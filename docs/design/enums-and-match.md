@@ -5,10 +5,12 @@
 | 状态 | 范围 |
 | --- | --- |
 | 已确认 | D12、D13：变体枚举 / 模式匹配、Option / Result、Go 可构造非法输入以及公开边界方向。 |
-| 暂定 | T03–T05：interface 加值型 case、nil 策略、panic / 递归验证、模式子集、值绑定、穷尽与控制流规则。 |
-| 未定 | U06、U08：最终 ABI、递归对象 / 共享状态校验、完整初始化算法；借用模式延期。 |
+| 暂定 | T03–T05：interface 加值型 case 的机制候选、nil 策略、panic / 递归验证、模式语法、穷尽与控制流规则。 |
+| 未定 | U06、U08：支持值/引用绑定的最终 ABI、递归对象 / 共享状态校验、完整初始化算法。 |
 
 状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 hgo 功能已实现。
+
+后续已确认按模式区分 `Ok(value)`、`Ok(&value)` 与 `Ok(mut& value)`；具体语法和 ABI 见 [enum RFC](../rfcs/0008-enums.md) 与 [match RFC](../rfcs/0009-match.md)。本文值型 case 的 Go 实验仅覆盖值匹配，不能作为不支持引用模式的最终语言限制。
 
 ## 1. 源级类型与构造
 
@@ -40,7 +42,7 @@ enum 是具有包身份的名义类型。每个值恰好属于一个声明的变
 
 普通 enum 与 `Result` 不隐式选择首个变体作默认值。`Option` 的默认值明确为 `None`；源代码仍使用 `None` / `Some`，不会因此引入“任何类型都能赋 nil”的规则。`Result::Err(nil)` 是否有效由 E 自身决定，例如可空的 `Ptr[T]` 可以为 nil；它与整个 Result 接口为 nil 是两件事。
 
-赋值和模式绑定默认延续 Go 值复制语义，不引入全局 move。复制 struct 会复制字段；复制 Arc、Ptr、slice 或 map 不会深复制其引用的数据。不得把 enum 装箱说成所有权转移，也不能让含作用域借用的值通过 enum 装箱逃逸。
+赋值和值模式绑定默认延续 Go 值复制语义，不引入全局 move；显式引用模式保留原存储位置。复制 struct 会复制字段；复制 Arc、Ptr、slice 或 map 不会深复制其引用的数据。不得把 enum 装箱说成所有权转移，也不能让含作用域借用的值通过 enum 装箱逃逸。
 
 ## 2. match 的求值与控制流
 
@@ -52,11 +54,11 @@ label := match load_result() {
 }
 ```
 
-被匹配表达式只求值一次，先保存为临时值，再按源码顺序尝试分支。模式检查本身不调用用户代码；模式成功后才建立该分支的绑定、求值 guard，guard 为 true 才执行分支体。guard 为 false 则继续后续分支，不重新调用 `load_result()`，也不撤销已经发生的副作用。只执行一个分支体，不允许 fallthrough。
+被匹配表达式只求值一次；上例保存值，借用模式则须保存受权限检查的原存储位置，再按源码顺序尝试分支。模式检查本身不调用用户代码；模式成功后才建立该分支的绑定、求值 guard，guard 为 true 才执行分支体。guard 为 false 则继续后续分支，不重新调用 `load_result()`，也不撤销已经发生的副作用。只执行一个分支体，不允许 fallthrough。
 
-临时值固定外层变体和已复制的字段。若 payload 包含共享 slice、map 或句柄，guard 对其指向数据的合法修改仍可能被后续分支观察到；“只求值一次”不等于制作整个对象图的快照。
+值匹配的临时值固定外层变体和已复制的字段；引用模式不能凭这一步制造原对象的副本。若 payload 包含共享 slice、map 或句柄，guard 对其指向数据的合法修改仍可能被后续分支观察到；“只求值一次”不等于制作整个对象图的快照。
 
-首版提供三种模式：完整限定的变体模式、绑定名、`_`。payload 可以递归使用这些模式，例如 `Option::Some(Option::None)`。常量条件先写成 guard，不增加隐式方法调用、动态相等性协议或解构副作用。
+模式包含完整限定的变体、绑定名和 `_`，绑定再按值/读借用/写借用区分。payload 可以递归使用这些模式，例如 `Option::Some(Option::None)`。常量条件先写成 guard，不增加隐式方法调用、动态相等性协议或解构副作用。
 
 ### 2.1 穷尽性与不可达分支
 
@@ -72,9 +74,9 @@ label := match load_result() {
 
 ### 2.2 绑定与作用域
 
-首版采用值绑定：从保存的合法 case 复制 payload 到分支局部变量，作用域包含该 guard 和分支体。改写这个局部值不会回写枚举；经共享句柄修改对象仍按该句柄的权限检查。再次尝试后续分支时重新建立绑定。
+值模式 `Ok(value)` 按允许的复制规则绑定 payload；改写局部副本不回写枚举。`Ok(&value)` 和 `Ok(mut& value)` 则分别借用 payload 原存储，后者修改应由原枚举观察到。匹配目标只求值一次不等于无条件复制目标，借用模式需要保存位置和权限。精确语法与 guard/借用作用域见 [RFC 0009](../rfcs/0009-match.md)。
 
-不自动取地址，不把值匹配变成 `mut&`，也不从 Go type switch 得到的 case 副本中制造“指向原枚举字段”的可变借用。首版不支持 `match mut& place` 等原位借用模式；含不可复制作用域借用的 payload 不得以普通值模式复制，需等待明确的借用匹配规则，或在引用检查允许的位置先提供可复制的值。已有 `&T` / `mut& T` 的装箱、返回、闭包、goroutine 和接口逃逸继续受引用专题约束；枚举不会绕过这些检查。
+不自动将值模式变成借用，不从 Go type switch 的 case 副本制造冒充原 payload 的可变引用。含不可复制借用的 payload 不得以普通值模式复制。现有 interface 加值型 case 候选尚不能直接支持原位借用；必须调整表示或给出满足原存储语义的 lowering，不能把复制后写回自动等同于借用。借用的装箱、返回、闭包和 goroutine 逃逸继续受引用规则约束。
 
 ### 2.3 表达式结果与非局部退出
 
@@ -88,7 +90,7 @@ match 是表达式，也可在语句位置丢弃结果。有期望类型时，�
 
 ## 3. 首版 Go 表示
 
-首版候选采用普通 Go interface 加**值型变体 struct**，不需要 Go `unsafe`、内存重解释或 union。普通枚举的无 payload 变体也有自己的零字段 case struct；只有标准 Option 的 None 使用 nil 接口这一约定。
+以下既有机制候选采用普通 Go interface 加**值型变体 struct**；其原位借用支持尚未闭合，不是最终 ABI。此候选不需要 Go `unsafe`、内存重解释或 union。普通枚举的无 payload 变体也有自己的零字段 case struct；只有标准 Option 的 None 使用 nil 接口这一约定。
 
 | hgo 值 | 生成 Go 值 |
 | --- | --- |
@@ -284,7 +286,7 @@ Go 下游可直接调用 `Describe(Ok[int, string]{Value: 7})`；`NestedState(ni
 
 1. 普通 enum、Option、Result 的泛型身份准确；构造与 payload 类型不匹配在源码处诊断。
 2. match 目标只求值一次，guard 和分支保持顺序；guard 不贡献穷尽覆盖，嵌套缺项与不可达分支有准确诊断。
-3. 分支复制、引用限制、结果统一、return / break / continue 与 defer 作用域不因降低改变。
+3. 值绑定按允许规则复制，读写借用指向原 payload；结果统一、return / break / continue 与 defer 作用域不因降低改变。
 4. nil Result、typed nil、非 nil case 指针及接口嵌入伪造值均在业务副作用前拒绝；合法标量 case 通过。
 5. None、Some(None)、Some(Some(value)) 与 Option[Ptr] 的 Some(nil) 可区分；嵌套非法 payload 被拒绝。
 6. 数组、slice 创建与扩长、map 缺项、关闭 channel、泛型零值和部分 struct 初始化不能在 safe hgo 中暴露非法值。

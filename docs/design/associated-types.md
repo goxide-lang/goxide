@@ -1,10 +1,10 @@
 # 普通关联类型
 
-状态：采用普通关联类型的方向已纳入设计；以下为最小语义草案。trait 和非泛型的 Go 直接适配可先实现，不必等待完整关联类型系统。
+状态：采用普通关联类型的方向已纳入设计；以下为最小语义草案。非泛型 trait 适配可先实现，不必等待完整关联类型系统。所有运行时 impl 视图沿用统一 wrapper、导出 marker 与固定包级工厂；尚无 hgo 编译器实现。
 
 | 状态 | 范围 |
 | --- | --- |
-| 已确认 | D04：纳入普通关联类型方向。 |
+| 已确认 | D04、D24：纳入普通关联类型方向；运行时视图采用统一 wrapper、marker 和固定工厂。 |
 | 暂定 | T08、T12：关联类型唯一性、显式绑定、投影拼写、固定 Go 接口与静态选择。 |
 | 未定 | U04：完整泛型约束和后端策略；GAT、特化延期；Option ABI 尚未冻结。 |
 
@@ -32,7 +32,7 @@ impl Iterator for *Counter {
 }
 ```
 
-上例省略方法体，是类型关系示意，不是完整实现。有体 impl 必须完整定义方法，其关联类型在 body 内用 `type Item = ...` 给出。无方法体的 `declare impl` 在头部给出关联类型绑定，采用现有业务方法并补充 marker，见第 5 节。两种形式都必须显式给出全部关联类型，不从方法返回类型反向猜测，也不提供默认值。
+上例省略方法体，是类型关系示意，不是完整实现。有体 impl 必须完整定义方法，其关联类型在 body 内用 `type Item = ...` 给出。无方法体的 `declare impl` 在头部给出关联类型绑定，在 wrapper 中逐项转发现有业务方法并保留 marker，见第 5 节。两种形式都必须显式给出全部关联类型，不从方法返回类型反向猜测，也不提供默认值。
 
 `Self.Item` 在 trait 内引用其关联类型。外部泛型代码使用限定投影 `T::Iterator.Item`；跨包可写 `T::iter::Iterator.Item`。这组拼写是草案，解析时 trait 引用以最后的 `.Item` 为界。
 
@@ -68,9 +68,11 @@ type Iterator[Item any] interface {
 
 hgo 的 `Iterator[Item = int]` 对应后端 `Iterator[int]`，不是允许 hgo 用户为同一个接收者任意挑选 `Item`。
 
-Go 接口参数只承载解析后的类型；marker 表达对应 trait 的显式采用。上例使用便于阅读的 marker 名称，正式名称由稳定 trait 身份编码。关联类型选择、投影正规化、等式约束、精确显式实现与 impl 唯一性仍由 hgo 检查，marker 不是安全证明。不能把某份 Go 代码能够编译作为 hgo 关联类型语义成立的充分条件。
+Go 接口参数只承载解析后的类型；marker 表达对应 trait 的显式采用。marker 定义在 impl 包的 wrapper 上并采用导出名称，使跨包 wrapper 可以实现接口；上例短名称不是正式 ABI。关联类型选择、投影正规化、等式约束、精确显式实现与 impl 唯一性仍由 hgo 检查，marker 不是安全证明。不能把某份 Go 代码能够编译作为 hgo 关联类型语义成立的充分条件。
 
 泛型函数中未具体化的投影，可能降低为附加类型参数及实现证据，也可能使用专门化；具体策略与泛型后端一起定稿。无论使用何种策略，不能在语义层把泛型实参 `T` 直接替换成一个接口 wrapper。
+
+关联类型描述实现选择的类型结果；类型自有的无 self 关联函数属于 [RFC 0020](../rfcs/0020-associated-functions.md)。构造函数按类型解析，不因此成为静态 trait 实现，本文不冻结静态 trait 成员的声明语法。
 
 ## 5. 直接采用原生 Go 方法
 
@@ -85,11 +87,23 @@ declare impl iter::Iterator[Item = int] for *native::Counter;
 
 这份声明属于 C，由 hgo 根据 C 的源码及显式导入的 impl 元数据使用；不会登记成 `native` 包对所有项目公开的实现。`Item = int` 声明这个实现的关联类型，不增加 impl 键的选择维度；可见实现集合中不能再为同一个 `*native::Counter` 和非泛型 `Iterator` 声明 `Item = string` 的第二个 impl。
 
-编译器检查 `*native::Counter` 的真实业务方法集。对应的 Go `Next` 必须与代入 `Item = int` 后、按最终选定且版本一致的 `Option[int]` ABI 降低出的签名一致；本文只采用枚举专题的当前候选表示，不表示 ABI 已冻结。检查通过后，仅在本次 hgo 隔离视图中的接收者定义包补充 marker 和 `AsXXX()`，适配返回原值；原生包无需预先提供 marker 或 wrapper。读取到 Go 方法集中的 marker 也不能代替显式导入的 hgo 实现元数据。
+编译器检查 `*native::Counter` 的真实业务方法集。对应的 Go `Next` 必须与代入 `Item = int` 后、按最终选定且版本一致的 `Option[int]` ABI 降低出的签名一致；本文只采用枚举专题的当前候选表示，不表示 ABI 已冻结。检查通过后，在 C 包生成独立 wrapper、显式转发方法、导出 marker 和固定包级工厂。原生包无需 marker 或 As，不向其追加任何方法。
 
-外部定义包的伴生文件通过 hgo 独立构建视图参与编译，不修改 `iter`、`native` 的原源码或共享模块缓存。既有纯 Go 项目不读取 C 的 `.hgo` 声明，继续原样构建；隔离视图的构建机制仍是实现草案。
+```go
+// C 包的机制片段；Iterator / Option 代表已解析的生成接口类型。
+type counterIterator struct { target *native.Counter }
+func (v counterIterator) HyperGoTraitIterator() {}
+func (v counterIterator) Next() Option[int] { return v.target.Next() }
+func AsCounterIterator(c *native.Counter) Iterator[int] {
+    return counterIterator{target: c}
+}
+```
 
-如果原生 `Next` 返回 `(int, bool)`，无体声明不能自动把它转为 `Option[int]`，必须报告签名不匹配。用户可以改写为有方法体的完整 impl，在 body 中声明 `type Item = int` 并显式完成转换；该模式由编译器生成包含实现体与 marker 的 wrapper，不会被原生同名方法覆盖。签名适配与调用规则见 [Go原生类型的显式适配](go-interop.md)。
+该片段的接收者检查按选定的源级权限契约补齐，不因最终都是 Go 指针就免检。target 保持原始指针身份，接口动态类型成为 counterIterator；wrapper 使用命名字段，不提升原生 Counter 的其他方法。
+
+工厂随 C 的普通 Go 源码发布。Go 用户可以使用 `C.ForCounter(c).AsIterator()` 一类仅转发工厂的 helper；只有类型与 impl 同包，且属于 Go 允许定义方法的本地 named type，才能在原类型生成同样只转发工厂的 As 方法。`type Ptr[T any] *T` 等具名指针类型不满足 Go 接收者规则，仍须使用包级工厂或 facade。具体导出名称和类型参数编码未定，不能让 helper 根据上下文改变 Item 或所选 impl。
+
+如果原生 `Next` 返回 `(int, bool)`，无体声明不能自动把它转为 `Option[int]`，必须报告签名不匹配。用户可以改写为有方法体的完整 impl，在 body 中声明 `type Item = int` 并显式完成转换；它与 declare 使用同一 wrapper 机制，但执行用户方法体，不会被原生同名方法覆盖。签名适配与调用规则见 [Go 原生类型的显式适配](go-interop.md)。
 
 原生泛型类型的实例化与约束仍需验证，`T` 和 `*T` 不可混同。完整的泛型 impl 声明头与投影降低策略由泛型专题补齐；在关联类型能力实现前，工具必须给出明确的不支持诊断。
 
@@ -103,5 +117,6 @@ declare impl iter::Iterator[Item = int] for *native::Counter;
 2. 同一 impl 键不能通过不同关联类型重复声明。
 3. `Iterator[Item = int]` 与 `Iterator[Item = string]` 不能相互赋值。
 4. 泛型投影只在具有相应实现证据时有效；冲突名称必须限定。
-5. 无体声明对原生 Go 业务方法在代入关联类型后逐项验签，通过后补充 marker；不匹配时拒绝，不静默切换实现模式。
+5. 无体声明对原生 Go 业务方法在代入关联类型后逐项验签，通过后在 wrapper 显式转发并保留 marker；不匹配时拒绝。
 6. 未绑定的 trait 值、GAT 及暂不支持的动态分派形式被明确拒绝。
+7. 固定工厂与便利 helper 保持相同关联类型和 impl 身份，原生类型无新增方法；Go 接口中的 marker 不能代替 hgo 元数据。

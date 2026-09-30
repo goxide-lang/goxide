@@ -248,7 +248,7 @@ Debug 不自动隐藏私有字段中的业务内容；需要控制输出的类�
 
 ### 5.5 静态 trait 操作与 Go 运行时接口
 
-`Default.default() -> Self` 与 `Clone.clone(&Self) -> Self` 不能强行装入只规定固定业务签名和 marker 的旧 Go 接口模型。前者没有接收者，后者结果依赖具体 Self；不能改成返回 `any` 或 wrapper 后宣称保持类型语义。静态成员的源码拼写（例如 `static default() Self`）尚待 trait 语法冻结，以上签名只描述必须支持的操作。
+`Default.default() -> Self` 与 `Clone.clone(&Self) -> Self` 不能强行装入只规定固定业务签名和 marker 的旧 Go 接口模型。前者没有接收者，后者结果依赖具体 Self；不能改成返回 `any` 或 wrapper 后宣称保持类型语义。静态 trait 成员的源码拼写（例如 `static default() Self`）仍待冻结，以上签名只描述必须支持的操作。固有类型关联函数的 `T::method` 调用及包级函数降低已确认，声明拼写讨论见 [RFC 0020](../rfcs/0020-associated-functions.md)；不因此自动建立 Default impl。
 
 首版对这些操作按规范 impl 身份在编译期选择实现，对具体类型生成普通 Go 函数，例如 `defaultPoint() Point`、`clonePoint(value *Point) Point`；后者的 `*Point` 仅为只读借用的后端表示。impl 唯一性、包可见性和借用检查仍由同一套 trait 元数据负责，不另建结构式自动采用关系。
 

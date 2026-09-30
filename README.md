@@ -35,3 +35,7 @@ python3 scripts/check_design.py
 ```
 
 完整验证需要 Python 3.10+、Go 1.27 或更新工具链及可用的 race detector。范围与限制见 [tests 说明](tests/README.md)：验证的是文档中的 Go 机制，不能证明尚不存在的 hgo 前端正确。
+
+## 许可证
+
+本项目采用 [Mozilla Public License 2.0](LICENSE)（SPDX：`MPL-2.0`）。

@@ -47,6 +47,8 @@
 
 **实施交接授权**：先冻结本地文档基线 `v0.0.0-mvp-doc`，再在独立实现会话推进模式宏、log/tracing 场景及 Debug/Clone/serde/thiserror 派生。JSON 是推荐首版格式，完整 Rust 兼容并非目标。本线程继续研究/spec/RFC，实现发现回流；授权实施不表示其他候选已经确认。
 
+已确认新增 **D23（文档标签之后，按最新反馈更新）**：用户要求 serde 优先，随后明确“仿照 serde-rs 的实现”。核心采用类型/格式分离的 Serialize/Deserialize、Serializer/Deserializer 与 Visitor/Access；Value 属于 serde-json 等格式层，首版 JSON、未来 YAML 独立适配。此前助手提出的公开 core Value、CoreValue-v1 与首版必须全树中转被这一决定覆盖，不再等待用户在旧候选中选择。Go/hgo ABI/子集/格式策略仍见 U18；本研究线程不实施宏或 serde 代码。
+
 **新增研究授权，不是后端选择**：对照“二进制模式无冲突直接适配、有冲突最小 wrapper；Go 源码模式固定 wrapper”。与 D05/D06 现行 marker/固定有体 wrapper 的差异见 RFC 0004；不得因研究授权就修改已有 impl 的可观察语义。
 
 ## 3. 已有方案但尚未冻结
@@ -91,6 +93,7 @@
 | U13 | supertrait、GAT、特化、借用 match 模式、锁块语法 | 延期 / 另行设计；“显式继承”当前指显式 impl，不是 supertrait |
 | U14 | Rust / LLVM 到 Go 汇编的受限计算内核路线 | 不作为首版主后端；ABI / GC / 栈约定等尚未解决 |
 | U17 | Option/Result 专用 `?` 的精确语法与实现、Go 多返回显式包装 | [RFC 0005](../rfcs/0005-option-result-question.md)；限域及显式 From 单步转换方向已确认，不公开 Try/Residual，不搜索转换链；Go error 静态类型需显式兜底或分类 |
+| U18 | serde-rs 分层到 Go/hgo 的接口映射、字段/数字/enum 策略及派生子集 | [RFC 0006](../rfcs/0006-serde-core-and-formats.md)；分层已确定，具体 helper/visitor ABI 与严格 JSON 偏差仍候选；无公开 core Value，格式 Value 不强制中转 |
 | U16 | trait 双路径、消除包装的语义条件及发布 ABI | [RFC 0004](../rfcs/0004-trait-lowering-paths.md)；比较直接调用/值视图/指针视图/字典，D05/D06 未被候选替换 |
 | U15 | D11 显式 AsPtr/unsafe 与普通 Go 指针实参的便利桥接 | [RFC 0002](../rfcs/0002-native-pointer-bridge.md)比较原生边界自动桥接与普通显式 AsPtr；推荐前者，D11 窄例外待用户确认 |
 

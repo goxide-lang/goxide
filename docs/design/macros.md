@@ -18,6 +18,8 @@
 
 后续独立会话的实现授权：在文档基线之后交付可运行的模式宏和内建派生原型，场景为 log/tracing 风格结构化日志、常见模式宏以及 Debug/Clone/serde/thiserror。JSON 是推荐首版序列化格式，不等于 Rust serde 全协议；thiserror 生成显式 From，问号的目标已知单步转换见 [RFC 0005](../rfcs/0005-option-result-question.md)。原型支持语法、已实现范围与失败诊断须单独登记；未完成整套 trait、引用和 enum 前端时，不把 Go helper 生成称为这些语言功能已完成。禁止以宏授权恢复 MVP 借用分析。本标签仅包含文档和机制证据，未包含宏实现。
 
+标签后用户进一步确定 **serde 优先并仿照 serde-rs**：核心 Serialize/Deserialize、Serializer/Deserializer、Visitor/Access 连接类型与格式，Value 属于 serde-json 等格式层，不设公共通用核心树。[RFC 0006](../rfcs/0006-serde-core-and-formats.md)已按官方实现修订，撤回此前 core Value 与强制树中转候选。derive 不直接调用 encoding/json，不把 Debug 输出当序列化格式，不自动授予字段写权限；具体 Go/hgo ABI、rename/default/skip 和泛型 codec 子集仍需实施细化。新增内建派生不开放用户过程宏。
+
 “如何调用”“如何实现”“是否有副作用”是三个不同维度：
 
 | 维度 | 形式 | 含义 |

@@ -51,6 +51,8 @@ Option/Result 专用问号见 [RFC 0005](docs/rfcs/0005-option-result-question.m
 
 本轮已授权在文档标签 `v0.0.0-mvp-doc` 之后启动宏原型：模式匹配/重复/卫生/诊断、结构化日志，Debug/Clone/JSON serde/thiserror 内建派生；采用明确语法子集完成输入到 Go 编译运行。完整语言和未定 trait 后端不因此宣称已完成。
 
+标签后最新优先级（D23）：**先 serde 闭环，仿照 serde-rs**。本线程整理官方协议/Visitor/Access 与格式分层，实施由独立会话推进；[RFC 0006](docs/rfcs/0006-serde-core-and-formats.md)规定核心协议→typed 派生 helper/visitor→serde-json、可选 JSON Value 和 S01–S12 验收，serde-yaml 后续。此前公开 core Value/强制全树中转候选已撤回；具体 Go ABI 与支持子集仍候选，派生不绑定 encoding/json。当前未实现，无需等远端传输批准才能继续研究。
+
 ## 3. 下一轮优先处理
 
 1. 阅读[决策登记](docs/design/decisions.md)与[总纲](docs/design/overview.md)，不要从早期 `*T` 示例推导 safe 源级指针语法。

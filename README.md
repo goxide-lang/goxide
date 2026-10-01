@@ -36,6 +36,8 @@ hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模
 
 文档标签与独立实现会话交接见 [MVP 文档基线](docs/mvp-doc-baseline.md)。标签记录已确认方向和未决项，不代表完整规范定稿或编译器已实现。
 
+最新优先任务是 serde，用户已决定仿照 serde-rs：核心协议/Visitor 与派生、独立 serde-json 及未来 serde-yaml；Value 属于格式层，不设强制核心树。首版 JSON 的实现契约及待实现验收见 [RFC 0006](docs/rfcs/0006-serde-core-and-formats.md)，具体 Go/hgo ABI 仍候选，尚未实现。
+
 ## 验证设计示例
 
 ```sh

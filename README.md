@@ -4,7 +4,7 @@ hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模
 
 架构以 **转译器 + 转译前 linter + 普通 Go 支持库** 为边界。最低目标语言及工具链版本为 **Go 1.27**，使用其新增的泛型方法表达带独立返回类型的锁回调等 API。
 
-当前仓库处于设计阶段，尚未实现编译器或 LSP。文档中的 hgo 代码用于规定和讨论语义，不代表已有可运行语法。
+本实现分支已有可运行的有限宏与 serde 原型，见[运行方式与准确支持范围](IMPLEMENTATION.md)。完整 hgo 编译器与 LSP 尚未实现；其余设计文档中的语法不因此成为可运行承诺。
 
 项目暂称 hgo / Hyper Go，当前远端仓库名为 `goxide`。换机器继续时先看 [Roadmap](ROADMAP.md) 和[决策登记](docs/design/decisions.md)：分别记录实现进度，以及**已确认 / 暂定 / 未定**的设计边界。
 
@@ -36,7 +36,7 @@ hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模
 
 文档标签与独立实现会话交接见 [MVP 文档基线](docs/mvp-doc-baseline.md)。标签记录已确认方向和未决项，不代表完整规范定稿或编译器已实现。
 
-最新优先任务是 serde，用户已决定仿照 serde-rs：核心协议/Visitor 与派生、独立 serde-json 及未来 serde-yaml；Value 属于格式层，不设强制核心树。首版 JSON 的实现契约及待实现验收见 [RFC 0006](docs/rfcs/0006-serde-core-and-formats.md)，具体 Go/hgo ABI 仍候选，尚未实现。
+最新优先任务是 serde，用户已决定仿照 serde-rs：核心协议/Visitor 与派生、独立 serde-json 及未来 serde-yaml；Value 属于格式层，不设强制核心树。首版 JSON 的实现契约及待实现验收见 [RFC 0006](docs/rfcs/0006-serde-core-and-formats.md)，协议设计仍可演进；本分支已实现其中具体类型 Go helper/Visitor 与 JSON 子集，准确边界见[原型说明](IMPLEMENTATION.md)。
 
 ## 验证设计示例
 

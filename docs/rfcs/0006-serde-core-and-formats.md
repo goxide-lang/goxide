@@ -234,3 +234,7 @@ JSON Value 不能保存 YAML 任意键、tag/锚点身份或注释；跨格式�
 前稿的公开 core Value、Record/Variant 节点、CoreValue-v1 固定映射、通用 serde.to_value、首版必建全树不再是推荐架构；统一 unit object、Option 标签封装、bytes 默认 Base64 同样撤回，除非未来作为用户显式 adapter 另提。保留的是数字精度、字段存在性、错误路径、预算和 Go 边界需求，并将其放回正确层次。
 
 自审反例：JSON 动态单键 object 不恢复 enum；Option(null) 不保存 PATCH 三态；MapAccess 不消费 value 不能前进；精确 Number 不等于核心新增 Decimal；协议有 struct/enum 不意味着 Value 有这些节点；Go helper 有错误转换不等于 ? 已实现。当前选择不改变 D05/D06/D11，不移动基线标签，不开始宏实现。
+
+## 实现分支进展（不冻结 ABI）
+
+具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../IMPLEMENTATION.md)。此结果不代表本 RFC 的泛型、enum 派生、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。

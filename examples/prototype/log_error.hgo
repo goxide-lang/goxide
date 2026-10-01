@@ -1,0 +1,32 @@
+package main
+
+import (
+    "errors"
+    "fmt"
+    "log/slog"
+    "os"
+)
+
+macro_rules! event {
+    ($message:expr, $($field:expr),*) => { slog.Info($message, $($field),*) };
+}
+
+#[derive(Error)]
+#[error("request failed")]
+type RequestError struct {
+    #[from]
+    Cause error
+}
+
+func main() {
+    slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+        ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+            if a.Key == slog.TimeKey { return slog.Attr{} }
+            return a
+        },
+    })))
+    cause := errors.New("connection reset")
+    err := FromRequestError(cause)
+    event!("request", "request_id", 7, "error", err.Error())
+    fmt.Println("cause preserved:", errors.Is(err, cause))
+}

@@ -72,3 +72,17 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 研究线需要保留的验收项：属性不可忽略、skip 与未知字段组合、结构化 MapKey 路径、CRLF token 跨度、Clone 别名/环策略与日志禁用求值。以上是原型边界和反例，不替用户批准新的语言核心语义。
 
 第二轮独立验收：`go test -race -count=1 -json ./...` 通过 8 包、44 个顶层测试及 30 个子测试；新增独立生成模块共 4 个，以 `-race` 运行 14 个测试及 19 个子测试。这些数量分开统计，不把生成模块日志重复算作宿主测试。`go vet ./...` 与 docs-only 均通过。
+
+## 后续阶段：enum/match 先于 serde enum
+
+本地非泛型 enum 已使用独立 AST/元数据实现，零载荷、单标量或无环本地 enum 载荷；构造保持名义身份。
+语句 match 支持值绑定、guard、穷尽与不可达检查，目标一次求值，匹配前精确校验非法 Go 值，保留 return/defer/break/continue。见[精确范围](internal/enums/README.md)及[任务状态示例](examples/prototype/events.hgo)。
+
+```sh
+go run ./cmd/hgo run examples/prototype/events.hgo
+go test -race -count=1 ./internal/enums ./tests/acceptance -run TestEnum
+```
+
+这是候选 interface+值型case ABI的有限实现，未冻结ABI；仅match使用点验证，未实现全入口/初始化检查。case/helper当前未导出，外部Go构造尚未支持。泛型、复杂payload、表达式match、嵌套模式、Option/Result特殊规则仍未实现。枚举声明不是serde专用表示；下一阶段在这份元数据上补serde派生。
+
+独立enum审查新增6顶层测试及8拒绝子例；3个生成模块显式race运行6测试及3卫生子例，另1模块验证名义类型编译拒绝。修复生成代码被局部true/false/any捕获，以及包级panic和标量类型遮蔽影响验证的问题。

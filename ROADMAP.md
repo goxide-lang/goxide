@@ -83,3 +83,5 @@ python3 scripts/check_design.py
 ## 实现分支阶段结果
 
 本地已完成 `.hgo → 宏/derive 展开 → Go → 编译运行` 的具体类型闭环：serde 核心及 JSON、Debug/Clone/Error、有限模式宏和 slog 场景。见[可复现命令、测试范围及缺项](IMPLEMENTATION.md)。不将此结果标记为完整 M1/M4/M5/M6 或 LSP 完成；冻结文档标签不变。
+
+用户明确实施顺序：先完成 enum/match 语言闭环，再以同一真实 enum 元数据补 serde enum；不先建立 serde 专用变体表示。当前本地已完成有限非泛型语句 match，完整泛型与表达式 match 等仍待实现，见[实际边界](IMPLEMENTATION.md)。

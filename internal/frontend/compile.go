@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/hxsf/goxide/internal/deriveextras"
+	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/macros"
 	"go/ast"
 	"go/format"
@@ -18,7 +19,10 @@ import (
 	"strings"
 )
 
-type Result struct{ Go, SourceMap, Expanded []byte }
+type Result struct {
+	Go, SourceMap, Expanded []byte
+	Enums                   []enums.Decl
+}
 type attrs struct {
 	derive          map[string]bool
 	rename          string
@@ -60,6 +64,25 @@ func Compile(filename string, source []byte) (Result, error) {
 		return Result{}, expandErr
 	}
 	source = expanded.Source
+	// Reject user access to reserved generated names before adding enum helpers.
+	reserveFS := token.NewFileSet()
+	reserveFile := reserveFS.AddFile(filename, -1, len(source))
+	var reserveScanner scanner.Scanner
+	reserveScanner.Init(reserveFile, source, func(token.Position, string) {}, 0)
+	for {
+		pos, tok, lit := reserveScanner.Scan()
+		if tok == token.EOF {
+			break
+		}
+		if tok == token.IDENT && strings.HasPrefix(lit, "__hgo_") {
+			return Result{}, fmt.Errorf("%s: reserved generated identifier %s", reserveFS.Position(pos), lit)
+		}
+	}
+	enumResult, err := enums.Lower(filename, source)
+	if err != nil {
+		return Result{}, err
+	}
+	source = enumResult.Source
 	fail := func(line int, msg string) (Result, error) {
 		return Result{}, fmt.Errorf("%s:%d: %s", filename, line, msg)
 	}
@@ -161,7 +184,7 @@ func Compile(filename string, source []byte) (Result, error) {
 	g := generator{fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") {
 			collision = id.Name
 		}
 		return true
@@ -391,7 +414,7 @@ func Compile(filename string, source []byte) (Result, error) {
 		}
 	}
 	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "macroTokens": expanded.Origins, "note": "derive locations use expanded input; macro token origins map pre-format expansion offsets"}, "", "  ")
-	return Result{Go: out, Expanded: out, SourceMap: append(mapping, '\n')}, nil
+	return Result{Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer

@@ -215,6 +215,7 @@ func declarations() string {
 }
 
 type checker struct {
+	companions          map[string][]byte
 	filename            string
 	source              []byte
 	m                   mapped
@@ -260,8 +261,27 @@ func (c *checker) checkTypes() error {
 	if imp == nil {
 		imp = importer.Default()
 	}
-	conf := types.Config{Importer: imp}
-	_, err := conf.Check("hgo.local/refs", c.fs, []*ast.File{c.file}, c.info)
+	files := []*ast.File{c.file}
+	for _, name := range sourceNames(c.companions) {
+		if name == c.filename {
+			continue
+		}
+		peer, err := parser.ParseFile(c.fs, name, c.companions[name], parser.AllErrors)
+		if err != nil {
+			return err
+		}
+		// All peer bodies are checked in their own turn. Their permission-bearing
+		// declarations remain nominal until every source file passes validation.
+		for _, d := range peer.Decls {
+			if f, ok := d.(*ast.FuncDecl); ok {
+				f.Body = &ast.BlockStmt{List: []ast.Stmt{&ast.ForStmt{Body: &ast.BlockStmt{}}}}
+			}
+		}
+		files = append(files, peer)
+	}
+	deduplicateIR(files)
+	conf := types.Config{Importer: imp, DisableUnusedImportCheck: len(c.companions) > 0}
+	_, err := conf.Check("hgo.local/refs", c.fs, files, c.info)
 	if err != nil {
 		return fmt.Errorf("%s: refs: source type checking failed: %w", c.filename, err)
 	}
@@ -275,7 +295,10 @@ func Lower(filename string, source []byte) (Result, error) {
 }
 
 func lower(filename string, source []byte, imp types.Importer, prepare bool) (Result, error) {
-	c := &checker{filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}, elements: map[string]bool{}}
+	return lowerWithFiles(filename, source, imp, prepare, nil)
+}
+func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare bool, files map[string][]byte) (Result, error) {
+	c := &checker{companions: files, filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}, elements: map[string]bool{}}
 	// Attributes belong to the later derive pass; preserve their exact source lines.
 	var attrs []struct {
 		line int
@@ -322,7 +345,7 @@ func lower(filename string, source []byte, imp types.Importer, prepare bool) (Re
 		}
 	}
 	c.m = c.m.apply(es)
-	active := len(es) > 0
+	active := len(es) > 0 || len(files) > 0
 	// Let the Go parser distinguish expression & from a reference in a type position.
 	for attempts := 0; ; attempts++ {
 		if attempts > 1000 {

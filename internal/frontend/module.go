@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"go/build"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -24,6 +26,38 @@ type ModuleResult struct {
 // package independently, then checks packages in import dependency order.
 // Relative filesystem replacements are rebased to preserve their meaning.
 func CompileModule(input, destination string) (ModuleResult, error) {
+	return CompileModuleWithTags(input, destination, nil)
+}
+
+// CompileModuleWithTags selects hgo and native files using the same host Go build
+// context. The generated module is a view of this one explicit configuration.
+func CompileModuleWithTags(input, destination string, tags []string) (ModuleResult, error) {
+	return CompileModuleWithOptions(input, destination, ModuleOptions{Tags: tags})
+}
+
+type ModuleOptions struct {
+	Tags []string
+	Race bool
+}
+
+func CompileModuleWithOptions(input, destination string, options ModuleOptions) (ModuleResult, error) {
+	ctx := build.Default
+	ctx.BuildTags = append([]string(nil), options.Tags...)
+	if options.Race {
+		ctx.BuildTags = append(ctx.BuildTags, "race")
+	}
+	for key, dst := range map[string]*string{"GOOS": &ctx.GOOS, "GOARCH": &ctx.GOARCH} {
+		if v := os.Getenv(key); v != "" {
+			*dst = v
+		}
+	}
+	if ctx.GOOS != runtime.GOOS || ctx.GOARCH != runtime.GOARCH {
+		return ModuleResult{}, fmt.Errorf("directory mode currently requires host GOOS/GOARCH (%s/%s); cross-target type sizes are unsupported", runtime.GOOS, runtime.GOARCH)
+	}
+	if v := os.Getenv("CGO_ENABLED"); v != "" {
+		ctx.CgoEnabled = v == "1"
+	}
+
 	input, err := filepath.Abs(input)
 	if err != nil {
 		return ModuleResult{}, err
@@ -143,35 +177,20 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 			}
 		}
 		hgoSource := ext == ".hgo" && sourceDir
-		if hgoSource && (strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "_")) {
-			return fmt.Errorf("%s: ignored Go-style .hgo filename is unsupported", path)
-		}
-		if hgoSource {
-			base := strings.TrimSuffix(entry.Name(), ext)
-			if strings.HasSuffix(base, "_test") {
-				return fmt.Errorf("%s: .hgo test files are not yet supported; use native Go tests", path)
-			}
-			if bytes.Contains(data, []byte("//go:build")) || bytes.Contains(data, []byte("// +build")) {
-				return fmt.Errorf("%s: build constraints on .hgo files are not yet supported", path)
-			}
-			for _, suffix := range []string{"aix", "android", "darwin", "dragonfly", "freebsd", "illumos", "ios", "js", "linux", "netbsd", "openbsd", "plan9", "solaris", "wasip1", "windows", "386", "amd64", "arm", "arm64", "loong64", "mips", "mipsle", "mips64", "mips64le", "ppc64", "ppc64le", "riscv64", "s390x", "wasm"} {
-				if strings.HasSuffix(base, "_"+suffix) {
-					return fmt.Errorf("%s: platform suffix on .hgo files is unsupported", path)
-				}
-			}
-			if _, e := os.Stat(strings.TrimSuffix(path, ".hgo") + ".go"); e == nil {
-				return fmt.Errorf("%s: generated Go filename conflicts with native source", path)
-			}
+		if hgoSource && strings.HasSuffix(strings.TrimSuffix(entry.Name(), ext), "_test") {
+			return fmt.Errorf("%s: .hgo test files are not yet supported; use native Go tests", path)
 		}
 		if hgoSource || sourceDir && ext == ".go" && !strings.HasSuffix(path, "_test.go") {
-			selected := true
-			if ext == ".go" {
-				selected, e = build.Default.MatchFile(filepath.Dir(path), entry.Name())
-				if e != nil {
-					return e
-				}
+			selected, err := matchSourceFile(ctx, path, data)
+			if err != nil {
+				return err
 			}
 			if selected {
+				if hgoSource {
+					if _, err := os.Stat(strings.TrimSuffix(path, ".hgo") + ".go"); err == nil {
+						return fmt.Errorf("%s: generated Go filename conflicts with native source", path)
+					}
+				}
 				dir := filepath.Dir(rel)
 				if packages[dir] == nil {
 					packages[dir] = map[string][]byte{}
@@ -209,7 +228,8 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 			return fmt.Errorf("module import cycle at %s", dir)
 		}
 		state[dir] = 1
-		for name, source := range packages[dir] {
+		for _, name := range sortedSources(packages[dir]) {
+			source := packages[dir][name]
 			f, e := parseSourceImports(name, source)
 			if e != nil {
 				return e
@@ -235,11 +255,11 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 		if dir != "." {
 			pkgPath += "/" + filepath.ToSlash(dir)
 		}
-		p, e := preparePackageContext(pkgPath, packages[dir], metadata, typecheck.NewImporter(filepath.Join(destination, dir, "package.go")), buildBudget)
+		p, e := preparePackageContext(pkgPath, packages[dir], metadata, typecheck.NewImporterWithBuild(filepath.Join(destination, dir, "package.go"), options.Tags, options.Race), buildBudget)
 		if e != nil {
 			return e
 		}
-		checked, e := finishPackage(pkgPath, p, typecheck.NewImporter(filepath.Join(destination, dir, "package.go")))
+		checked, e := finishPackage(pkgPath, p, typecheck.NewImporterWithBuild(filepath.Join(destination, dir, "package.go"), options.Tags, options.Race))
 		if e != nil {
 			return e
 		}
@@ -302,4 +322,21 @@ func canonicalOutput(path string) (string, error) {
 		suffix = append(suffix, filepath.Base(parent))
 		parent = next
 	}
+}
+
+// MatchFile understands only Go extensions. Present hgo bytes through a virtual
+// .go filename, preserving suffix selection and the standard constraint parser.
+func matchSourceFile(ctx build.Context, path string, source []byte) (bool, error) {
+	name := filepath.Base(path)
+	if strings.HasSuffix(name, ".hgo") {
+		name = strings.TrimSuffix(name, ".hgo") + ".go"
+	}
+	virtual := filepath.Join(filepath.Dir(path), name)
+	ctx.OpenFile = func(name string) (io.ReadCloser, error) {
+		if name == virtual {
+			return io.NopCloser(bytes.NewReader(source)), nil
+		}
+		return os.Open(name)
+	}
+	return ctx.MatchFile(filepath.Dir(path), name)
 }

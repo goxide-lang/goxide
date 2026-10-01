@@ -119,3 +119,12 @@ fixed-point restrictions and supported scalar copying. Frontend tests cover
 propagation/derive composition. Independent acceptance tests exercise generated
 modules with `go test -race`, writable-alias visibility, and permission-erasure
 counterexamples. These executions are not a whole-program race-freedom proof.
+
+
+Directory compilation uses `FinishPackage`: each file is checked against shared
+nominal reference declarations before any permissions are erased. File-local
+imports remain separate. Every body (including native Go consumers) must pass its
+own permission check; companions provide signatures, not permission-erased Go
+stubs. Exported new-reference signatures are rejected until cross-package
+permission metadata is supported. Ordinary Go pointer APIs remain ordinary
+pointer boundaries and cannot silently consume checked references.

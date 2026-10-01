@@ -299,3 +299,35 @@ From 仍只使用当前包注册项：先检查 Go assignability，再要求唯�
 - `go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **34 篇 Markdown / 310 个本地链接**和 diff whitespace 检查通过。设计夹具不是新宏实现的功能证据。
 
 日志：`/tmp/goxide-macro-final-race.json`、`/tmp/goxide-macro-final-shim-race.json`、`/tmp/goxide-macro-final-vet.log`、`/tmp/goxide-macro-final-design.log`、`/tmp/goxide-macro-final-docs.log`。仅本地提交，无 push/tag；无已知阻断，有限语法/metadata/来源限制如上。
+
+
+## T0 接续：目录引用和 Go 构建条件
+
+目录模式不再一律拒绝引用或 `.hgo` 构建条件。同包引用先保留 nominal 读/写签名，各源文件保留独立 AST/import scope，逐文件以同份包声明运行既有权限检查后统一擦除。peer 函数体在本文件检查时使用无返回的循环占位，原函数体必须在自己的检查轮次通过，不能通过忽略临时类型错误把权限绕过。native Go 文件也参与权限边界检查。公开新引用函数签名明确拒绝，直至跨包 metadata 能保留权限；原有引用 alias、global、callback、method 限制保持，不把普通 Go 指针 API误当新引用。
+
+`.hgo` 通过标准 `go/build.Context.MatchFile` 的虚拟 `.go` 文件选择，因此沿用平台 suffix、现代/旧构建条件、忽略文件规则；未选中源无需可解析且不进入声明/宏 registry。`-tags` 同步传递前端、native Go 导出数据与最终命令。目录 test 使用显式 Race 配置，同时选择 race 源并以 `go list -race` 读取 export data，最终生成测试也开启 race。仅实现宿主目标；不同 GOOS/GOARCH 在写产物前明确拒绝，避免错误 target sizes。生成模块是单构建配置视图，换 tags/race/平台要重新转译，不能把保留的 native 文件误当全配置可用承诺。
+
+定向验证涵盖同包跨文件读/写正例、readonly→write、native pointer 擦除、返回 readonly 后写、exported/global/alias/function-value/method 拒绝，且断言真实权限原因；标准选源涵盖 Linux/Windows/Darwin suffix、现代/旧 tag 与字符串中的伪注释。真实 CLI 在错误 PATH 的 go 前仍通过明确 `-go` 执行 run/test，包含 tags 依赖导出、race/!race 选择及生成模块 race。前端 importer 固定构建工具链 GOROOT，目录执行的 `-go` 版本必须一致；不声称支持多工具链 ABI 混用。最终综合统计由主集成验收记录。
+
+
+最终冻结代码验证（Go 1.27.1 linux/amd64、CGO=1；离线、本地工具链）：
+
+- `go test -race -count=1 -json ./...` 全部 **14 包、186 宿主顶层测试、297 子测试**通过，无失败。
+- 新独立 `TestT0DeliveryInstalledCLI` 实际安装CLI，并对单文件与多文件业务产物分别执行 `go test -race`：**2 个生成模块、4 个业务测试**通过。宿主带race与这些子进程显式race分别核实；目录CLI另执行真实race选源测试。
+- `go vet ./...`、`python3 scripts/check_design.py` 的 **13 个 Go 命令**、最终文档链接与diff检查通过。文档/旧Go机制检查不作为新前端能力证明。
+- 新验收者是复用非作者，实际编写新业务/测试并发现CLI宏栈和race选源两项缺陷；两项均修复后独立复验通过。没有声称获得额外空上下文审查。
+
+日志在 `/tmp/goxide-t0-delivery-race.json`、`/tmp/goxide-t0-delivery-vet.log`、`/tmp/goxide-t0-delivery-design.log`；可复现新业务如下（真实Go编译器已在PATH，目录为本仓库根）：
+
+```sh
+export GOTOOLCHAIN=local GOWORK=off GOPROXY=off
+repo="$PWD"
+work="$(mktemp -d)"
+GOBIN="$work/bin" go install ./cmd/hgo
+cd "$work"
+"$work/bin/hgo" run -runtime "$repo" "$repo/examples/prototype/delivery_job.hgo"
+cd "$repo"
+go test -race -count=1 ./tests/acceptance -run '^TestT0DeliveryInstalledCLI$' -v
+```
+
+输出包含结构化 `job accepted` 事件和 `scheduled mail: 3 units`。完整复现运行根模块 `go test -race -count=1 ./...`、`go vet ./...` 及上述设计脚本；runtime由当前checkout提供，不依赖未发布远端提交。只做本地提交，不push或改tag。

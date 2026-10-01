@@ -40,6 +40,7 @@ func run(args []string, out, stderr io.Writer) error {
 	mapPath := f.String("source-map", "", "write source mapping JSON")
 	expandedPath := f.String("expanded", "", "write expanded Go source for inspection")
 	runtimeRoot := f.String("runtime", "", "local goxide module root for run/build")
+	tags := f.String("tags", "", "comma-separated Go build tags (directory mode)")
 	goTool := f.String("go", "go", "Go compiler executable (must be Go 1.27+)")
 	if err := f.Parse(args[1:]); err != nil {
 		return err
@@ -55,7 +56,10 @@ func run(args []string, out, stderr io.Writer) error {
 		if *mapPath != "" || *expandedPath != "" {
 			return errors.New("directory mode writes per-file .go.map.json automatically; -source-map/-expanded are single-file flags")
 		}
-		return runDirectory(mode, input, *dest, *goTool, out, stderr)
+		return runDirectoryTags(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), out, stderr)
+	}
+	if *tags != "" {
+		return errors.New("-tags requires directory mode")
 	}
 	if mode == "test" {
 		return errors.New("test requires a package directory")

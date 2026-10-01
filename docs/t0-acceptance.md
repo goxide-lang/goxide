@@ -1,8 +1,24 @@
 # T0 子能力验收矩阵
 
-核对基准：`0f48259369d0940d298b76d3fc657dd6d0cb28d9`，并单列本轮新增组合验收。本文依据实现和测试源码，不把设计夹具或 README 的描述当作前端实现证明。当前是具体类型、Go 宿主语法的有限原型；单文件入口之外已有下文有限 Go module 目录入口；**整项 T0、M1/M3/M4/M6、核心设计和 LSP 均未完成**。
+本轮核对基准：`4e2a9138b9103b5e08b306f585c297aac467fc60`。以下先给有限交付标准，再保留历次逐项证据；历史阶段的“未做”若已有后续增量，以最新增量为准。具体类型、Go 宿主语法上的有限 T0 子集与整项 T0/M1–M8 完成是不同结论，不能混用。
 
 设计优先级以[决策登记](design/decisions.md) D21 为准：宏、enum/match、只读/可写分离是用户必需方向；D22 约束 Option/Result 专用 `?` 与唯一显式一步 From，D23 要求 serde 核心与格式分层。优先级不意味着全部语法或 ABI 已冻结。后续工作按 [ROADMAP](../ROADMAP.md) 依赖推进，不以完整 trait 或长期风险分析阻塞已有子集。
+
+## 有限 T0 的交付标准
+
+本轮验收范围固定为已有语言子集的实际应用闭环，不以整个未来语言为完成条件，也不因指定子集通过而取消已确认但尚未实现的方向。
+
+| 必须验收的范围 | 可交付标准 | 不由此承诺 |
+| --- | --- | --- |
+| 声明宏与日志包 | 同模块导入、定义点卫生、私有边界、禁用时不求值、确定展开与预算；明确拒绝未支持模板 | 任意 fragment、外部预编译宏、过程宏、完整 tracing |
+| serde JSON 与 enum/match | 真实 JSON 解码、名义 enum、已支持的 match、派生和失败输入；生成产物独立运行 | YAML、借用解码、任意对象图/泛型载荷、完整表达式 match |
+| Option/Result、`?` 与 From | 支持上下文的一次求值、传播/清理、错误链；赋值兼容优先与唯一显式一步转换 | 通用 Try/Residual、转换链或动态猜测 |
+| 基础权限与普通 Go 互操作 | 已支持只读投影和可写访问在多文件使用时不擦除；普通 Go API 能真实调用；不支持的新引用边界明确诊断 | 独占、全局不可变、完整引用桥接或长期借用风险分析 |
+| CLI 与构建 | 隔离安装、仓库外使用、Go 模块和已支持构建条件、一致输入可复现输出；真实错误位置或诚实 unmapped；失败清理与输出保护 | 包管理新体系、所有交叉编译目标、全部测试文件语法或 LSP |
+
+验收必须包含新的业务源例子、真实安装 CLI、原生 Go 独立构建和生成模块 `-race`；既有测试只作为回归，文档/机制夹具通过不替代这些应用证据。生成模块可独立构建指无需再次运行 hgo，仍须可解析其 go.mod 中明确的 runtime 依赖，不等于无依赖单文件。
+
+**整项已确认方向的剩余项不能隐藏：**D14 的内建 `print!`/`println!` 与 Default 尚未实现，D21 的数值/string 常量 enum raw/未知值语言入口也尚未实现；它们不同于明确延期的用户过程宏。精确格式/静态协议及常量入口拼写仍需收敛。完整 trait、LSP、YAML、风险分析不加入本次有限交付的必需清单。
 
 ## 如何读状态与证据
 
@@ -13,11 +29,11 @@
 
 “用户必需”表示已确认方向或本轮应用闭环要求；“可后置”不等于取消要求。所有 `Test…Race` 须看测试体：本文引用的独立接受测试 helper 会对生成模块显式执行 `go test -race`；宿主带 race 本身不会使普通子进程自动带 race。下表首先列宿主测试；括号内生成模块测试是嵌在该文件字符串内的真实测试，不应重复算为宿主测试。
 
-## 能力矩阵
+## 能力矩阵（基础范围与后续增量合读）
 
 | 能力与实际验收契约 | 状态 | 必需/可后置与下一步 | 真实证据 |
 | --- | --- | --- | --- |
-| 本文件声明宏：有限 expr/ident/tt、单层重复、嵌套调用、规则顺序 | 有限 | 用户必需 D14/D21；先维持应用组合和明确拒绝，跨包/任意片段后置 | [macros_test.go](../internal/macros/macros_test.go)：`TestRepetitionNestedInvocation`、`TestIdentAndTT`、`TestErrors`；[独立接受测试](../tests/acceptance/macros_test.go)：`TestMacroAcceptanceRace`、`TestMacroAndCloneExplicitRejections` |
+| 本文件声明宏：有限 expr/ident/tt、单层重复、嵌套调用、规则顺序 | 有限 | 用户必需 D14/D21；同 module 跨包已接通（见最新增量）；维持应用组合和明确拒绝，任意片段后置 | [macros_test.go](../internal/macros/macros_test.go)：`TestRepetitionNestedInvocation`、`TestIdentAndTT`、`TestErrors`；[独立接受测试](../tests/acceptance/macros_test.go)：`TestMacroAcceptanceRace`、`TestMacroAndCloneExplicitRejections` |
 | 已支持模板的局部身份、定义点函数绑定、原控制流和按模板次数求值 | 完整（具体子能力） | 用户必需；不能推广到未支持语法的完整卫生 | [宏内部测试](../internal/macros/macros_test.go)：`TestHygieneEvaluationAndHelperShadow`、`TestLogAndReturnDefer`、`TestTemplateRepetitionEvaluationCount`、`TestNestedLocalScopes`；`TestMacroAcceptanceRace` 内 `TestHygieneAndEvaluation`、`TestDisabledLogArgumentsAreEager`。禁用 slog 仍求值，非惰性 tracing |
 | 固定内建 Option/Result 类型的宏模板及显式闭包传播边界 | 有限 | 用户必需组合；捕获类型参数、用户 enum 构造和一般泛型后置 | [sums_test.go](../internal/macros/sums_test.go)：`TestBuiltinSumTemplateDefinitionBindings`、`TestSumHelperDoesNotMovePropagation`、`TestUnsupportedSumTemplateTypes`；[传播接受测试](../tests/acceptance/propagate_test.go)：`TestPropagationMacroClosureRace`（`TestExplicitMacroClosureOwnsReturn`） |
 | Debug/Clone：具体标量、无指针容器、嵌套本地类型 | 有限 | 用户已授权基础派生；通用 trait/泛型/环和共享拓扑复制后置 | [generate_test.go](../internal/deriveextras/generate_test.go)：`TestGeneratedDerivesRun`、`TestRejectImplicitProtocols`；[宏接受测试](../tests/acceptance/macros_test.go)：`TestCloneAndErrorAcceptanceRace`（`TestCloneNestedAndAliasPolicy`）、`TestMacroAndCloneExplicitRejections`。Clone 保留 nil/空区别，不保留别名拓扑/容量 |
@@ -30,7 +46,7 @@
 | 具体 struct JSON：标量、本地嵌套、数组/slice/string-key map、原生 Go `*T` 可空；rename/default/skip/deny_unknown_fields | 有限 | 用户必需首版闭环；default 仅 Go 零值，`*T` 非新引用/Option 桥接 | [serde_test.go](../tests/acceptance/serde_test.go)：`TestSerdeBlackBoxRace`（`TestBusinessRoundtrip`、`TestSkippedFieldAndWhitespace`、`TestNumericBoundaries`、`TestNestedErrorPath`、`TestCycleAndDepthBound`）、`TestUnsupportedSerdeIsDiagnosed`；[compile_test.go](../internal/frontend/compile_test.go)：`TestAttributesCannotBeSilentlyIgnored` |
 | JSON 严格数字/Unicode/重复键、无效值和深度限制 | 完整（具体子能力） | 用户必需可信输入路径；不推导支持完整 Rust serde/全部格式 | [json_test.go](../serdejson/json_test.go)：`TestScalarsAndStrictNumbers`、`TestStrictSyntaxEvenSkipped`；`TestSerdeBlackBoxRace` 内 `TestInputRejections`、`TestEncodingRejectsInvalidValues`、`TestZeroAndTinyNumbers` |
 | 真实 enum serde：unit 字符串/newtype 单键外标记对象，struct/container 嵌套，Variant 路径 | 有限 | 用户必需既定顺序；变体属性、复杂/泛型/递归 payload、内建 Option/Result serde 后置 | [enum_serde_test.go](../tests/acceptance/enum_serde_test.go)：`TestEnumSerdeBusinessRace`（`TestEnumWireAndRoundTrip`、`TestEnumContainers`、`TestEnumInvalidInput`、`TestEnumVariantErrorPath`）、`TestEnumSerdeIndependentDirectionsRace`、`TestEnumSerdeUnsupportedAttributes` |
-| Error/From：消息、显式 source、唯一静态 error 字段的 FromType 与 Unwrap | 有限 | 用户必需已授权；任意具体错误转换、enum Error、通用 From trait 后置 | [宏接受测试](../tests/acceptance/macros_test.go)：`TestCloneAndErrorAcceptanceRace`（`TestErrorChainsAndNil`）、`TestMacroAndCloneExplicitRejections`；[前端测试](../internal/frontend/compile_test.go)：`TestErrorDeriveFieldMethodCollisions` |
+| Error/From：消息、显式 source、唯一静态 error 字段的 FromType 与 Unwrap | 有限 | 用户必需已授权；enum Error 已有限支持（见增量）；任意具体错误转换、通用 From trait 后置 | [宏接受测试](../tests/acceptance/macros_test.go)：`TestCloneAndErrorAcceptanceRace`（`TestErrorChainsAndNil`）、`TestMacroAndCloneExplicitRejections`；[前端测试](../internal/frontend/compile_test.go)：`TestErrorDeriveFieldMethodCollisions` |
 | 内建 Option[T]/Result[T,E] 显式实例化与名义识别：Option nil=None；Result nil 非法；保留 typed-nil payload | 有限 | 用户必需 D12/D22；不是用户泛型声明或任意 interface 分类 | [builtins_test.go](../internal/enums/builtins_test.go)：`TestBuiltinSums`、`TestBuiltinRejects`、`TestBuiltinNominalAndInvalidCases`；[match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestBuiltinMatchExpressionRace`（`TestBuiltinDistinctions`）；[propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationControlFlowRace`（`TestNativePartialAndTypedNil`、`TestInvalidResultIsNotBusinessFailure`） |
 | `?` 在支持上下文保持一次求值、调用顺序、短路、最近闭包和 defer；成功类型可变化 | 有限 | 用户必需 D22；循环/switch/索引/复合字面量/多 RHS 等先明确拒绝 | [propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationControlFlowRace`（`TestDifferentSuccessTypesAndOrder`、`TestCalleeBeforeArguments`、`TestUnselectedBranchStaysUnevaluated`、`TestShortCircuit`、`TestNearestClosureAndDefer`）、`TestPropagationExplicitRejections` |
 | `?` 错误先赋值兼容，再唯一显式单步转换；拒绝缺失/歧义/两跳 | 完整（具体子能力） | 用户必需 D22；前端仅注册上述 Error 派生，不是一般转换求解器 | [propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationFromRace`（`TestOneStepFromAndAssignableFirst`）；[lower_test.go](../internal/propagate/lower_test.go)：`TestFromAndRejections`；[propagation_test.go](../internal/frontend/propagation_test.go)：`TestPropagationAliasIdentity`、`TestPropagationMatchCompositionRace` |
@@ -164,3 +180,22 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | 来源与资源边界 | 精确类型错误 literal 原跨度、定义和调用栈；同文件及外包在 `?` 预处理后的坐标；包/多文件预算和实际两个包累计超限，依赖循环/宏递归拒绝 | 200,000 输入/输出 token、4,096 次展开及既有深度限制；未知生成区域保持 unmapped |
 
 新增测试由实施及接续集成代理编写，fresh 非作者独立只读审查和定向复验已完成；接续集成另修复同文件同路径多alias的不确定 runtime alias 选择及未用导入。最终验证数量见实现记录，不把宿主 race 当作生成模块 race。
+
+
+## 整体验收：安装、多文件权限与构建条件
+
+基准 `4e2a9138b9103b5e08b306f585c297aac467fc60` 后，本轮以 [新任务调度示例](../examples/prototype/delivery_job.hgo) 验收，而非重复旧配置/日志应用。复用非作者独立验收者编写 [t0_delivery_test.go](../tests/acceptance/t0_delivery_test.go)；新建空上下文线程请求因平台线程上限未成功，不将复用审查称为空上下文审查。
+
+| 领域 | 本轮状态与实际证据 | 仍有的有限边界 |
+| --- | --- | --- |
+| 宏 / serde JSON / enum match / OptionResult 与有限 From / 普通 Go API | 新业务同用全部能力：JSON任务、可选名称、批次enum、逐步传播、错误链、条件slog；单文件及拆出只读函数的多文件生成模块实际 race | 保持既有类型/语法子集，不由成功组合推导任意表达式或泛型载荷 |
+| 目录引用 | [目录权限测试](../internal/frontend/directory_reference_test.go) 正向跨文件读/写/收窄；拒绝只读→写、native *T擦除、只读返回写入及公开出口；新业务验证权限阶段与serde/传播共存 | 同包私有引用函数；公开新引用签名仍明确拒绝，跨包权限元数据未实现。普通 Go *T API 保持原定位 |
+| Go 构建条件 | [选择测试](../internal/frontend/build_selection_test.go)：平台后缀、go:build/+build、显式tags、忽略文件与被排除语法；[CLI测试](../cmd/hgo/directory_test.go)：真实run/test与race/!race选择 | host目标；不同GOOS/GOARCH明确拒绝，.hgo测试源未实现。产物属于选定配置，换条件需重新转译 |
+| 安装与独立使用 | 独立验收实际 `go install` 到临时GOBIN、仓库外CLI run、生成模块原生Go build/run及正负业务结果 | runtime依赖由go.mod/replace明确提供；没有下载或发布包的验收 |
+| 输出与诊断 | 输入symlink覆盖拒绝、失败目录清理；真实跨包宏错误同时显示定义和调用位置；相同源两次Go/map产物比较 | 未映射来源仍标unmapped；不承诺移动源码根后绝对路径映射不变，也不承诺二进制逐字节复现 |
+
+独立验收实际发现并推动修复两项：`sourcemap.Error.Error()` 丢失已保存的宏调用栈；CLI `test` 的隐含 `race` 条件未同步到前端和导入数据读取。后者由统一 `ModuleOptions{Tags,Race}` 接通，并由原生测试调用race限定.hgo函数验证。模块依赖文件遍历固定顺序，避免map迭代顺序影响处理次序。
+
+**交付结论：**上述有限T0应用子集可作为本地可运行交付；这不是整项T0或M1–M8完成。整项已确认方向最短剩余清单仍为常量enum raw/未知值入口、内建print/println格式入口、Default；跨包新引用接口和更宽语法仍明确列为当前有限边界，不把风险分析/完整trait/LSP混入本次验收。
+
+最终全套race：**14包、186宿主顶层测试、297子测试**通过；新独立业务包含**2个生成race模块、4个业务测试**，并已验收安装、仓库外运行、真实失败诊断和重复生成一致性。vet、完整设计检查13命令和文档检查通过；完整复现与日志见 [实现记录](../IMPLEMENTATION.md)。本轮没有剩余已确认缺陷，未支持能力仍按上表保留，不能称全语言完成。

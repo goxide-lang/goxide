@@ -23,7 +23,15 @@ import (
 
 // NewImporter uses the source module when present, otherwise the working module.
 // It never downloads modules or switches toolchains. Each importer owns its cache.
-func NewImporter(filename string) types.Importer {
+func NewImporter(filename string) types.Importer { return NewImporterWithTags(filename, nil) }
+
+// NewImporterWithTags uses the same explicit build tags as the module frontend.
+func NewImporterWithTags(filename string, tags []string) types.Importer {
+	return NewImporterWithBuild(filename, tags, false)
+}
+
+// NewImporterWithBuild keeps file selection and export instrumentation aligned.
+func NewImporterWithBuild(filename string, tags []string, race bool) types.Importer {
 	dir, _ := filepath.Abs(filepath.Dir(filename))
 	if root := moduleRoot(dir); root != "" {
 		dir = root
@@ -37,7 +45,12 @@ func NewImporter(filename string) types.Importer {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "list", "-export", "-deps", "-json", "--", path)
+		args := []string{"list", "-export", "-deps", "-json", "-tags=" + strings.Join(tags, ",")}
+		if race {
+			args = append(args, "-race")
+		}
+		args = append(args, "--", path)
+		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
 		cmd.Dir = dir
 		for _, v := range os.Environ() {
 			n, _, _ := strings.Cut(v, "=")

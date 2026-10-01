@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 )
 
 func runDirectory(mode, input, dest, goTool string, out, stderr io.Writer) error {
+	return runDirectoryTags(mode, input, dest, goTool, nil, out, stderr)
+}
+func runDirectoryTags(mode, input, dest, goTool string, tags []string, out, stderr io.Writer) error {
+	options := frontend.ModuleOptions{Tags: tags, Race: mode == "test"}
 	if mode == "expand" {
 		return fmt.Errorf("expand is a single-file command; use transpile for packages")
 	}
@@ -23,7 +28,7 @@ func runDirectory(mode, input, dest, goTool string, out, stderr io.Writer) error
 		if dest == "" {
 			return fmt.Errorf("directory transpile requires -o with a fresh output directory")
 		}
-		_, err := frontend.CompileModule(input, dest)
+		_, err := frontend.CompileModuleWithOptions(input, dest, options)
 		return err
 	}
 	if err := checkDirectoryCompiler(goTool); err != nil {
@@ -34,11 +39,11 @@ func runDirectory(mode, input, dest, goTool string, out, stderr io.Writer) error
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	result, err := frontend.CompileModule(input, filepath.Join(tmp, "module"))
+	result, err := frontend.CompileModuleWithOptions(input, filepath.Join(tmp, "module"), options)
 	if err != nil {
 		return err
 	}
-	argv := []string{mode, "-buildvcs=false"}
+	argv := []string{mode, "-buildvcs=false", "-tags=" + strings.Join(tags, ",")}
 	if mode == "build" {
 		if dest == "" {
 			dest = filepath.Base(input)
@@ -102,6 +107,9 @@ func checkDirectoryCompiler(tool string) error {
 	parts := strings.Fields(string(data))
 	if len(parts) < 3 || parts[0] != "go" || parts[1] != "version" || !version.IsValid(parts[2]) || version.Compare(parts[2], "go1.27") < 0 {
 		return fmt.Errorf("not a supported Go compiler: %s", data)
+	}
+	if parts[2] != runtime.Version() {
+		return fmt.Errorf("directory -go compiler version %s must match the frontend build toolchain %s", parts[2], runtime.Version())
 	}
 	return nil
 }

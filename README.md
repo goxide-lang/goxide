@@ -52,3 +52,27 @@ python3 scripts/check_design.py
 ## 许可证
 
 本项目采用 [Mozilla Public License 2.0](LICENSE)（SPDX：`MPL-2.0`）。
+
+
+## 安装和在仓库外使用
+
+在仓库根目录用真实 Go 1.27+ 编译器安装；无需下载第三方依赖。`GOBIN` 指向希望存放命令的绝对目录：
+
+```sh
+repo="$PWD"
+work="$(mktemp -d)"
+mkdir "$work/bin"
+GOBIN="$work/bin" GOTOOLCHAIN=local GOWORK=off GOPROXY=off go install ./cmd/hgo
+cd "$work"
+"$work/bin/hgo" run -runtime "$repo" "$repo/examples/prototype/conditional_log.hgo"
+"$work/bin/hgo" transpile -o "$work/generated" "$repo/examples/macro_packages"
+cd "$work/generated"
+go test -race ./...
+go build .
+```
+
+单文件 run/build 在仓库外使用 `-runtime /absolute/goxide`。目录输入必须属于已有 `go.mod`；使用 serde 等 runtime 包的应用需要 `require github.com/hxsf/goxide v0.0.0` 和本地 `replace github.com/hxsf/goxide => /absolute/goxide`（示例已有相对 replace，转译时会重定位）。产物是可独立调用 Go 工具构建的模块，仍依赖 go.mod 声明的支持库，并非自包含 runtime 副本。
+
+目录命令支持 `-tags feature,other`，按 Go 规则选择 `.hgo`/native `.go` 的平台后缀、`//go:build` 和旧 `// +build`；忽略 `_`/`.` 开头的源文件。`hgo test` 的选择和 importer 同时启用 `race`，生成测试也使用 `-race`。输出是这一次选择的构建视图，改变 tags、race 配置或平台必须重新转译，不可把相同产物当作全配置源码。当前目录模式拒绝非宿主 GOOS/GOARCH；`.hgo` 测试文件仍未实现，请使用 native Go 测试。
+
+同包多文件可以使用已有有限读/写引用及函数调用，擦除前按完整包签名检查权限；跨包新引用签名暂不导出，普通 Go `*T` API 保持既有边界。`-go /absolute/go` 可绕过 PATH 中同名非编译器程序；类型 importer 使用构建 hgo 的 GOROOT 工具链，目录 run/build/test 要求 `-go` 的版本与它一致。

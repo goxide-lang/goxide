@@ -15,6 +15,7 @@ import (
 	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/propagate"
+	"github.com/hxsf/goxide/internal/refs"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
@@ -128,9 +129,6 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		if err != nil {
 			return PackageResult{}, err
 		}
-		if bytes.Contains(r.Go, []byte("__hgo_ref_")) {
-			return PackageResult{}, fmt.Errorf("%s: reference syntax in directory mode is not yet supported", name)
-		}
 		if err = packageGeneratedNames(name, &r, index, generated); err != nil {
 			return PackageResult{}, err
 		}
@@ -171,6 +169,24 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		refreshPackageMap(&r)
 		files[name] = lowered
 		result.Files[name] = r
+	}
+	finished, err := refs.FinishPackage(files, imp)
+	if err != nil {
+		return result, stageError("package refs.Finish", err)
+	}
+	for name, ref := range finished {
+		r := result.Files[name]
+		if !bytes.Equal(r.Go, ref.Source) {
+			if r.Diagnostics != nil {
+				r.Diagnostics = r.Diagnostics.Compose(r.Go, ref.Source, "package refs.Finish")
+			}
+			r.Go = ref.Source
+			r.Expanded = ref.Source
+			r.References = ref.References
+			refreshPackageMap(&r)
+			result.Files[name] = r
+			files[name] = ref.Source
+		}
 	}
 	if err := typecheck.CheckPackage(path, files, imp); err != nil {
 		if te, ok := err.(types.Error); ok {
@@ -239,7 +255,7 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 				}
 			}
 		}
-		builtin := exportedBuiltins[key] || strings.HasPrefix(key, "__hgo_enum_inst_") || strings.Contains(key, "__hgo_enum_case_Result_") || strings.Contains(key, "__hgo_enum_case_Option_") || strings.HasPrefix(key, "__hgo_enum_ctor_Result_") || strings.HasPrefix(key, "__hgo_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__hgo_enum_validate_Result" || key == "__hgo_enum_validate_Option"
+		builtin := strings.HasPrefix(key, "__hgo_ref_") || exportedBuiltins[key] || strings.HasPrefix(key, "__hgo_enum_inst_") || strings.Contains(key, "__hgo_enum_case_Result_") || strings.Contains(key, "__hgo_enum_case_Option_") || strings.HasPrefix(key, "__hgo_enum_ctor_Result_") || strings.HasPrefix(key, "__hgo_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__hgo_enum_validate_Result" || key == "__hgo_enum_validate_Option"
 		if !builtin {
 			continue
 		}
@@ -292,6 +308,7 @@ func refreshPackageMap(r *Result) {
 		obj = map[string]any{}
 	}
 	obj["diagnostics"] = r.Diagnostics
+	obj["references"] = r.References
 	if ds, ok := obj["derives"].([]any); ok {
 		for _, item := range ds {
 			if d, ok := item.(map[string]any); ok {

@@ -1,0 +1,84 @@
+package main
+
+import (
+    "errors"
+    "fmt"
+    "log/slog"
+    "os"
+    "github.com/hxsf/goxide/serdejson"
+)
+
+macro_rules! job_event {
+    ($enabled:expr, $name:expr, $units:expr) => {
+        if $enabled { slog.Info("job accepted", "name", $name, "units", $units) }
+    };
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum mode { Immediate, Batch(int), }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+type Job struct { Name string; Mode mode; Labels []string }
+
+#[derive(Error)]
+#[error("job rejected")]
+type JobFailure struct {
+    #[from]
+    Cause error
+}
+
+type Receipt struct { Name string; Units int }
+var missingName = errors.New("name is required")
+var exceededLimit = errors.New("batch exceeds available capacity")
+
+func decodeJob(input []byte) Result[Job,error] {
+    job,err:=serdejson.Unmarshal(input,DeserializeJob)
+    if err!=nil { return Result[Job,error]::Err(err) }
+    return Result[Job,error]::Ok(job)
+}
+func jobName(job Job) Option[string] {
+    if job.Name=="" { return Option[string]::None }
+    return Option[string]::Some(job.Name)
+}
+func requireName(job Job) Result[string,error] {
+    match jobName(job) {
+        Option[string]::Some(name) => { return Result[string,error]::Ok(name) },
+        Option[string]::None => { return Result[string,error]::Err(missingName) },
+    }
+    panic("unreachable")
+}
+func readLimit(limit &int) int { return *limit }
+func unitsFor(job Job, limit &int) Result[int,error] {
+    available:=readLimit(limit)
+    match job.Mode {
+        mode::Immediate => { return Result[int,error]::Ok(1) },
+        mode::Batch(count) if count>0 && count<=available => { return Result[int,error]::Ok(count) },
+        mode::Batch(_) => { return Result[int,error]::Err(exceededLimit) },
+    }
+    panic("unreachable")
+}
+func prepareJob(input []byte, limit &int, enabled bool) Result[Receipt,JobFailure] {
+    job:=decodeJob(input)?
+    name:=requireName(job)?
+    units:=unitsFor(job,limit)?
+    snapshot:=CloneJob(&job)
+    job_event!(enabled,snapshot.Name,units)
+    return Result[Receipt,JobFailure]::Ok(Receipt{Name:name,Units:units})
+}
+func RunJob(input []byte, capacity int, enabled bool) (Receipt,error) {
+    var limit &int = &capacity
+    match prepareJob(input,limit,enabled) {
+        Result[Receipt,JobFailure]::Ok(receipt) => { return receipt,nil },
+        Result[Receipt,JobFailure]::Err(failure) => { return Receipt{},failure },
+    }
+    panic("unreachable")
+}
+func main() {
+    slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout,nil)))
+    input:=`{"Name":"mail","Mode":{"Batch":3},"Labels":["priority"]}`
+    if len(os.Args)>1 { input=os.Args[1] }
+    receipt,err:=RunJob([]byte(input),4,true)
+    if err!=nil { fmt.Fprintln(os.Stderr,err);os.Exit(1) }
+    fmt.Printf("scheduled %s: %d units\n",receipt.Name,receipt.Units)
+}

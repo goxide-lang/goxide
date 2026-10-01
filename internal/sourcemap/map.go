@@ -221,10 +221,16 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	var out strings.Builder
 	if e.Origin == nil {
-		return fmt.Sprintf("%s: %s [generated/unmapped]", e.Generated, e.Message)
+		fmt.Fprintf(&out, "%s: %s [generated/unmapped]", e.Generated, e.Message)
+	} else {
+		fmt.Fprintf(&out, "%s:%d:%d: %s (source span [%d,%d))", e.Origin.File, e.Origin.Line, e.Origin.Column, e.Message, e.Origin.Start, e.Origin.End)
 	}
-	return fmt.Sprintf("%s:%d:%d: %s (source span [%d,%d))", e.Origin.File, e.Origin.Line, e.Origin.Column, e.Message, e.Origin.Start, e.Origin.End)
+	for _, frame := range e.Stack {
+		fmt.Fprintf(&out, "\n  macro %s defined at %s:%d:%d; invoked at %s:%d:%d", frame.Macro, frame.Definition.File, frame.Definition.Line, frame.Definition.Column, frame.Callsite.File, frame.Callsite.Line, frame.Callsite.Column)
+	}
+	return out.String()
 }
 
 // Format composes a go/format pass. go/format may remove redundant parentheses;

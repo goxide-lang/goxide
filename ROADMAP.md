@@ -97,3 +97,6 @@ Option/Result 阶段已有真实 Go API 显式包装、不同成功类型的传�
 
 
 同 module 源码包声明宏现支持 `pub macro_rules!` 和普通 import 的 `alias.name!`，保留每个定义文件的作用域、私有嵌套宏和公开 runtime shim 边界。真实日志包应用覆盖禁用时不求值、跨文件别名、同名宏、enum/serde/Result/Error 组合；包和整个模块共享资源预算，诊断保留有证据的定义/调用原始跨度。见 [实现记录](IMPLEMENTATION.md) 和 [增量验收](docs/t0-acceptance.md)。外部预编译宏 metadata、过程宏、任意模板语法及完整来源映射仍未完成；M6/T0 未整体完成。
+
+
+本轮整体验收在上述同module宏基准上补齐host构建条件（显式tags及test隐含race）和同包多文件引用检查；新任务调度示例从安装CLI到独立生成模块验证宏/JSON/enum/OptionResult/From/基础权限组合。有限T0可运行子集与整项已确认方向分别记录于 [当前交付标准及验收](docs/t0-acceptance.md#有限-t0-的交付标准)。常量enum raw/未知值、print/println与Default仍是真实未完成项；完整trait、LSP和长期风险分析不是本轮交付前置条件。公开新引用签名、跨目标编译和.hgo测试源等限制保持明确，不以降低成Go代码代替权限验证。

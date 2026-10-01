@@ -21,20 +21,42 @@ func Prepare(filename string, source []byte) (Result, error) {
 // Lower then performs complete type checking and validates all consuming sites.
 // Provisional typing here is used only to resolve constructor element types.
 func Finish(filename string, source []byte, imp types.Importer) (Result, error) {
+	restored, err := restore(filename, source, imp, nil)
+	if err != nil {
+		return Result{}, err
+	}
 	if !strings.Contains(string(source), "type __hgo_ref_write[") {
 		return Result{Source: source}, nil
+	}
+	return lower(filename, restored, imp, false)
+}
+func restore(filename string, source []byte, imp types.Importer, files map[string][]byte) ([]byte, error) {
+	if len(files) == 0 && !strings.Contains(string(source), "type __hgo_ref_write[") {
+		return source, nil
 	}
 	fs := token.NewFileSet()
 	f, err := parser.ParseFile(fs, filename, source, parser.AllErrors)
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{}}
 	if imp == nil {
 		imp = importer.Default()
 	}
 	conf := types.Config{Importer: imp, Error: func(error) {}}
-	_, _ = conf.Check("hgo.local/refs", fs, []*ast.File{f}, info)
+	all := []*ast.File{f}
+	for _, name := range sourceNames(files) {
+		if name == filename {
+			continue
+		}
+		peer, err := parser.ParseFile(fs, name, files[name], parser.AllErrors)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, peer)
+	}
+	deduplicateIR(all)
+	_, _ = conf.Check("hgo.local/refs", fs, all, info)
 	offset := func(p token.Pos) int { return fs.Position(p).Offset }
 	var es []edit
 	var failure error
@@ -98,8 +120,8 @@ func Finish(filename string, source []byte, imp types.Importer) (Result, error) 
 		})
 	}
 	if failure != nil {
-		return Result{}, failure
+		return nil, failure
 	}
 	restored := original(source).apply(es).text
-	return lower(filename, restored, imp, false)
+	return restored, nil
 }

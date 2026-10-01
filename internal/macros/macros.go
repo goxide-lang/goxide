@@ -37,6 +37,8 @@ type definition struct {
 	pos   token.Position
 }
 type engine struct {
+	sumHelpers                map[string]string
+	intrinsics                map[string]bool
 	importPaths               map[string]string
 	importCache               map[string]*types.Package
 	importer                  types.Importer
@@ -58,6 +60,12 @@ func Expand(filename string, source []byte) ([]byte, error) {
 	return r.Source, e
 }
 func ExpandWithMap(filename string, source []byte) (Result, error) {
+	return ExpandWithIntrinsics(filename, source, nil)
+}
+
+// ExpandWithIntrinsics is for compiler-produced markers only. The caller must
+// reject these reserved names in user input before preparing the source.
+func ExpandWithIntrinsics(filename string, source []byte, names []string) (Result, error) {
 	ts, tail, err := lex(filename, source)
 	if err != nil {
 		return Result{}, err
@@ -66,6 +74,10 @@ func ExpandWithMap(filename string, source []byte) (Result, error) {
 		return Result{}, fmt.Errorf("%s: macro input token budget exceeded", filename)
 	}
 	e := engine{importPaths: map[string]string{}, importCache: map[string]*types.Package{}, importer: importer.Default(), file: filename, defs: map[string]definition{}, funcs: map[string]bool{}, imports: map[string]bool{}, aliases: map[string]string{}, prefix: "hgoMacroGenerated"}
+	e.intrinsics = map[string]bool{}
+	for _, n := range names {
+		e.intrinsics[n] = true
+	}
 	for strings.Contains(string(source), e.prefix) {
 		e.prefix += "X"
 	}
@@ -176,7 +188,9 @@ func ExpandWithMap(filename string, source []byte) (Result, error) {
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if strings.HasPrefix(key, "type ") {
+		if strings.HasPrefix(key, "func ") {
+			b.WriteString("\n" + e.sumHelpers[key] + "\n")
+		} else if strings.HasPrefix(key, "type ") {
 			fmt.Fprintf(&b, "\ntype %s = %s\n", e.aliases[key], strings.TrimPrefix(key, "type "))
 		} else if strings.HasPrefix(key, "const ") {
 			fmt.Fprintf(&b, "\nconst %s = %s\n", e.aliases[key], strings.TrimPrefix(key, "const "))

@@ -8,7 +8,10 @@ import (
 	"github.com/hxsf/goxide/internal/deriveextras"
 	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/macros"
+	"github.com/hxsf/goxide/internal/matchexpr"
+	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/refs"
+	"github.com/hxsf/goxide/internal/typecheck"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -63,11 +66,6 @@ var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
 var renameAttr = regexp.MustCompile(`^rename\s*=\s*("(?:[^"\\]|\\.)*")$`)
 
 func Compile(filename string, source []byte) (Result, error) {
-	expanded, expandErr := macros.ExpandWithMap(filename, source)
-	if expandErr != nil {
-		return Result{}, expandErr
-	}
-	source = expanded.Source
 	// Reject user access to reserved generated names before adding enum helpers.
 	reserveFS := token.NewFileSet()
 	reserveFile := reserveFS.AddFile(filename, -1, len(source))
@@ -95,6 +93,18 @@ func Compile(filename string, source []byte) (Result, error) {
 		if tok == token.IDENT && strings.HasPrefix(lit, "__hgo_") {
 			return Result{}, fmt.Errorf("%s: reserved generated identifier %s", reserveFS.Position(pos), lit)
 		}
+	}
+	prepared, err := propagate.Prepare(filename, source)
+	if err != nil {
+		return Result{}, err
+	}
+	expanded, err := macros.ExpandWithIntrinsics(filename, prepared, []string{"__hgo_question"})
+	if err != nil {
+		return Result{}, err
+	}
+	source, err = matchexpr.Lower(filename, expanded.Source)
+	if err != nil {
+		return Result{}, err
 	}
 	enumResult, err := enums.Lower(filename, source)
 	if err != nil {
@@ -207,7 +217,7 @@ func Compile(filename string, source []byte) (Result, error) {
 	g := generator{fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && id.Name != "__hgo_question" {
 			collision = id.Name
 		}
 		return true
@@ -442,6 +452,26 @@ func Compile(filename string, source []byte) (Result, error) {
 	out, e := format.Source([]byte(text))
 	if e != nil {
 		return Result{}, fmt.Errorf("internal expansion error: %w\n%s", e, text)
+	}
+	needsTypecheck := bytes.Contains(out, []byte("__hgo_match_expr_"))
+	for _, d := range enumResult.Enums {
+		needsTypecheck = needsTypecheck || d.Family != ""
+	}
+	if bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck {
+		conversions := []propagate.Conversion{}
+		for _, m := range ordered {
+			if m.from != "" {
+				conversions = append(conversions, propagate.Conversion{Source: "error", Target: m.name, Helper: "From" + m.name})
+			}
+		}
+		imp := typecheck.NewImporter(filename)
+		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp})
+		if e != nil {
+			return Result{}, e
+		}
+		if e = typecheck.Check(filename, out, imp); e != nil {
+			return Result{}, e
+		}
 	}
 	sm := []map[string]any{}
 	for _, m := range ordered {

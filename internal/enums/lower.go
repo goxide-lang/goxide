@@ -18,6 +18,8 @@ type Variant struct {
 }
 type Decl struct {
 	Name, Marker, Validator string
+	Family                  string
+	TypeParams, TypeArgs    []string
 	Variants                []Variant
 	Position                token.Position
 }
@@ -99,14 +101,21 @@ func Lower(filename string, source []byte) (Result, error) {
 		edits = append(edits, edit{l.ts[start].start, l.ts[end].end, ""})
 		i = end
 	}
+	localCount := len(l.decls)
+	if err := l.collectBuiltins(); err != nil {
+		return Result{}, err
+	}
 	if err := l.checkBuiltinBindings(); err != nil {
+		return Result{}, err
+	}
+	if err := l.checkCompositePayloads(); err != nil {
 		return Result{}, err
 	}
 	// Refresh pointers after slice growth.
 	for i := range l.decls {
 		l.byName[l.decls[i].Name] = &l.decls[i]
 	}
-	for _, d := range l.decls {
+	for _, d := range l.decls[:localCount] {
 		for _, v := range d.Variants {
 			if v.Payload != "" && !scalar(v.Payload) && l.byName[v.Payload] == nil {
 				return Result{}, l.err(v.Position.Offset, "unsupported enum payload: use scalar or local non-generic enum")
@@ -135,7 +144,7 @@ func Lower(filename string, source []byte) (Result, error) {
 		done[n] = true
 		return nil
 	}
-	for _, d := range l.decls {
+	for _, d := range l.decls[:localCount] {
 		if e := visit(d.Name); e != nil {
 			return Result{}, e
 		}
@@ -147,6 +156,7 @@ func Lower(filename string, source []byte) (Result, error) {
 	if e != nil {
 		return Result{}, e
 	}
+	out += l.builtinDeclarations()
 	return Result{[]byte(out), l.decls}, nil
 }
 func scalar(s string) bool {
@@ -208,6 +218,9 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 		return d, 0, l.err(l.ts[i].start, "expected enum Name { ... }; generics unsupported")
 	}
 	d.Name = l.ts[i+1].text
+	if d.Name == "Option" || d.Name == "Result" {
+		return d, 0, l.err(l.ts[i+1].start, "reserved builtin sum type name")
+	}
 	d.Marker = "__hgo_enum_marker_" + d.Name
 	d.Validator = "__hgo_enum_validate_" + d.Name
 	end, e := l.close(i + 2)
@@ -315,12 +328,15 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 			i = last
 			continue
 		}
-		if i+3 < len(l.ts) && l.ts[i+1].text == ":" && l.ts[i+2].text == ":" {
-			d := l.byName[t.text]
+		d, colon, qualified, qe := l.qualified(i)
+		if qe != nil {
+			return "", qe
+		}
+		if qualified {
 			if d == nil {
 				return "", l.err(t.start, "unknown or cross-package enum constructor")
 			}
-			name := l.ts[i+3].text
+			name := l.ts[colon+2].text
 			var v *Variant
 			for j := range d.Variants {
 				if d.Variants[j].Name == name {
@@ -332,8 +348,8 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 			}
 			b.Write(l.src[cursor:t.start])
 			b.WriteString(v.Constructor)
-			cursor = l.ts[i+3].end
-			i += 3
+			cursor = l.ts[colon+2].end
+			i = colon + 2
 			if v.Payload == "" {
 				if i+1 < len(l.ts) && l.ts[i+1].text == "(" {
 					return "", l.err(t.start, "unit variant takes no arguments")
@@ -385,8 +401,11 @@ func (l *lowerer) match(i int) (string, int, error) {
 			continue
 		}
 		a := arm{pos: l.ts[k].start}
-		if k+3 < end && l.ts[k+1].text == ":" && l.ts[k+2].text == ":" {
-			nd := l.byName[l.ts[k].text]
+		nd, colon, qualified, qe := l.qualified(k)
+		if qe != nil {
+			return "", 0, qe
+		}
+		if qualified {
 			if nd == nil {
 				return "", 0, l.err(a.pos, "unknown enum in pattern")
 			}
@@ -394,8 +413,8 @@ func (l *lowerer) match(i int) (string, int, error) {
 				return "", 0, l.err(a.pos, "mixed enum identities in match")
 			}
 			d = nd
-			a.variant = l.ts[k+3].text
-			k += 4
+			a.variant = l.ts[colon+2].text
+			k = colon + 3
 			if k < end && l.ts[k].text == "(" {
 				p, e := l.close(k)
 				if e != nil {
@@ -498,7 +517,11 @@ func (l *lowerer) match(i int) (string, int, error) {
 				}
 			}
 			tmp := "__hgo_enum_payload_" + id
-			fmt.Fprintf(&b, "if %s, __hgo_enum_ok_%s := %s.(%s); __hgo_enum_ok_%s { _ = %s;\n", tmp, id, saved, v.CaseName, id, tmp)
+			if d.Family == "Option" && v.Name == "None" {
+				fmt.Fprintf(&b, "if %s == %s() {\n", saved, v.Constructor)
+			} else {
+				fmt.Fprintf(&b, "if %s, __hgo_enum_ok_%s := %s.(%s); __hgo_enum_ok_%s { _ = %s;\n", tmp, id, saved, v.CaseName, id, tmp)
+			}
 			if a.bind != "" && a.bind != "_" {
 				fmt.Fprintf(&b, "%s := %s.Value; _ = %s;\n", a.bind, tmp, a.bind)
 			}
@@ -529,6 +552,15 @@ func (l *lowerer) checkBuiltinBindings() error {
 		return nil
 	}
 	needed := map[string]bool{"panic": true}
+	for _, d := range l.decls {
+		if d.Family != "" {
+			needed["Option"] = true
+			needed["Result"] = true
+			needed["nil"] = true
+			needed["any"] = true
+			needed["error"] = true
+		}
+	}
 	for _, d := range l.decls {
 		for _, v := range d.Variants {
 			if scalar(v.Payload) {

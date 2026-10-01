@@ -18,6 +18,11 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 		return ts, nil
 	}
 	ts = append([]tok(nil), ts...)
+	var sumErr error
+	ts, sumErr = e.prepareSums(ts)
+	if sumErr != nil {
+		return nil, sumErr
+	}
 	var text strings.Builder
 	offsets := map[int]int{}
 	for i, t := range ts {
@@ -121,6 +126,9 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 		}
 		i, ok := index(id.Pos())
 		if !ok {
+			return true
+		}
+		if e.intrinsics[id.Name] {
 			return true
 		}
 		if _, ok := ph[id.Name]; ok {

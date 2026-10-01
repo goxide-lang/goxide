@@ -1,6 +1,6 @@
-# 可运行的宏与 serde 原型
+# 可运行的 hgo 语言子集
 
-此实现分支从 `v0.0.0-mvp-doc` 开始；冻结标签与研究工作区未改动。
+此实现分支从 `v0.0.0-mvp-doc` 开始；冻结标签保持不变，本文件只描述实现分支。
 这是具体类型、单文件、Go 宿主语法上的可执行子集，不是完整 hgo 编译器、trait ABI 或 LSP。
 
 ## 运行
@@ -26,7 +26,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 - 核心 `serde`：Serializer/Deserializer、Visitor 与容器访问协议、结构化错误及 cause；生成静态 helper，不采用反射 struct 编解码，不强制 Value 树。
 - 独立 `serdejson`：[支持范围与限制](serdejson/README.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议及本地 enum 的 Serialize/Deserialize 派生支持 unit/newtype。
 - `Debug/Clone`：具体标量及上述非指针容器、嵌套本地类型。Debug 的 map 按键排序；Clone 递归复制支持的容器。指针、锁、外部未知类型、接口等没有隐式复制协议，明确拒绝。
-- `Error`：`#[error("failed {Code}")]`、显式 `#[source]` 的 error 字段生成 Unwrap；单个 error 字段的 `#[from]` 生成 `FromType`。无动态错误变体推断、完整 enum 或问号实现。
+- `Error`：`#[error("failed {Code}")]`、显式 `#[source]` 的 error 字段生成 Unwrap；单个 error 字段的 `#[from]` 生成 `FromType`。其显式转换已接入下述有限 `?` 前端；不推断动态错误变体，不支持 enum Error 派生。
 - 日志示例调用 Go `log/slog`，验证重复字段参数和错误链；不是完整 tracing/span 运行时。
 
 代表写法见 [订单](examples/prototype/order.hgo) 和 [日志与错误](examples/prototype/log_error.hgo)。源文件采用 Go package/import/function/field 语法，派生属性独占行；也支持有限 `struct Name` 声明简写。未实现 Rust/hgo 整套语法。
@@ -41,7 +41,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 源码映射是原型：derive 记录 helper 范围及展开输入的类型来源；宏 token 保存格式化前的输出偏移及调用位置。
 它不是最终 Go 文件逐 token、逐字段的完整映射，也不是 LSP。
 
-未完成：泛型 derive、跨包宏、用户过程宏、完整 trait、泛型/跨包 enum、Option/Result/引用前端、YAML、格式 Value、借用解码和原生 JSON codec 自动适配。
+未完成：泛型 derive、跨包宏、用户过程宏、完整 trait、用户泛型/跨包 enum、完整 Option/Result/引用前端、YAML、格式 Value、借用解码和原生 JSON codec 自动适配。
 别名/借用风险分析继续独立于 MVP；本原型不作静态内存或并发安全保证。
 
 ## 本轮验收记录
@@ -83,7 +83,7 @@ go run ./cmd/hgo run examples/prototype/events.hgo
 go test -race -count=1 ./internal/enums ./tests/acceptance -run TestEnum
 ```
 
-这是候选 interface+值型case ABI的有限实现，未冻结ABI；仅match使用点验证，未实现全入口/初始化检查。case/helper当前未导出，外部Go构造尚未支持。泛型、复杂payload、表达式match、嵌套模式、Option/Result特殊规则仍未实现。枚举声明不是serde专用表示；下一阶段在这份元数据上补serde派生。
+这是候选 interface+值型case ABI的有限实现，未冻结ABI；仅match使用点验证，未实现全入口/初始化检查。case/helper当前未导出，外部Go构造尚未支持。用户泛型、复杂payload、嵌套模式仍未实现；有限表达式 match 和内建 Option/Result 的后续交付见下文。枚举声明不是serde专用表示；下一阶段在这份元数据上补serde派生。
 
 独立enum审查新增6顶层测试及8拒绝子例；3个生成模块显式race运行6测试及3卫生子例，另1模块验证名义类型编译拒绝。修复生成代码被局部true/false/any捕获，以及包级panic和标量类型遮蔽影响验证的问题。
 
@@ -121,3 +121,38 @@ go test -race -count=1 ./tests/acceptance -run TestReference
 本阶段末：`go test -race -count=1 -json ./...` 通过10包、76顶层测试、115子测试；`go vet ./...`通过。以上是宿主JSON事件统计，生成模块测试另计；新独立模块均显式启用race，旧prototype子进程普通测试的限制仍保留。引用CLI transpile产物另用 `go run -race`通过。
 
 最终独立验收累计：10个实际生成模块显式race运行29个测试、33个子测试，另1个模块验证预期Go名义类型编译拒绝。完整设计检查通过30篇Markdown/205个本地链接及13个Go命令（含预期拒绝）；该夹具检查仍不作为新编译器功能的证明。
+
+
+## 后续阶段：Option/Result 专用 `?` 与有限表达式 match
+
+已接入 `internal/propagate` 独立阶段，以 enum 元数据和真实 Go 类型识别内建 `Option[T]` / `Result[T,E]`，在原函数/最近闭包内生成一次求值、校验、分支和早退，不插入隐藏闭包。成功类型可以变化；错误先按 Go 赋值兼容保留，否则只查唯一注册的显式单步转换。前端当前仅注册 Error 派生的唯一 `#[from] Cause error` 字段所生成的 `FromType`，不是通用 From trait 搜索，不搜索链、不猜动态 error 变体。
+
+[可运行传播示例](examples/prototype/propagation.hgo) 显式调用真实 Go `strconv.Atoi` 后选择如何处理 `(int,error)`，再展示 Result、Option 和 `error → PortError`；没有隐式原生多返回适配。[表达式 match 示例](examples/prototype/match_expression.hgo) 展示带显式类型的局部初始化和单返回位置。
+
+```sh
+go run ./cmd/hgo run examples/prototype/propagation.hgo
+go run ./cmd/hgo run examples/prototype/match_expression.hgo
+go run ./cmd/hgo transpile -o /tmp/goxide-propagation-example.go examples/prototype/propagation.hgo
+go run -race /tmp/goxide-propagation-example.go
+go run ./cmd/hgo transpile -o /tmp/goxide-match-expression-example.go examples/prototype/match_expression.hgo
+go run -race /tmp/goxide-match-expression-example.go
+```
+
+以上两个 CLI run 和两个转译产物 `go run -race` 本轮均通过。传播输出为 `next port: 8081`、`port error: invalid port syntax: true`、`name length: 3`、`name length: absent`；match 输出为 `count: 3`、`count: 0`、`empty`。验证使用真实 Go 工具链，`GOTOOLCHAIN=local GOWORK=off GOPROXY=off GOCACHE=/tmp/goxide-macro-cache`。
+
+准确支持范围见 [内建枚举](internal/enums/README.md)、[传播](internal/propagate/README.md)、[表达式 match](internal/matchexpr/README.md) 和[宏](internal/macros/README.md)：
+
+- 这是内建容器的有限泛型实例化，必须显式写类型参数；不是用户泛型函数/声明、通用 Try/Residual 或跨包泛型 enum。Option 的 nil 是 None，Result 的 nil 非法；typed-nil error payload 原样保留。
+- `?` 支持单 RHS 绑定、单项 var 声明、return、调用参数（含 defer/go）、普通一元/二元/selector、短路布尔和无 initializer 的 if 条件。循环、switch、索引/切片、复合字面量、赋值目标、多 RHS 及带 initializer 的 if 条件中的传播明确拒绝；先绑定或显式 match。
+- 宏模板仅支持固定内建容器类型：类型参数限 Go 内建标量及其指针/数组/slice/map/channel 组合，不支持捕获调用者类型、未知具名类型或用户 enum 构造。类型别名/构造 helper 不改变 `?` 的词法目标；模板显式闭包仍是传播边界。
+- 表达式 match 仅支持整个显式类型局部初始化，以及单个非具名、Go 可解析返回类型的整个 return 表达式。`:=` 推断、参数/运算符/另一个 arm 内嵌 match、表达式块、包初始化、具名/多返回未实现。
+- 新引用语法与 `?`/尚未生成的 derive helper 的同文件组合尚未打通：引用检查早于传播与派生 lowering，不能把分开可运行的功能推断为任意组合可用。原生 Go 指针示例不代表新引用组合已经支持。
+- 内建容器不能派生 serde；已知含 enum 的 struct/container/pointer payload 在缺投影校验时拒绝。校验不遍历任意 interface 动态对象图。精确原始列映射、公开边界全面校验和借用风险分析仍未实现。
+
+独立接受测试见 `tests/acceptance/propagate_test.go`，覆盖原顺序、短路、defer、最近闭包、typed nil、原生部分成功及显式拒绝；转换注册器层另测歧义、缺失和两跳拒绝。全套统计按本轮实际运行另记，不沿用旧阶段数量作为当前证据。
+
+本阶段最终验收：`go test -race -count=1 -json ./...` 通过 **13 包、102 个顶层测试、150 个子测试**；`go vet ./...` 通过。新增传播与表达式 match 的独立接受测试让 **6 个实际生成模块**显式执行 `go test -race`，共 **15 个生成模块测试**通过；宿主统计与生成模块统计分开，旧 prototype 子进程未继承 race 的限制仍不变。另有前端组合回归直接 `go run -race`，两个 CLI 示例的转译产物也分别 `go run -race`；传播例子经 CLI build 后运行输出一致。
+
+全新上下文集成审查及自审修复：宏显式闭包的返回类型别名、载荷/导入/From 目标别名不再按字符串误判；选中的 From helper 在包级绑定到保留标识符，防止调用者局部同名函数截获。内建 sum 或表达式 match 即使没有 `?` 也执行最终完整 Go 类型检查，临时类型推导允许的错误不会被静默放过。实际组合回归覆盖 match arm 内 `?` 的成功、失败和未选中分支，以及 From 遮蔽。
+
+完整设计检查另通过 **32 篇 Markdown、218 个本地链接、13 条 Go 命令**（含三个预期编译拒绝、锁 race）；它仍只验证设计机制，与上述前端验收分开。环境为 Go 1.27.1 linux/amd64、CGO_ENABLED=1、Python 3.12.14；无工具链/依赖下载。

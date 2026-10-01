@@ -62,3 +62,14 @@ expression precedence, repetition and nesting, captured identifiers, log-style
 fields, and actual caller `return`/`defer` behavior. Negative tests exercise pattern,
 fragment, free-name, empty repetition and resource errors. These tests do not
 claim complete macro hygiene for the unsupported syntax categories above.
+
+Fixed built-in `Option[T]` / `Result[T,E]` template types and qualified
+constructors are supported through definition-site type aliases and typed
+constructor helpers. Type arguments currently admit builtin Go scalar types and
+pointer/array/slice/map/channel combinations, not caller-captured or unknown named
+types. Ordinary user enum constructors in templates remain a located diagnostic.
+The next enum lowering pass processes helper bodies; macro output never forges
+reserved enum ABI names. Constructor arguments and trusted compiler question
+markers remain at the original call position, inside an explicit template closure
+when present. No helper changes the nearest propagation/return target. None is a
+unit variant written `Option[int]::None`, without parentheses.

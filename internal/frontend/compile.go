@@ -81,6 +81,8 @@ type compileConfig struct {
 	named        map[string]ast.Expr
 	models       map[string]model
 	collect      bool
+	imported     map[string][]enums.Decl
+	preludes     map[string]string
 }
 
 func compile(filename string, source []byte, cfg *compileConfig) (Result, error) {
@@ -164,12 +166,15 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if cfg == nil {
 		enumResult, err = enums.LowerMapped(filename, source, provenance)
 	} else {
-		enumResult, err = enums.LowerPackage(filename, source, provenance, cfg.declarations, cfg.named)
+		enumResult, err = enums.LowerPackage(filename, source, provenance, append(append([]enums.Decl{}, cfg.declarations...), cfg.imported[filename]...), cfg.named)
 	}
 	if err != nil {
 		return Result{}, stageError("enums.Lower", err)
 	}
 	source = enumResult.Source
+	if cfg != nil {
+		source = append(source, []byte(cfg.preludes[filename])...)
+	}
 	refResult, err := refs.Prepare(filename, source)
 	if err != nil {
 		return Result{}, stageError("refs.Prepare", err)

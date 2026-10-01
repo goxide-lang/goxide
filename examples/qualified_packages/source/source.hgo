@@ -1,0 +1,33 @@
+package source
+import "errors"
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Mode { Idle, Ready(int), }
+var Sentinel = errors.New("source failed")
+type Fault struct{}
+func (*Fault) Error() string { return "typed failure" }
+func Fetch(kind string) Result[int,error] {
+    if kind == "error" { return Result[int,error]::Err(Sentinel) }
+    if kind == "typed" { var e *Fault; return Result[int,error]::Err(e) }
+    return Result[int,error]::Ok(7)
+}
+func Success(n int) Result[int,error] { return Result[int,error]::Ok(n) }
+func Read(value Result[int,error]) (int,error) {
+    match value {
+        Result[int,error]::Ok(n) => { return n,nil },
+        Result[int,error]::Err(e) => { return 0,e },
+    }
+    panic("unreachable")
+}
+func Missing() Option[int] { return Option[int]::None }
+func Present(n int) Option[int] { return Option[int]::Some(n) }
+func ReadOption(value Option[int]) (int,bool) {
+    match value {
+        Option[int]::Some(n) => { return n,true },
+        Option[int]::None => { return 0,false },
+    }
+    panic("unreachable")
+}
+func InvalidNested() Result[Mode,error] { return Result[Mode,error]::Ok(nil) }
+type Count = int
+func AliasSuccess() Result[Count,error] { return Result[Count,error]::Ok(9) }

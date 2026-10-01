@@ -37,10 +37,19 @@ functions without a match are not globally validated. This is not all public
 boundary validation, ownership analysis, or whole-object graph validation. Payload
 and nominal assignment type errors are currently rejected by generated Go's type
 checker. Generated helper/case names reserve `__hgo_enum_` and are recorded in
-metadata; they are unexported, so Go interoperability currently covers **same-package
-mechanism tests**, not external Go callers constructing exported cases.
+metadata. Directory compilation additionally emits a finite export protocol for
+`pub enum`: public constructors, validators, and `HgoCase...` aliases to the private
+value cases. The marker stays private and nominal; pointer and embedded cases are
+still rejected by validation. These generated names are a prototype protocol.
 
-Explicitly unsupported: `pub` declarations and generic/cross-package enums; recursive, pointer, enum-bearing container,
+Directory compilation supports `alias.Enum::Variant` constructors and statement
+or supported expression matches for directly imported `pub enum` declarations.
+Metadata is keyed by canonical module import path and bound separately for each
+file alias. Generated package bindings prevent local aliases from capturing case
+projections or validators. Matching two packages’ identically named enums remains
+a type error. Private enums and ordinary Go enum lookalikes have no metadata.
+
+Explicitly unsupported: user generic enums; recursive, pointer, enum-bearing container,
 unknown external or general interface payloads; nested/constant/or/range patterns;
 expression matches are handled by a separate frontend stage; wildcard-only
 type inference; generalized propagation protocols; constant-backed enum
@@ -81,7 +90,9 @@ sum payloads beside scalar references does not authorize storing new references
 inside sums. This is boundary validation, not ownership analysis.
 
 User generic functions and declarations remain unsupported, as do inferred generic
-constructors, cross-package builtin identities and builtin serde derives. Built-in
+constructors and builtin serde derives. In directory mode, the propagation stage
+can consume imported concrete builtin instances emitted by a compiled dependency;
+qualified builtin constructor/pattern syntax is not yet supported. Built-in
 names cannot be replaced by user declarations when using this subset. The local enum extension described below reuses the same value projection checks. The dedicated `?` stage consumes the same
 case/validator metadata; this module alone does not implement early return.
 

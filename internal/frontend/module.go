@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/build"
-	"go/parser"
-	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -198,14 +196,7 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 	if relTarget == "." {
 		result.Target = "."
 	}
-	prepared := map[string]PackageResult{}
-	for _, dir := range sortedPackageDirs(packages) {
-		p, e := preparePackage(packages[dir])
-		if e != nil {
-			return result, e
-		}
-		prepared[dir] = p
-	}
+	metadata := map[string]PackageResult{}
 	state := map[string]int{}
 	var compileDir func(string) error
 	compileDir = func(dir string) error {
@@ -216,9 +207,8 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 			return fmt.Errorf("module import cycle at %s", dir)
 		}
 		state[dir] = 1
-		p := prepared[dir]
-		for name, r := range p.Files {
-			f, e := parser.ParseFile(token.NewFileSet(), name, r.Go, parser.ImportsOnly)
+		for name, source := range packages[dir] {
+			f, e := parseSourceImports(name, source)
 			if e != nil {
 				return e
 			}
@@ -232,7 +222,7 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 				} else {
 					continue
 				}
-				if _, ok := prepared[dep]; ok {
+				if _, ok := packages[dep]; ok {
 					if e := compileDir(dep); e != nil {
 						return e
 					}
@@ -242,6 +232,10 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 		pkgPath := modulePath
 		if dir != "." {
 			pkgPath += "/" + filepath.ToSlash(dir)
+		}
+		p, e := preparePackageImports(packages[dir], metadata)
+		if e != nil {
+			return e
 		}
 		checked, e := finishPackage(pkgPath, p, typecheck.NewImporter(filepath.Join(destination, dir, "package.go")))
 		if e != nil {
@@ -261,6 +255,7 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 			}
 			result.Files[goName] = r
 		}
+		metadata[pkgPath] = checked
 		state[dir] = 2
 		return nil
 	}

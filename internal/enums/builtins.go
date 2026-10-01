@@ -102,7 +102,7 @@ func (l *lowerer) collectBuiltins() error {
 			continue
 		}
 		if i > 0 && l.ts[i-1].text == "." {
-			return l.err(t.start, "cross-package builtin sums unsupported")
+			continue
 		}
 		if i+1 >= len(l.ts) || l.ts[i+1].text != "[" {
 			if i+1 < len(l.ts) && l.ts[i+1].text == ":" {
@@ -124,6 +124,10 @@ func (l *lowerer) collectBuiltins() error {
 func (l *lowerer) qualified(i int) (*Decl, int, bool, error) {
 	j := i + 1
 	name := l.ts[i].text
+	if j+1 < len(l.ts) && l.ts[j].text == "." {
+		name += "." + l.ts[j+1].text
+		j += 2
+	}
 	if (name == "Option" || name == "Result") && j < len(l.ts) && l.ts[j].text == "[" {
 		d, end, e := l.builtinAt(i)
 		if e != nil {
@@ -175,6 +179,16 @@ func (l *lowerer) builtinDeclarations() string {
 			}
 		}
 		fmt.Fprintf(&b, "default:panic(%q)}};\n", "hgo: invalid enum "+d.Family)
+		for _, v := range g.Variants {
+			if v.Payload != "" {
+				fmt.Fprintf(&b, "type Hgo%s%s%s = %s;\n", d.Family, v.Name, params, v.CaseName)
+			}
+			arg, call := "", ""
+			if v.Payload != "" {
+				arg, call = "v "+v.Payload, "v"
+			}
+			fmt.Fprintf(&b, "func HgoNew%s%s%s(%s) %s%s { return %s(%s) };\n", d.Family, v.Name, params, arg, d.Family, args, v.Constructor, call)
+		}
 	}
 	for _, d := range l.decls {
 		if d.Family == "" {
@@ -189,6 +203,7 @@ func (l *lowerer) builtinDeclarations() string {
 			b.WriteString(l.payloadChecks[d.Name+"/"+v.Name])
 		}
 		b.WriteString("}};\n")
+		fmt.Fprintf(&b, "func HgoInst%s(v %s) { %s(v) };\n", strings.TrimPrefix(d.Validator, "__hgo_enum_inst_"), d.Name, d.Validator)
 	}
 	return b.String()
 }

@@ -1,0 +1,2 @@
+package other
+pub enum Mode { Idle, Ready(string), }

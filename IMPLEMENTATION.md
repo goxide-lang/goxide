@@ -253,14 +253,27 @@ go build -o /tmp/hgo-packages-app .
 
 输出目录必须尚不存在并位于输入模块之外。嵌套模块不参与本模块构建；testdata 和隐藏资源复制保留但不作为源码包发现入口。生成结果是普通 Go module，可直接由 Go 工具构建；依赖仍通过 go.mod 解析，保留本地 replace 的实际目标，不代表已经打包所有依赖。工具离线运行，不自动下载模块或切换工具链。目录 `run/build/test` 在临时生成模块执行；`test` 对目标目录子树运行 Go tests 并启用 race。`expand` 仍只接受单文件。
 
-[真实应用](examples/packages/main.hgo)的 model 包在多个文件中声明公开 enum、serde/Clone/Error 派生、JSON 解码及本地 Result 传播；调用包使用别名 import 和公开 API，另调用普通 Go native 包，输出结构化成功/失败日志。公开 enum 采用显式 `pub enum`，提供 `New<Enum><Variant>`、`Validate<Enum>` 和已支持派生的公开 helper；case 类型保持私有；Validate 无返回值，非法输入沿既有 validator 规则 panic。目录模式中大写 enum 必须写 pub，避免无 pub 的声明因 Go 大写规则意外公开。这是有限原型 ABI，不是最终跨包 trait 协议；普通 Go 声明遵循 Go 大小写可见性。
+[真实应用](examples/packages/main.hgo)的 model 包在多个文件中声明公开 enum、serde/Clone/Error 派生、JSON 解码及本地 Result 传播；调用包使用别名 import 和公开 API，另调用普通 Go native 包，输出结构化成功/失败日志。公开 enum 采用显式 `pub enum`，提供 `New<Enum><Variant>`、`Validate<Enum>` 和已支持派生的公开 helper；case 实现保持私有（后续 qualified 阶段提供受验证的导出 case alias）；Validate 无返回值，非法输入沿既有 validator 规则 panic。目录模式中大写 enum 必须写 pub，避免无 pub 的声明因 Go 大写规则意外公开。这是有限原型 ABI，不是最终跨包 trait 协议；普通 Go 声明遵循 Go 大小写可见性。
 
 公开构造函数不意味着任意 Go 输入已被全图验证：Go 调用者仍可传入 nil/别名，已有 match、Clone/Debug、serde 和显式 Validate 的使用点规则保持。私有 struct 字段不会因为序列化 helper 自动变成可从外包访问的 Go 字段；wire 字段是否出现仍按派生规则，不应把 Go 可见性当作数据脱敏。
 
-明确边界：目录模式暂不支持新引用语法、`.hgo` 测试文件、`.hgo` 平台后缀或构建条件；使用普通 Go 测试，native Go 文件由 Go 构建选择处理。尚未承诺完整 cgo、go.work 或自定义构建配置支持。宏定义仍局限于文件，跨文件/跨包宏不自动导出。跨包 qualified enum match、导入泛型 Result 的直接 `?`、从导入 selector 类型直接派生尚未支持；应用在声明包内完成 match/Result 传播，再通过公开函数消费。不能把这个闭环说成所有单文件语法已经可以跨包使用。跨包来源只在有原文件/跨度证据时附加，未知生成区域仍标明 unmapped。
+明确边界：目录模式暂不支持新引用语法、`.hgo` 测试文件、`.hgo` 平台后缀或构建条件；使用普通 Go 测试，native Go 文件由 Go 构建选择处理。尚未承诺完整 cgo、go.work 或自定义构建配置支持。宏定义仍局限于文件，跨文件/跨包宏不自动导出。该阶段尚未支持跨包 qualified enum match 和导入泛型 Result 的直接 `?`；后续阶段实现如下。从导入 selector 类型直接派生仍未支持。不能把这个闭环说成所有单文件语法已经可以跨包使用。跨包来源只在有原文件/跨度证据时附加，未知生成区域仍标明 unmapped。
 
 独立验收见 [packages_test.go](tests/acceptance/packages_test.go)：真实生成模块显式 `go test -race`、独立 build/运行、公开构造及派生调用、错误链，以及跨文件诊断/import 不泄漏/私有访问/名义类型不互换/跨包宏拒绝。全套统计由本阶段最终运行记录另列，不沿用上一阶段数量。
 
 本阶段最终全套 `go test -race -count=1 -json ./...` 通过 **14 包、154 个宿主顶层测试、278 个子测试**。独立接受测试中 **26 个成功生成模块**显式 race，共 **74 个测试、48 个子测试**，另有 1 个预期名义类型编译拒绝；新增真实三包模块包含 3 个应用测试，model/native 两包参与编译但没有测试函数。宿主统计与生成模块统计不混算。`go vet ./...`、完整设计检查 13 条 Go 命令、最终 docs-only（34 篇 Markdown、291 个内部链接）通过。最终全套重新运行，已包含 CLI 帮助文字、worktree `.git` 排除和 grouped type 跨文件载荷校验修复；受影响包及新 grouped 边界另经独立定向复验。
 
 新鲜上下文的非作者用例与只读审查分别完成；修复多文件 From 绑定冲突、重复 Result receiver、跨文件递归诊断越界、Error helper 位置、quoted replace 和资源复制，以及隐藏输出路径/祖先模块覆盖保护。生成应用成功输出 INFO/request-42/workers=4；坏 JSON 输出 ERROR 并保留 Syntax cause。无长期分析器或新模块体系；无标签变更、无推送。证据日志为 `/tmp/goxide-packages-final-race.json`、`/tmp/goxide-packages-vet.log`、`/tmp/goxide-packages-design.log`。
+
+
+## 后续阶段：qualified enum 与导入 Result
+
+目录编译按依赖顺序生成并检查每个包，只把成功编译包的受信任元数据交给其直接导入方。公开 enum 可以使用 `alias.Enum::Variant` 构造、statement match 和既有有限 expression match；匹配前调用生产包 validator，保持穷尽性、guard 顺序和非法表示先于 wildcard 副作用的规则。包身份使用 canonical Go import path，每个文件单独解析 import alias；同名不同包的 enum 不互换，私有 enum 和普通 Go 同名类型不获得协议。
+
+导入函数返回的具体 `Result[T,E]` 可以直接 `dep.Load()?`；Option 使用同一名义协议。生产包提供公开 case alias、构造 wrapper 和具体实例 validator wrapper；具体 validator 保留嵌套 enum payload 校验，不退化成仅外壳检查。生成类型和函数在包级保留名字下绑定，局部 import/type 同名变量不会截获验证或构造。导入实例必须有生产包登记，类型参数必须能在消费文件 import 作用域中命名；无法命名的私有类型或缺少导入的参数明确拒绝。
+
+From 仍只使用当前包注册项：先检查 Go assignability，再要求唯一显式一步转换；不会自动把依赖包所有 From 导入候选，也不搜索转换链。错误接口的 typed-nil 原样保留。诊断仅对有复制跨度证据的消费方 arm/body 保留原文件行号；类型化 match 临时变量上的错包赋值错误仍可能报告生成行并明确标记 `generated/unmapped`，不宣称已完成跨包全阶段来源。跨包宏、用户泛型 enum/trait ABI、导入 builtin 的 qualified 构造/pattern、独立预编译依赖的元数据发布和 imported selector derive 不在此有限实现内。
+
+[三包应用](examples/qualified_packages/main.hgo)和[验收](tests/acceptance/qualified_packages_test.go)覆盖真实 JSON/enum/Result/errors 分包；[内部边界测试](internal/frontend/imported_test.go)覆盖文件 alias 隔离、局部 shadow、同名不同包、私有/native 元数据拒绝及非法 enum 验证。全套验证和本地提交由本轮最终记录给出；无 push/tag，无长期分析或核心语义重选。
+
+本阶段最终冻结树验证：`go test -race -count=1 -json ./...` 通过 **14 包、163 宿主顶层测试、281 子测试**；接受测试日志中的 **27 个成功生成模块、79 测试、48 子测试**显式 race，另 1 模块按预期名义类型编译拒绝。本轮新增三包模块含 5 个 runtime 测试；内部 qualified enum 边界另运行一个生成模块 race。`go vet ./...`、完整设计检查 13 条 Go 命令、文档链接及 diff whitespace 均通过；冻结示例经 CLI 转译后再次独立 `go test -race`、`go build -buildvcs=false` 和运行，输出 INFO/mode=4/value=8/error=null 及 other。示例本身未携带测试文件，runtime 断言由接受测试注入，二者不混计。fresh 只读审查和类型别名续审无剩余阻断；测试由本轮实施者共同编写。证据：`/tmp/goxide-qualified-final-race.json`、`/tmp/goxide-qualified-final-vet.log`、`/tmp/goxide-qualified-final-design.log`、`/tmp/goxide-qualified-final-frozen`。未 push/tag。

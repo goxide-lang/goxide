@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
@@ -32,15 +33,17 @@ type Config struct {
 	Namespace string
 }
 type lowering struct {
-	fs          *token.FileSet
-	file        *ast.File
-	info        *types.Info
-	pkg         *types.Package
-	cfg         Config
-	serial      int
-	questions   map[string]enums.Decl
-	conversions map[string]string
-	companions  []*ast.File
+	fs            *token.FileSet
+	file          *ast.File
+	info          *types.Info
+	pkg           *types.Package
+	cfg           Config
+	serial        int
+	questions     map[string]enums.Decl
+	conversions   map[string]string
+	companions    []*ast.File
+	boundFamilies map[string]enums.Decl
+	familyIssue   string
 }
 
 func printNode(n any) string {
@@ -92,16 +95,165 @@ func (l *lowering) resolveType(name string) types.Type {
 	return tv.Type
 }
 func (l *lowering) family(t types.Type) (enums.Decl, bool) {
+	l.familyIssue = ""
 	n, ok := types.Unalias(t).(*types.Named)
-	if !ok || n.Obj().Pkg() != l.pkg {
+	if !ok || n.Obj().Pkg() == nil {
 		return enums.Decl{}, false
 	}
 	for _, d := range l.cfg.Families {
-		if d.Family != "" && types.Identical(n, l.resolveType(d.Name)) {
-			return d, true
+		if d.Family == "" {
+			continue
 		}
+		if d.PackagePath == "" {
+			if n.Obj().Pkg() == l.pkg && types.Identical(n, l.resolveType(d.Name)) {
+				return d, true
+			}
+			continue
+		}
+		// Imported family metadata is supplied only by a compiled producer. Both
+		// canonical package identity and the resolved declaration must agree.
+		if n.Obj().Pkg().Path() != d.PackagePath {
+			continue
+		}
+		decl, ok := types.Unalias(l.resolveType(d.Name)).(*types.Named)
+		if !ok || !types.Identical(n.Origin(), decl.Origin()) {
+			continue
+		}
+		if decl.TypeArgs().Len() > 0 {
+			if types.Identical(n, decl) {
+				d.TypeArgs = append([]string(nil), d.TypeArgs...)
+				d.Variants = append([]enums.Variant(nil), d.Variants...)
+				return l.bindImportedFamily(d)
+			}
+			continue
+		}
+		count := 1
+		if d.Family == "Result" {
+			count = 2
+		}
+		if (d.Family != "Result" && d.Family != "Option") || n.TypeArgs().Len() != count || len(d.Variants) != 2 {
+			continue
+		}
+		args := make([]string, count)
+		for i := range args {
+			var visible bool
+			args[i], visible = l.typeSpelling(n.TypeArgs().At(i))
+			if !visible {
+				l.familyIssue = "imported sum payload type is not nameable in this file; this prototype requires its exported type package to be imported"
+				return enums.Decl{}, false
+			}
+		}
+		suffix := "[" + strings.Join(args, ",") + "]"
+		d.Name += suffix
+		validator := ""
+		for _, instance := range d.Instances {
+			sig, ok := l.resolveType(instance.Validator).(*types.Signature)
+			if ok && sig.Params().Len() == 1 && sig.Results().Len() == 0 && !sig.Variadic() && types.Identical(n, sig.Params().At(0).Type()) {
+				// Different source aliases may cause the trusted producer to emit
+				// several validators for the same nominal instantiation. They all
+				// enforce that instance's payload contract, not competing From rules.
+				validator = instance.Validator
+				break
+			}
+		}
+		if validator == "" {
+			l.familyIssue = "imported sum instance has no matching producer validation metadata; this prototype cannot synthesize cross-package payload validation"
+			return enums.Decl{}, false
+		}
+		d.Validator = validator
+		d.TypeArgs = args
+		d.Variants = append([]enums.Variant(nil), d.Variants...)
+		for i := range d.Variants {
+			d.Variants[i].CaseName += suffix
+			d.Variants[i].Constructor += suffix
+			if d.Family == "Result" || i == 0 {
+				d.Variants[i].Payload = args[i]
+				d.Variants[i].Type = parseExpr(args[i])
+			}
+		}
+		return l.bindImportedFamily(d)
 	}
 	return enums.Decl{}, false
+}
+
+// Package-level bindings prevent caller locals from capturing generated uses
+// of an import alias, payload type, validator or constructor.
+func (l *lowering) bindImportedFamily(d enums.Decl) (enums.Decl, bool) {
+	key := d.PackagePath + "|" + d.Name + "|" + d.Validator
+	if cached, ok := l.boundFamilies[key]; ok {
+		return cached, true
+	}
+	bind := func(value string, isType bool) string {
+		l.serial++
+		name := fmt.Sprintf("__hgo_qimport_%s_%d", l.cfg.Namespace, l.serial)
+		text := "var " + name + " = " + value
+		if isType {
+			text = "type " + name + " = " + value
+		}
+		decl, err := parser.ParseFile(l.fs, "<imported propagation bindings>", "package "+l.file.Name.Name+";"+text, 0)
+		if err != nil {
+			l.familyIssue = "cannot represent imported propagation binding: " + err.Error()
+			return ""
+		}
+		l.file.Decls = append(l.file.Decls, decl.Decls...)
+		return name
+	}
+	d.Name = bind(d.Name, true)
+	d.Validator = bind(d.Validator, false)
+	for i := range d.TypeArgs {
+		d.TypeArgs[i] = bind(d.TypeArgs[i], true)
+	}
+	for i := range d.Variants {
+		if d.Variants[i].Payload != "" {
+			d.Variants[i].CaseName = bind(d.Variants[i].CaseName, true)
+		}
+		d.Variants[i].Constructor = bind(d.Variants[i].Constructor, false)
+	}
+	if l.familyIssue != "" {
+		return enums.Decl{}, false
+	}
+	if l.boundFamilies == nil {
+		l.boundFamilies = map[string]enums.Decl{}
+	}
+	l.boundFamilies[key] = d
+	return d, true
+}
+
+func (l *lowering) typeSpelling(t types.Type) (string, bool) {
+	aliases := map[string]string{}
+	for _, spec := range l.file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			continue
+		}
+		for _, pkg := range l.pkg.Imports() {
+			if pkg.Path() != path {
+				continue
+			}
+			name := pkg.Name()
+			if spec.Name != nil {
+				name = spec.Name.Name
+			}
+			if name != "_" && name != "." {
+				aliases[path] = name
+			}
+		}
+	}
+	visible := true
+	spelling := types.TypeString(t, func(pkg *types.Package) string {
+		if pkg == l.pkg {
+			return ""
+		}
+		if name := aliases[pkg.Path()]; name != "" {
+			return name
+		}
+		visible = false
+		return "__hgo_unavailable_package"
+	})
+	// Check the resulting spelling as a type in this file's scope. In
+	// particular, an unexported named payload cannot be invented in a caller.
+	resolved := l.resolveType(spelling)
+	return spelling, visible && resolved != nil && types.Identical(t, resolved)
 }
 
 // Lower replaces the internal markers with branches in the original function.
@@ -177,6 +329,10 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 			}
 			d, ok := l.family(typ)
 			if !ok {
+				if l.familyIssue != "" {
+					failure = l.fail(c, l.familyIssue)
+					return false
+				}
 				failure = l.fail(c, "? requires the builtin nominal Option or Result, not a native tuple or other type")
 				return false
 			}
@@ -270,6 +426,9 @@ func (l *lowering) target(ft *ast.FuncType) (enums.Decl, error) {
 	}
 	d, ok := l.family(t)
 	if !ok {
+		if l.familyIssue != "" {
+			return d, l.fail(ft, l.familyIssue)
+		}
 		return d, l.fail(ft, "? target must return builtin Option or Result")
 	}
 	return d, nil
@@ -449,6 +608,10 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 							return nil, nil, l.fail(n, "Result error requires one unique explicit From conversion; conversion chains are not searched")
 						}
 						helper := choices[0].Helper
+						sig, ok := l.resolveType(helper).(*types.Signature)
+						if !ok || sig.Variadic() || sig.Params().Len() != 1 || sig.Results().Len() != 1 || sig.TypeParams().Len() != 0 || !types.Identical(sig.Params().At(0).Type(), se) || !types.Identical(sig.Results().At(0).Type(), de) {
+							return nil, nil, l.fail(n, "registered From helper must have the exact static source and target types")
+						}
 						bound := l.conversions[helper]
 						if bound == "" {
 							l.serial++

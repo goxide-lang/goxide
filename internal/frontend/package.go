@@ -20,13 +20,21 @@ import (
 )
 
 // PackageResult keeps a separate output and origin map for every source file.
-type PackageResult struct{ Files map[string]Result }
+type PackageResult struct {
+	Files    map[string]Result
+	imported map[string][]enums.Decl
+}
 
 // preparePackage performs syntax lowering with shared declaration metadata. It
 // never concatenates sources: imports retain their original file scope.
 func preparePackage(sources map[string][]byte) (PackageResult, error) {
+	return preparePackageImports(sources, nil)
+}
+
+func preparePackageImports(sources map[string][]byte, metadata map[string]PackageResult) (PackageResult, error) {
 	names := sortedSources(sources)
 	cfg := &compileConfig{declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}}
+	cfg.imported, cfg.preludes = importedDeclarations(sources, metadata)
 	seen := map[string]string{}
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
@@ -88,7 +96,7 @@ func preparePackage(sources map[string][]byte) (PackageResult, error) {
 		}
 	}
 	cfg.collect = false
-	result := PackageResult{Files: map[string]Result{}}
+	result := PackageResult{Files: map[string]Result{}, imported: cfg.imported}
 	generated := map[string]string{}
 	for index, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
@@ -133,7 +141,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		if !strings.HasSuffix(name, ".hgo") {
 			continue
 		}
-		lowered, err := propagate.Lower(name, r.Go, propagate.Config{Families: families, From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index)})
+		lowered, err := propagate.Lower(name, r.Go, propagate.Config{Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index)})
 		if err != nil {
 			return result, stageError("package propagate.Lower", err)
 		}
@@ -180,6 +188,17 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 		return err
 	}
 	var edits []packageEdit
+	exportedBuiltins := map[string]bool{}
+	for _, d := range r.Enums {
+		if d.Family == "" {
+			continue
+		}
+		exportedBuiltins["HgoInst"+strings.TrimPrefix(d.Validator, "__hgo_enum_inst_")] = true
+		for _, v := range d.Variants {
+			exportedBuiltins["Hgo"+d.Family+v.Name] = true
+			exportedBuiltins["HgoNew"+d.Family+v.Name] = true
+		}
+	}
 	// Generic builtin definitions are shared by the package. Repeated concrete
 	// validators must agree exactly; a conflict is rejected instead of guessed.
 	for _, d := range f.Decls {
@@ -199,7 +218,7 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 				}
 			}
 		}
-		builtin := strings.HasPrefix(key, "__hgo_enum_inst_") || strings.Contains(key, "__hgo_enum_case_Result_") || strings.Contains(key, "__hgo_enum_case_Option_") || strings.HasPrefix(key, "__hgo_enum_ctor_Result_") || strings.HasPrefix(key, "__hgo_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__hgo_enum_validate_Result" || key == "__hgo_enum_validate_Option"
+		builtin := exportedBuiltins[key] || strings.HasPrefix(key, "__hgo_enum_inst_") || strings.Contains(key, "__hgo_enum_case_Result_") || strings.Contains(key, "__hgo_enum_case_Option_") || strings.HasPrefix(key, "__hgo_enum_ctor_Result_") || strings.HasPrefix(key, "__hgo_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__hgo_enum_validate_Result" || key == "__hgo_enum_validate_Option"
 		if !builtin {
 			continue
 		}

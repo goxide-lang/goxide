@@ -39,3 +39,20 @@ limitation. No runtime closure is inserted by propagation. Tests execute generat
 Go with `go run -race`, including ordering, short circuit, closure and defer cases;
 API negatives cover ambiguous/missing/two-hop From. These are compiler tests, not
 claims about future general ownership analysis.
+
+## Imported sums in directory compilation
+
+An imported call can be used directly as `dep.Load()?`. Only families and concrete
+instances registered by a successfully compiled producer in the same module are
+eligible. The nominal Go package path and actual instantiated type must match;
+a native Go type named `Result` does not authorize propagation. Concrete exported
+validators preserve producer-side nested payload validation, including typed-nil
+and forged case rejection. Success/error argument types must be nameable in the
+consumer's file import scope; private or otherwise inaccessible argument types
+receive an explicit limitation diagnostic. Generated package bindings preserve
+protocol identity when a local variable shadows an import or payload type.
+
+From registration remains scoped to the current package, with assignability first
+and exactly one explicit, single-step conversion otherwise. Importing a package
+does not automatically register its From helpers. No cross-package macro export,
+conversion graph search, or generic Try/Residual ABI is introduced.

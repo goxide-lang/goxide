@@ -21,6 +21,9 @@ type Variant struct {
 }
 type Decl struct {
 	Name, Marker, Validator string
+	// PackagePath is set only by the module compiler for trusted producer metadata.
+	PackagePath, LookupName string
+	Instances               []Decl
 	Public                  bool
 	Family                  string
 	TypeParams, TypeArgs    []string
@@ -157,6 +160,9 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 		d := &declarations[i]
 		if l.byName[d.Name] == nil {
 			l.byName[d.Name] = d
+			if d.LookupName != "" {
+				l.byName[d.LookupName] = d
+			}
 		}
 	}
 	localCount := len(l.decls)
@@ -393,6 +399,7 @@ func (l *lowerer) declaration(d Decl) string {
 	fmt.Fprintf(&b, "default: panic(%q) } };\n", "hgo: invalid enum "+d.Name)
 	if d.Public {
 		for _, v := range d.Variants {
+			fmt.Fprintf(&b, "type HgoCase%d_%s_%s = %s;\n", len(d.Name), d.Name, v.Name, v.CaseName)
 			arg, call := "", ""
 			if v.Payload != "" {
 				arg, call = "v "+v.Payload, "v"
@@ -522,7 +529,7 @@ func (l *lowerer) match(i int) (string, int, error) {
 			if nd == nil {
 				return "", 0, l.err(a.pos, "unknown enum in pattern")
 			}
-			if d != nil && d != nd {
+			if d != nil && d != nd && !(d.PackagePath != "" && d.PackagePath == nd.PackagePath && d.Marker == nd.Marker) {
 				return "", 0, l.err(a.pos, "mixed enum identities in match")
 			}
 			d = nd

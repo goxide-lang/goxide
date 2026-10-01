@@ -152,6 +152,12 @@ hgo 也采用这层分工：声明宏处理空参数和普通参数列表；内�
 
 以上 I/O 错误策略参考 Rust 打印宏的失败行为；hgo 的具体支持库仍以 Go std 写入接口和明确包装实现，不引入 Rust 标准库运行时。
 
+### 3.3 实现结果回流：限定打印协议
+
+实现基准 `47af69f` 已交付 `print!` / `println!`：第 3.2 节的固定占位符、参数先按序各求值一次后格式化、空输出/LF 与写错/短写保留 cause 的 panic 契约均有真实运行证据。后端使用具体 typed formatter，不以 Stringer/error/反射/any 兜底；同包可信 Debug 派生可用于 `{:?}`，不自动成为 Display。
+
+当前入口只接受直接语句位置，支持宏模板、显式参数闭包内的嵌套打印和参数中的 `?`；不支持 go/defer、值位置、initializer/post、导入 Debug 类型或用户格式协议。此范围不修改第 3.2 节的长期协议，也不声称完整 trait/格式生态。编译期仅使用可信来源，生成 I/O 代码仍可 unmapped，未实现运行时 panic 的 hgo 源码回映射。实现和独立生成模块 race 证据见 [实现记录](../../IMPLEMENTATION.md#print--default-最终验收)。
+
 ## 4. 卫生是符号身份，不是随机改名
 
 Rust 的 `macro_rules!` 使用 mixed-site hygiene：局部变量和标签按定义点查找，其他符号通常按调用点查找；`$crate` 可明确指向定义包。hgo 本文选择模板自由名字按定义点绑定，是有意采用的更统一规则，不声称照搬 Rust 的名字解析结果。[Rust 宏卫生规则](https://doc.rust-lang.org/reference/macros-by-example.html#hygiene)
@@ -226,6 +232,12 @@ pub enum Mode {
 `Arc[T]`、借用和其他非空句柄也不因后端使用 Go 指针就自动得到 Default。构造 Arc 必须由明确实现创建或取得合法对象；`&T` / `mut& T` 不能凭默认构造制造不存在的有效借用。特别是 nil 不可冒充这些类型的合法默认值。
 
 具有 `Default` 不等于允许任意零初始化，也不自动改写 Go 的 `var`、`make`、map 缺失读取或已关闭 channel 接收。需要默认元素的容器 API 必须明确逐项调用选定的构造；如构造返回共享句柄，每次结果是否共享由该实现决定。泛型构造不得用 `var value T` 冒充调用 `T` 的 Default。严格枚举初始化和 Go 边界继续遵守[枚举规则](enums-and-match.md)。
+
+#### 5.2.1 实现结果回流：具体 Default 与 Go 零值
+
+实现基准 `47af69f` 采用具体 helper `DefaultType() Type`，支持基础标量字段、同包已派生字段、空 struct、唯一指定无 payload 变体和具体 Option None。该选择沿第 5.5 节普通 Go 函数降低方向，不冻结通用静态 trait ABI。宏按显式 derive 登记 helper 身份，调用方局部同名函数不截获。
+
+缺失/重复/带 payload 的默认标记、未登记协议、Result/引用/容器/外部类型自动默认仍明确拒绝。Option 的 None 在当前 ABI 为 nil，不代表其他 enum 的 nil 合法。Go var/make/map 缺失读取保持原零值；现有 `#[serde(default)]` 仍是原型的缺失字段 Go 零值策略，不自动调用这个新 Default helper。后续扩展若改变该行为需单独处理兼容性，不能让本次语言 Default 静默修改 wire 契约。真实正反例见 [独立验收](../../tests/acceptance/print_default_test.go)。
 
 ### 5.3 Clone：字段协议决定复制内容
 

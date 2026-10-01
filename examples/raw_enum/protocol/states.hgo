@@ -1,0 +1,30 @@
+package protocol
+
+pub enum DeliveryState string {
+    Queued = "queued",
+    Sent = "sent",
+    Rejected = "rejected",
+}
+
+pub enum AttemptCode uint8 {
+    Accepted = 1,
+    Retry = retryCode,
+    Denied = 255,
+}
+
+pub enum SignedCode int8 {
+    Low = -128,
+    High = 127,
+}
+
+func KnownState(value DeliveryState) bool {
+    match value {
+        DeliveryState::Queued => { return true },
+        DeliveryState::Sent => { return true },
+        DeliveryState::Rejected => { return true },
+        _ => { return false },
+    }
+    panic("unreachable")
+}
+
+func KnownAttempt() AttemptCode { return AttemptCode::Accepted }

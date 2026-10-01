@@ -378,3 +378,27 @@ python3 scripts/check_design.py
 ```
 
 本轮不实现常量enum；既定raw/未知值方向保持，表层入口与同值别名选择见U19候选。T0最短必要剩余是该入口，其他明确后置边界不因本轮通过变成已实现。只做本地commit，不push/tag改。
+
+
+## T0 接续：显式整数 / string raw 常量 enum
+
+原型入口为 `enum Status string { Pending="pending", Paid="paid", }` / `enum Code uint8 { Accepted=1, Retry=1<<1, }`，成员引用复用 `Status::Pending`。明确底层类型限 Go 内建整数/string（含 byte/rune），降低为真实 Go named type 和 typed const；普通同包跨文件 const、运算表达式及成员常量引用由 Go 类型检查求值，数组长度/const initializer 保持常量身份。溢出、非const、类型不兼容、循环常量按 Go 检查拒绝；不实现隐式成员值或 iota。定义点底层类型必须确为指定 predeclared builtin，不能被同包其他文件的同名类型替换。
+
+raw 输入不封闭：原生 `Status("future")`、零值与 Go 合法 runtime narrowing 转换原样保留，不自动变成第一个成员，不生成 Unknown，不调用带载荷 enum 的非法表示 validator。statement 和既有有限 expression match 都要求无 guard `_` 或 whole-value binding 兜底；列完所有已知成员也不覆盖未来值。guard 保序、目标一次求值、无guard同成员后续分支不可达；绑定兜底保留原始未知值，控制流不新增隐藏循环/IIFE。既有至少一个 qualified pattern 用于确定名义类型的限制保持。
+
+同 module `pub enum` 支持消费者 `alias.Status::Pending` 与 qualified match，生产包成功检查后才发布可信元数据。包级 type/const 绑定防止消费方局部 alias/type 同名捕获，const 不退化为 var。Go 端公开常量名为 `HgoConst<len>_<Enum>_<Member>`，例如 `HgoConst6_Status_Pending`；普通 exported named type 可直接由 native Go 转换、接收及返回。它是有限原型 ABI，不是外部预编译 metadata 标准。
+
+同一 enum 的重复 raw 值按 Go `constant.Value` 求值后比较，报 `same-value aliases pending user decision; unsupported in current subset`；等值不同拼写不会漏判。这只隔离尚未决定的同值别名能力，不把永久禁止写入语言规则。不同 enum 可有相同 raw 值，但不能因此混赋/混match。不扩展 raw enum 的 Default/Debug/Clone/serde/Error derive，已有带载荷 enum 行为不改变。
+
+验证：内部测试覆盖显式常量表达式/数组长度、同包native const、溢出/非const/别名待决诊断、开放兜底/guard不可达、local type shadow、不同enum名义性与跨文件builtin shadow；`internal/enums` 和 `internal/frontend` 完整 race 通过，最后显式分号分隔raw声明的修复另以所有 `TestRawEnum` 定向race复验。复用非实现作者独立提供 [三包业务](examples/raw_enum/main.hgo) 和 [接受测试](tests/acceptance/raw_enum_test.go)：安装CLI后仓库外转译、重复产物一致、实际生成模块race、独立build/run、native JSON未知/零值/窄化转换及14类拒绝通过。最终综合统计由主集成记录；无本代理独立提交或标签操作。
+
+
+### 常量 enum 最终集成验收
+
+基准 `47af69fcd66820ab4b7edb8b4c22e5eaf9a928ad`。代码冻结后的 Go 1.27.1 linux/amd64、CGO=1、本地离线工具链验证：全套 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、204 宿主顶层测试、353 子测试**；另一个包无自身测试。`go vet ./...`、设计检查 **13 条 Go 命令**、最终文档检查和 diff 检查均通过。
+
+新增独立验收由复用非实现作者完成，非新建空上下文：**1 个生成模块、3 个真实 race 测试、14 项拒绝子例**，另实际安装 CLI、仓库外执行、原生 Go 独立构建及重复生成一致性通过。既有 print/Default 生成模块 4 项 race 测试与 28 项拒绝同时回归。宿主测试数不重复计入子进程运行测试。
+
+日志：`/tmp/goxide-raw-final-race.json`、`/tmp/goxide-raw-final-vet.log`、`/tmp/goxide-raw-final-design.log`。快速复现 `go run ./cmd/hgo run examples/raw_enum`；独立验收 `go test -race -count=1 ./tests/acceptance -run '^TestRawEnum' -v`。运行这些命令需真实 Go 编译器在 PATH。
+
+本轮没有已证实未修复阻断；同值别名保持待用户决定，不据此新增其他功能。只做本地提交，不推送，也不改原文档标签。环境断连通知后，实际文件访问、命令和完整验证均正常。

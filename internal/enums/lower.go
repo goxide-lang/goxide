@@ -13,6 +13,8 @@ import (
 )
 
 type Variant struct {
+	RawValue                             string
+	ValueStart, ValueEnd                 int
 	Name, Payload, CaseName, Constructor string
 	Type                                 ast.Expr
 	Message                              string
@@ -20,6 +22,7 @@ type Variant struct {
 	Position                             token.Position
 }
 type Decl struct {
+	RawType                 string
 	Name, Marker, Validator string
 	// PackagePath is set only by the module compiler for trusted producer metadata.
 	PackagePath, LookupName string
@@ -149,8 +152,15 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 		}
 		l.decls = append(l.decls, d)
 		l.byName[d.Name] = &l.decls[len(l.decls)-1]
-		edits = append(edits, edit{l.ts[start].start, l.ts[end].end, ""})
-		i = end
+		// The generated declaration already terminates its const declarations.
+		// Consume an explicit source separator rather than emitting an empty
+		// top-level declaration between adjacent raw enums.
+		last := end
+		if d.RawType != "" && last+1 < len(l.ts) && l.ts[last+1].kind == token.SEMICOLON && l.ts[last+1].text == ";" {
+			last++
+		}
+		edits = append(edits, edit{l.ts[start].start, l.ts[last].end, ""})
+		i = last
 	}
 	if collect {
 		named, err := l.collectNamedTypes()
@@ -207,7 +217,15 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 		}
 	}
 	for i := range edits {
-		edits[i].text = l.declaration(l.decls[i])
+		if l.decls[i].RawType != "" {
+			text, err := l.rawDeclaration(l.decls[i])
+			if err != nil {
+				return Result{}, err
+			}
+			edits[i].text = text
+		} else {
+			edits[i].text = l.declaration(l.decls[i])
+		}
 	}
 	out, e := l.region(0, len(source), edits)
 	if e != nil {
@@ -276,6 +294,9 @@ func (l *lowerer) close(i int) (int, error) {
 }
 func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 	d := Decl{Position: l.position(l.ts[i].start)}
+	if i+3 < len(l.ts) && l.ts[i+1].kind == token.IDENT && l.ts[i+2].kind == token.IDENT && l.ts[i+3].text == "{" {
+		return l.parseRawDecl(i)
+	}
 	if i+2 >= len(l.ts) || l.ts[i+1].kind != token.IDENT || l.ts[i+2].text != "{" {
 		return d, 0, l.err(l.ts[i].start, "expected enum Name { ... }; generics unsupported")
 	}
@@ -479,7 +500,9 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 				if i+1 < len(l.ts) && l.ts[i+1].text == "(" {
 					return "", l.err(t.start, "unit variant takes no arguments")
 				}
-				b.WriteString("()")
+				if d.RawType == "" {
+					b.WriteString("()")
+				}
 			} else if i+1 >= len(l.ts) || l.ts[i+1].text != "(" {
 				return "", l.err(t.start, "payload constructor requires argument")
 			}
@@ -598,7 +621,7 @@ func (l *lowerer) match(i int) (string, int, error) {
 	covered := map[string]bool{}
 	all := false
 	for _, a := range arms {
-		if all || len(covered) == len(d.Variants) || a.variant != "" && covered[a.variant] {
+		if all || (d.RawType == "" && len(covered) == len(d.Variants)) || a.variant != "" && covered[a.variant] {
 			return "", 0, l.err(a.pos, "unreachable match arm")
 		}
 		if a.variant != "" {
@@ -623,6 +646,9 @@ func (l *lowerer) match(i int) (string, int, error) {
 			}
 		}
 	}
+	if d.RawType != "" && !all {
+		return "", 0, l.err(l.ts[i].start, "open raw enum match requires an unguarded wildcard or whole-value binding; known members do not cover unknown values")
+	}
 	if !all && len(covered) != len(d.Variants) {
 		return "", 0, l.err(l.ts[i].start, "non-exhaustive match; guards do not contribute coverage")
 	}
@@ -631,7 +657,15 @@ func (l *lowerer) match(i int) (string, int, error) {
 	saved := "__hgo_enum_saved_" + id
 	matched := "__hgo_enum_matched_" + id
 	var b strings.Builder
-	fmt.Fprintf(&b, "{ var %s %s = (%s); %s(%s); %s := (0 != 0); _ = %s;\n", saved, d.Name, target, d.Validator, saved, matched, matched)
+	boundType := d.Name
+	if d.RawType != "" && d.PackagePath == "" {
+		boundType = d.Marker
+	}
+	fmt.Fprintf(&b, "{ var %s %s = (%s);", saved, boundType, target)
+	if d.RawType == "" {
+		fmt.Fprintf(&b, "%s(%s);", d.Validator, saved)
+	}
+	fmt.Fprintf(&b, "%s := (0 != 0); _ = %s;\n", matched, matched)
 	for _, a := range arms {
 		fmt.Fprintf(&b, "if !%s {\n", matched)
 		if a.variant != "" {
@@ -642,7 +676,9 @@ func (l *lowerer) match(i int) (string, int, error) {
 				}
 			}
 			tmp := "__hgo_enum_payload_" + id
-			if d.Family == "Option" && v.Name == "None" {
+			if d.RawType != "" {
+				fmt.Fprintf(&b, "if %s == %s {\n", saved, v.Constructor)
+			} else if d.Family == "Option" && v.Name == "None" {
 				fmt.Fprintf(&b, "if %s == %s() {\n", saved, v.Constructor)
 			} else {
 				fmt.Fprintf(&b, "if %s, __hgo_enum_ok_%s := %s.(%s); __hgo_enum_ok_%s { _ = %s;\n", tmp, id, saved, v.CaseName, id, tmp)
@@ -678,6 +714,9 @@ func (l *lowerer) checkBuiltinBindings() error {
 	}
 	needed := map[string]bool{"panic": true}
 	for _, d := range l.decls {
+		if d.RawType != "" {
+			needed[d.RawType] = true
+		}
 		if d.Family != "" {
 			needed["Option"] = true
 			needed["Result"] = true

@@ -52,8 +52,7 @@ a type error. Private enums and ordinary Go enum lookalikes have no metadata.
 Explicitly unsupported: user generic enums; recursive, pointer, enum-bearing container,
 unknown external or general interface payloads; nested/constant/or/range patterns;
 expression matches are handled by a separate frontend stage; wildcard-only
-type inference; generalized propagation protocols; constant-backed enum
-syntax. Statement targets use ordinary expression spelling (parenthesize composite
+type inference; generalized propagation protocols. Statement targets use ordinary expression spelling (parenthesize composite
 literals if needed to delimit the match body). Full Go package/symbol resolution,
 user-visible stable ABI names, LSP source maps, and exhaustive-path return analysis
 remain future work. The normal Go parser still rejects malformed host syntax.
@@ -145,3 +144,41 @@ source interface, including typed nil; source-less variants return nil. No dynam
 error classification, transparent struct forwarding, concrete source conversion,
 or conversion chaining is inferred. Attribute spelling and helper ABI remain
 prototype conventions, not new frozen language rules.
+
+
+## Explicit raw constant enums
+
+```hgo
+enum Status string { Pending = "pending", Paid = "paid", }
+enum Code uint8 { Accepted = 1, Retry = 1 << 1, }
+const retry = Code::Retry
+func route(s Status) string {
+    return match s { Status::Pending => "wait", Status::Paid => "done", other => string(other), }
+}
+```
+
+The frontend lowers these to Go named integer/string types and typed constants.
+Explicit values use Go constant-expression typing, including ordinary constants
+from other selected package files; overflow, nonconstant values, and incompatible
+typed constants are rejected. Member references remain constants, including in
+array lengths and const initializers. `iota`, implicit values, member attributes,
+and derive on raw enums are outside this subset. Duplicate evaluated values in
+one enum produce `same-value aliases pending user decision; unsupported in current
+subset`; this is an implementation boundary pending that decision, not a language
+rule forbidding aliases permanently.
+
+`Status("future")`, Go zero values, and legal runtime conversions are unchanged.
+There is no membership validator or automatically inserted Unknown member. An
+open raw match must have an unguarded wildcard or whole-value binding even after
+all known members; guards retain source ordering. The existing finite expression
+match forms are supported. At least one qualified member pattern is still needed
+to establish match identity; wildcard-only inference remains unsupported.
+
+Directory mode shares constants across files and exports `pub enum` metadata to
+direct same-module imports. `alias.Status::Paid` uses a package-level const alias
+and bound type identity, preserving constness under local import/type shadowing.
+Native Go accesses the ordinary exported type and constants named
+`HgoConst6_Status_Paid` (the numeric component is the enum name's byte length).
+These names remain prototype ABI. Raw values in different enum types do not
+become assignable just because their representations or member spellings match.
+External precompiled metadata and derive ecosystem integration are not added.

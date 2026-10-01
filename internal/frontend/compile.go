@@ -396,6 +396,9 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				return fail(line, "generic derive is not supported in this prototype")
 			}
 			if ed := enumByName[ts.Name.Name]; ed != nil {
+				if ed.RawType != "" {
+					return fail(ed.Position.Line, "derive on raw constant enums is unsupported in the current subset")
+				}
 				for kind := range a.derive {
 					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Default" && kind != "Error" {
 						return fail(ed.Position.Line, "unsupported enum derive "+kind)
@@ -661,7 +664,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	needsTypecheck := bytes.Contains(out, []byte("__hgo_match_expr_")) || bytes.Contains(out, []byte("__hgo_print"))
 	for _, d := range enumResult.Enums {
-		needsTypecheck = needsTypecheck || d.Family != ""
+		needsTypecheck = needsTypecheck || d.Family != "" || d.RawType != ""
 	}
 	if cfg == nil && (bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_"))) {
 		conversions := []propagate.Conversion{}
@@ -700,6 +703,12 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			return Result{}, stageError("typecheck.Check", e)
 		}
 	}
+	if cfg == nil {
+		if err := enums.ValidateRaw("hgo/generated", map[string][]byte{filename: out}, enumResult.Enums, typecheck.NewImporter(filename)); err != nil {
+			return Result{}, stageError("raw enum constants", err)
+		}
+	}
+
 	sm := []map[string]any{}
 	deriveFields := []map[string]any{}
 	for _, m := range ordered {

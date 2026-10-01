@@ -1,0 +1,67 @@
+package main
+
+import (
+    "os"
+    "strconv"
+    wire "rawenum.example/delivery/native"
+    p "rawenum.example/delivery/protocol"
+)
+
+func Route(state p.DeliveryState) string {
+    return match state {
+        p.DeliveryState::Queued => "wait",
+        p.DeliveryState::Sent => "archive",
+        p.DeliveryState::Rejected => "alert",
+        _ => "review:"+string(state),
+    }
+}
+
+func Action(code p.AttemptCode) string {
+    match code {
+        p.AttemptCode::Accepted => { return "accepted" },
+        p.AttemptCode::Retry => { return "retry" },
+        p.AttemptCode::Denied => { return "denied" },
+        _ => { return "unknown:"+strconv.Itoa(int(code)) },
+    }
+    panic("unreachable")
+}
+
+func Interpret(data []byte) (string,error) {
+    event,err:=wire.Decode(data)
+    if err!=nil { return "",err }
+    // Ordinary Go conversions preserve unknown values; they do not validate.
+    state:=p.DeliveryState(event.State)
+    code:=p.AttemptCode(event.Attempt)
+    return Route(state)+"/"+Action(code),nil
+}
+
+func Observe(next func() p.DeliveryState, guard func()bool, trace *[]string) string {
+    defer func(){*trace=append(*trace,"cleanup")}()
+    match next() {
+        p.DeliveryState::Queued if guard() => { return "guarded" },
+        p.DeliveryState::Queued => { return "queued" },
+        _ => { return "other" },
+    }
+    panic("unreachable")
+}
+
+func Sweep(states []p.DeliveryState) int {
+    count:=0
+    for _,state:=range states {
+        match state {
+            p.DeliveryState::Sent => { continue },
+            p.DeliveryState::Rejected => { break },
+            _ => { count++ },
+        }
+        count+=10
+    }
+    return count
+}
+
+func main() {
+    input:=`{"State":"deferred-v2","Attempt":7}`
+    if len(os.Args)>1 { input=os.Args[1] }
+    result,err:=Interpret([]byte(input))
+    if err!=nil { panic(err) }
+    println!("webhook {}",result)
+}

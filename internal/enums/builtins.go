@@ -299,7 +299,7 @@ func (l *lowerer) checkCompositePayloads() error {
 		switch n := e.(type) {
 		case *ast.Ident:
 			if d := l.byName[n.Name]; d != nil {
-				return true
+				return d.RawType == ""
 			}
 			if seen[n.Name] {
 				return false

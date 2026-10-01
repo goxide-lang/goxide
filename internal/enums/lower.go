@@ -21,6 +21,7 @@ type Variant struct {
 }
 type Decl struct {
 	Name, Marker, Validator string
+	Public                  bool
 	Family                  string
 	TypeParams, TypeArgs    []string
 	Variants                []Variant
@@ -29,6 +30,7 @@ type Decl struct {
 type Result struct {
 	Source []byte
 	Enums  []Decl
+	Types  map[string]ast.Expr
 }
 type tok struct {
 	kind       token.Token
@@ -47,6 +49,7 @@ type lowerer struct {
 	byName        map[string]*Decl
 	serial        int
 	payloadChecks map[string]string
+	packageTypes  map[string]ast.Expr
 	fragments     *sourcemap.Fragments
 }
 
@@ -55,10 +58,32 @@ func Lower(filename string, source []byte) (Result, error) {
 }
 
 func LowerMapped(filename string, source []byte, provenance *sourcemap.Map) (Result, error) {
+	return lowerPackage(filename, source, provenance, nil, false)
+}
+
+// Collect parses declaration metadata without merging file text or import scopes.
+func Collect(filename string, source []byte) ([]Decl, error) {
+	r, err := lowerPackage(filename, source, nil, nil, true)
+	return r.Enums, err
+}
+
+// CollectPackage also returns independently parsed named payload types.
+func CollectPackage(filename string, source []byte) (Result, error) {
+	return lowerPackageTypes(filename, source, nil, nil, map[string]ast.Expr{}, true)
+}
+
+// LowerPackage resolves enum names against independently parsed package declarations.
+func LowerPackage(filename string, source []byte, provenance *sourcemap.Map, declarations []Decl, named map[string]ast.Expr) (Result, error) {
+	return lowerPackageTypes(filename, source, provenance, declarations, named, false)
+}
+func lowerPackage(filename string, source []byte, provenance *sourcemap.Map, declarations []Decl, collect bool) (Result, error) {
+	return lowerPackageTypes(filename, source, provenance, declarations, nil, collect)
+}
+func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map, declarations []Decl, named map[string]ast.Expr, collect bool) (Result, error) {
 	if strings.IndexByte(string(source), 0) >= 0 {
 		return Result{}, fmt.Errorf("%s: NUL byte in source", filename)
 	}
-	l := &lowerer{filename: filename, src: source, byName: map[string]*Decl{}}
+	l := &lowerer{filename: filename, src: source, byName: map[string]*Decl{}, packageTypes: named}
 	if provenance != nil {
 		l.fragments = &sourcemap.Fragments{Input: provenance}
 	}
@@ -101,12 +126,20 @@ func LowerMapped(filename string, source []byte, provenance *sourcemap.Map) (Res
 			continue
 		}
 		start := i
-		if i > 0 && l.ts[i-1].text == "pub" {
-			return Result{}, l.err(l.ts[i-1].start, "pub enum requires cross-package ABI support; this prototype supports local enums only")
+		public := i > 0 && l.ts[i-1].text == "pub"
+		if public {
+			start = i - 1
+			if declarations == nil && !collect {
+				return Result{}, l.err(l.ts[start].start, "pub enum requires directory package compilation")
+			}
 		}
 		d, end, e := l.parseDecl(i)
 		if e != nil {
 			return Result{}, e
+		}
+		d.Public = public
+		if public && !ast.IsExported(d.Name) {
+			return Result{}, l.err(l.ts[i].start, "pub enum requires an exported Go name")
 		}
 		if _, ok := l.byName[d.Name]; ok {
 			return Result{}, l.err(l.ts[i].start, "duplicate enum "+d.Name)
@@ -115,6 +148,16 @@ func LowerMapped(filename string, source []byte, provenance *sourcemap.Map) (Res
 		l.byName[d.Name] = &l.decls[len(l.decls)-1]
 		edits = append(edits, edit{l.ts[start].start, l.ts[end].end, ""})
 		i = end
+	}
+	if collect {
+		named, err := l.collectNamedTypes()
+		return Result{Enums: l.decls, Types: named}, err
+	}
+	for i := range declarations {
+		d := &declarations[i]
+		if l.byName[d.Name] == nil {
+			l.byName[d.Name] = d
+		}
 	}
 	localCount := len(l.decls)
 	if err := l.collectBuiltins(); err != nil {
@@ -135,7 +178,7 @@ func LowerMapped(filename string, source []byte, provenance *sourcemap.Map) (Res
 	var visit func(string) error
 	visit = func(n string) error {
 		if visiting[n] {
-			return l.err(l.byName[n].Position.Offset, "recursive enum payload requires a future explicit container design")
+			return fmt.Errorf("%s: enum: recursive enum payload requires a future explicit container design", l.byName[n].Position)
 		}
 		if done[n] {
 			return nil
@@ -170,7 +213,7 @@ func LowerMapped(filename string, source []byte, provenance *sourcemap.Map) (Res
 		*provenance = *m
 		out = string(data)
 	}
-	return Result{[]byte(out), l.decls}, nil
+	return Result{Source: []byte(out), Enums: l.decls}, nil
 }
 func scalar(s string) bool {
 	switch s {
@@ -348,6 +391,16 @@ func (l *lowerer) declaration(d Decl) string {
 		b.WriteByte('\n')
 	}
 	fmt.Fprintf(&b, "default: panic(%q) } };\n", "hgo: invalid enum "+d.Name)
+	if d.Public {
+		for _, v := range d.Variants {
+			arg, call := "", ""
+			if v.Payload != "" {
+				arg, call = "v "+v.Payload, "v"
+			}
+			fmt.Fprintf(&b, "func New%s%s(%s) %s { return %s(%s) };\n", d.Name, v.Name, arg, d.Name, v.Constructor, call)
+		}
+		fmt.Fprintf(&b, "func Validate%s(v %s) { %s(v) };\n", d.Name, d.Name, d.Validator)
+	}
 	return b.String()
 }
 func (l *lowerer) region(start, end int, edits []edit) (string, error) {

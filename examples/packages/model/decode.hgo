@@ -1,0 +1,23 @@
+package model
+
+import "github.com/hxsf/goxide/serdejson"
+
+func decode(data []byte) Result[Config,error] {
+    config, err := serdejson.Unmarshal(data, DeserializeConfig)
+    if err != nil { return Result[Config,error]::Err(err) }
+    return Result[Config,error]::Ok(config)
+}
+
+func load(data []byte) Result[Config,ConfigError] {
+    config := decode(data)?
+    valid := validate(config)?
+    return Result[Config,ConfigError]::Ok(valid)
+}
+
+func Load(data []byte) (Config, error) {
+    match load(data) {
+        Result[Config,ConfigError]::Ok(config) => { return config, nil },
+        Result[Config,ConfigError]::Err(err) => { return Config{}, err },
+    }
+    panic("unreachable")
+}

@@ -1,0 +1,16 @@
+package model
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum RunMode {
+    DryRun,
+    Workers(int),
+}
+
+#[derive(Error)]
+#[error("configuration rejected")]
+type ConfigError struct {
+    #[from]
+    Cause error
+}
+
+func dryRun() RunMode { return RunMode::DryRun }

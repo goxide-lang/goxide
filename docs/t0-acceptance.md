@@ -1,6 +1,6 @@
 # T0 子能力验收矩阵
 
-核对基准：`0f48259369d0940d298b76d3fc657dd6d0cb28d9`，并单列本轮新增组合验收。本文依据实现和测试源码，不把设计夹具或 README 的描述当作前端实现证明。当前是具体类型、单文件、Go 宿主语法的有限原型；**整项 T0、M1/M3/M4/M6、核心设计和 LSP 均未完成**。
+核对基准：`0f48259369d0940d298b76d3fc657dd6d0cb28d9`，并单列本轮新增组合验收。本文依据实现和测试源码，不把设计夹具或 README 的描述当作前端实现证明。当前是具体类型、Go 宿主语法的有限原型；单文件入口之外已有下文有限 Go module 目录入口；**整项 T0、M1/M3/M4/M6、核心设计和 LSP 均未完成**。
 
 设计优先级以[决策登记](design/decisions.md) D21 为准：宏、enum/match、只读/可写分离是用户必需方向；D22 约束 Option/Result 专用 `?` 与唯一显式一步 From，D23 要求 serde 核心与格式分层。优先级不意味着全部语法或 ABI 已冻结。后续工作按 [ROADMAP](../ROADMAP.md) 依赖推进，不以完整 trait 或长期风险分析阻塞已有子集。
 
@@ -111,8 +111,25 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | 本地 enum 的普通多字段业务载荷 | 有限：普通 struct 单payload，另支持有限array/slice/map；`TestEnumDerivesApplicationRace` | 不冒称多字段variant；tuple/record源语法须后续扩展设计，格式协议另验收 |
 | enum Debug/Clone/serde 组合 | 有限：JSON→真实enum→match/Debug/深复制，`TestEnumDerivesApplicationRace`；拒绝见 `TestEnumDerivesExplicitRejections` | pointer/锁/interface无隐式Clone；enum-bearing容器/递归图待明确策略及真实正负例 |
 | enum Error/Unwrap/唯一 From | 有限：显式variant message/source/from与Result传播，独立生成模块race | 具体source From、transparent、泛型不冒称完成；必须先定义静态唯一转换条件 |
-| T0跨包身份与Go互操作 | 未做，仍为必需方向的实际缺口 | 至少两包：包A导出正式enum构造/metadata/helper，包B构造、serde、Clone并验证名义身份和非法边界；当前case/helper私有及单文件构建阻断，不能以同包测试代替 |
+| T0跨包身份与Go互操作 | 有限：真实多文件包、Go module、pub enum构造/派生API，`TestPackagesApplication` | 公开metadata驱动的qualified match、跨包Result传播和宏协议仍未做；公开入口全面校验、文件选择和完整源映射继续验收，不能称跨包能力整体完成 |
 
 后续优先级：先维持 enum 派生应用与失败诊断的真实回归，再处理常量 enum raw/未知值与最小跨包身份/公开入口；完整跨阶段来源继续补有证据的映射。常量例 `type Status string` 的未知 `"future"` 可存在、开放输入需wildcard，已是设计方向；尚未定案的是精确源语法、未知值模式及公开校验入口。后续最小建议：先实现开放raw匹配必须有wildcard的入口，再明确显式闭合校验的拼写，不重开保留raw的既定方向。通用引用桥接/容器/函数值、一般泛型及完整trait分别分期，长期借用分析独立。前面各历史阶段“enum派生未做”的记录由此增量取代，整项T0仍未完成。
 
 本增量最终验收：14包、144宿主顶层/262子测试通过全套race；25个成功生成race模块共71测试/48子测试，另1模块预期名义类型编译拒绝。新增2个生成模块验证13测试/7子例，含值struct内enum非法值先于Clone/Debug/guard副作用拒绝。vet、完整设计检查13Go命令与示例转译产物race通过。两位复用非作者分别编写用例/只读审查，无fresh线程可用；最终无未修复阻断。
+
+
+## 多文件与跨包入口增量
+
+基准 `3a48c8356c535f5852ee4044e2a973fc8e387848` 后，新增 [packages_test.go](../tests/acceptance/packages_test.go) 与 [真实模块应用](../examples/packages/main.hgo)。它们不依赖文本拼接：独立文件 AST/import scope、同包声明和派生共享、实际 module path、Go 导出数据导入共同构成有限包入口。
+
+| 子能力 | 当前验收 | 尚未完成的契约 |
+| --- | --- | --- |
+| 多文件同包与原生 Go 文件 | 跨文件 enum/struct/函数/derive；不同文件 import 别名各自解析，重复声明由包检查拒绝 | `.hgo` 测试文件、平台后缀及构建条件；目录引用语法暂不支持，native Go 测试可用 |
+| hgo 包调用 hgo/Go 包 | 两个 hgo 包及 native Go 包；生成模块独立 test-race/build，真实成功/失败日志 | 跨包宏、qualified enum match、导入 Result 的直接 `?`、导入 selector 类型的 derive |
+| 公开 ABI 与类型身份 | pub enum 的 New/Validate、serde/Clone/ErrorFrom API；私有符号不可访问，不同包 enum 不可赋值混用 | 正式 metadata/ABI 稳定性、全面 Go 输入检查与跨包语言协议；不能只靠公开Go函数称完整hgo导入 |
+| 同包 From | 本地唯一显式 error From；两个文件生成绑定用稳定命名空间去重 | 任意导入错误类型的别名归一与通用转换注册；不由包支持扩大D22到动态猜测 |
+| 诊断 | 各原文件分别维护来源；真实跨文件类型错误、私有访问、nominal错误定位 | 未映射生成区域明确保留；不承诺完整双向LSP映射 |
+
+下一完成标准：先保持这些生成包可由原生 Go 工具独立构建，再补 `.hgo` 文件选择/测试和目录引用能力；随后以声明包 metadata 接通消费者的 enum 模式与 Result，而不是生成同名替代类型。跨包仍是 T0 必需方向，以上剩余项没有一概降级为后置。跨包宏需定义点解析与独立依赖元数据，当前明确不支持。常量 enum 的 raw/未知值既定方向不变，精确拼写的设计不阻塞本轮模块工作。
+
+本阶段最终验收：14 包、154 宿主顶层测试、278 子测试通过全套 race；26 个成功生成模块显式 race，74 测试、48 子测试，另 1 预期名义类型编译拒绝。真实两包 hgo 加 native Go 应用独立构建并执行，模块中 3 个应用测试通过；vet、13 条设计检查命令及文档链接检查通过。最终全套已重跑并包含 grouped type 跨文件载荷校验修复；新边界另经独立复验，完整范围与证据见实现记录。

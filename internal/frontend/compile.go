@@ -30,6 +30,8 @@ type Result struct {
 	Go, SourceMap, Expanded []byte
 	Enums                   []enums.Decl
 	References              []refs.Reference
+	conversions             []propagate.Conversion
+	models                  map[string]model
 }
 type attrs struct {
 	derive          map[string]bool
@@ -71,6 +73,17 @@ var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
 var renameAttr = regexp.MustCompile(`^rename\s*=\s*("(?:[^"\\]|\\.)*")$`)
 
 func Compile(filename string, source []byte) (Result, error) {
+	return compile(filename, source, nil)
+}
+
+type compileConfig struct {
+	declarations []enums.Decl
+	named        map[string]ast.Expr
+	models       map[string]model
+	collect      bool
+}
+
+func compile(filename string, source []byte, cfg *compileConfig) (Result, error) {
 	if bytes.IndexByte(source, 0) >= 0 {
 		return Result{}, fmt.Errorf("%s: NUL byte in source", filename)
 	}
@@ -147,7 +160,12 @@ func Compile(filename string, source []byte) (Result, error) {
 	if err != nil {
 		return Result{}, stageError("matchexpr.Lower", err)
 	}
-	enumResult, err := enums.LowerMapped(filename, source, provenance)
+	var enumResult enums.Result
+	if cfg == nil {
+		enumResult, err = enums.LowerMapped(filename, source, provenance)
+	} else {
+		enumResult, err = enums.LowerPackage(filename, source, provenance, cfg.declarations, cfg.named)
+	}
 	if err != nil {
 		return Result{}, stageError("enums.Lower", err)
 	}
@@ -289,6 +307,17 @@ func Compile(filename string, source []byte) (Result, error) {
 	for i := range enumResult.Enums {
 		d := &enumResult.Enums[i]
 		enumByName[d.Name] = d
+	}
+	if cfg != nil {
+		for i := range cfg.declarations {
+			d := &cfg.declarations[i]
+			if enumByName[d.Name] == nil {
+				enumByName[d.Name] = d
+			}
+		}
+		for name, m := range cfg.models {
+			g.models[name] = m
+		}
 	}
 	g.enumDecls = enumByName
 	var ordered []model
@@ -485,6 +514,15 @@ func Compile(filename string, source []byte) (Result, error) {
 			return fail(m.line, "generated helper conflicts with declaration From"+m.name)
 		}
 	}
+	if cfg != nil && cfg.collect {
+		return Result{models: g.models}, nil
+	}
+	conversions := []propagate.Conversion{}
+	for _, m := range ordered {
+		if m.from != "" {
+			conversions = append(conversions, propagate.Conversion{Source: "error", Target: m.name, Helper: "From" + m.name})
+		}
+	}
 	imports := map[string]string{}
 	for _, m := range ordered {
 		if m.attrs.derive["Serialize"] || m.attrs.derive["Deserialize"] {
@@ -575,7 +613,7 @@ func Compile(filename string, source []byte) (Result, error) {
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
 	}
-	if bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_")) {
+	if cfg == nil && (bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_"))) {
 		conversions := []propagate.Conversion{}
 		for _, m := range ordered {
 			if m.from != "" {
@@ -629,7 +667,7 @@ func Compile(filename string, source []byte) (Result, error) {
 		}
 	}
 	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "deriveFields": deriveFields, "macroTokens": expanded.Origins, "macroTokenInputStage": "propagate.Prepare output", "references": refResult.References, "diagnostics": provenance, "sourceBytes": len(originalSource), "note": "diagnostics uses final Go byte offsets; generated/unmapped regions have no proven source; macroTokens uses macro expansion offsets"}, "", "  ")
-	return Result{Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References}, nil
+	return Result{Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer

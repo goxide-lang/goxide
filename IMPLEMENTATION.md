@@ -1,7 +1,7 @@
 # 可运行的 hgo 语言子集
 
 此实现分支从 `v0.0.0-mvp-doc` 开始；冻结标签保持不变，本文件只描述实现分支。
-这是具体类型、单文件、Go 宿主语法上的可执行子集，不是完整 hgo 编译器、trait ABI 或 LSP。
+这是具体类型、Go 宿主语法上的可执行子集；单文件入口与后文有限 Go module 目录入口并存，不是完整 hgo 编译器、trait ABI 或 LSP。
 
 ## 运行
 
@@ -17,7 +17,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 
 `transpile` 输出生成 Go，`expand` 输出可检查的展开结果；`-expanded` 可另存展开文件。
 `run/build` 使用临时模块和本地 runtime 替换，关闭自动工具链和依赖下载。
-从仓库之外使用时指定 `-runtime /path/to/goxide`。单文件输入不是多包构建系统；现有输出文件可被覆盖，输入及输出互相冲突则拒绝。
+单文件模式从仓库之外使用时指定 `-runtime /path/to/goxide`。目录模式使用输入模块自己的 go.mod/replace，见后文；现有单文件输出可被覆盖，输入及输出互相冲突则拒绝。
 
 ## 实际支持
 
@@ -238,3 +238,29 @@ Error 使用变体独占行 `#[error("message {Value}")]`，unit 可仅 literal�
 最终验证（Go 1.27.1、linux/amd64、CGO_ENABLED=1，同前述离线环境）：全套 `go test -race -count=1 -json ./...` 通过 **14包、144宿主顶层测试、262子测试**；接受测试实际生成 **25个成功race模块，71测试、48子测试**，另1模块验证预期名义类型编译拒绝。新增部分为3宿主测试（含21拒绝子例）、2个生成race模块的13测试/7子例。宿主与生成日志分别统计；旧prototype普通子进程不计入race模块。`go vet ./...`、完整设计检查13个Go命令通过；最终文档检查34篇Markdown、285本地链接通过。示例CLI transpile产物 `go run -race` 展示容器独立复制和JSON Syntax错误链。非作者最终只读审查无阻断。
 
 T0仍有明确缺口：enum-bearing容器/递归图、具体source From、跨包公开身份/构造入口、精确来源及其他矩阵项；本轮无设计决策阻断，不push/tag，不冻结新核心语义。
+
+## 后续阶段：多文件包与 Go module 入口
+
+目录模式沿用现有 `go.mod` 的模块路径和依赖关系，不引入另一套包管理器。每个 `.hgo` 文件分别展开、降低和解析；同包声明/派生模型共享，最终多个 Go AST 在真实 import path 下共同类型检查。各文件的 import 别名仍只在本文件可见，不拼接文本来消除文件边界。包依赖按导入顺序处理，消费者读取实际生成 Go 的导出数据。当前准备并检查整个模块内所有可见源码包，输入的目标目录仅决定 run/build/test 的执行目标，尚不是只处理目标依赖闭包。包级 From 绑定带稳定文件命名空间，避免两个文件各自使用 `?` 时生成重名。
+
+```sh
+go run ./cmd/hgo transpile -o /tmp/hgo-packages-output examples/packages
+cd /tmp/hgo-packages-output
+go test -race ./...
+go build -o /tmp/hgo-packages-app .
+/tmp/hgo-packages-app
+```
+
+输出目录必须尚不存在并位于输入模块之外。嵌套模块不参与本模块构建；testdata 和隐藏资源复制保留但不作为源码包发现入口。生成结果是普通 Go module，可直接由 Go 工具构建；依赖仍通过 go.mod 解析，保留本地 replace 的实际目标，不代表已经打包所有依赖。工具离线运行，不自动下载模块或切换工具链。目录 `run/build/test` 在临时生成模块执行；`test` 对目标目录子树运行 Go tests 并启用 race。`expand` 仍只接受单文件。
+
+[真实应用](examples/packages/main.hgo)的 model 包在多个文件中声明公开 enum、serde/Clone/Error 派生、JSON 解码及本地 Result 传播；调用包使用别名 import 和公开 API，另调用普通 Go native 包，输出结构化成功/失败日志。公开 enum 采用显式 `pub enum`，提供 `New<Enum><Variant>`、`Validate<Enum>` 和已支持派生的公开 helper；case 类型保持私有；Validate 无返回值，非法输入沿既有 validator 规则 panic。目录模式中大写 enum 必须写 pub，避免无 pub 的声明因 Go 大写规则意外公开。这是有限原型 ABI，不是最终跨包 trait 协议；普通 Go 声明遵循 Go 大小写可见性。
+
+公开构造函数不意味着任意 Go 输入已被全图验证：Go 调用者仍可传入 nil/别名，已有 match、Clone/Debug、serde 和显式 Validate 的使用点规则保持。私有 struct 字段不会因为序列化 helper 自动变成可从外包访问的 Go 字段；wire 字段是否出现仍按派生规则，不应把 Go 可见性当作数据脱敏。
+
+明确边界：目录模式暂不支持新引用语法、`.hgo` 测试文件、`.hgo` 平台后缀或构建条件；使用普通 Go 测试，native Go 文件由 Go 构建选择处理。尚未承诺完整 cgo、go.work 或自定义构建配置支持。宏定义仍局限于文件，跨文件/跨包宏不自动导出。跨包 qualified enum match、导入泛型 Result 的直接 `?`、从导入 selector 类型直接派生尚未支持；应用在声明包内完成 match/Result 传播，再通过公开函数消费。不能把这个闭环说成所有单文件语法已经可以跨包使用。跨包来源只在有原文件/跨度证据时附加，未知生成区域仍标明 unmapped。
+
+独立验收见 [packages_test.go](tests/acceptance/packages_test.go)：真实生成模块显式 `go test -race`、独立 build/运行、公开构造及派生调用、错误链，以及跨文件诊断/import 不泄漏/私有访问/名义类型不互换/跨包宏拒绝。全套统计由本阶段最终运行记录另列，不沿用上一阶段数量。
+
+本阶段最终全套 `go test -race -count=1 -json ./...` 通过 **14 包、154 个宿主顶层测试、278 个子测试**。独立接受测试中 **26 个成功生成模块**显式 race，共 **74 个测试、48 个子测试**，另有 1 个预期名义类型编译拒绝；新增真实三包模块包含 3 个应用测试，model/native 两包参与编译但没有测试函数。宿主统计与生成模块统计不混算。`go vet ./...`、完整设计检查 13 条 Go 命令、最终 docs-only（34 篇 Markdown、291 个内部链接）通过。最终全套重新运行，已包含 CLI 帮助文字、worktree `.git` 排除和 grouped type 跨文件载荷校验修复；受影响包及新 grouped 边界另经独立定向复验。
+
+新鲜上下文的非作者用例与只读审查分别完成；修复多文件 From 绑定冲突、重复 Result receiver、跨文件递归诊断越界、Error helper 位置、quoted replace 和资源复制，以及隐藏输出路径/祖先模块覆盖保护。生成应用成功输出 INFO/request-42/workers=4；坏 JSON 输出 ERROR 并保留 Syntax cause。无长期分析器或新模块体系；无标签变更、无推送。证据日志为 `/tmp/goxide-packages-final-race.json`、`/tmp/goxide-packages-vet.log`、`/tmp/goxide-packages-design.log`。

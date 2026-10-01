@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -136,9 +137,14 @@ var diagnostic = regexp.MustCompile(`(?m)^([^\n]+\.go):([0-9]+):([0-9]+): (.*)$`
 
 // Diagnostics supplements, never replaces, the original Go compiler stderr.
 func (m *Map) Diagnostics(src []byte, stderr string) string {
+	return m.DiagnosticsFile(src, stderr, "main.go")
+}
+
+// DiagnosticsFile supplements errors for one exact generated file.
+func (m *Map) DiagnosticsFile(src []byte, stderr, filename string) string {
 	var out strings.Builder
 	for _, v := range diagnostic.FindAllStringSubmatch(stderr, -1) {
-		if v[1] != "./main.go" && v[1] != "main.go" {
+		if filepath.Clean(v[1]) != filepath.Clean(filename) {
 			continue
 		}
 		line, _ := strconv.Atoi(v[2])

@@ -1,0 +1,25 @@
+package model
+
+import "errors"
+
+var ErrInvalidWorkers = errors.New("workers must be between 1 and 64")
+var ErrMissingName = errors.New("name is required")
+
+func validate(config Config) Result[Config,error] {
+    if config.Name == "" { return Result[Config,error]::Err(ErrMissingName) }
+    match config.Mode {
+        RunMode::DryRun => {},
+        RunMode::Workers(count) => {
+            if count < 1 || count > 64 { return Result[Config,error]::Err(ErrInvalidWorkers) }
+        },
+    }
+    return Result[Config,error]::Ok(config)
+}
+
+func Describe(mode RunMode) (string, int) {
+    match mode {
+        RunMode::DryRun => { return "dry_run", 0 },
+        RunMode::Workers(count) => { return "workers", count },
+    }
+    panic("unreachable")
+}

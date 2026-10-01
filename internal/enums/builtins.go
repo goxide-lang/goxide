@@ -195,7 +195,7 @@ func (l *lowerer) builtinDeclarations() string {
 
 // Validate value-struct projections before exposing sum payloads. Reference
 // containers and recursive object graphs remain outside this finite boundary.
-func (l *lowerer) checkCompositePayloads() error {
+func (l *lowerer) collectNamedTypes() (map[string]ast.Expr, error) {
 	named := map[string]ast.Expr{}
 	hasBuiltin := false
 	for _, d := range l.decls {
@@ -213,19 +213,19 @@ func (l *lowerer) checkCompositePayloads() error {
 		if !atPackage {
 			continue
 		}
-		if (hasBuiltin || len(l.decls) > 0) && t.kind == token.TYPE && i+1 < len(l.ts) && l.ts[i+1].kind == token.LPAREN {
+		if (hasBuiltin || len(l.decls) > 0 || l.packageTypes != nil) && t.kind == token.TYPE && i+1 < len(l.ts) && l.ts[i+1].kind == token.LPAREN {
 			end, err := l.close(i + 1)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			f, err := parser.ParseFile(token.NewFileSet(), "", "package p;"+string(l.src[t.start:l.ts[end].end]), 0)
 			if err != nil {
-				return l.err(t.start, "unsupported grouped type declaration in sum payload analysis")
+				return nil, l.err(t.start, "unsupported grouped type declaration in sum payload analysis")
 			}
 			for _, spec := range f.Decls[0].(*ast.GenDecl).Specs {
 				ts := spec.(*ast.TypeSpec)
 				if ts.TypeParams != nil {
-					return l.err(t.start, "user generic type declarations unsupported")
+					return nil, l.err(t.start, "user generic type declarations unsupported")
 				}
 				named[ts.Name.Name] = ts.Type
 			}
@@ -233,7 +233,7 @@ func (l *lowerer) checkCompositePayloads() error {
 		if t.text == "struct" && i+2 < len(l.ts) && l.ts[i+1].kind == token.IDENT && l.ts[i+2].text == "{" {
 			end, err := l.close(i + 2)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if e, err := parser.ParseExpr(withoutPayloadAttrs("struct " + string(l.src[l.ts[i+2].start:l.ts[end].end]))); err == nil {
 				named[l.ts[i+1].text] = e
@@ -244,7 +244,7 @@ func (l *lowerer) checkCompositePayloads() error {
 		}
 		start := i + 2
 		if l.ts[start].text == "[" {
-			return l.err(t.start, "user generic type declarations unsupported")
+			return nil, l.err(t.start, "user generic type declarations unsupported")
 		}
 		if l.ts[start].text == "=" {
 			start++
@@ -254,7 +254,7 @@ func (l *lowerer) checkCompositePayloads() error {
 			if l.ts[end].text == "{" || l.ts[end].text == "[" || l.ts[end].text == "(" {
 				k, e := l.close(end)
 				if e != nil {
-					return e
+					return nil, e
 				}
 				end = k
 			}
@@ -264,6 +264,19 @@ func (l *lowerer) checkCompositePayloads() error {
 			if e, err := parser.ParseExpr(withoutPayloadAttrs(string(l.src[l.ts[start].start:l.ts[end-1].end]))); err == nil {
 				named[l.ts[i+1].text] = e
 			}
+		}
+	}
+	return named, nil
+}
+
+func (l *lowerer) checkCompositePayloads() error {
+	named, err := l.collectNamedTypes()
+	if err != nil {
+		return err
+	}
+	for name, typ := range l.packageTypes {
+		if named[name] == nil {
+			named[name] = typ
 		}
 	}
 	var hasEnum func(ast.Expr, map[string]bool) bool

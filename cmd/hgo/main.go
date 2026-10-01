@@ -28,15 +28,15 @@ func main() {
 
 func run(args []string, out, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: hgo <transpile|expand|run|build> [flags] file.hgo")
+		return errors.New("usage: hgo <transpile|expand|run|build|test> [flags] file.hgo-or-directory")
 	}
 	mode := args[0]
-	if mode != "transpile" && mode != "expand" && mode != "run" && mode != "build" {
+	if mode != "transpile" && mode != "expand" && mode != "run" && mode != "build" && mode != "test" {
 		return fmt.Errorf("unknown command %q", mode)
 	}
 	f := flag.NewFlagSet(mode, flag.ContinueOnError)
 	f.SetOutput(stderr)
-	dest := f.String("o", "", "output Go source (transpile), expanded source (expand), or binary (build)")
+	dest := f.String("o", "", "output Go source/module directory (transpile), expanded source (expand), or binary (build)")
 	mapPath := f.String("source-map", "", "write source mapping JSON")
 	expandedPath := f.String("expanded", "", "write expanded Go source for inspection")
 	runtimeRoot := f.String("runtime", "", "local goxide module root for run/build")
@@ -45,11 +45,20 @@ func run(args []string, out, stderr io.Writer) error {
 		return err
 	}
 	if f.NArg() != 1 {
-		return errors.New("exactly one .hgo input is required; put flags before the input")
+		return errors.New("exactly one .hgo file or directory is required; put flags before the input")
 	}
 	input, err := filepath.Abs(f.Arg(0))
 	if err != nil {
 		return err
+	}
+	if info, statErr := os.Stat(input); statErr == nil && info.IsDir() {
+		if *mapPath != "" || *expandedPath != "" {
+			return errors.New("directory mode writes per-file .go.map.json automatically; -source-map/-expanded are single-file flags")
+		}
+		return runDirectory(mode, input, *dest, *goTool, out, stderr)
+	}
+	if mode == "test" {
+		return errors.New("test requires a package directory")
 	}
 	src, err := os.ReadFile(input)
 	if err != nil {

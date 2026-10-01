@@ -6,6 +6,8 @@ hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模
 
 本实现分支已有可运行的有限宏与 serde 原型，见[运行方式与准确支持范围](IMPLEMENTATION.md)。完整 hgo 编译器与 LSP 尚未实现；其余设计文档中的语法不因此成为可运行承诺。
 
+目录入口已扩展到现有 Go module 内的多文件包和有限跨包调用；[两包应用](examples/packages/main.hgo)组合 JSON、enum、Result、错误链和原生 Go 日志。目录模式的支持子集与单文件不同，构建命令、公开入口和限制见[实现记录](IMPLEMENTATION.md#后续阶段多文件包与-go-module-入口)。
+
 项目暂称 hgo / Hyper Go，当前远端仓库名为 `goxide`。换机器继续时先看 [Roadmap](ROADMAP.md) 和[决策登记](docs/design/decisions.md)：分别记录实现进度，以及**已确认 / 暂定 / 未定**的设计边界。
 
 用户在自己的 C 包 `.hgo` 文件中写 `declare impl AorB::XXX for BBB::Type;`。声明只由 hgo 读取，所需 marker 仅加入本次 hgo 的隔离构建视图；不修改 AorB、BBB 的原源码或共享缓存，既有纯 Go 项目完全保持原样。

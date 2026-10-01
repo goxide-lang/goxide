@@ -9,6 +9,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"sort"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
@@ -21,6 +22,14 @@ type Config struct {
 	From       []Conversion
 	Importer   types.Importer
 	Provenance *sourcemap.Map
+	// Files contains lowered companion files in the same package, not source
+	// fragments. Each file retains its own import scope. The active filename,
+	// if present, is ignored in favor of Lower's source argument.
+	Files       map[string][]byte
+	PackagePath string
+	// Namespace is a stable per-file identifier for package-level generated
+	// bindings. Package callers must give distinct values for distinct files.
+	Namespace string
 }
 type lowering struct {
 	fs          *token.FileSet
@@ -31,6 +40,7 @@ type lowering struct {
 	serial      int
 	questions   map[string]enums.Decl
 	conversions map[string]string
+	companions  []*ast.File
 }
 
 func printNode(n any) string {
@@ -63,7 +73,12 @@ func (l *lowering) check() {
 		imp = importer.Default()
 	}
 	c := types.Config{Importer: imp, Error: func(error) {}}
-	l.pkg, _ = c.Check("hgo/generated", l.fs, []*ast.File{l.file}, l.info)
+	path := l.cfg.PackagePath
+	if path == "" {
+		path = "hgo/generated"
+	}
+	files := append([]*ast.File{l.file}, l.companions...)
+	l.pkg, _ = c.Check(path, l.fs, files, l.info)
 }
 
 // Resolve metadata in the same file/package scope as the checked program.
@@ -93,6 +108,9 @@ func (l *lowering) family(t types.Type) (enums.Decl, bool) {
 // It intentionally rejects unsupported expression contexts instead of moving
 // evaluation or return into a hidden closure.
 func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
+	if cfg.Namespace != "" && !token.IsIdentifier(cfg.Namespace) {
+		return nil, fmt.Errorf("%s: invalid propagation namespace", filename)
+	}
 	if !bytes.Contains(source, []byte(marker+"(")) {
 		return source, nil
 	}
@@ -103,6 +121,23 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	originalNodes := sourcemap.Nodes(f)
 	l := &lowering{fs: fs, file: f, cfg: cfg, questions: map[string]enums.Decl{}, conversions: map[string]string{}}
+	names := make([]string, 0, len(cfg.Files))
+	for name := range cfg.Files {
+		if name != filename {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		companion, err := parser.ParseFile(fs, name, cfg.Files[name], parser.ParseComments)
+		if err != nil {
+			return nil, err
+		}
+		if companion.Name.Name != f.Name.Name {
+			return nil, fmt.Errorf("%s: companion belongs to package %s, expected %s", name, companion.Name.Name, f.Name.Name)
+		}
+		l.companions = append(l.companions, companion)
+	}
 	// Seed a temporary identity declaration: this makes operand types available,
 	// including operands with inference, before replacing each marker's result.
 	seed, _ := parser.ParseFile(fs, "<propagation signatures>", "package "+f.Name.Name+";func "+marker+"[T any](v T) T {return v}", 0)
@@ -418,6 +453,9 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 						if bound == "" {
 							l.serial++
 							bound = fmt.Sprintf("__hgo_qfrom_%d", l.serial)
+							if l.cfg.Namespace != "" {
+								bound = fmt.Sprintf("__hgo_qfrom_%s_%d", l.cfg.Namespace, l.serial)
+							}
 							l.conversions[helper] = bound
 							// Bind the registered package function outside every user local scope.
 							l.file.Decls = append(l.file.Decls, &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(bound)}, Values: []ast.Expr{parseExpr(helper)}}}})

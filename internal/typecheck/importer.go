@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 )
@@ -91,12 +92,34 @@ func moduleRoot(dir string) string {
 // Check verifies complete generated Go after semantic lowering, without ignoring
 // errors used temporarily by an earlier pass for type inference.
 func Check(filename string, source []byte, imp types.Importer) error {
+	return CheckPackage("hgo/generated", map[string][]byte{filename: source}, imp)
+}
+
+// CheckPackage checks independently parsed files in their real Go package.
+// File scopes (especially import names) remain separate. Callers select files
+// using their build configuration before passing them here.
+func CheckPackage(path string, sources map[string][]byte, imp types.Importer) error {
+	if path == "" {
+		return fmt.Errorf("package import path is required")
+	}
+	if len(sources) == 0 {
+		return fmt.Errorf("package %s has no source files", path)
+	}
 	fs := token.NewFileSet()
-	file, err := parser.ParseFile(fs, filename, source, parser.AllErrors)
-	if err != nil {
-		return err
+	names := make([]string, 0, len(sources))
+	for name := range sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	files := make([]*ast.File, 0, len(names))
+	for _, name := range names {
+		file, err := parser.ParseFile(fs, name, sources[name], parser.AllErrors)
+		if err != nil {
+			return err
+		}
+		files = append(files, file)
 	}
 	conf := types.Config{Importer: imp}
-	_, err = conf.Check("hgo/generated", fs, []*ast.File{file}, nil)
+	_, err := conf.Check(path, fs, files, nil)
 	return err
 }

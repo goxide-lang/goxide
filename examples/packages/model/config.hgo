@@ -1,0 +1,8 @@
+package model
+
+#[derive(Serialize, Deserialize, Clone)]
+type Config struct {
+    Name string
+    Mode RunMode
+    Labels []string
+}

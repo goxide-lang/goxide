@@ -1,0 +1,34 @@
+package main
+
+import (
+    "fmt"
+    "github.com/hxsf/goxide/serde"
+    "github.com/hxsf/goxide/serdejson"
+)
+
+#[derive(Serialize, Deserialize)]
+enum JobState {
+    Queued,
+    Running(int),
+    Failed(string),
+}
+
+#[derive(Serialize, Deserialize)]
+type Notification struct {
+    ID uint64
+    State JobState
+}
+
+func main() {
+    original := Notification{ID: 42, State: JobState::Running(70)}
+    data, err := serdejson.Encode(func(s serde.Serializer) error { return SerializeNotification(s, &original) })
+    if err != nil { panic(err) }
+    fmt.Println(string(data))
+    decoded, err := serdejson.Unmarshal(data, DeserializeNotification)
+    if err != nil { panic(err) }
+    match decoded.State {
+        JobState::Queued => { fmt.Println("queued") },
+        JobState::Running(progress) => { fmt.Println("progress:", progress) },
+        JobState::Failed(reason) => { fmt.Println("failed:", reason) },
+    }
+}

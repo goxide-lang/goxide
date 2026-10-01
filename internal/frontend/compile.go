@@ -39,6 +39,7 @@ type field struct {
 	line       int
 }
 type model struct {
+	enum         *enums.Decl
 	name         string
 	fields       []field
 	attrs        attrs
@@ -47,12 +48,13 @@ type model struct {
 	source, from string
 }
 type generator struct {
-	fs      *token.FileSet
-	file    string
-	models  map[string]model
-	alias   string
-	helpers strings.Builder
-	next    int
+	fs        *token.FileSet
+	file      string
+	models    map[string]model
+	enumDecls map[string]*enums.Decl
+	alias     string
+	helpers   strings.Builder
+	next      int
 }
 
 var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
@@ -69,10 +71,24 @@ func Compile(filename string, source []byte) (Result, error) {
 	reserveFile := reserveFS.AddFile(filename, -1, len(source))
 	var reserveScanner scanner.Scanner
 	reserveScanner.Init(reserveFile, source, func(token.Position, string) {}, 0)
+	enumHeader, enumDepth := false, 0
 	for {
 		pos, tok, lit := reserveScanner.Scan()
 		if tok == token.EOF {
 			break
+		}
+		if tok == token.IDENT && lit == "enum" {
+			enumHeader = true
+		}
+		if tok == token.LBRACE && (enumHeader || enumDepth > 0) {
+			enumDepth++
+			enumHeader = false
+		}
+		if tok == token.RBRACE && enumDepth > 0 {
+			enumDepth--
+		}
+		if enumDepth > 0 && lit == "#" {
+			return Result{}, fmt.Errorf("%s: enum variant attributes are unsupported", reserveFS.Position(pos))
 		}
 		if tok == token.IDENT && strings.HasPrefix(lit, "__hgo_") {
 			return Result{}, fmt.Errorf("%s: reserved generated identifier %s", reserveFS.Position(pos), lit)
@@ -192,6 +208,12 @@ func Compile(filename string, source []byte) (Result, error) {
 	if collision != "" {
 		return fail(1, "reserved generated identifier "+collision)
 	}
+	enumByName := map[string]*enums.Decl{}
+	for i := range enumResult.Enums {
+		d := &enumResult.Enums[i]
+		enumByName[d.Name] = d
+	}
+	g.enumDecls = enumByName
 	var ordered []model
 	for _, d := range f.Decls {
 		gd, ok := d.(*ast.GenDecl)
@@ -225,6 +247,20 @@ func Compile(filename string, source []byte) (Result, error) {
 			}
 			if ts.TypeParams != nil {
 				return fail(line, "generic derive is not supported in this prototype")
+			}
+			if ed := enumByName[ts.Name.Name]; ed != nil {
+				for kind := range a.derive {
+					if kind != "Serialize" && kind != "Deserialize" {
+						return fail(ed.Position.Line, "unsupported enum derive "+kind)
+					}
+				}
+				if a.deny || a.hasMessage {
+					return fail(ed.Position.Line, "enum serde and error attributes are unsupported")
+				}
+				m := model{name: ed.Name, attrs: a, line: ed.Position.Line, spec: ts, enum: ed}
+				g.models[m.name] = m
+				ordered = append(ordered, m)
+				continue
 			}
 			st, ok := ts.Type.(*ast.StructType)
 			if !ok {
@@ -425,6 +461,9 @@ func (g *generator) err(t ast.Expr, msg string) error {
 	return fmt.Errorf("%s:%d: %s", g.file, g.fs.Position(t.Pos()).Line, msg)
 }
 func (g *generator) emitModel(m model) error {
+	if m.enum != nil {
+		return g.emitEnum(m)
+	}
 	var ser, des strings.Builder
 	count := 0
 	for _, f := range m.fields {
@@ -513,6 +552,9 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 		default:
 			m, ok := g.models[t.Name]
 			if !ok {
+				if g.enumDecls[t.Name] != nil {
+					return "", "", g.err(t, "nested enum lacks required derive: "+typ)
+				}
 				return "", "", g.err(t, "unsupported field type "+typ)
 			}
 			if wantS && !m.attrs.derive["Serialize"] || wantR && !m.attrs.derive["Deserialize"] {
@@ -630,6 +672,46 @@ func (g *generator) validateExtra(t ast.Expr, kind string) error {
 			return e
 		}
 		return g.validateExtra(x.Value, kind)
+	}
+	return nil
+}
+
+// emitEnum uses only enum-lowerer's nominal metadata, never inferred interfaces.
+// Exact value-case dispatch rejects typed nil, pointer, and embedded foreign cases.
+func (g *generator) emitEnum(m model) error {
+	a := g.alias
+	d := m.enum
+	var w, r strings.Builder
+	fmt.Fprintf(&w, "\n//line %s:%d\nfunc Serialize%s(s %s.Serializer,v *%s)error{if v==nil{return %s.NewError(%s.Type,\"nil enum pointer\")};switch x:=(*v).(type){", g.file, m.line, m.name, a, m.name, a, a)
+	fmt.Fprintf(&r, "\n//line %s:%d\nfunc Deserialize%s(d %s.Deserializer)(v %s,e error){e=d.Enum(%q,[]string{", g.file, m.line, m.name, a, m.name, m.name)
+	for _, v := range d.Variants {
+		fmt.Fprintf(&r, "%q,", v.Name)
+	}
+	fmt.Fprintf(&r, "},%s.VisitorFuncs{OnEnum:func(access %s.EnumAccess)error{name,payload,e:=access.Variant();if e!=nil{return e};switch name{", a, a)
+	for _, v := range d.Variants {
+		fmt.Fprintf(&w, "case %s:_=x;", v.CaseName)
+		fmt.Fprintf(&r, "case %q:", v.Name)
+		if v.Payload == "" {
+			fmt.Fprintf(&w, "return s.UnitVariant(%q,%q);", m.name, v.Name)
+			fmt.Fprintf(&r, "if e:=payload.Unit();e!=nil{return e};v=%s();return nil;", v.Constructor)
+			continue
+		}
+		// Payload metadata AST positions use an independent FileSet. Report errors at
+		// the original variant source position rather than misinterpreting that Pos.
+		ws, rd, e := g.codec(v.Type, m.attrs.derive["Serialize"], m.attrs.derive["Deserialize"])
+		if e != nil {
+			return fmt.Errorf("%s: enum payload %s: %w", v.Position, v.Name, e)
+		}
+		fmt.Fprintf(&w, "return s.NewtypeVariant(%q,%q,func(s %s.Serializer)error{return %s(s,x.Value)});", m.name, v.Name, a, ws)
+		fmt.Fprintf(&r, "return payload.Newtype(func(d %s.Deserializer)error{x,e:=%s(d);if e!=nil{return e};v=%s(x);return nil});", a, rd, v.Constructor)
+	}
+	fmt.Fprintf(&w, "default:return %s.NewError(%s.Type,%q)}}\n", a, a, "invalid enum "+m.name)
+	fmt.Fprintf(&r, "default:return %s.NewError(%s.UnknownVariant,\"unknown variant \"+name)}}});return v,e}\n", a, a)
+	if m.attrs.derive["Serialize"] {
+		g.helpers.WriteString(w.String())
+	}
+	if m.attrs.derive["Deserialize"] {
+		g.helpers.WriteString(r.String())
 	}
 	return nil
 }

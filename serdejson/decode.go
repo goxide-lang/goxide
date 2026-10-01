@@ -604,7 +604,7 @@ func (a *enumAccess) Newtype(f serde.ReadValue) (_serdeErr error) {
 		return fail("Type", "expected newtype variant object")
 	}
 	if e := a.r.child(f); e != nil {
-		return serde.AtField(e, a.name)
+		return serde.AtVariant(e, a.name)
 	}
 	a.done = true
 	return nil

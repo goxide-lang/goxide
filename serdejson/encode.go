@@ -187,6 +187,7 @@ type container struct {
 	size, n             int
 	object, ended, busy bool
 	mapKeys             bool
+	variant             bool
 	seen                map[string]bool
 }
 
@@ -286,6 +287,9 @@ func (c *container) Field(k string, f serde.WriteValue) (_serdeErr error) {
 	c.busy = true
 	defer func() { c.busy = false }()
 	err := c.w.child(f)
+	if c.variant {
+		return serde.AtVariant(err, k)
+	}
 	if c.mapKeys {
 		return serde.AtMapKey(err, k)
 	}
@@ -348,7 +352,10 @@ func (w *writer) NewtypeVariant(_, v string, f serde.WriteValue) (_serdeErr erro
 			w.out.err = _serdeErr
 		}
 	}()
-	c, e := w.Struct("", 1)
+	c, e := w.begin(1, true)
+	if e == nil {
+		c.variant = true
+	}
 	if e != nil {
 		return e
 	}

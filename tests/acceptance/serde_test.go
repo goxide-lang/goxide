@@ -47,7 +47,7 @@ func TestUnsupportedSerdeIsDiagnosed(t *testing.T) {
 	cases := map[string]string{
 		"skip-wire-collision": "package fixture\n#[derive(Serialize, Deserialize)]\ntype Collision struct {\n #[serde(skip, rename=\"same\")]\n Secret string\n #[serde(rename=\"same\")]\n Public string\n}",
 		"generic":             "package fixture\n#[derive(Serialize)]\ntype Generic[T any] struct { Value T }",
-		"enum":                "package fixture\n#[derive(Serialize)]\nenum Choice { A, B }",
+		"public-enum":         "package fixture\n#[derive(Serialize)]\npub enum Choice { A, B }",
 		"external":            "package fixture\nimport \"time\"\n#[derive(Serialize)]\ntype Event struct { At time.Time }",
 		"interface":           "package fixture\n#[derive(Deserialize)]\ntype Dynamic struct { Value any }",
 	}

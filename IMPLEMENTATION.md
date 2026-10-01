@@ -24,7 +24,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 - 声明宏：本文件 `macro_rules!`，有限 `expr/ident/tt` 捕获、单层重复和嵌套调用。模板局部变量按 AST 身份改名，支持的自由函数按定义点绑定；不插入隐藏 IIFE。模板出现两次的参数仍求值两次，不自动缓存。详见 [宏限制](internal/macros/README.md)。
 - 内建 `Serialize/Deserialize`：具体命名 struct，标量、嵌套本地 struct、数组、slice、string-key map、可空 Go `*T`。`rename/default/skip/deny_unknown_fields`；default 是明确的 Go 零值子集，不是完整 Default trait。`*T` 仅是原型 Go 宿主语法，不代表 hgo 引用/Ptr 桥接已经定案。
 - 核心 `serde`：Serializer/Deserializer、Visitor 与容器访问协议、结构化错误及 cause；生成静态 helper，不采用反射 struct 编解码，不强制 Value 树。
-- 独立 `serdejson`：[支持范围与限制](serdejson/README.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议支持 unit/newtype；前端尚未实现 enum derive。
+- 独立 `serdejson`：[支持范围与限制](serdejson/README.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议及本地 enum 的 Serialize/Deserialize 派生支持 unit/newtype。
 - `Debug/Clone`：具体标量及上述非指针容器、嵌套本地类型。Debug 的 map 按键排序；Clone 递归复制支持的容器。指针、锁、外部未知类型、接口等没有隐式复制协议，明确拒绝。
 - `Error`：`#[error("failed {Code}")]`、显式 `#[source]` 的 error 字段生成 Unwrap；单个 error 字段的 `#[from]` 生成 `FromType`。无动态错误变体推断、完整 enum 或问号实现。
 - 日志示例调用 Go `log/slog`，验证重复字段参数和错误链；不是完整 tracing/span 运行时。
@@ -41,7 +41,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 源码映射是原型：derive 记录 helper 范围及展开输入的类型来源；宏 token 保存格式化前的输出偏移及调用位置。
 它不是最终 Go 文件逐 token、逐字段的完整映射，也不是 LSP。
 
-未完成：泛型 derive、跨包宏、用户过程宏、完整 trait/enum/Option/Result/引用前端、YAML、格式 Value、借用解码和原生 JSON codec 自动适配。
+未完成：泛型 derive、跨包宏、用户过程宏、完整 trait、泛型/跨包 enum、Option/Result/引用前端、YAML、格式 Value、借用解码和原生 JSON codec 自动适配。
 别名/借用风险分析继续独立于 MVP；本原型不作静态内存或并发安全保证。
 
 ## 本轮验收记录
@@ -86,3 +86,19 @@ go test -race -count=1 ./internal/enums ./tests/acceptance -run TestEnum
 这是候选 interface+值型case ABI的有限实现，未冻结ABI；仅match使用点验证，未实现全入口/初始化检查。case/helper当前未导出，外部Go构造尚未支持。泛型、复杂payload、表达式match、嵌套模式、Option/Result特殊规则仍未实现。枚举声明不是serde专用表示；下一阶段在这份元数据上补serde派生。
 
 独立enum审查新增6顶层测试及8拒绝子例；3个生成模块显式race运行6测试及3卫生子例，另1模块验证名义类型编译拒绝。修复生成代码被局部true/false/any捕获，以及包级panic和标量类型遮蔽影响验证的问题。
+
+## 后续阶段：真实 enum 的 serde 派生
+
+已在上一阶段的 Decl/Variant 元数据上实现 `#[derive(Serialize, Deserialize)] enum`，并允许 struct 和容器字段使用这些 enum；未另造 serde 专用变体表示。
+无载荷变体编码为字符串，单载荷变体为一个键的外标记对象；例如 `JobState::Running(70)` 对应 `{"Running":70}`。独立派生方向受检查，嵌套 enum 必须具有相应派生。
+
+```sh
+go run ./cmd/hgo run examples/prototype/event_json.hgo
+go test -race -count=1 ./tests/acceptance -run TestEnumSerde
+```
+
+[通知往返示例](examples/prototype/event_json.hgo) 先 JSON 往返，再对解码的真实 enum 执行 match。
+未知变体、错误载荷、null、多键/重复键等拒绝；非法 nil/typed-nil/case 指针/伪造值编码返回 serde 错误，不把它当业务变体或 panic。载荷错误使用 Variant 路径段，保留 cause。
+
+独立验收：3 个宿主测试及6个拒绝子例；2个实际生成模块显式race执行8个测试及11个坏输入子例，全部通过。
+仍未支持泛型/跨包 enum、复杂或递归载荷、enum 的 Debug/Clone/Error 和变体 rename/skip 等属性；这些明确诊断，不静默忽略。JSON 默认表示不是任意现有 Go interface 的自动反射协议。

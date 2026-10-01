@@ -8,6 +8,7 @@ import (
 	"github.com/hxsf/goxide/internal/deriveextras"
 	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/macros"
+	"github.com/hxsf/goxide/internal/refs"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -22,6 +23,7 @@ import (
 type Result struct {
 	Go, SourceMap, Expanded []byte
 	Enums                   []enums.Decl
+	References              []refs.Reference
 }
 type attrs struct {
 	derive          map[string]bool
@@ -99,6 +101,11 @@ func Compile(filename string, source []byte) (Result, error) {
 		return Result{}, err
 	}
 	source = enumResult.Source
+	refResult, err := refs.Lower(filename, source)
+	if err != nil {
+		return Result{}, err
+	}
+	source = refResult.Source
 	fail := func(line int, msg string) (Result, error) {
 		return Result{}, fmt.Errorf("%s:%d: %s", filename, line, msg)
 	}
@@ -449,8 +456,8 @@ func Compile(filename string, source []byte) (Result, error) {
 			sm = append(sm, map[string]any{"source": filename, "line": m.line, "helper": m.name + ".Error", "generatedByteOffset": bytes.Index(out, []byte("func (v "+m.name+") Error("))})
 		}
 	}
-	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "macroTokens": expanded.Origins, "note": "derive locations use expanded input; macro token origins map pre-format expansion offsets"}, "", "  ")
-	return Result{Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums}, nil
+	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "macroTokens": expanded.Origins, "references": refResult.References, "note": "derive locations use expanded input; macro token origins map pre-format expansion offsets"}, "", "  ")
+	return Result{Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer

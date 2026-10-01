@@ -175,6 +175,9 @@ func Compile(filename string, source []byte) (Result, error) {
 		if !ok || gd.Tok != token.TYPE {
 			continue
 		}
+		if gd.Lparen.IsValid() && byLine[fs.Position(gd.Pos()).Line].derive != nil {
+			return fail(fs.Position(gd.Pos()).Line, "derive on a grouped type declaration is unsupported; annotate each type separately")
+		}
 		for _, sp := range gd.Specs {
 			ts := sp.(*ast.TypeSpec)
 			line := fs.Position(ts.Pos()).Line
@@ -189,6 +192,10 @@ func Compile(filename string, source []byte) (Result, error) {
 			delete(byLine, fs.Position(gd.Pos()).Line)
 			if a.hasRename || a.skip || a.def || a.source || a.from {
 				return fail(line, "field attribute on type")
+			}
+			hasSerde := a.derive["Serialize"] || a.derive["Deserialize"]
+			if a.deny && !hasSerde {
+				return fail(line, "serde attributes require Serialize or Deserialize derive")
 			}
 			if ts.Assign.IsValid() {
 				return fail(line, "derive on aliases is unsupported")
@@ -206,6 +213,9 @@ func Compile(filename string, source []byte) (Result, error) {
 				fl := fs.Position(af.Pos()).Line
 				fa := byLine[fl]
 				delete(byLine, fl)
+				if (fa.hasRename || fa.skip || fa.def) && !hasSerde {
+					return fail(fl, "serde attributes require Serialize or Deserialize derive")
+				}
 				if fa.derive != nil || fa.deny || fa.hasMessage {
 					return fail(fl, "container attribute on field")
 				}
@@ -223,12 +233,10 @@ func Compile(filename string, source []byte) (Result, error) {
 				if fa.hasRename {
 					wire = fa.rename
 				}
-				if !fa.skip && seen[wire] {
+				if seen[wire] {
 					return fail(fl, "duplicate serialized field "+wire)
 				}
-				if !fa.skip {
-					seen[wire] = true
-				}
+				seen[wire] = true
 				if fa.source {
 					if m.source != "" {
 						return fail(fl, "multiple source fields")
@@ -417,6 +425,7 @@ func (g *generator) emitModel(m model) error {
 	fmt.Fprintf(&des, "},%s.VisitorFuncs{OnMap:func(a %s.MapAccess)error{for{var k string;ok,e:=a.NextKey(func(d %s.Deserializer)error{var e error;k,e=%s.ReadString(d);return e});if e!=nil{return e};if !ok{break};switch k{", g.alias, g.alias, g.alias, g.alias)
 	for i, f := range m.fields {
 		if f.skip {
+			fmt.Fprintf(&des, "case %q:if e:=a.NextValue(func(d %s.Deserializer)error{return d.Skip()});e!=nil{return e};", f.wire, g.alias)
 			continue
 		}
 		s, r, e := g.codec(f.typ, m.attrs.derive["Serialize"], m.attrs.derive["Deserialize"])

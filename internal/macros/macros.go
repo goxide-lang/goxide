@@ -218,6 +218,18 @@ func lex(file string, source []byte) ([]tok, string, error) {
 		}
 		off := f.Offset(p)
 		n := len(s)
+		// Go's scanner removes CR bytes from raw-string literals. Token spans
+		// must use original source bytes, otherwise trailing backticks are replayed.
+		if k == token.STRING && source[off] == '`' {
+			endRaw := off + 1
+			for endRaw < len(source) && source[endRaw] != '`' {
+				endRaw++
+			}
+			if endRaw < len(source) {
+				n = endRaw - off + 1
+				s = string(source[off : off+n])
+			}
+		}
 		if k == token.COMMENT {
 			continue
 		}

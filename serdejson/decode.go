@@ -233,12 +233,13 @@ func (r *reader) Option(v serde.Visitor) (_serdeErr error) {
 type access struct {
 	r                         *reader
 	obj, pending, ended, busy bool
+	fields                    bool
 	n                         int
 	key                       string
 	seen                      map[string]bool
 }
 
-func (r *reader) collection(v serde.Visitor, obj bool) (_serdeErr error) {
+func (r *reader) collection(v serde.Visitor, obj, fields bool) (_serdeErr error) {
 	defer func() {
 		if _serdeErr != nil {
 			r.state.err = _serdeErr
@@ -255,7 +256,7 @@ func (r *reader) collection(v serde.Visitor, obj bool) (_serdeErr error) {
 	if t != want {
 		return fail("Type", "expected JSON collection")
 	}
-	a := &access{r: r, obj: obj, seen: map[string]bool{}}
+	a := &access{r: r, obj: obj, fields: fields, seen: map[string]bool{}}
 	if obj {
 		e = v.VisitMap(a)
 	} else {
@@ -346,7 +347,7 @@ func (a *access) NextKey(f serde.ReadValue) (okResult bool, errResult error) {
 		return false, fail("Type", "expected string key")
 	}
 	if a.seen[k] {
-		return false, serde.AtField(fail("Duplicate", "duplicate object key"), k)
+		return false, a.atKey(fail("Duplicate", "duplicate object key"), k)
 	}
 	a.seen[k] = true
 	a.key = k
@@ -358,7 +359,7 @@ func (a *access) NextKey(f serde.ReadValue) (okResult bool, errResult error) {
 		return false, fail("State", "nil key callback")
 	}
 	if e = f(c); e != nil {
-		return false, serde.AtField(e, k)
+		return false, a.atKey(e, k)
 	}
 	if !c.done {
 		return false, fail("State", "key callback did not consume key")
@@ -380,17 +381,17 @@ func (a *access) NextValue(f serde.ReadValue) (_serdeErr error) {
 		return fail("State", "map value requested without key")
 	}
 	a.pending = false
-	return serde.AtField(a.r.child(f), a.key)
+	return a.atKey(a.r.child(f), a.key)
 }
-func (r *reader) Seq(v serde.Visitor) error { return r.collection(v, false) }
-func (r *reader) Map(v serde.Visitor) error { return r.collection(v, true) }
+func (r *reader) Seq(v serde.Visitor) error { return r.collection(v, false, false) }
+func (r *reader) Map(v serde.Visitor) error { return r.collection(v, true, false) }
 func (r *reader) Struct(_ string, _ []string, v serde.Visitor) (_serdeErr error) {
 	defer func() {
 		if _serdeErr != nil {
 			r.state.err = _serdeErr
 		}
 	}()
-	return r.Map(v)
+	return r.collection(v, true, true)
 }
 func (r *reader) Bytes(v serde.Visitor) (_serdeErr error) {
 	defer func() {
@@ -607,4 +608,11 @@ func (a *enumAccess) Newtype(f serde.ReadValue) (_serdeErr error) {
 	}
 	a.done = true
 	return nil
+}
+
+func (a *access) atKey(err error, key string) error {
+	if a.fields {
+		return serde.AtField(err, key)
+	}
+	return serde.AtMapKey(err, key)
 }

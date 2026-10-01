@@ -82,3 +82,15 @@ func TestErrorDeriveFieldMethodCollisions(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAttributesCannotBeSilentlyIgnored(t *testing.T) {
+	for _, src := range []string{
+		"#[derive(Debug)]\n#[serde(deny_unknown_fields)]\ntype S struct { X int }",
+		"#[derive(Clone)]\ntype S struct {\n#[serde(rename=\"x\")]\nX int\n}",
+		"#[derive(Serialize)]\ntype (\n A struct { X int }\n B struct { X int }\n)",
+	} {
+		if _, err := Compile("ignored.hgo", []byte("package p\n"+src)); err == nil {
+			t.Errorf("silently ignored attribute: %s", src)
+		}
+	}
+}

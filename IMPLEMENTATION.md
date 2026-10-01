@@ -56,3 +56,19 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 - 订单经 CLI transpile 后，另以 `go run -race /tmp/goxide-order-generated.go` 编译运行通过。
 
 独立审查驱动修复：生成代码重复声明、错误路径重复、float32 下溢、字符串内伪属性、JSON 错误被忽略、模板局部名字与导入遮蔽、Error/Unwrap 字段冲突。CLI 另修复输出别名保护、最低 Go 版本检查及临时模块 VCS stamping。
+
+## 独立黑盒验收后的精确边界
+
+- serde 属性必须有 Serialize 或 Deserialize；组类型声明不能只在组头 derive，需分别标注类型。不能静默丢弃属性。
+- `skip` 字段即使与 `deny_unknown_fields` 组合也消费并验证输入，解码保持零值；所有字段（含 skip）的 wire name 必须唯一。
+- 错误路径区分 Struct 的 Field 与 Map 的 MapKey；JSON 未知值中的对象按 MapKey 记录。
+- nil slice/map 编码为空数组/对象，解码为空容器；原生 `*T` 才接受 null。nullable 字段缺失仍须显式 default，本原型不是 Option 派生。
+- Clone 递归复制已支持的无环容器内容，保留 nil/空区别，但不保留共享别名拓扑和 slice 容量；不处理循环对象图。Debug 同样要求无环输入。二者没有动态深度预算；这不是通用深复制承诺。serde 自身递归编码有协议深度预算，循环输入返回 Limit。
+- `FromFailure(nil)` 返回 Failure 值，转成 error 后非 nil；Unwrap 为 nil。typed-nil source 原样保留。From 只支持唯一一个静态 `error` 字段，不支持任意具体错误类型转换。
+- 示例日志是普通 slog 调用：日志级别禁用时实参仍按模板求值一次，不是惰性 tracing。
+- CRLF 原始字符串按原始 token 范围处理；字符串值仍遵循 Go 的 raw-string CR 规则。
+
+新独立测试位于 `tests/acceptance`，生成模块明确运行 `go test -race`；与旧测试子进程未继承 race 的情况分开记录。
+研究线需要保留的验收项：属性不可忽略、skip 与未知字段组合、结构化 MapKey 路径、CRLF token 跨度、Clone 别名/环策略与日志禁用求值。以上是原型边界和反例，不替用户批准新的语言核心语义。
+
+第二轮独立验收：`go test -race -count=1 -json ./...` 通过 8 包、44 个顶层测试及 30 个子测试；新增独立生成模块共 4 个，以 `-race` 运行 14 个测试及 19 个子测试。这些数量分开统计，不把生成模块日志重复算作宿主测试。`go vet ./...` 与 docs-only 均通过。

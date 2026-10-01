@@ -186,6 +186,7 @@ type container struct {
 	w                   *writer
 	size, n             int
 	object, ended, busy bool
+	mapKeys             bool
 	seen                map[string]bool
 }
 
@@ -211,7 +212,13 @@ func (w *writer) begin(n int, obj bool) (_serdeResult0 *container, _serdeErr err
 	return &container{w: w, size: n, object: obj, seen: map[string]bool{}}, nil
 }
 func (w *writer) Seq(n int) (serde.SeqWriter, error) { return w.begin(n, false) }
-func (w *writer) Map(n int) (serde.MapWriter, error) { return w.begin(n, true) }
+func (w *writer) Map(n int) (serde.MapWriter, error) {
+	c, e := w.begin(n, true)
+	if e == nil {
+		c.mapKeys = true
+	}
+	return c, e
+}
 func (w *writer) Struct(_ string, n int) (_serdeResult0 serde.StructWriter, _serdeErr error) {
 	defer func() {
 		if _serdeErr != nil {
@@ -278,7 +285,11 @@ func (c *container) Field(k string, f serde.WriteValue) (_serdeErr error) {
 	}
 	c.busy = true
 	defer func() { c.busy = false }()
-	return serde.AtField(c.w.child(f), k)
+	err := c.w.child(f)
+	if c.mapKeys {
+		return serde.AtMapKey(err, k)
+	}
+	return serde.AtField(err, k)
 }
 func (c *container) Entry(k, v serde.WriteValue) (_serdeErr error) {
 	defer func() {

@@ -56,14 +56,15 @@ type model struct {
 	source, from string
 }
 type generator struct {
-	provenance *sourcemap.Map
-	fs         *token.FileSet
-	file       string
-	models     map[string]model
-	enumDecls  map[string]*enums.Decl
-	alias      string
-	helpers    strings.Builder
-	next       int
+	enumPosition *token.Position
+	provenance   *sourcemap.Map
+	fs           *token.FileSet
+	file         string
+	models       map[string]model
+	enumDecls    map[string]*enums.Decl
+	alias        string
+	helpers      strings.Builder
+	next         int
 }
 
 var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
@@ -95,9 +96,6 @@ func Compile(filename string, source []byte) (Result, error) {
 		}
 		if tok == token.RBRACE && enumDepth > 0 {
 			enumDepth--
-		}
-		if enumDepth > 0 && lit == "#" {
-			return Result{}, fmt.Errorf("%s: enum variant attributes are unsupported", reserveFS.Position(pos))
 		}
 		if tok == token.IDENT && strings.HasPrefix(lit, "__hgo_") {
 			return Result{}, fmt.Errorf("%s: reserved generated identifier %s", reserveFS.Position(pos), lit)
@@ -329,7 +327,7 @@ func Compile(filename string, source []byte) (Result, error) {
 			}
 			if ed := enumByName[ts.Name.Name]; ed != nil {
 				for kind := range a.derive {
-					if kind != "Serialize" && kind != "Deserialize" {
+					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Error" {
 						return fail(ed.Position.Line, "unsupported enum derive "+kind)
 					}
 				}
@@ -455,6 +453,38 @@ func Compile(filename string, source []byte) (Result, error) {
 			return fail(m.line, "generated helper conflicts with declaration From"+m.name)
 		}
 	}
+	for _, d := range enumResult.Enums {
+		for _, v := range d.Variants {
+			if (v.HasMessage || v.Source || v.From) && !g.models[d.Name].attrs.derive["Error"] {
+				return fail(d.Position.Line, "error attributes require Error derive")
+			}
+		}
+	}
+	// Variant error attributes are explicit and never infer a dynamic source case.
+	for i, m := range ordered {
+		if m.enum == nil {
+			continue
+		}
+		for _, v := range m.enum.Variants {
+			if !m.attrs.derive["Error"] && (v.HasMessage || v.Source || v.From) {
+				return fail(m.line, "error attributes require Error derive")
+			}
+			if m.attrs.derive["Error"] && !v.HasMessage {
+				return fail(m.line, "enum Error requires error message on every variant")
+			}
+			if v.From {
+				if m.from != "" {
+					return fail(m.line, "ambiguous enum From: multiple error variants")
+				}
+				m.from = v.Name
+			}
+		}
+		ordered[i] = m
+		g.models[m.name] = m
+		if m.from != "" && declared["From"+m.name] {
+			return fail(m.line, "generated helper conflicts with declaration From"+m.name)
+		}
+	}
 	imports := map[string]string{}
 	for _, m := range ordered {
 		if m.attrs.derive["Serialize"] || m.attrs.derive["Deserialize"] {
@@ -480,7 +510,23 @@ func Compile(filename string, source []byte) (Result, error) {
 					}
 				}
 			}
-			if kind == "Error" {
+			if m.enum != nil {
+				for _, v := range m.enum.Variants {
+					if kind != "Error" && v.Type != nil {
+						g.enumPosition = &v.Position
+						err := g.validateExtra(v.Type, kind)
+						g.enumPosition = nil
+						if err != nil {
+							return Result{}, err
+						}
+					}
+				}
+				if kind == "Error" {
+					code, im, e = deriveextras.GenerateEnumError(*m.enum)
+				} else {
+					code, im, e = deriveextras.GenerateEnum(kind, *m.enum)
+				}
+			} else if kind == "Error" {
 				code, im, e = deriveextras.GenerateError(m.spec, m.attrs.message, m.source, m.from)
 			} else {
 				code, im, e = deriveextras.Generate(kind, m.spec)
@@ -591,6 +637,9 @@ func (g *generator) typeName(t ast.Expr) string {
 	return b.String()
 }
 func (g *generator) err(t ast.Expr, msg string) error {
+	if g.enumPosition != nil {
+		return fmt.Errorf("%s [generated/unmapped; enum stage coordinates]: %s", *g.enumPosition, msg)
+	}
 	p := g.fs.Position(t.Pos())
 	e := &sourcemap.Error{Message: msg, Generated: p, Origin: g.provenance.SpanFor(p.Offset, g.fs.Position(t.End()).Offset)}
 	if s := g.provenance.Lookup(p.Offset); s != nil {
@@ -837,7 +886,9 @@ func (g *generator) emitEnum(m model) error {
 		}
 		// Payload metadata AST positions use an independent FileSet. Report errors at
 		// the original variant source position rather than misinterpreting that Pos.
+		g.enumPosition = &v.Position
 		ws, rd, e := g.codec(v.Type, m.attrs.derive["Serialize"], m.attrs.derive["Deserialize"])
+		g.enumPosition = nil
 		if e != nil {
 			return fmt.Errorf("%s: enum payload %s: %w", v.Position, v.Name, e)
 		}

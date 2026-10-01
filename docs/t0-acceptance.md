@@ -21,7 +21,7 @@
 | 已支持模板的局部身份、定义点函数绑定、原控制流和按模板次数求值 | 完整（具体子能力） | 用户必需；不能推广到未支持语法的完整卫生 | [宏内部测试](../internal/macros/macros_test.go)：`TestHygieneEvaluationAndHelperShadow`、`TestLogAndReturnDefer`、`TestTemplateRepetitionEvaluationCount`、`TestNestedLocalScopes`；`TestMacroAcceptanceRace` 内 `TestHygieneAndEvaluation`、`TestDisabledLogArgumentsAreEager`。禁用 slog 仍求值，非惰性 tracing |
 | 固定内建 Option/Result 类型的宏模板及显式闭包传播边界 | 有限 | 用户必需组合；捕获类型参数、用户 enum 构造和一般泛型后置 | [sums_test.go](../internal/macros/sums_test.go)：`TestBuiltinSumTemplateDefinitionBindings`、`TestSumHelperDoesNotMovePropagation`、`TestUnsupportedSumTemplateTypes`；[传播接受测试](../tests/acceptance/propagate_test.go)：`TestPropagationMacroClosureRace`（`TestExplicitMacroClosureOwnsReturn`） |
 | Debug/Clone：具体标量、无指针容器、嵌套本地类型 | 有限 | 用户已授权基础派生；通用 trait/泛型/环和共享拓扑复制后置 | [generate_test.go](../internal/deriveextras/generate_test.go)：`TestGeneratedDerivesRun`、`TestRejectImplicitProtocols`；[宏接受测试](../tests/acceptance/macros_test.go)：`TestCloneAndErrorAcceptanceRace`（`TestCloneNestedAndAliasPolicy`）、`TestMacroAndCloneExplicitRejections`。Clone 保留 nil/空区别，不保留别名拓扑/容量 |
-| 本地非泛型 enum：unit、单标量或无环本地 enum payload；名义身份 | 有限 | 用户必需 D12/D21；候选 interface+值 case ABI 尚未冻结，复杂 payload/跨包后置 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumNominalIdentity`、`TestEnumExplicitRejections`；[lower_test.go](../internal/enums/lower_test.go)：`TestPublicEnumIsNotSilentlyLocal` |
+| 本地非泛型 enum：unit、单标量/有限struct和容器/无环enum payload；名义身份 | 有限 | 用户必需 D12/D21；候选 interface+值 case ABI 尚未冻结，复杂payload继续分期；跨包身份仍必需但未做，见末尾完成标准 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumNominalIdentity`、`TestEnumExplicitRejections`；[lower_test.go](../internal/enums/lower_test.go)：`TestPublicEnumIsNotSilentlyLocal` |
 | 语句 match：一次求值、guard 次序、绑定、穷尽/不可达、return/defer/循环控制流 | 完整（具体子能力） | 用户必需；嵌套模式和完整表达式语法后置 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumControlFlowRace`（`TestOrderAndSingleEvaluation`、`TestReturnDeferLoop`、`TestNested`）、`TestEnumExplicitRejections` |
 | 表达式 match：整个显式类型局部初始化，或单个非具名 Go 可解析返回类型的整个 return | 有限 | 用户必需方向；下一步按应用需要扩展，尚不支持 `:=`/参数/运算符内嵌等 | [match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestMatchExpressionBusinessRace`（`TestScopeEffectsAndGuards`、`TestReturnClosureAndHygiene`）、`TestMatchExpressionUnsupportedContexts`、`TestBuiltinMatchExpressionRace` |
 | 使用点拒绝非法 enum Go 值：nil/typed-nil/case 指针/伪造值先于 wildcard 副作用；serde 编码返回错误 | 完整（具体子能力） | 用户必需边界说明；全入口/初始化/任意对象图校验可后置，不能称 Go 调用者无法造非法值 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumInvalidBoundaryRace`；[enum_serde_test.go](../tests/acceptance/enum_serde_test.go)：`TestEnumSerdeBusinessRace`（`TestEnumInvalidGoBoundaryReturnsError`）；[match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestBuiltinMatchExpressionRace`（`TestInvalidBuiltinBeforeEffect`） |
@@ -103,3 +103,16 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 本轮新增接受测试由实施者编写，fresh 非作者只读审查另行复验；不冒称新增测试作者独立。历史线程上限使本轮不能再开两名 fresh 实施者，实际采用单实施者与一名 fresh 只读审查者。
 
 本轮最终实际回归：**14 包、141 宿主顶层测试、241 子测试**通过全套 race；**23 个成功生成模块、58 测试、41 子测试**显式 race，另 1 模块预期编译拒绝。vet、完整设计检查 13 Go 命令、条件日志 CLI 转译产物 race、配置应用成功/两类失败均通过。详细范围及验收区分见 IMPLEMENTATION 当前增量。
+
+## enum 派生增量与剩余完成标准
+
+| 子能力 | 当前状态与证据 | 剩余完成标准 |
+| --- | --- | --- |
+| 本地 enum 的普通多字段业务载荷 | 有限：普通 struct 单payload，另支持有限array/slice/map；`TestEnumDerivesApplicationRace` | 不冒称多字段variant；tuple/record源语法须后续扩展设计，格式协议另验收 |
+| enum Debug/Clone/serde 组合 | 有限：JSON→真实enum→match/Debug/深复制，`TestEnumDerivesApplicationRace`；拒绝见 `TestEnumDerivesExplicitRejections` | pointer/锁/interface无隐式Clone；enum-bearing容器/递归图待明确策略及真实正负例 |
+| enum Error/Unwrap/唯一 From | 有限：显式variant message/source/from与Result传播，独立生成模块race | 具体source From、transparent、泛型不冒称完成；必须先定义静态唯一转换条件 |
+| T0跨包身份与Go互操作 | 未做，仍为必需方向的实际缺口 | 至少两包：包A导出正式enum构造/metadata/helper，包B构造、serde、Clone并验证名义身份和非法边界；当前case/helper私有及单文件构建阻断，不能以同包测试代替 |
+
+后续优先级：先维持 enum 派生应用与失败诊断的真实回归，再处理常量 enum raw/未知值与最小跨包身份/公开入口；完整跨阶段来源继续补有证据的映射。常量例 `type Status string` 的未知 `"future"` 可存在、开放输入需wildcard，已是设计方向；尚未定案的是精确源语法、未知值模式及公开校验入口。后续最小建议：先实现开放raw匹配必须有wildcard的入口，再明确显式闭合校验的拼写，不重开保留raw的既定方向。通用引用桥接/容器/函数值、一般泛型及完整trait分别分期，长期借用分析独立。前面各历史阶段“enum派生未做”的记录由此增量取代，整项T0仍未完成。
+
+本增量最终验收：14包、144宿主顶层/262子测试通过全套race；25个成功生成race模块共71测试/48子测试，另1模块预期名义类型编译拒绝。新增2个生成模块验证13测试/7子例，含值struct内enum非法值先于Clone/Debug/guard副作用拒绝。vet、完整设计检查13Go命令与示例转译产物race通过。两位复用非作者分别编写用例/只读审查，无fresh线程可用；最终无未修复阻断。

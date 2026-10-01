@@ -65,9 +65,7 @@ func main(){
 }
 func TestEnumSerdeDiagnostics(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{"#[derive(Debug)]\nenum E { A, }", "unsupported enum derive"},
-		{"#[derive(Clone)]\nenum E { A, }", "unsupported enum derive"},
-		{"#[derive(Error)]\nenum E { A, }", "unsupported enum derive"},
+		{"#[derive(Error)]\nenum E { A, }", "requires error message"},
 		{"#[derive(Serialize)]\n#[serde(deny_unknown_fields)]\nenum E { A, }", "enum serde"},
 		{"enum Inner { A, }\n#[derive(Serialize)]\nenum Outer { Item(Inner), }", "required derive"},
 		{"#[derive(Serialize)]\nenum E {\n#[serde(rename=\"other\")]\nA, }", "variant attributes are unsupported"},

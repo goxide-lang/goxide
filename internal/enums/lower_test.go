@@ -83,7 +83,7 @@ func TestRejectedForms(t *testing.T) {
 	for name, src := range map[string]string{
 		"generic":              "enum E[T] { A(T), }",
 		"empty":                "enum E {}",
-		"complex":              "enum E { A([]int), }",
+		"complex":              "enum E { A(*int), }",
 		"recursive":            "enum E { A(E), }",
 		"duplicate":            "enum E { A, A, }",
 		"constructor":          "enum E { A, }; func f(){ _ = E::B }",

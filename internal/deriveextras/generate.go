@@ -4,6 +4,7 @@ package deriveextras
 import (
 	"bytes"
 	"fmt"
+	"github.com/hxsf/goxide/internal/enums"
 	"go/ast"
 	"go/format"
 	"go/token"
@@ -178,4 +179,41 @@ func (g *generator) debug(t ast.Expr, x string) (string, error) {
 		return "func(src " + typ + ") string { if src == nil { return \"nil\" }; keys := make([]string, 0, len(src)); for key := range src { keys = append(keys, key) }; " + g.imp("sort") + ".Strings(keys); parts := make([]string, 0, len(keys)); for _, key := range keys { item := src[key]; parts = append(parts, " + g.imp("strconv") + ".Quote(key) + \": \" + " + child + ") }; return \"{\" + " + g.imp("strings") + ".Join(parts, \", \") + \"}\" }(" + x + ")", nil
 	}
 	return "", fmt.Errorf("Debug has no explicit implementation for %s", typeText(t))
+}
+
+// GenerateEnum retains nominal variant identity and delegates supported payloads.
+func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) {
+	g := &generator{imports: map[string]string{}}
+	var b strings.Builder
+	result := "string"
+	if kind == "Clone" {
+		result = d.Name
+	}
+	fmt.Fprintf(&b, "func %s%s(v *%s) %s { %s(*v); switch x:=(*v).(type){", kind, d.Name, d.Name, result, d.Validator)
+	for _, v := range d.Variants {
+		fmt.Fprintf(&b, "case %s: _=x;", v.CaseName)
+		if kind == "Clone" {
+			if v.Type == nil {
+				fmt.Fprintf(&b, "return %s();", v.Constructor)
+			} else {
+				x, e := g.clone(v.Type, "x.Value")
+				if e != nil {
+					return "", nil, e
+				}
+				fmt.Fprintf(&b, "return %s(%s);", v.Constructor, x)
+			}
+		} else {
+			if v.Type == nil {
+				fmt.Fprintf(&b, "return %q;", d.Name+"::"+v.Name)
+			} else {
+				x, e := g.debug(v.Type, "x.Value")
+				if e != nil {
+					return "", nil, e
+				}
+				fmt.Fprintf(&b, "return %q + %s + %q;", d.Name+"::"+v.Name+"(", x, ")")
+			}
+		}
+	}
+	fmt.Fprintf(&b, "default: panic(%q)}}", "hgo: invalid enum "+d.Name)
+	return b.String(), g.imports, nil
 }

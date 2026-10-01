@@ -18,8 +18,8 @@ func handle(e Event) string {
 }
 ```
 
-Supported: package-local non-generic enums with unit or one scalar payload; an
-acyclic nested local enum may also be a payload. Constructors return the nominal
+Supported: package-local non-generic enums with unit or one finite value payload:
+scalars, local structs, arrays, slices, maps, and acyclic nested local enums. Constructors return the nominal
 enum interface. Statement matches support qualified variants, one payload binding
 or `_`, whole-value bindings / `_`, and source-order guards. At least one qualified
 variant is required to establish the target enum type; wildcard-only matches are
@@ -40,8 +40,8 @@ checker. Generated helper/case names reserve `__hgo_enum_` and are recorded in
 metadata; they are unexported, so Go interoperability currently covers **same-package
 mechanism tests**, not external Go callers constructing exported cases.
 
-Explicitly unsupported: `pub` declarations and generic/cross-package enums; recursive, pointer, container,
-struct, interface, or named-alias payloads; nested/constant/or/range patterns;
+Explicitly unsupported: `pub` declarations and generic/cross-package enums; recursive, pointer, enum-bearing container,
+unknown external or general interface payloads; nested/constant/or/range patterns;
 expression matches are handled by a separate frontend stage; wildcard-only
 type inference; generalized propagation protocols; constant-backed enum
 syntax. Statement targets use ordinary expression spelling (parenthesize composite
@@ -82,10 +82,55 @@ inside sums. This is boundary validation, not ownership analysis.
 
 User generic functions and declarations remain unsupported, as do inferred generic
 constructors, cross-package builtin identities and builtin serde derives. Built-in
-names cannot be replaced by user declarations when using this subset. Ordinary
-local enum support remains unchanged. The dedicated `?` stage consumes the same
+names cannot be replaced by user declarations when using this subset. The local enum extension described below reuses the same value projection checks. The dedicated `?` stage consumes the same
 case/validator metadata; this module alone does not implement early return.
 
 Tests include generated modules run with `-race`, nil and typed-nil validation,
 nested builtin validation, and a real Go compile rejection for assigning an Err
 case across different success parameters.
+
+## Local payload and derive extension
+
+Local single-payload variants now accept finite local named value structs, arrays,
+slices and maps of supported value types. Structs can carry ordinary derive field
+attributes. Direct nested enums and enum-bearing named value fields are validated
+before match/Debug/Clone exposes the payload. Enum-bearing containers and pointers,
+recursive payload graphs, external unknown types and generic local declarations
+remain rejected. Constructors and match bindings retain Go value-copy semantics;
+only an explicit Clone helper recursively copies supported containers.
+
+`#[derive(Debug, Clone)] enum Command { Idle, Run(Job), }` generates
+`DebugCommand(*Command) string` and `CloneCommand(*Command) Command`.
+Debug prints `Command::Idle` or `Command::Run(Job { ... })`; payload fields follow
+the existing struct strategy (declaration order, quoted strings, sorted string map
+keys, nil distinguished from empty). Payload named types need the corresponding
+derive. Invalid enum representations panic in these helpers, as at match use
+points. Serde continues to report errors and retains the existing externally
+tagged unit/newtype protocol. A struct/array newtype payload is **not** a newly
+implemented struct/tuple variant protocol or source syntax.
+
+Error variants use explicit, standalone prototype attributes:
+
+```hgo
+#[derive(Error)]
+enum AppError {
+    #[error("input failed")]
+    #[from]
+    Input(error),
+    #[error("invalid count {Value}")]
+    Count(int),
+    #[error("missing")]
+    Missing,
+}
+```
+
+Every variant requires a literal message. `{Value}` supports the same built-in
+scalar formatting as struct Error; there is no implicit Stringer/debug fallback.
+`#[source]` and `#[from]` require a single static `error` payload. From implies
+source; at most one variant has From, producing `FromAppError(error) AppError`
+and registering the existing single-step `?` conversion. Each case implements
+Error/Unwrap and the enum interface includes those methods. Unwrap preserves the
+source interface, including typed nil; source-less variants return nil. No dynamic
+error classification, transparent struct forwarding, concrete source conversion,
+or conversion chaining is inferred. Attribute spelling and helper ABI remain
+prototype conventions, not new frozen language rules.

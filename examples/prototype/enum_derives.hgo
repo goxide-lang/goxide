@@ -1,0 +1,136 @@
+package main
+
+import (
+    "errors"
+    "fmt"
+    "github.com/hxsf/goxide/serdejson"
+)
+
+// Multiple data items live in an ordinary struct, carried by one enum payload.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+type WorkItem struct {
+    Name string
+    Retries []int
+    Labels map[string]string
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+enum Command {
+    Idle,
+    Submit(WorkItem),
+    Batch([]WorkItem),
+    Indexed(map[string]WorkItem),
+    Window([2]WorkItem),
+}
+
+// Struct field attributes remain effective inside a single enum payload.
+#[derive(Serialize, Deserialize)]
+type TaggedItem struct {
+    #[serde(rename="id")]
+    ID string
+    #[serde(default)]
+    Attempts int
+}
+#[derive(Serialize, Deserialize)]
+enum TaggedCommand { Change(TaggedItem), }
+func taggedItem(command TaggedCommand) TaggedItem {
+    match command {TaggedCommand::Change(item) => {return item},}
+    panic("unreachable")
+}
+
+#[derive(Error)]
+enum AppError {
+    #[error("could not load jobs")]
+    #[from]
+    Input(error),
+    #[error("invalid job count {Value}")]
+    Count(int),
+    #[error("remote job failed")]
+    #[source]
+    Remote(error),
+    #[error("missing job")]
+    Missing,
+}
+
+func remote(cause error) AppError { return AppError::Remote(cause) }
+func missing() AppError { return AppError::Missing }
+
+func failWith(cause error) Result[int,AppError] {
+    n := Result[int,error]::Err(cause)?
+    return Result[int,AppError]::Ok(n)
+}
+func failureValue(value Result[int,AppError]) AppError {
+    match value { Result[int,AppError]::Err(err) => {return err}, _ => {panic("not failure")}, }
+    panic("unreachable")
+}
+func errorKind(err AppError) string {
+    return match err {AppError::Input(_) => "input", AppError::Count(_) => "count", AppError::Remote(_) => "remote", AppError::Missing => "missing",}
+}
+
+func decodeCommand(data []byte) Result[Command,error] {
+    command, err := serdejson.Unmarshal(data, DeserializeCommand)
+    if err != nil { return Result[Command,error]::Err(err) }
+    return Result[Command,error]::Ok(command)
+}
+
+func loadCommand(data []byte) Result[Command,AppError] {
+    command := decodeCommand(data)?
+    match command {
+        Command::Batch(items) => {
+            if len(items) == 0 {
+                return Result[Command,AppError]::Err(AppError::Count(0))
+            }
+        },
+        _ => {},
+    }
+    return Result[Command,AppError]::Ok(command)
+}
+
+func accepted(v Result[Command,AppError]) Command {
+    match v {
+        Result[Command,AppError]::Ok(command) => {return command},
+        Result[Command,AppError]::Err(err) => {panic(err)},
+    }
+    panic("unreachable")
+}
+
+func rejected(v Result[Command,AppError]) error {
+    match v {
+        Result[Command,AppError]::Ok(_) => {return nil},
+        Result[Command,AppError]::Err(err) => {return err},
+    }
+    panic("unreachable")
+}
+
+func submit(item WorkItem) Command { return Command::Submit(item) }
+func batch(items []WorkItem) Command { return Command::Batch(items) }
+func indexed(items map[string]WorkItem) Command { return Command::Indexed(items) }
+func window(items [2]WorkItem) Command { return Command::Window(items) }
+func idle() Command { return Command::Idle }
+func submitted(command Command) WorkItem {
+    match command { Command::Submit(item) => {return item}, _ => {panic("not Submit")}, }
+    panic("unreachable")
+}
+func batchItems(command Command) []WorkItem {
+    match command { Command::Batch(items) => {return items}, _ => {panic("not Batch")}, }
+    panic("unreachable")
+}
+func indexedItems(command Command) map[string]WorkItem {
+    match command { Command::Indexed(items) => {return items}, _ => {panic("not Indexed")}, }
+    panic("unreachable")
+}
+func windowItems(command Command) [2]WorkItem {
+    match command { Command::Window(items) => {return items}, _ => {panic("not Window")}, }
+    panic("unreachable")
+}
+
+func main() {
+    command := accepted(loadCommand([]byte(`{"Submit":{"Name":"mail","Retries":[1,2],"Labels":{"z":"last","a":"first"}}}`)))
+    snapshot := CloneCommand(&command)
+    item := submitted(snapshot)
+    item.Retries[0] = 9
+    fmt.Println(DebugCommand(&command))
+    fmt.Println(DebugCommand(&snapshot))
+    err := rejected(loadCommand([]byte("{")))
+    fmt.Println("error:", err, "cause:", errors.Unwrap(err))
+}

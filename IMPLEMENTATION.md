@@ -24,9 +24,9 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 - 声明宏：本文件 `macro_rules!`，有限 `expr/ident/tt` 捕获、单层重复和嵌套调用。模板局部变量按 AST 身份改名，支持的自由函数按定义点绑定；不插入隐藏 IIFE。模板出现两次的参数仍求值两次，不自动缓存。详见 [宏限制](internal/macros/README.md)。
 - 内建 `Serialize/Deserialize`：具体命名 struct，标量、嵌套本地 struct、数组、slice、string-key map、可空 Go `*T`。`rename/default/skip/deny_unknown_fields`；default 是明确的 Go 零值子集，不是完整 Default trait。`*T` 仅是原型 Go 宿主语法，不代表 hgo 引用/Ptr 桥接已经定案。
 - 核心 `serde`：Serializer/Deserializer、Visitor 与容器访问协议、结构化错误及 cause；生成静态 helper，不采用反射 struct 编解码，不强制 Value 树。
-- 独立 `serdejson`：[支持范围与限制](serdejson/README.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议及本地 enum 的 Serialize/Deserialize 派生支持 unit/newtype。
+- 独立 `serdejson`：[支持范围与限制](serdejson/README.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议及本地 enum 的 Serialize/Deserialize 派生支持 unit/newtype（含有限 struct/container 单载荷）。
 - `Debug/Clone`：具体标量及上述非指针容器、嵌套本地类型。Debug 的 map 按键排序；Clone 递归复制支持的容器。指针、锁、外部未知类型、接口等没有隐式复制协议，明确拒绝。
-- `Error`：`#[error("failed {Code}")]`、显式 `#[source]` 的 error 字段生成 Unwrap；单个 error 字段的 `#[from]` 生成 `FromType`。其显式转换已接入下述有限 `?` 前端；不推断动态错误变体，不支持 enum Error 派生。
+- `Error`：`#[error("failed {Code}")]`、显式 `#[source]` 的 error 字段生成 Unwrap；单个 error 字段的 `#[from]` 生成 `FromType`。其显式转换已接入下述有限 `?` 前端；不推断动态错误变体，enum Error 的显式变体属性见本文最新增量。
 - 日志示例调用 Go `log/slog`，验证重复字段参数和错误链；不是完整 tracing/span 运行时。
 
 代表写法见 [订单](examples/prototype/order.hgo) 和 [日志与错误](examples/prototype/log_error.hgo)。源文件采用 Go package/import/function/field 语法，派生属性独占行；也支持有限 `struct Name` 声明简写。未实现 Rust/hgo 整套语法。
@@ -224,3 +224,17 @@ enum/语句 match 和表达式 match 的 renderer 现在记录显式复制范围
 - 配置应用 CLI build 后默认输入 exit 0/INFO/workers=4；坏 JSON 与零 workers 分别 exit 1/ERROR，保留 JSON syntax 与业务范围原因。
 
 本轮无待批准阻断，不改 tag、不 push、不冻结新核心语义。T0 整体仍为有限可运行子集：常量 enum raw/未知值规则需后续明确；通用引用桥接、引用容器/函数值、完整跨阶段映射、enum 派生扩展、一般泛型和跨包能力继续按验收矩阵分期。长期借用分析仍独立，race 不代表静态安全保证。
+
+## 当前增量：enum 常用派生与多字段业务载荷
+
+在 `f8466ae90a38a3d494b7e9127fe2710475c05cad` 上补齐本地 enum 的 Debug/Clone 与显式 Error/Unwrap/From。严格沿用设计的 unit/单 payload：多字段放普通 struct；有限 array/slice/map 单载荷可参与 serde 和深复制。没有新增 tuple/record variant 语法或格式协议。新[任务派生示例](examples/prototype/enum_derives.hgo)及[独立接受测试](tests/acceptance/enum_derives_test.go)验证真实 JSON 往返、match、容器 Clone、精确 Debug、错误链及唯一单步传播。
+
+Clone 递归复制支持容器、保留 nil/空区别，不复制原生指针、不保留别名拓扑/容量；不支持循环对象图。Debug 保持字段声明顺序、字符串引用及 string-key map 排序，variant 名称显式保留。嵌套命名类型必须具有相应派生。enum-bearing 容器仍拒绝，有限值 struct 中的 enum 投影在 match/Debug/Clone 前校验；没有扩大到任意对象图。
+
+Error 使用变体独占行 `#[error("message {Value}")]`，unit 可仅 literal；`#[source]`/`#[from]` 仅接受单个静态 error payload。每变体必须有 message；From 唯一，生成 `FromEnum(error)` 并接入现有包级绑定的一步转换。Unwrap 原样保留 typed-nil interface；不猜动态变体、不推断两跳，不隐式透明转发 struct Error。完整有限拼写见 [enum实现](internal/enums/README.md)。variant payload 独立 AST 的拒绝诊断明确使用 enum 阶段坐标及 generated/unmapped，不把位置误当 package 的原始 token。
+
+独立用例与只读审查分别由两位复用的非作者完成；平台线程上限拒绝 fresh 新线程，未宣称 fresh。审查促成无derive变体属性拒绝和payload诊断坐标修复。
+
+最终验证（Go 1.27.1、linux/amd64、CGO_ENABLED=1，同前述离线环境）：全套 `go test -race -count=1 -json ./...` 通过 **14包、144宿主顶层测试、262子测试**；接受测试实际生成 **25个成功race模块，71测试、48子测试**，另1模块验证预期名义类型编译拒绝。新增部分为3宿主测试（含21拒绝子例）、2个生成race模块的13测试/7子例。宿主与生成日志分别统计；旧prototype普通子进程不计入race模块。`go vet ./...`、完整设计检查13个Go命令通过；最终文档检查34篇Markdown、285本地链接通过。示例CLI transpile产物 `go run -race` 展示容器独立复制和JSON Syntax错误链。非作者最终只读审查无阻断。
+
+T0仍有明确缺口：enum-bearing容器/递归图、具体source From、跨包公开身份/构造入口、精确来源及其他矩阵项；本轮无设计决策阻断，不push/tag，不冻结新核心语义。

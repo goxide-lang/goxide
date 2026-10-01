@@ -213,7 +213,7 @@ func (l *lowerer) checkCompositePayloads() error {
 		if !atPackage {
 			continue
 		}
-		if hasBuiltin && t.kind == token.TYPE && i+1 < len(l.ts) && l.ts[i+1].kind == token.LPAREN {
+		if (hasBuiltin || len(l.decls) > 0) && t.kind == token.TYPE && i+1 < len(l.ts) && l.ts[i+1].kind == token.LPAREN {
 			end, err := l.close(i + 1)
 			if err != nil {
 				return err
@@ -235,7 +235,7 @@ func (l *lowerer) checkCompositePayloads() error {
 			if err != nil {
 				return err
 			}
-			if e, err := parser.ParseExpr("struct " + string(l.src[l.ts[i+2].start:l.ts[end].end])); err == nil {
+			if e, err := parser.ParseExpr(withoutPayloadAttrs("struct " + string(l.src[l.ts[i+2].start:l.ts[end].end]))); err == nil {
 				named[l.ts[i+1].text] = e
 			}
 		}
@@ -261,7 +261,7 @@ func (l *lowerer) checkCompositePayloads() error {
 			end++
 		}
 		if end > start {
-			if e, err := parser.ParseExpr(string(l.src[l.ts[start].start:l.ts[end-1].end])); err == nil {
+			if e, err := parser.ParseExpr(withoutPayloadAttrs(string(l.src[l.ts[start].start:l.ts[end-1].end]))); err == nil {
 				named[l.ts[i+1].text] = e
 			}
 		}
@@ -370,13 +370,43 @@ func (l *lowerer) checkCompositePayloads() error {
 		return "", fmt.Errorf("enum-bearing pointer/container projection")
 	}
 	for _, d := range l.decls {
-		if d.Family == "" {
-			continue
-		}
 		owner = d.Name
 		for _, v := range d.Variants {
 			if v.Type == nil {
 				continue
+			}
+			if d.Family == "" {
+				var allowed func(ast.Expr, map[string]bool) bool
+				allowed = func(e ast.Expr, seen map[string]bool) bool {
+					switch t := e.(type) {
+					case *ast.Ident:
+						if scalar(t.Name) || (t.Name == "error" && v.HasMessage && (v.Source || v.From)) || l.byName[t.Name] != nil {
+							return true
+						}
+						if seen[t.Name] || named[t.Name] == nil {
+							return false
+						}
+						seen[t.Name] = true
+						ok := allowed(named[t.Name], seen)
+						delete(seen, t.Name)
+						return ok
+					case *ast.StructType:
+						for _, f := range t.Fields.List {
+							if len(f.Names) == 0 || !allowed(f.Type, seen) {
+								return false
+							}
+						}
+						return true
+					case *ast.ArrayType:
+						return allowed(t.Elt, seen)
+					case *ast.MapType:
+						return allowed(t.Key, seen) && allowed(t.Value, seen)
+					}
+					return false
+				}
+				if !allowed(v.Type, map[string]bool{}) {
+					return l.err(v.Position.Offset, "unsupported enum payload: use scalar or finite local value struct/container")
+				}
 			}
 			code, err := project(v.Type, "x.Value", map[string]bool{})
 			if err != nil {
@@ -410,4 +440,17 @@ func (l *lowerer) checkCompositePayloads() error {
 		}
 	}
 	return nil
+}
+
+// Field attributes belong to derive processing; erase only whole attribute lines
+// while recovering the host type shape for projection checks.
+func withoutPayloadAttrs(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "#[") && strings.HasSuffix(t, "]") {
+			lines[i] = ""
+		}
+	}
+	return strings.Join(lines, "\n")
 }

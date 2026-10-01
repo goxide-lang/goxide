@@ -2,6 +2,7 @@ package deriveextras
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/enums"
 	"go/ast"
 	"strconv"
 	"strings"
@@ -104,4 +105,36 @@ func GenerateError(spec *ast.TypeSpec, message, sourceField, fromField string) (
 		code += "func From" + name + "(err error) " + name + " { return " + name + "{" + fromField + ": err} }\n"
 	}
 	return code, g.imports, nil
+}
+
+// GenerateEnumError implements explicitly attributed value cases.
+func GenerateEnumError(d enums.Decl) (string, map[string]string, error) {
+	var b strings.Builder
+	imports := map[string]string{}
+	for _, v := range d.Variants {
+		fields := &ast.FieldList{}
+		if v.Type != nil {
+			fields.List = append(fields.List, &ast.Field{Names: []*ast.Ident{ast.NewIdent("Value")}, Type: v.Type})
+		}
+		spec := &ast.TypeSpec{Name: ast.NewIdent(v.CaseName), Type: &ast.StructType{Fields: fields}}
+		source := ""
+		if v.Source || v.From {
+			source = "Value"
+		}
+		code, im, e := GenerateError(spec, v.Message, source, "")
+		if e != nil {
+			return "", nil, e
+		}
+		b.WriteString(code)
+		if source == "" {
+			fmt.Fprintf(&b, "func(v %s) Unwrap()error{return nil};", v.CaseName)
+		}
+		if v.From {
+			fmt.Fprintf(&b, "func From%s(err error)%s{return %s(err)};", d.Name, d.Name, v.Constructor)
+		}
+		for k, x := range im {
+			imports[k] = x
+		}
+	}
+	return b.String(), imports, nil
 }

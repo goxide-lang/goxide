@@ -162,7 +162,7 @@ func TestEnumExplicitRejections(t *testing.T) {
 		"guard not exhaustive": `enum E { A, B, }; func f(x E){match x {E::A if true=>{},E::B=>{},}}`,
 		"unreachable":          `enum E { A, B, }; func f(x E){match x {E::A=>{},E::A if true=>{},E::B=>{},}}`,
 		"generic":              `enum E[T] { A(T), }`,
-		"complex payload":      `enum E { A([]int), }`,
+		"pointer payload":      `enum E { A(*int), }`,
 		"recursive":            `enum E { A(E), }`,
 		"expression match":     `enum E { A, }; func f(x E) int {return match x {E::A=>1,}}`,
 		"nested pattern":       `enum E { A, }; enum F { B(E), }; func f(x F){match x {F::B(E::A)=>{},}}`,

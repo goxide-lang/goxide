@@ -15,6 +15,8 @@ import (
 type Variant struct {
 	Name, Payload, CaseName, Constructor string
 	Type                                 ast.Expr
+	Message                              string
+	HasMessage, Source, From             bool
 	Position                             token.Position
 }
 type Decl struct {
@@ -127,13 +129,6 @@ func LowerMapped(filename string, source []byte, provenance *sourcemap.Map) (Res
 	// Refresh pointers after slice growth.
 	for i := range l.decls {
 		l.byName[l.decls[i].Name] = &l.decls[i]
-	}
-	for _, d := range l.decls[:localCount] {
-		for _, v := range d.Variants {
-			if v.Payload != "" && !scalar(v.Payload) && l.byName[v.Payload] == nil {
-				return Result{}, l.err(v.Position.Offset, "unsupported enum payload: use scalar or local non-generic enum")
-			}
-		}
 	}
 	visiting := map[string]bool{}
 	done := map[string]bool{}
@@ -251,6 +246,48 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 			j++
 			continue
 		}
+		attr := Variant{}
+		for j < end && l.ts[j].text == "#" {
+			if j+1 >= end || l.ts[j+1].text != "[" {
+				return d, 0, l.err(l.ts[j].start, "invalid variant attribute")
+			}
+			k, e := l.close(j + 1)
+			if e != nil {
+				return d, 0, e
+			}
+			body := strings.TrimSpace(string(l.src[l.ts[j+1].end:l.ts[k].start]))
+			switch {
+			case strings.HasPrefix(body, "error(") && strings.HasSuffix(body, ")"):
+				if attr.HasMessage {
+					return d, 0, l.err(l.ts[j].start, "duplicate error message")
+				}
+				msg, e := strconv.Unquote(body[6 : len(body)-1])
+				if e != nil {
+					return d, 0, l.err(l.ts[j].start, "error requires quoted message")
+				}
+				attr.Message = msg
+				attr.HasMessage = true
+			case body == "source":
+				if attr.Source {
+					return d, 0, l.err(l.ts[j].start, "duplicate source attribute")
+				}
+				attr.Source = true
+			case body == "from":
+				if attr.From {
+					return d, 0, l.err(l.ts[j].start, "duplicate from attribute")
+				}
+				attr.From = true
+			default:
+				return d, 0, l.err(l.ts[j].start, "enum variant attributes are unsupported: "+body)
+			}
+			j = k + 1
+			for j < end && l.ts[j].kind == token.SEMICOLON {
+				j++
+			}
+		}
+		if j >= end {
+			return d, 0, l.err(d.Position.Offset, "variant attribute has no target")
+		}
 		t := l.ts[j]
 		if t.kind != token.IDENT || t.text == "_" {
 			return d, 0, l.err(t.start, "expected variant name")
@@ -260,6 +297,7 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 		}
 		seen[t.text] = true
 		v := Variant{Name: t.text, Position: l.position(t.start), CaseName: "__hgo_enum_case_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text, Constructor: "__hgo_enum_new_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text}
+		v.Message, v.HasMessage, v.Source, v.From = attr.Message, attr.HasMessage, attr.Source, attr.From
 		j++
 		if j < end && l.ts[j].text == "(" {
 			k, e := l.close(j)
@@ -285,7 +323,13 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 }
 func (l *lowerer) declaration(d Decl) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "type %s interface { %s() };\n", d.Name, d.Marker)
+	methods := ""
+	for _, v := range d.Variants {
+		if v.HasMessage {
+			methods = "Error() string; Unwrap() error;"
+		}
+	}
+	fmt.Fprintf(&b, "type %s interface { %s(); %s };\n", d.Name, d.Marker, methods)
 	for _, v := range d.Variants {
 		payload := ""
 		arg := ""
@@ -300,9 +344,7 @@ func (l *lowerer) declaration(d Decl) string {
 	fmt.Fprintf(&b, "func %s(v %s) { switch x := v.(type) {\n", d.Validator, d.Name)
 	for _, v := range d.Variants {
 		fmt.Fprintf(&b, "case %s: _ = x;", v.CaseName)
-		if nested := l.byName[v.Payload]; nested != nil {
-			fmt.Fprintf(&b, "%s(x.Value);", nested.Validator)
-		}
+		b.WriteString(l.payloadChecks[d.Name+"/"+v.Name])
 		b.WriteByte('\n')
 	}
 	fmt.Fprintf(&b, "default: panic(%q) } };\n", "hgo: invalid enum "+d.Name)

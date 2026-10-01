@@ -16,13 +16,14 @@ import (
 // Package is an opaque source-built macro registry. It contains no executable
 // metadata and is never deserialized. Each expansion owns its mutable state.
 type Package struct {
-	inputTokens int
-	prefix      string
-	path        string
-	name        string
-	defs        map[string]definition
-	funcs       map[string]bool
-	scopes      map[string]*scope
+	inputTokens    int
+	prefix         string
+	path           string
+	name           string
+	defs           map[string]definition
+	funcs          map[string]bool
+	privateHelpers map[string]bool
+	scopes         map[string]*scope
 }
 type scope struct {
 	index        int
@@ -34,7 +35,7 @@ type scope struct {
 // CollectPackage collects selected source files, retaining file-local imports.
 // dependencies must come from successfully compiled source packages.
 func CollectPackage(path string, sources map[string][]byte, dependencies map[string]*Package) (*Package, error) {
-	p := &Package{path: path, defs: map[string]definition{}, funcs: map[string]bool{}, scopes: map[string]*scope{}}
+	p := &Package{path: path, defs: map[string]definition{}, funcs: map[string]bool{}, privateHelpers: map[string]bool{}, scopes: map[string]*scope{}}
 	names := make([]string, 0, len(sources))
 	for n := range sources {
 		names = append(names, n)
@@ -104,6 +105,12 @@ func CollectPackage(path string, sources map[string][]byte, dependencies map[str
 			if d.scope == nil {
 				d.scope = sc
 				p.defs[n] = d
+			}
+		}
+		for helper, public := range declaredDeriveHelpers(clean) {
+			p.funcs[helper] = true
+			if !public {
+				p.privateHelpers[helper] = true
 			}
 		}
 		for i := 0; i+2 < len(clean); i++ {
@@ -179,7 +186,7 @@ func (e *engine) runtimeFunction(name string) (string, error) {
 	if e.active.pkg == e.pkg {
 		return name, nil
 	}
-	if !ast.IsExported(name) {
+	if !ast.IsExported(name) || e.active.pkg.privateHelpers[name] {
 		return "", fmt.Errorf("private runtime helper %s cannot cross package boundary; expose a public helper or shim", name)
 	}
 	return e.runtimePath(e.active.pkg.path) + "." + name, nil
@@ -298,4 +305,71 @@ func (b *Budget) AddPackage(p *Package) error {
 		return fmt.Errorf("macro build input token budget exceeded")
 	}
 	return nil
+}
+
+// declaredDeriveHelpers registers compiler-owned names only from explicit
+// derive attributes on named declarations. Full attribute/type validation stays
+// in frontend; malformed programs never become a compiled package dependency.
+func declaredDeriveHelpers(ts []tok) map[string]bool {
+	out := map[string]bool{}
+	for i := 0; i+5 < len(ts); i++ {
+		if ts[i].text != "#" || ts[i+1].text != "[" || ts[i+2].text != "derive" || ts[i+3].text != "(" {
+			continue
+		}
+		end, e := closeGroup(ts, i+1)
+		if e != nil {
+			continue
+		}
+		kinds := []string{}
+		for j := i + 4; j < end; j++ {
+			switch ts[j].text {
+			case "Default", "Clone", "Debug", "Serialize", "Deserialize":
+				kinds = append(kinds, ts[j].text)
+			}
+		}
+		j := end + 1
+		for j < len(ts) {
+			if ts[j].text == ";" {
+				j++
+				continue
+			}
+			if j+1 < len(ts) && ts[j].text == "#" && ts[j+1].text == "[" {
+				k, e := closeGroup(ts, j+1)
+				if e != nil {
+					break
+				}
+				j = k + 1
+				continue
+			}
+			break
+		}
+		public := false
+		if j < len(ts) && ts[j].text == "pub" {
+			public = true
+			j++
+		}
+		if j+1 >= len(ts) {
+			continue
+		}
+		kind := ts[j].text
+		name := ts[j+1].text
+		if kind != "type" && kind != "struct" && kind != "enum" {
+			// A TypeSpec inside type (...) has no repeated type keyword.
+			if ident(kind) && name == "struct" {
+				name, kind = kind, "type"
+			} else {
+				continue
+			}
+		}
+		if !ident(name) {
+			continue
+		}
+		if kind != "enum" {
+			public = ast.IsExported(name)
+		}
+		for _, derive := range kinds {
+			out[derive+name] = public
+		}
+	}
+	return out
 }

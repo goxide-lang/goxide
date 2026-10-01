@@ -61,6 +61,18 @@ func Generate(kind string, spec *ast.TypeSpec) (string, map[string]string, error
 	g := &generator{imports: map[string]string{}}
 	var b strings.Builder
 	switch kind {
+	case "Default":
+		fmt.Fprintf(&b, "func Default%s() %s { var out %s\n", spec.Name.Name, spec.Name.Name, spec.Name.Name)
+		for _, f := range s.Fields.List {
+			for _, n := range f.Names {
+				x, e := defaultValue(f.Type)
+				if e != nil {
+					return "", nil, fmt.Errorf("field %s: %w", n.Name, e)
+				}
+				fmt.Fprintf(&b, "out.%s = %s\n", n.Name, x)
+			}
+		}
+		b.WriteString("return out\n}\n")
 	case "Clone":
 		fmt.Fprintf(&b, "func Clone%s(v *%s) %s { var out %s\n", spec.Name.Name, spec.Name.Name, spec.Name.Name, spec.Name.Name)
 		for _, f := range s.Fields.List {
@@ -183,6 +195,26 @@ func (g *generator) debug(t ast.Expr, x string) (string, error) {
 
 // GenerateEnum retains nominal variant identity and delegates supported payloads.
 func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) {
+	if kind == "Default" {
+		var selected *enums.Variant
+		for i := range d.Variants {
+			v := &d.Variants[i]
+			if !v.Default {
+				continue
+			}
+			if selected != nil {
+				return "", nil, fmt.Errorf("Default requires exactly one default variant")
+			}
+			if v.Type != nil {
+				return "", nil, fmt.Errorf("default variant must have no payload")
+			}
+			selected = v
+		}
+		if selected == nil {
+			return "", nil, fmt.Errorf("Default requires exactly one default variant")
+		}
+		return "func Default" + d.Name + "() " + d.Name + " { return " + selected.Constructor + "() }\n", nil, nil
+	}
 	g := &generator{imports: map[string]string{}}
 	var b strings.Builder
 	result := "string"
@@ -216,4 +248,30 @@ func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) 
 	}
 	fmt.Fprintf(&b, "default: panic(%q)}}", "hgo: invalid enum "+d.Name)
 	return b.String(), g.imports, nil
+}
+
+// defaultValue selects only explicit prototype implementations. Local named
+// helper identity is validated by the frontend, never inferred from spelling.
+func defaultValue(t ast.Expr) (string, error) {
+	switch x := t.(type) {
+	case *ast.Ident:
+		switch x.Name {
+		case "bool":
+			return "false", nil
+		case "string":
+			return `""`, nil
+		case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "byte", "rune", "float32", "float64":
+			return x.Name + "(0)", nil
+		}
+		return "Default" + x.Name + "()", nil
+	case *ast.IndexExpr:
+		if id, ok := x.X.(*ast.Ident); ok && id.Name == "Option" {
+			d, e := enums.Builtin("Option", []string{typeText(x.Index)})
+			if e != nil {
+				return "", e
+			}
+			return d.Variants[1].Constructor + "()", nil
+		}
+	}
+	return "", fmt.Errorf("Default has no explicit implementation for %s", typeText(t))
 }

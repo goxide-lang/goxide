@@ -331,3 +331,50 @@ go test -race -count=1 ./tests/acceptance -run '^TestT0DeliveryInstalledCLI$' -v
 ```
 
 输出包含结构化 `job accepted` 事件和 `scheduled mail: 3 units`。完整复现运行根模块 `go test -race -count=1 ./...`、`go vet ./...` 及上述设计脚本；runtime由当前checkout提供，不依赖未发布远端提交。只做本地提交，不push或改tag。
+
+### Default 具体类型派生（标签后增量）
+
+`#[derive(Default)]` 生成 `DefaultType() Type`，沿用具体类型 helper，不声称完整 trait/impl 后端。struct 按声明顺序显式构造字段：已登记的 bool/string、整数（含 byte/rune）、float32/64 使用基础默认实现；同包已派生类型调用其 `DefaultType()`。空 struct 可构造。不会因出现同名手写函数就自动认领 Default 协议；基础类型被同包声明遮蔽时拒绝。
+
+普通 enum 必须恰好有一个 `#[default]` 无载荷变体，生成函数调用该变体的已有 nominal constructor；缺失、多选、重复属性及标记 payload 变体均拒绝。其他未选变体的 payload 无需 Default。`Option[T]` 具体实例字段显式调用 None constructor，不要求 T 有 Default；现有 ABI 的 None 表示为 nil，不能据此推断普通 enum/Result 的 nil 合法。
+
+容器、引用/指针、Arc、外部类型、Result 的自动默认及手写 Default 注册暂不支持；这不是给未决容器默认语义做决定。原生 Go `var`/`make` 不变。**`#[serde(default)]` 仍是既有原型的缺失字段 Go 零值策略，不调用语言 Default**；特别是它不能保证产生有效的非空 enum 字段，需要业务显式处理，后续不得无说明改变 wire 行为。
+
+生成 helper 参与冲突检测和源码映射；宏从显式 derive 声明登记其定义点绑定，包含 grouped TypeSpec。调用方同名局部变量不能截获 Default helper。跨包宏不能通过自动登记的 helper 暴露私有目标类型；公开手写 shim 仍按原有规则使用。跨包字段协议自动推导不在本次 Default 子集内。
+
+新增 `tests/prototype/default_test.go` 运行实际生成 Go，验证单个合法 enum 变体、Option None、嵌套 struct、空 struct、原生零值不变、宏局部遮蔽和分组声明；反例覆盖错误 default 标记、无注册类型、Result/容器/指针、helper 冲突、跨文件基础类型遮蔽。本轮独立 print/Default 业务另覆盖真实 CLI 和生成模块 race；安装与目录多文件使用由既有 T0 交付回归另验收。
+
+
+## T0 接续：内建 print / println 格式计划
+
+`print!` / `println!` 是保留的内建宏入口，要求圆括号参数和直接语句位置。首参数为字符串字面量，支持顺序 `{}` Display、`{:?}` Debug 和 `{{`/`}}`；数量、括号、动态格式串与缺少协议均在编译期拒绝。内建 bool/string/整数/浮点/复数及 Go alias 使用 `formatting` 的具体 typed formatter（基于 strconv）；用户 defined scalar 不因底层类型相同自动获得协议。同包受信任 `#[derive(Debug)]` struct/enum 支持 `{:?}`，跨文件保留类型身份并在包级绑定 helper，局部同名变量不能截获；导入包 Debug 类型、任意用户 Display impl、Stringer/error/reflect/any 兜底均未实现。
+
+宏模板内可调用打印入口。格式计划在普通表达式类型信息可用后降低：所有显式参数先按从左到右顺序各求值一次，之后按占位符顺序 formatter，最后执行 stdout 写入。生成普通语句块，不插入 IIFE，参数中的 `?` 仍退出真实 enclosing Result/Option 函数；显式参数闭包内的打印通过后续 lowering 轮次处理。`go`/`defer` 打印、值位置、if initializer/loop post 暂明确拒绝，不暗中改变求值时机。类型推导只把打印参数临时作为独立表达式检查，不引入 variadic any formatter。
+
+`formatting.Write` 在运行时读取 os.Stdout。`print!("")` 零次写入；`println!()`/空字符串输出一个 LF，已有换行仍追加一个 LF。`WriteTo(io.Writer,string)` 一次写入，不重试/回滚；错误或短写 panic `*formatting.WriteError`，保留 Written/Wanted 和可 errors.Is/As 的原 Cause（无错误短写为 io.ErrShortWrite）。不承诺输出原子性或持久化。格式参数的复制范围保留来源，编译期格式诊断可带原始调用及宏栈；生成 writer/helper 区域保持 unmapped，不承诺运行时 panic 自动映射为 hgo 行号。
+
+定向测试覆盖标量/alias、派生 Debug、定义类型拒绝、格式错误、嵌套闭包、参数 `?`、同包跨文件及 helper 遮蔽、捕获参数诊断来源，以及空写/短写/原始错误 cause。独立业务验收另运行生成模块；最终数量由主集成记录，不把宿主 race 当作生成模块 race。
+
+
+## print / Default 最终验收
+
+基准 `1300b77e1ca72ae9365f1ce47d5d24375d6c5f92`；复用非作者独立审查并编写新业务验收，没有声称新建空上下文。新例子为 [print_default.hgo](examples/prototype/print_default.hgo)，串联显式默认配置、JSON覆盖、Clone、宏和格式化输出。
+
+最终冻结代码在 Go 1.27.1 linux/amd64、CGO=1、`GOTOOLCHAIN=local GOWORK=off GOPROXY=off GOCACHE=/tmp/goxide-macro-cache` 下：
+
+- `go test -race -count=1 -json ./...` 成功：**15个有测试的包、198宿主顶层测试、328子测试**；另 `internal/printing` 无自身测试文件，通过编译，其行为由前端/独立接受测试覆盖。没有将 no-test 包计成有包内测试。
+- 新独立接受测试为 **3宿主顶层、28拒绝子例**；业务产物是 **1个生成模块、4个实际race运行测试**。真实CLI执行输出 `startup=standby retries=0`、snapshot与`ready nightly active`。
+- `go vet ./...`、完整设计检查 **13条Go命令**、最终 docs-only 和 diff 检查通过。设计夹具不替代前端实现测试。
+- 已修复并复验嵌套打印遗漏、打印实参 `?` 冻结compiler intrinsic，以及生成括号遮挡可信参数来源的诊断问题；派生helper登记使Default宏按定义点绑定。scalar同名遮蔽原已有守卫，本轮新增跨文件反例，不计为新修复。
+
+日志：`/tmp/goxide-print-default-race.json`、`/tmp/goxide-print-default-vet.log`、`/tmp/goxide-print-default-design.log`。快速复现：
+
+```sh
+go run ./cmd/hgo run examples/prototype/print_default.hgo
+go test -race -count=1 ./tests/acceptance -run '^TestPrintDefault' -v
+go test -race -count=1 ./...
+go vet ./...
+python3 scripts/check_design.py
+```
+
+本轮不实现常量enum；既定raw/未知值方向保持，表层入口与同值别名选择见U19候选。T0最短必要剩余是该入口，其他明确后置边界不因本轮通过变成已实现。只做本地commit，不push/tag改。

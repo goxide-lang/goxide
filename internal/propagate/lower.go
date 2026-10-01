@@ -652,19 +652,27 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 			pre = append(pre, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.DEFINE, Rhs: []ast.Expr{y}})
 			return ast.NewIdent(name)
 		}
+		printPlan := false
+		if id, ok := n.Fun.(*ast.Ident); ok {
+			printPlan = id.Name == "__hgo_print" || id.Name == "__hgo_println"
+		}
 		p, y, e := l.expr(n.Fun, ft)
 		if e != nil {
 			return nil, nil, e
 		}
 		pre = append(pre, p...)
-		n.Fun = freeze(n.Fun, y)
+		if printPlan {
+			n.Fun = y
+		} else {
+			n.Fun = freeze(n.Fun, y)
+		}
 		for i, a := range n.Args {
 			p, y, e = l.expr(a, ft)
 			if e != nil {
 				return nil, nil, e
 			}
 			pre = append(pre, p...)
-			if i < len(n.Args)-1 {
+			if i < len(n.Args)-1 && !(printPlan && i == 0) {
 				y = freeze(a, y)
 			}
 			n.Args[i] = y

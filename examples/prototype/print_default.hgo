@@ -1,0 +1,42 @@
+package main
+
+import "github.com/hxsf/goxide/serdejson"
+
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+enum state {
+    Active(int),
+    #[default]
+    Standby,
+}
+
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+type Limits struct { Retries int; Enabled bool }
+
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+type Settings struct { Name string; State state; Limits Limits }
+
+macro_rules! snapshot {
+    ($value:expr) => { println!("snapshot {:?}", $value) };
+}
+macro_rules! fresh_settings {
+    () => { DefaultSettings() };
+}
+
+func stateName(value state) string {
+    match value {
+        state::Active(_) => { return "active" },
+        state::Standby => { return "standby" },
+    }
+    panic("unreachable")
+}
+
+func main() {
+    initial:=fresh_settings!()
+    print!("startup={}",stateName(initial.State))
+    println!(" retries={}",initial.Limits.Retries)
+    loaded,err:=serdejson.Unmarshal([]byte(`{"Name":"nightly","State":{"Active":3},"Limits":{"Retries":2,"Enabled":true}}`),DeserializeSettings)
+    if err!=nil { panic(err) }
+    copied:=CloneSettings(&loaded)
+    snapshot!(copied)
+    println!("ready {} {}",copied.Name,stateName(copied.State))
+}

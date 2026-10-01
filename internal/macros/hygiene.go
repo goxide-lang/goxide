@@ -134,7 +134,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 		if !ok {
 			return true
 		}
-		if e.intrinsics[id.Name] {
+		if e.intrinsics[id.Name] || id.Name == "__hgo_print" || id.Name == "__hgo_println" {
 			return true
 		}
 		if _, ok := ph[id.Name]; ok {

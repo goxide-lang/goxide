@@ -28,6 +28,33 @@ D21 将 enum/match 列为 T0。Go 数值/string const 的既有零值或未知�
 
 只枚举已知成员不能声称覆盖开放输入；对受检查闭合值可以检查已知成员穷尽。带载荷 match 的非法值分支是边界诊断，不是业务变体，不改变下文“guard 不计覆盖”等规则。原生存储读取/清零后要在哪里验证仍是 U06/U08；允许先实现有限、明确的使用点检查，不把全图/别名分析放回 T0 门槛。来源不明不自动拒绝；无借用分析不等于 Go 零值自动合法。
 
+### 0.1 常量入口的最小实现提案（尚未批准）
+
+本轮重新核对 D21、本文第 0 节及现有 RFC 后，不重开底层 raw 值、Go 转换、未知值保留和开放 match 必须兜底的方向。仅提出沿 Go 类型声明和现有 `Enum::Member` 惯例的表层入口：
+
+```hgo
+enum Status string {
+    Pending = "pending",
+    Paid = "paid",
+}
+
+status := Status("future")
+match status {
+    Status::Pending => { handle_pending() },
+    Status::Paid => { handle_paid() },
+    _ => { handle_unknown(string(status)) },
+}
+```
+
+建议先支持显式整数/string 常量，不增加隐式 iota、自动 Unknown 变体或新的封闭包装类型。降低仍是 Go 命名基础类型及 typed const；未知值不是非法带载荷 case，不触发后者的 match 前 panic。即使写全已知成员，也不能删掉开放输入的兜底。Go 零值原样保留，不改成首个成员。此提案尚未实现，不借本轮 print/Default 的交付冻结该语法；带载荷 enum 的 `#[default]` 规则也不自动扩展到这里。
+
+唯一待用户选择的语义是同一 enum 的重复 raw 值：
+
+- 推荐允许作为 Go 风格同值别名，例如 `Pending = "pending", Queued = "pending"`。运行时不能区分别名，match 的覆盖/不可达必须按实际值而非成员名字计算；两个无 guard 同值分支不可达，不凭成员名虚构第二种状态。
+- 另一方案要求成员 raw 值唯一，诊断更简单，但不能直接表达原生协议的同值别名。
+
+两种方案都保留未知值和普通 Go 转换，选择不涉及重新要求所有输入先作闭合验证。问题未回答前不实施依赖该选择的常量入口，也不阻塞已有 print/println 与 Default 子集。
+
 ## 1. 源级类型与构造
 
 ```hgo

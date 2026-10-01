@@ -1,6 +1,6 @@
 # T0 子能力验收矩阵
 
-本轮核对基准：`4e2a9138b9103b5e08b306f585c297aac467fc60`。以下先给有限交付标准，再保留历次逐项证据；历史阶段的“未做”若已有后续增量，以最新增量为准。具体类型、Go 宿主语法上的有限 T0 子集与整项 T0/M1–M8 完成是不同结论，不能混用。
+本轮核对基准：`1300b77e1ca72ae9365f1ce47d5d24375d6c5f92`。以下先给有限交付标准，再保留历次逐项证据；历史阶段的“未做”若已有后续增量，以最新增量为准。具体类型、Go 宿主语法上的有限 T0 子集与整项 T0/M1–M8 完成是不同结论，不能混用。
 
 设计优先级以[决策登记](design/decisions.md) D21 为准：宏、enum/match、只读/可写分离是用户必需方向；D22 约束 Option/Result 专用 `?` 与唯一显式一步 From，D23 要求 serde 核心与格式分层。优先级不意味着全部语法或 ABI 已冻结。后续工作按 [ROADMAP](../ROADMAP.md) 依赖推进，不以完整 trait 或长期风险分析阻塞已有子集。
 
@@ -18,7 +18,7 @@
 
 验收必须包含新的业务源例子、真实安装 CLI、原生 Go 独立构建和生成模块 `-race`；既有测试只作为回归，文档/机制夹具通过不替代这些应用证据。生成模块可独立构建指无需再次运行 hgo，仍须可解析其 go.mod 中明确的 runtime 依赖，不等于无依赖单文件。
 
-**整项已确认方向的剩余项不能隐藏：**D14 的内建 `print!`/`println!` 与 Default 尚未实现，D21 的数值/string 常量 enum raw/未知值语言入口也尚未实现；它们不同于明确延期的用户过程宏。精确格式/静态协议及常量入口拼写仍需收敛。完整 trait、LSP、YAML、风险分析不加入本次有限交付的必需清单。
+**整项已确认方向的剩余项不能隐藏：**D14 的内建 `print!`/`println!` 与 Default 已有后文限定实现；D21 的数值/string 常量 enum raw/未知值语言入口仍未实现，同值别名问题见 U19。一般格式/静态 trait 协议仍不等于完成。完整 trait、LSP、YAML、风险分析不加入本次有限交付的必需清单。
 
 ## 如何读状态与证据
 
@@ -54,7 +54,8 @@
 | 标量只读写入及权限擦除拒绝：range、原生指针/接口/容器/泛型及不支持的引用函数签名 | 完整（具体子能力） | 用户必需基础类型规则；不以此宣称长期借用风险分析已做 | [refs_test.go](../tests/acceptance/refs_test.go)：`TestReferenceConsumerRejections`、`TestReferenceFrontendRejectsEscapes`；[lower_test.go](../internal/refs/lower_test.go)：`TestReject`、`TestExtraReject` |
 | 具体 struct/array/slice/map/pointer 只读投影；独立值副本可写，共享字段保留只读资格 | 有限，所测基础规则完整 | 用户必需 D08/D21；符号摘要加局部点事实，无长期别名分析；直线及双分支 fresh 重绑定可解除局部资格，捕获/取址/循环和字段替换仍保守 | [composite_permissions_test.go](../tests/acceptance/composite_permissions_test.go)：`TestCompositePermissionValuesAndAliasesRace`、`TestCompositePermissionConsumerRejections`、`TestCompositePermissionGenericCheckerBoundary`；[composite_test.go](../internal/refs/composite_test.go)：`TestCompositeRecursiveQualificationConverges`、`TestCompositeHiddenBoundaryRejections` |
 | 引用容器、引用函数值/回调、原生桥接、Arc/AsPtr | 未做 | 完整共享包装/桥接可分期；接口/函数/泛型/重取引用不得擦除只读 | [refs_test.go](../tests/acceptance/refs_test.go)：`TestReferenceConsumerRejections`；复合投影接受测试另验证共享路径不得通过这些边界逃逸 |
-| Default/print/println 内建协议、外部预编译宏、用户过程宏、完整泛型 derive、YAML/格式 Value、完整 LSP | 未做 | Default/print/println 是 D14 方向仍有缺口；其余可后置且分别设计，不能一并标完成 | 当前无对应成功前端验收；泛型 derive 的明确拒绝见 `TestDiagnosticLocationsAndUnsupported` 和 `TestMacroAndCloneExplicitRejections` |
+| Default / print / println 内建协议 | 有限，见本轮增量 | D14 已接通具体类型 helper 和固定格式子集；通用 trait/格式生态未完成 | [独立新业务验收](../tests/acceptance/print_default_test.go)及下文限定范围 |
+| 外部预编译宏、用户过程宏、完整泛型 derive、YAML/格式 Value、完整 LSP | 未做/明确后置 | 不加入当前有限交付必要清单，不能一并标完成 | 泛型 derive 的明确拒绝见 `TestDiagnosticLocationsAndUnsupported` 和 `TestMacroAndCloneExplicitRejections` |
 
 ## 组合矩阵
 
@@ -199,3 +200,20 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 **交付结论：**上述有限T0应用子集可作为本地可运行交付；这不是整项T0或M1–M8完成。整项已确认方向最短剩余清单仍为常量enum raw/未知值入口、内建print/println格式入口、Default；跨包新引用接口和更宽语法仍明确列为当前有限边界，不把风险分析/完整trait/LSP混入本次验收。
 
 最终全套race：**14包、186宿主顶层测试、297子测试**通过；新独立业务包含**2个生成race模块、4个业务测试**，并已验收安装、仓库外运行、真实失败诊断和重复生成一致性。vet、完整设计检查13命令和文档检查通过；完整复现与日志见 [实现记录](../IMPLEMENTATION.md)。本轮没有剩余已确认缺陷，未支持能力仍按上表保留，不能称全语言完成。
+
+
+## print / println 与 Default 增量
+
+本轮遵循 [既有打印和默认值协议](design/macros.md)，不扩完整 fmt/trait 系统。
+
+| T0 必需子能力 | 实际已支持 | 明确后置/不支持 |
+| --- | --- | --- |
+| `print!` / `println!` | 字面量 `{}` / `{:?}` / 花括号转义；明确标量协议及同包派生Debug；所有参数先按序一次求值，再格式化和写入；空输出/LF、错误和短写panic保留cause | 动态格式、宽度精度、自动Stringer/error/any、导入Debug协议、用户Display impl；go/defer和值位置打印 |
+| Default | `DefaultType()`；标量字段、同包已派生字段、空struct、唯一指定unit enum、具体Option None；宏定义点helper登记 | 自动Result/容器/引用/外部类型默认、手写协议注册、完整泛型trait |
+| 组合和边界 | 新 [启动配置业务](../examples/prototype/print_default.hgo)：显式默认→JSON覆盖→Clone→宏打印；默认选择第二个unit，不改Go var/make/map缺失或serde(default) | 不将合法显式默认值等同于所有Go零值合法；不把派生Debug当Display |
+
+独立非作者新增 [验收测试](../tests/acceptance/print_default_test.go)，覆盖28项拒绝、宏/Default/Debug局部遮蔽、嵌套打印、所有参数先于formatter、短写/部分输出/原始cause，以及未支持协议的准确错误。实际暴露的嵌套打印遗漏和打印参数中 `?` 被当普通未知函数冻结已修复；基础类型同名遮蔽原已有守卫，本轮补跨文件验证，不冒称新修复。审查者复用已有线程，非新空上下文。
+
+**最短剩余必要项收敛为常量 enum raw/未知值入口。** [表层语法提案与唯一待选项](design/enums-and-match.md#01-常量入口的最小实现提案尚未批准)保留候选状态；已定开放raw方向不重开。本轮不实现依赖同值别名选择的入口，也不把其他表中明确的有限边界伪称全部完成。最终全套验证由本轮实现记录汇总。
+
+本增量最终验证：全套race为**15个有测试包、198宿主顶层、328子测试**，另internal/printing无包内测试而由前端/接受测试覆盖；新独立业务为**1个生成race模块、4个运行测试**，28项拒绝子例和真实CLI通过。vet、完整设计检查13命令及最终文档检查通过，详见实现记录。无已知未修复阻断；常量enum候选仍未批准或实现。

@@ -100,3 +100,6 @@ Option/Result 阶段已有真实 Go API 显式包装、不同成功类型的传�
 
 
 本轮整体验收在上述同module宏基准上补齐host构建条件（显式tags及test隐含race）和同包多文件引用检查；新任务调度示例从安装CLI到独立生成模块验证宏/JSON/enum/OptionResult/From/基础权限组合。有限T0可运行子集与整项已确认方向分别记录于 [当前交付标准及验收](docs/t0-acceptance.md#有限-t0-的交付标准)。常量enum raw/未知值、print/println与Default仍是真实未完成项；完整trait、LSP和长期风险分析不是本轮交付前置条件。公开新引用签名、跨目标编译和.hgo测试源等限制保持明确，不以降低成Go代码代替权限验证。
+
+
+最新增量接通具体类型Default与固定格式print/println；沿已定默认unit选择、参数求值及写入错误契约，未扩完整trait/fmt生态。T0最短必要剩余现在是常量enum raw/未知值入口；其已有开放方向不重开，同值别名与表层入口仍为 [U19候选](docs/design/enums-and-match.md#01-常量入口的最小实现提案尚未批准)。准确成功/拒绝及明确后置范围见 [最新验收矩阵](docs/t0-acceptance.md#print--println-与-default-增量)。

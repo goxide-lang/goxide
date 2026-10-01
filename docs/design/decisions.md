@@ -94,6 +94,7 @@
 | U14 | Rust / LLVM 到 Go 汇编的受限计算内核路线 | 不作为首版主后端；ABI / GC / 栈约定等尚未解决 |
 | U17 | Option/Result 专用 `?` 的精确语法与实现、Go 多返回显式包装 | [RFC 0005](../rfcs/0005-option-result-question.md)；限域及显式 From 单步转换方向已确认，不公开 Try/Residual，不搜索转换链；Go error 静态类型需显式兜底或分类 |
 | U18 | serde-rs 分层到 Go/hgo 的接口映射、字段/数字/enum 策略及派生子集 | [RFC 0006](../rfcs/0006-serde-core-and-formats.md)；分层已确定，具体 helper/visitor ABI 与严格 JSON 偏差仍候选；无公开 core Value，格式 Value 不强制中转 |
+| U19 | 常量 enum 的表层入口及同 raw 值成员是否作为别名 | [候选入口](enums-and-match.md#01-常量入口的最小实现提案尚未批准)；D21 的 raw/未知值方向不重开，同值别名选择待用户答复，不阻塞 print/Default |
 | U16 | trait 双路径、消除包装的语义条件及发布 ABI | [RFC 0004](../rfcs/0004-trait-lowering-paths.md)；比较直接调用/值视图/指针视图/字典，D05/D06 未被候选替换 |
 | U15 | D11 显式 AsPtr/unsafe 与普通 Go 指针实参的便利桥接 | [RFC 0002](../rfcs/0002-native-pointer-bridge.md)比较原生边界自动桥接与普通显式 AsPtr；推荐前者，D11 窄例外待用户确认 |
 

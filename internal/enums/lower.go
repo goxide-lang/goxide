@@ -16,7 +16,7 @@ type Variant struct {
 	Name, Payload, CaseName, Constructor string
 	Type                                 ast.Expr
 	Message                              string
-	HasMessage, Source, From             bool
+	HasMessage, Source, From, Default    bool
 	Position                             token.Position
 }
 type Decl struct {
@@ -316,6 +316,11 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 				}
 				attr.Message = msg
 				attr.HasMessage = true
+			case body == "default":
+				if attr.Default {
+					return d, 0, l.err(l.ts[j].start, "duplicate default attribute")
+				}
+				attr.Default = true
 			case body == "source":
 				if attr.Source {
 					return d, 0, l.err(l.ts[j].start, "duplicate source attribute")
@@ -346,7 +351,7 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 		}
 		seen[t.text] = true
 		v := Variant{Name: t.text, Position: l.position(t.start), CaseName: "__hgo_enum_case_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text, Constructor: "__hgo_enum_new_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text}
-		v.Message, v.HasMessage, v.Source, v.From = attr.Message, attr.HasMessage, attr.Source, attr.From
+		v.Message, v.HasMessage, v.Source, v.From, v.Default = attr.Message, attr.HasMessage, attr.Source, attr.From, attr.Default
 		j++
 		if j < end && l.ts[j].text == "(" {
 			k, e := l.close(j)

@@ -105,8 +105,8 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 	if err != nil {
 		return Result{}, err
 	}
-	if len(e.defs) == 0 && pkg == nil {
-		return Result{Source: source}, nil
+	for helper := range declaredDeriveHelpers(clean) {
+		e.funcs[helper] = true
 	}
 	for i := 0; i+2 < len(clean); i++ {
 		if clean[i].text == "func" && ident(clean[i+1].text) && clean[i+2].text == "(" {
@@ -214,6 +214,9 @@ func (e *engine) readDefinitions(ts []tok, tail string) ([]tok, string, error) {
 			return nil, tail, at(start, "expected macro_rules! name { rules }")
 		}
 		name := ts[i+2].text
+		if name == "print" || name == "println" {
+			return nil, tail, at(start, "print and println are reserved builtin macro names")
+		}
 		if _, ok := e.defs[name]; ok {
 			return nil, tail, at(start, "duplicate macro "+name)
 		}
@@ -552,6 +555,33 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 			continue
 		}
 		call := ts[i]
+		if !qualified && (call.text == "print" || call.text == "println") {
+			if ts[i+2].text != "(" {
+				return nil, at(call, "print macros require parenthesized arguments")
+			}
+			end, err := closeGroup(ts, i+2)
+			if err != nil {
+				return nil, err
+			}
+			e.expansions++
+			if e.expansions > maxExpansions {
+				return nil, at(call, "expansion count budget exceeded")
+			}
+			inner, err := e.expand(ts[i+3:end], depth+1)
+			if err != nil {
+				return nil, err
+			}
+			e.emitted += len(inner) + 3
+			if e.emitted > maxTokens {
+				return nil, at(call, "macro output token budget exceeded")
+			}
+			call.text = "__hgo_" + call.text
+			out = append(out, call, ts[i+2])
+			out = append(out, inner...)
+			out = append(out, ts[end])
+			i = end
+			continue
+		}
 		d, ok := e.defs[call.text]
 		if e.pkg != nil {
 			var err error

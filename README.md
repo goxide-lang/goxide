@@ -8,6 +8,14 @@ hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模
 
 目录入口已扩展到现有 Go module 内的多文件包和有限跨包调用；[两包应用](examples/packages/main.hgo)组合 JSON、enum、Result、错误链和原生 Go 日志。[三包应用](examples/qualified_packages/main.hgo)进一步演示 qualified enum match 与导入 Result 直接 `?`。目录模式的支持子集与单文件不同，构建命令、公开入口和限制见[实现记录](IMPLEMENTATION.md#后续阶段多文件包与-go-module-入口)。
 
+固定格式 `print!` / `println!` 和具体类型 `#[derive(Default)]` 已可运行；[启动配置示例](examples/prototype/print_default.hgo)组合显式默认值、JSON、Clone、Debug 和宏打印：
+
+```sh
+go run ./cmd/hgo run examples/prototype/print_default.hgo
+```
+
+Default 不改变 Go 零初始化，打印只接受已登记协议。完整限制及 T0 必需/后置划分见 [验收矩阵](docs/t0-acceptance.md#print--println-与-default-增量)。
+
 项目暂称 hgo / Hyper Go，当前远端仓库名为 `goxide`。换机器继续时先看 [Roadmap](ROADMAP.md) 和[决策登记](docs/design/decisions.md)：分别记录实现进度，以及**已确认 / 暂定 / 未定**的设计边界。
 
 用户在自己的 C 包 `.hgo` 文件中写 `declare impl AorB::XXX for BBB::Type;`。声明只由 hgo 读取，所需 marker 仅加入本次 hgo 的隔离构建视图；不修改 AorB、BBB 的原源码或共享缓存，既有纯 Go 项目完全保持原样。

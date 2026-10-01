@@ -14,6 +14,7 @@ import (
 
 	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/macros"
+	"github.com/hxsf/goxide/internal/printing"
 	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/refs"
 	"github.com/hxsf/goxide/internal/sourcemap"
@@ -169,6 +170,26 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		refreshPackageMap(&r)
 		files[name] = lowered
 		result.Files[name] = r
+	}
+	debugTypes := map[string]bool{}
+	maps := map[string]*sourcemap.Map{}
+	for name, r := range result.Files {
+		for name := range r.debugTypes {
+			debugTypes[name] = true
+		}
+		maps[name] = r.Diagnostics
+	}
+	printed, err := printing.Lower(files, printing.Config{Importer: imp, PackagePath: path, DebugTypes: debugTypes, Maps: maps})
+	if err != nil {
+		return result, err
+	}
+	for name, source := range printed {
+		r := result.Files[name]
+		r.Go = source
+		r.Expanded = source
+		refreshPackageMap(&r)
+		result.Files[name] = r
+		files[name] = source
 	}
 	finished, err := refs.FinishPackage(files, imp)
 	if err != nil {

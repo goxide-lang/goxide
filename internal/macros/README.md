@@ -130,3 +130,16 @@ helper aliases and unmapped propagation syntax have no claimed source span.
 The registry is immutable during expansion, and generated file-specific names
 avoid collisions across package files. See [the package tests](package_test.go)
 and [the module application](../../examples/macro_packages/main.hgo).
+
+
+## Builtin printing
+
+`print!` and `println!` use compiler-owned format plans, including in macro
+templates. The first argument must be a literal; `{}`, `{:?}`, `{{`, and `}}`
+are the finite grammar. Typed lowering evaluates all arguments once, in order,
+before formatting or stdout output. Builtin scalars and aliases have concrete
+formatters; only trusted same-package Debug derives enable composite `{:?}`.
+Named scalar definitions and imported/custom formatting protocols do not gain
+implicit support. Direct statements, including nested explicit closure bodies,
+are supported; go/defer, initializer, loop-post, and value contexts are rejected.
+See [formatting runtime](../../formatting/print.go) for the checked write contract.

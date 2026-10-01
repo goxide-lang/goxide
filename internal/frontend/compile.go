@@ -9,6 +9,7 @@ import (
 	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/matchexpr"
+	"github.com/hxsf/goxide/internal/printing"
 	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/refs"
 	"github.com/hxsf/goxide/internal/sourcemap"
@@ -32,6 +33,7 @@ type Result struct {
 	References              []refs.Reference
 	conversions             []propagate.Conversion
 	models                  map[string]model
+	debugTypes              map[string]bool
 }
 type attrs struct {
 	derive          map[string]bool
@@ -235,7 +237,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				pending.derive = map[string]bool{}
 				for _, x := range strings.Split(body[7:len(body)-1], ",") {
 					x = strings.TrimSpace(x)
-					if x != "Serialize" && x != "Deserialize" && x != "Debug" && x != "Clone" && x != "Error" {
+					if x != "Serialize" && x != "Deserialize" && x != "Debug" && x != "Clone" && x != "Default" && x != "Error" {
 						return fail(i+1, "unsupported derive "+x)
 					}
 					if pending.derive[x] {
@@ -334,7 +336,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && !strings.HasPrefix(id.Name, "__hgo_ref_") && id.Name != "__hgo_question" {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && !strings.HasPrefix(id.Name, "__hgo_ref_") && id.Name != "__hgo_question" && id.Name != "__hgo_print" && id.Name != "__hgo_println" {
 			collision = id.Name
 		}
 		return true
@@ -395,7 +397,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 			if ed := enumByName[ts.Name.Name]; ed != nil {
 				for kind := range a.derive {
-					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Error" {
+					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Default" && kind != "Error" {
 						return fail(ed.Position.Line, "unsupported enum derive "+kind)
 					}
 				}
@@ -485,7 +487,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	for _, m := range ordered {
 		for _, n := range []string{"bool", "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", "byte", "rune", "error"} {
-			if declared[n] {
+			if declared[n] || (m.attrs.derive["Default"] && cfg != nil && cfg.named[n] != nil) {
 				return fail(m.line, "predeclared type shadowing is unsupported by derive: "+n)
 			}
 		}
@@ -512,7 +514,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	for _, m := range ordered {
-		for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone"} {
+		for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone", "Default"} {
 			if m.attrs.derive[kind] && declared[kind+m.name] {
 				return fail(m.line, "generated helper conflicts with declaration "+kind+m.name)
 			}
@@ -523,6 +525,9 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	for _, d := range enumResult.Enums {
 		for _, v := range d.Variants {
+			if v.Default && !g.models[d.Name].attrs.derive["Default"] {
+				return fail(d.Position.Line, "default attribute requires Default derive")
+			}
 			if (v.HasMessage || v.Source || v.From) && !g.models[d.Name].attrs.derive["Error"] {
 				return fail(d.Position.Line, "error attributes require Error derive")
 			}
@@ -573,7 +578,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		if (m.attrs.hasMessage || m.source != "") && !m.attrs.derive["Error"] {
 			return fail(m.line, "error attributes require Error derive")
 		}
-		for _, kind := range []string{"Debug", "Clone", "Error"} {
+		for _, kind := range []string{"Debug", "Clone", "Default", "Error"} {
 			if !m.attrs.derive[kind] {
 				continue
 			}
@@ -589,7 +594,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 			if m.enum != nil {
 				for _, v := range m.enum.Variants {
-					if kind != "Error" && v.Type != nil {
+					if kind != "Error" && kind != "Default" && v.Type != nil {
 						g.enumPosition = &v.Position
 						err := g.validateExtra(v.Type, kind)
 						g.enumPosition = nil
@@ -648,7 +653,13 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		return Result{}, fmt.Errorf("internal expansion error: %w\n%s", e, text)
 	}
 	provenance = provenance.Format([]byte(text), out, "format.generated")
-	needsTypecheck := bytes.Contains(out, []byte("__hgo_match_expr_"))
+	debugTypes := map[string]bool{}
+	for _, m := range ordered {
+		if m.attrs.derive["Debug"] {
+			debugTypes[m.name] = true
+		}
+	}
+	needsTypecheck := bytes.Contains(out, []byte("__hgo_match_expr_")) || bytes.Contains(out, []byte("__hgo_print"))
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
 	}
@@ -664,6 +675,11 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
 		}
+		printed, err := printing.Lower(map[string][]byte{filename: out}, printing.Config{Importer: imp, DebugTypes: debugTypes, Maps: map[string]*sourcemap.Map{filename: provenance}})
+		if err != nil {
+			return Result{}, err
+		}
+		out = printed[filename]
 		beforeReferences := out
 		refResult, e = refs.Finish(filename, out, imp)
 		if e != nil {
@@ -694,7 +710,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	for _, m := range ordered {
-		for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone"} {
+		for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone", "Default"} {
 			if m.attrs.derive[kind] {
 				name := kind + m.name
 				offset := bytes.Index(out, []byte("func "+name+"("))
@@ -706,7 +722,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "deriveFields": deriveFields, "macroTokens": expanded.Origins, "macroTokenInputStage": "propagate.Prepare output", "references": refResult.References, "diagnostics": provenance, "sourceBytes": len(originalSource), "note": "diagnostics uses final Go byte offsets; generated/unmapped regions have no proven source; macroTokens uses macro expansion offsets"}, "", "  ")
-	return Result{Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions}, nil
+	return Result{Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer
@@ -920,6 +936,16 @@ func protectedLines(source []byte) map[int]bool {
 	return out
 }
 func (g *generator) validateExtra(t ast.Expr, kind string) error {
+	if kind == "Default" {
+		if x, ok := t.(*ast.IndexExpr); ok {
+			if id, ok := x.X.(*ast.Ident); ok && id.Name == "Option" {
+				return nil
+			}
+		}
+		if _, ok := t.(*ast.Ident); !ok {
+			return g.err(t, "Default requires an explicit implementation; containers, references and Result are unsupported")
+		}
+	}
 	switch x := t.(type) {
 	case *ast.Ident:
 		switch x.Name {

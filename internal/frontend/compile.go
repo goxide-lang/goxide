@@ -111,7 +111,7 @@ func Compile(filename string, source []byte) (Result, error) {
 		return Result{}, err
 	}
 	source = enumResult.Source
-	refResult, err := refs.Lower(filename, source)
+	refResult, err := refs.Prepare(filename, source)
 	if err != nil {
 		return Result{}, err
 	}
@@ -217,7 +217,7 @@ func Compile(filename string, source []byte) (Result, error) {
 	g := generator{fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && id.Name != "__hgo_question" {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && !strings.HasPrefix(id.Name, "__hgo_ref_") && id.Name != "__hgo_question" {
 			collision = id.Name
 		}
 		return true
@@ -457,7 +457,7 @@ func Compile(filename string, source []byte) (Result, error) {
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
 	}
-	if bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck {
+	if bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_")) {
 		conversions := []propagate.Conversion{}
 		for _, m := range ordered {
 			if m.from != "" {
@@ -469,6 +469,11 @@ func Compile(filename string, source []byte) (Result, error) {
 		if e != nil {
 			return Result{}, e
 		}
+		refResult, e = refs.Finish(filename, out, imp)
+		if e != nil {
+			return Result{}, e
+		}
+		out = refResult.Source
 		if e = typecheck.Check(filename, out, imp); e != nil {
 			return Result{}, e
 		}

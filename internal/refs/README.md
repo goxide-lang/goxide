@@ -8,7 +8,13 @@ syntax, not approval of any pending Arc/Box/AsPtr protocol.
 `Lower(filename, source) (Result, error)` returns lowered `Source` plus source
 `References` records containing an element type, permission, position and, for
 identifier uses, a symbol identity with declaration position. Integration order:
-macro expansion, enum lowering, reference checking, then derives/Go generation.
+macro expansion, enum lowering, `Prepare`, derive generation, propagation,
+`Finish`, final Go checking. `Prepare` emits compiler-only nominal permission
+types and a write-construction marker. `Finish` resolves marker scalar elements,
+restores reference syntax, and runs the full type and permission checker before
+erasing permissions. Its provisional type information is never validation;
+unresolved marker elements and all final type errors are rejected. Both staged
+APIs are compiler internals; only the frontend may supply their generated names.
 The semantic checking itself uses `go/types` objects and expression types, not a
 variable-name taint map. Distinct named pointer types represent read/write access
 only in the analysis IR; every supported consuming context is separately checked
@@ -83,12 +89,20 @@ unsupported zero-value reference rather than silently selecting one.
 No ordinary Go call is restricted just for lacking an effect summary. A call
 with a *new reference value* requires an actual compatible checked signature;
 D11's pending native bridge is not automatically enabled. Native calls on
-independent raw pointers and copied scalars remain ordinary Go.
+independent raw pointers and copied scalars remain ordinary Go. Macro definition-site
+bindings that turn a reference-signature function into a package-level function
+value remain unsupported; direct checked calls work, and macros may consume
+dereferenced scalar values. This boundary reports the existing package/global
+reference or reference-function-value diagnostic.
 
-The pass typechecks the whole reference-bearing host file with the Go importer.
-Unavailable package export data and calls to not-yet-generated derive helpers
-therefore produce a clear unsupported/typechecking error; the pass never ignores
-unresolved types. Derive attribute lines are preserved, and raw strings/comments
+The pass typechecks the whole reference-bearing host file with the Go importer
+(the frontend supplies its module-aware importer). Derive helpers are available
+before checking, and scalar reference parameters/locals compose with ordinary
+Option/Result payloads and `?`, including direct deferred calls and scalar closure
+captures. Option/Result reference payloads remain explicitly unsupported; no
+container permission protocol or borrow analysis is added. Generic type arguments
+are checked even for phantom parameters. Unavailable package export data and
+unresolved types still produce errors; the pass never ignores final type errors. Derive attribute lines are preserved, and raw strings/comments
 that resemble attributes are not stripped. Reference-bearing files currently
 reject rebinding/shadowing predeclared scalar names. Diagnostic positions map to
 original input offsets; this is not a precise macro-origin source map.
@@ -97,3 +111,7 @@ Run `go test ./internal/refs` with the actual Go compiler on PATH. Tests include
 real lowered module executed with `go run -race .`; independent acceptance tests
 also run generated modules with `go test -race`. They exercise the executed
 paths, not all possible concurrent executions or a full source permission proof.
+
+Staged diagnostics currently point into the generated input after derive and
+propagation, rather than precise original source columns. Frontend combination
+tests cover permission rejection after propagation and derive availability.

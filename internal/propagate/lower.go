@@ -434,7 +434,9 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 				return y
 			}
 			if id, ok := original.(*ast.Ident); ok {
-				if _, ok := l.info.Uses[id].(*types.Builtin); ok {
+				switch l.info.Uses[id].(type) {
+				case *types.Builtin, *types.Func:
+					// A declared function has no mutable runtime value to freeze.
 					return y
 				}
 			}

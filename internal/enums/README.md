@@ -69,9 +69,16 @@ Option's only None representation is nil. Result nil is invalid. Validators reje
 case pointers, typed-nil case pointers, and embedded/forged cases before matching.
 A typed-nil **error payload** remains an ordinary retained payload; it is not None
 or an invalid Result. Instance validators recursively inspect directly nested known
-local enums and built-in sums. They reject statically known struct/container/pointer payloads containing enum
-values until projection validation exists; ordinary Go structs/containers remain
-usable. They do not inspect arbitrary interface dynamic values or object graphs. This is boundary validation, not ownership analysis.
+local enums and built-in sums, including named fields of finite local value structs
+and their aliases. Grouped Go type declarations are inspected as well. Validation
+runs before match guards or propagation exposes a payload, not when every value is
+constructed. Enum-bearing pointer/slice/map/array/channel projections, embedded or
+blank enum-bearing fields, and recursive sum projections remain explicitly
+unsupported; ordinary non-enum Go structs/containers remain usable. Dynamic
+interface contents and external object graphs are not traversed. Source reference
+payloads (`Option[&int]`, for example) are separately rejected: supporting ordinary
+sum payloads beside scalar references does not authorize storing new references
+inside sums. This is boundary validation, not ownership analysis.
 
 User generic functions and declarations remain unsupported, as do inferred generic
 constructors, cross-package builtin identities and builtin serde derives. Built-in

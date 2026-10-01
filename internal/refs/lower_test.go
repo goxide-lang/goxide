@@ -123,3 +123,14 @@ func TestHostMutIdentifier(t *testing.T) {
 		}
 	}
 }
+
+func TestPhantomGenericReferenceRejected(t *testing.T) {
+	for _, src := range []string{
+		`type Phantom[T any] struct{};func f(){var p Phantom[&int];_=p}`,
+		`func phantom[T any](){};func f(r &int){phantom[&int]()}`,
+	} {
+		if _, err := Lower("phantom.hgo", []byte("package p\n"+src)); err == nil {
+			t.Fatalf("accepted phantom reference argument: %s", src)
+		}
+	}
+}

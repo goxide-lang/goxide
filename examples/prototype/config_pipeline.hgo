@@ -1,0 +1,86 @@
+package main
+
+import (
+    "errors"
+    "fmt"
+    "log/slog"
+    "os"
+    "github.com/hxsf/goxide/serdejson"
+)
+
+#[derive(Serialize, Deserialize)]
+enum RunMode {
+    DryRun,
+    Workers(int),
+}
+
+#[derive(Serialize, Deserialize)]
+type Config struct {
+    Name string
+    Mode RunMode
+}
+
+#[derive(Error)]
+#[error("configuration rejected")]
+type ConfigError struct {
+    #[from]
+    Cause error
+}
+
+var ErrInvalidWorkers = errors.New("workers must be between 1 and 64")
+var ErrMissingName = errors.New("name is required")
+
+// Ordinary Go (T, error) calls cross an explicit Result boundary.
+func decodeConfig(data []byte) Result[Config,error] {
+    config, err := serdejson.Unmarshal(data, DeserializeConfig)
+    if err != nil { return Result[Config,error]::Err(err) }
+    return Result[Config,error]::Ok(config)
+}
+
+func validateConfig(config Config) Result[Config,error] {
+    if config.Name == "" { return Result[Config,error]::Err(ErrMissingName) }
+    match config.Mode {
+        RunMode::DryRun => {},
+        RunMode::Workers(count) => {
+            if count < 1 || count > 64 {
+                return Result[Config,error]::Err(ErrInvalidWorkers)
+            }
+        },
+    }
+    return Result[Config,error]::Ok(config)
+}
+
+func loadConfig(data []byte) Result[Config,ConfigError] {
+    config := decodeConfig(data)?
+    valid := validateConfig(config)?
+    return Result[Config,ConfigError]::Ok(valid)
+}
+
+// The application emits one JSON event and exposes the original error chain.
+func runConfig(logger *slog.Logger, requestID string, data []byte) error {
+    match loadConfig(data) {
+        Result[Config,ConfigError]::Ok(config) => {
+            match config.Mode {
+                RunMode::DryRun => {
+                    logger.Info("configuration accepted", "request_id", requestID, "name", config.Name, "mode", "dry_run", "workers", 0)
+                },
+                RunMode::Workers(count) => {
+                    logger.Info("configuration accepted", "request_id", requestID, "name", config.Name, "mode", "workers", "workers", count)
+                },
+            }
+            return nil
+        },
+        Result[Config,ConfigError]::Err(err) => {
+            logger.Error("configuration rejected", "request_id", requestID, "error", err.Error(), "cause", fmt.Sprint(errors.Unwrap(err)))
+            return err
+        },
+    }
+    panic("unreachable")
+}
+
+func main() {
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+    input := `{"Name":"mail-dispatch","Mode":{"Workers":4}}`
+    if len(os.Args) > 1 { input = os.Args[1] }
+    if err := runConfig(logger, "config-startup", []byte(input)); err != nil { os.Exit(1) }
+}

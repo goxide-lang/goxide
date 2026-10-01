@@ -202,6 +202,7 @@ type checker struct {
 	info       *types.Info
 	parents    map[ast.Node]ast.Node
 	mut        map[int]bool
+	imp        types.Importer
 	synthetic  map[int]bool
 	references []Reference
 }
@@ -230,10 +231,14 @@ func (c *checker) parse() error {
 }
 func (c *checker) checkTypes() error {
 	c.info = &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}, Instances: map[*ast.Ident]types.Instance{}}
-	conf := types.Config{Importer: importer.Default()}
+	imp := c.imp
+	if imp == nil {
+		imp = importer.Default()
+	}
+	conf := types.Config{Importer: imp}
 	_, err := conf.Check("hgo.local/refs", c.fs, []*ast.File{c.file}, c.info)
 	if err != nil {
-		return fmt.Errorf("%s: refs: source type checking failed (unresolved packages/derive helpers are unsupported in this reference slice): %w", c.filename, err)
+		return fmt.Errorf("%s: refs: source type checking failed: %w", c.filename, err)
 	}
 	return nil
 }
@@ -241,7 +246,11 @@ func (c *checker) checkTypes() error {
 // Lower checks scalar references before erasing permissions to ordinary Go pointers.
 // Files without the new reference syntax are returned byte-for-byte unchanged.
 func Lower(filename string, source []byte) (Result, error) {
-	c := &checker{filename: filename, source: source, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}}
+	return lower(filename, source, nil, false)
+}
+
+func lower(filename string, source []byte, imp types.Importer, prepare bool) (Result, error) {
+	c := &checker{filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}}
 	// Attributes belong to the later derive pass; preserve their exact source lines.
 	var attrs []struct {
 		line int
@@ -343,6 +352,28 @@ func Lower(filename string, source []byte) (Result, error) {
 	}
 	if reserved != "" {
 		return Result{}, fmt.Errorf("%s: refs: reserved analysis identifier %s", filename, reserved)
+	}
+	if prepare {
+		es = nil
+		ast.Inspect(c.file, func(n ast.Node) bool {
+			u, ok := n.(*ast.UnaryExpr)
+			if !ok || u.Op != token.AND {
+				return true
+			}
+			at := c.offset(u.Pos())
+			if c.mut[c.m.origin[at]] {
+				es = append(es, edit{at, at, "__hgo_ref_make_write("}, edit{c.offset(u.End()), c.offset(u.End()), ")"})
+			}
+			return true
+		})
+		c.m = c.m.apply(es)
+		lines := bytes.Split(c.m.text, []byte("\n"))
+		for _, a := range attrs {
+			lines[a.line] = []byte(a.text)
+		}
+		out := bytes.Join(lines, []byte("\n"))
+		out = append(out, []byte(declarations()+"\ntype __hgo_ref_write[T any] *T\nfunc __hgo_ref_make_write[T any](v *T) __hgo_ref_write[T] { return __hgo_ref_write[T](v) }\n")...)
+		return Result{Source: out}, nil
 	}
 	bodyLen := len(c.m.text)
 	c.m.text = append(c.m.text, []byte(declarations())...)
@@ -543,6 +574,11 @@ func hasRef(t types.Type) bool {
 		case *types.Chan:
 			return visit(t.Elem())
 		case *types.Named:
+			for i := 0; i < t.TypeArgs().Len(); i++ {
+				if visit(t.TypeArgs().At(i)) {
+					return true
+				}
+			}
 			return visit(t.Underlying())
 		case *types.Tuple:
 			for i := 0; i < t.Len(); i++ {
@@ -634,6 +670,13 @@ func (c *checker) validate() error {
 				return fail("reference aliases/defined types are unsupported")
 			}
 		case *ast.Ident:
+			if instance, ok := c.info.Instances[x]; ok {
+				for i := 0; i < instance.TypeArgs.Len(); i++ {
+					if hasRef(instance.TypeArgs.At(i)) {
+						return fail("generic instantiations carrying references are unsupported")
+					}
+				}
+			}
 			if c.info.Defs[x] != nil && scalar(x.Name) != "" {
 				return fail("shadowing built-in scalar names in a reference-bearing file is unsupported")
 			}

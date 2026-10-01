@@ -146,8 +146,8 @@ go run -race /tmp/goxide-match-expression-example.go
 - `?` 支持单 RHS 绑定、单项 var 声明、return、调用参数（含 defer/go）、普通一元/二元/selector、短路布尔和无 initializer 的 if 条件。循环、switch、索引/切片、复合字面量、赋值目标、多 RHS 及带 initializer 的 if 条件中的传播明确拒绝；先绑定或显式 match。
 - 宏模板仅支持固定内建容器类型：类型参数限 Go 内建标量及其指针/数组/slice/map/channel 组合，不支持捕获调用者类型、未知具名类型或用户 enum 构造。类型别名/构造 helper 不改变 `?` 的词法目标；模板显式闭包仍是传播边界。
 - 表达式 match 仅支持整个显式类型局部初始化，以及单个非具名、Go 可解析返回类型的整个 return 表达式。`:=` 推断、参数/运算符/另一个 arm 内嵌 match、表达式块、包初始化、具名/多返回未实现。
-- 新引用语法与 `?`/尚未生成的 derive helper 的同文件组合尚未打通：引用检查早于传播与派生 lowering，不能把分开可运行的功能推断为任意组合可用。原生 Go 指针示例不代表新引用组合已经支持。
-- 内建容器不能派生 serde；已知含 enum 的 struct/container/pointer payload 在缺投影校验时拒绝。校验不遍历任意 interface 动态对象图。精确原始列映射、公开边界全面校验和借用风险分析仍未实现。
+- 该阶段新引用语法与 `?`/尚未生成的 derive helper 的同文件组合尚未打通（下节已补有限支持）：引用检查早于传播与派生 lowering，不能把分开可运行的功能推断为任意组合可用。原生 Go 指针示例不代表新引用组合已经支持。
+- 内建容器不能派生 serde；该阶段已知含 enum 的 struct/container/pointer payload 在缺投影校验时拒绝（下节补值 struct 投影）。校验不遍历任意 interface 动态对象图。精确原始列映射、公开边界全面校验和借用风险分析仍未实现。
 
 独立接受测试见 `tests/acceptance/propagate_test.go`，覆盖原顺序、短路、defer、最近闭包、typed nil、原生部分成功及显式拒绝；转换注册器层另测歧义、缺失和两跳拒绝。全套统计按本轮实际运行另记，不沿用旧阶段数量作为当前证据。
 
@@ -156,3 +156,28 @@ go run -race /tmp/goxide-match-expression-example.go
 全新上下文集成审查及自审修复：宏显式闭包的返回类型别名、载荷/导入/From 目标别名不再按字符串误判；选中的 From helper 在包级绑定到保留标识符，防止调用者局部同名函数截获。内建 sum 或表达式 match 即使没有 `?` 也执行最终完整 Go 类型检查，临时类型推导允许的错误不会被静默放过。实际组合回归覆盖 match arm 内 `?` 的成功、失败和未选中分支，以及 From 遮蔽。
 
 完整设计检查另通过 **32 篇 Markdown、218 个本地链接、13 条 Go 命令**（含三个预期编译拒绝、锁 race）；它仍只验证设计机制，与上述前端验收分开。环境为 Go 1.27.1 linux/amd64、CGO_ENABLED=1、Python 3.12.14；无工具链/依赖下载。
+
+## 后续阶段：T0 跨功能组合与配置应用
+
+引用阶段拆为 `Prepare → derive/propagate → Finish`：中间表示保留读写权限，完成整个生成程序的类型与权限检查后才擦成 Go 指针。现在普通 Option/Result 载荷可与标量引用参数/局部、Error/Clone/Debug 派生、最近闭包及直接 defer 调用同文件使用。传播不再把不可变的直接函数名冻结成函数值，避免凭空制造尚不支持的引用函数值；真实函数变量仍按原求值顺序捕获。泛型实例（包括不使用类型参数的 phantom 容器）不能洗掉引用权限。
+
+这不是任意引用容器支持：`Option[&int]` / `Result[mut& int,error]` 明确报引用载荷未支持；宏定义点绑定引用签名函数产生的包级函数别名仍被拒绝。已有正例宏可以解引用后调用普通标量函数，也可以展开 `?`；调用处同名变量不截获宏绑定。完整投影权限、原生桥接、引用函数值和借用分析未加入本阶段。
+
+新增 [配置应用](examples/prototype/config_pipeline.hgo) 将真实 JSON 输入解码为含 enum 的 Config，经显式 Result 包装和 `#[from] ConfigError` 传播、业务 match 校验，输出一个带 request_id 的 JSON slog 事件。`errors.Is/As` 保留业务及 serde 错误链。应用验收直接读取这个示例，不维护另一份近似代码：
+
+```sh
+go run ./cmd/hgo build -o /tmp/hgo-config examples/prototype/config_pipeline.hgo
+/tmp/hgo-config
+/tmp/hgo-config '{'
+/tmp/hgo-config '{"Name":"worker","Mode":{"Workers":0}}'
+```
+
+首个执行成功（exit 0、INFO、workers=4）；后两个执行失败（exit 1、ERROR，分别保留 JSON syntax 和 workers 范围原因）。日志时间不固定，测试检查结构化字段和错误链。应用本身不混入新引用或宏；这些组合由独立测试覆盖。
+
+为承载 `Result[Config,error]`，sum 使用点校验已扩展到有限本地值 struct 的命名字段、别名及嵌套 sum。分组 type 声明同样被检查；无效字段在 match guard 或 `?` 后续副作用前失败。含 enum 的指针/集合、嵌入/空白字段及递归投影继续明确拒绝，不遍历任意 interface 动态对象图。
+
+[T0 验收矩阵](docs/t0-acceptance.md)逐项映射实际测试，区分完整窄契约、有限实现、未做和必需/后置。source-map 验收现检查 derive 起点确实指向最终 Go helper、宏调用行及引用权限/符号身份；宏偏移仍针对预格式化缓冲区，引用位置仍针对中间输入，未宣称完整逐 token 映射或 LSP。
+
+本阶段全套 `go test -race -count=1 -json ./...` 通过 **13 包、112 顶层测试、185 子测试**；`go vet ./...` 通过。新增 **3 个实际生成模块**显式执行 `go test -race`，**8 个测试、8 个子测试**通过，另有应用 CLI build 后的成功/失败真实执行。宿主统计与生成模块统计分开；旧 prototype 子进程未继承 race 的限制仍保留。未改变冻结标签、未实现完整 Try/Residual 或风险分析器。
+
+完整设计检查通过 **33 篇 Markdown、275 个本地链接、13 条 Go 命令**（含三个预期编译拒绝及锁 race）。自审回归另保证局部同名类型不能覆盖包级值字段校验描述；独立审查明确保留宏引用函数别名与引用载荷的限制，没有以拒绝用例冒充功能实现。

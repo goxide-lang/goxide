@@ -29,6 +29,19 @@ func Builtin(family string, args []string) (Decl, error) {
 		if err != nil {
 			return Decl{}, err
 		}
+		containsRef := false
+		ast.Inspect(e, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.UnaryExpr:
+				containsRef = containsRef || x.Op == token.AND
+			case *ast.BinaryExpr:
+				containsRef = containsRef || x.Op == token.AND
+			}
+			return true
+		})
+		if containsRef {
+			return Decl{}, fmt.Errorf("reference payload in Option/Result is unsupported; scalar references may accompany ordinary sum payloads")
+		}
 		var b bytes.Buffer
 		_ = format.Node(&b, token.NewFileSet(), e)
 		norm[i] = b.String()
@@ -173,45 +186,50 @@ func (l *lowerer) builtinDeclarations() string {
 				continue
 			}
 			fmt.Fprintf(&b, "case %s: _=x;", v.CaseName)
-			if nested := l.byName[v.Payload]; nested != nil {
-				fmt.Fprintf(&b, "%s(x.Value);", nested.Validator)
-			} else if e, err := parser.ParseExpr(v.Payload); err == nil {
-				var f string
-				var args []string
-				switch n := e.(type) {
-				case *ast.IndexExpr:
-					if id, ok := n.X.(*ast.Ident); ok {
-						f = id.Name
-					}
-					var z bytes.Buffer
-					format.Node(&z, token.NewFileSet(), n.Index)
-					args = []string{z.String()}
-				case *ast.IndexListExpr:
-					if id, ok := n.X.(*ast.Ident); ok {
-						f = id.Name
-					}
-					for _, a := range n.Indices {
-						var z bytes.Buffer
-						format.Node(&z, token.NewFileSet(), a)
-						args = append(args, z.String())
-					}
-				}
-				if nested, err := Builtin(f, args); err == nil {
-					fmt.Fprintf(&b, "%s(x.Value);", nested.Validator)
-				}
-			}
+			b.WriteString(l.payloadChecks[d.Name+"/"+v.Name])
 		}
 		b.WriteString("}};\n")
 	}
 	return b.String()
 }
 
-// Composite payloads that conceal a statically known enum need projection
-// validation before exposing their payload. Until that lowering exists, reject
-// those instances explicitly rather than silently checking only the outer case.
+// Validate value-struct projections before exposing sum payloads. Reference
+// containers and recursive object graphs remain outside this finite boundary.
 func (l *lowerer) checkCompositePayloads() error {
 	named := map[string]ast.Expr{}
+	hasBuiltin := false
+	for _, d := range l.decls {
+		hasBuiltin = hasBuiltin || d.Family != ""
+	}
+	depth := 0
 	for i, t := range l.ts {
+		if t.kind == token.RBRACE {
+			depth--
+		}
+		atPackage := depth == 0
+		if t.kind == token.LBRACE {
+			depth++
+		}
+		if !atPackage {
+			continue
+		}
+		if hasBuiltin && t.kind == token.TYPE && i+1 < len(l.ts) && l.ts[i+1].kind == token.LPAREN {
+			end, err := l.close(i + 1)
+			if err != nil {
+				return err
+			}
+			f, err := parser.ParseFile(token.NewFileSet(), "", "package p;"+string(l.src[t.start:l.ts[end].end]), 0)
+			if err != nil {
+				return l.err(t.start, "unsupported grouped type declaration in sum payload analysis")
+			}
+			for _, spec := range f.Decls[0].(*ast.GenDecl).Specs {
+				ts := spec.(*ast.TypeSpec)
+				if ts.TypeParams != nil {
+					return l.err(t.start, "user generic type declarations unsupported")
+				}
+				named[ts.Name.Name] = ts.Type
+			}
+		}
 		if t.text == "struct" && i+2 < len(l.ts) && l.ts[i+1].kind == token.IDENT && l.ts[i+2].text == "{" {
 			end, err := l.close(i + 2)
 			if err != nil {
@@ -293,30 +311,102 @@ func (l *lowerer) checkCompositePayloads() error {
 		}
 		return false
 	}
+	l.payloadChecks = map[string]string{}
+	dependencies := map[string][]string{}
+	owner := ""
+	var project func(ast.Expr, string, map[string]bool) (string, error)
+	project = func(e ast.Expr, path string, active map[string]bool) (string, error) {
+		if !hasEnum(e, map[string]bool{}) {
+			return "", nil
+		}
+		switch n := e.(type) {
+		case *ast.Ident:
+			if d := l.byName[n.Name]; d != nil {
+				dependencies[owner] = append(dependencies[owner], d.Name)
+				return d.Validator + "(" + path + ");", nil
+			}
+			if active[n.Name] {
+				return "", fmt.Errorf("recursive value projection %s", n.Name)
+			}
+			active[n.Name] = true
+			code, err := project(named[n.Name], path, active)
+			delete(active, n.Name)
+			return code, err
+		case *ast.ParenExpr:
+			return project(n.X, path, active)
+		case *ast.StructType:
+			var code strings.Builder
+			for _, f := range n.Fields.List {
+				if !hasEnum(f.Type, map[string]bool{}) {
+					continue
+				}
+				if len(f.Names) == 0 {
+					return "", fmt.Errorf("embedded enum-bearing field")
+				}
+				for _, id := range f.Names {
+					if id.Name == "_" {
+						return "", fmt.Errorf("blank enum-bearing field")
+					}
+					part, err := project(f.Type, path+"."+id.Name, active)
+					if err != nil {
+						return "", err
+					}
+					code.WriteString(part)
+				}
+			}
+			return code.String(), nil
+		case *ast.IndexExpr, *ast.IndexListExpr:
+			var b bytes.Buffer
+			_ = format.Node(&b, token.NewFileSet(), e)
+			// collectBuiltins already registered each concrete source instantiation.
+			compact := strings.ReplaceAll(b.String(), " ", "")
+			for _, d := range l.decls {
+				if d.Family != "" && strings.ReplaceAll(d.Name, " ", "") == compact {
+					dependencies[owner] = append(dependencies[owner], d.Name)
+					return d.Validator + "(" + path + ");", nil
+				}
+			}
+		}
+		return "", fmt.Errorf("enum-bearing pointer/container projection")
+	}
 	for _, d := range l.decls {
 		if d.Family == "" {
 			continue
 		}
+		owner = d.Name
 		for _, v := range d.Variants {
 			if v.Type == nil {
 				continue
 			}
-			direct := false
-			switch n := v.Type.(type) {
-			case *ast.Ident:
-				direct = l.byName[n.Name] != nil
-			case *ast.IndexExpr:
-				if id, ok := n.X.(*ast.Ident); ok {
-					direct = id.Name == "Option" || id.Name == "Result"
-				}
-			case *ast.IndexListExpr:
-				if id, ok := n.X.(*ast.Ident); ok {
-					direct = id.Name == "Option" || id.Name == "Result"
-				}
+			code, err := project(v.Type, "x.Value", map[string]bool{})
+			if err != nil {
+				return l.err(d.Position.Offset, "builtin payload projection unsupported: "+v.Payload+": "+err.Error())
 			}
-			if !direct && hasEnum(v.Type, map[string]bool{}) {
-				return l.err(d.Position.Offset, "builtin composite payload containing enum requires projection validation; unsupported: "+v.Payload)
+			l.payloadChecks[d.Name+"/"+v.Name] = code
+		}
+	}
+	visiting, done := map[string]bool{}, map[string]bool{}
+	var visit func(string) error
+	visit = func(name string) error {
+		if visiting[name] {
+			return fmt.Errorf("recursive sum value projection: %s", name)
+		}
+		if done[name] {
+			return nil
+		}
+		visiting[name] = true
+		for _, child := range dependencies[name] {
+			if err := visit(child); err != nil {
+				return err
 			}
+		}
+		delete(visiting, name)
+		done[name] = true
+		return nil
+	}
+	for _, d := range l.decls {
+		if err := visit(d.Name); err != nil {
+			return l.err(d.Position.Offset, err.Error())
 		}
 	}
 	return nil

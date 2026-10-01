@@ -92,3 +92,5 @@ python3 scripts/check_design.py
 
 
 Option/Result 阶段已有真实 Go API 显式包装、不同成功类型的传播和 sole-error-field `#[from]` 单步转换示例；表达式 match 单独提供可运行入口。内建泛型不等于用户泛型，转换注册不等于通用 From 搜索。宏固定类型、新引用与传播组合、unsupported 表达式上下文及运行证据见 [实现边界](IMPLEMENTATION.md)。下一阶段组合工作与完整 M1/M4/M5 仍未完成；不改变已确认设计。
+
+后续 T0 组合已打通普通 sum 载荷与标量引用/派生/传播，以及 JSON 配置→Result/From→enum match→结构化日志应用。引用载荷、宏引用签名函数别名、复合只读投影与完整 source map 仍有限或未做。每项实际测试与必需/后置划分见 [T0 验收矩阵](docs/t0-acceptance.md)；不能由应用成功推导任意跨功能组合已完成。

@@ -64,8 +64,8 @@ func TestInvalidResultIsNotBusinessFailure(t *testing.T){defer func(){if recover
 func TestPropagationExplicitRejections(t *testing.T) {
 	cases := map[string]string{
 		"nested-enum-slice":                `func f()Result[[]Option[int],error]{return Result[[]Option[int],error]::Ok(nil)}`,
-		"hgo-holder-enum":                  `enum E {A,};struct Holder { Bad E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
-		"go-holder-enum":                   `enum E {A,};type Holder struct { Bad E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
+		"hgo-holder-enum":                  `enum E {A,};struct Holder { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
+		"go-holder-enum":                   `enum E {A,};type Holder struct { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
 		"option-to-result":                 `func f()Result[int,error]{x:=Option[int]::None?;return Result[int,error]::Ok(x)}`,
 		"result-to-option":                 `func f()Option[int]{x:=Result[int,error]::Ok(1)?;return Option[int]::Some(x)}`,
 		"ordinary-closure":                 `func f()Result[int,error]{x:=func()int{return Result[int,error]::Ok(1)?}();return Result[int,error]::Ok(x)}`,

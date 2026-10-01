@@ -46,7 +46,7 @@ func TestBuiltinRejects(t *testing.T) {
 		`package p; var x=Option::Some(1)`,
 		`package p; type Option int; var x Option[int]`,
 		`package p; var x Result[[]Option[int],error]`,
-		`package p; enum E {A,}; type Holder struct {Bad E}; var x Result[Holder,error]`,
+		`package p; enum E {A,}; type Holder struct {Bad *E}; var x Result[Holder,error]`,
 	} {
 		if _, e := Lower("bad.hgo", []byte(s)); e == nil {
 			t.Fatal(s)

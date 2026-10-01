@@ -22,7 +22,9 @@ lexical function, including function literals. It supports one RHS assignments,
 one-spec variable declarations, returns, calls (including `defer` and `go` argument
 evaluation), ordinary unary/binary/selector expressions, short-circuit booleans,
 and `if` conditions without initializers. Calls freeze preceding evaluated runtime
-arguments before later propagation. Constants retain contextual types. A failing
+arguments before later propagation. Declared function names have no mutable
+runtime value and remain direct calls; function variables are still frozen.
+Constants retain contextual types. A failing
 `defer f(load()?)` does not register that defer, and earlier defers execute normally.
 
 Explicitly unsupported: user generic functions; propagation inside loops, switches,

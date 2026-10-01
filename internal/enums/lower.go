@@ -37,12 +37,13 @@ type edit struct {
 	text       string
 }
 type lowerer struct {
-	filename string
-	src      []byte
-	ts       []tok
-	decls    []Decl
-	byName   map[string]*Decl
-	serial   int
+	filename      string
+	src           []byte
+	ts            []tok
+	decls         []Decl
+	byName        map[string]*Decl
+	serial        int
+	payloadChecks map[string]string
 }
 
 func Lower(filename string, source []byte) (Result, error) {

@@ -1,0 +1,37 @@
+package main
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "log/slog"
+    "os"
+)
+
+// Explicit enabled expression is evaluated once. Message and fields are only
+// evaluated inside the branch. This is an ordinary statement macro, not spans.
+macro_rules! event_if {
+    ($enabled:expr, $message:expr, $($field:expr),*) => {
+        if $enabled { slog.Info($message, $($field),*) }
+    };
+}
+
+#[derive(Error)]
+#[error("request failed")]
+type RequestFailure struct {
+    #[from]
+    Cause error
+}
+
+func emitRequest(enabled func()bool, message func()string, requestID func()int, failure RequestFailure) {
+    event_if!(enabled(), message(), "request_id", requestID(), "error", failure.Error())
+}
+
+func main() {
+    slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+    cause := errors.New("connection reset")
+    failure := FromRequestFailure(cause)
+    emitRequest(func()bool{return slog.Default().Enabled(context.Background(),slog.LevelInfo)},
+        func()string{return "request"}, func()int{return 7}, failure)
+    fmt.Println("cause preserved:", errors.Is(failure,cause))
+}

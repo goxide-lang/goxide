@@ -204,3 +204,23 @@ go run ./cmd/hgo build -o /tmp/hgo-config examples/prototype/config_pipeline.hgo
 - CLI build 配置应用后，默认输入 exit 0 / INFO / workers=4；坏 JSON 与零 workers 分别 exit 1 / ERROR，并保留 syntax 与业务范围原因。
 
 整项 T0 仍未完成：数值/string 常量 enum raw/未知值、完整跨阶段来源、通用引用桥接、一般泛型/跨包能力继续按矩阵分期；未变更冻结设计、未新增长期借用分析。
+
+## 当前增量：T0 常用重绑定、lowering 来源与条件日志
+
+基于 `434ad22b23f7809b70a0cabacfe99ad02b5bd4a1`，本轮对上述保守规则作有限精化：局部直线 fresh 重绑定、双方 fresh 的 if 分支、同时赋值 RHS 和闭包自身的本地变量采用词法点事实；旧别名保留旧资格。`copy` 与 `append(writable, readonly...)` 可复制不含共享资格的值元素；含指针/共享字段的浅复制仍不能恢复写权限。捕获、取址、循环、switch/select/goto 涉及的槽位和字段 fresh 替换仍保守；相关诊断明确标出 `prototype tracking limitation`，建议独立 fresh local。确定只读写入、资格擦除及不支持边界仍是错误，没有引入全程序借用或效果分析。
+
+enum/语句 match 和表达式 match 的 renderer 现在记录显式复制范围，`?` 准备阶段保留操作数与未改来源；传播 AST lowering 只传递存活节点身份、完整顺序流对应以及结构一致时的起始 token。生成 AST 恰好重用位置不构成来源证据。嵌套宏诊断栈从 Prepare 坐标回传原始跨度；legacy `macroTokens` 仍明确使用 Prepare 坐标。新增验收逐一核对九次重复字面量的原始位置及宏栈，并把真实 go/types 错误分成原始字面量可映射、生成宏括号明确 unmapped 两类。derive 与这些阶段同文件组合已验收；引用 Prepare/Finish 的实质改写仍会丢弃精确来源，重建表达式和未知生成区域也不猜测来源。
+
+[条件日志应用](examples/prototype/conditional_log.hgo) 使用已有声明宏的显式条件分支。禁用时消息与昂贵字段零次求值，启用时条件、消息与字段各一次且顺序保持，JSON request_id/error 与 Error 的 errors.Is/As 链均验收。它提供常用条件日志模式，不实现 span/tracing runtime；现有 eager event 宏不改变语义。现有 serde JSON、thiserror 风格 Error/From 和 Debug/Clone 组合持续回归；enum Debug/Clone、enum Error/具体 source From 等尚未实现，没有因组合示例通过而标完成。
+
+本轮新增测试由实施者编写；fresh 非作者只读审查完成源码/矩阵检查并独立复跑七个新增顶层测试，其中两个真实生成模块显式 race。平台历史线程上限阻止创建另外两名 fresh 实施者，实际为单实施者加 fresh 非作者审查，不冒称并行独立实施。审查促成 Prepare 后宏栈原始坐标、NUL 私有分隔符输入拒绝、重复 token 精确序列与真实生成括号 unmapped 验收；最终无未修复阻断。
+
+最终实际验证（Go 1.27.1、linux/amd64、CGO_ENABLED=1；`GOTOOLCHAIN=local GOWORK=off GOPROXY=off GOCACHE=/tmp/goxide-macro-cache`）：
+
+- 全套 `go test -race -count=1 -json ./...`：**14 包、141 宿主顶层测试、241 子测试**通过。
+- 接受测试实际生成 **23 个成功模块**，显式 `go test -race`：**58 测试、41 子测试**通过；另 **1 个模块**保留预期名义类型编译拒绝。宿主和生成模块分开计数；旧 prototype 子进程不继承 race 的限制不变。
+- `go vet ./...`、完整设计检查 **13 Go 命令**通过（含三个预期拒绝和锁 race）。设计检查只证明文档/夹具，不代替语言前端覆盖。
+- 条件日志经 CLI transpile，source-map JSON 可解析，产物 `go run -race` 输出 INFO/request_id=7 与 `cause preserved: true`。
+- 配置应用 CLI build 后默认输入 exit 0/INFO/workers=4；坏 JSON 与零 workers 分别 exit 1/ERROR，保留 JSON syntax 与业务范围原因。
+
+本轮无待批准阻断，不改 tag、不 push、不冻结新核心语义。T0 整体仍为有限可运行子集：常量 enum raw/未知值规则需后续明确；通用引用桥接、引用容器/函数值、完整跨阶段映射、enum 派生扩展、一般泛型和跨包能力继续按验收矩阵分期。长期借用分析仍独立，race 不代表静态安全保证。

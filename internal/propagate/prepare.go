@@ -3,6 +3,7 @@ package propagate
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/scanner"
 	"go/token"
 	"strings"
@@ -13,6 +14,12 @@ const marker = "__hgo_question"
 // Prepare turns postfix propagation into an internal parsing marker. It does not
 // grant arbitrary named types a propagation implementation.
 func Prepare(filename string, source []byte) ([]byte, error) {
+	return PrepareMapped(filename, source, nil)
+}
+func PrepareMapped(filename string, source []byte, provenance *sourcemap.Map) ([]byte, error) {
+	if strings.IndexByte(string(source), 0) >= 0 {
+		return nil, fmt.Errorf("%s: NUL byte in source", filename)
+	}
 	s := string(source)
 	for {
 		fs := token.NewFileSet()
@@ -94,6 +101,15 @@ func Prepare(filename string, source []byte) ([]byte, error) {
 			return nil, fmt.Errorf("%s: %w", fs.Position(f.Pos(ts[qi].off)), e)
 		}
 		a, b := ts[start].off, ts[qi].off
-		s = s[:a] + marker + "(" + strings.TrimSpace(s[a:b]) + ")" + s[b+1:]
+		operand := strings.TrimSpace(s[a:b])
+		if provenance != nil {
+			f := &sourcemap.Fragments{Input: provenance}
+			start := a + strings.Index(s[a:b], operand)
+			data, m := f.Finish(f.Copy(0, a)+marker+"("+f.Copy(start, start+len(operand))+")"+f.Copy(b+1, len(s)), "propagate.Prepare")
+			*provenance = *m
+			s = string(data)
+		} else {
+			s = s[:a] + marker + "(" + operand + ")" + s[b+1:]
+		}
 	}
 }

@@ -4,6 +4,7 @@ package matchexpr
 import (
 	"bytes"
 	"fmt"
+	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -26,6 +27,23 @@ type edit struct {
 // expression in a function with one unnamed result. It leaves statement matches
 // untouched, delegating all pattern semantics to enums.Lower.
 func Lower(filename string, src []byte) ([]byte, error) {
+	return LowerMapped(filename, src, nil)
+}
+
+func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte, error) {
+	if bytes.IndexByte(src, 0) >= 0 {
+		return nil, fmt.Errorf("%s: NUL byte in source", filename)
+	}
+	var fragments *sourcemap.Fragments
+	if provenance != nil {
+		fragments = &sourcemap.Fragments{Input: provenance}
+	}
+	copySource := func(a, b int) string {
+		if fragments != nil {
+			return fragments.Copy(a, b)
+		}
+		return string(src[a:b])
+	}
 	fs := token.NewFileSet()
 	f := fs.AddFile(filename, -1, len(src))
 	var sc scanner.Scanner
@@ -191,7 +209,7 @@ func Lower(filename string, src []byte) ([]byte, error) {
 		serial++
 		tmp := fmt.Sprintf("__hgo_match_expr_%d", serial)
 		var b strings.Builder
-		fmt.Fprintf(&b, "var %s %s;\nmatch %s {\n", tmp, typ, src[ts[i].b:ts[j].a])
+		fmt.Fprintf(&b, "var %s %s;\nmatch %s {\n", tmp, typ, copySource(ts[i].b, ts[j].a))
 		for k := j + 1; k < end; {
 			if ts[k].k == token.COMMA || ts[k].k == token.SEMICOLON {
 				k++
@@ -224,7 +242,7 @@ func Lower(filename string, src []byte) ([]byte, error) {
 			if p == expr {
 				return nil, fail(expr, "empty arm expression")
 			}
-			fmt.Fprintf(&b, "%s => { %s = (%s) },\n", src[ts[arm].a:ts[k].a], tmp, src[ts[expr].a:ts[p-1].b])
+			fmt.Fprintf(&b, "%s => { %s = (%s) },\n", copySource(ts[arm].a, ts[k].a), tmp, copySource(ts[expr].a, ts[p-1].b))
 			k = p
 		}
 		b.WriteString("}\n")
@@ -239,10 +257,15 @@ func Lower(filename string, src []byte) ([]byte, error) {
 	var out bytes.Buffer
 	at := 0
 	for _, e := range edits {
-		out.Write(src[at:e.a])
+		out.WriteString(copySource(at, e.a))
 		out.WriteString(e.s)
 		at = e.b
 	}
-	out.Write(src[at:])
+	out.WriteString(copySource(at, len(src)))
+	if provenance != nil {
+		data, m := fragments.Finish(out.String(), "matchexpr.Lower")
+		*provenance = *m
+		return data, nil
+	}
 	return out.Bytes(), nil
 }

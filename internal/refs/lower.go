@@ -215,19 +215,21 @@ func declarations() string {
 }
 
 type checker struct {
-	filename       string
-	source         []byte
-	m              mapped
-	fs             *token.FileSet
-	file           *ast.File
-	info           *types.Info
-	parents        map[ast.Node]ast.Node
-	mut            map[int]bool
-	imp            types.Importer
-	synthetic      map[int]bool
-	references     []Reference
-	elements       map[string]bool
-	qualifications map[types.Object]*qualification
+	filename            string
+	source              []byte
+	m                   mapped
+	fs                  *token.FileSet
+	file                *ast.File
+	info                *types.Info
+	parents             map[ast.Node]ast.Node
+	mut                 map[int]bool
+	imp                 types.Importer
+	synthetic           map[int]bool
+	references          []Reference
+	elements            map[string]bool
+	qualifications      map[types.Object]*qualification
+	pointQualifications map[*ast.Ident]*qualification
+	conservativeObjects map[types.Object]bool
 }
 
 func (c *checker) offset(p token.Pos) int { return c.fs.PositionFor(p, false).Offset }

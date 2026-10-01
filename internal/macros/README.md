@@ -6,7 +6,8 @@ output ranges, original file/line/column and the immediate invocation line.
 Untouched source whitespace and attribute lines are retained. This is a bounded
 prototype of the design, not a complete Rust macro implementation or cross-package
 macro ABI. Go compiler diagnostics for appended helper aliases are not fully
-source-mapped; full expansion-stack source maps remain future work.
+source-mapped. Nested expansion stacks are available; complete coverage across
+all later lowering passes remains future work.
 
 ```go
 macro_rules! event {
@@ -73,3 +74,8 @@ reserved enum ABI names. Constructor arguments and trusted compiler question
 markers remain at the original call position, inside an explicit template closure
 when present. No helper changes the nearest propagation/return target. None is a
 unit variant written `Option[int]::None`, without parentheses.
+
+`event_if!` in [conditional_log.hgo](../../examples/prototype/conditional_log.hgo)
+uses an explicit enabled expression and ordinary `if`: disabled message/fields
+are not evaluated, enabled expressions retain template order. This does not
+change existing eager `event!` semantics and does not implement tracing spans.

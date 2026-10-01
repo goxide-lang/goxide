@@ -165,6 +165,9 @@ func (c *checker) quality(e ast.Expr) *qualification {
 	}
 	switch e := e.(type) {
 	case *ast.Ident:
+		if q, ok := c.pointQualifications[e]; ok {
+			return q
+		}
 		return c.qualifications[c.binding(e)]
 	case *ast.StarExpr:
 		return projection(c.quality(e.X), "")
@@ -259,12 +262,30 @@ func (c *checker) checkQualifications() error {
 			return true
 		})
 	}
+	c.refineLocalQualifications()
 	var failure error
 	ast.Inspect(c.file, func(n ast.Node) bool {
 		if n == nil || failure != nil || c.offset(n.Pos()) >= len(c.m.origin) {
 			return false
 		}
-		fail := func(e ast.Node, s string) { failure = c.fail(e, s) }
+		fail := func(e ast.Node, s string) {
+			conservative := false
+			ast.Inspect(e, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok {
+					obj := c.binding(id)
+					if obj != nil && c.conservativeObjects[obj] && restricted(c.qualifications[obj]) {
+						if _, explicit := refType(obj.Type()); !explicit {
+							conservative = true
+						}
+					}
+				}
+				return true
+			})
+			if conservative {
+				s += "; prototype tracking limitation: captured, address-taken or control-flow slot uses a conservative qualification; use a separate fresh local"
+			}
+			failure = c.fail(e, s)
+		}
 		boundary := func(e ast.Expr) {
 			if restricted(copied(c.typ(e), c.quality(e))) {
 				if _, ok := refType(c.typ(e)); !ok {
@@ -386,8 +407,8 @@ func (c *checker) checkQualifications() error {
 				switch builtin {
 				case "len", "cap":
 					continue
-				case "copy":
-					if i == 1 {
+				case "copy", "append":
+					if i == 1 && (builtin == "copy" || n.Ellipsis.IsValid()) {
 						boundaryElement := copied(elementType(c.typ(a)), projection(q, ""))
 						if !restricted(boundaryElement) {
 							continue

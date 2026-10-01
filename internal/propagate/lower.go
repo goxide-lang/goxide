@@ -12,13 +12,15 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
+	"github.com/hxsf/goxide/internal/sourcemap"
 )
 
 type Conversion struct{ Source, Target, Helper string }
 type Config struct {
-	Families []enums.Decl
-	From     []Conversion
-	Importer types.Importer
+	Families   []enums.Decl
+	From       []Conversion
+	Importer   types.Importer
+	Provenance *sourcemap.Map
 }
 type lowering struct {
 	fs          *token.FileSet
@@ -99,6 +101,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if e != nil {
 		return nil, e
 	}
+	originalNodes := sourcemap.Nodes(f)
 	l := &lowering{fs: fs, file: f, cfg: cfg, questions: map[string]enums.Decl{}, conversions: map[string]string{}}
 	// Seed a temporary identity declaration: this makes operand types available,
 	// including operands with inference, before replacing each marker's result.
@@ -200,6 +203,10 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	var out bytes.Buffer
 	if e = format.Node(&out, fs, f); e != nil {
 		return nil, e
+	}
+	if cfg.Provenance != nil {
+		next := cfg.Provenance.AST(fs, f, originalNodes, out.Bytes(), "propagate.Lower")
+		*cfg.Provenance = *next
 	}
 	return out.Bytes(), nil
 }

@@ -18,6 +18,7 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
+	"go/types"
 	"regexp"
 	"sort"
 	"strconv"
@@ -69,6 +70,9 @@ var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
 var renameAttr = regexp.MustCompile(`^rename\s*=\s*("(?:[^"\\]|\\.)*")$`)
 
 func Compile(filename string, source []byte) (Result, error) {
+	if bytes.IndexByte(source, 0) >= 0 {
+		return Result{}, fmt.Errorf("%s: NUL byte in source", filename)
+	}
 	originalSource := append([]byte(nil), source...)
 	provenance := sourcemap.Identity(filename, source)
 	// Reject user access to reserved generated names before adding enum helpers.
@@ -99,11 +103,10 @@ func Compile(filename string, source []byte) (Result, error) {
 			return Result{}, fmt.Errorf("%s: reserved generated identifier %s", reserveFS.Position(pos), lit)
 		}
 	}
-	prepared, err := propagate.Prepare(filename, source)
+	prepared, err := propagate.PrepareMapped(filename, source, provenance)
 	if err != nil {
 		return Result{}, err
 	}
-	provenance = provenance.Compose(source, prepared, "propagate.Prepare")
 	preparedMap := provenance
 	expanded, err := macros.ExpandWithIntrinsics(filename, prepared, []string{"__hgo_question"})
 	if err != nil {
@@ -117,7 +120,21 @@ func Compile(filename string, source []byte) (Result, error) {
 				origin = old.Origin
 			}
 			kind := "source"
-			stack := o.Stack
+			stack := append([]sourcemap.Expansion{}, o.Stack...)
+			for i := range stack {
+				for _, span := range []*sourcemap.Span{&stack[i].Definition, &stack[i].Callsite} {
+					first, last := preparedMap.Lookup(span.Start), preparedMap.Lookup(span.End-1)
+					if first != nil && last != nil && first.Origin != nil && last.Origin != nil && first.Origin.File == last.Origin.File {
+						*span = sourcemap.Position(filename, originalSource, first.Origin.Start, last.Origin.End)
+					} else {
+						stack = nil
+						break
+					}
+				}
+				if stack == nil {
+					break
+				}
+			}
 			if len(stack) > 0 {
 				kind = "macro"
 			}
@@ -128,17 +145,14 @@ func Compile(filename string, source []byte) (Result, error) {
 			provenance.Attach(o.OutputStart, o.OutputEnd, origin, stack, kind)
 		}
 	}
-	source, err = matchexpr.Lower(filename, expanded.Source)
+	source, err = matchexpr.LowerMapped(filename, expanded.Source, provenance)
 	if err != nil {
 		return Result{}, stageError("matchexpr.Lower", err)
 	}
-	provenance = provenance.Compose(expanded.Source, source, "matchexpr.Lower")
-	beforeEnums := source
-	enumResult, err := enums.Lower(filename, source)
+	enumResult, err := enums.LowerMapped(filename, source, provenance)
 	if err != nil {
 		return Result{}, stageError("enums.Lower", err)
 	}
-	provenance = provenance.Compose(beforeEnums, enumResult.Source, "enums.Lower")
 	source = enumResult.Source
 	refResult, err := refs.Prepare(filename, source)
 	if err != nil {
@@ -523,12 +537,10 @@ func Compile(filename string, source []byte) (Result, error) {
 			}
 		}
 		imp := typecheck.NewImporter(filename)
-		beforePropagation := out
-		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp})
+		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp, Provenance: provenance})
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
 		}
-		provenance = provenance.Compose(beforePropagation, out, "propagate.Lower")
 		beforeReferences := out
 		refResult, e = refs.Finish(filename, out, imp)
 		if e != nil {
@@ -537,6 +549,15 @@ func Compile(filename string, source []byte) (Result, error) {
 		provenance = provenance.Compose(beforeReferences, refResult.Source, "refs.Finish")
 		out = refResult.Source
 		if e = typecheck.Check(filename, out, imp); e != nil {
+			if te, ok := e.(types.Error); ok {
+				p := te.Fset.Position(te.Pos)
+				mapped := &sourcemap.Error{Message: te.Msg, Generated: p}
+				if seg := provenance.Lookup(p.Offset); seg != nil {
+					mapped.Origin = seg.Origin
+					mapped.Stack = seg.Stack
+				}
+				return Result{}, mapped
+			}
 			return Result{}, stageError("typecheck.Check", e)
 		}
 	}

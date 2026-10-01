@@ -58,15 +58,23 @@ retained after value copies. Inferred local qualifications are keyed by
 `go/types.Object` identity; selector paths use `go/types.Selection`. There is no
 source-variable-name taint table or heap-alias inference.
 
-Local binding constraints are solved to a fixed point; a transitive `deep` qualifier
-absorbs nested qualifiers so recursive pointer assignments converge. This includes loops, branches,
-range copies, and captured locals. Rebinding does not remove a qualification:
-replacing a restricted slice or field with fresh storage can therefore still
-produce a conservative rejection later. This is an explicit finite coverage
-limit; no flow-sensitive replacement guarantee is claimed. Independent bindings
-and same-name shadowed bindings have separate identities. Explicitly typed local
-declarations retain qualifications just like inferred locals, including closures.
-Named results and global/interface range targets cannot erase qualifications.
+Local binding constraints first converge to a conservative summary; a transitive
+`deep` qualifier absorbs nested qualifiers so recursive assignments terminate.
+Lexical point facts then permit ordinary local fresh rebinding, simultaneous RHS
+assignments, and branch joins (both branches must remove a shared qualification).
+Local variables declared inside a closure use the same rules. Existing aliases
+retain their previous qualification. This is a finite intraprocedural refinement,
+not whole-program borrow analysis or an inferred effect system.
+
+Captured/address-taken slots and slots mentioned by loops, switch/select or goto
+retain the conservative summary. Replacing individual fields with fresh storage
+also remains conservative. Rejections involving these inferred slots explicitly
+say `prototype tracking limitation` and suggest a separate fresh local. This
+message describes an analysis limit, not proof that the particular execution
+writes shared storage. Definite readonly writes and permission-erasing boundaries
+remain errors; nothing is demoted to a warning. Independent/shadowed local
+bindings have distinct identities. Named results and global/interface range
+targets cannot erase qualifications.
 
 A qualification is never silently dropped at unsupported boundaries. Restricted
 shared projections cannot be put into container/struct literals, ordinary parameters or results, interfaces/any, generic
@@ -78,6 +86,7 @@ Range destinations which cannot preserve qualification are also rejected.
 
 `len` and `cap` can inspect restricted containers. `copy` permits a restricted
 source only when its copied elements contain no restricted shared capability;
+`append(writable, readonly...)` supports the same value-element rule;
 its destination must be writable. `append`, `delete`, `clear`, and other consuming
 builtins cannot mutate restricted shared storage. Copying readonly pointer
 contents into a new slice remains unsupported; the checker does not claim that a

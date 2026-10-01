@@ -3,6 +3,7 @@ package enums
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/ast"
 	"go/parser"
 	"go/scanner"
@@ -44,10 +45,21 @@ type lowerer struct {
 	byName        map[string]*Decl
 	serial        int
 	payloadChecks map[string]string
+	fragments     *sourcemap.Fragments
 }
 
 func Lower(filename string, source []byte) (Result, error) {
+	return LowerMapped(filename, source, nil)
+}
+
+func LowerMapped(filename string, source []byte, provenance *sourcemap.Map) (Result, error) {
+	if strings.IndexByte(string(source), 0) >= 0 {
+		return Result{}, fmt.Errorf("%s: NUL byte in source", filename)
+	}
 	l := &lowerer{filename: filename, src: source, byName: map[string]*Decl{}}
+	if provenance != nil {
+		l.fragments = &sourcemap.Fragments{Input: provenance}
+	}
 	fs := token.NewFileSet()
 	f := fs.AddFile(filename, -1, len(source))
 	var s scanner.Scanner
@@ -158,6 +170,11 @@ func Lower(filename string, source []byte) (Result, error) {
 		return Result{}, e
 	}
 	out += l.builtinDeclarations()
+	if provenance != nil {
+		data, m := l.fragments.Finish(out, "enums.Lower")
+		*provenance = *m
+		out = string(data)
+	}
 	return Result{[]byte(out), l.decls}, nil
 }
 func scalar(s string) bool {
@@ -302,7 +319,7 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 		found := false
 		for _, e := range edits {
 			if t.start == e.start {
-				b.Write(l.src[cursor:e.start])
+				b.WriteString(l.copySource(cursor, e.start))
 				b.WriteString(e.text)
 				cursor = e.end
 				found = true
@@ -323,7 +340,7 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 			if e != nil {
 				return "", e
 			}
-			b.Write(l.src[cursor:t.start])
+			b.WriteString(l.copySource(cursor, t.start))
 			b.WriteString(text)
 			cursor = l.ts[last].end
 			i = last
@@ -347,7 +364,7 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 			if v == nil {
 				return "", l.err(t.start, "unknown enum variant "+name)
 			}
-			b.Write(l.src[cursor:t.start])
+			b.WriteString(l.copySource(cursor, t.start))
 			b.WriteString(v.Constructor)
 			cursor = l.ts[colon+2].end
 			i = colon + 2
@@ -362,7 +379,7 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 			continue
 		}
 	}
-	b.Write(l.src[cursor:end])
+	b.WriteString(l.copySource(cursor, end))
 	return b.String(), nil
 }
 
@@ -662,4 +679,11 @@ func (l *lowerer) checkBuiltinBindings() error {
 		}
 	}
 	return nil
+}
+
+func (l *lowerer) copySource(a, b int) string {
+	if l.fragments != nil {
+		return l.fragments.Copy(a, b)
+	}
+	return string(l.src[a:b])
 }

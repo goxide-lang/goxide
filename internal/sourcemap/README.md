@@ -19,9 +19,16 @@ sugar slices, known import/helper concatenations, and go/format passes.
 Go formatting can remove redundant parentheses; `Format` is exclusively for
 that known transformation and retains non-parenthesis origins only if their
 complete ordered token streams are equal. It never searches for equal repeated
-tokens. Unknown changed passes (including reference, enum, match and question
-lowering) conservatively lose all token provenance for that pass. The stages are
-listed in JSON; this is not complete lowering coverage. Synthetic macro
+tokens. Enum/statement-match and expression-match renderers now explicitly
+transport copied byte ranges, including nested arm bodies and guards. Question
+preparation transports the operand and untouched source; question lowering
+transports surviving AST node identities through a fully checked ordered AST
+stream. Generated nodes with coincidentally identical positions do not count.
+Macro diagnostic stack endpoints are translated back through question preparation;
+the legacy macroTokens coordinate space is unchanged. Reference lowering still
+loses precise origins on substantive changes, and reconstructed question AST
+expressions may remain unmapped. The stages are listed in JSON; this is not
+complete lowering coverage. Synthetic macro
 parentheses and generated infrastructure have no invented source location.
 
 Derive attachment is restricted to the actual appended helper region and the
@@ -38,4 +45,5 @@ Compiler-generated helpers no longer emit misleading `//line` directives.
 Legacy lowering errors preserve their owning phase's error text, wrapped with
 `generated/unmapped; intermediate coordinates` when their original span is not
 proven. The structured original-span API covers derive type validation and final
-Go diagnostics, not every phase error.
+Go diagnostics and final go/types errors, not every phase error. A real error
+located on a synthetic macro parenthesis explicitly stays generated/unmapped.

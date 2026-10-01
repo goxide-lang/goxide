@@ -1,9 +1,10 @@
-// Package refs implements a deliberately scalar-only source permission checker.
+// Package refs checks concrete source references and structural projection permissions.
 // Its named pointer types are an analysis IR, never a runtime wrapper.
 package refs
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -55,7 +56,21 @@ func scalar(s string) string {
 	}
 	return ""
 }
-func name(r Ref) string { return prefix + string(r.Permission) + "_" + r.Element }
+func name(r Ref) string {
+	e := r.Element
+	if scalar(e) == "" {
+		e = "x" + hex.EncodeToString([]byte(e))
+	}
+	return prefix + string(r.Permission) + "_" + e
+}
+func element(t types.Type) string {
+	return types.TypeString(t, func(p *types.Package) string {
+		if p.Path() == "hgo.local/refs" {
+			return ""
+		}
+		return p.Name()
+	})
+}
 func refType(t types.Type) (Ref, bool) {
 	n, ok := types.Unalias(t).(*types.Named)
 	if !ok {
@@ -65,7 +80,13 @@ func refType(t types.Type) (Ref, bool) {
 	for _, p := range []Permission{Read, Write} {
 		q := prefix + string(p) + "_"
 		if strings.HasPrefix(s, q) {
-			e := scalar(strings.TrimPrefix(s, q))
+			raw := strings.TrimPrefix(s, q)
+			e := scalar(raw)
+			if strings.HasPrefix(raw, "x") {
+				if b, err := hex.DecodeString(raw[1:]); err == nil {
+					e = string(b)
+				}
+			}
 			if e != "" {
 				return Ref{e, p}, true
 			}
@@ -194,17 +215,19 @@ func declarations() string {
 }
 
 type checker struct {
-	filename   string
-	source     []byte
-	m          mapped
-	fs         *token.FileSet
-	file       *ast.File
-	info       *types.Info
-	parents    map[ast.Node]ast.Node
-	mut        map[int]bool
-	imp        types.Importer
-	synthetic  map[int]bool
-	references []Reference
+	filename       string
+	source         []byte
+	m              mapped
+	fs             *token.FileSet
+	file           *ast.File
+	info           *types.Info
+	parents        map[ast.Node]ast.Node
+	mut            map[int]bool
+	imp            types.Importer
+	synthetic      map[int]bool
+	references     []Reference
+	elements       map[string]bool
+	qualifications map[types.Object]*qualification
 }
 
 func (c *checker) offset(p token.Pos) int { return c.fs.PositionFor(p, false).Offset }
@@ -230,7 +253,7 @@ func (c *checker) parse() error {
 	return err
 }
 func (c *checker) checkTypes() error {
-	c.info = &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}, Instances: map[*ast.Ident]types.Instance{}}
+	c.info = &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}, Instances: map[*ast.Ident]types.Instance{}, Selections: map[*ast.SelectorExpr]*types.Selection{}}
 	imp := c.imp
 	if imp == nil {
 		imp = importer.Default()
@@ -243,14 +266,14 @@ func (c *checker) checkTypes() error {
 	return nil
 }
 
-// Lower checks scalar references before erasing permissions to ordinary Go pointers.
+// Lower checks references and projection permissions before erasing to Go pointers.
 // Files without the new reference syntax are returned byte-for-byte unchanged.
 func Lower(filename string, source []byte) (Result, error) {
 	return lower(filename, source, nil, false)
 }
 
 func lower(filename string, source []byte, imp types.Importer, prepare bool) (Result, error) {
-	c := &checker{filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}}
+	c := &checker{filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}, elements: map[string]bool{}}
 	// Attributes belong to the later derive pass; preserve their exact source lines.
 	var attrs []struct {
 		line int
@@ -322,16 +345,17 @@ func lower(filename string, source []byte, imp types.Importer, prepare bool) (Re
 				if i+1 >= len(ts) {
 					continue
 				}
-				e := scalar(ts[i+1].text)
+				e, end := referenceElement(c.m.text, ts, i+1)
 				if e == "" {
-					return Result{}, fmt.Errorf("%s: refs: unsupported reference element; this slice accepts built-in scalars only", pe.Pos)
+					return Result{}, fmt.Errorf("%s: refs: unsupported reference element", pe.Pos)
 				}
+				c.elements[e] = true
 				perm := Read
 				if c.mut[c.m.origin[pos]] {
 					perm = Write
 					delete(c.mut, c.m.origin[pos])
 				}
-				c.m = c.m.apply([]edit{{pos, ts[i+1].end, name(Ref{e, perm})}})
+				c.m = c.m.apply([]edit{{pos, end, name(Ref{e, perm})}})
 				active = true
 				changed = true
 				break
@@ -372,11 +396,11 @@ func lower(filename string, source []byte, imp types.Importer, prepare bool) (Re
 			lines[a.line] = []byte(a.text)
 		}
 		out := bytes.Join(lines, []byte("\n"))
-		out = append(out, []byte(declarations()+"\ntype __hgo_ref_write[T any] *T\nfunc __hgo_ref_make_write[T any](v *T) __hgo_ref_write[T] { return __hgo_ref_write[T](v) }\n")...)
+		out = append(out, []byte(c.declarations()+"\ntype __hgo_ref_write[T any] *T\nfunc __hgo_ref_make_write[T any](v *T) __hgo_ref_write[T] { return __hgo_ref_write[T](v) }\n")...)
 		return Result{Source: out}, nil
 	}
 	bodyLen := len(c.m.text)
-	c.m.text = append(c.m.text, []byte(declarations())...)
+	c.m.text = append(c.m.text, []byte(c.declarations())...)
 	if err := c.parse(); err != nil {
 		return Result{}, err
 	}
@@ -397,16 +421,13 @@ func lower(filename string, source []byte, imp types.Importer, prepare bool) (Re
 		}
 		p, ok := c.info.TypeOf(u).(*types.Pointer)
 		if !ok {
-			firstErr = c.fail(u, "write reference requires addressable scalar")
+			firstErr = c.fail(u, "write reference requires addressable storage")
 			return false
 		}
-		b, ok := p.Elem().(*types.Basic)
-		if !ok || scalar(b.Name()) == "" {
-			firstErr = c.fail(u, "unsupported reference element; built-in scalar required")
-			return false
-		}
+		e := element(p.Elem())
+		c.elements[e] = true
 		c.synthetic[c.m.origin[at]] = true
-		r := Ref{scalar(b.Name()), Write}
+		r := Ref{e, Write}
 		es = append(es, edit{at, at, name(r) + "("}, edit{c.offset(u.End()), c.offset(u.End()), ")"})
 		return true
 	})
@@ -414,6 +435,7 @@ func lower(filename string, source []byte, imp types.Importer, prepare bool) (Re
 		return Result{}, firstErr
 	}
 	c.m = c.m.apply(es)
+	c.m.text = append(c.m.text[:len(c.m.origin)], []byte(c.declarations())...)
 	if err := c.parse(); err != nil {
 		return Result{}, err
 	}
@@ -475,6 +497,9 @@ func lower(filename string, source []byte, imp types.Importer, prepare bool) (Re
 		stack = append(stack, n)
 		return true
 	})
+	if err := c.checkQualifications(); err != nil {
+		return Result{}, err
+	}
 	if err := c.validate(); err != nil {
 		return Result{}, err
 	}
@@ -638,7 +663,7 @@ func (c *checker) transfer(dst types.Type, src ast.Expr) error {
 	if dr.Permission == Read {
 		if u, ok := unparen(src).(*ast.UnaryExpr); ok && u.Op == token.AND {
 			if p, ok := c.typ(u).(*types.Pointer); ok {
-				if b, ok := p.Elem().(*types.Basic); ok && scalar(b.Name()) == dr.Element {
+				if element(p.Elem()) == dr.Element {
 					c.references = append(c.references, Reference{c.position(u.Pos()), dr, ""})
 					return nil
 				}
@@ -907,6 +932,14 @@ func (c *checker) validate() error {
 				switch p := c.parents[n].(type) {
 				case *ast.ParenExpr:
 					return true
+				case *ast.SelectorExpr:
+					if p.X == n {
+						return true
+					}
+				case *ast.IndexExpr:
+					if p.X == n {
+						return true
+					}
 				case *ast.StarExpr:
 					if p.X == n {
 						return true
@@ -924,7 +957,7 @@ func (c *checker) validate() error {
 						}
 					}
 				}
-				return fail("unsupported reference use; only scalar dereference, local copy/rebinding, and direct checked calls/returns are supported")
+				return fail("unsupported reference use; only supported projections, local copy/rebinding, and direct checked calls/returns are supported")
 			} else if hasRef(t) {
 				switch n.(type) {
 				case *ast.FuncType, *ast.Ident: // function identity checked above

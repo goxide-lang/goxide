@@ -5,6 +5,7 @@ package macros
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/importer"
 	"go/parser"
 	"go/scanner"
@@ -20,6 +21,8 @@ type TokenOrigin struct {
 	File                   string
 	Line, Column           int
 	InvocationLine         int
+	SourceStart, SourceEnd int
+	Stack                  []sourcemap.Expansion
 }
 type Result struct {
 	Source  []byte
@@ -29,12 +32,15 @@ type tok struct {
 	text, before string
 	pos          token.Position
 	invocation   int
+	stack        []sourcemap.Expansion
+	sourceEnd    int
 }
 type rule struct{ pattern, body []tok }
 type definition struct {
 	name  string
 	rules []rule
 	pos   token.Position
+	end   int
 }
 type engine struct {
 	sumHelpers                map[string]string
@@ -100,7 +106,7 @@ func ExpandWithIntrinsics(filename string, source []byte, names []string) (Resul
 		if x != nil {
 			return Result{}, x
 		}
-		d := definition{name: name, pos: start.pos}
+		d := definition{name: name, pos: start.pos, end: ts[end].sourceEnd}
 		for j := i + 4; j < end; {
 			if ts[j].text == ";" {
 				j++
@@ -179,7 +185,7 @@ func ExpandWithIntrinsics(filename string, source []byte, names []string) (Resul
 		b.WriteString(t.before)
 		a := b.Len()
 		b.WriteString(t.text)
-		origins = append(origins, TokenOrigin{a, b.Len(), t.pos.Filename, t.pos.Line, t.pos.Column, t.invocation})
+		origins = append(origins, TokenOrigin{a, b.Len(), t.pos.Filename, t.pos.Line, t.pos.Column, t.invocation, t.pos.Offset, t.sourceEnd, t.stack})
 	}
 	b.WriteString(tail)
 	keys := make([]string, 0, len(e.aliases))
@@ -247,7 +253,7 @@ func lex(file string, source []byte) ([]tok, string, error) {
 		if k == token.COMMENT {
 			continue
 		}
-		ts = append(ts, tok{text: s, before: string(source[end:off]), pos: fs.Position(p)})
+		ts = append(ts, tok{text: s, before: string(source[end:off]), pos: fs.PositionFor(p, false), sourceEnd: off + n})
 		end = off + n
 	}
 	return ts, string(source[end:]), problem
@@ -496,6 +502,8 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 		if chosen == nil {
 			return nil, at(call, "no rule matches "+d.name)
 		}
+		frame := sourcemap.Expansion{Macro: d.name, Definition: sourcemap.Span{File: d.pos.Filename, Start: d.pos.Offset, End: d.end, Line: d.pos.Line, Column: d.pos.Column}, Callsite: sourcemap.Span{File: call.pos.Filename, Start: call.pos.Offset, End: ts[end].sourceEnd, Line: call.pos.Line, Column: call.pos.Column}}
+		call.stack = append(append([]sourcemap.Expansion{}, call.stack...), frame)
 		placeholders := map[string][]tok{}
 		body, x := e.instantiate(chosen.body, cs, -1, placeholders, call)
 		if x != nil {
@@ -515,6 +523,9 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 				v := append([]tok(nil), value...)
 				if len(v) > 0 {
 					v[0].before = t.before + " " + v[0].before
+					for j := range v {
+						v[j].stack = append([]sourcemap.Expansion{}, t.stack...)
+					}
 				}
 				filled = append(filled, v...)
 			} else {
@@ -545,6 +556,7 @@ func (e *engine) instantiate(ts []tok, cs map[string]capture, index int, ph map[
 		}
 		t := ts[i]
 		t.invocation = call.pos.Line
+		t.stack = append([]sourcemap.Expansion{}, call.stack...)
 		if t.text != "$" {
 			out = append(out, t)
 			continue

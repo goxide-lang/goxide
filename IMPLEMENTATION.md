@@ -181,3 +181,26 @@ go run ./cmd/hgo build -o /tmp/hgo-config examples/prototype/config_pipeline.hgo
 本阶段全套 `go test -race -count=1 -json ./...` 通过 **13 包、112 顶层测试、185 子测试**；`go vet ./...` 通过。新增 **3 个实际生成模块**显式执行 `go test -race`，**8 个测试、8 个子测试**通过，另有应用 CLI build 后的成功/失败真实执行。宿主统计与生成模块统计分开；旧 prototype 子进程未继承 race 的限制仍保留。未改变冻结标签、未实现完整 Try/Residual 或风险分析器。
 
 完整设计检查通过 **33 篇 Markdown、275 个本地链接、13 条 Go 命令**（含三个预期编译拒绝及锁 race）。自审回归另保证局部同名类型不能覆盖包级值字段校验描述；独立审查明确保留宏引用函数别名与引用载荷的限制，没有以拒绝用例冒充功能实现。
+
+
+## 当前增量：复合只读投影与跨阶段诊断
+
+在 `0f48259369d0940d298b76d3fc657dd6d0cb28d9` 的组合基础上，引用元素扩展到具体 struct、array、slice、map 和原生 pointer 路径。只读沿字段（含提升字段）、索引、range、解引用和切片视图传播；struct/array 的独立值部分可写，复制出的共享字段保留只读。接口、函数、泛型、重取写引用、普通返回/调用及容器边界不能擦除资格；命名结果和 range 目标也检查。显式类型本地变量与闭包局部保留资格。上述更新取代前文历史阶段“复合投影未实现”的说明，完整边界见 [引用实现](internal/refs/README.md) 和 [T0 矩阵](docs/t0-acceptance.md)。
+
+资格按 `go/types.Object` 和字段选择身份求固定点；传递只读的 `deep` 资格吸收更深资格，使递归指针 `p=&p` 收敛。没有长期别名风险分析；局部重新绑定或字段换成 fresh 存储仍保守保留旧资格。接口/channel/function 投影、方法效果、带共享字段的容器封装、引用容器/函数值/原生桥接仍有限或明确拒绝。不会因外层值复制而推断其共享内容独立。
+
+[只读缓存示例](examples/prototype/readonly_cache.hgo) 在同一对象上展示读取快照、独立值副本修改，以及可写别名更新后的可见性。独立接受测试直接读取示例、显式运行生成模块 `go test -race`，不以宿主 race 代替生成程序验证。
+
+新增 `diagnostics` 使用最终 Go 字节坐标，记录有证据的原始 span 和宏展开栈；`deriveFields` 记录字段类型原始范围。已知复制、显式宏来源与完整 token 顺序保持的格式化可传递来源，重复 token 不靠文本搜索猜测。生成 helper 名称和可证明接收者身份的字段 selector 记录因果来源；未知 helper 语法和没有显式映射的实质改写保持 `generated/unmapped`。Go stderr 原样保留后追加映射信息；旧阶段错误明确标为中间坐标，不冒充原始行列。enum、引用、match、`?` 的实质改写尚没有完整来源传递，不能宣称所有组合都保留精确位置，也不是 LSP。详见 [映射契约](internal/sourcemap/README.md)。
+
+非作者独立审查实证并复验修复：递归指针资格不收敛、命名普通结果裸 return 逃逸、range 写全局逃逸、括号赋值/range 目标资格丢失、闭包 var 过度拒绝、旧阶段误报原始位置。保留原有独立投影与映射验收成果，另加入对应回归；最终审查无未修复阻断。
+
+本轮最终代码验证（Go 1.27.1 linux/amd64、CGO_ENABLED=1；真实工具链 PATH，`GOTOOLCHAIN=local GOWORK=off GOPROXY=off GOCACHE=/tmp/goxide-macro-cache`，未下载）：
+
+- 全套 `go test -race -count=1 -json ./...`：**14 包、134 宿主顶层测试、234 宿主子测试**通过。
+- 独立接受测试另启动 **21 个成功生成模块**，显式 `go test -race` 通过 **56 个测试、41 个子测试**；另 **1 个生成模块**验证预期名义类型编译拒绝。宿主 JSON pass 与生成程序日志分开统计。旧 prototype 普通生成子进程的 9 个测试、14 个子测试不计入生成 race 数量。
+- `go vet ./...` 通过；完整 `python3 scripts/check_design.py` 的 **13 个 Go 命令**通过（含三个预期拒绝及锁 race）。设计夹具仍不代替前端证明。
+- CLI `run readonly_cache.hgo` 与其 transpile 产物 `go run -race` 均输出 `totals: 40 44 stored: 3 3 6 8 12`；同时生成可解析 source-map JSON。
+- CLI build 配置应用后，默认输入 exit 0 / INFO / workers=4；坏 JSON 与零 workers 分别 exit 1 / ERROR，并保留 syntax 与业务范围原因。
+
+整项 T0 仍未完成：数值/string 常量 enum raw/未知值、完整跨阶段来源、通用引用桥接、一般泛型/跨包能力继续按矩阵分期；未变更冻结设计、未新增长期借用分析。

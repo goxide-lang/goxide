@@ -1,0 +1,43 @@
+package main
+
+import "fmt"
+
+type Cache struct {
+    Reads int
+    Samples [3]int
+    Values []int
+    Counts map[string]int
+    Limit *int
+}
+
+func inspectCache(view &Cache) int {
+    // The scalar and fixed array are independent value copies.
+    snapshot := *view
+    snapshot.Reads++
+    snapshot.Samples[0]++
+
+    // A slice header copy would still share storage. Copy scalar elements
+    // into fresh storage before changing them.
+    values := make([]int, len(view.Values))
+    copy(values, view.Values)
+    values[0] += 10
+    return snapshot.Reads + snapshot.Samples[0] + values[0] + view.Counts["hits"] + *view.Limit
+}
+
+func updateCache(writer mut& Cache) {
+    writer.Reads++
+    writer.Values[0]++
+    writer.Counts["hits"]++
+    (*writer.Limit)++
+}
+
+func main() {
+    limit := 11
+    cache := Cache{Reads: 2, Samples: [3]int{3, 4, 5}, Values: []int{5, 8}, Counts: map[string]int{"hits": 7}, Limit: &limit}
+    var reader &Cache = &cache
+    writer := mut& cache
+    before := inspectCache(reader)
+    updateCache(writer)
+    after := inspectCache(reader)
+    fmt.Println("totals:", before, after, "stored:", cache.Reads, cache.Samples[0], cache.Values[0], cache.Counts["hits"], limit)
+}

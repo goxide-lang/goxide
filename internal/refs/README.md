@@ -1,117 +1,112 @@
-# Scalar reference prototype
+# Checked reference permissions
 
-This pass implements a deliberately finite part of D21, not the complete readonly
-projection model of RFC 0003. It adds no ownership, uniqueness, non-escape,
-thread-safety, or lifetime proof, and no warning analyzer. The syntax is prototype
-syntax, not approval of any pending Arc/Box/AsPtr protocol.
+This finite prototype implements source access permissions from D08/D21. It adds
+no ownership, uniqueness, non-escape, lifetime, race-freedom, Arc/Box protocol, or
+native-pointer bridge. `&T` protects a selected access path; `mut& T` does not
+exclude other aliases. Existing writable aliases can still modify the object.
 
-`Lower(filename, source) (Result, error)` returns lowered `Source` plus source
-`References` records containing an element type, permission, position and, for
-identifier uses, a symbol identity with declaration position. Integration order:
-macro expansion, enum lowering, `Prepare`, derive generation, propagation,
-`Finish`, final Go checking. `Prepare` emits compiler-only nominal permission
-types and a write-construction marker. `Finish` resolves marker scalar elements,
-restores reference syntax, and runs the full type and permission checker before
-erasing permissions. Its provisional type information is never validation;
-unresolved marker elements and all final type errors are rejected. Both staged
-APIs are compiler internals; only the frontend may supply their generated names.
-The semantic checking itself uses `go/types` objects and expression types, not a
-variable-name taint map. Distinct named pointer types represent read/write access
-only in the analysis IR; every supported consuming context is separately checked
-because Go permits assignments between named pointers and unnamed `*T`.
+`Lower(filename, source)` returns ordinary Go plus reference position, element,
+permission, and resolved symbol metadata. Frontend integration uses
+`Prepare → derive/propagation → Finish`; the staged API is unchanged. Prepare
+retains nominal reference types and write-construction markers. Finish resolves
+concrete element types, restores source reference syntax, and performs complete
+Go typing and permission checks before erasure. Provisional marker typing is
+never final validation. Compiler-reserved identifiers cannot be supplied by
+source programs.
+
+## Concrete elements and value copies
+
+Supported concrete elements include built-in scalars, local named structs,
+fixed arrays, slices, maps, and ordinary Go pointer fields. Anonymous struct,
+reference-bearing fields/containers, and generic reference element syntax remain
+outside this slice. New references may appear in direct function parameters,
+one unnamed result, and initialized locals. Read/write references preserve
+ordinary pointer identity and can be copied, rebound, returned, or captured by a
+closure whose signature does not itself carry references.
 
 ```hgo
-func create() mut& int { n := 4; return mut& n }
-func read(r &int) int { return *r }
-func increment(w mut& int) { (*w)++ }
-func example() int {
-    w := create()
-    copy := w                 // ordinary shared pointer identity, not unique ownership
-    increment(copy)
-    r := &(*w)                // explicit narrowing; also valid on an existing read ref
-    value := *r               // independent scalar copy can be modified
-    value++
-    var other &int = &value    // contextual read-reference creation
-    increment(w)              // allowed: r does not freeze the whole object
-    return read(r) + read(other)
+type State struct { N int; Values [2]int; Items []int; Counts map[string]int; P *int }
+func inspect(r &State) int {
+    v := *r
+    v.N++                       // independent value slot
+    v.Values[0]++               // independent fixed-array slot
+    items := r.Items            // inferred readonly shared-storage view
+    // items[0]++               // error
+    // v.Items[0]++             // error: copying the struct preserves shared fields
+    // w := mut& v              // error: would upgrade those shared fields
+    copied := make([]int, len(items))
+    copy(copied, items)           // independent scalar element storage
+    copied[0]++
+    return v.N + items[0] + r.Counts["x"] + *r.P
 }
 ```
 
-After checking, signatures become `*int`, `mut& n` becomes `&n`, and `&(*w)`
-becomes the corresponding ordinary Go address expression. Returned local storage
-is kept alive by Go's normal semantics; physical stack/heap placement is not a
-language promise. Copies and rebinding preserve the nominal source permission.
-Read access does not imply global immutability. Write access does not imply
-exclusive access. A scalar-only closure may capture references and its body is
-checked normally; closures with reference parameters or reference results are
-outside this slice. `go` and `defer` direct checked calls retain ordinary Go
-semantics; no race-free or join/escape claim is made.
+Read permission propagates through selectors (including promoted fields), array
+and slice indexes, map values and range keys, dereferences, and slice views.
+Copying scalars or aggregates of pure values permits writes to the independent
+copy. Copying an aggregate with shared fields preserves restrictions only on
+those fields. Addressing a restricted field cannot restore write access.
+Direct checked read-reference parameters can receive explicit read addresses;
+ordinary writable parameters cannot consume a restricted shared projection.
 
-Supported elements are predeclared bool, string, integer, floating-point and
-complex scalars, including byte/rune aliases. Explicit parameter types, one
-unnamed result, initialized local `var`, inferred locals, assignments, direct
-local calls, dereference reads/writes, increment/decrement, compound assignment,
-and range assignment destinations are checked. Independent same-name locals
-have independent identities. Discarding a reference with `_ = r` is allowed.
+## Qualification representation and finite boundaries
 
-Only an explicit read-reference expectation or dereferencing an already typed
-reference makes ordinary `&value` a read-reference constructor. A bare
-`raw := &value` stays a host Go raw pointer. A lexically bound Go variable named
-`mut`, or a selector field named `mut`, keeps its host meaning in `mut & n`.
-This compatibility rule is for the mixed prototype, not the final grammar.
-Host files without new reference syntax are returned byte-for-byte unchanged.
+Nominal pointer types encode source reference permissions during analysis. A
+structural access-path qualification supplements Go expression types: it records
+slot permission, transitive projection permission, and field/element permissions
+retained after value copies. Inferred local qualifications are keyed by
+`go/types.Object` identity; selector paths use `go/types.Selection`. There is no
+source-variable-name taint table or heap-alias inference.
 
-Errors include writing through a read reference, read-to-write promotion, and
-implicit conversion to a raw pointer or `any`. Examples:
+Local binding constraints are solved to a fixed point; a transitive `deep` qualifier
+absorbs nested qualifiers so recursive pointer assignments converge. This includes loops, branches,
+range copies, and captured locals. Rebinding does not remove a qualification:
+replacing a restricted slice or field with fresh storage can therefore still
+produce a conservative rejection later. This is an explicit finite coverage
+limit; no flow-sensitive replacement guarantee is claimed. Independent bindings
+and same-name shadowed bindings have separate identities. Explicitly typed local
+declarations retain qualifications just like inferred locals, including closures.
+Named results and global/interface range targets cannot erase qualifications.
 
-```hgo
-func bad(r &int) {
-    *r += 1                  // error: read permission
-    w := mut& *r             // error: cannot create write access from read access
-    var raw *int = r         // error: raw boundary would erase permission
-    print(r)                 // unsupported: builtin consumes reference itself
-    // print(*r) uses a copied scalar and is fine.
-}
-```
+A qualification is never silently dropped at unsupported boundaries. Restricted
+shared projections cannot be put into container/struct literals, ordinary parameters or results, interfaces/any, generic
+calls, channels, or function values. Qualified interface, channel, and function
+projections themselves are unsupported. Methods on restricted paths are rejected;
+no readonly method-effect protocol is inferred. Map comma-ok/tuple flow carrying
+restricted projections is rejected rather than losing the value's permission.
+Range destinations which cannot preserve qualification are also rejected.
 
-The following forms explicitly remain unsupported when they carry a new
-reference: compound elements/projections, nested references, structs and
-containers of references, aliases/defined reference types, methods, reference
-function values/callback signatures, generic calls, interfaces, comparisons,
-multiple-result reference signatures/tuple flow, package globals, uninitialized
-references, nil/adoption/conversions, and named reference result slots. These are
-implementation coverage limits, not borrow-risk errors. In particular the
-prototype has not decided the language's full nil invariant. Lowered Go entry
-points have no added nil/permission guard: unchecked Go callers can pass nil or
-write through their own aliases. Source checking is not a guarantee about those
-callers. It rejects an
-unsupported zero-value reference rather than silently selecting one.
-No ordinary Go call is restricted just for lacking an effect summary. A call
-with a *new reference value* requires an actual compatible checked signature;
-D11's pending native bridge is not automatically enabled. Native calls on
-independent raw pointers and copied scalars remain ordinary Go. Macro definition-site
-bindings that turn a reference-signature function into a package-level function
-value remain unsupported; direct checked calls work, and macros may consume
-dereferenced scalar values. This boundary reports the existing package/global
-reference or reference-function-value diagnostic.
+`len` and `cap` can inspect restricted containers. `copy` permits a restricted
+source only when its copied elements contain no restricted shared capability;
+its destination must be writable. `append`, `delete`, `clear`, and other consuming
+builtins cannot mutate restricted shared storage. Copying readonly pointer
+contents into a new slice remains unsupported; the checker does not claim that a
+new outer slice grants write access to the original pointer targets.
 
-The pass typechecks the whole reference-bearing host file with the Go importer
-(the frontend supplies its module-aware importer). Derive helpers are available
-before checking, and scalar reference parameters/locals compose with ordinary
-Option/Result payloads and `?`, including direct deferred calls and scalar closure
-captures. Option/Result reference payloads remain explicitly unsupported; no
-container permission protocol or borrow analysis is added. Generic type arguments
-are checked even for phantom parameters. Unavailable package export data and
-unresolved types still produce errors; the pass never ignores final type errors. Derive attribute lines are preserved, and raw strings/comments
-that resemble attributes are not stripped. Reference-bearing files currently
-reject rebinding/shadowing predeclared scalar names. Diagnostic positions map to
-original input offsets; this is not a precise macro-origin source map.
+Aliases/defined reference types, nested new references, references in generic
+arguments (including phantom arguments), multiple reference results, named
+reference result slots, reference callbacks/function values, globals, zero/nil
+reference initialization, raw-pointer adoption, and explicit permission-erasing
+conversions remain rejected. Native imported concrete types with unusual import
+aliases have not been separately qualified as supported. Pure value copies can
+cross ordinary Go boundaries; methods may return fresh objects without having
+all their results mechanically marked readonly.
 
-Run `go test ./internal/refs` with the actual Go compiler on PATH. Tests include a
-real lowered module executed with `go run -race .`; independent acceptance tests
-also run generated modules with `go test -race`. They exercise the executed
-paths, not all possible concurrent executions or a full source permission proof.
+## Mixed-host compatibility and verification
 
-Staged diagnostics currently point into the generated input after derive and
-propagation, rather than precise original source columns. Frontend combination
-tests cover permission rejection after propagation and derive availability.
+Only an explicit reference expectation or address of an already typed reference
+makes ordinary `&value` a new read-reference constructor. Bare host-Go addresses
+remain raw pointers, but addresses derived from a restricted projection retain
+that path's qualification. Lexically bound `mut` identifiers preserve normal
+bitwise-AND behavior. Files with no new reference syntax are unchanged.
+
+There is no runtime permission or nil guard on generated Go entry points;
+unverified Go callers can write through aliases. Physical allocation is decided
+by Go. All final generated declarations are typechecked, including derive and
+propagation output; unavailable imports are not ignored.
+
+Tests in `composite_test.go` cover concrete elements, value/shared copying,
+fixed-point restrictions and supported scalar copying. Frontend tests cover
+propagation/derive composition. Independent acceptance tests exercise generated
+modules with `go test -race`, writable-alias visibility, and permission-erasure
+counterexamples. These executions are not a whole-program race-freedom proof.

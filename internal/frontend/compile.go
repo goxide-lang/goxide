@@ -11,6 +11,7 @@ import (
 	"github.com/hxsf/goxide/internal/matchexpr"
 	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/refs"
+	"github.com/hxsf/goxide/internal/sourcemap"
 	"github.com/hxsf/goxide/internal/typecheck"
 	"go/ast"
 	"go/format"
@@ -24,6 +25,7 @@ import (
 )
 
 type Result struct {
+	Diagnostics             *sourcemap.Map
 	Go, SourceMap, Expanded []byte
 	Enums                   []enums.Decl
 	References              []refs.Reference
@@ -53,19 +55,22 @@ type model struct {
 	source, from string
 }
 type generator struct {
-	fs        *token.FileSet
-	file      string
-	models    map[string]model
-	enumDecls map[string]*enums.Decl
-	alias     string
-	helpers   strings.Builder
-	next      int
+	provenance *sourcemap.Map
+	fs         *token.FileSet
+	file       string
+	models     map[string]model
+	enumDecls  map[string]*enums.Decl
+	alias      string
+	helpers    strings.Builder
+	next       int
 }
 
 var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
 var renameAttr = regexp.MustCompile(`^rename\s*=\s*("(?:[^"\\]|\\.)*")$`)
 
 func Compile(filename string, source []byte) (Result, error) {
+	originalSource := append([]byte(nil), source...)
+	provenance := sourcemap.Identity(filename, source)
 	// Reject user access to reserved generated names before adding enum helpers.
 	reserveFS := token.NewFileSet()
 	reserveFile := reserveFS.AddFile(filename, -1, len(source))
@@ -98,23 +103,48 @@ func Compile(filename string, source []byte) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	provenance = provenance.Compose(source, prepared, "propagate.Prepare")
+	preparedMap := provenance
 	expanded, err := macros.ExpandWithIntrinsics(filename, prepared, []string{"__hgo_question"})
 	if err != nil {
 		return Result{}, err
 	}
+	if len(expanded.Origins) > 0 {
+		provenance = &sourcemap.Map{Source: expanded.Source, Stages: append(provenance.Stages, "macros.Expand")}
+		for _, o := range expanded.Origins {
+			var origin *sourcemap.Span
+			if old := preparedMap.Lookup(o.SourceStart); old != nil && o.SourceEnd > o.SourceStart {
+				origin = old.Origin
+			}
+			kind := "source"
+			stack := o.Stack
+			if len(stack) > 0 {
+				kind = "macro"
+			}
+			if origin == nil {
+				kind = "generated/unmapped"
+				stack = nil
+			}
+			provenance.Attach(o.OutputStart, o.OutputEnd, origin, stack, kind)
+		}
+	}
 	source, err = matchexpr.Lower(filename, expanded.Source)
 	if err != nil {
-		return Result{}, err
+		return Result{}, stageError("matchexpr.Lower", err)
 	}
+	provenance = provenance.Compose(expanded.Source, source, "matchexpr.Lower")
+	beforeEnums := source
 	enumResult, err := enums.Lower(filename, source)
 	if err != nil {
-		return Result{}, err
+		return Result{}, stageError("enums.Lower", err)
 	}
+	provenance = provenance.Compose(beforeEnums, enumResult.Source, "enums.Lower")
 	source = enumResult.Source
 	refResult, err := refs.Prepare(filename, source)
 	if err != nil {
-		return Result{}, err
+		return Result{}, stageError("refs.Prepare", err)
 	}
+	provenance = provenance.Compose(source, refResult.Source, "refs.Prepare")
 	source = refResult.Source
 	fail := func(line int, msg string) (Result, error) {
 		return Result{}, fmt.Errorf("%s:%d: %s", filename, line, msg)
@@ -209,12 +239,30 @@ func Compile(filename string, source []byte) (Result, error) {
 	if pending.derive != nil || pending.hasRename || pending.skip || pending.def || pending.deny || pending.hasMessage || pending.source || pending.from {
 		return fail(len(lines), "attribute has no target")
 	}
+	// Attribute erasure and struct sugar preserve known unchanged line slices.
+	parsedSource := []byte(strings.Join(lines, "\n"))
+	parsedMap := &sourcemap.Map{Source: parsedSource, Stages: append(provenance.Stages, "attributes")}
+	oldOffset, newOffset := 0, 0
+	for i, oldLine := range strings.Split(string(source), "\n") {
+		if oldLine == lines[i] {
+			parsedMap.Segments = append(parsedMap.Segments, provenance.Copy(oldOffset, oldOffset+len(oldLine), newOffset)...)
+		} else if strings.HasPrefix(strings.TrimSpace(oldLine), "struct ") {
+			// The field body following the opening brace is copied verbatim.
+			a, b := strings.Index(oldLine, "{"), strings.Index(lines[i], "{")
+			if a >= 0 && b >= 0 {
+				parsedMap.Segments = append(parsedMap.Segments, provenance.Copy(oldOffset+a, oldOffset+len(oldLine), newOffset+b)...)
+			}
+		}
+		oldOffset += len(oldLine) + 1
+		newOffset += len(lines[i]) + 1
+	}
+	provenance = parsedMap
 	fs := token.NewFileSet()
 	f, e := parser.ParseFile(fs, filename, strings.Join(lines, "\n"), parser.ParseComments)
 	if e != nil {
 		return Result{}, e
 	}
-	g := generator{fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
+	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
 		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && !strings.HasPrefix(id.Name, "__hgo_ref_") && id.Name != "__hgo_question" {
@@ -426,7 +474,7 @@ func Compile(filename string, source []byte) (Result, error) {
 			if e != nil {
 				return fail(m.line, e.Error())
 			}
-			g.helpers.WriteString("\n//line " + filename + ":" + strconv.Itoa(m.line) + "\n" + code)
+			g.helpers.WriteString("\n" + code)
 			for k, v := range im {
 				imports[k] = v
 			}
@@ -437,6 +485,7 @@ func Compile(filename string, source []byte) (Result, error) {
 		return Result{}, e
 	}
 	// Insert a distinct import declaration after package; other imports remain intact.
+	provenance = provenance.Format(parsedSource, original.Bytes(), "format.original")
 	text := original.String()
 	idx := strings.Index(text, "\n")
 	var ib strings.Builder
@@ -448,11 +497,20 @@ func Compile(filename string, source []byte) (Result, error) {
 	for _, k := range keys {
 		fmt.Fprintf(&ib, "\nimport %s %q\n", k, imports[k])
 	}
+	joinedMap := &sourcemap.Map{Stages: append(provenance.Stages, "derive.generate")}
+	joinedMap.Segments = append(joinedMap.Segments, provenance.Copy(0, idx+1, 0)...)
+	joinedMap.Segments = append(joinedMap.Segments, provenance.Copy(idx+1, len(text), idx+1+ib.Len())...)
+	generatedStart := len(text) + ib.Len()
 	text = text[:idx+1] + ib.String() + text[idx+1:] + g.helpers.String()
+
+	joinedMap.Source = []byte(text)
+	provenance = joinedMap
+	attachDeriveOrigins(provenance, []byte(text), ordered, g.provenance, fs, generatedStart)
 	out, e := format.Source([]byte(text))
 	if e != nil {
 		return Result{}, fmt.Errorf("internal expansion error: %w\n%s", e, text)
 	}
+	provenance = provenance.Format([]byte(text), out, "format.generated")
 	needsTypecheck := bytes.Contains(out, []byte("__hgo_match_expr_"))
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
@@ -465,20 +523,32 @@ func Compile(filename string, source []byte) (Result, error) {
 			}
 		}
 		imp := typecheck.NewImporter(filename)
+		beforePropagation := out
 		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp})
 		if e != nil {
-			return Result{}, e
+			return Result{}, stageError("propagate.Lower", e)
 		}
+		provenance = provenance.Compose(beforePropagation, out, "propagate.Lower")
+		beforeReferences := out
 		refResult, e = refs.Finish(filename, out, imp)
 		if e != nil {
-			return Result{}, e
+			return Result{}, stageError("refs.Finish", e)
 		}
+		provenance = provenance.Compose(beforeReferences, refResult.Source, "refs.Finish")
 		out = refResult.Source
 		if e = typecheck.Check(filename, out, imp); e != nil {
-			return Result{}, e
+			return Result{}, stageError("typecheck.Check", e)
 		}
 	}
 	sm := []map[string]any{}
+	deriveFields := []map[string]any{}
+	for _, m := range ordered {
+		for _, f := range m.fields {
+			p := fs.Position(f.typ.Pos())
+			origin := g.provenance.SpanFor(p.Offset, fs.Position(f.typ.End()).Offset)
+			deriveFields = append(deriveFields, map[string]any{"model": m.name, "field": f.name, "origin": origin})
+		}
+	}
 	for _, m := range ordered {
 		for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone"} {
 			if m.attrs.derive[kind] {
@@ -491,8 +561,8 @@ func Compile(filename string, source []byte) (Result, error) {
 			sm = append(sm, map[string]any{"source": filename, "line": m.line, "helper": m.name + ".Error", "generatedByteOffset": bytes.Index(out, []byte("func (v "+m.name+") Error("))})
 		}
 	}
-	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "macroTokens": expanded.Origins, "references": refResult.References, "note": "derive locations use expanded input; macro token origins map pre-format expansion offsets"}, "", "  ")
-	return Result{Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References}, nil
+	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "deriveFields": deriveFields, "macroTokens": expanded.Origins, "macroTokenInputStage": "propagate.Prepare output", "references": refResult.References, "diagnostics": provenance, "sourceBytes": len(originalSource), "note": "diagnostics uses final Go byte offsets; generated/unmapped regions have no proven source; macroTokens uses macro expansion offsets"}, "", "  ")
+	return Result{Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer
@@ -500,8 +570,14 @@ func (g *generator) typeName(t ast.Expr) string {
 	return b.String()
 }
 func (g *generator) err(t ast.Expr, msg string) error {
-	return fmt.Errorf("%s:%d: %s", g.file, g.fs.Position(t.Pos()).Line, msg)
+	p := g.fs.Position(t.Pos())
+	e := &sourcemap.Error{Message: msg, Generated: p, Origin: g.provenance.SpanFor(p.Offset, g.fs.Position(t.End()).Offset)}
+	if s := g.provenance.Lookup(p.Offset); s != nil {
+		e.Stack = s.Stack
+	}
+	return e
 }
+
 func (g *generator) emitModel(m model) error {
 	if m.enum != nil {
 		return g.emitEnum(m)
@@ -513,8 +589,8 @@ func (g *generator) emitModel(m model) error {
 			count++
 		}
 	}
-	fmt.Fprintf(&ser, "\n//line %s:%d\nfunc Serialize%s(s %s.Serializer,v *%s) error { if v==nil {return %s.NewError(\"Type\",\"nil struct pointer\")};w,e:=s.Struct(%q,%d);if e!=nil{return e};", g.file, m.line, m.name, g.alias, m.name, g.alias, m.name, count)
-	fmt.Fprintf(&des, "\n//line %s:%d\nfunc Deserialize%s(d %s.Deserializer)(%s,error){var v %s;", g.file, m.line, m.name, g.alias, m.name, m.name)
+	fmt.Fprintf(&ser, "\nfunc Serialize%s(s %s.Serializer,v *%s) error { if v==nil {return %s.NewError(\"Type\",\"nil struct pointer\")};w,e:=s.Struct(%q,%d);if e!=nil{return e};", m.name, g.alias, m.name, g.alias, m.name, count)
+	fmt.Fprintf(&des, "\nfunc Deserialize%s(d %s.Deserializer)(%s,error){var v %s;", m.name, g.alias, m.name, m.name)
 	for i, f := range m.fields {
 		if !f.skip {
 			fmt.Fprintf(&des, "var seen%d bool;", i)
@@ -724,8 +800,8 @@ func (g *generator) emitEnum(m model) error {
 	a := g.alias
 	d := m.enum
 	var w, r strings.Builder
-	fmt.Fprintf(&w, "\n//line %s:%d\nfunc Serialize%s(s %s.Serializer,v *%s)error{if v==nil{return %s.NewError(%s.Type,\"nil enum pointer\")};switch x:=(*v).(type){", g.file, m.line, m.name, a, m.name, a, a)
-	fmt.Fprintf(&r, "\n//line %s:%d\nfunc Deserialize%s(d %s.Deserializer)(v %s,e error){e=d.Enum(%q,[]string{", g.file, m.line, m.name, a, m.name, m.name)
+	fmt.Fprintf(&w, "\nfunc Serialize%s(s %s.Serializer,v *%s)error{if v==nil{return %s.NewError(%s.Type,\"nil enum pointer\")};switch x:=(*v).(type){", m.name, a, m.name, a, a)
+	fmt.Fprintf(&r, "\nfunc Deserialize%s(d %s.Deserializer)(v %s,e error){e=d.Enum(%q,[]string{", m.name, a, m.name, m.name)
 	for _, v := range d.Variants {
 		fmt.Fprintf(&r, "%q,", v.Name)
 	}
@@ -756,4 +832,10 @@ func (g *generator) emitEnum(m model) error {
 		g.helpers.WriteString(r.String())
 	}
 	return nil
+}
+
+// Legacy passes still report coordinates in their own transformed buffers.
+// Preserve their errors, but never present those coordinates as original spans.
+func stageError(stage string, err error) error {
+	return fmt.Errorf("%s [generated/unmapped; intermediate coordinates]: %w", stage, err)
 }

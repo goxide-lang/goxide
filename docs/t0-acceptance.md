@@ -1,6 +1,6 @@
 # T0 子能力验收矩阵
 
-核对基准：`86469bc`，并单列本轮新增组合验收。本文依据实现和测试源码，不把设计夹具或 README 的描述当作前端实现证明。当前是具体类型、单文件、Go 宿主语法的有限原型；**整项 T0、M1/M3/M4/M6、核心设计和 LSP 均未完成**。
+核对基准：`0f48259369d0940d298b76d3fc657dd6d0cb28d9`，并单列本轮新增组合验收。本文依据实现和测试源码，不把设计夹具或 README 的描述当作前端实现证明。当前是具体类型、单文件、Go 宿主语法的有限原型；**整项 T0、M1/M3/M4/M6、核心设计和 LSP 均未完成**。
 
 设计优先级以[决策登记](design/decisions.md) D21 为准：宏、enum/match、只读/可写分离是用户必需方向；D22 约束 Option/Result 专用 `?` 与唯一显式一步 From，D23 要求 serde 核心与格式分层。优先级不意味着全部语法或 ABI 已冻结。后续工作按 [ROADMAP](../ROADMAP.md) 依赖推进，不以完整 trait 或长期风险分析阻塞已有子集。
 
@@ -36,7 +36,8 @@
 | `?` 错误先赋值兼容，再唯一显式单步转换；拒绝缺失/歧义/两跳 | 完整（具体子能力） | 用户必需 D22；前端仅注册上述 Error 派生，不是一般转换求解器 | [propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationFromRace`（`TestOneStepFromAndAssignableFirst`）；[lower_test.go](../internal/propagate/lower_test.go)：`TestFromAndRejections`；[propagation_test.go](../internal/frontend/propagation_test.go)：`TestPropagationAliasIdentity`、`TestPropagationMatchCompositionRace` |
 | 标量 `&T`/`mut& T` 参数、单返回、局部、复制/重绑定、取址/解引用、显式收窄 | 有限 | 用户必需 D08/D21；当前权限检查不是独占或无竞争保证 | [refs_test.go](../tests/acceptance/refs_test.go)：`TestReferenceGeneratedModuleRace`（`TestReferenceLifetimeIdentity`）、`TestReferenceLegacyGoUntouched`；[lower_test.go](../internal/refs/lower_test.go)：`TestScalarEndToEnd`、`TestReadAddress`、`TestNestedReborrowCannotUpgrade` |
 | 标量只读写入及权限擦除拒绝：range、原生指针/接口/容器/泛型及不支持的引用函数签名 | 完整（具体子能力） | 用户必需基础类型规则；不以此宣称长期借用风险分析已做 | [refs_test.go](../tests/acceptance/refs_test.go)：`TestReferenceConsumerRejections`、`TestReferenceFrontendRejectsEscapes`；[lower_test.go](../internal/refs/lower_test.go)：`TestReject`、`TestExtraReject` |
-| 复合类型投影权限、引用容器、引用函数值/回调、原生桥接、Arc/AsPtr | 未做 | 投影是用户必需方向，建议高优先级下一步；完整共享包装/桥接设计可分期 | `TestReferenceConsumerRejections/compound-element` 仅证明拒绝，不证明投影实现；其他拒绝见同文件。旧 `tests/design` Go 夹具不能替代前端实现 |
+| 具体 struct/array/slice/map/pointer 只读投影；独立值副本可写，共享字段保留只读资格 | 有限，所测基础规则完整 | 用户必需 D08/D21；按词法符号固定点传播，无长期别名分析；fresh 重绑定不能消去已有资格 | [composite_permissions_test.go](../tests/acceptance/composite_permissions_test.go)：`TestCompositePermissionValuesAndAliasesRace`、`TestCompositePermissionConsumerRejections`、`TestCompositePermissionGenericCheckerBoundary`；[composite_test.go](../internal/refs/composite_test.go)：`TestCompositeRecursiveQualificationConverges`、`TestCompositeHiddenBoundaryRejections` |
+| 引用容器、引用函数值/回调、原生桥接、Arc/AsPtr | 未做 | 完整共享包装/桥接可分期；接口/函数/泛型/重取引用不得擦除只读 | [refs_test.go](../tests/acceptance/refs_test.go)：`TestReferenceConsumerRejections`；复合投影接受测试另验证共享路径不得通过这些边界逃逸 |
 | Default/print/println 内建协议、跨包宏、用户过程宏、完整泛型 derive、YAML/格式 Value、完整 LSP | 未做 | Default/print/println 是 D14 方向仍有缺口；其余可后置且分别设计，不能一并标完成 | 当前无对应成功前端验收；泛型 derive 的明确拒绝见 `TestDiagnosticLocationsAndUnsupported` 和 `TestMacroAndCloneExplicitRejections` |
 
 ## 组合矩阵
@@ -53,21 +54,24 @@
 
 ## 诊断与 source-map 保真范围
 
-状态：**有限，用户必需验收项尚有缺口**。实现依据 [compile.go](../internal/frontend/compile.go)、[macros.go](../internal/macros/macros.go) 和 [refs/lower.go](../internal/refs/lower.go)。
+状态：**有限，跨阶段来源已接入，未知区域明确 unmapped**。没有完整逐 token 双向映射或 LSP。实现见 [sourcemap](../internal/sourcemap/map.go)、[前端来源](../internal/frontend/source_origins.go)；独立证据见 [source_mapping_test.go](../tests/acceptance/source_mapping_test.go)。
 
-| 已有产物 | 实際保真范围 | 测试及未覆盖之处 |
+| 产物 | 已验证契约 | 精确边界 |
 | --- | --- | --- |
-| `derives` | Serialize/Deserialize/Debug/Clone helper 和 Error 方法的 `source`、类型 `line`、最终生成 Go 中函数起点 `generatedByteOffset`；行号来自展开/中间输入 | [compile_test.go](../internal/frontend/compile_test.go) `TestExtrasAndMap` 原有断言仅检查 JSON 非空；`TestT0CombinationSourceMetadata` 新断言起点确实指向最终 Go 的对应 helper。不是 helper 结束区间、字段逐 token 映射。From/Unwrap 和匿名 codec helper 未逐一记录 |
-| `macroTokens` | 宏展开阶段的 OutputStart/OutputEnd、来源文件/行/列和 immediate invocation；偏移针对格式化前的展开缓冲区 | [macros_test.go](../internal/macros/macros_test.go) `TestPreserveAttributeAndOrigins` 验证捕获 token `7` 的来源行与展开片段；`TestMacroRawLiteralCRLFRace` 验证运行值，不证明最终 Go 偏移。组合测试另检查来源文件及实际宏调用行，但不把展开偏移当作最终 Go 偏移。不是完整宏展开栈 |
-| `references` | 源引用的 Position、Type（元素及 read/write）、Symbol 元数据；在前端调用检查器所接收的中间输入上定位 | [refs_test.go](../tests/acceptance/refs_test.go) `TestReferenceGeneratedModuleRace` 检查元数据存在；[t0_combination_test.go](../tests/acceptance/t0_combination_test.go) `TestT0CombinationSourceMetadata` 另检查组合产物中 read/write、元素类型和多个符号身份保留；未建立所有引用操作至最终 Go 的连续区间，不能普遍保证原始列号 |
-| 诊断与 CLI 文件 | 部分拒绝带源文件/位置，CLI 输出 Go 和 JSON | [compile_test.go](../internal/frontend/compile_test.go) `TestDiagnosticLocationsAndUnsupported`；[macros_test.go](../tests/acceptance/macros_test.go) `TestMacroAndCloneExplicitRejections` 对无匹配规则检查精确调用行列；[main_test.go](../cmd/hgo/main_test.go) `TestTranspileArtifacts` 原有断言仅检查 helper/文件名存在 |
+| `diagnostics` | 最终 Go 字节范围；仅凭显式宏 token 来源、已知复制范围、完整 token 序列不变的格式化传递；重复同值 token 不以文本搜索猜来源 | changed pass 未提供显式来源则整个结果 unmapped；enum、引用、传播的实质改写会丢弃旧精确来源。格式化仅在去掉括号后的完整顺序流一致时传递非括号 token |
+| `macroTokens` | 来源字节范围、定义和调用范围、完整嵌套展开栈；重复字面量及多调用最终 Go 位置验收 | OutputStart/End 属于宏展开缓冲区；输入阶段明确记录为 propagate.Prepare output，该阶段实质改写后不冒充原始来源 |
+| `deriveFields` 和 derive 诊断 | 具体字段类型的连续原始字节范围；生成 helper 的名称、具有正确词法接收者身份的字段 selector 附因果来源 | 未知字段来源为 null；生成 API、同名用户 helper 不冒充用户字段；未知 helper 语法保持 unmapped。旧 `derives.line` 仍为中间输入位置 |
+| CLI Go 失败 | 真实 Go stderr 原样保留，再附可证明的原始文件/行/列和宏栈；未知 `main.go` 位置补 generated/unmapped | 只处理当前生成 main.go，不篡改其他文件；旧前端阶段错误明确标注 intermediate coordinates/generated-unmapped，未宣称它们已有原始列映射 |
+| `references` / `Expanded` | 权限、元素类型、符号身份保留；Expanded 仍与最终 Go 相同 | references 的位置仍对应引用阶段输入；不能拿 Expanded 解释宏阶段偏移 |
 
-`Expanded` 当前与最终 `Go` 相同，不能用它解释 `macroTokens` 的所有输出偏移。`//line` 只提供部分 helper 来源提示；多次 Prepare/宏/enum/match/引用/传播 lowering 的原始位置尚未统一复合。没有最终 Go 到原 `.hgo` 的完整逐 token/逐字段双向映射，也没有 LSP 跳转/重命名验收。本轮已补现有 JSON 字段的 helper 起点、宏调用行和引用权限/身份契约断言；下一步仍需跨阶段映射，不能将这些局部断言称为完整映射。
+独立验收包含 `TestSourceMappingRepeatedTokensNestedExpansion`、`TestSourceMappingChangedRepeatedTokensStayUnmapped`、`TestSourceMappingDeriveFieldDiagnosticSpan`、`TestSourceMappingDeriveFieldMetadata`、`TestSourceMappingUserHelperNameIsNotGeneratedProvenance`、`TestSourceMappingRealCompilerCLI`、`TestSourceMappingRealCompilerGeneratedHelperStaysUnmapped`；前端另验收 `TestSourceOriginsNestedRealGoError`、`TestSourceOriginsSerializerMethodIsNotField`、`TestTransformedPhaseErrorIsExplicitlyUnmapped`。实际 Go 编译失败是证据，不是拼造一条诊断当作集成验收。
+
+只读缓存示例见 [readonly_cache.hgo](../examples/prototype/readonly_cache.hgo)，`TestReadonlyCacheApplicationRace` 直接读取该文件，对实际生成模块启用 race，检查独立快照和可写别名更新的可见性。
 
 ## 下一优先级与可后置项
 
 1. **本轮先闭合组合**：应用运行、失败传播、错误链、原生 Go 部分成功/typed-nil、宏求值、match 分支、标量只读权限与负例均须对生成产物验收；新增应用成功不取消已有拒绝边界。
-2. **T0 剩余基础能力**：按真实用例推进复合类型只读/可写投影及数值/string 常量 enum 的 raw/未知值行为；同时补齐跨阶段诊断来源。具体语法/ABI 未冻结时保持候选状态，不能由测试代替设计确认。
+2. **T0 剩余基础能力**：继续扩展已接入的有限复合投影，推进数值/string 常量 enum 的 raw/未知值行为；补充目前 unmapped 的跨阶段诊断来源。具体语法/ABI 未冻结时保持候选状态，不能由测试代替设计确认。
 3. **扩展而非整体完成声明**：表达式上下文、跨包身份和一般泛型逐项排期。完整 trait、跨包宏、用户过程宏、泛型 derive、格式 Value/YAML、完整 LSP 和整套共享包装可后置，不能因未做而阻塞已授权的有限闭环。
 4. **D20 长期独立**：别名/借用风险静态分析不属于 MVP 前置条件；race 只检查实际执行，不证明静态内存/并发安全。原生 Go 可构造 nil/别名的公开边界仍须如实说明。
 
@@ -82,3 +86,6 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 ```
 
 上述定向命令实际通过六个包（运行开始时的工作树）；随后新增/修改的组合测试须单独复验，不能自动包含在该记录内。新增组合及配置应用另以 `go test -race -count=1 ./tests/acceptance -run 'TestT0|TestConfigPipeline'` 实际通过（5.964s），生成模块显式启用 race。全套包/宿主顶层测试/子测试与生成模块数量由本轮总验收单独统计，不复制 IMPLEMENTATION 历史轮次数字。`scripts/check_design.py` 仅证明设计文档/Go 夹具的可复现性，不计为新语言特性完成证据。
+
+
+本轮复合投影/映射增量最终验证：全套 race JSON **14 包、134 宿主顶层测试、234 子测试**通过；独立生成模块 **21 个成功模块、56 测试、41 子测试**显式启用 race，另 1 模块预期 Go 编译拒绝。`go vet`、完整设计检查 13 Go 命令、只读缓存 CLI/转译产物 race、配置应用成功/失败均通过。非作者审查发现的递归收敛、命名结果/range/括号目标逃逸、闭包 var 过拒绝和阶段坐标问题均已修复复验；详细证据与剩余边界见 [当前实现记录](../IMPLEMENTATION.md)。

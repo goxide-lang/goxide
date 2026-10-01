@@ -172,9 +172,13 @@ func run(args []string, out, stderr io.Writer) error {
 	cmd.Dir = tmp
 	cmd.Env = localEnv()
 	cmd.Stdout = out
-	cmd.Stderr = stderr
+	var compilerErrors bytes.Buffer
+	cmd.Stderr = io.MultiWriter(stderr, &compilerErrors)
 	cmd.Stdin = os.Stdin
 	if err = cmd.Run(); err != nil {
+		if result.Diagnostics != nil {
+			fmt.Fprint(stderr, result.Diagnostics.Diagnostics(result.Go, compilerErrors.String()))
+		}
 		return fmt.Errorf("generated Go %s: %w", mode, err)
 	}
 	return nil

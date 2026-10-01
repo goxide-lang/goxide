@@ -42,7 +42,7 @@ func TestReject(t *testing.T) {
 		"any": "func f(r &int){var x any=r;_=x}", "cast": "func f(r &int){p:=(*int)(r);_=p}", "any-cast": "func f(r &int){_=any(r)}",
 		"reborrow-write": "func f(r &int){w:=mut&(*r);*w=1}", "readonly-reborrow": "func f(r &int){p:=&(*r);*p=1}",
 		"function-value": "func f(r &int)int{return *r};func g(){_=f}", "slice": "func f(r &int){_= []any{r}}", "nil": "func f(){var r &int=nil;_=r}", "zero": "func f(){var r &int;_=r}",
-		"named-return": "func f()(r &int){return}", "struct": "type S struct {r &int}", "array-element": "func f(r &[2]int){}", "callback": "func f(g func(&int)){}",
+		"named-return": "func f()(r &int){return}", "struct": "type S struct {r &int}", "callback": "func f(g func(&int)){}",
 		"multi-return": "func f(r &int)(&int,int){return r,1}", "vararg": "func sink(...any){};func f(r &int){sink(r)}", "pointer-slot": "func f(r &int){_= &r}",
 		"raw-adopt": "func f(p *int)&int{return p}", "write-adopt": "func f(){x:=1;var p mut& int=&x;_=p}",
 	}

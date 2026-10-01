@@ -17,7 +17,7 @@ func Prepare(filename string, source []byte) (Result, error) {
 }
 
 // Finish checks the complete, generated program before erasing permissions.
-// The intermediate generic write constructor is resolved back to scalar syntax;
+// The intermediate generic write constructor is resolved back to concrete reference syntax;
 // Lower then performs complete type checking and validates all consuming sites.
 // Provisional typing here is used only to resolve constructor element types.
 func Finish(filename string, source []byte, imp types.Importer) (Result, error) {
@@ -67,9 +67,8 @@ func Finish(filename string, source []byte, imp types.Importer) (Result, error) 
 						failure = fmt.Errorf("%s: refs: unresolved write reference element", fs.Position(n.Pos()))
 						return false
 					}
-					b, ok := p.Elem().(*types.Basic)
-					if !ok || scalar(b.Name()) == "" {
-						failure = fmt.Errorf("%s: refs: unsupported reference element; built-in scalar required", fs.Position(n.Pos()))
+					if element(p.Elem()) == "" {
+						failure = fmt.Errorf("%s: refs: unsupported reference element", fs.Position(n.Pos()))
 						return false
 					}
 					es = append(es, edit{offset(n.Pos()), offset(n.Args[0].Pos()), "(mut"}, edit{offset(n.Args[0].End()), offset(n.End()), ")"})
@@ -77,12 +76,11 @@ func Finish(filename string, source []byte, imp types.Importer) (Result, error) 
 				}
 			case *ast.IndexExpr:
 				if id, ok := n.X.(*ast.Ident); ok && id.Name == "__hgo_ref_write" {
-					b, ok := info.TypeOf(n.Index).(*types.Basic)
-					if !ok || scalar(b.Name()) == "" {
+					if info.TypeOf(n.Index) == nil {
 						failure = fmt.Errorf("%s: refs: unsupported reference element", fs.Position(n.Pos()))
 						return false
 					}
-					es = append(es, edit{offset(n.Pos()), offset(n.End()), "mut& " + scalar(b.Name())})
+					es = append(es, edit{offset(n.Pos()), offset(n.End()), "mut& " + element(info.TypeOf(n.Index))})
 					return false
 				}
 			case *ast.Ident:

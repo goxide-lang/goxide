@@ -1,0 +1,12 @@
+package logkit
+
+macro_rules! emit_inner {
+    ($message:expr, $($field:expr),*) => { Emit($message, $($field),*) };
+}
+pub macro_rules! event_if {
+    ($enabled:expr, $message:expr, $($field:expr),*) => {
+        if $enabled { emit_inner!($message, $($field),*) }
+    };
+}
+macro_rules! take_inner { ($value:expr) => { $value? }; }
+pub macro_rules! take { ($value:expr) => { take_inner!($value) }; }

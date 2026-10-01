@@ -1,0 +1,42 @@
+package main
+import (
+    "fmt"
+    "log/slog"
+    "os"
+    logs "macros.example/app/logkit"
+    different "macros.example/app/other"
+    "github.com/hxsf/goxide/serdejson"
+)
+
+#[derive(Error)]
+pub enum AppError {
+    #[error("request failed")]
+    #[from]
+    Input(error),
+}
+func process(enabled bool,fail bool) Result[int,AppError] {
+    n:=logs.take!(logs.Fetch(fail))
+    logs.event_if!(enabled,"request", "request_id",42,"workers",n)
+    return Result[int,AppError]::Ok(n)
+}
+func unpack(value Result[int,AppError]) (int,error) {
+    match value { Result[int,AppError]::Ok(n) => { return n,nil }, Result[int,AppError]::Err(e) => { return 0,e }, }
+    panic("unreachable")
+}
+func describe(value logs.Mode) string {
+    return match value { logs.Mode::Idle => "idle", logs.Mode::Workers(_) => "workers", }
+}
+func emit(enabled func()bool,message func()string,field func()int) {
+    Emit:=func(string,...any){panic("captured caller helper")}
+    _=Emit
+    logs.event_if!(enabled(),message(),"request_id",field())
+}
+func otherMacro(n int) int { return different.event_if!(n) }
+func main() {
+    slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout,nil)))
+    mode,err:=serdejson.Unmarshal([]byte(`{"Workers":4}`),logs.DeserializeMode)
+    if err!=nil{panic(err)}
+    copied:=logs.CloneMode(&mode)
+    n,err:=unpack(process(true,false))
+    fmt.Println(describe(copied),n,err,otherMacro(2))
+}

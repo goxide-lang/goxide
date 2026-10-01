@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
 
@@ -197,6 +198,7 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 		result.Target = "."
 	}
 	metadata := map[string]PackageResult{}
+	buildBudget := &macros.Budget{}
 	state := map[string]int{}
 	var compileDir func(string) error
 	compileDir = func(dir string) error {
@@ -233,7 +235,7 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 		if dir != "." {
 			pkgPath += "/" + filepath.ToSlash(dir)
 		}
-		p, e := preparePackageImports(packages[dir], metadata)
+		p, e := preparePackageContext(pkgPath, packages[dir], metadata, typecheck.NewImporter(filepath.Join(destination, dir, "package.go")), buildBudget)
 		if e != nil {
 			return e
 		}

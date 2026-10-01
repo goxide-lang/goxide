@@ -19,6 +19,10 @@ type Span struct {
 type Expansion struct {
 	Macro                string
 	Definition, Callsite Span
+	// Package definitions may use original file coordinates while caller
+	// tokens still refer to the propagation preparation buffer.
+	DefinitionOriginal bool `json:",omitempty"`
+	CallsiteOriginal   bool `json:",omitempty"`
 }
 type Segment struct {
 	Start, End int

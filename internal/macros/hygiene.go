@@ -56,7 +56,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 		switch n := n.(type) {
 		case *ast.SelectorExpr:
 			ignored[n.Sel] = true
-			if x, ok := n.X.(*ast.Ident); ok && x.Obj == nil && e.imports[x.Name] {
+			if x, ok := n.X.(*ast.Ident); ok && x.Obj == nil && e.isImport(x.Name) {
 				// Only named package function calls are supported: no imported global
 				// snapshots, constants, types, generic indexing or arbitrary selector chains.
 				callable := false
@@ -71,6 +71,9 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 					return false
 				}
 				path := e.importPaths[x.Name]
+				if e.active != nil {
+					path = e.active.imports[x.Name]
+				}
 				pkg := e.importCache[path]
 				if pkg == nil {
 					var err error
@@ -82,7 +85,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 					e.importCache[path] = pkg
 				}
 				fn, ok := pkg.Scope().Lookup(n.Sel.Name).(*types.Func)
-				if !ok {
+				if !ok || !fn.Exported() {
 					problem = at(ts[0], "imported template selector must name a function, not a mutable function variable")
 					return false
 				}
@@ -91,6 +94,9 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 					return false
 				}
 				key := x.Name + "." + n.Sel.Name
+				if e.pkg != nil {
+					key = e.runtimePath(path) + "." + n.Sel.Name
+				}
 				alias := e.alias(key)
 				a, ok1 := index(x.Pos())
 				b, ok2 := index(n.Sel.Pos())
@@ -144,8 +150,17 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			ts[i].text = bindings[id.Obj]
 			return true
 		}
-		if e.funcs[id.Name] {
-			ts[i].text = e.alias(id.Name)
+		if e.isFunction(id.Name) {
+			key := id.Name
+			if e.pkg != nil {
+				var err error
+				key, err = e.runtimeFunction(id.Name)
+				if err != nil {
+					problem = at(ts[i], err.Error())
+					return true
+				}
+			}
+			ts[i].text = e.alias(key)
 			return true
 		}
 		switch id.Name {
@@ -166,4 +181,17 @@ func (e *engine) alias(key string) string {
 		e.aliases[key] = e.fresh()
 	}
 	return e.aliases[key]
+}
+
+func (e *engine) isImport(name string) bool {
+	if e.active != nil {
+		return e.active.imports[name] != ""
+	}
+	return e.imports[name]
+}
+func (e *engine) isFunction(name string) bool {
+	if e.active != nil {
+		return e.active.pkg.funcs[name]
+	}
+	return e.funcs[name]
 }

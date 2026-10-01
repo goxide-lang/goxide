@@ -21,7 +21,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 
 ## 实际支持
 
-- 声明宏：本文件 `macro_rules!`，有限 `expr/ident/tt` 捕获、单层重复和嵌套调用。模板局部变量按 AST 身份改名，支持的自由函数按定义点绑定；不插入隐藏 IIFE。模板出现两次的参数仍求值两次，不自动缓存。详见 [宏限制](internal/macros/README.md)。
+- 声明宏：单文件 `macro_rules!`，以及同 module 源码包 `pub macro_rules!` / `alias.name!`，有限 `expr/ident/tt` 捕获、单层重复和嵌套调用。模板局部变量按 AST 身份改名，支持的自由函数按定义点绑定；不插入隐藏 IIFE。模板出现两次的参数仍求值两次，不自动缓存。详见 [宏限制](internal/macros/README.md)。
 - 内建 `Serialize/Deserialize`：具体命名 struct，标量、嵌套本地 struct、数组、slice、string-key map、可空 Go `*T`。`rename/default/skip/deny_unknown_fields`；default 是明确的 Go 零值子集，不是完整 Default trait。`*T` 仅是原型 Go 宿主语法，不代表 hgo 引用/Ptr 桥接已经定案。
 - 核心 `serde`：Serializer/Deserializer、Visitor 与容器访问协议、结构化错误及 cause；生成静态 helper，不采用反射 struct 编解码，不强制 Value 树。
 - 独立 `serdejson`：[支持范围与限制](serdejson/README.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议及本地 enum 的 Serialize/Deserialize 派生支持 unit/newtype（含有限 struct/container 单载荷）。
@@ -41,7 +41,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 源码映射是原型：derive 记录 helper 范围及展开输入的类型来源；宏 token 保存格式化前的输出偏移及调用位置。
 它不是最终 Go 文件逐 token、逐字段的完整映射，也不是 LSP。
 
-未完成：泛型 derive、跨包宏、用户过程宏、完整 trait、用户泛型/跨包 enum、完整 Option/Result/引用前端、YAML、格式 Value、借用解码和原生 JSON codec 自动适配。
+未完成：泛型 derive、外部预编译宏 ABI、用户过程宏、完整 trait、用户泛型/跨包 enum、完整 Option/Result/引用前端、YAML、格式 Value、借用解码和原生 JSON codec 自动适配。
 别名/借用风险分析继续独立于 MVP；本原型不作静态内存或并发安全保证。
 
 ## 本轮验收记录
@@ -257,7 +257,7 @@ go build -o /tmp/hgo-packages-app .
 
 公开构造函数不意味着任意 Go 输入已被全图验证：Go 调用者仍可传入 nil/别名，已有 match、Clone/Debug、serde 和显式 Validate 的使用点规则保持。私有 struct 字段不会因为序列化 helper 自动变成可从外包访问的 Go 字段；wire 字段是否出现仍按派生规则，不应把 Go 可见性当作数据脱敏。
 
-明确边界：目录模式暂不支持新引用语法、`.hgo` 测试文件、`.hgo` 平台后缀或构建条件；使用普通 Go 测试，native Go 文件由 Go 构建选择处理。尚未承诺完整 cgo、go.work 或自定义构建配置支持。宏定义仍局限于文件，跨文件/跨包宏不自动导出。该阶段尚未支持跨包 qualified enum match 和导入泛型 Result 的直接 `?`；后续阶段实现如下。从导入 selector 类型直接派生仍未支持。不能把这个闭环说成所有单文件语法已经可以跨包使用。跨包来源只在有原文件/跨度证据时附加，未知生成区域仍标明 unmapped。
+明确边界：目录模式暂不支持新引用语法、`.hgo` 测试文件、`.hgo` 平台后缀或构建条件；使用普通 Go 测试，native Go 文件由 Go 构建选择处理。尚未承诺完整 cgo、go.work 或自定义构建配置支持。此阶段的宏定义仍局限于文件；后文同 module 声明宏阶段已接通跨文件/跨包宏。该阶段尚未支持跨包 qualified enum match 和导入泛型 Result 的直接 `?`；后续阶段实现如下。从导入 selector 类型直接派生仍未支持。不能把这个闭环说成所有单文件语法已经可以跨包使用。跨包来源只在有原文件/跨度证据时附加，未知生成区域仍标明 unmapped。
 
 独立验收见 [packages_test.go](tests/acceptance/packages_test.go)：真实生成模块显式 `go test -race`、独立 build/运行、公开构造及派生调用、错误链，以及跨文件诊断/import 不泄漏/私有访问/名义类型不互换/跨包宏拒绝。全套统计由本阶段最终运行记录另列，不沿用上一阶段数量。
 
@@ -277,3 +277,25 @@ From 仍只使用当前包注册项：先检查 Go assignability，再要求唯�
 [三包应用](examples/qualified_packages/main.hgo)和[验收](tests/acceptance/qualified_packages_test.go)覆盖真实 JSON/enum/Result/errors 分包；[内部边界测试](internal/frontend/imported_test.go)覆盖文件 alias 隔离、局部 shadow、同名不同包、私有/native 元数据拒绝及非法 enum 验证。全套验证和本地提交由本轮最终记录给出；无 push/tag，无长期分析或核心语义重选。
 
 本阶段最终冻结树验证：`go test -race -count=1 -json ./...` 通过 **14 包、163 宿主顶层测试、281 子测试**；接受测试日志中的 **27 个成功生成模块、79 测试、48 子测试**显式 race，另 1 模块按预期名义类型编译拒绝。本轮新增三包模块含 5 个 runtime 测试；内部 qualified enum 边界另运行一个生成模块 race。`go vet ./...`、完整设计检查 13 条 Go 命令、文档链接及 diff whitespace 均通过；冻结示例经 CLI 转译后再次独立 `go test -race`、`go build -buildvcs=false` 和运行，输出 INFO/mode=4/value=8/error=null 及 other。示例本身未携带测试文件，runtime 断言由接受测试注入，二者不混计。fresh 只读审查和类型别名续审无剩余阻断；测试由本轮实施者共同编写。证据：`/tmp/goxide-qualified-final-race.json`、`/tmp/goxide-qualified-final-vet.log`、`/tmp/goxide-qualified-final-design.log`、`/tmp/goxide-qualified-final-frozen`。未 push/tag。
+
+
+## 后续阶段：同 module 源码包声明宏
+
+目录模式支持公开 `pub macro_rules!`，普通 import 别名下用 `alias.name!(...)` 调用；同包多个文件共享宏及普通函数声明，定义文件的 import 作用域保持独立。运行时 helper 必须公开才能由跨包展开引用，私有嵌套宏仍可在定义包上下文展开。未解析自由名字明确拒绝，不能捕获调用者同名函数、宏或局部变量；宏身份不取决于包声明短名。
+
+复用现有 Go module 图、构建文件选择和 importer，不读取外部宏 metadata。只有成功编译源码包的 opaque registry 进入依赖元数据，普通 Go 同名声明不能伪造宏。共享构建预算限制 200,000 输入/输出 token、4,096 次展开，token tree 深度 256、展开遍历深度 64；内部收集/生成两遍不重复记账。展开状态属于本次编译，registry 可并发只读使用。
+
+定义和调用 token 分别记录源文件、原始/Prepare 阶段及嵌套栈，防止跨文件同偏移误归因；生成 import/helper 和无法证明的改写保持 unmapped。真实模块应用及独立业务测试见 [macro_packages](examples/macro_packages/main.hgo) 和[验收测试](tests/acceptance/macro_packages_test.go)。保留有限宏 fragment/模板语法、外部预编译依赖 ABI、用户过程宏和完整跨阶段映射等边界；T0 整体没有因此完成。
+
+
+本轮 fresh 非作者审查实际 diff 并定向复验，接续原生集成代理独立检查最终代码后修复同一文件同路径多 import alias 的选择不确定及 unused-import 问题；添加实际模块累计预算、同文件/外包 `?` 预处理后精确 literal 与展开栈、同文件双 alias 验收。测试由实施及接续代理编写，不称为独立测试作者。公开 `Emit` shim 调用私有 `emit` 的生成应用另经最终定向 race/build/run。
+
+
+最终验证（真实 Go 1.27.1，`GOTOOLCHAIN=local GOWORK=off GOPROXY=off GOCACHE=/tmp/goxide-macro-cache`，未下载）：
+
+- 全套 `go test -race -count=1 -json ./...`：**14 包、179 宿主顶层测试、289 子测试**通过。
+- 接受测试另有 **28 个成功生成模块、81 测试、48 子测试**显式 race；另 1 模块验证预期名义类型拒绝。新增日志应用贡献 1 模块、2 测试，并独立 build/run，输出 JSON request_id=42/workers=4 及 `workers 4 <nil> 102`。宿主和生成测试分别统计，旧普通 Go 子进程不计为 race。
+- 全套启动后示例 `Emit` 增加私有 `emit` shim，最终示例另以 `TestMacroPackagesApplicationRace` 定向 race/build/run 通过；没有声称较早全套读取了这一最后改动。
+- `go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **34 篇 Markdown / 310 个本地链接**和 diff whitespace 检查通过。设计夹具不是新宏实现的功能证据。
+
+日志：`/tmp/goxide-macro-final-race.json`、`/tmp/goxide-macro-final-shim-race.json`、`/tmp/goxide-macro-final-vet.log`、`/tmp/goxide-macro-final-design.log`、`/tmp/goxide-macro-final-docs.log`。仅本地提交，无 push/tag；无已知阻断，有限语法/metadata/来源限制如上。

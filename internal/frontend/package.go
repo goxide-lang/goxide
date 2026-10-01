@@ -7,13 +7,13 @@ import (
 	"go/ast"
 	"go/format"
 	"go/parser"
-	"go/scanner"
 	"go/token"
 	"go/types"
 	"sort"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
+	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"github.com/hxsf/goxide/internal/typecheck"
@@ -21,6 +21,7 @@ import (
 
 // PackageResult keeps a separate output and origin map for every source file.
 type PackageResult struct {
+	macros   *macros.Package
 	Files    map[string]Result
 	imported map[string][]enums.Decl
 }
@@ -32,16 +33,35 @@ func preparePackage(sources map[string][]byte) (PackageResult, error) {
 }
 
 func preparePackageImports(sources map[string][]byte, metadata map[string]PackageResult) (PackageResult, error) {
+	return preparePackageContext("", sources, metadata, nil)
+}
+func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
 	names := sortedSources(sources)
 	cfg := &compileConfig{declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}}
 	cfg.imported, cfg.preludes = importedDeclarations(sources, metadata)
+	dependencies := map[string]*macros.Package{}
+	for path, p := range metadata {
+		if p.macros != nil {
+			dependencies[path] = p.macros
+		}
+	}
+	registry, err := macros.CollectPackage(path, sources, dependencies)
+	if err != nil {
+		return PackageResult{}, err
+	}
+	cfg.macros, cfg.macroImporter = registry, imp
+	cfg.macroBudget = &macros.Budget{}
+	buildBudget := &macros.Budget{}
+	if len(budgets) > 0 && budgets[0] != nil {
+		buildBudget = budgets[0]
+	}
+	if err := buildBudget.AddPackage(registry); err != nil {
+		return PackageResult{}, err
+	}
 	seen := map[string]string{}
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
 			continue
-		}
-		if err := rejectPackageMacros(name, sources[name]); err != nil {
-			return PackageResult{}, err
 		}
 		meta, err := enums.CollectPackage(name, sources[name])
 		if err != nil {
@@ -96,7 +116,8 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 		}
 	}
 	cfg.collect = false
-	result := PackageResult{Files: map[string]Result{}, imported: cfg.imported}
+	cfg.macroBudget = buildBudget
+	result := PackageResult{macros: registry, Files: map[string]Result{}, imported: cfg.imported}
 	generated := map[string]string{}
 	for index, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
@@ -121,7 +142,7 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 // CompilePackage checks the complete package under its actual module import path.
 // sources may contain .hgo and native .go files already selected for this build.
 func CompilePackage(path string, sources map[string][]byte, imp types.Importer) (PackageResult, error) {
-	result, err := preparePackage(sources)
+	result, err := preparePackageContext(path, sources, nil, imp)
 	if err != nil {
 		return result, err
 	}
@@ -286,22 +307,4 @@ func refreshPackageMap(r *Result) {
 	}
 	r.SourceMap, _ = json.MarshalIndent(obj, "", "  ")
 	r.SourceMap = append(r.SourceMap, '\n')
-}
-
-func rejectPackageMacros(name string, source []byte) error {
-	fs := token.NewFileSet()
-	file := fs.AddFile(name, -1, len(source))
-	var scan scanner.Scanner
-	scan.Init(file, source, func(token.Position, string) {}, 0)
-	var prior []token.Token
-	for {
-		p, t, _ := scan.Scan()
-		if t == token.EOF {
-			return nil
-		}
-		if t == token.NOT && len(prior) >= 3 && prior[len(prior)-1] == token.IDENT && prior[len(prior)-2] == token.PERIOD && prior[len(prior)-3] == token.IDENT {
-			return fmt.Errorf("%s: cross-package macros are unsupported", fs.Position(p))
-		}
-		prior = append(prior, t)
-	}
 }

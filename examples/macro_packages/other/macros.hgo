@@ -1,0 +1,2 @@
+package other
+pub macro_rules! event_if { ($value:expr) => { $value + 100 }; }

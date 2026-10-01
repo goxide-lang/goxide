@@ -23,26 +23,37 @@ type TokenOrigin struct {
 	InvocationLine         int
 	SourceStart, SourceEnd int
 	Stack                  []sourcemap.Expansion
+	Original               bool
 }
 type Result struct {
-	Source  []byte
-	Origins []TokenOrigin
+	ExpansionCount, EmittedTokens int
+	Source                        []byte
+	Origins                       []TokenOrigin
 }
 type tok struct {
 	text, before string
 	pos          token.Position
 	invocation   int
 	stack        []sourcemap.Expansion
+	original     bool
+	scope        *scope
 	sourceEnd    int
 }
 type rule struct{ pattern, body []tok }
 type definition struct {
-	name  string
-	rules []rule
-	pos   token.Position
-	end   int
+	name   string
+	rules  []rule
+	pos    token.Position
+	end    int
+	public bool
+	scope  *scope
 }
 type engine struct {
+	pkg                       *Package
+	active                    *scope
+	callerImports             map[string]string
+	addedImports              map[string]string
+	usedMacroImports          map[string]bool
 	sumHelpers                map[string]string
 	intrinsics                map[string]bool
 	importPaths               map[string]string
@@ -72,6 +83,9 @@ func ExpandWithMap(filename string, source []byte) (Result, error) {
 // ExpandWithIntrinsics is for compiler-produced markers only. The caller must
 // reject these reserved names in user input before preparing the source.
 func ExpandWithIntrinsics(filename string, source []byte, names []string) (Result, error) {
+	return expandPackage(filename, source, names, nil, nil)
+}
+func expandPackage(filename string, source []byte, names []string, pkg *Package, imp types.Importer) (Result, error) {
 	ts, tail, err := lex(filename, source)
 	if err != nil {
 		return Result{}, err
@@ -87,72 +101,11 @@ func ExpandWithIntrinsics(filename string, source []byte, names []string) (Resul
 	for strings.Contains(string(source), e.prefix) {
 		e.prefix += "X"
 	}
-	var clean []tok
-	for i := 0; i < len(ts); {
-		if ts[i].text != "macro_rules" {
-			clean = append(clean, ts[i])
-			i++
-			continue
-		}
-		start := ts[i]
-		if i+3 >= len(ts) || ts[i+1].text != "!" || !ident(ts[i+2].text) || ts[i+3].text != "{" {
-			return Result{}, at(start, "expected macro_rules! name { rules }")
-		}
-		name := ts[i+2].text
-		if _, ok := e.defs[name]; ok {
-			return Result{}, at(start, "duplicate macro "+name)
-		}
-		end, x := closeGroup(ts, i+3)
-		if x != nil {
-			return Result{}, x
-		}
-		d := definition{name: name, pos: start.pos, end: ts[end].sourceEnd}
-		for j := i + 4; j < end; {
-			if ts[j].text == ";" {
-				j++
-				continue
-			}
-			if ts[j].text != "(" {
-				return Result{}, at(ts[j], "expected parenthesized macro pattern")
-			}
-			pe, x := closeGroup(ts, j)
-			if x != nil {
-				return Result{}, x
-			}
-			if pe+3 >= end || ts[pe+1].text != "=" || ts[pe+2].text != ">" || ts[pe+3].text != "{" {
-				return Result{}, at(ts[j], "expected => { template }")
-			}
-			te, x := closeGroup(ts, pe+3)
-			if x != nil {
-				return Result{}, x
-			}
-			if te > end {
-				return Result{}, at(ts[j], "template exceeds macro definition")
-			}
-			p := append([]tok(nil), ts[j+1:pe]...)
-			if _, x := parsePattern(p, false); x != nil {
-				return Result{}, x
-			}
-			d.rules = append(d.rules, rule{p, append([]tok(nil), ts[pe+4:te]...)})
-			j = te + 1
-		}
-		if len(d.rules) == 0 {
-			return Result{}, at(start, "macro has no rules")
-		}
-		e.defs[name] = d
-		// Keep source line count for untouched declarations and derive attributes.
-		trivia := start.before
-		for _, t := range ts[i : end+1] {
-			trivia += strings.Repeat("\n", strings.Count(t.before+t.text, "\n"))
-		}
-		if end+1 < len(ts) {
-			ts[end+1].before = trivia + ts[end+1].before
-		} else {
-			tail = trivia + tail
-		}
-		i = end + 1
+	clean, tail, err := e.readDefinitions(ts, tail)
+	if err != nil {
+		return Result{}, err
 	}
-	if len(e.defs) == 0 {
+	if len(e.defs) == 0 && pkg == nil {
 		return Result{Source: source}, nil
 	}
 	for i := 0; i+2 < len(clean); i++ {
@@ -175,9 +128,47 @@ func ExpandWithIntrinsics(filename string, source []byte, names []string) (Resul
 			}
 		}
 	}
+	if pkg != nil {
+		e.pkg = pkg
+		e.active = pkg.scopes[filename]
+		if e.active == nil {
+			return Result{}, fmt.Errorf("unknown macro source file %s", filename)
+		}
+		e.prefix = fmt.Sprintf("%sF%dN", pkg.prefix, e.active.index)
+		e.defs = pkg.defs
+		e.funcs = pkg.funcs
+		if imp != nil {
+			e.importer = imp
+		}
+		e.callerImports = map[string]string{}
+		e.addedImports = map[string]string{}
+		e.usedMacroImports = map[string]bool{}
+		for _, d := range pkg.defs {
+			if d.scope == e.active {
+				for _, r := range d.rules {
+					for i := 0; i+1 < len(r.body); i++ {
+						if r.body[i+1].text == "." && e.active.imports[r.body[i].text] != "" {
+							e.usedMacroImports[r.body[i].text] = true
+						}
+					}
+				}
+			}
+		}
+		for alias, path := range e.active.imports {
+			if old := e.callerImports[path]; old == "" || alias < old {
+				e.callerImports[path] = alias
+			}
+		}
+		for i := range clean {
+			clean[i].scope = e.active
+		}
+	}
 	out, err := e.expand(clean, 0)
 	if err != nil {
 		return Result{}, err
+	}
+	if pkg != nil {
+		out = e.finishImports(out)
 	}
 	var b strings.Builder
 	var origins []TokenOrigin
@@ -185,7 +176,7 @@ func ExpandWithIntrinsics(filename string, source []byte, names []string) (Resul
 		b.WriteString(t.before)
 		a := b.Len()
 		b.WriteString(t.text)
-		origins = append(origins, TokenOrigin{a, b.Len(), t.pos.Filename, t.pos.Line, t.pos.Column, t.invocation, t.pos.Offset, t.sourceEnd, t.stack})
+		origins = append(origins, TokenOrigin{a, b.Len(), t.pos.Filename, t.pos.Line, t.pos.Column, t.invocation, t.pos.Offset, t.sourceEnd, t.stack, t.original})
 	}
 	b.WriteString(tail)
 	keys := make([]string, 0, len(e.aliases))
@@ -204,7 +195,82 @@ func ExpandWithIntrinsics(filename string, source []byte, names []string) (Resul
 			fmt.Fprintf(&b, "\nvar %s = %s\n", e.aliases[key], key)
 		}
 	}
-	return Result{Source: []byte(b.String()), Origins: origins}, nil
+	return Result{Source: []byte(b.String()), Origins: origins, ExpansionCount: e.expansions, EmittedTokens: e.emitted}, nil
+}
+func (e *engine) readDefinitions(ts []tok, tail string) ([]tok, string, error) {
+	var clean []tok
+	for i := 0; i < len(ts); {
+		public := ts[i].text == "pub" && i+1 < len(ts) && ts[i+1].text == "macro_rules"
+		if public {
+			i++
+		}
+		if ts[i].text != "macro_rules" {
+			clean = append(clean, ts[i])
+			i++
+			continue
+		}
+		start := ts[i]
+		if i+3 >= len(ts) || ts[i+1].text != "!" || !ident(ts[i+2].text) || ts[i+3].text != "{" {
+			return nil, tail, at(start, "expected macro_rules! name { rules }")
+		}
+		name := ts[i+2].text
+		if _, ok := e.defs[name]; ok {
+			return nil, tail, at(start, "duplicate macro "+name)
+		}
+		end, x := closeGroup(ts, i+3)
+		if x != nil {
+			return nil, tail, x
+		}
+		d := definition{name: name, pos: start.pos, end: ts[end].sourceEnd, public: public}
+		for j := i + 4; j < end; {
+			if ts[j].text == ";" {
+				j++
+				continue
+			}
+			if ts[j].text != "(" {
+				return nil, tail, at(ts[j], "expected parenthesized macro pattern")
+			}
+			pe, x := closeGroup(ts, j)
+			if x != nil {
+				return nil, tail, x
+			}
+			if pe+3 >= end || ts[pe+1].text != "=" || ts[pe+2].text != ">" || ts[pe+3].text != "{" {
+				return nil, tail, at(ts[j], "expected => { template }")
+			}
+			te, x := closeGroup(ts, pe+3)
+			if x != nil {
+				return nil, tail, x
+			}
+			if te > end {
+				return nil, tail, at(ts[j], "template exceeds macro definition")
+			}
+			p := append([]tok(nil), ts[j+1:pe]...)
+			if _, x := parsePattern(p, false); x != nil {
+				return nil, tail, x
+			}
+			d.rules = append(d.rules, rule{p, append([]tok(nil), ts[pe+4:te]...)})
+			j = te + 1
+		}
+		if len(d.rules) == 0 {
+			return nil, tail, at(start, "macro has no rules")
+		}
+		e.defs[name] = d
+		// Keep source line count for untouched declarations and derive attributes.
+		trivia := start.before
+		if public {
+			trivia = ts[i-1].before
+		}
+		for _, t := range ts[i : end+1] {
+			trivia += strings.Repeat("\n", strings.Count(t.before+t.text, "\n"))
+		}
+		if end+1 < len(ts) {
+			ts[end+1].before = trivia + ts[end+1].before
+		} else {
+			tail = trivia + tail
+		}
+		i = end + 1
+	}
+	return clean, tail, nil
 }
 func at(t tok, s string) error {
 	return fmt.Errorf("%s:%d:%d: macro: %s", t.pos.Filename, t.pos.Line, t.pos.Column, s)
@@ -472,14 +538,35 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 	}
 	var out []tok
 	for i := 0; i < len(ts); i++ {
+		start := i
+		qualified := i+4 < len(ts) && ident(ts[i].text) && ts[i+1].text == "." && ident(ts[i+2].text) && ts[i+3].text == "!"
+		if qualified {
+			if e.pkg == nil {
+				return nil, at(ts[i], "cross-package macros require directory compilation")
+			}
+			i += 2
+		}
 		if i+2 >= len(ts) || !ident(ts[i].text) || ts[i+1].text != "!" || (ts[i+2].text != "(" && ts[i+2].text != "[" && ts[i+2].text != "{") {
+			i = start
 			out = append(out, ts[i])
 			continue
 		}
 		call := ts[i]
 		d, ok := e.defs[call.text]
+		if e.pkg != nil {
+			var err error
+			d, err = e.resolveMacro(ts[start], call.text, qualified)
+			if err != nil {
+				return nil, err
+			}
+			ok = true
+		}
 		if !ok {
 			return nil, at(call, "unknown macro "+call.text)
+		}
+		if qualified {
+			call.before = ts[start].before
+			call.pos = ts[start].pos
 		}
 		end, x := closeGroup(ts, i+2)
 		if x != nil {
@@ -502,7 +589,7 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 		if chosen == nil {
 			return nil, at(call, "no rule matches "+d.name)
 		}
-		frame := sourcemap.Expansion{Macro: d.name, Definition: sourcemap.Span{File: d.pos.Filename, Start: d.pos.Offset, End: d.end, Line: d.pos.Line, Column: d.pos.Column}, Callsite: sourcemap.Span{File: call.pos.Filename, Start: call.pos.Offset, End: ts[end].sourceEnd, Line: call.pos.Line, Column: call.pos.Column}}
+		frame := sourcemap.Expansion{DefinitionOriginal: d.scope != nil, CallsiteOriginal: call.original, Macro: d.name, Definition: sourcemap.Span{File: d.pos.Filename, Start: d.pos.Offset, End: d.end, Line: d.pos.Line, Column: d.pos.Column}, Callsite: sourcemap.Span{File: call.pos.Filename, Start: call.pos.Offset, End: ts[end].sourceEnd, Line: call.pos.Line, Column: call.pos.Column}}
 		call.stack = append(append([]sourcemap.Expansion{}, call.stack...), frame)
 		placeholders := map[string][]tok{}
 		body, x := e.instantiate(chosen.body, cs, -1, placeholders, call)
@@ -511,9 +598,14 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 		}
 		body, x = e.expand(body, depth+1)
 		if x != nil {
-			return nil, x
+			return nil, fmt.Errorf("%w (expanding %s invoked at %s:%d:%d)", x, d.name, call.pos.Filename, call.pos.Line, call.pos.Column)
+		}
+		saved := e.active
+		if d.scope != nil {
+			e.active = d.scope
 		}
 		body, x = e.hygiene(body, placeholders)
+		e.active = saved
 		if x != nil {
 			return nil, fmt.Errorf("%w (invoked at %s:%d:%d)", x, call.pos.Filename, call.pos.Line, call.pos.Column)
 		}
@@ -534,7 +626,7 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 		}
 		body, x = e.expand(filled, depth+1)
 		if x != nil {
-			return nil, x
+			return nil, fmt.Errorf("%w (expanding %s invoked at %s:%d:%d)", x, d.name, call.pos.Filename, call.pos.Line, call.pos.Column)
 		}
 		if len(body) > 0 {
 			body[0].before = call.before + body[0].before

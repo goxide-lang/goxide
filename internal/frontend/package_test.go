@@ -42,7 +42,7 @@ func TestModuleOutputAndSelectionBoundaries(t *testing.T) {
 		{"ignored", "_ignored.hgo", "package p\n", "ignored Go-style"},
 		{"tags", "input.hgo", "//go:build windows\n\npackage p\n", "build constraints"},
 		{"platform", "input_linux.hgo", "package p\n", "platform suffix"},
-		{"macro", "input.hgo", "package p\nfunc f(){dep.log!()}\n", "cross-package macros"},
+		{"macro", "input.hgo", "package p\nfunc f(){dep.log!()}\n", "explicit import"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := t.TempDir()

@@ -65,6 +65,8 @@
 
 ## 3. 函数式声明宏示例
 
+当前同 module 源码包原型采用 `pub macro_rules! name` 导出、普通 `import alias "path"` 和 `alias.name!(...)` 调用，复用 Go module/import 身份与依赖顺序。运行时 helper 按现有 Go 导出约定写 `Emit` 等公开函数；私有 helper 跨包不可见，须由作者提供公开 helper/shim。下文 `import macro`、`m::name!` 和 `pub func` 仍是完整语言的草案拼写，不是本轮原型新冻结语法。限定实现与来源/预算边界见[宏实现说明](../../internal/macros/README.md)。
+
 以下使用类似 `macro_rules` 的草案形式，不是当前可运行的 hgo 程序。假设 `macrokit` 包提供一个普通、公开的运行时 helper：
 
 ```hgo

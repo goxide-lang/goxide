@@ -94,3 +94,6 @@ python3 scripts/check_design.py
 Option/Result 阶段已有真实 Go API 显式包装、不同成功类型的传播和 sole-error-field `#[from]` 单步转换示例；表达式 match 单独提供可运行入口。内建泛型不等于用户泛型，转换注册不等于通用 From 搜索。宏固定类型、新引用与传播组合、unsupported 表达式上下文及运行证据见 [实现边界](IMPLEMENTATION.md)。下一阶段组合工作与完整 M1/M4/M5 仍未完成；不改变已确认设计。
 
 后续 T0 组合已打通普通 sum 载荷与标量引用/派生/传播，以及 JSON 配置→Result/From→enum match→结构化日志应用。引用载荷、宏引用签名函数别名、复合只读投影与完整 source map 仍有限或未做。每项实际测试与必需/后置划分见 [T0 验收矩阵](docs/t0-acceptance.md)；不能由应用成功推导任意跨功能组合已完成。
+
+
+同 module 源码包声明宏现支持 `pub macro_rules!` 和普通 import 的 `alias.name!`，保留每个定义文件的作用域、私有嵌套宏和公开 runtime shim 边界。真实日志包应用覆盖禁用时不求值、跨文件别名、同名宏、enum/serde/Result/Error 组合；包和整个模块共享资源预算，诊断保留有证据的定义/调用原始跨度。见 [实现记录](IMPLEMENTATION.md) 和 [增量验收](docs/t0-acceptance.md)。外部预编译宏 metadata、过程宏、任意模板语法及完整来源映射仍未完成；M6/T0 未整体完成。

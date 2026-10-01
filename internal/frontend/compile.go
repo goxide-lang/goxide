@@ -77,12 +77,15 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
-	declarations []enums.Decl
-	named        map[string]ast.Expr
-	models       map[string]model
-	collect      bool
-	imported     map[string][]enums.Decl
-	preludes     map[string]string
+	macros        *macros.Package
+	macroImporter types.Importer
+	macroBudget   *macros.Budget
+	declarations  []enums.Decl
+	named         map[string]ast.Expr
+	models        map[string]model
+	collect       bool
+	imported      map[string][]enums.Decl
+	preludes      map[string]string
 }
 
 func compile(filename string, source []byte, cfg *compileConfig) (Result, error) {
@@ -121,24 +124,55 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		return Result{}, err
 	}
 	preparedMap := provenance
-	expanded, err := macros.ExpandWithIntrinsics(filename, prepared, []string{"__hgo_question"})
+	var expanded macros.Result
+	if cfg != nil && cfg.macros != nil {
+		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__hgo_question"}, cfg.macros, cfg.macroImporter)
+	} else {
+		expanded, err = macros.ExpandWithIntrinsics(filename, prepared, []string{"__hgo_question"})
+	}
 	if err != nil {
 		return Result{}, err
+	}
+	if cfg != nil && cfg.macroBudget != nil {
+		if err := cfg.macroBudget.Add(expanded); err != nil {
+			return Result{}, fmt.Errorf("%s: %w", filename, err)
+		}
 	}
 	if len(expanded.Origins) > 0 {
 		provenance = &sourcemap.Map{Source: expanded.Source, Stages: append(provenance.Stages, "macros.Expand")}
 		for _, o := range expanded.Origins {
 			var origin *sourcemap.Span
-			if old := preparedMap.Lookup(o.SourceStart); old != nil && o.SourceEnd > o.SourceStart {
-				origin = old.Origin
+			if o.SourceEnd > o.SourceStart {
+				if o.File == filename && !o.Original {
+					if old := preparedMap.Lookup(o.SourceStart); old != nil {
+						origin = old.Origin
+					}
+				} else if o.File != "" {
+					// Package definitions retain their own original source spans.
+					// A caller's same numeric offset is unrelated evidence.
+					origin = &sourcemap.Span{File: o.File, Start: o.SourceStart, End: o.SourceEnd, Line: o.Line, Column: o.Column}
+				}
 			}
 			kind := "source"
 			stack := append([]sourcemap.Expansion{}, o.Stack...)
 			for i := range stack {
-				for _, span := range []*sourcemap.Span{&stack[i].Definition, &stack[i].Callsite} {
+				for j, span := range []*sourcemap.Span{&stack[i].Definition, &stack[i].Callsite} {
+					original := stack[i].DefinitionOriginal
+					if j == 1 {
+						original = stack[i].CallsiteOriginal
+					}
+					if span.File != filename || original {
+						// Package macro metadata was collected from original files.
+						continue
+					}
 					first, last := preparedMap.Lookup(span.Start), preparedMap.Lookup(span.End-1)
 					if first != nil && last != nil && first.Origin != nil && last.Origin != nil && first.Origin.File == last.Origin.File {
 						*span = sourcemap.Position(filename, originalSource, first.Origin.Start, last.Origin.End)
+						if j == 0 {
+							stack[i].DefinitionOriginal = true
+						} else {
+							stack[i].CallsiteOriginal = true
+						}
 					} else {
 						stack = nil
 						break

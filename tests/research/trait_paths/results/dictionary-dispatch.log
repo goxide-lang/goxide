@@ -1,0 +1,103 @@
+TEXT example.org/traitpaths.BenchmarkLocal.func6(SB) /tmp/hgo-trait-paths-obwvqm0e/probe/bench_test.go
+  bench_test.go:65	0x5c5de0		493b6610		CMPQ SP, 0x10(R14)					
+  bench_test.go:65	0x5c5de4		767d			JBE 0x5c5e63						
+  bench_test.go:65	0x5c5de6		55			PUSHQ BP						
+  bench_test.go:65	0x5c5de7		4889e5			MOVQ SP, BP						
+  bench_test.go:65	0x5c5dea		4883ec30		SUBQ $0x30, SP						
+  bench_test.go:68	0x5c5dee		4889442440		MOVQ AX, 0x40(SP)					
+  bench_test.go:66	0x5c5df3		b830000000		MOVL $0x30, AX						
+  bench_test.go:66	0x5c5df8		488d1d198b2800		LEAQ 0x288b19(IP), BX					
+  bench_test.go:66	0x5c5dff		b901000000		MOVL $0x1, CX						
+  bench_test.go:66	0x5c5e04		e8b7b8e5ff		CALL runtime.mallocgcSmallScanNoHeaderSC5(SB)		
+  bench_test.go:66	0x5c5e09		4889442428		MOVQ AX, 0x28(SP)					
+  benchmark.go:193	0x5c5e0e		488b542440		MOVQ 0x40(SP), DX					
+  benchmark.go:193	0x5c5e13		c6825202000001		MOVB $0x1, 0x252(DX)					
+  benchmark.go:193	0x5c5e1a		31c9			XORL CX, CX						
+  benchmark.go:193	0x5c5e1c		31db			XORL BX, BX						
+  benchmark.go:193	0x5c5e1e		6690			NOPW							
+  bench_test.go:68	0x5c5e20		eb2b			JMP 0x5c5e4d						
+  bench_test.go:69	0x5c5e22		48894c2420		MOVQ CX, 0x20(SP)					
+  bench_test.go:70	0x5c5e27		488b15a2ac2e00		MOVQ example.org/traitpaths.SourceDict(SB), DX		
+  paths.go:73		0x5c5e2e		488b0a			MOVQ 0(DX), CX						
+  paths.go:73		0x5c5e31		bb01000000		MOVL $0x1, BX						
+  paths.go:73		0x5c5e36		ffd1			CALL CX							
+  bench_test.go:69	0x5c5e38		488b4c2420		MOVQ 0x20(SP), CX					
+  bench_test.go:69	0x5c5e3d		48ffc1			INCQ CX							
+  bench_test.go:69	0x5c5e40		488b542440		MOVQ 0x40(SP), DX					
+  bench_test.go:69	0x5c5e45		4889c3			MOVQ AX, BX						
+  paths.go:73		0x5c5e48		488b442428		MOVQ 0x28(SP), AX					
+  bench_test.go:69	0x5c5e4d		48398a10020000		CMPQ 0x210(DX), CX					
+  bench_test.go:69	0x5c5e54		7fcc			JG 0x5c5e22						
+  bench_test.go:72	0x5c5e56		48891d6bc03100		MOVQ BX, example.org/traitpaths.sink(SB)		
+  bench_test.go:73	0x5c5e5d		4883c430		ADDQ $0x30, SP						
+  bench_test.go:73	0x5c5e61		5d			POPQ BP							
+  bench_test.go:73	0x5c5e62		c3			RET							
+  bench_test.go:65	0x5c5e63		4889442408		MOVQ AX, 0x8(SP)					
+  bench_test.go:65	0x5c5e68		e87392ecff		CALL runtime.morestack_noctxt.abi0(SB)			
+  bench_test.go:65	0x5c5e6d		488b442408		MOVQ 0x8(SP), AX					
+  bench_test.go:65	0x5c5e72		e969ffffff		JMP example.org/traitpaths.BenchmarkLocal.func6(SB)	
+
+TEXT example.org/traitpaths.BenchmarkLocal.func7(SB) /tmp/hgo-trait-paths-obwvqm0e/probe/bench_test.go
+  bench_test.go:74	0x5c5e80		493b6610		CMPQ SP, 0x10(R14)					
+  bench_test.go:74	0x5c5e84		0f8680000000		JBE 0x5c5f0a						
+  bench_test.go:74	0x5c5e8a		55			PUSHQ BP						
+  bench_test.go:74	0x5c5e8b		4889e5			MOVQ SP, BP						
+  bench_test.go:74	0x5c5e8e		4883ec30		SUBQ $0x30, SP						
+  bench_test.go:78	0x5c5e92		4889442440		MOVQ AX, 0x40(SP)					
+  bench_test.go:75	0x5c5e97		b830000000		MOVL $0x30, AX						
+  bench_test.go:75	0x5c5e9c		488d1d758a2800		LEAQ 0x288a75(IP), BX					
+  bench_test.go:75	0x5c5ea3		b901000000		MOVL $0x1, CX						
+  bench_test.go:75	0x5c5ea8		e813b8e5ff		CALL runtime.mallocgcSmallScanNoHeaderSC5(SB)		
+  bench_test.go:75	0x5c5ead		4889442428		MOVQ AX, 0x28(SP)					
+  benchmark.go:193	0x5c5eb2		488b542440		MOVQ 0x40(SP), DX					
+  benchmark.go:193	0x5c5eb7		c6825202000001		MOVB $0x1, 0x252(DX)					
+  benchmark.go:193	0x5c5ebe		31c9			XORL CX, CX						
+  benchmark.go:193	0x5c5ec0		31db			XORL BX, BX						
+  bench_test.go:78	0x5c5ec2		eb30			JMP 0x5c5ef4						
+  bench_test.go:79	0x5c5ec4		48894c2420		MOVQ CX, 0x20(SP)					
+  paths.go:73		0x5c5ec9		488b0da8fa2900		MOVQ 0x29faa8(IP), CX					
+  bench_test.go:80	0x5c5ed0		90			NOPL							
+  paths.go:73		0x5c5ed1		bb01000000		MOVL $0x1, BX						
+  paths.go:73		0x5c5ed6		488d159bfa2900		LEAQ 0x29fa9b(IP), DX					
+  paths.go:73		0x5c5edd		ffd1			CALL CX							
+  bench_test.go:79	0x5c5edf		488b4c2420		MOVQ 0x20(SP), CX					
+  bench_test.go:79	0x5c5ee4		48ffc1			INCQ CX							
+  bench_test.go:79	0x5c5ee7		488b542440		MOVQ 0x40(SP), DX					
+  bench_test.go:79	0x5c5eec		4889c3			MOVQ AX, BX						
+  paths.go:73		0x5c5eef		488b442428		MOVQ 0x28(SP), AX					
+  bench_test.go:79	0x5c5ef4		48398a10020000		CMPQ 0x210(DX), CX					
+  bench_test.go:79	0x5c5efb		7fc7			JG 0x5c5ec4						
+  bench_test.go:82	0x5c5efd		48891dc4bf3100		MOVQ BX, example.org/traitpaths.sink(SB)		
+  bench_test.go:83	0x5c5f04		4883c430		ADDQ $0x30, SP						
+  bench_test.go:83	0x5c5f08		5d			POPQ BP							
+  bench_test.go:83	0x5c5f09		c3			RET							
+  bench_test.go:74	0x5c5f0a		4889442408		MOVQ AX, 0x8(SP)					
+  bench_test.go:74	0x5c5f0f		e8cc91ecff		CALL runtime.morestack_noctxt.abi0(SB)			
+  bench_test.go:74	0x5c5f14		488b442408		MOVQ 0x8(SP), AX					
+  bench_test.go:74	0x5c5f19		e962ffffff		JMP example.org/traitpaths.BenchmarkLocal.func7(SB)	
+
+TEXT example.org/traitpaths.BenchmarkLocal.func8(SB) /tmp/hgo-trait-paths-obwvqm0e/probe/bench_test.go
+  bench_test.go:85	0x5c5f20		55			PUSHQ BP					
+  bench_test.go:85	0x5c5f21		4889e5			MOVQ SP, BP					
+  bench_test.go:85	0x5c5f24		4883ec30		SUBQ $0x30, SP					
+  bench_test.go:86	0x5c5f28		488d0c24		LEAQ 0(SP), CX					
+  bench_test.go:86	0x5c5f2c		440f1139		MOVUPS X15, 0(CX)				
+  bench_test.go:86	0x5c5f30		440f117910		MOVUPS X15, 0x10(CX)				
+  bench_test.go:86	0x5c5f35		440f117920		MOVUPS X15, 0x20(CX)				
+  benchmark.go:193	0x5c5f3a		c6805202000001		MOVB $0x1, 0x252(AX)				
+  bench_test.go:89	0x5c5f41		31c9			XORL CX, CX					
+  bench_test.go:89	0x5c5f43		31d2			XORL DX, DX					
+  bench_test.go:89	0x5c5f45		eb19			JMP 0x5c5f60					
+  paths.go:33		0x5c5f47		488b542418		MOVQ 0x18(SP), DX				
+  paths.go:33		0x5c5f4c		48ffc2			INCQ DX						
+  bench_test.go:91	0x5c5f4f		90			NOPL						
+  paths.go:45		0x5c5f50		90			NOPL						
+  paths.go:33		0x5c5f51		4889542418		MOVQ DX, 0x18(SP)				
+  bench_test.go:90	0x5c5f56		48ffc1			INCQ CX						
+  bench_test.go:90	0x5c5f59		0f1f8000000000		NOPL 0(AX)					
+  bench_test.go:90	0x5c5f60		48398810020000		CMPQ 0x210(AX), CX				
+  bench_test.go:90	0x5c5f67		7fde			JG 0x5c5f47					
+  bench_test.go:93	0x5c5f69		48891558bf3100		MOVQ DX, example.org/traitpaths.sink(SB)	
+  bench_test.go:94	0x5c5f70		4883c430		ADDQ $0x30, SP					
+  bench_test.go:94	0x5c5f74		5d			POPQ BP						
+  bench_test.go:94	0x5c5f75		c3			RET						

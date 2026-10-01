@@ -14,6 +14,7 @@ hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模
 
 - [设计总纲](docs/design/overview.md)：目标、决策状态、各部分边界与实现顺序。
 - [编译器、LSP 与自举](docs/design/compiler-and-tooling.md)：Go 工具复用边界、独立前端、启动实现与自举路线。
+- [RFC 0001：Go 兼容的别名风险诊断](docs/rfcs/0001-scoped-borrow-views.md)：Go 兼容默认、具体风险 warning、业务场景与机制证据；旧严格默认已否决。
 - [指针拆分与引用](docs/design/pointers-and-borrows.md)：Option、读写借用、Arc、Ptr、Box、解引用及尚未闭合的权限规则。
 - [显式 trait 与多接口实现](docs/design/traits.md)：无体声明补充 marker、自定义 wrapper 实现、同名方法与使用处转换。
 - [Go原生类型的显式适配](docs/design/go-interop.md)：普通 `.hgo` 中的显式声明、原生方法校验、伴生源码与独立构建视图。
@@ -26,6 +27,14 @@ hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模
 - [quote / syn 与语法工具](docs/design/syntax-tooling.md)：额外语法包、普通代码生成工具、上下文来源和后续过程宏的边界。
 
 总纲负责导航与记录决策，详细文档负责语义、示例、诊断和验收条件。新增专题时从总纲链接，避免把完整设计重复写在多个位置。
+
+原生指针桥接候选见 [RFC 0002](docs/rfcs/0002-native-pointer-bridge.md)；别名/借用风险分析已独立为长期工作线，不是 MVP 条件。
+
+当前场景评审见 [RFC 0003：Go 指针职责与 MVP 最小集合](docs/rfcs/0003-pointer-roles-and-mvp.md)。
+
+当前用户优先级：宏、enum/match、只读/可写访问为 T0（分批交付）；trait 双路径研究见 [RFC 0004](docs/rfcs/0004-trait-lowering-paths.md)。T0 不要求恢复借用分析或先实现全部智能指针。
+
+文档标签与独立实现会话交接见 [MVP 文档基线](docs/mvp-doc-baseline.md)。标签记录已确认方向和未决项，不代表完整规范定稿或编译器已实现。
 
 ## 验证设计示例
 

@@ -1,0 +1,2 @@
+# Preserve exact tool output, including objdump alignment and benchmark CPU text.
+tests/research/trait_paths/results/*.log -whitespace

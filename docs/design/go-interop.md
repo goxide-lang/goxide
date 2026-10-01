@@ -1,5 +1,7 @@
 # Go 原生类型的显式适配
 
+双路径研究（D21/U16）见 [RFC 0004](../rfcs/0004-trait-lowering-paths.md)：省掉内部包装与改变 Go 动态身份是不同操作；当前 D05 的原包 marker 模式未因研究而撤销。
+
 状态：本文的 `declare impl` 表示采用已有业务实现并补 marker；有体 impl 表示提供自定义 wrapper 实现。声明可写在用户自己的 `.hgo` 包中，只由 hgo 编译器读取，纯 Go 项目不受影响。伴生文件的构建接口仍为设计草案；其他 declare 形式见[原生 API 与裸指针](foreign-api.md)。
 
 | 状态 | 范围 |
@@ -201,7 +203,7 @@ declare 固定使用原始动态类型，有体 impl 固定使用对应 wrapper�
 
 ## 9. 原生 Go API 的两种视图
 
-原生 Go `*T` 的默认导入策略已调整为 raw `Ptr[T]`，未描述的调用走 unsafe 边界。此前将所有未知 `*T` 自动投影为 `Option[Arc[T]]` 的方案不再作为原生默认视图；`Option[Arc[T]]` 仍可用于明确选择的声明或包装接口。
+原生 Go `*T` 的旧 raw `Ptr[T]` 导入方案与普通参数桥接现列 U15 待协调；D19 明确普通调用不因未描述而要求 unsafe。此前将所有未知 `*T` 自动投影为 `Option[Arc[T]]` 的方案不再作为原生默认视图；`Option[Arc[T]]` 仍可用于明确选择的声明或包装接口。
 
 普通 `declare func` 可以提供 `&T`、`mut& T`、`Arc[T]` 等精确的调用接口，声明作者负责相应外部行为契约。`.d.hgo` 和独立声明包用于分发可复用的 hgo 视图；这与本篇 `declare impl` 的方法采用及 marker 生成规则相互补充。
 

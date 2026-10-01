@@ -85,7 +85,7 @@ func Lower(filename string, source []byte) (Result, error) {
 		}
 		start := i
 		if i > 0 && l.ts[i-1].text == "pub" {
-			start = i - 1
+			return Result{}, l.err(l.ts[i-1].start, "pub enum requires cross-package ABI support; this prototype supports local enums only")
 		}
 		d, end, e := l.parseDecl(i)
 		if e != nil {

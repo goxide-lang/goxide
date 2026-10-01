@@ -185,3 +185,9 @@ func TestBuiltinShadowRejections(t *testing.T) {
 		})
 	}
 }
+
+func TestPublicEnumIsNotSilentlyLocal(t *testing.T) {
+	if _, err := Lower("public.hgo", []byte("package p\npub enum Event { Idle, }\n")); err == nil {
+		t.Fatal("pub accepted without cross-package ABI")
+	}
+}

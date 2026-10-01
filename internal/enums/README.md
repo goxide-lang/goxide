@@ -40,7 +40,7 @@ checker. Generated helper/case names reserve `__hgo_enum_` and are recorded in
 metadata; they are unexported, so Go interoperability currently covers **same-package
 mechanism tests**, not external Go callers constructing exported cases.
 
-Explicitly unsupported: generic/cross-package enums; recursive, pointer, container,
+Explicitly unsupported: `pub` declarations and generic/cross-package enums; recursive, pointer, container,
 struct, interface, or named-alias payloads; nested/constant/or/range patterns;
 expression matches (including `return match` and assignment matches); wildcard-only
 type inference; Option/Result special nil conventions or `?`; constant-backed enum

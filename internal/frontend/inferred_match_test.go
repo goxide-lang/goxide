@@ -8,9 +8,6 @@ import (
 
 func TestInferredMatchNominalTargets(t *testing.T) {
 	for name, source := range map[string]string{
-		"raw": `enum Status string {Known="known",}
-func f(s Status)string {return match s { value=>string(value),}}
-`,
 		"payload": `enum Event {Value(int),}
 type Alias=Event
 func f(s Alias)int {match s {_ if false=>{return 0},whole=>{_=whole;return 1},};return 2}
@@ -40,7 +37,7 @@ func f(v Event){match identity!(v){_=>{},}}
 func TestInferredMatchRejectsUnprovenIdentity(t *testing.T) {
 	for name, source := range map[string]string{
 		"native": `func f(s string){match s {_=>{},}}`,
-		"defined-scalar": `enum Status string {Known="known",}
+		"defined-scalar": `type Status string
 type Other Status
 func f(s Other){match s {_=>{},}}`,
 		"any": `enum Event {Value(int),}
@@ -81,13 +78,11 @@ func TestInferredMatchPackageFunctionTarget(t *testing.T) {
 func TestInferredMatchImportedAndSumValidation(t *testing.T) {
 	out, err := compileImportedFixture(t, map[string]string{
 		"producer/types.hgo": `package producer
-pub enum Status string {Known="known",}
 pub enum Event {Value(int),}
 `,
 		"consumer.hgo": `package app
 import p "example.org/qualified/producer"
 var Effects int
-func Raw(v p.Status)string {p:=0;_=p;match v {whole=>{return string(whole)},};return "bad"}
 func Payload(v p.Event) {p:=0;_=p;match v {_ if false=>{Effects++},whole=>{_=whole;Effects++},}}
 func OptionZero() {var v Option[int];match v {_=>{Effects++},}}
 func ResultZero() {var v Result[int,string];match v {_=>{Effects++},}}
@@ -95,7 +90,6 @@ func ResultZero() {var v Result[int,string];match v {_=>{Effects++},}}
 		"consumer_test.go": `package app
 import("testing";p "example.org/qualified/producer")
 func TestInferred(t *testing.T){
- if Raw(p.Status("future"))!="future" || Raw(p.Status(""))!="" {t.Fatal("raw openness")}
  Payload(p.NewEventValue(3));OptionZero()
  if Effects!=2 {t.Fatal("valid sum",Effects)}
  for _, f:=range []func(){func(){Payload(nil)},ResultZero}{

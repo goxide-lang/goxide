@@ -7,7 +7,7 @@
 - D21：宏、enum/match、只读/可写访问为 T0，分批交付；共享与内部可变考虑 std 显式容器，不预设全套 Box/Cell。
 - D08：保留 GC Arc 方向；`mut&` 不承诺独占，`&T` 不承诺对象全局不变。基础权限须经过容器、方法和接口，不能靠长期分析补洞。
 - D19/D20：别名/借用风险分析完全独立于 MVP，未来 warning-first，未知不普遍拒绝。不要求实现 W01–W04 子集或强制 effect 注解。
-- D22：`?` 先支持 Option/Result；thiserror 生成显式 From，目标 Result 已知时一步转换，无转换链/任意泛型 blanket。静态 Go error 只走明确兜底或业务分类，不猜动态 variant。详见 [RFC 0005](rfcs/0005-option-result-question.md)。
+- D22：`?` 先支持 Option/Result；thiserror 生成显式 From，目标 Result 已知时一步转换，无转换链/任意泛型 blanket。静态 Go error 只走明确兜底或业务分类，不猜动态 variant。详见 [RFC 0005](rfcs/research/0005-option-result-question.md)。
 
 ## 未决语义不随标签冻结为已批准
 

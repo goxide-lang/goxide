@@ -1,6 +1,6 @@
 # RFC 0005：Option / Result 专用问号传播
 
-状态：Option/Result 专用传播与下述显式 From 单步错误转换方向已获用户确认；完整语法及前端仍未完成；本实现分支已有下述有限可运行子集。不公开 Residual/Try。thiserror 核心派生生成显式 From，目标 Result 已知时 `?` 可选择一步转换；不搜索转换链或任意泛型 blanket impl。当前具体实现边界见 [IMPLEMENTATION.md](../../IMPLEMENTATION.md)，不改变本 RFC 已确认方向。
+状态：Option/Result 专用传播与下述显式 From 单步错误转换方向已获用户确认；完整语法及前端仍未完成；本实现分支已有下述有限可运行子集。不公开 Residual/Try。thiserror 核心派生生成显式 From，目标 Result 已知时 `?` 可选择一步转换；不搜索转换链或任意泛型 blanket impl。当前具体实现边界见 [IMPLEMENTATION.md](../../../IMPLEMENTATION.md)，不改变本 RFC 已确认方向。
 
 ## 1. 当前规范核对与最小建议
 
@@ -112,7 +112,7 @@ Rust 的 `Try` 拆分成功 Output 与短路 Residual，通过 branch 决定继�
 
 ## 6. 验收与证据
 
-Go 机制夹具 [propagation_test.go](../../tests/design/enum/propagation_test.go)核对 typed-nil 原样保留、恰好一次、失败后跳过后续操作、defer、闭包目标、Option 及部分成功原生 I/O。它没有编译 hgo `?` 或实现错误转换规则。
+Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_test.go)核对 typed-nil 原样保留、恰好一次、失败后跳过后续操作、defer、闭包目标、Option 及部分成功原生 I/O。它没有编译 hgo `?` 或实现错误转换规则。
 
 完整前端的最小验收目标（有限实现证据见下节）：上述两个正例；Option/Result 混用、错误类型不兼容、普通闭包内 `?` 的明确类型诊断；宏插入闭包、短路和参数顺序；非法 Result nil 不被当成 Err。From 正例需验证目标已知、源/目标唯一、转换恰好一次且保留 source/typed nil；负例包括重复来源、仅存在两跳转换、任意 blanket 及从静态 error 猜动态变体。不要求用户自定义 residual、完整映射库或所有原生多返回形式自动适配才能交付首版。
 
@@ -123,8 +123,8 @@ Go 机制夹具 [propagation_test.go](../../tests/design/enum/propagation_test.g
 
 `internal/propagate` 已在真实前端接入内建容器元数据及 Go 类型检查，以原函数内分支实现专用 `?`。有限内建泛型要求显式 `Option[int]::Some(...)` / `Result[int,error]::Ok(...)`；用户泛型函数、通用 Try/Residual、跨家族转换仍未实现。Error 派生只为唯一静态 `error` 字段的 `#[from]` 注册显式一步 helper；普通赋值兼容优先，不做转换链或动态类型搜索。这不是最终通用 From 声明/可见性协议。
 
-[传播示例](../../examples/prototype/propagation.hgo) 使用真实 `strconv.Atoi` 显式桥接，含 Result/Option、成功类型变化与保留 source 的错误转换；[表达式 match 示例](../../examples/prototype/match_expression.hgo) 单独验证有限表达式位置。两者均通过 CLI run 和转译产物 `go run -race`，命令与输出记录在实现说明。
+[传播示例](../../../examples/prototype/propagation.hgo) 使用真实 `strconv.Atoi` 显式桥接，含 Result/Option、成功类型变化与保留 source 的错误转换；[表达式 match 示例](../../../examples/prototype/match_expression.hgo) 单独验证有限表达式位置。两者均通过 CLI run 和转译产物 `go run -race`，命令与输出记录在实现说明。
 
-[前端接受测试](../../tests/acceptance/propagate_test.go) 与上面的 Go 机制夹具分开：前者确实编译 `.hgo` `?`，检验顺序、短路、defer、最近闭包、nil Result、typed nil、原生部分成功和错误转换。模块 API 层还覆盖重复/缺失/两跳转换拒绝；这不表示源语言已支持用户声明所有转换。
+[前端接受测试](../../../tests/acceptance/propagate_test.go) 与上面的 Go 机制夹具分开：前者确实编译 `.hgo` `?`，检验顺序、短路、defer、最近闭包、nil Result、typed nil、原生部分成功和错误转换。模块 API 层还覆盖重复/缺失/两跳转换拒绝；这不表示源语言已支持用户声明所有转换。
 
-支持上下文限单 RHS、单项 var、return、调用参数、普通运算/selector、短路和无 initializer 的 if 条件。循环/switch/索引/切片/复合字面量/赋值目标/多 RHS/带 initializer 的 if 内传播拒绝。表达式 match 限显式类型局部初始化或单个非具名返回的完整表达式；无普遍类型推断。宏模板仅支持固定内建类型参数及有限 Go 复合类型，不能捕获任意调用者类型；模板显式闭包照常改变传播目标。后续组合阶段已支持普通 sum 载荷与标量引用参数/局部及 derive 同文件使用；引用作为 sum 载荷仍未支持，权限在传播后完整检查才擦除。完整支持表及源码映射限制以[实现说明](../../IMPLEMENTATION.md)和[传播阶段说明](../../internal/propagate/README.md)为准。
+支持上下文限单 RHS、单项 var、return、调用参数、普通运算/selector、短路和无 initializer 的 if 条件。循环/switch/索引/切片/复合字面量/赋值目标/多 RHS/带 initializer 的 if 内传播拒绝。表达式 match 限显式类型局部初始化或单个非具名返回的完整表达式；无普遍类型推断。宏模板仅支持固定内建类型参数及有限 Go 复合类型，不能捕获任意调用者类型；模板显式闭包照常改变传播目标。后续组合阶段已支持普通 sum 载荷与标量引用参数/局部及 derive 同文件使用；引用作为 sum 载荷仍未支持，权限在传播后完整检查才擦除。完整支持表及源码映射限制以[实现说明](../../../IMPLEMENTATION.md)和[传播阶段说明](../../../internal/propagate/README.md)为准。

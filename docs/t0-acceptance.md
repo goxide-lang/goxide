@@ -1,6 +1,6 @@
 # T0 子能力验收矩阵
 
-本轮核对基准：`47af69fcd66820ab4b7edb8b4c22e5eaf9a928ad`。以下先给有限交付标准，再保留历次逐项证据；历史阶段的“未做”若已有后续增量，以最新增量为准。具体类型、Go 宿主语法上的有限 T0 子集与整项 T0/M1–M8 完成是不同结论，不能混用。
+最新核对基准：`cd495372377cac8bf139427e21fc4490e48a0348`，并合入远端 work 的 RFC/检查器。**D27 已撤回下文历史开放 raw/C enum 成果；当前只支持封闭变体及 serde 外部映射，最新验收见末节。** 以下先给有限交付标准，再保留历次逐项证据；历史阶段的“未做”若已有后续增量，以最新增量为准。具体类型、Go 宿主语法上的有限 T0 子集与整项 T0/M1–M8 完成是不同结论，不能混用。
 
 设计优先级以[决策登记](design/decisions.md) D21 为准：宏、enum/match、只读/可写分离是用户必需方向；D22 约束 Option/Result 专用 `?` 与唯一显式一步 From，D23 要求 serde 核心与格式分层。优先级不意味着全部语法或 ABI 已冻结。后续工作按 [ROADMAP](../ROADMAP.md) 依赖推进，不以完整 trait 或长期风险分析阻塞已有子集。
 
@@ -18,7 +18,7 @@
 
 验收必须包含新的业务源例子、真实安装 CLI、原生 Go 独立构建和生成模块 `-race`；既有测试只作为回归，文档/机制夹具通过不替代这些应用证据。生成模块可独立构建指无需再次运行 hgo，仍须可解析其 go.mod 中明确的 runtime 依赖，不等于无依赖单文件。
 
-**整项已确认方向的剩余项不能隐藏：**D14 的内建 `print!`/`println!` 与 Default 已有后文限定实现；D21 的数值/string 常量 enum 唯一值子集已接通，见末尾增量；同值别名仍待 U19 选择。一般格式/静态 trait 协议仍不等于完成。完整 trait、LSP、YAML、风险分析不加入本次有限交付的必需清单。
+**整项已确认方向的剩余项不能隐藏：**D14 的内建 `print!`/`println!` 与 Default 已有后文限定实现；D27 已撤回开放 raw/C enum；数值/string 仅作为封闭变体 serde 外部值，见末节。一般格式/静态 trait 协议仍不等于完成。完整 trait、LSP、YAML、风险分析不加入本次有限交付的必需清单。
 
 ## 如何读状态与证据
 
@@ -41,7 +41,7 @@
 | 语句 match：一次求值、guard 次序、绑定、穷尽/不可达、return/defer/循环控制流 | 完整（具体子能力） | 用户必需；嵌套模式和完整表达式语法后置 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumControlFlowRace`（`TestOrderAndSingleEvaluation`、`TestReturnDeferLoop`、`TestNested`）、`TestEnumExplicitRejections` |
 | 表达式 match：整个显式类型局部初始化，或单个非具名 Go 可解析返回类型的整个 return | 有限 | 用户必需方向；下一步按应用需要扩展，尚不支持 `:=`/参数/运算符内嵌等 | [match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestMatchExpressionBusinessRace`（`TestScopeEffectsAndGuards`、`TestReturnClosureAndHygiene`）、`TestMatchExpressionUnsupportedContexts`、`TestBuiltinMatchExpressionRace` |
 | 使用点拒绝非法 enum Go 值：nil/typed-nil/case 指针/伪造值先于 wildcard 副作用；serde 编码返回错误 | 完整（具体子能力） | 用户必需边界说明；全入口/初始化/任意对象图校验可后置，不能称 Go 调用者无法造非法值 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumInvalidBoundaryRace`；[enum_serde_test.go](../tests/acceptance/enum_serde_test.go)：`TestEnumSerdeBusinessRace`（`TestEnumInvalidGoBoundaryReturnsError`）；[match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestBuiltinMatchExpressionRace`（`TestInvalidBuiltinBeforeEffect`） |
-| 强化既有数值/string 常量枚举的 raw/未知值语义 | 有限 | 唯一值子集已实现；同值别名待决、派生后置 | [独立业务验收](../tests/acceptance/raw_enum_test.go)：真实 Go 转换、未知值、零值、nominal 身份与开放 match，见末尾增量 |
+| 数值/string 外部枚举映射 | 有限 | 封闭 unit enum 的 serde 映射；开放 raw/C enum 已撤回 | [独立业务验收](../tests/acceptance/enum_wire_test.go)：已知往返、未知报错、未执行业务、Go 调用与生成race |
 | serde 核心 Serializer/Deserializer、Visitor/Access 与结构化错误/cause；格式独立 | 有限 | 用户必需 D23；完整协议扩展、借用解码和用户实现协议后续逐项验收 | [core_test.go](../serde/core_test.go)：`TestErrorPathAndCause`、`TestVisitorDefaultsAndCallbackErrors`、`TestScalarReaders`、`TestScalarProtocolFailures`；[json_test.go](../serdejson/json_test.go)：`TestCallbacksAndStates`、`TestIgnoredProtocolErrorsRemainErrors` |
 | 具体 struct JSON：标量、本地嵌套、数组/slice/string-key map、原生 Go `*T` 可空；rename/default/skip/deny_unknown_fields | 有限 | 用户必需首版闭环；default 仅 Go 零值，`*T` 非新引用/Option 桥接 | [serde_test.go](../tests/acceptance/serde_test.go)：`TestSerdeBlackBoxRace`（`TestBusinessRoundtrip`、`TestSkippedFieldAndWhitespace`、`TestNumericBoundaries`、`TestNestedErrorPath`、`TestCycleAndDepthBound`）、`TestUnsupportedSerdeIsDiagnosed`；[compile_test.go](../internal/frontend/compile_test.go)：`TestAttributesCannotBeSilentlyIgnored` |
 | JSON 严格数字/Unicode/重复键、无效值和深度限制 | 完整（具体子能力） | 用户必需可信输入路径；不推导支持完整 Rust serde/全部格式 | [json_test.go](../serdejson/json_test.go)：`TestScalarsAndStrictNumbers`、`TestStrictSyntaxEvenSkipped`；`TestSerdeBlackBoxRace` 内 `TestInputRejections`、`TestEncodingRejectsInvalidValues`、`TestZeroAndTinyNumbers` |
@@ -88,7 +88,7 @@
 ## 下一优先级与可后置项
 
 1. **本轮先闭合组合**：应用运行、失败传播、错误链、原生 Go 部分成功/typed-nil、宏求值、match 分支、标量只读权限与负例均须对生成产物验收；新增应用成功不取消已有拒绝边界。
-2. **T0 剩余基础能力**：继续扩展已接入的有限复合投影，推进数值/string 常量 enum 的 raw/未知值行为；补充目前 unmapped 的跨阶段诊断来源。具体语法/ABI 未冻结时保持候选状态，不能由测试代替设计确认。
+2. **T0 剩余基础能力**：继续扩展已接入的有限复合投影，维持封闭变体及serde数值/string映射边界；补充目前 unmapped 的跨阶段诊断来源。具体语法/ABI 未冻结时保持候选状态，不能由测试代替设计确认。
 3. **扩展而非整体完成声明**：表达式上下文、跨包身份和一般泛型逐项排期。完整 trait、外部预编译宏、用户过程宏、泛型 derive、格式 Value/YAML、完整 LSP 和整套共享包装可后置，不能因未做而阻塞已授权的有限闭环。
 4. **D20 长期独立**：别名/借用风险静态分析不属于 MVP 前置条件；race 只检查实际执行，不证明静态内存/并发安全。原生 Go 可构造 nil/别名的公开边界仍须如实说明。
 
@@ -130,7 +130,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | enum Error/Unwrap/唯一 From | 有限：显式variant message/source/from与Result传播，独立生成模块race | 具体source From、transparent、泛型不冒称完成；必须先定义静态唯一转换条件 |
 | T0跨包身份与Go互操作 | 有限：真实多文件包、Go module、pub enum构造/派生API，`TestPackagesApplication` | 公开metadata驱动的qualified match和跨包Result传播已在下文增量接通，同 module 声明宏已由下文增量接通；公开入口全面校验、文件选择和完整源映射继续验收，不能称跨包能力整体完成 |
 
-后续优先级：先维持 enum 派生应用与失败诊断的真实回归，再处理常量 enum raw/未知值与最小跨包身份/公开入口；完整跨阶段来源继续补有证据的映射。常量例 `type Status string` 的未知 `"future"` 可存在、开放输入需wildcard，已是设计方向；尚未定案的是精确源语法、未知值模式及公开校验入口。后续最小建议：先实现开放raw匹配必须有wildcard的入口，再明确显式闭合校验的拼写，不重开保留raw的既定方向。通用引用桥接/容器/函数值、一般泛型及完整trait分别分期，长期借用分析独立。前面各历史阶段“enum派生未做”的记录由此增量取代，整项T0仍未完成。
+**历史计划（raw部分已由D27撤回）：** 后续优先级：先维持 enum 派生应用与失败诊断的真实回归，再处理常量 enum raw/未知值与最小跨包身份/公开入口；完整跨阶段来源继续补有证据的映射。常量例 `type Status string` 的未知 `"future"` 可存在、开放输入需wildcard，已是设计方向；尚未定案的是精确源语法、未知值模式及公开校验入口。后续最小建议：先实现开放raw匹配必须有wildcard的入口，再明确显式闭合校验的拼写，不重开保留raw的既定方向。通用引用桥接/容器/函数值、一般泛型及完整trait分别分期，长期借用分析独立。前面各历史阶段“enum派生未做”的记录由此增量取代，整项T0仍未完成。
 
 本增量最终验收：14包、144宿主顶层/262子测试通过全套race；25个成功生成race模块共71测试/48子测试，另1模块预期名义类型编译拒绝。新增2个生成模块验证13测试/7子例，含值struct内enum非法值先于Clone/Debug/guard副作用拒绝。vet、完整设计检查13Go命令与示例转译产物race通过。两位复用非作者分别编写用例/只读审查，无fresh线程可用；最终无未修复阻断。
 
@@ -147,7 +147,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | 同包 From | 本地唯一显式 error From；两个文件生成绑定用稳定命名空间去重 | 任意导入错误类型的别名归一与通用转换注册；不由包支持扩大D22到动态猜测 |
 | 诊断 | 各原文件分别维护来源；真实跨文件类型错误、私有访问、nominal错误定位 | 未映射生成区域明确保留；不承诺完整双向LSP映射 |
 
-下一完成标准：先保持这些生成包可由原生 Go 工具独立构建，再补 `.hgo` 文件选择/测试和目录引用能力；随后以声明包 metadata 接通消费者的 enum 模式与 Result，而不是生成同名替代类型。跨包仍是 T0 必需方向，以上剩余项没有一概降级为后置。同 module 跨包声明宏已在下文增量接通；外部预编译宏仍需独立依赖元数据。常量 enum 的 raw/未知值既定方向不变，精确拼写的设计不阻塞本轮模块工作。
+**历史计划（raw部分已由D27撤回）：** 下一完成标准：先保持这些生成包可由原生 Go 工具独立构建，再补 `.hgo` 文件选择/测试和目录引用能力；随后以声明包 metadata 接通消费者的 enum 模式与 Result，而不是生成同名替代类型。跨包仍是 T0 必需方向，以上剩余项没有一概降级为后置。同 module 跨包声明宏已在下文增量接通；外部预编译宏仍需独立依赖元数据。常量 enum 的 raw/未知值既定方向不变，精确拼写的设计不阻塞本轮模块工作。
 
 本阶段最终验收：14 包、154 宿主顶层测试、278 子测试通过全套 race；26 个成功生成模块显式 race，74 测试、48 子测试，另 1 预期名义类型编译拒绝。真实两包 hgo 加 native Go 应用独立构建并执行，模块中 3 个应用测试通过；vet、13 条设计检查命令及文档链接检查通过。最终全套已重跑并包含 grouped type 跨文件载荷校验修复；新边界另经独立复验，完整范围与证据见实现记录。
 
@@ -164,7 +164,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | 来源与诚实诊断 | `TestQualifiedMatchBodyDiagnosticOrigin`断言真实consumer arm错误原行；错包身份拒绝和缺实例metadata验收 | typed match临时变量的错包赋值错误仍可能为生成行，明确`generated/unmapped`；不宣称跨包完整映射 |
 | ABI范围 | pub enum公开case alias/ctor/validator；builtin公开case/ctor及具体instance validator，private marker保持Go名义身份 | 有限原型，不是稳定导出元数据格式；外部预编译包、一般泛型trait/Try/Residual仍未做；同 module 声明宏见下文 |
 
-下一步继续按应用需要扩展文件选择/目录引用、可证明来源和独立依赖metadata；常量enum raw/未知值方向保持，不扩大为完整T0或长期分析。本轮验证记录见实现记录最新段落。
+**历史计划（raw部分已由D27撤回）：** 下一步继续按应用需要扩展文件选择/目录引用、可证明来源和独立依赖metadata；常量enum raw/未知值方向保持，不扩大为完整T0或长期分析。本轮验证记录见实现记录最新段落。
 
 本增量最终冻结树：全套 race **14 包、163 宿主顶层/281 子测试**；接受测试显式 race 的 **27 个成功生成模块、79 测试/48 子测试**，另 1 预期类型拒绝。新三包模块 5 个 runtime 测试及额外内部 qualified enum 生成模块通过；vet、完整设计检查 13 Go 命令、冻结示例 CLI 转译与独立 build/run 通过。无剩余审查阻断；诚实来源限制和协议边界如上，完整日志路径见实现记录。
 
@@ -197,7 +197,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 
 独立验收实际发现并推动修复两项：`sourcemap.Error.Error()` 丢失已保存的宏调用栈；CLI `test` 的隐含 `race` 条件未同步到前端和导入数据读取。后者由统一 `ModuleOptions{Tags,Race}` 接通，并由原生测试调用race限定.hgo函数验证。模块依赖文件遍历固定顺序，避免map迭代顺序影响处理次序。
 
-**交付结论：**上述有限T0应用子集可作为本地可运行交付；这不是整项T0或M1–M8完成。整项已确认方向最短剩余清单仍为常量enum raw/未知值入口、内建print/println格式入口、Default；跨包新引用接口和更宽语法仍明确列为当前有限边界，不把风险分析/完整trait/LSP混入本次验收。
+**历史计划（raw部分已由D27撤回）：** **交付结论：**上述有限T0应用子集可作为本地可运行交付；这不是整项T0或M1–M8完成。整项已确认方向最短剩余清单仍为常量enum raw/未知值入口、内建print/println格式入口、Default；跨包新引用接口和更宽语法仍明确列为当前有限边界，不把风险分析/完整trait/LSP混入本次验收。
 
 最终全套race：**14包、186宿主顶层测试、297子测试**通过；新独立业务包含**2个生成race模块、4个业务测试**，并已验收安装、仓库外运行、真实失败诊断和重复生成一致性。vet、完整设计检查13命令和文档检查通过；完整复现与日志见 [实现记录](../IMPLEMENTATION.md)。本轮没有剩余已确认缺陷，未支持能力仍按上表保留，不能称全语言完成。
 
@@ -214,37 +214,41 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 
 独立非作者新增 [验收测试](../tests/acceptance/print_default_test.go)，覆盖28项拒绝、宏/Default/Debug局部遮蔽、嵌套打印、所有参数先于formatter、短写/部分输出/原始cause，以及未支持协议的准确错误。实际暴露的嵌套打印遗漏和打印参数中 `?` 被当普通未知函数冻结已修复；基础类型同名遮蔽原已有守卫，本轮补跨文件验证，不冒称新修复。审查者复用已有线程，非新空上下文。
 
-**最短剩余必要项收敛为常量 enum raw/未知值入口。** [表层语法提案与唯一待选项](design/enums-and-match.md#01-常量入口的限定实现同值别名未定)保留候选状态；已定开放raw方向不重开。本轮不实现依赖同值别名选择的入口，也不把其他表中明确的有限边界伪称全部完成。最终全套验证由本轮实现记录汇总。
+**历史结论已撤回：**当时计划开放raw入口并等待别名选择；D27现已撤回该路线和问题。当前按[封闭变体与外部映射](design/enums-and-match.md#01-封闭-enum-与外部映射)实施，不再把旧候选作为待选任务。
 
 本增量最终验证：全套race为**15个有测试包、198宿主顶层、328子测试**，另internal/printing无包内测试而由前端/接受测试覆盖；新独立业务为**1个生成race模块、4个运行测试**，28项拒绝子例和真实CLI通过。vet、完整设计检查13命令及最终文档检查通过，详见实现记录。无已知未修复阻断；常量enum候选仍未批准或实现。
 
 
 ## 常量 enum 唯一值子集增量
 
+**历史记录，已被 D27 撤回，不代表当前支持；对应成功夹具已删除。**
+
 已支持 `enum Status string { Pending = "pending", Paid = "paid", }` 和 builtin 整数底层类型；成员必须显式常量，lowering 为 Go 命名类型及真正 typed const，能用于常量表达式和数组长度。同包多文件、同模块公开跨包使用保留名义身份。Go 转换保留零值、未知值及运行期整数截断，编译期溢出仍报类型错误；不插入成员集合验证器。
 
 开放 match 必须有无 guard 的 `_` 或全值绑定，已列出所有已知成员也不例外。沿用既有语句和限定表达式位置；目前至少一个 qualified 成员模式用于识别 enum，wildcard-only 不支持。raw derive、隐式 iota、外部预编译 metadata 未实现。同一 enum 求值后相同的成员报“别名待用户决定，当前子集不支持”，不是永久禁止；不同 enum 使用相同 raw 值合法。
 
-[业务示例](../examples/raw_enum/main.hgo)由原生 Go JSON webhook 输入 string/数字，经过跨包 raw enum 和开放 match，再由原生 Go 断言输出。[独立非作者验收](../tests/acceptance/raw_enum_test.go)实际安装 CLI、两次生成字节一致、生成模块 3 项 race 测试、独立 binary 与仓库外运行，并覆盖 14 项拒绝；print/Default 旧业务同时回归。部分 lowering 诊断明确 generated/unmapped，不承诺全部精确原始行列。
+业务示例（旧 raw 夹具已撤回，历史提交 cd49537）由原生 Go JSON webhook 输入 string/数字，经过跨包 raw enum 和开放 match，再由原生 Go 断言输出。独立非作者验收（旧 raw 夹具已撤回，历史提交 cd49537）实际安装 CLI、两次生成字节一致、生成模块 3 项 race 测试、独立 binary 与仓库外运行，并覆盖 14 项拒绝；print/Default 旧业务同时回归。部分 lowering 诊断明确 generated/unmapped，不承诺全部精确原始行列。
 
 本轮限定 T0 必需清单已有实现与应用验收路径；没有因此宣称整项 T0 或完整语言完成。未决同值别名不阻塞唯一值子集；无需为等待选择扩展全套 trait、智能指针或风险分析。最终全套统计见实现记录。
 
 
 ## 最后覆盖梳理：交付、待决与后置
 
-以本节和最新实现记录为当前状态，前面的分轮统计保留为历史证据。
-
-| 分类 | 精确范围 |
+| 分类 | 当前范围 |
 | --- | --- |
-| 可交付的有限子集 | 同模块卫生声明宏；具体类型 serde 核心/JSON；payload enum、Option/Result、限定 match、专用 `?` 与一步 From；已有多文件读写权限；print/println 与具体 Default/Clone/Debug；唯一值 raw enum、Go 互操作与显式 raw Clone；安装 CLI 和独立生成 Go 模块 |
-| 已在等待用户决定 | 同一 raw enum 的同值成员是否允许作为别名；保持待定，不重复询问，不阻止唯一值子集 |
-| 尚需补规则，不擅定 | raw Debug 的已知/未知显示、raw serde 的 wire/rename/未知解码、raw Default 的选择；见枚举专题 §0.2。它们并非已经批准但被别名问题一并阻塞的功能 |
-| 明确后置或有限边界 | 通用 trait/泛型、完整表达式和嵌套模式、导入类型自动派生、外部预编译宏 metadata、过程宏、完整 fmt、YAML、LSP、跨目标构建、`.hgo` 测试源及完整引用桥接；按各专题分期，不冒称永久取消 |
-| 独立长期工作 | 借用/别名风险分析及 W01–W04，不属 MVP 完成条件；只读/可写基础类型规则仍须检查 |
+| 有限可交付 | 同模块声明宏、具体 serde/JSON、封闭 enum/match、Option/Result 与专用 `?`/一步 From、已有读写权限、固定打印、具体 Default/Clone/Debug、CLI及生成Go模块 |
+| 本轮更新 | 撤回开放raw/C enum和raw Clone；封闭unit enum字符串rename或全体显式int64 value；未知外部值UnknownVariant，Type/Range保留；业务不执行 |
+| 已撤回问题 | U19同值raw别名不再等待；重复serde外部映射因解码歧义拒绝，不将其当成语言别名 |
+| 待用户选择 | enum非默认变体payload是否要求Default；没有通过新增拒绝/成功用例替用户定规则 |
+| 明确后置 | 业务validator、通用手写impl注册、统一trait wrapper前端、关联函数/Self/self前端、完整泛型/表达式/借用模式、复杂映射属性、YAML/LSP/外部metadata等 |
+| 独立长期 | 别名/借用风险warning分析不属MVP；基础类型权限检查仍执行 |
 
-这里交付的是可安装运行、有正反例与真实 Go 应用证据的原型子集，不是完备 Rust、完整 T0 或所有已确认设计均已实现。新增工作到本轮验收闭环为止；不为等待一个问题不断扩展范围。
+## 封闭变体与 serde 外部映射验收
 
+[业务模块](../examples/enum_wire/main.hgo)的Delivery映射字符串、Urgency映射整数；两者始终是声明的封闭变体。原生Go桥接调用生成codec，已知输入进入业务并Clone，未知输入返回带Field路径的UnknownVariant，业务计数为零。由此证明的是结构转换边界，不是业务validator功能。
 
-本轮补齐的是已有语义的两个缺口：纯 `_` / 全值绑定的 match 根据被匹配表达式的真实名义类型解析，不要求人为加一条成员模式；raw `#[derive(Clone)]` 保持全部原始值。前者不是对任意 Go 值开放通用模式匹配，仍要求可信 enum 元数据；payload/Result 的非法表示在 guard/body 前校验，raw 未知值不加成员门禁。旧章节的 wildcard-only/全部 raw 派生不支持记录由本增量覆盖。
+[独立验收](../tests/acceptance/enum_wire_test.go)实际安装CLI、转译、生成模块3项race运行测试、独立build、4种二进制输入和仓库外CLI运行。另[归档业务](../tests/acceptance/t0_final_test.go)已改为封闭变体，生成模块2项race运行测试；print/Default旧业务生成4项race测试回归。反例覆盖已撤回raw语法、未知映射、混合/重复/越界属性、未登记协议和非法case；准确数量见实现记录。
 
-新 [归档业务](../examples/prototype/final_audit.hgo) 与 [独立验收](../tests/acceptance/t0_final_test.go)覆盖未知状态保存、嵌套显式 Clone、仅绑定/通配分支、求值次数和非法 payload 在副作用前拒绝。基础规则不明的 raw Debug/serde/Default 继续明确诊断，不把原生 JSON 输入误计为 raw serde 派生。
+Default struct每字段必须有协议，缺项不能自动派生；当前通用手写impl还未实现，可显式业务构造但不会按helper名字认领。enum唯一unit默认是现实现子集，非默认payload约束仍待定。Debug显示源变体/payload及struct字段内容（含私有字段），不跟随wire值、不自动脱敏、不保证稳定格式。
+
+RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为文档合入就成为已实现能力。下文历史成果与当前闭环须区分，未宣称完整T0/Rust。

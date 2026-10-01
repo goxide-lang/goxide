@@ -1,12 +1,12 @@
 # RFC 0004：trait 二进制/源码路径与最小适配成本
 
-状态：2026-10-01，研究候选，未批准替换 D05/D06。D21 已确认宏、enum/match、只读/可写分离为 T0；本 RFC 只研究 trait 实现取舍。风险分析仍按 D20 独立长期推进。没有 hgo 编译器实现，所有实验是手写 Go lowering 模型。
+状态：历史研究与机制证据。后续已确认的 R24 / [RFC 0019](../0019-uniform-trait-wrappers.md) 统一采用 trait wrapper、marker 和包级适配工厂，覆盖本文当时“是否把无体 declare 改为 wrapper”的待选问题。本文不再将原包 marker 注入列为当前方案；内部不可观察优化与性能证据仍可参考。D21 的 T0 与 D20 的风险分析长期独立边界保持；本篇实验均为手写 Go lowering 模型，不代表通用 trait 前端已经实现。
 
 ## 1. 先给结论：可以优化表示，不能按模式重选语义
 
 用户提出“编译二进制时无冲突直接适配、有冲突最小 wrapper；导出 Go 源码固定 wrapper”。**对内部静态调用消除包装可行；仅凭没有方法名冲突就把动态视图替换为原对象，不保证等价。** 同一个 Go 编译器本来就可以内联薄 wrapper、消除局部装箱；生成源码路径也能获得这些优化，收益不是二进制模式独有。
 
-建议保持共同的 impl 选择、访问权限、视图能力及外部 ABI。二进制模式只在表示不可观察、目标已知时降低成直接调用；向未知 Go 函数、interface/any、回调、反射、持久容器或公开导出边界传值时，仍构造规范视图。仅导出“Go 源码固定 wrapper”若包括原有无体 declare，则改变 D05 的返回原对象与动态身份，需用户另选；本研究不视为已批准。
+建议保持共同的 impl 选择、访问权限、视图能力及外部 ABI。二进制模式只在表示不可观察、目标已知时降低成直接调用；向未知 Go 函数、interface/any、回调、反射、持久容器或公开导出边界传值时，仍构造规范视图。历史上，无体 declare 返回原对象与统一 wrapper 存在身份取舍；后续 R24 已选择统一 wrapper，现行 D05/D06 已据此更新。两种构建模式均应保持 RFC 0019 的规范视图，只在不可观察处消除包装。
 
 这里二进制模式仍是 hgo→Go→Go 工具链，不加入自建机器码后端。可见应用源码不等于能分析或改写所有原生库反射、可选接口和回调；不能以“全程序构建”自动证明可观察行为不存在。
 
@@ -14,20 +14,20 @@
 
 | 冲突/约束 | 局部 wrapper 能解决什么 | 不能解决什么 / 最小策略 |
 | --- | --- | --- |
-| 同一规范 trait/type/参数的重复 impl | 可分别保存两个已明确命名的实现 | 不能决定未限定调用应该选谁；当前 T08 仍报错。等价无体声明合并是单独候选，不靠 wrap 自动解决 |
+| 同一规范 trait/type/参数的重复 impl | 可分别保存两个已明确命名的实现 | 不能决定未限定调用应该选谁；当前 T08 仍报错。相容无体声明合并已按 R20 确认方向，具体冲突规则仍须明确，不靠 wrap 自动解决 |
 | 两个不同 trait 的同名异签名方法 | 不同 wrapper 各自拥有方法；静态调用可直接到已选实现 | 不能在一个 Go 接收者上放两个同名方法；不能因没有名字冲突忽略自定义方法体 |
 | 同名同签名但不同业务行为 | wrapper 或普通实现函数可保存行为 | 不能直接采用原方法；“方法集相符”不等于行为相同 |
-| marker 与嵌入方法提升 | 在应用包定义独立视图可避免给原对象注入新方法 | 不会修好已经注入后的整个增强图；必须明确选哪种 ABI，不能先污染后局部补丁 |
+| marker 与嵌入方法提升 | 在应用包定义独立视图可避免给原对象注入新方法 | 不会修好已经注入后的整个增强图；当前已选统一 wrapper；旧注入反例作为该决定的历史依据，不能先污染后局部补丁 |
 | 外部包/接口/定义指针/泛型接收者限制 | 普通 struct wrapper 可持有外部指针或接口；包级函数可作静态实现 | Go 不允许随处给原类型加方法；任意 `type View[T] T` 也不可作为通用方案。元数据/字典、包作用域、泛型实例化仍需设计 |
 | 只读能力 | 受限视图可只暴露已批准的方法 | 不能把受限 `&T` 直接变成可恢复全部方法的原生 *T；不能转发所有方法来“透明” |
 | 动态接口、可选协议、反射、相等性 | 固定视图可提供稳定能力集合 | 动态类型和可选协议会变化；包装尺寸为零不消除此事实 |
-| 构建/发布 | 无注入的本地视图可随普通 Go 模块发布 | 现行 marker 注入需要根构建选择增强依赖；子模块 replace 不向下游根传递 |
+| 构建/发布 | 无注入的本地视图可随普通 Go 模块发布 | 历史 marker 注入实验需要根构建选择增强依赖；当前统一 wrapper 无此注入要求；子模块 replace 不向下游根传递 |
 
 真正的判定顺序应是：选择唯一 impl → 校验类型/权限 → 确定这次需要的视图及外部能力 → 再优化表示。不能先试编译 Go，哪个版本成功就选择哪个业务实现。
 
 ## 3. 可对照的 lowering，不把名字当成本保证
 
-共同工作负载是同一 `*Source` 的方法调用、读取和 io.Copy；方法体及底层对象不因方案改变。完整可执行源码见 [研究夹具](../../tests/research/trait_paths/probe/paths.go)。以下是缩略的 Go 示意：
+共同工作负载是同一 `*Source` 的方法调用、读取和 io.Copy；方法体及底层对象不因方案改变。完整可执行源码见 [研究夹具](../../../tests/research/trait_paths/probe/paths.go)。以下是缩略的 Go 示意：
 
 ```go
 // 直接采用原方法：只有已选 impl 的语义确实如此才可以。
@@ -55,7 +55,7 @@ func Apply[T any](d Dict[T], value T, n int) int { return d.Step(value, n) }
 
 | 表示 | 可用范围与性能机会 | 语义/实现成本 |
 | --- | --- | --- |
-| 现行原包 marker + 原对象 | 采用已有方法，原动态身份/可选接口保留；marker 自身不增加对象字段 | 原包方法集变化、嵌入影响、增强构建/发布；不能用于任意接口接收者 |
+| 历史原包 marker + 原对象 | 采用已有方法，原动态身份/可选接口保留；marker 自身不增加对象字段 | 原包方法集变化、嵌入影响、增强构建/发布；不能用于任意接口接收者 |
 | 单指针值 wrapper | 通用具体指针适配；小方法可内联，单指针值装入接口在本环境可不额外分配 | 新动态类型；值视图相等可按 target，需规定 nil；不能自动恢复额外协议 |
 | 指针 wrapper | 表示稳定视图对象；可持有额外状态/字典 | 每次逃逸构造可能多分配，wrapper 身份也可观察；不能随便换成值视图 |
 | 无额外布局 Defined 视图 | 已知具体结构布局时通过普通 Go 指针转换复用原对象，无额外包装对象 | 新类型/方法集仍可观察；不是 type alias；不能泛化为任意 T、接口或定义指针；额外视图状态无处存 |
@@ -82,7 +82,7 @@ func Apply[T any](d Dict[T], value T, n int) int { return d.Step(value, n) }
 
 ### 4.3 marker 嵌入及动态身份
 
-同一 build-tag 夹具里，`Combined{*Native; Helper}` 原先从 Helper 提升 Marker；给 Native 注入同一 Marker 后，同深度歧义使动态接口断言 true→false。不注入、改成本地 wrapper 可避开这个注入副作用，但会改变当前 D05 模式，不是无需确认的小优化。仅扫描原类型直接方法名不足以发现所有下游嵌入/反射影响。
+同一 build-tag 夹具里，`Combined{*Native; Helper}` 原先从 Helper 提升 Marker；给 Native 注入同一 Marker 后，同深度歧义使动态接口断言 true→false。不注入、改成本地 wrapper 可避开这个注入副作用，它改变了当时的 D05 模式；该方向现已由 R24 确认，不再是等待批准的小优化。仅扫描原类型直接方法名不足以发现所有下游嵌入/反射影响。
 
 Value/Defined 与原 *Source 的 any 动态类型不同；两个指向同一 target 的值视图可以相等，两次新建指针 wrapper 则不相等。nil target 的非 nil wrapper 也不是 nil 接口。若源码输出固定指针 wrapper，二进制不能把它无条件改成原值或值 wrapper；这些都是可观察行为，两个模式需一致。
 
@@ -96,7 +96,7 @@ Value/Defined 与原 *Source 的 any 动态类型不同；两个指向同一 tar
 
 ## 5. 实验设计与复现
 
-执行 [run.py](../../tests/research/trait_paths/run.py) 会复制 fixture 到临时模块，不修改依赖或仓库根 go.mod，不下载软件。Go 可执行文件必须明确指定；本环境默认 /usr/bin/go 不是 Go 编译器。
+执行 [run.py](../../../tests/research/trait_paths/run.py) 会复制 fixture 到临时模块，不修改依赖或仓库根 go.mod，不下载软件。Go 可执行文件必须明确指定；本环境默认 /usr/bin/go 不是 Go 编译器。
 
 ```sh
 python3 tests/research/trait_paths/run.py \
@@ -112,7 +112,7 @@ python3 tests/research/trait_paths/run.py \
 - Copy：相同 4096 字节和 io.Discard，复用 target、每轮重置；每轮包括适配。原生 WriterTo 路径可避免读取/复制，因此不能把全部时间差归因于 wrapper 分配。吞吐数字不是网络/磁盘吞吐。
 - Plain/enhanced：同一个 marker 夹具开关伴生方法；并复测错误链、HTTP、io.Copy、自定义 Read、身份/存储。
 
-原始结果及版本/命令/源码摘要保存在 [results](../../tests/research/trait_paths/results/environment.json)，包括 [测试](../../tests/research/trait_paths/results/plain.log)、[增强方法集](../../tests/research/trait_paths/results/enhanced.log)、[基准](../../tests/research/trait_paths/results/bench.log)、[编译器诊断](../../tests/research/trait_paths/results/compiler.log)、[动态分派反汇编](../../tests/research/trait_paths/results/dispatch.log)。单次机器的一组微基准只回答这些表示在这些形状下的成本，不推算真实业务百分比或宣称跨版本零成本。
+原始结果及版本/命令/源码摘要保存在 [results](../../../tests/research/trait_paths/results/environment.json)，包括 [测试](../../../tests/research/trait_paths/results/plain.log)、[增强方法集](../../../tests/research/trait_paths/results/enhanced.log)、[基准](../../../tests/research/trait_paths/results/bench.log)、[编译器诊断](../../../tests/research/trait_paths/results/compiler.log)、[动态分派反汇编](../../../tests/research/trait_paths/results/dispatch.log)。单次机器的一组微基准只回答这些表示在这些形状下的成本，不推算真实业务百分比或宣称跨版本零成本。
 
 
 ### 5.1 本轮结果（五次中位数）
@@ -139,11 +139,11 @@ python3 tests/research/trait_paths/run.py \
 
 补充字典反汇编时首次未指定可写 Go 缓存而失败，重设 GOCACHE 后成功；失败日志及修正命令均保留，不算语义失败。
 
-本例中 Apply 自身内联并未消除字典函数字段调用，局部固定字典和可替换全局字典约 2.6 ns；[字典反汇编](../../tests/research/trait_paths/results/dictionary-dispatch.log)保留间接 CALL。不能从“类型化静态字典”名字推断与直接函数完全等价。亚纳秒局部小方法的排序在两轮中变化，受寄存器分配/噪声影响，不据此宣称某种表示普遍更快。
+本例中 Apply 自身内联并未消除字典函数字段调用，局部固定字典和可替换全局字典约 2.6 ns；[字典反汇编](../../../tests/research/trait_paths/results/dictionary-dispatch.log)保留间接 CALL。不能从“类型化静态字典”名字推断与直接函数完全等价。亚纳秒局部小方法的排序在两轮中变化，受寄存器分配/噪声影响，不据此宣称某种表示普遍更快。
 
 Copy 原生约 7.8 ns、Read-only 核心值视图约 69.3 ns、显式保留 WriterTo 的 Full 约 8.9 ns；这主要展示可选协议分派导致工作量不同。io.Discard 的快速路径甚至不需要复制 4 KiB，不能解释为真实 I/O 加速倍数。Full 与原生的微小差值也不能推广到业务。
 
-源码发布实验复现：原包 marker 模式配原依赖预期编译失败，改根配置为增强依赖后成功；本地值 wrapper 配原依赖成功。对应日志 publish-marker-original/enhanced、publish-wrapper-original 保留在 results。固定本地 wrapper 可以减轻发布依赖，但改变 D05 身份保证；这个产品取舍不能只按 ns/op 决定。没有测完整 hgo 构建时间或产物代码体积，不能宣称改善了多少。
+源码发布实验复现：原包 marker 模式配原依赖预期编译失败，改根配置为增强依赖后成功；本地值 wrapper 配原依赖成功。对应日志 publish-marker-original/enhanced、publish-wrapper-original 保留在 results。固定本地 wrapper 可以减轻发布依赖，也改变了当时 D05 的原动态身份；该产品取舍后来由 R24 确认，不能把性能实验本身当成批准依据。没有测完整 hgo 构建时间或产物代码体积，不能宣称改善了多少。
 
 ## 6. 决策建议与待选边界
 
@@ -151,6 +151,6 @@ Copy 原生约 7.8 ns、Read-only 核心值视图约 69.3 ns、显式保留 Writ
 
 这能保留用户双路径想法里有益的部分：二进制内部可比公开源码 ABI 更积极地消除表示；源码固定语义便于发布、检查和调试。但两者可以共用优化后的 Go lowering，固定 wrapper 也不等于每次堆分配。普通 Go 调用不应被迫套 trait；实际需要多个语义实现时才生成所需视图。
 
-仍需用户选择的是：是否将双模式统一为上述稳定视图语义，只在内部不可观察处消除包装？这不会自动批准取消 D05 marker 或将所有 declare 改 wrapper。若希望彻底摆脱增强依赖，可另选“impl 关系只在 hgo 元数据，静态调用直接函数，动态 trait 统一本地视图”的后端；它改善普通模块发布但改变 D05 和 Go 可见 API，需要独立兼容性设计。
+后续 R24 已确认运行时视图统一 wrapper，并保留 marker、包级工厂及 Go 便利 helper；原有“所有 declare 是否改 wrapper”的选择已闭合。取消 marker、按构建模式更换动态身份、任意裸对象替代规范视图均不由此获批。工厂编码、权限、nil/比较和多包适配协议仍以 RFC 0019 的未定项为准。
 
-现阶段不应仅为等待 trait 后端决定而推迟 T0 宏/enum/基本读写类型。可先做具体类型和有限宏，保留未来 evidence/源码映射；不开展完整编译器实现。
+现阶段不应仅为等待 trait 后端决定而推迟 T0 宏/enum/基本读写类型。已有有限具体类型与宏前端可继续保留未来实现证据/源码映射；本研究文档本身不授权扩展实现范围。

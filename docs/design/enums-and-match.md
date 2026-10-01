@@ -7,67 +7,62 @@
 | 状态 | 范围 |
 | --- | --- |
 | 已确认 | D12、D13：变体枚举 / 模式匹配、Option / Result、Go 可构造非法输入以及公开边界方向。 |
-| 暂定 | T03–T05：interface 加值型 case、nil 策略、panic / 递归验证、模式子集、值绑定、穷尽与控制流规则。 |
-| 未定 | U06、U08：最终 ABI、递归对象 / 共享状态校验、完整初始化算法；借用模式延期。 |
+| 暂定 | T03–T05：interface 加值型 case 的机制候选、nil 策略、panic / 递归验证、模式语法、穷尽与控制流规则。 |
+| 未定 | U06、U08：支持值/引用绑定的最终 ABI、递归对象 / 共享状态校验、完整初始化算法。 |
 
 状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 hgo 功能已实现。
 
-## 0. T0 的常量增强与带载荷范围
+后续已确认按模式区分 `Ok(value)`、`Ok(&value)` 与 `Ok(mut& value)`；具体语法和 ABI 见 [enum RFC](../rfcs/0008-enums.md) 与 [match RFC](../rfcs/0009-match.md)。本文值型 case 的 Go 实验仅覆盖值匹配，不能作为不支持引用模式的最终语言限制。
 
-D21 将 enum/match 列为 T0。Go 数值/string const 的既有零值或未知值问题不是阻塞理由；T0 优先级不要求先解决所有嵌套共享图验证。
+## 0. 当前确认：只保留封闭变体 enum
 
-以下区分是候选范围，不冻结新语法：
+用户最新决定（D27）覆盖此前开放 raw/C enum 路线。语言 enum 只有声明的变体；整数/string 是序列化的外部值，不是 enum 的底层类型，不允许任意 raw 转换制造合法值。旧 raw 成功示例和常量 lowering 已撤回；旧同值 raw 别名问题随该模型撤回，不再等待其答案。
 
-| 场景 | 最小能力 / lowering | 未知或非法值的候选行为 |
-| --- | --- | --- |
-| 数值/string 常量枚举，如订单状态 `"pending"` / `"paid"` | 保留真实底层数值/string 与显式常量取值，补名义身份、成员提示和 match 缺项检查；Go 可为命名基础类型 + const | Go 仍可传 `""` 或未来新增状态。开放/raw 值匹配需 `_` 或显式未知值处理；不普遍禁止原生转换，也不悄悄把零值改成第一个成员 |
-| 带载荷 enum，如 `Item(T)` / `Failed(error)` | 下文 interface/case 是一种候选 ABI，表达常量本身没有的数据选择 | 在执行受检查 match 时验证当前值；非法 Result nil/伪造 case 走明确边界失败（现候选 panic），不当作业务 Err，也不由 `_` 掩盖为合法 case |
-| Option | None/Some 区分缺失与存在的 payload | 现候选 nil 表示 None；Some(nil) 取决于 payload 类型，与 None 不同 |
-
-常量示意 lowering：`type State string; const Pending State = "pending"; const Paid State = "paid"`；原生未知 `State("future")` 仍可存在。闭合集合转换可显式返回校验失败；不把开放 Go 数据强制转换成闭合集合，也不将这种转换设为所有调用的门票。确切源语法、是否自动生成未知值模式尚未选定。
-
-只枚举已知成员不能声称覆盖开放输入；对受检查闭合值可以检查已知成员穷尽。带载荷 match 的非法值分支是边界诊断，不是业务变体，不改变下文“guard 不计覆盖”等规则。原生存储读取/清零后要在哪里验证仍是 U06/U08；允许先实现有限、明确的使用点检查，不把全图/别名分析放回 T0 门槛。来源不明不自动拒绝；无借用分析不等于 Go 零值自动合法。
-
-### 0.1 常量入口的限定实现（同值别名未定）
-
-本轮重新核对 D21、本文第 0 节及现有 RFC 后，不重开底层 raw 值、Go 转换、未知值保留和开放 match 必须兜底的方向。仅提出沿 Go 类型声明和现有 `Enum::Member` 惯例的表层入口：
+### 0.1 封闭 enum 与外部映射
 
 ```hgo
-enum Status string {
-    Pending = "pending",
-    Paid = "paid",
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum State {
+    #[serde(rename="pending")]
+    Pending,
+    #[serde(rename="paid")]
+    Paid,
 }
-
-status := Status("future")
-match status {
-    Status::Pending => { handle_pending() },
-    Status::Paid => { handle_paid() },
-    _ => { handle_unknown(string(status)) },
+#[derive(Serialize, Deserialize)]
+enum Code {
+    #[serde(value=1)]
+    Accepted,
+    #[serde(value=-2)]
+    Rejected,
 }
 ```
 
-建议先支持显式整数/string 常量，不增加隐式 iota、自动 Unknown 变体或新的封闭包装类型。降低仍是 Go 命名基础类型及 typed const；未知值不是非法带载荷 case，不触发后者的 match 前 panic。即使写全已知成员，也不能删掉开放输入的兜底。Go 零值原样保留，不改成首个成员。用户已授权先实现唯一 raw 值成员的这一限定入口；正式语法不因原型交付而整体冻结。同值别名继续待答复，带载荷 enum 的 `#[default]` 规则也不自动扩展到这里。
+原型字符串映射沿已有 UnitVariant 协议；不标 rename 则使用变体名。数值映射首版限所有变体都是 unit、每项显式 int64 范围整数字面量，选择 Int64/ReadInt64 协议后按值选择构造函数。映射是 serde 的固定辅助属性，不是语言判别值或隐式 Go 强转；仅 Serialize/Deserialize 之一也可独立派生。上述具体属性拼写是当前原型入口，通用属性/ABI 不据此全部冻结。
 
-唯一待用户选择的语义是同一 enum 的重复 raw 值：
+Go 核心 lowering 示意（辅助 API 的完整签名见实现；不是新 raw 类型）：
 
-- 推荐允许作为 Go 风格同值别名，例如 `Pending = "pending", Queued = "pending"`。运行时不能区分别名，match 的覆盖/不可达必须按实际值而非成员名字计算；两个无 guard 同值分支不可达，不凭成员名虚构第二种状态。
-- 另一方案要求成员 raw 值唯一，诊断更简单，但不能直接表达原生协议的同值别名。
+```go
+// State 仍为名义 interface/case；输入先解析再选择合法构造。
+func decodeStateText(text string) (State, error) {
+    switch text {
+    case "pending": return NewStatePending(), nil
+    case "paid": return NewStatePaid(), nil
+    default: return nil, fmt.Errorf("unknown State variant: %s", text)
+    }
+}
+```
 
-两种方案都保留未知值和普通 Go 转换，选择不涉及重新要求所有输入先作闭合验证。问题未回答前，只实现不依赖该选择的唯一值成员子集。同值声明暂报“别名规则待用户决策，当前子集未支持”，不把它记录为永久禁止，也不假定允许；其余常量 parse/type/lowering、Go 转换和开放 match 可继续。
+正式派生返回结构化 `UnknownVariant` 错误；错误数字类型、溢出等分别保持 Type/Range，不全部伪装成未知变体。未知输入不自动构造 Unknown、不选择默认变体，也不能用 `_` 吞成合法状态。业务应先处理解码错误再进入业务函数。用户自定义业务 validator（如订单流转/权限校验）后置；结构性 enum 合法性检查不是该业务功能。
 
-实际实现与 Go 互操作验收见 [常量 enum 增量](../t0-acceptance.md#常量-enum-唯一值子集增量)：唯一值入口已接通，同值别名仍待决定；raw 显式 Clone 已接通，其余派生规则见下一节。类型化常量不采用带载荷 case ABI。
+明确反例：`enum State string { ... }` / 整数底层声明被前端拒绝；重复外部名字/数值会令解码歧义而拒绝；数值/字符串混合、数值缺项、payload 使用该 unit 映射、缺少对应 derive 或未知属性明确拒绝。外部映射不得改变 Clone/Debug/match 的源变体身份。
 
-### 0.2 raw 派生的规则边界
+### 0.2 Default、Clone、Debug 边界
 
-本轮验收将普通标量复制与尚未定义的显示/格式策略分开：显式 `#[derive(Clone)]` 可以按既有整数/string Clone 规则复制完整 raw 值，结果保持原名义类型，未知值和零值不经过成员集合校验。它不要求同值别名决定，也不自动给所有 raw enum 登记 Clone。
+struct 自动 Default 要求每个字段类型具有 Default，否则不能派生，应手写完整实现。通用手写 impl 注册尚未实现；当前可显式调用普通业务构造函数，不能仅取名 DefaultX 就认领协议。enum 指定默认变体，当前原型仅支持唯一 unit `#[default]`；非默认变体 payload 是否需要 Default **待用户选择**，本轮不新增约束或宣称已定。带 payload 的默认构造超出当前自动派生能力。
 
-以下仍待设计，不用既有带载荷派生强行代替：
+Clone 复制当前合法变体及有协议的 payload。Debug 显示源 enum/变体名及 payload，struct 显示字段名和内容，包括私有业务字段；serde rename/value 不改 Debug，不自动脱敏，也不是稳定 wire 格式。缺少字段 Debug/Clone 协议仍拒绝，不反射、不调用任意 Stringer/error 兜底。
 
-- Debug：已知值是否显示成员名、未知值怎样带类型显示，尚无完整规则；若显示成员名，还要协调未来同值别名的显示选择。Debug 不是 wire 格式。
-- Serialize/Deserialize：raw 底层 string/整数编码，与 unit enum 变体名编码不同；rename、未知值解码及数值范围须明确。原生 Go JSON DTO→显式 raw 转换的业务验收不是 hgo raw serde 派生验收。
-- Default：选择 raw 零值还是明确标记成员没有规定；不自动把现有 payload unit 的 `#[default]` 移植过来，也不把 Go 零初始化当作协议选择。
-
-这些是独立未闭合规则，不意味着全部受同值别名一个问题阻塞。本轮不新增问卷、不替用户确认候选；现有显式转换/业务格式化仍可使用。
+Go 调用者仍能造 nil、typed-nil 或伪造 case；当前 match/派生边界检查拒绝它们，不声称 Go 全程序已静态封闭。Option None 与非法普通 enum/Result nil 继续区分；全面初始化/递归对象图/原位借用 ABI 仍未完成。
 
 ## 1. 源级类型与构造
 
@@ -111,11 +106,11 @@ label := match load_result() {
 }
 ```
 
-被匹配表达式只求值一次，先保存为临时值，再按源码顺序尝试分支。模式检查本身不调用用户代码；模式成功后才建立该分支的绑定、求值 guard，guard 为 true 才执行分支体。guard 为 false 则继续后续分支，不重新调用 `load_result()`，也不撤销已经发生的副作用。只执行一个分支体，不允许 fallthrough。
+被匹配表达式只求值一次；上例保存值，借用模式则须保存受权限检查的原存储位置，再按源码顺序尝试分支。模式检查本身不调用用户代码；模式成功后才建立该分支的绑定、求值 guard，guard 为 true 才执行分支体。guard 为 false 则继续后续分支，不重新调用 `load_result()`，也不撤销已经发生的副作用。只执行一个分支体，不允许 fallthrough。
 
-临时值固定外层变体和已复制的字段。若 payload 包含共享 slice、map 或句柄，guard 对其指向数据的合法修改仍可能被后续分支观察到；“只求值一次”不等于制作整个对象图的快照。
+值匹配的临时值固定外层变体和已复制的字段；引用模式不能凭这一步制造原对象的副本。若 payload 包含共享 slice、map 或句柄，guard 对其指向数据的合法修改仍可能被后续分支观察到；“只求值一次”不等于制作整个对象图的快照。
 
-首版提供三种模式：完整限定的变体模式、绑定名、`_`。payload 可以递归使用这些模式，例如 `Option::Some(Option::None)`。常量条件先写成 guard，不增加隐式方法调用、动态相等性协议或解构副作用。
+模式包含完整限定的变体、绑定名和 `_`，绑定再按值/读借用/写借用区分。payload 可以递归使用这些模式，例如 `Option::Some(Option::None)`。常量条件先写成 guard，不增加隐式方法调用、动态相等性协议或解构副作用。
 
 ### 2.1 穷尽性与不可达分支
 
@@ -131,7 +126,7 @@ label := match load_result() {
 
 ### 2.2 绑定与作用域
 
-首版采用值绑定：从保存的合法 case 复制 payload 到分支局部变量，作用域包含该 guard 和分支体。改写这个局部值不会回写枚举；经共享句柄修改对象仍按该句柄的权限检查。再次尝试后续分支时重新建立绑定。
+值模式 `Ok(value)` 按允许的复制规则绑定 payload；改写局部副本不回写枚举。`Ok(&value)` 和 `Ok(mut& value)` 则分别借用 payload 原存储，后者修改应由原枚举观察到。匹配目标只求值一次不等于无条件复制目标，借用模式需要保存位置和权限。精确语法与 guard/借用作用域见 [RFC 0009](../rfcs/0009-match.md)。
 
 不自动取地址，不把值匹配变成 `mut&`，也不从 Go type switch 得到的 case 副本中制造“指向原枚举字段”的可变借用。首版不支持 `match mut& place` 等原位借用模式；普通引用 payload 的值复制不因借用身份拒绝；真正明确不可复制的资源类型约束另行定义，不能借此恢复全局独占检查。已有 `&T` / `mut& T` 的装箱、返回、闭包、goroutine 和接口逃逸继续受引用专题约束；枚举不会绕过这些检查。
 
@@ -147,7 +142,7 @@ match 是表达式，也可在语句位置丢弃结果。有期望类型时，�
 
 ## 3. 首版 Go 表示
 
-首版候选采用普通 Go interface 加**值型变体 struct**，不需要 Go `unsafe`、内存重解释或 union。普通枚举的无 payload 变体也有自己的零字段 case struct；只有标准 Option 的 None 使用 nil 接口这一约定。
+以下既有机制候选采用普通 Go interface 加**值型变体 struct**；其原位借用支持尚未闭合，不是最终 ABI。此候选不需要 Go `unsafe`、内存重解释或 union。普通枚举的无 payload 变体也有自己的零字段 case struct；只有标准 Option 的 None 使用 nil 接口这一约定。
 
 | hgo 值 | 生成 Go 值 |
 | --- | --- |
@@ -343,7 +338,7 @@ Go 下游可直接调用 `Describe(Ok[int, string]{Value: 7})`；`NestedState(ni
 
 1. 普通 enum、Option、Result 的泛型身份准确；构造与 payload 类型不匹配在源码处诊断。
 2. match 目标只求值一次，guard 和分支保持顺序；guard 不贡献穷尽覆盖，嵌套缺项与不可达分支有准确诊断。
-3. 分支复制、引用限制、结果统一、return / break / continue 与 defer 作用域不因降低改变。
+3. 值绑定按允许规则复制，读写借用指向原 payload；结果统一、return / break / continue 与 defer 作用域不因降低改变。
 4. nil Result、typed nil、非 nil case 指针及接口嵌入伪造值均在业务副作用前拒绝；合法标量 case 通过。
 5. None、Some(None)、Some(Some(value)) 与 Option[Ptr] 的 Some(nil) 可区分；嵌套非法 payload 被拒绝。
 6. 数组、slice 创建与扩长、map 缺项、关闭 channel、泛型零值和部分 struct 初始化不能在 safe hgo 中暴露非法值。
@@ -352,4 +347,4 @@ Go 下游可直接调用 `Describe(Ok[int, string]{Value: 7})`；`NestedState(ni
 9. 新增变体触发必要的源码 / ABI 兼容性检查；LSP 的补全、缺失分支与跳转使用同一 enum 元数据。
 
 
-Option/Result 的专用 `?` 见 [RFC 0005](../rfcs/0005-option-result-question.md)：D22 确认限域与目标已知的显式 From 单步转换；精确语法与实现仍待完成，不公开通用 Try/Residual，不自动转换 Go 多返回。
+Option/Result 的专用 `?` 见 [RFC 0005](../rfcs/research/0005-option-result-question.md)：D22 确认限域与目标已知的显式 From 单步转换；精确语法与实现仍待完成，不公开通用 Try/Residual，不自动转换 Go 多返回。

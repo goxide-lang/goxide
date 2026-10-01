@@ -1,5 +1,7 @@
 # 可运行的 hgo 语言子集
 
+**当前覆盖：最新 D27 撤回开放 raw/C enum；旧 raw 阶段仅为历史记录，代码/成功夹具已移除。当前封闭 enum 与 serde 外部映射见末节；非默认 payload 的 Default 约束待用户选择。**
+
 此实现分支从 `v0.0.0-mvp-doc` 开始；冻结标签保持不变，本文件只描述实现分支。
 这是具体类型、Go 宿主语法上的可执行子集；单文件入口与后文有限 Go module 目录入口并存，不是完整 hgo 编译器、trait ABI 或 LSP。
 
@@ -336,7 +338,7 @@ go test -race -count=1 ./tests/acceptance -run '^TestT0DeliveryInstalledCLI$' -v
 
 `#[derive(Default)]` 生成 `DefaultType() Type`，沿用具体类型 helper，不声称完整 trait/impl 后端。struct 按声明顺序显式构造字段：已登记的 bool/string、整数（含 byte/rune）、float32/64 使用基础默认实现；同包已派生类型调用其 `DefaultType()`。空 struct 可构造。不会因出现同名手写函数就自动认领 Default 协议；基础类型被同包声明遮蔽时拒绝。
 
-普通 enum 必须恰好有一个 `#[default]` 无载荷变体，生成函数调用该变体的已有 nominal constructor；缺失、多选、重复属性及标记 payload 变体均拒绝。其他未选变体的 payload 无需 Default。`Option[T]` 具体实例字段显式调用 None constructor，不要求 T 有 Default；现有 ABI 的 None 表示为 nil，不能据此推断普通 enum/Result 的 nil 合法。
+普通 enum 必须恰好有一个 `#[default]` 无载荷变体，生成函数调用该变体的已有 nominal constructor；缺失、多选、重复属性及标记 payload 变体均拒绝。当时原型未检查其他未选变体的 payload Default；最新用户保留该约束待定，不把这个历史实现行为当成已确认规则或验收要求。`Option[T]` 具体实例字段显式调用 None constructor，不要求 T 有 Default；现有 ABI 的 None 表示为 nil，不能据此推断普通 enum/Result 的 nil 合法。
 
 容器、引用/指针、Arc、外部类型、Result 的自动默认及手写 Default 注册暂不支持；这不是给未决容器默认语义做决定。原生 Go `var`/`make` 不变。**`#[serde(default)]` 仍是既有原型的缺失字段 Go 零值策略，不调用语言 Default**；特别是它不能保证产生有效的非空 enum 字段，需要业务显式处理，后续不得无说明改变 wire 行为。
 
@@ -382,6 +384,8 @@ python3 scripts/check_design.py
 
 ## T0 接续：显式整数 / string raw 常量 enum
 
+**历史阶段：raw部分已由D27撤回，不是当前支持或待选任务；封闭enum的纯兜底match仍保留。**
+
 原型入口为 `enum Status string { Pending="pending", Paid="paid", }` / `enum Code uint8 { Accepted=1, Retry=1<<1, }`，成员引用复用 `Status::Pending`。明确底层类型限 Go 内建整数/string（含 byte/rune），降低为真实 Go named type 和 typed const；普通同包跨文件 const、运算表达式及成员常量引用由 Go 类型检查求值，数组长度/const initializer 保持常量身份。溢出、非const、类型不兼容、循环常量按 Go 检查拒绝；不实现隐式成员值或 iota。定义点底层类型必须确为指定 predeclared builtin，不能被同包其他文件的同名类型替换。
 
 raw 输入不封闭：原生 `Status("future")`、零值与 Go 合法 runtime narrowing 转换原样保留，不自动变成第一个成员，不生成 Unknown，不调用带载荷 enum 的非法表示 validator。statement 和既有有限 expression match 都要求无 guard `_` 或 whole-value binding 兜底；列完所有已知成员也不覆盖未来值。guard 保序、目标一次求值、无guard同成员后续分支不可达；绑定兜底保留原始未知值，控制流不新增隐藏循环/IIFE。既有至少一个 qualified pattern 用于确定名义类型的限制保持。
@@ -390,10 +394,12 @@ raw 输入不封闭：原生 `Status("future")`、零值与 Go 合法 runtime na
 
 同一 enum 的重复 raw 值按 Go `constant.Value` 求值后比较，报 `same-value aliases pending user decision; unsupported in current subset`；等值不同拼写不会漏判。这只隔离尚未决定的同值别名能力，不把永久禁止写入语言规则。不同 enum 可有相同 raw 值，但不能因此混赋/混match。不扩展 raw enum 的 Default/Debug/Clone/serde/Error derive，已有带载荷 enum 行为不改变。
 
-验证：内部测试覆盖显式常量表达式/数组长度、同包native const、溢出/非const/别名待决诊断、开放兜底/guard不可达、local type shadow、不同enum名义性与跨文件builtin shadow；`internal/enums` 和 `internal/frontend` 完整 race 通过，最后显式分号分隔raw声明的修复另以所有 `TestRawEnum` 定向race复验。复用非实现作者独立提供 [三包业务](examples/raw_enum/main.hgo) 和 [接受测试](tests/acceptance/raw_enum_test.go)：安装CLI后仓库外转译、重复产物一致、实际生成模块race、独立build/run、native JSON未知/零值/窄化转换及14类拒绝通过。最终综合统计由主集成记录；无本代理独立提交或标签操作。
+验证：内部测试覆盖显式常量表达式/数组长度、同包native const、溢出/非const/别名待决诊断、开放兜底/guard不可达、local type shadow、不同enum名义性与跨文件builtin shadow；`internal/enums` 和 `internal/frontend` 完整 race 通过，最后显式分号分隔raw声明的修复另以所有 `TestRawEnum` 定向race复验。复用非实现作者独立提供 三包业务（旧 raw 夹具已撤回，历史提交 cd49537） 和 接受测试（旧 raw 夹具已撤回，历史提交 cd49537）：安装CLI后仓库外转译、重复产物一致、实际生成模块race、独立build/run、native JSON未知/零值/窄化转换及14类拒绝通过。最终综合统计由主集成记录；无本代理独立提交或标签操作。
 
 
 ### 常量 enum 最终集成验收
+
+**历史阶段：raw部分已由D27撤回，不是当前支持或待选任务；封闭enum的纯兜底match仍保留。**
 
 基准 `47af69fcd66820ab4b7edb8b4c22e5eaf9a928ad`。代码冻结后的 Go 1.27.1 linux/amd64、CGO=1、本地离线工具链验证：全套 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、204 宿主顶层测试、353 子测试**；另一个包无自身测试。`go vet ./...`、设计检查 **13 条 Go 命令**、最终文档检查和 diff 检查均通过。
 
@@ -405,6 +411,8 @@ raw 输入不封闭：原生 `Status("future")`、零值与 Go 合法 runtime na
 
 
 ## 最后 T0 覆盖补缺：纯兜底 match 与 raw Clone
+
+**历史阶段：raw部分已由D27撤回，不是当前支持或待选任务；封闭enum的纯兜底match仍保留。**
 
 基准 `94e5d5790822dafb902e57f288da16ac78ee4e4c`。独立非实现作者核对规范并运行反例，确认纯通配/全值绑定 match 和 raw Clone 均是已有语义内的实现缺口，而不是同值别名决策的依赖。
 
@@ -431,3 +439,36 @@ go test -race -count=1 ./tests/acceptance -run '^(TestT0FinalAudit|TestRawEnum)'
 ```
 
 实际期望业务输出分别为 `audit webhook future-v3` 与 `webhook review:deferred-v2/unknown:7`。只做本地提交，不 push、不改标签；停止新增范围，不重问同值别名。
+
+
+## 当前交付：封闭 enum、serde 映射与文档同步
+
+基准 `cd495372377cac8bf139427e21fc4490e48a0348` 的开放raw/C enum parser、常量lowering、metadata、Go常量导出和raw Clone路径已删除；底层整数/string enum语法明确拒绝。只保留声明的封闭变体，match/Clone/Debug验证合法表示，不通过未知值或任意Go转换扩充变体。
+
+unit enum的 `#[serde(rename="pending")]` 使用字符串协议；或全部unit变体显式 `#[serde(value=1)]`，首版限定signed int64十进制字面量。数值映射使用既有Int64/ReadInt64而非新raw类型；两个方向可独立派生。重复/混合/缺失/越界/带payload的映射和未知属性明确诊断。未知有效wire值为UnknownVariant，Type/Range错误保持原类别及嵌套Field路径；错误不被默认变体吞掉，业务函数不执行。用户自定义业务validator后置，现有结构边界检查不属该延期项。
+
+Default struct要求所有字段有Default，否则手写；通用手写impl注册未实现，可显式业务构造，不凭helper名字注册。enum自动默认仍限unique unit标记；非默认payload是否需Default待用户回答，已去掉专门锁定这一选择的旧验收。Debug显示源变体/payload和struct字段内容，含私有内容，不按serde映射重命名、不自动脱敏、不保证稳定wire格式。
+
+安全同步：先将cd49537实现分支和原文档标签发布，再把远端work `b6b746c4267962b1c61d13bff4b3f2f55638bf91` 的36项文档/检查器变更合入当前feature分支。RFC0019统一wrapper与0020关联函数原文保留；实现仍未覆盖它们的通用前端。独立编号冲突通过R19–R26和研究RFC子目录消解，链接全部重定位；远端旧strict/unknown-call-unsafe规则按D19/D20逐篇修正，没有恢复MVP借用分析。未重写work/main或原标签。
+
+新[业务模块](examples/enum_wire/main.hgo)与[独立验收](tests/acceptance/enum_wire_test.go)由非实现作者编写，实际安装CLI、转译后生成模块3项race运行测试、独立build与4输入、仓库外run；另封闭归档业务2项race与PrintDefault业务4项race回归。未知字符串/数字（含空/0）返回带Field路径的UnknownVariant，业务计数0；已知值往返、原生Go构造/调用、Default第二unit和Debug源内容验证通过。
+
+原型CLI复现（当前环境已具备工具链）：
+
+```sh
+cd /workspace/goxide-macro-mvp
+export PATH=/workspace/goxide-environment/go/bin:$PATH
+export GOTOOLCHAIN=local GOWORK=off GOPROXY=off
+GOBIN=/tmp/hgo-closed-bin go install ./cmd/hgo
+/tmp/hgo-closed-bin/hgo run examples/enum_wire
+go test -race -count=1 ./tests/acceptance -run '^(TestEnumWire|TestT0FinalAudit|TestPrintDefault)' -v
+```
+
+正常输出 `dispatch delivered true 1`；未知输入打印 `rejected 0`。完整运行次数与回归结果追加在本节末尾。
+
+
+最终验证：Go1.27.1 linux/amd64、CGO=1、本地离线工具链。首轮整树race中其余14包通过，唯一失败是旧接受测试仍要求拒绝现已支持的variant rename；将该旧断言改为仍未支持的alias属性后，完整acceptance包重新race通过。合并这两次互不重复的最终包结果：**15个有测试包、209宿主顶层、350子测试通过**，另一个包无自身测试。不声称首轮命令成功，也没有将生成模块测试重复计入宿主数量。
+
+`go vet ./...`、设计检查13条Go命令通过；最终Markdown 56文件、486本地链接/锚点和20篇逐特性RFC结构检查通过。独立文档审查发现的strict/unknown-call-unsafe回流、raw旧当前状态、Default待决误标均已修正；0019/0020对origin/work全文无差异。日志 `/tmp/goxide-closed-wire-final-race.json`、`/tmp/goxide-closed-wire-acceptance-final.json`、`/tmp/goxide-closed-wire-final-vet.log`、`/tmp/goxide-closed-wire-final-design.log`。
+
+本轮按用户授权提交并推送feat/macro-mvp工作分支；原文档tag保持同一对象，work/main不更新。未决非默认payload Default约束保留，不重问已撤回的raw别名问题。

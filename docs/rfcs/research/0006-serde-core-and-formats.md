@@ -2,6 +2,8 @@
 
 状态：用户已确定“仿照 serde-rs 的实现”，覆盖此前助手提出的统一 core Value、CoreValue-v1 和首版必须建完整树等候选。已确定 serde 优先、首版 JSON、未来 YAML 独立适配；下文 Go/hgo ABI、支持子集与本地策略仍是实施候选，不声称完整 Rust 兼容。没有 serde 或宏前端实现，冻结标签 `v0.0.0-mvp-doc` 不变。
 
+当前D27补充：语言只保留封闭变体enum。unit变体可用serde rename映射外部字符串，或完整显式int64 value映射数字；未知外部值返回UnknownVariant，业务validator延期。它不新增开放raw enum，不改变Clone/Debug身份；真实边界见[枚举专题](../../design/enums-and-match.md#01-封闭-enum-与外部映射)。
+
 ## 1. 官方设计与源码核对
 
 本轮实际读取 serde-rs 官方文档及 serde/json 主分支源码。链接为移动分支，实施前应锁定参考版本；下表标明所核对的符号，不靠类名推断行为。
@@ -125,7 +127,7 @@ struct Order {
 }
 
 // 候选 API；首版 helper 可先采用 Go (T,error)，不等待 ? 前端。
-order := serde_json::from_str[Order](input)?
+order := serde_json::from_str[Order](../input)?
 text := serde_json::to_string(order)?
 view := serde_json::to_value(order)? // 可选 JSON Value，不是必经步骤
 ```
@@ -237,4 +239,4 @@ JSON Value 不能保存 YAML 任意键、tag/锚点身份或注释；跨格式�
 
 ## 实现分支进展（不冻结 ABI）
 
-具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../IMPLEMENTATION.md)。此结果不代表本 RFC 的泛型、enum 派生、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。
+具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。此结果不代表本 RFC 的泛型、enum 派生、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。

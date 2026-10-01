@@ -146,39 +146,8 @@ or conversion chaining is inferred. Attribute spelling and helper ABI remain
 prototype conventions, not new frozen language rules.
 
 
-## Explicit raw constant enums
+## Closed variants and external wire mappings
 
-```hgo
-enum Status string { Pending = "pending", Paid = "paid", }
-enum Code uint8 { Accepted = 1, Retry = 1 << 1, }
-const retry = Code::Retry
-func route(s Status) string {
-    return match s { Status::Pending => "wait", Status::Paid => "done", other => string(other), }
-}
-```
+Open raw/C enums are withdrawn. `enum State string {...}` and integer base declarations are rejected. All enum values use declared variants; wildcard-only matching resolves nominal identity and validates the closed representation before guards/bodies.
 
-The frontend lowers these to Go named integer/string types and typed constants.
-Explicit values use Go constant-expression typing, including ordinary constants
-from other selected package files; overflow, nonconstant values, and incompatible
-typed constants are rejected. Member references remain constants, including in
-array lengths and const initializers. `iota`, implicit values, member attributes,
-and derive on raw enums are outside this subset. Duplicate evaluated values in
-one enum produce `same-value aliases pending user decision; unsupported in current
-subset`; this is an implementation boundary pending that decision, not a language
-rule forbidding aliases permanently.
-
-`Status("future")`, Go zero values, and legal runtime conversions are unchanged.
-There is no membership validator or automatically inserted Unknown member. An
-open raw match must have an unguarded wildcard or whole-value binding even after
-all known members; guards retain source ordering. The existing finite expression
-match forms are supported. At least one qualified member pattern is still needed
-to establish match identity; wildcard-only inference remains unsupported.
-
-Directory mode shares constants across files and exports `pub enum` metadata to
-direct same-module imports. `alias.Status::Paid` uses a package-level const alias
-and bound type identity, preserving constness under local import/type shadowing.
-Native Go accesses the ordinary exported type and constants named
-`HgoConst6_Status_Paid` (the numeric component is the enum name's byte length).
-These names remain prototype ABI. Raw values in different enum types do not
-become assignable just because their representations or member spellings match.
-External precompiled metadata and derive ecosystem integration are not added.
+Unit enums may derive Serialize/Deserialize with `#[serde(rename="pending")]` or a complete `#[serde(value=1)]` mapping. Numeric mappings require signed int64 decimal literals on every unit variant; mixed, duplicate, missing or payload mappings are rejected. Unknown inputs return UnknownVariant instead of an unknown enum value. Type/range failures retain their distinct errors. Clone/Debug/match use source variant identity; the codec does not change Default or create a raw cast.

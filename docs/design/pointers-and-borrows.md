@@ -8,7 +8,7 @@
 
 三态定义与跨专题决策以[决策登记](decisions.md)为准。
 
-[RFC 0001](../rfcs/0001-scoped-borrow-views.md)已按 D19 改为默认 Go 兼容、有依据 warning；先前保守拒绝已否决。类型权限与别名风险分开，未知不等于错误。
+[RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)已按 D19 改为默认 Go 兼容、有依据 warning；先前保守拒绝已否决。类型权限与别名风险分开，未知不等于错误。
 
 ## 1. 已确认的方向
 
@@ -120,6 +120,6 @@ Go 的 nil 与容器行为由各自类型定义；hgo 应逐类建立视图，�
 
 跨专题依赖见[设计总纲](overview.md)，实现阶段与未完成项见[路线图](../../ROADMAP.md)。
 
-用户已明确引用获取与原生桥接分层：持有可写 T 可用 `mut& value`；Boxed/Ref/Arc 须先经各自已有方法/协议取得内部引用，之后才讨论 Go 桥接。当前 Box 未定、Boxed 无定义、旧 Ref 已替代、Arc 取写引用方法未定；不虚构 as_mut/get_mut。完整四类链路与容器槽位区别见 [RFC 0002 §1.2](../rfcs/0002-native-pointer-bridge.md#12-先取得内部引用再讨论-go-桥接)。
+用户已明确引用获取与原生桥接分层：持有可写 T 可用 `mut& value`；Boxed/Ref/Arc 须先经各自已有方法/协议取得内部引用，之后才讨论 Go 桥接。当前 Box 未定、Boxed 无定义、旧 Ref 已替代、Arc 取写引用方法未定；不虚构 as_mut/get_mut。完整四类链路与容器槽位区别见 [RFC 0002 §1.2](../rfcs/research/0002-native-pointer-bridge.md#12-先取得内部引用再讨论-go-桥接)。
 
-当前功能拆分与 MVP 候选见 [RFC 0003](../rfcs/0003-pointer-roles-and-mvp.md)：普通 GC 引用若可长期保存，已覆盖间接存储/递归/共享身份；Arc 的 API 保留/转交标记具有独立价值，当前候选与 D08 一致，具体协议仍未确认。Box 首先是装箱需求，不预设独占或物理堆保证；Cell/RefCell 不默认进入 MVP。读权限须沿字段/容器/方法传播，区别于长期别名分析。
+当前功能拆分与 MVP 候选见 [RFC 0003](../rfcs/research/0003-pointer-roles-and-mvp.md)：普通 GC 引用若可长期保存，已覆盖间接存储/递归/共享身份；Arc 的 API 保留/转交标记具有独立价值，当前候选与 D08 一致，具体协议仍未确认。Box 首先是装箱需求，不预设独占或物理堆保证；Cell/RefCell 不默认进入 MVP。读权限须沿字段/容器/方法传播，区别于长期别名分析。

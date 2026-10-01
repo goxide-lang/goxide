@@ -128,13 +128,6 @@ func hygienicDebug(){DebugSettings:=func(*Settings)string{panic("captured debug 
 
 #[derive(Default)]
 type Empty struct{}
-#[derive(Default)]
-enum fallback {
- Data([]int),
- #[default]
- Empty,
-}
-func isFallbackEmpty(value fallback)bool {match value {fallback::Data(_)=>{return false},fallback::Empty=>{return true},};panic("unreachable")}
 type NoDefault struct { Signal chan int }
 #[derive(Default)]
 type OptionalSettings struct { Value Option[NoDefault] }
@@ -151,7 +144,7 @@ import("errors";"io";"os";"strings";"testing";"github.com/hxsf/goxide/serdejson"
 func capturePrint(t *testing.T,f func())string{t.Helper();r,w,err:=os.Pipe();if err!=nil{t.Fatal(err)};old:=os.Stdout;os.Stdout=w;defer func(){os.Stdout=old;r.Close();w.Close()}();f();w.Close();data,err:=io.ReadAll(r);if err!=nil{t.Fatal(err)};return string(data)}
 func TestExplicitDefaultAndGoZero(t *testing.T){
  value:=DefaultSettings();if value.Name!=""||value.Limits.Retries!=0||value.Limits.Enabled||stateName(value.State)!="standby"{t.Fatalf("default: %#v",value)}
- if !isFallbackEmpty(Defaultfallback())||!hasNoOptionalValue(DefaultOptionalSettings()){t.Fatal("default incorrectly required unselected payload/T protocol")};_=DefaultEmpty()
+ if !hasNoOptionalValue(DefaultOptionalSettings()){t.Fatal("Option default must be None without T Default")};_=DefaultEmpty()
  if stateName(hygienicDefaults().State)!="standby"{t.Fatal("macro captured local Default helper")}
  var zero Settings;if zero.State!=nil||make([]Settings,1)[0].State!=nil||(map[string]Settings{})["missing"].State!=nil{t.Fatal("Default altered Go zero initialization")}
  rejected:=false;func(){defer func(){rejected=recover()!=nil}();_=stateName(zero.State)}();if !rejected{t.Fatal("Default legalized raw nil enum")}

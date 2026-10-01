@@ -68,7 +68,7 @@ func TestEnumSerdeDiagnostics(t *testing.T) {
 		{"#[derive(Error)]\nenum E { A, }", "requires error message"},
 		{"#[derive(Serialize)]\n#[serde(deny_unknown_fields)]\nenum E { A, }", "enum serde"},
 		{"enum Inner { A, }\n#[derive(Serialize)]\nenum Outer { Item(Inner), }", "required derive"},
-		{"#[derive(Serialize)]\nenum E {\n#[serde(rename=\"other\")]\nA, }", "variant attributes are unsupported"},
+		{"#[derive(Serialize)]\nenum E {\n#[serde(unsupported=\"other\")]\nA, }", "unsupported enum variant serde attribute"},
 	} {
 		_, e := Compile("bad.hgo", []byte("package p\n"+tc.src))
 		if e == nil || !strings.Contains(e.Error(), tc.want) {

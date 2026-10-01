@@ -95,6 +95,8 @@ Option / Result 的 Go interface 表示没有自动的 JSON 编码协议。JSON 
 
 ## 4. 泛型 slice 的首版方向
 
+后续建议由 std 独立提供 Vec、借用视图与多种 Map 实现，不将原生 map 关键字作为高级容器的唯一入口。分别见 [Vec RFC](../rfcs/0010-collections.md) 和 [Map RFC](../rfcs/0017-maps.md)。以下名义 Slice 是既有候选方案，其赋值共享语义不自动等于新 Vec 的最终语义；Go 原生 slice/map 仍须在互操作层准确表示。
+
 Go 已经有泛型 slice 及 `slices` 包。hgo 要补充的是权限、初始化、可选结果、错误结果和日常 API 视图，不是重新发明这些泛型算法。例如 Go `slices.Clone` 已按赋值复制元素，明确属于浅复制。[Go slices 包](https://pkg.go.dev/slices)、[slices.Clone](https://pkg.go.dev/slices#Clone)
 
 ### 4.1 Slice[T] 与原生 []T

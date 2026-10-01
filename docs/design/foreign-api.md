@@ -12,7 +12,7 @@
 
 状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 hgo 功能已实现。
 
-[RFC 0001](../rfcs/0001-scoped-borrow-views.md) B04/B07 区分普通原生调用与明确 unsafe 操作；没有效果摘要本身不拒绝、不要求 unsafe、不报告风险。
+[RFC 0001](../rfcs/research/0001-scoped-borrow-views.md) B04/B07 区分普通原生调用与明确 unsafe 操作；没有效果摘要本身不拒绝、不要求 unsafe、不报告风险。
 
 ## 1. 原生视图与声明视图
 
@@ -137,7 +137,7 @@ Go 函数类型本身没有该 unsafe 属性，导出 hgo unsafe API 后，纯 G
 
 声明包必须绑定真实 Go import path、适用版本与构建条件。编译器和 LSP 读取同一份明确选定的声明集合；不同来源的冲突声明应诊断或要求显式选择，不按磁盘扫描顺序、导入顺序或“最后一个覆盖”决定语义。声明格式、包命名及依赖锁定机制待包系统设计。
 
-`declare func` 只建立函数视图，通常不修改 Go 依赖源码；`declare impl` 继续遵守[显式实现适配规则](go-interop.md)，需要时在隔离构建视图中补 marker。若直接采用 safe trait 方法，声明作者也须担保原生实现符合该 trait 方法的借用和调用契约；编译器检查签名与声明契约兼容，不把 marker 当作行为证明。这不会顺带将其他原生方法或该方法的独立原生调用视图改为 safe。
+`declare func` 只建立函数视图，通常不修改 Go 依赖源码；`declare impl` 遵守[显式实现适配规则](go-interop.md)，在 impl 包生成转发 wrapper、marker 和固定工厂，不给原生类型追加方法。若直接采用 safe trait 方法，声明作者也须担保原生实现符合该 trait 方法的借用和调用契约；编译器检查签名与声明契约兼容，不把 marker 当作行为证明。这不会顺带将其他原生方法或该方法的独立原生调用视图改为 safe。
 
 类型文件本身没有需要执行的包初始化。原始 Go 包及依赖的 init 仍按 Go 规则运行，逐次调用的 unsafe 标记不覆盖初始化行为；这是引入原生依赖本身的信任边界，不能宣称 sys/lib 分层构成运行沙箱。
 
@@ -147,8 +147,8 @@ Go 函数类型本身没有该 unsafe 属性，导出 hgo unsafe API 后，纯 G
 
 未来 hgo 实现还需验证：普通未声明调用允许的对照、declare 签名校验与具体风险 warning、unsafe expr 范围、函数值传播、声明版本和冲突、Ptr 来源与反向转换，以及函数值/回调的 Go 桥接。上述 Go 实验不代表这些前端规则已经实现。
 
-U15 的完整候选调用写法、单层/容器/回调 lowering、D11 例外及唯一待确认项见 [RFC 0002](../rfcs/0002-native-pointer-bridge.md)。当前 D11 在批准前保持原样。
+U15 的完整候选调用写法、单层/容器/回调 lowering、D11 例外及唯一待确认项见 [RFC 0002](../rfcs/research/0002-native-pointer-bridge.md)。当前 D11 在批准前保持原样。
 
-写引用核对：hgo `native::Fill(mut& value)` 中 mut 不由自动桥接省略；已有 `p: mut& T` 可直接传 p。Go 输出 `native.Fill(&value)` 只是 Go 无 mut 语法。未知原生 *T 位置不能接受隐式升级的只读 &T；只读视图须有明确可信声明依据，见 [RFC 0002 权限核对](../rfcs/0002-native-pointer-bridge.md#11-写引用核对省-asptr不省-mut)。方案 A 仍待确认。
+写引用核对：hgo `native::Fill(mut& value)` 中 mut 不由自动桥接省略；已有 `p: mut& T` 可直接传 p。Go 输出 `native.Fill(&value)` 只是 Go 无 mut 语法。未知原生 *T 位置不能接受隐式升级的只读 &T；只读视图须有明确可信声明依据，见 [RFC 0002 权限核对](../rfcs/research/0002-native-pointer-bridge.md#11-写引用核对省-asptr不省-mut)。方案 A 仍待确认。
 
 边界桥接不负责取得容器内部引用：只有已经通过值取址或容器自身方法/协议实际得到的 `mut& T` 才进入写引用桥接；`mut& Arc[T]` 等容器绑定引用不能自动展平成 `mut& T`。Boxed/Ref/Arc 的未定获取 API 不由 AsPtr 或方案 A 自动补齐。

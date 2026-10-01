@@ -223,9 +223,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		}
 		return result, err
 	}
-	if err := enums.ValidateRaw(path, files, families, imp); err != nil {
-		return result, stageError("raw enum constants", err)
-	}
+
 	return result, nil
 }
 func sortedSources(s map[string][]byte) []string {

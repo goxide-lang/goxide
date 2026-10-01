@@ -134,7 +134,7 @@ sort::Slice(items, func(i int, j int) bool {
 
 原生容器可以原样往返；不把 `[]*T` 重写成 `[]Ptr[T]`，也不把 `map[string]*T` 重写为另一张 map。若用户明确要求不同元素类型的容器，必须用显式逐元素适配或提供具体转换；不能用 unsafe.Pointer 强转，也不能静默复制破坏共享身份。比较器同步调用、原地排序不意味着不能有指针；具体并发修改或重入链才 warning。
 
-常见回调形状 `func(*bytes.Buffer)` 的 hgo `func(Ptr[bytes.Buffer])` 不是同一个 Go 函数类型。A/B 均可在已知目标签名生成 `func(p *bytes.Buffer) { callback(Ptr[bytes.Buffer](p)) }`。桥接先对回调表达式求值一次并保存函数值，再判断 nil 和捕获该值，不能捕获之后可能重绑定的源变量槽位。nil 函数值须保持 nil，不能总包成非 nil 闭包；闭包留存/指针结果照原生语义，缺效果摘要不拒绝。明确 unsafe callable 属性不能被桥接擦除，须保留属性或由显式有体包装承担调用；这是类型/明确操作检查，不是长期别名分析。参数权限方向要分别检查：只读参数回调可以接收可写对象的降权限视图；要求可写参数的回调不能放到只保证提供只读对象的位置。nullable 是独立维度，不能无检查地把原生 nullable 入参适配为非空 &T/mut& T。
+常见回调形状 `func(*bytes.Buffer)` 的 hgo `func(Ptr[bytes.Buffer])` 不是同一个 Go 函数类型。A/B 均可在已知目标签名生成 `func(p *bytes.Buffer) { callback(Ptr[bytes.Buffer](../p)) }`。桥接先对回调表达式求值一次并保存函数值，再判断 nil 和捕获该值，不能捕获之后可能重绑定的源变量槽位。nil 函数值须保持 nil，不能总包成非 nil 闭包；闭包留存/指针结果照原生语义，缺效果摘要不拒绝。明确 unsafe callable 属性不能被桥接擦除，须保留属性或由显式有体包装承担调用；这是类型/明确操作检查，不是长期别名分析。参数权限方向要分别检查：只读参数回调可以接收可写对象的降权限视图；要求可写参数的回调不能放到只保证提供只读对象的位置。nullable 是独立维度，不能无检查地把原生 nullable 入参适配为非空 &T/mut& T。
 
 接口装箱同样保持原生动态类型和 typed nil；桥接 `Ptr[bytes.Buffer]` 到 io.Reader 时先恢复真实 `*bytes.Buffer` 才检查方法集，不给具名 Ptr 伪造接收者方法，不隐式选 hgo trait 实现。类型不匹配是 error，不用 warning 掩盖；未知 nil 风险也不默认逐个报警。
 

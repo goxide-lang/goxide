@@ -2,7 +2,6 @@ package propagate
 
 import (
 	"go/ast"
-	"go/token"
 	"go/types"
 
 	"github.com/hxsf/goxide/internal/enums"
@@ -43,7 +42,7 @@ func (l *lowering) inferMatches() error {
 		if !ok || failure != nil {
 			return true
 		}
-		for i, stmt := range block.List {
+		for _, stmt := range block.List {
 			es, ok := stmt.(*ast.ExprStmt)
 			if !ok {
 				continue
@@ -69,12 +68,7 @@ func (l *lowering) inferMatches() error {
 				failure = l.fail(call, message)
 				return false
 			}
-			if decl.RawType != "" {
-				// Evaluation happened at the saved value assignment; raw values remain open.
-				block.List[i] = &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_")}, Tok: token.ASSIGN, Rhs: call.Args}
-			} else {
-				call.Fun = ast.NewIdent(decl.Validator)
-			}
+			call.Fun = ast.NewIdent(decl.Validator)
 		}
 		return true
 	})

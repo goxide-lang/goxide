@@ -30,7 +30,7 @@ func TestT0FinalAuditBusinessRace(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "hgo")
 	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/hgo")
 	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "-go", tool, "-runtime", root, source)
-	if got != "audit webhook future-v3\n" {
+	if got != "audit webhook done\n" {
 		t.Fatalf("unexpected business output: %q", got)
 	}
 }
@@ -39,10 +39,8 @@ func TestT0FinalAuditBoundaries(t *testing.T) {
 	cases := []struct{ name, source, want string }{
 		{"plain-int", "func f(v int){match v {_=>{},}}", "enum"},
 		{"any-erases-identity", "enum E { A, }\nfunc f(v any){match v {_=>{},}}", "enum"},
-		{"raw-missing-clone", "enum S string { A=\"a\", }\n#[derive(Clone)]\ntype Record struct { Value S }", "derive"},
-		{"raw-helper-not-protocol", "enum S string { A=\"a\", }\nfunc CloneS(v *S) S{return *v}\n#[derive(Clone)]\ntype Record struct { Value S }", "derive"},
-		{"raw-debug-still-explicit", "#[derive(Debug)]\nenum S string { A=\"a\", }", "unsupported"},
-		{"raw-serde-still-explicit", "#[derive(Serialize,Deserialize)]\nenum S string { A=\"a\", }", "unsupported"},
+		{"missing-clone", "enum S { A, }\n#[derive(Clone)]\ntype Record struct { Value S }", "derive"},
+		{"helper-not-protocol", "enum S { A, }\nfunc CloneS(v *S) S{return *v}\n#[derive(Clone)]\ntype Record struct { Value S }", "derive"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -57,22 +55,22 @@ func TestT0FinalAuditBoundaries(t *testing.T) {
 
 const finalAuditAssertions = `package main
 import("reflect";"testing")
-func TestAuditPreservesOpenWireData(t *testing.T){
- for _,raw:=range []string{"","ready","future-v3"}{
-  original:=WireState(raw);cloned:=CloneWireState(&original)
-  if string(cloned)!=raw {t.Fatalf("raw Clone changed %q to %q",raw,cloned)}
-  record:=copyAudit(raw)
-  if string(record.Current.State)!=raw || record.Current.Revision!=3 || record.Label!="webhook" {t.Fatal(record)}
-  changed:=CloneAuditRecord(&record);changed.Current.State=WireState("changed")
-  if string(record.Current.State)!=raw {t.Fatal("nested value clone aliases source")}
+func TestAuditClonesClosedVariants(t *testing.T){
+ for _,state:=range []AuditState{ready(),done()}{
+  original:=state;cloned:=CloneAuditState(&original)
+  if isReady(cloned)!=isReady(state) {t.Fatal("Clone changed variant")}
+  record:=copyAudit(state)
+  if isReady(record.Current.State)!=isReady(state) || record.Current.Revision!=3 || record.Label!="webhook" {t.Fatal(record)}
+  changed:=CloneAuditRecord(&record);changed.Current.State=ready()
+  if isReady(record.Current.State)!=isReady(state) {t.Fatal("nested value clone aliases source")}
   trace:=[]string{};calls:=0
-  got:=archive(func()WireState{calls++;trace=append(trace,"read");return cloned},&trace)
-  want:=raw;wantTrace:=[]string{"read","archived","closed"}
-  if raw=="ready"{want="known";wantTrace=[]string{"read","closed"}}
+  got:=archive(func()AuditState{calls++;trace=append(trace,"read");return cloned},&trace)
+  want:="done";wantTrace:=[]string{"read","archived","closed"}
+  if isReady(state){want="known";wantTrace=[]string{"read","closed"}}
   if got!=want || calls!=1 || !reflect.DeepEqual(trace,wantTrace){t.Fatalf("got %q calls=%d trace=%v",got,calls,trace)}
-  discarded:=0;rawCalls:=0
-  discardRaw(func()WireState{rawCalls++;return cloned},&discarded)
-  if rawCalls!=1||discarded!=1 {t.Fatalf("raw wildcard calls %d/%d",rawCalls,discarded)}
+  discarded:=0;stateCalls:=0
+  discardState(func()AuditState{stateCalls++;return cloned},&discarded)
+  if stateCalls!=1||discarded!=1 {t.Fatalf("wildcard calls %d/%d",stateCalls,discarded)}
  }
 }
 func TestReceiptValidationPrecedesEffects(t *testing.T){

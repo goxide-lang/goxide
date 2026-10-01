@@ -16,9 +16,9 @@
 
 ## 1. 分类与首版范围
 
-后续独立会话的实现授权：在文档基线之后交付可运行的模式宏和内建派生原型，场景为 log/tracing 风格结构化日志、常见模式宏以及 Debug/Clone/serde/thiserror。JSON 是推荐首版序列化格式，不等于 Rust serde 全协议；thiserror 生成显式 From，问号的目标已知单步转换见 [RFC 0005](../rfcs/0005-option-result-question.md)。原型支持语法、已实现范围与失败诊断须单独登记；未完成整套 trait、引用和 enum 前端时，不把 Go helper 生成称为这些语言功能已完成。禁止以宏授权恢复 MVP 借用分析。本标签仅包含文档和机制证据，未包含宏实现。
+后续独立会话的实现授权：在文档基线之后交付可运行的模式宏和内建派生原型，场景为 log/tracing 风格结构化日志、常见模式宏以及 Debug/Clone/serde/thiserror。JSON 是推荐首版序列化格式，不等于 Rust serde 全协议；thiserror 生成显式 From，问号的目标已知单步转换见 [RFC 0005](../rfcs/research/0005-option-result-question.md)。原型支持语法、已实现范围与失败诊断须单独登记；未完成整套 trait、引用和 enum 前端时，不把 Go helper 生成称为这些语言功能已完成。禁止以宏授权恢复 MVP 借用分析。本标签仅包含文档和机制证据，未包含宏实现。
 
-标签后用户进一步确定 **serde 优先并仿照 serde-rs**：核心 Serialize/Deserialize、Serializer/Deserializer、Visitor/Access 连接类型与格式，Value 属于 serde-json 等格式层，不设公共通用核心树。[RFC 0006](../rfcs/0006-serde-core-and-formats.md)已按官方实现修订，撤回此前 core Value 与强制树中转候选。derive 不直接调用 encoding/json，不把 Debug 输出当序列化格式，不自动授予字段写权限；具体 Go/hgo ABI、rename/default/skip 和泛型 codec 子集仍需实施细化。新增内建派生不开放用户过程宏。
+标签后用户进一步确定 **serde 优先并仿照 serde-rs**：核心 Serialize/Deserialize、Serializer/Deserializer、Visitor/Access 连接类型与格式，Value 属于 serde-json 等格式层，不设公共通用核心树。[RFC 0006](../rfcs/research/0006-serde-core-and-formats.md)已按官方实现修订，撤回此前 core Value 与强制树中转候选。derive 不直接调用 encoding/json，不把 Debug 输出当序列化格式，不自动授予字段写权限；具体 Go/hgo ABI、rename/default/skip 和泛型 codec 子集仍需实施细化。新增内建派生不开放用户过程宏。
 
 “如何调用”“如何实现”“是否有副作用”是三个不同维度：
 
@@ -214,7 +214,7 @@ derive 入口按规范 trait 身份选择内建规则，不能仅凭同名字符
 
 `Default` 的语义是静态构造操作 `default() -> Self`，没有实例接收者。struct 派生依声明顺序调用每个字段类型的 `Default`；字段没有实现时拒绝。空 struct 可以直接构造。手写实现可以选择业务默认值，不要求它等于底层 Go 零值。这一逐字段派生思路参考 [Rust Default](https://doc.rust-lang.org/std/default/trait.Default.html)。
 
-普通 enum 的自动派生要求恰好一个无 payload 变体标注 `#[default]`，例如：
+当前原型普通 enum 的自动派生要求恰好一个无 payload 变体标注 `#[default]`，例如：
 
 ```hgo
 #[derive(Default, Clone, Debug)]
@@ -239,6 +239,8 @@ pub enum Mode {
 
 缺失/重复/带 payload 的默认标记、未登记协议、Result/引用/容器/外部类型自动默认仍明确拒绝。Option 的 None 在当前 ABI 为 nil，不代表其他 enum 的 nil 合法。Go var/make/map 缺失读取保持原零值；现有 `#[serde(default)]` 仍是原型的缺失字段 Go 零值策略，不自动调用这个新 Default helper。后续扩展若改变该行为需单独处理兼容性，不能让本次语言 Default 静默修改 wire 契约。真实正反例见 [独立验收](../../tests/acceptance/print_default_test.go)。
 
+非默认变体 payload 是否也要求 Default 仍待用户选择，本轮不加约束。当前自动派生没有通用手写 impl 注册，缺字段协议时可显式业务构造，但不把同名 Default helper 当成已登记协议。
+
 ### 5.3 Clone：字段协议决定复制内容
 
 `Clone` 的语义是从合法只读借用构造同类型结果 `clone(&Self) -> Self`。struct 派生依字段声明顺序调用各字段的显式 `Clone`；enum 保持当前合法变体，对其 payload 调用相应协议。缺失任一字段协议时拒绝，不回退成普通 Go 赋值。这个逐字段调用思路参考 [Rust Clone](https://doc.rust-lang.org/std/clone/trait.Clone.html)。
@@ -260,7 +262,7 @@ Go `slices.Clone` 用赋值复制元素，属于浅复制；这不能自动等�
 
 Clone 结果仍要保留字段的引用来源。复制 slice header、map、Arc 或锁句柄不洗掉外部别名，锁回调引用形成长寿命结果默认允许，未来有具体违约使用才 W01。手写 Clone 同样接受基于证据的诊断；若想从借用制作独立快照，必须实际复制所需内容并证明结果不依赖该借用，不能只改返回类型。
 
-raw 常量 enum 的显式 Clone 按其整数/string 标量值复制，未知 raw 与零值原样保留，生成 helper 保持名义返回类型；不经过 payload enum 的合法 case 校验。嵌套字段仍要求该类型明确登记 Clone，不能仅凭同名手写 helper 认领协议。raw Debug/serde/Default 的未定规则见[枚举专题](enums-and-match.md#02-raw-派生的规则边界)。
+开放 raw/C enum 已按 D27 撤回。serde 数值/string 映射不改变封闭变体的 Clone/Debug 身份，见[枚举专题](enums-and-match.md#01-封闭-enum-与外部映射)。
 
 ### 5.4 Debug：受检查的运行时格式化
 
@@ -272,7 +274,7 @@ Debug 不自动隐藏私有字段中的业务内容；需要控制输出的类�
 
 ### 5.5 静态 trait 操作与 Go 运行时接口
 
-`Default.default() -> Self` 与 `Clone.clone(&Self) -> Self` 不能强行装入只规定固定业务签名和 marker 的旧 Go 接口模型。前者没有接收者，后者结果依赖具体 Self；不能改成返回 `any` 或 wrapper 后宣称保持类型语义。静态成员的源码拼写（例如 `static default() Self`）尚待 trait 语法冻结，以上签名只描述必须支持的操作。
+`Default.default() -> Self` 与 `Clone.clone(&Self) -> Self` 不能强行装入只规定固定业务签名和 marker 的旧 Go 接口模型。前者没有接收者，后者结果依赖具体 Self；不能改成返回 `any` 或 wrapper 后宣称保持类型语义。静态 trait 成员的源码拼写（例如 `static default() Self`）仍待冻结，以上签名只描述必须支持的操作。固有类型关联函数的 `T::method` 调用及包级函数降低已确认，声明拼写讨论见 [RFC 0020](../rfcs/0020-associated-functions.md)；不因此自动建立 Default impl。
 
 首版对这些操作按规范 impl 身份在编译期选择实现，对具体类型生成普通 Go 函数，例如 `defaultPoint() Point`、`clonePoint(value *Point) Point`；后者的 `*Point` 仅为只读借用的后端表示。impl 唯一性、包可见性和借用检查仍由同一套 trait 元数据负责，不另建结构式自动采用关系。
 
@@ -488,4 +490,4 @@ LSP 与构建共享宏依赖、展开器、缓存协议及语义数据库，应�
 本轮仅交付设计文档和独立 Go 降低示意，未实现宏语法、展开器、缓存、内建派生或相关 LSP 能力。
 
 
-问号传播候选见 [RFC 0005](../rfcs/0005-option-result-question.md)：`{:?}` 格式协议与传播运算符无关；展开中的 `?` 服从真实函数/闭包边界，卫生不改变返回目标。
+问号传播候选见 [RFC 0005](../rfcs/research/0005-option-result-question.md)：`{:?}` 格式协议与传播运算符无关；展开中的 `?` 服从真实函数/闭包边界，卫生不改变返回目标。

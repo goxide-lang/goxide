@@ -77,10 +77,10 @@ func TestEnumSerdeUnsupportedAttributes(t *testing.T) {
 	cases := map[string]string{
 		"container-rename":  "#[derive(Serialize)]\n#[serde(rename=\"Other\")]\nenum E {A,}",
 		"container-unknown": "#[derive(Deserialize)]\n#[serde(deny_unknown_fields)]\nenum E {A,}",
-		"variant-rename":    "#[derive(Serialize)]\nenum E {\n#[serde(rename=\"Other\")]\nA,}",
+		"variant-alias":     "#[derive(Serialize)]\nenum E {\n#[serde(alias=\"Other\")]\nA,}",
 		"variant-skip":      "#[derive(Serialize)]\nenum E {\n#[serde(skip)]\nA,}",
 		"generic":           "#[derive(Serialize)]\nenum E[T] {A(T),}",
-		"pointer-payload": "#[derive(Serialize)]\nenum E {A(*int),}",
+		"pointer-payload":   "#[derive(Serialize)]\nenum E {A(*int),}",
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {

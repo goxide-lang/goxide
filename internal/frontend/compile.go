@@ -396,13 +396,6 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				return fail(line, "generic derive is not supported in this prototype")
 			}
 			if ed := enumByName[ts.Name.Name]; ed != nil {
-				if ed.RawType != "" {
-					for kind := range a.derive {
-						if kind != "Clone" {
-							return fail(ed.Position.Line, "raw constant enum supports only Clone derive; "+kind+" is unsupported")
-						}
-					}
-				}
 				for kind := range a.derive {
 					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Default" && kind != "Error" {
 						return fail(ed.Position.Line, "unsupported enum derive "+kind)
@@ -531,7 +524,13 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	for _, d := range enumResult.Enums {
+		if err := enums.ValidateSerdeMapping(d); err != nil {
+			return Result{}, err
+		}
 		for _, v := range d.Variants {
+			if (v.HasSerdeRename || v.HasSerdeValue) && !g.models[d.Name].attrs.derive["Serialize"] && !g.models[d.Name].attrs.derive["Deserialize"] {
+				return fail(d.Position.Line, "variant serde attributes require Serialize or Deserialize derive")
+			}
 			if v.Default && !g.models[d.Name].attrs.derive["Default"] {
 				return fail(d.Position.Line, "default attribute requires Default derive")
 			}
@@ -668,7 +667,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	needsTypecheck := bytes.Contains(out, []byte("__hgo_enum_infer(")) || bytes.Contains(out, []byte("__hgo_match_expr_")) || bytes.Contains(out, []byte("__hgo_print"))
 	for _, d := range enumResult.Enums {
-		needsTypecheck = needsTypecheck || d.Family != "" || d.RawType != ""
+		needsTypecheck = needsTypecheck || d.Family != ""
 	}
 	if cfg == nil && (bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_"))) {
 		conversions := []propagate.Conversion{}
@@ -705,11 +704,6 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				return Result{}, mapped
 			}
 			return Result{}, stageError("typecheck.Check", e)
-		}
-	}
-	if cfg == nil {
-		if err := enums.ValidateRaw("hgo/generated", map[string][]byte{filename: out}, enumResult.Enums, typecheck.NewImporter(filename)); err != nil {
-			return Result{}, stageError("raw enum constants", err)
 		}
 	}
 
@@ -985,18 +979,29 @@ func (g *generator) validateExtra(t ast.Expr, kind string) error {
 func (g *generator) emitEnum(m model) error {
 	a := g.alias
 	d := m.enum
+	if len(d.Variants) > 0 && d.Variants[0].HasSerdeValue {
+		return g.emitNumericEnum(m)
+	}
 	var w, r strings.Builder
 	fmt.Fprintf(&w, "\nfunc Serialize%s(s %s.Serializer,v *%s)error{if v==nil{return %s.NewError(%s.Type,\"nil enum pointer\")};switch x:=(*v).(type){", m.name, a, m.name, a, a)
 	fmt.Fprintf(&r, "\nfunc Deserialize%s(d %s.Deserializer)(v %s,e error){e=d.Enum(%q,[]string{", m.name, a, m.name, m.name)
 	for _, v := range d.Variants {
-		fmt.Fprintf(&r, "%q,", v.Name)
+		name := v.Name
+		if v.HasSerdeRename {
+			name = v.SerdeRename
+		}
+		fmt.Fprintf(&r, "%q,", name)
 	}
 	fmt.Fprintf(&r, "},%s.VisitorFuncs{OnEnum:func(access %s.EnumAccess)error{name,payload,e:=access.Variant();if e!=nil{return e};switch name{", a, a)
 	for _, v := range d.Variants {
+		name := v.Name
+		if v.HasSerdeRename {
+			name = v.SerdeRename
+		}
 		fmt.Fprintf(&w, "case %s:_=x;", v.CaseName)
-		fmt.Fprintf(&r, "case %q:", v.Name)
+		fmt.Fprintf(&r, "case %q:", name)
 		if v.Payload == "" {
-			fmt.Fprintf(&w, "return s.UnitVariant(%q,%q);", m.name, v.Name)
+			fmt.Fprintf(&w, "return s.UnitVariant(%q,%q);", m.name, name)
 			fmt.Fprintf(&r, "if e:=payload.Unit();e!=nil{return e};v=%s();return nil;", v.Constructor)
 			continue
 		}

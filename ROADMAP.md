@@ -1,10 +1,12 @@
 # hgo Roadmap 与接续入口
 
+当前覆盖规则：D27 只保留封闭变体 enum；旧开放 raw/C enum 及其别名待决项撤回。数值/string 属于 serde 外部映射，未知 variant 报错，业务 validator 后置。历史阶段 raw 验收不再代表当前支持。RFC 0019/0020 已同步设计，尚不代表 trait/固有 impl 实现。
 更新：2026-10-01。暂名 hgo / Hyper Go，仓库为 `hxsf/goxide`。本文件记录实现进度和依赖顺序；设计确认状态以[决策登记](docs/design/decisions.md)为准。路线本身是暂定建议，不是交付日期承诺。
 
 ## 1. 当前仓库实际具备什么
 
 - 已整理总纲与专题设计，并分别列出已确认、暂定、未定事项。
+- 新增[20 篇逐特性 RFC](docs/rfcs/README.md)：以转译前后、双向互操作和拒绝例子约束设计；部分已有有限端到端实现，完整范围见实现记录。
 - 已有用于核对 Go 降低机制的文档代码和可复现验证；它们不是 hgo 编译器或基础包实现。
 - 已有单文件有限前端、源类型检查、Go 生成与 CLI 构建原型，见 IMPLEMENTATION.md；完整 hgo 解析/包类型系统、必经 linter、LSP、基础包与自举尚未完成。
 - Go 1.27 是已确认的目标语言和工具链下限；实现分支已有根 go.mod，设计和研究夹具由各自模块隔离。
@@ -18,9 +20,9 @@ T0 是优先级，不是要求全部功能一次交付；下列 M 编号是依�
 | 优先级 | 工作 | 范围与边界 |
 | --- | --- | --- |
 | T0 | 卫生宏、有限声明宏与基础派生 | 用户明确优先；分批选择子集，仍验收卫生、求值、诊断/源码映射、生成代码与工具链行为；收益判断不等于已验证无成本 |
-| T0 | enum / match | 强化既有数值/string const 枚举，并保留带载荷 enum 方向；零值问题不阻塞优先级，明确 raw 值、未知值和 match 行为即可，不要求先解决全对象图合法性 |
+| T0 | enum / match | 只保留封闭变体enum；serde负责数值/string外部映射，未知variant解码报错；现有Go非法表示边界检查保留，业务validator后置，不要求先解决全对象图合法性 |
 | T0 | 只读/可写访问分离 | 基础类型与投影权限；共享/内部可变可经 hgo/std 包装表达。D08 Arc 方向保留，不要求先建整套智能指针库 |
-| 实现方案研究 | trait 适配与性能 | 对照二进制内部消除包装、源码稳定 wrapper；研究不等于批准替代 D05/D06，见 RFC 0004 |
+| 实现方案研究 | trait 适配与性能 | R24/RFC0019已确认统一wrapper；优化不改变实现选择、身份与行为，旧双路径仅为历史研究 |
 | 独立长期 | 别名/借用风险分析 | 按 D20 完全非 MVP；未来默认 warning-first，不引入未证明即拒绝 |
 
 
@@ -30,13 +32,13 @@ D20：别名/借用风险静态分析是独立长期工作线，不是 MVP 或 M
 | --- | --- | --- |
 | M0 设计基线与交接 | 文档已整理，Go 机制有验证 | 决策 / 遗留问题可查，文档示例验证可重跑；这不表示暂定方案已确认 |
 | M1 最小语义骨架 | 有限 AST / 元数据原型，完整包语义未完成 | 冻结最小语法、包 / 符号身份、位置；hgo AST、Go 包类型加载、诊断与 IR。为卫生 / LSP 预留身份，不先用文本拼接替代语义 |
-| M2 显式 trait 与 Go 采用 | 未开始 | 基于 M1；无体 marker + 返回自身、有体 wrapper、限定分派与期望类型适配；原生源文件保持不变；完成正反例和 Go 双向调用 |
+| M2 显式 trait 与 Go 采用 | 未开始 | 基于 M1；统一 wrapper + marker、固定包级工厂、本地 As / 外部 ForT.As helper、限定分派与期望类型适配；原生源文件保持不变；完成正反例和 Go 双向调用 |
 | M3 引用 / unsafe 与锁子集 | 标量读写引用已运行，复杂投影/桥接未完成 | 定义可用引用语法、真实类型/明确 unsafe、U03 接收类型及 U15 原生桥接，完成普通调用与 Go 降低；Lock / RWLock 机制测试可作证据。风险分析不属于此阶段或 MVP 完成条件 |
 | M4 enum / match 与边界 | 本地 enum、有限表达式 match 与内建 Option/Result `?` 已运行，完整阶段未完成 | 明确初始化、公开边界及选定 ABI；实现构造、穷尽、控制流、非法 Go 输入诊断或检查；容器与共享数据的未检查边界明确记录，不因缺证明普遍拒绝 |
 | M5 泛型 trait 与静态操作 | 未开始 | 普通关联类型、投影、约束与选定后端策略；Default / Clone 所需的静态 Self 操作；不以 any 抹掉语义 |
 | M6 声明宏与基础 derive | 有限原型已运行，完整阶段未完成 | 身份机制始于 M1；结合 M4/M5，实现匹配 / 重复 / 卫生、格式检查、print / println、Default / Clone / Debug、展开位置与负例。用户过程宏不在此阶段 |
 | M7 首批 safe Go std 与泛型 slice | 未开始 | 基于已完成的引用、枚举与 trait 子集逐项适配；每个入口有 Go 契约、成本、边界与失败验证；不是全量 std blanket safe |
-| M8 包发布与可用 LSP | 未开始 | 查询层从 M1/M2 演进；声明锁定、构建条件、隔离视图及导出产物可在第二台机器复现；LSP 与编译器诊断使用同一语义结果 |
+| M8 包发布与可用 LSP | 未开始 | 查询层从 M1/M2 演进；声明锁定、构建条件、普通 Go 模块及导出产物可在第二台机器复现；LSP 与编译器诊断使用同一语义结果 |
 | M9 自举 | 未开始 | 先有稳定可用语言子集及工具链；保留可构建 Go seed，逐步迁移并比较阶段产物和测试结果；具体阶段规则见工具链专题 |
 | 后续语法工具 | 暂定，未开始 | quote / syn 作为额外包已确认；可先做普通工具，但是否与首个可用版本一起交付未定，需要稳定 token 协议 |
 | 后续扩展 | 明确延期 / 未定 | 用户过程宏、可编程 derive、supertrait、GAT、特化、借用模式等逐项设计；不将 Rust / LLVM 汇编后端加入首版必需路径 |
@@ -45,19 +47,19 @@ D20：别名/借用风险静态分析是独立长期工作线，不是 MVP 或 M
 
 ### 独立长期工作线：风险静态分析
 
-状态未开始，无 MVP 截止要求。W01–W04 与来源/效果分析的复杂度、依赖和暂缓项见 [RFC 0002](docs/rfcs/0002-native-pointer-bridge.md#6-分析复杂度与-mvp-边界)。未来按独立规则评估价值；warning-first 不等于分析容易，不以未完成阻塞语言开发。
+状态未开始，无 MVP 截止要求。W01–W04 与来源/效果分析的复杂度、依赖和暂缓项见 [RFC 0002](docs/rfcs/research/0002-native-pointer-bridge.md#6-分析复杂度与-mvp-边界)。未来按独立规则评估价值；warning-first 不等于分析容易，不以未完成阻塞语言开发。
 
-Option/Result 专用问号见 [RFC 0005](docs/rfcs/0005-option-result-question.md)：限域与显式 From 单步错误转换方向已确认，不公开通用 Try/Residual、不搜索转换链。thiserror 先生成可验证的显式转换，本分支已接入有限问号前端与 Error 派生转换注册；不代表通用泛型/trait 求解完成。
+Option/Result 专用问号见 [RFC 0005](docs/rfcs/research/0005-option-result-question.md)：限域与显式 From 单步错误转换方向已确认，不公开通用 Try/Residual、不搜索转换链。thiserror 先生成可验证的显式转换，本分支已接入有限问号前端与 Error 派生转换注册；不代表通用泛型/trait 求解完成。
 
 本轮已授权在文档标签 `v0.0.0-mvp-doc` 之后启动宏原型：模式匹配/重复/卫生/诊断、结构化日志，Debug/Clone/JSON serde/thiserror 内建派生；采用明确语法子集完成输入到 Go 编译运行。完整语言和未定 trait 后端不因此宣称已完成。
 
-标签后最新优先级（D23）：**先 serde 闭环，仿照 serde-rs**。本线程整理官方协议/Visitor/Access 与格式分层，实施由独立会话推进；[RFC 0006](docs/rfcs/0006-serde-core-and-formats.md)规定核心协议→typed 派生 helper/visitor→serde-json、可选 JSON Value 和 S01–S12 验收，serde-yaml 后续。此前公开 core Value/强制全树中转候选已撤回；具体 Go ABI 与支持子集仍候选，派生不绑定 encoding/json。本分支已有具体类型核心/JSON 闭环，完整协议扩展与 YAML 仍待实现；准确范围见 IMPLEMENTATION.md。
+标签后最新优先级（D23）：**先 serde 闭环，仿照 serde-rs**。本线程整理官方协议/Visitor/Access 与格式分层，实施由独立会话推进；[RFC 0006](docs/rfcs/research/0006-serde-core-and-formats.md)规定核心协议→typed 派生 helper/visitor→serde-json、可选 JSON Value 和 S01–S12 验收，serde-yaml 后续。此前公开 core Value/强制全树中转候选已撤回；具体 Go ABI 与支持子集仍候选，派生不绑定 encoding/json。本分支已有具体类型核心/JSON 闭环，完整协议扩展与 YAML 仍待实现；准确范围见 IMPLEMENTATION.md。
 
 ## 3. 下一轮优先处理
 
 1. 阅读[决策登记](docs/design/decisions.md)与[总纲](docs/design/overview.md)，不要从早期 `*T` 示例推导 safe 源级指针语法。
-2. 回到真实语言场景、语法与 lowering：优先评审 [指针职责与 MVP](docs/rfcs/0003-pointer-roles-and-mvp.md)，按 §6.1 区分运行时最小能力与 D08 Arc 已确认方向。只读投影/接口断言是待闭合的基础类型设计，H 临时契约不是既定要求；U15 桥接不在本轮催定；风险分析按 D20 长期独立，不作为实现门槛。
-3. 冻结最小解析 / 包 / 类型身份，再决定仓库代码布局；按 T0 选择宏/enum/match/读写类型的小闭环，trait 双路径先按 [RFC 0004](docs/rfcs/0004-trait-lowering-paths.md) 研究。当前未授权的未来功能不因列在本文件就自动启动。
+2. 回到真实语言场景、语法与 lowering：优先评审 [指针职责与 MVP](docs/rfcs/research/0003-pointer-roles-and-mvp.md)，按 §6.1 区分运行时最小能力与 D08 Arc 已确认方向。只读投影/接口断言是待闭合的基础类型设计，H 临时契约不是既定要求；U15 桥接不在本轮催定；风险分析按 D20 长期独立，不作为实现门槛。
+3. 冻结最小解析 / 包 / 类型身份，再决定仓库代码布局；按 T0 选择宏/enum/match/读写类型的小闭环，trait 双路径先按 [RFC 0004](docs/rfcs/research/0004-trait-lowering-paths.md) 研究。当前未授权的未来功能不因列在本文件就自动启动。
 4. 泛型字典 / 专门化、静态 Self、enum ABI、格式化和声明包选择应分别形成小范围决策，不在一个“全语言实现”中静默选定。
 
 ## 4. 在另一台机器继续
@@ -99,13 +101,17 @@ Option/Result 阶段已有真实 Go API 显式包装、不同成功类型的传�
 同 module 源码包声明宏现支持 `pub macro_rules!` 和普通 import 的 `alias.name!`，保留每个定义文件的作用域、私有嵌套宏和公开 runtime shim 边界。真实日志包应用覆盖禁用时不求值、跨文件别名、同名宏、enum/serde/Result/Error 组合；包和整个模块共享资源预算，诊断保留有证据的定义/调用原始跨度。见 [实现记录](IMPLEMENTATION.md) 和 [增量验收](docs/t0-acceptance.md)。外部预编译宏 metadata、过程宏、任意模板语法及完整来源映射仍未完成；M6/T0 未整体完成。
 
 
-本轮整体验收在上述同module宏基准上补齐host构建条件（显式tags及test隐含race）和同包多文件引用检查；新任务调度示例从安装CLI到独立生成模块验证宏/JSON/enum/OptionResult/From/基础权限组合。有限T0可运行子集与整项已确认方向分别记录于 [当前交付标准及验收](docs/t0-acceptance.md#有限-t0-的交付标准)。常量enum raw/未知值、print/println与Default仍是真实未完成项；完整trait、LSP和长期风险分析不是本轮交付前置条件。公开新引用签名、跨目标编译和.hgo测试源等限制保持明确，不以降低成Go代码代替权限验证。
+本轮整体验收在上述同module宏基准上补齐host构建条件（显式tags及test隐含race）和同包多文件引用检查；新任务调度示例从安装CLI到独立生成模块验证宏/JSON/enum/OptionResult/From/基础权限组合。有限T0可运行子集与整项已确认方向分别记录于 [当前交付标准及验收](docs/t0-acceptance.md#有限-t0-的交付标准)。后续已补齐print/println与Default，开放raw路线现已撤回；完整trait、LSP和长期风险分析不是本轮交付前置条件。公开新引用签名、跨目标编译和.hgo测试源等限制保持明确，不以降低成Go代码代替权限验证。
 
 
-最新增量接通具体类型Default与固定格式print/println；沿已定默认unit选择、参数求值及写入错误契约，未扩完整trait/fmt生态。T0最短必要剩余现在是常量enum raw/未知值入口；其已有开放方向不重开，同值别名与表层入口仍为 [U19候选](docs/design/enums-and-match.md#01-常量入口的限定实现同值别名未定)。准确成功/拒绝及明确后置范围见 [最新验收矩阵](docs/t0-acceptance.md#print--println-与-default-增量)。
+具体类型Default与固定格式print/println已接通，沿已定unit默认、参数求值及写入错误契约，未扩完整trait/fmt生态。成功/拒绝范围见[验收矩阵](docs/t0-acceptance.md#print--println-与-default-增量)。
 
 
-常量 enum 最新增量：用户授权的唯一 raw 值成员子集已实现，保留 Go 零值/未知值/合法转换，开放 match 要求兜底；同值别名仍待选择，不解释为永久禁止。真实原生 JSON 输入、跨包常量、安装 CLI、独立生成模块及 race 见 [最新验收](docs/t0-acceptance.md#常量-enum-唯一值子集增量)。此前“最短剩余常量入口”的历史状态由本增量覆盖；原有文档标签不改，完整语言和明确后置边界不冒称完成。
+历史 raw 常量入口及 raw Clone 曾在 cd49537 验收；D27 已撤回该模型及旧别名问题，现移除代码/成功夹具，不再作为可交付范围。历史证据保留在实现记录。
 
 
-最后覆盖梳理补齐 wildcard-only/全值绑定-only match 与 raw 显式 Clone；前者依据真实类型身份，不靠模式名字猜测，后者只复制标量原值。交付/待决/后置以 [最终分类](docs/t0-acceptance.md#最后覆盖梳理交付待决与后置) 为准；同值别名保持待定，raw Debug/serde/Default 仍需明确各自规则，不制造新默认。此轮验收后停止扩展，不把所有语言方向当作这次有限T0闭环前提。
+wildcard-only/全值绑定-only match继续支持封闭enum，依据真实类型身份并先验证合法case。当前交付/待决/后置见[最终分类](docs/t0-acceptance.md#最后覆盖梳理交付待决与后置)。
+
+远端文档同步：RFC 0019 已确认统一 trait wrapper，RFC 0020 已确认独立 impl 内关联函数/Self/self 与包级函数降低；这些新设计不表示本分支已实现通用 trait/固有 impl。D19/D20 的 warning-first 与风险分析非 MVP 边界保持，不采用远端旧文本中的默认逃逸拒绝。
+
+最新交付：封闭 unit enum serde rename/value 映射与独立 Go 业务验收；Default 字段协议逐一检查、enum 默认标记保持，非默认 payload 约束仍待答。具体子集与未完成范围见验收矩阵。

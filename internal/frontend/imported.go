@@ -73,20 +73,7 @@ func importedDeclarations(sources map[string][]byte, packages map[string]Package
 					original := d.Name
 					prefix := fmt.Sprintf("__hgo_enum_import_f%d_i%d_%s", fi, ii, original)
 					d.PackagePath, d.LookupName, d.Name = path, alias+"."+original, prefix
-					if d.RawType != "" {
-						var code strings.Builder
-						fmt.Fprintf(&code, "\ntype %s = %s.%s;\n", prefix, alias, original)
-						d.Variants = append([]enums.Variant(nil), d.Variants...)
-						for vi := range d.Variants {
-							v := &d.Variants[vi]
-							exported := fmt.Sprintf("HgoConst%d_%s_%s", len(original), original, v.Name)
-							v.Constructor = fmt.Sprintf("%s_const%d", prefix, vi)
-							fmt.Fprintf(&code, "const %s = %s.%s;\n", v.Constructor, alias, exported)
-						}
-						preludes[name] += code.String()
-						declarations[name] = append(declarations[name], d)
-						continue
-					}
+
 					d.Validator = prefix + "_validate"
 					var code strings.Builder
 					fmt.Fprintf(&code, "\ntype %s = %s.%s; var %s = %s.Validate%s;\n", prefix, alias, original, d.Validator, alias, original)

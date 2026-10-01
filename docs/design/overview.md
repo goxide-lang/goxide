@@ -4,7 +4,7 @@
 
 状态：设计阶段。本文记录方向与专题边界，不承诺文档中能力已经实现。
 
-当前优先级（D21）：宏、enum/match、只读/可写访问分离为 T0；T0 不要求所有扩展一次交付。trait 后端正在研究，现行 D05/D06 不被研究候选静默替换；见 [RFC 0004](../rfcs/0004-trait-lowering-paths.md)。
+当前优先级（D21）：宏、enum/match、只读/可写访问分离为 T0；T0 不要求所有扩展一次交付。trait 后端已按 R24/RFC0019 确认统一 wrapper；旧[双路径研究](../rfcs/research/0004-trait-lowering-paths.md)仅保留历史比较，不覆盖该决定。
 
 ## 1. 目标
 
@@ -21,13 +21,15 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 1. 显式 trait 实现，一个类型可实现多个 trait，允许不同实现拥有同名方法。
 2. 变体枚举、`Option`、`Result` 和带穷尽性检查的模式匹配。
 3. 卫生宏，以及覆盖宏展开前后位置关系的诊断与 IDE 支持；首版参考 Rust 的声明宏（模式 / 模板 / 重复），提供 print / println 与 Default / Clone / Debug 内建派生，用户可编程过程宏及自定义过程派生延期。
-4. Go 包互操作，用户在自己的普通 `.hgo` 中声明采用原生 Go 方法；marker 仅补充到本次 hgo 的隔离构建视图，也可提供自定义实现。
+4. Go 包互操作，用户在自己的普通 `.hgo` 中声明采用原生 Go 方法或提供自定义实现；统一在 impl 包生成 wrapper 与 marker，通过固定包函数适配，并生成 Go 便利 helper。
 5. 基础包围绕现有 Go std 提供 safe 声明与实际包装，并补充泛型 slice 的权限与 API 视图；额外包提供 quote / syn 风格语法工具。
 6. 用 Go 启动编译器与 LSP，之后逐步使用 hgo 自举。
 
 不以实现 Rust 的所有类型系统能力为目标；不以替换 Go 运行时或首版直接输出 Plan 9 汇编为目标。
 
 ## 2. 决策状态
+
+每项新特性必须有[独立 RFC](../rfcs/README.md)，附编号的转译前后例子、拒绝例子与验收条件；具体格式见[模板](../rfcs/TEMPLATE.md)。专题文档保留背景和机制讨论。
 
 每项 hgo 新语法的详细设计都必须说明：源级语义、具体 Go 表示与代码生成、原生 Go API 如何导入并调用、hgo API 如何被 Go 调用，以及转译前 linter 能检查和不能检查的边界。不能只给出 hgo 写法而省略双向互操作；需要复制、适配、检查或生成辅助代码时，应明确其行为与成本。尚未确定的方向标为草案，不借用 Go 编译成功来证明源级约束成立。
 
@@ -37,14 +39,15 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 | --- | --- | --- | --- |
 | 编译目标 | 已确认生成 Go 源码，复用 Go 工具链与运行时 | 包输出布局、增量构建、发布格式 | [工具链](compiler-and-tooling.md) |
 | trait | 原生使用 `trait`；显式 `impl`；Go `interface` 保留结构式语义 | 精确语法、可见性、完整泛型约束，Default / Clone 等静态 Self 操作 | [trait](traits.md) |
-| 多接口实现 | 无体声明给原类型补 marker，适配返回自身；有体实现使用稳定 wrapper，方法体与 marker 放在 wrapper；期望类型驱动转换 | ABI 名称编码、优化边界 | [trait](traits.md) |
-| Go 适配 | 用户包的 `.hgo` 声明检查现有业务方法，仅由 hgo 使用；本次隔离视图补 marker，纯 Go 项目不受影响 | 本文暂用 `declare impl` 拼写；伴生源码、独立依赖视图和发布机制为实现草案 | [Go原生类型的显式适配](go-interop.md) |
-| Go API 视图 | 普通 declare 补充类型契约；普通 Go 调用不因无摘要要求 unsafe；Ptr/AsPtr 保留明确边界 | T01 已否决，U15 桥接待协调、声明分发与选择、引用诊断 | [原生 API 与裸指针](foreign-api.md) |
+| 多接口实现 | declare 与有体 impl 统一使用稳定 wrapper，业务方法与 marker 放在 wrapper；期望类型驱动固定工厂调用 | ABI 名称编码、权限和优化边界 | [trait](traits.md) |
+| Go 适配 | impl 包持有 wrapper、marker 和工厂；本地类型 As 方法、外部类型 ForT.As 入口方便 Go 使用 | 正式命名、冲突策略与声明绑定格式 | [Go原生类型的显式适配](go-interop.md) |
+| Go API 视图 | 普通 declare 补充类型契约；普通 Go 调用不因缺摘要要求 unsafe；Ptr/AsPtr 保留明确边界 | 统一标记未声明 callable 为 unsafe 已否决；U15 桥接待协调、声明分发与选择、引用诊断 | [原生 API 与裸指针](foreign-api.md) |
 | 关联类型 | 纳入设计，先支持普通关联类型 | 投影语法、泛型降低；GAT 等延期 | [关联类型](associated-types.md) |
+| impl 成员与类型关联函数 | 成员定义在 impl 块，支持 Self/self；T::method 降低为 Go 包函数；直接写的 Go 函数与方法保留原语义 | 块内 static 标记、接收权限、公开命名、与静态 trait 操作的限定规则 | [RFC 0020](../rfcs/0020-associated-functions.md) |
 | 指针拆分 | 已确认 mut& 写引用、Arc 对应 Go 指针、Option 分担缺失语义；只读借用和非空细则暂定 | Box、解引用、来源 / 逃逸、再借用、输出槽位、接收权限身份 | [引用专题](pointers-and-borrows.md) |
 | 锁与引用检查 | 锁句柄转为支持库指针；回调方法使用 Go 1.27 泛型返回类型；基础读写权限由类型检查，风险分析按 D20 长期独立 | Unit 映射、诊断范围、第三方锁适配 | [锁与作用域回调](synchronization.md) |
 | 枚举与空值 | hgo 内部静态约束；接受原生 Go 调用方可能输入非法值 | interface 加值型 case 的首版布局草案、递归校验实现、可变别名 | [变体枚举与 match](enums-and-match.md) |
-| 模式匹配 | 已确认功能方向；一次求值、穷尽、guard 覆盖与控制流为暂定具体规则 | 值绑定和嵌套模式的首版语法、决策树实现、后续借用模式 | [变体枚举与 match](enums-and-match.md) |
+| 模式匹配 | 已确认功能方向；一次求值、穷尽、guard 覆盖与控制流为暂定具体规则 | 值/只读借用/可变借用模式的语法与对应 ABI、决策树实现 | [变体枚举与 match](enums-and-match.md) |
 | 卫生宏 | 符号卫生、源码追踪；参考 Rust 的声明宏，print / println 与 Default / Clone / Debug；用户过程宏延期 | 模式语法、格式化协议、静态 trait 操作、阶段与缓存协议 | [卫生宏](macros.md) |
 | 基础与标准库 | 为现有 Go std 提供逐 API 的 safe 声明或包装；补充泛型 slice | 包路径、权限契约、具体 API 清单与容器 ABI；保留 Go 的错误及别名语义 | [基础包与 Go std](standard-library.md) |
 | 语法工具 | 额外包提供 quote / syn 风格能力；普通解析与生成不必等待过程宏 | 公共 token / AST 协议、受控上下文、token 构造原语；编译期用户代码执行延期 | [语法工具](syntax-tooling.md) |
@@ -60,11 +63,11 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 | --- | --- | --- |
 | 改善安全性 | 区分非空共享句柄、读借用、写借用和裸指针；Option 表达缺失；unsafe/declare 划定外部契约；枚举与 match 限制非法状态和遗漏分支 | 必须细化借用作用域、容器与闭包中的别名、trait 视图权限，以及来自 Go 的可变共享状态；外部声明仍是信任边界 |
 | 显式实现与可读性 | impl 元数据、唯一实现检查、限定调用、稳定视图；同名不同实现不混淆；不因结构碰巧一致而取得 trait 能力 | 源级接收者权限与早期 Go `*T` 示例需要接合；父 trait 继承尚未设计；显式声明不证明方法业务逻辑正确 |
-| 与 Go 包互操作 | 生成普通 Go；原生视图、声明/包装视图及明确 unsafe 操作；真实签名检查；marker 隔离构建；Go 可调用生成的普通 API | 声明版本与构建条件解析、递归类型与函数值桥接、可复现的增强依赖发布；Go 调用方不受 hgo 源级权限检查 |
+| 与 Go 包互操作 | 生成普通 Go；原生视图、声明/包装视图及明确 unsafe 操作；真实签名检查；本地 wrapper 与 marker；Go 可调用生成的普通 API | 声明版本与构建条件解析、递归类型与函数值桥接、可复现的普通模块与声明发布；Go 调用方不受 hgo 源级权限检查 |
 
 结论是三项目标均有可实现的设计路径，显式实现部分相对完整；目前不是一个已闭合、已实现或经过安全性证明的语言规范。首版要验证的是语言错误被拒绝，以及生成代码保留合法程序的语义；具体风险 warning 按 D20 独立长期验收，不承诺自动获得 Rust 的完整所有权或全程序无数据竞争保证。
 
-当前默认诊断策略见 [RFC 0001](../rfcs/0001-scoped-borrow-views.md)和[业务场景](../rfcs/0001-usage-and-tradeoffs.md)：前两轮保守拒绝已被用户否决，采用有具体风险依据的 warning；普通 Go API 缺少摘要不要求 unsafe。
+当前默认诊断策略见 [RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)和[业务场景](../rfcs/research/0001-usage-and-tradeoffs.md)：前两轮保守拒绝已被用户否决，采用有具体风险依据的 warning；普通 Go API 缺少摘要不要求 unsafe。
 
 ## 3. 当前必须保留的约束
 
@@ -72,14 +75,16 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 
 显式实现是 hgo 语义事实；方法集相符不会自动建立 impl。普通 `.hgo` 中有两种实现模式：
 
-- `declare impl Trait for T;` 没有方法体，检查并采用 `T` 已有的业务方法，在本次隔离构建视图中的接收者定义包补充 marker。`AsXXX()` 返回原值自身，不要求原生 Go 包预先提供 marker 或 wrapper。
+- `declare impl Trait for T;` 没有方法体，检查并采用 `T` 已有的业务方法，在 impl 包生成逐方法转发的 wrapper 与 marker。包级工厂返回 wrapper 视图；若接收者是指针，保留原目标指针而不保留原始接口动态类型。
 - `impl Trait for T { ... }` 提供完整实现，由编译器生成 wrapper，方法体与 marker 直接定义在 wrapper 上；原始类型的同名方法不会覆盖该实现。
 
-这两种语义已经确定。本文用 `declare impl` 作为无体声明的统一草案拼写；此前的 `impl ...;` 只是同一语义的简称，不引入第三种模式。
+两种形式的行为来源分别为原生方法与用户方法体，运行时载体统一为 wrapper。[RFC 0019](../rfcs/0019-uniform-trait-wrappers.md) 已确认取代原始类型 marker 注入；具体命名和权限语法仍待定。
+
+以上是 trait 实现形式。固有成员另用 `impl T { ... }`，关联函数降低为包函数，实例成员按接收者规则生成方法。impl 中 `Self` 表示源目标类型，`self` 只在实例成员中绑定接收者。直接书写的 Go `func F(...)` / `func (r T) M(...)` 保留原生声明和行为，不自动变成 impl 成员或 trait wrapper；例子见 [RFC 0020](../rfcs/0020-associated-functions.md)。
 
 可形成运行时视图的 trait，其生成的 Go 接口包含业务方法和对应 marker。marker 表达显式采用，但不是不可伪造的安全证明：Go 代码可以自行实现或通过嵌入获得它。hgo 的精确 impl 判定仍由可见元数据与类型检查负责，读取到 Go 方法集中的 marker 不会自动建立 impl。Default 的无接收者构造和 Clone 的 Self 结果使用静态实现选择与普通 Go 函数，不强行改成返回 any 的接口方法；见[静态 trait 操作](macros.md#55-静态-trait-操作与-go-运行时接口)。
 
-实现模式由声明固定。对 Go 暴露的 `AsXXX()` 或包级适配入口保持稳定；新增其他 impl 不会把已有的直接模式改为 wrapper，也不会替换已有自定义实现的 wrapper 表示。
+实现的行为来源由声明固定。后端通过元数据选择固定包级适配函数；类型与 impl 同包且满足 Go 方法接收者规则时可以生成 `t.AsXXX()`，其他类型生成 `adapters.ForT(t).AsXXX()`，便利 helper 只转发同一函数。新增 impl 不改变旧工厂、已发布 wrapper 归属或业务行为。
 
 使用处先完成 hgo 类型检查与实现选择，再将必要的转换记录到 IR。后端不能通过输出 Go 源码后试编译来猜测使用者的意图。
 
@@ -93,23 +98,21 @@ declare impl AorB::XXX for BBB::Type;
 
 **声明的定义来源是 C，不是 AorB 或 BBB。** hgo 根据 C 的声明和显式导入的 impl 元数据形成可见实现集合，不扫描全磁盘或其他项目来收集声明，也不把它登记成 BBB 对所有项目公开的实现。AorB、BBB 的原源码无需修改，普通 Go 工具也不会读取 C 的 `.hgo` 声明。
 
-普通 `.hgo` 允许对外部 trait 与外部 Go 类型声明显式 impl；可见实现集合中，规范化后同一个 impl 键重复定义时报错。无方法体的声明必须通过真实 Go 方法集和签名检查，不能把缺失的方法当成已经实现，也不能静默切换成自定义实现。
+普通 `.hgo` 允许对外部 trait 与外部 Go 类型声明显式 impl；可见实现集合中，规范化后同一 impl 键的相容无体声明可合并，有体实现唯一，矛盾的绑定或契约报错；合并细节见 [RFC 0003](../rfcs/0003-declare-impl.md)。无方法体的声明必须通过真实 Go 方法集和签名检查，不能把缺失的方法当成已经实现，也不能静默切换成自定义实现。
 
-普通 `declare` 也用于补充 Go API 的 hgo 类型视图，不要求写作 unsafe declare。函数契约可以放在调用方 `.hgo`、包内 `.d.hgo` 或明确依赖的外置声明包中；具体规则见[原生 API 与裸指针](foreign-api.md)。函数视图声明与补 marker 的 impl 声明分别检查，声明可信不等于编译器已证明外部实现行为。
+普通 `declare` 也用于补充 Go API 的 hgo 类型视图，不要求写作 unsafe declare。函数契约可以放在调用方 `.hgo`、包内 `.d.hgo` 或明确依赖的外置声明包中；具体规则见[原生 API 与裸指针](foreign-api.md)。函数视图声明与生成 wrapper/marker 的 impl 声明分别检查，声明可信不等于编译器已证明外部实现行为。
 
-`T` 与 `*T` 保持精确的接收者身份，不为满足 impl 自动取地址。外部 Go 类型的方法不能声明在调用方包中；marker 与 `AsXXX()` 的伴生文件仅在本次 hgo 隔离视图内归入接收者定义包。这个代码生成位置不改变 hgo 声明属于 C 的事实。已有 Go wrapper 可以按自身真实类型采用，不因此与原始结构体成为同一类型。
+`T` 与 `*T` 保持精确的接收者身份，不为满足 impl 自动取地址。外部 Go 类型的方法不能声明在调用方包中；当前生成的是 C 包自己定义的 wrapper，marker 与业务方法属于该 wrapper，工厂及 facade 也属于 C。已有 Go wrapper 可以按自身真实类型采用，不因此与原始结构体成为同一类型。
 
 编译器和 LSP 必须读取同一份 impl 与方法解析结果。仅让补全“看起来有两个 impl”，而编译器不知道采用哪些方法，不算完成互操作。
 
-### 3.3 独立构建视图与发布
+### 3.3 普通 Go 构建与发布
 
-伴生源文件只作为本次 hgo 视图中原生类型定义包的一部分参与构建。实现草案是在共享模块缓存之外准备独立的依赖源码副本，加入生成文件，并通过生成的本地 `replace` 等机制构成 hgo 构建视图。用户依赖原文件和共享模块缓存保持不变；不使用 hgo 的既有纯 Go 项目继续按原来的源码与依赖构建，完全不受影响。目录布局、缓存与具体构建参数仍待实现设计。
+发布采用普通 Go 模块携带 `.go`、`.d.hgo` 与可选 `.hgo` 的完整 dist；Go 只编译 `.go`，hgo 额外加载声明或源码。impl 包生成自己的 wrapper、marker、工厂与便利 helper，不要求给原生依赖或 GOROOT 增加任何方法，Go 下游可按正常包依赖构建。
 
-Go 的 `-overlay` 能让构建看到虚拟源码文件，但官方限制不允许替换 `GOMODCACHE` 下的文件，不能直接把伴生文件覆盖到共享模块缓存。它可以作为独立视图内部的实现手段。[Go 构建参数](https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies)
+此前隔离源码副本/replace/overlay 给原类型追加 marker 的方案已经被替代；保留的夹具只记录历史机制。具体发布对照见 [RFC 0001](../rfcs/0001-package-loading.md)，统一载体及 helper 见 [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)。
 
-为减少原生包反向依赖 trait 包导致的循环，`AsXXX()` 可以返回本包内镜像完整业务方法和 marker 的匿名接口，供调用处赋给对应 trait 接口。这是构建草案，不把返回类型写成不同接口的函数签名视为相同，也不承诺能消除所有依赖循环。
-
-发布依赖这类适配的 hgo 产物时，需要可复现的增强视图或 hgo 构建驱动，具体边界见 [Go原生类型的显式适配](go-interop.md)。
+编译器仍要锁定实际模块图、构建条件及声明集合，识别同一 .hgo 与其生成 .go，防止重复纳入业务定义。常规 Go 包循环、私有访问或签名不相容仍须诊断，wrapper 不自动消除真实依赖问题。
 
 ### 3.4 Go 边界与非法值
 
@@ -123,7 +126,7 @@ Go 的 `-overlay` 能让构建看到虚拟源码文件，但官方限制不允�
 - 只有目标类型明确允许缺失时，才讨论把 Go `nil` 映射为 `None`；typed nil 和未知动态类型不能简单等同于 `None`。
 - 回调、方法、返回值及共享可变对象也会跨边界；只检查一处构造函数并不能覆盖所有输入。
 
-枚举首版候选采用 interface 加值型 case；Option 的 None 以 nil 接口承载，Some 始终有明确的 case。精确白名单、嵌套 `Some(None)` 与 `Some(nil)`、初始化和边界规则见[变体枚举与 match](enums-and-match.md)。具体布局仍是草案，不作为已经冻结的 ABI。
+枚举首版候选采用 interface 加值型 case；Option 的 None 以 nil 接口承载，Some 始终有明确的 case。精确白名单、嵌套 `Some(None)` 与 `Some(nil)`、初始化和边界规则见[变体枚举与 match](enums-and-match.md)。具体布局仍是草案，不作为已经冻结的 ABI；值型 case 示例目前只覆盖值匹配。用户要求按模式区分值复制、只读借用和可变借用，ABI 必须满足 [RFC 0009](../rfcs/0009-match.md) 的原存储约束。
 
 ### 3.5 源级权限与 Go 表示必须分开
 
@@ -151,9 +154,9 @@ hgo 源文件（含 impl / 宏）+ 实际 Go 包类型信息 + 显式声明依�
                   |
        已解析语义 IR（含 impl 与视图转换）
                   |
-      标准 Go AST / 源码 + 伴生文件
+      标准 Go AST / 源码 + 声明元数据
                   |
-       独立依赖构建视图（按需增强）
+       普通 Go 包、wrapper 与适配工厂
                   |
               Go 工具链
 

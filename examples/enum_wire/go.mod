@@ -1,4 +1,4 @@
-module rawenum.example/delivery
+module enumwire.example/dispatch
 
 go 1.27
 

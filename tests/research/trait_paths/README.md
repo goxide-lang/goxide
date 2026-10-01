@@ -1,6 +1,6 @@
 # trait 表示与双路径研究
 
-对应 [RFC 0004](../../../docs/rfcs/0004-trait-lowering-paths.md)。这是独立机制研究，不实现 hgo、不修改当前 D05/D06，不把基准加入日常文档检查。
+对应 [RFC 0004](../../../docs/rfcs/research/0004-trait-lowering-paths.md)。这是独立机制研究，不实现 hgo、不修改当前 D05/D06，不把基准加入日常文档检查。
 
 ```sh
 python3 tests/research/trait_paths/run.py \

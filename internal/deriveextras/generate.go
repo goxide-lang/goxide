@@ -195,13 +195,6 @@ func (g *generator) debug(t ast.Expr, x string) (string, error) {
 
 // GenerateEnum retains nominal variant identity and delegates supported payloads.
 func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) {
-	if d.RawType != "" {
-		if kind != "Clone" {
-			return "", nil, fmt.Errorf("raw constant enum supports only Clone derive")
-		}
-		// Raw enums are open scalar values: copy unknown and zero values unchanged.
-		return "func Clone" + d.Name + "(v *" + d.Name + ") " + d.Name + " { return *v }\n", nil, nil
-	}
 	if kind == "Default" {
 		var selected *enums.Variant
 		for i := range d.Variants {

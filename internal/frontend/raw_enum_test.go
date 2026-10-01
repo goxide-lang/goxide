@@ -36,7 +36,7 @@ func TestRawEnumCheckedConstants(t *testing.T) {
 		{"exhaustive-known", "enum Code int { A=1,B=2,};func f(c Code){match c{Code::A=>{},Code::B=>{},}}", "unguarded wildcard"},
 		{"guarded-rest", "enum Code int { A=1,};func f(c Code){match c{Code::A=>{},_ if true=>{},}}", "unguarded wildcard"},
 		{"unreachable", "enum Code int { A=1,};func f(c Code){match c{Code::A=>{},Code::A if true=>{},_=>{},}}", "unreachable"},
-		{"derive", "#[derive(Clone)]\nenum Code int {A=1,}", "derive on raw"},
+		{"derive", "#[derive(Debug)]\nenum Code int {A=1,}", "only Clone"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Compile("raw.hgo", []byte("package p\n"+tc.body+"\n"))

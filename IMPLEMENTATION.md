@@ -402,3 +402,32 @@ raw 输入不封闭：原生 `Status("future")`、零值与 Go 合法 runtime na
 日志：`/tmp/goxide-raw-final-race.json`、`/tmp/goxide-raw-final-vet.log`、`/tmp/goxide-raw-final-design.log`。快速复现 `go run ./cmd/hgo run examples/raw_enum`；独立验收 `go test -race -count=1 ./tests/acceptance -run '^TestRawEnum' -v`。运行这些命令需真实 Go 编译器在 PATH。
 
 本轮没有已证实未修复阻断；同值别名保持待用户决定，不据此新增其他功能。只做本地提交，不推送，也不改原文档标签。环境断连通知后，实际文件访问、命令和完整验证均正常。
+
+
+## 最后 T0 覆盖补缺：纯兜底 match 与 raw Clone
+
+基准 `94e5d5790822dafb902e57f288da16ac78ee4e4c`。独立非实现作者核对规范并运行反例，确认纯通配/全值绑定 match 和 raw Clone 均是已有语义内的实现缺口，而不是同值别名决策的依赖。
+
+match 先保存目标一次，编译器内部标记在已有类型阶段用真实 Go nominal identity 和可信 enum 元数据解析。raw 保留所有原值；payload/Result 调用既有 validator，先于 guard/body；Option 保持 None 行为。普通标量、不同 defined type、any 擦除后的值和无法识别的泛型不靠底层形状猜成 enum。标记在生成 Go 前消除，未改 return/break/continue 的作用域；现有限表达式位置仍保持。
+
+`#[derive(Clone)]` raw 生成同类型同值复制，未知值和零值不验证成员资格，显式派生才能让嵌套 struct 调用其协议；宏定义点绑定仍适用。raw Debug、serde、Default 规则未完整规定，本轮明确拒绝；详见枚举专题 §0.2，不把 Go JSON DTO 业务当成 raw serde 派生。
+
+独立新 [归档业务](examples/prototype/final_audit.hgo) / [验收](tests/acceptance/t0_final_test.go)运行真实生成模块的 **2 项 race 测试、6 项拒绝子例**，检查未知/零值与嵌套Clone、一次读取/defer、非法payload nil/typed-nil/case指针在guard/body之前拒绝；仓库外CLI输出 `audit webhook future-v3`。审查者复用非作者线程，不冒称新空上下文。最终整树统计见下文；之前阶段wildcard-only与raw全部派生不支持的记录由本增量覆盖。
+
+
+最终冻结验证（Go 1.27.1 linux/amd64、CGO=1，本地工具链离线）：`go test -race -count=1 -json ./...` **15 个有测试包、213 宿主顶层测试、370 子测试全部通过**；另一个包无自身测试。`go vet ./...`、设计检查 13 条 Go 命令、最终 docs-only 与 diff 检查通过。新增独立生成模块 2 项 race 运行测试以外，前端新增直接导入模块的真实 race 测试验证 raw/payload、import alias 遮蔽、Option None 与 Result nil；prototype 的两个生成运行例验证 raw Clone 及跨文件嵌套。没有把宿主 race 当作子进程 race。
+
+日志：`/tmp/goxide-t0-final-audit-race.json`、`/tmp/goxide-t0-final-audit-vet.log`、`/tmp/goxide-t0-final-audit-design.log`。本轮无已知未修复阻断；新增有限能力已验收，未决定及后置范围见 T0 矩阵，不能称完整 T0/Rust。安装和复现（当前环境）：
+
+```sh
+cd /workspace/goxide-macro-mvp
+export PATH=/workspace/goxide-environment/go/bin:$PATH
+export GOTOOLCHAIN=local GOWORK=off GOPROXY=off
+mkdir -p /tmp/hgo-final-bin
+GOBIN=/tmp/hgo-final-bin go install ./cmd/hgo
+/tmp/hgo-final-bin/hgo run -runtime "$PWD" examples/prototype/final_audit.hgo
+/tmp/hgo-final-bin/hgo run examples/raw_enum
+go test -race -count=1 ./tests/acceptance -run '^(TestT0FinalAudit|TestRawEnum)' -v
+```
+
+实际期望业务输出分别为 `audit webhook future-v3` 与 `webhook review:deferred-v2/unknown:7`。只做本地提交，不 push、不改标签；停止新增范围，不重问同值别名。

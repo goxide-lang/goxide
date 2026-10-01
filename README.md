@@ -14,7 +14,9 @@ hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模
 go run ./cmd/hgo run examples/prototype/print_default.hgo
 ```
 
-常量 enum 的唯一值子集也已可运行：[Go webhook 互操作示例](examples/raw_enum/main.hgo)保留未知 string/数字值并用开放 match 处理。支持显式整数/string 常量；同值别名待决，raw 派生未实现，准确边界见 [常量 enum 验收](docs/t0-acceptance.md#常量-enum-唯一值子集增量)。
+常量 enum 的唯一值子集也已可运行：[Go webhook 互操作示例](examples/raw_enum/main.hgo)保留未知 string/数字值并用开放 match 处理。支持显式整数/string 常量；同值别名待决，raw 仅支持显式 Clone 派生，准确边界见 [常量 enum 验收](docs/t0-acceptance.md#常量-enum-唯一值子集增量)。
+
+仅通配/全值绑定的 match 已可按目标真实 enum 类型解析；[归档业务](examples/prototype/final_audit.hgo)展示未知 raw 值经过显式 Clone 后仍完整保存。最终交付、待决与后置范围见 [覆盖梳理](docs/t0-acceptance.md#最后覆盖梳理交付待决与后置)。
 
 Default 不改变 Go 零初始化，打印只接受已登记协议。完整限制及 T0 必需/后置划分见 [验收矩阵](docs/t0-acceptance.md#print--println-与-default-增量)。
 

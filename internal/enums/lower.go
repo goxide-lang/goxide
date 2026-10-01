@@ -615,8 +615,11 @@ func (l *lowerer) match(i int) (string, int, error) {
 		arms = append(arms, a)
 		k = p + 1
 	}
-	if d == nil {
-		return "", 0, l.err(l.ts[i].start, "match requires at least one qualified local enum pattern in this prototype")
+	inferred := d == nil
+	if inferred {
+		// Identity is resolved from go/types after the target has been evaluated
+		// into one saved value. A catch-all is not permission to skip validation.
+		d = &Decl{RawType: "<inferred>"}
 	}
 	covered := map[string]bool{}
 	all := false
@@ -646,6 +649,9 @@ func (l *lowerer) match(i int) (string, int, error) {
 			}
 		}
 	}
+	if inferred && !all {
+		return "", 0, l.err(l.ts[i].start, "non-exhaustive match; an unguarded wildcard or whole-value binding is required, guards do not contribute coverage")
+	}
 	if d.RawType != "" && !all {
 		return "", 0, l.err(l.ts[i].start, "open raw enum match requires an unguarded wildcard or whole-value binding; known members do not cover unknown values")
 	}
@@ -661,9 +667,13 @@ func (l *lowerer) match(i int) (string, int, error) {
 	if d.RawType != "" && d.PackagePath == "" {
 		boundType = d.Marker
 	}
-	fmt.Fprintf(&b, "{ var %s %s = (%s);", saved, boundType, target)
-	if d.RawType == "" {
-		fmt.Fprintf(&b, "%s(%s);", d.Validator, saved)
+	if inferred {
+		fmt.Fprintf(&b, "{ %s := (%s); __hgo_enum_infer(%s);", saved, target, saved)
+	} else {
+		fmt.Fprintf(&b, "{ var %s %s = (%s);", saved, boundType, target)
+		if d.RawType == "" {
+			fmt.Fprintf(&b, "%s(%s);", d.Validator, saved)
+		}
 	}
 	fmt.Fprintf(&b, "%s := (0 != 0); _ = %s;\n", matched, matched)
 	for _, a := range arms {

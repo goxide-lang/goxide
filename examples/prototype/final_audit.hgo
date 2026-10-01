@@ -1,0 +1,43 @@
+package main
+
+#[derive(Clone)]
+enum WireState string { Ready="ready", Done="done", }
+
+#[derive(Clone)]
+type Snapshot struct { State WireState; Revision int }
+#[derive(Clone)]
+type AuditRecord struct { Current Snapshot; Label string }
+
+enum Receipt { Accepted(int), Ignored, }
+
+func archive(next func() WireState, trace *[]string) string {
+    defer func(){ *trace=append(*trace,"closed") }()
+    match next() {
+        state if string(state)=="ready" => { return "known" },
+        state => { *trace=append(*trace,"archived"); return string(state) },
+    }
+    panic("unreachable")
+}
+func acknowledge(next func() Receipt, guard func() bool, trace *[]string) {
+    match next() {
+        _ if guard() => { *trace=append(*trace,"first") },
+        receipt => { _=receipt; *trace=append(*trace,"fallback") },
+    }
+}
+func discard(next func() Receipt, calls *int) {
+    match next() { _ => { *calls++ }, }
+}
+func discardRaw(next func() WireState, calls *int) {
+    match next() { _ => { *calls++ }, }
+}
+func accepted() Receipt { return Receipt::Accepted(9) }
+func copyAudit(state string) AuditRecord {
+    original:=AuditRecord{Current:Snapshot{State:WireState(state),Revision:3},Label:"webhook"}
+    return CloneAuditRecord(&original)
+}
+func main() {
+    record:=copyAudit("future-v3")
+    trace:=[]string{}
+    result:=archive(func()WireState{return record.Current.State},&trace)
+    println!("audit {} {}",record.Label,result)
+}

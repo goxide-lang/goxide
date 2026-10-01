@@ -263,7 +263,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if cfg.Namespace != "" && !token.IsIdentifier(cfg.Namespace) {
 		return nil, fmt.Errorf("%s: invalid propagation namespace", filename)
 	}
-	if !bytes.Contains(source, []byte(marker+"(")) {
+	if !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) {
 		return source, nil
 	}
 	fs := token.NewFileSet()
@@ -292,7 +292,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	// Seed a temporary identity declaration: this makes operand types available,
 	// including operands with inference, before replacing each marker's result.
-	seed, _ := parser.ParseFile(fs, "<propagation signatures>", "package "+f.Name.Name+";func "+marker+"[T any](v T) T {return v}", 0)
+	seed, _ := parser.ParseFile(fs, "<propagation signatures>", "package "+f.Name.Name+";func "+marker+"[T interface{}](v T) T {return v};func __hgo_enum_infer[T interface{}](v T) {}", 0)
 	f.Decls = append(f.Decls, seed.Decls...)
 	for {
 		l.check()
@@ -356,8 +356,11 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 		}
 	}
 	l.check()
+	if err := l.inferMatches(); err != nil {
+		return nil, err
+	}
 	for _, decl := range f.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil && !strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_") && fn.Name.Name != marker {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil && !strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_") && fn.Name.Name != marker && fn.Name.Name != "__hgo_enum_infer" {
 			if fn.Type.TypeParams != nil && contains(fn.Body, l.questions) {
 				return nil, l.fail(fn, "generic functions with ? are not supported by this prototype")
 			}
@@ -368,7 +371,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	var residual ast.Node
 	for _, decl := range f.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && (fn.Name.Name == marker || strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_")) {
+		if fn, ok := decl.(*ast.FuncDecl); ok && (fn.Name.Name == marker || fn.Name.Name == "__hgo_enum_infer" || strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_")) {
 			continue
 		}
 		ast.Inspect(decl, func(n ast.Node) bool {
@@ -385,7 +388,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	kept := f.Decls[:0]
 	for _, decl := range f.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && (fn.Name.Name == marker || strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_")) {
+		if fn, ok := decl.(*ast.FuncDecl); ok && (fn.Name.Name == marker || fn.Name.Name == "__hgo_enum_infer" || strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_")) {
 			continue
 		}
 		kept = append(kept, decl)

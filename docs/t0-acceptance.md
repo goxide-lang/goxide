@@ -228,3 +228,23 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 [业务示例](../examples/raw_enum/main.hgo)由原生 Go JSON webhook 输入 string/数字，经过跨包 raw enum 和开放 match，再由原生 Go 断言输出。[独立非作者验收](../tests/acceptance/raw_enum_test.go)实际安装 CLI、两次生成字节一致、生成模块 3 项 race 测试、独立 binary 与仓库外运行，并覆盖 14 项拒绝；print/Default 旧业务同时回归。部分 lowering 诊断明确 generated/unmapped，不承诺全部精确原始行列。
 
 本轮限定 T0 必需清单已有实现与应用验收路径；没有因此宣称整项 T0 或完整语言完成。未决同值别名不阻塞唯一值子集；无需为等待选择扩展全套 trait、智能指针或风险分析。最终全套统计见实现记录。
+
+
+## 最后覆盖梳理：交付、待决与后置
+
+以本节和最新实现记录为当前状态，前面的分轮统计保留为历史证据。
+
+| 分类 | 精确范围 |
+| --- | --- |
+| 可交付的有限子集 | 同模块卫生声明宏；具体类型 serde 核心/JSON；payload enum、Option/Result、限定 match、专用 `?` 与一步 From；已有多文件读写权限；print/println 与具体 Default/Clone/Debug；唯一值 raw enum、Go 互操作与显式 raw Clone；安装 CLI 和独立生成 Go 模块 |
+| 已在等待用户决定 | 同一 raw enum 的同值成员是否允许作为别名；保持待定，不重复询问，不阻止唯一值子集 |
+| 尚需补规则，不擅定 | raw Debug 的已知/未知显示、raw serde 的 wire/rename/未知解码、raw Default 的选择；见枚举专题 §0.2。它们并非已经批准但被别名问题一并阻塞的功能 |
+| 明确后置或有限边界 | 通用 trait/泛型、完整表达式和嵌套模式、导入类型自动派生、外部预编译宏 metadata、过程宏、完整 fmt、YAML、LSP、跨目标构建、`.hgo` 测试源及完整引用桥接；按各专题分期，不冒称永久取消 |
+| 独立长期工作 | 借用/别名风险分析及 W01–W04，不属 MVP 完成条件；只读/可写基础类型规则仍须检查 |
+
+这里交付的是可安装运行、有正反例与真实 Go 应用证据的原型子集，不是完备 Rust、完整 T0 或所有已确认设计均已实现。新增工作到本轮验收闭环为止；不为等待一个问题不断扩展范围。
+
+
+本轮补齐的是已有语义的两个缺口：纯 `_` / 全值绑定的 match 根据被匹配表达式的真实名义类型解析，不要求人为加一条成员模式；raw `#[derive(Clone)]` 保持全部原始值。前者不是对任意 Go 值开放通用模式匹配，仍要求可信 enum 元数据；payload/Result 的非法表示在 guard/body 前校验，raw 未知值不加成员门禁。旧章节的 wildcard-only/全部 raw 派生不支持记录由本增量覆盖。
+
+新 [归档业务](../examples/prototype/final_audit.hgo) 与 [独立验收](../tests/acceptance/t0_final_test.go)覆盖未知状态保存、嵌套显式 Clone、仅绑定/通配分支、求值次数和非法 payload 在副作用前拒绝。基础规则不明的 raw Debug/serde/Default 继续明确诊断，不把原生 JSON 输入误计为 raw serde 派生。

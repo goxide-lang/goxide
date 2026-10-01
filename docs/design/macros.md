@@ -260,6 +260,8 @@ Go `slices.Clone` 用赋值复制元素，属于浅复制；这不能自动等�
 
 Clone 结果仍要保留字段的引用来源。复制 slice header、map、Arc 或锁句柄不洗掉外部别名，锁回调引用形成长寿命结果默认允许，未来有具体违约使用才 W01。手写 Clone 同样接受基于证据的诊断；若想从借用制作独立快照，必须实际复制所需内容并证明结果不依赖该借用，不能只改返回类型。
 
+raw 常量 enum 的显式 Clone 按其整数/string 标量值复制，未知 raw 与零值原样保留，生成 helper 保持名义返回类型；不经过 payload enum 的合法 case 校验。嵌套字段仍要求该类型明确登记 Clone，不能仅凭同名手写 helper 认领协议。raw Debug/serde/Default 的未定规则见[枚举专题](enums-and-match.md#02-raw-派生的规则边界)。
+
 ### 5.4 Debug：受检查的运行时格式化
 
 Debug 按声明顺序格式化 struct 字段；enum 输出当前变体及其 payload。所有被格式化字段必须有显式 Debug 实现。生成的名称和字段布局便于调试，但不承诺跨版本稳定，不用作序列化、协议编码或持久化格式。这一用途边界参考 [Rust Debug](https://doc.rust-lang.org/std/fmt/trait.Debug.html#stability)。

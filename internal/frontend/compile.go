@@ -397,7 +397,11 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 			if ed := enumByName[ts.Name.Name]; ed != nil {
 				if ed.RawType != "" {
-					return fail(ed.Position.Line, "derive on raw constant enums is unsupported in the current subset")
+					for kind := range a.derive {
+						if kind != "Clone" {
+							return fail(ed.Position.Line, "raw constant enum supports only Clone derive; "+kind+" is unsupported")
+						}
+					}
 				}
 				for kind := range a.derive {
 					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Default" && kind != "Error" {
@@ -662,7 +666,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			debugTypes[m.name] = true
 		}
 	}
-	needsTypecheck := bytes.Contains(out, []byte("__hgo_match_expr_")) || bytes.Contains(out, []byte("__hgo_print"))
+	needsTypecheck := bytes.Contains(out, []byte("__hgo_enum_infer(")) || bytes.Contains(out, []byte("__hgo_match_expr_")) || bytes.Contains(out, []byte("__hgo_print"))
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != "" || d.RawType != ""
 	}

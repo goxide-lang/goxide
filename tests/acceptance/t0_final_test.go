@@ -1,0 +1,97 @@
+package acceptance_test
+
+import (
+	"github.com/hxsf/goxide/internal/frontend"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+func TestT0FinalAuditBusinessRace(t *testing.T) {
+	_, here, _, _ := runtime.Caller(0)
+	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
+	source := filepath.Join(root, "examples/prototype/final_audit.hgo")
+	input, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := frontend.Compile(source, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated := t.TempDir()
+	packagesWrite(t, generated, "go.mod", "module finalaudit.example/business\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
+	packagesWrite(t, generated, "main.go", string(result.Go))
+	packagesWrite(t, generated, "audit_test.go", finalAuditAssertions)
+	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
+	cli := filepath.Join(t.TempDir(), "hgo")
+	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/hgo")
+	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "-go", tool, "-runtime", root, source)
+	if got != "audit webhook future-v3\n" {
+		t.Fatalf("unexpected business output: %q", got)
+	}
+}
+
+func TestT0FinalAuditBoundaries(t *testing.T) {
+	cases := []struct{ name, source, want string }{
+		{"plain-int", "func f(v int){match v {_=>{},}}", "enum"},
+		{"any-erases-identity", "enum E { A, }\nfunc f(v any){match v {_=>{},}}", "enum"},
+		{"raw-missing-clone", "enum S string { A=\"a\", }\n#[derive(Clone)]\ntype Record struct { Value S }", "derive"},
+		{"raw-helper-not-protocol", "enum S string { A=\"a\", }\nfunc CloneS(v *S) S{return *v}\n#[derive(Clone)]\ntype Record struct { Value S }", "derive"},
+		{"raw-debug-still-explicit", "#[derive(Debug)]\nenum S string { A=\"a\", }", "unsupported"},
+		{"raw-serde-still-explicit", "#[derive(Serialize,Deserialize)]\nenum S string { A=\"a\", }", "unsupported"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			name := filepath.Join(t.TempDir(), tc.name+".hgo")
+			_, err := frontend.Compile(name, []byte("package boundary\n"+tc.source+"\n"))
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) || !strings.Contains(err.Error(), filepath.Base(name)+":") {
+				t.Fatalf("want located %s rejection, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+const finalAuditAssertions = `package main
+import("reflect";"testing")
+func TestAuditPreservesOpenWireData(t *testing.T){
+ for _,raw:=range []string{"","ready","future-v3"}{
+  original:=WireState(raw);cloned:=CloneWireState(&original)
+  if string(cloned)!=raw {t.Fatalf("raw Clone changed %q to %q",raw,cloned)}
+  record:=copyAudit(raw)
+  if string(record.Current.State)!=raw || record.Current.Revision!=3 || record.Label!="webhook" {t.Fatal(record)}
+  changed:=CloneAuditRecord(&record);changed.Current.State=WireState("changed")
+  if string(record.Current.State)!=raw {t.Fatal("nested value clone aliases source")}
+  trace:=[]string{};calls:=0
+  got:=archive(func()WireState{calls++;trace=append(trace,"read");return cloned},&trace)
+  want:=raw;wantTrace:=[]string{"read","archived","closed"}
+  if raw=="ready"{want="known";wantTrace=[]string{"read","closed"}}
+  if got!=want || calls!=1 || !reflect.DeepEqual(trace,wantTrace){t.Fatalf("got %q calls=%d trace=%v",got,calls,trace)}
+  discarded:=0;rawCalls:=0
+  discardRaw(func()WireState{rawCalls++;return cloned},&discarded)
+  if rawCalls!=1||discarded!=1 {t.Fatalf("raw wildcard calls %d/%d",rawCalls,discarded)}
+ }
+}
+func TestReceiptValidationPrecedesEffects(t *testing.T){
+ caseType:=reflect.TypeOf(accepted())
+ typedNil:=reflect.Zero(reflect.PointerTo(caseType)).Interface().(Receipt)
+ casePointer:=reflect.New(caseType).Interface().(Receipt)
+ for _,tc:=range []struct{valid bool;value Receipt}{{true,accepted()},{false,nil},{false,typedNil},{false,casePointer}}{
+  valid,value:=tc.valid,tc.value
+  trace:=[]string{};reads,guards:=0,0
+  panicked:=false
+  func(){defer func(){panicked=recover()!=nil}();acknowledge(func()Receipt{reads++;return value},func()bool{guards++;return false},&trace)}()
+  if reads!=1 {t.Fatal("scrutinee evaluated more than once",reads)}
+  if valid {if panicked||guards!=1||!reflect.DeepEqual(trace,[]string{"fallback"}){t.Fatalf("valid receipt: %v %d %v",panicked,guards,trace)}} else {
+   if !panicked||guards!=0||len(trace)!=0 {t.Fatalf("invalid receipt reached effects: %v %d %v",panicked,guards,trace)}
+  }
+  effects:=0;panicked=false
+  func(){defer func(){panicked=recover()!=nil}();discard(func()Receipt{return value},&effects)}()
+  if valid && (panicked||effects!=1) {t.Fatal("valid wildcard failed")}
+  if !valid && (!panicked||effects!=0) {t.Fatal("invalid wildcard swallowed receipt")}
+ }
+}
+`

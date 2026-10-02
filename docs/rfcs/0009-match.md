@@ -163,7 +163,7 @@ hgo 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开放
 
 现有目标类型见证只在编译期读取类型，生成 Go 前删除，不额外读取/取址目标。`=` 展开放在普通块中，最终目标赋值位于 pattern 绑定之外；`:=` 最后才声明用户变量，arm 内同名标识符仍绑定原来的外层变量，无新变量和 goto 的原合法性保留。包级卫生类型 alias 保护 import/builtin 名称，局部类型须在当前位置解析为同一身份；不可命名的私有/遮蔽类型明确诊断，不猜拼写。
 
-推断引用结果复用已有具体引用 alias，保留读写资格。穷尽 expression match 的结果临时量由本次编译逐文件显式登记，成功路径必赋值、失败问号退出；只有登记项允许无 initializer，不按名称前缀放开用户引用零值。此内部例外不改变源级引用初始化语义。跨包导入引用函数结果仍受当前 metadata/type-stage 顺序边界约束，不能借 raw Go 指针自动丢失资格。
+推断引用结果复用已有具体引用 alias，保留读写资格。穷尽 expression match 的结果临时量由本次编译逐文件显式登记，成功路径必赋值、失败问号退出；只有登记项允许无 initializer，不按名称前缀放开用户引用零值。此内部例外不改变源级引用初始化语义。同次 module 构建先绑定公开引用 metadata 再进行 match/问号类型推断，导入函数结果保留真实名义引用资格；完成权限检查后才恢复原生调用。不能借 raw Go 指针自动丢失资格。
 
 [真实模块验收](../../tests/acceptance/match_assignment_test.go)覆盖目标和 arm 一次求值、选中副作用、上下文 1<<63、别名/跨包具名类型、nested match/最近闭包问号、defer/direct recover、外层同名、goto、引用结果及 source 类型诊断。生成模块单独 race/vet，两次产物逐字节一致；15 个拒绝反例包括 mixed/nil/overflow/no-new-variable、复杂LHS/control-header、readonly写/any和未初始化/伪造临时量。类型诊断使用保存的源位置，缺可证明来源仍标 unmapped；不把 CheckExpr 合成表达式坐标冒充源码。生成代码没有新增 IIFE、正常失败 panic 或额外目标读取。
 

@@ -517,7 +517,7 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 | 必须完成：常用 match | 单标识符普通赋值/局部推断已通过下文限定验收；剩余复杂目标/其他表达式上下文留范围账；停止条件为已定类型规则、一次求值/仅选中分支/最近函数传播，不无限扩大模式系统 |
 | 必须完成：普通权限误拒 | 局部值字段替换已通过下文限定验收；继续捕获/真正取址槽位、指针/索引路径与未建模控制流中的合法普通用法；同时保留只读写入与擦除错误，不要求复杂 alias 风险证明 |
 | 必须完成：已列传播欠账 | 现存函数 iterator/range 目标、unsafe/guard 与上下文长尾逐项给出实现证据或明确范围决定；for 性能已有差距不能称等价，不将其扩成新优化项目 |
-| 已有实现待最终联合验收 | 同 module 宏/封闭 enum/match/OptionResult/Default/serde JSON/权限串成一个业务，安装 CLI 仓库外构建、失败路径、生成模块 race、输出确定性和诊断矩阵；已有分项测试不替代最终签收，也不重复旧云迁移 |
+| 已通过限定联合验收 | 下文联合业务贯通同 module 宏/封闭 enum/match/OptionResult/Default/serde JSON/权限；安装 CLI 仓库外构建、失败路径、生成模块 race、确定性及诊断矩阵通过。联合验收不抹去其余范围账 |
 | 范围不能暗改 | 当前公开引用是具体元素参数/单非具名返回、同次 module registry；外部恢复、其他签名/引用容器与完整来源映射保留工程账。先按已定有限交付标准核验实际需求，若要从已列工程项移出 MVP，须明确范围决定，不能由每阶段自行宣布延期 |
 | 明确独立长期/不纳入本轮 | D20 复杂别名/借用风险分析；完整 trait、LSP、自举、YAML、公开 Value/PATCH、完整 Rust 模式能力和稳定外部 ABI，不成为本轮隐性前置 |
 | 明确等用户设计 | Proposed serde field adapters 的具体入口与 custom deserialize_with 缺失策略；U15 自动 Go 桥接与 D11 协调；方法接收权限/impl 键 U03、引用容器与 any 保留资格的未定表示 U02；select 候选失败语义若扩展问号。均不阻塞其他已定工程 |
@@ -543,4 +543,12 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 
 单标识符普通赋值、`:=` 与无类型 var 接通；有目标上下文按实际类型赋值，无上下文仅同一 typed type 或同一 Go 默认类型推断，常量/nil按候选类型检查。无公共超类型搜索、自动数字转换或 any 降级。[模块测试](../tests/acceptance/match_assignment_test.go)为真实 CLI→多包 Go，3 项生成模块 race 测试及 vet，15 个负例与两次确定性输出；源级类型补充诊断有原位置，readonly 与用户未初始化引用仍拒绝。
 
-停止条件已按本片完成：跨包具名身份、上下文大整数/shift、nested match/问号、一次 scrutinee/选中 arm、原函数失败退出、scope/goto/direct recover 有执行证据。复杂 LHS/control-header、其余表达式/调用、private不可命名类型及导入引用结果的阶段顺序仍留工程账。[RFC](rfcs/0009-match.md)不将这些自动延期；接下来先做此前固定的联合验收，保留范围账及用户待决项，不宣称完整 MVP。
+停止条件已按本片完成：跨包具名身份、上下文大整数/shift、nested match/问号、一次 scrutinee/选中 arm、原函数失败退出、scope/goto/direct recover 有执行证据。复杂 LHS/control-header、其余表达式/调用、private不可命名类型仍留工程账；导入引用结果阶段顺序已在下一联合验收修复。[RFC](rfcs/0009-match.md)不将这些自动延期；接下来先做此前固定的联合验收，保留范围账及用户待决项，不宣称完整 MVP。
+
+### 同模块联合业务验收（2026-10-02）
+
+[业务源](../examples/t0_joint/main.hgo)与[安装 CLI 验收](../tests/acceptance/t0_joint_test.go)把 config/store/logkit/入口四包串成 JSON 订单：封闭 enum、两种 match 赋值、Option 缺失/null、Result 问号与 Go cause 链、手动及派生 Default、serde default/skip、条件宏和读写路径都参与真实执行。独立副本字段替换与可写/native 别名更新可见，未许诺全局不可变或独占。
+
+联合业务发现并修复元数据绑定晚于 match 推断的实际误拒。现在先绑定同次构建 registry，再推断表达式和传播；原始签名留作导出，完整权限校验后才还原 Go 调用。只读写入/擦除和跨构建无 registry 仍拒绝，不放宽 D11。
+
+停止条件证据：安装 CLI 离开仓库生成两次逐字节一致；四包生成模块单独 **3 项 race 测试**与 vet；原生二进制仓库外成功输出 `accepted 42 units=3 retry=-1 port=8080 observed=6`，三类失败输入非零退出且无成功日志。四个拒绝子项验证 readonly 写/any、类型错误原始源位置和缺元数据（权限重建诊断诚实标注 unmapped）。独立复验另有跨消费文件 import alias 与共享 slice 反例。此联合项已通过，整体 MVP 尚不能宣布完成：上表的权限精度、传播上下文/性能和范围账仍待逐项关闭，待设计入口仍保持 Proposed。

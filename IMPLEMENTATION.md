@@ -831,3 +831,11 @@ match 类型与 `?` 签名联合迭代，重新检查上下文后再进行传播
 [真实跨包 CLI 验收](tests/acceptance/match_assignment_test.go)生成模块单独 3 项 race 测试、vet 和两次确定性转译；15 项负例覆盖类型/范围/上下文、原作用域和权限擦除。跨包 named 类型、alias/import shadow、直接 recover/defer、nearest closure、嵌套和双向问号依赖均执行。[RFC](docs/rfcs/0009-match.md)记录准确统一规则和剩余复杂 LHS/表达式上下文、不可命名类型及 imported reference metadata 的阶段边界。下一执行联合验收，整体 MVP 尚不标完成。
 
 最终全树 race 通过 **15 个测试包 / 262 个宿主顶层 / 577 个子测试**，另 2 包无测试；全树 vet 通过。新生成多包模块单独 **3 项** race 测试与 vet 通过。设计检查通过 **60 份 Markdown / 742 个本地链接 / 20 篇 RFC** 及 **13 条独立 Go 机制命令**。独立实现和文档复审无阻断，另真实引用身份/别名可见性 race 探针输出 ok。日志 `/tmp/t0-match-inference-race.json`、`/tmp/t0-match-inference-race.err`、`/tmp/t0-match-inference-vet.log`、`/tmp/t0-match-inference-design.log`；本阶段只推送工作分支并 fetch 核验。
+
+## 同模块联合业务与阶段顺序修复（2026-10-02）
+
+基于 `5b47fae188874fc8f12846ef95adf550537faa29` 执行既定联合验收。[四包业务](examples/t0_joint/main.hgo)真实贯通 JSON config、Default/Option、封闭 enum/match、Result/error cause 链、预算读写路径与条件宏。首次转译暴露 imported View 的返回引用在 match 推断时仍是 raw pointer：metadata 绑定晚于类型推断，导致合法程序被 Finish 拒绝。现将 BindImports 提前到 propagate 之前，保存绑定前公开签名，完整 refs 检查后才 Restore 并导出 metadata；没有绕开只读检查、添加桥接或运行时包装。
+
+[安装 CLI 验收](tests/acceptance/t0_joint_test.go)离开仓库，两次模块生成一致，三项生成业务 race 测试及 vet、原生二进制成功和三类失败输入通过。四个拒绝项保留只读写/any、源类型诊断与跨构建缺 metadata；可写别名和 native 更新经只读路径可见，副本独立字段仍可写。独立审查复现原始失败、复验业务及两消费文件 import alias 的真实生成 race，字段/接口/共享 slice 三负例均拒绝。联合项通过不代表剩余 T0 范围账已关闭。
+
+最终全树 race：**15 个测试包 / 263 个宿主顶层 / 581 个子测试**通过，另 2 包无测试；vet 通过。联合生成四包模块单独 **3 项** race 测试与 vet 通过。设计检查：**60 Markdown / 749 本地链接 / 20 RFC**及 **13 条纯 Go 机制命令**通过，后者不算 hgo 执行证据。最后补充可写引用调用与 unmapped 断言后，联合专项再次 race 通过；独立复审无阻断。日志 `/tmp/t0-joint-race.json`、`/tmp/t0-joint-race.err`、`/tmp/t0-joint-vet.log`、`/tmp/t0-joint-design.log`、`/tmp/t0-joint-test-final.log`。本阶段只提交工作分支、push 后 fetch 核验。

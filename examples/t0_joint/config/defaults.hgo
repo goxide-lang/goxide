@@ -1,0 +1,6 @@
+package config
+
+var DefaultCalls int
+impl Default for Settings {
+    func default() Settings { DefaultCalls++; return Settings{Port:8080} }
+}

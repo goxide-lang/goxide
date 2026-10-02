@@ -1,0 +1,64 @@
+package main
+
+import (
+    "errors"
+    "fmt"
+    "os"
+    "strconv"
+    cfg "joint.example/app/config"
+    "joint.example/app/logkit"
+    "joint.example/app/store"
+)
+
+#[derive(Error)]
+#[error("order rejected")]
+type Failure struct {
+    #[from]
+    Cause error
+}
+type Receipt struct { ID int; Units int; Retry int; Port int; Observed int }
+var OverCapacity=errors.New("capacity exceeded")
+var SideEffects int
+func logValue(n int)int{SideEffects++;return n}
+func load(input []byte)Result[cfg.Request,error]{q,e:=cfg.Decode(input);if e!=nil{return Result[cfg.Request,error]::Err(e)};return Result[cfg.Request,error]::Ok(q)}
+func number(s string)Result[int,error]{n,e:=strconv.Atoi(s);if e!=nil{return Result[int,error]::Err(e)};return Result[int,error]::Ok(n)}
+func allowed(n,limit int)Result[int,error]{if n<=0||n>limit{return Result[int,error]::Err(OverCapacity)};return Result[int,error]::Ok(n)}
+func prepare(input []byte,capacity int,enabled bool)Result[Receipt,Failure]{
+    q:=load(input)?
+    id:=number(q.Name)?
+    budget:=store.Budget{Limit:capacity,History:[]int{capacity}}
+    view:=match q.Mode{
+        cfg.Mode::Immediate=>store.View(&budget),
+        cfg.Mode::Batch(_)=>store.View(&budget),
+    }
+    units:=match q.Mode{
+        cfg.Mode::Immediate=>1,
+        cfg.Mode::Batch(n)=>allowed(n,view.Limit)?,
+    }
+    units=match q.Mode{cfg.Mode::Immediate=>units,cfg.Mode::Batch(_)=>units}
+    snapshot:=*view
+    snapshot.History=append([]int(nil),snapshot.History...)
+    snapshot.History[0]+=units
+    writable:=store.Edit(mut& budget)
+    writable.Limit+=units
+    if view.Limit!=capacity+units{panic("writable alias visibility")}
+    store.NativeUpdate(&budget)
+    if snapshot.History[0]!=capacity+units||view.History[0]!=capacity+1{panic("storage identity")}
+    logkit.event_if!(enabled,logValue(id+units))
+    return Result[Receipt,Failure]::Ok(Receipt{ID:id,Units:units,Retry:cfg.RetryCount(q),Port:q.Settings.Port,Observed:view.History[0]})
+}
+func Run(input string,capacity int,enabled bool)(Receipt,error){
+    result:=prepare([]byte(input),capacity,enabled)
+    match result{
+        Result[Receipt,Failure]::Ok(v)=>{return v,nil},
+        Result[Receipt,Failure]::Err(e)=>{return Receipt{},e},
+    }
+    return Receipt{},errors.New("unreachable result")
+}
+func main(){
+    input:=`{"Name":"42","Mode":{"Batch":3}}`
+    if len(os.Args)>1{input=os.Args[1]}
+    result,err:=Run(input,5,true)
+    if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}
+    fmt.Printf("accepted %d units=%d retry=%d port=%d observed=%d\n",result.ID,result.Units,result.Retry,result.Port,result.Observed)
+}

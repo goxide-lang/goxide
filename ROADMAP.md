@@ -173,3 +173,7 @@ for/range 局部重绑定、退出分支、元素地址后的局部重绑定及�
 ### 2026-10-02：match 赋值与局部推断
 
 单标识符赋值/局部 `:=` 与 var 推断已按上下文类型和同型分支规则接通，不新增公共超类型或隐式转换；生成多包 race/vet 覆盖问号、引用、scope和副作用。复杂目标/其他表达式及不可命名结果仍留账。按既定收口顺序，下一先[多包联合验收](docs/t0-acceptance.md#局部值字段替换验收2026-10-02)，不继续无限扩模式/签名，也不在范围账或待决接口未经选择时宣称完整 MVP。
+
+### 同模块联合验收（2026-10-02）
+
+[四包业务](examples/t0_joint/main.hgo)与[真实安装 CLI 测试](tests/acceptance/t0_joint_test.go)已贯通宏、enum/match、Option/Result/错误链、Default、serde JSON 和读写权限。修复导入引用 metadata 绑定晚于 match 推断的误拒，生成模块独立 race/vet、仓库外运行、失败/诊断与确定性通过。联合项已完成；[剩余清单](docs/t0-acceptance.md#当前最小收口清单与停止条件2026-10-02)仍保留普通权限精度、问号欠账与范围决定，不把完整 MVP 标完成，也不将 Proposed 接口默认为获批。

@@ -1,0 +1,22 @@
+package config
+
+#[derive(Serialize, Deserialize, Default)]
+pub enum Mode { #[default] Immediate, Batch(int), }
+#[derive(Serialize, Deserialize)]
+type Settings struct { Port int }
+#[derive(Serialize, Deserialize, Default)]
+type Flags struct { Enabled bool }
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+type Request struct {
+    Name string
+    #[serde(default)]
+    Mode Mode
+    Retry Option[int]
+    #[serde(default)]
+    Settings Settings
+    #[serde(default)]
+    Flags Flags
+    #[serde(skip)]
+    Secret int
+}

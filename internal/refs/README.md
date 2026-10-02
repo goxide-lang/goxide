@@ -212,3 +212,10 @@ errors. This is local permission typing, not heap-alias risk analysis.
 old copies, siblings, assignments/range, and implicit receiver addresses. Generated
 Go runs race/vet independently. The implementation adds no runtime wrapper, alias
 graph, exclusive-reference promise, or inferred native-call effects.
+
+Package compilation binds imported permission metadata before match-result and
+question-propagation inference. It saves pre-binding public signatures for export,
+checks the complete lowered package, then restores native calls. The joint CLI
+business in `t0_joint_test.go` exercises imported readonly match results alongside
+serde, defaults, macros, errors and writable aliases. Native pointer signatures
+must never become an intermediate excuse to erase reference qualifications.

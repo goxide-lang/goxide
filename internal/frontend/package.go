@@ -182,6 +182,40 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		families = append(families, r.Enums...)
 		conversions = append(conversions, r.conversions...)
 	}
+	// Bind imported permissions before expression inference sees native pointer
+	// signatures. Keep source signatures for export; restore helpers only after
+	// the complete permission check. This does not authorize a native bridge.
+	referenceIR := map[string][]byte{}
+	for n, s := range files {
+		referenceIR[n] = s
+	}
+	bound, bindings, err := refs.BindImports(files, imp, result.referenceImports)
+	if err != nil {
+		if e, ok := err.(*refs.ImportError); ok {
+			mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
+			if r, ok := result.Files[e.Position.Filename]; ok && r.Diagnostics != nil {
+				if seg := r.Diagnostics.Lookup(e.Position.Offset); seg != nil {
+					mapped.Origin = seg.Origin
+					mapped.Stack = seg.Stack
+				}
+			}
+			return result, mapped
+		}
+		return result, err
+	}
+	for name, source := range bound {
+		r := result.Files[name]
+		if !bytes.Equal(r.Go, source) {
+			if r.Diagnostics != nil {
+				r.Diagnostics = r.Diagnostics.Compose(r.Go, source, "package refs.BindImports")
+			}
+			r.Go = source
+			r.Expanded = source
+			refreshPackageMap(&r)
+			result.Files[name] = r
+		}
+		files[name] = source
+	}
 	for index, name := range sortedSources(files) {
 		r := result.Files[name]
 		if !strings.HasSuffix(name, ".hgo") {
@@ -218,29 +252,11 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		result.Files[name] = r
 		files[name] = source
 	}
-	referenceIR := map[string][]byte{}
-	for n, s := range files {
-		referenceIR[n] = s
-	}
-	bound, bindings, err := refs.BindImports(files, imp, result.referenceImports)
-	if err != nil {
-		if e, ok := err.(*refs.ImportError); ok {
-			mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
-			if r, ok := result.Files[e.Position.Filename]; ok && r.Diagnostics != nil {
-				if seg := r.Diagnostics.Lookup(e.Position.Offset); seg != nil {
-					mapped.Origin = seg.Origin
-					mapped.Stack = seg.Stack
-				}
-			}
-			return result, mapped
-		}
-		return result, err
-	}
 	matchTemps := map[string]map[string]bool{}
 	for name, r := range result.Files {
 		matchTemps[name] = r.matchReferenceTemps
 	}
-	finished, err := refs.FinishPackage(bound, imp, matchTemps)
+	finished, err := refs.FinishPackage(files, imp, matchTemps)
 	if err != nil {
 		return result, stageError("package refs.Finish", err)
 	}

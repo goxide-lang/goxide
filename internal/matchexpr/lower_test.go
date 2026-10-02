@@ -56,9 +56,7 @@ func TestGeneratedRace(t *testing.T) {
 func TestReject(t *testing.T) {
 	for _, body := range []string{
 		`x,y:=match e { E::Idle => 1 }; _,_=x,y`,
-		`x[0] = match e { E::Idle => 1 }`,
 		`var x int = match e { E::Idle => { 1 } }; _=x`,
-		`var x int = match e { E::Idle => 1 } + 2; _=x`,
 		`consume(match e { E::Idle => 1 })`,
 	} {
 		t.Run(body, func(t *testing.T) {

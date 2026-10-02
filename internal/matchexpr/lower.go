@@ -250,6 +250,18 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 	var edits []edit
 	c := composer{ts: ts, pairs: pairs, copy: copySource, fail: fail, callees: callees, hash: fmt.Sprintf("%x", sha256.Sum256([]byte(filename)))[:24]}
 
+	c.origin = func(i int) string {
+		origin := f.Position(token.Pos(f.Base() + ts[i].a)).String()
+		if provenance != nil {
+			origin = "[generated/unmapped] " + origin
+			if seg := provenance.Lookup(ts[i].a); seg != nil && seg.Origin != nil {
+				o := seg.Origin
+				origin = fmt.Sprintf("%s:%d:%d", o.File, o.Line, o.Column)
+			}
+		}
+		return origin
+	}
+
 	for i := 0; i < len(ts); i++ {
 		if ts[i].s != "match" || ts[i].k != token.IDENT {
 			continue
@@ -263,6 +275,21 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 			if v.open < i && i < v.close && (owner < 0 || v.open > funcs[owner].open) {
 				owner = n
 			}
+		}
+		if owner >= 0 {
+			serial, aliases := c.serial, c.aliases.String()
+			e, end, ok, err := c.embedded(i, funcs[owner].open, funcs[owner].result)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				edits = append(edits, e)
+				i = end
+				continue
+			}
+			c.serial = serial
+			c.aliases.Reset()
+			c.aliases.WriteString(aliases)
 		}
 		// Find the outermost direct call enclosing this match. Only a whole
 		// return expression or expression statement is hoisted here.

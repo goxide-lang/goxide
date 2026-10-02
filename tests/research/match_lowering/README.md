@@ -89,3 +89,34 @@ that unit-case equality and enum/nil comparison are currently accepted, even whe
 another variant contains a slice; comparing the active slice case panics. A tagged
 struct migration must account for these existing source programs. The separate
 [payload-place output](results/place-race.txt) only validates the Go storage model.
+
+## Production binary/index preludes
+
+The later production slice implements binary-expression and simple indexed-target
+matches as statement preludes in the original function. The frontend's temporary
+function-literal atoms are compile-time syntax only and are absent from emitted
+Go. It does not change enum storage. Unlike the earlier integer-tag IIFE probe,
+these benchmarks use actual hgo CLI output, including current interface-enum
+validators, against explicit hgo statement-match baselines.
+
+[Executable acceptance/benchmark fixture](../../acceptance/match_binary_index_test.go)
+and [raw optimized samples](results/binary-index/bench.txt): Go 1.27.1 linux/amd64,
+GOMAXPROCS=1, default optimization, non-race, 5 × 200ms.
+
+| Case | Expression median ns/op | Explicit match median ns/op | Both B/op, allocs/op |
+| --- | ---: | ---: | --- |
+| `return 10 + match` | 3.173 | 3.247 | 0, 0 |
+| indexed assignment | 4.489 | 4.504 | 0, 0 |
+
+These small shared-machine samples show no allocation overhead in the measured
+cases; they do not establish a stable speed difference or arbitrary-arm guarantee.
+No new runtime IIFE is needed to obtain these results. The independent generated
+module also runs four race tests and vet, covering effects/storage/failure and
+function-frame semantics; the earlier pure-Go IIFE results remain separate.
+
+Reproduce from the repository with the real Go toolchain on PATH:
+
+```sh
+GOMAXPROCS=1 HGO_MATCH_BENCH=1 go test ./tests/acceptance \
+  -run '^TestMatchBinaryAndIndexedModules/execution$' -count=1 -v
+```

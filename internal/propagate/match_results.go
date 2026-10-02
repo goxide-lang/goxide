@@ -11,6 +11,9 @@ import (
 
 const matchInfer = "__hgo_match_expr_infer"
 const matchContext = "__hgo_match_expr_context"
+const matchOperand = "__hgo_match_expr_operand_context"
+const matchZero = "__hgo_match_expr_zero"
+const matchReturn = "__hgo_match_expr_return"
 const matchPending = "__hgo_match_expr_pending"
 
 // pendingMatchType distinguishes unresolved inference from a user interface.
@@ -54,9 +57,51 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 			return true
 		}
 		id, ok := call.Fun.(*ast.Ident)
-		if ok && (id.Name == matchInfer || id.Name == matchContext) {
+		if ok && (id.Name == matchInfer || id.Name == matchContext || id.Name == matchOperand) {
 			slots = append(slots, v)
 		}
+		return true
+	})
+
+	// Resolve concrete arms before defaulting constants. This lets a sibling
+	// match supply the operator identity without inventing a common type.
+	preferred := map[*ast.ValueSpec]bool{}
+	for _, slot := range slots {
+		obj := l.info.Defs[slot.Names[0]]
+		ast.Inspect(l.file, func(n ast.Node) bool {
+			a, ok := n.(*ast.AssignStmt)
+			if !ok || len(a.Lhs) != 1 || len(a.Rhs) != 1 {
+				return true
+			}
+			id, ok := a.Lhs[0].(*ast.Ident)
+			if !ok || l.info.ObjectOf(id) != obj {
+				return true
+			}
+			info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
+			if types.CheckExpr(l.fs, l.pkg, a.Rhs[0].Pos(), a.Rhs[0], info) == nil {
+				t := info.Types[a.Rhs[0]].Type
+				if t != nil && !pendingMatchType(t) {
+					b, ok := t.(*types.Basic)
+					if !ok || b.Info()&types.IsUntyped == 0 {
+						preferred[slot] = true
+					}
+				}
+			}
+			return true
+		})
+	}
+	sort.SliceStable(slots, func(i, j int) bool { return preferred[slots[i]] && !preferred[slots[j]] })
+	parents := map[ast.Node]ast.Node{}
+	var stack []ast.Node
+	ast.Inspect(l.file, func(n ast.Node) bool {
+		if n == nil {
+			stack = stack[:len(stack)-1]
+			return true
+		}
+		if len(stack) > 0 {
+			parents[n] = stack[len(stack)-1]
+		}
+		stack = append(stack, n)
 		return true
 	})
 	var pending error
@@ -90,6 +135,58 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 				return false, fail("assignment target must be an existing local variable")
 			}
 			target = v.Type()
+		}
+
+		if call.Fun.(*ast.Ident).Name == matchOperand {
+			target = l.info.TypeOf(call.Args[0])
+			if rc, ok := call.Args[0].(*ast.CallExpr); ok {
+				if id, ok := rc.Fun.(*ast.Ident); ok && id.Name == matchReturn {
+					// Resolve the enclosing user signature, not a copied spelling
+					// that a local declaration may shadow or a package cannot name.
+					var nearest *types.Signature
+					end := token.Pos(1 << 30)
+					ast.Inspect(l.file, func(n ast.Node) bool {
+						if n == nil {
+							return false
+						}
+						var ft *types.Signature
+						switch f := n.(type) {
+						case *ast.FuncDecl:
+							if obj := l.info.Defs[f.Name]; obj != nil {
+								ft, _ = obj.Type().(*types.Signature)
+							}
+						case *ast.FuncLit:
+							if matchAtom(f) == nil {
+								ft, _ = l.info.TypeOf(f).(*types.Signature)
+							}
+						}
+						if ft != nil && n.Pos() < slot.Pos() && slot.End() < n.End() && n.End() <= end {
+							nearest = ft
+							end = n.End()
+						}
+						return true
+					})
+					if nearest != nil {
+						if nearest.Results().Len() == 1 {
+							target = nearest.Results().At(0).Type()
+						}
+					}
+				}
+			}
+			kind, _ := strconv.Unquote(call.Args[1].(*ast.BasicLit).Value)
+
+			if kind != "direct" && target != nil {
+				basic, ok := target.Underlying().(*types.Basic)
+				if !ok || (kind == "numeric" && basic.Info()&(types.IsNumeric|types.IsString) == 0) || (kind == "boolean" && basic.Info()&types.IsBoolean == 0) {
+					target = nil
+				}
+			}
+			if pendingMatchType(target) {
+				target = nil
+			}
+		}
+		if peer := l.matchPeerType(slot, parents); peer != nil {
+			target = peer
 		}
 		var values []types.TypeAndValue
 		blocked := false
@@ -213,6 +310,17 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 		}
 		slot.Type = typeExpr
 		slot.Values = nil
+		ast.Inspect(l.file, func(n ast.Node) bool {
+			fn := matchAtom(n)
+			if fn != nil {
+				spec := fn.Body.List[0].(*ast.DeclStmt).Decl.(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
+				if spec == slot {
+					fn.Type.Results.List[0].Type = typeExpr
+					return false
+				}
+			}
+			return true
+		})
 		return true, nil
 	}
 	return false, pending
@@ -220,7 +328,7 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 
 func matchSeedDecl(d ast.Decl) bool {
 	if f, ok := d.(*ast.FuncDecl); ok {
-		return f.Name.Name == matchInfer || f.Name.Name == matchContext
+		return f.Name.Name == matchInfer || f.Name.Name == matchContext || f.Name.Name == matchOperand || f.Name.Name == matchZero || f.Name.Name == matchReturn
 	}
 	if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.TYPE && len(g.Specs) == 1 {
 		return g.Specs[0].(*ast.TypeSpec).Name.Name == matchPending

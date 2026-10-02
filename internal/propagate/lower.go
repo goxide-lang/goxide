@@ -284,7 +284,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if cfg.Namespace != "" && !token.IsIdentifier(cfg.Namespace) {
 		return nil, fmt.Errorf("%s: invalid propagation namespace", filename)
 	}
-	if !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) {
+	if !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) && !bytes.Contains(source, []byte(matchOperand+"(")) {
 		return source, nil
 	}
 	fs := token.NewFileSet()
@@ -315,17 +315,13 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	// including operands with inference, before replacing each marker's result.
 	seed, _ := parser.ParseFile(fs, "<propagation signatures>", "package "+f.Name.Name+";func "+marker+"[T interface{}](v T) T {return v};func __hgo_enum_infer[T interface{}](v T) {}", 0)
 	f.Decls = append(f.Decls, seed.Decls...)
-	matchSeed, _ := parser.ParseFile(fs, "<match result signatures>", "package "+f.Name.Name+";type "+matchPending+" interface{};func "+matchInfer+"(origin string) "+matchPending+"{return nil};func "+matchContext+"[T interface{}](v T,origin string)T{return v}", 0)
+	matchSeed, _ := parser.ParseFile(fs, "<match result signatures>", "package "+f.Name.Name+";type "+matchPending+" interface{};func "+matchInfer+"(origin string) "+matchPending+"{return nil};func "+matchContext+"[T interface{}](v T,origin string)T{return v};func "+matchOperand+"[T interface{}](v T,kind,origin string)T{return v};func "+matchZero+"[T interface{}]()T{var v T;return v};func "+matchReturn+"() "+matchPending+"{return nil}", 0)
 	f.Decls = append(f.Decls, matchSeed.Decls...)
 	for {
 		l.check()
-		resolved, matchIssue := l.resolveMatchResult()
-		if resolved {
-			continue
-		}
 		changed := false
 		var failure error
-		unresolved := matchIssue
+		var unresolved error
 		ast.Inspect(f, func(n ast.Node) bool {
 			c, ok := n.(*ast.CallExpr)
 			if !ok {
@@ -383,12 +379,20 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 		if failure != nil {
 			return nil, failure
 		}
-		if !changed {
-			if unresolved != nil {
-				return nil, unresolved
-			}
-			break
+		if changed {
+			continue
 		}
+		resolved, matchIssue := l.resolveMatchResult()
+		if resolved {
+			continue
+		}
+		if matchIssue != nil {
+			unresolved = matchIssue
+		}
+		if unresolved != nil {
+			return nil, unresolved
+		}
+		break
 	}
 	keptMatch := f.Decls[:0]
 	for _, d := range f.Decls {
@@ -451,6 +455,10 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 func contains(n ast.Node, questions map[string]enums.Decl) bool {
 	found := false
 	ast.Inspect(n, func(n ast.Node) bool {
+		if matchAtom(n) != nil {
+			found = true
+			return false
+		}
 		if _, ok := n.(*ast.FuncLit); ok {
 			return false
 		}
@@ -494,6 +502,9 @@ func (l *lowering) body(b *ast.BlockStmt, ft *ast.FuncType) error {
 	var err error
 	ast.Inspect(b, func(n ast.Node) bool {
 		if fn, ok := n.(*ast.FuncLit); ok {
+			if matchAtom(fn) != nil {
+				return true
+			}
 			err = l.body(fn.Body, fn.Type)
 			return false
 		}
@@ -578,6 +589,14 @@ func (l *lowering) bindLocalScalars() {
 }
 
 func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
+	scopeMatch := false
+	switch x := s.(type) {
+	case *ast.ReturnStmt:
+		scopeMatch = hasMatchAtom(x)
+	case *ast.AssignStmt:
+		scopeMatch = x.Tok == token.ASSIGN && hasMatchAtom(x)
+	}
+
 	if !contains(s, l.questions) {
 		return []ast.Stmt{s}, nil
 	}
@@ -753,6 +772,9 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 		}
 	default:
 		return nil, l.fail(s, "? in this statement context is unsupported; use an explicit match or a preceding statement")
+	}
+	if scopeMatch && len(pre) > 0 {
+		return []ast.Stmt{&ast.BlockStmt{List: append(pre, s)}}, nil
 	}
 	return append(pre, s), nil
 }
@@ -1065,6 +1087,9 @@ func (l *lowering) builtin(call *ast.CallExpr) *types.Builtin {
 }
 
 func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, error) {
+	if fn := matchAtom(x); fn != nil {
+		return l.matchAtomExpr(fn, ft)
+	}
 	if !contains(x, l.questions) {
 		return nil, x, nil
 	}

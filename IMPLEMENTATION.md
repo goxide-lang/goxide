@@ -873,3 +873,15 @@ Go 1.27.1 非 race 5×200ms 对照中，六组 typed IIFE/statement 小表达式
 [真实三包 CLI 验收](tests/acceptance/native_write_bridge_test.go)含 3 项生成模块测试单独 race/vet，覆盖跨包引用、atomic、原生别名、GC、具名/别名标量及各调用形式；11 个权限/类型反例保持拒绝。独立审查无代码阻断，另真实 hgo 模块验证具名 string、指针 alias、定义函数类型、bool/complex 和 readonly 观察，生成 race 输出 ok；额外 5 反例拒绝。D11/U15 历史说明及 RFC/矩阵已按最新用户纠正同步。
 
 最终全树 race **15 测试包 / 266 宿主顶层 / 611 子测试**通过，另 2 包无测试；全树 vet 通过。设计检查包括 **62 Markdown / 20 RFC / 13 条纯 Go 机制命令**，后者不算 hgo 执行证据。日志 `/tmp/t0-native-race.json`、`/tmp/t0-native-race.err`、`/tmp/t0-native-vet.log`、`/tmp/t0-native-design.log`、`/tmp/t0-native-test.log`。本片不迁移 enum ABI，未将其他指针边界限制冻结；原位 match、跨 module metadata、复杂表达式和剩余范围账仍待完成，整体 MVP 不标完成。工作分支提交/push/fetch 核验。
+
+## 二元 match 与简单索引赋值（2026-10-02）
+
+基于 `bfb01a5143177f83b6539c7fc0e6fa6952a3edda`，实现 `return 10 + match ...` 和 `a[index()] = match ...` 的有界生产切片。语法阶段的专用 atom function-literal 仅承载类型/块，typed 阶段在原用户函数展开 prelude/value；最终无 atom 调用帧，短路分支、问号最近函数退出、direct recover、readonly、普通 goto 均保持。索引目标复用 place，保存 slice/map/pointer 边界及 index，array 保留原存储，写入检查保持在 RHS 之后。enum ABI 未改变。
+
+[真实 CLI 验收](tests/acceptance/match_binary_index_test.go)两次生成确定，4 项生成模块 race 测试与 vet、7 个负例通过。原先拒绝 operator/short-circuit/simple-index 的用例迁入正例。独立审查发现并修复局部返回类型包级 alias、forward goto、嵌套/双 match typed peer 和含问号 sibling 提前默认四类缺陷，均纳入永久执行用例；复审另验证反向 match→问号类型依赖，真实 race 输出 ok，无剩余阻断。
+
+[优化构建原始样本](tests/research/match_lowering/results/binary-index/bench.txt)：Go 1.27.1、GOMAXPROCS=1、非 race、5×200ms，真实 hgo 输出二元/显式 match 中位 3.173/3.247 ns，索引/显式 match 4.489/4.504 ns，四组均 0 B/0 alloc。没有稳定快慢或任意分支成本承诺；早期纯 Go IIFE 研究仍独立，不冒充生产证据。
+
+最终生产树验证通过：全树 race **15 测试包 / 267 宿主顶层 / 614 子测试**，另 2 包无测试；全树 vet 通过，设计检查 **62 Markdown / 797 本地链接 / 20 RFC / 13 条纯 Go 机制命令**通过。独立实现及文档复审均无剩余阻断。日志 `/tmp/t0-match-binary-race-final.json`、`/tmp/t0-match-binary-race-final.err`、`/tmp/t0-match-binary-vet-final.log`、`/tmp/t0-match-binary-design.log`、`/tmp/t0-match-binary-question.log`、`/tmp/t0-match-binary-bench.log`。最终全树重跑包含问号类型调度修复，不沿用修复前的那次 race 结论。
+
+按用户要求，本有界阶段完成提交/push/fetch 后交回，不接着迁移 enum 或推进跨 module。原位借用等待 ABI 选择；跨 module 增强恢复、更复杂表达式/目标、不可命名类型及既列传播/权限工程账未关闭，完整 MVP 尚未完成。

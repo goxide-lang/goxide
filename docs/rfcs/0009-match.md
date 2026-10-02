@@ -172,3 +172,17 @@ hgo 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开放
 ## 原位借用与表达式实现选择（2026-10-02）
 
 用户 D29 已明确 `match mut& enum_value` 的可写 payload 原位借用是首版必需，不再作为可后置候选。D30/D31 同时要求跨 module hgo 增强恢复和自然可写指针 Go 互操作。现有值型 case 不能借副本地址冒充原位；[有界实现评审](research/match-place-and-expression-options.md)给出 tag struct 候选、实际 Go API/比较/旧借用取舍，以及用户提出的 typed IIFE 机制实验。布局尚未冻结，当前前端尚不支持新借用语法；纯 Go 探针不算实现。普通复杂目标/嵌入表达式仍是工程欠账，不能因 IIFE 的复杂分支限制而拒绝评估纯分支，也不能让生成包装改变问号或 recover 的用户函数边界。
+
+## 二元表达式与简单索引目标（2026-10-02）
+
+生产前端现支持 `return 10 + match ...`，以及 `a[index()] = match ...`。二元算术、位运算/shift、比较和 &&/|| 可在单结果 return、局部初始化/赋值及已有静态调用/arm 子集中组合；索引目标首片为一个标识符加一个 subscript，接受 slice/map/array/*array。未增加模式、enum ABI、任意调用解析或原位借用语法。
+
+语法阶段用专用保留名称的编译期 function-literal 节点承载结果槽和 statement match，类型阶段解析后全部变成原函数内的 prelude/value，最终 Go 没有该包装调用。普通用户闭包保留真实退出边界；短路右侧的整个 match 仅在条件成立时展开执行。问号失败沿最近用户函数返回，不用 panic；直接 recover 不新增调用帧。return/普通赋值的生成变量处于独立普通块，不破坏 forward goto。
+
+类型候选沿真实二元 AST 读取同一操作数域的 typed peer，每轮先推进可确定的问号载荷签名，再解析已有具体 arm 的槽，最后默认常量；问号依赖未定 match 时仍等待下一轮，支持两侧 match 与嵌套运算而不提前钉死 int。未类型化 peer 用独立 CheckExpr 查询，不从 provisional interface 接受已默认的 int。期望数字/bool 类型来自真实用户签名或目标；局部返回类型不搬到包级 alias。比较返回 bool 不污染操作数，shift count 不继承左侧类型，返回 any 时算术 match 仍按实际 arm/peer 类型推断。仍用现有同型/精确可赋值规则，不添加数值 widening 或共同 interface；私有不可命名结果等范围继续留账。
+
+原始索引 assignment 交给 typed place：先依序保存 slice/map/pointer 边界和 index，array 保留原存储；RHS match/问号完成后才写入并执行 bounds/nil-map/nil-array 检查。类型见证只在编译期，不额外读取 `a[index()]`；RHS 重绑 slice/map 仍写旧容器，重绑 array 后仍写原变量存储。引用临时量复用既有逐文件可信登记，readonly 的写入/any 擦除继续拒绝。
+
+[真实多包验收](../../tests/acceptance/match_binary_index_test.go)含四项生成模块 race 测试、vet、两次确定性、七个负例；覆盖 typed peer/两侧 match/大整数、scope/goto、短路、一次求值、存储及 panic 时点、失败/defer/direct recover 与用户闭包边界。原先 operator、short-circuit、simple-index 三类拒绝用例迁入正例，不通过删除合法功能来收口。[优化构建实测](../../tests/research/match_lowering/README.md#production-binaryindex-preludes)比较真实 hgo 输出与显式 statement match，不能与早期纯 Go IIFE 探针混为实现证据。
+
+本片采用 prelude 统一保留控制语义，不否定已有 IIFE 机制实验，也不宣称任意组合零成本。更复杂目标/控制头/字面量/动态调用/不可命名结果仍是工程账，未获自动延期；enum 表示迁移继续等用户选择。

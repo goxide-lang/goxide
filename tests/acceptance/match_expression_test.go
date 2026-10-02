@@ -66,7 +66,6 @@ func TestMatchExpressionUnsupportedContexts(t *testing.T) {
 		"named return":        `func f(x E)(value int){return match x {E::A=>1,E::B=>2,}}`,
 		"package initializer": `var value int = match E::A {E::A=>1,E::B=>2,}`,
 		"dynamic argument":    `func f(x E,g func(int)int)int{return g(match x {E::A=>1,E::B=>2,})}`,
-		"short circuit":       `func f(x E)bool{return false && match x {E::A=>true,E::B=>false,}}`,
 		"missing arm":         `func f(x E)int{return match x {E::A=>1,}}`,
 		"unreachable arm":     `func f(x E)int{return match x {E::A=>1,E::A=>2,E::B=>3,}}`,
 		"reserved name":       `func f(x E)int{__hgo_match_result_1:=9;return match x {E::A=>__hgo_match_result_1,E::B=>0,}}`,

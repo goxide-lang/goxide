@@ -13,6 +13,7 @@ type composer struct {
 	pairs   map[int]int
 	copy    func(int, int) string
 	fail    func(int, string) error
+	origin  func(int) string
 	callees map[string][]string
 	hash    string
 	serial  int
@@ -88,6 +89,9 @@ func (c *composer) assign(a, b int, dest, typ string) (string, error) {
 		return out.String(), nil
 	}
 	if c.contains(a, b) {
+		if value, e := c.expression(a, b, dest, "direct"); e == nil {
+			return dest + " = (" + value + ");\n", nil
+		}
 		pre, call, err := c.call(a, b)
 		if err != nil {
 			return "", err

@@ -72,6 +72,9 @@ func (l *lowering) canDeferredPlace(x ast.Expr) bool {
 	return false
 }
 func (l *lowering) canEffect(x ast.Expr) bool {
+	if matchAtom(x) != nil {
+		return true
+	}
 	f, ok := l.expressionFacts[x]
 	if !ok || f.typ == nil {
 		return false
@@ -170,6 +173,9 @@ func (l *lowering) staticEffectCallee(x ast.Expr) bool {
 // arithmetic over already saved operands. Untyped booleans are restored as a
 // comparison; typed values retain their inferred nominal identities.
 func (l *lowering) effectExpr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, error) {
+	if fn := matchAtom(x); fn != nil {
+		return l.matchAtomExpr(fn, ft)
+	}
 	f := l.expressionFacts[x]
 	if !contains(x, l.questions) && (f.constant || isNilType(f.typ)) {
 		return nil, x, nil

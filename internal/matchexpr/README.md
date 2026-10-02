@@ -26,7 +26,7 @@ its initializer: an outer variable of the same name is accessible in target and
 arms. Target evaluation, guard ordering, exhaustive coverage, pattern binding and
 invalid enum values remain the existing enum engine's responsibility. Only the
 selected arm evaluates; Go type checking checks assignment of each arm value.
-There is no generated closure, no synthetic loop around an arm, and no change of
+The emitted Go has no generated match closure, no synthetic loop around an arm, and no change of
 `return`/`defer` target. This is an implementation subset, not a new match semantics.
 
 Composition accepts complete direct calls in return/expression statements and
@@ -39,10 +39,9 @@ staging preserves contextual constants, nil and order. New statement-call
 expansions use ordinary blocks to preserve surrounding goto scope. Root-call
 search stays inside the nearest function, including inline closures.
 
-Not supported yet: complex/multiple assignment targets, control-header match
-declarations, package
-initializers; whole matches in named or multiple returns; match inside operators,
-short-circuit expressions or composite literals; dynamic/method/cross-file/generic/
+Not supported yet: target forms beyond a single identifier subscript, multiple assignment
+targets, control-header match declarations, package initializers; whole matches in
+named or multiple returns; match in arbitrary unary/composite literal contexts; dynamic/method/cross-file/generic/
 variadic callees; labelled standalone calls and control headers; expression blocks;
 unsupported complex signatures. These are
 implementation gaps, not language prohibitions or approved deferrals. Statement
@@ -92,3 +91,39 @@ pointer permission erasure is authorized by inference.
 `match_assignment_test.go` exercises actual CLI-generated packages with independent
 race/vet, deterministic output, nominal types/import aliases, constants, scope,
 recover/defer, nested matches, question dependencies and reference rejections.
+
+## Binary expressions and indexed assignments
+
+Binary arithmetic, shifts, comparisons and short-circuit operators now compose in
+single-result returns, local initializers/assignments, and the existing static
+call/arm subset. A single `a[index()] = match ...` accepts slice, map, array and
+pointer-to-array targets. The original target remains in the AST until typed
+`propagate.place` captures its operands: arrays keep storage identity, slice/map
+headers and indices are saved once, and bounds/nil write checks remain after RHS
+effects. Broader destination extraction remains an implementation gap.
+
+Compiler-owned function-literal syntax temporarily carries an expression atom's
+slot and statement match through Go parsing/type checking. Its reserved atom
+prefix is distinct from ordinary result slots; user closures are never treated
+as atoms. All atoms are removed into `(prelude, value)` in the original user
+function before Go emission. Short-circuit right preludes stay inside their
+conditional branch. `?` uses the original function target and direct `recover`
+keeps its call frame. Ordinary assignment and return expansions are block-scoped
+so generated temporaries do not invalidate forward goto.
+
+The expected numeric/boolean type comes from the actual enclosing signature or
+assignment and actual typed operator peers, including sibling match dependencies.
+Available question payload signatures resolve first, then concrete arms before
+untyped defaults; questions depending on a pending match wait for the next pass. Peer discovery follows the real
+binary tree, stops across a comparison result or shift count, and never evaluates
+a witness. A comparison operand does not inherit the function's bool result;
+returning any does not force arithmetic operands to any. The existing exact
+assignment, nominal identity, constant range and reference qualification rules
+still apply. Private/unnameable result identities remain a diagnosed gap.
+
+`tests/acceptance/match_binary_index_test.go` exercises actual generated modules
+with independent race/vet, deterministic output, storage/order/panic/failure
+checks, local/nominal type contexts and readonly negatives. Optional optimized
+benchmarks are enabled by `HGO_MATCH_BENCH=1`; production measurements and the
+separate earlier pure-Go IIFE research are recorded under
+`tests/research/match_lowering`.

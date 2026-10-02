@@ -516,7 +516,7 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 | --- | --- |
 | 必须完成：原位借用与跨模块 | D29 原位可写 payload 借用不得用复制/隐式共享替代；enum 表示迁移等待具体选择。D30 跨 module hgo 消费必须恢复增强 metadata，同 module 不作为获批首版冻结 |
 | 必须完成：自然 Go 指针调用 | D31 具体标量同型参数已通过下文验收，其余明确需求按真实 Go 类型逐项接通，不用未知 effects 或独占证明阻断普通用法 |
-| 必须完成：常用 match | 单标识符普通赋值/局部推断已通过下文限定验收；剩余复杂目标/其他表达式上下文留范围账；停止条件为已定类型规则、一次求值/仅选中分支/最近函数传播，不无限扩大模式系统 |
+| 必须完成：常用 match | 单标识符赋值/局部推断、二元表达式/短路与简单索引目标已通过下文限定验收；剩余更复杂目标/其他表达式上下文留范围账；停止条件为已定类型规则、一次求值/仅选中分支/最近函数传播，不无限扩大模式系统 |
 | 必须完成：普通权限误拒 | 局部值字段替换已通过下文限定验收；捕获/真正取址局部整槽替换也已修复；继续部分字段、指针/索引路径与未建模控制流中的合法普通用法；同时保留只读写入与擦除错误，不要求复杂 alias 风险证明 |
 | 必须完成：已列传播欠账 | 现存函数 iterator/range 目标、unsafe/guard 与上下文长尾逐项给出实现证据或明确范围决定；for 性能已有差距不能称等价，不将其扩成新优化项目 |
 | 已通过限定联合验收 | 下文联合业务贯通同 module 宏/封闭 enum/match/OptionResult/Default/serde JSON/权限；安装 CLI 仓库外构建、失败路径、生成模块 race、确定性及诊断矩阵通过。联合验收不抹去其余范围账 |
@@ -572,3 +572,11 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 [真实 CLI 三包验收](../tests/acceptance/native_write_bridge_test.go)接通同型 `mut& T` → Go `*T` 参数，包含跨 hgo 包引用、atomic、普通/定义函数值、变参、defer/go、具名标量/别名、求值一次、原生留存与返回指针、GC 后存活及 readonly 观察合法别名更新。生成模块三项 race 测试与 vet；只读直接/缩窄/再借用、异型元素及未开放擦除位置保持拒绝。
 
 这是 D31 的首个实现切片，D11/U15 的普通调用待批描述已更新。复合元素、定义指针类型、接口/容器/引用 callback 适配及其他转换位置未完成，不以本片限制作为范围冻结。原位 match 等待 enum 表示迁移选择；跨 module metadata、复杂 match 表达式与剩余普通工程缺口继续留账，完整 MVP 尚未完成。
+
+### 二元 match 与简单索引赋值（2026-10-02）
+
+[真实 CLI 多包验收](../tests/acceptance/match_binary_index_test.go)接通 `return 10 + match ...`、`a[index()] = match ...`、二元/短路及既有调用/arm 组合。四项生成模块 race 测试、vet、两次确定性和七个类型/readonly 负例通过。涵盖数组原存储、slice/map 重绑、nil/bounds 在 RHS 后、问号失败不写、defer/direct recover、真实用户闭包退出边界、forward goto、局部/具名/大整数与双 match 类型依赖。
+
+生产使用原函数 prelude，所有编译期 atom 包装均在输出前去除，readonly 不擦除；没有迁移 enum ABI。优化构建五次样本的二元/索引输出与显式 match 对照均零分配，原始值与复现见[研究记录](../tests/research/match_lowering/README.md#production-binaryindex-preludes)，不泛化为任意 match 成本承诺。
+
+本有界阶段完成后交回；原位 match 等待 enum ABI 选择，跨 module metadata 留给下一阶段。更复杂目标/表达式、不可命名结果及已列传播/权限欠账未冻结为延期，完整 MVP 尚未完成。

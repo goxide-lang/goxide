@@ -115,7 +115,6 @@ func TestNearestFailure(t *testing.T){after=0;cleanup=0;if v,e:=CheckPropagation
 		"no common interface":     `import "errors";func Bad(){var e error;x:=match m.Mode::Idle{m.Mode::Idle=>e,m.Mode::Value(_)=>errors.New("x")};_=x}`, // Both are already error: replaced below with concrete pointer.
 		"context mismatch":        `func Bad(){x:=1;x=match m.Mode::Idle{m.Mode::Idle=>1,m.Mode::Value(_)=>"bad"};_=x}`,
 		"no new variables":        `func Bad(){x:=1;x:=match m.Mode::Idle{m.Mode::Idle=>1,m.Mode::Value(_)=>2};_=x}`,
-		"complex destination":     `func Bad(){x:=[]int{1};x[0]=match m.Mode::Idle{m.Mode::Idle=>1,m.Mode::Value(_)=>2}}`,
 		"control header":          `func Bad(){if x:=match m.Mode::Idle{m.Mode::Idle=>1,m.Mode::Value(_)=>2};x>0{}}`,
 		"missing arm":             `func Bad(){x:=match m.Mode::Idle{m.Mode::Idle=>1};_=x}`,
 		"readonly write":          `func Bad(r &int){x:=match m.Mode::Idle{m.Mode::Idle=>r,m.Mode::Value(_)=>r};*x=2}`,

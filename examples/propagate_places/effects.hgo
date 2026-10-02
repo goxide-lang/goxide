@@ -1,0 +1,10 @@
+package main
+import "places.example/update/model"
+
+func effectsReceive(t *model.Tree,ch <-chan int,r Result[int,error])Result[int,error]{t.Count= <-ch+r?;return r}
+func effectsBool(t *model.Tree,r Result[int,error])Result[int,error]{true:=false;_=true;t.Enabled=r?==7&&(1==1);return r}
+func effectsPrivateBool(t *model.Tree,r Result[int,error])Result[int,error]{t.Count=model.BoolKind(t.Enabled&&model.Flag(r?==7));return Result[int,error]::Ok(t.Count)}
+func effectsBuiltinBool(t *model.Tree,r Result[int,error])Result[int,error]{t.Count=model.BoolKind((r?==7)&&(1==1));return Result[int,error]::Ok(t.Count)}
+func effectsTick(trace *[]int)int{*trace=append(*trace,1);return 7}
+func effectsLen(t *model.Tree,trace *[]int,r Result[int,error])Result[int,error]{t.Count=len([1]int{effectsTick(trace)})+r?;return r}
+func effectsShift(t *model.Tree,n uint,r Result[int,error])Result[int,error]{t.Wide,t.Count=(1<<n)|(1<<(n-1)),r?;return r}

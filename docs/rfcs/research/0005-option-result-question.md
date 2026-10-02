@@ -217,3 +217,25 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 **本次仍有 guard 的精确位置**：`statement` 对 `needsAssignmentFrame` 为真的赋值仍调用 `assignmentFrame`；后者声明 Assignment 并 defer Catch，`frameExpr` 的问号失败仍调用 Fail。runtime/assignment.go 未变。所有真正私有嵌入指针目标仍在此路径，包括 [private.hgo](../../../examples/propagate_places/private.hgo) 的 stock/stockFields、重绑、writeThenNil、compoundPrivate、direct recover、命名/blank/shadow 返回、Option、privateLHS、重复赋值与嵌套闭包、权限和 goto 用例；研究 Guard1/Guard8/PackedGuard 也仍使用 guard。只有此前已修复的普通读操作数（index/key/call arg）及普通 place 路径不使用 guard。本次没有新覆盖、静默替换或性能改善声明，也没有扩到循环、select 或 adapters。
 
 新增 [question_test.go](../../../internal/propagate/question_test.go)是生成 Go 的机制测试：同一控制流分别产生普通 return/可观察出口，验证 Option、Result 成败、validator/转换 panic 不进入出口及只读重复 emit。它不算新的 hgo 功能；既有 private acceptance 继续真实安装 CLI 转译并在独立模块 race。
+
+
+### 6.9 首批无 panic 完整赋值 lowering
+
+基于 `249567c6055f3f7d3ab6d506d9ea39100843c671` 实现 §6.8 的局部 planner，而非全语言 IR 重写。[facts.go](../../../internal/propagate/facts.go)在改写前保存原地址性、checked 类型、常量及语法/对象定义决定的原始 typed/untyped 属性；比较结果是未类型化 bool，逻辑表达式由两侧原属性决定，shift 继承左侧原属性。不能把已被赋值上下文具体化的 TypeOf 当作原属性。
+
+[effects.go](../../../internal/propagate/effects.go)先做不修改 AST 的支持判定，再生成原函数体内的求值、questionFlow 普通失败 return 和一条完整最终赋值。LHS 的显式 pointer 操作数、调用和索引先保存；array/struct 存储路径不复制，不提前对最终字段取址，也不展开隐藏 selector。RHS 的调用/接收、传播和短路按控制依赖求值；失败不会到达最终赋值，成功则由 Go 完成隐藏指针的第一阶段读取和从左到右写入。写阶段前项更换隐藏链时，后项仍写第一阶段确定的位置；最终 nil 不回滚已完成写入。隐式读取相对 RHS 调用的未规定顺序仍不收紧为语言承诺。
+
+原始未类型化数值表达式只在可证明不会产生运行时 panic 的局部算术子集留作 residual：先保存其有类型操作数，保留 `1<<n` 等表达式在私有 uint64 的原赋值上下文；动态 shift count 要求 unsigned，除法/余数等不在此子集。原始未类型化 bool 存为临时 bool 后以与 `(0==0)` 的比较恢复未类型化属性，不引用可被用户遮蔽的 true；原本有类型的私有 bool 则保留其名义类型。短路分支不执行的 operand、校验与转换都不能提前求值。源 recover 仍在原函数执行，不增加 IIFE/defer；用户 panic、defer 和 Goexit 继续走 Go 原控制流。生成临时量封装在普通 block，保留 forward goto；依据原地址性判定，不能通过复制 struct 返回值把非法目标变合法。
+
+| 路径 | 本阶段状态 / 证据 |
+| --- | --- |
+| 原 private.hgo 全部用例 | 改走普通 return；真实生成文件无 Assignment/Catch/Fail，原 11 项 private 测试（含读操作数）和两项业务继续独立 race |
+| 新 effects.hgo | 接收先于失败、真正私有 bool vs builtin bool 的原生泛型类型身份、true 遮蔽、未含问号的 len 副作用、私有 uint64 复合 shift；生成文件无 guard |
+| 研究 Guard1/Guard8/PackedGuard | 保留历史函数名便于基准对照，当前生成代码不再使用 guard；实际 hgo 与显式 match 对照，不用手写 IR 探针冒充实现 |
+| effects_fallback.hgo 五个赋值 | mixed private bool 右臂推型、有符号 contextual shift、含问号 len、tuple、unsafe.Pointer 转换链仍显式走 guard；形状断言要求恰好五个 Catch，另有运行验收 |
+
+**仍未替换的范围**：private assignment 的 tuple/comma-ok、map/slice 目标组合、需要猜测右侧私有名义 bool 类型的短路、可能 panic 的未类型化 residual 算术、含问号的非 recover builtin（包括 len/cap/unsafe）、动态 callee/方法调用或 index/slice/literal/断言等尚未规划的含问号表达式。无问号且有独立类型的完整表达式可以整体求值，不按上表把所有相关 Go 语法一律拒绝。支持判定失败仍调用 assignmentFrame，源码合法性仍由既有检查保证；这是公开列出的剩余工程范围，不是已经完成或获批延期。runtime guard 不能删除；其命名结果/返回槽绑定等仅为实际 fallback 生成，不再覆盖已替换文件。
+
+独立审查发现的具体反例：`t.Count, out = 7, unsafe.Pointer(uintptr(unsafe.Pointer(p)) + offset()?)`，p 指向两字节数组、offset=1。把 uintptr 存入临时变量后再转回 pointer 会破坏 Go unsafe 的同表达式转换/存活规则，真实 hgo 生成模块 race 触发 checkptr；旧 frame 则通过。支持判定现按真实类型身份保留 unsafe.Pointer 及从 unsafe.Pointer 到 uintptr 的转换链（也保护 syscall 特殊实参），永久回归验证有效偏移与失败不写。该扫描保守覆盖本赋值包含的嵌套闭包体；这可能保留额外 guard，但不会拒绝合法源码。后续可以细化范围，不能为了零分配破坏指针存活。
+
+这种反例限制当前 planner 的拆分策略，并不证明所有无 panic 方案不可能。下一工作是逐类保留特殊转换/求值单元及补齐上下文类型见证；本组不扩循环、select 或 adapters，也不声称整体 T0/MVP 已完成。

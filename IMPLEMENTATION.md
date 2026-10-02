@@ -691,3 +691,17 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 本阶段最终验证：全树 race **15 个有测试包、244 宿主顶层/440 子测试**，另 **2 包无自身测试**通过；全树 vet、完整设计检查 **13 条 Go 命令**通过。既有 private 业务 **13 项**、普通目标 **9 项**、unsafe **1 项**各自生成模块 race；新增出口机制模块 **2 项**生成 Go 测试单列，研究脚本模块 **10 项**（含 6 项手写 Go 机制探针）另行 race/legacy/vet，不算新 hgo 功能。独立非作者审查并重跑实际安装 CLI 验收通过。原始基准及 token 对比已入 [研究记录](tests/research/assignment_guard/README.md)：相同输入的基线/当前 private 与研究模块 token 序列一致；单条 guard 成功仍 **32 B/1 alloc**、失败 **48 B/2 alloc**。不存在性能改善声明。整树证据为 `/tmp/t0-flow-race.json`、`/tmp/t0-flow-race.err`、`/tmp/t0-flow-vet.log`、`/tmp/t0-flow-design.log`，可重复研究结果已保存仓库。
 
 最终 docs-only 检查通过 **58 Markdown / 606 本地链接与锚点 / 20 RFC**，`git diff --check` 通过。只提交推送 feat/t0-completion 并 fetch 核验，不修改 main/work/冻结标签。
+
+
+## 私有赋值 effects planner：首批无 panic 路径
+
+基于 `249567c6055f3f7d3ab6d506d9ea39100843c671`，新增 [facts.go](internal/propagate/facts.go)与 [effects.go](internal/propagate/effects.go)：记录原始类型/地址性，不改写 preflight，原函数体求值与普通失败 return，最后保留完整 Go assignment。不展开隐藏字段、不提前取最终地址、不复制 array/struct 位置；未类型化上下文数值与真正私有名义 bool 分开处理。
+
+原 private.hgo 与 effects.hgo 的实际生成代码已移除 guard，新增真实接受测试验证接收、布尔名义类型/遮蔽、len 副作用与 uint64 context。旧两阶段/panic/重绑/权限/Goexit/goto 验收继续保留。明确的 fallback 文件保持五个 guard；其余未规划范围及独立审查发现的 unsafe 转换链/checkptr 反例详见 [RFC §6.9](docs/rfcs/research/0005-option-result-question.md#69-首批无-panic-完整赋值-lowering)。修复按真实类型身份保留转换链，不以反射、unsafe 新实现或生产包桥接规避。仍未完全收口，runtime guard 未删除。
+
+
+本阶段最终验证：全树 race **15 个有测试包、244 宿主顶层/441 子测试**，另 **2 包无自身测试**；vet、完整设计检查 **13 条 Go 命令**通过。安装 CLI 的 private 业务模块 **18 项** race（原 13 + 新增 5），普通目标 **9 项**与 unsafe 非求值边界 **1 项**由各自生成模块 race；研究模块 **10 项**含 6 项纯 Go 机制探针，另跑 race/legacy/vet。独立非作者审查和反例复验通过；unsafe 转换拆链阻断已修复，不隐藏保留路径。
+
+非 race 基准 **200ms × 5** 验证真实 hgo Guard1/Guard8/PackedGuard 成功的全部样本 **0 B/0 alloc**，失败 **16 B/1 alloc**与显式 match 同级；生成代码无 guard。基准原始数据及精确中位数在[仓库研究记录](tests/research/assignment_guard/README.md)，不把六项手写 Go 探针当作此实现证据。全树日志 `/tmp/t0-effects-race.json`、`/tmp/t0-effects-race.err`、`/tmp/t0-effects-vet.log`、`/tmp/t0-effects-design.log`，研究结果与复现脚本已入库。仍有 guard 的形状未性能收口，T0/MVP 未完成。
+
+最终文档检查通过 **58 Markdown / 619 本地链接与锚点 / 20 RFC**，diff 检查通过；只提交推送 feat/t0-completion 并 fetch 核验，不修改 main/work/冻结标签。

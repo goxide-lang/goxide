@@ -135,3 +135,6 @@ T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 
 
 
 无 panic 私有赋值工程先完成 questionFlow 基础提取：显式失败出口替代 AST return 扫描，尚未替换任何真正私有目标 guard。下一步原始类型记录、局部赋值求值规划及完整赋值 emitter 的模块/风险见 [RFC §6.8](docs/rfcs/research/0005-option-result-question.md#68-显式传播控制流基础重构)；不把该重构算作性能收口。
+
+
+首批私有赋值无 panic lowering 已实现：原 private.hgo 验收集及核心研究基准使用普通失败 return，保留完整最终赋值和 Go 上下文类型。仍有明确 guard 范围（含 unsafe 转换链的真实 checkptr 反例），[RFC §6.9](docs/rfcs/research/0005-option-result-question.md#69-首批无-panic-完整赋值-lowering)与最新验收矩阵逐项列出，不宣称全部私有目标或 MVP 完成。

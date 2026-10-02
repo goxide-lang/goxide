@@ -67,3 +67,25 @@ go run tests/research/assignment_guard/tools/compare_tokens.go BASELINE_GENERATE
 ```
 
 它双向检查非 `_test.go` 的 Go 文件集合并比较 token，忽略注释和位置；测试夹具由 runner 另行安装，不纳入编译器产物比较。空基线、文件集合差异、扫描错误或 token 差异均失败。忽略的注释也包含 Go 编译指令，因此这只是本次产物的结构证据，不能单独证明任意程序等价。新增 questionFlow 出口机制测试属于单独的生成 Go 研究，不把它当作本目录 Guard 基准或新增 hgo 功能。
+
+
+## effects planner：首批真实无 guard 结果
+
+基于 `249567c6055f3f7d3ab6d506d9ea39100843c671` 的后续 effects 工作树，[原始结果](results/effects/bench.txt)、[统计](results/effects/summary.json)和 [manifest](results/effects/manifest.json)保存本次 Go 1.27.1 同机 GOMAXPROCS=1、200ms × 5 测量。全树回归结束后单独执行。Guard1/Guard8/PackedGuard 保留历史函数名，但当前由真实 hgo planner 生成普通 return，不含 Assignment/Catch/Fail；六项手写 Go 机制探针仍仅为机制证据。
+
+```sh
+python3 tests/research/assignment_guard/run.py --go /path/to/go --out /path/to/new-output --expect-no-guard
+```
+
+新增开关同时验证 benchmark.go 的无 guard 形状，以及上述三种成功基准的全部重复样本均为 0 B/0 alloc，并核对样本数。开关默认关闭，以便仍可使用脚本研究旧 compiler 的成本。
+
+| 真实 hgo 路径 | planner ns/op | 显式 match ns/op | planner B/alloc | 显式 B/alloc |
+| --- | ---: | ---: | --- | --- |
+| 单条成功 | 2.608 | 2.437 | 0/0 | 0/0 |
+| 单条失败 | 25.4 | 24.43 | 16/1 | 16/1 |
+| 八条成功 | 9.399 | 12.18 | 0/0 | 0/0 |
+| 八条末次失败 | 28.32 | 30.99 | 16/1 | 16/1 |
+| 单条八问号成功 | 9.726 | 13.86 | 0/0 | 0/0 |
+| 单条八问号末次失败 | 30.78 | 32.31 | 16/1 | 16/1 |
+
+成功路径此前的每条 32 B guard 分配已从这些路径消除；失败仍有与显式 match 一致的 16 B/1 次 Result 重建。计时受工具链/虚拟机及内联差异影响，不用单次表格推广所有应用性能。此结论不覆盖仍走 guard 的形状：完整清单和真实 unsafe/checkptr 反例见 [RFC §6.9](../../../docs/rfcs/research/0005-option-result-question.md#69-首批无-panic-完整赋值-lowering)。基准源/model 是固定研究快照，与扩充的业务 acceptance 原生 model 各自独立。

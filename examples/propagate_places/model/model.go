@@ -38,3 +38,12 @@ func Replace(t *Tree, n int)    { t.leaf = &leaf{Count: n} }
 func Observe(t Tree) func() int { old := t.leaf; return func() int { return old.Count } }
 func LeafSlot(t *Tree) **leaf   { return &t.leaf }
 func NewLeaf(n int) *leaf       { return &leaf{Count: n} }
+
+// Native helpers expose private scalar identity without exporting its name.
+func Flag(v bool) flag { return flag(v) }
+func BoolKind[T any](v T) int {
+	if _, ok := any(v).(bool); ok {
+		return 1
+	}
+	return 2
+}

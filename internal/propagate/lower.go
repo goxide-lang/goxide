@@ -33,6 +33,7 @@ type Config struct {
 	Namespace string
 }
 type lowering struct {
+	expressionFacts      map[ast.Expr]expressionFact
 	fs                   *token.FileSet
 	file                 *ast.File
 	info                 *types.Info
@@ -374,6 +375,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if err := l.inferMatches(); err != nil {
 		return nil, err
 	}
+	l.captureExpressionFacts()
 	l.bindLocalScalars()
 	for _, decl := range f.Decls {
 		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil && !strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_") && fn.Name.Name != marker && fn.Name.Name != "__hgo_enum_infer" {
@@ -555,6 +557,9 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	switch x := s.(type) {
 	case *ast.AssignStmt:
 		if l.needsAssignmentFrame(x) {
+			if l.canPlanAssignment(x) {
+				return l.plannedAssignment(x, ft)
+			}
 			return l.assignmentFrame(x, ft)
 		}
 		for i, lhs := range x.Lhs {

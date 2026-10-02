@@ -395,3 +395,13 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 本阶段仅提取 [questionFlow](../internal/propagate/question.go)，把失败出口从 sum 校验/From/结果构造中分离；普通 expr 显式 return，私有 frame 显式 Fail，移除 AST return 扫描改写。没有扩大支持范围，也没有替换真正私有目标 guard。所有 private.hgo 中的此类赋值和研究 Guard1/Guard8/PackedGuard 仍走原 guard，性能门槛继续未通过。
 
 [下一阶段模块与风险](rfcs/research/0005-option-result-question.md#68-显式传播控制流基础重构)明确原始类型记录、赋值求值规划和完整赋值 emitter；不能仅因已有手写子集就把这些工程项打勾。新增生成 Go 控制流机制测试单列，既有真实 hgo 私有目标/权限/跨包验收继续保留。循环、select 和 adapters 没有改动。
+
+
+### 私有目标无 panic lowering：首批真实替换
+
+本阶段在 questionFlow 基础上实现原始类型/地址性快照与局部求值 planner。原 private.hgo、新增 effects.hgo 和研究 Guard1/Guard8/PackedGuard 已采用普通失败 return，生成代码断言不含 Assignment/Catch/Fail；失败不写、两阶段部分写入、重绑、私有 scalar/泛型 bool 类型、直接 recover/defer/Goexit、只读约束和 goto 均通过真实前端验收。
+
+仍有 guard：专门的 effects_fallback.hgo 包含 **5 条**回归（右臂私有 bool、有符号 contextual shift、含问号 len、tuple、unsafe.Pointer 链），其余未规划形状见 [RFC §6.9](rfcs/research/0005-option-result-question.md#69-首批无-panic-完整赋值-lowering)。本组不是全部私有目标收口；guard 成本只从已覆盖路径移除，runtime 仍用于明确剩余范围。unsafe 拆链反例由独立审查发现并修复，race/checkptr 成功及失败不写成为永久真实 hgo 回归。新增混合目标负例防止临时复制把不可赋值 struct 返回值变合法。
+
+
+本阶段验证：全树 race **15 包 / 244 顶层 / 441 子测试**（另 2 包无测试），vet、13 条设计检查通过；private 业务 **18 项**生成 race。独立研究模块另跑 race/legacy/vet，非 race 200ms × 5 检查核心三种成功路径全部 **0 B/0 alloc**，失败 **16 B/1 alloc**；与显式 match 的原始对照已入[研究记录](../tests/research/assignment_guard/README.md)。该门槛仅覆盖已替换路径，不把仍有 guard 的组合或整项 MVP 打勾。

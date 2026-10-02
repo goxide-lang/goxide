@@ -126,7 +126,11 @@ their expression types. Ordinary readonly/writable checks still run after this
 pass. No borrowing, exclusivity or global immutability guarantee is added.
 
 Promoted fields through value embeddings use the ordinary place path. Imported
-private embedded-pointer targets preserve the complete original assignment,
+private embedded-pointer targets first use the bounded effects planner, retaining
+the complete final assignment and returning normally on propagation failure.
+The original syntax/type facts distinguish untyped contextual expressions from
+named private scalars. Unsupported combinations use the explicit legacy frame
+path described below, which preserves the complete original assignment,
 leaving hidden pointer operands, contextual private scalar types, and final
 writes to Go. Question helpers take source operands as arguments evaluated in
 the original frame, preserving direct recover. A compiler-support Assignment
@@ -156,5 +160,7 @@ failure conversion from its failure exit. Ordinary `expr` emits a return;
 Source operand scheduling is still owned by each caller. Branch containers are
 fresh but expression nodes are shared read-only; emit is not a deep-clone API.
 This is preparatory refactoring, not the no-panic private-target replacement.
-All actual private embedded-pointer assignments still take assignmentFrame and
-retain the measured guard allocations; performance acceptance remains open.
+That was the questionFlow-only stage. The subsequent effects planner now removes
+guards from the existing private.hgo acceptance set and core benchmark fixtures;
+unsupported combinations still take assignmentFrame, so universal private-target
+performance acceptance remains open. See RFC 0005 section 6.9 for the exact scope.

@@ -215,9 +215,9 @@ func (c *checker) quality(e ast.Expr) *qualification {
 }
 func (c *checker) checkQualifications() error {
 	c.qualifications = map[types.Object]*qualification{}
-	// Least fixed point over lexical slots covers forward captures, loops and both
-	// branches. Rebinding never removes a capability restriction from an inferred
-	// slot; path-sensitive replacement is deliberately outside this finite slice.
+	// First compute a conservative summary for forward captures and unsupported
+	// control flow. refineLocalQualifications then supplies point facts for the
+	// supported local flow, including strong rebinding and loop backedges.
 	changed := true
 	for changed {
 		changed = false

@@ -155,3 +155,23 @@ Go 调生成函数时只看到 `*T`，普通 Go 调用方不获得 hgo 的静态
 [模块验收](../../tests/acceptance/composite_metadata_test.go)走真实 CLI→生成 Go，覆盖多文件/再导出/私有类型、同名不同包、显式收窄、容器和读写正反例、两次生成确定性；生成模块独立 race/vet。权限检查包括经过 hgo 的 `.go` 消费文件，但原生 `go build` 不执行它。透明 alias 和 marker 不是原生 Go 的只读机制，也不是稳定外部 ABI。
 
 尚未支持 interface/channel/function/用户泛型元素、引用方法/回调/引用容器、named/multiple result、dot import、外部恢复。既有投影保守限制与来源映射缺口继续列工程待办，不默认为批准延期；D11 待决部分和长期别名分析保持原分类。
+
+### 6.17 普通局部权限事实与控制流（2026-10-02）
+
+D19/D20 要求不因无法证明别名安全而默认拒绝普通 Go 用法；D08/D21 仍要求只读路径写入和权限擦除属于基础类型错误。本节不引入风险分析或新桥接，修正已有实现把某槽位曾有只读资格永久套到后续独立存储的误拒。
+
+以下五个最小真实 hgo 例子均使用 `func f(r &S,b bool)`、`type S struct{Items []int}`，`touch([]int)` 是普通写入函数。修复前 CLI 均拒绝；前四类现已接通，第五类仍明确保留为工程缺口：
+
+| 最小函数体片段 | 类型事实与本阶段结果 |
+| --- | --- |
+| `x:=r.Items;for i:=0;i<2;i++{x=[]int{1};x[0]++}` | 每次写前强重绑定到独立存储，允许；零轮出口不能假设已重绑定 |
+| `for i:=0;i<2;i++{x:=r.Items;x=append([]int(nil),x...);touch(x)}` | 复制 int 元素后的新 slice 可传普通 Go 参数，不要求 callable 效果摘要，允许 |
+| `x:=r.Items;if b{return}else{x=[]int{1}};x[0]++` | 返回分支不参与后续汇合，继续执行路径已经独立，允许 |
+| `x:=r.Items;p:=&x[0];x=[]int{1};x[0]++;_=*p` | 取元素地址不等于取局部 slice header 地址，允许；通过旧 p 写仍拒绝 |
+| `v:=*r;v.Items=[]int{1};v.Items[0]++` | 应按替换后的字段处理；当前字段级强更新尚未实现，仍误拒，不能写成已批准语言限制 |
+
+实现使用有限函数内资格环境：不可达出口区别于可达且无只读资格的空环境；if 合并仅继续执行分支。for/range 入口合并回边直到固定点，再保留该轮完整事实；continue 经过 post，break 和标号退出进入实际目标，可能零轮的循环保留入口出口。range 源资格在源表达式求值时保存，不随循环体内重绑定源变量变化；每轮迭代变量和无初始化 var 重新建立资格。迭代求解不改变生成 Go 控制流，没有新增运行时状态。
+
+取址仅将真实被取址的局部槽位或值型 struct/array 根保守保留。`&slice[i]`、`&*p` 不暴露 slice header 或局部指针槽位；派生指针单独保留旧存储资格。`&x`、值型字段/array 元素地址和捕获仍有保守限制，不推断跨函数调用效果。switch/select/goto 与包含未建模 switch/select 的循环继续保守处理；这不是获批语言禁令，也不意味着复杂堆别名分析成为 T0 前提。
+
+[真实跨包验收](../../tests/acceptance/refs_control_flow_test.go)包含已检查 provider 返回引用、普通调用、分支/循环/标签、独立值复制、元素取址与每轮零值声明；生成模块另跑 race/vet。负例保留 readonly 回边、零轮路径、continue/post、break、旧 alias、range 源冻结、接口擦除和捕获/取址槽位。可写 alias 不因存在只读路径而禁用；没有把真正类型错误降成 warning。

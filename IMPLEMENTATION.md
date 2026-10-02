@@ -801,3 +801,13 @@ switch 研究模块 **1 项**真实 hgo 等价测试另跑 race/vet；非 race *
 这些权限校验只在 hgo 构建链运行。直接对生成代码使用原生 `go build` 不获得只读检查。没有全局不可变、独占、长期别名风险分析或 D11 新桥接。元素中的 interface/channel/function/用户泛型、引用方法与回调/引用容器、named/multiple result、dot import、外部恢复以及完整 source map 仍是工程缺口；既有投影保守限制并未因此全部解决。完整 T0/MVP 仍未完成。
 
 最终验证：全树 `go test -race -count=1 -json ./...` 通过 **15 个测试包 / 259 个宿主顶层 / 515 个子测试**，另 2 包无测试；全树 vet 通过。设计检查通过 60 份 Markdown、723 个本地链接、20 篇 RFC，以及 13 条独立 Go 机制命令，后者不计作 hgo 前端证据。独立实现与文档复审无阻断。整树日志 `/tmp/t0-composite-race.json`、`/tmp/t0-composite-race.err`、`/tmp/t0-composite-vet.log`、`/tmp/t0-composite-design.log`；只提交推送工作分支并 fetch 核验，不修改 main/work 或冻结标签。
+
+## 普通权限跟踪误拒绝首组（2026-10-02）
+
+基于 `fad6f759d444051dee1b636f49e6b0526b749776`，用真实 CLI 复现并修复局部 for/range 重绑定、复制后普通调用、早退分支和 slice 元素/指针所指位置取址后的局部重绑定。原实现把循环中出现过的对象整体永久保守化；现按局部控制流合并入口、回边和真实退出，不让已返回分支污染后续事实，保留零轮可能、continue/post、标号 break/continue 与 range 源一次求值的资格。取址区分局部槽位与它指向的存储，旧派生地址权限不变。
+
+[跨包 CLI 验收](tests/acceptance/refs_control_flow_test.go)验证 9 个业务函数、3 项独立生成 race 测试及单独 vet，另 20 个拒绝子项。真正只读写入、旧 alias、any/普通参数擦除、回边污染、range 源重绑定与取 header 地址仍不能洗掉资格。独立审查发现并修复循环内无 initializer 的 var 沿用上轮资格的误拒，永久用例经过普通函数验证每轮 nil；不靠全树宿主 race 替代生成程序执行。
+
+[RFC §6.17](docs/rfcs/0005-borrows.md#617-普通局部权限事实与控制流2026-10-02)列出 5 个最小源例和 D19/D20/D21 依据。字段替换、真正取址槽位/捕获、switch/select/goto 仍有未完成的局部资格精度；不称已批准语义限制，不改为复杂 alias 分析任务。D11 自动 Go 桥接未实施，没有新增用户设计选择，完整 MVP 仍未完成。
+
+最终全树 `go test -race -count=1 -json ./...` 通过 **15 个测试包 / 260 个宿主顶层 / 536 个子测试**，另 2 包无测试；全树 vet 通过。新增模块的 3 项生成 Go 业务测试单独 race/vet，通过与宿主结果分开记录。设计检查通过 **60 份 Markdown / 729 个本地链接 / 20 篇 RFC** 及 **13 条纯 Go 机制命令**；机制检查不计作真实 hgo 执行。独立复审修复 var 每轮初始化后无剩余实现阻断。日志 `/tmp/t0-flow-race.json`、`/tmp/t0-flow-race.err`、`/tmp/t0-flow-vet.log`、`/tmp/t0-flow-design.log`；只提交推送 feat/t0-completion 并 fetch 核验。

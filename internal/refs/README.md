@@ -60,14 +60,22 @@ source-variable-name taint table or heap-alias inference.
 
 Local binding constraints first converge to a conservative summary; a transitive
 `deep` qualifier absorbs nested qualifiers so recursive assignments terminate.
-Lexical point facts then permit ordinary local fresh rebinding, simultaneous RHS
-assignments, and branch joins (both branches must remove a shared qualification).
+Point facts then permit ordinary local fresh rebinding, simultaneous RHS
+assignments, and joins of reachable branch exits. A returning branch does not
+contaminate its sibling continuation. For/range loops join entry and backedge
+facts to convergence; continue passes through post and break reaches the correct
+labelled exit. Conditional loops retain the possible zero-iteration path. Range
+source qualifications are frozen at source evaluation, and iteration destinations
+and local declarations are updated on each execution, including zero-value vars.
 Local variables declared inside a closure use the same rules. Existing aliases
 retain their previous qualification. This is a finite intraprocedural refinement,
 not whole-program borrow analysis or an inferred effect system.
 
-Captured/address-taken slots and slots mentioned by loops, switch/select or goto
-retain the conservative summary. Replacing individual fields with fresh storage
+Captured slots, actual address-taken local slots, and slots mentioned by
+switch/select or goto retain the conservative summary. Loops containing those
+unsupported switch/select constructs also retain it. Taking a slice element or
+pointee address does not expose the local slice header/pointer slot; rebinding
+that local is allowed while the old derived address keeps its own qualification. Replacing individual fields with fresh storage
 also remains conservative. Rejections involving these inferred slots explicitly
 say `prototype tracking limitation` and suggest a separate fresh local. This
 message describes an analysis limit, not proof that the particular execution
@@ -178,3 +186,10 @@ on ordinary pointers remain valid. New import/function-value diagnostics preserv
 proven source spans; downstream reference reconstruction can remain
 `generated/unmapped`. See RFC 0005 §6.15–6.16 and the separate generated-module
 race acceptance tests.
+
+The real CLI cross-package acceptance in `refs_control_flow_test.go` exercises
+local loop/branch rebinding, value copies across ordinary calls, element-address
+identity, labelled exits, and per-iteration zero initialization. Its generated
+module runs race/vet separately. Loop-carried readonly values, zero-trip exits,
+old derived pointers, captured/header aliases, and interface erasure remain
+errors. This is local permission typing, not heap-alias risk analysis.

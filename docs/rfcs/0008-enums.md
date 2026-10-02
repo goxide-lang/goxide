@@ -58,7 +58,7 @@ var b Option[Option[int]] = Some[Option[int]]{Value: nil}
 var c Option[Option[int]] = Some[Option[int]]{Value: Some[int]{Value: 3}}
 ```
 
-对应约束：a、b、c 必须能被模式匹配区分；不能以“底层都是 nil”消除 b 的 Some 包装。
+对应约束：a、b、c 必须能被模式匹配区分；不能以“底层都是 nil”消除 b 的 Some 包装。 此为内存中的名义值语义；普通 JSON Option 表示中 a 与 b 均可编码为 null，解码为外层 None，不承诺 JSON 无损往返或 PATCH 三态，见 [serde RFC](research/0006-serde-core-and-formats.md#72-内建具体-option-派生)。
 
 **E03：没有合法初始化的 Result 不能成为源级可读值。**
 

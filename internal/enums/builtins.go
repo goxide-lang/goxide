@@ -194,12 +194,12 @@ func (l *lowerer) builtinDeclarations() string {
 		if d.Family == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "func %s(v %s){ __hgo_enum_validate_%s[%s](v); switch x:=v.(type){", d.Validator, d.Name, d.Family, strings.Join(d.TypeArgs, ","))
+		fmt.Fprintf(&b, "func %s(__hgo_enum_value %s){ __hgo_enum_validate_%s[%s](__hgo_enum_value); switch __hgo_enum_payload:=__hgo_enum_value.(type){", d.Validator, d.Name, d.Family, strings.Join(d.TypeArgs, ","))
 		for _, v := range d.Variants {
 			if v.Payload == "" {
 				continue
 			}
-			fmt.Fprintf(&b, "case %s: _=x;", v.CaseName)
+			fmt.Fprintf(&b, "case %s: _=__hgo_enum_payload;", v.CaseName)
 			b.WriteString(l.payloadChecks[d.Name+"/"+v.Name])
 		}
 		b.WriteString("}};\n")
@@ -436,7 +436,11 @@ func (l *lowerer) checkCompositePayloads() error {
 					return l.err(v.Position.Offset, "unsupported enum payload: use scalar or finite local value struct/container")
 				}
 			}
-			code, err := project(v.Type, "x.Value", map[string]bool{})
+			payload := "x.Value"
+			if d.Family != "" {
+				payload = "__hgo_enum_payload.Value"
+			}
+			code, err := project(v.Type, payload, map[string]bool{})
 			if err != nil {
 				return l.err(d.Position.Offset, "builtin payload projection unsupported: "+v.Payload+": "+err.Error())
 			}

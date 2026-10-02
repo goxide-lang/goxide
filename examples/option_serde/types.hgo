@@ -1,0 +1,49 @@
+package main
+
+var defaultCalls int
+
+#[derive(Serialize, Deserialize)]
+type Settings struct { Port int }
+
+#[derive(Serialize, Deserialize)]
+pub enum Mode { Idle, Ready(Settings), }
+
+#[derive(Serialize, Deserialize)]
+type Request struct {
+    Count Option[int]
+    Config Option[Settings]
+    State Option[Mode]
+    Nested Option[Option[int]]
+    Pointer Option[*int]
+    List Option[[]int]
+    Map Option[map[string]int]
+    Array Option[[2]int]
+    Items []Option[int]
+    Lookup map[string]Option[Settings]
+    Fixed [2]Option[int]
+    #[serde(default)]
+    Fallback Option[Settings]
+    #[serde(skip)]
+    Secret Option[chan int]
+}
+
+#[derive(Serialize)]
+type OutputPayload struct { Port int }
+#[derive(Serialize)]
+type OutputOnly struct { Value Option[OutputPayload] }
+#[derive(Deserialize)]
+type InputPayload struct { Port int }
+#[derive(Deserialize)]
+type InputOnly struct { Value Option[InputPayload] }
+
+// Defaults inside Some are ordinary payload decoding, not an Option default.
+#[derive(Serialize, Deserialize)]
+type PayloadWithDefault struct {
+    #[serde(default)]
+    Config Settings
+}
+#[derive(Serialize, Deserialize)]
+type DefaultEnvelope struct {
+    #[serde(default)]
+    Value Option[PayloadWithDefault]
+}

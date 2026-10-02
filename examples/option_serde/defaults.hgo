@@ -1,0 +1,8 @@
+package main
+
+impl Default for Settings {
+    func default() Settings {
+        defaultCalls += 1
+        return Settings{Port:8080}
+    }
+}

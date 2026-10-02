@@ -243,6 +243,8 @@ pub enum Mode {
 
 字段级 serde(default/skip) 的解码沿用该登记：default 仅缺失时调用，skip 无论输入是否存在均默认构造一次；本层读取及 required 检查成功后按字段声明顺序调用。缺协议拒绝，不悄悄用 Go 零值替代；Serialize-only 无此解码要求。原生指针可解码 null，但没有 Default，故不能作为解码 default/skip 字段。嵌套默认构造的副作用不回滚。
 
+内建具体 Option 的 serde 缺失/null 为 None；`serde(default/skip)` 使用 Option 自身 None 默认，不要求或调用载荷的 Default。未 skip 字段仍要求载荷具有对应方向的 serde codec，显式错误值不默认；skip 仅验证输入格式和预算，不按目标类型解码。
+
 ### 5.3 Clone：字段协议决定复制内容
 
 `Clone` 的语义是从合法只读借用构造同类型结果 `clone(&Self) -> Self`。struct 派生依字段声明顺序调用各字段的显式 `Clone`；enum 保持当前合法变体，对其 payload 调用相应协议。缺失任一字段协议时拒绝，不回退成普通 Go 赋值。这个逐字段调用思路参考 [Rust Clone](https://doc.rust-lang.org/std/clone/trait.Clone.html)。

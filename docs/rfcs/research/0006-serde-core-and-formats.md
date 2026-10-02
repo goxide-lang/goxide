@@ -186,8 +186,8 @@ Serialize/Deserialize derive 不自动生成或调用 Go MarshalJSON/UnmarshalJS
 
 当前有限实现支持 Serialize/Deserialize 独立派生及字段 rename、default、skip；未知字段默认消费并忽略，容器 deny_unknown_fields 可改为错误。skip_serializing_if、skip_deserializing/skip_serializing、容器级 default 和自定义默认工厂仍后置，不把不识别的属性静默忽略。设计参考[官方字段属性](https://serde.rs/field-attrs.html)，不承诺完整属性兼容。
 
-- required 字段缺失报 MissingField；default 仅字段缺失时调用一次已登记的 Default。显式值始终按目标 codec 解码：普通 T 的 null 类型错误不触发 default，允许 null 的类型仍按原语义接收；false/0/空字符串不是 missing，未知 enum 变体和错误 payload 不回退为默认值。
-- 后续 Option serde 方向（当前尚未接通内建 Option 派生）：字段按 Serde 风格可以缺失为 None，显式 null 同样是 None。`Option[Option[T]]` 的普通派生并不能自动保存 PATCH 的三态；Some(None) 与 None 默认 JSON 都可能为 null，不宣称往返可逆。
+- 非 Option 的 required 字段缺失报 MissingField；default 仅字段缺失时调用一次已登记的 Default。显式值始终按目标 codec 解码：普通 T 的 null 类型错误不触发 default，允许 null 的类型仍按原语义接收；false/0/空字符串不是 missing，未知 enum 变体和错误 payload 不回退为默认值。
+- 内建具体 `Option[T]` 字段按 Serde 风格缺失为 None，显式 null 同样是 None，存在的非 null 值按 T 的 codec 解码为 Some；None 编码为 null，Some 编码其载荷。`Option[Option[T]]` 的普通派生并不能自动保存 PATCH 的三态；Some(None) 与 None 默认 JSON 都可能为 null，不宣称往返可逆。
 - PATCH 要求缺失=不改、null=清空、值=设置时，应显式选择字段级 adapter/包装类型，跟踪字段存在性，例如库候选 `PatchField[T]`。它不是核心 Value 节点；默认值给 Missing，字段存在时的 custom deserializer 负责 Null/Value，序列化用 skip_if_missing。首版可先手写 DTO visitor，不为了它增加语言新类型。
 - skip 编码时省略字段；解码时忽略输入内容，完整消费并验证其格式与预算，不调用该字段 codec；不论输入中是否存在该字段，成功构造时调用一次已登记的 Default。带 Deserialize 的 default/skip 字段缺少 Default 时在派生阶段诊断，Serialize-only 不要求解码 Default。
 - rename 后冲突在派生阶段诊断；重复已知字段在 visitor 中检查，不以零值判断出现与否。私有字段会参与本包生成代码，敏感字段需显式 skip/自定义。
@@ -198,7 +198,17 @@ Serialize/Deserialize derive 不自动生成或调用 Go MarshalJSON/UnmarshalJS
 
 每个 struct visitor 完成字段读取和全部 required 检查后，按字段声明顺序为本层缺失 default 字段和全部 skip 字段调用 Default。显式字段不调用 Default。读取或 required 检查失败时不开始本层默认构造；嵌套字段自己的解码和默认构造可能已经执行，其外部副作用不回滚。此顺序不承诺整个 JSON 文档后续失败时回滚。
 
-旧代码中缺少 Default 的 skipped 字段现在会在带 Deserialize 派生时拒绝，包括原生指针、slice/map/数组等当前无 Default 的类型。原生 `*T` 的 codec 仍允许显式 null；这不授予 `*T` Default，故它不能标记解码 default/skip。需要业务默认构造时可使用具有已登记手动 Default 的本地 struct。没有新增容器级 default、函数路径属性、Option serde 或完整 trait 后端。
+旧代码中缺少 Default 的 skipped 字段现在会在带 Deserialize 派生时拒绝，包括原生指针、slice/map/数组等当前无 Default 的类型。原生 `*T` 的 codec 仍允许显式 null；这不授予 `*T` Default，故它不能标记解码 default/skip。需要业务默认构造时可使用具有已登记手动 Default 的本地 struct。该阶段未增加 Option serde；后续具体 Option 接入见下节。没有新增容器级 default、函数路径属性或完整 trait 后端。
+
+### 7.2 内建具体 Option 派生
+
+此增量复用核心 None/Some 与 Deserializer.Option/Visitor 协议，不引入通用泛型 trait。struct 字段可使用已支持具体载荷的 `Option[T]`，包括同包具有对应方向 codec 的 struct/enum；外层数组、slice、string-key map 可包含 Option。Serialize-only 只检查 Serialize 载荷，Deserialize-only 只检查 Deserialize 载荷。
+
+- 未 skip 的 `Option[T]` 在编译期要求 T 有对应方向 codec，即使业务值始终是 None；不能用可空性掩盖不支持的载荷、外部 codec 或 Result。
+- `Option[T]` 自身 Default 是 None，不要求或调用 T 的 Default。字段标记 `serde(default)` 也不改为 Some(default T)。手动 Default 的本地 struct 作为字段时仍使用已登记的业务构造，作为 Option 载荷时不能取代 Option 的 None 默认。
+- 缺失和显式 null 均为 None；非 null 的错误值必须报告正常字段/索引/变体路径，不回退 None 或业务默认值。skipped Option 不调用载荷 codec，输入只受格式、重复键及预算检查，成功后为 None；因此其载荷可以没有 serde 或 Default，但仍须满足既有内建 Option 类型合法性限制。
+- 普通 enum 的直接 Option payload、含 Option 的 struct payload 等仍受现有 payload 检查限制，不由 `Option[Enum]` 的支持反推可用。`Option[[]Option[int]]` 等穿过指针/容器的 enum 值投影继续拒绝；跨包 codec、Result serde 和任意泛型实例均未开放。
+- 合法的 `Option[Option[int]]` 中 Some(None) 与 None 编码均可为 null，解码为外层 None；`Option[*int]` 的 Some(nil) 也会丢失与 None 的区别。JSON 往返只承诺当前表示可区分的值，不提供 PATCH 三态。
 
 业务矩阵：配置 retries 缺失走 default，0 原样，null 报错；PATCH display_name 的 `{}`、`null`、`"Ada"` 仅通过明确三态 adapter 区分；事件 Idle 为字符串、Named 为外标记；JSON Number 保留大订单 ID。错误输入不吞成业务默认，不把 serde 错误自动选到某个 thiserror variant（仍按 D22 显式 From）。
 
@@ -247,4 +257,4 @@ JSON Value 不能保存 YAML 任意键、tag/锚点身份或注释；跨格式�
 
 ## 实现分支进展（不冻结 ABI）
 
-具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。当前已接通有限封闭 enum 派生及字段 default/skip 的已登记 Default 调用；此结果不代表本 RFC 的泛型、全部 enum 表示、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。
+具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。当前已接通有限封闭 enum 派生、字段 default/skip 的已登记 Default 调用及内建具体 Option serde；此结果不代表本 RFC 的泛型、全部 enum 表示、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。

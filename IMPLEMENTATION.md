@@ -1,6 +1,6 @@
 # 可运行的 hgo 语言子集
 
-**当前覆盖：最新 D27 撤回开放 raw/C enum；旧 raw 阶段仅为历史记录，代码/成功夹具已移除。当前封闭 enum 与 serde 外部映射及手动 Default 见末节；enum 仅选中默认变体的 payload 要求 Default。**
+**当前覆盖：最新 D27 撤回开放 raw/C enum；旧 raw 阶段仅为历史记录，代码/成功夹具已移除。当前封闭 enum、serde 外部映射、手动 Default 与具体 Option serde 见末节；enum 仅选中默认变体的 payload 要求 Default。**
 
 此实现分支从 `v0.0.0-mvp-doc` 开始；冻结标签保持不变，本文件只描述实现分支。
 这是具体类型、Go 宿主语法上的可执行子集；单文件入口与后文有限 Go module 目录入口并存，不是完整 hgo 编译器、trait ABI 或 LSP。
@@ -542,10 +542,38 @@ GOBIN=/workspace/goxide-restore-check/bin go install ./cmd/hgo
 go test -race -count=1 ./tests/acceptance -run '^TestSerdeDefaults' -v
 ```
 
-本轮不增加容器级 serde(default)、自定义属性、Option serde、指针/容器默认、跨包协议消费或完整 trait。下一阶段 Option 的缺失/null 策略不由本切片隐式实现。旧章节的 serde Go 零值记录由本节明确取代；Go 自身 var/make/map 缺失读取仍保持零初始化。
+该阶段未增加容器级 serde(default)、自定义属性、Option serde、指针/容器默认、跨包协议消费或完整 trait；后续 Option 增量见末节。旧章节的 serde Go 零值记录由本节明确取代；Go 自身 var/make/map 缺失读取仍保持零初始化。
 
 最终验收（Go 1.27.1 linux/amd64、CGO=1、本地离线工具链）：完整 `go test -race -count=1 -json ./...` 一次通过 **15 个有测试包、220 宿主顶层测试、385 子测试**，另 1 包无自身测试。新增生成模块 **4 项独立 race 测试**另计；`go vet ./...`、完整设计检查 **13 条 Go 命令**、文档检查 **56 Markdown / 501 本地链接与锚点 / 20 RFC**及 diff 检查通过。
 
 独立非作者审查未发现阻断，实际额外核对普通同名函数、跨文件原生 Go 基础类型遮蔽、Default→Deserialize→Default 静态循环、外部类型缺协议与 Serialize-only skip。共享默认值生成与 seen 标记使用不可被 true/false 同名声明捕获的布尔表达式，真实生成代码回归通过。日志位于 `/workspace/goxide-restore-check/serde-defaults-final-race.json`、`serde-defaults-final-vet.log`、`serde-defaults-final-design.log`、`serde-defaults-final-docs.log`；无需旧执行器文件即可重跑。
 
-按用户阶段同步授权提交并推送 `feat/manual-default`；未更新 main/work、冻结标签或另一工作区研究文件。后续 Option serde 仍独立留待下一切片。
+按用户阶段同步授权提交并推送 `feat/manual-default`；未更新 main/work、冻结标签或另一工作区研究文件。当时后置的 Option serde 由下述独立切片实现。
+
+
+## 当前增量：具体内建 Option 的 serde
+
+基准 `4e239be12a34cbca0bba2a56363418876e47ee7a`。派生识别已登记的具体 `Option[T]` 元数据，使用核心 Serializer.None/Some 与 Deserializer.Option/Visitor，不依赖 serdejson 特有回填。struct 的 Option 字段缺失、显式 null 均为 None；非 null 值由 T 的对应方向 codec 解码为 Some。None 编码 null，Some 编码载荷；存在的错误值不回退默认。嵌套 `Option[Option[int]]` 与 `Option[*int]` 的 Some(None)/Some(nil) 会折叠为 JSON null，不提供 PATCH 三态保证。
+
+Option 自身的 Default 是 None，不要求或调用 T.Default，`serde(default)` 也不产生 Some(default T)。但显式 Some 的正常 payload 解码会执行其内部字段声明的 Default。`serde(skip)` 输出省略，输入调用格式级 Skip，验证语法、重复键与预算，不调用目标字段或 payload codec；因此合法的任意 JSON 值都能被跳过，最终字段为 None。默认与 skip 的原有初始化顺序、副作用不回滚边界不变。
+
+支持现有具体 scalar、struct、enum、原生指针、数组/slice/string-key map 载荷，以及外层容器中的 Option。未 skip 的 payload 必须具有请求方向的 serde 协议，即使实际值总为 None；两个方向独立检查。仍拒绝普通 enum 的直接 Option payload 或含 Option 的 struct payload，以及 Option 内穿过指针/容器的 enum 投影，例如 `Option[[]Option[int]]`。不扩展 Result serde、通用泛型 trait、跨包 codec 或新属性。已有 enum 投影拒绝保留 generated/unmapped 标记；新增 codec 拒绝保留原字段位置。
+
+[多文件业务](examples/option_serde/main.hgo)与[独立接受测试](tests/acceptance/option_serde_test.go)覆盖缺失/null、Some、嵌套容器、普通 enum payload 的现有限制、真实单向派生、手动默认调用次数、skip 格式消费、原始字段诊断与 Field/Index/MapKey/Variant 错误路径。非法 native Go case 指针/typed nil/伪造值编码返回 Type，不 panic。真实 CLI 输出 `option 7 -1 4 0`。生成模块显式运行 8 项 race 测试，另有 9 项边界拒绝。
+
+独立审查发现并修复合法 payload 类型名被生成局部变量捕获：容器分配类型改在包级解析，struct 解码使用命名结果，builtin 实例 validator 使用编译器保留变量名。[名字捕获回归](tests/prototype/option_serde_test.go)运行实际生成代码；此普通子进程不计为 race 产物。
+
+复现沿用上节工具链和离线环境：
+
+```sh
+GOBIN=/workspace/goxide-restore-check/bin go install ./cmd/hgo
+/workspace/goxide-restore-check/bin/hgo run examples/option_serde
+go test -race -count=1 ./tests/acceptance -run '^TestOptionSerde' -v
+go test -race -count=1 ./...
+go vet ./...
+python3 scripts/check_design.py
+```
+
+最终验收：Go 1.27.1 linux/amd64、CGO=1、本地离线工具链。完整 `go test -race -count=1 -json ./...` 一次通过 **15 个有测试包、223 宿主顶层测试、394 子测试**，另 1 包无自身测试；新增生成模块 **8 项独立 race 测试**另计。`go vet ./...`、完整设计检查 **13 条 Go 命令**、文档检查 **56 Markdown / 511 本地链接与锚点 / 20 RFC**及 diff 检查通过。独立非作者复审和定向复验确认上述名字捕获修复，无已知剩余阻断。
+
+日志位于 `/workspace/goxide-restore-check/option-serde-final-race.json`、`option-serde-final-vet.log`、`option-serde-final-design.log`、`option-serde-final-docs.log`。按用户授权在 `feat/manual-default` 提交并推送，随后 fetch 核验；不更新 main/work 或冻结文档标签。

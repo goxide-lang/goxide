@@ -828,13 +828,13 @@ func (g *generator) emitModel(m model) error {
 		}
 	}
 	fmt.Fprintf(&ser, "\nfunc Serialize%s(s %s.Serializer,v *%s) error { if v==nil {return %s.NewError(\"Type\",\"nil struct pointer\")};w,e:=s.Struct(%q,%d);if e!=nil{return e};", m.name, g.alias, m.name, g.alias, m.name, count)
-	fmt.Fprintf(&des, "\nfunc Deserialize%s(d %s.Deserializer)(%s,error){var v %s;", m.name, g.alias, m.name, m.name)
+	fmt.Fprintf(&des, "\nfunc Deserialize%s(d %s.Deserializer)(v %s,e error){", m.name, g.alias, m.name)
 	for i, f := range m.fields {
 		if !f.skip {
 			fmt.Fprintf(&des, "var seen%d bool;", i)
 		}
 	}
-	fmt.Fprintf(&des, "e:=d.Struct(%q,[]string{", m.name)
+	fmt.Fprintf(&des, "e=d.Struct(%q,[]string{", m.name)
 	for _, f := range m.fields {
 		if !f.skip {
 			fmt.Fprintf(&des, "%q,", f.wire)
@@ -860,7 +860,8 @@ func (g *generator) emitModel(m model) error {
 	}
 	des.WriteString("}};")
 	for i, f := range m.fields {
-		if !f.skip && !f.def {
+		_, optional := g.option(f.typ)
+		if !f.skip && !f.def && !optional {
 			fmt.Fprintf(&des, "if !seen%d{return %s.AtField(%s.NewError(\"MissingField\",\"required field missing\"),%q)};", i, g.alias, g.alias, f.wire)
 		}
 	}
@@ -869,13 +870,19 @@ func (g *generator) emitModel(m model) error {
 	// back if an enclosing decode later fails.
 	if m.attrs.derive["Deserialize"] {
 		for i, f := range m.fields {
-			if !f.def && !f.skip {
+			_, optional := g.option(f.typ)
+			if !f.def && !f.skip && !optional {
 				continue
 			}
 			if err := g.validateExtra(f.typ, "Default"); err != nil {
 				return fmt.Errorf("serde default/skip field %s: %w", f.name, err)
 			}
 			value, err := deriveextras.DefaultValue(f.typ)
+			// The registered builtin's canonical None is nil. No payload Default is
+			// consulted, and no type argument is re-resolved inside the visitor scope.
+			if optional {
+				value = "nil"
+			}
 			if err != nil {
 				return g.err(f.typ, fmt.Sprintf("serde default/skip field %s: %v", f.name, err))
 			}
@@ -896,6 +903,23 @@ func (g *generator) emitModel(m model) error {
 	}
 	return nil
 }
+
+// option recognizes only metadata registered by the builtin enum lowerer.
+// Aliases, imported generic names and arbitrary shape-compatible types do not
+// acquire Option's missing-field behavior.
+func (g *generator) option(t ast.Expr) (*enums.Decl, bool) {
+	indexed, ok := t.(*ast.IndexExpr)
+	if !ok {
+		return nil, false
+	}
+	name, ok := indexed.X.(*ast.Ident)
+	if !ok || name.Name != "Option" {
+		return nil, false
+	}
+	d := g.enumDecls[g.typeName(t)]
+	return d, d != nil && d.Family == "Option"
+}
+
 func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error) {
 	g.next++
 	s := fmt.Sprintf("__hgo_write%d", g.next)
@@ -941,6 +965,27 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 			w = "return Serialize" + typ + "(s,&v)"
 			b = "return Deserialize" + typ + "(d)"
 		}
+	case *ast.IndexExpr:
+		option, ok := g.option(t)
+		if !ok {
+			return "", "", g.err(t, "serde supports only registered builtin Option[T] instantiations")
+		}
+		cs, cr, e := g.codec(t.Index, wantS, wantR)
+		if e != nil {
+			return "", "", e
+		}
+		// Bind the concrete case at package scope: payload type names may be s/d/v,
+		// which are also ordinary helper parameter names. The alias is compiler-owned
+		// and is namespaced with the other helpers during multi-file lowering.
+		caseType := s + "_option_case"
+		if wantS {
+			fmt.Fprintf(&g.helpers, "type %s = %s\n", caseType, option.Variants[0].CaseName)
+		}
+		w = "switch item:=v.(type){case nil:return s.None();case " + caseType + ":return s.Some(func(s " + a + ".Serializer)error{return " + cs + "(s,item.Value)});default:return " + a + ".NewError(" + a + ".Type,\"invalid enum Option\") }"
+		// Some has no phantom argument: infer its type from the statically typed
+		// decoded payload, avoiding local names capturing a repeated type argument.
+		some := strings.Split(option.Variants[0].Constructor, "[")[0]
+		b = "e=d.Option(" + a + ".VisitorFuncs{OnNone:func()error{return nil},OnSome:func(d " + a + ".Deserializer)error{x,e:=" + cr + "(d);if e!=nil{return e};v=" + some + "(x);return nil}});return v,e"
 	case *ast.StarExpr:
 		cs, cr, e := g.codec(t.X, wantS, wantR)
 		if e != nil {
@@ -962,7 +1007,12 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 			assign = "v[i]=x"
 			finish = "if i!=len(v){return " + a + ".NewError(\"Type\",\"wrong array length\")};"
 		} else {
-			b = "v=make(" + typ + ",0);"
+			// Resolve allocation types outside reader parameter/result scope.
+			containerType := r + "_container"
+			if wantR {
+				fmt.Fprintf(&g.helpers, "type %s = %s\n", containerType, typ)
+			}
+			b = "v=make(" + containerType + ",0);"
 		}
 		b += "e=d.Seq(" + a + ".VisitorFuncs{OnSeq:func(q " + a + ".SeqAccess)error{i:=0;for{ok,e:=q.NextElement(func(d " + a + ".Deserializer)error{" + init + "x,e:=" + cr + "(d);if e!=nil{return e};" + assign + ";return nil});if e!=nil{return e};if !ok{break};i++};" + finish + "return nil}});return v,e"
 	case *ast.MapType:
@@ -975,7 +1025,11 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 			return "", "", e
 		}
 		w = "q,e:=s.Map(len(v));if e!=nil{return e};for k,x:=range v{if e:=q.Entry(func(s " + a + ".Serializer)error{return s.String(k)},func(s " + a + ".Serializer)error{return " + cs + "(s,x)});e!=nil{return e}};return q.End()"
-		b = "v=make(" + typ + ");e=d.Map(" + a + ".VisitorFuncs{OnMap:func(q " + a + ".MapAccess)error{for{var k string;ok,e:=q.NextKey(func(d " + a + ".Deserializer)error{var e error;k,e=" + a + ".ReadString(d);return e});if e!=nil{return e};if !ok{break};if _,ok:=v[k];ok{return " + a + ".AtField(" + a + ".NewError(\"DuplicateField\",\"duplicate map key\"),k)};if e:=q.NextValue(func(d " + a + ".Deserializer)error{x,e:=" + cr + "(d);if e!=nil{return e};v[k]=x;return nil});e!=nil{return e}};return nil}});return v,e"
+		containerType := r + "_container"
+		if wantR {
+			fmt.Fprintf(&g.helpers, "type %s = %s\n", containerType, typ)
+		}
+		b = "v=make(" + containerType + ");e=d.Map(" + a + ".VisitorFuncs{OnMap:func(q " + a + ".MapAccess)error{for{var k string;ok,e:=q.NextKey(func(d " + a + ".Deserializer)error{var e error;k,e=" + a + ".ReadString(d);return e});if e!=nil{return e};if !ok{break};if _,ok:=v[k];ok{return " + a + ".AtField(" + a + ".NewError(\"DuplicateField\",\"duplicate map key\"),k)};if e:=q.NextValue(func(d " + a + ".Deserializer)error{x,e:=" + cr + "(d);if e!=nil{return e};v[k]=x;return nil});e!=nil{return e}};return nil}});return v,e"
 	default:
 		return "", "", g.err(t, "unsupported field type "+typ)
 	}

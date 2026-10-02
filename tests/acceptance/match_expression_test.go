@@ -59,8 +59,8 @@ func TestLiteral(t *testing.T){if raw()!="first\nsecond"{t.Fatalf("raw=%q",raw()
 
 func TestMatchExpressionUnsupportedContexts(t *testing.T) {
 	cases := map[string]string{
-		"inferred var":        `func f(x E){var value = match x {E::A=>1,E::B=>2,};_=value}`,
-		"short declaration":   `func f(x E){value := match x {E::A=>1,E::B=>2,};_=value}`,
+		"mixed inferred var":  `func f(x E){var value = match x {E::A=>1,E::B=>"no",};_=value}`,
+		"nil inference":       `func f(x E){value := match x {E::A=>nil,E::B=>nil,};_=value}`,
 		"void return":         `func f(x E){return match x {E::A=>1,E::B=>2,}}`,
 		"multiple return":     `func f(x E)(int,int){return match x {E::A=>1,E::B=>2,}}`,
 		"named return":        `func f(x E)(value int){return match x {E::A=>1,E::B=>2,}}`,

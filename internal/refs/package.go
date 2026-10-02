@@ -50,7 +50,7 @@ func deduplicateIR(files []*ast.File) {
 // permission-bearing signatures, then erases the package as a single operation.
 // Frontend callers bind imported metadata before this check and publish exports
 // only after final Go validation; ordinary Go pointer APIs are not reclassified.
-func FinishPackage(files map[string][]byte, imp types.Importer) (map[string]Result, error) {
+func FinishPackage(files map[string][]byte, imp types.Importer, trusted ...map[string]map[string]bool) (map[string]Result, error) {
 	active := false
 	for _, src := range files {
 		active = active || strings.Contains(string(src), "type __hgo_ref_write[")
@@ -68,7 +68,11 @@ func FinishPackage(files map[string][]byte, imp types.Importer) (map[string]Resu
 		if err != nil {
 			return nil, err
 		}
-		lowered, err := lowerWithFiles(name, restored, imp, false, files)
+		var temps map[string]bool
+		if len(trusted) > 0 {
+			temps = trusted[0][name]
+		}
+		lowered, err := lowerWithFiles(name, restored, imp, false, files, temps)
 		if err != nil {
 			return nil, err
 		}

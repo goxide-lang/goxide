@@ -212,3 +212,12 @@ context; full array values are saved to retain required dereferences/copies.
 Sources without propagation remain untouched, including constant-len exceptions.
 Unevaluated propagation and function-iterator sources/iteration targets remain
 explicit gaps; see RFC 6.14. No new frame guard is introduced in these paths.
+
+Match result placeholders are resolved jointly with question signatures before
+capturing expression facts. A distinct pending nominal type cannot be mistaken
+for a user's interface. Arm types are rechecked without the provisional context,
+then constant-aware assignments are checked against one concrete result type;
+a successful slot resolution restarts package checking. Context witnesses never
+read the assignment target at runtime. Compiler-owned reference match slots are
+explicitly registered for refs.Finish; source names alone grant no initialization
+exception. See RFC 0009's assignment/inference slice.

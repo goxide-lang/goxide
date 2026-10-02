@@ -279,6 +279,7 @@ func declarations() string {
 }
 
 type checker struct {
+	matchReferenceTemps map[string]bool
 	pkg                 *types.Package
 	companions          map[string][]byte
 	filename            string
@@ -363,8 +364,12 @@ func Lower(filename string, source []byte) (Result, error) {
 func lower(filename string, source []byte, imp types.Importer, prepare bool) (Result, error) {
 	return lowerWithFiles(filename, source, imp, prepare, nil)
 }
-func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare bool, files map[string][]byte) (Result, error) {
-	c := &checker{companions: files, filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}, elements: map[string]bool{}}
+func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare bool, files map[string][]byte, trusted ...map[string]bool) (Result, error) {
+	var matchTemps map[string]bool
+	if len(trusted) > 0 {
+		matchTemps = trusted[0]
+	}
+	c := &checker{matchReferenceTemps: matchTemps, companions: files, filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}, elements: map[string]bool{}}
 	// Attributes belong to the later derive pass; preserve their exact source lines.
 	var attrs []struct {
 		line int
@@ -874,7 +879,7 @@ func (c *checker) validate() error {
 				if !local {
 					return fail("package/global references are unsupported")
 				}
-				if len(x.Values) != len(x.Names) {
+				if len(x.Values) != len(x.Names) && !(len(x.Names) == 1 && len(x.Values) == 0 && c.matchReferenceTemps[x.Names[0].Name]) {
 					return fail("uninitialized/tuple reference declarations are unsupported")
 				}
 			}

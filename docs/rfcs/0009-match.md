@@ -152,3 +152,19 @@ hgo 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开放
 没有生成 IIFE、额外函数帧或正常路径 panic。`?` 仍退出最近函数，先前实参副作用保留，后续实参和调用不执行；enum 的非法 Go 表示沿用既有验证器。独立审查修复了 goto、内联闭包 owner 和括号函数类型绑定三个边界，回归见[接受测试](../../tests/acceptance/match_composition_test.go)。
 
 尚未实现且不视为获批延期：任意运算符/短路/字面量内部、普通赋值、局部 `:= match` 推断、方法/动态/跨文件签名/泛型/variadic 参数、表达式块，以及此有限提取器不支持的复杂签名。tuple/record 模式没有扩大。常用组合阶段后先转向公开引用元数据；这些 match 长尾仍留在 T0 清单。
+
+## 普通赋值与局部结果推断切片（2026-10-02）
+
+新增单个既有局部标识符 `x = match ...`、`x := match ...` 和 `var x = match ...`；沿用已支持封闭 enum、guard 和模式，不增加 tuple/record/借用模式。复杂 LHS、多目标和控制头不在本片，必须明确诊断而不是错误地提前 scrutinee 或改变 LHS 求值顺序。
+
+有上下文的赋值使用真实目标变量类型，逐 arm 按原有 Go 可赋值规则检查，包含常量范围与 nil。无上下文推断先要求所有已定型 arm 具有同一真实类型，再检查未类型化常量/nil 是否可赋给该类型；只有未类型化 arm 时要求同一默认类型，统一默认一次。全 nil、不同 defined type、不同默认类型或需要公共 interface/隐式数值转换时明确要求类型补充。别名 spelling 不建立新名义身份，底层布局相同不合并不同类型。
+
+语法阶段保留待解析临时类型；类型阶段与 `?` 签名共同迭代，支持 arm 中的问号和推断出 Result 后再问号。arm 用无赋值上下文的 Go CheckExpr 重新查询，不把临时 pending interface 的默认类型作为结果；每次解析后重新检查整个包，全部类型确定后才保存传播 lowering 的上下文事实。最终 assignment 检查包含具体常量值，不能只用 AssignableTo 代替溢出检查。没有共同类型时不退化成 any。
+
+现有目标类型见证只在编译期读取类型，生成 Go 前删除，不额外读取/取址目标。`=` 展开放在普通块中，最终目标赋值位于 pattern 绑定之外；`:=` 最后才声明用户变量，arm 内同名标识符仍绑定原来的外层变量，无新变量和 goto 的原合法性保留。包级卫生类型 alias 保护 import/builtin 名称，局部类型须在当前位置解析为同一身份；不可命名的私有/遮蔽类型明确诊断，不猜拼写。
+
+推断引用结果复用已有具体引用 alias，保留读写资格。穷尽 expression match 的结果临时量由本次编译逐文件显式登记，成功路径必赋值、失败问号退出；只有登记项允许无 initializer，不按名称前缀放开用户引用零值。此内部例外不改变源级引用初始化语义。跨包导入引用函数结果仍受当前 metadata/type-stage 顺序边界约束，不能借 raw Go 指针自动丢失资格。
+
+[真实模块验收](../../tests/acceptance/match_assignment_test.go)覆盖目标和 arm 一次求值、选中副作用、上下文 1<<63、别名/跨包具名类型、nested match/最近闭包问号、defer/direct recover、外层同名、goto、引用结果及 source 类型诊断。生成模块单独 race/vet，两次产物逐字节一致；15 个拒绝反例包括 mixed/nil/overflow/no-new-variable、复杂LHS/control-header、readonly写/any和未初始化/伪造临时量。类型诊断使用保存的源位置，缺可证明来源仍标 unmapped；不把 CheckExpr 合成表达式坐标冒充源码。生成代码没有新增 IIFE、正常失败 panic 或额外目标读取。
+
+剩余：任意运算符/短路/字面量、复杂目标、动态/方法/其他参数调用、私有不可命名结果和更完整来源映射。这些是工程/表示范围账，不自动改成批准延期。下一先执行多包联合验收，用真实阻断而不是继续扩大模式系统决定收口。

@@ -187,7 +187,8 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		if !strings.HasSuffix(name, ".hgo") {
 			continue
 		}
-		lowered, err := propagate.Lower(name, r.Go, propagate.Config{Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index)})
+		r.matchReferenceTemps = map[string]bool{}
+		lowered, err := propagate.Lower(name, r.Go, propagate.Config{Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index), MatchReferenceTemps: r.matchReferenceTemps})
 		if err != nil {
 			return result, stageError("package propagate.Lower", err)
 		}
@@ -235,7 +236,11 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		}
 		return result, err
 	}
-	finished, err := refs.FinishPackage(bound, imp)
+	matchTemps := map[string]map[string]bool{}
+	for name, r := range result.Files {
+		matchTemps[name] = r.matchReferenceTemps
+	}
+	finished, err := refs.FinishPackage(bound, imp, matchTemps)
 	if err != nil {
 		return result, stageError("package refs.Finish", err)
 	}

@@ -19,10 +19,12 @@ import (
 
 type Conversion struct{ Source, Target, Helper string }
 type Config struct {
-	Families   []enums.Decl
-	From       []Conversion
-	Importer   types.Importer
-	Provenance *sourcemap.Map
+	// MatchReferenceTemps receives only compiler-generated exhaustive match slots.
+	MatchReferenceTemps map[string]bool
+	Families            []enums.Decl
+	From                []Conversion
+	Importer            types.Importer
+	Provenance          *sourcemap.Map
 	// Files contains lowered companion files in the same package, not source
 	// fragments. Each file retains its own import scope. The active filename,
 	// if present, is ignored in favor of Lower's source argument.
@@ -282,7 +284,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if cfg.Namespace != "" && !token.IsIdentifier(cfg.Namespace) {
 		return nil, fmt.Errorf("%s: invalid propagation namespace", filename)
 	}
-	if !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) {
+	if !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) {
 		return source, nil
 	}
 	fs := token.NewFileSet()
@@ -313,11 +315,17 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	// including operands with inference, before replacing each marker's result.
 	seed, _ := parser.ParseFile(fs, "<propagation signatures>", "package "+f.Name.Name+";func "+marker+"[T interface{}](v T) T {return v};func __hgo_enum_infer[T interface{}](v T) {}", 0)
 	f.Decls = append(f.Decls, seed.Decls...)
+	matchSeed, _ := parser.ParseFile(fs, "<match result signatures>", "package "+f.Name.Name+";type "+matchPending+" interface{};func "+matchInfer+"(origin string) "+matchPending+"{return nil};func "+matchContext+"[T interface{}](v T,origin string)T{return v}", 0)
+	f.Decls = append(f.Decls, matchSeed.Decls...)
 	for {
 		l.check()
+		resolved, matchIssue := l.resolveMatchResult()
+		if resolved {
+			continue
+		}
 		changed := false
 		var failure error
-		var unresolved error
+		unresolved := matchIssue
 		ast.Inspect(f, func(n ast.Node) bool {
 			c, ok := n.(*ast.CallExpr)
 			if !ok {
@@ -345,6 +353,10 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 			typ := l.info.TypeOf(c.Args[0])
 			if typ == nil {
 				unresolved = l.fail(c, "cannot determine propagation operand type")
+				return false
+			}
+			if pendingMatchType(typ) {
+				unresolved = l.fail(c, "propagation operand depends on an unresolved match result")
 				return false
 			}
 			d, ok := l.family(typ)
@@ -378,6 +390,13 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 			break
 		}
 	}
+	keptMatch := f.Decls[:0]
+	for _, d := range f.Decls {
+		if !matchSeedDecl(d) {
+			keptMatch = append(keptMatch, d)
+		}
+	}
+	f.Decls = keptMatch
 	l.check()
 	if err := l.inferMatches(); err != nil {
 		return nil, err

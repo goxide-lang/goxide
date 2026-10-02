@@ -821,3 +821,13 @@ switch 研究模块 **1 项**真实 hgo 等价测试另跑 race/vet；非 race *
 [RFC §6.18](docs/rfcs/0005-borrows.md#618-局部值字段替换2026-10-02)明确五类最小用例、资格树成本及剩余边界。取址/捕获根、穿 pointer/索引路径的强更新及 switch/select/goto 精度未完成；不能全部拒绝便称字段能力已完成，也没有以猜测别名关系放行。无运行时包装、独占承诺、全程序 alias 分析或自动 Go 桥接。下一回到常用 match 与最小联合验收，保留尚未完成的明确工程账。
 
 最终全树 `go test -race -count=1 -json ./...` 通过 **15 个测试包 / 261 个宿主顶层 / 561 个子测试**，另 2 包无测试；全树 vet 通过。新增跨包生成模块 **2 项**业务测试单独 race/vet 通过。设计检查通过 **60 份 Markdown / 736 个本地链接 / 20 篇 RFC** 及 **13 条独立 Go 机制命令**；机制探针不冒充真实 hgo 运行。独立实现和文档复审无剩余阻断。日志 `/tmp/t0-fields-race.json`、`/tmp/t0-fields-race.err`、`/tmp/t0-fields-vet.log`、`/tmp/t0-fields-design.log`；仅工作分支提交推送并 fetch 核验，不修改 main/work 或冻结标签。
+
+## Match 普通赋值与局部推断（2026-10-02）
+
+基于 `562b1dd519ffa1c9e65ac9a3db6c1fe2d9e19749`，单标识符 `x = match` 使用目标真实类型；`x := match` / `var x = match` 统一已定型分支的真实身份，再验证未类型化值可赋值，无 typed 候选时要求同一 Go 默认类型。不同 named/default 类型、全 nil 或不可命名结果给出源位置和显式类型提示，不发明公共超类型/隐式数值转换。类型见证只在编译期存在，输出没有额外读取目标或 IIFE。
+
+match 类型与 `?` 签名联合迭代，重新检查上下文后再进行传播 lowering；常量具体值/运行时 shift 保留目标类型，嵌套 match 和问号仍在原函数。独立审查发现并修复 readonly 结果别名及内部未初始化临时量衔接；临时量只靠逐文件显式登记获得编译器例外，普通用户零值引用和伪造名字仍拒绝。
+
+[真实跨包 CLI 验收](tests/acceptance/match_assignment_test.go)生成模块单独 3 项 race 测试、vet 和两次确定性转译；15 项负例覆盖类型/范围/上下文、原作用域和权限擦除。跨包 named 类型、alias/import shadow、直接 recover/defer、nearest closure、嵌套和双向问号依赖均执行。[RFC](docs/rfcs/0009-match.md)记录准确统一规则和剩余复杂 LHS/表达式上下文、不可命名类型及 imported reference metadata 的阶段边界。下一执行联合验收，整体 MVP 尚不标完成。
+
+最终全树 race 通过 **15 个测试包 / 262 个宿主顶层 / 577 个子测试**，另 2 包无测试；全树 vet 通过。新生成多包模块单独 **3 项** race 测试与 vet 通过。设计检查通过 **60 份 Markdown / 742 个本地链接 / 20 篇 RFC** 及 **13 条独立 Go 机制命令**。独立实现和文档复审无阻断，另真实引用身份/别名可见性 race 探针输出 ok。日志 `/tmp/t0-match-inference-race.json`、`/tmp/t0-match-inference-race.err`、`/tmp/t0-match-inference-vet.log`、`/tmp/t0-match-inference-design.log`；本阶段只推送工作分支并 fetch 核验。

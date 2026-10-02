@@ -20,7 +20,7 @@ func Prepare(filename string, source []byte) (Result, error) {
 // The intermediate generic write constructor is resolved back to concrete reference syntax;
 // Lower then performs complete type checking and validates all consuming sites.
 // Provisional typing here is used only to resolve constructor element types.
-func Finish(filename string, source []byte, imp types.Importer) (Result, error) {
+func Finish(filename string, source []byte, imp types.Importer, trusted ...map[string]bool) (Result, error) {
 	restored, err := restore(filename, source, imp, nil)
 	if err != nil {
 		return Result{}, err
@@ -28,7 +28,7 @@ func Finish(filename string, source []byte, imp types.Importer) (Result, error) 
 	if !strings.Contains(string(source), "type __hgo_ref_write[") {
 		return Result{Source: source}, nil
 	}
-	return lower(filename, restored, imp, false)
+	return lowerWithFiles(filename, restored, imp, false, nil, trusted...)
 }
 func restore(filename string, source []byte, imp types.Importer, files map[string][]byte) ([]byte, error) {
 	if len(files) == 0 && !strings.Contains(string(source), "type __hgo_ref_write[") {

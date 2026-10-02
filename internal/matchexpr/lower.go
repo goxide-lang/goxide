@@ -11,6 +11,7 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
+	"strconv"
 	"strings"
 )
 
@@ -295,26 +296,39 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 				return nil, fail(i, "return requires one unnamed concrete result type")
 			}
 			typ = funcs[owner].result
-		} else if i > 0 && ts[i-1].k == token.ASSIGN {
-			j := i - 2
-			for j >= 0 && ts[j].k != token.SEMICOLON && ts[j].k != token.LBRACE && ts[j].k != token.RBRACE {
-				if ts[j].k == token.VAR {
-					break
-				}
-				j--
-			}
-			if j < 0 || ts[j].k != token.VAR || j+3 >= i || ts[j+1].k != token.IDENT {
-				return nil, fail(i, "use a single explicitly typed local var initializer")
-			}
+		} else if i > 1 && (ts[i-1].k == token.ASSIGN || ts[i-1].k == token.DEFINE) {
 			if owner < 0 {
 				return nil, fail(i, "package-level match initializer unsupported")
 			}
-			start = j
-			mode = "var"
-			name = ts[j+1].s
-			typ = strings.TrimSpace(string(src[ts[j+2].a:ts[i-1].a]))
-			if _, e := parser.ParseExpr(typ); e != nil {
-				return nil, fail(i, "invalid or unsupported explicit result type")
+			j := i - 2
+			for j >= 0 && ts[j].k != token.SEMICOLON && ts[j].k != token.LBRACE && ts[j].k != token.RBRACE && ts[j].k != token.VAR {
+				j--
+			}
+			if j >= 0 && ts[j].k == token.VAR && ts[i-1].k == token.ASSIGN {
+				if j+2 > i-1 || ts[j+1].k != token.IDENT {
+					return nil, fail(i, "use a single local var initializer")
+				}
+				start = j
+				name = ts[j+1].s
+				mode = "var"
+				if j+2 == i-1 {
+					mode = "varinfer"
+				} else {
+					typ = strings.TrimSpace(string(src[ts[j+2].a:ts[i-1].a]))
+					if _, e := parser.ParseExpr(typ); e != nil {
+						return nil, fail(i, "invalid or unsupported explicit result type")
+					}
+				}
+			} else {
+				start = i - 2
+				if ts[start].k != token.IDENT || ts[start].s == "_" || start == 0 || (ts[start-1].k != token.SEMICOLON && ts[start-1].k != token.LBRACE && ts[start-1].k != token.RBRACE) {
+					return nil, fail(i, "match assignment requires a single local identifier in a statement; use a typed local var for complex targets or control headers")
+				}
+				name = ts[start].s
+				mode = "assign"
+				if ts[i-1].k == token.DEFINE {
+					mode = "infer"
+				}
 			}
 		} else {
 			if i > 0 {
@@ -342,7 +356,24 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		}
 		tmp := c.temp()
 		var b strings.Builder
-		fmt.Fprintf(&b, "var %s %s;\n", tmp, typ)
+		if mode == "assign" || mode == "infer" || mode == "varinfer" {
+			pos := f.Position(token.Pos(f.Base() + ts[i].a))
+			origin := pos.String()
+			if provenance != nil {
+				origin = "[generated/unmapped] " + origin
+				if seg := provenance.Lookup(ts[i].a); seg != nil && seg.Origin != nil {
+					o := seg.Origin
+					origin = fmt.Sprintf("%s:%d:%d", o.File, o.Line, o.Column)
+				}
+			}
+			if mode == "assign" {
+				fmt.Fprintf(&b, "var %s = __hgo_match_expr_context(%s,%s);\n", tmp, copySource(ts[start].a, ts[start].b), strconv.Quote(origin))
+			} else {
+				fmt.Fprintf(&b, "var %s = __hgo_match_expr_infer(%s);\n", tmp, strconv.Quote(origin))
+			}
+		} else {
+			fmt.Fprintf(&b, "var %s %s;\n", tmp, typ)
+		}
 		body, err := c.assign(i, end+1, tmp, typ)
 		if err != nil {
 			return nil, err
@@ -351,10 +382,20 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 
 		if mode == "return" {
 			fmt.Fprintf(&b, "return %s", tmp)
+		} else if mode == "assign" {
+			fmt.Fprintf(&b, "%s = %s", copySource(ts[start].a, ts[start].b), tmp)
+		} else if mode == "infer" {
+			fmt.Fprintf(&b, "%s := %s", copySource(ts[start].a, ts[start].b), tmp)
+		} else if mode == "varinfer" {
+			fmt.Fprintf(&b, "var %s = %s", name, tmp)
 		} else {
 			fmt.Fprintf(&b, "var %s %s = %s", name, typ, tmp)
 		}
-		edits = append(edits, edit{ts[start].a, ts[end].b, b.String()})
+		text := b.String()
+		if mode == "assign" {
+			text = "{\n" + text + "\n}"
+		}
+		edits = append(edits, edit{ts[start].a, ts[end].b, text})
 		i = end
 	}
 	var out bytes.Buffer

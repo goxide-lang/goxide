@@ -4,6 +4,7 @@ package frontend
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/hxsf/goxide/internal/deriveextras"
 	"github.com/hxsf/goxide/internal/enums"
@@ -27,6 +28,7 @@ import (
 )
 
 type Result struct {
+	matchReferenceTemps     map[string]bool
 	Diagnostics             *sourcemap.Map
 	Go, SourceMap, Expanded []byte
 	Enums                   []enums.Decl
@@ -746,6 +748,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			return Result{}, err
 		}
 	}
+	matchReferenceTemps := map[string]bool{}
 	if cfg == nil && (bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_"))) {
 		conversions := []propagate.Conversion{}
 		for _, m := range ordered {
@@ -754,7 +757,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 		}
 		imp := typecheck.NewImporter(filename)
-		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp, Provenance: provenance})
+		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
 		}
@@ -764,7 +767,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		out = printed[filename]
 		beforeReferences := out
-		refResult, e = refs.Finish(filename, out, imp)
+		refResult, e = refs.Finish(filename, out, imp, matchReferenceTemps)
 		if e != nil {
 			return Result{}, stageError("refs.Finish", e)
 		}
@@ -823,7 +826,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "deriveFields": deriveFields, "macroTokens": expanded.Origins, "macroTokenInputStage": "propagate.Prepare output", "references": refResult.References, "diagnostics": provenance, "sourceBytes": len(originalSource), "note": "diagnostics uses final Go byte offsets; generated/unmapped regions have no proven source; macroTokens uses macro expansion offsets"}, "", "  ")
-	return Result{Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
+	return Result{matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer
@@ -1205,5 +1208,9 @@ func (g *generator) emitEnum(m model) error {
 // Legacy passes still report coordinates in their own transformed buffers.
 // Preserve their errors, but never present those coordinates as original spans.
 func stageError(stage string, err error) error {
+	var located interface{ SourceDiagnostic() bool }
+	if errors.As(err, &located) && located.SourceDiagnostic() {
+		return fmt.Errorf("%s: %w", stage, err)
+	}
 	return fmt.Errorf("%s [generated/unmapped; intermediate coordinates]: %w", stage, err)
 }

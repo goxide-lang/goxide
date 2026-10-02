@@ -1,6 +1,6 @@
 # RFC 0006：按 serde-rs 分层的 serde 核心与格式适配
 
-状态：用户已确定“仿照 serde-rs 的实现”，覆盖此前助手提出的统一 core Value、CoreValue-v1 和首版必须建完整树等候选。已确定 serde 优先、首版 JSON、未来 YAML 独立适配；下文 Go/hgo ABI、支持子集与本地策略仍是实施候选，不声称完整 Rust 兼容。没有 serde 或宏前端实现，冻结标签 `v0.0.0-mvp-doc` 不变。
+状态：用户已确定“仿照 serde-rs 的实现”，覆盖此前助手提出的统一 core Value、CoreValue-v1 和首版必须建完整树等候选。已确定 serde 优先、首版 JSON、未来 YAML 独立适配；下文 Go/hgo ABI、支持子集与本地策略仍是实施候选，不声称完整 Rust 兼容。初稿时尚无 serde 或宏前端实现；当前有限实现见末节，冻结标签 `v0.0.0-mvp-doc` 不变。
 
 当前D27补充：语言只保留封闭变体enum。unit变体可用serde rename映射外部字符串，或完整显式int64 value映射数字；未知外部值返回UnknownVariant，业务validator延期。它不新增开放raw enum，不改变Clone/Debug身份；真实边界见[枚举专题](../../design/enums-and-match.md#01-封闭-enum-与外部映射)。
 
@@ -184,13 +184,21 @@ Serialize/Deserialize derive 不自动生成或调用 Go MarshalJSON/UnmarshalJS
 
 ## 7. 字段属性、缺失与 null 的真实语义
 
-首版建议支持 Serialize/Deserialize 独立派生及 rename、default、skip、skip_serializing_if 的有限形式；未知字段默认消费并忽略，deny_unknown_fields 可改为错误。skip_deserializing/skip_serializing 可以后续分批，不把不识别的属性静默忽略。参照[官方字段属性](https://serde.rs/field-attrs.html)，精确拼写/支持子集仍待实现登记。
+当前有限实现支持 Serialize/Deserialize 独立派生及字段 rename、default、skip；未知字段默认消费并忽略，容器 deny_unknown_fields 可改为错误。skip_serializing_if、skip_deserializing/skip_serializing、容器级 default 和自定义默认工厂仍后置，不把不识别的属性静默忽略。设计参考[官方字段属性](https://serde.rs/field-attrs.html)，不承诺完整属性兼容。
 
-- required 字段缺失报 MissingField；default 仅字段缺失时调用一次已选择的工厂/Default。普通 T 的 null 类型错误不触发 default；false/0/空字符串不是 missing。
-- Option 字段按 Serde 风格可以缺失为 None，显式 null 同样是 None。`Option[Option[T]]` 的普通派生并不能自动保存 PATCH 的三态；Some(None) 与 None 默认 JSON 都可能为 null，不宣称往返可逆。
+- required 字段缺失报 MissingField；default 仅字段缺失时调用一次已登记的 Default。显式值始终按目标 codec 解码：普通 T 的 null 类型错误不触发 default，允许 null 的类型仍按原语义接收；false/0/空字符串不是 missing，未知 enum 变体和错误 payload 不回退为默认值。
+- 后续 Option serde 方向（当前尚未接通内建 Option 派生）：字段按 Serde 风格可以缺失为 None，显式 null 同样是 None。`Option[Option[T]]` 的普通派生并不能自动保存 PATCH 的三态；Some(None) 与 None 默认 JSON 都可能为 null，不宣称往返可逆。
 - PATCH 要求缺失=不改、null=清空、值=设置时，应显式选择字段级 adapter/包装类型，跟踪字段存在性，例如库候选 `PatchField[T]`。它不是核心 Value 节点；默认值给 Missing，字段存在时的 custom deserializer 负责 Null/Value，序列化用 skip_if_missing。首版可先手写 DTO visitor，不为了它增加语言新类型。
-- skip 双向省略，并为解码提供默认构造；没有合法构造或缺字段协议报派生错误。未知/skip 字段仍消费完整值且计入预算。
+- skip 编码时省略字段；解码时忽略输入内容，完整消费并验证其格式与预算，不调用该字段 codec；不论输入中是否存在该字段，成功构造时调用一次已登记的 Default。带 Deserialize 的 default/skip 字段缺少 Default 时在派生阶段诊断，Serialize-only 不要求解码 Default。
 - rename 后冲突在派生阶段诊断；重复已知字段在 visitor 中检查，不以零值判断出现与否。私有字段会参与本包生成代码，敏感字段需显式 skip/自定义。
+
+### 7.1 字段 Default 接入与兼容变化
+
+这是从旧原型 Go 零值策略到协议调用的显式兼容变化：缺失的 `#[serde(default)]` 和解码 `#[serde(skip)]` 字段复用语言 Default 登记，不以同名普通函数认领协议，不在缺协议时退回 Go 零值。标量、同包派生 Default 和同包手动 `impl Default for T { func default() T { ... } }` 沿用当前规则；enum 仅选中默认变体的 payload 要求 Default。跨文件解析保留包与类型身份，跨包协议消费仍不支持。
+
+每个 struct visitor 完成字段读取和全部 required 检查后，按字段声明顺序为本层缺失 default 字段和全部 skip 字段调用 Default。显式字段不调用 Default。读取或 required 检查失败时不开始本层默认构造；嵌套字段自己的解码和默认构造可能已经执行，其外部副作用不回滚。此顺序不承诺整个 JSON 文档后续失败时回滚。
+
+旧代码中缺少 Default 的 skipped 字段现在会在带 Deserialize 派生时拒绝，包括原生指针、slice/map/数组等当前无 Default 的类型。原生 `*T` 的 codec 仍允许显式 null；这不授予 `*T` Default，故它不能标记解码 default/skip。需要业务默认构造时可使用具有已登记手动 Default 的本地 struct。没有新增容器级 default、函数路径属性、Option serde 或完整 trait 后端。
 
 业务矩阵：配置 retries 缺失走 default，0 原样，null 报错；PATCH display_name 的 `{}`、`null`、`"Ada"` 仅通过明确三态 adapter 区分；事件 Idle 为字符串、Named 为外标记；JSON Number 保留大订单 ID。错误输入不吞成业务默认，不把 serde 错误自动选到某个 thiserror variant（仍按 D22 显式 From）。
 
@@ -229,14 +237,14 @@ JSON Value 不能保存 YAML 任意键、tag/锚点身份或注释；跨格式�
 
 首版后置：完整泛型 trait ABI、借用式零复制/生命周期、公开 Seed 高级协议、untagged/flatten、YAML、所有格式的特殊节点与通用语义 IR。原因分别是当前前端能力、额外状态机/歧义、范围与真实需求；不是恢复风险分析准入。
 
-本轮只做官方文档/源码核对和规格修订，S01–S12 均为待实现。现有检查不验证 serde/derive/Visitor 已运行。用户已决定仿照 serde-rs，不再询问是否采用该架构；后续只需逐项冻结 Go ABI/严格 JSON 策略及实际支持子集。
+初稿阶段只做官方文档/源码核对和规格修订，当时 S01–S12 均为待实现。当前有限实现和真实执行证据见末节及验收矩阵，不能将初稿检查当作运行证据。用户已决定仿照 serde-rs，不再询问是否采用该架构；后续只需逐项冻结 Go ABI/严格 JSON 策略及实际支持子集。
 
 ## 11. 被替代候选与一致性自审
 
 前稿的公开 core Value、Record/Variant 节点、CoreValue-v1 固定映射、通用 serde.to_value、首版必建全树不再是推荐架构；统一 unit object、Option 标签封装、bytes 默认 Base64 同样撤回，除非未来作为用户显式 adapter 另提。保留的是数字精度、字段存在性、错误路径、预算和 Go 边界需求，并将其放回正确层次。
 
-自审反例：JSON 动态单键 object 不恢复 enum；Option(null) 不保存 PATCH 三态；MapAccess 不消费 value 不能前进；精确 Number 不等于核心新增 Decimal；协议有 struct/enum 不意味着 Value 有这些节点；Go helper 有错误转换不等于 ? 已实现。当前选择不改变 D05/D06/D11，不移动基线标签，不开始宏实现。
+自审反例：JSON 动态单键 object 不恢复 enum；Option(null) 不保存 PATCH 三态；MapAccess 不消费 value 不能前进；精确 Number 不等于核心新增 Decimal；协议有 struct/enum 不意味着 Value 有这些节点；Go helper 有错误转换不等于 ? 已实现。当前选择不改变 D05/D06/D11，不移动基线标签；初稿未开始宏实现，后续有限实现另行验收。
 
 ## 实现分支进展（不冻结 ABI）
 
-具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。此结果不代表本 RFC 的泛型、enum 派生、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。
+具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。当前已接通有限封闭 enum 派生及字段 default/skip 的已登记 Default 调用；此结果不代表本 RFC 的泛型、全部 enum 表示、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。

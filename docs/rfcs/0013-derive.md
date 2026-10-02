@@ -93,6 +93,7 @@ struct Exclusive {
 - enum 的 Default 要求恰好一个 `#[default]` 变体；按字段声明顺序构造其 payload。缺少或重复标记、选中字段缺协议及非法属性位置均拒绝；不检查非选中变体的 Default。
 - Result 不自动取得 Default；nil 不因 Default 或 Go 零值存在就成为合法 Result / 非空引用。
 - 泛型 `var value T` 不能冒充 Default；容器需明确逐项调用选中的构造。
+- 字段 serde(default/skip) 解码调用已登记 Default，缺协议拒绝；default 只处理缺失，skip 忽略输入并默认构造一次。本层读取及 required 检查后按声明顺序调用，显式值/错误不回退默认。Serialize-only 无解码 Default 约束。此项替代旧 Go 零值策略，详见 [serde RFC](research/0006-serde-core-and-formats.md#71-字段-default-接入与兼容变化)。
 - 容器 Clone 必须说明存储、元素和别名行为；Go `slices.Clone` 不自动等于逐元素 Clone。
 - Debug 展示struct字段名和内容、enum源变体名和payload，包括私有业务数据；serde rename/value不改变显示。不自动脱敏，不绕过锁权限，不通过反射/Stringer/error兜底，也不是稳定序列化格式。
 - Default 无接收者、Clone 返回具体 Self；不得抹成 `any` 塞进统一运行时接口。

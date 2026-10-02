@@ -148,7 +148,7 @@ func TestExplicitDefaultAndGoZero(t *testing.T){
  if stateName(hygienicDefaults().State)!="standby"{t.Fatal("macro captured local Default helper")}
  var zero Settings;if zero.State!=nil||make([]Settings,1)[0].State!=nil||(map[string]Settings{})["missing"].State!=nil{t.Fatal("Default altered Go zero initialization")}
  rejected:=false;func(){defer func(){rejected=recover()!=nil}();_=stateName(zero.State)}();if !rejected{t.Fatal("Default legalized raw nil enum")}
- decoded,err:=serdejson.Unmarshal([]byte("{}"),DeserializeWireDefault);if err!=nil||decoded.State!=nil{t.Fatal("serde(default) silently acquired Default semantics",err)}
+ decoded,err:=serdejson.Unmarshal([]byte("{}"),DeserializeWireDefault);if err!=nil||stateName(decoded.State)!="standby"{t.Fatal("serde(default) did not call selected Default",err)}
 }
 func TestPrintFormsAndEvaluation(t *testing.T){
  if got:=capturePrint(t,printForms);got!="{}\n\ntail\n\n"{t.Fatalf("LF/braces: %q",got)}

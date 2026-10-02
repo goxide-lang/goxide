@@ -502,8 +502,14 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	for _, m := range ordered {
+		needsDefault := m.attrs.derive["Default"]
+		if m.attrs.derive["Deserialize"] {
+			for _, field := range m.fields {
+				needsDefault = needsDefault || field.def || field.skip
+			}
+		}
 		for _, n := range []string{"bool", "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", "byte", "rune", "error"} {
-			if declared[n] || (m.attrs.derive["Default"] && cfg != nil && cfg.named[n] != nil) {
+			if declared[n] || (needsDefault && cfg != nil && cfg.named[n] != nil) {
 				return fail(m.line, "predeclared type shadowing is unsupported by derive: "+n)
 			}
 		}
@@ -845,7 +851,7 @@ func (g *generator) emitModel(m model) error {
 			return e
 		}
 		fmt.Fprintf(&ser, "if e:=w.Field(%q,func(s %s.Serializer)error{return %s(s,v.%s)});e!=nil{return e};", f.wire, g.alias, s, f.name)
-		fmt.Fprintf(&des, "case %q:if seen%d{return %s.NewError(\"DuplicateField\",\"duplicate field \"+k)};seen%d=true;if e:=a.NextValue(func(d %s.Deserializer)error{var e error;v.%s,e=%s(d);return e});e!=nil{return e};", f.wire, i, g.alias, i, g.alias, f.name, r)
+		fmt.Fprintf(&des, "case %q:if seen%d{return %s.NewError(\"DuplicateField\",\"duplicate field \"+k)};seen%d=(0==0);if e:=a.NextValue(func(d %s.Deserializer)error{var e error;v.%s,e=%s(d);return e});e!=nil{return e};", f.wire, i, g.alias, i, g.alias, f.name, r)
 	}
 	if m.attrs.deny {
 		fmt.Fprintf(&des, "default:return %s.AtField(%s.NewError(\"UnknownField\",\"unknown field\"),k);", g.alias, g.alias)
@@ -856,6 +862,28 @@ func (g *generator) emitModel(m model) error {
 	for i, f := range m.fields {
 		if !f.skip && !f.def {
 			fmt.Fprintf(&des, "if !seen%d{return %s.AtField(%s.NewError(\"MissingField\",\"required field missing\"),%q)};", i, g.alias, g.alias, f.wire)
+		}
+	}
+	// Finish reading and validate required fields before constructing this
+	// struct's missing/skipped fields. Nested visitor side effects are not rolled
+	// back if an enclosing decode later fails.
+	if m.attrs.derive["Deserialize"] {
+		for i, f := range m.fields {
+			if !f.def && !f.skip {
+				continue
+			}
+			if err := g.validateExtra(f.typ, "Default"); err != nil {
+				return fmt.Errorf("serde default/skip field %s: %w", f.name, err)
+			}
+			value, err := deriveextras.DefaultValue(f.typ)
+			if err != nil {
+				return g.err(f.typ, fmt.Sprintf("serde default/skip field %s: %v", f.name, err))
+			}
+			if f.skip {
+				fmt.Fprintf(&des, "v.%s=%s;", f.name, value)
+			} else {
+				fmt.Fprintf(&des, "if !seen%d{v.%s=%s};", i, f.name, value)
+			}
 		}
 	}
 	des.WriteString("return nil}});return v,e}\n")

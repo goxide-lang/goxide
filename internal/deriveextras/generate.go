@@ -65,7 +65,7 @@ func Generate(kind string, spec *ast.TypeSpec) (string, map[string]string, error
 		fmt.Fprintf(&b, "func Default%s() %s { var out %s\n", spec.Name.Name, spec.Name.Name, spec.Name.Name)
 		for _, f := range s.Fields.List {
 			for _, n := range f.Names {
-				x, e := defaultValue(f.Type)
+				x, e := DefaultValue(f.Type)
 				if e != nil {
 					return "", nil, fmt.Errorf("field %s: %w", n.Name, e)
 				}
@@ -213,7 +213,7 @@ func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) 
 		argument := ""
 		if selected.Type != nil {
 			var err error
-			argument, err = defaultValue(selected.Type)
+			argument, err = DefaultValue(selected.Type)
 			if err != nil {
 				return "", nil, fmt.Errorf("default variant %s: %w", selected.Name, err)
 			}
@@ -255,14 +255,14 @@ func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) 
 	return b.String(), g.imports, nil
 }
 
-// defaultValue selects only explicit prototype implementations. Local named
+// DefaultValue selects only explicit prototype implementations. Local named
 // helper identity is validated by the frontend, never inferred from spelling.
-func defaultValue(t ast.Expr) (string, error) {
+func DefaultValue(t ast.Expr) (string, error) {
 	switch x := t.(type) {
 	case *ast.Ident:
 		switch x.Name {
 		case "bool":
-			return "false", nil
+			return "(0 != 0)", nil
 		case "string":
 			return `""`, nil
 		case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "byte", "rune", "float32", "float64":

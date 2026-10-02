@@ -237,9 +237,11 @@ pub enum Mode {
 
 历史实现基准 `47af69f` 采用具体 helper `DefaultType() Type`，支持基础标量字段、同包已派生字段、空 struct、唯一指定无 payload 变体和具体 Option None。该选择沿第 5.5 节普通 Go 函数降低方向，不冻结通用静态 trait ABI。宏按显式 derive 登记 helper 身份，调用方局部同名函数不截获。
 
-该历史版本拒绝带 payload 的默认标记；当前规则已允许它，并只检查选中字段。缺失/重复默认标记、未登记协议、Result/引用/容器/外部类型自动默认仍明确拒绝。Option 的 None 在当前 ABI 为 nil，不代表其他 enum 的 nil 合法。Go var/make/map 缺失读取保持原零值；现有 `#[serde(default)]` 仍是原型的缺失字段 Go 零值策略，不自动调用这个新 Default helper。后续扩展若改变该行为需单独处理兼容性，不能让本次语言 Default 静默修改 wire 契约。真实正反例见 [独立验收](../../tests/acceptance/print_default_test.go)。
+该历史版本拒绝带 payload 的默认标记；当前规则已允许它，并只检查选中字段。缺失/重复默认标记、未登记协议、Result/引用/容器/外部类型自动默认仍明确拒绝。Option 的 None 在当前 ABI 为 nil，不代表其他 enum 的 nil 合法。Go var/make/map 缺失读取保持原零值。历史原型的 `#[serde(default)]` 曾保留缺失字段 Go 零值；当前字段 serde(default/skip) 已显式改为调用登记的 Default，属于兼容变化，见 [serde 字段规则](../rfcs/research/0006-serde-core-and-formats.md#71-字段-default-接入与兼容变化)。真实正反例见 [独立验收](../../tests/acceptance/print_default_test.go)。
 
 当前手动协议入口为 `impl Default for T { func default() T { ... } }`，限同包本地非泛型 struct；函数零参数并返回目标具体类型，嵌套 derive 调用登记实现。按包与类型身份检查唯一性，手动与 derive 冲突、错误签名及不受支持的递归协议依赖均拒绝。同名普通 Default helper 不取得协议身份，跨包消费与完整 trait 后端仍后置。enum 非默认变体的 payload 不要求 Default。
+
+字段级 serde(default/skip) 的解码沿用该登记：default 仅缺失时调用，skip 无论输入是否存在均默认构造一次；本层读取及 required 检查成功后按字段声明顺序调用。缺协议拒绝，不悄悄用 Go 零值替代；Serialize-only 无此解码要求。原生指针可解码 null，但没有 Default，故不能作为解码 default/skip 字段。嵌套默认构造的副作用不回滚。
 
 ### 5.3 Clone：字段协议决定复制内容
 

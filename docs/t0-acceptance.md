@@ -43,7 +43,7 @@
 | 使用点拒绝非法 enum Go 值：nil/typed-nil/case 指针/伪造值先于 wildcard 副作用；serde 编码返回错误 | 完整（具体子能力） | 用户必需边界说明；全入口/初始化/任意对象图校验可后置，不能称 Go 调用者无法造非法值 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumInvalidBoundaryRace`；[enum_serde_test.go](../tests/acceptance/enum_serde_test.go)：`TestEnumSerdeBusinessRace`（`TestEnumInvalidGoBoundaryReturnsError`）；[match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestBuiltinMatchExpressionRace`（`TestInvalidBuiltinBeforeEffect`） |
 | 数值/string 外部枚举映射 | 有限 | 封闭 unit enum 的 serde 映射；开放 raw/C enum 已撤回 | [独立业务验收](../tests/acceptance/enum_wire_test.go)：已知往返、未知报错、未执行业务、Go 调用与生成race |
 | serde 核心 Serializer/Deserializer、Visitor/Access 与结构化错误/cause；格式独立 | 有限 | 用户必需 D23；完整协议扩展、借用解码和用户实现协议后续逐项验收 | [core_test.go](../serde/core_test.go)：`TestErrorPathAndCause`、`TestVisitorDefaultsAndCallbackErrors`、`TestScalarReaders`、`TestScalarProtocolFailures`；[json_test.go](../serdejson/json_test.go)：`TestCallbacksAndStates`、`TestIgnoredProtocolErrorsRemainErrors` |
-| 具体 struct JSON：标量、本地嵌套、数组/slice/string-key map、原生 Go `*T` 可空；rename/default/skip/deny_unknown_fields | 有限 | 用户必需首版闭环；default 仅 Go 零值，`*T` 非新引用/Option 桥接 | [serde_test.go](../tests/acceptance/serde_test.go)：`TestSerdeBlackBoxRace`（`TestBusinessRoundtrip`、`TestSkippedFieldAndWhitespace`、`TestNumericBoundaries`、`TestNestedErrorPath`、`TestCycleAndDepthBound`）、`TestUnsupportedSerdeIsDiagnosed`；[compile_test.go](../internal/frontend/compile_test.go)：`TestAttributesCannotBeSilentlyIgnored` |
+| 具体 struct JSON：标量、本地嵌套、数组/slice/string-key map、原生 Go `*T` 可空；rename/default/skip/deny_unknown_fields | 有限 | 用户必需首版闭环；字段 default/skip 解码调用已登记 Default，缺协议拒绝；`*T` 可空但无 Default，非新引用/Option 桥接 | [serde_test.go](../tests/acceptance/serde_test.go)：`TestSerdeBlackBoxRace`（`TestBusinessRoundtrip`、`TestSkippedFieldAndWhitespace`、`TestNumericBoundaries`、`TestNestedErrorPath`、`TestCycleAndDepthBound`）、`TestUnsupportedSerdeIsDiagnosed`；[compile_test.go](../internal/frontend/compile_test.go)：`TestAttributesCannotBeSilentlyIgnored` |
 | JSON 严格数字/Unicode/重复键、无效值和深度限制 | 完整（具体子能力） | 用户必需可信输入路径；不推导支持完整 Rust serde/全部格式 | [json_test.go](../serdejson/json_test.go)：`TestScalarsAndStrictNumbers`、`TestStrictSyntaxEvenSkipped`；`TestSerdeBlackBoxRace` 内 `TestInputRejections`、`TestEncodingRejectsInvalidValues`、`TestZeroAndTinyNumbers` |
 | 真实 enum serde：unit 字符串/newtype 单键外标记对象，struct/container 嵌套，Variant 路径 | 有限 | 用户必需既定顺序；变体属性、复杂/泛型/递归 payload、内建 Option/Result serde 后置 | [enum_serde_test.go](../tests/acceptance/enum_serde_test.go)：`TestEnumSerdeBusinessRace`（`TestEnumWireAndRoundTrip`、`TestEnumContainers`、`TestEnumInvalidInput`、`TestEnumVariantErrorPath`）、`TestEnumSerdeIndependentDirectionsRace`、`TestEnumSerdeUnsupportedAttributes` |
 | Error/From：消息、显式 source、唯一静态 error 字段的 FromType 与 Unwrap | 有限 | 用户必需已授权；enum Error 已有限支持（见增量）；任意具体错误转换、通用 From trait 后置 | [宏接受测试](../tests/acceptance/macros_test.go)：`TestCloneAndErrorAcceptanceRace`（`TestErrorChainsAndNil`）、`TestMacroAndCloneExplicitRejections`；[前端测试](../internal/frontend/compile_test.go)：`TestErrorDeriveFieldMethodCollisions` |
@@ -204,7 +204,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 
 ## print / println 与 Default 增量
 
-本轮遵循 [既有打印和默认值协议](design/macros.md)，不扩完整 fmt/trait 系统。
+本节为历史阶段记录；当前 Default 和 serde(default/skip) 限制以下文增量为准。该轮遵循 [既有打印和默认值协议](design/macros.md)，不扩完整 fmt/trait 系统。
 
 | T0 必需子能力 | 实际已支持 | 明确后置/不支持 |
 | --- | --- | --- |
@@ -259,3 +259,17 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 用户确认无 static：func 首参数 self 为实例成员，其余为关联函数。有限入口 `impl Default for T { func default() T { ... } }` 支持同包非泛型 struct，唯一零参具体返回目标；外层 derive 调用登记的业务实现。enum 仅选中默认变体的 payload 递归要求 Default，非选中变体不要求。跨包协议消费、通用 Self/trait 后端与动态递归分析未扩展。
 
 [独立业务验收](../tests/acceptance/manual_default_test.go) 运行真实 CLI 与生成模块 3 项 race 测试，覆盖多文件、同名异包、调用顺序/次数、非零默认值、独立 channel、Go 零值不变和非法协议诊断。[前端回归](../internal/frontend/manual_default_test.go) 补签名、别名、冲突、静态递归及源位置。此增量替代旧表中的“手写协议注册未实现”和“仅unit”限制，不代表完整 T0。
+
+
+## serde 字段 default/skip 协议增量
+
+本轮将旧缺失/跳过字段的 Go 零值策略改为登记的 Default 调用，是显式兼容变化。旧代码中无 Default 的 skipped 字段（包括指针和容器）在带 Deserialize 派生时现在拒绝；Serialize-only 不要求解码 Default。普通同名 helper 仍不能认领协议。
+
+| 验收切片 | 当前契约 | 保留边界 |
+| --- | --- | --- |
+| default 缺失与显式值 | 缺失调用一次 Default，显式零值正常解码；null 按目标 codec，未知变体和错误 payload 不回退 | 原生指针可解码 null，但无 Default，不能标记解码 default/skip |
+| skip 输入与输出 | 编码省略；解码完整消费/验证输入而不调用字段 codec，无论字段是否存在均默认构造一次 | 非法格式/超预算仍失败，缺 Default 编译拒绝 |
+| 调用顺序与失败 | 本层读取和 required 检查成功后按声明顺序初始化缺失 default/全部 skip；显式字段不调用 | 嵌套字段已执行的默认副作用不回滚，不承诺文档级事务 |
+| 协议组合 | 同包多文件手动 Default、嵌套 struct、选中默认 enum payload 复用当前登记与诊断 | 不扩大跨包协议、容器级 default、新注解、Option serde 或完整 trait |
+
+[独立业务验收](../tests/acceptance/serde_defaults_test.go)实际安装 CLI、仓库外转译并运行生成模块 4 项 race 测试，另有 8 项缺协议定位反例；[多文件示例](../examples/serde_defaults/main.hgo)输出 `demo 8080 8080 STSS`。[布尔名字捕获回归](../tests/prototype/serde_defaults_test.go)使用普通生成子进程，不计入独立 race 模块。具体命令见 [实现记录](../IMPLEMENTATION.md)。本增量替代上文历史阶段中“serde(default) 不改 Go 零值”的边界，不代表完整 serde-rs 属性或整项 T0 已完成。

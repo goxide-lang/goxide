@@ -24,7 +24,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 ## 实际支持
 
 - 声明宏：单文件 `macro_rules!`，以及同 module 源码包 `pub macro_rules!` / `alias.name!`，有限 `expr/ident/tt` 捕获、单层重复和嵌套调用。模板局部变量按 AST 身份改名，支持的自由函数按定义点绑定；不插入隐藏 IIFE。模板出现两次的参数仍求值两次，不自动缓存。详见 [宏限制](internal/macros/README.md)。
-- 内建 `Serialize/Deserialize`：具体命名 struct，标量、嵌套本地 struct、数组、slice、string-key map、可空 Go `*T`。`rename/default/skip/deny_unknown_fields`；default 是明确的 Go 零值子集，不是完整 Default trait。`*T` 仅是原型 Go 宿主语法，不代表 hgo 引用/Ptr 桥接已经定案。
+- 内建 `Serialize/Deserialize`：具体命名 struct，标量、嵌套本地 struct、数组、slice、string-key map、可空 Go `*T`。`rename/default/skip/deny_unknown_fields`；解码时 default/skip 复用已登记的具体 Default，缺协议报错；不是完整 Default trait。`*T` 仅是原型 Go 宿主语法，不代表 hgo 引用/Ptr 桥接已经定案。
 - 核心 `serde`：Serializer/Deserializer、Visitor 与容器访问协议、结构化错误及 cause；生成静态 helper，不采用反射 struct 编解码，不强制 Value 树。
 - 独立 `serdejson`：[支持范围与限制](serdejson/README.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议及本地 enum 的 Serialize/Deserialize 派生支持 unit/newtype（含有限 struct/container 单载荷）。
 - `Debug/Clone`：具体标量及上述非指针容器、嵌套本地类型。Debug 的 map 按键排序；Clone 递归复制支持的容器。指针、锁、外部未知类型、接口等没有隐式复制协议，明确拒绝。
@@ -62,9 +62,9 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 ## 独立黑盒验收后的精确边界
 
 - serde 属性必须有 Serialize 或 Deserialize；组类型声明不能只在组头 derive，需分别标注类型。不能静默丢弃属性。
-- `skip` 字段即使与 `deny_unknown_fields` 组合也消费并验证输入，解码保持零值；所有字段（含 skip）的 wire name 必须唯一。
+- `skip` 字段即使与 `deny_unknown_fields` 组合也消费并验证输入，解码调用 Default 构造字段（本轮兼容变更）；所有字段（含 skip）的 wire name 必须唯一。
 - 错误路径区分 Struct 的 Field 与 Map 的 MapKey；JSON 未知值中的对象按 MapKey 记录。
-- nil slice/map 编码为空数组/对象，解码为空容器；原生 `*T` 才接受 null。nullable 字段缺失仍须显式 default，本原型不是 Option 派生。
+- nil slice/map 编码为空数组/对象，解码为空容器；原生 `*T` 才接受 null。nullable 指针字段可显式为 null；缺失仍报 MissingField。本轮没有指针 Default，不能给指针字段加 default/解码 skip，本原型不是 Option 派生。
 - Clone 递归复制已支持的无环容器内容，保留 nil/空区别，但不保留共享别名拓扑和 slice 容量；不处理循环对象图。Debug 同样要求无环输入。二者没有动态深度预算；这不是通用深复制承诺。serde 自身递归编码有协议深度预算，循环输入返回 Limit。
 - `FromFailure(nil)` 返回 Failure 值，转成 error 后非 nil；Unwrap 为 nil。typed-nil source 原样保留。From 只支持唯一一个静态 `error` 字段，不支持任意具体错误类型转换。
 - 示例日志是普通 slog 调用：日志级别禁用时实参仍按模板求值一次，不是惰性 tracing。
@@ -340,7 +340,7 @@ go test -race -count=1 ./tests/acceptance -run '^TestT0DeliveryInstalledCLI$' -v
 
 普通 enum 必须恰好有一个 `#[default]` 无载荷变体，生成函数调用该变体的已有 nominal constructor；缺失、多选、重复属性及标记 payload 变体均拒绝。当时原型未检查其他未选变体的 payload Default；最新用户保留该约束待定，不把这个历史实现行为当成已确认规则或验收要求。`Option[T]` 具体实例字段显式调用 None constructor，不要求 T 有 Default；现有 ABI 的 None 表示为 nil，不能据此推断普通 enum/Result 的 nil 合法。
 
-容器、引用/指针、Arc、外部类型、Result 的自动默认及手写 Default 注册暂不支持；这不是给未决容器默认语义做决定。原生 Go `var`/`make` 不变。**`#[serde(default)]` 仍是既有原型的缺失字段 Go 零值策略，不调用语言 Default**；特别是它不能保证产生有效的非空 enum 字段，需要业务显式处理，后续不得无说明改变 wire 行为。
+容器、引用/指针、Arc、外部类型、Result 的自动默认及手写 Default 注册暂不支持；这不是给未决容器默认语义做决定。原生 Go `var`/`make` 不变。**历史阶段：当时 `#[serde(default)]` 仍是缺失字段 Go 零值策略，不调用语言 Default**；特别是它不能保证产生有效的非空 enum 字段，需要业务显式处理，后续不得无说明改变 wire 行为。
 
 生成 helper 参与冲突检测和源码映射；宏从显式 derive 声明登记其定义点绑定，包含 grouped TypeSpec。调用方同名局部变量不能截获 Default helper。跨包宏不能通过自动登记的 helper 暴露私有目标类型；公开手写 shim 仍按原有规则使用。跨包字段协议自动推导不在本次 Default 子集内。
 
@@ -491,7 +491,7 @@ type Service struct { Config Settings }
 
 手动入口限定义包内非泛型、非别名 struct（可在同包另一 `.hgo` / native `.go` 文件定义），恰好一个零参成员，显式返回具体目标类型。签名及函数体由前端和真实 Go 类型检查共同验证；降低为 `DefaultSettings() Settings` 并登记协议，嵌套派生按字段声明顺序调用。手动与手动、手动与 derive、生成 helper 与已有声明冲突均拒绝。普通同名函数、跨包同名类型和 Go 零初始化不会创建协议。
 
-enum 的 `#[default]` 可以选择现有有限单 payload 变体，只递归要求选中 payload 的 Default；非选中变体不需要该协议，但继续遵循原有 enum 类型和 payload 限制。未扩展递归 enum 的表示范围，也未支持手动 enum impl、通用容器默认或跨包协议消费。`#[serde(default)]` 仍保持既有缺失字段 Go 零值策略。
+enum 的 `#[default]` 可以选择现有有限单 payload 变体，只递归要求选中 payload 的 Default；非选中变体不需要该协议，但继续遵循原有 enum 类型和 payload 限制。未扩展递归 enum 的表示范围，也未支持手动 enum impl、通用容器默认或跨包协议消费。该阶段的 `#[serde(default)]` 仍保持 Go 零值策略；后续字段 default/skip 兼容变更见末节。
 
 静态函数引用图检查拒绝 Default 可达的直接/间接递归调用依赖（包括经外层 derive 回到手动入口），按解析后的函数身份检查，局部同名函数不误判。它是有限静态递归诊断，不是动态回调分析或终止性证明。宏可引用明确登记的 helper，保留定义点身份及私有类型边界；item 宏生成 impl、泛型/外部 impl、`Self` 返回写法、额外成员和 impl/member 属性尚不支持，明确拒绝。手动 helper 的源码映射保留 impl 来源，递归错误回到 `.hgo` 而非格式化 Go 行号。
 
@@ -519,3 +519,33 @@ go test -race -count=1 ./tests/acceptance -run '^TestManualDefault' -v
 独立非作者审查发现并复验修复：手动 Default 递归错误误用格式化 Go 行号；现为 impl 原始 `.hgo` 来源，单文件/多文件均有回归。引用降低后的映射也在依赖检查前刷新。宏定义点卫生、私有目标 helper 跨包泄露拒绝及非法属性另获独立复核。前一次整树运行只在新增源码定位断言失败；修复后上述最终整树命令完整成功，没有把失败轮与成功轮拼成通过。
 
 本轮日志保存在新环境 `/workspace/goxide-restore-check/manual-default-final-race.json`、`manual-default-final-vet.log`、`manual-default-design.log`、`manual-default-final-docs.log`；重跑只需要当前 checkout 和工具链，不依赖这些日志或旧执行器临时文件。按用户授权提交并推送 `feat/manual-default`，不修改 main/work、原文档标签或另一工作区的研究改动。
+
+
+## 当前增量：serde 字段 default / skip 接入 Default
+
+基准 `71b4e9888843cbd93de683dcc31a86aa99e745fe`。这是明确的兼容变化：反序列化字段 `#[serde(default)]` 从“缺失时保留 Go 零值”改为“缺失时调用已登记 Default”；`#[serde(skip)]` 保持编码省略与输入消费验证，解码始终调用该字段的 Default 一次，不采用输入内容。两者都不再为缺协议字段静默兜底，诊断带字段来源；同名普通 `DefaultType` 函数不创建协议。
+
+复用当前标量与同包具体类型 Default，包括手动非零 struct 构造、struct 派生及选中 payload 的 enum 默认。当前 struct 的容器读取与所有 required 字段检查成功后，按字段声明顺序处理缺失 default 与全部 skip；显式字段不调用自身 Default。嵌套字段解码可先调用自己的默认构造，后续外层错误、尾部输入错误或自定义副作用不回滚。
+
+显式 null 仍走目标 codec：非空 enum/普通 struct 报 Type，原生 nullable `*T` 仍能接受 null；未知 variant、非法 payload、重复键、被跳过内容中的非法 JSON 均不会被默认值掩盖。指针与容器本轮没有新增 Default，所以标记 default/解码 skip 的此类字段会因缺协议而拒绝；无该属性的 nullable 字段仍可使用。Serialize-only 不构造字段，skip 不需要 Default 或该字段 serde 协议。
+
+实现复用 Default 表达式生成与协议登记，不增加 JSON 特有的派生回填逻辑。缺字段 seen 标志和 bool 默认值使用不受包级 true/false 同名声明影响的表达式，防止显式字段被误当缺失。已有静态 Default 循环检测继续覆盖 Default → Deserialize → Default 依赖；不承诺动态回调或终止性分析。
+
+[独立业务](examples/serde_defaults/main.hgo)与[非作者接受测试](tests/acceptance/serde_defaults_test.go)验证多文件、手动默认、嵌套、默认 enum 载荷、调用次数和顺序、skip 输入/输出、nullable null、结构化错误路径及精确字段诊断。真实 CLI 输出 `demo 8080 8080 STSS`。生成模块单独运行 4 项 race 测试；缺协议有 8 项反例。另有[布尔名字捕获回归](tests/prototype/serde_defaults_test.go)，其普通生成子进程不冒充 race 产物。
+
+复现沿用上节的真实 Go、缓存和离线环境：
+
+```sh
+cd /workspace/goxide
+GOBIN=/workspace/goxide-restore-check/bin go install ./cmd/hgo
+/workspace/goxide-restore-check/bin/hgo run examples/serde_defaults
+go test -race -count=1 ./tests/acceptance -run '^TestSerdeDefaults' -v
+```
+
+本轮不增加容器级 serde(default)、自定义属性、Option serde、指针/容器默认、跨包协议消费或完整 trait。下一阶段 Option 的缺失/null 策略不由本切片隐式实现。旧章节的 serde Go 零值记录由本节明确取代；Go 自身 var/make/map 缺失读取仍保持零初始化。
+
+最终验收（Go 1.27.1 linux/amd64、CGO=1、本地离线工具链）：完整 `go test -race -count=1 -json ./...` 一次通过 **15 个有测试包、220 宿主顶层测试、385 子测试**，另 1 包无自身测试。新增生成模块 **4 项独立 race 测试**另计；`go vet ./...`、完整设计检查 **13 条 Go 命令**、文档检查 **56 Markdown / 501 本地链接与锚点 / 20 RFC**及 diff 检查通过。
+
+独立非作者审查未发现阻断，实际额外核对普通同名函数、跨文件原生 Go 基础类型遮蔽、Default→Deserialize→Default 静态循环、外部类型缺协议与 Serialize-only skip。共享默认值生成与 seen 标记使用不可被 true/false 同名声明捕获的布尔表达式，真实生成代码回归通过。日志位于 `/workspace/goxide-restore-check/serde-defaults-final-race.json`、`serde-defaults-final-vet.log`、`serde-defaults-final-design.log`、`serde-defaults-final-docs.log`；无需旧执行器文件即可重跑。
+
+按用户阶段同步授权提交并推送 `feat/manual-default`；未更新 main/work、冻结标签或另一工作区研究文件。后续 Option serde 仍独立留待下一切片。

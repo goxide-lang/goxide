@@ -260,3 +260,8 @@ JSON Value 不能保存 YAML 任意键、tag/锚点身份或注释；跨格式�
 ## 实现分支进展（不冻结 ABI）
 
 具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。当前已接通有限封闭 enum 派生、字段 default/skip 的已登记 Default 调用及内建具体 Option serde；此结果不代表本 RFC 的泛型、全部 enum 表示、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。
+
+
+## Proposed 研究增补：显式字段适配器
+
+[字段适配器最小候选](serde-field-adapters-proposed.md)以 `4c25e1d` 为基线比较具体函数路径与 with 包约定、time.Time typed helper 与 JSON RawMessage 桥；核对 Serde 官方 v1.0.228 源码并记录仓库外机制探针。状态为 **Proposed，未批准、未实施**；尤其 Option 自定义解码缺失策略仍需选择，不改变本文已实现字段的规则，不扩 Value/PATCH。

@@ -117,3 +117,5 @@ wildcard-only/全值绑定-only match继续支持封闭enum，依据真实类型
 最新交付：封闭 unit enum serde rename/value 映射、同包具体 struct 手动 Default、serde 字段 default/skip 调用已登记 Default，以及具体内建 Option serde 已端到端验收。enum 仅选中默认变体的 payload 要求 Default，非默认变体不要求；此项已确定，不再待答。具体子集与未完成范围见验收矩阵。
 
 格式 JSON Value/任意精度 Number、JSON 专用 native adapter、PATCH 字段 adapter 仍是规范方向或候选入口，尚未实现，不能从 RFC 示例推导为可用 API。普通 Go encoding/json 可显式调用，手写 typed helper/visitor 可直接使用现有 serde 核心；派生不自动采用 MarshalJSON/UnmarshalJSON，也没有通用导入类型字段 codec 选择入口。Option 缺失/null 均为 None，不提供 PATCH 三态；enum 的 Option payload 与部分容器投影限制仍保持。当前错误链修复仅保留已有底层 Go cause，不增加这些能力。
+
+字段显式适配器仅有 [Proposed 研究增补](docs/rfcs/research/serde-field-adapters-proposed.md)：比较函数对/with 入口及 typed helper/native JSON 桥，尚未批准或实施，不计作 T0 已交付能力。

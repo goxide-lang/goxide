@@ -122,3 +122,6 @@ wildcard-only/全值绑定-only match继续支持封闭enum，依据真实类型
 
 
 2026-10-02 收口从 `fb74ba2380389b39afe92f35ebdb8500fab74adf` 继续：补齐带 initializer 的 if 问号传播，保持词法作用域和原函数早退。当前四类剩余项见 [T0 收口核对](docs/t0-acceptance.md#2026-10-02-t0-收口核对)；先前“后置”不能将所有原型缺口自动改为已获用户批准延期，整项 MVP 尚未完成。
+
+
+T0 继续收口：在 if initializer 之后补齐标识符多 RHS、解引用/断言和 channel 发送中的问号；同步赋值、上下文位移类型、闭包和失败不发送均有真实前端验收。索引/切片/字面量/间接目标及循环/switch/select 的具体剩余例子见 [T0 第二组清单](docs/t0-acceptance.md#t0-收口第二组多-rhs解引用断言与发送)。不将完成一个切片记作整项完成。

@@ -1,0 +1,14 @@
+package main
+
+func wide(n uint) Option[uint64] {
+ var value,extra uint64=1<<n,Option[uint64]::Some(0)?
+ return Option[uint64]::Some(value+extra)
+}
+
+func valueOf(value Option[uint64]) uint64 {
+ match value {
+  Option[uint64]::Some(n)=>{return n},
+  Option[uint64]::None=>{return 0},
+ }
+ panic("unreachable")
+}

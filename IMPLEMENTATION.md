@@ -615,3 +615,15 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 独立非作者审查已复核修复并重跑 `TestPropagationIfInitializer*`，无剩余阻断。完整范围与四类剩余清单已同步 [T0 收口核对](docs/t0-acceptance.md#2026-10-02-t0-收口核对) 和 RFC 0005 §6.2；循环等传播上下文仍未实现，Proposed adapters 未获批准/未实施，整项 MVP 尚未完成。
 
 最终验证：全树 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、232 宿主顶层测试、410 子测试**（另 1 包无自身测试）。新增生成模块四项 race 测试单列，不重复计入宿主数量；安装 CLI 业务产物另执行 `go run -race`。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 534 本地链接与锚点 / 20 RFC**、`git diff --check` 通过。日志为 `/tmp/t0-race.json`、`/tmp/t0-race.err`、`/tmp/t0-vet.log`、`/tmp/t0-design.log`、`/tmp/t0-docs.log`；它们是本环境证据，不作为另一机器的文件依赖。
+
+## T0 收口第二组：多 RHS、取值与发送
+
+基于 `ab02dc3a26860447a3eb6927013271725a0b3868` 继续 `feat/t0-completion`，本阶段实现标识符目标的多 RHS 赋值/短声明、单 var spec 多值初始化、指针解引用、类型断言（含单 RHS comma-ok）及 channel/value 中的问号。前面的运行时操作数先捕获，全部成功才执行原同步赋值；发送先捕获 channel，再计算值，成功才发送。失败保持最近函数/闭包早退与 defer，不增加公共 Try/Residual、From 链或新语法。
+
+独立审查发现并修复非恒定位移丢失上下文类型的问题；现在具体标量临时量保留类型，局部名义类型别名在闭包降低前登记，覆盖 block/case/select 的语句列表和标签，跨文件包级生成名带 namespace。接受测试覆盖 63 位 uint64、局部类型遮蔽及嵌套闭包；原有调用参数/二元表达式捕获复用同一类型保留逻辑。单 RHS 元组不会拆成标量临时量，普通 Go panic 不改成业务 Err。
+
+[新增真实前端验收](tests/acceptance/propagate_values_test.go)的一个生成模块含七项 race 测试，覆盖顺序/不部分写入、常量/nil/位移类型、多次传播、短路/闭包、解引用/断言、nil/关闭/rebind channel；六项拒绝核对间接目标、数量/类型错误、跨家族和只收 channel。上一阶段 if initializer 的多 RHS 拒绝现改为成功覆盖，其他三项拒绝保留。另一个[两文件任务投递业务](examples/propagate_values/main.hgo)经真实安装 CLI、仓库外转译、生成模块两项 race 测试及 CLI run，输出 `port 8080 priority 7`、`invalid port`；errors.As 验证 strconv.NumError 保留，失败没有发送。生成模块测试和宿主统计分开，纯 Go 机制探针不算前端交付证据。
+
+独立非作者复审重跑新测试和其自行编写的真实 hgo 反例，修复后无剩余阻断。[RFC 0005 §6.3](docs/rfcs/research/0005-option-result-question.md#63-t0-收口多-rhs取值与发送)及[矩阵剩余例子](docs/t0-acceptance.md#t0-收口第二组多-rhs解引用断言与发送)已同步。索引/切片/字面量/间接目标、循环/switch/select、match 组合、权限跟踪限制、公开引用元数据及诊断仍未整体完成；select 候选传播组合与 Proposed adapter/原生桥接待决规则单列，不视作用户批准的延期，也不扩大到长期别名分析或完整 trait。
+
+最终验证：`go test -race -count=1 -json ./...` 通过 **15 个有测试包、235 宿主顶层测试、415 子测试**（另 1 包无自身测试）。本组两个实际生成模块另有 **7+2 项 race 测试**，不重复计入宿主数量；真实安装 CLI 及业务执行通过。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 543 本地链接与锚点 / 20 RFC**、`git diff --check` 均通过。最终日志为 `/tmp/t0-values-final-race.json`、`/tmp/t0-values-final-race.err`、`/tmp/t0-values-vet.log`、`/tmp/t0-values-design.log`、`/tmp/t0-values-docs.log`；审查修复前中断的旧 race 日志不计作最终验证。

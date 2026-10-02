@@ -18,9 +18,10 @@ compiler names, preventing local names from capturing the registered conversion.
 Raw Go multi-return calls require explicit user wrapping.
 
 The lowering inserts temporaries, validation, branches and returns in the original
-lexical function, including function literals. It supports one RHS assignments,
-one-spec variable declarations, returns, calls (including `defer` and `go` argument
-evaluation), ordinary unary/binary/selector expressions, short-circuit booleans,
+lexical function, including function literals. It supports identifier assignments with one or multiple RHS expressions,
+one-spec variable declarations (including multiple values), returns, calls (including `defer` and `go` argument
+evaluation), ordinary unary/binary/selector expressions, pointer dereferences, type assertions
+(including a single comma-ok RHS), sends, short-circuit booleans,
 and `if` initializers and conditions. An initializer and its condition prelude
 remain in one lexical block enclosing both branches, including else-if chains. Calls freeze preceding evaluated runtime
 arguments before later propagation. Declared function names have no mutable
@@ -29,7 +30,7 @@ Constants retain contextual types. A failing
 `defer f(load()?)` does not register that defer, and earlier defers execute normally.
 
 Explicitly unsupported: user generic functions; propagation inside loops, switches,
-indexes, slices, composite literals, assignment destinations, or parallel RHS lists. Use a preceding binding or explicit
+indexes, slices, composite literals, and non-identifier assignment destinations. Use a preceding binding or explicit
 match; these contexts are rejected rather than silently reordered. No public
 Try/Residual, cross-family coercion, or risk/borrow analysis is introduced.
 
@@ -56,3 +57,20 @@ From registration remains scoped to the current package, with assignability firs
 and exactly one explicit, single-step conversion otherwise. Importing a package
 does not automatically register its From helpers. No cross-package macro export,
 conversion graph search, or generic Try/Residual ABI is introduced.
+
+
+## Staged values and sends
+
+RHS operands are evaluated in source order before the original simultaneous
+assignment; failed propagation performs no destination writes. Earlier runtime
+values are captured before a later operand. Constants/nil retain contextual
+types. Runtime shifts use typed temporaries, with semantic scalar aliases bound
+before local name shadowing and before nested closures are lowered. Generated
+package aliases carry the file namespace for directory compilation. This does
+not implement user generic functions or a new conversion protocol.
+
+A send captures its channel before evaluating the value, then sends only after
+successful propagation. Nil/closed channels retain Go behavior when the send is
+reached; failed propagation returns without blocking or sending. Dereference and
+assertion failures likewise retain Go panics after successful propagation. A
+single comma-ok assertion remains a tuple expression, not a scalar temporary.

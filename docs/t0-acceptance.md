@@ -48,7 +48,7 @@
 | 真实 enum serde：unit 字符串/newtype 单键外标记对象，struct/container 嵌套，Variant 路径 | 有限 | 用户必需既定顺序；变体属性、复杂/泛型/递归 payload、Result serde 后置；Option 包装具体 enum 见下文增量 | [enum_serde_test.go](../tests/acceptance/enum_serde_test.go)：`TestEnumSerdeBusinessRace`（`TestEnumWireAndRoundTrip`、`TestEnumContainers`、`TestEnumInvalidInput`、`TestEnumVariantErrorPath`）、`TestEnumSerdeIndependentDirectionsRace`、`TestEnumSerdeUnsupportedAttributes` |
 | Error/From：消息、显式 source、唯一静态 error 字段的 FromType 与 Unwrap | 有限 | 用户必需已授权；enum Error 已有限支持（见增量）；任意具体错误转换、通用 From trait 后置 | [宏接受测试](../tests/acceptance/macros_test.go)：`TestCloneAndErrorAcceptanceRace`（`TestErrorChainsAndNil`）、`TestMacroAndCloneExplicitRejections`；[前端测试](../internal/frontend/compile_test.go)：`TestErrorDeriveFieldMethodCollisions` |
 | 内建 Option[T]/Result[T,E] 显式实例化与名义识别：Option nil=None；Result nil 非法；保留 typed-nil payload | 有限 | 用户必需 D12/D22；不是用户泛型声明或任意 interface 分类 | [builtins_test.go](../internal/enums/builtins_test.go)：`TestBuiltinSums`、`TestBuiltinRejects`、`TestBuiltinNominalAndInvalidCases`；[match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestBuiltinMatchExpressionRace`（`TestBuiltinDistinctions`）；[propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationControlFlowRace`（`TestNativePartialAndTypedNil`、`TestInvalidResultIsNotBusinessFailure`） |
-| `?` 在支持上下文保持一次求值、调用顺序、短路、最近闭包和 defer；成功类型可变化 | 有限 | 用户必需 D22；循环/switch/索引/复合字面量/多 RHS 等先明确拒绝 | [propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationControlFlowRace`（`TestDifferentSuccessTypesAndOrder`、`TestCalleeBeforeArguments`、`TestUnselectedBranchStaysUnevaluated`、`TestShortCircuit`、`TestNearestClosureAndDefer`）、`TestPropagationExplicitRejections` |
+| `?` 在支持上下文保持一次求值、调用顺序、短路、最近闭包和 defer；成功类型可变化 | 有限 | 用户必需 D22；循环/switch/索引/复合字面量等仍拒绝；多 RHS 等最新增量见末节 | [propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationControlFlowRace`（`TestDifferentSuccessTypesAndOrder`、`TestCalleeBeforeArguments`、`TestUnselectedBranchStaysUnevaluated`、`TestShortCircuit`、`TestNearestClosureAndDefer`）、`TestPropagationExplicitRejections` |
 | `?` 错误先赋值兼容，再唯一显式单步转换；拒绝缺失/歧义/两跳 | 完整（具体子能力） | 用户必需 D22；前端仅注册上述 Error 派生，不是一般转换求解器 | [propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationFromRace`（`TestOneStepFromAndAssignableFirst`）；[lower_test.go](../internal/propagate/lower_test.go)：`TestFromAndRejections`；[propagation_test.go](../internal/frontend/propagation_test.go)：`TestPropagationAliasIdentity`、`TestPropagationMatchCompositionRace` |
 | 标量 `&T`/`mut& T` 参数、单返回、局部、复制/重绑定、取址/解引用、显式收窄 | 有限 | 用户必需 D08/D21；当前权限检查不是独占或无竞争保证 | [refs_test.go](../tests/acceptance/refs_test.go)：`TestReferenceGeneratedModuleRace`（`TestReferenceLifetimeIdentity`）、`TestReferenceLegacyGoUntouched`；[lower_test.go](../internal/refs/lower_test.go)：`TestScalarEndToEnd`、`TestReadAddress`、`TestNestedReborrowCannotUpgrade` |
 | 标量只读写入及权限擦除拒绝：range、原生指针/接口/容器/泛型及不支持的引用函数签名 | 完整（具体子能力） | 用户必需基础类型规则；不以此宣称长期借用风险分析已做 | [refs_test.go](../tests/acceptance/refs_test.go)：`TestReferenceConsumerRejections`、`TestReferenceFrontendRejectsEscapes`；[lower_test.go](../internal/refs/lower_test.go)：`TestReject`、`TestExtraReject` |
@@ -317,4 +317,20 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 
 本阶段选取已定语义的 `if` initializer/condition `?` 缺口；[接受测试](../tests/acceptance/propagate_if_test.go)新增实际 hgo→Go 生成模块四项 race 测试、四项前端拒绝和安装 CLI/业务转译产物 race。原函数内词法块保留作用域、一次求值、短路、else-if 和 defer。普通 Option 缺失/null 及 Proposed adapter 不在本次实现改动内。
 
-下阶段仍需处理：循环/switch/索引/切片/复合字面量/多 RHS 传播；常用 match 表达式组合；权限跟踪中的捕获/取址/循环与字段替换限制；公开引用元数据和剩余组合/来源诊断。先区分已定类型规则和未定接口，再选可验收切片；不以“无法证明别名安全”为普通 Go 用法设置新门槛。
+下一阶段仍需处理：循环/switch/索引/切片/复合字面量传播（多 RHS 已由后续增量接通）；常用 match 表达式组合；权限跟踪中的捕获/取址/循环与字段替换限制；公开引用元数据和剩余组合/来源诊断。先区分已定类型规则和未定接口，再选可验收切片；不以“无法证明别名安全”为普通 Go 用法设置新门槛。
+
+
+## T0 收口第二组：多 RHS、解引用/断言与发送
+
+基于 `ab02dc3a26860447a3eb6927013271725a0b3868`，实现标识符目标多 RHS、单 var spec 多值、指针解引用、类型断言/comma-ok、channel/value 中的传播。类型/错误/权限规则不扩大。[接受测试](../tests/acceptance/propagate_values_test.go)实际转译 hgo 并运行生成模块 race；两文件[任务投递业务](../examples/propagate_values/main.hgo)经安装 CLI、仓库外转译和独立生成模块 race，核验真实 NumError cause 与失败不发送。
+
+| 剩余常用传播位置 | 最小业务例子 | 状态与下一步 |
+| --- | --- | --- |
+| 索引/切片 | `items[loadIndex()?]`、`items[low()?:high()?]` | 未实现；需保留容器求值、数组地址性、上下界顺序和 Go 检查时机，属工程缺口 |
+| 复合字面量 | `Config{Port: parsePort(text)?, Name: name()}` | 未实现；需保持字段/键值顺序、上下文类型与省略类型语法 |
+| 间接赋值目标 | `items[index()] = load()?` | 未实现；需保留目标操作数求值及赋值两阶段，不能靠把全部 RHS 提到前面实现 |
+| for/range | `for ready()? { ... }`、`for _,x := range load()? { ... }` | 未实现；每轮测试、post、continue 和标签要单独降低，不是统一前置临时量；不等同已批准延期 |
+| switch | `switch load()? { ... }`、`case predicate()?` | 未实现；initializer 作用域、case 顺序、fallthrough/break 需保持 |
+| select | `case jobs <- load()?` | 未实现；候选求值/提前失败与选择后操作的组合规则未明确，需明确后实施，不猜测为只求选中候选 |
+
+其他实质缺项仍是 match 常用表达式组合、权限跟踪对捕获/取址/循环/字段替换的保守限制、公开引用元数据及部分跨功能诊断；Proposed adapters 入口/自定义缺失策略、原生桥接的未定规则另列。长期别名分析、完整 trait/LSP/YAML/Value/PATCH 不成为本次收口的隐性前置。此组完成不等于 T0 整体完成。

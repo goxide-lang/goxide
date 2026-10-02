@@ -1,0 +1,41 @@
+package main
+
+import (
+ "fmt"
+ "strconv"
+)
+
+func parsePort(text string) Result[int,error] {
+ value,err:=strconv.Atoi(text)
+ if err!=nil{return Result[int,error]::Err(err)}
+ return Result[int,error]::Ok(value)
+}
+
+func priority() Result[*int,error] {
+ value:=7
+ return Result[*int,error]::Ok(&value)
+}
+
+func job(text string) Result[string,error] {
+ port,rank:=parsePort(text)?,*priority()?
+ return Result[string,error]::Ok(fmt.Sprintf("port %d priority %d",port,rank))
+}
+
+func deliver(text string,jobs chan string) Result[int,error] {
+ jobs<-job(text)?
+ return Result[int,error]::Ok(1)
+}
+
+func resultError(result Result[int,error]) error {
+ match result {
+  Result[int,error]::Ok(_)=>{return nil},
+  Result[int,error]::Err(err)=>{return err},
+ }
+ panic("unreachable")
+}
+
+func main() {
+ jobs:=make(chan string,1)
+ if resultError(deliver("8080",jobs))==nil {fmt.Println(<-jobs)}
+ if resultError(deliver("invalid",jobs))!=nil {fmt.Println("invalid port")}
+}

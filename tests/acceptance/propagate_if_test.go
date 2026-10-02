@@ -55,9 +55,9 @@ func TestAssignmentAndClosure(t *testing.T){trace:=[]string{};if resultText(assi
 
 func TestPropagationIfInitializerRejections(t *testing.T) {
 	for name, body := range map[string]string{
-		"scope":       `func f()Option[int]{if n:=Option[int]::Some(1)?;n>0{};return Option[int]::Some(n)}`,
-		"family":      `func f()Option[int]{if n:=Result[int,error]::Ok(1)?;n>0{};return Option[int]::None}`,
-		"parallel":    `func f()Option[int]{if n,m:=Option[int]::Some(1)?,2;n>m{};return Option[int]::None}`,
+		"scope":  `func f()Option[int]{if n:=Option[int]::Some(1)?;n>0{};return Option[int]::Some(n)}`,
+		"family": `func f()Option[int]{if n:=Result[int,error]::Ok(1)?;n>0{};return Option[int]::None}`,
+
 		"destination": `func f(a []int)Option[int]{if a[0]=Option[int]::Some(1)?;true{};return Option[int]::None}`,
 	} {
 		t.Run(name, func(t *testing.T) {

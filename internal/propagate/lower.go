@@ -44,6 +44,7 @@ type lowering struct {
 	companions    []*ast.File
 	boundFamilies map[string]enums.Decl
 	familyIssue   string
+	scalarNames   map[types.Type]string
 }
 
 func printNode(n any) string {
@@ -359,6 +360,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if err := l.inferMatches(); err != nil {
 		return nil, err
 	}
+	l.bindLocalScalars()
 	for _, decl := range f.Decls {
 		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil && !strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_") && fn.Name.Name != marker && fn.Name.Name != "__hgo_enum_infer" {
 			if fn.Type.TypeParams != nil && contains(fn.Body, l.questions) {
@@ -460,6 +462,66 @@ func (l *lowering) body(b *ast.BlockStmt, ft *ast.FuncType) error {
 	b.List = out
 	return nil
 }
+
+// Bind local scalar identities before lowering any closure bodies: a closure
+// may assign to a variable whose named type was declared in its outer function.
+func (l *lowering) bindLocalScalars() {
+	ast.Inspect(l.file, func(node ast.Node) bool {
+		var list *[]ast.Stmt
+		switch n := node.(type) {
+		case *ast.BlockStmt:
+			list = &n.List
+		case *ast.CaseClause:
+			list = &n.Body
+		case *ast.CommClause:
+			list = &n.Body
+		default:
+			return true
+		}
+		var out []ast.Stmt
+		for _, statement := range *list {
+			out = append(out, statement)
+			for {
+				label, ok := statement.(*ast.LabeledStmt)
+				if !ok {
+					break
+				}
+				statement = label.Stmt
+			}
+			decl, ok := statement.(*ast.DeclStmt)
+			if !ok {
+				continue
+			}
+			group, ok := decl.Decl.(*ast.GenDecl)
+			if !ok || group.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range group.Specs {
+				typeSpec := spec.(*ast.TypeSpec)
+				obj := l.info.Defs[typeSpec.Name]
+				if obj == nil {
+					continue
+				}
+				t, named := obj.Type().(*types.Named)
+				if !named || t.Obj() != obj {
+					continue
+				}
+				if _, ok := t.Underlying().(*types.Basic); !ok {
+					continue
+				}
+				name := l.temp()
+				if l.scalarNames == nil {
+					l.scalarNames = map[types.Type]string{}
+				}
+				l.scalarNames[t] = name
+				out = append(out, &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(name), Assign: token.Pos(1), Type: ast.NewIdent(typeSpec.Name.Name)}}}})
+			}
+		}
+		*list = out
+		return true
+	})
+}
+
 func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	if !contains(s, l.questions) {
 		return []ast.Stmt{s}, nil
@@ -468,21 +530,17 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	lower := func(x ast.Expr) (ast.Expr, error) { p, y, e := l.expr(x, ft); pre = append(pre, p...); return y, e }
 	switch x := s.(type) {
 	case *ast.AssignStmt:
-		if len(x.Rhs) > 1 {
-			return nil, l.fail(x, "? in parallel assignment is unsupported; split the evaluation into explicit statements")
-		}
 		for _, lhs := range x.Lhs {
 			if _, ok := lhs.(*ast.Ident); !ok {
 				return nil, l.fail(lhs, "? assignment currently requires identifier destinations")
 			}
 		}
-		for i, a := range x.Rhs {
-			y, e := lower(a)
-			if e != nil {
-				return nil, e
-			}
-			x.Rhs[i] = y
+		p, values, e := l.values(x.Rhs, ft)
+		if e != nil {
+			return nil, e
 		}
+		pre = append(pre, p...)
+		x.Rhs = values
 	case *ast.ReturnStmt:
 		if len(x.Results) > 1 {
 			return nil, l.fail(x, "? with multiple return expressions is unsupported")
@@ -538,15 +596,24 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 			return nil, l.fail(x, "? declaration requires one var specification")
 		}
 		v := d.Specs[0].(*ast.ValueSpec)
-		if len(v.Values) > 1 {
-			return nil, l.fail(v, "? in parallel variable initialization is unsupported")
+		p, values, e := l.values(v.Values, ft)
+		if e != nil {
+			return nil, e
 		}
-		for i, a := range v.Values {
-			y, e := lower(a)
-			if e != nil {
-				return nil, e
-			}
-			v.Values[i] = y
+		pre = append(pre, p...)
+		v.Values = values
+	case *ast.SendStmt:
+		p, channel, e := l.expr(x.Chan, ft)
+		if e != nil {
+			return nil, e
+		}
+		pre = append(pre, p...)
+		// Evaluate the channel before the value's propagation prelude. A nil
+		// channel only blocks if the send itself is reached.
+		x.Chan = l.freezeValue(x.Chan, channel, &pre)
+		x.Value, e = lower(x.Value)
+		if e != nil {
+			return nil, e
 		}
 	case *ast.BlockStmt:
 		if e := l.body(x, ft); e != nil {
@@ -592,6 +659,63 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	}
 	return append(pre, s), nil
 }
+
+// values stages simultaneous RHS expressions without writing any destination
+// until every operand succeeds. Constants and nil keep their contextual types;
+// a single multi-valued expression remains intact for Go's tuple assignment.
+func (l *lowering) values(values []ast.Expr, ft *ast.FuncType) ([]ast.Stmt, []ast.Expr, error) {
+	var pre []ast.Stmt
+	out := make([]ast.Expr, len(values))
+	for i, original := range values {
+		p, value, err := l.expr(original, ft)
+		if err != nil {
+			return nil, nil, err
+		}
+		pre = append(pre, p...)
+		if i < len(values)-1 {
+			value = l.freezeValue(original, value, &pre)
+		}
+		out[i] = value
+	}
+	return pre, out, nil
+}
+
+func (l *lowering) freezeValue(original, value ast.Expr, pre *[]ast.Stmt) ast.Expr {
+	tv := l.info.Types[original]
+	if tv.Value != nil {
+		return value
+	}
+	if basic, ok := tv.Type.(*types.Basic); ok && basic.Kind() == types.UntypedNil {
+		return value
+	}
+	// A runtime shift such as 1<<n receives its type from the enclosing
+	// assignment. Using := alone would default it to int before assignment.
+	if tv.Type != nil {
+		t := types.Unalias(tv.Type)
+		if basic, ok := t.Underlying().(*types.Basic); ok && basic.Info()&types.IsUntyped == 0 {
+			typeName := l.scalarNames[t]
+			if typeName == "" {
+				if spelling, ok := l.typeSpelling(t); ok {
+					typeName = "__hgo_qscalar_" + l.cfg.Namespace + l.temp()
+					l.file.Decls = append(l.file.Decls, &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(typeName), Assign: token.Pos(1), Type: parseExpr(spelling)}}})
+					if l.scalarNames == nil {
+						l.scalarNames = map[types.Type]string{}
+					}
+					l.scalarNames[t] = typeName
+				}
+			}
+			if typeName != "" {
+				name := l.temp()
+				*pre = append(*pre, &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(name)}, Type: ast.NewIdent(typeName), Values: []ast.Expr{value}}}}})
+				return ast.NewIdent(name)
+			}
+		}
+	}
+	name := l.temp()
+	*pre = append(*pre, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.DEFINE, Rhs: []ast.Expr{value}})
+	return ast.NewIdent(name)
+}
+
 func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, error) {
 	if !contains(x, l.questions) {
 		return nil, x, nil
@@ -667,10 +791,7 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 		var pre []ast.Stmt
 		freeze := func(original, y ast.Expr) ast.Expr {
 			tv := l.info.Types[original]
-			if tv.IsType() || tv.IsBuiltin() || tv.Value != nil {
-				return y
-			}
-			if b, ok := tv.Type.(*types.Basic); ok && b.Kind() == types.UntypedNil {
+			if tv.IsType() || tv.IsBuiltin() {
 				return y
 			}
 			if id, ok := original.(*ast.Ident); ok {
@@ -680,9 +801,7 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 					return y
 				}
 			}
-			name := l.temp()
-			pre = append(pre, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.DEFINE, Rhs: []ast.Expr{y}})
-			return ast.NewIdent(name)
+			return l.freezeValue(original, y, &pre)
 		}
 		printPlan := false
 		if id, ok := n.Fun.(*ast.Ident); ok {
@@ -731,9 +850,7 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 			return p, ast.NewIdent(name), nil
 		}
 		if len(q) > 0 && l.info.Types[n.X].Value == nil {
-			name := l.temp()
-			p = append(p, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.DEFINE, Rhs: []ast.Expr{left}})
-			left = ast.NewIdent(name)
+			left = l.freezeValue(n.X, left, &p)
 		}
 		n.X, n.Y = left, right
 		return append(p, q...), n, nil
@@ -741,6 +858,14 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 		if n.Op == token.AND {
 			return nil, nil, l.fail(n, "taking the address of a propagation expression is unsupported")
 		}
+		p, y, e := l.expr(n.X, ft)
+		n.X = y
+		return p, n, e
+	case *ast.StarExpr:
+		p, y, e := l.expr(n.X, ft)
+		n.X = y
+		return p, n, e
+	case *ast.TypeAssertExpr:
 		p, y, e := l.expr(n.X, ft)
 		n.X = y
 		return p, n, e

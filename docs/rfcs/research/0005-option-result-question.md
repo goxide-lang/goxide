@@ -134,4 +134,15 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 
 沿 §4 一次求值及最近函数早退契约，现支持 `if n := load()?; condition(n)? { ... } else { ... }`，以及普通 initializer 加传播条件。lowering 使用原函数内普通词法块：initializer 先执行一次，条件临时量随后执行，声明覆盖 then/else/else-if，但不泄漏到后续语句。短路仍跳过未选择操作；已注册 defer 仍在函数返回时执行。没有隐藏闭包或新 From 规则。
 
-[真实 hgo 验收](../../../tests/acceptance/propagate_if_test.go)覆盖成功/失败、条件短路、遮蔽、赋值 initializer、Option、else-if、最近闭包，以及作用域泄漏/跨家族/多 RHS/赋值目标的拒绝；生成模块显式 race。[业务例子](../../../examples/prototype/if_propagation.hgo)调用真实 strconv.Atoi，显式包装后传播。循环/switch/索引/切片/复合字面量等剩余上下文仍未实现，这些是实现缺口，不自动视作用户批准的延期。
+[真实 hgo 验收](../../../tests/acceptance/propagate_if_test.go)覆盖成功/失败、条件短路、遮蔽、赋值 initializer、Option、else-if、最近闭包，以及作用域泄漏/跨家族/赋值目标的拒绝（多 RHS 已由 §6.3 接通）；生成模块显式 race。[业务例子](../../../examples/prototype/if_propagation.hgo)调用真实 strconv.Atoi，显式包装后传播。循环/switch/索引/切片/复合字面量等剩余上下文仍未实现，这些是实现缺口，不自动视作用户批准的延期。
+
+
+### 6.3 T0 收口：多 RHS、取值与发送
+
+已接通标识符目标的多 RHS 赋值/短声明及单个 var spec 的多值初始化，例如 `port, rank := parsePort(text)?, *priority()?`。先按源码顺序计算操作数并捕获前面的运行时值，全部成功才执行原同步赋值；失败不部分写入目标。常量/nil 保留上下文类型；`var a,b uint64 = 1<<n, load()?` 的非恒定位移也保留 uint64，不能用临时 `:=` 默认成 int。具名标量的局部声明/遮蔽/闭包捕获和多文件生成名字一起验收。
+
+`*loadPointer()?` 和 `loadAny()?.(T)` 保留 Go 解引用/断言行为；单 RHS 的 `value, ok := loadAny()?.(T)` 保留 comma-ok 元组。`channel() <- load()?` 先捕获 channel，再计算传播值，成功才发送；失败不在 nil channel 上阻塞，也不在已关闭 channel 上 panic，成功路径仍保留 Go 发送行为。最近函数/闭包、短路、defer 和显式一步 From 规则不变。
+
+[真实前端与生成模块 race](../../../tests/acceptance/propagate_values_test.go)区分运行结果和错误拒绝；[两文件任务投递业务](../../../examples/propagate_values/main.hgo)用真实 strconv.Atoi 并保留 NumError 错误链。测试还覆盖早退不部分赋值、后续副作用跳过、嵌套闭包、63 位位移、channel 重绑定及已关闭 channel。
+
+剩余最小场景：索引 `items[index()?]`、切片 `items[low()?:high()?]`、字面量 `Config{Port: parse()?}`、间接赋值 `items[index()] = load()?`；for 的每轮条件/post 与 continue、switch 的条件/逐 case 求值及 fallthrough、select 的候选求值/选择后赋值需要各自 CFG lowering。前四项主要是已定求值/类型规则的工程缺口，不能归为“等用户设计”。for/switch 中普通传播仍沿最近函数早退；select 候选中失败是否在选择前退出尚未明确规定，先记录待明确的组合规则，不猜成只执行选中分支。完整 generic Try/Residual、From 链和隐式原生多返回适配不加入范围。

@@ -75,8 +75,22 @@ Captured slots, actual address-taken local slots, and slots mentioned by
 switch/select or goto retain the conservative summary. Loops containing those
 unsupported switch/select constructs also retain it. Taking a slice element or
 pointee address does not expose the local slice header/pointer slot; rebinding
-that local is allowed while the old derived address keeps its own qualification. Replacing individual fields with fresh storage
-also remains conservative. Rejections involving these inferred slots explicitly
+that local is allowed while the old derived address keeps its own qualification.
+Pointer-receiver method calls and method values also expose value receiver storage
+through Go's implicit address operation; promoted pointer receivers already behind
+a pointer do not expose the local pointer header.
+
+Unpinned local struct values support strong updates of direct/nested/value-promoted
+fields. Each path uses actual Go field selections and crosses no pointer or index.
+Replacement changes only that field's qualification: fresh storage clears it,
+qualified values retain it, siblings and older value copies are unchanged.
+Qualification nodes are persistent, so updating one copy cannot mutate an old
+copy's analysis facts. Assignment RHS facts are saved before left-to-right stores;
+branch joins, loop backedges and range targets use the same rules. Replacing a
+whole pointer/slice/map field is distinct from writing its shared pointee or
+storage. Captured/address-taken roots, pointer-traversing paths and per-index
+array/container updates remain outside strong updates; this is an engineering
+limit, not a new language prohibition. Rejections involving these inferred slots explicitly
 say `prototype tracking limitation` and suggest a separate fresh local. This
 message describes an analysis limit, not proof that the particular execution
 writes shared storage. Definite readonly writes and permission-erasing boundaries
@@ -193,3 +207,8 @@ identity, labelled exits, and per-iteration zero initialization. Its generated
 module runs race/vet separately. Loop-carried readonly values, zero-trip exits,
 old derived pointers, captured/header aliases, and interface erasure remain
 errors. This is local permission typing, not heap-alias risk analysis.
+
+`refs_field_flow_test.go` adds real cross-package CLI coverage for field updates,
+old copies, siblings, assignments/range, and implicit receiver addresses. Generated
+Go runs race/vet independently. The implementation adds no runtime wrapper, alias
+graph, exclusive-reference promise, or inferred native-call effects.

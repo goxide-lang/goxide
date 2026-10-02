@@ -33,7 +33,6 @@ func TestCompositeFixedPointAndSharedCopies(t *testing.T) {
 		`func f(r &S){v:=*r;w:=mut&v;w.Items[0]++}`,
 		`func f(r &S){m:=map[*int]int{};m[r.Pointers[0]]=1;for p:=range m{*p=2}}`,
 		`func f(r &S){dst:=make([]*int,len(r.Pointers));copy(dst,r.Pointers);*dst[0]++}`,
-		`func f(r &S){v:=*r;v.Items=[]int{1};v.Items[0]++}`,
 	} {
 		if _, err := Lower("composite.hgo", []byte("package p\ntype S struct{Items []int;Pointers []*int}\n"+src)); err == nil {
 			t.Fatalf("accepted %s", src)

@@ -67,6 +67,10 @@ func (c *checker) refineLocalQualifications() {
 			if n.Op == token.AND {
 				pinAddress(n.X)
 			}
+		case *ast.SelectorExpr:
+			if c.implicitReceiverAddress(n) {
+				pinAddress(n.X)
+			}
 		case *ast.ForStmt:
 			if unsupportedLoop(n) {
 				pin(n)
@@ -159,11 +163,8 @@ func (c *checker) refineLocalQualifications() {
 		})
 	}
 	bind := func(lhs ast.Expr, q *qualification, e env) {
-		if id, ok := unparen(lhs).(*ast.Ident); ok {
-			obj := c.binding(id)
-			if !pinned[obj] {
-				e[obj] = copied(c.typ(lhs), q)
-			}
+		if obj, path, ok := c.localValuePath(lhs); ok && !pinned[obj] {
+			e[obj] = withFieldPath(e[obj], path, copied(c.typ(lhs), q))
 		}
 	}
 	stmt = func(s ast.Stmt, e env) env {

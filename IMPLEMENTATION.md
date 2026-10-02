@@ -811,3 +811,13 @@ switch 研究模块 **1 项**真实 hgo 等价测试另跑 race/vet；非 race *
 [RFC §6.17](docs/rfcs/0005-borrows.md#617-普通局部权限事实与控制流2026-10-02)列出 5 个最小源例和 D19/D20/D21 依据。字段替换、真正取址槽位/捕获、switch/select/goto 仍有未完成的局部资格精度；不称已批准语义限制，不改为复杂 alias 分析任务。D11 自动 Go 桥接未实施，没有新增用户设计选择，完整 MVP 仍未完成。
 
 最终全树 `go test -race -count=1 -json ./...` 通过 **15 个测试包 / 260 个宿主顶层 / 536 个子测试**，另 2 包无测试；全树 vet 通过。新增模块的 3 项生成 Go 业务测试单独 race/vet，通过与宿主结果分开记录。设计检查通过 **60 份 Markdown / 729 个本地链接 / 20 篇 RFC** 及 **13 条纯 Go 机制命令**；机制检查不计作真实 hgo 执行。独立复审修复 var 每轮初始化后无剩余实现阻断。日志 `/tmp/t0-flow-race.json`、`/tmp/t0-flow-race.err`、`/tmp/t0-flow-vet.log`、`/tmp/t0-flow-design.log`；只提交推送 feat/t0-completion 并 fetch 核验。
+
+## 局部值字段替换与资格保持（2026-10-02）
+
+基于 `20d4d1fe91aefdc5a59b5e7dfa46f842fb9477ad`，非捕获/未取址的局部 struct 值支持直接、嵌套和值嵌入字段强更新。实际 Go selection 必须全部经过 struct 值，不穿指针/索引；替换字段清除或重新建立该路径资格，不改变兄弟字段、旧值副本及旧共享 alias。资格树持久化复制，summary 弱合并字段写；既有局部控制流负责分支/循环/range，多赋值保留 RHS 快照与左到右写入。
+
+[跨包模块接受测试](tests/acceptance/refs_field_flow_test.go)真实 CLI 转译包含 10 个业务函数、2 项单独生成 race 测试及 vet；24 个负例验证旧 alias、兄弟字段、回边/零轮、赋值顺序、接口、共享 pointer 路径及取址限制。独立审查另跑 8 个 assignment/range 探针。修复审查发现的指针方法隐式取址遗漏：从值选取 pointer receiver 的调用/方法值现记录实际槽位地址，不能用保存的指针绕过后续资格；不推断方法内部 effects，普通 native 方法仍可用。
+
+[RFC §6.18](docs/rfcs/0005-borrows.md#618-局部值字段替换2026-10-02)明确五类最小用例、资格树成本及剩余边界。取址/捕获根、穿 pointer/索引路径的强更新及 switch/select/goto 精度未完成；不能全部拒绝便称字段能力已完成，也没有以猜测别名关系放行。无运行时包装、独占承诺、全程序 alias 分析或自动 Go 桥接。下一回到常用 match 与最小联合验收，保留尚未完成的明确工程账。
+
+最终全树 `go test -race -count=1 -json ./...` 通过 **15 个测试包 / 261 个宿主顶层 / 561 个子测试**，另 2 包无测试；全树 vet 通过。新增跨包生成模块 **2 项**业务测试单独 race/vet 通过。设计检查通过 **60 份 Markdown / 736 个本地链接 / 20 篇 RFC** 及 **13 条独立 Go 机制命令**；机制探针不冒充真实 hgo 运行。独立实现和文档复审无剩余阻断。日志 `/tmp/t0-fields-race.json`、`/tmp/t0-fields-race.err`、`/tmp/t0-fields-vet.log`、`/tmp/t0-fields-design.log`；仅工作分支提交推送并 fetch 核验，不修改 main/work 或冻结标签。

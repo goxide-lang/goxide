@@ -222,15 +222,11 @@ func (c *checker) checkQualifications() error {
 	for changed {
 		changed = false
 		bind := func(e ast.Expr, q *qualification) {
-			id, ok := unparen(e).(*ast.Ident)
-			if !ok || id.Name == "_" {
+			obj, path, ok := c.localValuePath(e)
+			if !ok {
 				return
 			}
-			obj := c.binding(id)
-			if obj == nil {
-				return
-			}
-			v := join(c.qualifications[obj], copied(c.typ(e), q))
+			v := join(c.qualifications[obj], withFieldPath(nil, path, copied(c.typ(e), q)))
 			if !sameQ(v, c.qualifications[obj]) {
 				c.qualifications[obj] = v
 				changed = true
@@ -328,7 +324,7 @@ func (c *checker) checkQualifications() error {
 					if c.escapingSlot(obj) {
 						boundary(r)
 					}
-				} else {
+				} else if !c.tracksLocalField(n.Lhs[i]) {
 					boundary(r)
 				}
 			}
@@ -430,7 +426,7 @@ func (c *checker) checkQualifications() error {
 				for _, e := range []ast.Expr{n.Key, n.Value} {
 					if e != nil {
 						id, local := unparen(e).(*ast.Ident)
-						unsafe := !local
+						unsafe := !local && !c.tracksLocalField(e)
 						if local {
 							unsafe = id.Name != "_" && (c.escapingSlot(c.binding(id)) || isInterface(c.typ(e)))
 						}

@@ -70,7 +70,6 @@ func TestPropagationExplicitRejections(t *testing.T) {
 		"result-to-option":       `func f()Option[int]{x:=Result[int,error]::Ok(1)?;return Option[int]::Some(x)}`,
 		"ordinary-closure":       `func f()Result[int,error]{x:=func()int{return Result[int,error]::Ok(1)?}();return Result[int,error]::Ok(x)}`,
 		"native-multireturn":     `func native()(int,error){return 1,nil};func f()Result[int,error]{x:=native()?;return Result[int,error]::Ok(x)}`,
-		"loop-context":           `func f()Result[int,error]{for Result[bool,error]::Ok(false)?{};return Result[int,error]::Ok(1)}`,
 		"no-dynamic-error-guess": `type Domain struct{};func (Domain)Error()string{return "domain"};func f()Result[int,Domain]{x:=Result[int,error]::Err(Domain{})?;return Result[int,Domain]::Ok(x)}`,
 	}
 	for name, source := range cases {

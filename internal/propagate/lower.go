@@ -33,6 +33,7 @@ type Config struct {
 	Namespace string
 }
 type lowering struct {
+	loopDepth            int
 	expressionFacts      map[ast.Expr]expressionFact
 	fs                   *token.FileSet
 	file                 *ast.File
@@ -459,6 +460,9 @@ func (l *lowering) body(b *ast.BlockStmt, ft *ast.FuncType) error {
 		l.functionBodies = map[*ast.FuncType]*ast.BlockStmt{}
 	}
 	if l.functionBodies[ft] == nil {
+		if err := l.validateLoopLabels(b); err != nil {
+			return err
+		}
 		l.functionBodies[ft] = b
 	}
 	// Each function literal has its own lexical return target.
@@ -555,10 +559,26 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	var pre []ast.Stmt
 	lower := func(x ast.Expr) (ast.Expr, error) { p, y, e := l.expr(x, ft); pre = append(pre, p...); return y, e }
 	switch x := s.(type) {
+
+	case *ast.ForStmt:
+		return l.forStatement(x, nil, ft)
+	case *ast.RangeStmt:
+		return l.rangeStatement(x, nil, ft)
+	case *ast.LabeledStmt:
+		switch n := x.Stmt.(type) {
+		case *ast.ForStmt:
+			return l.forStatement(n, x.Label, ft)
+		case *ast.RangeStmt:
+			return l.rangeStatement(n, x.Label, ft)
+		}
+		return nil, l.fail(x, "? in this labeled statement is unsupported")
 	case *ast.AssignStmt:
 		if l.needsAssignmentFrame(x) {
 			if l.canPlanAssignment(x) {
 				return l.plannedAssignment(x, ft)
+			}
+			if l.loopDepth > 0 {
+				return nil, l.fail(x, "this loop assignment needs an unimplemented guard-free propagation plan")
 			}
 			return l.assignmentFrame(x, ft)
 		}

@@ -181,3 +181,15 @@ comma-ok alone restores its untyped second boolean result. The final complete
 assignment preserves Go's write phases. Nested tuple arguments, dynamic/method
 calls, other unplanned targets/operands and unsafe chains remain explicit guard
 routes. RFC section 6.11 supersedes the earlier blanket tuple/comma-ok fallback.
+
+`loops.go` lowers for header propagation and slice/map range sources with ordinary
+returns in the source function. Native For.Init short declarations remain in the
+header to retain Go per-iteration identities. A moved post runs at the next body
+entry before the moved condition, after Go's implicit iteration-variable copy.
+The original body keeps its block. Loop labels distinguish goto reentry from
+break/continue targets; original duplicate/blank-target legality is checked before
+renaming. A range source without propagation is left untouched, including native
+unevaluated array cases and integer/function iteration. Other propagated range
+kinds and per-iteration targets are explicitly unimplemented. Private assignments
+that still require a frame guard cannot introduce that guard into this new loop
+path; closures retain their own lexical return target. See RFC section 6.12.

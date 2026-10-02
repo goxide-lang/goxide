@@ -143,3 +143,5 @@ T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 
 无 guard 第二组接通静态函数返回类型提供的 private bool witness、signed contextual shift 原生检查及 planner 范围内的 len/cap；专门 fallback 用例由五条降至 tuple/unsafe 两条。其余组合和普通 expr 已知上下文缺口见 [RFC §6.10](docs/rfcs/research/0005-option-result-question.md#610-私有-bool上下文-shift-与-lencap-第二组)。for/range、switch 仍是待实现工程项，不等待 select/adapters 设计，也不默认为批准延期。
 
 无 guard 第三组接通单 RHS 静态 tuple 调用与 map/assert/receive comma-ok 赋值，保留一次求值、私有返回类型、未类型化 ok 与完整两阶段写入。专门 fallback 文件仅剩 unsafe 链，但其余 guard 分组仍明确待办，见 [RFC §6.11](docs/rfcs/research/0005-option-result-question.md#611-单-rhs-tuple-与-comma-ok-的第三组替换)。本组独立验收，不等待 unsafe 长尾；循环/range、switch 和整体 T0 验收尚未完成。
+
+普通循环首批已接通 for init/条件/post 和 slice/map range 源的问号传播，使用原函数普通 return，保留 Go 每轮变量身份、continue/post、标签重入及 defer。其他 range 源的问号、迭代赋值目标和需要旧 guard 的循环内组合仍待实现；原生无问号源不强制求值。[RFC §6.12](docs/rfcs/research/0005-option-result-question.md#612-for-与-slicemap-range-的首批传播)明确本阶段范围，不把 for/range 整项或整体 MVP 打勾。unsafe/其他 guard 长尾继续留表，switch 为后续独立工程。

@@ -138,7 +138,7 @@ func TestFromAndRejections(t *testing.T) {
 		`package p;func f() Option[int] {x:=1?;return Option[int]::Some(x)}`,
 		`package p;func get() Option[int]{return Option[int]::None};func f() int{return get()?}`,
 		`package p;func get() Option[int]{return Option[int]::None};func f() Result[int,error]{x:=get()?;return Result[int,error]::Ok(x)}`,
-		`package p;func get() Option[int]{return Option[int]::None};func f() Option[int]{for get()?>0 {};return Option[int]::None}`,
+		`package p;func get() Option[int]{return Option[int]::None};func f() Option[int]{for range get()? {};return Option[int]::None}`,
 	} {
 		if _, e = compile(s, nil); e == nil {
 			t.Fatal("accepted invalid propagation", s)

@@ -272,3 +272,27 @@ map 查询、类型断言、channel 接收仅在原 `HasOk` 的二值赋值语�
 剩余 guard：动态/方法 callee、多值调用作为另一调用唯一实参、map/slice 目标组合、未规划的私有 bool witness、contextual 除法/余数、len/cap 未规划 operand、其他含问号的 index/slice/literal/断言组合，以及 unsafe.Pointer/uintptr 转换链。没有新增可证明安全的 unsafe 拆分子集，本次保持原转换链的 race/checkptr 回归；GC/特殊 syscall 存活约束不能用保存 uintptr 或运行时 KeepAlive 猜测替代。该长尾不阻塞本多值切片独立验收，也没有被视为已批准延期。
 
 for/range 与 switch 仍是 T0 待实现项；普通 expr 的私有上下文问题仍须修复。select 与 Proposed adapters 的设计决策继续独立列出，不扩完整 trait/native bridge/Value/PATCH/YAML。整体 T0/MVP 尚未完成。
+
+### 6.12 for 与 slice/map range 的首批传播
+
+基于 `863051b9a57b198c3237f2ef06ac7b0e25baa0b1`，本阶段从 guard 长尾转向普通循环控制流。[loops.go](../../../internal/propagate/loops.go)使用原函数中的普通 return，不引入 panic、recover、IIFE 或 Assignment guard。[真实 hgo 示例](../../../examples/prototype/loop_propagation.hgo)与生成模块验收同步。
+
+**for init/条件/post**：含问号 initializer 的求值前缀放在包围 block；若源 initializer 是短声明，最后声明仍留在原生 For.Init 中，因此 Go 1.22 起的每轮变量身份仍由 Go 管理，不能把它简单提升成循环外变量。条件的传播前缀与真假检查在每轮 body 入口执行。含问号 post 放到下一轮入口，用循环外 first 标志只跳过首轮；此时原条件即使不含问号也移到 post 之后，保持 post→条件→body。Go 原生下一轮变量复制先于 post，普通 continue 和带标签 continue 均继续经过该复制及 post。没有 post 传播时保留原生 post。无限循环不额外插入退出条件；源 break/return 跳过 post。
+
+原 body 保留独立 block，防止其局部变量遮蔽移入的 header 表达式。生成代码仍属于原函数，失败执行该函数 defer；循环体的 defer 不提前执行，函数字面量中的传播仍返回最近闭包。initializer 目前沿用已有 statement 支持，post 覆盖已有普通赋值/调用及丢弃传播等形状；含问号 inc/dec 目标等未支持 statement 不会被顺带放行。
+
+**标签**：源 goto 指向外层 block，重入时重新执行 initializer/range 源前缀；break/continue 改指向内部原生 loop 的新标签。只有 break/continue 使用时不保留已无 goto 用户的外层标签。改写前按原词法函数检查重复标签与空白标签目标，嵌套函数有独立标签作用域；否则删除/改名会掩盖本应拒绝的源码。独立审查发现这两条真实反例，均已修复并加入负例。合法重复 `_:` 定义、仅 goto、仅 continue、两类混用及原本 unused 标签均有验收；不会用伪 goto 消除 unused 诊断。
+
+**range**：新增传播源仅支持 slice/map（含其命名类型），完整求值并保存一次源，再保留原生 RangeStmt；`:=` 逐轮独立变量与 `=` 共享既有变量不改写。nil slice/map 仍为空迭代，失败不进入循环。原 range 源不含问号时不求值、不保存或改写它，因此 `range p` / `range *p`（nil 数组指针、单变量、常量长度）、整数 range 原有规则保留，均有循环体传播验收。当前前端接受的原生函数迭代器也保留原语法，已验证单值 iterator 的 body 失败早退和 defer；由 Go 处理 yield/return 协议，不在 hgo 新造 iterator ABI。
+
+| 范围 | 本阶段状态 |
+| --- | --- |
+| 常见 for init/条件/post、已有可降低 body | 已接通；每轮求值、短路/普通 continue、标签、嵌套循环、闭包和地址身份、部分执行后失败与 defer |
+| slice/map range 源含问号 | 已接通；一次求值、成败、nil、捕获及标签重入 |
+| 无问号的其他 Go range 源 | 保留原表达式与原生迭代；验收 nil 数组指针/解引用、整数、单值函数 iterator body |
+| 数组/数组指针、整数、string/channel、函数 iterator 源含问号 | 尚未接通，明确诊断；尤其不能去掉 marker 后让常量长度规则跳过原本需求值的 array 解引用，也不能一律强制求值 |
+| range key/value 目标含问号 | 尚未接通；目标按轮求值不能提升到循环前 |
+| 循环内需要旧 assignmentFrame 的组合 | 明确未实现 guard-free plan，拒绝新增 guard；这是工程缺口，不是别名安全规则或批准延期 |
+| switch/select、泛型函数原型限制及其他未支持 statement | 不借循环改动扩大；switch 仍待实现，select 仍待决 |
+
+其余 unsafe/私有赋值 guard 长尾仍按 §6.11 留表，不阻塞本切片也不标完成。for/range 只对上表已验收范围完成，整体 T0/MVP 未完成。性能研究使用真实 hgo 循环与相同 Option 协议的显式 match，单独运行非 race 基准；零分配不代表与显式 match 耗时相同。

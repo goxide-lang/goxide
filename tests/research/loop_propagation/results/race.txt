@@ -1,0 +1,4 @@
+=== RUN   TestEquivalence
+--- PASS: TestEquivalence (0.00s)
+PASS
+ok  	loopfixture	1.011s

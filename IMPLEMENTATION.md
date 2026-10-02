@@ -729,3 +729,13 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 unsafe 无新增拆分，保留原转换链与 race/checkptr；其余 guard、普通 expr 上下文缺口、for/range 与 switch 仍待完成。[RFC §6.11](docs/rfcs/research/0005-option-result-question.md#611-单-rhs-tuple-与-comma-ok-的第三组替换)明确范围；select/adapters 不作新设计，T0/MVP 不标完成。
 
 最终整树 race **15 个有测试包 / 244 宿主顶层 / 445 子测试**，另 **2 包无测试**，vet 与完整设计检查 **13 条 Go 命令**通过。实际安装 CLI 业务模块 25 项、普通目标 9 项、unsafe 非求值边界 1 项各自生成 race；研究模块另加 `-gcflags=all=-d=checkptr=2` 通过。整树日志 `/tmp/t0-multi-race.json`、`/tmp/t0-multi-race.err`、`/tmp/t0-multi-vet.log`、`/tmp/t0-multi-design.log`；研究数据已入库。只提交推送 feat/t0-completion 并 fetch 核验。
+
+## 普通循环首批：for header 与 slice/map range
+
+基于 `863051b9a57b198c3237f2ef06ac7b0e25baa0b1`，新增 [loops.go](internal/propagate/loops.go)：for initializer 的声明保留原生 header，每轮条件与含问号 post 在原函数控制流执行；Go 仍负责下一轮变量复制。range 新增 slice/map 源求值一次，原生迭代声明保持。标签区分 goto 重入与 break/continue；独立审查发现并修复重复标签、空白标签目标被改写掩盖的静态合法性问题。
+
+[真实 hgo 示例](examples/prototype/loop_propagation.hgo)有 **10 项**独立生成模块 race 测试，另跑安装 CLI transpile/run（生成程序 race）。验证每轮条件/post、副作用、失败不继续、标签、嵌套循环、原函数 defer、最近闭包、body/post 指针身份、range `:=`/`=` 捕获与源一次求值。无问号的 nil 数组指针/解引用、整数和单值原生 iterator 源保留 Go 行为；其他 range 源问号、迭代目标问号及需要旧 guard 的循环赋值仍明确待实现，详见 [RFC §6.12](docs/rfcs/research/0005-option-result-question.md#612-for-与-slicemap-range-的首批传播)。无正常传播 panic，无新增循环 guard。
+
+独立研究模块 **1 项**等价测试另跑 race/vet，四组非 race 基准 **200ms × 5**全部 **0 B/0 alloc**。16 轮成功传播 **39.31 ns** 对显式 match **26.64 ns**，post=7 失败 **21.00 ns** 对 **12.69 ns**；明确不声称耗时持平。[原始数据与复现入口](tests/research/loop_propagation/README.md)已入库。unsafe/其他 guard 长尾不阻塞本组，但仍未完成或批准延期；switch 和其余 T0 待办继续留表。
+
+最终验证：全树 race **15 个有测试包 / 247 宿主顶层 / 454 子测试**，另 **2 包无测试**；全树 vet、完整设计检查 **13 条 Go 命令**通过。独立复审无剩余阻断，专项生成模块和反例另行复验通过。整树证据 `/tmp/t0-loops-race.json`、`/tmp/t0-loops-race.err`、`/tmp/t0-loops-vet.log`、`/tmp/t0-loops-design.log`；可重复性能证据保存在仓库。只提交推送 feat/t0-completion 并 fetch 核验，整体 MVP 尚未完成。

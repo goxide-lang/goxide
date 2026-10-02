@@ -431,3 +431,13 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 unsafe 没有扩大 planner 支持范围，原转换链仍保留；方法/动态调用、多值唯一实参等其他明确剩余范围见 RFC。完整 Rust 能力不纳入本阶段，整体 MVP 不标完成。
 
 最终验证通过：全树 race **15 包 / 244 顶层 / 445 子测试**（另 2 包无测试），vet、完整设计检查 13 条 Go 命令；业务生成模块 25 项 race，研究模块 12 项 race/legacy/vet 与额外 checkptr=2。Tuple/Map 新两组及原六组成功全部五次样本零分配，新两组失败与显式 match 同为 16 B/1 alloc；[原始数据](../tests/research/assignment_guard/results/multivalue/summary.json)入库。独立非作者审查及安装 CLI 复验通过。
+
+### 普通循环首批：for header 与 slice/map range 源
+
+[真实示例](../examples/prototype/loop_propagation.hgo)由前端生成独立模块并运行 race，另有安装 CLI transpile/run 验收。覆盖 init/每轮条件/post、失败早退、continue/break/标签与 goto 重入、嵌套循环、defer、最近闭包返回、每轮闭包/地址身份，及 slice/map 源一次求值与两种迭代变量声明。生成代码断言无 Assignment/Catch/Fail。
+
+[精确范围与边界](rfcs/research/0005-option-result-question.md#612-for-与-slicemap-range-的首批传播)：只新增 slice/map 源传播；无问号源保留 Go 原行为，验证 nil 数组指针（含原本不求值的解引用）、整数与单值函数 iterator 的循环体传播。其他种类的 range 源问号、range 目标问号及循环内尚需旧 guard 的赋值组合继续列工程缺口。重复/空白标签目标反例已由独立审查发现并修复，不吞掉原 Go 静态错误。
+
+for/range 不再整体列作完全未实现，但也不整体打勾；switch、普通 expr 上下文与剩余 guard 继续待办。select/adapters 仍单列设计问题，复杂别名分析长期延期，不把普通循环或普通 Go 别名用法视为设计待决。
+
+本阶段验证通过：全树 race **15 包 / 247 顶层 / 454 子测试**（另 2 包无测试）、vet、13 条完整设计命令；新增 **10 项**生成循环模块 race 测试、安装 CLI 生成程序 race 与 10 类负例。独立审查及反例复验通过。研究模块 1 项真实 hgo 等价测试另跑 race/vet；成功/失败四组全部五次样本零分配，但耗时高于显式 match，具体原始数据见[循环研究记录](../tests/research/loop_propagation/README.md)。

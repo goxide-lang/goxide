@@ -641,3 +641,15 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 独立非作者复审自行编写的跨包反例及新测试，无剩余阻断。[RFC 0005 §6.4](docs/rfcs/research/0005-option-result-question.md#64-t0-收口索引切片与复合字面量)和[矩阵第三组](docs/t0-acceptance.md#t0-收口第三组索引切片与复合字面量)同步准确边界：间接赋值目标须独立保存 LHS 位置及两阶段写入；循环/switch 尚需 CFG；select 候选规则仍待明确。unsafe.Sizeof/Alignof/Offsetof 不求值参数中的问号明确拒绝，根因是当前 prelude 会错误执行该参数，需要后续非求值类型降低；不静默缩范围或改写成求值语义。其他 match、权限跟踪、公开引用元数据及诊断缺口继续保留，T0/MVP 整体未完成。
 
 最终验证：Go 1.27.1 linux/amd64、CGO_ENABLED=1，使用本地工具链/缓存。全树 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、239 宿主顶层测试、427 子测试**，另有 printing/runtime **2 包无自身测试**；新增三份生成模块 **13 项 race** 单列。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 554 本地链接与锚点 / 20 RFC**、`git diff --check` 均通过。日志：`/tmp/t0-aggregate-final-race.json`、`/tmp/t0-aggregate-final-race.err`、`/tmp/t0-aggregate-vet.log`、`/tmp/t0-aggregate-design.log`、`/tmp/t0-aggregate-docs.log`。冻结标签和 main/work 未修改，阶段提交推送后 fetch 核验。
+
+## T0 收口第四组：间接赋值两阶段执行（部分收口）
+
+基于 `f6f7b3032749d1199676715cb7029b8eec114a4a` 继续 `feat/t0-completion`。新增 [place 降低](internal/propagate/place.go)：先保存 pointer/slice/map/index 操作数，全部传播成功才执行原 assignment；struct/array 目标不复制、不提前对完整目标取地址。最终 nil/bounds/map panic 保持写阶段，读取中间 pointer/container 的 panic 留求值阶段，已写入的前序目标不会因后序 panic 回滚。保持 compound 旧值读取、tuple/comma-ok、后续 LHS/RHS 改变容器时的原目标和已有权限；不添加借用分析。
+
+独立审查发现不同私有整数类型的 compound shift、any RHS 不能使用目标类型见证，已按精确静态同型守卫修复，map key 同样处理；真实跨包回归通过。另核对 promotion：纯值私有 embedding 保留原合法 selector，公共嵌入指针链保存中间 pointer。**外包私有嵌入指针路径仍未降低**，给出明确限制诊断；不引入 unsafe/反射/native bridge 掩盖它，不称为安全策略、用户待决语义或已批准延期。此阶段是可验收的部分收口，间接目标项和整个 T0/MVP 均不标完成，尚不转去循环/switch。
+
+[真实前端测试](tests/acceptance/propagate_place_test.go)三个生成模块分别有 **9+2+1 项 race 测试**。主模块验证失败不写、指针/字段/数组/slice/map、多目标、后续容器替换、别名、panic阶段和可写更新经只读路径观察；**10 项**拒绝子例覆盖不可取址、string、短声明、只读 scalar/field/slice/map/array 和常量越界。第二模块为[真实安装 CLI 跨包业务](examples/propagate_places/main.hgo)，仓库外转译及 CLI run 输出 `42 9 <nil>`、`invalid value 42 9`，验证 strconv.NumError cause、私有类型及纯值 promotion。第三模块验证需要求值的 unsafe.Add/Slice 和普通 Sizeof 同名函数可用，另拒绝真实 builtin Sizeof/Alignof/Offsetof 中的问号；本轮不扩 unsafe 非求值或泛型语义。安装测试还验证私有嵌入指针诊断。生成测试不重复计入宿主数量；独立纯 Go 阶段探针不算真实 hgo 验收。
+
+独立非作者审查自行构造的跨包反例、重跑新验收，修复后无新增阻断；已知私有嵌入指针缺口如上保留。[RFC 0005 §6.5](docs/rfcs/research/0005-option-result-question.md#65-t0-收口间接赋值的两阶段降低)、[第四组矩阵](docs/t0-acceptance.md#t0-收口第四组间接赋值的两阶段执行)、ROADMAP 与阶段 README 同步。select 候选传播、Proposed adapters 和完整 native bridge 待决入口没有获批或实施；其他循环/switch、match、权限跟踪、公开元数据与诊断仍须逐项收口。
+
+最终验证：Go 1.27.1 linux/amd64、CGO_ENABLED=1，本地离线工具链。全树 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、243 宿主顶层测试、434 子测试**，另 **2 包无自身测试**。新增三份生成模块 **9+2+1 项 race** 单列，真实安装 CLI/仓库外转译/业务运行通过。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 565 本地链接与锚点 / 20 RFC**、`git diff --check` 通过。旧“间接目标须拒绝”的三条测试已迁为成功及失败路径验收；因其中两条旧预期导致失败的早一轮整树日志不算最终验证。最终证据在 `/tmp/t0-place-final-race.json`、`/tmp/t0-place-final-race.err`、`/tmp/t0-place-vet.log`、`/tmp/t0-place-design.log`、`/tmp/t0-place-docs.log`、`/tmp/t0-place-targeted.log`。仅提交推送工作分支并 fetch 核验，不修改 main/work/冻结标签，不合并或发布。

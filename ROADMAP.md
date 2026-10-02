@@ -128,3 +128,5 @@ T0 继续收口：在 if initializer 之后补齐标识符多 RHS、解引用/�
 
 
 T0 第三组继续接通索引/切片与复合字面量问号，保留 Go 规定的部分求值顺序、数组存储/地址性、常量检查、外部私有上下文类型及 len/cap 求值。间接目标、循环/switch/select 和不求值上下文仍有明确缺口；[第三组及剩余列表](docs/t0-acceptance.md#t0-收口第三组索引切片与复合字面量)给出最小场景与根因，不宣称整项 T0 完成。
+
+T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 Go 两阶段求值和写入，保留数组存储、panic 时机、compound、上下文类型和既有权限。外包私有嵌入指针 promotion 仍是明确工程缺口，不能将间接赋值整体打勾；[第四组矩阵](docs/t0-acceptance.md#t0-收口第四组间接赋值的两阶段执行)与 [RFC 0005 §6.5](docs/rfcs/research/0005-option-result-question.md#65-t0-收口间接赋值的两阶段降低)记录证据和范围。循环/switch 未提前推进，select 及 Proposed adapters 继续待决，T0/MVP 尚未完成。

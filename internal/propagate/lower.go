@@ -49,6 +49,7 @@ type lowering struct {
 	witnesses            map[ast.Expr]func() ast.Expr
 	witnessHelpers       map[string]string
 	comparableConstraint string
+	placeFields          map[*ast.SelectorExpr]*types.Var
 }
 
 func printNode(n any) string {
@@ -75,7 +76,7 @@ func (l *lowering) fail(n ast.Node, s string) error {
 }
 func (l *lowering) temp() string { l.serial++; return fmt.Sprintf("__hgo_qtmp_%d", l.serial) }
 func (l *lowering) check() {
-	l.info = &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}}
+	l.info = &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}, Selections: map[*ast.SelectorExpr]*types.Selection{}}
 	imp := l.cfg.Importer
 	if imp == nil {
 		imp = importer.Default()
@@ -538,9 +539,21 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	lower := func(x ast.Expr) (ast.Expr, error) { p, y, e := l.expr(x, ft); pre = append(pre, p...); return y, e }
 	switch x := s.(type) {
 	case *ast.AssignStmt:
-		for _, lhs := range x.Lhs {
-			if _, ok := lhs.(*ast.Ident); !ok {
-				return nil, l.fail(lhs, "? assignment currently requires identifier destinations")
+		for i, lhs := range x.Lhs {
+			if x.Tok == token.DEFINE {
+				if _, ok := lhs.(*ast.Ident); !ok {
+					return nil, l.fail(lhs, "short declaration requires identifier destinations")
+				}
+				continue
+			}
+			p, target, witness, err := l.place(lhs, ft)
+			if err != nil {
+				return nil, err
+			}
+			pre = append(pre, p...)
+			x.Lhs[i] = target
+			if len(x.Lhs) == len(x.Rhs) && types.Identical(l.info.TypeOf(lhs), l.info.TypeOf(x.Rhs[i])) {
+				l.registerWitness(x.Rhs[i], witness)
 			}
 		}
 		p, values, e := l.values(x.Rhs, ft)

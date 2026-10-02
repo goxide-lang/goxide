@@ -157,3 +157,17 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，不能让原本会求值的操作数变成被跳过的常量表达式。`&T{...?...}`（含括号）支持，任意 `&(load()?)` 仍不支持。`unsafe.Sizeof/Alignof/Offsetof` 不求值参数中的传播明确报限制：现有 prelude 直接搬出参数会错误执行它，需后续有意识的非求值类型降低，不能静默执行或宣称已完成。
 
 [真实前端验收](../../../tests/acceptance/propagate_aggregate_test.go)覆盖三份实际生成模块 race、失败/副作用/defer/最近闭包、slice storage、map/index/pointer、键值顺序、只读数组投影、上下文 private 类型及静态拒绝；[跨包批次业务](../../../examples/propagate_aggregate/main.hgo)真实调用 strconv.Atoi 后解析窗口并构造原生 Go 包容器。间接赋值目标尚未加入：它需要保存 LHS 的地址或 map/key，并在 RHS 成功后才写入，与本节的读取表达式不同。循环/switch/select 未借此放宽，select 候选传播规则仍未确定。
+
+### 6.5 T0 收口：间接赋值的两阶段降低
+
+依据本机 Go 1.27.1 随附规范的 [Assignments](https://go.dev/ref/spec#Assignment_statements) 与 [Order of evaluation](https://go.dev/ref/spec#Order_of_evaluation)：第一阶段计算左侧索引/显隐式指针间接访问的操作数和 RHS；第二阶段从左至右写入。传播失败退出最近函数，不进入第二阶段，但不回滚第一阶段用户调用已产生的副作用。成功进入写阶段后，后一个目标 panic 不回滚前一个目标的写入。变量读取相对调用的未规定顺序仍不被收紧成新的语言承诺。
+
+新增 `*pointer()? = value()?`、字段、slice/array/pointer-array/map 索引及其多目标组合。降低保存 pointer、slice header、map 和 index，不复制作为目标的 array/struct；例如 `s[i].Array[j]` 的最终越界及 `p.Array[j]` 的最终 nil 检查仍在写阶段。`p.P.X` 则先读取并保存中间 `p.P`：外层 p 为 nil 是求值阶段 panic，已保存 P 为 nil 是写阶段 panic。不能统一用 `&完整目标` 捕获位置，因为这会过早触发最终检查。
+
+保留原最终赋值语句，包括 compound `op=`、tuple 和 map comma-ok；不提前读取 compound 旧值。RHS 或后面的 LHS 改变原 pointer/container 时，写入已保存的目标。动态不可比较 map key、nil map 和最终 bounds 均保持写阶段 Go panic。已有类型与权限检查继续执行，不增加借用/别名分析，`&T` 不承诺全局不变，`mut&` 不承诺独占。私有 scalar 的上下文零值见证只用于静态同型 RHS/key；interface 目标、不同类型的位移计数不会被强制换成目标类型。
+
+[真实 hgo 验收](../../../tests/acceptance/propagate_place_test.go)覆盖上述顺序/错误/写入/别名/权限和静态拒绝；[跨包业务](../../../examples/propagate_places/main.hgo)使用真实 strconv.Atoi，验证失败保持已有目标值和 NumError cause，并覆盖外部私有 scalar、纯值嵌入 promotion、63 位 shift、不同类型 compound 及 any 键。安装 CLI 后从仓库外转译，所有新增生成模块分别 race。审查使用的纯 Go panic 阶段探针仅为机制证据，不计作 hgo 验收。
+
+**仍未完成的工程边界**：需要显式保存外包私有嵌入指针的 promoted field 路径，如 `dep.Outer{*privateInner}` 的 `o.X = load()?`，当前给出 `private imported embedded pointer path is not yet lowered`。纯值嵌入 promotion 已支持。私有指针不能直接生成为不可访问 selector，也不能提前对最终字段取地址；本组未引入 unsafe、反射或生产包桥接。这是未完成实现，不是安全拒绝、待用户新语义或获批延期，不能把整个间接赋值项标为完成。
+
+本轮检查 unsafe 拒绝边界：按实际 `types.Builtin` 身份，仅限制 Sizeof/Alignof/Offsetof 中的传播；需要求值的 unsafe.Add/Slice 与普通同名函数均真实执行通过。未扩展 unsafe 非求值降低或源泛型能力。循环/switch 保持下一组工程缺口，select 候选规则继续待决。

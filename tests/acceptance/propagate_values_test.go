@@ -123,12 +123,11 @@ func btoi(b bool)int{if b{return 1};return 0}
 
 func TestPropagationValueContextRejections(t *testing.T) {
 	for name, source := range map[string]string{
-		"non-identifier-destination": `func f(a []int)Option[int]{a[0],a[1]=1,Option[int]::Some(2)?;return Option[int]::None}`,
-		"tuple-count":                `func f()Option[int]{a,b,c:=1,Option[int]::Some(2)?;_,_,_=a,b,c;return Option[int]::None}`,
-		"typed-overflow":             `func f()Option[int]{var a,b byte=256,Option[byte]::Some(1)?;_,_=a,b;return Option[int]::None}`,
-		"cross-family":               `func f(ch chan int)Option[int]{ch<-Result[int,error]::Ok(1)?;return Option[int]::None}`,
-		"receive-only":               `func f(ch <-chan int)Option[int]{ch<-Option[int]::Some(1)?;return Option[int]::None}`,
-		"bad-dereference":            `func f()Option[int]{v:=*Option[int]::Some(1)?;return Option[int]::Some(v)}`,
+		"tuple-count":     `func f()Option[int]{a,b,c:=1,Option[int]::Some(2)?;_,_,_=a,b,c;return Option[int]::None}`,
+		"typed-overflow":  `func f()Option[int]{var a,b byte=256,Option[byte]::Some(1)?;_,_=a,b;return Option[int]::None}`,
+		"cross-family":    `func f(ch chan int)Option[int]{ch<-Result[int,error]::Ok(1)?;return Option[int]::None}`,
+		"receive-only":    `func f(ch <-chan int)Option[int]{ch<-Option[int]::Some(1)?;return Option[int]::None}`,
+		"bad-dereference": `func f()Option[int]{v:=*Option[int]::Some(1)?;return Option[int]::Some(v)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := frontend.Compile("value_bad.hgo", []byte("package fixture\n"+source))

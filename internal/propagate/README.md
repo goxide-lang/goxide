@@ -18,7 +18,7 @@ compiler names, preventing local names from capturing the registered conversion.
 Raw Go multi-return calls require explicit user wrapping.
 
 The lowering inserts temporaries, validation, branches and returns in the original
-lexical function, including function literals. It supports identifier assignments with one or multiple RHS expressions,
+lexical function, including function literals. It supports assignments with one or multiple RHS expressions, including ordinary indirect destinations,
 one-spec variable declarations (including multiple values), returns, calls (including `defer` and `go` argument
 evaluation), ordinary unary/binary/selector expressions, indexes, slices, composite literals, pointer dereferences, type assertions
 (including a single comma-ok RHS), sends, short-circuit booleans,
@@ -30,7 +30,7 @@ Constants retain contextual types. A failing
 `defer f(load()?)` does not register that defer, and earlier defers execute normally.
 
 Explicitly unsupported: user generic functions; propagation inside loops, switches,
-select candidates, non-identifier assignment destinations, and unevaluated
+select candidates, destinations requiring capture through imported private embedded pointer paths, and unevaluated
 unsafe.Sizeof/Alignof/Offsetof operands. Use a preceding binding or explicit
 match; these contexts are rejected rather than silently reordered. No public
 Try/Residual, cross-family coercion, or risk/borrow analysis is introduced.
@@ -107,3 +107,26 @@ parentheses), not arbitrary propagation results. Unevaluated unsafe operands are
 explicitly rejected: the current statement-prelude lowering cannot preserve their
 non-evaluation while simply hoisting propagation. This remains an implementation
 gap, not approval to evaluate them or a newly deferred language feature.
+
+
+## Assignment places
+
+The place pass freezes pointer/slice/map containers and indexes before RHS
+propagation, preserving the final Go assignment and its left-to-right write
+phase. Struct/array destination paths retain storage without taking an early
+address of the full place. Final bounds/nil/map checks therefore remain in the
+write phase; reading an intermediate pointer or container can still panic during
+operand evaluation. Failed propagation skips destination writes, not user side
+effects already performed. Compound assignments retain their final old-value
+read. Tuple and comma-ok RHS remain intact.
+
+Context witnesses apply only when the destination/key and expression have the
+same static type; interface assignment and differently typed shift counts retain
+their expression types. Ordinary readonly/writable checks still run after this
+pass. No borrowing, exclusivity or global immutability guarantee is added.
+
+Promoted fields through value embeddings are supported. Capturing a private
+imported embedded pointer would require accessing an inaccessible intermediate
+field; taking the final field address would change panic timing. This path has an
+explicit lowering-limit diagnostic and remains unfinished engineering work,
+not an approved deferral or a safety policy. No reflection/unsafe bridge is added.

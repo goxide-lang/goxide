@@ -354,3 +354,19 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 - **其他 T0**：match 常用表达式组合、权限跟踪对捕获/取址/循环/字段替换的保守限制、公开引用元数据与跨阶段诊断；Proposed adapters/原生桥接待决接口另列。长期别名分析、完整 trait/LSP/YAML/Value/PATCH 不加入隐性前置。
 
 以上是剩余工作，不因阶段测试通过自动变为获批延期；整项 T0/MVP 仍未完成。
+
+## T0 收口第四组：间接赋值的两阶段执行
+
+[实现](../internal/propagate/place.go)与[真实前端验收](../tests/acceptance/propagate_place_test.go)接通 pointer、field、slice/array/pointer-array/map 目标及多目标/compound/tuple/comma-ok 组合。保存第一阶段的容器和索引、保持数组原存储，传播失败不进入写阶段；最终 nil/bounds/map panic 和从左到右的部分写入保持 Go 行为。用户调用在求值阶段的副作用不会回滚。现有只读权限仍验证，同时接受可写别名更新经只读路径观察，不新增借用分析。
+
+三个新增生成模块分别执行 race：主语义 **9 项**、安装 CLI 跨包业务 **2 项**、unsafe 边界 **1 项**。另有 **10 项**静态拒绝子例、三种 unsafe 非求值入口拒绝，以及外包私有嵌入指针限制诊断。真实业务输出 `42 9 <nil>` 与 `invalid value 42 9`，保留 NumError cause。纯 Go 阶段/panic 探针只作研究证据。
+
+| 分类 | 当前具体剩余 | 本阶段结论 |
+| --- | --- | --- |
+| 必须完成的工程缺口 | 外包私有嵌入指针 promoted field 目标；循环/range；switch；match 常用组合；权限保守限制；公开引用元数据与诊断 | 不将已定语义的缺口改名为批准延期；间接赋值仍为部分完成 |
+| 已实现并验证 | 普通间接目标的保存与两阶段写入、只读/可写已有约束、私有 scalar 上下文及纯值嵌入 promotion | 新增真实 hgo 生成模块和 CLI 验收；不代表其他 T0 行自动完成 |
+| 已有实现仍需整体验收 | 历史矩阵中的组合、公开跨包权限元数据及逐项源码位置保证 | 阶段全树测试不能代替每个边界的验收证据 |
+| 明确长期不纳入 | 复杂别名分析、完整 trait/Rust 能力、完整 LSP；完整 Value/PATCH/YAML 不顺手扩大 | 不用拒绝普通 Go 用法冒充安全保证 |
+| 需要新设计决定 | select 候选失败规则；Proposed adapters 入口与自定义 deserialize_with 缺失策略；完整 native bridge 的候选接口 | 本组不选定或实现这些接口 |
+
+unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/Slice 和普通同名函数不被误拒绝。非求值降低仍未实现，本轮不扩其语义。外包私有嵌入指针目标是编译器工程障碍，不需要用户重定语言语义；未通过反射/unsafe/跨包代码注入掩盖它。暂不切换到循环/switch，也不宣称本切片或整项 MVP 全部完成。

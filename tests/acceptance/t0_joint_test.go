@@ -105,7 +105,7 @@ func TestT0JointBusiness(t *testing.T) {
 			}
 		})
 	}
-	t.Run("missing-registry", func(t *testing.T) {
+	t.Run("external-permissions-and-missing-artifact", func(t *testing.T) {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", "module consumer.example/app\ngo 1.27\nrequire joint.example/app v0.0.0\nreplace joint.example/app => "+strconvQuote(generated)+"\n")
 		packagesWrite(t, dir, "app.go", `package app
@@ -113,7 +113,20 @@ import "joint.example/app/store"
 func Bad(){b:=store.Budget{};r:=store.View(&b);r.Limit=9}
 `)
 		out := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), dir)
-		if !strings.Contains(out, "metadata") {
+		if !strings.Contains(out, "readonly projection") {
+			t.Fatal(out)
+		}
+		artifact := filepath.Join(generated, "store/.hgo.refs.json")
+		saved, e := os.ReadFile(artifact)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = os.Remove(artifact); e != nil {
+			t.Fatal(e)
+		}
+		defer os.WriteFile(artifact, saved, 0600)
+		out = deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), dir)
+		if !strings.Contains(out, "metadata missing") {
 			t.Fatal(out)
 		}
 	})

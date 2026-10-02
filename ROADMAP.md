@@ -193,3 +193,7 @@ D31 首片已支持同型 `mut& T` 直接传原生 `*T` 标量参数，包括函
 ### 二元表达式与简单索引 match（2026-10-02）
 
 `return 10 + match ...` 与 `a[index()] = match ...` 已通过[真实生成模块验收](docs/t0-acceptance.md#二元-match-与简单索引赋值2026-10-02)：在原函数展开，保持短路、问号/recover、求值/写入时点、类型身份、readonly 与 goto。优化构建对照和独立审查随本阶段提交。按用户要求完成此有界切片后交回；enum ABI 不迁移，跨 module 元数据待下一步，整体 MVP 尚未完成。
+
+### 跨 module 引用 metadata 首片（2026-10-02）
+
+独立模块 local replace 已恢复当前具体引用函数签名，支持 alias/reexport、只读拒绝和可写调用，普通 Go 消费不依赖 metadata。内部产物绑定真实包、选中源、传递依赖源内容和增强依赖 artifact；依赖结构漂移触发重新生成，避免旧权限分析失效。实现、独立审查与验收边界见 [T0 清单](docs/t0-acceptance.md#跨-module-引用产物2026-10-02)。未迁移 enum ABI；其他增强 metadata、未实现引用签名/投影、外部 cgo 输入及原位 match 留账，完整 MVP 尚未完成。

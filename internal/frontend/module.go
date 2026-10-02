@@ -2,7 +2,6 @@ package frontend
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"go/build"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/macros"
+	"github.com/hxsf/goxide/internal/refs"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
 
@@ -256,11 +256,12 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if dir != "." {
 			pkgPath += "/" + filepath.ToSlash(dir)
 		}
-		p, e := preparePackageContext(pkgPath, packages[dir], metadata, typecheck.NewImporterWithBuild(filepath.Join(destination, dir, "package.go"), options.Tags, options.Race), buildBudget)
+		packageImporter := typecheck.NewImporterWithBuild(filepath.Join(destination, dir, "package.go"), options.Tags, options.Race)
+		p, e := preparePackageContext(pkgPath, packages[dir], metadata, packageImporter, buildBudget)
 		if e != nil {
 			return e
 		}
-		checked, e := finishPackage(pkgPath, p, typecheck.NewImporterWithBuild(filepath.Join(destination, dir, "package.go"), options.Tags, options.Race))
+		checked, e := finishPackage(pkgPath, p, packageImporter)
 		if e != nil {
 			return e
 		}
@@ -278,15 +279,29 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			}
 			result.Files[goName] = r
 		}
+
 		if len(checked.references.Functions) > 0 {
-			data, e := json.MarshalIndent(checked.references, "", "  ")
+			sourceFiles := map[string][]byte{}
+			for name := range packages[dir] {
+				base := filepath.Base(name)
+				if strings.HasSuffix(base, ".hgo") {
+					base = strings.TrimSuffix(base, ".hgo") + ".go"
+				}
+				data, e := os.ReadFile(filepath.Join(destination, dir, base))
+				if e != nil {
+					return e
+				}
+				sourceFiles[base] = data
+			}
+			data, e := refs.MarshalMetadataArtifact(checked.references, sourceFiles, packageImporter)
 			if e != nil {
 				return e
 			}
-			if e = os.WriteFile(filepath.Join(destination, dir, ".hgo.refs.json"), append(data, '\n'), 0644); e != nil {
+			if e = os.WriteFile(filepath.Join(destination, dir, refs.MetadataFilename), data, 0644); e != nil {
 				return e
 			}
 		}
+
 		metadata[pkgPath] = checked
 		state[dir] = 2
 		return nil

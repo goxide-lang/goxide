@@ -734,8 +734,13 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
 	}
+	referenceIR := out
+	var importedBindings refs.ImportBindings
+	var singleImporter types.Importer
 	if cfg == nil {
-		_, _, err := refs.BindImports(map[string][]byte{filename: out}, typecheck.NewImporter(filename), nil)
+		singleImporter = typecheck.NewImporter(filename)
+		bound, bindings, err := refs.BindImports(map[string][]byte{filename: out}, singleImporter, nil)
+		importedBindings = bindings
 		if err != nil {
 			if e, ok := err.(*refs.ImportError); ok {
 				mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
@@ -747,6 +752,8 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 			return Result{}, err
 		}
+		provenance = provenance.Compose(out, bound[filename], "refs.BindImports")
+		out = bound[filename]
 	}
 	matchReferenceTemps := map[string]bool{}
 	if cfg == nil && (bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_"))) {
@@ -756,7 +763,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				conversions = append(conversions, propagate.Conversion{Source: "error", Target: m.name, Helper: "From" + m.name})
 			}
 		}
-		imp := typecheck.NewImporter(filename)
+		imp := singleImporter
 		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
@@ -770,6 +777,10 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		refResult, e = refs.Finish(filename, out, imp, matchReferenceTemps)
 		if e != nil {
 			return Result{}, stageError("refs.Finish", e)
+		}
+		refResult.Source, e = importedBindings.Restore(filename, refResult.Source)
+		if e != nil {
+			return Result{}, e
 		}
 		provenance = provenance.Compose(beforeReferences, refResult.Source, "refs.Finish")
 		out = refResult.Source
@@ -786,7 +797,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			return Result{}, stageError("typecheck.Check", e)
 		}
 		erased := map[string][]byte{filename: out}
-		meta, e := refs.ExportMetadata("hgo/generated", map[string][]byte{filename: beforeReferences}, erased, imp)
+		meta, e := refs.ExportMetadata("hgo/generated", map[string][]byte{filename: referenceIR}, erased, imp)
 		if e != nil {
 			return Result{}, e
 		}

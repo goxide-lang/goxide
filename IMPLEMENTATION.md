@@ -885,3 +885,11 @@ Go 1.27.1 非 race 5×200ms 对照中，六组 typed IIFE/statement 小表达式
 最终生产树验证通过：全树 race **15 测试包 / 267 宿主顶层 / 614 子测试**，另 2 包无测试；全树 vet 通过，设计检查 **62 Markdown / 797 本地链接 / 20 RFC / 13 条纯 Go 机制命令**通过。独立实现及文档复审均无剩余阻断。日志 `/tmp/t0-match-binary-race-final.json`、`/tmp/t0-match-binary-race-final.err`、`/tmp/t0-match-binary-vet-final.log`、`/tmp/t0-match-binary-design.log`、`/tmp/t0-match-binary-question.log`、`/tmp/t0-match-binary-bench.log`。最终全树重跑包含问号类型调度修复，不沿用修复前的那次 race 结论。
 
 按用户要求，本有界阶段完成提交/push/fetch 后交回，不接着迁移 enum 或推进跨 module。原位借用等待 ABI 选择；跨 module 增强恢复、更复杂表达式/目标、不可命名类型及既列传播/权限工程账未关闭，完整 MVP 尚未完成。
+
+### 跨 module 引用 metadata 首片（2026-10-02）
+
+独立模块 local replace 已恢复当前具体引用函数签名，支持 alias/reexport、只读拒绝和可写调用，普通 Go 消费不依赖 metadata。内部产物绑定真实包、选中源、传递依赖源内容和增强依赖 artifact；依赖结构漂移触发重新生成，避免旧权限分析失效。实现、独立审查与验收边界见 [T0 清单](docs/t0-acceptance.md#跨-module-引用产物2026-10-02)。未迁移 enum ABI；其他增强 metadata、未实现引用签名/投影、外部 cgo 输入及原位 match 留账，完整 MVP 尚未完成。
+
+最终验收通过：全树 `go test -race -count=1 -json ./...` 为 **15 测试包 / 268 宿主顶层 / 634 子测试**，另 2 包无测试；生成库、hgo 应用、普通 Go 消费模块分别 race/vet，库与应用两次生成字节一致。全树 vet 通过；设计检查 **62 Markdown / 803 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过，机制探针不代替真实 hgo 执行。独立审查复现并确认修复增强依赖与普通 Go 依赖的具名结构漂移；最终实现、根包指纹/构建配置及旧联合验收迁移复审均无剩余阻断。旧“缺 registry”联合用例改为先验证恢复后的 readonly 拒绝，再删除 artifact 验证缺失错误，不削弱负例。
+
+采用补丁和测试迁移后的最终日志 `/tmp/t0-crossmeta-verified.json`、`/tmp/t0-crossmeta-verified.err`、`/tmp/t0-crossmeta-vet.log`、`/tmp/t0-crossmeta-design.log`；前两轮未更新旧断言的全树失败不作为通过证据。独立真实结构漂移探针在 `/tmp/review-artifact-shape-fixed/`。本阶段提交并 push/fetch 后交回，不继续迁移 enum 或扩展其他协议。

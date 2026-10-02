@@ -125,3 +125,7 @@ Go → hgo：下载发布模块后直接调用生成 `.go` API，如 PKG-01、PK
 未来须在新主模块中分别运行普通 Go 导入与 hgo 导入，验证 PKG-01、PKG-02、声明缺失/冲突及源码模式。PKG-02 不提供 overlay 或增强标准库，工厂与 facade 应返回相同 wrapper 类型并共享原指针；PKG-03 作为 Go 拒绝的历史反例。当前无 hgo 端到端通过记录。
 
 待定：生成文件来源识别、声明格式/指纹、构建条件一致性、公开工厂命名与权限契约。统一 wrapper 的选择已确认，不再将外部 marker 注入视为发布前提。
+
+### 跨模块引用恢复首片（2026-10-02）
+
+独立模块 local replace 的生成 Go + `.hgo.refs.json` 已能恢复现有引用签名，详见 [RFC 0005 §6.21](0005-borrows.md#621-跨-module-引用产物恢复2026-10-02)。源定位与 build selection 复用离线 Go importer，缺失/陈旧产物不猜测权限；普通 Go 消费无需 metadata。此证据仅覆盖具体引用签名，不代表 trait、宏、enum 等跨模块增强协议全部完成，亦不代表远程 registry 或外部 cgo 输入验证完成。

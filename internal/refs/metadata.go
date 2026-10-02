@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-// Metadata is build-local versioned analysis data, not a stable export ABI.
+// Metadata is versioned analysis data, not a stable export ABI.
 const MetadataVersion = 2
 const MetadataMarker = "HgoReferenceMetadata"
 
@@ -343,6 +343,20 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 				return nil, bindings, &ImportError{fs.Position(spec.Pos()), "invalid reference metadata marker for " + path}
 			}
 			meta, known := metadata[path]
+			if marked && (!known || len(meta.Functions) == 0) {
+				if provider, ok := imp.(ArtifactImporter); ok {
+					var e error
+					meta, e = LoadMetadataArtifact(path, provider)
+					if e != nil {
+						return nil, bindings, &ImportError{fs.Position(spec.Pos()), e.Error()}
+					}
+					if metadata == nil {
+						metadata = map[string]Metadata{}
+					}
+					metadata[path] = meta
+					known = true
+				}
+			}
 			if marked {
 				if marker.Val().Kind() != constant.String || !known || meta.Version != MetadataVersion || meta.Path != path || constant.StringVal(marker.Val()) != meta.Marker() {
 					return nil, bindings, &ImportError{fs.Position(spec.Pos()), "reference permission metadata missing, stale or wrong package for " + path}

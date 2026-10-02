@@ -167,7 +167,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
 		packagesWrite(t, generated, "consumer.hgo", consumer)
 		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "single.go"), filepath.Join(generated, "consumer.hgo"))
-		if !strings.Contains(output, "metadata missing") {
+		if !strings.Contains(output, "readonly") {
 			t.Fatal(output)
 		}
 	})

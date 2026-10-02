@@ -514,13 +514,13 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 
 | 类别 | 剩余工作与可验收停止条件 |
 | --- | --- |
-| 必须完成：原位借用与跨模块 | D29 原位可写 payload 借用不得用复制/隐式共享替代；enum 表示迁移等待具体选择。D30 跨 module hgo 消费必须恢复增强 metadata，同 module 不作为获批首版冻结 |
+| 必须完成：原位借用与跨模块 | D29 原位可写 payload 借用不得用复制/隐式共享替代；enum 表示迁移等待具体选择。D30 已接通下文现有具体引用签名的跨 module local replace 恢复；其他增强协议与签名仍留工程账，同 module 不作为获批首版冻结 |
 | 必须完成：自然 Go 指针调用 | D31 具体标量同型参数已通过下文验收，其余明确需求按真实 Go 类型逐项接通，不用未知 effects 或独占证明阻断普通用法 |
 | 必须完成：常用 match | 单标识符赋值/局部推断、二元表达式/短路与简单索引目标已通过下文限定验收；剩余更复杂目标/其他表达式上下文留范围账；停止条件为已定类型规则、一次求值/仅选中分支/最近函数传播，不无限扩大模式系统 |
 | 必须完成：普通权限误拒 | 局部值字段替换已通过下文限定验收；捕获/真正取址局部整槽替换也已修复；继续部分字段、指针/索引路径与未建模控制流中的合法普通用法；同时保留只读写入与擦除错误，不要求复杂 alias 风险证明 |
 | 必须完成：已列传播欠账 | 现存函数 iterator/range 目标、unsafe/guard 与上下文长尾逐项给出实现证据或明确范围决定；for 性能已有差距不能称等价，不将其扩成新优化项目 |
 | 已通过限定联合验收 | 下文联合业务贯通同 module 宏/封闭 enum/match/OptionResult/Default/serde JSON/权限；安装 CLI 仓库外构建、失败路径、生成模块 race、确定性及诊断矩阵通过。联合验收不抹去其余范围账 |
-| 范围不能暗改 | 当前公开引用是具体元素参数/单非具名返回、同次 module registry；外部恢复、其他签名/引用容器与完整来源映射保留工程账。先按已定有限交付标准核验实际需求，若要从已列工程项移出 MVP，须明确范围决定，不能由每阶段自行宣布延期 |
+| 范围不能暗改 | 当前公开引用是具体元素参数/单非具名返回，现支持同次 registry 和下文跨 module artifact 恢复；其他增强协议/签名/引用容器与完整来源映射保留工程账。先按已定有限交付标准核验实际需求，若要从已列工程项移出 MVP，须明确范围决定，不能由每阶段自行宣布延期 |
 | 明确独立长期/不纳入本轮 | D20 复杂别名/借用风险分析；完整 trait、LSP、自举、YAML、公开 Value/PATCH、完整 Rust 模式能力和稳定外部 ABI，不成为本轮隐性前置 |
 | 明确等用户设计 | Proposed serde field adapters 的具体入口与 custom deserialize_with 缺失策略；enum 原位表示迁移的 Go ABI/源比较取舍；方法接收权限/impl 键 U03、引用容器与 any 保留资格的未定表示 U02；select 候选失败语义若扩展问号。均不阻塞其他已定工程 |
 
@@ -580,3 +580,11 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 生产使用原函数 prelude，所有编译期 atom 包装均在输出前去除，readonly 不擦除；没有迁移 enum ABI。优化构建五次样本的二元/索引输出与显式 match 对照均零分配，原始值与复现见[研究记录](../tests/research/match_lowering/README.md#production-binaryindex-preludes)，不泛化为任意 match 成本承诺。
 
 本有界阶段完成后交回；原位 match 等待 enum ABI 选择，跨 module metadata 留给下一阶段。更复杂目标/表达式、不可命名结果及已列传播/权限欠账未冻结为延期，完整 MVP 尚未完成。
+
+## 跨 module 引用产物（2026-10-02）
+
+[真实 CLI 验收](../tests/acceptance/reference_external_test.go)创建独立库/应用 go.mod，库生成 Go+metadata，应用经离线 local replace 恢复具体引用权限；库、应用及第三个普通 Go 消费模块分别 race/vet。两次库/应用输出字节一致。alias/reexport、mut& 写入及已有可写别名保持；readonly 返回、字段写入、升级和擦除拒绝。单文件消费者也应用权限绑定。
+
+缺失、版本/包错误、权限摘要、文件内容/选集和依赖漂移均有负例；增强依赖及未marked普通 Go依赖的具名 struct 新增 slice 都使旧产物失效。独立审查的真实 hgo→Go 探针曾复现旧实现绕过，已用传递源指纹及增强 artifact pin 修复并纳入回归。这是编译期产物一致性校验，不是全局不可变或密码学认证；普通 Go 仍可直接写生成指针，移除 JSON 也能构建运行。
+
+最小内部格式与边界见 [RFC 0005](rfcs/0005-borrows.md#621-跨-module-引用产物恢复2026-10-02)。源可用 local replace 子集完成；其他增强协议、纯预编译无源恢复、外部 cgo 输入验证和未实现引用签名继续留账。原位 match mut& 等待 enum ABI 决定，Proposed serde adapters 未批准，完整 MVP 尚未完成。

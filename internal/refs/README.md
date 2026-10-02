@@ -170,13 +170,21 @@ ordinary pointer/interface/closure returns cannot erase them. Existing writable
 aliases remain usable. Native unmarked pointer APIs stay native APIs; D11 bridge
 work is not implemented by pretending a checked reference is a raw pointer.
 
-Generated packages contain `HgoReferenceMetadata` and `.hgo.refs.json`. The JSON
-is inspectable output, **not an external metadata input format**. Only the current
-module build's registry is consumed. A marked dependency without matching trusted
-build metadata is diagnosed, including in single-file compilation with no new
-reference syntax. Single-file exported-reference output also carries a marker,
-with internal identity `hgo/generated`; it does not enable cross-build recovery.
-This is not a stable public ABI or cryptographic provenance mechanism.
+Generated directory packages contain `HgoReferenceMetadata` and `.hgo.refs.json`.
+The internal artifact envelope (ArtifactVersion 1, permission schema v2) can now
+restore the supported signatures across separate modules via offline local replace.
+It binds package identity, logical marker digest, exact selected Go source hashes,
+and root/dependency fingerprints. The root package and every direct import pin its transitive selected source
+closure and target build settings; marked imports also pin their artifact bytes and
+are recursively validated. This includes ordinary Go dependencies: changing a named
+struct's fields can invalidate an earlier readonly analysis without changing an hgo
+function marker. Regenerate consumers after dependency changes. Hashes detect stale
+or mismatched trusted producer artifacts; they are not authentication or certification
+of arbitrary edited Go. Sources are resolved by the same offline Go importer, never
+by a path supplied in JSON. External cgo headers/toolchain inputs are not fully pinned.
+Single-file consumers recover directory artifacts and apply the same permission checks;
+single-file providers still use internal identity `hgo/generated` without an artifact.
+This is not a stable public ABI. Native Go consumers do not need the JSON file.
 
 Supported elements include builtin scalars, non-generic named concrete types,
 structs, slices, maps, arrays and recursively composed pointers. Generic nominal
@@ -189,7 +197,7 @@ All analysis types erase to ordinary pointers, without runtime wrappers.
 The public signature subset remains ordinary exported functions and one unnamed
 result. Interface/channel/function/generic elements, reference methods, generics,
 callbacks/function values, reference-containing containers, dot imports,
-named/multiple results and external-source/precompiled metadata recovery remain
+named/multiple results and source-unavailable/precompiled metadata recovery remain
 incomplete. A reference to a supported container is distinct from a container of
 references. Existing projection restrictions remain; this metadata extension does
 not claim unrestricted composite operations or method-effect inference.

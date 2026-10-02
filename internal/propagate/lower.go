@@ -835,7 +835,8 @@ func (l *lowering) mapConstraint() string {
 }
 
 // witnessCall builds compiler-only zero-value helpers. The argument is itself
-// a zero witness, never a user value. Type inference can therefore retain an
+// a zero witness or a static function identity, never an evaluated user result.
+// Type inference can therefore retain an
 // inaccessible named element type without reading storage or invoking methods.
 func (l *lowering) witnessCall(kind string, arg ast.Expr) ast.Expr {
 	if l.witnessHelpers == nil {
@@ -846,6 +847,17 @@ func (l *lowering) witnessCall(kind string, arg ast.Expr) ast.Expr {
 		name = "__hgo_qzero_" + l.cfg.Namespace + l.temp()
 		signature := "[T interface{}]() (zero T)"
 		switch {
+		case strings.HasPrefix(kind, "function-result-"):
+			count, err := strconv.Atoi(strings.TrimPrefix(kind, "function-result-"))
+			if err != nil {
+				panic(err)
+			}
+			params := make([]string, count)
+			for i := range params {
+				params[i] = fmt.Sprintf("A%d", i)
+			}
+			types := append(append([]string(nil), params...), "R")
+			signature = "[" + strings.Join(types, ",") + " interface{}](callee func(" + strings.Join(params, ",") + ") R) (zero R)"
 		case kind == "slice":
 			signature = "[S ~[]E, E interface{}](container S) (zero E)"
 		case kind == "pointer":

@@ -405,3 +405,13 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 
 
 本阶段验证：全树 race **15 包 / 244 顶层 / 441 子测试**（另 2 包无测试），vet、13 条设计检查通过；private 业务 **18 项**生成 race。独立研究模块另跑 race/legacy/vet，非 race 200ms × 5 检查核心三种成功路径全部 **0 B/0 alloc**，失败 **16 B/1 alloc**；与显式 match 的原始对照已入[研究记录](../tests/research/assignment_guard/README.md)。该门槛仅覆盖已替换路径，不把仍有 guard 的组合或整项 MVP 打勾。
+
+
+### 无 guard 第二组：bool witness、signed shift、len/cap
+
+[effects_context.hgo](../examples/propagate_places/effects_context.hgo)新增无 guard 形状断言，迁入此前 mixed private bool、有符号 contextual shift、含问号 len 三条用例，并加入私有泛型类型身份/右臂未调用、nil 目标、负 shift 不写、private 参数上下文、cap、常量 keyed literal、nil pointer-array 与真实解引用边界。duplicate-key 继续作为前端负例。专门 fallback 文件从五条降到 **两条**（tuple/unsafe），不改变这两条的语义保证。
+
+本组仅覆盖 [RFC §6.10](rfcs/research/0005-option-result-question.md#610-私有-bool上下文-shift-与-lencap-第二组)列明的签名来源和 operand。字段/动态或泛型 bool witness、未规划 literal/表达式及旧普通 expr 的私有上下文问题仍是工程缺口；不能称所有 bool/len 或全部 guard 已收口。循环/range、switch 仍列待办，select/adapters 继续待决。
+
+
+本组最终验证：全树 race **15 包 / 244 顶层 / 442 子测试**，另 2 包无测试；vet、13 条设计检查通过。业务生成模块 **22 项** race；独立研究模块 **11 项**另跑 race/legacy/vet。Bool/Shift/Len 新三组与旧三组成功全部 5 次样本 **0 B/0 alloc**，新三组失败 **16 B/1 alloc**与显式 match 一致。[分组原始基准](../tests/research/assignment_guard/README.md)和独立反例证据明确区分真实 hgo 与纯 Go 探针。

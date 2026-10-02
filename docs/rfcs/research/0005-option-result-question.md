@@ -239,3 +239,24 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 独立审查发现的具体反例：`t.Count, out = 7, unsafe.Pointer(uintptr(unsafe.Pointer(p)) + offset()?)`，p 指向两字节数组、offset=1。把 uintptr 存入临时变量后再转回 pointer 会破坏 Go unsafe 的同表达式转换/存活规则，真实 hgo 生成模块 race 触发 checkptr；旧 frame 则通过。支持判定现按真实类型身份保留 unsafe.Pointer 及从 unsafe.Pointer 到 uintptr 的转换链（也保护 syscall 特殊实参），永久回归验证有效偏移与失败不写。该扫描保守覆盖本赋值包含的嵌套闭包体；这可能保留额外 guard，但不会拒绝合法源码。后续可以细化范围，不能为了零分配破坏指针存活。
 
 这种反例限制当前 planner 的拆分策略，并不证明所有无 panic 方案不可能。下一工作是逐类保留特殊转换/求值单元及补齐上下文类型见证；本组不扩循环、select 或 adapters，也不声称整体 T0/MVP 已完成。
+
+
+### 6.10 私有 bool、上下文 shift 与 len/cap 第二组
+
+基于 `693282c64f0868cb38beaacd98c113e2aba029b1`，新增 [effect_context.go](../../../internal/propagate/effect_context.go)，把上组五条明确 fallback 中三条迁到 [effects_context.hgo](../../../examples/propagate_places/effects_context.hgo) 的无 guard 路径；tuple 和 unsafe 转换链仍保留。没有取消其余未规划形状的限制或宣布全部私有目标完成。
+
+**私有 bool 短路推型**：对于 `(n==0) && model.Flag(r?==7)`，若右臂提供纯静态、非泛型、非 variadic、非方法的函数签名，编译器通过泛型 zero-result helper 从该签名推导 private 返回类型。helper 只返回零值，既不调用 Flag，也不读取目标字段或执行右臂。先用该零值声明保留名义类型的临时量，再写入左条件；只有选中右臂才执行其调用/传播。真实 hgo 验证原生泛型观察到 private bool 而非 builtin bool、二参数函数 witness、未选中右臂调用计数为零，以及 nil 目标上右臂失败不提前读目标。
+
+**上下文有符号 shift**：先保存 count，再在其原求值位置执行 `_ = 0 << count` 的原生 Go 检查；不合成 panic/recover，也不把最终 `1<<count` 默认成 int。负 count 在后续传播前产生原生 shift panic；非负路径仍把真实移位留在私有 uint64 上下文，63 位不丢失。constant 和 unsigned count 不加这项动态检查。残余表达式只有已经排除 panic 的部分延后；contextual 除法/余数等仍未纳入。
+
+**含问号 len/cap**：通过 effects planner 处理 operand，保持私有函数参数的 bool/shift 上下文。显式 array/slice literal 的元素与常量 key 保留，整份 literal 明确求值后再调用 len/cap；不因去掉问号调用而使原本需求值的 array 操作数被常量折叠跳过。pointer-array 值为 nil 时 cap 可取长度，但 `len(*pointerResult?)` 的实际解引用仍 panic；失败传播先于解引用。当前支持 planner 已能处理的普通 operand，加显式 array/slice literal（不含需要推断类型的嵌套省略 literal）；map literal、其他未规划 operand 保持 guard。
+
+独立研究拒绝了“直接复用旧 expr 就足够”的假设：`len(Array((n==0)&&Flag(r?==7)))` 和 `len(ArrayMask(1<<n,r?))` 会在旧普通 expr 路径把 private bool/mask 默认成 bool/int。新路径使用 effects 自己的上下文处理，两条真实跨包 hgo 反例均通过，生成文件无 guard。旧普通目标 expr 的这些组合不是本组已修复范围，仍是具体工程待办；不能借私有目标通过就宣称所有 len 组合已完成。
+
+当前剩余 guard 分组：
+
+- 私有 bool 的类型只来自字段/动态 callee/泛型或 variadic 函数等尚无安全 witness 的来源；不提前执行右臂取类型。
+- contextual 除法/余数等未规划残余；len/cap 的未规划 operand 或隐式嵌套 literal；此前 map/slice 目标、动态调用/其他含问号表达式组合。
+- tuple/comma-ok 的多值处理，以及 unsafe.Pointer/uintptr 转换链的求值和存活约束。现有永久 fallback 文件恰好两条 Catch，继续 race/checkptr。
+
+下一组先处理 tuple/comma-ok 和可证明保留完整转换链的 unsafe 子集；目前没有证明统一无 guard 不可能。for/range 与 switch 仍是已确认、未完成的 T0 工程项，不因这些分组自动延期；若 unsafe 剩余确有边界，可独立推进循环切片。select 候选语义与 Proposed adapters 不作新决定。

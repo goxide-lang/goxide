@@ -47,3 +47,7 @@ func BoolKind[T any](v T) int {
 	}
 	return 2
 }
+
+func TrackedFlag(v bool, calls *int) flag { *calls++; return flag(v) }
+func FlagArray(v flag) [1]flag            { return [1]flag{v} }
+func MaskArray(v mask, n int) [1]mask     { return [1]mask{v + mask(n)} }

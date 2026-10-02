@@ -87,22 +87,22 @@ func (l *lowering) canEffect(x ast.Expr) bool {
 			switch n.Op {
 			case token.ADD, token.SUB, token.MUL, token.AND, token.OR, token.XOR, token.AND_NOT:
 			case token.SHL, token.SHR:
-				// Delaying a negative shift count's panic would change evaluation.
-				count := l.expressionFacts[n.Y]
-				basic, _ := underlyingType(count.typ).(*types.Basic)
-				if !count.constant && (basic == nil || basic.Info()&types.IsUnsigned == 0) {
-					return false
-				}
+				// Signed counts receive a native Go shift check at this evaluation
+				// position; the contextual result still stays in the assignment.
 			default:
 				return false
 			}
 		}
 		if (n.Op == token.LAND || n.Op == token.LOR) && !f.untyped {
 			if _, nameable := l.typeSpelling(f.typ); !nameable && l.expressionFacts[n.X].untyped {
-				return false
+				if _, _, ok := l.resultWitness(n, f.typ); !ok {
+					return false
+				}
 			}
 		}
 		return l.canEffect(n.X) && l.canEffect(n.Y)
+	case *ast.StarExpr:
+		return l.canEffect(n.X)
 	case *ast.UnaryExpr:
 		switch n.Op {
 		case token.ADD, token.SUB, token.XOR, token.NOT, token.ARROW:
@@ -115,6 +115,9 @@ func (l *lowering) canEffect(x ast.Expr) bool {
 			}
 		}
 		if b := l.builtin(n); b != nil && b.Name() != "recover" {
+			if (b.Name() == "len" || b.Name() == "cap") && len(n.Args) == 1 {
+				return l.canMeasureOperand(n.Args[0])
+			}
 			return false
 		}
 		if !l.staticEffectCallee(n.Fun) {
@@ -186,6 +189,12 @@ func (l *lowering) effectExpr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Exp
 	case *ast.ParenExpr:
 		p, v, e := l.effectExpr(n.X, ft)
 		return p, &ast.ParenExpr{X: v}, e
+	case *ast.StarExpr:
+		p, v, e := l.effectExpr(n.X, ft)
+		if e != nil {
+			return nil, nil, e
+		}
+		return finish(p, &ast.StarExpr{X: v})
 	case *ast.UnaryExpr:
 		p, v, e := l.effectExpr(n.X, ft)
 		if e != nil {
@@ -207,7 +216,7 @@ func (l *lowering) effectExpr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Exp
 			// a genuinely untyped logical expression to temporary builtin bool.
 			var stored ast.Expr
 			if !f.untyped {
-				stored = l.freezeValue(x, left, &p)
+				stored = l.logicalValue(x, left, &p)
 			} else {
 				name := l.temp()
 				p = append(p, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.DEFINE, Rhs: []ast.Expr{left}})
@@ -224,7 +233,13 @@ func (l *lowering) effectExpr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Exp
 			}
 			return p, stored, nil
 		}
-		return finish(append(p, q...), &ast.BinaryExpr{X: left, Op: n.Op, Y: right})
+		pre := append(p, q...)
+		if l.signedResidualShift(n) {
+			// This is a real Go shift, not a synthetic panic. It checks the saved
+			// count now without defaulting the actual private-context result.
+			pre = append(pre, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_")}, Tok: token.ASSIGN, Rhs: []ast.Expr{&ast.BinaryExpr{X: &ast.BasicLit{Kind: token.INT, Value: "0"}, Op: token.SHL, Y: right}}})
+		}
+		return finish(pre, &ast.BinaryExpr{X: left, Op: n.Op, Y: right})
 	case *ast.CallExpr:
 		if id, ok := n.Fun.(*ast.Ident); ok {
 			if d, q := l.questions[id.Name]; q {
@@ -238,6 +253,9 @@ func (l *lowering) effectExpr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Exp
 				}
 				return append(p, flow.emit(returnFailure)...), flow.value, nil
 			}
+		}
+		if b := l.builtin(n); b != nil && (b.Name() == "len" || b.Name() == "cap") {
+			return l.measureExpr(n, ft)
 		}
 		call := *n
 		call.Args = append([]ast.Expr(nil), n.Args...)

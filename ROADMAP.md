@@ -138,3 +138,6 @@ T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 
 
 
 首批私有赋值无 panic lowering 已实现：原 private.hgo 验收集及核心研究基准使用普通失败 return，保留完整最终赋值和 Go 上下文类型。仍有明确 guard 范围（含 unsafe 转换链的真实 checkptr 反例），[RFC §6.9](docs/rfcs/research/0005-option-result-question.md#69-首批无-panic-完整赋值-lowering)与最新验收矩阵逐项列出，不宣称全部私有目标或 MVP 完成。
+
+
+无 guard 第二组接通静态函数返回类型提供的 private bool witness、signed contextual shift 原生检查及 planner 范围内的 len/cap；专门 fallback 用例由五条降至 tuple/unsafe 两条。其余组合和普通 expr 已知上下文缺口见 [RFC §6.10](docs/rfcs/research/0005-option-result-question.md#610-私有-bool上下文-shift-与-lencap-第二组)。for/range、switch 仍是待实现工程项，不等待 select/adapters 设计，也不默认为批准延期。

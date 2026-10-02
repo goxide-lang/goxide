@@ -1,6 +1,6 @@
 # 私有赋值 guard 与正常控制流研究
 
-状态：`a3f064fbcd0e75bb06bdba406f007e5abd68bd71` 功能路径已接通，**性能验收未通过，私有目标缺口未收口**。这里没有实现新的编译器 IR，也没有批准延期。修正后的 guard 识别只遍历真正存储路径；只读 index/key/调用参数不需要 guard。不将该机制扩到循环。
+历史状态：`a3f064fbcd0e75bb06bdba406f007e5abd68bd71` 功能路径已接通，**性能验收未通过，私有目标缺口未收口**。这里没有实现新的编译器 IR，也没有批准延期。修正后的 guard 识别只遍历真正存储路径；只读 index/key/调用参数不需要 guard。不将该机制扩到循环。
 
 ## 重现
 
@@ -89,3 +89,21 @@ python3 tests/research/assignment_guard/run.py --go /path/to/go --out /path/to/n
 | 单条八问号末次失败 | 30.78 | 32.31 | 16/1 | 16/1 |
 
 成功路径此前的每条 32 B guard 分配已从这些路径消除；失败仍有与显式 match 一致的 16 B/1 次 Result 重建。计时受工具链/虚拟机及内联差异影响，不用单次表格推广所有应用性能。此结论不覆盖仍走 guard 的形状：完整清单和真实 unsafe/checkptr 反例见 [RFC §6.9](../../../docs/rfcs/research/0005-option-result-question.md#69-首批无-panic-完整赋值-lowering)。基准源/model 是固定研究快照，与扩充的业务 acceptance 原生 model 各自独立。
+
+
+## context 第二组：私有 bool、signed shift、len/cap
+
+基于 `693282c64f0868cb38beaacd98c113e2aba029b1`，新增 [真实 hgo context 源](source/context.hgo)与 [分组基准](context_bench_test.go.fixture)。Bool 的显式基线在左条件失败时跳过右臂；Shift 基线保留同一原生负数检查；三组都用相同 Result/validator/Err 重建，输入在计时前构造。没有用原生 `(int,error)` 或手写 IR 探针替代此对照。
+
+[原始数据](results/context/bench.txt)、[统计](results/context/summary.json)及 [manifest](results/context/manifest.json)记录 Go 1.27.1 同机 GOMAXPROCS=1、200ms × 5；全树测试结束后单独运行。`--expect-no-guard` 现在检查 benchmark.go 和 context.go，两文件无 Assignment/Catch/Fail，原三组与新三组共六组成功路径的全部样本均为 0 B/0 alloc；同时检查样本数。
+
+| 真实 hgo 路径 | planner ns/op | 显式 match ns/op | planner B/alloc | 显式 B/alloc |
+| --- | ---: | ---: | --- | --- |
+| 私有 bool 成功 | 2.666 | 2.581 | 0/0 | 0/0 |
+| 私有 bool 失败 | 22.64 | 24.26 | 16/1 | 16/1 |
+| signed shift 成功 | 3.109 | 3.57 | 0/0 | 0/0 |
+| signed shift 失败 | 25.51 | 22.34 | 16/1 | 16/1 |
+| len 成功 | 2.457 | 2.595 | 0/0 | 0/0 |
+| len 失败 | 26.26 | 26.67 | 16/1 | 16/1 |
+
+这些有限微基准的时间差不能推广所有应用；已证明的是所测路径没有额外成功分配，失败分配与显式 match 相同。研究生成模块共 11 项 race 测试，其中 6 项仍是手写 Go 机制探针；新增 TestContextBenchmarkEquivalence 比较真实 hgo 两路径的结果和目标状态。业务 acceptance 另覆盖 witness 未调用、nil、负 shift 原生 runtime.Error、private 参数及 cap/keyed literal。tuple/unsafe 与其余未规划形状仍有 guard；精确范围见 [RFC §6.10](../../../docs/rfcs/research/0005-option-result-question.md#610-私有-bool上下文-shift-与-lencap-第二组)。

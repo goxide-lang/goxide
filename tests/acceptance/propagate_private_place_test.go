@@ -7,7 +7,7 @@ import (
 )
 
 const privatePlaceAssertions = `package main
-import("testing";"errors";"strconv";"places.example/update/model")
+import("testing";"errors";"strconv";"runtime";"places.example/update/model")
 func catchPanic(f func())(v any){defer func(){v=recover()}();f();return}
 func TestPromotedReadOperands(t *testing.T){tree:=model.NewTree(0);ok:=parse("7");bad:=parse("bad");if n,e:=unpack(readIndex(&tree,ok));n!=7||e!=nil{t.Fatal(n,e)};if _,e:=unpack(readIndex(&tree,bad));e==nil{t.Fatal("index failure lost")};m:=map[int]int{};if _,e:=unpack(readKey(&tree,m,ok));e!=nil||m[0]!=7{t.Fatal(e,m)};a:=[1]int{};if _,e:=unpack(readArgument(&tree,&a,ok));e!=nil||a[0]!=7{t.Fatal(e,a)};if _,e:=unpack(readKey(&tree,m,bad));e==nil||m[0]!=7{t.Fatal(e,m)};if _,e:=unpack(readArgument(&tree,&a,bad));e==nil||a[0]!=7{t.Fatal(e,a)}}
 func TestPrivateStock(t *testing.T){tree:=model.NewTree(3);if n,e:=unpack(stock(&tree,"7"));n!=7||e!=nil{t.Fatal(n,e)};_,e:=unpack(stock(&tree,"bad"));var cause *strconv.NumError;if !errors.As(e,&cause)||tree.Count!=7{t.Fatal(e,tree.Count)};if n,e:=unpack(stockFields(&tree,63,"7"));n!=7||e!=nil||uint64(tree.Wide)!=uint64(1)<<63||!tree.Enabled{t.Fatal(n,e,tree)};tree.Wide=1;if n,e:=unpack(compoundPrivate(&tree));n!=4||e!=nil{t.Fatal(n,e)}}
@@ -23,9 +23,14 @@ func TestPrivateQuestionsInLHS(t *testing.T){tree:=model.NewTree(3);if n,e:=unpa
 func TestEffectsReceiveBeforeFailure(t *testing.T){tree:=model.NewTree(3);ch:=make(chan int,1);ch<-5;if _,e:=unpack(effectsReceive(&tree,ch,parse("bad")));e==nil||len(ch)!=0||tree.Count!=3{t.Fatal(e,len(ch),tree.Count)};ch<-5;if _,e:=unpack(effectsReceive(&tree,ch,parse("7")));e!=nil||tree.Count!=12{t.Fatal(e,tree.Count)}}
 func TestEffectsBooleanIdentity(t *testing.T){tree:=model.NewTree(3);if _,e:=unpack(effectsBool(&tree,parse("7")));e!=nil||!tree.Enabled{t.Fatal(e,tree.Enabled)};if n,e:=unpack(effectsPrivateBool(&tree,parse("7")));e!=nil||n!=2{t.Fatal(n,e)};tree.Enabled=false;if n,e:=unpack(effectsPrivateBool(&tree,parse("bad")));e!=nil||n!=2{t.Fatal("unselected right must not propagate",n,e)};if n,e:=unpack(effectsBuiltinBool(&tree,parse("7")));e!=nil||n!=1{t.Fatal(n,e)}}
 func TestEffectsContextAndLen(t *testing.T){tree:=model.NewTree(3);trace:=[]int{};if _,e:=unpack(effectsLen(&tree,&trace,parse("bad")));e==nil||len(trace)!=1||tree.Count!=3{t.Fatal(e,trace,tree.Count)};if _,e:=unpack(effectsShift(&tree,63,parse("7")));e!=nil||uint64(tree.Wide)!=(uint64(1)<<63|uint64(1)<<62)||tree.Count!=7{t.Fatal(e,tree.Wide,tree.Count)}}
-func TestExplicitEffectFallbacks(t *testing.T){tree:=model.NewTree(3);if _,e:=unpack(fallbackMixedBool(&tree,1,parse("bad")));e!=nil||tree.Enabled{t.Fatal(e,tree.Enabled)};if _,e:=unpack(fallbackMixedBool(&tree,0,parse("7")));e!=nil||!tree.Enabled{t.Fatal(e,tree.Enabled)};if _,e:=unpack(fallbackSignedShift(&tree,63,parse("7")));e!=nil||uint64(tree.Wide)!=uint64(1)<<63{t.Fatal(e,tree.Wide)};if _,e:=unpack(fallbackLen(&tree,parse("7")));e!=nil||tree.Count!=1{t.Fatal(e,tree.Count)};if _,e:=unpack(fallbackTuple(&tree,parse("8")));e!=nil||tree.Count!=8{t.Fatal(e,tree.Count)}}
+func TestExplicitEffectFallbacks(t *testing.T){tree:=model.NewTree(3);if _,e:=unpack(contextMixedBool(&tree,1,parse("bad")));e!=nil||tree.Enabled{t.Fatal(e,tree.Enabled)};if _,e:=unpack(contextMixedBool(&tree,0,parse("7")));e!=nil||!tree.Enabled{t.Fatal(e,tree.Enabled)};if _,e:=unpack(contextSignedShift(&tree,63,parse("7")));e!=nil||uint64(tree.Wide)!=uint64(1)<<63{t.Fatal(e,tree.Wide)};if _,e:=unpack(contextLen(&tree,parse("7")));e!=nil||tree.Count!=1{t.Fatal(e,tree.Count)};if _,e:=unpack(fallbackTuple(&tree,parse("8")));e!=nil||tree.Count!=8{t.Fatal(e,tree.Count)}}
 
 func TestUnsafeConversionFallbackRace(t *testing.T){tree:=model.NewTree(3);a:=[2]byte{1,9};if n,e:=unpack(fallbackUnsafe(&tree,&a,1,true));e!=nil||n!=9||tree.Count!=7{t.Fatal(n,e,tree.Count)};tree.Count=3;if _,e:=unpack(fallbackUnsafe(&tree,&a,1,false));e==nil||tree.Count!=3{t.Fatal(e,tree.Count)}}
+
+func TestContextPrivateBoolWitness(t *testing.T){tree:=model.NewTree(3);calls:=0;if n,e:=unpack(contextBoolKind(&tree,1,parse("bad"),&calls));e!=nil||n!=2||calls!=0{t.Fatal(n,e,calls)};if n,e:=unpack(contextBoolKind(&tree,0,parse("7"),&calls));e!=nil||n!=2||calls!=1{t.Fatal(n,e,calls)};tree=model.NilLeaf();if _,e:=unpack(contextMixedBool(&tree,0,parse("bad")));e==nil{t.Fatal("witness must not read nil target")}}
+func TestContextSignedShiftPanic(t *testing.T){tree:=model.NewTree(3);for _,r:=range []Result[int,error]{parse("7"),parse("bad")}{v:=catchPanic(func(){_=contextSignedShift(&tree,-1,r)});if _,ok:=v.(runtime.Error);!ok{t.Fatal("expected native shift panic",v)};if v==nil||tree.Count!=3||tree.Wide!=0{t.Fatal(v,tree.Count,tree.Wide)}};if _,e:=unpack(contextSignedShift(&tree,63,parse("7")));e!=nil||uint64(tree.Wide)!=uint64(1)<<63{t.Fatal(e,tree.Wide)}}
+func TestContextMeasureTypes(t *testing.T){tree:=model.NewTree(3);if n,e:=unpack(contextBoolLen(&tree,1,parse("bad")));e!=nil||n!=1{t.Fatal(n,e)};if n,e:=unpack(contextBoolLen(&tree,0,parse("7")));e!=nil||n!=1{t.Fatal(n,e)};if n,e:=unpack(contextMaskLen(&tree,63,parse("7")));e!=nil||n!=1{t.Fatal(n,e)};if n,e:=unpack(contextCap(&tree,parse("7")));e!=nil||n!=2{t.Fatal(n,e)};if n,e:=unpack(contextKeyedLen(&tree,parse("7")));e!=nil||n!=3{t.Fatal(n,e)};if _,e:=unpack(contextKeyedLen(&tree,parse("bad")));e==nil||tree.Count!=3{t.Fatal(e,tree.Count)}}
+func TestContextMeasureNilArray(t *testing.T){tree:=model.NewTree(3);if n,e:=unpack(contextNilArray(&tree,nil,true,false));e!=nil||n!=2{t.Fatal(n,e)};if v:=catchPanic(func(){_=contextNilArray(&tree,nil,true,true)});v==nil||tree.Count!=2{t.Fatal(v,tree.Count)};if _,e:=unpack(contextNilArray(&tree,nil,false,true));e==nil||tree.Count!=2{t.Fatal(e,tree.Count)}}
 
 `
 
@@ -37,6 +42,7 @@ func privateAssignmentNegatives(t *testing.T, cli, outside, root string) {
 		"outer-bare-return":     `func f(r *dep.Tree)Option[int]{if true{r.X=Option[int]::Some(1)?};return}`,
 		"bare-return":           `func f(r *dep.Tree)Option[int]{r.X=Option[int]::Some(1)?;return}`,
 		"type-mismatch":         `func f(r *dep.Tree)Option[int]{r.X=Option[string]::Some("a")?;return Option[int]::None}`,
+		"measure-duplicate-key": `func f(r *dep.Tree)Option[int]{r.X=len([2]int{0:Option[int]::Some(1)?,0:2});return Option[int]::None}`,
 		"mixed-not-addressable": `func f(r *dep.Tree)Option[int]{r.X,r.Value().N=1,Option[int]::Some(1)?;return Option[int]::None}`,
 		"not-addressable":       `func f(r *dep.Tree)Option[int]{r.Value().N=Option[int]::Some(1)?;return Option[int]::None}`,
 	} {

@@ -5,9 +5,6 @@ import (
 )
 
 // These combinations are explicitly not covered by the new planner yet.
-func fallbackMixedBool(t *model.Tree,n int,r Result[int,error])Result[int,error]{t.Enabled=(n==0)&&model.Flag(r?==7);return Result[int,error]::Ok(1)}
-func fallbackSignedShift(t *model.Tree,n int,r Result[int,error])Result[int,error]{t.Wide,t.Count=1<<n,r?;return r}
-func fallbackLen(t *model.Tree,r Result[int,error])Result[int,error]{t.Count=len([1]int{r?});return r}
 func fallbackPair(n int)(int,bool){return n,true}
 func fallbackTuple(t *model.Tree,r Result[int,error])Result[int,error]{var ok bool;t.Count,ok=fallbackPair(r?);_=ok;return r}
 func fallbackUnsafe(t *model.Tree,p *[2]byte,n uintptr,ok bool)Result[int,error]{r:=Result[uintptr,error]::Ok(n);if !ok{r=Result[uintptr,error]::Err(parseError())};var out unsafe.Pointer;t.Count,out=7,unsafe.Pointer(uintptr(unsafe.Pointer(p))+r?);return Result[int,error]::Ok(int(*(*byte)(out)))}

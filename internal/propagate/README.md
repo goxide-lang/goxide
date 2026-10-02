@@ -164,3 +164,12 @@ That was the questionFlow-only stage. The subsequent effects planner now removes
 guards from the existing private.hgo acceptance set and core benchmark fixtures;
 unsupported combinations still take assignmentFrame, so universal private-target
 performance acceptance remains open. See RFC 0005 section 6.9 for the exact scope.
+
+
+The second effects group adds static non-generic/non-variadic function-result
+witnesses for private logical types, native negative-count checks for contextual
+shifts, and len/cap operands through the effects planner itself. Explicit array
+and slice literals are evaluated before measuring them. We do not route these
+through legacy expr, which can default private call-argument bool/mask types.
+Tuple/unsafe and the unplanned witness/operand shapes remain explicit fallbacks;
+RFC section 6.10 records those boundaries and the ordinary-expr gap separately.

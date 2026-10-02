@@ -117,7 +117,7 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 		t.Fatal("rvalue index/key/call-argument unexpectedly uses assignment guard")
 	}
 
-	for _, name := range []string{"private.go", "effects.go"} {
+	for _, name := range []string{"private.go", "effects.go", "effects_context.go"} {
 		code, err := os.ReadFile(filepath.Join(generated, name))
 		if err != nil {
 			t.Fatal(err)
@@ -130,8 +130,8 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(string(fallback), ".Catch("); n != 5 {
-		t.Fatalf("explicit fallback coverage: got %d guards, want 5", n)
+	if n := strings.Count(string(fallback), ".Catch("); n != 2 {
+		t.Fatalf("explicit fallback coverage: got %d guards, want 2", n)
 	}
 	packagesWrite(t, generated, "private_test.go", privatePlaceAssertions)
 

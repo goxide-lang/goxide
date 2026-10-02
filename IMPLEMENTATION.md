@@ -705,3 +705,17 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 非 race 基准 **200ms × 5** 验证真实 hgo Guard1/Guard8/PackedGuard 成功的全部样本 **0 B/0 alloc**，失败 **16 B/1 alloc**与显式 match 同级；生成代码无 guard。基准原始数据及精确中位数在[仓库研究记录](tests/research/assignment_guard/README.md)，不把六项手写 Go 探针当作此实现证据。全树日志 `/tmp/t0-effects-race.json`、`/tmp/t0-effects-race.err`、`/tmp/t0-effects-vet.log`、`/tmp/t0-effects-design.log`，研究结果与复现脚本已入库。仍有 guard 的形状未性能收口，T0/MVP 未完成。
 
 最终文档检查通过 **58 Markdown / 619 本地链接与锚点 / 20 RFC**，diff 检查通过；只提交推送 feat/t0-completion 并 fetch 核验，不修改 main/work/冻结标签。
+
+
+## 无 guard 第二组：上下文类型与求值检查
+
+基于 `693282c64f0868cb38beaacd98c113e2aba029b1`，通过静态函数签名的纯零值 helper 推导私有 bool；对动态 signed count 在原求值点执行 Go 自身移位检查，真实结果仍留私有整数上下文；len/cap 用 effects 自己的 operand 处理和显式 literal 求值，不复用会丢私有参数类型的旧 expr。实现见 [effect_context.go](internal/propagate/effect_context.go)，精确范围和剩余项见 [RFC §6.10](docs/rfcs/research/0005-option-result-question.md#610-私有-bool上下文-shift-与-lencap-第二组)。
+
+三条原 fallback 已迁为普通失败 return，生成效果文件无 guard；剩余 tuple/unsafe 文件恰好两条 Catch，继续原 race/checkptr 回归。新增跨包用例验证短路未调用、nominal bool、nil 目标、负 shift、私有 mask 参数、keyed len、cap、pointer-array nil 与解引用。独立审查还用真实 hgo 重现旧 expr 两个类型丢失反例，并验证新 private planner 均通过；旧普通 expr 的对应组合没有冒称已修复。
+
+
+本阶段最终验证：全树 race **15 个有测试包、244 宿主顶层/442 子测试**，另 **2 包无自身测试**；vet、完整设计检查 **13 条 Go 命令**通过。随后加强负 shift 为原生 runtime.Error 的断言并重跑安装 CLI 业务 race；该模块现在 **22 项**（原 18 + 新增 4），普通目标 **9 项**和 unsafe 非求值 **1 项**由各自生成模块 race。独立审查与实际跨包探针无阻断。
+
+研究生成模块 **11 项**测试单列（含 6 项手写 Go 机制探针），race/legacy/vet 通过。非 race **200ms × 5**：两份核心生成文件无 guard，原三组及新增 Bool/Shift/Len 共六组成功全部样本 **0 B/0 alloc**；三组失败均 **16 B/1 alloc**，与相应显式 match 相同。[原始基准与复现入口](tests/research/assignment_guard/README.md)已入库。全树证据 `/tmp/t0-context-race.json`、`/tmp/t0-context-race.err`、`/tmp/t0-context-vet.log`、`/tmp/t0-context-design.log`，加强断言复验 `/tmp/t0-context-final-targeted.log`。阶段完成不代表其余 guard、循环/switch 或整体 MVP 完成。
+
+最终 docs-only **58 Markdown / 634 本地链接与锚点 / 20 RFC**及 diff 检查通过；仅提交推送 feat/t0-completion 并 fetch 核验，不修改 main/work/冻结标签。

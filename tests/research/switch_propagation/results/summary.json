@@ -1,0 +1,26 @@
+{
+  "PropagatedSuccess": {
+    "samples": 5,
+    "median_ns": 10.5,
+    "bytes": 0,
+    "allocations": 0
+  },
+  "ExplicitSuccess": {
+    "samples": 5,
+    "median_ns": 9.392,
+    "bytes": 0,
+    "allocations": 0
+  },
+  "PropagatedFailure": {
+    "samples": 5,
+    "median_ns": 8.094,
+    "bytes": 0,
+    "allocations": 0
+  },
+  "ExplicitFailure": {
+    "samples": 5,
+    "median_ns": 7.895,
+    "bytes": 0,
+    "allocations": 0
+  }
+}

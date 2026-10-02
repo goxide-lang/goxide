@@ -1,0 +1,5 @@
+package main
+import "places.example/update/model"
+func switchPrivateCase(t *model.Tree,n uint,r Result[uint,error])Result[int,error]{switch t.Wide{case (1<<n)|(1<<r?):return Result[int,error]::Ok(1);default:return Result[int,error]::Ok(0)}}
+func switchPrivateSigned(t *model.Tree,n int,r Result[uint,error])Result[int,error]{switch t.Wide{case (1<<n)|(1<<r?):return Result[int,error]::Ok(1);default:return Result[int,error]::Ok(0)}}
+func switchPrivateBool(n int,r Result[int,error])Result[int,error]{switch model.Flag(true){case (n==0)&&model.Flag(r?==7):return Result[int,error]::Ok(1);default:return Result[int,error]::Ok(0)}}

@@ -1,0 +1,26 @@
+goos: linux
+goarch: amd64
+pkg: switchfixture
+cpu: AMD EPYC 9V74 80-Core Processor                
+BenchmarkPropagatedSuccess 	20488932	        13.49 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedSuccess 	36458743	        15.17 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedSuccess 	28494794	        10.50 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedSuccess 	29766445	         9.229 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedSuccess 	39124210	         8.588 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitSuccess   	35053797	         9.617 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitSuccess   	36510068	         8.349 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitSuccess   	31691275	         9.392 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitSuccess   	28043787	         7.335 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitSuccess   	35706044	        10.91 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedFailure 	30465547	        12.84 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedFailure 	38171107	         7.491 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedFailure 	36370485	         8.094 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedFailure 	37386921	         7.192 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPropagatedFailure 	39089373	         8.610 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitFailure   	25105384	         9.914 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitFailure   	34766313	         7.895 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitFailure   	28926950	         8.678 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitFailure   	34012308	         6.567 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicitFailure   	37634584	         6.584 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	switchfixture	6.964s

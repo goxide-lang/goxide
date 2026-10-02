@@ -296,3 +296,17 @@ for/range 与 switch 仍是 T0 待实现项；普通 expr 的私有上下文问�
 | switch/select、泛型函数原型限制及其他未支持 statement | 不借循环改动扩大；switch 仍待实现，select 仍待决 |
 
 其余 unsafe/私有赋值 guard 长尾仍按 §6.11 留表，不阻塞本切片也不标完成。for/range 只对上表已验收范围完成，整体 T0/MVP 未完成。性能研究使用真实 hgo 循环与相同 Option 协议的显式 match，单独运行非 race 基准；零分配不代表与显式 match 耗时相同。
+
+### 6.13 表达式 switch 的传播与循环开销复核
+
+基于 `ab8889b26fdf32272ccec77204042c7dd57cf87a`，新增 [switches.go](../../../internal/propagate/switches.go)，覆盖 expression switch 的 initializer、tag、case 表达式和已有可降低的 case body。初始化与 tag 在原函数中求值，局部声明保留在包围整个 switch 的 block；tag 仅求值一次，未类型化 tag 仍使用 Go 默认类型。没有 tag 时保留原生 switch 的隐式 true 规则，不能把私有名义 bool case 偷偷当作内建 bool。
+
+含 case 传播时，按原 clause 与逗号列表的顺序逐项求值；每项放进单 case 的原生 switch，保留原类型转换、接口 nil 与动态不可比较值 panic 的规则。只在尚未匹配时求下一项；传播失败普通 return，尚不进入任何 case body。选中编号交给最后的原生 switch，原 clause 顺序和 default 位置保持，因此 break、fallthrough（包括落入/离开 default）、case 独立作用域和带 default 的终止性仍由 Go 保证。default 仅在所有非 default case 不匹配之后执行，不因其写在前面就提前选中。
+
+标签复用控制语句的入口分离：goto 重入 initializer/tag/case 求值，带标签 break 指向最终原生 switch，continue 到 switch 标签仍非法。循环中的 continue 继续作用于外层循环。nearest-function return、defer 和用户 panic 不增加隐藏函数或 guard。Type switch 与 expression switch 分开：本阶段不支持 type switch 自身 initializer/guard/body 中的传播，仍明确诊断，未改其无传播语法。
+
+改写前保存最终原 AST 的 Go 类型检查错误，对 switch header/tag/case 区间先报错，避免拆成单 case 后掩盖重复常量、类型不匹配、不可比较 tag 等原静态错误。原 case body 留给最终 Go 检查，非法末尾 fallthrough、continue 标签和泄漏变量不能放行。独立审查还发现跨包 private mask 的 `(1<<n)|(1<<r?)` 会在旧 expr 丢失上下文；现优先复用已验证的 effects planner，真实跨包用例覆盖 63/62 位、原生负 shift 检查先于后续失败，以及 private bool 短路。effects 尚未覆盖的表达式仍受既有普通 expr 范围限制，不能宣称全部 Rust/Go 表达式已支持。
+
+含问号的 unsafe 转换链不在本 switch plan 中，明确拒绝而不拆 pointer/uintptr 链；仍需旧 assignmentFrame 的控制流赋值同样留工程缺口，不增加 guard。其他 range 源/目标、type switch、旧私有上下文长尾和其余 guard 未完成，select/adapters 不作新设计。
+
+for 性能复核：上一阶段实际生成循环为成功 **39.31 ns**、失败 **21.00 ns**，显式 match 为 **26.64/12.69 ns**，都零分配。独立同轮对照为原生成 **38.90/18.41 ns**、仅去 first/移 post 尾部的手写 Go 机制探针 **36.59/17.00 ns**、显式 match **26.85/13.21 ns**；保持同 Option 协议、输入与结果。三者都超过 inline budget，first 分支仅能解释部分差异，且伴随布局/寄存器变化；不能把明显耗时差距用 0alloc 掩盖。探针对捕获了短声明迭代变量的生产循环不安全，本阶段不作这种替换。完整 [原始数据、汇编与复现](../../../tests/research/loop_propagation/README.md#first-flag-follow-up-isolate-part-of-the-overhead)明确区分真实 hgo 与手写机制探针，后续性能优化仍是独立工程项。

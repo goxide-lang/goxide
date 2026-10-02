@@ -441,3 +441,13 @@ unsafe 没有扩大 planner 支持范围，原转换链仍保留；方法/动态
 for/range 不再整体列作完全未实现，但也不整体打勾；switch、普通 expr 上下文与剩余 guard 继续待办。select/adapters 仍单列设计问题，复杂别名分析长期延期，不把普通循环或普通 Go 别名用法视为设计待决。
 
 本阶段验证通过：全树 race **15 包 / 247 顶层 / 454 子测试**（另 2 包无测试）、vet、13 条完整设计命令；新增 **10 项**生成循环模块 race 测试、安装 CLI 生成程序 race 与 10 类负例。独立审查及反例复验通过。研究模块 1 项真实 hgo 等价测试另跑 race/vet；成功/失败四组全部五次样本零分配，但耗时高于显式 match，具体原始数据见[循环研究记录](../tests/research/loop_propagation/README.md)。
+
+### 表达式 switch 首批：init、tag、case 与原生分支
+
+[真实 hgo 示例](../examples/prototype/switch_propagation.hgo)验证 case 逗号列表/跨 clause 的求值顺序、匹配后停止、失败不进 body、default 在前/中间、fallthrough、标签重入与外循环 continue、作用域/最近闭包、defer 和接口动态比较 panic。[跨包用例](../examples/propagate_places/effects_switch.hgo)验证 private mask 移位与 private bool 的上下文保持。代码形状断言无 Assignment/Catch/Fail，独立生成模块 race 与安装 CLI transpile/run 另行执行。
+
+[范围说明](rfcs/research/0005-option-result-question.md#613-表达式-switch-的传播与循环开销复核)：表达式 switch 已接通，type switch 中的传播本组未接通。重复 case/default、错误 case 类型、不可比较 tag、非法 fallthrough/continue、作用域仍拒绝。unsafe 转换链、其他 range 来源/目标、控制流内未规划私有赋值、旧 expr 上下文与其余 guard 继续列工程缺口，不称完成或批准延期。
+
+for 的耗时差异已单独调查，first 状态只解释一部分，三条路径均未内联；危险的去 first 探针未用于生产。[具体数值与可复现证据](../tests/research/loop_propagation/README.md#first-flag-follow-up-isolate-part-of-the-overhead)区分零分配、耗时和语义范围，不以零分配代替性能说明。
+
+本组最终验证：全树 race **15 包 / 250 顶层 / 462 子测试**，另 2 包无测试；vet、13 条完整设计命令通过。独立审查与跨包原反例复验通过；switch 模块 6 项、private 业务模块 26 项各自生成 race，另有安装 CLI 生成程序 race。switch 研究模块 1 项等价测试另跑 race/vet，四组五次非 race 样本均零分配；[原始基准](../tests/research/switch_propagation/README.md)不声称与显式 match 耗时相等。for 手写机制探针单列，不冒充生产优化。

@@ -1,0 +1,4 @@
+=== RUN   TestSwitchEquivalence
+--- PASS: TestSwitchEquivalence (0.00s)
+PASS
+ok  	switchfixture	1.015s

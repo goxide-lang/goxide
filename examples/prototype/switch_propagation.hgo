@@ -1,0 +1,33 @@
+package main
+import "fmt"
+func swInt(n int,fail bool,trace *[]int)Option[int]{*trace=append(*trace,n);if fail{return Option[int]::None};return Option[int]::Some(n)}
+func swValue(v Option[int])int{match v{Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
+func switchOrder(tag,fail int,trace *[]int)Option[int]{
+ defer func(){*trace=append(*trace,99)}()
+ switch n:=swInt(tag,fail==1,trace)?;n{
+ default:*trace=append(*trace,30)
+ case swInt(1,fail==2,trace)?,swInt(2,fail==3,trace)?:*trace=append(*trace,10)
+ case swInt(3,fail==4,trace)?:*trace=append(*trace,20)
+ };return Option[int]::Some(8)
+}
+func switchFallthrough(tag int,trace *[]int)Option[int]{switch Option[int]::Some(tag)?{
+ case swInt(1,false,trace)?:*trace=append(*trace,10);fallthrough
+ default:*trace=append(*trace,20);fallthrough
+ case swInt(3,true,trace)?:*trace=append(*trace,30)
+ };return Option[int]::Some(8)}
+type swFlag bool
+func switchTagless(trace *[]int)Option[int]{switch{case false:panic("false");case Option[bool]::Some(true)?:*trace=append(*trace,1);case Option[bool]::None?:panic("late case")};return Option[int]::Some(1)}
+func switchScope(trace *[]int)Option[int]{n:=99;switch n:=swInt(2,false,trace)?;n{case swInt(2,false,trace)?:if n!=2{panic("scope")};n:=4;_=n};return Option[int]::Some(n)}
+func switchStart(entries *int)Option[int]{*entries++;return Option[int]::Some(*entries)}
+func switchLabels(entries *int,trace *[]int)Option[int]{Again:switch n:=switchStart(entries)?;n{case swInt(1,false,trace)?:goto Again;default:break Again};return Option[int]::Some(*entries)}
+func switchLoop()Option[int]{sum:=0;Outer:for i:=0;i<3;i++{Pick:switch Option[int]::Some(i)?{case Option[int]::Some(1)?:continue Outer;default:sum+=i;break Pick}};return Option[int]::Some(sum)}
+func switchAny(tag,value any,trace *[]int)Option[int]{switch tag{case Option[any]::Some(value)?:*trace=append(*trace,1);case nil:*trace=append(*trace,2);default:*trace=append(*trace,3)};return Option[int]::Some(1)}
+func switchClosure(trace *[]int)Option[int]{f:=func()Option[int]{defer func(){*trace=append(*trace,1)}();switch Option[int]::None?{default:panic("failure executed body")}};_=f();*trace=append(*trace,2);return Option[int]::Some(8)}
+func switchBody(trace *[]int)Option[int]{switch 1{case 1:_=swInt(7,true,trace)?;default:panic("wrong case")};return Option[int]::Some(8)}
+func switchTerminating()Option[int]{switch Option[int]::Some(1)?{case Option[int]::Some(1)?:return Option[int]::Some(7);default:return Option[int]::None}}
+func main(){trace:=[]int{};fmt.Println(swValue(switchOrder(2,0,&trace)),trace)}
+
+func switchNamedBool()Option[int]{switch swFlag(true){case Option[swFlag]::Some(true)?:return Option[int]::Some(2);default:return Option[int]::None}}
+func swBenchValue(n,fail int)Option[int]{if n==fail{return Option[int]::None};return Option[int]::Some(n)}
+func propagatedSwitch(n,fail int)Option[int]{switch swBenchValue(n,fail)?{case swBenchValue(1,fail)?:return Option[int]::Some(10);case swBenchValue(2,fail)?:return Option[int]::Some(20);default:return Option[int]::Some(30)}}
+func explicitSwitch(n,fail int)Option[int]{tag:=0;match swBenchValue(n,fail){Option[int]::Some(v)=>{tag=v},Option[int]::None=>{return Option[int]::None},};first:=0;match swBenchValue(1,fail){Option[int]::Some(v)=>{first=v},Option[int]::None=>{return Option[int]::None},};if tag==first{return Option[int]::Some(10)};second:=0;match swBenchValue(2,fail){Option[int]::Some(v)=>{second=v},Option[int]::None=>{return Option[int]::None},};if tag==second{return Option[int]::Some(20)};return Option[int]::Some(30)}

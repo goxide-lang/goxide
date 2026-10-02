@@ -9,8 +9,8 @@ import (
 // Keep the native for initializer: Go's implicit per-iteration variable copy
 // must happen before post, including when post is moved to the next body entry.
 func (l *lowering) forStatement(n *ast.ForStmt, label *ast.Ident, ft *ast.FuncType) ([]ast.Stmt, error) {
-	l.loopDepth++
-	defer func() { l.loopDepth-- }()
+	l.guardFreeDepth++
+	defer func() { l.guardFreeDepth-- }()
 	var outer []ast.Stmt
 	if n.Init != nil && contains(n.Init, l.questions) {
 		init, e := l.statement(n.Init, ft)
@@ -64,8 +64,8 @@ func (l *lowering) forStatement(n *ast.ForStmt, label *ast.Ident, ft *ast.FuncTy
 }
 
 func (l *lowering) rangeStatement(n *ast.RangeStmt, label *ast.Ident, ft *ast.FuncType) ([]ast.Stmt, error) {
-	l.loopDepth++
-	defer func() { l.loopDepth-- }()
+	l.guardFreeDepth++
+	defer func() { l.guardFreeDepth-- }()
 	if (n.Key != nil && contains(n.Key, l.questions)) || (n.Value != nil && contains(n.Value, l.questions)) {
 		return nil, l.fail(n, "? in range assignment targets is not supported yet")
 	}

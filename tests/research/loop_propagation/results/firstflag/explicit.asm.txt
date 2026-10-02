@@ -1,0 +1,143 @@
+TEXT loopfixture.explicitLoop(SB) /tmp/review-loop-firstflag/generated.go
+  generated.go:651	0x543880		493b6610		CMPQ SP, 0x10(R14)			
+  generated.go:651	0x543884		0f86dc010000		JBE 0x543a66				
+  generated.go:651	0x54388a		55			PUSHQ BP				
+  generated.go:651	0x54388b		4889e5			MOVQ SP, BP				
+  generated.go:651	0x54388e		4883ec40		SUBQ $0x40, SP				
+  generated.go:597	0x543892		4885db			TESTQ BX, BX				
+  generated.go:597	0x543895		7506			JNE 0x54389d				
+  generated.go:597	0x543897		31d2			XORL DX, DX				
+  generated.go:597	0x543899		31c9			XORL CX, CX				
+  generated.go:655	0x54389b		eb16			JMP 0x5438b3				
+  generated.go:600	0x54389d		90			NOPL					
+  generated.go:878	0x54389e		48c744243000000000	MOVQ $0x0, 0x30(SP)			
+  generated.go:878	0x5438a7		488d15c2401900		LEAQ 0x1940c2(IP), DX			
+  generated.go:878	0x5438ae		488d4c2430		LEAQ 0x30(SP), CX			
+  generated.go:656	0x5438b3		90			NOPL					
+  generated.go:897	0x5438b4		90			NOPL					
+  generated.go:882	0x5438b5		4885d2			TESTQ DX, DX				
+  generated.go:882	0x5438b8		7413			JE 0x5438cd				
+  generated.go:885	0x5438ba		488d35af401900		LEAQ 0x1940af(IP), SI			
+  generated.go:885	0x5438c1		4839d6			CMPQ SI, DX				
+  generated.go:885	0x5438c4		0f8588010000		JNE 0x543a52				
+  generated.go:882	0x5438ca		4885d2			TESTQ DX, DX				
+  generated.go:898	0x5438cd		7421			JE 0x5438f0				
+  generated.go:898	0x5438cf		817a10c7e89220		CMPL 0x10(DX), $0x2092e8c7		
+  generated.go:898	0x5438d6		750f			JNE 0x5438e7				
+  generated.go:899	0x5438d8		488d3591401900		LEAQ 0x194091(IP), SI			
+  generated.go:899	0x5438df		90			NOPL					
+  generated.go:899	0x5438e0		4839f2			CMPQ DX, SI				
+  generated.go:899	0x5438e3		7412			JE 0x5438f7				
+  generated.go:899	0x5438e5		eb10			JMP 0x5438f7				
+  generated.go:899	0x5438e7		488d3582401900		LEAQ 0x194082(IP), SI			
+  generated.go:898	0x5438ee		eb07			JMP 0x5438f7				
+  generated.go:898	0x5438f0		488d3579401900		LEAQ 0x194079(IP), SI			
+  generated.go:660	0x5438f7		4839f2			CMPQ DX, SI				
+  generated.go:660	0x5438fa		7506			JNE 0x543902				
+  generated.go:660	0x5438fc		488b39			MOVQ 0(CX), DI				
+  generated.go:660	0x5438ff		90			NOPL					
+  generated.go:665	0x543900		eb05			JMP 0x543907				
+  generated.go:665	0x543902		bf00000000		MOVL $0x0, DI				
+  generated.go:597	0x543907		4889442450		MOVQ AX, 0x50(SP)			
+  generated.go:597	0x54390c		48895c2458		MOVQ BX, 0x58(SP)			
+  generated.go:668	0x543911		7431			JE 0x543944				
+  generated.go:882	0x543913		4885d2			TESTQ DX, DX				
+  generated.go:669	0x543916		752c			JNE 0x543944				
+  generated.go:669	0x543918		48897c2420		MOVQ DI, 0x20(SP)			
+  generated.go:669	0x54391d		4889d0			MOVQ DX, AX				
+  generated.go:669	0x543920		4889cb			MOVQ CX, BX				
+  generated.go:669	0x543923		31c9			XORL CX, CX				
+  generated.go:669	0x543925		e8360bedff		CALL runtime.ifaceeq(SB)		
+  generated.go:669	0x54392a		84c0			TESTL AL, AL				
+  generated.go:669	0x54392c		751a			JNE 0x543948				
+  generated.go:678	0x54392e		488b442450		MOVQ 0x50(SP), AX			
+  generated.go:597	0x543933		488b5c2458		MOVQ 0x58(SP), BX			
+  generated.go:597	0x543938		488d3531401900		LEAQ 0x194031(IP), SI			
+  generated.go:597	0x54393f		488b7c2420		MOVQ 0x20(SP), DI			
+  generated.go:678	0x543944		31d2			XORL DX, DX				
+  generated.go:678	0x543946		eb0a			JMP 0x543952				
+  generated.go:671	0x543948		31c0			XORL AX, AX				
+  generated.go:671	0x54394a		31db			XORL BX, BX				
+  generated.go:671	0x54394c		4883c440		ADDQ $0x40, SP				
+  generated.go:671	0x543950		5d			POPQ BP					
+  generated.go:671	0x543951		c3			RET					
+  generated.go:678	0x543952		4839f8			CMPQ AX, DI				
+  generated.go:678	0x543955		410f9fc0		SETG R8					
+  generated.go:878	0x543959		450fb6c0		MOVZX R8, R8				
+  generated.go:683	0x54395d		4c8d0ddc7a0200		LEAQ runtime.staticuint64s(SB), R9	
+  generated.go:683	0x543964		4f8d04c1		LEAQ 0(R9)(R8*8), R8			
+  generated.go:683	0x543968		41803800		CMPB 0(R8), $0x0			
+  generated.go:698	0x54396c		0f84b2000000		JE 0x543a24				
+  generated.go:703	0x543972		4c8d4701		LEAQ 0x1(DI), R8			
+  generated.go:701	0x543976		4801fa			ADDQ DI, DX				
+  generated.go:597	0x543979		4c39c3			CMPQ BX, R8				
+  generated.go:597	0x54397c		7507			JNE 0x543985				
+  generated.go:597	0x54397e		4531c0			XORL R8, R8				
+  generated.go:597	0x543981		31c9			XORL CX, CX				
+  generated.go:703	0x543983		eb12			JMP 0x543997				
+  generated.go:600	0x543985		90			NOPL					
+  generated.go:878	0x543986		4c89442428		MOVQ R8, 0x28(SP)			
+  generated.go:878	0x54398b		4c8d05de3f1900		LEAQ 0x193fde(IP), R8			
+  generated.go:878	0x543992		488d4c2428		LEAQ 0x28(SP), CX			
+  generated.go:704	0x543997		90			NOPL					
+  generated.go:897	0x543998		90			NOPL					
+  generated.go:882	0x543999		4d85c0			TESTQ R8, R8				
+  generated.go:882	0x54399c		7413			JE 0x5439b1				
+  generated.go:885	0x54399e		4c8d15cb3f1900		LEAQ 0x193fcb(IP), R10			
+  generated.go:885	0x5439a5		4d39c2			CMPQ R10, R8				
+  generated.go:885	0x5439a8		0f8591000000		JNE 0x543a3f				
+  generated.go:882	0x5439ae		4d85c0			TESTQ R8, R8				
+  generated.go:898	0x5439b1		7412			JE 0x5439c5				
+  generated.go:898	0x5439b3		41817810c7e89220	CMPL 0x10(R8), $0x2092e8c7		
+  generated.go:898	0x5439bb		7508			JNE 0x5439c5				
+  generated.go:898	0x5439bd		0f1f00			NOPL 0(AX)				
+  generated.go:899	0x5439c0		4939f0			CMPQ R8, SI				
+  generated.go:899	0x5439c3		7500			JNE 0x5439c5				
+  generated.go:708	0x5439c5		4939f0			CMPQ R8, SI				
+  generated.go:708	0x5439c8		7503			JNE 0x5439cd				
+  generated.go:708	0x5439ca		488b39			MOVQ 0(CX), DI				
+  generated.go:716	0x5439cd		7483			JE 0x543952				
+  generated.go:882	0x5439cf		4d85c0			TESTQ R8, R8				
+  generated.go:717	0x5439d2		0f857affffff		JNE 0x543952				
+  generated.go:701	0x5439d8		4889542418		MOVQ DX, 0x18(SP)			
+  generated.go:701	0x5439dd		48897c2438		MOVQ DI, 0x38(SP)			
+  generated.go:717	0x5439e2		4c89c0			MOVQ R8, AX				
+  generated.go:717	0x5439e5		4889cb			MOVQ CX, BX				
+  generated.go:717	0x5439e8		31c9			XORL CX, CX				
+  generated.go:717	0x5439ea		e8710aedff		CALL runtime.ifaceeq(SB)		
+  generated.go:717	0x5439ef		84c0			TESTL AL, AL				
+  generated.go:717	0x5439f1		7527			JNE 0x543a1a				
+  generated.go:678	0x5439f3		488b442450		MOVQ 0x50(SP), AX			
+  generated.go:678	0x5439f8		488b542418		MOVQ 0x18(SP), DX			
+  generated.go:597	0x5439fd		488b5c2458		MOVQ 0x58(SP), BX			
+  generated.go:597	0x543a02		488d35673f1900		LEAQ 0x193f67(IP), SI			
+  generated.go:597	0x543a09		488b7c2438		MOVQ 0x38(SP), DI			
+  generated.go:597	0x543a0e		4c8d0d2b7a0200		LEAQ runtime.staticuint64s(SB), R9	
+  generated.go:717	0x543a15		e938ffffff		JMP 0x543952				
+  generated.go:719	0x543a1a		31c0			XORL AX, AX				
+  generated.go:719	0x543a1c		31db			XORL BX, BX				
+  generated.go:719	0x543a1e		4883c440		ADDQ $0x40, SP				
+  generated.go:719	0x543a22		5d			POPQ BP					
+  generated.go:719	0x543a23		c3			RET					
+  generated.go:878	0x543a24		4889d0			MOVQ DX, AX				
+  generated.go:878	0x543a27		e8b40df4ff		CALL runtime.convT64(SB)		
+  generated.go:878	0x543a2c		488d0d3d3f1900		LEAQ 0x193f3d(IP), CX			
+  generated.go:724	0x543a33		4889c3			MOVQ AX, BX				
+  generated.go:724	0x543a36		4889c8			MOVQ CX, AX				
+  generated.go:724	0x543a39		4883c440		ADDQ $0x40, SP				
+  generated.go:724	0x543a3d		5d			POPQ BP					
+  generated.go:724	0x543a3e		c3			RET					
+  generated.go:888	0x543a3f		488d059a461700		LEAQ 0x17469a(IP), AX			
+  generated.go:888	0x543a46		488d1df30b0200		LEAQ 0x20bf3(IP), BX			
+  generated.go:888	0x543a4d		e84e24f4ff		CALL runtime.gopanic(SB)		
+  generated.go:888	0x543a52		488d0587461700		LEAQ 0x174687(IP), AX			
+  generated.go:888	0x543a59		488d1de00b0200		LEAQ 0x20be0(IP), BX			
+  generated.go:888	0x543a60		e83b24f4ff		CALL runtime.gopanic(SB)		
+  generated.go:888	0x543a65		90			NOPL					
+  generated.go:651	0x543a66		4889442408		MOVQ AX, 0x8(SP)			
+  generated.go:651	0x543a6b		48895c2410		MOVQ BX, 0x10(SP)			
+  generated.go:651	0x543a70		e88b76f4ff		CALL runtime.morestack_noctxt.abi0(SB)	
+  generated.go:651	0x543a75		488b442408		MOVQ 0x8(SP), AX			
+  generated.go:651	0x543a7a		488b5c2410		MOVQ 0x10(SP), BX			
+  generated.go:651	0x543a7f		90			NOPL					
+  generated.go:651	0x543a80		e9fbfdffff		JMP loopfixture.explicitLoop(SB)	

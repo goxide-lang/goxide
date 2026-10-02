@@ -1,0 +1,160 @@
+TEXT loopfixture.probeNoFirstLoop(SB) /tmp/review-loop-firstflag/probe.go
+  probe.go:3		0x543aa0		493b6610		CMPQ SP, 0x10(R14)			
+  probe.go:3		0x543aa4		0f862f020000		JBE 0x543cd9				
+  probe.go:3		0x543aaa		55			PUSHQ BP				
+  probe.go:3		0x543aab		4889e5			MOVQ SP, BP				
+  probe.go:3		0x543aae		4883ec50		SUBQ $0x50, SP				
+  generated.go:597	0x543ab2		4885db			TESTQ BX, BX				
+  generated.go:597	0x543ab5		7506			JNE 0x543abd				
+  generated.go:597	0x543ab7		31d2			XORL DX, DX				
+  generated.go:597	0x543ab9		31c9			XORL CX, CX				
+  probe.go:6		0x543abb		eb16			JMP 0x543ad3				
+  generated.go:600	0x543abd		90			NOPL					
+  generated.go:878	0x543abe		48c744243800000000	MOVQ $0x0, 0x38(SP)			
+  generated.go:878	0x543ac7		488d15a23e1900		LEAQ 0x193ea2(IP), DX			
+  generated.go:878	0x543ace		488d4c2438		LEAQ 0x38(SP), CX			
+  probe.go:7		0x543ad3		90			NOPL					
+  generated.go:897	0x543ad4		90			NOPL					
+  generated.go:882	0x543ad5		4885d2			TESTQ DX, DX				
+  generated.go:882	0x543ad8		7413			JE 0x543aed				
+  generated.go:885	0x543ada		488d358f3e1900		LEAQ 0x193e8f(IP), SI			
+  generated.go:885	0x543ae1		4839d6			CMPQ SI, DX				
+  generated.go:885	0x543ae4		0f85db010000		JNE 0x543cc5				
+  generated.go:882	0x543aea		4885d2			TESTQ DX, DX				
+  generated.go:898	0x543aed		742c			JE 0x543b1b				
+  generated.go:898	0x543aef		817a10c7e89220		CMPL 0x10(DX), $0x2092e8c7		
+  generated.go:898	0x543af6		7517			JNE 0x543b0f				
+  generated.go:899	0x543af8		488d35713e1900		LEAQ 0x193e71(IP), SI			
+  generated.go:899	0x543aff		90			NOPL					
+  generated.go:899	0x543b00		4839f2			CMPQ DX, SI				
+  generated.go:899	0x543b03		7505			JNE 0x543b0a				
+  generated.go:882	0x543b05		4885d2			TESTQ DX, DX				
+  generated.go:898	0x543b08		eb18			JMP 0x543b22				
+  generated.go:882	0x543b0a		4885d2			TESTQ DX, DX				
+  generated.go:898	0x543b0d		eb13			JMP 0x543b22				
+  generated.go:882	0x543b0f		4885d2			TESTQ DX, DX				
+  generated.go:882	0x543b12		488d35573e1900		LEAQ 0x193e57(IP), SI			
+  generated.go:898	0x543b19		eb07			JMP 0x543b22				
+  generated.go:898	0x543b1b		488d354e3e1900		LEAQ 0x193e4e(IP), SI			
+  generated.go:597	0x543b22		4889442460		MOVQ AX, 0x60(SP)			
+  generated.go:597	0x543b27		48895c2468		MOVQ BX, 0x68(SP)			
+  probe.go:11		0x543b2c		7536			JNE 0x543b64				
+  probe.go:6		0x543b2e		48894c2448		MOVQ CX, 0x48(SP)			
+  probe.go:6		0x543b33		4889542420		MOVQ DX, 0x20(SP)			
+  probe.go:10		0x543b38		4889d0			MOVQ DX, AX				
+  probe.go:10		0x543b3b		4889cb			MOVQ CX, BX				
+  probe.go:10		0x543b3e		31c9			XORL CX, CX				
+  probe.go:10		0x543b40		e81b09edff		CALL runtime.ifaceeq(SB)		
+  probe.go:10		0x543b45		84c0			TESTL AL, AL				
+  probe.go:10		0x543b47		752b			JNE 0x543b74				
+  probe.go:17		0x543b49		488b442460		MOVQ 0x60(SP), AX			
+  probe.go:14		0x543b4e		488b4c2448		MOVQ 0x48(SP), CX			
+  probe.go:14		0x543b53		488b542420		MOVQ 0x20(SP), DX			
+  generated.go:597	0x543b58		488b5c2468		MOVQ 0x68(SP), BX			
+  generated.go:597	0x543b5d		488d350c3e1900		LEAQ 0x193e0c(IP), SI			
+  probe.go:14		0x543b64		4839f2			CMPQ DX, SI				
+  probe.go:14		0x543b67		0f853f010000		JNE 0x543cac				
+  probe.go:14		0x543b6d		488b11			MOVQ 0(CX), DX				
+  probe.go:16		0x543b70		31ff			XORL DI, DI				
+  probe.go:16		0x543b72		eb13			JMP 0x543b87				
+  probe.go:12		0x543b74		31c0			XORL AX, AX				
+  probe.go:12		0x543b76		31db			XORL BX, BX				
+  probe.go:12		0x543b78		4883c450		ADDQ $0x50, SP				
+  probe.go:12		0x543b7c		5d			POPQ BP					
+  probe.go:12		0x543b7d		c3			RET					
+  probe.go:41		0x543b7e		4c8b01			MOVQ 0(CX), R8				
+  probe.go:41		0x543b81		4889d7			MOVQ DX, DI				
+  probe.go:41		0x543b84		4c89c2			MOVQ R8, DX				
+  probe.go:17		0x543b87		4839d0			CMPQ AX, DX				
+  probe.go:17		0x543b8a		410f9fc0		SETG R8					
+  generated.go:878	0x543b8e		450fb6c0		MOVZX R8, R8				
+  probe.go:24		0x543b92		4c8d0da7780200		LEAQ runtime.staticuint64s(SB), R9	
+  probe.go:24		0x543b99		4f8d04c1		LEAQ 0(R9)(R8*8), R8			
+  probe.go:24		0x543b9d		41803800		CMPB 0(R8), $0x0			
+  probe.go:25		0x543ba1		0f84c1000000		JE 0x543c68				
+  probe.go:34		0x543ba7		4c8d4201		LEAQ 0x1(DX), R8			
+  probe.go:30		0x543bab		4801fa			ADDQ DI, DX				
+  generated.go:597	0x543bae		4c39c3			CMPQ BX, R8				
+  generated.go:597	0x543bb1		7506			JNE 0x543bb9				
+  generated.go:597	0x543bb3		31ff			XORL DI, DI				
+  generated.go:597	0x543bb5		31c9			XORL CX, CX				
+  probe.go:34		0x543bb7		eb12			JMP 0x543bcb				
+  generated.go:600	0x543bb9		90			NOPL					
+  generated.go:878	0x543bba		4c89442430		MOVQ R8, 0x30(SP)			
+  generated.go:878	0x543bbf		488d3daa3d1900		LEAQ 0x193daa(IP), DI			
+  generated.go:878	0x543bc6		488d4c2430		LEAQ 0x30(SP), CX			
+  probe.go:35		0x543bcb		90			NOPL					
+  generated.go:897	0x543bcc		90			NOPL					
+  generated.go:882	0x543bcd		4885ff			TESTQ DI, DI				
+  generated.go:882	0x543bd0		741a			JE 0x543bec				
+  generated.go:885	0x543bd2		4c8d05973d1900		LEAQ 0x193d97(IP), R8			
+  generated.go:885	0x543bd9		0f1f8000000000		NOPL 0(AX)				
+  generated.go:885	0x543be0		4939f8			CMPQ R8, DI				
+  generated.go:885	0x543be3		0f85b0000000		JNE 0x543c99				
+  generated.go:882	0x543be9		4885ff			TESTQ DI, DI				
+  generated.go:898	0x543bec		741c			JE 0x543c0a				
+  generated.go:898	0x543bee		817f10c7e89220		CMPL 0x10(DI), $0x2092e8c7		
+  generated.go:898	0x543bf5		7510			JNE 0x543c07				
+  generated.go:899	0x543bf7		4839f7			CMPQ DI, SI				
+  generated.go:899	0x543bfa		7506			JNE 0x543c02				
+  generated.go:882	0x543bfc		4885ff			TESTQ DI, DI				
+  generated.go:882	0x543bff		90			NOPL					
+  generated.go:898	0x543c00		eb08			JMP 0x543c0a				
+  generated.go:882	0x543c02		4885ff			TESTQ DI, DI				
+  generated.go:898	0x543c05		eb03			JMP 0x543c0a				
+  generated.go:882	0x543c07		4885ff			TESTQ DI, DI				
+  probe.go:38		0x543c0a		7547			JNE 0x543c53				
+  probe.go:34		0x543c0c		48894c2440		MOVQ CX, 0x40(SP)			
+  probe.go:34		0x543c11		48897c2418		MOVQ DI, 0x18(SP)			
+  probe.go:30		0x543c16		4889542428		MOVQ DX, 0x28(SP)			
+  probe.go:37		0x543c1b		4889f8			MOVQ DI, AX				
+  probe.go:37		0x543c1e		4889cb			MOVQ CX, BX				
+  probe.go:37		0x543c21		31c9			XORL CX, CX				
+  probe.go:37		0x543c23		e83808edff		CALL runtime.ifaceeq(SB)		
+  probe.go:37		0x543c28		84c0			TESTL AL, AL				
+  probe.go:37		0x543c2a		7532			JNE 0x543c5e				
+  probe.go:17		0x543c2c		488b442460		MOVQ 0x60(SP), AX			
+  probe.go:41		0x543c31		488b4c2440		MOVQ 0x40(SP), CX			
+  probe.go:41		0x543c36		488b542428		MOVQ 0x28(SP), DX			
+  generated.go:597	0x543c3b		488b5c2468		MOVQ 0x68(SP), BX			
+  generated.go:597	0x543c40		488d35293d1900		LEAQ 0x193d29(IP), SI			
+  probe.go:41		0x543c47		488b7c2418		MOVQ 0x18(SP), DI			
+  probe.go:41		0x543c4c		4c8d0ded770200		LEAQ runtime.staticuint64s(SB), R9	
+  probe.go:41		0x543c53		4839f7			CMPQ DI, SI				
+  probe.go:41		0x543c56		0f8422ffffff		JE 0x543b7e				
+  probe.go:41		0x543c5c		eb25			JMP 0x543c83				
+  probe.go:39		0x543c5e		31c0			XORL AX, AX				
+  probe.go:39		0x543c60		31db			XORL BX, BX				
+  probe.go:39		0x543c62		4883c450		ADDQ $0x50, SP				
+  probe.go:39		0x543c66		5d			POPQ BP					
+  probe.go:39		0x543c67		c3			RET					
+  generated.go:878	0x543c68		4889f8			MOVQ DI, AX				
+  generated.go:878	0x543c6b		e8700bf4ff		CALL runtime.convT64(SB)		
+  generated.go:878	0x543c70		488d0df93c1900		LEAQ 0x193cf9(IP), CX			
+  probe.go:46		0x543c77		4889c3			MOVQ AX, BX				
+  probe.go:46		0x543c7a		4889c8			MOVQ CX, AX				
+  probe.go:46		0x543c7d		4883c450		ADDQ $0x50, SP				
+  probe.go:46		0x543c81		5d			POPQ BP					
+  probe.go:46		0x543c82		c3			RET					
+  probe.go:41		0x543c83		4889f8			MOVQ DI, AX				
+  probe.go:41		0x543c86		488d1dabd71700		LEAQ 0x17d7ab(IP), BX			
+  probe.go:41		0x543c8d		488d0d24871700		LEAQ 0x178724(IP), CX			
+  probe.go:41		0x543c94		e8876bedff		CALL runtime.panicdottypeI(SB)		
+  generated.go:888	0x543c99		488d0540441700		LEAQ 0x174440(IP), AX			
+  generated.go:888	0x543ca0		488d1d99090200		LEAQ 0x20999(IP), BX			
+  generated.go:888	0x543ca7		e8f421f4ff		CALL runtime.gopanic(SB)		
+  probe.go:14		0x543cac		4889d0			MOVQ DX, AX				
+  probe.go:14		0x543caf		488d1d82d71700		LEAQ 0x17d782(IP), BX			
+  probe.go:14		0x543cb6		488d0dfb861700		LEAQ 0x1786fb(IP), CX			
+  probe.go:14		0x543cbd		0f1f00			NOPL 0(AX)				
+  probe.go:14		0x543cc0		e85b6bedff		CALL runtime.panicdottypeI(SB)		
+  generated.go:888	0x543cc5		488d0514441700		LEAQ 0x174414(IP), AX			
+  generated.go:888	0x543ccc		488d1d6d090200		LEAQ 0x2096d(IP), BX			
+  generated.go:888	0x543cd3		e8c821f4ff		CALL runtime.gopanic(SB)		
+  generated.go:888	0x543cd8		90			NOPL					
+  probe.go:3		0x543cd9		4889442408		MOVQ AX, 0x8(SP)			
+  probe.go:3		0x543cde		48895c2410		MOVQ BX, 0x10(SP)			
+  probe.go:3		0x543ce3		e81874f4ff		CALL runtime.morestack_noctxt.abi0(SB)	
+  probe.go:3		0x543ce8		488b442408		MOVQ 0x8(SP), AX			
+  probe.go:3		0x543ced		488b5c2410		MOVQ 0x10(SP), BX			
+  probe.go:3		0x543cf2		e9a9fdffff		JMP loopfixture.probeNoFirstLoop(SB)	

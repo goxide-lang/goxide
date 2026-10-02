@@ -1,0 +1,1 @@
+ok  	loopfixture	1.013s

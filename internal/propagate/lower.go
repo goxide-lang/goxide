@@ -33,7 +33,8 @@ type Config struct {
 	Namespace string
 }
 type lowering struct {
-	loopDepth            int
+	checkErrors          []types.Error
+	guardFreeDepth       int
 	expressionFacts      map[ast.Expr]expressionFact
 	fs                   *token.FileSet
 	file                 *ast.File
@@ -88,7 +89,12 @@ func (l *lowering) check() {
 	if imp == nil {
 		imp = importer.Default()
 	}
-	c := types.Config{Importer: imp, Error: func(error) {}}
+	l.checkErrors = nil
+	c := types.Config{Importer: imp, Error: func(err error) {
+		if e, ok := err.(types.Error); ok {
+			l.checkErrors = append(l.checkErrors, e)
+		}
+	}}
 	path := l.cfg.PackagePath
 	if path == "" {
 		path = "hgo/generated"
@@ -560,12 +566,18 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	lower := func(x ast.Expr) (ast.Expr, error) { p, y, e := l.expr(x, ft); pre = append(pre, p...); return y, e }
 	switch x := s.(type) {
 
+	case *ast.TypeSwitchStmt:
+		return nil, l.fail(x, "? in type switch is not supported by this control-flow slice")
+	case *ast.SwitchStmt:
+		return l.switchStatement(x, nil, ft)
 	case *ast.ForStmt:
 		return l.forStatement(x, nil, ft)
 	case *ast.RangeStmt:
 		return l.rangeStatement(x, nil, ft)
 	case *ast.LabeledStmt:
 		switch n := x.Stmt.(type) {
+		case *ast.SwitchStmt:
+			return l.switchStatement(n, x.Label, ft)
 		case *ast.ForStmt:
 			return l.forStatement(n, x.Label, ft)
 		case *ast.RangeStmt:
@@ -577,8 +589,8 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 			if l.canPlanAssignment(x) {
 				return l.plannedAssignment(x, ft)
 			}
-			if l.loopDepth > 0 {
-				return nil, l.fail(x, "this loop assignment needs an unimplemented guard-free propagation plan")
+			if l.guardFreeDepth > 0 {
+				return nil, l.fail(x, "this control-flow assignment needs an unimplemented guard-free propagation plan")
 			}
 			return l.assignmentFrame(x, ft)
 		}

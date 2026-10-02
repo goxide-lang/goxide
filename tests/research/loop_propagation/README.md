@@ -35,3 +35,48 @@ loop is slower in these measurements; this is allocation evidence, not timing
 parity or a speedup claim. The result does not cover escaping iteration-variable
 captures, larger boxed values, Result error construction, or unimplemented loop
 shapes. Performance tuning is separate from preserving those semantics.
+
+## First-flag follow-up: isolate part of the overhead
+
+The original stage measured 39.31/21.00 ns (success/failure), against explicit
+match at 26.64/12.69 ns. An independent same-run follow-up retained every
+benchStep call, sum validation, condition and result construction. A
+[hand-edited generated-Go probe](results/firstflag/probe.go.fixture) removed only
+the first flag and moved post to the body tail for this capture-free benchmark.
+This probe is **not production hgo support**: applying it to short-declaration
+loops with captured iteration variables would violate the validated Go semantics.
+
+| Path | Success median ns/op | Failure median ns/op |
+| --- | ---: | ---: |
+| Original generated loop | 38.90 | 18.41 |
+| No-first / tail-post probe | 36.59 | 17.00 |
+| Explicit match | 26.85 | 13.21 |
+
+[Raw samples](results/firstflag/bench.txt) are non-race, GOMAXPROCS=1, 200ms × 5;
+all are zero-allocation for these payloads. The probe's equivalence grid covers
+n=0..19 and fail=-1..20 and passes [race](results/firstflag/race.txt).
+[Compiler diagnostics excerpt](results/firstflag/inline-excerpt.txt) shows all
+three outer functions exceed the inlining budget (costs 297, 287, 400 vs 80),
+while benchStep is inlineable (22). Non-inlining is not unique to propagation.
+[Original assembly](results/firstflag/propagated.asm.txt) and
+[probe assembly](results/firstflag/probe.asm.txt) show removal of the first test
+and flag save/restore, with stack frame 88 → 80 bytes. The remaining gap is not
+explained by that branch alone; timings also include layout/register changes.
+The assembly still contains convT64: small payload zero-allocation results do not
+extend to arbitrary boxed sums.
+
+Reproduce the mechanism comparison after running the regular script with
+`--out /tmp/loop-control`; copy the two `.go.fixture` files from
+`results/firstflag` into that generated directory as `probe.go` and `loop_test.go`
+(overwriting only its benchmark test fixture), then run:
+
+```sh
+go test -race -count=1 ./...
+GOMAXPROCS=1 go test -run '^$' -bench . -benchmem -count=5 -benchtime=200ms
+go test -c -gcflags=-m=2 -o audit.test
+go tool objdump -s '^loopfixture.propagatedLoop$' audit.test
+```
+
+Use the same real Go toolchain/environment as above. The [manifest](results/firstflag/manifest.json)
+records the base revision and source hashes. Production loop lowering remains
+unchanged; a safe broader optimization needs separate evidence and scope.

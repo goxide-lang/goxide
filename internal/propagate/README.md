@@ -193,3 +193,11 @@ unevaluated array cases and integer/function iteration. Other propagated range
 kinds and per-iteration targets are explicitly unimplemented. Private assignments
 that still require a frame guard cannot introduce that guard into this new loop
 path; closures retain their own lexical return target. See RFC section 6.12.
+
+`switches.go` plans expression-switch initializer/tag and ordered case effects.
+Single-case native comparisons retain Go contextual typing; a final native switch
+keeps the original clause/default order and body scopes, including fallthrough.
+Original header type errors are retained before case lists are erased. Supported
+private case residuals use effects rather than defaulting a partial shift to int.
+Unsafe conversion chains with propagation, type-switch propagation, and assignment
+shapes needing a frame guard remain explicit control-flow gaps (RFC 6.13).

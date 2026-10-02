@@ -145,3 +145,5 @@ T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 
 无 guard 第三组接通单 RHS 静态 tuple 调用与 map/assert/receive comma-ok 赋值，保留一次求值、私有返回类型、未类型化 ok 与完整两阶段写入。专门 fallback 文件仅剩 unsafe 链，但其余 guard 分组仍明确待办，见 [RFC §6.11](docs/rfcs/research/0005-option-result-question.md#611-单-rhs-tuple-与-comma-ok-的第三组替换)。本组独立验收，不等待 unsafe 长尾；循环/range、switch 和整体 T0 验收尚未完成。
 
 普通循环首批已接通 for init/条件/post 和 slice/map range 源的问号传播，使用原函数普通 return，保留 Go 每轮变量身份、continue/post、标签重入及 defer。其他 range 源的问号、迭代赋值目标和需要旧 guard 的循环内组合仍待实现；原生无问号源不强制求值。[RFC §6.12](docs/rfcs/research/0005-option-result-question.md#612-for-与-slicemap-range-的首批传播)明确本阶段范围，不把 for/range 整项或整体 MVP 打勾。unsafe/其他 guard 长尾继续留表，switch 为后续独立工程。
+
+表达式 switch 首批接通 init/tag/case 与已有 body 传播：按 Go 顺序选中后执行原生分支，保留 default/fallthrough、标签、作用域和原类型诊断。type switch 传播、其他 range/guard 长尾仍未完成。[RFC §6.13](docs/rfcs/research/0005-option-result-question.md#613-表达式-switch-的传播与循环开销复核)同时记录 for 性能复核：零分配但慢于显式 match，去 first 探针只解释部分差距且未作不安全生产替换。整体 MVP 不标完成。

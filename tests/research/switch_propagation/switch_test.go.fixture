@@ -1,0 +1,8 @@
+package main
+import "testing"
+var switchSink Option[int]
+func TestSwitchEquivalence(t *testing.T){for n:=0;n<5;n++{for fail:=-1;fail<5;fail++{a,b:=swValue(propagatedSwitch(n,fail)),swValue(explicitSwitch(n,fail));if a!=b{t.Fatal(n,fail,a,b)}}}}
+func BenchmarkPropagatedSuccess(b *testing.B){for i:=0;i<b.N;i++{switchSink=propagatedSwitch(2,-1)}}
+func BenchmarkExplicitSuccess(b *testing.B){for i:=0;i<b.N;i++{switchSink=explicitSwitch(2,-1)}}
+func BenchmarkPropagatedFailure(b *testing.B){for i:=0;i<b.N;i++{switchSink=propagatedSwitch(3,2)}}
+func BenchmarkExplicitFailure(b *testing.B){for i:=0;i<b.N;i++{switchSink=explicitSwitch(3,2)}}

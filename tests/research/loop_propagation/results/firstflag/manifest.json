@@ -1,0 +1,10 @@
+{
+  "base_revision": "ab8889b26fdf32272ccec77204042c7dd57cf87a",
+  "kind": "hand-edited generated-Go mechanism probe; not production hgo lowering",
+  "source_sha256": "0e8f8261aa1c7e6bf2e0d5299c41e885f6db3190ceafa55ef2ae376475bd4063",
+  "generated_sha256": "b1a25e5a3d29019514d717a62815c387cf54807ec42be3f78f3432ac669d184d",
+  "go": "go1.27.1 linux/amd64",
+  "GOMAXPROCS": "1",
+  "count": 5,
+  "benchtime": "200ms"
+}

@@ -739,3 +739,17 @@ unsafe 无新增拆分，保留原转换链与 race/checkptr；其余 guard、�
 独立研究模块 **1 项**等价测试另跑 race/vet，四组非 race 基准 **200ms × 5**全部 **0 B/0 alloc**。16 轮成功传播 **39.31 ns** 对显式 match **26.64 ns**，post=7 失败 **21.00 ns** 对 **12.69 ns**；明确不声称耗时持平。[原始数据与复现入口](tests/research/loop_propagation/README.md)已入库。unsafe/其他 guard 长尾不阻塞本组，但仍未完成或批准延期；switch 和其余 T0 待办继续留表。
 
 最终验证：全树 race **15 个有测试包 / 247 宿主顶层 / 454 子测试**，另 **2 包无测试**；全树 vet、完整设计检查 **13 条 Go 命令**通过。独立复审无剩余阻断，专项生成模块和反例另行复验通过。整树证据 `/tmp/t0-loops-race.json`、`/tmp/t0-loops-race.err`、`/tmp/t0-loops-vet.log`、`/tmp/t0-loops-design.log`；可重复性能证据保存在仓库。只提交推送 feat/t0-completion 并 fetch 核验，整体 MVP 尚未完成。
+
+## 表达式 switch 与 for 性能复核
+
+基于 `ab8889b26fdf32272ccec77204042c7dd57cf87a`，新增 [switches.go](internal/propagate/switches.go)，支持 initializer/tag/case 与已有 body 的传播。先顺序选择，后执行保留原 clause/default 次序的原生 switch；匹配后跳过后续 case，失败不进 body，fallthrough/终止性、标签/循环 continue、作用域和最近函数/defer 保留。不引入 panic/guard，type switch 传播另列未完成。
+
+独立审查发现并修复跨包 private mask 移位 case 的旧 expr 默认 int 问题：switch 优先复用 effects 上下文规划。新增 [跨包用例](examples/propagate_places/effects_switch.hgo)验证 63/62 位、负 shift 先于后续失败以及 private bool 短路，业务模块现 **26 项**生成 race；新增 switch 模块 **6 项**生成 race，加安装 CLI transpile/run。原 header 类型错误在擦除 case 列表前保留，八类静态负例继续拒绝。独立复审和原反例生成模块 race 通过。
+
+switch 研究模块 **1 项**真实 hgo 等价测试另跑 race/vet；非 race **200ms × 5**四组全部零分配。成功 **10.500 ns** 对显式 match **9.392 ns**，失败 **8.094 ns** 对 **7.895 ns**，[原始数据与复现](tests/research/switch_propagation/README.md)入库，不宣称耗时相等。
+
+上一轮 for 为成功/失败 **39.31/21.00 ns** 对显式 match **26.64/12.69 ns**。独立同轮研究 **38.90/18.41** → 去 first/tail-post 手写机制探针 **36.59/17.00**，显式 match **26.85/13.21 ns**；三者都未内联，first 分支只解释部分差距。汇编、内联诊断、探针与等价网格 race 在[循环研究记录](tests/research/loop_propagation/README.md#first-flag-follow-up-isolate-part-of-the-overhead)。该探针不能保持短声明变量捕获语义，未替换生产 lowering；更深耗时差距仍未完全归因。
+
+其他 range 来源/目标、type switch、unsafe 转换链与 guard/旧 expr 长尾继续是工程缺口，不称完成或批准延期；[RFC §6.13](docs/rfcs/research/0005-option-result-question.md#613-表达式-switch-的传播与循环开销复核)与验收矩阵同步，整体 MVP 尚未完成。
+
+最终整树 race **15 个有测试包 / 250 宿主顶层 / 462 子测试**，另 **2 包无测试**；全树 vet、完整设计检查 **13 条 Go 命令**通过。修复后的独立审查无剩余阻断。整树日志 `/tmp/t0-switch-final-race.json`、`/tmp/t0-switch-final-race.err`、`/tmp/t0-switch-final-vet.log`、`/tmp/t0-switch-design.log`，原始研究数据保存在仓库。仅提交推送 feat/t0-completion 并 fetch 核验。

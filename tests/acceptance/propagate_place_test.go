@@ -108,19 +108,14 @@ import("testing";"errors";"strconv")
 func TestUpdate(t *testing.T){s:=[]int{0};m:=map[int]int{};n,e:=unpack(update(s,m,"0","42"));if e!=nil||n!=42||s[0]!=42||m[0]!=9{t.Fatal(n,e,s,m)};_,e=unpack(update(s,m,"0","bad"));var cause *strconv.NumError;if !errors.As(e,&cause)||s[0]!=42||m[0]!=9{t.Fatal(e,s,m)};_,e=unpack(update(s,m,"bad","42"));if !errors.As(e,&cause){t.Fatal(e)}}
 func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fatal(n,e)};if n,e:=unpack(distinctTypes());n!=1||e!=nil{t.Fatal(n,e)}}
 `)
+	packagesWrite(t, generated, "private_test.go", privatePlaceAssertions)
+
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "42 9 <nil>\ninvalid value 42 9\n" {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "42 9 <nil>\ninvalid value 42 9\nstock 7 <nil>\ninvalid stock 7\n" {
 		t.Fatalf("business: %q", got)
 	}
-	// This is an explicit remaining lowering boundary, not an alias-safety rule.
-	limited := t.TempDir()
-	packagesWrite(t, limited, "go.mod", "module private.example/fixture\n\ngo 1.27\n")
-	packagesWrite(t, limited, "dep/dep.go", `package dep;type inner struct{X int};type Outer struct{*inner}`)
-	packagesWrite(t, limited, "main.hgo", `package fixture;import "private.example/fixture/dep";func f(p *dep.Outer)Option[int]{p.X=Option[int]::Some(1)?;return Option[int]::Some(1)}`)
-	got := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "limited"), limited)
-	if !strings.Contains(got, "private imported embedded pointer path is not yet lowered") || !strings.Contains(got, "main.hgo") {
-		t.Fatalf("limitation diagnostic: %s", got)
-	}
+	deliveryCommand(t, generated, tool, true, []string{"GODEBUG=panicnil=1"}, "test", "-race", "-count=1", "-v", "-run", "TestPrivateUserPanicAndGoexit", ".")
+	privateAssignmentNegatives(t, cli, outside, root)
 
 }
 

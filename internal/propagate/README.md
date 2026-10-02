@@ -30,14 +30,14 @@ Constants retain contextual types. A failing
 `defer f(load()?)` does not register that defer, and earlier defers execute normally.
 
 Explicitly unsupported: user generic functions; propagation inside loops, switches,
-select candidates, destinations requiring capture through imported private embedded pointer paths, and unevaluated
+select candidates, and unevaluated
 unsafe.Sizeof/Alignof/Offsetof operands. Use a preceding binding or explicit
 match; these contexts are rejected rather than silently reordered. No public
 Try/Residual, cross-family coercion, or risk/borrow analysis is introduced.
 
 Diagnostics carry parser positions in the lowered input; preserving exact original
 columns through macro, enum and marker rewrites remains the frontend source-map
-limitation. No runtime closure is inserted by propagation. Tests execute generated
+limitation. Ordinary paths insert no runtime closure. The private embedded-pointer assignment fallback below uses typed question helpers while preserving the source expression frame. Tests execute generated
 Go with `go run -race`, including ordering, short circuit, closure and defer cases;
 API negatives cover ambiguous/missing/two-hop From. These are compiler tests, not
 claims about future general ownership analysis.
@@ -94,7 +94,7 @@ Private scalar element/field types can be inferred using pure zero witnesses
 through the exported container; those helpers never read user storage or call
 user methods. When a source declaration shadows comparable, map witness helpers
 use the qualified compiler-support constraint in github.com/hxsf/goxide/runtime.
-Directory modules using that path need the same explicit runtime module dependency
+Directory modules using that path need the same explicit goxide module dependency
 as other generated runtime imports. This is a lowering detail, not a new source
 protocol, stable ABI or zero-cost guarantee.
 
@@ -125,8 +125,26 @@ same static type; interface assignment and differently typed shift counts retain
 their expression types. Ordinary readonly/writable checks still run after this
 pass. No borrowing, exclusivity or global immutability guarantee is added.
 
-Promoted fields through value embeddings are supported. Capturing a private
-imported embedded pointer would require accessing an inaccessible intermediate
-field; taking the final field address would change panic timing. This path has an
-explicit lowering-limit diagnostic and remains unfinished engineering work,
-not an approved deferral or a safety policy. No reflection/unsafe bridge is added.
+Promoted fields through value embeddings use the ordinary place path. Imported
+private embedded-pointer targets preserve the complete original assignment,
+leaving hidden pointer operands, contextual private scalar types, and final
+writes to Go. Question helpers take source operands as arguments evaluated in
+the original frame, preserving direct recover. A compiler-support Assignment
+guard, deferred directly in the source function, catches only its own pending
+failure token and fills the original return slot before prior source defers run.
+Ordinary panics, invalid sums, Goexit and legacy panic(nil) stay outside this
+protocol. No reflection, unsafe or producer cooperation is used.
+
+The return-slot pointer is bound at function entry to avoid source shadowing.
+Guards live in ordinary blocks so their declarations do not obstruct forward
+goto. Original illegal bare returns remain rejected when naming an unnamed
+result. Source closures retain their own targets. This fallback adds helper/defer
+cost and internal panic on failure, and requires an explicit dependency on the
+github.com/hxsf/goxide module for its runtime package. Guards remain until function exit;
+this is neither a stable ABI nor a zero-cost claim.
+
+Go specifies required call/receive/logical ordering and two-phase assignment,
+not that all implicit pointer reads precede every RHS call. Tests permit the
+allowed read-order results while requiring phase-one locations to survive earlier
+phase-two writes. Loops/switch and unevaluated unsafe propagation remain separate
+work; this fallback does not expand those contexts.

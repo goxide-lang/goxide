@@ -152,7 +152,7 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 
 新增 `items[index()?]`、`items[low()?:high()?:max()?]` 和 struct/array/slice/map 字面量中的传播，仍仅限既有名义 Option/Result。依据 Go 1.27 工具链随附规范的 [Order of evaluation](https://go.dev/ref/spec#Order_of_evaluation)，调用/方法调用、接收和逻辑运算保持词法顺序；变量读取、索引和 map 插入没有被重新定义成全序。验收不要求某个未规定的动态重复键覆盖结果，只断言结果属于 Go 允许集合及规定的调用顺序。
 
-索引保留 map comma-ok。数组切片保持原存储；不可取址数组不能因临时量获得切片或指针接收者调用能力。省略上下界、长度/容量、常量错误及运行时边界检查保留。字面量保留最终形状，不把 map 改写成逐项赋值，不抹掉重复常量键或非常量数组下标错误；省略元素类型和隐式指针沿原上下文保留。外部包不可命名的 scalar 类型通过原容器的纯零值类型见证推断，支持位移、比较及短路；不读取业务存储或调用用户方法。`comparable` 被源码遮蔽时使用编译器支持包限定约束，不拒绝普通 Go 命名；该路径需要声明已有 runtime module 依赖，不引入 source trait 或稳定 ABI。
+索引保留 map comma-ok。数组切片保持原存储；不可取址数组不能因临时量获得切片或指针接收者调用能力。省略上下界、长度/容量、常量错误及运行时边界检查保留。字面量保留最终形状，不把 map 改写成逐项赋值，不抹掉重复常量键或非常量数组下标错误；省略元素类型和隐式指针沿原上下文保留。外部包不可命名的 scalar 类型通过原容器的纯零值类型见证推断，支持位移、比较及短路；不读取业务存储或调用用户方法。`comparable` 被源码遮蔽时使用编译器支持包限定约束，不拒绝普通 Go 命名；该路径需要声明已有 goxide 模块 依赖，不引入 source trait 或稳定 ABI。
 
 Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，不能让原本会求值的操作数变成被跳过的常量表达式。`&T{...?...}`（含括号）支持，任意 `&(load()?)` 仍不支持。`unsafe.Sizeof/Alignof/Offsetof` 不求值参数中的传播明确报限制：现有 prelude 直接搬出参数会错误执行它，需后续有意识的非求值类型降低，不能静默执行或宣称已完成。
 
@@ -168,6 +168,20 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 
 [真实 hgo 验收](../../../tests/acceptance/propagate_place_test.go)覆盖上述顺序/错误/写入/别名/权限和静态拒绝；[跨包业务](../../../examples/propagate_places/main.hgo)使用真实 strconv.Atoi，验证失败保持已有目标值和 NumError cause，并覆盖外部私有 scalar、纯值嵌入 promotion、63 位 shift、不同类型 compound 及 any 键。安装 CLI 后从仓库外转译，所有新增生成模块分别 race。审查使用的纯 Go panic 阶段探针仅为机制证据，不计作 hgo 验收。
 
-**仍未完成的工程边界**：需要显式保存外包私有嵌入指针的 promoted field 路径，如 `dep.Outer{*privateInner}` 的 `o.X = load()?`，当前给出 `private imported embedded pointer path is not yet lowered`。纯值嵌入 promotion 已支持。私有指针不能直接生成为不可访问 selector，也不能提前对最终字段取地址；本组未引入 unsafe、反射或生产包桥接。这是未完成实现，不是安全拒绝、待用户新语义或获批延期，不能把整个间接赋值项标为完成。
+**本小节交付时的工程边界（现由 §6.6 补齐）**：需要保存外包私有嵌入指针的 promoted field 路径，如 `dep.Outer{*privateInner}` 的 `o.X = load()?`，当时给出 `private imported embedded pointer path is not yet lowered`。纯值嵌入 promotion 已支持。私有指针不能直接生成为不可访问 selector，也不能提前对最终字段取地址；本组未引入 unsafe、反射或生产包桥接。这是未完成实现，不是安全拒绝、待用户新语义或获批延期，不能把整个间接赋值项标为完成。
 
 本轮检查 unsafe 拒绝边界：按实际 `types.Builtin` 身份，仅限制 Sizeof/Alignof/Offsetof 中的传播；需要求值的 unsafe.Add/Slice 与普通同名函数均真实执行通过。未扩展 unsafe 非求值降低或源泛型能力。循环/switch 保持下一组工程缺口，select 候选规则继续待决。
+
+### 6.6 私有嵌入指针目标：保留原赋值与原函数执行帧
+
+§6.5 的私有嵌入指针工程缺口现由 [assignment-frame 降低](../../../internal/propagate/frame.go)接通。例如原生 Go 包 `type leaf struct{ Count int }; type branch struct{ *leaf }; type Tree struct{ *branch }` 允许调用方写 `tree.Count = parse(text)?`，但生成 `tree.branch.leaf` 会越过 Go 可见性规则。直接对最终字段取地址会提前触发最终 nil 检查；把整个赋值放进 IIFE 又会改变 deferred 源函数里直接 `recover()` 的归属。私有标量字段的上下文类型也不能通过 `zero Tree.Count` 推断：zero 的嵌入指针为 nil。
+
+**研究校正**：Go 规定的是 §6.4 的偏序与赋值两阶段，不规定所有隐式 pointer 读取都在 RHS 调用之前。先前“浅拷贝必因 RHS 重绑而写错旧/新目标”的推断过强，不能据此宣称根本不可降低。普通 place 路径选择先捕获操作数是允许实现；私有路径选择保留原完整赋值同样允许。测试对 RHS 重绑只接受 Go 允许结果集合；对第二阶段第一项重绑深指针、第二项写 promoted field，则必须写入第一阶段确定的旧位置，不能重走新链。
+
+当前方案保留完整 assignment，让 Go 负责隐藏操作数、上下文类型、可取址性及写阶段；仅把 `?` 替换为接收原 sum 值的有类型 helper。所有源操作数作为 helper 实参在原函数执行帧中求值，直接 recover 仍是直接调用。失败先完成验证与错误转换，再经 [compiler-support guard](../../../runtime/assignment.go)的私有 token 退出该赋值；源函数直接 defer 的 Catch 只在自身 pending 时恢复该 token、填写原函数返回槽，随后正常执行先前用户 defer。普通 panic、invalid sum、panic(nil)、Goexit 不进入此恢复路径。没有反射、unsafe、导出私有字段或生产包专用捕获接口。
+
+返回槽在原函数入口以保留名字的指针绑定，避免内层遮蔽；原无名结果增加 hygienic 名字前先检查完整函数的非法 bare return，blank 名结果也正确处理。guard/defer/赋值放普通词法块，避免声明挡住原合法 forward goto；不增加整条赋值的闭包执行帧。嵌套源闭包保持自己的传播目标，重复遍历不会重复插入入口绑定。
+
+代价是此特殊路径新增 helper、每次执行的 defer、失败时内部 panic，以及对已有 goxide 模块 的明确依赖；成功 guard 也保留至函数退出，不宣称零开销或稳定 ABI。另一可行架构是由可控制的生产包生成有类型的目标捕获/写入 helper，在其可见范围内读取私有链；它需要生产包重编译、调用方/生产方元数据协议，并不能自动覆盖任意现存原生 Go 依赖，因此本阶段不采用。整条赋值 IIFE 方案因直接 recover 反例被排除；Go 编译器内部 typed-IR 集成则超出当前可独立转译的后端范围。
+
+[真实跨包业务](../../../examples/propagate_places/private.hgo)和[接受测试](../../../tests/acceptance/propagate_private_place_test.go)覆盖业务解析/cause、私有整数与布尔上下文、两层指针、RHS/写阶段重绑、nil/失败不写、named/blank/shadow 返回、直接 recover、source defer、旧 panic、Goexit、legacy panic(nil)、nested closure、goto 和只读权限。纯 Go 研究探针只作方案依据；本项完成依据是实际安装 CLI、仓库外 hgo 转译及生成模块 race。非求值 unsafe 参数和其他既有传播限制未扩大。

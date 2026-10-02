@@ -340,7 +340,7 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 
 基于 `a229e5f12dfebc953dea75beae867af5161abd3d`，补齐既有 Option/Result 的索引/切片及 struct、数组、slice、map 字面量传播。[接受测试](../tests/acceptance/propagate_aggregate_test.go)包含 **10 项**主生成模块 race、跨包批次业务 **2 项** race、只读数组投影 **1 项** race，另有 **14 项**前端拒绝。拒绝包括不可取址数组切片/元素指针方法、静态边界、重复键/字段、非法 literal key、只读共享字段装入可写容器及不求值 unsafe 参数。
 
-覆盖证据明确分开：源码真实经过 hgo→Go；安装 CLI 在仓库外转译[批次业务](../examples/propagate_aggregate/main.hgo)，独立生成模块执行；纯 Go 规范探针不是前端实现证明。业务保留 strconv.NumError cause，并覆盖外部包私有 scalar、struct/array、隐式指针、map 键值、命名 bool 短路及 comparable 遮蔽。对应 compiler-support 约束见 [runtime](../runtime/constraints.go)，不是新 trait/公共协议；只有遮蔽且需要该 witness 的生成路径引入此包，目录模块须声明 runtime module 依赖。
+覆盖证据明确分开：源码真实经过 hgo→Go；安装 CLI 在仓库外转译[批次业务](../examples/propagate_aggregate/main.hgo)，独立生成模块执行；纯 Go 规范探针不是前端实现证明。业务保留 strconv.NumError cause，并覆盖外部包私有 scalar、struct/array、隐式指针、map 键值、命名 bool 短路及 comparable 遮蔽。对应 compiler-support 约束见 [runtime](../runtime/constraints.go)，不是新 trait/公共协议；只有遮蔽且需要该 witness 的生成路径引入此包，目录模块须声明 goxide 模块 依赖。
 
 本组保留规定的调用/接收/逻辑顺序；不对变量读取、索引及 map 插入的未规定顺序作新增承诺。动态重复键接受 Go 允许的任一结果。数组原存储和可取址类别、map comma-ok、省略 bounds/类型、常量 key 错误及 len/cap 原求值属性均分别验收。
 
@@ -357,6 +357,8 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 
 ## T0 收口第四组：间接赋值的两阶段执行
 
+本节记录 `067ead774bf27a0366e7b69c5349f25ae5fa3574` 的交付边界；其中私有嵌入指针缺口现由下一节补齐。
+
 [实现](../internal/propagate/place.go)与[真实前端验收](../tests/acceptance/propagate_place_test.go)接通 pointer、field、slice/array/pointer-array/map 目标及多目标/compound/tuple/comma-ok 组合。保存第一阶段的容器和索引、保持数组原存储，传播失败不进入写阶段；最终 nil/bounds/map panic 和从左到右的部分写入保持 Go 行为。用户调用在求值阶段的副作用不会回滚。现有只读权限仍验证，同时接受可写别名更新经只读路径观察，不新增借用分析。
 
 三个新增生成模块分别执行 race：主语义 **9 项**、安装 CLI 跨包业务 **2 项**、unsafe 边界 **1 项**。另有 **10 项**静态拒绝子例、三种 unsafe 非求值入口拒绝，以及外包私有嵌入指针限制诊断。真实业务输出 `42 9 <nil>` 与 `invalid value 42 9`，保留 NumError cause。纯 Go 阶段/panic 探针只作研究证据。
@@ -370,3 +372,13 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 | 需要新设计决定 | select 候选失败规则；Proposed adapters 入口与自定义 deserialize_with 缺失策略；完整 native bridge 的候选接口 | 本组不选定或实现这些接口 |
 
 unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/Slice 和普通同名函数不被误拒绝。非求值降低仍未实现，本轮不扩其语义。外包私有嵌入指针目标是编译器工程障碍，不需要用户重定语言语义；未通过反射/unsafe/跨包代码注入掩盖它。暂不切换到循环/switch，也不宣称本切片或整项 MVP 全部完成。
+
+## T0 第四组补齐：外包私有嵌入指针目标
+
+覆盖上一节的私有嵌入指针限制：当前 [frame lowering](../internal/propagate/frame.go)保留原 Go assignment，不生成不可访问 selector，也不复制数组/根结构体来冒充原位置。原生包无需配合修改或导出私有字段。仅这类目标使用 [runtime guard](../runtime/assignment.go)，问号失败不进入写阶段；private scalar 的上下文类型与只读权限由原赋值继续保留。
+
+实际[跨包业务](../examples/propagate_places/private.hgo)新增 **10 项**生成模块 race，另 **6 项**前端拒绝，旧限制拒绝用例已替换为正向执行。与既有两项业务合计 **12 项**生成模块测试；legacy `GODEBUG=panicnil=1` 另重跑 panic/Goexit 一项，属于配置验证而非新增测试计数。CLI 业务新增输出 `stock 7 <nil>`、`invalid stock 7`。命名返回遮蔽、非法裸 return、goto 声明作用域三个独立审查发现均已修复并留真实用例。
+
+这补齐的是已识别的普通间接赋值目标缺口，不是完成整个 T0。需要纠正旧分析中的过强顺序假设：Go 不保证隐式指针读取早于全部 RHS 调用；本轮只承诺规定的调用顺序与两阶段写入，对未规定的读取顺序不作额外保证。根本不可行的推断撤回，也没有把缺口变成批准延期。
+
+下一建议先做 **for/range 一组**：initializer、每轮 condition、post、无 condition、嵌套与标签 continue/break、range 源一次求值；保留现有 Go 迭代变量规则和最近函数早退，不在本组引入 select 决策。随后做 **switch 一组**：initializer/tag、逐 case 求值/短路、default、break/fallthrough 及标签；type switch 另按具体组合验证，不自动加入新的泛型/匹配协议。select 候选失败、Proposed adapters 入口和 custom deserialize_with 缺失策略继续待决；match 组合、权限保守限制、公开引用元数据及诊断仍按既有矩阵逐项验收。

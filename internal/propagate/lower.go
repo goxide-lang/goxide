@@ -50,6 +50,11 @@ type lowering struct {
 	witnessHelpers       map[string]string
 	comparableConstraint string
 	placeFields          map[*ast.SelectorExpr]*types.Var
+	functionBodies       map[*ast.FuncType]*ast.BlockStmt
+	frameTypes           map[types.Type]string
+	frameRuntime         string
+	resultPointers       map[*ast.FuncType]string
+	functionPrologues    map[*ast.FuncType][]ast.Stmt
 }
 
 func printNode(n any) string {
@@ -448,6 +453,12 @@ func (l *lowering) target(ft *ast.FuncType) (enums.Decl, error) {
 	return d, nil
 }
 func (l *lowering) body(b *ast.BlockStmt, ft *ast.FuncType) error {
+	if l.functionBodies == nil {
+		l.functionBodies = map[*ast.FuncType]*ast.BlockStmt{}
+	}
+	if l.functionBodies[ft] == nil {
+		l.functionBodies[ft] = b
+	}
 	// Each function literal has its own lexical return target.
 	var err error
 	ast.Inspect(b, func(n ast.Node) bool {
@@ -467,6 +478,10 @@ func (l *lowering) body(b *ast.BlockStmt, ft *ast.FuncType) error {
 			return e
 		}
 		out = append(out, ss...)
+	}
+	if l.functionBodies[ft] == b {
+		out = append(l.functionPrologues[ft], out...)
+		delete(l.functionPrologues, ft)
 	}
 	b.List = out
 	return nil
@@ -539,6 +554,9 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	lower := func(x ast.Expr) (ast.Expr, error) { p, y, e := l.expr(x, ft); pre = append(pre, p...); return y, e }
 	switch x := s.(type) {
 	case *ast.AssignStmt:
+		if l.needsAssignmentFrame(x) {
+			return l.assignmentFrame(x, ft)
+		}
 		for i, lhs := range x.Lhs {
 			if x.Tok == token.DEFINE {
 				if _, ok := lhs.(*ast.Ident); !ok {

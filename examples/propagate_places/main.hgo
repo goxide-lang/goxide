@@ -26,4 +26,4 @@ func distinctTypes()Result[int,error]{
  if model.N!=4||a!=model.Count(5)||keys[model.Count(5)]!=7{panic("different contextual types")}
  return Result[int,error]::Ok(1)
 }
-func main(){s:=[]int{0};m:=map[int]int{};n,e:=unpack(update(s,m,"0","42"));fmt.Println(n,m[0],e);_,e=unpack(update(s,m,"0","bad"));if e!=nil{fmt.Println("invalid value",s[0],m[0])}}
+func main(){s:=[]int{0};m:=map[int]int{};n,e:=unpack(update(s,m,"0","42"));fmt.Println(n,m[0],e);_,e=unpack(update(s,m,"0","bad"));if e!=nil{fmt.Println("invalid value",s[0],m[0])};tree:=model.NewTree(3);n,e=unpack(stock(&tree,"7"));fmt.Println("stock",n,e);_,e=unpack(stock(&tree,"bad"));if e!=nil{fmt.Println("invalid stock",tree.Count)}}

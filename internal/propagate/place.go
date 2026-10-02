@@ -126,7 +126,7 @@ func (l *lowering) place(original ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.E
 			}
 			field := t.(*types.Struct).Field(index)
 			if !field.Exported() && field.Pkg() != l.pkg {
-				return nil, nil, nil, l.fail(x, "? assignment through a private imported embedded pointer path is not yet lowered")
+				return nil, nil, nil, l.fail(x, "internal propagation error: private pointer path escaped assignment-frame selection")
 			}
 			next := &ast.SelectorExpr{X: base, Sel: ast.NewIdent(field.Name())}
 			tv := l.info.Types[base]

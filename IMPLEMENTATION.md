@@ -634,7 +634,7 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 
 实现保留 map comma-ok、数组原存储与不可取址值类别、上下界/容量、省略 bounds、常量错误、重复 key/field、嵌套省略类型与隐式指针 literal。`len/cap` 原本需求值的 array 操作数显式保持求值，避免去掉 marker 后变常量；仅 composite literal 可带传播取地址，不放开任意 `&(load()?)`。类型迭代对暂未访问到的 marker 等待本轮其他 payload 签名解析后重查；无进展仍报错，不忽略最终类型检查。
 
-独立审查发现并修复外部包 private scalar 上下文丢失，包括 uint64 位移、命名 bool 比较/短路。使用原 container 的纯零值类型见证保留类型，不读用户存储、不调用用户方法或 Default。又修复源码包级/file import 的 comparable 遮蔽：只有该特殊路径引入 [compiler-support 约束](runtime/constraints.go)，目录模块显式依赖 runtime module，普通生成路径不增加此依赖。这不是新语言协议、稳定 ABI 或零成本承诺。
+独立审查发现并修复外部包 private scalar 上下文丢失，包括 uint64 位移、命名 bool 比较/短路。使用原 container 的纯零值类型见证保留类型，不读用户存储、不调用用户方法或 Default。又修复源码包级/file import 的 comparable 遮蔽：只有该特殊路径引入 [compiler-support 约束](runtime/constraints.go)，目录模块显式依赖 goxide 模块，普通生成路径不增加此依赖。这不是新语言协议、稳定 ABI 或零成本承诺。
 
 [真实前端接受测试](tests/acceptance/propagate_aggregate_test.go)中，主生成模块 **10 项 race** 覆盖调用/接收顺序、错误/副作用、map/pointer/index、slice storage、literal 键值、上下文类型、短路/嵌套闭包/defer、动态不可比较 map key 与 len/cap panic；另有 **14 项**前端拒绝。第二份[跨包批次业务](examples/propagate_aggregate/main.hgo)经安装 CLI、仓库外转译、生成模块 **2 项 race** 与 CLI run，输出 `batch 2 9223372036854775808`、`invalid bounds`，保留 strconv.NumError cause；第三份生成模块 **1 项 race** 验证只读数组索引观察正常可写别名更新，另拒绝共享只读字段进入可写 literal。生成模块 **10+2+1** 与宿主统计分开，纯 Go 规范探针不算前端完成证据。
 
@@ -653,3 +653,19 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 独立非作者审查自行构造的跨包反例、重跑新验收，修复后无新增阻断；已知私有嵌入指针缺口如上保留。[RFC 0005 §6.5](docs/rfcs/research/0005-option-result-question.md#65-t0-收口间接赋值的两阶段降低)、[第四组矩阵](docs/t0-acceptance.md#t0-收口第四组间接赋值的两阶段执行)、ROADMAP 与阶段 README 同步。select 候选传播、Proposed adapters 和完整 native bridge 待决入口没有获批或实施；其他循环/switch、match、权限跟踪、公开元数据与诊断仍须逐项收口。
 
 最终验证：Go 1.27.1 linux/amd64、CGO_ENABLED=1，本地离线工具链。全树 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、243 宿主顶层测试、434 子测试**，另 **2 包无自身测试**。新增三份生成模块 **9+2+1 项 race** 单列，真实安装 CLI/仓库外转译/业务运行通过。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 565 本地链接与锚点 / 20 RFC**、`git diff --check` 通过。旧“间接目标须拒绝”的三条测试已迁为成功及失败路径验收；因其中两条旧预期导致失败的早一轮整树日志不算最终验证。最终证据在 `/tmp/t0-place-final-race.json`、`/tmp/t0-place-final-race.err`、`/tmp/t0-place-vet.log`、`/tmp/t0-place-design.log`、`/tmp/t0-place-docs.log`、`/tmp/t0-place-targeted.log`。仅提交推送工作分支并 fetch 核验，不修改 main/work/冻结标签，不合并或发布。
+
+## T0 第四组补齐：外包私有嵌入指针赋值
+
+基于 `067ead774bf27a0366e7b69c5349f25ae5fa3574`。普通 Go 允许访问私有嵌入指针上的导出提升字段，而旧 place pass 会展开不可访问 selector；私有 scalar 的零值 witness 也不能经 nil 嵌入指针取字段。新增 [frame lowering](internal/propagate/frame.go)仅对这类赋值保留完整原 Go assignment，让后端负责隐藏路径、上下文类型和两阶段写入。问号 helper 的源操作数留在原函数执行帧中作实参求值，避免整条赋值 IIFE 破坏直接 recover。
+
+[compiler-support guard](runtime/assignment.go)只在失败返回值完成验证/转换后设置 pending 并抛出私有 token，由源函数直接 defer 的 Catch 消费并写回原返回槽，再执行先前源 defer。普通 panic、invalid sum、panic(nil)、Goexit 不被当业务失败。无反射、unsafe、根对象/数组复制、私有字段导出或原生生产包捕获桥接。代价是该特殊路径的 helper/defer、失败时内部 panic，以及已有 goxide 模块 依赖；guard 保留到函数返回，不承诺零开销/稳定 ABI。源泛型、非求值 unsafe 和 From 规则没有扩大。
+
+独立审查修复三个真实反例：返回槽在函数入口绑定以免内层同名变量遮蔽；函数体记录只保留完整原词法函数，防止命名无名结果后误放行外层非法裸 return；guard 声明放普通 block，避免合法 forward goto 被新增声明阻挡。入口绑定在首次插入后移除待插队列，嵌套闭包重复遍历不重复声明。复审自建跨包反例与生成模块 race 均通过。
+
+研究同时纠正先前过强推断：Go 不保证所有隐式 pointer 读取早于 RHS 调用，不能由此声称浅拷贝必错或根本不可降低。本实现保留规范偏序；重绑发生于 RHS 时测试允许规范结果集合，发生于写阶段第一项时后续目标必须保持第一阶段位置。另一有条件可行方案是生产包生成有类型捕获/写入 helper，但需要包配合与元数据协议，故不采用；整条赋值 IIFE 因 recover 反例被排除。研究探针为纯 Go，不当作前端完成证据。
+
+[真实跨包验收](tests/acceptance/propagate_private_place_test.go)新增 **10 项**生成模块 race、**6 项**前端拒绝。与原业务两项合计 **12 项**生成模块测试，legacy `GODEBUG=panicnil=1` 再执行其中 panic/Goexit 一项作配置复核。涵盖 stock 解析/cause、private scalar/短路、两层指针、root/deep 重绑、多目标写阶段、nil/错误不写、Option、named/blank/shadow 返回、直接 recover/旧 panic/用户 defer、Goexit、nested closure、goto、只读拒绝和可写别名观察。真实安装 CLI、仓库外转译、生成模块 race 及 CLI run 输出新增 `stock 7 <nil>`、`invalid stock 7`；普通赋值/unsafe 边界的既有生成模块另有 **9+1 项**race 回归。生成模块统计与宿主数量分开。
+
+[RFC §6.6](docs/rfcs/research/0005-option-result-question.md#66-私有嵌入指针目标保留原赋值与原函数执行帧)、[补齐矩阵](docs/t0-acceptance.md#t0-第四组补齐外包私有嵌入指针目标)、ROADMAP 和阶段 README 同步，旧“not yet lowered”条目标明历史时点。该具体工程缺口已接通，整体 T0/MVP 仍未完成；下一建议 for/range，再 switch，select 与 Proposed adapters 继续待决。
+
+最终验证：Go 1.27.1 linux/amd64、CGO_ENABLED=1，本地离线工具链。全树 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、243 宿主顶层测试、440 子测试**，另 **2 包无自身测试**；实际生成模块分别 race，特殊路径业务 **12 项**（其中本次新增 10 项）、普通目标 **9 项**、unsafe **1 项**，legacy panic(nil) 为额外配置复核。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 578 本地链接与锚点 / 20 RFC** 和 diff 检查通过。日志位于 `/tmp/t0-private-final-race.json`、`/tmp/t0-private-final-race.err`、`/tmp/t0-private-vet.log`、`/tmp/t0-private-design.log`、`/tmp/t0-private-docs.log`、`/tmp/t0-private-targeted.log`。只提交推送 `feat/t0-completion` 并 fetch 核验，不修改 main/work/冻结标签，不合并或发布。

@@ -1,0 +1,65 @@
+Total: 2.84MB
+ROUTINE ======================== runtime.recovery in /workspace/goxide-environment/go/src/runtime/panic.go
+         0   234.40kB (flat, cum)  8.06% of Total
+         .          .   1310:func recovery(gp *g) {
+         .          .   1311:	p := gp._panic
+         .          .   1312:	pc, sp, fp := p.retpc, uintptr(p.sp), uintptr(p.fp)
+         .          .   1313:	p0, saveOpenDeferState := p, p.deferBitsPtr != nil && *p.deferBitsPtr != 0
+         .          .   1314:
+         .          .   1315:	// The linker records the f-relative address of a call to deferreturn in f's funcInfo.
+         .          .   1316:	// Assuming a "normal" call to recover() inside one of f's deferred functions
+         .          .   1317:	// invoked for a panic, that is the desired PC for exiting f.
+         .          .   1318:	f := findfunc(pc)
+         .          .   1319:	if f.deferreturn == 0 {
+         .          .   1320:		throw("no deferreturn")
+         .          .   1321:	}
+         .          .   1322:	gotoPc := f.entry() + uintptr(f.deferreturn)
+         .          .   1323:
+         .          .   1324:	// Unwind the panic stack.
+         .          .   1325:	for ; p != nil && uintptr(p.startSP) < sp; p = p.link {
+         .          .   1326:		// Don't allow jumping past a pending Goexit.
+         .          .   1327:		// Instead, have its _panic.start() call return again.
+         .          .   1328:		//
+         .          .   1329:		// TODO(mdempsky): In this case, Goexit will resume walking the
+         .          .   1330:		// stack where it left off, which means it will need to rewalk
+         .          .   1331:		// frames that we've already processed.
+         .          .   1332:		//
+         .          .   1333:		// There's a similar issue with nested panics, when the inner
+         .          .   1334:		// panic supersedes the outer panic. Again, we end up needing to
+         .          .   1335:		// walk the same stack frames.
+         .          .   1336:		//
+         .          .   1337:		// These are probably pretty rare occurrences in practice, and
+         .          .   1338:		// they don't seem any worse than the existing logic. But if we
+         .          .   1339:		// move the unwinding state into _panic, we could detect when we
+         .          .   1340:		// run into where the last panic started, and then just pick up
+         .          .   1341:		// where it left off instead.
+         .          .   1342:		//
+         .          .   1343:		// With how subtle defer handling is, this might not actually be
+         .          .   1344:		// worthwhile though.
+         .          .   1345:		if p.goexit {
+         .          .   1346:			gotoPc, sp = p.startPC, uintptr(p.startSP)
+         .          .   1347:			saveOpenDeferState = false // goexit is unwinding the stack anyway
+         .          .   1348:			break
+         .          .   1349:		}
+         .          .   1350:
+         .          .   1351:		runningPanicDefers.Add(-1)
+         .          .   1352:	}
+         .          .   1353:	gp._panic = p
+         .          .   1354:
+         .          .   1355:	if p == nil { // must be done with signal
+         .          .   1356:		gp.sig = 0
+         .          .   1357:	}
+         .          .   1358:
+         .          .   1359:	if gp.param != nil {
+         .          .   1360:		throw("unexpected gp.param")
+         .          .   1361:	}
+         .          .   1362:	if saveOpenDeferState {
+         .          .   1363:		// If we're returning to deferreturn and there are more open-coded
+         .          .   1364:		// defers for it to call, save enough state for it to be able to
+         .          .   1365:		// pick up where p0 left off.
+         .   234.40kB   1366:		gp.param = unsafe.Pointer(&savedOpenDeferState{
+         .          .   1367:			retpc: p0.retpc,
+         .          .   1368:
+         .          .   1369:			// We need to save deferBitsPtr and slotsPtr too, but those are
+         .          .   1370:			// stack pointers. To avoid issues around heap objects pointing
+         .          .   1371:			// to the stack, save them as offsets from SP.

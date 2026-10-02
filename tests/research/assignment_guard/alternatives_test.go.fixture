@@ -1,0 +1,177 @@
+package main
+
+import (
+	"places.example/update/model"
+	"testing"
+)
+
+// Mechanism probes, not compiler implementations. No candidate uses panic or
+// recover for normal control flow; observed() catches expected Go nil panics.
+func capture[T any](p *T) func(T) { return func(v T) { *p = v } }
+
+func TestEarlyAddressChangesFailure(t *testing.T) {
+	tree := model.NilLeaf()
+	failed := func() bool { return true }
+	_, completed := observed(func() {
+		_ = &tree.Wide
+		if failed() {
+			return
+		}
+	})
+	if completed {
+		t.Fatal("expected early address to panic")
+	}
+	_, completed = observed(func() {
+		if failed() {
+			return
+		}
+		tree.Wide = 1
+	})
+	if !completed {
+		t.Fatal("failure should skip final destination access")
+	}
+}
+func TestGenericInferenceDoesNotDelayAddress(t *testing.T) {
+	tree := model.NewTree(0)
+	set := capture(&tree.Wide) // T is inferred as model's private mask.
+	set(1 << 63)
+	if uint64(tree.Wide) != uint64(1)<<63 {
+		t.Fatal(tree.Wide)
+	}
+	tree = model.NilLeaf()
+	if _, completed := observed(func() { _ = capture(&tree.Wide) }); completed {
+		t.Fatal("generic arguments still evaluate eagerly")
+	}
+}
+func TestLateAddressStillChangesWritePhase(t *testing.T) {
+	tree := model.NilLeaf()
+	first := 0
+	observed(func() { p := &tree.Count; first, *p = 5, 7 })
+	if first != 0 {
+		t.Fatal(first)
+	}
+	observed(func() { first, tree.Count = 5, 7 })
+	if first != 5 {
+		t.Fatal("original first write must precede final nil panic", first)
+	}
+}
+func TestDeferredSetterLosesPhaseOnePlace(t *testing.T) {
+	tree := model.NewTree(3)
+	old := model.Observe(tree)
+	set := func(v int) { tree.Count = v }
+	*model.LeafSlot(&tree) = model.NewLeaf(99)
+	set(7)
+	if old() != 3 || tree.Count != 7 {
+		t.Fatal(old(), tree.Count)
+	}
+	tree = model.NewTree(3)
+	old = model.Observe(tree)
+	*model.LeafSlot(&tree), tree.Count = model.NewLeaf(99), 7
+	if old() != 7 || tree.Count != 99 {
+		t.Fatal("original assignment retains first-phase location", old(), tree.Count)
+	}
+}
+
+// A bounded, manually authored effect-staging candidate. The complete final
+// assignment retains private scalar context and hidden pointer writes. The bool
+// comparison is intentionally untyped in that context; replacing an originally
+// typed named bool with this trick in an interface would be incorrect.
+func contextIR(t *model.Tree, first *int, n uint, r Result[int, error]) Result[int, error] {
+	cond := false
+	if n == 63 {
+		__hgo_enum_inst_54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(r)
+		switch v := r.(type) {
+		case __hgo_enum_case_Result_Ok[int, error]:
+			cond = v.Value == 7
+		case __hgo_enum_case_Result_Err[int, error]:
+			return __hgo_enum_ctor_Result_Err[int, error](v.Value)
+		}
+	}
+	*first, t.Wide, t.Enabled = 5, 1<<n, cond == true
+	return r
+}
+func TestContextPreservingIRSubset(t *testing.T) {
+	tree := model.NewTree(3)
+	first := 0
+	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
+	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	_, e := unpack(contextIR(&tree, &first, 63, bad))
+	if e != benchError || first != 0 || tree.Wide != 0 {
+		t.Fatal(e, first, tree.Wide)
+	}
+	_, e = unpack(contextIR(&tree, &first, 63, ok))
+	if e != nil || first != 5 || uint64(tree.Wide) != uint64(1)<<63 || !tree.Enabled {
+		t.Fatal(e, first, tree.Wide, tree.Enabled)
+	}
+	tree = model.NilLeaf()
+	first = 0
+	observed(func() { _ = contextIR(&tree, &first, 63, ok) })
+	if first != 5 {
+		t.Fatal("late nil in final write phase", first)
+	}
+}
+func BenchmarkGenericCaptureSuccess(b *testing.B) {
+	tree := model.NewTree(0)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		set := capture(&tree.Wide)
+		set(7)
+	}
+	intSink = int(tree.Wide)
+}
+func BenchmarkContextIRSuccess(b *testing.B) {
+	tree := model.NewTree(0)
+	first := 0
+	r := __hgo_enum_ctor_Result_Ok[int, error](7)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchSink = contextIR(&tree, &first, 63, r)
+	}
+	intSink = first
+}
+func BenchmarkContextIRFailure(b *testing.B) {
+	tree := model.NewTree(0)
+	first := 0
+	r := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchSink = contextIR(&tree, &first, 63, r)
+	}
+	intSink = first
+}
+func BenchmarkIndexOnlySuccess(b *testing.B) {
+	tree := model.NewTree(0)
+	r := __hgo_enum_ctor_Result_Ok[int, error](7)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchSink = IndexOnly(&tree, r)
+	}
+}
+func BenchmarkIndexExplicitSuccess(b *testing.B) {
+	tree := model.NewTree(0)
+	r := __hgo_enum_ctor_Result_Ok[int, error](7)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchSink = IndexExplicit(&tree, r)
+	}
+}
+
+func box[T any](v T) any { return v }
+func TestTypedBoolProvenance(t *testing.T) {
+	tree := model.NewTree(0)
+	other := model.NewTree(1)
+	original := box(tree.Enabled && other.Enabled)
+	cond := bool(tree.Enabled && other.Enabled)
+	rewritten := box(cond == true)
+	if _, builtin := original.(bool); builtin {
+		t.Fatal("original must retain private named bool")
+	}
+	if _, builtin := rewritten.(bool); !builtin {
+		t.Fatal("comparison unexpectedly retained named bool")
+	}
+}

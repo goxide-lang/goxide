@@ -357,7 +357,7 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 
 ## T0 收口第四组：间接赋值的两阶段执行
 
-本节记录 `067ead774bf27a0366e7b69c5349f25ae5fa3574` 的交付边界；其中私有嵌入指针缺口现由下一节补齐。
+本节记录 `067ead774bf27a0366e7b69c5349f25ae5fa3574` 的交付边界；其中私有嵌入指针下一节仅接通功能；性能复核未通过，尚未收口。
 
 [实现](../internal/propagate/place.go)与[真实前端验收](../tests/acceptance/propagate_place_test.go)接通 pointer、field、slice/array/pointer-array/map 目标及多目标/compound/tuple/comma-ok 组合。保存第一阶段的容器和索引、保持数组原存储，传播失败不进入写阶段；最终 nil/bounds/map panic 和从左到右的部分写入保持 Go 行为。用户调用在求值阶段的副作用不会回滚。现有只读权限仍验证，同时接受可写别名更新经只读路径观察，不新增借用分析。
 
@@ -379,6 +379,12 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 
 实际[跨包业务](../examples/propagate_places/private.hgo)新增 **10 项**生成模块 race，另 **6 项**前端拒绝，旧限制拒绝用例已替换为正向执行。与既有两项业务合计 **12 项**生成模块测试；legacy `GODEBUG=panicnil=1` 另重跑 panic/Goexit 一项，属于配置验证而非新增测试计数。CLI 业务新增输出 `stock 7 <nil>`、`invalid stock 7`。命名返回遮蔽、非法裸 return、goto 声明作用域三个独立审查发现均已修复并留真实用例。
 
-这补齐的是已识别的普通间接赋值目标缺口，不是完成整个 T0。需要纠正旧分析中的过强顺序假设：Go 不保证隐式指针读取早于全部 RHS 调用；本轮只承诺规定的调用顺序与两阶段写入，对未规定的读取顺序不作额外保证。根本不可行的推断撤回，也没有把缺口变成批准延期。
+这仅接通已识别的普通间接赋值目标功能；后续性能复核未通过，不能称该缺口或 T0 完成。需要纠正旧分析中的过强顺序假设：Go 不保证隐式指针读取早于全部 RHS 调用；本轮只承诺规定的调用顺序与两阶段写入，对未规定的读取顺序不作额外保证。根本不可行的推断撤回，也没有把缺口变成批准延期。
 
-下一建议先做 **for/range 一组**：initializer、每轮 condition、post、无 condition、嵌套与标签 continue/break、range 源一次求值；保留现有 Go 迭代变量规则和最近函数早退，不在本组引入 select 决策。随后做 **switch 一组**：initializer/tag、逐 case 求值/短路、default、break/fallthrough 及标签；type switch 另按具体组合验证，不自动加入新的泛型/匹配协议。select 候选失败、Proposed adapters 入口和 custom deserialize_with 缺失策略继续待决；match 组合、权限保守限制、公开引用元数据及诊断仍按既有矩阵逐项验收。
+当前先处理私有目标正常控制流方案，不将 guard 扩到循环。for/range、switch、match 组合、权限保守限制、公开引用元数据及诊断仍是工程待办；select 候选失败、Proposed adapters 入口和 custom deserialize_with 缺失策略继续待决。
+
+### 私有目标性能复核：未收口
+
+`a3f064fbcd0e75bb06bdba406f007e5abd68bd71` 功能测试通过，但性能验收失败：单条 guard 成功 32 B/1 alloc，失败 48 B/2 alloc；八条执行成功 256 B/8 alloc，末条失败 296 B/10 alloc。后者包含实测 Go runtime recovery 的额外分配；不把全部成本归因于编译器不能内联。[可复现研究](../tests/research/assignment_guard/README.md)保存原始测量及后续复核，区分真实 hgo 执行与手写 Go 机制探针。
+
+本次修复只读提升字段作为索引/key/调用参数的误路由，新增一项生成业务测试（现共 13 项）与生成代码无 guard 断言。真实索引成功路径测得 0 B/0 alloc。真正私有目标仍使用未获性能验收的 guard，不能勾为完成。手写 Go 的无 panic 完整赋值 IR 子集探针可行，通用实现和验收未完成；没有新的语言语义决定或批准延期。

@@ -1,0 +1,4 @@
+package main
+import "places.example/update/model"
+func IndexOnly(t *model.Tree,r Result[int,error])Result[int,error]{a:=[1]int{};a[t.Count]=r?;return r}
+func IndexExplicit(t *model.Tree,r Result[int,error])Result[int,error]{a:=[1]int{};match r{Result[int,error]::Ok(n)=>{a[t.Count]=n},Result[int,error]::Err(e)=>{return Result[int,error]::Err(e)},};return r}

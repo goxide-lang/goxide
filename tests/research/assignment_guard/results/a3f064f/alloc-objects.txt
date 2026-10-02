@@ -1,0 +1,17 @@
+File: update.test
+Build ID: d8f08d2d25e702b52a4a2ae76afda0ce96cd3975
+Type: alloc_objects
+Time: 2026-10-02 09:30:32 UTC
+Showing nodes accounting for 100015, 99.82% of 100193 total
+Dropped 118 nodes (cum <= 500)
+      flat  flat%   sum%        cum   cum%
+     80008 79.85% 79.85%      90009 89.84%  places.example/update.Guard8
+     10004  9.98% 89.84%      10004  9.98%  runtime.mallocgc
+     10001  9.98% 99.82%      10001  9.98%  places.example/update.__hgo_enum_ctor_Result_Err[go.shape.int,go.shape.interface { Error string }] (inline)
+         2 0.002% 99.82%      90056 89.88%  testing.(*B).runN
+         0     0% 99.82%      90009 89.84%  places.example/update.BenchmarkGuard8FailLast
+         0     0% 99.82%      10001  9.98%  places.example/update.Guard8.func8 (inline)
+         0     0% 99.82%      10001  9.98%  runtime.mcall
+         0     0% 99.82%      10004  9.98%  runtime.newobject
+         0     0% 99.82%      10001  9.98%  runtime.recovery
+         0     0% 99.82%      90002 89.83%  testing.(*B).launch

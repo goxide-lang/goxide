@@ -168,7 +168,7 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 
 [真实 hgo 验收](../../../tests/acceptance/propagate_place_test.go)覆盖上述顺序/错误/写入/别名/权限和静态拒绝；[跨包业务](../../../examples/propagate_places/main.hgo)使用真实 strconv.Atoi，验证失败保持已有目标值和 NumError cause，并覆盖外部私有 scalar、纯值嵌入 promotion、63 位 shift、不同类型 compound 及 any 键。安装 CLI 后从仓库外转译，所有新增生成模块分别 race。审查使用的纯 Go panic 阶段探针仅为机制证据，不计作 hgo 验收。
 
-**本小节交付时的工程边界（现由 §6.6 补齐）**：需要保存外包私有嵌入指针的 promoted field 路径，如 `dep.Outer{*privateInner}` 的 `o.X = load()?`，当时给出 `private imported embedded pointer path is not yet lowered`。纯值嵌入 promotion 已支持。私有指针不能直接生成为不可访问 selector，也不能提前对最终字段取地址；本组未引入 unsafe、反射或生产包桥接。这是未完成实现，不是安全拒绝、待用户新语义或获批延期，不能把整个间接赋值项标为完成。
+**本小节交付时的工程边界（§6.6 仅接通功能，§6.7 性能复核未通过）**：需要保存外包私有嵌入指针的 promoted field 路径，如 `dep.Outer{*privateInner}` 的 `o.X = load()?`，当时给出 `private imported embedded pointer path is not yet lowered`。纯值嵌入 promotion 已支持。私有指针不能直接生成为不可访问 selector，也不能提前对最终字段取地址；本组未引入 unsafe、反射或生产包桥接。这是未完成实现，不是安全拒绝、待用户新语义或获批延期，不能把整个间接赋值项标为完成。
 
 本轮检查 unsafe 拒绝边界：按实际 `types.Builtin` 身份，仅限制 Sizeof/Alignof/Offsetof 中的传播；需要求值的 unsafe.Add/Slice 与普通同名函数均真实执行通过。未扩展 unsafe 非求值降低或源泛型能力。循环/switch 保持下一组工程缺口，select 候选规则继续待决。
 
@@ -184,4 +184,14 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 
 代价是此特殊路径新增 helper、每次执行的 defer、失败时内部 panic，以及对已有 goxide 模块 的明确依赖；成功 guard 也保留至函数退出，不宣称零开销或稳定 ABI。另一可行架构是由可控制的生产包生成有类型的目标捕获/写入 helper，在其可见范围内读取私有链；它需要生产包重编译、调用方/生产方元数据协议，并不能自动覆盖任意现存原生 Go 依赖，因此本阶段不采用。整条赋值 IIFE 方案因直接 recover 反例被排除；Go 编译器内部 typed-IR 集成则超出当前可独立转译的后端范围。
 
-[真实跨包业务](../../../examples/propagate_places/private.hgo)和[接受测试](../../../tests/acceptance/propagate_private_place_test.go)覆盖业务解析/cause、私有整数与布尔上下文、两层指针、RHS/写阶段重绑、nil/失败不写、named/blank/shadow 返回、直接 recover、source defer、旧 panic、Goexit、legacy panic(nil)、nested closure、goto 和只读权限。纯 Go 研究探针只作方案依据；本项完成依据是实际安装 CLI、仓库外 hgo 转译及生成模块 race。非求值 unsafe 参数和其他既有传播限制未扩大。
+[真实跨包业务](../../../examples/propagate_places/private.hgo)和[接受测试](../../../tests/acceptance/propagate_private_place_test.go)覆盖业务解析/cause、私有整数与布尔上下文、两层指针、RHS/写阶段重绑、nil/失败不写、named/blank/shadow 返回、直接 recover、source defer、旧 panic、Goexit、legacy panic(nil)、nested closure、goto 和只读权限。纯 Go 研究探针只作方案依据；这些仅为功能证据；§6.7 的性能门槛未通过，本项未完成。非求值 unsafe 参数和其他既有传播限制未扩大。
+
+### 6.7 性能门槛与无 panic 控制流研究
+
+§6.6 在 `a3f064fbcd0e75bb06bdba406f007e5abd68bd71` 的实现未获性能验收：guard 的 token 地址传入 panic 接口导致 guard 逃逸，成功也每条分配 32 B。失败额外有 Result 重建，某些多 defer 恢复路径还有 runtime 分配。详见[可复现夹具、数据及反例](../../../tests/research/assignment_guard/README.md)。内部 panic 也可被调试器/采样器观察；不能仅说“有少量 helper/defer 成本”。当前不扩到循环。
+
+路由必须只检查赋值存储路径，不能扫描 LHS 内所有 selector：`a[t.Count] = r?` 的 `Count` 只是普通读取；index/key/调用实参和 pointer/slice/map 容器读取可以使用既有普通 lowering。本次真实 hgo 回归检查生成代码不含 guard。
+
+无 panic 正常控制流候选结论：提前 `&t.Field`（含泛型推断 `capture(&t.Field)`）会早触发最终 nil panic；RHS 成功后统一取址仍会阻止多赋值前项本应发生的写入；延迟闭包重新访问根对象会丢失第一阶段的隐藏指针目标。泛型可以推断不可命名类型，但不会延迟实参求值，Go 函数字面量也不提供省略返回类型来构造通用私有指针 getter。这些具体反例不构成“不可能实现”的证明。
+
+保留整条最终 Go assignment、只分离调用/传播/短路副作用的 IR 值得继续：手写子集已保留私有 uint64 的 `1 << n` 上下文、未类型化 bool 及写阶段 nil。然而不能统一把布尔临时量改回比较式：原命名 bool 在泛型/接口中的类型会变为内建 bool。须记录源表达式原始 typed/untyped 属性（不能仅依赖被上下文具体化的 TypeOf），同时覆盖 tuple/comma-ok、callee/实参顺序、源直接 recover、移除调用后 len/cap 是否仍求值等。该实验不是编译器实现或私有目标验收；这是已定语义的工程工作，不需要新语言设计，不默认为长期延期。

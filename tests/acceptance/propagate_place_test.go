@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"github.com/hxsf/goxide/internal/frontend"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -108,6 +109,14 @@ import("testing";"errors";"strconv")
 func TestUpdate(t *testing.T){s:=[]int{0};m:=map[int]int{};n,e:=unpack(update(s,m,"0","42"));if e!=nil||n!=42||s[0]!=42||m[0]!=9{t.Fatal(n,e,s,m)};_,e=unpack(update(s,m,"0","bad"));var cause *strconv.NumError;if !errors.As(e,&cause)||s[0]!=42||m[0]!=9{t.Fatal(e,s,m)};_,e=unpack(update(s,m,"bad","42"));if !errors.As(e,&cause){t.Fatal(e)}}
 func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fatal(n,e)};if n,e:=unpack(distinctTypes());n!=1||e!=nil{t.Fatal(n,e)}}
 `)
+	indexGo, err := os.ReadFile(filepath.Join(generated, "index_reads.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(indexGo), ".Catch(") || strings.Contains(string(indexGo), ".Assignment[") {
+		t.Fatal("rvalue index/key/call-argument unexpectedly uses assignment guard")
+	}
+
 	packagesWrite(t, generated, "private_test.go", privatePlaceAssertions)
 
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")

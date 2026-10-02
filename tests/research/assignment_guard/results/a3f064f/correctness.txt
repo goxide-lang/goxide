@@ -1,0 +1,5 @@
+=== RUN   TestBenchmarkEquivalence
+--- PASS: TestBenchmarkEquivalence (0.00s)
+PASS
+ok  	places.example/update	1.010s
+?   	places.example/update/model	[no test files]

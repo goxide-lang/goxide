@@ -11,38 +11,49 @@ import (
 // cannot be spelled in the importing package. Keep these assignments intact:
 // Go can stage the hidden operands without exposing any private selector.
 func (l *lowering) needsAssignmentFrame(s *ast.AssignStmt) bool {
-	found := false
 	for _, lhs := range s.Lhs {
-		ast.Inspect(lhs, func(n ast.Node) bool {
-			if _, ok := n.(*ast.FuncLit); ok {
-				return false
-			}
-			x, ok := n.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			sel := l.info.Selections[x]
-			if sel == nil || sel.Kind() != types.FieldVal {
-				return true
-			}
-			t := underlyingType(l.info.TypeOf(x.X))
-			private := false
-			path := sel.Index()
-			for _, i := range path[:len(path)-1] {
-				if p, ok := t.(*types.Pointer); ok {
-					t = p.Elem().Underlying()
-				}
-				f := t.(*types.Struct).Field(i)
-				private = private || (!f.Exported() && f.Pkg() != l.pkg)
-				t = f.Type().Underlying()
-				if _, ok := t.(*types.Pointer); ok && private {
-					found = true
-				}
-			}
-			return !found
-		})
+		if l.placeNeedsFrame(lhs) {
+			return true
+		}
 	}
-	return found
+	return false
+}
+
+// Follow only storage paths that place would expand. Pointer, slice and map
+// operands are evaluated as ordinary rvalues, whose promoted selectors remain
+// legal Go expressions. An index/key or call argument is never a destination.
+func (l *lowering) placeNeedsFrame(expr ast.Expr) bool {
+	switch x := expr.(type) {
+	case *ast.ParenExpr:
+		return l.placeNeedsFrame(x.X)
+	case *ast.IndexExpr:
+		if _, array := underlyingType(l.info.TypeOf(x.X)).(*types.Array); array {
+			return l.placeNeedsFrame(x.X)
+		}
+	case *ast.SelectorExpr:
+		sel := l.info.Selections[x]
+		if sel == nil || sel.Kind() != types.FieldVal {
+			return false
+		}
+		t := underlyingType(l.info.TypeOf(x.X))
+		private := false
+		path := sel.Index()
+		for _, i := range path[:len(path)-1] {
+			if p, ok := t.(*types.Pointer); ok {
+				t = p.Elem().Underlying()
+			}
+			f := t.(*types.Struct).Field(i)
+			private = private || (!f.Exported() && f.Pkg() != l.pkg)
+			t = f.Type().Underlying()
+			if _, pointer := t.(*types.Pointer); pointer && private {
+				return true
+			}
+		}
+		if _, pointer := underlyingType(l.info.TypeOf(x.X)).(*types.Pointer); !pointer {
+			return l.placeNeedsFrame(x.X)
+		}
+	}
+	return false
 }
 
 // frameType binds types at file scope so source locals cannot shadow imports

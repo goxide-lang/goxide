@@ -666,6 +666,16 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 
 [真实跨包验收](tests/acceptance/propagate_private_place_test.go)新增 **10 项**生成模块 race、**6 项**前端拒绝。与原业务两项合计 **12 项**生成模块测试，legacy `GODEBUG=panicnil=1` 再执行其中 panic/Goexit 一项作配置复核。涵盖 stock 解析/cause、private scalar/短路、两层指针、root/deep 重绑、多目标写阶段、nil/错误不写、Option、named/blank/shadow 返回、直接 recover/旧 panic/用户 defer、Goexit、nested closure、goto、只读拒绝和可写别名观察。真实安装 CLI、仓库外转译、生成模块 race 及 CLI run 输出新增 `stock 7 <nil>`、`invalid stock 7`；普通赋值/unsafe 边界的既有生成模块另有 **9+1 项**race 回归。生成模块统计与宿主数量分开。
 
-[RFC §6.6](docs/rfcs/research/0005-option-result-question.md#66-私有嵌入指针目标保留原赋值与原函数执行帧)、[补齐矩阵](docs/t0-acceptance.md#t0-第四组补齐外包私有嵌入指针目标)、ROADMAP 和阶段 README 同步，旧“not yet lowered”条目标明历史时点。该具体工程缺口已接通，整体 T0/MVP 仍未完成；下一建议 for/range，再 switch，select 与 Proposed adapters 继续待决。
+[RFC §6.6](docs/rfcs/research/0005-option-result-question.md#66-私有嵌入指针目标保留原赋值与原函数执行帧)、[补齐矩阵](docs/t0-acceptance.md#t0-第四组补齐外包私有嵌入指针目标)、ROADMAP 和阶段 README 同步，旧“not yet lowered”条目标明历史时点。该具体工程缺口仅功能接通，性能验收未通过，不能标为完成；暂停向 for/range 或 switch 扩展 guard，select 与 Proposed adapters 继续待决。
 
 最终验证：Go 1.27.1 linux/amd64、CGO_ENABLED=1，本地离线工具链。全树 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、243 宿主顶层测试、440 子测试**，另 **2 包无自身测试**；实际生成模块分别 race，特殊路径业务 **12 项**（其中本次新增 10 项）、普通目标 **9 项**、unsafe **1 项**，legacy panic(nil) 为额外配置复核。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 578 本地链接与锚点 / 20 RFC** 和 diff 检查通过。日志位于 `/tmp/t0-private-final-race.json`、`/tmp/t0-private-final-race.err`、`/tmp/t0-private-vet.log`、`/tmp/t0-private-design.log`、`/tmp/t0-private-docs.log`、`/tmp/t0-private-targeted.log`。只提交推送 `feat/t0-completion` 并 fetch 核验，不修改 main/work/冻结标签，不合并或发布。
+
+## 私有赋值性能复核与只读操作数路由修正
+
+`a3f064fbcd0e75bb06bdba406f007e5abd68bd71` 的功能测试不等于性能验收。成功路径每条特殊赋值仍分配 32 B，失败借助内部 panic/recover；用户未接受其作为第四组收口。真实私有目标仍为必须完成的工程缺口，不改为批准延期。
+
+本次仅修正 guard 识别过宽：沿真正的 struct/array 存储路径检查私有 promotion；索引、map key、调用参数及 pointer/slice/map 普通读取不再误入 guard。[真实 hgo 用例](examples/propagate_places/index_reads.hgo)分别验证成功与失败不写，并检查生成文件没有 Assignment/Catch。私有目标既有 guard 保留，不扩展到循环。
+
+[仓库内研究夹具和结果](tests/research/assignment_guard/README.md)保存真实 hgo 对比、纯 Go 取址/泛型/延迟 setter/上下文 IR 反例及重现脚本。提前取址、泛型地址捕获、写前统一取址和延迟重走链均有语义反例；保留完整赋值并分离副作用的 IR 子集可行，但尚无通用编译器实现，尤其需保留原表达式 typed/untyped 属性、tuple/comma-ok、直接 recover 和 len/cap 求值。研究没有证明该路线不可能，也没有采用新语法、反射、unsafe 或生产包桥接。
+
+本阶段验证：全树 race **15 个有测试包、243 宿主顶层/440 子测试**，另 **2 包无自身测试**通过。随后加强索引成功值/失败断言并重跑安装 CLI 跨包业务 race 通过（13 项生成测试）；普通目标 9 项、unsafe 1 项仍由全树验收各自生成模块 race。研究脚本生成模块 **10 项**测试单列，含 6 项纯 Go 机制探针，不能合并为新 hgo 特性验收数量；legacy 配置、生成模块 vet、escape 与基准均完成。全树 vet、完整设计检查 **13 条 Go 命令**、docs-only **58 Markdown / 593 本地链接与锚点 / 20 RFC**、diff 检查通过。独立非作者审查 detector、真实业务验收与整个研究脚本，未发现阻断。研究原始结果在仓库内，整树日志为 `/tmp/t0-routing-race.json`、`/tmp/t0-routing-race.err`、`/tmp/t0-routing-vet.log`、`/tmp/t0-routing-design.log` 和 `/tmp/t0-routing-targeted.log`。

@@ -1,0 +1,69 @@
+goos: linux
+goarch: amd64
+pkg: places.example/update
+cpu: AMD EPYC 9V74 80-Core Processor
+BenchmarkGenericCaptureSuccess  	127048494	         0.8248 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGenericCaptureSuccess  	300222637	         0.4847 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGenericCaptureSuccess  	391603038	         0.2885 ns/op	       0 B/op	       0 allocs/op
+BenchmarkContextIRSuccess       	39013136	         4.378 ns/op	       0 B/op	       0 allocs/op
+BenchmarkContextIRSuccess       	38768541	         4.909 ns/op	       0 B/op	       0 allocs/op
+BenchmarkContextIRSuccess       	32264448	         3.455 ns/op	       0 B/op	       0 allocs/op
+BenchmarkContextIRFailure       	 5315088	        26.42 ns/op	      16 B/op	       1 allocs/op
+BenchmarkContextIRFailure       	 5021912	        33.22 ns/op	      16 B/op	       1 allocs/op
+BenchmarkContextIRFailure       	 2993928	        38.27 ns/op	      16 B/op	       1 allocs/op
+BenchmarkIndexOnlySuccess       	46043164	         3.728 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndexOnlySuccess       	32290875	         3.407 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndexOnlySuccess       	37470643	         2.776 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndexExplicitSuccess   	43420728	         2.994 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndexExplicitSuccess   	37224434	         3.406 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndexExplicitSuccess   	39246351	         3.793 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPackedGuardSuccess     	 3302412	        31.99 ns/op	      32 B/op	       1 allocs/op
+BenchmarkPackedGuardSuccess     	 4063952	        34.35 ns/op	      32 B/op	       1 allocs/op
+BenchmarkPackedGuardSuccess     	 3761775	        32.86 ns/op	      32 B/op	       1 allocs/op
+BenchmarkPackedGuardFailLast    	  433362	       355.3 ns/op	      48 B/op	       2 allocs/op
+BenchmarkPackedGuardFailLast    	  434632	       327.6 ns/op	      48 B/op	       2 allocs/op
+BenchmarkPackedGuardFailLast    	  399934	       335.7 ns/op	      48 B/op	       2 allocs/op
+BenchmarkPackedExplicitSuccess  	 8564679	        14.23 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPackedExplicitSuccess  	 8853133	        22.57 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPackedExplicitSuccess  	 8238448	        15.47 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPackedExplicitFailLast 	 3645578	        36.09 ns/op	      16 B/op	       1 allocs/op
+BenchmarkPackedExplicitFailLast 	 3594000	        35.87 ns/op	      16 B/op	       1 allocs/op
+BenchmarkPackedExplicitFailLast 	 3637495	        33.82 ns/op	      16 B/op	       1 allocs/op
+BenchmarkGuard1Success          	 5102619	        22.70 ns/op	      32 B/op	       1 allocs/op
+BenchmarkGuard1Success          	 5193069	        23.07 ns/op	      32 B/op	       1 allocs/op
+BenchmarkGuard1Success          	 4702200	        23.12 ns/op	      32 B/op	       1 allocs/op
+BenchmarkGuard1Failure          	  361958	       372.3 ns/op	      48 B/op	       2 allocs/op
+BenchmarkGuard1Failure          	  307974	       347.8 ns/op	      48 B/op	       2 allocs/op
+BenchmarkGuard1Failure          	  466357	       277.7 ns/op	      48 B/op	       2 allocs/op
+BenchmarkGuard8Success          	  786309	       195.9 ns/op	     256 B/op	       8 allocs/op
+BenchmarkGuard8Success          	  600300	       195.1 ns/op	     256 B/op	       8 allocs/op
+BenchmarkGuard8Success          	  803536	       224.9 ns/op	     256 B/op	       8 allocs/op
+BenchmarkGuard8FailFirst        	  360261	       346.5 ns/op	      48 B/op	       2 allocs/op
+BenchmarkGuard8FailFirst        	  438955	       318.8 ns/op	      48 B/op	       2 allocs/op
+BenchmarkGuard8FailFirst        	  454563	       294.2 ns/op	      48 B/op	       2 allocs/op
+BenchmarkGuard8FailLast         	  250098	       502.5 ns/op	     296 B/op	      10 allocs/op
+BenchmarkGuard8FailLast         	  237800	       485.6 ns/op	     296 B/op	      10 allocs/op
+BenchmarkGuard8FailLast         	  237657	       470.9 ns/op	     296 B/op	      10 allocs/op
+BenchmarkExplicit1Success       	51565219	         2.366 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicit1Success       	51386515	         2.389 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicit1Success       	51138709	         2.377 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicit1Failure       	 4392740	        25.72 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExplicit1Failure       	 5035734	        24.04 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExplicit1Failure       	 4300404	        36.51 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExplicit8Success       	 8642600	        13.18 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicit8Success       	 9656967	        15.46 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicit8Success       	 9349080	        12.28 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExplicit8FailFirst     	 4936216	        43.49 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExplicit8FailFirst     	 3978586	        37.06 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExplicit8FailFirst     	 4417416	        27.49 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExplicit8FailLast      	 3485575	        33.63 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExplicit8FailLast      	 3552231	        46.97 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExplicit8FailLast      	 3096157	        34.96 ns/op	      16 B/op	       1 allocs/op
+BenchmarkNativeSuccess          	43025942	         2.674 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeSuccess          	51517534	         2.301 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeSuccess          	52385390	         2.348 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeFailure          	72199124	         1.977 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeFailure          	56449741	         2.067 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNativeFailure          	70743412	         1.830 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	places.example/update	10.347s

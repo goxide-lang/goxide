@@ -216,6 +216,8 @@ Serialize/Deserialize derive 不自动生成或调用 Go MarshalJSON/UnmarshalJS
 
 核心错误构造至少支持 Type、MissingField、DuplicateField、UnknownField/Variant、Range、Unsupported 和 Custom；格式附 Syntax/IO、byte offset，路径 wrapper 增加 Field/Index/MapKey/Variant 段并保留 Unwrap。结构化路径不能用点连接字符串代替，否则字段名里的点/斜杠有歧义。完整路径包装是 hgo 首版建议，不能声称 Rust serde 核心本身保证所有格式输出统一路径。默认不打印完整敏感载荷。
 
+当前 JSON 后端保留实际 Token/数值转换错误为 cause；可用 `errors.As` 读取原始 `json.SyntaxError.Offset` / `strconv.NumError`，或 `errors.Is` 检查底层 sentinel。Kind、Path 与既有消息保持；位置来自实际 Token 调用，不重算为 json.Unmarshal 的 offset。仅由本后端检测的错误不伪造 Go cause，也不新增统一 offset API。
+
 读入字节、嵌套深度、数字/字符串长度、容器项数设有限可配置预算；IgnoredAny、native adapter 和 Value builder 同样计数。Deserialize 构造新结果，成功后返回；自定义 default/codec 的外部副作用不能回滚。writer 出错前可已写部分输出，不宣称原子提交；需要原子缓冲由调用者选择。
 
 Value 拥有其保存的字符串/字节，不引用解码器可复用缓冲。Serde bytes 协议的 borrowed/owned 全套优化后置，不把 Go GC 等同于缓冲不会变动。编码共享对象需要真实同步，递归对象循环须明确 Cycle/Limit；不通过未来借用分析替代这些运行时契约。

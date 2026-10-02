@@ -290,3 +290,10 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 本增量不改变已有 Default/skip 调用顺序：读取与 required 检查后按字段声明顺序构造缺失 default/全部 skip，嵌套业务副作用不回滚。skip 的“验证输入”指格式级消费，不是强制匹配目标字段类型。
 
 [独立接受测试](../tests/acceptance/option_serde_test.go)验证实际安装 CLI、仓库外转译、生成模块 8 项 race 测试与 9 项边界拒绝；[多文件业务](../examples/option_serde/main.hgo)输出 `option 7 -1 4 0`。[名字捕获回归](../tests/prototype/option_serde_test.go)使用普通生成子进程，验证具体类型名不被 helper 局部变量捕获。完整验证记录见 [实现记录](../IMPLEMENTATION.md)。
+
+
+## JSON 底层 Go 错误链补缺
+
+[格式层测试](../serdejson/cause_test.go)验证 Token、容器结束、尾部输入、数值转换和 Unicode 数字解析中的真实 Go cause，保持原 Kind/Path；可通过 errors.As/Is 取回 SyntaxError 的原始 Token Offset、NumError 与 sentinel。自检错误没有伪造 cause，已有路径 wrapper 指向内层 serde.Error 属于正常链。
+
+[业务示例](../examples/serde_causes/main.hgo)与[独立验收](../tests/acceptance/serde_causes_test.go)使用真实 CLI 与生成模块 race，覆盖嵌套 Field/Index/Variant、正常订单、语法/范围/类型错误。此项补齐既有 cause 契约，不放宽 enum payload、不自动采用 MarshalJSON，也不新增适配 API。格式 Value、native adapter、PATCH adapter 仍为未实现方向，手写 typed helper 和普通 Go 调用可用。

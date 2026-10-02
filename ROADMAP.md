@@ -114,4 +114,6 @@ wildcard-only/全值绑定-only match继续支持封闭enum，依据真实类型
 
 远端文档同步：RFC 0019 已确认统一 trait wrapper，RFC 0020 已确认独立 impl 内关联函数/Self/self 与包级函数降低；这些新设计不表示本分支已实现通用 trait/固有 impl。D19/D20 的 warning-first 与风险分析非 MVP 边界保持，不采用远端旧文本中的默认逃逸拒绝。
 
-最新交付：封闭 unit enum serde rename/value 映射与独立 Go 业务验收；Default 字段协议逐一检查、enum 默认标记保持，非默认 payload 约束仍待答。具体子集与未完成范围见验收矩阵。
+最新交付：封闭 unit enum serde rename/value 映射、同包具体 struct 手动 Default、serde 字段 default/skip 调用已登记 Default，以及具体内建 Option serde 已端到端验收。enum 仅选中默认变体的 payload 要求 Default，非默认变体不要求；此项已确定，不再待答。具体子集与未完成范围见验收矩阵。
+
+格式 JSON Value/任意精度 Number、JSON 专用 native adapter、PATCH 字段 adapter 仍是规范方向或候选入口，尚未实现，不能从 RFC 示例推导为可用 API。普通 Go encoding/json 可显式调用，手写 typed helper/visitor 可直接使用现有 serde 核心；派生不自动采用 MarshalJSON/UnmarshalJSON，也没有通用导入类型字段 codec 选择入口。Option 缺失/null 均为 None，不提供 PATCH 三态；enum 的 Option payload 与部分容器投影限制仍保持。当前错误链修复仅保留已有底层 Go cause，不增加这些能力。

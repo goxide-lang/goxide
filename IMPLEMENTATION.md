@@ -577,3 +577,18 @@ python3 scripts/check_design.py
 最终验收：Go 1.27.1 linux/amd64、CGO=1、本地离线工具链。完整 `go test -race -count=1 -json ./...` 一次通过 **15 个有测试包、223 宿主顶层测试、394 子测试**，另 1 包无自身测试；新增生成模块 **8 项独立 race 测试**另计。`go vet ./...`、完整设计检查 **13 条 Go 命令**、文档检查 **56 Markdown / 511 本地链接与锚点 / 20 RFC**及 diff 检查通过。独立非作者复审和定向复验确认上述名字捕获修复，无已知剩余阻断。
 
 日志位于 `/workspace/goxide-restore-check/option-serde-final-race.json`、`option-serde-final-vet.log`、`option-serde-final-design.log`、`option-serde-final-docs.log`。按用户授权在 `feat/manual-default` 提交并推送，随后 fetch 核验；不更新 main/work 或冻结文档标签。
+
+
+## JSON 底层 Go cause 保留
+
+基准 `2c353e4282892b289bc202c0a22fae333d9348ca`。格式后端将实际 Token、strconv 数值/Unicode 转换错误保存为 serde.Error.Cause，维持原 Kind、Path、消息和检测顺序。errors.As 可取回 json.SyntaxError 的原始 Token Offset 与 strconv.NumError，errors.Is 保留底层 sentinel。自行检测的额外合法顶层值、Unicode 配对错误、无 strconv 错误的浮点下溢等不伪造 cause。已有路径包装继续保留内层错误链；不重算 offset、不添加统一位置 API。
+
+[格式层回归](serdejson/cause_test.go)与[独立生成业务验收](tests/acceptance/serde_causes_test.go)覆盖正常输入、字段/索引/变体内错误、Token/容器结束/尾部失败、数值解析与自检边界。[订单示例](examples/serde_causes/main.hgo)显式用普通 Go errors.As/Is 分类错误。此轮仅补错误证据保留，不改变截断输入的既有 Kind/Path 分类。
+
+ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 payload Default。格式 JSON Value/任意精度 Number、JSON native adapter、PATCH 字段 adapter 仍未实现；普通 Go 调用与手写 typed helper 可用。enum/Option 载荷及投影限制保持，不新增适配 API 或自动 MarshalJSON/UnmarshalJSON 调用。
+
+最终验收：Go 1.27.1 linux/amd64、CGO=1、本地离线工具链。整树 `go test -race -count=1 -json ./...` 一次通过 **15 个有测试包、228 宿主顶层测试、406 子测试**，另 1 包无自身测试；新增生成模块 **5 项独立 race 测试**另计。真实安装 CLI、仓库外运行及独立生成二进制的 4 种输入通过；正常/范围/语法/类型输出分别为 `accepted 1`、`range`、`syntax 1`、`rejected`。独立错误链探针确认 SyntaxError Offset=1、NumError/ErrRange 可识别、自检 cause=nil。
+
+`go vet ./...`、设计检查 **13 条 Go 命令**、文档检查 **56 Markdown / 517 本地链接与锚点 / 20 RFC**及 diff 检查通过。独立非作者复审无阻断；对基线与修复后 **10,095 组输入/reader** 的差分检查确认错误文本（含 Kind/Path）完全一致。差分脚本位于 `/workspace/goxide-cause-review/compare.py`；真实 Token.Offset 不推导为其他调用序列或 json.Unmarshal 的位置。
+
+复现使用前述真实工具链与离线环境，执行 `go test -race -count=1 ./...`、`go vet ./...`、`python3 scripts/check_design.py`；独立验收可用 `go test -count=1 -v ./tests/acceptance -run '^TestSerdeCausesInstalledBusinessRace$'`，其生成模块明确启用 race。日志 `/workspace/goxide-restore-check/serde-causes-final-race.json`、`serde-causes-final-vet.log`、`serde-causes-final-design.log`、`serde-causes-final-docs.log`、`serde-cause-probe.log`。按授权提交推送 feat/manual-default 并 fetch 核验，不修改 main/work/冻结标签，不发布或合并。

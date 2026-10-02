@@ -11,6 +11,12 @@ import (
 	"unicode/utf8"
 )
 
+// failCause retains an actual backend error without changing the public kind or
+// message. A nil cause is intentional for checks performed by this backend.
+func failCause(kind, message string, cause error) error {
+	return &serde.Error{Kind: kind, Message: message, Cause: cause}
+}
+
 // Strict Unicode validation precedes Decoder, which otherwise replaces invalid surrogates.
 func validate(data []byte) error {
 	if len(data) > MaxBytes {
@@ -40,7 +46,7 @@ func validate(data []byte) error {
 		}
 		n, e := strconv.ParseUint(string(data[i+1:i+5]), 16, 16)
 		if e != nil {
-			return fail("Syntax", "invalid Unicode escape")
+			return failCause("Syntax", "invalid Unicode escape", e)
 		}
 		i += 4
 		if n >= 0xD800 && n <= 0xDBFF {
@@ -49,7 +55,7 @@ func validate(data []byte) error {
 			}
 			low, e := strconv.ParseUint(string(data[i+3:i+7]), 16, 16)
 			if e != nil || low < 0xDC00 || low > 0xDFFF {
-				return fail("Syntax", "unpaired high surrogate")
+				return failCause("Syntax", "unpaired high surrogate", e)
 			}
 			i += 6
 		} else if n >= 0xDC00 && n <= 0xDFFF {
@@ -87,7 +93,7 @@ func (r *reader) take() (_serdeResult0 json.Token, _serdeErr error) {
 	}
 	t, e := r.d.Token()
 	if e != nil {
-		return nil, fail("Syntax", e.Error())
+		return nil, failCause("Syntax", e.Error(), e)
 	}
 	return t, nil
 }
@@ -129,7 +135,7 @@ func Decode(data []byte, f serde.ReadValue) error {
 		return fail("State", "incomplete deserialized value")
 	}
 	if _, e := d.Token(); e != io.EOF {
-		return fail("Syntax", "expected single top-level JSON value")
+		return failCause("Syntax", "expected single top-level JSON value", e)
 	}
 	return nil
 }
@@ -169,19 +175,19 @@ func (r *reader) scalar(v serde.Visitor, kind string) (_serdeErr error) {
 		case "int":
 			x, err := strconv.ParseInt(string(n), 10, 64)
 			if err != nil {
-				return fail("Range", "expected exact int64: "+string(n))
+				return failCause("Range", "expected exact int64: "+string(n), err)
 			}
 			e = v.VisitInt64(x)
 		case "uint":
 			x, err := strconv.ParseUint(string(n), 10, 64)
 			if err != nil {
-				return fail("Range", "expected exact uint64: "+string(n))
+				return failCause("Range", "expected exact uint64: "+string(n), err)
 			}
 			e = v.VisitUint64(x)
 		case "float":
 			x, err := strconv.ParseFloat(string(n), 64)
 			if err != nil || math.IsInf(x, 0) || (x == 0 && nonzero(string(n))) {
-				return fail("Range", "float64 overflow or underflow")
+				return failCause("Range", "float64 overflow or underflow", err)
 			}
 			e = v.VisitFloat64(x)
 		}
@@ -287,7 +293,7 @@ func (a *access) finish() (_serdeErr error) {
 	}()
 	t, e := a.r.d.Token()
 	if e != nil {
-		return fail("Syntax", e.Error())
+		return failCause("Syntax", e.Error(), e)
 	}
 	want := json.Delim(']')
 	if a.obj {
@@ -340,7 +346,7 @@ func (a *access) NextKey(f serde.ReadValue) (okResult bool, errResult error) {
 	}
 	t, e := a.r.d.Token()
 	if e != nil {
-		return false, fail("Syntax", e.Error())
+		return false, failCause("Syntax", e.Error(), e)
 	}
 	k, ok := t.(string)
 	if !ok {
@@ -533,7 +539,7 @@ func (r *reader) Enum(_ string, variants []string, v serde.Visitor) (_serdeErr e
 		}
 		key, e := r.d.Token()
 		if e != nil {
-			return fail("Syntax", e.Error())
+			return failCause("Syntax", e.Error(), e)
 		}
 		var ok bool
 		a.name, ok = key.(string)
@@ -564,7 +570,7 @@ func (r *reader) Enum(_ string, variants []string, v serde.Visitor) (_serdeErr e
 		}
 		t, e = r.d.Token()
 		if e != nil || t != json.Delim('}') {
-			return fail("Syntax", "invalid enum end")
+			return failCause("Syntax", "invalid enum end", e)
 		}
 	}
 	r.done = true

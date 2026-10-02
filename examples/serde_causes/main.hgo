@@ -1,0 +1,25 @@
+package main
+
+import "os"
+import "errors"
+import "encoding/json"
+import "strconv"
+import "github.com/hxsf/goxide/serdejson"
+
+#[derive(Serialize, Deserialize)]
+pub enum Operation { Charge(int64), }
+#[derive(Serialize, Deserialize)]
+type Order struct { Operations []Operation }
+
+func main() {
+    input:=`{"Operations":[{"Charge":7}]}`
+    if len(os.Args)>1 { input=os.Args[1] }
+    order,err:=serdejson.Unmarshal([]byte(input),DeserializeOrder)
+    if err!=nil {
+        var syntax *json.SyntaxError
+        if errors.As(err,&syntax) { println!("syntax {}",syntax.Offset); return }
+        if errors.Is(err,strconv.ErrRange) { println!("range"); return }
+        println!("rejected");return
+    }
+    println!("accepted {}",len(order.Operations))
+}

@@ -177,3 +177,7 @@ for/range 局部重绑定、退出分支、元素地址后的局部重绑定及�
 ### 同模块联合验收（2026-10-02）
 
 [四包业务](examples/t0_joint/main.hgo)与[真实安装 CLI 测试](tests/acceptance/t0_joint_test.go)已贯通宏、enum/match、Option/Result/错误链、Default、serde JSON 和读写权限。修复导入引用 metadata 绑定晚于 match 推断的误拒，生成模块独立 race/vet、仓库外运行、失败/诊断与确定性通过。联合项已完成；[剩余清单](docs/t0-acceptance.md#当前最小收口清单与停止条件2026-10-02)仍保留普通权限精度、问号欠账与范围决定，不把完整 MVP 标完成，也不将 Proposed 接口默认为获批。
+
+### 当前值与暴露槽位（2026-10-02）
+
+捕获/取址局部的直接整槽替换已修复，旧地址与闭包、未知调用和channel同步保持资格；实际生成模块 race/vet 正反例见[验收](docs/t0-acceptance.md#暴露局部整槽替换2026-10-02)。接下来先修普通问号私有 bool 类型丢失，然后推进用户明确要求的原位 `match mut&`；借用模式首版必需，不再作为可建议后置项。其他范围选择和新桥接尚待用户决定。

@@ -219,3 +219,10 @@ checks the complete lowered package, then restores native calls. The joint CLI
 business in `t0_joint_test.go` exercises imported readonly match results alongside
 serde, defaults, macros, errors and writable aliases. Native pointer signatures
 must never become an intermediate excuse to erase reference qualifications.
+
+Exposed local slots now distinguish their current directly assigned value from
+lifetime qualifications retained by addresses and closure captures. Unknown calls,
+channel synchronization, implicit iterator/channel range operations and indirect
+composite writes invalidate current facts. A subsequent whole-slot replacement can
+refine them again. Partial field updates of exposed roots remain conservative.
+See `refs_exposed_flow_test.go`; this does not infer heap aliases or callee effects.

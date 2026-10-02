@@ -6,13 +6,14 @@ import (
 	"go/types"
 )
 
-// refineLocalQualifications retains a conservative summary for captured,
-// address-taken slots and unsupported control flow, and records point facts for
-// ordinary local slots. It is deliberately intraprocedural: no call effects or
-// whole-program alias graph is inferred.
+// refineLocalQualifications records current values separately from the lifetime
+// qualification of exposed slots. Unsupported control flow retains its summary.
+// It infers neither callee effects nor a whole-program alias graph.
 func (c *checker) refineLocalQualifications() {
 	summary := c.qualifications
 	pinned := map[types.Object]bool{}
+	exposed := map[types.Object]bool{}
+	addressUses := map[*ast.Ident]bool{}
 	pin := func(n ast.Node) {
 		ast.Inspect(n, func(n ast.Node) bool {
 			if id, ok := n.(*ast.Ident); ok {
@@ -27,7 +28,8 @@ func (c *checker) refineLocalQualifications() {
 	pinAddress = func(e ast.Expr) {
 		switch e := unparen(e).(type) {
 		case *ast.Ident:
-			pinned[c.binding(e)] = true
+			exposed[c.binding(e)] = true
+			addressUses[e] = true
 		case *ast.SelectorExpr:
 			if _, pointer := c.typ(e.X).Underlying().(*types.Pointer); !pointer {
 				pinAddress(e.X)
@@ -58,7 +60,7 @@ func (c *checker) refineLocalQualifications() {
 				if id, ok := x.(*ast.Ident); ok {
 					obj := c.binding(id)
 					if obj != nil && (obj.Pos() < n.Pos() || obj.Pos() > n.End()) {
-						pinned[obj] = true
+						exposed[obj] = true
 					}
 				}
 				return true
@@ -92,7 +94,13 @@ func (c *checker) refineLocalQualifications() {
 		}
 		return true
 	})
-	c.conservativeObjects = pinned
+	c.conservativeObjects = map[types.Object]bool{}
+	for obj := range pinned {
+		c.conservativeObjects[obj] = true
+	}
+	for obj := range exposed {
+		c.conservativeObjects[obj] = true
+	}
 	type env map[types.Object]*qualification
 	clone := func(in env) env {
 		if in == nil {
@@ -137,17 +145,55 @@ func (c *checker) refineLocalQualifications() {
 	var loops []*loopFlow
 	labels := map[ast.Stmt]string{}
 	c.pointQualifications = map[*ast.Ident]*qualification{}
+	// No callee/alias effects are inferred. A possible slot mutation invalidates
+	// current facts before annotating the whole expression, including its early
+	// operands; Go does not order every ordinary read relative to calls.
+	invalidate := func(e env) {
+		for obj := range exposed {
+			e[obj] = summary[obj]
+		}
+	}
+	hasEffect := func(n ast.Node) bool {
+		found := false
+		ast.Inspect(n, func(n ast.Node) bool {
+			if _, ok := n.(*ast.FuncLit); ok {
+				return false
+			}
+			if u, ok := n.(*ast.UnaryExpr); ok && u.Op == token.ARROW {
+				found = true
+			}
+			if _, ok := n.(*ast.SendStmt); ok {
+				found = true
+			}
+			if call, ok := n.(*ast.CallExpr); ok {
+				if c.info.Types[call.Fun].IsType() {
+					return true
+				}
+				if id, ok := call.Fun.(*ast.Ident); ok {
+					if _, builtin := c.binding(id).(*types.Builtin); builtin {
+						return true
+					}
+				}
+				found = true
+			}
+			return !found
+		})
+		return found
+	}
 	var expr func(ast.Node, env)
 	var stmt func(ast.Stmt, env) env
 	expr = func(n ast.Node, e env) {
 		if n == nil {
 			return
 		}
+		if hasEffect(n) {
+			invalidate(e)
+		}
 		ast.Inspect(n, func(n ast.Node) bool {
 			if id, ok := n.(*ast.Ident); ok {
 				obj := c.binding(id)
 				q := e[obj]
-				if pinned[obj] {
+				if pinned[obj] || addressUses[id] {
 					q = summary[obj]
 				}
 				c.pointQualifications[id] = q
@@ -155,7 +201,13 @@ func (c *checker) refineLocalQualifications() {
 			if f, ok := n.(*ast.FuncLit); ok {
 				outer := loops
 				loops = nil
-				stmt(f.Body, clone(e))
+				entry := clone(e)
+				for obj := range exposed {
+					if obj != nil && (obj.Pos() < f.Pos() || obj.Pos() > f.End()) {
+						entry[obj] = summary[obj]
+					}
+				}
+				stmt(f.Body, entry)
 				loops = outer
 				return false
 			}
@@ -163,7 +215,7 @@ func (c *checker) refineLocalQualifications() {
 		})
 	}
 	bind := func(lhs ast.Expr, q *qualification, e env) {
-		if obj, path, ok := c.localValuePath(lhs); ok && !pinned[obj] {
+		if obj, path, ok := c.localValuePath(lhs); ok && !pinned[obj] && (len(path) == 0 || !exposed[obj]) {
 			e[obj] = withFieldPath(e[obj], path, copied(c.typ(lhs), q))
 		}
 	}
@@ -177,6 +229,22 @@ func (c *checker) refineLocalQualifications() {
 				e = stmt(s, e)
 			}
 		case *ast.AssignStmt:
+			indirect := false
+			for _, l := range s.Lhs {
+				if typ := c.typ(l); typ != nil {
+					if _, scalar := typ.Underlying().(*types.Basic); scalar {
+						continue
+					}
+				}
+				if _, _, local := c.localValuePath(l); !local {
+					if id, ok := l.(*ast.Ident); !ok || id.Name != "_" {
+						indirect = true
+					}
+				}
+			}
+			if hasEffect(s) || indirect {
+				invalidate(e)
+			}
 			for _, r := range s.Rhs {
 				expr(r, e)
 			}
@@ -192,7 +260,13 @@ func (c *checker) refineLocalQualifications() {
 					bind(l, qs[i], e)
 				}
 			}
+			if indirect {
+				invalidate(e)
+			}
 		case *ast.DeclStmt:
+			if hasEffect(s) {
+				invalidate(e)
+			}
 			d, ok := s.Decl.(*ast.GenDecl)
 			if !ok {
 				break
@@ -276,9 +350,18 @@ func (c *checker) refineLocalQualifications() {
 			if _, ok := c.typ(s.X).Underlying().(*types.Map); ok {
 				key = value
 			}
+			_, iterator := c.typ(s.X).Underlying().(*types.Signature)
+			_, receiving := c.typ(s.X).Underlying().(*types.Chan)
+			iterationEffect := iterator || receiving
+			if iterationEffect {
+				invalidate(e)
+			}
 			initial, header := clone(e), clone(e)
 			for {
 				body := clone(header)
+				if iterationEffect {
+					invalidate(body)
+				}
 				for i, target := range []ast.Expr{s.Key, s.Value} {
 					if target == nil {
 						continue

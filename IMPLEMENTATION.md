@@ -839,3 +839,11 @@ match 类型与 `?` 签名联合迭代，重新检查上下文后再进行传播
 [安装 CLI 验收](tests/acceptance/t0_joint_test.go)离开仓库，两次模块生成一致，三项生成业务 race 测试及 vet、原生二进制成功和三类失败输入通过。四个拒绝项保留只读写/any、源类型诊断与跨构建缺 metadata；可写别名和 native 更新经只读路径可见，副本独立字段仍可写。独立审查复现原始失败、复验业务及两消费文件 import alias 的真实生成 race，字段/接口/共享 slice 三负例均拒绝。联合项通过不代表剩余 T0 范围账已关闭。
 
 最终全树 race：**15 个测试包 / 263 个宿主顶层 / 581 个子测试**通过，另 2 包无测试；vet 通过。联合生成四包模块单独 **3 项** race 测试与 vet 通过。设计检查：**60 Markdown / 749 本地链接 / 20 RFC**及 **13 条纯 Go 机制命令**通过，后者不算 hgo 执行证据。最后补充可写引用调用与 unmapped 断言后，联合专项再次 race 通过；独立复审无阻断。日志 `/tmp/t0-joint-race.json`、`/tmp/t0-joint-race.err`、`/tmp/t0-joint-vet.log`、`/tmp/t0-joint-design.log`、`/tmp/t0-joint-test-final.log`。本阶段只提交工作分支、push 后 fetch 核验。
+
+## 暴露局部整槽替换误拒修复（2026-10-02）
+
+基于 `ffbb1766b68e0c237ad75e9666c4373708aefd76`，修复捕获/取址事实永久污染新局部值的真实误拒。当前值按直接整槽赋值精化，地址和闭包入口保留 lifetime summary；未知调用、收发/隐式 range 接收及间接复合写恢复资格。旧别名不升级，未增加长期 alias 分析或运行时包装。
+
+[真实 CLI 验收](tests/acceptance/refs_exposed_flow_test.go)含 8 个业务函数、2 项生成模块 race 测试与 vet、14 个负例。独立审查发现 channel range 的隐式接收遗漏；无 race 的握手程序曾可污染只读值，现已纳入屏障与永久反例。此阶段不修改剩余 guard、不批准范围缩减；用户已明确原位可写借用 match 是 MVP 必需，待下一设计/实现阶段。
+
+最终验证：全树 race **15 测试包 / 264 宿主顶层 / 596 子测试**通过，另 2 包无测试；vet 通过。新增生成模块单独 **2 项 race 测试**与 vet 通过；设计检查 **60 Markdown / 753 本地链接 / 20 RFC**及 **13 条独立 Go 机制命令**通过。独立复审无剩余阻断，channel range 修复后已重跑最终全树。日志 `/tmp/t0-exposed-race-final.json`、`/tmp/t0-exposed-race-final.err`、`/tmp/t0-exposed-vet.log`、`/tmp/t0-exposed-design.log`、`/tmp/t0-exposed-test-final.log`。工作分支提交/push/fetch，未修改 main/work 或冻结标签。

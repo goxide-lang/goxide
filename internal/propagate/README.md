@@ -173,3 +173,11 @@ and slice literals are evaluated before measuring them. We do not route these
 through legacy expr, which can default private call-argument bool/mask types.
 Tuple/unsafe and the unplanned witness/operand shapes remain explicit fallbacks;
 RFC section 6.10 records those boundaries and the ordinary-expr gap separately.
+
+The third group uses `effect_multivalue.go` only for checked single-RHS
+assignments: static tuple calls and map/assert/receive comma-ok operations.
+A single multi-variable declaration retains inferred private return types;
+comma-ok alone restores its untyped second boolean result. The final complete
+assignment preserves Go's write phases. Nested tuple arguments, dynamic/method
+calls, other unplanned targets/operands and unsafe chains remain explicit guard
+routes. RFC section 6.11 supersedes the earlier blanket tuple/comma-ok fallback.

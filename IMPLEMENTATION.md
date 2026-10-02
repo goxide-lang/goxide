@@ -719,3 +719,13 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 研究生成模块 **11 项**测试单列（含 6 项手写 Go 机制探针），race/legacy/vet 通过。非 race **200ms × 5**：两份核心生成文件无 guard，原三组及新增 Bool/Shift/Len 共六组成功全部样本 **0 B/0 alloc**；三组失败均 **16 B/1 alloc**，与相应显式 match 相同。[原始基准与复现入口](tests/research/assignment_guard/README.md)已入库。全树证据 `/tmp/t0-context-race.json`、`/tmp/t0-context-race.err`、`/tmp/t0-context-vet.log`、`/tmp/t0-context-design.log`，加强断言复验 `/tmp/t0-context-final-targeted.log`。阶段完成不代表其余 guard、循环/switch 或整体 MVP 完成。
 
 最终 docs-only **58 Markdown / 634 本地链接与锚点 / 20 RFC**及 diff 检查通过；仅提交推送 feat/t0-completion 并 fetch 核验，不修改 main/work/冻结标签。
+
+## 无 guard 第三组：单 RHS 多值赋值
+
+基于 `2fe4c2e9c191ad4d60087153eb1c06f0e784749b`，新增 [effect_multivalue.go](internal/propagate/effect_multivalue.go)与 [真实 hgo 多值用例](examples/propagate_places/effects_multivalue.hgo)。静态 tuple 调用、map/assert/receive comma-ok 在原合法赋值语境只求值一次；临时量保留私有名义返回类型，comma-ok 第二结果恢复未类型化 bool，最后完整赋值保留原位置与部分写入。三类非法多值语境继续拒绝，专门 fallback 文件恰好一条 unsafe Catch，不冒充全语言只剩一个 guard。
+
+独立审查无阻断，并独立重跑安装 CLI 业务验收通过。业务生成模块 **25 项** race，新增三项测试；研究模块 **12 项**另跑 race/legacy/vet，其中六项纯 Go 机制探针单列。非 race **200ms × 5**：新增 Tuple/Map 及原六组成功全部样本 **0 B/0 alloc**；新增失败 **16 B/1 alloc**与显式 match 一致。[原始基准、清单与复现入口](tests/research/assignment_guard/README.md)已保存。
+
+unsafe 无新增拆分，保留原转换链与 race/checkptr；其余 guard、普通 expr 上下文缺口、for/range 与 switch 仍待完成。[RFC §6.11](docs/rfcs/research/0005-option-result-question.md#611-单-rhs-tuple-与-comma-ok-的第三组替换)明确范围；select/adapters 不作新设计，T0/MVP 不标完成。
+
+最终整树 race **15 个有测试包 / 244 宿主顶层 / 445 子测试**，另 **2 包无测试**，vet 与完整设计检查 **13 条 Go 命令**通过。实际安装 CLI 业务模块 25 项、普通目标 9 项、unsafe 非求值边界 1 项各自生成 race；研究模块另加 `-gcflags=all=-d=checkptr=2` 通过。整树日志 `/tmp/t0-multi-race.json`、`/tmp/t0-multi-race.err`、`/tmp/t0-multi-vet.log`、`/tmp/t0-multi-design.log`；研究数据已入库。只提交推送 feat/t0-completion 并 fetch 核验。

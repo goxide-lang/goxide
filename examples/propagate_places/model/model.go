@@ -51,3 +51,6 @@ func BoolKind[T any](v T) int {
 func TrackedFlag(v bool, calls *int) flag { *calls++; return flag(v) }
 func FlagArray(v flag) [1]flag            { return [1]flag{v} }
 func MaskArray(v mask, n int) [1]mask     { return [1]mask{v + mask(n)} }
+
+func MultiPrivate(n int) (mask, flag) { return mask(n), true }
+func MultiLeaf(n int) (*leaf, int)    { return NewLeaf(99), n }

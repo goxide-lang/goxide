@@ -107,3 +107,27 @@ python3 tests/research/assignment_guard/run.py --go /path/to/go --out /path/to/n
 | len 失败 | 26.26 | 26.67 | 16/1 | 16/1 |
 
 这些有限微基准的时间差不能推广所有应用；已证明的是所测路径没有额外成功分配，失败分配与显式 match 相同。研究生成模块共 11 项 race 测试，其中 6 项仍是手写 Go 机制探针；新增 TestContextBenchmarkEquivalence 比较真实 hgo 两路径的结果和目标状态。业务 acceptance 另覆盖 witness 未调用、nil、负 shift 原生 runtime.Error、private 参数及 cap/keyed literal。tuple/unsafe 与其余未规划形状仍有 guard；精确范围见 [RFC §6.10](../../../docs/rfcs/research/0005-option-result-question.md#610-私有-bool上下文-shift-与-lencap-第二组)。
+
+## Third group: assignment multi-values
+
+The [multivalue source](source/multivalue.hgo) is compiled by the real hgo CLI.
+Its static tuple and map comma-ok benchmarks compare the same preconstructed
+Result inputs with explicit match, including the same error reconstruction.
+The [raw results](results/multivalue/bench.txt), [manifest](results/multivalue/manifest.json)
+and [summary](results/multivalue/summary.json) record the parent revision plus
+uncommitted stage changes, Go version and exact commands. Reproduce with the
+existing `run.py --count 5 --benchtime 200ms --expect-no-guard` command.
+
+| Case | Planner median ns/op | Explicit match median ns/op | Both B/op, allocs/op |
+| --- | ---: | ---: | --- |
+| Tuple success | 2.506 | 2.993 | 0, 0 |
+| Tuple failure | 23.69 | 28.51 | 16, 1 |
+| Map success | 6.030 | 6.725 | 0, 0 |
+| Map failure | 29.76 | 24.88 | 16, 1 |
+
+Every success sample in all eight checked groups allocates zero. These short
+benchmarks establish the allocation gate for the covered shapes, not a general
+speedup claim. All three generated implementation files omit guards. The research
+module has 12 tests: six hand-written Go mechanism probes remain separate from
+actual hgo tests. Race, legacy panicnil, and vet pass; the unsafe chain regression
+remains in the installed business module and still uses the guard path.

@@ -260,3 +260,15 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 - tuple/comma-ok 的多值处理，以及 unsafe.Pointer/uintptr 转换链的求值和存活约束。现有永久 fallback 文件恰好两条 Catch，继续 race/checkptr。
 
 下一组先处理 tuple/comma-ok 和可证明保留完整转换链的 unsafe 子集；目前没有证明统一无 guard 不可能。for/range 与 switch 仍是已确认、未完成的 T0 工程项，不因这些分组自动延期；若 unsafe 剩余确有边界，可独立推进循环切片。select 候选语义与 Proposed adapters 不作新决定。
+
+### 6.11 单 RHS tuple 与 comma-ok 的第三组替换
+
+基于 `2fe4c2e9c191ad4d60087153eb1c06f0e784749b`，新增 [effect_multivalue.go](../../../internal/propagate/effect_multivalue.go)。仅对已通过原 Go 检查的单 RHS、多 LHS 普通赋值规划多值；静态函数调用必须具有与目标数一致的 tuple 类型，参数必须在 effects 支持范围内。参数依次规划后，整次调用只执行一次，用多变量 `:=` 推导各自原返回类型，再保留完整最终赋值。不把 tuple 展开成非法的多个普通实参，也不默认私有返回类型为内建类型。
+
+map 查询、类型断言、channel 接收仅在原 `HasOk` 的二值赋值语境进入该路径。保存操作数后原操作执行一次；第二结果以比较恢复未类型化 bool，允许原本合法的 private bool 赋值。函数返回的 bool 是有类型值，不做这种恢复。原目标地址性、只读权限、类型/数量及语境检查不变；不提前取最终字段地址、不复制 array/struct 存储、不拆开最终写入，因此前项重绑隐藏指针后后项仍使用 Go 第一阶段选定的位置，最终 nil 的部分写入也保留。
+
+[真实 hgo 用例](../../../examples/propagate_places/effects_multivalue.hgo)涵盖调用计数、失败不调用/不写、私有 mask/flag 返回、空白目标、前项重绑、最终 nil、map 命中/缺失、断言成败、channel 单次接收/关闭及失败。生成文件必须无 guard；非法混合 RHS、错误数量和多值调用外带实参继续拒绝。专门 fallback 文件由两条降为一条 unsafe 转换链；此数字只描述该文件，绝不代表全语言只剩一处 guard。
+
+剩余 guard：动态/方法 callee、多值调用作为另一调用唯一实参、map/slice 目标组合、未规划的私有 bool witness、contextual 除法/余数、len/cap 未规划 operand、其他含问号的 index/slice/literal/断言组合，以及 unsafe.Pointer/uintptr 转换链。没有新增可证明安全的 unsafe 拆分子集，本次保持原转换链的 race/checkptr 回归；GC/特殊 syscall 存活约束不能用保存 uintptr 或运行时 KeepAlive 猜测替代。该长尾不阻塞本多值切片独立验收，也没有被视为已批准延期。
+
+for/range 与 switch 仍是 T0 待实现项；普通 expr 的私有上下文问题仍须修复。select 与 Proposed adapters 的设计决策继续独立列出，不扩完整 trait/native bridge/Value/PATCH/YAML。整体 T0/MVP 尚未完成。

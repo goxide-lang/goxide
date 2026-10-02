@@ -32,11 +32,19 @@ func TestContextSignedShiftPanic(t *testing.T){tree:=model.NewTree(3);for _,r:=r
 func TestContextMeasureTypes(t *testing.T){tree:=model.NewTree(3);if n,e:=unpack(contextBoolLen(&tree,1,parse("bad")));e!=nil||n!=1{t.Fatal(n,e)};if n,e:=unpack(contextBoolLen(&tree,0,parse("7")));e!=nil||n!=1{t.Fatal(n,e)};if n,e:=unpack(contextMaskLen(&tree,63,parse("7")));e!=nil||n!=1{t.Fatal(n,e)};if n,e:=unpack(contextCap(&tree,parse("7")));e!=nil||n!=2{t.Fatal(n,e)};if n,e:=unpack(contextKeyedLen(&tree,parse("7")));e!=nil||n!=3{t.Fatal(n,e)};if _,e:=unpack(contextKeyedLen(&tree,parse("bad")));e==nil||tree.Count!=3{t.Fatal(e,tree.Count)}}
 func TestContextMeasureNilArray(t *testing.T){tree:=model.NewTree(3);if n,e:=unpack(contextNilArray(&tree,nil,true,false));e!=nil||n!=2{t.Fatal(n,e)};if v:=catchPanic(func(){_=contextNilArray(&tree,nil,true,true)});v==nil||tree.Count!=2{t.Fatal(v,tree.Count)};if _,e:=unpack(contextNilArray(&tree,nil,false,true));e==nil||tree.Count!=2{t.Fatal(e,tree.Count)}}
 
+func TestMultiTupleOnceAndTypes(t *testing.T){tree:=model.NewTree(3);calls:=0;if _,e:=unpack(multiTuple(&tree,parse("7"),&calls));e!=nil||calls!=1||tree.Count!=7||tree.Values[0]!=8{t.Fatal(e,calls,tree)};if _,e:=unpack(multiTuple(&tree,parse("bad"),&calls));e==nil||calls!=1||tree.Count!=7{t.Fatal(e,calls,tree)};if _,e:=unpack(multiPrivate(&tree,parse("9")));e!=nil||tree.Wide!=9||!tree.Enabled||tree.Count!=9{t.Fatal(e,tree)}}
+func TestMultiTupleWrites(t *testing.T){tree:=model.NewTree(3);old:=model.Observe(tree);if _,e:=unpack(multiRebind(&tree,parse("7")));e!=nil||old()!=7||tree.Count!=99{t.Fatal(e,old(),tree.Count)};tree=model.NilLeaf();first,calls:=0,0;if v:=catchPanic(func(){_=multiNil(&tree,&first,parse("7"),&calls)});v==nil||first!=7||calls!=1{t.Fatal(v,first,calls)};first=0;if _,e:=unpack(multiNil(&tree,&first,parse("bad"),&calls));e==nil||first!=0||calls!=1{t.Fatal(e,first,calls)}}
+func TestMultiCommaOK(t *testing.T){tree:=model.NewTree(3);m:=map[int]int{7:9};if _,e:=unpack(multiMap(&tree,m,parse("7")));e!=nil||tree.Count!=9||!tree.Enabled{t.Fatal(e,tree)};if _,e:=unpack(multiMap(&tree,m,parse("8")));e!=nil||tree.Count!=0||tree.Enabled{t.Fatal(e,tree)};tree.Count=3;if _,e:=unpack(multiMap(&tree,m,parse("bad")));e==nil||tree.Count!=3{t.Fatal(e,tree)};for _,v:=range []any{12,"no",nil}{r:=__hgo_enum_ctor_Result_Ok[any,error](v);if _,e:=unpack(multiAssert(&tree,r));e!=nil{t.Fatal(e)};_,ok:=v.(int);if bool(tree.Enabled)!=ok{t.Fatal(v,tree.Enabled)}};ch:=make(chan int,1);ch<-15;r:=__hgo_enum_ctor_Result_Ok[chan int,error](ch);if _,e:=unpack(multiReceive(&tree,r));e!=nil||tree.Count!=15||!tree.Enabled||len(ch)!=0{t.Fatal(e,tree)};close(ch);if _,e:=unpack(multiReceive(&tree,r));e!=nil||tree.Count!=0||tree.Enabled{t.Fatal(e,tree)};bad:=__hgo_enum_ctor_Result_Err[chan int,error](parseError());if _,e:=unpack(multiReceive(&tree,bad));e==nil{t.Fatal("failure lost")}}
+
 `
 
 func privateAssignmentNegatives(t *testing.T, cli, outside, root string) {
 	t.Helper()
 	for name, body := range map[string]string{
+		"tuple-mixed-rhs":      `func pair(n int)(int,int){return n,n};func f(r *dep.Tree)Option[int]{r.X,r.A[0]=pair(Option[int]::Some(1)?),2;return Option[int]::None}`,
+		"tuple-wrong-arity":    `func pair(n int)(int,int,int){return n,n,n};func f(r *dep.Tree)Option[int]{r.X,r.A[0]=pair(Option[int]::Some(1)?);return Option[int]::None}`,
+		"tuple-extra-argument": `func pair(n int)(int,int){return n,n};func take(a,b,c int)(int,int){return a,b};func f(r *dep.Tree)Option[int]{r.X,r.A[0]=take(pair(Option[int]::Some(1)?),2);return Option[int]::None}`,
+
 		"readonly-field":        `func f(r &dep.Tree)Option[int]{r.X=Option[int]::Some(1)?;return Option[int]::None}`,
 		"readonly-array":        `func f(r &dep.Tree)Option[int]{r.A[0]=Option[int]::Some(1)?;return Option[int]::None}`,
 		"outer-bare-return":     `func f(r *dep.Tree)Option[int]{if true{r.X=Option[int]::Some(1)?};return}`,

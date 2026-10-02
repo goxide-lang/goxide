@@ -15,13 +15,17 @@ func (l *lowering) canPlanAssignment(s *ast.AssignStmt) bool {
 	if l.hasUnsafePointerConversion(s) {
 		return false
 	}
-	if len(s.Lhs) != len(s.Rhs) {
+	multi := len(s.Rhs) == 1 && len(s.Lhs) > 1
+	if len(s.Lhs) != len(s.Rhs) && !multi {
 		return false
-	} // tuple/comma-ok not planned yet
+	}
 	for _, x := range s.Lhs {
 		if !l.canDeferredPlace(x) {
 			return false
 		}
+	}
+	if multi {
+		return s.Tok == token.ASSIGN && l.canMultiEffect(s.Rhs[0], len(s.Lhs))
 	}
 	for _, x := range s.Rhs {
 		if !l.canEffect(x) {
@@ -326,13 +330,22 @@ func (l *lowering) plannedAssignment(s *ast.AssignStmt, ft *ast.FuncType) ([]ast
 		pre = append(pre, p...)
 		assignment.Lhs[i] = v
 	}
-	for i, x := range s.Rhs {
-		p, v, e := l.effectExpr(x, ft)
+	if len(s.Rhs) == 1 && len(s.Lhs) > 1 {
+		p, values, e := l.multiEffect(s.Rhs[0], len(s.Lhs), ft)
 		if e != nil {
 			return nil, e
 		}
 		pre = append(pre, p...)
-		assignment.Rhs[i] = v
+		assignment.Rhs = values
+	} else {
+		for i, x := range s.Rhs {
+			p, v, e := l.effectExpr(x, ft)
+			if e != nil {
+				return nil, e
+			}
+			pre = append(pre, p...)
+			assignment.Rhs[i] = v
+		}
 	}
 	// Keep all final destinations in one assignment. The block prevents generated
 	// temporaries from obstructing a source forward goto.

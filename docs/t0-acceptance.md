@@ -415,3 +415,19 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 
 
 本组最终验证：全树 race **15 包 / 244 顶层 / 442 子测试**，另 2 包无测试；vet、13 条设计检查通过。业务生成模块 **22 项** race；独立研究模块 **11 项**另跑 race/legacy/vet。Bool/Shift/Len 新三组与旧三组成功全部 5 次样本 **0 B/0 alloc**，新三组失败 **16 B/1 alloc**与显式 match 一致。[分组原始基准](../tests/research/assignment_guard/README.md)和独立反例证据明确区分真实 hgo 与纯 Go 探针。
+
+### 无 guard 第三组：赋值 tuple 与 comma-ok
+
+[多值用例](../examples/propagate_places/effects_multivalue.hgo)与 [RFC §6.11](rfcs/research/0005-option-result-question.md#611-单-rhs-tuple-与-comma-ok-的第三组替换)同步实现单 RHS 静态 tuple 调用及 map/assert/receive 二值操作。新增三项真实生成业务测试验证一次求值、跨包私有类型、空白目标、原位置/部分写入、失败不写和 comma-ok 的 private bool；新增三类非法多值语境拒绝。业务模块共 **25 项**，多值生成文件断言无 guard，unsafe fallback 文件恰好一条 Catch。
+
+| 分类 | 当前状态 |
+| --- | --- |
+| 本阶段已实现、须随阶段验证 | tuple/comma-ok 的限定赋值范围；整树 race/vet/设计、生成模块 race/checkptr 与非 race 基准 |
+| 必须继续完成 | 其余私有目标 guard 替换及普通 expr 上下文缺口；for/range、switch；完整 T0 逐项验收 |
+| 已实现继续保留回归 | 原私有目标、bool/shift/len、宏/enum/match、Default 与 serde/Option 已定协议 |
+| 明确延期 | 复杂别名分析；不能借此拒绝普通 Go 别名用法，readonly 不代表全局不可变，mut& 不承诺独占 |
+| 需要新设计决定 | select 候选语义、Proposed serde adapters 的入口与自定义缺失策略；不阻塞以上独立工程 |
+
+unsafe 没有扩大 planner 支持范围，原转换链仍保留；方法/动态调用、多值唯一实参等其他明确剩余范围见 RFC。完整 Rust 能力不纳入本阶段，整体 MVP 不标完成。
+
+最终验证通过：全树 race **15 包 / 244 顶层 / 445 子测试**（另 2 包无测试），vet、完整设计检查 13 条 Go 命令；业务生成模块 25 项 race，研究模块 12 项 race/legacy/vet 与额外 checkptr=2。Tuple/Map 新两组及原六组成功全部五次样本零分配，新两组失败与显式 match 同为 16 B/1 alloc；[原始数据](../tests/research/assignment_guard/results/multivalue/summary.json)入库。独立非作者审查及安装 CLI 复验通过。

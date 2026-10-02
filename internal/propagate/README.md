@@ -148,3 +148,13 @@ not that all implicit pointer reads precede every RHS call. Tests permit the
 allowed read-order results while requiring phase-one locations to survive earlier
 phase-two writes. Loops/switch and unevaluated unsafe propagation remain separate
 work; this fallback does not expand those contexts.
+
+
+`question.go` separates one already-lowered operand's validation, payload and
+failure conversion from its failure exit. Ordinary `expr` emits a return;
+`frameExpr` explicitly emits guard.Fail without scanning generated return nodes.
+Source operand scheduling is still owned by each caller. Branch containers are
+fresh but expression nodes are shared read-only; emit is not a deep-clone API.
+This is preparatory refactoring, not the no-panic private-target replacement.
+All actual private embedded-pointer assignments still take assignmentFrame and
+retain the measured guard allocations; performance acceptance remains open.

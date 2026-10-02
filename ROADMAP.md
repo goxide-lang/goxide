@@ -132,3 +132,6 @@ T0 第三组继续接通索引/切片与复合字面量问号，保留 Go 规定
 T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 Go 两阶段求值和写入，保留数组存储、panic 时机、compound、上下文类型和既有权限。外包私有嵌入指针 promotion 仍是明确工程缺口，不能将间接赋值整体打勾；[第四组矩阵](docs/t0-acceptance.md#t0-收口第四组间接赋值的两阶段执行)与 [RFC 0005 §6.5](docs/rfcs/research/0005-option-result-question.md#65-t0-收口间接赋值的两阶段降低)记录证据和范围。循环/switch 未提前推进，select 及 Proposed adapters 继续待决，T0/MVP 尚未完成。
 
 第四组私有嵌入指针功能路径已接通，但性能验收未通过、缺口未收口：保留完整 Go assignment 与原函数执行帧，通过仅内部使用的失败 guard 早退，保持可见性、私有 scalar 上下文和原权限，无反射/unsafe/生产包桥接。[补齐验收及下一切片](docs/t0-acceptance.md#t0-第四组补齐外包私有嵌入指针目标)区分 Go 偏序与两阶段写入，撤回“根本无法降低”的过强推断。先完成无 panic 正常控制流方案研究和实现验证，不把当前 guard 扩展到循环；select 与 adapters 仍待决，整体 MVP 未完成。
+
+
+无 panic 私有赋值工程先完成 questionFlow 基础提取：显式失败出口替代 AST return 扫描，尚未替换任何真正私有目标 guard。下一步原始类型记录、局部赋值求值规划及完整赋值 emitter 的模块/风险见 [RFC §6.8](docs/rfcs/research/0005-option-result-question.md#68-显式传播控制流基础重构)；不把该重构算作性能收口。

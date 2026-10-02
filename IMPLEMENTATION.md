@@ -679,3 +679,15 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 [仓库内研究夹具和结果](tests/research/assignment_guard/README.md)保存真实 hgo 对比、纯 Go 取址/泛型/延迟 setter/上下文 IR 反例及重现脚本。提前取址、泛型地址捕获、写前统一取址和延迟重走链均有语义反例；保留完整赋值并分离副作用的 IR 子集可行，但尚无通用编译器实现，尤其需保留原表达式 typed/untyped 属性、tuple/comma-ok、直接 recover 和 len/cap 求值。研究没有证明该路线不可能，也没有采用新语法、反射、unsafe 或生产包桥接。
 
 本阶段验证：全树 race **15 个有测试包、243 宿主顶层/440 子测试**，另 **2 包无自身测试**通过。随后加强索引成功值/失败断言并重跑安装 CLI 跨包业务 race 通过（13 项生成测试）；普通目标 9 项、unsafe 1 项仍由全树验收各自生成模块 race。研究脚本生成模块 **10 项**测试单列，含 6 项纯 Go 机制探针，不能合并为新 hgo 特性验收数量；legacy 配置、生成模块 vet、escape 与基准均完成。全树 vet、完整设计检查 **13 条 Go 命令**、docs-only **58 Markdown / 593 本地链接与锚点 / 20 RFC**、diff 检查通过。独立非作者审查 detector、真实业务验收与整个研究脚本，未发现阻断。研究原始结果在仓库内，整树日志为 `/tmp/t0-routing-race.json`、`/tmp/t0-routing-race.err`、`/tmp/t0-routing-vet.log`、`/tmp/t0-routing-design.log` 和 `/tmp/t0-routing-targeted.log`。
+
+
+## questionFlow：普通失败出口基础重构
+
+基于 `ec437f2a12dc40671cb474f7cd2a0efc40cf5db1`，将 expr 中内联的 sum 检查/From/结果构造提取到 [question.go](internal/propagate/question.go)。两个调用方显式选择 return 或 guard.Fail，frameExpr 不再扫描 AST 替换 return。源操作数求值帧、错误转换绑定、验证和 panic 顺序保持原行为。独立审查和真实安装 CLI 的 private 验收通过。
+
+本阶段只是用户允许的最小基础重构：所有真正私有目标仍用 guard，runtime 未改，无成功零分配或无 panic 替换声明。详细下一阶段模块、风险、仍有 guard 的位置见 [RFC §6.8](docs/rfcs/research/0005-option-result-question.md#68-显式传播控制流基础重构)。新机制测试在生成 Go 模块验证两个出口及 validator/转换异常，不冒充新增 hgo 验收。
+
+
+本阶段最终验证：全树 race **15 个有测试包、244 宿主顶层/440 子测试**，另 **2 包无自身测试**通过；全树 vet、完整设计检查 **13 条 Go 命令**通过。既有 private 业务 **13 项**、普通目标 **9 项**、unsafe **1 项**各自生成模块 race；新增出口机制模块 **2 项**生成 Go 测试单列，研究脚本模块 **10 项**（含 6 项手写 Go 机制探针）另行 race/legacy/vet，不算新 hgo 功能。独立非作者审查并重跑实际安装 CLI 验收通过。原始基准及 token 对比已入 [研究记录](tests/research/assignment_guard/README.md)：相同输入的基线/当前 private 与研究模块 token 序列一致；单条 guard 成功仍 **32 B/1 alloc**、失败 **48 B/2 alloc**。不存在性能改善声明。整树证据为 `/tmp/t0-flow-race.json`、`/tmp/t0-flow-race.err`、`/tmp/t0-flow-vet.log`、`/tmp/t0-flow-design.log`，可重复研究结果已保存仓库。
+
+最终 docs-only 检查通过 **58 Markdown / 606 本地链接与锚点 / 20 RFC**，`git diff --check` 通过。只提交推送 feat/t0-completion 并 fetch 核验，不修改 main/work/冻结标签。

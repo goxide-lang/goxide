@@ -1,0 +1,22 @@
+[
+  {
+    "File": "index_reads.go",
+    "Identical": true,
+    "TokenSHA256": "8b2dd4f6aa33df0c2bd8c08db17e30b0782e9758574f425e8e008c5f881fca08"
+  },
+  {
+    "File": "main.go",
+    "Identical": true,
+    "TokenSHA256": "f3cd19c913cd88cb84c908fbe4c567d9547faf4abf739f09115d2e8c98ab31b8"
+  },
+  {
+    "File": "model/model.go",
+    "Identical": true,
+    "TokenSHA256": "3b875e17b7983cc58340f54058cb58e2875ade75172a71116e299cb9a7544c00"
+  },
+  {
+    "File": "private.go",
+    "Identical": true,
+    "TokenSHA256": "45f6d3beabba3f51f07aa525079fbfc22bec9a73223d59b0e08f8ee803bd14af"
+  }
+]

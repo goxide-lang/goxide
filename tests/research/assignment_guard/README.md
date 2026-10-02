@@ -54,3 +54,16 @@ Go 1.27.1 linux/amd64，AMD EPYC 9V74 云 VM，GOMAXPROCS=1。数字为非 race 
 4. **保留完整赋值的副作用 IR**：先执行明确的传播/短路控制流，最终保留 `first, tree.Wide, tree.Enabled = 5, 1<<n, cond==true`。纯 Go 探针证明 63 位 shift、未类型化 bool、失败不写及最终 nil 前项写入可同时保持。此路线尚未实现为通用 compiler pass，不能宣称收口。
 
 第四项需保留源表达式的原始 typed/untyped 属性：`box(tree.Enabled && other.Enabled)` 推断私有命名 bool，而替换成 `box(cond==true)` 推断 builtin bool；接口断言反例已测试。仅使用上下文处理后的 go/types.TypeOf 不足。还需处理 callee/实参顺序、tuple/comma-ok、源直接 recover、len/cap 去调用后的求值属性，以及副作用子表达式与隐藏目标的相互作用。继续这项工程研究不需要用户批准新语义；没有证明该路线不可行，也没有承诺通用实现已经完成。
+
+
+## questionFlow 基础重构复核
+
+在 `ec437f2a12dc40671cb474f7cd2a0efc40cf5db1` 上提取传播节点后，仍未替换真正私有目标的 guard。[同机 200ms × 5 结果](results/question-flow/summary.json)与 [manifest](results/question-flow/manifest.json)记录本次工作树。整树测试结束后执行基准；单条 guard 成功 22.17 ns、32 B/1 alloc，对照显式 match 2.922 ns、0 B/0 alloc；失败 280.0 ns、48 B/2 alloc，对照 27.05 ns、16 B/1 alloc。八条末次失败仍 296 B/10 alloc。不以波动宣称性能改善。
+
+从上述基线 commit 的 git archive 构建旧 CLI（归档无 git metadata，使用 go build -buildvcs=false），与新 CLI 对相同 source 分别转译。[研究模块](results/question-flow/research-token-comparison.json)及 [private 业务模块](results/question-flow/private-token-comparison.json)的 Go token 序列均一致，只有排版/源位置差别；比较包含 Go 扫描器插入的分号，不是简单删除空格。相同 token 不能证明源位置诊断不变，诊断仍由既有 hgo 回归验证。比较工具可重用：
+
+```sh
+go run tests/research/assignment_guard/tools/compare_tokens.go BASELINE_GENERATED CURRENT_GENERATED
+```
+
+它双向检查非 `_test.go` 的 Go 文件集合并比较 token，忽略注释和位置；测试夹具由 runner 另行安装，不纳入编译器产物比较。空基线、文件集合差异、扫描错误或 token 差异均失败。忽略的注释也包含 Go 编译指令，因此这只是本次产物的结构证据，不能单独证明任意程序等价。新增 questionFlow 出口机制测试属于单独的生成 Go 研究，不把它当作本目录 Guard 基准或新增 hgo 功能。

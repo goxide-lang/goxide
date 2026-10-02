@@ -388,3 +388,10 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 `a3f064fbcd0e75bb06bdba406f007e5abd68bd71` 功能测试通过，但性能验收失败：单条 guard 成功 32 B/1 alloc，失败 48 B/2 alloc；八条执行成功 256 B/8 alloc，末条失败 296 B/10 alloc。后者包含实测 Go runtime recovery 的额外分配；不把全部成本归因于编译器不能内联。[可复现研究](../tests/research/assignment_guard/README.md)保存原始测量及后续复核，区分真实 hgo 执行与手写 Go 机制探针。
 
 本次修复只读提升字段作为索引/key/调用参数的误路由，新增一项生成业务测试（现共 13 项）与生成代码无 guard 断言。真实索引成功路径测得 0 B/0 alloc。真正私有目标仍使用未获性能验收的 guard，不能勾为完成。手写 Go 的无 panic 完整赋值 IR 子集探针可行，通用实现和验收未完成；没有新的语言语义决定或批准延期。
+
+
+### 正常传播控制流基础切片
+
+本阶段仅提取 [questionFlow](../internal/propagate/question.go)，把失败出口从 sum 校验/From/结果构造中分离；普通 expr 显式 return，私有 frame 显式 Fail，移除 AST return 扫描改写。没有扩大支持范围，也没有替换真正私有目标 guard。所有 private.hgo 中的此类赋值和研究 Guard1/Guard8/PackedGuard 仍走原 guard，性能门槛继续未通过。
+
+[下一阶段模块与风险](rfcs/research/0005-option-result-question.md#68-显式传播控制流基础重构)明确原始类型记录、赋值求值规划和完整赋值 emitter；不能仅因已有手写子集就把这些工程项打勾。新增生成 Go 控制流机制测试单列，既有真实 hgo 私有目标/权限/跨包验收继续保留。循环、select 和 adapters 没有改动。

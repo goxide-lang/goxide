@@ -157,7 +157,7 @@ func (l *lowering) frameExpr(x ast.Expr, ft *ast.FuncType, guard string) (ast.Ex
 			return nil, l.fail(n, "? in unsafe compile-time operands is unsupported; lowering must not evaluate an unevaluated operand")
 		}
 		if id, ok := n.Fun.(*ast.Ident); ok {
-			if _, question := l.questions[id.Name]; question {
+			if d, question := l.questions[id.Name]; question {
 				original := n.Args[0]
 				inputType, e := l.frameType(l.info.TypeOf(original))
 				if e != nil {
@@ -172,36 +172,18 @@ func (l *lowering) frameExpr(x ast.Expr, ft *ast.FuncType, guard string) (ast.Ex
 				l.info.Types[arg] = l.info.Types[original]
 				call := *n
 				call.Args = []ast.Expr{arg}
-				pre, value, e := l.expr(&call, ft)
+				flow, e := l.questionFlow(&call, arg, ft, d)
 				if e != nil {
 					return nil, e
 				}
-				// All returns in this generated prelude are propagation failures, not
-				// source returns. The original operand has not been moved into the helper.
-				for _, st := range pre {
-					ast.Inspect(st, func(node ast.Node) bool {
-						switch v := node.(type) {
-						case *ast.BlockStmt:
-							for i, stmt := range v.List {
-								if r, ok := stmt.(*ast.ReturnStmt); ok {
-									v.List[i] = &ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(guard), Sel: ast.NewIdent("Fail")}, Args: r.Results}}
-								}
-							}
-						case *ast.CaseClause:
-							for i, stmt := range v.Body {
-								if r, ok := stmt.(*ast.ReturnStmt); ok {
-									v.Body[i] = &ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(guard), Sel: ast.NewIdent("Fail")}, Args: r.Results}}
-								}
-							}
-						}
-						return true
-					})
-				}
+				pre := flow.emit(func(value ast.Expr) ast.Stmt {
+					return &ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(guard), Sel: ast.NewIdent("Fail")}, Args: []ast.Expr{value}}}
+				})
 				operand, e := l.frameExpr(original, ft, guard)
 				if e != nil {
 					return nil, e
 				}
-				fn := &ast.FuncLit{Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(argName)}, Type: inputType}}}, Results: &ast.FieldList{List: []*ast.Field{{Type: outputType}}}}, Body: &ast.BlockStmt{List: append(pre, &ast.ReturnStmt{Results: []ast.Expr{value}})}}
+				fn := &ast.FuncLit{Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(argName)}, Type: inputType}}}, Results: &ast.FieldList{List: []*ast.Field{{Type: outputType}}}}, Body: &ast.BlockStmt{List: append(pre, &ast.ReturnStmt{Results: []ast.Expr{flow.value}})}}
 				return &ast.CallExpr{Fun: fn, Args: []ast.Expr{operand}}, nil
 			}
 		}

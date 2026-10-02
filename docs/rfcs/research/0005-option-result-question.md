@@ -195,3 +195,25 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 无 panic 正常控制流候选结论：提前 `&t.Field`（含泛型推断 `capture(&t.Field)`）会早触发最终 nil panic；RHS 成功后统一取址仍会阻止多赋值前项本应发生的写入；延迟闭包重新访问根对象会丢失第一阶段的隐藏指针目标。泛型可以推断不可命名类型，但不会延迟实参求值，Go 函数字面量也不提供省略返回类型来构造通用私有指针 getter。这些具体反例不构成“不可能实现”的证明。
 
 保留整条最终 Go assignment、只分离调用/传播/短路副作用的 IR 值得继续：手写子集已保留私有 uint64 的 `1 << n` 上下文、未类型化 bool 及写阶段 nil。然而不能统一把布尔临时量改回比较式：原命名 bool 在泛型/接口中的类型会变为内建 bool。须记录源表达式原始 typed/untyped 属性（不能仅依赖被上下文具体化的 TypeOf），同时覆盖 tuple/comma-ok、callee/实参顺序、源直接 recover、移除调用后 len/cap 是否仍求值等。该实验不是编译器实现或私有目标验收；这是已定语义的工程工作，不需要新语言设计，不默认为长期延期。
+
+### 6.8 显式传播控制流基础重构
+
+本阶段基于 `ec437f2a12dc40671cb474f7cd2a0efc40cf5db1`，仅完成正常控制流 IR 所需的第一个基础切片，不声称替换私有目标 guard。
+
+候选最终形状是：在原函数体内执行传播的校验和普通失败 return，成功取得 payload 后，保留完整 Go assignment。因失败路径不会到达 assignment，所有目标均不写；成功后 Go 仍负责隐藏指针目标的第一阶段求值和第二阶段从左到右写入，后一目标的最终 nil 不回滚前项写入。私有 scalar 的 `1<<n` 等表达式继续留在原赋值上下文，不提前默认成 int，也不生成不可访问的类型名或 selector。这个说明适用于已验证的手写子集，**不是把任意表达式先求值再赋值都判为正确**。尤其调用/接收/短路条件有规定顺序，中间指针读取可能 panic；不能仅按某次 gc 的隐式读取顺序追加语言保证，也不能忽略确定的控制依赖。
+
+[question.go](../../../internal/propagate/question.go)现在把一个已降低 operand 的 sum 校验、成功 payload、失败转换与结果表示为 `questionFlow`。它不调度源 operand、不处理目标位置。`emit` 显式接收失败出口：普通 expr 使用 `returnFailure`；现有 frame 使用 `guard.Fail`。From 与目标失败值作为出口参数先求值，validator/From panic 不会先设置 pending。frame 不再扫描生成 AST、寻找 return 后改写，源操作数仍在原函数帧作为 helper 实参执行。分支容器是新建的，但表达式节点按只读约定共享，不能把重复 emit 当作深拷贝 API。
+
+最小后续阶段及风险：
+
+| 阶段 / 模块 | 具体职责 | 必须验证的风险 |
+| --- | --- | --- |
+| 本次：question.go + expr/frame 两调用方 | 显式传播节点与可选择失败出口 | validator/From/payload/失败值顺序、最近函数、guard pending；已实现 |
+| 待实现：独立 expression facts 模块，在修改 AST 前保存 | 原始 typed/untyped、地址性、builtin 身份与原 len/cap 求值属性 | 私有 bool 进入泛型/接口不能变为 builtin bool；不能只读上下文具体化后的 TypeOf |
+| 待实现：assignment effects planner | 只覆盖现有 private fixtures 所需调用/接收/短路/传播，保留控制与先后依赖 | callee/receiver、LHS 调用与 RHS 调用、短路条件读取、嵌套 ?、直接 recover；不重写全语言 |
+| 待实现：完整赋值 emitter | 普通失败 return + residual assignment，不展开隐藏字段 | 私有 scalar 上下文、tuple/comma-ok、compound 旧值、多目标前项换链、nil/bounds panic；覆盖后显式删除对应 guard 路由 |
+| 待实现：替换验收 | 真实 hgo 代码形状、跨包权限/race、与显式 match 基准 | 正常 ? 无 panic/recover、成功无新增堆分配；未覆盖路由必须逐项公开 |
+
+**本次仍有 guard 的精确位置**：`statement` 对 `needsAssignmentFrame` 为真的赋值仍调用 `assignmentFrame`；后者声明 Assignment 并 defer Catch，`frameExpr` 的问号失败仍调用 Fail。runtime/assignment.go 未变。所有真正私有嵌入指针目标仍在此路径，包括 [private.hgo](../../../examples/propagate_places/private.hgo) 的 stock/stockFields、重绑、writeThenNil、compoundPrivate、direct recover、命名/blank/shadow 返回、Option、privateLHS、重复赋值与嵌套闭包、权限和 goto 用例；研究 Guard1/Guard8/PackedGuard 也仍使用 guard。只有此前已修复的普通读操作数（index/key/call arg）及普通 place 路径不使用 guard。本次没有新覆盖、静默替换或性能改善声明，也没有扩到循环、select 或 adapters。
+
+新增 [question_test.go](../../../internal/propagate/question_test.go)是生成 Go 的机制测试：同一控制流分别产生普通 return/可观察出口，验证 Option、Result 成败、validator/转换 panic 不进入出口及只读重复 emit。它不算新的 hgo 功能；既有 private acceptance 继续真实安装 CLI 转译并在独立模块 race。

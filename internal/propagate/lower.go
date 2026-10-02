@@ -1024,58 +1024,11 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 				if e != nil {
 					return nil, nil, e
 				}
-				target, e := l.target(ft)
+				flow, e := l.questionFlow(n, arg, ft, d)
 				if e != nil {
 					return nil, nil, e
 				}
-				if target.Family != d.Family {
-					return nil, nil, l.fail(n, "Option and Result cannot propagate into each other")
-				}
-				tmp, val := l.temp(), l.temp()
-				code := tmp + " := " + printNode(arg) + "; " + d.Validator + "(" + tmp + "); var " + val + " " + d.TypeArgs[0] + "; "
-				if d.Family == "Option" {
-					code += "if " + tmp + " == " + d.Variants[1].Constructor + "() { return " + target.Variants[1].Constructor + "() }; " + val + " = " + tmp + ".(" + d.Variants[0].CaseName + ").Value"
-				} else {
-					errVal := "__hgo_failure.Value"
-					srcType := l.info.TypeOf(n.Args[0])
-					srcNamed, _ := types.Unalias(srcType).(*types.Named)
-					targetType := l.info.TypeOf(ft.Results.List[0].Type)
-					dstNamed, _ := types.Unalias(targetType).(*types.Named)
-					if srcNamed == nil || dstNamed == nil {
-						return nil, nil, l.fail(n, "unresolved Result error types")
-					}
-					se, de := srcNamed.TypeArgs().At(1), dstNamed.TypeArgs().At(1)
-					if !types.AssignableTo(se, de) {
-						var choices []Conversion
-						for _, c := range l.cfg.From {
-							if types.Identical(se, l.resolveType(c.Source)) && types.Identical(de, l.resolveType(c.Target)) {
-								choices = append(choices, c)
-							}
-						}
-						if len(choices) != 1 {
-							return nil, nil, l.fail(n, "Result error requires one unique explicit From conversion; conversion chains are not searched")
-						}
-						helper := choices[0].Helper
-						sig, ok := l.resolveType(helper).(*types.Signature)
-						if !ok || sig.Variadic() || sig.Params().Len() != 1 || sig.Results().Len() != 1 || sig.TypeParams().Len() != 0 || !types.Identical(sig.Params().At(0).Type(), se) || !types.Identical(sig.Results().At(0).Type(), de) {
-							return nil, nil, l.fail(n, "registered From helper must have the exact static source and target types")
-						}
-						bound := l.conversions[helper]
-						if bound == "" {
-							l.serial++
-							bound = fmt.Sprintf("__hgo_qfrom_%d", l.serial)
-							if l.cfg.Namespace != "" {
-								bound = fmt.Sprintf("__hgo_qfrom_%s_%d", l.cfg.Namespace, l.serial)
-							}
-							l.conversions[helper] = bound
-							// Bind the registered package function outside every user local scope.
-							l.file.Decls = append(l.file.Decls, &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent(bound)}, Values: []ast.Expr{parseExpr(helper)}}}})
-						}
-						errVal = bound + "(" + errVal + ")"
-					}
-					code += "switch __hgo_failure := " + tmp + ".(type) {case " + d.Variants[0].CaseName + ": " + val + " = __hgo_failure.Value; case " + d.Variants[1].CaseName + ": return " + target.Variants[1].Constructor + "(" + errVal + "); default: panic(\"hgo: invalid Result at ?\") }"
-				}
-				return append(p, parseStatements(code)...), ast.NewIdent(val), nil
+				return append(p, flow.emit(returnFailure)...), flow.value, nil
 			}
 		}
 		// Freeze earlier evaluated runtime operands before lowering a later ?. Constants

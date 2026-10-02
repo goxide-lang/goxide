@@ -1,0 +1,37 @@
+package iife
+import "testing"
+var sinkInt int
+var sinkWord Word
+var sinkPointer *int
+var sinkBool bool
+func BenchmarkIntIIFE(b *testing.B){for i:=0;i<b.N;i++{sinkInt=IntIIFE(i&1)}}
+func BenchmarkIntStmt(b *testing.B){for i:=0;i<b.N;i++{sinkInt=IntStmt(i&1)}}
+func BenchmarkNamedIIFE(b *testing.B){for i:=0;i<b.N;i++{sinkWord=NamedIIFE(i&1)}}
+func BenchmarkNamedStmt(b *testing.B){for i:=0;i<b.N;i++{sinkWord=NamedStmt(i&1)}}
+func BenchmarkPointerIIFE(b *testing.B){for i:=0;i<b.N;i++{sinkPointer=PointerIIFE(i&1)}}
+func BenchmarkPointerStmt(b *testing.B){for i:=0;i<b.N;i++{sinkPointer=PointerStmt(i&1)}}
+func BenchmarkArgIIFE(b *testing.B){for i:=0;i<b.N;i++{sinkInt=ArgIIFE(i&1)}}
+func BenchmarkArgStmt(b *testing.B){for i:=0;i<b.N;i++{sinkInt=ArgStmt(i&1)}}
+func BenchmarkShortIIFE(b *testing.B){for i:=0;i<b.N;i++{sinkBool=ShortIIFE(i&1)}}
+func BenchmarkShortStmt(b *testing.B){for i:=0;i<b.N;i++{sinkBool=ShortStmt(i&1)}}
+func BenchmarkIndexIIFE(b *testing.B){dst:=make([]int,2);for i:=0;i<b.N;i++{IndexIIFE(dst,i&1)};sinkInt=dst[0]}
+func BenchmarkIndexStmt(b *testing.B){dst:=make([]int,2);for i:=0;i<b.N;i++{IndexStmt(dst,i&1)};sinkInt=dst[0]}
+func TestResults(t *testing.T){for i:=0;i<4;i++{if IntIIFE(i)!=IntStmt(i)||NamedIIFE(i)!=NamedStmt(i)||PointerIIFE(i)!=PointerStmt(i)||ArgIIFE(i)!=ArgStmt(i)||ShortIIFE(i)!=ShortStmt(i){t.Fatal(i)};a,b:=make([]int,2),make([]int,2);IndexIIFE(a,i);IndexStmt(b,i);if a[0]!=b[0]||a[1]!=b[1]{t.Fatal(i)}}}
+func TestEffects(t *testing.T){
+ trace:="";step:=func(s string,n int)int{trace+=s;return n}
+ v:=combine(step("a",3),func()int{switch step("s",0){case 0:return step("b",17);default:return step("BAD",29)}}())
+ if trace!="asb"||v!=26{t.Fatal(trace,v)}
+ trace="";flag:=false;if flag&&func()bool{step("BAD",0);return true}(){t.Fatal("short")};if trace!=""{t.Fatal(trace)}
+ dst:=[]int{0};base:=func()[]int{trace+="l";return dst};idx:=func()int{trace+="i";return 0}
+ base()[idx()]=func()int{trace+="r";return 8}();if trace!="lir"||dst[0]!=8{t.Fatal(trace,dst)}
+ trace="";func(){defer func(){if recover()==nil||trace!="r"{t.Errorf("bounds timing %s",trace)}}();var dst []int;dst[0]=func()int{trace+="r";return 1}()}()
+}
+// A directly evaluated recover() is frame-sensitive even with expression-only arms.
+func TestRecoverFrame(t *testing.T){var direct,wrapped,escaped any
+ func(){defer func(){direct=recover()}();panic("direct")}()
+ func(){defer func(){escaped=recover()}();func(){defer func(){wrapped=func()any{return recover()}()}();panic("wrapped")}()}()
+ if direct!="direct"||wrapped!=nil||escaped!="wrapped"{t.Fatal(direct,wrapped)}
+}
+
+func BenchmarkLargeIIFE(b *testing.B){for i:=0;i<b.N;i++{sinkInt=LargeIIFE(i%41)}}
+func BenchmarkLargeStmt(b *testing.B){for i:=0;i<b.N;i++{sinkInt=LargeStmt(i%41)}}

@@ -1,0 +1,1 @@
+native enum equality and nil accepted

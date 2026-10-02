@@ -1,0 +1,3 @@
+package app
+import("testing";m "iife.example/app/model")
+func TestActualHgoIIFE(t *testing.T){if Plain(m.NewModeA())!=1||Plain(m.NewModeB())!=2||Named(m.NewModeA())!=m.Word(1<<63)||Named(m.NewModeB())!=7{t.Fatal("iife values")}}

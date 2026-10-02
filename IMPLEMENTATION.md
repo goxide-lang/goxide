@@ -855,3 +855,13 @@ match 类型与 `?` 签名联合迭代，重新检查上下文后再进行传播
 [模块验收](tests/acceptance/propagate_private_bool_test.go)单独三项生成 race 测试与 vet，覆盖真实 interface 类型、短路/len/cap 次数、nearest closure、失败/defer/direct recover、未选 nil Result；两项类型负例保持拒绝，产物确定且无新增 guard。不变更剩余 guard、桥接或范围；两项误拒修复之后继续用户明确的原位 match 目标与授权 IIFE 机制评估。
 
 最终验证：全树 race **15 测试包 / 265 宿主顶层 / 599 子测试**通过，另 2 包无测试；全树 vet 通过。新生成模块单独 **3 项 race 测试**与 vet 通过。设计检查 **60 Markdown / 757 本地链接 / 20 RFC**及 **13 条纯 Go 机制命令**通过。独立复审无阻断，另真实 hgo 左侧传播/嵌套逻辑/私有身份探针生成模块 race 输出 ok。日志 `/tmp/t0-private-bool-race.json`、`/tmp/t0-private-bool-race.err`、`/tmp/t0-private-bool-vet.log`、`/tmp/t0-private-bool-design.log`、`/tmp/t0-private-bool-test-final.log`；工作分支 push/fetch 核验。
+
+## Match 原位与表达式机制评审（2026-10-02）
+
+在 `6380b6788333485a2fdd24e6558da0aba264df68` 上完成用户授权的[有界方案评审](docs/rfcs/research/match-place-and-expression-options.md)和[可复现夹具/原始证据](tests/research/match_lowering/README.md)。这轮仅新增文档与研究夹具，未修改前端、未迁移 enum ABI、未冻结范围。
+
+Go 1.27.1 非 race 5×200ms 对照中，六组 typed IIFE/statement 小表达式均零分配，inline日志证明小IIFE内联；不能推导任意match成本。纯机制另有3项语义测试及race/vet。实际hgo显式IIFE的int/跨包具名uint64通过独立生成模块race/vet；引用返回IIFE目前拒绝，未伪称权限验收。直接recover反例证明无问号也不一定能新增调用帧。
+
+原位借用的tag struct候选通过独立纯Go race存储探针；它保留值复制与稳定payload槽，但改变生成Go的case断言、nil表示和比较能力，需要明确API迁移取舍。当前无满足全部旧interface API与真实payload指针的已证明简单方案，不以隐藏pointer共享或复制写回冒充等价实现。原位可写借用仍为必需，尚未实现；无获批后置。
+
+研究阶段适用验证：设计检查通过 **62 Markdown / 780 本地链接 / 20 RFC / 13 条机制命令**；独立研究复审无阻断。纯Go IIFE机制3测试race/vet、显式hgo IIFE生成模块1测试race/vet、payload存储与已有hgo比较各自race运行通过。生产代码沿用上一提交已通过的全树race/vet，本轮没有重跑同一生产树。比较探针确认旧hgo已接受部分enum ==/nil，布局迁移必须保留源级行为或取得明确选择，不只属于Go消费API变化。

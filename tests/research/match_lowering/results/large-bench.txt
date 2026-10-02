@@ -1,0 +1,16 @@
+goos: linux
+goarch: amd64
+pkg: audit.example/iife
+cpu: AMD EPYC 9V74 80-Core Processor                
+BenchmarkLargeIIFE 	158660128	         1.478 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeIIFE 	149087112	         1.481 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeIIFE 	166031902	         1.456 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeIIFE 	156770414	         1.565 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeIIFE 	164413851	         1.444 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeStmt 	63848551	         3.592 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeStmt 	58184413	         3.548 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeStmt 	64824567	         3.585 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeStmt 	61131918	         3.607 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLargeStmt 	64994414	         3.626 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	audit.example/iife	3.102s

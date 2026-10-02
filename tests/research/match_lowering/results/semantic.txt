@@ -1,0 +1,8 @@
+=== RUN   TestResults
+--- PASS: TestResults (0.00s)
+=== RUN   TestEffects
+--- PASS: TestEffects (0.00s)
+=== RUN   TestRecoverFrame
+--- PASS: TestRecoverFrame (0.00s)
+PASS
+ok  	audit.example/iife	0.002s

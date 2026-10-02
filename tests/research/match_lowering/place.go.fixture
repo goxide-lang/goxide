@@ -1,0 +1,15 @@
+package main
+import "fmt"
+type E struct{tag uint8;a int;b []int}
+func A(v int)E{return E{tag:1,a:v}}
+func B(v []int)E{return E{tag:2,b:v}}
+func borrowA(v *E)*int{if v.tag!=1{panic("wrong variant")};return &v.a}
+func main(){
+ e:=A(1);copy:=e;p:=borrowA(&e);*p=2
+ if e.a!=2||copy.a!=1{panic("copy")}
+ e=B([]int{7});if *p!=0{panic("assignment clears inactive")};*p=9
+ if e.tag!=2||e.b[0]!=7{panic("old borrow changed active variant")}
+ e=A(5);if *p!=5{panic("stable slot")}
+ s:=B([]int{1});other:=s;other.b[0]=3;if s.b[0]!=3{panic("Go shallow copy")}
+ fmt.Println("copy, stable slot, inactive write, shallow payload: ok")
+}

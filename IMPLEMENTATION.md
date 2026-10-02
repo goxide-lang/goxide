@@ -627,3 +627,17 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 独立非作者复审重跑新测试和其自行编写的真实 hgo 反例，修复后无剩余阻断。[RFC 0005 §6.3](docs/rfcs/research/0005-option-result-question.md#63-t0-收口多-rhs取值与发送)及[矩阵剩余例子](docs/t0-acceptance.md#t0-收口第二组多-rhs解引用断言与发送)已同步。索引/切片/字面量/间接目标、循环/switch/select、match 组合、权限跟踪限制、公开引用元数据及诊断仍未整体完成；select 候选传播组合与 Proposed adapter/原生桥接待决规则单列，不视作用户批准的延期，也不扩大到长期别名分析或完整 trait。
 
 最终验证：`go test -race -count=1 -json ./...` 通过 **15 个有测试包、235 宿主顶层测试、415 子测试**（另 1 包无自身测试）。本组两个实际生成模块另有 **7+2 项 race 测试**，不重复计入宿主数量；真实安装 CLI 及业务执行通过。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 543 本地链接与锚点 / 20 RFC**、`git diff --check` 均通过。最终日志为 `/tmp/t0-values-final-race.json`、`/tmp/t0-values-final-race.err`、`/tmp/t0-values-vet.log`、`/tmp/t0-values-design.log`、`/tmp/t0-values-docs.log`；审查修复前中断的旧 race 日志不计作最终验证。
+
+## T0 收口第三组：索引、切片与复合字面量
+
+基于 `a229e5f12dfebc953dea75beae867af5161abd3d` 继续同一 `feat/t0-completion`。新增 array/pointer/slice/string/map 索引、二/三索引切片，以及 struct/array/slice/map 字面量中的既有 Option/Result 问号；未扩大 From、Try/Residual、source 泛型或 select 规则。只暂存需要求值的操作数，不重写成逐项 map 插入；测试区分 Go 规定的调用/接收/逻辑顺序和未规定的变量读取/索引/插入顺序。
+
+实现保留 map comma-ok、数组原存储与不可取址值类别、上下界/容量、省略 bounds、常量错误、重复 key/field、嵌套省略类型与隐式指针 literal。`len/cap` 原本需求值的 array 操作数显式保持求值，避免去掉 marker 后变常量；仅 composite literal 可带传播取地址，不放开任意 `&(load()?)`。类型迭代对暂未访问到的 marker 等待本轮其他 payload 签名解析后重查；无进展仍报错，不忽略最终类型检查。
+
+独立审查发现并修复外部包 private scalar 上下文丢失，包括 uint64 位移、命名 bool 比较/短路。使用原 container 的纯零值类型见证保留类型，不读用户存储、不调用用户方法或 Default。又修复源码包级/file import 的 comparable 遮蔽：只有该特殊路径引入 [compiler-support 约束](runtime/constraints.go)，目录模块显式依赖 runtime module，普通生成路径不增加此依赖。这不是新语言协议、稳定 ABI 或零成本承诺。
+
+[真实前端接受测试](tests/acceptance/propagate_aggregate_test.go)中，主生成模块 **10 项 race** 覆盖调用/接收顺序、错误/副作用、map/pointer/index、slice storage、literal 键值、上下文类型、短路/嵌套闭包/defer、动态不可比较 map key 与 len/cap panic；另有 **14 项**前端拒绝。第二份[跨包批次业务](examples/propagate_aggregate/main.hgo)经安装 CLI、仓库外转译、生成模块 **2 项 race** 与 CLI run，输出 `batch 2 9223372036854775808`、`invalid bounds`，保留 strconv.NumError cause；第三份生成模块 **1 项 race** 验证只读数组索引观察正常可写别名更新，另拒绝共享只读字段进入可写 literal。生成模块 **10+2+1** 与宿主统计分开，纯 Go 规范探针不算前端完成证据。
+
+独立非作者复审自行编写的跨包反例及新测试，无剩余阻断。[RFC 0005 §6.4](docs/rfcs/research/0005-option-result-question.md#64-t0-收口索引切片与复合字面量)和[矩阵第三组](docs/t0-acceptance.md#t0-收口第三组索引切片与复合字面量)同步准确边界：间接赋值目标须独立保存 LHS 位置及两阶段写入；循环/switch 尚需 CFG；select 候选规则仍待明确。unsafe.Sizeof/Alignof/Offsetof 不求值参数中的问号明确拒绝，根因是当前 prelude 会错误执行该参数，需要后续非求值类型降低；不静默缩范围或改写成求值语义。其他 match、权限跟踪、公开引用元数据及诊断缺口继续保留，T0/MVP 整体未完成。
+
+最终验证：Go 1.27.1 linux/amd64、CGO_ENABLED=1，使用本地工具链/缓存。全树 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、239 宿主顶层测试、427 子测试**，另有 printing/runtime **2 包无自身测试**；新增三份生成模块 **13 项 race** 单列。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 554 本地链接与锚点 / 20 RFC**、`git diff --check` 均通过。日志：`/tmp/t0-aggregate-final-race.json`、`/tmp/t0-aggregate-final-race.err`、`/tmp/t0-aggregate-vet.log`、`/tmp/t0-aggregate-design.log`、`/tmp/t0-aggregate-docs.log`。冻结标签和 main/work 未修改，阶段提交推送后 fetch 核验。

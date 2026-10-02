@@ -1,0 +1,24 @@
+package main
+
+import "aggregate.example/batches/model"
+
+// Ordinary Go source can shadow this universe name. Compiler helpers must not.
+type comparable interface{}
+
+func hiddenTypes(n uint)Result[uint64,error] {
+ masks:=model.Masks{1<<Result[uint,error]::Ok(n)?}
+ table:=model.Table{1<<Result[uint,error]::Ok(n)?:1<<n}
+ pair:=model.Pair{{Mask:1<<Result[uint,error]::Ok(n)?}}
+ toggles:=model.Toggles{Result[int,error]::Ok(1)?>0&&Result[int,error]::Ok(2)?>0}
+ if uint64(masks[0])!=uint64(1)<<n||uint64(pair[0].Mask)!=uint64(masks[0])||!toggles[0]{panic("context type")}
+ for key,value:=range table{if uint64(key)!=uint64(masks[0])||key!=value{panic("map type")}}
+ return Result[uint64,error]::Ok(uint64(masks[0]))
+}
+
+func resultWide(value Result[uint64,error])(uint64,error) {
+ match value {
+  Result[uint64,error]::Ok(n)=>{return n,nil},
+  Result[uint64,error]::Err(err)=>{return 0,err},
+ }
+ panic("unreachable")
+}

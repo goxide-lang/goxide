@@ -33,18 +33,22 @@ type Config struct {
 	Namespace string
 }
 type lowering struct {
-	fs            *token.FileSet
-	file          *ast.File
-	info          *types.Info
-	pkg           *types.Package
-	cfg           Config
-	serial        int
-	questions     map[string]enums.Decl
-	conversions   map[string]string
-	companions    []*ast.File
-	boundFamilies map[string]enums.Decl
-	familyIssue   string
-	scalarNames   map[types.Type]string
+	fs                   *token.FileSet
+	file                 *ast.File
+	info                 *types.Info
+	pkg                  *types.Package
+	cfg                  Config
+	serial               int
+	questions            map[string]enums.Decl
+	conversions          map[string]string
+	companions           []*ast.File
+	boundFamilies        map[string]enums.Decl
+	familyIssue          string
+	scalarNames          map[types.Type]string
+	arrayValueHelper     string
+	witnesses            map[ast.Expr]func() ast.Expr
+	witnessHelpers       map[string]string
+	comparableConstraint string
 }
 
 func printNode(n any) string {
@@ -299,6 +303,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 		l.check()
 		changed := false
 		var failure error
+		var unresolved error
 		ast.Inspect(f, func(n ast.Node) bool {
 			c, ok := n.(*ast.CallExpr)
 			if !ok {
@@ -325,7 +330,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 			}
 			typ := l.info.TypeOf(c.Args[0])
 			if typ == nil {
-				failure = l.fail(c, "cannot determine propagation operand type")
+				unresolved = l.fail(c, "cannot determine propagation operand type")
 				return false
 			}
 			d, ok := l.family(typ)
@@ -353,6 +358,9 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 			return nil, failure
 		}
 		if !changed {
+			if unresolved != nil {
+				return nil, unresolved
+			}
 			break
 		}
 	}
@@ -680,6 +688,13 @@ func (l *lowering) values(values []ast.Expr, ft *ast.FuncType) ([]ast.Stmt, []as
 	return pre, out, nil
 }
 
+func underlyingType(t types.Type) types.Type {
+	if t == nil {
+		return nil
+	}
+	return t.Underlying()
+}
+
 func (l *lowering) freezeValue(original, value ast.Expr, pre *[]ast.Stmt) ast.Expr {
 	tv := l.info.Types[original]
 	if tv.Value != nil {
@@ -711,9 +726,241 @@ func (l *lowering) freezeValue(original, value ast.Expr, pre *[]ast.Stmt) ast.Ex
 			}
 		}
 	}
+	// Some valid literal contexts use private named scalar types exported
+	// through a public container. Obtain a zero of that type from its context,
+	// never by evaluating a user expression or spelling the private type.
+	_, scalar := underlyingType(tv.Type).(*types.Basic)
+	if witness := l.witnesses[original]; witness != nil && scalar {
+		name := l.temp()
+		*pre = append(*pre,
+			&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.DEFINE, Rhs: []ast.Expr{witness()}},
+			&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.ASSIGN, Rhs: []ast.Expr{value}})
+		return ast.NewIdent(name)
+	}
+
 	name := l.temp()
 	*pre = append(*pre, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.DEFINE, Rhs: []ast.Expr{value}})
 	return ast.NewIdent(name)
+}
+
+// indexBase preserves array storage and value category. In particular, taking
+// a temporary copy of an addressable array would make slicing detach storage,
+// while indexing a temporary variable for an rvalue array would invent an
+// addressable element (and permit otherwise illegal pointer-receiver calls).
+func (l *lowering) indexBase(original ast.Expr, slicing bool, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, error) {
+	tv := l.info.Types[original]
+	array := false
+	if tv.Type != nil {
+		_, array = tv.Type.Underlying().(*types.Array)
+	}
+	if slicing && array && !tv.Addressable() {
+		return nil, nil, l.fail(original, "cannot slice an unaddressable array, including an array returned by ?")
+	}
+	pre, value, err := l.expr(original, ft)
+	if err != nil {
+		return nil, nil, err
+	}
+	if array && tv.Addressable() {
+		name := l.temp()
+		pre = append(pre, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(name)}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: value}}})
+		return pre, ast.NewIdent(name), nil
+	}
+	value = l.freezeValue(original, value, &pre)
+	if array {
+		if l.arrayValueHelper == "" {
+			l.arrayValueHelper = "__hgo_qarray_" + l.cfg.Namespace + l.temp()
+			decl, err := parser.ParseFile(l.fs, "<array value category>", "package "+l.file.Name.Name+";func "+l.arrayValueHelper+"[T interface{}](value T) T {return value}", 0)
+			if err != nil {
+				return nil, nil, err
+			}
+			l.file.Decls = append(l.file.Decls, decl.Decls...)
+		}
+		value = &ast.CallExpr{Fun: ast.NewIdent(l.arrayValueHelper), Args: []ast.Expr{value}}
+	}
+	return pre, value, nil
+}
+
+// Keep ordinary generated packages dependency-free when the universe name is
+// available. A real source declaration named comparable requires a qualified
+// compiler-support constraint; a package-local alias would be captured too.
+func (l *lowering) mapConstraint() string {
+	if t := l.resolveType("comparable"); t != nil && types.Identical(t, types.Universe.Lookup("comparable").Type()) {
+		return "comparable"
+	}
+	if l.comparableConstraint == "" {
+		name := "__hgo_qconstraints_" + l.cfg.Namespace
+		spec := &ast.ImportSpec{Name: ast.NewIdent(name), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("github.com/hxsf/goxide/runtime")}}
+		// Imports must precede declarations even when the original file had none.
+		l.file.Decls = append([]ast.Decl{&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{spec}}}, l.file.Decls...)
+		l.file.Imports = append(l.file.Imports, spec)
+		l.comparableConstraint = name + ".Comparable"
+	}
+	return l.comparableConstraint
+}
+
+// witnessCall builds compiler-only zero-value helpers. The argument is itself
+// a zero witness, never a user value. Type inference can therefore retain an
+// inaccessible named element type without reading storage or invoking methods.
+func (l *lowering) witnessCall(kind string, arg ast.Expr) ast.Expr {
+	if l.witnessHelpers == nil {
+		l.witnessHelpers = map[string]string{}
+	}
+	name := l.witnessHelpers[kind]
+	if name == "" {
+		name = "__hgo_qzero_" + l.cfg.Namespace + l.temp()
+		signature := "[T interface{}]() (zero T)"
+		switch {
+		case kind == "slice":
+			signature = "[S ~[]E, E interface{}](container S) (zero E)"
+		case kind == "pointer":
+			signature = "[P ~*E, E interface{}](container P) (zero E)"
+		case kind == "map-key":
+			signature = "[M ~map[K]V, K " + l.mapConstraint() + ", V interface{}](container M) (zero K)"
+		case kind == "map-value":
+			signature = "[M ~map[K]V, K " + l.mapConstraint() + ", V interface{}](container M) (zero V)"
+		case strings.HasPrefix(kind, "array-"):
+			signature = "[A ~[" + strings.TrimPrefix(kind, "array-") + "]E, E interface{}](container A) (zero E)"
+		}
+		decl, err := parser.ParseFile(l.fs, "<literal contextual type>", "package "+l.file.Name.Name+";func "+name+signature+"{return}", 0)
+		if err != nil {
+			panic(err)
+		}
+		l.file.Decls = append(l.file.Decls, decl.Decls...)
+		l.witnessHelpers[kind] = name
+	}
+	if kind == "root" {
+		return &ast.CallExpr{Fun: &ast.IndexExpr{X: ast.NewIdent(name), Index: arg}}
+	}
+	return &ast.CallExpr{Fun: ast.NewIdent(name), Args: []ast.Expr{arg}}
+}
+
+// Stage all literal leaves while retaining the enclosing literal. An omitted
+// element type may not be nameable (e.g. []dep.private), and may imply &T.
+// Keeping that syntax in its original context preserves both properties and
+// leaves constant-key checks and map insertion order to Go.
+func (l *lowering) literal(lit *ast.CompositeLit, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, error) {
+	return l.contextLiteral(lit, ft, nil)
+}
+
+func (l *lowering) contextLiteral(lit *ast.CompositeLit, ft *ast.FuncType, witness func() ast.Expr) ([]ast.Stmt, ast.Expr, error) {
+	var pre []ast.Stmt
+	var kind types.Type
+	if typ := l.info.TypeOf(lit); typ != nil {
+		kind = typ.Underlying()
+	}
+	if lit.Type != nil {
+		typeExpr := lit.Type
+		if array, ok := typeExpr.(*ast.ArrayType); ok {
+			if _, ellipsis := array.Len.(*ast.Ellipsis); ellipsis {
+				if t, ok := kind.(*types.Array); ok {
+					typeExpr = &ast.ArrayType{Len: parseExpr(strconv.FormatInt(t.Len(), 10)), Elt: array.Elt}
+				}
+			}
+		}
+		witness = func() ast.Expr { return l.witnessCall("root", typeExpr) }
+	}
+	if pointer, ok := kind.(*types.Pointer); ok {
+		kind = pointer.Elem().Underlying()
+		if parent := witness; parent != nil {
+			witness = func() ast.Expr { return l.witnessCall("pointer", parent()) }
+		}
+	}
+	stage := func(original ast.Expr, context func() ast.Expr) (ast.Expr, error) {
+		if nested, ok := original.(*ast.CompositeLit); ok {
+			p, value, err := l.contextLiteral(nested, ft, context)
+			pre = append(pre, p...)
+			return value, err
+		}
+		if context != nil {
+			expected := l.info.TypeOf(original)
+			if l.witnesses == nil {
+				l.witnesses = map[ast.Expr]func() ast.Expr{}
+			}
+			ast.Inspect(original, func(node ast.Node) bool {
+				if _, closure := node.(*ast.FuncLit); closure {
+					return false
+				}
+				if expr, ok := node.(ast.Expr); ok && expected != nil && types.Identical(l.info.TypeOf(expr), expected) {
+					l.witnesses[expr] = context
+				}
+				return true
+			})
+		}
+		p, value, err := l.expr(original, ft)
+		if err != nil {
+			return nil, err
+		}
+		pre = append(pre, p...)
+		return l.freezeValue(original, value, &pre), nil
+	}
+	context := func(field string, key bool) func() ast.Expr {
+		if witness == nil {
+			return nil
+		}
+		switch t := kind.(type) {
+		case *types.Struct:
+			return func() ast.Expr { return &ast.SelectorExpr{X: witness(), Sel: ast.NewIdent(field)} }
+		case *types.Slice:
+			return func() ast.Expr { return l.witnessCall("slice", witness()) }
+		case *types.Array:
+			return func() ast.Expr { return l.witnessCall("array-"+strconv.FormatInt(t.Len(), 10), witness()) }
+		case *types.Map:
+			part := "map-value"
+			if key {
+				part = "map-key"
+			}
+			return func() ast.Expr { return l.witnessCall(part, witness()) }
+		}
+		return nil
+	}
+	_, isMap := kind.(*types.Map)
+	for i, element := range lit.Elts {
+		if pair, ok := element.(*ast.KeyValueExpr); ok {
+			field := ""
+			if isMap {
+				key, err := stage(pair.Key, context("", true))
+				if err != nil {
+					return nil, nil, err
+				}
+				pair.Key = key
+			} else if contains(pair.Key, l.questions) {
+				return nil, nil, l.fail(pair.Key, "? cannot be a struct field selector or constant array/slice literal index")
+			} else if _, structure := kind.(*types.Struct); structure {
+				field = printNode(pair.Key)
+			}
+			value, err := stage(pair.Value, context(field, false))
+			if err != nil {
+				return nil, nil, err
+			}
+			pair.Value = value
+		} else {
+			field := ""
+			if structure, ok := kind.(*types.Struct); ok && i < structure.NumFields() {
+				field = structure.Field(i).Name()
+			}
+			value, err := stage(element, context(field, false))
+			if err != nil {
+				return nil, nil, err
+			}
+			lit.Elts[i] = value
+		}
+	}
+	return pre, lit, nil
+}
+
+func (l *lowering) builtin(call *ast.CallExpr) *types.Builtin {
+	var id *ast.Ident
+	switch fun := ast.Unparen(call.Fun).(type) {
+	case *ast.Ident:
+		id = fun
+	case *ast.SelectorExpr:
+		id = fun.Sel
+	}
+	if id != nil {
+		b, _ := l.info.Uses[id].(*types.Builtin)
+		return b
+	}
+	return nil
 }
 
 func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, error) {
@@ -726,6 +973,20 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 		n.X = y
 		return p, n, e
 	case *ast.CallExpr:
+		builtin := l.builtin(n)
+		if builtin != nil && builtin.Pkg() != nil && builtin.Pkg().Path() == "unsafe" && (builtin.Name() == "Sizeof" || builtin.Name() == "Alignof" || builtin.Name() == "Offsetof") {
+			return nil, nil, l.fail(n, "? in unsafe compile-time operands is unsupported; lowering must not evaluate an unevaluated operand")
+		}
+		forceArrayArgument := false
+		if builtin != nil && (builtin.Name() == "len" || builtin.Name() == "cap") && len(n.Args) == 1 && l.info.Types[n].Value == nil {
+			if typ := l.info.TypeOf(n.Args[0]); typ != nil {
+				underlying := typ.Underlying()
+				if pointer, ok := underlying.(*types.Pointer); ok {
+					underlying = pointer.Elem().Underlying()
+				}
+				_, forceArrayArgument = underlying.(*types.Array)
+			}
+		}
 		if id, ok := n.Fun.(*ast.Ident); ok {
 			if d, yes := l.questions[id.Name]; yes {
 				p, arg, e := l.expr(n.Args[0], ft)
@@ -823,7 +1084,7 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 				return nil, nil, e
 			}
 			pre = append(pre, p...)
-			if i < len(n.Args)-1 && !(printPlan && i == 0) {
+			if (i < len(n.Args)-1 || forceArrayArgument) && !(printPlan && i == 0) {
 				y = freeze(a, y)
 			}
 			n.Args[i] = y
@@ -839,8 +1100,8 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 			return nil, nil, e
 		}
 		if n.Op == token.LAND || n.Op == token.LOR {
-			name := l.temp()
-			p = append(p, parseStatements(name+" := "+printNode(left))...)
+			stored := l.freezeValue(n, left, &p)
+			name := stored.(*ast.Ident).Name
 			cond := ast.Expr(ast.NewIdent(name))
 			if n.Op == token.LOR {
 				cond = &ast.UnaryExpr{Op: token.NOT, X: cond}
@@ -854,9 +1115,43 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 		}
 		n.X, n.Y = left, right
 		return append(p, q...), n, nil
+	case *ast.IndexExpr:
+		pre, base, err := l.indexBase(n.X, false, ft)
+		if err != nil {
+			return nil, nil, err
+		}
+		p, index, err := l.expr(n.Index, ft)
+		if err != nil {
+			return nil, nil, err
+		}
+		n.X, n.Index = base, index
+		return append(pre, p...), n, nil
+	case *ast.SliceExpr:
+		pre, base, err := l.indexBase(n.X, true, ft)
+		if err != nil {
+			return nil, nil, err
+		}
+		n.X = base
+		for _, bound := range []*ast.Expr{&n.Low, &n.High, &n.Max} {
+			if *bound == nil {
+				continue
+			}
+			original := *bound
+			p, value, err := l.expr(original, ft)
+			if err != nil {
+				return nil, nil, err
+			}
+			pre = append(pre, p...)
+			*bound = l.freezeValue(original, value, &pre)
+		}
+		return pre, n, nil
+	case *ast.CompositeLit:
+		return l.literal(n, ft)
 	case *ast.UnaryExpr:
 		if n.Op == token.AND {
-			return nil, nil, l.fail(n, "taking the address of a propagation expression is unsupported")
+			if _, literal := ast.Unparen(n.X).(*ast.CompositeLit); !literal {
+				return nil, nil, l.fail(n, "taking the address of a propagation expression is unsupported except for a composite literal")
+			}
 		}
 		p, y, e := l.expr(n.X, ft)
 		n.X = y

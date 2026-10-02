@@ -1,0 +1,36 @@
+package main
+
+import (
+ "fmt"
+ "strconv"
+ "aggregate.example/batches/model"
+)
+
+func parseBound(text string) Result[int,error] {
+ n,err:=strconv.Atoi(text)
+ if err!=nil{return Result[int,error]::Err(err)}
+ return Result[int,error]::Ok(n)
+}
+
+func batch(low,high string) Result[string,error] {
+ source:=[]int{10,20,30,40}
+ window:=source[parseBound(low)?:parseBound(high)?]
+ rows:=model.Rows{
+  {Count:window[0],Mask:1<<Result[uint,error]::Ok(63)?},
+  {Count:source[Result[int,error]::Ok(2)?]},
+ }
+ return Result[string,error]::Ok(fmt.Sprintf("batch %d %d",len(window),rows[0].Mask))
+}
+
+func resultText(value Result[string,error])(string,error) {
+ match value {
+  Result[string,error]::Ok(s)=>{return s,nil},
+  Result[string,error]::Err(err)=>{return "",err},
+ }
+ panic("unreachable")
+}
+
+func main() {
+ if text,err:=resultText(batch("1","3"));err==nil{fmt.Println(text)}
+ if _,err:=resultText(batch("invalid","3"));err!=nil{fmt.Println("invalid bounds")}
+}

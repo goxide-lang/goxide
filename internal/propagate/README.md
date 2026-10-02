@@ -20,7 +20,7 @@ Raw Go multi-return calls require explicit user wrapping.
 The lowering inserts temporaries, validation, branches and returns in the original
 lexical function, including function literals. It supports identifier assignments with one or multiple RHS expressions,
 one-spec variable declarations (including multiple values), returns, calls (including `defer` and `go` argument
-evaluation), ordinary unary/binary/selector expressions, pointer dereferences, type assertions
+evaluation), ordinary unary/binary/selector expressions, indexes, slices, composite literals, pointer dereferences, type assertions
 (including a single comma-ok RHS), sends, short-circuit booleans,
 and `if` initializers and conditions. An initializer and its condition prelude
 remain in one lexical block enclosing both branches, including else-if chains. Calls freeze preceding evaluated runtime
@@ -30,7 +30,8 @@ Constants retain contextual types. A failing
 `defer f(load()?)` does not register that defer, and earlier defers execute normally.
 
 Explicitly unsupported: user generic functions; propagation inside loops, switches,
-indexes, slices, composite literals, and non-identifier assignment destinations. Use a preceding binding or explicit
+select candidates, non-identifier assignment destinations, and unevaluated
+unsafe.Sizeof/Alignof/Offsetof operands. Use a preceding binding or explicit
 match; these contexts are rejected rather than silently reordered. No public
 Try/Residual, cross-family coercion, or risk/borrow analysis is introduced.
 
@@ -74,3 +75,35 @@ successful propagation. Nil/closed channels retain Go behavior when the send is
 reached; failed propagation returns without blocking or sending. Dereference and
 assertion failures likewise retain Go panics after successful propagation. A
 single comma-ok assertion remains a tuple expression, not a scalar temporary.
+
+
+## Indexes, slices and aggregate literals
+
+Index and slice operands support array, pointer-to-array, slice, string and map
+operations where Go permits them. A single map index remains a comma-ok-capable
+expression. Addressable arrays retain their original storage; rvalue arrays keep
+non-addressable indexed elements through a compiler-only value helper. An array
+returned by a call or propagation cannot be sliced just because lowering created
+a temporary variable. Bounds stay in the final Go expression, preserving constant
+errors and runtime checks. Missing bounds retain Go length/capacity defaults.
+
+Literal lowering preserves the final struct/array/slice/map syntax, including
+constant keys, omitted element types and implicit pointer literals. It stages
+runtime leaves and propagation branches, not a new map insertion algorithm.
+Private scalar element/field types can be inferred using pure zero witnesses
+through the exported container; those helpers never read user storage or call
+user methods. When a source declaration shadows comparable, map witness helpers
+use the qualified compiler-support constraint in github.com/hxsf/goxide/runtime.
+Directory modules using that path need the same explicit runtime module dependency
+as other generated runtime imports. This is a lowering detail, not a new source
+protocol, stable ABI or zero-cost guarantee.
+
+Tests assert Go's required lexical ordering for calls, receives and logical
+operations, not a total order for variable reads, indexing or map insertions.
+Nonconstant array len/cap operands remain evaluated even when removing the
+propagation marker would otherwise make Go consider the operation constant.
+Taking an address is newly supported only for composite literals (including
+parentheses), not arbitrary propagation results. Unevaluated unsafe operands are
+explicitly rejected: the current statement-prelude lowering cannot preserve their
+non-evaluation while simply hoisting propagation. This remains an implementation
+gap, not approval to evaluate them or a newly deferred language feature.

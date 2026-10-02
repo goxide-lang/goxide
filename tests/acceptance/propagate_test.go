@@ -71,8 +71,6 @@ func TestPropagationExplicitRejections(t *testing.T) {
 		"ordinary-closure":                 `func f()Result[int,error]{x:=func()int{return Result[int,error]::Ok(1)?}();return Result[int,error]::Ok(x)}`,
 		"native-multireturn":               `func native()(int,error){return 1,nil};func f()Result[int,error]{x:=native()?;return Result[int,error]::Ok(x)}`,
 		"effectful-assignment-destination": `func index()int{return 0};func f(a []int)Result[int,error]{a[index()]=Result[int,error]::Ok(1)?;return Result[int,error]::Ok(1)}`,
-		"index-context":                    `func f(a []int)Result[int,error]{x:=a[Result[int,error]::Ok(1)?];return Result[int,error]::Ok(x)}`,
-		"literal-context":                  `func f()Result[int,error]{x:=[]int{Result[int,error]::Ok(1)?};return Result[int,error]::Ok(x[0])}`,
 		"loop-context":                     `func f()Result[int,error]{for Result[bool,error]::Ok(false)?{};return Result[int,error]::Ok(1)}`,
 		"no-dynamic-error-guess":           `type Domain struct{};func (Domain)Error()string{return "domain"};func f()Result[int,Domain]{x:=Result[int,error]::Err(Domain{})?;return Result[int,Domain]::Ok(x)}`,
 	}

@@ -146,3 +146,14 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 [真实前端与生成模块 race](../../../tests/acceptance/propagate_values_test.go)区分运行结果和错误拒绝；[两文件任务投递业务](../../../examples/propagate_values/main.hgo)用真实 strconv.Atoi 并保留 NumError 错误链。测试还覆盖早退不部分赋值、后续副作用跳过、嵌套闭包、63 位位移、channel 重绑定及已关闭 channel。
 
 剩余最小场景：索引 `items[index()?]`、切片 `items[low()?:high()?]`、字面量 `Config{Port: parse()?}`、间接赋值 `items[index()] = load()?`；for 的每轮条件/post 与 continue、switch 的条件/逐 case 求值及 fallthrough、select 的候选求值/选择后赋值需要各自 CFG lowering。前四项主要是已定求值/类型规则的工程缺口，不能归为“等用户设计”。for/switch 中普通传播仍沿最近函数早退；select 候选中失败是否在选择前退出尚未明确规定，先记录待明确的组合规则，不猜成只执行选中分支。完整 generic Try/Residual、From 链和隐式原生多返回适配不加入范围。
+
+
+### 6.4 T0 收口：索引、切片与复合字面量
+
+新增 `items[index()?]`、`items[low()?:high()?:max()?]` 和 struct/array/slice/map 字面量中的传播，仍仅限既有名义 Option/Result。依据 Go 1.27 工具链随附规范的 [Order of evaluation](https://go.dev/ref/spec#Order_of_evaluation)，调用/方法调用、接收和逻辑运算保持词法顺序；变量读取、索引和 map 插入没有被重新定义成全序。验收不要求某个未规定的动态重复键覆盖结果，只断言结果属于 Go 允许集合及规定的调用顺序。
+
+索引保留 map comma-ok。数组切片保持原存储；不可取址数组不能因临时量获得切片或指针接收者调用能力。省略上下界、长度/容量、常量错误及运行时边界检查保留。字面量保留最终形状，不把 map 改写成逐项赋值，不抹掉重复常量键或非常量数组下标错误；省略元素类型和隐式指针沿原上下文保留。外部包不可命名的 scalar 类型通过原容器的纯零值类型见证推断，支持位移、比较及短路；不读取业务存储或调用用户方法。`comparable` 被源码遮蔽时使用编译器支持包限定约束，不拒绝普通 Go 命名；该路径需要声明已有 runtime module 依赖，不引入 source trait 或稳定 ABI。
+
+Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，不能让原本会求值的操作数变成被跳过的常量表达式。`&T{...?...}`（含括号）支持，任意 `&(load()?)` 仍不支持。`unsafe.Sizeof/Alignof/Offsetof` 不求值参数中的传播明确报限制：现有 prelude 直接搬出参数会错误执行它，需后续有意识的非求值类型降低，不能静默执行或宣称已完成。
+
+[真实前端验收](../../../tests/acceptance/propagate_aggregate_test.go)覆盖三份实际生成模块 race、失败/副作用/defer/最近闭包、slice storage、map/index/pointer、键值顺序、只读数组投影、上下文 private 类型及静态拒绝；[跨包批次业务](../../../examples/propagate_aggregate/main.hgo)真实调用 strconv.Atoi 后解析窗口并构造原生 Go 包容器。间接赋值目标尚未加入：它需要保存 LHS 的地址或 map/key，并在 RHS 成功后才写入，与本节的读取表达式不同。循环/switch/select 未借此放宽，select 候选传播规则仍未确定。

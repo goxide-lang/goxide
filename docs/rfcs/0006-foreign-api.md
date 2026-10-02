@@ -12,6 +12,8 @@ D19/D20 边界：读写权限和已确认类型不变量照常检查；别名、
 
 背景：[原生 API](../design/foreign-api.md)。声明分发见 [RFC 0001](0001-package-loading.md)。
 
+2026-10-02 更新：D31 已纠正普通写引用调用要求显式 AsPtr 的旧前提。具体标量 `mut& T` 到同型普通 Go `*T` 参数已直接接通，原生可留存/返回指针，readonly 不升级；[实现及验收范围](research/0002-native-pointer-bridge.md)。下文 Ptr/AsPtr 和函数适配示例保留历史候选，不是每个普通调用的必经步骤。
+
 ## 源级规则
 
 原生视图保留真实 Go 符号和布局；声明视图补充 hgo 参数、结果和行为契约。

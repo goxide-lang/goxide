@@ -988,7 +988,10 @@ func (c *checker) validate() error {
 					return fail("generic calls carrying references are unsupported")
 				}
 			}
-			sig, _ := c.typ(x.Fun).(*types.Signature)
+			var sig *types.Signature
+			if ft := c.typ(x.Fun); ft != nil {
+				sig, _ = ft.Underlying().(*types.Signature)
+			}
 			for i, a := range x.Args {
 				if sig != nil {
 					p := i
@@ -1001,6 +1004,9 @@ func (c *checker) validate() error {
 					target := sig.Params().At(p).Type()
 					if sig.Variadic() && p == sig.Params().Len()-1 && !x.Ellipsis.IsValid() {
 						target = target.(*types.Slice).Elem()
+					}
+					if c.nativeWriteArgument(target, a) {
+						continue
 					}
 					if e := c.transfer(target, a); e != nil {
 						err = e

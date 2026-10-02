@@ -2,7 +2,7 @@
 
 交付边界（D20）：本文涉及的别名/借用风险 warning 是未来独立长期分析，不属于 MVP 验收；当前语言语法、类型、明确操作与真实 Go 行为照常设计。不得为未实现分析器强制复杂效果注解。
 
-状态：D10/D11 的 declare、显式 unsafe 与 Ptr/AsPtr 方向保留。D19 否决“所有未描述 Go callable 自动 unsafe”；普通调用按真实类型允许，具体风险 warning。原生指针桥接与 D11 的接合列为 U15，不静默取消明确操作。
+状态：D10/D11 的 declare、显式 unsafe 与 Ptr/AsPtr 方向保留。D19 否决“所有未描述 Go callable 自动 unsafe”；普通调用按真实类型允许，具体风险 warning。D31 已纠正普通同型写引用调用必须显式 AsPtr 的旧要求；具体标量参数直接桥接已实现，其他边界仍逐项处理。
 
 | 状态 | 范围 |
 | --- | --- |
@@ -20,7 +20,7 @@
 
 | 视图 | hgo 行为 | Go 实现 |
 | --- | --- | --- |
-| 原生视图，类似 `xx-sys` | 普通函数/方法不自动 unsafe；原生指针类型视图及桥接待 U15 协调 | 原始 Go 符号与布局 |
+| 原生视图，类似 `xx-sys` | 普通函数/方法不自动 unsafe；D31 具体标量 mut&→*T 参数已接通，其余边界继续 U15 | 原始 Go 符号与布局 |
 | 声明视图，类似 `xx-lib` | `declare` 提供可信的参数、结果和调用约束；按声明进行普通调用或保留 unsafe 属性 | 原始 Go 符号，必要时增加边界检查；改变行为需要实际包装函数 |
 
 `declare` 本身不加 unsafe。它是作者提供的类型与行为契约，不是执行危险操作。若某个声明后的函数仍需要调用者承担未被类型表达的前提，可以将函数本身声明为 unsafe；该属性与 declare 关键字分开。
@@ -80,6 +80,8 @@ func ToGo[T any](p Ptr[T]) *T { return (*T)(p) }
 `Ptr[T]` 本身允许 nil，所以 `Option[Ptr[T]]` 必须区分 None 和 Some(nil)，不能直接复用 `Option[Arc[T]]` 的可空指针优化。
 
 ## 4. AsPtr 与 unsafe 表达式
+
+以下为旧显式导出候选。D31 后，已有具体标量 `mut& T` 调用同型普通 Go `*T` 参数无需 AsPtr/unsafe；参见[实际规则与验收](../rfcs/research/0002-native-pointer-bridge.md)。这不批准 readonly 升级或真正内存重解释。
 
 沿用普通关联类型，语法草案为：
 
@@ -147,8 +149,8 @@ Go 函数类型本身没有该 unsafe 属性，导出 hgo unsafe API 后，纯 G
 
 未来 hgo 实现还需验证：普通未声明调用允许的对照、declare 签名校验与具体风险 warning、unsafe expr 范围、函数值传播、声明版本和冲突、Ptr 来源与反向转换，以及函数值/回调的 Go 桥接。上述 Go 实验不代表这些前端规则已经实现。
 
-U15 的完整候选调用写法、单层/容器/回调 lowering、D11 例外及唯一待确认项见 [RFC 0002](../rfcs/research/0002-native-pointer-bridge.md)。当前 D11 在批准前保持原样。
+U15 的历史候选与 D31 后的实际实现范围见 [RFC 0002](../rfcs/research/0002-native-pointer-bridge.md)。普通同型写引用调用已确认，不再等待 D11 例外批准；容器、接口及引用回调不由此自动获批或完成。
 
-写引用核对：hgo `native::Fill(mut& value)` 中 mut 不由自动桥接省略；已有 `p: mut& T` 可直接传 p。Go 输出 `native.Fill(&value)` 只是 Go 无 mut 语法。未知原生 *T 位置不能接受隐式升级的只读 &T；只读视图须有明确可信声明依据，见 [RFC 0002 权限核对](../rfcs/research/0002-native-pointer-bridge.md#11-写引用核对省-asptr不省-mut)。方案 A 仍待确认。
+写引用核对：hgo `native::Fill(mut& value)` 中 mut 不由自动桥接省略；已有 `p: mut& T` 可直接传 p。Go 输出 `native.Fill(&value)` 只是 Go 无 mut 语法。未知原生 *T 位置不能接受隐式升级的只读 &T；只读视图须有明确可信声明依据，见 [RFC 0002 权限核对](../rfcs/research/0002-native-pointer-bridge.md#11-写引用核对省-asptr不省-mut)。方案 A 的普通同型写引用调用方向已由 D31 确认；具体标量参数已实现，其余候选不能据此视为完成。
 
 边界桥接不负责取得容器内部引用：只有已经通过值取址或容器自身方法/协议实际得到的 `mut& T` 才进入写引用桥接；`mut& Arc[T]` 等容器绑定引用不能自动展平成 `mut& T`。Boxed/Ref/Arc 的未定获取 API 不由 AsPtr 或方案 A 自动补齐。

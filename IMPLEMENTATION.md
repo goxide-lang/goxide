@@ -865,3 +865,11 @@ Go 1.27.1 非 race 5×200ms 对照中，六组 typed IIFE/statement 小表达式
 原位借用的tag struct候选通过独立纯Go race存储探针；它保留值复制与稳定payload槽，但改变生成Go的case断言、nil表示和比较能力，需要明确API迁移取舍。当前无满足全部旧interface API与真实payload指针的已证明简单方案，不以隐藏pointer共享或复制写回冒充等价实现。原位可写借用仍为必需，尚未实现；无获批后置。
 
 研究阶段适用验证：设计检查通过 **62 Markdown / 780 本地链接 / 20 RFC / 13 条机制命令**；独立研究复审无阻断。纯Go IIFE机制3测试race/vet、显式hgo IIFE生成模块1测试race/vet、payload存储与已有hgo比较各自race运行通过。生产代码沿用上一提交已通过的全树race/vet，本轮没有重跑同一生产树。比较探针确认旧hgo已接受部分enum ==/nil，布局迁移必须保留源级行为或取得明确选择，不只属于Go消费API变化。
+
+## 具体标量原生写指针参数（2026-10-02）
+
+基于 `9ce4cebb60fb44b0603399821b001059610d151a`，按 D31 接通具体标量 `mut& T` 到真实元素同型、Go 可赋值的普通 `*T` 调用参数。参数检查单独准入，不放开通用 transfer；定义函数类型取底层 Signature，支持普通函数值、变参、defer/go。生成 Go 直接传原指针，无运行时桥、复制或额外求值。callee 可以留存/返回指针，Go GC 管理存活；readonly 仍不升级，合法别名更新可由只读路径观察。
+
+[真实三包 CLI 验收](tests/acceptance/native_write_bridge_test.go)含 3 项生成模块测试单独 race/vet，覆盖跨包引用、atomic、原生别名、GC、具名/别名标量及各调用形式；11 个权限/类型反例保持拒绝。独立审查无代码阻断，另真实 hgo 模块验证具名 string、指针 alias、定义函数类型、bool/complex 和 readonly 观察，生成 race 输出 ok；额外 5 反例拒绝。D11/U15 历史说明及 RFC/矩阵已按最新用户纠正同步。
+
+最终全树 race **15 测试包 / 266 宿主顶层 / 611 子测试**通过，另 2 包无测试；全树 vet 通过。设计检查包括 **62 Markdown / 20 RFC / 13 条纯 Go 机制命令**，后者不算 hgo 执行证据。日志 `/tmp/t0-native-race.json`、`/tmp/t0-native-race.err`、`/tmp/t0-native-vet.log`、`/tmp/t0-native-design.log`、`/tmp/t0-native-test.log`。本片不迁移 enum ABI，未将其他指针边界限制冻结；原位 match、跨 module metadata、复杂表达式和剩余范围账仍待完成，整体 MVP 不标完成。工作分支提交/push/fetch 核验。

@@ -32,7 +32,7 @@
 | D08 | 拆分 Go 指针用途：Option 表达缺失、`mut& T` 表达写引用、`Arc[T]` 对应 Go 共享指针；不引入全局 move | [引用专题](pointers-and-borrows.md)；D19 更新默认诊断：别名/独占风险 warning，不承诺静态独占，Arc 使用 Go GC |
 | D09 | Lock / RWLock 保存数据并采用指针句柄，避免复制 mutex；回调访问及返回结果 | [锁](synchronization.md)；`Do[P any]` 使用 Go 1.27，最低语言版本和工具链为 1.27 |
 | D10 | 普通 declare 补充 / 覆盖原生 Go 的 hgo 类型视图，不写 unsafe declare；裸 API 与已声明 / 包装 API 分层 | [原生 API](foreign-api.md)；.d.hgo 与类似 @types 的外置声明包均纳入方向 |
-| D11 | 使用 `unsafe <expr>`；拆分后的指针通过 unsafe as_ptr 转成统一 `Ptr[T]`；提供 AsPtr trait 与关联类型 | [Ptr / AsPtr](foreign-api.md)；Go 候选表示 `type Ptr[T any] *T`，源级精确拼写未冻结 |
+| D11 | 历史决定：使用 `unsafe <expr>`；拆分指针经 unsafe as_ptr / `Ptr[T]`、AsPtr。**普通可写引用到匹配 Go 指针调用已由 D31 纠正，不再要求冗余 AsPtr**；真正 unsafe 操作另保留 | [Ptr / AsPtr](foreign-api.md)；Go 候选表示 `type Ptr[T any] *T`，源级精确拼写未冻结 |
 | D12 | 变体枚举、Option / Result、模式匹配；接受 Go 调用方能构造非法值，不能假称阻止了 Go 零值 | [枚举与 match](enums-and-match.md)；边界策略和布局见暂定项 |
 | D13 | pub 标记公开边界的方向；需要处理 Go 调用生成 API 的情况 | [总纲](overview.md#34-go-边界与非法值)；完整可见性与检查入口未定 |
 | D14 | 卫生宏参考 Rust；先做模式 / 模板声明宏及内建派生，提供 print / println、Default / Clone / Debug；用户过程宏后续考虑 | [宏](macros.md)；纯的用户 Syntax→Syntax 编译期程序仍是过程宏 |
@@ -110,7 +110,7 @@
 | U18 | serde-rs 分层到 Go/hgo 的接口映射、字段/数字/enum 策略及派生子集 | [RFC 0006](../rfcs/research/0006-serde-core-and-formats.md)；分层已确定，具体 helper/visitor ABI 与严格 JSON 偏差仍候选；无公开 core Value，格式 Value 不强制中转 |
 | U19（撤回） | 开放 raw/C enum 与同值别名 | 已由 D27 撤回；不再等待旧别名问题；serde 外部映射不创建开放 enum |
 | U16 | trait 双路径、消除包装的语义条件及发布 ABI | [RFC 0004](../rfcs/research/0004-trait-lowering-paths.md)；比较直接调用/值视图/指针视图/字典，D05/D06 未被候选替换 |
-| U15 | D11 显式 AsPtr/unsafe 与普通 Go 指针实参的便利桥接 | [RFC 0002](../rfcs/research/0002-native-pointer-bridge.md)比较原生边界自动桥接与普通显式 AsPtr；推荐前者，D11 窄例外待用户确认 |
+| U15 | D31 已确认自然 mut&→Go 指针调用；其余边界逐项实现 | [RFC 0002](../rfcs/research/0002-native-pointer-bridge.md)：具体标量同型参数已接通；递归容器/接口/引用 callback 等未由此完成，不再将普通调用方向列作待批准 |
 
 ### 4.1 本轮候选细化
 

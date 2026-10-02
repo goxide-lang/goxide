@@ -29,7 +29,6 @@ func TestDirectoryReferenceRejectsErasure(t *testing.T) {
 		{"exported-alias", "type Public = &int", "func Run(){}", "reference aliases/defined types"},
 		{"exported-function-value", "func use(r &int)int{return *r};var Public=use", "func Run(){}", "package/global references"},
 		{"method", "type box struct{};func(b box) use(r &int)int{return *r}", "func Run(){}", "reference methods/generics"},
-		{"exported", "func Read(r &int)int{return *r}", "func Run(){}", "exported reference signatures"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			name := "callee.hgo"

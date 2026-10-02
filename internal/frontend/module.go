@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/build"
 	"io"
@@ -276,6 +277,15 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 				return e
 			}
 			result.Files[goName] = r
+		}
+		if len(checked.references.Functions) > 0 {
+			data, e := json.MarshalIndent(checked.references, "", "  ")
+			if e != nil {
+				return e
+			}
+			if e = os.WriteFile(filepath.Join(destination, dir, ".hgo.refs.json"), append(data, '\n'), 0644); e != nil {
+				return e
+			}
 		}
 		metadata[pkgPath] = checked
 		state[dir] = 2

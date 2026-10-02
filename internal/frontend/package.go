@@ -23,9 +23,11 @@ import (
 
 // PackageResult keeps a separate output and origin map for every source file.
 type PackageResult struct {
-	macros   *macros.Package
-	Files    map[string]Result
-	imported map[string][]enums.Decl
+	references       refs.Metadata
+	referenceImports map[string]refs.Metadata
+	macros           *macros.Package
+	Files            map[string]Result
+	imported         map[string][]enums.Decl
 }
 
 // preparePackage performs syntax lowering with shared declaration metadata. It
@@ -140,7 +142,10 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	cfg.collect = false
 	cfg.macroBudget = buildBudget
-	result := PackageResult{macros: registry, Files: map[string]Result{}, imported: cfg.imported}
+	result := PackageResult{macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
+	for path, p := range metadata {
+		result.referenceImports[path] = p.references
+	}
 	generated := map[string]string{}
 	for index, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
@@ -212,11 +217,33 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		result.Files[name] = r
 		files[name] = source
 	}
-	finished, err := refs.FinishPackage(files, imp)
+	referenceIR := map[string][]byte{}
+	for n, s := range files {
+		referenceIR[n] = s
+	}
+	bound, bindings, err := refs.BindImports(files, imp, result.referenceImports)
+	if err != nil {
+		if e, ok := err.(*refs.ImportError); ok {
+			mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
+			if r, ok := result.Files[e.Position.Filename]; ok && r.Diagnostics != nil {
+				if seg := r.Diagnostics.Lookup(e.Position.Offset); seg != nil {
+					mapped.Origin = seg.Origin
+					mapped.Stack = seg.Stack
+				}
+			}
+			return result, mapped
+		}
+		return result, err
+	}
+	finished, err := refs.FinishPackage(bound, imp)
 	if err != nil {
 		return result, stageError("package refs.Finish", err)
 	}
 	for name, ref := range finished {
+		ref.Source, err = bindings.Restore(name, ref.Source)
+		if err != nil {
+			return result, err
+		}
 		r := result.Files[name]
 		if !bytes.Equal(r.Go, ref.Source) {
 			if r.Diagnostics != nil {
@@ -254,6 +281,33 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	}
 	if err := checkDefaultCycles(path, files, imp, helpers, maps); err != nil {
 		return result, err
+	}
+	result.references, err = refs.ExportMetadata(path, referenceIR, files, imp)
+	if err != nil {
+		return result, err
+	}
+	if err := typecheck.CheckPackage(path, files, imp); err != nil {
+		return result, err
+	}
+	for name, source := range files {
+		r := result.Files[name]
+		r.Go = source
+		r.Expanded = source
+		refreshPackageMap(&r)
+		result.Files[name] = r
+	}
+	if len(result.references.Functions) > 0 {
+		for _, name := range sortedSources(files) {
+			if !strings.HasSuffix(name, ".hgo") {
+				continue
+			}
+			r := result.Files[name]
+			r.Go = append(r.Go, []byte(fmt.Sprintf("\nconst %s = %q\n", refs.MetadataMarker, result.references.Marker()))...)
+			r.Expanded = r.Go
+			refreshPackageMap(&r)
+			result.Files[name] = r
+			break
+		}
 	}
 	return result, nil
 }

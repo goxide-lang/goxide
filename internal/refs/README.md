@@ -125,6 +125,41 @@ Directory compilation uses `FinishPackage`: each file is checked against shared
 nominal reference declarations before any permissions are erased. File-local
 imports remain separate. Every body (including native Go consumers) must pass its
 own permission check; companions provide signatures, not permission-erased Go
-stubs. Exported new-reference signatures are rejected until cross-package
-permission metadata is supported. Ordinary Go pointer APIs remain ordinary
+stubs. Exported scalar reference signatures now use the build-local metadata protocol
+below. Other public element/signature forms remain engineering gaps. Ordinary Go pointer APIs remain ordinary
 pointer boundaries and cannot silently consume checked references.
+
+
+## Public scalar reference metadata
+
+Directory builds publish internal v1 metadata only after complete provider checks.
+`Metadata.Path` is the actual import path, and each package function records every
+parameter/result Go type and each reference permission. Ordinary slots have
+transparent generated aliases, so private and transitive types retain identity.
+Consumers resolve package function objects (not selector spellings or methods),
+validate the marker digest, version, path, complete signature and alias identity,
+and temporarily use local nominal analysis signatures. Generated analysis
+functions are removed by AST spans after checking. Imports and source identifiers
+retain scope; generated names avoid identifiers in every selected file.
+
+Checks include native `.go` consumers without new reference syntax. Returned read
+references retain permissions through local inference and checked forwarding;
+ordinary pointer/interface/closure returns cannot erase them. Existing writable
+aliases remain usable. Native unmarked pointer APIs stay native APIs; D11 bridge
+work is not implemented by pretending a checked reference is a raw pointer.
+
+Generated packages contain `HgoReferenceMetadata` and `.hgo.refs.json`. The JSON
+is inspectable output, **not an external metadata input format**. Only the current
+module build's registry is consumed. A marked dependency without matching trusted
+build metadata is diagnosed, including in single-file compilation with no new
+reference syntax. Single-file exported-reference output also carries a marker,
+with internal identity `hgo/generated`; it does not enable cross-build recovery.
+This is not a stable public ABI or cryptographic provenance mechanism.
+
+The first slice covers builtin scalar reference elements, ordinary exported
+functions and one unnamed result. Composite/named elements, reference methods,
+generics, callbacks/function values, containers, dot imports, named/multiple
+results and external-source/precompiled metadata recovery remain incomplete.
+New import/function-value diagnostics preserve proven source spans; downstream
+reference reconstruction diagnostics still state generated/unmapped coordinates.
+See RFC 0005 §6.15 and the separate generated-module race acceptance tests.

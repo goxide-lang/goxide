@@ -190,7 +190,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | 领域 | 本轮状态与实际证据 | 仍有的有限边界 |
 | --- | --- | --- |
 | 宏 / serde JSON / enum match / OptionResult 与有限 From / 普通 Go API | 新业务同用全部能力：JSON任务、可选名称、批次enum、逐步传播、错误链、条件slog；单文件及拆出只读函数的多文件生成模块实际 race | 保持既有类型/语法子集，不由成功组合推导任意表达式或泛型载荷 |
-| 目录引用 | [目录权限测试](../internal/frontend/directory_reference_test.go) 正向跨文件读/写/收窄；拒绝只读→写、native *T擦除、只读返回写入及公开出口；新业务验证权限阶段与serde/传播共存 | 同包私有引用函数；公开新引用签名仍明确拒绝，跨包权限元数据未实现。普通 Go *T API 保持原定位 |
+| 目录引用 | [目录权限测试](../internal/frontend/directory_reference_test.go) 正向跨文件读/写/收窄；拒绝只读→写、native *T擦除、只读返回写入及公开出口；新业务验证权限阶段与serde/传播共存 | 同包私有引用函数及同模块公开标量引用函数；后续元数据首片见末节。复合公开引用与外部恢复未完成，普通 Go *T API 保持原定位 |
 | Go 构建条件 | [选择测试](../internal/frontend/build_selection_test.go)：平台后缀、go:build/+build、显式tags、忽略文件与被排除语法；[CLI测试](../cmd/hgo/directory_test.go)：真实run/test与race/!race选择 | host目标；不同GOOS/GOARCH明确拒绝，.hgo测试源未实现。产物属于选定配置，换条件需重新转译 |
 | 安装与独立使用 | 独立验收实际 `go install` 到临时GOBIN、仓库外CLI run、生成模块原生Go build/run及正负业务结果 | runtime依赖由go.mod/replace明确提供；没有下载或发布包的验收 |
 | 输出与诊断 | 输入symlink覆盖拒绝、失败目录清理；真实跨包宏错误同时显示定义和调用位置；相同源两次Go/map产物比较 | 未映射来源仍标unmapped；不承诺移动源码根后绝对路径映射不变，也不承诺二进制逐字节复现 |
@@ -463,7 +463,7 @@ for 的耗时差异已单独调查，first 状态只解释一部分，三条路�
 | 优先级 | 可验收的下一工作 | 边界 |
 | --- | --- | --- |
 | P1 | 常用 match 表达式组合：先普通赋值/已知参数类型位置，再按 RFC 补齐局部 `:=` 等推断范围；保持一次求值、仅选中 arm、穷尽检查与最近函数控制流 | 现有显式类型局部整个 initializer、有限整个 return，新增完整 arm 嵌套和有限同文件已知参数调用；普通赋值、推断与其他组合仍未完成，不要求完整 Rust 模式系统 |
-| P2 | 公开引用权限元数据：先同模块/源码依赖的导出签名、导入还原及消费者校验，加入缺失/错包/擦除反例 | 已定只读路径/可写收窄语义可先实现；外部预编译最终 ABI、native bridge 未定部分另列，不能把整项元数据无限后置 |
+| P2 | 公开引用权限元数据：先同模块/源码依赖的导出签名、导入还原及消费者校验，加入缺失/错包/擦除反例 | 已完成同次模块构建内公开标量参数/单返回首片，复合元素和外部恢复仍未完成；最终外部 ABI、native bridge 未定部分另列 |
 | P3 | 权限跟踪对普通捕获、取址、循环/分支重绑定和字段替换的误拒绝，按可证明的局部类型事实逐项修复 | 不引入复杂别名分析，不把只读当全局不可变或 mut& 当独占，不用“安全”包装原型限制 |
 | P4 | 剩余传播：函数 iterator 源、range 逐轮赋值目标、unsafe 链/其他 guard、旧 expr 私有上下文；for 已测耗时差距继续有证据优化 | 不阻塞 P1/P2；这些仍是工程欠账，不是获批延期，也不新增正常传播 panic |
 | P5 | 整体 T0 组合验收与来源诊断：宏/enum/match/权限/Default/serde/传播和安装 CLI 一起逐项核验 | 已有测试通过不等于全部能力打勾；重复旧迁移/云还原不计新增验收 |
@@ -477,3 +477,16 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 旧范围：整个显式类型局部 initializer、有限整个 return。新增：完整 arm 嵌套、有限同文件已知参数类型调用，调用处限完整 return/独立调用及完整 arm/实参递归组合。[接受测试](../tests/acceptance/match_composition_test.go)走真实 frontend/CLI→Go，覆盖 JSON 配置、Result 传播、参数/guard 顺序、上下文类型、goto、最近闭包和跨包非法 enum 验证；4+2 个生成模块测试单独 race，跨包另 vet。具体边界及性能样本见 [实现记录](../IMPLEMENTATION.md#常用-match-表达式组合2026-10-02)和 [RFC](rfcs/0009-match.md)。
 
 普通赋值、推断、任意字面量/运算符及动态等调用仍未完成，不默认为已批准延期。之后先推进公开引用元数据，同时保留权限跟踪与 `?` 长尾、跨阶段来源诊断清单。Proposed serde adapters 尚待设计决定；长期别名分析及完整 Rust/trait/Value/YAML/PATCH 不扩大。
+
+### 公开标量引用元数据首片（2026-10-02）
+
+| 范围 | 验收状态与证据 |
+| --- | --- |
+| 同次 module 构建、公开普通函数的内建标量引用参数/单返回 | 已实现有限子能力；多文件、alias import、返回转发和读写方向由[真实 CLI 模块验收](../tests/acceptance/reference_metadata_test.go)验证 |
+| Go 消费者权限保留、合法 native 调用 | 无新引用语法也校验；只读写入/升级/接口/指针/闭包擦除拒绝，普通 unmarked Go API、同名方法、私有/传递普通 slot 通过 |
+| 身份、版本、确定性 | 真正 import path/包函数对象，v1/摘要/签名/透明 alias identity；重复转译字节一致，错误元数据见[单测](../internal/refs/metadata_test.go) |
+| 跨构建缺失与 source | single→module 与 module→single marked 产物均明确缺 metadata；import/函数值原 source span 已验证，下游 refs 重建仍可能 generated/unmapped |
+| 产物验证 | 真正 hgo→Go 的独立跨包模块 `go test -race`、`go vet`；宿主单测和生成模块统计分开 |
+| 尚未完成 | 复合/具名元素、方法/泛型/引用容器/回调、named/multiple result、dot import、外部恢复及完整来源映射；不自动改为批准延期 |
+
+[实现记录](../IMPLEMENTATION.md#同模块公开标量引用元数据2026-10-02)与 [RFC 0005](rfcs/0005-borrows.md)说明内部格式、marker 和信任边界。本片不引入长期别名分析、独占承诺、全局只读或完整 trait，也不决定 D11 尚待协调的便利桥接。

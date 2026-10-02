@@ -732,6 +732,20 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
 	}
+	if cfg == nil {
+		_, _, err := refs.BindImports(map[string][]byte{filename: out}, typecheck.NewImporter(filename), nil)
+		if err != nil {
+			if e, ok := err.(*refs.ImportError); ok {
+				mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
+				if seg := provenance.Lookup(e.Position.Offset); seg != nil {
+					mapped.Origin = seg.Origin
+					mapped.Stack = seg.Stack
+				}
+				return Result{}, mapped
+			}
+			return Result{}, err
+		}
+	}
 	if cfg == nil && (bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_"))) {
 		conversions := []propagate.Conversion{}
 		for _, m := range ordered {
@@ -767,6 +781,18 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				return Result{}, mapped
 			}
 			return Result{}, stageError("typecheck.Check", e)
+		}
+		erased := map[string][]byte{filename: out}
+		meta, e := refs.ExportMetadata("hgo/generated", map[string][]byte{filename: beforeReferences}, erased, imp)
+		if e != nil {
+			return Result{}, e
+		}
+		if len(meta.Functions) > 0 {
+			out = append(erased[filename], []byte(fmt.Sprintf("\nconst %s = %q\n", refs.MetadataMarker, meta.Marker()))...)
+			if e = typecheck.Check(filename, out, imp); e != nil {
+				return Result{}, e
+			}
+			provenance = provenance.Compose(refResult.Source, out, "refs.exportMetadata")
 		}
 	}
 

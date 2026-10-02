@@ -789,3 +789,15 @@ switch 研究模块 **1 项**真实 hgo 等价测试另跑 race/vet；非 race *
 未完成：复合/具名元素的公开引用、引用方法/泛型/容器/函数值、named/multiple results、dot import、外部源码/预编译依赖恢复、更完整 source map。既有权限跟踪保守限制、match 与 `?` 长尾仍在 T0 清单。D11、路径只读和非独占语义不变；不加入长期 alias 分析或完整 trait。
 
 最终树验证：`go test -race -count=1 -json ./...` 通过 15 个测试包、258 个顶层测试、500 个子测试（另 2 包无测试）；`go vet ./...` 通过。新跨包业务生成模块单独 race/vet 通过；8 项 metadata 单测与 10 个模块验收子项分别统计，不混淆宿主与生成程序。设计检查通过 60 份 Markdown、717 个本地链接、20 篇 RFC，以及 13 个独立 Go 设计机制命令。独立复审无剩余阻断；最后补齐仅清理本轮实际生成 import 的卫生回归，避免误删原生 Go 用户导入。
+
+## 同模块公开复合引用元数据（2026-10-02）
+
+基于 `b96051ae90cd5b5f4c6fd5a163f9e83b9801c9c4`，公开普通函数的引用参数/单个非具名返回扩展到具体 struct、slice、map、array、非泛型具名类型及递归指针组合。内部元数据升至 v2，为引用元素导出透明 alias，保留私有类型、再导出与不同 import 拼写的真实身份。检查阶段采用以真实元素类型实例化的共享名义读/写类型；文件级辅助 alias 分开命名，避免多文件同名 import 指向不同包时混淆。所有分析类型最终擦成原生 Go 指针，不增加运行时包装。
+
+[真实 CLI 验收](tests/acceptance/composite_metadata_test.go)覆盖三包返回/转发、显式收窄、同型不同拼写、异包同名和 defined type 拒绝、多文件、私有返回、结构体值副本、slice/map/array 投影与确定性生成；15 个宿主子项，生成模块的 3 项业务测试独立 race，另单独 vet。Go 消费端覆盖字段/容器/指针写入、浅复制共享字段、接口擦除、原生指针擦除和方法边界拒绝。普通可写别名与普通 native 指针调用仍可修改原存储，读路径能看到更新。
+
+独立非作者审查重建 CLI 并通过专项；另自建私有递归 struct 的真实 hgo→Go race 探针输出 `7 9`，递归投影、共享字段值接收者/方法值、接口和指针别名的 5 个反例均拒绝。引用识别限定当前类型检查包对象身份，避免依名称或包路径冒认；生成约束用 `interface{}` 避免用户 `any` 遮蔽。
+
+这些权限校验只在 hgo 构建链运行。直接对生成代码使用原生 `go build` 不获得只读检查。没有全局不可变、独占、长期别名风险分析或 D11 新桥接。元素中的 interface/channel/function/用户泛型、引用方法与回调/引用容器、named/multiple result、dot import、外部恢复以及完整 source map 仍是工程缺口；既有投影保守限制并未因此全部解决。完整 T0/MVP 仍未完成。
+
+最终验证：全树 `go test -race -count=1 -json ./...` 通过 **15 个测试包 / 259 个宿主顶层 / 515 个子测试**，另 2 包无测试；全树 vet 通过。设计检查通过 60 份 Markdown、723 个本地链接、20 篇 RFC，以及 13 条独立 Go 机制命令，后者不计作 hgo 前端证据。独立实现与文档复审无阻断。整树日志 `/tmp/t0-composite-race.json`、`/tmp/t0-composite-race.err`、`/tmp/t0-composite-vet.log`、`/tmp/t0-composite-design.log`；只提交推送工作分支并 fetch 核验，不修改 main/work 或冻结标签。

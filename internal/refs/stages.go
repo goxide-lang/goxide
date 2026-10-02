@@ -56,7 +56,7 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 		all = append(all, peer)
 	}
 	deduplicateIR(all)
-	_, _ = conf.Check("hgo.local/refs", fs, all, info)
+	pkg, _ := conf.Check("hgo.local/refs", fs, all, info)
 	offset := func(p token.Pos) int { return fs.Position(p).Offset }
 	var es []edit
 	var failure error
@@ -102,13 +102,13 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 						failure = fmt.Errorf("%s: refs: unsupported reference element", fs.Position(n.Pos()))
 						return false
 					}
-					es = append(es, edit{offset(n.Pos()), offset(n.End()), "mut& " + element(info.TypeOf(n.Index))})
+					es = append(es, edit{offset(n.Pos()), offset(n.End()), "mut& " + elementInFile(info.TypeOf(n.Index), f, info)})
 					return false
 				}
 			case *ast.Ident:
-				if r, ok := refType(info.TypeOf(n)); ok {
+				if r, ok := refType(info.TypeOf(n), pkg); ok {
 					if _, isType := info.Uses[n].(*types.TypeName); isType {
-						spelling := "& " + r.Element
+						spelling := "& " + elementInFile(referenceTarget(info.TypeOf(n)), f, info)
 						if r.Permission == Write {
 							spelling = "mut" + spelling
 						}

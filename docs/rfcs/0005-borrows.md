@@ -143,3 +143,15 @@ Go 调生成函数时只看到 `*T`，普通 Go 调用方不获得 hgo 的静态
 [真实模块验收](../../tests/acceptance/reference_metadata_test.go)覆盖别名与空白重复导入、同名包路径、同名普通方法、类型私有性、多文件、返回转发、defer/goroutine、既有可写别名可见性、Go 消费者的写入/接口/指针/闭包擦除拒绝、单文件两方向缺失诊断、重复构建字节确定性及生成模块单独 race/vet。[元数据验证单测](../../internal/refs/metadata_test.go)覆盖版本、路径、摘要、完整签名和权限值。新导入/函数值错误有原始 source span；后端引用重建错误仍明确 `generated/unmapped`，未声称所有位置精确。
 
 剩余工程缺口：复合/具名元素的公开引用、方法/泛型/引用容器/回调、named/multiple result、dot import、跨构建/外部源码依赖恢复，以及更完整的来源映射。这些不是新语言禁令或自动批准延期；完整外部 ABI 与 native bridge 的待决部分另行处理。
+
+### 6.16 同模块复合元素权限元数据（2026-10-02）
+
+在 §6.15 已定规则上扩展具体 struct、slice/map/array、非泛型具名元素和递归指针组合，公开签名仍限普通函数的参数和单个非具名返回。内部格式升至 `Version=2`；引用 slot 新增元素透明 alias，消费端验证 alias 与实际 Go 指针元素身份一致，解决私有类型和再导出类型的命名问题。普通 slot 保持既有完整签名校验；不读取外部 sidecar。
+
+检查 IR 从按元素源码拼写区分的名义类型改为共享泛型名义读/写源，实例参数是实际 Go 类型。相同类型的别名/import 拼写得到同一身份，不同 defined type 或包路径不会因布局/短名相同而合并。具体辅助 alias 带文件 namespace，防跨文件同一 import 短名碰撞；识别内部引用还要求当前检查包对象身份。类型约束使用 `interface{}`，不受用户 `any` 定义影响。生成 Go 前删除实际登记的分析声明并擦除引用，不靠名称前缀删除用户声明。
+
+返回值与转发保留既有投影规则：标量及数组/struct 副本的独立值部分可写，其中 slice/map/pointer 等共享投影不能借复制、接口或方法路径擦除权限；这里没有引入完整方法效果协议。其他可写 alias 与普通 native 指针仍可更新原存储；只读路径可观察更新。对容器的引用已支持，不等于容器中携带新引用已支持。
+
+[模块验收](../../tests/acceptance/composite_metadata_test.go)走真实 CLI→生成 Go，覆盖多文件/再导出/私有类型、同名不同包、显式收窄、容器和读写正反例、两次生成确定性；生成模块独立 race/vet。权限检查包括经过 hgo 的 `.go` 消费文件，但原生 `go build` 不执行它。透明 alias 和 marker 不是原生 Go 的只读机制，也不是稳定外部 ABI。
+
+尚未支持 interface/channel/function/用户泛型元素、引用方法/回调/引用容器、named/multiple result、dot import、外部恢复。既有投影保守限制与来源映射缺口继续列工程待办，不默认为批准延期；D11 待决部分和长期别名分析保持原分类。

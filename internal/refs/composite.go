@@ -61,7 +61,11 @@ func (c *checker) declarations() string {
 			continue
 		}
 		for _, p := range []Permission{Read, Write} {
-			s += fmt.Sprintf("\ntype %s *%s\n", name(Ref{e, p}), e)
+			origin := "__hgo_ref_ro"
+			if p == Write {
+				origin = "__hgo_ref_rw"
+			}
+			s += fmt.Sprintf("\ntype %s = %s[%s]\n", c.name(Ref{e, p}), origin, e)
 		}
 	}
 	return s
@@ -160,7 +164,7 @@ func (c *checker) quality(e ast.Expr) *qualification {
 		return nil
 	}
 	e = unparen(e)
-	if r, ok := refType(c.typ(e)); ok && r.Permission == Read {
+	if r, ok := c.refType(c.typ(e)); ok && r.Permission == Read {
 		return &qualification{deep: true}
 	}
 	switch e := e.(type) {
@@ -274,7 +278,7 @@ func (c *checker) checkQualifications() error {
 				if id, ok := n.(*ast.Ident); ok {
 					obj := c.binding(id)
 					if obj != nil && c.conservativeObjects[obj] && restricted(c.qualifications[obj]) {
-						if _, explicit := refType(obj.Type()); !explicit {
+						if _, explicit := c.refType(obj.Type()); !explicit {
 							conservative = true
 						}
 					}
@@ -288,7 +292,7 @@ func (c *checker) checkQualifications() error {
 		}
 		boundary := func(e ast.Expr) {
 			if restricted(copied(c.typ(e), c.quality(e))) {
-				if _, ok := refType(c.typ(e)); !ok {
+				if _, ok := c.refType(c.typ(e)); !ok {
 					fail(e, "readonly projection qualification would be erased; this boundary is unsupported")
 				}
 			}
@@ -338,7 +342,7 @@ func (c *checker) checkQualifications() error {
 			}
 			for i, v := range n.Values {
 				if i >= len(n.Names) || c.escapingSlot(c.binding(n.Names[i])) || isInterface(c.typ(n.Type)) {
-					if r, ok := refType(c.typ(n.Type)); n.Type != nil && ok && r.Permission == Read {
+					if r, ok := c.refType(c.typ(n.Type)); n.Type != nil && ok && r.Permission == Read {
 						continue
 					}
 					boundary(v)
@@ -359,7 +363,7 @@ func (c *checker) checkQualifications() error {
 				if f := c.function(n); f != nil {
 					sig := c.info.Defs[f.Name].Type().(*types.Signature)
 					if i < sig.Results().Len() {
-						if r, ok := refType(sig.Results().At(i).Type()); ok && r.Permission == Read {
+						if r, ok := c.refType(sig.Results().At(i).Type()); ok && r.Permission == Read {
 							continue
 						}
 					}
@@ -377,7 +381,7 @@ func (c *checker) checkQualifications() error {
 			}
 		case *ast.CallExpr:
 			if c.isIRCast(n) {
-				r, _ := refType(c.typ(n))
+				r, _ := c.refType(c.typ(n))
 				if r.Permission == Write {
 					if u, ok := unparen(n.Args[0]).(*ast.UnaryExpr); ok {
 						if q := c.quality(u.X); restricted(q) {
@@ -396,7 +400,7 @@ func (c *checker) checkQualifications() error {
 			}
 			for i, a := range n.Args {
 				if sig, ok := c.typ(n.Fun).(*types.Signature); ok && i < sig.Params().Len() {
-					if r, ok := refType(sig.Params().At(i).Type()); ok && r.Permission == Read {
+					if r, ok := c.refType(sig.Params().At(i).Type()); ok && r.Permission == Read {
 						continue
 					}
 				}

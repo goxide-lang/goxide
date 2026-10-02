@@ -125,16 +125,16 @@ Directory compilation uses `FinishPackage`: each file is checked against shared
 nominal reference declarations before any permissions are erased. File-local
 imports remain separate. Every body (including native Go consumers) must pass its
 own permission check; companions provide signatures, not permission-erased Go
-stubs. Exported scalar reference signatures now use the build-local metadata protocol
+stubs. Exported concrete reference signatures now use the build-local metadata protocol
 below. Other public element/signature forms remain engineering gaps. Ordinary Go pointer APIs remain ordinary
 pointer boundaries and cannot silently consume checked references.
 
 
-## Public scalar reference metadata
+## Public concrete reference metadata
 
-Directory builds publish internal v1 metadata only after complete provider checks.
+Directory builds publish internal v2 metadata only after complete provider checks.
 `Metadata.Path` is the actual import path, and each package function records every
-parameter/result Go type and each reference permission. Ordinary slots have
+parameter/result Go type and each reference permission. Ordinary slots and reference elements have
 transparent generated aliases, so private and transitive types retain identity.
 Consumers resolve package function objects (not selector spellings or methods),
 validate the marker digest, version, path, complete signature and alias identity,
@@ -156,10 +156,25 @@ reference syntax. Single-file exported-reference output also carries a marker,
 with internal identity `hgo/generated`; it does not enable cross-build recovery.
 This is not a stable public ABI or cryptographic provenance mechanism.
 
-The first slice covers builtin scalar reference elements, ordinary exported
-functions and one unnamed result. Composite/named elements, reference methods,
-generics, callbacks/function values, containers, dot imports, named/multiple
-results and external-source/precompiled metadata recovery remain incomplete.
-New import/function-value diagnostics preserve proven source spans; downstream
-reference reconstruction diagnostics still state generated/unmapped coordinates.
-See RFC 0005 §6.15 and the separate generated-module race acceptance tests.
+Supported elements include builtin scalars, non-generic named concrete types,
+structs, slices, maps, arrays and recursively composed pointers. Generic nominal
+read/write origins parameterized by actual element types preserve Go identity:
+alias spellings unify, defined types and different package paths do not. Concrete
+analysis aliases have per-file namespaces; generated element aliases preserve
+private/re-exported types and are removed only by recorded declaration identity.
+All analysis types erase to ordinary pointers, without runtime wrappers.
+
+The public signature subset remains ordinary exported functions and one unnamed
+result. Interface/channel/function/generic elements, reference methods, generics,
+callbacks/function values, reference-containing containers, dot imports,
+named/multiple results and external-source/precompiled metadata recovery remain
+incomplete. A reference to a supported container is distinct from a container of
+references. Existing projection restrictions remain; this metadata extension does
+not claim unrestricted composite operations or method-effect inference.
+
+These checks apply to files processed by hgo. Native `go build` of generated
+pointers does not enforce hgo permissions. Other writable aliases and native calls
+on ordinary pointers remain valid. New import/function-value diagnostics preserve
+proven source spans; downstream reference reconstruction can remain
+`generated/unmapped`. See RFC 0005 §6.15–6.16 and the separate generated-module
+race acceptance tests.

@@ -4,6 +4,7 @@ package refs
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"go/ast"
@@ -14,6 +15,7 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -63,20 +65,77 @@ func name(r Ref) string {
 	}
 	return prefix + string(r.Permission) + "_" + e
 }
-func element(t types.Type) string {
+func referenceName(r Ref, filename string) string {
+	base := name(r)
+	if scalar(r.Element) != "" {
+		return base
+	}
+	sum := sha256.Sum256([]byte(filename))
+	return fmt.Sprintf("%s_f%x", base, sum[:8])
+}
+func (c *checker) name(r Ref) string { return referenceName(r, c.filename) }
+func element(t types.Type) string    { return elementInFile(t, nil, nil) }
+func elementInFile(t types.Type, file *ast.File, info *types.Info) string {
+	if file != nil && info != nil {
+		for _, decl := range file.Decls {
+			if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
+				for _, sp := range gd.Specs {
+					spec := sp.(*ast.TypeSpec)
+					if strings.HasPrefix(spec.Name.Name, "__hgo_permission_element_") && types.Identical(t, info.TypeOf(spec.Type)) {
+						return spec.Name.Name
+					}
+				}
+			}
+		}
+	}
 	return types.TypeString(t, func(p *types.Package) string {
 		if p.Path() == "hgo.local/refs" {
 			return ""
 		}
+		if file != nil {
+			for _, spec := range file.Imports {
+				path, _ := strconv.Unquote(spec.Path.Value)
+				if path == p.Path() {
+					if spec.Name != nil {
+						if spec.Name.Name == "_" {
+							continue
+						}
+						if spec.Name.Name == "." {
+							return ""
+						}
+						return spec.Name.Name
+					}
+					return p.Name()
+				}
+			}
+		}
 		return p.Name()
 	})
 }
-func refType(t types.Type) (Ref, bool) {
+func (c *checker) element(t types.Type) string { return elementInFile(t, c.file, c.info) }
+func referenceTarget(t types.Type) types.Type {
+	if p, ok := types.Unalias(t).Underlying().(*types.Pointer); ok {
+		return p.Elem()
+	}
+	return nil
+}
+
+func refType(t types.Type, owner *types.Package) (Ref, bool) {
 	n, ok := types.Unalias(t).(*types.Named)
 	if !ok {
 		return Ref{}, false
 	}
+	if owner == nil || n.Obj().Pkg() != owner {
+		return Ref{}, false
+	}
 	s := n.Obj().Name()
+	if (s == "__hgo_ref_ro" || s == "__hgo_ref_rw") && n.TypeArgs().Len() == 1 {
+		p := Read
+		if s == "__hgo_ref_rw" {
+			p = Write
+		}
+		return Ref{element(n.TypeArgs().At(0)), p}, true
+	}
 	for _, p := range []Permission{Read, Write} {
 		q := prefix + string(p) + "_"
 		if strings.HasPrefix(s, q) {
@@ -206,15 +265,21 @@ func protectedAt(source []byte) func(int) bool {
 }
 func declarations() string {
 	var b strings.Builder
+	b.WriteString("\ntype __hgo_ref_ro[T interface{}] *T\ntype __hgo_ref_rw[T interface{}] *T\n")
 	for _, e := range scalars {
 		for _, p := range []Permission{Read, Write} {
-			fmt.Fprintf(&b, "\ntype %s *%s\n", name(Ref{e, p}), e)
+			origin := "__hgo_ref_ro"
+			if p == Write {
+				origin = "__hgo_ref_rw"
+			}
+			fmt.Fprintf(&b, "\ntype %s = %s[%s]\n", name(Ref{e, p}), origin, e)
 		}
 	}
 	return b.String()
 }
 
 type checker struct {
+	pkg                 *types.Package
 	companions          map[string][]byte
 	filename            string
 	source              []byte
@@ -281,7 +346,8 @@ func (c *checker) checkTypes() error {
 	}
 	deduplicateIR(files)
 	conf := types.Config{Importer: imp, DisableUnusedImportCheck: len(c.companions) > 0}
-	_, err := conf.Check("hgo.local/refs", c.fs, files, c.info)
+	pkg, err := conf.Check("hgo.local/refs", c.fs, files, c.info)
+	c.pkg = pkg
 	if err != nil {
 		return fmt.Errorf("%s: refs: source type checking failed: %w", c.filename, err)
 	}
@@ -380,7 +446,7 @@ func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare 
 					perm = Write
 					delete(c.mut, c.m.origin[pos])
 				}
-				c.m = c.m.apply([]edit{{pos, end, name(Ref{e, perm})}})
+				c.m = c.m.apply([]edit{{pos, end, c.name(Ref{e, perm})}})
 				active = true
 				changed = true
 				break
@@ -421,7 +487,7 @@ func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare 
 			lines[a.line] = []byte(a.text)
 		}
 		out := bytes.Join(lines, []byte("\n"))
-		out = append(out, []byte(c.declarations()+"\ntype __hgo_ref_write[T any] *T\nfunc __hgo_ref_make_write[T any](v *T) __hgo_ref_write[T] { return __hgo_ref_write[T](v) }\n")...)
+		out = append(out, []byte(c.declarations()+"\ntype __hgo_ref_write[T interface{}] *T\nfunc __hgo_ref_make_write[T interface{}](v *T) __hgo_ref_write[T] { return __hgo_ref_write[T](v) }\n")...)
 		return Result{Source: out}, nil
 	}
 	bodyLen := len(c.m.text)
@@ -449,11 +515,11 @@ func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare 
 			firstErr = c.fail(u, "write reference requires addressable storage")
 			return false
 		}
-		e := element(p.Elem())
+		e := c.element(p.Elem())
 		c.elements[e] = true
 		c.synthetic[c.m.origin[at]] = true
 		r := Ref{e, Write}
-		es = append(es, edit{at, at, name(r) + "("}, edit{c.offset(u.End()), c.offset(u.End()), ")"})
+		es = append(es, edit{at, at, c.name(r) + "("}, edit{c.offset(u.End()), c.offset(u.End()), ")"})
 		return true
 	})
 	if firstErr != nil {
@@ -482,7 +548,7 @@ func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare 
 			if !ok {
 				return true
 			}
-			r, ok := refType(c.info.TypeOf(s.X))
+			r, ok := c.refType(c.info.TypeOf(s.X))
 			if !ok {
 				return true
 			}
@@ -494,11 +560,14 @@ func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare 
 				return true
 			}
 			r.Permission = Read
+			r.Element = c.element(referenceTarget(c.info.TypeOf(s.X)))
+			c.elements[r.Element] = true
 			c.synthetic[c.m.origin[at]] = true
-			es = append(es, edit{at, at, name(r) + "("}, edit{c.offset(u.End()), c.offset(u.End()), ")"})
+			es = append(es, edit{at, at, c.name(r) + "("}, edit{c.offset(u.End()), c.offset(u.End()), ")"})
 			return true
 		})
 		c.m = c.m.apply(es)
+		c.m.text = append(c.m.text[:len(c.m.origin)], []byte(c.declarations())...)
 		if err := c.parse(); err != nil {
 			return Result{}, err
 		}
@@ -538,9 +607,9 @@ func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare 
 			return false
 		}
 		if id, ok := n.(*ast.Ident); ok {
-			if r, yes := refType(c.info.TypeOf(id)); yes {
+			if _, yes := c.refType(c.info.TypeOf(id)); yes {
 				if _, isType := c.info.Uses[id].(*types.TypeName); isType {
-					es = append(es, edit{c.offset(id.Pos()), c.offset(id.End()), "*" + r.Element})
+					es = append(es, edit{c.offset(id.Pos()), c.offset(id.End()), "*" + c.element(referenceTarget(c.info.TypeOf(id)))})
 				}
 			}
 		}
@@ -601,7 +670,7 @@ func (c *checker) isIRCast(call *ast.CallExpr) bool {
 	return ok && strings.HasPrefix(id.Name, prefix) && len(call.Args) == 1 && at < len(c.m.origin) && c.synthetic[c.m.origin[at]]
 }
 
-func hasRef(t types.Type) bool {
+func (c *checker) hasRef(t types.Type) bool {
 	seen := map[types.Type]bool{}
 	var visit func(types.Type) bool
 	visit = func(t types.Type) bool {
@@ -609,10 +678,10 @@ func hasRef(t types.Type) bool {
 			return false
 		}
 		seen[t] = true
-		if _, ok := refType(t); ok {
+		if _, ok := c.refType(t); ok {
 			return true
 		}
-		switch t := t.(type) {
+		switch t := types.Unalias(t).(type) {
 		case *types.Pointer:
 			return visit(t.Elem())
 		case *types.Slice:
@@ -660,7 +729,8 @@ func (c *checker) function(n ast.Node) *ast.FuncDecl {
 	}
 	return nil
 }
-func (c *checker) typ(e ast.Expr) types.Type { return c.info.TypeOf(e) }
+func (c *checker) refType(t types.Type) (Ref, bool) { return refType(t, c.pkg) }
+func (c *checker) typ(e ast.Expr) types.Type        { return c.info.TypeOf(e) }
 func (c *checker) binding(id *ast.Ident) types.Object {
 	if o := c.info.Defs[id]; o != nil {
 		return o
@@ -668,16 +738,16 @@ func (c *checker) binding(id *ast.Ident) types.Object {
 	return c.info.Uses[id]
 }
 func (c *checker) transfer(dst types.Type, src ast.Expr) error {
-	dr, dok := refType(dst)
-	sr, sok := refType(c.typ(src))
+	dr, dok := c.refType(dst)
+	sr, sok := c.refType(c.typ(src))
 	if !dok && !sok {
-		if hasRef(dst) || hasRef(c.typ(src)) {
+		if c.hasRef(dst) || c.hasRef(c.typ(src)) {
 			return c.fail(src, "unsupported container/function/tuple carrying references")
 		}
 		return nil
 	}
 	if dok && sok {
-		if dr != sr {
+		if dr.Permission != sr.Permission || !types.Identical(referenceTarget(dst), referenceTarget(c.typ(src))) {
 			return c.fail(src, "reference permission/type mismatch; use &(*w) to explicitly narrow write access")
 		}
 		return nil
@@ -688,7 +758,7 @@ func (c *checker) transfer(dst types.Type, src ast.Expr) error {
 	if dr.Permission == Read {
 		if u, ok := unparen(src).(*ast.UnaryExpr); ok && u.Op == token.AND {
 			if p, ok := c.typ(u).(*types.Pointer); ok {
-				if element(p.Elem()) == dr.Element {
+				if types.Identical(p.Elem(), referenceTarget(dst)) {
 					c.references = append(c.references, Reference{c.position(u.Pos()), dr, ""})
 					return nil
 				}
@@ -722,7 +792,7 @@ func (c *checker) validate() error {
 		case *ast.Ident:
 			if instance, ok := c.info.Instances[x]; ok {
 				for i := 0; i < instance.TypeArgs.Len(); i++ {
-					if hasRef(instance.TypeArgs.At(i)) {
+					if c.hasRef(instance.TypeArgs.At(i)) {
 						return fail("generic instantiations carrying references are unsupported")
 					}
 				}
@@ -731,7 +801,7 @@ func (c *checker) validate() error {
 				return fail("shadowing built-in scalar names in a reference-bearing file is unsupported")
 			}
 			if obj := c.binding(x); obj != nil {
-				if sig, ok := obj.Type().(*types.Signature); ok && hasRef(sig) {
+				if sig, ok := obj.Type().(*types.Signature); ok && c.hasRef(sig) {
 					switch p := c.parents[x].(type) {
 					case *ast.FuncDecl:
 						if p.Name == x {
@@ -749,7 +819,7 @@ func (c *checker) validate() error {
 			}
 		case *ast.FuncDecl:
 			sig, ok := c.info.Defs[x.Name].Type().(*types.Signature)
-			if ok && hasRef(sig) {
+			if ok && c.hasRef(sig) {
 				if x.Recv != nil || x.Type.TypeParams != nil {
 					return fail("reference methods/generics are unsupported")
 				}
@@ -761,8 +831,8 @@ func (c *checker) validate() error {
 						continue
 					}
 					for _, f := range list.List {
-						if hasRef(c.typ(f.Type)) {
-							if _, yes := refType(c.typ(f.Type)); !yes {
+						if c.hasRef(c.typ(f.Type)) {
+							if _, yes := c.refType(c.typ(f.Type)); !yes {
 								return fail("reference containers/callback signatures are unsupported")
 							}
 							if list == x.Type.Results && len(f.Names) > 0 {
@@ -773,7 +843,7 @@ func (c *checker) validate() error {
 				}
 			}
 		case *ast.Field:
-			if hasRef(c.typ(x.Type)) {
+			if c.hasRef(c.typ(x.Type)) {
 				p, ok := c.parents[x].(*ast.FieldList)
 				if !ok {
 					return fail("unsupported reference field")
@@ -789,7 +859,7 @@ func (c *checker) validate() error {
 		case *ast.ValueSpec:
 			refs := false
 			for _, id := range x.Names {
-				if obj := c.info.Defs[id]; obj != nil && hasRef(obj.Type()) {
+				if obj := c.info.Defs[id]; obj != nil && c.hasRef(obj.Type()) {
 					refs = true
 				}
 			}
@@ -822,7 +892,7 @@ func (c *checker) validate() error {
 		case *ast.AssignStmt:
 			if len(x.Lhs) != len(x.Rhs) {
 				for _, e := range append(append([]ast.Expr{}, x.Lhs...), x.Rhs...) {
-					if hasRef(c.typ(e)) {
+					if c.hasRef(c.typ(e)) {
 						return fail("tuple/multiple-result reference assignment is unsupported")
 					}
 				}
@@ -845,7 +915,7 @@ func (c *checker) validate() error {
 		case *ast.RangeStmt:
 			for _, e := range []ast.Expr{x.Key, x.Value} {
 				if e != nil {
-					if hasRef(c.typ(e)) {
+					if c.hasRef(c.typ(e)) {
 						return fail("references as range destinations are unsupported")
 					}
 					if er := c.writable(unparen(e)); er != nil {
@@ -863,7 +933,7 @@ func (c *checker) validate() error {
 			f := c.function(x)
 			for i, v := range x.Results {
 				if f == nil {
-					if hasRef(c.typ(v)) {
+					if c.hasRef(c.typ(v)) {
 						return fail("reference return from closures is unsupported")
 					}
 					continue
@@ -874,7 +944,7 @@ func (c *checker) validate() error {
 						err = e
 						return false
 					}
-				} else if hasRef(c.typ(v)) {
+				} else if c.hasRef(c.typ(v)) {
 					return fail("tuple reference return is unsupported")
 				}
 			}
@@ -884,20 +954,20 @@ func (c *checker) validate() error {
 				if !ok || u.Op != token.AND {
 					return fail("invalid internal reference construction")
 				}
-				r, _ := refType(c.typ(x))
+				r, _ := c.refType(c.typ(x))
 				if s, ok := unparen(u.X).(*ast.StarExpr); ok {
-					if from, yes := refType(c.typ(s.X)); yes && r.Permission == Write && from.Permission == Read {
+					if from, yes := c.refType(c.typ(s.X)); yes && r.Permission == Write && from.Permission == Read {
 						return fail("cannot obtain write access through a read reference")
 					}
 				}
 				break
 			}
-			if c.info.Types[x.Fun].IsType() && hasRef(c.typ(x)) {
+			if c.info.Types[x.Fun].IsType() && c.hasRef(c.typ(x)) {
 				return fail("explicit reference type conversion/adoption is unsupported")
 			}
-			involved := hasRef(c.typ(x))
+			involved := c.hasRef(c.typ(x))
 			for _, a := range x.Args {
-				involved = involved || hasRef(c.typ(a))
+				involved = involved || c.hasRef(c.typ(a))
 			}
 			if involved {
 				generic := false
@@ -931,14 +1001,14 @@ func (c *checker) validate() error {
 						err = e
 						return false
 					}
-				} else if hasRef(c.typ(a)) {
+				} else if c.hasRef(c.typ(a)) {
 					return fail("reference conversion/builtin/native boundary is unsupported")
 				}
 			}
 		}
 		if expr, ok := n.(ast.Expr); ok {
 			t := c.typ(expr)
-			if r, yes := refType(t); yes {
+			if r, yes := c.refType(t); yes {
 				if id, ok := expr.(*ast.Ident); ok {
 					if _, isType := c.info.Uses[id].(*types.TypeName); isType {
 						return true
@@ -983,7 +1053,7 @@ func (c *checker) validate() error {
 					}
 				}
 				return fail("unsupported reference use; only supported projections, local copy/rebinding, and direct checked calls/returns are supported")
-			} else if hasRef(t) {
+			} else if c.hasRef(t) {
 				switch n.(type) {
 				case *ast.FuncType, *ast.Ident: // function identity checked above
 				default:
@@ -997,7 +1067,7 @@ func (c *checker) validate() error {
 }
 func (c *checker) writable(e ast.Expr) error {
 	if s, ok := e.(*ast.StarExpr); ok {
-		if r, yes := refType(c.typ(s.X)); yes && r.Permission == Read {
+		if r, yes := c.refType(c.typ(s.X)); yes && r.Permission == Read {
 			return c.fail(e, "cannot write through a read reference")
 		}
 	}

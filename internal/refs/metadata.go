@@ -17,13 +17,14 @@ import (
 )
 
 // Metadata is build-local versioned analysis data, not a stable export ABI.
-const MetadataVersion = 1
+const MetadataVersion = 2
 const MetadataMarker = "HgoReferenceMetadata"
 
 type Slot struct {
-	Alias      string `json:",omitempty"`
-	Type       string
-	Permission Permission `json:",omitempty"`
+	ElementAlias string `json:",omitempty"`
+	Alias        string `json:",omitempty"`
+	Type         string
+	Permission   Permission `json:",omitempty"`
 }
 type Signature struct{ Params, Results []Slot }
 type Metadata struct {
@@ -73,12 +74,18 @@ func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importe
 	m := Metadata{Version: MetadataVersion, Path: path, Functions: map[string]Signature{}}
 	fs := token.NewFileSet()
 	var files []*ast.File
+	nativeDecls := map[string]*ast.FuncDecl{}
 	for _, name := range sourceNames(erased) {
 		f, e := parser.ParseFile(fs, name, erased[name], 0)
 		if e != nil {
 			return m, e
 		}
 		files = append(files, f)
+		for _, decl := range f.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil {
+				nativeDecls[fn.Name.Name] = fn
+			}
+		}
 	}
 	pkg, e := (&types.Config{Importer: imp}).Check(path, fs, files, nil)
 	if e != nil {
@@ -123,12 +130,14 @@ func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importe
 				}
 			}
 			if active {
-				// Export transparent type aliases for ordinary slots. This lets
-				// consumers name private/transitive types without changing identity.
+				// Transparent slot and element aliases keep nominal Go identity
+				// available even through re-exports and private/transitive types.
+				native := nativeDecls[fn.Name.Name]
 				for _, pair := range []struct {
 					fields *ast.FieldList
 					slots  []Slot
-				}{{fn.Type.Params, data.Params}, {fn.Type.Results, data.Results}} {
+					tuple  *types.Tuple
+				}{{native.Type.Params, data.Params, sig.Params()}, {native.Type.Results, data.Results, sig.Results()}} {
 					at := 0
 					if pair.fields == nil {
 						continue
@@ -140,13 +149,21 @@ func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importe
 						}
 						for i := 0; i < count; i++ {
 							slot := &pair.slots[at]
+							typ := pair.tuple.At(at).Type()
 							at++
+							expr := field.Type
 							if slot.Permission != "" {
-								continue
+								ptr := types.Unalias(typ).(*types.Pointer)
+								typ = ptr.Elem()
+								expr = unparen(expr).(*ast.StarExpr).X
 							}
-							sum := sha256.Sum256([]byte(path + "\x00" + slot.Type))
+							sum := sha256.Sum256([]byte(path + "\x00" + typeID(typ)))
 							alias := fmt.Sprintf("HgoReferenceType_%x", sum[:16])
-							slot.Alias = alias
+							if slot.Permission != "" {
+								slot.ElementAlias = alias
+							} else {
+								slot.Alias = alias
+							}
 							if seenAliases[alias] {
 								continue
 							}
@@ -155,11 +172,12 @@ func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importe
 								return m, fmt.Errorf("%s: reserved reference type alias %s", name, alias)
 							}
 							var text bytes.Buffer
-							format.Node(&text, token.NewFileSet(), field.Type)
+							format.Node(&text, token.NewFileSet(), expr)
 							aliasDecls[name] += fmt.Sprintf("\ntype %s = %s\n", alias, text.String())
 						}
 					}
 				}
+
 				if sig.Variadic() || sig.TypeParams().Len() > 0 {
 					return m, fmt.Errorf("%s: reference metadata: variadic/generic exports unsupported", name)
 				}
@@ -204,13 +222,48 @@ func validateSignature(sig *types.Signature, meta Signature) error {
 			if !ok {
 				return fmt.Errorf("reference metadata requires pointer representation")
 			}
-			basic, ok := types.Unalias(ptr.Elem()).(*types.Basic)
-			if !ok || scalar(basic.Name()) == "" {
-				return fmt.Errorf("exported reference metadata currently supports builtin scalar elements only")
+			if !supportedReferenceElement(ptr.Elem(), map[types.Type]bool{}) {
+				return fmt.Errorf("reference metadata element is outside the concrete data subset")
 			}
+
 		}
 	}
 	return nil
+}
+
+// Matches the concrete data shapes supported by projection checking; no
+// interface/channel/function or user generic reference element is inferred.
+func supportedReferenceElement(t types.Type, seen map[types.Type]bool) bool {
+	t = types.Unalias(t)
+	if seen[t] {
+		return true
+	}
+	seen[t] = true
+	switch t := t.(type) {
+	case *types.Basic:
+		return scalar(t.Name()) != ""
+	case *types.Named:
+		if t.TypeArgs().Len() > 0 {
+			return false
+		}
+		return supportedReferenceElement(t.Underlying(), seen)
+	case *types.Struct:
+		for i := 0; i < t.NumFields(); i++ {
+			if !supportedReferenceElement(t.Field(i).Type(), seen) {
+				return false
+			}
+		}
+		return true
+	case *types.Array:
+		return supportedReferenceElement(t.Elem(), seen)
+	case *types.Slice:
+		return supportedReferenceElement(t.Elem(), seen)
+	case *types.Map:
+		return supportedReferenceElement(t.Key(), seen) && supportedReferenceElement(t.Elem(), seen)
+	case *types.Pointer:
+		return supportedReferenceElement(t.Elem(), seen)
+	}
+	return false
 }
 
 type ImportError struct {
@@ -262,6 +315,12 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 		var edits []edit
 		var suffix strings.Builder
 		active := false
+		type elementBinding struct {
+			typ  types.Type
+			name string
+		}
+		var elementBindings []elementBinding
+		elements := map[string]bool{}
 		aliases := map[string]string{}
 		addedImports := map[string]string{}
 
@@ -409,7 +468,38 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 					}
 					if s.Permission != "" {
 						elem := types.Unalias(pair.tuple.At(i).Type()).(*types.Pointer).Elem()
-						spelling = nameRefScalar(s.Permission, elem)
+						if basic, ok := types.Unalias(elem).(*types.Basic); ok {
+							spelling = referenceName(Ref{Element: basic.Name(), Permission: s.Permission}, name)
+						} else {
+							alias := fn.Pkg().Scope().Lookup(s.ElementAlias)
+							if alias == nil || !types.Identical(alias.Type(), elem) {
+								failure = &ImportError{fs.Position(id.Pos()), "reference metadata element alias identity mismatch"}
+								return false
+							}
+							local := ""
+							for _, b := range elementBindings {
+								if types.Identical(b.typ, elem) {
+									local = b.name
+									break
+								}
+							}
+							if local == "" {
+								serial++
+								local = fmt.Sprintf("__hgo_permission_element_%d", serial)
+								for used[local] {
+									serial++
+									local = fmt.Sprintf("__hgo_permission_element_%d", serial)
+								}
+								used[local] = true
+								elementBindings = append(elementBindings, elementBinding{elem, local})
+								target := aliases[path] + "." + s.ElementAlias
+								bindings.Stubs[local] = true
+								bindings.Originals[local] = target
+								fmt.Fprintf(&suffix, "\ntype %s = %s\n", local, target)
+								elements[local] = true
+							}
+							spelling = referenceName(Ref{Element: local, Permission: s.Permission}, name)
+						}
 					}
 					if pair.params {
 						spelling = fmt.Sprintf("p%d %s", i, spelling)
@@ -429,6 +519,19 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 			return nil, bindings, failure
 		}
 		if active {
+			names := map[string][]byte{}
+			for e := range elements {
+				names[e] = nil
+			}
+			for _, e := range sourceNames(names) {
+				for _, p := range []Permission{Read, Write} {
+					origin := "__hgo_ref_ro"
+					if p == Write {
+						origin = "__hgo_ref_rw"
+					}
+					fmt.Fprintf(&suffix, "\ntype %s = %s[%s]\n", referenceName(Ref{e, p}, name), origin, e)
+				}
+			}
 			// Keep imports used during analysis even when their sole selector is replaced.
 			for _, stub := range f.Imports {
 				path, _ := strconv.Unquote(stub.Path.Value)
@@ -438,7 +541,7 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 			}
 			if !strings.Contains(string(files[name]), "type __hgo_ref_write[") {
 				suffix.WriteString(declarations())
-				suffix.WriteString("\ntype __hgo_ref_write[T any] *T\nfunc __hgo_ref_make_write[T any](v *T)__hgo_ref_write[T]{return __hgo_ref_write[T](v)}\n")
+				suffix.WriteString("\ntype __hgo_ref_write[T interface{}] *T\nfunc __hgo_ref_make_write[T interface{}](v *T)__hgo_ref_write[T]{return __hgo_ref_write[T](v)}\n")
 			}
 		}
 		if len(addedImports) > 0 {
@@ -461,9 +564,7 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 	}
 	return out, bindings, nil
 }
-func nameRefScalar(p Permission, t types.Type) string {
-	return name(Ref{Element: types.Unalias(t).(*types.Basic).Name(), Permission: p})
-}
+
 func (b ImportBindings) Restore(filename string, source []byte) ([]byte, error) {
 	if len(b.Stubs) == 0 {
 		return source, nil
@@ -479,6 +580,13 @@ func (b ImportBindings) Restore(filename string, source []byte) ([]byte, error) 
 		if decl, ok := d.(*ast.GenDecl); ok && decl.Tok == token.IMPORT && len(decl.Specs) == 1 {
 			spec := decl.Specs[0].(*ast.ImportSpec)
 			if spec.Name != nil && b.Imports[spec.Name.Name] {
+				es = append(es, edit{offset(d.Pos()), offset(d.End()), ""})
+				continue
+			}
+		}
+		if decl, ok := d.(*ast.GenDecl); ok && decl.Tok == token.TYPE && len(decl.Specs) == 1 {
+			spec := decl.Specs[0].(*ast.TypeSpec)
+			if b.Stubs[spec.Name.Name] {
 				es = append(es, edit{offset(d.Pos()), offset(d.End()), ""})
 				continue
 			}

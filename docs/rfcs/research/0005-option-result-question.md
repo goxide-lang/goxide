@@ -310,3 +310,19 @@ for/range 与 switch 仍是 T0 待实现项；普通 expr 的私有上下文问�
 含问号的 unsafe 转换链不在本 switch plan 中，明确拒绝而不拆 pointer/uintptr 链；仍需旧 assignmentFrame 的控制流赋值同样留工程缺口，不增加 guard。其他 range 源/目标、type switch、旧私有上下文长尾和其余 guard 未完成，select/adapters 不作新设计。
 
 for 性能复核：上一阶段实际生成循环为成功 **39.31 ns**、失败 **21.00 ns**，显式 match 为 **26.64/12.69 ns**，都零分配。独立同轮对照为原生成 **38.90/18.41 ns**、仅去 first/移 post 尾部的手写 Go 机制探针 **36.59/17.00 ns**、显式 match **26.85/13.21 ns**；保持同 Option 协议、输入与结果。三者都超过 inline budget，first 分支仅能解释部分差异，且伴随布局/寄存器变化；不能把明显耗时差距用 0alloc 掩盖。探针对捕获了短声明迭代变量的生产循环不安全，本阶段不作这种替换。完整 [原始数据、汇编与复现](../../../tests/research/loop_propagation/README.md#first-flag-follow-up-isolate-part-of-the-overhead)明确区分真实 hgo 与手写机制探针，后续性能优化仍是独立工程项。
+
+### 6.14 type switch 与其他非函数 range 源
+
+基于 `e1face9af24ef7cf89ce87cb77da5ab182567c1b`，接通 type switch 的 initializer、被断言接口表达式和已有可降低 case body。保留原 `x := value.(type)` 或无绑定 guard，以及原 case 类型列表，不把 case 变量改成统一 any。Go 因而继续在单类型 case 中赋予具体类型，在多类型/default/nil case 中使用原接口类型。只前置初始化与接口表达式的普通求值/失败 return，case 作用域、typed-nil 与 nil、重复类型检查、非法 fallthrough/continue、标签重入和最近闭包规则不变。
+
+range 源新增 string、整数、channel、数组和数组指针，沿用原生 RangeStmt 管理每轮变量、接收阻塞与停止。string 验证 UTF-8 byte index/rune 值；channel 仅保存 channel 值，不预接收，验证未缓冲发送配对、关闭、提前退出不多收、失败源为 nil 时早退。
+
+**整数上下文**：effects 先保存操作数并执行必要的原生负 shift 检查，最后纯 residual 仍留在原 Range.X。`for t.Wide = range 1<<r?` 的 private uint64 类型由原迭代目标提供，不能 `tmp :=` 默认成 int。无变量/短声明的 Go 默认类型及已类型化源的类型仍由原生 range 检查；负数/零没有迭代。真实跨包测试以 63 位计数只进入首轮，避免大循环并能检测错误的 int 默认化；失败不写目标，负 shift 仍先于后续传播失败。
+
+**数组求值边界**：对本组可降低、实际求值的传播源保存完整数组值，不能只保存指针，再让 `range *savedPointer` 因常量 len 而省略原本必须发生的解引用。数组值保留进入循环前的副本；数组指针保留指针，后续元素变化按 Go 可见。验证了 nil 指针单索引可迭代、第二变量为 `_` 不增加元素解引用、两变量读元素会 panic、实际求值的完整数组解引用（包括零长数组）仍 panic。
+
+不自行实现一套 Go 常量 len 判定器：公共 go/types 的 TypeAndValue 不直接给出所有数组 range 免求值结论，不能简单依据 X.Value 或剪掉常量子树。源不含传播时完全保留原表达式，尤其 `range *nilArrayPointer` 的原生免求值行为。传播位于 unsafe.Sizeof/Alignof/Offsetof 等现有未支持非求值子树时继续明确拒绝，不为接通 range 而强制执行。函数迭代器源中的传播与 range 赋值目标中的传播仍未实现；无传播的原生 iterator 源及此前已验证的 body 保持既有行为。
+
+[真实示例](../../../examples/prototype/type_range_propagation.hgo)覆盖两种 type guard、单/多类型/接口 nil、init/subject 失败顺序、defer、case/init 闭包捕获和标签，以及上述 range 边界；[私有整数用例](../../../examples/propagate_places/effects_range.hgo)独立跨包验证。没有新增正常传播 panic 或 Assignment guard；原 Go panic 与 channel 阻塞仍是原行为。其余控制流内需要旧 guard 的赋值、unsafe 链与普通 expr 上下文长尾不因此完成。
+
+后续 T0 优先级不再由问号长尾占满：先推进常用 match 表达式组合，再接通源码依赖/同模块的公开引用权限元数据，并修正普通用法的权限跟踪误拒绝；再按应用补齐剩余传播与性能/诊断。完整 trait、长期别名分析、未定 native bridge/adapters 不能作为这些既定工程的隐性前置，公开元数据也不等于一次冻结最终外部 ABI。

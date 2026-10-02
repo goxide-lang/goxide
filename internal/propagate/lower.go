@@ -567,7 +567,7 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	switch x := s.(type) {
 
 	case *ast.TypeSwitchStmt:
-		return nil, l.fail(x, "? in type switch is not supported by this control-flow slice")
+		return l.typeSwitchStatement(x, nil, ft)
 	case *ast.SwitchStmt:
 		return l.switchStatement(x, nil, ft)
 	case *ast.ForStmt:
@@ -576,6 +576,8 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 		return l.rangeStatement(x, nil, ft)
 	case *ast.LabeledStmt:
 		switch n := x.Stmt.(type) {
+		case *ast.TypeSwitchStmt:
+			return l.typeSwitchStatement(n, x.Label, ft)
 		case *ast.SwitchStmt:
 			return l.switchStatement(n, x.Label, ft)
 		case *ast.ForStmt:

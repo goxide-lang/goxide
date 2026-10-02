@@ -753,3 +753,13 @@ switch 研究模块 **1 项**真实 hgo 等价测试另跑 race/vet；非 race *
 其他 range 来源/目标、type switch、unsafe 转换链与 guard/旧 expr 长尾继续是工程缺口，不称完成或批准延期；[RFC §6.13](docs/rfcs/research/0005-option-result-question.md#613-表达式-switch-的传播与循环开销复核)与验收矩阵同步，整体 MVP 尚未完成。
 
 最终整树 race **15 个有测试包 / 250 宿主顶层 / 462 子测试**，另 **2 包无测试**；全树 vet、完整设计检查 **13 条 Go 命令**通过。修复后的独立审查无剩余阻断。整树日志 `/tmp/t0-switch-final-race.json`、`/tmp/t0-switch-final-race.err`、`/tmp/t0-switch-final-vet.log`、`/tmp/t0-switch-design.log`，原始研究数据保存在仓库。仅提交推送 feat/t0-completion 并 fetch 核验。
+
+## Type switch 与非函数 range 源
+
+基于 `e1face9af24ef7cf89ce87cb77da5ab182567c1b`，接通 type switch 的 initializer/subject 与既有 case body；原生 guard/类型列表不改，保留各 case 的具体或接口变量类型、nil/typed-nil、词法作用域及标签。range 新增 string/整数/channel/数组/数组指针：整数 residual 留原上下文，完整数组值显式保存，指针/接收仍由原生 range 执行，无传播的源完全不改。非求值子树传播仍拒绝，函数 iterator 源与 range 目标传播未实现。
+
+[主示例](examples/prototype/type_range_propagation.hgo) **8 项**生成模块 race，安装 CLI 生成程序 race/run，**11 类**负例；[跨包私有整数](examples/propagate_places/effects_range.hgo)加入业务模块，现 **27 项**生成 race。独立审查无新增阻断，零长数组 nil 解引用、blank 第二变量和 case/init 闭包绑定探针已成为永久测试。普通 Go panic/阻塞保持，没有新增正常传播 panic/guard。
+
+[RFC §6.14](docs/rfcs/research/0005-option-result-question.md#614-type-switch-与其他非函数-range-源)与矩阵同步；[剩余优先表](docs/t0-acceptance.md#当前剩余-t0-优先级)把常用 match、公开权限元数据和普通权限误拒绝放到问号长尾之前。其余 range/guard/性能与诊断仍是工程待办，Proposed adapters/select/native bridge 的未定部分独立列出，整体 MVP 尚未完成。
+
+最终验证：全树 race **15 个有测试包 / 253 宿主顶层 / 470 子测试**，另 **2 包无测试**；全树 vet 与完整设计检查 **13 条 Go 命令**通过。整树证据 `/tmp/t0-type-range-race.json`、`/tmp/t0-type-range-race.err`、`/tmp/t0-type-range-vet.log`、`/tmp/t0-type-range-design.log`；专项与跨包安装 CLI 复验 `/tmp/t0-type-range-target.log`。只提交推送 feat/t0-completion 并 fetch 核验，没有修改 main/work/冻结标签。

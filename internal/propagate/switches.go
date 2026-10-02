@@ -40,7 +40,7 @@ func (l *lowering) switchStatement(n *ast.SwitchStmt, label *ast.Ident, ft *ast.
 	}
 	var tag ast.Expr
 	if n.Tag != nil {
-		p, v, e := l.switchExpr(n.Tag, ft)
+		p, v, e := l.controlExpr(n.Tag, ft)
 		if e != nil {
 			return nil, e
 		}
@@ -60,7 +60,7 @@ func (l *lowering) switchStatement(n *ast.SwitchStmt, label *ast.Ident, ft *ast.
 		for i, s := range n.Body.List {
 			c := s.(*ast.CaseClause)
 			for _, x := range c.List {
-				p, v, e := l.switchExpr(x, ft)
+				p, v, e := l.controlExpr(x, ft)
 				if e != nil {
 					return nil, e
 				}
@@ -90,13 +90,59 @@ func (l *lowering) switchStatement(n *ast.SwitchStmt, label *ast.Ident, ft *ast.
 // Reuse the proven contextual residual planner when available. In particular a
 // private numeric case must not default a partial shift to int. Unsafe chains
 // containing propagation need their own plan, not split pointer temporaries.
-func (l *lowering) switchExpr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, error) {
+func (l *lowering) controlExpr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, error) {
 	if l.hasUnsafePointerConversion(x) {
 		if contains(x, l.questions) {
-			return nil, nil, l.fail(x, "unsafe conversion chain with ? needs an unimplemented switch expression plan")
+			return nil, nil, l.fail(x, "unsafe conversion chain with ? needs an unimplemented control-flow expression plan")
 		}
 	} else if l.canEffect(x) {
 		return l.effectExpr(x, ft)
 	}
 	return l.expr(x, ft)
+}
+
+// Retain the native type-switch guard and case lists: Go assigns a different
+// implicit variable type in each single-type case, and the interface type in
+// multi-type/default/nil cases. Only its subject's effects move before it.
+func (l *lowering) typeSwitchStatement(n *ast.TypeSwitchStmt, label *ast.Ident, ft *ast.FuncType) ([]ast.Stmt, error) {
+	l.guardFreeDepth++
+	defer func() { l.guardFreeDepth-- }()
+	var pre []ast.Stmt
+	if n.Init != nil {
+		p, e := l.statement(n.Init, ft)
+		if e != nil {
+			return nil, e
+		}
+		pre = append(pre, p...)
+		n.Init = nil
+	}
+	var guard ast.Expr
+	switch a := n.Assign.(type) {
+	case *ast.AssignStmt:
+		if len(a.Rhs) == 1 {
+			guard = a.Rhs[0]
+		}
+	case *ast.ExprStmt:
+		guard = a.X
+	}
+	assertion, ok := guard.(*ast.TypeAssertExpr)
+	if !ok || assertion.Type != nil {
+		return nil, l.fail(n, "invalid type switch guard")
+	}
+	p, v, e := l.controlExpr(assertion.X, ft)
+	if e != nil {
+		return nil, e
+	}
+	pre = append(pre, p...)
+	assertion.X = l.freezeValue(assertion.X, v, &pre)
+	control, outerLabel := l.loopLabels(n, label, ft)
+	for _, s := range n.Body.List {
+		c := s.(*ast.CaseClause)
+		body := &ast.BlockStmt{List: c.Body}
+		if e := l.body(body, ft); e != nil {
+			return nil, e
+		}
+		c.Body = body.List
+	}
+	return wrapLoop(pre, control, outerLabel), nil
 }

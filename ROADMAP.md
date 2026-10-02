@@ -147,3 +147,5 @@ T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 
 普通循环首批已接通 for init/条件/post 和 slice/map range 源的问号传播，使用原函数普通 return，保留 Go 每轮变量身份、continue/post、标签重入及 defer。其他 range 源的问号、迭代赋值目标和需要旧 guard 的循环内组合仍待实现；原生无问号源不强制求值。[RFC §6.12](docs/rfcs/research/0005-option-result-question.md#612-for-与-slicemap-range-的首批传播)明确本阶段范围，不把 for/range 整项或整体 MVP 打勾。unsafe/其他 guard 长尾继续留表，switch 为后续独立工程。
 
 表达式 switch 首批接通 init/tag/case 与已有 body 传播：按 Go 顺序选中后执行原生分支，保留 default/fallthrough、标签、作用域和原类型诊断。type switch 传播、其他 range/guard 长尾仍未完成。[RFC §6.13](docs/rfcs/research/0005-option-result-question.md#613-表达式-switch-的传播与循环开销复核)同时记录 for 性能复核：零分配但慢于显式 match，去 first 探针只解释部分差距且未作不安全生产替换。整体 MVP 不标完成。
+
+Type switch 的 init/subject 与既有 body 传播、string/整数/channel/数组/数组指针 range 源已增量接通，保留 Go case 变量类型、整数上下文、channel 行为与数组免求值边界；函数 iterator 源及 range 目标传播仍未实现。[最新 T0 优先表](docs/t0-acceptance.md#当前剩余-t0-优先级)明确下一步先常用 match，再公开权限元数据/普通权限跟踪修复，问号和性能长尾不继续阻塞这些工作。整体 MVP 不标完成。

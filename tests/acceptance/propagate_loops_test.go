@@ -51,8 +51,6 @@ func TestPropagationLoopRejections(t *testing.T) {
 	for name, body := range map[string]string{
 		"scope":              `func f()Option[int]{for i:=Option[int]::Some(0)?;i<1;i++{};return Option[int]::Some(i)}`,
 		"post-declaration":   `func f()Option[int]{for ;;i:=Option[int]::Some(0)?{_=i};return Option[int]::None}`,
-		"integer-source":     `func f()Option[int]{for range Option[int]::Some(3)?{};return Option[int]::None}`,
-		"array-source":       `func f()Option[int]{for range Option[[3]int]::Some([3]int{})?{};return Option[int]::None}`,
 		"iterator-source":    `func f()Option[int]{for range Option[func(func(int)bool)]::None?{};return Option[int]::None}`,
 		"range-target":       `func f()Option[int]{s:=[]int{0};for s[Option[int]::Some(0)?]=range []int{1}{};return Option[int]::None}`,
 		"duplicate-label":    `func f()Option[int]{L:for Option[bool]::Some(true)?{break L};L:for Option[bool]::Some(true)?{break L};return Option[int]::None}`,

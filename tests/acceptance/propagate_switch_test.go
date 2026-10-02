@@ -49,7 +49,6 @@ func TestPropagationSwitchRejections(t *testing.T) {
 		"fallthrough-last":  `func f()Option[int]{switch Option[int]::Some(1)?{case Option[int]::Some(1)?:fallthrough};return Option[int]::None}`,
 		"continue-switch":   `func f()Option[int]{S:switch Option[int]::Some(1)?{case Option[int]::Some(1)?:continue S};return Option[int]::None}`,
 		"scope":             `func f()Option[int]{switch n:=Option[int]::Some(1)?;n{};return Option[int]::Some(n)}`,
-		"type-switch":       `func f()Option[int]{switch x:=Option[any]::Some(1)?.(type){case int:_=x};return Option[int]::None}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, e := frontend.Compile("switch_bad.hgo", []byte("package fixture;"+body))

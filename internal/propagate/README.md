@@ -22,15 +22,16 @@ lexical function, including function literals. It supports assignments with one 
 one-spec variable declarations (including multiple values), returns, calls (including `defer` and `go` argument
 evaluation), ordinary unary/binary/selector expressions, indexes, slices, composite literals, pointer dereferences, type assertions
 (including a single comma-ok RHS), sends, short-circuit booleans,
-and `if` initializers and conditions. An initializer and its condition prelude
+and `if` initializers and conditions, for headers/bodies, expression/type switches,
+and propagated slice/map/string/integer/channel/array/pointer-array range sources. An initializer and its condition prelude
 remain in one lexical block enclosing both branches, including else-if chains. Calls freeze preceding evaluated runtime
 arguments before later propagation. Declared function names have no mutable
 runtime value and remain direct calls; function variables are still frozen.
 Constants retain contextual types. A failing
 `defer f(load()?)` does not register that defer, and earlier defers execute normally.
 
-Explicitly unsupported: user generic functions; propagation inside loops, switches,
-select candidates, and unevaluated
+Explicitly unsupported: user generic functions; propagation in function-iterator
+range sources, range assignment targets, select candidates, and unevaluated
 unsafe.Sizeof/Alignof/Offsetof operands. Use a preceding binding or explicit
 match; these contexts are rejected rather than silently reordered. No public
 Try/Residual, cross-family coercion, or risk/borrow analysis is introduced.
@@ -201,3 +202,13 @@ Original header type errors are retained before case lists are erased. Supported
 private case residuals use effects rather than defaulting a partial shift to int.
 Unsafe conversion chains with propagation, type-switch propagation, and assignment
 shapes needing a frame guard remain explicit control-flow gaps (RFC 6.13).
+
+Type switches now lower initializer and asserted-interface effects while keeping
+native guards/case lists, so concrete versus interface case bindings remain Go's
+responsibility. `controlExpr` shares proven contextual planning across switches
+and range sources. Range additionally supports propagated strings, integers,
+channels, arrays and array pointers. Integer residuals stay in the original range
+context; full array values are saved to retain required dereferences/copies.
+Sources without propagation remain untouched, including constant-len exceptions.
+Unevaluated propagation and function-iterator sources/iteration targets remain
+explicit gaps; see RFC 6.14. No new frame guard is introduced in these paths.

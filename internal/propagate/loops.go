@@ -71,17 +71,38 @@ func (l *lowering) rangeStatement(n *ast.RangeStmt, label *ast.Ident, ft *ast.Fu
 	}
 	var pre []ast.Stmt
 	if contains(n.X, l.questions) {
-		switch underlyingType(l.info.TypeOf(n.X)).(type) {
-		case *types.Slice, *types.Map:
+
+		integer := false
+		switch t := underlyingType(l.info.TypeOf(n.X)).(type) {
+		case *types.Slice, *types.Map, *types.Chan, *types.Array:
+		case *types.Pointer:
+			if _, ok := t.Elem().Underlying().(*types.Array); !ok {
+				return nil, l.fail(n.X, "unsupported pointer range source")
+			}
+		case *types.Basic:
+			integer = t.Info()&types.IsInteger != 0
+			if !integer && t.Info()&types.IsString == 0 {
+				return nil, l.fail(n.X, "unsupported range source type")
+			}
 		default:
-			return nil, l.fail(n.X, "? in range source currently requires a slice or map; other range kinds retain their original evaluation rules")
+			return nil, l.fail(n.X, "? in function iterator range sources is not supported yet")
 		}
-		p, v, e := l.expr(n.X, ft)
+		p, v, e := l.controlExpr(n.X, ft)
 		if e != nil {
 			return nil, e
 		}
 		pre = p
-		n.X = l.freezeValue(n.X, v, &pre)
+		if integer {
+			// Keep untyped residuals in the native range context: an existing
+			// iteration variable may supply a private integer type. Effects
+			// have already saved operands and performed any shift checks.
+			n.X = v
+		} else {
+			// Save the complete array value, not merely a propagated pointer:
+			// range *pointerResult? must not become an unevaluated dereference.
+			n.X = l.freezeValue(n.X, v, &pre)
+		}
+
 	}
 	loop, outerLabel := l.loopLabels(n, label, ft)
 	if e := l.body(n.Body, ft); e != nil {

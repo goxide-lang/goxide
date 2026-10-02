@@ -38,6 +38,8 @@ func TestMultiCommaOK(t *testing.T){tree:=model.NewTree(3);m:=map[int]int{7:9};i
 
 func TestPrivateSwitchContexts(t *testing.T){tree:=model.NewTree(3);tree.Wide=1<<63|1<<62;r:=__hgo_enum_ctor_Result_Ok[uint,error](62);if n,e:=unpack(switchPrivateCase(&tree,63,r));n!=1||e!=nil{t.Fatal(n,e)};bad:=__hgo_enum_ctor_Result_Err[uint,error](parseError());if _,e:=unpack(switchPrivateCase(&tree,63,bad));e==nil{t.Fatal("case failure lost")};if v:=catchPanic(func(){_=switchPrivateSigned(&tree,-1,bad)});v==nil{t.Fatal("native shift panic lost")};if n,e:=unpack(switchPrivateBool(1,parse("bad")));e!=nil||n!=0{t.Fatal(n,e)};if n,e:=unpack(switchPrivateBool(0,parse("7")));e!=nil||n!=1{t.Fatal(n,e)}}
 
+func TestPrivateRangeIntegerContext(t *testing.T){tree:=model.NewTree(3);r:=__hgo_enum_ctor_Result_Ok[uint,error](63);if n,e:=unpack(rangePrivateInteger(&tree,r));n!=1||e!=nil{t.Fatal(n,e)};bad:=__hgo_enum_ctor_Result_Err[uint,error](parseError());tree.Wide=9;if _,e:=unpack(rangePrivateInteger(&tree,bad));e==nil||tree.Wide!=9{t.Fatal(e,tree.Wide)};if v:=catchPanic(func(){_=rangePrivateNegative(&tree,-1,bad)});v==nil||tree.Wide!=9{t.Fatal(v,tree.Wide)}}
+
 `
 
 func privateAssignmentNegatives(t *testing.T, cli, outside, root string) {

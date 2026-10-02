@@ -149,3 +149,7 @@ T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 
 表达式 switch 首批接通 init/tag/case 与已有 body 传播：按 Go 顺序选中后执行原生分支，保留 default/fallthrough、标签、作用域和原类型诊断。type switch 传播、其他 range/guard 长尾仍未完成。[RFC §6.13](docs/rfcs/research/0005-option-result-question.md#613-表达式-switch-的传播与循环开销复核)同时记录 for 性能复核：零分配但慢于显式 match，去 first 探针只解释部分差距且未作不安全生产替换。整体 MVP 不标完成。
 
 Type switch 的 init/subject 与既有 body 传播、string/整数/channel/数组/数组指针 range 源已增量接通，保留 Go case 变量类型、整数上下文、channel 行为与数组免求值边界；函数 iterator 源及 range 目标传播仍未实现。[最新 T0 优先表](docs/t0-acceptance.md#当前剩余-t0-优先级)明确下一步先常用 match，再公开权限元数据/普通权限跟踪修复，问号和性能长尾不继续阻塞这些工作。整体 MVP 不标完成。
+
+### 2026-10-02：常用 match 组合增量
+
+完整 arm 内嵌套 match、有限同文件已知参数调用已接通，真实配置/Result 早退和跨包非法 enum 由生成模块 race 验证；[精确范围与证据](IMPLEMENTATION.md#常用-match-表达式组合2026-10-02)。普通赋值/推断/任意运算符与字面量/其他调用仍是未完成项。此阶段后先做公开引用元数据，不把完整模式系统或长期别名分析带入本轮收口。

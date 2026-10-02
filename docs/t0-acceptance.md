@@ -39,7 +39,7 @@
 | Debug/Clone：具体标量、无指针容器、嵌套本地类型 | 有限 | 用户已授权基础派生；通用 trait/泛型/环和共享拓扑复制后置 | [generate_test.go](../internal/deriveextras/generate_test.go)：`TestGeneratedDerivesRun`、`TestRejectImplicitProtocols`；[宏接受测试](../tests/acceptance/macros_test.go)：`TestCloneAndErrorAcceptanceRace`（`TestCloneNestedAndAliasPolicy`）、`TestMacroAndCloneExplicitRejections`。Clone 保留 nil/空区别，不保留别名拓扑/容量 |
 | 本地非泛型 enum：unit、单标量/有限struct和容器/无环enum payload；名义身份 | 有限 | 用户必需 D12/D21；候选 interface+值 case ABI 尚未冻结，复杂payload继续分期；跨包身份已有限接通，见末尾增量和剩余完成标准 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumNominalIdentity`、`TestEnumExplicitRejections`；[lower_test.go](../internal/enums/lower_test.go)：`TestPublicEnumIsNotSilentlyLocal` |
 | 语句 match：一次求值、guard 次序、绑定、穷尽/不可达、return/defer/循环控制流 | 完整（具体子能力） | 用户必需；嵌套模式和完整表达式语法后置 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumControlFlowRace`（`TestOrderAndSingleEvaluation`、`TestReturnDeferLoop`、`TestNested`）、`TestEnumExplicitRejections` |
-| 表达式 match：整个显式类型局部初始化，或单个非具名 Go 可解析返回类型的整个 return | 有限 | 用户必需方向；下一步按应用需要扩展，尚不支持 `:=`/参数/运算符内嵌等 | [match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestMatchExpressionBusinessRace`（`TestScopeEffectsAndGuards`、`TestReturnClosureAndHygiene`）、`TestMatchExpressionUnsupportedContexts`、`TestBuiltinMatchExpressionRace` |
+| 表达式 match：整个显式类型局部初始化、有限整个 return、完整 arm 嵌套与有限已知参数调用 | 有限 | 用户必需方向；普通赋值、`:= match` 推断、运算符/字面量和其他调用仍未完成；新增证据见末节 | [match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestMatchExpressionBusinessRace`（`TestScopeEffectsAndGuards`、`TestReturnClosureAndHygiene`）、`TestMatchExpressionUnsupportedContexts`、`TestBuiltinMatchExpressionRace` |
 | 使用点拒绝非法 enum Go 值：nil/typed-nil/case 指针/伪造值先于 wildcard 副作用；serde 编码返回错误 | 完整（具体子能力） | 用户必需边界说明；全入口/初始化/任意对象图校验可后置，不能称 Go 调用者无法造非法值 | [enums_test.go](../tests/acceptance/enums_test.go)：`TestEnumInvalidBoundaryRace`；[enum_serde_test.go](../tests/acceptance/enum_serde_test.go)：`TestEnumSerdeBusinessRace`（`TestEnumInvalidGoBoundaryReturnsError`）；[match_expression_test.go](../tests/acceptance/match_expression_test.go)：`TestBuiltinMatchExpressionRace`（`TestInvalidBuiltinBeforeEffect`） |
 | 数值/string 外部枚举映射 | 有限 | 封闭 unit enum 的 serde 映射；开放 raw/C enum 已撤回 | [独立业务验收](../tests/acceptance/enum_wire_test.go)：已知往返、未知报错、未执行业务、Go 调用与生成race |
 | serde 核心 Serializer/Deserializer、Visitor/Access 与结构化错误/cause；格式独立 | 有限 | 用户必需 D23；完整协议扩展、借用解码和用户实现协议后续逐项验收 | [core_test.go](../serde/core_test.go)：`TestErrorPathAndCause`、`TestVisitorDefaultsAndCallbackErrors`、`TestScalarReaders`、`TestScalarProtocolFailures`；[json_test.go](../serdejson/json_test.go)：`TestCallbacksAndStates`、`TestIgnoredProtocolErrorsRemainErrors` |
@@ -462,7 +462,7 @@ for 的耗时差异已单独调查，first 状态只解释一部分，三条路�
 
 | 优先级 | 可验收的下一工作 | 边界 |
 | --- | --- | --- |
-| P1 | 常用 match 表达式组合：先普通赋值/已知参数类型位置，再按 RFC 补齐局部 `:=` 等推断范围；保持一次求值、仅选中 arm、穷尽检查与最近函数控制流 | 现实现只覆盖显式类型局部整个 initializer 与有限整个 return；不要求完整 Rust 模式系统 |
+| P1 | 常用 match 表达式组合：先普通赋值/已知参数类型位置，再按 RFC 补齐局部 `:=` 等推断范围；保持一次求值、仅选中 arm、穷尽检查与最近函数控制流 | 现有显式类型局部整个 initializer、有限整个 return，新增完整 arm 嵌套和有限同文件已知参数调用；普通赋值、推断与其他组合仍未完成，不要求完整 Rust 模式系统 |
 | P2 | 公开引用权限元数据：先同模块/源码依赖的导出签名、导入还原及消费者校验，加入缺失/错包/擦除反例 | 已定只读路径/可写收窄语义可先实现；外部预编译最终 ABI、native bridge 未定部分另列，不能把整项元数据无限后置 |
 | P3 | 权限跟踪对普通捕获、取址、循环/分支重绑定和字段替换的误拒绝，按可证明的局部类型事实逐项修复 | 不引入复杂别名分析，不把只读当全局不可变或 mut& 当独占，不用“安全”包装原型限制 |
 | P4 | 剩余传播：函数 iterator 源、range 逐轮赋值目标、unsafe 链/其他 guard、旧 expr 私有上下文；for 已测耗时差距继续有证据优化 | 不阻塞 P1/P2；这些仍是工程欠账，不是获批延期，也不新增正常传播 panic |
@@ -471,3 +471,9 @@ for 的耗时差异已单独调查，first 状态只解释一部分，三条路�
 Proposed serde adapters 入口与自定义缺失策略、select 候选语义及未定原生桥接另列设计问题；复杂别名分析长期延期。完整 trait、Value/PATCH/YAML 等不扩大为本轮前置。整体 MVP 尚未完成。
 
 本阶段最终验证通过：全树 race **15 包 / 253 顶层 / 470 子测试**（另 2 包无测试）、vet、13 条完整设计命令；新增 type/range 模块 8 项、private 业务模块 27 项各自生成 race，安装 CLI 生成程序 race/run。独立审查无新增阻断，相关反例永久化。整树测试与新增具体边界区分记录，不由本组通过推导整体 T0 完成。
+
+### 常用 match 组合切片验收（2026-10-02）
+
+旧范围：整个显式类型局部 initializer、有限整个 return。新增：完整 arm 嵌套、有限同文件已知参数类型调用，调用处限完整 return/独立调用及完整 arm/实参递归组合。[接受测试](../tests/acceptance/match_composition_test.go)走真实 frontend/CLI→Go，覆盖 JSON 配置、Result 传播、参数/guard 顺序、上下文类型、goto、最近闭包和跨包非法 enum 验证；4+2 个生成模块测试单独 race，跨包另 vet。具体边界及性能样本见 [实现记录](../IMPLEMENTATION.md#常用-match-表达式组合2026-10-02)和 [RFC](rfcs/0009-match.md)。
+
+普通赋值、推断、任意字面量/运算符及动态等调用仍未完成，不默认为已批准延期。之后先推进公开引用元数据，同时保留权限跟踪与 `?` 长尾、跨阶段来源诊断清单。Proposed serde adapters 尚待设计决定；长期别名分析及完整 Rust/trait/Value/YAML/PATCH 不扩大。

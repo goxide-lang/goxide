@@ -147,7 +147,7 @@ go run -race /tmp/goxide-match-expression-example.go
 - 这是内建容器的有限泛型实例化，必须显式写类型参数；不是用户泛型函数/声明、通用 Try/Residual 或跨包泛型 enum。Option 的 nil 是 None，Result 的 nil 非法；typed-nil error payload 原样保留。
 - `?` 支持单 RHS 绑定、单项 var 声明、return、调用参数（含 defer/go）、普通一元/二元/selector、短路布尔和无 initializer 的 if 条件。循环、switch、索引/切片、复合字面量、赋值目标、多 RHS 及带 initializer 的 if 条件中的传播明确拒绝；先绑定或显式 match。
 - 宏模板仅支持固定内建容器类型：类型参数限 Go 内建标量及其指针/数组/slice/map/channel 组合，不支持捕获调用者类型、未知具名类型或用户 enum 构造。类型别名/构造 helper 不改变 `?` 的词法目标；模板显式闭包仍是传播边界。
-- 表达式 match 仅支持整个显式类型局部初始化，以及单个非具名、Go 可解析返回类型的整个 return 表达式。`:=` 推断、参数/运算符/另一个 arm 内嵌 match、表达式块、包初始化、具名/多返回未实现。
+- 表达式 match 支持整个显式类型局部初始化、单个非具名 Go 可解析结果的整个 return；另支持完整 arm 嵌套和有限同文件已知参数调用组合，见末节。普通赋值、`:= match` 推断、任意运算符/字面量内嵌等仍未实现。
 - 该阶段新引用语法与 `?`/尚未生成的 derive helper 的同文件组合尚未打通（下节已补有限支持）：引用检查早于传播与派生 lowering，不能把分开可运行的功能推断为任意组合可用。原生 Go 指针示例不代表新引用组合已经支持。
 - 内建容器不能派生 serde；该阶段已知含 enum 的 struct/container/pointer payload 在缺投影校验时拒绝（下节补值 struct 投影）。校验不遍历任意 interface 动态对象图。精确原始列映射、公开边界全面校验和借用风险分析仍未实现。
 
@@ -763,3 +763,15 @@ switch 研究模块 **1 项**真实 hgo 等价测试另跑 race/vet；非 race *
 [RFC §6.14](docs/rfcs/research/0005-option-result-question.md#614-type-switch-与其他非函数-range-源)与矩阵同步；[剩余优先表](docs/t0-acceptance.md#当前剩余-t0-优先级)把常用 match、公开权限元数据和普通权限误拒绝放到问号长尾之前。其余 range/guard/性能与诊断仍是工程待办，Proposed adapters/select/native bridge 的未定部分独立列出，整体 MVP 尚未完成。
 
 最终验证：全树 race **15 个有测试包 / 253 宿主顶层 / 470 子测试**，另 **2 包无测试**；全树 vet 与完整设计检查 **13 条 Go 命令**通过。整树证据 `/tmp/t0-type-range-race.json`、`/tmp/t0-type-range-race.err`、`/tmp/t0-type-range-vet.log`、`/tmp/t0-type-range-design.log`；专项与跨包安装 CLI 复验 `/tmp/t0-type-range-target.log`。只提交推送 feat/t0-completion 并 fetch 核验，没有修改 main/work/冻结标签。
+
+## 常用 match 表达式组合（2026-10-02）
+
+在旧的整个 typed initializer/return 基础上，新增完整 arm 内嵌套 match；同文件、非方法/泛型/variadic 且名称可有限静态解析的函数参数支持 match，调用限整个 return、独立调用或完整 arm/实参。参数类型在声明处绑定，逐参求值；无 IIFE，`?` 保持最近函数退出。普通块保存 goto 作用域，函数 owner 边界保存内联闭包目标；compiler directive callee 不拆实参。详见 [RFC 0009](docs/rfcs/0009-match.md)与[实现边界](internal/matchexpr/README.md)。
+
+[真实接受测试](tests/acceptance/match_composition_test.go)覆盖 JSON→enum→嵌套 Option→Result 早退、guard/参数顺序、仅选中 arm、nil、uint64 上下文、局部类型遮蔽、goto/闭包与跨包 enum 非法值。单包生成模块 4 项、跨包生成模块 2 项测试分别跑 race，跨包模块另跑 vet。宿主执行不替代生成模块 race。
+
+性能为实际 CLI 转译出的跨包 hgo 组合/显式语句对照：AMD EPYC 9V74、Go 1.27.1、单 CPU、100ms×3，组合中位数 8.912 ns/op，显式写法 8.531 ns/op，全部 0 B/op、0 allocs/op。基准内置于上述接受测试，非 race 子进程执行；不是手写 Go 机制探针，也不外推到所有 payload 或性能等价。
+
+仍未完成：普通赋值、`:= match` 推断、任意运算符/短路/字面量、动态/方法/跨文件签名及其他参数长尾，表达式块和复杂签名。未扩大 tuple/record 模式。这一切片不等于完整 T0；下一优先切片为公开引用元数据。
+
+最终树验证：全树 `go test -race -count=1 -json ./...` 通过 15 个测试包、256 个顶层测试、483 个子测试（另 2 包无测试）；`go vet ./...` 通过。设计检查通过 60 份 Markdown、708 个本地链接和 20 篇 RFC，另 13 个 Go 设计机制命令；这些纯 Go 机制检查不冒充上述真实 hgo 执行。独立非作者复审已复验 goto/闭包、函数/类型绑定遮蔽及非 Go 签名边界，无剩余阻断；13 项组合边界负例通过。

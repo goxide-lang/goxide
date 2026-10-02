@@ -847,3 +847,11 @@ match 类型与 `?` 签名联合迭代，重新检查上下文后再进行传播
 [真实 CLI 验收](tests/acceptance/refs_exposed_flow_test.go)含 8 个业务函数、2 项生成模块 race 测试与 vet、14 个负例。独立审查发现 channel range 的隐式接收遗漏；无 race 的握手程序曾可污染只读值，现已纳入屏障与永久反例。此阶段不修改剩余 guard、不批准范围缩减；用户已明确原位可写借用 match 是 MVP 必需，待下一设计/实现阶段。
 
 最终验证：全树 race **15 测试包 / 264 宿主顶层 / 596 子测试**通过，另 2 包无测试；vet 通过。新增生成模块单独 **2 项 race 测试**与 vet 通过；设计检查 **60 Markdown / 753 本地链接 / 20 RFC**及 **13 条独立 Go 机制命令**通过。独立复审无剩余阻断，channel range 修复后已重跑最终全树。日志 `/tmp/t0-exposed-race-final.json`、`/tmp/t0-exposed-race-final.err`、`/tmp/t0-exposed-vet.log`、`/tmp/t0-exposed-design.log`、`/tmp/t0-exposed-test-final.log`。工作分支提交/push/fetch，未修改 main/work 或冻结标签。
+
+## 普通问号私有 bool 类型保持（2026-10-02）
+
+基于 `605c4dbf2626fff903e798372727c5eec33b38fd`，修复 `len(model.FlagArray((n==0)&&model.Flag(r?==7)))` 的真实误拒。旧普通 expr 以 bool 暂存左臂，丢失完整表达式的外包私有名义类型；现仅对满足已有静态 witness/preflight 的私有 typed 短路表达式，在改写前复用 effects lowering。
+
+[模块验收](tests/acceptance/propagate_private_bool_test.go)单独三项生成 race 测试与 vet，覆盖真实 interface 类型、短路/len/cap 次数、nearest closure、失败/defer/direct recover、未选 nil Result；两项类型负例保持拒绝，产物确定且无新增 guard。不变更剩余 guard、桥接或范围；两项误拒修复之后继续用户明确的原位 match 目标与授权 IIFE 机制评估。
+
+最终验证：全树 race **15 测试包 / 265 宿主顶层 / 599 子测试**通过，另 2 包无测试；全树 vet 通过。新生成模块单独 **3 项 race 测试**与 vet 通过。设计检查 **60 Markdown / 757 本地链接 / 20 RFC**及 **13 条纯 Go 机制命令**通过。独立复审无阻断，另真实 hgo 左侧传播/嵌套逻辑/私有身份探针生成模块 race 输出 ok。日志 `/tmp/t0-private-bool-race.json`、`/tmp/t0-private-bool-race.err`、`/tmp/t0-private-bool-vet.log`、`/tmp/t0-private-bool-design.log`、`/tmp/t0-private-bool-test-final.log`；工作分支 push/fetch 核验。

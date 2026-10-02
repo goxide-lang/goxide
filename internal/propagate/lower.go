@@ -1145,6 +1145,18 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 		}
 		return pre, n, nil
 	case *ast.BinaryExpr:
+		// A private named bool cannot be spelled in a temporary declaration.
+		// When an untyped left operand gets its type from the right arm, reuse
+		// the preflighted static type witness before either arm is rewritten.
+		// The witness does not execute the unselected arm or introduce a frame.
+		if n.Op == token.LAND || n.Op == token.LOR {
+			fact := l.expressionFacts[n]
+			if fact.typ != nil && !fact.untyped && l.expressionFacts[n.X].untyped {
+				if _, nameable := l.typeSpelling(fact.typ); !nameable && !l.hasUnsafePointerConversion(n) && l.canEffect(n) {
+					return l.effectExpr(n, ft)
+				}
+			}
+		}
 		p, left, e := l.expr(n.X, ft)
 		if e != nil {
 			return nil, nil, e

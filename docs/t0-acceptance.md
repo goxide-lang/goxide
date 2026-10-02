@@ -560,3 +560,7 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 用户已进一步明确：`match mut& enum_value { Var1(mut& inner) => *inner += 1 }` 的原位可写借用是首版必需，不能后置；绑定必须指向原 payload，不能用隐藏共享指针改变值复制语义。具体表示仍需研究取舍，下一在两项真实 bug 修复之后推进。跨模块增强元数据、复杂上下文收窄及新引用 Go 桥接尚未批准任何范围冻结；剩余 guard 不在本阶段删除或缩减。
 
 后续用户纠正已记入 D29–D31：跨 module hgo 库消费恢复增强信息也是所需方向，未批准同模块冻结；`mut& T` 到 Go `*T` 应自然互操作，readonly 不得升级。复杂 match 上下文是工程缺口。以上不由本次权限误拒修复完成，也不再把旧 D11 桥接候选当成拒绝新意图的前提。
+
+### 普通问号私有 bool 误拒（2026-10-02）
+
+[真实 CLI 验收](../tests/acceptance/propagate_private_bool_test.go)修复普通局部值/调用/len/cap 中右臂私有 bool 给左侧未类型化比较提供上下文时的失型。已有静态类型见证在改写前复用，短路、私有类型身份、最近函数失败、defer/direct recover 均保持；生成模块三项独立 race 测试与 vet、两项非法类型负例。无新转换、IIFE、guard 或范围冻结。其他 witness/unsafe 欠账继续留表；原位可写借用 match、跨 module 增强恢复和自然 mut&→Go 指针互操作按 D29–D31 继续推进。

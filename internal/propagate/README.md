@@ -221,3 +221,11 @@ a successful slot resolution restarts package checking. Context witnesses never
 read the assignment target at runtime. Compiler-owned reference match slots are
 explicitly registered for refs.Finish; source names alone grant no initialization
 exception. See RFC 0009's assignment/inference slice.
+
+Ordinary logical expressions reuse the contextual effects planner when an
+untyped left operand receives a private named bool type from a statically
+witnessed right arm. Preflight occurs before either arm is rewritten. The witness
+never executes the skipped arm; the temporary retains its private identity.
+`propagate_private_bool_test.go` validates real CLI output and independent race,
+including len/cap evaluation, nearest failure, and direct recover. Other missing
+witness shapes and remaining assignment guards are unchanged.

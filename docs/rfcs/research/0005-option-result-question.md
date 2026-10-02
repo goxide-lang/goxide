@@ -326,3 +326,11 @@ range 源新增 string、整数、channel、数组和数组指针，沿用原生
 [真实示例](../../../examples/prototype/type_range_propagation.hgo)覆盖两种 type guard、单/多类型/接口 nil、init/subject 失败顺序、defer、case/init 闭包捕获和标签，以及上述 range 边界；[私有整数用例](../../../examples/propagate_places/effects_range.hgo)独立跨包验证。没有新增正常传播 panic 或 Assignment guard；原 Go panic 与 channel 阻塞仍是原行为。其余控制流内需要旧 guard 的赋值、unsafe 链与普通 expr 上下文长尾不因此完成。
 
 后续 T0 优先级不再由问号长尾占满：先推进常用 match 表达式组合，再接通源码依赖/同模块的公开引用权限元数据，并修正普通用法的权限跟踪误拒绝；再按应用补齐剩余传播与性能/诊断。完整 trait、长期别名分析、未定 native bridge/adapters 不能作为这些既定工程的隐性前置，公开元数据也不等于一次冻结最终外部 ABI。
+
+### 6.15 普通短路表达式的私有 bool 身份
+
+普通 expr 原先把 `(n==0)&&model.Flag(r?==7)` 的左臂用 `:=` 默认成 bool，尽管完整表达式的真实类型是外包私有 flag。在 `len(model.FlagArray(...))`、普通参数或局部值中，原本合法的表达式因此在生成 Go 阶段被误拒。
+
+现对已定型、不可直接命名且左臂未类型化的 &&/||，在改写任何 arm 前执行已有 effects preflight；静态函数签名能提供原类型见证时复用 contextual planner。见证只取零值，不调用右臂函数，不读取外部存储；选中分支才执行传播/业务调用。保留私有名义 bool 身份，不新增转换、IIFE 或 guard，失败仍退出最近用户函数/闭包。
+
+[真实跨包 CLI 验收](../../../tests/acceptance/propagate_private_bool_test.go)覆盖 interface 中真实类型、短路次数、len/cap 求值、未选 nil Result、失败与 defer、显式闭包及含传播的直接 recover。生成模块单独三项 race 测试与 vet，重复输出一致且无 Assignment/Catch/Fail；typed bool 与 private bool 不兼容、private bool 传 builtin bool 仍拒绝。本组不扩大未知动态/方法/泛型 witness，不删除剩余 unsafe/guard，也不宣布所有私有表达式长尾完成。

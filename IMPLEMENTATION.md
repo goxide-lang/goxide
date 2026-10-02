@@ -603,3 +603,15 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 最终验证：Go 1.27.1 linux/amd64、CGO=1、本地离线工具链。整树 `go test -race -count=1 -json ./...` 一次通过 **15 个有测试包、229 宿主顶层测试、406 子测试**，另 1 包无自身测试。定向验收真实安装 CLI、仓库外转译，并分别运行 Option **9 项**、serde-defaults **4 项**生成模块 race 测试，业务输出 `option 7 -1 4 0` 和 `demo 8080 8080 STSS`。生成模块数量与宿主统计分开。`go vet ./...`、完整设计检查 **13 条 Go 命令**、文档检查 **57 Markdown / 527 本地链接与锚点 / 20 RFC**及 diff 检查通过。
 
 独立非作者检查控制流并重跑 Option 生成模块 race 与无 payload Default 负例；文档复审发现并修正四处固定版本源码行号和一处旧测试计数，最终复核无剩余阻断。日志位于 `/workspace/goxide-restore-check/option-protocol-targeted.log`、`option-protocol-final-race.json`、`option-protocol-final-vet.log`、`option-protocol-final-design.log`、`option-protocol-final-docs.log`。按授权在 `feat/manual-default` 阶段提交推送并 fetch 核验，不修改 main/work/冻结标签；adapter 仍未批准、未实现。
+
+## T0 收口：if initializer 的问号传播（2026-10-02）
+
+从 `feat/manual-default` 的 `fb74ba2380389b39afe92f35ebdb8500fab74adf` 建立 `feat/t0-completion`。现场未发现仓库/workspace AGENTS.md 或 .agents/skills 内容；工具链为 `/workspace/goxide-environment/go/bin/go`，Go 1.27.1 linux/amd64，CGO_ENABLED=1，缓存放 `/tmp/goxide-cache`。没有使用环境默认 work 作为实现基线。
+
+实现 `if n := load()?; condition(n)? { ... } else { ... }`：initializer 与条件 prelude 留在包含两个分支的普通词法块中，声明不泄漏；失败退出原函数，保留条件短路和 defer，不制造闭包。支持普通 initializer、赋值 initializer、else-if 和 Option。独立审查另外发现裸 `load()?` 表达式语句的 payload 临时量不能作为 Go 独立语句；现显式丢弃成功值，保留传播与普通调用的求值。
+
+[真实前端验收](tests/acceptance/propagate_if_test.go)新增四项生成模块 race 测试及四项拒绝子例，分别核对求值/失败/清理、作用域/遮蔽、Option/else-if、赋值/闭包和成功值丢弃。[业务源](examples/prototype/if_propagation.hgo)通过真实安装 CLI、仓库外转译、生成 Go `run -race` 和 CLI run，输出 `port 8080`、`disabled`、`invalid port`。这些属于真实 hgo→Go 执行；设计检查中的纯 Go 机制探针另计。
+
+独立非作者审查已复核修复并重跑 `TestPropagationIfInitializer*`，无剩余阻断。完整范围与四类剩余清单已同步 [T0 收口核对](docs/t0-acceptance.md#2026-10-02-t0-收口核对) 和 RFC 0005 §6.2；循环等传播上下文仍未实现，Proposed adapters 未获批准/未实施，整项 MVP 尚未完成。
+
+最终验证：全树 `go test -race -count=1 -json ./...` 通过 **15 个有测试包、232 宿主顶层测试、410 子测试**（另 1 包无自身测试）。新增生成模块四项 race 测试单列，不重复计入宿主数量；安装 CLI 业务产物另执行 `go run -race`。`go vet ./...`、完整设计检查 **13 条 Go 命令**、最终 docs-only **57 Markdown / 534 本地链接与锚点 / 20 RFC**、`git diff --check` 通过。日志为 `/tmp/t0-race.json`、`/tmp/t0-race.err`、`/tmp/t0-vet.log`、`/tmp/t0-design.log`、`/tmp/t0-docs.log`；它们是本环境证据，不作为另一机器的文件依赖。

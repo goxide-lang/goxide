@@ -21,15 +21,15 @@ The lowering inserts temporaries, validation, branches and returns in the origin
 lexical function, including function literals. It supports one RHS assignments,
 one-spec variable declarations, returns, calls (including `defer` and `go` argument
 evaluation), ordinary unary/binary/selector expressions, short-circuit booleans,
-and `if` conditions without initializers. Calls freeze preceding evaluated runtime
+and `if` initializers and conditions. An initializer and its condition prelude
+remain in one lexical block enclosing both branches, including else-if chains. Calls freeze preceding evaluated runtime
 arguments before later propagation. Declared function names have no mutable
 runtime value and remain direct calls; function variables are still frozen.
 Constants retain contextual types. A failing
 `defer f(load()?)` does not register that defer, and earlier defers execute normally.
 
 Explicitly unsupported: user generic functions; propagation inside loops, switches,
-indexes, slices, composite literals, assignment destinations, parallel RHS lists,
-or an if condition sharing an initializer. Use a preceding binding or explicit
+indexes, slices, composite literals, assignment destinations, or parallel RHS lists. Use a preceding binding or explicit
 match; these contexts are rejected rather than silently reordered. No public
 Try/Residual, cross-family coercion, or risk/borrow analysis is introduced.
 

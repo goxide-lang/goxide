@@ -495,9 +495,29 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 			x.Results[i] = y
 		}
 	case *ast.ExprStmt:
+		// A bare propagation consumes the sum for its failure branch and
+		// discards the success payload. Its lowered value is not a Go
+		// expression statement (and may otherwise be an unused temporary).
+		original := x.X
+		for {
+			paren, ok := original.(*ast.ParenExpr)
+			if !ok {
+				break
+			}
+			original = paren.X
+		}
+		discard := false
+		if call, ok := original.(*ast.CallExpr); ok {
+			if id, ok := call.Fun.(*ast.Ident); ok {
+				_, discard = l.questions[id.Name]
+			}
+		}
 		y, e := lower(x.X)
 		if e != nil {
 			return nil, e
+		}
+		if discard {
+			return append(pre, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_")}, Tok: token.ASSIGN, Rhs: []ast.Expr{y}}), nil
 		}
 		x.X = y
 	case *ast.DeferStmt:
@@ -533,11 +553,20 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 			return nil, e
 		}
 	case *ast.IfStmt:
-		if x.Init != nil && contains(x.Init, l.questions) {
-			return nil, l.fail(x.Init, "? in if initializer is not supported; use a preceding declaration")
-		}
-		if x.Init != nil && contains(x.Cond, l.questions) {
-			return nil, l.fail(x, "? condition with if initializer is not supported")
+		if x.Init != nil && (contains(x.Init, l.questions) || contains(x.Cond, l.questions)) {
+			// Keep the initializer's implicit scope around both branches and all
+			// condition temporaries. An ordinary block preserves lexical return,
+			// defer and loop control without introducing a closure.
+			init, e := l.statement(x.Init, ft)
+			if e != nil {
+				return nil, e
+			}
+			x.Init = nil
+			rest, e := l.statement(x, ft)
+			if e != nil {
+				return nil, e
+			}
+			return []ast.Stmt{&ast.BlockStmt{List: append(init, rest...)}}, nil
 		}
 		y, e := lower(x.Cond)
 		if e != nil {

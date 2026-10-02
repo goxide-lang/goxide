@@ -1,6 +1,6 @@
 # T0 子能力验收矩阵
 
-最新核对基准：`cd495372377cac8bf139427e21fc4490e48a0348`，并合入远端 work 的 RFC/检查器。**D27 已撤回下文历史开放 raw/C enum 成果；当前只支持封闭变体及 serde 外部映射，最新验收见末节。** 以下先给有限交付标准，再保留历次逐项证据；历史阶段的“未做”若已有后续增量，以最新增量为准。具体类型、Go 宿主语法上的有限 T0 子集与整项 T0/M1–M8 完成是不同结论，不能混用。
+本轮实现基线：`fb74ba2380389b39afe92f35ebdb8500fab74adf`；最新四类状态见文末 T0 收口核对。历史核对包含 `cd495372377cac8bf139427e21fc4490e48a0348` 及远端 work 的 RFC/检查器。**D27 已撤回下文历史开放 raw/C enum 成果；当前只支持封闭变体及 serde 外部映射，最新验收见末节。** 以下先给有限交付标准，再保留历次逐项证据；历史阶段的“未做”若已有后续增量，以最新增量为准。具体类型、Go 宿主语法上的有限 T0 子集与整项 T0/M1–M8 完成是不同结论，不能混用。
 
 设计优先级以[决策登记](design/decisions.md) D21 为准：宏、enum/match、只读/可写分离是用户必需方向；D22 约束 Option/Result 专用 `?` 与唯一显式一步 From，D23 要求 serde 核心与格式分层。优先级不意味着全部语法或 ABI 已冻结。后续工作按 [ROADMAP](../ROADMAP.md) 依赖推进，不以完整 trait 或长期风险分析阻塞已有子集。
 
@@ -302,3 +302,19 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 ## 普通 Option 缺失与 Default 解耦
 
 普通 Option 缺失直接进入 serde None 分支，不调用 Default 检查/表达式生成；null 保持既有 Option/VisitNone。显式 default/skip 继续按独立 Default 契约处理。扩充的 [Option 验收](../tests/acceptance/option_serde_test.go)以无 Default 的 InputPayload 证明缺失/null/Some 可反序列化，并用 Default 派生拒绝确认该 payload 未取得协议；带副作用的 Settings Default 不被普通缺失/null 调用，显式 Option default/skip 不回归。生成模块现有 9 项 race 测试，既有 serde-defaults 生成模块 4 项 race 同时复验；普通与自定义 adapter 路径不能混同。
+
+
+## 2026-10-02 T0 收口核对
+
+实现基线为 `fb74ba2380389b39afe92f35ebdb8500fab74adf`（feat/manual-default），不是环境默认 main/work。本节覆盖此前把逐轮原型限制笼统称为“后置”的表述；不能据此宣称整个 MVP 完成。
+
+| 分类 | 当前剩余范围及处理 |
+| --- | --- |
+| 必须继续完成/核验 | 已确认宏、闭合 enum/match、只读/可写分离、Option/Result 问号及 JSON serde 的实用闭环；常用传播上下文、权限跟踪的普通用法误拒绝、跨功能组合和诊断仍需逐项证据。尚未支持的语法不自动成为获批延期，也不要求完整 Rust 语言 |
+| 已有实现，按当前树复验 | 同 module 宏/enum、有限 match、基础投影、Default/print、手动 struct Default、默认 enum payload、serde default/skip、Option 缺失/null 与 Default 解耦、JSON cause、安装 CLI 和生成模块独立 race |
+| 明确不作为本轮前置 | D20 全部复杂别名/借用风险分析；完整 trait/native bridge、LSP、YAML、格式 Value/PATCH、用户过程宏/完整泛型生态不顺手扩展；其中桥接/格式扩展还有未定设计，不宣称全部永久延期 |
+| 需要用户新设计决定 | Proposed 字段 adapters 的具体入口及自定义 deserialize_with 缺失策略；U02/U15 尚未闭合的引用类型/原生桥接协议、最终发布 ABI 等。与既定的只读路径语义、非独占 mut&、Default 规则分开 |
+
+本阶段选取已定语义的 `if` initializer/condition `?` 缺口；[接受测试](../tests/acceptance/propagate_if_test.go)新增实际 hgo→Go 生成模块四项 race 测试、四项前端拒绝和安装 CLI/业务转译产物 race。原函数内词法块保留作用域、一次求值、短路、else-if 和 defer。普通 Option 缺失/null 及 Proposed adapter 不在本次实现改动内。
+
+下阶段仍需处理：循环/switch/索引/切片/复合字面量/多 RHS 传播；常用 match 表达式组合；权限跟踪中的捕获/取址/循环与字段替换限制；公开引用元数据和剩余组合/来源诊断。先区分已定类型规则和未定接口，再选可验收切片；不以“无法证明别名安全”为普通 Go 用法设置新门槛。

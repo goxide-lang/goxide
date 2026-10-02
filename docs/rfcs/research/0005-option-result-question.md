@@ -128,3 +128,10 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 [前端接受测试](../../../tests/acceptance/propagate_test.go) 与上面的 Go 机制夹具分开：前者确实编译 `.hgo` `?`，检验顺序、短路、defer、最近闭包、nil Result、typed nil、原生部分成功和错误转换。模块 API 层还覆盖重复/缺失/两跳转换拒绝；这不表示源语言已支持用户声明所有转换。
 
 支持上下文限单 RHS、单项 var、return、调用参数、普通运算/selector、短路和无 initializer 的 if 条件。循环/switch/索引/切片/复合字面量/赋值目标/多 RHS/带 initializer 的 if 内传播拒绝。表达式 match 限显式类型局部初始化或单个非具名返回的完整表达式；无普遍类型推断。宏模板仅支持固定内建类型参数及有限 Go 复合类型，不能捕获任意调用者类型；模板显式闭包照常改变传播目标。后续组合阶段已支持普通 sum 载荷与标量引用参数/局部及 derive 同文件使用；引用作为 sum 载荷仍未支持，权限在传播后完整检查才擦除。完整支持表及源码映射限制以[实现说明](../../../IMPLEMENTATION.md)和[传播阶段说明](../../../internal/propagate/README.md)为准。
+
+
+### 6.2 T0 收口：带 initializer 的 if
+
+沿 §4 一次求值及最近函数早退契约，现支持 `if n := load()?; condition(n)? { ... } else { ... }`，以及普通 initializer 加传播条件。lowering 使用原函数内普通词法块：initializer 先执行一次，条件临时量随后执行，声明覆盖 then/else/else-if，但不泄漏到后续语句。短路仍跳过未选择操作；已注册 defer 仍在函数返回时执行。没有隐藏闭包或新 From 规则。
+
+[真实 hgo 验收](../../../tests/acceptance/propagate_if_test.go)覆盖成功/失败、条件短路、遮蔽、赋值 initializer、Option、else-if、最近闭包，以及作用域泄漏/跨家族/多 RHS/赋值目标的拒绝；生成模块显式 race。[业务例子](../../../examples/prototype/if_propagation.hgo)调用真实 strconv.Atoi，显式包装后传播。循环/switch/索引/切片/复合字面量等剩余上下文仍未实现，这些是实现缺口，不自动视作用户批准的延期。

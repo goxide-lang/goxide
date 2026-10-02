@@ -1,6 +1,6 @@
 # 可运行的 hgo 语言子集
 
-**当前覆盖：最新 D27 撤回开放 raw/C enum；旧 raw 阶段仅为历史记录，代码/成功夹具已移除。当前封闭 enum 与 serde 外部映射见末节；非默认 payload 的 Default 约束待用户选择。**
+**当前覆盖：最新 D27 撤回开放 raw/C enum；旧 raw 阶段仅为历史记录，代码/成功夹具已移除。当前封闭 enum 与 serde 外部映射及手动 Default 见末节；enum 仅选中默认变体的 payload 要求 Default。**
 
 此实现分支从 `v0.0.0-mvp-doc` 开始；冻结标签保持不变，本文件只描述实现分支。
 这是具体类型、Go 宿主语法上的可执行子集；单文件入口与后文有限 Go module 目录入口并存，不是完整 hgo 编译器、trait ABI 或 LSP。
@@ -447,7 +447,7 @@ go test -race -count=1 ./tests/acceptance -run '^(TestT0FinalAudit|TestRawEnum)'
 
 unit enum的 `#[serde(rename="pending")]` 使用字符串协议；或全部unit变体显式 `#[serde(value=1)]`，首版限定signed int64十进制字面量。数值映射使用既有Int64/ReadInt64而非新raw类型；两个方向可独立派生。重复/混合/缺失/越界/带payload的映射和未知属性明确诊断。未知有效wire值为UnknownVariant，Type/Range错误保持原类别及嵌套Field路径；错误不被默认变体吞掉，业务函数不执行。用户自定义业务validator后置，现有结构边界检查不属该延期项。
 
-Default struct要求所有字段有Default，否则手写；通用手写impl注册未实现，可显式业务构造，不凭helper名字注册。enum自动默认仍限unique unit标记；非默认payload是否需Default待用户回答，已去掉专门锁定这一选择的旧验收。Debug显示源变体/payload和struct字段内容，含私有内容，不按serde映射重命名、不自动脱敏、不保证稳定wire格式。
+该阶段历史状态：Default struct要求所有字段有Default，否则手写；当时通用手写impl注册未实现，可显式业务构造，不凭helper名字注册。enum自动默认当时仅限unique unit标记；非默认payload约束当时待回答，现已确认并实现选中payload规则，见末节。Debug显示源变体/payload和struct字段内容，含私有内容，不按serde映射重命名、不自动脱敏、不保证稳定wire格式。
 
 安全同步：先将cd49537实现分支和原文档标签发布，再把远端work `b6b746c4267962b1c61d13bff4b3f2f55638bf91` 的36项文档/检查器变更合入当前feature分支。RFC0019统一wrapper与0020关联函数原文保留；实现仍未覆盖它们的通用前端。独立编号冲突通过R19–R26和研究RFC子目录消解，链接全部重定位；远端旧strict/unknown-call-unsafe规则按D19/D20逐篇修正，没有恢复MVP借用分析。未重写work/main或原标签。
 
@@ -472,3 +472,50 @@ go test -race -count=1 ./tests/acceptance -run '^(TestEnumWire|TestT0FinalAudit|
 `go vet ./...`、设计检查13条Go命令通过；最终Markdown 56文件、486本地链接/锚点和20篇逐特性RFC结构检查通过。独立文档审查发现的strict/unknown-call-unsafe回流、raw旧当前状态、Default待决误标均已修正；0019/0020对origin/work全文无差异。日志 `/tmp/goxide-closed-wire-final-race.json`、`/tmp/goxide-closed-wire-acceptance-final.json`、`/tmp/goxide-closed-wire-final-vet.log`、`/tmp/goxide-closed-wire-final-design.log`。
 
 本轮按用户授权提交并推送feat/macro-mvp工作分支；原文档tag保持同一对象，work/main不更新。未决非默认payload Default约束保留，不重问已撤回的raw别名问题。
+
+
+## 当前增量：手动 struct Default 与默认 enum payload
+
+用户已确认 `impl` 内不使用 `static`：首参数为 `self` 的函数是实例成员，否则是关联函数；零参 `default` 属于关联函数。本轮仅实现以下具体入口，不代表完整关联函数、Self/self 或 trait wrapper 后端：
+
+```hgo
+type Settings struct { Port int; Ready chan int }
+impl Default for Settings {
+    func default() Settings {
+        return Settings{Port: 8080, Ready: make(chan int, 1)}
+    }
+}
+#[derive(Default)]
+type Service struct { Config Settings }
+```
+
+手动入口限定义包内非泛型、非别名 struct（可在同包另一 `.hgo` / native `.go` 文件定义），恰好一个零参成员，显式返回具体目标类型。签名及函数体由前端和真实 Go 类型检查共同验证；降低为 `DefaultSettings() Settings` 并登记协议，嵌套派生按字段声明顺序调用。手动与手动、手动与 derive、生成 helper 与已有声明冲突均拒绝。普通同名函数、跨包同名类型和 Go 零初始化不会创建协议。
+
+enum 的 `#[default]` 可以选择现有有限单 payload 变体，只递归要求选中 payload 的 Default；非选中变体不需要该协议，但继续遵循原有 enum 类型和 payload 限制。未扩展递归 enum 的表示范围，也未支持手动 enum impl、通用容器默认或跨包协议消费。`#[serde(default)]` 仍保持既有缺失字段 Go 零值策略。
+
+静态函数引用图检查拒绝 Default 可达的直接/间接递归调用依赖（包括经外层 derive 回到手动入口），按解析后的函数身份检查，局部同名函数不误判。它是有限静态递归诊断，不是动态回调分析或终止性证明。宏可引用明确登记的 helper，保留定义点身份及私有类型边界；item 宏生成 impl、泛型/外部 impl、`Self` 返回写法、额外成员和 impl/member 属性尚不支持，明确拒绝。手动 helper 的源码映射保留 impl 来源，递归错误回到 `.hgo` 而非格式化 Go 行号。
+
+真实 [多文件业务](examples/manual_default/main.hgo) 包含两种手动构造、嵌套 struct、选中 payload、未选中无 Default 类型、独立 channel 和另一个包的同名 Settings。独立非作者 [接受测试](tests/acceptance/manual_default_test.go) 实际安装 CLI、仓库外转译、运行生成模块的 3 项 race 测试，并验证业务输出 `service 8080 service 8080 service 9090 SCSC`、跨包协议拒绝及定位反例。默认构造由业务显式调用，不改变 Go var/make/map 缺失读取。
+
+复现（替换为实际 checkout 路径，需真实 Go 1.27+）：
+
+```sh
+cd /workspace/goxide
+export PATH=/workspace/goxide-environment/go/bin:$PATH
+export GOTOOLCHAIN=local GOWORK=off GOPROXY=off GOSUMDB=off
+export GOCACHE=/workspace/goxide-restore-check/cache
+export TMPDIR=/workspace/goxide-restore-check/tmp
+mkdir -p "$GOCACHE" "$TMPDIR" /workspace/goxide-restore-check/bin
+GOBIN=/workspace/goxide-restore-check/bin go install ./cmd/hgo
+/workspace/goxide-restore-check/bin/hgo run examples/manual_default
+go test -race -count=1 ./tests/acceptance -run '^TestManualDefault' -v
+```
+
+旧章节中“手动 impl 未实现”“仅 unit 默认”“非默认 payload 待选”描述的是先前阶段，由本节替代。完整回归及审查结果见本节末记录。
+
+
+最终验收：Go **1.27.1 linux/amd64**、CGO=1、GCC 14.2.0、Python 3.12.14，本地离线工具链。最终完整 `go test -race -count=1 -json ./...` 返回成功：**15 个有测试包、217 宿主顶层测试、377 子测试**；另 1 包无自身测试。新增独立业务生成模块的 **3 项实际 race 测试**单独统计，不混入宿主数量。`go vet ./...`、完整设计检查 **13 条 Go 命令**及最终文档检查 **56 Markdown / 492 本地链接与锚点 / 20 RFC**通过。设计夹具不替代编译器验收。
+
+独立非作者审查发现并复验修复：手动 Default 递归错误误用格式化 Go 行号；现为 impl 原始 `.hgo` 来源，单文件/多文件均有回归。引用降低后的映射也在依赖检查前刷新。宏定义点卫生、私有目标 helper 跨包泄露拒绝及非法属性另获独立复核。前一次整树运行只在新增源码定位断言失败；修复后上述最终整树命令完整成功，没有把失败轮与成功轮拼成通过。
+
+本轮日志保存在新环境 `/workspace/goxide-restore-check/manual-default-final-race.json`、`manual-default-final-vet.log`、`manual-default-design.log`、`manual-default-final-docs.log`；重跑只需要当前 checkout 和工具链，不依赖这些日志或旧执行器临时文件。按用户授权提交并推送 `feat/manual-default`，不修改 main/work、原文档标签或另一工作区的研究改动。

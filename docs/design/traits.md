@@ -29,7 +29,7 @@
 
 此模型描述可形成运行时视图的实例方法。`Default.default() -> Self` 等静态操作仍按选定 impl 降低为普通函数，不能强行塞入运行时接口。见[静态 trait 操作](macros.md#55-静态-trait-操作与-go-运行时接口)。`impl A for T` 与 trait 继承是不同功能，supertrait 另行设计。
 
-类型自有成员写在 `impl T { ... }` 中，`T::new(...)` 等无接收者关联函数见 [RFC 0020](../rfcs/0020-associated-functions.md)。它按类型查找函数，trait 静态操作则按显式 impl 选择实现；两者都可降低为包级函数，但前者不会自动创建 Default impl。静态 trait 成员的源级声明语法仍未冻结。
+类型自有成员写在 `impl T { ... }` 中，`T::new(...)` 等无接收者关联函数见 [RFC 0020](../rfcs/0020-associated-functions.md)。它按类型查找函数，trait 静态操作则按显式 impl 选择实现；两者都可降低为包级函数，但前者不会自动创建 Default impl。impl 成员用 `func` 声明，首参数 self 标识实例成员，否则为关联函数，无需 static。手动 Default 的有限实现见该 RFC，完整静态 trait 后端仍未实现。
 
 直接写出的 `func NewT(...) T` 和 `func (recv T) M(...)` 保留普通 Go 函数与方法语义，不自动成为 hgo impl，也不凭名字建立 `T::new` 绑定。impl 的 `Self` / `self` 支持按绑定解析；普通 Go 声明中的同名标识符仍按 Go 规则处理。
 
@@ -136,7 +136,7 @@ marker 使用导出的稳定符号，使其他包拥有的 wrapper 能实现 tra
 
 ## 4. 接收者、共享状态与 self
 
-`Self` 与 `self` 区分大小写：`Self` 表示 impl 的源级目标类型，包括其泛型实参，不是生成的 wrapper 类型；`self` 表示实例成员所绑定的接收者。无接收者关联函数可以使用 `Self`，不能因此获得 `self`。接收者与权限的具体声明语法另行规定，不能根据函数体是否使用 self 来决定成员有没有接收者。
+`Self` 与 `self` 区分大小写：`Self` 表示 impl 的源级目标类型，包括其泛型实参，不是生成的 wrapper 类型；`self` 表示实例成员所绑定的接收者。无接收者关联函数可以使用 `Self`，不能因此获得 `self`。首参数 self 决定成员具有实例接收者；接收者类型与权限的具体拼写另行规定，不能根据函数体是否使用 self 来决定成员有没有接收者。
 
 `impl Trait for *T` 的 wrapper 保存同一个 `*T`。不同视图可观察同一对象变化；对象指针身份保持不变，Go interface 动态类型则是 wrapper。反射与类型断言不能再假定看到原始 `*T`。
 

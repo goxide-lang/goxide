@@ -2,9 +2,9 @@
 
 ## 状态与范围
 
-已确认方向：类型关联函数定义在独立的 `impl T { ... }` 块中，用 `T::method(...)` 调用，转译为普通 Go 包级函数。impl 内支持 `Self` 和实例成员的 `self` 绑定及转译；直接书写的 Go 函数与方法保留原生 Go 语义。本篇的成员声明拼写、Go 导出名、重载与初始化细则仍为草案，尚未实现。
+已确认方向：类型关联函数定义在独立的 `impl T { ... }` 块中，用 `T::method(...)` 调用，转译为普通 Go 包级函数。impl 内支持 `Self` 和实例成员的 `self` 绑定及转译；直接书写的 Go 函数与方法保留原生 Go 语义。已确认成员均用 `func` 声明：首参数为 `self` 的是实例成员，否则是关联函数，零参数函数自然是关联函数，不引入 `static`。具体接收权限拼写、Go 导出名、重载与初始化细则仍为草案；当前实现子集见下文。
 
-这里的“类函数”指无实例接收者的类型关联函数；构造函数是其中返回新值或句柄的一类。结构体声明只定义数据，增强成员写在 impl 块中。示例暂用 impl 内的 `static func` 区分无接收者函数，`func` 表示实例成员；这组成员拼写及接收权限语法尚未冻结，不能根据函数体是否使用 self 来推断成员种类。
+这里的“类函数”指无实例接收者的类型关联函数；构造函数是其中返回新值或句柄的一类。结构体声明只定义数据，增强成员写在 impl 块中。成员种类由首参数是否为 `self` 决定，不能根据函数体是否使用 self 来推断；接收者的类型及权限拼写仍按既有 self 规格另行收敛。
 
 `impl T { ... }` 定义固有成员；`impl Trait for T { ... }` 定义显式 trait 实现，后者的实例 wrapper、marker、As/For helper 继续按 [RFC 0019](0019-uniform-trait-wrappers.md)。这一区分约束函数与方法声明，不将 enum、match 等其他 hgo 语法限制在 impl 内。
 
@@ -23,7 +23,7 @@
 
 ### C01：类型上的构造函数，普通 Go 工厂
 
-以下包含直接书写的 Go 类型声明与 hgo impl。已确定的是 impl 块、Self 支持、`Point::new` 调用与包级函数降低；块内 static/func 的具体拼写为草案。
+以下包含直接书写的 Go 类型声明与 hgo impl。已确定的是 impl 块、Self 支持、`Point::new` 调用与包级函数降低；关联函数用 `func` 且不声明首参数 self。
 
 ```hgo
 type Point struct {
@@ -32,10 +32,10 @@ type Point struct {
 }
 
 impl Point {
-    pub static func new(x int, y int) Self {
+    pub func new(x int, y int) Self {
         return Self { x: x, y: y }
     }
-    pub static func origin() Self {
+    pub func origin() Self {
         return Self::new(0, 0)
     }
 }
@@ -66,7 +66,7 @@ Go 调用方使用 `geometry.NewPoint(1, 2)`、`geometry.PointOrigin()`。无额
 源级片段位于 `impl Point` 内；`Arc::new` 是待定义基础包构造入口的示意拼写，暂假定能将一个合法值放入共享存储：
 
 ```hgo
-pub static func shared(x int, y int) Arc[Self] {
+pub func shared(x int, y int) Arc[Self] {
     return Arc::new(Self::new(x, y))
 }
 ```
@@ -92,7 +92,7 @@ type Pair[T any] struct {
     second T
 }
 impl[T any] Pair[T] {
-    pub static func new(first T, second T) Self {
+    pub func new(first T, second T) Self {
         return Self { first: first, second: second }
     }
 }
@@ -135,7 +135,7 @@ _ = p
 
 ```hgo
 // impl Point 内的关联函数；函数体应显式返回 Ok 或 Err。
-pub static func from_text(text string) Result[Self, string]
+pub func from_text(text string) Result[Self, string]
 ```
 
 Go 签名片段，依赖最终选定的 Result 支持类型与 Point：
@@ -166,11 +166,11 @@ func (p Point) LegacySum() int { return p.x + p.y }
 
 ### C07：impl 实例成员的 Self 与 self
 
-以下为 `impl Point` 的实例成员片段，采用只含 int 字段的可复制 Point 与值接收者来展示绑定；不由此冻结一般接收权限的声明语法：
+以下为 `impl Point` 的实例成员概念片段，采用只含 int 字段的可复制 Point 与值接收者来展示绑定；首参数 self 表明实例成员，注释占位并非可编译的接收者声明，不由此冻结接收类型或权限语法：
 
 ```hgo
 impl Point {
-    pub func translated(dx int, dy int) Self {
+    pub func translated(self /* 接收类型及权限待定 */, dx int, dy int) Self {
         return Self { x: self.x + dx, y: self.y + dy }
     }
 }
@@ -235,6 +235,29 @@ trait 的 `Default.default() -> Self` 仍需选择显式 impl；具体实现可�
 
 ## 验收与未定项
 
-未来验收：C01 的两种构造、C02 的独立对象和共享句柄、C03 的明确类型实参、C04 的调用次数与效果、C05 的成功/失败保留、C06 的原生声明不变、C07 的 Self/self 绑定及接收者语义、C08 的普通同名符号不变，以及 C-N1–C-N10。当前没有 hgo 实现或本篇编译通过记录。
+未来验收：C01 的两种构造、C02 的独立对象和共享句柄、C03 的明确类型实参、C04 的调用次数与效果、C05 的成功/失败保留、C06 的原生声明不变、C07 的 Self/self 绑定及接收者语义、C08 的普通同名符号不变，以及 C-N1–C-N10。这些通用关联函数与实例成员示例不作为当前实现验收；本轮仅实现以下手动 Default 子集。
 
-下一轮只需收敛：impl 内关联函数是否用 static func 标识、实例成员的接收权限拼写；Go 公共名称是否采用 NewT/TMethod；固有关联函数与同名静态 trait 操作如何限定。impl 块承担增强成员定义、Self/self 按绑定转译、原生 Go 声明保留原语义，以及 `T::method` 与包级 Go 函数的直接对应均已确定。
+下一轮只需收敛：实例成员的接收类型及权限拼写；Go 公共名称是否采用 NewT/TMethod；固有关联函数与同名静态 trait 操作如何限定。impl 块承担增强成员定义、Self/self 按绑定转译、原生 Go 声明保留原语义，以及 `T::method` 与包级 Go 函数的直接对应均已确定。
+
+## 当前手动 Default 实现子集
+
+```hgo
+struct Settings {
+    Port int
+}
+impl Default for Settings {
+    func default() Settings {
+        return Settings{Port: 8080}
+    }
+}
+#[derive(Default)]
+struct Application {
+    Config Settings
+}
+```
+
+手动实现的目标限同包本地非泛型 struct，成员必须是唯一的零参数 `default`，返回目标具体类型；该入口没有 self，也不需要 static。嵌套 struct 派生调用登记的手动实现，保留业务默认值。登记按包与类型身份进行，同包多文件可共享，不能按普通函数 `DefaultSettings` 的名称认领协议。重复手写实现、与 derive 冲突、错误参数或返回类型及不受支持的静态可达函数引用的递归协议依赖均须诊断。
+
+此子集不实现通用 trait 后端、实例 wrapper、泛型证据或跨包 Default 元数据消费；外部类型实现与跨包消费暂不支持。这里要求具体返回类型，不据此声称完整 `Self` 降低已经实现。
+
+当前 Default 子集不做动态回调分析或一般终止性证明；宏可调用已登记 helper，但 item 宏生成 impl 尚不支持。

@@ -205,15 +205,20 @@ func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) 
 			if selected != nil {
 				return "", nil, fmt.Errorf("Default requires exactly one default variant")
 			}
-			if v.Type != nil {
-				return "", nil, fmt.Errorf("default variant must have no payload")
-			}
 			selected = v
 		}
 		if selected == nil {
 			return "", nil, fmt.Errorf("Default requires exactly one default variant")
 		}
-		return "func Default" + d.Name + "() " + d.Name + " { return " + selected.Constructor + "() }\n", nil, nil
+		argument := ""
+		if selected.Type != nil {
+			var err error
+			argument, err = defaultValue(selected.Type)
+			if err != nil {
+				return "", nil, fmt.Errorf("default variant %s: %w", selected.Name, err)
+			}
+		}
+		return "func Default" + d.Name + "() " + d.Name + " { return " + selected.Constructor + "(" + argument + ") }\n", nil, nil
 	}
 	g := &generator{imports: map[string]string{}}
 	var b strings.Builder

@@ -1,0 +1,14 @@
+package main
+
+impl Default for Settings {
+    func default() Settings {
+        defaultTrace += "S"
+        return Settings{Port: 8080, Ready: make(chan int, 1)}
+    }
+}
+impl Default for Credentials {
+    func default() Credentials {
+        defaultTrace += "C"
+        return Credentials{Name: "service"}
+    }
+}

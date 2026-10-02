@@ -46,7 +46,7 @@
 | R22 | 所有新特性和语法有独立 spec/RFC，以转译前后、双向调用和反例表达约束 | [RFC 清单](../rfcs/README.md)、[模板](../rfcs/TEMPLATE.md)；已写文档不代表已实现 |
 | R23 | hgo 源级使用变体枚举分派，不直接采用 Go 的 .(T)/.(type) 作为分派语法；增强保证由 hgo 工具链提供 | 后端和原生 Go 仍可使用 Go 类型检查/反射；普通 Go 调用者不获得 hgo 静态权限保证 |
 | R24 | 所有运行时 trait 视图统一 wrapper；trait 接口与 wrapper 保留 marker；固定包级函数适配；Go 使用本包 As 方法或外部 ForT.As helper | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；具体符号编码、权限、nil/比较与多包载体选择未定 |
-| R25 | 构造函数等类型关联函数定义在独立 impl T 块中，用 T::method 调用，降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；不将函数写入 struct 声明；块内成员拼写、Go 名称、初始化等具体规则为讨论草案 |
+| R25 | 构造函数等类型关联函数定义在独立 impl T 块中，用 T::method 调用，降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；不将函数写入 struct 声明；func 首参数 self 区分实例成员，其余为关联函数，无 static；接收类型/权限、Go 名称与初始化细则仍待收敛 |
 | R26 | impl 成员按 hgo 规则转译并支持 Self/self；直接书写的 Go 函数和方法保留原生 Go 语义 | [RFC 0020](../rfcs/0020-associated-functions.md)；Self 绑定源目标类型，self 仅绑定实例接收者；不全局替换同名 Go 标识符，不限制其他 hgo 特性只能位于 impl 内 |
 
 已确认新增 **D19（2026-10-01）**：用户明确要求默认兼容 Go 式指针/别名；有具体风险依据先 warning，不以无法证明安全大面积拒绝。语法、类型、已确认不变量错误不降级；warning 与运行时 race 分开，不能宣称静态安全。该反馈否决 T01/T06 及前两轮严格默认，不撤销无关 D01–D18。
@@ -78,13 +78,13 @@
 | T09 | 固有方法优先、唯一可见 trait 候选；稳定符号编码，限定调用 | 最终源码拼写、名称冲突策略和 ABI 编码未定；新增 impl 可能增加源码歧义 |
 | T10 | 宏模板自由名字按定义点绑定、捕获语法保留调用点来源 | 此处有意不同于 Rust mixed-site hygiene；宏匹配、阶段、缓存、预算及授权规则是候选设计 |
 | T11 | 字面量 `{}` / `{:?}` 对应 Display / Debug；打印失败 panic；固定字段式 derive 规则 | 格式子集、formatter、Default / Clone / Debug 精确协议及错误策略未冻结 |
-| T12 | Default / Clone 的静态 Self 操作选择具体 impl 并降低为普通 Go 函数 | 静态成员语法与泛型实现证据未定；不能宣称所有 trait 均可作为 Go 运行时接口 |
+| T12 | Default / Clone 的静态 Self 操作选择具体 impl 并降低为普通 Go 函数 | 成员类别规则已确认；接收类型/权限与泛型实现证据未定；不能宣称所有 trait 均可作为 Go 运行时接口 |
 | T13 | 用户建议 std 提供 Vec/借用视图和多种 Map；既有 Slice、ReadOutcome、copy/clone_with 为候选 | [Vec](../rfcs/0010-collections.md)、[Map](../rfcs/0017-maps.md)；赋值语义、元素借用、ABI、名称和具体后端未定 |
 | T14 | syntax 协议 + 普通 syn / quote 包可先于过程宏宿主提供 | 这是实现建议，不承诺首版交付；token 构造原语、卫生上下文和包版本尚未冻结 |
 | T15 | Go 启动前端 / LSP，独立 hgo AST 和语义 IR；复用 Go 包加载、输出和类型信息 | 自举阶段、复用边界、仓库布局和工具进程协议见[工具链草案](compiler-and-tooling.md) |
 | T16 | Unit 用 struct{}；第三方锁经普通 Lock/Unlock 原语接入 | 回调语法、没有结果的 return 插入、第三方适配构造器及来源检查 |
 | T17 | R24 已确认的 wrapper/marker/helper 方向下的具体工厂、便利名称和载体协议 | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；编码、冲突、共享适配包和权限细则仍需定稿 |
-| T18 | impl 内 static func 示例、实例接收权限拼写、new → NewT、其他关联函数 → TMethod、首版不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；impl 块及 Self/self 支持、T::method 与 Go 包函数映射已确认，全部成员语法/导出规则未冻结 |
+| T18 | 实例接收类型/权限拼写、new → NewT、其他关联函数 → TMethod、首版不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；impl 块及 Self/self 支持、T::method 与 Go 包函数映射已确认，func 首参数 self 的分类规则已确认；具体接收类型/权限及导出规则未冻结 |
 
 ## 4. 未定与明确延期
 
@@ -145,4 +145,4 @@
 
 已确认 **D27（最新用户反馈）**：语言仅封闭变体 enum，撤回开放 raw/C enum；serde 内建宏负责数值/string 外部映射，未知 variant 解码报错，不制造合法未知值。业务 validator 后置，现有结构类型/enum边界验证保留。
 
-已确认 **D28（最新用户反馈）**：struct 派生 Default 要求每个字段实现 Default，否则手写；enum 标记默认变体。非默认变体 payload 的 Default 约束尚待回答，不擅自确认或扩大。Debug 必须清楚说明输出字段/payload内容与隐私、格式稳定性边界。
+已确认 **D28（最新用户反馈）**：struct 派生 Default 要求每个字段实现 Default，否则手写；enum 标记默认变体。后续用户确认：仅选中默认变体的 payload 字段需要 Default，非默认变体不要求；允许带 payload 的默认变体。手动 Default 采用 `impl Default for T { func default() T { ... } }`，不引入 static，首参数 self 区分实例成员与关联函数。Debug 必须清楚说明输出字段/payload内容与隐私、格式稳定性边界。

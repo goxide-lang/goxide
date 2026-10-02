@@ -23,7 +23,7 @@ func attachDeriveOrigins(dst *sourcemap.Map, src []byte, models []model, input *
 		}
 		for _, m := range models {
 			match := false
-			for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone", "From"} {
+			for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone", "Default", "From"} {
 				if fn.Name.Name == kind+m.name && (m.attrs.derive[kind] || kind == "From" && m.from != "") {
 					match = true
 				}

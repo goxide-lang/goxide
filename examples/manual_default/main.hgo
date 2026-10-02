@@ -1,0 +1,9 @@
+package main
+
+import "manualdefault.example/service/config"
+
+func main() {
+    service := DefaultService()
+    remote := config.NewSettings()
+    println!("service {} {} {} {} {} {}", service.First.Port, service.Login.Name, service.Second.Port, ModeName(service.Mode), remote.Port, defaultTrace)
+}

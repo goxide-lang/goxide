@@ -49,7 +49,7 @@ enum E { A, B }`,
 		`#[derive(Default)]
 enum E { #[default] A, #[default] B }`,
 		`#[derive(Default)]
-enum E { #[default] A(int), B }`,
+enum E { #[default] A(Result[int,string]), B }`,
 		`#[derive(Default)]
 enum E { #[default] #[default] A }`,
 		`enum E { #[default] A }`,

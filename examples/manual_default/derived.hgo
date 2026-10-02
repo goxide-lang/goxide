@@ -1,0 +1,25 @@
+package main
+
+#[derive(Default)]
+type Service struct {
+    First Settings
+    Login Credentials
+    Second Settings
+    Mode Mode
+}
+
+// Only the selected variant needs Default; Unsupported deliberately has none.
+#[derive(Default)]
+pub enum Mode {
+    Disabled(Unsupported),
+    #[default]
+    Ready(Credentials),
+}
+
+func ModeName(mode Mode) string {
+    match mode {
+        Mode::Ready(settings) => { return settings.Name },
+        Mode::Disabled(_) => { return "disabled" },
+    }
+    panic("unreachable")
+}

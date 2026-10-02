@@ -34,6 +34,8 @@ type Result struct {
 	conversions             []propagate.Conversion
 	models                  map[string]model
 	debugTypes              map[string]bool
+	typeSpecs               map[string]*ast.TypeSpec
+	defaultHelpers          map[string]bool
 }
 type attrs struct {
 	derive          map[string]bool
@@ -79,15 +81,17 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
-	macros        *macros.Package
-	macroImporter types.Importer
-	macroBudget   *macros.Budget
-	declarations  []enums.Decl
-	named         map[string]ast.Expr
-	models        map[string]model
-	collect       bool
-	imported      map[string][]enums.Decl
-	preludes      map[string]string
+	macros         *macros.Package
+	macroImporter  types.Importer
+	macroBudget    *macros.Budget
+	declarations   []enums.Decl
+	named          map[string]ast.Expr
+	models         map[string]model
+	collect        bool
+	imported       map[string][]enums.Decl
+	preludes       map[string]string
+	manualDefaults map[string]manualDefault
+	typeSpecs      map[string]*ast.TypeSpec
 }
 
 func compile(filename string, source []byte, cfg *compileConfig) (Result, error) {
@@ -194,7 +198,19 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			provenance.Attach(o.OutputStart, o.OutputEnd, origin, stack, kind)
 		}
 	}
-	source, err = matchexpr.LowerMapped(filename, expanded.Source, provenance)
+	manualSource, manual, err := lowerManualDefaults(filename, expanded.Source)
+	if err != nil {
+		return Result{}, err
+	}
+	for n, entry := range manual {
+		entry.origin = provenance.SpanFor(entry.position.Offset, entry.position.Offset+4)
+		if seg := provenance.Lookup(entry.position.Offset); seg != nil {
+			entry.stack = seg.Stack
+		}
+		manual[n] = entry
+	}
+	provenance = provenance.Compose(expanded.Source, manualSource, "manualDefault.Lower")
+	source, err = matchexpr.LowerMapped(filename, manualSource, provenance)
 	if err != nil {
 		return Result{}, stageError("matchexpr.Lower", err)
 	}
@@ -565,8 +581,48 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	if cfg != nil && cfg.collect {
-		return Result{models: g.models}, nil
+		return Result{models: g.models, typeSpecs: typeSpecs(f)}, nil
 	}
+	allManual := manual
+	if cfg != nil {
+		allManual = cfg.manualDefaults
+	}
+	specs := typeSpecs(f)
+	if cfg != nil {
+		for n, sp := range cfg.typeSpecs {
+			if specs[n] == nil {
+				specs[n] = sp
+			}
+		}
+	}
+	for n, entry := range allManual {
+		spec := specs[n]
+		if spec == nil || spec.Assign.IsValid() || spec.TypeParams != nil {
+			return Result{}, fmt.Errorf("%s: manual Default requires a local defined non-generic struct: %s", entry.position, n)
+		}
+		if _, ok := spec.Type.(*ast.StructType); !ok {
+			return Result{}, fmt.Errorf("%s: manual Default target must be a struct: %s", entry.position, n)
+		}
+		m := g.models[n]
+		if m.attrs.derive["Default"] {
+			return Result{}, fmt.Errorf("%s: duplicate Default implementation (manual and derive): %s", entry.position, n)
+		}
+		derives := map[string]bool{}
+		for k, v := range m.attrs.derive {
+			derives[k] = v
+		}
+		derives["Default"] = true
+		m.attrs.derive = derives
+		m.name = n
+		g.models[n] = m
+	}
+	defaultHelpers := map[string]bool{}
+	for n, m := range g.models {
+		if m.attrs.derive["Default"] {
+			defaultHelpers["Default"+n] = true
+		}
+	}
+
 	conversions := []propagate.Conversion{}
 	for _, m := range ordered {
 		if m.from != "" {
@@ -600,7 +656,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 			if m.enum != nil {
 				for _, v := range m.enum.Variants {
-					if kind != "Error" && kind != "Default" && v.Type != nil {
+					if kind != "Error" && (kind != "Default" || v.Default) && v.Type != nil {
 						g.enumPosition = &v.Position
 						err := g.validateExtra(v.Type, kind)
 						g.enumPosition = nil
@@ -659,13 +715,14 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		return Result{}, fmt.Errorf("internal expansion error: %w\n%s", e, text)
 	}
 	provenance = provenance.Format([]byte(text), out, "format.generated")
+	attachManualDefaultOrigins(provenance, out, manual)
 	debugTypes := map[string]bool{}
 	for _, m := range ordered {
 		if m.attrs.derive["Debug"] {
 			debugTypes[m.name] = true
 		}
 	}
-	needsTypecheck := bytes.Contains(out, []byte("__hgo_enum_infer(")) || bytes.Contains(out, []byte("__hgo_match_expr_")) || bytes.Contains(out, []byte("__hgo_print"))
+	needsTypecheck := len(defaultHelpers) > 0 || bytes.Contains(out, []byte("__hgo_enum_infer(")) || bytes.Contains(out, []byte("__hgo_match_expr_")) || bytes.Contains(out, []byte("__hgo_print"))
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
 	}
@@ -707,6 +764,11 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 
+	if cfg == nil {
+		if err := checkDefaultCycles("hgo/generated", map[string][]byte{filename: out}, typecheck.NewImporter(filename), defaultHelpers, map[string]*sourcemap.Map{filename: provenance}); err != nil {
+			return Result{}, err
+		}
+	}
 	sm := []map[string]any{}
 	deriveFields := []map[string]any{}
 	for _, m := range ordered {
@@ -729,7 +791,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "deriveFields": deriveFields, "macroTokens": expanded.Origins, "macroTokenInputStage": "propagate.Prepare output", "references": refResult.References, "diagnostics": provenance, "sourceBytes": len(originalSource), "note": "diagnostics uses final Go byte offsets; generated/unmapped regions have no proven source; macroTokens uses macro expansion offsets"}, "", "  ")
-	return Result{Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes}, nil
+	return Result{Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer
@@ -961,7 +1023,7 @@ func (g *generator) validateExtra(t ast.Expr, kind string) error {
 		}
 		m, ok := g.models[x.Name]
 		if !ok || !m.attrs.derive[kind] {
-			return g.err(t, "nested type requires "+kind+" derive: "+x.Name)
+			return g.err(t, "nested type requires "+kind+" derive or explicit implementation: "+x.Name)
 		}
 	case *ast.ArrayType:
 		return g.validateExtra(x.Elt, kind)

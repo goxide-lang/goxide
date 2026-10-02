@@ -1,0 +1,9 @@
+package config
+
+type Settings struct { Port int }
+impl Default for Settings {
+    func default() Settings { return Settings{Port: 9090} }
+}
+
+// A public ordinary constructor crosses the package boundary explicitly.
+func NewSettings() Settings { return DefaultSettings() }

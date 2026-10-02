@@ -3,12 +3,12 @@
 ## 状态与范围
 
 已确认目标：内建 `#[derive(Default, Clone, Debug)]`；用户可编程 derive 延期（D14）。
-具体派生规则与静态降低为候选方案（T11、T12）；静态成员语法、泛型证据和 formatter 未定。
+Default 的字段约束、enum 默认变体规则与无 static 的关联函数声明已确认；通用静态降低、泛型证据和 formatter 仍未定。
 依据：[原设计](../design/macros.md)。derive 生成普通显式 impl，不能绕过 trait / 借用检查。类型关联函数/构造函数见 [RFC 0020](0020-associated-functions.md)；同名构造不会自动实现 Default。
 
 ## 源级规则
 
-最新D28：struct自动Default必须每个字段有Default，否则手动实现；enum标记默认变体。**非默认变体payload的Default约束待用户选择**，不得在本轮加约束或用旧成功测试宣称定案。当前自动派生仅支持unique unit默认，通用手写impl注册仍未实现。
+最新 D28 补充确认：struct 自动 Default 必须每个字段有 Default，否则手动实现；enum 恰好标记一个默认变体，可以携带 payload，仅该变体的字段递归要求 Default，非默认变体不要求 Default。手动 Default 首期使用 `impl Default for T { func default() T { ... } }`，限同包本地非泛型 struct，具体边界见 [RFC 0020](0020-associated-functions.md#当前手动-default-实现子集)。
 
 - 按规范 trait 身份选择固定内建规则；只读目标类型形状和固定辅助属性。
 - Default 按声明顺序调用字段 Default；Clone 按同一顺序调用字段 Clone。
@@ -90,7 +90,7 @@ struct Exclusive {
 
 ## 拒绝与边界
 
-- enum 的 Default 候选规则：恰好一个无 payload 的 `#[default]` 变体；其他情况手写实现。
+- enum 的 Default 要求恰好一个 `#[default]` 变体；按字段声明顺序构造其 payload。缺少或重复标记、选中字段缺协议及非法属性位置均拒绝；不检查非选中变体的 Default。
 - Result 不自动取得 Default；nil 不因 Default 或 Go 零值存在就成为合法 Result / 非空引用。
 - 泛型 `var value T` 不能冒充 Default；容器需明确逐项调用选中的构造。
 - 容器 Clone 必须说明存储、元素和别名行为；Go `slices.Clone` 不自动等于逐元素 Clone。
@@ -110,7 +110,7 @@ Go 使用发布 `.go` 中公开的普通函数 / 类型；Default 不自动改�
 2. D02 验证共享身份；独立容器复制必须另用已选定的容器 Clone 契约验收。
 3. D03、缺少字段 Debug、重复 impl、多个 default 变体均不得生成成功产物。
 4. 成本：逐字段协议调用；递归、分配、共享及副作用取决于字段实现，不承诺统一复杂度。
-5. 未定：静态成员源码语法、泛型字典或专门化、Debug formatter 和稳定符号编码。
+5. 未定：接收者类型与权限拼写、泛型字典或专门化、Debug formatter 和稳定符号编码。
 6. 未确定的泛型形式不得假称已有可编译降低；Go 示例不证明通用派生器已实现。
 
-当前实现证据见[Default/打印验收](../../tests/acceptance/print_default_test.go)与[封闭映射验收](../../tests/acceptance/enum_wire_test.go)。泛型和手写impl仍后置；不能将原型helper认作完整关联函数语法。
+当前手动入口与选中 payload 的实现证据见[独立业务验收](../../tests/acceptance/manual_default_test.go)；既有实现证据见[Default/打印验收](../../tests/acceptance/print_default_test.go)与[封闭映射验收](../../tests/acceptance/enum_wire_test.go)。泛型与完整 trait 后端仍后置；手动 Default 的具体子集不代表完整关联函数后端。

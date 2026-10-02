@@ -57,7 +57,7 @@ func TestPrintDefaultExplicitRejections(t *testing.T) {
 		{"defer-statement", `func f(){defer println!("later")}`},
 		{"default-enum-missing", "#[derive(Default)]\nenum E { A, B, }"},
 		{"default-enum-many", "#[derive(Default)]\nenum E {\n#[default]\nA,\n#[default]\nB,\n}"},
-		{"default-enum-payload", "#[derive(Default)]\nenum E {\n#[default]\nA(int),\n}"},
+		{"default-enum-payload-without-default", "#[derive(Default)]\nenum E {\n#[default]\nA(Result[int,string]),\n}"},
 		{"default-without-derive", "enum E {\n#[default]\nA,\n}"},
 		{"default-reference", "#[derive(Default)]\ntype Invalid struct { Value &int }"},
 		{"default-pointer", "#[derive(Default)]\ntype Invalid struct { Value *int }"},

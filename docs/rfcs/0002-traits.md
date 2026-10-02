@@ -25,7 +25,7 @@
 8. 自定义 wrapper 保存原对象；其方法体内调用当前 trait 时不能绕回原生实现。
 9. wrapper 与工厂属于 impl 声明包 C，不必属于 trait 包；declare 转发原生方法，有体 impl 执行其方法体，marker 均由 wrapper 实现。
 10. hgo 适配使用固定工厂；Go 便利方法不另选 impl。只有类型与 impl 同包且满足 Go 方法接收者规则才生成 `t.AsTrait()`，其他类型使用 `adapters.ForT(t).AsTrait()`。
-11. impl 中 `Self` 绑定源级目标类型及其泛型实参，不绑定生成的 wrapper；`self` 绑定实例接收者。self 的字段访问保持原对象语义，当前 trait 方法调用保持选定的 impl。没有接收者的成员不获得 self，具体接收者与权限语法仍未定。
+11. impl 中 `Self` 绑定源级目标类型及其泛型实参，不绑定生成的 wrapper；`self` 绑定实例接收者。self 的字段访问保持原对象语义，当前 trait 方法调用保持选定的 impl。impl 的 func 首参数为 self 时是实例成员，否则为关联函数；没有接收者的成员不获得 self，不需要 static。具体接收类型与权限拼写仍未定。
 12. 直接声明的 Go 包函数与接收者方法保留 Go 语义，不自动变为 impl。Self / self 的转译按已解析绑定进行；普通 Go 声明中的同名标识符不被全局替换。
 
 统一表示与便利入口详见 [RFC 0019](0019-uniform-trait-wrappers.md)。静态 trait 操作和泛型实现证据不强制生成实例 wrapper。

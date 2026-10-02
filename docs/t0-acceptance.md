@@ -239,7 +239,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | 有限可交付 | 同模块声明宏、具体 serde/JSON、封闭 enum/match、Option/Result 与专用 `?`/一步 From、已有读写权限、固定打印、具体 Default/Clone/Debug、CLI及生成Go模块 |
 | 本轮更新 | 撤回开放raw/C enum和raw Clone；封闭unit enum字符串rename或全体显式int64 value；未知外部值UnknownVariant，Type/Range保留；业务不执行 |
 | 已撤回问题 | U19同值raw别名不再等待；重复serde外部映射因解码歧义拒绝，不将其当成语言别名 |
-| 待用户选择 | enum非默认变体payload是否要求Default；没有通过新增拒绝/成功用例替用户定规则 |
+| 已由后续用户确认 | enum 仅选中默认变体的 payload 要求 Default；非默认变体不要求。下述旧验收不代替新增实现验收 |
 | 明确后置 | 业务validator、通用手写impl注册、统一trait wrapper前端、关联函数/Self/self前端、完整泛型/表达式/借用模式、复杂映射属性、YAML/LSP/外部metadata等 |
 | 独立长期 | 别名/借用风险warning分析不属MVP；基础类型权限检查仍执行 |
 
@@ -249,6 +249,13 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 
 [独立验收](../tests/acceptance/enum_wire_test.go)实际安装CLI、转译、生成模块3项race运行测试、独立build、4种二进制输入和仓库外CLI运行。另[归档业务](../tests/acceptance/t0_final_test.go)已改为封闭变体，生成模块2项race运行测试；print/Default旧业务生成4项race测试回归。反例覆盖已撤回raw语法、未知映射、混合/重复/越界属性、未登记协议和非法case；准确数量见实现记录。
 
-Default struct每字段必须有协议，缺项不能自动派生；当前通用手写impl还未实现，可显式业务构造但不会按helper名字认领。enum唯一unit默认是现实现子集，非默认payload约束仍待定。Debug显示源变体/payload及struct字段内容（含私有字段），不跟随wire值、不自动脱敏、不保证稳定格式。
+历史验收时 Default struct 每字段必须有协议，手写 impl 尚未实现，enum 仅支持唯一 unit 默认。后续已确认并扩展为同包非泛型 struct 的显式手动 Default，以及允许默认变体 payload、仅检查选中字段；普通 helper 名称仍不认领协议。当前范围见 RFC 0013/0020 与 IMPLEMENTATION.md。Debug显示源变体/payload及struct字段内容（含私有字段），不跟随wire值、不自动脱敏、不保证稳定格式。
 
 RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为文档合入就成为已实现能力。下文历史成果与当前闭环须区分，未宣称完整T0/Rust。
+
+
+## 手动 Default 与默认 enum payload 增量
+
+用户确认无 static：func 首参数 self 为实例成员，其余为关联函数。有限入口 `impl Default for T { func default() T { ... } }` 支持同包非泛型 struct，唯一零参具体返回目标；外层 derive 调用登记的业务实现。enum 仅选中默认变体的 payload 递归要求 Default，非选中变体不要求。跨包协议消费、通用 Self/trait 后端与动态递归分析未扩展。
+
+[独立业务验收](../tests/acceptance/manual_default_test.go) 运行真实 CLI 与生成模块 3 项 race 测试，覆盖多文件、同名异包、调用顺序/次数、非零默认值、独立 channel、Go 零值不变和非法协议诊断。[前端回归](../internal/frontend/manual_default_test.go) 补签名、别名、冲突、静态递归及源位置。此增量替代旧表中的“手写协议注册未实现”和“仅unit”限制，不代表完整 T0。

@@ -39,7 +39,22 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 }
 func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
 	names := sortedSources(sources)
-	cfg := &compileConfig{declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}}
+	cfg := &compileConfig{declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, typeSpecs: map[string]*ast.TypeSpec{}}
+	for _, name := range names {
+		if !strings.HasSuffix(name, ".hgo") {
+			continue
+		}
+		_, manual, err := lowerManualDefaults(name, sources[name])
+		if err != nil {
+			return PackageResult{}, err
+		}
+		for n, m := range manual {
+			if prior, ok := cfg.manualDefaults[n]; ok {
+				return PackageResult{}, fmt.Errorf("%s: duplicate Default implementation for %s (also %s)", m.position, n, prior.position)
+			}
+			cfg.manualDefaults[n] = m
+		}
+	}
 	cfg.imported, cfg.preludes = importedDeclarations(sources, metadata)
 	dependencies := map[string]*macros.Package{}
 	for path, p := range metadata {
@@ -95,6 +110,9 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		if err != nil {
 			return PackageResult{}, err
 		}
+		for n, sp := range typeSpecs(f) {
+			cfg.typeSpecs[n] = sp
+		}
 		for _, decl := range f.Decls {
 			if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
 				for _, sp := range gd.Specs {
@@ -112,6 +130,9 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		r, err := compile(name, sources[name], cfg)
 		if err != nil {
 			return PackageResult{}, err
+		}
+		for n, sp := range r.typeSpecs {
+			cfg.typeSpecs[n] = sp
 		}
 		for n, m := range r.models {
 			cfg.models[n] = m
@@ -224,6 +245,16 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		return result, err
 	}
 
+	helpers := map[string]bool{}
+	for name, r := range result.Files {
+		maps[name] = r.Diagnostics
+		for n := range r.defaultHelpers {
+			helpers[n] = true
+		}
+	}
+	if err := checkDefaultCycles(path, files, imp, helpers, maps); err != nil {
+		return result, err
+	}
 	return result, nil
 }
 func sortedSources(s map[string][]byte) []string {

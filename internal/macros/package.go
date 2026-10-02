@@ -312,6 +312,14 @@ func (b *Budget) AddPackage(p *Package) error {
 // in frontend; malformed programs never become a compiled package dependency.
 func declaredDeriveHelpers(ts []tok) map[string]bool {
 	out := map[string]bool{}
+	// Explicit manual Default is protocol evidence too. The frontend validates
+	// its signature and target before a dependency's metadata can be consumed.
+	for i := 0; i+4 < len(ts); i++ {
+		if ts[i].text == "impl" && ts[i+1].text == "Default" && ts[i+2].text == "for" && ident(ts[i+3].text) && ts[i+4].text == "{" {
+			name := ts[i+3].text
+			out["Default"+name] = ast.IsExported(name)
+		}
+	}
 	for i := 0; i+5 < len(ts); i++ {
 		if ts[i].text != "#" || ts[i+1].text != "[" || ts[i+2].text != "derive" || ts[i+3].text != "(" {
 			continue

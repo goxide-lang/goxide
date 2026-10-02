@@ -214,18 +214,18 @@ derive 入口按规范 trait 身份选择内建规则，不能仅凭同名字符
 
 `Default` 的语义是静态构造操作 `default() -> Self`，没有实例接收者。struct 派生依声明顺序调用每个字段类型的 `Default`；字段没有实现时拒绝。空 struct 可以直接构造。手写实现可以选择业务默认值，不要求它等于底层 Go 零值。这一逐字段派生思路参考 [Rust Default](https://doc.rust-lang.org/std/default/trait.Default.html)。
 
-当前原型普通 enum 的自动派生要求恰好一个无 payload 变体标注 `#[default]`，例如：
+普通 enum 的自动派生要求恰好一个变体标注 `#[default]`，该变体可以有 payload，例如：
 
 ```hgo
-#[derive(Default, Clone, Debug)]
+#[derive(Default)]
 pub enum Mode {
     #[default]
-    Idle,
     Named(string),
+    Idle,
 }
 ```
 
-没有标注、多处标注，或将 `#[default]` 放在带 payload 变体上都拒绝；需要携带数据的业务默认值时手写完整 `Default` impl。`#[default]` 是内建 derive 的固定辅助属性，不执行用户程序。
+上例默认构造 `Named`，其字符串字段使用 string 的 Default。没有标注、多处标注或非法属性位置都拒绝。默认变体的 payload 按声明顺序逐字段调用 Default，缺少协议时拒绝；非默认变体的 payload 不要求 Default。`#[default]` 是内建 derive 的固定辅助属性，不执行用户程序。
 
 `Option[T]` 可以由基础包提供返回 `None` 的显式实现，不必要求 `T: Default`。`Result[T, E]` **不自动获得 Default**，不猜测 `Ok(default)` 或 `Err(default)`。即使用户手写返回合法变体的 Default，也只有显式调用它才执行构造；原生 Go 输入的 nil 仍不是合法 Result。
 
@@ -235,11 +235,11 @@ pub enum Mode {
 
 #### 5.2.1 实现结果回流：具体 Default 与 Go 零值
 
-实现基准 `47af69f` 采用具体 helper `DefaultType() Type`，支持基础标量字段、同包已派生字段、空 struct、唯一指定无 payload 变体和具体 Option None。该选择沿第 5.5 节普通 Go 函数降低方向，不冻结通用静态 trait ABI。宏按显式 derive 登记 helper 身份，调用方局部同名函数不截获。
+历史实现基准 `47af69f` 采用具体 helper `DefaultType() Type`，支持基础标量字段、同包已派生字段、空 struct、唯一指定无 payload 变体和具体 Option None。该选择沿第 5.5 节普通 Go 函数降低方向，不冻结通用静态 trait ABI。宏按显式 derive 登记 helper 身份，调用方局部同名函数不截获。
 
-缺失/重复/带 payload 的默认标记、未登记协议、Result/引用/容器/外部类型自动默认仍明确拒绝。Option 的 None 在当前 ABI 为 nil，不代表其他 enum 的 nil 合法。Go var/make/map 缺失读取保持原零值；现有 `#[serde(default)]` 仍是原型的缺失字段 Go 零值策略，不自动调用这个新 Default helper。后续扩展若改变该行为需单独处理兼容性，不能让本次语言 Default 静默修改 wire 契约。真实正反例见 [独立验收](../../tests/acceptance/print_default_test.go)。
+该历史版本拒绝带 payload 的默认标记；当前规则已允许它，并只检查选中字段。缺失/重复默认标记、未登记协议、Result/引用/容器/外部类型自动默认仍明确拒绝。Option 的 None 在当前 ABI 为 nil，不代表其他 enum 的 nil 合法。Go var/make/map 缺失读取保持原零值；现有 `#[serde(default)]` 仍是原型的缺失字段 Go 零值策略，不自动调用这个新 Default helper。后续扩展若改变该行为需单独处理兼容性，不能让本次语言 Default 静默修改 wire 契约。真实正反例见 [独立验收](../../tests/acceptance/print_default_test.go)。
 
-非默认变体 payload 是否也要求 Default 仍待用户选择，本轮不加约束。当前自动派生没有通用手写 impl 注册，缺字段协议时可显式业务构造，但不把同名 Default helper 当成已登记协议。
+当前手动协议入口为 `impl Default for T { func default() T { ... } }`，限同包本地非泛型 struct；函数零参数并返回目标具体类型，嵌套 derive 调用登记实现。按包与类型身份检查唯一性，手动与 derive 冲突、错误签名及不受支持的递归协议依赖均拒绝。同名普通 Default helper 不取得协议身份，跨包消费与完整 trait 后端仍后置。enum 非默认变体的 payload 不要求 Default。
 
 ### 5.3 Clone：字段协议决定复制内容
 
@@ -274,7 +274,7 @@ Debug 不自动隐藏私有字段中的业务内容；需要控制输出的类�
 
 ### 5.5 静态 trait 操作与 Go 运行时接口
 
-`Default.default() -> Self` 与 `Clone.clone(&Self) -> Self` 不能强行装入只规定固定业务签名和 marker 的旧 Go 接口模型。前者没有接收者，后者结果依赖具体 Self；不能改成返回 `any` 或 wrapper 后宣称保持类型语义。静态 trait 成员的源码拼写（例如 `static default() Self`）仍待冻结，以上签名只描述必须支持的操作。固有类型关联函数的 `T::method` 调用及包级函数降低已确认，声明拼写讨论见 [RFC 0020](../rfcs/0020-associated-functions.md)；不因此自动建立 Default impl。
+`Default.default() -> Self` 与 `Clone.clone(&Self) -> Self` 不能强行装入只规定固定业务签名和 marker 的旧 Go 接口模型。前者没有接收者，后者结果依赖具体 Self；不能改成返回 `any` 或 wrapper 后宣称保持类型语义。impl 成员统一用 `func`，首参数 self 标识实例成员，其余是关联函数，不需要 static；接收类型及权限拼写仍待收敛。以上签名描述操作语义，当前手动 Default 要求具体返回类型。固有类型关联函数的 `T::method` 调用及包级函数降低已确认，已确认声明规则见 [RFC 0020](../rfcs/0020-associated-functions.md)；不因此自动建立 Default impl。
 
 首版对这些操作按规范 impl 身份在编译期选择实现，对具体类型生成普通 Go 函数，例如 `defaultPoint() Point`、`clonePoint(value *Point) Point`；后者的 `*Point` 仅为只读借用的后端表示。impl 唯一性、包可见性和借用检查仍由同一套 trait 元数据负责，不另建结构式自动采用关系。
 
@@ -480,7 +480,7 @@ LSP 与构建共享宏依赖、展开器、缓存协议及语义数据库，应�
 6. 跨包模板引用私有运行时 helper 被拒绝；公开 helper 或显式公开 shim 可用。
 7. 打印格式字面量、实参数量、Display / Debug 实现均在编译期检查；实参从左到右各求值一次，临时引用按具体来源风险 warning；不调用未经适配的 Go Stringer 或反射。
 8. `print!("")` 无输出，`println!()` 和 `println!("")` 各输出一个 LF；写入错误及短写遵守 panic 策略，不吞掉部分写入事实。
-9. Default 派生逐字段构造；enum 只接受单个无 payload 的 default 变体；Result nil、无约束泛型零值不能借 Default 获得合法性。
+9. Default 派生逐字段构造；enum 接受单个 default 变体，仅其 payload 字段递归要求 Default；Result nil、无约束泛型零值不能借 Default 获得合法性。
 10. Clone 派生调用字段协议，缺少显式 impl 仍错误；不能仅因字段含 `mut&` 就套用旧独占规则拒绝；共享 Arc 和锁仍共享状态，独立数据复制不被夸大为整个对象图深复制。Debug 不延长借用，也不绕过锁权限读取内部数据。
 11. 内建 derive 只读取有限形状，输出显式 impl；缺失字段协议、重复 impl、关联类型错误正常诊断。静态 Self 操作正确选择函数，不伪装成返回 any 的运行时接口。未知 derive 不能执行宿主程序。
 12. 递归或输出爆炸在预算内终止并诊断；声明规则不能读取环境、文件或在宏扩展中执行用户 AST 程序。

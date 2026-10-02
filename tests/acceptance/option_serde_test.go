@@ -70,6 +70,18 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 	}
 }
 
+func TestOptionProtocolDoesNotGrantPayloadDefault(t *testing.T) {
+	_, err := frontend.Compile("no-payload-default.hgo", []byte(`package fixture
+#[derive(Deserialize)]
+type InputPayload struct { Port int }
+#[derive(Default)]
+type RequiresDefault struct { Payload InputPayload }
+`))
+	if err == nil || !strings.Contains(err.Error(), "requires Default") {
+		t.Fatalf("payload unexpectedly gained Default: %v", err)
+	}
+}
+
 const optionSerdeAssertions = `package main
 import("errors";"reflect";"strings";"testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
 func readRequest(input string)(Request,error){return serdejson.Unmarshal([]byte(input),DeserializeRequest)}
@@ -157,4 +169,18 @@ func TestSomePayloadDefaultsAreSeparateFromOptionDefault(t *testing.T){
  if !errors.As(err,&detail)||detail.Kind!=serde.Type||defaultCalls!=0||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Field",Name:"Value"},{Kind:"Field",Name:"Config"},{Kind:"Field",Name:"Port"}}){t.Fatalf("invalid Some fell back: %#v %v calls=%d",detail,err,defaultCalls)}
 }
 
+
+func TestOptionProtocolWithoutPayloadDefault(t *testing.T){
+ for _,input:=range []string{"{}","{\"Plain\":null,\"SideEffects\":null,\"Explicit\":null,\"Ignored\":{\"anything\":[1,true]}}"}{
+  defaultCalls=0;v,err:=serdejson.Unmarshal([]byte(input),DeserializeProtocolEnvelope)
+  if err!=nil||v.Plain!=nil||v.SideEffects!=nil||v.Explicit!=nil||v.Ignored!=nil||defaultCalls!=0{t.Fatalf("protocol None: %s %#v err=%v defaults=%d",input,v,err,defaultCalls)}
+ }
+ defaultCalls=0;v,err:=serdejson.Unmarshal([]byte("{\"Plain\":{\"Port\":7},\"Explicit\":{\"Port\":8}}"),DeserializeProtocolEnvelope)
+ if err!=nil{t.Fatal(err)}
+ plain,ok:=v.Plain.(__hgo_enum_case_Option_Some[InputPayload]);explicit,ok2:=v.Explicit.(__hgo_enum_case_Option_Some[InputPayload])
+ if !ok||!ok2||plain.Value.Port!=7||explicit.Value.Port!=8||defaultCalls!=0{t.Fatalf("Some without Default: %#v defaults=%d",v,defaultCalls)}
+ for _,input:=range []string{"{\"Plain\":false}","{\"Explicit\":false}","{\"Ignored\":[1,]}"}{
+  if _,err:=serdejson.Unmarshal([]byte(input),DeserializeProtocolEnvelope);err==nil||defaultCalls!=0{t.Fatalf("bad input defaulted: %s %v defaults=%d",input,err,defaultCalls)}
+ }
+}
 `

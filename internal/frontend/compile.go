@@ -871,15 +871,20 @@ func (g *generator) emitModel(m model) error {
 	if m.attrs.derive["Deserialize"] {
 		for i, f := range m.fields {
 			_, optional := g.option(f.typ)
-			if !f.def && !f.skip && !optional {
+			if !f.def && !f.skip {
+				// Ordinary missing Option fields follow the serde protocol, not
+				// Default resolution. nil is the builtin's canonical None.
+				if optional {
+					fmt.Fprintf(&des, "if !seen%d{v.%s=nil};", i, f.name)
+				}
 				continue
 			}
 			if err := g.validateExtra(f.typ, "Default"); err != nil {
 				return fmt.Errorf("serde default/skip field %s: %w", f.name, err)
 			}
 			value, err := deriveextras.DefaultValue(f.typ)
-			// The registered builtin's canonical None is nil. No payload Default is
-			// consulted, and no type argument is re-resolved inside the visitor scope.
+			// Explicit default/skip uses the builtin Option Default (None).
+			// Avoid re-resolving type arguments inside the visitor scope.
 			if optional {
 				value = "nil"
 			}

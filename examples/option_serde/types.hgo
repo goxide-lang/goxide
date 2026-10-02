@@ -47,3 +47,14 @@ type DefaultEnvelope struct {
     #[serde(default)]
     Value Option[PayloadWithDefault]
 }
+
+// InputPayload has Deserialize only, no Default registration.
+#[derive(Deserialize)]
+type ProtocolEnvelope struct {
+    Plain Option[InputPayload]
+    SideEffects Option[Settings]
+    #[serde(default)]
+    Explicit Option[InputPayload]
+    #[serde(skip)]
+    Ignored Option[InputPayload]
+}

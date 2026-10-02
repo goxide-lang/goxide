@@ -210,6 +210,24 @@ Serialize/Deserialize derive 不自动生成或调用 Go MarshalJSON/UnmarshalJS
 - 普通 enum 的直接 Option payload、含 Option 的 struct payload 等仍受现有 payload 检查限制，不由 `Option[Enum]` 的支持反推可用。`Option[[]Option[int]]` 等穿过指针/容器的 enum 值投影继续拒绝；跨包 codec、Result serde 和任意泛型实例均未开放。
 - 合法的 `Option[Option[int]]` 中 Some(None) 与 None 编码均可为 null，解码为外层 None；`Option[*int]` 的 Some(nil) 也会丢失与 None 的区别。JSON 往返只承诺当前表示可区分的值，不提供 PATCH 三态。
 
+### 7.3 普通 Option 协议与 Default 相互独立
+
+用户校正明确：标准库 Option 的 Default 返回 None，与 serde 将普通 Option 的缺失/null 映射为 None 是两条独立机制。普通字段不需标记 serde(default)，也不应经过 Default 登记、检查或表达式生成。T 仍需对应方向的 serde 能力，但不需 T.Default。显式 serde(default)/skip 才走已批准的 Default 路径；Option 的该显式 Default 恰好也是 None，不能据此混同来源。
+
+固定版本依据：
+
+| 路径 | 源码与行为 |
+| --- | --- |
+| 标准库 Default | [Rust 1.90.0 Option Default](https://github.com/rust-lang/rust/blob/1.90.0/library/core/src/option.rs#L2176-L2189)：独立返回 None，不要求 T.Default |
+| 普通缺失字段 | [Serde 1.0.228 missing_field](https://github.com/serde-rs/serde/blob/v1.0.228/serde/src/private/de.rs#L22-L56)：MissingFieldDeserializer 的 deserialize_option 调用 visit_none，不调用 Default |
+| Option 类型协议 | [Serde 1.0.228 OptionVisitor](https://github.com/serde-rs/serde/blob/v1.0.228/serde_core/src/de/impls.rs#L870-L927)：visit_none/visit_unit 返回 None，visit_some 解码 T 后包装 Some |
+| JSON null | [serde_json 1.0.145 deserialize_option](https://github.com/serde-rs/json/blob/v1.0.145/src/de.rs#L1671-L1683)：消费 null 后调用 visit_none，否则 visit_some |
+| 自定义字段缺失 | [Serde 1.0.228 expr_is_missing](https://github.com/serde-rs/serde/blob/v1.0.228/serde_derive/src/de.rs#L763-L803)：有 default 先处理；无自定义解码时调用 missing_field；有 deserialize_with 且无 default 时直接报缺失。这不是普通 Option 的规则 |
+
+hgo 当前有限实现：普通 Option 缺失由生成的 struct visitor 直接设置 None，绕过 Default 检查及生成器；JSON null 沿现有 Deserializer.Option → VisitNone 路径。此职责分离不要求先移植通用 MissingFieldDeserializer 或完整 trait，也不改返回行为。标准库层的独立 Default 在当前原型由内建 Default 选择逻辑表示，不声称已实现通用 std trait 后端。
+
+adapter 注解仍未批准、未实现；自定义 deserialize_with 的缺失行为不能从普通 Option 结论自动批准。本文确认普通 Option 规则，不把 Proposed 两项选择视为整体批准。
+
 业务矩阵：配置 retries 缺失走 default，0 原样，null 报错；PATCH display_name 的 `{}`、`null`、`"Ada"` 仅通过明确三态 adapter 区分；事件 Idle 为字符串、Named 为外标记；JSON Number 保留大订单 ID。错误输入不吞成业务默认，不把 serde 错误自动选到某个 thiserror variant（仍按 D22 显式 From）。
 
 ## 8. 错误、预算与所有权边界

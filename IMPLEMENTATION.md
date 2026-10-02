@@ -592,3 +592,14 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 `go vet ./...`、设计检查 **13 条 Go 命令**、文档检查 **56 Markdown / 517 本地链接与锚点 / 20 RFC**及 diff 检查通过。独立非作者复审无阻断；对基线与修复后 **10,095 组输入/reader** 的差分检查确认错误文本（含 Kind/Path）完全一致。差分脚本位于 `/workspace/goxide-cause-review/compare.py`；真实 Token.Offset 不推导为其他调用序列或 json.Unmarshal 的位置。
 
 复现使用前述真实工具链与离线环境，执行 `go test -race -count=1 ./...`、`go vet ./...`、`python3 scripts/check_design.py`；独立验收可用 `go test -count=1 -v ./tests/acceptance -run '^TestSerdeCausesInstalledBusinessRace$'`，其生成模块明确启用 race。日志 `/workspace/goxide-restore-check/serde-causes-final-race.json`、`serde-causes-final-vet.log`、`serde-causes-final-design.log`、`serde-causes-final-docs.log`、`serde-cause-probe.log`。按授权提交推送 feat/manual-default 并 fetch 核验，不修改 main/work/冻结标签，不发布或合并。
+
+
+## 普通 Option 缺失不依赖 Default
+
+基准 `f5c07874ece5ff3130f5e8b1c8f96d40ffc95cd5`。普通 Option 字段缺失由 serde 派生 visitor 直接构造 None，跳过 Default 检查与表达式生成；JSON null 继续走现有 Deserializer.Option/VisitNone。显式 serde(default)/skip 仍复用已批准 Default 行为。此次是职责解耦，不改普通字段的返回值、调用顺序或错误策略，不新增 adapter。
+
+[扩充验收](tests/acceptance/option_serde_test.go)让无 Default 的 InputPayload 处理缺失/null/Some，并验证对它派生外层 Default 仍拒绝；普通 Option 缺失/null 不调用带副作用的 Settings 默认构造。显式 Option default/skip 和普通字段 serde-defaults 业务同时回归。Option 生成模块现有 9 项独立 race 测试；既有 serde-defaults 模块 4 项另计。RFC 新增固定版本标准库、Serde missing_field/OptionVisitor、JSON null 与自定义字段缺失源码依据，明确普通 Option 不是依赖 Default 才得到 None。
+
+最终验证：Go 1.27.1 linux/amd64、CGO=1、本地离线工具链。整树 `go test -race -count=1 -json ./...` 一次通过 **15 个有测试包、229 宿主顶层测试、406 子测试**，另 1 包无自身测试。定向验收真实安装 CLI、仓库外转译，并分别运行 Option **9 项**、serde-defaults **4 项**生成模块 race 测试，业务输出 `option 7 -1 4 0` 和 `demo 8080 8080 STSS`。生成模块数量与宿主统计分开。`go vet ./...`、完整设计检查 **13 条 Go 命令**、文档检查 **57 Markdown / 527 本地链接与锚点 / 20 RFC**及 diff 检查通过。
+
+独立非作者检查控制流并重跑 Option 生成模块 race 与无 payload Default 负例；文档复审发现并修正四处固定版本源码行号和一处旧测试计数，最终复核无剩余阻断。日志位于 `/workspace/goxide-restore-check/option-protocol-targeted.log`、`option-protocol-final-race.json`、`option-protocol-final-vet.log`、`option-protocol-final-design.log`、`option-protocol-final-docs.log`。按授权在 `feat/manual-default` 阶段提交推送并 fetch 核验，不修改 main/work/冻结标签；adapter 仍未批准、未实现。

@@ -109,6 +109,8 @@ err = fields.NextValue(func(d serde.Deserializer) error {
 
 ## 5. Option / default / skip 的 Proposed 组合
 
+普通 Option 的规则已由用户校正明确：serde 自身处理缺失/null→None，与 std Default 独立，普通缺失不得调用 Default 检查或生成器。固定源码依据和当前实现见母 RFC [协议独立性](0006-serde-core-and-formats.md#73-普通-option-协议与-default-相互独立)。下表只有新 adapter 的组合仍属 Proposed；这一校正不批准 adapter 入口或自定义缺失策略。
+
 明确区分“字段 codec”与“自动提升 payload codec”。两候选都选中**整个字段类型 T**；若字段是 `Option[time.Time]`，函数的 T 必须是该 Option，而非 time.Time。没有自动给任意函数包一层 Option、也没有自动递归应用到容器元素。用户可写具体同包 wrapper；首片不需要用户泛型声明。
 
 | 情况 | 推荐候选行为 | 与既有规则/Serde 的关系 |

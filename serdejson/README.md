@@ -8,7 +8,7 @@ Strict differences from Go's default JSON behavior: duplicate keys (including es
 
 Run: `GOCACHE=/tmp/goxide-macro-cache GOTOOLCHAIN=local /workspace/goxide-environment/go/bin/go test -race ./serdejson`.
 
-Generated concrete `Option[T]` codecs use the core None/Some protocol: missing struct fields and explicit JSON null decode to None; a non-null value decodes through T's codec to Some. None encodes as null and Some encodes its payload. Even if all runtime values are None, non-skipped fields require T's codec for the derived direction. Option's Default is None and never calls T's Default; `serde(default)` does not construct Some(default T). Invalid present values do not fall back to defaults.
+Generated concrete `Option[T]` codecs use the core None/Some protocol: missing struct fields and explicit JSON null decode to None; a non-null value decodes through T's codec to Some. None encodes as null and Some encodes its payload. Even if all runtime values are None, non-skipped fields require T's codec for the derived direction. Ordinary Option missing/null handling belongs to serde and does not resolve Default. Independently, Option's explicit Default is None and never calls T's Default; `serde(default)` does not construct Some(default T). Invalid present values do not fall back to defaults.
 
 Nested options do not preserve PATCH's missing/null/value distinction: Some(None) and None can both encode as null, as can Some(nil) for nullable pointer payloads. Existing enum payload and projection restrictions still apply; this is concrete builtin support, not general generic or cross-package codec resolution. See the [serde RFC](../docs/rfcs/research/0006-serde-core-and-formats.md#72-内建具体-option-派生) for frontend boundaries.
 

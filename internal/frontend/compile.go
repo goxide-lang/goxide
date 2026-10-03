@@ -83,17 +83,19 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
-	macros         *macros.Package
-	macroImporter  types.Importer
-	macroBudget    *macros.Budget
-	declarations   []enums.Decl
-	named          map[string]ast.Expr
-	models         map[string]model
-	collect        bool
-	imported       map[string][]enums.Decl
-	preludes       map[string]string
-	manualDefaults map[string]manualDefault
-	typeSpecs      map[string]*ast.TypeSpec
+	macros          *macros.Package
+	macroImporter   types.Importer
+	macroBudget     *macros.Budget
+	declarations    []enums.Decl
+	named           map[string]ast.Expr
+	models          map[string]model
+	collect         bool
+	imported        map[string][]enums.Decl
+	preludes        map[string]string
+	enumGoImports   map[string]string
+	enumUnavailable map[string]map[string]string
+	manualDefaults  map[string]manualDefault
+	typeSpecs       map[string]*ast.TypeSpec
 }
 
 func compile(filename string, source []byte, cfg *compileConfig) (Result, error) {
@@ -216,6 +218,11 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if err != nil {
 		return Result{}, stageError("matchexpr.Lower", err)
 	}
+	if cfg != nil {
+		if err = checkUnavailableEnumSyntax(filename, source, cfg.enumUnavailable[filename]); err != nil {
+			return Result{}, stageError("enums.import", err)
+		}
+	}
 	var enumResult enums.Result
 	if cfg == nil {
 		enumResult, err = enums.LowerMapped(filename, source, provenance)
@@ -227,6 +234,12 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	source = enumResult.Source
 	if cfg != nil {
+		beforeImports := source
+		source, err = insertEnumImports(filename, source, cfg.enumGoImports[filename])
+		if err != nil {
+			return Result{}, err
+		}
+		provenance = provenance.Compose(beforeImports, source, "enumImports")
 		source = append(source, []byte(cfg.preludes[filename])...)
 	}
 	refResult, err := refs.Prepare(filename, source)

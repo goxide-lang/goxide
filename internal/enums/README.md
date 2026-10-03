@@ -151,3 +151,34 @@ prototype conventions, not new frozen language rules.
 Open raw/C enums are withdrawn. `enum State string {...}` and integer base declarations are rejected. All enum values use declared variants; wildcard-only matching resolves nominal identity and validates the closed representation before guards/bodies.
 
 Unit enums may derive Serialize/Deserialize with `#[serde(rename="pending")]` or a complete `#[serde(value=1)]` mapping. Numeric mappings require signed int64 decimal literals on every unit variant; mixed, duplicate, missing or payload mappings are rejected. Unknown inputs return UnknownVariant instead of an unknown enum value. Type/range failures retain their distinct errors. Clone/Debug/match use source variant identity; the codec does not change Default or create a raw cast.
+
+## External concrete enum artifacts
+
+Directory builds now publish `.hgo.enums.json` and `HgoEnumMetadata` for public
+concrete enums and transparent public type aliases. The frontend restores these
+before match syntax lowering, using actual imported Go types to verify enum,
+case, constructor, validator and payload identity. Private payload names are not
+serialized or rewritten into consumer source: case fields preserve their actual
+Go types and inferred access remains possible. A new defined interface type is
+not authorized as an alias of a closed enum.
+
+The internal v1 envelope binds package identity/name, a logical marker digest,
+selected Go file hashes, root/transitive source and build configuration, plus
+marked dependency artifacts. It reuses the offline importer fingerprint mechanism
+also used by reference artifacts; both markers are added before either final
+artifact is hashed. Missing/stale/mismatched artifacts produce consumer import
+location diagnostics. Hashes detect consistency errors, not malicious-producer
+forgery. External cgo inputs remain subject to the existing fingerprint limits.
+
+Tested delivery uses independent go.mod modules with local replace. Native Go can
+consume the generated API without the JSON. Existing producer serde/Clone/Default
+helpers remain callable; consumer derive protocols and external generic builtin
+Option/Result family metadata are not restored by this concrete-enum schema.
+Single-file compilation does not acquire the directory import registry here.
+
+Transparent aliases bind to the defining package's helpers. If Go's internal
+package rule prevents that origin import, ordinary public API calls still work;
+using that alias's enum constructor/pattern syntax receives an explicit unsupported
+diagnostic. Public relay helpers are an outstanding design/engineering option, not
+an approved permanent exclusion. This stage retains value cases and does not add
+Copy/move, new borrow semantics, comparison policy or universal entry validation.

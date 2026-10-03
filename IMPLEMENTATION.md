@@ -901,3 +901,15 @@ Go 1.27.1 非 race 5×200ms 对照中，六组 typed IIFE/statement 小表达式
 比较/map key、零值与全公开入口校验未改变；原位借用/Copy 留给后续引用增强，仍保留演进目标。跨 module enum 元数据为下一独立切片，不以已有 reference artifact 或同模块 registry 冒充完成。
 
 最终验收：全树 race **15 测试包 / 270 宿主顶层 / 633 子测试**通过（另 2 包无测试），全树 vet 通过；设计检查 **62 Markdown / 806 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过。新增实际生成模块独立 race/vet 与代码、文档独立复审均通过。日志 `/tmp/enum-separator-race.json`、`/tmp/enum-separator-race.err`、`/tmp/enum-separator-vet.log`、`/tmp/enum-separator-design.log`、`/tmp/enum-separator-independent.log`。计数减少的子测试是已迁为正例的旧错误 expression-match 拒绝项，不是删除功能验收。
+
+## 跨 module 公开具体 enum 产物（2026-10-03）
+
+在 `4fab40870d2fcfed1e58f7f3acfb03b3f688ece8` 上增加版本化 enum artifact；在 package 语法 lowering 前恢复，对照实际 Go 类型核验 canonical 身份、值型 case、构造器和 validator，不序列化私有载荷拼写。PackageResult 保留公共 enum 导出与透明 alias 信息；必要时生成定义包 import 和内部绑定，原 same-module builtin 路径保留。typecheck 可返回已检查类型对象供元数据导出，未改变 Go 类型检查规则。
+
+源文件最终包含 enum/ref 两个 marker 后才计算 artifact，内容/目标配置及传递依赖使用已有 importer 指纹。只有需要生成 marker 的 native alias 文件被写回，其余原生文件继续原样复制。独立审查复现并修复 internal 定义包的非法 origin import：普通 Go facade 可继续调用，实际变体语法在该形态尚无公开 relay helpers 时明确诊断，不全拒依赖、不悄悄增加导出 API。
+
+真实双模块验收与第三个原生 Go 消费模块覆盖构造/穷尽 match、alias、私有载荷推断、serde producer helpers、非法 guard 输入及陈旧/错包/缺失/目标变化，额外验证 payload 结构变化但逻辑元数据不变时的下游失效。详见 [验收清单](docs/t0-acceptance.md#跨-module-公开具体-enum2026-10-03)。未新增消费者 derive/外部 OptionResult 家族/单文件 enum registry，未迁 ABI 或改变比较/零值/全入口验证规则。
+
+全树回归另暴露生成 main 包的离线 export 查询尝试 VCS stamping；该内部 `go list -export` 现加 `-buildvcs=false`，仅关闭类型查询的二进制版本打标，不改变后续用户 go build 设置、源码选集或 artifact 指纹。独立复审确认，原有安装业务验收覆盖此回归。
+
+最终验收：全树 `go test -race -json ./...` **15 测试包 / 273 宿主顶层 / 663 子测试**通过，另 2 包无测试；5 个未受影响包使用 Go 有效测试缓存，其余含完整 acceptance 实际执行。全树 vet 通过；新增三个真实生成/消费模块分别 race/vet，两次产物确定。设计检查 **62 Markdown / 811 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过，机制命令不冒充 hgo 执行。实现及集成独立复审无剩余阻断。日志 `/tmp/enum-artifact-final-race.json`、`/tmp/enum-artifact-final-race.err`、`/tmp/enum-artifact-final-vet.log`、`/tmp/enum-artifact-final-design.log`、`/tmp/enum-artifact-drift.log`。修复前 VCS 查询失败的全树运行不作为通过证据；本次最终完整 acceptance 已覆盖该修复。工作分支提交并 push/fetch，完整 MVP 未标完成。

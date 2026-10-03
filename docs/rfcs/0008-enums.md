@@ -132,3 +132,15 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；hgo 不向第三方
 最新用户顺序为宏 → enum → 指针拆分。当前独立 enum 阶段保持 interface＋值型 case，不引入 Copy/move 或新借用模型；未来原位 payload 可写借用仍是演进目标，不再作为本阶段前置。既有引用功能保留。此调整不承诺 case 布局永久兼容，也不自动决定比较/map key 资格、非法零值或所有 Go 入口的校验政策。
 
 已修正 `enum E { A, }; func f...` 中显式声明分号残留、导致生成 Go 顶层空声明报错的问题。仅移除 enum 后紧随的显式分号，保留间隔注释和自动换行分隔；不改变 match 语义。原来把合法表达式 match 当负例的测试迁为实际执行正例，多文件/pub enum、混合普通声明、同线多 enum、注释、EOF 与真正语义错误见[回归验收](../../tests/acceptance/enum_separator_test.go)。
+
+### 跨 module 公开具体 enum 恢复（2026-10-03）
+
+目录构建输出内部 `.hgo.enums.json`（协议/产物 v1）和 `HgoEnumMetadata` 常量。消费者在 enum 语法 lowering 之前恢复闭合变体集合，并检查真实 Go enum 类型、私有 marker、值型 case、构造器参数/返回和 validator 签名。元数据不保存 AST 或生产者私有载荷名；载荷类型由真实 case.Value 与构造器签名提供，所以私有类型的公开字段读取、转发和重构可继续推断。
+
+产物绑定实际包路径/名称、逻辑元数据摘要、选中 Go 文件、源闭包与目标构建配置，递归绑定增强依赖 artifact；复用引用阶段的离线 importer 指纹机制。enum/ref 两种 marker 均先写入最终 Go，再计算各自产物，不使已有引用文件摘要失效。缺失/陈旧/错包/版本/构建变化在消费 import 处诊断；这不是生产者认证，外部 cgo 输入限制沿用现有边界。
+
+[真实双模块验收](../../tests/acceptance/enum_external_test.go)覆盖文件级 import alias、公开透明 type alias 再导出、函数转发、闭合构造/穷尽 match、guard 前非法动态值拒绝、私有载荷推断、同名不同包隔离及定义新类型不冒充 alias。生产者已生成的 serde/Clone/Default 辅助函数可以直接 Go 调用；原生 Go 消费者不依赖 JSON。库与应用两次生成一致，独立模块分别 race/vet，引用权限恢复继续成立。
+
+首片限定公开具体 enum 与源可用 local replace。消费者跨包 derive 协议、外部通用 Option/Result 家族元数据、单文件外部 enum 语法恢复未由本片完成；已有同 module builtin 能力保留。透明 alias 若指向消费者不可导入的 `internal` 定义包，普通公开 Go API 仍可使用，实际 enum 模式/构造语法明确诊断未支持；是否增加公开 relay helper 另需收敛，不冻结为永久延期。
+
+本片不迁移 interface＋值型 case，不引入 Copy/move，不改变比较/map key、非法零值或全公开入口的验证策略。元数据与具体 case 导出仍为内部/版本耦合协议，不承诺未来 payload 原位引用或 ABI 迁移无破坏。

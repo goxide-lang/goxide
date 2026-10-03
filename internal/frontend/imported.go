@@ -12,12 +12,14 @@ import (
 	"github.com/hxsf/goxide/internal/enums"
 )
 
-// Metadata travels only from successfully compiled packages in this module.
+// Metadata comes from successfully compiled packages or verified external artifacts.
 // Import names are resolved separately for every source file; dependency paths,
 // never package names, authorize an enum or builtin family.
-func importedDeclarations(sources map[string][]byte, packages map[string]PackageResult) (map[string][]enums.Decl, map[string]string) {
+func importedDeclarations(consumerPath string, sources map[string][]byte, packages map[string]PackageResult) (map[string][]enums.Decl, map[string]string, map[string]string, map[string]map[string]string) {
 	declarations := map[string][]enums.Decl{}
 	preludes := map[string]string{}
+	extraImports := map[string]string{}
+	unavailable := map[string]map[string]string{}
 	for fi, name := range sortedSources(sources) {
 		if !strings.HasSuffix(name, ".hgo") {
 			continue
@@ -35,6 +37,8 @@ func importedDeclarations(sources map[string][]byte, packages map[string]Package
 			alias := ""
 			if spec.Name != nil {
 				alias = spec.Name.Name
+			} else if p.enumMetadata.Package != "" {
+				alias = p.enumMetadata.Package
 			} else {
 				for _, fn := range sortedResultNames(p) {
 					pf, e := parser.ParseFile(token.NewFileSet(), fn, p.Files[fn].Go, parser.PackageClauseOnly)
@@ -47,7 +51,38 @@ func importedDeclarations(sources map[string][]byte, packages map[string]Package
 			if alias == "" || alias == "_" || alias == "." {
 				continue
 			}
+			for ei, export := range p.enumMetadata.Enums {
+				if !enumOriginImportAllowed(consumerPath, export.DefinitionPath) {
+					if unavailable[name] == nil {
+						unavailable[name] = map[string]string{}
+					}
+					unavailable[name][alias+"."+export.Name] = "enum syntax through an internal-origin alias is not yet supported; use the producer's public Go API (origin " + export.DefinitionPath + ")"
+					continue
+				}
+				originAlias := alias
+				if export.DefinitionPath != path {
+					originAlias = fmt.Sprintf("__hgo_enum_origin_f%d_i%d_e%d", fi, ii, ei)
+					extraImports[name] += fmt.Sprintf("; import %s %q", originAlias, export.DefinitionPath)
+				}
+				prefix := fmt.Sprintf("__hgo_enum_import_f%d_i%d_%s", fi, ii, export.Name)
+				d := enums.Decl{Name: prefix, LookupName: alias + "." + export.Name, PackagePath: export.DefinitionPath, Marker: export.Marker, Validator: prefix + "_validate", Public: true}
+				var code strings.Builder
+				fmt.Fprintf(&code, "\ntype %s = %s.%s; var %s = %s.%s;\n", prefix, alias, export.Name, d.Validator, originAlias, export.Validator)
+				for vi, v := range export.Variants {
+					variant := enums.Variant{Name: v.Name, CaseName: fmt.Sprintf("%s_case%d", prefix, vi), Constructor: fmt.Sprintf("%s_new%d", prefix, vi)}
+					if v.HasPayload {
+						variant.Payload = "__hgo_imported_payload"
+					}
+					fmt.Fprintf(&code, "type %s = %s.%s; var %s = %s.%s;\n", variant.CaseName, originAlias, v.Case, variant.Constructor, originAlias, v.Constructor)
+					d.Variants = append(d.Variants, variant)
+				}
+				preludes[name] += code.String()
+				declarations[name] = append(declarations[name], d)
+			}
 			seen := map[string]bool{}
+			for _, export := range p.enumMetadata.Enums {
+				seen[export.Name] = true
+			}
 			families := map[string]*enums.Decl{}
 			for _, fn := range sortedResultNames(p) {
 				for _, d := range p.Files[fn].Enums {
@@ -94,7 +129,7 @@ func importedDeclarations(sources map[string][]byte, packages map[string]Package
 			}
 		}
 	}
-	return declarations, preludes
+	return declarations, preludes, extraImports, unavailable
 }
 func sortedResultNames(p PackageResult) []string {
 	m := map[string][]byte{}

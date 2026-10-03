@@ -129,3 +129,7 @@ Go → hgo：下载发布模块后直接调用生成 `.go` API，如 PKG-01、PK
 ### 跨模块引用恢复首片（2026-10-02）
 
 独立模块 local replace 的生成 Go + `.hgo.refs.json` 已能恢复现有引用签名，详见 [RFC 0005 §6.21](0005-borrows.md#621-跨-module-引用产物恢复2026-10-02)。源定位与 build selection 复用离线 Go importer，缺失/陈旧产物不猜测权限；普通 Go 消费无需 metadata。此证据仅覆盖具体引用签名，不代表 trait、宏、enum 等跨模块增强协议全部完成，亦不代表远程 registry 或外部 cgo 输入验证完成。
+
+### 跨模块具体 enum 元数据（2026-10-03）
+
+独立模块 local replace 现可恢复公开具体 enum 的闭合变体与真实类型身份，见 [RFC 0008](0008-enums.md#跨-module-公开具体-enum-恢复2026-10-03)。该产物与 refs 协议分别版本化并复用内容/构建指纹；同 module registry 和原生 Go API 消费不替代外部 hgo 模式验收。通用 Option/Result 家族及跨包 derive 协议未由此片恢复；Go internal 包访问规则仍需尊重，普通 facade API 不因其内部表示不可导入而被拒绝。

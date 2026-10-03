@@ -47,7 +47,8 @@ func NewImporterWithBuild(filename string, tags []string, race bool) types.Impor
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		args := []string{"list", "-export", "-deps", "-json", "-tags=" + strings.Join(tags, ",")}
+		// Export loading is a deterministic type/source query, not binary stamping.
+		args := []string{"list", "-buildvcs=false", "-export", "-deps", "-json", "-tags=" + strings.Join(tags, ",")}
 		if race {
 			args = append(args, "-race")
 		}
@@ -210,11 +211,17 @@ func Check(filename string, source []byte, imp types.Importer) error {
 // File scopes (especially import names) remain separate. Callers select files
 // using their build configuration before passing them here.
 func CheckPackage(path string, sources map[string][]byte, imp types.Importer) error {
+	_, err := CheckPackageTypes(path, sources, imp)
+	return err
+}
+
+// CheckPackageTypes returns the checked identities for metadata export.
+func CheckPackageTypes(path string, sources map[string][]byte, imp types.Importer) (*types.Package, error) {
 	if path == "" {
-		return fmt.Errorf("package import path is required")
+		return nil, fmt.Errorf("package import path is required")
 	}
 	if len(sources) == 0 {
-		return fmt.Errorf("package %s has no source files", path)
+		return nil, fmt.Errorf("package %s has no source files", path)
 	}
 	fs := token.NewFileSet()
 	names := make([]string, 0, len(sources))
@@ -226,11 +233,10 @@ func CheckPackage(path string, sources map[string][]byte, imp types.Importer) er
 	for _, name := range names {
 		file, err := parser.ParseFile(fs, name, sources[name], parser.AllErrors)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		files = append(files, file)
 	}
 	conf := types.Config{Importer: imp}
-	_, err := conf.Check(path, fs, files, nil)
-	return err
+	return conf.Check(path, fs, files, nil)
 }

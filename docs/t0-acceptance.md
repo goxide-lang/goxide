@@ -596,3 +596,11 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 [真实回归](../tests/acceptance/enum_separator_test.go)验证 enum 声明后同线显式分号、混合 type/const/函数、同线多 enum、注释及文件末尾，包含单文件表达式/语句 match 执行和 CLI 多文件生成模块 race/vet。修复只删显式 separator token，保留注释与自动换行；旧 expression-match 假负例已移除。真正未知变体/guard 非穷尽仍拒绝，保留文件定位，不宣称补齐完整 source map。
 
 下一切片为两个独立 go.mod 的 enum 元数据恢复；引用 artifact 已实现不代表 enum 信息已恢复。同 module 或普通 Go API 消费不能代替外部 hgo 变体匹配验收。完整 enum/MVP 稳定仍未宣布。
+
+## 跨 module 公开具体 enum（2026-10-03）
+
+[双模块 CLI 验收](../tests/acceptance/enum_external_test.go)真实生成独立库 go.mod 的 Go+enum/ref artifacts，再由独立 hgo 应用经 local replace 消费：构造、穷尽 match、双 alias/透明 type alias 再导出、函数转发、私有载荷推断及生产者 serde helper 均贯通；另一个普通 Go 模块直接消费 API。库/应用生成两次字节一致，三模块分别 race/vet；非法 nil/typed nil/指针 case/嵌入伪造值在 guard 前拒绝。它不等于所有公开函数都自动校验。
+
+缺失、错包、版本、变体摘要、源码/构建变化均有负例；重新生成私有载荷结构后即便逻辑变体摘要未变，旧下游产物也因依赖内容变化失效。定义新类型和同名不同包不能冒充原 enum 身份。引用元数据组合回归保持通过。
+
+独立审查发现并修复内部 origin 自动导入破坏 Go facade 的问题：合法普通 API 调用保留；不可导入定义包的 alias 变体语法给明确未支持诊断。公开 relay helper 的选择仍留工程账。消费者跨包 derive、外部 Option/Result 家族、单文件外部 enum 语法恢复、无源产物及远程发布未由本片完成，不视为批准延期。当前值型 ABI、比较/零值/入口策略不变，完整 enum/MVP 稳定尚未宣布。

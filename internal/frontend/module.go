@@ -266,11 +266,15 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			return e
 		}
 		for name, r := range checked.Files {
-			if !strings.HasSuffix(name, ".hgo") {
+			// Native Go files only change when carrying a transparent-alias marker.
+			if !strings.HasSuffix(name, ".hgo") && checked.enumMarkerFile != name {
 				continue
 			}
 			rel, _ := filepath.Rel(root, name)
-			goName := strings.TrimSuffix(rel, ".hgo") + ".go"
+			goName := rel
+			if strings.HasSuffix(rel, ".hgo") {
+				goName = strings.TrimSuffix(rel, ".hgo") + ".go"
+			}
 			if e = os.WriteFile(filepath.Join(destination, goName), r.Go, 0644); e != nil {
 				return e
 			}
@@ -280,7 +284,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			result.Files[goName] = r
 		}
 
-		if len(checked.references.Functions) > 0 {
+		if len(checked.references.Functions) > 0 || len(checked.enumMetadata.Enums) > 0 {
 			sourceFiles := map[string][]byte{}
 			for name := range packages[dir] {
 				base := filepath.Base(name)
@@ -293,12 +297,27 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 				}
 				sourceFiles[base] = data
 			}
-			data, e := refs.MarshalMetadataArtifact(checked.references, sourceFiles, packageImporter)
-			if e != nil {
-				return e
+			if len(checked.references.Functions) > 0 {
+				data, e := refs.MarshalMetadataArtifact(checked.references, sourceFiles, packageImporter)
+				if e != nil {
+					return e
+				}
+				if e = os.WriteFile(filepath.Join(destination, dir, refs.MetadataFilename), data, 0644); e != nil {
+					return e
+				}
 			}
-			if e = os.WriteFile(filepath.Join(destination, dir, refs.MetadataFilename), data, 0644); e != nil {
-				return e
+			if len(checked.enumMetadata.Enums) > 0 {
+				provider, ok := packageImporter.(refs.ArtifactImporter)
+				if !ok {
+					return fmt.Errorf("enum artifact source importer unavailable")
+				}
+				data, e := marshalEnumArtifact(checked.enumMetadata, sourceFiles, provider)
+				if e != nil {
+					return e
+				}
+				if e = os.WriteFile(filepath.Join(destination, dir, enumMetadataFilename), data, 0644); e != nil {
+					return e
+				}
 			}
 		}
 

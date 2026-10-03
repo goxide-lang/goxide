@@ -201,3 +201,7 @@ D31 首片已支持同型 `mut& T` 直接传原生 `*T` 标量参数，包括函
 ### 独立 enum 阶段（2026-10-03）
 
 最新顺序为宏 → enum → 指针拆分。保留当前值型 case 与已有引用能力，先收口 enum 独立缺口，不以前置 Copy/move/原位借用扩大阶段。首片修复 enum 同线显式分号与旧假负例，见[阶段验收](docs/t0-acceptance.md#独立-enum-稳定阶段声明分隔符2026-10-03)。下一步为跨 module enum metadata；比较/零值/入口校验具体规则未在本片决定。
+
+### 跨 module 具体 enum 首片（2026-10-03）
+
+公开具体 enum 的两个独立模块恢复已接通，含构造/match、透明 alias 再导出、真实类型核验、内容/构建绑定与生产者 serde helper 调用，见[验收](docs/t0-acceptance.md#跨-module-公开具体-enum2026-10-03)。不迁值型 ABI，不引入 Copy/move 或新借用模型。internal facade 保留普通 API；公开 relay helper、跨包 derive、外部 builtin 家族等继续留账，比较与初始化/验证策略须准确收敛。

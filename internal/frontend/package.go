@@ -23,6 +23,9 @@ import (
 
 // PackageResult keeps a separate output and origin map for every source file.
 type PackageResult struct {
+	enumMarkerFile   string
+	enumMetadata     enumMetadata
+	enumImports      map[string]enumMetadata
 	references       refs.Metadata
 	referenceImports map[string]refs.Metadata
 	macros           *macros.Package
@@ -57,7 +60,12 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 			cfg.manualDefaults[n] = m
 		}
 	}
-	cfg.imported, cfg.preludes = importedDeclarations(sources, metadata)
+	var err error
+	metadata, err = recoverEnumImports(sources, metadata, imp)
+	if err != nil {
+		return PackageResult{}, err
+	}
+	cfg.imported, cfg.preludes, cfg.enumGoImports, cfg.enumUnavailable = importedDeclarations(path, sources, metadata)
 	dependencies := map[string]*macros.Package{}
 	for path, p := range metadata {
 		if p.macros != nil {
@@ -142,9 +150,10 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	cfg.collect = false
 	cfg.macroBudget = buildBudget
-	result := PackageResult{macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
+	result := PackageResult{enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
 	for path, p := range metadata {
 		result.referenceImports[path] = p.references
+		result.enumImports[path] = p.enumMetadata
 	}
 	generated := map[string]string{}
 	for index, name := range names {
@@ -307,7 +316,12 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	if err != nil {
 		return result, err
 	}
-	if err := typecheck.CheckPackage(path, files, imp); err != nil {
+	checkedTypes, err := typecheck.CheckPackageTypes(path, files, imp)
+	if err != nil {
+		return result, err
+	}
+	result.enumMetadata, err = collectEnumExports(path, result, checkedTypes)
+	if err != nil {
 		return result, err
 	}
 	for name, source := range files {
@@ -324,6 +338,27 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			}
 			r := result.Files[name]
 			r.Go = append(r.Go, []byte(fmt.Sprintf("\nconst %s = %q\n", refs.MetadataMarker, result.references.Marker()))...)
+			r.Expanded = r.Go
+			refreshPackageMap(&r)
+			result.Files[name] = r
+			break
+		}
+	}
+	if len(result.enumMetadata.Enums) > 0 {
+		if err := validateEnumMetadata(result.enumMetadata, checkedTypes, imp); err != nil {
+			return result, err
+		}
+		markerFiles := sortedSources(files)
+		for _, name := range markerFiles {
+			if strings.HasSuffix(name, ".hgo") {
+				markerFiles = []string{name}
+				break
+			}
+		}
+		for _, name := range markerFiles {
+			result.enumMarkerFile = name
+			r := result.Files[name]
+			r.Go = append(r.Go, []byte(fmt.Sprintf("\nconst %s = %q\n", enumMetadataMarker, result.enumMetadata.Marker()))...)
 			r.Expanded = r.Go
 			refreshPackageMap(&r)
 			result.Files[name] = r

@@ -993,3 +993,11 @@ struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload
 真实三模块验收 `tests/acceptance/local_protocol_alias_test.go` 覆盖各协议、生产者 manual Default、多级/重复导入/native-only alias、不同包相同导入名、同名局部类型拒绝、同名局部变量、容器与已支持的 Option serde/equality、独立 Go helper 消费、重复生成一致、新 defined/假 helper 拒绝及错误摘要定位原生 consumer import。生产/消费/Go消费模块分别 race/vet；独立审查另验证宏 import 改名与 alias 共存。此处 Option 不宣称 Clone/Debug 已实现。
 
 边界：本片恢复外部 canonical 的已登记协议；同包原始类型经本地 alias 的 Default/Clone/Debug/serde 转发仍未接通，既有 Eq 已支持。单文件外部协议、不可直接导入 internal-origin、其他载荷/字段形状和未实现协议入口继续留账；不是透明 alias 身份发生变化，也不是获批延期。公开 enum 函数入口验证仍待用户决定，未混入指针阶段、完整 trait/manual serde 或字段 adapters。
+
+## 同包已登记类型的透明 alias 协议恢复（2026-10-03）
+
+同包具体原始类型的包级透明 alias 现与外部 alias 共用 `bindLocalProtocolAliases` 的 Go Unalias/Identical 身份解析。Default/Clone/Debug/Serialize/Deserialize 从既有 models/manual Default 显式登记恢复，不逐派生新增 alias 分支；既有 Eq 继续按真实类型身份工作。支持跨文件、多级 alias、native `.go` alias 和单文件编译。新 defined 类型（即使底层相同）、普通同名 helper 不产生登记；alias 上再 derive/impl 及重复实现按既有规则拒绝。
+
+本地 helper 直接引用登记对应函数，不新增函数值全局初始化依赖；这不撤销现有 `checkDefaultCycles` 的静态递归拒绝策略，也不声称递归 Default 已支持。手写函数签名/返回、冲突、最终完整 Go 包仍照常检查。metadata 保持 v6，外包签名/来源/摘要校验不变。
+
+真实证据 `tests/acceptance/same_package_alias_test.go`：独立目录生成模块与单文件生成模块分别 race/vet，执行 manual Default、enum 默认 payload、Clone、Debug、serde 往返、equality、容器独立副本、反射身份及局部同名 helper/变量；反例覆盖新 defined、无登记 helper、alias impl/derive、重复 Default、错误方向和错误手写返回类型。外部 alias 三模块继续回归。blank/embedded 字段没有悄悄新增跳过/展开/命名规则。

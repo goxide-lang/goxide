@@ -712,6 +712,16 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		m.name = n
 		g.models[n] = m
 	}
+	if cfg == nil {
+		local := &compileConfig{
+			builtinTypes: map[string]macros.TypeContext{filename: {Types: specs, Imports: f.Imports}},
+			models:       g.models, manualDefaults: allManual,
+		}
+		if _, err := bindLocalProtocolAliases("hgo/local", map[string][]byte{filename: originalSource}, local, nil, nil); err != nil {
+			return Result{}, err
+		}
+		g.localProtocols = local.localProtocols
+	}
 	equalityDerives := map[string]equality.Derive{}
 	for _, m := range ordered {
 		if m.attrs.derive["PartialEq"] || m.attrs.derive["Eq"] {

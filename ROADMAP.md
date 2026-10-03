@@ -246,3 +246,15 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 - 待决定：公开函数直接 enum 参数是否在函数体前验证并对非法值 panic，None 的合法性按 builtin Option；本轮未实施该待答复契约。
 
 以上仅为独立 enum 最小账，不重新加入指针阶段；手写 serde/adapters/完整 trait 也不借此变成已批准设计。工程限制不能自行归为批准延期，完整 MVP 尚未宣布完成。
+
+### 独立 enum 精确剩余（2026-10-03，同包 alias 后）
+
+本地/外部具体已登记类型的包级 alias 转发已关闭，不能再列作待做。其余最小账为：
+
+1. **已复现 match 限制**：`func F(x E, g func(int) int) int { return g(match x { E::A(n) => n, E::B => 0, }) }` 仍拒绝 embedded expression match；`func F(x E) (out int) { return match x { E::A(n) => n, E::B => 0, } }` 仍要求一个 unnamed result。直接已知函数参数调用、binary/短路及简单 index 目标已有验收，不重复列为未实现。
+2. **协议组合**：`#[derive(Clone,Debug)] type S struct { V Option[int] }` 尚无对应具体派生支持；Result 的未实现组合同样须按实际资格验收。已有静态 Default 递归限制仍在，例如 DefaultItem→DefaultWrapper→DefaultItem 即便有终止条件也拒绝，不算本轮新增能力。
+3. **外部恢复边界**：单文件外部 enum/协议、受限的外部 payload/不可命名载荷及 internal-origin 增强操作尚未全部接通，当前模块 local replace 正例不能代替这些验收。
+4. **字段规则需明确到例子**：`type S struct { _ int; X int }` 的 blank 字段是否/如何参加各派生，`type S struct { Inner }` 的 Debug 字段名与 serde 嵌套/展开规则未在当前 RFC 明确；继续明确拒绝，不擅自跳过或沿用 encoding/json 自动展开。
+5. **公开入口待答复**：直接 enum 参数在公开函数体前验证、非法值 panic 的契约未实施，Option None 合法性也不由本轮改动。
+
+这些工程/设计账不自动成为批准延期；不混入指针阶段、full trait/manual serde 或 Proposed adapters，也不宣称完整 MVP 已完成。

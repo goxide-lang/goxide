@@ -18,9 +18,6 @@ import (
 // retain their own file import scopes; a new defined type never inherits a
 // registration merely because its underlying representation matches.
 func bindLocalProtocolAliases(path string, sources map[string][]byte, cfg *compileConfig, known map[string]PackageResult, imp types.Importer) ([]equality.Protocol, error) {
-	if imp == nil {
-		return nil, nil
-	}
 	fs := token.NewFileSet()
 	var files []*ast.File
 	destination := ""
@@ -95,9 +92,16 @@ func bindLocalProtocolAliases(path string, sources map[string][]byte, cfg *compi
 			if !enumOriginImportAllowed(path, definitionPath) {
 				return nil
 			}
-			origin, err := imp.Import(definitionPath)
-			if err != nil {
-				return err
+			origin := pkg
+			if definitionPath != path {
+				if imp == nil {
+					return nil
+				}
+				var err error
+				origin, err = imp.Import(definitionPath)
+				if err != nil {
+					return err
+				}
 			}
 			if origin == nil {
 				return nil
@@ -112,11 +116,17 @@ func bindLocalProtocolAliases(path string, sources map[string][]byte, cfg *compi
 			if cfg.localProtocols[name][kind] != "" {
 				return nil
 			}
-			serial++
-			prefix := fmt.Sprintf("__hgo_enum_alias_protocol_%d", serial)
-			cfg.enumGoImports[destination] += fmt.Sprintf("; import %s %q", prefix, definitionPath)
-			bound := prefix + "_helper"
-			cfg.preludes[destination] += fmt.Sprintf("\nvar %s = %s.%s;\n", bound, prefix, helper)
+			bound := helper
+			if definitionPath != path {
+				serial++
+				prefix := fmt.Sprintf("__hgo_enum_alias_protocol_%d", serial)
+				cfg.enumGoImports[destination] += fmt.Sprintf("; import %s %q", prefix, definitionPath)
+				bound = prefix + "_helper"
+				cfg.preludes[destination] += fmt.Sprintf("\nvar %s = %s.%s;\n", bound, prefix, helper)
+			}
+			// Local helpers are generated from explicit registrations and are called
+			// directly. Function-valued globals would create initialization cycles
+			// when a manual implementation calls back through a derived wrapper.
 			cfg.localProtocols[name][kind] = bound
 			if kind == "Default" {
 				cfg.localProtocols[name][kind] += "()"
@@ -125,6 +135,21 @@ func bindLocalProtocolAliases(path string, sources map[string][]byte, cfg *compi
 				protocols = append(protocols, equality.Protocol{PackagePath: definitionPath, TypeName: name, Helper: bound, PartialEq: true, Eq: eq})
 			}
 			return nil
+		}
+		// Local source registrations use the same identity gate as artifacts.
+		// Helper spelling follows a registration; an ordinary same-name Go
+		// function never creates one. Final lowering checks impl conflicts/signatures.
+		for _, canonicalName := range pkg.Scope().Names() {
+			model := cfg.models[canonicalName]
+			for _, kind := range []string{"Default", "Clone", "Debug", "Serialize", "Deserialize"} {
+				_, manualDefault := cfg.manualDefaults[canonicalName]
+				if !model.attrs.derive[kind] && !(kind == "Default" && manualDefault) {
+					continue
+				}
+				if err := bind(kind, path, canonicalName, kind+canonicalName, false); err != nil {
+					return nil, err
+				}
+			}
 		}
 		for _, p := range paths {
 			m := known[p].enumMetadata

@@ -664,3 +664,13 @@ struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload
 [真实 CLI 三模块验收](../tests/acceptance/field_protocol_external_test.go)覆盖具体 enum/struct、透明 relay、跨文件/包名差异、array/slice/map 嵌套元素协议、nil/空区别、普通 hgo/Go 赋值仍共享容器、显式 Clone 的独立副本及不保留别名拓扑。容器类型以包级 type alias 绑定，避免生成的 src/item/out 等局部名字截获源 import。Debug 保留生产类型/变体名、字段名、字符串和 map key 引号及内容（含私有字段），不自动脱敏；无需消费者反射或绕过字段可见性。三个生成/消费模块分别 race/vet，生成结果重复一致，原生 Go 可调用公开 helper。
 
 [协议反例](../internal/frontend/field_protocol_artifact_test.go)核验参数/返回类型、函数变量/泛型/variadic 拒绝、重复/未知/手写来源拒绝、relay 伪造另一 Kind 及陈旧 producer；CLI 对摘要篡改和源文件变化在消费者 import 位置报错。手写 Clone/Debug 尚无已实现登记入口，本片仅 derive 来源；消费者本地 `type Local = m.T` 字段的协议转发仍未接通，不能把该工程缺口说成类型身份不同。不可直接导入的 internal-origin 协议仍不可用，普通 facade API 保留。外部 enum 载荷类型范围、pointer/interface 自动协议、完整 trait、serde 和零值/公开入口验证不在本片扩展；borrow/Copy/指针拆分不作为本片前置条件。
+
+## 跨包已登记 Serialize/Deserialize 字段（2026-10-03）
+
+目录/模块模式按实际 import 路径恢复生产者显式 derive 的具体 struct/enum serde 协议，消费 struct 的 qualified 字段及既有 array/slice/map/pointer/Option codec 递归调用生产者 helper；公开透明 relay alias 可转发，多文件同名 import 不混淆。Serialize 与 Deserialize 独立登记/要求，不通过 helper 名、反射、Go 方法集或 encoding/json 自动实现兜底。
+
+复用 metadata v6 的 FieldProtocols 记录，不新增 schema 字段或版本；Kind 扩展为 Serialize/Deserialize。核验 canonical named 类型、derive 来源、alias 定义包登记，以及精确非泛型 `func(serde.Serializer, *T) error` / `func(serde.Deserializer) (T, error)`，其中 core 类型必须与实际 serde 包身份一致，error 必须是内建 error。内容、依赖、marker 校验保持。旧 v6 产物若缺少对应协议记录必须重新生成；不能把旧 helper 的存在当作登记。
+
+真实 CLI 三模块验收覆盖 producer struct/enum、透明 relay、单向协议、跨文件导入、容器和 Option、原生 Go helper 消费，三个生成/消费模块分别 race/vet。验证嵌套 field/variant path、Range/Syntax 的 Go cause、未知变体、生产者 deny_unknown_fields 与消费端忽略额外字段、忽略值深度预算、非法 enum nil/typed-nil/指针 case、nil 容器编码为空且解码为非 nil 空、普通 Option 缺失/null 为 None。没有把它们改为 Default 或其他新语义。重复生成一致；伪 helper、新 defined 类型、缺方向、篡改及陈旧产物拒绝，产物错误定位消费 import。
+
+边界延续：消费者本地 `type Local = m.T` 字段转发尚未接通；手写 serde 登记、单文件外部协议恢复、不可直接导入的 internal-origin、普通 enum 外部 payload 类型范围均未借本片扩大。字段 adapters 的入口/缺失策略仍 Proposed，完整 trait/native bridge、Value/PATCH/YAML、公开函数 enum 参数入口验证不在本片实施。完整 T0 MVP 尚未据此宣告完成。

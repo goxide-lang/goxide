@@ -738,7 +738,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	fieldProtocols := map[string][]string{}
 	for _, m := range ordered {
-		for _, kind := range []string{"Clone", "Debug"} {
+		for _, kind := range []string{"Clone", "Debug", "Serialize", "Deserialize"} {
 			if m.attrs.derive[kind] {
 				fieldProtocols[m.name] = append(fieldProtocols[m.name], kind)
 			}
@@ -1163,6 +1163,14 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 			w = "return Serialize" + typ + "(s,&v)"
 			b = "return Deserialize" + typ + "(d)"
 		}
+	case *ast.SelectorExpr:
+		write, hasWrite := g.importedField("Serialize", t)
+		read, hasRead := g.importedField("Deserialize", t)
+		if wantS && !hasWrite || wantR && !hasRead {
+			return "", "", g.err(t, "nested type lacks required registered serde protocol: "+typ)
+		}
+		w = "return " + write + "(s,&v)"
+		b = "return " + read + "(d)"
 	case *ast.IndexExpr:
 		option, ok := g.option(t)
 		if !ok {

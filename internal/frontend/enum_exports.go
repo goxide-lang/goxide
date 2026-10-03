@@ -181,7 +181,7 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 			continue
 		}
 		origin := named.Obj()
-		for _, kind := range []string{"Clone", "Debug"} {
+		for _, kind := range []string{"Clone", "Debug", "Serialize", "Deserialize"} {
 			if x, ok := protocols[kind+"."+origin.Pkg().Path()+"."+origin.Name()]; ok {
 				x.Name = name
 				meta.FieldProtocols = append(meta.FieldProtocols, x)

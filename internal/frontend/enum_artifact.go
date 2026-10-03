@@ -882,7 +882,7 @@ func validateFieldProtocolMetadata(meta enumMetadata, pkg *types.Package, imp ty
 		if !public(x.Name) || !public(x.DefinitionName) || !public(x.Helper) || x.DefinitionPath == "" || seen[x.Kind+"."+x.Name] {
 			return fmt.Errorf("invalid or duplicate field protocol export %q", x.Name)
 		}
-		if (x.Kind != "Clone" && x.Kind != "Debug") || x.Source != "derive" {
+		if (x.Kind != "Clone" && x.Kind != "Debug" && x.Kind != "Serialize" && x.Kind != "Deserialize") || x.Source != "derive" {
 			return fmt.Errorf("invalid field protocol source for %s", x.Name)
 		}
 		seen[x.Kind+"."+x.Name] = true
@@ -921,7 +921,48 @@ func validateFieldProtocolMetadata(meta enumMetadata, pkg *types.Package, imp ty
 			result = types.Typ[types.String]
 		}
 		sig, ok := fn.Type().(*types.Signature)
-		if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 || sig.Params().Len() != 1 || sig.Results().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), types.NewPointer(target)) || !types.Identical(sig.Results().At(0).Type(), result) {
+		if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 {
+			return fmt.Errorf("field protocol helper signature mismatch: %s", x.Helper)
+		}
+		params, results := []types.Type{types.NewPointer(target)}, []types.Type{result}
+		if x.Kind == "Serialize" || x.Kind == "Deserialize" {
+			if imp == nil {
+				return fmt.Errorf("missing serde protocol importer for %s", x.Helper)
+			}
+			core, err := imp.Import("github.com/hxsf/goxide/serde")
+			if err != nil {
+				return err
+			}
+			if core == nil {
+				return fmt.Errorf("missing serde core package")
+			}
+			protocol := "Serializer"
+			if x.Kind == "Deserialize" {
+				protocol = "Deserializer"
+			}
+			obj, ok := core.Scope().Lookup(protocol).(*types.TypeName)
+			if !ok {
+				return fmt.Errorf("missing serde core protocol %s", protocol)
+			}
+			errorType := types.Universe.Lookup("error").Type()
+			if x.Kind == "Serialize" {
+				params, results = []types.Type{obj.Type(), types.NewPointer(target)}, []types.Type{errorType}
+			} else {
+				params, results = []types.Type{obj.Type()}, []types.Type{target, errorType}
+			}
+		}
+		matches := func(actual *types.Tuple, expected []types.Type) bool {
+			if actual.Len() != len(expected) {
+				return false
+			}
+			for i, typ := range expected {
+				if !types.Identical(actual.At(i).Type(), typ) {
+					return false
+				}
+			}
+			return true
+		}
+		if !matches(sig.Params(), params) || !matches(sig.Results(), results) {
 			return fmt.Errorf("field protocol helper signature mismatch: %s", x.Helper)
 		}
 	}

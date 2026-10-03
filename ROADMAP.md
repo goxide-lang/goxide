@@ -233,3 +233,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 跨包 Clone/Debug 字段恢复（2026-10-03）
 
 具体已派生 enum/struct 的 qualified 字段协议、公开透明 relay 与有限容器元素递归已接通，见[验收](docs/t0-acceptance.md#跨包已登记-clonedebug-字段2026-10-03)。消费者本地 alias 转发和手写入口准确留界；跨包 serde 单独下一片。零值/公开入口仍待用户定约，完整 MVP 尚未宣布完成。
+
+### 跨包 serde 协议恢复（2026-10-03）
+
+已接通生产者显式派生 Serialize/Deserialize 的 qualified 字段与既有容器/Option codec，协议方向独立、公开 relay 可转发。沿用 metadata v6（无新 schema 字段），旧产物缺协议记录必须重生成；真实三模块验收与协议身份/签名/来源/陈旧产物反例见 `tests/acceptance/serde_external_test.go`、`internal/frontend/serde_protocol_artifact_test.go`。消费者本地 alias、手写 serde 登记等仍是工程账；adapter Proposed 与公开入口零值契约仍待决定，不视为获批延期或完整 T0 已完成。

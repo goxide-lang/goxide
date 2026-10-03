@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/hxsf/goxide/internal/equality"
 )
 
 type enumTestImporter map[string]*types.Package
@@ -307,5 +309,141 @@ func TestEnumFamilyArtifactRoundTrip(t *testing.T) {
 				t.Fatalf("want %s got %v", tc.want, e)
 			}
 		})
+	}
+}
+
+func equalityTestMetadata() enumMetadata {
+	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/equality", Package: "equality", Equality: []equalityExport{{Name: "Value", DefinitionPath: "example.org/equality", DefinitionName: "Value", Helper: "EqualsValue", Eq: true}}}
+}
+
+const equalityTestSource = `package equality
+type Value int
+func EqualsValue(a,b Value)bool{return a==b}
+`
+
+func TestEqualityMetadataValidation(t *testing.T) {
+	p := enumTestPackage(t, "example.org/equality", equalityTestSource, nil)
+	imp := enumTestImporter{p.Path(): p}
+	m := equalityTestMetadata()
+	if !m.present() {
+		t.Fatal("equality-only metadata absent")
+	}
+	if e := validateEnumMetadata(m, p, imp); e != nil {
+		t.Fatal(e)
+	}
+	relay := enumTestPackage(t, "example.org/relay", `package relay;import p "example.org/equality";type Alias=p.Value`, imp)
+	m.Path = relay.Path()
+	m.Package = relay.Name()
+	m.Equality[0].Name = "Alias"
+	if e := validateEnumMetadata(m, relay, imp); e != nil {
+		t.Fatal("transparent alias", e)
+	}
+	defined := enumTestPackage(t, relay.Path(), `package relay;import p "example.org/equality";type Alias p.Value`, imp)
+	if e := validateEnumMetadata(m, defined, imp); e == nil || !strings.Contains(e.Error(), "alias identity") {
+		t.Fatal("new defined type", e)
+	}
+	for _, tc := range []struct{ name, helper string }{
+		{"wrong-left", "func EqualsValue(a int,b Value)bool{return true}"},
+		{"wrong-right", "func EqualsValue(a Value,b int)bool{return true}"},
+		{"pointer", "func EqualsValue(a,b *Value)bool{return true}"},
+		{"named-bool", "type Boolean bool;func EqualsValue(a,b Value)Boolean{return true}"},
+		{"variadic", "func EqualsValue(a Value,b ...Value)bool{return true}"},
+		{"generic", "func EqualsValue[T any](a,b Value)bool{return true}"},
+		{"function-variable", "var EqualsValue=func(a,b Value)bool{return true}"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := enumTestPackage(t, "example.org/equality", "package equality;type Value int;"+tc.helper, nil)
+			if e := validateEnumMetadata(equalityTestMetadata(), p, enumTestImporter{p.Path(): p}); e == nil {
+				t.Fatal("invalid helper accepted")
+			}
+		})
+	}
+	t.Run("duplicate", func(t *testing.T) {
+		m := equalityTestMetadata()
+		m.Equality = append(m.Equality, m.Equality[0])
+		if e := validateEnumMetadata(m, p, imp); e == nil {
+			t.Fatal("duplicate accepted")
+		}
+	})
+	t.Run("no-registration-from-helper", func(t *testing.T) {
+		got, e := collectEnumExports(p.Path(), PackageResult{}, p)
+		if e != nil || got.present() {
+			t.Fatal(got, e)
+		}
+	})
+}
+
+type equalityArtifactImporter struct {
+	enumTestImporter
+	dirs map[string]string
+}
+
+func (i equalityArtifactImporter) PackageFiles(path string) (string, []string, error) {
+	return i.dirs[path], []string{"source.go"}, nil
+}
+func (i equalityArtifactImporter) PackageFingerprint(path string) (string, error) {
+	return "stable:" + path, nil
+}
+func TestEqualityArtifactOriginAuthorization(t *testing.T) {
+	imp := equalityArtifactImporter{enumTestImporter: enumTestImporter{}, dirs: map[string]string{}}
+	write := func(m enumMetadata, body string) {
+		t.Helper()
+		src := []byte(body + fmt.Sprintf("\nconst %s=%q\n", enumMetadataMarker, m.Marker()))
+		pkg := enumTestPackage(t, m.Path, string(src), imp)
+		imp.enumTestImporter[m.Path] = pkg
+		dir := t.TempDir()
+		imp.dirs[m.Path] = dir
+		if e := os.WriteFile(filepath.Join(dir, "source.go"), src, 0600); e != nil {
+			t.Fatal(e)
+		}
+		data, e := marshalEnumArtifact(m, map[string][]byte{"source.go": src}, imp)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = os.WriteFile(filepath.Join(dir, enumMetadataFilename), data, 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	origin := equalityTestMetadata()
+	origin.Equality[0].Eq = false
+	write(origin, equalityTestSource)
+	if _, e := loadEnumArtifact(origin.Path, imp); e != nil {
+		t.Fatal("equality-only artifact", e)
+	}
+	relay := origin
+	relay.Equality = append([]equalityExport(nil), origin.Equality...)
+	relay.Path = "example.org/relay"
+	relay.Package = "relay"
+	relay.Equality[0].Name = "Alias"
+	source := `package relay;import p "example.org/equality";type Alias=p.Value`
+	write(relay, source)
+	if _, e := loadEnumArtifact(relay.Path, imp); e != nil {
+		t.Fatal("authorized alias", e)
+	}
+	relay.Equality[0].Eq = true
+	write(relay, source)
+	if _, e := loadEnumArtifact(relay.Path, imp); e == nil || !strings.Contains(e.Error(), "equality alias does not match") {
+		t.Fatal("relay elevated Eq", e)
+	}
+}
+
+func TestCollectEqualityRegistrations(t *testing.T) {
+	source := equalityTestSource + "\ntype Alias=Value;type Fake Value\n"
+	p := enumTestPackage(t, "example.org/equality", source, nil)
+	result := PackageResult{Files: map[string]Result{"a.hgo": {equalityDerives: map[string]equality.Derive{"Value": {PartialEq: true, Eq: true}}}}}
+	m, e := collectEnumExports(p.Path(), result, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(m.Equality) != 2 || m.Equality[0].Name != "Alias" || m.Equality[1].Name != "Value" || !m.Equality[0].Eq {
+		t.Fatal(m.Equality)
+	}
+	if e = validateEnumMetadata(m, p, enumTestImporter{p.Path(): p}); e != nil {
+		t.Fatal(e)
+	}
+	relay := enumTestPackage(t, "example.org/relay", `package relay;import p "example.org/equality";type Another=p.Value;type Fake p.Value`, enumTestImporter{p.Path(): p})
+	exported, e := collectEnumExports(relay.Path(), PackageResult{enumImports: map[string]enumMetadata{p.Path(): m}}, relay)
+	if e != nil || len(exported.Equality) != 1 || exported.Equality[0].Name != "Another" || exported.Equality[0].DefinitionPath != p.Path() {
+		t.Fatal(exported, e)
 	}
 }

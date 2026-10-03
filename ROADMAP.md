@@ -209,3 +209,7 @@ D31 首片已支持同型 `mut& T` 直接传原生 `*T` 标量参数，包括函
 ### 跨 module builtin 恢复（2026-10-03）
 
 Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立 go.mod 构造/match/传播、alias 与原生消费进入[真实验收](docs/t0-acceptance.md#跨-module-optionresult2026-10-03)。消费者跨包 derive 可作为后续独立切片，不扩全 trait 或隐式 From 注册。用户已选 enum 比较资格编译期判断，并确认显式 PartialEq/Eq derive 与 equals 方向；[有界比较提案](docs/rfcs/research/enum-equality-proposed.md)区分已确认方向、建议入口和待定边界，本片未实现比较协议。
+
+### 显式 equality 首片（2026-10-03）
+
+已接通有限具体类型的显式 PartialEq/Eq 派生、实例 equals、v3 跨模块登记和真实 helper 消费，见[验收](docs/t0-acceptance.md#显式-equality-首片2026-10-03)。直接 enum 比较及已知危险 enum 的间接比较/map键入口编译期诊断；原生 Go 与 enum-nil 现状保留。容器语义、manual、pointer/chan/interface、HashMap 未混入本片，剩余账不自动批准延期。

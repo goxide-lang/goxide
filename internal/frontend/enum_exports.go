@@ -33,7 +33,7 @@ func recoverEnumImports(sources map[string][]byte, known map[string]PackageResul
 			if path == "C" {
 				continue
 			}
-			if p, ok := out[path]; ok && (len(p.enumMetadata.Enums) > 0 || len(p.enumMetadata.Families) > 0) {
+			if p, ok := out[path]; ok && p.enumMetadata.present() {
 				continue
 			}
 			pkg, e := imp.Import(path)
@@ -75,7 +75,18 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 	meta := enumMetadata{Version: enumMetadataVersion, Path: path, Package: pkg.Name()}
 	canonical := map[string]enumExport{}
 	families := map[string]enumFamilyExport{}
+	equalities := map[string]equalityExport{}
 	for _, file := range sortedResultNames(result) {
+		for name, derive := range result.Files[file].equalityDerives {
+			if !ast.IsExported(name) || !derive.PartialEq {
+				continue
+			}
+			x := equalityExport{Name: name, DefinitionPath: path, DefinitionName: name, Helper: "Equals" + name, Eq: derive.Eq}
+			if prior, ok := equalities[path+"."+name]; ok && prior != x {
+				return meta, fmt.Errorf("conflicting equality derivations for %s", name)
+			}
+			equalities[path+"."+name] = x
+		}
 		for _, d := range result.Files[file].Enums {
 			if d.Family != "" {
 				key := path + "." + d.Family
@@ -112,6 +123,9 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 		}
 	}
 	for _, m := range result.enumImports {
+		for _, x := range m.Equality {
+			equalities[x.DefinitionPath+"."+x.DefinitionName] = x
+		}
 		for _, x := range m.Families {
 			families[x.DefinitionPath+"."+x.DefinitionName] = x
 		}
@@ -129,6 +143,10 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 			continue
 		}
 		origin := named.Obj()
+		if x, ok := equalities[origin.Pkg().Path()+"."+origin.Name()]; ok {
+			x.Name = name
+			meta.Equality = append(meta.Equality, x)
+		}
 		if f, ok := families[origin.Pkg().Path()+"."+origin.Name()]; ok {
 			f.Name = name
 			sort.Slice(f.Instances, func(i, j int) bool { return f.Instances[i].Validator < f.Instances[j].Validator })
@@ -148,6 +166,7 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 	}
 	sort.Slice(meta.Enums, func(i, j int) bool { return meta.Enums[i].Name < meta.Enums[j].Name })
 	sort.Slice(meta.Families, func(i, j int) bool { return meta.Families[i].Name < meta.Families[j].Name })
+	sort.Slice(meta.Equality, func(i, j int) bool { return meta.Equality[i].Name < meta.Equality[j].Name })
 	return meta, nil
 }
 

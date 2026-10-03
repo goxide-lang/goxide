@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/hxsf/goxide/internal/deriveextras"
 	"github.com/hxsf/goxide/internal/enums"
+	"github.com/hxsf/goxide/internal/equality"
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/matchexpr"
 	"github.com/hxsf/goxide/internal/printing"
@@ -38,6 +39,7 @@ type Result struct {
 	debugTypes              map[string]bool
 	typeSpecs               map[string]*ast.TypeSpec
 	defaultHelpers          map[string]bool
+	equalityDerives         map[string]equality.Derive
 }
 type attrs struct {
 	derive          map[string]bool
@@ -268,7 +270,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				pending.derive = map[string]bool{}
 				for _, x := range strings.Split(body[7:len(body)-1], ",") {
 					x = strings.TrimSpace(x)
-					if x != "Serialize" && x != "Deserialize" && x != "Debug" && x != "Clone" && x != "Default" && x != "Error" {
+					if x != "Serialize" && x != "Deserialize" && x != "Debug" && x != "Clone" && x != "Default" && x != "Error" && x != "PartialEq" && x != "Eq" {
 						return fail(i+1, "unsupported derive "+x)
 					}
 					if pending.derive[x] {
@@ -428,7 +430,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 			if ed := enumByName[ts.Name.Name]; ed != nil {
 				for kind := range a.derive {
-					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Default" && kind != "Error" {
+					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Default" && kind != "Error" && kind != "PartialEq" && kind != "Eq" {
 						return fail(ed.Position.Line, "unsupported enum derive "+kind)
 					}
 				}
@@ -442,6 +444,18 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 			st, ok := ts.Type.(*ast.StructType)
 			if !ok {
+				equalityOnly := true
+				for kind := range a.derive {
+					if kind != "PartialEq" && kind != "Eq" {
+						equalityOnly = false
+					}
+				}
+				if equalityOnly {
+					m := model{name: ts.Name.Name, attrs: a, line: line, spec: ts}
+					g.models[m.name] = m
+					ordered = append(ordered, m)
+					continue
+				}
 				return fail(line, "derive requires struct; enum and aliases are not supported")
 			}
 			m := model{name: ts.Name.Name, attrs: a, line: line, spec: ts}
@@ -637,6 +651,12 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		m.name = n
 		g.models[n] = m
 	}
+	equalityDerives := map[string]equality.Derive{}
+	for _, m := range ordered {
+		if m.attrs.derive["PartialEq"] || m.attrs.derive["Eq"] {
+			equalityDerives[m.name] = equality.Derive{PartialEq: m.attrs.derive["PartialEq"], Eq: m.attrs.derive["Eq"]}
+		}
+	}
 	defaultHelpers := map[string]bool{}
 	for n, m := range g.models {
 		if m.attrs.derive["Default"] {
@@ -768,6 +788,16 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		provenance = provenance.Compose(out, bound[filename], "refs.BindImports")
 		out = bound[filename]
 	}
+	singleEqCfg := equality.Config{Importer: singleImporter, PackagePath: "hgo/generated", Derives: equalityDerives, Enums: enumResult.Enums, Maps: map[string]*sourcemap.Map{filename: provenance}}
+	if cfg == nil {
+		eqFiles, err := equality.Prepare(map[string][]byte{filename: out}, singleEqCfg)
+		if err != nil {
+			return Result{}, stageError("equality.Prepare", err)
+		}
+		out = eqFiles[filename]
+		provenance = singleEqCfg.Maps[filename]
+		needsTypecheck = needsTypecheck || len(equalityDerives) > 0 || bytes.Contains(originalSource, []byte("equals"))
+	}
 	matchReferenceTemps := map[string]bool{}
 	if cfg == nil && (bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_"))) {
 		conversions := []propagate.Conversion{}
@@ -780,6 +810,15 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
+		}
+		eqFiles, err := equality.Lower(map[string][]byte{filename: out}, singleEqCfg)
+		if err != nil {
+			return Result{}, stageError("equality.Lower", err)
+		}
+		out = eqFiles[filename]
+		provenance = singleEqCfg.Maps[filename]
+		if err := checkEnumEquality("hgo/generated", map[string][]byte{filename: out}, imp, enumResult.Enums, true); err != nil {
+			return Result{}, err
 		}
 		printed, err := printing.Lower(map[string][]byte{filename: out}, printing.Config{Importer: imp, DebugTypes: debugTypes, Maps: map[string]*sourcemap.Map{filename: provenance}})
 		if err != nil {
@@ -850,7 +889,12 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "deriveFields": deriveFields, "macroTokens": expanded.Origins, "macroTokenInputStage": "propagate.Prepare output", "references": refResult.References, "diagnostics": provenance, "sourceBytes": len(originalSource), "note": "diagnostics uses final Go byte offsets; generated/unmapped regions have no proven source; macroTokens uses macro expansion offsets"}, "", "  ")
-	return Result{matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
+	if cfg == nil {
+		if err := checkEnumEquality("hgo/generated", map[string][]byte{filename: out}, singleImporter, enumResult.Enums, true); err != nil {
+			return Result{}, err
+		}
+	}
+	return Result{equalityDerives: equalityDerives, matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer

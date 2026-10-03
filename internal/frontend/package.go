@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
+	"github.com/hxsf/goxide/internal/equality"
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/printing"
 	"github.com/hxsf/goxide/internal/propagate"
@@ -23,6 +24,7 @@ import (
 
 // PackageResult keeps a separate output and origin map for every source file.
 type PackageResult struct {
+	equalityImports  []equality.Protocol
 	enumMarkerFile   string
 	enumTypes        *types.Package
 	enumMetadata     enumMetadata
@@ -67,6 +69,14 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		return PackageResult{}, err
 	}
 	cfg.imported, cfg.preludes, cfg.enumGoImports, cfg.enumUnavailable = importedDeclarations(path, sources, metadata)
+	eqPrelude, eqImports, eqProtocols := importedEquality(path, sources, metadata)
+	for n, p := range eqPrelude {
+		cfg.preludes[n] += p
+	}
+	for n, p := range eqImports {
+		cfg.enumGoImports[n] += p
+	}
+
 	dependencies := map[string]*macros.Package{}
 	for path, p := range metadata {
 		if p.macros != nil {
@@ -151,7 +161,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	cfg.collect = false
 	cfg.macroBudget = buildBudget
-	result := PackageResult{enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
+	result := PackageResult{equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
 	for path, p := range metadata {
 		result.referenceImports[path] = p.references
 		result.enumImports[path] = p.enumMetadata
@@ -226,6 +236,28 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		}
 		files[name] = source
 	}
+	eqCfg := equality.Config{Native: map[string]bool{}, Importer: imp, PackagePath: path, Derives: map[string]equality.Derive{}, Enums: append([]enums.Decl(nil), families...), Imported: result.equalityImports, Maps: map[string]*sourcemap.Map{}}
+	for name, r := range result.Files {
+		eqCfg.Native[name] = strings.HasSuffix(name, ".go")
+		for n, d := range r.equalityDerives {
+			d.File = name
+			eqCfg.Derives[n] = d
+		}
+		eqCfg.Maps[name] = r.Diagnostics
+		eqCfg.Enums = append(eqCfg.Enums, result.imported[name]...)
+	}
+	eqPrepared, err := equality.Prepare(files, eqCfg)
+	if err != nil {
+		return result, stageError("equality.Prepare", err)
+	}
+	for name, source := range eqPrepared {
+		r := result.Files[name]
+		r.Go = source
+		r.Expanded = source
+		r.Diagnostics = eqCfg.Maps[name]
+		result.Files[name] = r
+		files[name] = source
+	}
 	for index, name := range sortedSources(files) {
 		r := result.Files[name]
 		if !strings.HasSuffix(name, ".hgo") {
@@ -241,6 +273,21 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		refreshPackageMap(&r)
 		files[name] = lowered
 		result.Files[name] = r
+	}
+	eqLowered, err := equality.Lower(files, eqCfg)
+	if err != nil {
+		return result, stageError("equality.Lower", err)
+	}
+	for name, source := range eqLowered {
+		r := result.Files[name]
+		r.Go = source
+		r.Expanded = source
+		r.Diagnostics = eqCfg.Maps[name]
+		result.Files[name] = r
+		files[name] = source
+	}
+	if err := checkEnumEquality(path, files, imp, eqCfg.Enums); err != nil {
+		return result, err
 	}
 	debugTypes := map[string]bool{}
 	maps := map[string]*sourcemap.Map{}
@@ -346,7 +393,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		}
 	}
 	result.enumTypes = checkedTypes
-	if len(result.enumMetadata.Enums) > 0 || len(result.enumMetadata.Families) > 0 {
+	if result.enumMetadata.present() {
 		if err := validateEnumMetadata(result.enumMetadata, checkedTypes, imp); err != nil {
 			return result, err
 		}

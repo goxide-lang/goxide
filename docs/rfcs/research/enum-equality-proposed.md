@@ -1,6 +1,8 @@
 # Enum 显式比较：有界实施提案
 
-状态（2026-10-03）：用户已选**资格编译期判断，不能把含不可比载荷的 enum 比较留给 Go interface 运行时 panic**；进一步确认显式派生宏自动实现 PartialEq/Eq，并承接 enum 使用 `equals` 的方向。下面具体签名、容器/非法值边界仍是提案；尚未实现，不以本文授权全 trait 或修改普通 Go 类型的 `==`。
+状态（2026-10-03）：用户已选**资格编译期判断，不能把含不可比载荷的 enum 比较留给 Go interface 运行时 panic**；进一步确认显式派生宏自动实现 PartialEq/Eq，并承接 enum 使用 `equals` 的方向。手写签名、容器和剩余比较例外仍是提案；未完成部分不以本文授权全 trait 或修改普通 Go 类型的 `==`。
+
+实际首片已按后续授权实现 scalar/struct/array/enum 显式派生、值参数 equals、左/右校验及跨模块登记，见 [enum RFC](../0008-enums.md#显式-partialeqeq-首片2026-10-03)。下列未完成容器/manual等仍保留提案状态，不以建议分片视为获批延期。
 
 ## 最小协议
 
@@ -19,7 +21,7 @@ Go 1.27.1 的本地 `go doc cmp.Compare` 确認它是 Ordered 泛型函数，并
 
 ## 容器、原生 map 与 Hash
 
-slice/map 可由显式派生定义内容相等，资格递归依赖载荷协议，不等同于 Go `==` 资格。nil 与空容器是否相等尚需确认。若 map 内容比较以原生键查找实现，键还须满足 Go 比较与选定语义一致且自反；NaN 键不能被隐藏忽略。循环容器、递归指针和动态 interface 的通用深比较不加入首片。
+slice/map 可由显式派生定义内容相等，资格递归依赖载荷协议，不等同于 Go `==` 资格。用户已确认同类型 nil 与非 nil 空容器不相等、两个 nil 相等、两个非 nil 空容器按内容相等；先判 nil 再比较内容，不做归一化。固定长度 Go array 本身没有 nil。若 map 内容比较以原生键查找实现，键还须满足 Go 比较与选定语义一致且自反；NaN 键不能被隐藏忽略。循环容器、递归指针和动态 interface 的通用深比较不加入首片。
 
 Eq 不使 enum 自动成为 Go map key。原生 map 使用自身 `==`/hash，不调用 equals；必须单独核验实际 Go 可比较性、无动态 panic 风险与语义一致性。未来若迁 tag struct，非活跃字段也参与原生比较，因此不能仅凭 tag struct 可比较就声称与活跃载荷 equals 一致。
 
@@ -35,4 +37,4 @@ Eq 不使 enum 自动成为 Go map key。原生 map 使用自身 `==`/hash，不
 
 第一片先确定上述具体入口，支持有限 scalar/struct/array 载荷的显式 PartialEq/Eq 派生、真实 NaN 反例和跨模块 helper；不引入全 trait、隐式适配或 HashMap。以下分片顺序不是用户批准延期。第二片再做已确认容器语义的 slice/map 递归派生与 manual 入口。每片都需真实 hgo→Go 执行及独立审查。
 
-仍需确认：self/other 的权限签名及 Go helper 命名；enum 对 nil 比较是否例外；nil/空容器语义与 map 键契约；手写实现之前的验证保证。当前讨论方向为 enum 统一走显式 equals；落地静态禁令前应在最终契约中写清 `==`/`!=`、隐含比较 switch 和 map key 的边界，不能扩大成普通 Go 类型全局禁令。
+仍需确认：self/other 的权限签名及 Go helper 命名；enum 对 nil 比较是否例外；map 键契约（nil/空区别已由 D33 确认）；手写实现之前的验证保证。当前讨论方向为 enum 统一走显式 equals；落地静态禁令前应在最终契约中写清 `==`/`!=`、隐含比较 switch 和 map key 的边界，不能扩大成普通 Go 类型全局禁令。

@@ -315,9 +315,6 @@ func (l *lowerer) collectNamedTypes() (map[string]ast.Expr, error) {
 			continue
 		}
 		start := i + 2
-		if l.ts[start].text == "[" {
-			return nil, l.err(t.start, "user generic type declarations unsupported")
-		}
 		if l.ts[start].text == "=" {
 			start++
 		}
@@ -333,6 +330,12 @@ func (l *lowerer) collectNamedTypes() (map[string]ast.Expr, error) {
 			end++
 		}
 		if end > start {
+			declaration := "package p;" + string(l.src[t.start:l.ts[end-1].end])
+			if f, e := parser.ParseFile(token.NewFileSet(), "", declaration, 0); e == nil {
+				if spec, ok := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.TypeSpec); ok && spec.TypeParams != nil {
+					return nil, l.err(t.start, "user generic type declarations unsupported")
+				}
+			}
 			if e, err := parser.ParseExpr(withoutPayloadAttrs(string(l.src[l.ts[start].start:l.ts[end-1].end]))); err == nil {
 				named[l.ts[i+1].text] = e
 			}

@@ -63,7 +63,9 @@ func (l *lowering) questionFlow(n *ast.CallExpr, operand ast.Expr, ft *ast.FuncT
 		value: ast.NewIdent(val),
 	}
 	if d.Family == "Option" {
-		q.optionCondition = parseExpr(tmp + " == " + d.Variants[1].Constructor + "()")
+		none := "__hgo_enum_none_" + l.temp()
+		q.setup = append(q.setup, parseStatements(none+" := "+d.Variants[1].Constructor+"()")...)
+		q.optionCondition = parseExpr(tmp + " == " + none)
 		q.failure = parseExpr(target.Variants[1].Constructor + "()")
 		q.success = parseStatements(val + " = " + tmp + ".(" + d.Variants[0].CaseName + ").Value")
 		return q, nil

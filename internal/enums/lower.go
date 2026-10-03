@@ -704,7 +704,7 @@ func (l *lowerer) match(i int) (string, int, error) {
 			}
 			tmp := "__hgo_enum_payload_" + id
 			if d.Family == "Option" && v.Name == "None" {
-				fmt.Fprintf(&b, "if %s == %s() {\n", saved, v.Constructor)
+				fmt.Fprintf(&b, "__hgo_enum_none_%s := %s(); if %s == __hgo_enum_none_%s {\n", id, v.Constructor, saved, id)
 			} else {
 				fmt.Fprintf(&b, "if %s, __hgo_enum_ok_%s := %s.(%s); __hgo_enum_ok_%s { _ = %s;\n", tmp, id, saved, v.CaseName, id, tmp)
 			}

@@ -921,3 +921,13 @@ Go 1.27.1 非 race 5×200ms 对照中，六组 typed IIFE/statement 小表达式
 独立审查修复 alias 类型参数误替换字段名，以及 canonical ctor 擦除源 alias 约束；真实正反例验证。嵌套 Some(None) 连续问号暴露 identity stub 旧推断，逐签名重新 typecheck 修复；Q 个问号可能需要 Q 次包级检查，属于编译成本，不新增运行时框架。细节及未完成边界见[验收矩阵](docs/t0-acceptance.md#跨-module-optionresult2026-10-03)。比较用户新方向仅形成有界提案，未混入本工程切片。
 
 最终验证：全树 `go test -race -count=1 -json ./...` **15 测试包 / 276 宿主顶层 / 688 子测试**通过（另 2 包无测试，无测试缓存），全树 vet 通过。库、hgo 应用、原生 Go 消费模块各自 race/vet，重复生成一致；先前具体 enum 与引用 metadata 回归同在最终全树。设计检查 **63 Markdown / 820 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过，后者不代替真实 hgo 验收。实现、修复反例及比较设计分别独立审查无剩余阻断。日志 `/tmp/builtin-final-race.json`、`/tmp/builtin-final-race.err`、`/tmp/builtin-final-vet.log`、`/tmp/builtin-design.log`、`/tmp/builtin-final-docs.log`、`/tmp/builtin-alias-final.log`；独立生成复验 `/tmp/family-alias-review/app-fixed`、`/tmp/family-constraint-review/good-go`。最终全树包含字段名与alias约束修复，不沿用修复前运行的通过结论。阶段提交/push/fetch，完整 MVP 尚未完成。
+
+## 显式 PartialEq/Eq（2026-10-03）
+
+基于 `d8e800d684766b45975f844b928d1025928d084a`，新增 typed equality Prepare/Lower：按明确 derive 和已验证导入记录生成 EqualsT，以静态 helper 降低实例调用，Eq 要求已有 PartialEq 与递归 Eq 资格。value 参数无写副作用，enum 两实参求值后左/右 validator 及活跃载荷比较；不迁 ABI、不引入指针拆分或 full trait。metadata v3 复用 source/dependency 指纹并验证真实 helper 签名、alias origin 与 Eq 标记。
+
+hgo 直接 enum 比较诊断；已知危险载荷的包裹/混合比较、switch 与 map键用实际类型检查。compiler 自身 Option None 测试改用保留名临时值，静态 pass 不把这些生成操作误认为源显式相等；源无法伪造保留名。ordinary Go 文件不改，enum-nil 例外保留，不承诺全局 erased-interface 分析。独立审查修复 true/false 遮蔽、scalar typed bool 丢失和 switch-case/delete 等漏口。详见[真实验收](docs/t0-acceptance.md#显式-equality-首片2026-10-03)。
+
+用户追加确认 D33：slice/map 的 nil 与非 nil 空值必须区分，Option.None/Some(nil)/Some(empty) 也区分；已同步 RFC/决策及纯 Go 契约探针。容器派生尚未实现，但 nil/空不再列待决；此探针不冒充真实 hgo 派生验收。
+
+最终验证：全树 `go test -race -count=1 -json ./...` **16 测试包 / 290 宿主顶层 / 723 子测试**通过（无测试缓存），全树 vet 通过。真实 CLI 的库、hgo 应用、原生 Go 消费模块分别 race/vet，库与应用重复生成一致；设计检查 **64 Markdown / 834 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过。实现与修复反例独立复审、D33 文档及契约测试独立复审均无剩余阻断。日志 `/tmp/equality-verified-race.json`、`/tmp/equality-verified-race.err`、`/tmp/equality-verified-vet.log`、`/tmp/equality-final-design.log`；最终全树包含单文件空白调用与首个诊断保留修复。容器/手动协议、原位借用、剩余表达式/权限边界等仍留账，不标完整 MVP；本片提交/push/fetch。

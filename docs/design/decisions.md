@@ -152,3 +152,7 @@
 已确认 **D30（2026-10-02 用户收口纠正）**：hgo 跨 module 消费 hgo 库应恢复增强信息，普通 Go 消费生成库则不执行 hgo 静态增强检查，类似 TS/JS 消费边界。同模块联合验收不等于此能力已完成，也未获批准缩成同模块 MVP。
 
 已确认 **D31（2026-10-02 用户收口纠正）**：`mut& T` 降低为 Go `*T` 应有自然互操作，不接受用权限擦除概念一刀切拒绝可写引用到普通 Go 指针 API；只读 `&T` 仍不能借该路径升级写权限。D11/U15 的旧显式桥候选须按这一新意图修订，不能作为拒绝新需求的既定前提；具体递归/返回/回调边界仍需核对，不由此宣布实现完成。复杂 match 表达式限制是工程欠账，不是获批语言禁令或范围缩减。
+
+已确认 **D32（2026-10-03 显式比较）**：enum 相等走显式 PartialEq/equals，Eq 依赖 PartialEq 并标记等价关系；允许显式 derive 自动生成。含不可比载荷的已知 enum 比较资格编译期判断，不以 Go interface 运行时 panic 充当策略。首片具体值参数、两实参求值后左/右验证沿既有机制实现；普通原生 Go 比较与当前 enum-nil 例外保持。Go comparable 不等于 Eq，Eq 不自动使类型成为 Go map key；不扩 full trait、HashMap 或指针拆分。具体实现与未完成边界见 [RFC](../rfcs/0008-enums.md#显式-partialeqeq-首片2026-10-03)。
+
+已确认 **D33（2026-10-03 容器 nil/空）**：同类型 nil slice 与非 nil 空 slice 不相等，nil map 与非 nil 空 map 不相等；两个 nil 相等，两个非 nil 空容器按内容相等。未来 equals 先区分 nil，再比较内容，不做隐式 normalization。Option.None、Some(nil 载荷)、Some(非 nil 空载荷) 三者区分；serde null/[]/{}不因此改变。固定长度 Go array 没有 nil 状态。该语义已定，不再作为容器派生的待决项；map 键资格/自定义相等和手写接口仍单列。[契约参考测试](../../tests/design/enum/equality_contract_test.go)仅为纯 Go 规则探针，尚不表示 hgo 容器派生已实现。

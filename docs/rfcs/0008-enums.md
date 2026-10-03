@@ -154,3 +154,19 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；hgo 不向第三方
 私有载荷有实际公开透明类型 alias 时可保持类型身份；没有可见类型拼写的载荷、带私有字段且不可命名的匿名形状仍是增强操作的工程缺口，普通 API 调用/转发保留。native generic aliases 可消费，不代表 `.hgo` 已支持用户泛型定义。internal origin facade、无源产物、单文件外部 enum、消费者跨包 derive 仍未由本片补齐，不视为获批延期。
 
 [双模块执行验收](../../tests/acceptance/builtin_external_test.go)区分真实 hgo 构造/match/传播与第三个原生 Go 消费模块，检查 None、Some(None)、typed-nil、非法动态 case、嵌套非法载荷、别名约束与 metadata 缺失/篡改。serde 生产者 helper 的 Option 缺失/null 仍为 None，不依赖 Default。比较/零值/入口策略未在本片修改。
+
+### 显式 PartialEq/Eq 首片（2026-10-03）
+
+已接通具体 scalar、struct、array 和 enum 的 `#[derive(PartialEq)]` / `#[derive(PartialEq, Eq)]`，实例 `a.equals(b)` 静态调用已登记的 `EqualsT(a,b T) bool`。Eq 是依赖 PartialEq 的资格标记，不产生第二套方法；单独 derive Eq 在尚无 PartialEq 实现时拒绝。本片未实现手写协议或一般 trait 求解。
+
+PartialEq 按字段/元素递归比较；enum 先验证左参数、再验证右参数，然后比较变体和活跃载荷。两个实参先完成既有表达式求值，helper 不在两实参之间插入验证。Eq 要求全部载荷有 Eq；float/complex 的普通相等只支持 PartialEq（NaN 不自反），不能派生 Eq。具名字段类型需要明确协议，普通方法名或 Go comparable 不构成注册。无写副作用的值参数继续采用现有 Go 风格传入，不引入指针拆分。
+
+生成 helper 以保留名绑定防局部同名劫持；布尔常量不引用可遮蔽的 true/false 标识符。scalar equals 同样返回 **typed bool**，不能将比较表达式的 untyped bool 语义泄漏到调用方。需要生成 bool 返回类型时，包级遮蔽 builtin bool 仍给明确当前限制诊断；scalar helper 所需 comparable 被包级遮蔽也单列限制；不改无此功能的普通 Go 代码。
+
+hgo 中两个已知 enum 的直接 `==`/`!=` 给出使用显式 equals 的诊断；现有 enum 与 nil 比较保留。已知包含不可比 enum 载荷的 struct/array、混合 interface 比较、switch tag/case 和原生 map 键使用也在编译期拒绝，含 map[any] 的已知 enum key 及 builtin delete。只按实际类型处理已知 enum，不做全程序 interface/alias 风险分析；普通原生 Go 文件与无 enum 的 Go 比较不受此检查影响。安全载荷的既有 Go map key、expression switch 规则未扩大新许可，Eq 不自动赋予 Go map key 资格；对 nil 与其他隐式比较的最终协议边界仍单列。
+
+enum metadata **v3** 记录 Equality：真实目标身份、helper 与 Eq 标记；存在记录即明确 PartialEq。equality-only 包也生成产物，透明 alias 核对定义包记录与 `(T,T) bool` 实际签名，防止 relay 伪升 Eq。支持跨模块调用与消费者派生组合已登记字段；这是 equality 专用能力，不表示其他 derive 均已跨包实现。当前导出以公开 canonical 类型为界，私有 canonical 的公开 alias 尚未复出 equality 协议。
+
+[真实模块验收](../../tests/acceptance/equality_test.go)验证 NaN、变体/递归字段、array、上下文大整数、`?`、全局初始化、调用遮蔽、参数求值及左右非法值顺序、别名与普通 Go helper 消费。blank/embedded 字段的 struct 派生、builtin Option/Result 的条件泛型比较协议、slice/map 内容相等及 nil/空规则、pointer/chan/interface 自动协议、手写权限入口、Hash/HashMap 均未实现，不由本片自动延期。
+
+后续容器规则已由 [D33](../design/decisions.md) 确认：同类型 nil slice/map 与非 nil 空容器不相等，两个 nil 相等，两个非 nil 空容器按内容相等；Option.None/Some(nil)/Some(empty) 区分，serde 不变。固定长度 array 无 nil。对应 [纯 Go 契约探针](../../tests/design/enum/equality_contract_test.go)不冒充尚未实现的 hgo 容器派生；nil/空不再待决，map 键规则仍单列。

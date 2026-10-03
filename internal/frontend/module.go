@@ -284,7 +284,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			result.Files[goName] = r
 		}
 
-		if len(checked.references.Functions) > 0 || (len(checked.enumMetadata.Enums) > 0 || len(checked.enumMetadata.Families) > 0) {
+		if len(checked.references.Functions) > 0 || checked.enumMetadata.present() {
 			sourceFiles := map[string][]byte{}
 			for name := range packages[dir] {
 				base := filepath.Base(name)

@@ -612,3 +612,15 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 负例包括未登记 instance 的传播、伪同名 family、新 defined 类型、跨家族、非穷尽、外部 From helper 未授权、不可命名私有载荷、generic alias 约束违规、family marker 篡改及 artifact 缺失；移除 artifact 后原生 Go 消费继续执行。独立审查发现并修复类型参数误替换字段名和 canonical helper 擦除 alias 约束两项问题。
 
 协议升级 v2 需重生成，实际 Go origin/实例类型和完整产物指纹仍校验。未完成项：完全不可命名 payload、internal facade 增强操作、消费者跨包 derive、单文件/无源外部恢复、外部 From 注册入口及已列其他 T0 欠账；不把当前限制自动批准延期。比较协议另见[有界提案](rfcs/research/enum-equality-proposed.md)，本工程片不改变比较、零值或全入口校验，整体 MVP 尚未完成。
+
+## 显式 equality 首片（2026-10-03）
+
+[真实 CLI 双模块与 Go 消费验收](../tests/acceptance/equality_test.go)覆盖 scalar/struct/array/enum 显式 PartialEq/Eq、跨模块透明 alias、消费者组合派生、NaN/complex/±0、活跃变体、全局初始化、大整数上下文、`?`、局部遮蔽、nil 例外与左右实参/validator 顺序。库与应用重复生成一致；库、应用、原生消费模块分别 race/vet。原生 Go 仍可直接使用自身 `==`，不是 hgo 静态规则的执行入口。
+
+负例包括缺 PartialEq 的 Eq、float/complex Eq、导入仅 PartialEq 的字段尝试 Eq、slice/pointer 自动协议、新 defined 类型冒充协议、helper 冲突、直接 enum 比较、已知危险载荷的包裹/混合 interface 比较、switch tag/case、map 声明/索引/literal/delete、丢失 metadata 和 scalar bool 结果错误赋给具名 bool。独立审查修复布尔标识符遮蔽、typed bool 丢失及间接比较检查漏口；只有 builtin delete 适用，普通同名函数保留。
+
+此次收口还修复 `type Row [2]Point` 被 enum 类型收集误当作用户泛型的问题；用户泛型仍不因此开放。[内部执行测试](../internal/equality/lower_test.go)补 native 非 bool equals 方法、传播后 native receiver、卫生绑定等；[单文件入口](../internal/frontend/equality_test.go)覆盖空格分隔的 scalar 方法调用。
+
+剩余：blank/embedded struct 字段、Option/Result 条件泛型比较协议、容器派生实现（nil/空区别已由 D33 确认）、manual 接口、pointer/chan/interface 协议、私有 canonical 的跨包 equality alias、其他 derive 协议与既列 T0 工程账。Eq 不新增 map key 许可、不证明任意手写函数的等价关系；不进行任意 interface 擦除后的全局值流分析，也不将等值 helper 的验证扩大到所有公开入口。完整 enum/MVP 尚未宣布完成。
+
+最新 [D33](design/decisions.md) 已确认 nil/非 nil 空 slice/map 不相等；[契约探针](../tests/design/enum/equality_contract_test.go)只验证参考规则，不计作 hgo 容器执行证据，不隐式改 Option 状态或 serde null/[]/{}。

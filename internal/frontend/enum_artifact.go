@@ -21,7 +21,7 @@ import (
 
 const enumMetadataMarker = "HgoEnumMetadata"
 const enumMetadataFilename = ".hgo.enums.json"
-const enumMetadataVersion = 2
+const enumMetadataVersion = 3
 
 type enumVariantExport struct {
 	Name, Case, Constructor string
@@ -41,12 +41,22 @@ type enumFamilyExport struct {
 	Variants                                             []enumFamilyVariantExport
 	Instances                                            []enumFamilyInstanceExport
 }
+
+// Equality records are explicit PartialEq registrations; Eq adds qualification.
+type equalityExport struct {
+	Name, DefinitionPath, DefinitionName, Helper string
+	Eq                                           bool
+}
+
 type enumMetadata struct {
 	Version       int
 	Path, Package string
 	Enums         []enumExport
 	Families      []enumFamilyExport
+	Equality      []equalityExport
 }
+
+func (m enumMetadata) present() bool { return len(m.Enums)+len(m.Families)+len(m.Equality) > 0 }
 
 func (m enumMetadata) Marker() string {
 	data, _ := json.Marshal(m)
@@ -320,6 +330,28 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 				return bad("builtin alias does not match a public defining declaration: " + export.Name)
 			}
 		}
+		for _, export := range a.Metadata.Equality {
+			origin := a.Metadata
+			if export.DefinitionPath != path {
+				origin, e = load(export.DefinitionPath)
+				if e != nil {
+					return bad("equality definition: " + e.Error())
+				}
+			}
+			found := false
+			for _, definition := range origin.Equality {
+				if definition.Name == export.DefinitionName && definition.DefinitionPath == export.DefinitionPath && definition.DefinitionName == export.DefinitionName {
+					want := definition
+					want.Name = export.Name
+					found = want == export
+					break
+				}
+			}
+			if !found {
+				return bad("equality alias does not match a public defining declaration: " + export.Name)
+			}
+		}
+
 		content, e := imp.PackageFingerprint(path)
 		if e != nil {
 			return bad(e.Error())
@@ -335,7 +367,7 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 }
 
 func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Importer) error {
-	if meta.Version != enumMetadataVersion || meta.Path != pkg.Path() || meta.Package != pkg.Name() || len(meta.Enums)+len(meta.Families) == 0 {
+	if meta.Version != enumMetadataVersion || meta.Path != pkg.Path() || meta.Package != pkg.Name() || !meta.present() {
 		return fmt.Errorf("enum metadata package identity or version mismatch")
 	}
 	exported := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
@@ -453,7 +485,10 @@ func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Impor
 			}
 		}
 	}
-	return validateEnumFamilies(meta, pkg, imp)
+	if err := validateEnumFamilies(meta, pkg, imp); err != nil {
+		return err
+	}
+	return validateEqualityMetadata(meta, pkg, imp)
 }
 
 // Reject duplicate object keys rather than accepting last-write-wins metadata.
@@ -677,6 +712,50 @@ func enumGenericParameters(t types.Type) *types.TypeParamList {
 		return t.TypeParams()
 	case *types.Alias:
 		return t.TypeParams()
+	}
+	return nil
+}
+
+// Validate registrations, never infer a protocol from an arbitrary helper name.
+func validateEqualityMetadata(meta enumMetadata, pkg *types.Package, imp types.Importer) error {
+	public := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
+	seen := map[string]bool{}
+	for _, x := range meta.Equality {
+		if !public(x.Name) || !public(x.DefinitionName) || !public(x.Helper) || x.DefinitionPath == "" || seen[x.Name] {
+			return fmt.Errorf("invalid or duplicate equality export %q", x.Name)
+		}
+		seen[x.Name] = true
+		origin := pkg
+		if x.DefinitionPath != pkg.Path() {
+			var err error
+			origin, err = imp.Import(x.DefinitionPath)
+			if err != nil {
+				return err
+			}
+			if origin == nil {
+				return fmt.Errorf("missing equality definition package %s", x.DefinitionPath)
+			}
+		}
+		obj, ok := origin.Scope().Lookup(x.DefinitionName).(*types.TypeName)
+		if !ok {
+			return fmt.Errorf("missing equality definition %s", x.DefinitionName)
+		}
+		target, ok := types.Unalias(obj.Type()).(*types.Named)
+		if !ok || target.Obj().Pkg() == nil || target.Obj().Pkg().Path() != x.DefinitionPath || target.Obj().Name() != x.DefinitionName || target.TypeParams().Len() != 0 || target.TypeArgs().Len() != 0 {
+			return fmt.Errorf("invalid equality canonical type %s", x.DefinitionName)
+		}
+		exposed, ok := pkg.Scope().Lookup(x.Name).(*types.TypeName)
+		if !ok || !types.Identical(types.Unalias(exposed.Type()), target) {
+			return fmt.Errorf("equality alias identity mismatch: %s", x.Name)
+		}
+		fn, ok := origin.Scope().Lookup(x.Helper).(*types.Func)
+		if !ok {
+			return fmt.Errorf("missing equality helper %s", x.Helper)
+		}
+		sig, ok := fn.Type().(*types.Signature)
+		if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 || sig.Params().Len() != 2 || sig.Results().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), target) || !types.Identical(sig.Params().At(1).Type(), target) || !types.Identical(sig.Results().At(0).Type(), types.Typ[types.Bool]) {
+			return fmt.Errorf("equality helper signature mismatch: %s", x.Helper)
+		}
 	}
 	return nil
 }

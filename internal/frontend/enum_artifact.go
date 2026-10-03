@@ -21,7 +21,7 @@ import (
 
 const enumMetadataMarker = "HgoEnumMetadata"
 const enumMetadataFilename = ".hgo.enums.json"
-const enumMetadataVersion = 5
+const enumMetadataVersion = 6
 
 type enumVariantExport struct {
 	Name, Case, Constructor string
@@ -51,17 +51,20 @@ type equalityExport struct {
 
 type defaultExport struct{ Name, DefinitionPath, DefinitionName, Helper, Source string }
 
+type fieldProtocolExport struct{ Name, DefinitionPath, DefinitionName, Helper, Kind, Source string }
+
 type enumMetadata struct {
-	Defaults      []defaultExport
-	Version       int
-	Path, Package string
-	Enums         []enumExport
-	Families      []enumFamilyExport
-	Equality      []equalityExport
+	FieldProtocols []fieldProtocolExport
+	Defaults       []defaultExport
+	Version        int
+	Path, Package  string
+	Enums          []enumExport
+	Families       []enumFamilyExport
+	Equality       []equalityExport
 }
 
 func (m enumMetadata) present() bool {
-	return len(m.Enums)+len(m.Families)+len(m.Equality)+len(m.Defaults) > 0
+	return len(m.Enums)+len(m.Families)+len(m.Equality)+len(m.Defaults)+len(m.FieldProtocols) > 0
 }
 
 func (m enumMetadata) Marker() string {
@@ -378,6 +381,27 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 				return bad("Default alias does not match a public defining declaration: " + export.Name)
 			}
 		}
+		for _, export := range a.Metadata.FieldProtocols {
+			origin := a.Metadata
+			if export.DefinitionPath != path {
+				origin, e = load(export.DefinitionPath)
+				if e != nil {
+					return bad("field protocol definition: " + e.Error())
+				}
+			}
+			found := false
+			for _, definition := range origin.FieldProtocols {
+				if definition.Kind == export.Kind && definition.Name == export.DefinitionName && definition.DefinitionPath == export.DefinitionPath && definition.DefinitionName == export.DefinitionName {
+					want := definition
+					want.Name = export.Name
+					found = want == export
+					break
+				}
+			}
+			if !found {
+				return bad("field protocol alias does not match a public defining declaration: " + export.Name)
+			}
+		}
 
 		content, e := imp.PackageFingerprint(path)
 		if e != nil {
@@ -518,7 +542,10 @@ func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Impor
 	if err := validateEqualityMetadata(meta, pkg, imp); err != nil {
 		return err
 	}
-	return validateDefaultMetadata(meta, pkg, imp)
+	if err := validateDefaultMetadata(meta, pkg, imp); err != nil {
+		return err
+	}
+	return validateFieldProtocolMetadata(meta, pkg, imp)
 }
 
 // Reject duplicate object keys rather than accepting last-write-wins metadata.
@@ -843,6 +870,59 @@ func validateDefaultMetadata(meta enumMetadata, pkg *types.Package, imp types.Im
 		sig, ok := fn.Type().(*types.Signature)
 		if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 || sig.Params().Len() != 0 || sig.Results().Len() != 1 || !types.Identical(sig.Results().At(0).Type(), target) {
 			return fmt.Errorf("Default helper signature mismatch: %s", x.Helper)
+		}
+	}
+	return nil
+}
+
+func validateFieldProtocolMetadata(meta enumMetadata, pkg *types.Package, imp types.Importer) error {
+	public := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
+	seen := map[string]bool{}
+	for _, x := range meta.FieldProtocols {
+		if !public(x.Name) || !public(x.DefinitionName) || !public(x.Helper) || x.DefinitionPath == "" || seen[x.Kind+"."+x.Name] {
+			return fmt.Errorf("invalid or duplicate field protocol export %q", x.Name)
+		}
+		if (x.Kind != "Clone" && x.Kind != "Debug") || x.Source != "derive" {
+			return fmt.Errorf("invalid field protocol source for %s", x.Name)
+		}
+		seen[x.Kind+"."+x.Name] = true
+		origin := pkg
+		if x.DefinitionPath != pkg.Path() {
+			var err error
+			if imp == nil {
+				return fmt.Errorf("missing field protocol definition importer for %s", x.DefinitionPath)
+			}
+			origin, err = imp.Import(x.DefinitionPath)
+			if err != nil {
+				return err
+			}
+			if origin == nil {
+				return fmt.Errorf("missing field protocol definition package %s", x.DefinitionPath)
+			}
+		}
+		obj, ok := origin.Scope().Lookup(x.DefinitionName).(*types.TypeName)
+		if !ok {
+			return fmt.Errorf("missing field protocol definition %s", x.DefinitionName)
+		}
+		target, ok := types.Unalias(obj.Type()).(*types.Named)
+		if !ok || target.Obj().Pkg() == nil || target.Obj().Pkg().Path() != x.DefinitionPath || target.Obj().Name() != x.DefinitionName || target.TypeParams().Len() != 0 || target.TypeArgs().Len() != 0 {
+			return fmt.Errorf("invalid field protocol canonical type %s", x.DefinitionName)
+		}
+		exposed, ok := pkg.Scope().Lookup(x.Name).(*types.TypeName)
+		if !ok || !types.Identical(types.Unalias(exposed.Type()), target) {
+			return fmt.Errorf("field protocol alias identity mismatch: %s", x.Name)
+		}
+		fn, ok := origin.Scope().Lookup(x.Helper).(*types.Func)
+		if !ok {
+			return fmt.Errorf("missing field protocol helper %s", x.Helper)
+		}
+		var result types.Type = target
+		if x.Kind == "Debug" {
+			result = types.Typ[types.String]
+		}
+		sig, ok := fn.Type().(*types.Signature)
+		if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 || sig.Params().Len() != 1 || sig.Results().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), types.NewPointer(target)) || !types.Identical(sig.Results().At(0).Type(), result) {
+			return fmt.Errorf("field protocol helper signature mismatch: %s", x.Helper)
 		}
 	}
 	return nil

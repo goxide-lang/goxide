@@ -77,7 +77,17 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 	families := map[string]enumFamilyExport{}
 	equalities := map[string]equalityExport{}
 	defaults := map[string]defaultExport{}
+	protocols := map[string]fieldProtocolExport{}
 	for _, file := range sortedResultNames(result) {
+		for name, kinds := range result.Files[file].fieldProtocols {
+			for _, kind := range kinds {
+				if !ast.IsExported(name) {
+					continue
+				}
+				key := kind + "." + path + "." + name
+				protocols[key] = fieldProtocolExport{Name: name, DefinitionPath: path, DefinitionName: name, Helper: kind + name, Kind: kind, Source: "derive"}
+			}
+		}
 		for name, source := range result.Files[file].defaultRegistrations {
 			if !ast.IsExported(name) {
 				continue
@@ -145,6 +155,9 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 		}
 	}
 	for _, m := range result.enumImports {
+		for _, x := range m.FieldProtocols {
+			protocols[x.Kind+"."+x.DefinitionPath+"."+x.DefinitionName] = x
+		}
 		for _, x := range m.Defaults {
 			defaults[x.DefinitionPath+"."+x.DefinitionName] = x
 		}
@@ -168,6 +181,12 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 			continue
 		}
 		origin := named.Obj()
+		for _, kind := range []string{"Clone", "Debug"} {
+			if x, ok := protocols[kind+"."+origin.Pkg().Path()+"."+origin.Name()]; ok {
+				x.Name = name
+				meta.FieldProtocols = append(meta.FieldProtocols, x)
+			}
+		}
 		if x, ok := defaults[origin.Pkg().Path()+"."+origin.Name()]; ok {
 			x.Name = name
 			meta.Defaults = append(meta.Defaults, x)
@@ -195,6 +214,13 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 	}
 	sort.Slice(meta.Enums, func(i, j int) bool { return meta.Enums[i].Name < meta.Enums[j].Name })
 	sort.Slice(meta.Families, func(i, j int) bool { return meta.Families[i].Name < meta.Families[j].Name })
+	sort.Slice(meta.FieldProtocols, func(i, j int) bool {
+		a, b := meta.FieldProtocols[i], meta.FieldProtocols[j]
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.Kind < b.Kind
+	})
 	sort.Slice(meta.Defaults, func(i, j int) bool { return meta.Defaults[i].Name < meta.Defaults[j].Name })
 	sort.Slice(meta.Equality, func(i, j int) bool { return meta.Equality[i].Name < meta.Equality[j].Name })
 	return meta, nil

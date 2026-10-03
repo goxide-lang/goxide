@@ -12,7 +12,30 @@ import (
 	"strings"
 )
 
-type generator struct{ imports map[string]string }
+// Resolver supplies only frontend-verified helper bindings and stable type names.
+type Resolver func(kind string, t ast.Expr) (string, bool)
+type generator struct {
+	imports   map[string]string
+	resolvers []Resolver
+}
+
+func resolve(rs []Resolver, kind string, t ast.Expr) (string, bool) {
+	for _, r := range rs {
+		if value, ok := r(kind, t); ok {
+			return value, true
+		}
+	}
+	return "", false
+}
+func defaultValue(t ast.Expr, rs []Resolver) (string, error) {
+	return DefaultValue(t, func(t ast.Expr) (string, bool) { return resolve(rs, "Default", t) })
+}
+func (g *generator) typeText(t ast.Expr) string {
+	if name, ok := resolve(g.resolvers, "Type", t); ok {
+		return name
+	}
+	return typeText(t)
+}
 
 func (g *generator) imp(name string) string { a := "__hgo_" + name; g.imports[a] = name; return a }
 func typeText(t ast.Expr) string {
@@ -53,19 +76,19 @@ func fields(spec *ast.TypeSpec) (*ast.StructType, error) {
 
 // Generate emits helpers rather than automatically modifying Go method sets.
 // Non-builtin named fields require matching local helpers, checked by frontend.
-func Generate(kind string, spec *ast.TypeSpec, defaults ...func(ast.Expr) (string, bool)) (string, map[string]string, error) {
+func Generate(kind string, spec *ast.TypeSpec, resolvers ...Resolver) (string, map[string]string, error) {
 	s, err := fields(spec)
 	if err != nil {
 		return "", nil, err
 	}
-	g := &generator{imports: map[string]string{}}
+	g := &generator{imports: map[string]string{}, resolvers: resolvers}
 	var b strings.Builder
 	switch kind {
 	case "Default":
 		fmt.Fprintf(&b, "func Default%s() %s { var out %s\n", spec.Name.Name, spec.Name.Name, spec.Name.Name)
 		for _, f := range s.Fields.List {
 			for _, n := range f.Names {
-				x, e := DefaultValue(f.Type, defaults...)
+				x, e := defaultValue(f.Type, resolvers)
 				if e != nil {
 					return "", nil, fmt.Errorf("field %s: %w", n.Name, e)
 				}
@@ -110,6 +133,9 @@ func Generate(kind string, spec *ast.TypeSpec, defaults ...func(ast.Expr) (strin
 	return b.String(), g.imports, nil
 }
 func (g *generator) clone(t ast.Expr, x string) (string, error) {
+	if fn, ok := resolve(g.resolvers, "Clone", t); ok {
+		return fn + "(&(" + x + "))", nil
+	}
 	switch t := t.(type) {
 	case *ast.Ident:
 		if scalar(t.Name) {
@@ -124,7 +150,7 @@ func (g *generator) clone(t ast.Expr, x string) (string, error) {
 		if e != nil {
 			return "", e
 		}
-		typ := typeText(t)
+		typ := g.typeText(t)
 		init := "var dst " + typ
 		if t.Len == nil {
 			init = "if src == nil { return nil }; dst := make(" + typ + ", len(src))"
@@ -139,12 +165,15 @@ func (g *generator) clone(t ast.Expr, x string) (string, error) {
 		if e != nil {
 			return "", e
 		}
-		typ := typeText(t)
+		typ := g.typeText(t)
 		return "func(src " + typ + ") " + typ + " { if src == nil { return nil }; dst := make(" + typ + ", len(src)); for key, item := range src { dst[key] = " + child + " }; return dst }(" + x + ")", nil
 	}
 	return "", fmt.Errorf("Clone has no explicit implementation for %s (pointer, external, interface and synchronization types are not copied implicitly)", typeText(t))
 }
 func (g *generator) debug(t ast.Expr, x string) (string, error) {
+	if fn, ok := resolve(g.resolvers, "Debug", t); ok {
+		return fn + "(&(" + x + "))", nil
+	}
 	switch t := t.(type) {
 	case *ast.Ident:
 		switch t.Name {
@@ -172,7 +201,7 @@ func (g *generator) debug(t ast.Expr, x string) (string, error) {
 		if e != nil {
 			return "", e
 		}
-		typ := typeText(t)
+		typ := g.typeText(t)
 		nilCheck := ""
 		if t.Len == nil {
 			nilCheck = "if src == nil { return \"nil\" }; "
@@ -187,14 +216,14 @@ func (g *generator) debug(t ast.Expr, x string) (string, error) {
 		if e != nil {
 			return "", e
 		}
-		typ := typeText(t)
+		typ := g.typeText(t)
 		return "func(src " + typ + ") string { if src == nil { return \"nil\" }; keys := make([]string, 0, len(src)); for key := range src { keys = append(keys, key) }; " + g.imp("sort") + ".Strings(keys); parts := make([]string, 0, len(keys)); for _, key := range keys { item := src[key]; parts = append(parts, " + g.imp("strconv") + ".Quote(key) + \": \" + " + child + ") }; return \"{\" + " + g.imp("strings") + ".Join(parts, \", \") + \"}\" }(" + x + ")", nil
 	}
 	return "", fmt.Errorf("Debug has no explicit implementation for %s", typeText(t))
 }
 
 // GenerateEnum retains nominal variant identity and delegates supported payloads.
-func GenerateEnum(kind string, d enums.Decl, defaults ...func(ast.Expr) (string, bool)) (string, map[string]string, error) {
+func GenerateEnum(kind string, d enums.Decl, resolvers ...Resolver) (string, map[string]string, error) {
 	if kind == "Default" {
 		var selected *enums.Variant
 		for i := range d.Variants {
@@ -213,14 +242,14 @@ func GenerateEnum(kind string, d enums.Decl, defaults ...func(ast.Expr) (string,
 		argument := ""
 		if selected.Type != nil {
 			var err error
-			argument, err = DefaultValue(selected.Type, defaults...)
+			argument, err = defaultValue(selected.Type, resolvers)
 			if err != nil {
 				return "", nil, fmt.Errorf("default variant %s: %w", selected.Name, err)
 			}
 		}
 		return "func Default" + d.Name + "() " + d.Name + " { return " + selected.Constructor + "(" + argument + ") }\n", nil, nil
 	}
-	g := &generator{imports: map[string]string{}}
+	g := &generator{imports: map[string]string{}, resolvers: resolvers}
 	var b strings.Builder
 	result := "string"
 	if kind == "Clone" {

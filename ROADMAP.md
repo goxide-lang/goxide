@@ -229,3 +229,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 跨包 Default 字段恢复（2026-10-03）
 
 已接通具体类型显式 Default 的跨包字段消费，含 derive/manual 来源、透明 alias、真实 helper 签名及 artifact 身份；见[验收](docs/t0-acceptance.md#跨包已登记-default-字段2026-10-03)。其他字段派生、单文件外部元数据、不可命名载荷仍分别留账，零值与公开入口契约待明确，不宣称完整 MVP 已完成。
+
+### 跨包 Clone/Debug 字段恢复（2026-10-03）
+
+具体已派生 enum/struct 的 qualified 字段协议、公开透明 relay 与有限容器元素递归已接通，见[验收](docs/t0-acceptance.md#跨包已登记-clonedebug-字段2026-10-03)。消费者本地 alias 转发和手写入口准确留界；跨包 serde 单独下一片。零值/公开入口仍待用户定约，完整 MVP 尚未宣布完成。

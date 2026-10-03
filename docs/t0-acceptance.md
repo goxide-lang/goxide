@@ -656,3 +656,11 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 [真实 CLI 三模块验收](../tests/acceptance/default_external_test.go)覆盖私有字段的业务默认值、字段调用次数、跨文件同名 import、透明 relay、宏 len 的 import 改名组合、serde skip 共用 Default，以及独立原生 Go 消费；三个生成/消费模块分别 race/vet，重复生成一致。[协议反例](../internal/frontend/default_artifact_test.go)覆盖 helper 变量/泛型/参数/错误返回、假注册、new defined、alias 来源改写及陈旧 producer。原跨包 Default 字段负例已迁为[真实源包正例](../tests/acceptance/manual_default_test.go)，外部目标 impl 仍拒绝。
 
 struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload Default。此次不放开 enum 的外部载荷类型限制，不新增跨包 Clone/Debug/Serialize/Deserialize、完整 trait 或字段 adapters。internal-origin 不可直接导入的协议暂不可用，普通公开 Go API 保留。单文件外部协议恢复、容器默认语义及零值/公开入口契约不在本片修改；普通 Option 缺失/null 到 None 仍独立于 Default。
+
+## 跨包已登记 Clone/Debug 字段（2026-10-03）
+
+目录/模块模式支持消费生产包明确派生的具体 struct/enum Clone、Debug。qualified 字段可经生产者公开透明 alias 转发，跨文件相同 import 名按实际包路径区分。内部 metadata v6 在 v5 校验链上新增 Kind/目标/helper/derive 来源，检查 canonical named 身份及精确 `func(*T) T` / `func(*T) string` 签名；alias 不得凭同名函数或正确签名自行增加协议。内容、marker、依赖产物及 canonical 注册均须一致，旧生成模块需重新生成。
+
+[真实 CLI 三模块验收](../tests/acceptance/field_protocol_external_test.go)覆盖具体 enum/struct、透明 relay、跨文件/包名差异、array/slice/map 嵌套元素协议、nil/空区别、普通 hgo/Go 赋值仍共享容器、显式 Clone 的独立副本及不保留别名拓扑。容器类型以包级 type alias 绑定，避免生成的 src/item/out 等局部名字截获源 import。Debug 保留生产类型/变体名、字段名、字符串和 map key 引号及内容（含私有字段），不自动脱敏；无需消费者反射或绕过字段可见性。三个生成/消费模块分别 race/vet，生成结果重复一致，原生 Go 可调用公开 helper。
+
+[协议反例](../internal/frontend/field_protocol_artifact_test.go)核验参数/返回类型、函数变量/泛型/variadic 拒绝、重复/未知/手写来源拒绝、relay 伪造另一 Kind 及陈旧 producer；CLI 对摘要篡改和源文件变化在消费者 import 位置报错。手写 Clone/Debug 尚无已实现登记入口，本片仅 derive 来源；消费者本地 `type Local = m.T` 字段的协议转发仍未接通，不能把该工程缺口说成类型身份不同。不可直接导入的 internal-origin 协议仍不可用，普通 facade API 保留。外部 enum 载荷类型范围、pointer/interface 自动协议、完整 trait、serde 和零值/公开入口验证不在本片扩展；borrow/Copy/指针拆分不作为本片前置条件。

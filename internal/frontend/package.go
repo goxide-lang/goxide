@@ -86,6 +86,15 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		cfg.enumGoImports[n] += p
 	}
 
+	fieldPrelude, fieldImports, fieldProtocols := importedFieldProtocols(path, sources, metadata)
+	cfg.fieldImports = fieldProtocols
+	for n, p := range fieldPrelude {
+		cfg.preludes[n] += p
+	}
+	for n, p := range fieldImports {
+		cfg.enumGoImports[n] += p
+	}
+
 	dependencies := map[string]*macros.Package{}
 	for path, p := range metadata {
 		if p.macros != nil {

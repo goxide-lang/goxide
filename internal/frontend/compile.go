@@ -29,6 +29,7 @@ import (
 )
 
 type Result struct {
+	fieldProtocols          map[string][]string
 	defaultRegistrations    map[string]string
 	manualEquality          map[string]manualEquality
 	matchReferenceTemps     map[string]bool
@@ -68,6 +69,8 @@ type model struct {
 	source, from string
 }
 type generator struct {
+	deriveFile         int
+	importedFields     map[string]string
 	importedDefaults   map[string]string
 	defaultImportPaths map[string]string
 	enumPosition       *token.Position
@@ -89,6 +92,7 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
+	fieldImports    map[string]map[string]string
 	defaultImports  map[string]map[string]string
 	builtinTypes    map[string]macros.TypeContext
 	macros          *macros.Package
@@ -397,8 +401,20 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
 	if cfg != nil {
 		g.importedDefaults = cfg.defaultImports[filename]
+		g.importedFields = cfg.fieldImports[filename]
+		names := make([]string, 0, len(cfg.builtinTypes))
+		for name := range cfg.builtinTypes {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for i, name := range names {
+			if name == filename {
+				g.deriveFile = i
+				break
+			}
+		}
 	}
-	if len(g.importedDefaults) > 0 {
+	if len(g.importedDefaults)+len(g.importedFields) > 0 {
 		g.defaultImportPaths = defaultImportPaths(f, builtinImporter)
 		if original, e := parseSourceImports(filename, originalSource); e == nil {
 			for alias, path := range defaultImportPaths(original, builtinImporter) {
@@ -720,6 +736,14 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if err = applyManualEquality(filename, equalityDerives, allEqualityManual, specs, g.models); err != nil {
 		return Result{}, err
 	}
+	fieldProtocols := map[string][]string{}
+	for _, m := range ordered {
+		for _, kind := range []string{"Clone", "Debug"} {
+			if m.attrs.derive[kind] {
+				fieldProtocols[m.name] = append(fieldProtocols[m.name], kind)
+			}
+		}
+	}
 	defaultRegistrations := map[string]string{}
 	for _, m := range ordered {
 		if m.attrs.derive["Default"] {
@@ -781,12 +805,12 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				if kind == "Error" {
 					code, im, e = deriveextras.GenerateEnumError(*m.enum)
 				} else {
-					code, im, e = deriveextras.GenerateEnum(kind, *m.enum, g.importedDefault)
+					code, im, e = deriveextras.GenerateEnum(kind, *m.enum, g.deriveProtocol)
 				}
 			} else if kind == "Error" {
 				code, im, e = deriveextras.GenerateError(m.spec, m.attrs.message, m.source, m.from)
 			} else {
-				code, im, e = deriveextras.Generate(kind, m.spec, g.importedDefault)
+				code, im, e = deriveextras.Generate(kind, m.spec, g.deriveProtocol)
 			}
 			if e != nil {
 				return fail(m.line, e.Error())
@@ -966,7 +990,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			return Result{}, err
 		}
 	}
-	return Result{defaultRegistrations: defaultRegistrations, equalityDerives: equalityDerives, matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
+	return Result{fieldProtocols: fieldProtocols, defaultRegistrations: defaultRegistrations, equalityDerives: equalityDerives, matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer
@@ -1261,6 +1285,11 @@ func protectedLines(source []byte) map[int]bool {
 	return out
 }
 func (g *generator) validateExtra(t ast.Expr, kind string) error {
+	if kind == "Clone" || kind == "Debug" {
+		if _, ok := g.importedField(kind, t); ok {
+			return nil
+		}
+	}
 	if kind == "Default" {
 		if _, ok := g.importedDefault(t); ok {
 			return nil

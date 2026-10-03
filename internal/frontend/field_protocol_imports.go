@@ -52,6 +52,10 @@ func importedFieldProtocols(consumer string, sources map[string][]byte, known ma
 }
 
 func (g *generator) importedField(kind string, t ast.Expr) (string, bool) {
+	if id, ok := t.(*ast.Ident); ok {
+		value, found := g.localProtocols[id.Name][kind]
+		return value, found
+	}
 	x, ok := t.(*ast.SelectorExpr)
 	if !ok {
 		return "", false

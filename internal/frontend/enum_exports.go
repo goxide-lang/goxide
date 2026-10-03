@@ -237,10 +237,10 @@ func insertEnumImports(name string, source []byte, imports string) ([]byte, erro
 	if e != nil {
 		return nil, e
 	}
-	if len(f.Decls) == 0 {
-		return nil, fmt.Errorf("%s: enum origin import has no source import anchor", name)
+	off := int(f.Name.End()) - 1
+	if len(f.Decls) > 0 {
+		off = int(f.Decls[len(f.Decls)-1].End()) - 1
 	}
-	off := int(f.Decls[len(f.Decls)-1].End()) - 1
 	out := append([]byte(nil), source[:off]...)
 	out = append(out, imports...)
 	out = append(out, source[off:]...)

@@ -183,6 +183,10 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		if err = mergeManualEquality(cfg.manualEquality, r.manualEquality); err != nil {
 			return PackageResult{}, err
 		}
+		context := cfg.builtinTypes[name]
+		context.Types = r.typeSpecs
+		context.Imports = r.typeImports
+		cfg.builtinTypes[name] = context
 		for n, sp := range r.typeSpecs {
 			cfg.typeSpecs[n] = sp
 		}
@@ -190,6 +194,11 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 			cfg.models[n] = m
 		}
 	}
+	aliasProtocols, err := bindLocalProtocolAliases(path, sources, cfg, metadata, imp)
+	if err != nil {
+		return PackageResult{}, err
+	}
+	eqProtocols = append(eqProtocols, aliasProtocols...)
 	cfg.collect = false
 	cfg.macroBudget = buildBudget
 	result := PackageResult{equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}

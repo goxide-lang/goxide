@@ -206,3 +206,7 @@ metadata v4 在已验证身份、helper 签名和 Eq 资格之外记录 PartialE
 当前内部协议已升级 **v5**，新增显式 Default 注册及 canonical 来源核验，Default-only 包也发行 artifact；具体消费边界见[派生 RFC](0013-derive.md#跨包已登记-default-字段2026-10-03)。不改变 enum ABI、外部载荷类型范围、零值或公开入口验证契约。
 
 内部协议 **v6** 新增显式 Clone/Debug 字段协议记录，复用 v5 的 typed identity、canonical alias 和内容/依赖验证；见[派生 RFC](0013-derive.md#跨包已登记-clonedebug-字段2026-10-03)。不改变闭合 enum 表示或公开边界契约。
+
+## 消费者透明 alias 与协议身份（2026-10-03）
+
+本地包级多级 Go `=` alias 可恢复外部 canonical 的已登记 Default/Clone/Debug/Serialize/Deserialize 与 PartialEq/Eq，包含 alias 在 native `.go` 中声明的场景。身份由 Go 类型系统 Unalias/Identical 核验，new defined 及同名局部类型不冒继承；metadata v6 的来源/签名/产物校验不变。实现与真实三模块证据见 RFC 0013 和 `tests/acceptance/local_protocol_alias_test.go`。此项不改变 enum 表示、合法值或公开函数入口验证契约。

@@ -75,6 +75,10 @@ func defaultImportPaths(f *ast.File, imp types.Importer) map[string]string {
 	return out
 }
 func (g *generator) importedDefault(t ast.Expr) (string, bool) {
+	if id, ok := t.(*ast.Ident); ok {
+		value, found := g.localProtocols[id.Name]["Default"]
+		return value, found
+	}
 	x, ok := t.(*ast.SelectorExpr)
 	if !ok {
 		return "", false

@@ -237,3 +237,12 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 跨包 serde 协议恢复（2026-10-03）
 
 已接通生产者显式派生 Serialize/Deserialize 的 qualified 字段与既有容器/Option codec，协议方向独立、公开 relay 可转发。沿用 metadata v6（无新 schema 字段），旧产物缺协议记录必须重生成；真实三模块验收与协议身份/签名/来源/陈旧产物反例见 `tests/acceptance/serde_external_test.go`、`internal/frontend/serde_protocol_artifact_test.go`。消费者本地 alias、手写 serde 登记等仍是工程账；adapter Proposed 与公开入口零值契约仍待决定，不视为获批延期或完整 T0 已完成。
+
+### 独立 enum 当前最小剩余清单（2026-10-03，alias 阶段后）
+
+- 协议组合工程账：同包原始类型的本地 alias 转发（Default/Clone/Debug/serde；Eq 已支持）；Option/Result 未实现的 Clone/Debug 等组合及 blank/embedded 字段仍须逐项收口或明确首版范围。
+- 外部恢复工程账：单文件外部 enum/协议恢复、既有限制外部 payload、不可命名载荷/internal-origin 的增强操作；公开 relay 不能代替所有这些能力。无源/远程发布不由当前 local replace 验收推导为完成。
+- 常用 match 仍有复杂目标/表达式上下文长尾，按已定求值与最近函数传播规则验收，不扩大成完整 Rust 模式系统。
+- 待决定：公开函数直接 enum 参数是否在函数体前验证并对非法值 panic，None 的合法性按 builtin Option；本轮未实施该待答复契约。
+
+以上仅为独立 enum 最小账，不重新加入指针阶段；手写 serde/adapters/完整 trait 也不借此变成已批准设计。工程限制不能自行归为批准延期，完整 MVP 尚未宣布完成。

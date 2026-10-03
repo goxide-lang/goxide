@@ -674,3 +674,22 @@ struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload
 真实 CLI 三模块验收覆盖 producer struct/enum、透明 relay、单向协议、跨文件导入、容器和 Option、原生 Go helper 消费，三个生成/消费模块分别 race/vet。验证嵌套 field/variant path、Range/Syntax 的 Go cause、未知变体、生产者 deny_unknown_fields 与消费端忽略额外字段、忽略值深度预算、非法 enum nil/typed-nil/指针 case、nil 容器编码为空且解码为非 nil 空、普通 Option 缺失/null 为 None。没有把它们改为 Default 或其他新语义。重复生成一致；伪 helper、新 defined 类型、缺方向、篡改及陈旧产物拒绝，产物错误定位消费 import。
 
 边界延续：消费者本地 `type Local = m.T` 字段转发尚未接通；手写 serde 登记、单文件外部协议恢复、不可直接导入的 internal-origin、普通 enum 外部 payload 类型范围均未借本片扩大。字段 adapters 的入口/缺失策略仍 Proposed，完整 trait/native bridge、Value/PATCH/YAML、公开函数 enum 参数入口验证不在本片实施。完整 T0 MVP 尚未据此宣告完成。
+
+## 消费者本地透明 alias 的外部协议恢复（2026-10-03）
+
+消费者包级 `type Local = producer.T`（包括多级 alias、native `.go` 中声明、生产者公开 relay）现统一恢复已登记 Default、Clone、Debug、Serialize、Deserialize 和 PartialEq/Eq。使用保留各文件 import 作用域的 Go 类型解析，只对真正 alias 的 Unalias 结果与已验证 canonical 类型作 Identical 匹配；新 defined 类型、alias 指向新 defined 类型、同名/相同底层结构不继承协议。非类型语句留给既有最终完整包检查，不从源码名称猜 helper。
+
+沿用 metadata v6 及既有签名、来源、内容、依赖、marker 校验，无新 schema 或旧数据宽松恢复。协议绑定放在包级，hgo 文件没有源 import 时也能在 package 声明后插入生成 import。收集后的真实 TypeSpec/Imports 保留 `=` 和宏卫生改名；不新增宏模板 type selector 语法。
+
+真实三模块验收 `tests/acceptance/local_protocol_alias_test.go` 覆盖各协议、生产者 manual Default、多级/重复导入/native-only alias、不同包相同导入名、同名局部类型拒绝、同名局部变量、容器与已支持的 Option serde/equality、独立 Go helper 消费、重复生成一致、新 defined/假 helper 拒绝及错误摘要定位原生 consumer import。生产/消费/Go消费模块分别 race/vet；独立审查另验证宏 import 改名与 alias 共存。此处 Option 不宣称 Clone/Debug 已实现。
+
+边界：本片恢复外部 canonical 的已登记协议；同包原始类型经本地 alias 的 Default/Clone/Debug/serde 转发仍未接通，既有 Eq 已支持。单文件外部协议、不可直接导入 internal-origin、其他载荷/字段形状和未实现协议入口继续留账；不是透明 alias 身份发生变化，也不是获批延期。公开 enum 函数入口验证仍待用户决定，未混入指针阶段、完整 trait/manual serde 或字段 adapters。
+
+### 独立 enum 当前最小剩余清单（2026-10-03，alias 阶段后）
+
+- 协议组合工程账：同包原始类型的本地 alias 转发（Default/Clone/Debug/serde；Eq 已支持）；Option/Result 未实现的 Clone/Debug 等组合及 blank/embedded 字段仍须逐项收口或明确首版范围。
+- 外部恢复工程账：单文件外部 enum/协议恢复、既有限制外部 payload、不可命名载荷/internal-origin 的增强操作；公开 relay 不能代替所有这些能力。无源/远程发布不由当前 local replace 验收推导为完成。
+- 常用 match 仍有复杂目标/表达式上下文长尾，按已定求值与最近函数传播规则验收，不扩大成完整 Rust 模式系统。
+- 待决定：公开函数直接 enum 参数是否在函数体前验证并对非法值 panic，None 的合法性按 builtin Option；本轮未实施该待答复契约。
+
+以上仅为独立 enum 最小账，不重新加入指针阶段；手写 serde/adapters/完整 trait 也不借此变成已批准设计。工程限制不能自行归为批准延期，完整 MVP 尚未宣布完成。

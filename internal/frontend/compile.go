@@ -29,6 +29,7 @@ import (
 )
 
 type Result struct {
+	typeImports             []*ast.ImportSpec
 	fieldProtocols          map[string][]string
 	defaultRegistrations    map[string]string
 	manualEquality          map[string]manualEquality
@@ -69,6 +70,7 @@ type model struct {
 	source, from string
 }
 type generator struct {
+	localProtocols     map[string]map[string]string
 	deriveFile         int
 	importedFields     map[string]string
 	importedDefaults   map[string]string
@@ -92,6 +94,7 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
+	localProtocols  map[string]map[string]string
 	fieldImports    map[string]map[string]string
 	defaultImports  map[string]map[string]string
 	builtinTypes    map[string]macros.TypeContext
@@ -400,6 +403,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
 	if cfg != nil {
+		g.localProtocols = cfg.localProtocols
 		g.importedDefaults = cfg.defaultImports[filename]
 		g.importedFields = cfg.fieldImports[filename]
 		names := make([]string, 0, len(cfg.builtinTypes))
@@ -673,7 +677,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	if cfg != nil && cfg.collect {
-		return Result{models: g.models, typeSpecs: typeSpecs(f), manualEquality: manualEqualities}, nil
+		return Result{models: g.models, typeSpecs: typeSpecs(f), typeImports: f.Imports, manualEquality: manualEqualities}, nil
 	}
 	allManual := manual
 	if cfg != nil {
@@ -1127,6 +1131,16 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 	var w, b string
 	switch t := t.(type) {
 	case *ast.Ident:
+		write, hasWrite := g.importedField("Serialize", t)
+		read, hasRead := g.importedField("Deserialize", t)
+		if hasWrite || hasRead {
+			if wantS && !hasWrite || wantR && !hasRead {
+				return "", "", g.err(t, "nested type lacks required registered serde protocol: "+typ)
+			}
+			w = "return " + write + "(s,&v)"
+			b = "return " + read + "(d)"
+			break
+		}
 		switch t.Name {
 		case "bool", "string":
 			method := map[string]string{"bool": "Bool", "string": "String"}[t.Name]

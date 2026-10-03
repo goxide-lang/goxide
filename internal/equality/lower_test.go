@@ -1,10 +1,15 @@
 package equality
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -82,7 +87,7 @@ func TestRejectedProtocols(t *testing.T) {
 	}{
 		{"float-eq", "type T struct{N float64}", map[string]Derive{"T": {PartialEq: true, Eq: true}}, "no automatic Eq"},
 		{"pointer", "type T struct{P *int}", map[string]Derive{"T": {PartialEq: true}}, "no automatic PartialEq"},
-		{"slice", "type T struct{S []int}", map[string]Derive{"T": {PartialEq: true}}, "no automatic PartialEq"},
+		{"channel", "type T struct{S chan int}", map[string]Derive{"T": {PartialEq: true}}, "no automatic PartialEq"},
 		{"named-no-protocol", "type N int;type T struct{N N}", map[string]Derive{"T": {PartialEq: true}}, "requires an explicit"},
 		{"eq-needs-child-eq", "type N float64;type T struct{N N}", map[string]Derive{"N": {PartialEq: true}, "T": {PartialEq: true, Eq: true}}, "no explicit Eq"},
 	} {
@@ -184,5 +189,238 @@ func bad(){n:=1;takes(n.equals(1))}
 	_, e = Lower(prepared, cfg)
 	if e == nil || !strings.Contains(e.Error(), "cannot use") {
 		t.Fatalf("typed bool unexpectedly accepted for named B: %v", e)
+	}
+}
+
+func TestContainerEquality(t *testing.T) {
+	execute(t, `package fixture
+type Leaf struct{N int}
+type Key struct{ID int;Names [2]string}
+type Batch struct{Rows [][]Leaf;Index map[Key][]Leaf}
+type Values []float64
+type Dictionary map[string]int
+func Same(a,b Batch)bool{return a.equals(b)}
+`, Config{Derives: map[string]Derive{"Leaf": {PartialEq: true, Eq: true}, "Key": {PartialEq: true, Eq: true}, "Batch": {PartialEq: true, Eq: true}, "Values": {PartialEq: true}, "Dictionary": {PartialEq: true, Eq: true}}}, `package fixture
+import("testing";"math")
+func TestContents(t *testing.T){
+ a:=Batch{Rows:[][]Leaf{{{1}},nil},Index:map[Key][]Leaf{{ID:1}:{{2}}}}
+ b:=Batch{Rows:[][]Leaf{{{1}},nil},Index:map[Key][]Leaf{{ID:1}:{{2}}}}
+ if !Same(a,b){t.Fatal("contents")};b.Rows[0][0].N=2;if Same(a,b){t.Fatal("nested changed")}
+ if Same(Batch{},Batch{Rows:[][]Leaf{}})||Same(Batch{},Batch{Index:map[Key][]Leaf{}}){t.Fatal("nil equals nonnil empty")}
+ if !Same(Batch{},Batch{}){t.Fatal("nil equality")}
+ if Same(Batch{Rows:[][]Leaf{nil}},Batch{Rows:[][]Leaf{{}}}){t.Fatal("nested nil/empty")}
+ if Same(Batch{Index:map[Key][]Leaf{{ID:1}:nil}},Batch{Index:map[Key][]Leaf{{ID:1}:{}}}){t.Fatal("map nil/empty values")}
+ if Same(Batch{Index:map[Key][]Leaf{{ID:1}:nil}},Batch{Index:map[Key][]Leaf{{ID:2}:nil}}){t.Fatal("missing key with zero value")}
+ n:=Values{math.NaN()};if EqualsValues(n,n){t.Fatal("same slice backing does not override NaN")}
+ if !EqualsDictionary(Dictionary{"a":1,"b":2},Dictionary{"b":2,"a":1}){t.Fatal("map content")}
+}
+`)
+}
+func TestConditionalSumContainers(t *testing.T) {
+	source := `package fixture
+type Record struct{V Option[[]int];R Result[[]int,int]}
+func None()Option[[]int]{return Option[[]int]::None}
+func Nil()Option[[]int]{return Option[[]int]::Some(nil)}
+func Empty()Option[[]int]{return Option[[]int]::Some([]int{})}
+func Good()Result[[]int,int]{return Result[[]int,int]::Ok([]int{1})}
+func Failed()Result[[]int,int]{return Result[[]int,int]::Err(2)}
+`
+	lowered, e := enums.Lower("input.hgo", []byte(source))
+	if e != nil {
+		t.Fatal(e)
+	}
+	execute(t, string(lowered.Source), Config{Enums: lowered.Enums, Derives: map[string]Derive{"Record": {PartialEq: true, Eq: true}}}, `package fixture
+import("testing";"reflect")
+func TestStates(t *testing.T){
+ vals:=[]Option[[]int]{None(),Nil(),Empty()}
+ for i,a:=range vals{for j,b:=range vals{if EqualsRecord(Record{a,Good()},Record{b,Good()})!=(i==j){t.Fatal("collapsed option states",i,j)}}}
+ if EqualsRecord(Record{None(),Good()},Record{None(),Failed()}){t.Fatal("collapsed result variants")}
+ if !EqualsRecord(Record{None(),Failed()},Record{None(),Failed()}){t.Fatal("Err equality")}
+ var bad=reflect.Zero(reflect.PointerTo(reflect.TypeOf(Empty()))).Interface().(Option[[]int])
+ defer func(){if recover()==nil{t.Fatal("right invalid Option skipped after left None")}}()
+ EqualsRecord(Record{None(),Good()},Record{bad,Good()})
+}
+`)
+}
+func TestContainerProtocolRejections(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"float-key", "type T map[float64]int", "map key"},
+		{"float-struct-key", "type T map[struct{F float64}]int", "map key"},
+		{"pointer-key", "type T map[*int]int", "map key"},
+		{"interface-key", "type T map[any]int", "map key"},
+		{"reference-element", "type T []*int", "no automatic"},
+		{"recursive-slice", "type T []T", "recursive protocol"},
+		{"recursive-map", "type T map[string]T", "recursive protocol"},
+		{"shadow-len", "func len(v any)int{return 0};type T []int", "unshadowed predeclared len"},
+		{"shadow-nil", "var nil=[]int{};type T []int", "unshadowed predeclared nil"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, e := Prepare(map[string][]byte{"input.hgo": []byte("package fixture\n" + tc.body)}, Config{Derives: map[string]Derive{"T": {PartialEq: true}}})
+			if e == nil || !strings.Contains(e.Error(), tc.want) {
+				t.Fatalf("want %s got %v", tc.want, e)
+			}
+		})
+	}
+}
+
+type fixtureImporter map[string]*types.Package
+
+func (i fixtureImporter) Import(path string) (*types.Package, error) { return i[path], nil }
+func TestImportedSumFileAliasIdentity(t *testing.T) {
+	imp := fixtureImporter{}
+	for _, name := range []string{"first", "second"} {
+		fs := token.NewFileSet()
+		f, e := parser.ParseFile(fs, name+".go", `package sum
+type Option[T any]interface{mark(T)}
+type Some[T any]struct{Value T}
+func(Some[T])mark(T){}
+func Check(v Option[int]){}
+`, 0)
+		if e != nil {
+			t.Fatal(e)
+		}
+		p, e := (&types.Config{}).Check("fixture/"+name, fs, []*ast.File{f}, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		imp[p.Path()] = p
+	}
+	files := map[string][]byte{
+		"a.hgo": []byte(`package app;import q "fixture/first";type A struct{V q.Option[int]};type FirstSome[T any]=q.Some[T];var FirstCheck=q.Check`),
+		"b.hgo": []byte(`package app;import q "fixture/second";type B struct{V q.Option[int]};type SecondSome[T any]=q.Some[T];var SecondCheck=q.Check`),
+	}
+	family := func(path, prefix string) enums.Decl {
+		return enums.Decl{Name: "q.Option", PackagePath: path, Family: "Option", Variants: []enums.Variant{{Name: "Some", CaseName: prefix + "Some", Payload: "bound"}, {Name: "None"}}, Instances: []enums.Decl{{Validator: prefix + "Check"}}}
+	}
+	cfg := Config{Importer: imp, PackagePath: "fixture/app", Derives: map[string]Derive{"A": {PartialEq: true, Eq: true}, "B": {PartialEq: true, Eq: true}}, Enums: []enums.Decl{family("fixture/first", "First"), family("fixture/second", "Second")}}
+	out, e := Prepare(files, cfg)
+	if e != nil {
+		t.Fatal(e)
+	}
+	u, e := parse(out)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = u.check(cfg, false, false); e != nil {
+		t.Fatal(e)
+	}
+	if !strings.Contains(string(out["b.hgo"]), "SecondCheck(a.V)") || strings.Contains(string(out["b.hgo"]), "FirstCheck(a.V)") {
+		t.Fatal("wrong producer family", string(out["b.hgo"]))
+	}
+}
+
+func TestNestedSumContainerInstances(t *testing.T) {
+	source := `package fixture
+type N struct{Rows Option[[]Option[int]];Results map[string]Result[int,string]}
+func sample(n int)N{return N{Rows:Option[[]Option[int]]::Some([]Option[int]{Option[int]::None,Option[int]::Some(n)}),Results:map[string]Result[int,string]{"ok":Result[int,string]::Ok(3),"err":Result[int,string]::Err("bad")}}}
+`
+	lowered, e := enums.Lower("input.hgo", []byte(source))
+	if e != nil {
+		t.Fatal(e)
+	}
+	execute(t, string(lowered.Source), Config{Enums: lowered.Enums, Derives: map[string]Derive{"N": {PartialEq: true, Eq: true}}}, `package fixture
+import "testing"
+func TestNested(t *testing.T){if !EqualsN(sample(1),sample(1))||EqualsN(sample(1),sample(2)){t.Fatal("nested instance equality")}}
+`)
+}
+func TestImportedMapKeyNeedsSemanticProof(t *testing.T) {
+	fs := token.NewFileSet()
+	f, e := parser.ParseFile(fs, "p.go", `package p;type Key int;func EqualKey(a,b Key)bool{return false}`, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p, e := (&types.Config{}).Check("fixture/key", fs, []*ast.File{f}, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	files := map[string][]byte{"input.hgo": []byte(`package app;import p "fixture/key";type Bound=p.Key;var BoundEqual=p.EqualKey;type Table map[Bound]int`)}
+	cfg := Config{Importer: fixtureImporter{p.Path(): p}, PackagePath: "fixture/app", Derives: map[string]Derive{"Table": {PartialEq: true, Eq: true}}, Imported: []Protocol{{PackagePath: p.Path(), TypeName: "Bound", Helper: "BoundEqual", PartialEq: true, Eq: true}}}
+	_, e = Prepare(files, cfg)
+	if e == nil || !strings.Contains(e.Error(), "no proven native-key consistency") {
+		t.Fatal(e)
+	}
+}
+
+func TestImportedNestedPublicSumExecution(t *testing.T) {
+	producer := `package sum
+type Option[T any]interface{mark(T)}
+type some[T any]struct{Value T}
+func(some[T])mark(T){}
+type Some[T any]=some[T]
+func New[T any](v T)Option[T]{return some[T]{v}}
+func CheckInt(v Option[int]){switch v.(type){case nil,some[int]:default:panic("invalid int")}}
+func CheckOuter(v Option[[]Option[int]]){switch v.(type){case nil:case some[[]Option[int]]:for _,x:=range v.(some[[]Option[int]]).Value{CheckInt(x)};default:panic("invalid outer")}}
+type hidden[A any,B any]struct{A A;B B}
+type Public[X any,Y any]=hidden[Y,X]
+`
+	fs := token.NewFileSet()
+	f, e := parser.ParseFile(fs, "sum.go", producer, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p, e := (&types.Config{}).Check("eqsum", fs, []*ast.File{f}, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	src := []byte(`package fixture
+import q "eqsum"
+type Holder struct{V q.Option[[]q.Option[int]]}
+type Case[T any]=q.Some[T]
+var CheckInt=q.CheckInt
+var CheckOuter=q.CheckOuter
+func Sample(n int)Holder{return Holder{q.New([]q.Option[int]{nil,q.New(n)})}}
+`)
+	cfg := Config{PackagePath: "eqnested", Importer: fixtureImporter{p.Path(): p}, Derives: map[string]Derive{"Holder": {PartialEq: true, Eq: true}}, Enums: []enums.Decl{{Name: "q.Option", PackagePath: p.Path(), Family: "Option", Variants: []enums.Variant{{Name: "Some", CaseName: "Case", Payload: "bound"}, {Name: "None"}}, Instances: []enums.Decl{{Validator: "CheckInt"}, {Validator: "CheckOuter"}}}}}
+	prepared, e := Prepare(map[string][]byte{"input.hgo": src}, cfg)
+	if e != nil {
+		t.Fatal(e)
+	}
+	out, e := Lower(prepared, cfg)
+	if e != nil {
+		t.Fatal(e)
+	}
+	producerDir := t.TempDir()
+	for name, data := range map[string]string{"go.mod": "module eqsum\ngo 1.27\n", "sum.go": producer} {
+		if e = os.WriteFile(filepath.Join(producerDir, name), []byte(data), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	dir := t.TempDir()
+	for name, data := range map[string]string{"go.mod": "module eqnested\ngo 1.27\nrequire eqsum v0.0.0\nreplace eqsum => " + strconv.Quote(producerDir) + "\n", "main.go": string(out["input.hgo"]), "main_test.go": `package fixture
+import "testing"
+func TestNested(t *testing.T){if !EqualsHolder(Sample(1),Sample(1))||EqualsHolder(Sample(1),Sample(2)){t.Fatal("imported nested Option")}}
+`} {
+		if e = os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin/go"), "test", "-race", "-count=1", "./...")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
+	if data, e := cmd.CombinedOutput(); e != nil {
+		t.Fatalf("%v\n%s\n%s", e, data, out["input.hgo"])
+	}
+	// A public generic alias may reverse private origin parameters. Recover the
+	// mapping by type identity rather than printing the inaccessible origin name.
+	u, e := parse(prepared)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = u.check(cfg, false, false); e != nil {
+		t.Fatal(e)
+	}
+	g, e := registry(u, cfg)
+	if e != nil {
+		t.Fatal(e)
+	}
+	g.file = "input.hgo"
+	hidden := p.Scope().Lookup("hidden").Type()
+	target, e := types.Instantiate(nil, hidden, []types.Type{types.Typ[types.Int], types.Typ[types.String]}, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	spelling, e := g.typeSpelling(target)
+	if e != nil || spelling != "q.Public[string,int]" {
+		t.Fatal(spelling, e)
 	}
 }

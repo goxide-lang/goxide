@@ -624,3 +624,13 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 剩余：blank/embedded struct 字段、Option/Result 条件泛型比较协议、容器派生实现（nil/空区别已由 D33 确认）、manual 接口、pointer/chan/interface 协议、私有 canonical 的跨包 equality alias、其他 derive 协议与既列 T0 工程账。Eq 不新增 map key 许可、不证明任意手写函数的等价关系；不进行任意 interface 擦除后的全局值流分析，也不将等值 helper 的验证扩大到所有公开入口。完整 enum/MVP 尚未宣布完成。
 
 最新 [D33](design/decisions.md) 已确认 nil/非 nil 空 slice/map 不相等；[契约探针](../tests/design/enum/equality_contract_test.go)只验证参考规则，不计作 hgo 容器执行证据，不隐式改 Option 状态或 serde null/[]/{}。
+
+## 容器 equality 派生（2026-10-03）
+
+[实际 CLI 模块验收](../tests/acceptance/equality_test.go)扩展为 slice/map 的 nil/空、有限嵌套 struct/array/enum、稳定 bool/整数/string/结构键、缺失键与零值区分、Option.None/Some(nil)/Some(empty)、float/complex NaN 仅 PartialEq、访问元素的非法 enum/typed-nil，以及 struct/container 短路与外层 enum 先验证的区别。继续验证跨 module 透明 alias/组合派生、原生 Go helper、重复生成确定和三个生成/消费模块各自 race/vet。
+
+有限 array/slice/map enum validator 投影现已接通；原 Option 嵌套容器的负例迁到 [真实 serde 执行验收](../tests/acceptance/option_serde_test.go)，并在 [lowering 单元执行](../internal/enums/builtins_test.go)覆盖 Result 内 Option 容器的非法输入先于 match arm 拒绝。另将 grouped type、普通 enum 载荷与传播/projection 的旧拒绝迁为实际生成模块，覆盖非法内层值在 guard 或 `?` 继续执行前拒绝；这些生成模块独立 race/vet。这不是以纯 Go 机制测试代替 hgo 执行。
+
+边界：递归容器/环相等、导入具名键的原生一致性证明、手写比较、blank/embedded 字段及 pointer/chan/interface 协议仍待收口；本片没有新增直接匿名 slice/map/Option/Result equals 入口，也不实现 HashMap。原位 borrow/指针拆分是后续独立阶段，不作为此次 enum 容器派生的前置阻断。完整 T0 MVP 尚未宣布完成。
+
+独立复审修复同 import 别名指向不同包时的错误身份解析，以及同一家族不同具体实例的 validator 查找；公开泛型载荷按真实 origin/参数递归命名并验证类型身份。真实独立模块复验包括外部 Option[[]Option[int]]，私有不可命名形状仍明确诊断，不输出错误私有拼写。

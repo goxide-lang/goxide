@@ -14,7 +14,7 @@ import (
 
 // enumGeneratedModule exercises the public frontend and instruments the generated
 // module itself. Host race instrumentation does not propagate to child commands.
-func enumGeneratedModule(t *testing.T, source, assertions string, wantFailure bool) {
+func enumGeneratedModule(t *testing.T, source, assertions string, wantFailure bool, verifyVet ...bool) {
 	t.Helper()
 	result, err := frontend.Compile("enum_acceptance.hgo", []byte(source))
 	if err != nil {
@@ -42,6 +42,13 @@ func enumGeneratedModule(t *testing.T, source, assertions string, wantFailure bo
 		t.Fatalf("unexpected compile failure: %s", output)
 	}
 	t.Logf("generated go test -race -count=1 -v .:\n%s", output)
+	if !wantFailure && len(verifyVet) > 0 && verifyVet[0] {
+		vet := exec.Command(filepath.Join(runtime.GOROOT(), "bin/go"), "vet", "./...")
+		vet.Dir, vet.Env = dir, cmd.Env
+		if output, err := vet.CombinedOutput(); err != nil {
+			t.Fatalf("generated go vet: %v\n%s", err, output)
+		}
+	}
 }
 
 func TestEnumControlFlowRace(t *testing.T) {

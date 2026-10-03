@@ -402,6 +402,7 @@ func (l *lowerer) checkCompositePayloads() error {
 	l.payloadChecks = map[string]string{}
 	dependencies := map[string][]string{}
 	owner := ""
+	projectionID := 0
 	var project func(ast.Expr, string, map[string]bool) (string, error)
 	project = func(e ast.Expr, path string, active map[string]bool) (string, error) {
 		if !hasEnum(e, map[string]bool{}) {
@@ -422,6 +423,27 @@ func (l *lowerer) checkCompositePayloads() error {
 			return code, err
 		case *ast.ParenExpr:
 			return project(n.X, path, active)
+		case *ast.ArrayType:
+			projectionID++
+			value := fmt.Sprintf("__hgo_enum_projection_%d", projectionID)
+			part, err := project(n.Elt, value, active)
+			if err != nil {
+				return "", err
+			}
+			return "for _," + value + ":=range " + path + "{" + part + "};", nil
+		case *ast.MapType:
+			projectionID++
+			key := fmt.Sprintf("__hgo_enum_projection_key_%d", projectionID)
+			value := fmt.Sprintf("__hgo_enum_projection_value_%d", projectionID)
+			keyPart, err := project(n.Key, key, active)
+			if err != nil {
+				return "", err
+			}
+			valuePart, err := project(n.Value, value, active)
+			if err != nil {
+				return "", err
+			}
+			return "for " + key + "," + value + ":=range " + path + "{_=" + key + ";_=" + value + ";" + keyPart + valuePart + "};", nil
 		case *ast.StructType:
 			var code strings.Builder
 			for _, f := range n.Fields.List {

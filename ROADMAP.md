@@ -213,3 +213,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 显式 equality 首片（2026-10-03）
 
 已接通有限具体类型的显式 PartialEq/Eq 派生、实例 equals、v3 跨模块登记和真实 helper 消费，见[验收](docs/t0-acceptance.md#显式-equality-首片2026-10-03)。直接 enum 比较及已知危险 enum 的间接比较/map键入口编译期诊断；原生 Go 与 enum-nil 现状保留。容器语义、manual、pointer/chan/interface、HashMap 未混入本片，剩余账不自动批准延期。
+
+### 容器 equality 派生（2026-10-03）
+
+依 D33/D34 推进 slice/map 递归比较及 Option/Result 条件载荷协议，保留 nil/空区别、既有短路和 enum 校验顺序，原生 map 限定能证明一致的稳定键。见 [RFC](docs/rfcs/0008-enums.md#容器-partialeqeq-派生2026-10-03)。手写入口、循环容器规则和其他 T0 欠账继续独立记录；指针拆分/原位 borrow 是后续阶段，不前置阻断本轮 enum 收口。

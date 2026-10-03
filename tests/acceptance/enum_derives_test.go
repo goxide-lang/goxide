@@ -61,8 +61,6 @@ func TestInvalidEnumsAtDeriveBoundary(t *testing.T){for _,value:=range []Command
 func TestEnumDerivesExplicitRejections(t *testing.T) {
 	cases := map[string]string{
 		"recursive-struct-payload":     "enum E{Value(Item),}\ntype Item struct{Loop E}",
-		"enum-slice-payload":           "enum Inner{Ready,}\nenum Outer{Items([]Inner),}",
-		"enum-map-payload":             "enum Inner{Ready,}\nenum Outer{Items(map[string]Inner),}",
 		"message-without-error-derive": "enum E{\n#[error(\"oops\")]\nA,\n}",
 		"source-without-error-derive":  "enum E{\n#[source]\nA(int),\n}",
 		"from-without-error-derive":    "enum E{\n#[from]\nA(int),\n}",
@@ -101,6 +99,15 @@ enum Phase { Ready, }
 type Detail struct { Phase Phase }
 #[derive(Serialize, Deserialize, Debug, Clone)]
 enum Packet { Data(Detail), }
+#[derive(Serialize, Deserialize, Debug, Clone)]
+enum Bundle { Items([]Phase), Indexed(map[string]Phase), }
+func bundleItems(values []Phase)Bundle{return Bundle::Items(values)}
+func bundleIndex(values map[string]Phase)Bundle{return Bundle::Indexed(values)}
+func readyPhase()Phase{return Phase::Ready}
+func observeBundle(value Bundle,hit *bool){
+ mark:=func()bool{*hit=true;return true}
+ match value {Bundle::Items(_) if mark()=>{},Bundle::Indexed(_) if mark()=>{},_=>{},}
+}
 func valid() Packet {return Packet::Data(Detail{Phase:Phase::Ready})}
 func invalid() Packet {return Packet::Data(Detail{})}
 func observe(value Packet,hit *bool) {
@@ -112,6 +119,29 @@ func observe(value Packet,hit *bool) {
 import("testing";"errors";"reflect";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
 func TestNestedValueDerives(t *testing.T){value:=valid();clone:=ClonePacket(&value);if !reflect.DeepEqual(clone,value)||DebugPacket(&clone)!="Packet::Data(Detail { Phase: Phase::Ready })"{t.Fatal("nested value derive")}}
 func TestInvalidNestedEnumBeforeEffects(t *testing.T){value:=invalid();hit:=false;for name,run:=range map[string]func(){"clone":func(){_=ClonePacket(&value)},"debug":func(){_=DebugPacket(&value)},"guard":func(){observe(value,&hit)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid nested enum",name)}}();run()}()};if hit{t.Fatal("guard ran before nested enum validation")}}
+func TestNestedEnumContainerDerives(t *testing.T){
+ for _,v:=range []Bundle{bundleItems(nil),bundleItems([]Phase{}),bundleItems([]Phase{readyPhase()}),bundleIndex(nil),bundleIndex(map[string]Phase{}),bundleIndex(map[string]Phase{"first":readyPhase()})}{
+  hit:=false;observeBundle(v,&hit);if !hit{t.Fatal("valid container did not match")};copy:=CloneBundle(&v);if !reflect.DeepEqual(v,copy)||DebugBundle(&v)==""{t.Fatal("container derive")}
+ }
+ // JSON canonicalizes nil containers to empty; exact roundtrip applies to nonnil containers.
+ for _,v:=range []Bundle{bundleItems([]Phase{}),bundleItems([]Phase{readyPhase()}),bundleIndex(map[string]Phase{}),bundleIndex(map[string]Phase{"first":readyPhase()})}{
+  data,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeBundle(s,&v)});if err!=nil{t.Fatal(err)};decoded,err:=serdejson.Unmarshal(data,DeserializeBundle);if err!=nil||!reflect.DeepEqual(v,decoded){t.Fatalf("container roundtrip %s: %#v %v",data,decoded,err)}
+ }
+}
+func TestInvalidNestedContainerBeforeEffects(t *testing.T){
+ var typed * __hgo_enum_case_5_Phase_Ready
+ for _,bad:=range []Phase{nil,typed}{
+  for _,tc:=range []struct{value Bundle;path []serde.PathSegment}{
+   {bundleItems([]Phase{bad}),[]serde.PathSegment{{Kind:"Variant",Name:"Items"},{Kind:"Index",Index:0}}},
+   {bundleIndex(map[string]Phase{"bad":bad}),[]serde.PathSegment{{Kind:"Variant",Name:"Indexed"},{Kind:"MapKey",Name:"bad"}}},
+  }{
+   value:=tc.value;hit:=false
+   for name,run:=range map[string]func(){"match":func(){observeBundle(value,&hit)},"debug":func(){_=DebugBundle(&value)},"clone":func(){_=CloneBundle(&value)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid nested container element %T",name,bad)}}();run()}()}
+   if hit{t.Fatal("container guard ran before validation")}
+   _,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeBundle(s,&value)});var detail *serde.Error;if !errors.As(err,&detail)||!reflect.DeepEqual(detail.Path,tc.path){t.Fatalf("container error path want %#v: %v",tc.path,err)}
+  }
+ }
+}
 func TestNestedEnumEncodingPath(t *testing.T){value:=invalid();_,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializePacket(s,&value)});var detail *serde.Error;want:=[]serde.PathSegment{{Kind:"Variant",Name:"Data"},{Kind:"Field",Name:"Phase"}};if !errors.As(err,&detail)||!reflect.DeepEqual(detail.Path,want){t.Fatalf("path=%v",err)}}
-`, false)
+`, false, true)
 }

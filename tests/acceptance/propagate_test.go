@@ -7,11 +7,14 @@ import (
 )
 
 func TestPropagationControlFlowRace(t *testing.T) {
-	enumGeneratedModule(t, propagationSource, propagationAssertions, false)
+	enumGeneratedModule(t, propagationSource, propagationAssertions, false, true)
 }
 
 const propagationSource = `package fixture
 import "errors"
+var nestedContinued bool
+func rows(v []Option[int])Result[[]Option[int],error]{return Result[[]Option[int],error]::Ok(v)}
+func rowCount(v []Option[int])Result[int,error]{r:=rows(v)?;nestedContinued=true;return Result[int,error]::Ok(len(r))}
 func load(ok bool,trace *[]string) Result[int,error] {*trace=append(*trace,"load");if !ok{return Result[int,error]::Err(errors.New("failed"))};return Result[int,error]::Ok(4)}
 func mark(s string,trace *[]string) int {*trace=append(*trace,s);return 1}
 func combine(a,b,c int)int{return a+b+c}
@@ -52,6 +55,12 @@ func failure(v Result[string,error])error{match v {Result[string,error]::Ok(_)=>
 
 const propagationAssertions = `package fixture
 import("testing";"reflect")
+func TestNestedContainerPropagation(t *testing.T){
+ for _,v:=range [][]Option[int]{nil,{}, {nil,HgoNewOptionSome[int](1)}}{nestedContinued=false;got:=rowCount(v).(__hgo_enum_case_Result_Ok[int,error]).Value;if got!=len(v)||!nestedContinued{t.Fatal("container propagation")}}
+ var bad *HgoOptionSome[int];nestedContinued=false
+ defer func(){if recover()==nil||nestedContinued{t.Fatal("invalid inner value passed question boundary")}}()
+ rowCount([]Option[int]{bad})
+}
 func TestDifferentSuccessTypesAndOrder(t *testing.T){for _,ok:=range []bool{false,true}{trace:=[]string{};v:=sequence(ok,&trace);want:=[]string{"first","load","cleanup"};text:="failed";if ok{want=[]string{"first","load","last","late","cleanup"};text="six"};if resultText(v)!=text||!reflect.DeepEqual(trace,want){t.Fatalf("ok=%t text=%s trace=%v",ok,resultText(v),trace)}};if optionInt(optionalLength(true))!=3||optionInt(optionalLength(false))!=-1{t.Fatal("Option propagation")}}
 func TestCalleeBeforeArguments(t *testing.T){for _,ok:=range []bool{false,true}{trace:=[]string{};_=calleeSequence(ok,&trace);want:=[]string{"callee","first","load"};if ok{want=[]string{"callee","first","load","last","body"}};if !reflect.DeepEqual(trace,want){t.Fatalf("callee order ok=%t: %v",ok,trace)}}}
 func TestUnselectedBranchStaysUnevaluated(t *testing.T){trace:=[]string{};if resultText(conditional(false,&trace))!="continued"||!reflect.DeepEqual(trace,[]string{"else"}){t.Fatalf("unselected branch ran: %v",trace)};trace=nil;if resultText(conditional(true,&trace))!="failed"||!reflect.DeepEqual(trace,[]string{"load"}){t.Fatalf("selected failure did not return: %v",trace)}}
@@ -63,7 +72,6 @@ func TestInvalidResultIsNotBusinessFailure(t *testing.T){defer func(){if recover
 
 func TestPropagationExplicitRejections(t *testing.T) {
 	cases := map[string]string{
-		"nested-enum-slice":      `func f()Result[[]Option[int],error]{return Result[[]Option[int],error]::Ok(nil)}`,
 		"hgo-holder-enum":        `enum E {A,};struct Holder { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
 		"go-holder-enum":         `enum E {A,};type Holder struct { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
 		"option-to-result":       `func f()Result[int,error]{x:=Option[int]::None?;return Result[int,error]::Ok(x)}`,

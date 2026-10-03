@@ -2,7 +2,9 @@ package frontend
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -72,12 +74,44 @@ func TestModuleOutputAndSelectionBoundaries(t *testing.T) {
 }
 
 func TestPackageGroupedPayloadRetainsEnumBoundary(t *testing.T) {
-	_, err := preparePackage(map[string][]byte{
-		"enum.hgo":  []byte("package p\npub enum Mode { Idle, }\n"),
-		"group.hgo": []byte("package p\ntype ( Container struct { Modes []Mode } )\n"),
-		"use.hgo":   []byte("package p\nfunc f(v Container) Result[Container,error] { return Result[Container,error]::Ok(v) }\n"),
-	})
-	if err == nil || !strings.Contains(err.Error(), "enum-bearing pointer/container") {
-		t.Fatalf("cross-file grouped payload escaped validation: %v", err)
+	source := t.TempDir()
+	files := map[string]string{
+		"go.mod":    "module grouped.example/p\ngo 1.27\n",
+		"enum.hgo":  "package p\npub enum Mode { Idle, }\n",
+		"group.hgo": "package p\ntype ( Container struct { Modes []Mode } )\n",
+		"use.hgo": `package p
+func Count(v Result[Container,string])int {
+ match v {Result[Container,string]::Ok(c)=>{return len(c.Modes)},Result[Container,string]::Err(_)=>{return -1}}
+ return -2
+}
+`,
+	}
+	for name, text := range files {
+		if err := os.WriteFile(filepath.Join(source, name), []byte(text), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := filepath.Join(t.TempDir(), "out")
+	if _, err := CompileModule(source, out); err != nil {
+		t.Fatal(err)
+	}
+	assertions := `package p
+import "testing"
+func TestGroupedValidation(t *testing.T){
+ if Count(HgoNewResultOk[Container,string](Container{Modes:[]Mode{NewModeIdle()}}))!=1{t.Fatal("valid grouped container")}
+ var typed *HgoCase4_Mode_Idle
+ for _,bad:=range []Mode{nil,typed}{func(){defer func(){if recover()==nil{t.Fatal("invalid nested enum escaped validator")}}();Count(HgoNewResultOk[Container,string](Container{Modes:[]Mode{bad}}))}()}
+}
+`
+	if err := os.WriteFile(filepath.Join(out, "grouped_test.go"), []byte(assertions), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"test", "-race", "-count=1", "./..."}, {"vet", "./..."}} {
+		cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin/go"), args...)
+		cmd.Dir = out
+		cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
+		if log, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, log)
+		}
 	}
 }

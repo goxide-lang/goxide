@@ -1,8 +1,8 @@
 # Enum 显式比较：有界实施提案
 
-状态（2026-10-03）：用户已选**资格编译期判断，不能把含不可比载荷的 enum 比较留给 Go interface 运行时 panic**；进一步确认显式派生宏自动实现 PartialEq/Eq，并承接 enum 使用 `equals` 的方向。手写签名、容器和剩余比较例外仍是提案；未完成部分不以本文授权全 trait 或修改普通 Go 类型的 `==`。
+状态（2026-10-03）：用户已选**资格编译期判断，不能把含不可比载荷的 enum 比较留给 Go interface 运行时 panic**；进一步确认显式派生宏自动实现 PartialEq/Eq，并承接 enum 使用 `equals` 的方向。容器 nil/空和有限稳定原生 map 键规则已确认，手写签名和剩余比较例外仍是提案；未完成部分不以本文授权全 trait 或修改普通 Go 类型的 `==`。
 
-实际首片已按后续授权实现 scalar/struct/array/enum 显式派生、值参数 equals、左/右校验及跨模块登记，见 [enum RFC](../0008-enums.md#显式-partialeqeq-首片2026-10-03)。下列未完成容器/manual等仍保留提案状态，不以建议分片视为获批延期。
+实际首片已按后续授权实现 scalar/struct/array/enum 显式派生、值参数 equals、左/右校验及跨模块登记，见 [enum RFC](../0008-enums.md#显式-partialeqeq-首片2026-10-03)。manual 等未决部分仍保留提案状态；容器按 D33 及后续授权实施，不以建议分片视为获批延期。
 
 ## 最小协议
 
@@ -35,6 +35,8 @@ Eq 不使 enum 自动成为 Go map key。原生 map 使用自身 `==`/hash，不
 
 ## 建议实施顺序与待确认点
 
-第一片先确定上述具体入口，支持有限 scalar/struct/array 载荷的显式 PartialEq/Eq 派生、真实 NaN 反例和跨模块 helper；不引入全 trait、隐式适配或 HashMap。以下分片顺序不是用户批准延期。第二片再做已确认容器语义的 slice/map 递归派生与 manual 入口。每片都需真实 hgo→Go 执行及独立审查。
+第一片先确定上述具体入口，支持有限 scalar/struct/array 载荷的显式 PartialEq/Eq 派生、真实 NaN 反例和跨模块 helper；不引入全 trait、隐式适配或 HashMap。以下分片顺序不是用户批准延期。第二片实现已确认容器语义的 slice/map 递归派生；manual 入口另行收口。每片都需真实 hgo→Go 执行及独立审查。
 
-仍需确认：self/other 的权限签名及 Go helper 命名；enum 对 nil 比较是否例外；map 键契约（nil/空区别已由 D33 确认）；手写实现之前的验证保证。当前讨论方向为 enum 统一走显式 equals；落地静态禁令前应在最终契约中写清 `==`/`!=`、隐含比较 switch 和 map key 的边界，不能扩大成普通 Go 类型全局禁令。
+仍需确认：self/other 的权限签名及 Go helper 命名；enum 对 nil 比较是否例外；自定义 map 键契约（本轮稳定原生键子集与 nil/空区别已确认）；手写实现之前的验证保证。当前讨论方向为 enum 统一走显式 equals；落地静态禁令前应在最终契约中写清 `==`/`!=`、隐含比较 switch 和 map key 的边界，不能扩大成普通 Go 类型全局禁令。
+
+用户后续授权的 map 首片限定：键须支持稳定原生 Go 查找且与所选相等契约一致；bool/int/string 及有可检查结构证明的既有类型可纳入，float/complex（NaN）、动态 interface 和仅有自定义 equals 的键不能放行。不为此引入 HashMap。容器元素/值递归使用显式协议，不以 reflect.DeepEqual 兜底。手写比较、指针拆分和原位 borrow 为后续阶段，不作为此次容器派生的前置阻断。

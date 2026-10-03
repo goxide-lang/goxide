@@ -45,7 +45,6 @@ func TestBuiltinRejects(t *testing.T) {
 		`package p; var x=Result[int]::Ok(1)`,
 		`package p; var x=Option::Some(1)`,
 		`package p; type Option int; var x Option[int]`,
-		`package p; var x Result[[]Option[int],error]`,
 		`package p; enum E {A,}; type Holder struct {Bad *E}; var x Result[Holder,error]`,
 	} {
 		if _, e := Lower("bad.hgo", []byte(s)); e == nil {
@@ -59,6 +58,11 @@ var a Option[int]
 var b Result[int,string]
 var c Result[string,string]
 var nested Option[Option[int]]
+var visited int
+func checkRows(v Result[[]Option[int],error])int {
+ match v {Result[[]Option[int],error]::Ok(rows)=>{visited++;return len(rows)},Result[[]Option[int],error]::Err(_)=>{return -1}}
+ return -2
+}
 func main(){}
 `))
 	if e != nil {
@@ -68,6 +72,7 @@ func main(){}
 	ri, _ := Builtin("Result", []string{"int", "string"})
 	rs, _ := Builtin("Result", []string{"string", "string"})
 	nested, _ := Builtin("Option", []string{"Option[int]"})
+	rows, _ := Builtin("Result", []string{"[]Option[int]", "error"})
 	tests := `package main
 import "testing"
 func panics(t *testing.T,f func()){t.Helper();defer func(){if recover()==nil{t.Fatal("expected invalid case panic")}}();f()}
@@ -75,6 +80,15 @@ func TestInvalid(t *testing.T){`
 	tests += `panics(t,func(){` + ri.Validator + `(nil)});`
 	tests += `panics(t,func(){var p *` + oi.Variants[0].CaseName + `;` + oi.Validator + `(p)});`
 	tests += `panics(t,func(){` + nested.Validator + `(` + nested.Variants[0].Constructor + `((*` + oi.Variants[0].CaseName + `)(nil)))});}`
+	tests += `
+func TestContainerPayload(t *testing.T){
+ if checkRows(` + rows.Variants[0].Constructor + `([]Option[int]{nil,` + oi.Variants[0].Constructor + `(7)}))!=2||visited!=1{t.Fatal("valid nested sum")}
+ if checkRows(` + rows.Variants[0].Constructor + `(nil))!=0||visited!=2{t.Fatal("nil slice")}
+ visited=0
+ panics(t,func(){checkRows(` + rows.Variants[0].Constructor + `([]Option[int]{nil,(*` + oi.Variants[0].CaseName + `)(nil)}))})
+ if visited!=0{t.Fatal("invalid inner Option reached match arm")}
+}
+`
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
 	os.WriteFile(filepath.Join(dir, "main_test.go"), []byte(tests), 0600)

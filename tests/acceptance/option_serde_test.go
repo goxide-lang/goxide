@@ -37,8 +37,6 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 		"default-cannot-mask-unsupported":        "#[derive(Deserialize)]\ntype Request struct {\n#[serde(default)]\nValue Option[chan int]\n}",
 		"ordinary-enum-option-payload":           "#[derive(Serialize,Deserialize)]\nenum Event { Empty, Data(Option[int]), }",
 		"ordinary-enum-struct-option-payload":    "#[derive(Serialize,Deserialize)]\ntype Payload struct { Value Option[int] }\n#[derive(Serialize,Deserialize)]\nenum Event { Data(Payload), }",
-		"option-enum-bearing-container":          "#[derive(Serialize,Deserialize)]\ntype Request struct { Value Option[[]Option[int]] }",
-		"option-map-enum-bearing-container":      "#[derive(Serialize,Deserialize)]\ntype Request struct { Value Option[map[string]Option[int]] }",
 	} {
 		t.Run(name, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), name+".hgo")
@@ -53,9 +51,6 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 			if strings.HasPrefix(name, "ordinary-enum-") {
 				want = "unsupported enum payload"
 			}
-			if strings.HasPrefix(name, "option-") {
-				want = "enum-bearing pointer/container projection"
-			}
 			if !strings.Contains(err.Error(), want) {
 				t.Fatalf("want %q, got %v", want, err)
 			}
@@ -69,6 +64,75 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 		})
 	}
 }
+
+// These container payloads used to be rejected before serde lowering. Exercise
+// both actual codecs and the recursive match validator through the installed CLI.
+func TestOptionSerdeNestedContainersRace(t *testing.T) {
+	_, here, _, _ := runtime.Caller(0)
+	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
+	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	bin, outside, source := t.TempDir(), t.TempDir(), t.TempDir()
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
+	packagesWrite(t, source, "go.mod", "module nestedoption.example/app\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconv.Quote(root)+"\n")
+	packagesWrite(t, source, "nested.hgo", `package nested
+import("github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+#[derive(Serialize,Deserialize)]
+type Request struct { List Option[[]Option[int]]; Lookup Option[map[string]Option[int]] }
+func Decode(data []byte)(Request,error){return serdejson.Unmarshal(data,DeserializeRequest)}
+func Encode(v Request)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeRequest(s,&v)})}
+var Entered int
+func ListLength(v Option[[]Option[int]])int{
+ match v {Option[[]Option[int]]::Some(rows)=>{Entered++;return len(rows)},Option[[]Option[int]]::None=>{return -1}}
+ return -2
+}
+func MapLength(v Option[map[string]Option[int]])int{
+ match v {Option[map[string]Option[int]]::Some(rows)=>{Entered++;return len(rows)},Option[map[string]Option[int]]::None=>{return -1}}
+ return -2
+}
+`)
+	generated := filepath.Join(t.TempDir(), "generated")
+	deliveryCommand(t, outside, filepath.Join(bin, "hgo"), true, nil, "transpile", "-o", generated, source)
+	packagesWrite(t, generated, "nested_test.go", optionSerdeNestedAssertions)
+	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
+	deliveryCommand(t, generated, tool, true, nil, "vet", "./...")
+}
+
+const optionSerdeNestedAssertions = `package nested
+import("errors";"reflect";"testing";"github.com/hxsf/goxide/serde")
+func TestNestedRoundTrip(t *testing.T){
+ for _,input:=range []string{"{}","{\"List\":null,\"Lookup\":null}"}{
+  v,e:=Decode([]byte(input));if e!=nil||v.List!=nil||v.Lookup!=nil{t.Fatal(input,v,e)}
+ }
+ for _,input:=range []string{"{\"List\":[],\"Lookup\":{}}","{\"List\":[null,7],\"Lookup\":{\"none\":null,\"some\":8}}"}{
+  v,e:=Decode([]byte(input));if e!=nil{t.Fatal(e)}
+  rows,ok:=v.List.(__hgo_enum_case_Option_Some[[]Option[int]])
+  lookup,ok2:=v.Lookup.(__hgo_enum_case_Option_Some[map[string]Option[int]])
+  if !ok||!ok2||rows.Value==nil||lookup.Value==nil{t.Fatal("present containers must be Some",v)}
+  Entered=0;if ListLength(v.List)!=len(rows.Value)||MapLength(v.Lookup)!=len(lookup.Value)||Entered!=2{t.Fatal("match",v,Entered)}
+  if len(rows.Value)>0{if rows.Value[0]!=nil||rows.Value[1].(__hgo_enum_case_Option_Some[int]).Value!=7||lookup.Value["none"]!=nil||lookup.Value["some"].(__hgo_enum_case_Option_Some[int]).Value!=8{t.Fatal(v)}}
+  wire,e:=Encode(v);if e!=nil{t.Fatal(e)};back,e:=Decode(wire);if e!=nil||!reflect.DeepEqual(v,back){t.Fatal(string(wire),back,e)}
+ }
+}
+func TestNestedErrors(t *testing.T){
+ for _,tc:=range []struct{input string;path []serde.PathSegment}{
+  {"{\"List\":[null,false]}",[]serde.PathSegment{{Kind:"Field",Name:"List"},{Kind:"Index",Index:1}}},
+  {"{\"Lookup\":{\"bad\":false}}",[]serde.PathSegment{{Kind:"Field",Name:"Lookup"},{Kind:"MapKey",Name:"bad"}}},
+ }{_,e:=Decode([]byte(tc.input));var detail *serde.Error;if !errors.As(e,&detail)||detail.Kind!=serde.Type||!reflect.DeepEqual(detail.Path,tc.path){t.Fatal(tc.input,detail,e)}}
+}
+func TestInvalidInnerValueBeforeArm(t *testing.T){
+ var bad *__hgo_enum_case_Option_Some[int]
+ a:=__hgo_enum_case_Option_Some[[]Option[int]]{Value:[]Option[int]{nil,bad}}
+ b:=__hgo_enum_case_Option_Some[map[string]Option[int]]{Value:map[string]Option[int]{"bad":bad}}
+ for _,f:=range []func(){func(){ListLength(a)},func(){MapLength(b)}}{
+  Entered=0;func(){defer func(){if recover()==nil{t.Fatal("invalid nested value accepted")}}();f()}()
+  if Entered!=0{t.Fatal("invalid nested value reached arm")}
+ }
+ for _,tc:=range []struct{v Request;path []serde.PathSegment}{
+  {Request{List:a},[]serde.PathSegment{{Kind:"Field",Name:"List"},{Kind:"Index",Index:1}}},
+  {Request{Lookup:b},[]serde.PathSegment{{Kind:"Field",Name:"Lookup"},{Kind:"MapKey",Name:"bad"}}},
+ }{_,e:=Encode(tc.v);var detail *serde.Error;if !errors.As(e,&detail)||detail.Kind!=serde.Type||!reflect.DeepEqual(detail.Path,tc.path){t.Fatal(detail,e)}}
+}
+`
 
 func TestOptionProtocolDoesNotGrantPayloadDefault(t *testing.T) {
 	_, err := frontend.Compile("no-payload-default.hgo", []byte(`package fixture

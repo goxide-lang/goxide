@@ -931,3 +931,13 @@ hgo 直接 enum 比较诊断；已知危险载荷的包裹/混合比较、switch
 用户追加确认 D33：slice/map 的 nil 与非 nil 空值必须区分，Option.None/Some(nil)/Some(empty) 也区分；已同步 RFC/决策及纯 Go 契约探针。容器派生尚未实现，但 nil/空不再列待决；此探针不冒充真实 hgo 派生验收。
 
 最终验证：全树 `go test -race -count=1 -json ./...` **16 测试包 / 290 宿主顶层 / 723 子测试**通过（无测试缓存），全树 vet 通过。真实 CLI 的库、hgo 应用、原生 Go 消费模块分别 race/vet，库与应用重复生成一致；设计检查 **64 Markdown / 834 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过。实现与修复反例独立复审、D33 文档及契约测试独立复审均无剩余阻断。日志 `/tmp/equality-verified-race.json`、`/tmp/equality-verified-race.err`、`/tmp/equality-verified-vet.log`、`/tmp/equality-final-design.log`；最终全树包含单文件空白调用与首个诊断保留修复。容器/手动协议、原位借用、剩余表达式/权限边界等仍留账，不标完整 MVP；本片提交/push/fetch。
+
+## 容器 PartialEq/Eq（2026-10-03）
+
+基于 `790f73f941c362dbc2176945cf6e3cbb2ead0101`，按 D33/D34 接通有限 slice/map 递归派生及派生字段中的具体 Option/Result 条件协议。nil/空区别、实际键存在检查和元素/值协议调用保留；不按容器地址跳过 NaN、不用 reflect.DeepEqual。map 键只接受可证明与原生查找一致的基础或本地显式派生结构；导入具名键缺少一致性证明仍明确留账，签名/Eq 标记不替代语义证明。
+
+外层 enum 的 finite array/slice/map 载荷补齐递归 validator，普通 struct/container 保持短路，不扩所有公开入口预验证。旧 grouped/Option/enum 容器负例迁成真实生成执行，保留非法 nil/typed-nil 的拒绝证据。独立审查发现并修复同 import 别名的跨文件包身份选择、同一家族多个具体实例的 validator 查找；进一步覆盖公开泛型载荷的有限嵌套。代码、RFC、决策和矩阵同步，详细边界见[本片验收](docs/t0-acceptance.md#容器-equality-派生2026-10-03)。
+
+最终生产树全量 `go test -race -count=1 -json ./...` **16 测试包 / 298 宿主顶层 / 733 子测试**通过，另 2 包无测试，无测试结果缓存；全树 vet 通过。真实库、hgo 应用和原生 Go 消费各自 race/vet，重复产物确定；新增/迁移的 grouped、enum、Option serde、传播/projection 生成模块独立 race/vet。设计检查 **64 Markdown / 840 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过，纯机制不代替 hgo 执行。实现、反例修复及迁移测试独立复审无阻断；外部嵌套 sum 与私有不可命名负例另有双模块执行证据。
+
+最终日志 `/tmp/container-release-race.json`、`/tmp/container-release-race.err`、`/tmp/container-release-vet.log`、`/tmp/container-verified-design.log`；独立探针 `/tmp/review-container-multi-out`、`/tmp/review-container-nested-out`、`/tmp/review-external-nested-v2`。先前旧拒绝断言、临时构建缓存空间耗尽，以及把生成模块 vet 无差别扩到既有 match fixture 的失败不计作通过证据；最终完整重跑已包含所有迁移，独立生成 vet 限定本片新增/迁移模块，未改旧 match lowering。手写协议、循环容器与导入具名键一致性证明等继续留账，不将本片边界自动批准延期；指针拆分/原位 borrow 为后续阶段，完整 MVP 不标完成。本片提交/push/fetch。

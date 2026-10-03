@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
@@ -115,6 +116,7 @@ type generator struct {
 	state     map[string]int
 	code      map[string]string
 	serial    int
+	file      string
 }
 
 func registry(u *unit, cfg Config) (*generator, error) {
@@ -237,6 +239,9 @@ func (g *generator) expression(t types.Type, a, b string, eq bool) (string, erro
 		return "(" + a + " == " + b + ")", nil
 	}
 	if n, ok := t.(*types.Named); ok {
+		if expression, known, e := g.sumExpression(n, a, b, eq); known {
+			return expression, e
+		}
 		return "", fmt.Errorf("named type %s requires an explicit %s protocol", n, equalityKind(eq))
 	}
 	return g.structural(t, a, b, eq)
@@ -269,6 +274,32 @@ func (g *generator) structural(t types.Type, a, b string, eq bool) (string, erro
 			return "(0==0)", nil
 		}
 		return "(" + strings.Join(parts, " && ") + ")", nil
+	case *types.Slice:
+		if e := g.containerBuiltins(); e != nil {
+			return "", e
+		}
+		g.serial++
+		idx := fmt.Sprintf("__hgo_enum_eq_i%d", g.serial)
+		x, e := g.expression(t.Elem(), a+"["+idx+"]", b+"["+idx+"]", eq)
+		if e != nil {
+			return "", e
+		}
+		return fmt.Sprintf("func()bool{if (%s==nil)!=(%s==nil){return (0!=0)};if len(%s)!=len(%s){return (0!=0)};for %s:=range %s{if !(%s){return (0!=0)}};return (0==0)}()", a, b, a, b, idx, a, x), nil
+	case *types.Map:
+		if e := g.containerBuiltins(); e != nil {
+			return "", e
+		}
+		if e := g.mapKey(t.Key(), eq); e != nil {
+			return "", e
+		}
+		g.serial++
+		prefix := fmt.Sprintf("__hgo_enum_eq_m%d", g.serial)
+		key, left, right, ok := prefix+"k", prefix+"a", prefix+"b", prefix+"ok"
+		x, e := g.expression(t.Elem(), left, right, eq)
+		if e != nil {
+			return "", e
+		}
+		return fmt.Sprintf("func()bool{if (%s==nil)!=(%s==nil){return (0!=0)};if len(%s)!=len(%s){return (0!=0)};for %s,%s:=range %s{%s,%s:=%s[%s];if !%s{return (0!=0)};if !(%s){return (0!=0)}};return (0==0)}()", a, b, a, b, key, left, a, right, ok, b, key, ok, x), nil
 	case *types.Array:
 		g.serial++
 		idx := fmt.Sprintf("__hgo_eq_i%d", g.serial)
@@ -288,6 +319,9 @@ func (g *generator) generate(r *registered) error {
 		return fmt.Errorf("equality: recursive protocol dependency at %s", r.name)
 	}
 	g.state[r.name] = 1
+	previousFile := g.file
+	g.file = r.file
+	defer func() { g.file = previousFile }()
 	var body string
 	if r.enum != nil {
 		d := r.enum
@@ -610,4 +644,374 @@ func checkBoolName(u *unit) error {
 		}
 	}
 	return nil
+}
+
+func (g *generator) containerBuiltins() error {
+	for _, name := range []string{"len", "nil"} {
+		if g.u.pkg.Scope().Lookup(name) != nil {
+			return fmt.Errorf("equality: container comparison requires unshadowed predeclared %s", name)
+		}
+	}
+	return nil
+}
+
+// Native map lookup must implement the same equivalence relation as key equals.
+// Imported helper signatures alone do not prove that semantic property.
+func (g *generator) mapKey(t types.Type, eq bool) error {
+	t = types.Unalias(t)
+	if basic(t, true) {
+		return nil
+	}
+	if n, ok := t.(*types.Named); ok {
+		r := g.find(n)
+		if r == nil {
+			return fmt.Errorf("map key %s requires an explicit native-consistent equality protocol", t)
+		}
+		if eq && !r.flags.Eq {
+			return fmt.Errorf("map key %s has no explicit Eq protocol", t)
+		}
+		if r.name == "" {
+			return fmt.Errorf("imported map key %s has no proven native-key consistency", t)
+		}
+		if r.enum != nil {
+			return fmt.Errorf("enum map key %s has no native-key equality protocol", t)
+		}
+		return g.mapKey(n.Underlying(), eq)
+	}
+	switch t := t.(type) {
+	case *types.Array:
+		return g.mapKey(t.Elem(), eq)
+	case *types.Struct:
+		for i := 0; i < t.NumFields(); i++ {
+			f := t.Field(i)
+			if f.Name() == "_" || f.Embedded() {
+				return fmt.Errorf("blank or embedded map key fields are unsupported")
+			}
+			if e := g.mapKey(f.Type(), eq); e != nil {
+				return fmt.Errorf("map key field %s: %w", f.Name(), e)
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("map key %s has no proven native-key equality protocol", t)
+}
+func (g *generator) eval(text string) (types.Type, error) {
+	if f := g.u.trees[g.file]; f != nil {
+		tv, e := types.Eval(g.u.fs, g.u.pkg, f.Pos(), text)
+		if e == nil {
+			return tv.Type, nil
+		}
+	}
+	tv, e := types.Eval(g.u.fs, g.u.pkg, token.NoPos, text)
+	if e == nil {
+		return tv.Type, nil
+	}
+	for _, name := range g.u.names {
+		tv, err := types.Eval(g.u.fs, g.u.pkg, g.u.trees[name].Pos(), text)
+		if err == nil {
+			return tv.Type, nil
+		}
+	}
+	return nil, e
+}
+
+// sumExpression accepts only a concrete instance of a registered builtin family
+// with its producer validator. It does not synthesize a protocol from spelling.
+func (g *generator) sumExpression(t *types.Named, a, b string, eq bool) (string, bool, error) {
+	for _, d := range g.cfg.Enums {
+		if d.Family != "Option" && d.Family != "Result" {
+			continue
+		}
+		if d.PackagePath != "" && (t.Obj().Pkg() == nil || t.Obj().Pkg().Path() != d.PackagePath) {
+			continue
+		}
+		declared, e := g.eval(d.Name)
+		if e != nil {
+			continue
+		}
+		n, ok := types.Unalias(declared).(*types.Named)
+		if !ok || !types.Identical(n.Origin(), t.Origin()) {
+			continue
+		}
+		if n.TypeArgs().Len() > 0 && !types.Identical(n, t) {
+			continue
+		}
+		count := 1
+		if d.Family == "Result" {
+			count = 2
+		}
+		if t.TypeArgs().Len() != count || len(d.Variants) != 2 {
+			return "", true, fmt.Errorf("equality: invalid trusted sum family %s", d.Name)
+		}
+		validator := ""
+		candidates := append([]enums.Decl{{Validator: d.Validator}}, d.Instances...)
+		for _, instance := range candidates {
+			if instance.Validator == "" {
+				continue
+			}
+			vt, e := g.eval(instance.Validator)
+			if e != nil {
+				continue
+			}
+			sig, ok := vt.(*types.Signature)
+			if ok && sig.Params().Len() == 1 && sig.Results().Len() == 0 && types.Identical(sig.Params().At(0).Type(), t) {
+				validator = instance.Validator
+				break
+			}
+		}
+		if validator == "" {
+			return "", true, fmt.Errorf("equality: sum instance has no matching trusted validation metadata: %s", t)
+		}
+		g.serial++
+		prefix := fmt.Sprintf("__hgo_enum_eq_sum%d", g.serial)
+		left, right, matched := prefix+"a", prefix+"b", prefix+"ok"
+		var text strings.Builder
+		fmt.Fprintf(&text, "func()bool{%s(%s);%s(%s);switch %s:=(%s).(type){", validator, a, validator, b, left, a)
+		if d.Family == "Option" {
+			if g.u.pkg.Scope().Lookup("nil") != nil {
+				return "", true, fmt.Errorf("equality: Option comparison requires unshadowed predeclared nil")
+			}
+			fmt.Fprintf(&text, "case nil:return %s==nil;", b)
+		}
+		for i, v := range d.Variants {
+			if d.Family == "Option" && i == 1 {
+				continue
+			}
+			caseName := v.CaseName
+			ct, e := g.eval(caseName)
+			if e != nil {
+				return "", true, fmt.Errorf("equality: missing trusted sum case %s: %w", caseName, e)
+			}
+			named, ok := types.Unalias(ct).(*types.Named)
+			if !ok {
+				return "", true, fmt.Errorf("equality: invalid trusted sum case %s", caseName)
+			}
+			if named.TypeArgs().Len() == 0 || !types.Implements(ct, t.Underlying().(*types.Interface)) {
+				args := make([]string, count)
+				for ai := range args {
+					args[ai], e = g.typeSpelling(t.TypeArgs().At(ai))
+					if e != nil {
+						return "", true, e
+					}
+				}
+				caseName += "[" + strings.Join(args, ",") + "]"
+				ct, e = g.eval(caseName)
+				if e != nil {
+					return "", true, e
+				}
+			}
+			st, ok := ct.Underlying().(*types.Struct)
+			if !ok || st.NumFields() != 1 || !types.Identical(st.Field(0).Type(), t.TypeArgs().At(i)) || !types.Implements(ct, t.Underlying().(*types.Interface)) {
+				return "", true, fmt.Errorf("equality: sum case payload identity mismatch: %s", caseName)
+			}
+			x, e := g.expression(st.Field(0).Type(), left+".Value", right+".Value", eq)
+			if e != nil {
+				return "", true, e
+			}
+			fmt.Fprintf(&text, "case %s:%s,%s:=(%s).(%s);if !%s{return (0!=0)};return %s;", caseName, right, matched, b, caseName, matched, x)
+		}
+		text.WriteString("};return (0!=0)}()")
+		return text.String(), true, nil
+	}
+	return "", false, nil
+}
+
+func (g *generator) typeSpelling(t types.Type) (string, error) {
+	for _, name := range g.u.pkg.Scope().Names() {
+		obj, ok := g.u.pkg.Scope().Lookup(name).(*types.TypeName)
+		if ok && types.Identical(obj.Type(), t) {
+			return name, nil
+		}
+	}
+	if file := g.u.trees[g.file]; file != nil {
+		for _, spec := range file.Imports {
+			path, _ := strconv.Unquote(spec.Path.Value)
+			if g.cfg.Importer == nil {
+				continue
+			}
+			pkg, e := g.cfg.Importer.Import(path)
+			if e != nil {
+				continue
+			}
+			alias := pkg.Name()
+			if spec.Name != nil {
+				alias = spec.Name.Name
+			}
+			if alias == "_" {
+				continue
+			}
+			for _, name := range pkg.Scope().Names() {
+				if !token.IsExported(name) {
+					continue
+				}
+				obj, ok := pkg.Scope().Lookup(name).(*types.TypeName)
+				if ok && types.Identical(obj.Type(), t) {
+					if alias == "." {
+						return name, nil
+					}
+					return alias + "." + name, nil
+				}
+			}
+		}
+	}
+	// Recover arguments from the actual alias expansion; never assume a public
+	// generic alias uses its origin's parameter order.
+	for _, name := range g.u.pkg.Scope().Names() {
+		if obj, ok := g.u.pkg.Scope().Lookup(name).(*types.TypeName); ok {
+			if spelling, ok := g.genericSpelling(obj, name, t); ok {
+				return spelling, nil
+			}
+		}
+	}
+	if file := g.u.trees[g.file]; file != nil && g.cfg.Importer != nil {
+		for _, spec := range file.Imports {
+			path, _ := strconv.Unquote(spec.Path.Value)
+			pkg, e := g.cfg.Importer.Import(path)
+			if e != nil {
+				continue
+			}
+			alias := pkg.Name()
+			if spec.Name != nil {
+				alias = spec.Name.Name
+			}
+			if alias == "_" {
+				continue
+			}
+			for _, name := range pkg.Scope().Names() {
+				if !token.IsExported(name) {
+					continue
+				}
+				obj, ok := pkg.Scope().Lookup(name).(*types.TypeName)
+				if !ok {
+					continue
+				}
+				spelling := alias + "." + name
+				if alias == "." {
+					spelling = name
+				}
+				if spelling, ok := g.genericSpelling(obj, spelling, t); ok {
+					return spelling, nil
+				}
+			}
+		}
+	}
+	switch t := types.Unalias(t).(type) {
+	case *types.Basic:
+		name := t.Name()
+		if g.u.pkg.Scope().Lookup(name) == nil {
+			return name, nil
+		}
+	case *types.Slice:
+		elem, e := g.typeSpelling(t.Elem())
+		if e == nil {
+			return "[]" + elem, nil
+		}
+	case *types.Array:
+		elem, e := g.typeSpelling(t.Elem())
+		if e == nil {
+			return fmt.Sprintf("[%d]%s", t.Len(), elem), nil
+		}
+	case *types.Map:
+		key, e := g.typeSpelling(t.Key())
+		value, e2 := g.typeSpelling(t.Elem())
+		if e == nil && e2 == nil {
+			return "map[" + key + "]" + value, nil
+		}
+	case *types.Pointer:
+		elem, e := g.typeSpelling(t.Elem())
+		if e == nil {
+			return "*" + elem, nil
+		}
+	}
+	return "", fmt.Errorf("equality: imported sum payload type is not nameable in the helper source: %s", t)
+}
+
+func (g *generator) genericSpelling(obj *types.TypeName, name string, target types.Type) (string, bool) {
+	var params *types.TypeParamList
+	switch t := obj.Type().(type) {
+	case *types.Named:
+		params = t.TypeParams()
+	case *types.Alias:
+		params = t.TypeParams()
+	}
+	if params.Len() == 0 {
+		return "", false
+	}
+	symbolic := make([]types.Type, params.Len())
+	for i := range symbolic {
+		symbolic[i] = params.At(i)
+	}
+	pattern, e := types.Instantiate(nil, obj.Type(), symbolic, true)
+	if e != nil {
+		return "", false
+	}
+	bound := make([]types.Type, len(symbolic))
+	var unify func(types.Type, types.Type) bool
+	unify = func(p, a types.Type) bool {
+		p = types.Unalias(p)
+		a = types.Unalias(a)
+		if tp, ok := p.(*types.TypeParam); ok {
+			for i, x := range symbolic {
+				if types.Identical(tp, x) {
+					if bound[i] == nil {
+						bound[i] = a
+						return true
+					}
+					return types.Identical(bound[i], a)
+				}
+			}
+			return types.Identical(p, a)
+		}
+		switch p := p.(type) {
+		case *types.Named:
+			n, ok := a.(*types.Named)
+			if !ok || !types.Identical(p.Origin(), n.Origin()) || p.TypeArgs().Len() != n.TypeArgs().Len() {
+				return false
+			}
+			for i := 0; i < p.TypeArgs().Len(); i++ {
+				if !unify(p.TypeArgs().At(i), n.TypeArgs().At(i)) {
+					return false
+				}
+			}
+			return true
+		case *types.Slice:
+			n, ok := a.(*types.Slice)
+			return ok && unify(p.Elem(), n.Elem())
+		case *types.Array:
+			n, ok := a.(*types.Array)
+			return ok && p.Len() == n.Len() && unify(p.Elem(), n.Elem())
+		case *types.Map:
+			n, ok := a.(*types.Map)
+			return ok && unify(p.Key(), n.Key()) && unify(p.Elem(), n.Elem())
+		case *types.Pointer:
+			n, ok := a.(*types.Pointer)
+			return ok && unify(p.Elem(), n.Elem())
+		}
+		return types.Identical(p, a)
+	}
+	if !unify(pattern, target) {
+		return "", false
+	}
+	for _, arg := range bound {
+		if arg == nil {
+			return "", false
+		}
+	}
+	instance, e := types.Instantiate(nil, obj.Type(), bound, true)
+	if e != nil || !types.Identical(instance, target) {
+		return "", false
+	}
+	args := make([]string, len(bound))
+	for i, arg := range bound {
+		if types.Identical(arg, target) {
+			return "", false
+		}
+		args[i], e = g.typeSpelling(arg)
+		if e != nil {
+			return "", false
+		}
+	}
+	spelling := name + "[" + strings.Join(args, ",") + "]"
+	actual, e := g.eval(spelling)
+	return spelling, e == nil && types.Identical(actual, target)
 }

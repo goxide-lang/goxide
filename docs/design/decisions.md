@@ -155,4 +155,6 @@
 
 已确认 **D32（2026-10-03 显式比较）**：enum 相等走显式 PartialEq/equals，Eq 依赖 PartialEq 并标记等价关系；允许显式 derive 自动生成。含不可比载荷的已知 enum 比较资格编译期判断，不以 Go interface 运行时 panic 充当策略。首片具体值参数、两实参求值后左/右验证沿既有机制实现；普通原生 Go 比较与当前 enum-nil 例外保持。Go comparable 不等于 Eq，Eq 不自动使类型成为 Go map key；不扩 full trait、HashMap 或指针拆分。具体实现与未完成边界见 [RFC](../rfcs/0008-enums.md#显式-partialeqeq-首片2026-10-03)。
 
-已确认 **D33（2026-10-03 容器 nil/空）**：同类型 nil slice 与非 nil 空 slice 不相等，nil map 与非 nil 空 map 不相等；两个 nil 相等，两个非 nil 空容器按内容相等。未来 equals 先区分 nil，再比较内容，不做隐式 normalization。Option.None、Some(nil 载荷)、Some(非 nil 空载荷) 三者区分；serde null/[]/{}不因此改变。固定长度 Go array 没有 nil 状态。该语义已定，不再作为容器派生的待决项；map 键资格/自定义相等和手写接口仍单列。[契约参考测试](../../tests/design/enum/equality_contract_test.go)仅为纯 Go 规则探针，尚不表示 hgo 容器派生已实现。
+已确认 **D33（2026-10-03 容器 nil/空）**：同类型 nil slice 与非 nil 空 slice 不相等，nil map 与非 nil 空 map 不相等；两个 nil 相等，两个非 nil 空容器按内容相等。equals 先区分 nil，再比较内容，不做隐式 normalization。Option.None、Some(nil 载荷)、Some(非 nil 空载荷) 三者区分；serde null/[]/{}不因此改变。固定长度 Go array 没有 nil 状态。该语义已定，不再作为容器派生的待决项；map 键资格按后续 D34 有限实施，自定义相等和手写接口仍单列。[契约参考测试](../../tests/design/enum/equality_contract_test.go)仅为纯 Go 规则探针；实际容器实现证据另见 [本片验收](../t0-acceptance.md#容器-equality-派生2026-10-03)。
+
+已确认 **D34（2026-10-03 容器比较派生）**：slice/map 按 D33 区分 nil/空并递归调用元素/值的 PartialEq/Eq 协议，不以 reflect.DeepEqual 替代。原生 map 首片仅接纳能证明原生查找与相等契约一致的稳定键，不能由 float NaN、自定义 equals 或 Go comparable 偷渡资格；不引入 HashMap。嵌套 struct/array/enum 与 Option 状态需要真实生成验收。手写比较入口可下一片，指针拆分/原位 borrow 不前置阻断本轮独立 enum 阶段。

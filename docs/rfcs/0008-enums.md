@@ -170,3 +170,13 @@ enum metadata **v3** 记录 Equality：真实目标身份、helper 与 Eq 标记
 [真实模块验收](../../tests/acceptance/equality_test.go)验证 NaN、变体/递归字段、array、上下文大整数、`?`、全局初始化、调用遮蔽、参数求值及左右非法值顺序、别名与普通 Go helper 消费。blank/embedded 字段的 struct 派生、builtin Option/Result 的条件泛型比较协议、slice/map 内容相等及 nil/空规则、pointer/chan/interface 自动协议、手写权限入口、Hash/HashMap 均未实现，不由本片自动延期。
 
 后续容器规则已由 [D33](../design/decisions.md) 确认：同类型 nil slice/map 与非 nil 空容器不相等，两个 nil 相等，两个非 nil 空容器按内容相等；Option.None/Some(nil)/Some(empty) 区分，serde 不变。固定长度 array 无 nil。对应 [纯 Go 契约探针](../../tests/design/enum/equality_contract_test.go)不冒充尚未实现的 hgo 容器派生；nil/空不再待决，map 键规则仍单列。
+
+### 容器 PartialEq/Eq 派生（2026-10-03）
+
+按 D33/D34 扩展显式派生到 slice/map 及其有限嵌套：先区分 nil 与非 nil，再比较长度、元素或键对应的值。两个 nil 相等；非 nil 空值相等；nil 与非 nil 空值不相等。数组仍没有 nil。递归调用已登记元素/值协议，float/complex 仅允许 PartialEq，不使用 reflect.DeepEqual，也不按相同容器地址跳过内容（否则 NaN 语义会被改变）。map 查找必须同时检查键是否存在，缺失键不能与零值混淆。
+
+map 首片键需静态证明原生 Go 查找与比较语义一致：基础 bool/integer/string、其透明 alias，以及可递归证明的有限结构/数组；本地显式派生具名键还需验证其结构。导入 equality metadata 目前只有 helper 签名/Eq 资格，未携带原生键一致性证明；导入具名键暂拒绝，透明 builtin alias 不受此限制。float/complex、interface、pointer/chan、enum 或只有未知语义 helper 的键不能通过。Eq 仍不赋予任意类型原生 map key 资格；不实现 HashMap 或手写键适配。
+
+struct 依字段顺序、slice/array 依索引短路；map 依 Go 未指定的迭代顺序逐键查找并短路，不承诺不同键之间的校验顺序。两个用户实参先求值，再进入 helper。访问到 enum 值时沿现有 validator 左后右；不为普通 struct/container 增加全值预扫描。外层 enum 则仍先校验两侧，再比较活跃载荷；为容器载荷补全有限 array/slice/map 的递归 enum validator，非法 nil/typed-nil/伪造值不会参与原生 interface 内容比较。
+
+在派生字段/元素中，已登记的具体 Option/Result 实例按载荷资格条件比较，None、Some(nil)、Some(empty) 保持区分，Result 的非法 nil 仍拒绝；不改 serde 协议；validator 的有限容器投影也让此前拒绝的嵌套 Option 容器进入既有 serde 路径，旧负例迁为真实执行验收。直接匿名容器或 Option/Result 的 `.equals` 尚未新增独立入口。自递归容器可能构成运行时环，本片保留明确诊断，不擅定环等价关系或退回任意动态深比较。手写协议、指针拆分与原位 borrow 留后续独立阶段。

@@ -205,3 +205,7 @@ D31 首片已支持同型 `mut& T` 直接传原生 `*T` 标量参数，包括函
 ### 跨 module 具体 enum 首片（2026-10-03）
 
 公开具体 enum 的两个独立模块恢复已接通，含构造/match、透明 alias 再导出、真实类型核验、内容/构建绑定与生产者 serde helper 调用，见[验收](docs/t0-acceptance.md#跨-module-公开具体-enum2026-10-03)。不迁值型 ABI，不引入 Copy/move 或新借用模型。internal facade 保留普通 API；公开 relay helper、跨包 derive、外部 builtin 家族等继续留账，比较与初始化/验证策略须准确收敛。
+
+### 跨 module builtin 恢复（2026-10-03）
+
+Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立 go.mod 构造/match/传播、alias 与原生消费进入[真实验收](docs/t0-acceptance.md#跨-module-optionresult2026-10-03)。消费者跨包 derive 可作为后续独立切片，不扩全 trait 或隐式 From 注册。用户已选 enum 比较资格编译期判断，并确认显式 PartialEq/Eq derive 与 equals 方向；[有界比较提案](docs/rfcs/research/enum-equality-proposed.md)区分已确认方向、建议入口和待定边界，本片未实现比较协议。

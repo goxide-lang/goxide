@@ -182,3 +182,19 @@ using that alias's enum constructor/pattern syntax receives an explicit unsuppor
 diagnostic. Public relay helpers are an outstanding design/engineering option, not
 an approved permanent exclusion. This stage retains value cases and does not add
 Copy/move, new borrow semantics, comparison policy or universal entry validation.
+
+## External builtin families
+
+Protocol v2 adds registry-backed Option/Result families and concrete producer
+validators. Generic origin, phantom arguments, case/constructor types and instance
+validator signatures are checked using actual Go identities. Transparent generic
+aliases retain their source instantiation (and constraints), while canonical
+argument substitution visits type references only. Constructors keep existing
+helper behavior; match/question operations require the matching instance validator.
+This does not introduce validation at every public API entry.
+
+Exported payload aliases can expose otherwise private named types. Unnameable
+payloads remain a documented limitation for enhanced operations; ordinary API
+calls remain valid. Internal facade syntax, external consumer derives and
+single-file metadata recovery remain separate work. See
+[builtin module acceptance](../../tests/acceptance/builtin_external_test.go).

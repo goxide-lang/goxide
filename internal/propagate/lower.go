@@ -260,6 +260,23 @@ func (l *lowering) typeSpelling(t types.Type) (string, bool) {
 			}
 		}
 	}
+	// Exported transparent aliases may expose a private named payload. Resolve
+	// by identity, not by the alias name or its underlying shape.
+	for _, pkg := range l.pkg.Imports() {
+		alias := aliases[pkg.Path()]
+		if alias == "" {
+			continue
+		}
+		for _, name := range pkg.Scope().Names() {
+			if !ast.IsExported(name) {
+				continue
+			}
+			obj, ok := pkg.Scope().Lookup(name).(*types.TypeName)
+			if ok && types.Identical(t, obj.Type()) {
+				return alias + "." + name, true
+			}
+		}
+	}
 	visible := true
 	spelling := types.TypeString(t, func(pkg *types.Package) string {
 		if pkg == l.pkg {
@@ -323,6 +340,9 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 		var failure error
 		var unresolved error
 		ast.Inspect(f, func(n ast.Node) bool {
+			if changed || failure != nil {
+				return false
+			}
 			c, ok := n.(*ast.CallExpr)
 			if !ok {
 				return true
@@ -373,8 +393,10 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 				return false
 			}
 			f.Decls = append(f.Decls, decl.Decls...)
+			// The replacement changes the inferred type of subsequent locals.
+			// Recheck before resolving another question from stale identity-stub facts.
 			changed = true
-			return true
+			return false
 		})
 		if failure != nil {
 			return nil, failure

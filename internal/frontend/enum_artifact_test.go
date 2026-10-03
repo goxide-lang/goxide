@@ -31,7 +31,7 @@ func enumTestPackage(t *testing.T, path, source string, imp types.Importer) *typ
 	return pkg
 }
 func enumTestMetadata() enumMetadata {
-	return enumMetadata{Version: 1, Path: "example.org/producer", Package: "producer", Enums: []enumExport{{Name: "Event", DefinitionPath: "example.org/producer", DefinitionName: "Event", Marker: "sealed", Validator: "ValidateEvent", Variants: []enumVariantExport{{Name: "Empty", Case: "EmptyCase", Constructor: "NewEmpty"}, {Name: "Item", Case: "ItemCase", Constructor: "NewItem", HasPayload: true}}}}}
+	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/producer", Package: "producer", Enums: []enumExport{{Name: "Event", DefinitionPath: "example.org/producer", DefinitionName: "Event", Marker: "sealed", Validator: "ValidateEvent", Variants: []enumVariantExport{{Name: "Empty", Case: "EmptyCase", Constructor: "NewEmpty"}, {Name: "Item", Case: "ItemCase", Constructor: "NewItem", HasPayload: true}}}}}
 }
 
 const enumTestSource = `package producer
@@ -186,4 +186,126 @@ func TestEnumArtifactBindings(t *testing.T) {
 			t.Fatal(e)
 		}
 	})
+}
+
+const enumFamilyTestSource = `package producer
+type Option[T any] interface{ option(T) }
+type some[T any] struct{Value T}
+func(some[T])option(T){}
+type HSome[T any]=some[T]
+func NewSome[T any](v T)Option[T]{return some[T]{v}}
+func NewNone[T any]()Option[T]{return nil}
+type private struct{N int}
+func CheckOption(v Option[private]){}
+type Result[T any,E any] interface{ result(T,E) }
+type ok[T any,E any] struct{Value T}
+func(ok[T,E])result(T,E){}
+type errCase[T any,E any] struct{Value E}
+func(errCase[T,E])result(T,E){}
+type HOk[T any,E any]=ok[T,E]
+type HErr[T any,E any]=errCase[T,E]
+func NewOk[T any,E any](v T)Result[T,E]{return ok[T,E]{v}}
+func NewErr[T any,E any](v E)Result[T,E]{return errCase[T,E]{v}}
+func CheckResult(v Result[int,error]){}
+`
+
+func enumFamilyTestMetadata() enumMetadata {
+	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/producer", Package: "producer", Families: []enumFamilyExport{
+		{Name: "Option", Family: "Option", DefinitionPath: "example.org/producer", DefinitionName: "Option", Marker: "option", Variants: []enumFamilyVariantExport{{Name: "Some", Case: "HSome", Constructor: "NewSome", PayloadIndex: 0}, {Name: "None", Constructor: "NewNone", PayloadIndex: -1}}, Instances: []enumFamilyInstanceExport{{Validator: "CheckOption"}}},
+		{Name: "Result", Family: "Result", DefinitionPath: "example.org/producer", DefinitionName: "Result", Marker: "result", Variants: []enumFamilyVariantExport{{Name: "Ok", Case: "HOk", Constructor: "NewOk", PayloadIndex: 0}, {Name: "Err", Case: "HErr", Constructor: "NewErr", PayloadIndex: 1}}, Instances: []enumFamilyInstanceExport{{Validator: "CheckResult"}}},
+	}}
+}
+func TestEnumFamilyMetadataValidation(t *testing.T) {
+	producer := enumTestPackage(t, "example.org/producer", enumFamilyTestSource, nil)
+	imp := enumTestImporter{"example.org/producer": producer}
+	if e := validateEnumMetadata(enumFamilyTestMetadata(), producer, imp); e != nil {
+		t.Fatal(e)
+	}
+	relay := enumTestPackage(t, "example.org/relay", `package relay;import p "example.org/producer";type Concrete=p.Result[int,error];type Reordered[A any,B any]=p.Result[B,A];type Partial[T any]=p.Result[T,error]`, imp)
+	for _, name := range []string{"Concrete", "Reordered", "Partial"} {
+		t.Run(name, func(t *testing.T) {
+			m := enumFamilyTestMetadata()
+			m.Path = relay.Path()
+			m.Package = relay.Name()
+			m.Families = m.Families[1:]
+			m.Families[0].Name = name
+			if e := validateEnumMetadata(m, relay, imp); e != nil {
+				t.Fatal(e)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*enumMetadata)
+		want   string
+	}{
+		{"variant-order", func(m *enumMetadata) { v := m.Families[1].Variants; v[0], v[1] = v[1], v[0] }, "variant protocol"},
+		{"payload-index", func(m *enumMetadata) { m.Families[1].Variants[1].PayloadIndex = 0 }, "variant protocol"},
+		{"none-case", func(m *enumMetadata) { m.Families[0].Variants[1].Case = "HSome" }, "None must not"},
+		{"missing-instance", func(m *enumMetadata) { m.Families[0].Instances = nil }, "invalid or duplicate"},
+		{"wrong-instance-family", func(m *enumMetadata) { m.Families[0].Instances[0].Validator = "CheckResult" }, "validator family"},
+		{"wrong-marker", func(m *enumMetadata) { m.Families[0].Marker = "result" }, "marker signature"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := enumFamilyTestMetadata()
+			tc.change(&m)
+			e := validateEnumMetadata(m, producer, imp)
+			if e == nil || !strings.Contains(e.Error(), tc.want) {
+				t.Fatalf("want %s got %v", tc.want, e)
+			}
+		})
+	}
+	t.Run("case-alias-parameter-order", func(t *testing.T) {
+		src := strings.Replace(enumFamilyTestSource, "type HOk[T any,E any]=ok[T,E]", "type HOk[T any,E any]=ok[E,T]", 1)
+		p := enumTestPackage(t, producer.Path(), src, nil)
+		e := validateEnumMetadata(enumFamilyTestMetadata(), p, enumTestImporter{p.Path(): p})
+		if e == nil || !strings.Contains(e.Error(), "payload or marker") {
+			t.Fatal(e)
+		}
+	})
+	t.Run("new-defined-not-alias", func(t *testing.T) {
+		p := enumTestPackage(t, "example.org/relay", `package relay;import p "example.org/producer";type Fake[T any,E any] p.Result[T,E]`, imp)
+		m := enumFamilyTestMetadata()
+		m.Path = p.Path()
+		m.Package = p.Name()
+		m.Families = m.Families[1:]
+		m.Families[0].Name = "Fake"
+		if e := validateEnumMetadata(m, p, imp); e == nil || !strings.Contains(e.Error(), "alias identity") {
+			t.Fatal(e)
+		}
+	})
+}
+
+func TestEnumFamilyArtifactRoundTrip(t *testing.T) {
+	m := enumFamilyTestMetadata()
+	source := []byte(enumFamilyTestSource + fmt.Sprintf("\nconst %s=%q\n", enumMetadataMarker, m.Marker()))
+	dir := t.TempDir()
+	if e := os.WriteFile(filepath.Join(dir, "producer.go"), source, 0600); e != nil {
+		t.Fatal(e)
+	}
+	imp := &enumArtifactTestImporter{enumTestImporter: enumTestImporter{m.Path: enumTestPackage(t, m.Path, string(source), nil)}, dir: dir, content: "family-build"}
+	data, e := marshalEnumArtifact(m, map[string][]byte{"producer.go": source}, imp)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(filepath.Join(dir, enumMetadataFilename), data, 0600); e != nil {
+		t.Fatal(e)
+	}
+	got, e := loadEnumArtifact(m.Path, imp)
+	if e != nil || got.Marker() != m.Marker() {
+		t.Fatal(got, e)
+	}
+	for _, tc := range []struct{ name, source, want string }{
+		{"phantom-order", strings.ReplaceAll(enumFamilyTestSource, "result(T,E)", "result(E,T)"), "phantom parameter"},
+		{"constructor-result-order", strings.Replace(enumFamilyTestSource, "func NewOk[T any,E any](v T)Result[T,E]{return ok[T,E]{v}}", "func NewOk[T any,E any](v T)Result[E,T]{return nil}", 1), "constructor result"},
+		{"generic-instance-validator", strings.Replace(enumFamilyTestSource, "func CheckResult(v Result[int,error])", "func CheckResult[T any](v Result[T,error])", 1), "validator signature"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := enumTestPackage(t, m.Path, tc.source, nil)
+			e := validateEnumMetadata(m, p, enumTestImporter{m.Path: p})
+			if e == nil || !strings.Contains(e.Error(), tc.want) {
+				t.Fatalf("want %s got %v", tc.want, e)
+			}
+		})
+	}
 }

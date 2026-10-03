@@ -604,3 +604,11 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 缺失、错包、版本、变体摘要、源码/构建变化均有负例；重新生成私有载荷结构后即便逻辑变体摘要未变，旧下游产物也因依赖内容变化失效。定义新类型和同名不同包不能冒充原 enum 身份。引用元数据组合回归保持通过。
 
 独立审查发现并修复内部 origin 自动导入破坏 Go facade 的问题：合法普通 API 调用保留；不可导入定义包的 alias 变体语法给明确未支持诊断。公开 relay helper 的选择仍留工程账。消费者跨包 derive、外部 Option/Result 家族、单文件外部 enum 语法恢复、无源产物及远程发布未由本片完成，不视为批准延期。当前值型 ABI、比较/零值/入口策略不变，完整 enum/MVP 稳定尚未宣布。
+
+## 跨 module Option/Result（2026-10-03）
+
+[真实 CLI 验收](../tests/acceptance/builtin_external_test.go)用独立库/应用 go.mod 与第三个原生 Go 消费模块，覆盖构造、穷尽 match、`?`、固定/换序/部分 generic alias、复合类型实参、公开 alias 暴露的私有 payload、本包 Error derive 一步 From、cause/typed nil、None/Some(None)、非法动态 case 和嵌套 validator。生产者 JSON helper 另验证 Option 字段缺失/null 与普通值。三个模块各自 race/vet，库和应用重复生成字节一致。
+
+负例包括未登记 instance 的传播、伪同名 family、新 defined 类型、跨家族、非穷尽、外部 From helper 未授权、不可命名私有载荷、generic alias 约束违规、family marker 篡改及 artifact 缺失；移除 artifact 后原生 Go 消费继续执行。独立审查发现并修复类型参数误替换字段名和 canonical helper 擦除 alias 约束两项问题。
+
+协议升级 v2 需重生成，实际 Go origin/实例类型和完整产物指纹仍校验。未完成项：完全不可命名 payload、internal facade 增强操作、消费者跨包 derive、单文件/无源外部恢复、外部 From 注册入口及已列其他 T0 欠账；不把当前限制自动批准延期。比较协议另见[有界提案](rfcs/research/enum-equality-proposed.md)，本工程片不改变比较、零值或全入口校验，整体 MVP 尚未完成。

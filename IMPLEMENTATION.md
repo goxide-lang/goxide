@@ -913,3 +913,11 @@ Go 1.27.1 非 race 5×200ms 对照中，六组 typed IIFE/statement 小表达式
 全树回归另暴露生成 main 包的离线 export 查询尝试 VCS stamping；该内部 `go list -export` 现加 `-buildvcs=false`，仅关闭类型查询的二进制版本打标，不改变后续用户 go build 设置、源码选集或 artifact 指纹。独立复审确认，原有安装业务验收覆盖此回归。
 
 最终验收：全树 `go test -race -json ./...` **15 测试包 / 273 宿主顶层 / 663 子测试**通过，另 2 包无测试；5 个未受影响包使用 Go 有效测试缓存，其余含完整 acceptance 实际执行。全树 vet 通过；新增三个真实生成/消费模块分别 race/vet，两次产物确定。设计检查 **62 Markdown / 811 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过，机制命令不冒充 hgo 执行。实现及集成独立复审无剩余阻断。日志 `/tmp/enum-artifact-final-race.json`、`/tmp/enum-artifact-final-race.err`、`/tmp/enum-artifact-final-vet.log`、`/tmp/enum-artifact-final-design.log`、`/tmp/enum-artifact-drift.log`。修复前 VCS 查询失败的全树运行不作为通过证据；本次最终完整 acceptance 已覆盖该修复。工作分支提交并 push/fetch，完整 MVP 未标完成。
+
+## 外部 Option/Result registry（2026-10-03）
+
+基于 `9611e02e4fdfdb7cd497c9390d35c999f09964c0`，enum 协议 v2 新增 Families，来自真实 builtin registry，核验 generic origin/phantom 参数、固定变体与生产者具体实例 validator。恢复构造/match/`?`，透明泛型 alias 从实际 Go 类型映射 canonical 参数；私有 payload 有公开 alias 时按真实身份保持，完全不可命名形状仍留工程账。没有额外 From 自动注册、全 trait、Copy/borrow 或 enum ABI 变化。
+
+独立审查修复 alias 类型参数误替换字段名，以及 canonical ctor 擦除源 alias 约束；真实正反例验证。嵌套 Some(None) 连续问号暴露 identity stub 旧推断，逐签名重新 typecheck 修复；Q 个问号可能需要 Q 次包级检查，属于编译成本，不新增运行时框架。细节及未完成边界见[验收矩阵](docs/t0-acceptance.md#跨-module-optionresult2026-10-03)。比较用户新方向仅形成有界提案，未混入本工程切片。
+
+最终验证：全树 `go test -race -count=1 -json ./...` **15 测试包 / 276 宿主顶层 / 688 子测试**通过（另 2 包无测试，无测试缓存），全树 vet 通过。库、hgo 应用、原生 Go 消费模块各自 race/vet，重复生成一致；先前具体 enum 与引用 metadata 回归同在最终全树。设计检查 **63 Markdown / 820 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过，后者不代替真实 hgo 验收。实现、修复反例及比较设计分别独立审查无剩余阻断。日志 `/tmp/builtin-final-race.json`、`/tmp/builtin-final-race.err`、`/tmp/builtin-final-vet.log`、`/tmp/builtin-design.log`、`/tmp/builtin-final-docs.log`、`/tmp/builtin-alias-final.log`；独立生成复验 `/tmp/family-alias-review/app-fixed`、`/tmp/family-constraint-review/good-go`。最终全树包含字段名与alias约束修复，不沿用修复前运行的通过结论。阶段提交/push/fetch，完整 MVP 尚未完成。

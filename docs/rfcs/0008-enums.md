@@ -144,3 +144,13 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；hgo 不向第三方
 首片限定公开具体 enum 与源可用 local replace。消费者跨包 derive 协议、外部通用 Option/Result 家族元数据、单文件外部 enum 语法恢复未由本片完成；已有同 module builtin 能力保留。透明 alias 若指向消费者不可导入的 `internal` 定义包，普通公开 Go API 仍可使用，实际 enum 模式/构造语法明确诊断未支持；是否增加公开 relay helper 另需收敛，不冻结为永久延期。
 
 本片不迁移 interface＋值型 case，不引入 Copy/move，不改变比较/map key、非法零值或全公开入口的验证策略。元数据与具体 case 导出仍为内部/版本耦合协议，不承诺未来 payload 原位引用或 ABI 迁移无破坏。
+
+### 跨 module Option/Result 家族（2026-10-03）
+
+内部 enum 协议升级为 **v2**（产物 envelope 仍 v1，旧协议需重新生成）。`Families` 来自实际 builtin registry，独立记录 canonical family、固定顺序的 Some/None 或 Ok/Err、公开 generic case/constructor 与生产者已生成的具体 instance validator。只出现 builtin 的包同样产生 marker/artifact。消费者检查真实 Go 泛型 origin、全部 phantom 参数、透明 alias、case/constructor 精确类型和 validator 参数身份；名称或接口形状不授权协议。
+
+目录/local replace 恢复支持 `dep.Option[int]::Some(...)`、None、Result 构造、穷尽 match、既有 `?`；具体 alias、泛型参数换序、部分应用与复合实参从实际 Go alias 求得 canonical 参数。替换只作用于类型引用，不改 struct 字段名或函数参数名；生成代码保留源 alias 的实例化，Go 类型检查继续验证其约束。构造本身沿现有 helper 行为，不新增全入口验证；match/`?` 必须找到真实匹配的生产者 instance validator，不能退回只检查外层 case 的泛型 validator。
+
+私有载荷有实际公开透明类型 alias 时可保持类型身份；没有可见类型拼写的载荷、带私有字段且不可命名的匿名形状仍是增强操作的工程缺口，普通 API 调用/转发保留。native generic aliases 可消费，不代表 `.hgo` 已支持用户泛型定义。internal origin facade、无源产物、单文件外部 enum、消费者跨包 derive 仍未由本片补齐，不视为获批延期。
+
+[双模块执行验收](../../tests/acceptance/builtin_external_test.go)区分真实 hgo 构造/match/传播与第三个原生 Go 消费模块，检查 None、Some(None)、typed-nil、非法动态 case、嵌套非法载荷、别名约束与 metadata 缺失/篡改。serde 生产者 helper 的 Option 缺失/null 仍为 None，不依赖 Default。比较/零值/入口策略未在本片修改。

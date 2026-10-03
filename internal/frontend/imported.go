@@ -79,6 +79,31 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 				preludes[name] += code.String()
 				declarations[name] = append(declarations[name], d)
 			}
+			for ei, export := range p.enumMetadata.Families {
+				if !enumOriginImportAllowed(consumerPath, export.DefinitionPath) {
+					if unavailable[name] == nil {
+						unavailable[name] = map[string]string{}
+					}
+					unavailable[name][alias+"."+export.Name] = "sum syntax through an internal-origin alias is not yet supported; use the producer's public Go API"
+					continue
+				}
+				originAlias := alias
+				if export.DefinitionPath != path {
+					originAlias = fmt.Sprintf("__hgo_enum_origin_f%d_i%d_b%d", fi, ii, ei)
+					extraImports[name] += fmt.Sprintf("; import %s %q", originAlias, export.DefinitionPath)
+				}
+				prefix := fmt.Sprintf("__hgo_enum_family_import_f%d_i%d_b%d", fi, ii, ei)
+				d, code, reason := importedFamily(export, p.enumTypes, alias, originAlias, prefix)
+				if reason != "" {
+					if unavailable[name] == nil {
+						unavailable[name] = map[string]string{}
+					}
+					unavailable[name][alias+"."+export.Name] = reason
+					d.LookupName = ""
+				}
+				preludes[name] += code
+				declarations[name] = append(declarations[name], d)
+			}
 			seen := map[string]bool{}
 			for _, export := range p.enumMetadata.Enums {
 				seen[export.Name] = true
@@ -91,6 +116,9 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 					}
 					seen[d.Name] = true
 					if d.Family != "" {
+						if len(p.enumMetadata.Families) > 0 {
+							continue
+						}
 						family := families[d.Family]
 						if family == nil {
 							family = &enums.Decl{PackagePath: path, Name: alias + "." + d.Family, Family: d.Family}

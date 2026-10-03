@@ -25,6 +25,7 @@ type Decl struct {
 	Name, Marker, Validator string
 	// PackagePath is set only by the module compiler for trusted producer metadata.
 	PackagePath, LookupName string
+	ConstructorType         string
 	Instances               []Decl
 	Public                  bool
 	Family                  string
@@ -169,9 +170,9 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 		d := &declarations[i]
 		if l.byName[d.Name] == nil {
 			l.byName[d.Name] = d
-			if d.LookupName != "" {
-				l.byName[d.LookupName] = d
-			}
+		}
+		if d.LookupName != "" {
+			l.byName[d.LookupName] = d
 		}
 	}
 	localCount := len(l.decls)
@@ -488,6 +489,35 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 			}
 			if v == nil {
 				return "", l.err(t.start, "unknown enum variant "+name)
+			}
+			if d.ConstructorType != "" {
+				end := colon + 2
+				payload := ""
+				if v.Payload == "" {
+					if end+1 < len(l.ts) && l.ts[end+1].text == "(" {
+						return "", l.err(t.start, "unit variant takes no arguments")
+					}
+				} else {
+					if end+1 >= len(l.ts) || l.ts[end+1].text != "(" {
+						return "", l.err(t.start, "payload constructor requires argument")
+					}
+					close, err := l.close(end + 1)
+					if err != nil {
+						return "", err
+					}
+					payload, err = l.region(l.ts[end+1].end, l.ts[close].start, nil)
+					if err != nil {
+						return "", err
+					}
+					end = close
+				}
+				b.WriteString(l.copySource(cursor, t.start))
+				// Keep the exact source alias instantiation in Go's type checker;
+				// canonical helpers must not erase its type-parameter constraints.
+				b.WriteString("(" + d.ConstructorType + ")(" + v.Constructor + "(" + payload + "))")
+				cursor = l.ts[end].end
+				i = end
+				continue
 			}
 			b.WriteString(l.copySource(cursor, t.start))
 			b.WriteString(v.Constructor)

@@ -46,8 +46,8 @@ claims about future general ownership analysis.
 ## Imported sums in directory compilation
 
 An imported call can be used directly as `dep.Load()?`. Only families and concrete
-instances registered by a successfully compiled producer in the same module are
-eligible. The nominal Go package path and actual instantiated type must match;
+instances registered by a successfully compiled producer in the same module or
+a verified source-backed external artifact are eligible. The nominal Go package path and actual instantiated type must match;
 a native Go type named `Result` does not authorize propagation. Concrete exported
 validators preserve producer-side nested payload validation, including typed-nil
 and forged case rejection. Success/error argument types must be nameable in the
@@ -229,3 +229,11 @@ never executes the skipped arm; the temporary retains its private identity.
 `propagate_private_bool_test.go` validates real CLI output and independent race,
 including len/cap evaluation, nearest failure, and direct recover. Other missing
 witness shapes and remaining assignment guards are unchanged.
+
+The same registry is now recoverable from verified external v2 enum artifacts in
+directory builds with source-backed local replace. A public transparent payload
+alias may provide a nameable spelling while preserving its actual private type.
+Importing a From helper still does not register a conversion. Consecutive question
+signatures are resolved with a fresh package check after each replacement, so an
+identity stub cannot make an inner Option retain its outer Option type. This adds
+compile-time checks (up to one per question), not a runtime function frame.

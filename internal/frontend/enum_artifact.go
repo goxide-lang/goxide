@@ -21,7 +21,7 @@ import (
 
 const enumMetadataMarker = "HgoEnumMetadata"
 const enumMetadataFilename = ".hgo.enums.json"
-const enumMetadataVersion = 1
+const enumMetadataVersion = 2
 
 type enumVariantExport struct {
 	Name, Case, Constructor string
@@ -31,10 +31,21 @@ type enumExport struct {
 	Name, DefinitionPath, DefinitionName, Marker, Validator string
 	Variants                                                []enumVariantExport
 }
+type enumFamilyVariantExport struct {
+	Name, Case, Constructor string
+	PayloadIndex            int
+}
+type enumFamilyInstanceExport struct{ Validator string }
+type enumFamilyExport struct {
+	Name, Family, DefinitionPath, DefinitionName, Marker string
+	Variants                                             []enumFamilyVariantExport
+	Instances                                            []enumFamilyInstanceExport
+}
 type enumMetadata struct {
 	Version       int
 	Path, Package string
 	Enums         []enumExport
+	Families      []enumFamilyExport
 }
 
 func (m enumMetadata) Marker() string {
@@ -286,6 +297,29 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 				return bad("enum alias does not match a public defining declaration: " + export.Name)
 			}
 		}
+		for _, export := range a.Metadata.Families {
+			origin := a.Metadata
+			if export.DefinitionPath != path {
+				origin, e = load(export.DefinitionPath)
+				if e != nil {
+					return bad("builtin definition: " + e.Error())
+				}
+			}
+			found := false
+			for _, definition := range origin.Families {
+				if definition.Name == export.DefinitionName && definition.DefinitionPath == export.DefinitionPath && definition.DefinitionName == export.DefinitionName {
+					want := definition
+					want.Name = export.Name
+					if reflect.DeepEqual(want, export) {
+						found = true
+					}
+					break
+				}
+			}
+			if !found {
+				return bad("builtin alias does not match a public defining declaration: " + export.Name)
+			}
+		}
 		content, e := imp.PackageFingerprint(path)
 		if e != nil {
 			return bad(e.Error())
@@ -301,7 +335,7 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 }
 
 func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Importer) error {
-	if meta.Version != enumMetadataVersion || meta.Path != pkg.Path() || meta.Package != pkg.Name() || len(meta.Enums) == 0 {
+	if meta.Version != enumMetadataVersion || meta.Path != pkg.Path() || meta.Package != pkg.Name() || len(meta.Enums)+len(meta.Families) == 0 {
 		return fmt.Errorf("enum metadata package identity or version mismatch")
 	}
 	exported := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
@@ -419,7 +453,7 @@ func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Impor
 			}
 		}
 	}
-	return nil
+	return validateEnumFamilies(meta, pkg, imp)
 }
 
 // Reject duplicate object keys rather than accepting last-write-wins metadata.
@@ -469,6 +503,180 @@ func enumUniqueJSON(data []byte) error {
 	}
 	if _, e := d.Token(); e != io.EOF {
 		return fmt.Errorf("trailing metadata JSON")
+	}
+	return nil
+}
+
+// Verify generic protocol identities by substituting the family's own type
+// parameters into every case and constructor. No payload type spelling is used.
+func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Importer) error {
+	seen := map[string]bool{}
+	for _, d := range meta.Enums {
+		seen[d.Name] = true
+	}
+	public := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
+	unconstrained := func(list *types.TypeParamList, count int) bool {
+		if list.Len() != count {
+			return false
+		}
+		for i := 0; i < count; i++ {
+			c, ok := list.At(i).Constraint().Underlying().(*types.Interface)
+			if !ok || !c.Empty() {
+				return false
+			}
+		}
+		return true
+	}
+	for _, f := range meta.Families {
+		count := 1
+		names := []string{"Some", "None"}
+		payloads := []int{0, -1}
+		if f.Family == "Result" {
+			count = 2
+			names = []string{"Ok", "Err"}
+			payloads = []int{0, 1}
+		} else if f.Family != "Option" {
+			return fmt.Errorf("unknown builtin family %q", f.Family)
+		}
+		if !public(f.Name) || !public(f.DefinitionName) || f.DefinitionPath == "" || seen[f.Name] || len(f.Variants) != 2 || len(f.Instances) == 0 {
+			return fmt.Errorf("invalid or duplicate builtin family export %q", f.Name)
+		}
+		seen[f.Name] = true
+		if !token.IsIdentifier(f.Marker) || token.IsExported(f.Marker) || f.Marker == "_" {
+			return fmt.Errorf("invalid builtin private marker %q", f.Marker)
+		}
+		origin := pkg
+		var e error
+		if f.DefinitionPath != pkg.Path() {
+			origin, e = imp.Import(f.DefinitionPath)
+			if e != nil {
+				return e
+			}
+		}
+		obj, ok := origin.Scope().Lookup(f.DefinitionName).(*types.TypeName)
+		if !ok {
+			return fmt.Errorf("missing builtin family definition %s", f.DefinitionName)
+		}
+		canonical, ok := types.Unalias(obj.Type()).(*types.Named)
+		if !ok || canonical.Obj().Pkg() == nil || canonical.Obj().Pkg().Path() != f.DefinitionPath || canonical.Obj().Name() != f.DefinitionName || canonical.TypeArgs().Len() != 0 || !unconstrained(canonical.TypeParams(), count) {
+			return fmt.Errorf("invalid builtin family definition %s", f.DefinitionName)
+		}
+		exposed, ok := pkg.Scope().Lookup(f.Name).(*types.TypeName)
+		if !ok {
+			return fmt.Errorf("missing builtin export %s", f.Name)
+		}
+		target, ok := types.Unalias(exposed.Type()).(*types.Named)
+		if !ok || !types.Identical(target.Origin(), canonical) {
+			return fmt.Errorf("builtin alias identity mismatch: %s", f.Name)
+		}
+		args := make([]types.Type, count)
+		for i := range args {
+			args[i] = canonical.TypeParams().At(i)
+		}
+		concrete, e := types.Instantiate(nil, canonical, args, true)
+		if e != nil {
+			return e
+		}
+		iface, ok := concrete.Underlying().(*types.Interface)
+		if !ok || !iface.IsMethodSet() {
+			return fmt.Errorf("builtin family is not an interface: %s", f.Name)
+		}
+		iface.Complete()
+		if iface.NumMethods() != 1 {
+			return fmt.Errorf("builtin marker method set mismatch: %s", f.Name)
+		}
+		marker := iface.Method(0)
+		sig, ok := marker.Type().(*types.Signature)
+		if !ok || marker.Name() != f.Marker || marker.Pkg() == nil || marker.Pkg().Path() != f.DefinitionPath || sig.Params().Len() != count || sig.Results().Len() != 0 || sig.Variadic() {
+			return fmt.Errorf("builtin marker signature mismatch: %s", f.Name)
+		}
+		for i, a := range args {
+			if !types.Identical(sig.Params().At(i).Type(), a) {
+				return fmt.Errorf("builtin phantom parameter mismatch: %s", f.Name)
+			}
+		}
+		for i, v := range f.Variants {
+			if v.Name != names[i] || v.PayloadIndex != payloads[i] || !public(v.Constructor) {
+				return fmt.Errorf("builtin variant protocol mismatch: %s", f.Name)
+			}
+			if v.PayloadIndex < 0 {
+				if v.Case != "" {
+					return fmt.Errorf("Option None must not name a case type")
+				}
+			} else {
+				if !public(v.Case) {
+					return fmt.Errorf("invalid builtin case %q", v.Case)
+				}
+				obj, ok := origin.Scope().Lookup(v.Case).(*types.TypeName)
+				if !ok {
+					return fmt.Errorf("missing builtin case %s", v.Case)
+				}
+				caseType, ok := types.Unalias(obj.Type()).(*types.Named)
+				if !ok || caseType.Obj().Pkg() == nil || caseType.Obj().Pkg().Path() != f.DefinitionPath || !unconstrained(enumGenericParameters(obj.Type()), count) {
+					return fmt.Errorf("invalid builtin case identity %s", v.Case)
+				}
+				actual, e := types.Instantiate(nil, obj.Type(), args, true)
+				if e != nil {
+					return e
+				}
+				st, ok := actual.Underlying().(*types.Struct)
+				if !ok || st.NumFields() != 1 || st.Field(0).Name() != "Value" || st.Field(0).Embedded() || !types.Identical(st.Field(0).Type(), args[v.PayloadIndex]) || !types.Implements(actual, iface) {
+					return fmt.Errorf("builtin case payload or marker mismatch: %s", v.Case)
+				}
+			}
+			fn, ok := origin.Scope().Lookup(v.Constructor).(*types.Func)
+			if !ok {
+				return fmt.Errorf("missing builtin constructor %s", v.Constructor)
+			}
+			ctor, ok := fn.Type().(*types.Signature)
+			if !ok || ctor.Recv() != nil || ctor.Variadic() || !unconstrained(ctor.TypeParams(), count) {
+				return fmt.Errorf("builtin constructor generic signature mismatch: %s", v.Constructor)
+			}
+			instantiated, e := types.Instantiate(nil, ctor, args, true)
+			if e != nil {
+				return e
+			}
+			bound := instantiated.(*types.Signature)
+			arity := 1
+			if v.PayloadIndex < 0 {
+				arity = 0
+			}
+			if bound.Params().Len() != arity || bound.Results().Len() != 1 || !types.Identical(bound.Results().At(0).Type(), concrete) {
+				return fmt.Errorf("builtin constructor result or arity mismatch: %s", v.Constructor)
+			}
+			if arity == 1 && !types.Identical(bound.Params().At(0).Type(), args[v.PayloadIndex]) {
+				return fmt.Errorf("builtin constructor payload mismatch: %s", v.Constructor)
+			}
+		}
+		validators := map[string]bool{}
+		for _, instance := range f.Instances {
+			if !public(instance.Validator) || validators[instance.Validator] {
+				return fmt.Errorf("invalid or duplicate builtin validator %s", instance.Validator)
+			}
+			validators[instance.Validator] = true
+			fn, ok := origin.Scope().Lookup(instance.Validator).(*types.Func)
+			if !ok {
+				return fmt.Errorf("missing builtin validator %s", instance.Validator)
+			}
+			s, ok := fn.Type().(*types.Signature)
+			if !ok || s.Recv() != nil || s.Variadic() || s.TypeParams().Len() != 0 || s.Params().Len() != 1 || s.Results().Len() != 0 {
+				return fmt.Errorf("builtin instance validator signature mismatch: %s", instance.Validator)
+			}
+			n, ok := types.Unalias(s.Params().At(0).Type()).(*types.Named)
+			if !ok || !types.Identical(n.Origin(), canonical) || n.TypeArgs().Len() != count {
+				return fmt.Errorf("builtin instance validator family mismatch: %s", instance.Validator)
+			}
+		}
+	}
+	return nil
+}
+
+func enumGenericParameters(t types.Type) *types.TypeParamList {
+	switch t := t.(type) {
+	case *types.Named:
+		return t.TypeParams()
+	case *types.Alias:
+		return t.TypeParams()
 	}
 	return nil
 }

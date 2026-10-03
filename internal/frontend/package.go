@@ -24,6 +24,7 @@ import (
 // PackageResult keeps a separate output and origin map for every source file.
 type PackageResult struct {
 	enumMarkerFile   string
+	enumTypes        *types.Package
 	enumMetadata     enumMetadata
 	enumImports      map[string]enumMetadata
 	references       refs.Metadata
@@ -344,7 +345,8 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			break
 		}
 	}
-	if len(result.enumMetadata.Enums) > 0 {
+	result.enumTypes = checkedTypes
+	if len(result.enumMetadata.Enums) > 0 || len(result.enumMetadata.Families) > 0 {
 		if err := validateEnumMetadata(result.enumMetadata, checkedTypes, imp); err != nil {
 			return result, err
 		}

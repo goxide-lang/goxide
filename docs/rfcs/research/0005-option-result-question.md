@@ -334,3 +334,11 @@ range 源新增 string、整数、channel、数组和数组指针，沿用原生
 现对已定型、不可直接命名且左臂未类型化的 &&/||，在改写任何 arm 前执行已有 effects preflight；静态函数签名能提供原类型见证时复用 contextual planner。见证只取零值，不调用右臂函数，不读取外部存储；选中分支才执行传播/业务调用。保留私有名义 bool 身份，不新增转换、IIFE 或 guard，失败仍退出最近用户函数/闭包。
 
 [真实跨包 CLI 验收](../../../tests/acceptance/propagate_private_bool_test.go)覆盖 interface 中真实类型、短路次数、len/cap 求值、未选 nil Result、失败与 defer、显式闭包及含传播的直接 recover。生成模块单独三项 race 测试与 vet，重复输出一致且无 Assignment/Catch/Fail；typed bool 与 private bool 不兼容、private bool 传 builtin bool 仍拒绝。本组不扩大未知动态/方法/泛型 witness，不删除剩余 unsafe/guard，也不宣布所有私有表达式长尾完成。
+
+### 6.19 外部 builtin registry 恢复（2026-10-03）
+
+两个独立 go.mod 经 local replace 的真实执行已接通，元数据细节见 [enum RFC](../0008-enums.md#跨-module-optionresult-家族2026-10-03)。`?` 仍按真实 canonical 类型、当前函数返回类型和生产者具体 validator 处理，Option/Result 不跨家族转换；Result typed-nil error 保持原动态接口值。没有匹配的具体 validator 时拒绝传播/匹配，不自行弱化嵌套验证。
+
+From **不因导入外部包而自动注册**。当前实际源入口仍是本包 Error derive 的明确 `#[from]`：先普通 Go 可赋值，再唯一的显式一步 Source/Target/helper；外部同名 helper、动态错误类型、两跳链均不自动选用。外部 Result 可传播进本包已注册目标，但外部目标只有 helper 名称还不足以授权转换。这是可见性/注册工程边界，不是全 trait 实现。
+
+连续 `outerOption()?` 再对其成功载荷 `?` 暴露了旧 identity typing stub 的陈旧推断。现在每替换一个问号签名后重新类型检查，再解析下一问号；否则 `Some(None)` 的内层值可能错误沿用外层 validator。此改动不移动运行时求值或早退目标，但 Q 个问号可能引起 Q 轮包级类型检查；未声明编译成本不变。保留[实际正反例](../../../tests/acceptance/builtin_external_test.go)及既有多上下文回归。

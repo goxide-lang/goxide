@@ -136,6 +136,63 @@ func (l *lowerer) qualified(i int) (*Decl, int, bool, error) {
 		name = d.Name
 		j = end + 1
 	}
+	if family := l.byName[name]; family != nil && family.PackagePath != "" && family.Family != "" && family.LookupName != "" {
+		args := []string{}
+		if j < len(l.ts) && l.ts[j].text == "[" {
+			end, err := l.close(j)
+			if err != nil {
+				return nil, 0, false, err
+			}
+			begin := j + 1
+			for k := begin; k <= end; k++ {
+				if k == end || l.ts[k].text == "," {
+					if k == begin {
+						return nil, 0, false, l.err(l.ts[j].start, "empty builtin type argument")
+					}
+					args = append(args, string(l.src[l.ts[begin].start:l.ts[k-1].end]))
+					begin = k + 1
+				} else if l.ts[k].text == "[" || l.ts[k].text == "(" || l.ts[k].text == "{" {
+					k, err = l.close(k)
+					if err != nil {
+						return nil, 0, false, err
+					}
+				}
+			}
+			j = end + 1
+		}
+		if j+2 < len(l.ts) && l.ts[j].text == ":" && l.ts[j+1].text == ":" {
+			if len(args) != len(family.TypeParams) {
+				return nil, 0, false, l.err(l.ts[i].start, "imported sum requires its explicit alias type arguments")
+			}
+			replacements := map[string]string{}
+			for k, p := range family.TypeParams {
+				replacements[p] = args[k]
+			}
+			canonical := make([]string, len(family.TypeArgs))
+			for k, arg := range family.TypeArgs {
+				var err error
+				canonical[k], err = substituteSumType(arg, replacements)
+				if err != nil {
+					return nil, 0, false, l.err(l.ts[i].start, err.Error())
+				}
+			}
+			d := *family
+			d.TypeArgs = canonical
+			suffix := "[" + strings.Join(canonical, ",") + "]"
+			d.Name = name
+			if len(args) > 0 {
+				d.Name += "[" + strings.Join(args, ",") + "]"
+			}
+			d.ConstructorType = d.Name
+			d.Validator = "__hgo_enum_infer"
+			d.Variants = append([]Variant(nil), family.Variants...)
+			for k := range d.Variants {
+				d.Variants[k].CaseName += suffix
+				d.Variants[k].Constructor += suffix
+			}
+			return &d, j, true, nil
+		}
+	}
 	if j+2 < len(l.ts) && l.ts[j].text == ":" && l.ts[j+1].text == ":" {
 		return l.byName[name], j, true, nil
 	}
@@ -485,4 +542,37 @@ func withoutPayloadAttrs(s string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// Substitute alias parameters as syntax nodes, never substring replacement.
+func substituteSumType(source string, args map[string]string) (string, error) {
+	fs := token.NewFileSet()
+	x, err := parser.ParseExprFrom(fs, "", source, 0)
+	if err != nil {
+		return "", err
+	}
+	var changes []edit
+	var walk func(ast.Node) bool
+	walk = func(n ast.Node) bool {
+		switch t := n.(type) {
+		case *ast.SelectorExpr:
+			// Neither the package qualifier nor selected member is a type parameter.
+			return false
+		case *ast.Field:
+			// Field and parameter names are declarations, not type references.
+			ast.Inspect(t.Type, walk)
+			return false
+		case *ast.Ident:
+			if arg, ok := args[t.Name]; ok {
+				changes = append(changes, edit{int(t.Pos()) - 1, int(t.End()) - 1, arg})
+			}
+		}
+		return true
+	}
+	ast.Inspect(x, walk)
+	for i := len(changes) - 1; i >= 0; i-- {
+		e := changes[i]
+		source = source[:e.start] + e.text + source[e.end:]
+	}
+	return source, nil
 }

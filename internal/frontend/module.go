@@ -306,7 +306,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 					return e
 				}
 			}
-			if len(checked.enumMetadata.Enums) > 0 || len(checked.enumMetadata.Families) > 0 {
+			if checked.enumMetadata.present() {
 				provider, ok := packageImporter.(refs.ArtifactImporter)
 				if !ok {
 					return fmt.Errorf("enum artifact source importer unavailable")

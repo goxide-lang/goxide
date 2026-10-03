@@ -77,6 +77,15 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		cfg.enumGoImports[n] += p
 	}
 
+	defaultPrelude, defaultImports, defaultProtocols := importedDefaults(path, sources, metadata)
+	cfg.defaultImports = defaultProtocols
+	for n, p := range defaultPrelude {
+		cfg.preludes[n] += p
+	}
+	for n, p := range defaultImports {
+		cfg.enumGoImports[n] += p
+	}
+
 	dependencies := map[string]*macros.Package{}
 	for path, p := range metadata {
 		if p.macros != nil {

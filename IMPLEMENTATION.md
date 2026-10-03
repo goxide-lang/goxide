@@ -957,3 +957,11 @@ hgo 直接 enum 比较诊断；已知危险载荷的包裹/混合比较、switch
 模板可直接写 `len($x)` / `cap($x)`，无需 wrapper。定义端局部/函数绑定优先，变量、类型与 import 不能误当 builtin。编译器标记在 DSL 降低后恢复原生 Go 调用，保留常量上下文、数组/数组指针的不求值规则、实参次数与 `?` 所在 frame。调用端局部变量/常量与 import 按绑定改名；struct 字段键和 map 表达式键区分处理。
 
 [单元执行](internal/macros/builtins_test.go)与[真实生成模块验收](tests/acceptance/macro_builtins_test.go)覆盖嵌套/跨包宏、局部及 import 遮蔽、定义端同名声明、常量/数组、None/Some 传播次数，以及生成模块 race/vet。调用包级同名声明和实际覆盖调用点的局部 named type 目前明确诊断；无关作用域的类型名称保持不变。它们是工程边界，不自动视为获批延期。其他 builtin（含 append/make/new）未开放，不宣称完整 Rust 宏或全面卫生已完成。零值/公开入口契约未修改。
+
+## 跨包已登记 Default 字段（2026-10-03）
+
+目录/模块编译恢复生产包显式登记的具体 Default：消费 struct 的 `m.E` / `m.Settings` 字段可调用生产包 helper，包含透明 alias 和手动实现。没有登记的同名 `DefaultT` 函数、新 defined 类型不继承协议；不猜 helper 名。schema v5 记录目标、canonical 定义、helper 及 derive/manual 来源，核验真实 named 身份与精确非泛型 `func() T` 签名，alias 的来源必须与定义包一致。旧产物需重新生成，内容、依赖及 marker 绑定继续核验；Default-only 包也写出 artifact。
+
+[真实 CLI 三模块验收](tests/acceptance/default_external_test.go)覆盖私有字段的业务默认值、字段调用次数、跨文件同名 import、透明 relay、宏 len 的 import 改名组合、serde skip 共用 Default，以及独立原生 Go 消费；三个生成/消费模块分别 race/vet，重复生成一致。[协议反例](internal/frontend/default_artifact_test.go)覆盖 helper 变量/泛型/参数/错误返回、假注册、new defined、alias 来源改写及陈旧 producer。原跨包 Default 字段负例已迁为[真实源包正例](tests/acceptance/manual_default_test.go)，外部目标 impl 仍拒绝。
+
+struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload Default。此次不放开 enum 的外部载荷类型限制，不新增跨包 Clone/Debug/Serialize/Deserialize、完整 trait 或字段 adapters。internal-origin 不可直接导入的协议暂不可用，普通公开 Go API 保留。单文件外部协议恢复、容器默认语义及零值/公开入口契约不在本片修改；普通 Option 缺失/null 到 None 仍独立于 Default。

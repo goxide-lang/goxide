@@ -202,3 +202,5 @@ enum Event { User(User), Closed, }
 手写 PartialEq 不自动成为原生 map 键协议：即使底层全是整数/string，业务相等也可能与 Go 查找不同；含该字段的结构键同样拒绝自动内容派生。手写 Eq 本身不增加 map 键资格；若 PartialEq 仍由派生生成且原先的结构一致性证明成立，则不因 Eq 的手写标记误拒。float/complex 的默认 PartialEq 不变；用户可以显式编写把 NaN 视为相等的具体 wrapper，并自行承诺 Eq。
 
 metadata v4 在已验证身份、helper 签名和 Eq 资格之外记录 PartialEq/Eq 各自的 derive/manual 来源，透明 alias 必须与定义包来源一致，不能通过 relay 改写来源。内部协议升级需重生成产物，不修改普通 Go ABI。目标仍限具体 scalar/struct/array/slice/map 与已登记 enum；不引入用户泛型、自动循环图比较或额外 trait dispatch。宏模板生成比较 impl 仍受上游语法限制，不由注册阶段的位置推导为已支持。手写体中的源级 enum 直接比较限制仍保持；业务规则可以显式匹配变体。
+
+当前内部协议已升级 **v5**，新增显式 Default 注册及 canonical 来源核验，Default-only 包也发行 artifact；具体消费边界见[派生 RFC](0013-derive.md#跨包已登记-default-字段2026-10-03)。不改变 enum ABI、外部载荷类型范围、零值或公开入口验证契约。

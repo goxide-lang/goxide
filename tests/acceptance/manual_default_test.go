@@ -27,17 +27,26 @@ func TestManualDefaultInstalledBusinessRace(t *testing.T) {
 		t.Fatalf("CLI output %q, want %q", got, want)
 	}
 
-	// A public Go constructor is usable above, but does not grant a consuming
-	// package automatic protocol registration for a qualified field type.
+	// Explicit Default registration now crosses source packages. Defining an
+	// implementation for a foreign target remains unsupported.
 	foreign := t.TempDir()
 	packagesWrite(t, foreign, "go.mod", "module manualdefault.example/rejected\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
 	packagesWrite(t, foreign, "config/types.hgo", "package config\ntype Settings struct { Port int }\nimpl Default for Settings { func default() Settings { return Settings{Port:9090} } }\n")
-	for _, body := range []string{
+	for i, body := range []string{
 		"#[derive(Default)]\ntype Service struct { Value config.Settings }\n",
 		"impl Default for config.Settings { func default() config.Settings { return config.Settings{} } }\n",
 	} {
 		packagesWrite(t, foreign, "main.hgo", "package main\nimport \"manualdefault.example/rejected/config\"\n"+body+"func main(){}\n")
-		output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "rejected"), foreign)
+		destination := filepath.Join(t.TempDir(), "generated")
+		output := deliveryCommand(t, outside, cli, i == 0, nil, "transpile", "-o", destination, foreign)
+		if i == 0 {
+			packagesWrite(t, destination, "default_test.go", `package main
+import "testing"
+func TestRegisteredForeignDefault(t *testing.T){if DefaultService().Value.Port!=9090{t.Fatal("foreign Default not called")}}
+`)
+			deliveryCommand(t, destination, tool, true, nil, "test", "-race", "-count=1", "./...")
+			continue
+		}
 		if !strings.Contains(strings.ToLower(output), "default") || !strings.Contains(output, "main.hgo:") {
 			t.Fatalf("cross-package rejection lost protocol/source: %s", output)
 		}

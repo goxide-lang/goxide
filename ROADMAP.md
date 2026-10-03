@@ -225,3 +225,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 宏 builtin 首片（2026-10-03）
 
 按宏 → enum → 指针顺序补模板直接 len/cap，保原生求值及定义端绑定。调用包级同名声明与局部 named type 边界仍留账；其他 builtin 未开放。见[阶段验收](docs/t0-acceptance.md#宏-builtin-首片lencap2026-10-03)。下一独立片为已登记跨包 Default 字段协议，不改零值/公开入口契约。
+
+### 跨包 Default 字段恢复（2026-10-03）
+
+已接通具体类型显式 Default 的跨包字段消费，含 derive/manual 来源、透明 alias、真实 helper 签名及 artifact 身份；见[验收](docs/t0-acceptance.md#跨包已登记-default-字段2026-10-03)。其他字段派生、单文件外部元数据、不可命名载荷仍分别留账，零值与公开入口契约待明确，不宣称完整 MVP 已完成。

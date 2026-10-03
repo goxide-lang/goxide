@@ -76,7 +76,18 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 	canonical := map[string]enumExport{}
 	families := map[string]enumFamilyExport{}
 	equalities := map[string]equalityExport{}
+	defaults := map[string]defaultExport{}
 	for _, file := range sortedResultNames(result) {
+		for name, source := range result.Files[file].defaultRegistrations {
+			if !ast.IsExported(name) {
+				continue
+			}
+			x := defaultExport{Name: name, DefinitionPath: path, DefinitionName: name, Helper: "Default" + name, Source: source}
+			if prior, ok := defaults[path+"."+name]; ok && prior != x {
+				return meta, fmt.Errorf("conflicting Default registrations for %s", name)
+			}
+			defaults[path+"."+name] = x
+		}
 		for name, derive := range result.Files[file].equalityDerives {
 			if !ast.IsExported(name) || !derive.PartialEq {
 				continue
@@ -134,6 +145,9 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 		}
 	}
 	for _, m := range result.enumImports {
+		for _, x := range m.Defaults {
+			defaults[x.DefinitionPath+"."+x.DefinitionName] = x
+		}
 		for _, x := range m.Equality {
 			equalities[x.DefinitionPath+"."+x.DefinitionName] = x
 		}
@@ -154,6 +168,10 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 			continue
 		}
 		origin := named.Obj()
+		if x, ok := defaults[origin.Pkg().Path()+"."+origin.Name()]; ok {
+			x.Name = name
+			meta.Defaults = append(meta.Defaults, x)
+		}
 		if x, ok := equalities[origin.Pkg().Path()+"."+origin.Name()]; ok {
 			x.Name = name
 			meta.Equality = append(meta.Equality, x)
@@ -177,6 +195,7 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 	}
 	sort.Slice(meta.Enums, func(i, j int) bool { return meta.Enums[i].Name < meta.Enums[j].Name })
 	sort.Slice(meta.Families, func(i, j int) bool { return meta.Families[i].Name < meta.Families[j].Name })
+	sort.Slice(meta.Defaults, func(i, j int) bool { return meta.Defaults[i].Name < meta.Defaults[j].Name })
 	sort.Slice(meta.Equality, func(i, j int) bool { return meta.Equality[i].Name < meta.Equality[j].Name })
 	return meta, nil
 }

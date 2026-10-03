@@ -53,7 +53,7 @@ func fields(spec *ast.TypeSpec) (*ast.StructType, error) {
 
 // Generate emits helpers rather than automatically modifying Go method sets.
 // Non-builtin named fields require matching local helpers, checked by frontend.
-func Generate(kind string, spec *ast.TypeSpec) (string, map[string]string, error) {
+func Generate(kind string, spec *ast.TypeSpec, defaults ...func(ast.Expr) (string, bool)) (string, map[string]string, error) {
 	s, err := fields(spec)
 	if err != nil {
 		return "", nil, err
@@ -65,7 +65,7 @@ func Generate(kind string, spec *ast.TypeSpec) (string, map[string]string, error
 		fmt.Fprintf(&b, "func Default%s() %s { var out %s\n", spec.Name.Name, spec.Name.Name, spec.Name.Name)
 		for _, f := range s.Fields.List {
 			for _, n := range f.Names {
-				x, e := DefaultValue(f.Type)
+				x, e := DefaultValue(f.Type, defaults...)
 				if e != nil {
 					return "", nil, fmt.Errorf("field %s: %w", n.Name, e)
 				}
@@ -194,7 +194,7 @@ func (g *generator) debug(t ast.Expr, x string) (string, error) {
 }
 
 // GenerateEnum retains nominal variant identity and delegates supported payloads.
-func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) {
+func GenerateEnum(kind string, d enums.Decl, defaults ...func(ast.Expr) (string, bool)) (string, map[string]string, error) {
 	if kind == "Default" {
 		var selected *enums.Variant
 		for i := range d.Variants {
@@ -213,7 +213,7 @@ func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) 
 		argument := ""
 		if selected.Type != nil {
 			var err error
-			argument, err = DefaultValue(selected.Type)
+			argument, err = DefaultValue(selected.Type, defaults...)
 			if err != nil {
 				return "", nil, fmt.Errorf("default variant %s: %w", selected.Name, err)
 			}
@@ -257,7 +257,12 @@ func GenerateEnum(kind string, d enums.Decl) (string, map[string]string, error) 
 
 // DefaultValue selects only explicit prototype implementations. Local named
 // helper identity is validated by the frontend, never inferred from spelling.
-func DefaultValue(t ast.Expr) (string, error) {
+func DefaultValue(t ast.Expr, defaults ...func(ast.Expr) (string, bool)) (string, error) {
+	for _, resolve := range defaults {
+		if value, ok := resolve(t); ok {
+			return value, nil
+		}
+	}
 	switch x := t.(type) {
 	case *ast.Ident:
 		switch x.Name {

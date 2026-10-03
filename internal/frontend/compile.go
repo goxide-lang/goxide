@@ -29,6 +29,7 @@ import (
 )
 
 type Result struct {
+	defaultRegistrations    map[string]string
 	manualEquality          map[string]manualEquality
 	matchReferenceTemps     map[string]bool
 	Diagnostics             *sourcemap.Map
@@ -67,15 +68,17 @@ type model struct {
 	source, from string
 }
 type generator struct {
-	enumPosition *token.Position
-	provenance   *sourcemap.Map
-	fs           *token.FileSet
-	file         string
-	models       map[string]model
-	enumDecls    map[string]*enums.Decl
-	alias        string
-	helpers      strings.Builder
-	next         int
+	importedDefaults   map[string]string
+	defaultImportPaths map[string]string
+	enumPosition       *token.Position
+	provenance         *sourcemap.Map
+	fs                 *token.FileSet
+	file               string
+	models             map[string]model
+	enumDecls          map[string]*enums.Decl
+	alias              string
+	helpers            strings.Builder
+	next               int
 }
 
 var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
@@ -86,6 +89,7 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
+	defaultImports  map[string]map[string]string
 	builtinTypes    map[string]macros.TypeContext
 	macros          *macros.Package
 	macroImporter   types.Importer
@@ -391,6 +395,19 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		return Result{}, stageError("macros.ResolveBuiltins", err)
 	}
 	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
+	if cfg != nil {
+		g.importedDefaults = cfg.defaultImports[filename]
+	}
+	if len(g.importedDefaults) > 0 {
+		g.defaultImportPaths = defaultImportPaths(f, builtinImporter)
+		if original, e := parseSourceImports(filename, originalSource); e == nil {
+			for alias, path := range defaultImportPaths(original, builtinImporter) {
+				if g.defaultImportPaths[alias] == "" {
+					g.defaultImportPaths[alias] = path
+				}
+			}
+		}
+	}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
 		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && !strings.HasPrefix(id.Name, "__hgo_ref_") && id.Name != "__hgo_question" && id.Name != "__hgo_print" && id.Name != "__hgo_println" {
@@ -703,6 +720,15 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if err = applyManualEquality(filename, equalityDerives, allEqualityManual, specs, g.models); err != nil {
 		return Result{}, err
 	}
+	defaultRegistrations := map[string]string{}
+	for _, m := range ordered {
+		if m.attrs.derive["Default"] {
+			defaultRegistrations[m.name] = "derive"
+		}
+	}
+	for n := range manual {
+		defaultRegistrations[n] = "manual"
+	}
 	defaultHelpers := map[string]bool{}
 	for n, m := range g.models {
 		if m.attrs.derive["Default"] {
@@ -755,12 +781,12 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				if kind == "Error" {
 					code, im, e = deriveextras.GenerateEnumError(*m.enum)
 				} else {
-					code, im, e = deriveextras.GenerateEnum(kind, *m.enum)
+					code, im, e = deriveextras.GenerateEnum(kind, *m.enum, g.importedDefault)
 				}
 			} else if kind == "Error" {
 				code, im, e = deriveextras.GenerateError(m.spec, m.attrs.message, m.source, m.from)
 			} else {
-				code, im, e = deriveextras.Generate(kind, m.spec)
+				code, im, e = deriveextras.Generate(kind, m.spec, g.importedDefault)
 			}
 			if e != nil {
 				return fail(m.line, e.Error())
@@ -940,7 +966,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			return Result{}, err
 		}
 	}
-	return Result{equalityDerives: equalityDerives, matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
+	return Result{defaultRegistrations: defaultRegistrations, equalityDerives: equalityDerives, matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer
@@ -1025,7 +1051,7 @@ func (g *generator) emitModel(m model) error {
 			if err := g.validateExtra(f.typ, "Default"); err != nil {
 				return fmt.Errorf("serde default/skip field %s: %w", f.name, err)
 			}
-			value, err := deriveextras.DefaultValue(f.typ)
+			value, err := deriveextras.DefaultValue(f.typ, g.importedDefault)
 			// Explicit default/skip uses the builtin Option Default (None).
 			// Avoid re-resolving type arguments inside the visitor scope.
 			if optional {
@@ -1236,6 +1262,9 @@ func protectedLines(source []byte) map[int]bool {
 }
 func (g *generator) validateExtra(t ast.Expr, kind string) error {
 	if kind == "Default" {
+		if _, ok := g.importedDefault(t); ok {
+			return nil
+		}
 		if x, ok := t.(*ast.IndexExpr); ok {
 			if id, ok := x.X.(*ast.Ident); ok && id.Name == "Option" {
 				return nil

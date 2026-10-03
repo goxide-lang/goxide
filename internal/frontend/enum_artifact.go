@@ -21,7 +21,7 @@ import (
 
 const enumMetadataMarker = "HgoEnumMetadata"
 const enumMetadataFilename = ".hgo.enums.json"
-const enumMetadataVersion = 4
+const enumMetadataVersion = 5
 
 type enumVariantExport struct {
 	Name, Case, Constructor string
@@ -49,7 +49,10 @@ type equalityExport struct {
 	Eq                                           bool
 }
 
+type defaultExport struct{ Name, DefinitionPath, DefinitionName, Helper, Source string }
+
 type enumMetadata struct {
+	Defaults      []defaultExport
 	Version       int
 	Path, Package string
 	Enums         []enumExport
@@ -57,7 +60,9 @@ type enumMetadata struct {
 	Equality      []equalityExport
 }
 
-func (m enumMetadata) present() bool { return len(m.Enums)+len(m.Families)+len(m.Equality) > 0 }
+func (m enumMetadata) present() bool {
+	return len(m.Enums)+len(m.Families)+len(m.Equality)+len(m.Defaults) > 0
+}
 
 func (m enumMetadata) Marker() string {
 	data, _ := json.Marshal(m)
@@ -352,6 +357,27 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 				return bad("equality alias does not match a public defining declaration: " + export.Name)
 			}
 		}
+		for _, export := range a.Metadata.Defaults {
+			origin := a.Metadata
+			if export.DefinitionPath != path {
+				origin, e = load(export.DefinitionPath)
+				if e != nil {
+					return bad("Default definition: " + e.Error())
+				}
+			}
+			found := false
+			for _, definition := range origin.Defaults {
+				if definition.Name == export.DefinitionName && definition.DefinitionPath == export.DefinitionPath && definition.DefinitionName == export.DefinitionName {
+					want := definition
+					want.Name = export.Name
+					found = want == export
+					break
+				}
+			}
+			if !found {
+				return bad("Default alias does not match a public defining declaration: " + export.Name)
+			}
+		}
 
 		content, e := imp.PackageFingerprint(path)
 		if e != nil {
@@ -489,7 +515,10 @@ func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Impor
 	if err := validateEnumFamilies(meta, pkg, imp); err != nil {
 		return err
 	}
-	return validateEqualityMetadata(meta, pkg, imp)
+	if err := validateEqualityMetadata(meta, pkg, imp); err != nil {
+		return err
+	}
+	return validateDefaultMetadata(meta, pkg, imp)
 }
 
 // Reject duplicate object keys rather than accepting last-write-wins metadata.
@@ -765,6 +794,55 @@ func validateEqualityMetadata(meta enumMetadata, pkg *types.Package, imp types.I
 		sig, ok := fn.Type().(*types.Signature)
 		if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 || sig.Params().Len() != 2 || sig.Results().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), target) || !types.Identical(sig.Params().At(1).Type(), target) || !types.Identical(sig.Results().At(0).Type(), types.Typ[types.Bool]) {
 			return fmt.Errorf("equality helper signature mismatch: %s", x.Helper)
+		}
+	}
+	return nil
+}
+
+func validateDefaultMetadata(meta enumMetadata, pkg *types.Package, imp types.Importer) error {
+	public := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
+	seen := map[string]bool{}
+	for _, x := range meta.Defaults {
+		if !public(x.Name) || !public(x.DefinitionName) || !public(x.Helper) || x.DefinitionPath == "" || seen[x.Name] {
+			return fmt.Errorf("invalid or duplicate Default export %q", x.Name)
+		}
+		if x.Source != "derive" && x.Source != "manual" {
+			return fmt.Errorf("invalid Default source for %s", x.Name)
+		}
+		seen[x.Name] = true
+		origin := pkg
+		if x.DefinitionPath != pkg.Path() {
+			var err error
+			if imp == nil {
+				return fmt.Errorf("missing Default definition importer for %s", x.DefinitionPath)
+			}
+			origin, err = imp.Import(x.DefinitionPath)
+			if err != nil {
+				return err
+			}
+			if origin == nil {
+				return fmt.Errorf("missing Default definition package %s", x.DefinitionPath)
+			}
+		}
+		obj, ok := origin.Scope().Lookup(x.DefinitionName).(*types.TypeName)
+		if !ok {
+			return fmt.Errorf("missing Default definition %s", x.DefinitionName)
+		}
+		target, ok := types.Unalias(obj.Type()).(*types.Named)
+		if !ok || target.Obj().Pkg() == nil || target.Obj().Pkg().Path() != x.DefinitionPath || target.Obj().Name() != x.DefinitionName || target.TypeParams().Len() != 0 || target.TypeArgs().Len() != 0 {
+			return fmt.Errorf("invalid Default canonical type %s", x.DefinitionName)
+		}
+		exposed, ok := pkg.Scope().Lookup(x.Name).(*types.TypeName)
+		if !ok || !types.Identical(types.Unalias(exposed.Type()), target) {
+			return fmt.Errorf("Default alias identity mismatch: %s", x.Name)
+		}
+		fn, ok := origin.Scope().Lookup(x.Helper).(*types.Func)
+		if !ok {
+			return fmt.Errorf("missing Default helper %s", x.Helper)
+		}
+		sig, ok := fn.Type().(*types.Signature)
+		if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 || sig.Params().Len() != 0 || sig.Results().Len() != 1 || !types.Identical(sig.Results().At(0).Type(), target) {
+			return fmt.Errorf("Default helper signature mismatch: %s", x.Helper)
 		}
 	}
 	return nil

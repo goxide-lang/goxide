@@ -116,3 +116,11 @@ Go 使用发布 `.go` 中公开的普通函数 / 类型；Default 不自动改�
 6. 未确定的泛型形式不得假称已有可编译降低；Go 示例不证明通用派生器已实现。
 
 当前手动入口与选中 payload 的实现证据见[独立业务验收](../../tests/acceptance/manual_default_test.go)；既有实现证据见[Default/打印验收](../../tests/acceptance/print_default_test.go)与[封闭映射验收](../../tests/acceptance/enum_wire_test.go)。泛型与完整 trait 后端仍后置；手动 Default 的具体子集不代表完整关联函数后端。
+
+## 跨包已登记 Default 字段（2026-10-03）
+
+目录/模块编译恢复生产包显式登记的具体 Default：消费 struct 的 `m.E` / `m.Settings` 字段可调用生产包 helper，包含透明 alias 和手动实现。没有登记的同名 `DefaultT` 函数、新 defined 类型不继承协议；不猜 helper 名。schema v5 记录目标、canonical 定义、helper 及 derive/manual 来源，核验真实 named 身份与精确非泛型 `func() T` 签名，alias 的来源必须与定义包一致。旧产物需重新生成，内容、依赖及 marker 绑定继续核验；Default-only 包也写出 artifact。
+
+[真实 CLI 三模块验收](../../tests/acceptance/default_external_test.go)覆盖私有字段的业务默认值、字段调用次数、跨文件同名 import、透明 relay、宏 len 的 import 改名组合、serde skip 共用 Default，以及独立原生 Go 消费；三个生成/消费模块分别 race/vet，重复生成一致。[协议反例](../../internal/frontend/default_artifact_test.go)覆盖 helper 变量/泛型/参数/错误返回、假注册、new defined、alias 来源改写及陈旧 producer。原跨包 Default 字段负例已迁为[真实源包正例](../../tests/acceptance/manual_default_test.go)，外部目标 impl 仍拒绝。
+
+struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload Default。此次不放开 enum 的外部载荷类型限制，不新增跨包 Clone/Debug/Serialize/Deserialize、完整 trait 或字段 adapters。internal-origin 不可直接导入的协议暂不可用，普通公开 Go API 保留。单文件外部协议恢复、容器默认语义及零值/公开入口契约不在本片修改；普通 Option 缺失/null 到 None 仍独立于 Default。

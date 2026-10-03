@@ -1,96 +1,68 @@
 # Hyper Go（hgo）
 
-hgo 是面向 Go 生态的语言设计：增加显式 trait、变体枚举、模式匹配和卫生宏，生成标准 Go 源码，并提供共享语义分析前端的 LSP。
+hgo 在 Go 生态上实现一个可执行语言子集：声明宏、闭合变体 enum/match、Option/Result、显式派生和 serde JSON，生成普通 Go 源码。设计中的完整 trait、LSP、指针体系等并不因此成为当前实现承诺。
 
-架构以 **转译器 + 转译前 linter + 普通 Go 支持库** 为边界。最低目标语言及工具链版本为 **Go 1.27**，使用其新增的泛型方法表达带独立返回类型的锁回调等 API。
+**当前宏 + 独立 enum 阶段生产代码候选：`55ef3b3020b3984a8ae360ca469fc13fee345bd2`，已验证 Go 1.27.1。** 后续交付整理只更新文档和示例，运行脚本会打印实际 checkout SHA。此阶段已有可审查的业务闭环，**不宣称整个 MVP 完成**。
 
-本实现分支已有可运行的有限宏与 serde 原型，见[运行方式与准确支持范围](IMPLEMENTATION.md)。完整 hgo 编译器与 LSP 尚未实现；其余设计文档中的语法不因此成为可运行承诺。
+## 开始试用
 
-目录入口已扩展到现有 Go module 内的多文件包和有限跨包调用；[两包应用](examples/packages/main.hgo)组合 JSON、enum、Result、错误链和原生 Go 日志。[三包应用](examples/qualified_packages/main.hgo)进一步演示 qualified enum match 与导入 Result 直接 `?`。目录模式的支持子集与单文件不同，构建命令、公开入口和限制见[实现记录](IMPLEMENTATION.md#后续阶段多文件包与-go-module-入口)。
-
-固定格式 `print!` / `println!` 和具体类型 `#[derive(Default)]` 已可运行；[启动配置示例](examples/prototype/print_default.hgo)组合显式默认值、JSON、Clone、Debug 和宏打印：
+先看 [最小双模块订单示例](examples/enum_trial/README.md)：一条脚本构建 CLI、生成生产者与消费者、运行及 race/vet；可直接观察正确/错误 JSON、None/Some(nil)/Some(empty)、equals 和跨包 derive。它复用既有联合业务，不含新指针语法。
 
 ```sh
-go run ./cmd/hgo run examples/prototype/print_default.hgo
+# 改成你机器上真实的 Go 1.27.x；这是本次云环境的已验证路径。
+export GO_BIN=/workspace/goxide-environment/go/bin/go
+work="$(mktemp -d)"
+bash examples/enum_trial/try.sh "$work"
 ```
 
-当前只支持封闭变体 enum；[外部映射业务](examples/enum_wire/main.hgo)通过 serde 宏映射数值/string，未知值返回错误，业务处理不执行。开放 raw/C enum 已撤回。
+工具链不能仅按 `go` 这个名字判断。CLI 的 `-go /absolute/go` 可选择执行编译器，但 importer 使用构建 CLI 的 GOROOT；目录运行/测试要求二者版本一致。生成模块仍通过 go.mod 依赖支持库，不是自包含 runtime 副本。
 
-仅通配/全值绑定 match 按真实 enum 身份解析并验证合法 case；[归档业务](examples/prototype/final_audit.hgo)使用封闭变体。交付边界见[验收矩阵](docs/t0-acceptance.md)。
+## 当前支持
 
-Default 不改变 Go 零初始化，打印只接受已登记协议。完整限制及 T0 必需/后置划分见 [验收矩阵](docs/t0-acceptance.md#print--println-与-default-增量)。
+| 能力 | 已验收范围与入口 |
+| --- | --- |
+| 声明宏 | 有限捕获、重复、嵌套、定义点绑定；源码包 `pub macro_rules!` 与 qualified 调用；[准确边界](internal/macros/README.md) |
+| 闭合 enum 与 match | 名义身份、穷尽匹配、guard、非法值在使用点拒绝；有限表达式组合，包括命名单结果、静态已知方法/函数字段/返回函数/variadic/原生 Go 显式 generic 调用；[match 范围](internal/matchexpr/README.md) |
+| Option / Result | 已登记具体实例、match、有限 `?` 组合、Go cause 链；跨独立模块恢复及透明 alias；[验收](docs/t0-acceptance.md) |
+| 显式协议 | Default、Clone、Debug、serde、PartialEq/Eq 的有限具体类型及跨包登记；已支持手写 Default 和具体 equality，不隐式赋予所有类型协议 |
+| serde | core 协议 + 独立 JSON 实现；default/skip、具体 Option 缺失/null、闭合变体；[JSON 范围](serdejson/README.md) |
+| Go 互操作 | 单文件及现有 go.mod 中多文件/多包目录、独立模块 local replace、生成 helper 的原生 Go 消费；build tags/race 属于具体构建视图 |
 
-项目暂称 hgo / Hyper Go，当前远端仓库名为 `goxide`。换机器继续时先看 [Roadmap](ROADMAP.md) 和[决策登记](docs/design/decisions.md)：分别记录实现进度，以及**已确认 / 暂定 / 未定**的设计边界。
+Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，enum 只要求显式选中默认变体的载荷。普通 Option 缺失/null→None 不依赖 Default。Clone 不改变普通 Go 赋值语义；enum 不是开放 C-style 数字枚举。
 
-用户在自己的 C 包 `.hgo` 文件中写 `declare impl AorB::XXX for BBB::Type;`。[当前 trait 方案](docs/rfcs/0019-uniform-trait-wrappers.md)统一在 impl 包生成 wrapper：原生采用显式转发，有体实现使用用户方法体，marker 保留在 trait 接口和 wrapper 上。后端使用固定包级工厂；Go 用户可用本包 `t.AsXXX()` 或外部类型的 `adapters.ForT(t).AsXXX()` helper。
+## 已知失败与未完成边界
 
-## 逐特性 RFC
+以下是工程边界，不自动等于获批延期；具体正反例见[最新验收清单](docs/t0-acceptance.md#独立-enum-现阶段交付验收与待决清单2026-10-03统一调用组后)。
 
-新语法与能力先在[独立 RFC](docs/rfcs/README.md)中给出 hgo → Go 对照、正反例、双向互操作和验收约束。当前共有 20 篇，使用[统一模板](docs/rfcs/TEMPLATE.md)；具体语法和 ABI 未定时明确保留草案状态。
+- **表达式和类型上下文**：多结果 `return match`、部分 unary/composite/block-arm 组合、完全不可命名的私有参数仍拒绝；`.hgo` 用户泛型定义尚未开放，与消费原生 Go 泛型函数不同。
+- **模块与工具模式**：单文件外部增强恢复、受限 internal-origin/无源分发未全面验收；预编译宏 ABI、`.hgo` 测试文件与非宿主交叉构建未实现。切换 race/tags/平台不能直接复用另一视图的 metadata；[本试用的具体模式与已知拒绝](examples/enum_trial/README.md#运行与测试模式)。
+- **协议资格**：手写 Clone/Debug/serde 登记、静态递归 Default、循环容器 equality 等仍有缺口或需另行设计；有限容器正例不证明任意对象图支持。
+- **完整设计能力**：完整 trait、LSP、用户过程宏、格式 Value/PATCH/YAML 等未成为本阶段交付能力；不要把 RFC 示例当作已实现语法。
 
-包发布采用同模块 `.go + .d.hgo`、可选 `.hgo` 的方式：Go 编译生成的 `.go`，hgo 额外加载声明或源码。参见[包加载与具体 marker 反例](docs/rfcs/0001-package-loading.md)。
+## 待用户决定
 
-## 设计文档
+1. 公开函数是否在函数体前验证直接 enum 参数，以及非法值行为；当前使用点验证不等于统一入口验证。
+2. blank 字段如何参与派生；embedded 字段的 Debug 名称、serde 嵌套/展开规则。
+3. Proposed serde field adapters 的具体入口与自定义 `deserialize_with` 缺失策略。
 
-- [设计总纲](docs/design/overview.md)：目标、决策状态、各部分边界与实现顺序。
-- [编译器、LSP 与自举](docs/design/compiler-and-tooling.md)：Go 工具复用边界、独立前端、启动实现与自举路线。
-- [RFC 0001：Go 兼容的别名风险诊断](docs/rfcs/research/0001-scoped-borrow-views.md)：Go 兼容默认、具体风险 warning、业务场景与机制证据；旧严格默认已否决。
-- [指针拆分与引用](docs/design/pointers-and-borrows.md)：Option、读写借用、Arc、Ptr、Box、解引用及尚未闭合的权限规则。
-- [显式 trait 与多接口实现](docs/design/traits.md)：无体声明转发原生方法、有体实现自定义行为、wrapper marker、同名方法、固定工厂与 Go 便利 helper。
-- [Go原生类型的显式适配](docs/design/go-interop.md)：普通 `.hgo` 中的显式声明、原生方法校验、独立 wrapper 与普通 Go 发布。
-- [原生 Go API、安全声明与裸指针](docs/design/foreign-api.md)：原生 unsafe 视图、declare、Ptr/AsPtr 和 `.d.hgo` 声明分发。
-- [关联类型](docs/design/associated-types.md)：普通关联类型的最小设计及 Go 降低方式。
-- [锁与作用域回调](docs/design/synchronization.md)：指针形式的锁句柄、Go 1.27 泛型返回值、解锁和 linter 边界。
-- [变体枚举与模式匹配](docs/design/enums-and-match.md)：Option / Result、穷尽匹配、值型 case、Go 零值与边界验证。
-- [卫生宏与基础派生](docs/design/macros.md)：参考 Rust 的声明宏、print / println、Default / Clone / Debug、符号卫生和 Go 降低；用户过程宏延期。
-- [基础包与 safe Go 标准库](docs/design/standard-library.md)：针对现有 Go std 的逐 API 声明与包装，以及泛型 slice 的权限、复制和别名。
-- [quote / syn 与语法工具](docs/design/syntax-tooling.md)：额外语法包、普通代码生成工具、上下文来源和后续过程宏的边界。
+既定方向和未定项以[决策登记](docs/design/decisions.md)及对应 RFC 为准，不将上述事项默认标为批准延期。
 
-总纲负责导航，决策登记维护状态，逐特性 RFC 负责输入输出与验收约束，专题文档保留设计背景和完整机制示例。变更同步相关入口，不能让旧候选规则覆盖后续已确认的方向。
+## 后续指针阶段
 
-原生指针桥接候选见 [RFC 0002](docs/rfcs/research/0002-native-pointer-bridge.md)；别名/借用风险分析已独立为长期工作线，不是 MVP 条件。
+用户已有后续指针目标；本次仅交付宏 + 独立 enum 候选，整理完成后暂停，等待反馈或明确下一片。仓库已有的有限读/写引用验收保留，但本试用不要求使用新指针语法。
 
-当前场景评审见 [RFC 0003：Go 指针职责与 MVP 最小集合](docs/rfcs/research/0003-pointer-roles-and-mvp.md)。
+`&T` 路径只读不承诺全局不可变，`mut&` 不承诺独占。复杂别名/借用风险分析是独立长期工作线，不是拿保守拒绝普通 Go 用法来完成的安全保证，也不是当前 MVP 的前置条件。详见[指针与引用设计](docs/design/pointers-and-borrows.md)。
 
-当前用户优先级：宏、enum/match、只读/可写访问为 T0（分批交付）；trait 双路径研究见 [RFC 0004](docs/rfcs/research/0004-trait-lowering-paths.md)。T0 不要求恢复借用分析或先实现全部智能指针。
+## 验收与设计导航
 
-文档标签与独立实现会话交接见 [MVP 文档基线](docs/mvp-doc-baseline.md)。标签记录已确认方向和未决项，不代表完整规范定稿或编译器已实现。
-
-最新优先任务是 serde，用户已决定仿照 serde-rs：核心协议/Visitor 与派生、独立 serde-json 及未来 serde-yaml；Value 属于格式层，不设强制核心树。首版 JSON 的实现契约及待实现验收见 [RFC 0006](docs/rfcs/research/0006-serde-core-and-formats.md)，协议设计仍可演进；本分支已实现其中具体类型 Go helper/Visitor 与 JSON 子集，准确边界见[原型说明](IMPLEMENTATION.md)。
-
-## 验证设计示例
-
-```sh
-python3 scripts/check_design.py --docs-only
-python3 scripts/check_design.py
-```
-
-完整验证需要 Python 3.10+、Go 1.27 或更新工具链及可用的 race detector。范围与限制见 [tests 说明](tests/README.md)：验证的是文档中的 Go 机制，不能证明尚不存在的 hgo 前端正确。
+- [交付试用与逐条命令](examples/enum_trial/README.md)：本次新增示例的实际验证。
+- [T0 验收矩阵](docs/t0-acceptance.md)：真实 hgo→Go 与独立生成模块证据、已知失败及待决。
+- [实现历史](IMPLEMENTATION.md)、[Roadmap](ROADMAP.md)：按阶段保留历史；旧限制以最新验收覆盖，不能截取早期条目代表当前能力。
+- [逐特性 RFC](docs/rfcs/README.md)、[设计总纲](docs/design/overview.md)、[决策登记](docs/design/decisions.md)：区分已确认、暂定、未定。完整 trait 包装器/发布 ABI 等仍须按各自状态阅读。
+- [宏与派生设计](docs/design/macros.md)、[enum/match 设计](docs/design/enums-and-match.md)、[serde core 与格式](docs/rfcs/research/0006-serde-core-and-formats.md)。
+- [测试说明](tests/README.md)：`scripts/check_design.py` 验证文档中的 Go 机制，不能替代真实 hgo 编译执行。候选 SHA 的全树 race/vet/设计检查已通过，本次文档整理不冒充重新执行全部测试。
+- [冻结 MVP 文档基线](docs/mvp-doc-baseline.md)：标签记录设计基线，不代表实现完成；本阶段不修改标签、不合并或发布。
 
 ## 许可证
 
-本项目采用 [Mozilla Public License 2.0](LICENSE)（SPDX：`MPL-2.0`）。
-
-
-## 安装和在仓库外使用
-
-在仓库根目录用真实 Go 1.27+ 编译器安装；无需下载第三方依赖。`GOBIN` 指向希望存放命令的绝对目录：
-
-```sh
-repo="$PWD"
-work="$(mktemp -d)"
-mkdir "$work/bin"
-GOBIN="$work/bin" GOTOOLCHAIN=local GOWORK=off GOPROXY=off go install ./cmd/hgo
-cd "$work"
-"$work/bin/hgo" run -runtime "$repo" "$repo/examples/prototype/conditional_log.hgo"
-"$work/bin/hgo" transpile -o "$work/generated" "$repo/examples/macro_packages"
-cd "$work/generated"
-go test -race ./...
-go build .
-```
-
-单文件 run/build 在仓库外使用 `-runtime /absolute/goxide`。目录输入必须属于已有 `go.mod`；使用 serde 等 runtime 包的应用需要 `require github.com/hxsf/goxide v0.0.0` 和本地 `replace github.com/hxsf/goxide => /absolute/goxide`（示例已有相对 replace，转译时会重定位）。产物是可独立调用 Go 工具构建的模块，仍依赖 go.mod 声明的支持库，并非自包含 runtime 副本。
-
-目录命令支持 `-tags feature,other`，按 Go 规则选择 `.hgo`/native `.go` 的平台后缀、`//go:build` 和旧 `// +build`；忽略 `_`/`.` 开头的源文件。`hgo test` 的选择和 importer 同时启用 `race`，生成测试也使用 `-race`。输出是这一次选择的构建视图，改变 tags、race 配置或平台必须重新转译，不可把相同产物当作全配置源码。当前目录模式拒绝非宿主 GOOS/GOARCH；`.hgo` 测试文件仍未实现，请使用 native Go 测试。
-
-同包多文件可以使用已有有限读/写引用及函数调用，擦除前按完整包签名检查权限；跨包新引用签名暂不导出，普通 Go `*T` API 保持既有边界。`-go /absolute/go` 可绕过 PATH 中同名非编译器程序；类型 importer 使用构建 hgo 的 GOROOT 工具链，目录 run/build/test 要求 `-go` 的版本与它一致。
+[Mozilla Public License 2.0](LICENSE)（`MPL-2.0`）。项目暂称 hgo / Hyper Go，仓库名为 `goxide`。

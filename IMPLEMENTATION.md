@@ -1022,4 +1022,18 @@ Default 仅在实例身份确认是已登记 Option 后返回 canonical None；�
 
 `tests/acceptance/match_named_dynamic_test.go` 为真实 CLI→Go 模块 race/vet 验收，含确定性、返回槽/defer/panic/goto、direct recover、named 类型遮蔽、函数值捕获、参数 uint64 上下文/shift、局部/statement/嵌套组合、nil 时机、Result 失败/defer/用户闭包，以及负例原 match 行列。旧 named return/dynamic argument 及四条遮蔽/括号/分组函数变量拒绝测试已迁入正向执行验收，未删除其场景覆盖。独立审查另验命名槽旧值、首实参重绑函数变量与包函数同名遮蔽。纯 Go 设计探针单独报告，不替代这些执行证据。
 
-本片后仍实际拒绝的最小形状：`return match ...` 所在函数有 `(a,b int)`；`g(match ...)` 中 g 为 `func(...int)int`；`s.F(match ...)`（字段函数/直接方法）；`factory()(match ...)`；`call[int](match ...)`。均有新负例，参数数量、溢出和不兼容类型仍正常拒绝。这些是当前实现边界，不自动批准延期。blank/embedded 字段、公开 enum 入口、Proposed adapters 不改，整体 MVP 未宣布完成。
+该片之后的调用形状缺口已由下节统一签名组继续接通；多结果 `return match` 仍未实现，参数数量、溢出和不兼容类型仍正常拒绝。这些是当前实现边界，不自动批准延期。blank/embedded 字段、公开 enum 入口、Proposed adapters 不改，整体 MVP 未宣布完成。
+
+## 统一静态调用签名与 match 参数（2026-10-03）
+
+`tests/acceptance/match_call_signatures_test.go` 接通函数字段/直接方法 `s.F(M)`、返回的函数 `factory()(M)`、variadic `g(M)`/固定参数加 `g(prefix,M,rest...)`、展开参数本身为 `g(M...)`，以及原生 Go 声明的显式 `call[int](M)`（M 为完整 match 表达式）。同文件静态函数、跨文件/跨包函数、函数变量、方法表达式共用实际 Go 签名和参数身份；不再扫描同名函数或复制其参数类型拼写。variadic 普通尾项取元素类型，`...` 取 slice 类型，Go 自身仍执行展开/调用；禁止将额外 variadic 元素与 `rest...` 混合的非法 arity。`.hgo` 用户泛型定义仍在 enum 前端明确拒绝，不能与原生 Go generic 调用支持混淆。
+
+函数值沿既定规则在参数前保存一次；nil 函数直到调用时才 panic。直接方法不能变成提前创建 method value：先执行 receiver 中调用、receive、短路运算，普通读取、索引、类型断言和隐式解引用留在最终直接调用。为提前执行某个 receiver 调用所必需的操作仍随之执行，例如 `a.(*S).Get().Method(M)` 必须先断言才能调用 Get。隐式取址继续由 Go 对原 receiver 判定，原本不可寻址的函数返回 struct/array 元素不会因编译器临时变量而获得资格。`?` 失败直接返回最近用户函数，不调用最终 callee；direct recover 不增加用户调用帧。只读到原生可写指针/接口/方法的擦除仍拒绝。
+
+Go 规范 Order of evaluation 只规定调用、接收和逻辑运算等的相对次序；普通读取/断言/索引相对实参调用并非全部规定。独立矩阵发现同一 native receiver 断言在默认与 race 构建中可出现不同先后，因此验收分开验证：确定的调用顺序、hgo 一致的 late receiver 规则、原生未规定次序的允许结果。不把某次优化器时点伪装成语言保证，也不按指针/值断言逐条模拟 Go 优化器。
+
+真实 CLI 输出覆盖独立生成模块 race/vet、输出确定性、callee/receiver 一次求值、值/指针 receiver、nil receiver/interface/callee、嵌入 receiver、索引及断言、私有名义类型的公开 alias、scope shadow、变参 nil/empty 和 backing slice 身份、原生显式 generic 的上下文/溢出、`?`/defer/recover、goto 和权限负例。旧 selector/factory/variadic/generic-call 与静态函数被取值的拒绝用例已迁为正例，不重新添加为缺口。独立审查修复 method-value 提前检查后通过真实 race/vet。
+
+优化构建探针（非 race；Go 1.27.1，单 CPU，100ms×3）中，方法、slice 展开、显式 generic 的真实 hgo 输出均为 0 B/op、0 allocs/op；中位数约 1.963/1.706/1.655 ns/op，内联原生 Go 对照约 0.5635/0.2835/0.2828 ns/op。微基准可被内联/常量折叠，不代表业务性能等价，记录见 `tests/research/match_lowering/call-signatures-2026-10-03.txt`。原生 receiver 顺序研究属于机制探针，未替代真实 hgo 执行证据。
+
+仍明确未接通：多结果 `return match`；完全无可见类型拼写的私有调用参数（如 `m.Hidden()(match ...)`）；既有 unary/composite/block-arm 等非本组表达式上下文。非法 arity、常量溢出、不可寻址 pointer receiver 和权限擦除属于应拒绝输入，不算功能欠账。带编译器指令的本地函数保持既有明确诊断，不擅改调用的逃逸/活性约束。blank/embedded 字段、公开 enum 入口验证、serde adapters Proposed 均未在此决定。

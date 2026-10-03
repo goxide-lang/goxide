@@ -29,19 +29,16 @@ selected arm evaluates; Go type checking checks assignment of each arm value.
 The emitted Go has no generated match closure, no synthetic loop around an arm, and no change of
 `return`/`defer` target. This is an implementation subset, not a new match semantics.
 
-Composition accepts complete direct calls in return/expression statements and
-recursively in complete arms/arguments. Callees must be same-file non-method,
-non-generic, non-variadic function declarations without compiler directives.
-Names appearing as bindings or function values anywhere in the file fall outside
-this finite resolution subset; ordinary Go calls are unaffected. Package-level
-parameter aliases preserve declaration-scope type identity; typed argument
-staging preserves contextual constants, nil and order. New statement-call
-expansions use ordinary blocks to preserve surrounding goto scope. Root-call
-search stays inside the nearest function, including inline closures.
+Composition uses the actual typed Go call signature for parameter context. It
+accepts static functions, function variables, field functions, direct methods,
+method expressions, returned functions, variadic arguments/spreads, and explicit
+generic calls whose declarations are available to Go typing. No callee name scan
+or copied signature spelling authorizes a call. Compiler-directed local functions
+retain an explicit boundary. Expression-statement expansions are block scoped.
 
 Not supported yet: target forms beyond a single identifier subscript, multiple assignment
 targets, control-header match declarations, package initializers; whole matches in
-multiple returns; match in arbitrary unary/composite literal contexts; selector/factory-call/generic/variadic callees; direct cross-file declarations; labelled standalone calls and control headers; expression blocks;
+multiple returns; match in arbitrary unary/composite literal contexts; unresolved/unnameable parameter types; user generic definitions in hgo; labelled standalone calls and control headers; expression blocks;
 unsupported complex signatures. These are
 implementation gaps, not language prohibitions or approved deferrals. Statement
 matches pass through. All enum validation, guard order and exhaustiveness remain
@@ -146,9 +143,33 @@ and delays nil-function invocation until arguments finish. Failed `?` returns fr
 the nearest user function before later arguments or invocation. Compiler atoms
 are always removed; no generated IIFE, reflection or runtime type erasure is used.
 
-This slice does not add `s.F(match ...)`, `factory()(match ...)`, variadic or
-explicit generic calls, or multiple-result `return match`. Such inputs remain
-source-located diagnostics. Parameter type errors and constant overflow also
+The following unified-signature stage adds selector/factory/variadic and native
+explicit generic calls. Multiple-result `return match` remains a located diagnostic. Parameter type errors and constant overflow also
 report the original match location. `tests/acceptance/match_named_dynamic_test.go`
 uses real CLI output, independent generated-module race/vet, deterministic output,
 positive runtime assertions and negative source-location assertions.
+
+## Unified call contexts and receiver evaluation
+
+The parser preserves the complete callee expression and argument expansion.
+`propagate.matchArgumentType` resolves its actual Go signature, checks arity and
+selects the fixed parameter, variadic element, or expanded slice type. Builtin and
+type-conversion calls remain explicitly unsupported contexts. Native Go generic
+instantiations use the same path; hgo user generic definitions remain unsupported.
+Public transparent aliases preserve private nominal parameter identity; completely
+unnameable parameters retain a diagnostic rather than type erasure.
+
+Function values are captured once before arguments. Direct methods retain direct
+selection: receiver calls, receives and short-circuit expressions are evaluated
+first; remaining receiver reads/indexing/assertions/implicit dereferences occur
+on the final call. Operations required to execute an earlier receiver call still
+execute with it. This is a consistent choice within Go's partially specified
+order, not a promise to reproduce every optimizer's ordinary-read/panic timing.
+In particular default and race builds can order a native type assertion differently.
+The receiver is not converted into a method value, and original Go addressability
+is checked before emission. Match failure remains a return from the user function.
+
+`match_call_signatures_test.go` supplies true CLI output, generated race/vet,
+positive/negative scope and permission tests, deterministic output and optional
+optimized microbenchmarks (`HGO_MATCH_CALL_BENCH=1`). See the corresponding RFC
+0009 stage for measured scope and remaining boundaries.

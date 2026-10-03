@@ -1,6 +1,7 @@
 package matchexpr
 
 import (
+	"go/parser"
 	"go/token"
 	"strconv"
 	"strings"
@@ -63,30 +64,48 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 		}
 		return "(" + left + " " + op.String() + " " + right + ")", nil
 	}
-	// Identifier calls retain the real callee expression. The typed pass reads
-	// its actual signature; no signature spelling or runtime witness is copied.
-	if a+2 < b && ts[a].k == token.IDENT && ts[a+1].k == token.LPAREN && c.pairs[a+1] == b-1 {
-		if _, static := c.callees[ts[a].s]; !static {
-			var args []string
-			for i := a + 2; i < b-1; {
-				start := i
-				for i < b-1 && ts[i].k != token.COMMA {
-					if end, ok := c.pairs[i]; ok {
-						i = end
-					}
-					i++
-				}
-				value, err := c.expression(start, i, "__hgo_match_expr_argument()", "direct")
-				if err != nil {
-					return "", err
-				}
-				args = append(args, value)
-				if i < b-1 {
-					i++
-				}
-			}
-			return c.copy(ts[a].a, ts[a].b) + "(" + strings.Join(args, ",") + ")", nil
+	// Find the final call suffix, independent of callee surface syntax. The
+	// actual signature and parameter identity are resolved by go/types later.
+	for open := a; open < b; open++ {
+		end, paired := c.pairs[open]
+		if !paired {
+			continue
 		}
+		if ts[open].k != token.LPAREN || end != b-1 || open == a {
+			open = end
+			continue
+		}
+		callee := c.copy(ts[a].a, ts[open].a)
+		if _, err := parser.ParseExpr(string(c.source[ts[a].a:ts[open].a])); err != nil {
+			break
+		}
+		var args []string
+		for i := open + 1; i < b-1; {
+			start := i
+			for i < b-1 && ts[i].k != token.COMMA {
+				if end, ok := c.pairs[i]; ok {
+					i = end
+				}
+				i++
+			}
+			argEnd := i
+			spread := argEnd > start && ts[argEnd-1].k == token.ELLIPSIS
+			if spread {
+				argEnd--
+			}
+			value, err := c.expression(start, argEnd, "__hgo_match_expr_argument()", "direct")
+			if err != nil {
+				return "", err
+			}
+			if spread {
+				value += "..."
+			}
+			args = append(args, value)
+			if i < b-1 {
+				i++
+			}
+		}
+		return callee + "(" + strings.Join(args, ",") + ")", nil
 	}
 	if ts[a].k != token.IDENT || ts[a].s != "match" {
 		return "", c.fail(a, "embedded match currently requires binary operands or parentheses")
@@ -147,13 +166,22 @@ func (c *composer) embedded(i, open int, result string) (edit, int, bool, error)
 			}
 		}
 		if assign < 0 {
-			if ts[start].k == token.IDENT && start+1 < i && ts[start+1].k == token.LPAREN {
-				end := c.pairs[start+1]
-				if end > i && end+1 < len(ts) && (ts[end+1].k == token.SEMICOLON || ts[end+1].k == token.RBRACE) {
-					value, err := c.expression(start, end+1, "", "direct")
-					if err == nil {
-						return edit{ts[start].a, ts[end].b, value}, end, true, nil
-					}
+			// Whole expression-statement calls share the same typed call path.
+			// Statement match and go/defer/control headers are not expressions.
+			if ts[start].s == "match" {
+				return edit{}, 0, false, nil
+			}
+			end := start
+			for end < len(ts) && ts[end].k != token.SEMICOLON && ts[end].k != token.RBRACE {
+				if close, ok := c.pairs[end]; ok {
+					end = close
+				}
+				end++
+			}
+			if end > i && ts[end-1].k == token.RPAREN {
+				value, err := c.expression(start, end, "", "direct")
+				if err == nil {
+					return edit{ts[start].a, ts[end-1].b, value}, end - 1, true, nil
 				}
 			}
 			return edit{}, 0, false, nil

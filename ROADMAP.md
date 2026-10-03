@@ -265,4 +265,8 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 
 ### 两项 match 工程缺口已完成（2026-10-03）
 
-命名单结果 `return match` 与标识符函数变量 `g(match...)` 已接通，返回槽/defer/direct recover、函数值捕获、参数次序、nil 调用和 `?` 目标有真实生成模块验收；见 RFC 0009 与 `tests/acceptance/match_named_dynamic_test.go`。前节所列这两项不再是缺口。仍拒绝的已测最小形状为多结果 return、variadic g、selector/直接方法、factory() 返回函数直接调用及显式 generic 调用中的 match。待定字段/公开入口契约保持不变，整体 MVP 不标完成。
+命名单结果 `return match` 与标识符函数变量 `g(match...)` 已接通，返回槽/defer/direct recover、函数值捕获、参数次序、nil 调用和 `?` 目标有真实生成模块验收；见 RFC 0009 与 `tests/acceptance/match_named_dynamic_test.go`。前节所列这两项不再是缺口。其中调用形状已由下节继续接通，多结果 return 仍留独立工程账。待定字段/公开入口契约保持不变，整体 MVP 不标完成。
+
+### 统一签名调用组与独立 enum 验收（2026-10-03）
+
+静态/变量/函数字段/方法/返回函数/variadic/原生 Go 显式 generic 调用统一从实际 Go 签名获得 match 参数上下文；真实 CLI race/vet、receiver/callee 次序、variadic slice 身份、私有 alias、权限及 0 分配微基准见 RFC 0009 与 `match_call_signatures_test.go`。不借此开放 `.hgo` 用户泛型定义或多结果 return match。独立 enum 的已验收业务闭环、工程边界与用户待决项汇总见 `docs/t0-acceptance.md` 最后清单；本阶段停止，不自动扩展多返回值、字段规则或公开入口契约，也不执行发布。

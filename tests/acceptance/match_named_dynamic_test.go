@@ -96,14 +96,9 @@ func TestFailure(t *testing.T){trace=nil;if !IsErr(Failure(false)){t.Fatal("fail
 	})
 	for name, body := range map[string]string{
 		"multiple-results": `func Bad()(a,b int){return match E::B{E::A(_)=>1,E::B=>0}}`,
-		"variadic":         `func Bad(g func(...int)int)int{return g(match E::B{E::A(_)=>1,E::B=>0})}`,
 		"arity":            `func Bad(g func(int,int)int)int{return g(match E::B{E::A(_)=>1,E::B=>0})}`,
 		"overflow":         `func Bad(g func(uint8)int)int{return g(match E::B{E::A(_)=>256,E::B=>0})}`,
 		"wrong-type":       `func Bad(g func(int)int)int{return g(match E::B{E::A(_)=>"bad",E::B=>0})}`,
-		"selector":         `type S struct{ F func(int)int };func Bad(s S)int{return s.F(match E::B{E::A(_)=>1,E::B=>0})}`,
-		"method":           `type S struct{};func(s S)Call(n int)int{return n};func Bad(s S)int{return s.Call(match E::B{E::A(_)=>1,E::B=>0})}`,
-		"generic":          `func call[T any](v T)T{return v};func Bad()int{return call[int](match E::B{E::A(_)=>1,E::B=>0})}`,
-		"factory":          `func factory()func(int)int{return nil};func Bad()int{return factory()(match E::B{E::A(_)=>1,E::B=>0})}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)

@@ -166,22 +166,11 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 					if host == nil {
 						return false, fail("match argument has no enclosing call")
 					}
-					callee, ok := host.Fun.(*ast.Ident)
-					if !ok {
-						return false, fail("match argument requires an identifier function value")
+					var err error
+					target, err = l.matchArgumentType(host, index)
+					if err != nil {
+						return false, fail(err.Error())
 					}
-					if _, ok := l.info.ObjectOf(callee).(*types.Var); !ok {
-						return false, fail("match argument requires a statically typed function variable; this declaration/builtin call is outside the supported subset")
-					}
-					t := l.info.TypeOf(callee)
-					if t == nil {
-						return false, fail("match argument function type is unresolved")
-					}
-					sig, ok := t.Underlying().(*types.Signature)
-					if !ok || sig.Variadic() || sig.TypeParams().Len() != 0 || len(host.Args) != sig.Params().Len() || host.Ellipsis.IsValid() {
-						return false, fail("match argument requires exact non-variadic function-value arity")
-					}
-					target = sig.Params().At(index).Type()
 				}
 				if id, ok := rc.Fun.(*ast.Ident); ok && id.Name == matchReturn {
 					// Resolve the enclosing user signature, not a copied spelling

@@ -62,7 +62,7 @@ func TestReject(t *testing.T) {
 	for _, body := range []string{
 		`x,y:=match e { E::Idle => 1 }; _,_=x,y`,
 		`var x int = match e { E::Idle => { 1 } }; _=x`,
-		`obj.consume(match e { E::Idle => 1 })`,
+		`consume(-match e { E::Idle => 1 })`,
 	} {
 		t.Run(body, func(t *testing.T) {
 			if _, e := Lower("bad.hgo", []byte("package p\nfunc f(){"+body+"}")); e == nil {

@@ -3,7 +3,6 @@ package matchexpr
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/ast"
@@ -101,8 +100,6 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		result      string
 	}
 	var funcs []fn
-	callees := map[string][]string{}
-	shadowNames := map[string]bool{}
 	for i, t := range ts {
 		if t.k != token.FUNC {
 			continue
@@ -132,62 +129,6 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		} else if file, e := parser.ParseFile(token.NewFileSet(), "", "package p\n"+header+"{}", 0); e == nil {
 			if d, ok := file.Decls[0].(*ast.FuncDecl); ok {
 				ft = d.Type
-				if d.Recv != nil {
-					for _, field := range d.Recv.List {
-						for _, name := range field.Names {
-							shadowNames[name.Name] = true
-						}
-					}
-				}
-				if d.Recv == nil && (ft.TypeParams == nil || len(ft.TypeParams.List) == 0) {
-					var params []string
-					valid := true
-					for _, field := range ft.Params.List {
-						if _, variadic := field.Type.(*ast.Ellipsis); variadic {
-							valid = false
-						}
-						var b bytes.Buffer
-						format.Node(&b, token.NewFileSet(), field.Type)
-						count := len(field.Names)
-						if count == 0 {
-							count = 1
-						}
-						for n := 0; n < count; n++ {
-							params = append(params, b.String())
-						}
-					}
-					// Preserve compiler call contracts that require direct arguments.
-					previous := 0
-					if i > 0 {
-						previous = ts[i-1].b
-					}
-					if strings.Contains(string(src[previous:t.a]), "//go:") {
-						valid = false
-					}
-					if valid {
-						callees[d.Name.Name] = params
-					}
-				}
-			}
-		}
-		if ft == nil {
-			// An hgo-only signature (for example &T) is not host-parseable.
-			// Its identifiers cannot establish a static callee identity.
-			for n := i + 1; n < j; n++ {
-				if ts[n].k == token.IDENT {
-					shadowNames[ts[n].s] = true
-				}
-			}
-		}
-		if ft != nil {
-			for _, fields := range []*ast.FieldList{ft.Params, ft.Results} {
-				if fields != nil {
-					for _, field := range fields.List {
-						for _, name := range field.Names {
-							shadowNames[name.Name] = true
-						}
-					}
-				}
 			}
 		}
 		result := ""
@@ -198,57 +139,8 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		}
 		funcs = append(funcs, fn{j, end, result})
 	}
-	// A deliberately finite resolution proof: any non-call occurrence means
-	// the name may be shadowed or used as a value. Ordinary Go is unchanged.
-	for i, t := range ts {
-		if (t.k != token.VAR && t.k != token.TYPE && t.k != token.CONST) || i+1 >= len(ts) {
-			continue
-		}
-		j, end := i+1, len(ts)
-		grouped := ts[j].k == token.LPAREN
-		if grouped {
-			end = pairs[j]
-			j++
-		}
-		for j < end {
-			if ts[j].k == token.SEMICOLON {
-				j++
-				continue
-			}
-			for j < end && ts[j].k == token.IDENT {
-				shadowNames[ts[j].s] = true
-				j++
-				if j >= end || ts[j].k != token.COMMA {
-					break
-				}
-				j++
-			}
-			if !grouped {
-				break
-			}
-			for j < end && ts[j].k != token.SEMICOLON {
-				if e, ok := pairs[j]; ok {
-					j = e
-				}
-				j++
-			}
-		}
-	}
-
-	for name := range callees {
-		if shadowNames[name] {
-			delete(callees, name)
-			continue
-		}
-		for n, t := range ts {
-			if t.k == token.IDENT && t.s == name && (n+1 == len(ts) || ts[n+1].k != token.LPAREN) {
-				delete(callees, name)
-				break
-			}
-		}
-	}
 	var edits []edit
-	c := composer{ts: ts, pairs: pairs, copy: copySource, fail: fail, callees: callees, hash: fmt.Sprintf("%x", sha256.Sum256([]byte(filename)))[:24]}
+	c := composer{source: src, ts: ts, pairs: pairs, copy: copySource, fail: fail}
 
 	c.origin = func(i int) string {
 		origin := f.Position(token.Pos(f.Base() + ts[i].a)).String()
@@ -277,7 +169,7 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 			}
 		}
 		if owner >= 0 {
-			serial, aliases := c.serial, c.aliases.String()
+			serial := c.serial
 			e, end, ok, err := c.embedded(i, funcs[owner].open, funcs[owner].result)
 			if err != nil {
 				return nil, err
@@ -288,33 +180,6 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 				continue
 			}
 			c.serial = serial
-			c.aliases.Reset()
-			c.aliases.WriteString(aliases)
-		}
-		// Find the outermost direct call enclosing this match. Only a whole
-		// return expression or expression statement is hoisted here.
-		root, close := -1, -1
-		for n := i - 1; owner >= 0 && n > funcs[owner].open; n-- {
-			if ts[n].k == token.LPAREN && pairs[n] > i && n > 0 && ts[n-1].k == token.IDENT {
-				if _, ok := callees[ts[n-1].s]; ok {
-					root, close = n-1, pairs[n]
-				}
-			}
-		}
-		if root >= 0 && owner >= 0 && root > 0 && (ts[root-1].k == token.RETURN || ts[root-1].k == token.LBRACE || ts[root-1].k == token.SEMICOLON) && (close+1 == len(ts) || ts[close+1].k == token.SEMICOLON || ts[close+1].k == token.RBRACE) {
-			pre, call, err := c.call(root, close+1)
-			if err != nil {
-				return nil, err
-			}
-			start := root
-			prefix := ""
-			if ts[root-1].k == token.RETURN {
-				start--
-				prefix = "return "
-			}
-			edits = append(edits, edit{ts[start].a, ts[close].b, "{\n" + pre + prefix + call + "\n}"})
-			i = close
-			continue
 		}
 		if i > 0 && ts[i-1].k == token.RETURN {
 			mode = "return"
@@ -437,7 +302,6 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		at = e.b
 	}
 	out.WriteString(copySource(at, len(src)))
-	out.WriteString(c.aliases.String())
 	if provenance != nil {
 		data, m := fragments.Finish(out.String(), "matchexpr.Lower")
 		*provenance = *m

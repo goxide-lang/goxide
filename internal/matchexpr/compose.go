@@ -9,15 +9,13 @@ import (
 // composer lowers only complete expressions with a proven contextual type.
 // Every generated statement stays in the original function, including ? exits.
 type composer struct {
-	ts      []tok
-	pairs   map[int]int
-	copy    func(int, int) string
-	fail    func(int, string) error
-	origin  func(int) string
-	callees map[string][]string
-	hash    string
-	serial  int
-	aliases strings.Builder
+	source []byte
+	ts     []tok
+	pairs  map[int]int
+	copy   func(int, int) string
+	fail   func(int, string) error
+	origin func(int) string
+	serial int
 }
 
 func (c *composer) temp() string { c.serial++; return fmt.Sprintf("__hgo_match_expr_%d", c.serial) }
@@ -89,56 +87,11 @@ func (c *composer) assign(a, b int, dest, typ string) (string, error) {
 		return out.String(), nil
 	}
 	if c.contains(a, b) {
-		if value, e := c.expression(a, b, dest, "direct"); e == nil {
-			return dest + " = (" + value + ");\n", nil
-		}
-		pre, call, err := c.call(a, b)
+		value, err := c.expression(a, b, dest, "direct")
 		if err != nil {
 			return "", err
 		}
-		return pre + dest + " = (" + call + ");\n", nil
+		return dest + " = (" + value + ");\n", nil
 	}
 	return dest + " = (" + c.copy(ts[a].a, ts[b-1].b) + ");\n", nil
-}
-func (c *composer) call(a, b int) (string, string, error) {
-	ts := c.ts
-	if a+2 >= b || ts[a].k != token.IDENT || ts[a+1].k != token.LPAREN || c.pairs[a+1] != b-1 {
-		return "", "", c.fail(a, "embedded match requires a complete direct call with a known same-file signature")
-	}
-	params, ok := c.callees[ts[a].s]
-	if !ok {
-		return "", "", c.fail(a, "match argument callee is outside the supported signature/resolution subset")
-	}
-	var args [][2]int
-	for i := a + 2; i < b-1; {
-		start := i
-		for i < b-1 && ts[i].k != token.COMMA {
-			if e, ok := c.pairs[i]; ok {
-				i = e
-			}
-			i++
-		}
-		args = append(args, [2]int{start, i})
-		if i < b-1 {
-			i++
-		}
-	}
-	if len(args) != len(params) {
-		return "", "", c.fail(a, "match argument call requires exact non-variadic arity")
-	}
-	var out strings.Builder
-	var names []string
-	for n, arg := range args {
-		name := c.temp()
-		alias := fmt.Sprintf("__hgo_match_expr_type_%s_%d", c.hash, c.serial)
-		fmt.Fprintf(&c.aliases, "\ntype %s = %s\n", alias, params[n])
-		fmt.Fprintf(&out, "var %s %s;\n", name, alias)
-		value, err := c.assign(arg[0], arg[1], name, alias)
-		if err != nil {
-			return "", "", err
-		}
-		out.WriteString(value)
-		names = append(names, name)
-	}
-	return out.String(), ts[a].s + "(" + strings.Join(names, ",") + ")", nil
 }

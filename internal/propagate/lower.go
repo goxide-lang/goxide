@@ -615,6 +615,8 @@ func (l *lowering) statement(s ast.Stmt, ft *ast.FuncType) ([]ast.Stmt, error) {
 	switch x := s.(type) {
 	case *ast.ReturnStmt:
 		scopeMatch = hasMatchAtom(x)
+	case *ast.ExprStmt:
+		scopeMatch = hasMatchAtom(x)
 	case *ast.AssignStmt:
 		scopeMatch = x.Tok == token.ASSIGN && hasMatchAtom(x)
 	}
@@ -1156,28 +1158,37 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 			if tv.IsType() || tv.IsBuiltin() {
 				return y
 			}
-			if id, ok := original.(*ast.Ident); ok {
-				switch l.info.Uses[id].(type) {
-				case *types.Builtin, *types.Func:
-					// A declared function has no mutable runtime value to freeze.
-					return y
-				}
+			if l.staticEffectCallee(original) {
+				return y
 			}
+
 			return l.freezeValue(original, y, &pre)
 		}
 		printPlan := false
 		if id, ok := n.Fun.(*ast.Ident); ok {
 			printPlan = id.Name == "__hgo_print" || id.Name == "__hgo_println"
 		}
-		p, y, e := l.expr(n.Fun, ft)
-		if e != nil {
-			return nil, nil, e
-		}
-		pre = append(pre, p...)
-		if printPlan {
-			n.Fun = y
+		var p []ast.Stmt
+		var y ast.Expr
+		var e error
+		if selector, ok := ast.Unparen(n.Fun).(*ast.SelectorExpr); ok && l.info.Selections[selector] != nil && l.info.Selections[selector].Kind() == types.MethodVal {
+			p, y, e = l.methodReceiver(selector.X, ft)
+			if e != nil {
+				return nil, nil, e
+			}
+			pre = append(pre, p...)
+			selector.X = y
 		} else {
-			n.Fun = freeze(n.Fun, y)
+			p, y, e = l.expr(n.Fun, ft)
+			if e != nil {
+				return nil, nil, e
+			}
+			pre = append(pre, p...)
+			if printPlan {
+				n.Fun = y
+			} else {
+				n.Fun = freeze(n.Fun, y)
+			}
 		}
 		for i, a := range n.Args {
 			p, y, e = l.expr(a, ft)

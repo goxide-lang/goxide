@@ -3,7 +3,7 @@
 `Lower(filename, source) ([]byte, error)` runs before `enums.Lower`. It supports
 whole initializers of single typed or inferred **local** declarations, single
 identifier assignments and short declarations, and whole
-return expressions in functions or closures with one unnamed, Go-parseable result.
+return expressions in functions or closures with one named or unnamed, Go-parseable result.
 It also supports recursive complete-arm matches and same-file known-signature
 call arguments (see the bounded composition rules below):
 
@@ -41,8 +41,7 @@ search stays inside the nearest function, including inline closures.
 
 Not supported yet: target forms beyond a single identifier subscript, multiple assignment
 targets, control-header match declarations, package initializers; whole matches in
-named or multiple returns; match in arbitrary unary/composite literal contexts; dynamic/method/cross-file/generic/
-variadic callees; labelled standalone calls and control headers; expression blocks;
+multiple returns; match in arbitrary unary/composite literal contexts; selector/factory-call/generic/variadic callees; direct cross-file declarations; labelled standalone calls and control headers; expression blocks;
 unsupported complex signatures. These are
 implementation gaps, not language prohibitions or approved deferrals. Statement
 matches pass through. All enum validation, guard order and exhaustiveness remain
@@ -127,3 +126,29 @@ checks, local/nominal type contexts and readonly negatives. Optional optimized
 benchmarks are enabled by `HGO_MATCH_BENCH=1`; production measurements and the
 separate earlier pure-Go IIFE research are recorded under
 `tests/research/match_lowering`.
+
+## Named returns and typed function variables
+
+Whole `return match ...` reads the actual single-result signature through the
+same typed context resolver as embedded returns, including a named result and
+locally shadowed type spelling. Arm evaluation finishes in a private block before
+an ordinary `return temporary` assigns the named result slot. Defers observe that
+assignment; a panic during an arm leaves the prior slot value. Generated locals
+do not invalidate a forward goto. Direct recover remains in the user call frame.
+
+Identifier function variables with known non-variadic signatures accept match
+arguments in return/statement calls and the existing local/arm/binary contexts.
+The typed pass follows the enclosing actual call and checks the variable object,
+exact arity and signature parameter; a same-spelled declaration or builtin is not
+a substitute. Signature witnesses never execute. The existing propagation pass
+captures the function value before arguments, stages arguments in lexical order,
+and delays nil-function invocation until arguments finish. Failed `?` returns from
+the nearest user function before later arguments or invocation. Compiler atoms
+are always removed; no generated IIFE, reflection or runtime type erasure is used.
+
+This slice does not add `s.F(match ...)`, `factory()(match ...)`, variadic or
+explicit generic calls, or multiple-result `return match`. Such inputs remain
+source-located diagnostics. Parameter type errors and constant overflow also
+report the original match location. `tests/acceptance/match_named_dynamic_test.go`
+uses real CLI output, independent generated-module race/vet, deterministic output,
+positive runtime assertions and negative source-location assertions.

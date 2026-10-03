@@ -191,7 +191,7 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 			}
 		}
 		result := ""
-		if ft != nil && ft.Results != nil && len(ft.Results.List) == 1 && len(ft.Results.List[0].Names) == 0 {
+		if ft != nil && ft.Results != nil && len(ft.Results.List) == 1 && len(ft.Results.List[0].Names) <= 1 {
 			var b bytes.Buffer
 			format.Node(&b, token.NewFileSet(), ft.Results.List[0].Type)
 			result = b.String()
@@ -320,7 +320,7 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 			mode = "return"
 			start = i - 1
 			if owner < 0 || funcs[owner].result == "" {
-				return nil, fail(i, "return requires one unnamed concrete result type")
+				return nil, fail(i, "return requires one concrete result type")
 			}
 			typ = funcs[owner].result
 		} else if i > 1 && (ts[i-1].k == token.ASSIGN || ts[i-1].k == token.DEFINE) {
@@ -399,7 +399,11 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 				fmt.Fprintf(&b, "var %s = __hgo_match_expr_infer(%s);\n", tmp, strconv.Quote(origin))
 			}
 		} else {
-			fmt.Fprintf(&b, "var %s %s;\n", tmp, typ)
+			if mode == "return" {
+				fmt.Fprintf(&b, "var %s = __hgo_match_expr_operand_context(__hgo_match_expr_return(),%q,%q);\n", tmp, "direct", c.origin(i))
+			} else {
+				fmt.Fprintf(&b, "var %s %s;\n", tmp, typ)
+			}
 		}
 		body, err := c.assign(i, end+1, tmp, typ)
 		if err != nil {
@@ -419,7 +423,7 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 			fmt.Fprintf(&b, "var %s %s = %s", name, typ, tmp)
 		}
 		text := b.String()
-		if mode == "assign" {
+		if mode == "assign" || mode == "return" {
 			text = "{\n" + text + "\n}"
 		}
 		edits = append(edits, edit{ts[start].a, ts[end].b, text})

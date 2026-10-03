@@ -186,3 +186,13 @@ hgo 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开放
 [真实多包验收](../../tests/acceptance/match_binary_index_test.go)含四项生成模块 race 测试、vet、两次确定性、七个负例；覆盖 typed peer/两侧 match/大整数、scope/goto、短路、一次求值、存储及 panic 时点、失败/defer/direct recover 与用户闭包边界。原先 operator、short-circuit、simple-index 三类拒绝用例迁入正例，不通过删除合法功能来收口。[优化构建实测](../../tests/research/match_lowering/README.md#production-binaryindex-preludes)比较真实 hgo 输出与显式 statement match，不能与早期纯 Go IIFE 探针混为实现证据。
 
 本片采用 prelude 统一保留控制语义，不否定已有 IIFE 机制实验，也不宣称任意组合零成本。更复杂目标/控制头/字面量/动态调用/不可命名结果仍是工程账，未获自动延期；enum 表示迁移继续等用户选择。
+
+## 命名返回与静态类型已知的函数变量 match（2026-10-03）
+
+两个旧最小失败例现已接通：`func F(x E)(out int){return match x{E::A(n)=>n,E::B=>0}}` 与 `func F(x E,g func(int)int)int{return g(match x{E::A(n)=>n,E::B=>0})}`。命名单结果从真实用户函数签名获得类型，避免局部同名类型捕获。arm 先求值到私有 block 内的临时槽，普通 return 再写命名返回槽；defer 观察/修改最终槽，arm panic 不提前改槽，direct recover 保持用户帧，goto 不跨生成声明。
+
+函数变量调用仅接受标识符、静态已知非 variadic 签名及精确 arity。类型检查沿实际 enclosing call 获取参数类型并确认变量对象，不复制同名包函数的参数拼写，不执行类型 witness。既有 propagation 求值机制先保存函数值，再按顺序求实参；实参中重绑 g 不改变已取出的函数值，nil 函数在参数求值完成后才触发调用 panic。scrutinee/guard 保留一次求值，`?` 失败仍返回最近用户函数，跳过后续实参与函数调用。编译器暂存 atom 在 Go 输出前消除，不新增 IIFE/反射/类型擦除。
+
+`tests/acceptance/match_named_dynamic_test.go` 为真实 CLI→Go 模块 race/vet 验收，含确定性、返回槽/defer/panic/goto、direct recover、named 类型遮蔽、函数值捕获、参数 uint64 上下文/shift、局部/statement/嵌套组合、nil 时机、Result 失败/defer/用户闭包，以及负例原 match 行列。旧 named return/dynamic argument 及四条遮蔽/括号/分组函数变量拒绝测试已迁入正向执行验收，未删除其场景覆盖。独立审查另验命名槽旧值、首实参重绑函数变量与包函数同名遮蔽。纯 Go 设计探针单独报告，不替代这些执行证据。
+
+本片后仍实际拒绝的最小形状：`return match ...` 所在函数有 `(a,b int)`；`g(match ...)` 中 g 为 `func(...int)int`；`s.F(match ...)`（字段函数/直接方法）；`factory()(match ...)`；`call[int](match ...)`。均有新负例，参数数量、溢出和不兼容类型仍正常拒绝。这些是当前实现边界，不自动批准延期。blank/embedded 字段、公开 enum 入口、Proposed adapters 不改，整体 MVP 未宣布完成。

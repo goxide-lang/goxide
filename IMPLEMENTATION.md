@@ -1013,3 +1013,13 @@ Default 仅在实例身份确认是已登记 Option 后返回 canonical None；�
 `tests/acceptance/sum_clone_debug_test.go` 提供真实单文件生成模块与独立 producer/consumer/Go-consumer 三模块 race/vet，覆盖深 clone、嵌套 sum、活跃分支、None/Some(nil)/Some(empty)、Err nil/空 map、跨文件/多级/native-only alias、反序 alias 参数、外部具体 Item 载荷、私有载荷 Option Default、不同实例拒绝、new defined/缺载荷协议/Result Default 反例，以及错误 artifact 定位消费 import、重复生成一致。跨文件收集保留必要 validator/constructor 函数签名；基本类型与容器优先按结构拼写，避免无关 slice alias 污染协议选择。独立审查对上述两问题修复后分别执行真实生成模块 race/vet。
 
 边界：Clone/Debug 仍要求载荷的已有协议和可访问类型表达，未新增 pointer/interface 自动协议、手写 Clone/Debug、完整 trait 或递归对象图系统。blank/embedded 字段、公开 enum 入口契约不变。本片完成后先交回；命名返回 match 与动态已知类型函数参数 match 是下一独立工程片，未在此实施。
+
+## 命名返回与静态类型已知的函数变量 match（2026-10-03）
+
+两个旧最小失败例现已接通：`func F(x E)(out int){return match x{E::A(n)=>n,E::B=>0}}` 与 `func F(x E,g func(int)int)int{return g(match x{E::A(n)=>n,E::B=>0})}`。命名单结果从真实用户函数签名获得类型，避免局部同名类型捕获。arm 先求值到私有 block 内的临时槽，普通 return 再写命名返回槽；defer 观察/修改最终槽，arm panic 不提前改槽，direct recover 保持用户帧，goto 不跨生成声明。
+
+函数变量调用仅接受标识符、静态已知非 variadic 签名及精确 arity。类型检查沿实际 enclosing call 获取参数类型并确认变量对象，不复制同名包函数的参数拼写，不执行类型 witness。既有 propagation 求值机制先保存函数值，再按顺序求实参；实参中重绑 g 不改变已取出的函数值，nil 函数在参数求值完成后才触发调用 panic。scrutinee/guard 保留一次求值，`?` 失败仍返回最近用户函数，跳过后续实参与函数调用。编译器暂存 atom 在 Go 输出前消除，不新增 IIFE/反射/类型擦除。
+
+`tests/acceptance/match_named_dynamic_test.go` 为真实 CLI→Go 模块 race/vet 验收，含确定性、返回槽/defer/panic/goto、direct recover、named 类型遮蔽、函数值捕获、参数 uint64 上下文/shift、局部/statement/嵌套组合、nil 时机、Result 失败/defer/用户闭包，以及负例原 match 行列。旧 named return/dynamic argument 及四条遮蔽/括号/分组函数变量拒绝测试已迁入正向执行验收，未删除其场景覆盖。独立审查另验命名槽旧值、首实参重绑函数变量与包函数同名遮蔽。纯 Go 设计探针单独报告，不替代这些执行证据。
+
+本片后仍实际拒绝的最小形状：`return match ...` 所在函数有 `(a,b int)`；`g(match ...)` 中 g 为 `func(...int)int`；`s.F(match ...)`（字段函数/直接方法）；`factory()(match ...)`；`call[int](match ...)`。均有新负例，参数数量、溢出和不兼容类型仍正常拒绝。这些是当前实现边界，不自动批准延期。blank/embedded 字段、公开 enum 入口、Proposed adapters 不改，整体 MVP 未宣布完成。

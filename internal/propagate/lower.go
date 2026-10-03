@@ -332,7 +332,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	// including operands with inference, before replacing each marker's result.
 	seed, _ := parser.ParseFile(fs, "<propagation signatures>", "package "+f.Name.Name+";func "+marker+"[T interface{}](v T) T {return v};func __hgo_enum_infer[T interface{}](v T) {}", 0)
 	f.Decls = append(f.Decls, seed.Decls...)
-	matchSeed, _ := parser.ParseFile(fs, "<match result signatures>", "package "+f.Name.Name+";type "+matchPending+" interface{};func "+matchInfer+"(origin string) "+matchPending+"{return nil};func "+matchContext+"[T interface{}](v T,origin string)T{return v};func "+matchOperand+"[T interface{}](v T,kind,origin string)T{return v};func "+matchZero+"[T interface{}]()T{var v T;return v};func "+matchReturn+"() "+matchPending+"{return nil}", 0)
+	matchSeed, _ := parser.ParseFile(fs, "<match result signatures>", "package "+f.Name.Name+";type "+matchPending+" interface{};func "+matchInfer+"(origin string) "+matchPending+"{return nil};func "+matchContext+"[T interface{}](v T,origin string)T{return v};func "+matchOperand+"[T interface{}](v T,kind,origin string)T{return v};func "+matchZero+"[T interface{}]()T{var v T;return v};func "+matchReturn+"() "+matchPending+"{return nil};func "+matchArgument+"() "+matchPending+"{return nil}", 0)
 	f.Decls = append(f.Decls, matchSeed.Decls...)
 	for {
 		l.check()

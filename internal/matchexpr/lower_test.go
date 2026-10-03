@@ -2,6 +2,7 @@ package matchexpr
 
 import (
 	"github.com/hxsf/goxide/internal/enums"
+	"github.com/hxsf/goxide/internal/propagate"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,6 +36,10 @@ func TestGeneratedRace(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	r.Source, e = propagate.Lower("sample.hgo", r.Source, propagate.Config{Families: r.Enums})
+	if e != nil {
+		t.Fatal(e)
+	}
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
 	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module check\ngo 1.27\n"), 0600)
@@ -57,7 +62,7 @@ func TestReject(t *testing.T) {
 	for _, body := range []string{
 		`x,y:=match e { E::Idle => 1 }; _,_=x,y`,
 		`var x int = match e { E::Idle => { 1 } }; _=x`,
-		`consume(match e { E::Idle => 1 })`,
+		`obj.consume(match e { E::Idle => 1 })`,
 	} {
 		t.Run(body, func(t *testing.T) {
 			if _, e := Lower("bad.hgo", []byte("package p\nfunc f(){"+body+"}")); e == nil {
@@ -65,8 +70,8 @@ func TestReject(t *testing.T) {
 			}
 		})
 	}
-	if _, e := Lower("bad.hgo", []byte("package p\nfunc f()(x int){return match e { E::Idle => 1 }}")); e == nil {
-		t.Fatal("named result accepted")
+	if _, e := Lower("bad.hgo", []byte("package p\nfunc f()(x,y int){return match e { E::Idle => 1 }}")); e == nil {
+		t.Fatal("multiple results accepted")
 	}
 }
 func TestCoverageDelegated(t *testing.T) {

@@ -57,10 +57,6 @@ func TestInvalidBeforeArms(t *testing.T){trace:=[]string{};defer func(){if recov
 func TestMatchCompositionBoundaries(t *testing.T) {
 	cases := map[string]string{
 		"variadic":                      `func g(n ...int)int{return 0};func f(x E)int{return g(match x{E::A=>1,_=>2,})}`,
-		"shadow parameter":              `func g(n int)int{return n};func f(x E,g func(int)int)int{return g(match x{E::A=>1,_=>2,})}`,
-		"parenthesized parameter":       `func g(n uint64)uint64{return n};func f(x E,g (func(int)uint64))uint64{return g(match x{E::A=>1,_=>2,})}`,
-		"parenthesized local":           `func g(n uint64)uint64{return n};func f(x E)uint64{var g (func(int)uint64);return g(match x{E::A=>1,_=>2,})}`,
-		"grouped local":                 `func g(n uint64)uint64{return n};func f(x E)uint64{var (g (func(int)uint64));return g(match x{E::A=>1,_=>2,})}`,
 		"parenthesized type conversion": `func g(n uint64)uint64{return n};func f(x E)any{type g (int8);return g(match x{E::A=>256,_=>0,})}`,
 		"grouped type conversion":       `func g(n uint64)uint64{return n};func f(x E)any{type (g (int8));return g(match x{E::A=>256,_=>0,})}`,
 		"reference signature shadow":    `func g(n uint64)uint64{return n};func f(x E,r &int,g (func(int)uint64))uint64{return g(match x{E::A=>1,_=>2,})}`,

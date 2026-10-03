@@ -262,3 +262,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### Option/Result 字段 Clone/Debug 已收口（2026-10-03）
 
 已登记具体实例的本地/跨模块字段 Clone/Debug 与 Option None Default 已通过独立生成模块验收；旧“Option/Result Clone/Debug 字段全部未做”不再适用。缺载荷协议、不可访问类型及未实现手写协议仍按实际范围明确诊断，不扩为全 trait。下一片可实现命名返回函数 `return match ...` 与动态已知类型函数参数 `g(match ...)`；binary、简单 index 和直接已知函数调用已实现，不再列为缺口。本片按要求交回，不连续扩展下一片。blank/embedded 规则及公开 enum 入口验证仍待决定。
+
+### 两项 match 工程缺口已完成（2026-10-03）
+
+命名单结果 `return match` 与标识符函数变量 `g(match...)` 已接通，返回槽/defer/direct recover、函数值捕获、参数次序、nil 调用和 `?` 目标有真实生成模块验收；见 RFC 0009 与 `tests/acceptance/match_named_dynamic_test.go`。前节所列这两项不再是缺口。仍拒绝的已测最小形状为多结果 return、variadic g、selector/直接方法、factory() 返回函数直接调用及显式 generic 调用中的 match。待定字段/公开入口契约保持不变，整体 MVP 不标完成。

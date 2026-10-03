@@ -13,6 +13,7 @@ const matchInfer = "__hgo_match_expr_infer"
 const matchContext = "__hgo_match_expr_context"
 const matchOperand = "__hgo_match_expr_operand_context"
 const matchZero = "__hgo_match_expr_zero"
+const matchArgument = "__hgo_match_expr_argument"
 const matchReturn = "__hgo_match_expr_return"
 const matchPending = "__hgo_match_expr_pending"
 
@@ -140,6 +141,48 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 		if call.Fun.(*ast.Ident).Name == matchOperand {
 			target = l.info.TypeOf(call.Args[0])
 			if rc, ok := call.Args[0].(*ast.CallExpr); ok {
+				if id, ok := rc.Fun.(*ast.Ident); ok && id.Name == matchArgument {
+					var node ast.Node = slot
+					var host *ast.CallExpr
+					index := -1
+					for node != nil {
+						parent := parents[node]
+						if fn, ok := parent.(*ast.FuncLit); ok && matchAtom(fn) == nil {
+							break
+						}
+						if candidate, ok := parent.(*ast.CallExpr); ok {
+							for i, arg := range candidate.Args {
+								if arg == node {
+									host, index = candidate, i
+									break
+								}
+							}
+							if host != nil {
+								break
+							}
+						}
+						node = parent
+					}
+					if host == nil {
+						return false, fail("match argument has no enclosing call")
+					}
+					callee, ok := host.Fun.(*ast.Ident)
+					if !ok {
+						return false, fail("match argument requires an identifier function value")
+					}
+					if _, ok := l.info.ObjectOf(callee).(*types.Var); !ok {
+						return false, fail("match argument requires a statically typed function variable; this declaration/builtin call is outside the supported subset")
+					}
+					t := l.info.TypeOf(callee)
+					if t == nil {
+						return false, fail("match argument function type is unresolved")
+					}
+					sig, ok := t.Underlying().(*types.Signature)
+					if !ok || sig.Variadic() || sig.TypeParams().Len() != 0 || len(host.Args) != sig.Params().Len() || host.Ellipsis.IsValid() {
+						return false, fail("match argument requires exact non-variadic function-value arity")
+					}
+					target = sig.Params().At(index).Type()
+				}
 				if id, ok := rc.Fun.(*ast.Ident); ok && id.Name == matchReturn {
 					// Resolve the enclosing user signature, not a copied spelling
 					// that a local declaration may shadow or a package cannot name.
@@ -328,7 +371,7 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 
 func matchSeedDecl(d ast.Decl) bool {
 	if f, ok := d.(*ast.FuncDecl); ok {
-		return f.Name.Name == matchInfer || f.Name.Name == matchContext || f.Name.Name == matchOperand || f.Name.Name == matchZero || f.Name.Name == matchReturn
+		return f.Name.Name == matchInfer || f.Name.Name == matchContext || f.Name.Name == matchOperand || f.Name.Name == matchZero || f.Name.Name == matchReturn || f.Name.Name == matchArgument
 	}
 	if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.TYPE && len(g.Specs) == 1 {
 		return g.Specs[0].(*ast.TypeSpec).Name.Name == matchPending

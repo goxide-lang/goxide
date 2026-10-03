@@ -63,6 +63,31 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 		}
 		return "(" + left + " " + op.String() + " " + right + ")", nil
 	}
+	// Identifier calls retain the real callee expression. The typed pass reads
+	// its actual signature; no signature spelling or runtime witness is copied.
+	if a+2 < b && ts[a].k == token.IDENT && ts[a+1].k == token.LPAREN && c.pairs[a+1] == b-1 {
+		if _, static := c.callees[ts[a].s]; !static {
+			var args []string
+			for i := a + 2; i < b-1; {
+				start := i
+				for i < b-1 && ts[i].k != token.COMMA {
+					if end, ok := c.pairs[i]; ok {
+						i = end
+					}
+					i++
+				}
+				value, err := c.expression(start, i, "__hgo_match_expr_argument()", "direct")
+				if err != nil {
+					return "", err
+				}
+				args = append(args, value)
+				if i < b-1 {
+					i++
+				}
+			}
+			return c.copy(ts[a].a, ts[a].b) + "(" + strings.Join(args, ",") + ")", nil
+		}
+	}
 	if ts[a].k != token.IDENT || ts[a].s != "match" {
 		return "", c.fail(a, "embedded match currently requires binary operands or parentheses")
 	}
@@ -106,7 +131,7 @@ func (c *composer) embedded(i, open int, result string) (edit, int, bool, error)
 	if ts[start].k == token.RETURN {
 		expr = start + 1
 		if result == "" {
-			return edit{}, 0, false, c.fail(i, "return requires one unnamed concrete result type")
+			return edit{}, 0, false, c.fail(i, "return requires one concrete result type")
 		}
 		context = "__hgo_match_expr_return()"
 		prefix = "return "
@@ -122,6 +147,15 @@ func (c *composer) embedded(i, open int, result string) (edit, int, bool, error)
 			}
 		}
 		if assign < 0 {
+			if ts[start].k == token.IDENT && start+1 < i && ts[start+1].k == token.LPAREN {
+				end := c.pairs[start+1]
+				if end > i && end+1 < len(ts) && (ts[end+1].k == token.SEMICOLON || ts[end+1].k == token.RBRACE) {
+					value, err := c.expression(start, end+1, "", "direct")
+					if err == nil {
+						return edit{ts[start].a, ts[end].b, value}, end, true, nil
+					}
+				}
+			}
 			return edit{}, 0, false, nil
 		}
 		expr = assign + 1

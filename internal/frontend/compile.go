@@ -86,6 +86,7 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
+	builtinTypes    map[string]macros.TypeContext
 	macros          *macros.Package
 	macroImporter   types.Importer
 	macroBudget     *macros.Budget
@@ -371,6 +372,23 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	f, e := parser.ParseFile(fs, filename, strings.Join(lines, "\n"), parser.ParseComments)
 	if e != nil {
 		return Result{}, e
+	}
+	var builtinImporter types.Importer
+	var builtinNamed map[string]macros.TypeContext
+	if cfg != nil {
+		builtinImporter = cfg.macroImporter
+		builtinNamed = cfg.builtinTypes
+	}
+	if err := macros.ResolveBuiltins(fs, f, expanded.Builtins, builtinImporter, builtinNamed); err != nil {
+		if e, ok := err.(*macros.BuiltinBindingError); ok {
+			mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
+			if seg := provenance.Lookup(e.Position.Offset); seg != nil {
+				mapped.Origin = seg.Origin
+				mapped.Stack = seg.Stack
+			}
+			return Result{}, mapped
+		}
+		return Result{}, stageError("macros.ResolveBuiltins", err)
 	}
 	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
 	var collision string

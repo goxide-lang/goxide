@@ -642,3 +642,9 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 函数体保持原 frame，实际 `defer .equals` 的直接 recover 继续有效。普通手写递归与经过另一函数的递归、全局初始化、局部同名函数/类型及反射名称纳入执行验收；不以“循环容器尚未定义”拒绝普通用户函数递归。重复生成保持一致。重复 impl、同协议 manual/derive 冲突、错 self/参数/返回类型、别名目标、额外成员、helper 碰撞、缺 PartialEq、误用 derive Eq 证明手写业务函数及手写 map 键均拒绝。
 
 [前端测试](../internal/frontend/manual_equality_test.go)验证跨文件注册、冲突和原始 body 错误行号；注册汇总位于宏展开之后，但上游宏模板尚不接受 impl，本片不声称宏生成比较 impl 已可用；metadata v4 记录各协议 derive/manual 来源，alias 与定义包一致，身份与精确 Go helper 签名仍核验。本片不新增 Self 简写、借用参数、泛型 impl、外部目标、自动循环图比较或完整 trait；手写函数的 Eq 性质由作者负责。完整 T0 仍有已列工程账，不由本阶段宣称完成。
+
+## 宏 builtin 首片：len/cap（2026-10-03）
+
+模板可直接写 `len($x)` / `cap($x)`，无需 wrapper。定义端局部/函数绑定优先，变量、类型与 import 不能误当 builtin。编译器标记在 DSL 降低后恢复原生 Go 调用，保留常量上下文、数组/数组指针的不求值规则、实参次数与 `?` 所在 frame。调用端局部变量/常量与 import 按绑定改名；struct 字段键和 map 表达式键区分处理。
+
+[单元执行](../internal/macros/builtins_test.go)与[真实生成模块验收](../tests/acceptance/macro_builtins_test.go)覆盖嵌套/跨包宏、局部及 import 遮蔽、定义端同名声明、常量/数组、None/Some 传播次数，以及生成模块 race/vet。调用包级同名声明和实际覆盖调用点的局部 named type 目前明确诊断；无关作用域的类型名称保持不变。它们是工程边界，不自动视为获批延期。其他 builtin（含 append/make/new）未开放，不宣称完整 Rust 宏或全面卫生已完成。零值/公开入口契约未修改。

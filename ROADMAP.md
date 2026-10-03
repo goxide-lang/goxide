@@ -221,3 +221,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 手写具体 equality（2026-10-03）
 
 按 D35 复用比较 registry 接入具体值参数 PartialEq 和空 Eq impl，支持跨文件/跨模块与派生组合、来源元数据和唯一 enum 校验入口。见 [RFC](docs/rfcs/0008-enums.md#手写具体-partialeqeq2026-10-03)。不把业务相等自动映射到原生 map key，不新增借用签名、完整 trait 或循环图比较；完整 T0 仍按验收范围逐项收口。
+
+### 宏 builtin 首片（2026-10-03）
+
+按宏 → enum → 指针顺序补模板直接 len/cap，保原生求值及定义端绑定。调用包级同名声明与局部 named type 边界仍留账；其他 builtin 未开放。见[阶段验收](docs/t0-acceptance.md#宏-builtin-首片lencap2026-10-03)。下一独立片为已登记跨包 Default 字段协议，不改零值/公开入口契约。

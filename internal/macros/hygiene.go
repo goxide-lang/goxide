@@ -124,6 +124,15 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 	if problem != nil {
 		return nil, problem
 	}
+	calls := map[*ast.Ident]bool{}
+	ast.Inspect(root, func(n ast.Node) bool {
+		if c, ok := n.(*ast.CallExpr); ok {
+			if id, ok := c.Fun.(*ast.Ident); ok {
+				calls[id] = true
+			}
+		}
+		return true
+	})
 	bindings := map[*ast.Object]string{}
 	ast.Inspect(root, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
@@ -150,6 +159,10 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			ts[i].text = bindings[id.Obj]
 			return true
 		}
+		if (id.Name == "len" || id.Name == "cap") && e.builtinImportShadow(id.Name) {
+			problem = at(ts[i], "template name "+id.Name+" is a definition-site import, not a builtin")
+			return true
+		}
 		if e.isFunction(id.Name) {
 			key := id.Name
 			if e.pkg != nil {
@@ -163,6 +176,20 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			ts[i].text = e.alias(key)
 			return true
 		}
+		if id.Name == "len" || id.Name == "cap" {
+			if e.definitionNames()[id.Name] {
+				problem = at(ts[i], "template name "+id.Name+" is a definition-site declaration, not a builtin; pass it as an explicit capture")
+			} else if !calls[id] {
+				problem = at(ts[i], "template builtin "+id.Name+" requires a direct call")
+			} else if e.callerNames()[id.Name] {
+				problem = at(ts[i], "template builtin "+id.Name+" is shadowed by a caller package declaration; this builtin lowering is unsupported")
+			} else {
+				marker := e.fresh()
+				e.builtins[marker] = id.Name
+				ts[i].text = marker
+			}
+			return true
+		}
 		switch id.Name {
 		case "bool", "string", "byte", "rune", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "float32", "float64", "complex64", "complex128", "any", "error":
 			ts[i].text = e.alias("type " + id.Name)
@@ -171,7 +198,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			ts[i].text = e.alias("const " + id.Name)
 			return true
 		}
-		problem = at(ts[i], fmt.Sprintf("unsupported free template name %q; pass it as an explicit capture (builtins included)", id.Name))
+		problem = at(ts[i], fmt.Sprintf("unsupported free template name %q; pass it as an explicit capture (unsupported builtins included)", id.Name))
 		return true
 	})
 	return ts, problem

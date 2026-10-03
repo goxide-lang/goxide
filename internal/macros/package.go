@@ -16,6 +16,7 @@ import (
 // Package is an opaque source-built macro registry. It contains no executable
 // metadata and is never deserialized. Each expansion owns its mutable state.
 type Package struct {
+	topNames       map[string]bool
 	inputTokens    int
 	prefix         string
 	path           string
@@ -26,16 +27,17 @@ type Package struct {
 	scopes         map[string]*scope
 }
 type scope struct {
-	index        int
-	pkg          *Package
-	imports      map[string]string
-	dependencies map[string]*Package
+	implicitImports []string
+	index           int
+	pkg             *Package
+	imports         map[string]string
+	dependencies    map[string]*Package
 }
 
 // CollectPackage collects selected source files, retaining file-local imports.
 // dependencies must come from successfully compiled source packages.
 func CollectPackage(path string, sources map[string][]byte, dependencies map[string]*Package) (*Package, error) {
-	p := &Package{path: path, defs: map[string]definition{}, funcs: map[string]bool{}, privateHelpers: map[string]bool{}, scopes: map[string]*scope{}}
+	p := &Package{topNames: map[string]bool{}, path: path, defs: map[string]definition{}, funcs: map[string]bool{}, privateHelpers: map[string]bool{}, scopes: map[string]*scope{}}
 	names := make([]string, 0, len(sources))
 	for n := range sources {
 		names = append(names, n)
@@ -107,6 +109,9 @@ func CollectPackage(path string, sources map[string][]byte, dependencies map[str
 				p.defs[n] = d
 			}
 		}
+		for n := range declaredNames(clean) {
+			p.topNames[n] = true
+		}
 		for helper, public := range declaredDeriveHelpers(clean) {
 			p.funcs[helper] = true
 			if !public {
@@ -124,6 +129,9 @@ func CollectPackage(path string, sources map[string][]byte, dependencies map[str
 				path, _ := strconv.Unquote(im.Path.Value)
 				parts := strings.Split(path, "/")
 				alias := parts[len(parts)-1]
+				if im.Name == nil {
+					sc.implicitImports = append(sc.implicitImports, path)
+				}
 				if im.Name != nil {
 					alias = im.Name.Name
 				} else if dep := dependencies[path]; dep != nil {

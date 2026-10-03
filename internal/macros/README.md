@@ -43,7 +43,7 @@ with an explicit-capture alternative. Mutable imported function-valued variables
 are rejected, avoiding an accidental snapshot at package initialization.
 
 There is deliberately no permissive free-name fallback. Unsupported free names
-(including builtin functions such as `len`), generic helpers, imported types and
+(including builtin functions other than the explicitly supported `len`/`cap`), generic helpers, imported types and
 variables, identifier-keyed literals, local type/struct/interface declarations,
 labels, and external precompiled macro metadata are diagnosed. Pass unsupported call-site
 values/functions as explicit captures. Primitive types/constants used by a
@@ -143,3 +143,22 @@ Named scalar definitions and imported/custom formatting protocols do not gain
 implicit support. Direct statements, including nested explicit closure bodies,
 are supported; go/defer, initializer, loop-post, and value contexts are rejected.
 See [formatting runtime](../../formatting/print.go) for the checked write contract.
+
+## Definition-site len/cap
+
+Templates may call native `len` and `cap` directly. Template locals and actual
+same-package functions still take precedence; a definition-site variable, type,
+or import is never silently interpreted as a builtin. Compiler-owned markers
+survive DSL lowering, then restore native Go calls. No wrapper changes constant
+expressions, array/pointer-to-array non-evaluation, argument multiplicity, or `?`
+propagation. Caller local variables/constants and import aliases are renamed by
+binding; struct field keys remain fields and map keys retain variable/constant
+identity. Only scopes enclosing a builtin expansion need local renaming.
+
+A caller package declaration or an enclosing local named type with the same name
+currently gives an explicit diagnostic: renaming named types would change their
+reflection identity. This is an engineering boundary, not approved permanent
+scope exclusion. `append`, `make`, `new`, other builtin functions and complete
+macro-generated declaration support are not enabled by this slice. Existing
+expansion budgets and definition/invocation origins still apply; downstream Go
+argument errors can retain the existing generated/unmapped coordinate label.

@@ -47,7 +47,7 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 }
 func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
 	names := sortedSources(sources)
-	cfg := &compileConfig{declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
+	cfg := &compileConfig{builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
 			continue
@@ -115,6 +115,13 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 			seen[d.Name] = name
 			cfg.declarations = append(cfg.declarations, d)
 		}
+		if parsed, e := parseSourceImports(name, sources[name]); e == nil {
+			context := macros.TypeContext{Types: map[string]*ast.TypeSpec{}, Imports: parsed.Imports}
+			for n, t := range meta.Types {
+				context.Types[n] = &ast.TypeSpec{Name: ast.NewIdent(n), Type: t}
+			}
+			cfg.builtinTypes[name] = context
+		}
 		for n, t := range meta.Types {
 			if _, ok := cfg.named[n]; ok {
 				return PackageResult{}, fmt.Errorf("%s: duplicate type %s", name, n)
@@ -131,9 +138,12 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		if err != nil {
 			return PackageResult{}, err
 		}
+		context := macros.TypeContext{Types: map[string]*ast.TypeSpec{}, Imports: f.Imports}
 		for n, sp := range typeSpecs(f) {
+			context.Types[n] = sp
 			cfg.typeSpecs[n] = sp
 		}
+		cfg.builtinTypes[name] = context
 		for _, decl := range f.Decls {
 			if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
 				for _, sp := range gd.Specs {

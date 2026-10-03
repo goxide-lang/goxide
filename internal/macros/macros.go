@@ -26,6 +26,8 @@ type TokenOrigin struct {
 	Original               bool
 }
 type Result struct {
+	// Builtins maps compiler-owned markers to definition-site builtin operations.
+	Builtins                      map[string]string
 	ExpansionCount, EmittedTokens int
 	Source                        []byte
 	Origins                       []TokenOrigin
@@ -49,6 +51,9 @@ type definition struct {
 	scope  *scope
 }
 type engine struct {
+	implicitImports           []string
+	topNames                  map[string]bool
+	builtins                  map[string]string
 	pkg                       *Package
 	active                    *scope
 	callerImports             map[string]string
@@ -105,6 +110,8 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 	if err != nil {
 		return Result{}, err
 	}
+	e.topNames = declaredNames(clean)
+	e.builtins = map[string]string{}
 	for helper := range declaredDeriveHelpers(clean) {
 		e.funcs[helper] = true
 	}
@@ -121,6 +128,8 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 			name := parts[len(parts)-1]
 			if im.Name != nil {
 				name = im.Name.Name
+			} else {
+				e.implicitImports = append(e.implicitImports, p)
 			}
 			if name != "_" && name != "." {
 				e.imports[name] = true
@@ -170,6 +179,13 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 	if pkg != nil {
 		out = e.finishImports(out)
 	}
+	// Plain Go-shaped expansions can finish here. DSL files finish after lowering.
+	if len(e.builtins) > 0 {
+		out, err = e.finishBuiltins(out)
+		if err != nil {
+			return Result{}, err
+		}
+	}
 	var b strings.Builder
 	var origins []TokenOrigin
 	for _, t := range out {
@@ -195,7 +211,7 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 			fmt.Fprintf(&b, "\nvar %s = %s\n", e.aliases[key], key)
 		}
 	}
-	return Result{Source: []byte(b.String()), Origins: origins, ExpansionCount: e.expansions, EmittedTokens: e.emitted}, nil
+	return Result{Builtins: e.builtins, Source: []byte(b.String()), Origins: origins, ExpansionCount: e.expansions, EmittedTokens: e.emitted}, nil
 }
 func (e *engine) readDefinitions(ts []tok, tail string) ([]tok, string, error) {
 	var clean []tok

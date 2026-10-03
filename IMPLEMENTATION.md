@@ -951,3 +951,9 @@ hgo 直接 enum 比较诊断；已知危险载荷的包裹/混合比较、switch
 最终全树 `go test -race -count=1 -json ./...` **16 测试包 / 309 宿主顶层 / 778 子测试**通过，另 2 包无测试，无测试结果缓存；全树 vet 通过。库、hgo 消费应用、原生 Go 消费三个真实模块分别 race/vet，库和应用重复生成一致。设计检查 **64 Markdown / 846 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过；机制探针不代替真实 hgo 执行。实现、递归与遮蔽修复、源映射和 metadata v4 的独立复审均无阻断。
 
 最终日志 `/tmp/manual-equality-full-race.json`、`/tmp/manual-equality-full-race.err`、`/tmp/manual-equality-full-vet.log`、`/tmp/manual-equality-design.log`；CLI 专项 `/tmp/manual-equality-final-acceptance.log`，独立探针 `/tmp/review-manual`。完整重跑包含递归初始化环与局部类型反射身份修复；早期递归反例失败不计作通过证据。本片提交/push/fetch；借用签名、Self/泛型 impl、宏模板 impl、循环容器和导入键一致性等边界仍按范围账保留，不自动视作获批延期，完整 T0 MVP 未标完成。
+
+## 宏 builtin 首片：len/cap（2026-10-03）
+
+模板可直接写 `len($x)` / `cap($x)`，无需 wrapper。定义端局部/函数绑定优先，变量、类型与 import 不能误当 builtin。编译器标记在 DSL 降低后恢复原生 Go 调用，保留常量上下文、数组/数组指针的不求值规则、实参次数与 `?` 所在 frame。调用端局部变量/常量与 import 按绑定改名；struct 字段键和 map 表达式键区分处理。
+
+[单元执行](internal/macros/builtins_test.go)与[真实生成模块验收](tests/acceptance/macro_builtins_test.go)覆盖嵌套/跨包宏、局部及 import 遮蔽、定义端同名声明、常量/数组、None/Some 传播次数，以及生成模块 race/vet。调用包级同名声明和实际覆盖调用点的局部 named type 目前明确诊断；无关作用域的类型名称保持不变。它们是工程边界，不自动视为获批延期。其他 builtin（含 append/make/new）未开放，不宣称完整 Rust 宏或全面卫生已完成。零值/公开入口契约未修改。

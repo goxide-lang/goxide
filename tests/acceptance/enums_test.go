@@ -164,7 +164,6 @@ func TestEnumExplicitRejections(t *testing.T) {
 		"generic":              `enum E[T] { A(T), }`,
 		"pointer payload":      `enum E { A(*int), }`,
 		"recursive":            `enum E { A(E), }`,
-		"expression match":     `enum E { A, }; func f(x E) int {return match x {E::A=>1,}}`,
 		"nested pattern":       `enum E { A, }; enum F { B(E), }; func f(x F){match x {F::B(E::A)=>{},}}`,
 	}
 	for name, source := range cases {

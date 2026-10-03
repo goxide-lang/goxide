@@ -197,3 +197,7 @@ D31 首片已支持同型 `mut& T` 直接传原生 `*T` 标量参数，包括函
 ### 跨 module 引用 metadata 首片（2026-10-02）
 
 独立模块 local replace 已恢复当前具体引用函数签名，支持 alias/reexport、只读拒绝和可写调用，普通 Go 消费不依赖 metadata。内部产物绑定真实包、选中源、传递依赖源内容和增强依赖 artifact；依赖结构漂移触发重新生成，避免旧权限分析失效。实现、独立审查与验收边界见 [T0 清单](docs/t0-acceptance.md#跨-module-引用产物2026-10-02)。未迁移 enum ABI；其他增强 metadata、未实现引用签名/投影、外部 cgo 输入及原位 match 留账，完整 MVP 尚未完成。
+
+### 独立 enum 阶段（2026-10-03）
+
+最新顺序为宏 → enum → 指针拆分。保留当前值型 case 与已有引用能力，先收口 enum 独立缺口，不以前置 Copy/move/原位借用扩大阶段。首片修复 enum 同线显式分号与旧假负例，见[阶段验收](docs/t0-acceptance.md#独立-enum-稳定阶段声明分隔符2026-10-03)。下一步为跨 module enum metadata；比较/零值/入口校验具体规则未在本片决定。

@@ -893,3 +893,11 @@ Go 1.27.1 非 race 5×200ms 对照中，六组 typed IIFE/statement 小表达式
 最终验收通过：全树 `go test -race -count=1 -json ./...` 为 **15 测试包 / 268 宿主顶层 / 634 子测试**，另 2 包无测试；生成库、hgo 应用、普通 Go 消费模块分别 race/vet，库与应用两次生成字节一致。全树 vet 通过；设计检查 **62 Markdown / 803 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过，机制探针不代替真实 hgo 执行。独立审查复现并确认修复增强依赖与普通 Go 依赖的具名结构漂移；最终实现、根包指纹/构建配置及旧联合验收迁移复审均无剩余阻断。旧“缺 registry”联合用例改为先验证恢复后的 readonly 拒绝，再删除 artifact 验证缺失错误，不削弱负例。
 
 采用补丁和测试迁移后的最终日志 `/tmp/t0-crossmeta-verified.json`、`/tmp/t0-crossmeta-verified.err`、`/tmp/t0-crossmeta-vet.log`、`/tmp/t0-crossmeta-design.log`；前两轮未更新旧断言的全树失败不作为通过证据。独立真实结构漂移探针在 `/tmp/review-artifact-shape-fixed/`。本阶段提交并 push/fetch 后交回，不继续迁移 enum 或扩展其他协议。
+
+## 独立 enum：声明分隔符修复（2026-10-03）
+
+基于 `442cc51e6e8290846c996200b857ac62ef2ad9a5`，按用户新阶段顺序保留 interface＋值型 case，不迁 ABI。enum Lower 在声明生成后独立删除紧随的显式分号 token，避免其落到生成 Go 顶层；注释、自动换行和下一声明保留。将错误地依靠此 bug 通过的表达式 match 负例迁成执行正例。单文件、CLI 多文件/公开 enum、混合声明/注释/EOF 及语义拒绝已由新验收覆盖；生成模块独立 race/vet。
+
+比较/map key、零值与全公开入口校验未改变；原位借用/Copy 留给后续引用增强，仍保留演进目标。跨 module enum 元数据为下一独立切片，不以已有 reference artifact 或同模块 registry 冒充完成。
+
+最终验收：全树 race **15 测试包 / 270 宿主顶层 / 633 子测试**通过（另 2 包无测试），全树 vet 通过；设计检查 **62 Markdown / 806 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过。新增实际生成模块独立 race/vet 与代码、文档独立复审均通过。日志 `/tmp/enum-separator-race.json`、`/tmp/enum-separator-race.err`、`/tmp/enum-separator-vet.log`、`/tmp/enum-separator-design.log`、`/tmp/enum-separator-independent.log`。计数减少的子测试是已迁为正例的旧错误 expression-match 拒绝项，不是删除功能验收。

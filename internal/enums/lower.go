@@ -126,6 +126,7 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 		}
 	}
 	edits := []edit{}
+	var separators []edit
 	for i := 0; i < len(l.ts); i++ {
 		if l.ts[i].text != "enum" {
 			continue
@@ -152,6 +153,12 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 		l.decls = append(l.decls, d)
 		l.byName[d.Name] = &l.decls[len(l.decls)-1]
 		edits = append(edits, edit{l.ts[start].start, l.ts[end].end, ""})
+		// Generated declarations already terminate themselves. Remove only the
+		// explicit source separator, preserving comments between it and the enum.
+		if end+1 < len(l.ts) && l.ts[end+1].kind == token.SEMICOLON && l.ts[end+1].text == ";" {
+			separator := l.ts[end+1]
+			separators = append(separators, edit{separator.start, separator.end, ""})
+		}
 		i = end
 	}
 	if collect {
@@ -211,6 +218,7 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 	for i := range edits {
 		edits[i].text = l.declaration(l.decls[i])
 	}
+	edits = append(edits, separators...)
 	out, e := l.region(0, len(source), edits)
 	if e != nil {
 		return Result{}, e

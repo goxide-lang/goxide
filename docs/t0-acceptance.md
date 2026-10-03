@@ -588,3 +588,11 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 缺失、版本/包错误、权限摘要、文件内容/选集和依赖漂移均有负例；增强依赖及未marked普通 Go依赖的具名 struct 新增 slice 都使旧产物失效。独立审查的真实 hgo→Go 探针曾复现旧实现绕过，已用传递源指纹及增强 artifact pin 修复并纳入回归。这是编译期产物一致性校验，不是全局不可变或密码学认证；普通 Go 仍可直接写生成指针，移除 JSON 也能构建运行。
 
 最小内部格式与边界见 [RFC 0005](rfcs/0005-borrows.md#621-跨-module-引用产物恢复2026-10-02)。源可用 local replace 子集完成；其他增强协议、纯预编译无源恢复、外部 cgo 输入验证和未实现引用签名继续留账。原位 match mut& 等待 enum ABI 决定，Proposed serde adapters 未批准，完整 MVP 尚未完成。
+
+## 独立 enum 稳定阶段：声明分隔符（2026-10-03）
+
+按最新用户优先级，先宏、再独立 enum、后续指针拆分增强；原位 `match mut&` 与 Copy/move 不作为当前 enum 阶段的前置，未来目标保留，已有引用功能不删除。当前保留 interface＋值型 case。比较/map key 资格、非法零值和自动 Go 入口校验仍需准确契约，本片未改变其行为。
+
+[真实回归](../tests/acceptance/enum_separator_test.go)验证 enum 声明后同线显式分号、混合 type/const/函数、同线多 enum、注释及文件末尾，包含单文件表达式/语句 match 执行和 CLI 多文件生成模块 race/vet。修复只删显式 separator token，保留注释与自动换行；旧 expression-match 假负例已移除。真正未知变体/guard 非穷尽仍拒绝，保留文件定位，不宣称补齐完整 source map。
+
+下一切片为两个独立 go.mod 的 enum 元数据恢复；引用 artifact 已实现不代表 enum 信息已恢复。同 module 或普通 Go API 消费不能代替外部 hgo 变体匹配验收。完整 enum/MVP 稳定仍未宣布。

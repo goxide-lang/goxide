@@ -210,3 +210,7 @@ metadata v4 在已验证身份、helper 签名和 Eq 资格之外记录 PartialE
 ## 消费者透明 alias 与协议身份（2026-10-03）
 
 本地包级多级 Go `=` alias 可恢复外部 canonical 的已登记 Default/Clone/Debug/Serialize/Deserialize 与 PartialEq/Eq，包含 alias 在 native `.go` 中声明的场景。身份由 Go 类型系统 Unalias/Identical 核验，new defined 及同名局部类型不冒继承；metadata v6 的来源/签名/产物校验不变。实现与真实三模块证据见 RFC 0013 和 `tests/acceptance/local_protocol_alias_test.go`。此项不改变 enum 表示、合法值或公开函数入口验证契约。
+
+## 具体 builtin sum 字段协议（2026-10-03）
+
+已登记具体 Option/Result 的 Clone/Debug 字段组合已接通，依据现有 validator 参数的 Go 类型身份，不按 family 拼写推断。None 与 Some(nil/empty) 保持不同变体/载荷状态；Result 只运行活跃分支协议，非法动态 case 仍拒。Option Default 仅为 None，载荷 Default/可命名性不是前提；Result 不获得隐式默认值。跨文件及跨 module 实际验收见 RFC 0013 和 `tests/acceptance/sum_clone_debug_test.go`。不改变公开入口或指针阶段契约。

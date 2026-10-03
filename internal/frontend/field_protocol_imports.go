@@ -72,6 +72,14 @@ func (g *generator) importedField(kind string, t ast.Expr) (string, bool) {
 	return helper, ok
 }
 func (g *generator) deriveProtocol(kind string, t ast.Expr) (string, bool) {
+	if kind == "Default" || kind == "Clone" || kind == "Debug" {
+		if value, ok, err := g.sumProtocol(kind, t); ok || err != nil {
+			if err != nil {
+				g.sumError = err
+			}
+			return value, true
+		}
+	}
 	if kind == "Default" {
 		return g.importedDefault(t)
 	}

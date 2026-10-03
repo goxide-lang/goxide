@@ -47,7 +47,7 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 }
 func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
 	names := sortedSources(sources)
-	cfg := &compileConfig{builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
+	cfg := &compileConfig{protocolFunctions: map[string][]*ast.FuncDecl{}, packagePath: path, builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
 			continue
@@ -68,6 +68,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	if err != nil {
 		return PackageResult{}, err
 	}
+	cfg.enumRegistry = metadata
 	cfg.imported, cfg.preludes, cfg.enumGoImports, cfg.enumUnavailable = importedDeclarations(path, sources, metadata)
 	eqPrelude, eqImports, eqProtocols := importedEquality(path, sources, metadata)
 	for n, p := range eqPrelude {
@@ -183,6 +184,8 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		if err = mergeManualEquality(cfg.manualEquality, r.manualEquality); err != nil {
 			return PackageResult{}, err
 		}
+		cfg.protocolFunctions[name] = r.typeFunctions
+		cfg.sumDeclarations = append(cfg.sumDeclarations, r.Enums...)
 		context := cfg.builtinTypes[name]
 		context.Types = r.typeSpecs
 		context.Imports = r.typeImports

@@ -258,3 +258,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 5. **公开入口待答复**：直接 enum 参数在公开函数体前验证、非法值 panic 的契约未实施，Option None 合法性也不由本轮改动。
 
 这些工程/设计账不自动成为批准延期；不混入指针阶段、full trait/manual serde 或 Proposed adapters，也不宣称完整 MVP 已完成。
+
+### Option/Result 字段 Clone/Debug 已收口（2026-10-03）
+
+已登记具体实例的本地/跨模块字段 Clone/Debug 与 Option None Default 已通过独立生成模块验收；旧“Option/Result Clone/Debug 字段全部未做”不再适用。缺载荷协议、不可访问类型及未实现手写协议仍按实际范围明确诊断，不扩为全 trait。下一片可实现命名返回函数 `return match ...` 与动态已知类型函数参数 `g(match ...)`；binary、简单 index 和直接已知函数调用已实现，不再列为缺口。本片按要求交回，不连续扩展下一片。blank/embedded 规则及公开 enum 入口验证仍待决定。

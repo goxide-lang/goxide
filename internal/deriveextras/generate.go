@@ -249,13 +249,23 @@ func GenerateEnum(kind string, d enums.Decl, resolvers ...Resolver) (string, map
 		}
 		return "func Default" + d.Name + "() " + d.Name + " { return " + selected.Constructor + "(" + argument + ") }\n", nil, nil
 	}
+	return generateVariantProtocol(kind, d, kind+d.Name, d.Name, resolvers...)
+}
+
+// GenerateSum consumes a registry-verified concrete builtin instance. None has
+// the nil case; payload protocols still come exclusively from the resolver.
+func GenerateSum(kind string, d enums.Decl, helper string, resolvers ...Resolver) (string, map[string]string, error) {
+	return generateVariantProtocol(kind, d, helper, d.Family, resolvers...)
+}
+
+func generateVariantProtocol(kind string, d enums.Decl, helper, display string, resolvers ...Resolver) (string, map[string]string, error) {
 	g := &generator{imports: map[string]string{}, resolvers: resolvers}
 	var b strings.Builder
 	result := "string"
 	if kind == "Clone" {
 		result = d.Name
 	}
-	fmt.Fprintf(&b, "func %s%s(v *%s) %s { %s(*v); switch x:=(*v).(type){", kind, d.Name, d.Name, result, d.Validator)
+	fmt.Fprintf(&b, "func %s(v *%s) %s { %s(*v); switch x:=(*v).(type){", helper, d.Name, result, d.Validator)
 	for _, v := range d.Variants {
 		fmt.Fprintf(&b, "case %s: _=x;", v.CaseName)
 		if kind == "Clone" {
@@ -270,13 +280,13 @@ func GenerateEnum(kind string, d enums.Decl, resolvers ...Resolver) (string, map
 			}
 		} else {
 			if v.Type == nil {
-				fmt.Fprintf(&b, "return %q;", d.Name+"::"+v.Name)
+				fmt.Fprintf(&b, "return %q;", display+"::"+v.Name)
 			} else {
 				x, e := g.debug(v.Type, "x.Value")
 				if e != nil {
 					return "", nil, e
 				}
-				fmt.Fprintf(&b, "return %q + %s + %q;", d.Name+"::"+v.Name+"(", x, ")")
+				fmt.Fprintf(&b, "return %q + %s + %q;", display+"::"+v.Name+"(", x, ")")
 			}
 		}
 	}

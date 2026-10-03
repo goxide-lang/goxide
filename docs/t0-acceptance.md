@@ -713,3 +713,15 @@ struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload
 5. **公开入口待答复**：直接 enum 参数在公开函数体前验证、非法值 panic 的契约未实施，Option None 合法性也不由本轮改动。
 
 这些工程/设计账不自动成为批准延期；不混入指针阶段、full trait/manual serde 或 Proposed adapters，也不宣称完整 MVP 已完成。
+
+## 已登记具体 Option/Result 的 Clone/Debug 组合（2026-10-03）
+
+最小旧失败例 `#[derive(Clone,Debug)] type S struct { V Option[[]int] }` 及对应 Result 字段现已接通。既有 Option serde/equality 与普通 enum Clone/Debug 不被当成此项证据；新实现经统一字段协议 resolver 分派，并用本地 lowering 或已验证跨包 family registry 中 validator 的精确参数类型核对真实 origin 和全部具体参数。类型名相似、同 family 不同具体实例、新 defined 类型均不能冒认协议；metadata 保持 v6，无新 schema。
+
+Clone 在通过既有 validator 后只复制活跃分支：Option None 无载荷操作，Some 按载荷 Clone；Result 只处理 Ok 或 Err 实际载荷。静态资格仍要求所有可能载荷具备所需协议，不能因某个调用当前是 Ok 而放过无 Debug 的 Err 类型。递归复用既有字段/容器协议，普通 Go 赋值与别名拓扑规则不变。Debug 明确展示 `Option::None`、`Option::Some(nil)`、`Option::Some([])`、`Result::Ok(...)` / `Result::Err(...)`，保留字符串引号、nil/空区别及载荷内容。
+
+Default 仅在实例身份确认是已登记 Option 后返回 canonical None；不要求载荷 Default，也不要求私有载荷可命名，不实例化无用 Some constructor。Result 继续没有隐式默认值；普通 enum 显式选中变体的既定 Default 规则不改。非法 nil Result、typed-nil/指针 case/伪造动态 case 仍按现有 validator 拒绝；没有扩大公开函数入口验证。
+
+`tests/acceptance/sum_clone_debug_test.go` 提供真实单文件生成模块与独立 producer/consumer/Go-consumer 三模块 race/vet，覆盖深 clone、嵌套 sum、活跃分支、None/Some(nil)/Some(empty)、Err nil/空 map、跨文件/多级/native-only alias、反序 alias 参数、外部具体 Item 载荷、私有载荷 Option Default、不同实例拒绝、new defined/缺载荷协议/Result Default 反例，以及错误 artifact 定位消费 import、重复生成一致。跨文件收集保留必要 validator/constructor 函数签名；基本类型与容器优先按结构拼写，避免无关 slice alias 污染协议选择。独立审查对上述两问题修复后分别执行真实生成模块 race/vet。
+
+边界：Clone/Debug 仍要求载荷的已有协议和可访问类型表达，未新增 pointer/interface 自动协议、手写 Clone/Debug、完整 trait 或递归对象图系统。blank/embedded 字段、公开 enum 入口契约不变。本片完成后先交回；命名返回 match 与动态已知类型函数参数 match 是下一独立工程片，未在此实施。

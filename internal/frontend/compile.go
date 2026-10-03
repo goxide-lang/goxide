@@ -29,6 +29,7 @@ import (
 )
 
 type Result struct {
+	typeFunctions           []*ast.FuncDecl
 	typeImports             []*ast.ImportSpec
 	fieldProtocols          map[string][]string
 	defaultRegistrations    map[string]string
@@ -70,6 +71,14 @@ type model struct {
 	source, from string
 }
 type generator struct {
+	sumExternal  []externalSumProtocol
+	protocolPkg  *types.Package
+	protocolFile *ast.File
+	protocolSums []enums.Decl
+	sumHelpers   map[string]string
+	sumImports   map[string]string
+	sumError     error
+
 	localProtocols     map[string]map[string]string
 	deriveFile         int
 	importedFields     map[string]string
@@ -94,24 +103,28 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
-	localProtocols  map[string]map[string]string
-	fieldImports    map[string]map[string]string
-	defaultImports  map[string]map[string]string
-	builtinTypes    map[string]macros.TypeContext
-	macros          *macros.Package
-	macroImporter   types.Importer
-	macroBudget     *macros.Budget
-	declarations    []enums.Decl
-	named           map[string]ast.Expr
-	models          map[string]model
-	collect         bool
-	imported        map[string][]enums.Decl
-	preludes        map[string]string
-	enumGoImports   map[string]string
-	enumUnavailable map[string]map[string]string
-	manualDefaults  map[string]manualDefault
-	manualEquality  map[string]manualEquality
-	typeSpecs       map[string]*ast.TypeSpec
+	protocolFunctions map[string][]*ast.FuncDecl
+	sumDeclarations   []enums.Decl
+	packagePath       string
+	enumRegistry      map[string]PackageResult
+	localProtocols    map[string]map[string]string
+	fieldImports      map[string]map[string]string
+	defaultImports    map[string]map[string]string
+	builtinTypes      map[string]macros.TypeContext
+	macros            *macros.Package
+	macroImporter     types.Importer
+	macroBudget       *macros.Budget
+	declarations      []enums.Decl
+	named             map[string]ast.Expr
+	models            map[string]model
+	collect           bool
+	imported          map[string][]enums.Decl
+	preludes          map[string]string
+	enumGoImports     map[string]string
+	enumUnavailable   map[string]map[string]string
+	manualDefaults    map[string]manualDefault
+	manualEquality    map[string]manualEquality
+	typeSpecs         map[string]*ast.TypeSpec
 }
 
 func compile(filename string, source []byte, cfg *compileConfig) (Result, error) {
@@ -418,7 +431,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 		}
 	}
-	if len(g.importedDefaults)+len(g.importedFields) > 0 {
+	{
 		g.defaultImportPaths = defaultImportPaths(f, builtinImporter)
 		if original, e := parseSourceImports(filename, originalSource); e == nil {
 			for alias, path := range defaultImportPaths(original, builtinImporter) {
@@ -677,7 +690,16 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	if cfg != nil && cfg.collect {
-		return Result{models: g.models, typeSpecs: typeSpecs(f), typeImports: f.Imports, manualEquality: manualEqualities}, nil
+		var functions []*ast.FuncDecl
+		for _, declaration := range f.Decls {
+			if fn, ok := declaration.(*ast.FuncDecl); ok {
+				signature := *fn
+				signature.Body = nil
+				signature.Doc = nil
+				functions = append(functions, &signature)
+			}
+		}
+		return Result{models: g.models, typeSpecs: typeSpecs(f), typeImports: f.Imports, typeFunctions: functions, Enums: enumResult.Enums, manualEquality: manualEqualities}, nil
 	}
 	allManual := manual
 	if cfg != nil {
@@ -750,6 +772,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if err = applyManualEquality(filename, equalityDerives, allEqualityManual, specs, g.models); err != nil {
 		return Result{}, err
 	}
+	g.prepareSumProtocols(f, cfg, builtinImporter)
 	fieldProtocols := map[string][]string{}
 	for _, m := range ordered {
 		for _, kind := range []string{"Clone", "Debug", "Serialize", "Deserialize"} {
@@ -834,6 +857,12 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				imports[k] = v
 			}
 		}
+	}
+	if g.sumError != nil {
+		return Result{}, g.sumError
+	}
+	for alias, path := range g.sumImports {
+		imports[alias] = path
 	}
 	var original bytes.Buffer
 	if e := format.Node(&original, fs, f); e != nil {
@@ -1089,7 +1118,7 @@ func (g *generator) emitModel(m model) error {
 			if err := g.validateExtra(f.typ, "Default"); err != nil {
 				return fmt.Errorf("serde default/skip field %s: %w", f.name, err)
 			}
-			value, err := deriveextras.DefaultValue(f.typ, g.importedDefault)
+			value, err := deriveextras.DefaultValue(f.typ, func(t ast.Expr) (string, bool) { return g.deriveProtocol("Default", t) })
 			// Explicit default/skip uses the builtin Option Default (None).
 			// Avoid re-resolving type arguments inside the visitor scope.
 			if optional {
@@ -1317,6 +1346,11 @@ func protectedLines(source []byte) map[int]bool {
 	return out
 }
 func (g *generator) validateExtra(t ast.Expr, kind string) error {
+	if kind == "Default" || kind == "Clone" || kind == "Debug" {
+		if _, ok, err := g.sumProtocol(kind, t); ok || err != nil {
+			return err
+		}
+	}
 	if kind == "Clone" || kind == "Debug" {
 		if _, ok := g.importedField(kind, t); ok {
 			return nil
@@ -1325,11 +1359,6 @@ func (g *generator) validateExtra(t ast.Expr, kind string) error {
 	if kind == "Default" {
 		if _, ok := g.importedDefault(t); ok {
 			return nil
-		}
-		if x, ok := t.(*ast.IndexExpr); ok {
-			if id, ok := x.X.(*ast.Ident); ok && id.Name == "Option" {
-				return nil
-			}
 		}
 		if _, ok := t.(*ast.Ident); !ok {
 			return g.err(t, "Default requires an explicit implementation; containers, references and Result are unsupported")

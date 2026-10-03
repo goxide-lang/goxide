@@ -19,8 +19,9 @@ import (
 )
 
 type Derive struct {
-	PartialEq, Eq bool
-	File          string
+	PartialEq, Eq             bool
+	ManualPartialEq, ManualEq bool
+	File                      string
 }
 type Protocol struct {
 	PackagePath, TypeName, Helper string
@@ -109,14 +110,15 @@ type registered struct {
 	enum       *enums.Decl
 }
 type generator struct {
-	u         *unit
-	cfg       Config
-	protocols []*registered
-	local     map[string]*registered
-	state     map[string]int
-	code      map[string]string
-	serial    int
-	file      string
+	u            *unit
+	cfg          Config
+	protocols    []*registered
+	local        map[string]*registered
+	state        map[string]int
+	code         map[string]string
+	serial       int
+	file         string
+	callBindings map[*ast.CallExpr]map[string]string
 }
 
 func registry(u *unit, cfg Config) (*generator, error) {
@@ -128,6 +130,12 @@ func registry(u *unit, cfg Config) (*generator, error) {
 	sort.Strings(names)
 	for _, name := range names {
 		flags := cfg.Derives[name]
+		if flags.ManualPartialEq && !flags.PartialEq || flags.ManualEq && !flags.Eq {
+			return nil, fmt.Errorf("equality: inconsistent manual protocol flags for %s", name)
+		}
+		if flags.ManualPartialEq && flags.Eq && !flags.ManualEq {
+			return nil, fmt.Errorf("equality: derive Eq cannot prove manual PartialEq for %s; implement Eq explicitly", name)
+		}
 		if flags.Eq && !flags.PartialEq {
 			return nil, fmt.Errorf("equality: Eq requires explicit PartialEq for %s", name)
 		}
@@ -156,6 +164,17 @@ func registry(u *unit, cfg Config) (*generator, error) {
 			if e == nil && types.Identical(tv.Type, t) {
 				r.enum = d
 				break
+			}
+		}
+		if flags.ManualPartialEq && r.enum == nil {
+			switch underlying := t.Underlying().(type) {
+			case *types.Struct, *types.Array, *types.Slice, *types.Map:
+			case *types.Basic:
+				if !basic(underlying, false) {
+					return nil, fmt.Errorf("equality: unsupported manual protocol target %s", name)
+				}
+			default:
+				return nil, fmt.Errorf("equality: unsupported manual protocol target %s", name)
 			}
 		}
 		g.protocols = append(g.protocols, r)
@@ -198,6 +217,9 @@ func registry(u *unit, cfg Config) (*generator, error) {
 	}
 	for i, r := range g.protocols {
 		r.bound = fmt.Sprintf("__hgo_enum_eq_bound_%d", i)
+		if r.name != "" {
+			r.bound = r.helper
+		}
 	}
 	return g, nil
 }
@@ -211,6 +233,146 @@ func (g *generator) find(t types.Type) *registered {
 		}
 	}
 	return nil
+}
+
+// Local helper function values must not be stored in package variables: a
+// recursive manual body would make those variables form an initialization cycle.
+// Rename only lexical bindings, by object identity, before emitting direct calls.
+func (g *generator) protectLocalHelpers() {
+	helpers := map[string]bool{}
+	for _, r := range g.protocols {
+		if r.name != "" {
+			helpers[r.helper] = true
+		}
+	}
+	used := map[string]bool{}
+	editable := map[*ast.Ident]bool{}
+	for _, name := range g.u.names {
+		ast.Inspect(g.u.trees[name], func(n ast.Node) bool {
+			if id, ok := n.(*ast.Ident); ok {
+				used[id.Name] = true
+				if !g.cfg.Native[name] {
+					editable[id] = true
+				}
+			}
+			return true
+		})
+	}
+	renamed := map[types.Object]string{}
+	serial := 0
+	ids := make([]*ast.Ident, 0, len(g.u.info.Defs))
+	for id := range g.u.info.Defs {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Pos() < ids[j].Pos() })
+	for _, id := range ids {
+		obj := g.u.info.Defs[id]
+		if obj == nil || !editable[id] || !helpers[obj.Name()] || obj.Parent() == g.u.pkg.Scope() {
+			continue
+		}
+		switch o := obj.(type) {
+		case *types.Var:
+			if o.IsField() {
+				continue
+			}
+		case *types.TypeName:
+			if _, ok := o.Type().(*types.TypeParam); !ok {
+				continue
+			}
+		case *types.Const:
+		default:
+			continue
+		}
+		for {
+			serial++
+			candidate := fmt.Sprintf("__hgo_enum_eq_local_%d", serial)
+			if !used[candidate] {
+				used[candidate] = true
+				renamed[obj] = candidate
+				break
+			}
+		}
+	}
+	for id, obj := range g.u.info.Defs {
+		if name := renamed[obj]; name != "" && editable[id] {
+			id.Name = name
+		}
+	}
+	for id, obj := range g.u.info.Uses {
+		if name := renamed[obj]; name != "" && editable[id] {
+			id.Name = name
+		}
+	}
+	// Local defined type names are observable through reflection. Preserve them,
+	// capturing the helper in the enclosing function before their lexical scopes.
+	g.callBindings = map[*ast.CallExpr]map[string]string{}
+	for _, file := range g.u.names {
+		if g.cfg.Native[file] {
+			continue
+		}
+		ast.Inspect(g.u.trees[file], func(node ast.Node) bool {
+			var body *ast.BlockStmt
+			switch f := node.(type) {
+			case *ast.FuncDecl:
+				body = f.Body
+			case *ast.FuncLit:
+				body = f.Body
+			default:
+				return true
+			}
+			if body == nil {
+				return false
+			}
+			conflicts := map[string]bool{}
+			ast.Inspect(body, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok {
+					if obj, ok := g.u.info.Defs[id].(*types.TypeName); ok && helpers[obj.Name()] {
+						if _, param := obj.Type().(*types.TypeParam); !param {
+							conflicts[obj.Name()] = true
+						}
+					}
+				}
+				return true
+			})
+			names := []string{}
+			for name := range conflicts {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			bindings := map[string]string{}
+			var prefix []ast.Stmt
+			for _, name := range names {
+				var alias string
+				for {
+					serial++
+					alias = fmt.Sprintf("__hgo_enum_eq_local_%d", serial)
+					if !used[alias] {
+						used[alias] = true
+						break
+					}
+				}
+				bindings[name] = alias
+				prefix = append(prefix, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(alias)}, Tok: token.DEFINE, Rhs: []ast.Expr{ast.NewIdent(name)}}, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_")}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(alias)}})
+			}
+			if len(bindings) > 0 {
+				ast.Inspect(body, func(n ast.Node) bool {
+					if call, ok := n.(*ast.CallExpr); ok {
+						g.callBindings[call] = bindings
+					}
+					return true
+				})
+				body.List = append(prefix, body.List...)
+			}
+			return false
+		})
+	}
+
+}
+func (g *generator) callHelper(call *ast.CallExpr, r *registered) string {
+	if name := g.callBindings[call][r.helper]; name != "" {
+		return name
+	}
+	return r.bound
 }
 func basic(t types.Type, eq bool) bool {
 	b, ok := types.Unalias(t).(*types.Basic)
@@ -318,10 +480,15 @@ func (g *generator) generate(r *registered) error {
 	if g.state[r.name] == 1 {
 		return fmt.Errorf("equality: recursive protocol dependency at %s", r.name)
 	}
+	if r.flags.ManualPartialEq {
+		g.state[r.name] = 2
+		return nil
+	}
 	g.state[r.name] = 1
 	previousFile := g.file
 	g.file = r.file
 	defer func() { g.file = previousFile }()
+	requireEq := r.flags.Eq && !r.flags.ManualEq
 	var body string
 	if r.enum != nil {
 		d := r.enum
@@ -346,7 +513,7 @@ func (g *generator) generate(r *registered) error {
 				if st.NumFields() != 1 || st.Field(0).Name() != "Value" {
 					return fmt.Errorf("equality: invalid enum payload case %s", v.CaseName)
 				}
-				x, e := g.expression(st.Field(0).Type(), "x.Value", "y.Value", r.flags.Eq)
+				x, e := g.expression(st.Field(0).Type(), "x.Value", "y.Value", requireEq)
 				if e != nil {
 					return fmt.Errorf("equality: %s::%s: %w", r.name, v.Name, e)
 				}
@@ -356,7 +523,7 @@ func (g *generator) generate(r *registered) error {
 		b.WriteString("};return (0!=0)")
 		body = b.String()
 	} else {
-		x, e := g.structural(r.typ.Underlying(), "a", "b", r.flags.Eq)
+		x, e := g.structural(r.typ.Underlying(), "a", "b", requireEq)
 		if e != nil {
 			return fmt.Errorf("equality: derive %s for %s: %w", equalityKind(r.flags.Eq), r.name, e)
 		}
@@ -364,6 +531,62 @@ func (g *generator) generate(r *registered) error {
 	}
 	g.code[r.name] = fmt.Sprintf("\nfunc %s(a,b %s)bool{%s}\n", r.helper, r.name, body)
 	g.state[r.name] = 2
+	return nil
+}
+
+// prepareManual validates the sole public implementation and guards that very
+// entry point for enums; calls from native Go therefore cannot bypass validation.
+func (g *generator) prepareManual(r *registered) error {
+	obj, ok := g.u.pkg.Scope().Lookup(r.helper).(*types.Func)
+	if !ok {
+		return fmt.Errorf("equality: manual PartialEq requires function %s", r.helper)
+	}
+	sig, ok := obj.Type().(*types.Signature)
+	if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 || sig.Params().Len() != 2 || sig.Results().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), r.typ) || !types.Identical(sig.Params().At(1).Type(), r.typ) || !types.Identical(sig.Results().At(0).Type(), types.Typ[types.Bool]) {
+		return fmt.Errorf("equality: manual helper signature mismatch: %s", r.helper)
+	}
+	var decl *ast.FuncDecl
+	var file string
+	for _, name := range g.u.names {
+		for _, d := range g.u.trees[name].Decls {
+			if f, ok := d.(*ast.FuncDecl); ok && g.u.info.Defs[f.Name] == obj {
+				decl = f
+				file = name
+			}
+		}
+	}
+	if decl == nil || decl.Body == nil || g.cfg.Native[file] {
+		return fmt.Errorf("equality: manual helper %s requires an editable function body", r.helper)
+	}
+	if r.enum == nil {
+		return nil
+	}
+	vt, e := g.eval(r.enum.Validator)
+	vs, ok := vt.(*types.Signature)
+	if e != nil || !ok || vs.Variadic() || vs.TypeParams().Len() != 0 || vs.Params().Len() != 1 || vs.Results().Len() != 0 || !types.Identical(vs.Params().At(0).Type(), r.typ) {
+		return fmt.Errorf("equality: invalid manual enum validator for %s", r.name)
+	}
+	bound := "__hgo_enum_eq_manual_validator_" + r.name
+	// Bind outside the function so a user parameter named like the validator
+	// cannot capture the compiler-inserted call.
+	g.code[r.name] = "\nvar " + bound + " = " + r.enum.Validator + "\n"
+	var args []*ast.Ident
+	for _, f := range decl.Type.Params.List {
+		for _, n := range f.Names {
+			if n.Name == "_" {
+				n.Name = fmt.Sprintf("__hgo_enum_eq_manual_arg_%d", len(args))
+			}
+			args = append(args, n)
+		}
+	}
+	if len(args) != 2 {
+		return fmt.Errorf("equality: manual enum helper requires named parameters: %s", r.helper)
+	}
+	prefix := []ast.Stmt{}
+	for _, arg := range args {
+		prefix = append(prefix, &ast.ExprStmt{X: &ast.CallExpr{Fun: ast.NewIdent(bound), Args: []ast.Expr{ast.NewIdent(arg.Name)}}})
+	}
+	decl.Body.List = append(prefix, decl.Body.List...)
 	return nil
 }
 func appendDeclarations(u *unit, name, text string) error {
@@ -421,7 +644,11 @@ func Prepare(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		if u.pkg.Scope().Lookup(g.local[n].helper) != nil {
+		if g.local[n].flags.ManualPartialEq {
+			if e = g.prepareManual(g.local[n]); e != nil {
+				return nil, e
+			}
+		} else if u.pkg.Scope().Lookup(g.local[n].helper) != nil {
 			return nil, fmt.Errorf("equality: generated helper name collision: %s", g.local[n].helper)
 		}
 		if e = g.generate(g.local[n]); e != nil {
@@ -444,6 +671,9 @@ func Prepare(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 		return files, nil
 	}
 	for _, r := range g.protocols {
+		if r.name != "" {
+			continue
+		}
 		if u.pkg.Scope().Lookup(r.bound) != nil {
 			return nil, fmt.Errorf("equality: reserved binding collision: %s", r.bound)
 		}
@@ -458,6 +688,7 @@ func Prepare(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 	if e != nil {
 		return nil, e
 	}
+	g.protectLocalHelpers()
 	needed := false
 	for _, name := range u.names {
 		if cfg.Native[name] {
@@ -485,7 +716,7 @@ func Prepare(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 				}
 			}
 			if r != nil {
-				call.Fun = ast.NewIdent(r.bound)
+				call.Fun = ast.NewIdent(g.callHelper(call, r))
 				call.Args = append([]ast.Expr{sel.X}, call.Args...)
 				return true
 			}
@@ -530,6 +761,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 	if e != nil {
 		return nil, e
 	}
+	g.protectLocalHelpers()
 	needScalarHelper := false
 	for _, name := range u.names {
 		ast.Inspect(u.trees[name], func(n ast.Node) bool {
@@ -542,7 +774,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 				return true
 			}
 			if r := g.find(u.info.TypeOf(call.Args[0])); r != nil {
-				call.Fun = ast.NewIdent(r.bound)
+				call.Fun = ast.NewIdent(g.callHelper(call, r))
 			} else if basic(u.info.TypeOf(call.Args[0]), false) {
 				call.Fun = ast.NewIdent("__hgo_enum_scalar_equals")
 				needScalarHelper = true
@@ -669,6 +901,9 @@ func (g *generator) mapKey(t types.Type, eq bool) error {
 		}
 		if eq && !r.flags.Eq {
 			return fmt.Errorf("map key %s has no explicit Eq protocol", t)
+		}
+		if r.flags.ManualPartialEq {
+			return fmt.Errorf("manual map key %s has no proven native-key consistency", t)
 		}
 		if r.name == "" {
 			return fmt.Errorf("imported map key %s has no proven native-key consistency", t)

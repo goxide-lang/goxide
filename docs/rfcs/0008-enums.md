@@ -180,3 +180,25 @@ map 首片键需静态证明原生 Go 查找与比较语义一致：基础 bool/
 struct 依字段顺序、slice/array 依索引短路；map 依 Go 未指定的迭代顺序逐键查找并短路，不承诺不同键之间的校验顺序。两个用户实参先求值，再进入 helper。访问到 enum 值时沿现有 validator 左后右；不为普通 struct/container 增加全值预扫描。外层 enum 则仍先校验两侧，再比较活跃载荷；为容器载荷补全有限 array/slice/map 的递归 enum validator，非法 nil/typed-nil/伪造值不会参与原生 interface 内容比较。
 
 在派生字段/元素中，已登记的具体 Option/Result 实例按载荷资格条件比较，None、Some(nil)、Some(empty) 保持区分，Result 的非法 nil 仍拒绝；不改 serde 协议；validator 的有限容器投影也让此前拒绝的嵌套 Option 容器进入既有 serde 路径，旧负例迁为真实执行验收。直接匿名容器或 Option/Result 的 `.equals` 尚未新增独立入口。自递归容器可能构成运行时环，本片保留明确诊断，不擅定环等价关系或退回任意动态深比较。手写协议、指针拆分与原位 borrow 留后续独立阶段。
+
+### 手写具体 PartialEq/Eq（2026-10-03）
+
+本片沿已批准的具体值参数 helper 路径支持手写比较，不等待 `&T`/`mut&T` 或一般 trait 求解。源级入口使用明确具体类型拼写；首参数必须名为 `self`，两个参数均为目标值类型，单个返回值为 builtin bool。没有 static，不增加隐式只读、独占或全局不可变保证；函数体按普通 Go 值参数和共享容器语义执行。`Self` 简写、泛型 impl、别名/外部目标和借用签名不在此具体入口内。
+
+```hgo
+type User struct { ID int; Display string }
+impl PartialEq for User {
+    func equals(self User, other User) bool { return self.ID == other.ID }
+}
+impl Eq for User {}
+#[derive(PartialEq, Eq)]
+enum Event { User(User), Closed, }
+```
+
+降低为原函数体所在的唯一包级 `EqualsUser(self User, other User) bool`，`.equals` 及外层派生均调用已登记 helper；不会用 Go `==` 跳过手写业务规则。普通 Go 调用方也使用这个 helper。手写 enum 的同一 helper 函数体开头插入左、右 validator，先于用户代码，两个调用实参仍先求值；不另留未校验 body helper，也不加函数帧破坏直接 `recover()`。此入口检查不扩成所有公共函数的自动检查。
+
+同一目标、同一协议只能有一个来源：重复 impl、manual 与该协议 derive 冲突以及导出 helper 碰撞均诊断，跨文件一并检查。手写 Eq 要求已有 PartialEq，但只是作者的等价关系承诺，编译器不能证明任意函数的自反、对称、传递性质。derive PartialEq + 手写 Eq 可组合；手写 PartialEq + derive Eq 明确拒绝，需作者另写空 Eq impl，不能从载荷性质推出任意业务函数的性质。纯 derive Eq 的递归资格检查保持不变。
+
+手写 PartialEq 不自动成为原生 map 键协议：即使底层全是整数/string，业务相等也可能与 Go 查找不同；含该字段的结构键同样拒绝自动内容派生。手写 Eq 本身不增加 map 键资格；若 PartialEq 仍由派生生成且原先的结构一致性证明成立，则不因 Eq 的手写标记误拒。float/complex 的默认 PartialEq 不变；用户可以显式编写把 NaN 视为相等的具体 wrapper，并自行承诺 Eq。
+
+metadata v4 在已验证身份、helper 签名和 Eq 资格之外记录 PartialEq/Eq 各自的 derive/manual 来源，透明 alias 必须与定义包来源一致，不能通过 relay 改写来源。内部协议升级需重生成产物，不修改普通 Go ABI。目标仍限具体 scalar/struct/array/slice/map 与已登记 enum；不引入用户泛型、自动循环图比较或额外 trait dispatch。宏模板生成比较 impl 仍受上游语法限制，不由注册阶段的位置推导为已支持。手写体中的源级 enum 直接比较限制仍保持；业务规则可以显式匹配变体。

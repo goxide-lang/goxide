@@ -47,7 +47,7 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 }
 func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
 	names := sortedSources(sources)
-	cfg := &compileConfig{declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, typeSpecs: map[string]*ast.TypeSpec{}}
+	cfg := &compileConfig{declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
 			continue
@@ -150,6 +150,9 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		}
 		r, err := compile(name, sources[name], cfg)
 		if err != nil {
+			return PackageResult{}, err
+		}
+		if err = mergeManualEquality(cfg.manualEquality, r.manualEquality); err != nil {
 			return PackageResult{}, err
 		}
 		for n, sp := range r.typeSpecs {

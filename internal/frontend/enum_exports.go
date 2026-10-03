@@ -82,6 +82,17 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 				continue
 			}
 			x := equalityExport{Name: name, DefinitionPath: path, DefinitionName: name, Helper: "Equals" + name, Eq: derive.Eq}
+			x.PartialEqSource = "derive"
+			if derive.ManualPartialEq {
+				x.PartialEqSource = "manual"
+			}
+			if derive.Eq {
+				x.EqSource = "derive"
+				if derive.ManualEq {
+					x.EqSource = "manual"
+				}
+			}
+
 			if prior, ok := equalities[path+"."+name]; ok && prior != x {
 				return meta, fmt.Errorf("conflicting equality derivations for %s", name)
 			}

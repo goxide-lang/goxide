@@ -158,3 +158,5 @@
 已确认 **D33（2026-10-03 容器 nil/空）**：同类型 nil slice 与非 nil 空 slice 不相等，nil map 与非 nil 空 map 不相等；两个 nil 相等，两个非 nil 空容器按内容相等。equals 先区分 nil，再比较内容，不做隐式 normalization。Option.None、Some(nil 载荷)、Some(非 nil 空载荷) 三者区分；serde null/[]/{}不因此改变。固定长度 Go array 没有 nil 状态。该语义已定，不再作为容器派生的待决项；map 键资格按后续 D34 有限实施，自定义相等和手写接口仍单列。[契约参考测试](../../tests/design/enum/equality_contract_test.go)仅为纯 Go 规则探针；实际容器实现证据另见 [本片验收](../t0-acceptance.md#容器-equality-派生2026-10-03)。
 
 已确认 **D34（2026-10-03 容器比较派生）**：slice/map 按 D33 区分 nil/空并递归调用元素/值的 PartialEq/Eq 协议，不以 reflect.DeepEqual 替代。原生 map 首片仅接纳能证明原生查找与相等契约一致的稳定键，不能由 float NaN、自定义 equals 或 Go comparable 偷渡资格；不引入 HashMap。嵌套 struct/array/enum 与 Option 状态需要真实生成验收。手写比较入口可下一片，指针拆分/原位 borrow 不前置阻断本轮独立 enum 阶段。
+
+已确认 **D35（2026-10-03 手写具体比较）**：接通具体 PartialEq/Eq 实现，首参 self 为实例、无 static，复用显式 equals registry，不新增完整 trait。手写 PartialEq 决定业务相等，派生包含该类型时调用其协议；手写 Eq 是作者承诺，不能自动授予原生 map 键资格。当前值参数 `func equals(self T, other T) bool` 与空 Eq impl 沿既有 helper 约定实施；不依赖或默认批准借用/所有权签名。enum 唯一比较入口先校验再执行用户体，保留原函数帧；不是所有公开函数的自动验证。[实施规则](../rfcs/0008-enums.md#手写具体-partialeqeq2026-10-03)区分本片边界与未定扩展。

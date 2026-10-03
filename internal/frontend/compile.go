@@ -29,6 +29,7 @@ import (
 )
 
 type Result struct {
+	manualEquality          map[string]manualEquality
 	matchReferenceTemps     map[string]bool
 	Diagnostics             *sourcemap.Map
 	Go, SourceMap, Expanded []byte
@@ -97,6 +98,7 @@ type compileConfig struct {
 	enumGoImports   map[string]string
 	enumUnavailable map[string]map[string]string
 	manualDefaults  map[string]manualDefault
+	manualEquality  map[string]manualEquality
 	typeSpecs       map[string]*ast.TypeSpec
 }
 
@@ -216,7 +218,11 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		manual[n] = entry
 	}
 	provenance = provenance.Compose(expanded.Source, manualSource, "manualDefault.Lower")
-	source, err = matchexpr.LowerMapped(filename, manualSource, provenance)
+	equalitySource, manualEqualities, err := lowerManualEquality(filename, manualSource, provenance)
+	if err != nil {
+		return Result{}, err
+	}
+	source, err = matchexpr.LowerMapped(filename, equalitySource, provenance)
 	if err != nil {
 		return Result{}, stageError("matchexpr.Lower", err)
 	}
@@ -616,7 +622,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	if cfg != nil && cfg.collect {
-		return Result{models: g.models, typeSpecs: typeSpecs(f)}, nil
+		return Result{models: g.models, typeSpecs: typeSpecs(f), manualEquality: manualEqualities}, nil
 	}
 	allManual := manual
 	if cfg != nil {
@@ -656,6 +662,28 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		if m.attrs.derive["PartialEq"] || m.attrs.derive["Eq"] {
 			equalityDerives[m.name] = equality.Derive{PartialEq: m.attrs.derive["PartialEq"], Eq: m.attrs.derive["Eq"]}
 		}
+	}
+	allEqualityManual := manualEqualities
+	if cfg != nil {
+		allEqualityManual = map[string]manualEquality{}
+		for n, e := range cfg.manualEquality {
+			allEqualityManual[n] = e
+		}
+		// The final pass owns local positions; the declaration collection pass
+		// supplies other files' explicit registrations for conflict checks.
+		for n, e := range manualEqualities {
+			prior := allEqualityManual[n]
+			if e.partial != nil {
+				prior.partial = e.partial
+			}
+			if e.eq != nil {
+				prior.eq = e.eq
+			}
+			allEqualityManual[n] = prior
+		}
+	}
+	if err = applyManualEquality(filename, equalityDerives, allEqualityManual, specs, g.models); err != nil {
+		return Result{}, err
 	}
 	defaultHelpers := map[string]bool{}
 	for n, m := range g.models {

@@ -634,3 +634,11 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 边界：递归容器/环相等、导入具名键的原生一致性证明、手写比较、blank/embedded 字段及 pointer/chan/interface 协议仍待收口；本片没有新增直接匿名 slice/map/Option/Result equals 入口，也不实现 HashMap。原位 borrow/指针拆分是后续独立阶段，不作为此次 enum 容器派生的前置阻断。完整 T0 MVP 尚未宣布完成。
 
 独立复审修复同 import 别名指向不同包时的错误身份解析，以及同一家族不同具体实例的 validator 查找；公开泛型载荷按真实 origin/参数递归命名并验证类型身份。真实独立模块复验包括外部 Option[[]Option[int]]，私有不可命名形状仍明确诊断，不输出错误私有拼写。
+
+## 手写具体 equality（2026-10-03）
+
+[真实三模块 CLI 验收](../tests/acceptance/manual_equality_test.go)包含多文件 Person 手写按 ID 相等而忽略 Name、派生 enum/struct/slice/map 值调用用户协议、用户显式 NaN wrapper 与普通浮点 PartialEq 对照、manual Eq + 派生 PartialEq 的稳定键证明，以及独立 Go 消费公开 helper。非法 enum nil/typed-nil/指针 case/伪造动态值在用户体前拒绝；两实参先求值、左 validator 优先，native Go helper 同样受检。
+
+函数体保持原 frame，实际 `defer .equals` 的直接 recover 继续有效。普通手写递归与经过另一函数的递归、全局初始化、局部同名函数/类型及反射名称纳入执行验收；不以“循环容器尚未定义”拒绝普通用户函数递归。重复生成保持一致。重复 impl、同协议 manual/derive 冲突、错 self/参数/返回类型、别名目标、额外成员、helper 碰撞、缺 PartialEq、误用 derive Eq 证明手写业务函数及手写 map 键均拒绝。
+
+[前端测试](../internal/frontend/manual_equality_test.go)验证跨文件注册、冲突和原始 body 错误行号；注册汇总位于宏展开之后，但上游宏模板尚不接受 impl，本片不声称宏生成比较 impl 已可用；metadata v4 记录各协议 derive/manual 来源，alias 与定义包一致，身份与精确 Go helper 签名仍核验。本片不新增 Self 简写、借用参数、泛型 impl、外部目标、自动循环图比较或完整 trait；手写函数的 Eq 性质由作者负责。完整 T0 仍有已列工程账，不由本阶段宣称完成。

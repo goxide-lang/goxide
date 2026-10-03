@@ -941,3 +941,13 @@ hgo 直接 enum 比较诊断；已知危险载荷的包裹/混合比较、switch
 最终生产树全量 `go test -race -count=1 -json ./...` **16 测试包 / 298 宿主顶层 / 733 子测试**通过，另 2 包无测试，无测试结果缓存；全树 vet 通过。真实库、hgo 应用和原生 Go 消费各自 race/vet，重复产物确定；新增/迁移的 grouped、enum、Option serde、传播/projection 生成模块独立 race/vet。设计检查 **64 Markdown / 840 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过，纯机制不代替 hgo 执行。实现、反例修复及迁移测试独立复审无阻断；外部嵌套 sum 与私有不可命名负例另有双模块执行证据。
 
 最终日志 `/tmp/container-release-race.json`、`/tmp/container-release-race.err`、`/tmp/container-release-vet.log`、`/tmp/container-verified-design.log`；独立探针 `/tmp/review-container-multi-out`、`/tmp/review-container-nested-out`、`/tmp/review-external-nested-v2`。先前旧拒绝断言、临时构建缓存空间耗尽，以及把生成模块 vet 无差别扩到既有 match fixture 的失败不计作通过证据；最终完整重跑已包含所有迁移，独立生成 vet 限定本片新增/迁移模块，未改旧 match lowering。手写协议、循环容器与导入具名键一致性证明等继续留账，不将本片边界自动批准延期；指针拆分/原位 borrow 为后续阶段，完整 MVP 不标完成。本片提交/push/fetch。
+
+## 手写具体 PartialEq/Eq（2026-10-03）
+
+基于 `36db423f81fbac71eb2498a62420fdbe826286fc`，复用 equality registry 接入具体 `impl PartialEq for T {func equals(self T, other T) bool {...}}` 与空 Eq impl。首参 self、无 static、明确值参数，不默认借用/所有权规则。手写体保存在唯一 EqualsT helper；enum 入口插左右 validator，原生调用不能绕过用户体之前的检查。manual Eq 是作者契约，手写业务关系不自动成为原生 map 键；纯 derive 的递归资格及稳定键证明保持。
+
+跨文件注册在宏展开后汇总（上游宏模板尚不接受 impl，不声称该宏用法已可用），手写 body 原始位置保留，metadata v4 校验 PartialEq/Eq 各自来源及 alias 定义包一致性。独立审查发现函数变量绑定导致普通手写递归初始化环；本地协议改为直接调用，并对实际局部对象处理名称遮蔽，局部类型名保持可反射身份。需要时在原函数入口使用局部 helper 绑定，不加函数帧或推迟到 init，保留全局初始化与直接 recover。具体证据及未完成边界见[本片验收](docs/t0-acceptance.md#手写具体-equality2026-10-03)。
+
+最终全树 `go test -race -count=1 -json ./...` **16 测试包 / 309 宿主顶层 / 778 子测试**通过，另 2 包无测试，无测试结果缓存；全树 vet 通过。库、hgo 消费应用、原生 Go 消费三个真实模块分别 race/vet，库和应用重复生成一致。设计检查 **64 Markdown / 846 本地链接 / 20 RFC / 13 纯 Go 机制命令**通过；机制探针不代替真实 hgo 执行。实现、递归与遮蔽修复、源映射和 metadata v4 的独立复审均无阻断。
+
+最终日志 `/tmp/manual-equality-full-race.json`、`/tmp/manual-equality-full-race.err`、`/tmp/manual-equality-full-vet.log`、`/tmp/manual-equality-design.log`；CLI 专项 `/tmp/manual-equality-final-acceptance.log`，独立探针 `/tmp/review-manual`。完整重跑包含递归初始化环与局部类型反射身份修复；早期递归反例失败不计作通过证据。本片提交/push/fetch；借用签名、Self/泛型 impl、宏模板 impl、循环容器和导入键一致性等边界仍按范围账保留，不自动视作获批延期，完整 T0 MVP 未标完成。

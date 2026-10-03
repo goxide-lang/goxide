@@ -217,3 +217,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 容器 equality 派生（2026-10-03）
 
 依 D33/D34 推进 slice/map 递归比较及 Option/Result 条件载荷协议，保留 nil/空区别、既有短路和 enum 校验顺序，原生 map 限定能证明一致的稳定键。见 [RFC](docs/rfcs/0008-enums.md#容器-partialeqeq-派生2026-10-03)。手写入口、循环容器规则和其他 T0 欠账继续独立记录；指针拆分/原位 borrow 是后续阶段，不前置阻断本轮 enum 收口。
+
+### 手写具体 equality（2026-10-03）
+
+按 D35 复用比较 registry 接入具体值参数 PartialEq 和空 Eq impl，支持跨文件/跨模块与派生组合、来源元数据和唯一 enum 校验入口。见 [RFC](docs/rfcs/0008-enums.md#手写具体-partialeqeq2026-10-03)。不把业务相等自动映射到原生 map key，不新增借用签名、完整 trait 或循环图比较；完整 T0 仍按验收范围逐项收口。

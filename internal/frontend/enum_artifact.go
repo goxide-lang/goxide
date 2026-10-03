@@ -21,7 +21,7 @@ import (
 
 const enumMetadataMarker = "HgoEnumMetadata"
 const enumMetadataFilename = ".hgo.enums.json"
-const enumMetadataVersion = 3
+const enumMetadataVersion = 4
 
 type enumVariantExport struct {
 	Name, Case, Constructor string
@@ -45,6 +45,7 @@ type enumFamilyExport struct {
 // Equality records are explicit PartialEq registrations; Eq adds qualification.
 type equalityExport struct {
 	Name, DefinitionPath, DefinitionName, Helper string
+	PartialEqSource, EqSource                    string
 	Eq                                           bool
 }
 
@@ -723,6 +724,15 @@ func validateEqualityMetadata(meta enumMetadata, pkg *types.Package, imp types.I
 	for _, x := range meta.Equality {
 		if !public(x.Name) || !public(x.DefinitionName) || !public(x.Helper) || x.DefinitionPath == "" || seen[x.Name] {
 			return fmt.Errorf("invalid or duplicate equality export %q", x.Name)
+		}
+		if x.PartialEqSource != "derive" && x.PartialEqSource != "manual" {
+			return fmt.Errorf("invalid PartialEq source for %s", x.Name)
+		}
+		if (!x.Eq && x.EqSource != "") || (x.Eq && x.EqSource != "derive" && x.EqSource != "manual") {
+			return fmt.Errorf("invalid Eq source for %s", x.Name)
+		}
+		if x.PartialEqSource == "manual" && x.EqSource == "derive" {
+			return fmt.Errorf("derived Eq cannot qualify manual PartialEq: %s", x.Name)
 		}
 		seen[x.Name] = true
 		origin := pkg

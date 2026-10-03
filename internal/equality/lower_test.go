@@ -120,7 +120,7 @@ func NativeCall()int{return (Native{}).equals("x")}
 		t.Fatal("native file rewritten")
 	}
 	text := string(out["source.hgo"])
-	if !strings.Contains(text, "return __hgo_enum_eq_bound_") {
+	if !strings.Contains(text, "return EqualsT(") || !strings.Contains(text, "__hgo_enum_eq_local_") {
 		t.Fatal("helper local capture", text)
 	}
 	u, e := parse(out)
@@ -423,4 +423,98 @@ func TestNested(t *testing.T){if !EqualsHolder(Sample(1),Sample(1))||EqualsHolde
 	if e != nil || spelling != "q.Public[string,int]" {
 		t.Fatal(spelling, e)
 	}
+}
+
+func TestManualEquality(t *testing.T) {
+	execute(t, `package fixture
+ type Number int
+ func EqualsNumber(a,b Number)bool{return a%10==b%10}
+ type Row struct{N Number}
+ type Floating struct{N float64}
+ func Values()bool{return Row{1}.equals(Row{11})}
+ `, Config{Derives: map[string]Derive{
+		"Number":   {PartialEq: true, Eq: true, ManualPartialEq: true, ManualEq: true},
+		"Row":      {PartialEq: true, Eq: true},
+		"Floating": {PartialEq: true, Eq: true, ManualEq: true},
+	}}, `package fixture
+ import("testing";"math")
+ func TestManual(t *testing.T){if !Values()||EqualsFloating(Floating{math.NaN()},Floating{math.NaN()}){t.Fatal("manual relation or PartialEq generation")}}
+ `)
+}
+func TestManualEnumEntryValidation(t *testing.T) {
+	d := enums.Decl{Name: "E", Validator: "check", Variants: []enums.Variant{{Name: "Item", CaseName: "item", Payload: "int"}}}
+	execute(t, `package fixture
+ type E interface{marker()}
+ type item struct{Value int}
+ func(item)marker(){}
+ var Trace []int
+ func check(e E){Trace=append(Trace,3);switch e.(type){case item:default:panic("invalid")}}
+ func EqualsE(check E, other E)bool{Trace=append(Trace,4);return true}
+ func arg(n int)E{Trace=append(Trace,n);return item{1}}
+ func Run()bool{return arg(1).equals(arg(2))}
+ `, Config{Derives: map[string]Derive{"E": {PartialEq: true, Eq: true, ManualPartialEq: true, ManualEq: true}}, Enums: []enums.Decl{d}}, `package fixture
+ import("testing";"reflect")
+ func TestOrder(t *testing.T){if !Run()||!reflect.DeepEqual(Trace,[]int{1,2,3,3,4}){t.Fatal(Trace)};Trace=nil;defer func(){if recover()==nil||!reflect.DeepEqual(Trace,[]int{3,3}){t.Fatal(Trace)}}();EqualsE(item{1},(*item)(nil))}
+ `)
+}
+func TestManualEqualityRejected(t *testing.T) {
+	for _, tc := range []struct {
+		name, source, want string
+		flags              Derive
+	}{
+		{"signature", "type N int;func EqualsN(a N,b int)bool{return true}", "signature mismatch", Derive{PartialEq: true, ManualPartialEq: true}},
+		{"missing", "type N int", "requires function", Derive{PartialEq: true, ManualPartialEq: true}},
+		{"alias", "type N = int;func EqualsN(a,b N)bool{return true}", "concrete defined", Derive{PartialEq: true, ManualPartialEq: true}},
+		{"deriveEq", "type N int;func EqualsN(a,b N)bool{return true}", "cannot prove manual", Derive{PartialEq: true, Eq: true, ManualPartialEq: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, e := Prepare(map[string][]byte{"input.hgo": []byte("package fixture;" + tc.source)}, Config{Derives: map[string]Derive{"N": tc.flags}})
+			if e == nil || !strings.Contains(e.Error(), tc.want) {
+				t.Fatalf("%v", e)
+			}
+		})
+	}
+	_, e := Prepare(map[string][]byte{"input.hgo": []byte(`package fixture;type N int;func EqualsN(a,b N)bool{return true};type M map[N]int`)}, Config{Derives: map[string]Derive{"N": {PartialEq: true, ManualPartialEq: true}, "M": {PartialEq: true}}})
+	if e == nil || !strings.Contains(e.Error(), "manual map key") {
+		t.Fatalf("%v", e)
+	}
+}
+
+func TestManualDeferredRecover(t *testing.T) {
+	execute(t, `package fixture
+ type N int
+ var Caught bool
+ func EqualsN(a,b N)bool{Caught=recover()!=nil;return true}
+ func Run(){var n N;defer n.equals(n);panic("caught")}
+ `, Config{Derives: map[string]Derive{"N": {PartialEq: true, ManualPartialEq: true}}}, `package fixture
+ import "testing"
+ func TestRecover(t *testing.T){Run();if !Caught{t.Fatal("manual function frame changed")}}
+ `)
+}
+func TestManualEqDoesNotBlockProvenMapKey(t *testing.T) {
+	execute(t, `package fixture
+ type Key struct{I int}
+ type M map[Key]int
+ `, Config{Derives: map[string]Derive{"Key": {PartialEq: true, Eq: true, ManualEq: true}, "M": {PartialEq: true, Eq: true}}}, `package fixture
+ import "testing"
+ func TestKey(t *testing.T){if !EqualsM(M{Key{1}:2},M{Key{1}:2}){t.Fatal("key")}}
+ `)
+}
+
+func TestManualRecursiveEqualityHygiene(t *testing.T) {
+	execute(t, `package fixture
+ type N int
+ type Other int
+ func EqualsN(a,b N)bool{if a==0||b==0{return a==b};return Other(a-1).equals(Other(b-1))}
+ func EqualsOther(a,b Other)bool{return N(a).equals(N(b))}
+ var Global=N(3).equals(N(3))
+ func Shadow(EqualsN func(N,N)bool)bool{local:=EqualsN(1,2);return !local&&N(2).equals(N(2))}
+ func Nested()bool{EqualsN:=func(a,b N)bool{return false};f:=func()bool{return !EqualsN(1,1)&&N(1).equals(N(1))};return f()}
+ func LocalName()any{type EqualsSelf int;if Self(1).equals(Self(1)){return EqualsSelf(0)};return nil}
+ type Self int
+ func EqualsSelf(a,b Self)bool{if a==0||b==0{return a==b};return Self(a-1).equals(Self(b-1))}
+ `, Config{Derives: map[string]Derive{"N": {PartialEq: true, ManualPartialEq: true}, "Other": {PartialEq: true, ManualPartialEq: true}, "Self": {PartialEq: true, ManualPartialEq: true}}}, `package fixture
+ import("testing";"reflect")
+ func TestRecursion(t *testing.T){if reflect.TypeOf(LocalName()).Name()!="EqualsSelf"{t.Fatal("local type renamed")};if !Global||!Shadow(func(N,N)bool{return false})||!Nested()||!EqualsSelf(3,3)||EqualsSelf(2,3){t.Fatal("recursion/shadow")}}
+ `)
 }

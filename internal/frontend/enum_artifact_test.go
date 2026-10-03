@@ -313,7 +313,7 @@ func TestEnumFamilyArtifactRoundTrip(t *testing.T) {
 }
 
 func equalityTestMetadata() enumMetadata {
-	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/equality", Package: "equality", Equality: []equalityExport{{Name: "Value", DefinitionPath: "example.org/equality", DefinitionName: "Value", Helper: "EqualsValue", Eq: true}}}
+	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/equality", Package: "equality", Equality: []equalityExport{{Name: "Value", DefinitionPath: "example.org/equality", DefinitionName: "Value", Helper: "EqualsValue", Eq: true, PartialEqSource: "derive", EqSource: "derive"}}}
 }
 
 const equalityTestSource = `package equality
@@ -357,6 +357,27 @@ func TestEqualityMetadataValidation(t *testing.T) {
 				t.Fatal("invalid helper accepted")
 			}
 		})
+	}
+	for _, sources := range [][2]string{{"", "derive"}, {"native", "derive"}, {"manual", "derive"}, {"derive", ""}, {"derive", "native"}} {
+		m := equalityTestMetadata()
+		m.Equality[0].PartialEqSource = sources[0]
+		m.Equality[0].EqSource = sources[1]
+		if e := validateEnumMetadata(m, p, imp); e == nil {
+			t.Fatalf("accepted invalid sources %v", sources)
+		}
+	}
+	for _, sources := range [][2]string{{"manual", "manual"}, {"derive", "manual"}} {
+		m := equalityTestMetadata()
+		m.Equality[0].PartialEqSource = sources[0]
+		m.Equality[0].EqSource = sources[1]
+		if e := validateEnumMetadata(m, p, imp); e != nil {
+			t.Fatalf("valid sources %v: %v", sources, e)
+		}
+	}
+	m = equalityTestMetadata()
+	m.Equality[0].Eq = false
+	if e := validateEnumMetadata(m, p, imp); e == nil {
+		t.Fatal("accepted Eq source without Eq")
 	}
 	t.Run("duplicate", func(t *testing.T) {
 		m := equalityTestMetadata()
@@ -406,6 +427,7 @@ func TestEqualityArtifactOriginAuthorization(t *testing.T) {
 	}
 	origin := equalityTestMetadata()
 	origin.Equality[0].Eq = false
+	origin.Equality[0].EqSource = ""
 	write(origin, equalityTestSource)
 	if _, e := loadEnumArtifact(origin.Path, imp); e != nil {
 		t.Fatal("equality-only artifact", e)
@@ -421,9 +443,17 @@ func TestEqualityArtifactOriginAuthorization(t *testing.T) {
 		t.Fatal("authorized alias", e)
 	}
 	relay.Equality[0].Eq = true
+	relay.Equality[0].EqSource = "derive"
 	write(relay, source)
 	if _, e := loadEnumArtifact(relay.Path, imp); e == nil || !strings.Contains(e.Error(), "equality alias does not match") {
 		t.Fatal("relay elevated Eq", e)
+	}
+	relay.Equality[0].Eq = false
+	relay.Equality[0].EqSource = ""
+	relay.Equality[0].PartialEqSource = "manual"
+	write(relay, source)
+	if _, e := loadEnumArtifact(relay.Path, imp); e == nil || !strings.Contains(e.Error(), "equality alias does not match") {
+		t.Fatal("relay changed protocol source", e)
 	}
 }
 

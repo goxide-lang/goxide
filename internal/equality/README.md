@@ -4,15 +4,17 @@
 and resolves known protocol calls. `Lower` runs after propagation, resolves deferred
 receivers using actual types, and removes temporary typing intrinsics. Ordinary
 native methods are preserved and never imply a registered protocol. Native source
-bytes remain unchanged. Package bindings protect generated helper selection from
-caller locals.
+bytes remain unchanged. Imported package bindings protect imported helper selection. Local helpers are
+called directly, with colliding variables/constants renamed by Go object identity.
+Local defined type names are preserved (including reflection): a function-local
+helper binding before their declarations avoids capture. No package function-value
+binding or extra call frame is introduced for recursive manual bodies.
 
-Eq requires explicit PartialEq plus recursively qualified fields. Bool, integers
+Derived Eq requires explicit PartialEq plus recursively qualified fields. Bool, integers
 and strings support ordinary scalar Eq; floats/complex retain PartialEq only.
 Structs and arrays recurse, named types require registration, and enums validate
 both inputs left-to-right after argument evaluation before comparing active cases.
-Scalar calls keep a typed bool result. No general trait, manual implementation,
-deep-pointer protocol or HashMap is implemented.
+Scalar calls keep a typed bool result. No general trait, deep-pointer protocol or HashMap is implemented.
 
 The frontend separately rejects direct enum equality and known dangerous enum
 comparisons/map keys in hgo source; native Go semantics and the existing nil
@@ -51,3 +53,20 @@ cyclic graph equality policy. Package-level `len`/`nil` shadowing is diagnosed
 where generated container operations need those predeclared names, rather than
 silently changing comparison semantics. These are implementation boundaries,
 not a claim that all remaining forms have been approved for permanent exclusion.
+
+Concrete manual implementations register `ManualPartialEq` / `ManualEq` alongside
+merged `PartialEq` / `Eq` capabilities. A manual PartialEq implementation is the
+existing local `func EqualsT(T,T) bool`, validated by actual Go types; no second
+implementation or forwarding function is generated. For enums, validators are
+inserted at the beginning of this public function, left then right, preserving
+its function frame (including direct `recover` in deferred calls). Both caller
+arguments are still evaluated before entering the function.
+
+Manual Eq is an explicit author promise. Combined with derived PartialEq, helper
+generation checks only PartialEq requirements, even for float-containing values.
+Derived Eq over manual PartialEq is rejected because the compiler cannot prove
+the custom relation; explicit manual Eq is required instead. Derived aggregate
+fields invoke registered manual helpers. Manual PartialEq cannot prove native
+map-key consistency, including when nested inside a structural key; Manual Eq
+alone does not weaken the existing structural proof. This stage supports concrete
+scalar/struct/array/slice/map/enum targets, not generic or alias implementations.

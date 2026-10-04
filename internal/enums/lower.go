@@ -731,6 +731,40 @@ func (l *lowerer) match(i int) (string, int, error) {
 		fmt.Fprintf(&b, "{ var %s %s = (%s);", saved, d.Name, target)
 		fmt.Fprintf(&b, "%s(%s);", d.Validator, saved)
 	}
+	// A plain variant chain needs no matched flag. Unlike a type switch, an
+	// if/else chain does not intercept a user arm's unlabelled break/continue.
+	plain := !inferred
+	for _, a := range arms {
+		plain = plain && a.variant != "" && a.guard == ""
+	}
+	if plain {
+		for index, a := range arms {
+			var v Variant
+			for _, candidate := range d.Variants {
+				if candidate.Name == a.variant {
+					v = candidate
+					break
+				}
+			}
+			if index > 0 {
+				b.WriteString(" else ")
+			}
+			tmp := "__hgo_enum_payload_" + id
+			if d.Family == "Option" && v.Name == "None" {
+				// Keep the constructor rather than spelling nil in caller scope.
+				fmt.Fprintf(&b, "if __hgo_enum_none_%s := %s(); %s == __hgo_enum_none_%s {", id, v.Constructor, saved, id)
+			} else {
+				fmt.Fprintf(&b, "if %s, __hgo_enum_ok_%s := %s.(%s); __hgo_enum_ok_%s { _ = %s;", tmp, id, saved, v.CaseName, id, tmp)
+			}
+			if a.bind != "" && a.bind != "_" {
+				fmt.Fprintf(&b, "%s := %s.Value; _ = %s;", a.bind, tmp, a.bind)
+			}
+			b.WriteString(a.body)
+			b.WriteString("\n}")
+		}
+		b.WriteString("\n}")
+		return b.String(), end, nil
+	}
 	fmt.Fprintf(&b, "%s := (0 != 0); _ = %s;\n", matched, matched)
 	for _, a := range arms {
 		fmt.Fprintf(&b, "if !%s {\n", matched)

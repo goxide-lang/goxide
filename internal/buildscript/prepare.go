@@ -507,7 +507,7 @@ func validateModule(mod string, files map[string][]byte, deps map[string]string)
 		return fmt.Errorf("helper %s missing module identity", mod)
 	}
 	for n := range files {
-		if n != "go.mod" && filepath.Base(n) == "go.mod" {
+		if filepath.Dir(n) != "." && (filepath.Base(n) == "go.mod" || filepath.Base(n) == project.ManifestName || filepath.Base(n) == project.LegacyManifestName) {
 			return fmt.Errorf("nested host modules unsupported: %s/%s", mod, n)
 		}
 	}

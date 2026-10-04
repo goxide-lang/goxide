@@ -325,8 +325,12 @@ func checkTarget(root, path string) error {
 		resolved = filepath.Dir(resolved)
 	}
 	for p := resolved; p != root; p = filepath.Dir(p) {
-		if _, e := os.Stat(filepath.Join(p, "go.mod")); e == nil {
-			return fmt.Errorf("target crosses nested module boundary")
+		for _, name := range []string{"go.mod", project.ManifestName, project.LegacyManifestName} {
+			if _, e := os.Lstat(filepath.Join(p, name)); e == nil {
+				return fmt.Errorf("target crosses nested module boundary")
+			} else if !os.IsNotExist(e) {
+				return e
+			}
 		}
 	}
 	return nil

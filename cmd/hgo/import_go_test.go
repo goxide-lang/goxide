@@ -207,3 +207,27 @@ func TestImportGoChecksumsAndOffline(t *testing.T) {
 		t.Fatal("checksum failure mutated source")
 	}
 }
+
+func TestUnifiedTargetModuleBoundary(t *testing.T) {
+	for _, marker := range []string{"go.mod", "goxide.toml", "hgo.json"} {
+		t.Run(marker, func(t *testing.T) {
+			root := t.TempDir()
+			nested := filepath.Join(root, "nested")
+			if e := os.Mkdir(nested, 0755); e != nil {
+				t.Fatal(e)
+			}
+			if e := os.WriteFile(filepath.Join(nested, marker), []byte("boundary"), 0644); e != nil {
+				t.Fatal(e)
+			}
+			entry := filepath.Join(nested, "main.go")
+			if e := os.WriteFile(entry, []byte("package main"), 0644); e != nil {
+				t.Fatal(e)
+			}
+			for _, path := range []string{nested, entry} {
+				if e := checkTarget(root, path); e == nil || !strings.Contains(e.Error(), "nested module") {
+					t.Fatalf("%s: %v", path, e)
+				}
+			}
+		})
+	}
+}

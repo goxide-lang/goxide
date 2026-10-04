@@ -415,3 +415,12 @@ func TestTOMLManifestReservedAndHelperBootstrap(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestNestedPureManifestHelperRejected(t *testing.T) {
+	for _, name := range []string{"goxide.toml", "hgo.json"} {
+		files := map[string][]byte{"go.mod": []byte("module example.org/helper\ngo 1.27\n"), "nested/" + name: []byte("boundary")}
+		if err := validateModule("example.org/helper", files, nil); err == nil {
+			t.Fatal("accepted nested helper", name)
+		}
+	}
+}

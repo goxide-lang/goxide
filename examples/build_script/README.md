@@ -2,7 +2,7 @@
 
 此例只使用标准库，没有第三方工具或 host helper。`tools/build/main.hgo` 读取 manifest 显式声明的 `schema.txt`，在 runner 提供的输出目录生成 `gen/schema.go` 和 `gen/data.txt`。应用导入生成包；该包用 `go:embed` 嵌入资源。源码目录不会出现 `gen/`。
 
-需要 Go 1.27+ 和本分支的 `hgo`。可在仓库根目录执行 `go build -o /tmp/hgo-build-script-demo ./cmd/hgo`，然后将下列命令的 `hgo` 换成 `/tmp/hgo-build-script-demo`。所有选项都放在项目路径之前。
+需要 Go 1.27+ 和本分支的 `hgo`。可在仓库根目录执行 `go build -o /tmp/hgo-build-script-demo ./cmd/hgo`，然后将下列命令的 `hgo` 换成 `/tmp/hgo-build-script-demo`。所有选项都放在项目路径之前。离线首次运行前，请在编译器仓库根用同一真实 Go 执行 `go mod download github.com/goxide-lang/std github.com/goxide-lang/serde`，预热本例锁定的公开支持库；冷缓存不会被 `--offline` 自动补齐。
 
 ## 手动运行
 

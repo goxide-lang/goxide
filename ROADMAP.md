@@ -299,3 +299,8 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 - [早期 TOML 迁移设计](docs/design/toml-manifest.md)保留为 superseded 历史：根go.mod必需、保留hgo.lock、format 1不再是现行规范。
 
 不删除用户原工程，既有format 1/JSON/增强旧锁的自动升级尚不支持；不是完整Cargo或workspace兼容。
+
+
+### 2026-10-04 Vendor 自动迁入扩展
+
+用户要求自动迁入 go.mod/go.sum/vendor，已按 [RFC 0025 vendor合同](docs/rfcs/0025-unified-project.md#vendor-自动迁入扩展2026-10-04实施合同) 实现原生 `-mod=vendor` 视图：源码/许可证/修改保留，单独内容锁，真实 Go 校验政策，不重建缺失模块或访问网络补全。默认只读plan、显式NEW目录构建验证；workspace vendor、未知规则和增强来源混用拒绝。当前独立分支正在完成全量验收，未声明网站已上线。

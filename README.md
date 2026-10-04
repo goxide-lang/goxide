@@ -84,6 +84,6 @@ Cargo 风格第一版通过 `goxide.toml` 增量启用默认/显式 feature、�
 
 `version` 渠道现可直接取得带 `goxide.toml` 的源码并统一 features；Go 负责共享 MVS 与 sums，稳定后才生成/执行已授权脚本。仅原生 go.mod 不隐式激活 hgo feature；固定配置 Go 发行物不重配。见 [version 来源合同与验收](docs/design/version-source-plan.md)。
 
-项目采用 [统一项目模型](docs/rfcs/0025-unified-project.md)：根以 `goxide.toml`（`package.format = 2`，显式 module/go）和 `goxide.lock` 为配置与锁定权威，`.go` / `.hgo` 可共存。原生 require/replace/exclude 写入 TOML；Go 元数据仅生成到 target。普通 Go 工程可用 `hgo import-go --plan --bin app=cmd/app ROOT` 查看方案，再用 `--out NEWDIR --offline` 在新目录验证迁移，原工程保持不变。旧 JSON、format 1、双根配置和旧锁均明确拒绝；不自动删除或改名。
+项目采用 [统一项目模型](docs/rfcs/0025-unified-project.md)：根以 `goxide.toml`（`package.format = 2`，显式 module/go）和 `goxide.lock` 为配置与锁定权威，`.go` / `.hgo` 可共存。原生 require/replace/exclude 写入 TOML；Go 元数据仅生成到 target。普通 Go 工程可用 `hgo import-go --plan --bin app=cmd/app ROOT` 查看方案，再用 `--out NEWDIR --offline` 在新目录验证迁移，原工程保持不变。旧 JSON、format 1、双根配置和旧锁均明确拒绝；不自动删除或改名。 `import-go` 未指定输出时默认只读计划；单模块 vendor 自动保留为 `[vendor] mode = "go-mod"` 的原生 Go vendor 视图，逐文件锁定实际字节，冷缓存离线构建不下载补包。workspace vendor 与增强依赖图混用明确拒绝，详见 RFC 0025 的 vendor 扩展。
 
 共享 sum 与 serde 已迁入独立 Go 模块：`github.com/goxide-lang/std/sum`、`github.com/goxide-lang/serde`、`github.com/goxide-lang/serde/json`。本 checkout 的 go.mod/go.sum 固定真实公开提交；不是未发布候选 replace。具体版本、发布白名单和整合验收见[迁移记录](docs/reviews/public-library-migration-20261004.md)。旧 schema 6 产物需用此编译器重新生成；不承诺与旧私有 marker 二进制兼容。

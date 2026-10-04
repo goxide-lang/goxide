@@ -217,7 +217,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 			excluded[filepath.Clean(filepath.Dir(n.Manifest.Build.Entry))] = true
 			configuration = project.Digest([]string{configuration, artifact.Digest})
 		}
-		options := frontend.ModuleOptions{ManagedOutputRoot: layout.Root, SourceModuleRoot: n.Root, SourceModuleFile: n.ModBytes, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files}
+		options := frontend.ModuleOptions{VendorMode: n.Manifest.Vendor != nil, ManagedOutputRoot: layout.Root, SourceModuleRoot: n.Root, SourceModuleFile: n.ModBytes, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files}
 		options.Prepare = func(root string) error { return prepareProjectModule(g, n, root, generated) }
 		result, err = frontend.CompileModuleWithOptions(inputPath, output, options)
 		if err != nil {
@@ -233,7 +233,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 			return err
 		}
 	}
-	if err = validateProjectKind(tool, result, flags.lib || (flags.bin == "" && flags.example == "" && len(g.Root.Manifest.Bins) == 0 && g.Root.Manifest.Lib != nil), tags); err != nil {
+	if err = validateProjectKind(tool, result, flags.lib || (flags.bin == "" && flags.example == "" && len(g.Root.Manifest.Bins) == 0 && g.Root.Manifest.Lib != nil), tags, g.Root.Manifest.Vendor != nil); err != nil {
 		return err
 	}
 	if err = g.Save(); err != nil {
@@ -243,7 +243,11 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		_, err = fmt.Fprintln(out, result.Root)
 		return err
 	}
-	argv := []string{mode, "-buildvcs=false", "-mod=readonly", "-tags=" + strings.Join(tags, ",")}
+	moduleMode := "-mod=readonly"
+	if g.Root.Manifest.Vendor != nil {
+		moduleMode = "-mod=vendor"
+	}
+	argv := []string{mode, "-buildvcs=false", moduleMode, "-tags=" + strings.Join(tags, ",")}
 	if mode == "test" {
 		argv = append(argv, "-race")
 	}
@@ -392,7 +396,7 @@ func projectModuleAnchors(g *project.Graph, work string) (map[string]string, err
 		}
 		args := []string{"mod", "edit"}
 		for _, rep := range m.Replace {
-			if rep.New.Version == "" && !filepath.IsAbs(rep.New.Path) {
+			if n.Manifest.Vendor == nil && rep.New.Version == "" && !filepath.IsAbs(rep.New.Path) {
 				old := rep.Old.Path
 				if rep.Old.Version != "" {
 					old += "@" + rep.Old.Version
@@ -419,6 +423,9 @@ func projectModuleAnchors(g *project.Graph, work string) (map[string]string, err
 }
 
 func prepareProjectModule(g *project.Graph, n *project.Node, root string, generated map[string]string) error {
+	if n.Manifest.Vendor != nil {
+		return project.PrepareVendor(g.Tool, n.Root, root, n.Manifest, g.Lock.Vendor)
+	}
 	run := func(args ...string) ([]byte, error) {
 		cmd := exec.Command(g.Tool, args...)
 		cmd.Dir = root
@@ -635,8 +642,12 @@ func projectCompilerID() string {
 	}
 	return project.Digest(data)
 }
-func validateProjectKind(tool string, result frontend.ModuleResult, lib bool, tags []string) error {
-	cmd := exec.Command(tool, "list", "-buildvcs=false", "-mod=readonly", "-tags="+strings.Join(tags, ","), "-f", "{{.Name}}", result.Target)
+func validateProjectKind(tool string, result frontend.ModuleResult, lib bool, tags []string, vendor bool) error {
+	moduleMode := "-mod=readonly"
+	if vendor {
+		moduleMode = "-mod=vendor"
+	}
+	cmd := exec.Command(tool, "list", "-buildvcs=false", moduleMode, "-tags="+strings.Join(tags, ","), "-f", "{{.Name}}", result.Target)
 	cmd.Dir = result.Root
 	cmd.Env = project.GoEnv(true)
 	b, e := cmd.CombinedOutput()

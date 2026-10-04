@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -22,7 +23,7 @@ func (b *importBins) Set(v string) error { *b = append(*b, v); return nil }
 func runImportGo(args []string, out, stderr io.Writer) error {
 	f := flag.NewFlagSet("import-go", flag.ContinueOnError)
 	f.SetOutput(stderr)
-	plan := f.Bool("plan", false, "read-only migration plan")
+	plan := f.Bool("plan", false, "read-only migration plan (default without --out)")
 	dest := f.String("out", "", "new migrated project directory (never overwritten)")
 	tool := f.String("go", "go", "real Go compiler")
 	offline := f.Bool("offline", false, "validate with cached modules only")
@@ -32,8 +33,11 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 	if e := f.Parse(args); e != nil {
 		return e
 	}
+	if !*plan && *dest == "" {
+		*plan = true
+	}
 	if f.NArg() != 1 || (*plan == (*dest != "")) {
-		return fmt.Errorf("usage: hgo import-go (--plan | --out NEWDIR) (--lib PATH | --bin NAME=PATH) ROOT")
+		return fmt.Errorf("usage: hgo import-go [--plan | --out NEWDIR] (--lib PATH | --bin NAME=PATH) ROOT")
 	}
 	if (*lib == "") == (len(bins) == 0) {
 		return fmt.Errorf("choose --lib or one or more --bin targets")
@@ -48,7 +52,7 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 	if e = project.CheckWorkspace(root); e != nil {
 		return e
 	}
-	for _, name := range []string{project.ManifestName, project.LegacyManifestName, "goxide.lock", "hgo.lock", "vendor"} {
+	for _, name := range []string{project.ManifestName, project.LegacyManifestName, "goxide.lock", "hgo.lock"} {
 		if _, e := os.Lstat(filepath.Join(root, name)); e == nil {
 			return fmt.Errorf("import-go refuses existing %s; preserve and explicitly migrate that configuration first", name)
 		} else if !os.IsNotExist(e) {
@@ -72,9 +76,26 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 		}
 		m.Bins = append(m.Bins, project.Target{Name: name, Path: path})
 	}
+	var vendor *project.VendorSnapshot
+	if _, err := os.Lstat(filepath.Join(root, "vendor")); err == nil {
+		m.Vendor = &project.VendorConfig{Mode: "go-mod"}
+		vendor, e = project.InspectVendor(root, m)
+		if e != nil {
+			return e
+		}
+		// Validate consistency using original Go metadata without writing source files.
+		c := exec.Command(*tool, "list", "-mod=vendor", "-m", "-json")
+		c.Dir = root
+		c.Env = project.GoEnv(true)
+		if b, err := c.CombinedOutput(); err != nil {
+			return fmt.Errorf("vendor policy consistency: %w: %s", err, b)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	for i := range m.Native.Replace {
 		r := &m.Native.Replace[i]
-		if r.Path != "" && !filepath.IsAbs(r.Path) {
+		if vendor == nil && r.Path != "" && !filepath.IsAbs(r.Path) {
 			r.Path = filepath.Join(root, r.Path)
 		}
 	}
@@ -86,6 +107,13 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 		return e
 	}
 	if *plan {
+		fmt.Fprintln(out, "# Plan: preserve original files; copy regular source into a new directory; create goxide.toml/goxide.lock; generate Go metadata only under target.")
+		if vendor != nil {
+			fmt.Fprintln(out, "# Vendor bytes and licenses copied unchanged; upstream content difference: unknown (no fetch); hashes describe supplied content, not proxy checksums.")
+			for _, line := range project.VendorInventory(vendor) {
+				fmt.Fprintln(out, line)
+			}
+		}
 		_, e = out.Write(data)
 		return e
 	}
@@ -129,6 +157,9 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 			return fmt.Errorf("migration source symlink unsupported: %s", rel)
 		}
 		if d.IsDir() {
+			if rel == "vendor" || strings.HasPrefix(rel, "vendor"+string(filepath.Separator)) {
+				return os.Mkdir(filepath.Join(stage, rel), 0755)
+			}
 			owned, err := project.ManagedSourceDirectory(path, root, m.Module)
 			if err != nil {
 				return err
@@ -152,7 +183,10 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 		if e != nil {
 			return e
 		}
-		return os.WriteFile(filepath.Join(stage, rel), b, info.Mode().Perm())
+		if e = os.WriteFile(filepath.Join(stage, rel), b, info.Mode().Perm()); e != nil {
+			return e
+		}
+		return os.Chmod(filepath.Join(stage, rel), info.Mode().Perm())
 	})
 	if e != nil {
 		return e
@@ -168,7 +202,16 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 	if e != nil {
 		return e
 	}
-	lock := project.Lock{Version: 2, PlanningSums: string(sums), Provenance: project.Digest([]any{original, sums})}
+	if vendor != nil {
+		candidate, err := project.InspectVendor(stage, m)
+		if err != nil {
+			return err
+		}
+		if candidate.Digest != vendor.Digest {
+			return fmt.Errorf("vendor snapshot changed during migration")
+		}
+	}
+	lock := project.Lock{Vendor: vendor, Version: 2, PlanningSums: string(sums), Provenance: project.Digest([]any{original, sums})}
 	b, e := json.MarshalIndent(lock, "", "  ")
 	if e != nil {
 		return e

@@ -258,6 +258,9 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 		for _, module := range keys(r.nodes) {
 			n := r.nodes[module]
 			req := reqs[module]
+			if n != r.root && n.Manifest.Vendor != nil {
+				return nil, fmt.Errorf("vendor mode is supported only for a root project; cannot mix vendor author dependency %s", n.Module)
+			}
 			features, deps, e := Resolve(n.Manifest, req.Features, req.Defaults)
 			if e != nil {
 				if n == r.root {
@@ -785,6 +788,12 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 	initial, err := g.readNode(root, false)
 	if err != nil {
 		return nil, err
+	}
+	if initial.Manifest.Vendor != nil {
+		return g.planVendor(initial, requested, defaults)
+	}
+	if g.Lock.Vendor != nil {
+		return nil, fmt.Errorf("vendor lock requires explicit vendor mode; cannot silently switch source policy")
 	}
 	g.RootMod = initial.Mod
 	if e != nil {

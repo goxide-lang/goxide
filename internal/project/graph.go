@@ -13,6 +13,7 @@ import (
 )
 
 type Lock struct {
+	Vendor       *VendorSnapshot                 `json:"vendor,omitempty"`
 	PlanningSums string                          `json:"planning_sums,omitempty"`
 	Provenance   string                          `json:"provenance,omitempty"`
 	Version      int                             `json:"version"`

@@ -20,6 +20,7 @@ const LegacyManifestName = "hgo.json"
 const ManifestProtocol = "goxide-unified-v2"
 
 type Manifest struct {
+	Vendor       *VendorConfig         `json:"vendor,omitempty" toml:"vendor,omitempty"`
 	Module       string                `json:"module"`
 	GoVersion    string                `json:"go"`
 	Toolchain    string                `json:"toolchain,omitempty"`
@@ -78,6 +79,7 @@ func Detect(root string) (bool, error) {
 
 // manifestDocument deliberately separates the human format from internal identities.
 type manifestDocument struct {
+	Vendor       *VendorConfig         `toml:"vendor,omitempty"`
 	Package      PackageConfig         `toml:"package"`
 	Native       GoConfig              `toml:"go,omitempty"`
 	Build        *buildconfig.Config   `toml:"build,omitempty"`
@@ -105,7 +107,7 @@ func Parse(filename string, b []byte) (Manifest, error) {
 	if err := toml.NewDecoder(bytes.NewReader(b)).DisallowUnknownFields().Decode(&d); err != nil {
 		return Manifest{}, manifestDecodeError(filename, err)
 	}
-	m := Manifest{Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
+	m := Manifest{Vendor: d.Vendor, Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validateNames(filename, b); err != nil {
 		return m, err
 	}
@@ -116,6 +118,9 @@ func Parse(filename string, b []byte) (Manifest, error) {
 }
 
 func validate(m Manifest) error {
+	if m.Vendor != nil && m.Vendor.Mode != "go-mod" {
+		return fmt.Errorf("unsupported vendor.mode %q", m.Vendor.Mode)
+	}
 	if m.Version != 2 {
 		return fmt.Errorf("unsupported goxide.toml package.format %d; migrate to format 2 with explicit package.module/go", m.Version)
 	}
@@ -302,6 +307,6 @@ func Select(m Manifest, bin, example string, features map[string]bool) (Target, 
 
 // Marshal emits the authoring schema, not the internal JSON identity representation.
 func Marshal(m Manifest) ([]byte, error) {
-	d := manifestDocument{Package: PackageConfig{m.Version, m.Module, m.GoVersion, m.Toolchain}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	d := manifestDocument{Vendor: m.Vendor, Package: PackageConfig{m.Version, m.Module, m.GoVersion, m.Toolchain}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
 	return toml.Marshal(d)
 }

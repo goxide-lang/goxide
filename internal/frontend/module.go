@@ -40,6 +40,7 @@ func CompileModuleWithTags(input, destination string, tags []string) (ModuleResu
 }
 
 type ModuleOptions struct {
+	VendorMode bool // Preserve native vendor replace spelling in generated policy.
 	// SourceModuleRoot/File are a trusted project-planner virtual Go module, never source directives.
 	SourceModuleRoot string
 	SourceModuleFile []byte
@@ -152,7 +153,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if len(fields) >= 2 && fields[0] == "module" {
 			modulePath = strings.Trim(fields[1], "\"")
 		}
-		if at := strings.Index(line, "=>"); at >= 0 {
+		if at := strings.Index(line, "=>"); at >= 0 && !options.VendorMode {
 			tail := strings.TrimSpace(line[at+2:])
 			tokenText := strings.Fields(tail)
 			if len(tokenText) > 0 {

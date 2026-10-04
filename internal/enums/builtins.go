@@ -50,7 +50,9 @@ func Builtin(family string, args []string) (Decl, error) {
 		norm[i] = b.String()
 	}
 	suffix := "[" + strings.Join(norm, ",") + "]"
-	d := Decl{Name: family + suffix, Family: family, TypeArgs: norm, Marker: "is" + family, Validator: fmt.Sprintf("__hgo_enum_inst_%x", sha256.Sum256([]byte(family+suffix)))}
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(family+suffix)))
+	d := Decl{Name: family + suffix, Family: family, TypeArgs: norm, Marker: "is" + family,
+		Validator: "__hgo_enum_check" + family + "_" + digest[:16], ExportValidator: "HgoInst" + digest}
 	names := []string{"Some", "None"}
 	payloads := []string{norm[0], ""}
 	if family == "Result" {
@@ -279,7 +281,7 @@ func (l *lowerer) builtinInstances() string {
 			b.WriteString("}")
 		}
 		b.WriteString("};\n")
-		fmt.Fprintf(&b, "func HgoInst%s(v %s) { %s(v) };\n", strings.TrimPrefix(d.Validator, "__hgo_enum_inst_"), d.Name, d.Validator)
+		fmt.Fprintf(&b, "func %s(v %s) { %s(v) };\n", d.ExportValidator, d.Name, d.Validator)
 	}
 	return b.String()
 }
@@ -641,6 +643,9 @@ func substituteSumType(source string, args map[string]string) (string, error) {
 // projection checks as source-written instances. It never reparses lowered Go
 // or regenerates a nominal family. Callers must retain returned Decl metadata.
 func InstantiateBuiltin(d Decl, declarations []Decl, named map[string]ast.Expr) (string, error) {
+	if err := CheckBuiltinValidatorNames(append(append([]Decl(nil), declarations...), d)); err != nil {
+		return "", err
+	}
 	l := &lowerer{filename: "<Go result instance>", decls: []Decl{d}, byName: map[string]*Decl{}, packageTypes: named}
 	for i := range declarations {
 		prior := &declarations[i]
@@ -695,4 +700,21 @@ func BindPayloadType(expr ast.Expr, declarations []Decl) ast.Expr {
 		return expr
 	}
 	return bound
+}
+
+// CheckBuiltinValidatorNames rejects shortened-name collisions before emitting or
+// deduplicating declarations. Short digests are spellings, not nominal identities.
+// Imported bindings carry their own qualified validators and are not local names.
+func CheckBuiltinValidatorNames(declarations []Decl) error {
+	seen := map[string]string{}
+	for _, d := range declarations {
+		if d.Family == "" || d.PackagePath != "" || d.ExportValidator == "" {
+			continue
+		}
+		if prior, ok := seen[d.Validator]; ok && prior != d.ExportValidator {
+			return fmt.Errorf("generated builtin validator name collision %s (%s and %s)", d.Validator, prior, d.ExportValidator)
+		}
+		seen[d.Validator] = d.ExportValidator
+	}
+	return nil
 }

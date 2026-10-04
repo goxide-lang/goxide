@@ -562,11 +562,20 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 	}
 	var edits []packageEdit
 	exportedBuiltins := map[string]bool{}
+	privateValidators := map[string]bool{}
 	for _, d := range r.Enums {
 		if d.Family == "" {
 			continue
 		}
-		exportedBuiltins["HgoInst"+strings.TrimPrefix(d.Validator, "__hgo_enum_inst_")] = true
+		exportedBuiltins[d.ExportValidator] = true
+		privateValidators[d.Validator] = true
+		if d.ExportValidator != "" && d.PackagePath == "" {
+			identityKey := "validator identity:" + d.Validator
+			if prior, ok := seen[identityKey]; ok && prior != d.ExportValidator {
+				return fmt.Errorf("%s: generated builtin validator name collision %s", name, d.Validator)
+			}
+			seen[identityKey] = d.ExportValidator
+		}
 		for _, v := range d.Variants {
 			exportedBuiltins["Hgo"+d.Family+v.Name] = true
 			exportedBuiltins["HgoNew"+d.Family+v.Name] = true
@@ -591,7 +600,7 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 				}
 			}
 		}
-		builtin := strings.HasPrefix(key, "__hgo_ref_") || exportedBuiltins[key] || strings.HasPrefix(key, "__hgo_enum_inst_") || strings.Contains(key, "__hgo_enum_case_Result_") || strings.Contains(key, "__hgo_enum_case_Option_") || strings.HasPrefix(key, "__hgo_enum_ctor_Result_") || strings.HasPrefix(key, "__hgo_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__hgo_enum_validate_Result" || key == "__hgo_enum_validate_Option"
+		builtin := strings.HasPrefix(key, "__hgo_ref_") || exportedBuiltins[key] || privateValidators[key] || strings.Contains(key, "__hgo_enum_case_Result_") || strings.Contains(key, "__hgo_enum_case_Option_") || strings.HasPrefix(key, "__hgo_enum_ctor_Result_") || strings.HasPrefix(key, "__hgo_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__hgo_enum_validate_Result" || key == "__hgo_enum_validate_Option"
 		if !builtin {
 			continue
 		}

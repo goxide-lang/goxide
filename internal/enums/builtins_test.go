@@ -153,3 +153,28 @@ var nested Result[Result[int,error],error]
 		}
 	}
 }
+
+func TestBuiltinValidatorIdentityAndCollision(t *testing.T) {
+	a, _ := Builtin("Result", []string{"int", "error"})
+	if a.ExportValidator != "HgoInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2" {
+		t.Fatal("exported ABI changed", a.ExportValidator)
+	}
+	if len(a.Validator) >= len(a.ExportValidator) || !strings.HasPrefix(a.Validator, "__hgo_enum_checkResult_") {
+		t.Fatal("unreadable private name", a.Validator)
+	}
+	same, _ := Builtin("Result", []string{" int ", "error"})
+	if a.Validator != same.Validator || a.ExportValidator != same.ExportValidator {
+		t.Fatal("normalization changed identity")
+	}
+	if err := CheckBuiltinValidatorNames([]Decl{a, same}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := Builtin("Result", []string{"string", "error"})
+	b.Validator = a.Validator // Inject a collision instead of relying on chance.
+	if err := CheckBuiltinValidatorNames([]Decl{a, b}); err == nil || !strings.Contains(err.Error(), "collision") {
+		t.Fatal("collision accepted", err)
+	}
+	if _, err := InstantiateBuiltin(b, []Decl{a}, nil); err == nil || !strings.Contains(err.Error(), "collision") {
+		t.Fatal("adapter collision accepted", err)
+	}
+}

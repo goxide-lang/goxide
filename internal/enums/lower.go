@@ -25,6 +25,9 @@ type Decl struct {
 	Name, Marker, Validator string
 	// ValidatorPath records an external instance owner independently of its family origin.
 	ValidatorPath string
+	// ExportValidator is the stable full-digest ABI name. Validator is private
+	// generated spelling and must never be used to reconstruct this identity.
+	ExportValidator string
 	// PackagePath is set only by the module compiler for trusted producer metadata.
 	PackagePath, LookupName string
 	ConstructorType         string
@@ -180,6 +183,9 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 	localCount := len(l.decls)
 	if err := l.collectBuiltins(); err != nil {
 		return Result{}, err
+	}
+	if err := CheckBuiltinValidatorNames(append(append([]Decl(nil), declarations...), l.decls...)); err != nil {
+		return Result{}, l.err(0, err.Error())
 	}
 	if err := l.checkBuiltinBindings(); err != nil {
 		return Result{}, err

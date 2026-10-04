@@ -62,3 +62,53 @@ func f(v Option[int])int{return match v{Option[int]::Some(n) if n>0=>n,Option[in
 		t.Fatal("guarded match lost fallback state")
 	}
 }
+
+func TestShortValidatorPackageIdentity(t *testing.T) {
+	compile := func(typ string) Result {
+		t.Helper()
+		r, err := Compile("binding.hgo", []byte("package p\nvar value Result["+typ+",error]\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	first := compile("int")
+	repeat := compile("int")
+	seen := map[string]string{}
+	if err := packageGeneratedNames("a.hgo", &first, 0, seen); err != nil {
+		t.Fatal(err)
+	}
+	if err := packageGeneratedNames("b.hgo", &repeat, 1, seen); err != nil {
+		t.Fatal("same identity was not deduplicated", err)
+	}
+	other := compile("string")
+	other.Enums[0].Validator = first.Enums[0].Validator
+	if err := packageGeneratedNames("c.hgo", &other, 2, seen); err == nil || !strings.Contains(err.Error(), "collision") {
+		t.Fatal("cross-file collision accepted", err)
+	}
+	name := first.Enums[0].Validator
+	for _, body := range []string{"var " + name + " int", "func f(){type " + name + " int}", "macro_rules! bad {()=>{func(){var " + name + " int}};}"} {
+		if _, err := Compile("capture.hgo", []byte("package p\n"+body)); err == nil || !strings.Contains(err.Error(), "reserved") {
+			t.Fatal("source capture accepted", err)
+		}
+	}
+	if _, err := CompilePackage("example.org/p", map[string][]byte{"a.hgo": []byte("package p\nvar v Result[int,error]\n"), "native.go": []byte("package p\nvar " + name + " int\n")}, nil); err == nil {
+		t.Fatal("native declaration collision accepted")
+	}
+}
+
+func TestPlainMatchArmSourceOrigin(t *testing.T) {
+	const source = "package p\nfunc f(v Option[int])int {\n return match v {\n Option[int]::Some(n)=>n+17,\n Option[int]::None=>23,\n }\n}\n"
+	r, err := Compile("origin.hgo", []byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := bytes.Index(r.Go, []byte("17"))
+	if at < 0 {
+		t.Fatal("missing arm literal")
+	}
+	seg := r.Diagnostics.Lookup(at)
+	if seg == nil || seg.Origin == nil || seg.Origin.File != "origin.hgo" || seg.Origin.Line != 4 {
+		t.Fatalf("wrong arm origin: %+v", seg)
+	}
+}

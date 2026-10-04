@@ -156,7 +156,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 							}
 							families[d.Family] = family
 						}
-						family.Instances = append(family.Instances, enums.Decl{Validator: alias + ".HgoInst" + strings.TrimPrefix(d.Validator, "__hgo_enum_inst_")})
+						family.Instances = append(family.Instances, enums.Decl{Validator: alias + "." + d.ExportValidator})
 						continue
 					}
 					if !d.Public {

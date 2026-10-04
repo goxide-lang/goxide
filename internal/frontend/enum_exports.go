@@ -138,7 +138,7 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 				if f.Name == "" {
 					f = sharedSumFamily(d.Family)
 				}
-				validator := "HgoInst" + strings.TrimPrefix(d.Validator, "__hgo_enum_inst_")
+				validator := d.ExportValidator
 				found := false
 				for _, x := range f.Instances {
 					found = found || x.Validator == validator

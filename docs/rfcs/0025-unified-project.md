@@ -108,3 +108,33 @@ func main() { fmt.Println("mixed source, one manifest") }
 实施顺序：先字段与指令映射/只读plan；再project模块元数据适配、target规划、锁schema；接入path/Git纯作者源、proxy传输一致性与host helper；最后staging迁移和文档/fixtures。测试使用真实Go与本地mockproxy/Git，不访问私人第三方：Go→mixed→hgo、localreplace/版本replace、indirect/MVS、offline/locked、Go checksum、未知指令、workspace、双配置、partialfailure/source不变、发布后第一次offline+locked重建及无staging路径残留、版本/feature/target A-B-A、脚本授权、embed、生成Go、race/vet与独立review。
 
 本篇不要求用户重新批准已决定的单一清单模型。首片拒绝未支持指令属于无损边界，不以“部分迁移成功”交付。若后续确需retract/tool/godebug/workspace语义，另列精确映射与测试后启用；不在首片默默补默认值。
+
+## Vendor 自动迁入扩展（2026-10-04，实施合同）
+
+状态：用户已要求实现；本节先于代码提交，验收完成前不标已交付/网站已上线。默认 `import-go` 为只读 plan，指定 `--out NEWDIR` 才复制及验证。无 vendor 输入保持原规则；有 vendor 输入自动选择下列显式策略：
+
+```toml
+[vendor]
+mode = "go-mod"
+```
+
+采用真实 Go 的 `-mod=vendor`，不从 modules.txt 猜造完整依赖 go.mod，不把部分包拆装成完整 module，也不调用 download/tidy/vendor 重建。源 vendor 和 modules.txt 逐字复制，许可证保留；TOML 原生政策不丢弃，local replace 在此模式保留原拼写以与 modules.txt 一致（构建只读 vendor，不访问原 replace 目录）。生成 target 内的 Go 元数据＋vendor 构成可独立构建视图。
+
+锁新增独立 vendor 来源记录：模式、政策摘要、modules.txt 描述的版本/替换/explicit/Go版本/包清单、每个普通文件内容与权限摘要和总摘要。它不是 proxy h1：vendor 的本地修改按实际字节保留，原 go.sum 仅记录迁移 provenance，不用于声称 vendor 与远端一致。plan 输出候选 TOML、复制/新增/保留策略、完整 vendor 文件摘要与许可文件清单；上游差异未核实时明确 unknown，不联网猜测。后续 vendor 修改改变配置/metadata/脚本缓存身份；--locked 拒绝摘要变化。
+
+Go 负责核查模块版本、explicit、replace 与根政策一致性。工具额外严格核查清单语法、未知规则、package路径/归属、缺目录/源码、未声明Go包、符号链接/特殊文件/嵌套模块及越界路径；不因 Go 清单解析器容忍未知行就静默丢弃。包目录内资源及嵌入子目录、模块层许可证按内容完整保留；未归属文件拒绝并给路径。原项目及已有输出不变，失败只清理本次 staging。
+
+首片要求现代单模块 vendor（Go声明至少1.17，包所属模块需Go版本元数据）；`## workspace`、go.work 或未知metadata明确拒绝。modules.txt是被选包视图，不是完整传递版本图：只锁定这份vendor视图，不承诺恢复遗漏的包、依赖测试或其他模块的vendor。原go.mod中未支持的retract/tool/godebug/ignore/Deprecated等仍整项拒绝。vendor模式不与增强依赖图混合：`dependencies` 非空明确拒绝；root features/bin/example可用，vendored源只作为原生Go消费，不展开其中.hgo或自动执行脚本。根显式脚本继续遵守独立信任策略。
+
+| 白/黑例 | 结果 |
+| --- | --- |
+| 同步go.mod+sum+vendor、冷modulecache、无网络 | 原Go -mod=vendor与迁入后build/run/test等价，原文件hash不变 |
+| vendor本地源码改动、与上游sum不匹配 | 保留实际内容并标vendor摘要，绝不伪装为proxy checksum |
+| local或version replace，原replace目录之后不存在 | vendor模式仍从保留字节构建，政策与modules.txt一致 |
+| go:embed、平台/build tags文件、许可证 | 原字节保留；选择由真实Go/既有host前端处理，不承诺交叉编译 |
+| 缺包、未声明Go目录、坏/未知modules.txt、symlink、嵌套配置 | 精确路径/行诊断，拒绝发布，不网络补全 |
+| workspace vendor或早期缺metadata格式 | 明确识别不支持，不能误当单modulevendor |
+| 双配置、既有目的目录、部分目标失败 | 原项目不变，目的目录不覆盖/不部分发布 |
+| vendor内容变化、feature/bin切换 | 内容进入配置身份；锁定变化拒绝，配置缓存隔离 |
+
+官方依据：[Go vendoring](https://go.dev/ref/mod#vendoring)、[go mod vendor](https://go.dev/ref/mod#go-mod-vendor)、当前Go工具源码的modules.txt一致性检查。Go vendor覆盖主模块构建/测试所需包，省略依赖自身测试；生成时考虑ignore以外的build constraints。工具不能据当前host构建成功宣称所有平台/任意未来新增import均完整。

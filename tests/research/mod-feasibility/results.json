@@ -1,0 +1,463 @@
+{
+  "scope": "hand-written Go mechanism probes; no hgo syntax implemented",
+  "toolchain": "go version go1.27.1 linux/amd64",
+  "cases": [
+    {
+      "name": "merged_recursive_identity",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe\t1.008s\n"
+        },
+        {
+          "command": [
+            "vet",
+            "./..."
+          ],
+          "exit": 0,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "split_import_cycle",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe/a\npackage example.org/probe/a\n\timports example.org/probe/b from a.go\n\timports example.org/probe/a from b.go: import cycle not allowed\nFAIL\texample.org/probe/a [setup failed]\n# example.org/probe/b\npackage example.org/probe/a\n\timports example.org/probe/b from a.go\n\timports example.org/probe/a from b.go: import cycle not allowed\nFAIL\texample.org/probe/b [setup failed]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "merged_infinite_value_type",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe\n./bad.go:2:6: invalid recursive type A\n\t./bad.go:2:6: A refers to B\n\t./bad.go:2:29: B refers to A\nFAIL\texample.org/probe [build failed]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "split_parent_private",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe/parent/child\nparent/child/child.go:3:41: undefined: parent.hidden\n?   \texample.org/probe/parent\t[no test files]\nFAIL\texample.org/probe/parent/child [build failed]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "merged_private_interface_collision",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe\t1.008s\n"
+        },
+        {
+          "command": [
+            "vet",
+            "./..."
+          ],
+          "exit": 0,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "reexport_alias_generics_methods",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/consumer\t1.008s\n?   \texample.org/probe/facade\t[no test files]\n?   \texample.org/probe/origin\t[no test files]\n"
+        },
+        {
+          "command": [
+            "vet",
+            "./..."
+          ],
+          "exit": 0,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "alias_cannot_add_external_method",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe/facade\nfacade/facade.go:4:15: cannot define new methods on non-local type Alias\nFAIL\texample.org/probe/facade [build failed]\n?   \texample.org/probe/origin\t[no test files]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "reexport_function_and_variable_limits",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/facade\t1.008s\n?   \texample.org/probe/origin\t[no test files]\n"
+        },
+        {
+          "command": [
+            "vet",
+            "./..."
+          ],
+          "exit": 0,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "merged_native_same_package_bypass",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe\t1.008s\n"
+        }
+      ]
+    },
+    {
+      "name": "external_go_private_rejection",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe/consumer\nconsumer/consumer.go:3:25: undefined: lib.hgoChild_private\nFAIL\texample.org/probe/consumer [build failed]\n?   \texample.org/probe/lib\t[no test files]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "internal_is_not_crate_privacy",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/lib/consumer\t0.002s\n?   \texample.org/probe/lib/internal/bridge\t[no test files]\n"
+        }
+      ]
+    },
+    {
+      "name": "initialization_and_shared_lib",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe\t1.008s\n?   \texample.org/probe/cmd/cli\t[no test files]\n?   \texample.org/probe/cmd/web\t[no test files]\n?   \texample.org/probe/examples/demo\t[no test files]\n?   \texample.org/probe/left\t[no test files]\n?   \texample.org/probe/lib\t[no test files]\n?   \texample.org/probe/right\t[no test files]\n"
+        },
+        {
+          "command": [
+            "build",
+            "./cmd/web",
+            "./cmd/cli",
+            "./examples/demo"
+          ],
+          "exit": 0,
+          "output": ""
+        },
+        {
+          "command": [
+            "vet",
+            "./..."
+          ],
+          "exit": 0,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "initialization_cycle_still_invalid",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe\n./bad.go:2:5: initialization cycle for a\n\t./bad.go:2:5: a refers to b\n\t./bad.go:3:5: b refers to a\nFAIL\texample.org/probe [build failed]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "definition_site_binding_vs_shadow",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/consumer\t1.008s\n?   \texample.org/probe/lib\t[no test files]\n"
+        }
+      ]
+    },
+    {
+      "name": "facade_variadic_multireturn_constants",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/consumer\t1.008s\n?   \texample.org/probe/facade\t[no test files]\n?   \texample.org/probe/origin\t[no test files]\n"
+        },
+        {
+          "command": [
+            "vet",
+            "./..."
+          ],
+          "exit": 0,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "wrapper_changes_direct_recover",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/consumer\t1.008s\n?   \texample.org/probe/facade\t[no test files]\n?   \texample.org/probe/origin\t[no test files]\n"
+        }
+      ]
+    },
+    {
+      "name": "generic_function_not_variable_alias",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe/facade\nfacade/facade.go:3:15: cannot use generic function origin.F without instantiation\nFAIL\texample.org/probe/facade [build failed]\n?   \texample.org/probe/origin\t[no test files]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "canonical_internal_path_is_not_accessible_route",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe/consumer\npackage example.org/probe/consumer\n\tconsumer/direct.go:2:16: use of internal package example.org/probe/origin/internal/detail not allowed\nFAIL\texample.org/probe/consumer [setup failed]\n?   \texample.org/probe/origin/api\t[no test files]\n?   \texample.org/probe/origin/internal/detail\t[no test files]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "internal_alias_and_function_value_bridge",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/consumer\t1.008s\n?   \texample.org/probe/origin/api\t[no test files]\n?   \texample.org/probe/origin/internal/detail\t[no test files]\n"
+        },
+        {
+          "command": [
+            "vet",
+            "./..."
+          ],
+          "exit": 0,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "facade_initialization_retained",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/consumer\t1.008s\n?   \texample.org/probe/facade\t[no test files]\n?   \texample.org/probe/origin\t[no test files]\n?   \texample.org/probe/trace\t[no test files]\n"
+        }
+      ]
+    },
+    {
+      "name": "facade_initialization_lost_when_import_dropped",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./consumer"
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/consumer\t1.007s\n"
+        }
+      ]
+    },
+    {
+      "name": "generic_alias_go123_observed_acceptance",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "?   \texample.org/probe\t[no test files]\n"
+        }
+      ]
+    },
+    {
+      "name": "generic_alias_go122_language_rejection",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe\n./alias.go:3:12: generic type alias requires go1.23 or later (-lang was set to go1.22; check go.mod)\nFAIL\texample.org/probe [build failed]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "hidden_signature_direct_call_inference",
+      "expected": "pass",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "-race",
+            "./..."
+          ],
+          "exit": 0,
+          "output": "ok  \texample.org/probe/consumer\t1.008s\n?   \texample.org/probe/origin\t[no test files]\n"
+        }
+      ]
+    },
+    {
+      "name": "hidden_signature_getter_rejected",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe/facade\nfacade/facade.go:3:32: name hidden not exported by package origin\nFAIL\texample.org/probe/facade [build failed]\n?   \texample.org/probe/origin\t[no test files]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "private_constraint_cannot_be_textually_copied",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe/facade\nfacade/facade.go:3:68: V does not satisfy interface{hidden()} (missing method hidden)\nFAIL\texample.org/probe/facade [build failed]\n?   \texample.org/probe/origin\t[no test files]\nFAIL\n"
+        }
+      ]
+    },
+    {
+      "name": "source_line_diagnostic",
+      "expected": "reject",
+      "runs": [
+        {
+          "command": [
+            "test",
+            "./..."
+          ],
+          "exit": 1,
+          "output": "# example.org/probe\n./src/net/client.hgo:41: cannot use \"wrong\" (untyped string constant) as int value in return statement\nFAIL\texample.org/probe [build failed]\nFAIL\n"
+        }
+      ]
+    }
+  ]
+}

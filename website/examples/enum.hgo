@@ -1,0 +1,23 @@
+package main
+
+import "fmt"
+
+enum State { Empty, Count(int), }
+
+func label(state State) string {
+    var size int = match state {
+        State::Count(n) if n > 0 => n,
+        State::Count(_) => 0,
+        State::Empty => 0,
+    }
+    return match state {
+        State::Count(_) => fmt.Sprintf("count: %d", size),
+        State::Empty => "empty",
+    }
+}
+
+func main() {
+    fmt.Println(label(State::Count(3)))
+    fmt.Println(label(State::Count(-1)))
+    fmt.Println(label(State::Empty))
+}

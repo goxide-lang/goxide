@@ -1,0 +1,61 @@
+package main
+
+import (
+    "errors"
+    "fmt"
+    "strconv"
+)
+
+#[derive(Error)]
+#[error("invalid port")]
+type PortError struct {
+    #[from]
+    Cause error
+}
+
+// The caller explicitly decides what to do with Go's (int, error).
+func parsePort(text string) Result[int,error] {
+    n, err := strconv.Atoi(text)
+    if err != nil { return Result[int,error]::Err(err) }
+    return Result[int,error]::Ok(n)
+}
+
+// The registered error -> PortError conversion runs only on Err.
+// The success type changes from int to string.
+func nextPort(text string) Result[string,PortError] {
+    n := parsePort(text)?
+    return Result[string,PortError]::Ok(strconv.Itoa(n + 1))
+}
+
+func firstName(names []string) Option[string] {
+    if len(names) == 0 { return Option[string]::None }
+    return Option[string]::Some(names[0])
+}
+
+func nameLength(names []string) Option[int] {
+    name := firstName(names)?
+    return Option[int]::Some(len(name))
+}
+
+func showPort(text string) {
+    match nextPort(text) {
+        Result[string,PortError]::Ok(port) => { fmt.Println("next port:", port) },
+        Result[string,PortError]::Err(err) => {
+            fmt.Println("port error:", err.Error(), "syntax:", errors.Is(err, strconv.ErrSyntax))
+        },
+    }
+}
+
+func showLength(names []string) {
+    match nameLength(names) {
+        Option[int]::Some(n) => { fmt.Println("name length:", n) },
+        Option[int]::None => { fmt.Println("name length: absent") },
+    }
+}
+
+func main() {
+    showPort("8080")
+    showPort("invalid")
+    showLength([]string{"Ada"})
+    showLength(nil)
+}

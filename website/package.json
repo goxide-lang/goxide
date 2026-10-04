@@ -1,0 +1,1 @@
+{"name":"goxide-website-checks","private":true,"scripts":{"test":"node qa.mjs"},"devDependencies":{"playwright":"1.58.2"}}

@@ -17,6 +17,10 @@ bash examples/enum_trial/try.sh "$work"
 
 工具链不能仅按 `go` 这个名字判断。CLI 的 `-go /absolute/go` 可选择执行编译器，但 importer 使用构建 CLI 的 GOROOT；目录运行/测试要求二者版本一致。生成模块仍通过 go.mod 依赖支持库，不是自包含 runtime 副本。
 
+## 网页与浏览器 Playground
+
+[构建独立 hgo-web 二进制](website/README.md)：中文特性介绍、四组真实 hgo → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器仅支持清单内包的单文件转译；CLI 与 WASM 示例逐字节校验。
+
 ## 当前支持
 
 | 能力 | 已验收范围与入口 |

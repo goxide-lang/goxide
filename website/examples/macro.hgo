@@ -1,0 +1,14 @@
+package main
+
+import "fmt"
+
+// 模板中的局部变量有独立绑定；表达式仅求值一次。
+macro_rules! twice {
+    ($value:expr) => {
+        func() int { value := $value; return value + value }()
+    };
+}
+
+func main() {
+    fmt.Println(twice!(21))
+}

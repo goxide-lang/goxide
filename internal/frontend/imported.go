@@ -7,6 +7,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"go/types"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -96,6 +97,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 				declarations[name] = append(declarations[name], d)
 			}
 			for ei, export := range p.enumMetadata.Families {
+				export.Instances = orderedFamilyInstances(export.Instances)
 				if !enumOriginImportAllowed(consumerPath, export.DefinitionPath) {
 					if unavailable[name] == nil {
 						unavailable[name] = map[string]string{}
@@ -234,4 +236,17 @@ func parseSourceImports(name string, source []byte) (*ast.File, error) {
 		}
 	}
 	return parser.ParseFile(token.NewFileSet(), name, source[:file.Offset(pos)], parser.ImportsOnly)
+}
+
+// Validated candidates have the same registered payload contract. Select and
+// bind them by owner identity, independently of artifact serialization order.
+func orderedFamilyInstances(instances []enumFamilyInstanceExport) []enumFamilyInstanceExport {
+	ordered := append([]enumFamilyInstanceExport(nil), instances...)
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].ValidatorPath != ordered[j].ValidatorPath {
+			return ordered[i].ValidatorPath < ordered[j].ValidatorPath
+		}
+		return ordered[i].Validator < ordered[j].Validator
+	})
+	return ordered
 }

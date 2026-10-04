@@ -32,6 +32,7 @@ func (g *generator) prepareSumProtocols(f *ast.File, cfg *compileConfig, imp typ
 		sort.Strings(paths)
 		for _, path := range paths {
 			for _, family := range cfg.enumRegistry[path].enumMetadata.Families {
+				family.Instances = orderedFamilyInstances(family.Instances)
 				if imp == nil || !enumOriginImportAllowed(cfg.packagePath, family.DefinitionPath) {
 					continue
 				}

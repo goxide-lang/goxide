@@ -201,8 +201,7 @@ func TestNestedOptionIsLossyNotPatch(t *testing.T){
  wire,err:=writeRequest(v);if err!=nil{t.Fatal(err)}
  back,err:=readRequest(string(wire));if err!=nil||back.Nested!=nil||back.Pointer!=nil||!strings.Contains(string(wire),"\"Nested\":null"){t.Fatalf("null collapse: %s %#v %v",wire,back,err)}
 }
-type forgedOption struct{}
-func(forgedOption)__hgo_enum_marker_Option(int){}
+type forgedOption struct{Option[int]}
 func TestInvalidNativeValuesReturnTypeWithoutPanic(t *testing.T){
  for _,bad:=range []Option[int]{(*__hgo_enum_case_Option_Some[int])(nil),&__hgo_enum_case_Option_Some[int]{Value:2},forgedOption{}}{
   v,err:=readRequest("{"+required+"}");if err!=nil{t.Fatal(err)};v.Count=bad

@@ -412,10 +412,9 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		matchTemps[name] = r.matchReferenceTemps
 	}
 	for name, source := range files {
-		cleaned := unusedValidatorOwnerImports(name, source)
+		r := result.Files[name]
+		cleaned := unusedValidatorOwnerImports(name, source, r.Diagnostics)
 		if !bytes.Equal(source, cleaned) {
-			r := result.Files[name]
-			r.Diagnostics = r.Diagnostics.Compose(source, cleaned, "package validator imports")
 			r.Go, r.Expanded = cleaned, cleaned
 			result.Files[name] = r
 			files[name] = cleaned
@@ -690,7 +689,7 @@ func refreshPackageMap(r *Result) {
 
 // Owner imports must stay available during typed candidate selection. Once all
 // sum operations are lowered, only selected owners need a named Go import.
-func unusedValidatorOwnerImports(name string, source []byte) []byte {
+func unusedValidatorOwnerImports(name string, source []byte, provenance *sourcemap.Map) []byte {
 	fs := token.NewFileSet()
 	f, err := parser.ParseFile(fs, name, source, 0)
 	if err != nil {
@@ -712,7 +711,17 @@ func unusedValidatorOwnerImports(name string, source []byte) []byte {
 			continue
 		}
 		a, b := fs.Position(im.Name.Pos()).Offset, fs.Position(im.Name.End()).Offset
+		var next *sourcemap.Map
+		if provenance != nil {
+			next = &sourcemap.Map{Stages: append(append([]string(nil), provenance.Stages...), "package validator imports")}
+			next.Segments = append(next.Segments, provenance.Copy(0, a, 0)...)
+			next.Segments = append(next.Segments, provenance.Copy(b, len(result), a+1)...)
+		}
 		result = append(result[:a], append([]byte("_"), result[b:]...)...)
+		if next != nil {
+			next.Source = result
+			*provenance = *next
+		}
 	}
 	return result
 }

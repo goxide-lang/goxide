@@ -113,7 +113,7 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(indexGo), ".Catch(") || strings.Contains(string(indexGo), ".Assignment[") {
+	if strings.Contains(strings.Join(strings.Fields(string(indexGo)), ""), ".Catch(") || strings.Contains(strings.Join(strings.Fields(string(indexGo)), ""), ".Assignment[") {
 		t.Fatal("rvalue index/key/call-argument unexpectedly uses assignment guard")
 	}
 
@@ -122,7 +122,7 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(code), ".Catch(") || strings.Contains(string(code), ".Fail(") || strings.Contains(string(code), ".Assignment[") {
+		if strings.Contains(strings.Join(strings.Fields(string(code)), ""), ".Catch(") || strings.Contains(strings.Join(strings.Fields(string(code)), ""), ".Fail(") || strings.Contains(strings.Join(strings.Fields(string(code)), ""), ".Assignment[") {
 			t.Fatalf("%s unexpectedly retained an assignment guard", name)
 		}
 	}
@@ -130,7 +130,7 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(string(fallback), ".Catch("); n != 1 {
+	if n := strings.Count(strings.Join(strings.Fields(string(fallback)), ""), ".Catch("); n != 1 {
 		t.Fatalf("explicit fallback coverage: got %d guards, want 1", n)
 	}
 	packagesWrite(t, generated, "private_test.go", privatePlaceAssertions)

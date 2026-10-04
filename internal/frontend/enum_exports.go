@@ -12,6 +12,7 @@ import (
 
 	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/refs"
+	"github.com/hxsf/goxide/internal/sourcemap"
 )
 
 // Recover before syntax lowering: match needs a closed variant set, not merely
@@ -250,7 +251,7 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 // Import declarations can be added after the original import block without
 // rewriting package text or producer-private names. This runs after enum syntax
 // lowering, alongside the existing compiler-owned import binding prelude.
-func insertEnumImports(name string, source []byte, imports string) ([]byte, error) {
+func insertEnumImports(name string, source []byte, imports string, provenance *sourcemap.Map) ([]byte, error) {
 	if imports == "" {
 		return source, nil
 	}
@@ -265,6 +266,12 @@ func insertEnumImports(name string, source []byte, imports string) ([]byte, erro
 	out := append([]byte(nil), source[:off]...)
 	out = append(out, imports...)
 	out = append(out, source[off:]...)
+	if provenance != nil {
+		next := &sourcemap.Map{Source: out, Stages: append(append([]string(nil), provenance.Stages...), "enumImports")}
+		next.Segments = append(next.Segments, provenance.Copy(0, off, 0)...)
+		next.Segments = append(next.Segments, provenance.Copy(off, len(source), off+len(imports))...)
+		*provenance = *next
+	}
 	return out, nil
 }
 

@@ -275,12 +275,10 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	source = enumResult.Source
 	if cfg != nil {
-		beforeImports := source
-		source, err = insertEnumImports(filename, source, cfg.enumGoImports[filename])
+		source, err = insertEnumImports(filename, source, cfg.enumGoImports[filename], provenance)
 		if err != nil {
 			return Result{}, err
 		}
-		provenance = provenance.Compose(beforeImports, source, "enumImports")
 		source = append(source, []byte(cfg.preludes[filename])...)
 	}
 	refResult, err := refs.Prepare(filename, source)

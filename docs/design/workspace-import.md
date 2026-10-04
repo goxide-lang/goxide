@@ -65,3 +65,21 @@ hgo transpile -p example.org/app --bin web --locked --offline /projects/migrated
 bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳过嵌套 module），不会查找任意兄弟目录。重复目录名可通过重复 `--member-bin example.org/app::first=a/web` 与 `--member-bin example.org/app::second=b/web` 显式命名；对一个成员给出的首个覆盖会替换该成员全部自动 bin 列表。examples 不自动推断，迁入后可在成员 TOML 使用既有 `[[example]]`，仅 `--example NAME` 选择；没有新增发布功能。原生模式目前拒绝 `-o`，使用受管输出。
 
 输出目录、Go 视图和锁共用已有 owner/lease/原子发布机制；配置/成员/目标/normal-test 模式进入 unit 身份，每次仍创建新源码 generation。不存在复用增强外部 metadata 的旁路。未知嵌套 owner 标记拒绝，不能以伪造标记静默丢弃原工程普通目录。
+
+## 渐进增强衔接（继续实施）
+
+`70964a8` 完成的是原生 Go 保真迁入，尚非完整第二阶段。`.hgo`、features、脚本与 schema4 拆锁的拒绝是临时实现缺口，不能成为用户迁入后的最终工作流边界。后续仍遵守 RFC0022/0023/0026，不通过删去 work/vendor 政策来绕过缺口。
+
+增强编译将保持同一受管 go.work 与完整政策集合，仅生成显式活动依赖闭包。复用现有 Resolve feature 固定点、cfg→宏→类型检查顺序、目标选择和脚本主体授权。类型导入器默认仍 GOWORK=off，只允许构建器通过显式接口传入已拥有的 Go 工作区；不接受源码/脚本自行指定上下文。未选成员只有元数据，不注入源码。
+
+脚本继续使用 RFC0023 的独立本地 host 快照和明确 trust/allow；本片不引入新的 host resolver。其产物参与普通 lowering，并在执行前后复核授权。workspace 成员身份与迁入操作都不是脚本授权。
+
+拆出复制根锁仍按已确认规则只使用可达记录。必须分别处理原生 work 开发政策、成员独立政策及 workspace vendor 主模块集合，不能静默转换 vendor/丢失 replace/godebug。若某输入无法在既定显式物化规则下等价拆出，先提供最小正反例并明确拒绝该输入；普通无冲突拆出路径继续实施。
+
+### 已完成衔接与真正需要单列的转换边界
+
+新增可验证路径：成员逐步加入 `.hgo`、现有 features/可选成员依赖/required_features、带原生 vendor 的增强宏，以及 RFC0023 明确授权的构建脚本。前端显式接受受管 Go workspace，不改变 cfg/宏/类型检查顺序；vendor 内容参与 frontend 配置与脚本计划身份。
+
+schema4 增补逐成员输入记录；非vendor拆出显式物化继承/path后直接复制根锁，复用既有 Go/Unified可达解析和校验，不读无关成员源码、不激活无关脚本。显式本地成员路径可搬迁，逐节点仍核对模块身份与有效清单。成员自身 go/toolchain/godebug/replace 恢复生效；若来源因 work override 消失而改变，必须报错而非沿旧来源偷偷构建。旧schema4缺成员记录时先在原workspace普通构建补锁；复制锁的原字节保留。
+
+**workspace vendor 拆出仍需显式转换合同**。最小反例：A require D，B require E，工作区 vendor 标记 D/E 都 explicit。A 独立后若原样复制整份 vendor，E 的 explicit 不再对应主模块 require，真实 Go 拒绝；若改 modules.txt 删除 E，则已不是原 vendor 政策/摘要；若保留隐藏的 B/go.work，则仍施加原 work replace/godebug，违反已确认独立政策恢复。普通非vendor A 可直接复制根锁、只校验D；vendor A 当前明确拒绝并要求显式转换，绝不擦标记或丢修改字节。建议另立最小转换协议：验证原快照后，依据独立政策派生vendor元数据，保留实际文件和原/派生摘要；在协议确认前暂停这部分，而不阻塞非vendor及workspace内渐进增强。

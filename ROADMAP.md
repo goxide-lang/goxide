@@ -313,3 +313,7 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 ### RFC0026 作者 workspace 核心（2026-10-04）
 
 独立 `feat/workspace-core` 已实现显式成员/模板继承、全 workspace Go MVS 与 schema 3 根唯一锁、按选中闭包合并 feature、多成员 lib/bin 构建、显式 example、根 target 归属和复制根锁的可达校验。没有源码 import 自动补边或成员自动覆盖远端。原生 go.work/workspace vendor 迁入、workspace host resolver 与发布机制仍待后续；不把研究矩阵全部标为完成。见 [实现范围](docs/rfcs/0026-workspaces.md#本次实现范围) 与 [核心验收](docs/reviews/workspace-core-20261004.md)。
+
+## 正式命名迁移（2026-10-04）
+
+已确认 Goxide / goxide / .gox，分阶段推进到当前受维护代码完全迁移；pre-1.0 旧 ABI 允许破坏并要求重新生成。跟踪 [RFC 0027](docs/rfcs/0027-goxide-naming.md) 与[迁移清单](docs/design/goxide-naming.md)。不实施未批准的 workspace vendor 拆出转换，不部署官网。

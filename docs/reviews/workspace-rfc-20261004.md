@@ -1,6 +1,6 @@
 # Workspace RFC 0026 研究验收（2026-10-04）
 
-状态：研究与独立对抗评审完成，显式依赖约束已由用户确认，其余三项待决；workspace 生产功能未实现、未批准，未部署网站。基于 `d51117d36fa2d1ccfcf322b81195b0d753cbb8de`，文档分支 `docs/workspace-rfc`。正式合同候选见 [RFC 0026](../rfcs/0026-workspaces.md)。
+状态：研究与独立对抗评审完成，显式依赖、根唯一锁/拆出复制、Git URL优先及阶段顺序已确认，统一版本解析与构建feature隔离随后获确认；workspace 生产功能未实现、未批准，未部署网站。基于 `d51117d36fa2d1ccfcf322b81195b0d753cbb8de`，文档分支 `docs/workspace-rfc`。正式合同候选见 [RFC 0026](../rfcs/0026-workspaces.md)。
 
 ## 资料与环境
 
@@ -42,3 +42,13 @@ GO-18 / GO-19 验证最长前缀不等于包归属：内层module无目标包时
 用户明确要求 `package1 = { workspace = true }`。已同步RFC WS02/04/05/07/09/10、W17/W18、来源冲突和待决表：根模板不注入，成员身份不覆盖version/path/git，import不创建边；生成Go use不能绕过此约束。原生GO16–19仍是Go差异/包归属证据，不再为goxide自动成员发现背书，旧import/feature固定点建议撤回。Go.work迁入须在plan物化实际边/覆盖并声明配置覆盖范围，无法无损推断时列缺项/拒绝，不运行时fallback。
 
 本次仅改文档解释，19项原生Go机制结果未改变、不重复充当新hgo功能测试；显式原则不代表其他workspace策略获批。新增inline TOML白/黑例；独立文档一致性复审确认无阻断，覆盖模板、来源保持、显式图先于import、生成Go use及vendor不得绕过、迁入范围和历史撤回。按review建议将W18迁入物化验收归入阶段二，避免阶段一范围含糊。文档检查及diff空白检查再次通过。
+
+
+## 用户后续确认：唯一根锁、Git优先与阶段顺序
+
+核对原四问：第4项是先作者workspace核心、再go.work/vendor迁入，不是解析策略批准。已替换成员保留lock建议，新增复制根锁的可达性/完整性/来源校验、无关条目不下载不执行、不自动升级以及本地path源码边界。Git URL优先，别名不猜registry；原生完整Go module+version继续互操作。app/server/common表明确命令选择只决定构建对象，统一版本图和feature范围另定；全workspace统一版本锁是最新建议，未批准。
+
+重新查阅官方Cargo workspaces/resolver及Go module reference；Cargo全workspace锁求解和实际编译feature集合有区别，不能照搬成Go多版本类型身份。再次检查仓库相关AGENTS/.agents/skills，无适用新增指令。本轮只更新文档及黑白例，不重跑未变化的原生Go探针、不声称生产实现；文档独立一致性复审完成：指出并已修复旧selected范围、分开命令解决来源冲突、optional读取承诺和并发两计划措辞；统一为全workspace版本结果/完整锁构建与锁更新分层，并修复表格连接。文档检查96文件/1004链接/25RFC及diff空白检查通过。
+
+
+后续“对的”确认已同步：全workspace统一版本解析与根lock，仅构建选中成员及依赖、未选成员feature不带入。删除selected/all-members模式建议，WS10改为共同依赖被server抬升但app不启用yaml的正反例；host/target独立角色内统一，根锁拆出规则不变。前段“仍待决”是这次后续确认之前的过程记录，不是当前状态。

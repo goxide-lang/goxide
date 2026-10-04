@@ -57,7 +57,7 @@ func cliCommand(use, short string) *cobra.Command {
 	return c
 }
 func newCLI(out, stderr io.Writer) *cobra.Command {
-	root := cliCommand("goxide", "Compile goxide source to ordinary Go")
+	root := cliCommand("goxide", "Compile Goxide source to ordinary Go")
 	root.SetOut(out)
 	root.SetErr(stderr)
 	root.CompletionOptions.DisableDefaultCmd = true

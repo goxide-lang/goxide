@@ -1,4 +1,4 @@
-// goxide compiles goxide source to ordinary Go.
+// goxide compiles Goxide source to ordinary Go.
 package main
 
 import (

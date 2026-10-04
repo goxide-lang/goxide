@@ -1,4 +1,6 @@
-# 最新 CLI / 浏览器组合验证
+> 当前网站编译器基线为 69c1ab0，范围见 [网站说明](README.md) 与 [统一项目验收](../docs/reviews/unified-project-20261004.md)。以下保留早期五例/旧模块集成记录，不代表当前状态。
+
+# 历史 CLI / 浏览器组合验证（ae61ec6）
 
 独立分支 `integrate/latest-web-features-inference` 从共同基线 `f097b1951dde4f8653a0629a7da8a0bb5646ec79` 开始，按来源 cherry-pick（保留 -x）：
 

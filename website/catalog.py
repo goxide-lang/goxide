@@ -11,7 +11,7 @@ def load():
     assert set(ids) == {p.stem for p in (ROOT/'website/examples').glob('*.hgo')}
     cards = data['items']; assert len({c['id'] for c in cards}) == len(cards)
     coverage = {r for c in cards for r in c['rfcs']}
-    assert {f'{n:04}' for n in range(1,25)} <= coverage
+    assert {f'{n:04}' for n in range(1,26)} <= coverage
     for c in cards:
         assert c['status'] in data['statusLabels'] and c['topic'] in data['topics']
         assert c['support'] in ['browser','cli','unavailable']
@@ -53,4 +53,4 @@ def write_index(data):
     (ROOT/'website/FEATURES.md').write_text('\n'.join(lines))
 
 if __name__ == '__main__':
-    data=load();write_index(data);print(f"catalog schema/evidence OK: {len(data['items'])} topics, RFC 0001–0024 covered")
+    data=load();write_index(data);print(f"catalog schema/evidence OK: {len(data['items'])} topics, RFC 0001–0025 covered")

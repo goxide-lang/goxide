@@ -5,8 +5,8 @@ import "github.com/goxide-lang/serde/json"
 type Request struct { Limit Option[int] }
 func describe(value Option[int]) string {
     return match value {
-        Option[int]::Some(n) => fmt.Sprintf("Some(%d)", n),
-        Option[int]::None => "None",
+        Option::Some(n) => fmt.Sprintf("Some(%d)", n),
+        Option::None => "None",
     }
 }
 func main() {

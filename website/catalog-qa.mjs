@@ -13,6 +13,10 @@ try {
  const done=()=>page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('转译完成'),{},{timeout:60000});await done();
  const manifest=await page.evaluate(async()=>await(await fetch('examples.json')).json());
  assert.equal(manifest.catalog.compilerCommit,manifest.commit);
+ assert.equal(manifest.metadataSchema,7);assert.equal(manifest.publicLibraries.length,2);
+ assert.ok(requests.some(r=>new URL(r.url).pathname.endsWith('/compiler.wasm')&&new URL(r.url).searchParams.get('compiler')===manifest.commit));
+ const wasmHash=await page.evaluate(async sha=>{const bytes=await(await fetch('compiler.wasm?compiler='+sha)).arrayBuffer();return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');},manifest.commit);
+ assert.equal(wasmHash,manifest.wasmSha256);
  assert.equal(await page.locator('.feature-card').count(),manifest.catalog.items.length);
  for(const item of manifest.catalog.items){
   const card=page.locator('#feature-'+item.id);
@@ -20,7 +24,7 @@ try {
   assert.equal(await card.locator('.example-open').count(),item.examples.length);
   assert.ok((await card.locator('.status-badge').textContent())===manifest.catalog.statusLabels[item.status]);
  }
- await page.fill('#catalog-search','0024');assert.equal(await page.locator('.feature-card:visible').count(),2);
+ await page.fill('#catalog-search','0024');assert.equal(await page.locator('.feature-card:visible').count(),manifest.catalog.items.filter(c=>c.rfcs.includes('0024')).length);
  await page.selectOption('#catalog-status','proposal');assert.equal(await page.locator('.feature-card:visible').count(),1);
  await page.fill('#catalog-search','no-such-feature');assert.equal(await page.locator('.feature-card:visible').count(),0);assert.ok(await page.locator('#catalog-empty').isVisible());
  await page.click('#catalog-clear');assert.equal(await page.locator('.feature-card:visible').count(),manifest.catalog.items.length);
@@ -65,11 +69,15 @@ try {
  await page.screenshot({path:new URL('qa-artifacts/catalog-mobile-example.png',import.meta.url).pathname});
  assert.deepEqual(errors,[]);assert.deepEqual(consoleErrors,[]);
  assert.ok(requests.every(r=>r.url.startsWith(base)&&r.method==='GET'&&r.body===null));
- const result={url:base,compilerCommit:manifest.commit,websiteCommit:manifest.websiteCommit,cards:manifest.catalog.items.length,examples:manifest.examples.length,negativeExamples:manifest.catalog.checks.length,filters:true,permalinks:true,snapshots:true,mobile390:true,clipboard:true,parity:'byte-for-byte',errors,consoleErrors,network:'same-origin GET only'};
+ const result={url:base,compilerCommit:manifest.commit,websiteCommit:manifest.websiteCommit,wasmSha256:wasmHash,metadataSchema:manifest.metadataSchema,cards:manifest.catalog.items.length,examples:manifest.examples.length,negativeExamples:manifest.catalog.checks.length,filters:true,permalinks:true,snapshots:true,mobile390:true,clipboard:true,parity:'byte-for-byte',errors,consoleErrors,network:'same-origin GET only'};
  console.log(JSON.stringify(result,null,2));
  // Intentional unavailable manifest: readable error state instead of stale or fake data.
  const failure=await context.newPage();await failure.route('**/examples.json',r=>r.fulfill({status:503,body:'unavailable'}));await failure.goto(base);
  await failure.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
  assert.match(await failure.textContent('#catalog-count'),/暂时不可用/);assert.ok(await failure.isDisabled('#compile'));assert.equal(await failure.locator('.feature-card').count(),0);
  console.log('manifest failure state: passed');
+ const stale=await context.newPage();await stale.route('**/compiler.wasm*',r=>r.fulfill({contentType:'application/wasm',body:Buffer.from([0,97,115,109,1,0,0,0])}));await stale.goto(base);
+ await stale.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
+ assert.match(await stale.textContent('#diagnostic'),/完整性不匹配/);assert.equal(await stale.inputValue('#output'),'');assert.ok(await stale.isDisabled('#copy'));
+ console.log('stale/corrupt WASM rejected before execution: passed');
 } finally {await browser.close();}

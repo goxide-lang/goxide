@@ -16,7 +16,7 @@ func parse(text string) Result[int,error] {
 
 func next(text string) Result[int,error] {
     value := go_result!(strconv.Atoi(text))?
-    return Result[int,error]::Ok(value + 1)
+    return Result::Ok(value + 1)
 }
 
 func read(reader io.Reader, buffer []byte) Result[int,ReadFailure] {

@@ -57,7 +57,7 @@ func forwarded(r &Alias)&b.State{return m.View(r)}
 func Run()int{n:=5;s:=a.State{N:1,A:[2]int{2,0},S:[]int{3},M:map[string]int{"x":4},P:&n};w:=mut& s;r:=forwarded(&*w);copy:=*r;copy.N++;copy.A[0]++;m.Edit(w).N++;a.Native(&s);s.Touch();if r.N!=4||r.S[0]!=4||copy.N!=2||copy.A[0]!=3{panic("identity/copy changed")};return b.Read(r)}
 func Containers()int{s:=[]int{1};w:=mut& s;(*a.SliceEdit(w))[0]++;r:=a.Slice(&*w);m:=map[string]int{"x":3};mr:=a.Map(&m);v:=[2]int{4,5};ar:=a.Array(&v);copy:=*ar;copy[0]++;return (*r)[0]+(*mr)["x"]+copy[0]}
 func Private()int{return a.Hidden().N}
-`, "goxide")
+`, "gox")
 		packagesWrite(t, source, "left.gox", `package app
 import a "packages.example/app/model"
 func left(r &a.State)int{return r.N}
@@ -147,7 +147,7 @@ func TestPathsAndNative(t *testing.T){if Left()!=10||Right()!=20||NativeRead()!=
 			if strings.Contains(body, "other.") {
 				imports += "import other \"packages.example/app/other\"\n"
 			}
-			source := sourceFor("package app\n"+imports+body+"\n", "goxide")
+			source := sourceFor("package app\n"+imports+body+"\n", "gox")
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
 			if !strings.Contains(out, "app.gox") {
 				t.Fatal(out)

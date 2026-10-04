@@ -53,7 +53,7 @@ func Deferred()int{n:=0;w:=mut& n;func(){defer a.Inc(w)}();return n}
 func Goroutine()int{n:=0;w:=mut& n;done:=make(chan bool);go func(){a.Inc(w);done<-true}();<-done;return n}
 func Native()int{n:=4;p:=&n;native(p);return n}
 func native(p *int){*p+=1}
-`, "goxide")
+`, "gox")
 		packagesWrite(t, source, "consumer.go", `package app
 import alias "packages.example/app/api"
 import _ "packages.example/app/api"
@@ -126,7 +126,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 			}
 			ext := "go"
 			if name == "function value" {
-				ext = "goxide"
+				ext = "gox"
 			}
 			source := makeSource("package app\n"+imports+"func bad(){"+body+"}\nfunc raw(p *int){}\n", ext)
 			generated := filepath.Join(t.TempDir(), "generated")
@@ -143,7 +143,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 		})
 	}
 	t.Run("single-file-boundaries", func(t *testing.T) {
-		source := makeSource("package app\nfunc Run(){}\n", "goxide")
+		source := makeSource("package app\nfunc Run(){}\n", "gox")
 		single := filepath.Join(t.TempDir(), "api.go")
 		packagesCommand(t, root, cli, true, "transpile", "-o", single, filepath.Join(source, "api/read.gox"))
 		data, e := os.ReadFile(single)

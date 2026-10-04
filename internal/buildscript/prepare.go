@@ -14,6 +14,8 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/hxsf/goxide/internal/project"
 )
 
 func digest(v any) string {
@@ -71,8 +73,16 @@ func checkComponents(path string) error {
 	}
 	return nil
 }
-func snapshot(root string) (map[string][]byte, error) { return snapshotMode(root, false) }
+func snapshotSource(root, moduleRoot, module string) (map[string][]byte, error) {
+	if e := rejectManagedInput(root, moduleRoot, module); e != nil {
+		return nil, e
+	}
+	return snapshotTree(root, false, moduleRoot, module)
+}
 func snapshotMode(root string, strict bool) (map[string][]byte, error) {
+	return snapshotTree(root, strict, "", "")
+}
+func snapshotTree(root string, strict bool, moduleRoot, module string) (map[string][]byte, error) {
 	if err := checkComponents(root); err != nil {
 		return nil, err
 	}
@@ -90,6 +100,15 @@ func snapshotMode(root string, strict bool) (map[string][]byte, error) {
 			return nil
 		}
 		if d.IsDir() {
+			if !strict && moduleRoot != "" {
+				managed, err := project.ManagedSourceDirectory(path, moduleRoot, module)
+				if err != nil {
+					return err
+				}
+				if managed {
+					return filepath.SkipDir
+				}
+			}
 			if !strict && rel != "." {
 				if len(out) >= 10000 {
 					return fmt.Errorf("snapshot entry limit exceeded: %s", path)
@@ -192,7 +211,7 @@ func Prepare(o Options) (*Plan, error) {
 	if len(o.Config.Inputs)+len(o.Config.Outputs)+len(o.Config.Dependencies)+len(o.Config.Tools) > 10000 {
 		return nil, fmt.Errorf("build script declaration limit exceeded")
 	}
-	p.script, err = snapshot(filepath.Join(o.PackageRoot, filepath.Dir(o.Config.Entry)))
+	p.script, err = snapshotSource(filepath.Join(o.PackageRoot, filepath.Dir(o.Config.Entry)), o.PackageRoot, o.Module)
 	if err != nil {
 		return nil, err
 	}
@@ -245,33 +264,19 @@ func Prepare(o Options) (*Plan, error) {
 		if e != nil {
 			return nil, e
 		}
+		if e = rejectManagedInput(path, o.PackageRoot, o.Module); e != nil {
+			return nil, e
+		}
 		if i.IsDir() {
-			e = filepath.WalkDir(path, func(pth string, d fs.DirEntry, er error) error {
-				if er != nil {
-					return er
-				}
-				if d.IsDir() {
-					r, _ := filepath.Rel(o.PackageRoot, pth)
-					if er = safeRel(filepath.ToSlash(r)); er != nil {
-						return er
-					}
-					if len(p.inputDirs) >= 10000 {
-						return fmt.Errorf("input directory limit exceeded")
-					}
-					p.inputDirs = append(p.inputDirs, filepath.ToSlash(r))
-				}
-				return nil
-			})
+			files, e := snapshotSource(path, o.PackageRoot, o.Module)
 			if e != nil {
 				return nil, e
 			}
-			files, e := snapshot(path)
-			if e != nil {
-				return nil, e
-			}
+			p.inputDirs = append(p.inputDirs, n)
 			for k, v := range files {
 				p.inputs[n+"/"+k] = v
 			}
+
 		} else {
 			if e = regular(path, i); e != nil {
 				return nil, e
@@ -306,7 +311,11 @@ func Prepare(o Options) (*Plan, error) {
 		if e := withinBoundary(o.Boundary, path); e != nil {
 			return nil, e
 		}
-		files, e := snapshot(path)
+		path, err = filepath.Abs(path)
+		if err != nil {
+			return nil, err
+		}
+		files, e := snapshotSource(path, path, mod)
 		if e != nil {
 			return nil, e
 		}
@@ -511,6 +520,30 @@ func (p *Plan) checkSize() error {
 	}
 	if count > 10000 || total > 128<<20 {
 		return fmt.Errorf("build script snapshot exceeds 10000 entries or 128 MiB")
+	}
+	return nil
+}
+
+// Explicit source selections must not name a managed layout or anything inside
+// one. Descendant layouts encountered during a source walk are validated and
+// skipped instead; this keeps build products out of input fingerprints.
+func rejectManagedInput(path, moduleRoot, module string) error {
+	if e := project.RejectManagedOutput(path); e != nil {
+		return fmt.Errorf("managed artifacts cannot be build script inputs: %w", e)
+	}
+	info, e := os.Stat(path)
+	if e != nil {
+		return e
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	managed, e := project.ManagedSourceDirectory(path, moduleRoot, module)
+	if e != nil {
+		return e
+	}
+	if managed {
+		return fmt.Errorf("managed artifacts cannot be build script inputs: %s", path)
 	}
 	return nil
 }

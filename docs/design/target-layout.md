@@ -19,6 +19,9 @@ target/
       intermediate/
       script-out/                 # 只预留路径，布局不创建/执行脚本
     script-cache/                 # 只预留路径，布局不定义脚本缓存键
+  scripts/<host>/<target>/<package-id>/
+    .hgo-unit.json              # 包级脚本缓存容器，跨 bin/example 共享
+    script-cache/              # runner 所有权标记及 entries/<完整输入键>
   bin/<host>/<target>/<kind>/<name>/<config>/
     .hgo-unit.json
     <name>[.exe]
@@ -37,7 +40,7 @@ host/target 为 GOOS-GOARCH；kind 为 lib/bin/example。config 包含整个已�
 
 最终二进制仅在所有权和上次记录的 SHA-256/模式均匹配时覆盖；用户修改或没有记录的文件明确拒绝。发布通过临时文件 rename；若崩溃导致二进制和记录不一致，下次拒绝，不自动恢复或覆盖。失败运行也可能保留诊断用生成目录；frontend 可删除本次新建的不完整 module。
 
-没有 clean、GC 或旧 run 删除命令；重复构建会增长磁盘占用。用户确认无构建运行后可自行处理自己的产物目录；工具不会递归清空旧目录、陌生文件或依赖缓存。
+只有 `hgo scripts --action clean` 清理当前所选 target 根下的脚本结果缓存；没有全项目 clean、GC 或旧 run 删除命令；重复构建会增长磁盘占用。用户确认无构建运行后可自行处理自己的产物目录；工具不会递归清空旧目录、陌生文件或依赖缓存。
 
 ## 所有权与扫描
 
@@ -51,7 +54,9 @@ host/target 为 GOOS-GOARCH；kind 为 lib/bin/example。config 包含整个已�
 
 `hgo.lock` 仍在源码根；Git checkout 仍在 `.hgo/git`；Go module/build cache 仍由 Go 的 GOMODCACHE/GOCACHE 管理。target-dir 不迁移或删除这些缓存。最终 Go 命令的 GOTMPDIR 指向当次 intermediate；Go 自行管理其短期文件。离线/锁定策略沿用 RFC 0022。
 
-后续 runner 使用 `project.OpenLayout(root, module, targetDir)` 持有 lease，再调用 `Layout.Begin(UnitSpec)`。返回 `Unit` 的 Directory、Run、Bundle、Intermediate、ScriptOut、ScriptCache、BinaryDirectory。Close 只释放 lease，不清理产物。runner 必须自行定义脚本输出所有权与完整缓存键；不能仅凭 config 认定脚本结果新鲜。脚本信任授权必须存放于产物根之外，不得放在可清理、可版本控制的 target 或所有权标记中。本布局不执行脚本、不提供信任决定、不触发安装脚本。
+runner 使用 `project.OpenLayout(root, module, targetDir)` 持有 lease，再调用 `Layout.Begin(UnitSpec)`。返回 `Unit` 的 Directory、Run、Bundle、Intermediate、ScriptOut、ScriptCache、BinaryDirectory。Close 只释放 lease，不清理产物。runner 必须自行定义脚本输出所有权与完整缓存键；不能仅凭 config 认定脚本结果新鲜。脚本信任授权必须存放于产物根之外，不得放在可清理、可版本控制的 target 或所有权标记中。布局模块本身不执行脚本、不提供信任决定、不触发安装脚本。联合runner见 [RFC 0023](../rfcs/0023-build-scripts.md)。
+
+为保持包级生成结果跨bin共享，联合runner使用 `Layout.ScriptCache` 创建独立scripts空间，调用 `ScriptCachePath` 计算同一路径；沿用所有权标记和layout lease，不复用逐target Unit.ScriptCache。host/target/package决定容器位置，features/env/输入/工具等由runner完整缓存键分区。`CleanScriptCaches` 先验证全部脚本布局结构，再调用runner逐cache所有权检查与清理，保留其他units/bin、信任、源码和依赖缓存。Unit.ScriptOut尚未用于执行暂存，生成器使用短期隔离目录，成功字节保存在cache及当前bundle；这里的隔离目录不是OS sandbox。
 
 ## 验证入口
 

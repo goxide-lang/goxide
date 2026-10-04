@@ -19,19 +19,63 @@ type Store struct {
 	release   func()
 }
 
-// Open takes an exclusive policy lease. Mutations fail busy while a cooperating
-// build holds the lease, so a successful revocation cannot race artifact binding.
-// A crashed process may leave lease/ behind; never steal possibly live leases.
-func Open() (*Store, error) {
+// Location resolves the user-owned policy directory without creating it.
+func Location() (string, error) {
 	directory := os.Getenv("HGO_TRUST_DIR")
 	if directory == "" {
 		config, err := os.UserConfigDir()
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		directory = filepath.Join(config, "goxide", "build-trust")
 	}
 	directory, err := filepath.Abs(directory)
+	if err != nil {
+		return "", err
+	}
+	return directory, nil
+}
+
+// CheckLocation prevents grants from being stored in source or disposable outputs.
+func CheckLocation(forbidden ...string) error {
+	directory, err := Location()
+	if err != nil {
+		return err
+	}
+	for _, root := range forbidden {
+		if root == "" {
+			continue
+		}
+		root, err = filepath.Abs(root)
+		if err != nil {
+			return err
+		}
+		rel, e := filepath.Rel(root, directory)
+		if e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("B-TRUST-PATH: trust must be outside sources and build artifacts: %s", directory)
+		}
+	}
+	for at := directory; ; at = filepath.Dir(at) {
+		if _, e := os.Lstat(filepath.Join(at, ".hgo-layout.json")); e == nil {
+			return fmt.Errorf("B-TRUST-PATH: trust cannot be in a managed layout")
+		} else if !os.IsNotExist(e) {
+			return e
+		}
+		if filepath.Dir(at) == at {
+			break
+		}
+	}
+	return nil
+}
+
+// Open takes an exclusive policy lease. Mutations fail busy while a cooperating
+// build holds the lease, so a successful revocation cannot race artifact binding.
+// A crashed process may leave lease/ behind; never steal possibly live leases.
+func Open(forbidden ...string) (*Store, error) {
+	if err := CheckLocation(forbidden...); err != nil {
+		return nil, err
+	}
+	directory, err := Location()
 	if err != nil {
 		return nil, err
 	}

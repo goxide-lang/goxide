@@ -34,6 +34,8 @@ bash examples/enum_trial/try.sh "$work"
 
 Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，enum 只要求显式选中默认变体的载荷。普通 Option 缺失/null→None 不依赖 Default。Clone 不改变普通 Go 赋值语义；enum 不是开放 C-style 数字枚举。
 
+可直接运行 [构建脚本示例](examples/build_script/README.md)。显式代码生成、host helper/tool、许可与缓存的接口和正反例见 [宿主构建脚本 RFC](docs/rfcs/0023-build-scripts.md)。脚本仅在主动授权后运行；普通Go执行不构成OS沙箱。
+
 ## 已知失败与未完成边界
 
 以下是工程边界，不自动等于获批延期；具体正反例见[最新验收清单](docs/t0-acceptance.md#独立-enum-现阶段交付验收与待决清单2026-10-03统一调用组后)。

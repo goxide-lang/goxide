@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -78,9 +79,33 @@ func projectTrustIdentity(root, module string) (string, error) {
 		Repository   []byte
 	}{root, module, repository}), nil
 }
-func prepareScriptPlans(g *project.Graph, tool, compiler string, tags []string, race bool) (*scriptPlans, error) {
+func scriptSourceRoots(root string, manifest project.Manifest) []string {
+	roots := []string{root}
+	if manifest.Build != nil {
+		for _, helper := range manifest.Build.Dependencies {
+			if !filepath.IsAbs(helper) {
+				helper = filepath.Join(root, helper)
+			}
+			roots = append(roots, helper)
+		}
+	}
+	return roots
+}
+
+func prepareScriptPlans(g *project.Graph, tool, compiler string, tags []string, race bool, layoutRoot string) (*scriptPlans, error) {
 	p := &scriptPlans{plans: map[*project.Node]*buildscript.Plan{}}
 	var e error
+	hasScripts := false
+	for _, n := range g.Nodes {
+		hasScripts = hasScripts || n.Manifest.Build != nil
+	}
+	if hasScripts {
+		for _, n := range g.Nodes {
+			if err := scripttrust.CheckLocation(scriptSourceRoots(n.Root, n.Manifest)...); err != nil {
+				return nil, err
+			}
+		}
+	}
 	ids := map[string]buildscript.Subject{}
 	for _, n := range g.Nodes {
 		if n.Manifest.Build == nil {
@@ -121,7 +146,7 @@ func prepareScriptPlans(g *project.Graph, tool, compiler string, tags []string, 
 		if n.CheckoutRoot != "" {
 			commit = g.Lock.Git[filepath.Base(n.CheckoutRoot)]
 		}
-		plan, e := buildscript.Prepare(buildscript.Options{ProjectRoot: g.Root.Root, PackageRoot: n.Root, Module: n.Module, SourceID: project.Digest([]string{n.Module, n.Root, n.CheckoutRoot, commit}), GoTool: tool, CompilerID: compiler, Root: n == g.Root, Boundary: n.CheckoutRoot, Config: *n.Manifest.Build, Features: project.Keys(n.Features), Tags: tags, Race: race})
+		plan, e := buildscript.Prepare(buildscript.Options{ProjectRoot: g.Root.Root, PackageRoot: n.Root, Module: n.Module, SourceID: project.Digest([]string{n.Module, n.Root, n.CheckoutRoot, commit}), GoTool: tool, CompilerID: compiler, Root: n == g.Root, Boundary: n.CheckoutRoot, ArtifactRoot: project.ScriptCachePath(layoutRoot, runtime.GOOS+"-"+runtime.GOARCH, runtime.GOOS+"-"+runtime.GOARCH, n.Root, n.Module), Config: *n.Manifest.Build, Features: project.Keys(n.Features), Tags: tags, Race: race})
 		if e != nil {
 			return nil, fmt.Errorf("build script %s: %w", n.Module, e)
 		}
@@ -173,6 +198,7 @@ func runScripts(args []string, out, stderr io.Writer) error {
 	f.SetOutput(stderr)
 	action := f.String("action", "plan", "plan|trust-project|allow|revoke|forget-project|clean")
 	subject := f.String("subject", "", "exact host execution subject from plan")
+	targetDir := f.String("target-dir", "", "managed project artifacts; default target or HGO_TARGET_DIR")
 	tool := f.String("go", "go", "Go 1.27+ compiler")
 	features := f.String("features", "", "project features")
 	defaults := f.Bool("no-default-features", false, "disable root default features")
@@ -207,12 +233,12 @@ func runScripts(args []string, out, stderr io.Writer) error {
 		return e
 	}
 	defer release()
-	if *action == "clean" {
-		if e = buildscript.Clean(root); e != nil {
-			return e
-		}
-		fmt.Fprintln(out, "cleaned owned build-script cache; local trust unchanged")
-		return nil
+	layoutPath, e := project.ResolveTargetDir(root, *targetDir)
+	if e != nil {
+		return e
+	}
+	if e = scripttrust.CheckLocation(root, layoutPath); e != nil {
+		return e
 	}
 	if e = checkDirectoryCompiler(*tool); e != nil {
 		return e
@@ -221,11 +247,36 @@ func runScripts(args []string, out, stderr io.Writer) error {
 	if e != nil {
 		return e
 	}
+	if *action == "clean" {
+		if _, e := os.Lstat(layoutPath); os.IsNotExist(e) {
+			fmt.Fprintln(out, "no script cache; local trust unchanged")
+			return nil
+		}
+		layout, e := project.OpenLayout(root, module, *targetDir)
+		if e != nil {
+			return e
+		}
+		defer layout.Close()
+		if e = layout.CleanScriptCaches(func(path string) error { return buildscript.Clean(root, path) }); e != nil {
+			return e
+		}
+		fmt.Fprintln(out, "cleaned owned build-script cache; local trust and retained target outputs unchanged")
+		return nil
+	}
 	identity, e := projectTrustIdentity(root, module)
 	if e != nil {
 		return e
 	}
-	store, e := scripttrust.Open()
+	forbidden := []string{root, layoutPath}
+	// Revocation must remain available even if the current manifest is broken.
+	if *action != "revoke" && *action != "forget-project" {
+		manifest, err := project.Read(root)
+		if err != nil {
+			return err
+		}
+		forbidden = append(forbidden, scriptSourceRoots(root, manifest)...)
+	}
+	store, e := scripttrust.Open(forbidden...)
 	if e != nil {
 		return e
 	}
@@ -257,7 +308,7 @@ func runScripts(args []string, out, stderr io.Writer) error {
 	if e != nil {
 		return e
 	}
-	plans, e := prepareScriptPlans(g, *tool, projectCompilerID(), nil, false)
+	plans, e := prepareScriptPlans(g, *tool, projectCompilerID(), nil, false, layoutPath)
 	if e != nil {
 		return e
 	}
@@ -294,5 +345,5 @@ func runScripts(args []string, out, stderr io.Writer) error {
 		RootTrusted  bool           `json:"root_trusted"`
 		Subjects     []shownSubject `json:"subjects"`
 		Mode         string         `json:"mode"`
-	}{plans.identity, store.Projects[plans.identity], shown, "unconfined; declared-input incremental cache"})
+	}{identity, store.Projects[identity], shown, "unconfined; declared-input incremental cache"})
 }

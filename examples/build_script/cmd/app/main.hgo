@@ -1,0 +1,9 @@
+package main
+
+import "fmt"
+import "example.org/buildscript/gen"
+
+func main() {
+	fmt.Println("schema:", gen.Schema)
+	fmt.Print("embedded: ", gen.Resource)
+}

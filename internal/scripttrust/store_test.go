@@ -61,3 +61,20 @@ func TestTrustRejectsLinksAndBadJSON(t *testing.T) {
 		t.Fatal("unknown trust field")
 	}
 }
+
+func TestTrustCannotLiveInSourceOrManagedArtifacts(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HGO_TRUST_DIR", filepath.Join(root, "trust"))
+	if _, err := Open(root); err == nil {
+		t.Fatal("trust allowed in source")
+	}
+	if _, err := os.Stat(filepath.Join(root, "trust")); !os.IsNotExist(err) {
+		t.Fatal("forbidden trust directory was created")
+	}
+	if err := os.WriteFile(filepath.Join(root, ".hgo-layout.json"), []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(); err == nil {
+		t.Fatal("trust allowed inside an existing layout")
+	}
+}

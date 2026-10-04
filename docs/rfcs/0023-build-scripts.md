@@ -63,11 +63,11 @@ hgo scripts --action forget-project ./app
 hgo scripts --action clean ./app
 ```
 
-所有 flags 放在项目路径之前；可指定 `--go`、`--features`、`--no-default-features`、`--offline`、`--locked`。plan 输出 JSON 与逐主体 trusted 状态，不编译/执行脚本；依赖解析仍可能访问网络，应按需要用 offline/locked。allow 只接受当前 plan 中存在的完整摘要，不顺便信任根项目。revoke/forget 不依赖仍能解析旧脚本，缓存存在也不能绕过撤销。
+所有 flags 放在项目路径之前；可指定 `--target-dir`、`--go`、`--features`、`--no-default-features`、`--offline`、`--locked`。plan 输出 JSON 与逐主体 trusted 状态，不编译/执行脚本；依赖解析仍可能访问网络，应按需要用 offline/locked。allow 只接受当前 plan 中存在的完整摘要，不顺便信任根项目。revoke/forget 不依赖仍能解析旧脚本，缓存存在也不能绕过撤销。
 
-信任记录为用户配置目录 `goxide/build-trust/grants.json`，可由 `HGO_TRUST_DIR` 指定给 CI/测试；不要设置到源码/可清理产物。项目声明不能授予信任。policy lease 覆盖整次脚本项目构建/运行，防止协作命令在授权使用中途成功撤销；并发修改返回 `B-TRUST-BUSY`，并非即时终止已启动程序。全局 lease 暂时串行化使用同一 store 的不同项目，崩溃遗留锁需确认无进程后人工处理。target 执行期间也持有 lease，长运行服务须注意这一限制。
+信任记录为用户配置目录 `goxide/build-trust/grants.json`，可由 `HGO_TRUST_DIR` 指定给 CI/测试；CLI 拒绝设置到当前图源码、选定产物根及任何已知受管布局内。项目声明不能授予信任。policy lease 覆盖整次脚本项目构建/运行，防止协作命令在授权使用中途成功撤销；并发修改返回 `B-TRUST-BUSY`，并非即时终止已启动程序。全局 lease 暂时串行化使用同一 store 的不同项目，崩溃遗留锁需确认无进程后人工处理。target 执行期间也持有 lease，长运行服务须注意这一限制。
 
-脚本结果缓存键包含完整冻结输入、目录成员、工具、env、features/tags/race、host/target、编译器身份与脚本声明。package 配置不包含 bin/example 名，多个 target 可共享脚本结果。当前 core 默认缓存位于 `.hgo/build-scripts`，提供 caller-controlled ArtifactRoot 接入受管 target 布局；信任 store 与产物分离。Clean 只删除匹配所有权标记的脚本 entries，拒绝陌生结构或 busy lock，保留源码、信任及其他依赖缓存。不是全项目 clean/GC。
+脚本结果缓存键包含完整冻结输入、目录成员、工具、env、features/tags/race、host/target、编译器身份与脚本声明。package 配置不包含 bin/example 名，多个 target 可共享脚本结果。CLI 缓存位于所选 target 根的 `scripts/<host>/<target>/<package-id>/script-cache/entries/<key>`；通过 layout 包级所有权容器与 core 自有cache双层校验。它不放入逐bin Unit.ScriptCache，避免同包不同bin重复执行。输入/执行临时目录仍由runner创建并回收，生成文件保留在当次bundle；Unit.ScriptOut仍为预留。core独立单测的默认 `.hgo/build-scripts` 不是CLI默认。信任 store 与产物分离。Clean 只删除匹配所有权标记的脚本 entries，拒绝陌生结构或 busy lock，保留源码、信任及其他依赖缓存。不是全项目 clean/GC；保留target二进制与旧bundle。遍历先验证所有layout结构，再逐cache清理；后续cache所有权错误不会回滚已清理的其他cache。
 
 超时覆盖 host lowering 的 importer 子进程、host 编译及运行，取消传播至 Go 查询；同步 CPU lowering 在包边界检查，不能保证实时抢占。CommandContext/WaitDelay 不保证杀死所有后代；脚本外部副作用不会回滚。失败不发布新 artifact，但之前完整缓存可保留。
 
@@ -87,7 +87,7 @@ package gen
 func Version() int { return 42 }
 ```
 
-消费包 import `example.org/app/gen`，无需把生成文件写回源码。generated `.go` 和资源可使用正常 `go:embed`；文件入口映射仍遵循 RFC 0022，不自动移动同目录资源。CLI fixture 的 generator 是完整自编程序，见 [端到端测试](../../cmd/hgo/buildscript_test.go)。
+消费包 import `example.org/app/gen`，无需把生成文件写回源码。generated `.go` 和资源可使用正常 `go:embed`；文件入口映射仍遵循 RFC 0022，不自动移动同目录资源。完整可运行生成器见 [试用示例](../../examples/build_script/README.md)，自动验收见 [端到端测试](../../cmd/hgo/buildscript_test.go)。
 
 BS-01 黑例：未信任根项目，输入完全相同，构建在任何 host 编译/执行前返回 `B-TRUST-ROOT`；不会因仅需 transpile 而绕过。trust-project 后再走以上顺序。
 
@@ -119,6 +119,8 @@ host `.hgo` 可以 import 已声明本地 Go helper，Go host 可以 import 已 
 
 ## 验收与未定项
 
+联合分支整合 `feat/target-layout` 的所有权/持久bundle接口，保留修改二进制拒覆盖、symlink/陌生产物拒绝及源码扫描隔离；不以文件合并无冲突代替联合测试。
+
 独立审阅发现并修复：host lowering取消链遗漏；注释伪造helper依赖环（改真实imports与host选择）；重叠module最长匹配；生成source-map资源覆盖；monorepo信任遗漏祖先仓库。对应自编测试进入版本库，没有运行未授权第三方脚本。
 
 复现使用 Go 1.27.1：
@@ -129,3 +131,5 @@ python3 scripts/check_design.py --docs-only
 ```
 
 成本：每次plan读取与哈希执行闭包和工具；miss时host编译（复用Go自身缓存）；两层锁暂牺牲并发吞吐。收益：普通schema/embed无需手工先生成；输入变更自动失效；许可更新可检查；target语义继续由既有frontend负责。下一阶段真正的产品选择集中于：是否需要OS sandbox、何时引入远端host依赖resolver、native探测/链接接口；本轮无需再次确认已批准的生成子集。
+
+整合来源、独立审阅修复和实测结果见 [联合验收记录](../design/build-script-validation.md)。

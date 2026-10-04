@@ -65,14 +65,27 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	}
 	targetInput := g.Root.Root
 	compilerID := projectCompilerID()
-	plans, err := prepareScriptPlans(g, tool, compilerID, tags, mode == "test")
+	layoutPath, err := project.ResolveTargetDir(g.Root.Root, flags.targetDir)
+	if err != nil {
+		return err
+	}
+	for _, node := range g.Nodes {
+		if within(layoutPath, node.Root) || node != g.Root && within(node.Root, layoutPath) {
+			return fmt.Errorf("target directory overlaps a dependency/source module")
+		}
+	}
+	plans, err := prepareScriptPlans(g, tool, compilerID, tags, mode == "test", layoutPath)
 	if err != nil {
 		return err
 	}
 	defer plans.close()
 	var policy *scripttrust.Store
 	if len(plans.plans) != 0 {
-		policy, err = scripttrust.Open()
+		forbidden := []string{layoutPath}
+		for _, node := range g.Nodes {
+			forbidden = append(forbidden, node.Root)
+		}
+		policy, err = scripttrust.Open(forbidden...)
 		if err != nil {
 			return err
 		}
@@ -83,22 +96,17 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	// The layout API owns paths only. Build-script execution/trust/cache remains
-	// a separate pipeline concern; Unit exposes reserved paths for that caller.
-	layoutPath, err := project.ResolveTargetDir(g.Root.Root, flags.targetDir)
-	if err != nil {
-		return err
-	}
-	for _, node := range g.Nodes {
-		if within(layoutPath, node.Root) || node != g.Root && within(node.Root, layoutPath) {
-			return fmt.Errorf("target directory overlaps a dependency/source module")
-		}
-	}
 	layout, err := project.OpenLayout(g.Root.Root, g.Root.Module, flags.targetDir)
 	if err != nil {
 		return err
 	}
 	defer layout.Close()
+	for node := range plans.plans {
+		platform := runtime.GOOS + "-" + runtime.GOARCH
+		if _, err = layout.ScriptCache(platform, platform, node.Root, node.Module); err != nil {
+			return err
+		}
+	}
 	kind := "bin"
 	if flags.lib || (flags.bin == "" && flags.example == "" && len(g.Root.Manifest.Bins) == 0 && g.Root.Manifest.Lib != nil) {
 		kind = "lib"

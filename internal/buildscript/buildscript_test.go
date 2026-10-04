@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/hxsf/goxide/internal/project"
 )
 
 const generator = `package main
@@ -339,4 +341,56 @@ func TestOverlappingHelperModulesNoFalseCycle(t *testing.T) {
 		o.Config.Dependencies[mod] = root
 	}
 	run(t, prepare(t, o))
+}
+
+func TestManagedLayoutsExcludedFromSourceSnapshots(t *testing.T) {
+	o := fixture(t)
+	o.Config.Inputs = append(o.Config.Inputs, "scripts")
+	helper := t.TempDir()
+	put(t, helper, "go.mod", "module example.test/helper\n\ngo 1.27\n")
+	put(t, helper, "value.go", "package helper\nconst Value=1\n")
+	o.Config.Dependencies = map[string]string{"example.test/helper": helper}
+	before := prepare(t, o)
+	for _, spec := range []struct{ root, module, out string }{{o.PackageRoot, o.Module, "scripts/artifacts"}, {helper, "example.test/helper", "target"}} {
+		layout, e := project.OpenLayout(spec.root, spec.module, spec.out)
+		if e != nil {
+			t.Fatal(e)
+		}
+		unit, e := layout.Begin(project.UnitSpec{Host: "linux-amd64", Target: "linux-amd64", Kind: "bin", Name: "app", Config: "test"})
+		if e != nil {
+			t.Fatal(e)
+		}
+		put(t, unit.Intermediate, "bundle/go.mod", "module generated\n")
+		if e = layout.Close(); e != nil {
+			t.Fatal(e)
+		}
+	}
+	after := prepare(t, o)
+	if before.ID != after.ID || before.Subject != after.Subject {
+		t.Fatal("managed outputs polluted source/input/helper snapshot")
+	}
+	run(t, after)
+	for _, input := range []string{"scripts/artifacts", "scripts/artifacts/.hgo-layout.json"} {
+		copy := o
+		copy.Config.Inputs = []string{input}
+		if _, e := Prepare(copy); e == nil || !strings.Contains(e.Error(), "managed") {
+			t.Fatalf("explicit managed input accepted: %s: %v", input, e)
+		}
+	}
+	// An invalid or copied marker must produce a diagnostic, not an exclusion.
+	put(t, o.PackageRoot, "scripts/foreign/.hgo-layout.json", "{}")
+	if _, e := Prepare(o); e == nil {
+		t.Fatal("foreign layout silently skipped")
+	}
+}
+func TestOutputSnapshotNeverSkipsManagedMarkers(t *testing.T) {
+	root := t.TempDir()
+	put(t, root, ".hgo-layout.json", "{}")
+	files, e := snapshotMode(root, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, ok := files[".hgo-layout.json"]; !ok {
+		t.Fatal("output marker omitted")
+	}
 }

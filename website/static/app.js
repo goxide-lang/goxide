@@ -21,7 +21,7 @@ function compile() {
   if (ready) { send(); return; }
   if (worker) return; // Loading: the eventual ready handler compiles newest source.
   status('正在载入浏览器编译器…'); $('stop').disabled = false;
-  const instance = new Worker('worker.js'); worker = instance;
+  const instance = new Worker(`worker.js?compiler=${manifest.commit}&wasm=${manifest.wasmSha256}`); worker = instance;
   timer = setTimeout(() => fail('编译器加载超过 30 秒。请重试。'), LOAD_MS);
   instance.onerror = e => { if (worker === instance) fail(e.message || 'Worker 启动失败'); };
   instance.onmessage = ({data}) => {
@@ -59,7 +59,7 @@ function renderCatalog() {
   const code = text => { const node = el('pre', text); node.tabIndex = 0; return node; };
   const details = (title, text) => { const d=el('details'); d.append(el('summary',title)); if(text!==undefined)d.append(code(text)); return d; };
   const supportLabels = {browser:'当前版本 · 浏览器可转译',cli:'当前版本 · 仅 CLI 工程',unavailable:'当前线上不可用 · 设计 / 开发中'};
-  $('catalog-version').textContent = `${manifest.commit} · ${manifest.toolchain} · 复核 ${catalog.reviewedAt}`;
+  $('catalog-version').textContent = `${manifest.commit} · ${manifest.toolchain} · metadata ${manifest.metadataSchema} · 复核 ${catalog.reviewedAt}`;
   $('catalog-rules').replaceChildren(...catalog.rules.map(rule=>el('li',rule)));
   for (const [value,label] of Object.entries(catalog.statusLabels)) { const option=el('option',label);option.value=value;$('catalog-status').append(option); }
   let topic='all';
@@ -85,7 +85,7 @@ function renderCatalog() {
       const output=details('查看 CLI 运行输出（浏览器不执行）',example.stdout);usage.append(output);
     }
     if(item.id==='reexports'){const a=el('a','查看 use / pub use 多文件快照 →','snapshot-link');a.href='#projects';usage.append(a);}
-    if(item.id==='projects'){const a=el('a','查看最小 feature 工程与输出 →','snapshot-link');a.href='#project-snapshots';usage.append(a);}
+    if(item.id==='projects'||item.id==='import-go'){const a=el('a','查看 CLI 工程快照与验证输出 →','snapshot-link');a.href='#project-snapshots';usage.append(a);}
     for(const id of item.checks){const check=catalog.checks.find(c=>c.id===id);const d=details('拒绝例：'+id,check.source);d.append(el('p','当前版本真实 CLI 诊断'),code(check.diagnostic));usage.append(d);}
     article.append(usage);$('catalog-items').append(article);
   }
@@ -99,17 +99,19 @@ function renderCatalog() {
   $('catalog-search').oninput=filter;$('catalog-status').onchange=filter;$('catalog-support').onchange=filter;$('catalog-clear').onclick=reset;
   function followHash(){const target=document.getElementById(location.hash.slice(1));if(target?.classList.contains('feature-card')){reset();target.scrollIntoView({block:'start'});}}
   addEventListener('hashchange',followHash);filter();followHash();
-  for(const project of manifest.projectExamples||[]){const d=details(project.title);for(const file of project.files)d.append(details(file.path,file.source));for(const run of project.runs)d.append(el('p',run.command,'mono'),code(run.stdout));$('project-examples').append(d);}
+  for(const project of manifest.projectExamples||[]){const d=details(project.title);if(project.note)d.append(el('p',project.note));for(const file of project.files)d.append(details(file.path,file.source));for(const run of project.runs)d.append(el('p',run.command,'mono'),code(run.stdout));$('project-examples').append(d);}
 }
 
 (async () => {
-  const response = await fetch('examples.json');
+  const response = await fetch('examples.json', {cache:'no-store'});
   if (!response.ok) throw new Error(`示例清单 HTTP ${response.status}`);
   manifest = await response.json();
+  if (!/^[a-f0-9]{64}$/.test(manifest.wasmSha256 || '')) throw new Error('编译器清单缺少完整性摘要，请刷新重试');
   renderCatalog();
   $('examples').replaceChildren(...manifest.examples.map((e,i) => { const option = document.createElement('option'); option.value = i; option.textContent = e.title; return option; }));
   $('version').textContent = `源码提交 ${manifest.commit} · 编译器源摘要 SHA-256 ${manifest.compilerDigest} · ${manifest.toolchain}`;
   $('packages').textContent = manifest.packages.join(' · ');
+  $('library-versions').textContent = manifest.publicLibraries.map(p=>`${p.module} @ ${p.version}`).join(' · ');
   for (const example of manifest.cliExamples || []) {
     for (const file of example.files) {
       const detail = document.createElement('details');

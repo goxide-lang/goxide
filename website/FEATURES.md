@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`fceeb8669e738ebffc968b8bd948b2334fe627cb`；证据复核日期：2026-10-04。
+编译器基线：`f1474551cb7f18c5610880b91b54e7367a2a6a2e`；证据复核日期：2026-10-04。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -29,9 +29,9 @@
 | 分仓标准库与共享 sum | 0008, 0016 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `docs/reviews/public-library-migration-20261004.md` (5c4089eda830) |
 | 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/readability_test.go` (4a76f296f046); `internal/enums/builtins_test.go` (df7d2414ab1b) |
 | CLI：明确的长短选项与参数边界 | 0022, 0023 | 部分实现 | cli | `docs/reviews/cobra-cli-20261004.md` (8ea6aedbfb22); `cmd/goxide/cli_process_test.go` (7eb2a08d0445); `cmd/goxide/cli_dependency_graph_test.go` (fcca67ecb0e8) |
-| 原生 Go vendor：实际字节与离线锁 | 0025 | 部分实现 | cli | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/goxide/vendor_import_test.go` (bfe8c6b79782) |
+| Go vendor 输入 → 普通本地模块 | 0025 | 部分实现 | cli | `docs/reviews/vendor-local-modules-20261004.md` (8a12349f3d78); `cmd/goxide/vendor_import_test.go` (bfe8c6b79782); `internal/project/vendor_materialize_test.go` (06abc6328a32) |
 | Workspace：作者核心与统一根锁 | 0026 | 部分实现 | cli | `docs/rfcs/0026-workspaces.md` (dc93927cf0c8); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/goxide/workspace_test.go` (8f2753c45dd2); `internal/project/workspace_test.go` (7856d06c586f) |
-| go.work / workspace vendor 迁入与渐进增强 | 0026 | 部分实现 | cli | `docs/design/workspace-import.md` (fd45463efc85); `docs/reviews/workspace-import-20261004.md` (62a5cfb20f03); `cmd/goxide/native_enhanced_test.go` (411614571f2c); `cmd/goxide/native_standalone_test.go` (afc6388b3197) |
+| go.work 迁入与本地模块渐进增强 | 0026 | 部分实现 | cli | `docs/design/workspace-import.md` (fd45463efc85); `docs/reviews/workspace-import-20261004.md` (62a5cfb20f03); `cmd/goxide/native_enhanced_test.go` (411614571f2c); `cmd/goxide/native_standalone_test.go` (afc6388b3197); `docs/reviews/vendor-local-modules-20261004.md` (8a12349f3d78) |
 
 开发快照：{"use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa", "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"}
 

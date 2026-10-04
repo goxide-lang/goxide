@@ -1,0 +1,19 @@
+[package]
+format = 2
+module = "example.org/service"
+go.workspace = true
+
+[dependencies]
+shared = { workspace = true, features = ["json"] }
+
+[[bin]]
+name = "web"
+path = "web.hgo"
+
+[[bin]]
+name = "admin"
+path = "admin.hgo"
+
+[[example]]
+name = "hello"
+path = "hello.hgo"

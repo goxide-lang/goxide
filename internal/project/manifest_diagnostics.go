@@ -101,6 +101,9 @@ func validateNames(filename string, data []byte) error {
 // Decoder struct matching is case-insensitive; enforce exact schema tags using
 // the parser AST, including inline tables and arrays, without a second TOML parser.
 func manifestKeyKnown(path []string) bool {
+	if len(path) == 3 && path[0] == "package" && (path[1] == "go" || path[1] == "toolchain") && path[2] == "workspace" {
+		return true
+	}
 	typ := reflect.TypeOf(manifestDocument{})
 	for _, key := range path {
 		for typ.Kind() == reflect.Pointer || typ.Kind() == reflect.Slice {

@@ -1,0 +1,7 @@
+package shared
+
+func Mode() string {
+    if cfg!(feature("yaml")) { return "yaml" }
+    if cfg!(feature("json")) { return "json" }
+    return "plain"
+}

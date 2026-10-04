@@ -308,4 +308,8 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 
 ## Workspace 研究提案（2026-10-04，未批准/未实现）
 
-新增 [RFC 0026](docs/rfcs/0026-workspaces.md)，参考官方 Cargo workspace/feature resolver 与 Go MVS/go.work/vendor；保留 TOML/lock 单一作者权威。用户已确认显式workspace=true继承、Git URL优先、根唯一lock（拆出复制、无关项不激活）及先核心后迁入的阶段顺序。选中构建不等于版本解析范围；后续“对的”已确认全workspace统一版本锁、只构建选中成员及依赖、未选成员feature隔离，原生Go互操作保留。本轮仅原生 Go 隔离机制试验和文档评审，不增加 workspace 生产能力，现有 go.work/workspace vendor 拒绝仍有效。证据见 [研究记录](docs/reviews/workspace-rfc-20261004.md)。
+新增 [RFC 0026](docs/rfcs/0026-workspaces.md)，参考官方 Cargo workspace/feature resolver 与 Go MVS/go.work/vendor；保留 TOML/lock 单一作者权威。用户已确认显式workspace=true继承、Git URL优先、根唯一lock（拆出复制、无关项不激活）及先核心后迁入的阶段顺序。选中构建不等于版本解析范围；后续“对的”已确认全workspace统一版本锁、只构建选中成员及依赖、未选成员feature隔离，原生Go互操作保留。该研究阶段仅原生 Go 隔离机制试验和文档评审；后续核心实现见下节，go.work/workspace vendor 拒绝仍有效。证据见 [研究记录](docs/reviews/workspace-rfc-20261004.md)。
+
+### RFC0026 作者 workspace 核心（2026-10-04）
+
+独立 `feat/workspace-core` 已实现显式成员/模板继承、全 workspace Go MVS 与 schema 3 根唯一锁、按选中闭包合并 feature、多成员 lib/bin 构建、显式 example、根 target 归属和复制根锁的可达校验。没有源码 import 自动补边或成员自动覆盖远端。原生 go.work/workspace vendor 迁入、workspace host resolver 与发布机制仍待后续；不把研究矩阵全部标为完成。见 [实现范围](docs/rfcs/0026-workspaces.md#本次实现范围) 与 [核心验收](docs/reviews/workspace-core-20261004.md)。

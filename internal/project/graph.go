@@ -12,7 +12,17 @@ import (
 	"strings"
 )
 
+type UnifiedLock struct {
+	GitPins   map[string]string    `json:"git_pins"`
+	MinimumGo string               `json:"minimum_go"`
+	Workspace string               `json:"workspace"`
+	Sources   map[string]string    `json:"sources"`
+	Policy    ModFile              `json:"policy"`
+	Inputs    map[string]string    `json:"inputs"`
+	Modules   map[string]Selection `json:"modules"`
+}
 type Lock struct {
+	Unified      *UnifiedLock                    `json:"unified,omitempty"`
 	Vendor       *VendorSnapshot                 `json:"vendor,omitempty"`
 	PlanningSums string                          `json:"planning_sums,omitempty"`
 	Provenance   string                          `json:"provenance,omitempty"`
@@ -36,19 +46,26 @@ type Node struct {
 	Sources         map[string]Dependency
 }
 type Graph struct {
-	planningSeed     string
-	planningVerified map[string]bool
-	WorkRoot         string
-	Root             *Node
-	Nodes            []*Node
-	Lock             Lock
-	LockPath, Cache  string
-	Offline, Locked  bool
-	original         []byte
-	Tool             string
-	Plan             map[string]Selection
-	PlanID           string
-	RootMod          ModFile
+	featureOverrides       map[string]Request
+	overrides              map[string]Manifest
+	allFeatures            bool
+	unifiedPlanning        bool
+	forced                 map[string]Selection
+	workspace              *Workspace
+	ownerRoot, ownerModule string
+	planningSeed           string
+	planningVerified       map[string]bool
+	WorkRoot               string
+	Root                   *Node
+	Nodes                  []*Node
+	Lock                   Lock
+	LockPath, Cache        string
+	Offline, Locked        bool
+	original               []byte
+	Tool                   string
+	Plan                   map[string]Selection
+	PlanID                 string
+	RootMod                ModFile
 }
 
 func Digest(v any) string {
@@ -71,6 +88,16 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 	if e = CheckAuthoring(root); e != nil {
 		return nil, e
 	}
+	w, e := DiscoverWorkspace(root)
+	if e != nil {
+		return nil, e
+	}
+	if w != nil {
+		if _, ok := w.Manifests[root]; !ok {
+			return nil, fmt.Errorf("workspace root requires explicit package selection")
+		}
+		return loadWorkspaceGraph(w, root, tool, requested, defaults, offline, locked, targetDir, nil)
+	}
 	m, e := Read(root)
 	if e != nil {
 		return nil, e
@@ -92,7 +119,7 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 		if e = json.Unmarshal(b, &g.Lock); e != nil {
 			return nil, e
 		}
-		if g.Lock.Version != 2 {
+		if g.Lock.Version != 2 && g.Lock.Version != 3 {
 			return nil, fmt.Errorf("unsupported goxide.lock version")
 		}
 		g.original = b
@@ -106,6 +133,12 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 	}
 	if g.Lock.Sums == nil {
 		g.Lock.Sums = map[string]string{}
+	}
+	if g.Lock.Version == 3 {
+		if g.Lock.Unified == nil {
+			return nil, fmt.Errorf("version 3 lock missing unified records")
+		}
+		g.forced = g.Lock.Unified.Modules
 	}
 	return g.plan(root, requested, defaults)
 }
@@ -213,7 +246,12 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 	}
 	key := Digest([]string{d.Git, d.Rev, d.Subdir, d.Module})
 	commit := g.Lock.Git[key]
-	if commit == "" && g.Locked {
+	if g.Lock.Unified != nil {
+		if expected, exists := g.Lock.Unified.GitPins[key]; exists && expected != commit {
+			return "", fmt.Errorf("unified lock missing or changed git pin")
+		}
+	}
+	if commit == "" && (g.Locked || g.Lock.Unified != nil && !g.unifiedPlanning) {
 		return "", fmt.Errorf("--locked: git source absent from lock")
 	}
 	for _, p := range []string{g.Cache, filepath.Join(g.Cache, key)} {
@@ -312,6 +350,11 @@ func LockProject(root string) (func(), error) {
 	if e != nil {
 		return nil, e
 	}
+	if w, err := DiscoverWorkspace(root); err != nil {
+		return nil, err
+	} else if w != nil {
+		root = w.Root
+	}
 	cache := filepath.Join(root, ".hgo")
 	if info, e := os.Lstat(cache); e == nil && info.Mode()&os.ModeSymlink != 0 {
 		return nil, fmt.Errorf(".hgo must not be a symlink")
@@ -324,4 +367,17 @@ func LockProject(root string) (func(), error) {
 		return nil, fmt.Errorf("project build lock unavailable (another build or stale lock): %w", e)
 	}
 	return func() { os.Remove(lock) }, nil
+}
+
+func (g *Graph) OwnerRoot() string {
+	if g.ownerRoot != "" {
+		return g.ownerRoot
+	}
+	return g.Root.Root
+}
+func (g *Graph) OwnerModule() string {
+	if g.ownerModule != "" {
+		return g.ownerModule
+	}
+	return g.Root.Module
 }

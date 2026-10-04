@@ -77,3 +77,75 @@ lib={module="example.org/lib",version="v1.2.0"}
 		t.Fatal(m)
 	}
 }
+
+func TestWorkspaceStrictBoundaries(t *testing.T) {
+	for _, tc := range []struct{ name, root, member, extra, want string }{
+		{"case", "[workspace]\nFormat=1\nmembers=[\"app\"]\n", "", "", "unknown"},
+		{"feature type", "[workspace]\nformat=1\nmembers=[\"app\"]\n[workspace.dependencies]\nd={module=\"example.org/d\",path=\"d\"}\n", "[dependencies]\nd={workspace=true,features=\"oops\"}\n", "", "features"},
+		{"duplicate", "[workspace]\nformat=1\nmembers=[\"app\",\"other\"]\n", "", "other", "duplicate workspace module"},
+		{"nested", "[workspace]\nformat=1\nmembers=[\"nested/app\"]\n", "", "nested", "another workspace"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			wsWrite(t, root, "goxide.toml", tc.root)
+			manifest := "[package]\nformat=2\nmodule=\"example.org/app\"\ngo=\"1.27\"\n" + tc.member
+			wsWrite(t, root, "app/goxide.toml", manifest)
+			if tc.extra == "other" {
+				wsWrite(t, root, "other/goxide.toml", manifest)
+			}
+			if tc.extra == "nested" {
+				wsWrite(t, root, "nested/goxide.toml", "[workspace]\nformat=1\nmembers=[\"app\"]\n")
+				wsWrite(t, root, "nested/app/goxide.toml", manifest)
+			}
+			if _, e := DiscoverWorkspace(root); e == nil || !strings.Contains(strings.ToLower(e.Error()), tc.want) {
+				t.Fatalf("want %s, got %v", tc.want, e)
+			}
+		})
+	}
+	root := t.TempDir()
+	wsWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"app\"]\n")
+	wsWrite(t, root, "app/goxide.toml", "[package]\nformat=2\nmodule=\"example.org/app\"\ngo=\"1.27\"\n")
+	w, e := DiscoverWorkspace(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = w.Select(filepath.Join(root, "unlisted"), nil, false); e == nil || !strings.Contains(e.Error(), "WS-NOT-MEMBER") {
+		t.Fatal(e)
+	}
+	wsWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"link/*\"]\n")
+	if e = os.Symlink(filepath.Join(root, "app"), filepath.Join(root, "link")); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = DiscoverWorkspace(root); e == nil || !strings.Contains(e.Error(), "symlink") {
+		t.Fatal(e)
+	}
+}
+
+func TestWorkspaceMembersShareLease(t *testing.T) {
+	root := t.TempDir()
+	wsWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"a\",\"b\"]\n")
+	for _, name := range []string{"a", "b"} {
+		wsWrite(t, root, name+"/goxide.toml", "[package]\nformat=2\nmodule=\"example.org/"+name+"\"\ngo=\"1.27\"\n")
+	}
+	release, e := LockProject(filepath.Join(root, "a"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer release()
+	if other, e := LockProject(filepath.Join(root, "b")); e == nil {
+		other()
+		t.Fatal("second member bypassed workspace lease")
+	}
+	if _, e = os.Stat(filepath.Join(root, ".hgo", "build.lock")); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = os.Stat(filepath.Join(root, "a", ".hgo", "build.lock")); !os.IsNotExist(e) {
+		t.Fatal("member acquired separate lease", e)
+	}
+	release()
+	other, e := LockProject(filepath.Join(root, "b"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	other()
+}

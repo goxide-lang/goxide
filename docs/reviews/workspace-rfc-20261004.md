@@ -1,6 +1,6 @@
 # Workspace RFC 0026 研究验收（2026-10-04）
 
-状态：研究与独立对抗评审完成，显式依赖、根唯一锁/拆出复制、Git URL优先及阶段顺序已确认，统一版本解析与构建feature隔离随后获确认；workspace 生产功能未实现、未批准，未部署网站。基于 `d51117d36fa2d1ccfcf322b81195b0d753cbb8de`，文档分支 `docs/workspace-rfc`。正式合同候选见 [RFC 0026](../rfcs/0026-workspaces.md)。
+状态（历史研究快照；后续实现见 [核心验收](workspace-core-20261004.md)）：研究与独立对抗评审完成，显式依赖、根唯一锁/拆出复制、Git URL优先及阶段顺序已确认，统一版本解析与构建feature隔离随后获确认；workspace 生产功能未实现、未批准，未部署网站。基于 `d51117d36fa2d1ccfcf322b81195b0d753cbb8de`，文档分支 `docs/workspace-rfc`。正式合同候选见 [RFC 0026](../rfcs/0026-workspaces.md)。
 
 ## 资料与环境
 

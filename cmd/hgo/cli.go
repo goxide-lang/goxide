@@ -70,6 +70,8 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.StringVar(&req.Runtime, "runtime", "", "local goxide module root (single-file run/build)")
 		f.StringVar(&req.Tags, "tags", "", "Go build tags (directory mode; comma/space separated)")
 		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (Go 1.27+; unused for single-file transpile/expand)")
+		f.StringArrayVarP(&req.Packages, "package", "p", nil, "select workspace member by module identity (repeatable)")
+		f.BoolVar(&req.Workspace, "workspace", false, "build all workspace members")
 		f.StringVar(&req.Features, "features", "", "project features (comma/space separated)")
 		f.BoolVar(&req.NoDefaultFeatures, "no-default-features", false, "disable project default features")
 		f.StringVar(&req.Bin, "bin", "", "select project binary")
@@ -260,6 +262,7 @@ var oldLongOptions = map[string]bool{
 	"expanded": true, "runtime": true, "tags": true, "no-default-features": true,
 	"bin": true, "example": true, "lib": true, "target-dir": true, "locked": true,
 	"action": true, "subject": true, "plan": true, "out": true, "help": true,
+	"package": true, "workspace": true,
 }
 
 func checkOptionTokens(f *pflag.FlagSet, args []string) error {

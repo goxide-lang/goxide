@@ -2,9 +2,24 @@
 
 ## 状态与范围
 
-**核心方向已确认，协议细节Proposed，生产未实现（2026-10-04）**。用户后续已明确一项约束：依赖继承必须像 `package1 = { workspace = true }` 一样显式；本篇据此撤回旧草稿的源码import自动建立成员边和按module身份自动本地覆盖。最新进一步确认根唯一lock、拆出复制根lock、Git URL优先及阶段顺序；最新“对的”进一步确认全workspace统一版本解析、根锁和仅构建选中成员及依赖，未选成员feature不自动带入；本轮仍仅修订文档。用户要求参考 Cargo 编写 workspace RFC；本轮仅官方资料研究、原生 Go 隔离机制试验及文档评审。基线 `feat/vendor-import` / `d51117d36fa2d1ccfcf322b81195b0d753cbb8de` 的 hgo 不支持本篇 workspace 字段/命令。没有改生产代码、发布网站或合并主线；有 Go 实验不代表 hgo workspace 已通过验收。
+**作者 workspace 核心已实现，扩展协议仍 Proposed（2026-10-04）**。实现基于 `feat/cobra-posix-cli` 的 `09f1eb258fc98217e5d03506f34957c9ee9aec4f`，独立分支 `feat/workspace-core`；整合了 `594d3a3` 的已确认决策。显式 `workspace=true`、全 workspace 统一版本/根唯一锁、仅所选编译闭包的 feature 并集现已有生产代码与本地端到端测试。没有合并主线、冻结 tag 或发布网站。下文未纳入本节实现清单的语法仍为设计合同，不应视作已提供。
 
 承接 [0022 项目工具链](0022-project-toolchain.md)、[0023 构建脚本](0023-build-scripts.md)、[0025 单一项目清单](0025-unified-project.md)。继续以 `goxide.toml` / `goxide.lock` 为作者配置权威，根不并存 go.mod/go.sum/go.work/go.work.sum。原生 Go 负责 module path、版本、MVS、checksum 和编译；生成 Go 配置只在受管 target。目标是组织多包开发与独立发布，不引入 Rust resolver、所有权、Copy、enum ABI 或新借用语义。
+
+### 本次实现范围
+
+- 根 `[workspace] format=1`，虚拟根/根包、显式 `members`、单段 glob、`exclude`、`default-members`；成员为 format 2 TOML。拒绝重复 module、嵌套 workspace、成员锁、symlink/受管输出成员；外部成员须显式路径，由根 INPUT 选择。
+- `[workspace.dependencies]` 仅模板；成员须 `{workspace=true}`，可加 feature 请求、设置 default_features/optional；不写该标记就不继承。`package.go.workspace=true` / toolchain 同理。直接 version/Git/path 原有来源继续有效，不自动改为成员 path；显式来源冲突报错。原生 require 与成员 path 共存须显式未限定版本的本地 replace。
+- `hgo build|test|transpile --workspace ROOT`；重复 `-p/--package MODULE`；run、显式 bin/example/lib 和 -o 必须只选择一个成员。默认多成员构建其 lib/bins，未满足 required_features 的默认目标跳过并说明；examples 仅显式选择。多成员 feature 使用 `MODULE/FEATURE`。CLI 保留 POSIX 风格，flags 在 INPUT 前。
+- 根 schema 3 lock 保存统一 Go MVS 版本、有效政策、来源身份和校验和；schema 2 单项目继续支持，不自动迁移为 workspace。全体成员的声明 feature 闭包只用于版本求解；本次构建的 features 另按所选根/活动依赖固定点合并。根写锁串行化更新，不运行求解阶段脚本。Git 保持已锁 commit，已有 Unified 锁缺可达 pin 时即使未传 --locked 也拒绝移动分支解析。
+- 拆出项目可直接读取复制的 schema 3 根锁：只沿实际清单及已校验 Go `.mod` 的可达关系求解，忽略无关记录，核对来源/输入/版本/checksum；不复用旧 workspace 的无关 replace 政策。远端/Git 可在新缓存位置重建；path 不自动物化或改源。`--offline` 使用已缓存的可达已锁版本，不要求被升级低版本的缓存。
+- 根 target 所有权与成员 module/目标/feature/配置共同隔离；既有 normal/test metadata 拒绝机制与脚本 trust 保留。未选成员源码/脚本不编译或执行。host helper **沿用 RFC0023 的显式本地 Go 快照合同**；本片没有新增 workspace host 版本/feature resolver，也不声称跨脚本 helper 来源统一。
+
+可运行清单与命令见 [workspace 示例](../../examples/workspace/README.md)，实现证据见 [核心验收](../reviews/workspace-core-20261004.md)。原始研究记录仍是 19 项原生 Go 机制实验，不替代这些 hgo 测试。
+
+**明确限制**：暂不支持 `[workspace.go]` / root override / workspace vendor / go.work import、`publish_version`、dev 表、profile、registry、target-specific features、互斥 feature、Cargo resolver 数字版本、批量 examples/all-targets、manifest-path/workspace-manifest/no-workspace 参数。未知配置字段严格拒绝。现有 host helper 不支持依赖模板继承，不以 workspace 成员资格扩展 host 权限。全 workspace 搬家时绝对本地路径身份需重新锁定；拆出 path 或仍保留继承语法的成员必须先显式物化配置，不能声称复制锁即自足。
+
+普通构建在成员清单/根政策改变时重新求解统一版本，保留已有 Git pin；--locked 明确拒绝变化。可达非成员 path 依赖政策变更、schema 2→3 转换、路径改源需要显式重建锁；当前没有细粒度 update 命令。需备份旧锁后移走并重新构建，新锁会重新解析 Git rev，必须审查新旧 commit；不能把该流程当作锁定构建。编译前沿现有脚本合同检查每个所选图，批量任务可能已有前序成员成功后才遇到后序构建失败；不是整个批次的事务性发布。
 
 ### 官方事实与本篇选择
 
@@ -13,7 +28,7 @@
 | 官方事实（资料） | 本篇提案，不能当作上游承诺 |
 | --- | --- |
 | Cargo 支持虚拟根/根包、成员选择、共享 lock/target 和显式字段继承；根 patch/profile 有特殊地位。[Workspaces](https://doc.rust-lang.org/cargo/reference/workspaces.html) | 采用显式模板继承；只有成员写 workspace=true 才继承，不自动引入依赖或把内部 path 依赖升级成成员 |
-| Cargo 同次多包构建合并依赖 features；锁求解与本次编译 feature 选择不是同一过程。[Resolver](https://doc.rust-lang.org/cargo/reference/resolver.html#features) | 锁可容纳多个已求解计划；不为锁定而激活所有可选依赖 |
+| Cargo 同次多包构建合并依赖 features；锁求解与本次编译 feature 选择不是同一过程。[Resolver](https://doc.rust-lang.org/cargo/reference/resolver.html#features) | 全 workspace 声明 feature 闭包统一锁版本；本次编译不因此启用未请求的 feature |
 | Cargo feature 是加法；resolver 2 隔离 build/normal，dev 请求按需要生效。[Features](https://doc.rust-lang.org/cargo/reference/features.html#feature-resolver-version-2) | 采用闭包与角色隔离；不提供数字 resolver=2/3 假兼容 |
 | Cargo path 与发布版本可以表达不同开发/发行来源。[Dependencies](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#multiple-locations) | 本地来源必须显式声明，另保留发行版本；成员身份不能替换原version/path/git来源 |
 | Go workspace 把 use 中模块视作主模块，MVS 统一同 module path；冲突 replace 可由 work 根裁决。[Go modules](https://go.dev/ref/mod#workspaces) | 构建仅显式选中成员及其依赖；全workspace统一版本解析，Go use 的隐式来源不照搬，迁入计划须物化声明 |
@@ -23,7 +38,7 @@
 
 ## 源级规则
 
-以下语法、CLI、诊断名都是**候选合同**。现有清单继续 format=2；新增 workspace 协议使用自身 format，旧工具遇到未知表必须拒绝，不能静默忽略。最终兼容门控需在实现时先通过黑例。
+除上节列明的实现子集外，以下语法、CLI、诊断名仍为**候选合同**。现有清单继续 format=2；新增 workspace 协议使用自身 format，旧工具遇到未知表必须拒绝，不能静默忽略。最终兼容门控需在实现时先通过黑例。
 
 ### WS-01：根、成员与发现
 
@@ -350,6 +365,6 @@ GO-01..04 验证 standalone / 全主模块 / 选中主模块选版；GO-05..06 r
 
 原四问中第三项的隐式成员覆盖已被此前显式继承指令撤回；本轮来源方向也明确，不复活隐式覆盖。最新全workspace统一版本锁及未选成员feature隔离已确认；optional锁记录组织等细节需保持这两个约束；schema/override/发布字段仍是候选实施合同。
 
-已确认阶段顺序：阶段一作者workspace核心（根/成员、显式继承/来源、多目标、唯一根锁及拆出复制、layout/并发）；阶段二go.work逐政策迁入和workspace vendor。本轮不实现生产workspace；后续实施按已确认统一模型推进。W01–W11/W13/W15–W17/W19/W20为核心候选验收，W12/W14/W18为迁入候选验收；dev表、发布自动化、registry、profile另行设计。暂不支持Cargo数字resolver或自动工具链下载。
+已确认阶段顺序：阶段一作者workspace核心（根/成员、显式继承/来源、多目标、唯一根锁及拆出复制、layout/并发）；阶段二go.work逐政策迁入和workspace vendor。研究阶段未实现生产 workspace；当前实施子集以上方实现范围为准。W01–W11/W13/W15–W17/W19/W20为核心候选验收，W12/W14/W18为迁入候选验收；dev表、发布自动化、registry、profile另行设计。暂不支持Cargo数字resolver或自动工具链下载。
 
-生产落点预估为 internal/project 清单/图/锁、cmd/hgo 选择、受管layout/metadata上下文；原则上不改宏语法基础设施，cfg使用既有配置入口。未来若需改变前端条件移除顺序，应先单列RFC0022变更并协调其owner。本轮只有文档与机制研究脚本，不要求全量生产race/vet重新跑来冒充workspace已实现；实现阶段须跑选中图端到端、生成Go、race/vet、适用全量回归和独立对抗review。
+生产落点预估为 internal/project 清单/图/锁、cmd/hgo 选择、受管layout/metadata上下文；原则上不改宏语法基础设施，cfg使用既有配置入口。未来若需改变前端条件移除顺序，应先单列RFC0022变更并协调其owner。原研究阶段只有文档与机制研究脚本；当前实现验收另见核心验收记录，仍须跑选中图端到端、生成Go、race/vet、适用全量回归和独立对抗review。

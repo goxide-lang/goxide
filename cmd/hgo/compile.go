@@ -22,6 +22,8 @@ import (
 // CompileRequest is the parser-independent input to compilation services.
 // ProgramArgs is used only by run and never interpreted as Go tool flags.
 type CompileRequest struct {
+	Packages                                                        []string
+	Workspace                                                       bool
 	Mode, Input, Output, SourceMap, Expanded, Runtime, Tags, GoTool string
 	Features, Bin, Example, TargetDir                               string
 	NoDefaultFeatures, Lib, Offline, Locked                         bool
@@ -54,6 +56,14 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if *mapPath != "" || *expandedPath != "" {
 			return errors.New("directory mode writes per-file .go.map.json automatically; --source-map/--expanded are single-file flags")
 		}
+		if w, e := project.DiscoverWorkspace(input); e != nil {
+			return e
+		} else if w != nil {
+			return runWorkspace(req, input, w, out, stderr)
+		}
+		if req.Workspace || len(req.Packages) > 0 {
+			return fmt.Errorf("workspace selection requires a workspace manifest")
+		}
 		if exists, e := project.Detect(input); e != nil {
 			return e
 		} else if exists {
@@ -63,6 +73,9 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			return errors.New("project flags require goxide.toml in the input directory")
 		}
 		return runDirectoryArgs(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), req.ProgramArgs, out, stderr)
+	}
+	if req.Workspace || len(req.Packages) > 0 {
+		return errors.New("workspace selection requires a directory")
 	}
 	if *targetDir != "" || *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
 		return errors.New("project flags require a directory with goxide.toml")

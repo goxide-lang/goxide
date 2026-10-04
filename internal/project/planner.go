@@ -131,7 +131,11 @@ func (g *Graph) readNode(root string, published bool) (*Node, error) {
 	n := &Node{Root: root, Manifest: Manifest{Version: 2}, Children: map[string]*Node{}, Sources: map[string]Dependency{}}
 	if present {
 		n.HasManifest = true
-		n.Manifest, e = Read(root)
+		if override, ok := g.overrides[root]; ok {
+			n.Manifest = override
+		} else {
+			n.Manifest, e = Read(root)
+		}
 		manifestErr := e
 		if e != nil && n.Manifest.Module == "" {
 			return nil, e
@@ -257,9 +261,13 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 		changed = false
 		for _, module := range keys(r.nodes) {
 			n := r.nodes[module]
-			req := reqs[module]
+			req := unionRequest(reqs[module], g.featureOverrides[module])
 			if n != r.root && n.Manifest.Vendor != nil {
 				deferred[module] = fmt.Errorf("vendor mode is supported only for a root project; cannot mix vendor author dependency %s", n.Module)
+			}
+			if g.allFeatures {
+				req.Features = keys(n.Manifest.Features)
+				req.Defaults = true
 			}
 			features, deps, e := Resolve(n.Manifest, req.Features, req.Defaults)
 			if e != nil {
@@ -280,8 +288,23 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 			}
 			n.Features = features
 			n.Requests = deps
+			if g.Lock.Unified != nil && !g.unifiedPlanning {
+				if g.Lock.Unified.Inputs[n.Module] != nodeInput(n) {
+					return nil, fmt.Errorf("unified lock missing or changed reachable input %s; explicitly update lock", n.Module)
+				}
+				for _, req := range n.Mod.Require {
+					if _, ok := g.Lock.Unified.Modules[req.Path]; !ok {
+						return nil, fmt.Errorf("unified lock missing reachable module %s", req.Path)
+					}
+				}
+			}
 			for _, alias := range keys(deps) {
 				d := n.Manifest.Dependencies[alias]
+				if g.Lock.Unified != nil && !g.unifiedPlanning {
+					if _, ok := g.Lock.Unified.Modules[d.Module]; !ok {
+						return nil, fmt.Errorf("unified lock missing reachable module %s", d.Module)
+					}
+				}
 				if strings.HasPrefix(d.Module, plannerPrefix) {
 					return nil, fmt.Errorf("reserved planner module namespace: %s", d.Module)
 				}
@@ -477,6 +500,103 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		return nil, e
 	}
 	args := []string{"mod", "edit"}
+	for _, req := range g.RootMod.Require {
+		if pin, ok := g.forced[req.Path]; ok {
+			args = append(args, "-require="+req.Path+"@"+pin.Version)
+		}
+	}
+	for i, req := range r.requirements {
+		if pin, ok := g.forced[req.Module]; ok {
+			r.requirements[i].Version = pin.Version
+		}
+	}
+	// Follow only native requirement edges reachable from this feature round.
+	// Pre-pin the whole reachable native closure before Go can read older .mod
+	// files. Unrelated workspace lock entries must never become Go roots.
+	if g.Lock.Unified != nil && !g.unifiedPlanning {
+		queue := []string{}
+		for _, req := range g.RootMod.Require {
+			queue = append(queue, req.Path)
+		}
+		for _, req := range r.requirements {
+			queue = append(queue, req.Module)
+		}
+		for _, node := range r.nodes {
+			for _, req := range node.Mod.Require {
+				queue = append(queue, req.Path)
+			}
+		}
+		seen := map[string]bool{}
+		for len(queue) > 0 {
+			module := queue[0]
+			queue = queue[1:]
+			if seen[module] || module == r.root.Module {
+				continue
+			}
+			seen[module] = true
+			pin, ok := g.forced[module]
+			if !ok {
+				return nil, fmt.Errorf("unified lock missing reachable module %s", module)
+			}
+			var mod ModFile
+			if node := r.nodes[module]; node != nil {
+				mod = node.Mod
+			} else {
+				eff := effective(pin)
+				if eff.Version == "" {
+					node, err := g.readNode(eff.Path, false)
+					if err != nil {
+						return nil, err
+					}
+					if want, exists := g.Lock.Unified.Inputs[module]; exists && want != nodeInput(node) {
+						return nil, fmt.Errorf("unified lock changed reachable input %s", module)
+					}
+					mod = node.Mod
+				} else {
+					// Explicit download verifies cached/fetched .mod against go.sum;
+					// compare its identity to the root lock before following any edge.
+					data, err := run("mod", "download", "-json", eff.Path+"@"+eff.Version)
+					if err != nil {
+						return nil, err
+					}
+					var verified Selection
+					if err = json.Unmarshal(data, &verified); err != nil {
+						return nil, err
+					}
+					if verified.Path != eff.Path || verified.Version != eff.Version || verified.GoModSum != eff.GoModSum || verified.Sum != eff.Sum || verified.GoMod == "" {
+						return nil, fmt.Errorf("unified lock identity/checksum changed for %s", module)
+					}
+					if err = NoSymlinks(verified.GoMod); err != nil {
+						return nil, err
+					}
+					body, err := os.ReadFile(verified.GoMod)
+					if err != nil {
+						return nil, err
+					}
+					metadata, err := os.MkdirTemp(work, "locked-mod-")
+					if err != nil {
+						return nil, err
+					}
+					if err = os.WriteFile(filepath.Join(metadata, "go.mod"), body, 0644); err != nil {
+						return nil, err
+					}
+					mod, err = ReadMod(g.Tool, metadata)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+			for _, child := range mod.Require {
+				queue = append(queue, child.Path)
+			}
+			if pin.Version != "" {
+				args = append(args, "-require="+module+"@"+pin.Version)
+			}
+		}
+	}
+	for _, x := range g.RootMod.Exclude {
+		args = append(args, "-exclude="+x.Path+"@"+x.Version)
+	}
 	for _, rep := range replacements {
 		old := rep.Old.Path
 		if rep.Old.Version != "" {
@@ -492,6 +612,13 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		dir := r.local[module]
 		hasVersion := false
 		for _, node := range r.nodes {
+			if g.unifiedPlanning {
+				for _, req := range node.Mod.Require {
+					if req.Path == module {
+						hasVersion = true
+					}
+				}
+			}
 			for _, dep := range node.Sources {
 				if dep.Module == module && dep.Version != "" {
 					hasVersion = true
@@ -647,6 +774,19 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			}
 			selected[s.Path] = s
 		}
+		pinArgs := []string{"mod", "edit"}
+		for _, path := range keys(selected) {
+			candidate := selected[path]
+			if pin, ok := g.forced[path]; ok && pin.Version != "" && candidate.Version != pin.Version {
+				pinArgs = append(pinArgs, "-require="+path+"@"+pin.Version)
+			}
+		}
+		if len(pinArgs) > 2 {
+			if _, e = run(pinArgs...); e != nil {
+				return nil, e
+			}
+			continue
+		}
 		nativeState := Digest(selected)
 		if nativeState == previousNative {
 			break
@@ -673,6 +813,19 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		}
 		parent, _, _ := strings.Cut(fields[0], "@")
 		child, _, _ := strings.Cut(fields[1], "@")
+		if g.unifiedPlanning && parent != r.root.Module && !bridges[parent] {
+			if dir, local := r.local[child]; local {
+				matched := false
+				for _, rep := range replacements {
+					if rep.Old.Path == child && rep.Old.Version == "" && rep.New.Version == "" && rep.New.Path == dir {
+						matched = true
+					}
+				}
+				if !matched {
+					return nil, fmt.Errorf("native module %s requires %s by version; workspace membership cannot replace it; declare an explicit root local replace", parent, child)
+				}
+			}
+		}
 		if strings.HasPrefix(child, plannerPrefix) && parent != r.root.Module && !bridges[parent] {
 			return nil, fmt.Errorf("native requirement collides with reserved planner namespace: %s", line)
 		}
@@ -805,7 +958,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, error) {
 	g.planningSeed = g.Lock.PlanningSums
 	g.planningVerified = map[string]bool{}
-	if len(g.Lock.Plans) > 0 {
+	if len(g.Lock.Plans) > 0 || g.Lock.Unified != nil {
 		for _, line := range strings.Split(g.Lock.PlanningSums, "\n") {
 			if line != "" {
 				g.planningVerified[line] = true
@@ -825,6 +978,10 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 		return nil, fmt.Errorf("vendor lock requires explicit vendor mode; cannot silently switch source policy")
 	}
 	g.RootMod = initial.Mod
+	if g.workspace != nil && g.Lock.Unified != nil && !g.unifiedPlanning {
+		g.RootMod.Replace = g.Lock.Unified.Policy.Replace
+		g.RootMod.Exclude = g.Lock.Unified.Policy.Exclude
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -888,7 +1045,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			// Dependency target qualification is part of the stable graph, not
 			// a late per-node error after an earlier script may have run.
 			for _, n := range g.Nodes {
-				if n == g.Root || !n.HasManifest {
+				if g.unifiedPlanning || n == g.Root || !n.HasManifest {
 					continue
 				}
 				if n.Manifest.Lib == nil {
@@ -899,6 +1056,15 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 						return nil, fmt.Errorf("target %s requires feature %s", n.Manifest.Lib.Name, f)
 					}
 				}
+			}
+			if g.unifiedPlanning {
+				return g, nil
+			}
+			if g.Lock.Unified != nil {
+				if e := g.validateUnified(); e != nil {
+					return nil, e
+				}
+				return g, nil
 			}
 			// This key captures source declarations and active dependency constraints.
 			// Feature-only cfg changes with an identical module plan may reuse the lock.

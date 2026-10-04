@@ -1,0 +1,12 @@
+[package]
+format = 2
+module = "example.org/shared"
+go.workspace = true
+
+[features]
+json = []
+yaml = []
+
+[lib]
+name = "shared"
+path = "shared.hgo"

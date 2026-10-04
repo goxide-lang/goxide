@@ -1,0 +1,10 @@
+[workspace]
+format = 1
+members = ["apps/service", "apps/worker", "libs/shared"]
+default-members = ["apps/service"]
+
+[workspace.package]
+go = "1.27"
+
+[workspace.dependencies]
+shared = { module = "example.org/shared", path = "libs/shared", default_features = false }

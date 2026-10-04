@@ -191,7 +191,17 @@ func ManagedSourceDirectory(path, sourceRoot, module string) (bool, error) {
 	if e := readJSON(filepath.Join(path, LayoutMarker), &owner); e != nil {
 		return false, e
 	}
-	if owner != (layoutOwner{1, sourceRoot, module, path}) {
+	expected := layoutOwner{1, sourceRoot, module, path}
+	if owner.Module == "workspace" {
+		w, e := DiscoverWorkspace(sourceRoot)
+		if e != nil {
+			return false, e
+		}
+		if w != nil && w.Members[module] == sourceRoot {
+			expected = layoutOwner{1, w.Root, "workspace", path}
+		}
+	}
+	if owner != expected {
 		return false, fmt.Errorf("invalid or foreign managed target directory in source tree: %s", path)
 	}
 	if e := NoSymlinks(path); e != nil {

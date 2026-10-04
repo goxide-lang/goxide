@@ -88,6 +88,8 @@ Cargo 风格第一版通过 `goxide.toml` 增量启用默认/显式 feature、�
 
 项目构建默认将产物保留在 `target/`：`hgo build --bin web ./app` 会打印二进制路径，`hgo transpile --bin web ./app` 会打印可独立 Go 构建的生成 module 路径。可用 `--target-dir` 或 `HGO_TARGET_DIR` 配置；相对路径以项目根为准。见 [产物布局与安全边界](docs/design/target-layout.md)。
 
+作者 workspace 核心支持显式成员和 `{ workspace = true }` 依赖继承、全工作区统一版本与根锁、按所选成员合并 feature。用 `hgo build --workspace ROOT` 或 `hgo run -p MODULE --bin NAME ROOT` 选择；成员资格不自动提供依赖。见 [可运行 workspace 示例](examples/workspace/README.md) 与 [实现范围及限制](docs/rfcs/0026-workspaces.md#本次实现范围)。
+
 `version` 渠道现可直接取得带 `goxide.toml` 的源码并统一 features；Go 负责共享 MVS 与 sums，稳定后才生成/执行已授权脚本。仅原生 go.mod 不隐式激活 hgo feature；固定配置 Go 发行物不重配。见 [version 来源合同与验收](docs/design/version-source-plan.md)。
 
 项目采用 [统一项目模型](docs/rfcs/0025-unified-project.md)：根以 `goxide.toml`（`package.format = 2`，显式 module/go）和 `goxide.lock` 为配置与锁定权威，`.go` / `.hgo` 可共存。原生 require/replace/exclude 写入 TOML；Go 元数据仅生成到 target。普通 Go 工程可用 `hgo import-go --plan --bin app=cmd/app ROOT` 查看方案，再用 `--out NEWDIR --offline` 在新目录验证迁移，原工程保持不变。旧 JSON、format 1、双根配置和旧锁均明确拒绝；不自动删除或改名。 `import-go` 未指定输出时默认只读计划；单模块 vendor 自动保留为 `[vendor] mode = "go-mod"` 的原生 Go vendor 视图，逐文件锁定实际字节，冷缓存离线构建不下载补包。workspace vendor 与增强依赖图混用明确拒绝，详见 RFC 0025 的 vendor 扩展。

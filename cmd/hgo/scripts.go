@@ -224,7 +224,13 @@ func executeScripts(req ScriptsRequest, out, stderr io.Writer) error {
 		return e
 	}
 	defer release()
-	layoutPath, e := project.ResolveTargetDir(root, req.TargetDir)
+	ownerRoot, ownerModule := root, ""
+	if w, err := project.DiscoverWorkspace(root); err != nil {
+		return err
+	} else if w != nil {
+		ownerRoot, ownerModule = w.Root, "workspace"
+	}
+	layoutPath, e := project.ResolveTargetDir(ownerRoot, req.TargetDir)
 	if e != nil {
 		return e
 	}
@@ -243,7 +249,10 @@ func executeScripts(req ScriptsRequest, out, stderr io.Writer) error {
 			fmt.Fprintln(out, "no script cache; local trust unchanged")
 			return nil
 		}
-		layout, e := project.OpenLayout(root, module, req.TargetDir)
+		if ownerModule == "" {
+			ownerModule = module
+		}
+		layout, e := project.OpenLayout(ownerRoot, ownerModule, req.TargetDir)
 		if e != nil {
 			return e
 		}

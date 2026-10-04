@@ -43,6 +43,9 @@ func workspaceHeader(root string) (*WorkspaceConfig, error) {
 	if e = toml.Unmarshal(b, &doc); e != nil {
 		return nil, fmt.Errorf("%s: %w", filepath.Join(root, ManifestName), e)
 	}
+	if e = validateNames(filepath.Join(root, ManifestName), b); e != nil {
+		return nil, e
+	}
 	raw, ok := doc["workspace"]
 	if !ok {
 		return nil, nil
@@ -57,6 +60,9 @@ func workspaceHeader(root string) (*WorkspaceConfig, error) {
 	}
 	if c.Format != 1 {
 		return nil, fmt.Errorf("unsupported workspace.format %d", c.Format)
+	}
+	if e := validate(Manifest{Version: 2, Module: "goxide-workspace.invalid/templates", GoVersion: "1.27", Dependencies: c.Dependencies}); e != nil {
+		return nil, fmt.Errorf("workspace templates: %w", e)
 	}
 	for name, d := range c.Dependencies {
 		if d.Workspace || d.Optional {
@@ -112,17 +118,34 @@ func loadWorkspace(root string, c WorkspaceConfig) (*Workspace, error) {
 				return nil, fmt.Errorf("workspace member cannot traverse reserved directory %s", part)
 			}
 		}
-		matches, e := filepath.Glob(filepath.Join(root, pattern))
-		if e != nil {
-			return nil, e
+		matches := []string{root}
+		for _, part := range parts {
+			next := []string{}
+			for _, parent := range matches {
+				children, e := filepath.Glob(filepath.Join(parent, part))
+				if e != nil {
+					return nil, e
+				}
+				for _, dir := range children {
+					base := filepath.Base(dir)
+					if base == "target" || base == ".git" || base == ".hgo" || base == "vendor" {
+						return nil, fmt.Errorf("workspace pattern traverses reserved directory %s", dir)
+					}
+					if e := NoSymlinks(dir); e != nil {
+						return nil, e
+					}
+					if _, e := os.Lstat(filepath.Join(dir, LayoutMarker)); e == nil {
+						return nil, fmt.Errorf("workspace pattern traverses managed output %s", dir)
+					} else if !os.IsNotExist(e) {
+						return nil, e
+					}
+					next = append(next, dir)
+				}
+			}
+			matches = next
 		}
 		if len(matches) == 0 {
 			return nil, fmt.Errorf("workspace member pattern has no matches: %s", pattern)
-		}
-		for _, dir := range matches {
-			if e := NoSymlinks(dir); e != nil {
-				return nil, e
-			}
 		}
 		return matches, nil
 	}
@@ -158,10 +181,18 @@ func loadWorkspace(root string, c WorkspaceConfig) (*Workspace, error) {
 	}
 	for _, dir := range keys(dirs) {
 		if dir != root {
-			if c, e := workspaceHeader(dir); e != nil {
+			if e := RejectManagedOutput(dir); e != nil {
 				return nil, e
-			} else if c != nil {
-				return nil, fmt.Errorf("nested workspace cannot be a member: %s", dir)
+			}
+			for parent := dir; parent != root; parent = filepath.Dir(parent) {
+				if c, e := workspaceHeader(parent); e != nil {
+					return nil, e
+				} else if c != nil {
+					return nil, fmt.Errorf("member belongs to another workspace: %s", parent)
+				}
+				if filepath.Dir(parent) == parent {
+					break
+				}
 			}
 			if _, e := os.Lstat(filepath.Join(dir, "goxide.lock")); e == nil {
 				return nil, fmt.Errorf("WS-MEMBER-LOCK: member must use root lock: %s", dir)
@@ -217,6 +248,9 @@ func loadWorkspace(root string, c WorkspaceConfig) (*Workspace, error) {
 }
 
 func parseWorkspaceManifest(filename string, b []byte, w *Workspace) (Manifest, error) {
+	if e := validateNames(filename, b); e != nil {
+		return Manifest{}, e
+	}
 	var raw map[string]any
 	if e := toml.Unmarshal(b, &raw); e != nil {
 		return Manifest{}, e
@@ -268,6 +302,11 @@ func parseWorkspaceManifest(filename string, b []byte, w *Workspace) (Manifest, 
 			if e = toml.Unmarshal(b, &merged); e != nil {
 				return Manifest{}, e
 			}
+			if _, present := d["features"]; present {
+				if _, ok := d["features"].([]any); !ok {
+					return Manifest{}, fmt.Errorf("dependency %s: features must be an array", alias)
+				}
+			}
 			if f, ok := d["features"].([]any); ok {
 				prior, _ := merged["features"].([]any)
 				merged["features"] = append(prior, f...)
@@ -288,6 +327,13 @@ func parseWorkspaceManifest(filename string, b []byte, w *Workspace) (Manifest, 
 }
 
 func (w *Workspace) Select(input string, packages []string, all bool) ([]string, error) {
+	input, e := filepath.Abs(input)
+	if e != nil {
+		return nil, e
+	}
+	if _, ok := w.Manifests[input]; !ok && input != w.Root {
+		return nil, fmt.Errorf("WS-NOT-MEMBER: input is not a workspace member: %s", input)
+	}
 	if all && len(packages) > 0 {
 		return nil, fmt.Errorf("--workspace conflicts with --package")
 	}

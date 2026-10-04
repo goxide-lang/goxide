@@ -19,6 +19,7 @@ import (
 )
 
 type projectFlags struct {
+	graph                             *project.Graph
 	programArgs                       []string
 	features, bin, example, targetDir string
 	noDefault, offline, locked, lib   bool
@@ -31,14 +32,18 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	if err := checkDirectoryCompiler(tool); err != nil {
 		return err
 	}
-	release, err := project.LockProject(input)
-	if err != nil {
-		return err
-	}
-	defer release()
-	g, err := project.LoadWithTarget(input, tool, strings.FieldsFunc(flags.features, func(r rune) bool { return r == ',' || r == ' ' }), !flags.noDefault, flags.offline, flags.locked, flags.targetDir)
-	if err != nil {
-		return err
+	var err error
+	g := flags.graph
+	if g == nil {
+		release, e := project.LockProject(input)
+		if e != nil {
+			return e
+		}
+		defer release()
+		g, err = project.LoadWithTarget(input, tool, strings.FieldsFunc(flags.features, func(r rune) bool { return r == ',' || r == ' ' }), !flags.noDefault, flags.offline, flags.locked, flags.targetDir)
+		if err != nil {
+			return err
+		}
 	}
 	var target project.Target
 	if flags.lib || (flags.bin == "" && flags.example == "" && len(g.Root.Manifest.Bins) == 0 && g.Root.Manifest.Lib != nil) {
@@ -68,7 +73,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		return err
 	}
 	compilerID := projectCompilerID()
-	layoutPath, err := project.ResolveTargetDir(g.Root.Root, flags.targetDir)
+	layoutPath, err := project.ResolveTargetDir(g.OwnerRoot(), flags.targetDir)
 	if err != nil {
 		return err
 	}
@@ -99,7 +104,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	layout, err := project.OpenLayout(g.Root.Root, g.Root.Module, flags.targetDir)
+	layout, err := project.OpenLayout(g.OwnerRoot(), g.OwnerModule(), flags.targetDir)
 	if err != nil {
 		return err
 	}
@@ -347,7 +352,7 @@ func checkTarget(root, path string) error {
 // Validate every generated module policy before any generator or frontend runs.
 // These shadow modules contain no source code and never become published output.
 func preflightProjectModules(g *project.Graph, targetDir string) error {
-	layout, e := project.OpenLayout(g.Root.Root, g.Root.Module, targetDir)
+	layout, e := project.OpenLayout(g.OwnerRoot(), g.OwnerModule(), targetDir)
 	if e != nil {
 		return e
 	}
@@ -519,7 +524,11 @@ func prepareProjectModule(g *project.Graph, n *project.Node, root string, genera
 		Sources  map[string]project.Dependency
 		Plan     string
 	}{n.Module, n.Manifest, string(sourceMod), n.Sources, g.PlanID})
-	if sums, ok := g.Lock.Sums[key]; ok {
+	if g.Lock.Unified != nil {
+		if e = os.WriteFile(filepath.Join(root, "go.sum"), []byte(g.Lock.PlanningSums), 0644); e != nil {
+			return e
+		}
+	} else if sums, ok := g.Lock.Sums[key]; ok {
 		if e = os.WriteFile(filepath.Join(root, "go.sum"), []byte(sums), 0644); e != nil {
 			return e
 		}
@@ -576,6 +585,18 @@ func prepareProjectModule(g *project.Graph, n *project.Node, root string, genera
 	sums, e := os.ReadFile(filepath.Join(root, "go.sum"))
 	if e != nil && !os.IsNotExist(e) {
 		return e
+	}
+	if g.Lock.Unified != nil {
+		allowed := map[string]bool{}
+		for _, line := range strings.Split(g.Lock.PlanningSums, "\n") {
+			allowed[line] = true
+		}
+		for _, line := range strings.Split(string(sums), "\n") {
+			if !allowed[line] {
+				return fmt.Errorf("unified lock checksum missing for %s", n.Module)
+			}
+		}
+		return nil
 	}
 	if g.Locked && g.Lock.Sums[key] != string(sums) {
 		return fmt.Errorf("--locked: checksums would change for %s", n.Module)

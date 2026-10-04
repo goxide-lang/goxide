@@ -80,6 +80,7 @@ func Detect(root string) (bool, error) {
 
 // manifestDocument deliberately separates the human format from internal identities.
 type manifestDocument struct {
+	Workspace    *WorkspaceConfig      `toml:"workspace,omitempty"`
 	Vendor       *VendorConfig         `toml:"vendor,omitempty"`
 	Package      PackageConfig         `toml:"package"`
 	Native       GoConfig              `toml:"go,omitempty"`
@@ -116,6 +117,9 @@ func Parse(filename string, b []byte) (Manifest, error) {
 	var d manifestDocument
 	if err := toml.NewDecoder(bytes.NewReader(b)).DisallowUnknownFields().Decode(&d); err != nil {
 		return Manifest{}, manifestDecodeError(filename, err)
+	}
+	if d.Workspace != nil {
+		return Manifest{}, fmt.Errorf("workspace manifest requires workspace-aware loading")
 	}
 	m := Manifest{Vendor: d.Vendor, Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validateNames(filename, b); err != nil {

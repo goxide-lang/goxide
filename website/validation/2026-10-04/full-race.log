@@ -1,0 +1,19 @@
+ok  	github.com/hxsf/goxide/cmd/hgo	4.561s
+ok  	github.com/hxsf/goxide/cmd/hgo-web	1.205s
+ok  	github.com/hxsf/goxide/formatting	1.013s
+ok  	github.com/hxsf/goxide/internal/deriveextras	1.294s
+ok  	github.com/hxsf/goxide/internal/enums	6.153s
+ok  	github.com/hxsf/goxide/internal/equality	18.510s
+ok  	github.com/hxsf/goxide/internal/frontend	26.836s
+ok  	github.com/hxsf/goxide/internal/macros	3.925s
+ok  	github.com/hxsf/goxide/internal/matchexpr	2.305s
+?   	github.com/hxsf/goxide/internal/printing	[no test files]
+ok  	github.com/hxsf/goxide/internal/propagate	5.691s
+ok  	github.com/hxsf/goxide/internal/refs	3.071s
+ok  	github.com/hxsf/goxide/internal/sourcemap	1.008s
+ok  	github.com/hxsf/goxide/internal/typecheck	1.204s
+?   	github.com/hxsf/goxide/runtime	[no test files]
+ok  	github.com/hxsf/goxide/serde	1.014s
+ok  	github.com/hxsf/goxide/serdejson	1.055s
+ok  	github.com/hxsf/goxide/tests/acceptance	284.548s
+ok  	github.com/hxsf/goxide/tests/prototype	7.731s

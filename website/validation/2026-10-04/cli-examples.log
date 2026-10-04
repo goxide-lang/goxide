@@ -1,0 +1,18 @@
+macro
+42
+enum
+count: 3
+count: 0
+empty
+result
+next port: 8081
+port error: invalid port syntax: true
+name length: 3
+name length: absent
+go_result
+next: 42
+parse error: true
+partial: 3 abc true
+derive
+Config { Name: "goxide", Enabled: false } true
+{"Name":"goxide","Enabled":false} <nil>

@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"go/build"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -37,6 +39,8 @@ func CompileModuleWithTags(input, destination string, tags []string) (ModuleResu
 }
 
 type ModuleOptions struct {
+	// Context cancels module traversal and importer subprocesses; CPU passes check between packages.
+	Context    context.Context
 	Tags       []string
 	Race       bool
 	Features   map[string]bool
@@ -48,23 +52,46 @@ type ModuleOptions struct {
 	ExcludeDirs   map[string]bool
 	TargetPackage string
 	Configuration string
+	// GeneratedFiles are validated module-relative build-script outputs. They join
+	// ordinary package selection/lowering without modifying the source tree.
+	GeneratedFiles map[string][]byte
+	// Environment scopes source selection/importer subprocesses for host tools.
+	// Nil preserves ambient environment. Never populated by generated script output.
+	Environment []string
 }
 
 func CompileModuleWithOptions(input, destination string, options ModuleOptions) (ModuleResult, error) {
+	if options.Context == nil {
+		options.Context = context.Background()
+	}
+	if err := options.Context.Err(); err != nil {
+		return ModuleResult{}, err
+	}
 	ctx := build.Default
+	environment := options.Environment
+	if environment == nil {
+		environment = os.Environ()
+	}
+	envValues := map[string]string{}
+	for _, value := range environment {
+		key, val, ok := strings.Cut(value, "=")
+		if ok {
+			envValues[key] = val
+		}
+	}
 	ctx.BuildTags = append([]string(nil), options.Tags...)
 	if options.Race {
 		ctx.BuildTags = append(ctx.BuildTags, "race")
 	}
 	for key, dst := range map[string]*string{"GOOS": &ctx.GOOS, "GOARCH": &ctx.GOARCH} {
-		if v := os.Getenv(key); v != "" {
+		if v := envValues[key]; v != "" {
 			*dst = v
 		}
 	}
 	if ctx.GOOS != runtime.GOOS || ctx.GOARCH != runtime.GOARCH {
 		return ModuleResult{}, fmt.Errorf("directory mode currently requires host GOOS/GOARCH (%s/%s); cross-target type sizes are unsupported", runtime.GOOS, runtime.GOARCH)
 	}
-	if v := os.Getenv("CGO_ENABLED"); v != "" {
+	if v := envValues["CGO_ENABLED"]; v != "" {
 		ctx.CgoEnabled = v == "1"
 	}
 
@@ -148,6 +175,9 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 	outputOwners := map[string]string{}
 	selectedTests := map[string]map[string][]byte{}
 	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if err := options.Context.Err(); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return walkErr
 		}
@@ -263,6 +293,65 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		return ModuleResult{}, err
 	}
 
+	// Script outputs enter the same package maps as source files, before import
+	// discovery. Validate against final mapped source names, including .hgo -> .go.
+	generatedNames := make([]string, 0, len(options.GeneratedFiles))
+	for name := range options.GeneratedFiles {
+		generatedNames = append(generatedNames, name)
+	}
+	sort.Strings(generatedNames)
+	occupied := map[string]string{}
+	finalName := func(name string) string {
+		if strings.HasSuffix(name, ".hgo") {
+			name = strings.TrimSuffix(name, ".hgo") + ".go"
+		}
+		return strings.ToLower(filepath.ToSlash(name))
+	}
+	for source, rel := range sourceOutputs {
+		occupied[finalName(rel)] = source
+	}
+	for _, name := range generatedNames {
+		rel := filepath.FromSlash(name)
+		if strings.HasSuffix(strings.ToLower(name), ".go.map.json") {
+			return ModuleResult{}, fmt.Errorf("reserved generated source-map path %q", name)
+		}
+		if rel == "." || filepath.IsAbs(rel) || filepath.Clean(rel) != rel || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || strings.Contains(name, "\\") || strings.Contains(name, ":") {
+			return ModuleResult{}, fmt.Errorf("invalid generated input path %q", name)
+		}
+		for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
+			if strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") || part == "vendor" || part == "testdata" || part == "hgo_targets" || part == "hgo_project_config.go" || part == "go.mod" || part == "go.sum" || part == "hgo.json" || part == "hgo.lock" {
+				return ModuleResult{}, fmt.Errorf("reserved generated input path %q", name)
+			}
+		}
+		if previous, ok := occupied[finalName(rel)]; ok {
+			return ModuleResult{}, fmt.Errorf("generated output collides with source/output: %s and %s", name, previous)
+		}
+		occupied[finalName(rel)] = name
+		path := filepath.Join(root, rel)
+		data := options.GeneratedFiles[name]
+		ext := filepath.Ext(rel)
+		if ext == ".go" || ext == ".hgo" {
+			if strings.HasSuffix(strings.TrimSuffix(rel, ext), "_test") {
+				return ModuleResult{}, fmt.Errorf("generated test sources are unsupported: %s", name)
+			}
+			dir := filepath.Dir(rel)
+			if packages[dir] == nil {
+				packages[dir] = map[string][]byte{}
+			}
+			packages[dir][path] = data
+		}
+		sourceOutputs[path] = rel
+		if ext != ".hgo" {
+			output := filepath.Join(destination, rel)
+			if err := os.MkdirAll(filepath.Dir(output), 0755); err != nil {
+				return ModuleResult{}, err
+			}
+			if err := os.WriteFile(output, data, 0644); err != nil {
+				return ModuleResult{}, err
+			}
+		}
+	}
+
 	if options.Prepare != nil {
 		if err = options.Prepare(destination); err != nil {
 			return ModuleResult{}, err
@@ -282,6 +371,9 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 	state := map[string]int{}
 	var compileDir func(string) error
 	compileDir = func(dir string) error {
+		if err := options.Context.Err(); err != nil {
+			return err
+		}
 		if state[dir] == 2 {
 			return nil
 		}
@@ -415,9 +507,12 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if dir != "." {
 			pkgPath += "/" + filepath.ToSlash(dir)
 		}
-		packageImporter := typecheck.NewImporterWithBuild(filepath.Join(destination, dir, "package.go"), options.Tags, options.Race)
+		packageImporter := typecheck.NewImporterWithContext(options.Context, filepath.Join(destination, dir, "package.go"), options.Tags, options.Race, options.Environment)
 		p, e := preparePackageContext(pkgPath, packages[dir], metadata, packageImporter, buildBudget)
 		if e != nil {
+			return e
+		}
+		if e := options.Context.Err(); e != nil {
 			return e
 		}
 		checked, e := finishPackage(pkgPath, p, packageImporter)

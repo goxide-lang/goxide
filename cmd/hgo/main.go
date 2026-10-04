@@ -28,7 +28,10 @@ func main() {
 
 func run(args []string, out, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: hgo <transpile|expand|run|build|test> [flags] file.hgo-or-directory")
+		return errors.New("usage: hgo <transpile|expand|run|build|test|scripts> [flags] file.hgo-or-directory")
+	}
+	if args[0] == "scripts" {
+		return runScripts(args[1:], out, stderr)
 	}
 	mode := args[0]
 	if mode != "transpile" && mode != "expand" && mode != "run" && mode != "build" && mode != "test" {

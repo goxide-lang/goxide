@@ -1,6 +1,10 @@
 package typecheck
 
-import "testing"
+import (
+	"context"
+	"testing"
+	"time"
+)
 
 func TestLocalRuntimeAndStandardIdentity(t *testing.T) {
 	imp := NewImporter("input.hgo")
@@ -18,5 +22,18 @@ func TestLocalRuntimeAndStandardIdentity(t *testing.T) {
 	again, err := imp.Import("fmt")
 	if err != nil || again != fmtPackage {
 		t.Fatal("package identity/cache lost")
+	}
+}
+
+func TestImporterHonorsCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	imp := NewImporterWithContext(ctx, "input.hgo", nil, false, nil)
+	if _, err := imp.Import("fmt"); err == nil {
+		t.Fatal("cancelled export query succeeded")
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Fatal("cancelled export query delayed")
 	}
 }

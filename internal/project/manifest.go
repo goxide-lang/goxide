@@ -12,12 +12,15 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/hxsf/goxide/internal/buildconfig"
 )
 
 const ManifestName = "hgo.json"
 
 type Manifest struct {
 	Version      int                   `json:"version"`
+	Build        *buildconfig.Config   `json:"build,omitempty"`
 	Features     map[string][]string   `json:"features,omitempty"`
 	Dependencies map[string]Dependency `json:"dependencies,omitempty"`
 	Lib          *Target               `json:"lib,omitempty"`

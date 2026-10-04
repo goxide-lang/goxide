@@ -33,6 +33,24 @@ func NewImporterWithTags(filename string, tags []string) types.Importer {
 
 // NewImporterWithBuild keeps file selection and export instrumentation aligned.
 func NewImporterWithBuild(filename string, tags []string, race bool) types.Importer {
+	return NewImporterWithEnvironment(filename, tags, race, nil)
+}
+
+// NewImporterWithEnvironment scopes host-tool environment without process-global mutations.
+// Nil preserves the existing ambient target context.
+func NewImporterWithEnvironment(filename string, tags []string, race bool, environment []string) types.Importer {
+	return NewImporterWithContext(context.Background(), filename, tags, race, environment)
+}
+
+// NewImporterWithContext bounds export queries and fingerprint subprocesses by the caller.
+func NewImporterWithContext(parent context.Context, filename string, tags []string, race bool, environment []string) types.Importer {
+	if parent == nil {
+		parent = context.Background()
+	}
+	if environment == nil {
+		environment = os.Environ()
+	}
+	environment = append([]string(nil), environment...)
 	if imp := platformImporter(); imp != nil {
 		return imp
 	}
@@ -48,7 +66,7 @@ func NewImporterWithBuild(filename string, tags []string, race bool) types.Impor
 		if file := exports[path]; file != "" {
 			return os.Open(file)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 		defer cancel()
 		// Export loading is a deterministic type/source query, not binary stamping.
 		args := []string{"list", "-buildvcs=false", "-export", "-deps", "-json", "-tags=" + strings.Join(tags, ",")}
@@ -58,7 +76,8 @@ func NewImporterWithBuild(filename string, tags []string, race bool) types.Impor
 		args = append(args, "--", path)
 		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
 		cmd.Dir = dir
-		for _, v := range os.Environ() {
+		cmd.WaitDelay = time.Second
+		for _, v := range environment {
 			n, _, _ := strings.Cut(v, "=")
 			switch n {
 			case "GOTOOLCHAIN", "GOWORK", "GOFLAGS", "GOPROXY", "GOSUMDB", "GONOPROXY", "GOVCS":
@@ -101,7 +120,7 @@ func NewImporterWithBuild(filename string, tags []string, race bool) types.Impor
 		}
 		return os.Open(file)
 	}
-	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, fingerprints: map[string]string{}, race: race, tags: append([]string(nil), tags...)}
+	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, fingerprints: map[string]string{}, race: race, tags: append([]string(nil), tags...), environment: environment, context: parent}
 }
 
 // PackageFiles exposes the exact source selection associated with offline export
@@ -118,6 +137,8 @@ type sourceImporter struct {
 	build        string
 	race         bool
 	tags         []string
+	environment  []string
+	context      context.Context
 }
 
 func (i *sourceImporter) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {
@@ -153,8 +174,11 @@ func (i *sourceImporter) PackageFingerprint(path string) (string, error) {
 	}
 	p := i.sources[path]
 	if i.build == "" {
-		cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "env", "-json", "GOOS", "GOARCH", "CGO_ENABLED", "GOEXPERIMENT", "GOAMD64", "GO386", "GOARM", "GOARM64", "GOMIPS", "GOMIPS64", "GOPPC64", "GORISCV64", "GOWASM")
-		cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off")
+		ctx, cancel := context.WithTimeout(i.context, 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "env", "-json", "GOOS", "GOARCH", "CGO_ENABLED", "GOEXPERIMENT", "GOAMD64", "GO386", "GOARM", "GOARM64", "GOMIPS", "GOMIPS64", "GOPPC64", "GORISCV64", "GOWASM")
+		cmd.WaitDelay = time.Second
+		cmd.Env = append(append([]string(nil), i.environment...), "GOTOOLCHAIN=local", "GOWORK=off")
 		b, e := cmd.Output()
 		if e != nil {
 			return "", e

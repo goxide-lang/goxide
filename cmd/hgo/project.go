@@ -2,17 +2,20 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/project"
+	"github.com/hxsf/goxide/internal/scripttrust"
 )
 
 type projectFlags struct {
@@ -61,6 +64,24 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	}
 	targetInput := g.Root.Root
 	compilerID := projectCompilerID()
+	plans, err := prepareScriptPlans(g, tool, compilerID, tags, mode == "test")
+	if err != nil {
+		return err
+	}
+	defer plans.close()
+	var policy *scripttrust.Store
+	if len(plans.plans) != 0 {
+		policy, err = scripttrust.Open()
+		if err != nil {
+			return err
+		}
+		defer policy.Close()
+		if err = policy.Authorize(plans.identity, plans.required()); err != nil {
+			return err
+		}
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 	var bundle string
 	if mode == "transpile" {
 		if dest == "" {
@@ -147,13 +168,29 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		} else {
 			features = nil
 		}
-		options := frontend.ModuleOptions{Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage}
+		artifact, e := plans.execute(ctx, n, policy, stderr)
+		if e != nil {
+			return e
+		}
+		if n.Manifest.Build != nil {
+			excluded[filepath.Clean(filepath.Dir(n.Manifest.Build.Entry))] = true
+			configuration = project.Digest([]string{configuration, artifact.Digest})
+		}
+		options := frontend.ModuleOptions{Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files}
 		options.Prepare = func(root string) error { return prepareProjectModule(g, n, root, generated) }
 		result, err = frontend.CompileModuleWithOptions(inputPath, output, options)
 		if err != nil {
 			return err
 		}
 		generated[n.Module] = result.Root
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	if policy != nil {
+		if err = policy.Authorize(plans.identity, plans.required()); err != nil {
+			return err
+		}
 	}
 	if err = validateProjectKind(tool, result, flags.lib || (flags.bin == "" && flags.example == "" && len(g.Root.Manifest.Bins) == 0 && g.Root.Manifest.Lib != nil), tags); err != nil {
 		return err
@@ -196,7 +233,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		return fmt.Errorf("lib build checks the package; -o is reserved for binaries")
 	}
 	argv = append(argv, result.Target)
-	cmd := exec.Command(tool, argv...)
+	cmd := exec.CommandContext(ctx, tool, argv...)
 	cmd.Dir = result.Root
 	cmd.Env = project.GoEnv(true)
 	cmd.Stdout = out

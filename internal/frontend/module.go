@@ -42,8 +42,7 @@ func CompileModuleWithTags(input, destination string, tags []string) (ModuleResu
 
 type ModuleOptions struct {
 	WorkspaceFile string // Explicit planner-owned Go workspace; ambient GOWORK is ignored.
-	ModuleMode    string // -mod=readonly or -mod=vendor for the owned workspace.
-	VendorMode    bool   // Preserve native vendor replace spelling in generated policy.
+	ModuleMode    string // -mod=readonly for the owned workspace.
 	// SourceModuleRoot/File are a trusted project-planner virtual Go module, never source directives.
 	SourceModuleRoot string
 	SourceModuleFile []byte
@@ -156,7 +155,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if len(fields) >= 2 && fields[0] == "module" {
 			modulePath = strings.Trim(fields[1], "\"")
 		}
-		if at := strings.Index(line, "=>"); at >= 0 && !options.VendorMode {
+		if at := strings.Index(line, "=>"); at >= 0 {
 			tail := strings.TrimSpace(line[at+2:])
 			tokenText := strings.Fields(tail)
 			if len(tokenText) > 0 {

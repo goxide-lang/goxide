@@ -68,7 +68,6 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 	}
 	var vendor *project.VendorSnapshot
 	if _, err := os.Lstat(filepath.Join(root, "vendor")); err == nil {
-		m.Vendor = &project.VendorConfig{Mode: "go-mod"}
 		vendor, e = project.InspectVendor(root, m)
 		if e != nil {
 			return e
@@ -89,6 +88,14 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 			r.Path = filepath.Join(root, r.Path)
 		}
 	}
+	var supplied *project.SuppliedModules
+	if vendor != nil {
+		supplied, e = project.MaterializeSupplied(req.GoTool, root, "", m.GoVersion, vendor, map[string]string{m.Module: root})
+		if e != nil {
+			return e
+		}
+		project.BindSupplied(&m, supplied, ".")
+	}
 	data, e := project.Marshal(m)
 	if e != nil {
 		return e
@@ -99,6 +106,9 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 	if req.Plan {
 		fmt.Fprintln(out, "# Plan: preserve original files; copy regular source into a new directory; create goxide.toml/goxide.lock; generate Go metadata only under target.")
 		if vendor != nil {
+			for _, line := range project.SuppliedSourceChoices(supplied, req.Offline) {
+				fmt.Fprintln(out, line)
+			}
 			fmt.Fprintln(out, "# Vendor bytes and licenses copied unchanged; upstream content difference: unknown (no fetch); hashes describe supplied content, not proxy checksums.")
 			for _, line := range project.VendorInventory(vendor) {
 				fmt.Fprintln(out, line)
@@ -148,7 +158,7 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 		}
 		if d.IsDir() {
 			if rel == "vendor" || strings.HasPrefix(rel, "vendor"+string(filepath.Separator)) {
-				return os.Mkdir(filepath.Join(stage, rel), 0755)
+				return filepath.SkipDir
 			}
 			owned, err := project.ManagedSourceDirectory(path, root, m.Module)
 			if err != nil {
@@ -193,15 +203,11 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 		return e
 	}
 	if vendor != nil {
-		candidate, err := project.InspectVendor(stage, m)
-		if err != nil {
-			return err
-		}
-		if candidate.Digest != vendor.Digest {
-			return fmt.Errorf("vendor snapshot changed during migration")
+		if _, e = project.MaterializeSupplied(req.GoTool, root, stage, m.GoVersion, vendor, map[string]string{m.Module: root}); e != nil {
+			return e
 		}
 	}
-	lock := project.Lock{Vendor: vendor, Version: 2, PlanningSums: string(sums), Provenance: project.Digest([]any{original, sums})}
+	lock := project.Lock{Version: 2, PlanningSums: string(sums), Provenance: project.Digest([]any{original, sums, vendor})}
 	b, e := json.MarshalIndent(lock, "", "  ")
 	if e != nil {
 		return e

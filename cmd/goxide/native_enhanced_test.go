@@ -72,7 +72,7 @@ func TestNativeWorkspaceProgressiveVendor(t *testing.T) {
 	if e != nil || !strings.Contains(out, "modified enhanced") {
 		t.Fatalf("%s %v", out, e)
 	}
-	b, e := os.ReadFile(filepath.Join(dest, "vendor/example.org/dep/dep.go"))
+	b, e := os.ReadFile(filepath.Join(dest, "local-modules", project.Digest("example.org/dep")[:24], "dep.go"))
 	if e != nil || !strings.Contains(string(b), "modified") {
 		t.Fatal("vendor modified by lowering", e)
 	}

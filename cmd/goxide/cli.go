@@ -112,7 +112,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 	f.BoolVar(&req.Plan, "plan", false, "show migration plan (default without --out)")
 	f.StringVar(&req.Out, "out", "", "new migrated project directory (never overwritten)")
 	f.StringVar(&req.GoTool, "go", "go", "Go compiler executable")
-	f.BoolVar(&req.Offline, "offline", false, "validate with cached modules only")
+	f.BoolVar(&req.Offline, "offline", false, "disable remote probing/downloads; use local files and cached modules only")
 	f.StringVar(&req.Lib, "lib", "", "explicit library directory/file")
 	f.StringArrayVar(&req.Bins, "bin", nil, "explicit name=path binary; repeatable, commas preserved")
 	imp.RunE = func(c *cobra.Command, args []string) error {

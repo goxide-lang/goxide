@@ -70,7 +70,7 @@ func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested ma
 	}
 	graphs := map[string]*Graph{}
 	for _, module := range roots {
-		g := &Graph{Root: nodes[module], Tool: tool, Lock: lock, LockPath: filepath.Join(w.Root, "goxide.lock"), ownerRoot: w.Root, ownerModule: WorkspaceOwner, Plan: lock.NativeWorkspace.Modules, PlanID: Digest([]any{lock.NativeWorkspace.Input, lock.NativeWorkspace.Modules, lock.NativeWorkspace.Vendor}), workspace: w}
+		g := &Graph{Root: nodes[module], Tool: tool, Lock: lock, LockPath: filepath.Join(w.Root, "goxide.lock"), ownerRoot: w.Root, ownerModule: WorkspaceOwner, Plan: lock.NativeWorkspace.Modules, PlanID: Digest([]any{lock.NativeWorkspace.Input, lock.NativeWorkspace.Modules}), workspace: w}
 		seen := map[string]bool{}
 		var visit func(*Node)
 		visit = func(n *Node) {
@@ -141,16 +141,6 @@ func LoadNativeGraph(w *Workspace, root, tool string, requested []string, defaul
 		return nil, fmt.Errorf("--locked: native workspace inputs changed")
 	}
 	lock.NativeWorkspace.Input = input
-	if w.Config.Vendor != nil {
-		snapshot, e := InspectWorkspaceVendor(w)
-		if e != nil {
-			return nil, e
-		}
-		if locked && (lock.NativeWorkspace.Vendor == nil || snapshot.Digest != lock.NativeWorkspace.Vendor.Digest) {
-			return nil, fmt.Errorf("--locked: workspace vendor changed")
-		}
-		lock.NativeWorkspace.Vendor = snapshot
-	}
 	layout, e := OpenLayout(w.Root, WorkspaceOwner, targetDir)
 	if e != nil {
 		return nil, e

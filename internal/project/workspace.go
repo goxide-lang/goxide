@@ -63,8 +63,8 @@ func workspaceHeader(root string) (*WorkspaceConfig, error) {
 	if e = toml.NewDecoder(bytes.NewReader(b)).DisallowUnknownFields().Decode(&c); e != nil {
 		return nil, fmt.Errorf("workspace: %w", e)
 	}
-	if c.Vendor != nil && (c.Vendor.Mode != "go-work" || c.Go == nil) {
-		return nil, fmt.Errorf("workspace vendor requires native go-work mode")
+	if c.Vendor != nil {
+		return nil, fmt.Errorf("obsolete workspace vendor configuration: explicitly re-import original Go input as local modules")
 	}
 	if c.Format != 1 {
 		return nil, fmt.Errorf("unsupported workspace.format %d", c.Format)

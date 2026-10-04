@@ -25,11 +25,8 @@ type nativePackage struct {
 	DepsErrors []struct{ Err string }
 }
 
-func nativePackages(tool, view string, patterns []string, vendor, offline, race bool) ([]nativePackage, error) {
+func nativePackages(tool, view string, patterns []string, offline, race bool) ([]nativePackage, error) {
 	mode := "-mod=readonly"
-	if vendor {
-		mode = "-mod=vendor"
-	}
 	args := []string{"list", "-buildvcs=false", mode, "-deps", "-test", "-json"}
 	if race {
 		args = append(args, "-race")
@@ -206,9 +203,6 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 	}
 	defer os.RemoveAll(stage)
 	c := project.WorkspaceConfig{Format: 1, Go: policy}
-	if vendor {
-		c.Vendor = &project.VendorConfig{Mode: "go-work"}
-	}
 	seed := &project.NativeWorkspaceLock{Sums: map[string]string{}}
 	readOptional := func(path string) (string, error) {
 		b, e := os.ReadFile(path)
@@ -224,6 +218,20 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 	destMembers := map[string]string{}
 	for i, module := range project.Keys(manifests) {
 		destMembers[module] = fmt.Sprintf("members/m%d", i)
+	}
+	var supplied *project.SuppliedModules
+	if vendor {
+		snapshot, err := project.InspectWorkVendor(root, policy.Version, work)
+		if err != nil {
+			return err
+		}
+		if _, err = project.NativeGo(req.GoTool, root, true, "list", "-mod=vendor", "-m", "-json"); err != nil {
+			return fmt.Errorf("original vendor policy: %w", err)
+		}
+		supplied, e = project.MaterializeSupplied(req.GoTool, root, stage, policy.Version, snapshot, source)
+		if e != nil {
+			return e
+		}
 	}
 	for _, module := range project.Keys(manifests) {
 		rel := destMembers[module]
@@ -242,30 +250,26 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 			if !filepath.IsAbs(absolute) {
 				absolute = filepath.Join(dir, absolute)
 			}
-			if vendor && !filepath.IsAbs(r.Path) {
-				coordinate, err := filepath.Rel(root, absolute)
-				if err != nil {
-					return err
-				}
-				r.Path, err = filepath.Rel(rel, coordinate)
-				if err != nil {
-					return err
+			if supplied != nil && supplied.Paths[r.Module] != "" {
+				continue
+			}
+			r.Path = absolute
+			if source[r.Module] == filepath.Clean(absolute) {
+				r.Path, e = filepath.Rel(rel, destMembers[r.Module])
+				if e != nil {
+					return e
 				}
 				if !strings.HasPrefix(r.Path, ".") {
 					r.Path = "./" + r.Path
 				}
-			} else if !vendor {
-				r.Path = absolute
-				if source[r.Module] == filepath.Clean(absolute) {
-					r.Path, e = filepath.Rel(rel, destMembers[r.Module])
-					if e != nil {
-						return e
-					}
-					if !strings.HasPrefix(r.Path, ".") {
-						r.Path = "./" + r.Path
-					}
-				}
 			}
+		}
+		if supplied != nil {
+			relative, e := filepath.Rel(rel, ".")
+			if e != nil {
+				return e
+			}
+			project.BindSupplied(&m, supplied, relative)
 		}
 		manifests[module] = m
 		seed.Sums[module], e = readOptional(filepath.Join(dir, "go.sum"))
@@ -273,9 +277,12 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 			return e
 		}
 	}
-	if !vendor {
+	{
 		for i := range c.Go.Replace {
 			r := &c.Go.Replace[i]
+			if supplied != nil && supplied.Paths[r.Module] != "" {
+				continue
+			}
 			if r.Path != "" && !filepath.IsAbs(r.Path) {
 				r.Path = filepath.Join(root, r.Path)
 			}
@@ -284,25 +291,18 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 			}
 		}
 	}
+	if supplied != nil {
+		m := project.Manifest{Native: project.GoConfig{Replace: c.Go.Replace}}
+		project.BindSupplied(&m, supplied, ".")
+		c.Go.Replace = m.Native.Replace
+	}
 	edges := map[string]map[string]bool{}
 	if e = writeWorkspaceCandidate(stage, c, manifests, edges); e != nil {
 		return e
 	}
-	// Vendor is copied verbatim by a dedicated file walker; it is not regenerated.
-	if vendor {
-		if e = copyImportVendor(filepath.Join(root, "vendor"), filepath.Join(stage, "vendor")); e != nil {
-			return e
-		}
-	}
 	w, e := project.DiscoverWorkspace(stage)
 	if e != nil {
 		return e
-	}
-	if vendor {
-		seed.Vendor, e = project.InspectWorkspaceVendor(w)
-		if e != nil {
-			return e
-		}
 	}
 	view, e := os.MkdirTemp("", "goxide-native-analysis-")
 	if e != nil {
@@ -321,19 +321,21 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 	for _, rel := range c.Members {
 		patterns = append(patterns, "./"+filepath.ToSlash(rel)+"/...")
 	}
-	packages, e := nativePackages(req.GoTool, view, patterns, vendor, req.Offline, false)
+	packages, e := nativePackages(req.GoTool, view, patterns, req.Offline, false)
 	if e != nil {
 		return e
 	}
 	if config["CGO_ENABLED"] == "1" {
-		racePackages, err := nativePackages(req.GoTool, view, patterns, vendor, req.Offline, true)
+		racePackages, err := nativePackages(req.GoTool, view, patterns, req.Offline, true)
 		if err != nil {
 			return err
 		}
 		packages = append(packages, racePackages...)
 	}
 	owners := map[string]map[string]bool{}
+	packageImports := map[string][]string{}
 	for _, p := range packages {
+		packageImports[p.ImportPath] = append(packageImports[p.ImportPath], p.Imports...)
 		if p.Module != nil {
 			if owners[p.ImportPath] == nil {
 				owners[p.ImportPath] = map[string]bool{}
@@ -364,11 +366,25 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 			edges[module] = map[string]bool{}
 		}
 		imports := append(append(append([]string{}, p.Imports...), p.TestImports...), p.XTestImports...)
-		for _, imp := range imports {
+		seenImports := map[string]bool{}
+		for len(imports) > 0 {
+			imp := imports[0]
+			imports = imports[1:]
+			if seenImports[imp] {
+				continue
+			}
+			seenImports[imp] = true
+			native := true
 			for child := range owners[imp] {
-				if child != module && all[child] {
-					edges[module][child] = true
+				if all[child] {
+					native = false
+					if child != module {
+						edges[module][child] = true
+					}
 				}
+			}
+			if native {
+				imports = append(imports, packageImports[imp]...)
 			}
 		}
 		m := manifests[module]
@@ -434,12 +450,6 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 	if e != nil {
 		return e
 	}
-	if vendor {
-		seed.Vendor, e = project.InspectWorkspaceVendor(w)
-		if e != nil {
-			return e
-		}
-	}
 	if e = project.CaptureNativeSums(w, view, seed); e != nil {
 		return e
 	}
@@ -451,9 +461,12 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 				fmt.Fprintf(out, "# explicit dependency %s -> %s (workspace=true)\n", module, child)
 			}
 		}
-		if seed.Vendor != nil {
-			fmt.Fprintln(out, "# workspace vendor: preserve supplied bytes/modes/licenses; upstream differences unknown; content hashes are not proxy h1")
-			for _, line := range project.VendorInventory(seed.Vendor) {
+		if supplied != nil {
+			for _, line := range project.SuppliedSourceChoices(supplied, req.Offline) {
+				fmt.Fprintln(out, line)
+			}
+			fmt.Fprintln(out, "# supplied vendor input -> ordinary local modules: preserve bytes/modes/licenses; upstream differences unknown; content hashes are not proxy h1")
+			for _, line := range project.VendorInventory(supplied.Snapshot) {
 				fmt.Fprintln(out, line)
 			}
 		}
@@ -495,37 +508,4 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 	}
 	_, e = fmt.Fprintf(out, "migrated workspace: %s\noriginal workspace retained: %s\n", final, root)
 	return e
-}
-func copyImportVendor(src, dst string) error {
-	if e := project.NoSymlinks(src); e != nil {
-		return e
-	}
-	return filepath.WalkDir(src, func(path string, d os.DirEntry, e error) error {
-		if e != nil {
-			return e
-		}
-		rel, _ := filepath.Rel(src, path)
-		to := filepath.Join(dst, rel)
-		if d.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("vendor symlink forbidden: %s", rel)
-		}
-		if d.IsDir() {
-			return os.MkdirAll(to, 0755)
-		}
-		info, e := d.Info()
-		if e != nil {
-			return e
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("vendor special file: %s", rel)
-		}
-		b, e := os.ReadFile(path)
-		if e != nil {
-			return e
-		}
-		if e = os.WriteFile(to, b, info.Mode().Perm()); e != nil {
-			return e
-		}
-		return os.Chmod(to, info.Mode().Perm())
-	})
 }

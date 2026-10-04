@@ -54,19 +54,20 @@ def vendor(ROOT, GO, run):
             assert str(base) not in out
             return out
         plan=call('import-go','--go',GO,'--bin','app=.',str(old))
-        assert '[vendor]' in plan and 'go-mod' in plan
+        assert 'local-modules/' in plan and '[vendor]' not in plan
         imported=call('import-go','--go',GO,'--out',str(new),'--bin','app=.','--offline',str(old))
         stdout=call('run','--go',GO,'--bin','app','--offline','--locked',str(new))
         assert stdout=='vendored bytes\n'
         files=[dict(path='old-project/'+n,source=b.decode()) for n,b in sorted(before.items())]
         files += [dict(path='new-project/'+n,source=(new/n).read_text()) for n in ['goxide.toml','goxide.lock']]
         locked=json.loads((new/'goxide.lock').read_text())
-        assert 'vendor' in locked
+        assert 'vendor' not in locked
+        audit=json.loads((new/'goxide-import.json').read_text())
         assert {str(p.relative_to(old)):p.read_bytes() for p in old.rglob('*') if p.is_file()}==before
-        path=new/'vendor/example.org/catalogdep/dep.go';path.write_text(path.read_text().replace('vendored bytes','changed bytes'))
-        rejected=call('run','--go',GO,'--bin','app','--offline','--locked',str(new),fail=True)
-        assert 'lock' in rejected.lower() or '锁' in rejected
-        return dict(id='vendor',title='原生 vendor：冷缓存离线与字节变更拒绝',note='在空 module cache、GOPROXY=off、GOSUMDB=off 下实测；原 replace 目录已移除，Go 构建缓存可用。本机绝对路径仅替换为示例目录名。修改的 vendor 与上游是否相同：未检查，不联网比较。',files=files,runs=[dict(command='goxide import-go --bin app=. old-project',stdout=plan),dict(command='goxide import-go --out new-project --bin app=. --offline old-project',stdout=imported),dict(command='goxide run --bin app --offline --locked new-project',stdout=stdout),dict(command='修改 vendor/dep.go 后重复 locked 运行（预期失败）',stdout=rejected)],verification=dict(coldModuleCache=True,proxyOff=True,originalFilesUnchanged=True,vendorMutationRejected=True))
+        path=new/audit['local_modules']['example.org/catalogdep']/'dep.go';path.write_text(path.read_text().replace('vendored bytes','changed bytes'))
+        rejected=call('run','--go',GO,'--bin','app','--offline','--locked',str(new))
+        assert rejected=='changed bytes\n'
+        return dict(id='vendor',title='供应源码：本地模块冷离线与正常编辑',note='在空 module cache、GOPROXY=off、GOSUMDB=off 下实测；原 replace 目录已移除，Go 构建缓存可用。本机绝对路径仅替换为示例目录名。修改的 vendor 与上游是否相同：未检查，不联网比较。',files=files,runs=[dict(command='goxide import-go --bin app=. old-project',stdout=plan),dict(command='goxide import-go --out new-project --bin app=. --offline old-project',stdout=imported),dict(command='goxide run --bin app --offline --locked new-project',stdout=stdout),dict(command='修改本地模块 dep.go 后重复 locked 运行',stdout=rejected)],verification=dict(coldModuleCache=True,proxyOff=True,originalFilesUnchanged=True,localMutationRebuilt=True))
 
 def cli(ROOT, GO, run):
     import os, subprocess

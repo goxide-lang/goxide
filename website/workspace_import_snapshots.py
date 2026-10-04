@@ -50,7 +50,11 @@ def build(ROOT, GO):
     write(lib/'lib.gox','package lib\nimport "example.org/dep"\nmacro_rules! suffix { () => { " enhanced" }; }\nfunc Value()string{return dep.Value()+suffix!()}\n')
     out=call(['run','--package','example.org/app','--locked','--offline',str(new)]);assert out=='modified vendor enhanced\n'
     runs.append(dict(command='替换 lib.go 为 lib.gox 后：goxide run --package example.org/app --locked --offline migrated',stdout=out))
-    assert {str(p.relative_to(new/'vendor')):(p.read_bytes(),p.stat().st_mode&0o777) for p in (new/'vendor').rglob('*') if p.is_file()}=={n[len('vendor/'):]:v for n,v in before.items() if n.startswith('vendor/')}
+    audit=json.loads((new/'goxide-import.json').read_text())
+    for name,outputs in audit['files'].items():
+     for output in outputs:
+      p=new/output
+      assert (p.read_bytes(),p.stat().st_mode&0o777)==before['vendor/'+name]
    else:
     write(lib/'lib.gox','package lib\nfunc Value()string{if cfg!(feature("fancy")){return "enhanced workspace"};return "plain workspace"}\n')
     with (lib/'goxide.toml').open('a') as f:f.write('\n[features]\nfancy=[]\n')
@@ -75,5 +79,5 @@ def build(ROOT, GO):
    out=call(['test','--package','example.org/app','--locked','--offline',str(new)]);runs.append(dict(command='goxide test --package example.org/app --locked --offline migrated',stdout=out))
    files += [dict(path='增强后 members/m1/lib.gox',source=(lib/'lib.gox').read_text()),dict(path='增强后 members/m0/goxide.toml',source=(app/'goxide.toml').read_text()),dict(path='增强后 members/m1/goxide.toml',source=(lib/'goxide.toml').read_text())]
    assert original()==before
-   shots.append(dict(id='workspace-import-vendor' if vendored else 'workspace-import',title='Workspace vendor：修改字节保留与增强宏' if vendored else 'go.work 迁入：渐进 feature 与非vendor拆出',note='真实本地 CLI，原文件字节/权限不变，只发布新目录；输出中的临时根路径前缀已移除。'+('go work vendor 仅用于制造输入fixture；迁入不重建vendor。删除原replace目录并使用空module cache、proxy/sumdb关闭，Go构建缓存可用。workspace vendor独立拆出未支持，须另行确认转换协议。' if vendored else '先在原workspace普通构建更新修改清单的锁；再进行locked feature切换。拆出显式物化继承/path并复制schema4根锁，锁原字节不改。示例不覆盖全部平台和Go政策组合。'),files=files,runs=runs,verification=dict(originalFilesAndModesUnchanged=True,schema=4,coldModuleCache=vendored,copiedRootLock=not vendored)))
+   shots.append(dict(id='workspace-import-vendor' if vendored else 'workspace-import',title='供应源码本地模块：修改字节保留与增强宏' if vendored else 'go.work 迁入：渐进 feature 与成员拆出',note='真实本地 CLI，原文件字节/权限不变，只发布新目录；输出中的临时根路径前缀已移除。'+('go work vendor 仅用于制造输入fixture；迁入不重建vendor。删除原replace目录并使用空module cache、proxy/sumdb关闭，Go构建缓存可用。供应源码已物化普通本地模块；独立运行只需显式本地路径和复制根锁，无vendor转换。' if vendored else '先在原workspace普通构建更新修改清单的锁；再进行locked feature切换。拆出显式物化继承/path并复制schema4根锁，锁原字节不改。示例不覆盖全部平台和Go政策组合。'),files=files,runs=runs,verification=dict(originalFilesAndModesUnchanged=True,schema=4,coldModuleCache=vendored,copiedRootLock=not vendored)))
  return shots

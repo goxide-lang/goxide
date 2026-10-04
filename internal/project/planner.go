@@ -280,7 +280,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 			n := r.nodes[module]
 			req := unionRequest(reqs[module], g.featureOverrides[module])
 			if n != r.root && n.Manifest.Vendor != nil {
-				deferred[module] = fmt.Errorf("vendor mode is supported only for a root project; cannot mix vendor author dependency %s", n.Module)
+				deferred[module] = fmt.Errorf("obsolete vendor configuration in %s: explicitly re-import original Go input as local modules", n.Module)
 			}
 			if g.allFeatures {
 				req.Features = keys(n.Manifest.Features)
@@ -554,6 +554,13 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			pin, ok := g.forced[module]
 			if !ok {
 				return nil, fmt.Errorf("unified lock missing reachable module %s", module)
+			}
+			if g.nativeStandalone {
+				var err error
+				pin, err = g.bindNativeLocal(module, pin, replacements)
+				if err != nil {
+					return nil, err
+				}
 			}
 			var mod ModFile
 			if node := r.nodes[module]; node != nil {
@@ -988,12 +995,6 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 	if err != nil {
 		return nil, err
 	}
-	if initial.Manifest.Vendor != nil {
-		return g.planVendor(initial, requested, defaults)
-	}
-	if g.Lock.Vendor != nil {
-		return nil, fmt.Errorf("vendor lock requires explicit vendor mode; cannot silently switch source policy")
-	}
 	g.RootMod = initial.Mod
 	if g.workspace != nil && g.Lock.Unified != nil && !g.unifiedPlanning {
 		g.RootMod.Replace = g.Lock.Unified.Policy.Replace
@@ -1036,7 +1037,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			}
 			g.Root = r.root
 			g.Plan = next
-			g.PlanID = Digest([]any{ManifestProtocol, next})
+			g.PlanID = Digest([]any{ManifestProtocol, portableSelections(root, next)})
 			state := map[string]int{}
 			var visit func(*Node) error
 			visit = func(n *Node) error {
@@ -1108,10 +1109,10 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			if g.Lock.Plans == nil {
 				g.Lock.Plans = map[string]map[string]Selection{}
 			}
-			if old, ok := g.Lock.Plans[key]; g.Locked && (!ok || Digest(old) != Digest(next)) {
+			if old, ok := g.Lock.Plans[key]; g.Locked && (!ok || Digest(old) != Digest(portableSelections(root, next))) {
 				return nil, fmt.Errorf("--locked: stable module plan missing or changed")
 			}
-			g.Lock.Plans[key] = next
+			g.Lock.Plans[key] = portableSelections(root, next)
 			return g, nil
 		}
 		if states[state] {

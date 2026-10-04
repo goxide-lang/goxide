@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"github.com/hxsf/goxide/internal/project"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -92,23 +94,30 @@ func TestNativeWorkspaceVendorColdOffline(t *testing.T) {
 	if e != nil || !strings.Contains(out, "modified") {
 		t.Fatalf("%s %v", out, e)
 	}
-	b, e := os.ReadFile(filepath.Join(dest, "vendor", "modules.txt"))
-	if e != nil || !strings.HasPrefix(string(b), "## workspace") {
-		t.Fatalf("%s %v", b, e)
+	local := "local-modules/" + project.Digest("example.org/dep")[:24]
+	license := filepath.Join(dest, local, "LICENSE")
+	b, e := os.ReadFile(license)
+	if e != nil || string(b) != "fixture license\n" {
+		t.Fatal("license", e)
 	}
-	license := filepath.Join(dest, "vendor/example.org/dep/LICENSE")
-	licenseBytes, err := os.ReadFile(license)
-	if err != nil || string(licenseBytes) != "fixture license\n" {
-		t.Fatalf("license bytes %s %v", licenseBytes, err)
+	info, e := os.Stat(license)
+	if e != nil || info.Mode().Perm() != 0600 {
+		t.Fatal("license mode", e)
 	}
-	licenseInfo, err := os.Stat(license)
-	if err != nil || licenseInfo.Mode().Perm() != 0600 {
-		t.Fatalf("license permissions %v %v", licenseInfo, err)
+	workspaceWrite(t, dest, local+"/dep.go", "package dep\nfunc Value()string{return \"changed\"}\n")
+	if out, e = projectRun(t, dest, "run", "-p", "example.org/app", "--offline", "--locked"); e != nil || !strings.Contains(out, "changed") {
+		t.Fatalf("local edit: %s %v", out, e)
 	}
-	workspaceWrite(t, dest, "vendor/example.org/dep/dep.go", "package dep\nfunc Value()string{return \"changed\"}\n")
-	if _, e = projectRun(t, dest, "run", "-p", "example.org/app", "--offline", "--locked"); e == nil || !strings.Contains(e.Error(), "vendor") {
+	moved := dest + "-moved"
+	if e = os.Rename(dest, moved); e != nil {
 		t.Fatal(e)
 	}
+	os.RemoveAll(root)
+	os.RemoveAll(filepath.Join(moved, "target"))
+	if out, e = projectRun(t, moved, "run", "-p", "example.org/app", "--offline", "--locked"); e != nil || !strings.Contains(out, "changed") {
+		t.Fatalf("moved: %s %v", out, e)
+	}
+
 }
 
 func TestNativeWorkspaceReplaceScopeAndGraphGuard(t *testing.T) {
@@ -199,5 +208,43 @@ func TestNativeWorkspaceVendorMissingPackagePreservesSource(t *testing.T) {
 	}
 	if _, err := os.Stat(dest); !os.IsNotExist(err) {
 		t.Fatal("failed migration published destination")
+	}
+}
+
+func TestSuppliedWorkspaceSelectedVersionsAndEmptyModule(t *testing.T) {
+	root := nativeWorkspaceFixture(t)
+	workspaceWrite(t, root, "d/go.mod", "module example.org/d\ngo 1.27\n")
+	workspaceWrite(t, root, "d/d.go", "package d\nconst Value=\"selected\"\n")
+	workspaceWrite(t, root, "empty/go.mod", "module example.org/empty\ngo 1.27\n")
+	workspaceWrite(t, root, "go.work", "go 1.27\nuse (\n./app\n./lib\n)\nreplace example.org/d => ./d\nreplace example.org/empty => ./empty\n")
+	workspaceWrite(t, root, "app/go.mod", "module example.org/app\ngo 1.27\nrequire (\nexample.org/d v1.0.0\nexample.org/empty v1.0.0\n)\n")
+	workspaceWrite(t, root, "app/main.go", "package main\nimport(\"fmt\";\"example.org/d\")\nfunc main(){fmt.Println(d.Value)}\n")
+	workspaceWrite(t, root, "lib/go.mod", "module example.org/lib\ngo 1.27\nrequire example.org/d v1.1.0\n")
+	workspaceWrite(t, root, "lib/lib.go", "package lib\nimport \"example.org/d\"\nfunc Value()string{return d.Value}\n")
+	nativeFixtureCommand(t, root, "work", "vendor")
+	os.RemoveAll(filepath.Join(root, "d"))
+	os.RemoveAll(filepath.Join(root, "empty"))
+	dest := filepath.Join(t.TempDir(), "imported")
+	if b, e := importCall(t, root, "--workspace", "--out", dest, "--offline"); e != nil {
+		t.Fatalf("%s %v", b, e)
+	}
+	if b, e := projectRun(t, dest, "run", "-p", "example.org/app", "--offline", "--locked"); e != nil || strings.TrimSpace(b) != "selected" {
+		t.Fatalf("%s %v", b, e)
+	}
+	data, e := os.ReadFile(filepath.Join(dest, "goxide.lock"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	var lock project.Lock
+	if e = json.Unmarshal(data, &lock); e != nil {
+		t.Fatal(e)
+	}
+	if lock.NativeWorkspace.Modules["example.org/d"].Version != "v1.1.0" {
+		t.Fatal("lost Go selection", string(data))
+	}
+	empty := filepath.Join(dest, "local-modules", project.Digest("example.org/empty")[:24])
+	entries, e := os.ReadDir(empty)
+	if e != nil || len(entries) != 1 || entries[0].Name() != "go.mod" {
+		t.Fatalf("fabricated empty package: %v %v", entries, e)
 	}
 }

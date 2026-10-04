@@ -32,6 +32,29 @@ type Lock struct {
 	Sums            map[string]string               `json:"sums"`
 	Plans           map[string]map[string]Selection `json:"plans,omitempty"`
 }
+
+// UnmarshalJSON prevents pre-1.0 vendor artifacts from silently changing source policy.
+func (l *Lock) UnmarshalJSON(data []byte) error {
+	type plain Lock
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if _, ok := fields["vendor"]; ok {
+		return fmt.Errorf("obsolete vendor lock: explicitly re-import original Go input as local modules")
+	}
+	if raw := fields["native_workspace"]; len(raw) > 0 {
+		var native map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &native); err != nil {
+			return err
+		}
+		if _, ok := native["vendor"]; ok {
+			return fmt.Errorf("obsolete workspace vendor lock: explicitly re-import original Go input as local modules")
+		}
+	}
+	return json.Unmarshal(data, (*plain)(l))
+}
+
 type Node struct {
 	Mod             ModFile
 	ModBytes        []byte

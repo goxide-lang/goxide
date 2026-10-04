@@ -44,14 +44,26 @@ func nativeMemberInput(m Manifest, root string, locations map[string]string) str
 		if r.Path != "" && direct[r.Module] != "" && direct[r.Module] == filepath.Clean(path) {
 			continue
 		}
+		if r.Path != "" && locations[r.Module] == filepath.Clean(path) {
+			r.Path = "local:" + r.Module
+		}
 		normalized.Native.Replace = append(normalized.Native.Replace, r)
 	}
 	return Digest(normalized)
 }
 func CaptureNativeMembers(w *Workspace, lock *NativeWorkspaceLock) {
 	lock.Members = map[string]NativeMemberRecord{}
+	locations := map[string]string{}
 	for module, root := range w.Members {
-		lock.Members[module] = NativeMemberRecord{Input: nativeMemberInput(w.Manifests[root], root, w.Members)}
+		locations[module] = root
+	}
+	for module, pin := range lock.Modules {
+		if pin.Replace != nil && pin.Replace.Version == "" && contained(w.Root, pin.Replace.Path) {
+			locations[module] = pin.Replace.Path
+		}
+	}
+	for module, root := range w.Members {
+		lock.Members[module] = NativeMemberRecord{Input: nativeMemberInput(w.Manifests[root], root, locations)}
 	}
 }
 func (g *Graph) input(n *Node) string {
@@ -69,6 +81,29 @@ func (g *Graph) input(n *Node) string {
 		}
 		locations[d.Module] = filepath.Clean(path)
 	}
+	for module := range g.Lock.NativeWorkspace.LocalSources {
+		pin := g.Lock.NativeWorkspace.Modules[module]
+		var fallback, exact string
+		for _, r := range n.Manifest.Native.Replace {
+			if r.Module == module && r.Path != "" {
+				if r.Version == "" {
+					fallback = r.Path
+				} else if r.Version == pin.Version {
+					exact = r.Path
+				}
+			}
+		}
+		p := exact
+		if p == "" {
+			p = fallback
+		}
+		if p != "" {
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(n.Root, p)
+			}
+			locations[module] = p
+		}
+	}
 	return nativeMemberInput(n.Manifest, n.Root, locations)
 }
 func (g *Graph) prepareNativeStandalone() error {
@@ -77,7 +112,7 @@ func (g *Graph) prepareNativeStandalone() error {
 		return fmt.Errorf("copied native lock lacks member records; refresh it in the original workspace")
 	}
 	if n.Vendor != nil {
-		return fmt.Errorf("copied workspace vendor requires explicit standalone vendor conversion; cannot discard workspace policy or vendor bytes")
+		return fmt.Errorf("obsolete vendor lock: explicitly re-import original Go input as local modules")
 	}
 	g.nativeStandalone = true
 	g.Lock.Unified = &UnifiedLock{Inputs: map[string]string{}, Sources: map[string]string{}, Modules: map[string]Selection{}, GitPins: map[string]string{}}

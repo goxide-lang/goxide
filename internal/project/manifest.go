@@ -132,8 +132,8 @@ func Parse(filename string, b []byte) (Manifest, error) {
 }
 
 func validate(m Manifest) error {
-	if m.Vendor != nil && m.Vendor.Mode != "go-mod" {
-		return fmt.Errorf("unsupported vendor.mode %q", m.Vendor.Mode)
+	if m.Vendor != nil {
+		return fmt.Errorf("obsolete vendor configuration: explicitly re-import the original Go input as local modules")
 	}
 	if m.Version != 2 {
 		return fmt.Errorf("unsupported goxide.toml package.format %d; migrate to format 2 with explicit package.module/go", m.Version)

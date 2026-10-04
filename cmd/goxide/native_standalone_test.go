@@ -3,9 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -136,7 +134,7 @@ func TestNativeWorkspaceCopiedLockMaterializedMembers(t *testing.T) {
 	}
 }
 
-func TestNativeWorkspaceVendorStandaloneNeedsConversion(t *testing.T) {
+func TestNativeWorkspaceSuppliedLocalStandalone(t *testing.T) {
 	root := nativeWorkspaceFixture(t)
 	for _, name := range []string{"d", "e"} {
 		workspaceWrite(t, root, name+"/go.mod", "module example.org/"+name+"\ngo 1.27\n")
@@ -164,21 +162,29 @@ func TestNativeWorkspaceVendorStandaloneNeedsConversion(t *testing.T) {
 		t.Fatal(e)
 	}
 	workspaceWrite(t, split, "goxide.lock", string(locked))
-	if out, e := projectRun(t, split, "build", "--locked", "--offline"); e == nil || !strings.Contains(e.Error(), "explicit standalone vendor conversion") {
-		t.Fatalf("silent vendor conversion: %s %v", out, e)
-	}
-	// Independent native Go witness: full workspace vendor is not valid under
-	// A's standalone policy, because B alone required E.
-	if e = copyImportVendor(filepath.Join(root, "vendor"), filepath.Join(root, "app/vendor")); e != nil {
+	// Materialize local paths, copy the ordinary local module trees, retain root lock.
+	m, e := project.Read(split)
+	if e != nil {
 		t.Fatal(e)
 	}
-	c := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "list", "-mod=vendor", "./...")
-	c.Dir = filepath.Join(root, "app")
-	c.Env = project.GoEnv(true)
-	output, e := c.CombinedOutput()
-	if e == nil || !strings.Contains(string(output), "explicit") || !strings.Contains(string(output), "example.org/e") {
-		t.Fatalf("expected native standalone vendor mismatch: %s %v", output, e)
+	for i := range m.Native.Replace {
+		r := &m.Native.Replace[i]
+		r.Path = "./local-modules/" + project.Digest(r.Module)[:24]
 	}
+	data, e := project.Marshal(m)
+	if e != nil {
+		t.Fatal(e)
+	}
+	workspaceWrite(t, split, "goxide.toml", string(data))
+	if e = copyImportVendor(filepath.Join(dest, "local-modules"), filepath.Join(split, "local-modules")); e != nil {
+		t.Fatal(e)
+	}
+	os.RemoveAll(dest)
+	os.RemoveAll(root)
+	if out, e := projectRun(t, split, "run", "--locked", "--offline"); e != nil || strings.TrimSpace(out) != "1" {
+		t.Fatalf("independent local modules: %s %v", out, e)
+	}
+
 }
 
 func TestNativeWorkspaceCopiedLockRejectsLostWorkOverride(t *testing.T) {

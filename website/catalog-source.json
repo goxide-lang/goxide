@@ -350,7 +350,7 @@
       "support": "cli",
       "summary": "format 2 的 goxide.toml 统一 module、原生 Go 依赖政策、增强依赖、feature 与目标；goxide.lock 固定真实解析结果。",
       "usage": "最小工程根只有 TOML 和源码：默认 pretty=true，关闭默认 feature 后 false。Go module 元数据只进入受管 target；锁记录真实选版和校验，不将历史 go.sum 当版本列表。",
-      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 goxide.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 有独立模式；go.work 使用显式迁入模式，旧 format 不自动升级。",
+      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 goxide.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 只作输入，物化普通本地模块；go.work 使用显式迁入模式，旧 format 不自动升级。",
       "examples": [],
       "evidence": [
         "internal/project/manifest.go",
@@ -666,9 +666,9 @@
       ],
       "status": "partial",
       "support": "cli",
-      "summary": "import-go 接受一致的原生 module vendor，使用 Go 自身检查 modules.txt、版本和 replace；锁定实际 vendored 文件字节及权限。",
-      "usage": "迁入保留原工程，生成 [vendor] mode=\"go-mod\"；冷 module cache 下可 --offline --locked 运行。修改 vendor 文件后 locked 拒绝，见真实快照。",
-      "limitation": "不重建 vendor、不下载补齐缺包、不声称与上游相同；历史 go.sum 仅保留来源信息。单模块模式下的 workspace vendor、增强依赖图混用、符号链接与不受支持的布局拒绝。 独立的go.work迁入模式支持workspace vendor与渐进增强，见迁入条目。",
+      "summary": "import-go 接受一致的原生 module vendor，使用 Go 自身检查 modules.txt、版本和 replace；保留实际供应文件字节及权限，物化普通本地模块。",
+      "usage": "迁入保留原工程，生成显式本地 replace；冷 module cache 下可 --offline --locked 运行。本地源码后续编辑遵循普通本地模块规则，见真实快照。",
+      "limitation": "不重建 vendor、不下载补齐缺包、不声称与上游相同；历史 go.sum 仅保留来源信息。符号链接与不受支持的布局拒绝。go.work 迁入同样将供应源码物化为本地模块并支持渐进增强，见迁入条目。",
       "examples": [],
       "checks": [],
       "evidence": [
@@ -692,7 +692,7 @@
       "support": "cli",
       "summary": "作者 workspace 核心已实现：显式继承、全 workspace 统一版本与根唯一 schema 3 锁；仅所选成员及活动依赖参与编译。",
       "usage": "成员须显式 package1 = { workspace = true } 才继承模板。全体成员政策参与版本求解，选中构建另合并 feature；--package 选择成员，--bin / --example 选择命名目标。复制根锁拆出可复用可达版本与 Git pin。",
-      "limitation": "成员/import 不自动建边或覆盖来源。复制锁不复制 path 源码，继承须物化；首次锁定可能取未选依赖元数据，不运行脚本。原生go.work迁入有独立schema4模式；workspace vendor独立拆出、统一host resolver、细粒度lock update、publish/registry尚未实现。批量构建不是事务性发布。",
+      "limitation": "成员/import 不自动建边或覆盖来源。复制锁不复制 path 源码，继承须物化；首次锁定可能取未选依赖元数据，不运行脚本。原生go.work迁入有独立schema4模式；统一host resolver、细粒度lock update、publish/registry尚未实现。批量构建不是事务性发布。",
       "examples": [],
       "checks": [],
       "evidence": [
@@ -717,8 +717,8 @@
       "status": "partial",
       "support": "cli",
       "summary": "只读plan后向新目录迁入，保留成员go/require/replace/exclude/godebug与根work政策；真实Go包归属分析物化显式成员边，根schema4锁与作者模式schema3分开。",
-      "usage": "迁入后可逐步加入.gox、现有features与明确授权的scripts；未授权不执行，撤销后缓存也拒绝。非vendor拆出显式物化继承/path并复制根锁，只消费可达记录，恢复成员独立政策。",
-      "limitation": "分析限迁入时平台、Go工具与C配置，换配置需重新分析。供应vendor保留字节/权限，不下载补包或重建；workspace vendor独立拆出须确认转换协议，当前拒绝。外部非成员replace不自动打包；不承诺全部workspace功能、统一host resolver或publish。",
+      "usage": "迁入后可逐步加入.gox、现有features与明确授权的scripts；未授权不执行，撤销后缓存也拒绝。成员拆出显式物化继承/path并复制根锁，只消费可达记录，恢复成员独立政策。",
+      "limitation": "分析限迁入时平台、Go工具与C配置，换配置需重新分析。供应vendor保留字节/权限，不下载补包或重建；供应源码是普通本地模块，没有vendor构建/拆出模式，独立时物化路径并复制根锁。外部非成员replace不自动打包；不承诺全部workspace功能、统一host resolver或publish。",
       "examples": [],
       "checks": [],
       "evidence": [

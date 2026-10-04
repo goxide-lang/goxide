@@ -87,18 +87,6 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 		return fmt.Errorf("--locked: native workspace inputs changed")
 	}
 	lock.NativeWorkspace.Input = inputID
-	if w.Config.Vendor != nil {
-		snapshot, err := project.InspectWorkspaceVendor(w)
-		if err != nil {
-			return err
-		}
-		if req.Locked && (lock.NativeWorkspace.Vendor == nil || lock.NativeWorkspace.Vendor.Digest != snapshot.Digest) {
-			return fmt.Errorf("--locked: workspace vendor content/policy changed")
-		}
-		lock.NativeWorkspace.Vendor = snapshot
-	} else if lock.NativeWorkspace.Vendor != nil {
-		return fmt.Errorf("native workspace vendor mode cannot change implicitly")
-	}
 	planning, e := os.MkdirTemp(layout.Root, ".native-plan-")
 	if e != nil {
 		return e
@@ -213,7 +201,7 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 			pattern := "./" + filepath.ToSlash(rel)
 			// Every Go read and build sees this same owned work file. Metadata-only
 			// members cannot satisfy an undeclared member import, even in batch mode.
-			packages, err := nativePackages(req.GoTool, unit.Bundle, []string{pattern}, w.Config.Vendor != nil, req.Offline, req.Mode == "test")
+			packages, err := nativePackages(req.GoTool, unit.Bundle, []string{pattern}, req.Offline, req.Mode == "test")
 			if err != nil {
 				return fmt.Errorf("explicit native graph for %s: %w", module, err)
 			}

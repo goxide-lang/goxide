@@ -1,5 +1,3 @@
-> 2026-10-04 规范修订：本文下列 vendor 运行模式描述是被替代实现的记录；当前合同以 [供应源码迁入设计](vendor-local-modules.md) 和 RFC0025/0026 为准。没有 Goxide vendor 模式或 vendor 拆出功能。
-
 # 原生 go.work 与 workspace vendor 迁入合同
 
 状态：2026-10-04 第二阶段原生传输子集已实现，基于 `2aa0d066`。本文件先于生产实现落地；验收结果见 [迁入验收](../reviews/workspace-import-20261004.md)。保持原目录不变，仅在临时 staging 运行会写 Go 元数据的分析/构建命令，成功后发布新的输出目录。
@@ -16,7 +14,7 @@
 
 ## 显式图与分析范围
 
-迁入在 staging 使用真实 Go `list -deps -test -json` 分析各成员的实际包归属，生成根 path 模板和成员 `{workspace=true}` 边；不能仅按 import 字符串最长 module 前缀猜来源。原本无 require 的 `A import B` 会在 plan 明列新增 A→B 声明。原 native require 仍保留原版本；显式图不产生 `B@v0.0.0` 伪 require，也不改 vendor explicit 记录。
+迁入在 staging 使用真实 Go `list -deps -test -json` 分析各成员的实际包归属，生成根 path 模板和成员 `{workspace=true}` 边；不能仅按 import 字符串最长 module 前缀猜来源。原本无 require 的 `A import B` 会在 plan 明列新增 A→B 声明。原 native require 仍保留原版本；显式图不产生 `B@v0.0.0` 伪 require；供应版本与 explicit 仅保留在迁移 provenance。
 
 分析范围固定为迁入时的 GOOS/GOARCH/CGO_ENABLED、架构特征（如 GOAMD64）、GOEXPERIMENT/GOFIPS140、Go 工具版本及 C 工具/flags/PKG_CONFIG，且 build tags 为空，写入 `[workspace.go]` 配置。分析普通与测试包；CGO 开启时额外合并 race 配置的实际成员边（现有 goxide test 使用 -race）。切换配置明确拒绝并要求重新分析；不能把单配置分析冒称所有平台的无损迁移。源码或新的 import 改变后，构建仍按声明图检查，不能运行时借 go.work 自动扩图。跨成员包级无环但 module 级循环，首片明确拒绝。
 
@@ -26,13 +24,11 @@
 
 保留 work/member replace 的作用域和限定版本，冲突由真实 Go 检查；work 根 override 不会被错误展开为所有成员政策。显式 use 的每个成员单独复制，不递归寻找其他模块；拒绝 symlink、特殊文件、增强旧清单与无法映射的未知指令。外部 use 可映射到新输出的显式成员位置，plan 列出旧→新路径。
 
-非 vendor 的本地 replace 若 module 身份和目录都明确对应 use 成员，改写到新成员，再映射到受管 Go 视图；迁入后删除原成员路径仍可构建。非成员 replace 保持显式、规范化的原目录引用，不暗中复制任意目录；因此输出不承诺这种本地依赖自动自足。vendor 模式保留工作区根坐标下的 replace 政策，使其与原 modules.txt 一致；不要求已被 vendor 物化的原 replace 目录仍存在。
+非 vendor 的本地 replace 若 module 身份和目录都明确对应 use 成员，改写到新成员，再映射到受管 Go 视图；迁入后删除原成员路径仍可构建。非成员 replace 保持显式、规范化的原目录引用，不暗中复制任意目录；因此输出不承诺这种本地依赖自动自足。有 vendor 输入时按原政策校验后物化普通本地模块，以显式路径绑定；不要求原 replace 目录仍存在。
 
 ## workspace vendor
 
-显式 `[workspace.vendor] mode="go-work"`，原 `## workspace` 必须存在；module vendor 仍是 mode=go-mod，二者不能混淆。逐字复制 modules.txt、所有包/资源/许可证与文件权限。锁记录独立内容摘要和政策摘要，不把内容哈希写成 h1，也不声称 go.sum 证明本地修改的 vendor。
-
-用受管原生 go.work（完整主模块集合）和真实 `-mod=vendor` 检验一致性；绝不调用 go work vendor 重建输入。缺 package、错误 explicit/replace、未知条目、symlink、额外增强源码或多个 vendor 冲突均失败，不下载补全。供应的 vendor 含本地修改时保留修改；删除原 replace 目录和清空 modulecache 后仍应可离线构建。
+vendor 仅是原生 Go 输入。严格验证 `## workspace`、政策与全部供应文件后，按 [供应源码迁入合同](vendor-local-modules.md) 转换为普通本地模块和显式 local replace。所有包/资源/许可证与权限保留，原 metadata 和摘要进入独立 provenance；输出没有 vendor 树或 vendor 锁。原 go.sum 不证明本地修改。缺包、未知条目、symlink、额外增强源码或多个输入 vendor 冲突失败，不下载补全。
 
 ## 白例与黑例
 
@@ -41,10 +37,10 @@
 | A 无 require 却 import use 成员 B | plan 显示并物化 A→B 显式边；新目录可构建，原文件摘要不变 |
 | A1.26/B1.27，work1.27 且有 godebug | 保留每成员语言 go 与 work 运行时政策；与原生 DefaultGODEBUG 比较 |
 | 成员 replace 冲突，但 work replace 裁决 | 保留三层声明并由 Go 验证，不任挑一个 |
-| root vendor 有修改字节，原 replace 目录已删除 | 保留字节/权限；冷缓存 -mod=vendor 成功 |
+| root vendor 有修改字节，原 replace 目录已删除 | 物化普通本地模块，保留字节/权限；冷离线成功 |
 | A 新增对图外 C 的 import | 锁/显式可达图拒绝；不会因为 C 是成员而提供源码 |
 | 改 GOOS、tags、Go 工具版本 | 配置范围错误，要求重新分析 |
-| vendor 缺一个文件/包或被篡改且 --locked | 明确失败，不代理下载、不重建 vendor |
+| 供应输入缺包/校验时发生变动 | 明确失败，不代理下载、不重建 vendor |
 | 迁入输入已带增强源码/脚本、未知政策、重复 module、模块级循环 | 明确拒绝；原目录和 NEWDIR 均不改变 |
 
 依据：Go 官方 [模块/工作区](https://go.dev/ref/mod#workspaces) 与 [GODEBUG](https://go.dev/doc/godebug)，以及本仓库 RFC0026 的原生机制研究。最终验收使用临时多模块项目、本地 file proxy 和真实 Go，不访问私人第三方。
@@ -62,7 +58,7 @@ goxide transpile -p example.org/app --bin web --locked --offline /projects/migra
 
 `transpile` 输出受管 Go workspace bundle，可由真实 Go 使用其 go.work 编译；增强成员在此阶段执行既有 lowering。所有 flags 在位置 INPUT 前。没有缓存的非 vendor 远端依赖初次迁入不能使用 `--offline`；此时仍由 Go 原生 proxy/checksum 机制获取，没有安装脚本。
 
-根 schema 4 锁保存原生全工作区选版、各成员 sum、work.sum、政策输入摘要以及独立 vendor 清单摘要；它与增强作者模式的 schema 3 锁显式分开，旧 schema 不隐式升级。schema 4 在补齐逐成员记录后支持非vendor成员显式物化并复制根锁独立运行；workspace vendor 拆出仍要求另行明确转换政策。原本合法的非vendor本地 replace 是可变作者源码，锁不伪造内容不可变保证。
+根 schema 4 锁保存原生全工作区选版、各成员 sum、work.sum、政策输入摘要以及普通本地模块身份记录；它与增强作者模式的 schema 3 锁显式分开，旧 schema 不隐式升级。schema 4 在补齐逐成员记录后支持成员显式物化并复制根锁独立运行；不存在 vendor 拆出转换。原本合法的非vendor本地 replace 是可变作者源码，锁不伪造内容不可变保证。
 
 bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳过嵌套 module），不会查找任意兄弟目录。重复目录名可通过重复 `--member-bin example.org/app::first=a/web` 与 `--member-bin example.org/app::second=b/web` 显式命名；对一个成员给出的首个覆盖会替换该成员全部自动 bin 列表。examples 不自动推断，迁入后可在成员 TOML 使用既有 `[[example]]`，仅 `--example NAME` 选择；没有新增发布功能。该模式目前拒绝 `-o`，使用受管输出。
 
@@ -76,12 +72,12 @@ bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳�
 
 脚本继续使用 RFC0023 的独立本地 host 快照和明确 trust/allow；本片不引入新的 host resolver。其产物参与普通 lowering，并在执行前后复核授权。workspace 成员身份与迁入操作都不是脚本授权。
 
-拆出复制根锁仍按已确认规则只使用可达记录。必须分别处理原生 work 开发政策、成员独立政策及 workspace vendor 主模块集合，不能静默转换 vendor/丢失 replace/godebug。若某输入无法在既定显式物化规则下等价拆出，先提供最小正反例并明确拒绝该输入；普通无冲突拆出路径继续实施。
+拆出复制根锁仍按已确认规则只使用可达记录。必须分别处理原生 work 开发政策、成员独立政策及显式本地模块来源，不能静默转换 vendor/丢失 replace/godebug。若某输入无法在既定显式物化规则下等价拆出，先提供最小正反例并明确拒绝该输入；普通无冲突拆出路径继续实施。
 
 ### 已完成衔接与真正需要单列的转换边界
 
-新增可验证路径：成员逐步加入 `.gox`、现有 features/可选成员依赖/required_features、带原生 vendor 的增强宏，以及 RFC0023 明确授权的构建脚本。前端显式接受受管 Go workspace，不改变 cfg/宏/类型检查顺序；vendor 内容参与 frontend 配置与脚本计划身份。
+新增可验证路径：成员逐步加入 `.gox`、现有 features/可选成员依赖/required_features、带原生 vendor 的增强宏，以及 RFC0023 明确授权的构建脚本。前端显式接受受管 Go workspace，不改变 cfg/宏/类型检查顺序；本地源码参与 frontend 配置与脚本计划身份。
 
-schema4 增补逐成员输入记录；非vendor拆出显式物化继承/path后直接复制根锁，复用既有 Go/Unified可达解析和校验，不读无关成员源码、不激活无关脚本。显式本地成员路径可搬迁，逐节点仍核对模块身份与有效清单。成员自身 go/toolchain/godebug/replace 恢复生效；若来源因 work override 消失而改变，必须报错而非沿旧来源偷偷构建。旧schema4缺成员记录时先在原workspace普通构建补锁；复制锁的原字节保留。
+schema4 增补逐成员输入记录；成员拆出显式物化继承/path后直接复制根锁，复用既有 Go/Unified可达解析和校验，不读无关成员源码、不激活无关脚本。显式本地成员路径可搬迁，逐节点仍核对模块身份与有效清单。成员自身 go/toolchain/godebug/replace 恢复生效；若来源因 work override 消失而改变，必须报错而非沿旧来源偷偷构建。旧schema4缺成员记录时先在原workspace普通构建补锁；复制锁的原字节保留。
 
 本节此前的 vendor 运行模式及“拆出另立转换协议”已撤回。统一遵守 [供应源码迁入设计](vendor-local-modules.md)：vendor 仅是原生输入，验证后产生普通本地模块与显式路径。独立工程只需物化继承/本地路径并复制根锁；不引入第二种 vendor 转换。

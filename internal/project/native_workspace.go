@@ -24,12 +24,13 @@ type NativeWorkspaceConfig struct {
 	Configuration map[string]string `toml:"configuration"`
 }
 type NativeWorkspaceLock struct {
-	Members map[string]NativeMemberRecord `json:"members,omitempty"`
-	Input   string                        `json:"input"`
-	Modules map[string]Selection          `json:"modules"`
-	Sums    map[string]string             `json:"sums"`
-	WorkSum string                        `json:"work_sum"`
-	Vendor  *VendorSnapshot               `json:"vendor,omitempty"`
+	LocalSources map[string]NativeMemberRecord `json:"local_sources,omitempty"`
+	Members      map[string]NativeMemberRecord `json:"members,omitempty"`
+	Input        string                        `json:"input"`
+	Modules      map[string]Selection          `json:"modules"`
+	Sums         map[string]string             `json:"sums"`
+	WorkSum      string                        `json:"work_sum"`
+	Vendor       *VendorSnapshot               `json:"vendor,omitempty"`
 }
 type GoWorkFile struct {
 	Go, Toolchain string
@@ -269,54 +270,8 @@ func CopyNativeSource(src, dst string, workRoot ...string) error {
 		return os.Chmod(to, info.Mode().Perm())
 	})
 }
-func NativeMode(w *Workspace) string {
-	if w.Config.Vendor != nil {
-		return "-mod=vendor"
-	}
-	return "-mod=readonly"
-}
-func InspectWorkspaceVendor(w *Workspace) (*VendorSnapshot, error) {
-	input, e := NativeInput(w)
-	if e != nil {
-		return nil, e
-	}
-	return inspectVendor(w.Root, Manifest{GoVersion: w.Config.Go.Version}, "go-work", input)
-}
-func copyWorkspaceVendor(w *Workspace, dst string, expected *VendorSnapshot) error {
-	actual, e := InspectWorkspaceVendor(w)
-	if e != nil {
-		return e
-	}
-	if expected == nil || actual.Digest != expected.Digest {
-		return fmt.Errorf("workspace vendor content/policy changed")
-	}
-	for _, rel := range keys(actual.Files) {
-		src := filepath.Join(w.Root, "vendor", filepath.FromSlash(rel))
-		info, e := os.Stat(src)
-		if e != nil {
-			return e
-		}
-		b, e := os.ReadFile(src)
-		if e != nil {
-			return e
-		}
-		if Digest([]any{b, uint32(info.Mode().Perm())}) != actual.Files[rel] {
-			return fmt.Errorf("workspace vendor changed during copy")
-		}
-		to := filepath.Join(dst, "vendor", filepath.FromSlash(rel))
-		if e = os.MkdirAll(filepath.Dir(to), 0755); e != nil {
-			return e
-		}
-		if e = os.WriteFile(to, b, info.Mode().Perm()); e != nil {
-			return e
-		}
-		if e = os.Chmod(to, info.Mode().Perm()); e != nil {
-			return e
-		}
-	}
-	return nil
-}
-func WorkText(p *NativeWorkspaceConfig, members []string, root string, vendor bool) ([]byte, error) {
+func NativeMode(w *Workspace) string { return "-mod=readonly" }
+func WorkText(p *NativeWorkspaceConfig, members []string, root string) ([]byte, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "go %s\n", p.Version)
 	if p.Toolchain != "" {
@@ -324,7 +279,7 @@ func WorkText(p *NativeWorkspaceConfig, members []string, root string, vendor bo
 	}
 	// Reuse Go's accepted directive serializer, then omit its module/go header.
 	m := Manifest{Module: "goxide-work-policy.invalid", GoVersion: p.Version, Toolchain: p.Toolchain, Native: GoConfig{Replace: append([]GoReplace(nil), p.Replace...), Godebug: p.Godebug}}
-	if !vendor {
+	{
 		for i := range m.Native.Replace {
 			r := &m.Native.Replace[i]
 			if r.Path != "" && !filepath.IsAbs(r.Path) {
@@ -402,30 +357,11 @@ func NativeView(w *Workspace, dst string, source map[string]bool, lock *NativeWo
 			return nil, e
 		}
 	}
-	if w.Config.Vendor != nil {
-		if e = copyWorkspaceVendor(w, dst, lock.Vendor); e != nil {
-			return nil, e
-		}
-	}
 	return dirs, nil
 }
 func ReadNativeSelections(w *Workspace, tool, view string, lock *NativeWorkspaceLock, offline bool) error {
-	CaptureNativeMembers(w, lock)
 	lock.Modules = map[string]Selection{}
-	if w.Config.Vendor != nil {
-		if _, e := NativeGo(tool, view, true, "list", "-mod=vendor", "-m", "-json"); e != nil {
-			return e
-		}
-		for _, m := range lock.Vendor.Modules {
-			if m.Version != "" {
-				s := Selection{Path: m.Path, Version: m.Version}
-				if m.Replace != "" {
-					s.Replace = &Selection{Path: m.Replace, Version: m.ReplaceVersion}
-				}
-				lock.Modules[m.Path] = s
-			}
-		}
-	} else {
+	{
 		b, e := NativeGo(tool, view, offline, "list", "-mod=readonly", "-m", "-json", "all")
 		if e != nil {
 			return e
@@ -447,6 +383,10 @@ func ReadNativeSelections(w *Workspace, tool, view string, lock *NativeWorkspace
 		if _, e = NativeGo(tool, view, offline, "mod", "verify"); e != nil {
 			return e
 		}
+	}
+	CaptureNativeMembers(w, lock)
+	if e := captureNativeLocals(w, lock); e != nil {
+		return e
 	}
 	return CaptureNativeSums(w, view, lock)
 }
@@ -474,7 +414,7 @@ func CaptureNativeSums(w *Workspace, view string, lock *NativeWorkspaceLock) err
 func nativeModuleText(w *Workspace, src, view string) ([]byte, error) {
 	m := w.Manifests[src]
 	m.Native.Replace = append([]GoReplace(nil), m.Native.Replace...)
-	if w.Config.Vendor == nil {
+	{
 		for i := range m.Native.Replace {
 			r := &m.Native.Replace[i]
 			if r.Path != "" && !filepath.IsAbs(r.Path) {
@@ -537,7 +477,7 @@ func CheckNativePolicies(w *Workspace, view string) error {
 func nativeWorkText(w *Workspace, uses []string, view string) ([]byte, error) {
 	policy := *w.Config.Go
 	policy.Replace = append([]GoReplace(nil), policy.Replace...)
-	if w.Config.Vendor == nil {
+	{
 		for i := range policy.Replace {
 			r := &policy.Replace[i]
 			if r.Path == "" {
@@ -556,5 +496,5 @@ func nativeWorkText(w *Workspace, uses []string, view string) ([]byte, error) {
 			}
 		}
 	}
-	return WorkText(&policy, uses, w.Root, w.Config.Vendor != nil)
+	return WorkText(&policy, uses, w.Root)
 }

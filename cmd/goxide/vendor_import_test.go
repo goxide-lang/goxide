@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/hxsf/goxide/internal/project"
@@ -58,7 +61,7 @@ func TestVendorImportColdOffline(t *testing.T) {
 		t.Fatal(b)
 	}
 	vendorGo(t, root, "test", "-mod=vendor", "./...")
-	if b, e := importCall(t, root, "--bin", "app=."); e != nil || !strings.Contains(b, "[vendor]") || !strings.Contains(b, "license") || !strings.Contains(b, "unknown (no fetch)") {
+	if b, e := importCall(t, root, "--bin", "app=."); e != nil || !strings.Contains(b, "local-modules/") || !strings.Contains(b, "license") || !strings.Contains(b, "unknown (no fetch)") {
 		t.Fatalf("plan %s %v", b, e)
 	}
 	if b, e := importCall(t, root, "--out", out, "--bin", "app=.", "--offline"); e != nil {
@@ -81,57 +84,66 @@ func TestVendorImportColdOffline(t *testing.T) {
 			t.Fatal(b)
 		}
 	}
-	var lock project.Lock
-	b, e := os.ReadFile(filepath.Join(out, "goxide.lock"))
+	var audit project.SuppliedModules
+	b, e := os.ReadFile(filepath.Join(out, "goxide-import.json"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = json.Unmarshal(b, &lock); e != nil {
+	if e = json.Unmarshal(b, &audit); e != nil {
 		t.Fatal(e)
 	}
-	if lock.Vendor == nil || lock.Vendor.Files["example.org/dep/LICENSE"] == "" || lock.PlanningSums != "" {
-		t.Fatalf("bad vendor lock: %s", b)
+	if audit.Snapshot.Files["example.org/dep/LICENSE"] == "" {
+		t.Fatal("missing provenance")
 	}
-	beforeArtifact, e := projectRun(t, out, "build", "--offline", "--locked")
+	lock, e := os.ReadFile(filepath.Join(out, "goxide.lock"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	oldDigest := lock.Vendor.Digest
-	binary := filepath.Join(out, "vendor/example.org/dep/opaque.bin")
-	original, e := os.ReadFile(binary)
-	if e != nil {
+	if strings.Contains(string(lock), `"vendor"`) || strings.Contains(string(lock), ".goxide-import-") {
+		t.Fatal("runtime vendor or staging path", string(lock))
+	}
+	for rel, outputs := range audit.Outputs {
+		original, e := os.ReadFile(filepath.Join(root, "vendor", rel))
+		if e != nil {
+			t.Fatal(e)
+		}
+		for _, target := range outputs {
+			data, e := os.ReadFile(filepath.Join(out, target))
+			if e != nil || string(data) != string(original) {
+				t.Fatal("supply changed", target, e)
+			}
+			info, _ := os.Stat(filepath.Join(out, target))
+			input, _ := os.Stat(filepath.Join(root, "vendor", rel))
+			if info.Mode().Perm() != input.Mode().Perm() {
+				t.Fatal("mode changed", target)
+			}
+		}
+	}
+	// A normal local module remains editable under --locked.
+	local := audit.Paths["example.org/dep"]
+	if e = os.WriteFile(filepath.Join(out, local, "assets/value.txt"), []byte("changed"), 0644); e != nil {
 		t.Fatal(e)
 	}
-	if e = os.WriteFile(binary, []byte{0xfe, 0x00, 0xfe}, 0644); e != nil {
+	if b, e := projectRun(t, out, "run", "--offline", "--locked"); e != nil || !strings.Contains(b, "changed") {
+		t.Fatalf("local edit %s %v", b, e)
+	}
+	moved := out + "-moved"
+	if e = os.Rename(out, moved); e != nil {
 		t.Fatal(e)
 	}
-	if b, e := projectRun(t, out, "run", "--offline", "--locked"); e == nil {
-		t.Fatalf("binary corruption accepted %s", b)
-	}
-	if e = os.WriteFile(binary, original, 0644); e != nil {
+	if e = os.RemoveAll(root); e != nil {
 		t.Fatal(e)
 	}
-	if e := os.WriteFile(filepath.Join(out, "vendor/example.org/dep/assets/value.txt"), []byte("changed"), 0644); e != nil {
-		t.Fatal(e)
+	// Discard owned artifacts after move: rebuilding must use only author files/lock.
+	os.RemoveAll(filepath.Join(moved, "target"))
+	if b, e := projectRun(t, moved, "run", "--offline", "--locked"); e != nil || !strings.Contains(b, "changed") {
+		t.Fatalf("moved %s %v", b, e)
 	}
-	if b, e := projectRun(t, out, "run", "--offline", "--locked"); e == nil || !strings.Contains(e.Error(), "vendor") {
-		t.Fatalf("locked mutation %s %v", b, e)
+	projectWrite(t, moved, map[string]string{"main.go": "package main\nimport _ \"example.org/dep/missing\"\nfunc main(){}\n"})
+	if b, e := projectRun(t, moved, "build", "--locked"); e == nil {
+		t.Fatalf("missing package fetched: %s", b)
 	}
-	if b, e := projectRun(t, out, "run", "--offline"); e != nil || !strings.Contains(b, "changed") {
-		t.Fatalf("updated source %s %v", b, e)
-	}
-	b, _ = os.ReadFile(filepath.Join(out, "goxide.lock"))
-	json.Unmarshal(b, &lock)
-	afterArtifact, e := projectRun(t, out, "build", "--offline", "--locked")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if strings.TrimSpace(beforeArtifact) == strings.TrimSpace(afterArtifact) {
-		t.Fatal("vendor mutation reused artifact configuration")
-	}
-	if oldDigest == lock.Vendor.Digest {
-		t.Fatal("digest did not change")
-	}
+
 }
 func TestVendorImportRejections(t *testing.T) {
 	for _, kind := range []string{"missing", "extra-go", "extra-file", "metadata", "workspace", "explicit", "version", "replace", "symlink", "modules-symlink", "nested", "dual", "output"} {
@@ -227,7 +239,7 @@ func TestVendorVersionReplacementAndOriginalSums(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join(out, "goxide.lock"))
 	var lock project.Lock
 	json.Unmarshal(b, &lock)
-	if lock.Vendor == nil || lock.Provenance == "" || strings.Contains(string(b), "h1:") {
+	if lock.Vendor != nil || lock.Provenance == "" || strings.Contains(string(b), "h1:") {
 		t.Fatalf("misrepresented vendor provenance: %s", b)
 	}
 }
@@ -251,6 +263,9 @@ func TestVendorRootFeaturesTargetsAndTrust(t *testing.T) {
 	os.WriteFile(filepath.Join(out, project.ManifestName), b, 0644)
 	os.WriteFile(filepath.Join(out, "flag.gox"), []byte("package main\nfunc Enabled()bool{return cfg!(feature(\"on\"))}\n"), 0644)
 	os.WriteFile(filepath.Join(out, "main.go"), []byte("package main\nimport \"fmt\"\nfunc main(){fmt.Println(Enabled())}\n"), 0644)
+	if b, e := projectRun(t, out, "build", "--bin", "app", "--offline"); e != nil {
+		t.Fatalf("refresh edited manifest %s %v", b, e)
+	}
 	for _, tc := range []struct {
 		flags []string
 		want  string
@@ -282,7 +297,7 @@ func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", versionLibrary("v2"))
 	publishVersion(t, proxy, "example.org/middle", "v1.0.0", map[string]string{"go.mod": "module example.org/middle\ngo 1.27\n", "goxide.toml": "[package]\nformat=1\n[lib]\nname='middle'\npath='.'\n[dependencies.lib]\nmodule='example.org/goxidelib'\nversion='v1.1.0'\n", "middle.go": "package middle\n"})
 	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
-	if b, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "only for a root") {
+	if b, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "obsolete vendor") {
 		t.Fatalf("stable unsupported vendor: %s %v", b, e)
 	}
 	m, e := project.Read(root)
@@ -297,5 +312,42 @@ func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
 	os.WriteFile(filepath.Join(root, project.ManifestName), b, 0644)
 	if b, e := projectRun(t, root, "run"); e != nil || !strings.Contains(b, "v2") {
 		t.Fatalf("transient vendor rejected: %s %v", b, e)
+	}
+}
+
+func TestSuppliedModuleCycleAndOfflineNoProbes(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
+	var requests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); http.Error(w, "network forbidden", 500) }))
+	defer server.Close()
+	t.Setenv("GOPROXY", server.URL)
+	t.Setenv("GOSUMDB", "off")
+	t.Setenv("GOMODCACHE", t.TempDir())
+	base := t.TempDir()
+	root := filepath.Join(base, "original")
+	projectWrite(t, filepath.Join(base, "d"), map[string]string{"go.mod": "module example.org/d\ngo 1.27\nrequire example.org/e v1.0.0\n", "p/p.go": "package p\nimport \"example.org/e/q\"\nconst Value=q.Value\n", "s/s.go": "package s\nconst Value=\"cycle\"\n"})
+	projectWrite(t, filepath.Join(base, "e"), map[string]string{"go.mod": "module example.org/e\ngo 1.27\nrequire example.org/d v1.0.0\n", "q/q.go": "package q\nconst Value=\"modules\"\n", "r/r.go": "package r\nimport \"example.org/d/s\"\nconst Value=s.Value\n"})
+	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\ngo 1.27\nrequire (\nexample.org/d v1.0.0\nexample.org/e v1.0.0\n)\nreplace example.org/d => ../d\nreplace example.org/e => ../e\n", "main.go": "package main\nimport(\"fmt\";\"example.org/d/p\";\"example.org/e/r\")\nfunc main(){fmt.Println(p.Value,r.Value)}\n"})
+	vendorGo(t, root, "mod", "vendor")
+	os.RemoveAll(filepath.Join(base, "d"))
+	os.RemoveAll(filepath.Join(base, "e"))
+	before := requests.Load()
+	if b, e := importCall(t, root, "--plan", "--offline", "--bin", "app=."); e != nil {
+		t.Fatalf("plan %s %v", b, e)
+	}
+	out := filepath.Join(base, "new")
+	if b, e := importCall(t, root, "--out", out, "--offline", "--bin", "app=."); e != nil {
+		t.Fatalf("import %s %v", b, e)
+	}
+	if b, e := projectRun(t, out, "run", "--offline", "--locked"); e != nil || strings.TrimSpace(b) != "modules cycle" {
+		t.Fatalf("module cycle: %s %v", b, e)
+	}
+	projectWrite(t, root, map[string]string{"vendor/example.org/d/p/p.go": "package p\nimport _ \"example.org/missing\"\n"})
+	if b, e := importCall(t, root, "--plan", "--offline", "--bin", "app=."); e == nil {
+		t.Fatalf("missing supplied source accepted %s", b)
+	}
+	if requests.Load() != before {
+		t.Fatalf("offline performed %d requests", requests.Load()-before)
 	}
 }

@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`09f1eb258fc98217e5d03506f34957c9ee9aec4f`；证据复核日期：2026-10-04。
+编译器基线：`2aa0d06625f3d25ee6ad08ea2666c226eb4b1dac`；证据复核日期：2026-10-04。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -16,12 +16,12 @@
 | serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (b2b3b5b7c4b2); `tests/acceptance/serde_defaults_test.go` (1e47b7754dd4); `docs/serde-json.md` (7709e62022f8); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5) |
 | Error 派生与错误链 | 0013, research/0005 | 部分实现 | browser | `internal/deriveextras/error.go` (10ec1a9760c5); `tests/acceptance/serde_causes_test.go` (bff4e268af32); `tests/acceptance/macros_test.go` (ddf8bb2e7dcc) |
 | use / pub use 与 API 聚合 | 0021 | 部分实现 | cli | `cmd/hgo/directory.go` (68b6fb393ac2); `tests/acceptance/qualified_packages_test.go` (c5bfce420056); `examples/reexports/README.md` (9ee7831f088d) |
-| feature、依赖来源与 targets | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (1124c2a619df); `internal/project/planner.go` (3f51cda58431); `cmd/hgo/project_test.go` (8090cd1f603b); `cmd/hgo/version_test.go` (5cfcbd7d2820); `cmd/hgo/combination_review_test.go` (23c1636f7550); `docs/rfcs/0025-unified-project.md` (8f0b41a501d8); `cmd/hgo/import_go_test.go` (1a2cf544ba27) |
+| feature、依赖来源与 targets | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (42dc79d3fa45); `internal/project/planner.go` (8f35952404ba); `cmd/hgo/project_test.go` (8090cd1f603b); `cmd/hgo/version_test.go` (5cfcbd7d2820); `cmd/hgo/combination_review_test.go` (23c1636f7550); `docs/rfcs/0025-unified-project.md` (8f0b41a501d8); `cmd/hgo/import_go_test.go` (1a2cf544ba27) |
 | 从普通 Go 迁入：plan → 新目录 | 0025 | 部分实现 | cli | `docs/rfcs/0025-unified-project.md` (8f0b41a501d8); `cmd/hgo/import_go.go` (34efc43512fe); `cmd/hgo/import_go_test.go` (1a2cf544ba27) |
-| 宿主构建脚本与授权 | 0023 | 部分实现 | cli | `internal/scripttrust/store.go` (f0921cd5c9aa); `cmd/hgo/scripts.go` (ccfce0f4b03e); `cmd/hgo/buildscript_test.go` (e28e9b879b33); `cmd/hgo/combination_review_test.go` (23c1636f7550) |
+| 宿主构建脚本与授权 | 0023 | 部分实现 | cli | `internal/scripttrust/store.go` (f0921cd5c9aa); `cmd/hgo/scripts.go` (d446ff660f7d); `cmd/hgo/buildscript_test.go` (e28e9b879b33); `cmd/hgo/combination_review_test.go` (23c1636f7550) |
 | 只读路径与写引用 | 0005, 0006 | 部分实现 | browser | `internal/refs/lower.go` (f8bc43440764); `internal/refs/flow.go` (8a7482599404); `tests/acceptance/refs_test.go` (d86a8c58b151); `tests/acceptance/composite_permissions_test.go` (8aa1757b4743) |
-| 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (64077ea1ab96); `ROADMAP.md` (80b89f4c687e) |
-| trait、关联类型与 impl | 0002, 0003, 0004, 0019, 0020 | 已确认待实现 | unavailable | `docs/rfcs/0019-uniform-trait-wrappers.md` (2eb3455cf393); `docs/rfcs/0020-associated-functions.md` (fe9214afd14c); `ROADMAP.md` (80b89f4c687e) |
+| 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (64077ea1ab96); `ROADMAP.md` (1ec63af09f7c) |
+| trait、关联类型与 impl | 0002, 0003, 0004, 0019, 0020 | 已确认待实现 | unavailable | `docs/rfcs/0019-uniform-trait-wrappers.md` (2eb3455cf393); `docs/rfcs/0020-associated-functions.md` (fe9214afd14c); `ROADMAP.md` (1ec63af09f7c) |
 | safe std、锁与集合 | 0006, 0007, 0010, 0016, 0017 | 已确认待实现 | unavailable | `docs/rfcs/0007-locks.md` (2cc232953b36); `docs/rfcs/0010-collections.md` (4584de88ecfc); `docs/rfcs/0016-safe-std.md` (4a44a92d8cdf); `docs/rfcs/0017-maps.md` (4f3f0e488622) |
 | quote / syn 与过程宏 | 0014 | 已确认待实现 | unavailable | `docs/rfcs/0014-syntax-tools.md` (a353eb00b301) |
 | 降低约束与公开边界 | 0015, 0018 | 部分实现 | browser | `tests/acceptance/source_lowering_test.go` (54e4fca71f7c); `tests/acceptance/source_mapping_test.go` (09a8b20795ec); `docs/rfcs/0018-lowering-contract.md` (fa6c8182e549) |
@@ -30,8 +30,8 @@
 | 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (2b3c470b75c1); `internal/frontend/readability_test.go` (3778ab0cf652); `internal/enums/builtins_test.go` (2dc5aeafcafc) |
 | CLI：明确的长短选项与参数边界 | 0022, 0023 | 部分实现 | cli | `docs/reviews/cobra-cli-20261004.md` (01486298a672); `cmd/hgo/cli_process_test.go` (522eae4b6a44); `cmd/hgo/cli_dependency_graph_test.go` (4d9a665275f7) |
 | 原生 Go vendor：实际字节与离线锁 | 0025 | 部分实现 | cli | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/hgo/vendor_import_test.go` (5d0e84a433bb) |
-| workspace：显式继承的设计提案 | 0026 | 提案 | unavailable | `@workspace:docs/rfcs/0026-workspaces.md` (eacb8a976875) |
+| Workspace：作者核心与统一根锁 | 0026 | 部分实现 | cli | `docs/rfcs/0026-workspaces.md` (d000880c9e55); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/hgo/workspace_test.go` (a87e46574fc2); `internal/project/workspace_test.go` (afb658ae2019) |
 
-开发快照：{"use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa", "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150", "workspace": "be41fba3cc70b788c889dab58c341e6e3a764f8a"}
+开发快照：{"use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa", "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"}
 
 管理建议：规范留在编译器仓库随版本评审；Issue 讨论/跟踪，PR 变更规范与实现；公共网站只发布审核后的摘要。未创建新仓库或 Issue。

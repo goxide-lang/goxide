@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild every published example and the browser compiler from this checkout."""
 import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
-import catalog, project_snapshots
+import catalog, project_snapshots, workspace_snapshots
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
 GO = os.environ.get('GO_BIN', 'go')
@@ -120,7 +120,7 @@ metadata_schema = int(re.search(r'const enumMetadataVersion = (\d+)', (ROOT/'int
 assert metadata_schema == 7
 manifest = dict(metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 importClosure=sorted(closure), maxSourceBytes=32768, compileTimeoutMs=10000,
-                examples=examples, cliExamples=[cli_example], projectExamples=[feature_example,migration_example,vendor_example,cli_options_example])
+                examples=examples, cliExamples=[cli_example], projectExamples=[feature_example,migration_example,vendor_example,cli_options_example]+workspace_snapshots.build(ROOT, GO))
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')
 subprocess.run([GO, 'build', *wasm_flags, '-o', str(dist/'compiler.wasm'), './cmd/hgo-playground'], env=wasm_env, check=True)
 manifest['wasmSha256'] = hashlib.sha256((dist/'compiler.wasm').read_bytes()).hexdigest()

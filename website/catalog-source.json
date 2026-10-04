@@ -1,11 +1,10 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "09f1eb258fc98217e5d03506f34957c9ee9aec4f",
+  "compilerCommit": "2aa0d06625f3d25ee6ad08ea2666c226eb4b1dac",
   "reviewedAt": "2026-10-04",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
-    "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150",
-    "workspace": "be41fba3cc70b788c889dab58c341e6e3a764f8a"
+    "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"
   },
   "statusLabels": {
     "proposal": "提案",
@@ -351,7 +350,7 @@
       "support": "cli",
       "summary": "format 2 的 goxide.toml 统一 module、原生 Go 依赖政策、增强依赖、feature 与目标；goxide.lock 固定真实解析结果。",
       "usage": "最小工程根只有 TOML 和源码：默认 pretty=true，关闭默认 feature 后 false。Go module 元数据只进入受管 target；锁记录真实选版和校验，不将历史 go.sum 当版本列表。",
-      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 hgo.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 有独立模式；workspace 与旧 format 不自动升级。",
+      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 hgo.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 有独立模式；go.work 不自动迁入，旧 format 不自动升级。",
       "examples": [],
       "evidence": [
         "internal/project/manifest.go",
@@ -684,22 +683,30 @@
     },
     {
       "id": "workspace",
-      "title": "workspace：显式继承的设计提案",
-      "topic": "future",
+      "title": "Workspace：作者核心与统一根锁",
+      "topic": "projects",
       "rfcs": [
         "0026"
       ],
-      "status": "proposal",
-      "support": "unavailable",
-      "summary": "整体仍为提案，生产 workspace 尚未实现；仅显式依赖继承这一约束已确认。",
-      "usage": "候选声明 package1 = { workspace = true } 才继承根模板。列为 member 或源码 import 不会创建依赖、激活模板或隐式改用本地来源。",
-      "limitation": "其余解析策略、根锁与实施阶段尚待确定；Go 机制试验不是 hgo 功能验收。这里不提供可运行 workspace 示例。",
+      "status": "partial",
+      "support": "cli",
+      "summary": "作者 workspace 核心已实现：显式继承、全 workspace 统一版本与根唯一 schema 3 锁；仅所选成员及活动依赖参与编译。",
+      "usage": "成员须显式 package1 = { workspace = true } 才继承模板。全体成员政策参与版本求解，选中构建另合并 feature；--package 选择成员，--bin / --example 选择命名目标。复制根锁拆出可复用可达版本与 Git pin。",
+      "limitation": "成员/import 不自动建边或覆盖来源。复制锁不复制 path 源码，继承须物化；首次锁定可能取未选依赖元数据，不运行脚本。go.work/workspace vendor 迁入、统一 host resolver、细粒度 lock update、publish/registry 尚未实现。批量构建不是事务性发布。",
       "examples": [],
       "checks": [],
       "evidence": [
-        "@workspace:docs/rfcs/0026-workspaces.md"
-      ]
+        "docs/rfcs/0026-workspaces.md",
+        "docs/reviews/workspace-core-20261004.md",
+        "cmd/hgo/workspace_test.go",
+        "internal/project/workspace_test.go"
+      ],
+      "snippet": {
+        "language": "CLI · 多文件工程",
+        "text": "hgo run --package example.org/service --bin web workspace\nhgo run --package example.org/service --example hello workspace\nhgo build --workspace --offline --locked workspace",
+        "note": "下面的真实工程快照展示统一选版、feature恢复及复制根锁拆出；不能放进单文件Playground。"
+      }
     }
   ],
-  "compilerDigest": "9cebac63731cc5490e3ffc00a8a5b9b7ef0869d72482e29f1d8e7ae9bb16ec77"
+  "compilerDigest": "be5fa4d4276d4cd9cd8cffbe7fa55c63664be89e8fd08636cf3b0c3b51012dd4"
 }

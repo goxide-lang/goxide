@@ -1,2 +1,6 @@
 /bin/
 *.test
+
+/internal/typecheck/browserexports/*.a
+/cmd/hgo-web/dist/
+/bin/

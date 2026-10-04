@@ -33,6 +33,9 @@ func NewImporterWithTags(filename string, tags []string) types.Importer {
 
 // NewImporterWithBuild keeps file selection and export instrumentation aligned.
 func NewImporterWithBuild(filename string, tags []string, race bool) types.Importer {
+	if imp := platformImporter(); imp != nil {
+		return imp
+	}
 	dir, _ := filepath.Abs(filepath.Dir(filename))
 	if root := moduleRoot(dir); root != "" {
 		dir = root

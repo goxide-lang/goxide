@@ -1,6 +1,6 @@
 # Workspace RFC 0026 研究验收（2026-10-04）
 
-状态：研究完成，设计待评审；workspace 生产功能未实现、未批准，未部署网站。基于 `d51117d36fa2d1ccfcf322b81195b0d753cbb8de`，文档分支 `docs/workspace-rfc`。正式合同候选见 [RFC 0026](../rfcs/0026-workspaces.md)。
+状态：研究与独立对抗评审完成，四项用户决策待确认；workspace 生产功能未实现、未批准，未部署网站。基于 `d51117d36fa2d1ccfcf322b81195b0d753cbb8de`，文档分支 `docs/workspace-rfc`。正式合同候选见 [RFC 0026](../rfcs/0026-workspaces.md)。
 
 ## 资料与环境
 
@@ -8,7 +8,7 @@
 
 ## 已通过机制试验
 
-运行 [研究脚本](../../scripts/research/workspace_go_probe.py)，全部 12 项通过；[完整结构化结果](evidence/workspace-go-20261004.json)已保存，fixture 路径归一为 `<fixture>`。每次新建临时目录/空GOMODCACHE，只用本地replace；网络解析禁用，GOTOOLCHAIN=local，无Go下载/私有来源/脚本安装。研究用 `go work vendor` 只制造fixture，不提出在迁入中重建vendor。
+运行 [研究脚本](../../scripts/research/workspace_go_probe.py)，全部 19 项通过；[完整结构化结果](evidence/workspace-go-20261004.json)已保存，fixture 路径归一为 `<fixture>`。每次新建临时目录/空GOMODCACHE，只用本地replace；网络解析禁用，GOTOOLCHAIN=local，无Go下载/私有来源/脚本安装。研究用 `go work vendor` 只制造fixture，不提出在迁入中重建vendor。
 
 | 证据 | 结果 |
 | --- | --- |
@@ -19,11 +19,19 @@
 | GO-09 / GO-10 | GOWORK=off不能消费workspace vendor；删vendor实际import包明确失败，不联网 |
 | GO-11 | Go edit JSON保留Go/Toolchain/Godebug；此项只验证解析，不证明hgo映射或运行时GODEBUG等效 |
 | GO-12 | 原生全workspace含未来go1.99成员时，list A也拒绝，未选择编译不等于未参与Go政策 |
+| GO-13 / GO-14 / GO-15 | 成员panicnil=1、工作区panicnil=0覆盖、退出后成员值恢复；DefaultGODEBUG由真实Go报告 |
+| GO-16 / GO-17 | A没有require B仍可在workspace import成员B；standalone readonly明确缺模块失败 |
+
+Go list默认VCS stamping在此隔离环境报git状态错误，研究脚本显式关闭buildvcs，避免环境VCS影响政策探针；不改变作者工程。GODEBUG探针显式-mod=readonly避免前项workspace vendor被自动采用，vendor试验本身仍用-mod=vendor。
+
+GO-18 / GO-19 验证最长前缀不等于包归属：内层module无目标包时外层可提供；双方都有时真实Go报ambiguous import。
 
 ## 文档与实现边界
 
-变更限于 RFC、索引、ROADMAP、研究脚本/结果。检查生产源文件diff为空；不新增接受workspace的parser或CLI路径。RFC六章节、链接与代码围栏需通过 `python3 scripts/check_design.py --docs-only`。W01–W16是未来实现矩阵，不是已通过测试；无hgo workspace feature/cache/lock/trust/publish实测。本轮不重复生产全量race/vet，基线已有覆盖不算本RFC功能验收。
+变更限于 RFC、索引、ROADMAP、研究脚本/结果。检查生产源文件diff为空；不新增接受workspace的parser或CLI路径。RFC六章节、链接与代码围栏需通过 `python3 scripts/check_design.py --docs-only`。W01–W17是未来实现矩阵，不是已通过测试；无hgo workspace feature/cache/lock/trust/publish实测。本轮不重复生产全量race/vet，基线已有覆盖不算本RFC功能验收。
 
 ## 独立评审
 
-待独立 reviewer 对设计矛盾、Cargo/Go区别、迁入无损性及锁/脚本边界做对抗检查；完成后记录实际结论。
+独立 reviewer 初轮检查全部RFC/验收表、脚本及JSON，独立运行原12项Go机制试验，归一化结果与候选记录相等；另行验证无require的成员import。发现并已修订：单次命令只能绑定一个根不等于禁止多workspace只读同一成员；CLI未选不等于源码未触达；optional边不抹去原生require/其他活动边。补充固定点重算/振荡诊断、关闭文件不激活、脚本/宏生成跨成员import须清单预声明和独立发行补齐require。第二轮独立重跑17项通过，指出最长module前缀不等于包归属；修正为Go实际包映射并新增GO18/19正反例，总19项通过。最终文字复核确认其余无阻断；依其最后建议将optional诊断限定为没有其他有效显式/原生require边的情形，避免错误拒绝合法并集。没有运行Cargo或声称hgo功能完成。
+
+最终文档检查通过96个Markdown、1004个本地链接/锚点、25个正式RFC；git diff --check通过。生产目录没有变更。

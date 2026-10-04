@@ -16,7 +16,7 @@ def main():
     go = str(Path(args.go).resolve(strict=True))
     root = Path(tempfile.mkdtemp(prefix='goxide-workspace-research-'))
     env = dict(os.environ, GOTOOLCHAIN='local', GOPROXY='off', GOSUMDB='off',
-               GONOPROXY='none', GOVCS='*:off', GOWORK='off', GOFLAGS='',
+               GONOPROXY='none', GOVCS='*:off', GOWORK='off', GOFLAGS='-buildvcs=false',
                GOMODCACHE=str(root / 'empty-modcache'), GOPATH=str(root / 'gopath'))
     results = []
 
@@ -91,6 +91,41 @@ def main():
     write('future.work', 'go 1.27\nuse (\n./a\n./future\n)\n')
     run('GO-12-unselected-main-go-version', 'a', ['list', '-m'],
         work=str(root / 'future.work'), error='requires go >= 1.99')
+    # Runtime defaults: workspace policy shadows member policy, without rewriting it.
+    write('policy-member/go.mod', 'module example.org/policy\n\ngo 1.27\ngodebug panicnil=1\n')
+    write('policy-member/main.go', 'package main\nfunc main() {}\n')
+    write('runtime.work', 'go 1.27\ngodebug panicnil=0\nuse ./policy-member\n')
+    run('GO-13-member-godebug', 'policy-member', ['list', '-mod=readonly', '-f', '{{.DefaultGODEBUG}}', '.'],
+        expected='panicnil=1')
+    defaults = run('GO-14-work-godebug', 'policy-member', ['list', '-mod=readonly', '-f', '{{.DefaultGODEBUG}}', '.'],
+                   work=str(root / 'runtime.work'))
+    assert 'panicnil=1' not in defaults, defaults
+    run('GO-15-member-policy-restored', 'policy-member', ['list', '-mod=readonly', '-f', '{{.DefaultGODEBUG}}', '.'],
+        expected='panicnil=1')
+    # A native work member is importable even without a require edge from the caller.
+    write('no-require/a/go.mod', 'module example.org/no-require-a\n\ngo 1.27\n')
+    write('no-require/a/main.go', 'package main\nimport ("fmt"; "example.org/no-require-b")\n'
+          'func main() { fmt.Println(b.Message()) }\n')
+    write('no-require/b/go.mod', 'module example.org/no-require-b\n\ngo 1.27\n')
+    write('no-require/b/b.go', 'package b\nfunc Message() string { return "member import" }\n')
+    write('no-require/go.work', 'go 1.27\nuse (\n./a\n./b\n)\n')
+    run('GO-16-member-import-without-require', 'no-require/a', ['run', '.'],
+        work=str(root / 'no-require/go.work'), expected='member import')
+    run('GO-17-standalone-missing-require', 'no-require/a', ['run', '-mod=readonly', '.'],
+        error='cannot find module providing package example.org/no-require-b')
+    # A longer module prefix is only a candidate, not necessarily the package owner.
+    write('prefix/outer/go.mod', 'module example.org/p\n\ngo 1.27\n')
+    write('prefix/outer/sub/c/c.go', 'package c\nfunc Value() string { return "outer" }\n')
+    write('prefix/inner/go.mod', 'module example.org/p/sub\n\ngo 1.27\n')
+    write('prefix/app/go.mod', 'module example.org/prefix-app\n\ngo 1.27\n')
+    write('prefix/app/main.go', 'package main\nimport ("fmt"; "example.org/p/sub/c")\n'
+          'func main() { fmt.Println(c.Value()) }\n')
+    write('prefix/go.work', 'go 1.27\nuse (\n./outer\n./inner\n./app\n)\n')
+    run('GO-18-prefix-not-owner', 'prefix/app', ['run', '.'],
+        work=str(root / 'prefix/go.work'), expected='outer')
+    write('prefix/inner/c/c.go', 'package c\nfunc Value() string { return "inner" }\n')
+    run('GO-19-ambiguous-package-owner', 'prefix/app', ['run', '.'],
+        work=str(root / 'prefix/go.work'), error='ambiguous import')
     record = {'scope': 'Native Go only; no hgo workspace implementation', 'go': version,
               'network': 'GOPROXY=off GOSUMDB=off GOVCS=*:off; local replacements only',
               'modules_txt': modules, 'checks': results}

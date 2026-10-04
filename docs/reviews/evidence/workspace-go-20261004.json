@@ -139,6 +139,86 @@
       "work": "<fixture>/future.work",
       "exit": 1,
       "output": "go: module ../future listed in go.work file requires go >= 1.99, but go.work lists go 1.27; to download and use go 1.99:\n\tgo work use"
+    },
+    {
+      "id": "GO-13-member-godebug",
+      "args": [
+        "list",
+        "-mod=readonly",
+        "-f",
+        "{{.DefaultGODEBUG}}",
+        "."
+      ],
+      "work": "off",
+      "exit": 0,
+      "output": "panicnil=1"
+    },
+    {
+      "id": "GO-14-work-godebug",
+      "args": [
+        "list",
+        "-mod=readonly",
+        "-f",
+        "{{.DefaultGODEBUG}}",
+        "."
+      ],
+      "work": "<fixture>/runtime.work",
+      "exit": 0,
+      "output": "panicnil=0"
+    },
+    {
+      "id": "GO-15-member-policy-restored",
+      "args": [
+        "list",
+        "-mod=readonly",
+        "-f",
+        "{{.DefaultGODEBUG}}",
+        "."
+      ],
+      "work": "off",
+      "exit": 0,
+      "output": "panicnil=1"
+    },
+    {
+      "id": "GO-16-member-import-without-require",
+      "args": [
+        "run",
+        "."
+      ],
+      "work": "<fixture>/no-require/go.work",
+      "exit": 0,
+      "output": "member import"
+    },
+    {
+      "id": "GO-17-standalone-missing-require",
+      "args": [
+        "run",
+        "-mod=readonly",
+        "."
+      ],
+      "work": "off",
+      "exit": 1,
+      "output": "main.go:2:16: cannot find module providing package example.org/no-require-b: import lookup disabled by -mod=readonly"
+    },
+    {
+      "id": "GO-18-prefix-not-owner",
+      "args": [
+        "run",
+        "."
+      ],
+      "work": "<fixture>/prefix/go.work",
+      "exit": 0,
+      "output": "outer"
+    },
+    {
+      "id": "GO-19-ambiguous-package-owner",
+      "args": [
+        "run",
+        "."
+      ],
+      "work": "<fixture>/prefix/go.work",
+      "exit": 1,
+      "output": "main.go:2:16: ambiguous import: found package example.org/p/sub/c in multiple modules:\n\texample.org/p (<fixture>/prefix/outer/sub/c)\n\texample.org/p/sub (<fixture>/prefix/inner/c)"
     }
   ]
 }

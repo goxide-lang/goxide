@@ -82,7 +82,7 @@ func TestPropagationLoopInstalledCLI(t *testing.T) {
 	if got := deliveryCommand(t, root, tool, true, nil, "run", "-race", generated); got != want {
 		t.Fatalf("generated output %q", got)
 	}
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-runtime", root, "-go", tool, source); got != want {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--runtime", root, "--go", tool, source); got != want {
 		t.Fatalf("CLI output %q", got)
 	}
 }

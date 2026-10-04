@@ -34,7 +34,7 @@ func TestOutputProtection(t *testing.T) {
 	}
 	var out bytes.Buffer
 	target := filepath.Join(d, "result.go")
-	if err := run([]string{"transpile", "-o", target, "-source-map", target, src}, &out, &out); err == nil {
+	if err := run([]string{"transpile", "-o", target, "--source-map", target, src}, &out, &out); err == nil {
 		t.Fatal("colliding outputs accepted")
 	}
 	got, _ := os.ReadFile(src)
@@ -52,7 +52,7 @@ func TestTranspileArtifacts(t *testing.T) {
 	sm := filepath.Join(d, "map.json")
 	os.WriteFile(src, []byte("package sample\n#[derive(Debug)]\ntype Item struct { Name string }\n"), 0600)
 	var log bytes.Buffer
-	if err := run([]string{"transpile", "-o", out, "-source-map", sm, src}, &log, &log); err != nil {
+	if err := run([]string{"transpile", "-o", out, "--source-map", sm, src}, &log, &log); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(out)
@@ -77,7 +77,7 @@ func TestBuildAndRunGenerated(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	if err := run([]string{"build", "-runtime", root, "-go", filepath.Join(runtime.GOROOT(), "bin/go"), "-o", target, src}, &output, &output); err != nil {
+	if err := run([]string{"build", "--runtime", root, "--go", filepath.Join(runtime.GOROOT(), "bin/go"), "-o", target, src}, &output, &output); err != nil {
 		t.Fatalf("build: %v: %s", err, &output)
 	}
 	got, err := exec.Command(target).CombinedOutput()
@@ -108,12 +108,12 @@ func main(){
 	}
 	goTool := filepath.Join(runtime.GOROOT(), "bin/go")
 	var output bytes.Buffer
-	if err := run([]string{"run", "-runtime", root, "-go", goTool, src}, &output, &output); err != nil || output.String() != "42\n" {
+	if err := run([]string{"run", "--runtime", root, "--go", goTool, src}, &output, &output); err != nil || output.String() != "42\n" {
 		t.Fatalf("run: %v: %s", err, &output)
 	}
 	output.Reset()
 	binary := filepath.Join(dir, "program")
-	if err := run([]string{"build", "-runtime", root, "-go", goTool, "-o", binary, src}, &output, &output); err != nil {
+	if err := run([]string{"build", "--runtime", root, "--go", goTool, "-o", binary, src}, &output, &output); err != nil {
 		t.Fatalf("build: %v: %s", err, &output)
 	}
 	got, err := exec.Command(binary).CombinedOutput()

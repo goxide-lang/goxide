@@ -31,9 +31,9 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	generated := t.TempDir()
 	first := filepath.Join(generated, "main.go")
 	firstMap := first + ".map.json"
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", first, "-source-map", firstMap, input)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", first, "--source-map", firstMap, input)
 	second := filepath.Join(t.TempDir(), "main.go")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", second, "-source-map", second+".map.json", input)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", second, "--source-map", second+".map.json", input)
 	for _, suffix := range []string{"", ".map.json"} {
 		a, err := os.ReadFile(first + suffix)
 		if err != nil {
@@ -58,7 +58,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	if len(lines) != 2 || json.Unmarshal([]byte(lines[0]), &event) != nil || event["msg"] != "job accepted" || event["name"] != "mail" || event["units"] != float64(3) || lines[1] != "scheduled mail: 3 units" {
 		t.Fatalf("unexpected independent application output: %s", output)
 	}
-	cliOutput := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, "-runtime", root, input)
+	cliOutput := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, "--runtime", root, input)
 	if !strings.Contains(cliOutput, `"msg":"job accepted"`) || !strings.Contains(cliOutput, "scheduled mail: 3 units") {
 		t.Fatalf("installed CLI run with explicit runtime failed: %s", cliOutput)
 	}

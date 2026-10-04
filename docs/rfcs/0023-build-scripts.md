@@ -62,14 +62,16 @@ host 编译固定本机 GOOS/GOARCH、CGO=0、GOWORK=off、GOTOOLCHAIN=local、�
 ### 缓存与信任操作
 
 ```sh
-hgo scripts --action plan ./app
-hgo scripts --action trust-project ./app
-hgo scripts --action allow --subject EXACT_SHA256 ./app
+hgo scripts plan ./app
+hgo scripts trust-project ./app
+hgo scripts allow --subject EXACT_SHA256 ./app
 hgo run --bin app ./app
-hgo scripts --action revoke --subject EXACT_SHA256 ./app
-hgo scripts --action forget-project ./app
-hgo scripts --action clean ./app
+hgo scripts revoke --subject EXACT_SHA256 ./app
+hgo scripts forget-project ./app
+hgo scripts clean ./app
 ```
+
+兼容入口 `hgo scripts --action ACTION [flags] PROJECT` 仍受支持；与显式子命令同时指定时，动作必须一致。所有动作都要求显式项目路径，不会默认信任当前目录。
 
 所有 flags 放在项目路径之前；可指定 `--target-dir`、`--go`、`--features`、`--no-default-features`、`--offline`、`--locked`。plan 输出 JSON 与逐主体 trusted 状态，不编译/执行脚本；依赖解析仍可能访问网络，应按需要用 offline/locked。allow 只接受当前 plan 中存在的完整摘要，不顺便信任根项目。revoke/forget 不依赖仍能解析旧脚本，缓存存在也不能绕过撤销。
 

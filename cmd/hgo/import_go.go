@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -15,34 +14,19 @@ import (
 	"github.com/hxsf/goxide/internal/project"
 )
 
-type importBins []string
-
-func (b *importBins) String() string     { return strings.Join(*b, ",") }
-func (b *importBins) Set(v string) error { *b = append(*b, v); return nil }
-
-func runImportGo(args []string, out, stderr io.Writer) error {
-	f := flag.NewFlagSet("import-go", flag.ContinueOnError)
-	f.SetOutput(stderr)
-	plan := f.Bool("plan", false, "read-only migration plan (default without --out)")
-	dest := f.String("out", "", "new migrated project directory (never overwritten)")
-	tool := f.String("go", "go", "real Go compiler")
-	offline := f.Bool("offline", false, "validate with cached modules only")
-	lib := f.String("lib", "", "explicit library directory/file")
-	var bins importBins
-	f.Var(&bins, "bin", "explicit name=path binary; repeatable")
-	if e := f.Parse(args); e != nil {
-		return e
+// executeImportGo validates and executes an explicit migration request. Parsing and
+// help belong to the CLI adapter; this service never depends on a flag framework.
+func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
+	if !req.Plan && req.Out == "" {
+		req.Plan = true
 	}
-	if !*plan && *dest == "" {
-		*plan = true
-	}
-	if f.NArg() != 1 || (*plan == (*dest != "")) {
+	if req.Root == "" || (req.Plan == (req.Out != "")) {
 		return fmt.Errorf("usage: hgo import-go [--plan | --out NEWDIR] (--lib PATH | --bin NAME=PATH) ROOT")
 	}
-	if (*lib == "") == (len(bins) == 0) {
+	if (req.Lib == "") == (len(req.Bins) == 0) {
 		return fmt.Errorf("choose --lib or one or more --bin targets")
 	}
-	root, e := filepath.Abs(f.Arg(0))
+	root, e := filepath.Abs(req.Root)
 	if e != nil {
 		return e
 	}
@@ -59,17 +43,17 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 			return e
 		}
 	}
-	if e = checkDirectoryCompiler(*tool); e != nil {
+	if e = checkDirectoryCompiler(req.GoTool); e != nil {
 		return e
 	}
-	m, e := project.ImportMod(*tool, root)
+	m, e := project.ImportMod(req.GoTool, root)
 	if e != nil {
 		return e
 	}
-	if *lib != "" {
-		m.Lib = &project.Target{Name: "lib", Path: *lib}
+	if req.Lib != "" {
+		m.Lib = &project.Target{Name: "lib", Path: req.Lib}
 	}
-	for _, raw := range bins {
+	for _, raw := range req.Bins {
 		name, path, ok := strings.Cut(raw, "=")
 		if !ok {
 			return fmt.Errorf("--bin requires name=path")
@@ -84,7 +68,7 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 			return e
 		}
 		// Validate consistency using original Go metadata without writing source files.
-		c := exec.Command(*tool, "list", "-mod=vendor", "-m", "-json")
+		c := exec.Command(req.GoTool, "list", "-mod=vendor", "-m", "-json")
 		c.Dir = root
 		c.Env = project.GoEnv(true)
 		if b, err := c.CombinedOutput(); err != nil {
@@ -106,7 +90,7 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 	if _, e = project.Parse("candidate/goxide.toml", data); e != nil {
 		return e
 	}
-	if *plan {
+	if req.Plan {
 		fmt.Fprintln(out, "# Plan: preserve original files; copy regular source into a new directory; create goxide.toml/goxide.lock; generate Go metadata only under target.")
 		if vendor != nil {
 			fmt.Fprintln(out, "# Vendor bytes and licenses copied unchanged; upstream content difference: unknown (no fetch); hashes describe supplied content, not proxy checksums.")
@@ -117,7 +101,7 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 		_, e = out.Write(data)
 		return e
 	}
-	final, e := filepath.Abs(*dest)
+	final, e := filepath.Abs(req.Out)
 	if e != nil {
 		return e
 	}
@@ -221,9 +205,9 @@ func runImportGo(args []string, out, stderr io.Writer) error {
 	}
 	validate := func(flags projectFlags) error {
 		var buildOut bytes.Buffer
-		flags.offline = *offline
+		flags.offline = req.Offline
 		flags.targetDir = "target"
-		if e := runProject("build", stage, "", *tool, nil, flags, &buildOut, stderr); e != nil {
+		if e := runProject("build", stage, "", req.GoTool, nil, flags, &buildOut, stderr); e != nil {
 			return fmt.Errorf("migration validation failed; original files unchanged: %w", e)
 		}
 		return nil

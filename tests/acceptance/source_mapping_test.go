@@ -234,7 +234,7 @@ func main(){
 	if out, err := sourceMappingGo(t, root, "build", "-o", cli, "./cmd/hgo"); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, out)
 	}
-	cmd := exec.Command(cli, "build", "-runtime", root, "-go", filepath.Join(runtime.GOROOT(), "bin/go"), "-o", filepath.Join(dir, "program"), input)
+	cmd := exec.Command(cli, "build", "--runtime", root, "--go", filepath.Join(runtime.GOROOT(), "bin/go"), "-o", filepath.Join(dir, "program"), input)
 	cmd.Env = append(os.Environ(), "GOCACHE=/tmp/goxide-macro-cache", "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
 	output, err := cmd.CombinedOutput()
 	if err == nil {

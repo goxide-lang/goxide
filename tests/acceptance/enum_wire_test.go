@@ -34,7 +34,7 @@ func TestEnumWireInstalledBusinessRace(t *testing.T) {
 			t.Fatalf("got %q want %q", got, tc.want)
 		}
 	}
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "dispatch delivered true 1\n" {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "dispatch delivered true 1\n" {
 		t.Fatal(got)
 	}
 	// The example itself, not a synthetic source string, is the delivery artifact.

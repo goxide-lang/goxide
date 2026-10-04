@@ -155,7 +155,7 @@ func TestJobDelivery(t *testing.T){jobs:=make(chan string,1);if err:=resultError
 func TestCrossFileContextualTypes(t *testing.T){if valueOf(wide(63))!=uint64(1)<<63{t.Fatal("wide shift")}}
 `)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "port 8080 priority 7\ninvalid port\n" {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "port 8080 priority 7\ninvalid port\n" {
 		t.Fatalf("business: %q", got)
 	}
 }

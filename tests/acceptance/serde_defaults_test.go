@@ -23,7 +23,7 @@ func TestSerdeDefaultsInstalledBusinessRace(t *testing.T) {
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
 	packagesWrite(t, generated, "business_test.go", serdeDefaultsAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "demo 8080 8080 STSS\n" {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "demo 8080 8080 STSS\n" {
 		t.Fatalf("CLI output: %q", got)
 	}
 }

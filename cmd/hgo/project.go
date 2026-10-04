@@ -19,6 +19,7 @@ import (
 )
 
 type projectFlags struct {
+	programArgs                       []string
 	features, bin, example, targetDir string
 	noDefault, offline, locked, lib   bool
 }
@@ -281,6 +282,9 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	}
 
 	argv = append(argv, result.Target)
+	if mode == "run" {
+		argv = append(argv, flags.programArgs...)
+	}
 	cmd := exec.CommandContext(ctx, tool, argv...)
 	cmd.Dir = result.Root
 	cmd.Env = project.GoEnv(true)

@@ -19,7 +19,7 @@ func TestSerdeCausesInstalledBusinessRace(t *testing.T) {
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
 	packagesWrite(t, generated, "business_test.go", serdeCausesAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "accepted 1\n" {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "accepted 1\n" {
 		t.Fatalf("CLI output: %q", got)
 	}
 	executable := filepath.Join(bin, "orders")

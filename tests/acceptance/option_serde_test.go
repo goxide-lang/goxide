@@ -23,7 +23,7 @@ func TestOptionSerdeInstalledBusinessRace(t *testing.T) {
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
 	packagesWrite(t, generated, "business_test.go", optionSerdeAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "option 7 -1 4 0\n" {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "option 7 -1 4 0\n" {
 		t.Fatalf("CLI output: %q", got)
 	}
 }

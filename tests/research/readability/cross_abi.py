@@ -28,7 +28,7 @@ func None()Option[[]int]{return Option[[]int]::None}
 ''')
 producers={}
 for label,cli in [('old',old),('new',new)]:
- out=root/('producer-'+label);run([cli,'transpile','-go',go,'-o',str(out),str(src)]);producers[label]=out
+ out=root/('producer-'+label);run([cli,'transpile','--go',go,'-o',str(out),str(src)]);producers[label]=out
  run([go,'test','-race','./...'],cwd=out);run([go,'vet','./...'],cwd=out)
 a=json.loads((producers['old']/'model/.hgo.enums.json').read_text())
 b=json.loads((producers['new']/'model/.hgo.enums.json').read_text())
@@ -51,6 +51,6 @@ func main(){}
 import "testing"
 func TestValues(t *testing.T){for i:=-2;i<5;i++{want:=1;if i<0{want=-1}else if i==0{want=0};if got:=Read(i);got!=want{t.Fatal(i,got,want)}};if Sum().(HgoResultOk[int,error]).Value!=33||Nested()!=3{t.Fatal("propagation")}}
 ''')
-  out=root/('out-'+producer+'-'+consumer);run([cli,'transpile','-go',go,'-o',str(out),str(app)]);run([go,'test','-race','-count=1','./...'],cwd=out);run([go,'vet','./...'],cwd=out)
+  out=root/('out-'+producer+'-'+consumer);run([cli,'transpile','--go',go,'-o',str(out),str(app)]);run([go,'test','-race','-count=1','./...'],cwd=out);run([go,'vet','./...'],cwd=out)
   print('PASS producer',producer,'consumer',consumer,flush=True)
 print('ALL FOUR ABI PAIRS PASS',flush=True)

@@ -219,7 +219,7 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 		}
 	})
 	t.Run("build-selection", func(t *testing.T) {
-		out := packagesCommand(t, root, cli, false, "transpile", "-tags", "extra", "-o", filepath.Join(t.TempDir(), "out"), valid)
+		out := packagesCommand(t, root, cli, false, "transpile", "--tags", "extra", "-o", filepath.Join(t.TempDir(), "out"), valid)
 		if !strings.Contains(out, "source set mismatch") {
 			t.Fatal(out)
 		}

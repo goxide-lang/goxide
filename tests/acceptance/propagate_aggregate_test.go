@@ -136,7 +136,7 @@ func TestBatch(t *testing.T){s,e:=resultText(batch("1","3"));if e!=nil||s!="batc
 func TestHiddenContextualTypes(t *testing.T){if n,e:=resultWide(hiddenTypes(63));e!=nil||n!=uint64(1)<<63{t.Fatal(n,e)}}
 `)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "batch 2 9223372036854775808\ninvalid bounds\n" {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "batch 2 9223372036854775808\ninvalid bounds\n" {
 		t.Fatalf("business: %q", got)
 	}
 }

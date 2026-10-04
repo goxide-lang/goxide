@@ -143,7 +143,7 @@ source map在use移除及名称重写后继续回映原文件；生成alias文�
 可运行例子：[examples/reexports](../../examples/reexports/README.md)。命令仍使用已有目录接口：
 
 ```sh
-go run ./cmd/hgo run -go /path/to/go examples/reexports
+go run ./cmd/hgo run --go /path/to/go examples/reexports
 go run ./cmd/hgo transpile -o /tmp/reexports-generated examples/reexports
 ```
 

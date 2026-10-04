@@ -11,12 +11,18 @@ hgo 在 Go 生态上实现一个可执行语言子集：声明宏、闭合变体
 ```sh
 # 改成你机器上真实的 Go 1.27.x；这是本次云环境的已验证路径。
 export GO_BIN=/workspace/goxide-environment/go/bin/go
-"$GO_BIN" mod download # 首次联网取得 go.mod/go.sum 固定的依赖；试用脚本本身离线。
+"$GO_BIN" mod download all # 首次预热完整固定模块图；试用脚本本身离线。
 work="$(mktemp -d)"
 bash examples/enum_trial/try.sh "$work"
 ```
 
-工具链不能仅按 `go` 这个名字判断。CLI 的 `-go /absolute/go` 可选择执行编译器，但 importer 使用构建 CLI 的 GOROOT；目录运行/测试要求二者版本一致。生成模块仍通过 go.mod 依赖支持库，不是自包含 runtime 副本。
+工具链不能仅按 `go` 这个名字判断。CLI 的 `--go /absolute/go` 可选择执行编译器，但 importer 使用构建 CLI 的 GOROOT；目录运行/测试要求二者版本一致。生成模块仍通过 go.mod 依赖支持库，不是自包含 runtime 副本。
+
+CLI 长选项使用 `--name`，短选项使用 `-h`、`-o`，拒绝旧式 `-go/-offline`。用
+`hgo --help`、`hgo help scripts allow` 查看中文帮助，或 `hgo completion bash` 生成补全。
+选项放在输入路径前；程序参数用 `hgo run main.hgo -- ARGS...` 原样传递。scripts
+支持六个显式动作子命令，仍兼容 `--action`，不会默认授信当前目录。详细规则见
+[CLI 语法合同](docs/design/cli-parser-migration.md)。
 
 ## 网页与浏览器 Playground
 

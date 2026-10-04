@@ -82,7 +82,7 @@ func TestPackagesApplication(t *testing.T) {
 				for name, data := range test.files {
 					packagesWrite(t, source, name, data)
 				}
-				output := packagesCommand(t, root, cli, false, "build", "-go", tool, "-runtime", root, "-o", filepath.Join(t.TempDir(), "bad"), source)
+				output := packagesCommand(t, root, cli, false, "build", "--go", tool, "--runtime", root, "-o", filepath.Join(t.TempDir(), "bad"), source)
 				location := regexp.MustCompile(regexp.QuoteMeta(test.filename) + ":" + fmt.Sprint(test.line) + `(?::[0-9]+)?[: ]`)
 				if !location.MatchString(output) {
 					t.Fatalf("diagnostic did not map to original source %s:%d:\n%s", test.filename, test.line, output)

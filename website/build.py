@@ -53,7 +53,7 @@ for entry in catalog_data['examples']:
     name, title, description = entry['id'], entry['title'], entry['description']
     path = ROOT/'website/examples'/f'{name}.hgo'
     generated = run(str(ROOT/'bin/hgo'), 'transpile', str(path)).decode()
-    stdout = run(str(ROOT/'bin/hgo'), 'run', '-go', GO, str(path)).decode()
+    stdout = run(str(ROOT/'bin/hgo'), 'run', '--go', GO, str(path)).decode()
     assert stdout == entry['expectedStdout'], f'{name}: runtime output changed'
     examples.append(dict(id=name, title=title, description=description, source=path.read_text(), go=generated, stdout=stdout))
 # A known repository project, generated and run locally at build time only.
@@ -61,12 +61,12 @@ for entry in catalog_data['examples']:
 with tempfile.TemporaryDirectory(prefix='hgo-web-reexports-') as temporary:
     output = pathlib.Path(temporary)/'generated'
     project = ROOT/'examples/reexports'
-    run(str(ROOT/'bin/hgo'), 'transpile', '-go', GO, '-o', str(output), str(project))
+    run(str(ROOT/'bin/hgo'), 'transpile', '--go', GO, '-o', str(output), str(project))
     cli_example = dict(id='reexports', title='use / pub use：同一存储与定义点',
         files=[dict(path=str(p.relative_to(project)), source=p.read_text(),
                     go=(output/p.relative_to(project).with_suffix('.go')).read_text())
                for p in sorted(project.rglob('*.hgo'))],
-        stdout=run(str(ROOT/'bin/hgo'), 'run', '-go', GO, str(project)).decode())
+        stdout=run(str(ROOT/'bin/hgo'), 'run', '--go', GO, str(project)).decode())
 # Negative examples are genuine CLI rejections; only sanitized diagnostics are public.
 checks = []
 for name in sorted({n for c in catalog_data['items'] for n in c['checks']}):
@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory(prefix='hgo-catalog-features-') as temporary:
     files = [dict(path=str(p.relative_to(project)), source=p.read_text()) for p in sorted(project.rglob('*')) if p.is_file()]
     feature_runs = []
     for flags, expected in [([], 'pretty: true\n'), (['--no-default-features'], 'pretty: false\n')]:
-        stdout = run(str(ROOT/'bin/hgo'), 'run', '-go', GO, '--bin', 'demo', *flags, str(project)).decode()
+        stdout = run(str(ROOT/'bin/hgo'), 'run', '--go', GO, '--bin', 'demo', *flags, str(project)).decode()
         assert stdout == expected
         feature_runs.append(dict(command='hgo run --bin demo '+(' '.join(flags)+' ' if flags else '')+'.', stdout=stdout))
     feature_example = dict(id='features', title='feature 与 bin：完整最小工程', files=files, runs=feature_runs)

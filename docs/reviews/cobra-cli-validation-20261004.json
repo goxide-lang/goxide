@@ -1,0 +1,174 @@
+{
+  "base": "d51117d36fa2d1ccfcf322b81195b0d753cbb8de",
+  "branch": "feat/cobra-posix-cli",
+  "sourceGoAndModuleSHA256": "3d2b90f7177d1597e42a8024c94efb736e8a43b0819abfe6d2937decb4255d1c",
+  "toolchain": "go1.27.1 linux/amd64",
+  "environment": {
+    "GOTOOLCHAIN": "local",
+    "GOWORK": "off",
+    "GOPROXY": "off",
+    "GOMAXPROCS": "4"
+  },
+  "fullRace": {
+    "command": "go test -race -count=1 -timeout=20m ./...",
+    "exitCode": 0,
+    "packages": [
+      {
+        "package": "github.com/hxsf/goxide/cmd/hgo",
+        "seconds": 560.205
+      },
+      {
+        "package": "github.com/hxsf/goxide/formatting",
+        "seconds": 1.02
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/buildscript",
+        "seconds": 49.626
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/deriveextras",
+        "seconds": 1.409
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/enums",
+        "seconds": 7.052
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/equality",
+        "seconds": 21.53
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/frontend",
+        "seconds": 84.256
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/macros",
+        "seconds": 7.598
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/matchexpr",
+        "seconds": 2.736
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/project",
+        "seconds": 1.204
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/propagate",
+        "seconds": 8.139
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/refs",
+        "seconds": 3.415
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/scripttrust",
+        "seconds": 1.039
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/sourcemap",
+        "seconds": 1.026
+      },
+      {
+        "package": "github.com/hxsf/goxide/internal/typecheck",
+        "seconds": 1.518
+      },
+      {
+        "package": "github.com/hxsf/goxide/tests/acceptance",
+        "seconds": 434.134
+      },
+      {
+        "package": "github.com/hxsf/goxide/tests/prototype",
+        "seconds": 12.893
+      }
+    ]
+  },
+  "vet": {
+    "command": "go vet ./...",
+    "exitCode": 0
+  },
+  "design": {
+    "command": "python3 scripts/check_design.py",
+    "exitCode": 0,
+    "goMechanismCommands": 13
+  },
+  "nativeExamples": [
+    {
+      "example": "macro",
+      "stdout": "42\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "enum",
+      "stdout": "count: 3\ncount: 0\nempty\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "result",
+      "stdout": "next port: 8081\nport error: invalid port syntax: true\nname length: 3\nname length: absent\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "go_result",
+      "stdout": "next: 42\nparse error: true\npartial: 3 abc true\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "derive",
+      "stdout": "Config { Name: \"goxide\", Enabled: false } true\n{\"Name\":\"goxide\",\"Enabled\":false} <nil>\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "macro_repeat",
+      "stdout": "[1 2 9] 2\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "equality",
+      "stdout": "equal: true\nafter edit: 1 9 false\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "defaults",
+      "stdout": "0 8080\nsettings Settings { Port: 8080 }\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "serde_option",
+      "stdout": "{} None\n{\"Limit\":null} None\n{\"Limit\":7} Some(7)\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    },
+    {
+      "example": "readonly",
+      "stdout": "shared: 6 snapshot: 105\n",
+      "native_equal": true,
+      "generated_race": true,
+      "generated_vet": true
+    }
+  ],
+  "independentReview": "no remaining blocker; planner closure separately reviewed and race regression passed",
+  "notExecuted": [
+    "website/WASM rebuild",
+    "browser tests",
+    "CI",
+    "deployment"
+  ]
+}

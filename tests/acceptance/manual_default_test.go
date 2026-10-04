@@ -23,7 +23,7 @@ func TestManualDefaultInstalledBusinessRace(t *testing.T) {
 	packagesWrite(t, generated, "business_test.go", manualDefaultAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
 	want := "service 8080 service 8080 service 9090 SCSC\n"
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != want {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != want {
 		t.Fatalf("CLI output %q, want %q", got, want)
 	}
 

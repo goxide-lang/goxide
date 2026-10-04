@@ -29,7 +29,7 @@ func TestT0FinalAuditBusinessRace(t *testing.T) {
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
 	cli := filepath.Join(t.TempDir(), "hgo")
 	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/hgo")
-	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "-go", tool, "-runtime", root, source)
+	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--go", tool, "--runtime", root, source)
 	if got != "audit webhook done\n" {
 		t.Fatalf("unexpected business output: %q", got)
 	}

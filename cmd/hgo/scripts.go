@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -193,31 +192,21 @@ func (p *scriptPlans) execute(ctx context.Context, n *project.Node, store *scrip
 	fmt.Fprintf(log, "build-script %s %s\n", state, n.Module)
 	return a, nil
 }
-func runScripts(args []string, out, stderr io.Writer) error {
-	f := flag.NewFlagSet("scripts", flag.ContinueOnError)
-	f.SetOutput(stderr)
-	action := f.String("action", "plan", "plan|trust-project|allow|revoke|forget-project|clean")
-	subject := f.String("subject", "", "exact host execution subject from plan")
-	targetDir := f.String("target-dir", "", "managed project artifacts; default target or HGO_TARGET_DIR")
-	tool := f.String("go", "go", "Go 1.27+ compiler")
-	features := f.String("features", "", "project features")
-	defaults := f.Bool("no-default-features", false, "disable root default features")
-	offline := f.Bool("offline", false, "resolve only cached dependencies; does not sandbox scripts")
-	locked := f.Bool("locked", false, "require existing unchanged dependency lock")
-	if e := f.Parse(args); e != nil {
-		return e
-	}
-	if f.NArg() != 1 {
-		return fmt.Errorf("usage: hgo scripts [flags] PROJECT")
+
+// executeScripts performs only the explicitly selected action. In particular,
+// zero-value requests cannot grant trust or default to a mutating action.
+func executeScripts(req ScriptsRequest, out, stderr io.Writer) error {
+	if req.Root == "" {
+		return fmt.Errorf("usage: hgo scripts [ACTION] [flags] PROJECT")
 	}
 	valid := map[string]bool{"plan": true, "trust-project": true, "allow": true, "revoke": true, "forget-project": true, "clean": true}
-	if !valid[*action] {
-		return fmt.Errorf("unknown scripts action %q", *action)
+	if !valid[req.Action] {
+		return fmt.Errorf("unknown scripts action %q", req.Action)
 	}
-	if *subject != "" && *action != "allow" && *action != "revoke" {
+	if req.Subject != "" && req.Action != "allow" && req.Action != "revoke" {
 		return fmt.Errorf("--subject requires allow or revoke")
 	}
-	root, e := filepath.Abs(f.Arg(0))
+	root, e := filepath.Abs(req.Root)
 	if e != nil {
 		return e
 	}
@@ -235,26 +224,26 @@ func runScripts(args []string, out, stderr io.Writer) error {
 		return e
 	}
 	defer release()
-	layoutPath, e := project.ResolveTargetDir(root, *targetDir)
+	layoutPath, e := project.ResolveTargetDir(root, req.TargetDir)
 	if e != nil {
 		return e
 	}
 	if e = scripttrust.CheckLocation(root, layoutPath); e != nil {
 		return e
 	}
-	if e = checkDirectoryCompiler(*tool); e != nil {
+	if e = checkDirectoryCompiler(req.GoTool); e != nil {
 		return e
 	}
-	module, e := project.ModulePath(*tool, root)
+	module, e := project.ModulePath(req.GoTool, root)
 	if e != nil {
 		return e
 	}
-	if *action == "clean" {
+	if req.Action == "clean" {
 		if _, e := os.Lstat(layoutPath); os.IsNotExist(e) {
 			fmt.Fprintln(out, "no script cache; local trust unchanged")
 			return nil
 		}
-		layout, e := project.OpenLayout(root, module, *targetDir)
+		layout, e := project.OpenLayout(root, module, req.TargetDir)
 		if e != nil {
 			return e
 		}
@@ -271,7 +260,7 @@ func runScripts(args []string, out, stderr io.Writer) error {
 	}
 	forbidden := []string{root, layoutPath}
 	// Revocation must remain available even if the current manifest is broken.
-	if *action != "revoke" && *action != "forget-project" {
+	if req.Action != "revoke" && req.Action != "forget-project" {
 		manifest, err := project.Read(root)
 		if err != nil {
 			return err
@@ -283,7 +272,7 @@ func runScripts(args []string, out, stderr io.Writer) error {
 		return e
 	}
 	defer store.Close()
-	switch *action {
+	switch req.Action {
 	case "trust-project":
 		store.Projects[identity] = true
 		if e = store.Save(); e == nil {
@@ -297,28 +286,28 @@ func runScripts(args []string, out, stderr io.Writer) error {
 		}
 		return e
 	case "revoke":
-		if !scripttrust.ValidSubject(*subject) {
+		if !scripttrust.ValidSubject(req.Subject) {
 			return fmt.Errorf("--subject must be an exact SHA-256 from plan")
 		}
-		delete(store.Subjects, *subject)
+		delete(store.Subjects, req.Subject)
 		if e = store.Save(); e == nil {
 			fmt.Fprintln(out, "host execution permission revoked")
 		}
 		return e
 	}
-	g, e := project.LoadWithTarget(root, *tool, strings.FieldsFunc(*features, func(r rune) bool { return r == ',' || r == ' ' }), !*defaults, *offline, *locked, *targetDir)
+	g, e := project.LoadWithTarget(root, req.GoTool, strings.FieldsFunc(req.Features, func(r rune) bool { return r == ',' || r == ' ' }), !req.NoDefaultFeatures, req.Offline, req.Locked, req.TargetDir)
 	if e != nil {
 		return e
 	}
-	plans, e := prepareScriptPlans(g, *tool, projectCompilerID(), nil, false, layoutPath)
+	plans, e := prepareScriptPlans(g, req.GoTool, projectCompilerID(), nil, false, layoutPath)
 	if e != nil {
 		return e
 	}
 	defer plans.close()
-	if *action == "allow" {
+	if req.Action == "allow" {
 		found := false
 		for _, s := range plans.subjects {
-			if s.ID == *subject {
+			if s.ID == req.Subject {
 				found = true
 				break
 			}
@@ -326,7 +315,7 @@ func runScripts(args []string, out, stderr io.Writer) error {
 		if !found {
 			return fmt.Errorf("subject does not match the current frozen host execution closure; inspect scripts plan again")
 		}
-		store.Subjects[*subject] = true
+		store.Subjects[req.Subject] = true
 		if e = store.Save(); e == nil {
 			fmt.Fprintln(out, "permitted exact host execution closure (unconfined)")
 		}

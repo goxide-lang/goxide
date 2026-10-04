@@ -5,7 +5,7 @@
 `api.Add` 调用原函数，没有生成函数变量或调用 wrapper。
 
 ```sh
-go run ./cmd/hgo run -go /path/to/go examples/reexports
+go run ./cmd/hgo run --go /path/to/go examples/reexports
 ```
 
 在仓库根运行，且 `go` 应是 Go 1.27+ 编译器。输出：

@@ -613,25 +613,54 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			return nil, e
 		}
 	}
-	data, e := run("list", "-mod=mod", "-m", "-json", "all")
-	if e != nil {
-		return nil, e
-	}
+	// Generated modules promote every selected module to a main-module require.
+	// With Go graph pruning, that promotion can expose additional dependencies
+	// (notably through older go directives). Solve the same roots here before
+	// locking/verifying the plan, rather than permitting unplanned modules later.
+	// This closure starts fresh in every feature/source round; inactive historical
+	// selections must never become roots of a subsequent round.
+	var data []byte
+	var decoder *json.Decoder
 	selected := map[string]Selection{}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	for {
-		var s Selection
-		e = decoder.Decode(&s)
-		if e == io.EOF {
-			break
+	previousNative := ""
+	for closureRound := 0; ; closureRound++ {
+		if closureRound == 64 {
+			return nil, fmt.Errorf("promoted Go module graph did not converge within 64 rounds")
 		}
+		data, e = run("list", "-mod=mod", "-m", "-json", "all")
 		if e != nil {
 			return nil, e
 		}
-		if s.Path == r.root.Module || bridges[s.Path] {
-			continue
+		selected = map[string]Selection{}
+		decoder = json.NewDecoder(bytes.NewReader(data))
+		for {
+			var s Selection
+			e = decoder.Decode(&s)
+			if e == io.EOF {
+				break
+			}
+			if e != nil {
+				return nil, e
+			}
+			if s.Path == r.root.Module || bridges[s.Path] {
+				continue
+			}
+			selected[s.Path] = s
 		}
-		selected[s.Path] = s
+		nativeState := Digest(selected)
+		if nativeState == previousNative {
+			break
+		}
+		previousNative = nativeState
+		roots := []string{"mod", "edit"}
+		for _, path := range keys(selected) {
+			roots = append(roots, "-require="+path+"@"+selected[path].Version)
+		}
+		if len(roots) > 2 {
+			if _, e = run(roots...); e != nil {
+				return nil, e
+			}
+		}
 	}
 	graph, e := run("mod", "graph")
 	if e != nil {

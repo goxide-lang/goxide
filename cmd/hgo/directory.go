@@ -20,6 +20,9 @@ func runDirectory(mode, input, dest, goTool string, out, stderr io.Writer) error
 	return runDirectoryTags(mode, input, dest, goTool, nil, out, stderr)
 }
 func runDirectoryTags(mode, input, dest, goTool string, tags []string, out, stderr io.Writer) error {
+	return runDirectoryArgs(mode, input, dest, goTool, tags, nil, out, stderr)
+}
+func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []string, out, stderr io.Writer) error {
 	options := frontend.ModuleOptions{Tags: tags, Race: mode == "test"}
 	if mode == "expand" {
 		return fmt.Errorf("expand is a single-file command; use transpile for packages")
@@ -76,6 +79,9 @@ func runDirectoryTags(mode, input, dest, goTool string, tags []string, out, stde
 		argv = append(argv, "-race")
 	}
 	argv = append(argv, target)
+	if mode == "run" {
+		argv = append(argv, programArgs...)
+	}
 	cmd := exec.Command(goTool, argv...)
 	cmd.Dir = result.Root
 	cmd.Env = localEnv()

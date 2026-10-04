@@ -231,7 +231,7 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		}
 	})
 	t.Run("build-selection", func(t *testing.T) {
-		msg := packagesCommand(t, root, cli, false, "transpile", "-tags", "extra", "-o", filepath.Join(t.TempDir(), "out"), valid)
+		msg := packagesCommand(t, root, cli, false, "transpile", "--tags", "extra", "-o", filepath.Join(t.TempDir(), "out"), valid)
 		if !strings.Contains(msg, "mismatch") && !strings.Contains(msg, "changed") {
 			t.Fatal(msg)
 		}

@@ -30,7 +30,7 @@ func TestPrintDefaultBusinessRace(t *testing.T) {
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
 	cli := filepath.Join(t.TempDir(), "hgo")
 	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/hgo")
-	output := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "-go", tool, "-runtime", root, source)
+	output := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--go", tool, "--runtime", root, source)
 	for _, want := range []string{"startup=standby retries=0\n", "snapshot Settings {", "ready nightly active\n"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in real CLI output: %s", want, output)

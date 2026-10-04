@@ -19,7 +19,7 @@ func TestDirectoryBuildProtectsSourceModule(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	for _, dest := range []string{filepath.Join(src, ".hidden"), filepath.Join(root, "go.mod"), filepath.Join(root, "new-binary")} {
 		var log bytes.Buffer
-		err := run([]string{"build", "-go", tool, "-o", dest, src}, &log, &log)
+		err := run([]string{"build", "--go", tool, "-o", dest, src}, &log, &log)
 		if err == nil || (!strings.Contains(err.Error(), "outside") && !strings.Contains(err.Error(), "overwrite")) {
 			t.Fatalf("%s: %v (%s)", dest, err, log.String())
 		}
@@ -60,7 +60,7 @@ func TestDirectoryTagsReferencesAndExplicitCompiler(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	for _, mode := range []string{"run", "test"} {
 		var out bytes.Buffer
-		if err := run([]string{mode, "-go", tool, "-tags", "feature", src}, &out, &out); err != nil {
+		if err := run([]string{mode, "--go", tool, "--tags", "feature", src}, &out, &out); err != nil {
 			t.Fatalf("%s: %v\n%s", mode, err, out.String())
 		}
 		if mode == "run" && !strings.Contains(out.String(), "42 tagged") {
@@ -68,7 +68,7 @@ func TestDirectoryTagsReferencesAndExplicitCompiler(t *testing.T) {
 		}
 	}
 	var out bytes.Buffer
-	if err := run([]string{"run", "-go", tool, src}, &out, &out); err != nil || !strings.Contains(out.String(), "42 base") {
+	if err := run([]string{"run", "--go", tool, src}, &out, &out); err != nil || !strings.Contains(out.String(), "42 base") {
 		t.Fatalf("%v: %s", err, out.String())
 	}
 }

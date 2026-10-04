@@ -136,7 +136,7 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 	packagesWrite(t, generated, "private_test.go", privatePlaceAssertions)
 
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "-go", tool, source); got != "42 9 <nil>\ninvalid value 42 9\nstock 7 <nil>\ninvalid stock 7\n" {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "42 9 <nil>\ninvalid value 42 9\nstock 7 <nil>\ninvalid stock 7\n" {
 		t.Fatalf("business: %q", got)
 	}
 	deliveryCommand(t, generated, tool, true, []string{"GODEBUG=panicnil=1"}, "test", "-race", "-count=1", "-v", "-run", "TestPrivateUserPanicAndGoexit", ".")

@@ -42,6 +42,8 @@ producer 的具体校验函数、调用位置、nominal instance 选择、非法
 
 ## 适配宏与网站任务交接
 
+更新：已 fetch 并验证新宏提交 `ffc9b9b`；实际重叠为 hygiene.go、propagate/lower.go 和宏 README，三方自动合并无冲突，组合验收通过。`sums.go` 未出现在该新宏 diff 中。详见 [准确提交、合成树与安全集成步骤](INTEGRATION_FFC9B9B.md)。下段保留实现阶段的潜在重叠提示。
+
 可能与另一个 Result 适配宏任务重叠的生产文件只有 `internal/macros/sums.go`：在 `prepareSums` 的 `fixedType(arg)` 检查成功后、`args = append(args, arg)` 前新增 7 行，对 `ts[start:j]` 中 primitive token 调用 `checkPrimitiveBinding`。若适配宏增加新的类型处理入口，应复用这个检查，避免绕过；本任务未获取或合并对方未提交改动，不能宣称已验证联合分支。
 
 其它生产文件：`internal/macros/hygiene.go`、新增 `primitive_bindings.go`、`internal/frontend/imported_family.go`、`internal/propagate/lower.go`。它们的 diff 和回归可独立审查/复用。没有实现 Go `(v,error)` 适配宏，没有改网站。

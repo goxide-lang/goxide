@@ -10,7 +10,7 @@
 
 首片是**原生 Go 传输模式**：输出仍以根/成员 goxide.toml 和根 goxide.lock 为作者权威，所有 go.mod/go.work 只生成在受管 target。保留每个成员自己的 go/require/replace/exclude/godebug、根 work go/toolchain/godebug/replace。不把 work.go 赋给所有成员；不把成员 godebug 合并成 work godebug。实际 list/build/run/test 使用同一受控 GOWORK。`GOTOOLCHAIN=local`，不自动安装工具链。
 
-原生模式拒绝 .hgo、增强 features、构建脚本、增强远端依赖与额外 member-vendor；这些要等待前端完整传播原生工作区上下文后另行开放。不扩展 registry、发布或 host resolver。
+迁入的输入仍必须是原生 Go 工程；迁入完成后允许成员渐进加入 .hgo、现有 features 与明确授权的构建脚本。额外 member-vendor 仍拒绝；增强依赖图当前连接显式成员，其他远端依赖保持原生 Go 版本来源。不扩展 registry、发布或 host resolver。
 
 ## 显式图与分析范围
 
@@ -18,7 +18,7 @@
 
 分析范围固定为迁入时的 GOOS/GOARCH/CGO_ENABLED、架构特征（如 GOAMD64）、GOEXPERIMENT/GOFIPS140、Go 工具版本及 C 工具/flags/PKG_CONFIG，且 build tags 为空，写入 `[workspace.go]` 配置。分析普通与测试包；CGO 开启时额外合并 race 配置的实际成员边（现有 hgo test 使用 -race）。切换配置明确拒绝并要求重新分析；不能把单配置分析冒称所有平台的无损迁移。源码或新的 import 改变后，构建仍按声明图检查，不能运行时借 go.work 自动扩图。跨成员包级无环但 module 级循环，首片明确拒绝。
 
-构建某成员时仅复制其显式依赖闭包的源码；其余成员只保留原生 Go 元数据以维持全工作区版本政策。每个选中根独立校验，批量选择本身不使别的成员源码成为允许来源。纯 Go 源码没有宏/脚本展开路径。
+构建某成员时仅复制其显式依赖闭包的源码；其余成员只保留原生 Go 元数据以维持全工作区版本政策。每个选中根独立校验，批量选择本身不使别的成员源码成为允许来源。纯 Go 源码保持原生路径；增强成员按依赖顺序在同一受管工作区展开，仍不为未选成员提供源码或执行脚本。
 
 ## replace 与路径
 
@@ -43,7 +43,7 @@
 | A 新增对图外 C 的 import | 锁/显式可达图拒绝；不会因为 C 是成员而提供源码 |
 | 改 GOOS、tags、Go 工具版本 | 配置范围错误，要求重新分析 |
 | vendor 缺一个文件/包或被篡改且 --locked | 明确失败，不代理下载、不重建 vendor |
-| 工作区中增强源码/脚本、未知政策、重复 module、模块级循环 | 明确拒绝；原目录和 NEWDIR 均不改变 |
+| 迁入输入已带增强源码/脚本、未知政策、重复 module、模块级循环 | 明确拒绝；原目录和 NEWDIR 均不改变 |
 
 依据：Go 官方 [模块/工作区](https://go.dev/ref/mod#workspaces) 与 [GODEBUG](https://go.dev/doc/godebug)，以及本仓库 RFC0026 的原生机制研究。最终验收使用临时多模块项目、本地 file proxy 和真实 Go，不访问私人第三方。
 
@@ -58,11 +58,11 @@ hgo test -p example.org/app --locked --offline /projects/migrated
 hgo transpile -p example.org/app --bin web --locked --offline /projects/migrated
 ```
 
-`transpile` 输出受管 Go workspace bundle，可由真实 Go 使用其 go.work 编译；它不执行 hgo lowering。所有 flags 在位置 INPUT 前。没有缓存的非 vendor 远端依赖初次迁入不能使用 `--offline`；此时仍由 Go 原生 proxy/checksum 机制获取，没有安装脚本。
+`transpile` 输出受管 Go workspace bundle，可由真实 Go 使用其 go.work 编译；增强成员在此阶段执行既有 lowering。所有 flags 在位置 INPUT 前。没有缓存的非 vendor 远端依赖初次迁入不能使用 `--offline`；此时仍由 Go 原生 proxy/checksum 机制获取，没有安装脚本。
 
-根 schema 4 锁保存原生全工作区选版、各成员 sum、work.sum、政策输入摘要以及独立 vendor 清单摘要；它与增强作者模式的 schema 3 锁显式分开，旧 schema 不隐式升级。schema 4 尚不支持拆成员复制锁独立运行，需另行物化独立政策。原本合法的非vendor本地 replace 是可变作者源码，锁不伪造内容不可变保证。
+根 schema 4 锁保存原生全工作区选版、各成员 sum、work.sum、政策输入摘要以及独立 vendor 清单摘要；它与增强作者模式的 schema 3 锁显式分开，旧 schema 不隐式升级。schema 4 在补齐逐成员记录后支持非vendor成员显式物化并复制根锁独立运行；workspace vendor 拆出仍要求另行明确转换政策。原本合法的非vendor本地 replace 是可变作者源码，锁不伪造内容不可变保证。
 
-bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳过嵌套 module），不会查找任意兄弟目录。重复目录名可通过重复 `--member-bin example.org/app::first=a/web` 与 `--member-bin example.org/app::second=b/web` 显式命名；对一个成员给出的首个覆盖会替换该成员全部自动 bin 列表。examples 不自动推断，迁入后可在成员 TOML 使用既有 `[[example]]`，仅 `--example NAME` 选择；没有新增发布功能。原生模式目前拒绝 `-o`，使用受管输出。
+bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳过嵌套 module），不会查找任意兄弟目录。重复目录名可通过重复 `--member-bin example.org/app::first=a/web` 与 `--member-bin example.org/app::second=b/web` 显式命名；对一个成员给出的首个覆盖会替换该成员全部自动 bin 列表。examples 不自动推断，迁入后可在成员 TOML 使用既有 `[[example]]`，仅 `--example NAME` 选择；没有新增发布功能。该模式目前拒绝 `-o`，使用受管输出。
 
 输出目录、Go 视图和锁共用已有 owner/lease/原子发布机制；配置/成员/目标/normal-test 模式进入 unit 身份，每次仍创建新源码 generation。不存在复用增强外部 metadata 的旁路。未知嵌套 owner 标记拒绝，不能以伪造标记静默丢弃原工程普通目录。
 
@@ -83,3 +83,6 @@ bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳�
 schema4 增补逐成员输入记录；非vendor拆出显式物化继承/path后直接复制根锁，复用既有 Go/Unified可达解析和校验，不读无关成员源码、不激活无关脚本。显式本地成员路径可搬迁，逐节点仍核对模块身份与有效清单。成员自身 go/toolchain/godebug/replace 恢复生效；若来源因 work override 消失而改变，必须报错而非沿旧来源偷偷构建。旧schema4缺成员记录时先在原workspace普通构建补锁；复制锁的原字节保留。
 
 **workspace vendor 拆出仍需显式转换合同**。最小反例：A require D，B require E，工作区 vendor 标记 D/E 都 explicit。A 独立后若原样复制整份 vendor，E 的 explicit 不再对应主模块 require，真实 Go 拒绝；若改 modules.txt 删除 E，则已不是原 vendor 政策/摘要；若保留隐藏的 B/go.work，则仍施加原 work replace/godebug，违反已确认独立政策恢复。普通非vendor A 可直接复制根锁、只校验D；vendor A 当前明确拒绝并要求显式转换，绝不擦标记或丢修改字节。建议另立最小转换协议：验证原快照后，依据独立政策派生vendor元数据，保留实际文件和原/派生摘要；在协议确认前暂停这部分，而不阻塞非vendor及workspace内渐进增强。
+
+
+条件编译语法与既有前端完全一致：`//hgo:cfg` 在导入发现/宏/名称解析前移除；未选文件仍校验词法、token tree 与 package/import 前缀，完整声明/表达式语法按既有合同延后到启用时验证。本次未扩大为完整语法解析，也未引入新宏语义。

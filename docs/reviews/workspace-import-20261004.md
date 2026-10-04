@@ -42,8 +42,28 @@
 - 成员路径修复后全部原生迁入 race 再通过：CLI43.964s、project1.052s；work 根限定版本 replace 搬迁增量 race 通过5.567s。最终生产增量再次 `go vet ./...` 通过。
 - `go test -race ./... -count=1` 全树通过：CLI422.497s、acceptance351.991s、project1.151s，frontend/macros/typecheck/buildscript 等全部通过。该轮启动后补入的原生模式修复由以上最终专项 race 覆盖；没有修改前端。
 
-明确边界：只保证记录的普通/race测试配置；不支持增强 .hgo/features/scripts、额外 tags、自动工具链下载、schema4 拆出复制锁、统一 host resolver 或发布。非vendor的外部本地 replace 保留显式绝对原目录引用，不承诺自动自足。只有迁入发布新目录是整体事务；之后批量 build 沿用逐目标发布语义。
+`70964a8` 时的边界（下方续作已解除增强与非vendor拆锁限制）：只保证记录的普通/race测试配置；当时不支持增强 .hgo/features/scripts、额外 tags、自动工具链下载、schema4 拆出复制锁、统一 host resolver 或发布。非vendor的外部本地 replace 保留显式绝对原目录引用，不承诺自动自足。只有迁入发布新目录是整体事务；之后批量 build 沿用逐目标发布语义。
 
 ## 提交与交付
 
 先行合同 `514b864`；生产实现 `30238cba62c3bdf003463474320d4ac098614af5`；成员替换搬迁修复 `fbe43f96a1e2cc9116c417aacd4037802f3d9b26`，均已推送独立分支，远端 refs 核验一致。本记录和示例随后独立提交。未合并主线、未创建tag、未部署网站；没有权限拒绝或遗留执行阻断。
+
+## 渐进增强与拆锁续作
+
+父审阅正确指出 `70964a8` 只完成原生保真迁入，不能作为完整第二阶段交付。续作合同先行提交 `28a0e63`，生产衔接提交 `d3edf65`。
+
+新增真实验证：
+
+- 迁入后 Go app 调用 `.hgo` lib，默认feature转发/关闭默认/再次默认结果切换，test模式成功；未知feature拒绝。
+- 可选成员关闭后，其错误源码不参与编译；未选cfg文件不解析名称和import，仍校验既有token tree/package-import前缀合同。未改变前端原有“完整表达式语法启用后才检查”的规则。
+- 修改过的 workspace vendor 在原replace目录删除、空modulecache条件下，继续被增强宏代码调用，字节保持不变。
+- 依赖构建脚本先plan/明确subject allow；未授权不执行，成功后可复用缓存，revoke后缓存也拒绝。迁入与workspace成员资格均不授予权限。
+- 非vendor复制schema4根锁，A仍使用整个工作区锁定的D1.1.0；独立后恢复成员panicnil=0，复制锁原字节不改，无关原workspace删除后仍可离线运行。
+- 显式物化成员path并搬迁后，复制锁可运行；缺可达member/module记录、远端checksum篡改、子成员清单变化均拒绝。
+- work override与成员自身replace选择不同来源时，拆出拒绝静默变源；没有偷偷继承原work override。
+
+独立review发现依赖lib的required_features/缺lib检查必须先于脚本，已移入图预检；又补齐vendor摘要进入增强metadata/脚本PlanID。两项均修复。copied-lock独立race通过13.480s，无新增阻断。
+
+新增测试：`native_enhanced_test.go`、`native_standalone_test.go`。集成race（NativeWorkspace/Workspace/BuildScript）通过CLI294.731s/project1.067s；复制锁/可选cfg负例race通过25.764s；政策丢失/vendor独立/依赖gate负例race通过14.552s。续作生产代码 `go vet ./...` 通过，完整设计检查13条Go命令通过。实际新CLI也执行了README渐进增强脚本，输出先为 hello workspace / web: hello workspace，再为 enhanced workspace / plain workspace。最终生产代码 `go test -race ./... -count=1` 全树通过：CLI535.324s、acceptance334.772s、frontend50.414s、project1.109s、typecheck1.297s，其余包全部通过，见[原始race输出](evidence/workspace-progressive-race-20261004.txt)。全树启动后追加的政策负例另有上述14.552s专项race；启动后未修改生产代码。
+
+保留的真正转换边界：`TestNativeWorkspaceVendorStandaloneNeedsConversion` 同时验证hgo明确拒绝与真实Go的explicit不一致错误。A→D、B→E的workspace vendor不能直接当A的module vendor；擦掉E/marker改变原政策，隐藏保留B/go.work又违背独立政策恢复。建议先确认显式派生vendor协议（原快照验证、独立政策验证、字节保留、原/派生摘要），该部分暂停，未冒称完整第二阶段全部完成。其余上述渐进增强与非vendor拆锁已实现。

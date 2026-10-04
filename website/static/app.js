@@ -85,7 +85,7 @@ function renderCatalog() {
       const output=details('查看 CLI 运行输出（浏览器不执行）',example.stdout);usage.append(output);
     }
     if(item.id==='reexports'){const a=el('a','查看 use / pub use 多文件快照 →','snapshot-link');a.href='#projects';usage.append(a);}
-    if(['projects','import-go','vendor','cli-options','workspace'].includes(item.id)){const a=el('a','查看 CLI 工程快照与验证输出 →','snapshot-link');a.href='#project-snapshots';usage.append(a);}
+    if(['projects','import-go','vendor','cli-options','workspace','workspace-import'].includes(item.id)){const a=el('a','查看 CLI 工程快照与验证输出 →','snapshot-link');a.href='#project-snapshots';usage.append(a);}
     for(const id of item.checks){const check=catalog.checks.find(c=>c.id===id);const d=details('拒绝例：'+id,check.source);d.append(el('p','当前版本真实 CLI 诊断'),code(check.diagnostic));usage.append(d);}
     article.append(usage);$('catalog-items').append(article);
   }

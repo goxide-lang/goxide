@@ -94,7 +94,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 
 状态针对卡片的限定范围：提案 / 已确认待实现 / 部分实现 / 已实现并验证。开发快照与当前编译器支持分别记录；任务报告不等于可发布实现。RFC 0024 仍是提案。当前 Playground 已包含共享 std/serde、明确上下文下的普通 sum 推导及限定可读性改进；统一 TOML/锁与 import-go 只在 CLI 工程快照说明。
 
-编译器 `commit` 固定为 2aa0d06625f3d25ee6ad08ea2666c226eb4b1dac，`websiteCommit` 记录网站源码提交；构建计算真实编译器源摘要并与该基线逐文件核对，不允许文案偷偷升级编译器。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
+编译器 `commit` 固定为 27d2e2740c5ee7dc3e3766bd7b5f0eec6bb852b8，`websiteCommit` 记录网站源码提交；构建计算真实编译器源摘要并与该基线逐文件核对，不允许文案偷偷升级编译器。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
 
 ```sh
 python3 website/catalog.py
@@ -122,3 +122,7 @@ CLI snapshot 构建实际运行 format 2 feature 工程 A/B/A、根无 go.mod/go
 ## Workspace 作者核心同步
 
 当前2aa0d06已经实现RFC0026作者核心，覆盖显式继承、全workspace统一版本、根唯一schema3锁、selected feature/build、多目标及复制根锁拆出。上节Cobra轮的“workspace未实现”是历史状态。本轮CLI快照在本地file proxy/Git fixture上实际执行，不使用公网示例模块，也不把工程送入浏览器。路径归一化后的锁仅展示，不能直接复用。go.work/workspace vendor迁入、统一host resolver、细粒度lock update、publish仍未实现。
+
+## 原生 workspace 迁入同步
+
+当前27d2e274已实现go.work/workspace vendor向新目录迁入，保留原生政策并物化显式成员边；迁入后支持渐进.hgo/features/明确授权scripts。schema4非vendor根锁经显式物化可复制拆出。上节“迁入未实现”是历史状态；workspace vendor独立拆出仍未支持，须确认转换合同。既有host resolver/publish等限制不变。新增两个真实CLI快照，授权脚本由本轮NativeWorkspaceProgressiveScriptPermissions测试验证，网站构建本身不运行或授权脚本。

@@ -123,3 +123,7 @@ Go 可调用公开生成函数，不能调用 `m!(...)`；宏规则供 hgo 工�
 内建 `go_result!` / `go_result_keep!` 已获用户授权，两种结果及传播契约见 [RFC 0005](research/0005-option-result-question.md#显式-go-result-适配宏2026-10-04)。宏可出现在声明宏模板和已支持的表达式位置；`m!(...)?` 的前处理现在保留整个 qualified 宏操作数。
 
 实现复用宏展开器，先以内部 marker 保持捕获/定义点卫生，再展开具体适配器函数 literal；原调用位于实参，不能移进其函数体。类型参数不是通用 type fragment；首片显式 T，借用现有具体 Result 登记。原生调用必须返回 error 或 (T,error)，语义检查发生在问号类型解析稳定之后，防止暂时的 identity stub 误判原生泛型签名。局部 Result/error/nil 遮蔽、重复展开确定性和生成模块 race/vet 见[接受测试](../../tests/acceptance/go_result_test.go)。外部预编译宏规则仍未接通，独立模块测试对此明确拒绝。
+
+### T/E 推导增量（已授权，先规范后实现）
+
+两种 Result 适配内建改为在 typed 阶段按真实返回签名确定 arity/T/E，不增加一般声明宏的类型查询或 type fragment。规范、nil 黑白案例、显式 T 兼容、卫生/缓存/source map 及网站差分验收见 [RFC 0005 推导增量](research/0005-option-result-question.md#按静态返回签名推导-te已授权实施前规范)。此处是本轮实施契约；上节固定 error 的首片说明作为历史保留。

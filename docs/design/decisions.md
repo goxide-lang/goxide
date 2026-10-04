@@ -163,3 +163,6 @@
 
 
 已确认 **D36（2026-10-04 显式 Go 多返回适配）**：提供普通 Ok/Err 与保留错误时返回值两种显式宏，覆盖 Reader 的部分成功。保值版不能经 `?` 静默丢弃 Value；原始 error 身份、typed-nil 语义、单次求值与用户函数边界保持。首片工程 API、具体类型/数量边界和真实验收见 [RFC 0005](../rfcs/research/0005-option-result-question.md#显式-go-result-适配宏2026-10-04)。不授权隐式原生调用转换、Residual/Try、tuple 或新指针设计。
+
+
+D36 补充（用户已授权，先规范后实现）：`go_result!(call)` / `go_result_keep!(call)` 按真实返回签名推导 T/E，保留具名 nilable 错误类型，按原类型 nil 判断；error 接口不动态猜 E，非 nilable struct 错误明确拒绝。显式 T 形式继续精确核对。完整黑白案例、typed 阶段/多文件/metadata 与网站验收见 [T/E 推导规范](../rfcs/research/0005-option-result-question.md#按静态返回签名推导-te已授权实施前规范)。

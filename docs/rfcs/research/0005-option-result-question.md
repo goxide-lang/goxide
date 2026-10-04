@@ -355,3 +355,67 @@ From **不因导入外部包而自动注册**。当前实际源入口仍是本�
 `defer`/`go` 的实参按普通 Go 规则先求值：写 `defer go_result!(call())` 延期的是适配器，call 在注册时执行；`go` 同理。要延期/并发原调用须显式函数体。原生泛型调用自身的推断不受影响，但宏尚不推断 T；包作用域不可命名的局部 payload 沿现有 Result 实例登记限制拒绝。跨独立模块的 Result metadata 可恢复；预编译宏导入仍未实现，不能把这项工程边界视为用户批准的延期。
 
 [可运行例子](../../../examples/go_result/README.md)覆盖解析与 Reader 部分读取。[真实 CLI 验收](../../../tests/acceptance/go_result_test.go)覆盖单次调用/参数次序、typed nil/error identity/Is/As、单 error、透明 alias、原生泛型、宏嵌套与跨源码包、命名遮蔽、最近问号/From、panic/defer/recover/go、保值误传播和非法返回签名拒绝，并单独运行生成模块 race/vet。第二独立模块检验原生 alias、Result metadata、match/问号，并保留外部宏规则导入的明确拒绝。此前本文 §6.1 等历史原型限制不覆盖这次新增入口，也不代表完整 MVP 完成。
+
+## 按静态返回签名推导 T/E（已授权，实施前规范）
+
+本节基于 `f097b1951dde4f8653a0629a7da8a0bb5646ec79`，覆盖上一节首片的显式 T/error-only 限制；先提交规范，再实施。用户已批准推导 T 并保留声明中的 E。两入口仍须显式写宏，不把普通 Go 调用自动变成 Result，不引入泛化 Try、tuple 或新借用语义。
+
+### 输入、输出与 nil
+
+- `go_result!(call())`：真实签名为 `(T,E)` 时返回本包 `Result[T,E]`；只返回 E 时返回 `Result[struct{},E]`。
+- `go_result_keep!(call())`：相应返回 `Result[T,struct{Value T; Err E}]`，单返回时 T 为 struct{}。
+- E 必须静态实现预声明的 Go error 接口，且其原类型允许与 nil 比较。具名错误接口、错误指针与透明 alias 保留原身份；不能先装箱为 error 再判断。
+- nil 表示 Ok；非 nil 表示 Err。若原返回声明就是 error/具名接口，其中装着 typed-nil 指针，该接口本来非 nil，应是 Err；绝不根据运行时动态类型推断 E 或反射归一化。
+- 非 nilable struct 错误拒绝，不把零值解释为成功，也不默认全部成功/失败。自定义成功 predicate 属于后续建议，不加入本片。
+- 保留 `go_result!(T,call())` / keep 的显式 T 形式：要求两个结果、显式 T 与实际首结果 identical；E 同样取自真实末结果，不发生隐式 T/E 转换。旧合法 `(T,error)` 例子保持类型和行为；旧指针 E 拒绝例转成正例。
+- 零返回、三个及以上返回、末结果不实现 error、非调用操作数拒绝。多成功值先组织为业务 struct。
+
+```hgo
+// 正例：这些类型只取决于静态返回声明。
+a := go_result!(strconv.Atoi(text))             // Result[int,error]
+b := go_result_keep!(reader.Read(buffer))       // Result[int,struct{Value int; Err error}]
+c := go_result!(file.Close())                   // Result[struct{},error]
+// operation 返回 (int,*MyError)，且 *MyError 实现 error：
+d := go_result!(operation())                    // Result[int,*MyError]
+```
+
+```go
+// Go 语义对照：宏在用户调用完成后才检查其原类型返回值。
+func pointerResult() (int, *MyError) { return 3, nil } // 应为 Ok(3)
+func interfaceResult() (int, error) {
+    var e *MyError
+    return 3, e // 装箱发生在此原函数返回处；宏应为 Err，E 仍为 error
+}
+```
+
+负例：`go_result!(string,strconv.Atoi(text))` 首结果类型不一致；`func f()(int,MyStructError)` 没有 nil 成功条件；`func f()(int,string)` 不实现 error；`func f()(int,int,error)` 不自动合成 tuple。不同写法的透明 alias 不改变这些判定。
+
+### 类型检查与降低顺序
+
+声明宏阶段只处理模式、捕获、定义点绑定和保留名，把这两种内建保留为带源码来源的内部调用标记；单参数不得在此阶段先判为 error-only。两者按真实签名的结果数量区分，不引入 Go 函数重载。
+
+在 typed 阶段读取实例化后的 callee signature；原生泛型调用的 T/E 应使用 Go 已完成的参数推断。嵌套适配、问号、match 的未决类型与现有固定点检查协作：先解决依赖，再登记一个适配器并重新检查，不能把临时 identity stub 的 Result 类型误当成成功载荷。不能执行表达式以取得类型。
+
+具体 Result 的 nominal 定义、case/constructor、使用点 validator 与导出实例 metadata 必须一同登记；不只生成一个 Go 泛型 helper 而遗漏 match、问号或跨包恢复。宏阶段可预备名义 Result 骨架，typed 阶段补充具体实例和适配函数。与现有多文件 import scope、use 的绑定、外部 producer metadata 及原生/浏览器 importer 共用同一实现，不新增网站专用语义。
+
+适配函数接收已求值的返回值，用户原调用仍是它的实参；不能放进零参数 thunk/闭包体。因此求值一次、方法/函数值/变参的原生顺序、direct recover、内层问号最近函数目标保持。defer/go 延期或并发的是适配器，原调用按普通实参规则先求值；保持首片已公开语义。
+
+T/E 的 Go 类型对象应保持身份，不能用 any/interface 退化或伪造私有 import。存在公开透明 alias 时应尽量复用；无可见拼写的外包私有类型或局部类型若当前实例 registry 无法表示，给出明确诊断，不改为保守的别名/借用安全拒绝。本片不承诺立即解决所有不可命名类型；采用 witness 必须同时解决 validator 和 metadata 身份。
+
+生成标记、helper 与类型绑定使用保留且确定的名称，避免 caller 的 Result/error/nil、import 或局部 T/E 绑定捕获。预算包含延后产生的节点；不允许递归推导无限重试。源码映射保留宏调用/定义来源，无法定位的诊断明确标注 generated/unmapped。新推导实例与旧显式实例应通过同一可信 metadata 和缓存校验路径，不复用不同源码/构建视图的旧结果。项目 target/build script 只改变输入/构建视图，不改变宏语义。
+
+### 保值传播与验收
+
+保值错误载荷不实现 Error/Unwrap，不自动登记投影到 E 的 From。`?` 沿现有普通赋值兼容或唯一显式一步 From；传播相同保值载荷应保留 Value/Err，直接到普通 E/error 拒绝。普通版若 E 为非 nil 错误指针，可按现有赋值规则传播给 error；nil 指针已经走 Ok，不会在失败分支被误装箱。接口 E 的动态类型不参与 From 搜索。
+
+必须以真实 hgo→Go 执行覆盖：Atoi、Reader 部分 n、Close/error-only、error alias、具名错误接口、*MyError nil/非 nil、error 接口内 typed nil、非法 E/arity、显式 T 兼容与错误 T、调用/参数/方法/函数值/variadic 次序、panic/defer/recover、嵌套问号/原生泛型、源码跨包及独立 module 的 metadata/match/传播、外包私有 T/E 的 alias 正例或明确拒绝。保值匿名 payload 保持 T/E 身份，不承诺 Clone。
+
+官网可运行示例改用推导形式，旧指针 E 负例更新为正例，并增加具名 E/nil/非法 E 的 CLI-WASM 输出或诊断差分；浏览器只转译，运行语义另由 CLI/生成模块断言。独立 review 后执行全树 `go test -race -tags hgoweb`/vet、生成 Go 独立 race/vet、设计检查和网站 WASM 回归；不要求重新发布网站。
+
+
+实施前独立审查补充（本轮契约的一部分）：
+
+- nilable 的具名 slice/map/func/channel 若实现 error 也适用；必须是 `e != nil` 的原类型判断，禁止沿旧实现写 `var zero E; e != zero`。至少验证 nil 与非 nil 空 slice 错误，后者必须为 Err；同时保护 nil 的绑定。
+- 包级推导准备覆盖 A 文件的 `var x = go_result!(f())` 与 B 文件使用 x 的问号/匹配，以及相反文件名顺序；未决结果不是 Result[any,error] 占位值。新增实例须回流所属文件、包级 families、后续 equality 与导出 metadata。
+- 增量实例生成复用既有 nested payload 校验；不可对已降低 Go 整体重跑 enum parser，也不可只登记 ABI 而遗漏 `Result[[]Enum,E]` 的非法元素校验。
+- `*MyError` 到 error 的直接赋值传播可以；不得为了已有 `From[error,Failure]` 先自动装箱再串接转换。From 仍要求精确静态来源和唯一一步。

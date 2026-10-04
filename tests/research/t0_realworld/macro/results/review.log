@@ -1,0 +1,53 @@
+checkout=3098a30e8e5fcb4696687246b2f39988218f4006
+work=/tmp/t0-macro-final
+go version go1.27.1 linux/amd64
+enabled=false disabled=true
+value="\x00" type=main.int
+main.go:10:11: conversion from untyped int to hgoMacroGeneratedF0N1 (string) yields a string of one rune, not a string of digits
+shadow_types: generated Go vet failed
+--- /workspace/goxide/tests/research/t0_realworld/macro/shadow_constants/expected.txt	2026-10-04 04:04:32.591812305 +0000
++++ /tmp/t0-macro-final/shadow_constants.actual.txt	2026-10-04 04:04:47.840270934 +0000
+@@ -1 +1 @@
+-enabled=true disabled=false
++enabled=false disabled=true
+--- /workspace/goxide/tests/research/t0_realworld/macro/shadow_types/expected.txt	2026-10-04 04:04:32.607298390 +0000
++++ /tmp/t0-macro-final/shadow_types.actual.txt	2026-10-04 04:04:49.184213770 +0000
+@@ -1 +1 @@
+-value=0 type=int
++value="\x00" type=main.int
+ok  	review.example/macroflow	1.044s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/7 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 7/7 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 145905 (48613/sec), new interesting: 0 (total: 7)
+fuzz: elapsed: 3s, execs: 145905 (0/sec), new interesting: 0 (total: 7)
+PASS
+ok  	review.example/macroflow	3.019s
+goos: linux
+goarch: amd64
+pkg: review.example/macroflow
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkMacro-5    	 1000000	       476.1 ns/op	     120 B/op	       4 allocs/op
+BenchmarkMacro-5    	  964756	       601.0 ns/op	     120 B/op	       4 allocs/op
+BenchmarkNative-5   	 1000000	       522.2 ns/op	     120 B/op	       4 allocs/op
+BenchmarkNative-5   	 1000000	       450.2 ns/op	     120 B/op	       4 allocs/op
+PASS
+ok  	review.example/macroflow	2.093s
+goos: linux
+goarch: amd64
+pkg: github.com/hxsf/goxide/researchmacro
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkRepeatedHelper/imported=false/n=128-5         	       1	   9919092 ns/op	 3648624 B/op	    6119 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=128-5         	       1	  16386108 ns/op	 3642920 B/op	    6107 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=128-5          	       1	 118287189 ns/op	 4983472 B/op	    8229 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=128-5          	       1	   7150011 ns/op	 4401600 B/op	    8129 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=512-5         	       1	  45411877 ns/op	16818880 B/op	   23752 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=512-5         	       1	  53332120 ns/op	16781368 B/op	   23743 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=512-5          	       1	 117876977 ns/op	21384672 B/op	   29229 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=512-5          	       1	 124229476 ns/op	21384896 B/op	   29232 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=2048-5        	       1	 227111970 ns/op	84840776 B/op	   94582 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=2048-5        	       1	 159111177 ns/op	84951024 B/op	   94592 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=2048-5         	       1	 563917474 ns/op	104104304 B/op	  113929 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=2048-5         	       1	 530267972 ns/op	104105024 B/op	  113933 allocs/op
+PASS
+ok  	github.com/hxsf/goxide/researchmacro	2.152s
+Expected-behavior failures: 3 (nonzero is intentional on the reviewed baseline)

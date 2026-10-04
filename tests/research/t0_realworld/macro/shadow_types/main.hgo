@@ -1,0 +1,12 @@
+package main
+
+import "fmt"
+import numeric "review.example/macrotypes/ops"
+
+// Go permits a package-defined name to shadow a predeclared type.
+type int string
+
+func main() {
+    value := numeric.zero!()
+    fmt.Printf("value=%#v type=%T\n", value, value)
+}

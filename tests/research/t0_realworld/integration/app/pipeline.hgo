@@ -1,0 +1,53 @@
+package main
+
+import (
+    "errors"
+    cfg "trial.example/model/config"
+    "trial.example/app/logkit"
+)
+
+// Value is captured once by this package macro. The imported Result's ? must
+// exit process, including when it occurs inside a loop and after a defer.
+macro_rules! take_step { ($value:expr) => { cfg.Step($value)? }; }
+func process(items []int, mode cfg.Mode, enabled bool, trace *[]int) Result[int,Failure] {
+    defer func(){ *trace = append(*trace, 99) }()
+    total := 0
+    for i, item := range items {
+        *trace = append(*trace, i)
+        n := take_step!(item)
+        units := match mode { cfg.Mode::Immediate => n, cfg.Mode::Batch(k) => n*k }
+        total += units
+        logkit.event_if!(enabled, total)
+    }
+    return Result[int,Failure]::Ok(total)
+}
+func Process(items []int, mode cfg.Mode, enabled bool, trace *[]int) (int,error) {
+    result := process(items, mode, enabled, trace)
+    match result {
+        Result[int,Failure]::Ok(n) => { return n,nil },
+        Result[int,Failure]::Err(e) => { return 0,e },
+    }
+    return 0,errors.New("unreachable")
+}
+func Dispatch(mode cfg.Mode) int { return match mode { cfg.Mode::Immediate => 1, cfg.Mode::Batch(n) => n } }
+func Sum(items []int) Result[int,error] {
+    total := 0
+    for _, item := range items { total += cfg.Step(item)? }
+    return Result[int,error]::Ok(total)
+}
+func SumGoBoundary(items []int) (int,error) {
+    result := Sum(items)
+    match result {
+        Result[int,error]::Ok(n) => { return n,nil },
+        Result[int,error]::Err(e) => { return 0,e },
+    }
+    return 0,errors.New("unreachable")
+}
+func wrapCause(err error) Result[int,Failure] {
+    n := cfg.Fail(err)?
+    return Result[int,Failure]::Ok(n)
+}
+func WrappedCause(err error) error {
+    result := wrapCause(err)
+    return match result { Result[int,Failure]::Ok(_) => nil, Result[int,Failure]::Err(e) => e }
+}

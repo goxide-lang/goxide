@@ -1,0 +1,27 @@
+package macroflow
+
+macro_rules! choose_once {
+    ($enabled:expr, $value:expr) => {
+        func() int {
+            if !$enabled { return -1 }
+            local := $value
+            return local + local
+        }()
+    };
+}
+macro_rules! stop_if { ($stop:expr) => { if $stop { break } }; }
+macro_rules! mark_on_exit { ($f:expr) => { defer $f() }; }
+macro_rules! return_if { ($stop:expr, $value:expr, $trace:expr) => { if $stop { return $value, $trace } }; }
+
+func MacroFlow(seed uint32) (result int, trace []int) {
+    mark := func(n int) int { trace = append(trace, n); return n }
+    mark_on_exit!(func() { mark(9) })
+    // Caller and template locals have the same spelling deliberately.
+    local := int(seed & 7)
+    for i := 0; i < 4; i++ {
+        stop_if!(mark(i) == local)
+        result += choose_once!(mark(5) & int(seed) != 0, mark(6))
+    }
+    return_if!(mark(7) & int(seed) != 0, result + mark(8), trace)
+    return result, trace
+}

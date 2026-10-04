@@ -1,0 +1,11 @@
+package config
+
+// A separately compiled producer, used without access to its hgo sources.
+func Step(n int) Result[int,error] {
+    if n < 0 { return Result[int,error]::Err(Negative) }
+    return Result[int,error]::Ok(n + 1)
+}
+func Units(m Mode) int {
+    return match m { Mode::Immediate => 1, Mode::Batch(n) => n }
+}
+func Fail(err error) Result[int,error] { return Result[int,error]::Err(err) }

@@ -1,0 +1,8 @@
+package logkit
+
+var Calls int
+var Last int
+func Emit(value int){Calls++;Last=value}
+pub macro_rules! event_if {
+    ($enabled:expr,$value:expr) => { if $enabled { Emit($value) } };
+}

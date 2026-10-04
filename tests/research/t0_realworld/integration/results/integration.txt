@@ -1,0 +1,73 @@
+checkout: 3098a30e8e5fcb4696687246b2f39988218f4006
+go version go1.27.1 linux/amd64
+?   	trial.example/model/config	[no test files]
+=== RUN   TestOrder
+--- PASS: TestOrder (0.00s)
+=== RUN   TestErrorChainAndClosedVariants
+--- PASS: TestErrorChainAndClosedVariants (0.00s)
+=== RUN   TestCrossModuleProtocols
+--- PASS: TestCrossModuleProtocols (0.00s)
+=== RUN   TestBoundedPipeline
+--- PASS: TestBoundedPipeline (0.03s)
+=== RUN   TestContainerProperties
+--- PASS: TestContainerProperties (0.00s)
+=== RUN   TestTypedNilCause
+--- PASS: TestTypedNilCause (0.00s)
+=== RUN   TestJSONBusinessGrid
+--- PASS: TestJSONBusinessGrid (0.01s)
+=== RUN   FuzzPipeline
+=== RUN   FuzzPipeline/seed#0
+=== RUN   FuzzPipeline/seed#1
+=== RUN   FuzzPipeline/seed#2
+=== RUN   FuzzPipeline/seed#3
+--- PASS: FuzzPipeline (0.00s)
+    --- PASS: FuzzPipeline/seed#0 (0.00s)
+    --- PASS: FuzzPipeline/seed#1 (0.00s)
+    --- PASS: FuzzPipeline/seed#2 (0.00s)
+    --- PASS: FuzzPipeline/seed#3 (0.00s)
+PASS
+ok  	trial.example/app	1.059s
+?   	trial.example/app/logkit	[no test files]
+goos: linux
+goarch: amd64
+pkg: trial.example/app
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBatchSum/hgo/1-5         	 5602825	        41.71 ns/op	      16 B/op	       2 allocs/op
+BenchmarkBatchSum/hgo/1-5         	 5117196	        53.43 ns/op	      16 B/op	       2 allocs/op
+BenchmarkBatchSum/hgo/1-5         	 5570598	        79.90 ns/op	      16 B/op	       2 allocs/op
+BenchmarkBatchSum/native/1-5      	87249628	         2.818 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1-5      	91742697	         2.876 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1-5      	87108202	         2.849 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/hgo/32-5        	  165909	      1239 ns/op	     264 B/op	      33 allocs/op
+BenchmarkBatchSum/hgo/32-5        	  227287	       945.8 ns/op	     264 B/op	      33 allocs/op
+BenchmarkBatchSum/hgo/32-5        	  545522	       876.2 ns/op	     264 B/op	      33 allocs/op
+BenchmarkBatchSum/native/32-5     	 9996073	        24.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/32-5     	 8433914	        26.71 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/32-5     	 4330669	        76.30 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/hgo/1024-5      	   10000	     20569 ns/op	    8200 B/op	    1025 allocs/op
+BenchmarkBatchSum/hgo/1024-5      	   15374	     16078 ns/op	    8200 B/op	    1025 allocs/op
+BenchmarkBatchSum/hgo/1024-5      	   14444	     16792 ns/op	    8200 B/op	    1025 allocs/op
+BenchmarkBatchSum/native/1024-5   	  293428	       808.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1024-5   	  320865	       729.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1024-5   	  275715	       823.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/hgo-5           	62979148	         3.809 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/hgo-5           	57363871	         3.778 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/hgo-5           	59887208	         3.899 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/native-same-abi-5         	197788783	         1.225 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/native-same-abi-5         	162308702	         1.369 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/native-same-abi-5         	163166922	         1.520 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	trial.example/app	6.250s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/12 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 12/12 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 76127 (25369/sec), new interesting: 0 (total: 12)
+fuzz: elapsed: 5s, execs: 133920 (27774/sec), new interesting: 0 (total: 12)
+PASS
+ok  	trial.example/app	5.089s
+accepted 42 units=3 retry=-1 port=8080
+Snapshot { Data: Samples { Items: Option::None } }
+Snapshot { Data: Samples { Items: Option::Some(nil) } }
+Snapshot { Data: Samples { Items: Option::Some([]) } }
+equals none/some(nil)=false some(nil)/some(empty)=false
+clone source=[1] copy=[9] equals=false
+Artifacts: /tmp/t0-integration-final

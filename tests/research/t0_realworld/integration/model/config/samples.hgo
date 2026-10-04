@@ -1,0 +1,14 @@
+package config
+
+// None, Some(nil) and Some(empty) are three distinct states.
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+type Samples struct { Items Option[[]int] }
+
+func None() Samples { return Samples{Items: Option[[]int]::None} }
+func Some(items []int) Samples { return Samples{Items: Option[[]int]::Some(items)} }
+func Items(s Samples) []int {
+    return match s.Items {
+        Option[[]int]::None => nil,
+        Option[[]int]::Some(items) => items,
+    }
+}

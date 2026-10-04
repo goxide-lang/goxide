@@ -1,0 +1,5 @@
+package ops
+
+// These constants are resolved in the macro's definition package.
+pub macro_rules! enabled { () => { true }; }
+pub macro_rules! disabled { () => { false }; }

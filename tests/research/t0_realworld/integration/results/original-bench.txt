@@ -1,0 +1,30 @@
+goos: linux
+goarch: amd64
+pkg: trial.example/app
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBatchSum/hgo/1         	 6533772	        30.84 ns/op	      16 B/op	       2 allocs/op
+BenchmarkBatchSum/hgo/1         	 6773010	        32.32 ns/op	      16 B/op	       2 allocs/op
+BenchmarkBatchSum/hgo/1         	 7907437	        31.63 ns/op	      16 B/op	       2 allocs/op
+BenchmarkBatchSum/native/1      	100000000	         2.996 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1      	100000000	         2.971 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1      	100000000	         2.941 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/hgo/32        	  432968	       478.0 ns/op	     264 B/op	      33 allocs/op
+BenchmarkBatchSum/hgo/32        	  528921	       474.0 ns/op	     264 B/op	      33 allocs/op
+BenchmarkBatchSum/hgo/32        	  554827	       473.9 ns/op	     264 B/op	      33 allocs/op
+BenchmarkBatchSum/native/32     	 9502488	        25.86 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/32     	 9653540	        25.70 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/32     	10010838	        25.42 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/hgo/1024      	   16519	     14997 ns/op	    8200 B/op	    1025 allocs/op
+BenchmarkBatchSum/hgo/1024      	   16852	     14663 ns/op	    8200 B/op	    1025 allocs/op
+BenchmarkBatchSum/hgo/1024      	   17180	     14228 ns/op	    8200 B/op	    1025 allocs/op
+BenchmarkBatchSum/native/1024   	  319518	       781.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1024   	  307969	       780.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1024   	  299638	       786.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/hgo           	63514477	         3.876 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/hgo           	66823646	         3.875 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/hgo           	63053329	         3.798 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/native-same-abi         	193433896	         1.190 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/native-same-abi         	196472607	         1.195 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDispatch/native-same-abi         	200094046	         1.170 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	trial.example/app	5.952s

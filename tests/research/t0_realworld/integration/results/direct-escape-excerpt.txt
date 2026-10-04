@@ -1,0 +1,120 @@
+./main.go:572:6: can inline Failure.Unwrap with cost 3 as: method(Failure) func() error { return v.Cause }
+./pipeline.go:347:6: can inline __hgo_qimport_f1_2 with cost 46 as: func(config.Result[int,error]) { config.HgoInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(v) }
+./main.go:278:6: can inline __hgo_enum_ctor_Result_Err[go.shape.int,go.shape.struct { Cause error }] with cost 5 as: func(*[4]uintptr, go.shape.struct { Cause error }) Result[go.shape.int,go.shape.struct { Cause error }] { return __hgo_enum_case_Result_Err[go.shape.int,go.shape.struct { Cause error }]{...} }
+./pipeline.go:244:6: can inline __hgo_enum_import_f1_i1_Mode_validate with cost 25 as: func(config.Mode) { config.ValidateMode(v) }
+./main.go:271:6: can inline __hgo_enum_ctor_Result_Ok[go.shape.int,go.shape.struct { Cause error }] with cost 5 as: func(*[4]uintptr, go.shape.int) Result[go.shape.int,go.shape.struct { Cause error }] { return __hgo_enum_case_Result_Ok[go.shape.int,go.shape.struct { Cause error }]{...} }
+./pipeline.go:12:6: cannot inline process: unhandled op DEFER
+./pipeline.go:65:48:     from return ~r0 (return) at ./pipeline.go:65:2
+./pipeline.go:12:14: items does not escape
+./pipeline.go:12:27: mode does not escape
+./pipeline.go:12:56: leaking param content: trace
+./pipeline.go:13:8: func literal does not escape
+./pipeline.go:13:32: append escapes to heap
+./pipeline.go:12:14: items does not escape
+./pipeline.go:12:27: mode does not escape
+./pipeline.go:12:56: leaking param content: trace
+./pipeline.go:13:8: func literal does not escape
+./pipeline.go:13:32: append escapes to heap
+./pipeline.go:17:19: append escapes to heap
+./pipeline.go:12:56: leaking param content: trace
+./pipeline.go:13:8: func literal does not escape
+./pipeline.go:13:32: append escapes to heap
+./pipeline.go:17:19: append escapes to heap
+./pipeline.go:19:22: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:26:52: __hgo_enum_case_Result_Err[go.shape.int,go.shape.struct { Cause error }]{...} escapes to heap
+./pipeline.go:93:22:     from return 0, ~r0 (return) at ./pipeline.go:93:2
+./pipeline.go:67:14: items does not escape
+./pipeline.go:67:27: mode does not escape
+./pipeline.go:67:56: leaking param content: trace
+./pipeline.go:71:83: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:89:15: e escapes to heap
+./pipeline.go:67:14: items does not escape
+./pipeline.go:67:27: mode does not escape
+./pipeline.go:67:56: leaking param content: trace
+./pipeline.go:71:83: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:89:15: e escapes to heap
+./pipeline.go:93:22: &errors.errorString{...} escapes to heap
+./pipeline.go:100:41:     from panic("hgo: invalid enum Mode") (call parameter) at ./pipeline.go:100:41
+./pipeline.go:95:15: mode does not escape
+./pipeline.go:100:41: "hgo: invalid enum Mode" escapes to heap
+./pipeline.go:130:22: "hgo: invalid enum Result" escapes to heap in Sum:
+./pipeline.go:130:22:   flow: {heap} ← &{storage for "hgo: invalid enum Result"}:
+./pipeline.go:130:22:     from "hgo: invalid enum Result" (spill) at ./pipeline.go:130:22
+./pipeline.go:100:41: "hgo: invalid enum Mode" escapes to heap
+./pipeline.go:130:22: "hgo: invalid enum Result" escapes to heap in Sum:
+./pipeline.go:130:22:   flow: {heap} ← &{storage for "hgo: invalid enum Result"}:
+./pipeline.go:130:22:     from "hgo: invalid enum Result" (spill) at ./pipeline.go:130:22
+./pipeline.go:130:22:     from panic("hgo: invalid enum Result") (call parameter) at ./pipeline.go:130:22
+./pipeline.go:139:11: "hgo: invalid Result at ?" escapes to heap in Sum:
+./pipeline.go:130:22:     from panic("hgo: invalid enum Result") (call parameter) at ./pipeline.go:130:22
+./pipeline.go:139:11: "hgo: invalid Result at ?" escapes to heap in Sum:
+./pipeline.go:139:11:   flow: {heap} ← &{storage for "hgo: invalid Result at ?"}:
+./pipeline.go:139:11:     from "hgo: invalid Result at ?" (spill) at ./pipeline.go:139:11
+./pipeline.go:139:11:     from panic("hgo: invalid Result at ?") (call parameter) at ./pipeline.go:139:10
+./pipeline.go:137:50: __hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} escapes to heap in Sum:
+./pipeline.go:139:11:     from panic("hgo: invalid Result at ?") (call parameter) at ./pipeline.go:139:10
+./pipeline.go:137:50: __hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} escapes to heap in Sum:
+./pipeline.go:137:50:   flow: ~r0 ← &{storage for __hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...}}:
+./pipeline.go:137:50:     from __hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} (spill) at ./pipeline.go:137:50
+./pipeline.go:137:50:     from ~r0 = __hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} (assign-pair) at ./pipeline.go:137:50
+./pipeline.go:137:50:   flow: ~r0 ← ~r0:
+./pipeline.go:137:50:     from return ~r0 (return) at ./pipeline.go:137:5
+./pipeline.go:145:46: __hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...} escapes to heap in Sum:
+./pipeline.go:145:46:   flow: ~r0 ← &{storage for __hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...}}:
+./pipeline.go:145:46:     from __hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...} (spill) at ./pipeline.go:145:46
+./pipeline.go:145:46:     from ~r0 = __hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...} (assign-pair) at ./pipeline.go:145:46
+./pipeline.go:145:46:   flow: ~r0 ← ~r0:
+./pipeline.go:145:46:     from return ~r0 (return) at ./pipeline.go:145:2
+./pipeline.go:125:10: items does not escape
+./pipeline.go:129:29: config.__hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:129:29: config.__hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:130:22: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:137:50: __hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} escapes to heap
+./pipeline.go:125:10: items does not escape
+./pipeline.go:129:29: config.__hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:129:29: config.__hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:130:22: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:137:50: __hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} escapes to heap
+./pipeline.go:139:11: "hgo: invalid Result at ?" escapes to heap
+./pipeline.go:129:29: config.__hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:129:29: config.__hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:130:22: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:137:50: __hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} escapes to heap
+./pipeline.go:139:11: "hgo: invalid Result at ?" escapes to heap
+./pipeline.go:145:46: __hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...} escapes to heap
+./pipeline.go:173:22:     from return 0, ~r0 (return) at ./pipeline.go:173:2
+./pipeline.go:147:20: items does not escape
+./pipeline.go:151:83: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:173:22: &errors.errorString{...} escapes to heap
+./pipeline.go:177:20: "hgo: invalid enum Result" escapes to heap in wrapCause:
+./pipeline.go:177:20:   flow: {heap} ← &{storage for "hgo: invalid enum Result"}:
+./pipeline.go:175:16: leaking param: err
+./pipeline.go:176:27: config.__hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:177:20: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:184:50: __hgo_enum_case_Result_Err[go.shape.int,go.shape.struct { Cause error }]{...} escapes to heap
+./pipeline.go:187:9: "hgo: invalid Result at ?" escapes to heap
+./pipeline.go:191:48: __hgo_enum_case_Result_Ok[go.shape.int,go.shape.struct { Cause error }]{...} escapes to heap
+./pipeline.go:230:42:     from panic("hgo: invalid enum Result") (call parameter) at ./pipeline.go:230:42
+./pipeline.go:229:87: __hgo_enum_value does not escape
+./pipeline.go:230:42: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:239:82: "hgo: invalid enum Result" escapes to heap in HgoInste78424c49e3d5fc3e9d4d7e123411aa9230b9faa56bdc57b4f618886271a1714:
+./pipeline.go:239:82:   flow: {heap} ← &{storage for "hgo: invalid enum Result"}:
+./pipeline.go:239:82:     from "hgo: invalid enum Result" (spill) at ./pipeline.go:239:82
+./pipeline.go:239:82:     from panic("hgo: invalid enum Result") (call parameter) at ./pipeline.go:239:82
+./pipeline.go:238:78: v does not escape
+./pipeline.go:239:82: "hgo: invalid enum Result" escapes to heap
+./pipeline.go:244:74: "hgo: invalid enum Mode" escapes to heap in __hgo_enum_import_f1_i1_Mode_validate:
+./pipeline.go:244:74:   flow: {heap} ← &{storage for "hgo: invalid enum Mode"}:
+./pipeline.go:244:74:     from "hgo: invalid enum Mode" (spill) at ./pipeline.go:244:74
+./pipeline.go:244:74:     from panic("hgo: invalid enum Mode") (call parameter) at ./pipeline.go:244:74
+./pipeline.go:244:44: v does not escape
+./pipeline.go:244:74: "hgo: invalid enum Mode" escapes to heap
+./pipeline.go:347:127: "hgo: invalid enum Result" escapes to heap in __hgo_qimport_f1_2:
+./pipeline.go:347:127:   flow: {heap} ← &{storage for "hgo: invalid enum Result"}:
+./pipeline.go:347:127:     from "hgo: invalid enum Result" (spill) at ./pipeline.go:347:127
+./pipeline.go:347:127:     from panic("hgo: invalid enum Result") (call parameter) at ./pipeline.go:347:127
+./pipeline.go:347:25: v does not escape
+./pipeline.go:347:127: "hgo: invalid enum Result" escapes to heap
+./main_test.go:12:16: parameter t leaks to {heap} for TestOrder with derefs=0:
+./main_test.go:12:16:   flow: {heap} ← t:
+./main_test.go:12:16:     from t.common (dot of pointer) at ./main_test.go:16:4

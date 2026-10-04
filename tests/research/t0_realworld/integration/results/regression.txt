@@ -1,0 +1,6 @@
+ok  	github.com/hxsf/goxide/internal/macros	3.371s
+ok  	github.com/hxsf/goxide/internal/enums	6.437s
+ok  	github.com/hxsf/goxide/internal/deriveextras	1.416s
+ok  	github.com/hxsf/goxide/serdejson	1.022s
+ok  	github.com/hxsf/goxide/serde	1.017s
+ok  	github.com/hxsf/goxide/formatting	1.016s

@@ -1,0 +1,11 @@
+package main
+
+import "fmt"
+import flags "review.example/macroconstants/ops"
+
+const true = 1 == 2
+const false = 1 == 1
+
+func main() {
+    fmt.Printf("enabled=%v disabled=%v\n", flags.enabled!(), flags.disabled!())
+}

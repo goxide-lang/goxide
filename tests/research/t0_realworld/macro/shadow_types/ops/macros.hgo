@@ -1,0 +1,3 @@
+package ops
+
+pub macro_rules! zero { () => { int(0) }; }

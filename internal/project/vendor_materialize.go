@@ -15,6 +15,7 @@ import (
 // SuppliedModules is an import-time audit, never a build or lock policy.
 // Its native modules contain a pruned snapshot, not a complete upstream release.
 type SuppliedModules struct {
+	MainModules        []string                `json:"main_modules"`
 	Snapshot           *VendorSnapshot         `json:"input"`
 	Selected           map[string]VendorModule `json:"selected_modules"`
 	Paths              map[string]string       `json:"local_modules"`
@@ -31,7 +32,7 @@ func InspectWorkVendor(root, version string, policy any) (*VendorSnapshot, error
 // MaterializeSupplied validates every supplied import independently of host tags.
 // A nil destination produces the same plan without publishing files.
 func MaterializeSupplied(tool, root, destination, goVersion string, snapshot *VendorSnapshot, members map[string]string) (*SuppliedModules, error) {
-	a := &SuppliedModules{PolicyFiles: map[string]string{}, Snapshot: snapshot, Paths: map[string]string{}, Outputs: map[string][]string{}, Metadata: map[string]string{}, UpstreamDifference: "unknown (no upstream fetch)"}
+	a := &SuppliedModules{MainModules: Keys(members), PolicyFiles: map[string]string{}, Snapshot: snapshot, Paths: map[string]string{}, Outputs: map[string][]string{}, Metadata: map[string]string{}, UpstreamDifference: "unknown (no upstream fetch)"}
 	for _, name := range []string{"go.mod", "go.sum", "go.work", "go.work.sum", "vendor/modules.txt"} {
 		b, e := os.ReadFile(filepath.Join(root, name))
 		if e == nil {
@@ -304,9 +305,18 @@ func BindSupplied(m *Manifest, a *SuppliedModules, relativeRoot string) {
 	for _, r := range m.Native.Require {
 		requires[r.Module] = true
 	}
+	// Old replacements for supplied modules are provenance, not author paths.
+	// Unselected replacement-only tails likewise authorize no new local source.
+	// Preserve workspace main-module policies for normal member materialization.
+	mainModules := map[string]bool{}
+	if a.Snapshot.Mode == "go-work" {
+		for _, module := range a.MainModules {
+			mainModules[module] = true
+		}
+	}
 	replacements := m.Native.Replace[:0]
 	for _, r := range m.Native.Replace {
-		if a.Paths[r.Module] == "" {
+		if a.Paths[r.Module] == "" && mainModules[r.Module] {
 			replacements = append(replacements, r)
 		}
 	}

@@ -56,6 +56,18 @@ func vendorFixture(t *testing.T) (string, string, string) {
 }
 func TestVendorImportColdOffline(t *testing.T) {
 	root, out, _ := vendorFixture(t)
+	// Unused historical replacement records must not make the imported snapshot
+	// depend on an unavailable original directory.
+	for name, extra := range map[string]string{"go.mod": "replace example.org/unused => ../unavailable\n", "vendor/modules.txt": "# example.org/unused => ../unavailable\n"} {
+		f, e := os.OpenFile(filepath.Join(root, name), os.O_APPEND|os.O_WRONLY, 0644)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = f.WriteString(extra); e != nil {
+			t.Fatal(e)
+		}
+		f.Close()
+	}
 	before := sourceHash(t, root)
 	if b := vendorGo(t, root, "run", "-mod=vendor", "."); strings.TrimSpace(b) != "modified host" {
 		t.Fatal(b)

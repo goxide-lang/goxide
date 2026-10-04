@@ -1,12 +1,12 @@
 # 供应源码迁入为本地模块
 
-状态：合同先行；实现与验收在独立分支 `feat/vendor-local-modules` 推进。取代旧 Goxide vendor 模式和 workspace vendor 拆出提案，不改冻结历史或原生 Go 自己的 vendoring 行为。
+状态：本地核心已实现于独立分支 `feat/vendor-local-modules`；来源候选显示已实现，TTY 选择与远端切换后续交付。取代旧 Goxide vendor 模式和 workspace vendor 拆出提案，不改冻结历史或原生 Go 自己的 vendoring 行为。
 
 ## 输入与输出
 
 `import-go` 读取原 go.mod/go.work 与 vendor/modules.txt，使用真实 Go 只读一致性检查。供应内容分配至 `local-modules/<module-id>/`，每个目录有合成 go.mod；TOML 显式本地 replace 指向这些目录。目录身份取 module path 的稳定摘要，不取 fork 名或临时路径。原始源码、资源和许可证保留内容与文件权限；合成 go.mod 单独记录为新增元数据。祖先许可证复制到相关模块的许可证记录目录，不覆盖原模块自身文件。输出 provenance 记录每个输入文件的摘要及一个或多个输出位置，以及原版本、replace、explicit 和 Go 版本。原 modules.txt 只进入来源记录，不放入输出 vendor 树。
 
-合成模块保留逻辑 import identity。供应源码扫描全部 Go 文件的 imports（含 tests、平台/tag 文件）；精确包声明决定归属，声明模块前缀用于诊断缺失包，不能以字符串前缀抢占嵌套模块。已知标准库和 `C` 不形成第三方边；未知包明确拒绝。供应模块 go.mod 表达实际供应 import 边与 modules.txt 版本标签；这不是恢复上游完整依赖图。无包 explicit 模块仍有空 go.mod；其 Go 版本缺失时沿用输入根最低版本并在 provenance 明示。替换尾记录没有选中版本时仅保存来源信息。
+合成模块保留逻辑 import identity。供应源码扫描全部 Go 文件的 imports（含 tests、平台/tag 文件）；精确包声明决定归属，声明模块前缀用于诊断缺失包，不能以字符串前缀抢占嵌套模块。已知标准库和 `C` 不形成第三方边；未知包明确拒绝。供应模块 go.mod 表达实际供应 import 边与 modules.txt 版本标签；这不是恢复上游完整依赖图。无包 explicit 模块仍有空 go.mod；其 Go 版本缺失时沿用输入根最低版本并在 provenance 明示。替换尾记录没有选中版本时仅保存来源信息，不把未使用的旧 replace 目录变成运行时依赖；它不同于 explicit requirement 对应的无包模块，后者仍保留空模块声明。workspace 主模块政策继续保留。
 
 为 Go 的裁剪图求解提供 modules.txt 已选版本约束及显式 local replace；原 require 的直接/间接关系保留，低于供应选版的标签提升到供应版本，原完整 go.mod/go.work/sum 与 modules.txt 另存 provenance；不从原始 go.sum 认证修改源码，不调用 tidy/get/download/vendor。所有供应模块均本地绑定，模块间循环 require 可以存在，包环交 Go 拒绝。目录中缺失未来新 import 必须失败，不以在线代理补包。补全供应内容必须由用户显式提供源码和依赖政策。
 

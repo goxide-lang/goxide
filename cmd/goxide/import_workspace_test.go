@@ -216,7 +216,7 @@ func TestSuppliedWorkspaceSelectedVersionsAndEmptyModule(t *testing.T) {
 	workspaceWrite(t, root, "d/go.mod", "module example.org/d\ngo 1.27\n")
 	workspaceWrite(t, root, "d/d.go", "package d\nconst Value=\"selected\"\n")
 	workspaceWrite(t, root, "empty/go.mod", "module example.org/empty\ngo 1.27\n")
-	workspaceWrite(t, root, "go.work", "go 1.27\nuse (\n./app\n./lib\n)\nreplace example.org/d => ./d\nreplace example.org/empty => ./empty\n")
+	workspaceWrite(t, root, "go.work", "go 1.27\nuse (\n./app\n./lib\n)\nreplace example.org/d => ./d\nreplace example.org/empty => ./empty\nreplace example.org/unused => ./unavailable\n")
 	workspaceWrite(t, root, "app/go.mod", "module example.org/app\ngo 1.27\nrequire (\nexample.org/d v1.0.0\nexample.org/empty v1.0.0\n)\n")
 	workspaceWrite(t, root, "app/main.go", "package main\nimport(\"fmt\";\"example.org/d\")\nfunc main(){fmt.Println(d.Value)}\n")
 	workspaceWrite(t, root, "lib/go.mod", "module example.org/lib\ngo 1.27\nrequire example.org/d v1.1.0\n")

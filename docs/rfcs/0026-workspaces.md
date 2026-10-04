@@ -23,7 +23,7 @@
 
 ### 第二阶段迁入实施合同
 
-基于 `2aa0d066` 的独立 `feat/workspace-import` 已实现纯原生 go.work / workspace vendor 迁入子集，接口、单配置分析边界、schema 4 锁与限制见 [迁入设计](../design/workspace-import.md)，实际测试见 [迁入验收](../reviews/workspace-import-20261004.md)。本次采用受管原生 go.work，显式依赖图与 Go 传输政策分开。后续衔接已允许成员渐进使用 .goxide/features/明确授权脚本，非vendor根锁可经显式物化拆出；workspace vendor 拆出仍需单列转换合同，不能视为全 RFC 完成。
+基于 `2aa0d066` 的独立 `feat/workspace-import` 已实现纯原生 go.work / workspace vendor 迁入子集，接口、单配置分析边界、schema 4 锁与限制见 [迁入设计](../design/workspace-import.md)，实际测试见 [迁入验收](../reviews/workspace-import-20261004.md)。本次采用受管原生 go.work，显式依赖图与 Go 传输政策分开。后续衔接已允许成员渐进使用 .gox/features/明确授权脚本。最新合同将 vendor 限定为迁入输入，验证后物化普通本地模块；成员独立时显式物化路径并复制根锁，没有 vendor 拆出转换，见 [供应源码迁入设计](../design/vendor-local-modules.md)。这仍不代表全 RFC 完成。
 
 ### 官方事实与本篇选择
 

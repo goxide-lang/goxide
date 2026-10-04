@@ -259,7 +259,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 			n := r.nodes[module]
 			req := reqs[module]
 			if n != r.root && n.Manifest.Vendor != nil {
-				return nil, fmt.Errorf("vendor mode is supported only for a root project; cannot mix vendor author dependency %s", n.Module)
+				deferred[module] = fmt.Errorf("vendor mode is supported only for a root project; cannot mix vendor author dependency %s", n.Module)
 			}
 			features, deps, e := Resolve(n.Manifest, req.Features, req.Defaults)
 			if e != nil {

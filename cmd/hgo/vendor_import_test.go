@@ -32,9 +32,12 @@ func vendorFixture(t *testing.T) (string, string, string) {
 	root := filepath.Join(base, "old")
 	dep := filepath.Join(base, "dep")
 	out := filepath.Join(base, "new")
-	projectWrite(t, dep, map[string]string{"go.mod": "module example.org/dep\ngo 1.27\n", "dep.go": "package dep\nimport _ \"embed\"\n//go:embed assets/value.txt\nvar data string\nfunc Value()string{return data+Tag()}\n", "assets/value.txt": "original", "LICENSE": "fixture license\n", "tag.go": "//go:build !special\npackage dep\nfunc Tag()string{return \" host\"}\n", "tag_special.go": "//go:build special\npackage dep\nfunc Tag()string{return \" special\"}\n", "other_windows.go": "package dep\nvar WindowsOnly=1\n"})
+	projectWrite(t, dep, map[string]string{"go.mod": "module example.org/dep\ngo 1.27\n", "dep.go": "package dep\nimport _ \"embed\"\n//go:embed assets/value.txt\nvar data string\nfunc Value()string{return data+Tag()}\n", "assets/value.txt": "original", "LICENSE": "fixture license\n", "opaque.bin": string([]byte{0xff, 0x00, 0xfe}), "tag.go": "//go:build !special\npackage dep\nfunc Tag()string{return \" host\"}\n", "tag_special.go": "//go:build special\npackage dep\nfunc Tag()string{return \" special\"}\n", "other_windows.go": "package dep\nvar WindowsOnly=1\n"})
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\ngo 1.27\nrequire example.org/dep v1.0.0\nreplace example.org/dep => ../dep\n", "main.go": "package main\nimport (\"fmt\";\"example.org/dep\")\nfunc main(){fmt.Println(dep.Value())}\n", "main_test.go": "package main\nimport (\"testing\";\"example.org/dep\")\nfunc TestValue(t *testing.T){if dep.Value()==\"\"{t.Fatal(\"empty\")}}\n"})
 	vendorGo(t, root, "mod", "vendor")
+	if e := os.Chmod(filepath.Join(root, "vendor/example.org/dep/LICENSE"), 0444); e != nil {
+		t.Fatal(e)
+	}
 	if e := os.Chmod(filepath.Join(root, "vendor/example.org/dep/dep.go"), 0664); e != nil {
 		t.Fatal(e)
 	}
@@ -89,7 +92,25 @@ func TestVendorImportColdOffline(t *testing.T) {
 	if lock.Vendor == nil || lock.Vendor.Files["example.org/dep/LICENSE"] == "" || lock.PlanningSums != "" {
 		t.Fatalf("bad vendor lock: %s", b)
 	}
+	beforeArtifact, e := projectRun(t, out, "build", "--offline", "--locked")
+	if e != nil {
+		t.Fatal(e)
+	}
 	oldDigest := lock.Vendor.Digest
+	binary := filepath.Join(out, "vendor/example.org/dep/opaque.bin")
+	original, e := os.ReadFile(binary)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(binary, []byte{0xfe, 0x00, 0xfe}, 0644); e != nil {
+		t.Fatal(e)
+	}
+	if b, e := projectRun(t, out, "run", "--offline", "--locked"); e == nil {
+		t.Fatalf("binary corruption accepted %s", b)
+	}
+	if e = os.WriteFile(binary, original, 0644); e != nil {
+		t.Fatal(e)
+	}
 	if e := os.WriteFile(filepath.Join(out, "vendor/example.org/dep/assets/value.txt"), []byte("changed"), 0644); e != nil {
 		t.Fatal(e)
 	}
@@ -101,12 +122,19 @@ func TestVendorImportColdOffline(t *testing.T) {
 	}
 	b, _ = os.ReadFile(filepath.Join(out, "goxide.lock"))
 	json.Unmarshal(b, &lock)
+	afterArtifact, e := projectRun(t, out, "build", "--offline", "--locked")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if strings.TrimSpace(beforeArtifact) == strings.TrimSpace(afterArtifact) {
+		t.Fatal("vendor mutation reused artifact configuration")
+	}
 	if oldDigest == lock.Vendor.Digest {
 		t.Fatal("digest did not change")
 	}
 }
 func TestVendorImportRejections(t *testing.T) {
-	for _, kind := range []string{"missing", "extra-go", "extra-file", "metadata", "workspace", "explicit", "version", "replace", "symlink", "nested", "dual", "output"} {
+	for _, kind := range []string{"missing", "extra-go", "extra-file", "metadata", "workspace", "explicit", "version", "replace", "symlink", "modules-symlink", "nested", "dual", "output"} {
 		t.Run(kind, func(t *testing.T) {
 			root, out, base := vendorFixture(t)
 			mods := filepath.Join(root, "vendor/modules.txt")
@@ -131,6 +159,10 @@ func TestVendorImportRejections(t *testing.T) {
 				os.WriteFile(mods, []byte(strings.ReplaceAll(string(b), "v1.0.0", "v1.1.0")), 0644)
 			case "replace":
 				os.WriteFile(mods, []byte(strings.ReplaceAll(string(b), "../dep", "../elsewhere")), 0644)
+			case "modules-symlink":
+				os.WriteFile(filepath.Join(base, "external-modules"), b, 0644)
+				os.Remove(mods)
+				os.Symlink(filepath.Join(base, "external-modules"), mods)
 			case "symlink":
 				os.WriteFile(filepath.Join(base, "outside"), []byte("outside"), 0644)
 				os.Symlink(filepath.Join(base, "outside"), filepath.Join(root, "vendor/example.org/dep/link"))
@@ -169,7 +201,7 @@ func TestVendorVersionReplacementAndOriginalSums(t *testing.T) {
 	base := t.TempDir()
 	root := filepath.Join(base, "old")
 	out := filepath.Join(base, "new")
-	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\ngo 1.27\nrequire example.org/original v1.0.0\nreplace example.org/original => example.org/fork v1.1.0\nexclude example.org/original v1.0.1\n", "main.go": "package main\nimport (\"fmt\";dep \"example.org/original\")\nfunc main(){fmt.Println(dep.Value())}\n"})
+	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\ngo 1.27\nrequire example.org/original v1.0.0\nreplace example.org/original v1.0.0 => example.org/fork v1.1.0\nreplace example.org/original v1.9.0 => example.org/fork v1.9.1\nexclude example.org/original v1.0.1\n", "main.go": "package main\nimport (\"fmt\";dep \"example.org/original\")\nfunc main(){fmt.Println(dep.Value())}\n"})
 	vendorGo(t, root, "mod", "tidy")
 	vendorGo(t, root, "mod", "vendor")
 	sums, e := os.ReadFile(filepath.Join(root, "go.sum"))
@@ -239,5 +271,31 @@ func TestVendorRootFeaturesTargetsAndTrust(t *testing.T) {
 	t.Setenv("HGO_TRUST_DIR", filepath.Join(t.TempDir(), "trust"))
 	if b, e := projectRun(t, out, "build", "--bin", "app", "--offline"); e == nil || !strings.Contains(e.Error(), "trust") {
 		t.Fatalf("script not gated: %s %v", b, e)
+	}
+}
+
+func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
+	proxy, _ := versionProxy(t)
+	first := versionLibrary("v1")
+	first["goxide.toml"] += "\n[vendor]\nmode='go-mod'\n"
+	publishVersion(t, proxy, "example.org/hgolib", "v1.0.0", first)
+	publishVersion(t, proxy, "example.org/hgolib", "v1.1.0", versionLibrary("v2"))
+	publishVersion(t, proxy, "example.org/middle", "v1.0.0", map[string]string{"go.mod": "module example.org/middle\ngo 1.27\n", "goxide.toml": "[package]\nformat=1\n[lib]\nname='middle'\npath='.'\n[dependencies.lib]\nmodule='example.org/hgolib'\nversion='v1.1.0'\n", "middle.go": "package middle\n"})
+	root := versionApp(t, `{"module":"example.org/hgolib","version":"v1.0.0"}`)
+	if b, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "only for a root") {
+		t.Fatalf("stable unsupported vendor: %s %v", b, e)
+	}
+	m, e := project.Read(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	m.Dependencies["middle"] = project.Dependency{Module: "example.org/middle", Version: "v1.0.0"}
+	b, e := project.Marshal(m)
+	if e != nil {
+		t.Fatal(e)
+	}
+	os.WriteFile(filepath.Join(root, project.ManifestName), b, 0644)
+	if b, e := projectRun(t, root, "run"); e != nil || !strings.Contains(b, "v2") {
+		t.Fatalf("transient vendor rejected: %s %v", b, e)
 	}
 }

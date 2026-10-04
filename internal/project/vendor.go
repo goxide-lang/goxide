@@ -142,6 +142,13 @@ func InspectVendor(root string, m Manifest) (*VendorSnapshot, error) {
 	if e := NoSymlinks(dir); e != nil {
 		return nil, e
 	}
+	info, err := os.Lstat(filepath.Join(dir, "modules.txt"))
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("vendor/modules.txt must be a regular file (no symlink)")
+	}
 	data, e := os.ReadFile(filepath.Join(dir, "modules.txt"))
 	if e != nil {
 		return nil, e
@@ -219,7 +226,7 @@ func InspectVendor(root string, m Manifest) (*VendorSnapshot, error) {
 		if e != nil {
 			return e
 		}
-		snap.Files[rel] = Digest([]any{string(b), uint32(info.Mode().Perm())})
+		snap.Files[rel] = Digest([]any{b, uint32(info.Mode().Perm())})
 		return nil
 	})
 	if e != nil {
@@ -255,11 +262,18 @@ func PrepareVendor(tool, source, destination string, m Manifest, expected *Vendo
 		if e != nil {
 			return e
 		}
-		if Digest([]any{string(b), uint32(info.Mode().Perm())}) != actual.Files[rel] {
+		if Digest([]any{b, uint32(info.Mode().Perm())}) != actual.Files[rel] {
 			return fmt.Errorf("vendor source changed: %s", rel)
 		}
 		if e = os.MkdirAll(filepath.Dir(dst), 0755); e != nil {
 			return e
+		}
+		if _, err := os.Lstat(dst); err == nil {
+			if e = os.Chmod(dst, info.Mode().Perm()|0200); e != nil {
+				return e
+			}
+		} else if !os.IsNotExist(err) {
+			return err
 		}
 		if e = os.WriteFile(dst, b, info.Mode().Perm()); e != nil {
 			return e
@@ -306,7 +320,7 @@ func (g *Graph) planVendor(n *Node, requested []string, defaults bool) (*Graph, 
 	g.Plan = map[string]Selection{}
 	// These versions describe the supplied package view, not a newly solved MVS graph.
 	for _, mod := range snap.Modules {
-		if mod.Version != "" {
+		if mod.Version != "" && (mod.Explicit || len(mod.Packages) > 0) {
 			s := Selection{Path: mod.Path, Version: mod.Version}
 			if mod.Replace != "" {
 				s.Replace = &Selection{Path: mod.Replace, Version: mod.ReplaceVersion}
@@ -320,6 +334,9 @@ func (g *Graph) planVendor(n *Node, requested []string, defaults bool) (*Graph, 
 
 func VendorInventory(s *VendorSnapshot) []string {
 	var lines []string
+	for _, m := range s.Modules {
+		lines = append(lines, fmt.Sprintf("# vendor module %s@%s replace=%s@%s explicit=%t go=%s packages=%s", m.Path, m.Version, m.Replace, m.ReplaceVersion, m.Explicit, m.Go, strings.Join(m.Packages, ",")))
+	}
 	for name, hash := range s.Files {
 		kind := "file"
 		if vendorLicense(path.Base(name)) {

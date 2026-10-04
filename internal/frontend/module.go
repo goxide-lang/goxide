@@ -335,7 +335,12 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if e = os.MkdirAll(filepath.Dir(target), 0755); e != nil {
 			return e
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		mode := info.Mode().Perm()
+		// Only the owned generated source copy is rewritten by lowering.
+		if sourceDir && ext == ".go" {
+			mode |= 0200
+		}
+		return os.WriteFile(target, data, mode)
 	})
 	if err != nil {
 		return ModuleResult{}, err

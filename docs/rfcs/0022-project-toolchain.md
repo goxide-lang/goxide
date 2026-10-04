@@ -151,3 +151,7 @@ examples 仅显式选择构建，不成为默认 bin/lib 产物；本片没有 p
 早期实现用 Go 完整 parser 验证关闭文件，误拒合法 hgo DSL；现改为上述基础检查并在任何宏/use/cfg! 查询处理前退出。配置标记的包名前缀读取同样复用 hgo parser。启用文件若 package 前有 cfg/build 注释，派生 import 插入点由格式化 Go AST 的 package 名结束位置确定，不再假设文件第一行是 package。
 
 多行 cfg! 仍明确拒绝，不能用保留 LF 的简单布尔填充规避：Go 自动分号会使合法表达式变成语法错误。后续若支持，须接入明确 source-map edits，覆盖零缩进闭括号、CRLF、前置否定、尾随运算及后续诊断位置；本次未加入新的谓词或表达式解释器。
+
+## 已批准的 version 来源增强（文档先行）
+
+用户已批准将 Go module version 渠道的 hgo 源码与 path/git 统一处理；实施前合同、统一 MVS/feature 稳定图、发布边界、黑白例及实现顺序见 [version 来源计划](../design/version-source-plan.md)。本段不将尚未完成的实现冒称可用；完成后更新正文中原生 version 不接受 hgo feature、独立 build list 的旧限制。

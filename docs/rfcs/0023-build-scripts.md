@@ -133,3 +133,7 @@ python3 scripts/check_design.py --docs-only
 成本：每次plan读取与哈希执行闭包和工具；miss时host编译（复用Go自身缓存）；两层锁暂牺牲并发吞吐。收益：普通schema/embed无需手工先生成；输入变更自动失效；许可更新可检查；target语义继续由既有frontend负责。下一阶段真正的产品选择集中于：是否需要OS sandbox、何时引入远端host依赖resolver、native探测/链接接口；本轮无需再次确认已批准的生成子集。
 
 整合来源、独立审阅修复和实测结果见 [联合验收记录](../design/build-script-validation.md)。
+
+## version 来源衔接计划
+
+[version 来源计划](../design/version-source-plan.md)要求完整选版/feature 图稳定后才准备并授权脚本，选中版本及 Go sums 进入非根来源身份；版本变化不能复用旧精确许可。本段为文档先行合同，待实现测试确认。

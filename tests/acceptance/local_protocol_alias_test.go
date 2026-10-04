@@ -109,7 +109,7 @@ type Other struct{V Different}
 		t.Fatal(err)
 	}
 	packagesWrite(t, out, "app_test.go", `package app
-import("testing";"reflect";"strings";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson";m "aliases.example/lib/model")
+import("testing";"reflect";"strings";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";m "aliases.example/lib/model")
 func TestAllProtocols(t *testing.T){
  v:=DefaultWrap();if v.V.N!=7||v.Again.Name!="producer"{t.Fatal(v)}
  c:=CloneWrap(&v);if !Equal(v,c)||!strings.Contains(DebugWrap(&v),"E::Item(Item {"){t.Fatal(v,c,DebugWrap(&v))};c.V.N=8;if Equal(v,c){t.Fatal("wrong equality")}

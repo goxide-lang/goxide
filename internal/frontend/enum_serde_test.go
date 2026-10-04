@@ -1,7 +1,7 @@
 package frontend
 
 import (
-	"os"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -12,8 +12,8 @@ func TestEnumSerdeGeneratedRuntime(t *testing.T) {
 	r, e := Compile("event.hgo", []byte(`package main
 import (
  "fmt"
- "github.com/hxsf/goxide/serde"
- "github.com/hxsf/goxide/serdejson"
+ "github.com/goxide-lang/serde"
+ "github.com/goxide-lang/serde/json"
 )
 #[derive(Serialize, Deserialize)]
 enum Status { Idle, Code(int8), }
@@ -43,10 +43,10 @@ func main(){
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module generated\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+root+"\n"), 0600); e != nil {
+	if e = testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module generated\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+root+"\n"), 0600); e != nil {
 		t.Fatal(e)
 	}
-	if e = os.WriteFile(filepath.Join(dir, "main.go"), r.Go, 0600); e != nil {
+	if e = testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Go, 0600); e != nil {
 		t.Fatal(e)
 	}
 	goexe, e := exec.LookPath("go")

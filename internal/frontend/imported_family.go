@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"sort"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
@@ -11,7 +12,7 @@ import (
 
 // The generic origin is registry-authorized. Alias argument mappings come from
 // go/types, including partial/reordered aliases; names never imply a protocol.
-func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefix string, validatorOwners ...map[string]string) (enums.Decl, string, string) {
+func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefix string, validatorOwners map[string]string, visible map[*types.Package]string) (enums.Decl, string, string) {
 	d := enums.Decl{PackagePath: f.DefinitionPath, Name: origin + "." + f.DefinitionName, LookupName: alias + "." + f.Name, Family: f.Family, Marker: f.Marker}
 	for _, v := range f.Variants {
 		payload := ""
@@ -27,8 +28,8 @@ func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefi
 		// pass can name its concrete parameter. A function-value alias here
 		// would hide the target from Go escape analysis at every `?` call.
 		owner := origin
-		if len(validatorOwners) > 0 {
-			bound := validatorOwners[0][v.ValidatorPath]
+		if validatorOwners != nil {
+			bound := validatorOwners[v.ValidatorPath]
 			if bound == "" {
 				// A facade can expose ordinary Go values without exposing an
 				// internal validator owner. Never invent a helper at the origin.
@@ -88,6 +89,20 @@ func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefi
 		spelling, ok := familyAliasType(t, pkg, alias)
 		if !ok && named.Obj().Pkg() != pkg {
 			spelling, ok = familyAliasType(t, named.Obj().Pkg(), origin)
+		}
+		if !ok {
+			// Shared family origin is std, but payload aliases can belong to
+			// another package explicitly imported by this source file.
+			packages := make([]*types.Package, 0, len(visible))
+			for pkg := range visible {
+				packages = append(packages, pkg)
+			}
+			sort.Slice(packages, func(i, j int) bool { return packages[i].Path() < packages[j].Path() })
+			for _, pkg := range packages {
+				if spelling, ok = familyAliasType(t, pkg, visible[pkg]); ok {
+					break
+				}
+			}
 		}
 		if !ok {
 			return d, b.String(), "imported sum alias payload type is not nameable; use the producer's public Go API"

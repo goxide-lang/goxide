@@ -11,12 +11,12 @@ version = run(GO, 'version').decode().strip()
 sha = run('git', 'rev-parse', 'HEAD').decode().strip()
 # Bind to actual compiler sources too, including uncommitted adapter changes.
 h = hashlib.sha256()
-for path in sorted([*ROOT.glob('internal/**/*.go'), *ROOT.glob('cmd/hgo-playground/*.go'), *ROOT.glob('runtime/*.go'), *ROOT.glob('formatting/*.go'), *ROOT.glob('serde/*.go'), *ROOT.glob('serdejson/*.go'), ROOT/'go.mod']):
+for path in sorted([*ROOT.glob('internal/**/*.go'), *ROOT.glob('cmd/hgo-playground/*.go'), *ROOT.glob('runtime/*.go'), *ROOT.glob('formatting/*.go'), ROOT/'go.mod', ROOT/'go.sum']):
     if path.name.endswith('_test.go'): continue
     h.update(str(path.relative_to(ROOT)).encode()); h.update(path.read_bytes())
 packages = ['fmt', 'errors', 'io', 'strconv', 'strings', 'math', 'encoding/json',
             'github.com/hxsf/goxide/runtime', 'github.com/hxsf/goxide/formatting',
-            'github.com/hxsf/goxide/serde', 'github.com/hxsf/goxide/serdejson']
+            'github.com/goxide-lang/std/sum', 'github.com/goxide-lang/serde', 'github.com/goxide-lang/serde/json']
 exports = ROOT/'internal/typecheck/browserexports'
 exports.mkdir(exist_ok=True)
 for old in exports.glob('*.a'): old.unlink()

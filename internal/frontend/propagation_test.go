@@ -1,7 +1,7 @@
 package frontend
 
 import (
-	"os"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -71,10 +71,10 @@ func main(){if !conversionOK(converted()){panic("wrong conversion")};if answer(c
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	if err = os.WriteFile(filepath.Join(dir, "main.go"), r.Go, 0600); err != nil {
+	if err = testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Go, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module composition\ngo 1.27\n"), 0600); err != nil {
+	if err = testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module composition\ngo 1.27\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("go", "run", "-race", ".")

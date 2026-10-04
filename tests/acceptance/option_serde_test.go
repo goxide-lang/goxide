@@ -75,7 +75,7 @@ func TestOptionSerdeNestedContainersRace(t *testing.T) {
 	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
 	packagesWrite(t, source, "go.mod", "module nestedoption.example/app\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconv.Quote(root)+"\n")
 	packagesWrite(t, source, "nested.hgo", `package nested
-import("github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 #[derive(Serialize,Deserialize)]
 type Request struct { List Option[[]Option[int]]; Lookup Option[map[string]Option[int]] }
 func Decode(data []byte)(Request,error){return serdejson.Unmarshal(data,DeserializeRequest)}
@@ -98,7 +98,7 @@ func MapLength(v Option[map[string]Option[int]])int{
 }
 
 const optionSerdeNestedAssertions = `package nested
-import("errors";"reflect";"testing";"github.com/hxsf/goxide/serde")
+import("errors";"reflect";"testing";"github.com/goxide-lang/serde")
 func TestNestedRoundTrip(t *testing.T){
  for _,input:=range []string{"{}","{\"List\":null,\"Lookup\":null}"}{
   v,e:=Decode([]byte(input));if e!=nil||v.List!=nil||v.Lookup!=nil{t.Fatal(input,v,e)}
@@ -147,7 +147,7 @@ type RequiresDefault struct { Payload InputPayload }
 }
 
 const optionSerdeAssertions = `package main
-import("errors";"reflect";"strings";"testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("errors";"reflect";"strings";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func readRequest(input string)(Request,error){return serdejson.Unmarshal([]byte(input),DeserializeRequest)}
 func writeRequest(v Request)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeRequest(s,&v)})}
 const required = "\"Items\":[],\"Lookup\":{},\"Fixed\":[null,null]"

@@ -3,6 +3,7 @@ package frontend
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,14 +155,14 @@ func TestUseMacroExternalSourceRegistryBoundary(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			if e = os.WriteFile(file, changed, 0644); e != nil {
+			if e = testdeps.WriteFile(file, changed, 0644); e != nil {
 				t.Fatal(e)
 			}
 			_, e = CompileModule(client, filepath.Join(t.TempDir(), "tampered"))
 			if e == nil || !strings.Contains(e.Error(), "marker/schema mismatch") {
 				t.Fatalf("want classification digest mismatch, got %v", e)
 			}
-			if e = os.WriteFile(file, original, 0644); e != nil {
+			if e = testdeps.WriteFile(file, original, 0644); e != nil {
 				t.Fatal(e)
 			}
 		}

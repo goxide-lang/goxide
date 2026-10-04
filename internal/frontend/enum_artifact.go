@@ -987,7 +987,7 @@ func validateFieldProtocolMetadata(meta enumMetadata, pkg *types.Package, imp ty
 			if imp == nil {
 				return fmt.Errorf("missing serde protocol importer for %s", x.Helper)
 			}
-			core, err := imp.Import("github.com/hxsf/goxide/serde")
+			core, err := imp.Import("github.com/goxide-lang/serde")
 			if err != nil {
 				return err
 			}

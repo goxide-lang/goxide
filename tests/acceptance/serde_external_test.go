@@ -49,7 +49,7 @@ type E=m.E
 type New m.Item
 `)
 	packagesWrite(t, src, "fake/fake.go", `package fake
-import "github.com/hxsf/goxide/serde"
+import "github.com/goxide-lang/serde"
 type Item struct{N int}
 func SerializeItem(s serde.Serializer,v *Item)error{return s.Int64(int64(v.N))}
 func DeserializeItem(d serde.Deserializer)(Item,error){n,e:=serde.ReadInt64(d);return Item{N:int(n)},e}
@@ -111,7 +111,7 @@ type In struct{V m.Input}
 	plain := t.TempDir()
 	packagesWrite(t, plain, "go.mod", mod("wire.example/plain", lib)+fmt.Sprintf("require wire.example/app v0.0.0\nreplace wire.example/app => %s\n", filepath.ToSlash(out)))
 	packagesWrite(t, plain, "consumer_test.go", `package plain
-import("testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson";a "wire.example/app";m "wire.example/lib/model")
+import("testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";a "wire.example/app";m "wire.example/lib/model")
 func TestGoHelpers(t *testing.T){v:=a.Out{V:m.Output{N:9}};b,e:=serdejson.Encode(func(s serde.Serializer)error{return a.SerializeOut(s,&v)});if e!=nil||string(b)!="{\"V\":{\"N\":9}}"{t.Fatal(string(b),e)};x,e:=serdejson.Unmarshal(b,a.DeserializeIn);if e!=nil||x.V.N!=9{t.Fatal(x,e)}}
 `)
 	for _, dir := range []string{lib, out, plain} {
@@ -150,7 +150,7 @@ func TestGoHelpers(t *testing.T){v:=a.Out{V:m.Output{N:9}};b,e:=serdejson.Encode
 }
 
 const externalSerdeAssertions = `package app
-import("testing";"errors";"reflect";"strconv";"strings";"encoding/json";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson";m "wire.example/lib/model";other "wire.example/lib/other")
+import("testing";"errors";"reflect";"strconv";"strings";"encoding/json";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";m "wire.example/lib/model";other "wire.example/lib/other")
 const valid="{\"V\":{\"Item\":{\"N\":7,\"Name\":\"business\"}},\"Items\":[],\"Index\":{},\"Pair\":[{\"N\":1,\"Name\":\"pair\"}],\"Maybe\":null}"
 func enc(v Wrap)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeWrap(s,&v)})}
 func detail(t *testing.T,e error,kind string,path []serde.PathSegment){t.Helper();var d *serde.Error;if !errors.As(e,&d)||d.Kind!=kind||!reflect.DeepEqual(d.Path,path){t.Fatalf("error %v %#v want %s %#v",e,d,kind,path)}}

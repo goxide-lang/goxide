@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -173,10 +174,10 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 			}
 			change(v)
 			data, _ := json.Marshal(v)
-			if e := os.WriteFile(metaPath, data, 0600); e != nil {
+			if e := testdeps.WriteFile(metaPath, data, 0600); e != nil {
 				t.Fatal(e)
 			}
-			defer os.WriteFile(metaPath, original, 0600)
+			defer testdeps.WriteFile(metaPath, original, 0600)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
 			if !strings.Contains(out, want) || !strings.Contains(out, "app.hgo:2:") {
 				t.Fatal(out)
@@ -195,7 +196,7 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 		if e := os.Remove(metaPath); e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(metaPath, original, 0600)
+		defer testdeps.WriteFile(metaPath, original, 0600)
 		out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
 		if !strings.Contains(out, "metadata missing") {
 			t.Fatal(out)
@@ -208,10 +209,10 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 		if e != nil {
 			t.Fatal(e)
 		}
-		if e = os.WriteFile(path, append(old, []byte("\n// stale body artifact\n")...), 0600); e != nil {
+		if e = testdeps.WriteFile(path, append(old, []byte("\n// stale body artifact\n")...), 0600); e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(path, old, 0600)
+		defer testdeps.WriteFile(path, old, 0600)
 		out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
 		if !strings.Contains(out, "Go source content mismatch") || !strings.Contains(out, "dependency library.example/refs/api") {
 			t.Fatal(out)
@@ -232,12 +233,12 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 			if e != nil {
 				t.Fatal(e)
 			}
-			defer os.WriteFile(path, old, 0600)
+			defer testdeps.WriteFile(path, old, 0600)
 			next, e := os.ReadFile(filepath.Join(drift, "api", name))
 			if e != nil {
 				t.Fatal(e)
 			}
-			if e = os.WriteFile(path, next, 0600); e != nil {
+			if e = testdeps.WriteFile(path, next, 0600); e != nil {
 				t.Fatal(e)
 			}
 		}
@@ -267,12 +268,12 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 			if e != nil {
 				t.Fatal(e)
 			}
-			defer os.WriteFile(path, old, 0600)
+			defer testdeps.WriteFile(path, old, 0600)
 			next, e := os.ReadFile(filepath.Join(drift, "api", name))
 			if e != nil {
 				t.Fatal(e)
 			}
-			if e = os.WriteFile(path, next, 0600); e != nil {
+			if e = testdeps.WriteFile(path, next, 0600); e != nil {
 				t.Fatal(e)
 			}
 		}

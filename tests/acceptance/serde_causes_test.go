@@ -37,7 +37,7 @@ func TestSerdeCausesInstalledBusinessRace(t *testing.T) {
 }
 
 const serdeCausesAssertions = `package main
-import("encoding/json";"errors";"io";"reflect";"strconv";"strings";"testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("encoding/json";"errors";"io";"reflect";"strconv";"strings";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func detail(t *testing.T,err error,kind string,path []serde.PathSegment)*serde.Error{
  t.Helper();var e *serde.Error
  if !errors.As(err,&e)||e.Kind!=kind||!reflect.DeepEqual(e.Path,path){t.Fatalf("kind/path: %#v error=%v want=%s %v",e,err,kind,path)}

@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -39,7 +40,7 @@ func TestPackagesApplication(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			return os.WriteFile(dest, data, 0600)
+			return testdeps.WriteFile(dest, data, 0600)
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -101,7 +102,7 @@ func packagesWrite(t *testing.T, root, name, data string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+	if err := testdeps.WriteFile(path, []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -129,8 +130,8 @@ import (
  "reflect"
  "testing"
  cfg "packages.example/app/model"
- "github.com/hxsf/goxide/serde"
- "github.com/hxsf/goxide/serdejson"
+ "github.com/goxide-lang/serde"
+ "github.com/goxide-lang/serde/json"
 )
 func invokePackage(t *testing.T, input string) (map[string]any, error) {
  t.Helper()

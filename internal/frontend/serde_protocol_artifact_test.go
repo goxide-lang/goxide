@@ -9,7 +9,7 @@ import (
 )
 
 func TestSerdeProtocolMetadataSignatures(t *testing.T) {
-	core := enumTestPackage(t, "github.com/hxsf/goxide/serde", `package serde;type Serializer interface{String(string)error};type Deserializer interface{Skip()error}`, nil)
+	core := enumTestPackage(t, "github.com/goxide-lang/serde", `package serde;type Serializer interface{String(string)error};type Deserializer interface{Skip()error}`, nil)
 	imp := enumTestImporter{core.Path(): core}
 	for _, kind := range []string{"Serialize", "Deserialize"} {
 		t.Run(kind, func(t *testing.T) {
@@ -17,7 +17,7 @@ func TestSerdeProtocolMetadataSignatures(t *testing.T) {
 			if kind == "Deserialize" {
 				helper = "func DeserializeValue(d serde.Deserializer)(Value,error){return Value{},nil}"
 			}
-			source := `package fields;import "github.com/hxsf/goxide/serde";type Value struct{N int};` + helper
+			source := `package fields;import "github.com/goxide-lang/serde";type Value struct{N int};` + helper
 			p := enumTestPackage(t, "example.org/fields", source, imp)
 			imp[p.Path()] = p
 			m := fieldTestMetadata(kind)
@@ -56,7 +56,7 @@ func TestSerdeProtocolMetadataSignatures(t *testing.T) {
 			}
 			for i, bad := range badHelpers {
 				t.Run(fmt.Sprint(i), func(t *testing.T) {
-					src := `package fields;import "github.com/hxsf/goxide/serde";var _ serde.Serializer;type Value struct{N int};` + bad
+					src := `package fields;import "github.com/goxide-lang/serde";var _ serde.Serializer;type Value struct{N int};` + bad
 					p := enumTestPackage(t, "example.org/fields", src, imp)
 					if err := validateEnumMetadata(m, p, imp); err == nil {
 						t.Fatal("accepted", bad)
@@ -75,7 +75,7 @@ func TestSerdeProtocolMetadataSignatures(t *testing.T) {
 }
 
 func TestSerdeProtocolArtifactOriginAuthorization(t *testing.T) {
-	core := enumTestPackage(t, "github.com/hxsf/goxide/serde", `package serde;type Serializer interface{String(string)error};type Deserializer interface{Skip()error}`, nil)
+	core := enumTestPackage(t, "github.com/goxide-lang/serde", `package serde;type Serializer interface{String(string)error};type Deserializer interface{Skip()error}`, nil)
 	imp := equalityArtifactImporter{enumTestImporter: enumTestImporter{core.Path(): core}, dirs: map[string]string{}}
 	write := func(m enumMetadata, body string) {
 		t.Helper()
@@ -94,7 +94,7 @@ func TestSerdeProtocolArtifactOriginAuthorization(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	const serdeSource = `package fields;import "github.com/hxsf/goxide/serde";type Value struct{N int};func SerializeValue(s serde.Serializer,v *Value)error{return nil};func DeserializeValue(d serde.Deserializer)(Value,error){return Value{},nil}`
+	const serdeSource = `package fields;import "github.com/goxide-lang/serde";type Value struct{N int};func SerializeValue(s serde.Serializer,v *Value)error{return nil};func DeserializeValue(d serde.Deserializer)(Value,error){return Value{},nil}`
 	origin := fieldTestMetadata("Serialize")
 	write(origin, serdeSource)
 	if _, err := loadEnumArtifact(origin.Path, imp); err != nil {

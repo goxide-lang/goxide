@@ -1,6 +1,7 @@
 package acceptance_test
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,7 +90,7 @@ func exercise()int{
 	}
 	dir := t.TempDir()
 	for name, data := range map[string]string{"go.mod": "module referencefixture\n\ngo 1.27\n", "generated.go": string(result.Go), "generated_test.go": "package fixture\nimport \"testing\"\nfunc TestReferenceLifetimeIdentity(t *testing.T){if n:=exercise();n!=609{t.Fatalf(\"got %d\",n)}}\n"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}

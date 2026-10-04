@@ -27,7 +27,7 @@ import (
  "log/slog"
  "strings"
  "testing"
- "github.com/hxsf/goxide/serde"
+ "github.com/goxide-lang/serde"
 )
 
 func invoke(t *testing.T, input string) (map[string]any, error) {

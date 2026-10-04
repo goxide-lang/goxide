@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -99,7 +100,7 @@ pub enum E { A, Count(int), }
 		return dir
 	}
 	app := appFor(`package app
-import(r "enum.example/library/relay";m "enum.example/library/model";"github.com/hxsf/goxide/serdejson")
+import(r "enum.example/library/relay";m "enum.example/library/model";"github.com/goxide-lang/serde/json")
 func Score(e r.Alias)int{return match e{r.Alias::A=>0,r.Alias::Count(n)=>n,r.Alias::Batch(xs)=>len(xs),r.Alias::Hidden(v)=>v.N,}}
 func Run()int{return Score(r.Get())+Score(r.Alias::Count(7))+Score(m.Secret())}
 func Rebuild(e r.Alias)r.Alias{return match e{r.Alias::Hidden(v)=>r.Alias::Hidden(v),_=>e,}}
@@ -186,10 +187,10 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 			}
 			change(v)
 			data, _ := json.Marshal(v)
-			if e := os.WriteFile(metaPath, data, 0600); e != nil {
+			if e := testdeps.WriteFile(metaPath, data, 0600); e != nil {
 				t.Fatal(e)
 			}
-			defer os.WriteFile(metaPath, original, 0600)
+			defer testdeps.WriteFile(metaPath, original, 0600)
 			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
 			if !strings.Contains(msg, want) || !strings.Contains(msg, "app.hgo:2:") {
 				t.Fatal(msg)
@@ -207,7 +208,7 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		if e := os.Remove(metaPath); e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(metaPath, original, 0600)
+		defer testdeps.WriteFile(metaPath, original, 0600)
 		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
 		if !strings.Contains(msg, "metadata") {
 			t.Fatal(msg)
@@ -220,8 +221,8 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		if e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(path, old, 0600)
-		if e = os.WriteFile(path, append(old, []byte("\n// changed source\n")...), 0600); e != nil {
+		defer testdeps.WriteFile(path, old, 0600)
+		if e = testdeps.WriteFile(path, append(old, []byte("\n// changed source\n")...), 0600); e != nil {
 			t.Fatal(e)
 		}
 		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
@@ -241,12 +242,12 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		if e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(sourcePath, oldSource, 0600)
+		defer testdeps.WriteFile(sourcePath, oldSource, 0600)
 		changed := strings.Replace(string(oldSource), "struct{N int}", "struct{N int;Extra []int}", 1)
 		if changed == string(oldSource) {
 			t.Fatal("fixture replacement failed")
 		}
-		if e = os.WriteFile(sourcePath, []byte(changed), 0600); e != nil {
+		if e = testdeps.WriteFile(sourcePath, []byte(changed), 0600); e != nil {
 			t.Fatal(e)
 		}
 		updated := filepath.Join(t.TempDir(), "library")
@@ -274,12 +275,12 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 			if e != nil {
 				t.Fatal(e)
 			}
-			defer os.WriteFile(path, old, 0600)
+			defer testdeps.WriteFile(path, old, 0600)
 			data, e := os.ReadFile(filepath.Join(updated, "model", name))
 			if e != nil {
 				t.Fatal(e)
 			}
-			if e = os.WriteFile(path, data, 0600); e != nil {
+			if e = testdeps.WriteFile(path, data, 0600); e != nil {
 				t.Fatal(e)
 			}
 		}

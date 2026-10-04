@@ -4,7 +4,7 @@ import "os"
 import "errors"
 import "encoding/json"
 import "strconv"
-import "github.com/hxsf/goxide/serdejson"
+import "github.com/goxide-lang/serde/json"
 
 #[derive(Serialize, Deserialize)]
 pub enum Operation { Charge(int64), }

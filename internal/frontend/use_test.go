@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,7 @@ func useWrite(t *testing.T, root string, files map[string]string) {
 		if e := os.MkdirAll(filepath.Dir(path), 0755); e != nil {
 			t.Fatal(e)
 		}
-		if e := os.WriteFile(path, []byte(src), 0644); e != nil {
+		if e := testdeps.WriteFile(path, []byte(src), 0644); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -133,7 +134,7 @@ func TestUseExternalMetadataAndStaleness(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = os.WriteFile(f, append(b, []byte("\n// changed dependency closure\n")...), 0644); e != nil {
+	if e = testdeps.WriteFile(f, append(b, []byte("\n// changed dependency closure\n")...), 0644); e != nil {
 		t.Fatal(e)
 	}
 	_, e = CompileModule(client, filepath.Join(t.TempDir(), "stale"))
@@ -351,7 +352,7 @@ func TestUseArtifactTrailingDataAndSingleFileGuard(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = os.WriteFile(artifact, append(b, []byte("{}")...), 0644); e != nil {
+	if e = testdeps.WriteFile(artifact, append(b, []byte("{}")...), 0644); e != nil {
 		t.Fatal(e)
 	}
 	useWrite(t, client, map[string]string{"client.hgo": "package client\nimport p \"example.org/metadata\"\nfunc F()int{return p.Count}\n"})

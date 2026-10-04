@@ -1,7 +1,7 @@
 package main
 
 import "os"
-import "github.com/hxsf/goxide/serdejson"
+import "github.com/goxide-lang/serde/json"
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub enum Delivery {

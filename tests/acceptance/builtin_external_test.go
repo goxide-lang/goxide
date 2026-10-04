@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -145,7 +146,7 @@ func SumLarge(items []int)Result[int,error]{total:=0;for _,item:=range items{tot
 	compare(src, lib)
 	compare(app, out)
 	packagesWrite(t, lib, "model/model_test.go", `package model
-import("testing";"github.com/hxsf/goxide/serdejson")
+import("testing";"github.com/goxide-lang/serde/json")
 func TestProducer(t *testing.T){for _,wire:=range []string{"{}",`+"`"+`{"Value":null}`+"`"+`}{v,e:=serdejson.Unmarshal([]byte(wire),DeserializeConfig);if e!=nil||v.Value!=nil{t.Fatal(v,e)}};v,e:=serdejson.Unmarshal([]byte(`+"`"+`{"Value":3}`+"`"+`),DeserializeConfig);if e!=nil||v.Value.(HgoOptionSome[int]).Value!=3{t.Fatal(v,e)}}
 `)
 	packagesWrite(t, out, "app_test.go", `package app
@@ -215,10 +216,10 @@ func TestGo(t *testing.T){var v r.Maybe[int]=m.HgoNewOptionSome[int](4);if v.(m.
 		}
 		a["Metadata"].(map[string]any)["Families"].([]any)[0].(map[string]any)["Family"] = "Result"
 		b, _ := json.Marshal(a)
-		if e := os.WriteFile(meta, b, 0600); e != nil {
+		if e := testdeps.WriteFile(meta, b, 0600); e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(meta, original, 0600)
+		defer testdeps.WriteFile(meta, original, 0600)
 		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), app)
 		if !strings.Contains(msg, "metadata") {
 			t.Fatal(msg)
@@ -228,7 +229,7 @@ func TestGo(t *testing.T){var v r.Maybe[int]=m.HgoNewOptionSome[int](4);if v.(m.
 		if e := os.Remove(meta); e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(meta, original, 0600)
+		defer testdeps.WriteFile(meta, original, 0600)
 		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), app)
 		if !strings.Contains(msg, "metadata") {
 			t.Fatal(msg)

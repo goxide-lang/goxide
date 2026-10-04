@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"context"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,7 @@ import (
 
 func TestGeneratedModuleHgoAndReservedSidecar(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.org/generated\n\ngo 1.27\n"), 0600); err != nil {
+	if err := testdeps.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.org/generated\n\ngo 1.27\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	src := []byte("package generated\nfunc Value() int { return 42 }\n")

@@ -14,7 +14,7 @@
 | Go JSON | 普通 Go 显式调用 encoding/json、原生方法可用 | 自动采用方法集；核心 raw JSON 子值读写能力 |
 | 类型范围 | 具体字段、内建 Option 与既有有限 enum，真实 Go 包函数 | 用户泛型函数、通用 trait 字典、关联函数/Self 全套前端 |
 
-实现证据：[字段属性解析与 codec](../../../internal/frontend/compile.go)、[现有核心协议](../../../serde/protocol.go)、[格式后端](../../../serdejson/README.md)、[当前验收矩阵](../../t0-acceptance.md)。以下新注解均为候选伪源码，不能当作现有成功示例。
+实现证据：[字段属性解析与 codec](../../../internal/frontend/compile.go)、[现有核心协议](https://github.com/goxide-lang/serde/blob/a1b791e96d660c6be620e110c566a9a171631b7e/protocol.go)、[格式后端](../../serde-json.md)、[当前验收矩阵](../../t0-acceptance.md)。以下新注解均为候选伪源码，不能当作现有成功示例。
 
 ## 2. 一手资料与版本
 

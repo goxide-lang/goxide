@@ -43,7 +43,7 @@ func TestEnumSerdeBusinessRace(t *testing.T) {
 }
 
 const enumSerdeAssertions = `package fixture
-import("testing";"reflect";"errors";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"reflect";"errors";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func enc(v Event)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeEvent(s,&v)})}
 func dec(s string)(Event,error){return serdejson.Unmarshal([]byte(s),DeserializeEvent)}
 func TestEnumWireAndRoundTrip(t *testing.T){for _,c:=range []struct{value Event;wire string}{{idle(),"\"Idle\""},{item(42),"{\"Item\":42}"},{text("hello"),"{\"Text\":\"hello\"}"}}{out,e:=enc(c.value);if e!=nil||string(out)!=c.wire{t.Fatalf("encode %T: %s %v",c.value,out,e)};v,e:=dec(c.wire);if e!=nil||!reflect.DeepEqual(v,c.value){t.Fatalf("roundtrip: %#v %v",v,e)}}}
@@ -68,7 +68,7 @@ enum In { Empty, Value(int), }
 enum OuterIn { Nested(In), }
 func output() OuterOut {return OuterOut::Nested(Out::Value(3))}
 `, `package fixture
-import("testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestDirectionOnly(t *testing.T){v:=output();out,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeOuterOut(s,&v)});if e!=nil{t.Fatal(e)};if string(out)!="{\"Nested\":{\"Value\":3}}"{t.Fatalf("wrong wire: %s",out)};if _,e:=serdejson.Unmarshal(out,DeserializeOuterIn);e!=nil{t.Fatal(e)}}
 `, false)
 }

@@ -2,7 +2,7 @@ package main
 
 import (
     "fmt"
-    "github.com/hxsf/goxide/serdejson"
+    "github.com/goxide-lang/serde/json"
 )
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

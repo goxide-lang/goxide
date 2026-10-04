@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -34,7 +35,7 @@ func qualifiedSource(t *testing.T) (string, string) {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(dst, data, 0600)
+		return testdeps.WriteFile(dst, data, 0600)
 	})
 	if err != nil {
 		t.Fatal(err)

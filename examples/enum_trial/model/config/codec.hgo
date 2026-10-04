@@ -1,6 +1,6 @@
 package config
 
-import "github.com/hxsf/goxide/serdejson"
+import "github.com/goxide-lang/serde/json"
 
 func Decode(input []byte)(Request,error){return serdejson.Unmarshal(input,DeserializeRequest)}
 func RetryCount(q Request)int{return match q.Retry{Option[int]::None=>-1,Option[int]::Some(n)=>n}}

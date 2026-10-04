@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -211,7 +212,7 @@ func main(){
 `
 	dir := t.TempDir()
 	input := filepath.Join(dir, "original.hgo")
-	if err := os.WriteFile(input, []byte(source), 0600); err != nil {
+	if err := testdeps.WriteFile(input, []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
 	result, err := frontend.Compile(input, []byte(source))
@@ -219,7 +220,7 @@ func main(){
 		t.Fatalf("fixture must reach the actual Go compiler: %v", err)
 	}
 	for name, data := range map[string][]byte{"go.mod": []byte("module compilerfixture\n\ngo 1.27\n"), "main.go": result.Go} {
-		if err := os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -267,7 +268,7 @@ func main(){}
 	}
 	dir := t.TempDir()
 	for name, data := range map[string][]byte{"go.mod": []byte("module helperfixture\n\ngo 1.27\n"), "main.go": result.Go} {
-		if err := os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}

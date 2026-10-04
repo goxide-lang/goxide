@@ -37,7 +37,7 @@ func TestEnumDerivesApplicationRace(t *testing.T) {
 }
 
 const enumDeriveAssertions = `package main
-import("testing";"reflect";"errors";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"reflect";"errors";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func encodeCommand(v Command)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeCommand(s,&v)})}
 func sample()WorkItem{return WorkItem{Name:"mail",Retries:[]int{1,2},Labels:map[string]string{"z":"last","a":"first"}}}
 func TestStructAndContainerPayloadRoundTrips(t *testing.T){item:=sample();for _,value:=range []Command{idle(),submit(item),batch([]WorkItem{item}),indexed(map[string]WorkItem{"first":item}),window([2]WorkItem{item,item})}{data,err:=encodeCommand(value);if err!=nil{t.Fatal(err)};got,err:=serdejson.Unmarshal(data,DeserializeCommand);if err!=nil||!reflect.DeepEqual(got,value){t.Fatalf("roundtrip %s: %#v %v",data,got,err)}}}
@@ -116,7 +116,7 @@ func observe(value Packet,hit *bool) {
 }
 `
 	enumGeneratedModule(t, source, `package fixture
-import("testing";"errors";"reflect";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"errors";"reflect";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestNestedValueDerives(t *testing.T){value:=valid();clone:=ClonePacket(&value);if !reflect.DeepEqual(clone,value)||DebugPacket(&clone)!="Packet::Data(Detail { Phase: Phase::Ready })"{t.Fatal("nested value derive")}}
 func TestInvalidNestedEnumBeforeEffects(t *testing.T){value:=invalid();hit:=false;for name,run:=range map[string]func(){"clone":func(){_=ClonePacket(&value)},"debug":func(){_=DebugPacket(&value)},"guard":func(){observe(value,&hit)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid nested enum",name)}}();run()}()};if hit{t.Fatal("guard ran before nested enum validation")}}
 func TestNestedEnumContainerDerives(t *testing.T){

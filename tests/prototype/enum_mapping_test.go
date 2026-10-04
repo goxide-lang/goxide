@@ -39,7 +39,7 @@ func OutputValue() Output{return Output::Done}
 		t.Fatal(e)
 	}
 	runGenerated(t, r.Go, `package fixture
-import("errors";"testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("errors";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 type forgedCode struct { Code }
 func readCode(s string)(Code,error){var v Code;e:=serdejson.Decode([]byte(s),func(d serde.Deserializer)error{var e error;v,e=DeserializeCode(d);return e});return v,e}
 func TestMapping(t *testing.T){

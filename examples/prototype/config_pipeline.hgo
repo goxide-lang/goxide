@@ -5,7 +5,7 @@ import (
     "fmt"
     "log/slog"
     "os"
-    "github.com/hxsf/goxide/serdejson"
+    "github.com/goxide-lang/serde/json"
 )
 
 #[derive(Serialize, Deserialize)]

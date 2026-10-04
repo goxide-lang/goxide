@@ -3,6 +3,7 @@ package prototype_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,7 +64,7 @@ func runGenerated(t *testing.T, generated []byte, assertions string) {
 		"generated_test.go": []byte(assertions),
 	}
 	for name, data := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -120,8 +121,8 @@ import (
  "reflect"
  "strings"
  "testing"
- "github.com/hxsf/goxide/serde"
- "github.com/hxsf/goxide/serdejson"
+ "github.com/goxide-lang/serde"
+ "github.com/goxide-lang/serde/json"
 )
 func decode(input string)(Order,error){var result Order;err:=serdejson.Decode([]byte(input),func(d serde.Deserializer)error{var err error;result,err=DeserializeOrder(d);return err});return result,err}
 const valid = "{\"id\":18446744073709551615,\"Items\":[{\"City\":\"Paris\"}],\"Counts\":{\"west\":-7},\"Bytes\":[0,255],\"Pair\":[3,4],\"Nick\":null}"
@@ -185,7 +186,7 @@ struct Input { Value float32 }
 		t.Fatal(err)
 	}
 	runGenerated(t, result.Go, `package fixture
-import("testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestDirections(t *testing.T){
  _,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeOutput(s,&Output{Child:OutChild{Value:"ok"}})});if err!=nil{t.Fatal(err)}
  for _,bad:=range []string{"1e-50","1e39"}{
@@ -221,7 +222,7 @@ type Names struct {
 		t.Fatal(err)
 	}
 	runGenerated(t, result.Go, `package fixture
-import("testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestNames(t *testing.T){
  var value Names
  err:=serdejson.Decode([]byte("{\"\":\"ok\",\"a,b\":2}"),func(d serde.Deserializer)error{var e error;value,e=DeserializeNames(d);return e});if err!=nil{t.Fatal(err)}

@@ -25,7 +25,7 @@ type Config struct {
 		t.Fatal(err)
 	}
 	runGenerated(t, r.Go, `package fixture
-import("testing";"github.com/hxsf/goxide/serdejson")
+import("testing";"github.com/goxide-lang/serde/json")
 func TestBooleanShadowing(t *testing.T){
  calls=0
  v,e:=serdejson.Unmarshal([]byte("{}"),DeserializeConfig)

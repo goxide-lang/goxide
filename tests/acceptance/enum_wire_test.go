@@ -66,7 +66,7 @@ func TestEnumWireExplicitBoundaries(t *testing.T) {
 }
 
 const enumWireAssertions = `package main
-import("errors";"reflect";"strings";"testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("errors";"reflect";"strings";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func encodeTicket(v Ticket)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeTicket(s,&v)})}
 func TestKnownWireRoundTripAndNativeConstructors(t *testing.T){
  for _,tc:=range []struct{status Delivery;urgency Urgency;wire string}{

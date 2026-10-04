@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +18,7 @@ func compileImportedFixture(t *testing.T, files map[string]string) (string, erro
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+		if err := testdeps.WriteFile(path, []byte(source), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}

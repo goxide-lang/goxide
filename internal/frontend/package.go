@@ -411,6 +411,16 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	for name, r := range result.Files {
 		matchTemps[name] = r.matchReferenceTemps
 	}
+	for name, source := range files {
+		cleaned := unusedValidatorOwnerImports(name, source)
+		if !bytes.Equal(source, cleaned) {
+			r := result.Files[name]
+			r.Diagnostics = r.Diagnostics.Compose(source, cleaned, "package validator imports")
+			r.Go, r.Expanded = cleaned, cleaned
+			result.Files[name] = r
+			files[name] = cleaned
+		}
+	}
 	finished, err := refs.FinishPackage(files, imp, matchTemps)
 	if err != nil {
 		return result, stageError("package refs.Finish", err)
@@ -667,4 +677,33 @@ func refreshPackageMap(r *Result) {
 	}
 	r.SourceMap, _ = json.MarshalIndent(obj, "", "  ")
 	r.SourceMap = append(r.SourceMap, '\n')
+}
+
+// Owner imports must stay available during typed candidate selection. Once all
+// sum operations are lowered, only selected owners need a named Go import.
+func unusedValidatorOwnerImports(name string, source []byte) []byte {
+	fs := token.NewFileSet()
+	f, err := parser.ParseFile(fs, name, source, 0)
+	if err != nil {
+		return source
+	}
+	used := map[string]bool{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		if s, ok := n.(*ast.SelectorExpr); ok {
+			if id, ok := s.X.(*ast.Ident); ok {
+				used[id.Name] = true
+			}
+		}
+		return true
+	})
+	result := append([]byte(nil), source...)
+	for i := len(f.Imports) - 1; i >= 0; i-- {
+		im := f.Imports[i]
+		if im.Name == nil || !strings.HasPrefix(im.Name.Name, "__hgo_enum_validator_owner_") || used[im.Name.Name] {
+			continue
+		}
+		a, b := fs.Position(im.Name.Pos()).Offset, fs.Position(im.Name.End()).Offset
+		result = append(result[:a], append([]byte("_"), result[b:]...)...)
+	}
+	return result
 }

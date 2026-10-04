@@ -2,7 +2,8 @@ package propagate
 
 import (
 	"github.com/hxsf/goxide/internal/enums"
-	"os"
+	"github.com/hxsf/goxide/internal/testdeps"
+	"github.com/hxsf/goxide/internal/typecheck"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -26,13 +27,13 @@ func main() {fmt.Print(outer(false),outer(true),check())}
 	if e != nil {
 		t.Fatal(e)
 	}
-	out, e := Lower("test.hgo", en.Source, Config{Families: en.Enums})
+	out, e := Lower("test.hgo", en.Source, Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums})
 	if e != nil {
 		t.Fatal(e)
 	}
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "main.go"), out, 0600)
-	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\ngo 1.27\n"), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "main.go"), out, 0600)
+	testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\ngo 1.27\n"), 0600)
 	cmd := exec.Command("go", "run", "-race", ".")
 	cmd.Dir = dir
 	b, e := cmd.CombinedOutput()
@@ -77,13 +78,13 @@ func main(){order(false);if trace!="FLTCD"{panic(trace)};trace="";order(true);if
 	if e != nil {
 		t.Fatal(e)
 	}
-	out, e := Lower("flow.hgo", en.Source, Config{Families: en.Enums})
+	out, e := Lower("flow.hgo", en.Source, Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums})
 	if e != nil {
 		t.Fatal(e)
 	}
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module flow\ngo 1.27\n"), 0600)
-	os.WriteFile(filepath.Join(dir, "main.go"), out, 0600)
+	testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module flow\ngo 1.27\n"), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "main.go"), out, 0600)
 	cmd := exec.Command("go", "run", "-race", ".")
 	cmd.Dir = dir
 	b, e := cmd.CombinedOutput()
@@ -111,14 +112,14 @@ func TestFromAndRejections(t *testing.T) {
 		if e != nil {
 			return nil, e
 		}
-		return Lower("from.hgo", en.Source, Config{Families: en.Enums, From: c})
+		return Lower("from.hgo", en.Source, Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums, From: c})
 	}
 	mapping := Conversion{"error", "Wrapped", "FromWrapped"}
 	out, e := compile(base, []Conversion{mapping})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(out), "= FromWrapped") || !strings.Contains(string(out), "(__hgo_failure.Value)") {
+	if !strings.Contains(string(out), "= FromWrapped") || !strings.Contains(strings.Join(strings.Fields(string(out)), ""), "(__hgo_failure.Value)") {
 		t.Fatal(string(out))
 	}
 	identity := strings.ReplaceAll(base, "Result[string,Wrapped]", "Result[string,error]")
@@ -157,7 +158,7 @@ func TestGoResultTypedBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	used := 200000
-	_, err = Lower("budget.hgo", en.Source, Config{Families: en.Enums, GoResultNodes: &used})
+	_, err = Lower("budget.hgo", en.Source, Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums, GoResultNodes: &used})
 	if err == nil || !strings.Contains(err.Error(), "typed adapter generated-node budget exceeded") {
 		t.Fatalf("budget not enforced: %v", err)
 	}

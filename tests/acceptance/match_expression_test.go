@@ -42,7 +42,7 @@ func outerClosure() int {
 }
 `
 	enumGeneratedModule(t, source, `package fixture
-import("testing";"reflect";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"reflect";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestScopeEffectsAndGuards(t *testing.T){calls:=0;trace:=[]int{};got:=business(func()Response{calls++;return number(4)},&trace);if got!=18||calls!=1||!reflect.DeepEqual(trace,[]int{1,2}){t.Fatalf("got %d calls %d trace %v",got,calls,trace)}}
 func TestReturnClosureAndHygiene(t *testing.T){done:=false;if returning(number(2),&done)!=3||!done{t.Fatal("defer or return changed")};if outerClosure()!=13||shadowBuiltins()!=7{t.Fatal("closure target or generated hygiene changed")}}
 func TestSerdeMacroMatchIntegration(t *testing.T){v:=number(11);data,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeResponse(s,&v)});if e!=nil{t.Fatal(e)};decoded,e:=serdejson.Unmarshal(data,DeserializeResponse);if e!=nil{t.Fatal(e)};done:=false;if returning(decoded,&done)!=12||!done{t.Fatal("integration changed value")}}

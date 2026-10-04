@@ -8,7 +8,7 @@ import (
 
 func TestLocalRuntimeAndStandardIdentity(t *testing.T) {
 	imp := NewImporter("input.hgo")
-	runtime, err := imp.Import("github.com/hxsf/goxide/serde")
+	runtime, err := imp.Import("github.com/goxide-lang/serde")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,7 +5,7 @@ import (
     "os"
     logs "macros.example/app/logkit"
     different "macros.example/app/other"
-    "github.com/hxsf/goxide/serdejson"
+    "github.com/goxide-lang/serde/json"
 )
 
 #[derive(Error)]

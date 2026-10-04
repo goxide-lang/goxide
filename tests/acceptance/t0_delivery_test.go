@@ -185,7 +185,7 @@ func deliveryCommand(t *testing.T, dir, tool string, success bool, extra []strin
 }
 
 const deliveryAssertions = `package main
-import("bytes";"errors";"log/slog";"reflect";"strings";"testing";"github.com/hxsf/goxide/serdejson")
+import("bytes";"errors";"log/slog";"reflect";"strings";"testing";"github.com/goxide-lang/serde/json")
 func TestJobSuccessAndClone(t *testing.T){
  var output bytes.Buffer;old:=slog.Default();defer slog.SetDefault(old);slog.SetDefault(slog.New(slog.NewJSONHandler(&output,nil)))
  raw:=[]byte("{\"Name\":\"archive\",\"Mode\":{\"Batch\":2},\"Labels\":[\"cold\"]}")

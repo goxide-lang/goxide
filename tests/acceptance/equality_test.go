@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -254,7 +255,7 @@ func Bad(v E,other any){switch other{case v:}}`, "switch case comparison"},
 		if e = os.Remove(p); e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(p, old, 0600)
+		defer testdeps.WriteFile(p, old, 0600)
 		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), app)
 		if !strings.Contains(msg, "metadata") {
 			t.Fatal(msg)

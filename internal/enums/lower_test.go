@@ -1,6 +1,7 @@
 package enums
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,10 +54,10 @@ func main() {
 		t.Fatal("missing AST")
 	}
 	dir := t.TempDir()
-	if e = os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600); e != nil {
+	if e = testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if e = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module enumtest\ngo 1.27\n"), 0600); e != nil {
+	if e = testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module enumtest\ngo 1.27\n"), 0600); e != nil {
 		t.Fatal(e)
 	}
 	cmd := exec.Command(goTool(t), "run", "-race", ".")
@@ -130,8 +131,8 @@ func check(e E) {
 		t.Fatal(e)
 	}
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module enumtest\ngo 1.27\n"), 0600)
-	os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
+	testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module enumtest\ngo 1.27\n"), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
 	tests := `package p
 import "testing"
 type forged struct { E }
@@ -142,7 +143,7 @@ func TestInvalid(t *testing.T) {
  check(__hgo_enum_case_1_E_A{});if effects!=1{t.Fatal(effects)}
 }
 `
-	os.WriteFile(filepath.Join(dir, "main_test.go"), []byte(tests), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "main_test.go"), []byte(tests), 0600)
 	cmd := exec.Command(goTool(t), "test", "-race", ".")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
@@ -157,8 +158,8 @@ func TestNominalTypeMismatchCompilesAsError(t *testing.T) {
 		t.Fatal(e)
 	}
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module enumtest\ngo 1.27\n"), 0600)
-	os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
+	testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module enumtest\ngo 1.27\n"), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
 	cmd := exec.Command(goTool(t), "test", ".")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")

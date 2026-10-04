@@ -35,7 +35,7 @@ func Equal(a,b Wrap)bool{Local:=1;_=Local;return a.equals(b)}
 func ShadowDefault()Item{DefaultItem:=func()Item{return Item{N:9}};return DefaultItem()}
 `
 const samePackageAliasAssertions = `package fixture
-import("testing";"reflect";"strings";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"reflect";"strings";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestSamePackageAliasProtocols(t *testing.T){
  if ShadowDefault().N!=9{t.Fatal("local helper spelling rebound")};v:=DefaultWrap();if v.V.N!=7||v.V.Name!="local"{t.Fatal(v)};c:=CloneWrap(&v);if !Equal(v,c)||!strings.Contains(DebugWrap(&v),"E::Item(Item {"){t.Fatal(v,c)}
  c.V.N=9;if Equal(v,c){t.Fatal("equality lost")};if reflect.TypeOf(v.V)!=reflect.TypeOf(Item{}){t.Fatal("identity changed")}

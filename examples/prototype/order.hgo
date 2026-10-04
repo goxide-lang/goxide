@@ -2,8 +2,8 @@ package main
 
 import (
     "fmt"
-    "github.com/hxsf/goxide/serde"
-    "github.com/hxsf/goxide/serdejson"
+    "github.com/goxide-lang/serde"
+    "github.com/goxide-lang/serde/json"
 )
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

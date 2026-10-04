@@ -56,7 +56,7 @@ func TestSerdeDefaultsMissingProtocolDiagnostics(t *testing.T) {
 }
 
 const serdeDefaultsAssertions = `package main
-import("errors";"reflect";"strings";"testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("errors";"reflect";"strings";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func request(input string)(Request,error){return serdejson.Unmarshal([]byte(input),DeserializeRequest)}
 func encodeRequest(v Request)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeRequest(s,&v)})}
 func TestMissingDefaultsOrderAndRoundTrip(t *testing.T){

@@ -1,9 +1,9 @@
 package propagate
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"go/ast"
 	"go/token"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -63,10 +63,10 @@ func observe(f func()int)(n int,p any){defer func(){p=recover()}();n=f();return}
 func TestOption(t *testing.T){for _,f:=range []struct{call func()int;mark string}{{OptionReturn,""},{OptionObserved,"E"},{OptionReturnAgain,""}}{for m:=0;m<2;m++{mode=m;trace="";n:=f.call();want:="O";if m==0&&n!=7{t.Fatal(n)};if m==1{want+="N"+f.mark;if n!=-1{t.Fatal(n)}};if trace!=want{t.Fatal(trace,want)}}}}
 `
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "flow_test.go"), []byte(source), 0600); err != nil {
+	if err := testdeps.WriteFile(filepath.Join(dir, "flow_test.go"), []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module flow.example/probe\n\ngo 1.27\n"), 0600); err != nil {
+	if err := testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module flow.example/probe\n\ngo 1.27\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("go", "test", "-race", "-count=1", ".")

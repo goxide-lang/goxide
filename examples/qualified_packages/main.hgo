@@ -6,7 +6,7 @@ import (
     "strconv"
     p "qualified.example/app/source"
     alternate "qualified.example/app/other"
-    "github.com/hxsf/goxide/serdejson"
+    "github.com/goxide-lang/serde/json"
 )
 macro_rules! take_inner { ($value:expr) => { $value? }; }
 macro_rules! take { ($value:expr) => { take_inner!($value) }; }

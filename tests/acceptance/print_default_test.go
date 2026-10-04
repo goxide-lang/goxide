@@ -140,7 +140,7 @@ type WireDefault struct {
 `
 
 const printDefaultAssertions = `package main
-import("errors";"io";"os";"strings";"testing";"github.com/hxsf/goxide/serdejson";"github.com/hxsf/goxide/formatting")
+import("errors";"io";"os";"strings";"testing";"github.com/goxide-lang/serde/json";"github.com/hxsf/goxide/formatting")
 func capturePrint(t *testing.T,f func())string{t.Helper();r,w,err:=os.Pipe();if err!=nil{t.Fatal(err)};old:=os.Stdout;os.Stdout=w;defer func(){os.Stdout=old;r.Close();w.Close()}();f();w.Close();data,err:=io.ReadAll(r);if err!=nil{t.Fatal(err)};return string(data)}
 func TestExplicitDefaultAndGoZero(t *testing.T){
  value:=DefaultSettings();if value.Name!=""||value.Limits.Retries!=0||value.Limits.Enabled||stateName(value.State)!="standby"{t.Fatalf("default: %#v",value)}

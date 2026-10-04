@@ -1,6 +1,8 @@
 package equality
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
+	"github.com/hxsf/goxide/internal/typecheck"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -18,6 +20,9 @@ import (
 
 func execute(t *testing.T, source string, cfg Config, assertions string) {
 	t.Helper()
+	if cfg.Importer == nil {
+		cfg.Importer = typecheck.NewImporter("input.hgo")
+	}
 	files := map[string][]byte{"input.hgo": []byte(source)}
 	prepared, e := Prepare(files, cfg)
 	if e != nil {
@@ -29,7 +34,7 @@ func execute(t *testing.T, source string, cfg Config, assertions string) {
 	}
 	dir := t.TempDir()
 	for name, data := range map[string]string{"go.mod": "module eqfixture\ngo 1.27\n", "main.go": string(out["input.hgo"]), "main_test.go": assertions} {
-		if e := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); e != nil {
+		if e := testdeps.WriteFile(filepath.Join(dir, name), []byte(data), 0600); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -381,7 +386,7 @@ func Sample(n int)Holder{return Holder{q.New([]q.Option[int]{nil,q.New(n)})}}
 	}
 	producerDir := t.TempDir()
 	for name, data := range map[string]string{"go.mod": "module eqsum\ngo 1.27\n", "sum.go": producer} {
-		if e = os.WriteFile(filepath.Join(producerDir, name), []byte(data), 0600); e != nil {
+		if e = testdeps.WriteFile(filepath.Join(producerDir, name), []byte(data), 0600); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -390,7 +395,7 @@ func Sample(n int)Holder{return Holder{q.New([]q.Option[int]{nil,q.New(n)})}}
 import "testing"
 func TestNested(t *testing.T){if !EqualsHolder(Sample(1),Sample(1))||EqualsHolder(Sample(1),Sample(2)){t.Fatal("imported nested Option")}}
 `} {
-		if e = os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); e != nil {
+		if e = testdeps.WriteFile(filepath.Join(dir, name), []byte(data), 0600); e != nil {
 			t.Fatal(e)
 		}
 	}

@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"context"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,7 +28,7 @@ func TestSerdeBlackBoxRace(t *testing.T) {
 		"generated.go":      result.Go,
 		"generated_test.go": []byte(acceptanceAssertions),
 	} {
-		if err := os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -85,7 +86,7 @@ type Node struct { Value int; Next *Node }
 `
 
 const acceptanceAssertions = `package fixture
-import("errors";"math";"reflect";"strings";"testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("errors";"math";"reflect";"strings";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func record(s string)(Record,error){return serdejson.Unmarshal([]byte(s),DeserializeRecord)}
 func number(s string)(Numbers,error){return serdejson.Unmarshal([]byte(s),DeserializeNumbers)}
 const valid="{\"rows\":{\"east\":[{\"Name\":\"\\ud83d\\ude80\",\"N\":-9223372036854775808},null]},\"Optional\":null}"

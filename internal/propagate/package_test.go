@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"go/ast"
 	"go/format"
-	"go/importer"
 	"go/parser"
 	"go/token"
 	"strings"
@@ -55,13 +54,13 @@ func second() Result[int,Failure] { n:=load()?; return Result[int,Failure]::Ok(n
 		files[name] = buf.Bytes()
 	}
 	for _, name := range []string{"first.go", "second.go"} {
-		out, err := Lower(name, files[name], Config{Families: en.Enums, From: []Conversion{{Source: "error", Target: "Failure", Helper: "FromFailure"}}, Files: files, PackagePath: "example.org/sample", Namespace: strings.TrimSuffix(name, ".go")})
+		out, err := Lower(name, files[name], Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums, From: []Conversion{{Source: "error", Target: "Failure", Helper: "FromFailure"}}, Files: files, PackagePath: "example.org/sample", Namespace: strings.TrimSuffix(name, ".go")})
 		if err != nil {
 			t.Fatal(err)
 		}
 		files[name] = out
 	}
-	if err := typecheck.CheckPackage("example.org/sample", files, importer.Default()); err != nil {
+	if err := typecheck.CheckPackage("example.org/sample", files, typecheck.NewImporter("input.hgo")); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Contains(files["first.go"], []byte("__hgo_qfrom_first_")) || !bytes.Contains(files["second.go"], []byte("__hgo_qfrom_second_")) {
@@ -93,17 +92,17 @@ func outer() Result[int,string] { n:=load()?; native.Sprint(n); return Result[in
 		t.Fatal("missing Result metadata")
 	}
 	companion := []byte("package sample\nimport native \"strconv\"\nfunc load() " + resultName + " { native.Itoa(1); return seed() }")
-	config := Config{Families: lowered.Enums, PackagePath: "example.org/app/sample", Files: map[string][]byte{"helper.go": companion, "active.hgo": []byte("ignored active copy")}}
+	config := Config{Importer: typecheck.NewImporter("input.hgo"), Families: lowered.Enums, PackagePath: "example.org/app/sample", Files: map[string][]byte{"helper.go": companion, "active.hgo": []byte("ignored active copy")}}
 	out, err := Lower("active.hgo", lowered.Source, config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := typecheck.CheckPackage(config.PackagePath, map[string][]byte{"active.go": out, "helper.go": companion}, importer.Default()); err != nil {
+	if err := typecheck.CheckPackage(config.PackagePath, map[string][]byte{"active.go": out, "helper.go": companion}, typecheck.NewImporter("input.hgo")); err != nil {
 		t.Fatal(err)
 	}
 	// An import in the active file must not become available in its companion.
 	bad := []byte("package sample\nfunc load() " + resultName + " { native.Sprint(1); return seed() }")
-	if err := typecheck.CheckPackage(config.PackagePath, map[string][]byte{"active.go": out, "helper.go": bad}, importer.Default()); err == nil || !strings.Contains(err.Error(), "undefined: native") {
+	if err := typecheck.CheckPackage(config.PackagePath, map[string][]byte{"active.go": out, "helper.go": bad}, typecheck.NewImporter("input.hgo")); err == nil || !strings.Contains(err.Error(), "undefined: native") {
 		t.Fatalf("import scope leaked: %v", err)
 	}
 	config.Files = map[string][]byte{"broken.go": []byte("package sample\nfunc (")}

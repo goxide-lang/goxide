@@ -1,6 +1,7 @@
 package acceptance_test
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -124,7 +125,7 @@ func Bad(){b:=store.Budget{};r:=store.View(&b);r.Limit=9}
 		if e = os.Remove(artifact); e != nil {
 			t.Fatal(e)
 		}
-		defer os.WriteFile(artifact, saved, 0600)
+		defer testdeps.WriteFile(artifact, saved, 0600)
 		out = deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), dir)
 		if !strings.Contains(out, "metadata missing") {
 			t.Fatal(out)
@@ -133,7 +134,7 @@ func Bad(){b:=store.Budget{};r:=store.View(&b);r.Limit=9}
 }
 
 const jointAssertions = `package main
-import("testing";"errors";"strconv";cfg "joint.example/app/config";"joint.example/app/logkit";"github.com/hxsf/goxide/serde")
+import("testing";"errors";"strconv";cfg "joint.example/app/config";"joint.example/app/logkit";"github.com/goxide-lang/serde")
 func reset(){cfg.DefaultCalls=0;SideEffects=0;logkit.Calls=0;logkit.Last=0}
 func TestJointSuccess(t *testing.T){
  reset();r,e:=Run("{\"Name\":\"42\",\"Mode\":{\"Batch\":3}}",5,true)

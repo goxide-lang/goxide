@@ -30,7 +30,7 @@ type Request struct {
 		t.Fatal(err)
 	}
 	runGenerated(t, r.Go, `package fixture
-import("testing";"reflect";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("testing";"reflect";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestRoundTrip(t *testing.T) {
  input := "{\"Direct\":{\"N\":1},\"Values\":[null,{\"N\":2}],\"Lookup\":{\"x\":{\"N\":3}},\"Errors\":[{\"N\":4}]}"
  original,err:=serdejson.Unmarshal([]byte(input),DeserializeRequest);if err!=nil{t.Fatal(err)}

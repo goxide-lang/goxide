@@ -42,7 +42,7 @@ func Boundaries(done *bool) int {mark:=func(){*done=true};cleanup!(mark);exit!(4
 		t.Fatal(err)
 	}
 	runGenerated(t, result.Go, `package fixture
-import("errors";"strings";"testing";"github.com/hxsf/goxide/serde";"github.com/hxsf/goxide/serdejson")
+import("errors";"strings";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 type typedNilError struct{}
 func(*typedNilError)Error()string{return "nil"}
 func TestApplication(t *testing.T){

@@ -1,6 +1,6 @@
 package main
 
-import "github.com/hxsf/goxide/serdejson"
+import "github.com/goxide-lang/serde/json"
 
 func count(value Option[int]) int {
     match value {

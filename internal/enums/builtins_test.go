@@ -1,6 +1,7 @@
 package enums
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,8 +30,8 @@ func main(){run()}
 		t.Fatal(e)
 	}
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
-	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module sums\ngo 1.27\n"), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
+	testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module sums\ngo 1.27\n"), 0600)
 	c := exec.Command(goTool(t), "run", "-race", ".")
 	c.Dir = dir
 	c.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
@@ -89,16 +90,16 @@ func TestContainerPayload(t *testing.T){
 }
 `
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
-	os.WriteFile(filepath.Join(dir, "main_test.go"), []byte(tests), 0600)
-	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module sums\ngo 1.27\n"), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
+	testdeps.WriteFile(filepath.Join(dir, "main_test.go"), []byte(tests), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module sums\ngo 1.27\n"), 0600)
 	c := exec.Command(goTool(t), "test", "-race", ".")
 	c.Dir = dir
 	c.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
 	if out, e := c.CombinedOutput(); e != nil {
 		t.Fatalf("%v %s", e, out)
 	}
-	os.WriteFile(filepath.Join(dir, "bad.go"), []byte("package main\nvar wrong "+rs.Name+" = "+ri.Variants[1].Constructor+"(\"bad\")"), 0600)
+	testdeps.WriteFile(filepath.Join(dir, "bad.go"), []byte("package main\nvar wrong "+rs.Name+" = "+ri.Variants[1].Constructor+"(\"bad\")"), 0600)
 	c = exec.Command(goTool(t), "build", "-buildvcs=false", ".")
 	c.Dir = dir
 	c.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")

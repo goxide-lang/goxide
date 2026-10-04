@@ -3,7 +3,7 @@ package main
 import (
     "errors"
     "fmt"
-    "github.com/hxsf/goxide/serdejson"
+    "github.com/goxide-lang/serde/json"
 )
 
 // Multiple data items live in an ordinary struct, carried by one enum payload.

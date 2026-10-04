@@ -28,7 +28,7 @@ go run ./cmd/hgo build -o /tmp/order examples/prototype/order.hgo
 - 声明宏：单文件 `macro_rules!`，以及同 module 源码包 `pub macro_rules!` / `alias.name!`，有限 `expr/ident/tt` 捕获、单层重复和嵌套调用。模板局部变量按 AST 身份改名，支持的自由函数按定义点绑定；不插入隐藏 IIFE。模板出现两次的参数仍求值两次，不自动缓存。详见 [宏限制](internal/macros/README.md)。
 - 内建 `Serialize/Deserialize`：具体命名 struct，标量、嵌套本地 struct、数组、slice、string-key map、可空 Go `*T`。`rename/default/skip/deny_unknown_fields`；解码时 default/skip 复用已登记的具体 Default，缺协议报错；不是完整 Default trait。`*T` 仅是原型 Go 宿主语法，不代表 hgo 引用/Ptr 桥接已经定案。
 - 核心 `serde`：Serializer/Deserializer、Visitor 与容器访问协议、结构化错误及 cause；生成静态 helper，不采用反射 struct 编解码，不强制 Value 树。
-- 独立 `serdejson`：[支持范围与限制](serdejson/README.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议及本地 enum 的 Serialize/Deserialize 派生支持 unit/newtype（含有限 struct/container 单载荷）。
+- 独立 `serdejson`：[支持范围与限制](docs/serde-json.md)。精确整数、拥有解码数据、严格数字/Unicode/重复键/大小与深度检查。核心 enum 协议及本地 enum 的 Serialize/Deserialize 派生支持 unit/newtype（含有限 struct/container 单载荷）。
 - `Debug/Clone`：具体标量及上述非指针容器、嵌套本地类型。Debug 的 map 按键排序；Clone 递归复制支持的容器。指针、锁、外部未知类型、接口等没有隐式复制协议，明确拒绝。
 - `Error`：`#[error("failed {Code}")]`、显式 `#[source]` 的 error 字段生成 Unwrap；单个 error 字段的 `#[from]` 生成 `FromType`。其显式转换已接入下述有限 `?` 前端；不推断动态错误变体，enum Error 的显式变体属性见本文最新增量。
 - 日志示例调用 Go `log/slog`，验证重复字段参数和错误链；不是完整 tracing/span 运行时。
@@ -585,7 +585,7 @@ python3 scripts/check_design.py
 
 基准 `2c353e4282892b289bc202c0a22fae333d9348ca`。格式后端将实际 Token、strconv 数值/Unicode 转换错误保存为 serde.Error.Cause，维持原 Kind、Path、消息和检测顺序。errors.As 可取回 json.SyntaxError 的原始 Token Offset 与 strconv.NumError，errors.Is 保留底层 sentinel。自行检测的额外合法顶层值、Unicode 配对错误、无 strconv 错误的浮点下溢等不伪造 cause。已有路径包装继续保留内层错误链；不重算 offset、不添加统一位置 API。
 
-[格式层回归](serdejson/cause_test.go)与[独立生成业务验收](tests/acceptance/serde_causes_test.go)覆盖正常输入、字段/索引/变体内错误、Token/容器结束/尾部失败、数值解析与自检边界。[订单示例](examples/serde_causes/main.hgo)显式用普通 Go errors.As/Is 分类错误。此轮仅补错误证据保留，不改变截断输入的既有 Kind/Path 分类。
+[格式层回归](https://github.com/goxide-lang/serde/blob/a1b791e96d660c6be620e110c566a9a171631b7e/json/cause_test.go)与[独立生成业务验收](tests/acceptance/serde_causes_test.go)覆盖正常输入、字段/索引/变体内错误、Token/容器结束/尾部失败、数值解析与自检边界。[订单示例](examples/serde_causes/main.hgo)显式用普通 Go errors.As/Is 分类错误。此轮仅补错误证据保留，不改变截断输入的既有 Kind/Path 分类。
 
 ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 payload Default。格式 JSON Value/任意精度 Number、JSON native adapter、PATCH 字段 adapter 仍未实现；普通 Go 调用与手写 typed helper 可用。enum/Option 载荷及投影限制保持，不新增适配 API 或自动 MarshalJSON/UnmarshalJSON 调用。
 

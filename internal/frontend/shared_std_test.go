@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,14 +10,11 @@ import (
 	"testing"
 )
 
-// The public module is deliberately not assigned a fabricated release version.
-// Migration tests use the reviewed isolated library candidate explicitly.
+// Exercise the downloaded public module with the compiler's pinned revision.
 func sharedStdModule(t *testing.T, module string) string {
 	t.Helper()
-	_, file, _, _ := runtime.Caller(0)
-	candidate := filepath.Join(filepath.Dir(file), "../../tests/research/shared_std_candidate")
 	dir := t.TempDir()
-	sharedStdWrite(t, dir, "go.mod", "module "+module+"\ngo 1.27\nrequire github.com/goxide-lang/std v0.0.0\nreplace github.com/goxide-lang/std => "+filepath.ToSlash(candidate)+"\n")
+	sharedStdWrite(t, dir, "go.mod", "module "+module+"\ngo 1.27\n")
 	return dir
 }
 func sharedStdWrite(t *testing.T, dir, name, body string) {
@@ -25,7 +23,7 @@ func sharedStdWrite(t *testing.T, dir, name, body string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+	if err := testdeps.WriteFile(path, []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -114,7 +112,7 @@ func TestShared(t *testing.T){if PointerAdapter().(sum.Ok[int,*Failure]).Value!=
 		t.Fatal(err)
 	}
 	data = []byte(strings.Replace(string(data), `"Version": 7`, `"Version": 6`, 1))
-	if err = os.WriteFile(artifact, data, 0600); err != nil {
+	if err = testdeps.WriteFile(artifact, data, 0600); err != nil {
 		t.Fatal(err)
 	}
 	_, err = CompileModuleWithOptions(consumer, filepath.Join(t.TempDir(), "stale"), ModuleOptions{})

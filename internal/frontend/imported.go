@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
+	"go/types"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,21 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 		if err != nil {
 			continue
 		} // The normal parser reports malformed imports.
+		visible := map[*types.Package]string{}
+		for _, spec := range f.Imports {
+			path, _ := strconv.Unquote(spec.Path.Value)
+			pkg := packages[path].enumTypes
+			if pkg == nil {
+				continue
+			}
+			alias := pkg.Name()
+			if spec.Name != nil {
+				alias = spec.Name.Name
+			}
+			if alias != "_" && alias != "." {
+				visible[pkg] = alias
+			}
+		}
 		for ii, spec := range f.Imports {
 			path, _ := strconv.Unquote(spec.Path.Value)
 			p, ok := packages[path]
@@ -106,7 +122,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 					owners[owner] = oa
 					extraImports[name] += fmt.Sprintf("; import %s %q", oa, owner)
 				}
-				d, code, reason := importedFamily(export, p.enumTypes, alias, originAlias, prefix, owners)
+				d, code, reason := importedFamily(export, p.enumTypes, alias, originAlias, prefix, owners, visible)
 				if reason != "" {
 					if unavailable[name] == nil {
 						unavailable[name] = map[string]string{}

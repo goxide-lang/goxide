@@ -789,6 +789,10 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if err = applyManualEquality(filename, equalityDerives, allEqualityManual, specs, g.models); err != nil {
 		return Result{}, err
 	}
+	// Shared sums need real imported type identity even in single-file derives.
+	if builtinImporter == nil {
+		builtinImporter = typecheck.NewImporter(filename)
+	}
 	g.prepareSumProtocols(f, cfg, builtinImporter)
 	fieldProtocols := map[string][]string{}
 	for _, m := range ordered {
@@ -823,7 +827,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	imports := map[string]string{}
 	for _, m := range ordered {
 		if m.attrs.derive["Serialize"] || m.attrs.derive["Deserialize"] {
-			imports[g.alias] = "github.com/hxsf/goxide/serde"
+			imports[g.alias] = "github.com/goxide-lang/serde"
 			if e := g.emitModel(m); e != nil {
 				return Result{}, e
 			}

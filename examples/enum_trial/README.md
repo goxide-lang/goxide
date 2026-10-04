@@ -71,7 +71,7 @@ PATH="$(dirname "$GO_BIN"):$PATH" GOTOOLCHAIN=local GOWORK=off GOPROXY=off \
     "$work/hgo" run "$work/input"
 ```
 
-此试用的测试入口是脚本中的**生成 Go 模块测试**。直接对普通模式生成的 model 再执行 `hgo test "$work/input"` 已知会因 race 源码视图不同而拒绝 metadata（实测 `dependency source closure changed: github.com/hxsf/goxide/serde`）。不要把生成 Go 的 `go test -race` 与重新按 race 视图加载源码的 `hgo test` 混为一个模式，也不要绕过 metadata 检查。切换 build tags/race/平台需一致地重新生成依赖；本例不额外扩展该流程。
+此试用的测试入口是脚本中的**生成 Go 模块测试**。直接对普通模式生成的 model 再执行 `hgo test "$work/input"` 已知会因 race 源码视图不同而拒绝 metadata（实测 `dependency source closure changed: github.com/goxide-lang/serde`）。不要把生成 Go 的 `go test -race` 与重新按 race 视图加载源码的 `hgo test` 混为一个模式，也不要绕过 metadata 检查。切换 build tags/race/平台需一致地重新生成依赖；本例不额外扩展该流程。
 
 ## 范围和证据
 

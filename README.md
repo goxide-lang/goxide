@@ -29,7 +29,7 @@ bash examples/enum_trial/try.sh "$work"
 | 闭合 enum 与 match | 名义身份、穷尽匹配、guard、非法值在使用点拒绝；有限表达式组合，包括命名单结果、静态已知方法/函数字段/返回函数/variadic/原生 Go 显式 generic 调用；[match 范围](internal/matchexpr/README.md) |
 | Option / Result | 已登记具体实例、match、有限 `?` 组合、Go cause 链、显式 `go_result!` / `go_result_keep!`；跨独立模块恢复及透明 alias；[验收](docs/t0-acceptance.md) |
 | 显式协议 | Default、Clone、Debug、serde、PartialEq/Eq 的有限具体类型及跨包登记；已支持手写 Default 和具体 equality，不隐式赋予所有类型协议 |
-| serde | core 协议 + 独立 JSON 实现；default/skip、具体 Option 缺失/null、闭合变体；[JSON 范围](serdejson/README.md) |
+| serde | core 协议 + 独立 JSON 实现；default/skip、具体 Option 缺失/null、闭合变体；[JSON 范围](docs/serde-json.md) |
 | Go 互操作 | 单文件及现有 go.mod 中多文件/多包目录、独立模块 local replace、生成 helper 的原生 Go 消费；build tags/race 属于具体构建视图 |
 
 Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，enum 只要求显式选中默认变体的载荷。普通 Option 缺失/null→None 不依赖 Default。Clone 不改变普通 Go 赋值语义；enum 不是开放 C-style 数字枚举。

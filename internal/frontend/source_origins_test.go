@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"bytes"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,7 @@ func runMappedGo(t *testing.T, src string, mode string) (Result, []byte, error) 
 	}
 	dir := t.TempDir()
 	for n, b := range map[string][]byte{"go.mod": []byte("module fixture\ngo 1.27\n"), "main.go": r.Go} {
-		if e := os.WriteFile(filepath.Join(dir, n), b, 0600); e != nil {
+		if e := testdeps.WriteFile(filepath.Join(dir, n), b, 0600); e != nil {
 			t.Fatal(e)
 		}
 	}

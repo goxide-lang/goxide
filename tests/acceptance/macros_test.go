@@ -1,6 +1,7 @@
 package acceptance_test
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +26,7 @@ func macroRaceModule(t *testing.T, source, assertions string) {
 		"go.mod":       "module acceptancefixture\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => " + root + "\n",
 		"generated.go": string(result.Go), "generated_test.go": assertions,
 	} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}

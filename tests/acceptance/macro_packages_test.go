@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"errors"
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -36,7 +37,7 @@ func macroPackageSource(t *testing.T) string {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, 0600)
+		return testdeps.WriteFile(target, data, 0600)
 	}); err != nil {
 		t.Fatal(err)
 	}

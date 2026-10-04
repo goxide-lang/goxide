@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -115,7 +116,7 @@ type Skipped struct {
 		t.Fatal(err)
 	}
 	packagesWrite(t, out, "app_test.go", `package app
-import("testing";m "defaults.example/lib/model";"github.com/hxsf/goxide/serdejson")
+import("testing";m "defaults.example/lib/model";"github.com/goxide-lang/serde/json")
 func TestExternalDefaults(t *testing.T){m.Calls=0;v:=DefaultWrap();if m.Read(v.V)!=7||m.Value(v.M)!=7||m.Calls!=2{t.Fatal(v,m.Calls)};if DefaultOther().V.N!=0{t.Fatal("cross-file alias bound to wrong package")};s,e:=serdejson.Unmarshal([]byte("{}"),DeserializeSkipped);if e!=nil||m.Value(s.V)!=7||m.Calls!=3{t.Fatal(s,e,m.Calls)};b:=DefaultBoth();if m.Value(b.M)!=7||Count()!=3||m.Calls!=4{t.Fatal(b,m.Calls)}}
 `)
 	plain := t.TempDir()
@@ -142,7 +143,7 @@ func TestGoConsumer(t *testing.T){v:=a.DefaultWrap();if m.Read(v.V)!=7||m.Value(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(artifact, []byte(strings.Replace(string(data), `"Source": "manual"`, `"Source": "fake"`, 1)), 0600); err != nil {
+	if err = testdeps.WriteFile(artifact, []byte(strings.Replace(string(data), `"Source": "manual"`, `"Source": "fake"`, 1)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "tampered"), appsrc)

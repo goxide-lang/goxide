@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,10 +21,10 @@ func TestModulePreservesResourcesAndQuotedReplacement(t *testing.T) {
 	src := filepath.Join(parent, "src")
 	os.MkdirAll(filepath.Join(src, "testdata"), 0755)
 	os.MkdirAll(filepath.Join(src, ".assets"), 0755)
-	os.WriteFile(filepath.Join(src, "go.mod"), []byte("module example.org/app\n\ngo 1.27\nreplace example.org/dependency => \"../dependency with spaces\"\n"), 0600)
-	os.WriteFile(filepath.Join(src, "main.hgo"), []byte("package main\nfunc main() {}\n"), 0600)
-	os.WriteFile(filepath.Join(src, "testdata", "input.json"), []byte("resource"), 0600)
-	os.WriteFile(filepath.Join(src, ".assets", "data.txt"), []byte("hidden"), 0600)
+	testdeps.WriteFile(filepath.Join(src, "go.mod"), []byte("module example.org/app\n\ngo 1.27\nreplace example.org/dependency => \"../dependency with spaces\"\n"), 0600)
+	testdeps.WriteFile(filepath.Join(src, "main.hgo"), []byte("package main\nfunc main() {}\n"), 0600)
+	testdeps.WriteFile(filepath.Join(src, "testdata", "input.json"), []byte("resource"), 0600)
+	testdeps.WriteFile(filepath.Join(src, ".assets", "data.txt"), []byte("hidden"), 0600)
 	dest := filepath.Join(parent, "out")
 	_, err := CompileModule(src, dest)
 	if err != nil {
@@ -45,8 +46,8 @@ func TestModuleOutputAndSelectionBoundaries(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := t.TempDir()
-			os.WriteFile(filepath.Join(src, "go.mod"), []byte("module example.org/p\ngo 1.27\n"), 0600)
-			os.WriteFile(filepath.Join(src, tc.filename), []byte(tc.source), 0600)
+			testdeps.WriteFile(filepath.Join(src, "go.mod"), []byte("module example.org/p\ngo 1.27\n"), 0600)
+			testdeps.WriteFile(filepath.Join(src, tc.filename), []byte(tc.source), 0600)
 			dest := filepath.Join(t.TempDir(), "out")
 			_, err := CompileModule(src, dest)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -61,7 +62,7 @@ func TestModuleOutputAndSelectionBoundaries(t *testing.T) {
 		parent := t.TempDir()
 		src := filepath.Join(parent, "src")
 		os.Mkdir(src, 0755)
-		os.WriteFile(filepath.Join(src, "go.mod"), []byte("module example.org/p\ngo 1.27\n"), 0600)
+		testdeps.WriteFile(filepath.Join(src, "go.mod"), []byte("module example.org/p\ngo 1.27\n"), 0600)
 		link := filepath.Join(parent, "link")
 		if err := os.Symlink(src, link); err != nil {
 			t.Skip(err)
@@ -87,7 +88,7 @@ func Count(v Result[Container,string])int {
 `,
 	}
 	for name, text := range files {
-		if err := os.WriteFile(filepath.Join(source, name), []byte(text), 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(source, name), []byte(text), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -103,7 +104,7 @@ func TestGroupedValidation(t *testing.T){
  for _,bad:=range []Mode{nil,typed}{func(){defer func(){if recover()==nil{t.Fatal("invalid nested enum escaped validator")}}();Count(HgoNewResultOk[Container,string](Container{Modes:[]Mode{bad}}))}()}
 }
 `
-	if err := os.WriteFile(filepath.Join(out, "grouped_test.go"), []byte(assertions), 0600); err != nil {
+	if err := testdeps.WriteFile(filepath.Join(out, "grouped_test.go"), []byte(assertions), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"test", "-race", "-count=1", "./..."}, {"vet", "./..."}} {

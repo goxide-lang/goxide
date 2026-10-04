@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -139,7 +140,7 @@ func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=a.CloneWr
 		if data == string(saved) {
 			t.Fatal("tamper did not change metadata")
 		}
-		if err = os.WriteFile(artifact, []byte(data), 0600); err != nil {
+		if err = testdeps.WriteFile(artifact, []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
 		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), appsrc)
@@ -147,7 +148,7 @@ func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=a.CloneWr
 			t.Fatal(log)
 		}
 	}
-	if err = os.WriteFile(artifact, saved, 0600); err != nil {
+	if err = testdeps.WriteFile(artifact, saved, 0600); err != nil {
 		t.Fatal(err)
 	}
 	producer := filepath.Join(lib, "model", "item.go")

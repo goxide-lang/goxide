@@ -10,6 +10,8 @@
 
 实现位置：`internal/frontend/use.go`、`use_artifact.go`，接入包收集与 DSL 降低后的绑定阶段。宏模块以原definition/scope绑定源图内别名，保留定义点卫生，并检查实际引入的internal运行时路径；不复制宏为facade新定义。
 
+后续路径提案见 [RFC 0024：use 路径、依赖名与分仓标准库](0024-use-paths.md)。其 `use std::option::Option` / 字符串包路径尚未实现；本篇已实现的 import-alias 合同不变。
+
 ## 源级规则
 
 ### 语法与绑定

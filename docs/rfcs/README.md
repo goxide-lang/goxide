@@ -44,6 +44,8 @@
 
 | [0023 宿主构建脚本](0023-build-scripts.md) | 显式生成、本地host依赖、信任与声明缓存 | 未授权拒绝、原子产物、无沙箱边界 |
 
+| [0024 use 路径（提案）](0024-use-paths.md) | 依赖别名、精确 Go 包路径与 std/next/serde 分仓 | 保留旧 import 绑定、身份与 Go DAG；无隐式 prelude |
+
 ## 范围与验证
 
 LSP、自举、构建缓存等工程架构继续由[工具链专题](../design/compiler-and-tooling.md)管理；凡引入新源级行为或改变产物契约，仍需相应 RFC。Box、supertrait、GAT、特化、用户过程宏、锁块等未定或延期能力列在[决策登记](../design/decisions.md)，启用前必须另立 RFC，不能从名字补出未经确认的语义。

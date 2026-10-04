@@ -1,6 +1,6 @@
 # Workspace RFC 0026 研究验收（2026-10-04）
 
-状态：研究与独立对抗评审完成，四项用户决策待确认；workspace 生产功能未实现、未批准，未部署网站。基于 `d51117d36fa2d1ccfcf322b81195b0d753cbb8de`，文档分支 `docs/workspace-rfc`。正式合同候选见 [RFC 0026](../rfcs/0026-workspaces.md)。
+状态：研究与独立对抗评审完成，显式依赖约束已由用户确认，其余三项待决；workspace 生产功能未实现、未批准，未部署网站。基于 `d51117d36fa2d1ccfcf322b81195b0d753cbb8de`，文档分支 `docs/workspace-rfc`。正式合同候选见 [RFC 0026](../rfcs/0026-workspaces.md)。
 
 ## 资料与环境
 
@@ -28,10 +28,17 @@ GO-18 / GO-19 验证最长前缀不等于包归属：内层module无目标包时
 
 ## 文档与实现边界
 
-变更限于 RFC、索引、ROADMAP、研究脚本/结果。检查生产源文件diff为空；不新增接受workspace的parser或CLI路径。RFC六章节、链接与代码围栏需通过 `python3 scripts/check_design.py --docs-only`。W01–W17是未来实现矩阵，不是已通过测试；无hgo workspace feature/cache/lock/trust/publish实测。本轮不重复生产全量race/vet，基线已有覆盖不算本RFC功能验收。
+变更限于 RFC、索引、ROADMAP、研究脚本/结果。检查生产源文件diff为空；不新增接受workspace的parser或CLI路径。RFC六章节、链接与代码围栏需通过 `python3 scripts/check_design.py --docs-only`。W01–W18是未来实现矩阵，不是已通过测试；无hgo workspace feature/cache/lock/trust/publish实测。本轮不重复生产全量race/vet，基线已有覆盖不算本RFC功能验收。
 
-## 独立评审
+## 初版独立评审（历史记录，自动成员边建议已撤回）
 
 独立 reviewer 初轮检查全部RFC/验收表、脚本及JSON，独立运行原12项Go机制试验，归一化结果与候选记录相等；另行验证无require的成员import。发现并已修订：单次命令只能绑定一个根不等于禁止多workspace只读同一成员；CLI未选不等于源码未触达；optional边不抹去原生require/其他活动边。补充固定点重算/振荡诊断、关闭文件不激活、脚本/宏生成跨成员import须清单预声明和独立发行补齐require。第二轮独立重跑17项通过，指出最长module前缀不等于包归属；修正为Go实际包映射并新增GO18/19正反例，总19项通过。最终文字复核确认其余无阻断；依其最后建议将optional诊断限定为没有其他有效显式/原生require边的情形，避免错误拒绝合法并集。没有运行Cargo或声称hgo功能完成。
 
 最终文档检查通过96个Markdown、1004个本地链接/锚点、25个正式RFC；git diff --check通过。生产目录没有变更。
+
+
+## 用户修正：仅显式依赖继承
+
+用户明确要求 `package1 = { workspace = true }`。已同步RFC WS02/04/05/07/09/10、W17/W18、来源冲突和待决表：根模板不注入，成员身份不覆盖version/path/git，import不创建边；生成Go use不能绕过此约束。原生GO16–19仍是Go差异/包归属证据，不再为goxide自动成员发现背书，旧import/feature固定点建议撤回。Go.work迁入须在plan物化实际边/覆盖并声明配置覆盖范围，无法无损推断时列缺项/拒绝，不运行时fallback。
+
+本次仅改文档解释，19项原生Go机制结果未改变、不重复充当新hgo功能测试；显式原则不代表其他workspace策略获批。新增inline TOML白/黑例；独立文档一致性复审确认无阻断，覆盖模板、来源保持、显式图先于import、生成Go use及vendor不得绕过、迁入范围和历史撤回。按review建议将W18迁入物化验收归入阶段二，避免阶段一范围含糊。文档检查及diff空白检查再次通过。

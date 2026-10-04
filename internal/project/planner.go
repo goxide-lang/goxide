@@ -123,15 +123,12 @@ func (g *Graph) readNode(root string) (*Node, error) {
 		return nil, e
 	}
 	n := &Node{Root: root, Module: m.Module.Path, Manifest: Manifest{Version: 1}, Children: map[string]*Node{}, Sources: map[string]Dependency{}}
-	info, e := os.Lstat(filepath.Join(root, ManifestName))
-	if os.IsNotExist(e) {
-		return n, nil
-	}
+	present, e := Detect(root)
 	if e != nil {
 		return nil, e
 	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("hgo manifest must be a regular file")
+	if !present {
+		return n, nil
 	}
 	n.HasManifest = true
 	n.Manifest, e = Read(root)
@@ -281,13 +278,13 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					return nil, fmt.Errorf("conflicting sources for module %s", d.Module)
 				}
 				if d.Version != "" {
-					if _, err := os.Lstat(filepath.Join(dir, ManifestName)); os.IsNotExist(err) {
+					if present, err := Detect(dir); err != nil {
+						return nil, err
+					} else if !present {
 						if len(deps[alias].Features) > 0 {
 							deferred[d.Module] = fmt.Errorf("version dependency %s has no hgo source manifest; fixed Go artifacts cannot receive hgo features", alias)
 						}
 						continue
-					} else if err != nil {
-						return nil, err
 					}
 				}
 				child, ok := r.nodes[d.Module]
@@ -671,7 +668,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			}
 			g.Root = r.root
 			g.Plan = next
-			g.PlanID = Digest(next)
+			g.PlanID = Digest([]any{ManifestProtocol, next})
 			state := map[string]int{}
 			var visit func(*Node) error
 			visit = func(n *Node) error {
@@ -730,7 +727,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 				}
 				inputs = append(inputs, lockNode{n.Module, idRoot, n.Manifest, string(raw), n.Sources})
 			}
-			key := Digest(inputs)
+			key := Digest([]any{ManifestProtocol, inputs})
 			if g.Lock.Plans == nil {
 				g.Lock.Plans = map[string]map[string]Selection{}
 			}

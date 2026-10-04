@@ -242,7 +242,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			}
 			return os.MkdirAll(target, 0755)
 		}
-		if options.Features != nil && (entry.Name() == "hgo.json" || entry.Name() == "hgo.lock") {
+		if options.Features != nil && (entry.Name() == "goxide.toml" || entry.Name() == "hgo.json" || entry.Name() == "hgo.lock") {
 			return nil
 		}
 		data, e := os.ReadFile(path)
@@ -345,7 +345,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			return ModuleResult{}, fmt.Errorf("invalid generated input path %q", name)
 		}
 		for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
-			if strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") || part == "vendor" || part == "testdata" || part == "hgo_targets" || part == "hgo_project_config.go" || part == "go.mod" || part == "go.sum" || part == "hgo.json" || part == "hgo.lock" {
+			if strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") || part == "vendor" || part == "testdata" || part == "hgo_targets" || part == "hgo_project_config.go" || part == "go.mod" || part == "go.sum" || part == "goxide.toml" || part == "hgo.json" || part == "hgo.lock" {
 				return ModuleResult{}, fmt.Errorf("reserved generated input path %q", name)
 			}
 		}

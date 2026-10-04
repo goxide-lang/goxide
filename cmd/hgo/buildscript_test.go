@@ -27,9 +27,15 @@ func buildScriptFixture(t *testing.T, hgo bool, helper bool) string {
 		build["dependencies"] = map[string]string{"example.org/helper": "../helper"}
 		extraImport, extraValue = `"example.org/helper"`, "helper.Value()"
 		projectWrite(t, filepath.Join(filepath.Dir(root), "helper"), map[string]string{
-			"go.mod":   "module example.org/helper\n\ngo 1.27\n",
-			"hgo.json": `{"version":1,"lib":{"name":"helper","path":"lib.hgo"}}`,
-			"lib.hgo":  "package helper\nfunc Value()string{return \"helper-one\"}\n",
+			"go.mod": "module example.org/helper\n\ngo 1.27\n",
+			"goxide.toml": `[lib]
+name = 'helper'
+path = 'lib.hgo'
+
+[package]
+format = 1
+`,
+			"lib.hgo": "package helper\nfunc Value()string{return \"helper-one\"}\n",
 		})
 	}
 	manifest := map[string]any{"version": 1, "build": build, "features": map[string]any{"extra": []string{}}, "bins": []any{map[string]string{"name": "one", "path": "cmd/one"}, map[string]string{"name": "two", "path": "cmd/two"}}}
@@ -51,7 +57,7 @@ func main(){
 }
 `, extraImport, extraValue)
 	projectWrite(t, root, map[string]string{
-		"go.mod": "module example.org/generated\n\ngo 1.27\n", "hgo.json": projectJSON(manifest), entry: generator,
+		"go.mod": "module example.org/generated\n\ngo 1.27\n", "goxide.toml": projectManifest(manifest), entry: generator,
 		"schema.txt": "schema-one", "templates/value.txt": "template-one",
 		"cmd/one/main.hgo": "package main\nimport \"fmt\"\nimport \"example.org/generated/gen\"\nfunc main(){fmt.Println(\"APP_ONE\",gen.Value,gen.Resource)}\n",
 		"cmd/two/main.hgo": "package main\nimport \"fmt\"\nimport \"example.org/generated/gen\"\nfunc main(){fmt.Println(\"APP_TWO\",gen.Value,gen.Resource)}\n",
@@ -238,12 +244,12 @@ func TestBuildScriptHostToolFingerprintCLI(t *testing.T) {
 		}
 	}
 	compile("FIXTURE_TOOL_ONE")
-	b, e := os.ReadFile(filepath.Join(root, "hgo.json"))
+	b, e := os.ReadFile(filepath.Join(root, "goxide.toml"))
 	if e != nil {
 		t.Fatal(e)
 	}
 	var m map[string]any
-	if e = json.Unmarshal(b, &m); e != nil {
+	if e = decodeManifestFixture(b, &m); e != nil {
 		t.Fatal(e)
 	}
 	m["build"].(map[string]any)["tools"] = map[string]string{"echoer": toolBin}
@@ -255,7 +261,7 @@ func TestBuildScriptHostToolFingerprintCLI(t *testing.T) {
 	source := strings.Replace(string(b), `"encoding/json";`, `"encoding/json";"os/exec";`, 1)
 	source = strings.Replace(source, "Version int;", "Version int; Tools map[string]string;", 1)
 	source = strings.Replace(source, `fmt.Println("FIXTURE_GENERATOR_EXECUTED")`, `b,e=exec.Command(q.Tools["echoer"]).CombinedOutput();if e!=nil{panic(e)};fmt.Print(string(b));fmt.Println("FIXTURE_GENERATOR_EXECUTED")`, 1)
-	projectWrite(t, root, map[string]string{"hgo.json": projectJSON(m), "tools/build/main.go": source})
+	projectWrite(t, root, map[string]string{"goxide.toml": projectManifest(m), "tools/build/main.go": source})
 	scriptAction(t, root, "trust-project")
 	p := scriptPlan(t, root)
 	if len(p.Subjects) == 0 {
@@ -299,25 +305,36 @@ func TestBuildScriptHostToolFingerprintCLI(t *testing.T) {
 
 func TestBuildScriptDependencyPackagePermissionCLI(t *testing.T) {
 	dep := buildScriptFixture(t, false, false)
-	b, e := os.ReadFile(filepath.Join(dep, "hgo.json"))
+	b, e := os.ReadFile(filepath.Join(dep, "goxide.toml"))
 	if e != nil {
 		t.Fatal(e)
 	}
 	var m map[string]any
-	if e = json.Unmarshal(b, &m); e != nil {
+	if e = decodeManifestFixture(b, &m); e != nil {
 		t.Fatal(e)
 	}
 	delete(m, "bins")
 	m["lib"] = map[string]string{"name": "depscript", "path": "lib/lib.hgo"}
 	projectWrite(t, dep, map[string]string{
 		"go.mod":      "module example.org/depscript\n\ngo 1.27\n",
-		"hgo.json":    projectJSON(m),
+		"goxide.toml": projectManifest(m),
 		"lib/lib.hgo": "package depscript\nimport \"example.org/depscript/gen\"\nfunc Value()string{return gen.Value+\" \"+gen.Resource}\n",
 	})
 	root := filepath.Join(filepath.Dir(dep), "consumer")
 	projectWrite(t, root, map[string]string{
-		"go.mod":   "module example.org/consumer\n\ngo 1.27\n",
-		"hgo.json": `{"version":1,"bins":[{"name":"app","path":"main.hgo"}],"dependencies":{"generator":{"module":"example.org/depscript","path":"../root"}}}`,
+		"go.mod": "module example.org/consumer\n\ngo 1.27\n",
+		"goxide.toml": `[[bin]]
+name = 'app'
+path = 'main.hgo'
+
+[dependencies]
+[dependencies.generator]
+module = 'example.org/depscript'
+path = '../root'
+
+[package]
+format = 1
+`,
 		"main.hgo": "package main\nimport \"fmt\"\nimport d \"example.org/depscript\"\nfunc main(){fmt.Println(\"DEPENDENT_APP\",d.Value())}\n",
 	})
 	scriptAction(t, root, "trust-project")
@@ -369,16 +386,16 @@ func TestBuildScriptTimeoutDoesNotPublishCLI(t *testing.T) {
 	// Warm compilation of the exact generator before imposing a short deadline.
 	scriptRun(t, root, "one", "run", "APP_ONE")
 	scriptAction(t, root, "clean")
-	b, e = os.ReadFile(filepath.Join(root, "hgo.json"))
+	b, e = os.ReadFile(filepath.Join(root, "goxide.toml"))
 	if e != nil {
 		t.Fatal(e)
 	}
 	var m map[string]any
-	if e = json.Unmarshal(b, &m); e != nil {
+	if e = decodeManifestFixture(b, &m); e != nil {
 		t.Fatal(e)
 	}
 	m["build"].(map[string]any)["timeout_seconds"] = 1
-	projectWrite(t, root, map[string]string{"hgo.json": projectJSON(m)})
+	projectWrite(t, root, map[string]string{"goxide.toml": projectManifest(m)})
 	t.Setenv("MODE", "timeout")
 	for attempt := 0; attempt < 2; attempt++ {
 		out, e := projectRun(t, root, "run", "--offline", "--bin", "one")

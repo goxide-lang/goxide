@@ -4,18 +4,22 @@
 
 ## 格式和发布合同
 
-无需新的 source 字段。`version`、`git`、`path` 是获取渠道，hgo.json 则表明是否使用 hgo 的 feature/lib/build 项目规则。例如：
+无需新的 source 字段。`version`、`git`、`path` 是获取渠道，goxide.toml 则表明是否使用 hgo 的 feature/lib/build 项目规则。例如：
 
-```json
-{"module":"example.org/lib", "version":"v1.2.0", "features":["fast"], "default_features":false}
+```toml
+[dependencies.lib]
+module = "example.org/lib"
+version = "v1.2.0"
+features = ["fast"]
+default_features = false
 ```
 
 version 仍使用 Go 可接受的规范版本/伪版本。Go 自行处理 module path、MVS、proxy、zip 与 sums。hgo 不实现第二套版本比较器，不把版本请求当作精确最终版本。不同到达边的版本要求共同参加 Go MVS；对同一实际源码身份的活动 manifest features/default 请求取并集。根 go.mod 已 require 同库时，manifest 的 default_features:false 仍有效；Go require 不构成第二条默认 feature 请求。
 
-Go module zip 可以携带 hgo.json/.hgo；嵌套模块、vendor、链接等受 Go zip 规则限制，不能假设发布目录等于工作树。[Go module zip 规则](https://go.dev/ref/mod#zip-files) 与 [go mod download 的 JSON 输出](https://go.dev/ref/mod#go-mod-download) 为机制来源。实现使用实际返回的 Dir、Version、Sum、GoModSum，不按缓存路径命名猜测身份。
+Go module zip 可以携带 goxide.toml/.hgo；嵌套模块、vendor、链接等受 Go zip 规则限制，不能假设发布目录等于工作树。[Go module zip 规则](https://go.dev/ref/mod#zip-files) 与 [go mod download 的 JSON 输出](https://go.dev/ref/mod#go-mod-download) 为机制来源。实现使用实际返回的 Dir、Version、Sum、GoModSum，不按缓存路径命名猜测身份。
 
-- 有 hgo.json 的源码发行物：按 hgo 项目处理，可为 .hgo、手写 .go 或显式 build 生成源码；作为依赖必须有 lib。默认 feature 与 git/path 相同。
-- 无 hgo.json 的纯 Go 或已生成 Go 发行物：保持原生 Go/既有 metadata 消费路径；显式请求 hgo feature 必须报错，不能假装重配已有二进制/Go 产物。
+- 有 goxide.toml 的源码发行物：按 hgo 项目处理，可为 .hgo、手写 .go 或显式 build 生成源码；作为依赖必须有 lib。默认 feature 与 git/path 相同。
+- 无 goxide.toml 的纯 Go 或已生成 Go 发行物：保持原生 Go/既有 metadata 消费路径；显式请求 hgo feature 必须报错，不能假装重配已有二进制/Go 产物。
 - 源码 hgo 项目不能混入 hgo 生成物：拒绝 hgo_project_config.go、已知增强 metadata、.go.map.json，或同路径同名 .hgo/.go 双源，避免重复声明和旧配置污染。手写不同名 Go 文件正常保留。不按普通 `Code generated` 注释拒绝其他 Go 生成器产物。
 - 本轮没有 source/generated 文件所有权 manifest 或双视图发布协议。直接 Go 消费者不会执行 hgo feature 解析：source-only hgo 库需先转译并发布固定配置 Go 发行物；纯 Go 已发布默认产物可直接消费，但不可通过 features 重新配置。不能宣称一份混装 zip 自动同时满足两种消费方式。
 
@@ -24,7 +28,7 @@ Go module zip 可以携带 hgo.json/.hgo；嵌套模块、vendor、链接等受 
 1. 根项目身份、锁、Go module 文件读取后，在独立短期规划目录工作；不修改用户 go.mod/go.sum 或下载后的 module Dir。
 2. 每轮从根重建当前可达的 hgo/Go 依赖边与 feature 请求。只激活本轮 manifest 的 optional 边；原始 go.mod require 仍属于 Go 图。上轮消失的 hgo manifest、边、feature 请求不得残留。此处只重建 hgo 额外边；Go 原生图中的非最终版本 requirements 也可能影响 MVS，完整 Go 图必须交由 Go 保留和解析，不能自行按最终版本裁剪。
 3. 原生 Go require 与激活 hgo manifest 的版本要求进入同一个 Go main-module 规划图。活动约束先作为 main module 根要求；只含 go.mod 的私有桥接模块保留多个最低版本请求，让真实 Go MVS 合并。桥继承根的 Go directive，不用旧 go 1.16 强迫新项目展开未裁剪图；桥接模块不会进入输出 Go 模块或用户锁身份；hgo-planner.invalid/ 是内部保留 module namespace，真实根/传递依赖引用会明确拒绝以防碰撞。path/git 用规范化源码替换，根 go.mod replace/exclude 为全局权威。冲突的显式 hgo path/git 与根 replace 必须报错，不能静默覆盖；依赖自己的 replace/exclude 不提升为根规则。
-4. 用 `go list -m -json all` 得到实际选版，再用 Go 下载选中源码。对于活动 hgo.json 依赖边读取当前版本的 hgo.json 并重新计算请求。明确分开 SelectedModules（Go 选版/锁）与 BuildNodes（增强编译/脚本许可）：只有活动 manifest 边提升为 hgo 构建节点，沿用 path/git 的显式规则；仅原生 go.mod require（包括 indirect）不产生 hgo defaults 请求，也不会自动准备 lib 或脚本。消费 source-only hgo 库必须加显式 hgo.json 依赖边；仅原生图的固定配置 Go 产物正常消费。桥接和计划注入的 require 同样不产生 feature 请求。
+4. 用 `go list -m -json all` 得到实际选版，再用 Go 下载选中源码。对于活动 goxide.toml 依赖边读取当前版本的 goxide.toml 并重新计算请求。明确分开 SelectedModules（Go 选版/锁）与 BuildNodes（增强编译/脚本许可）：只有活动 manifest 边提升为 hgo 构建节点，沿用 path/git 的显式规则；仅原生 go.mod require（包括 indirect）不产生 hgo defaults 请求，也不会自动准备 lib 或脚本。消费 source-only hgo 库必须加显式 goxide.toml 依赖边；仅原生图的固定配置 Go 产物正常消费。桥接和计划注入的 require 同样不产生 feature 请求。
 5. 选中版本/来源、可达边、features 都不再变化才稳定。版本变化可删掉旧依赖，因此不能只做不断加边的闭包。重复的非相邻状态诊断振荡；设有限轮数上限，超限拒绝。中间版本的未知 feature、缺少 lib 等错误在最终稳定视图确认；不得先编译临时版本。最终增强构建依赖环明确拒绝。
 6. 稳定后生成依赖顺序，并把同一个选版/替换计划应用到每个独立生成 module。Go 重新列出的实际 build list 必须与计划一致，不一致拒绝；不能继续依赖原先“各节点独立选版后恰好相等”的做法。CLI 对全图只含 go.mod/go.sum 的影子模块先应用政策并核对；全部通过后才运行脚本、类型检查、宏展开和输出，实际生成副本再核对一次。bundle/main-anchor 只含根 go.mod，允许原生模块级回边；不提供根包源码，实际包循环不会因此成为支持能力。
 

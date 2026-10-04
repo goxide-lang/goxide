@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/project"
 )
 
 func main() {
@@ -67,16 +68,18 @@ func run(args []string, out, stderr io.Writer) error {
 		if *mapPath != "" || *expandedPath != "" {
 			return errors.New("directory mode writes per-file .go.map.json automatically; -source-map/-expanded are single-file flags")
 		}
-		if _, e := os.Stat(filepath.Join(input, "hgo.json")); e == nil {
+		if exists, e := project.Detect(input); e != nil {
+			return e
+		} else if exists {
 			return runProject(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), projectFlags{targetDir: *targetDir, features: *features, bin: *bin, example: *example, noDefault: *noDefault, offline: *offline, locked: *locked, lib: *lib}, out, stderr)
 		}
 		if *targetDir != "" || *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
-			return errors.New("project flags require hgo.json in the input directory")
+			return errors.New("project flags require goxide.toml in the input directory")
 		}
 		return runDirectoryTags(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), out, stderr)
 	}
 	if *targetDir != "" || *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
-		return errors.New("project flags require a directory with hgo.json")
+		return errors.New("project flags require a directory with goxide.toml")
 	}
 	if *tags != "" {
 		return errors.New("-tags requires directory mode")

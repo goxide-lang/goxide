@@ -18,8 +18,39 @@ func layoutFixture(t *testing.T) (string, string) {
 	dep := filepath.Join(base, "dep")
 	projectWrite(t, dep, map[string]string{"go.mod": "module example.org/layoutdep\n\ngo 1.27\n", "lib.go": "package dep\nfunc Value()string{return \"dependency\"}\n"})
 	projectWrite(t, root, map[string]string{
-		"go.mod":              "module example.org/layout\n\ngo 1.27\n",
-		"hgo.json":            `{"version":1,"features":{"default":["extra"],"extra":[]},"lib":{"name":"lib","path":"src/lib.hgo"},"bins":[{"name":"one","path":"src/one.hgo"},{"name":"two","path":"src/two.hgo"},{"name":"web","path":"cmd/web"}],"examples":[{"name":"demo","path":"examples/demo.hgo"}],"dependencies":{"dep":{"module":"example.org/layoutdep","path":"../dep"}}}`,
+		"go.mod": "module example.org/layout\n\ngo 1.27\n",
+		"goxide.toml": `[[bin]]
+name = 'one'
+path = 'src/one.hgo'
+
+[[bin]]
+name = 'two'
+path = 'src/two.hgo'
+
+[[bin]]
+name = 'web'
+path = 'cmd/web'
+
+[dependencies]
+[dependencies.dep]
+module = 'example.org/layoutdep'
+path = '../dep'
+
+[[example]]
+name = 'demo'
+path = 'examples/demo.hgo'
+
+[features]
+default = ['extra']
+extra = []
+
+[lib]
+name = 'lib'
+path = 'src/lib.hgo'
+
+[package]
+format = 1
+`,
 		"src/lib.hgo":         "package lib\nimport d \"example.org/layoutdep\"\nfunc Value()string{if cfg!(feature(\"extra\")){return \"on \"+d.Value()};return \"off \"+d.Value()}\n",
 		"src/one.hgo":         "package main\nimport \"fmt\"\nimport l \"example.org/layout\"\nfunc main(){fmt.Println(l.Value())}\n",
 		"src/two.hgo":         "package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"two\")}\n",

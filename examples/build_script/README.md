@@ -6,7 +6,7 @@
 
 ## 手动运行
 
-先阅读 `hgo.json` 和 `tools/build/main.hgo`，再选择是否信任。下面使用独立临时信任目录和产物目录，不写入日常授权记录。在同一个终端运行：
+先阅读 `goxide.toml` 和 `tools/build/main.hgo`，再选择是否信任。下面使用独立临时信任目录和产物目录，不写入日常授权记录。在同一个终端运行：
 
 ```sh
 cd examples/build_script

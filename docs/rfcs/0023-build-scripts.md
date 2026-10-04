@@ -12,23 +12,29 @@
 
 ### 显式声明
 
-```json
-{
-  "version": 1,
-  "bins": [{"name": "app", "path": "cmd/app"}],
-  "build": {
-    "entry": "tools/build/main.hgo",
-    "inputs": ["schema.txt", "templates"],
-    "env": ["SCHEMA_MODE"],
-    "outputs": ["gen/schema.go", "gen/data.txt"],
-    "dependencies": {"example.org/codegen": "../codegen"},
-    "tools": {"formatter": "tools/bin/formatter"},
-    "timeout_seconds": 60
-  }
-}
+```toml
+[package]
+format = 1
+
+[[bin]]
+name = 'app'
+path = 'cmd/app'
+
+[build]
+entry = 'tools/build/main.hgo'
+env = ['SCHEMA_MODE']
+inputs = ['schema.txt', 'templates']
+outputs = ['gen/schema.go', 'gen/data.txt']
+timeout_seconds = 60
+
+[build.dependencies]
+'example.org/codegen' = '../codegen'
+
+[build.tools]
+formatter = 'tools/bin/formatter'
 ```
 
-`build` 缺省或 null 为关闭，false 不属于 v1 manifest 类型。入口必须在独立子目录，整个目录构成 host 包快照，不能包含 go.mod/hgo.json。该目录不再作为 target 源包参与扫描。不能隐式寻找 build.rs、build.gox、Go generate 注释或依赖安装命令。
+`[build]` 缺省为关闭；TOML 没有 null，false 也不属于该表类型。入口必须在独立子目录，整个目录构成 host 包快照，不能包含 go.mod/goxide.toml/hgo.json。该目录不再作为 target 源包参与扫描。不能隐式寻找 build.rs、build.gox、Go generate 注释或依赖安装命令。
 
 inputs 为包内明确的文件或递归目录，不支持 glob；目录成员和空目录均进入缓存身份。文件内容变更而 mtime 相同仍失效。路径必须规范相对路径；拒绝 `..`、链接、特殊文件、可检测的硬链接、保留目录。输出必须枚举具体文件，不能覆盖源码、manifest、lock、Go module 文件、配置/metadata/source-map 保留名称；缺少或多出文件均失败。每文件最大 32 MiB，快照闭包最大 128 MiB/10000 项；不是无限制资源配额或 OS 内存隔离。
 

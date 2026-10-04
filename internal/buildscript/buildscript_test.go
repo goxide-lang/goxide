@@ -394,3 +394,23 @@ func TestOutputSnapshotNeverSkipsManagedMarkers(t *testing.T) {
 		t.Fatal("output marker omitted")
 	}
 }
+
+func TestTOMLManifestReservedAndHelperBootstrap(t *testing.T) {
+	for _, name := range []string{"goxide.toml", "hgo.json"} {
+		t.Run(name, func(t *testing.T) {
+			o := fixture(t)
+			o.Config.Outputs = []string{name}
+			if _, e := Prepare(o); e == nil {
+				t.Fatal("generator could publish a manifest", name)
+			}
+		})
+	}
+	o := fixture(t)
+	helper := t.TempDir()
+	put(t, helper, "go.mod", "module example.test/helper\n\ngo 1.27\n")
+	put(t, helper, "goxide.toml", "[package]\nformat=1\n[build]\nentry='tools/build.go'\n")
+	o.Config.Dependencies = map[string]string{"example.test/helper": helper}
+	if _, e := Prepare(o); e == nil || !strings.Contains(e.Error(), "bootstrap scripts unsupported") {
+		t.Fatal(e)
+	}
+}

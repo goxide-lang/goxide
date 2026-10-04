@@ -1,6 +1,6 @@
 # 项目 target 产物布局
 
-本说明对应 RFC 0022 的可选 hgo.json 项目模式。布局实现位于 `internal/project/layout.go`，CLI 集成位于 `cmd/hgo/project.go`；无 manifest 的传统命令保持原输出规则。不是 Cargo 的完整 target/cache 协议。
+本说明对应 RFC 0022 的可选 goxide.toml 项目模式。布局实现位于 `internal/project/layout.go`，CLI 集成位于 `cmd/hgo/project.go`；无 manifest 的传统命令保持原输出规则。不是 Cargo 的完整 target/cache 协议。
 
 ## 选择与路径
 

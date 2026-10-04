@@ -1,12 +1,10 @@
-// Package project implements the additive hgo.json project format. Go remains
+// Package project implements the goxide.toml project format. Go remains
 // responsible for module versions, checksums, and native dependency resolution.
 package project
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,59 +12,113 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/buildconfig"
+	"github.com/pelletier/go-toml/v2"
 )
 
-const ManifestName = "hgo.json"
+const ManifestName = "goxide.toml"
+const LegacyManifestName = "hgo.json"
+const ManifestProtocol = "goxide-toml-v1"
 
 type Manifest struct {
-	Version      int                   `json:"version"`
-	Build        *buildconfig.Config   `json:"build,omitempty"`
-	Features     map[string][]string   `json:"features,omitempty"`
-	Dependencies map[string]Dependency `json:"dependencies,omitempty"`
-	Lib          *Target               `json:"lib,omitempty"`
-	Bins         []Target              `json:"bins,omitempty"`
-	Examples     []Target              `json:"examples,omitempty"`
+	Version      int                   `json:"version" toml:"-"`
+	Build        *buildconfig.Config   `json:"build,omitempty" toml:"build,omitempty"`
+	Features     map[string][]string   `json:"features,omitempty" toml:"features,omitempty"`
+	Dependencies map[string]Dependency `json:"dependencies,omitempty" toml:"dependencies,omitempty"`
+	Lib          *Target               `json:"lib,omitempty" toml:"lib,omitempty"`
+	Bins         []Target              `json:"bins,omitempty" toml:"bin,omitempty"`
+	Examples     []Target              `json:"examples,omitempty" toml:"example,omitempty"`
 }
 type Dependency struct {
-	Module          string   `json:"module"`
-	Version         string   `json:"version,omitempty"`
-	Path            string   `json:"path,omitempty"`
-	Git             string   `json:"git,omitempty"`
-	Rev             string   `json:"rev,omitempty"`
-	Subdir          string   `json:"subdir,omitempty"`
-	Optional        bool     `json:"optional,omitempty"`
-	Features        []string `json:"features,omitempty"`
-	DefaultFeatures *bool    `json:"default_features,omitempty"`
+	Module          string   `json:"module" toml:"module"`
+	Version         string   `json:"version,omitempty" toml:"version,omitempty"`
+	Path            string   `json:"path,omitempty" toml:"path,omitempty"`
+	Git             string   `json:"git,omitempty" toml:"git,omitempty"`
+	Rev             string   `json:"rev,omitempty" toml:"rev,omitempty"`
+	Subdir          string   `json:"subdir,omitempty" toml:"subdir,omitempty"`
+	Optional        bool     `json:"optional,omitempty" toml:"optional,omitempty"`
+	Features        []string `json:"features,omitempty" toml:"features,omitempty"`
+	DefaultFeatures *bool    `json:"default_features,omitempty" toml:"default_features,omitempty"`
 }
 type Target struct {
-	Name             string   `json:"name"`
-	Path             string   `json:"path"`
-	RequiredFeatures []string `json:"required_features,omitempty"`
+	Name             string   `json:"name" toml:"name"`
+	Path             string   `json:"path" toml:"path"`
+	RequiredFeatures []string `json:"required_features,omitempty" toml:"required_features,omitempty"`
 }
 
 var ident = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
+// Detect rejects ambiguous/legacy projects before any native Go fallback.
+func Detect(root string) (bool, error) {
+	info, err := os.Lstat(filepath.Join(root, ManifestName))
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+	old, oldErr := os.Lstat(filepath.Join(root, LegacyManifestName))
+	if oldErr != nil && !os.IsNotExist(oldErr) {
+		return false, oldErr
+	}
+	if old != nil {
+		if info != nil {
+			return false, fmt.Errorf("%s: both goxide.toml and hgo.json exist; migrate and move the old hgo.json out of the project root", root)
+		}
+		return false, fmt.Errorf("%s: legacy hgo.json is unsupported; migrate its contents to goxide.toml (version -> package.format, bins -> bin, examples -> example); renaming alone is insufficient", root)
+	}
+	if info == nil {
+		return false, nil
+	}
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("%s: manifest must be a regular file", filepath.Join(root, ManifestName))
+	}
+	return true, nil
+}
+
+// manifestDocument deliberately separates the human format from internal identities.
+type manifestDocument struct {
+	Package struct {
+		Format int `toml:"format"`
+	} `toml:"package"`
+	Build        *buildconfig.Config   `toml:"build,omitempty"`
+	Features     map[string][]string   `toml:"features,omitempty"`
+	Dependencies map[string]Dependency `toml:"dependencies,omitempty"`
+	Lib          *Target               `toml:"lib,omitempty"`
+	Bins         []Target              `toml:"bin,omitempty"`
+	Examples     []Target              `toml:"example,omitempty"`
+}
+
 func Read(root string) (Manifest, error) {
-	var m Manifest
-	b, e := os.ReadFile(filepath.Join(root, ManifestName))
-	if e != nil {
-		return m, e
+	if _, err := Detect(root); err != nil {
+		return Manifest{}, err
 	}
-	d := json.NewDecoder(bytes.NewReader(b))
-	d.DisallowUnknownFields()
-	if e = d.Decode(&m); e != nil {
-		return m, e
+	b, err := os.ReadFile(filepath.Join(root, ManifestName))
+	if err != nil {
+		return Manifest{}, err
 	}
-	var extra any
-	if e = d.Decode(&extra); e != io.EOF {
-		return m, fmt.Errorf("manifest must contain one JSON object")
+	return Parse(filepath.Join(root, ManifestName), b)
+}
+
+// Parse reads the strict, current TOML schema. filename is diagnostic context.
+func Parse(filename string, b []byte) (Manifest, error) {
+	var d manifestDocument
+	if err := toml.NewDecoder(bytes.NewReader(b)).DisallowUnknownFields().Decode(&d); err != nil {
+		return Manifest{}, manifestDecodeError(filename, err)
 	}
+	m := Manifest{Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
+	if err := validateNames(filename, b); err != nil {
+		return m, err
+	}
+	if err := validate(m); err != nil {
+		return m, fmt.Errorf("%s:1:1: %w", filename, err)
+	}
+	return m, nil
+}
+
+func validate(m Manifest) error {
 	if m.Version != 1 {
-		return m, fmt.Errorf("unsupported hgo.json version %d", m.Version)
+		return fmt.Errorf("unsupported goxide.toml package.format %d", m.Version)
 	}
 	for k, d := range m.Dependencies {
 		if !ident.MatchString(k) || d.Module == "" {
-			return m, fmt.Errorf("invalid dependency %q", k)
+			return fmt.Errorf("invalid dependency %q", k)
 		}
 		n := 0
 		for _, v := range []string{d.Version, d.Path, d.Git} {
@@ -75,21 +127,21 @@ func Read(root string) (Manifest, error) {
 			}
 		}
 		if n != 1 {
-			return m, fmt.Errorf("dependency %s requires exactly one of version, path, git", k)
+			return fmt.Errorf("dependency %s requires exactly one of version, path, git", k)
 		}
 		if d.Git == "" && (d.Rev != "" || d.Subdir != "") {
-			return m, fmt.Errorf("dependency %s: rev/subdir require git", k)
+			return fmt.Errorf("dependency %s: rev/subdir require git", k)
 		}
 		if d.Git != "" && d.Rev == "" {
-			return m, fmt.Errorf("dependency %s: git requires explicit rev", k)
+			return fmt.Errorf("dependency %s: git requires explicit rev", k)
 		}
 		if d.Subdir != "" && !safeRelative(d.Subdir) {
-			return m, fmt.Errorf("dependency %s: subdir must stay inside repository", k)
+			return fmt.Errorf("dependency %s: subdir must stay inside repository", k)
 		}
 	}
 	for k := range m.Features {
 		if !ident.MatchString(k) {
-			return m, fmt.Errorf("invalid feature %q", k)
+			return fmt.Errorf("invalid feature %q", k)
 		}
 	}
 	targets := [][]Target{m.Bins, m.Examples}
@@ -100,22 +152,22 @@ func Read(root string) (Manifest, error) {
 		seen := map[string]bool{}
 		for _, t := range ts {
 			if !ident.MatchString(t.Name) || seen[t.Name] {
-				return m, fmt.Errorf("invalid or duplicate target name %q", t.Name)
+				return fmt.Errorf("invalid or duplicate target name %q", t.Name)
 			}
 			seen[t.Name] = true
 			if !safeRelative(t.Path) {
-				return m, fmt.Errorf("target %s path must stay inside module", t.Name)
+				return fmt.Errorf("target %s path must stay inside module", t.Name)
 			}
 			for _, f := range t.RequiredFeatures {
 				if _, ok := m.Features[f]; !ok {
-					return m, fmt.Errorf("target %s: unknown required feature %s", t.Name, f)
+					return fmt.Errorf("target %s: unknown required feature %s", t.Name, f)
 				}
 			}
 		}
 	}
 	// Validate dormant features as well as enabled ones.
-	_, _, e = Resolve(m, keys(m.Features), false)
-	return m, e
+	_, _, e := Resolve(m, keys(m.Features), false)
+	return e
 }
 func safeRelative(p string) bool {
 	return p != "" && !filepath.IsAbs(p) && p != ".." && !strings.HasPrefix(filepath.Clean(p), ".."+string(filepath.Separator))

@@ -1,0 +1,23 @@
+[package]
+format = 1
+
+[[bin]]
+name = 'hello'
+path = 'src/main.hgo'
+
+[[bin]]
+name = 'inspect'
+path = 'src/inspect.hgo'
+
+[[example]]
+name = 'greet'
+path = 'examples/greet.hgo'
+
+[features]
+default = ['pretty']
+pretty = []
+
+[lib]
+name = 'greeting'
+path = 'src/lib.hgo'
+

@@ -2,3 +2,5 @@ github.com/goxide-lang/serde v0.0.0-20261004120911-a1b791e96d66 h1:EelklFYrLNvw2
 github.com/goxide-lang/serde v0.0.0-20261004120911-a1b791e96d66/go.mod h1:m4z9CAWRl/5hQN6+9RQ7Sfr/gK9wcWk+ANoqbSxlW0g=
 github.com/goxide-lang/std v0.0.0-20261004120854-3f2204770fd3 h1:lReTt3A3ECBCAzJdvHAOLvM1eUncndmKL0grHnzdj1o=
 github.com/goxide-lang/std v0.0.0-20261004120854-3f2204770fd3/go.mod h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ=
+github.com/pelletier/go-toml/v2 v2.4.3 h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY=
+github.com/pelletier/go-toml/v2 v2.4.3/go.mod h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY=

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,12 +10,12 @@ import (
 func TestVersionFeaturesScriptTargetIntegration(t *testing.T) {
 	proxy, cache := versionProxy(t)
 	fixture := buildScriptFixture(t, false, false)
-	raw, e := os.ReadFile(filepath.Join(fixture, "hgo.json"))
+	raw, e := os.ReadFile(filepath.Join(fixture, "goxide.toml"))
 	if e != nil {
 		t.Fatal(e)
 	}
 	var m map[string]any
-	if e = json.Unmarshal(raw, &m); e != nil {
+	if e = decodeManifestFixture(raw, &m); e != nil {
 		t.Fatal(e)
 	}
 	delete(m, "bins")
@@ -39,16 +38,16 @@ func TestVersionFeaturesScriptTargetIntegration(t *testing.T) {
 	}); e != nil {
 		t.Fatal(e)
 	}
-	files["hgo.json"] = projectJSON(m)
+	files["goxide.toml"] = projectManifest(m)
 	files["go.mod"] = "module example.org/hgolib\n\ngo 1.27\n"
 	files["lib/lib.hgo"] = "package lib\nimport \"example.org/hgolib/gen\"\nfunc Value()string{return gen.Value}\n"
 	publishVersion(t, proxy, "example.org/hgolib", "v1.0.0", files)
 	publishVersion(t, proxy, "example.org/hgolib", "v1.1.0", files)
 	root := versionApp(t, `{"module":"example.org/hgolib","version":"v1.0.0"}`)
 	rootManifest := func(version string) string {
-		return `{"version":1,"features":{"extra":["lib/extra"]},"bins":[{"name":"app","path":"main.hgo"}],"dependencies":{"lib":{"module":"example.org/hgolib","version":"` + version + `"}}}`
+		return manifestJSON(`{"version":1,"features":{"extra":["lib/extra"]},"bins":[{"name":"app","path":"main.hgo"}],"dependencies":{"lib":{"module":"example.org/hgolib","version":"` + version + `"}}}`)
 	}
-	projectWrite(t, root, map[string]string{"hgo.json": rootManifest("v1.0.0")})
+	projectWrite(t, root, map[string]string{"goxide.toml": rootManifest("v1.0.0")})
 	scriptAction(t, root, "trust-project")
 	plan := scriptPlan(t, root)
 	if len(plan.Subjects) != 1 {
@@ -90,7 +89,7 @@ func TestVersionFeaturesScriptTargetIntegration(t *testing.T) {
 	if again := build("--locked"); again != a {
 		t.Fatalf("A/B/A target identity %q != %q", again, a)
 	}
-	projectWrite(t, root, map[string]string{"hgo.json": rootManifest("v1.1.0")})
+	projectWrite(t, root, map[string]string{"goxide.toml": rootManifest("v1.1.0")})
 	changed := scriptPlan(t, root)
 	if len(changed.Subjects) != 1 || changed.Subjects[0].ID == plan.Subjects[0].ID || changed.Subjects[0].Trusted {
 		t.Fatal("version upgrade reused permission", changed)

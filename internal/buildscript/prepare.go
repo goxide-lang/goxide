@@ -216,7 +216,7 @@ func Prepare(o Options) (*Plan, error) {
 		return nil, err
 	}
 	for n := range p.script {
-		if filepath.Base(n) == "go.mod" || filepath.Base(n) == "hgo.json" {
+		if filepath.Base(n) == "go.mod" || (filepath.Base(n) == "goxide.toml" || filepath.Base(n) == "hgo.json") {
 			return nil, fmt.Errorf("build script directory must not contain module/manifest: %s", n)
 		}
 	}
@@ -238,7 +238,7 @@ func Prepare(o Options) (*Plan, error) {
 			}
 		}
 		seen[fold] = true
-		if strings.HasSuffix(strings.ToLower(n), ".go.map.json") || strings.Split(n, "/")[0] == "hgo_targets" || filepath.Base(n) == "hgo_project_config.go" || filepath.Base(n) == "go.mod" || filepath.Base(n) == "go.sum" || filepath.Base(n) == "hgo.json" || filepath.Base(n) == "hgo.lock" {
+		if strings.HasSuffix(strings.ToLower(n), ".go.map.json") || strings.Split(n, "/")[0] == "hgo_targets" || filepath.Base(n) == "hgo_project_config.go" || filepath.Base(n) == "go.mod" || filepath.Base(n) == "go.sum" || (filepath.Base(n) == "goxide.toml" || filepath.Base(n) == "hgo.json") || filepath.Base(n) == "hgo.lock" {
 			return nil, fmt.Errorf("reserved output %s", n)
 		}
 		path := filepath.Join(o.PackageRoot, n)
@@ -319,12 +319,15 @@ func Prepare(o Options) (*Plan, error) {
 		if e != nil {
 			return nil, e
 		}
-		if b, ok := files["hgo.json"]; ok {
-			var m map[string]json.RawMessage
-			if json.Unmarshal(b, &m) != nil {
-				return nil, fmt.Errorf("invalid helper manifest %s", mod)
+		if _, e := project.Detect(path); e != nil {
+			return nil, e
+		}
+		if b, ok := files[project.ManifestName]; ok {
+			m, e := project.Parse(filepath.Join(path, project.ManifestName), b)
+			if e != nil {
+				return nil, e
 			}
-			if v := m["build"]; len(v) > 0 && string(v) != "null" && string(v) != "false" {
+			if m.Build != nil {
 				return nil, fmt.Errorf("helper %s declares build script: bootstrap scripts unsupported", mod)
 			}
 		}

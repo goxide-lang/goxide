@@ -214,7 +214,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		}
 		configuration := ""
 		if n.HasManifest {
-			configuration = project.Digest(struct {
+			configuration = project.ManifestProtocol + ":" + project.Digest(struct {
 				Manifest             project.Manifest
 				Features             []string
 				Target               project.Target

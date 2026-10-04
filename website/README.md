@@ -74,6 +74,10 @@ Playwright 仅是测试依赖，固定在 lockfile。默认使用 `/usr/bin/chro
 
 HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路径穿越/仓库文件不可见以及安全 header。服务器设置读取、写入、空闲超时和 header 大小限制。程序从只含二进制的独立目录启动后仍可完成浏览器测试。
 
+## 静态托管准备
+
+根路径与项目子路径的本地验证、发布资产允许列表、CF Direct Upload 与独立网站仓库 Pages 的待批准方案见 [托管准备说明](hosting/README.md)。这些准备不会自动发布。
+
 ## 文件布局
 
 - `website/static/`：手写静态页面、样式、主线程与 Worker，无线上第三方依赖。

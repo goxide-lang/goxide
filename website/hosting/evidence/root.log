@@ -1,0 +1,35 @@
+
+> test
+> node qa.mjs
+
+{
+  "examples": 5,
+  "parity": "byte-for-byte",
+  "goResultChecks": [
+    "error_only",
+    "typed_nil",
+    "reject_wrong_type",
+    "reject_pointer_error"
+  ],
+  "checks": [
+    "edit",
+    "error recovery",
+    "rapid edits",
+    "copy",
+    "32 KiB",
+    "unsupported import",
+    "XSS",
+    "keyboard",
+    "390px",
+    "hard timeout",
+    "interrupt",
+    "reset",
+    "no external requests"
+  ],
+  "errors": []
+}
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

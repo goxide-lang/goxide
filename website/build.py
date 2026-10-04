@@ -21,7 +21,7 @@ exports = ROOT/'internal/typecheck/browserexports'
 exports.mkdir(exist_ok=True)
 for old in exports.glob('*.a'): old.unlink()
 # Use native export archives as compiler metadata, never execute user Go.
-raw = run(GO, 'list', '-export', '-deps', '-json', *packages).decode()
+raw = run(GO, 'list', '-trimpath', '-export', '-deps', '-json', *packages).decode()
 decoder = json.JSONDecoder(); closure = []
 while raw.strip():
     p, end = decoder.raw_decode(raw.lstrip()); raw = raw.lstrip()[end:]
@@ -32,7 +32,12 @@ while raw.strip():
         closure.append(p['ImportPath'])
 dist = ROOT/'website/dist'
 if dist.exists(): shutil.rmtree(dist)
-shutil.copytree(ROOT/'website/static', dist)
+# Explicit publish allowlist: no source tree, RFCs, configs or accidental files.
+static_files = ['index.html', '404.html', 'style.css', 'app.js', 'worker.js', '_headers', '.nojekyll']
+assert set(p.name for p in (ROOT/'website/static').iterdir()) == set(static_files), 'unexpected static input'
+dist.mkdir()
+for name in static_files:
+    shutil.copyfile(ROOT/'website/static'/name, dist/name)
 (ROOT/'bin').mkdir(exist_ok=True)
 run(GO, 'build', '-o', str(ROOT/'bin/hgo'), './cmd/hgo')
 examples = []
@@ -49,12 +54,13 @@ eh = hashlib.sha256()
 for archive in sorted(exports.glob('*.a')):
     eh.update(archive.name.encode()); eh.update(archive.read_bytes())
 export_target = json.loads(run(GO, 'env', '-json', 'GOOS', 'GOARCH'))
-manifest = dict(commit=sha, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
+wasm_flags = ['-trimpath', '-buildvcs=false', '-ldflags=-s -w -buildid=']
+manifest = dict(wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 importClosure=sorted(closure), maxSourceBytes=32768, compileTimeoutMs=10000,
                 examples=examples)
 (dist/'examples.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n')
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')
-subprocess.run([GO, 'build', '-trimpath', '-o', str(dist/'compiler.wasm'), './cmd/hgo-playground'], env=wasm_env, check=True)
+subprocess.run([GO, 'build', *wasm_flags, '-o', str(dist/'compiler.wasm'), './cmd/hgo-playground'], env=wasm_env, check=True)
 goroot = run(GO, 'env', 'GOROOT').decode().strip()
 shutil.copyfile(pathlib.Path(goroot)/'lib/wasm/wasm_exec.js', dist/'wasm_exec.js')
 shutil.copyfile(pathlib.Path(goroot)/'LICENSE', dist/'GO-LICENSE.txt')

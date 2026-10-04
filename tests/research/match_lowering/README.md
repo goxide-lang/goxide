@@ -77,7 +77,7 @@ go -C "$output_parent/generated" test -race -count=1 ./...
 go -C "$output_parent/generated" vet ./...
 ```
 
-[Actual generated-module race](results/goxide-race.txt) and [vet](results/goxide-vet.txt)
+[Actual generated-module race](results/hgo-race.txt) and [vet](results/hgo-vet.txt)
 are separate from [pure mechanism race](results/mechanism-race.txt) and
 [mechanism vet](results/mechanism-vet.txt). Replacing source app.gox with the
 reference-result fixture demonstrates the current frontend limitation; it must

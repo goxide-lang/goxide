@@ -1,6 +1,6 @@
 {
   "revision": "693282c64f0868cb38beaacd98c113e2aba029b1",
-  "working_tree_status": " M IMPLEMENTATION.md\n M ROADMAP.md\n M docs/rfcs/research/0005-option-result-question.md\n M docs/t0-acceptance.md\n M examples/propagate_places/effects_fallback.gox\n M examples/propagate_places/model/model.go\n M internal/propagate/README.md\n M internal/propagate/effects.go\n M internal/propagate/lower.go\n M tests/acceptance/propagate_place_test.go\n M tests/acceptance/propagate_private_place_test.go\n M tests/research/assignment_guard/run.py\n M tests/research/assignment_guard/source/model/model.go\n?? examples/propagate_places/effects_context.gox\n?? internal/propagate/effect_context.go\n?? tests/research/assignment_guard/context_bench_test.go.fixture\n?? tests/research/assignment_guard/source/context.gox\n",
+  "working_tree_status": " M IMPLEMENTATION.md\n M ROADMAP.md\n M docs/rfcs/research/0005-option-result-question.md\n M docs/t0-acceptance.md\n M examples/propagate_places/effects_fallback.hgo\n M examples/propagate_places/model/model.go\n M internal/propagate/README.md\n M internal/propagate/effects.go\n M internal/propagate/lower.go\n M tests/acceptance/propagate_place_test.go\n M tests/acceptance/propagate_private_place_test.go\n M tests/research/assignment_guard/run.py\n M tests/research/assignment_guard/source/model/model.go\n?? examples/propagate_places/effects_context.hgo\n?? internal/propagate/effect_context.go\n?? tests/research/assignment_guard/context_bench_test.go.fixture\n?? tests/research/assignment_guard/source/context.hgo\n",
   "toolchain": "go version go1.27.1 linux/amd64",
   "expect_no_guard": true,
   "commands": [
@@ -17,15 +17,15 @@
         "/workspace/goxide-environment/go/bin/go",
         "build",
         "-o",
-        "/tmp/t0-context-research/goxide",
-        "./cmd/goxide"
+        "/tmp/t0-context-research/hgo",
+        "./cmd/hgo"
       ],
       "cwd": "/workspace/goxide",
       "extra_env": {}
     },
     {
       "argv": [
-        "/tmp/t0-context-research/goxide",
+        "/tmp/t0-context-research/hgo",
         "transpile",
         "-o",
         "/tmp/t0-context-research/generated",

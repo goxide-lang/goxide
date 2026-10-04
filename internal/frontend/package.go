@@ -49,6 +49,11 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 	return preparePackageContext("", sources, metadata, nil)
 }
 func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
+	for name, source := range sources {
+		if err := naming.Source(name, source); err != nil {
+			return PackageResult{}, err
+		}
+	}
 	useContext, err := prepareUses(path, sources, metadata, imp)
 	if err != nil {
 		return PackageResult{}, err
@@ -259,11 +264,6 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 // CompilePackage checks the complete package under its actual module import path.
 // sources may contain .gox and native .go files already selected for this build.
 func CompilePackage(path string, sources map[string][]byte, imp types.Importer) (PackageResult, error) {
-	for name, source := range sources {
-		if err := naming.Source(name, source); err != nil {
-			return PackageResult{}, err
-		}
-	}
 	result, err := preparePackageContext(path, sources, nil, imp)
 	if err != nil {
 		return result, err

@@ -1,4 +1,4 @@
-TEXT example.org/traitpaths.BenchmarkLocal.func6(SB) /tmp/goxide-trait-paths-obwvqm0e/probe/bench_test.go
+TEXT example.org/traitpaths.BenchmarkLocal.func6(SB) /tmp/hgo-trait-paths-obwvqm0e/probe/bench_test.go
   bench_test.go:65	0x5c5de0		493b6610		CMPQ SP, 0x10(R14)					
   bench_test.go:65	0x5c5de4		767d			JBE 0x5c5e63						
   bench_test.go:65	0x5c5de6		55			PUSHQ BP						
@@ -37,7 +37,7 @@ TEXT example.org/traitpaths.BenchmarkLocal.func6(SB) /tmp/goxide-trait-paths-obw
   bench_test.go:65	0x5c5e6d		488b442408		MOVQ 0x8(SP), AX					
   bench_test.go:65	0x5c5e72		e969ffffff		JMP example.org/traitpaths.BenchmarkLocal.func6(SB)	
 
-TEXT example.org/traitpaths.BenchmarkLocal.func7(SB) /tmp/goxide-trait-paths-obwvqm0e/probe/bench_test.go
+TEXT example.org/traitpaths.BenchmarkLocal.func7(SB) /tmp/hgo-trait-paths-obwvqm0e/probe/bench_test.go
   bench_test.go:74	0x5c5e80		493b6610		CMPQ SP, 0x10(R14)					
   bench_test.go:74	0x5c5e84		0f8680000000		JBE 0x5c5f0a						
   bench_test.go:74	0x5c5e8a		55			PUSHQ BP						
@@ -76,7 +76,7 @@ TEXT example.org/traitpaths.BenchmarkLocal.func7(SB) /tmp/goxide-trait-paths-obw
   bench_test.go:74	0x5c5f14		488b442408		MOVQ 0x8(SP), AX					
   bench_test.go:74	0x5c5f19		e962ffffff		JMP example.org/traitpaths.BenchmarkLocal.func7(SB)	
 
-TEXT example.org/traitpaths.BenchmarkLocal.func8(SB) /tmp/goxide-trait-paths-obwvqm0e/probe/bench_test.go
+TEXT example.org/traitpaths.BenchmarkLocal.func8(SB) /tmp/hgo-trait-paths-obwvqm0e/probe/bench_test.go
   bench_test.go:85	0x5c5f20		55			PUSHQ BP					
   bench_test.go:85	0x5c5f21		4889e5			MOVQ SP, BP					
   bench_test.go:85	0x5c5f24		4883ec30		SUBQ $0x30, SP					

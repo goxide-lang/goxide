@@ -35,3 +35,25 @@ func TestNamingLegacyDirectiveIsNotComment(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNamingModuleInputs(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		generated map[string][]byte
+		source    string
+	}{
+		{name: "directory-directive", source: "//hgo:cfg off\npackage p\n"},
+		{name: "generated-source", source: "package p\n", generated: map[string][]byte{"old.hgo": []byte("package p\n")}},
+		{name: "generated-directive", source: "package p\n", generated: map[string][]byte{"new.gox": []byte("//hgo:cfg off\npackage p\n")}},
+		{name: "generated-metadata", source: "package p\n", generated: map[string][]byte{"hgo_project_config.go": []byte("package p\n")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := sharedStdModule(t, "example.org/naming")
+			sharedStdWrite(t, root, "main.gox", tc.source)
+			_, err := CompileModuleWithOptions(root, t.TempDir()+"/out", ModuleOptions{GeneratedFiles: tc.generated})
+			if err == nil || !strings.Contains(err.Error(), "legacy") {
+				t.Fatal(err)
+			}
+		})
+	}
+}

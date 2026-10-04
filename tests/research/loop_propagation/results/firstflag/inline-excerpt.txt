@@ -1,4 +1,4 @@
-./generated.go:596:6: can inline benchStep with cost 22 as: func(int, int) Option[int] { if n == fail { return __goxide_enum_ctor_Option_None[go.shape.int](&.dict.__goxide_enum_ctor_Option_None[int]) }; return __goxide_enum_ctor_Option_Some[go.shape.int](&.dict.__goxide_enum_ctor_Option_Some[int], n) }
+./generated.go:596:6: can inline benchStep with cost 22 as: func(int, int) Option[int] { if n == fail { return __hgo_enum_ctor_Option_None[go.shape.int](&.dict.__hgo_enum_ctor_Option_None[int]) }; return __hgo_enum_ctor_Option_Some[go.shape.int](&.dict.__hgo_enum_ctor_Option_Some[int], n) }
 ./generated.go:602:6: cannot inline propagatedLoop: function too complex: cost 297 exceeds budget 80
 ./generated.go:651:6: cannot inline explicitLoop: function too complex: cost 400 exceeds budget 80
 ./probe.go:3:6: cannot inline probeNoFirstLoop: function too complex: cost 287 exceeds budget 80

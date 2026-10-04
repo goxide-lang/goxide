@@ -1,5 +1,5 @@
 Go 1.27.1 linux/amd64; GOMAXPROCS=1; default optimized build, non-race, 5 x 200ms.
-Actual CLI-generated goxide module from TestMatchBinaryAndIndexedModules.
+Actual CLI-generated hgo module from TestMatchBinaryAndIndexedModules.
 BenchmarkMatch         	68185093	         3.578 ns/op	       0 B/op	       0 allocs/op
 BenchmarkMatch         	71055277	         3.140 ns/op	       0 B/op	       0 allocs/op
 BenchmarkMatch         	72412694	         3.173 ns/op	       0 B/op	       0 allocs/op

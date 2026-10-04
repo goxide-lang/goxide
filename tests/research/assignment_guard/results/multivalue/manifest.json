@@ -1,6 +1,6 @@
 {
   "revision": "2fe4c2e9c191ad4d60087153eb1c06f0e784749b",
-  "working_tree_status": " M examples/propagate_places/effects_fallback.gox\n M examples/propagate_places/model/model.go\n M internal/propagate/effects.go\n M tests/acceptance/propagate_place_test.go\n M tests/acceptance/propagate_private_place_test.go\n M tests/research/assignment_guard/run.py\n?? examples/propagate_places/effects_multivalue.gox\n?? internal/propagate/effect_multivalue.go\n?? tests/research/assignment_guard/multivalue_bench_test.go.fixture\n?? tests/research/assignment_guard/source/multivalue.gox\n",
+  "working_tree_status": " M examples/propagate_places/effects_fallback.hgo\n M examples/propagate_places/model/model.go\n M internal/propagate/effects.go\n M tests/acceptance/propagate_place_test.go\n M tests/acceptance/propagate_private_place_test.go\n M tests/research/assignment_guard/run.py\n?? examples/propagate_places/effects_multivalue.hgo\n?? internal/propagate/effect_multivalue.go\n?? tests/research/assignment_guard/multivalue_bench_test.go.fixture\n?? tests/research/assignment_guard/source/multivalue.hgo\n",
   "toolchain": "go version go1.27.1 linux/amd64",
   "expect_no_guard": true,
   "commands": [
@@ -17,15 +17,15 @@
         "/workspace/goxide-environment/go/bin/go",
         "build",
         "-o",
-        "/tmp/t0-multi-research/goxide",
-        "./cmd/goxide"
+        "/tmp/t0-multi-research/hgo",
+        "./cmd/hgo"
       ],
       "cwd": "/workspace/goxide",
       "extra_env": {}
     },
     {
       "argv": [
-        "/tmp/t0-multi-research/goxide",
+        "/tmp/t0-multi-research/hgo",
         "transpile",
         "-o",
         "/tmp/t0-multi-research/generated",

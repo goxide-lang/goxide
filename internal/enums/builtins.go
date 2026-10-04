@@ -261,15 +261,24 @@ func (l *lowerer) builtinInstances() string {
 		if d.Family == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "func %s(__hgo_enum_value %s){ __hgo_enum_validate_%s[%s](__hgo_enum_value); switch __hgo_enum_payload:=__hgo_enum_value.(type){", d.Validator, d.Name, d.Family, strings.Join(d.TypeArgs, ","))
+		fmt.Fprintf(&b, "func %s(__hgo_enum_value %s){ __hgo_enum_validate_%s[%s](__hgo_enum_value);", d.Validator, d.Name, d.Family, strings.Join(d.TypeArgs, ","))
+		hasChecks := false
 		for _, v := range d.Variants {
-			if v.Payload == "" {
-				continue
-			}
-			fmt.Fprintf(&b, "case %s: _=__hgo_enum_payload;", v.CaseName)
-			b.WriteString(l.payloadChecks[d.Name+"/"+v.Name])
+			hasChecks = hasChecks || l.payloadChecks[d.Name+"/"+v.Name] != ""
 		}
-		b.WriteString("}};\n")
+		if hasChecks {
+			b.WriteString("switch __hgo_enum_payload:=__hgo_enum_value.(type){")
+			for _, v := range d.Variants {
+				check := l.payloadChecks[d.Name+"/"+v.Name]
+				if check == "" {
+					continue
+				}
+				fmt.Fprintf(&b, "case %s: _=__hgo_enum_payload;", v.CaseName)
+				b.WriteString(check)
+			}
+			b.WriteString("}")
+		}
+		b.WriteString("};\n")
 		fmt.Fprintf(&b, "func HgoInst%s(v %s) { %s(v) };\n", strings.TrimPrefix(d.Validator, "__hgo_enum_inst_"), d.Name, d.Validator)
 	}
 	return b.String()

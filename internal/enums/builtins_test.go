@@ -2,6 +2,9 @@ package enums
 
 import (
 	"github.com/hxsf/goxide/internal/testdeps"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -105,5 +108,48 @@ func TestContainerPayload(t *testing.T){
 	c.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
 	if out, e := c.CombinedOutput(); e == nil || !strings.Contains(string(out), "wrong type for method") {
 		t.Fatalf("nominal failure expected: %v %s", e, out)
+	}
+}
+
+func TestBuiltinPayloadSwitchOnlyWhenNeeded(t *testing.T) {
+	r, err := Lower("checks.hgo", []byte(`package p
+var scalar Result[int,error]
+var nested Result[Result[int,error],error]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := token.NewFileSet()
+	f, err := parser.ParseFile(fs, "checks.go", r.Source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"int", "error"}, {"Result[int,error]", "error"}} {
+		d, _ := Builtin("Result", args)
+		found := false
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name.Name != d.Validator {
+				continue
+			}
+			found = true
+			want := 1
+			if args[0] != "int" {
+				want = 2
+			}
+			if len(fn.Body.List) != want {
+				t.Fatalf("%s: want %d statements, got %d", d.Name, want, len(fn.Body.List))
+			}
+			call, ok := fn.Body.List[0].(*ast.ExprStmt)
+			if !ok {
+				t.Fatal("missing base validation")
+			}
+			if _, ok := call.X.(*ast.CallExpr); !ok {
+				t.Fatal("missing base validation call")
+			}
+		}
+		if !found {
+			t.Fatalf("missing validator %s", d.Name)
+		}
 	}
 }

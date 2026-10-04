@@ -221,8 +221,12 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 	if e != nil {
 		return e
 	}
+	destMembers := map[string]string{}
 	for i, module := range project.Keys(manifests) {
-		rel := fmt.Sprintf("members/m%d", i)
+		destMembers[module] = fmt.Sprintf("members/m%d", i)
+	}
+	for _, module := range project.Keys(manifests) {
+		rel := destMembers[module]
 		c.Members = append(c.Members, rel)
 		dir := source[module]
 		m := manifests[module]
@@ -252,6 +256,15 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 				}
 			} else if !vendor {
 				r.Path = absolute
+				if source[r.Module] == filepath.Clean(absolute) {
+					r.Path, e = filepath.Rel(rel, destMembers[r.Module])
+					if e != nil {
+						return e
+					}
+					if !strings.HasPrefix(r.Path, ".") {
+						r.Path = "./" + r.Path
+					}
+				}
 			}
 		}
 		manifests[module] = m
@@ -265,6 +278,9 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 			r := &c.Go.Replace[i]
 			if r.Path != "" && !filepath.IsAbs(r.Path) {
 				r.Path = filepath.Join(root, r.Path)
+			}
+			if source[r.Module] == filepath.Clean(r.Path) {
+				r.Path = "./" + destMembers[r.Module]
 			}
 		}
 	}

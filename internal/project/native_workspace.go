@@ -368,7 +368,7 @@ func NativeView(w *Workspace, dst string, source map[string]bool, lock *NativeWo
 		} else if e = os.MkdirAll(dir, 0755); e != nil {
 			return nil, e
 		}
-		data, e := nativeModuleText(w, src)
+		data, e := nativeModuleText(w, src, dst)
 		if e != nil {
 			return nil, e
 		}
@@ -383,7 +383,7 @@ func NativeView(w *Workspace, dst string, source map[string]bool, lock *NativeWo
 		dirs[module] = dir
 		uses = append(uses, rel)
 	}
-	data, e := WorkText(w.Config.Go, uses, w.Root, w.Config.Vendor != nil)
+	data, e := nativeWorkText(w, uses, dst)
 	if e != nil {
 		return nil, e
 	}
@@ -463,7 +463,7 @@ func CaptureNativeSums(w *Workspace, view string, lock *NativeWorkspaceLock) err
 	return nil
 }
 
-func nativeModuleText(w *Workspace, src string) ([]byte, error) {
+func nativeModuleText(w *Workspace, src, view string) ([]byte, error) {
 	m := w.Manifests[src]
 	m.Native.Replace = append([]GoReplace(nil), m.Native.Replace...)
 	if w.Config.Vendor == nil {
@@ -471,6 +471,13 @@ func nativeModuleText(w *Workspace, src string) ([]byte, error) {
 			r := &m.Native.Replace[i]
 			if r.Path != "" && !filepath.IsAbs(r.Path) {
 				r.Path = filepath.Join(src, r.Path)
+			}
+			if w.Members[r.Module] == filepath.Clean(r.Path) {
+				rel, e := filepath.Rel(w.Root, r.Path)
+				if e != nil {
+					return nil, e
+				}
+				r.Path = filepath.Join(view, rel)
 			}
 			if r.Path != "" {
 				if e := NoSymlinks(r.Path); e != nil {
@@ -502,7 +509,7 @@ func CheckNativePolicies(w *Workspace, view string) error {
 			return e
 		}
 		uses = append(uses, rel)
-		data, e := nativeModuleText(w, src)
+		data, e := nativeModuleText(w, src, view)
 		if e != nil {
 			return e
 		}
@@ -510,9 +517,36 @@ func CheckNativePolicies(w *Workspace, view string) error {
 			return e
 		}
 	}
-	data, e := WorkText(w.Config.Go, uses, w.Root, w.Config.Vendor != nil)
+	data, e := nativeWorkText(w, uses, view)
 	if e != nil {
 		return e
 	}
 	return check(filepath.Join(view, "go.work"), data)
+}
+
+// A local replacement of a use member follows that member into the generated
+// view. Nonmember replacements retain their explicit external author path.
+func nativeWorkText(w *Workspace, uses []string, view string) ([]byte, error) {
+	policy := *w.Config.Go
+	policy.Replace = append([]GoReplace(nil), policy.Replace...)
+	if w.Config.Vendor == nil {
+		for i := range policy.Replace {
+			r := &policy.Replace[i]
+			if r.Path == "" {
+				continue
+			}
+			absolute := r.Path
+			if !filepath.IsAbs(absolute) {
+				absolute = filepath.Join(w.Root, absolute)
+			}
+			if w.Members[r.Module] == filepath.Clean(absolute) {
+				rel, e := filepath.Rel(w.Root, absolute)
+				if e != nil {
+					return nil, e
+				}
+				r.Path = filepath.Join(view, rel)
+			}
+		}
+	}
+	return WorkText(&policy, uses, w.Root, w.Config.Vendor != nil)
 }

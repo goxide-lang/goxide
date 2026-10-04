@@ -10,8 +10,8 @@ import (
 func TestNativeWorkspaceExternalUseAndTestSuffix(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "root")
-	workspaceWrite(t, root, "go.work", "go 1.27\nuse (\n../app\n../lib\n)\n")
-	workspaceWrite(t, parent, "app/go.mod", "module example.org/app.test\ngo 1.27\n")
+	workspaceWrite(t, root, "go.work", "go 1.27\nuse (\n../app\n../lib\n)\nreplace example.org/lib.test v1.0.0 => ../lib\n")
+	workspaceWrite(t, parent, "app/go.mod", "module example.org/app.test\ngo 1.27\nrequire example.org/lib.test v1.0.0\nreplace example.org/lib.test => ../lib\n")
 	workspaceWrite(t, parent, "app/main.go", "package main\nimport(\"fmt\";\"example.org/lib.test\")\nfunc main(){fmt.Println(lib.Value)}\n")
 	workspaceWrite(t, parent, "lib/go.mod", "module example.org/lib.test\ngo 1.27\n")
 	workspaceWrite(t, parent, "lib/lib.go", "package lib\nconst Value=\"external\"\n")

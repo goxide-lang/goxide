@@ -47,7 +47,11 @@ There is deliberately no permissive free-name fallback. Unsupported free names
 variables, identifier-keyed literals, local type/struct/interface declarations,
 labels, and external precompiled macro metadata are diagnosed. Pass unsupported call-site
 values/functions as explicit captures. Primitive types/constants used by a
-template have definition-site aliases. A local variable shadowing an import inside
+template have definition-site aliases. These spellings must actually denote predeclared
+objects at the definition site. A conflicting definition-site declaration/import or
+caller package declaration/file import is a located diagnostic, including in fixed
+Option/Result type arguments; caller-local shadows remain supported. This boundary
+avoids silent rebinding without renaming user named types. A local variable shadowing an import inside
 the template takes precedence over the import. Ordinary Go compilation still
 checks types, arity, target-context legality and unused declarations.
 

@@ -35,6 +35,13 @@ func (e *engine) prepareSums(ts []tok) ([]tok, error) {
 				if !fixedType(arg) {
 					return nil, at(t, "macro sum type arguments must be fixed builtin Go types; captured or unknown types are unsupported")
 				}
+				for _, typeToken := range ts[start:j] {
+					if primitiveName(typeToken.text) {
+						if err := e.checkPrimitiveBinding(typeToken); err != nil {
+							return nil, err
+						}
+					}
+				}
 				args = append(args, arg)
 				start = j + 1
 				continue

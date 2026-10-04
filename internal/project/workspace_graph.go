@@ -15,10 +15,10 @@ func nodeInput(n *Node) string { return Digest([]any{n.Manifest, string(n.ModByt
 func (g *Graph) validateUnified() error {
 	u := g.Lock.Unified
 	for _, n := range g.Nodes {
-		if n != g.Root && u.Sources[n.Module] != n.SourceID {
+		if !g.nativeStandalone && n != g.Root && u.Sources[n.Module] != n.SourceID {
 			return fmt.Errorf("unified lock source identity changed for %s", n.Module)
 		}
-		if want, ok := u.Inputs[n.Module]; !ok || want != nodeInput(n) {
+		if want, ok := u.Inputs[n.Module]; !ok || want != g.input(n) {
 			return fmt.Errorf("unified lock missing or changed reachable input %s; explicitly update lock", n.Module)
 		}
 	}

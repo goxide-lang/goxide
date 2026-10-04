@@ -47,6 +47,7 @@ type Node struct {
 	Sources         map[string]Dependency
 }
 type Graph struct {
+	nativeStandalone       bool
 	featureOverrides       map[string]Request
 	overrides              map[string]Manifest
 	allFeatures            bool
@@ -97,6 +98,9 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 		if _, ok := w.Manifests[root]; !ok {
 			return nil, fmt.Errorf("workspace root requires explicit package selection")
 		}
+		if w.Config.Go != nil {
+			return LoadNativeGraph(w, root, tool, requested, defaults, offline, locked, targetDir)
+		}
 		return loadWorkspaceGraph(w, root, tool, requested, defaults, offline, locked, targetDir, nil)
 	}
 	m, e := Read(root)
@@ -120,7 +124,7 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 		if e = json.Unmarshal(b, &g.Lock); e != nil {
 			return nil, e
 		}
-		if g.Lock.Version != 2 && g.Lock.Version != 3 {
+		if g.Lock.Version != 2 && g.Lock.Version != 3 && g.Lock.Version != 4 {
 			return nil, fmt.Errorf("unsupported goxide.lock version")
 		}
 		g.original = b
@@ -134,6 +138,11 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 	}
 	if g.Lock.Sums == nil {
 		g.Lock.Sums = map[string]string{}
+	}
+	if g.Lock.Version == 4 {
+		if e = g.prepareNativeStandalone(); e != nil {
+			return nil, e
+		}
 	}
 	if g.Lock.Version == 3 {
 		if g.Lock.Unified == nil {
@@ -170,6 +179,9 @@ func GoEnv(offline bool) []string {
 	return env
 }
 func (g *Graph) Save() error {
+	if g.nativeStandalone {
+		return nil
+	} // Retain the complete copied root lock; reachable records were validated by plan.
 	b, e := json.MarshalIndent(g.Lock, "", "  ")
 	if e != nil {
 		return e

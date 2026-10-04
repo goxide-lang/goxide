@@ -189,6 +189,16 @@ func (g *Graph) readNode(root string, published bool) (*Node, error) {
 			return nil, e
 		}
 	}
+	if g.nativeStandalone {
+		if record, known := g.Lock.NativeWorkspace.Members[n.Module]; known {
+			if g.input(n) != record.Input {
+				return nil, fmt.Errorf("copied native lock changed reachable member %s; materialize its explicit policy", n.Module)
+			}
+			pin := g.forced[n.Module]
+			pin.Replace = &Selection{Path: n.Root}
+			g.forced[n.Module] = pin
+		}
+	}
 	return n, nil
 }
 
@@ -290,7 +300,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 			n.Features = features
 			n.Requests = deps
 			if g.Lock.Unified != nil && !g.unifiedPlanning {
-				if g.Lock.Unified.Inputs[n.Module] != nodeInput(n) {
+				if g.Lock.Unified.Inputs[n.Module] != g.input(n) {
 					return nil, fmt.Errorf("unified lock missing or changed reachable input %s; explicitly update lock", n.Module)
 				}
 				for _, req := range n.Mod.Require {
@@ -549,7 +559,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 					if err != nil {
 						return nil, err
 					}
-					if want, exists := g.Lock.Unified.Inputs[module]; exists && want != nodeInput(node) {
+					if want, exists := g.Lock.Unified.Inputs[module]; exists && want != g.input(node) {
 						return nil, fmt.Errorf("unified lock changed reachable input %s", module)
 					}
 					mod = node.Mod

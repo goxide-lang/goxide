@@ -44,6 +44,12 @@ func NewImporterWithEnvironment(filename string, tags []string, race bool, envir
 
 // NewImporterWithContext bounds export queries and fingerprint subprocesses by the caller.
 func NewImporterWithContext(parent context.Context, filename string, tags []string, race bool, environment []string) types.Importer {
+	return NewImporterWithWorkspace(parent, filename, tags, race, environment, "", "")
+}
+
+// NewImporterWithWorkspace accepts only an explicit planner-owned work file.
+// Ambient GOWORK remains ignored by the ordinary importer APIs.
+func NewImporterWithWorkspace(parent context.Context, filename string, tags []string, race bool, environment []string, workFile, moduleMode string) types.Importer {
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -73,6 +79,9 @@ func NewImporterWithContext(parent context.Context, filename string, tags []stri
 		if race {
 			args = append(args, "-race")
 		}
+		if moduleMode != "" {
+			args = append(args, moduleMode)
+		}
 		args = append(args, "--", path)
 		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
 		cmd.Dir = dir
@@ -85,7 +94,11 @@ func NewImporterWithContext(parent context.Context, filename string, tags []stri
 			}
 			cmd.Env = append(cmd.Env, v)
 		}
-		cmd.Env = append(cmd.Env, "GOTOOLCHAIN=local", "GOWORK=off", "GOFLAGS=", "GOPROXY=off", "GOSUMDB=off", "GONOPROXY=none", "GOVCS=*:off")
+		work := "off"
+		if workFile != "" {
+			work = workFile
+		}
+		cmd.Env = append(cmd.Env, "GOTOOLCHAIN=local", "GOWORK="+work, "GOFLAGS=", "GOPROXY=off", "GOSUMDB=off", "GONOPROXY=none", "GOVCS=*:off")
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		data, err := cmd.Output()

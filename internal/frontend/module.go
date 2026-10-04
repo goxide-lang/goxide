@@ -40,7 +40,9 @@ func CompileModuleWithTags(input, destination string, tags []string) (ModuleResu
 }
 
 type ModuleOptions struct {
-	VendorMode bool // Preserve native vendor replace spelling in generated policy.
+	WorkspaceFile string // Explicit planner-owned Go workspace; ambient GOWORK is ignored.
+	ModuleMode    string // -mod=readonly or -mod=vendor for the owned workspace.
+	VendorMode    bool   // Preserve native vendor replace spelling in generated policy.
 	// SourceModuleRoot/File are a trusted project-planner virtual Go module, never source directives.
 	SourceModuleRoot string
 	SourceModuleFile []byte
@@ -560,7 +562,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if dir != "." {
 			pkgPath += "/" + filepath.ToSlash(dir)
 		}
-		packageImporter := typecheck.NewImporterWithContext(options.Context, filepath.Join(destination, dir, "package.go"), options.Tags, options.Race, options.Environment)
+		packageImporter := typecheck.NewImporterWithWorkspace(options.Context, filepath.Join(destination, dir, "package.go"), options.Tags, options.Race, options.Environment, options.WorkspaceFile, options.ModuleMode)
 		p, e := preparePackageContext(pkgPath, packages[dir], metadata, packageImporter, buildBudget)
 		if e != nil {
 			return e

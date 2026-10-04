@@ -23,11 +23,12 @@ type NativeWorkspaceConfig struct {
 	Configuration map[string]string `toml:"configuration"`
 }
 type NativeWorkspaceLock struct {
-	Input   string               `json:"input"`
-	Modules map[string]Selection `json:"modules"`
-	Sums    map[string]string    `json:"sums"`
-	WorkSum string               `json:"work_sum"`
-	Vendor  *VendorSnapshot      `json:"vendor,omitempty"`
+	Members map[string]NativeMemberRecord `json:"members,omitempty"`
+	Input   string                        `json:"input"`
+	Modules map[string]Selection          `json:"modules"`
+	Sums    map[string]string             `json:"sums"`
+	WorkSum string                        `json:"work_sum"`
+	Vendor  *VendorSnapshot               `json:"vendor,omitempty"`
 }
 type GoWorkFile struct {
 	Go, Toolchain string
@@ -143,12 +144,12 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 			return fmt.Errorf("unknown native workspace member %s", module)
 		}
 		m := w.Manifests[dir]
-		if m.Build != nil || len(m.Features) != 0 || m.Vendor != nil {
-			return fmt.Errorf("native workspace rejects features, build scripts and member vendor: %s", module)
+		if m.Vendor != nil {
+			return fmt.Errorf("native workspace rejects member vendor: %s", module)
 		}
 		for alias, d := range m.Dependencies {
-			if d.Optional || len(d.Features) > 0 || d.Git != "" || d.Version != "" || d.Path == "" {
-				return fmt.Errorf("native workspace dependency %s must be an unconditional member path", alias)
+			if d.Git != "" || d.Version != "" || d.Path == "" {
+				return fmt.Errorf("native workspace dependency %s must be an explicit member path", alias)
 			}
 			path := d.Path
 			if !filepath.IsAbs(path) {
@@ -238,7 +239,7 @@ func CopyNativeSource(src, dst string, workRoot ...string) error {
 		case "go.mod", "go.sum", "go.work", "go.work.sum", ManifestName, "goxide.lock":
 			return nil
 		}
-		if d.Name() == LegacyManifestName || strings.HasSuffix(d.Name(), ".hgo") {
+		if d.Name() == LegacyManifestName || w == nil && strings.HasSuffix(d.Name(), ".hgo") {
 			return fmt.Errorf("native workspace does not support enhanced source: %s", path)
 		}
 		info, e := d.Info()
@@ -403,6 +404,7 @@ func NativeView(w *Workspace, dst string, source map[string]bool, lock *NativeWo
 	return dirs, nil
 }
 func ReadNativeSelections(w *Workspace, tool, view string, lock *NativeWorkspaceLock, offline bool) error {
+	CaptureNativeMembers(w, lock)
 	lock.Modules = map[string]Selection{}
 	if w.Config.Vendor != nil {
 		if _, e := NativeGo(tool, view, true, "list", "-mod=vendor", "-m", "-json"); e != nil {

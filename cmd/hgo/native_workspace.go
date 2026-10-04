@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,8 +14,8 @@ import (
 )
 
 func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, out, stderr io.Writer) error {
-	if req.Mode == "expand" || req.Features != "" || req.NoDefaultFeatures || req.Tags != "" {
-		return fmt.Errorf("native workspace supports only its recorded configuration; features/tags/expand require a new analysis")
+	if req.Mode == "expand" || req.Tags != "" {
+		return fmt.Errorf("native workspace supports only its recorded configuration; tags/expand require a new analysis")
 	}
 	if req.Output != "" {
 		return fmt.Errorf("native workspace uses managed outputs; -o is not supported")
@@ -118,7 +119,16 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 			return e
 		}
 	}
+	requested, e := nativeFeatureRequests(req.Features, members)
+	if e != nil {
+		return e
+	}
+	graphs, e := project.NativeFeatureGraphs(w, members, req.GoTool, requested, !req.NoDefaultFeatures, lock)
+	if e != nil {
+		return e
+	}
 	for _, module := range members {
+		g := graphs[module]
 		m := w.Manifests[w.Members[module]]
 		type selectedTarget struct {
 			target project.Target
@@ -137,7 +147,7 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 			if req.Bin == "" && req.Example == "" && len(m.Bins) == 0 && m.Lib != nil {
 				targets = append(targets, selectedTarget{*m.Lib, "lib"})
 			} else {
-				t, err := project.Select(m, req.Bin, req.Example, map[string]bool{})
+				t, err := project.Select(m, req.Bin, req.Example, g.Root.Features)
 				if err != nil {
 					return err
 				}
@@ -158,16 +168,29 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 		if len(targets) == 0 {
 			return fmt.Errorf("native member %s has no selected targets", module)
 		}
-		allowed, err := project.NativeClosure(w, module)
-		if err != nil {
-			return err
+		allowed := map[string]bool{}
+		featureIDs := map[string][]string{}
+		for _, n := range g.Nodes {
+			allowed[n.Module] = true
+			featureIDs[n.Module] = project.Keys(n.Features)
 		}
 		for _, selected := range targets {
+			available := true
+			for _, f := range selected.target.RequiredFeatures {
+				available = available && g.Root.Features[f]
+			}
+			if !available {
+				if req.Workspace && req.Bin == "" && req.Example == "" && !req.Lib {
+					fmt.Fprintf(stderr, "skip %s/%s: required feature disabled\n", module, selected.target.Name)
+					continue
+				}
+				return fmt.Errorf("target %s requires disabled feature", selected.target.Name)
+			}
 			if req.Mode == "run" && selected.kind == "lib" {
 				return fmt.Errorf("cannot run a library")
 			}
 			platform := config["GOOS"] + "-" + config["GOARCH"]
-			spec := project.UnitSpec{Host: runtime.GOOS + "-" + runtime.GOARCH, Target: platform, Kind: selected.kind, Name: selected.target.Name, Config: project.Digest([]any{"native-workspace-v1", lock.NativeWorkspace, module, selected, req.Mode, projectCompilerID()})}
+			spec := project.UnitSpec{Host: runtime.GOOS + "-" + runtime.GOARCH, Target: platform, Kind: selected.kind, Name: selected.target.Name, Config: project.Digest([]any{"native-workspace-v1", lock.NativeWorkspace, module, selected.target, selected.kind, featureIDs, req.Mode, projectCompilerID()})}
 			unit, err := layout.Begin(spec)
 			if err != nil {
 				return err
@@ -176,7 +199,10 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 			if err != nil {
 				return err
 			}
-			path := filepath.Join(dirs[module], selected.target.Path)
+			path, err := lowerNativeView(context.Background(), w, g, dirs, unit.Bundle, selected.target, selected.kind, req.Mode == "test", layout, stderr)
+			if err != nil {
+				return err
+			}
 			if e = checkTarget(dirs[module], path); e != nil {
 				return e
 			}
@@ -199,7 +225,7 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 				}
 			}
 			preflight := *lock.NativeWorkspace
-			if e = project.CaptureNativeSums(w, unit.Bundle, &preflight); e != nil {
+			if e = project.ReadNativeSelections(w, req.GoTool, unit.Bundle, &preflight, true); e != nil {
 				return e
 			}
 			if req.Locked && project.Digest(preflight) != project.Digest(lock.NativeWorkspace) {

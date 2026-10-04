@@ -1,3 +1,5 @@
+> 2026-10-04 规范修订：本文下列 vendor 运行模式描述是被替代实现的记录；当前合同以 [供应源码迁入设计](vendor-local-modules.md) 和 RFC0025/0026 为准。没有 Goxide vendor 模式或 vendor 拆出功能。
+
 # 原生 go.work 与 workspace vendor 迁入合同
 
 状态：2026-10-04 第二阶段原生传输子集已实现，基于 `2aa0d066`。本文件先于生产实现落地；验收结果见 [迁入验收](../reviews/workspace-import-20261004.md)。保持原目录不变，仅在临时 staging 运行会写 Go 元数据的分析/构建命令，成功后发布新的输出目录。
@@ -82,7 +84,4 @@ bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳�
 
 schema4 增补逐成员输入记录；非vendor拆出显式物化继承/path后直接复制根锁，复用既有 Go/Unified可达解析和校验，不读无关成员源码、不激活无关脚本。显式本地成员路径可搬迁，逐节点仍核对模块身份与有效清单。成员自身 go/toolchain/godebug/replace 恢复生效；若来源因 work override 消失而改变，必须报错而非沿旧来源偷偷构建。旧schema4缺成员记录时先在原workspace普通构建补锁；复制锁的原字节保留。
 
-**workspace vendor 拆出仍需显式转换合同**。最小反例：A require D，B require E，工作区 vendor 标记 D/E 都 explicit。A 独立后若原样复制整份 vendor，E 的 explicit 不再对应主模块 require，真实 Go 拒绝；若改 modules.txt 删除 E，则已不是原 vendor 政策/摘要；若保留隐藏的 B/go.work，则仍施加原 work replace/godebug，违反已确认独立政策恢复。普通非vendor A 可直接复制根锁、只校验D；vendor A 当前明确拒绝并要求显式转换，绝不擦标记或丢修改字节。建议另立最小转换协议：验证原快照后，依据独立政策派生vendor元数据，保留实际文件和原/派生摘要；在协议确认前暂停这部分，而不阻塞非vendor及workspace内渐进增强。
-
-
-条件编译语法与既有前端完全一致：`//goxide:cfg` 在导入发现/宏/名称解析前移除；未选文件仍校验词法、token tree 与 package/import 前缀，完整声明/表达式语法按既有合同延后到启用时验证。本次未扩大为完整语法解析，也未引入新宏语义。
+本节此前的 vendor 运行模式及“拆出另立转换协议”已撤回。统一遵守 [供应源码迁入设计](vendor-local-modules.md)：vendor 仅是原生输入，验证后产生普通本地模块与显式路径。独立工程只需物化继承/本地路径并复制根锁；不引入第二种 vendor 转换。

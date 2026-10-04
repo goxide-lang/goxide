@@ -221,7 +221,7 @@ dev-dependencies 属候选后续能力：只加入所选成员 test/examples 所
 锁更新需保留未使用记录，不把每次构建写成“仅本次依赖”；锁项不能携带脚本授权。--offline仅禁fetch，不等于--locked；--locked可获取已锁内容但不能改变锁定结果。local path内容不伪装为不可变远端checksum；其源码/生成输入改变使缓存失效，锁只约束身份和有效依赖政策。feature、target、normal/test/host和编译配置进入artifact/metadata身份；锁内部索引格式仍可设计，但必须保持已确认的全workspace版本结果。
 ### WS-06：target、并发与信任
 
-默认 target 在 workspace 根，以根所有权记录统筹；成员/角色/host-target/config/模式/目标名进入 unit 身份。外部 metadata 还校验选版计划、member source、feature 并集、编译器版本、Go 工具链、tags/race、vendor 摘要，保留 test/normal 隔离。普通与 workspace 两种根身份不共用裸缓存键，显式 --target-dir 也不能跨 owner 抢占。两个成员都叫 web 产物各在 module-id 下，不能都写 target/web。网站 web bin/嵌入资源可自然按现有目录目标工作，不修改独立官网分支。
+默认 target 在 workspace 根，以根所有权记录统筹；成员/角色/host-target/config/模式/目标名进入 unit 身份。外部 metadata 还校验选版计划、member source、feature 并集、编译器版本、Go 工具链、tags/race、本地源码摘要，保留 test/normal 隔离。普通与 workspace 两种根身份不共用裸缓存键，显式 --target-dir 也不能跨 owner 抢占。两个成员都叫 web 产物各在 module-id 下，不能都写 target/web。网站 web bin/嵌入资源可自然按现有目录目标工作，不修改独立官网分支。
 
 锁更新采用跨进程 workspace 写锁、读取旧版本并 merge/CAS、临时文件+原子替换；A/B 并发不能丢合法记录更新或形成两个不一致的版本结果。每 unit 另有互斥及原子发布，失败留旧完整产物；脚本输出每主体独享，不让共享 OUT_DIR 多写。clean 必须取得相应 owner/unit 锁，默认仅删本项目受管目标；未知文件拒删，活跃任务拒绝或等待，不能 rm -rf 全父目录。不同 workspace 的同一外部成员允许各自独立 target，不共享源码写入。
 
@@ -248,9 +248,7 @@ Go 原生允许没有 require 的成员间import，也会让use成员覆盖同mo
 
 Go 的 go.work sync 会改写成员 go.mod；本工具迁入不得调用它。也不能默认 tidy/get/vendor 修“坏输入”。计划先列每个政策和来源去向，生成与独立新目录验证全成功后发布；失败不留下半个新工程，不修改原来锁/权限。
 
-现有 `[vendor] mode="go-mod"` 只支持 RFC0025 单模块。第二阶段纯原生迁入已新增独立 `[workspace.vendor] mode="go-work"`（增强模式仍不支持）：保留 workspace modules.txt 标记、根/成员政策、全部 vendor 原始字节、许可证、文件模式及独立内容锁，不冒充 proxy h1。采用真实 Go work vendor 视图，生成 Go workspace 必须与原 vendor 的主模块集合匹配；vendor迁入沿用全workspace统一版本模型，即使只编译 A 也保留完整政策集合。vendor模式同样必须先核验已物化的显式依赖/来源图；原Go主模块集合只用于政策与vendor一致性，不授权源码从未声明成员取包。无法同时保持原vendor政策和显式source图时明确拒绝该迁入，不靠Go use补边。不要从部分 modules.txt 逆造完整 go.mod。
-
-模块 vendor 与 workspace vendor 不能合并去重或任挑一个；module-vendor 工程独立构建保持现状，加入非vendor workspace 后若要使用新的统一来源，须显式模式切换/重锁。多个各自修改过 vendor 的成员不能未经选择合成一份。workspace vendor 无需原 replace 目录仍应可冷离线构建（本次 GO-08 已验证 native 机制），缺失一个实际 import 包就失败并给路径，不联网补全；不能宣称含依赖自己的 tests/任意新 import。vendor 中增强 .gox、脚本或混合增强来源支持需另有合同，首片不自动执行/展开。工作区增删成员或改政策必须重新核验原 vendor，不能擦掉 ## workspace 伪装单模块。
+原生 workspace vendor 仅为迁入输入；验证后转换为显式本地模块，合同见 RFC0025 与 [供应源码迁入设计](../design/vendor-local-modules.md)。Goxide 不保存 workspace vendor 模式，不用 modules.txt 控制构建或锁。成员独立时仅物化继承和本地路径、复制根锁；没有“vendor 拆出”协议或待批准转换。所有可达本地模块必须由显式路径提供，复制锁不能恢复缺失源码。原 work override/godebug 的独立政策恢复规则保持不变。
 
 ## 转译示例
 
@@ -327,7 +325,7 @@ Go 试验确证上表**原生版本机制**，没有实现 feature 行为；没�
 | W09 脚本 | 活动A脚本独立授权，未触达B不运行 | 锁/成员隐式授权、撤销后缓存复用：trust拒绝；没有结果也不运行安装脚本 |
 | W10 并发 | A/B并发维护同一全workspace版本结果，保留双方合法记录更新/配置索引；重名web独立输出 | 外owner target、同输出争抢、clean活跃unit：owner/lock拒绝，旧完整结果不丢 |
 | W11 离开/发行 | 物化成员清单与真实发行依赖，隔离消费者成功 | 本地replace/../std/继承父字段泄入发行物：publish preflight失败，不发布 |
-| W12 vendor | workspace原字节+policy冷离线；module独立vendor继续成功 | 缺包、## workspace误作go-mod、多个vendor冲突：预检/Go vendor失败，不fetch |
+| W12 供应源码 | vendor 输入物化普通本地模块，冷离线与独立复制锁可用 | 缺包、错误归属/政策、旧 vendor 清单/锁：明确失败，不 fetch |
 | W13 选择 | 两bin按需、example显式、跨成员同名合法 | 未限定多成员feature/多成员run/-o文件：CLI歧义失败 |
 | W14 迁入 | dry plan源hash不变，新目录逐政策保留、验证后发布 | 未知指令/godebug尚未支持/已有输出/失败构建：整体不发布，不修改原工程 |
 | W15 锁稳定 | 唯一根锁保留已锁来源，全workspace统一版本结果按角色验收 | 同source移动branch偷偷更新或复制锁后无声升级：--locked拒绝 |

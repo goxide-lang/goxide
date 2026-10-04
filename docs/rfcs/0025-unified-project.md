@@ -109,32 +109,20 @@ func main() { fmt.Println("mixed source, one manifest") }
 
 本篇不要求用户重新批准已决定的单一清单模型。首片拒绝未支持指令属于无损边界，不以“部分迁移成功”交付。若后续确需retract/tool/godebug/workspace语义，另列精确映射与测试后启用；不在首片默默补默认值。
 
-## Vendor 自动迁入扩展（2026-10-04，实施合同）
+<a id="vendor-自动迁入扩展2026-10-04实施合同"></a>
 
-状态：本节先于代码提交；单模块vendor首片已实现并完成race/vet/设计检查及独立复审，见 [vendor验收记录](../reviews/vendor-import-20261004.md)。这是独立分支交付，网站上线须另行整合。默认 `import-go` 为只读 plan，指定 `--out NEWDIR` 才复制及验证。无 vendor 输入保持原规则；有 vendor 输入自动选择下列显式策略：
+## Vendor 输入转换为本地模块（2026-10-04，取代旧 vendor 运行模式）
 
-```toml
-[vendor]
-mode = "go-mod"
-```
+Goxide 没有 vendor 构建模式。原生 Go 的 vendor 只是 `import-go` 的迁移输入。旧 `[vendor]`、`[workspace.vendor]` 和含 vendor 来源记录的旧锁要求从保留的原生工程显式重新迁入；不能忽略字段或沿旧模式构建。
 
-采用真实 Go 的 `-mod=vendor`，不从 modules.txt 猜造完整依赖 go.mod，不把部分包拆装成完整 module，也不调用 download/tidy/vendor 重建。源 vendor 和 modules.txt 逐字复制，许可证保留；TOML 原生政策不丢弃，local replace 在此模式保留原拼写以与 modules.txt 一致（构建只读 vendor，不访问原 replace 目录）。生成 target 内的 Go 元数据＋vendor 构成可独立构建视图。
+先用原生 Go 核验 modules.txt 与原政策，再按原逻辑 module identity 将供应字节物化为普通本地 Go 模块。根 TOML 通过明确的本地 replace 绑定这些模块；workspace 成员和根政策也显式绑定。旧版本与 fork/local replace 记录是迁移来源，不能让它们覆盖已经供应的修改字节。普通本地模块规则适用于 build/run/test/lock；没有 `-mod=vendor`、vendor 内容锁或 modules.txt 运行时权威。
 
-锁新增独立 vendor 来源记录：模式、政策摘要、modules.txt 描述的版本/替换/explicit/Go版本/包清单、每个普通文件内容与权限摘要和总摘要。它不是 proxy h1：vendor 的本地修改按实际字节保留，原 go.sum 仅记录迁移 provenance，不用于声称 vendor 与远端一致。plan 输出候选 TOML、复制/新增/保留策略、完整 vendor 文件摘要与许可文件清单；上游差异未核实时明确 unknown，不联网猜测。后续 vendor 修改改变配置/metadata/脚本缓存身份；--locked 拒绝摘要变化。
+这是一份裁剪过的供应源码集合，不是完整上游发行物。合成 go.mod 只表达供应源码实际 import 所需的模块关系及已知版本标签，不声称恢复原始 require 图。扫描全部供应 Go 文件，不按当前 host/tag 裁剪；Go 处理包级环和平台选择，合法的模块级环不得误判为增强依赖环。原生 workspace 成员仍使用已有显式成员边合同。
 
-Go 负责核查模块版本、explicit、replace 与根政策一致性。工具额外严格核查清单语法、未知规则、package路径/归属、缺目录/源码、未声明Go包、符号链接/特殊文件/嵌套模块及越界路径；不因 Go 清单解析器容忍未知行就静默丢弃。包目录内资源及嵌入子目录、模块层许可证按内容完整保留；未归属文件拒绝并给路径。原项目及已有输出不变，失败只清理本次 staging。
+全部供应源码、build tags、cgo/asm/header、embed 资源与许可证保留字节和权限；嵌套 module identity 按声明包归属分开，祖先许可证复制到相关本地模块并记录去向。只含 explicit 记录而没有包的模块保留空声明，不伪造包。未知归属、缺包、symlink/特殊文件、未知 metadata 或嵌套配置明确失败。不能 tidy/download 或重建 vendor 来补足供应集合。
 
-首片要求现代单模块 vendor（Go声明至少1.17，包所属模块需Go版本元数据）；`## workspace`、go.work 或未知metadata明确拒绝。modules.txt是被选包视图，不是完整传递版本图：只锁定这份vendor视图，不承诺恢复遗漏的包、依赖测试或其他模块的vendor。原go.mod中未支持的retract/tool/godebug/ignore/Deprecated等仍整项拒绝。vendor模式不与增强依赖图混合：`dependencies` 非空明确拒绝；root features/bin/example可用，vendored源只作为原生Go消费，不展开其中.gox或自动执行脚本。根显式脚本继续遵守独立信任策略。
+迁移 provenance 单独记录原政策、版本/replace、输入文件摘要和输出映射，不作为运行时来源开关。原 go.sum 不证明被修改的供应字节，也不得给这些本地文件伪造 proxy h1。来源与上游的差异未核验时写 unknown。正常本地源码后续编辑遵守普通缓存/锁规则，不增加不可变 vendor 特例。
 
-| 白/黑例 | 结果 |
-| --- | --- |
-| 同步go.mod+sum+vendor、冷modulecache、无网络 | 原Go -mod=vendor与迁入后build/run/test等价，原文件hash不变 |
-| vendor本地源码改动、与上游sum不匹配 | 保留实际内容并标vendor摘要，绝不伪装为proxy checksum |
-| local或version replace，原replace目录之后不存在 | vendor模式仍从保留字节构建，政策与modules.txt一致 |
-| go:embed、平台/build tags文件、许可证 | 原字节保留；选择由真实Go/既有host前端处理，不承诺交叉编译 |
-| 缺包、未声明Go目录、坏/未知modules.txt、symlink、嵌套配置 | 精确路径/行诊断，拒绝发布，不网络补全 |
-| workspace vendor或早期缺metadata格式 | 明确识别不支持，不能误当单modulevendor |
-| 双配置、既有目的目录、部分目标失败 | 原项目不变，目的目录不覆盖/不部分发布 |
-| vendor内容变化、feature/bin切换 | 内容进入配置身份；锁定变化拒绝，配置缓存隔离 |
+输出不依赖原 vendor/原 replace 目录或临时 staging 路径。新增未供应的包必须失败，即使网络可用也不能静默切回远端；用户须显式提供新的本地源码并审阅依赖声明。原工程始终不变。
 
-官方依据：[Go vendoring](https://go.dev/ref/mod#vendoring)、[go mod vendor](https://go.dev/ref/mod#go-mod-vendor)、当前Go工具源码的modules.txt一致性检查。Go vendor覆盖主模块构建/测试所需包，省略依赖自身测试；生成时考虑ignore以外的build constraints。工具不能据当前host构建成功宣称所有平台/任意未来新增import均完整。
+具体物化、白黑例和验收见 [供应源码迁入设计](../design/vendor-local-modules.md)。

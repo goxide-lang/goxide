@@ -77,13 +77,13 @@ await page.setViewportSize({width:390,height:844});
 assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
 await page.screenshot({path:new URL('qa-artifacts/mobile.png',import.meta.url).pathname,fullPage:true});
 // Intercept only a QA worker to deterministically exercise hard timeout and cancel.
-await page.route('**/worker.js',r=>r.fulfill({contentType:'application/javascript',body:'postMessage({type:"ready"}); onmessage=()=>{};'}));
+await page.route('**/worker.js*',r=>r.fulfill({contentType:'application/javascript',body:'postMessage({type:"ready"}); onmessage=()=>{};'}));
 await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent==='正在转译…');
 await page.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('超过 10 秒'),{},{timeout:15000});
 assert.equal(await page.inputValue('#output'),'');
 await page.click('#compile');await page.waitForFunction(()=>document.querySelector('#status').textContent==='正在转译…');await page.click('#stop');
 assert.match(await page.textContent('#status'),/已中断/);
-await page.unroute('**/worker.js');await page.click('#reset');await finished();
+await page.unroute('**/worker.js*');await page.click('#reset');await finished();
 assert.equal(await page.inputValue('#output'),manifest.examples[0].go);
 assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');

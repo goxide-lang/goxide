@@ -35,7 +35,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		return err
 	}
 	defer release()
-	g, err := project.Load(input, tool, strings.FieldsFunc(flags.features, func(r rune) bool { return r == ',' || r == ' ' }), !flags.noDefault, flags.offline, flags.locked)
+	g, err := project.LoadWithTarget(input, tool, strings.FieldsFunc(flags.features, func(r rune) bool { return r == ',' || r == ' ' }), !flags.noDefault, flags.offline, flags.locked, flags.targetDir)
 	if err != nil {
 		return err
 	}
@@ -153,23 +153,9 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	// Generation directories are retained; the frontend may remove its own new
 	// incomplete module on failure. No generated-source cache hit is claimed.
 
-	generated := map[string]string{}
-	// A main-module anchor preserves native module backedges without exposing an
-	// unconfigured root package to dependency compilation. Actual package cycles
-	// still fail; this directory contains module policy only, never source code.
-	if len(g.Nodes) > 1 {
-		anchor := filepath.Join(bundle, "main-anchor")
-		if err = os.Mkdir(anchor, 0755); err != nil {
-			return err
-		}
-		raw, e := os.ReadFile(filepath.Join(g.Root.Root, "go.mod"))
-		if e != nil {
-			return e
-		}
-		if err = os.WriteFile(filepath.Join(anchor, "go.mod"), raw, 0644); err != nil {
-			return err
-		}
-		generated[g.Root.Module] = anchor
+	generated, err := projectModuleAnchors(g, filepath.Join(bundle, "policy-anchors"))
+	if err != nil {
+		return err
 	}
 	var result frontend.ModuleResult
 	for _, n := range g.Nodes {
@@ -231,7 +217,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 			excluded[filepath.Clean(filepath.Dir(n.Manifest.Build.Entry))] = true
 			configuration = project.Digest([]string{configuration, artifact.Digest})
 		}
-		options := frontend.ModuleOptions{ManagedOutputRoot: layout.Root, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files}
+		options := frontend.ModuleOptions{ManagedOutputRoot: layout.Root, SourceModuleRoot: n.Root, SourceModuleFile: n.ModBytes, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files}
 		options.Prepare = func(root string) error { return prepareProjectModule(g, n, root, generated) }
 		result, err = frontend.CompileModuleWithOptions(inputPath, output, options)
 		if err != nil {
@@ -354,29 +340,46 @@ func preflightProjectModules(g *project.Graph) error {
 		return e
 	}
 	defer os.RemoveAll(work)
+	_, e = projectModuleAnchors(g, work)
+	return e
+}
+
+// Policy anchors keep every graph node available to Go before its source is generated.
+func projectModuleAnchors(g *project.Graph, work string) (map[string]string, error) {
+	if e := os.MkdirAll(work, 0755); e != nil {
+		return nil, e
+	}
+	var e error
 	generated := map[string]string{}
 	for _, n := range g.Nodes {
 		dir := filepath.Join(work, project.Digest(n.Module))
 		if e = os.Mkdir(dir, 0755); e != nil {
-			return e
+			return nil, e
 		}
 		for _, name := range []string{"go.mod", "go.sum"} {
 			b, err := os.ReadFile(filepath.Join(n.Root, name))
+			if name == "go.mod" {
+				b = n.ModBytes
+				err = nil
+			}
+			if name == "go.sum" && n.HasManifest {
+				continue
+			}
 			if os.IsNotExist(err) && name == "go.sum" {
 				continue
 			}
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if err = os.WriteFile(filepath.Join(dir, name), b, 0644); err != nil {
-				return err
+				return nil, err
 			}
 		}
 		// Frontend normally normalizes relative replaces while copying. Do the same
 		// for this module-only preflight, without touching the original go.mod.
-		m, err := project.ReadMod(g.Tool, n.Root)
+		m, err := n.Mod, error(nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		args := []string{"mod", "edit"}
 		for _, rep := range m.Replace {
@@ -393,17 +396,17 @@ func preflightProjectModules(g *project.Graph) error {
 			c.Dir = dir
 			c.Env = project.GoEnv(true)
 			if b, e := c.CombinedOutput(); e != nil {
-				return fmt.Errorf("module preflight: %w: %s", e, b)
+				return nil, fmt.Errorf("module preflight: %w: %s", e, b)
 			}
 		}
 		generated[n.Module] = dir
 	}
 	for _, n := range g.Nodes {
 		if e = prepareProjectModule(g, n, generated[n.Module], generated); e != nil {
-			return e
+			return nil, e
 		}
 	}
-	return nil
+	return generated, nil
 }
 
 func prepareProjectModule(g *project.Graph, n *project.Node, root string, generated map[string]string) error {
@@ -485,7 +488,7 @@ func prepareProjectModule(g *project.Graph, n *project.Node, root string, genera
 			return e
 		}
 	}
-	sourceMod, e := os.ReadFile(filepath.Join(n.Root, "go.mod"))
+	sourceMod, e := n.ModBytes, error(nil)
 	if e != nil {
 		return e
 	}
@@ -666,7 +669,7 @@ func projectUnitSpec(g *project.Graph, target project.Target, kind, mode string,
 	nodes := []nodeConfig{}
 	commits := map[string]string{}
 	for _, n := range g.Nodes {
-		mod, e := os.ReadFile(filepath.Join(n.Root, "go.mod"))
+		mod, e := n.ModBytes, error(nil)
 		if e != nil {
 			return project.UnitSpec{}, e
 		}

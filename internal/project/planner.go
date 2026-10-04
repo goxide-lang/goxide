@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -41,12 +42,17 @@ func (s *Selection) UnmarshalJSON(data []byte) error {
 
 type ModuleVersion struct{ Path, Version string }
 type ModReplace struct{ Old, New ModuleVersion }
+type ModRequire struct {
+	Path, Version string
+	Indirect      bool
+}
 type ModFile struct {
-	Module  ModuleVersion
-	Go      string
-	Require []ModuleVersion
-	Replace []ModReplace
-	Exclude []ModuleVersion
+	Toolchain string
+	Module    ModuleVersion
+	Go        string
+	Require   []ModRequire
+	Replace   []ModReplace
+	Exclude   []ModuleVersion
 }
 
 func goCommand(tool, dir string, offline bool, args ...string) ([]byte, error) {
@@ -117,22 +123,68 @@ func normalizedReplaces(root string, m ModFile) ([]ModReplace, error) {
 	}
 	return out, nil
 }
-func (g *Graph) readNode(root string) (*Node, error) {
-	m, e := ReadMod(g.Tool, root)
-	if e != nil {
-		return nil, e
-	}
-	n := &Node{Root: root, Module: m.Module.Path, Manifest: Manifest{Version: 1}, Children: map[string]*Node{}, Sources: map[string]Dependency{}}
+func (g *Graph) readNode(root string, published bool) (*Node, error) {
 	present, e := Detect(root)
 	if e != nil {
 		return nil, e
 	}
-	if !present {
-		return n, nil
+	n := &Node{Root: root, Manifest: Manifest{Version: 2}, Children: map[string]*Node{}, Sources: map[string]Dependency{}}
+	if present {
+		n.HasManifest = true
+		n.Manifest, e = Read(root)
+		manifestErr := e
+		if e != nil && n.Manifest.Module == "" {
+			return nil, e
+		}
+		if !published {
+			if e = CheckAuthoring(root); e != nil {
+				return nil, e
+			}
+		}
+		n.Module = n.Manifest.Module
+		n.ModBytes, e = ModuleText(n.Manifest)
+		if e != nil {
+			return nil, e
+		}
+		dir, e := os.MkdirTemp(g.WorkRoot, "input-")
+		if e != nil {
+			return nil, e
+		}
+		defer os.RemoveAll(dir)
+		if e = os.WriteFile(filepath.Join(dir, "go.mod"), n.ModBytes, 0644); e != nil {
+			return nil, e
+		}
+		n.Mod, e = ReadMod(g.Tool, dir)
+		if e != nil {
+			return nil, e
+		}
+		if published {
+			if _, e := ImportMod(g.Tool, root); e != nil {
+				return nil, fmt.Errorf("published Go transport metadata: %w", e)
+			}
+			transport, e := ReadMod(g.Tool, root)
+			if e != nil {
+				return nil, e
+			}
+			if !sameTransport(n.Mod, transport) {
+				return nil, fmt.Errorf("published Go transport metadata conflicts with goxide.toml: %s", n.Module)
+			}
+		}
+		if manifestErr != nil {
+			return n, manifestErr
+		}
+	} else {
+		n.Mod, e = ReadMod(g.Tool, root)
+		if e != nil {
+			return nil, e
+		}
+		n.Module = n.Mod.Module.Path
+		n.ModBytes, e = os.ReadFile(filepath.Join(root, "go.mod"))
+		if e != nil {
+			return nil, e
+		}
 	}
-	n.HasManifest = true
-	n.Manifest, e = Read(root)
-	return n, e
+	return n, nil
 }
 
 // Published source projects must not silently incorporate a previous hgo view.
@@ -193,7 +245,7 @@ func effective(s Selection) Selection {
 func (g *Graph) round(root string, requested []string, defaults bool, selected map[string]Selection) (*planningRound, error) {
 	r := &planningRound{nodes: map[string]*Node{}, local: map[string]string{}}
 	var e error
-	r.root, e = g.readNode(root)
+	r.root, e = g.readNode(root, false)
 	if e != nil {
 		return nil, e
 	}
@@ -289,7 +341,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 				}
 				child, ok := r.nodes[d.Module]
 				if !ok {
-					child, e = g.readNode(dir)
+					child, e = g.readNode(dir, published)
 					if e != nil {
 						if child == nil {
 							return nil, e
@@ -314,7 +366,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					child.SourceID = sourceID
 					child.SelectedVersion = version
 					if boundary != "" {
-						mod, err := ReadMod(g.Tool, dir)
+						mod, err := child.Mod, error(nil)
 						if err != nil {
 							return nil, err
 						}
@@ -386,24 +438,22 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 // solve delegates the complete version ordering and module graph to Go. Private
 // local go.mod-only bridges preserve multiple constraints for one module path.
 func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, error) {
-	work, e := os.MkdirTemp("", "hgo-module-plan-")
+	work, e := os.MkdirTemp(g.WorkRoot, "solve-")
 	if e != nil {
 		return nil, e
 	}
 	defer os.RemoveAll(work)
-	raw, e := os.ReadFile(filepath.Join(root, "go.mod"))
+	raw, e := r.root.ModBytes, error(nil)
 	if e != nil {
 		return nil, e
 	}
 	if e = os.WriteFile(filepath.Join(work, "go.mod"), raw, 0644); e != nil {
 		return nil, e
 	}
-	if sums, e := os.ReadFile(filepath.Join(root, "go.sum")); e == nil {
+	if sums, e := []byte(g.planningSeed+g.Lock.PlanningSums), error(nil); len(sums) > 0 && e == nil {
 		if e = os.WriteFile(filepath.Join(work, "go.sum"), sums, 0644); e != nil {
 			return nil, e
 		}
-	} else if !os.IsNotExist(e) {
-		return nil, e
 	}
 	run := func(args ...string) ([]byte, error) { return goCommand(g.Tool, work, g.Offline, args...) }
 	for _, req := range g.RootMod.Require {
@@ -462,6 +512,53 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			}
 		}
 		args = append(args, "-replace="+module+"="+dir)
+	}
+	// Go sees generated module-only projections of TOML authoring sources.
+	shadows := map[string]string{}
+
+	for _, rep := range replacements {
+		if rep.New.Version != "" {
+			continue
+		}
+		yes, err := Detect(rep.New.Path)
+		if err != nil {
+			return nil, err
+		}
+		if !yes {
+			continue
+		}
+		n, err := g.readNode(rep.New.Path, false)
+		if err != nil {
+			return nil, err
+		}
+		shadow := filepath.Join(work, "replace-"+Digest([]string{rep.Old.Path, rep.Old.Version}))
+		if e = os.Mkdir(shadow, 0755); e != nil {
+			return nil, e
+		}
+		if e = os.WriteFile(filepath.Join(shadow, "go.mod"), n.ModBytes, 0644); e != nil {
+			return nil, e
+		}
+		shadows[shadow] = rep.New.Path
+		old := rep.Old.Path
+		if rep.Old.Version != "" {
+			old += "@" + rep.Old.Version
+		}
+		args = append(args, "-replace="+old+"="+shadow)
+	}
+	for module, dir := range r.local {
+		n := r.nodes[module]
+		if n == nil || !n.HasManifest {
+			continue
+		}
+		shadow := filepath.Join(work, "source-"+Digest(module))
+		if e = os.Mkdir(shadow, 0755); e != nil {
+			return nil, e
+		}
+		if e = os.WriteFile(filepath.Join(shadow, "go.mod"), n.ModBytes, 0644); e != nil {
+			return nil, e
+		}
+		shadows[shadow] = dir
+		args = append(args, "-replace="+module+"="+shadow)
 	}
 	if len(args) > 2 {
 		if _, e = run(args...); e != nil {
@@ -624,13 +721,72 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		if e = NoSymlinks(effective(s).Dir); e != nil {
 			return nil, e
 		}
+		if original, ok := shadows[effective(s).Dir]; ok {
+			eff := effective(s)
+			eff.Dir = original
+			eff.Path = original
+			eff.GoMod = ""
+			if s.Replace != nil {
+				s.Replace = &eff
+			} else {
+				s = eff
+			}
+		}
 		selected[path] = s
+	}
+	if sums, err := os.ReadFile(filepath.Join(work, "go.sum")); err == nil {
+		needed := map[string]bool{}
+		for _, line := range strings.Split(string(graph), "\n") {
+			for _, item := range strings.Fields(line) {
+				if path, v, ok := strings.Cut(item, "@"); ok {
+					needed[path+" "+v+"/go.mod"] = true
+				}
+			}
+		}
+		for _, s := range selected {
+			eff := effective(s)
+			if eff.Version != "" {
+				needed[eff.Path+" "+eff.Version] = true
+				needed[eff.Path+" "+eff.Version+"/go.mod"] = true
+			}
+		}
+		var kept []string
+		for _, line := range strings.Split(string(sums), "\n") {
+			f := strings.Fields(line)
+			if len(f) == 3 && needed[f[0]+" "+f[1]] {
+				g.planningVerified[line] = true
+			}
+		}
+		for line := range g.planningVerified {
+			kept = append(kept, line)
+		}
+		sort.Strings(kept)
+		g.Lock.PlanningSums = ""
+		if len(kept) > 0 {
+			g.Lock.PlanningSums = strings.Join(kept, "\n") + "\n"
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
 	}
 	return selected, nil
 }
 func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, error) {
+	g.planningSeed = g.Lock.PlanningSums
+	g.planningVerified = map[string]bool{}
+	if len(g.Lock.Plans) > 0 {
+		for _, line := range strings.Split(g.Lock.PlanningSums, "\n") {
+			if line != "" {
+				g.planningVerified[line] = true
+			}
+		}
+	}
+
 	var e error
-	g.RootMod, e = ReadMod(g.Tool, root)
+	initial, err := g.readNode(root, false)
+	if err != nil {
+		return nil, err
+	}
+	g.RootMod = initial.Mod
 	if e != nil {
 		return nil, e
 	}
@@ -717,12 +873,12 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			inputs := []lockNode{}
 			for _, module := range keys(r.nodes) {
 				n := r.nodes[module]
-				raw, e := os.ReadFile(filepath.Join(n.Root, "go.mod"))
+				raw, e := n.ModBytes, error(nil)
 				if e != nil {
 					return nil, e
 				}
 				idRoot := n.Root
-				if n.SelectedVersion != "" {
+				if n == r.root || n.SelectedVersion != "" {
 					idRoot = n.Module
 				}
 				inputs = append(inputs, lockNode{n.Module, idRoot, n.Manifest, string(raw), n.Sources})

@@ -1,5 +1,7 @@
 [package]
-format = 1
+format = 2
+module = "example.org/buildscript"
+go = "1.27"
 
 [[bin]]
 name = 'app'
@@ -11,3 +13,11 @@ inputs = ['schema.txt']
 outputs = ['gen/schema.go', 'gen/data.txt']
 timeout_seconds = 60
 
+
+[[go.require]]
+module = "github.com/goxide-lang/serde"
+version = "v0.0.0-20261004120911-a1b791e96d66"
+
+[[go.require]]
+module = "github.com/goxide-lang/std"
+version = "v0.0.0-20261004120854-3f2204770fd3"

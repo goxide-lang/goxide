@@ -33,6 +33,9 @@ func versionProxy(t *testing.T) (string, string) {
 }
 func publishVersion(t *testing.T, proxy, module, version string, files map[string]string) {
 	t.Helper()
+	if text, ok := files["goxide.toml"]; ok {
+		files["goxide.toml"] = fixtureManifest(t, text, files["go.mod"])
+	}
 	var b bytes.Buffer
 	zw := zip.NewWriter(&b)
 	for _, name := range project.Keys(files) {

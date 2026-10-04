@@ -238,7 +238,7 @@ func Prepare(o Options) (*Plan, error) {
 			}
 		}
 		seen[fold] = true
-		if strings.HasSuffix(strings.ToLower(n), ".go.map.json") || strings.Split(n, "/")[0] == "hgo_targets" || filepath.Base(n) == "hgo_project_config.go" || filepath.Base(n) == "go.mod" || filepath.Base(n) == "go.sum" || (filepath.Base(n) == "goxide.toml" || filepath.Base(n) == "hgo.json") || filepath.Base(n) == "hgo.lock" {
+		if strings.HasSuffix(strings.ToLower(n), ".go.map.json") || strings.Split(n, "/")[0] == "hgo_targets" || filepath.Base(n) == "hgo_project_config.go" || filepath.Base(n) == "go.mod" || filepath.Base(n) == "go.sum" || (filepath.Base(n) == "goxide.toml" || filepath.Base(n) == "hgo.json") || filepath.Base(n) == "hgo.lock" || filepath.Base(n) == "goxide.lock" {
 			return nil, fmt.Errorf("reserved output %s", n)
 		}
 		path := filepath.Join(o.PackageRoot, n)
@@ -324,6 +324,13 @@ func Prepare(o Options) (*Plan, error) {
 		}
 		if b, ok := files[project.ManifestName]; ok {
 			m, e := project.Parse(filepath.Join(path, project.ManifestName), b)
+			if e != nil {
+				return nil, e
+			}
+			if e = project.CheckAuthoring(path); e != nil {
+				return nil, e
+			}
+			files["go.mod"], e = project.ModuleText(m)
 			if e != nil {
 				return nil, e
 			}

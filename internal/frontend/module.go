@@ -40,6 +40,9 @@ func CompileModuleWithTags(input, destination string, tags []string) (ModuleResu
 }
 
 type ModuleOptions struct {
+	// SourceModuleRoot/File are a trusted project-planner virtual Go module, never source directives.
+	SourceModuleRoot string
+	SourceModuleFile []byte
 	// Context cancels module traversal and importer subprocesses; CPU passes check between packages.
 	Context    context.Context
 	Tags       []string
@@ -107,7 +110,10 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		return ModuleResult{}, err
 	}
 	root := input
-	for {
+	if options.SourceModuleRoot != "" {
+		root = options.SourceModuleRoot
+	}
+	for options.SourceModuleRoot == "" {
 		if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
 			break
 		}
@@ -132,6 +138,10 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		return ModuleResult{}, fmt.Errorf("output directory must not exist: %s", destination)
 	}
 	mod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if options.SourceModuleRoot != "" {
+		mod = options.SourceModuleFile
+		err = nil
+	}
 	if err != nil {
 		return ModuleResult{}, err
 	}
@@ -186,6 +196,11 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			os.RemoveAll(destination)
 		}
 	}()
+	if options.SourceModuleRoot != "" {
+		if err = os.WriteFile(filepath.Join(destination, "go.mod"), []byte(strings.Join(lines, "\n")), 0644); err != nil {
+			return ModuleResult{}, err
+		}
+	}
 	packages := map[string]map[string][]byte{}
 	sourceOutputs := map[string]string{}
 	testSources := map[string]map[string][]byte{}
@@ -204,7 +219,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		}
 		// Worktrees can use a .git file rather than a directory. Neither belongs
 		// in the independently buildable generated module.
-		if entry.Name() == ".git" || entry.Name() == ".hgo" {
+		if entry.Name() == ".git" || entry.Name() == ".hgo" || entry.Name() == ".goxide-migration" {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
@@ -234,7 +249,10 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		sourceOutputs[path] = rel
 		target := filepath.Join(destination, rel)
 		if entry.IsDir() {
-			if entry.Name() == ".git" || entry.Name() == ".hgo" {
+			if entry.Name() == ".git" || entry.Name() == ".hgo" || entry.Name() == ".goxide-migration" {
+				return filepath.SkipDir
+			}
+			if _, e := os.Stat(filepath.Join(path, "goxide.toml")); e == nil {
 				return filepath.SkipDir
 			}
 			if _, e := os.Stat(filepath.Join(path, "go.mod")); e == nil {
@@ -242,12 +260,15 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			}
 			return os.MkdirAll(target, 0755)
 		}
-		if options.Features != nil && (entry.Name() == "goxide.toml" || entry.Name() == "hgo.json" || entry.Name() == "hgo.lock") {
+		if options.Features != nil && (entry.Name() == "goxide.toml" || entry.Name() == "hgo.json" || entry.Name() == "hgo.lock" || entry.Name() == "goxide.lock") {
 			return nil
 		}
 		data, e := os.ReadFile(path)
 		if e != nil {
 			return e
+		}
+		if options.SourceModuleRoot != "" && (rel == "go.mod" || rel == "go.sum") {
+			return nil
 		}
 		if rel == "go.mod" {
 			data = []byte(strings.Join(lines, "\n"))
@@ -345,7 +366,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			return ModuleResult{}, fmt.Errorf("invalid generated input path %q", name)
 		}
 		for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
-			if strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") || part == "vendor" || part == "testdata" || part == "hgo_targets" || part == "hgo_project_config.go" || part == "go.mod" || part == "go.sum" || part == "goxide.toml" || part == "hgo.json" || part == "hgo.lock" {
+			if strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") || part == "vendor" || part == "testdata" || part == "hgo_targets" || part == "hgo_project_config.go" || part == "go.mod" || part == "go.sum" || part == "goxide.toml" || part == "hgo.json" || part == "hgo.lock" || part == "goxide.lock" {
 				return ModuleResult{}, fmt.Errorf("reserved generated input path %q", name)
 			}
 		}

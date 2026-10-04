@@ -98,7 +98,7 @@ format = 1
 `, "unknown required feature"},
 	} {
 		root := t.TempDir()
-		if e := os.WriteFile(filepath.Join(root, ManifestName), []byte(tc.src), 0644); e != nil {
+		if e := os.WriteFile(filepath.Join(root, ManifestName), []byte(strings.ReplaceAll(tc.src, "[package]\nformat = 1", "[package]\nformat = 2\nmodule = 'example.org/fixture'\ngo = '1.27'")), 0644); e != nil {
 			t.Fatal(e)
 		}
 		_, e := Read(root)
@@ -134,7 +134,9 @@ func TestGitURLAndLockBoundaries(t *testing.T) {
 func TestTOMLFormatAndDiagnostics(t *testing.T) {
 	const valid = `# human comments are not configuration
 [package]
-format = 1
+format = 2
+module = "example.org/fixture"
+go = "1.27"
 [features]
 default = [
  "fast", # trailing comments and commas
@@ -174,11 +176,11 @@ formatter = '/tools/formatter'
 	if e != nil || !enabled["fast"] || deps["some-lib"].Defaults {
 		t.Fatalf("%v %v %v", enabled, deps, e)
 	}
-	if m.Version != 1 || len(m.Bins) != 1 || len(m.Examples) != 1 || m.Lib.Path != "src/lib.hgo" || m.Build.TimeoutSeconds != 5 || m.Dependencies["some-lib"].Version != "v2.1.0" {
+	if m.Version != 2 || len(m.Bins) != 1 || len(m.Examples) != 1 || m.Lib.Path != "src/lib.hgo" || m.Build.TimeoutSeconds != 5 || m.Dependencies["some-lib"].Version != "v2.1.0" {
 		t.Fatal(m)
 	}
 	doc := manifestDocument{Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
-	doc.Package.Format = m.Version
+	doc.Package = PackageConfig{m.Version, m.Module, m.GoVersion, m.Toolchain}
 	b, e := toml.Marshal(doc)
 	if e != nil {
 		t.Fatal(e)
@@ -188,7 +190,7 @@ formatter = '/tools/formatter'
 		t.Fatalf("roundtrip %s %v", b, e)
 	}
 	var old Manifest
-	if e = json.Unmarshal([]byte(`{"version":1,"features":{"default":["fast"],"fast":[]},"dependencies":{"some-lib":{"module":"example.org/lib/v2","version":"v2.1.0","default_features":false,"features":[]}},"lib":{"name":"lib","path":"src/lib.hgo"},"bins":[{"name":"cli","path":"cmd/cli","required_features":["fast"]}],"examples":[{"name":"demo","path":"examples/demo"}],"build":{"entry":"tools/build.go","inputs":["schema.txt"],"outputs":["gen/a.go"],"env":[],"timeout_seconds":5,"dependencies":{"example.org/helper":"../helper"},"tools":{"formatter":"/tools/formatter"}}}`), &old); e != nil {
+	if e = json.Unmarshal([]byte(`{"version":2,"module":"example.org/fixture","go":"1.27","features":{"default":["fast"],"fast":[]},"dependencies":{"some-lib":{"module":"example.org/lib/v2","version":"v2.1.0","default_features":false,"features":[]}},"lib":{"name":"lib","path":"src/lib.hgo"},"bins":[{"name":"cli","path":"cmd/cli","required_features":["fast"]}],"examples":[{"name":"demo","path":"examples/demo"}],"build":{"entry":"tools/build.go","inputs":["schema.txt"],"outputs":["gen/a.go"],"env":[],"timeout_seconds":5,"dependencies":{"example.org/helper":"../helper"},"tools":{"formatter":"/tools/formatter"}}}`), &old); e != nil {
 		t.Fatal(e)
 	}
 	if !reflect.DeepEqual(old, m) {

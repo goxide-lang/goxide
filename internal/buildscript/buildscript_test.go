@@ -408,7 +408,8 @@ func TestTOMLManifestReservedAndHelperBootstrap(t *testing.T) {
 	o := fixture(t)
 	helper := t.TempDir()
 	put(t, helper, "go.mod", "module example.test/helper\n\ngo 1.27\n")
-	put(t, helper, "goxide.toml", "[package]\nformat=1\n[build]\nentry='tools/build.go'\n")
+	os.Remove(filepath.Join(helper, "go.mod"))
+	put(t, helper, "goxide.toml", "[package]\nformat=2\nmodule='example.test/helper'\ngo='1.27'\n[build]\nentry='tools/build.go'\n")
 	o.Config.Dependencies = map[string]string{"example.test/helper": helper}
 	if _, e := Prepare(o); e == nil || !strings.Contains(e.Error(), "bootstrap scripts unsupported") {
 		t.Fatal(e)

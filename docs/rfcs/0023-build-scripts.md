@@ -14,7 +14,9 @@
 
 ```toml
 [package]
-format = 1
+format = 2
+module = "example.org/app"
+go = "1.27"
 
 [[bin]]
 name = 'app'

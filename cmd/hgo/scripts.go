@@ -306,7 +306,7 @@ func runScripts(args []string, out, stderr io.Writer) error {
 		}
 		return e
 	}
-	g, e := project.Load(root, *tool, strings.FieldsFunc(*features, func(r rune) bool { return r == ',' || r == ' ' }), !*defaults, *offline, *locked)
+	g, e := project.LoadWithTarget(root, *tool, strings.FieldsFunc(*features, func(r rune) bool { return r == ',' || r == ' ' }), !*defaults, *offline, *locked, *targetDir)
 	if e != nil {
 		return e
 	}

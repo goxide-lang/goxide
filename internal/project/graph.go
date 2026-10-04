@@ -13,12 +13,16 @@ import (
 )
 
 type Lock struct {
-	Version int                             `json:"version"`
-	Git     map[string]string               `json:"git"`
-	Sums    map[string]string               `json:"sums"`
-	Plans   map[string]map[string]Selection `json:"plans,omitempty"`
+	PlanningSums string                          `json:"planning_sums,omitempty"`
+	Provenance   string                          `json:"provenance,omitempty"`
+	Version      int                             `json:"version"`
+	Git          map[string]string               `json:"git"`
+	Sums         map[string]string               `json:"sums"`
+	Plans        map[string]map[string]Selection `json:"plans,omitempty"`
 }
 type Node struct {
+	Mod             ModFile
+	ModBytes        []byte
 	Root, Module    string
 	HasManifest     bool
 	CheckoutRoot    string
@@ -31,16 +35,19 @@ type Node struct {
 	Sources         map[string]Dependency
 }
 type Graph struct {
-	Root            *Node
-	Nodes           []*Node
-	Lock            Lock
-	LockPath, Cache string
-	Offline, Locked bool
-	original        []byte
-	Tool            string
-	Plan            map[string]Selection
-	PlanID          string
-	RootMod         ModFile
+	planningSeed     string
+	planningVerified map[string]bool
+	WorkRoot         string
+	Root             *Node
+	Nodes            []*Node
+	Lock             Lock
+	LockPath, Cache  string
+	Offline, Locked  bool
+	original         []byte
+	Tool             string
+	Plan             map[string]Selection
+	PlanID           string
+	RootMod          ModFile
 }
 
 func Digest(v any) string {
@@ -49,6 +56,9 @@ func Digest(v any) string {
 	return hex.EncodeToString(h[:])
 }
 func Load(root, tool string, requested []string, defaults, offline, locked bool) (*Graph, error) {
+	return LoadWithTarget(root, tool, requested, defaults, offline, locked, "")
+}
+func LoadWithTarget(root, tool string, requested []string, defaults, offline, locked bool, targetDir string) (*Graph, error) {
 	root, e := filepath.Abs(root)
 	if e != nil {
 		return nil, e
@@ -57,20 +67,38 @@ func Load(root, tool string, requested []string, defaults, offline, locked bool)
 	if e != nil {
 		return nil, e
 	}
-	g := &Graph{Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(root, ".hgo", "git"), LockPath: filepath.Join(root, "hgo.lock"), Lock: Lock{Version: 1, Git: map[string]string{}, Sums: map[string]string{}}}
+	if e = CheckAuthoring(root); e != nil {
+		return nil, e
+	}
+	m, e := Read(root)
+	if e != nil {
+		return nil, e
+	}
+	layout, e := OpenLayout(root, m.Module, targetDir)
+	if e != nil {
+		return nil, e
+	}
+	work, e := os.MkdirTemp(layout.Root, ".plan-")
+	if e != nil {
+		layout.Close()
+		return nil, e
+	}
+	defer os.RemoveAll(work)
+	defer layout.Close()
+	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(root, ".hgo", "git"), LockPath: filepath.Join(root, "goxide.lock"), Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}}}
 	b, e := os.ReadFile(g.LockPath)
 	if e == nil {
 		if e = json.Unmarshal(b, &g.Lock); e != nil {
 			return nil, e
 		}
-		if g.Lock.Version != 1 {
-			return nil, fmt.Errorf("unsupported hgo.lock version")
+		if g.Lock.Version != 2 {
+			return nil, fmt.Errorf("unsupported goxide.lock version")
 		}
 		g.original = b
 	} else if !os.IsNotExist(e) {
 		return nil, e
 	} else if locked {
-		return nil, fmt.Errorf("--locked requires hgo.lock")
+		return nil, fmt.Errorf("--locked requires goxide.lock")
 	}
 	if g.Lock.Git == nil {
 		g.Lock.Git = map[string]string{}
@@ -82,25 +110,14 @@ func Load(root, tool string, requested []string, defaults, offline, locked bool)
 }
 
 func ModulePath(tool, root string) (string, error) {
-	info, err := os.Lstat(filepath.Join(root, "go.mod"))
-	if err != nil || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("module directory must contain its own regular go.mod: %s", root)
-	}
-	cmd := exec.Command(tool, "mod", "edit", "-json")
-	cmd.Dir = root
-	cmd.Env = GoEnv(true)
-	b, e := cmd.Output()
-	if e != nil {
-		return "", fmt.Errorf("read go.mod in %s: %w", root, e)
-	}
-	var v struct{ Module struct{ Path string } }
-	if e = json.Unmarshal(b, &v); e != nil {
+	if yes, e := Detect(root); e != nil {
 		return "", e
+	} else if yes {
+		m, e := Read(root)
+		return m.Module, e
 	}
-	if v.Module.Path == "" {
-		return "", fmt.Errorf("go.mod has no module directive")
-	}
-	return v.Module.Path, nil
+	m, e := ReadMod(tool, root)
+	return m.Module.Path, e
 }
 func GoEnv(offline bool) []string {
 	env := []string{}

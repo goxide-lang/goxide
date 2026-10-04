@@ -120,7 +120,7 @@ func TestBuildScriptManagedLayoutRetainsBundle(t *testing.T) {
 	if _, e := os.Stat(filepath.Join(root, "gen")); !os.IsNotExist(e) {
 		t.Fatal("generator outputs leaked into source root", e)
 	}
-	if _, e := os.Stat(filepath.Join(root, "hgo.lock")); e != nil {
+	if _, e := os.Stat(filepath.Join(root, "goxide.lock")); e != nil {
 		t.Fatal("lock must remain in source root", e)
 	}
 }

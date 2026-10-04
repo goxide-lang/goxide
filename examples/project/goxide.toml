@@ -1,5 +1,7 @@
 [package]
-format = 1
+format = 2
+module = "example.org/hgo-project"
+go = "1.27"
 
 [[bin]]
 name = 'hello'
@@ -21,3 +23,11 @@ pretty = []
 name = 'greeting'
 path = 'src/lib.hgo'
 
+
+[[go.require]]
+module = "github.com/goxide-lang/serde"
+version = "v0.0.0-20261004120911-a1b791e96d66"
+
+[[go.require]]
+module = "github.com/goxide-lang/std"
+version = "v0.0.0-20261004120854-3f2204770fd3"

@@ -17,9 +17,13 @@ import (
 
 const ManifestName = "goxide.toml"
 const LegacyManifestName = "hgo.json"
-const ManifestProtocol = "goxide-toml-v1"
+const ManifestProtocol = "goxide-unified-v2"
 
 type Manifest struct {
+	Module       string                `json:"module"`
+	GoVersion    string                `json:"go"`
+	Toolchain    string                `json:"toolchain,omitempty"`
+	Native       GoConfig              `json:"native,omitempty"`
 	Version      int                   `json:"version" toml:"-"`
 	Build        *buildconfig.Config   `json:"build,omitempty" toml:"build,omitempty"`
 	Features     map[string][]string   `json:"features,omitempty" toml:"features,omitempty"`
@@ -74,9 +78,8 @@ func Detect(root string) (bool, error) {
 
 // manifestDocument deliberately separates the human format from internal identities.
 type manifestDocument struct {
-	Package struct {
-		Format int `toml:"format"`
-	} `toml:"package"`
+	Package      PackageConfig         `toml:"package"`
+	Native       GoConfig              `toml:"go,omitempty"`
 	Build        *buildconfig.Config   `toml:"build,omitempty"`
 	Features     map[string][]string   `toml:"features,omitempty"`
 	Dependencies map[string]Dependency `toml:"dependencies,omitempty"`
@@ -102,7 +105,7 @@ func Parse(filename string, b []byte) (Manifest, error) {
 	if err := toml.NewDecoder(bytes.NewReader(b)).DisallowUnknownFields().Decode(&d); err != nil {
 		return Manifest{}, manifestDecodeError(filename, err)
 	}
-	m := Manifest{Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
+	m := Manifest{Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validateNames(filename, b); err != nil {
 		return m, err
 	}
@@ -113,8 +116,11 @@ func Parse(filename string, b []byte) (Manifest, error) {
 }
 
 func validate(m Manifest) error {
-	if m.Version != 1 {
-		return fmt.Errorf("unsupported goxide.toml package.format %d", m.Version)
+	if m.Version != 2 {
+		return fmt.Errorf("unsupported goxide.toml package.format %d; migrate to format 2 with explicit package.module/go", m.Version)
+	}
+	if _, err := ModuleText(m); err != nil {
+		return err
 	}
 	for k, d := range m.Dependencies {
 		if !ident.MatchString(k) || d.Module == "" {
@@ -292,4 +298,10 @@ func Select(m Manifest, bin, example string, features map[string]bool) (Target, 
 		}
 	}
 	return Target{}, fmt.Errorf("unknown target %q", name)
+}
+
+// Marshal emits the authoring schema, not the internal JSON identity representation.
+func Marshal(m Manifest) ([]byte, error) {
+	d := manifestDocument{Package: PackageConfig{m.Version, m.Module, m.GoVersion, m.Toolchain}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	return toml.Marshal(d)
 }

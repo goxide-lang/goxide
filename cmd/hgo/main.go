@@ -31,6 +31,9 @@ func run(args []string, out, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("usage: hgo <transpile|expand|run|build|test|scripts> [flags] file.hgo-or-directory")
 	}
+	if args[0] == "import-go" {
+		return runImportGo(args[1:], out, stderr)
+	}
 	if args[0] == "scripts" {
 		return runScripts(args[1:], out, stderr)
 	}
@@ -53,7 +56,7 @@ func run(args []string, out, stderr io.Writer) error {
 	lib := f.Bool("lib", false, "select the optional project library")
 	targetDir := f.String("target-dir", "", "managed project artifacts (relative to project root; default target or HGO_TARGET_DIR)")
 	offline := f.Bool("offline", false, "use only cached dependencies")
-	locked := f.Bool("locked", false, "require unchanged hgo.lock")
+	locked := f.Bool("locked", false, "require unchanged goxide.lock")
 	if err := f.Parse(args[1:]); err != nil {
 		return err
 	}

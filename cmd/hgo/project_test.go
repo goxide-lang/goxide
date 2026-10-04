@@ -13,6 +13,7 @@ import (
 
 func projectWrite(t *testing.T, root string, files map[string]string) {
 	t.Helper()
+	fixtureAuthoring(t, root, files)
 	for name, s := range files {
 		p := filepath.Join(root, name)
 		if e := os.MkdirAll(filepath.Dir(p), 0755); e != nil {
@@ -234,7 +235,7 @@ func TestProjectGitRevisionLock(t *testing.T) {
 	if b, e := projectRun(t, root, "run"); e != nil || strings.TrimSpace(b) != "1" {
 		t.Fatalf("%s %v", b, e)
 	}
-	lock, e := os.ReadFile(filepath.Join(root, "hgo.lock"))
+	lock, e := os.ReadFile(filepath.Join(root, "goxide.lock"))
 	if e != nil || !bytes.Contains(lock, []byte(first)) {
 		t.Fatalf("commit not locked: %s %v", lock, e)
 	}
@@ -324,7 +325,7 @@ format = 1
 	if b, e := projectRun(t, root, "run", "--offline", "--locked"); e != nil || strings.TrimSpace(b) != "17" {
 		t.Fatalf("offline cached native: %s %v", b, e)
 	}
-	sourceMod, e := os.ReadFile(filepath.Join(root, "go.mod"))
+	sourceMod, e := os.ReadFile(filepath.Join(root, "goxide.toml"))
 	if e != nil || bytes.Contains(sourceMod, []byte("require")) {
 		t.Fatalf("source go.mod modified: %s %v", sourceMod, e)
 	}

@@ -53,7 +53,7 @@ host/target 为 GOOS-GOARCH；kind 为 lib/bin/example。config 包含整个已�
 
 ## 与依赖、Go 缓存及脚本的界面
 
-`hgo.lock` 仍在源码根；Git checkout 仍在 `.hgo/git`；Go module/build cache 仍由 Go 的 GOMODCACHE/GOCACHE 管理。target-dir 不迁移或删除这些缓存。最终 Go 命令的 GOTMPDIR 指向当次 intermediate；Go 自行管理其短期文件。离线/锁定策略沿用 RFC 0022。
+`goxide.lock` 仍在源码根；Git checkout 仍在 `.hgo/git`；Go module/build cache 仍由 Go 的 GOMODCACHE/GOCACHE 管理。target-dir 不迁移或删除这些缓存。最终 Go 命令的 GOTMPDIR 指向当次 intermediate；Go 自行管理其短期文件。离线/锁定策略沿用 RFC 0022。
 
 runner 使用 `project.OpenLayout(root, module, targetDir)` 持有 lease，再调用 `Layout.Begin(UnitSpec)`。返回 `Unit` 的 Directory、Run、Bundle、Intermediate、ScriptOut、ScriptCache、BinaryDirectory。Close 只释放 lease，不清理产物。runner 必须自行定义脚本输出所有权与完整缓存键；不能仅凭 config 认定脚本结果新鲜。脚本信任授权必须存放于产物根之外，不得放在可清理、可版本控制的 target 或所有权标记中。布局模块本身不执行脚本、不提供信任决定、不触发安装脚本。联合runner见 [RFC 0023](../rfcs/0023-build-scripts.md)。
 

@@ -11,15 +11,15 @@ func TestReadonlyExposedReplacementModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
-		packagesWrite(t, dir, "model/model.hgo", `package model
+		packagesWrite(t, dir, "model/model.gox", `package model
 func View(r &[]int)&[]int{return r}
 `)
-		packagesWrite(t, dir, "app.hgo", "package app\nimport m \"packages.example/app/model\"\n"+body+"\nfunc Imported(v []int)int{return Capture(m.View(&v))}\n")
+		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\n"+body+"\nfunc Imported(v []int)int{return Capture(m.View(&v))}\n")
 		return dir
 	}
 	const capture = `func Capture(r &[]int)int{x:=*r;f:=func()int{return x[0]};x=[]int{1};x[0]=2;return f()}`

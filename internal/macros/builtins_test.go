@@ -38,7 +38,7 @@ func TestBuiltinDefinitionShadows(t *testing.T) {
 		`const len=3`,
 		`import len "strings"`,
 	} {
-		_, err := Expand("shadow.hgo", []byte("package p\n"+declaration+"\nmacro_rules! size {($x:expr)=>{len($x)};}\nfunc f(){_=size!(\"x\")}\n"))
+		_, err := Expand("shadow.gox", []byte("package p\n"+declaration+"\nmacro_rules! size {($x:expr)=>{len($x)};}\nfunc f(){_=size!(\"x\")}\n"))
 		if err == nil || !strings.Contains(err.Error(), "definition-site") {
 			t.Fatalf("%s: %v", declaration, err)
 		}
@@ -51,14 +51,14 @@ func main(){len:=func(string)int{return 99};fmt.Println(size!("abc"),len("abc"))
 `, "12 99\n")
 }
 func TestBuiltinNotFirstClass(t *testing.T) {
-	_, err := Expand("value.hgo", []byte("package p\nmacro_rules! value {()=>{len};}\nvar x=value!()"))
+	_, err := Expand("value.gox", []byte("package p\nmacro_rules! value {()=>{len};}\nvar x=value!()"))
 	if err == nil || !strings.Contains(err.Error(), "direct call") {
 		t.Fatal(err)
 	}
 }
 
 func TestBuiltinLocalTypeBoundary(t *testing.T) {
-	_, err := Expand("type.hgo", []byte(`package p
+	_, err := Expand("type.gox", []byte(`package p
 macro_rules! size {($x:expr)=>{len($x)};}
 func f(){type len int;var v len;_=v;_=size!("abc")}
 `))

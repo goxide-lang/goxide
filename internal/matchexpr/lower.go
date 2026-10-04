@@ -89,7 +89,7 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 				pairs[j] = i
 			}
 		}
-		if t.k == token.IDENT && strings.HasPrefix(t.s, "__hgo_match_expr_") {
+		if t.k == token.IDENT && strings.HasPrefix(t.s, "__goxide_match_expr_") {
 			return nil, fail(i, "reserved generated identifier")
 		}
 	}
@@ -259,13 +259,13 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 				}
 			}
 			if mode == "assign" {
-				fmt.Fprintf(&b, "var %s = __hgo_match_expr_context(%s,%s);\n", tmp, copySource(ts[start].a, ts[start].b), strconv.Quote(origin))
+				fmt.Fprintf(&b, "var %s = __goxide_match_expr_context(%s,%s);\n", tmp, copySource(ts[start].a, ts[start].b), strconv.Quote(origin))
 			} else {
-				fmt.Fprintf(&b, "var %s = __hgo_match_expr_infer(%s);\n", tmp, strconv.Quote(origin))
+				fmt.Fprintf(&b, "var %s = __goxide_match_expr_infer(%s);\n", tmp, strconv.Quote(origin))
 			}
 		} else {
 			if mode == "return" {
-				fmt.Fprintf(&b, "var %s = __hgo_match_expr_operand_context(__hgo_match_expr_return(),%q,%q);\n", tmp, "direct", c.origin(i))
+				fmt.Fprintf(&b, "var %s = __goxide_match_expr_operand_context(__goxide_match_expr_return(),%q,%q);\n", tmp, "direct", c.origin(i))
 			} else {
 				fmt.Fprintf(&b, "var %s %s;\n", tmp, typ)
 			}

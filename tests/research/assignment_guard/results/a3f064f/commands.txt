@@ -3,8 +3,8 @@ No repository edits, commits, pushes or implementation changes in this audit.
 Go: /workspace/goxide-environment/go/bin/go, go1.27.1 linux/amd64.
 CPU reported by VM: AMD EPYC 9V74. GOMAXPROCS=1 for benchmarks.
 Environment: GOCACHE=/tmp/goxide-cache GOTOOLCHAIN=local GOWORK=off GOPROXY=off.
-Source artifacts: source/benchmark.hgo, source/model/model.go, source/index_probe.hgo.
-Actual hgo output and benchmark driver: measured/benchmark.go, measured/guard_bench_test.go.
+Source artifacts: source/benchmark.gox, source/model/model.go, source/index_probe.gox.
+Actual goxide output and benchmark driver: measured/benchmark.go, measured/guard_bench_test.go.
 Additional same-assignment and interop tests: extra/benchmark.go, extra/extra_test.go.
 Reproduce main measurement from measured/:
   GOMAXPROCS=1 go test -run '^$' -bench . -benchmem -benchtime=200ms -count=5

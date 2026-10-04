@@ -28,15 +28,15 @@ func TestGeneratedRace(t *testing.T) {
  fmt.Print(f())
  }
  `
-	out, e := Lower("sample.hgo", []byte(s))
+	out, e := Lower("sample.gox", []byte(s))
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := enums.Lower("sample.hgo", out)
+	r, e := enums.Lower("sample.gox", out)
 	if e != nil {
 		t.Fatal(e)
 	}
-	r.Source, e = propagate.Lower("sample.hgo", r.Source, propagate.Config{Families: r.Enums})
+	r.Source, e = propagate.Lower("sample.gox", r.Source, propagate.Config{Families: r.Enums})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -65,27 +65,27 @@ func TestReject(t *testing.T) {
 		`consume(-match e { E::Idle => 1 })`,
 	} {
 		t.Run(body, func(t *testing.T) {
-			if _, e := Lower("bad.hgo", []byte("package p\nfunc f(){"+body+"}")); e == nil {
+			if _, e := Lower("bad.gox", []byte("package p\nfunc f(){"+body+"}")); e == nil {
 				t.Fatal("accepted")
 			}
 		})
 	}
-	if _, e := Lower("bad.hgo", []byte("package p\nfunc f()(x,y int){return match e { E::Idle => 1 }}")); e == nil {
+	if _, e := Lower("bad.gox", []byte("package p\nfunc f()(x,y int){return match e { E::Idle => 1 }}")); e == nil {
 		t.Fatal("multiple results accepted")
 	}
 }
 func TestCoverageDelegated(t *testing.T) {
-	out, e := Lower("bad.hgo", []byte("package p\nenum E {Idle, Item(int)}\nfunc f(e E) int {return match e { E::Idle => 1 }}"))
+	out, e := Lower("bad.gox", []byte("package p\nenum E {Idle, Item(int)}\nfunc f(e E) int {return match e { E::Idle => 1 }}"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = enums.Lower("bad.hgo", out); e == nil || !strings.Contains(e.Error(), "non-exhaustive") {
+	if _, e = enums.Lower("bad.gox", out); e == nil || !strings.Contains(e.Error(), "non-exhaustive") {
 		t.Fatal(e)
 	}
 }
 func TestPreserveRawCRLF(t *testing.T) {
 	src := []byte("package p\r\nvar text = `a\r\nb`\r\n// match nope\r\n")
-	out, e := Lower("raw.hgo", src)
+	out, e := Lower("raw.gox", src)
 	if e != nil || string(out) != string(src) {
 		t.Fatalf("%q %v", out, e)
 	}

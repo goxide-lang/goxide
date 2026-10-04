@@ -2,12 +2,12 @@
   "go": "/workspace/goxide-environment/go/bin/go",
   "python": "3.12.14",
   "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
-  "work": "/tmp/hgo-trait-paths-obwvqm0e",
+  "work": "/tmp/goxide-trait-paths-obwvqm0e",
   "gomaxprocs": 1,
   "commands": [
     {
       "label": "plain",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/probe",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/probe",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "test",
@@ -19,7 +19,7 @@
     },
     {
       "label": "enhanced",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/probe",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/probe",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "test",
@@ -32,7 +32,7 @@
     },
     {
       "label": "bench",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/probe",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/probe",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "test",
@@ -46,7 +46,7 @@
     },
     {
       "label": "compiler",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/probe",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/probe",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "test",
@@ -58,32 +58,32 @@
     },
     {
       "label": "build",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/probe",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/probe",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "test",
         "-c",
         "-o",
-        "/tmp/hgo-trait-paths-obwvqm0e/probe.test"
+        "/tmp/goxide-trait-paths-obwvqm0e/probe.test"
       ],
       "returncode": 0
     },
     {
       "label": "dispatch",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/probe",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/probe",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "tool",
         "objdump",
         "-s",
         "example.org/traitpaths.BenchmarkPolymorphic",
-        "/tmp/hgo-trait-paths-obwvqm0e/probe.test"
+        "/tmp/goxide-trait-paths-obwvqm0e/probe.test"
       ],
       "returncode": 0
     },
     {
       "label": "publish-marker-original",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/consumer",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/consumer",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "run",
@@ -94,7 +94,7 @@
     },
     {
       "label": "publish-marker-enhanced",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/consumer",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/consumer",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "run",
@@ -104,7 +104,7 @@
     },
     {
       "label": "publish-wrapper-original",
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/consumer",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/consumer",
       "command": [
         "/workspace/goxide-environment/go/bin/go",
         "run",
@@ -120,9 +120,9 @@
         "objdump",
         "-s",
         "example.org/traitpaths.BenchmarkLocal.func[678]",
-        "/tmp/hgo-trait-paths-obwvqm0e/probe.test"
+        "/tmp/goxide-trait-paths-obwvqm0e/probe.test"
       ],
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/probe",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/probe",
       "returncode": 1
     },
     {
@@ -133,9 +133,9 @@
         "objdump",
         "-s",
         "example.org/traitpaths.BenchmarkLocal.func[678]",
-        "/tmp/hgo-trait-paths-obwvqm0e/probe.test"
+        "/tmp/goxide-trait-paths-obwvqm0e/probe.test"
       ],
-      "cwd": "/tmp/hgo-trait-paths-obwvqm0e/probe",
+      "cwd": "/tmp/goxide-trait-paths-obwvqm0e/probe",
       "returncode": 0,
       "GOCACHE": "/workspace/goxide-environment/cache"
     }

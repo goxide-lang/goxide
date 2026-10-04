@@ -8,12 +8,12 @@ shared = { workspace = true, features = ["json"] }
 
 [[bin]]
 name = "web"
-path = "web.hgo"
+path = "web.gox"
 
 [[bin]]
 name = "admin"
-path = "admin.hgo"
+path = "admin.gox"
 
 [[example]]
 name = "hello"
-path = "hello.hgo"
+path = "hello.gox"

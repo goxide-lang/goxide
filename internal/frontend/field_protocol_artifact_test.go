@@ -73,7 +73,7 @@ func TestFieldProtocolMetadataValidation(t *testing.T) {
 	if err != nil || m.present() {
 		t.Fatal("helper spelling inferred registration", m, err)
 	}
-	result := PackageResult{Files: map[string]Result{"a.hgo": {fieldProtocols: map[string][]string{"Value": {"Clone", "Debug"}}}}}
+	result := PackageResult{Files: map[string]Result{"a.gox": {fieldProtocols: map[string][]string{"Value": {"Clone", "Debug"}}}}}
 	m, err = collectEnumExports(p.Path(), result, p)
 	if err != nil || len(m.FieldProtocols) != 2 {
 		t.Fatal(m, err)

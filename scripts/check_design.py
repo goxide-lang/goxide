@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check design Markdown and existing Go lowering examples, not an hgo compiler."""
+"""Check design Markdown and existing Go lowering examples, not an goxide compiler."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def check_docs() -> dict[Path, tuple[str, list[tuple[str, str]], set[str]]]:
         raise CheckFailure("\n".join(problems))
     rfc_count = check_rfc_contracts(documents)
     print(f"PASS Markdown: {len(files)} files, {links} local links/anchors, balanced fences", flush=True)
-    print(f"PASS RFC structure: {rfc_count} documents with required sections and hgo/Go example blocks", flush=True)
+    print(f"PASS RFC structure: {rfc_count} documents with required sections and goxide/Go example blocks", flush=True)
     print("Scope: inline local Markdown links and ATX headings; external URLs are not fetched.", flush=True)
     print("RFC structure checks do not compile examples or prove source/Go semantic equivalence.", flush=True)
     return documents
@@ -114,8 +114,8 @@ def check_rfc_contracts(documents) -> int:
         if missing:
             raise CheckFailure(f"{path.relative_to(ROOT)}: missing RFC sections: {', '.join(sorted(missing))}")
         languages = {language for language, code in blocks if code.strip()}
-        if not {"hgo", "go"} <= languages:
-            raise CheckFailure(f"{path.relative_to(ROOT)}: requires hgo and Go example blocks")
+        if not {"goxide", "go"} <= languages:
+            raise CheckFailure(f"{path.relative_to(ROOT)}: requires goxide and Go example blocks")
     return len(identifiers)
 
 
@@ -162,8 +162,8 @@ def check_go(documents) -> None:
         raise CheckFailure(f"Need local Go >= 1.27; found {environment['GOVERSION']} (no toolchain auto-download).")
     print("Environment: " + json.dumps({"python": sys.version.split()[0], "go": go, **environment}, ensure_ascii=False), flush=True)
     print("Overrides: GOTOOLCHAIN=local GOWORK=off GOFLAGS= (isolated temporary modules).", flush=True)
-    print("Scope: existing Go lowering/support mechanisms only; no hgo frontend or GOROOT overlay checks.", flush=True)
-    workspace = Path(tempfile.mkdtemp(prefix="hgo-design-check-"))
+    print("Scope: existing Go lowering/support mechanisms only; no goxide frontend or GOROOT overlay checks.", flush=True)
+    workspace = Path(tempfile.mkdtemp(prefix="goxide-design-check-"))
     logs = workspace / "logs"
     logs.mkdir()
     print(f"Artifacts retained: {workspace}", flush=True)
@@ -194,9 +194,9 @@ def check_go(documents) -> None:
         passed.append(label)
 
     for fixture, doc, package, module, race in [
-        ("lock", "synchronization.md", "hgosync", "example.org/hgosync-probe", True),
-        ("std", "standard-library.md", "stdsupport", "example.org/hgo-stdlib-design", False),
-        ("views", "traits.md", "views", "example.org/hgo-views-check", False),
+        ("lock", "synchronization.md", "goxidesync", "example.org/goxidesync-probe", True),
+        ("std", "standard-library.md", "stdsupport", "example.org/goxide-stdlib-design", False),
+        ("views", "traits.md", "views", "example.org/goxide-views-check", False),
     ]:
         target = workspace / fixture
         copy_fixture(fixture, target)
@@ -205,22 +205,22 @@ def check_go(documents) -> None:
         run(fixture, target, ["test", *( ["-race"] if race else []), "-count=1", "-v", "./..."])
 
     enum_root = workspace / "enum"
-    write_module(enum_root, "example.org/hgodesigncheck")
+    write_module(enum_root, "example.org/goxidedesigncheck")
     copy_fixture("enum", enum_root / "enumdemo")
     (enum_root / "enumdemo" / "example.go").write_text(source_blocks(documents, "enums-and-match.md", "enumdemo")[0], encoding="utf-8")
     run("enum", enum_root, ["test", "-count=1", "-v", "./..."])
-    for variant, diagnostic in [("option", "hgoOption"), ("result", "hgoResult")]:
+    for variant, diagnostic in [("option", "goxideOption"), ("result", "goxideResult")]:
         target = enum_root / f"invalid_{variant}"
         copy_fixture(f"enum_invalid/{variant}", target)
         write_module(target, f"example.org/invalid{variant}")
         with (target / "go.mod").open("a", encoding="utf-8") as stream:
-            stream.write("\nrequire example.org/hgodesigncheck v0.0.0\nreplace example.org/hgodesigncheck => ..\n")
+            stream.write("\nrequire example.org/goxidedesigncheck v0.0.0\nreplace example.org/goxidedesigncheck => ..\n")
         run(f"enum-invalid-{variant}", target, ["test", "./..."], expected_failure=diagnostic)
 
     for index, (code, expected) in enumerate(zip(source_blocks(documents, "macros.md", "main", 2),
                                                ["85 1 41", "untitled 1 9 true 7"]), 1):
         target = workspace / f"macro{index}"
-        write_module(target, f"example.org/hgo-macro-check{index}")
+        write_module(target, f"example.org/goxide-macro-check{index}")
         (target / "main.go").write_text(code, encoding="utf-8")
         run(f"macro{index}", target, ["run", "."], expected_output=expected)
 
@@ -243,7 +243,7 @@ def check_go(documents) -> None:
         raise CheckFailure("marker: original dependency files changed")
     print("PASS marker original dependency files unchanged", flush=True)
     summary = {"environment": environment, "passed_commands": passed,
-               "scope": "Go lowering/support mechanisms only; no hgo compiler, linter, macros, or LSP tested.",
+               "scope": "Go lowering/support mechanisms only; no goxide compiler, linter, macros, or LSP tested.",
                "excluded": "Historical GOROOT overlay probe is not part of this portable suite."}
     (workspace / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(f"\nPASS {len(passed)} Go commands (including expected failures); artifacts: {workspace}", flush=True)

@@ -83,7 +83,7 @@ type edit struct {
 func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 	active := false
 	for _, s := range files {
-		active = active || bytes.Contains(s, []byte("__hgo_print"))
+		active = active || bytes.Contains(s, []byte("__goxide_print"))
 	}
 	if !active {
 		return files, nil
@@ -118,7 +118,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 					continue
 				}
 				id, ok := call.Fun.(*ast.Ident)
-				if !ok || (id.Name != "__hgo_print" && id.Name != "__hgo_println") {
+				if !ok || (id.Name != "__goxide_print" && id.Name != "__goxide_println") {
 					continue
 				}
 				typedCalls[n] = append(typedCalls[n], call)
@@ -145,7 +145,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 	info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}}
 	path := cfg.PackagePath
 	if path == "" {
-		path = "hgo/generated"
+		path = "goxide/generated"
 	}
 	conf := types.Config{Importer: cfg.Importer, Error: func(error) {}}
 	_, _ = conf.Check(path, fs, all, info)
@@ -205,7 +205,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 		var edits []edit
 		var failure error
 		next := 0
-		generated := "__hgo_print_generated"
+		generated := "__goxide_print_generated"
 		for bytes.Contains(source, []byte(generated)) {
 			generated += "X"
 		}
@@ -217,7 +217,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 				return true
 			}
 			id, ok := call.Fun.(*ast.Ident)
-			if !ok || (id.Name != "__hgo_print" && id.Name != "__hgo_println") {
+			if !ok || (id.Name != "__goxide_print" && id.Name != "__goxide_println") {
 				return true
 			}
 			statement, ok := parents[call].(*ast.ExprStmt)
@@ -234,7 +234,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 			format := ""
 			args := call.Args
 			if len(args) == 0 {
-				if id.Name != "__hgo_println" {
+				if id.Name != "__goxide_println" {
 					failure = fail(call, "print! requires a format string literal")
 					return false
 				}
@@ -301,7 +301,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 				}
 				ai++
 			}
-			if id.Name == "__hgo_println" {
+			if id.Name == "__goxide_println" {
 				fmt.Fprintf(&body, "%stext += \"\\n\"\n", prefix)
 			}
 			fmt.Fprintf(&body, "%s.Write(%stext)\n}", runtimeAlias, prefix)
@@ -356,7 +356,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 	}
 	if changed {
 		for _, source := range result {
-			if bytes.Contains(source, []byte("__hgo_print(")) || bytes.Contains(source, []byte("__hgo_println(")) {
+			if bytes.Contains(source, []byte("__goxide_print(")) || bytes.Contains(source, []byte("__goxide_println(")) {
 				return Lower(result, cfg)
 			}
 		}

@@ -46,7 +46,7 @@ func main() {
  fmt.Print("ok")
 }
 `
-	r, e := Lower("demo.hgo", []byte(source))
+	r, e := Lower("demo.gox", []byte(source))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -94,14 +94,14 @@ func TestRejectedForms(t *testing.T) {
 		"wildcard unreachable": "enum E { A, };func f(e E){ match e { _ => {}, E::A => {} } }",
 		"nested":               "enum E { A(int), };func f(e E){ match e { E::A(E::A(_)) => {} } }",
 		"expression":           "enum E { A, };func f(e E){ x := match e { E::A => {} }; _=x }",
-		"reserved":             "var __hgo_enum_saved_1 int",
+		"reserved":             "var __goxide_enum_saved_1 int",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, e := Lower("bad.hgo", []byte("package p\n"+src))
+			_, e := Lower("bad.gox", []byte("package p\n"+src))
 			if e == nil {
 				t.Fatalf("accepted %s", src)
 			}
-			if !strings.Contains(e.Error(), "bad.hgo:") {
+			if !strings.Contains(e.Error(), "bad.gox:") {
 				t.Fatal(e)
 			}
 		})
@@ -109,7 +109,7 @@ func TestRejectedForms(t *testing.T) {
 }
 func TestLexicalPreservation(t *testing.T) {
 	src := "package p\r\n// enum Fake { X, }\r\nvar s = `enum Fake { X, } match x {}`\r\nenum E { A, }\r\nfunc f(e E) {\r\nmatch e { E::A => { _ = \"} => enum\" } }\r\n}\r\n"
-	r, e := Lower("lex.hgo", []byte(src))
+	r, e := Lower("lex.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -126,7 +126,7 @@ func check(e E) {
  match e { E::A if false => { effects++ }, _ => { effects++ } }
 }
 `
-	r, e := Lower("input.hgo", []byte(src))
+	r, e := Lower("input.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -137,10 +137,10 @@ func check(e E) {
 import "testing"
 type forged struct { E }
 func TestInvalid(t *testing.T) {
- inputs:=[]E{nil, (*__hgo_enum_case_1_E_A)(nil), &__hgo_enum_case_1_E_A{}, forged{}, __hgo_enum_case_1_E_B{Value:nil}}
+ inputs:=[]E{nil, (*__goxide_enum_case_1_E_A)(nil), &__goxide_enum_case_1_E_A{}, forged{}, __goxide_enum_case_1_E_B{Value:nil}}
  for _,v:=range inputs {func(){defer func(){if recover()==nil {t.Error("accepted invalid")}}();check(v)}()}
  if effects != 0 {t.Fatal("wildcard ran before validation")}
- check(__hgo_enum_case_1_E_A{});if effects!=1{t.Fatal(effects)}
+ check(__goxide_enum_case_1_E_A{});if effects!=1{t.Fatal(effects)}
 }
 `
 	testdeps.WriteFile(filepath.Join(dir, "main_test.go"), []byte(tests), 0600)
@@ -153,7 +153,7 @@ func TestInvalid(t *testing.T) {
 	}
 }
 func TestNominalTypeMismatchCompilesAsError(t *testing.T) {
-	r, e := Lower("bad.hgo", []byte("package p\nenum A { X, }\nenum B { X, }\nvar bad A = B::X\n"))
+	r, e := Lower("bad.gox", []byte("package p\nenum A { X, }\nenum B { X, }\nvar bad A = B::X\n"))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -179,7 +179,7 @@ func TestBuiltinShadowRejections(t *testing.T) {
 		"import int \"fmt\"",
 	} {
 		t.Run(decl, func(t *testing.T) {
-			_, e := Lower("shadow.hgo", []byte("package p\n"+decl+"\nenum E { A(int), }\n"))
+			_, e := Lower("shadow.gox", []byte("package p\n"+decl+"\nenum E { A(int), }\n"))
 			if e == nil || !strings.Contains(e.Error(), "shadows enum-required builtin") {
 				t.Fatalf("expected targeted diagnostic: %v", e)
 			}
@@ -188,7 +188,7 @@ func TestBuiltinShadowRejections(t *testing.T) {
 }
 
 func TestPublicEnumIsNotSilentlyLocal(t *testing.T) {
-	if _, err := Lower("public.hgo", []byte("package p\npub enum Event { Idle, }\n")); err == nil {
+	if _, err := Lower("public.gox", []byte("package p\npub enum Event { Idle, }\n")); err == nil {
 		t.Fatal("pub accepted without cross-package ABI")
 	}
 }

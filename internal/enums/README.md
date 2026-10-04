@@ -5,7 +5,7 @@
 both source spelling and a Go expression AST. This implements a finite part of
 D12/D21 and experiments with T03–T05, **not a frozen enum ABI**.
 
-```hgo
+```goxide
 enum Event { Idle, Item(int), Failed(string), }
 func handle(e Event) string {
     match e {
@@ -36,9 +36,9 @@ Checks occur at match use points. Uninitialized enum storage and calls to ordina
 functions without a match are not globally validated. This is not all public
 boundary validation, ownership analysis, or whole-object graph validation. Payload
 and nominal assignment type errors are currently rejected by generated Go's type
-checker. Generated helper/case names reserve `__hgo_enum_` and are recorded in
+checker. Generated helper/case names reserve `__goxide_enum_` and are recorded in
 metadata. Directory compilation additionally emits a finite export protocol for
-`pub enum`: public constructors, validators, and `HgoCase...` aliases to the private
+`pub enum`: public constructors, validators, and `GoxideCase...` aliases to the private
 value cases. The marker stays private and nominal; pointer and embedded cases are
 still rejected by validation. These generated names are a prototype protocol.
 
@@ -121,7 +121,7 @@ implemented struct/tuple variant protocol or source syntax.
 
 Error variants use explicit, standalone prototype attributes:
 
-```hgo
+```goxide
 #[derive(Error)]
 enum AppError {
     #[error("input failed")]
@@ -154,7 +154,7 @@ Unit enums may derive Serialize/Deserialize with `#[serde(rename="pending")]` or
 
 ## External concrete enum artifacts
 
-Directory builds now publish `.hgo.enums.json` and `HgoEnumMetadata` for public
+Directory builds now publish `.goxide.enums.json` and `GoxideEnumMetadata` for public
 concrete enums and transparent public type aliases. The frontend restores these
 before match syntax lowering, using actual imported Go types to verify enum,
 case, constructor, validator and payload identity. Private payload names are not

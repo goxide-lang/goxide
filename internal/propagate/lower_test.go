@@ -19,15 +19,15 @@ func opt() Option[int] {return Option[int]::None}
 func check() Option[string] {n:=opt()?;return Option[string]::Some(fmt.Sprint(n))}
 func main() {fmt.Print(outer(false),outer(true),check())}
 `
-	p, e := Prepare("test.hgo", []byte(src))
+	p, e := Prepare("test.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}
-	en, e := enums.Lower("test.hgo", p)
+	en, e := enums.Lower("test.gox", p)
 	if e != nil {
 		t.Fatal(e)
 	}
-	out, e := Lower("test.hgo", en.Source, Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums})
+	out, e := Lower("test.gox", en.Source, Config{Importer: typecheck.NewImporter("input.gox"), Families: en.Enums})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -70,15 +70,15 @@ func closure() Result[int,string] {f:=func() Result[int,string] {n:=load(true)?;
 func deferred() Result[int,string] {defer combine(first(),load(true)?,last());return Result[int,string]::Ok(0)}
 func main(){order(false);if trace!="FLTCD"{panic(trace)};trace="";order(true);if trace!="FLD"{panic(trace)};trace="";short();if trace!=""{panic(trace)};closure();if trace!="LO"{panic(trace)};trace="";deferred();if trace!="FL"{panic(trace)};fmt.Print("ok")}
 `
-	p, e := Prepare("flow.hgo", []byte(src))
+	p, e := Prepare("flow.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}
-	en, e := enums.Lower("flow.hgo", p)
+	en, e := enums.Lower("flow.gox", p)
 	if e != nil {
 		t.Fatal(e)
 	}
-	out, e := Lower("flow.hgo", en.Source, Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums})
+	out, e := Lower("flow.gox", en.Source, Config{Importer: typecheck.NewImporter("input.gox"), Families: en.Enums})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -104,22 +104,22 @@ func TestFromAndRejections(t *testing.T) {
  func f() Result[string,Wrapped] {n:=get()?;_ = n;return Result[string,Wrapped]::Ok("")}
  `
 	compile := func(s string, c []Conversion) ([]byte, error) {
-		p, e := Prepare("from.hgo", []byte(s))
+		p, e := Prepare("from.gox", []byte(s))
 		if e != nil {
 			return nil, e
 		}
-		en, e := enums.Lower("from.hgo", p)
+		en, e := enums.Lower("from.gox", p)
 		if e != nil {
 			return nil, e
 		}
-		return Lower("from.hgo", en.Source, Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums, From: c})
+		return Lower("from.gox", en.Source, Config{Importer: typecheck.NewImporter("input.gox"), Families: en.Enums, From: c})
 	}
 	mapping := Conversion{"error", "Wrapped", "FromWrapped"}
 	out, e := compile(base, []Conversion{mapping})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(out), "= FromWrapped") || !strings.Contains(strings.Join(strings.Fields(string(out)), ""), "(__hgo_failure.Value)") {
+	if !strings.Contains(string(out), "= FromWrapped") || !strings.Contains(strings.Join(strings.Fields(string(out)), ""), "(__goxide_failure.Value)") {
 		t.Fatal(string(out))
 	}
 	identity := strings.ReplaceAll(base, "Result[string,Wrapped]", "Result[string,error]")
@@ -151,14 +151,14 @@ func TestGoResultTypedBudget(t *testing.T) {
 	src := `package p
  type ResultSeed = Result[struct{},struct{}]
  func native()(int,error){return 1,nil}
- func call(){_=__hgo_go_result_auto(native())}
+ func call(){_=__goxide_go_result_auto(native())}
  `
-	en, err := enums.Lower("budget.hgo", []byte(src))
+	en, err := enums.Lower("budget.gox", []byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
 	used := 200000
-	_, err = Lower("budget.hgo", en.Source, Config{Importer: typecheck.NewImporter("input.hgo"), Families: en.Enums, GoResultNodes: &used})
+	_, err = Lower("budget.gox", en.Source, Config{Importer: typecheck.NewImporter("input.gox"), Families: en.Enums, GoResultNodes: &used})
 	if err == nil || !strings.Contains(err.Error(), "typed adapter generated-node budget exceeded") {
 		t.Fatalf("budget not enforced: %v", err)
 	}

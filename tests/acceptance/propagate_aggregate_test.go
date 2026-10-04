@@ -111,8 +111,8 @@ func TestPropagationAggregateRejections(t *testing.T) {
 			if strings.HasPrefix(name, "unsafe-") {
 				prefix += "import \"unsafe\"\n"
 			}
-			_, err := frontend.Compile("aggregate_bad.hgo", []byte(prefix+source))
-			if err == nil || !strings.Contains(err.Error(), "aggregate_bad.hgo") {
+			_, err := frontend.Compile("aggregate_bad.gox", []byte(prefix+source))
+			if err == nil || !strings.Contains(err.Error(), "aggregate_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
 		})
@@ -124,8 +124,8 @@ func TestPropagationAggregateInstalledBusinessRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	outside := t.TempDir()
 	source := filepath.Join(root, "examples/propagate_aggregate")
 	generated := filepath.Join(t.TempDir(), "module")

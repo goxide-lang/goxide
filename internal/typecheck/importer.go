@@ -173,7 +173,7 @@ func (i *sourceImporter) PackageFiles(path string) (string, []string, error) {
 }
 
 // PackageFingerprint pins the source closure used by permission analysis, including
-// ordinary Go packages whose named types can change without an hgo marker change.
+// ordinary Go packages whose named types can change without an goxide marker change.
 // Paths are import-relative, so moving an identical local replacement is stable.
 func (i *sourceImporter) PackageFingerprint(path string) (string, error) {
 	if path == "unsafe" {
@@ -244,7 +244,7 @@ func moduleRoot(dir string) string {
 // Check verifies complete generated Go after semantic lowering, without ignoring
 // errors used temporarily by an earlier pass for type inference.
 func Check(filename string, source []byte, imp types.Importer) error {
-	return CheckPackage("hgo/generated", map[string][]byte{filename: source}, imp)
+	return CheckPackage("goxide/generated", map[string][]byte{filename: source}, imp)
 }
 
 // CheckPackage checks independently parsed files in their real Go package.

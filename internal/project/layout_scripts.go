@@ -107,7 +107,7 @@ func (l *Layout) CleanScriptCaches(clean func(string) error) error {
 					return e
 				}
 				switch item.Name() {
-				case ".hgo-unit.json":
+				case ".goxide-unit.json":
 					if !item.Type().IsRegular() {
 						return fmt.Errorf("invalid script unit marker: %s", itemPath)
 					}

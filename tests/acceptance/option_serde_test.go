@@ -15,8 +15,8 @@ func TestOptionSerdeInstalledBusinessRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	source := filepath.Join(root, "examples/option_serde")
 	outside := t.TempDir()
 	generated := filepath.Join(t.TempDir(), "module")
@@ -39,7 +39,7 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 		"ordinary-enum-struct-option-payload":    "#[derive(Serialize,Deserialize)]\ntype Payload struct { Value Option[int] }\n#[derive(Serialize,Deserialize)]\nenum Event { Data(Payload), }",
 	} {
 		t.Run(name, func(t *testing.T) {
-			filename := filepath.Join(t.TempDir(), name+".hgo")
+			filename := filepath.Join(t.TempDir(), name+".gox")
 			_, err := frontend.Compile(filename, []byte("package rejected\n"+source+"\n"))
 			if err == nil || !strings.Contains(err.Error(), filepath.Base(filename)+":") {
 				t.Fatalf("want located rejection, got %v", err)
@@ -72,9 +72,9 @@ func TestOptionSerdeNestedContainersRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin, outside, source := t.TempDir(), t.TempDir(), t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
 	packagesWrite(t, source, "go.mod", "module nestedoption.example/app\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconv.Quote(root)+"\n")
-	packagesWrite(t, source, "nested.hgo", `package nested
+	packagesWrite(t, source, "nested.gox", `package nested
 import("github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 #[derive(Serialize,Deserialize)]
 type Request struct { List Option[[]Option[int]]; Lookup Option[map[string]Option[int]] }
@@ -91,7 +91,7 @@ func MapLength(v Option[map[string]Option[int]])int{
 }
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
-	deliveryCommand(t, outside, filepath.Join(bin, "hgo"), true, nil, "transpile", "-o", generated, source)
+	deliveryCommand(t, outside, filepath.Join(bin, "goxide"), true, nil, "transpile", "-o", generated, source)
 	packagesWrite(t, generated, "nested_test.go", optionSerdeNestedAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
 	deliveryCommand(t, generated, tool, true, nil, "vet", "./...")
@@ -105,11 +105,11 @@ func TestNestedRoundTrip(t *testing.T){
  }
  for _,input:=range []string{"{\"List\":[],\"Lookup\":{}}","{\"List\":[null,7],\"Lookup\":{\"none\":null,\"some\":8}}"}{
   v,e:=Decode([]byte(input));if e!=nil{t.Fatal(e)}
-  rows,ok:=v.List.(__hgo_enum_case_Option_Some[[]Option[int]])
-  lookup,ok2:=v.Lookup.(__hgo_enum_case_Option_Some[map[string]Option[int]])
+  rows,ok:=v.List.(__goxide_enum_case_Option_Some[[]Option[int]])
+  lookup,ok2:=v.Lookup.(__goxide_enum_case_Option_Some[map[string]Option[int]])
   if !ok||!ok2||rows.Value==nil||lookup.Value==nil{t.Fatal("present containers must be Some",v)}
   Entered=0;if ListLength(v.List)!=len(rows.Value)||MapLength(v.Lookup)!=len(lookup.Value)||Entered!=2{t.Fatal("match",v,Entered)}
-  if len(rows.Value)>0{if rows.Value[0]!=nil||rows.Value[1].(__hgo_enum_case_Option_Some[int]).Value!=7||lookup.Value["none"]!=nil||lookup.Value["some"].(__hgo_enum_case_Option_Some[int]).Value!=8{t.Fatal(v)}}
+  if len(rows.Value)>0{if rows.Value[0]!=nil||rows.Value[1].(__goxide_enum_case_Option_Some[int]).Value!=7||lookup.Value["none"]!=nil||lookup.Value["some"].(__goxide_enum_case_Option_Some[int]).Value!=8{t.Fatal(v)}}
   wire,e:=Encode(v);if e!=nil{t.Fatal(e)};back,e:=Decode(wire);if e!=nil||!reflect.DeepEqual(v,back){t.Fatal(string(wire),back,e)}
  }
 }
@@ -120,9 +120,9 @@ func TestNestedErrors(t *testing.T){
  }{_,e:=Decode([]byte(tc.input));var detail *serde.Error;if !errors.As(e,&detail)||detail.Kind!=serde.Type||!reflect.DeepEqual(detail.Path,tc.path){t.Fatal(tc.input,detail,e)}}
 }
 func TestInvalidInnerValueBeforeArm(t *testing.T){
- var bad *__hgo_enum_case_Option_Some[int]
- a:=__hgo_enum_case_Option_Some[[]Option[int]]{Value:[]Option[int]{nil,bad}}
- b:=__hgo_enum_case_Option_Some[map[string]Option[int]]{Value:map[string]Option[int]{"bad":bad}}
+ var bad *__goxide_enum_case_Option_Some[int]
+ a:=__goxide_enum_case_Option_Some[[]Option[int]]{Value:[]Option[int]{nil,bad}}
+ b:=__goxide_enum_case_Option_Some[map[string]Option[int]]{Value:map[string]Option[int]{"bad":bad}}
  for _,f:=range []func(){func(){ListLength(a)},func(){MapLength(b)}}{
   Entered=0;func(){defer func(){if recover()==nil{t.Fatal("invalid nested value accepted")}}();f()}()
   if Entered!=0{t.Fatal("invalid nested value reached arm")}
@@ -135,7 +135,7 @@ func TestInvalidInnerValueBeforeArm(t *testing.T){
 `
 
 func TestOptionProtocolDoesNotGrantPayloadDefault(t *testing.T) {
-	_, err := frontend.Compile("no-payload-default.hgo", []byte(`package fixture
+	_, err := frontend.Compile("no-payload-default.gox", []byte(`package fixture
 #[derive(Deserialize)]
 type InputPayload struct { Port int }
 #[derive(Default)]
@@ -196,14 +196,14 @@ func TestPresentErrorsNeverDefaultAndRetainPath(t *testing.T){
 }
 func TestNestedOptionIsLossyNotPatch(t *testing.T){
  v,err:=readRequest("{"+required+"}");if err!=nil{t.Fatal(err)}
- v.Nested=__hgo_enum_case_Option_Some[Option[int]]{Value:nil}
- v.Pointer=__hgo_enum_case_Option_Some[*int]{Value:nil}
+ v.Nested=__goxide_enum_case_Option_Some[Option[int]]{Value:nil}
+ v.Pointer=__goxide_enum_case_Option_Some[*int]{Value:nil}
  wire,err:=writeRequest(v);if err!=nil{t.Fatal(err)}
  back,err:=readRequest(string(wire));if err!=nil||back.Nested!=nil||back.Pointer!=nil||!strings.Contains(string(wire),"\"Nested\":null"){t.Fatalf("null collapse: %s %#v %v",wire,back,err)}
 }
 type forgedOption struct{Option[int]}
 func TestInvalidNativeValuesReturnTypeWithoutPanic(t *testing.T){
- for _,bad:=range []Option[int]{(*__hgo_enum_case_Option_Some[int])(nil),&__hgo_enum_case_Option_Some[int]{Value:2},forgedOption{}}{
+ for _,bad:=range []Option[int]{(*__goxide_enum_case_Option_Some[int])(nil),&__goxide_enum_case_Option_Some[int]{Value:2},forgedOption{}}{
   v,err:=readRequest("{"+required+"}");if err!=nil{t.Fatal(err)};v.Count=bad
   _,err=writeRequest(v);var detail *serde.Error
   if !errors.As(err,&detail)||detail.Kind!=serde.Type||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Field",Name:"Count"}}){t.Fatalf("invalid native value: %#v %v",detail,err)}
@@ -211,8 +211,8 @@ func TestInvalidNativeValuesReturnTypeWithoutPanic(t *testing.T){
 }
 func TestOneDirectionDerives(t *testing.T){
  v,err:=serdejson.Unmarshal([]byte("{\"Value\":{\"Port\":18}}"),DeserializeInputOnly);if err!=nil{t.Fatal(err)}
- payload,ok:=v.Value.(__hgo_enum_case_Option_Some[InputPayload]);if !ok||payload.Value.Port!=18{t.Fatalf("decode-only payload: %#v",v)}
- out:=OutputOnly{Value:__hgo_enum_case_Option_Some[OutputPayload]{Value:OutputPayload{Port:payload.Value.Port}}};wire,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeOutputOnly(s,&out)})
+ payload,ok:=v.Value.(__goxide_enum_case_Option_Some[InputPayload]);if !ok||payload.Value.Port!=18{t.Fatalf("decode-only payload: %#v",v)}
+ out:=OutputOnly{Value:__goxide_enum_case_Option_Some[OutputPayload]{Value:OutputPayload{Port:payload.Value.Port}}};wire,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeOutputOnly(s,&out)})
  if err!=nil||string(wire)!="{\"Value\":{\"Port\":18}}"{t.Fatalf("one direction: %s %v",wire,err)}
 }
 func TestSomePayloadDefaultsAreSeparateFromOptionDefault(t *testing.T){
@@ -225,7 +225,7 @@ func TestSomePayloadDefaultsAreSeparateFromOptionDefault(t *testing.T){
   {"{\"Value\":{\"Config\":{\"Port\":5}}}",5,0},
  }{
   defaultCalls=0;v,err:=serdejson.Unmarshal([]byte(tc.input),DeserializeDefaultEnvelope)
-  if err!=nil{t.Fatal(err)};payload,ok:=v.Value.(__hgo_enum_case_Option_Some[PayloadWithDefault])
+  if err!=nil{t.Fatal(err)};payload,ok:=v.Value.(__goxide_enum_case_Option_Some[PayloadWithDefault])
   if !ok||payload.Value.Config.Port!=tc.port||defaultCalls!=tc.calls{t.Fatalf("Some payload default: %#v calls=%d",v,defaultCalls)}
  }
  defaultCalls=0;_,err:=serdejson.Unmarshal([]byte("{\"Value\":{\"Config\":{\"Port\":false}}}"),DeserializeDefaultEnvelope);var detail *serde.Error
@@ -240,7 +240,7 @@ func TestOptionProtocolWithoutPayloadDefault(t *testing.T){
  }
  defaultCalls=0;v,err:=serdejson.Unmarshal([]byte("{\"Plain\":{\"Port\":7},\"Explicit\":{\"Port\":8}}"),DeserializeProtocolEnvelope)
  if err!=nil{t.Fatal(err)}
- plain,ok:=v.Plain.(__hgo_enum_case_Option_Some[InputPayload]);explicit,ok2:=v.Explicit.(__hgo_enum_case_Option_Some[InputPayload])
+ plain,ok:=v.Plain.(__goxide_enum_case_Option_Some[InputPayload]);explicit,ok2:=v.Explicit.(__goxide_enum_case_Option_Some[InputPayload])
  if !ok||!ok2||plain.Value.Port!=7||explicit.Value.Port!=8||defaultCalls!=0{t.Fatalf("Some without Default: %#v defaults=%d",v,defaultCalls)}
  for _,input:=range []string{"{\"Plain\":false}","{\"Explicit\":false}","{\"Ignored\":[1,]}"}{
   if _,err:=serdejson.Unmarshal([]byte(input),DeserializeProtocolEnvelope);err==nil||defaultCalls!=0{t.Fatalf("bad input defaulted: %s %v defaults=%d",input,err,defaultCalls)}

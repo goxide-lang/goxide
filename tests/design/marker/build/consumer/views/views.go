@@ -2,12 +2,12 @@ package views
 
 type ByteReader interface {
 	Read([]byte) (int, error)
-	HyperGoTraitByteReader()
+	GoxideTraitByteReader()
 }
 
 type TextReader interface {
 	Read() string
-	HyperGoTraitTextReader()
+	GoxideTraitTextReader()
 }
 
 type Buffer struct {
@@ -23,31 +23,31 @@ type bufferTextReader struct{ target *Buffer }
 
 func (b *Buffer) AsByteReader() ByteReader {
 	if b == nil {
-		panic("hgo: nil Buffer")
+		panic("goxide: nil Buffer")
 	}
 	return bufferByteReader{target: b}
 }
 
 func (b *Buffer) AsTextReader() TextReader {
 	if b == nil {
-		panic("hgo: nil Buffer")
+		panic("goxide: nil Buffer")
 	}
 	return bufferTextReader{target: b}
 }
 
-func (v bufferByteReader) HyperGoTraitByteReader() {}
-func (v bufferTextReader) HyperGoTraitTextReader() {}
+func (v bufferByteReader) GoxideTraitByteReader() {}
+func (v bufferTextReader) GoxideTraitTextReader() {}
 
 func (v bufferByteReader) Read(p []byte) (int, error) {
 	if v.target == nil {
-		panic("hgo: invalid ByteReader view")
+		panic("goxide: invalid ByteReader view")
 	}
 	return copy(p, v.target.data), nil
 }
 
 func (v bufferTextReader) Read() string {
 	if v.target == nil {
-		panic("hgo: invalid TextReader view")
+		panic("goxide: invalid TextReader view")
 	}
 	return string(v.target.data)
 }

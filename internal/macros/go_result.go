@@ -27,7 +27,7 @@ func (e *engine) goResultMarker(call tok, args []tok, depth int) ([]tok, error) 
 			comma = i
 		}
 	}
-	name := "__hgo_" + call.text
+	name := "__goxide_" + call.text
 	if comma < 0 {
 		name += "_auto"
 	}
@@ -62,7 +62,7 @@ func (e *engine) goResultMarker(call tok, args []tok, depth int) ([]tok, error) 
 func (e *engine) finishGoResults(ts []tok) ([]tok, error) {
 	count := 0
 	for _, t := range ts {
-		if strings.HasPrefix(t.text, "__hgo_go_result") {
+		if strings.HasPrefix(t.text, "__goxide_go_result") {
 			count++
 		}
 	}

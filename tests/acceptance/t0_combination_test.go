@@ -71,7 +71,7 @@ func runDeferred(ok bool,trace *[]string)int{n:=2;w:=mut& n;_=registerDeferred(w
 `
 
 func TestT0CombinationSourceMetadata(t *testing.T) {
-	result, err := frontend.Compile("t0_combination.hgo", []byte(t0CombinationSource))
+	result, err := frontend.Compile("t0_combination.gox", []byte(t0CombinationSource))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,14 +95,14 @@ func TestT0CombinationSourceMetadata(t *testing.T) {
 		if d.Helper == "Failure.Error" {
 			want = "func (v Failure) Error("
 		}
-		if d.Source != "t0_combination.hgo" || d.Offset < 0 || d.Offset >= len(result.Go) || !strings.HasPrefix(string(result.Go[d.Offset:]), want) {
+		if d.Source != "t0_combination.gox" || d.Offset < 0 || d.Offset >= len(result.Go) || !strings.HasPrefix(string(result.Go[d.Offset:]), want) {
 			t.Fatalf("derive start does not point to its final Go helper: %+v", d)
 		}
 	}
 	callLine := strings.Count(t0CombinationSource[:strings.Index(t0CombinationSource, "access!(r)")], "\n") + 1
 	foundCall := false
 	for _, origin := range metadata.MacroTokens {
-		if origin.File != "t0_combination.hgo" || origin.OutputStart < 0 || origin.OutputEnd <= origin.OutputStart || origin.Line < 1 || origin.Column < 1 {
+		if origin.File != "t0_combination.gox" || origin.OutputStart < 0 || origin.OutputEnd <= origin.OutputStart || origin.Line < 1 || origin.Column < 1 {
 			t.Fatalf("invalid macro origin: %+v", origin)
 		}
 		foundCall = foundCall || origin.InvocationLine == callLine
@@ -113,7 +113,7 @@ func TestT0CombinationSourceMetadata(t *testing.T) {
 	permissions := map[refs.Permission]bool{}
 	symbols := map[string]bool{}
 	for _, r := range metadata.References {
-		if r.Position.Filename != "t0_combination.hgo" || r.Position.Line < 1 || r.Type.Element != "int" {
+		if r.Position.Filename != "t0_combination.gox" || r.Position.Line < 1 || r.Type.Element != "int" {
 			t.Fatalf("invalid reference record: %+v", r)
 		}
 		permissions[r.Type.Permission] = true
@@ -151,8 +151,8 @@ func f(r &int)Option[any]{_=Option[int]::Some(1)?;return Option[any]::Some(box!(
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("t0_boundary.hgo", []byte("package fixture\n"+body+"\n"))
-			if err == nil || !strings.Contains(err.Error(), "t0_boundary.hgo") {
+			_, err := frontend.Compile("t0_boundary.gox", []byte("package fixture\n"+body+"\n"))
+			if err == nil || !strings.Contains(err.Error(), "t0_boundary.gox") {
 				t.Fatalf("need located boundary rejection, got %v", err)
 			}
 			t.Log(err)
@@ -169,8 +169,8 @@ func TestT0ReferenceGenericInstantiationBoundary(t *testing.T) {
 		"identity-write": `func id[T any](v T)T{return v};func f(r &int){v:=id(r);*v=9}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := refs.Lower("t0_generic.hgo", []byte("package fixture\n"+body))
-			if err == nil || !strings.Contains(err.Error(), "t0_generic.hgo") {
+			_, err := refs.Lower("t0_generic.gox", []byte("package fixture\n"+body))
+			if err == nil || !strings.Contains(err.Error(), "t0_generic.gox") {
 				t.Fatalf("need located generic reference rejection, got %v", err)
 			}
 			t.Log(err)

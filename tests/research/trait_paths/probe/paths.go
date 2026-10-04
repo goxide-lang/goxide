@@ -1,4 +1,4 @@
-// Package traitpaths compares hand-written lowering strategies, not hgo output.
+// Package traitpaths compares hand-written lowering strategies, not goxide output.
 package traitpaths
 
 import (

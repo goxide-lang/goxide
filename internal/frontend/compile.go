@@ -11,6 +11,7 @@ import (
 	"github.com/hxsf/goxide/internal/equality"
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/matchexpr"
+	"github.com/hxsf/goxide/internal/naming"
 	"github.com/hxsf/goxide/internal/printing"
 	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/refs"
@@ -99,6 +100,9 @@ var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
 var renameAttr = regexp.MustCompile(`^rename\s*=\s*("(?:[^"\\]|\\.)*")$`)
 
 func Compile(filename string, source []byte) (Result, error) {
+	if err := naming.Source(filename, source); err != nil {
+		return Result{}, err
+	}
 	_, uses, err := scanUses(filename, source)
 	if err != nil {
 		return Result{}, err
@@ -162,7 +166,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		if tok == token.RBRACE && enumDepth > 0 {
 			enumDepth--
 		}
-		if tok == token.IDENT && strings.HasPrefix(lit, "__hgo_") {
+		if tok == token.IDENT && strings.HasPrefix(lit, "__goxide_") {
 			return Result{}, fmt.Errorf("%s: reserved generated identifier %s", reserveFS.Position(pos), lit)
 		}
 	}
@@ -173,9 +177,9 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	preparedMap := provenance
 	var expanded macros.Result
 	if cfg != nil && cfg.macros != nil {
-		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__hgo_question"}, cfg.macros, cfg.macroImporter)
+		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, cfg.macros, cfg.macroImporter)
 	} else {
-		expanded, err = macros.ExpandWithIntrinsics(filename, prepared, []string{"__hgo_question"})
+		expanded, err = macros.ExpandWithIntrinsics(filename, prepared, []string{"__goxide_question"})
 	}
 	if err != nil {
 		return Result{}, err
@@ -429,7 +433,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		return Result{}, stageError("macros.ResolveBuiltins", err)
 	}
-	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__hgo_serde"}
+	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__goxide_serde"}
 	if cfg != nil {
 		g.localProtocols = cfg.localProtocols
 		g.importedDefaults = cfg.defaultImports[filename]
@@ -458,7 +462,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && !strings.HasPrefix(id.Name, "__hgo_ref_") && !strings.HasPrefix(id.Name, "__hgo_go_result") && id.Name != "__hgo_question" && id.Name != "__hgo_print" && id.Name != "__hgo_println" {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_") && !strings.HasPrefix(id.Name, "__goxide_enum_") && !strings.HasPrefix(id.Name, "__goxide_match_expr_") && !strings.HasPrefix(id.Name, "__goxide_ref_") && !strings.HasPrefix(id.Name, "__goxide_go_result") && id.Name != "__goxide_question" && id.Name != "__goxide_print" && id.Name != "__goxide_println" {
 			collision = id.Name
 		}
 		return true
@@ -754,7 +758,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			builtinTypes: map[string]macros.TypeContext{filename: {Types: specs, Imports: f.Imports}},
 			models:       g.models, manualDefaults: allManual,
 		}
-		if _, err := bindLocalProtocolAliases("hgo/local", map[string][]byte{filename: originalSource}, local, nil, nil); err != nil {
+		if _, err := bindLocalProtocolAliases("goxide/local", map[string][]byte{filename: originalSource}, local, nil, nil); err != nil {
 			return Result{}, err
 		}
 		g.localProtocols = local.localProtocols
@@ -928,7 +932,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			debugTypes[m.name] = true
 		}
 	}
-	needsTypecheck := len(defaultHelpers) > 0 || bytes.Contains(out, []byte("__hgo_enum_infer(")) || bytes.Contains(out, []byte("__hgo_match_expr_")) || bytes.Contains(out, []byte("__hgo_print"))
+	needsTypecheck := len(defaultHelpers) > 0 || bytes.Contains(out, []byte("__goxide_enum_infer(")) || bytes.Contains(out, []byte("__goxide_match_expr_")) || bytes.Contains(out, []byte("__goxide_print"))
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
 	}
@@ -960,7 +964,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		provenance = provenance.Compose(out, bound[filename], "refs.BindImports")
 		out = bound[filename]
 	}
-	singleEqCfg := equality.Config{Importer: singleImporter, PackagePath: "hgo/generated", Derives: equalityDerives, Enums: enumResult.Enums, Maps: map[string]*sourcemap.Map{filename: provenance}}
+	singleEqCfg := equality.Config{Importer: singleImporter, PackagePath: "goxide/generated", Derives: equalityDerives, Enums: enumResult.Enums, Maps: map[string]*sourcemap.Map{filename: provenance}}
 	if cfg == nil {
 		eqFiles, err := equality.Prepare(map[string][]byte{filename: out}, singleEqCfg)
 		if err != nil {
@@ -971,7 +975,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		needsTypecheck = needsTypecheck || len(equalityDerives) > 0 || bytes.Contains(originalSource, []byte("equals"))
 	}
 	matchReferenceTemps := map[string]bool{}
-	if cfg == nil && (bytes.Contains(out, []byte("__hgo_question(")) || needsTypecheck || bytes.Contains(out, []byte("__hgo_ref_"))) {
+	if cfg == nil && (bytes.Contains(out, []byte("__goxide_question(")) || needsTypecheck || bytes.Contains(out, []byte("__goxide_ref_"))) {
 		conversions := []propagate.Conversion{}
 		for _, m := range ordered {
 			if m.from != "" {
@@ -992,7 +996,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		out = eqFiles[filename]
 		provenance = singleEqCfg.Maps[filename]
-		if err := checkEnumEquality("hgo/generated", map[string][]byte{filename: out}, imp, enumResult.Enums, true); err != nil {
+		if err := checkEnumEquality("goxide/generated", map[string][]byte{filename: out}, imp, enumResult.Enums, true); err != nil {
 			return Result{}, err
 		}
 		printed, err := printing.Lower(map[string][]byte{filename: out}, printing.Config{Importer: imp, DebugTypes: debugTypes, Maps: map[string]*sourcemap.Map{filename: provenance}})
@@ -1024,7 +1028,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			return Result{}, stageError("typecheck.Check", e)
 		}
 		erased := map[string][]byte{filename: out}
-		meta, e := refs.ExportMetadata("hgo/generated", map[string][]byte{filename: referenceIR}, erased, imp)
+		meta, e := refs.ExportMetadata("goxide/generated", map[string][]byte{filename: referenceIR}, erased, imp)
 		if e != nil {
 			return Result{}, e
 		}
@@ -1038,7 +1042,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 
 	if cfg == nil {
-		if err := checkDefaultCycles("hgo/generated", map[string][]byte{filename: out}, typecheck.NewImporter(filename), defaultHelpers, map[string]*sourcemap.Map{filename: provenance}); err != nil {
+		if err := checkDefaultCycles("goxide/generated", map[string][]byte{filename: out}, typecheck.NewImporter(filename), defaultHelpers, map[string]*sourcemap.Map{filename: provenance}); err != nil {
 			return Result{}, err
 		}
 	}
@@ -1065,7 +1069,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "deriveFields": deriveFields, "macroTokens": expanded.Origins, "macroTokenInputStage": "propagate.Prepare output", "references": refResult.References, "diagnostics": provenance, "sourceBytes": len(originalSource), "note": "diagnostics uses final Go byte offsets; generated/unmapped regions have no proven source; macroTokens uses macro expansion offsets"}, "", "  ")
 	if cfg == nil {
-		if err := checkEnumEquality("hgo/generated", map[string][]byte{filename: out}, singleImporter, enumResult.Enums, true); err != nil {
+		if err := checkEnumEquality("goxide/generated", map[string][]byte{filename: out}, singleImporter, enumResult.Enums, true); err != nil {
 			return Result{}, err
 		}
 	}
@@ -1199,8 +1203,8 @@ func (g *generator) option(t ast.Expr) (*enums.Decl, bool) {
 
 func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error) {
 	g.next++
-	s := fmt.Sprintf("__hgo_write%d", g.next)
-	r := fmt.Sprintf("__hgo_read%d", g.next)
+	s := fmt.Sprintf("__goxide_write%d", g.next)
+	r := fmt.Sprintf("__goxide_read%d", g.next)
 	typ := g.typeName(t)
 	a := g.alias
 	var w, b string

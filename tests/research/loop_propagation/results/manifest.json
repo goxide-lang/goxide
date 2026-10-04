@@ -1,6 +1,6 @@
 {
   "revision": "863051b9a57b198c3237f2ef06ac7b0e25baa0b1",
-  "working_tree_status": " M internal/propagate/lower.go\n M internal/propagate/lower_test.go\n M tests/acceptance/propagate_test.go\n?? examples/prototype/loop_propagation.hgo\n?? internal/propagate/loops.go\n?? tests/acceptance/propagate_loops_test.go\n?? tests/research/loop_propagation/\n",
+  "working_tree_status": " M internal/propagate/lower.go\n M internal/propagate/lower_test.go\n M tests/acceptance/propagate_test.go\n?? examples/prototype/loop_propagation.gox\n?? internal/propagate/loops.go\n?? tests/acceptance/propagate_loops_test.go\n?? tests/research/loop_propagation/\n",
   "toolchain": "go version go1.27.1 linux/amd64",
   "commands": [
     {
@@ -16,19 +16,19 @@
         "/workspace/goxide-environment/go/bin/go",
         "build",
         "-o",
-        "/tmp/t0-loops-finalresearch/hgo",
-        "./cmd/hgo"
+        "/tmp/t0-loops-finalresearch/goxide",
+        "./cmd/goxide"
       ],
       "cwd": "/workspace/goxide",
       "extra_env": {}
     },
     {
       "argv": [
-        "/tmp/t0-loops-finalresearch/hgo",
+        "/tmp/t0-loops-finalresearch/goxide",
         "transpile",
         "-o",
         "/tmp/t0-loops-finalresearch/generated/generated.go",
-        "/workspace/goxide/examples/prototype/loop_propagation.hgo"
+        "/workspace/goxide/examples/prototype/loop_propagation.gox"
       ],
       "cwd": "/workspace/goxide",
       "extra_env": {}

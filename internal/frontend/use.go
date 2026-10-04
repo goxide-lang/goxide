@@ -146,11 +146,11 @@ func scanUses(name string, source []byte) ([]byte, []useDecl, error) {
 }
 
 func prepareUses(path string, sources map[string][]byte, known map[string]PackageResult, imp types.Importer) (*usePackage, error) {
-	u := &usePackage{positions: map[string]token.Position{}, useImports: map[string]map[string]bool{}, bindings: map[string]useBinding{}, imports: map[string]map[string]string{}, imported: map[string]useMetadata{}, original: sources, prepared: map[string][]byte{}, imp: imp, known: known, metadata: useMetadata{Version: 1, Path: path}}
+	u := &usePackage{positions: map[string]token.Position{}, useImports: map[string]map[string]bool{}, bindings: map[string]useBinding{}, imports: map[string]map[string]string{}, imported: map[string]useMetadata{}, original: sources, prepared: map[string][]byte{}, imp: imp, known: known, metadata: useMetadata{Version: 2, Path: path}}
 	var declarations []useDecl
 	for _, file := range sortedSources(sources) {
 		src := sources[file]
-		if strings.HasSuffix(file, ".hgo") {
+		if strings.HasSuffix(file, ".gox") {
 			clean, ds, e := scanUses(file, src)
 			if e != nil {
 				return nil, e
@@ -192,7 +192,7 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 					return nil, e
 				}
 			}
-			if alias == "." && m.present() && strings.HasSuffix(file, ".hgo") {
+			if alias == "." && m.present() && strings.HasSuffix(file, ".gox") {
 				return nil, fmt.Errorf("%s: dot imports of packages with use metadata are unsupported; use a named import", file)
 			}
 			u.imported[p] = m
@@ -260,7 +260,7 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 			case "macro":
 				return name + " (macro requires a compiled source registry; external macro artifacts are unsupported)"
 			case "family":
-				return name + " (hgo generic family has no use alias protocol)"
+				return name + " (goxide generic family has no use alias protocol)"
 			default:
 				return name + " (legacy artifact lacks macro/family classification; no compiled source registry)"
 			}
@@ -298,7 +298,7 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 				b.Name = d.alias
 			}
 			b.Public = d.public
-			if isUseMarker(b.Name) || strings.HasPrefix(b.Name, "__hgo_") || b.Name == "init" || b.Name == "main" {
+			if isUseMarker(b.Name) || strings.HasPrefix(b.Name, "__goxide_") || b.Name == "init" || b.Name == "main" {
 				return nil, fmt.Errorf("%s: reserved use binding %s", d.pos, b.Name)
 			}
 			if (b.Kind == "function" || b.Kind == "variable") && !enumOriginImportAllowed(path, b.RoutePath) {
@@ -355,13 +355,13 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 	if len(u.bindings) > 0 {
 		file := ""
 		for _, n := range sortedSources(sources) {
-			if strings.HasSuffix(n, ".hgo") {
+			if strings.HasSuffix(n, ".gox") {
 				file = n
 				break
 			}
 		}
 		if file == "" {
-			return nil, fmt.Errorf("use requires .hgo source")
+			return nil, fmt.Errorf("use requires .gox source")
 		}
 		imports := map[string]string{}
 		reserved := map[string]bool{}
@@ -412,7 +412,7 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 				alias := imports[b.RoutePath]
 				if alias == "" {
 					for {
-						alias = fmt.Sprintf("hgoUseImport%d", nextImport)
+						alias = fmt.Sprintf("goxideUseImport%d", nextImport)
 						nextImport++
 						if !reserved[alias] {
 							break
@@ -433,7 +433,7 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 			}
 		}
 		if extra.Len() > 0 {
-			u.generatedFile = filepath.Join(filepath.Dir(file), "hgo_use_aliases.go")
+			u.generatedFile = filepath.Join(filepath.Dir(file), "goxide_use_aliases.go")
 			if _, exists := sources[u.generatedFile]; exists {
 				return nil, fmt.Errorf("reserved generated use alias filename conflicts: %s", u.generatedFile)
 			}
@@ -521,7 +521,7 @@ func sortedUseNames(m map[string]useBinding) []string {
 	return names
 }
 func isUseMarker(n string) bool {
-	return n == useMetadataMarker || n == enumMetadataMarker || n == "HgoReferenceMetadata"
+	return n == useMetadataMarker || n == enumMetadataMarker || n == "GoxideReferenceMetadata"
 }
 func useTypeParameterList(t types.Type) *types.TypeParamList {
 	var params *types.TypeParamList
@@ -637,7 +637,7 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 		a := extra[b.RoutePath]
 		if a == "" {
 			for i := len(extra); ; i++ {
-				a = fmt.Sprintf("hgoUseRoute%d", i)
+				a = fmt.Sprintf("goxideUseRoute%d", i)
 				if !bytes.Contains(source, []byte(a)) {
 					used := false
 					for _, prior := range extra {

@@ -9,7 +9,7 @@ import (
 
 func TestReadonlyCacheApplicationRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
-	source, err := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/readonly_cache.hgo"))
+	source, err := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/readonly_cache.gox"))
 	if err != nil {
 		t.Fatal(err)
 	}

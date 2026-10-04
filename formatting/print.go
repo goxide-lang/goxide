@@ -15,7 +15,7 @@ type WriteError struct {
 }
 
 func (e *WriteError) Error() string {
-	return fmt.Sprintf("hgo print: wrote %d of %d bytes: %v", e.Written, e.Wanted, e.Cause)
+	return fmt.Sprintf("goxide print: wrote %d of %d bytes: %v", e.Written, e.Wanted, e.Cause)
 }
 func (e *WriteError) Unwrap() error { return e.Cause }
 

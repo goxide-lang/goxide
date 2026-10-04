@@ -37,7 +37,7 @@ func (g *generator) typeText(t ast.Expr) string {
 	return typeText(t)
 }
 
-func (g *generator) imp(name string) string { a := "__hgo_" + name; g.imports[a] = name; return a }
+func (g *generator) imp(name string) string { a := "__goxide_" + name; g.imports[a] = name; return a }
 func typeText(t ast.Expr) string {
 	var b bytes.Buffer
 	_ = format.Node(&b, token.NewFileSet(), t)
@@ -290,7 +290,7 @@ func generateVariantProtocol(kind string, d enums.Decl, helper, display string, 
 			}
 		}
 	}
-	fmt.Fprintf(&b, "default: panic(%q)}}", "hgo: invalid enum "+d.Name)
+	fmt.Fprintf(&b, "default: panic(%q)}}", "goxide: invalid enum "+d.Name)
 	return b.String(), g.imports, nil
 }
 

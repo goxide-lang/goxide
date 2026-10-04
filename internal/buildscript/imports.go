@@ -2,6 +2,7 @@ package buildscript
 
 import (
 	"bytes"
+	"github.com/hxsf/goxide/internal/naming"
 	"go/build"
 	"go/parser"
 	"go/token"
@@ -28,8 +29,11 @@ func hostImports(files map[string][]byte) ([]string, error) {
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		if err := naming.Source(name, files[name]); err != nil {
+			return nil, err
+		}
 		ext := filepath.Ext(name)
-		if ext != ".go" && ext != ".hgo" {
+		if ext != ".go" && ext != ".gox" {
 			continue
 		}
 		base := strings.TrimSuffix(filepath.Base(name), ext)

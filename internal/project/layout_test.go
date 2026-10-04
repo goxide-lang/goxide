@@ -82,7 +82,7 @@ func TestLayoutUnknownAndSymlinkBoundaries(t *testing.T) {
 	}
 	external := t.TempDir()
 	os.Symlink(external, filepath.Join(root, "alias"))
-	for _, path := range []string{"alias/new", ".", "vendor/output", ".hgo/output", ".git/output"} {
+	for _, path := range []string{"alias/new", ".", "vendor/output", ".goxide/output", ".git/output"} {
 		if _, e := OpenLayout(root, "example.org/app", path); e == nil {
 			t.Fatalf("accepted %s", path)
 		}

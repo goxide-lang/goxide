@@ -3,96 +3,96 @@ package b
 import "fixture.example/current/a"
 
 func Make() Result[int, error] {
-	__hgo_qtmp_10 := a.Make()
-	__hgo_qimport_f0_2(__hgo_qtmp_10)
-	var __hgo_qtmp_11 __hgo_qimport_f0_3
-	switch __hgo_failure := __hgo_qtmp_10.(type) {
-	case __hgo_qimport_f0_5:
+	__goxide_qtmp_10 := a.Make()
+	__goxide_qimport_f0_2(__goxide_qtmp_10)
+	var __goxide_qtmp_11 __goxide_qimport_f0_3
+	switch __goxide_failure := __goxide_qtmp_10.(type) {
+	case __goxide_qimport_f0_5:
 
-		__hgo_qtmp_11 = __hgo_failure.
+		__goxide_qtmp_11 = __goxide_failure.
 			Value
-	case __hgo_qimport_f0_7:
-		return __hgo_enum_ctor_Result_Err[int, error](__hgo_failure.
+	case __goxide_qimport_f0_7:
+		return __goxide_enum_ctor_Result_Err[int, error](__goxide_failure.
 			Value)
 	default:
-		panic("hgo: invalid Result at ?",
+		panic("goxide: invalid Result at ?",
 		)
 	}
-	n := __hgo_qtmp_11
-	return __hgo_enum_ctor_Result_Ok[int, error](n)
+	n := __goxide_qtmp_11
+	return __goxide_enum_ctor_Result_Ok[int, error](n)
 }
 
-type Result[T any, E any] interface{ __hgo_enum_marker_Result(T, E) }
-type __hgo_enum_case_Result_Ok[T any, E any] struct{ Value T }
+type Result[T any, E any] interface{ __goxide_enum_marker_Result(T, E) }
+type __goxide_enum_case_Result_Ok[T any, E any] struct{ Value T }
 
-func (__hgo_enum_case_Result_Ok[T, E]) __hgo_enum_marker_Result(T, E) {}
-func __hgo_enum_ctor_Result_Ok[T any, E any](v T) Result[T, E] {
-	return __hgo_enum_case_Result_Ok[T, E]{Value: v}
+func (__goxide_enum_case_Result_Ok[T, E]) __goxide_enum_marker_Result(T, E) {}
+func __goxide_enum_ctor_Result_Ok[T any, E any](v T) Result[T, E] {
+	return __goxide_enum_case_Result_Ok[T, E]{Value: v}
 }
 
-type __hgo_enum_case_Result_Err[T any, E any] struct{ Value E }
+type __goxide_enum_case_Result_Err[T any, E any] struct{ Value E }
 
-func (__hgo_enum_case_Result_Err[T, E]) __hgo_enum_marker_Result(T, E) {}
-func __hgo_enum_ctor_Result_Err[T any, E any](v E) Result[T, E] {
-	return __hgo_enum_case_Result_Err[T, E]{Value: v}
+func (__goxide_enum_case_Result_Err[T, E]) __goxide_enum_marker_Result(T, E) {}
+func __goxide_enum_ctor_Result_Err[T any, E any](v E) Result[T, E] {
+	return __goxide_enum_case_Result_Err[T, E]{Value: v}
 }
-func __hgo_enum_validate_Result[T any, E any](v Result[T, E]) {
+func __goxide_enum_validate_Result[T any, E any](v Result[T, E]) {
 	switch v.(type) {
-	case __hgo_enum_case_Result_Ok[T, E]:
+	case __goxide_enum_case_Result_Ok[T, E]:
 		return
-	case __hgo_enum_case_Result_Err[T, E]:
+	case __goxide_enum_case_Result_Err[T, E]:
 		return
 	default:
-		panic("hgo: invalid enum Result")
+		panic("goxide: invalid enum Result")
 	}
 }
 
-type HgoResultOk[T any, E any] = __hgo_enum_case_Result_Ok[T, E]
+type GoxideResultOk[T any, E any] = __goxide_enum_case_Result_Ok[T, E]
 
-func HgoNewResultOk[T any, E any](v T) Result[T, E] { return __hgo_enum_ctor_Result_Ok[T, E](v) }
+func GoxideNewResultOk[T any, E any](v T) Result[T, E] { return __goxide_enum_ctor_Result_Ok[T, E](v) }
 
-type HgoResultErr[T any, E any] = __hgo_enum_case_Result_Err[T, E]
+type GoxideResultErr[T any, E any] = __goxide_enum_case_Result_Err[T, E]
 
-func HgoNewResultErr[T any, E any](v E) Result[T, E] { return __hgo_enum_ctor_Result_Err[T, E](v) }
-func __hgo_enum_inst_54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(__hgo_enum_value Result[int, error]) {
-	__hgo_enum_validate_Result[int, error](__hgo_enum_value)
-	switch __hgo_enum_payload := __hgo_enum_value.(type) {
-	case __hgo_enum_case_Result_Ok[int, error]:
-		_ = __hgo_enum_payload
-	case __hgo_enum_case_Result_Err[int, error]:
-		_ = __hgo_enum_payload
+func GoxideNewResultErr[T any, E any](v E) Result[T, E] { return __goxide_enum_ctor_Result_Err[T, E](v) }
+func __goxide_enum_inst_54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(__goxide_enum_value Result[int, error]) {
+	__goxide_enum_validate_Result[int, error](__goxide_enum_value)
+	switch __goxide_enum_payload := __goxide_enum_value.(type) {
+	case __goxide_enum_case_Result_Ok[int, error]:
+		_ = __goxide_enum_payload
+	case __goxide_enum_case_Result_Err[int, error]:
+		_ = __goxide_enum_payload
 	}
 }
-func HgoInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(v Result[int, error]) {
-	__hgo_enum_inst_54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(v)
+func GoxideInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(v Result[int, error]) {
+	__goxide_enum_inst_54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(v)
 }
 
-type __hgo_enum_family_import_f0_i0_b0_Ok[__HgoT0 any, __HgoT1 any] = a.HgoResultOk[__HgoT0, __HgoT1]
+type __goxide_enum_family_import_f0_i0_b0_Ok[__GoxideT0 any, __GoxideT1 any] = a.GoxideResultOk[__GoxideT0, __GoxideT1]
 
-func __hgo_enum_family_import_f0_i0_b0_newOk[__HgoT0 any, __HgoT1 any](value __HgoT0) a.Result[__HgoT0, __HgoT1] {
-	return a.HgoNewResultOk[__HgoT0, __HgoT1](value)
+func __goxide_enum_family_import_f0_i0_b0_newOk[__GoxideT0 any, __GoxideT1 any](value __GoxideT0) a.Result[__GoxideT0, __GoxideT1] {
+	return a.GoxideNewResultOk[__GoxideT0, __GoxideT1](value)
 }
 
-type __hgo_enum_family_import_f0_i0_b0_Err[__HgoT0 any, __HgoT1 any] = a.HgoResultErr[__HgoT0, __HgoT1]
+type __goxide_enum_family_import_f0_i0_b0_Err[__GoxideT0 any, __GoxideT1 any] = a.GoxideResultErr[__GoxideT0, __GoxideT1]
 
-func __hgo_enum_family_import_f0_i0_b0_newErr[__HgoT0 any, __HgoT1 any](value __HgoT1) a.Result[__HgoT0, __HgoT1] {
-	return a.HgoNewResultErr[__HgoT0, __HgoT1](value)
+func __goxide_enum_family_import_f0_i0_b0_newErr[__GoxideT0 any, __GoxideT1 any](value __GoxideT1) a.Result[__GoxideT0, __GoxideT1] {
+	return a.GoxideNewResultErr[__GoxideT0, __GoxideT1](value)
 }
 
-type __hgo_qimport_f0_1 = a.Result[int, error]
+type __goxide_qimport_f0_1 = a.Result[int, error]
 
-func __hgo_qimport_f0_2(__hgo_sum_value __hgo_qimport_f0_1) {
-	a.HgoInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(__hgo_sum_value)
+func __goxide_qimport_f0_2(__goxide_sum_value __goxide_qimport_f0_1) {
+	a.GoxideInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(__goxide_sum_value)
 }
 
-type __hgo_qimport_f0_3 = int
-type __hgo_qimport_f0_4 = error
-type __hgo_qimport_f0_5 = __hgo_enum_family_import_f0_i0_b0_Ok[int, error]
+type __goxide_qimport_f0_3 = int
+type __goxide_qimport_f0_4 = error
+type __goxide_qimport_f0_5 = __goxide_enum_family_import_f0_i0_b0_Ok[int, error]
 
-var __hgo_qimport_f0_6 = __hgo_enum_family_import_f0_i0_b0_newOk[int, error]
+var __goxide_qimport_f0_6 = __goxide_enum_family_import_f0_i0_b0_newOk[int, error]
 
-type __hgo_qimport_f0_7 = __hgo_enum_family_import_f0_i0_b0_Err[int, error]
+type __goxide_qimport_f0_7 = __goxide_enum_family_import_f0_i0_b0_Err[int, error]
 
-var __hgo_qimport_f0_8 = __hgo_enum_family_import_f0_i0_b0_newErr[int, error]
+var __goxide_qimport_f0_8 = __goxide_enum_family_import_f0_i0_b0_newErr[int, error]
 
-const HgoEnumMetadata = "74bc6c73e068e50c48eec005f7d850ee6b6e196a3aa424dc8456f6d05c55cce4"
+const GoxideEnumMetadata = "74bc6c73e068e50c48eec005f7d850ee6b6e196a3aa424dc8456f6d05c55cce4"

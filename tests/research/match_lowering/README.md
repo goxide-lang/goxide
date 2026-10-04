@@ -1,11 +1,11 @@
 # Match expression and addressable enum probes
 
 Research at `6380b6788333485a2fdd24e6558da0aba264df68`. These are lowering
-candidates, not newly implemented hgo syntax. They do not freeze the enum ABI.
+candidates, not newly implemented goxide syntax. They do not freeze the enum ABI.
 
 The [Go source](match.go.fixture) and [tests](match_test.go.fixture) compare typed
 IIFEs with statement preludes using integer tag switches. They deliberately omit
-the current hgo interface enum representation, validators and permission checks;
+the current goxide interface enum representation, validators and permission checks;
 timings are not end-to-end compiler output measurements. Pointer cases return
 existing globals, not newly allocated values. Shared-machine microbenchmarks do
 not establish a stable speed advantage.
@@ -46,13 +46,13 @@ circuiting and indexed write panic timing. They also demonstrate that wrapping
 `recover()` changes its meaning. Expression-only arms therefore still need a
 frame-sensitive exclusion; absence of `?` alone is insufficient.
 
-Separate **actual hgo** evidence uses [app.hgo](hgo/app.hgo.fixture) and
-[model.hgo](hgo/model/model.hgo.fixture) in module `iife.example/app`. Explicit
+Separate **actual goxide** evidence uses [app.gox](goxide/app.gox.fixture) and
+[model.gox](goxide/model/model.gox.fixture) in module `iife.example/app`. Explicit
 user-written IIFEs containing statement match successfully return int and an
 imported named uint64 type, including `1<<63`; generated Go passes a separate race
-assertion. The [reference-result version](reference-iife-rejected.hgo.fixture)
+assertion. The [reference-result version](reference-iife-rejected.gox.fixture)
 currently fails in refs.Prepare. Raw `*int` benchmark results do not establish
-hgo reference-IIFE support or permission preservation. No automatic expression
+goxide reference-IIFE support or permission preservation. No automatic expression
 wrapping has been added to the frontend.
 
 The [addressable enum probe](place.go.fixture) is a separate pure Go program:
@@ -60,30 +60,30 @@ The [addressable enum probe](place.go.fixture) is a separate pure Go program:
 copy it to a `.go` file first. It validates independent value copies, stable payload
 slots across whole enum replacement, and ordinary shallow slice copying. See the
 [design assessment](../../../docs/rfcs/research/match-place-and-expression-options.md)
-for API and comparison consequences; it is not hgo borrow-match acceptance.
+for API and comparison consequences; it is not goxide borrow-match acceptance.
 
-Actual hgo reproduction from the repository root (use the real Go executable):
+Actual goxide reproduction from the repository root (use the real Go executable):
 
 ```sh
 source_dir=$(mktemp -d)
 output_parent=$(mktemp -d)
 mkdir "$source_dir/model"
-cp tests/research/match_lowering/hgo/go.mod.fixture "$source_dir/go.mod"
-cp tests/research/match_lowering/hgo/app.hgo.fixture "$source_dir/app.hgo"
-cp tests/research/match_lowering/hgo/model/model.hgo.fixture "$source_dir/model/model.hgo"
-go run ./cmd/hgo transpile -o "$output_parent/generated" "$source_dir"
-cp tests/research/match_lowering/hgo/iife_test.go.fixture "$output_parent/generated/iife_test.go"
+cp tests/research/match_lowering/goxide/go.mod.fixture "$source_dir/go.mod"
+cp tests/research/match_lowering/goxide/app.gox.fixture "$source_dir/app.gox"
+cp tests/research/match_lowering/goxide/model/model.gox.fixture "$source_dir/model/model.gox"
+go run ./cmd/goxide transpile -o "$output_parent/generated" "$source_dir"
+cp tests/research/match_lowering/goxide/iife_test.go.fixture "$output_parent/generated/iife_test.go"
 go -C "$output_parent/generated" test -race -count=1 ./...
 go -C "$output_parent/generated" vet ./...
 ```
 
-[Actual generated-module race](results/hgo-race.txt) and [vet](results/hgo-vet.txt)
+[Actual generated-module race](results/goxide-race.txt) and [vet](results/goxide-vet.txt)
 are separate from [pure mechanism race](results/mechanism-race.txt) and
-[mechanism vet](results/mechanism-vet.txt). Replacing source app.hgo with the
+[mechanism vet](results/mechanism-vet.txt). Replacing source app.gox with the
 reference-result fixture demonstrates the current frontend limitation; it must
 not be described as a successful permission test.
 
-The [existing comparison source](comparison.hgo.fixture) is actual hgo, separately
+The [existing comparison source](comparison.gox.fixture) is actual goxide, separately
 transpiled and executed with race: [output](results/comparison-race.txt). It proves
 that unit-case equality and enum/nil comparison are currently accepted, even when
 another variant contains a slice; comparing the active slice case panics. A tagged
@@ -96,8 +96,8 @@ The later production slice implements binary-expression and simple indexed-targe
 matches as statement preludes in the original function. The frontend's temporary
 function-literal atoms are compile-time syntax only and are absent from emitted
 Go. It does not change enum storage. Unlike the earlier integer-tag IIFE probe,
-these benchmarks use actual hgo CLI output, including current interface-enum
-validators, against explicit hgo statement-match baselines.
+these benchmarks use actual goxide CLI output, including current interface-enum
+validators, against explicit goxide statement-match baselines.
 
 [Executable acceptance/benchmark fixture](../../acceptance/match_binary_index_test.go)
 and [raw optimized samples](results/binary-index/bench.txt): Go 1.27.1 linux/amd64,
@@ -117,6 +117,6 @@ function-frame semantics; the earlier pure-Go IIFE results remain separate.
 Reproduce from the repository with the real Go toolchain on PATH:
 
 ```sh
-GOMAXPROCS=1 HGO_MATCH_BENCH=1 go test ./tests/acceptance \
+GOMAXPROCS=1 GOXIDE_MATCH_BENCH=1 go test ./tests/acceptance \
   -run '^TestMatchBinaryAndIndexedModules/execution$' -count=1 -v
 ```

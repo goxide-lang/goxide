@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"go/ast"
 	"go/scanner"
 	"go/token"
@@ -40,6 +41,9 @@ func recoverEnumImports(sources map[string][]byte, known map[string]PackageResul
 			}
 			pkg, e := imp.Import(path)
 			if e != nil {
+				return nil, e
+			}
+			if e := naming.Package(pkg); e != nil {
 				return nil, e
 			}
 			if path == enums.SumPackage {
@@ -155,7 +159,7 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 			}
 			x := enumExport{Name: d.Name, DefinitionPath: path, DefinitionName: d.Name, Marker: d.Marker, Validator: "Validate" + d.Name}
 			for _, v := range d.Variants {
-				x.Variants = append(x.Variants, enumVariantExport{Name: v.Name, HasPayload: v.Payload != "", Case: fmt.Sprintf("HgoCase%d_%s_%s", len(d.Name), d.Name, v.Name), Constructor: "New" + d.Name + v.Name})
+				x.Variants = append(x.Variants, enumVariantExport{Name: v.Name, HasPayload: v.Payload != "", Case: fmt.Sprintf("GoxideCase%d_%s_%s", len(d.Name), d.Name, v.Name), Constructor: "New" + d.Name + v.Name})
 			}
 			canonical[path+"."+d.Name] = x
 		}

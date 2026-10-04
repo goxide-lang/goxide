@@ -463,7 +463,7 @@ func TestEqualityArtifactOriginAuthorization(t *testing.T) {
 func TestCollectEqualityRegistrations(t *testing.T) {
 	source := equalityTestSource + "\ntype Alias=Value;type Fake Value\n"
 	p := enumTestPackage(t, "example.org/equality", source, nil)
-	result := PackageResult{Files: map[string]Result{"a.hgo": {equalityDerives: map[string]equality.Derive{"Value": {PartialEq: true, Eq: true}}}}}
+	result := PackageResult{Files: map[string]Result{"a.gox": {equalityDerives: map[string]equality.Derive{"Value": {PartialEq: true, Eq: true}}}}}
 	m, e := collectEnumExports(p.Path(), result, p)
 	if e != nil {
 		t.Fatal(e)

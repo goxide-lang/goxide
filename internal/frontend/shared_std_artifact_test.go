@@ -14,7 +14,7 @@ import (
 )
 
 func TestSharedStdValidatorOwnerAuthorization(t *testing.T) {
-	std, err := typecheck.NewImporter("artifact.hgo").Import(enums.SumPackage)
+	std, err := typecheck.NewImporter("artifact.gox").Import(enums.SumPackage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,12 +74,12 @@ func TestSharedStdValidatorOwnerAuthorization(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		decls, prelude, imports, _ := importedDeclarations("example.org/consumer", map[string][]byte{"input.hgo": []byte("package consumer\nimport r \"example.org/relay\"\nvar V r.Option[int]\n")}, map[string]PackageResult{relay.Path: {enumMetadata: loaded, enumTypes: imp.enumTestImporter[relay.Path]}})
+		decls, prelude, imports, _ := importedDeclarations("example.org/consumer", map[string][]byte{"input.gox": []byte("package consumer\nimport r \"example.org/relay\"\nvar V r.Option[int]\n")}, map[string]PackageResult{relay.Path: {enumMetadata: loaded, enumTypes: imp.enumTestImporter[relay.Path]}})
 		data, err := json.Marshal(decls)
 		if err != nil {
 			t.Fatal(err)
 		}
-		outputs = append(outputs, append(data, []byte(prelude["input.hgo"]+imports["input.hgo"])...))
+		outputs = append(outputs, append(data, []byte(prelude["input.gox"]+imports["input.gox"])...))
 	}
 	if !bytes.Equal(outputs[0], outputs[1]) {
 		t.Fatal("candidate order changed generated imports/prelude")

@@ -88,13 +88,13 @@ func main(){_=m.forever!()}
 		t.Run(tc.name, func(t *testing.T) {
 			source := t.TempDir()
 			packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
-			packagesWrite(t, source, "logkit/macros.hgo", tc.definition)
-			packagesWrite(t, source, "main.hgo", tc.main)
+			packagesWrite(t, source, "logkit/macros.gox", tc.definition)
+			packagesWrite(t, source, "main.gox", tc.main)
 			_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) {
 				t.Fatalf("expected %s rejection: %v", tc.want, err)
 			}
-			if tc.name == "private-runtime" && (!strings.Contains(err.Error(), "main.hgo") || !strings.Contains(err.Error(), "macros.hgo")) {
+			if tc.name == "private-runtime" && (!strings.Contains(err.Error(), "main.gox") || !strings.Contains(err.Error(), "macros.gox")) {
 				t.Fatalf("missing definition/callsite: %v", err)
 			}
 		})
@@ -104,8 +104,8 @@ func main(){_=m.forever!()}
 func TestMacroPackagesDependencyCycle(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
-	packagesWrite(t, source, "a/a.hgo", "package a\nimport b \"macros.example/app/b\"\npub macro_rules! value {()=>{b.value!()};}\n")
-	packagesWrite(t, source, "b/b.hgo", "package b\nimport a \"macros.example/app/a\"\npub macro_rules! value {()=>{a.value!()};}\n")
+	packagesWrite(t, source, "a/a.gox", "package a\nimport b \"macros.example/app/b\"\npub macro_rules! value {()=>{b.value!()};}\n")
+	packagesWrite(t, source, "b/b.gox", "package b\nimport a \"macros.example/app/a\"\npub macro_rules! value {()=>{a.value!()};}\n")
 	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Fatalf("dependency cycle accepted: %v", err)
@@ -115,22 +115,22 @@ func TestMacroPackagesDependencyCycle(t *testing.T) {
 func TestMacroPackagesDefinitionDiagnostic(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
-	packagesWrite(t, source, "logkit/macros.hgo", `package logkit
+	packagesWrite(t, source, "logkit/macros.gox", `package logkit
 func Emit(value string) {}
 pub macro_rules! broken { () => { Emit(71) }; }
 `)
-	packagesWrite(t, source, "main.hgo", `package main
+	packagesWrite(t, source, "main.gox", `package main
 import m "macros.example/app/logkit"
 func main(){m.broken!()}
 `)
 	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
 	var mapped *sourcemap.Error
-	if !errors.As(err, &mapped) || mapped.Origin == nil || filepath.Base(mapped.Origin.File) != "macros.hgo" || mapped.Origin.Line != 3 {
+	if !errors.As(err, &mapped) || mapped.Origin == nil || filepath.Base(mapped.Origin.File) != "macros.gox" || mapped.Origin.Line != 3 {
 		t.Fatalf("missing true definition source: %v", err)
 	}
 	found := false
 	for _, frame := range mapped.Stack {
-		if filepath.Base(frame.Callsite.File) == "main.hgo" && frame.Callsite.Line == 3 {
+		if filepath.Base(frame.Callsite.File) == "main.gox" && frame.Callsite.Line == 3 {
 			found = true
 		}
 	}
@@ -180,7 +180,7 @@ func TestMacroPackagesWholeBuildBudget(t *testing.T) {
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
 	// Each package is below the limit; the module must share the counter.
 	for _, name := range []string{"a", "b"} {
-		packagesWrite(t, source, name+"/macros.hgo", "package "+name+"\nmacro_rules! one {()=>{1};}\nfunc Run(){"+strings.Repeat("_=one!();", 2200)+"}\n")
+		packagesWrite(t, source, name+"/macros.gox", "package "+name+"\nmacro_rules! one {()=>{1};}\nfunc Run(){"+strings.Repeat("_=one!();", 2200)+"}\n")
 	}
 	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(err.Error(), "expansion count budget") {
@@ -204,15 +204,15 @@ import m "macros.example/app/logkit"
 func main(){m.broken!()}
 `
 			callLine := 3
-			definitionFile := "macros.hgo"
+			definitionFile := "macros.gox"
 			if sameFile {
 				definition = strings.Replace(definition, "package logkit", "package main", 1) + "func main(){broken!()}\n"
-				packagesWrite(t, source, "main.hgo", definition)
+				packagesWrite(t, source, "main.gox", definition)
 				callLine = 6
-				definitionFile = "main.hgo"
+				definitionFile = "main.gox"
 			} else {
-				packagesWrite(t, source, "logkit/macros.hgo", definition)
-				packagesWrite(t, source, "main.hgo", caller)
+				packagesWrite(t, source, "logkit/macros.gox", definition)
+				packagesWrite(t, source, "main.gox", caller)
 			}
 			_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
 			var mapped *sourcemap.Error
@@ -220,7 +220,7 @@ func main(){m.broken!()}
 			if !errors.As(err, &mapped) || mapped.Origin == nil || filepath.Base(mapped.Origin.File) != definitionFile || mapped.Origin.Start != offset || mapped.Origin.End != offset+2 || mapped.Origin.Line != 5 {
 				t.Fatalf("lost original literal after preparation: %v (%#v)", err, mapped)
 			}
-			if len(mapped.Stack) != 1 || filepath.Base(mapped.Stack[0].Callsite.File) != "main.hgo" || mapped.Stack[0].Callsite.Line != callLine || mapped.Stack[0].Definition.Line != 5 {
+			if len(mapped.Stack) != 1 || filepath.Base(mapped.Stack[0].Callsite.File) != "main.gox" || mapped.Stack[0].Callsite.Line != callLine || mapped.Stack[0].Definition.Line != 5 {
 				t.Fatalf("wrong original expansion stack: %#v", mapped.Stack)
 			}
 		})
@@ -230,11 +230,11 @@ func main(){m.broken!()}
 func TestMacroPackagesSameFileAliases(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
-	packagesWrite(t, source, "dep/macros.hgo", `package dep
+	packagesWrite(t, source, "dep/macros.gox", `package dep
 func Emit() int { return 7 }
 pub macro_rules! value {()=>{Emit()};}
 `)
-	packagesWrite(t, source, "main.hgo", `package main
+	packagesWrite(t, source, "main.gox", `package main
 import (
  a "macros.example/app/dep"
  b "macros.example/app/dep"

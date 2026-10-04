@@ -40,7 +40,7 @@ type Result struct {
 	References []Reference
 }
 
-const prefix = "__hgo_ref_"
+const prefix = "__goxide_ref_"
 
 var scalars = []string{"bool", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "float32", "float64", "complex64", "complex128", "string"}
 
@@ -81,7 +81,7 @@ func elementInFile(t types.Type, file *ast.File, info *types.Info) string {
 			if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
 				for _, sp := range gd.Specs {
 					spec := sp.(*ast.TypeSpec)
-					if strings.HasPrefix(spec.Name.Name, "__hgo_permission_element_") && types.Identical(t, info.TypeOf(spec.Type)) {
+					if strings.HasPrefix(spec.Name.Name, "__goxide_permission_element_") && types.Identical(t, info.TypeOf(spec.Type)) {
 						return spec.Name.Name
 					}
 				}
@@ -89,7 +89,7 @@ func elementInFile(t types.Type, file *ast.File, info *types.Info) string {
 		}
 	}
 	return types.TypeString(t, func(p *types.Package) string {
-		if p.Path() == "hgo.local/refs" {
+		if p.Path() == "goxide.local/refs" {
 			return ""
 		}
 		if file != nil {
@@ -129,9 +129,9 @@ func refType(t types.Type, owner *types.Package) (Ref, bool) {
 		return Ref{}, false
 	}
 	s := n.Obj().Name()
-	if (s == "__hgo_ref_ro" || s == "__hgo_ref_rw") && n.TypeArgs().Len() == 1 {
+	if (s == "__goxide_ref_ro" || s == "__goxide_ref_rw") && n.TypeArgs().Len() == 1 {
 		p := Read
-		if s == "__hgo_ref_rw" {
+		if s == "__goxide_ref_rw" {
 			p = Write
 		}
 		return Ref{element(n.TypeArgs().At(0)), p}, true
@@ -265,12 +265,12 @@ func protectedAt(source []byte) func(int) bool {
 }
 func declarations() string {
 	var b strings.Builder
-	b.WriteString("\ntype __hgo_ref_ro[T interface{}] *T\ntype __hgo_ref_rw[T interface{}] *T\n")
+	b.WriteString("\ntype __goxide_ref_ro[T interface{}] *T\ntype __goxide_ref_rw[T interface{}] *T\n")
 	for _, e := range scalars {
 		for _, p := range []Permission{Read, Write} {
-			origin := "__hgo_ref_ro"
+			origin := "__goxide_ref_ro"
 			if p == Write {
-				origin = "__hgo_ref_rw"
+				origin = "__goxide_ref_rw"
 			}
 			fmt.Fprintf(&b, "\ntype %s = %s[%s]\n", name(Ref{e, p}), origin, e)
 		}
@@ -347,7 +347,7 @@ func (c *checker) checkTypes() error {
 	}
 	deduplicateIR(files)
 	conf := types.Config{Importer: imp, DisableUnusedImportCheck: len(c.companions) > 0}
-	pkg, err := conf.Check("hgo.local/refs", c.fs, files, c.info)
+	pkg, err := conf.Check("goxide.local/refs", c.fs, files, c.info)
 	c.pkg = pkg
 	if err != nil {
 		return fmt.Errorf("%s: refs: source type checking failed: %w", c.filename, err)
@@ -482,7 +482,7 @@ func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare 
 			}
 			at := c.offset(u.Pos())
 			if c.mut[c.m.origin[at]] {
-				es = append(es, edit{at, at, "__hgo_ref_make_write("}, edit{c.offset(u.End()), c.offset(u.End()), ")"})
+				es = append(es, edit{at, at, "__goxide_ref_make_write("}, edit{c.offset(u.End()), c.offset(u.End()), ")"})
 			}
 			return true
 		})
@@ -492,7 +492,7 @@ func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare 
 			lines[a.line] = []byte(a.text)
 		}
 		out := bytes.Join(lines, []byte("\n"))
-		out = append(out, []byte(c.declarations()+"\ntype __hgo_ref_write[T interface{}] *T\nfunc __hgo_ref_make_write[T interface{}](v *T) __hgo_ref_write[T] { return __hgo_ref_write[T](v) }\n")...)
+		out = append(out, []byte(c.declarations()+"\ntype __goxide_ref_write[T interface{}] *T\nfunc __goxide_ref_make_write[T interface{}](v *T) __goxide_ref_write[T] { return __goxide_ref_write[T](v) }\n")...)
 		return Result{Source: out}, nil
 	}
 	bodyLen := len(c.m.text)

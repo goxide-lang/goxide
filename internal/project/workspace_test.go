@@ -136,10 +136,10 @@ func TestWorkspaceMembersShareLease(t *testing.T) {
 		other()
 		t.Fatal("second member bypassed workspace lease")
 	}
-	if _, e = os.Stat(filepath.Join(root, ".hgo", "build.lock")); e != nil {
+	if _, e = os.Stat(filepath.Join(root, ".goxide", "build.lock")); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = os.Stat(filepath.Join(root, "a", ".hgo", "build.lock")); !os.IsNotExist(e) {
+	if _, e = os.Stat(filepath.Join(root, "a", ".goxide", "build.lock")); !os.IsNotExist(e) {
 		t.Fatal("member acquired separate lease", e)
 	}
 	release()

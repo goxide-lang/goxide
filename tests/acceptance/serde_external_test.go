@@ -13,8 +13,8 @@ func TestExternalSerdeModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	mod := func(name, lib string) string {
 		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", name, filepath.ToSlash(root))
 		if lib != "" {
@@ -24,7 +24,7 @@ func TestExternalSerdeModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("wire.example/lib", ""))
-	packagesWrite(t, src, "model/item.hgo", `package model
+	packagesWrite(t, src, "model/item.gox", `package model
 #[derive(Serialize,Deserialize)]
 #[serde(deny_unknown_fields)]
 type Item struct{N int;Name string}
@@ -33,12 +33,12 @@ type Output struct{N int}
 #[derive(Deserialize)]
 type Input struct{N int}
 `)
-	packagesWrite(t, src, "model/event.hgo", `package model
+	packagesWrite(t, src, "model/event.gox", `package model
 #[derive(Serialize,Deserialize)]
 pub enum E{Empty,Item(Item),}
 func Event(n int)E{return E::Item(Item{N:n,Name:"business"})}
 `)
-	packagesWrite(t, src, "other/item.hgo", `package different
+	packagesWrite(t, src, "other/item.gox", `package different
 #[derive(Serialize,Deserialize)]
 type Item struct{Text string}
 `)
@@ -58,19 +58,19 @@ func DeserializeItem(d serde.Deserializer)(Item,error){n,e:=serde.ReadInt64(d);r
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("wire.example/app", lib))
-	packagesWrite(t, appsrc, "app.hgo", `package app
+	packagesWrite(t, appsrc, "app.gox", `package app
 import v "wire.example/lib/relay"
 #[derive(Serialize,Deserialize)]
 type Wrap struct{V v.E;Items []v.Item;Index map[string]v.Item;Pair [1]v.Item;Maybe *v.Item;Opt Option[v.Item]}
 #[derive(Serialize,Deserialize)]
 type Nested struct{Items [][]v.E}
 `)
-	packagesWrite(t, appsrc, "other.hgo", `package app
+	packagesWrite(t, appsrc, "other.gox", `package app
 import v "wire.example/lib/other"
 #[derive(Serialize,Deserialize)]
 type Other struct{Items []v.Item}
 `)
-	packagesWrite(t, appsrc, "directions.hgo", `package app
+	packagesWrite(t, appsrc, "directions.gox", `package app
 import m "wire.example/lib/model"
 #[derive(Serialize)]
 type Out struct{V m.Output}
@@ -121,13 +121,13 @@ func TestGoHelpers(t *testing.T){v:=a.Out{V:m.Output{N:9}};b,e:=serdejson.Encode
 	for _, tc := range []struct{ kind, pkg, typ string }{{"Serialize", "fake", "Item"}, {"Deserialize", "fake", "Item"}, {"Serialize", "relay", "New"}, {"Deserialize", "relay", "New"}, {"Serialize", "model", "Input"}, {"Deserialize", "model", "Output"}} {
 		bad := t.TempDir()
 		packagesWrite(t, bad, "go.mod", mod("wire.example/bad", lib))
-		packagesWrite(t, bad, "bad.hgo", fmt.Sprintf("package bad\nimport m %q\n#[derive(%s)]\ntype Wrap struct{V m.%s}\n", "wire.example/lib/"+tc.pkg, tc.kind, tc.typ))
+		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nimport m %q\n#[derive(%s)]\ntype Wrap struct{V m.%s}\n", "wire.example/lib/"+tc.pkg, tc.kind, tc.typ))
 		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
-		if !strings.Contains(log, "registered serde protocol") || !strings.Contains(log, "bad.hgo:") {
+		if !strings.Contains(log, "registered serde protocol") || !strings.Contains(log, "bad.gox:") {
 			t.Fatal(log)
 		}
 	}
-	artifact := filepath.Join(lib, "model", ".hgo.enums.json")
+	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
 	saved, err := os.ReadFile(artifact)
 	if err != nil {
 		t.Fatal(err)
@@ -136,15 +136,15 @@ func TestGoHelpers(t *testing.T){v:=a.Out{V:m.Output{N:9}};b,e:=serdejson.Encode
 	if changed == string(saved) {
 		t.Fatal("tamper unchanged")
 	}
-	packagesWrite(t, lib, "model/.hgo.enums.json", changed)
+	packagesWrite(t, lib, "model/.goxide.enums.json", changed)
 	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "tamper"), appsrc)
-	if !strings.Contains(log, ".hgo:") || !strings.Contains(log, "metadata") {
+	if !strings.Contains(log, ".gox:") || !strings.Contains(log, "metadata") {
 		t.Fatal(log)
 	}
-	packagesWrite(t, lib, "model/.hgo.enums.json", string(saved))
+	packagesWrite(t, lib, "model/.goxide.enums.json", string(saved))
 	packagesWrite(t, lib, "model/stale.go", "package model\nvar Stale int\n")
 	log = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "stale"), appsrc)
-	if !strings.Contains(log, ".hgo:") || !strings.Contains(log, "metadata") {
+	if !strings.Contains(log, ".gox:") || !strings.Contains(log, "metadata") {
 		t.Fatal(log)
 	}
 }
@@ -177,5 +177,5 @@ func TestExternalErrors(t *testing.T){
  _,e=serdejson.Unmarshal([]byte(strings.TrimSuffix(valid,"}")+",\"extra\":"+strings.Repeat("[",serdejson.MaxDepth+2)+"0"+strings.Repeat("]",serdejson.MaxDepth+2)+"}"),DeserializeWrap);var d *serde.Error;if !errors.As(e,&d)||d.Kind!="Limit"{t.Fatal("skip budget lost",e)}
 }
 type invalid struct{m.E}
-func TestExternalInvalidBoundary(t *testing.T){v,e:=serdejson.Unmarshal([]byte(valid),DeserializeWrap);if e!=nil{t.Fatal(e)};for _,x:=range []m.E{nil,(*m.HgoCase1_E_Empty)(nil),&m.HgoCase1_E_Empty{},(*invalid)(nil),invalid{}}{v.V=x;_,e:=enc(v);detail(t,e,serde.Type,[]serde.PathSegment{{Kind:"Field",Name:"V"}})}}
+func TestExternalInvalidBoundary(t *testing.T){v,e:=serdejson.Unmarshal([]byte(valid),DeserializeWrap);if e!=nil{t.Fatal(e)};for _,x:=range []m.E{nil,(*m.GoxideCase1_E_Empty)(nil),&m.GoxideCase1_E_Empty{},(*invalid)(nil),invalid{}}{v.V=x;_,e:=enc(v);detail(t,e,serde.Type,[]serde.PathSegment{{Kind:"Field",Name:"V"}})}}
 `

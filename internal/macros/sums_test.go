@@ -21,14 +21,14 @@ func unwrap(v Option[int])int{match v {Option[int]::Some(n)=>{return n},Option[i
 func result(v Result[int,error])int{match v {Result[int,error]::Ok(n)=>{return n},Result[int,error]::Err(_)=>{return -2},};panic("bad")}
 func main(){Option,Result,int,error:=1,2,3,4;_,_,_,_=Option,Result,int,error;fmt.Println(unwrap(some!(7)),unwrap(none!()),result(okay!(9)))}
 `
-	expanded, err := Expand("sum.hgo", []byte(source))
+	expanded, err := Expand("sum.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(expanded), "__hgo_enum_") {
+	if strings.Contains(string(expanded), "__goxide_enum_") {
 		t.Fatal("macro pass leaked reserved enum names")
 	}
-	lower, err := enums.Lower("sum.hgo", expanded)
+	lower, err := enums.Lower("sum.gox", expanded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,21 +45,21 @@ func main(){Option,Result,int,error:=1,2,3,4;_,_,_,_=Option,Result,int,error;fmt
 	}
 }
 func TestSumHelperDoesNotMovePropagation(t *testing.T) {
-	r, err := ExpandWithIntrinsics("sum.hgo", []byte(`package p
-macro_rules! wrap {($v:expr)=>{func()Result[int,error]{return Result[int,error]::Ok(__hgo_question($v))}()};}
+	r, err := ExpandWithIntrinsics("sum.gox", []byte(`package p
+macro_rules! wrap {($v:expr)=>{func()Result[int,error]{return Result[int,error]::Ok(__goxide_question($v))}()};}
 func source()Result[int,error]{return Result[int,error]::Ok(1)}
 func caller(){_=wrap!(source())}
-`), []string{"__hgo_question"})
+`), []string{"__goxide_question"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(r.Source)
 	start := strings.Index(s, "func caller")
-	if start < 0 || strings.Count(s, "__hgo_question(") != 1 {
+	if start < 0 || strings.Count(s, "__goxide_question(") != 1 {
 		t.Fatalf("lost or duplicated marker: %s", s)
 	}
-	marker := strings.Index(s, "__hgo_question(")
-	helper := strings.Index(s[start:], "\nfunc hgoMacroGenerated") + start
+	marker := strings.Index(s, "__goxide_question(")
+	helper := strings.Index(s[start:], "\nfunc goxideMacroGenerated") + start
 	if helper < start || marker > helper {
 		t.Fatalf("propagation moved into helper: %s", s)
 	}
@@ -71,7 +71,7 @@ func TestUnsupportedSumTemplateTypes(t *testing.T) {
 		`Option[int]::Missing`, `Option[int]::None()`, `Result[int]::Ok(1)`, `E::Ready`,
 	} {
 		src := "package p\nmacro_rules! m {($t:ident)=>{" + body + "};}\nfunc f(){_=m!(int)}"
-		if _, e := Expand("bad_sum.hgo", []byte(src)); e == nil || !strings.Contains(e.Error(), "bad_sum.hgo") {
+		if _, e := Expand("bad_sum.gox", []byte(src)); e == nil || !strings.Contains(e.Error(), "bad_sum.gox") {
 			t.Fatalf("expected located error for %s: %v", body, e)
 		}
 	}

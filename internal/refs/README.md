@@ -24,7 +24,7 @@ one unnamed result, and initialized locals. Read/write references preserve
 ordinary pointer identity and can be copied, rebound, returned, or captured by a
 closure whose signature does not itself carry references.
 
-```hgo
+```goxide
 type State struct { N int; Values [2]int; Items []int; Counts map[string]int; P *int }
 func inspect(r &State) int {
     v := *r
@@ -170,20 +170,20 @@ ordinary pointer/interface/closure returns cannot erase them. Existing writable
 aliases remain usable. Native unmarked pointer APIs stay native APIs; D11 bridge
 work is not implemented by pretending a checked reference is a raw pointer.
 
-Generated directory packages contain `HgoReferenceMetadata` and `.hgo.refs.json`.
+Generated directory packages contain `GoxideReferenceMetadata` and `.goxide.refs.json`.
 The internal artifact envelope (ArtifactVersion 1, permission schema v2) can now
 restore the supported signatures across separate modules via offline local replace.
 It binds package identity, logical marker digest, exact selected Go source hashes,
 and root/dependency fingerprints. The root package and every direct import pin its transitive selected source
 closure and target build settings; marked imports also pin their artifact bytes and
 are recursively validated. This includes ordinary Go dependencies: changing a named
-struct's fields can invalidate an earlier readonly analysis without changing an hgo
+struct's fields can invalidate an earlier readonly analysis without changing an goxide
 function marker. Regenerate consumers after dependency changes. Hashes detect stale
 or mismatched trusted producer artifacts; they are not authentication or certification
 of arbitrary edited Go. Sources are resolved by the same offline Go importer, never
 by a path supplied in JSON. External cgo headers/toolchain inputs are not fully pinned.
 Single-file consumers recover directory artifacts and apply the same permission checks;
-single-file providers still use internal identity `hgo/generated` without an artifact.
+single-file providers still use internal identity `goxide/generated` without an artifact.
 This is not a stable public ABI. Native Go consumers do not need the JSON file.
 
 Supported elements include builtin scalars, non-generic named concrete types,
@@ -202,8 +202,8 @@ incomplete. A reference to a supported container is distinct from a container of
 references. Existing projection restrictions remain; this metadata extension does
 not claim unrestricted composite operations or method-effect inference.
 
-These checks apply to files processed by hgo. Native `go build` of generated
-pointers does not enforce hgo permissions. Other writable aliases and native calls
+These checks apply to files processed by goxide. Native `go build` of generated
+pointers does not enforce goxide permissions. Other writable aliases and native calls
 on ordinary pointers remain valid. New import/function-value diagnostics preserve
 proven source spans; downstream reference reconstruction can remain
 `generated/unmapped`. See RFC 0005 §6.15–6.16 and the separate generated-module

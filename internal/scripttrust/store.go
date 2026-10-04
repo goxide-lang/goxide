@@ -5,6 +5,7 @@ package scripttrust
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,7 +22,10 @@ type Store struct {
 
 // Location resolves the user-owned policy directory without creating it.
 func Location() (string, error) {
-	directory := os.Getenv("HGO_TRUST_DIR")
+	if err := naming.Environment(); err != nil {
+		return "", err
+	}
+	directory := os.Getenv("GOXIDE_TRUST_DIR")
 	if directory == "" {
 		config, err := os.UserConfigDir()
 		if err != nil {
@@ -56,7 +60,7 @@ func CheckLocation(forbidden ...string) error {
 		}
 	}
 	for at := directory; ; at = filepath.Dir(at) {
-		if _, e := os.Lstat(filepath.Join(at, ".hgo-layout.json")); e == nil {
+		if _, e := os.Lstat(filepath.Join(at, ".goxide-layout.json")); e == nil {
 			return fmt.Errorf("B-TRUST-PATH: trust cannot be in a managed layout")
 		} else if !os.IsNotExist(e) {
 			return e
@@ -167,7 +171,7 @@ func (s *Store) Save() error {
 }
 func (s *Store) Authorize(project string, required []string) error {
 	if !s.Projects[project] {
-		return fmt.Errorf("B-TRUST-ROOT: project is not trusted; inspect 'hgo scripts --action plan', then explicitly use --action trust-project")
+		return fmt.Errorf("B-TRUST-ROOT: project is not trusted; inspect 'goxide scripts --action plan', then explicitly use --action trust-project")
 	}
 	for _, id := range required {
 		if !s.Subjects[id] {

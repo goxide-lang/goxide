@@ -20,10 +20,10 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	outside := t.TempDir()
-	input := filepath.Join(root, "examples/prototype/delivery_job.hgo")
+	input := filepath.Join(root, "examples/prototype/delivery_job.gox")
 	original, err := os.ReadFile(input)
 	if err != nil {
 		t.Fatal(err)
@@ -91,8 +91,8 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 			t.Fatal("example no longer has the expected readonly helper")
 		}
 		packagesWrite(t, source, "go.mod", "module delivery.example/package\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
-		packagesWrite(t, source, "main.hgo", strings.Replace(string(original), readLimit, "", 1))
-		packagesWrite(t, source, "limits.hgo", "package main\n"+readLimit+"\n")
+		packagesWrite(t, source, "main.gox", strings.Replace(string(original), readLimit, "", 1))
+		packagesWrite(t, source, "limits.gox", "package main\n"+readLimit+"\n")
 		dest := filepath.Join(t.TempDir(), "generated")
 		deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", dest, source)
 		repeated := filepath.Join(t.TempDir(), "generated")
@@ -129,10 +129,10 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	t.Run("readonly-write-rejected", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module delivery.example/invalid\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
-		packagesWrite(t, source, "bad.hgo", string(original)+"\nfunc illegalWrite(limit &int) { *limit = 9 }\n")
+		packagesWrite(t, source, "bad.gox", string(original)+"\nfunc illegalWrite(limit &int) { *limit = 9 }\n")
 		dest := filepath.Join(t.TempDir(), "bad.go")
-		output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, filepath.Join(source, "bad.hgo"))
-		if !strings.Contains(output, "cannot write through a read") || !strings.Contains(output, "bad.hgo:") {
+		output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, filepath.Join(source, "bad.gox"))
+		if !strings.Contains(output, "cannot write through a read") || !strings.Contains(output, "bad.gox:") {
 			t.Fatalf("missing permission failure: %s", output)
 		}
 		if _, err := os.Stat(dest); !os.IsNotExist(err) {
@@ -143,11 +143,11 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	t.Run("cross-package-diagnostic-and-cleanup", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module delivery.example/broken\ngo 1.27\n")
-		packagesWrite(t, source, "kit/definition.hgo", "package kit\nfunc Emit(value string){}\npub macro_rules! broken {()=>{Emit(17)};}\n")
-		packagesWrite(t, source, "main.hgo", "package main\nimport k \"delivery.example/broken/kit\"\nfunc main(){k.broken!()}\n")
+		packagesWrite(t, source, "kit/definition.gox", "package kit\nfunc Emit(value string){}\npub macro_rules! broken {()=>{Emit(17)};}\n")
+		packagesWrite(t, source, "main.gox", "package main\nimport k \"delivery.example/broken/kit\"\nfunc main(){k.broken!()}\n")
 		dest := filepath.Join(t.TempDir(), "generated")
 		output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, source)
-		for _, want := range []string{"definition.hgo:3:", "main.hgo:3:"} {
+		for _, want := range []string{"definition.gox:3:", "main.gox:3:"} {
 			if !strings.Contains(output, want) {
 				t.Fatalf("missing %s in real CLI error: %s", want, output)
 			}

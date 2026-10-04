@@ -9,4 +9,4 @@ yaml = []
 
 [lib]
 name = "shared"
-path = "shared.hgo"
+path = "shared.gox"

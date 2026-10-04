@@ -12,7 +12,7 @@ func importedFieldProtocols(consumer string, sources map[string][]byte, known ma
 	preludes, imports := map[string]string{}, map[string]string{}
 	protocols := map[string]map[string]string{}
 	for fi, name := range sortedSources(sources) {
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
 		f, err := parseSourceImports(name, sources[name])
@@ -39,10 +39,10 @@ func importedFieldProtocols(consumer string, sources map[string][]byte, known ma
 				}
 				origin := alias
 				if x.DefinitionPath != pth {
-					origin = fmt.Sprintf("__hgo_enum_field_origin_f%d_i%d_d%d", fi, ii, di)
+					origin = fmt.Sprintf("__goxide_enum_field_origin_f%d_i%d_d%d", fi, ii, di)
 					imports[name] += fmt.Sprintf("; import %s %q", origin, x.DefinitionPath)
 				}
-				helper := fmt.Sprintf("__hgo_enum_field_import_f%d_i%d_d%d", fi, ii, di)
+				helper := fmt.Sprintf("__goxide_enum_field_import_f%d_i%d_d%d", fi, ii, di)
 				preludes[name] += fmt.Sprintf("\nvar %s = %s.%s;\n", helper, origin, x.Helper)
 				protocols[name][x.Kind+"."+pth+"."+x.Name] = helper
 			}
@@ -87,7 +87,7 @@ func (g *generator) deriveProtocol(kind string, t ast.Expr) (string, bool) {
 		// Container types remain in package scope so generated locals (src, item,
 		// out, ...) cannot capture source import aliases or named element types.
 		g.next++
-		name := fmt.Sprintf("__hgo_enum_derive_type_f%d_%d", g.deriveFile, g.next)
+		name := fmt.Sprintf("__goxide_enum_derive_type_f%d_%d", g.deriveFile, g.next)
 		fmt.Fprintf(&g.helpers, "\ntype %s = %s\n", name, g.typeName(t))
 		return name, true
 	}

@@ -9,7 +9,7 @@ case "$("$go_tool" version)" in
     *) echo 'Set GO_BIN to the real Go 1.27.x compiler (validated with 1.27.1).' >&2; exit 2 ;;
 esac
 export PATH="$(dirname -- "$go_tool"):$PATH"
-work=${1:-$(mktemp -d "${TMPDIR:-/tmp}/hgo-enum-trial.XXXXXX")}
+work=${1:-$(mktemp -d "${TMPDIR:-/tmp}/goxide-enum-trial.XXXXXX")}
 mkdir -p -- "$work"
 work=$(cd -- "$work" && pwd)
 if [[ -n $(ls -A -- "$work") ]]; then
@@ -20,13 +20,13 @@ printf 'Source checkout: %s\n' "$(git -C "$repo" rev-parse HEAD)"
 "$go_tool" version
 
 # The model is one real Go module; app is a separate consumer module.
-"$go_tool" -C "$repo" build -o "$work/hgo" ./cmd/hgo
-"$work/hgo" transpile -o "$work/model" "$repo/examples/enum_trial/model"
+"$go_tool" -C "$repo" build -o "$work/goxide" ./cmd/goxide
+"$work/goxide" transpile -o "$work/model" "$repo/examples/enum_trial/model"
 cp -R -- "$repo/examples/enum_trial/app" "$work/input"
 "$go_tool" -C "$work/input" mod edit \
     "-replace=github.com/hxsf/goxide=$repo" \
     "-replace=trial.example/model=$work/model"
-"$work/hgo" transpile -o "$work/app" "$work/input"
+"$work/goxide" transpile -o "$work/app" "$work/input"
 for module in "$work/model" "$work/app"; do
     "$go_tool" -C "$module" test -race -count=1 -v ./...
     "$go_tool" -C "$module" vet ./...

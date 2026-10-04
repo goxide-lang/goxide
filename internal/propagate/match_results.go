@@ -9,13 +9,13 @@ import (
 	"strings"
 )
 
-const matchInfer = "__hgo_match_expr_infer"
-const matchContext = "__hgo_match_expr_context"
-const matchOperand = "__hgo_match_expr_operand_context"
-const matchZero = "__hgo_match_expr_zero"
-const matchArgument = "__hgo_match_expr_argument"
-const matchReturn = "__hgo_match_expr_return"
-const matchPending = "__hgo_match_expr_pending"
+const matchInfer = "__goxide_match_expr_infer"
+const matchContext = "__goxide_match_expr_context"
+const matchOperand = "__goxide_match_expr_operand_context"
+const matchZero = "__goxide_match_expr_zero"
+const matchArgument = "__goxide_match_expr_argument"
+const matchReturn = "__goxide_match_expr_return"
+const matchPending = "__goxide_match_expr_pending"
 
 // pendingMatchType distinguishes unresolved inference from a user interface.
 // No provisional type facts are used for emission: resolving a slot restarts
@@ -288,7 +288,7 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 		// must still restore &T/mut& T before permission checking.
 		var referenceAliases []string
 		for id, obj := range l.info.Defs {
-			if tn, ok := obj.(*types.TypeName); ok && tn.IsAlias() && (strings.HasPrefix(id.Name, "__hgo_ref_read_") || strings.HasPrefix(id.Name, "__hgo_ref_write_")) && types.Identical(tn.Type(), target) {
+			if tn, ok := obj.(*types.TypeName); ok && tn.IsAlias() && (strings.HasPrefix(id.Name, "__goxide_ref_read_") || strings.HasPrefix(id.Name, "__goxide_ref_write_")) && types.Identical(tn.Type(), target) {
 				referenceAliases = append(referenceAliases, id.Name)
 			}
 		}

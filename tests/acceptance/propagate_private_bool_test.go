@@ -12,8 +12,8 @@ func TestPropagationPrivateBoolContexts(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
@@ -25,7 +25,7 @@ func FlagArray(v flag)[1]flag{return [1]flag{v}}
 func Kind(v any)int{f,ok:=v.(flag);if !ok{return -1};if f{return 1};return 0}
 func Consume(v flag)int{return Kind(v)}
 `)
-		packagesWrite(t, dir, "app.hgo", "package app\nimport m \"packages.example/app/model\"\n"+body)
+		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\n"+body)
 		return dir
 	}
 	t.Run("private-type-and-short-circuit", func(t *testing.T) {
@@ -91,7 +91,7 @@ func TestNearestFailureAndCleanup(t *testing.T){
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "app.hgo") || !strings.Contains(out, "bool") {
+			if !strings.Contains(out, "app.gox") || !strings.Contains(out, "bool") {
 				t.Fatal(out)
 			}
 		})

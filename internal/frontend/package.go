@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -56,7 +57,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	names := sortedSources(sources)
 	cfg := &compileConfig{uses: useContext, protocolFunctions: map[string][]*ast.FuncDecl{}, packagePath: path, builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
 	for _, name := range names {
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
 		_, manual, err := lowerManualDefaults(name, sources[name])
@@ -140,7 +141,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	seen := map[string]string{}
 	for _, name := range names {
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
 		meta, err := enums.CollectPackage(name, sources[name])
@@ -197,7 +198,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	cfg.collect = true
 	for _, name := range names {
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
 		r, err := compile(name, sources[name], cfg)
@@ -234,7 +235,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	generated := map[string]string{}
 	for index, name := range names {
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			result.Files[name] = Result{Go: sources[name]}
 			if name == useContext.generatedFile {
 				r := result.Files[name]
@@ -256,8 +257,13 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 }
 
 // CompilePackage checks the complete package under its actual module import path.
-// sources may contain .hgo and native .go files already selected for this build.
+// sources may contain .gox and native .go files already selected for this build.
 func CompilePackage(path string, sources map[string][]byte, imp types.Importer) (PackageResult, error) {
+	for name, source := range sources {
+		if err := naming.Source(name, source); err != nil {
+			return PackageResult{}, err
+		}
+	}
 	result, err := preparePackageContext(path, sources, nil, imp)
 	if err != nil {
 		return result, err
@@ -354,7 +360,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	}
 	for index, name := range sortedSources(files) {
 		r := result.Files[name]
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
 		r.matchReferenceTemps = map[string]bool{}
@@ -488,7 +494,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	}
 	if len(result.references.Functions) > 0 {
 		for _, name := range sortedSources(files) {
-			if !strings.HasSuffix(name, ".hgo") {
+			if !strings.HasSuffix(name, ".gox") {
 				continue
 			}
 			r := result.Files[name]
@@ -515,7 +521,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		} else {
 			markerFiles := sortedSources(files)
 			for _, name := range markerFiles {
-				if strings.HasSuffix(name, ".hgo") {
+				if strings.HasSuffix(name, ".gox") {
 					markerFiles = []string{name}
 					break
 				}
@@ -576,8 +582,8 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 			seen[identityKey] = d.ExportValidator
 		}
 		for _, v := range d.Variants {
-			exportedBuiltins["Hgo"+d.Family+v.Name] = true
-			exportedBuiltins["HgoNew"+d.Family+v.Name] = true
+			exportedBuiltins["Goxide"+d.Family+v.Name] = true
+			exportedBuiltins["GoxideNew"+d.Family+v.Name] = true
 		}
 	}
 	// Generic builtin definitions are shared by the package. Repeated concrete
@@ -599,7 +605,7 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 				}
 			}
 		}
-		builtin := strings.HasPrefix(key, "__hgo_ref_") || exportedBuiltins[key] || privateValidators[key] || strings.Contains(key, "__hgo_enum_case_Result_") || strings.Contains(key, "__hgo_enum_case_Option_") || strings.HasPrefix(key, "__hgo_enum_ctor_Result_") || strings.HasPrefix(key, "__hgo_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__hgo_enum_validate_Result" || key == "__hgo_enum_validate_Option"
+		builtin := strings.HasPrefix(key, "__goxide_ref_") || exportedBuiltins[key] || privateValidators[key] || strings.Contains(key, "__goxide_enum_case_Result_") || strings.Contains(key, "__goxide_enum_case_Option_") || strings.HasPrefix(key, "__goxide_enum_ctor_Result_") || strings.HasPrefix(key, "__goxide_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__goxide_enum_validate_Result" || key == "__goxide_enum_validate_Option"
 		if !builtin {
 			continue
 		}
@@ -615,7 +621,7 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 		}
 	}
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && (strings.HasPrefix(id.Name, "__hgo_write") || strings.HasPrefix(id.Name, "__hgo_read")) {
+		if id, ok := n.(*ast.Ident); ok && (strings.HasPrefix(id.Name, "__goxide_write") || strings.HasPrefix(id.Name, "__goxide_read")) {
 			edits = append(edits, packageEdit{fs.Position(id.Pos()).Offset, fs.Position(id.End()).Offset, fmt.Sprintf("%s_f%d", id.Name, index)})
 		}
 		return true
@@ -643,14 +649,14 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 		used := false
 		ast.Inspect(parsed, func(n ast.Node) bool {
 			if x, ok := n.(*ast.SelectorExpr); ok {
-				if id, ok := x.X.(*ast.Ident); ok && id.Name == "__hgo_enum_std" {
+				if id, ok := x.X.(*ast.Ident); ok && id.Name == "__goxide_enum_std" {
 					used = true
 				}
 			}
 			return true
 		})
 		if !used {
-			raw = bytes.Replace(raw, []byte("import __hgo_enum_std "), []byte("import _ "), 1)
+			raw = bytes.Replace(raw, []byte("import __goxide_enum_std "), []byte("import _ "), 1)
 		}
 	}
 	formatted, err := format.Source(raw)
@@ -707,7 +713,7 @@ func unusedValidatorOwnerImports(name string, source []byte, provenance *sourcem
 	result := append([]byte(nil), source...)
 	for i := len(f.Imports) - 1; i >= 0; i-- {
 		im := f.Imports[i]
-		if im.Name == nil || !strings.HasPrefix(im.Name.Name, "__hgo_enum_validator_owner_") || used[im.Name.Name] {
+		if im.Name == nil || !strings.HasPrefix(im.Name.Name, "__goxide_enum_validator_owner_") || used[im.Name.Name] {
 			continue
 		}
 		a, b := fs.Position(im.Name.Pos()).Offset, fs.Position(im.Name.End()).Offset

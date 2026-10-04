@@ -14,7 +14,7 @@ func importedEquality(consumer string, sources map[string][]byte, known map[stri
 	prelude, imports := map[string]string{}, map[string]string{}
 	var protocols []equality.Protocol
 	for fi, name := range sortedSources(sources) {
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
 		f, err := parseSourceImports(name, sources[name])
@@ -40,10 +40,10 @@ func importedEquality(consumer string, sources map[string][]byte, known map[stri
 				}
 				origin := alias
 				if x.DefinitionPath != path {
-					origin = fmt.Sprintf("__hgo_enum_eq_origin_f%d_i%d_e%d", fi, ii, ei)
+					origin = fmt.Sprintf("__goxide_enum_eq_origin_f%d_i%d_e%d", fi, ii, ei)
 					imports[name] += fmt.Sprintf("; import %s %q", origin, x.DefinitionPath)
 				}
-				prefix := fmt.Sprintf("__hgo_enum_eq_import_f%d_i%d_e%d", fi, ii, ei)
+				prefix := fmt.Sprintf("__goxide_enum_eq_import_f%d_i%d_e%d", fi, ii, ei)
 				prelude[name] += fmt.Sprintf("\ntype %s = %s.%s; var %s_helper = %s.%s;\n", prefix, alias, x.Name, prefix, origin, x.Helper)
 				protocols = append(protocols, equality.Protocol{PackagePath: x.DefinitionPath, TypeName: prefix, Helper: prefix + "_helper", PartialEq: true, Eq: x.Eq})
 			}

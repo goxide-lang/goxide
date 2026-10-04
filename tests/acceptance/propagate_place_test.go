@@ -85,8 +85,8 @@ func TestPropagationAssignmentPlaceRejections(t *testing.T) {
 		"constant-bound":   `func f(a *[2]int)Option[int]{a[3]=Option[int]::Some(1)?;return Option[int]::Some(0)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("place_bad.hgo", []byte("package fixture\n"+source))
-			if err == nil || !strings.Contains(err.Error(), "place_bad.hgo") {
+			_, err := frontend.Compile("place_bad.gox", []byte("package fixture\n"+source))
+			if err == nil || !strings.Contains(err.Error(), "place_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
 		})
@@ -98,8 +98,8 @@ func TestPropagationAssignmentInstalledBusinessRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	outside := t.TempDir()
 	source := filepath.Join(root, "examples/propagate_places")
 	generated := filepath.Join(t.TempDir(), "module")
@@ -150,7 +150,7 @@ func TestPropagationUnsafeOperandBoundary(t *testing.T) {
 		`unsafe.Alignof([1]int{Option[int]::Some(1)?})`,
 		`unsafe.Offsetof(Option[S]::Some(S{})?.X)`,
 	} {
-		_, err := frontend.Compile("unsafe_bad.hgo", []byte(`package fixture;import "unsafe";type S struct{X int};func f()Option[int]{n:=`+expr+`;return Option[int]::Some(int(n))}`))
+		_, err := frontend.Compile("unsafe_bad.gox", []byte(`package fixture;import "unsafe";type S struct{X int};func f()Option[int]{n:=`+expr+`;return Option[int]::Some(int(n))}`))
 		if err == nil || !strings.Contains(err.Error(), "unsafe compile-time operands") {
 			t.Fatalf("%s: %v", expr, err)
 		}

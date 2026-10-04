@@ -12,18 +12,18 @@ func TestGoResultInference(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", packagesModule(root))
-	packagesWrite(t, source, "ops/macros.hgo", `package ops
+	packagesWrite(t, source, "ops/macros.gox", `package ops
 pub macro_rules! infer {($x:expr)=>{go_result!($x)};}
 pub macro_rules! retain {($x:expr)=>{go_result_keep!($x)};}
 `)
 	packagesWrite(t, source, "native.go", `package app
 func Generic[T any](v T)(T,error){return v,nil}
 `)
-	packagesWrite(t, source, "a.hgo", `package app
+	packagesWrite(t, source, "a.gox", `package app
 import("io";"strconv";"strings";m "packages.example/app/ops")
 type Failure struct{N int}
 func(e *Failure)Error()string{return "failure"}
@@ -73,7 +73,7 @@ pub enum Event{A,B,}
 func invalid()([]Event,error){return []Event{nil},nil}
 func ValidateNested(){r:=go_result!(invalid());match r {_=>{panic("validator missed")},}}
 `)
-	packagesWrite(t, source, "z.hgo", `package app
+	packagesWrite(t, source, "z.gox", `package app
 var InferredGlobal=go_result!(pointer(true))
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
@@ -87,20 +87,20 @@ var InferredGlobal=go_result!(pointer(true))
 	}
 	packagesWrite(t, generated, "inference_test.go", `package app
 import("testing";"errors";"io";"reflect";"strings")
-func TestPointerAndNamed(t *testing.T){if v:=Pointer(true).(HgoResultOk[int,*Failure]).Value;v!=7{t.Fatal(v)};if e:=Pointer(false).(HgoResultErr[int,*Failure]).Value;e!=sentinel{t.Fatal(e)};if e:=Explicit(false).(HgoResultErr[int,*Failure]).Value;e!=sentinel{t.Fatal(e)};if _,ok:=Named(0).(HgoResultOk[int,NamedError]);!ok{t.Fatal("named nil")};e:=Named(1).(HgoResultErr[int,NamedError]).Value;var ptr *Failure;if e==nil||!errors.As(e,&ptr)||ptr!=nil{t.Fatal("interface typed nil")};if e:=Named(2).(HgoResultErr[int,NamedError]).Value;e!=sentinel{t.Fatal(e)};if e:=Erased().(HgoResultErr[int,error]).Value;e==nil||!errors.As(e,&ptr){t.Fatal("erased")};if _,ok:=Unit().(HgoResultOk[struct{},NamedError]);!ok{t.Fatal("unit")};if _,ok:=UnitKeep().(HgoResultOk[struct{},struct{Value struct{};Err NamedError}]);!ok{t.Fatal("keep unit")};if v:=Hygiene().(HgoResultOk[int,*Failure]).Value;v!=7{t.Fatal(v)}}
-func TestPreserve(t *testing.T){e:=Retained(false).(HgoResultErr[int,Partial]).Value;if e.Value!=4||e.Err!=sentinel{t.Fatal(e)};v:=Propagate(false).(HgoResultErr[string,Partial]).Value;if v!=e{t.Fatal(v)};boxed:=BoxPartial().(HgoResultErr[string,any]).Value.(Partial);if boxed!=e{t.Fatal(boxed)};p:=Reader().(HgoResultErr[int,struct{Value int;Err error}]).Value;if p.Value!=3||!errors.Is(p.Err,io.ErrUnexpectedEOF){t.Fatal(p)}}
-func TestFrames(t *testing.T){trace=nil;if e:=Nested(false).(HgoResultErr[int,error]).Value;e!=sentinel||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(e,trace)};trace=nil;if n:=Nested(true).(HgoResultOk[int,error]).Value;n!=7||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(n,trace)};trace=nil;if n:=AnyOrder().(HgoResultOk[int,*Failure]).Value;n!=2||!reflect.DeepEqual(trace,[]int{1,2,3}){t.Fatal(n,trace)};if n:=Variadic().(HgoResultOk[int,*Failure]).Value;n!=7{t.Fatal(n)};if Recover()!="boom"{t.Fatal("recover")};if n:=Cross().(HgoResultOk[int,*Failure]).Value;n!=8{t.Fatal(n)};if n:=NestedAdapter().(HgoResultOk[int,error]).Value;n!=8{t.Fatal(n)};if n:=Parse("9").(HgoResultOk[int,error]).Value;n!=9{t.Fatal(n)}}
-func TestNilable(t *testing.T){if _,ok:=Slice(false).(HgoResultOk[int,SliceError]);!ok{t.Fatal("nil slice")};if e:=Slice(true).(HgoResultErr[int,SliceError]).Value;e==nil||len(e)!=0{t.Fatal(e)};if _,ok:=Map(nil).(HgoResultOk[struct{},MapError]);!ok{t.Fatal("nil map")};if e:=Map(MapError{}).(HgoResultErr[struct{},MapError]).Value;e==nil{t.Fatal(e)};if _,ok:=Func(nil).(HgoResultOk[struct{},FuncError]);!ok{t.Fatal("nil func")};if e:=Func(func(){}).(HgoResultErr[struct{},FuncError]).Value;e==nil{t.Fatal("nonnull func")};if _,ok:=Chan(nil).(HgoResultOk[struct{},ChanError]);!ok{t.Fatal("nil chan")};if e:=Chan(make(ChanError)).(HgoResultErr[struct{},ChanError]).Value;e==nil{t.Fatal("nonnull chan")}}
+func TestPointerAndNamed(t *testing.T){if v:=Pointer(true).(GoxideResultOk[int,*Failure]).Value;v!=7{t.Fatal(v)};if e:=Pointer(false).(GoxideResultErr[int,*Failure]).Value;e!=sentinel{t.Fatal(e)};if e:=Explicit(false).(GoxideResultErr[int,*Failure]).Value;e!=sentinel{t.Fatal(e)};if _,ok:=Named(0).(GoxideResultOk[int,NamedError]);!ok{t.Fatal("named nil")};e:=Named(1).(GoxideResultErr[int,NamedError]).Value;var ptr *Failure;if e==nil||!errors.As(e,&ptr)||ptr!=nil{t.Fatal("interface typed nil")};if e:=Named(2).(GoxideResultErr[int,NamedError]).Value;e!=sentinel{t.Fatal(e)};if e:=Erased().(GoxideResultErr[int,error]).Value;e==nil||!errors.As(e,&ptr){t.Fatal("erased")};if _,ok:=Unit().(GoxideResultOk[struct{},NamedError]);!ok{t.Fatal("unit")};if _,ok:=UnitKeep().(GoxideResultOk[struct{},struct{Value struct{};Err NamedError}]);!ok{t.Fatal("keep unit")};if v:=Hygiene().(GoxideResultOk[int,*Failure]).Value;v!=7{t.Fatal(v)}}
+func TestPreserve(t *testing.T){e:=Retained(false).(GoxideResultErr[int,Partial]).Value;if e.Value!=4||e.Err!=sentinel{t.Fatal(e)};v:=Propagate(false).(GoxideResultErr[string,Partial]).Value;if v!=e{t.Fatal(v)};boxed:=BoxPartial().(GoxideResultErr[string,any]).Value.(Partial);if boxed!=e{t.Fatal(boxed)};p:=Reader().(GoxideResultErr[int,struct{Value int;Err error}]).Value;if p.Value!=3||!errors.Is(p.Err,io.ErrUnexpectedEOF){t.Fatal(p)}}
+func TestFrames(t *testing.T){trace=nil;if e:=Nested(false).(GoxideResultErr[int,error]).Value;e!=sentinel||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(e,trace)};trace=nil;if n:=Nested(true).(GoxideResultOk[int,error]).Value;n!=7||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(n,trace)};trace=nil;if n:=AnyOrder().(GoxideResultOk[int,*Failure]).Value;n!=2||!reflect.DeepEqual(trace,[]int{1,2,3}){t.Fatal(n,trace)};if n:=Variadic().(GoxideResultOk[int,*Failure]).Value;n!=7{t.Fatal(n)};if Recover()!="boom"{t.Fatal("recover")};if n:=Cross().(GoxideResultOk[int,*Failure]).Value;n!=8{t.Fatal(n)};if n:=NestedAdapter().(GoxideResultOk[int,error]).Value;n!=8{t.Fatal(n)};if n:=Parse("9").(GoxideResultOk[int,error]).Value;n!=9{t.Fatal(n)}}
+func TestNilable(t *testing.T){if _,ok:=Slice(false).(GoxideResultOk[int,SliceError]);!ok{t.Fatal("nil slice")};if e:=Slice(true).(GoxideResultErr[int,SliceError]).Value;e==nil||len(e)!=0{t.Fatal(e)};if _,ok:=Map(nil).(GoxideResultOk[struct{},MapError]);!ok{t.Fatal("nil map")};if e:=Map(MapError{}).(GoxideResultErr[struct{},MapError]).Value;e==nil{t.Fatal(e)};if _,ok:=Func(nil).(GoxideResultOk[struct{},FuncError]);!ok{t.Fatal("nil func")};if e:=Func(func(){}).(GoxideResultErr[struct{},FuncError]).Value;e==nil{t.Fatal("nonnull func")};if _,ok:=Chan(nil).(GoxideResultOk[struct{},ChanError]);!ok{t.Fatal("nil chan")};if e:=Chan(make(ChanError)).(GoxideResultErr[struct{},ChanError]).Value;e==nil{t.Fatal("nonnull chan")}}
 func TestNestedValidation(t *testing.T){defer func(){p:=recover();if p==nil||!strings.Contains(p.(string),"invalid enum"){t.Fatal(p)}}();ValidateNested()}
 `)
 	packagesCommand(t, generated, tool, true, "test", "-race", "-count=1", "-v", "./...")
 	packagesCommand(t, generated, tool, true, "vet", "./...")
 	// Reverse which file is visited first: package initialization must expose the
 	// same real Result identity to question lowering in either order.
-	if err := os.Rename(filepath.Join(source, "a.hgo"), filepath.Join(source, "zz.hgo")); err != nil {
+	if err := os.Rename(filepath.Join(source, "a.gox"), filepath.Join(source, "zz.gox")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(filepath.Join(source, "z.hgo"), filepath.Join(source, "aa.hgo")); err != nil {
+	if err := os.Rename(filepath.Join(source, "z.gox"), filepath.Join(source, "aa.gox")); err != nil {
 		t.Fatal(err)
 	}
 	reversed := filepath.Join(t.TempDir(), "reversed")
@@ -131,7 +131,7 @@ func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			packagesWrite(t, dir, "go.mod", packagesModule(root))
-			packagesWrite(t, dir, "bad.hgo", "package bad\n"+tc.body)
+			packagesWrite(t, dir, "bad.gox", "package bad\n"+tc.body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), dir)
 			if !strings.Contains(out, tc.want) {
 				t.Fatal(out)
@@ -144,8 +144,8 @@ func TestGoResultInferenceModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	producer := t.TempDir()
 	packagesWrite(t, producer, "go.mod", strings.Replace(packagesModule(root), "packages.example/app", "inferred.example/producer", 1))
 	packagesWrite(t, producer, "native.go", `package producer
@@ -162,13 +162,13 @@ func TestGoResultInferenceModules(t *testing.T) {
  func(*inaccessibleError)Error()string{return "hidden"}
  func HiddenE()(int,*inaccessibleError){return 1,nil}
  `)
-	packagesWrite(t, producer, "adapter.hgo", `package producer
+	packagesWrite(t, producer, "adapter.gox", `package producer
  type Partial = struct{Value Count; Err *Error}
  func Wrapped(ok bool)Result[Count,Partial]{return go_result_keep!(Read(ok))}
  pub enum Event{Ready,Failed,}
  func InvalidEvents()([]Event,error){return []Event{nil},nil}
  `)
-	packagesWrite(t, producer, "other/event.hgo", `package other
+	packagesWrite(t, producer, "other/event.gox", `package other
  pub enum Event{Other,Failed,}
  func Events()([]Event,error){return []Event{Event::Other},nil}
  `)
@@ -177,7 +177,7 @@ func TestGoResultInferenceModules(t *testing.T) {
 	consumer := t.TempDir()
 	mod := strings.Replace(packagesModule(root), "packages.example/app", "inferred.example/consumer", 1) + "\nrequire inferred.example/producer v0.0.0\nreplace inferred.example/producer => " + filepath.ToSlash(prodOut) + "\n"
 	packagesWrite(t, consumer, "go.mod", mod)
-	packagesWrite(t, consumer, "a.hgo", `package consumer
+	packagesWrite(t, consumer, "a.gox", `package consumer
  import p "inferred.example/producer"
  func Native(ok bool)Result[p.Count,*p.Error]{return go_result!(p.Read(ok))}
  func Keep()Result[p.Count,p.Partial]{return go_result_keep!(p.Read(false))}
@@ -189,21 +189,21 @@ func TestGoResultInferenceModules(t *testing.T) {
  func ExplicitForeignInvalid(){r:=Result[Events,error]::Ok(Events{nil});match r {_=>{panic("missed explicit foreign enum")},}}
  func ForeignInvalid(){r:=go_result!(p.InvalidEvents());match r {_=>{panic("missed foreign enum")},}}
  `)
-	packagesWrite(t, consumer, "z.hgo", `package consumer
+	packagesWrite(t, consumer, "z.gox", `package consumer
  import p "inferred.example/producer"
  type Events []p.Event
  var Inferred=go_result!(p.Read(true))
  `)
-	packagesWrite(t, consumer, "left.hgo", `package consumer
+	packagesWrite(t, consumer, "left.gox", `package consumer
  import m "inferred.example/producer"
  type Left []m.Event
  `)
-	packagesWrite(t, consumer, "right.hgo", `package consumer
+	packagesWrite(t, consumer, "right.gox", `package consumer
  import m "inferred.example/producer/other"
  type Right []m.Event
  func right()(Right,error){return m.Events()}
  `)
-	packagesWrite(t, consumer, "scope.hgo", `package consumer
+	packagesWrite(t, consumer, "scope.gox", `package consumer
  func invalidLeft()(Left,error){return Left{nil},nil}
  func invalidRight()(Right,error){return Right{nil},nil}
  func LeftInvalid(){r:=go_result!(invalidLeft());match r {_=>{panic("missed left")},}}
@@ -214,7 +214,7 @@ func TestGoResultInferenceModules(t *testing.T) {
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, consumer)
 	packagesWrite(t, out, "consumer_test.go", `package consumer
  import("testing";"strings";p "inferred.example/producer")
- func TestIdentity(t *testing.T){if n:=Native(true).(HgoResultOk[p.Count,*p.Error]).Value;n!=7{t.Fatal(n)};if e:=Native(false).(HgoResultErr[p.Count,*p.Error]).Value;e!=p.Sentinel{t.Fatal(e)};a:=Keep().(HgoResultErr[p.Count,p.Partial]).Value;b:=Forward().(HgoResultErr[string,p.Partial]).Value;if a.Value!=4||a.Err!=p.Sentinel||a!=b||Match()!=4{t.Fatal(a,b)};if n:=Cross().(HgoResultOk[p.Count,*p.Error]).Value;n!=7{t.Fatal(n)}}
+ func TestIdentity(t *testing.T){if n:=Native(true).(GoxideResultOk[p.Count,*p.Error]).Value;n!=7{t.Fatal(n)};if e:=Native(false).(GoxideResultErr[p.Count,*p.Error]).Value;e!=p.Sentinel{t.Fatal(e)};a:=Keep().(GoxideResultErr[p.Count,p.Partial]).Value;b:=Forward().(GoxideResultErr[string,p.Partial]).Value;if a.Value!=4||a.Err!=p.Sentinel||a!=b||Match()!=4{t.Fatal(a,b)};if n:=Cross().(GoxideResultOk[p.Count,*p.Error]).Value;n!=7{t.Fatal(n)}}
  func TestForeignPayload(t *testing.T){RightValid();for _, f:=range []func(){ForeignInvalid,NamedForeignInvalid,ExplicitForeignInvalid,LeftInvalid,RightInvalid}{func(){defer func(){p:=recover();if p==nil||!strings.Contains(p.(string),"invalid enum"){t.Fatal(p)}}();f()}()}}
  `)
 	packagesCommand(t, prodOut, tool, true, "test", "-race", "-count=1", "./...")
@@ -225,7 +225,7 @@ func TestGoResultInferenceModules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			packagesWrite(t, dir, "go.mod", mod)
-			packagesWrite(t, dir, "bad.hgo", "package consumer\nimport p \"inferred.example/producer\"\nfunc Bad(){_=go_result!("+tc.call+")}\n")
+			packagesWrite(t, dir, "bad.gox", "package consumer\nimport p \"inferred.example/producer\"\nfunc Bad(){_=go_result!("+tc.call+")}\n")
 			message := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "negative"), dir)
 			if !strings.Contains(message, tc.want) {
 				t.Fatal(message)

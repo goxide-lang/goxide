@@ -11,11 +11,11 @@ import (
 
 func TestPropagationTypeRangeRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
-	source, e := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/type_range_propagation.hgo"))
+	source, e := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/type_range_propagation.gox"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := frontend.Compile("type_range.hgo", source)
+	r, e := frontend.Compile("type_range.gox", source)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -36,7 +36,7 @@ func TestRangeIntegers(t *testing.T){for _,limit:=range []int{-2,0,3}{var fs []f
 func TestRangeChannels(t *testing.T){ready:=make(chan bool,1);done:=make(chan int,1);ch:=make(chan int);go func(){done<-trValue(rangeChannel(ch,true,ready))}();<-ready;ch<-2;ch<-5;close(ch);if n:=<-done;n!=7{t.Fatal(n)};if n:=trValue(rangeChannel(nil,false,ready));n!=-1{t.Fatal(n)};<-ready;closed:=make(chan int);close(closed);if n:=trValue(rangeChannel(closed,true,ready));n!=0{t.Fatal(n)};<-ready;buffered:=make(chan int,2);buffered<-4;buffered<-9;if n:=trValue(rangeChannelBreak(buffered));n!=4||len(buffered)!=1{t.Fatal(n,len(buffered))}}
 func TestRangeArrayValueAndPointer(t *testing.T){for _,pointer:=range []bool{false,true}{a:=[3]int{1,2,3};trace:=[]int{};n:=trValue(rangeArray(&a,true,pointer,&trace));want:=6;if pointer{want=103};if n!=want||!reflect.DeepEqual(trace,[]int{0,1,2}){t.Fatal(pointer,n,trace)}};trace:=[]int{};if n:=trValue(rangeArray(nil,false,false,&trace));n!=-1||len(trace)!=0{t.Fatal(n,trace)}}
 func TestRangeArrayEvaluation(t *testing.T){if n:=trValue(rangeArrayIndex(nil,true,false));n!=3{t.Fatal(n)};if n:=trValue(rangeArrayIndex(nil,false,true));n!=-1{t.Fatal(n)};func(){defer func(){if recover()==nil{t.Error("required full array dereference was skipped")}}();_=rangeArrayIndex(nil,true,true)}();if n:=trValue(rangeNativeUnevaluated());n!=3{t.Fatal(n)}}
-func TestTypeRangeReviewBoundaries(t *testing.T){func(){defer func(){if recover()==nil{t.Error("zero array nil dereference skipped")}}();_=rangeZeroArray(__hgo_enum_ctor_Option_Some[*[0]int](nil))}();if n:=trValue(rangeBlankArray(__hgo_enum_ctor_Option_Some[*[2]int](nil)));n!=1{t.Fatal(n)};if n:=trValue(typeCapturedInit());n!=14{t.Fatal(n)};if n:=trValue(rangeArrayPayload());n!=6{t.Fatal(n)};trace:=[]int{};func(){defer func(){if recover()==nil{t.Error("two-value nil pointer range did not dereference")}}();_=rangeArray(nil,true,true,&trace)}();if len(trace)!=0{t.Fatal(trace)}}
+func TestTypeRangeReviewBoundaries(t *testing.T){func(){defer func(){if recover()==nil{t.Error("zero array nil dereference skipped")}}();_=rangeZeroArray(__goxide_enum_ctor_Option_Some[*[0]int](nil))}();if n:=trValue(rangeBlankArray(__goxide_enum_ctor_Option_Some[*[2]int](nil)));n!=1{t.Fatal(n)};if n:=trValue(typeCapturedInit());n!=14{t.Fatal(n)};if n:=trValue(rangeArrayPayload());n!=6{t.Fatal(n)};trace:=[]int{};func(){defer func(){if recover()==nil{t.Error("two-value nil pointer range did not dereference")}}();_=rangeArray(nil,true,true,&trace)}();if len(trace)!=0{t.Fatal(trace)}}
 
 `
 
@@ -59,8 +59,8 @@ func TestPropagationTypeRangeRejections(t *testing.T) {
 			if name == "unevaluated-question" {
 				imports = `import "unsafe";`
 			}
-			_, e := frontend.Compile("type_range_bad.hgo", []byte("package fixture;"+imports+body))
-			if e == nil || !strings.Contains(e.Error(), "type_range_bad.hgo") {
+			_, e := frontend.Compile("type_range_bad.gox", []byte("package fixture;"+imports+body))
+			if e == nil || !strings.Contains(e.Error(), "type_range_bad.gox") {
 				t.Fatalf("expected located rejection: %v", e)
 			}
 		})
@@ -72,10 +72,10 @@ func TestPropagationTypeRangeInstalledCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	outside := t.TempDir()
-	source := filepath.Join(root, "examples/prototype/type_range_propagation.hgo")
+	source := filepath.Join(root, "examples/prototype/type_range_propagation.gox")
 	generated := filepath.Join(outside, "main.go")
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
 	want := "14 [1 2 9]\n"

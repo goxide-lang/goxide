@@ -213,8 +213,8 @@ func (l *lowering) resolveSumConstructors() (bool, error, error) {
 		}
 		call, ok := n.(*ast.CallExpr)
 		if ok {
-			if id, ok := call.Fun.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_enum_pending_") {
-				bits := strings.Split(strings.TrimPrefix(id.Name, "__hgo_enum_pending_"), "_")
+			if id, ok := call.Fun.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_enum_pending_") {
+				bits := strings.Split(strings.TrimPrefix(id.Name, "__goxide_enum_pending_"), "_")
 				if len(bits) != 2 {
 					fatal = l.fail(call, "invalid sum constructor marker")
 					return false
@@ -296,7 +296,7 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 				continue
 			}
 			id, ok := c.Fun.(*ast.Ident)
-			if !ok || id.Name != "__hgo_enum_context_match" {
+			if !ok || id.Name != "__goxide_enum_context_match" {
 				continue
 			}
 			if len(c.Args) != 2 {
@@ -324,7 +324,7 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 				fatal = l.fail(c, err.Error())
 				return false
 			}
-			source := "package " + l.file.Name.Name + ";func hgoContextStatement(){match hgoContextValue " + body + "}"
+			source := "package " + l.file.Name.Name + ";func goxideContextStatement(){match goxideContextValue " + body + "}"
 			lowered, err := enums.LowerPackage("<contextual match>", []byte(source), nil, append(l.cfg.Families, d), nil)
 			if err != nil {
 				fatal = err
@@ -366,13 +366,13 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 			}
 			for _, decl := range f.Decls {
 				key := declName(decl)
-				if strings.HasPrefix(key, "__hgo_ref_") && !present[key] {
+				if strings.HasPrefix(key, "__goxide_ref_") && !present[key] {
 					l.file.Decls = append(l.file.Decls, decl)
 					present[key] = true
 				}
 			}
 			for _, decl := range f.Decls {
-				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "hgoContextStatement" {
+				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "goxideContextStatement" {
 					// The enum lowering saves its operand exactly once as the first assignment.
 					for _, s := range fn.Body.List {
 						if b, ok := s.(*ast.BlockStmt); ok && len(b.List) > 0 {
@@ -402,7 +402,7 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 func pendingSumConstructor(n ast.Node) bool {
 	found := false
 	ast.Inspect(n, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_enum_pending_") {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_enum_pending_") {
 			found = true
 		}
 		return !found

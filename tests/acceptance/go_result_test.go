@@ -13,11 +13,11 @@ func TestGoResultMacros(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", packagesModule(root))
-	packagesWrite(t, source, "ops/macros.hgo", `package ops
+	packagesWrite(t, source, "ops/macros.gox", `package ops
 pub macro_rules! ordinary { ($x:expr) => { go_result!(int, $x) }; }
 pub macro_rules! retained { ($x:expr) => { go_result_keep!(int, $x) }; }
 pub macro_rules! typed { ($t:ident, $x:expr) => { go_result!($t, $x) }; }
@@ -28,7 +28,7 @@ type ErrorAlias = error
 func AliasCall()(Number,ErrorAlias){return 7,nil}
 func Generic[T any](v T)(T,error){return v,nil}
 `)
-	packagesWrite(t, source, "app.hgo", `package app
+	packagesWrite(t, source, "app.gox", `package app
 import("strconv";"io";"errors";m "packages.example/app/ops")
 type Partial = struct{Value int; Err error}
 var stop=errors.New("stop")
@@ -55,7 +55,7 @@ func Recover()(got any){defer func(){f:=func(v any)(any,error){got=v;return v,ni
 func Panic(){defer func(){mark(9)}();f:=func()(int,error){mark(3);panic(stop)};_=go_result!(int,f())}
 func Deferred(){defer go_result!(unit(nil));mark(4)}
 func Concurrent(done chan int){go go_result!(int,func()(int,error){done<-1;return 1,nil}())}
-func Hygienic()Result[int,error]{error:=99;nil:=1;hgoMacroGenerated:=2;_=error;_=nil;_=hgoMacroGenerated;return m.ordinary!(strconv.Atoi("11"))}
+func Hygienic()Result[int,error]{error:=99;nil:=1;goxideMacroGenerated:=2;_=error;_=nil;_=goxideMacroGenerated;return m.ordinary!(strconv.Atoi("11"))}
 func FamilyShadow()any{Result:=99;_=Result;return go_result!(int,strconv.Atoi("13"))}
 func FamilyTypeShadow()any{type Result int;_=Result(99);return go_result!(int,strconv.Atoi("14"))}
 func MacroKeep()Result[int,Partial]{return m.retained!(pair(2))}
@@ -89,11 +89,11 @@ type typedError struct{}
 func(*typedError)Error()string{panic("Error must not run")}
 type typedReader struct{}
 func(typedReader)Read(p []byte)(int,error){var e *typedError;return 1,e}
-func okInt(t *testing.T,v Result[int,error],want int){t.Helper();x,ok:=v.(HgoResultOk[int,error]);if !ok||x.Value!=want{t.Fatal(v)}}
-func TestParse(t *testing.T){okInt(t,Initial,42);okInt(t,Parse("42"),42);okInt(t,Hygienic(),11);okInt(t,FamilyShadow().(Result[int,error]),13);okInt(t,FamilyTypeShadow().(Result[int,error]),14);okInt(t,OrdinaryQuestion(),12);v:=Parse("bad").(HgoResultErr[int,error]).Value;var n *strconv.NumError;if !errors.As(v,&n)||n.Num!="bad"{t.Fatal(v)};e:=Convert("bad").(HgoResultErr[int,Failure]).Value;if !errors.As(e,&n){t.Fatal(e)};if x:=ParseNext("9").(HgoResultOk[string,error]).Value;x!="10"{t.Fatal(x)};if _,ok:=ParseNext("bad").(HgoResultErr[string,error]);!ok{t.Fatal("propagation")}}
-func TestPartial(t *testing.T){r:=new(reader);b:=make([]byte,8);e:=Read(r,b).(HgoResultErr[int,Partial]).Value;if e.Value!=3||e.Err!=io.EOF||!errors.Is(e.Err,io.EOF)||r.calls!=1||string(b[:3])!="abc"{t.Fatal(e,r,b)};e=ReadNext(r,b).(HgoResultErr[string,Partial]).Value;if e.Value!=3||e.Err!=io.EOF||r.calls!=2{t.Fatal(e,r)};if e:=Drop(r,b).(HgoResultErr[int,error]).Value;e!=io.EOF{t.Fatal(e)};e=Methods(r,b).(HgoResultErr[int,Partial]).Value;if e.Value!=3||e.Err!=io.EOF{t.Fatal(e)};if _,ok:=any(e).(error);ok{t.Fatal("partial must not implement error")};e=Read(typedReader{},b).(HgoResultErr[int,Partial]).Value;var typed *typedError;if e.Value!=1||e.Err==nil||!errors.As(e.Err,&typed)||typed!=nil{t.Fatal("typed nil")};if v:=Drop(typedReader{},b).(HgoResultErr[int,error]).Value;v==nil||!errors.As(v,&typed){t.Fatal("typed nil ordinary")}}
-func TestUnitsAndTypes(t *testing.T){trace=nil;var ptr *typedError;var err error=ptr;if v:=Unit(err).(HgoResultErr[struct{},error]).Value;v!=err{t.Fatal("unit typed nil")};if v:=KeepUnit(err).(HgoResultErr[struct{},struct{Value struct{}; Err error}]).Value;v.Err!=err{t.Fatal("keep unit typed nil")};if _,ok:=KeepUnit(nil).(HgoResultOk[struct{},struct{Value struct{}; Err error}]);!ok{t.Fatal("keep unit success")};if _,ok:=Unit(nil).(HgoResultOk[struct{},error]);!ok{t.Fatal("unit")};if e:=Unit(stop).(HgoResultErr[struct{},error]).Value;e!=stop{t.Fatal(e)};if e:=KeepUnit(stop).(HgoResultErr[struct{},struct{Value struct{}; Err error}]).Value;e.Err!=stop{t.Fatal(e)};if n:=NativeAlias().(HgoResultOk[Number,error]).Value;n!=7{t.Fatal(n)};if n:=MacroType().(HgoResultOk[Number,error]).Value;n!=7{t.Fatal(n)};okInt(t,NativeGeneric(),9);okInt(t,Variadic(),9)}
-func TestOrderAndFrames(t *testing.T){trace=nil;e:=Factory().(HgoResultErr[int,error]).Value;if e!=stop||!reflect.DeepEqual(trace,[]int{1,2,3}){t.Fatal(e,trace)};trace=nil;if _,ok:=Nested(false).(HgoResultErr[int,error]);!ok||!reflect.DeepEqual(trace,[]int{1,9}){t.Fatal(trace)};trace=nil;okInt(t,Nested(true),8);if !reflect.DeepEqual(trace,[]int{1,3,9}){t.Fatal(trace)};if Recover()!="boom"{t.Fatal("recover frame")};trace=nil;func(){defer func(){if recover()!=stop{t.Fatal("panic identity")}}();Panic()}();if !reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(trace)};trace=nil;Deferred();if !reflect.DeepEqual(trace,[]int{3,4}){t.Fatal("defer arguments",trace)};done:=make(chan int,1);Concurrent(done);if <-done!=1{t.Fatal("go arguments")};e2:=MacroKeep().(HgoResultErr[int,Partial]).Value;if e2.Value!=2||e2.Err!=stop{t.Fatal(e2)}}
+func okInt(t *testing.T,v Result[int,error],want int){t.Helper();x,ok:=v.(GoxideResultOk[int,error]);if !ok||x.Value!=want{t.Fatal(v)}}
+func TestParse(t *testing.T){okInt(t,Initial,42);okInt(t,Parse("42"),42);okInt(t,Hygienic(),11);okInt(t,FamilyShadow().(Result[int,error]),13);okInt(t,FamilyTypeShadow().(Result[int,error]),14);okInt(t,OrdinaryQuestion(),12);v:=Parse("bad").(GoxideResultErr[int,error]).Value;var n *strconv.NumError;if !errors.As(v,&n)||n.Num!="bad"{t.Fatal(v)};e:=Convert("bad").(GoxideResultErr[int,Failure]).Value;if !errors.As(e,&n){t.Fatal(e)};if x:=ParseNext("9").(GoxideResultOk[string,error]).Value;x!="10"{t.Fatal(x)};if _,ok:=ParseNext("bad").(GoxideResultErr[string,error]);!ok{t.Fatal("propagation")}}
+func TestPartial(t *testing.T){r:=new(reader);b:=make([]byte,8);e:=Read(r,b).(GoxideResultErr[int,Partial]).Value;if e.Value!=3||e.Err!=io.EOF||!errors.Is(e.Err,io.EOF)||r.calls!=1||string(b[:3])!="abc"{t.Fatal(e,r,b)};e=ReadNext(r,b).(GoxideResultErr[string,Partial]).Value;if e.Value!=3||e.Err!=io.EOF||r.calls!=2{t.Fatal(e,r)};if e:=Drop(r,b).(GoxideResultErr[int,error]).Value;e!=io.EOF{t.Fatal(e)};e=Methods(r,b).(GoxideResultErr[int,Partial]).Value;if e.Value!=3||e.Err!=io.EOF{t.Fatal(e)};if _,ok:=any(e).(error);ok{t.Fatal("partial must not implement error")};e=Read(typedReader{},b).(GoxideResultErr[int,Partial]).Value;var typed *typedError;if e.Value!=1||e.Err==nil||!errors.As(e.Err,&typed)||typed!=nil{t.Fatal("typed nil")};if v:=Drop(typedReader{},b).(GoxideResultErr[int,error]).Value;v==nil||!errors.As(v,&typed){t.Fatal("typed nil ordinary")}}
+func TestUnitsAndTypes(t *testing.T){trace=nil;var ptr *typedError;var err error=ptr;if v:=Unit(err).(GoxideResultErr[struct{},error]).Value;v!=err{t.Fatal("unit typed nil")};if v:=KeepUnit(err).(GoxideResultErr[struct{},struct{Value struct{}; Err error}]).Value;v.Err!=err{t.Fatal("keep unit typed nil")};if _,ok:=KeepUnit(nil).(GoxideResultOk[struct{},struct{Value struct{}; Err error}]);!ok{t.Fatal("keep unit success")};if _,ok:=Unit(nil).(GoxideResultOk[struct{},error]);!ok{t.Fatal("unit")};if e:=Unit(stop).(GoxideResultErr[struct{},error]).Value;e!=stop{t.Fatal(e)};if e:=KeepUnit(stop).(GoxideResultErr[struct{},struct{Value struct{}; Err error}]).Value;e.Err!=stop{t.Fatal(e)};if n:=NativeAlias().(GoxideResultOk[Number,error]).Value;n!=7{t.Fatal(n)};if n:=MacroType().(GoxideResultOk[Number,error]).Value;n!=7{t.Fatal(n)};okInt(t,NativeGeneric(),9);okInt(t,Variadic(),9)}
+func TestOrderAndFrames(t *testing.T){trace=nil;e:=Factory().(GoxideResultErr[int,error]).Value;if e!=stop||!reflect.DeepEqual(trace,[]int{1,2,3}){t.Fatal(e,trace)};trace=nil;if _,ok:=Nested(false).(GoxideResultErr[int,error]);!ok||!reflect.DeepEqual(trace,[]int{1,9}){t.Fatal(trace)};trace=nil;okInt(t,Nested(true),8);if !reflect.DeepEqual(trace,[]int{1,3,9}){t.Fatal(trace)};if Recover()!="boom"{t.Fatal("recover frame")};trace=nil;func(){defer func(){if recover()!=stop{t.Fatal("panic identity")}}();Panic()}();if !reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(trace)};trace=nil;Deferred();if !reflect.DeepEqual(trace,[]int{3,4}){t.Fatal("defer arguments",trace)};done:=make(chan int,1);Concurrent(done);if <-done!=1{t.Fatal("go arguments")};e2:=MacroKeep().(GoxideResultErr[int,Partial]).Value;if e2.Value!=2||e2.Err!=stop{t.Fatal(e2)}}
 `)
 	packagesCommand(t, generated, tool, true, "test", "-race", "-count=1", "-v", "./...")
 	packagesCommand(t, generated, tool, true, "vet", "./...")
@@ -114,9 +114,9 @@ func TestOrderAndFrames(t *testing.T){trace=nil;e:=Factory().(HgoResultErr[int,e
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			packagesWrite(t, dir, "go.mod", packagesModule(root))
-			packagesWrite(t, dir, "bad.hgo", "package bad\nimport \"strconv\"\nvar _=strconv.Atoi\n"+body)
+			packagesWrite(t, dir, "bad.gox", "package bad\nimport \"strconv\"\nvar _=strconv.Atoi\n"+body)
 			output := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), dir)
-			if !strings.Contains(output, "bad.hgo") {
+			if !strings.Contains(output, "bad.gox") {
 				t.Fatal("lost diagnostic location", output)
 			}
 			if name == "local-type" && !strings.Contains(output, "T must be nameable at package scope") {
@@ -130,8 +130,8 @@ func TestGoResultIndependentModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	producer := t.TempDir()
 	packagesWrite(t, producer, "go.mod", fmt.Sprintf("module adapter.example/producer\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %q\n", root))
 	packagesWrite(t, producer, "native.go", `package producer
@@ -140,7 +140,7 @@ type Count = int
 type ErrorAlias = error
 func Read()(Count,ErrorAlias){return 3,io.EOF}
 `)
-	packagesWrite(t, producer, "adapter.hgo", `package producer
+	packagesWrite(t, producer, "adapter.gox", `package producer
 pub macro_rules! retained {($call:expr)=>{go_result_keep!(int,$call)};}
 type Partial = struct{Value int; Err error}
 func Wrapped()Result[int,Partial]{return go_result_keep!(int,Read())}
@@ -149,7 +149,7 @@ func Wrapped()Result[int,Partial]{return go_result_keep!(int,Read())}
 	packagesCommand(t, root, cli, true, "transpile", "-o", prodOut, producer)
 	consumer := t.TempDir()
 	packagesWrite(t, consumer, "go.mod", fmt.Sprintf("module adapter.example/consumer\ngo 1.27\nrequire (\n github.com/hxsf/goxide v0.0.0\n adapter.example/producer v0.0.0\n)\nreplace github.com/hxsf/goxide => %q\nreplace adapter.example/producer => %q\n", root, prodOut))
-	packagesWrite(t, consumer, "consumer.hgo", `package consumer
+	packagesWrite(t, consumer, "consumer.gox", `package consumer
 import(p "adapter.example/producer";"strconv")
 func Native()Result[p.Count,p.Partial]{return go_result_keep!(p.Count,p.Read())}
 func Forward()Result[string,p.Partial]{n:=p.Wrapped()?;return Result[string,p.Partial]::Ok(strconv.Itoa(n))}
@@ -159,13 +159,13 @@ func Match()int{return match p.Wrapped(){p.Result[int,p.Partial]::Ok(n)=>n,p.Res
 	packagesCommand(t, root, cli, true, "transpile", "-o", consOut, consumer)
 	packagesWrite(t, consOut, "consumer_test.go", `package consumer
 import("testing";"io";p "adapter.example/producer")
-func TestExternal(t *testing.T){a:=Native().(HgoResultErr[p.Count,p.Partial]).Value;b:=Forward().(HgoResultErr[string,p.Partial]).Value;if a.Value!=3||a.Err!=io.EOF||b!=a||Match()!=3{t.Fatal(a,b)}}
+func TestExternal(t *testing.T){a:=Native().(GoxideResultErr[p.Count,p.Partial]).Value;b:=Forward().(GoxideResultErr[string,p.Partial]).Value;if a.Value!=3||a.Err!=io.EOF||b!=a||Match()!=3{t.Fatal(a,b)}}
 `)
 	packagesCommand(t, prodOut, tool, true, "test", "-race", "-count=1", "./...")
 	packagesCommand(t, prodOut, tool, true, "vet", "./...")
 	packagesCommand(t, consOut, tool, true, "test", "-race", "-count=1", "-v", "./...")
 	packagesCommand(t, consOut, tool, true, "vet", "./...")
-	packagesWrite(t, consumer, "macro.hgo", `package consumer
+	packagesWrite(t, consumer, "macro.gox", `package consumer
 import p "adapter.example/producer"
 func ImportedMacro(){_=p.retained!(p.Read())}
 `)

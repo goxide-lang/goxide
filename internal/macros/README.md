@@ -81,7 +81,7 @@ markers remain at the original call position, inside an explicit template closur
 when present. No helper changes the nearest propagation/return target. None is a
 unit variant written `Option[int]::None`, without parentheses.
 
-`event_if!` in [conditional_log.hgo](../../examples/prototype/conditional_log.hgo)
+`event_if!` in [conditional_log.gox](../../examples/prototype/conditional_log.gox)
 uses an explicit enabled expression and ordinary `if`: disabled message/fields
 are not evaluated, enabled expressions retain template order. This does not
 change existing eager `event!` semantics and does not implement tracing spans.
@@ -95,17 +95,17 @@ spellings remain drafts. Runtime helpers follow current Go visibility: use an
 exported function such as `Emit`, or expose a public shim around private state.
 
 ```go
-// logkit/macros.hgo
+// logkit/macros.gox
 package logkit
 pub macro_rules! event_if {
     ($enabled:expr, $message:expr) => {
         if $enabled { Emit($message) }
     };
 }
-// logkit/runtime.hgo
+// logkit/runtime.gox
 package logkit
 func Emit(message string) { /* ordinary runtime implementation */ }
-// caller/main.hgo
+// caller/main.gox
 package caller
 import logs "example.org/app/logkit"
 func Run() { logs.event_if!(true, "request") }
@@ -133,7 +133,7 @@ reinterpreting another file's offset in the caller buffer. Synthetic imports,
 helper aliases and unmapped propagation syntax have no claimed source span.
 The registry is immutable during expansion, and generated file-specific names
 avoid collisions across package files. See [the package tests](package_test.go)
-and [the module application](../../examples/macro_packages/main.hgo).
+and [the module application](../../examples/macro_packages/main.gox).
 
 
 ## Builtin printing

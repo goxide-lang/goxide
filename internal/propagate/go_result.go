@@ -26,9 +26,9 @@ func goResultMarker(expr ast.Expr) (string, ast.Expr, bool) {
 		return "", nil, false
 	}
 	switch id.Name {
-	case "__hgo_go_result", "__hgo_go_result_keep":
+	case "__goxide_go_result", "__goxide_go_result_keep":
 		return id.Name, explicit, true
-	case "__hgo_go_result_auto", "__hgo_go_result_keep_auto":
+	case "__goxide_go_result_auto", "__goxide_go_result_keep_auto":
 		return id.Name, nil, true
 	}
 	return "", nil, false
@@ -152,7 +152,7 @@ func (l *lowering) resolveGoResult() (bool, error, error) {
 		}
 		// Package-level bindings prevent caller-local type/import/Result capture.
 		l.serial++
-		helper := fmt.Sprintf("__hgo_go_result_%s_%d", l.cfg.Namespace, l.serial)
+		helper := fmt.Sprintf("__goxide_go_result_%s_%d", l.cfg.Namespace, l.serial)
 		tAlias, eAlias := helper+"_T", helper+"_E"
 		aliasSource := "type " + tAlias + " = " + ts + ";type " + eAlias + " = " + payload + ";"
 		d, err := enums.Builtin("Result", []string{tAlias, eAlias})
@@ -301,7 +301,7 @@ func PrepareGoResults(files map[string][]byte, cfg Config, maps map[string]*sour
 		round++
 		progress := false
 		for index, name := range names {
-			if !strings.HasSuffix(name, ".hgo") || (!bytes.Contains(result[name], []byte("__hgo_go_result")) && !bytes.Contains(result[name], []byte("__hgo_enum_pending_"))) {
+			if !strings.HasSuffix(name, ".gox") || (!bytes.Contains(result[name], []byte("__goxide_go_result")) && !bytes.Contains(result[name], []byte("__goxide_enum_pending_"))) {
 				continue
 			}
 			fs := token.NewFileSet()

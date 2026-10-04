@@ -52,7 +52,7 @@ func (l *lowering) inferMatches() error {
 				continue
 			}
 			id, ok := call.Fun.(*ast.Ident)
-			if !ok || id.Name != "__hgo_enum_infer" {
+			if !ok || id.Name != "__goxide_enum_infer" {
 				continue
 			}
 			if len(call.Args) != 1 {

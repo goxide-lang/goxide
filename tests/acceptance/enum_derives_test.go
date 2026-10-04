@@ -12,11 +12,11 @@ import (
 
 func TestEnumDerivesApplicationRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
-	source, err := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/enum_derives.hgo"))
+	source, err := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/enum_derives.gox"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := frontend.Compile("enum_derives.hgo", source)
+	result, err := frontend.Compile("enum_derives.gox", source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,8 +82,8 @@ func TestEnumDerivesExplicitRejections(t *testing.T) {
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("enum_derives_bad.hgo", []byte("package fixture\n"+body))
-			if err == nil || !strings.Contains(err.Error(), "enum_derives_bad.hgo") {
+			_, err := frontend.Compile("enum_derives_bad.gox", []byte("package fixture\n"+body))
+			if err == nil || !strings.Contains(err.Error(), "enum_derives_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
 			t.Log(err)
@@ -129,7 +129,7 @@ func TestNestedEnumContainerDerives(t *testing.T){
  }
 }
 func TestInvalidNestedContainerBeforeEffects(t *testing.T){
- var typed * __hgo_enum_case_5_Phase_Ready
+ var typed * __goxide_enum_case_5_Phase_Ready
  for _,bad:=range []Phase{nil,typed}{
   for _,tc:=range []struct{value Bundle;path []serde.PathSegment}{
    {bundleItems([]Phase{bad}),[]serde.PathSegment{{Kind:"Variant",Name:"Items"},{Kind:"Index",Index:0}}},

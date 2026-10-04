@@ -53,7 +53,7 @@ func deduplicateIR(files []*ast.File) {
 func FinishPackage(files map[string][]byte, imp types.Importer, trusted ...map[string]map[string]bool) (map[string]Result, error) {
 	active := false
 	for _, src := range files {
-		active = active || strings.Contains(string(src), "type __hgo_ref_write[")
+		active = active || strings.Contains(string(src), "type __goxide_ref_write[")
 	}
 	result := map[string]Result{}
 	if !active {

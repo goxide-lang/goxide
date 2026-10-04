@@ -23,7 +23,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 	extraImports := map[string]string{}
 	unavailable := map[string]map[string]string{}
 	for fi, name := range sortedSources(sources) {
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
 		f, err := parseSourceImports(name, sources[name])
@@ -78,17 +78,17 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 				}
 				originAlias := alias
 				if export.DefinitionPath != path {
-					originAlias = fmt.Sprintf("__hgo_enum_origin_f%d_i%d_e%d", fi, ii, ei)
+					originAlias = fmt.Sprintf("__goxide_enum_origin_f%d_i%d_e%d", fi, ii, ei)
 					extraImports[name] += fmt.Sprintf("; import %s %q", originAlias, export.DefinitionPath)
 				}
-				prefix := fmt.Sprintf("__hgo_enum_import_f%d_i%d_%s", fi, ii, export.Name)
+				prefix := fmt.Sprintf("__goxide_enum_import_f%d_i%d_%s", fi, ii, export.Name)
 				d := enums.Decl{Name: prefix, LookupName: alias + "." + export.Name, PackagePath: export.DefinitionPath, Marker: export.Marker, Validator: prefix + "_validate", Public: true}
 				var code strings.Builder
 				fmt.Fprintf(&code, "\ntype %s = %s.%s; var %s = %s.%s;\n", prefix, alias, export.Name, d.Validator, originAlias, export.Validator)
 				for vi, v := range export.Variants {
 					variant := enums.Variant{Name: v.Name, CaseName: fmt.Sprintf("%s_case%d", prefix, vi), Constructor: fmt.Sprintf("%s_new%d", prefix, vi)}
 					if v.HasPayload {
-						variant.Payload = "__hgo_imported_payload"
+						variant.Payload = "__goxide_imported_payload"
 					}
 					fmt.Fprintf(&code, "type %s = %s.%s; var %s = %s.%s;\n", variant.CaseName, originAlias, v.Case, variant.Constructor, originAlias, v.Constructor)
 					d.Variants = append(d.Variants, variant)
@@ -107,10 +107,10 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 				}
 				originAlias := alias
 				if export.DefinitionPath != path {
-					originAlias = fmt.Sprintf("__hgo_enum_origin_f%d_i%d_b%d", fi, ii, ei)
+					originAlias = fmt.Sprintf("__goxide_enum_origin_f%d_i%d_b%d", fi, ii, ei)
 					extraImports[name] += fmt.Sprintf("; import %s %q", originAlias, export.DefinitionPath)
 				}
-				prefix := fmt.Sprintf("__hgo_enum_family_import_f%d_i%d_b%d", fi, ii, ei)
+				prefix := fmt.Sprintf("__goxide_enum_family_import_f%d_i%d_b%d", fi, ii, ei)
 				owners := map[string]string{path: alias, export.DefinitionPath: originAlias}
 				for vi, instance := range export.Instances {
 					owner := instance.ValidatorPath
@@ -120,7 +120,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 					if !enumOriginImportAllowed(consumerPath, owner) {
 						continue
 					}
-					oa := fmt.Sprintf("__hgo_enum_validator_owner_f%d_i%d_b%d_v%d", fi, ii, ei, vi)
+					oa := fmt.Sprintf("__goxide_enum_validator_owner_f%d_i%d_b%d_v%d", fi, ii, ei, vi)
 					owners[owner] = oa
 					extraImports[name] += fmt.Sprintf("; import %s %q", oa, owner)
 				}
@@ -154,7 +154,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 						if family == nil {
 							family = &enums.Decl{PackagePath: path, Name: alias + "." + d.Family, Family: d.Family}
 							for _, v := range d.Variants {
-								family.Variants = append(family.Variants, enums.Variant{Name: v.Name, Payload: v.Payload, CaseName: alias + ".Hgo" + d.Family + v.Name, Constructor: alias + ".HgoNew" + d.Family + v.Name})
+								family.Variants = append(family.Variants, enums.Variant{Name: v.Name, Payload: v.Payload, CaseName: alias + ".Goxide" + d.Family + v.Name, Constructor: alias + ".GoxideNew" + d.Family + v.Name})
 							}
 							families[d.Family] = family
 						}
@@ -165,7 +165,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 						continue
 					}
 					original := d.Name
-					prefix := fmt.Sprintf("__hgo_enum_import_f%d_i%d_%s", fi, ii, original)
+					prefix := fmt.Sprintf("__goxide_enum_import_f%d_i%d_%s", fi, ii, original)
 					d.PackagePath, d.LookupName, d.Name = path, alias+"."+original, prefix
 
 					d.Validator = prefix + "_validate"
@@ -175,7 +175,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 					for vi := range d.Variants {
 						v := &d.Variants[vi]
 						v.CaseName, v.Constructor = fmt.Sprintf("%s_case%d", prefix, vi), fmt.Sprintf("%s_new%d", prefix, vi)
-						fmt.Fprintf(&code, "type %s = %s.HgoCase%d_%s_%s; var %s = %s.New%s%s;\n", v.CaseName, alias, len(original), original, v.Name, v.Constructor, alias, original, v.Name)
+						fmt.Fprintf(&code, "type %s = %s.GoxideCase%d_%s_%s; var %s = %s.New%s%s;\n", v.CaseName, alias, len(original), original, v.Name, v.Constructor, alias, original, v.Name)
 					}
 					preludes[name] += code.String()
 					declarations[name] = append(declarations[name], d)

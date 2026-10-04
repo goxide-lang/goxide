@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const marker = "__hgo_question"
+const marker = "__goxide_question"
 
 // Prepare turns postfix propagation into an internal parsing marker. It does not
 // grant arbitrary named types a propagation implementation.

@@ -7,7 +7,7 @@ return expressions in functions or closures with one named or unnamed, Go-parsea
 It also supports recursive complete-arm matches and same-file known-signature
 call arguments (see the bounded composition rules below):
 
-```hgo
+```goxide
 enum State { Empty, Count(int), }
 func size(s State) int {
     var base int = match s {
@@ -38,7 +38,7 @@ retain an explicit boundary. Expression-statement expansions are block scoped.
 
 Not supported yet: target forms beyond a single identifier subscript, multiple assignment
 targets, control-header match declarations, package initializers; whole matches in
-multiple returns; match in arbitrary unary/composite literal contexts; unresolved/unnameable parameter types; user generic definitions in hgo; labelled standalone calls and control headers; expression blocks;
+multiple returns; match in arbitrary unary/composite literal contexts; unresolved/unnameable parameter types; user generic definitions in goxide; labelled standalone calls and control headers; expression blocks;
 unsupported complex signatures. These are
 implementation gaps, not language prohibitions or approved deferrals. Statement
 matches pass through. All enum validation, guard order and exhaustiveness remain
@@ -120,7 +120,7 @@ still apply. Private/unnameable result identities remain a diagnosed gap.
 `tests/acceptance/match_binary_index_test.go` exercises actual generated modules
 with independent race/vet, deterministic output, storage/order/panic/failure
 checks, local/nominal type contexts and readonly negatives. Optional optimized
-benchmarks are enabled by `HGO_MATCH_BENCH=1`; production measurements and the
+benchmarks are enabled by `GOXIDE_MATCH_BENCH=1`; production measurements and the
 separate earlier pure-Go IIFE research are recorded under
 `tests/research/match_lowering`.
 
@@ -155,7 +155,7 @@ The parser preserves the complete callee expression and argument expansion.
 `propagate.matchArgumentType` resolves its actual Go signature, checks arity and
 selects the fixed parameter, variadic element, or expanded slice type. Builtin and
 type-conversion calls remain explicitly unsupported contexts. Native Go generic
-instantiations use the same path; hgo user generic definitions remain unsupported.
+instantiations use the same path; goxide user generic definitions remain unsupported.
 Public transparent aliases preserve private nominal parameter identity; completely
 unnameable parameters retain a diagnostic rather than type erasure.
 
@@ -171,5 +171,5 @@ is checked before emission. Match failure remains a return from the user functio
 
 `match_call_signatures_test.go` supplies true CLI output, generated race/vet,
 positive/negative scope and permission tests, deterministic output and optional
-optimized microbenchmarks (`HGO_MATCH_CALL_BENCH=1`). See the corresponding RFC
+optimized microbenchmarks (`GOXIDE_MATCH_CALL_BENCH=1`). See the corresponding RFC
 0009 stage for measured scope and remaining boundaries.

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"io"
 	"io/fs"
 	"os"
@@ -31,7 +32,7 @@ func safeRel(s string) error {
 		if strings.TrimRight(part, ". ") != part {
 			return fmt.Errorf("nonportable path %q", s)
 		}
-		if part == ".." || part == ".git" || part == ".hgo" || part == "vendor" {
+		if part == ".." || part == ".git" || part == ".goxide" || part == "vendor" {
 			return fmt.Errorf("reserved or escaping path %q", s)
 		}
 	}
@@ -92,8 +93,13 @@ func snapshotTree(root string, strict bool, moduleRoot, module string) (map[stri
 		if e != nil {
 			return e
 		}
+		if !d.IsDir() {
+			if err := naming.Path(path); err != nil {
+				return err
+			}
+		}
 		rel, _ := filepath.Rel(root, path)
-		if !strict && (d.Name() == ".git" || d.Name() == ".hgo" || d.Name() == "vendor") {
+		if !strict && (d.Name() == ".git" || d.Name() == ".goxide" || d.Name() == "vendor") {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -161,7 +167,7 @@ func Prepare(o Options) (*Plan, error) {
 		return nil, err
 	}
 	if o.ArtifactRoot == "" {
-		o.ArtifactRoot = filepath.Join(o.ProjectRoot, ".hgo", "build-scripts")
+		o.ArtifactRoot = filepath.Join(o.ProjectRoot, ".goxide", "build-scripts")
 	}
 	o.ArtifactRoot, err = filepath.Abs(o.ArtifactRoot)
 	if err != nil {
@@ -192,8 +198,8 @@ func Prepare(o Options) (*Plan, error) {
 		return nil, err
 	}
 	ext := filepath.Ext(o.Config.Entry)
-	if ext != ".go" && ext != ".hgo" {
-		return nil, fmt.Errorf("build entry must be .go or .hgo (build.gox is a proposal name)")
+	if ext != ".go" && ext != ".gox" {
+		return nil, fmt.Errorf("build entry must be .go or .gox (canonical build script: build.gox)")
 	}
 	if filepath.Dir(o.Config.Entry) == "." {
 		return nil, fmt.Errorf("build entry must live in a dedicated subdirectory, not module root")
@@ -225,6 +231,9 @@ func Prepare(o Options) (*Plan, error) {
 	}
 	seen := map[string]bool{}
 	for _, n := range o.Config.Outputs {
+		if err := naming.Path(n); err != nil {
+			return nil, err
+		}
 		if err = safeRel(n); err != nil {
 			return nil, err
 		}
@@ -238,7 +247,7 @@ func Prepare(o Options) (*Plan, error) {
 			}
 		}
 		seen[fold] = true
-		if strings.HasSuffix(strings.ToLower(n), ".go.map.json") || strings.Split(n, "/")[0] == "hgo_targets" || filepath.Base(n) == "hgo_project_config.go" || filepath.Base(n) == "go.mod" || filepath.Base(n) == "go.sum" || (filepath.Base(n) == "goxide.toml" || filepath.Base(n) == "hgo.json") || filepath.Base(n) == "hgo.lock" || filepath.Base(n) == "goxide.lock" {
+		if strings.HasSuffix(strings.ToLower(n), ".go.map.json") || strings.Split(n, "/")[0] == "goxide_targets" || filepath.Base(n) == "goxide_project_config.go" || filepath.Base(n) == "go.mod" || filepath.Base(n) == "go.sum" || (filepath.Base(n) == "goxide.toml" || filepath.Base(n) == "hgo.json") || filepath.Base(n) == "hgo.lock" || filepath.Base(n) == "goxide.lock" {
 			return nil, fmt.Errorf("reserved output %s", n)
 		}
 		path := filepath.Join(o.PackageRoot, n)
@@ -432,7 +441,7 @@ func readLimited(path string, limit int64) ([]byte, error) {
 }
 func reservedEnv(n string) bool {
 	n = strings.ToUpper(n)
-	if strings.HasPrefix(n, "GO") || strings.HasPrefix(n, "CGO_") {
+	if strings.HasPrefix(n, "HGO_") || strings.HasPrefix(n, "GO") || strings.HasPrefix(n, "CGO_") {
 		return true
 	}
 	switch n {

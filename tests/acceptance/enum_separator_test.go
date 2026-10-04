@@ -21,7 +21,7 @@ func TestEnumDeclarationSeparators(t *testing.T) {
  func newline()H{return H::D}
  enum Last { End, };`, `package fixture
  import "testing"
- func TestSeparators(t *testing.T){if expression(__hgo_enum_new_1_E_A())!=1||statement(__hgo_enum_new_1_F_B(3))!=5||newline()==nil{t.Fatal("separator changed behavior")}}
+ func TestSeparators(t *testing.T){if expression(__goxide_enum_new_1_E_A())!=1||statement(__goxide_enum_new_1_F_B(3))!=5||newline()==nil{t.Fatal("separator changed behavior")}}
  `, false)
 }
 
@@ -29,18 +29,18 @@ func TestEnumSeparatorPackageCLI(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", packagesModule(root))
-	packagesWrite(t, src, "model/types.hgo", `package model
+	packagesWrite(t, src, "model/types.gox", `package model
 pub enum E { A, B(int), } /* preserved between */ ; // preserved after
 func Read(e E)int{return match e{E::A=>0,E::B(n)=>n,}}
 `)
-	packagesWrite(t, src, "model/other.hgo", `package model
+	packagesWrite(t, src, "model/other.gox", `package model
 type Record struct{N int}; enum local { Ready, }; func Ready()E{return E::B(4)}
 `)
-	packagesWrite(t, src, "app.hgo", `package app
+	packagesWrite(t, src, "app.gox", `package app
 import m "packages.example/app/model"
 func Run()int{return m.Read(m.Ready())}
 `)
@@ -65,8 +65,8 @@ func TestGenerated(t *testing.T){if Run()!=4{t.Fatal(Run())}}
 		"package fixture\nenum E { A, }; func bad(e E){match e{E::Missing=>{},}}",
 		"package fixture\nenum E { A, }; func bad(e E){match e{E::A if true=>{},}}",
 	} {
-		_, e := frontend.Compile("separator_bad.hgo", []byte(src))
-		if e == nil || !strings.Contains(e.Error(), "separator_bad.hgo:") || strings.Contains(e.Error(), "expected declaration") {
+		_, e := frontend.Compile("separator_bad.gox", []byte(src))
+		if e == nil || !strings.Contains(e.Error(), "separator_bad.gox:") || strings.Contains(e.Error(), "expected declaration") {
 			t.Fatalf("expected enum diagnostic with source position, got %v", e)
 		}
 	}

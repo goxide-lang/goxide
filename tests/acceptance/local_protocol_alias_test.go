@@ -13,8 +13,8 @@ func TestLocalProtocolAliasModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	mod := func(name, lib string) string {
 		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", name, filepath.ToSlash(root))
 		if lib != "" {
@@ -24,7 +24,7 @@ func TestLocalProtocolAliasModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("aliases.example/lib", ""))
-	packagesWrite(t, src, "model/item.hgo", `package model
+	packagesWrite(t, src, "model/item.gox", `package model
 #[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
 type Item struct{N int;Name string}
 impl Default for Item{func default()Item{return Item{N:7,Name:"producer"}}}
@@ -35,7 +35,7 @@ Item(Item),
 Empty,
 }
 `)
-	packagesWrite(t, src, "other/item.hgo", `package different
+	packagesWrite(t, src, "other/item.gox", `package different
 #[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
 type Item struct{Text string}
 `)
@@ -55,7 +55,7 @@ func EqualsItem(a,b Item)bool{return true}
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("aliases.example/app", lib))
-	// Both canonical imports exist only in native Go: no hgo selector is available.
+	// Both canonical imports exist only in native Go: no goxide selector is available.
 	packagesWrite(t, appsrc, "aliases.go", `package app
 import m "aliases.example/lib/relay"
 import again "aliases.example/lib/relay"
@@ -63,7 +63,7 @@ type Native=m.Item
 type NativeE=m.E
 type Duplicate=again.Item
 `)
-	packagesWrite(t, appsrc, "chain.hgo", `package app
+	packagesWrite(t, appsrc, "chain.gox", `package app
 type Local=Native
 type Level=Local
 type Event=NativeE
@@ -75,7 +75,7 @@ type Bag struct{Items []Level;Lookup map[string]Local}
 type Optional struct{Maybe Option[Level]}
 func Equal(a,b Wrap)bool{Local:=3;_=Local;return a.equals(b)}
 `)
-	packagesWrite(t, appsrc, "other.hgo", `package app
+	packagesWrite(t, appsrc, "other.gox", `package app
 import m "aliases.example/lib/other"
 type Different=m.Item
 #[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
@@ -140,16 +140,16 @@ func TestPublicGoHelpers(t *testing.T){v:=a.DefaultWrap();c:=a.CloneWrap(&v);if 
 		for _, definition := range []string{"type Local m.Item", "type Fresh m.Item;type Local=Fresh"} {
 			bad := t.TempDir()
 			packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
-			packagesWrite(t, bad, "bad.hgo", fmt.Sprintf("package bad\nimport m \"aliases.example/lib/model\"\n%s\n#[derive(%s)]\ntype W struct{V Local}\n", definition, kind))
+			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nimport m \"aliases.example/lib/model\"\n%s\n#[derive(%s)]\ntype W struct{V Local}\n", definition, kind))
 			log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
-			if !strings.Contains(log, "bad.hgo") && !strings.Contains(log, "requires an explicit ") {
+			if !strings.Contains(log, "bad.gox") && !strings.Contains(log, "requires an explicit ") {
 				t.Fatal(log)
 			}
 		}
 	}
 	shadow := t.TempDir()
 	packagesWrite(t, shadow, "go.mod", mod("aliases.example/shadow", lib))
-	packagesWrite(t, shadow, "shadow.hgo", `package shadow
+	packagesWrite(t, shadow, "shadow.gox", `package shadow
 import m "aliases.example/lib/model"
 type Local=m.Item
 func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
@@ -161,9 +161,9 @@ func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
 	// Matching shape/helper spellings in another package do not convey registration.
 	bad := t.TempDir()
 	packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
-	packagesWrite(t, bad, "bad.hgo", "package bad\nimport m \"aliases.example/lib/fake\"\ntype Local=m.Item\n#[derive(Clone)]\ntype W struct{V Local}\n")
+	packagesWrite(t, bad, "bad.gox", "package bad\nimport m \"aliases.example/lib/fake\"\ntype Local=m.Item\n#[derive(Clone)]\ntype W struct{V Local}\n")
 	packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "fake"), bad)
-	artifact := filepath.Join(lib, "model", ".hgo.enums.json")
+	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
 	saved, err := os.ReadFile(artifact)
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +172,7 @@ func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
 	if changed == string(saved) {
 		t.Fatal("no tamper")
 	}
-	packagesWrite(t, lib, "model/.hgo.enums.json", changed)
+	packagesWrite(t, lib, "model/.goxide.enums.json", changed)
 	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "tamper"), appsrc)
 	if !strings.Contains(log, "aliases.go:") || !strings.Contains(log, "metadata") {
 		t.Fatal(log)

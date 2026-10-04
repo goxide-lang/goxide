@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"go/ast"
 	"go/constant"
 	"go/format"
@@ -17,8 +18,8 @@ import (
 )
 
 // Metadata is versioned analysis data, not a stable export ABI.
-const MetadataVersion = 2
-const MetadataMarker = "HgoReferenceMetadata"
+const MetadataVersion = 3
+const MetadataMarker = "GoxideReferenceMetadata"
 
 type Slot struct {
 	ElementAlias string `json:",omitempty"`
@@ -158,7 +159,7 @@ func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importe
 								expr = unparen(expr).(*ast.StarExpr).X
 							}
 							sum := sha256.Sum256([]byte(path + "\x00" + typeID(typ)))
-							alias := fmt.Sprintf("HgoReferenceType_%x", sum[:16])
+							alias := fmt.Sprintf("GoxideReferenceType_%x", sum[:16])
 							if slot.Permission != "" {
 								slot.ElementAlias = alias
 							} else {
@@ -308,7 +309,7 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 	info := &types.Info{Uses: map[*ast.Ident]types.Object{}, Types: map[ast.Expr]types.TypeAndValue{}}
 	// Provisional errors (including local write IR) are not acceptance; Finish checks all bodies.
 	deduplicateIR(all)
-	_, _ = (&types.Config{Importer: imp, Error: func(error) {}}).Check("hgo.local/refs", fs, all, info)
+	_, _ = (&types.Config{Importer: imp, Error: func(error) {}}).Check("goxide.local/refs", fs, all, info)
 	serial := 0
 	for _, name := range sourceNames(files) {
 		f := parsed[name]
@@ -336,6 +337,9 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 			}
 			if aliases[path] == "" || (alias != "_" && alias != ".") {
 				aliases[path] = alias
+			}
+			if e := naming.Package(pkg); e != nil {
+				return nil, bindings, e
 			}
 			markerObject := pkg.Scope().Lookup(MetadataMarker)
 			marker, marked := markerObject.(*types.Const)
@@ -430,10 +434,10 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 				return false
 			}
 			serial++
-			stub := fmt.Sprintf("__hgo_permission_call_%d", serial)
+			stub := fmt.Sprintf("__goxide_permission_call_%d", serial)
 			for used[stub] {
 				serial++
-				stub = fmt.Sprintf("__hgo_permission_call_%d", serial)
+				stub = fmt.Sprintf("__goxide_permission_call_%d", serial)
 			}
 			used[stub] = true
 			off := func(p token.Pos) int { return fs.Position(p).Offset }
@@ -449,10 +453,10 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 						return alias
 					}
 					serial++
-					alias := fmt.Sprintf("__hgo_permission_import_%d", serial)
+					alias := fmt.Sprintf("__goxide_permission_import_%d", serial)
 					for used[alias] {
 						serial++
-						alias = fmt.Sprintf("__hgo_permission_import_%d", serial)
+						alias = fmt.Sprintf("__goxide_permission_import_%d", serial)
 					}
 					used[alias] = true
 					aliases[p.Path()] = alias
@@ -499,10 +503,10 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 							}
 							if local == "" {
 								serial++
-								local = fmt.Sprintf("__hgo_permission_element_%d", serial)
+								local = fmt.Sprintf("__goxide_permission_element_%d", serial)
 								for used[local] {
 									serial++
-									local = fmt.Sprintf("__hgo_permission_element_%d", serial)
+									local = fmt.Sprintf("__goxide_permission_element_%d", serial)
 								}
 								used[local] = true
 								elementBindings = append(elementBindings, elementBinding{elem, local})
@@ -539,9 +543,9 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 			}
 			for _, e := range sourceNames(names) {
 				for _, p := range []Permission{Read, Write} {
-					origin := "__hgo_ref_ro"
+					origin := "__goxide_ref_ro"
 					if p == Write {
-						origin = "__hgo_ref_rw"
+						origin = "__goxide_ref_rw"
 					}
 					fmt.Fprintf(&suffix, "\ntype %s = %s[%s]\n", referenceName(Ref{e, p}, name), origin, e)
 				}
@@ -553,9 +557,9 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 					fmt.Fprintf(&suffix, "\nvar _ = %s.%s\n", aliases[path], MetadataMarker)
 				}
 			}
-			if !strings.Contains(string(files[name]), "type __hgo_ref_write[") {
+			if !strings.Contains(string(files[name]), "type __goxide_ref_write[") {
 				suffix.WriteString(declarations())
-				suffix.WriteString("\ntype __hgo_ref_write[T interface{}] *T\nfunc __hgo_ref_make_write[T interface{}](v *T)__hgo_ref_write[T]{return __hgo_ref_write[T](v)}\n")
+				suffix.WriteString("\ntype __goxide_ref_write[T interface{}] *T\nfunc __goxide_ref_make_write[T interface{}](v *T)__goxide_ref_write[T]{return __goxide_ref_write[T](v)}\n")
 			}
 		}
 		if len(addedImports) > 0 {

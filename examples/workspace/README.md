@@ -2,15 +2,15 @@
 
 根 `goxide.toml` 列出三个成员。只有两个应用的 `shared={workspace=true}` 建立依赖；成员资格不补 import、不覆盖同名远端依赖。根模板的 path 相对根清单，成员直接 path 相对成员清单。
 
-在仓库根运行，`hgo` 为本分支编译的 CLI，Go 需 1.27+：
+在仓库根运行，`goxide` 为本分支编译的 CLI，Go 需 1.27+：
 
 ```sh
-hgo run --bin web examples/workspace
-hgo run -p example.org/worker --bin web examples/workspace
-hgo run -p example.org/service --example hello examples/workspace
-hgo build --workspace examples/workspace
-hgo build --workspace --offline --locked examples/workspace
-hgo test --workspace --offline --locked examples/workspace
+goxide run --bin web examples/workspace
+goxide run -p example.org/worker --bin web examples/workspace
+goxide run -p example.org/service --example hello examples/workspace
+goxide build --workspace examples/workspace
+goxide build --workspace --offline --locked examples/workspace
+goxide test --workspace --offline --locked examples/workspace
 ```
 
 前三条依次打印 `json`、`yaml`、`json`。同时 build 两个应用时共享库合并为 `json+yaml`，选择 `yaml` 分支；随后单独运行 service 恢复 `json`。两个成员都叫 `web`，产物按 module/target/config 分目录。service 的 `admin` 也是命名 bin；单独 run 必须选择 bin，example 不进入 workspace 默认批量构建。

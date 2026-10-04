@@ -18,7 +18,7 @@ func TestCompositeConcreteReferenceElements(t *testing.T) {
 		`type S struct{N int;Items []int};func f(r &S)int{dst:=make([]int,len(r.Items));copy(dst,r.Items);dst[0]++;return dst[0]}`,
 		`type S struct{N int};func f(r &S)int{{r:=S{};r.N++;};v:=*r;w:=mut&v;w.N++;return w.N}`,
 	} {
-		if _, err := Lower("composite.hgo", []byte("package p\n"+src)); err != nil {
+		if _, err := Lower("composite.gox", []byte("package p\n"+src)); err != nil {
 			t.Fatalf("%s: %v", src, err)
 		}
 	}
@@ -34,7 +34,7 @@ func TestCompositeFixedPointAndSharedCopies(t *testing.T) {
 		`func f(r &S){m:=map[*int]int{};m[r.Pointers[0]]=1;for p:=range m{*p=2}}`,
 		`func f(r &S){dst:=make([]*int,len(r.Pointers));copy(dst,r.Pointers);*dst[0]++}`,
 	} {
-		if _, err := Lower("composite.hgo", []byte("package p\ntype S struct{Items []int;Pointers []*int}\n"+src)); err == nil {
+		if _, err := Lower("composite.gox", []byte("package p\ntype S struct{Items []int;Pointers []*int}\n"+src)); err == nil {
 			t.Fatalf("accepted %s", src)
 		}
 	}
@@ -45,7 +45,7 @@ func TestCompositeRecursiveQualificationConverges(t *testing.T) {
 		`type P *P;func f(r &P){p:=*r;p=&p;_=p}`,
 		`type Node struct{Next *Node;Items []int};func f(r &Node){p:=r.Next;for p!=nil{p=p.Next};_=p}`,
 	} {
-		if _, err := Lower("recursive.hgo", []byte("package p\n"+src)); err != nil {
+		if _, err := Lower("recursive.gox", []byte("package p\n"+src)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -59,7 +59,7 @@ func TestCompositeHiddenBoundaryRejections(t *testing.T) {
 		`type S struct{Ps []*int};var G *int;func f(r &S){for _,G=range r.Ps{}}`,
 		`type S struct{Ps []*int};func f(r &S){var x any;for _,x=range r.Ps{};_=x}`,
 	} {
-		if _, err := Lower("escape.hgo", []byte("package p\n"+src)); err == nil {
+		if _, err := Lower("escape.gox", []byte("package p\n"+src)); err == nil {
 			t.Fatal("accepted " + src)
 		}
 	}

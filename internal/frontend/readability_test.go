@@ -20,18 +20,18 @@ func loops()int{
  return n
 }
 func recovered(){defer func(){match next(0){Result[int,error]::Ok(_)=>{if recover()!="kept"{panic("recover frame")}},Result[int,error]::Err(_)=>{},}}();panic("kept")}
-func invalid(){defer func(){if recover()!="hgo: invalid enum Result"{panic("missing nested validation")}}();var inner Result[int,error];match Result[Result[int,error],error]::Ok(inner){Result[Result[int,error],error]::Ok(_)=>{panic("wrong body")},Result[Result[int,error],error]::Err(_)=>{},}}
+func invalid(){defer func(){if recover()!="goxide: invalid enum Result"{panic("missing nested validation")}}();var inner Result[int,error];match Result[Result[int,error],error]::Ok(inner){Result[Result[int,error],error]::Ok(_)=>{panic("wrong body")},Result[Result[int,error],error]::Err(_)=>{},}}
 func none(v Option[int])int{nil:=42;_=nil;return match v{Option[int]::Some(n)=>n,Option[int]::None=>-1,}}
 func main(){if loops()!=4||calls!=4{panic("control flow or eval count")};recovered();invalid();if none(Option[int]::None)!=-1||none(Option[int]::Some(9))!=9{panic("Option")}}
 `
-	r, err := Compile("plain.hgo", []byte(source))
+	r, err := Compile("plain.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(r.Go, []byte("__hgo_enum_matched_")) {
+	if bytes.Contains(r.Go, []byte("__goxide_enum_matched_")) {
 		t.Fatal("plain match still emits matched state")
 	}
-	again, err := Compile("plain.hgo", []byte(source))
+	again, err := Compile("plain.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,13 +52,13 @@ func main(){if loops()!=4||calls!=4{panic("control flow or eval count")};recover
 }
 
 func TestGuardedMatchRetainsFallback(t *testing.T) {
-	r, err := Compile("guard.hgo", []byte(`package p
+	r, err := Compile("guard.gox", []byte(`package p
 func f(v Option[int])int{return match v{Option[int]::Some(n) if n>0=>n,Option[int]::Some(_)=>0,Option[int]::None=>-1,}}
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(r.Go), "__hgo_enum_matched_") {
+	if !strings.Contains(string(r.Go), "__goxide_enum_matched_") {
 		t.Fatal("guarded match lost fallback state")
 	}
 }
@@ -66,7 +66,7 @@ func f(v Option[int])int{return match v{Option[int]::Some(n) if n>0=>n,Option[in
 func TestShortValidatorPackageIdentity(t *testing.T) {
 	compile := func(typ string) Result {
 		t.Helper()
-		r, err := Compile("binding.hgo", []byte("package p\nvar value Result["+typ+",error]\n"))
+		r, err := Compile("binding.gox", []byte("package p\nvar value Result["+typ+",error]\n"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,31 +75,31 @@ func TestShortValidatorPackageIdentity(t *testing.T) {
 	first := compile("int")
 	repeat := compile("int")
 	seen := map[string]string{}
-	if err := packageGeneratedNames("a.hgo", &first, 0, seen); err != nil {
+	if err := packageGeneratedNames("a.gox", &first, 0, seen); err != nil {
 		t.Fatal(err)
 	}
-	if err := packageGeneratedNames("b.hgo", &repeat, 1, seen); err != nil {
+	if err := packageGeneratedNames("b.gox", &repeat, 1, seen); err != nil {
 		t.Fatal("same identity was not deduplicated", err)
 	}
 	other := compile("string")
 	other.Enums[0].Validator = first.Enums[0].Validator
-	if err := packageGeneratedNames("c.hgo", &other, 2, seen); err == nil || !strings.Contains(err.Error(), "collision") {
+	if err := packageGeneratedNames("c.gox", &other, 2, seen); err == nil || !strings.Contains(err.Error(), "collision") {
 		t.Fatal("cross-file collision accepted", err)
 	}
 	name := first.Enums[0].Validator
 	for _, body := range []string{"var " + name + " int", "func f(){type " + name + " int}", "macro_rules! bad {()=>{func(){var " + name + " int}};}"} {
-		if _, err := Compile("capture.hgo", []byte("package p\n"+body)); err == nil || !strings.Contains(err.Error(), "reserved") {
+		if _, err := Compile("capture.gox", []byte("package p\n"+body)); err == nil || !strings.Contains(err.Error(), "reserved") {
 			t.Fatal("source capture accepted", err)
 		}
 	}
-	if _, err := CompilePackage("example.org/p", map[string][]byte{"a.hgo": []byte("package p\nvar v Result[int,error]\n"), "native.go": []byte("package p\nvar " + name + " int\n")}, nil); err == nil {
+	if _, err := CompilePackage("example.org/p", map[string][]byte{"a.gox": []byte("package p\nvar v Result[int,error]\n"), "native.go": []byte("package p\nvar " + name + " int\n")}, nil); err == nil {
 		t.Fatal("native declaration collision accepted")
 	}
 }
 
 func TestPlainMatchArmSourceOrigin(t *testing.T) {
 	const source = "package p\nfunc f(v Option[int])int {\n return match v {\n Option[int]::Some(n)=>n+17,\n Option[int]::None=>23,\n }\n}\n"
-	r, err := Compile("origin.hgo", []byte(source))
+	r, err := Compile("origin.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestPlainMatchArmSourceOrigin(t *testing.T) {
 		t.Fatal("missing arm literal")
 	}
 	seg := r.Diagnostics.Lookup(at)
-	if seg == nil || seg.Origin == nil || seg.Origin.File != "origin.hgo" || seg.Origin.Line != 4 {
+	if seg == nil || seg.Origin == nil || seg.Origin.File != "origin.gox" || seg.Origin.Line != 4 {
 		t.Fatalf("wrong arm origin: %+v", seg)
 	}
 }

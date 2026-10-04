@@ -43,7 +43,7 @@ func CollectPackage(path string, sources map[string][]byte, dependencies map[str
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	p.prefix = "hgoMacroGenerated"
+	p.prefix = "goxideMacroGenerated"
 	for {
 		collision := false
 		for _, source := range sources {

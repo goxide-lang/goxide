@@ -20,7 +20,7 @@ func load()Result[int,string]{return Result[int,string]::Ok(2)}
 		{"return-erasure", `func f(r &State)Result[[]int,string]{_=load()?;return Result[[]int,string]::Ok(r.Items)}`, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			r, err := Compile("composite_propagation.hgo", []byte(prelude+test.body))
+			r, err := Compile("composite_propagation.gox", []byte(prelude+test.body))
 			if test.reject {
 				if err == nil {
 					t.Fatal("accepted permission erasure")
@@ -30,7 +30,7 @@ func load()Result[int,string]{return Result[int,string]::Ok(2)}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(string(r.Go), "__hgo_ref_") {
+			if strings.Contains(string(r.Go), "__goxide_ref_") {
 				t.Fatal("analysis types escaped")
 			}
 		})

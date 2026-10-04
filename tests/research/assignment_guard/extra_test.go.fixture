@@ -8,8 +8,8 @@ import (
 
 func BenchmarkPackedGuardSuccess(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -19,8 +19,8 @@ func BenchmarkPackedGuardSuccess(b *testing.B) {
 }
 func BenchmarkPackedGuardFailLast(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -30,8 +30,8 @@ func BenchmarkPackedGuardFailLast(b *testing.B) {
 }
 func BenchmarkPackedExplicitSuccess(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -41,8 +41,8 @@ func BenchmarkPackedExplicitSuccess(b *testing.B) {
 }
 func BenchmarkPackedExplicitFailLast(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -58,7 +58,7 @@ func observed(f func()) (value any, completed bool) {
 func TestAuditPanicIdentity(t *testing.T) {
 	tree := model.NewTree(3)
 	token := new(int)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	for _, f := range []func(){func() { _ = auditUserPanic(&tree, token) }, func() { _ = auditDeferPanic(&tree, token, bad) }} {
 		v, completed := observed(f)
 		if v != token || completed || tree.Count != 3 {
@@ -75,7 +75,7 @@ func TestAuditNilPanicCompletion(t *testing.T) {
 }
 func TestAuditGoexitWithDeferredFailure(t *testing.T) {
 	tree := model.NewTree(3)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	done := make(chan struct{})
 	returned := false
 	go func() { defer close(done); func() { defer Guard1(&tree, bad); runtime.Goexit() }(); returned = true }()

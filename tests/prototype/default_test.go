@@ -23,7 +23,7 @@ struct Empty {}
 macro_rules! fresh {()=>{DefaultConfig()};}
 func Fresh() Config {DefaultConfig:=func() Config{panic("captured")};_=DefaultConfig;return fresh!()}
 `
-	r, e := frontend.Compile("default.hgo", []byte(source))
+	r, e := frontend.Compile("default.gox", []byte(source))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -35,7 +35,7 @@ import "testing"
 func TestDefaults(t *testing.T){
  v:=Fresh(); if v.First.Count!=0||v.First.Enabled||v.First.Label!=""||v.Last!=0 {t.Fatalf("bad defaults: %#v",v)}
  if v.State==nil {t.Fatal("Default produced invalid nil enum")}; if v.Maybe!=nil {t.Fatal("Option default must be None under current ABI")}
- if _,ok:=v.State.(__hgo_enum_case_6_Status_Ready);!ok{t.Fatal("wrong default variant")}
+ if _,ok:=v.State.(__goxide_enum_case_6_Status_Ready);!ok{t.Fatal("wrong default variant")}
  _=DefaultEmpty()
  var raw Status;if raw!=nil{t.Fatal("Go zero value implicitly rewritten")}
 }
@@ -70,8 +70,8 @@ struct S { Value Child }`,
 struct S { Value int }`,
 	}
 	for _, body := range cases {
-		_, e := frontend.Compile("invalid-default.hgo", []byte("package fixture\n"+body+"\n"))
-		if e == nil || !strings.Contains(e.Error(), "invalid-default.hgo") {
+		_, e := frontend.Compile("invalid-default.gox", []byte("package fixture\n"+body+"\n"))
+		if e == nil || !strings.Contains(e.Error(), "invalid-default.gox") {
 			t.Errorf("expected source diagnostic for %s; got %v", body, e)
 		}
 	}
@@ -80,7 +80,7 @@ struct S { Value int }`,
 func TestDefaultRejectsCrossFileBuiltinShadow(t *testing.T) {
 	_, e := frontend.CompilePackage("fixture", map[string][]byte{
 		"type.go":   []byte("package fixture\ntype int string\n"),
-		"value.hgo": []byte("package fixture\n#[derive(Default)]\nstruct Value { N int }\n"),
+		"value.gox": []byte("package fixture\n#[derive(Default)]\nstruct Value { N int }\n"),
 	}, nil)
 	if e == nil || !strings.Contains(e.Error(), "shadowing") {
 		t.Fatalf("builtin identity was inferred from spelling: %v", e)
@@ -88,7 +88,7 @@ func TestDefaultRejectsCrossFileBuiltinShadow(t *testing.T) {
 }
 
 func TestDefaultGroupedTypeMacroBinding(t *testing.T) {
-	r, e := frontend.Compile("group.hgo", []byte(`package fixture
+	r, e := frontend.Compile("group.gox", []byte(`package fixture
 type (
  #[derive(Default)]
  Settings struct { N int }

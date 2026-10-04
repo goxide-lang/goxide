@@ -6,7 +6,7 @@ import (
 )
 
 func TestOptionSerdePayloadNamesDoNotCaptureHelpers(t *testing.T) {
-	r, err := frontend.Compile("option-names.hgo", []byte(`package fixture
+	r, err := frontend.Compile("option-names.gox", []byte(`package fixture
 #[derive(Serialize,Deserialize)]
 type d struct { N int }
 #[derive(Serialize,Deserialize)]

@@ -37,7 +37,7 @@ func Exercise() (int,string) {
 }
 func Boundaries(done *bool) int {mark:=func(){*done=true};cleanup!(mark);exit!(4)}
 `
-	result, err := frontend.Compile("application.hgo", []byte(source))
+	result, err := frontend.Compile("application.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +87,8 @@ struct Bad {
 `,
 	}
 	for _, source := range cases {
-		_, err := frontend.Compile("diagnostic.hgo", []byte(source))
-		if err == nil || !strings.Contains(err.Error(), "diagnostic.hgo") {
+		_, err := frontend.Compile("diagnostic.gox", []byte(source))
+		if err == nil || !strings.Contains(err.Error(), "diagnostic.gox") {
 			t.Fatalf("missing source-aware rejection: %v", err)
 		}
 	}
@@ -102,7 +102,7 @@ func exerciseLocal(value *Builder) string { _ = fmt.Sprint(1); return local!(val
 type Builder struct{}
 func(*Builder)String()string{return "local-method"}
 `
-	result, err := frontend.Compile("shadow.hgo", []byte(source))
+	result, err := frontend.Compile("shadow.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}

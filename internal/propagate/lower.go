@@ -87,7 +87,7 @@ func parseStatements(s string) []ast.Stmt {
 func (l *lowering) fail(n ast.Node, s string) error {
 	return fmt.Errorf("%s: %s", l.fs.Position(n.Pos()), s)
 }
-func (l *lowering) temp() string { l.serial++; return fmt.Sprintf("__hgo_qtmp_%d", l.serial) }
+func (l *lowering) temp() string { l.serial++; return fmt.Sprintf("__goxide_qtmp_%d", l.serial) }
 func (l *lowering) check() {
 	l.info = &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}, Selections: map[*ast.SelectorExpr]*types.Selection{}}
 	imp := l.cfg.Importer
@@ -102,7 +102,7 @@ func (l *lowering) check() {
 	}}
 	path := l.cfg.PackagePath
 	if path == "" {
-		path = "hgo/generated"
+		path = "goxide/generated"
 	}
 	files := append([]*ast.File{l.file}, l.companions...)
 	l.pkg, _ = c.Check(path, l.fs, files, l.info)
@@ -209,7 +209,7 @@ func (l *lowering) bindImportedFamily(d enums.Decl) (enums.Decl, bool) {
 	}
 	bind := func(value string, kind token.Token) string {
 		l.serial++
-		name := fmt.Sprintf("__hgo_qimport_%s_%d", l.cfg.Namespace, l.serial)
+		name := fmt.Sprintf("__goxide_qimport_%s_%d", l.cfg.Namespace, l.serial)
 		text := "var " + name + " = " + value
 		if kind == token.TYPE {
 			text = "type " + name + " = " + value
@@ -217,7 +217,7 @@ func (l *lowering) bindImportedFamily(d enums.Decl) (enums.Decl, bool) {
 			// The concrete family alias is already bound at package scope.
 			// A named forwarding function retains definition-site binding while
 			// exposing the trusted validator to Go's inline/escape analysis.
-			text = "func " + name + "(__hgo_sum_value " + d.Name + ") { " + value + "(__hgo_sum_value) }"
+			text = "func " + name + "(__goxide_sum_value " + d.Name + ") { " + value + "(__goxide_sum_value) }"
 		}
 		decl, err := parser.ParseFile(l.fs, "<imported propagation bindings>", "package "+l.file.Name.Name+";"+text, 0)
 		if err != nil {
@@ -294,7 +294,7 @@ func (l *lowering) typeSpelling(t types.Type) (string, bool) {
 			return name
 		}
 		visible = false
-		return "__hgo_unavailable_package"
+		return "__goxide_unavailable_package"
 	})
 	// Check the resulting spelling as a type in this file's scope. In
 	// particular, an unexported named payload cannot be invented in a caller.
@@ -309,7 +309,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if cfg.Namespace != "" && !token.IsIdentifier(cfg.Namespace) {
 		return nil, fmt.Errorf("%s: invalid propagation namespace", filename)
 	}
-	if !bytes.Contains(source, []byte("__hgo_enum_pending_")) && !bytes.Contains(source, []byte("__hgo_enum_context_match")) && !bytes.Contains(source, []byte("__hgo_go_result")) && !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) && !bytes.Contains(source, []byte(matchOperand+"(")) {
+	if !bytes.Contains(source, []byte("__goxide_enum_pending_")) && !bytes.Contains(source, []byte("__goxide_enum_context_match")) && !bytes.Contains(source, []byte("__goxide_go_result")) && !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__goxide_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) && !bytes.Contains(source, []byte(matchOperand+"(")) {
 		return source, nil
 	}
 	if cfg.GoResultNodes == nil {
@@ -341,7 +341,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	// Seed a temporary identity declaration: this makes operand types available,
 	// including operands with inference, before replacing each marker's result.
-	seed, _ := parser.ParseFile(fs, "<propagation signatures>", "package "+f.Name.Name+";func "+marker+"[T interface{}](v T) T {return v};func __hgo_enum_infer[T interface{}](v T) {}", 0)
+	seed, _ := parser.ParseFile(fs, "<propagation signatures>", "package "+f.Name.Name+";func "+marker+"[T interface{}](v T) T {return v};func __goxide_enum_infer[T interface{}](v T) {}", 0)
 	f.Decls = append(f.Decls, seed.Decls...)
 	matchSeed, _ := parser.ParseFile(fs, "<match result signatures>", "package "+f.Name.Name+";type "+matchPending+" interface{};func "+matchInfer+"(origin string) "+matchPending+"{return nil};func "+matchContext+"[T interface{}](v T,origin string)T{return v};func "+matchOperand+"[T interface{}](v T,kind,origin string)T{return v};func "+matchZero+"[T interface{}]()T{var v T;return v};func "+matchReturn+"() "+matchPending+"{return nil};func "+matchArgument+"() "+matchPending+"{return nil}", 0)
 	f.Decls = append(f.Decls, matchSeed.Decls...)
@@ -488,7 +488,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	l.captureExpressionFacts()
 	l.bindLocalScalars()
 	for _, decl := range f.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil && !strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_") && fn.Name.Name != marker && fn.Name.Name != "__hgo_enum_infer" {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil && !strings.HasPrefix(fn.Name.Name, "__goxide_qtmp_") && fn.Name.Name != marker && fn.Name.Name != "__goxide_enum_infer" {
 			if fn.Type.TypeParams != nil && contains(fn.Body, l.questions) {
 				return nil, l.fail(fn, "generic functions with ? are not supported by this prototype")
 			}
@@ -499,7 +499,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	var residual ast.Node
 	for _, decl := range f.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && (fn.Name.Name == marker || fn.Name.Name == "__hgo_enum_infer" || strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_")) {
+		if fn, ok := decl.(*ast.FuncDecl); ok && (fn.Name.Name == marker || fn.Name.Name == "__goxide_enum_infer" || strings.HasPrefix(fn.Name.Name, "__goxide_qtmp_")) {
 			continue
 		}
 		ast.Inspect(decl, func(n ast.Node) bool {
@@ -516,7 +516,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	kept := f.Decls[:0]
 	for _, decl := range f.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && (fn.Name.Name == marker || fn.Name.Name == "__hgo_enum_infer" || strings.HasPrefix(fn.Name.Name, "__hgo_qtmp_")) {
+		if fn, ok := decl.(*ast.FuncDecl); ok && (fn.Name.Name == marker || fn.Name.Name == "__goxide_enum_infer" || strings.HasPrefix(fn.Name.Name, "__goxide_qtmp_")) {
 			continue
 		}
 		kept = append(kept, decl)
@@ -904,7 +904,7 @@ func (l *lowering) freezeValue(original, value ast.Expr, pre *[]ast.Stmt) ast.Ex
 			typeName := l.scalarNames[t]
 			if typeName == "" {
 				if spelling, ok := l.typeSpelling(t); ok {
-					typeName = "__hgo_qscalar_" + l.cfg.Namespace + l.temp()
+					typeName = "__goxide_qscalar_" + l.cfg.Namespace + l.temp()
 					l.file.Decls = append(l.file.Decls, &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(typeName), Assign: token.Pos(1), Type: parseExpr(spelling)}}})
 					if l.scalarNames == nil {
 						l.scalarNames = map[types.Type]string{}
@@ -961,7 +961,7 @@ func (l *lowering) indexBase(original ast.Expr, slicing bool, ft *ast.FuncType) 
 	value = l.freezeValue(original, value, &pre)
 	if array {
 		if l.arrayValueHelper == "" {
-			l.arrayValueHelper = "__hgo_qarray_" + l.cfg.Namespace + l.temp()
+			l.arrayValueHelper = "__goxide_qarray_" + l.cfg.Namespace + l.temp()
 			decl, err := parser.ParseFile(l.fs, "<array value category>", "package "+l.file.Name.Name+";func "+l.arrayValueHelper+"[T interface{}](value T) T {return value}", 0)
 			if err != nil {
 				return nil, nil, err
@@ -981,7 +981,7 @@ func (l *lowering) mapConstraint() string {
 		return "comparable"
 	}
 	if l.comparableConstraint == "" {
-		name := "__hgo_qconstraints_" + l.cfg.Namespace
+		name := "__goxide_qconstraints_" + l.cfg.Namespace
 		spec := &ast.ImportSpec{Name: ast.NewIdent(name), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("github.com/hxsf/goxide/runtime")}}
 		// Imports must precede declarations even when the original file had none.
 		l.file.Decls = append([]ast.Decl{&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{spec}}}, l.file.Decls...)
@@ -1001,7 +1001,7 @@ func (l *lowering) witnessCall(kind string, arg ast.Expr) ast.Expr {
 	}
 	name := l.witnessHelpers[kind]
 	if name == "" {
-		name = "__hgo_qzero_" + l.cfg.Namespace + l.temp()
+		name = "__goxide_qzero_" + l.cfg.Namespace + l.temp()
 		signature := "[T interface{}]() (zero T)"
 		switch {
 		case strings.HasPrefix(kind, "function-result-"):
@@ -1224,7 +1224,7 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 		}
 		printPlan := false
 		if id, ok := n.Fun.(*ast.Ident); ok {
-			printPlan = id.Name == "__hgo_print" || id.Name == "__hgo_println"
+			printPlan = id.Name == "__goxide_print" || id.Name == "__goxide_println"
 		}
 		var p []ast.Stmt
 		var y ast.Expr

@@ -127,7 +127,7 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 		l.ts = append(l.ts, tok{k, v, off, off + n})
 	}
 	for _, t := range l.ts {
-		if t.kind == token.IDENT && strings.HasPrefix(t.text, "__hgo_enum_") {
+		if t.kind == token.IDENT && strings.HasPrefix(t.text, "__goxide_enum_") {
 			return Result{}, l.err(t.start, "reserved generated enum identifier")
 		}
 	}
@@ -232,7 +232,7 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 			for i, t := range l.ts {
 				if t.text == "package" && i+1 < len(l.ts) {
 					end := l.ts[i+1].end
-					edits = append(edits, edit{t.start, end, string(source[t.start:end]) + ";import __hgo_enum_std " + strconv.Quote(SumPackage)})
+					edits = append(edits, edit{t.start, end, string(source[t.start:end]) + ";import __goxide_enum_std " + strconv.Quote(SumPackage)})
 					break
 				}
 			}
@@ -317,8 +317,8 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 	if d.Name == "Option" || d.Name == "Result" {
 		return d, 0, l.err(l.ts[i+1].start, "reserved builtin sum type name")
 	}
-	d.Marker = "__hgo_enum_marker_" + d.Name
-	d.Validator = "__hgo_enum_validate_" + d.Name
+	d.Marker = "__goxide_enum_marker_" + d.Name
+	d.Validator = "__goxide_enum_validate_" + d.Name
 	end, e := l.close(i + 2)
 	if e != nil {
 		return d, 0, e
@@ -388,7 +388,7 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 			return d, 0, l.err(t.start, "duplicate variant")
 		}
 		seen[t.text] = true
-		v := Variant{Name: t.text, Position: l.position(t.start), CaseName: "__hgo_enum_case_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text, Constructor: "__hgo_enum_new_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text}
+		v := Variant{Name: t.text, Position: l.position(t.start), CaseName: "__goxide_enum_case_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text, Constructor: "__goxide_enum_new_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text}
 		v.Message, v.HasMessage, v.Source, v.From, v.Default = attr.Message, attr.HasMessage, attr.Source, attr.From, attr.Default
 		v.SerdeRename, v.SerdeValue, v.HasSerdeRename, v.HasSerdeValue = attr.SerdeRename, attr.SerdeValue, attr.HasSerdeRename, attr.HasSerdeValue
 		j++
@@ -440,10 +440,10 @@ func (l *lowerer) declaration(d Decl) string {
 		b.WriteString(l.payloadChecks[d.Name+"/"+v.Name])
 		b.WriteByte('\n')
 	}
-	fmt.Fprintf(&b, "default: panic(%q) } };\n", "hgo: invalid enum "+d.Name)
+	fmt.Fprintf(&b, "default: panic(%q) } };\n", "goxide: invalid enum "+d.Name)
 	if d.Public {
 		for _, v := range d.Variants {
-			fmt.Fprintf(&b, "type HgoCase%d_%s_%s = %s;\n", len(d.Name), d.Name, v.Name, v.CaseName)
+			fmt.Fprintf(&b, "type GoxideCase%d_%s_%s = %s;\n", len(d.Name), d.Name, v.Name, v.CaseName)
 			arg, call := "", ""
 			if v.Payload != "" {
 				arg, call = "v "+v.Payload, "v"
@@ -482,7 +482,7 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 				return "", l.err(t.start, "unknown builtin variant "+variant)
 			}
 			b.WriteString(l.copySource(cursor, t.start))
-			b.WriteString("__hgo_enum_pending_" + t.text + "_" + variant)
+			b.WriteString("__goxide_enum_pending_" + t.text + "_" + variant)
 			cursor = l.ts[i+3].end
 			i += 3
 			if variant == "None" {
@@ -608,7 +608,7 @@ func (l *lowerer) match(i int) (string, int, error) {
 		k := j + head
 		if k+2 < end && (l.ts[k].text == "Option" || l.ts[k].text == "Result") && l.ts[k+1].text == ":" && l.ts[k+2].text == ":" {
 			body := string(l.src[l.ts[j].start:l.ts[end].end])
-			return "__hgo_enum_context_match(" + target + "," + strconv.Quote(body) + ")", end, nil
+			return "__goxide_enum_context_match(" + target + "," + strconv.Quote(body) + ")", end, nil
 		}
 	}
 	var d *Decl
@@ -728,11 +728,11 @@ func (l *lowerer) match(i int) (string, int, error) {
 	}
 	l.serial++
 	id := strconv.Itoa(l.serial)
-	saved := "__hgo_enum_saved_" + id
-	matched := "__hgo_enum_matched_" + id
+	saved := "__goxide_enum_saved_" + id
+	matched := "__goxide_enum_matched_" + id
 	var b strings.Builder
 	if inferred {
-		fmt.Fprintf(&b, "{ %s := (%s); __hgo_enum_infer(%s);", saved, target, saved)
+		fmt.Fprintf(&b, "{ %s := (%s); __goxide_enum_infer(%s);", saved, target, saved)
 	} else {
 		fmt.Fprintf(&b, "{ var %s %s = (%s);", saved, d.Name, target)
 		fmt.Fprintf(&b, "%s(%s);", d.Validator, saved)
@@ -755,12 +755,12 @@ func (l *lowerer) match(i int) (string, int, error) {
 			if index > 0 {
 				b.WriteString(" else ")
 			}
-			tmp := "__hgo_enum_payload_" + id
+			tmp := "__goxide_enum_payload_" + id
 			if d.Family == "Option" && v.Name == "None" {
 				// Keep the constructor rather than spelling nil in caller scope.
-				fmt.Fprintf(&b, "if __hgo_enum_none_%s := %s(); %s == __hgo_enum_none_%s {", id, v.Constructor, saved, id)
+				fmt.Fprintf(&b, "if __goxide_enum_none_%s := %s(); %s == __goxide_enum_none_%s {", id, v.Constructor, saved, id)
 			} else {
-				fmt.Fprintf(&b, "if %s, __hgo_enum_ok_%s := %s.(%s); __hgo_enum_ok_%s { _ = %s;", tmp, id, saved, v.CaseName, id, tmp)
+				fmt.Fprintf(&b, "if %s, __goxide_enum_ok_%s := %s.(%s); __goxide_enum_ok_%s { _ = %s;", tmp, id, saved, v.CaseName, id, tmp)
 			}
 			if a.bind != "" && a.bind != "_" {
 				fmt.Fprintf(&b, "%s := %s.Value; _ = %s;", a.bind, tmp, a.bind)
@@ -781,11 +781,11 @@ func (l *lowerer) match(i int) (string, int, error) {
 					v = x
 				}
 			}
-			tmp := "__hgo_enum_payload_" + id
+			tmp := "__goxide_enum_payload_" + id
 			if d.Family == "Option" && v.Name == "None" {
-				fmt.Fprintf(&b, "__hgo_enum_none_%s := %s(); if %s == __hgo_enum_none_%s {\n", id, v.Constructor, saved, id)
+				fmt.Fprintf(&b, "__goxide_enum_none_%s := %s(); if %s == __goxide_enum_none_%s {\n", id, v.Constructor, saved, id)
 			} else {
-				fmt.Fprintf(&b, "if %s, __hgo_enum_ok_%s := %s.(%s); __hgo_enum_ok_%s { _ = %s;\n", tmp, id, saved, v.CaseName, id, tmp)
+				fmt.Fprintf(&b, "if %s, __goxide_enum_ok_%s := %s.(%s); __goxide_enum_ok_%s { _ = %s;\n", tmp, id, saved, v.CaseName, id, tmp)
 			}
 			if a.bind != "" && a.bind != "_" {
 				fmt.Fprintf(&b, "%s := %s.Value; _ = %s;\n", a.bind, tmp, a.bind)

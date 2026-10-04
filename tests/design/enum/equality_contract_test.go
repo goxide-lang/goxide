@@ -1,13 +1,13 @@
 package enumdemo_test
 
 import (
-	e "example.org/hgodesigncheck/enumdemo"
+	e "example.org/goxidedesigncheck/enumdemo"
 	"maps"
 	"slices"
 	"testing"
 )
 
-// Reference contract only: this does not compile hgo or implement container derives.
+// Reference contract only: this does not compile goxide or implement container derives.
 // Primitive element/key types deliberately avoid choosing custom map-key semantics.
 func TestNilEmptyEqualityContract(t *testing.T) {
 	sliceEqual := func(a, b []int) bool { return (a == nil) == (b == nil) && slices.Equal(a, b) }

@@ -93,7 +93,7 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 			if spread {
 				argEnd--
 			}
-			value, err := c.expression(start, argEnd, "__hgo_match_expr_argument()", "direct")
+			value, err := c.expression(start, argEnd, "__goxide_match_expr_argument()", "direct")
 			if err != nil {
 				return "", err
 			}
@@ -110,18 +110,18 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 	if ts[a].k != token.IDENT || ts[a].s != "match" {
 		return "", c.fail(a, "embedded match currently requires binary operands or parentheses")
 	}
-	name := strings.Replace(c.temp(), "__hgo_match_expr_", "__hgo_match_expr_atom_", 1)
-	marker := "__hgo_match_expr_infer(" + strconv.Quote(c.origin(a)) + ")"
+	name := strings.Replace(c.temp(), "__goxide_match_expr_", "__goxide_match_expr_atom_", 1)
+	marker := "__goxide_match_expr_infer(" + strconv.Quote(c.origin(a)) + ")"
 
 	if context != "" {
-		marker = "__hgo_match_expr_operand_context(" + context + "," + strconv.Quote(kind) + "," + strconv.Quote(c.origin(a)) + ")"
+		marker = "__goxide_match_expr_operand_context(" + context + "," + strconv.Quote(kind) + "," + strconv.Quote(c.origin(a)) + ")"
 	}
 
 	body, e := c.assign(a, b, name, "")
 	if e != nil {
 		return "", e
 	}
-	return "func() __hgo_match_expr_pending { var " + name + " = " + marker + ";\n" + body + "return " + name + " }()", nil
+	return "func() __goxide_match_expr_pending { var " + name + " = " + marker + ";\n" + body + "return " + name + " }()", nil
 }
 
 // embedded handles full statement boundaries only. Keeping the actual indexed
@@ -152,7 +152,7 @@ func (c *composer) embedded(i, open int, result string) (edit, int, bool, error)
 		if result == "" {
 			return edit{}, 0, false, c.fail(i, "return requires one concrete result type")
 		}
-		context = "__hgo_match_expr_return()"
+		context = "__goxide_match_expr_return()"
 		prefix = "return "
 	} else {
 		for n := start; n < i; n++ {
@@ -189,7 +189,7 @@ func (c *composer) embedded(i, open int, result string) (edit, int, bool, error)
 		expr = assign + 1
 		if ts[start].k == token.VAR {
 			if start+2 < assign {
-				context = "__hgo_match_expr_zero[" + c.copy(ts[start+2].a, ts[assign].a) + "]()"
+				context = "__goxide_match_expr_zero[" + c.copy(ts[start+2].a, ts[assign].a) + "]()"
 			}
 		} else if assign == start+1 && ts[start].k == token.IDENT {
 			if ts[assign].k == token.ASSIGN {

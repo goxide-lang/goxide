@@ -38,10 +38,10 @@ func sharedStdGo(t *testing.T, dir string, args ...string) {
 }
 func TestSharedStdCrossModuleAndContext(t *testing.T) {
 	producer := sharedStdModule(t, "example.org/producer")
-	sharedStdWrite(t, producer, "internal/source/value.hgo", `package source;
+	sharedStdWrite(t, producer, "internal/source/value.gox", `package source;
 func Make()Result[int,error]{return Result::Ok(7)}
 `)
-	sharedStdWrite(t, producer, "value.hgo", `package producer
+	sharedStdWrite(t, producer, "value.gox", `package producer
 import "example.org/producer/internal/source"
 func Make()Result[int,error]{return source.Make()}
 func Optional()Option[int]{return Option::Some(3)}
@@ -62,17 +62,17 @@ func Optional()Option[int]{return Option::Some(3)}
 	if err != nil {
 		t.Fatal(err)
 	}
-	sharedStdWrite(t, consumer, "z_init.hgo", `package consumer
+	sharedStdWrite(t, consumer, "z_init.gox", `package consumer
 var Later = Option::Some(11)
 `)
-	sharedStdWrite(t, consumer, "a_use.hgo", `package consumer
+	sharedStdWrite(t, consumer, "a_use.gox", `package consumer
 func CrossFile()int{return match Later {Option::Some(n)=>n,Option::None=>0,}}
 `)
 	sharedStdWrite(t, consumer, "native.go", `package consumer
 import "example.org/producer"
 type NativeOption = producer.Option[int]
 `)
-	sharedStdWrite(t, consumer, "value.hgo", `package consumer
+	sharedStdWrite(t, consumer, "value.gox", `package consumer
 import "example.org/producer"
 #[derive(Default,Clone,Debug,PartialEq,Eq)]
 type Holder struct{V NativeOption}
@@ -111,7 +111,7 @@ func TestShared(t *testing.T){if PointerAdapter().(sum.Ok[int,*Failure]).Value!=
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = []byte(strings.Replace(string(data), `"Version": 7`, `"Version": 6`, 1))
+	data = []byte(strings.Replace(string(data), `"Version": 8`, `"Version": 7`, 1))
 	if err = testdeps.WriteFile(artifact, data, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestSharedStdInsufficientInference(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := sharedStdModule(t, "example.org/negative")
-			sharedStdWrite(t, dir, "bad.hgo", "package negative\n"+body)
+			sharedStdWrite(t, dir, "bad.gox", "package negative\n"+body)
 			_, err := CompileModuleWithOptions(dir, filepath.Join(t.TempDir(), "out"), ModuleOptions{})
 			if err == nil {
 				t.Fatal("accepted unconstrained constructor")
@@ -150,7 +150,7 @@ func TestSharedStdContextChecksPayload(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := sharedStdModule(t, "example.org/negative")
-			sharedStdWrite(t, dir, "bad.hgo", "package negative\n"+body)
+			sharedStdWrite(t, dir, "bad.gox", "package negative\n"+body)
 			_, err := CompileModuleWithOptions(dir, filepath.Join(t.TempDir(), "out"), ModuleOptions{})
 			if err == nil || (name == "overflow" && !strings.Contains(err.Error(), "overflows")) || (name == "wrong-payload" && !strings.Contains(err.Error(), "cannot use")) {
 				t.Fatalf("missing payload diagnostic: %v", err)

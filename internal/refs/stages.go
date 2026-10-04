@@ -25,13 +25,13 @@ func Finish(filename string, source []byte, imp types.Importer, trusted ...map[s
 	if err != nil {
 		return Result{}, err
 	}
-	if !strings.Contains(string(source), "type __hgo_ref_write[") {
+	if !strings.Contains(string(source), "type __goxide_ref_write[") {
 		return Result{Source: source}, nil
 	}
 	return lowerWithFiles(filename, restored, imp, false, nil, trusted...)
 }
 func restore(filename string, source []byte, imp types.Importer, files map[string][]byte) ([]byte, error) {
-	if len(files) == 0 && !strings.Contains(string(source), "type __hgo_ref_write[") {
+	if len(files) == 0 && !strings.Contains(string(source), "type __goxide_ref_write[") {
 		return source, nil
 	}
 	fs := token.NewFileSet()
@@ -56,7 +56,7 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 		all = append(all, peer)
 	}
 	deduplicateIR(all)
-	pkg, _ := conf.Check("hgo.local/refs", fs, all, info)
+	pkg, _ := conf.Check("goxide.local/refs", fs, all, info)
 	offset := func(p token.Pos) int { return fs.Position(p).Offset }
 	var es []edit
 	var failure error
@@ -64,7 +64,7 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 		generated := false
 		switch d := d.(type) {
 		case *ast.FuncDecl:
-			generated = d.Name.Name == "__hgo_ref_make_write"
+			generated = d.Name.Name == "__goxide_ref_make_write"
 		case *ast.GenDecl:
 			if len(d.Specs) == 1 {
 				if t, ok := d.Specs[0].(*ast.TypeSpec); ok {
@@ -79,7 +79,7 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 		ast.Inspect(d, func(n ast.Node) bool {
 			switch n := n.(type) {
 			case *ast.CallExpr:
-				if id, ok := n.Fun.(*ast.Ident); ok && id.Name == "__hgo_ref_make_write" {
+				if id, ok := n.Fun.(*ast.Ident); ok && id.Name == "__goxide_ref_make_write" {
 					if len(n.Args) != 1 {
 						failure = fmt.Errorf("%s: refs: invalid internal write constructor", fs.Position(n.Pos()))
 						return false
@@ -97,7 +97,7 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 					return true
 				}
 			case *ast.IndexExpr:
-				if id, ok := n.X.(*ast.Ident); ok && id.Name == "__hgo_ref_write" {
+				if id, ok := n.X.(*ast.Ident); ok && id.Name == "__goxide_ref_write" {
 					if info.TypeOf(n.Index) == nil {
 						failure = fmt.Errorf("%s: refs: unsupported reference element", fs.Position(n.Pos()))
 						return false

@@ -11,8 +11,8 @@ func TestNativeWritableScalarArguments(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
@@ -36,11 +36,11 @@ func Sink(v any){}
 func Composite(p *[]int){}
 func Generic[T any](p *T){}
 `)
-		packagesWrite(t, dir, "views/views.hgo", `package views
+		packagesWrite(t, dir, "views/views.gox", `package views
 func Edit(p mut& int64)mut& int64{return p}
 func View(p &int64)&int64{return p}
 `)
-		packagesWrite(t, dir, "app.hgo", `package app
+		packagesWrite(t, dir, "app.gox", `package app
 import("sync/atomic";"runtime";n "packages.example/app/native";v "packages.example/app/views")
 var _=atomic.LoadInt64
 var _=runtime.GC

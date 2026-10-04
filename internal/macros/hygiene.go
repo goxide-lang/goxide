@@ -148,7 +148,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 		if !ok {
 			return true
 		}
-		if strings.HasPrefix(id.Name, "__hgo_go_result") || e.intrinsics[id.Name] || id.Name == "__hgo_print" || id.Name == "__hgo_println" {
+		if strings.HasPrefix(id.Name, "__goxide_go_result") || e.intrinsics[id.Name] || id.Name == "__goxide_print" || id.Name == "__goxide_println" {
 			return true
 		}
 		if _, ok := ph[id.Name]; ok {

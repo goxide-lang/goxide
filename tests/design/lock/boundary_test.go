@@ -1,9 +1,9 @@
-package hgosync
+package goxidesync
 
 import "testing"
 
 // These passing Go probes document normal behavior and evidence for risk warnings.
-// They are not hgo rejection tests; unknown effects must not imply an error.
+// They are not goxide rejection tests; unknown effects must not imply an error.
 // All accesses are sequential: race detection cannot establish borrow validity.
 type borrowedCounterView struct{ target *int }
 

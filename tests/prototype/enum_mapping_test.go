@@ -7,7 +7,7 @@ import (
 )
 
 func TestClosedEnumWireMapping(t *testing.T) {
-	r, e := frontend.Compile("wire.hgo", []byte(`package fixture
+	r, e := frontend.Compile("wire.gox", []byte(`package fixture
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 enum Status {
  #[default]
@@ -58,7 +58,7 @@ func TestUnknownAndMalformed(t *testing.T){
  e=serdejson.Decode([]byte("{\"Code\":99}"),func(d serde.Deserializer)error{_,e:=DeserializeEnvelope(d);return e});if !errors.As(e,&typed)||typed.Kind!=serde.UnknownVariant||len(typed.Path)!=1||typed.Path[0].Name!="Code"{t.Fatalf("missing contextual path: %v",e)}
  invalidForged:=Code(forgedCode{Code:MaxCode()});_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&invalidForged)});if e==nil{t.Fatal("embedded foreign case accepted")}
  var invalid Code;_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&invalid)});if e==nil{t.Fatal("nil enum accepted")}
- var typedNil *__hgo_enum_case_4_Code_Max;invalid=typedNil;_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&invalid)});if e==nil{t.Fatal("typed nil enum accepted")}
+ var typedNil *__goxide_enum_case_4_Code_Max;invalid=typedNil;_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&invalid)});if e==nil{t.Fatal("typed nil enum accepted")}
 }
 `)
 }
@@ -92,8 +92,8 @@ enum E { #[serde(skip)] A }`, "requires rename"},
 enum E { #[serde(rename="x")] #[serde(value=1)] A }`, "mixed variant"},
 	}
 	for _, tc := range cases {
-		_, e := frontend.Compile("invalid-wire.hgo", []byte("package fixture\n"+tc.body+"\n"))
-		if e == nil || !strings.Contains(e.Error(), tc.want) || !strings.Contains(e.Error(), "invalid-wire.hgo") {
+		_, e := frontend.Compile("invalid-wire.gox", []byte("package fixture\n"+tc.body+"\n"))
+		if e == nil || !strings.Contains(e.Error(), tc.want) || !strings.Contains(e.Error(), "invalid-wire.gox") {
 			t.Errorf("want %s, got %v", tc.want, e)
 		}
 	}

@@ -22,13 +22,13 @@ func TestReadonlyFieldReplacementModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
-		packagesWrite(t, dir, "model/model.hgo", fieldFlowAPI)
-		packagesWrite(t, dir, "app.hgo", "package app\nimport m \"packages.example/app/model\"\n"+body)
+		packagesWrite(t, dir, "model/model.gox", fieldFlowAPI)
+		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\n"+body)
 		return dir
 	}
 	t.Run("local-fields-race", func(t *testing.T) {

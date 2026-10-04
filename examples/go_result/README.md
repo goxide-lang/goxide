@@ -2,7 +2,7 @@
 
 用户授权两种选择：普通版在失败时只保留原 E；保值版同时保留返回值和原 E。不会自动改写原生 Go 调用，也不引入 Try/Residual 或新指针语法。
 
-```hgo
+```goxide
 // strconv.Atoi 返回 (int, error)
 ordinary := go_result!(strconv.Atoi(text))
 // reader.Read 返回 (int, error)，可能同时返回 n > 0 和 error
@@ -20,7 +20,7 @@ E 须实现预声明 error 且可为 nil（接口、指针，以及具名 slice/
 
 可以给保值载荷起**透明 alias**，方便签名和 match：
 
-```hgo
+```goxide
 type ReadFailure = struct { Value int; Err error }
 func read(reader io.Reader, buffer []byte) Result[int,ReadFailure] {
     return go_result_keep!(reader.Read(buffer))
@@ -35,15 +35,15 @@ func readSize(reader io.Reader, buffer []byte) Result[string,ReadFailure] {
 
 ## 运行
 
-在仓库根目录，使用真实 Go 1.27.x。以下命令已在 Go 1.27.1 执行；没有把纯 Go 机制探针当成 hgo 验收。
+在仓库根目录，使用真实 Go 1.27.x。以下命令已在 Go 1.27.1 执行；没有把纯 Go 机制探针当成 goxide 验收。
 
 ```sh
 export PATH=/workspace/goxide-environment/go/bin:$PATH
 export GOTOOLCHAIN=local GOWORK=off GOPROXY=off
 work="$(mktemp -d)"
-go build -o "$work/hgo" ./cmd/hgo
-"$work/hgo" run examples/go_result
-"$work/hgo" transpile -o "$work/generated" examples/go_result
+go build -o "$work/goxide" ./cmd/goxide
+"$work/goxide" run examples/go_result
+"$work/goxide" transpile -o "$work/generated" examples/go_result
 go -C "$work/generated" run -race .
 go -C "$work/generated" vet ./...
 go test ./tests/acceptance -run '^TestGoResult' -count=1 -v
@@ -57,7 +57,7 @@ parse error: true
 partial: 3 abc true
 ```
 
-[main.hgo](main.hgo) 使用 `io.Reader`，最后一个非空片段同时返回 EOF；[ops/macros.hgo](ops/macros.hgo) 展示源码包宏组合。完整断言在[真实 CLI 验收](../../tests/acceptance/go_result_test.go)：生成模块单独 race/vet、原始错误身份、Reader 次数/缓冲区、解析 `errors.As`、typed nil、错误类型转换、卫生、panic/defer/recover、单次求值与参数顺序；另有两个独立 go.mod 的原生 alias、保值 Result metadata、match/问号和预编译宏导入拒绝。
+[main.gox](main.gox) 使用 `io.Reader`，最后一个非空片段同时返回 EOF；[ops/macros.gox](ops/macros.gox) 展示源码包宏组合。完整断言在[真实 CLI 验收](../../tests/acceptance/go_result_test.go)：生成模块单独 race/vet、原始错误身份、Reader 次数/缓冲区、解析 `errors.As`、typed nil、错误类型转换、卫生、panic/defer/recover、单次求值与参数顺序；另有两个独立 go.mod 的原生 alias、保值 Result metadata、match/问号和预编译宏导入拒绝。
 
 ## 求值与范围
 

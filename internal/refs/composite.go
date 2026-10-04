@@ -61,9 +61,9 @@ func (c *checker) declarations() string {
 			continue
 		}
 		for _, p := range []Permission{Read, Write} {
-			origin := "__hgo_ref_ro"
+			origin := "__goxide_ref_ro"
 			if p == Write {
-				origin = "__hgo_ref_rw"
+				origin = "__goxide_ref_rw"
 			}
 			s += fmt.Sprintf("\ntype %s = %s[%s]\n", c.name(Ref{e, p}), origin, e)
 		}

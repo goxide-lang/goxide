@@ -2,6 +2,7 @@ package project
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"go/version"
 	"os"
 	"path"
@@ -181,6 +182,11 @@ func inspectVendor(root string, m Manifest, mode, policy string) (*VendorSnapsho
 		if e != nil {
 			return e
 		}
+		if !d.IsDir() {
+			if err := naming.Path(file); err != nil {
+				return err
+			}
+		}
 		rel, _ := filepath.Rel(dir, file)
 		rel = filepath.ToSlash(rel)
 		if rel == "." {
@@ -193,7 +199,7 @@ func inspectVendor(root string, m Manifest, mode, policy string) (*VendorSnapsho
 			return fmt.Errorf("vendor: symlink forbidden: %s", rel)
 		}
 		if d.IsDir() {
-			if d.Name() == ".git" || d.Name() == ".hgo" || d.Name() == ".goxide-migration" {
+			if d.Name() == ".git" || d.Name() == ".goxide" || d.Name() == ".goxide-migration" {
 				return fmt.Errorf("vendor: reserved directory %s", rel)
 			}
 			return nil
@@ -207,7 +213,7 @@ func inspectVendor(root string, m Manifest, mode, policy string) (*VendorSnapsho
 		}
 		name := path.Base(rel)
 		parent := path.Dir(rel)
-		if name == "go.mod" || name == "go.sum" || name == ManifestName || name == LegacyManifestName || name == "goxide.lock" || strings.HasSuffix(name, ".hgo") {
+		if name == "go.mod" || name == "go.sum" || name == ManifestName || name == LegacyManifestName || name == "goxide.lock" || strings.HasSuffix(name, ".gox") {
 			return fmt.Errorf("vendor: nested module/enhanced source unsupported: %s", rel)
 		}
 		owned := rel == "modules.txt"

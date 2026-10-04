@@ -1,19 +1,19 @@
 [package]
 format = 2
-module = "example.org/hgo-project"
+module = "example.org/goxide-project"
 go = "1.27"
 
 [[bin]]
 name = 'hello'
-path = 'src/main.hgo'
+path = 'src/main.gox'
 
 [[bin]]
 name = 'inspect'
-path = 'src/inspect.hgo'
+path = 'src/inspect.gox'
 
 [[example]]
 name = 'greet'
-path = 'examples/greet.hgo'
+path = 'examples/greet.gox'
 
 [features]
 default = ['pretty']
@@ -21,7 +21,7 @@ pretty = []
 
 [lib]
 name = 'greeting'
-path = 'src/lib.hgo'
+path = 'src/lib.gox'
 
 
 [[go.require]]

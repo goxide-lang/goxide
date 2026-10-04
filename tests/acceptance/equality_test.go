@@ -14,8 +14,8 @@ func TestExplicitEqualityModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	mod := func(name, lib string) string {
 		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", name, filepath.ToSlash(root))
 		if lib != "" {
@@ -25,7 +25,7 @@ func TestExplicitEqualityModules(t *testing.T) {
 	}
 	libsrc := t.TempDir()
 	packagesWrite(t, libsrc, "go.mod", mod("equal.example/lib", ""))
-	packagesWrite(t, libsrc, "model/model.hgo", `package model
+	packagesWrite(t, libsrc, "model/model.gox", `package model
 #[derive(PartialEq,Eq)]
 type Count uint64
 #[derive(PartialEq,Eq)]
@@ -66,7 +66,7 @@ type New m.E
 	appFor := func(code string) string {
 		src := t.TempDir()
 		packagesWrite(t, src, "go.mod", mod("equal.example/app", lib))
-		packagesWrite(t, src, "app.hgo", code)
+		packagesWrite(t, src, "app.gox", code)
 		return src
 	}
 	app := appFor(`package app
@@ -129,7 +129,7 @@ func Nil(a r.Alias)bool{return a==nil}
 	}
 	packagesWrite(t, out, "app_test.go", `package app
 import("testing";"math";"strings";"fmt";m "equal.example/lib/model")
-func TestValues(t *testing.T){a:=m.NewEP(m.Point{X:1,Y:2});b:=m.NewEP(m.Point{X:1,Y:2});if !Initial||!Same(a,b)||Same(a,m.NewEUnit())||Same(a,m.NewEP(m.Point{X:3}))||!Row()||!Big()||!Shadow(a,b)||!PairSame(Pair{m.Point{X:2},a},Pair{m.Point{X:2},b}){t.Fatal("value equality")};if !Question(a,b).(__hgo_enum_case_Result_Ok[bool,string]).Value{t.Fatal("question")};if OptionFlow(nil)!=nil||!Nil(nil){t.Fatal("nil unchanged")};n:=math.NaN();if FloatSame(m.NewFloatValue(n),m.NewFloatValue(n))||ComplexSame(m.Complex{Z:complex(n,0)},m.Complex{Z:complex(n,0)}){t.Fatal("NaN")};if !FloatSame(m.NewFloatValue(math.Copysign(0,-1)),m.NewFloatValue(0)){t.Fatal("zero")}}
+func TestValues(t *testing.T){a:=m.NewEP(m.Point{X:1,Y:2});b:=m.NewEP(m.Point{X:1,Y:2});if !Initial||!Same(a,b)||Same(a,m.NewEUnit())||Same(a,m.NewEP(m.Point{X:3}))||!Row()||!Big()||!Shadow(a,b)||!PairSame(Pair{m.Point{X:2},a},Pair{m.Point{X:2},b}){t.Fatal("value equality")};if !Question(a,b).(__goxide_enum_case_Result_Ok[bool,string]).Value{t.Fatal("question")};if OptionFlow(nil)!=nil||!Nil(nil){t.Fatal("nil unchanged")};n:=math.NaN();if FloatSame(m.NewFloatValue(n),m.NewFloatValue(n))||ComplexSame(m.Complex{Z:complex(n,0)},m.Complex{Z:complex(n,0)}){t.Fatal("NaN")};if !FloatSame(m.NewFloatValue(math.Copysign(0,-1)),m.NewFloatValue(0)){t.Fatal("zero")}}
 type forged struct{m.E}
 func TestRecursiveContainers(t *testing.T){
  key:=m.Key{ID:7,Flags:[2]bool{true,false}}
@@ -142,27 +142,27 @@ func TestRecursiveContainers(t *testing.T){
 func TestNilEmptyAndOptions(t *testing.T){
  zero:=m.Dataset{};if !DatasetSame(zero,zero)||DatasetSame(zero,m.Dataset{Slices:[][]int{}})||DatasetSame(zero,m.Dataset{Lookup:map[string][]m.Point{}}){t.Fatal("nil vs empty container")}
  if DatasetSame(m.Dataset{Slices:[][]int{nil}},m.Dataset{Slices:[][]int{{}}}){t.Fatal("nested nil vs empty")}
- none:=m.Optional{Value:m.HgoNewOptionNone[[]int]()};nilSome:=m.Optional{Value:m.HgoNewOptionSome[[]int](nil)};emptySome:=m.Optional{Value:m.HgoNewOptionSome[[]int]([]int{})}
+ none:=m.Optional{Value:m.GoxideNewOptionNone[[]int]()};nilSome:=m.Optional{Value:m.GoxideNewOptionSome[[]int](nil)};emptySome:=m.Optional{Value:m.GoxideNewOptionSome[[]int]([]int{})}
  if !OptionalSame(none,none)||!OptionalSame(nilSome,nilSome)||!OptionalSame(emptySome,emptySome)||OptionalSame(none,nilSome)||OptionalSame(nilSome,emptySome)||OptionalSame(none,emptySome){t.Fatal("None/Some(nil)/Some(empty)")}
- var typed *m.HgoOptionSome[[]int];func(){defer func(){if recover()==nil{t.Fatal("typed nil Option case")}}();OptionalSame(m.Optional{Value:typed},none)}()
+ var typed *m.GoxideOptionSome[[]int];func(){defer func(){if recover()==nil{t.Fatal("typed nil Option case")}}();OptionalSame(m.Optional{Value:typed},none)}()
 }
 func TestConsumerDerivedExternalSumContainers(t *testing.T){
- okNil:=m.HgoNewResultOk[[]int,map[string]int](nil);okEmpty:=m.HgoNewResultOk[[]int,map[string]int]([]int{})
- errNil:=m.HgoNewResultErr[[]int,map[string]int](nil);errEmpty:=m.HgoNewResultErr[[]int,map[string]int](map[string]int{})
+ okNil:=m.GoxideNewResultOk[[]int,map[string]int](nil);okEmpty:=m.GoxideNewResultOk[[]int,map[string]int]([]int{})
+ errNil:=m.GoxideNewResultErr[[]int,map[string]int](nil);errEmpty:=m.GoxideNewResultErr[[]int,map[string]int](map[string]int{})
  base:=ExternalSums{Result:okNil};if !ExternalSumsSame(base,base){t.Fatal("external conditional Eq")}
  for _,result:=range []m.Result[[]int,map[string]int]{okEmpty,errNil,errEmpty}{if ExternalSumsSame(base,ExternalSums{Result:result}){t.Fatal("result variant/nil distinctions")}}
  if ExternalSumsSame(ExternalSums{Result:errNil},ExternalSums{Result:errEmpty}){t.Fatal("Err nil/empty map")}
- sameOk:=ExternalSums{Result:m.HgoNewResultOk[[]int,map[string]int]([]int{1,2})};if !ExternalSumsSame(sameOk,ExternalSums{Result:m.HgoNewResultOk[[]int,map[string]int]([]int{1,2})})||ExternalSumsSame(sameOk,ExternalSums{Result:m.HgoNewResultOk[[]int,map[string]int]([]int{1,3})}){t.Fatal("Ok slice contents")}
- a:=ExternalSums{Result:m.HgoNewResultErr[[]int,map[string]int](map[string]int{"x":1})};b:=ExternalSums{Result:m.HgoNewResultErr[[]int,map[string]int](map[string]int{"x":1})}
- if !ExternalSumsSame(a,b){t.Fatal("Err map contents")};b.Result=m.HgoNewResultErr[[]int,map[string]int](map[string]int{"x":2});if ExternalSumsSame(a,b){t.Fatal("Err map value difference")}
+ sameOk:=ExternalSums{Result:m.GoxideNewResultOk[[]int,map[string]int]([]int{1,2})};if !ExternalSumsSame(sameOk,ExternalSums{Result:m.GoxideNewResultOk[[]int,map[string]int]([]int{1,2})})||ExternalSumsSame(sameOk,ExternalSums{Result:m.GoxideNewResultOk[[]int,map[string]int]([]int{1,3})}){t.Fatal("Ok slice contents")}
+ a:=ExternalSums{Result:m.GoxideNewResultErr[[]int,map[string]int](map[string]int{"x":1})};b:=ExternalSums{Result:m.GoxideNewResultErr[[]int,map[string]int](map[string]int{"x":1})}
+ if !ExternalSumsSame(a,b){t.Fatal("Err map contents")};b.Result=m.GoxideNewResultErr[[]int,map[string]int](map[string]int{"x":2});if ExternalSumsSame(a,b){t.Fatal("Err map value difference")}
  for _,alias:=range []bool{false,true}{
   nilSome:=base;emptySome:=base
-  if alias{nilSome.Alias=m.HgoNewOptionSome[[]int](nil);emptySome.Alias=m.HgoNewOptionSome[[]int]([]int{})}else{nilSome.Direct=m.HgoNewOptionSome[[]int](nil);emptySome.Direct=m.HgoNewOptionSome[[]int]([]int{})}
+  if alias{nilSome.Alias=m.GoxideNewOptionSome[[]int](nil);emptySome.Alias=m.GoxideNewOptionSome[[]int]([]int{})}else{nilSome.Direct=m.GoxideNewOptionSome[[]int](nil);emptySome.Direct=m.GoxideNewOptionSome[[]int]([]int{})}
   if !ExternalSumsSame(nilSome,nilSome)||ExternalSumsSame(base,nilSome)||ExternalSumsSame(nilSome,emptySome){t.Fatal("consumer Option None/Some nil/empty",alias)}
  }
- var typedResult *m.HgoResultOk[[]int,map[string]int]
+ var typedResult *m.GoxideResultOk[[]int,map[string]int]
  for _,bad:=range []m.Result[[]int,map[string]int]{nil,typedResult}{func(){defer func(){if recover()==nil{t.Fatal("consumer Result validation")}}();ExternalSumsSame(ExternalSums{Result:bad},base)}()}
- var typedOption *m.HgoOptionSome[[]int]
+ var typedOption *m.GoxideOptionSome[[]int]
  for _,alias:=range []bool{false,true}{func(){bad:=base;if alias{bad.Alias=typedOption}else{bad.Direct=typedOption};defer func(){if recover()==nil{t.Fatal("consumer Option validation",alias)}}();ExternalSumsSame(bad,base)}()}
 }
 func TestContainerNaNAndShortCircuit(t *testing.T){
@@ -172,13 +172,13 @@ func TestContainerNaNAndShortCircuit(t *testing.T){
  if DatasetSame(m.Dataset{Slices:[][]int{{1}},Items:[]m.E{nil}},m.Dataset{Slices:[][]int{{2}},Items:[]m.E{nil}}){t.Fatal("struct first field")}
  left:=m.Dataset{Items:[]m.E{m.NewEUnit(),nil}};right:=m.Dataset{Items:[]m.E{m.NewEP(m.Point{}),nil}}
  if DatasetSame(left,right){t.Fatal("slice first element")}
- var typed *m.HgoCase1_E_Unit
+ var typed *m.GoxideCase1_E_Unit
  for _,bad:=range []m.E{nil,typed,forged{}}{func(){defer func(){if recover()==nil{t.Fatal("visited enum element")}}();DatasetSame(m.Dataset{Items:[]m.E{bad}},m.Dataset{Items:[]m.E{m.NewEUnit()}})}();func(){defer func(){if recover()==nil{t.Fatal("visited map enum element")}}();DatasetSame(m.Dataset{Events:map[string]m.E{"x":bad}},m.Dataset{Events:map[string]m.E{"x":m.NewEUnit()}})}()}
  // The outer enum's existing validator still runs before comparison, including its nested payload validation.
  func(){defer func(){if recover()==nil{t.Fatal("outer enum must validate before unequal fields")}}();CollectionSame(m.NewCollectionData(left),m.NewCollectionData(right))}()
 }
 func TestLeftValidationFirst(t *testing.T){Trace="";defer func(){p:=recover();if p==nil||!strings.Contains(fmt.Sprint(p),"Leaf")||Trace!="LR"{t.Fatal(p,Trace)}}();Ordered(m.NewEChild(nil),nil)}
-func TestValidationAndOrder(t *testing.T){valid:=m.NewEUnit();var typed *m.HgoCase1_E_Unit;for _,bad:=range []m.E{nil,typed,&m.HgoCase1_E_Unit{},forged{}}{func(){Trace="";defer func(){if recover()==nil||Trace!="LR"{t.Fatal("evaluation/validation",Trace)}}();Ordered(bad,valid)}();func(){Trace="";defer func(){if recover()==nil||Trace!="LR"{t.Fatal("right validation",Trace)}}();Ordered(valid,bad)}()}}
+func TestValidationAndOrder(t *testing.T){valid:=m.NewEUnit();var typed *m.GoxideCase1_E_Unit;for _,bad:=range []m.E{nil,typed,&m.GoxideCase1_E_Unit{},forged{}}{func(){Trace="";defer func(){if recover()==nil||Trace!="LR"{t.Fatal("evaluation/validation",Trace)}}();Ordered(bad,valid)}();func(){Trace="";defer func(){if recover()==nil||Trace!="LR"{t.Fatal("right validation",Trace)}}();Ordered(valid,bad)}()}}
 `)
 	packagesWrite(t, lib, "model/model_test.go", `package model
 import "testing"
@@ -247,7 +247,7 @@ func Bad(v E,other any){switch other{case v:}}`, "switch case comparison"},
 		})
 	}
 	t.Run("metadata-required", func(t *testing.T) {
-		p := filepath.Join(lib, "model/.hgo.enums.json")
+		p := filepath.Join(lib, "model/.goxide.enums.json")
 		old, e := os.ReadFile(p)
 		if e != nil {
 			t.Fatal(e)

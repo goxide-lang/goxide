@@ -14,24 +14,24 @@ func TestUseMacroSourceGraph(t *testing.T) {
 	src := t.TempDir()
 	useWrite(t, src, map[string]string{
 		"go.mod": "module example.org/mac\n\ngo 1.27\n",
-		"p/p.hgo": `package p
+		"p/p.gox": `package p
  var Trace=1
  func Helper(x int)int{return x+1}
  macro_rules! inner { ($x:expr) => { Helper($x) }; }
  pub macro_rules! answer { ($x:expr) => { inner!($x) }; }
  pub macro_rules! identity { ($x:expr) => { $x }; }
  `,
-		"left/left.hgo": `package left
+		"left/left.gox": `package left
  import p "example.org/mac/p"
  pub use p::answer as value;
  func init(){p.Trace+=10}
  `,
-		"right/right.hgo": `package right
+		"right/right.gox": `package right
  import p "example.org/mac/p"
  pub use p::answer as value;
  func init(){p.Trace+=100}
  `,
-		"api/api.hgo": `package api
+		"api/api.gox": `package api
  import l "example.org/mac/left"
  import r "example.org/mac/right"
  import p "example.org/mac/p"
@@ -40,7 +40,7 @@ func TestUseMacroSourceGraph(t *testing.T) {
  pub use p::identity;
  func init(){p.Trace+=1000}
  `,
-		"client/client.hgo": `package client
+		"client/client.gox": `package client
  import a "example.org/mac/api"
  import p "example.org/mac/p"
  use a::value as local;
@@ -51,7 +51,7 @@ func TestUseMacroSourceGraph(t *testing.T) {
  }
  `,
 		"client/generic.go": "package client\nfunc Generic[T any](x T)T{return x}\n",
-		"client/other.hgo": `package client
+		"client/other.gox": `package client
  func Other()int{return local!(8)}
  `,
 		"client/client_test.go": `package client
@@ -69,7 +69,7 @@ func TestUseMacroSourceGraph(t *testing.T) {
 	if _, e := CompileModule(src, repeat); e != nil {
 		t.Fatal(e)
 	}
-	for _, file := range []string{"api/api.go", "api/.hgo.uses.json", "client/client.go"} {
+	for _, file := range []string{"api/api.go", "api/.goxide.uses.json", "client/client.go"} {
 		a, e := os.ReadFile(filepath.Join(out, file))
 		if e != nil {
 			t.Fatal(e)
@@ -98,9 +98,9 @@ func TestUseMacroRejections(t *testing.T) {
 			src := t.TempDir()
 			useWrite(t, src, map[string]string{
 				"go.mod":            "module example.org/mac\n\ngo 1.27\n",
-				"p/p.hgo":           "package p\n" + tc.origin + "\n",
-				"a/a.hgo":           "package a\nimport p \"example.org/mac/p\"\n" + tc.api + "\n",
-				"client/client.hgo": "package client\nimport a \"example.org/mac/a\"\n" + tc.client + "\n",
+				"p/p.gox":           "package p\n" + tc.origin + "\n",
+				"a/a.gox":           "package a\nimport p \"example.org/mac/p\"\n" + tc.api + "\n",
+				"client/client.gox": "package client\nimport a \"example.org/mac/a\"\n" + tc.client + "\n",
 			})
 			_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
@@ -115,8 +115,8 @@ func TestUseMacroExternalSourceRegistryBoundary(t *testing.T) {
 	producer := filepath.Join(t.TempDir(), "out")
 	useWrite(t, src, map[string]string{
 		"go.mod":  "module example.org/mac\n\ngo 1.27\n",
-		"p/p.hgo": "package p\npub macro_rules! answer { () => { 42 }; }\nconst C=7\n",
-		"api.hgo": "package api\nimport p \"example.org/mac/p\"\npub use p::*;\n",
+		"p/p.gox": "package p\npub macro_rules! answer { () => { 42 }; }\nconst C=7\n",
+		"api.gox": "package api\nimport p \"example.org/mac/p\"\npub use p::*;\n",
 	})
 	if _, e := CompileModule(src, producer); e != nil {
 		t.Fatal(e)
@@ -125,13 +125,13 @@ func TestUseMacroExternalSourceRegistryBoundary(t *testing.T) {
 		client := t.TempDir()
 		useWrite(t, client, map[string]string{
 			"go.mod":     "module example.org/client\n\ngo 1.27\nrequire example.org/mac v0.0.0\nreplace example.org/mac => " + producer + "\n",
-			"client.hgo": "package client\nimport a \"example.org/mac\"\npub use a::" + selection + ";\n",
+			"client.gox": "package client\nimport a \"example.org/mac\"\npub use a::" + selection + ";\n",
 		})
 		_, e := CompileModule(client, filepath.Join(t.TempDir(), "out"))
 		if e == nil || !strings.Contains(e.Error(), "compiled source registry") {
 			t.Fatalf("want explicit source registry boundary, got %v", e)
 		}
-		useWrite(t, client, map[string]string{"client.hgo": "package client\nimport a \"example.org/mac\"\npub use a::C;\n"})
+		useWrite(t, client, map[string]string{"client.gox": "package client\nimport a \"example.org/mac\"\npub use a::C;\n"})
 		if _, e = CompileModule(client, filepath.Join(t.TempDir(), "ok")); e != nil {
 			t.Fatal(e)
 		}
@@ -174,8 +174,8 @@ func TestUseMacroKindCollisionOnlyWhenSelected(t *testing.T) {
 		src := t.TempDir()
 		useWrite(t, src, map[string]string{
 			"go.mod":  "module example.org/mac\n\ngo 1.27\n",
-			"p/p.hgo": "package p\npub macro_rules! F { () => { 42 }; }\nfunc F()int{return 3}\nconst C=7\n",
-			"api.hgo": "package api\nimport p \"example.org/mac/p\"\npub use p::" + selection + ";\n",
+			"p/p.gox": "package p\npub macro_rules! F { () => { 42 }; }\nfunc F()int{return 3}\nconst C=7\n",
+			"api.gox": "package api\nimport p \"example.org/mac/p\"\npub use p::" + selection + ";\n",
 		})
 		_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 		if selection == "C" {
@@ -192,22 +192,22 @@ func TestUseMacroAndBuiltinFamilies(t *testing.T) {
 	src := t.TempDir()
 	useWrite(t, src, map[string]string{
 		"go.mod": "module example.org/mac\n\ngo 1.27\n",
-		"p/p.hgo": `package p
+		"p/p.gox": `package p
  pub macro_rules! answer { () => { 42 }; }
  func Pick()Option[int]{return Option[int]::Some(3)}
  func ResultValue()Result[int,string]{return Result[int,string]::Ok(7)}
  `,
-		"left/left.hgo": `package left
+		"left/left.gox": `package left
  import p "example.org/mac/p"
  pub use p::*;
  `,
-		"api.hgo": `package api
+		"api.gox": `package api
  import l "example.org/mac/left"
  pub use l::Option as Maybe;
  pub use l::Result as Outcome;
  pub use l::answer;
  `,
-		"client/client.hgo": `package client
+		"client/client.gox": `package client
  import a "example.org/mac"
  func Run()int{
    x:=a.Maybe[int]::Some(a.answer!())
@@ -226,7 +226,7 @@ func TestUseMacroAndBuiltinFamilies(t *testing.T) {
 	client := t.TempDir()
 	useWrite(t, client, map[string]string{
 		"go.mod": "module example.org/consumer\n\ngo 1.27\nrequire example.org/mac v0.0.0\nreplace example.org/mac => " + out + "\n",
-		"client.hgo": `package consumer
+		"client.gox": `package consumer
  import a "example.org/mac"
  use a::Maybe as Local;
  func F()int{
@@ -257,9 +257,9 @@ func TestUseMacroInternalRuntimeRoute(t *testing.T) {
 			useWrite(t, src, map[string]string{
 				"go.mod":                "module example.org/mac\n\ngo 1.27\n",
 				"impl/internal/q/q.go":  "package q\nfunc Helper()int{return 42}\n",
-				"impl/internal/p/p.hgo": "package p\nimport q \"example.org/mac/impl/internal/q\"\nvar _=q.Helper\nfunc Helper()int{return 42}\npub macro_rules! answer { () => { " + tc.body + " }; }\n",
-				"impl/api/api.hgo":      "package api\nimport p \"example.org/mac/impl/internal/p\"\npub use p::answer;\n",
-				"client/client.hgo":     "package client\nimport a \"example.org/mac/impl/api\"\nfunc F()int{return a.answer!()}\n",
+				"impl/internal/p/p.gox": "package p\nimport q \"example.org/mac/impl/internal/q\"\nvar _=q.Helper\nfunc Helper()int{return 42}\npub macro_rules! answer { () => { " + tc.body + " }; }\n",
+				"impl/api/api.gox":      "package api\nimport p \"example.org/mac/impl/internal/p\"\npub use p::answer;\n",
+				"client/client.gox":     "package client\nimport a \"example.org/mac/impl/api\"\nfunc F()int{return a.answer!()}\n",
 				"client/client_test.go": "package client\nimport \"testing\"\nfunc TestF(t *testing.T){if F()!=42{t.Fatal(F())}}\n",
 			})
 			out := filepath.Join(t.TempDir(), "out")

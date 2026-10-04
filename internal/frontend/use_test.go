@@ -48,12 +48,12 @@ func TestUseStorageFunctionIdentityAndFacadeInit(t *testing.T) {
  func(b Box[T])Get()T{return b.Value}
  const Small=7
  `,
-		"api/api.hgo": `package api
+		"api/api.gox": `package api
  import p "example.org/use/origin"
  pub use p::*;
  func init(){p.Trace=append(p.Trace,"facade")}
  `,
-		"relay/relay.hgo": `package relay
+		"relay/relay.gox": `package relay
  import a "example.org/use/api"
  pub use a::Count as Counter;
  pub use a::Catch;
@@ -62,7 +62,7 @@ func TestUseStorageFunctionIdentityAndFacadeInit(t *testing.T) {
  pub use a::Box;
  pub use a::Small;
  `,
-		"client/client.hgo": `package client
+		"client/client.gox": `package client
  import a "example.org/use/relay"
  import o "example.org/use/origin"
  use a::Counter;
@@ -102,7 +102,7 @@ func TestUseExternalMetadataAndStaleness(t *testing.T) {
 	useWrite(t, source, map[string]string{
 		"go.mod":        "module example.org/producer\n\ngo 1.27\n",
 		"impl/value.go": "package impl\nvar Count=2\nfunc Catch(){_=recover()}\ntype T struct{N int}\ntype Box[T any] struct{Value T}\ntype hidden struct{N int}\nfunc Hidden()hidden{return hidden{N:9}}\n",
-		"api.hgo":       "package producer\nimport p \"example.org/producer/impl\"\npub use p::*;\n",
+		"api.gox":       "package producer\nimport p \"example.org/producer/impl\"\npub use p::*;\n",
 	})
 	if _, e := CompileModule(source, producer); e != nil {
 		t.Fatal(e)
@@ -110,7 +110,7 @@ func TestUseExternalMetadataAndStaleness(t *testing.T) {
 	client := t.TempDir()
 	useWrite(t, client, map[string]string{
 		"go.mod": "module example.org/client\n\ngo 1.27\nrequire example.org/producer v0.0.0\nreplace example.org/producer => " + producer + "\n",
-		"client.hgo": `package client
+		"client.gox": `package client
  import a "example.org/producer"
  use a::Count as Counter;
  func Run()int{Counter++;return a.Count}
@@ -158,8 +158,8 @@ func TestUseDiagnostics(t *testing.T) {
 				"go.mod":            "module example.org/negative\n\ngo 1.27\n",
 				"p/p.go":            "package p\nvar Count=1\n",
 				"q/q.go":            "package q\nvar Count=2\n",
-				"api/api.hgo":       "package api\nimport p \"example.org/negative/p\"\nimport q \"example.org/negative/q\"\n" + tc.api + "\nvar _=q.Count\n",
-				"client/client.hgo": "package client\nimport a \"example.org/negative/api\"\n" + tc.client + "\n",
+				"api/api.gox":       "package api\nimport p \"example.org/negative/p\"\nimport q \"example.org/negative/q\"\n" + tc.api + "\nvar _=q.Count\n",
+				"client/client.gox": "package client\nimport a \"example.org/negative/api\"\n" + tc.client + "\n",
 			})
 			_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
@@ -175,7 +175,7 @@ func TestUseInternalTypeRouteAndFunctionRejection(t *testing.T) {
 	useWrite(t, source, map[string]string{
 		"go.mod":                "module example.org/producer\n\ngo 1.27\n",
 		"internal/impl/impl.go": "package impl\ntype T struct{N int}\nfunc F()int{return 1}\n",
-		"api.hgo":               "package producer\nimport p \"example.org/producer/internal/impl\"\npub use p::T; pub use p::F;\n",
+		"api.gox":               "package producer\nimport p \"example.org/producer/internal/impl\"\npub use p::T; pub use p::F;\n",
 	})
 	if _, e := CompileModule(source, producer); e != nil {
 		t.Fatal(e)
@@ -183,12 +183,12 @@ func TestUseInternalTypeRouteAndFunctionRejection(t *testing.T) {
 	client := t.TempDir()
 	useWrite(t, client, map[string]string{
 		"go.mod":     "module example.org/client\n\ngo 1.27\nrequire example.org/producer v0.0.0\nreplace example.org/producer => " + producer + "\n",
-		"client.hgo": "package client\nimport a \"example.org/producer\"\nuse a::T;\nfunc Run()int{return T{N:7}.N}\n",
+		"client.gox": "package client\nimport a \"example.org/producer\"\nuse a::T;\nfunc Run()int{return T{N:7}.N}\n",
 	})
 	if _, e := CompileModule(client, filepath.Join(t.TempDir(), "ok")); e != nil {
 		t.Fatal(e)
 	}
-	useWrite(t, client, map[string]string{"client.hgo": "package client\nimport a \"example.org/producer\"\nfunc Run()int{return a.F()}\n"})
+	useWrite(t, client, map[string]string{"client.gox": "package client\nimport a \"example.org/producer\"\nfunc Run()int{return a.F()}\n"})
 	_, e := CompileModule(client, filepath.Join(t.TempDir(), "bad"))
 	if e == nil || !strings.Contains(e.Error(), "internal package") {
 		t.Fatalf("expected illegal internal route, got %v", e)
@@ -200,8 +200,8 @@ func TestUseCycleAndMacroDiagnostic(t *testing.T) {
 		src := t.TempDir()
 		useWrite(t, src, map[string]string{
 			"go.mod":  "module example.org/cycle\n\ngo 1.27\n",
-			"a/a.hgo": "package a\nimport b \"example.org/cycle/b\"\npub use b::*;\n",
-			"b/b.hgo": "package b\nimport a \"example.org/cycle/a\"\npub use a::*;\n",
+			"a/a.gox": "package a\nimport b \"example.org/cycle/b\"\npub use b::*;\n",
+			"b/b.gox": "package b\nimport a \"example.org/cycle/a\"\npub use a::*;\n",
 		})
 		_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 		if e == nil || !strings.Contains(e.Error(), "cycle") {
@@ -216,7 +216,7 @@ func TestUseRouteCannotCaptureLocalImportShadow(t *testing.T) {
 	useWrite(t, src, map[string]string{
 		"go.mod":           "module example.org/shadow\n\ngo 1.27\n",
 		"origin/origin.go": "package origin\nvar Count=7\nfunc F()int{return Count}\n",
-		"client/client.hgo": `package client
+		"client/client.gox": `package client
  import p "example.org/shadow/origin"
  use p::Count;
  use p::F as Call;
@@ -241,8 +241,8 @@ func TestUsePrivateDotImportAndTypeConflictRejected(t *testing.T) {
 			useWrite(t, src, map[string]string{
 				"go.mod":            "module example.org/case\n\ngo 1.27\n",
 				"p/p.go":            "package p\ntype T struct{}\nvar Count=2\n",
-				"api/api.hgo":       "package api\nimport p \"example.org/case/p\"\n" + tc.api + "\n",
-				"client/client.hgo": "package client\n" + tc.client + "\n",
+				"api/api.gox":       "package api\nimport p \"example.org/case/p\"\n" + tc.api + "\n",
+				"client/client.gox": "package client\n" + tc.client + "\n",
 			})
 			_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
@@ -257,9 +257,9 @@ func TestUseEnumMetadataAndGeneratedRoundTrip(t *testing.T) {
 	first := filepath.Join(t.TempDir(), "first")
 	useWrite(t, src, map[string]string{
 		"go.mod":           "module example.org/enuse\n\ngo 1.27\n",
-		"origin/event.hgo": "package origin\npub enum Event {Empty, Item(int)}\n",
-		"api/api.hgo":      "package api\nimport p \"example.org/enuse/origin\"\npub use p::Event as Event;\n",
-		"client/client.hgo": `package client
+		"origin/event.gox": "package origin\npub enum Event {Empty, Item(int)}\n",
+		"api/api.gox":      "package api\nimport p \"example.org/enuse/origin\"\npub use p::Event as Event;\n",
+		"client/client.gox": `package client
  import a "example.org/enuse/api"
  func Value()int{v:=a.Event::Item(9);return match v {a.Event::Empty=>0,a.Event::Item(x)=>x}}
  `,
@@ -286,7 +286,7 @@ func TestUseDistinctGenericInstancesConflict(t *testing.T) {
 		"origin/origin.go":  "package origin\ntype Box[T any] struct{Value T}\n",
 		"a/a.go":            "package a\nimport o \"example.org/instances/origin\"\ntype Value=o.Box[int]\n",
 		"b/b.go":            "package b\nimport o \"example.org/instances/origin\"\ntype Value=o.Box[string]\n",
-		"client/client.hgo": "package client\nimport a \"example.org/instances/a\"\nimport b \"example.org/instances/b\"\nuse a::Value; use b::Value;\n",
+		"client/client.gox": "package client\nimport a \"example.org/instances/a\"\nimport b \"example.org/instances/b\"\nuse a::Value; use b::Value;\n",
 	})
 	_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 	if e == nil || !strings.Contains(e.Error(), "ambiguous use") {
@@ -303,7 +303,7 @@ func TestUsePrivateStructuralTypeArgumentsConflict(t *testing.T) {
 				"origin/origin.go":  "package origin\ntype Box[T any] struct{Value T}\n",
 				"a/a.go":            "package a\nimport o \"example.org/structural/origin\"\ntype Value=o.Box[" + arg + "]\n",
 				"b/b.go":            "package b\nimport o \"example.org/structural/origin\"\ntype Value=o.Box[" + arg + "]\n",
-				"client/client.hgo": "package client\nimport a \"example.org/structural/a\"\nimport b \"example.org/structural/b\"\nuse a::Value; use b::Value;\n",
+				"client/client.gox": "package client\nimport a \"example.org/structural/a\"\nimport b \"example.org/structural/b\"\nuse a::Value; use b::Value;\n",
 			})
 			_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 			if e == nil || !strings.Contains(e.Error(), "distinct Go type identities") {
@@ -318,7 +318,7 @@ func TestUseDependentGenericConstraintRejectedAtProducer(t *testing.T) {
 	useWrite(t, src, map[string]string{
 		"go.mod":           "module example.org/dependent\n\ngo 1.27\n",
 		"origin/origin.go": "package origin\ntype Pair[T any,S ~[]T] struct{Value S}\n",
-		"api/api.hgo":      "package api\nimport p \"example.org/dependent/origin\"\npub use p::Pair;\n",
+		"api/api.gox":      "package api\nimport p \"example.org/dependent/origin\"\npub use p::Pair;\n",
 	})
 	_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 	if e == nil || !strings.Contains(e.Error(), "constraints referring to type parameters") {
@@ -332,7 +332,7 @@ func TestUseArtifactTrailingDataAndSingleFileGuard(t *testing.T) {
 	useWrite(t, source, map[string]string{
 		"go.mod":       "module example.org/metadata\n\ngo 1.27\n",
 		"impl/impl.go": "package impl\ntype T struct{}\nvar Count=1\n",
-		"api.hgo":      "package metadata\nimport p \"example.org/metadata/impl\"\nuse p::T as Secret; pub use p::Count;\n",
+		"api.gox":      "package metadata\nimport p \"example.org/metadata/impl\"\nuse p::T as Secret; pub use p::Count;\n",
 	})
 	if _, e := CompileModule(source, producer); e != nil {
 		t.Fatal(e)
@@ -341,9 +341,9 @@ func TestUseArtifactTrailingDataAndSingleFileGuard(t *testing.T) {
 	src := "package client\nimport p \"example.org/metadata\"\nfunc F()p.Secret{return p.Secret{}}\n"
 	useWrite(t, client, map[string]string{
 		"go.mod":     "module example.org/client\n\ngo 1.27\nrequire example.org/metadata v0.0.0\nreplace example.org/metadata => " + producer + "\n",
-		"client.hgo": src,
+		"client.gox": src,
 	})
-	_, e := Compile(filepath.Join(client, "client.hgo"), []byte(src))
+	_, e := Compile(filepath.Join(client, "client.gox"), []byte(src))
 	if e == nil || !strings.Contains(e.Error(), "require directory/package") {
 		t.Fatalf("single file bypass: %v", e)
 	}
@@ -355,7 +355,7 @@ func TestUseArtifactTrailingDataAndSingleFileGuard(t *testing.T) {
 	if e = testdeps.WriteFile(artifact, append(b, []byte("{}")...), 0644); e != nil {
 		t.Fatal(e)
 	}
-	useWrite(t, client, map[string]string{"client.hgo": "package client\nimport p \"example.org/metadata\"\nfunc F()int{return p.Count}\n"})
+	useWrite(t, client, map[string]string{"client.gox": "package client\nimport p \"example.org/metadata\"\nfunc F()int{return p.Count}\n"})
 	_, e = CompileModule(client, filepath.Join(t.TempDir(), "out"))
 	if e == nil || !strings.Contains(e.Error(), "exactly one JSON object") {
 		t.Fatalf("trailing metadata accepted: %v", e)

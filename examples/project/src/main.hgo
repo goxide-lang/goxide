@@ -1,4 +1,0 @@
-package main
-import "fmt"
-import greeting "example.org/hgo-project"
-func main() { fmt.Println(greeting.Message()) }

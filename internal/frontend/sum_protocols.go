@@ -103,7 +103,7 @@ func (g *generator) prepareSumProtocols(f *ast.File, cfg *compileConfig, imp typ
 		}
 	}
 	conf := types.Config{Importer: imp, IgnoreFuncBodies: true, Error: func(error) {}}
-	g.protocolPkg, _ = conf.Check("hgo/derive", g.fs, files, nil)
+	g.protocolPkg, _ = conf.Check("goxide/derive", g.fs, files, nil)
 	g.protocolFile = f
 	g.sumHelpers = map[string]string{}
 	g.sumImports = map[string]string{}
@@ -149,7 +149,7 @@ func (g *generator) registeredSum(t ast.Expr) (enums.Decl, *types.Named, string,
 		}
 	}
 	// A native .go alias may be the sole import of this family. Its verified
-	// metadata remains available without requiring a source hgo selector.
+	// metadata remains available without requiring a source goxide selector.
 	for _, entry := range g.sumExternal {
 		for _, instance := range entry.family.Instances {
 			owner := entry.origin
@@ -193,7 +193,7 @@ func (g *generator) protocolTypeName(t types.Type) (string, error) {
 		if !named {
 			break
 		}
-		if strings.HasPrefix(name, "__hgo_") {
+		if strings.HasPrefix(name, "__goxide_") {
 			continue
 		}
 		if obj, ok := g.protocolPkg.Scope().Lookup(name).(*types.TypeName); ok && types.Identical(obj.Type(), t) && valid(name) {
@@ -291,7 +291,7 @@ func (g *generator) sumProtocol(kind string, t ast.Expr) (string, bool, error) {
 	}
 	if fromMetadata {
 		g.next++
-		alias := fmt.Sprintf("__hgo_enum_sum_origin_f%d_%d", g.deriveFile, g.next)
+		alias := fmt.Sprintf("__goxide_enum_sum_origin_f%d_%d", g.deriveFile, g.next)
 		g.sumImports[alias] = original.PackagePath
 		ownerAlias := alias
 		if original.ValidatorPath != "" && original.ValidatorPath != original.PackagePath {
@@ -322,7 +322,7 @@ func (g *generator) sumProtocol(kind string, t ast.Expr) (string, bool, error) {
 		}
 	}
 	g.next++
-	prefix := fmt.Sprintf("__hgo_enum_sum_f%d_%d", g.deriveFile, g.next)
+	prefix := fmt.Sprintf("__goxide_enum_sum_f%d_%d", g.deriveFile, g.next)
 	d := original
 	d.Name = prefix + "_type"
 	d.Validator = prefix + "_validate"

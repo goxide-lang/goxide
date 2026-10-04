@@ -79,12 +79,12 @@ func TestDeferredSetterLosesPhaseOnePlace(t *testing.T) {
 func contextIR(t *model.Tree, first *int, n uint, r Result[int, error]) Result[int, error] {
 	cond := false
 	if n == 63 {
-		__hgo_enum_inst_54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(r)
+		__goxide_enum_inst_54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(r)
 		switch v := r.(type) {
-		case __hgo_enum_case_Result_Ok[int, error]:
+		case __goxide_enum_case_Result_Ok[int, error]:
 			cond = v.Value == 7
-		case __hgo_enum_case_Result_Err[int, error]:
-			return __hgo_enum_ctor_Result_Err[int, error](v.Value)
+		case __goxide_enum_case_Result_Err[int, error]:
+			return __goxide_enum_ctor_Result_Err[int, error](v.Value)
 		}
 	}
 	*first, t.Wide, t.Enabled = 5, 1<<n, cond == true
@@ -93,8 +93,8 @@ func contextIR(t *model.Tree, first *int, n uint, r Result[int, error]) Result[i
 func TestContextPreservingIRSubset(t *testing.T) {
 	tree := model.NewTree(3)
 	first := 0
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, e := unpack(contextIR(&tree, &first, 63, bad))
 	if e != benchError || first != 0 || tree.Wide != 0 {
 		t.Fatal(e, first, tree.Wide)
@@ -123,7 +123,7 @@ func BenchmarkGenericCaptureSuccess(b *testing.B) {
 func BenchmarkContextIRSuccess(b *testing.B) {
 	tree := model.NewTree(0)
 	first := 0
-	r := __hgo_enum_ctor_Result_Ok[int, error](7)
+	r := __goxide_enum_ctor_Result_Ok[int, error](7)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -134,7 +134,7 @@ func BenchmarkContextIRSuccess(b *testing.B) {
 func BenchmarkContextIRFailure(b *testing.B) {
 	tree := model.NewTree(0)
 	first := 0
-	r := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	r := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -144,7 +144,7 @@ func BenchmarkContextIRFailure(b *testing.B) {
 }
 func BenchmarkIndexOnlySuccess(b *testing.B) {
 	tree := model.NewTree(0)
-	r := __hgo_enum_ctor_Result_Ok[int, error](7)
+	r := __goxide_enum_ctor_Result_Ok[int, error](7)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -153,7 +153,7 @@ func BenchmarkIndexOnlySuccess(b *testing.B) {
 }
 func BenchmarkIndexExplicitSuccess(b *testing.B) {
 	tree := model.NewTree(0)
-	r := __hgo_enum_ctor_Result_Ok[int, error](7)
+	r := __goxide_enum_ctor_Result_Ok[int, error](7)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

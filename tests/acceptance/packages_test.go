@@ -19,8 +19,8 @@ func TestPackagesApplication(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 
 	t.Run("independent-module-race-and-build", func(t *testing.T) {
 		source := filepath.Join(t.TempDir(), "source")
@@ -67,12 +67,12 @@ func TestPackagesApplication(t *testing.T) {
 			line                   int
 			files                  map[string]string
 		}{
-			{"cross-file-type-error", "package main\nfunc main() { var n int = Shared; _ = n }\n", "bad.hgo", 2, map[string]string{"shared.hgo": "package main\nvar Shared = \"wrong\"\n"}},
-			{"imports-are-file-scoped", "package main\nfunc main() { fmt.Println(1) }\n", "bad.hgo", 2, map[string]string{"other.hgo": "package main\nimport \"fmt\"\nfunc other() { fmt.Println(2) }\n"}},
-			{"private-function", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { cfg.hidden() }\n", "bad.hgo", 3, map[string]string{"model/model.hgo": "package model\nfunc hidden() {}\n"}},
-			{"private-enum", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { var value cfg.secret; _ = value }\n", "bad.hgo", 3, map[string]string{"model/model.hgo": "package model\nenum secret { Idle, }\n"}},
-			{"nominal-enums", "package main\nimport cfg \"packages.example/app/model\"\npub enum Mode { Idle, }\nfunc main() { var local Mode; cfg.Accept(local) }\n", "bad.hgo", 4, map[string]string{"model/model.hgo": "package model\npub enum Mode { Idle, }\nfunc Accept(value Mode) {}\n"}},
-			{"cross-package-macro", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { cfg.identity!(1) }\n", "bad.hgo", 3, map[string]string{"model/model.hgo": "package model\nmacro_rules! identity { ($value:expr) => { $value }; }\n"}},
+			{"cross-file-type-error", "package main\nfunc main() { var n int = Shared; _ = n }\n", "bad.gox", 2, map[string]string{"shared.gox": "package main\nvar Shared = \"wrong\"\n"}},
+			{"imports-are-file-scoped", "package main\nfunc main() { fmt.Println(1) }\n", "bad.gox", 2, map[string]string{"other.gox": "package main\nimport \"fmt\"\nfunc other() { fmt.Println(2) }\n"}},
+			{"private-function", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { cfg.hidden() }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nfunc hidden() {}\n"}},
+			{"private-enum", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { var value cfg.secret; _ = value }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nenum secret { Idle, }\n"}},
+			{"nominal-enums", "package main\nimport cfg \"packages.example/app/model\"\npub enum Mode { Idle, }\nfunc main() { var local Mode; cfg.Accept(local) }\n", "bad.gox", 4, map[string]string{"model/model.gox": "package model\npub enum Mode { Idle, }\nfunc Accept(value Mode) {}\n"}},
+			{"cross-package-macro", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { cfg.identity!(1) }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nmacro_rules! identity { ($value:expr) => { $value }; }\n"}},
 		}
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {

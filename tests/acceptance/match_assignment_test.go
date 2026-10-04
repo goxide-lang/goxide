@@ -12,17 +12,17 @@ func TestMatchAssignmentInferenceModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
-		packagesWrite(t, dir, "model/model.hgo", `package model
+		packagesWrite(t, dir, "model/model.gox", `package model
 pub enum Mode{Idle,Value(int)}
 type Count uint64
 func Number()Count{return Count(7)}
 `)
-		packagesWrite(t, dir, "app.hgo", "package app\nimport m \"packages.example/app/model\"\n"+body)
+		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\n"+body)
 		return dir
 	}
 	t.Run("business-race-determinism", func(t *testing.T) {
@@ -90,7 +90,7 @@ func Recover() (out int){defer func(){x:=match m.Mode::Idle{m.Mode::Idle=>recove
 			if e != nil || string(a) != string(b) {
 				t.Fatalf("nondeterministic %s: %v", rel, e)
 			}
-			if strings.Contains(string(a), "__hgo_match_expr_infer(") || strings.Contains(string(a), "__hgo_match_expr_context(") {
+			if strings.Contains(string(a), "__goxide_match_expr_infer(") || strings.Contains(string(a), "__goxide_match_expr_context(") {
 				t.Fatalf("typing marker leaked in %s", rel)
 			}
 			return nil
@@ -106,7 +106,7 @@ func TestNearestFailure(t *testing.T){after=0;cleanup=0;if v,e:=CheckPropagation
 	})
 	cases := map[string]string{
 		"uninitialized reference": `func Bad(r &int){var x &int;_=x;_=r}`,
-		"forged temporary":        `func Bad(r &int){var __hgo_match_expr_1 &int;_=__hgo_match_expr_1;_=r}`,
+		"forged temporary":        `func Bad(r &int){var __goxide_match_expr_1 &int;_=__goxide_match_expr_1;_=r}`,
 		"mixed types":             `func Bad(){x:=match m.Mode::Idle{m.Mode::Idle=>1,m.Mode::Value(_)=>"bad"};_=x}`,
 		"defined identity":        `type A int;type B int;func Bad(){x:=match m.Mode::Idle{m.Mode::Idle=>A(1),m.Mode::Value(_)=>B(1)};_=x}`,
 		"nil only":                `func Bad(){x:=match m.Mode::Idle{m.Mode::Idle=>nil,m.Mode::Value(_)=>nil};_=x}`,
@@ -125,11 +125,11 @@ func TestNearestFailure(t *testing.T){after=0;cleanup=0;if v,e:=CheckPropagation
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "app.hgo") {
+			if !strings.Contains(out, "app.gox") {
 				t.Fatal(out)
 			}
 			if name == "mixed types" || name == "nil only" || name == "defined identity" || name == "overflow" {
-				if !strings.Contains(out, "explicit typed local initializer") || !strings.Contains(out, "app.hgo:3:") {
+				if !strings.Contains(out, "explicit typed local initializer") || !strings.Contains(out, "app.gox:3:") {
 					t.Fatalf("missing source/type guidance: %s", out)
 				}
 			}

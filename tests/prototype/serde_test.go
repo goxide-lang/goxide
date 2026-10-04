@@ -34,14 +34,14 @@ type Order struct {
  Secret string
 }
 `
-	result, err := frontend.Compile("business.hgo", []byte(source))
+	result, err := frontend.Compile("business.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !json.Valid(result.SourceMap) {
 		t.Fatalf("invalid source map: %s", result.SourceMap)
 	}
-	if !bytes.Contains(result.SourceMap, []byte("business.hgo")) {
+	if !bytes.Contains(result.SourceMap, []byte("business.gox")) {
 		t.Fatalf("source map has no input origin: %s", result.SourceMap)
 	}
 	if len(result.Expanded) == 0 {
@@ -103,11 +103,11 @@ type A struct { X map[bool]int }`},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := frontend.Compile("invalid.hgo", []byte(tt.source))
+			_, err := frontend.Compile("invalid.gox", []byte(tt.source))
 			if err == nil {
 				t.Fatal("invalid input accepted")
 			}
-			if !strings.Contains(err.Error(), "invalid.hgo") {
+			if !strings.Contains(err.Error(), "invalid.gox") {
 				t.Fatalf("diagnostic lacks source: %v", err)
 			}
 		})
@@ -181,7 +181,7 @@ struct Output { Child OutChild }
 #[derive(Deserialize)]
 struct Input { Value float32 }
 `
-	result, err := frontend.Compile("directions.hgo", []byte(source))
+	result, err := frontend.Compile("directions.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestDirections(t *testing.T){
 
 func TestAttributesInsideGoLiteralsAreNotSyntax(t *testing.T) {
 	source := "package fixture\nconst Template = `\n#[derive(NotAMacro)]\nstruct literal {\n`\n/*\n#[serde(unsupported)]\n*/\n#[derive(Serialize)]\ntype Actual struct { Value string }\n"
-	result, err := frontend.Compile("literal.hgo", []byte(source))
+	result, err := frontend.Compile("literal.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ type Names struct {
  Comma int
 }
 `
-	result, err := frontend.Compile("names.hgo", []byte(source))
+	result, err := frontend.Compile("names.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}

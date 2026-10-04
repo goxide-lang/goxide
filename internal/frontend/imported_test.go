@@ -29,9 +29,9 @@ func compileImportedFixture(t *testing.T, files map[string]string) (string, erro
 
 func TestQualifiedEnumsKeepFileAliasesAndValidation(t *testing.T) {
 	out, err := compileImportedFixture(t, map[string]string{
-		"a/a.hgo": "package unusual\npub enum State { Idle, Number(int), }\n",
-		"b/b.hgo": "package unusual\npub enum State { Idle, Number(int), }\n",
-		"first.hgo": `package app
+		"a/a.gox": "package unusual\npub enum State { Idle, Number(int), }\n",
+		"b/b.gox": "package unusual\npub enum State { Idle, Number(int), }\n",
+		"first.gox": `package app
 import first "example.org/qualified/a"
 import same "example.org/qualified/a"
 var Effects int
@@ -49,7 +49,7 @@ func Same(v first.State) int {
  return -1
 }
 `,
-		"second.hgo": `package app
+		"second.gox": `package app
 import first "example.org/qualified/b"
 import other "example.org/qualified/a"
 func Two(v first.State) int {
@@ -62,9 +62,9 @@ func Again(v other.State) int { return One(v) }
 import("testing"; a "example.org/qualified/a"; b "example.org/qualified/b")
 func TestValues(t *testing.T) {
  if Same(Make()) != 7 || One(Make()) != 7 || Again(Make()) != 7 || Two(b.NewStateIdle()) != 2 { t.Fatal("wrong identity") }
- type forged struct { a.HgoCase5_State_Number }
- var bad *a.HgoCase5_State_Number
- for _, v := range []a.State{nil,bad,&a.HgoCase5_State_Number{Value:1},forged{}} {
+ type forged struct { a.GoxideCase5_State_Number }
+ var bad *a.GoxideCase5_State_Number
+ for _, v := range []a.State{nil,bad,&a.GoxideCase5_State_Number{Value:1},forged{}} {
   func(){defer func(){if recover()==nil {t.Error("invalid enum accepted")}}(); One(v)}()
   if Effects != 0 { t.Fatal("wildcard ran before validation") }
  }
@@ -89,7 +89,7 @@ func TestQualifiedEnumsRejectPrivateAndMixedIdentity(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			producer := "package p\npub enum State { Idle, Number(int), }\nenum secret { Idle, }\n"
-			extension := ".hgo"
+			extension := ".gox"
 			if tc.name == "native" {
 				producer = "package p\ntype State int\n"
 				extension = ".go"
@@ -98,16 +98,16 @@ func TestQualifiedEnumsRejectPrivateAndMixedIdentity(t *testing.T) {
 			if tc.name == "same-spelling" {
 				imports += `import q "example.org/qualified/b"` + "\n"
 			}
-			_, err := compileImportedFixture(t, map[string]string{"a/a" + extension: producer, "b/b.hgo": "package p\npub enum State { Idle, Number(int), }\n", "main.hgo": "package main\n" + imports + tc.consumer + "\n"})
-			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "main.hgo:") {
+			_, err := compileImportedFixture(t, map[string]string{"a/a" + extension: producer, "b/b.gox": "package p\npub enum State { Idle, Number(int), }\n", "main.gox": "package main\n" + imports + tc.consumer + "\n"})
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "main.gox:") {
 				t.Fatalf("want %q, got %v", tc.want, err)
 			}
 		})
 	}
 }
 
-func TestUserHgoPrefixDoesNotDeduplicate(t *testing.T) {
-	_, err := CompilePackage("example.org/p", map[string][]byte{"a.hgo": []byte("package p\nfunc HgoBusiness() {}\n"), "b.hgo": []byte("package p\nfunc HgoBusiness() {}\n")}, nil)
+func TestUserGoxidePrefixDoesNotDeduplicate(t *testing.T) {
+	_, err := CompilePackage("example.org/p", map[string][]byte{"a.gox": []byte("package p\nfunc GoxideBusiness() {}\n"), "b.gox": []byte("package p\nfunc GoxideBusiness() {}\n")}, nil)
 	if err == nil || !strings.Contains(err.Error(), "redeclared") {
 		t.Fatalf("duplicate user declaration: %v", err)
 	}
@@ -115,8 +115,8 @@ func TestUserHgoPrefixDoesNotDeduplicate(t *testing.T) {
 
 func TestQualifiedMatchBodyDiagnosticOrigin(t *testing.T) {
 	_, err := compileImportedFixture(t, map[string]string{
-		"a/a.hgo": "package p\npub enum State { Idle, Number(int), }\n",
-		"main.hgo": `package app
+		"a/a.gox": "package p\npub enum State { Idle, Number(int), }\n",
+		"main.gox": `package app
 import p "example.org/qualified/a"
 func f(v p.State) {
  match v {
@@ -126,7 +126,7 @@ func f(v p.State) {
 }
 `,
 	})
-	if err == nil || !strings.Contains(err.Error(), "main.hgo:6:") || !strings.Contains(err.Error(), "cannot use") {
+	if err == nil || !strings.Contains(err.Error(), "main.gox:6:") || !strings.Contains(err.Error(), "cannot use") {
 		t.Fatalf("missing consumer arm origin: %v", err)
 	}
 }

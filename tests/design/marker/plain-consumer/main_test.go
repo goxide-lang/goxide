@@ -11,7 +11,7 @@ func TestOriginalGoUnchanged(t *testing.T) {
 	if _, err := b.Read(p); err != nil || string(p) != "abc" {
 		t.Fatal(err, string(p))
 	}
-	if _, ok := any(b).(interface{ HyperGoTraitByteReader() }); ok {
+	if _, ok := any(b).(interface{ GoxideTraitByteReader() }); ok {
 		t.Fatal("marker leaked into original")
 	}
 }

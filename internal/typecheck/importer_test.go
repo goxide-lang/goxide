@@ -7,7 +7,7 @@ import (
 )
 
 func TestLocalRuntimeAndStandardIdentity(t *testing.T) {
-	imp := NewImporter("input.hgo")
+	imp := NewImporter("input.gox")
 	runtime, err := imp.Import("github.com/goxide-lang/serde")
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestImporterHonorsCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	start := time.Now()
-	imp := NewImporterWithContext(ctx, "input.hgo", nil, false, nil)
+	imp := NewImporterWithContext(ctx, "input.gox", nil, false, nil)
 	if _, err := imp.Import("fmt"); err == nil {
 		t.Fatal("cancelled export query succeeded")
 	}

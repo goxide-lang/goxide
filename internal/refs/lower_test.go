@@ -15,7 +15,7 @@ func read(r &int) int { return *r }
 func bump(w mut& int) { *w += 2; (*w)++ }
 func main() { w:=create(); copied:=w; bump(copied); r:=&(*w); x:=*r; x++; var rr &int = &x; if read(rr)!=14 {panic("value copy")}; if read(r)!=13 {panic("shared identity")}; { r:=3; r++; if r!=4 {panic("shadow")}}; *w=21; if read(r)!=21 {panic("read path is not global immutability")} }
 `
-	r, err := Lower("scalar.hgo", []byte(src))
+	r, err := Lower("scalar.gox", []byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestReject(t *testing.T) {
 	}
 	for n, b := range cases {
 		t.Run(n, func(t *testing.T) {
-			_, err := Lower(n+".hgo", []byte("package p\n"+b))
+			_, err := Lower(n+".gox", []byte("package p\n"+b))
 			if err == nil {
 				t.Fatalf("accepted %s", b)
 			}
@@ -57,7 +57,7 @@ func TestReject(t *testing.T) {
 }
 func TestPlainGoUnchanged(t *testing.T) {
 	s := []byte("package p\nfunc f(p *int)*int {x:=2; r:=&x; *p=*r;return r}\n")
-	r, e := Lower("raw.hgo", s)
+	r, e := Lower("raw.gox", s)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -67,7 +67,7 @@ func TestPlainGoUnchanged(t *testing.T) {
 }
 func TestReadAddress(t *testing.T) {
 	s := []byte("package p\nfunc read(r &int)int{return *r};func f()int{x:=2;return read(&x)}\n")
-	r, e := Lower("read.hgo", s)
+	r, e := Lower("read.gox", s)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -77,7 +77,7 @@ func TestReadAddress(t *testing.T) {
 }
 
 func TestStandardImport(t *testing.T) {
-	_, err := Lower("import.hgo", []byte("package p\nimport \"fmt\"\nfunc f(r &int)string{return fmt.Sprint(*r)}\n"))
+	_, err := Lower("import.gox", []byte("package p\nimport \"fmt\"\nfunc f(r &int)string{return fmt.Sprint(*r)}\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestExtraReject(t *testing.T) {
 		`func f(r &int){for *r = range 3{}}`,
 		`func erase[T ~*int](v T)*int{return v};func f(r &int){p:=erase(r);*p=2}`,
 	} {
-		if _, err := Lower("unsupported.hgo", []byte("package p\n"+b)); err == nil {
+		if _, err := Lower("unsupported.gox", []byte("package p\n"+b)); err == nil {
 			t.Errorf("accepted %s", b)
 		}
 	}
@@ -98,7 +98,7 @@ func TestExtraReject(t *testing.T) {
 
 func TestAttributesAndRawStrings(t *testing.T) {
 	src := "package p\n#[derive(Debug)]\ntype S struct { N int }\nfunc f(r &int)string { return `hello\n#[not_an_attribute]` }\n"
-	r, err := Lower("attrs.hgo", []byte(src))
+	r, err := Lower("attrs.gox", []byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestAttributesAndRawStrings(t *testing.T) {
 
 func TestNestedReborrowCannotUpgrade(t *testing.T) {
 	for _, b := range []string{`func f(r &int){w:=mut& *(&(*r));*w=2}`, `func f(r &int){p:=&(*(&(*r)));*p=2}`, `func f(r &int){w:=mut& *(mut& *r);*w=2}`} {
-		if _, err := Lower("nested.hgo", []byte("package p\n"+b)); err == nil {
+		if _, err := Lower("nested.gox", []byte("package p\n"+b)); err == nil {
 			t.Errorf("accepted %s", b)
 		}
 	}
@@ -129,7 +129,7 @@ func TestPhantomGenericReferenceRejected(t *testing.T) {
 		`type Phantom[T any] struct{};func f(){var p Phantom[&int];_=p}`,
 		`func phantom[T any](){};func f(r &int){phantom[&int]()}`,
 	} {
-		if _, err := Lower("phantom.hgo", []byte("package p\n"+src)); err == nil {
+		if _, err := Lower("phantom.gox", []byte("package p\n"+src)); err == nil {
 			t.Fatalf("accepted phantom reference argument: %s", src)
 		}
 	}

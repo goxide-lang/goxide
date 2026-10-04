@@ -15,8 +15,8 @@ func TestT0JointBusiness(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	bin, outside := t.TempDir(), t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	sourceFor := func() string {
 		dir := t.TempDir()
 		err := filepath.WalkDir(filepath.Join(root, "examples/t0_joint"), func(path string, d os.DirEntry, err error) error {
@@ -92,13 +92,13 @@ func TestT0JointBusiness(t *testing.T) {
 			if name != "source-type" {
 				imports += "import \"joint.example/app/store\"\n"
 			}
-			packagesWrite(t, dir, "bad.hgo", "package main\n"+imports+body+"\n")
+			packagesWrite(t, dir, "bad.gox", "package main\n"+imports+body+"\n")
 			out := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), dir)
-			if !strings.Contains(out, "bad.hgo") {
+			if !strings.Contains(out, "bad.gox") {
 				t.Fatal(out)
 			}
 			if name == "source-type" {
-				if !strings.Contains(out, "bad.hgo:3:") || !strings.Contains(out, "explicit typed local initializer") {
+				if !strings.Contains(out, "bad.gox:3:") || !strings.Contains(out, "explicit typed local initializer") {
 					t.Fatal(out)
 				}
 			} else if !strings.Contains(out, "refs:") || !strings.Contains(out, "generated/unmapped") {
@@ -117,7 +117,7 @@ func Bad(){b:=store.Budget{};r:=store.View(&b);r.Limit=9}
 		if !strings.Contains(out, "readonly projection") {
 			t.Fatal(out)
 		}
-		artifact := filepath.Join(generated, "store/.hgo.refs.json")
+		artifact := filepath.Join(generated, "store/.goxide.refs.json")
 		saved, e := os.ReadFile(artifact)
 		if e != nil {
 			t.Fatal(e)

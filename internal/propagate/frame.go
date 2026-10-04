@@ -67,7 +67,7 @@ func (l *lowering) frameType(t types.Type) (ast.Expr, error) {
 	if !ok {
 		return nil, l.fail(l.file, "assignment propagation helper type is not nameable in this file")
 	}
-	name := "__hgo_qframe_type_" + l.cfg.Namespace + l.temp()
+	name := "__goxide_qframe_type_" + l.cfg.Namespace + l.temp()
 	if l.frameTypes == nil {
 		l.frameTypes = map[types.Type]string{}
 	}
@@ -116,13 +116,13 @@ func (l *lowering) assignmentFrame(s *ast.AssignStmt, ft *ast.FuncType) ([]ast.S
 		return nil, err
 	}
 	if l.frameRuntime == "" {
-		l.frameRuntime = "__hgo_qframe_runtime_" + l.cfg.Namespace
+		l.frameRuntime = "__goxide_qframe_runtime_" + l.cfg.Namespace
 		spec := &ast.ImportSpec{Name: ast.NewIdent(l.frameRuntime), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("github.com/hxsf/goxide/runtime")}}
 		l.file.Decls = append([]ast.Decl{&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{spec}}}, l.file.Decls...)
 		l.file.Imports = append(l.file.Imports, spec)
 	}
 	// Bind the generic instantiation outside user local scopes too.
-	guardType := "__hgo_qframe_guard_" + l.cfg.Namespace + l.temp()
+	guardType := "__goxide_qframe_guard_" + l.cfg.Namespace + l.temp()
 	l.file.Decls = append(l.file.Decls, &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(guardType), Assign: token.Pos(1), Type: &ast.IndexExpr{X: &ast.SelectorExpr{X: ast.NewIdent(l.frameRuntime), Sel: ast.NewIdent("Assignment")}, Index: resultType}}}})
 	guard := l.temp()
 	pre := parseStatements("var " + guard + " " + guardType + "; defer " + guard + ".Catch(" + pointer + ")")

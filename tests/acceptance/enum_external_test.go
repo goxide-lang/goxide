@@ -15,8 +15,8 @@ func TestCrossModuleEnumArtifacts(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	module := func(path, library string) string {
 		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", path, filepath.ToSlash(root))
 		if library != "" {
@@ -26,7 +26,7 @@ func TestCrossModuleEnumArtifacts(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", module("enum.example/library", ""))
-	packagesWrite(t, src, "model/model.hgo", `package model
+	packagesWrite(t, src, "model/model.gox", `package model
 #[derive(Clone,Debug,Serialize,Deserialize)]
 type hidden struct{N int}
 #[derive(Default,Clone,Debug,Serialize,Deserialize)]
@@ -49,16 +49,16 @@ type New m.E
 func Get()Alias{return m.NewECount(6)}
 `)
 
-	packagesWrite(t, src, "internal/hidden/hidden.hgo", `package hidden
+	packagesWrite(t, src, "internal/hidden/hidden.gox", `package hidden
 pub enum E { A(int), }
 `)
 	packagesWrite(t, src, "api/api.go", `package api
 import h "enum.example/library/internal/hidden"
 type Public=h.E
 func Get()Public{return h.NewEA(8)}
-func Read(e Public)int{return e.(h.HgoCase1_E_A).Value}
+func Read(e Public)int{return e.(h.GoxideCase1_E_A).Value}
 `)
-	packagesWrite(t, src, "other/other.hgo", `package other
+	packagesWrite(t, src, "other/other.gox", `package other
 pub enum E { A, Count(int), }
 `)
 	library := filepath.Join(t.TempDir(), "library")
@@ -96,7 +96,7 @@ pub enum E { A, Count(int), }
 	appFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", module("enum.example/app", library))
-		packagesWrite(t, dir, "app.hgo", body)
+		packagesWrite(t, dir, "app.gox", body)
 		return dir
 	}
 	app := appFor(`package app
@@ -110,7 +110,7 @@ func mark(seen *bool)bool{*seen=true;return true}
 func Read()int{n:=3;return *m.View(&n)}
 func Cross(e r.Alias)int{return match e{m.E::A=>0,r.Alias::Count(n)=>n,m.E::Batch(xs)=>len(xs),r.Alias::Hidden(v)=>v.N,}}
 `)
-	packagesWrite(t, app, "other.hgo", `package app
+	packagesWrite(t, app, "other.gox", `package app
 import(renamed "enum.example/library/model";a "enum.example/library/api")
 func Facade()int{return a.Read(a.Get())}
 func Other()int{return match renamed.E::Count(2){renamed.E::Count(n)=>n,_=>0,}}
@@ -124,7 +124,7 @@ func Other()int{return match renamed.E::Count(2){renamed.E::Count(n)=>n,_=>0,}}
 import("testing";m "enum.example/library/model";r "enum.example/library/relay")
 type forged struct{r.Alias}
 func TestBusiness(t *testing.T){if Run()!=22||Other()!=2||Read()!=3||Facade()!=8||Cross(m.NewECount(4))!=4||Score(Rebuild(m.Secret()))!=9{t.Fatal("business")};if n,e:=Decode();e!=nil||n!=4{t.Fatal(n,e)}}
-func TestInvalidBeforeGuard(t *testing.T){var typed *m.HgoCase1_E_Count;for _,e:=range []r.Alias{nil,typed,&m.HgoCase1_E_Count{Value:1},forged{}}{func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid before guard")}}();Ordered(e,&seen)}()}}
+func TestInvalidBeforeGuard(t *testing.T){var typed *m.GoxideCase1_E_Count;for _,e:=range []r.Alias{nil,typed,&m.GoxideCase1_E_Count{Value:1},forged{}}{func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid before guard")}}();Ordered(e,&seen)}()}}
 `)
 	packagesWrite(t, library, "model/model_test.go", `package model
 import "testing"
@@ -134,7 +134,7 @@ func TestProducer(t *testing.T){e:=DefaultE();if DebugE(&e)!="E::A"{t.Fatal(Debu
 	packagesWrite(t, plain, "go.mod", module("enum.example/plain", library))
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import("testing";m "enum.example/library/model";r "enum.example/library/relay")
-func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if e.(m.HgoCase1_E_Count).Value!=5{t.Fatal(e)}}
+func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if e.(m.GoxideCase1_E_Count).Value!=5{t.Fatal(e)}}
 `)
 	for _, dir := range []string{library, out, plain} {
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
@@ -148,7 +148,7 @@ func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if e.(m.Hg
 		t.Run(name, func(t *testing.T) {
 			src := appFor("package app\nimport(r \"enum.example/library/relay\";m \"enum.example/library/model\")\nvar _=m.Secret\n" + body)
 			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), src)
-			if !strings.Contains(msg, ".hgo:") {
+			if !strings.Contains(msg, ".gox:") {
 				t.Fatal(msg)
 			}
 		})
@@ -164,7 +164,7 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		t.Run(name, func(t *testing.T) {
 			source := appFor("package app\n" + body)
 			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), source)
-			if !strings.Contains(msg, ".hgo:") {
+			if !strings.Contains(msg, ".gox:") {
 				t.Fatal(msg)
 			}
 			if name == "internal-origin-pattern" && !strings.Contains(msg, "internal-origin alias") {
@@ -174,7 +174,7 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 	}
 
 	valid := appFor("package app\nimport r \"enum.example/library/relay\"\nfunc Read()int{return match r.Get(){r.Alias::Count(n)=>n,_=>0,}}\n")
-	metaPath := filepath.Join(library, "relay/.hgo.enums.json")
+	metaPath := filepath.Join(library, "relay/.goxide.enums.json")
 	original, e := os.ReadFile(metaPath)
 	if e != nil {
 		t.Fatal(e)
@@ -192,7 +192,7 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 			}
 			defer testdeps.WriteFile(metaPath, original, 0600)
 			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-			if !strings.Contains(msg, want) || !strings.Contains(msg, "app.hgo:2:") {
+			if !strings.Contains(msg, want) || !strings.Contains(msg, "app.gox:2:") {
 				t.Fatal(msg)
 			}
 		})
@@ -237,7 +237,7 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		}
 	})
 	t.Run("regenerated-payload-drift", func(t *testing.T) {
-		sourcePath := filepath.Join(src, "model/model.hgo")
+		sourcePath := filepath.Join(src, "model/model.gox")
 		oldSource, e := os.ReadFile(sourcePath)
 		if e != nil {
 			t.Fatal(e)
@@ -253,11 +253,11 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		updated := filepath.Join(t.TempDir(), "library")
 		packagesCommand(t, root, cli, true, "transpile", "-o", updated, src)
 		var before, after map[string]any
-		prior, e := os.ReadFile(filepath.Join(library, "model/.hgo.enums.json"))
+		prior, e := os.ReadFile(filepath.Join(library, "model/.goxide.enums.json"))
 		if e != nil {
 			t.Fatal(e)
 		}
-		next, e := os.ReadFile(filepath.Join(updated, "model/.hgo.enums.json"))
+		next, e := os.ReadFile(filepath.Join(updated, "model/.goxide.enums.json"))
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -269,7 +269,7 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		if string(x) != string(y) {
 			t.Fatal("probe must keep logical variant metadata unchanged")
 		}
-		for _, name := range []string{"model.go", ".hgo.enums.json", ".hgo.refs.json"} {
+		for _, name := range []string{"model.go", ".goxide.enums.json", ".goxide.refs.json"} {
 			path := filepath.Join(library, "model", name)
 			old, e := os.ReadFile(path)
 			if e != nil {

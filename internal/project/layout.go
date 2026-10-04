@@ -5,13 +5,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-const LayoutMarker = ".hgo-layout.json"
+const LayoutMarker = ".goxide-layout.json"
 
 type layoutOwner struct {
 	Version                    int
@@ -102,8 +103,11 @@ func readJSON(path string, v any) error {
 // ResolveTargetDir uses manifest-root-relative CLI/env values. No manifest fields
 // are added; runner ownership/trust remains an independent contract.
 func ResolveTargetDir(root, requested string) (string, error) {
+	if err := naming.Environment(); err != nil {
+		return "", err
+	}
 	if requested == "" {
-		requested = os.Getenv("HGO_TARGET_DIR")
+		requested = os.Getenv("GOXIDE_TARGET_DIR")
 	}
 	if requested == "" {
 		requested = "target"
@@ -122,7 +126,7 @@ func ResolveTargetDir(root, requested string) (string, error) {
 		return "", fmt.Errorf("target directory must not contain the source root")
 	}
 	for _, part := range strings.Split(filepath.ToSlash(p), "/") {
-		if part == "vendor" || part == ".git" || part == ".hgo" {
+		if part == "vendor" || part == ".git" || part == ".goxide" {
 			return "", fmt.Errorf("target directory cannot use reserved source/cache component %s", part)
 		}
 	}
@@ -230,7 +234,7 @@ func (l *Layout) ownedDirectory(path string, spec UnitSpec) error {
 		if e = os.Mkdir(path, 0755); e != nil {
 			return e
 		}
-		return writeExclusive(filepath.Join(path, ".hgo-unit.json"), want)
+		return writeExclusive(filepath.Join(path, ".goxide-unit.json"), want)
 	} else if e != nil {
 		return e
 	}
@@ -238,7 +242,7 @@ func (l *Layout) ownedDirectory(path string, spec UnitSpec) error {
 		Owner layoutOwner
 		Unit  UnitSpec
 	}
-	if e := readJSON(filepath.Join(path, ".hgo-unit.json"), &got); e != nil {
+	if e := readJSON(filepath.Join(path, ".goxide-unit.json"), &got); e != nil {
 		return fmt.Errorf("refusing unmanaged unit directory: %w", e)
 	}
 	if got != want {
@@ -272,7 +276,7 @@ func (l *Layout) Begin(spec UnitSpec) (*Unit, error) {
 		return nil, e
 	}
 	u := &Unit{Spec: spec, Directory: dir, Run: run, Bundle: filepath.Join(run, "bundle"), Intermediate: filepath.Join(run, "intermediate"), ScriptOut: filepath.Join(run, "script-out"), ScriptCache: filepath.Join(dir, "script-cache"), BinaryDirectory: filepath.Join(l.Root, "bin", rel), layout: l}
-	if e = writeExclusive(filepath.Join(run, ".hgo-run.json"), struct {
+	if e = writeExclusive(filepath.Join(run, ".goxide-run.json"), struct {
 		Owner layoutOwner
 		Unit  UnitSpec
 	}{l.owner, spec}); e != nil {
@@ -323,7 +327,7 @@ func (u *Unit) PublishBinary(source string) (string, error) {
 		name += ".exe"
 	}
 	dest := filepath.Join(u.BinaryDirectory, name)
-	recordPath := filepath.Join(u.BinaryDirectory, ".hgo-binary.json")
+	recordPath := filepath.Join(u.BinaryDirectory, ".goxide-binary.json")
 	var old binaryRecord
 	recordErr := readJSON(recordPath, &old)
 	if recordErr != nil && !os.IsNotExist(recordErr) {

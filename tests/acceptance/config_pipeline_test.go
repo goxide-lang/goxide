@@ -10,7 +10,7 @@ import (
 // Read the runnable example itself so the acceptance scenario cannot drift.
 func TestConfigPipelineApplicationRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
-	filename := filepath.Join(filepath.Dir(here), "../../examples/prototype/config_pipeline.hgo")
+	filename := filepath.Join(filepath.Dir(here), "../../examples/prototype/config_pipeline.gox")
 	source, err := os.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)

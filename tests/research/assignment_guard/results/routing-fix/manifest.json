@@ -1,6 +1,6 @@
 {
   "revision": "a3f064fbcd0e75bb06bdba406f007e5abd68bd71",
-  "working_tree_status": " M IMPLEMENTATION.md\n M ROADMAP.md\n M docs/rfcs/research/0005-option-result-question.md\n M docs/t0-acceptance.md\n M internal/propagate/frame.go\n M tests/acceptance/propagate_place_test.go\n M tests/acceptance/propagate_private_place_test.go\n?? examples/propagate_places/index_reads.hgo\n?? tests/research/assignment_guard/\n",
+  "working_tree_status": " M IMPLEMENTATION.md\n M ROADMAP.md\n M docs/rfcs/research/0005-option-result-question.md\n M docs/t0-acceptance.md\n M internal/propagate/frame.go\n M tests/acceptance/propagate_place_test.go\n M tests/acceptance/propagate_private_place_test.go\n?? examples/propagate_places/index_reads.gox\n?? tests/research/assignment_guard/\n",
   "toolchain": "go version go1.27.1 linux/amd64",
   "commands": [
     {
@@ -16,15 +16,15 @@
         "/workspace/goxide-environment/go/bin/go",
         "build",
         "-o",
-        "/tmp/goxide-no-panic-final2/hgo",
-        "./cmd/hgo"
+        "/tmp/goxide-no-panic-final2/goxide",
+        "./cmd/goxide"
       ],
       "cwd": "/workspace/goxide",
       "extra_env": {}
     },
     {
       "argv": [
-        "/tmp/goxide-no-panic-final2/hgo",
+        "/tmp/goxide-no-panic-final2/goxide",
         "transpile",
         "-o",
         "/tmp/goxide-no-panic-final2/generated",

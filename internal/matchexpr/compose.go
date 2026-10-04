@@ -18,7 +18,7 @@ type composer struct {
 	serial int
 }
 
-func (c *composer) temp() string { c.serial++; return fmt.Sprintf("__hgo_match_expr_%d", c.serial) }
+func (c *composer) temp() string { c.serial++; return fmt.Sprintf("__goxide_match_expr_%d", c.serial) }
 func (c *composer) contains(a, b int) bool {
 	for i := a; i < b; i++ {
 		if c.ts[i].k == token.IDENT && c.ts[i].s == "match" {

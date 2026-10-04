@@ -1,6 +1,6 @@
-Actual hgo CLI-generated module, Go 1.27.1, optimized build (not race).
+Actual goxide CLI-generated module, Go 1.27.1, optimized build (not race).
 Source: tests/acceptance/match_call_signatures_test.go
-Reproduce: HGO_MATCH_CALL_BENCH=1 go test ./tests/acceptance -run ^TestMatchCallSignatures$ -count=1 -v
+Reproduce: GOXIDE_MATCH_CALL_BENCH=1 go test ./tests/acceptance -run ^TestMatchCallSignatures$ -count=1 -v
 Generated benchmark: go test -run=^$ -bench=. -benchmem -benchtime=100ms -count=3 -cpu=1 .
 Microbenchmarks include inlining/constant folding; not a general throughput claim.
 

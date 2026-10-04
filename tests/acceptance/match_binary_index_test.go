@@ -12,17 +12,17 @@ func TestMatchBinaryAndIndexedModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
-		packagesWrite(t, dir, "model/model.hgo", `package model
+		packagesWrite(t, dir, "model/model.gox", `package model
 pub enum E{A,B}
 type Word uint64
 type Flag bool
 `)
-		packagesWrite(t, dir, "app.hgo", `package app
+		packagesWrite(t, dir, "app.gox", `package app
 import m "packages.example/app/model"
 `+body)
 		return dir
@@ -110,7 +110,7 @@ func CheckUserClosure()int{return match UserClosure(){Result[int,error]::Ok(n)=>
 		if e != nil {
 			t.Fatal(e)
 		}
-		for _, marker := range []string{"__hgo_match_expr_pending", "__hgo_match_expr_operand_context(", "__hgo_match_expr_zero[", "__hgo_match_expr_return(", "__hgo_match_expr_peers(", ".Catch(", ".Fail("} {
+		for _, marker := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_operand_context(", "__goxide_match_expr_zero[", "__goxide_match_expr_return(", "__goxide_match_expr_peers(", ".Catch(", ".Fail("} {
 			if strings.Contains(string(data), marker) {
 				t.Fatalf("residual %s", marker)
 			}
@@ -130,7 +130,7 @@ func BenchmarkIndexExplicit(b *testing.B){e:=makeA();a:=make([]int,16);for i:=0;
 `)
 		packagesCommand(t, generated, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, generated, tool, true, "vet", "./...")
-		if os.Getenv("HGO_MATCH_BENCH") != "" {
+		if os.Getenv("GOXIDE_MATCH_BENCH") != "" {
 			out := packagesCommand(t, generated, tool, true, "test", "-run", "^$", "-bench", "Benchmark(Match|Explicit|IndexMatch|IndexExplicit)$", "-benchmem", "-benchtime=200ms", "-count=5")
 			t.Log(out)
 		}

@@ -8,7 +8,7 @@ name = 'app'
 path = 'cmd/app'
 
 [build]
-entry = 'tools/build/main.hgo'
+entry = 'tools/build/build.gox'
 inputs = ['schema.txt']
 outputs = ['gen/schema.go', 'gen/data.txt']
 timeout_seconds = 60

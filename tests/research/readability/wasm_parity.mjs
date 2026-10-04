@@ -19,21 +19,21 @@ void go.run(binary.instance);
 await started;
 const manifest = JSON.parse(fs.readFileSync(path.join(dist, 'examples.json'), 'utf8'));
 for (const example of manifest.examples) {
-  const actual = globalThis.hgoCompile(example.source);
+  const actual = globalThis.goxideCompile(example.source);
   assert.equal(actual.error, undefined, example.id);
   assert.equal(actual.go, example.go, `${example.id}: native/WASM output differs`);
   console.log(`PASS website ${example.id}`);
 }
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'readability-wasm-'));
 try {
-  for (const name of fs.readdirSync(path.join(root, 'website/checks')).filter(n => n.endsWith('.hgo')).sort()) {
+  for (const name of fs.readdirSync(path.join(root, 'website/checks')).filter(n => n.endsWith('.gox')).sort()) {
     const source = fs.readFileSync(path.join(root, 'website/checks', name), 'utf8');
-    const input = path.join(scratch, 'playground.hgo');
+    const input = path.join(scratch, 'playground.gox');
     fs.writeFileSync(input, source);
     let output, error;
-    try {output = execFileSync(path.join(root, 'bin/hgo'), ['transpile', input], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']});}
-    catch (e) {error = String(e.stderr).trim().replaceAll(input, 'playground.hgo');}
-    const actual = globalThis.hgoCompile(source);
+    try {output = execFileSync(path.join(root, 'bin/goxide'), ['transpile', input], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']});}
+    catch (e) {error = String(e.stderr).trim().replaceAll(input, 'playground.gox');}
+    const actual = globalThis.goxideCompile(source);
     if (error !== undefined) assert.equal(actual.error, error, `${name}: diagnostic mismatch`);
     else {assert.equal(actual.error, undefined, name); assert.equal(actual.go, output, `${name}: output mismatch`);}
     console.log(`PASS adapter ${name}`);

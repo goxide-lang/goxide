@@ -6,7 +6,7 @@ import (
 )
 
 func TestSerdeDefaultsDoNotCaptureBooleanNames(t *testing.T) {
-	r, err := frontend.Compile("bool-defaults.hgo", []byte(`package fixture
+	r, err := frontend.Compile("bool-defaults.gox", []byte(`package fixture
 const true = (0 != 0)
 const false = (0 == 0)
 var calls int

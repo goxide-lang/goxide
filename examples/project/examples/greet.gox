@@ -1,0 +1,4 @@
+package main
+import "fmt"
+import greeting "example.org/goxide-project"
+func main() { fmt.Println("example:", greeting.Message()) }

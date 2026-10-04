@@ -1,4 +1,4 @@
-package hgoruntime
+package goxideruntime
 
 // Assignment is compiler support for an assignment whose hidden promoted
 // pointer operands must be staged by Go itself. It is not a source protocol.

@@ -22,7 +22,7 @@ func bindLocalProtocolAliases(path string, sources map[string][]byte, cfg *compi
 	var files []*ast.File
 	destination := ""
 	for _, name := range sortedSources(sources) {
-		if destination == "" && strings.HasSuffix(name, ".hgo") {
+		if destination == "" && strings.HasSuffix(name, ".gox") {
 			destination = name
 		}
 		context, ok := cfg.builtinTypes[name]
@@ -119,7 +119,7 @@ func bindLocalProtocolAliases(path string, sources map[string][]byte, cfg *compi
 			bound := helper
 			if definitionPath != path {
 				serial++
-				prefix := fmt.Sprintf("__hgo_enum_alias_protocol_%d", serial)
+				prefix := fmt.Sprintf("__goxide_enum_alias_protocol_%d", serial)
 				cfg.enumGoImports[destination] += fmt.Sprintf("; import %s %q", prefix, definitionPath)
 				bound = prefix + "_helper"
 				cfg.preludes[destination] += fmt.Sprintf("\nvar %s = %s.%s;\n", bound, prefix, helper)

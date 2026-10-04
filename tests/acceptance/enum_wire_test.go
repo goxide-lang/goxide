@@ -14,8 +14,8 @@ func TestEnumWireInstalledBusinessRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	source := filepath.Join(root, "examples/enum_wire")
 	outside := t.TempDir()
 	generated := filepath.Join(t.TempDir(), "module")
@@ -56,7 +56,7 @@ func TestEnumWireExplicitBoundaries(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			filename := filepath.Join(t.TempDir(), tc.name+".hgo")
+			filename := filepath.Join(t.TempDir(), tc.name+".gox")
 			_, err := frontend.Compile(filename, []byte("package rejected\n"+tc.source+"\n"))
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) || !strings.Contains(err.Error(), filepath.Base(filename)+":") {
 				t.Fatalf("want located %s rejection, got %v", tc.want, err)

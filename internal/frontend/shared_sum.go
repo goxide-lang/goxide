@@ -29,7 +29,7 @@ func sharedSumMetadata(pkg *types.Package, imp types.Importer) (enumMetadata, er
 	if pkg == nil || pkg.Path() != enums.SumPackage {
 		return enumMetadata{}, fmt.Errorf("shared sum package identity mismatch")
 	}
-	abi, ok := pkg.Scope().Lookup("HgoSumABI").(*types.Const)
+	abi, ok := pkg.Scope().Lookup("GoxideSumABI").(*types.Const)
 	if !ok || abi.Val().Kind() != constant.Int {
 		return enumMetadata{}, fmt.Errorf("shared sum ABI marker missing")
 	}

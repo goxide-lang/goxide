@@ -2,7 +2,7 @@
 *.test
 
 /internal/typecheck/browserexports/*.a
-/cmd/hgo-web/dist/
+/cmd/goxide-web/dist/
 /bin/
 
 /target/

@@ -11,7 +11,7 @@ import (
 
 func run(t *testing.T, src, want string) {
 	t.Helper()
-	r, e := ExpandWithMap("input.hgo", []byte(src))
+	r, e := ExpandWithMap("input.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -102,8 +102,8 @@ func TestErrors(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.needle, func(t *testing.T) {
-			_, e := Expand("bad.hgo", []byte("package p\n"+c.src))
-			if e == nil || !strings.Contains(e.Error(), c.needle) || !strings.Contains(e.Error(), "bad.hgo") {
+			_, e := Expand("bad.gox", []byte("package p\n"+c.src))
+			if e == nil || !strings.Contains(e.Error(), c.needle) || !strings.Contains(e.Error(), "bad.gox") {
 				t.Fatalf("got %v want %s", e, c.needle)
 			}
 		})
@@ -116,7 +116,7 @@ macro_rules! identity {($x:expr)=>{$x};}
 type Item struct { Value int }
 func f()int{return identity!(7)}
 `
-	r, e := ExpandWithMap("shape.hgo", []byte(src))
+	r, e := ExpandWithMap("shape.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}

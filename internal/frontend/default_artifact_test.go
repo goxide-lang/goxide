@@ -116,7 +116,7 @@ func TestDefaultArtifactOriginAuthorization(t *testing.T) {
 }
 func TestCollectDefaultRegistrations(t *testing.T) {
 	p := enumTestPackage(t, "example.org/defaults", defaultTestSource+";type Alias=Value;type Fake Value", nil)
-	result := PackageResult{Files: map[string]Result{"a.hgo": {defaultRegistrations: map[string]string{"Value": "manual"}}}}
+	result := PackageResult{Files: map[string]Result{"a.gox": {defaultRegistrations: map[string]string{"Value": "manual"}}}}
 	m, err := collectEnumExports(p.Path(), result, p)
 	if err != nil {
 		t.Fatal(err)

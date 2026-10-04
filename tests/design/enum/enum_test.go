@@ -1,7 +1,7 @@
 package enumdemo_test
 
 import (
-	e "example.org/hgodesigncheck/enumdemo"
+	e "example.org/goxidedesigncheck/enumdemo"
 	"testing"
 )
 

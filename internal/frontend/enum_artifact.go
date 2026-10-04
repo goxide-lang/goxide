@@ -20,9 +20,9 @@ import (
 	"github.com/hxsf/goxide/internal/refs"
 )
 
-const enumMetadataMarker = "HgoEnumMetadata"
-const enumMetadataFilename = ".hgo.enums.json"
-const enumMetadataVersion = 7
+const enumMetadataMarker = "GoxideEnumMetadata"
+const enumMetadataFilename = ".goxide.enums.json"
+const enumMetadataVersion = 8
 
 type enumVariantExport struct {
 	Name, Case, Constructor string

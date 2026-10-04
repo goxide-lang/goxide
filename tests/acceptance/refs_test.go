@@ -43,11 +43,11 @@ func capture(r &int)func()int{return func()int{return *r}};func f(){g:=read;_ = 
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := refs.Lower("reference_reject.hgo", []byte("package fixture\n"+body+"\n"))
+			_, err := refs.Lower("reference_reject.gox", []byte("package fixture\n"+body+"\n"))
 			if err == nil {
 				t.Fatal("accepted permission escape or unsupported reference form")
 			}
-			if !strings.Contains(err.Error(), "reference_reject.hgo") {
+			if !strings.Contains(err.Error(), "reference_reject.gox") {
 				t.Fatalf("missing source location: %v", err)
 			}
 		})
@@ -81,7 +81,7 @@ func exercise()int{
  return read(r)*100+n+reader()-6
 }
 `
-	result, err := frontend.Compile("reference_run.hgo", []byte(source))
+	result, err := frontend.Compile("reference_run.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestReferenceFrontendRejectsEscapes(t *testing.T) {
 		"closure": "func f(r &int)func()any{return func()any{return r}}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := frontend.Compile("reference_frontend.hgo", []byte("package fixture\n"+body)); err == nil {
+			if _, err := frontend.Compile("reference_frontend.gox", []byte("package fixture\n"+body)); err == nil {
 				t.Fatal("frontend accepted reference escape")
 			}
 		})

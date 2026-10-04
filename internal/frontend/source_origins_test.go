@@ -13,7 +13,7 @@ import (
 
 func runMappedGo(t *testing.T, src string, mode string) (Result, []byte, error) {
 	t.Helper()
-	r, e := Compile("provenance.hgo", []byte(src))
+	r, e := Compile("provenance.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -40,7 +40,7 @@ func main(){_=outer!(missing)}
 		t.Fatal("invalid nested macro accepted")
 	}
 	mapped := r.Diagnostics.Diagnostics(r.Go, string(raw))
-	for _, want := range []string{"provenance.hgo:4:", "macro outer defined at provenance.hgo:3:", "macro inner defined at provenance.hgo:2:"} {
+	for _, want := range []string{"provenance.gox:4:", "macro outer defined at provenance.gox:3:", "macro inner defined at provenance.gox:2:"} {
 		if !strings.Contains(mapped, want) {
 			t.Fatalf("missing %q\nraw: %s\nmapped: %s", want, raw, mapped)
 		}
@@ -56,7 +56,7 @@ func TestSourceOriginsRawLineDirectivePreserved(t *testing.T) {
 }
 func TestSourceOriginsSerializerMethodIsNotField(t *testing.T) {
 	src := []byte("package fixture\n#[derive(Serialize)]\ntype Item struct{Struct int}\n")
-	r, e := Compile("serializer.hgo", src)
+	r, e := Compile("serializer.gox", src)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -87,7 +87,7 @@ func f(r &S){
  bad!(r)
 }
 `
-	_, err := Compile("phase.hgo", []byte(src))
+	_, err := Compile("phase.gox", []byte(src))
 	if err == nil || !strings.Contains(err.Error(), "refs.Finish [generated/unmapped; intermediate coordinates]") {
 		t.Fatalf("transformed position must not claim original source precision: %v", err)
 	}

@@ -165,11 +165,11 @@ func (m *Map) DiagnosticsFile(src []byte, stderr, filename string) string {
 		off += col - 1
 		s := m.Lookup(off)
 		if s == nil || s.Origin == nil {
-			fmt.Fprintf(&out, "hgo: %s:%s:%s: generated/unmapped\n", v[1], v[2], v[3])
+			fmt.Fprintf(&out, "goxide: %s:%s:%s: generated/unmapped\n", v[1], v[2], v[3])
 			continue
 		}
 		p := s.Origin
-		fmt.Fprintf(&out, "hgo: %s:%d:%d: %s [%s]\n", p.File, p.Line, p.Column, v[4], s.Kind)
+		fmt.Fprintf(&out, "goxide: %s:%d:%d: %s [%s]\n", p.File, p.Line, p.Column, v[4], s.Kind)
 		for _, f := range s.Stack {
 			fmt.Fprintf(&out, "  macro %s defined at %s:%d:%d; invoked at %s:%d:%d\n", f.Macro, f.Definition.File, f.Definition.Line, f.Definition.Column, f.Callsite.File, f.Callsite.Line, f.Callsite.Column)
 		}

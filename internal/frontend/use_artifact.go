@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"go/constant"
 	"go/types"
 	"io"
@@ -14,8 +15,8 @@ import (
 	"github.com/hxsf/goxide/internal/refs"
 )
 
-const useMetadataMarker = "HgoUseMetadata"
-const useMetadataFilename = ".hgo.uses.json"
+const useMetadataMarker = "GoxideUseMetadata"
+const useMetadataFilename = ".goxide.uses.json"
 
 type useArtifact struct {
 	Version  int
@@ -35,6 +36,9 @@ func (u *usePackage) load(path string) (useMetadata, error) {
 	}
 	pkg, e := u.imp.Import(path)
 	if e != nil {
+		return useMetadata{}, e
+	}
+	if e := naming.Package(pkg); e != nil {
 		return useMetadata{}, e
 	}
 	obj := pkg.Scope().Lookup(useMetadataMarker)
@@ -78,7 +82,7 @@ func (u *usePackage) load(path string) (useMetadata, error) {
 	if e = d.Decode(&extra); e != io.EOF {
 		return useMetadata{}, fmt.Errorf("use metadata must contain exactly one JSON object for %s", path)
 	}
-	if a.Version != 1 || a.Metadata.Version != 1 || a.Metadata.Path != path || a.Metadata.Package != pkg.Name() || a.Metadata.marker() != constant.StringVal(c.Val()) {
+	if a.Version != 2 || a.Metadata.Version != 2 || a.Metadata.Path != path || a.Metadata.Package != pkg.Name() || a.Metadata.marker() != constant.StringVal(c.Val()) {
 		return useMetadata{}, fmt.Errorf("use metadata marker/schema mismatch for %s", path)
 	}
 	if len(a.Files) != len(names) {
@@ -180,7 +184,7 @@ func writeUseArtifact(root, path string, m useMetadata, files map[string][]byte,
 	if e != nil {
 		return e
 	}
-	a := useArtifact{Version: 1, Metadata: m, Content: content, Files: map[string]string{}}
+	a := useArtifact{Version: 2, Metadata: m, Content: content, Files: map[string]string{}}
 	for name, source := range files {
 		a.Files[name] = enumDigest(source)
 	}
@@ -211,7 +215,7 @@ func attachUseMetadata(result *PackageResult, u *usePackage) error {
 		return nil
 	}
 	for _, name := range sortedResultNames(*result) {
-		if len(name) < 4 || name[len(name)-4:] != ".hgo" {
+		if len(name) < 4 || name[len(name)-4:] != ".gox" {
 			continue
 		}
 		r := result.Files[name]
@@ -221,5 +225,5 @@ func attachUseMetadata(result *PackageResult, u *usePackage) error {
 		result.Files[name] = r
 		return nil
 	}
-	return fmt.Errorf("use metadata requires a generated hgo source file")
+	return fmt.Errorf("use metadata requires a generated goxide source file")
 }

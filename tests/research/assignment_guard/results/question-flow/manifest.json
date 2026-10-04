@@ -16,15 +16,15 @@
         "/workspace/goxide-environment/go/bin/go",
         "build",
         "-o",
-        "/tmp/t0-flow-research/hgo",
-        "./cmd/hgo"
+        "/tmp/t0-flow-research/goxide",
+        "./cmd/goxide"
       ],
       "cwd": "/workspace/goxide",
       "extra_env": {}
     },
     {
       "argv": [
-        "/tmp/t0-flow-research/hgo",
+        "/tmp/t0-flow-research/goxide",
         "transpile",
         "-o",
         "/tmp/t0-flow-research/generated",

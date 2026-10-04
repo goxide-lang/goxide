@@ -17,12 +17,12 @@ bash examples/enum_trial/try.sh "$work"
 
 [try.sh](try.sh) 是完整、已实跑的构建说明。它依次：
 
-1. 用 `go build -o "$work/hgo" ./cmd/hgo` 构建 CLI。
+1. 用 `go build -o "$work/goxide" ./cmd/goxide` 构建 CLI。
 2. 转译独立的 [model 模块](model/go.mod)，保存生成 Go 和协议 metadata。
 3. 复制 [app 模块](app/go.mod) 到临时输入目录，将其 `replace` 指向**已生成的 model**，再转译消费者。不会修改仓库的 go.mod。
 4. 在两个生成模块执行 `go test -race -count=1 -v ./...`、`go vet ./...`，构建并运行 `orders`。
 
-产物保留在 `$work`；重复尝试请使用新的空目录。生成模块通过真实固定版本依赖公开 std/serde，并通过本地 `replace` 依赖当前仍在 compiler 仓库的其他支持 helper；**不是自包含发布包**。宏在 app 自己的源码包 [logkit](app/logkit/events.hgo) 中导入；此例不声称跨独立模块的预编译宏 ABI 已实现。
+产物保留在 `$work`；重复尝试请使用新的空目录。生成模块通过真实固定版本依赖公开 std/serde，并通过本地 `replace` 依赖当前仍在 compiler 仓库的其他支持 helper；**不是自包含发布包**。宏在 app 自己的源码包 [logkit](app/logkit/events.gox) 中导入；此例不声称跨独立模块的预编译宏 ABI 已实现。
 
 默认输出：
 
@@ -65,14 +65,14 @@ clone source=[1] copy=[9] equals=false
 
 ## 运行与测试模式
 
-上述脚本已经实跑：双模块目录转译、生成 Go 的普通 build/运行、两个生成模块的 race/vet。也单独实跑了以下目录 `hgo run`：
+上述脚本已经实跑：双模块目录转译、生成 Go 的普通 build/运行、两个生成模块的 race/vet。也单独实跑了以下目录 `goxide run`：
 
 ```sh
 PATH="$(dirname "$GO_BIN"):$PATH" GOTOOLCHAIN=local GOWORK=off GOPROXY=off \
-    "$work/hgo" run "$work/input"
+    "$work/goxide" run "$work/input"
 ```
 
-此试用的测试入口是脚本中的**生成 Go 模块测试**。直接对普通模式生成的 model 再执行 `hgo test "$work/input"` 已知会因 race 源码视图不同而拒绝 metadata（实测 `dependency source closure changed: github.com/goxide-lang/serde`）。不要把生成 Go 的 `go test -race` 与重新按 race 视图加载源码的 `hgo test` 混为一个模式，也不要绕过 metadata 检查。切换 build tags/race/平台需一致地重新生成依赖；本例不额外扩展该流程。
+此试用的测试入口是脚本中的**生成 Go 模块测试**。直接对普通模式生成的 model 再执行 `goxide test "$work/input"` 已知会因 race 源码视图不同而拒绝 metadata（实测 `dependency source closure changed: github.com/goxide-lang/serde`）。不要把生成 Go 的 `go test -race` 与重新按 race 视图加载源码的 `goxide test` 混为一个模式，也不要绕过 metadata 检查。切换 build tags/race/平台需一致地重新生成依赖；本例不额外扩展该流程。
 
 ## 范围和证据
 

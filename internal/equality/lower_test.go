@@ -21,9 +21,9 @@ import (
 func execute(t *testing.T, source string, cfg Config, assertions string) {
 	t.Helper()
 	if cfg.Importer == nil {
-		cfg.Importer = typecheck.NewImporter("input.hgo")
+		cfg.Importer = typecheck.NewImporter("input.gox")
 	}
-	files := map[string][]byte{"input.hgo": []byte(source)}
+	files := map[string][]byte{"input.gox": []byte(source)}
 	prepared, e := Prepare(files, cfg)
 	if e != nil {
 		t.Fatal(e)
@@ -33,7 +33,7 @@ func execute(t *testing.T, source string, cfg Config, assertions string) {
 		t.Fatal(e)
 	}
 	dir := t.TempDir()
-	for name, data := range map[string]string{"go.mod": "module eqfixture\ngo 1.27\n", "main.go": string(out["input.hgo"]), "main_test.go": assertions} {
+	for name, data := range map[string]string{"go.mod": "module eqfixture\ngo 1.27\n", "main.go": string(out["input.gox"]), "main_test.go": assertions} {
 		if e := testdeps.WriteFile(filepath.Join(dir, name), []byte(data), 0600); e != nil {
 			t.Fatal(e)
 		}
@@ -43,7 +43,7 @@ func execute(t *testing.T, source string, cfg Config, assertions string) {
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
 	b, e := cmd.CombinedOutput()
 	if e != nil {
-		t.Fatalf("%v\n%s\n%s", e, b, out["input.hgo"])
+		t.Fatalf("%v\n%s\n%s", e, b, out["input.gox"])
 	}
 }
 func TestDerivedEquality(t *testing.T) {
@@ -97,7 +97,7 @@ func TestRejectedProtocols(t *testing.T) {
 		{"eq-needs-child-eq", "type N float64;type T struct{N N}", map[string]Derive{"N": {PartialEq: true}, "T": {PartialEq: true, Eq: true}}, "no explicit Eq"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, e := Prepare(map[string][]byte{"input.hgo": []byte("package fixture\n" + tc.body)}, Config{Derives: tc.derive})
+			_, e := Prepare(map[string][]byte{"input.gox": []byte("package fixture\n" + tc.body)}, Config{Derives: tc.derive})
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
 				t.Fatalf("want %s got %v", tc.want, e)
 			}
@@ -107,7 +107,7 @@ func TestRejectedProtocols(t *testing.T) {
 
 func TestNativePreservationAndHelperHygiene(t *testing.T) {
 	native := []byte("package fixture\n// unusual   spacing retained\ntype Native struct{};func(Native)equals(x string)int{return len(x)}\n")
-	files := map[string][]byte{"native.go": native, "source.hgo": []byte(`package fixture
+	files := map[string][]byte{"native.go": native, "source.gox": []byte(`package fixture
 type T struct{N int}
 func F()bool{EqualsT:=func(a,b T)bool{return false};_=EqualsT;return (T{1}).equals(T{1})}
 func NativeCall()int{return (Native{}).equals("x")}
@@ -124,8 +124,8 @@ func NativeCall()int{return (Native{}).equals("x")}
 	if string(out["native.go"]) != string(native) {
 		t.Fatal("native file rewritten")
 	}
-	text := string(out["source.hgo"])
-	if !strings.Contains(text, "return EqualsT(") || !strings.Contains(text, "__hgo_enum_eq_local_") {
+	text := string(out["source.gox"])
+	if !strings.Contains(text, "return EqualsT(") || !strings.Contains(text, "__goxide_enum_eq_local_") {
 		t.Fatal("helper local capture", text)
 	}
 	u, e := parse(out)
@@ -143,19 +143,19 @@ type Native struct{}
 func(Native)equals(s string)int{return len(s)}
 type Result[T any,E any]interface{ result(T,E) }
 func get()Result[Native,error]{return nil}
-func NativeReceiver()int{return __hgo_question(get()).equals("xx")}
+func NativeReceiver()int{return __goxide_question(get()).equals("xx")}
 `)
 	cfg := Config{Enums: []enums.Decl{{Name: "Result[Native,error]", Family: "Result"}}}
-	out, e := Prepare(map[string][]byte{"input.hgo": source}, cfg)
+	out, e := Prepare(map[string][]byte{"input.gox": source}, cfg)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if strings.Contains(string(out["input.hgo"]), intrinsic) {
-		t.Fatal("native non-bool method captured by bool shim", string(out["input.hgo"]))
+	if strings.Contains(string(out["input.gox"]), intrinsic) {
+		t.Fatal("native non-bool method captured by bool shim", string(out["input.gox"]))
 	}
 }
 func TestEqRequiresExplicitPartialEq(t *testing.T) {
-	_, e := Prepare(map[string][]byte{"input.hgo": []byte("package fixture;type T int")}, Config{Derives: map[string]Derive{"T": {Eq: true}}})
+	_, e := Prepare(map[string][]byte{"input.gox": []byte("package fixture;type T int")}, Config{Derives: map[string]Derive{"T": {Eq: true}}})
 	if e == nil || !strings.Contains(e.Error(), "requires explicit PartialEq") {
 		t.Fatal(e)
 	}
@@ -174,7 +174,7 @@ func TestBool(t *testing.T){if !Run(){t.Fatal("captured boolean constants")}}
 `)
 }
 func TestShadowedBoolRejected(t *testing.T) {
-	_, e := Prepare(map[string][]byte{"input.hgo": []byte("package fixture;type bool int;type T struct{}")}, Config{Derives: map[string]Derive{"T": {PartialEq: true}}})
+	_, e := Prepare(map[string][]byte{"input.gox": []byte("package fixture;type bool int;type T struct{}")}, Config{Derives: map[string]Derive{"T": {PartialEq: true}}})
 	if e == nil || !strings.Contains(e.Error(), "unshadowed predeclared bool") {
 		t.Fatal(e)
 	}
@@ -182,7 +182,7 @@ func TestShadowedBoolRejected(t *testing.T) {
 
 func TestScalarEqualsResultIsTypedBool(t *testing.T) {
 	cfg := Config{}
-	files := map[string][]byte{"input.hgo": []byte(`package fixture
+	files := map[string][]byte{"input.gox": []byte(`package fixture
 type B bool
 func takes(B){}
 func bad(){n:=1;takes(n.equals(1))}
@@ -230,7 +230,7 @@ func Empty()Option[[]int]{return Option[[]int]::Some([]int{})}
 func Good()Result[[]int,int]{return Result[[]int,int]::Ok([]int{1})}
 func Failed()Result[[]int,int]{return Result[[]int,int]::Err(2)}
 `
-	lowered, e := enums.Lower("input.hgo", []byte(source))
+	lowered, e := enums.Lower("input.gox", []byte(source))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -260,7 +260,7 @@ func TestContainerProtocolRejections(t *testing.T) {
 		{"shadow-nil", "var nil=[]int{};type T []int", "unshadowed predeclared nil"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, e := Prepare(map[string][]byte{"input.hgo": []byte("package fixture\n" + tc.body)}, Config{Derives: map[string]Derive{"T": {PartialEq: true}}})
+			_, e := Prepare(map[string][]byte{"input.gox": []byte("package fixture\n" + tc.body)}, Config{Derives: map[string]Derive{"T": {PartialEq: true}}})
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
 				t.Fatalf("want %s got %v", tc.want, e)
 			}
@@ -291,8 +291,8 @@ func Check(v Option[int]){}
 		imp[p.Path()] = p
 	}
 	files := map[string][]byte{
-		"a.hgo": []byte(`package app;import q "fixture/first";type A struct{V q.Option[int]};type FirstSome[T any]=q.Some[T];var FirstCheck=q.Check`),
-		"b.hgo": []byte(`package app;import q "fixture/second";type B struct{V q.Option[int]};type SecondSome[T any]=q.Some[T];var SecondCheck=q.Check`),
+		"a.gox": []byte(`package app;import q "fixture/first";type A struct{V q.Option[int]};type FirstSome[T any]=q.Some[T];var FirstCheck=q.Check`),
+		"b.gox": []byte(`package app;import q "fixture/second";type B struct{V q.Option[int]};type SecondSome[T any]=q.Some[T];var SecondCheck=q.Check`),
 	}
 	family := func(path, prefix string) enums.Decl {
 		return enums.Decl{Name: "q.Option", PackagePath: path, Family: "Option", Variants: []enums.Variant{{Name: "Some", CaseName: prefix + "Some", Payload: "bound"}, {Name: "None"}}, Instances: []enums.Decl{{Validator: prefix + "Check"}}}
@@ -309,8 +309,8 @@ func Check(v Option[int]){}
 	if e = u.check(cfg, false, false); e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(out["b.hgo"]), "SecondCheck(a.V)") || strings.Contains(string(out["b.hgo"]), "FirstCheck(a.V)") {
-		t.Fatal("wrong producer family", string(out["b.hgo"]))
+	if !strings.Contains(string(out["b.gox"]), "SecondCheck(a.V)") || strings.Contains(string(out["b.gox"]), "FirstCheck(a.V)") {
+		t.Fatal("wrong producer family", string(out["b.gox"]))
 	}
 }
 
@@ -319,7 +319,7 @@ func TestNestedSumContainerInstances(t *testing.T) {
 type N struct{Rows Option[[]Option[int]];Results map[string]Result[int,string]}
 func sample(n int)N{return N{Rows:Option[[]Option[int]]::Some([]Option[int]{Option[int]::None,Option[int]::Some(n)}),Results:map[string]Result[int,string]{"ok":Result[int,string]::Ok(3),"err":Result[int,string]::Err("bad")}}}
 `
-	lowered, e := enums.Lower("input.hgo", []byte(source))
+	lowered, e := enums.Lower("input.gox", []byte(source))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -338,7 +338,7 @@ func TestImportedMapKeyNeedsSemanticProof(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	files := map[string][]byte{"input.hgo": []byte(`package app;import p "fixture/key";type Bound=p.Key;var BoundEqual=p.EqualKey;type Table map[Bound]int`)}
+	files := map[string][]byte{"input.gox": []byte(`package app;import p "fixture/key";type Bound=p.Key;var BoundEqual=p.EqualKey;type Table map[Bound]int`)}
 	cfg := Config{Importer: fixtureImporter{p.Path(): p}, PackagePath: "fixture/app", Derives: map[string]Derive{"Table": {PartialEq: true, Eq: true}}, Imported: []Protocol{{PackagePath: p.Path(), TypeName: "Bound", Helper: "BoundEqual", PartialEq: true, Eq: true}}}
 	_, e = Prepare(files, cfg)
 	if e == nil || !strings.Contains(e.Error(), "no proven native-key consistency") {
@@ -376,7 +376,7 @@ var CheckOuter=q.CheckOuter
 func Sample(n int)Holder{return Holder{q.New([]q.Option[int]{nil,q.New(n)})}}
 `)
 	cfg := Config{PackagePath: "eqnested", Importer: fixtureImporter{p.Path(): p}, Derives: map[string]Derive{"Holder": {PartialEq: true, Eq: true}}, Enums: []enums.Decl{{Name: "q.Option", PackagePath: p.Path(), Family: "Option", Variants: []enums.Variant{{Name: "Some", CaseName: "Case", Payload: "bound"}, {Name: "None"}}, Instances: []enums.Decl{{Validator: "CheckInt"}, {Validator: "CheckOuter"}}}}}
-	prepared, e := Prepare(map[string][]byte{"input.hgo": src}, cfg)
+	prepared, e := Prepare(map[string][]byte{"input.gox": src}, cfg)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -391,7 +391,7 @@ func Sample(n int)Holder{return Holder{q.New([]q.Option[int]{nil,q.New(n)})}}
 		}
 	}
 	dir := t.TempDir()
-	for name, data := range map[string]string{"go.mod": "module eqnested\ngo 1.27\nrequire eqsum v0.0.0\nreplace eqsum => " + strconv.Quote(producerDir) + "\n", "main.go": string(out["input.hgo"]), "main_test.go": `package fixture
+	for name, data := range map[string]string{"go.mod": "module eqnested\ngo 1.27\nrequire eqsum v0.0.0\nreplace eqsum => " + strconv.Quote(producerDir) + "\n", "main.go": string(out["input.gox"]), "main_test.go": `package fixture
 import "testing"
 func TestNested(t *testing.T){if !EqualsHolder(Sample(1),Sample(1))||EqualsHolder(Sample(1),Sample(2)){t.Fatal("imported nested Option")}}
 `} {
@@ -403,7 +403,7 @@ func TestNested(t *testing.T){if !EqualsHolder(Sample(1),Sample(1))||EqualsHolde
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
 	if data, e := cmd.CombinedOutput(); e != nil {
-		t.Fatalf("%v\n%s\n%s", e, data, out["input.hgo"])
+		t.Fatalf("%v\n%s\n%s", e, data, out["input.gox"])
 	}
 	// A public generic alias may reverse private origin parameters. Recover the
 	// mapping by type identity rather than printing the inaccessible origin name.
@@ -418,7 +418,7 @@ func TestNested(t *testing.T){if !EqualsHolder(Sample(1),Sample(1))||EqualsHolde
 	if e != nil {
 		t.Fatal(e)
 	}
-	g.file = "input.hgo"
+	g.file = "input.gox"
 	hidden := p.Scope().Lookup("hidden").Type()
 	target, e := types.Instantiate(nil, hidden, []types.Type{types.Typ[types.Int], types.Typ[types.String]}, true)
 	if e != nil {
@@ -473,13 +473,13 @@ func TestManualEqualityRejected(t *testing.T) {
 		{"deriveEq", "type N int;func EqualsN(a,b N)bool{return true}", "cannot prove manual", Derive{PartialEq: true, Eq: true, ManualPartialEq: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, e := Prepare(map[string][]byte{"input.hgo": []byte("package fixture;" + tc.source)}, Config{Derives: map[string]Derive{"N": tc.flags}})
+			_, e := Prepare(map[string][]byte{"input.gox": []byte("package fixture;" + tc.source)}, Config{Derives: map[string]Derive{"N": tc.flags}})
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
 				t.Fatalf("%v", e)
 			}
 		})
 	}
-	_, e := Prepare(map[string][]byte{"input.hgo": []byte(`package fixture;type N int;func EqualsN(a,b N)bool{return true};type M map[N]int`)}, Config{Derives: map[string]Derive{"N": {PartialEq: true, ManualPartialEq: true}, "M": {PartialEq: true}}})
+	_, e := Prepare(map[string][]byte{"input.gox": []byte(`package fixture;type N int;func EqualsN(a,b N)bool{return true};type M map[N]int`)}, Config{Derives: map[string]Derive{"N": {PartialEq: true, ManualPartialEq: true}, "M": {PartialEq: true}}})
 	if e == nil || !strings.Contains(e.Error(), "manual map key") {
 		t.Fatalf("%v", e)
 	}

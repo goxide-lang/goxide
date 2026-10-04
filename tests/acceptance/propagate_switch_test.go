@@ -11,11 +11,11 @@ import (
 
 func TestPropagationSwitchRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
-	source, e := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/switch_propagation.hgo"))
+	source, e := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/switch_propagation.gox"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := frontend.Compile("switch.hgo", source)
+	r, e := frontend.Compile("switch.gox", source)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -51,8 +51,8 @@ func TestPropagationSwitchRejections(t *testing.T) {
 		"scope":             `func f()Option[int]{switch n:=Option[int]::Some(1)?;n{};return Option[int]::Some(n)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, e := frontend.Compile("switch_bad.hgo", []byte("package fixture;"+body))
-			if e == nil || !strings.Contains(e.Error(), "switch_bad.hgo") {
+			_, e := frontend.Compile("switch_bad.gox", []byte("package fixture;"+body))
+			if e == nil || !strings.Contains(e.Error(), "switch_bad.gox") {
 				t.Fatalf("expected located rejection: %v", e)
 			}
 		})
@@ -64,10 +64,10 @@ func TestPropagationSwitchInstalledCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	outside := t.TempDir()
-	source := filepath.Join(root, "examples/prototype/switch_propagation.hgo")
+	source := filepath.Join(root, "examples/prototype/switch_propagation.gox")
 	generated := filepath.Join(outside, "main.go")
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
 	want := "8 [2 1 2 10 99]\n"

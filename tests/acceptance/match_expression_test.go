@@ -66,12 +66,12 @@ func TestMatchExpressionUnsupportedContexts(t *testing.T) {
 		"package initializer": `var value int = match E::A {E::A=>1,E::B=>2,}`,
 		"missing arm":         `func f(x E)int{return match x {E::A=>1,}}`,
 		"unreachable arm":     `func f(x E)int{return match x {E::A=>1,E::A=>2,E::B=>3,}}`,
-		"reserved name":       `func f(x E)int{__hgo_match_result_1:=9;return match x {E::A=>__hgo_match_result_1,E::B=>0,}}`,
+		"reserved name":       `func f(x E)int{__goxide_match_result_1:=9;return match x {E::A=>__goxide_match_result_1,E::B=>0,}}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("expression_bad.hgo", []byte("package fixture\nenum E {A,B,}\n"+body))
-			if err == nil || !strings.Contains(err.Error(), "expression_bad.hgo") {
+			_, err := frontend.Compile("expression_bad.gox", []byte("package fixture\nenum E {A,B,}\n"+body))
+			if err == nil || !strings.Contains(err.Error(), "expression_bad.gox") {
 				t.Fatalf("expected located rejection, got %v", err)
 			}
 			t.Log(err)

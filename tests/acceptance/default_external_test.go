@@ -14,8 +14,8 @@ func TestExternalDefaultModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	mod := func(name, lib string) string {
 		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", name, filepath.ToSlash(root))
 		if lib != "" {
@@ -25,7 +25,7 @@ func TestExternalDefaultModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("defaults.example/lib", ""))
-	packagesWrite(t, src, "model/types.hgo", `package model
+	packagesWrite(t, src, "model/types.gox", `package model
 type Manual struct{value int}
 var Calls int
 func Value(v Manual)int{return v.value}
@@ -37,10 +37,10 @@ pub enum E {
 }
 func Read(v E)int{return match v {E::Ready(n)=>Value(n),E::Other(_)=>-1,}}
 `)
-	packagesWrite(t, src, "model/impl.hgo", `package model
+	packagesWrite(t, src, "model/impl.gox", `package model
 impl Default for Manual {func default()Manual{Calls++;return Manual{value:7}}}
 `)
-	packagesWrite(t, src, "other/model.hgo", `package other
+	packagesWrite(t, src, "other/model.gox", `package other
 #[derive(Default)]
 type Manual struct{N int}
 `)
@@ -58,28 +58,28 @@ func DefaultValue()Value{return Value{N:99}}
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("defaults.example/app", lib))
-	packagesWrite(t, appsrc, "app.hgo", `package app
+	packagesWrite(t, appsrc, "app.gox", `package app
 import(out "defaults.example/lib/relay";m "defaults.example/lib/model")
 #[derive(Default)]
 type Wrap struct{V out.E;M m.Manual}
 
 `)
-	packagesWrite(t, appsrc, "other.hgo", `package app
+	packagesWrite(t, appsrc, "other.gox", `package app
 import m "defaults.example/lib/other"
 #[derive(Default)]
 type Other struct{V m.Manual}
 `)
-	packagesWrite(t, appsrc, "ops/macros.hgo", `package ops
+	packagesWrite(t, appsrc, "ops/macros.gox", `package ops
 pub macro_rules! size {($x:expr)=>{len($x)};}
 `)
-	packagesWrite(t, appsrc, "builtin.hgo", `package app
+	packagesWrite(t, appsrc, "builtin.gox", `package app
 import len "defaults.example/lib/model"
 import ops "defaults.example/app/ops"
 #[derive(Default)]
 type Both struct{M len.Manual}
 func Count()int{return ops.size!("abc")}
 `)
-	packagesWrite(t, appsrc, "skip.hgo", `package app
+	packagesWrite(t, appsrc, "skip.gox", `package app
 import m "defaults.example/lib/model"
 #[derive(Deserialize)]
 type Skipped struct {
@@ -132,13 +132,13 @@ func TestGoConsumer(t *testing.T){v:=a.DefaultWrap();if m.Read(v.V)!=7||m.Value(
 	for _, tc := range []struct{ path, typ string }{{"fake", "Value"}, {"relay", "New"}} {
 		bad := t.TempDir()
 		packagesWrite(t, bad, "go.mod", mod("defaults.example/bad", lib))
-		packagesWrite(t, bad, "bad.hgo", fmt.Sprintf("package bad\nimport m %q\n#[derive(Default)]\ntype Wrap struct{V m.%s}\n", "defaults.example/lib/"+tc.path, tc.typ))
+		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nimport m %q\n#[derive(Default)]\ntype Wrap struct{V m.%s}\n", "defaults.example/lib/"+tc.path, tc.typ))
 		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
 		if !strings.Contains(log, "Default") {
 			t.Fatal(log)
 		}
 	}
-	artifact := filepath.Join(lib, "model", ".hgo.enums.json")
+	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
 	data, err := os.ReadFile(artifact)
 	if err != nil {
 		t.Fatal(err)

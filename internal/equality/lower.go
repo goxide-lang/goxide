@@ -37,8 +37,8 @@ type Config struct {
 	Native      map[string]bool
 }
 
-const intrinsic = "__hgo_enum_equals"
-const shim = "\nfunc __hgo_enum_equals[T interface{}](a,b T)bool{return (0!=0)}\n"
+const intrinsic = "__goxide_enum_equals"
+const shim = "\nfunc __goxide_enum_equals[T interface{}](a,b T)bool{return (0!=0)}\n"
 
 type unit struct {
 	fs    *token.FileSet
@@ -69,7 +69,7 @@ func (u *unit) check(cfg Config, ignoreBodies, tolerate bool) error {
 	u.info = &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{}, Defs: map[*ast.Ident]types.Object{}, Selections: map[*ast.SelectorExpr]*types.Selection{}}
 	path := cfg.PackagePath
 	if path == "" {
-		path = "hgo/generated"
+		path = "goxide/generated"
 	}
 	conf := types.Config{Importer: cfg.Importer, IgnoreFuncBodies: ignoreBodies}
 	if tolerate {
@@ -216,7 +216,7 @@ func registry(u *unit, cfg Config) (*generator, error) {
 		g.protocols = append(g.protocols, r)
 	}
 	for i, r := range g.protocols {
-		r.bound = fmt.Sprintf("__hgo_enum_eq_bound_%d", i)
+		r.bound = fmt.Sprintf("__goxide_enum_eq_bound_%d", i)
 		if r.name != "" {
 			r.bound = r.helper
 		}
@@ -285,7 +285,7 @@ func (g *generator) protectLocalHelpers() {
 		}
 		for {
 			serial++
-			candidate := fmt.Sprintf("__hgo_enum_eq_local_%d", serial)
+			candidate := fmt.Sprintf("__goxide_enum_eq_local_%d", serial)
 			if !used[candidate] {
 				used[candidate] = true
 				renamed[obj] = candidate
@@ -345,7 +345,7 @@ func (g *generator) protectLocalHelpers() {
 				var alias string
 				for {
 					serial++
-					alias = fmt.Sprintf("__hgo_enum_eq_local_%d", serial)
+					alias = fmt.Sprintf("__goxide_enum_eq_local_%d", serial)
 					if !used[alias] {
 						used[alias] = true
 						break
@@ -441,7 +441,7 @@ func (g *generator) structural(t types.Type, a, b string, eq bool) (string, erro
 			return "", e
 		}
 		g.serial++
-		idx := fmt.Sprintf("__hgo_enum_eq_i%d", g.serial)
+		idx := fmt.Sprintf("__goxide_enum_eq_i%d", g.serial)
 		x, e := g.expression(t.Elem(), a+"["+idx+"]", b+"["+idx+"]", eq)
 		if e != nil {
 			return "", e
@@ -455,7 +455,7 @@ func (g *generator) structural(t types.Type, a, b string, eq bool) (string, erro
 			return "", e
 		}
 		g.serial++
-		prefix := fmt.Sprintf("__hgo_enum_eq_m%d", g.serial)
+		prefix := fmt.Sprintf("__goxide_enum_eq_m%d", g.serial)
 		key, left, right, ok := prefix+"k", prefix+"a", prefix+"b", prefix+"ok"
 		x, e := g.expression(t.Elem(), left, right, eq)
 		if e != nil {
@@ -464,7 +464,7 @@ func (g *generator) structural(t types.Type, a, b string, eq bool) (string, erro
 		return fmt.Sprintf("func()bool{if (%s==nil)!=(%s==nil){return (0!=0)};if len(%s)!=len(%s){return (0!=0)};for %s,%s:=range %s{%s,%s:=%s[%s];if !%s{return (0!=0)};if !(%s){return (0!=0)}};return (0==0)}()", a, b, a, b, key, left, a, right, ok, b, key, ok, x), nil
 	case *types.Array:
 		g.serial++
-		idx := fmt.Sprintf("__hgo_eq_i%d", g.serial)
+		idx := fmt.Sprintf("__goxide_eq_i%d", g.serial)
 		x, e := g.expression(t.Elem(), a+"["+idx+"]", b+"["+idx+"]", eq)
 		if e != nil {
 			return "", e
@@ -566,7 +566,7 @@ func (g *generator) prepareManual(r *registered) error {
 	if e != nil || !ok || vs.Variadic() || vs.TypeParams().Len() != 0 || vs.Params().Len() != 1 || vs.Results().Len() != 0 || !types.Identical(vs.Params().At(0).Type(), r.typ) {
 		return fmt.Errorf("equality: invalid manual enum validator for %s", r.name)
 	}
-	bound := "__hgo_enum_eq_manual_validator_" + r.name
+	bound := "__goxide_enum_eq_manual_validator_" + r.name
 	// Bind outside the function so a user parameter named like the validator
 	// cannot capture the compiler-inserted call.
 	g.code[r.name] = "\nvar " + bound + " = " + r.enum.Validator + "\n"
@@ -574,7 +574,7 @@ func (g *generator) prepareManual(r *registered) error {
 	for _, f := range decl.Type.Params.List {
 		for _, n := range f.Names {
 			if n.Name == "_" {
-				n.Name = fmt.Sprintf("__hgo_enum_eq_manual_arg_%d", len(args))
+				n.Name = fmt.Sprintf("__goxide_enum_eq_manual_arg_%d", len(args))
 			}
 			args = append(args, n)
 		}
@@ -776,7 +776,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 			if r := g.find(u.info.TypeOf(call.Args[0])); r != nil {
 				call.Fun = ast.NewIdent(g.callHelper(call, r))
 			} else if basic(u.info.TypeOf(call.Args[0]), false) {
-				call.Fun = ast.NewIdent("__hgo_enum_scalar_equals")
+				call.Fun = ast.NewIdent("__goxide_enum_scalar_equals")
 				needScalarHelper = true
 			} else {
 				call.Fun = &ast.SelectorExpr{X: call.Args[0], Sel: ast.NewIdent("equals")}
@@ -807,7 +807,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 		if anchor == "" {
 			return nil, fmt.Errorf("equality: no generated source for scalar helper")
 		}
-		if e = appendDeclarations(u, anchor, "func __hgo_enum_scalar_equals[T comparable](a,b T)bool{return a==b}"); e != nil {
+		if e = appendDeclarations(u, anchor, "func __goxide_enum_scalar_equals[T comparable](a,b T)bool{return a==b}"); e != nil {
 			return nil, e
 		}
 	}
@@ -842,7 +842,7 @@ func (g *generator) receiverType(x ast.Expr) types.Type {
 		return nil
 	}
 	id, ok := call.Fun.(*ast.Ident)
-	if !ok || id.Name != "__hgo_question" {
+	if !ok || id.Name != "__goxide_question" {
 		return nil
 	}
 	operand := g.receiverType(call.Args[0])
@@ -998,7 +998,7 @@ func (g *generator) sumExpression(t *types.Named, a, b string, eq bool) (string,
 			return "", true, fmt.Errorf("equality: sum instance has no matching trusted validation metadata: %s", t)
 		}
 		g.serial++
-		prefix := fmt.Sprintf("__hgo_enum_eq_sum%d", g.serial)
+		prefix := fmt.Sprintf("__goxide_enum_eq_sum%d", g.serial)
 		left, right, matched := prefix+"a", prefix+"b", prefix+"ok"
 		var text strings.Builder
 		fmt.Fprintf(&text, "func()bool{%s(%s);%s(%s);switch %s:=(%s).(type){", validator, a, validator, b, left, a)

@@ -45,7 +45,7 @@ func (e *engine) callerNames() map[string]bool {
 }
 
 // Only declaration heads are inspected: a builtin in an initializer is not a
-// declaration. Balanced bodies and types are skipped, including hgo syntax.
+// declaration. Balanced bodies and types are skipped, including goxide syntax.
 func declaredNames(ts []tok) map[string]bool {
 	out := map[string]bool{}
 	for i := 0; i < len(ts); i++ {

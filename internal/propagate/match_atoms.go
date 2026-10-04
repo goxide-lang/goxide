@@ -31,7 +31,7 @@ func matchAtom(n ast.Node) *ast.FuncLit {
 		return nil
 	}
 	slot, ok := gen.Specs[0].(*ast.ValueSpec)
-	if !ok || len(slot.Names) != 1 || !strings.HasPrefix(slot.Names[0].Name, "__hgo_match_expr_atom_") {
+	if !ok || len(slot.Names) != 1 || !strings.HasPrefix(slot.Names[0].Name, "__goxide_match_expr_atom_") {
 		return nil
 	}
 	ret, ok := fn.Body.List[len(fn.Body.List)-1].(*ast.ReturnStmt)

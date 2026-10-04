@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"io"
 	"os"
 	"os/exec"
@@ -183,11 +184,16 @@ func CopyNativeSource(src, dst string, workRoot ...string) error {
 		if e != nil {
 			return e
 		}
+		if !d.IsDir() {
+			if err := naming.Path(path); err != nil {
+				return err
+			}
+		}
 		rel, _ := filepath.Rel(src, path)
 		if rel == "." {
 			return os.MkdirAll(dst, 0755)
 		}
-		if d.Name() == ".git" || d.Name() == ".hgo" || d.Name() == ".goxide-migration" {
+		if d.Name() == ".git" || d.Name() == ".goxide" || d.Name() == ".goxide-migration" {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -239,7 +245,7 @@ func CopyNativeSource(src, dst string, workRoot ...string) error {
 		case "go.mod", "go.sum", "go.work", "go.work.sum", ManifestName, "goxide.lock":
 			return nil
 		}
-		if d.Name() == LegacyManifestName || w == nil && strings.HasSuffix(d.Name(), ".hgo") {
+		if d.Name() == LegacyManifestName || w == nil && strings.HasSuffix(d.Name(), ".gox") {
 			return fmt.Errorf("native workspace does not support enhanced source: %s", path)
 		}
 		info, e := d.Info()

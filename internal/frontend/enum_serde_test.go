@@ -9,7 +9,7 @@ import (
 )
 
 func TestEnumSerdeGeneratedRuntime(t *testing.T) {
-	r, e := Compile("event.hgo", []byte(`package main
+	r, e := Compile("event.gox", []byte(`package main
 import (
  "fmt"
  "github.com/goxide-lang/serde"
@@ -70,7 +70,7 @@ func TestEnumSerdeDiagnostics(t *testing.T) {
 		{"enum Inner { A, }\n#[derive(Serialize)]\nenum Outer { Item(Inner), }", "required derive"},
 		{"#[derive(Serialize)]\nenum E {\n#[serde(unsupported=\"other\")]\nA, }", "unsupported enum variant serde attribute"},
 	} {
-		_, e := Compile("bad.hgo", []byte("package p\n"+tc.src))
+		_, e := Compile("bad.gox", []byte("package p\n"+tc.src))
 		if e == nil || !strings.Contains(e.Error(), tc.want) {
 			t.Fatalf("%s: %v", tc.src, e)
 		}

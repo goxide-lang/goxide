@@ -12,7 +12,7 @@ import (
 )
 
 const SumPackage = "github.com/goxide-lang/std/sum"
-const SumABI = 1
+const SumABI = 2
 
 // Builtin returns the nominal case ABI for an explicitly instantiated built-in.
 // Constructors and markers carry every type parameter, including phantom ones.
@@ -52,7 +52,7 @@ func Builtin(family string, args []string) (Decl, error) {
 	suffix := "[" + strings.Join(norm, ",") + "]"
 	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(family+suffix)))
 	d := Decl{Name: family + suffix, Family: family, TypeArgs: norm, Marker: "is" + family,
-		Validator: "__hgo_enum_check" + family + "_" + digest[:16], ExportValidator: "HgoInst" + digest}
+		Validator: "__goxide_enum_check" + family + "_" + digest[:16], ExportValidator: "GoxideInst" + digest}
 	names := []string{"Some", "None"}
 	payloads := []string{norm[0], ""}
 	if family == "Result" {
@@ -64,7 +64,7 @@ func Builtin(family string, args []string) (Decl, error) {
 		if payloads[i] != "" {
 			typ, _ = parser.ParseExpr(payloads[i])
 		}
-		d.Variants = append(d.Variants, Variant{Name: n, Payload: payloads[i], Type: typ, CaseName: "__hgo_enum_case_" + family + "_" + n + suffix, Constructor: "__hgo_enum_ctor_" + family + "_" + n + suffix})
+		d.Variants = append(d.Variants, Variant{Name: n, Payload: payloads[i], Type: typ, CaseName: "__goxide_enum_case_" + family + "_" + n + suffix, Constructor: "__goxide_enum_ctor_" + family + "_" + n + suffix})
 	}
 	return d, nil
 }
@@ -198,7 +198,7 @@ func (l *lowerer) qualified(i int) (*Decl, int, bool, error) {
 				d.Name += "[" + strings.Join(args, ",") + "]"
 			}
 			d.ConstructorType = d.Name
-			d.Validator = "__hgo_enum_infer"
+			d.Validator = "__goxide_enum_infer"
 			d.Variants = append([]Variant(nil), family.Variants...)
 			for k := range d.Variants {
 				d.Variants[k].CaseName += suffix
@@ -224,8 +224,8 @@ func (l *lowerer) builtinDeclarations() string {
 		if d.Family == "Result" {
 			params, args = "[T any,E any]", "[T,E]"
 		}
-		fmt.Fprintf(&b, "\nvar _ [%d-__hgo_enum_std.HgoSumABI]struct{};var _ [__hgo_enum_std.HgoSumABI-%d]struct{};\n", SumABI, SumABI)
-		fmt.Fprintf(&b, "\ntype %s%s = __hgo_enum_std.%s%s;\n", d.Family, params, d.Family, args)
+		fmt.Fprintf(&b, "\nvar _ [%d-__goxide_enum_std.GoxideSumABI]struct{};var _ [__goxide_enum_std.GoxideSumABI-%d]struct{};\n", SumABI, SumABI)
+		fmt.Fprintf(&b, "\ntype %s%s = __goxide_enum_std.%s%s;\n", d.Family, params, d.Family, args)
 		genericArgs := []string{"T"}
 		if d.Family == "Result" {
 			genericArgs = append(genericArgs, "E")
@@ -235,22 +235,22 @@ func (l *lowerer) builtinDeclarations() string {
 			baseCase := strings.Split(v.CaseName, "[")[0]
 			ctor := strings.Split(v.Constructor, "[")[0]
 			if v.Payload == "" {
-				fmt.Fprintf(&b, "func %s%s() %s%s{return __hgo_enum_std.None%s()};\n", ctor, params, d.Family, args, args)
+				fmt.Fprintf(&b, "func %s%s() %s%s{return __goxide_enum_std.None%s()};\n", ctor, params, d.Family, args, args)
 				continue
 			}
-			fmt.Fprintf(&b, "type %s%s = __hgo_enum_std.%s%s;func %s%s(v %s)%s%s{return __hgo_enum_std.New%s%s(v)};\n", baseCase, params, v.Name, args, ctor, params, v.Payload, d.Family, args, v.Name, args)
+			fmt.Fprintf(&b, "type %s%s = __goxide_enum_std.%s%s;func %s%s(v %s)%s%s{return __goxide_enum_std.New%s%s(v)};\n", baseCase, params, v.Name, args, ctor, params, v.Payload, d.Family, args, v.Name, args)
 		}
-		fmt.Fprintf(&b, "func __hgo_enum_validate_%s%s(v %s%s){__hgo_enum_std.Validate%s%s(v)};\n", d.Family, params, d.Family, args, d.Family, args)
+		fmt.Fprintf(&b, "func __goxide_enum_validate_%s%s(v %s%s){__goxide_enum_std.Validate%s%s(v)};\n", d.Family, params, d.Family, args, d.Family, args)
 
 		for _, v := range g.Variants {
 			if v.Payload != "" {
-				fmt.Fprintf(&b, "type Hgo%s%s%s = %s;\n", d.Family, v.Name, params, v.CaseName)
+				fmt.Fprintf(&b, "type Goxide%s%s%s = %s;\n", d.Family, v.Name, params, v.CaseName)
 			}
 			arg, call := "", ""
 			if v.Payload != "" {
 				arg, call = "v "+v.Payload, "v"
 			}
-			fmt.Fprintf(&b, "func HgoNew%s%s%s(%s) %s%s { return %s(%s) };\n", d.Family, v.Name, params, arg, d.Family, args, v.Constructor, call)
+			fmt.Fprintf(&b, "func GoxideNew%s%s%s(%s) %s%s { return %s(%s) };\n", d.Family, v.Name, params, arg, d.Family, args, v.Constructor, call)
 		}
 	}
 	b.WriteString(l.builtinInstances())
@@ -263,19 +263,19 @@ func (l *lowerer) builtinInstances() string {
 		if d.Family == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "func %s(__hgo_enum_value %s){ __hgo_enum_validate_%s[%s](__hgo_enum_value);", d.Validator, d.Name, d.Family, strings.Join(d.TypeArgs, ","))
+		fmt.Fprintf(&b, "func %s(__goxide_enum_value %s){ __goxide_enum_validate_%s[%s](__goxide_enum_value);", d.Validator, d.Name, d.Family, strings.Join(d.TypeArgs, ","))
 		hasChecks := false
 		for _, v := range d.Variants {
 			hasChecks = hasChecks || l.payloadChecks[d.Name+"/"+v.Name] != ""
 		}
 		if hasChecks {
-			b.WriteString("switch __hgo_enum_payload:=__hgo_enum_value.(type){")
+			b.WriteString("switch __goxide_enum_payload:=__goxide_enum_value.(type){")
 			for _, v := range d.Variants {
 				check := l.payloadChecks[d.Name+"/"+v.Name]
 				if check == "" {
 					continue
 				}
-				fmt.Fprintf(&b, "case %s: _=__hgo_enum_payload;", v.CaseName)
+				fmt.Fprintf(&b, "case %s: _=__goxide_enum_payload;", v.CaseName)
 				b.WriteString(check)
 			}
 			b.WriteString("}")
@@ -458,7 +458,7 @@ func (l *lowerer) checkCompositePayloads() error {
 			return project(n.X, path, active)
 		case *ast.ArrayType:
 			projectionID++
-			value := fmt.Sprintf("__hgo_enum_projection_%d", projectionID)
+			value := fmt.Sprintf("__goxide_enum_projection_%d", projectionID)
 			part, err := project(n.Elt, value, active)
 			if err != nil {
 				return "", err
@@ -466,8 +466,8 @@ func (l *lowerer) checkCompositePayloads() error {
 			return "for _," + value + ":=range " + path + "{" + part + "};", nil
 		case *ast.MapType:
 			projectionID++
-			key := fmt.Sprintf("__hgo_enum_projection_key_%d", projectionID)
-			value := fmt.Sprintf("__hgo_enum_projection_value_%d", projectionID)
+			key := fmt.Sprintf("__goxide_enum_projection_key_%d", projectionID)
+			value := fmt.Sprintf("__goxide_enum_projection_value_%d", projectionID)
 			keyPart, err := project(n.Key, key, active)
 			if err != nil {
 				return "", err
@@ -557,7 +557,7 @@ func (l *lowerer) checkCompositePayloads() error {
 			}
 			payload := "x.Value"
 			if d.Family != "" {
-				payload = "__hgo_enum_payload.Value"
+				payload = "__goxide_enum_payload.Value"
 			}
 			code, err := project(v.Type, payload, map[string]bool{})
 			if err != nil {

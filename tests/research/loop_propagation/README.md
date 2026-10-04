@@ -1,8 +1,8 @@
 # Loop propagation evidence
 
-This is an actual hgo → Go experiment, not a hand-written Go lowering probe.
+This is an actual goxide → Go experiment, not a hand-written Go lowering probe.
 `run.py` builds the repository CLI, transpiles the
-[loop example](../../../examples/prototype/loop_propagation.hgo), checks for absence
+[loop example](../../../examples/prototype/loop_propagation.gox), checks for absence
 of Assignment/Catch/Fail, runs a separate generated module with race and vet, then
 runs non-race benchmarks. The main acceptance module separately exercises ten
 behavioral tests; the research module's one equivalence test is not ten additional
@@ -43,7 +43,7 @@ match at 26.64/12.69 ns. An independent same-run follow-up retained every
 benchStep call, sum validation, condition and result construction. A
 [hand-edited generated-Go probe](results/firstflag/probe.go.fixture) removed only
 the first flag and moved post to the body tail for this capture-free benchmark.
-This probe is **not production hgo support**: applying it to short-declaration
+This probe is **not production goxide support**: applying it to short-declaration
 loops with captured iteration variables would violate the validated Go semantics.
 
 | Path | Success median ns/op | Failure median ns/op |

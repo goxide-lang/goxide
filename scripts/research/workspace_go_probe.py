@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isolated native Go mechanism probes for proposed RFC 0026, not hgo tests."""
+"""Isolated native Go mechanism probes for proposed RFC 0026, not goxide tests."""
 import argparse
 import hashlib
 import json
@@ -126,7 +126,7 @@ def main():
     write('prefix/inner/c/c.go', 'package c\nfunc Value() string { return "inner" }\n')
     run('GO-19-ambiguous-package-owner', 'prefix/app', ['run', '.'],
         work=str(root / 'prefix/go.work'), error='ambiguous import')
-    record = {'scope': 'Native Go only; no hgo workspace implementation', 'go': version,
+    record = {'scope': 'Native Go only; no goxide workspace implementation', 'go': version,
               'network': 'GOPROXY=off GOSUMDB=off GOVCS=*:off; local replacements only',
               'modules_txt': modules, 'checks': results}
     (root / 'results.json').write_text(json.dumps(record, indent=2) + '\n')

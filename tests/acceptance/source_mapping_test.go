@@ -25,7 +25,7 @@ macro_rules! outer {($x:expr)=>{inner!($x)+7};}
 func first()int{return outer!(7)}
 func second()int{return outer!(7)}
 `
-	result, err := macros.ExpandWithMap("nested.hgo", []byte(source))
+	result, err := macros.ExpandWithMap("nested.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func second()int{return outer!(7)}
 		}
 		for _, frame := range origin.Stack {
 			definition := strings.Index(source, "macro_rules! "+frame.Macro)
-			if frame.Definition.Start != definition || frame.Definition.File != "nested.hgo" || frame.Definition.End <= definition {
+			if frame.Definition.Start != definition || frame.Definition.File != "nested.gox" || frame.Definition.End <= definition {
 				t.Fatalf("wrong definition span: %+v", frame)
 			}
 			if frame.Macro == "inner" {
@@ -73,7 +73,7 @@ func second()int{return outer!(7)}
 	if i != len(wantOrigins) {
 		t.Fatalf("checked %d repeated output tokens, want %d", i, len(wantOrigins))
 	}
-	compiled, err := frontend.Compile("nested.hgo", []byte(source))
+	compiled, err := frontend.Compile("nested.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,14 +103,14 @@ func second()int{return outer!(7)}
 func TestSourceMappingChangedRepeatedTokensStayUnmapped(t *testing.T) {
 	before := []byte("package fixture\nvar A=7\nvar B=7\n")
 	after := []byte("package fixture\nvar B=7\n")
-	m := sourcemap.Identity("deleted.hgo", before).Compose(before, after, "delete-A")
+	m := sourcemap.Identity("deleted.gox", before).Compose(before, after, "delete-A")
 	s := m.Lookup(bytes.Index(after, []byte("7")))
 	if s == nil || s.Origin != nil || s.Kind != "generated/unmapped" {
 		t.Fatalf("deleted/repeated token acquired fabricated origin: %+v", s)
 	}
 	raw := "# fixture\n./main.go:2:7: synthetic failure\nother.go:2:7: unrelated failure\n"
 	diagnostic := m.Diagnostics(after, raw)
-	if !strings.Contains(diagnostic, "generated/unmapped") || strings.Contains(diagnostic, "deleted.hgo") || strings.Contains(diagnostic, "unrelated failure") {
+	if !strings.Contains(diagnostic, "generated/unmapped") || strings.Contains(diagnostic, "deleted.gox") || strings.Contains(diagnostic, "unrelated failure") {
 		t.Fatalf("unmapped or unrelated compiler position was fabricated: %s", diagnostic)
 	}
 }
@@ -128,13 +128,13 @@ type Broken struct{
 }
 
 `
-	_, err := frontend.Compile("derive_span.hgo", []byte(source))
+	_, err := frontend.Compile("derive_span.gox", []byte(source))
 	if err == nil {
 		t.Fatal("accepted missing nested Clone implementation")
 	}
 	start := strings.LastIndex(source, "Missing")
 	wantSpan := fmt.Sprintf("source span [%d,%d)", start, start+len("Missing"))
-	if !strings.Contains(err.Error(), "derive_span.hgo:9:6:") || !strings.Contains(err.Error(), wantSpan) {
+	if !strings.Contains(err.Error(), "derive_span.gox:9:6:") || !strings.Contains(err.Error(), wantSpan) {
 		t.Fatalf("derive diagnostic must identify exact offending field type, not an earlier repeated name or declaration: %v; expected %s", err, wantSpan)
 	}
 	var diagnostic *sourcemap.Error
@@ -145,7 +145,7 @@ type Broken struct{
 
 func TestSourceMappingDeriveFieldMetadata(t *testing.T) {
 	const source = "package fixture\ntype Earlier struct{ Values []int }\n#[derive(Clone)]\ntype Item struct{ Values []int; Other []int }\n"
-	result, err := frontend.Compile("fields.hgo", []byte(source))
+	result, err := frontend.Compile("fields.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestSourceMappingDeriveFieldMetadata(t *testing.T) {
 	}
 	for _, f := range metadata.Fields {
 		start, ok := want[f.Field]
-		if !ok || f.Model != "Item" || f.Origin == nil || f.Origin.File != "fields.hgo" || f.Origin.Start != start || f.Origin.End != start+len("[]int") {
+		if !ok || f.Model != "Item" || f.Origin == nil || f.Origin.File != "fields.gox" || f.Origin.Start != start || f.Origin.End != start+len("[]int") {
 			t.Fatalf("derived field incorrectly mapped: %+v, origin=%+v", f, f.Origin)
 		}
 		delete(want, f.Field)
@@ -182,7 +182,7 @@ func sourceMappingGo(t *testing.T, dir string, args ...string) ([]byte, error) {
 
 func TestSourceMappingUserHelperNameIsNotGeneratedProvenance(t *testing.T) {
 	const source = "package fixture\n#[derive(Debug)]\ntype Item struct{ Value int }\nfunc CloneItem(v *Item)int{return v.Value}\n"
-	result, err := frontend.Compile("user_helper.hgo", []byte(source))
+	result, err := frontend.Compile("user_helper.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func main(){
 }
 `
 	dir := t.TempDir()
-	input := filepath.Join(dir, "original.hgo")
+	input := filepath.Join(dir, "original.gox")
 	if err := testdeps.WriteFile(input, []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -230,8 +230,8 @@ func main(){
 	}
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
-	cli := filepath.Join(dir, "hgo")
-	if out, err := sourceMappingGo(t, root, "build", "-o", cli, "./cmd/hgo"); err != nil {
+	cli := filepath.Join(dir, "goxide")
+	if out, err := sourceMappingGo(t, root, "build", "-o", cli, "./cmd/goxide"); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, out)
 	}
 	cmd := exec.Command(cli, "build", "--runtime", root, "--go", filepath.Join(runtime.GOROOT(), "bin/go"), "-o", filepath.Join(dir, "program"), input)
@@ -262,7 +262,7 @@ func len()int{return 0}
 type Item struct{ Values []int }
 func main(){}
 `
-	result, err := frontend.Compile("generated_helper.hgo", []byte(source))
+	result, err := frontend.Compile("generated_helper.gox", []byte(source))
 	if err != nil {
 		t.Fatalf("fixture must reach generated helper compiler error: %v", err)
 	}
@@ -277,7 +277,7 @@ func main(){}
 		t.Fatalf("expected actual generated helper compiler failure: %v\n%s", err, raw)
 	}
 	mapped := result.Diagnostics.Diagnostics(result.Go, string(raw))
-	if !strings.Contains(mapped, "generated/unmapped") || strings.Contains(mapped, "generated_helper.hgo") {
+	if !strings.Contains(mapped, "generated/unmapped") || strings.Contains(mapped, "generated_helper.gox") {
 		t.Fatalf("generated helper error acquired fabricated user position:\nraw=%s\nmapped=%s", raw, mapped)
 	}
 	t.Logf("real generated helper error:\n%s%s", raw, mapped)

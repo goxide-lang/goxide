@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Portable actual-hgo guard benchmarks and separate no-panic mechanism probes."""
+"""Portable actual-goxide guard benchmarks and separate no-panic mechanism probes."""
 import argparse
 import json
 import os
@@ -37,12 +37,12 @@ def run(command, cwd, log, extra=None):
 version = run([go, 'version'], ROOT, 'version.txt')
 if not version.startswith('go version go'):
     raise SystemExit('Selected go executable is not the Go language toolchain')
-run([go, 'build', '-o', str(out / 'hgo'), './cmd/hgo'], ROOT, 'build.txt')
+run([go, 'build', '-o', str(out / 'goxide'), './cmd/goxide'], ROOT, 'build.txt')
 source = out / 'source'
 shutil.copytree(HERE / 'source', source)
 (source / 'go.mod').write_text(f'module places.example/update\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => {json.dumps(str(ROOT))}\n')
 generated = out / 'generated'
-run([str(out / 'hgo'), 'transpile', '-o', str(generated), str(source)], out, 'transpile.txt')
+run([str(out / 'goxide'), 'transpile', '-o', str(generated), str(source)], out, 'transpile.txt')
 if a.expect_no_guard:
     for filename in ('benchmark.go', 'context.go', 'multivalue.go'):
         code = (generated / filename).read_text()

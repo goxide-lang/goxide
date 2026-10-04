@@ -12,8 +12,8 @@ func TestMatchCallSignatures(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
@@ -35,7 +35,7 @@ func TestMatchCallSignatures(t *testing.T) {
 		packagesWrite(t, dir, "native.go", `package app
  func Generic[T any](v T)T{return v}
  `)
-		packagesWrite(t, dir, "app.hgo", "package app\nimport m \"packages.example/app/model\"\npub enum E{A,B,}\n"+body)
+		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\npub enum E{A,B,}\n"+body)
 		return dir
 	}
 	t.Run("execution", func(t *testing.T) {
@@ -86,7 +86,7 @@ func BenchGeneric()int{return m.Identity[int](match E::A{E::A=>1,E::B=>0})}
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, bad := range []string{"__hgo_match_expr_pending", "__hgo_match_expr_argument", "func() __hgo_match"} {
+		for _, bad := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_argument", "func() __goxide_match"} {
 			if strings.Contains(string(first), bad) {
 				t.Fatal("unlowered", bad)
 			}
@@ -124,13 +124,13 @@ func BenchmarkGenericGo(b *testing.B){for i:=0;i<b.N;i++{sink=m.Identity[int](1)
 `)
 		packagesCommand(t, generated, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, generated, tool, true, "vet", "./...")
-		if os.Getenv("HGO_MATCH_CALL_BENCH") != "" {
+		if os.Getenv("GOXIDE_MATCH_CALL_BENCH") != "" {
 			t.Log(packagesCommand(t, generated, tool, true, "test", "-run=^$", "-bench=.", "-benchmem", "-benchtime=100ms", "-count=3", "-cpu=1", "."))
 		}
 	})
 	for name, body := range map[string]string{
 		"multiple":               `func Bad()(a,b int){return match E::A{E::A=>1,E::B=>0}}`,
-		"hgo-generic-definition": `func own[T any](v T)T{return v};func Bad()int{return own[int](match E::A{E::A=>1,E::B=>0})}`,
+		"goxide-generic-definition": `func own[T any](v T)T{return v};func Bad()int{return own[int](match E::A{E::A=>1,E::B=>0})}`,
 		"unaddressable-array":    `func Bad()int{return m.Array()[0].Pointer(match E::A{E::A=>1,E::B=>0})}`,
 		"readonly-method":        `func Bad(r &m.S){(*r).Pointer(match E::A{E::A=>1,E::B=>0})}`,
 		"unaddressable":          `func Bad()int{return m.Value().Pointer(match E::A{E::A=>1,E::B=>0})}`,
@@ -144,7 +144,7 @@ func BenchmarkGenericGo(b *testing.B){for i:=0;i<b.N;i++{sink=m.Identity[int](1)
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "app.hgo:") {
+			if !strings.Contains(out, "app.gox:") {
 				t.Fatal("missing source diagnostic", out)
 			}
 		})

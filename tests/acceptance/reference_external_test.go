@@ -15,8 +15,8 @@ func TestCrossModuleReferenceArtifacts(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	module := func(path, library string) string {
 		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", path, filepath.ToSlash(root))
 		if library != "" {
@@ -41,11 +41,11 @@ func CellView(p &Cell)&Cell{return p}
 		if drift {
 			src = strings.Replace(src, "func Read(p &int)int{return *p}", "func Read(p mut& int)int{*p+=1;return *p}", 1)
 		}
-		packagesWrite(t, dir, "api/api.hgo", src)
+		packagesWrite(t, dir, "api/api.gox", src)
 		packagesWrite(t, dir, "api/native_default.go", "//go:build !extra\n\npackage api\nfunc Native()int{return 1}\n")
 		packagesWrite(t, dir, "api/native_extra.go", "//go:build extra\n\npackage api\nfunc Native()int{return 2}\n")
 		if relay {
-			packagesWrite(t, dir, "relay/relay.hgo", `package relay
+			packagesWrite(t, dir, "relay/relay.gox", `package relay
 import a "library.example/refs/api"
 type Cell=a.Cell
 func Global()&int{return a.Global()}
@@ -93,7 +93,7 @@ func CellView(p &Cell)&Cell{return a.CellView(p)}
 	makeApp := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", module("consumer.example/app", library))
-		packagesWrite(t, dir, "app.hgo", "package app\nimport r \"library.example/refs/relay\"\n"+body)
+		packagesWrite(t, dir, "app.gox", "package app\nimport r \"library.example/refs/relay\"\n"+body)
 		return dir
 	}
 	body := `import a "library.example/refs/api"
@@ -101,8 +101,8 @@ func Run()int{n:=1;w:=r.Edit(mut& n);*w+=2;a.Inc(w);c:=a.Cell{N:5};v:=r.CellView
 func Again(p &int)&int{return r.View(p)}
 `
 	appSource := makeApp(body)
-	packagesWrite(t, appSource, "extra.hgo", "package app\nimport renamed \"library.example/refs/api\"\nfunc Extra()int{n:=2;renamed.Inc(mut& n);return renamed.Read(&n)}\n")
-	packagesWrite(t, appSource, "client/client.hgo", "package client\nimport app \"consumer.example/app\"\nfunc Read()int{n:=8;return *app.Again(&n)}\n")
+	packagesWrite(t, appSource, "extra.gox", "package app\nimport renamed \"library.example/refs/api\"\nfunc Extra()int{n:=2;renamed.Inc(mut& n);return renamed.Read(&n)}\n")
+	packagesWrite(t, appSource, "client/client.gox", "package client\nimport app \"consumer.example/app\"\nfunc Read()int{n:=8;return *app.Again(&n)}\n")
 	app := filepath.Join(t.TempDir(), "app")
 	packagesCommand(t, root, cli, true, "transpile", "-o", app, appSource)
 	appTwice := filepath.Join(t.TempDir(), "app")
@@ -124,7 +124,7 @@ func TestCrossModule(t *testing.T){if a.Run()!=11||a.Extra()!=3||c.Read()!=8{t.F
 	packagesWrite(t, plain, "go.mod", module("plain.example/app", library))
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import("testing";r "library.example/refs/relay")
-func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read(&n)!=9{t.Fatal(n)}}
+func TestGoIgnoresGoxidePermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read(&n)!=9{t.Fatal(n)}}
 `)
 	packagesCommand(t, plain, tool, true, "test", "-race", "-count=1", "-v", "./...")
 	packagesCommand(t, plain, tool, true, "vet", "./...")
@@ -146,22 +146,22 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 	t.Run("single-file-permissions", func(t *testing.T) {
 		good := makeApp("func Read()int{return *r.Global()}")
 		out := filepath.Join(t.TempDir(), "read.go")
-		packagesCommand(t, root, cli, true, "transpile", "-o", out, filepath.Join(good, "app.hgo"))
+		packagesCommand(t, root, cli, true, "transpile", "-o", out, filepath.Join(good, "app.gox"))
 		b, e := os.ReadFile(out)
 		if e != nil {
 			t.Fatal(e)
 		}
-		if strings.Contains(string(b), "__hgo_permission_call_") {
+		if strings.Contains(string(b), "__goxide_permission_call_") {
 			t.Fatal("binding stub leaked")
 		}
 		bad := makeApp("func Bad(){p:=r.Global();*p=9}")
-		diagnostic := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad.go"), filepath.Join(bad, "app.hgo"))
+		diagnostic := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad.go"), filepath.Join(bad, "app.gox"))
 		if !strings.Contains(diagnostic, "readonly") {
 			t.Fatal(diagnostic)
 		}
 	})
 	valid := makeApp("func Read()int{n:=1;return r.Read(&n)}")
-	metaPath := filepath.Join(library, "relay/.hgo.refs.json")
+	metaPath := filepath.Join(library, "relay/.goxide.refs.json")
 	original, e := os.ReadFile(metaPath)
 	if e != nil {
 		t.Fatal(e)
@@ -179,7 +179,7 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 			}
 			defer testdeps.WriteFile(metaPath, original, 0600)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-			if !strings.Contains(out, want) || !strings.Contains(out, "app.hgo:2:") {
+			if !strings.Contains(out, want) || !strings.Contains(out, "app.gox:2:") {
 				t.Fatal(out)
 			}
 		})
@@ -227,7 +227,7 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 	t.Run("dependency-permission-drift", func(t *testing.T) {
 		drift := filepath.Join(t.TempDir(), "library")
 		packagesCommand(t, root, cli, true, "transpile", "-o", drift, makeLibrary(false, true))
-		for _, name := range []string{"api.go", ".hgo.refs.json"} {
+		for _, name := range []string{"api.go", ".goxide.refs.json"} {
 			path := filepath.Join(library, "api", name)
 			old, e := os.ReadFile(path)
 			if e != nil {
@@ -249,12 +249,12 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 	})
 	t.Run("named-aggregate-drift", func(t *testing.T) {
 		source := makeLibrary(false, false)
-		packagesWrite(t, source, "api/api.hgo", strings.Replace(api, "struct{N int}", "struct{N int;Items []int}", 1))
+		packagesWrite(t, source, "api/api.gox", strings.Replace(api, "struct{N int}", "struct{N int;Items []int}", 1))
 		drift := filepath.Join(t.TempDir(), "out")
 		packagesCommand(t, root, cli, true, "transpile", "-o", drift, source)
 		var before, after map[string]any
-		oldMeta, _ := os.ReadFile(filepath.Join(library, "api/.hgo.refs.json"))
-		newMeta, _ := os.ReadFile(filepath.Join(drift, "api/.hgo.refs.json"))
+		oldMeta, _ := os.ReadFile(filepath.Join(library, "api/.goxide.refs.json"))
+		newMeta, _ := os.ReadFile(filepath.Join(drift, "api/.goxide.refs.json"))
 		json.Unmarshal(oldMeta, &before)
 		json.Unmarshal(newMeta, &after)
 		oldFunctions, _ := json.Marshal(before["Functions"])
@@ -262,7 +262,7 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 		if string(oldFunctions) != string(newFunctions) {
 			t.Fatal("probe must preserve function permissions")
 		}
-		for _, name := range []string{"api.go", ".hgo.refs.json"} {
+		for _, name := range []string{"api.go", ".goxide.refs.json"} {
 			path := filepath.Join(library, "api", name)
 			old, e := os.ReadFile(path)
 			if e != nil {
@@ -286,7 +286,7 @@ func TestGoIgnoresHgoPermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.Read
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", module("library.example/refs", ""))
 		packagesWrite(t, source, "model/model.go", "package model\ntype Cell struct{N int}\nfunc Consume(c Cell){}\n")
-		packagesWrite(t, source, "relay/relay.hgo", `package relay
+		packagesWrite(t, source, "relay/relay.gox", `package relay
 import n "library.example/refs/model"
 func Touch(p &n.Cell){v:=*p;n.Consume(v)}
 `)
@@ -295,7 +295,7 @@ func Touch(p &n.Cell){v:=*p;n.Consume(v)}
 		packagesWrite(t, generated, "model/model.go", "package model\ntype Cell struct{N int;Items []int}\nfunc Consume(c Cell){c.Items[0]=9}\n")
 		app := t.TempDir()
 		packagesWrite(t, app, "go.mod", module("consumer.example/app", generated))
-		packagesWrite(t, app, "app.hgo", `package app
+		packagesWrite(t, app, "app.gox", `package app
 import(n "library.example/refs/model";r "library.example/refs/relay")
 func Run()int{c:=n.Cell{Items:[]int{1}};r.Touch(&c);return c.Items[0]}
 `)

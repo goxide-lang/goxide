@@ -26,19 +26,19 @@ func TestReferenceMetadataModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	makeSource := func(body, ext string) string {
 		source := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, source, "go.mod", packagesModule(root))
-		packagesWrite(t, source, "api/read.hgo", referenceAPI)
-		packagesWrite(t, source, "api/other.hgo", "package api\nfunc Again(r &int)&int{return View(r)}\n")
-		packagesWrite(t, source, "mid/mid.hgo", `package mid
+		packagesWrite(t, source, "api/read.gox", referenceAPI)
+		packagesWrite(t, source, "api/other.gox", "package api\nfunc Again(r &int)&int{return View(r)}\n")
+		packagesWrite(t, source, "mid/mid.gox", `package mid
 import x "packages.example/app/api"
 func View(r &int)&int{return x.Again(r)}
 func Edit(r mut& int)mut& int{return x.Edit(r)}
 `)
-		packagesWrite(t, source, "other/other.hgo", `package api
+		packagesWrite(t, source, "other/other.gox", `package api
 func View(r mut& int)mut& int{return r}
 `)
 		packagesWrite(t, source, "app."+ext, body)
@@ -53,16 +53,16 @@ func Deferred()int{n:=0;w:=mut& n;func(){defer a.Inc(w)}();return n}
 func Goroutine()int{n:=0;w:=mut& n;done:=make(chan bool);go func(){a.Inc(w);done<-true}();<-done;return n}
 func Native()int{n:=4;p:=&n;native(p);return n}
 func native(p *int){*p+=1}
-`, "hgo")
+`, "goxide")
 		packagesWrite(t, source, "consumer.go", `package app
 import alias "packages.example/app/api"
 import _ "packages.example/app/api"
-import __hgo_permission_import_1 "fmt"
-func ImportedHygiene()string{n:=1;return __hgo_permission_import_1.Sprint(alias.Read(&n))}
+import __goxide_permission_import_1 "fmt"
+func ImportedHygiene()string{n:=1;return __goxide_permission_import_1.Sprint(alias.Read(&n))}
 func GoRead()int{n:=7;return alias.Read(&n)}
 func Context()int{n:=2;v:=alias.Value{};return alias.Context(&n,alias.Now(),alias.Hidden())+v.Read()}
 // Same spelling as a possible generated helper must never capture a shim.
-func Hygiene()int{n:=8;__hgo_permission_call_1:=func(p *int)int{return 0};_=__hgo_permission_call_1;return alias.Read(&n)}
+func Hygiene()int{n:=8;__goxide_permission_call_1:=func(p *int)int{return 0};_=__goxide_permission_call_1;return alias.Read(&n)}
 `)
 		generated := filepath.Join(t.TempDir(), "generated")
 		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
@@ -92,7 +92,7 @@ func Hygiene()int{n:=8;__hgo_permission_call_1:=func(p *int)int{return 0};_=__hg
 		if err != nil {
 			t.Fatal(err)
 		}
-		data, e := os.ReadFile(filepath.Join(generated, "mid/.hgo.refs.json"))
+		data, e := os.ReadFile(filepath.Join(generated, "mid/.goxide.refs.json"))
 		if e != nil || !strings.Contains(string(data), `"Permission": "read"`) {
 			t.Fatalf("metadata %s %v", data, e)
 		}
@@ -126,7 +126,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 			}
 			ext := "go"
 			if name == "function value" {
-				ext = "hgo"
+				ext = "goxide"
 			}
 			source := makeSource("package app\n"+imports+"func bad(){"+body+"}\nfunc raw(p *int){}\n", ext)
 			generated := filepath.Join(t.TempDir(), "generated")
@@ -134,7 +134,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 			if !strings.Contains(output, "app."+ext) {
 				t.Fatalf("source file lost: %s", output)
 			}
-			if name == "function value" && (!strings.Contains(output, "app.hgo:3:") || strings.Contains(output, "generated/unmapped")) {
+			if name == "function value" && (!strings.Contains(output, "app.gox:3:") || strings.Contains(output, "generated/unmapped")) {
 				t.Fatalf("selector origin lost: %s", output)
 			}
 			if _, e := os.Stat(generated); !os.IsNotExist(e) {
@@ -143,30 +143,30 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 		})
 	}
 	t.Run("single-file-boundaries", func(t *testing.T) {
-		source := makeSource("package app\nfunc Run(){}\n", "hgo")
+		source := makeSource("package app\nfunc Run(){}\n", "goxide")
 		single := filepath.Join(t.TempDir(), "api.go")
-		packagesCommand(t, root, cli, true, "transpile", "-o", single, filepath.Join(source, "api/read.hgo"))
+		packagesCommand(t, root, cli, true, "transpile", "-o", single, filepath.Join(source, "api/read.gox"))
 		data, e := os.ReadFile(single)
-		if e != nil || !strings.Contains(string(data), "HgoReferenceMetadata") {
+		if e != nil || !strings.Contains(string(data), "GoxideReferenceMetadata") {
 			t.Fatalf("single export marker: %s %v", data, e)
 		}
 		copied := filepath.Join(t.TempDir(), "copied")
 		packagesWrite(t, copied, "go.mod", packagesModule(root))
 		packagesWrite(t, copied, "api/api.go", string(data))
 		consumer := "package app\nimport x \"packages.example/app/api\"\nfunc Run(){n:=1;*x.View(&n)=7}\n"
-		packagesWrite(t, copied, "app.hgo", consumer)
+		packagesWrite(t, copied, "app.gox", consumer)
 		output := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), copied)
 		if !strings.Contains(output, "metadata missing") {
 			t.Fatal(output)
 		}
-		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "single.go"), filepath.Join(copied, "app.hgo"))
-		if !strings.Contains(output, "metadata missing") || !strings.Contains(output, "app.hgo:2:") {
+		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "single.go"), filepath.Join(copied, "app.gox"))
+		if !strings.Contains(output, "metadata missing") || !strings.Contains(output, "app.gox:2:") {
 			t.Fatal(output)
 		}
 		generated := filepath.Join(t.TempDir(), "generated")
 		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
-		packagesWrite(t, generated, "consumer.hgo", consumer)
-		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "single.go"), filepath.Join(generated, "consumer.hgo"))
+		packagesWrite(t, generated, "consumer.gox", consumer)
+		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "single.go"), filepath.Join(generated, "consumer.gox"))
 		if !strings.Contains(output, "readonly") {
 			t.Fatal(output)
 		}
@@ -175,15 +175,15 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 		source := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, source, "go.mod", packagesModule(root))
 		packagesWrite(t, source, "api/api.go", `package api
-const HgoReferenceMetadata="v1:missing"
+const GoxideReferenceMetadata="v1:missing"
 func View(p *int)*int{return p}
 `)
-		packagesWrite(t, source, "app.hgo", "package app\nimport x \"packages.example/app/api\"\nfunc Run(){n:=1;*x.View(&n)=2}\n")
+		packagesWrite(t, source, "app.gox", "package app\nimport x \"packages.example/app/api\"\nfunc Run(){n:=1;*x.View(&n)=2}\n")
 		output := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), source)
-		if !strings.Contains(output, "metadata missing") || !strings.Contains(output, "app.hgo:2:") {
+		if !strings.Contains(output, "metadata missing") || !strings.Contains(output, "app.gox:2:") {
 			t.Fatal(output)
 		}
-		packagesWrite(t, source, "api/api.go", "package api\nconst HgoReferenceMetadata=1\nfunc View(p *int)*int{return p}\n")
+		packagesWrite(t, source, "api/api.go", "package api\nconst GoxideReferenceMetadata=1\nfunc View(p *int)*int{return p}\n")
 		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), source)
 		if strings.Contains(output, "panic:") || !strings.Contains(output, "metadata missing") {
 			t.Fatal(output)

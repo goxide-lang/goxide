@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual hgo loop lowering, generated race tests, and non-race allocation checks."""
+"""Actual goxide loop lowering, generated race tests, and non-race allocation checks."""
 import argparse
 import json
 import os
@@ -35,10 +35,10 @@ def run(argv, cwd, log, extra=None):
 version = run([go, 'version'], ROOT, 'version.txt')
 if not version.startswith('go version go'):
     raise SystemExit('Not the Go compiler')
-run([go, 'build', '-o', str(out / 'hgo'), './cmd/hgo'], ROOT, 'build.txt')
+run([go, 'build', '-o', str(out / 'goxide'), './cmd/goxide'], ROOT, 'build.txt')
 generated = out / 'generated'
 generated.mkdir()
-run([str(out / 'hgo'), 'transpile', '-o', str(generated / 'generated.go'), str(ROOT / 'examples/prototype/loop_propagation.hgo')], ROOT, 'transpile.txt')
+run([str(out / 'goxide'), 'transpile', '-o', str(generated / 'generated.go'), str(ROOT / 'examples/prototype/loop_propagation.gox')], ROOT, 'transpile.txt')
 code = (generated / 'generated.go').read_text()
 if any(x in code for x in ('.Catch(', '.Fail(', '.Assignment[')):
     raise SystemExit('Unexpected loop guard')

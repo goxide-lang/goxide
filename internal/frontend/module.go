@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"go/build"
 	"io"
 	"io/fs"
@@ -33,7 +34,7 @@ func CompileModule(input, destination string) (ModuleResult, error) {
 	return CompileModuleWithTags(input, destination, nil)
 }
 
-// CompileModuleWithTags selects hgo and native files using the same host Go build
+// CompileModuleWithTags selects goxide and native files using the same host Go build
 // context. The generated module is a view of this one explicit configuration.
 func CompileModuleWithTags(input, destination string, tags []string) (ModuleResult, error) {
 	return CompileModuleWithOptions(input, destination, ModuleOptions{Tags: tags})
@@ -216,13 +217,18 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if walkErr != nil {
 			return walkErr
 		}
+		if !entry.IsDir() {
+			if err := naming.Path(path); err != nil {
+				return err
+			}
+		}
 		rel, _ := filepath.Rel(root, path)
 		if rel == "." {
 			return nil
 		}
 		// Worktrees can use a .git file rather than a directory. Neither belongs
 		// in the independently buildable generated module.
-		if entry.Name() == ".git" || entry.Name() == ".hgo" || entry.Name() == ".goxide-migration" {
+		if entry.Name() == ".git" || entry.Name() == ".goxide" || entry.Name() == ".goxide-migration" {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
@@ -252,7 +258,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		sourceOutputs[path] = rel
 		target := filepath.Join(destination, rel)
 		if entry.IsDir() {
-			if entry.Name() == ".git" || entry.Name() == ".hgo" || entry.Name() == ".goxide-migration" {
+			if entry.Name() == ".git" || entry.Name() == ".goxide" || entry.Name() == ".goxide-migration" {
 				return filepath.SkipDir
 			}
 			if _, e := os.Stat(filepath.Join(path, "goxide.toml")); e == nil {
@@ -277,7 +283,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			data = []byte(strings.Join(lines, "\n"))
 		}
 		ext := filepath.Ext(path)
-		if !options.OnlyTarget && options.Features != nil && (ext == ".hgo" || ext == ".go") {
+		if !options.OnlyTarget && options.Features != nil && (ext == ".gox" || ext == ".go") {
 			var selected bool
 			data, selected, e = ConfigureSource(path, data, options.Features)
 			if e != nil {
@@ -293,11 +299,11 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 				sourceDir = false
 			}
 		}
-		hgoSource := ext == ".hgo" && sourceDir
-		if !options.OnlyTarget && hgoSource && strings.HasSuffix(strings.TrimSuffix(entry.Name(), ext), "_test") {
-			return fmt.Errorf("%s: .hgo test files are not yet supported; use native Go tests", path)
+		goxideSource := ext == ".gox" && sourceDir
+		if !options.OnlyTarget && goxideSource && strings.HasSuffix(strings.TrimSuffix(entry.Name(), ext), "_test") {
+			return fmt.Errorf("%s: .gox test files are not yet supported; use native Go tests", path)
 		}
-		if hgoSource || sourceDir && ext == ".go" && !strings.HasSuffix(path, "_test.go") {
+		if goxideSource || sourceDir && ext == ".go" && !strings.HasSuffix(path, "_test.go") {
 			selected := options.OnlyTarget
 			var err error
 			if !selected {
@@ -307,8 +313,8 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 				return err
 			}
 			if selected {
-				if hgoSource && !options.OnlyTarget {
-					if _, err := os.Stat(strings.TrimSuffix(path, ".hgo") + ".go"); err == nil {
+				if goxideSource && !options.OnlyTarget {
+					if _, err := os.Stat(strings.TrimSuffix(path, ".gox") + ".go"); err == nil {
 						return fmt.Errorf("%s: generated Go filename conflicts with native source", path)
 					}
 				}
@@ -327,7 +333,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			testSources[dir][path] = data
 			return nil
 		}
-		if hgoSource {
+		if goxideSource {
 			return nil
 		}
 		info, e := entry.Info()
@@ -349,7 +355,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 	}
 
 	// Script outputs enter the same package maps as source files, before import
-	// discovery. Validate against final mapped source names, including .hgo -> .go.
+	// discovery. Validate against final mapped source names, including .gox -> .go.
 	generatedNames := make([]string, 0, len(options.GeneratedFiles))
 	for name := range options.GeneratedFiles {
 		generatedNames = append(generatedNames, name)
@@ -357,8 +363,8 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 	sort.Strings(generatedNames)
 	occupied := map[string]string{}
 	finalName := func(name string) string {
-		if strings.HasSuffix(name, ".hgo") {
-			name = strings.TrimSuffix(name, ".hgo") + ".go"
+		if strings.HasSuffix(name, ".gox") {
+			name = strings.TrimSuffix(name, ".gox") + ".go"
 		}
 		return strings.ToLower(filepath.ToSlash(name))
 	}
@@ -366,6 +372,9 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		occupied[finalName(rel)] = source
 	}
 	for _, name := range generatedNames {
+		if err := naming.Source(name, options.GeneratedFiles[name]); err != nil {
+			return ModuleResult{}, err
+		}
 		rel := filepath.FromSlash(name)
 		if strings.HasSuffix(strings.ToLower(name), ".go.map.json") {
 			return ModuleResult{}, fmt.Errorf("reserved generated source-map path %q", name)
@@ -374,7 +383,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			return ModuleResult{}, fmt.Errorf("invalid generated input path %q", name)
 		}
 		for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
-			if strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") || part == "vendor" || part == "testdata" || part == "hgo_targets" || part == "hgo_project_config.go" || part == "go.mod" || part == "go.sum" || part == "goxide.toml" || part == "hgo.json" || part == "hgo.lock" || part == "goxide.lock" {
+			if strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") || part == "vendor" || part == "testdata" || part == "goxide_targets" || part == "goxide_project_config.go" || part == "go.mod" || part == "go.sum" || part == "goxide.toml" || part == "hgo.json" || part == "hgo.lock" || part == "goxide.lock" {
 				return ModuleResult{}, fmt.Errorf("reserved generated input path %q", name)
 			}
 		}
@@ -385,7 +394,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		path := filepath.Join(root, rel)
 		data := options.GeneratedFiles[name]
 		ext := filepath.Ext(rel)
-		if ext == ".go" || ext == ".hgo" {
+		if ext == ".go" || ext == ".gox" {
 			if strings.HasSuffix(strings.TrimSuffix(rel, ext), "_test") {
 				return ModuleResult{}, fmt.Errorf("generated test sources are unsupported: %s", name)
 			}
@@ -396,7 +405,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			packages[dir][path] = data
 		}
 		sourceOutputs[path] = rel
-		if ext != ".hgo" {
+		if ext != ".gox" {
 			output := filepath.Join(destination, rel)
 			if err := os.MkdirAll(filepath.Dir(output), 0755); err != nil {
 				return ModuleResult{}, err
@@ -456,8 +465,8 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 					}
 					continue
 				}
-				if strings.HasSuffix(name, "_test.hgo") {
-					return fmt.Errorf("%s: .hgo test files are not yet supported; use native Go tests", name)
+				if strings.HasSuffix(name, "_test.gox") {
+					return fmt.Errorf("%s: .gox test files are not yet supported; use native Go tests", name)
 				}
 				packages[dir][name] = data
 				if strings.HasSuffix(name, ".go") {
@@ -500,11 +509,11 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if len(packages[dir]) == 0 {
 			return fmt.Errorf("package %s has no selected source files", dir)
 		}
-		// Reserve final paths after selection, including moved hgo entries.
+		// Reserve final paths after selection, including moved goxide entries.
 		for _, name := range sortedSources(packages[dir]) {
 			output := sourceOutputs[name]
-			if strings.HasSuffix(output, ".hgo") {
-				output = strings.TrimSuffix(output, ".hgo") + ".go"
+			if strings.HasSuffix(output, ".gox") {
+				output = strings.TrimSuffix(output, ".gox") + ".go"
 			}
 			if prior, ok := outputOwners[output]; ok && prior != name {
 				return fmt.Errorf("generated Go filename conflicts: %s and %s -> %s", prior, name, output)
@@ -517,17 +526,17 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			if e != nil {
 				return e
 			}
-			file := filepath.Join(root, dir, "hgo_project_config.go")
-			output := filepath.Join(destination, dir, "hgo_project_config.go")
-			if _, exists := outputOwners[filepath.Join(dir, "hgo_project_config.go")]; exists {
+			file := filepath.Join(root, dir, "goxide_project_config.go")
+			output := filepath.Join(destination, dir, "goxide_project_config.go")
+			if _, exists := outputOwners[filepath.Join(dir, "goxide_project_config.go")]; exists {
 				return fmt.Errorf("reserved project config filename conflicts: %s", output)
 			}
 			if _, e = os.Stat(output); !os.IsNotExist(e) {
 				return fmt.Errorf("reserved project config filename conflicts: %s", output)
 			}
-			data := []byte(fmt.Sprintf("package %s\nconst __hgo_project_configuration = %q\n", parsed.Name.Name, options.Configuration))
+			data := []byte(fmt.Sprintf("package %s\nconst __goxide_project_configuration = %q\n", parsed.Name.Name, options.Configuration))
 			packages[dir][file] = data
-			sourceOutputs[file] = filepath.Join(dir, "hgo_project_config.go")
+			sourceOutputs[file] = filepath.Join(dir, "goxide_project_config.go")
 			if e = os.MkdirAll(filepath.Dir(output), 0755); e != nil {
 				return e
 			}
@@ -576,7 +585,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		}
 		for name, r := range checked.Files {
 			// Native Go files only change when carrying a transparent-alias marker.
-			if !strings.HasSuffix(name, ".hgo") && checked.enumMarkerFile != name && (checked.useContext == nil || checked.useContext.generatedFile != name) {
+			if !strings.HasSuffix(name, ".gox") && checked.enumMarkerFile != name && (checked.useContext == nil || checked.useContext.generatedFile != name) {
 				continue
 			}
 			rel, ok := sourceOutputs[name]
@@ -584,8 +593,8 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 				rel = filepath.Join(dir, filepath.Base(name))
 			}
 			goName := rel
-			if strings.HasSuffix(rel, ".hgo") {
-				goName = strings.TrimSuffix(rel, ".hgo") + ".go"
+			if strings.HasSuffix(rel, ".gox") {
+				goName = strings.TrimSuffix(rel, ".gox") + ".go"
 			}
 			if prior, ok := outputOwners[goName]; ok && prior != name {
 				return fmt.Errorf("generated Go filename conflicts: %s and %s -> %s", prior, name, goName)
@@ -607,8 +616,8 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			sourceFiles := map[string][]byte{}
 			for name := range checked.Files {
 				base := filepath.Base(name)
-				if strings.HasSuffix(base, ".hgo") {
-					base = strings.TrimSuffix(base, ".hgo") + ".go"
+				if strings.HasSuffix(base, ".gox") {
+					base = strings.TrimSuffix(base, ".gox") + ".go"
 				}
 				data, e := os.ReadFile(filepath.Join(destination, dir, base))
 				if e != nil {
@@ -721,12 +730,12 @@ func canonicalOutput(path string) (string, error) {
 	}
 }
 
-// MatchFile understands only Go extensions. Present hgo bytes through a virtual
+// MatchFile understands only Go extensions. Present goxide bytes through a virtual
 // .go filename, preserving suffix selection and the standard constraint parser.
 func matchSourceFile(ctx build.Context, path string, source []byte) (bool, error) {
 	name := filepath.Base(path)
-	if strings.HasSuffix(name, ".hgo") {
-		name = strings.TrimSuffix(name, ".hgo") + ".go"
+	if strings.HasSuffix(name, ".gox") {
+		name = strings.TrimSuffix(name, ".gox") + ".go"
 	}
 	virtual := filepath.Join(filepath.Dir(path), name)
 	ctx.OpenFile = func(name string) (io.ReadCloser, error) {

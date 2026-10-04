@@ -122,7 +122,7 @@ func loadWorkspace(root string, c WorkspaceConfig) (*Workspace, error) {
 		}
 		parts := strings.Split(filepath.ToSlash(filepath.Clean(pattern)), "/")
 		for _, part := range parts {
-			if part == "target" || part == ".git" || part == ".hgo" {
+			if part == "target" || part == ".git" || part == ".goxide" {
 				return nil, fmt.Errorf("workspace member cannot traverse reserved directory %s", part)
 			}
 		}
@@ -136,7 +136,7 @@ func loadWorkspace(root string, c WorkspaceConfig) (*Workspace, error) {
 				}
 				for _, dir := range children {
 					base := filepath.Base(dir)
-					if base == "target" || base == ".git" || base == ".hgo" || base == "vendor" {
+					if base == "target" || base == ".git" || base == ".goxide" || base == "vendor" {
 						return nil, fmt.Errorf("workspace pattern traverses reserved directory %s", dir)
 					}
 					if e := NoSymlinks(dir); e != nil {

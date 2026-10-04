@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"io"
 	"os"
 	"os/exec"
@@ -46,7 +47,7 @@ func owned(root string, create bool) error {
 
 // Clean deletes only a verified owned cache. Optional root is reserved for caller-controlled artifact layout.
 func Clean(projectRoot string, artifactRoot ...string) error {
-	root := filepath.Join(projectRoot, ".hgo", "build-scripts")
+	root := filepath.Join(projectRoot, ".goxide", "build-scripts")
 	if len(artifactRoot) > 0 && artifactRoot[0] != "" {
 		root = artifactRoot[0]
 	}
@@ -213,7 +214,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 	} else if !os.IsNotExist(e) {
 		return fail, e
 	}
-	scratch, e := os.MkdirTemp("", "hgo-build-script-")
+	scratch, e := os.MkdirTemp("", "goxide-build-script-")
 	if e != nil {
 		return fail, e
 	}
@@ -299,7 +300,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 			if blocked {
 				continue
 			}
-			if hasHgo(p.helpers[m]) {
+			if hasGoxide(p.helpers[m]) {
 				dst := paths[m] + "-lowered"
 				if _, e = frontend.CompileModuleWithOptions(paths[m], dst, frontend.ModuleOptions{Environment: p.compileEnv(), Context: ctx}); e != nil {
 					return fail, fmt.Errorf("host helper %s: %w", m, e)
@@ -327,10 +328,10 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 			return fail, e
 		}
 	}
-	if e = os.WriteFile(filepath.Join(host, "go.mod"), modFile("hgo.buildscript.local/host"), 0600); e != nil {
+	if e = os.WriteFile(filepath.Join(host, "go.mod"), modFile("goxide.buildscript.local/host"), 0600); e != nil {
 		return fail, e
 	}
-	if hasHgo(p.script) {
+	if hasGoxide(p.script) {
 		dst := filepath.Join(scratch, "lowered")
 		if _, e = frontend.CompileModuleWithOptions(host, dst, frontend.ModuleOptions{Environment: p.compileEnv(), Context: ctx}); e != nil {
 			return fail, fmt.Errorf("host script lowering: %w", e)
@@ -428,9 +429,9 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 	}
 	return a, nil
 }
-func hasHgo(files map[string][]byte) bool {
+func hasGoxide(files map[string][]byte) bool {
 	for n := range files {
-		if strings.HasSuffix(n, ".hgo") {
+		if strings.HasSuffix(n, ".gox") {
 			return true
 		}
 	}
@@ -445,6 +446,9 @@ func (p *Plan) validateFiles(files map[string][]byte) error {
 		}
 	}
 	for n := range files {
+		if err := naming.Path(n); err != nil {
+			return err
+		}
 		if !want[n] {
 			return fmt.Errorf("build script emitted undeclared output %s", n)
 		}

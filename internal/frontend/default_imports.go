@@ -15,7 +15,7 @@ func importedDefaults(consumer string, sources map[string][]byte, known map[stri
 	preludes, imports := map[string]string{}, map[string]string{}
 	protocols := map[string]map[string]string{}
 	for fi, name := range sortedSources(sources) {
-		if !strings.HasSuffix(name, ".hgo") {
+		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
 		f, err := parseSourceImports(name, sources[name])
@@ -42,10 +42,10 @@ func importedDefaults(consumer string, sources map[string][]byte, known map[stri
 				}
 				origin := alias
 				if x.DefinitionPath != pth {
-					origin = fmt.Sprintf("__hgo_enum_default_origin_f%d_i%d_d%d", fi, ii, di)
+					origin = fmt.Sprintf("__goxide_enum_default_origin_f%d_i%d_d%d", fi, ii, di)
 					imports[name] += fmt.Sprintf("; import %s %q", origin, x.DefinitionPath)
 				}
-				helper := fmt.Sprintf("__hgo_enum_default_import_f%d_i%d_d%d", fi, ii, di)
+				helper := fmt.Sprintf("__goxide_enum_default_import_f%d_i%d_d%d", fi, ii, di)
 				preludes[name] += fmt.Sprintf("\nvar %s = %s.%s;\n", helper, origin, x.Helper)
 				protocols[name][pth+"."+x.Name] = helper + "()"
 			}

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// This is a generated-Go control-flow test, not an additional hgo feature
+// This is a generated-Go control-flow test, not an additional goxide feature
 // acceptance. The same plan is emitted with two exits to check evaluation and
 // isolation: validation/conversion panics must never reach the exit observer.
 func TestQuestionFlowExitOrderingRace(t *testing.T) {

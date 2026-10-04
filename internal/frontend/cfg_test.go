@@ -10,15 +10,15 @@ import (
 
 func TestProjectCfg(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
-		source := []byte("//hgo:cfg feature(\"extra\")\npackage p\nimport \"missing.example/never\"\nfunc F()Unknown{return missing()}\n")
-		out, selected, e := ConfigureSource("p.hgo", source, map[string]bool{"extra": enabled})
+		source := []byte("//goxide:cfg feature(\"extra\")\npackage p\nimport \"missing.example/never\"\nfunc F()Unknown{return missing()}\n")
+		out, selected, e := ConfigureSource("p.gox", source, map[string]bool{"extra": enabled})
 		if e != nil || selected != enabled || !bytes.Equal(out, source) {
 			t.Fatalf("selection: %s %v %v", out, selected, e)
 		}
 	}
 	for _, pred := range []string{"feature(\"extra\")", "any()", "all()", "not(feature(\"extra\"))"} {
 		src := []byte("package p\nvar V = cfg!(" + pred + ") && true\n")
-		out, _, e := ConfigureSource("p.hgo", src, map[string]bool{"extra": true})
+		out, _, e := ConfigureSource("p.gox", src, map[string]bool{"extra": true})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -35,28 +35,28 @@ func TestProjectCfg(t *testing.T) {
 		}
 	}
 	for _, src := range []string{
-		"//hgo:cfg feature(\"off\")\npackage p\nfunc F(){ x := ( }\n",
-		"//hgo:cfg feature(\"missing\")\npackage p\n",
+		"//goxide:cfg feature(\"off\")\npackage p\nfunc F(){ x := ( }\n",
+		"//goxide:cfg feature(\"missing\")\npackage p\n",
 		"package p\nvar v=cfg!(not())\n",
 		"package p\nvar v=cfg!(\nall()\n)\n",
 		"package p\nmacro_rules! cfg {() => {true};}\n",
 		"package p\nuse p::other as cfg;\n",
 		"package p\npub use p::cfg;\n",
 	} {
-		if _, _, e := ConfigureSource("p.hgo", []byte(src), map[string]bool{"off": false}); e == nil {
+		if _, _, e := ConfigureSource("p.gox", []byte(src), map[string]bool{"off": false}); e == nil {
 			t.Fatalf("accepted %s", src)
 		}
 	}
 	src := "package p\npub macro_rules! m {($x:expr) => { $x };}\n"
-	if _, _, e := ConfigureSource("p.hgo", []byte(src), map[string]bool{}); e != nil {
+	if _, _, e := ConfigureSource("p.gox", []byte(src), map[string]bool{}); e != nil {
 		t.Fatal(e)
 	}
-	if _, _, e := ConfigureSource("p.hgo", []byte("//hgo:cfg feature(\"off\")\n"+src), map[string]bool{"off": false}); e != nil {
+	if _, _, e := ConfigureSource("p.gox", []byte("//goxide:cfg feature(\"off\")\n"+src), map[string]bool{"off": false}); e != nil {
 		t.Fatal(e)
 	}
 }
 
-func TestProjectCfgDisabledHgo(t *testing.T) {
+func TestProjectCfgDisabledGoxide(t *testing.T) {
 	sources := map[string]string{
 		"enum-match":        "package p\nenum State { Empty, Count(Unknown), }\nfunc F(s State)int{return match s {State::Empty=>0,State::Count(n)=>missing(n),}}\n",
 		"derive":            "package p\n#[derive(Debug, Clone)]\ntype Item struct { Value Unknown }\n",
@@ -65,10 +65,10 @@ func TestProjectCfgDisabledHgo(t *testing.T) {
 	}
 	for name, src := range sources {
 		t.Run(name, func(t *testing.T) {
-			input := []byte("//hgo:cfg feature(\"off\")\n" + src)
-			out, on, e := ConfigureSource(name+".hgo", input, map[string]bool{"off": false})
+			input := []byte("//goxide:cfg feature(\"off\")\n" + src)
+			out, on, e := ConfigureSource(name+".gox", input, map[string]bool{"off": false})
 			if e != nil || on || !bytes.Equal(input, out) {
-				t.Fatalf("disabled hgo: %s %v %v", out, on, e)
+				t.Fatalf("disabled goxide: %s %v %v", out, on, e)
 			}
 		})
 	}
@@ -85,27 +85,27 @@ func TestProjectCfgLexicalBoundaries(t *testing.T) {
 		"package 123\n",
 		"package p\nimport 123\n",
 	} {
-		if _, _, e := ConfigureSource("bad.hgo", []byte("//hgo:cfg feature(\"off\")\n"+src), map[string]bool{"off": false}); e == nil {
+		if _, _, e := ConfigureSource("bad.gox", []byte("//goxide:cfg feature(\"off\")\n"+src), map[string]bool{"off": false}); e == nil {
 			t.Fatalf("accepted invalid lexical/prefix syntax: %q", src)
 		}
 	}
 	// Deliberately defer full expression grammar to the selected compilation.
-	src := []byte("//hgo:cfg feature(\"off\")\npackage p\nfunc F(){x:=}\n")
-	if _, on, e := ConfigureSource("deferred.hgo", src, map[string]bool{"off": false}); e != nil || on {
+	src := []byte("//goxide:cfg feature(\"off\")\npackage p\nfunc F(){x:=}\n")
+	if _, on, e := ConfigureSource("deferred.gox", src, map[string]bool{"off": false}); e != nil || on {
 		t.Fatalf("%v %v", on, e)
 	}
 	// Only real line-comment directives count, never text inside strings/comments.
-	src = []byte("package p\n/*\n//hgo:cfg feature(\"unknown\")\n*/\nvar S=`\n//hgo:cfg feature(\"unknown\")\ncfg!(feature(\"unknown\"))\n`\n")
-	out, on, e := ConfigureSource("literal.hgo", src, map[string]bool{})
+	src = []byte("package p\n/*\n//goxide:cfg feature(\"unknown\")\n*/\nvar S=`\n//goxide:cfg feature(\"unknown\")\ncfg!(feature(\"unknown\"))\n`\n")
+	out, on, e := ConfigureSource("literal.gox", src, map[string]bool{})
 	if e != nil || !on || !bytes.Equal(src, out) {
 		t.Fatalf("literal text interpreted: %s %v", out, e)
 	}
 }
 func TestDeriveImportsAfterLeadingComments(t *testing.T) {
-	for _, header := range []string{"//hgo:cfg all()\n", "//go:build linux\n\n// package documentation\n", "/* leading block\nsecond line */\n"} {
+	for _, header := range []string{"//goxide:cfg all()\n", "//go:build linux\n\n// package documentation\n", "/* leading block\nsecond line */\n"} {
 		for _, clause := range []string{"package p\n", "package p // trailing package comment\n", "package 日本語\n"} {
 			src := header + clause + "#[derive(Debug)]\ntype Item struct { Value int }\nfunc Original() int { return 71 }\n"
-			r, e := Compile("leading.hgo", []byte(src))
+			r, e := Compile("leading.gox", []byte(src))
 			if e != nil {
 				t.Fatal(e)
 			}

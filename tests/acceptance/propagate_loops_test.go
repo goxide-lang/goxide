@@ -11,11 +11,11 @@ import (
 
 func TestPropagationLoopsRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
-	source, err := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/loop_propagation.hgo"))
+	source, err := os.ReadFile(filepath.Join(filepath.Dir(here), "../../examples/prototype/loop_propagation.gox"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := frontend.Compile("loops.hgo", source)
+	result, err := frontend.Compile("loops.gox", source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,8 +59,8 @@ func TestPropagationLoopRejections(t *testing.T) {
 		"goto-scope":         `func f()Option[int]{goto L;{L:for Option[bool]::Some(false)?{}};return Option[int]::None}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("loop_bad.hgo", []byte("package fixture;"+body))
-			if err == nil || !strings.Contains(err.Error(), "loop_bad.hgo") {
+			_, err := frontend.Compile("loop_bad.gox", []byte("package fixture;"+body))
+			if err == nil || !strings.Contains(err.Error(), "loop_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
 		})
@@ -72,10 +72,10 @@ func TestPropagationLoopInstalledCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	outside := t.TempDir()
-	source := filepath.Join(root, "examples/prototype/loop_propagation.hgo")
+	source := filepath.Join(root, "examples/prototype/loop_propagation.gox")
 	generated := filepath.Join(outside, "main.go")
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
 	want := "2 [10 100 300 201 101 301 202 102 302 203 103 900]\n"

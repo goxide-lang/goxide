@@ -15,7 +15,7 @@ import (
 // Independent acceptance: the generated program itself is race-instrumented.
 func macroRaceModule(t *testing.T, source, assertions string) {
 	t.Helper()
-	result, err := frontend.Compile("acceptance.hgo", []byte(source))
+	result, err := frontend.Compile("acceptance.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,11 +150,11 @@ func(*Other)Error()string{return "other"}
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("rejected.hgo", []byte(source))
-			if err == nil || !strings.Contains(err.Error(), "rejected.hgo:") {
+			_, err := frontend.Compile("rejected.gox", []byte(source))
+			if err == nil || !strings.Contains(err.Error(), "rejected.gox:") {
 				t.Fatalf("expected located rejection; got %v", err)
 			}
-			if name == "no matching rule" && !strings.Contains(err.Error(), "rejected.hgo:3:12:") {
+			if name == "no matching rule" && !strings.Contains(err.Error(), "rejected.gox:3:12:") {
 				t.Fatalf("diagnostic lost invocation location: %v", err)
 			}
 			t.Log(err)

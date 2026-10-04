@@ -14,7 +14,7 @@ struct Server { Config Settings }
 macro_rules! fresh {()=>{DefaultSettings()};}
 func Fresh() Settings { DefaultSettings:=func()Settings{panic("captured")};_=DefaultSettings;return fresh!() }
 `
-	r, err := Compile("manual.hgo", []byte(source))
+	r, err := Compile("manual.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestManualDefaultPackageDiagnostics(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			files := map[string][]byte{"types.hgo": []byte("package fixture\n" + tc.types), "impl.hgo": []byte("package fixture\n" + tc.first), "other.hgo": []byte("package fixture\n" + tc.second)}
+			files := map[string][]byte{"types.gox": []byte("package fixture\n" + tc.types), "impl.gox": []byte("package fixture\n" + tc.first), "other.gox": []byte("package fixture\n" + tc.second)}
 			_, err := CompilePackage("fixture", files, nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want %q, got %v", tc.want, err)
@@ -60,7 +60,7 @@ func TestManualDefaultMemberBoundaries(t *testing.T) {
 		"#[default]\nfunc default() Settings {return Settings{}}",
 	} {
 		t.Run(member, func(t *testing.T) {
-			_, err := Compile("members.hgo", []byte("package fixture\ntype Settings struct{}\nimpl Default for Settings {"+member+"}\n"))
+			_, err := Compile("members.gox", []byte("package fixture\ntype Settings struct{}\nimpl Default for Settings {"+member+"}\n"))
 			if err == nil || !strings.Contains(err.Error(), "manual Default") {
 				t.Fatalf("want manual Default rejection, got %v", err)
 			}
@@ -71,7 +71,7 @@ func TestManualDefaultMemberBoundaries(t *testing.T) {
 func TestManualDefaultNativeTargetAndResolvedShadow(t *testing.T) {
 	_, err := CompilePackage("fixture", map[string][]byte{
 		"types.go": []byte("package fixture\ntype Settings struct{Port int}\n"),
-		"impl.hgo": []byte(`package fixture
+		"impl.gox": []byte(`package fixture
 impl Default for Settings {func default() Settings { DefaultSettings:=func()Settings{return Settings{Port:8}};return DefaultSettings() }}
 #[derive(Default)]
 struct Server { Config Settings }
@@ -83,7 +83,7 @@ struct Server { Config Settings }
 }
 
 func TestDefaultNestedEnumPayload(t *testing.T) {
-	_, err := Compile("enum-default.hgo", []byte(`package fixture
+	_, err := Compile("enum-default.gox", []byte(`package fixture
 type NoDefault struct{ N int }
 #[derive(Default)]
 enum Inner { Other(NoDefault), #[default] Chosen(int), }
@@ -99,12 +99,12 @@ struct Config { Value Outer }
 
 func TestManualDefaultRecursionUsesSourcePosition(t *testing.T) {
 	source := []byte("package fixture\ntype Settings struct{}; impl Default for Settings {func default() Settings{return DefaultSettings()}}\n")
-	_, err := Compile("compact.hgo", source)
-	if err == nil || !strings.Contains(err.Error(), "compact.hgo:2:") || !strings.Contains(err.Error(), "recursive Default") {
+	_, err := Compile("compact.gox", source)
+	if err == nil || !strings.Contains(err.Error(), "compact.gox:2:") || !strings.Contains(err.Error(), "recursive Default") {
 		t.Fatalf("lost original recursion position: %v", err)
 	}
-	_, err = CompilePackage("fixture", map[string][]byte{"compact.hgo": source}, nil)
-	if err == nil || !strings.Contains(err.Error(), "compact.hgo:2:") || !strings.Contains(err.Error(), "recursive Default") {
+	_, err = CompilePackage("fixture", map[string][]byte{"compact.gox": source}, nil)
+	if err == nil || !strings.Contains(err.Error(), "compact.gox:2:") || !strings.Contains(err.Error(), "recursive Default") {
 		t.Fatalf("lost package recursion position: %v", err)
 	}
 }

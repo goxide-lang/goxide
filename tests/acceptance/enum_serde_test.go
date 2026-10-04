@@ -20,7 +20,7 @@ func nested(v Event) Envelope {return Envelope::Nested(v)}
 `
 
 func TestEnumSerdeBusinessRace(t *testing.T) {
-	result, err := frontend.Compile("enum_serde.hgo", []byte(enumSerdeSource))
+	result, err := frontend.Compile("enum_serde.gox", []byte(enumSerdeSource))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,8 +84,8 @@ func TestEnumSerdeUnsupportedAttributes(t *testing.T) {
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("enum_attrs.hgo", []byte("package fixture\n"+source))
-			if err == nil || !strings.Contains(err.Error(), "enum_attrs.hgo") {
+			_, err := frontend.Compile("enum_attrs.gox", []byte("package fixture\n"+source))
+			if err == nil || !strings.Contains(err.Error(), "enum_attrs.gox") {
 				t.Fatalf("need explicit located rejection: %v", err)
 			}
 		})

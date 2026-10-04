@@ -21,8 +21,8 @@ func native(t *model.Tree, v int, e error) (int, error) {
 }
 func BenchmarkGuard1Success(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -32,8 +32,8 @@ func BenchmarkGuard1Success(b *testing.B) {
 }
 func BenchmarkGuard1Failure(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -43,8 +43,8 @@ func BenchmarkGuard1Failure(b *testing.B) {
 }
 func BenchmarkGuard8Success(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -54,8 +54,8 @@ func BenchmarkGuard8Success(b *testing.B) {
 }
 func BenchmarkGuard8FailFirst(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -65,8 +65,8 @@ func BenchmarkGuard8FailFirst(b *testing.B) {
 }
 func BenchmarkGuard8FailLast(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -76,8 +76,8 @@ func BenchmarkGuard8FailLast(b *testing.B) {
 }
 func BenchmarkExplicit1Success(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -87,8 +87,8 @@ func BenchmarkExplicit1Success(b *testing.B) {
 }
 func BenchmarkExplicit1Failure(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -98,8 +98,8 @@ func BenchmarkExplicit1Failure(b *testing.B) {
 }
 func BenchmarkExplicit8Success(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -109,8 +109,8 @@ func BenchmarkExplicit8Success(b *testing.B) {
 }
 func BenchmarkExplicit8FailFirst(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -120,8 +120,8 @@ func BenchmarkExplicit8FailFirst(b *testing.B) {
 }
 func BenchmarkExplicit8FailLast(b *testing.B) {
 	t := model.NewTree(0)
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	_, _ = ok, bad
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -146,8 +146,8 @@ func BenchmarkNativeFailure(b *testing.B) {
 	}
 }
 func TestBenchmarkEquivalence(t *testing.T) {
-	ok := __hgo_enum_ctor_Result_Ok[int, error](7)
-	bad := __hgo_enum_ctor_Result_Err[int, error](benchError)
+	ok := __goxide_enum_ctor_Result_Ok[int, error](7)
+	bad := __goxide_enum_ctor_Result_Err[int, error](benchError)
 	for _, r := range []Result[int, error]{ok, bad} {
 		a := model.NewTree(3)
 		b := model.NewTree(3)

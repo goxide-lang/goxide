@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"io"
 	"os"
 	"os/exec"
@@ -85,7 +86,7 @@ func ReadMod(tool, root string) (ModFile, error) {
 	return m, e
 }
 
-const plannerPrefix = "hgo-planner.invalid/"
+const plannerPrefix = "goxide-planner.invalid/"
 
 func Placeholder(module string) string {
 	last := module[strings.LastIndex(module, "/")+1:]
@@ -202,11 +203,16 @@ func (g *Graph) readNode(root string, published bool) (*Node, error) {
 	return n, nil
 }
 
-// Published source projects must not silently incorporate a previous hgo view.
+// Published source projects must not silently incorporate a previous goxide view.
 func validatePublished(root string) error {
 	return filepath.WalkDir(root, func(path string, d os.DirEntry, e error) error {
 		if e != nil {
 			return e
+		}
+		if !d.IsDir() {
+			if err := naming.Path(path); err != nil {
+				return err
+			}
 		}
 		if d.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("published module contains symlink: %s", path)
@@ -218,12 +224,12 @@ func validatePublished(root string) error {
 			return nil
 		}
 		name := d.Name()
-		if name == "hgo_project_config.go" || name == ".hgo.refs.json" || name == ".hgo.enums.json" || name == ".hgo.uses.json" || strings.HasSuffix(name, ".go.map.json") {
-			return fmt.Errorf("published hgo source mixes generated artifacts: %s", path)
+		if name == "goxide_project_config.go" || name == ".goxide.refs.json" || name == ".goxide.enums.json" || name == ".goxide.uses.json" || strings.HasSuffix(name, ".go.map.json") {
+			return fmt.Errorf("published goxide source mixes generated artifacts: %s", path)
 		}
-		if strings.HasSuffix(name, ".hgo") {
-			if _, e := os.Lstat(strings.TrimSuffix(path, ".hgo") + ".go"); e == nil {
-				return fmt.Errorf("published hgo source has duplicate .hgo/.go ownership: %s", path)
+		if strings.HasSuffix(name, ".gox") {
+			if _, e := os.Lstat(strings.TrimSuffix(path, ".gox") + ".go"); e == nil {
+				return fmt.Errorf("published goxide source has duplicate .goxide/.go ownership: %s", path)
 			} else if !os.IsNotExist(e) {
 				return e
 			}
@@ -371,7 +377,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 						return nil, err
 					} else if !present {
 						if len(deps[alias].Features) > 0 {
-							deferred[d.Module] = fmt.Errorf("version dependency %s has no hgo source manifest; fixed Go artifacts cannot receive hgo features", alias)
+							deferred[d.Module] = fmt.Errorf("version dependency %s has no goxide source manifest; fixed Go artifacts cannot receive goxide features", alias)
 						}
 						continue
 					}
@@ -387,7 +393,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					}
 					if d.Version != "" && !child.HasManifest {
 						if len(deps[alias].Features) > 0 {
-							deferred[d.Module] = fmt.Errorf("version dependency %s has no hgo source manifest; fixed Go artifacts cannot receive hgo features", alias)
+							deferred[d.Module] = fmt.Errorf("version dependency %s has no goxide source manifest; fixed Go artifacts cannot receive goxide features", alias)
 						}
 						continue
 					}
@@ -706,7 +712,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			return nil, e
 		}
 	}
-	// All active hgo module constraints are main-module roots. A pruned Go
+	// All active goxide module constraints are main-module roots. A pruned Go
 	// graph cannot rely on artificial bridge modules to declare a complete
 	// indirect-require closure. Bridges retain additional minimum constraints;
 	// Go still selects their maximum, never this first-root insertion order.
@@ -732,7 +738,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 	}
 	bridges := map[string]bool{}
 	for i, req := range r.requirements {
-		path := fmt.Sprintf("hgo-planner.invalid/requirements/r%d", i)
+		path := fmt.Sprintf("goxide-planner.invalid/requirements/r%d", i)
 		bridges[path] = true
 		if req.Module == path || r.root.Module == path {
 			return nil, fmt.Errorf("reserved planner module identity")
@@ -908,7 +914,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 					return nil, err
 				}
 				if !bytes.Equal(cached, source) {
-					return nil, fmt.Errorf("hgo module go.mod differs between selected metadata and verified source: %s", path)
+					return nil, fmt.Errorf("goxide module go.mod differs between selected metadata and verified source: %s", path)
 				}
 			} else if !os.IsNotExist(err) {
 				return nil, err
@@ -1060,7 +1066,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 					continue
 				}
 				if n.Manifest.Lib == nil {
-					return nil, fmt.Errorf("hgo dependency %s must declare lib", n.Module)
+					return nil, fmt.Errorf("goxide dependency %s must declare lib", n.Module)
 				}
 				for _, f := range n.Manifest.Lib.RequiredFeatures {
 					if !n.Features[f] {
@@ -1109,11 +1115,11 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			return g, nil
 		}
 		if states[state] {
-			return nil, fmt.Errorf("hgo version/feature graph oscillates; no stable module plan")
+			return nil, fmt.Errorf("goxide version/feature graph oscillates; no stable module plan")
 		}
 		states[state] = true
 		previous = state
 		selected = next
 	}
-	return nil, fmt.Errorf("hgo version/feature graph did not converge within 64 rounds")
+	return nil, fmt.Errorf("goxide version/feature graph did not converge within 64 rounds")
 }

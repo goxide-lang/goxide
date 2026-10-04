@@ -13,8 +13,8 @@ func TestMatchNamedDynamicModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
@@ -24,7 +24,7 @@ func TestMatchNamedDynamicModules(t *testing.T) {
 			prefix += line + "\n"
 			body = rest
 		}
-		packagesWrite(t, dir, "app.hgo", prefix+"pub enum E{A(int),B,}\n"+body)
+		packagesWrite(t, dir, "app.gox", prefix+"pub enum E{A(int),B,}\n"+body)
 		return dir
 	}
 	t.Run("execution", func(t *testing.T) {
@@ -71,7 +71,7 @@ func MakeA()E{return E::A(1)}
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, marker := range []string{"__hgo_match_expr_pending", "__hgo_match_expr_operand_context", "__hgo_match_expr_argument", "func() __hgo_match"} {
+		for _, marker := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_operand_context", "__goxide_match_expr_argument", "func() __goxide_match"} {
 			if strings.Contains(string(first), marker) {
 				t.Fatalf("unlowered marker %s", marker)
 			}
@@ -103,7 +103,7 @@ func TestFailure(t *testing.T){trace=nil;if !IsErr(Failure(false)){t.Fatal("fail
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			location := fmt.Sprintf("app.hgo:3:%d:", strings.Index(body, "match ")+1)
+			location := fmt.Sprintf("app.gox:3:%d:", strings.Index(body, "match ")+1)
 			if !strings.Contains(out, location) {
 				t.Fatalf("missing source location: %s", out)
 			}

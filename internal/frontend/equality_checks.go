@@ -11,7 +11,7 @@ import (
 	"github.com/hxsf/goxide/internal/enums"
 )
 
-// Check only hgo files. Native Go callers keep Go's comparison/map semantics.
+// Check only goxide files. Native Go callers keep Go's comparison/map semantics.
 // Compiler-created Option None tests have a reserved RHS temporary, so they do
 // not grant an exception to a source enum-to-enum comparison.
 func checkEnumEquality(path string, sources map[string][]byte, imp types.Importer, decls []enums.Decl, single ...bool) error {
@@ -135,7 +135,7 @@ func checkEnumEquality(path string, sources map[string][]byte, imp types.Importe
 				}
 			}
 			if b, ok := node.(*ast.BinaryExpr); ok && (b.Op == token.EQL || b.Op == token.NEQ) {
-				if id, ok := b.Y.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_enum_none_") {
+				if id, ok := b.Y.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_enum_none_") {
 					return true
 				}
 				_, _, left := enumOf(info.TypeOf(b.X))

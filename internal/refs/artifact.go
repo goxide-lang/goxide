@@ -16,7 +16,7 @@ import (
 	"strconv"
 )
 
-const MetadataFilename = ".hgo.refs.json"
+const MetadataFilename = ".goxide.refs.json"
 const ArtifactVersion = 1
 
 // MetadataArtifact binds permission analysis to one selected generated Go source

@@ -17,7 +17,7 @@ import (
 // module itself. Host race instrumentation does not propagate to child commands.
 func enumGeneratedModule(t *testing.T, source, assertions string, wantFailure bool, verifyVet ...bool) {
 	t.Helper()
-	result, err := frontend.Compile("enum_acceptance.hgo", []byte(source))
+	result, err := frontend.Compile("enum_acceptance.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func observeNested(x Outer,touched *bool) {
  }
 }
 `
-	lowered, err := enums.Lower("enum_acceptance.hgo", []byte(source))
+	lowered, err := enums.Lower("enum_acceptance.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,8 +176,8 @@ func TestEnumExplicitRejections(t *testing.T) {
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("enum_bad.hgo", []byte("package fixture\n"+source))
-			if err == nil || !strings.Contains(err.Error(), "enum_bad.hgo") {
+			_, err := frontend.Compile("enum_bad.gox", []byte("package fixture\n"+source))
+			if err == nil || !strings.Contains(err.Error(), "enum_bad.gox") {
 				t.Fatalf("expected located rejection, got %v", err)
 			}
 			t.Log(err)
@@ -235,8 +235,8 @@ func observe(x Choice,touched *bool) {
  match x {Choice::Empty if false=>{*touched=true},_=>{*touched=true},}
 }
 `
-	_, err := frontend.Compile("panic_shadow.hgo", []byte(source))
-	if err == nil || !strings.Contains(err.Error(), "panic_shadow.hgo") || !strings.Contains(err.Error(), "panic") {
+	_, err := frontend.Compile("panic_shadow.gox", []byte(source))
+	if err == nil || !strings.Contains(err.Error(), "panic_shadow.gox") || !strings.Contains(err.Error(), "panic") {
 		t.Fatalf("expected located rejection of validator builtin shadow, got %v", err)
 	}
 	t.Log(err)

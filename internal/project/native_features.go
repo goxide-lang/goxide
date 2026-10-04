@@ -3,6 +3,7 @@ package project
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,16 +180,18 @@ func LoadNativeGraph(w *Workspace, root, tool string, requested []string, defaul
 
 // NativeEnhanced detects enhancement without parsing or executing source.
 func NativeEnhanced(root string, m Manifest) (bool, error) {
-	if len(m.Features) > 0 || m.Build != nil {
-		return true, nil
-	}
-	found := false
+	found := len(m.Features) > 0 || m.Build != nil
 	e := filepath.WalkDir(root, func(path string, d os.DirEntry, e error) error {
 		if e != nil {
 			return e
 		}
+		if !d.IsDir() {
+			if err := naming.Path(path); err != nil {
+				return err
+			}
+		}
 		if d.IsDir() && path != root {
-			if d.Name() == ".git" || d.Name() == ".hgo" || d.Name() == "vendor" {
+			if d.Name() == ".git" || d.Name() == ".goxide" || d.Name() == "vendor" {
 				return filepath.SkipDir
 			}
 			for _, marker := range []string{ManifestName, "go.mod", LayoutMarker} {
@@ -199,7 +202,7 @@ func NativeEnhanced(root string, m Manifest) (bool, error) {
 				}
 			}
 		}
-		if !d.IsDir() && strings.HasSuffix(path, ".hgo") {
+		if !d.IsDir() && strings.HasSuffix(path, ".gox") {
 			found = true
 		}
 		return nil

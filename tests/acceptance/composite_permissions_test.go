@@ -116,8 +116,8 @@ type State struct { N int; Value Leaf; Values [2]int; Items []int; Index map[str
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("composite_consumer.hgo", []byte(declarations+body+"\n"))
-			if err == nil || !strings.Contains(err.Error(), "composite_consumer.hgo") {
+			_, err := frontend.Compile("composite_consumer.gox", []byte(declarations+body+"\n"))
+			if err == nil || !strings.Contains(err.Error(), "composite_consumer.gox") {
 				t.Fatalf("expected located permission/boundary rejection, got %v", err)
 			}
 			t.Log(err)
@@ -134,8 +134,8 @@ func TestCompositePermissionGenericCheckerBoundary(t *testing.T) {
 		"boxed-value":      `type Box[T any]struct{Value T};func box[T any](x T)Box[T]{return Box[T]{Value:x}};func f(r &State)any{return box(*r)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := refs.Lower("composite_generic.hgo", []byte("package fixture\ntype State struct{Items []int;Pointer *int}\n"+body))
-			if err == nil || !strings.Contains(err.Error(), "composite_generic.hgo") {
+			_, err := refs.Lower("composite_generic.gox", []byte("package fixture\ntype State struct{Items []int;Pointer *int}\n"+body))
+			if err == nil || !strings.Contains(err.Error(), "composite_generic.gox") {
 				t.Fatalf("expected checker boundary rejection, got %v", err)
 			}
 		})

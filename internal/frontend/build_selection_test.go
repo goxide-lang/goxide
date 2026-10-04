@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestHgoBuildSelection(t *testing.T) {
+func TestGoxideBuildSelection(t *testing.T) {
 	for _, target := range []string{"linux", "windows", "darwin"} {
 		for _, tagged := range []bool{false, true} {
 			ctx := build.Default
@@ -21,15 +21,15 @@ func TestHgoBuildSelection(t *testing.T) {
 				name, body string
 				want       bool
 			}{
-				{"plain.hgo", "package p\n", true},
-				{"_ignored.hgo", "invalid source", false},
-				{".ignored.hgo", "invalid source", false},
-				{"host_linux.hgo", "package p\n", target == "linux"},
-				{"host_windows_amd64.hgo", "package p\n", target == "windows"},
-				{"host_arm64.hgo", "package p\n", false},
-				{"feature.hgo", "//go:build feature\n\npackage p\n", tagged},
-				{"legacy.hgo", "// +build feature\n\npackage p\n", tagged},
-				{"literal.hgo", "package p\nvar text=`//go:build false`\n", true},
+				{"plain.gox", "package p\n", true},
+				{"_ignored.gox", "invalid source", false},
+				{".ignored.gox", "invalid source", false},
+				{"host_linux.gox", "package p\n", target == "linux"},
+				{"host_windows_amd64.gox", "package p\n", target == "windows"},
+				{"host_arm64.gox", "package p\n", false},
+				{"feature.gox", "//go:build feature\n\npackage p\n", tagged},
+				{"legacy.gox", "// +build feature\n\npackage p\n", tagged},
+				{"literal.gox", "package p\nvar text=`//go:build false`\n", true},
 			} {
 				got, err := matchSourceFile(ctx, filepath.Join(t.TempDir(), tc.name), []byte(tc.body))
 				if err != nil || got != tc.want {
@@ -45,11 +45,11 @@ func TestModuleTaggedImportsAndExcludedSyntax(t *testing.T) {
 		os.Mkdir(filepath.Join(src, "dep"), 0700)
 		files := map[string]string{
 			"go.mod":         "module example.org/p\ngo 1.27\n",
-			"main.hgo":       "package main\nimport d \"example.org/p/dep\"\nfunc main(){_=d.Value()}\n",
-			"excluded.hgo":   "//go:build never_selected\n\ninvalid excluded language syntax\n",
-			"_ignored.hgo":   "invalid ignored language syntax\n",
-			"dep/base.hgo":   "//go:build !feature\n\npackage dep\nfunc Value()int{return 1}\n",
-			"dep/tagged.hgo": "//go:build feature\n\npackage dep\nfunc Value()int{return native()}\n",
+			"main.gox":       "package main\nimport d \"example.org/p/dep\"\nfunc main(){_=d.Value()}\n",
+			"excluded.gox":   "//go:build never_selected\n\ninvalid excluded language syntax\n",
+			"_ignored.gox":   "invalid ignored language syntax\n",
+			"dep/base.gox":   "//go:build !feature\n\npackage dep\nfunc Value()int{return 1}\n",
+			"dep/tagged.gox": "//go:build feature\n\npackage dep\nfunc Value()int{return native()}\n",
 			"dep/native.go":  "//go:build feature\n\npackage dep\nfunc native()int{return 2}\n",
 		}
 		for n, s := range files {

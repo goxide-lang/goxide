@@ -89,8 +89,8 @@ func TestPrepareFreezesBytes(t *testing.T) {
 		t.Fatal("mutable prepared inputs")
 	}
 }
-func TestLocalHelperGoAndHgo(t *testing.T) {
-	for _, ext := range []string{"go", "hgo"} {
+func TestLocalHelperGoAndGoxide(t *testing.T) {
+	for _, ext := range []string{"go", "gox"} {
 		t.Run(ext, func(t *testing.T) {
 			o := fixture(t)
 			o.Config.Entry = "scripts/build." + ext
@@ -191,7 +191,7 @@ func TestCleanOwnershipAndBusy(t *testing.T) {
 	if e := Clean(o.ProjectRoot); e != nil {
 		t.Fatal(e)
 	}
-	put(t, o.ProjectRoot, ".hgo/build-scripts/owner", "other")
+	put(t, o.ProjectRoot, ".goxide/build-scripts/owner", "other")
 	if e := Clean(o.ProjectRoot); e == nil {
 		t.Fatal("unowned clean")
 	}
@@ -273,7 +273,7 @@ func TestHelperCommentsDoNotCreateCycle(t *testing.T) {
 			other = "example.test/a"
 		}
 		put(t, root, "go.mod", "module "+mod+"\n\ngo 1.27\n")
-		put(t, root, "value.hgo", "package "+name+"\n// import \""+other+"\"\nconst Value=\""+other+"\"\n")
+		put(t, root, "value.gox", "package "+name+"\n// import \""+other+"\"\nconst Value=\""+other+"\"\n")
 		o.Config.Dependencies[mod] = root
 	}
 	run(t, prepare(t, o))
@@ -284,10 +284,10 @@ func TestHostImportsSelectRealImports(t *testing.T) {
 		opposite = "linux"
 	}
 	files := map[string][]byte{
-		"main.hgo":                  []byte("package x\nimport alias `example.test/real/sub`\n// import \"example.test/comment\"\nconst s=\"example.test/string\""),
+		"main.gox":                  []byte("package x\nimport alias `example.test/real/sub`\n// import \"example.test/comment\"\nconst s=\"example.test/string\""),
 		"main_test.go":              []byte("package x\nimport _ \"example.test/test\""),
 		"other_" + opposite + ".go": []byte("package x\nimport _ \"example.test/platform\""),
-		"tagged.hgo":                []byte("//go:build nonexistent_host_tag\n\npackage x\nimport _ \"example.test/tagged\""),
+		"tagged.gox":                []byte("//go:build nonexistent_host_tag\n\npackage x\nimport _ \"example.test/tagged\""),
 		"testdata/ignored.go":       []byte("package x\nimport _ \"example.test/testdata\""),
 		"cgo.go":                    []byte("package x\nimport \"C\"\nimport _ \"example.test/cgo\""),
 	}
@@ -302,13 +302,13 @@ func TestHostImportsSelectRealImports(t *testing.T) {
 
 func TestOutputSourceMapReserved(t *testing.T) {
 	o := fixture(t)
-	o.Config.Outputs = []string{"generated.hgo", "generated.go.map.json"}
+	o.Config.Outputs = []string{"generated.gox", "generated.go.map.json"}
 	if _, e := Prepare(o); e == nil || !strings.Contains(e.Error(), "reserved output") {
 		t.Fatal(e)
 	}
 }
 func TestHostUseRetainsImportEdge(t *testing.T) {
-	imports, e := hostImports(map[string][]byte{"use.hgo": []byte("package helper\nimport other \"example.test/other\"\npub use other::*;\n")})
+	imports, e := hostImports(map[string][]byte{"use.gox": []byte("package helper\nimport other \"example.test/other\"\npub use other::*;\n")})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -337,7 +337,7 @@ func TestOverlappingHelperModulesNoFalseCycle(t *testing.T) {
 	for mod, source := range sources {
 		root := t.TempDir()
 		put(t, root, "go.mod", "module "+mod+"\n\ngo 1.27\n")
-		put(t, root, "value.hgo", source)
+		put(t, root, "value.gox", source)
 		o.Config.Dependencies[mod] = root
 	}
 	run(t, prepare(t, o))
@@ -370,7 +370,7 @@ func TestManagedLayoutsExcludedFromSourceSnapshots(t *testing.T) {
 		t.Fatal("managed outputs polluted source/input/helper snapshot")
 	}
 	run(t, after)
-	for _, input := range []string{"scripts/artifacts", "scripts/artifacts/.hgo-layout.json"} {
+	for _, input := range []string{"scripts/artifacts", "scripts/artifacts/.goxide-layout.json"} {
 		copy := o
 		copy.Config.Inputs = []string{input}
 		if _, e := Prepare(copy); e == nil || !strings.Contains(e.Error(), "managed") {
@@ -378,19 +378,19 @@ func TestManagedLayoutsExcludedFromSourceSnapshots(t *testing.T) {
 		}
 	}
 	// An invalid or copied marker must produce a diagnostic, not an exclusion.
-	put(t, o.PackageRoot, "scripts/foreign/.hgo-layout.json", "{}")
+	put(t, o.PackageRoot, "scripts/foreign/.goxide-layout.json", "{}")
 	if _, e := Prepare(o); e == nil {
 		t.Fatal("foreign layout silently skipped")
 	}
 }
 func TestOutputSnapshotNeverSkipsManagedMarkers(t *testing.T) {
 	root := t.TempDir()
-	put(t, root, ".hgo-layout.json", "{}")
+	put(t, root, ".goxide-layout.json", "{}")
 	files, e := snapshotMode(root, true)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, ok := files[".hgo-layout.json"]; !ok {
+	if _, ok := files[".goxide-layout.json"]; !ok {
 		t.Fatal("output marker omitted")
 	}
 }

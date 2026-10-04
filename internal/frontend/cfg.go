@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/naming"
 	"go/ast"
 	"go/parser"
 	"go/scanner"
@@ -15,6 +16,9 @@ import (
 // Disabled sources validate lexical token trees and the package/import prefix,
 // without expanding macros or attempting full declaration/expression parsing.
 func ConfigureSource(filename string, src []byte, features map[string]bool) ([]byte, bool, error) {
+	if err := naming.Source(filename, src); err != nil {
+		return nil, false, err
+	}
 	out := append([]byte(nil), src...)
 	fs := token.NewFileSet()
 	file := fs.AddFile(filename, -1, len(src))
@@ -40,11 +44,11 @@ func ConfigureSource(filename string, src []byte, features map[string]bool) ([]b
 			break
 		}
 		off := file.Offset(p)
-		if t == token.COMMENT && strings.HasPrefix(l, "//hgo:cfg") {
+		if t == token.COMMENT && strings.HasPrefix(l, "//goxide:cfg") {
 			if !beforePackage {
-				return nil, false, fmt.Errorf("%s: //hgo:cfg must precede package", fs.Position(p))
+				return nil, false, fmt.Errorf("%s: //goxide:cfg must precede package", fs.Position(p))
 			}
-			expr := strings.TrimSpace(strings.TrimPrefix(l, "//hgo:cfg"))
+			expr := strings.TrimSpace(strings.TrimPrefix(l, "//goxide:cfg"))
 			v, e := evalCfg(expr, features)
 			if e != nil {
 				return nil, false, fmt.Errorf("%s: %w", fs.Position(p), e)
@@ -75,7 +79,7 @@ func ConfigureSource(filename string, src []byte, features map[string]bool) ([]b
 		return nil, false, fmt.Errorf("%s: unclosed delimiter in conditional source", filename)
 	}
 	if !selected {
-		// Reuse the hgo import-prefix parser: it stops before DSL declarations
+		// Reuse the goxide import-prefix parser: it stops before DSL declarations
 		// and validates syntax without loading packages or resolving names.
 		// The scanner and delimiter checks above cover the entire token tree.
 		// Do not inspect macro templates/uses/cfg! in code that is removed.

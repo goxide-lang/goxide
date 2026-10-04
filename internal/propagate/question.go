@@ -44,7 +44,7 @@ func (q *questionFlow) emit(exit failureExit) []ast.Stmt {
 	dispatch := &ast.TypeSwitchStmt{Assign: q.resultSubject, Body: &ast.BlockStmt{List: []ast.Stmt{
 		&ast.CaseClause{List: []ast.Expr{q.resultOK}, Body: append([]ast.Stmt(nil), q.success...)},
 		&ast.CaseClause{List: []ast.Expr{q.resultErr}, Body: []ast.Stmt{failure}},
-		&ast.CaseClause{Body: parseStatements(`panic("hgo: invalid Result at ?")`)},
+		&ast.CaseClause{Body: parseStatements(`panic("goxide: invalid Result at ?")`)},
 	}}}
 	return append(out, dispatch)
 }
@@ -63,14 +63,14 @@ func (l *lowering) questionFlow(n *ast.CallExpr, operand ast.Expr, ft *ast.FuncT
 		value: ast.NewIdent(val),
 	}
 	if d.Family == "Option" {
-		none := "__hgo_enum_none_" + l.temp()
+		none := "__goxide_enum_none_" + l.temp()
 		q.setup = append(q.setup, parseStatements(none+" := "+d.Variants[1].Constructor+"()")...)
 		q.optionCondition = parseExpr(tmp + " == " + none)
 		q.failure = parseExpr(target.Variants[1].Constructor + "()")
 		q.success = parseStatements(val + " = " + tmp + ".(" + d.Variants[0].CaseName + ").Value")
 		return q, nil
 	}
-	errVal := "__hgo_failure.Value"
+	errVal := "__goxide_failure.Value"
 	srcType := l.info.TypeOf(n.Args[0])
 	srcNamed, _ := types.Unalias(srcType).(*types.Named)
 	targetType := l.info.TypeOf(ft.Results.List[0].Type)
@@ -97,9 +97,9 @@ func (l *lowering) questionFlow(n *ast.CallExpr, operand ast.Expr, ft *ast.FuncT
 		bound := l.conversions[helper]
 		if bound == "" {
 			l.serial++
-			bound = fmt.Sprintf("__hgo_qfrom_%d", l.serial)
+			bound = fmt.Sprintf("__goxide_qfrom_%d", l.serial)
 			if l.cfg.Namespace != "" {
-				bound = fmt.Sprintf("__hgo_qfrom_%s_%d", l.cfg.Namespace, l.serial)
+				bound = fmt.Sprintf("__goxide_qfrom_%s_%d", l.cfg.Namespace, l.serial)
 			}
 			l.conversions[helper] = bound
 			// Bind the registered package function outside every user local scope.
@@ -108,9 +108,9 @@ func (l *lowering) questionFlow(n *ast.CallExpr, operand ast.Expr, ft *ast.FuncT
 		errVal = bound + "(" + errVal + ")"
 	}
 	q.failure = parseExpr(target.Variants[1].Constructor + "(" + errVal + ")")
-	q.resultSubject = &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("__hgo_failure")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(tmp)}}}
+	q.resultSubject = &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("__goxide_failure")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(tmp)}}}
 	q.resultOK = parseExpr(d.Variants[0].CaseName)
 	q.resultErr = parseExpr(d.Variants[1].CaseName)
-	q.success = parseStatements(val + " = __hgo_failure.Value")
+	q.success = parseStatements(val + " = __goxide_failure.Value")
 	return q, nil
 }

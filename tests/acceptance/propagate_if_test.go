@@ -59,8 +59,8 @@ func TestPropagationIfInitializerRejections(t *testing.T) {
 		"family": `func f()Option[int]{if n:=Result[int,error]::Ok(1)?;n>0{};return Option[int]::None}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("if_bad.hgo", []byte("package fixture\n"+body))
-			if err == nil || !strings.Contains(err.Error(), "if_bad.hgo") {
+			_, err := frontend.Compile("if_bad.gox", []byte("package fixture\n"+body))
+			if err == nil || !strings.Contains(err.Error(), "if_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
 		})
@@ -72,10 +72,10 @@ func TestPropagationIfInstalledCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	outside := t.TempDir()
-	source := filepath.Join(root, "examples/prototype/if_propagation.hgo")
+	source := filepath.Join(root, "examples/prototype/if_propagation.gox")
 	generated := filepath.Join(outside, "main.go")
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
 	want := "port 8080\ndisabled\ninvalid port\n"

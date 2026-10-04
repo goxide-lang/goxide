@@ -13,23 +13,23 @@ def run(label, cwd, args, success=True, env=None):
     results.append(dict(label=label, code=p.returncode, expected_success=success))
     if (p.returncode == 0) != success: raise RuntimeError(label+': '+p.stdout)
     return p.stdout
-cli = out/'hgo'
-run('build-cli',root,['go','build','-o',str(cli),'./cmd/hgo'])
-# Actual hgo: two packages define distinct sum identities; ? reconstructs target.
-src=out/'hgo-source'
+cli = out/'goxide'
+run('build-cli',root,['go','build','-o',str(cli),'./cmd/goxide'])
+# Actual goxide: two packages define distinct sum identities; ? reconstructs target.
+src=out/'goxide-source'
 write(src,'go.mod','module fixture.example/current\ngo 1.27\n')
-write(src,'a/a.hgo','package a\nfunc Make()Result[int,error]{return Result[int,error]::Ok(7)}\n')
-write(src,'b/b.hgo','package b\nimport "fixture.example/current/a"\nfunc Make()Result[int,error]{n:=a.Make()?;return Result[int,error]::Ok(n)}\n')
-gen=out/'hgo-generated'
-run('hgo-transpile',root,[str(cli),'transpile','-o',str(gen),str(src)])
+write(src,'a/a.gox','package a\nfunc Make()Result[int,error]{return Result[int,error]::Ok(7)}\n')
+write(src,'b/b.gox','package b\nimport "fixture.example/current/a"\nfunc Make()Result[int,error]{n:=a.Make()?;return Result[int,error]::Ok(n)}\n')
+gen=out/'goxide-generated'
+run('goxide-transpile',root,[str(cli),'transpile','-o',str(gen),str(src)])
 write(gen,'b/b_test.go','''package b
 import("testing";"reflect";"fixture.example/current/a")
-func TestDifferent(t *testing.T){if reflect.TypeOf(a.Make())==reflect.TypeOf(Make()){t.Fatal("unexpected identical cases")};if Make().(HgoResultOk[int,error]).Value!=7{t.Fatal("propagate")}}
+func TestDifferent(t *testing.T){if reflect.TypeOf(a.Make())==reflect.TypeOf(Make()){t.Fatal("unexpected identical cases")};if Make().(GoxideResultOk[int,error]).Value!=7{t.Fatal("propagate")}}
 ''')
-run('hgo-generated-race',gen,['go','test','-race','./...'])
-run('hgo-generated-vet',gen,['go','vet','./...'])
+run('goxide-generated-race',gen,['go','test','-race','./...'])
+run('goxide-generated-vet',gen,['go','vet','./...'])
 write(gen,'b/negative.go','package b\nimport "fixture.example/current/a"\nvar _ Result[int,error] = a.Make()\n')
-run('hgo-cross-package-assignment-rejected',gen,['go','test','./b'],False)
+run('goxide-cross-package-assignment-rejected',gen,['go','test','./b'],False)
 (gen/'b/negative.go').unlink()
 # Actual constructor/pattern/result-expression cases, not Go mechanism claims.
 cases={
@@ -49,9 +49,9 @@ cases={
 'underdetermined-ok':('func F(){x:=Result::Ok(1);_=x}',False),
 }
 for name,(body,ok) in cases.items():
-    f=out/'hgo-cases'/(name+'.hgo');write(f.parent,f.name,'package p\n'+body+'\n')
-    text=run('hgo-'+name,root,[str(cli),'transpile',str(f)],ok)
-    if ok:write(out/'hgo-cases',name+'.generated.go',text)
+    f=out/'goxide-cases'/(name+'.gox');write(f.parent,f.name,'package p\n'+body+'\n')
+    text=run('goxide-'+name,root,[str(cli),'transpile',str(f)],ok)
+    if ok:write(out/'goxide-cases',name+'.generated.go',text)
 # Proposed shared Go ABI mechanism only, deliberately outside repo production.
 std=out/'std';prod=out/'producer';consumer=out/'consumer'
 write(std,'go.mod','module fixture.example/std\ngo 1.27\n')
@@ -75,7 +75,7 @@ write(prod,'go.mod',f'module fixture.example/producer\ngo 1.27\nrequire fixture.
 write(prod,'p.go','''package producer
 import s "fixture.example/std/sum"
 type Result[T,E any] = s.Result[T,E]
-type HgoResultOk[T,E any] = s.Ok[T,E]
+type GoxideResultOk[T,E any] = s.Ok[T,E]
 func Make()Result[int,error]{return s.NewOk[int,error](7)}
 ''')
 write(consumer,'go.mod',f'module fixture.example/consumer\ngo 1.27\nrequire (\nfixture.example/std v0.0.0\nfixture.example/producer v0.0.0\n)\nreplace fixture.example/std => {std}\nreplace fixture.example/producer => {prod}\n')
@@ -83,7 +83,7 @@ write(consumer,'c.go','''package consumer
 import(s "fixture.example/std/sum";p "fixture.example/producer")
 type Result[T,E any] = s.Result[T,E]
 var Shared Result[int,error] = p.Make()
-var SharedCase p.HgoResultOk[int,error] = s.Ok[int,error]{Value:8}
+var SharedCase p.GoxideResultOk[int,error] = s.Ok[int,error]{Value:8}
 ''')
 write(consumer,'c_test.go','''package consumer
 import("testing";s "fixture.example/std/sum";p "fixture.example/producer")

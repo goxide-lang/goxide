@@ -13,7 +13,7 @@ import (
 func TestPrintDefaultBusinessRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
-	source := filepath.Join(root, "examples/prototype/print_default.hgo")
+	source := filepath.Join(root, "examples/prototype/print_default.gox")
 	input, err := os.ReadFile(source)
 	if err != nil {
 		t.Fatal(err)
@@ -28,8 +28,8 @@ func TestPrintDefaultBusinessRace(t *testing.T) {
 	packagesWrite(t, generated, "business_test.go", printDefaultAssertions)
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
 	output := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--go", tool, "--runtime", root, source)
 	for _, want := range []string{"startup=standby retries=0\n", "snapshot Settings {", "ready nightly active\n"} {
 		if !strings.Contains(output, want) {
@@ -71,7 +71,7 @@ func TestPrintDefaultExplicitRejections(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			filename := filepath.Join(t.TempDir(), tc.name+".hgo")
+			filename := filepath.Join(t.TempDir(), tc.name+".gox")
 			_, err := frontend.Compile(filename, []byte("package rejected\n"+tc.source+"\n"))
 			if err == nil {
 				t.Fatal("unsupported operation accepted")
@@ -105,8 +105,8 @@ func TestPrintDefaultExplicitRejections(t *testing.T) {
 
 func TestPrintDefaultPackageScalarIdentity(t *testing.T) {
 	_, err := frontend.CompilePackage("printdefault.example/shadow", map[string][]byte{
-		"shadow.hgo":   []byte("package shadow\ntype int string\n"),
-		"defaults.hgo": []byte("package shadow\n#[derive(Default)]\ntype Value struct { N int }\n"),
+		"shadow.gox":   []byte("package shadow\ntype int string\n"),
+		"defaults.gox": []byte("package shadow\n#[derive(Default)]\ntype Value struct { N int }\n"),
 	}, nil)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "shadow") {
 		t.Fatalf("package type named int acquired builtin Default: %v", err)

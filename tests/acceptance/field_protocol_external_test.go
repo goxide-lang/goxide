@@ -14,8 +14,8 @@ func TestExternalCloneDebugModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	mod := func(name, lib string) string {
 		s := fmt.Sprintf("module %s\ngo 1.27\n", name)
 		if lib != "" {
@@ -25,18 +25,18 @@ func TestExternalCloneDebugModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("fields.example/lib", ""))
-	packagesWrite(t, src, "model/item.hgo", `package model
+	packagesWrite(t, src, "model/item.gox", `package model
 #[derive(Clone,Debug)]
 type Item struct{Name string;secret string;Values []int;Index map[string][]int}
 func Make(name string)Item{return Item{Name:name,secret:"token\n",Values:[]int{1},Index:map[string][]int{"z":[]int{2}}}}
 `)
-	packagesWrite(t, src, "model/event.hgo", `package model
+	packagesWrite(t, src, "model/event.gox", `package model
 #[derive(Clone,Debug)]
 pub enum E{Empty,Item(Item),}
 func Event(v Item)E{return E::Item(v)}
 func Data(v E)Item{return match v{E::Item(n)=>n,E::Empty=>Item{},}}
 `)
-	packagesWrite(t, src, "other/item.hgo", `package different
+	packagesWrite(t, src, "other/item.gox", `package different
 #[derive(Clone,Debug)]
 type Item struct{N int}
 `)
@@ -55,13 +55,13 @@ func DebugItem(v *Item)string{return "fake"}
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("fields.example/app", lib))
-	packagesWrite(t, appsrc, "app.hgo", `package app
+	packagesWrite(t, appsrc, "app.gox", `package app
 import src "fields.example/lib/relay"
 #[derive(Clone,Debug)]
 type Wrap struct{V src.E;Items []src.Renamed;Index map[string]src.Renamed;Pair [2]src.Renamed;Nested [][]src.Renamed}
 func Assign(v Wrap)Wrap{return v}
 `)
-	packagesWrite(t, appsrc, "other.hgo", `package app
+	packagesWrite(t, appsrc, "other.gox", `package app
 import src "fields.example/lib/other"
 #[derive(Clone,Debug)]
 type Other struct{Items []src.Item}
@@ -123,14 +123,14 @@ func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=a.CloneWr
 		for _, tc := range []struct{ pkg, typ string }{{"fake", "Item"}, {"relay", "New"}} {
 			bad := t.TempDir()
 			packagesWrite(t, bad, "go.mod", mod("fields.example/bad", lib))
-			packagesWrite(t, bad, "bad.hgo", fmt.Sprintf("package bad\nimport m %q\n#[derive(%s)]\ntype Wrap struct{V m.%s}\n", "fields.example/lib/"+tc.pkg, kind, tc.typ))
+			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nimport m %q\n#[derive(%s)]\ntype Wrap struct{V m.%s}\n", "fields.example/lib/"+tc.pkg, kind, tc.typ))
 			log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
-			if !strings.Contains(log, kind) || !strings.Contains(log, "bad.hgo:") {
+			if !strings.Contains(log, kind) || !strings.Contains(log, "bad.gox:") {
 				t.Fatal(log)
 			}
 		}
 	}
-	artifact := filepath.Join(lib, "model", ".hgo.enums.json")
+	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
 	saved, err := os.ReadFile(artifact)
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=a.CloneWr
 			t.Fatal(err)
 		}
 		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), appsrc)
-		if !strings.Contains(log, "metadata") || !strings.Contains(log, "app.hgo:") {
+		if !strings.Contains(log, "metadata") || !strings.Contains(log, "app.gox:") {
 			t.Fatal(log)
 		}
 	}
@@ -162,7 +162,7 @@ func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=a.CloneWr
 		t.Fatal(err)
 	}
 	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "stale"), appsrc)
-	if !strings.Contains(log, "metadata") || !strings.Contains(log, "app.hgo:") {
+	if !strings.Contains(log, "metadata") || !strings.Contains(log, "app.gox:") {
 		t.Fatal(log)
 	}
 }

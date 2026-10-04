@@ -1,4 +1,4 @@
-TEXT example.org/traitpaths.BenchmarkPolymorphic(SB) /tmp/hgo-trait-paths-obwvqm0e/probe/bench_test.go
+TEXT example.org/traitpaths.BenchmarkPolymorphic(SB) /tmp/goxide-trait-paths-obwvqm0e/probe/bench_test.go
   bench_test.go:140	0x5c3700		4c8d6424f0		LEAQ -0x10(SP), R12					
   bench_test.go:140	0x5c3705		4d3b6610		CMPQ R12, 0x10(R14)					
   bench_test.go:140	0x5c3709		0f866a010000		JBE 0x5c3879						

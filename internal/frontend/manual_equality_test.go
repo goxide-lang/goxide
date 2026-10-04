@@ -11,7 +11,7 @@ import (
 
 func TestManualEqualityParser(t *testing.T) {
 	source := []byte("package fixture\ntype T struct{N int}\nimpl PartialEq for T {\n func equals(self, other T) bool {\n // exact body comment\n return self.N == other.N\n }\n}\nimpl Eq for T {};\n")
-	lowered, registry, err := lowerManualEquality("manual.hgo", source)
+	lowered, registry, err := lowerManualEquality("manual.gox", source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +44,8 @@ func TestManualEqualityParser(t *testing.T) {
 		"duplicate-eq":      "impl Eq for T {};impl Eq for T {}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, _, e := lowerManualEquality("bad.hgo", []byte("package fixture\n"+body))
-			if e == nil || !strings.Contains(e.Error(), "bad.hgo:2:") {
+			_, _, e := lowerManualEquality("bad.gox", []byte("package fixture\n"+body))
+			if e == nil || !strings.Contains(e.Error(), "bad.gox:2:") {
 				t.Fatal(e)
 			}
 		})
@@ -54,7 +54,7 @@ func TestManualEqualityParser(t *testing.T) {
 func TestManualEqualityRegistrations(t *testing.T) {
 	parse := func(body string) map[string]manualEquality {
 		t.Helper()
-		_, r, e := lowerManualEquality("manual.hgo", []byte("package fixture\n"+body))
+		_, r, e := lowerManualEquality("manual.gox", []byte("package fixture\n"+body))
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -67,7 +67,7 @@ func TestManualEqualityRegistrations(t *testing.T) {
 	specs := typeSpecs(file)
 	both := parse("impl PartialEq for T {func equals(self,other T)bool{return true}};impl Eq for T {}")
 	derives := map[string]equality.Derive{}
-	if e = applyManualEquality("manual.hgo", derives, both, specs, map[string]model{}); e != nil {
+	if e = applyManualEquality("manual.gox", derives, both, specs, map[string]model{}); e != nil {
 		t.Fatal(e)
 	}
 	d := derives["T"]
@@ -79,23 +79,23 @@ func TestManualEqualityRegistrations(t *testing.T) {
 	}
 	for _, name := range []string{"Alias", "Generic", "Missing"} {
 		r := parse("impl PartialEq for " + name + " {func equals(self,other " + name + ")bool{return true}}")
-		if e = applyManualEquality("manual.hgo", map[string]equality.Derive{}, r, specs, map[string]model{}); e == nil {
+		if e = applyManualEquality("manual.gox", map[string]equality.Derive{}, r, specs, map[string]model{}); e == nil {
 			t.Fatal("invalid target", name)
 		}
 	}
 	partial := parse("impl PartialEq for T {func equals(self,other T)bool{return true}}")
 	for _, kind := range []string{"PartialEq", "Eq"} {
 		models := map[string]model{"T": {attrs: attrs{derive: map[string]bool{kind: true}}}}
-		if e = applyManualEquality("manual.hgo", map[string]equality.Derive{}, partial, specs, models); e == nil {
+		if e = applyManualEquality("manual.gox", map[string]equality.Derive{}, partial, specs, models); e == nil {
 			t.Fatal("derive conflict", kind)
 		}
 	}
 	marker := parse("impl Eq for T {}")
-	if e = applyManualEquality("manual.hgo", map[string]equality.Derive{}, marker, specs, map[string]model{}); e == nil {
+	if e = applyManualEquality("manual.gox", map[string]equality.Derive{}, marker, specs, map[string]model{}); e == nil {
 		t.Fatal("Eq without PartialEq")
 	}
 	derived := map[string]equality.Derive{"T": {PartialEq: true}}
-	if e = applyManualEquality("type.hgo", derived, marker, specs, map[string]model{"T": {attrs: attrs{derive: map[string]bool{"PartialEq": true}}}}); e != nil || !derived["T"].ManualEq {
+	if e = applyManualEquality("type.gox", derived, marker, specs, map[string]model{"T": {attrs: attrs{derive: map[string]bool{"PartialEq": true}}}}); e != nil || !derived["T"].ManualEq {
 		t.Fatal(derived, e)
 	}
 }
@@ -104,9 +104,9 @@ func TestManualEqualityCompilePackage(t *testing.T) {
 	for _, declaration := range []string{"type T struct{ P *int }", "type T int", "pub enum T { A, B(int), }"} {
 		t.Run(declaration, func(t *testing.T) {
 			result, err := CompilePackage("fixture", map[string][]byte{
-				"types.hgo":  []byte("package fixture\n" + declaration),
-				"method.hgo": []byte("package fixture\nimpl PartialEq for T {func equals(self,other T) bool { return true }}"),
-				"marker.hgo": []byte("package fixture\nimpl Eq for T {}"),
+				"types.gox":  []byte("package fixture\n" + declaration),
+				"method.gox": []byte("package fixture\nimpl PartialEq for T {func equals(self,other T) bool { return true }}"),
+				"marker.gox": []byte("package fixture\nimpl Eq for T {}"),
 			}, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -114,18 +114,18 @@ func TestManualEqualityCompilePackage(t *testing.T) {
 			if len(result.enumMetadata.Equality) != 1 || result.enumMetadata.Equality[0].PartialEqSource != "manual" || result.enumMetadata.Equality[0].EqSource != "manual" {
 				t.Fatalf("manual provenance missing: %+v", result.enumMetadata.Equality)
 			}
-			got := result.Files["method.hgo"].equalityDerives["T"]
+			got := result.Files["method.gox"].equalityDerives["T"]
 			if !got.PartialEq || !got.Eq || !got.ManualPartialEq || !got.ManualEq {
 				t.Fatal(got)
 			}
-			if strings.Contains(declaration, "enum") && !strings.Contains(string(result.Files["method.hgo"].Go), "__hgo_enum_eq_manual_validator_T") {
+			if strings.Contains(declaration, "enum") && !strings.Contains(string(result.Files["method.gox"].Go), "__goxide_enum_eq_manual_validator_T") {
 				t.Fatal("enum method lacks entry validators")
 			}
 		})
 	}
 	_, err := CompilePackage("fixture", map[string][]byte{
-		"types.hgo":  []byte("package fixture\n#[derive(PartialEq)]\ntype T struct{F float64}"),
-		"marker.hgo": []byte("package fixture\nimpl Eq for T {}"),
+		"types.gox":  []byte("package fixture\n#[derive(PartialEq)]\ntype T struct{F float64}"),
+		"marker.gox": []byte("package fixture\nimpl Eq for T {}"),
 	}, nil)
 	if err != nil {
 		t.Fatal("manual Eq author promise", err)
@@ -138,7 +138,7 @@ func TestManualEqualityCompilePackage(t *testing.T) {
 		{"helper-conflict", "type T int", "impl PartialEq for T {func equals(self,other T)bool{return true}}", "func EqualsT(a,b T)bool{return true}", "redeclared"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := CompilePackage("fixture", map[string][]byte{"types.hgo": []byte("package fixture\n" + tc.decl), "one.hgo": []byte("package fixture\n" + tc.one), "two.hgo": []byte("package fixture\n" + tc.two)}, nil)
+			_, err := CompilePackage("fixture", map[string][]byte{"types.gox": []byte("package fixture\n" + tc.decl), "one.gox": []byte("package fixture\n" + tc.one), "two.gox": []byte("package fixture\n" + tc.two)}, nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want %s got %v", tc.want, err)
 			}
@@ -148,8 +148,8 @@ func TestManualEqualityCompilePackage(t *testing.T) {
 
 func TestManualEqualityBodySource(t *testing.T) {
 	source := []byte("package fixture\ntype T int\nimpl PartialEq for T {func equals(self,other T)bool{\n return self.Missing == other.Missing\n}}\n")
-	_, err := Compile("body.hgo", source)
-	if err == nil || !strings.Contains(err.Error(), "body.hgo:4:") {
+	_, err := Compile("body.gox", source)
+	if err == nil || !strings.Contains(err.Error(), "body.gox:4:") {
 		t.Fatalf("lost body source location: %v", err)
 	}
 }

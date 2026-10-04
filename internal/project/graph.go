@@ -118,7 +118,7 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 	}
 	defer os.RemoveAll(work)
 	defer layout.Close()
-	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(root, ".hgo", "git"), LockPath: filepath.Join(root, "goxide.lock"), Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}}}
+	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(root, ".goxide", "git"), LockPath: filepath.Join(root, "goxide.lock"), Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}}}
 	b, e := os.ReadFile(g.LockPath)
 	if e == nil {
 		if e = json.Unmarshal(b, &g.Lock); e != nil {
@@ -197,7 +197,7 @@ func (g *Graph) Save() error {
 		}
 		return nil
 	}
-	tmp, e := os.CreateTemp(filepath.Dir(g.LockPath), ".hgo-lock-*")
+	tmp, e := os.CreateTemp(filepath.Dir(g.LockPath), ".goxide-lock-*")
 	if e != nil {
 		return e
 	}
@@ -368,9 +368,9 @@ func LockProject(root string) (func(), error) {
 	} else if w != nil {
 		root = w.Root
 	}
-	cache := filepath.Join(root, ".hgo")
+	cache := filepath.Join(root, ".goxide")
 	if info, e := os.Lstat(cache); e == nil && info.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf(".hgo must not be a symlink")
+		return nil, fmt.Errorf(".gox must not be a symlink")
 	}
 	if e = os.MkdirAll(cache, 0755); e != nil {
 		return nil, e

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run isolated trait lowering probes; retains raw logs, does not build hgo."""
+"""Run isolated trait lowering probes; retains raw logs, does not build goxide."""
 import argparse
 import hashlib
 import json
@@ -24,7 +24,7 @@ if not go:
     raise SystemExit('Go executable not found; no download is attempted')
 out = a.out.resolve()
 out.mkdir(parents=True, exist_ok=True)
-work = Path(tempfile.mkdtemp(prefix='hgo-trait-paths-'))
+work = Path(tempfile.mkdtemp(prefix='goxide-trait-paths-'))
 shutil.copytree(HERE / 'probe', work / 'probe')
 mod = work / 'probe'
 (mod / 'go.mod.fixture').rename(mod / 'go.mod')

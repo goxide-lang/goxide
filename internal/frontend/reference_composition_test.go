@@ -19,11 +19,11 @@ func TestReferencePropagationAndDerive(t *testing.T) {
 type Item struct {N int}
 func load()Result[int,string]{return Result[int,string]::Ok(1)}
 ` + body
-			r, err := Compile("refs-combination.hgo", []byte(src))
+			r, err := Compile("refs-combination.gox", []byte(src))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(string(r.Go), "__hgo_ref_") {
+			if strings.Contains(string(r.Go), "__goxide_ref_") {
 				t.Fatalf("reference IR escaped: %s", r.Go)
 			}
 			if len(r.References) == 0 {
@@ -44,7 +44,7 @@ func TestReferenceCompositionRejections(t *testing.T) {
 		"payload":         `func f(r &int)Option[&int]{return Option[&int]::Some(r)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Compile("bad-refs.hgo", []byte("package p\nfunc load()Result[int,string]{return Result[int,string]::Ok(1)}\n"+body))
+			_, err := Compile("bad-refs.gox", []byte("package p\nfunc load()Result[int,string]{return Result[int,string]::Ok(1)}\n"+body))
 			if err == nil {
 				t.Fatal("accepted unsupported/invalid permission flow")
 			}

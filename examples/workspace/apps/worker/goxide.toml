@@ -8,4 +8,4 @@ shared = { workspace = true, features = ["yaml"] }
 
 [[bin]]
 name = "web"
-path = "web.hgo"
+path = "web.gox"

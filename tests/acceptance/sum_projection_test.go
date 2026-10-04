@@ -38,7 +38,7 @@ func TestSumProjectionUnsupportedPaths(t *testing.T) {
 		"recursive":     `type Holder struct { Next Option[Holder] }`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("projection_bad.hgo", []byte("package p;enum Mode {Idle,};"+declaration+";func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}"))
+			_, err := frontend.Compile("projection_bad.gox", []byte("package p;enum Mode {Idle,};"+declaration+";func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}"))
 			if err == nil || !strings.Contains(err.Error(), "projection") {
 				t.Fatalf("expected projection rejection: %v", err)
 			}

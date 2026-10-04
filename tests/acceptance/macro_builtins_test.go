@@ -12,7 +12,7 @@ import (
 func TestMacroBuiltinsModuleRace(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module builtins.example/app\ngo 1.27\n")
-	packagesWrite(t, source, "ops/macros.hgo", `package ops
+	packagesWrite(t, source, "ops/macros.gox", `package ops
 pub macro_rules! size {($x:expr)=>{len($x)};}
 pub macro_rules! space {($x:expr)=>{cap($x)};}
 pub macro_rules! nested {($x:expr)=>{size!($x)+space!($x)};}
@@ -20,8 +20,8 @@ pub macro_rules! question {($x:expr)=>{len($x?)};}
 `)
 	packagesWrite(t, source, "native/model.go", "package native\ntype Mapping map[int]int\n")
 	packagesWrite(t, source, "generic.go", "package app\ntype GenericMapping[K comparable] map[K]int\n")
-	packagesWrite(t, source, "types.hgo", "package app\nimport n \"builtins.example/app/native\"\ntype Record struct {len int}\ntype Mapping = n.Mapping\n")
-	packagesWrite(t, source, "app.hgo", `package app
+	packagesWrite(t, source, "types.gox", "package app\nimport n \"builtins.example/app/native\"\ntype Record struct {len int}\ntype Mapping = n.Mapping\n")
+	packagesWrite(t, source, "app.gox", `package app
 import m "builtins.example/app/ops"
 import len "strings"
 const N=m.size!("abc")
@@ -63,14 +63,14 @@ func TestMacroBuiltinInvalidCallsAndPackageShadow(t *testing.T) {
 	} {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module builtins.example/app\ngo 1.27\n")
-		packagesWrite(t, source, "ops/macros.hgo", "package ops\npub macro_rules! size {($x:expr)=>{len($x)};}\npub macro_rules! space {($x:expr)=>{cap($x)};}\n")
-		packagesWrite(t, source, "app.hgo", "package app\nimport m \"builtins.example/app/ops\"\nfunc F(){_="+tc.body+"}\n")
+		packagesWrite(t, source, "ops/macros.gox", "package ops\npub macro_rules! size {($x:expr)=>{len($x)};}\npub macro_rules! space {($x:expr)=>{cap($x)};}\n")
+		packagesWrite(t, source, "app.gox", "package app\nimport m \"builtins.example/app/ops\"\nfunc F(){_="+tc.body+"}\n")
 		packagesWrite(t, source, "shadow.go", "package app\n"+tc.decl+"\n")
 		_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("%s %s: %v", tc.decl, tc.body, err)
 		}
-		if !strings.Contains(err.Error(), "app.hgo") || (tc.decl != "" && !strings.Contains(err.Error(), "macros.hgo")) {
+		if !strings.Contains(err.Error(), "app.gox") || (tc.decl != "" && !strings.Contains(err.Error(), "macros.gox")) {
 			t.Fatalf("lost source diagnostic: %v", err)
 		}
 	}

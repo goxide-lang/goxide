@@ -13,16 +13,16 @@ func TestReadonlyControlFlowModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, dir, "go.mod", packagesModule(root))
-		packagesWrite(t, dir, "model/model.hgo", `package model
+		packagesWrite(t, dir, "model/model.gox", `package model
  type State struct { Items []int; Rows [][]int; P *int; A [1][]int }
  func View(s &State)&State{return s}
  `)
-		packagesWrite(t, dir, "app.hgo", `package app
+		packagesWrite(t, dir, "app.gox", `package app
  import "packages.example/app/model"
  func touch(v []int){v[0]++}
  `+body)

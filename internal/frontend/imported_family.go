@@ -17,7 +17,7 @@ func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefi
 	for _, v := range f.Variants {
 		payload := ""
 		if v.PayloadIndex >= 0 {
-			payload = "__hgo_imported_payload"
+			payload = "__goxide_imported_payload"
 		}
 		d.Variants = append(d.Variants, enums.Variant{Name: v.Name, Payload: payload, CaseName: prefix + "_" + v.Name, Constructor: prefix + "_new" + v.Name})
 	}
@@ -45,7 +45,7 @@ func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefi
 	}
 	params, args := []string{}, []string{}
 	for i := 0; i < count; i++ {
-		n := fmt.Sprintf("__HgoT%d", i)
+		n := fmt.Sprintf("__GoxideT%d", i)
 		params = append(params, n+" any")
 		args = append(args, n)
 	}

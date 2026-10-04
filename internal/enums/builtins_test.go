@@ -28,7 +28,7 @@ func run() {
 }
 func main(){run()}
 `
-	r, e := Lower("sum.hgo", []byte(src))
+	r, e := Lower("sum.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -50,13 +50,13 @@ func TestBuiltinRejects(t *testing.T) {
 		`package p; type Option int; var x Option[int]`,
 		`package p; enum E {A,}; type Holder struct {Bad *E}; var x Result[Holder,error]`,
 	} {
-		if _, e := Lower("bad.hgo", []byte(s)); e == nil {
+		if _, e := Lower("bad.gox", []byte(s)); e == nil {
 			t.Fatal(s)
 		}
 	}
 }
 func TestBuiltinNominalAndInvalidCases(t *testing.T) {
-	r, e := Lower("sum.hgo", []byte(`package main
+	r, e := Lower("sum.gox", []byte(`package main
 var a Option[int]
 var b Result[int,string]
 var c Result[string,string]
@@ -112,7 +112,7 @@ func TestContainerPayload(t *testing.T){
 }
 
 func TestBuiltinPayloadSwitchOnlyWhenNeeded(t *testing.T) {
-	r, err := Lower("checks.hgo", []byte(`package p
+	r, err := Lower("checks.gox", []byte(`package p
 var scalar Result[int,error]
 var nested Result[Result[int,error],error]
 `))
@@ -156,10 +156,10 @@ var nested Result[Result[int,error],error]
 
 func TestBuiltinValidatorIdentityAndCollision(t *testing.T) {
 	a, _ := Builtin("Result", []string{"int", "error"})
-	if a.ExportValidator != "HgoInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2" {
+	if a.ExportValidator != "GoxideInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2" {
 		t.Fatal("exported ABI changed", a.ExportValidator)
 	}
-	if len(a.Validator) >= len(a.ExportValidator) || !strings.HasPrefix(a.Validator, "__hgo_enum_checkResult_") {
+	if len(a.Validator) >= len(a.ExportValidator) || !strings.HasPrefix(a.Validator, "__goxide_enum_checkResult_") {
 		t.Fatal("unreadable private name", a.Validator)
 	}
 	same, _ := Builtin("Result", []string{" int ", "error"})

@@ -166,7 +166,7 @@ Source operand scheduling is still owned by each caller. Branch containers are
 fresh but expression nodes are shared read-only; emit is not a deep-clone API.
 This is preparatory refactoring, not the no-panic private-target replacement.
 That was the questionFlow-only stage. The subsequent effects planner now removes
-guards from the existing private.hgo acceptance set and core benchmark fixtures;
+guards from the existing private.gox acceptance set and core benchmark fixtures;
 unsupported combinations still take assignmentFrame, so universal private-target
 performance acceptance remains open. See RFC 0005 section 6.9 for the exact scope.
 

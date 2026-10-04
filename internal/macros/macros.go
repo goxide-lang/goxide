@@ -98,7 +98,7 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 	if len(ts) > maxTokens {
 		return Result{}, fmt.Errorf("%s: macro input token budget exceeded", filename)
 	}
-	e := engine{importPaths: map[string]string{}, importCache: map[string]*types.Package{}, importer: importer.Default(), file: filename, defs: map[string]definition{}, funcs: map[string]bool{}, imports: map[string]bool{}, aliases: map[string]string{}, prefix: "hgoMacroGenerated"}
+	e := engine{importPaths: map[string]string{}, importCache: map[string]*types.Package{}, importer: importer.Default(), file: filename, defs: map[string]definition{}, funcs: map[string]bool{}, imports: map[string]bool{}, aliases: map[string]string{}, prefix: "goxideMacroGenerated"}
 	e.intrinsics = map[string]bool{}
 	for _, n := range names {
 		e.intrinsics[n] = true
@@ -626,7 +626,7 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 			if e.emitted > maxTokens {
 				return nil, at(call, "macro output token budget exceeded")
 			}
-			call.text = "__hgo_" + call.text
+			call.text = "__goxide_" + call.text
 			out = append(out, call, ts[i+2])
 			out = append(out, inner...)
 			out = append(out, ts[end])

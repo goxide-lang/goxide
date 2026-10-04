@@ -15,8 +15,8 @@ func TestSerdeDefaultsInstalledBusinessRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	source := filepath.Join(root, "examples/serde_defaults")
 	outside := t.TempDir()
 	generated := filepath.Join(t.TempDir(), "module")
@@ -44,9 +44,9 @@ func TestSerdeDefaultsMissingProtocolDiagnostics(t *testing.T) {
 				}
 				source := "package rejected\n#[derive(Serialize,Deserialize)]\ntype Settings struct { Port int }\n" + extra +
 					"#[derive(Deserialize)]\ntype Request struct {\n#[serde(" + attribute + ")]\nValue " + typ + "\n}\n"
-				filename := filepath.Join(t.TempDir(), "missing_protocol.hgo")
+				filename := filepath.Join(t.TempDir(), "missing_protocol.gox")
 				_, err := frontend.Compile(filename, []byte(source))
-				wantLocation := "missing_protocol.hgo:" + strconv.Itoa(strings.Count(source[:strings.Index(source, "Value ")], "\n")+1) + ":"
+				wantLocation := "missing_protocol.gox:" + strconv.Itoa(strings.Count(source[:strings.Index(source, "Value ")], "\n")+1) + ":"
 				if err == nil || !strings.Contains(strings.ToLower(err.Error()), "default") || !strings.Contains(err.Error(), wantLocation) {
 					t.Fatalf("want source-located missing Default diagnostic: %v", err)
 				}

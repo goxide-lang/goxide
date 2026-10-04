@@ -16,7 +16,7 @@ import (
 
 // This independent acceptance suite executes actual frontend output under race.
 func TestSerdeBlackBoxRace(t *testing.T) {
-	result, err := frontend.Compile("acceptance.hgo", []byte(acceptanceSource))
+	result, err := frontend.Compile("acceptance.gox", []byte(acceptanceSource))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,11 +54,11 @@ func TestUnsupportedSerdeIsDiagnosed(t *testing.T) {
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("unsupported.hgo", []byte(source))
+			_, err := frontend.Compile("unsupported.gox", []byte(source))
 			if err == nil {
 				t.Fatal("unsupported derive accepted")
 			}
-			if !strings.Contains(err.Error(), "unsupported.hgo") {
+			if !strings.Contains(err.Error(), "unsupported.gox") {
 				t.Fatalf("no source location: %v", err)
 			}
 		})

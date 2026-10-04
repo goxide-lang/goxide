@@ -1,7 +1,7 @@
 # Expression switch propagation evidence
 
-`run.py` builds the real hgo CLI and transpiles the
-[switch example](../../../examples/prototype/switch_propagation.hgo). It checks
+`run.py` builds the real goxide CLI and transpiles the
+[switch example](../../../examples/prototype/switch_propagation.gox). It checks
 that generated code contains no Assignment/Catch/Fail, runs its separate module
 with race and vet, then measures non-race benchmarks. This module's one
 input-grid equivalence test is separate from the six main switch behavior tests
@@ -31,5 +31,5 @@ A global sink retains the results. Timing uses GOMAXPROCS=1, no race instrumenta
 
 Every sample is zero-allocation for this fixture. These results do not establish
 speed parity, arbitrary payload allocation behavior, or support for all case
-expressions. This is real hgo evidence, unlike the separately labeled hand-edited
+expressions. This is real goxide evidence, unlike the separately labeled hand-edited
 Go probe in the loop performance follow-up.

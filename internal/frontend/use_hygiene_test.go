@@ -12,20 +12,20 @@ func TestUseGenericImportHygiene(t *testing.T) {
 	useWrite(t, src, map[string]string{
 		"go.mod": "module example.org/hygiene\n\ngo 1.27\n",
 		"p/p.go": `package p
- type Box[hgoUseImport0 any] struct{Value hgoUseImport0}
+ type Box[goxideUseImport0 any] struct{Value goxideUseImport0}
  func(b Box[T])Get()T{return b.Value}
- type Later[hgoUseImport1 any] struct{Value hgoUseImport1}
+ type Later[goxideUseImport1 any] struct{Value goxideUseImport1}
  `,
-		"q/q.go":     "package q\ntype Other[hgoUseImport2 any] struct{Value hgoUseImport2}\n",
-		"api/pre.go": "package api\nvar hgoUseImport3=3\n",
-		"api/api.hgo": `package api
+		"q/q.go":     "package q\ntype Other[goxideUseImport2 any] struct{Value goxideUseImport2}\n",
+		"api/pre.go": "package api\nvar goxideUseImport3=3\n",
+		"api/api.gox": `package api
  import p "example.org/hygiene/p"
  import q "example.org/hygiene/q"
  pub use p::Box;
  pub use p::Later as Another;
  pub use q::Other;
  `,
-		"facade/api.hgo": `package facade
+		"facade/api.gox": `package facade
  import a "example.org/hygiene/api"
  pub use a::*;
  `,
@@ -50,9 +50,9 @@ func TestUseGenericImportHygiene(t *testing.T) {
 		file, decl, source string
 		line               int
 	}{
-		{"api/hgo_use_aliases.go", "type Box", "api/api.hgo", 4},
-		{"api/hgo_use_aliases.go", "type Another", "api/api.hgo", 5},
-		{"facade/hgo_use_aliases.go", "type Box", "facade/api.hgo", 3},
+		{"api/goxide_use_aliases.go", "type Box", "api/api.gox", 4},
+		{"api/goxide_use_aliases.go", "type Another", "api/api.gox", 5},
+		{"facade/goxide_use_aliases.go", "type Box", "facade/api.gox", 3},
 	} {
 		r := result.Files[tc.file]
 		off := strings.Index(string(r.Go), tc.decl)
@@ -72,11 +72,11 @@ func TestUseMacroReservedAliasPosition(t *testing.T) {
 	for _, alias := range []string{"print", "println", "go_result", "go_result_keep"} {
 		t.Run(alias, func(t *testing.T) {
 			src := t.TempDir()
-			file := filepath.Join(src, "api.hgo")
+			file := filepath.Join(src, "api.gox")
 			useWrite(t, src, map[string]string{
 				"go.mod":  "module example.org/position\n\ngo 1.27\n",
-				"p/p.hgo": "package p\npub macro_rules! answer { () => { 1 }; }\n",
-				"api.hgo": "package api\nimport p \"example.org/position/p\"\n\n  pub use p::answer as " + alias + ";\n",
+				"p/p.gox": "package p\npub macro_rules! answer { () => { 1 }; }\n",
+				"api.gox": "package api\nimport p \"example.org/position/p\"\n\n  pub use p::answer as " + alias + ";\n",
 			})
 			_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 			want := fmt.Sprintf("%s:4:3: macro use alias %s is a reserved builtin macro name", file, alias)
@@ -89,11 +89,11 @@ func TestUseMacroReservedAliasPosition(t *testing.T) {
 
 func TestUseGenericConstraintPosition(t *testing.T) {
 	src := t.TempDir()
-	file := filepath.Join(src, "api.hgo")
+	file := filepath.Join(src, "api.gox")
 	useWrite(t, src, map[string]string{
 		"go.mod":  "module example.org/position\n\ngo 1.27\n",
 		"p/p.go":  "package p\ntype Box[T interface{hidden()}] struct{Value T}\n",
-		"api.hgo": "package api\nimport p \"example.org/position/p\"\n\n  pub use p::Box;\n",
+		"api.gox": "package api\nimport p \"example.org/position/p\"\n\n  pub use p::Box;\n",
 	})
 	_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
 	want := file + ":4:3: use Box: generic alias constraint has private methods"

@@ -14,8 +14,8 @@ func TestManualDefaultInstalledBusinessRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/hgo")
-	cli := filepath.Join(bin, "hgo")
+	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	cli := filepath.Join(bin, "goxide")
 	source := filepath.Join(root, "examples/manual_default")
 	outside := t.TempDir()
 	generated := filepath.Join(t.TempDir(), "module")
@@ -31,12 +31,12 @@ func TestManualDefaultInstalledBusinessRace(t *testing.T) {
 	// implementation for a foreign target remains unsupported.
 	foreign := t.TempDir()
 	packagesWrite(t, foreign, "go.mod", "module manualdefault.example/rejected\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
-	packagesWrite(t, foreign, "config/types.hgo", "package config\ntype Settings struct { Port int }\nimpl Default for Settings { func default() Settings { return Settings{Port:9090} } }\n")
+	packagesWrite(t, foreign, "config/types.gox", "package config\ntype Settings struct { Port int }\nimpl Default for Settings { func default() Settings { return Settings{Port:9090} } }\n")
 	for i, body := range []string{
 		"#[derive(Default)]\ntype Service struct { Value config.Settings }\n",
 		"impl Default for config.Settings { func default() config.Settings { return config.Settings{} } }\n",
 	} {
-		packagesWrite(t, foreign, "main.hgo", "package main\nimport \"manualdefault.example/rejected/config\"\n"+body+"func main(){}\n")
+		packagesWrite(t, foreign, "main.gox", "package main\nimport \"manualdefault.example/rejected/config\"\n"+body+"func main(){}\n")
 		destination := filepath.Join(t.TempDir(), "generated")
 		output := deliveryCommand(t, outside, cli, i == 0, nil, "transpile", "-o", destination, foreign)
 		if i == 0 {
@@ -47,7 +47,7 @@ func TestRegisteredForeignDefault(t *testing.T){if DefaultService().Value.Port!=
 			deliveryCommand(t, destination, tool, true, nil, "test", "-race", "-count=1", "./...")
 			continue
 		}
-		if !strings.Contains(strings.ToLower(output), "default") || !strings.Contains(output, "main.hgo:") {
+		if !strings.Contains(strings.ToLower(output), "default") || !strings.Contains(output, "main.gox:") {
 			t.Fatalf("cross-package rejection lost protocol/source: %s", output)
 		}
 	}
@@ -75,7 +75,7 @@ impl Default for Settings { func default() Settings { return DefaultSettings() }
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			filename := filepath.Join(t.TempDir(), tc.name+".hgo")
+			filename := filepath.Join(t.TempDir(), tc.name+".gox")
 			_, err := frontend.Compile(filename, []byte("package rejected\n"+tc.source+"\n"))
 			if err == nil || !strings.Contains(err.Error(), filepath.Base(filename)+":") || !strings.Contains(strings.ToLower(err.Error()), "default") {
 				t.Fatalf("want source-located rejection, got %v", err)

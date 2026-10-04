@@ -49,12 +49,12 @@ func TestSamePackageAliasModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", fmt.Sprintf("module local.example/fixture\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", filepath.ToSlash(root)))
-	packagesWrite(t, src, "types.hgo", samePackageAliasTypes)
-	packagesWrite(t, src, "wrap.hgo", samePackageAliasWrappers)
+	packagesWrite(t, src, "types.gox", samePackageAliasTypes)
+	packagesWrite(t, src, "wrap.gox", samePackageAliasWrappers)
 	packagesWrite(t, src, "alias.go", "package fixture\ntype Native=Item\n")
 	out := filepath.Join(t.TempDir(), "out")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, src)
@@ -77,8 +77,8 @@ func TestSamePackageAliasRejections(t *testing.T) {
 		"bad-manual-return":       "type Item struct{N int}\ntype Local=Item\nimpl Default for Item{func default()Item{return 1}}\n#[derive(Default)]\ntype Wrap struct{V Local}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile(name+".hgo", []byte("package fixture\n"+body+"\n"))
-			if err == nil || !strings.Contains(err.Error(), name+".hgo") {
+			_, err := frontend.Compile(name+".gox", []byte("package fixture\n"+body+"\n"))
+			if err == nil || !strings.Contains(err.Error(), name+".gox") {
 				t.Fatal(err)
 			}
 		})

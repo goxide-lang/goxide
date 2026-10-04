@@ -7,7 +7,7 @@ Dropped 115 nodes (cum <= 14.55kB)
       flat  flat%   sum%        cum   cum%
  2500.25kB 85.94% 85.94%  2656.52kB 91.31%  places.example/update.Guard8
   235.84kB  8.11% 94.05%   235.84kB  8.11%  runtime.mallocgc
-  156.27kB  5.37% 99.42%   156.27kB  5.37%  places.example/update.__hgo_enum_ctor_Result_Err[go.shape.int,go.shape.interface { Error string }] (inline)
+  156.27kB  5.37% 99.42%   156.27kB  5.37%  places.example/update.__goxide_enum_ctor_Result_Err[go.shape.int,go.shape.interface { Error string }] (inline)
     0.12kB 0.0043% 99.42%  2661.21kB 91.47%  testing.(*B).runN
     0.07kB 0.0024% 99.42%    15.81kB  0.54%  testing.(*M).Run
          0     0% 99.42%    15.81kB  0.54%  main.main

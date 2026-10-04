@@ -65,7 +65,7 @@ func TestQualifiedPackagesApplicationRace(t *testing.T) {
 
 func TestQualifiedPackagesRejectWrongIdentity(t *testing.T) {
 	source, _ := qualifiedSource(t)
-	packagesWrite(t, source, "bad.hgo", `package main
+	packagesWrite(t, source, "bad.gox", `package main
 import a "qualified.example/app/source"
 import b "qualified.example/app/other"
 func wrong(value b.Mode) string {
@@ -76,7 +76,7 @@ func wrong(value b.Mode) string {
 	if err == nil {
 		t.Fatal("matched different packages' Mode values by name")
 	}
-	if !strings.Contains(err.Error(), "bad.hgo") || !strings.Contains(err.Error(), "generated/unmapped") {
+	if !strings.Contains(err.Error(), "bad.gox") || !strings.Contains(err.Error(), "generated/unmapped") {
 		t.Fatalf("lost consumer file: %v", err)
 	}
 	t.Log(err)
@@ -88,7 +88,7 @@ func TestQualifiedPackagesRejectUnregisteredSum(t *testing.T) {
 type Result[T,E any] interface{}
 func Fetch() Result[int,error] {return nil}
 `)
-	packagesWrite(t, source, "bad.hgo", `package main
+	packagesWrite(t, source, "bad.gox", `package main
 import fake "qualified.example/app/fake"
 func wrong() Result[int,AppError] {
  n:=fake.Fetch()?
@@ -104,12 +104,12 @@ func wrong() Result[int,AppError] {
 
 func TestQualifiedPackagesRequireConcreteValidation(t *testing.T) {
 	source, _ := qualifiedSource(t)
-	packagesWrite(t, source, "bad.hgo", `package main
+	packagesWrite(t, source, "bad.gox", `package main
 import p "qualified.example/app/source"
 func absent() p.Result[string,error] {
  n:=p.Fetch("ok")?
  _=n
- return p.HgoNewResultOk[string,error]("ok")
+ return p.GoxideNewResultOk[string,error]("ok")
 }
 `)
 	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
@@ -120,7 +120,7 @@ func absent() p.Result[string,error] {
 
 func TestQualifiedPackagesRejectDuplicateFrom(t *testing.T) {
 	source, _ := qualifiedSource(t)
-	packagesWrite(t, source, "bad.hgo", `package main
+	packagesWrite(t, source, "bad.gox", `package main
 #[derive(Error)]
 pub enum Duplicate {
  #[error("first")]
@@ -169,8 +169,8 @@ func TestImportedNestedValidationBeforeEffect(t *testing.T) {
 }
 type forgedResult struct { source.Result[int,error] }
 func TestImportedInvalidSumBeforeEffect(t *testing.T) {
- var typed *source.HgoResultOk[int,error]
- for _,v:=range []source.Result[int,error]{nil,typed,&source.HgoResultOk[int,error]{Value:2},forgedResult{}} {
+ var typed *source.GoxideResultOk[int,error]
+ for _,v:=range []source.Result[int,error]{nil,typed,&source.GoxideResultOk[int,error]{Value:2},forgedResult{}} {
   func(){ continuation=0;defer func(){if recover()==nil{t.Fatal("invalid sum accepted")};if continuation!=0{t.Fatal("effect before sum validation")}}();importedInput(v) }()
  }
 }

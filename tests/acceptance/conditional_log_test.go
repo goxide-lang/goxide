@@ -6,7 +6,7 @@ import (
 )
 
 func TestConditionalLogApplicationRace(t *testing.T) {
-	source, err := os.ReadFile("../../examples/prototype/conditional_log.hgo")
+	source, err := os.ReadFile("../../examples/prototype/conditional_log.gox")
 	if err != nil {
 		t.Fatal(err)
 	}

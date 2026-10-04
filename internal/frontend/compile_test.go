@@ -12,18 +12,18 @@ func TestDiagnosticLocationsAndUnsupported(t *testing.T) {
 		{"#[derive(Serialize)]\ntype S struct { X Other }", "unsupported field type"},
 		{"#[derive(Clone)]\ntype S struct { X Other }", "nested type requires Clone"},
 		{"#[derive(Serialize)]\ntype S struct { X int }\nfunc SerializeS() {}", "conflicts"},
-		{"#[derive(Serialize)]\ntype S struct { __hgo_serde int }", "reserved"},
+		{"#[derive(Serialize)]\ntype S struct { __goxide_serde int }", "reserved"},
 		{"#[derive(Serialize)]\ntype S[T any] struct { X T }", "generic"},
 		{"#[derive(Serialize)]\ntype S struct {\n#[serde(unknown)]\nX int\n}", "unsupported serde attribute"},
 	} {
-		_, e := Compile("input.hgo", []byte("package p\n"+tc.src))
-		if e == nil || !strings.Contains(e.Error(), tc.msg) || !strings.Contains(e.Error(), "input.hgo:") {
+		_, e := Compile("input.gox", []byte("package p\n"+tc.src))
+		if e == nil || !strings.Contains(e.Error(), tc.msg) || !strings.Contains(e.Error(), "input.gox:") {
 			t.Errorf("%q: %v", tc.src, e)
 		}
 	}
 }
 func TestExtrasAndMap(t *testing.T) {
-	r, e := Compile("input.hgo", []byte(`package p
+	r, e := Compile("input.gox", []byte(`package p
 #[derive(Debug, Clone)]
 type S struct { Values []int }
 #[derive(Error)]
@@ -50,7 +50,7 @@ Cause error
 	}
 }
 func TestEmptyAndCommaNames(t *testing.T) {
-	r, e := Compile("input.hgo", []byte(`package p
+	r, e := Compile("input.gox", []byte(`package p
 #[derive(Serialize, Deserialize)]
 type S struct {
 #[serde(rename="")]
@@ -72,13 +72,13 @@ func TestErrorDeriveFieldMethodCollisions(t *testing.T) {
 		{"Error string", "Error"},
 		{"Unwrap string\n#[source]\nCause error", "Unwrap"},
 	} {
-		_, err := Compile("collision.hgo", []byte("package p\n#[derive(Error)]\n#[error(\"failed\")]\ntype Failure struct {\n"+tc.fields+"\n}\n"))
-		if err == nil || !strings.Contains(err.Error(), "collision.hgo:5:") || !strings.Contains(err.Error(), "derived method conflicts with field "+tc.collision) {
+		_, err := Compile("collision.gox", []byte("package p\n#[derive(Error)]\n#[error(\"failed\")]\ntype Failure struct {\n"+tc.fields+"\n}\n"))
+		if err == nil || !strings.Contains(err.Error(), "collision.gox:5:") || !strings.Contains(err.Error(), "derived method conflicts with field "+tc.collision) {
 			t.Fatalf("%s: %v", tc.collision, err)
 		}
 	}
 	// Unwrap is an ordinary field if no source requests an Unwrap method.
-	if _, err := Compile("valid.hgo", []byte("package p\n#[derive(Error)]\ntype Failure struct { Unwrap string }\n")); err != nil {
+	if _, err := Compile("valid.gox", []byte("package p\n#[derive(Error)]\ntype Failure struct { Unwrap string }\n")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -89,7 +89,7 @@ func TestAttributesCannotBeSilentlyIgnored(t *testing.T) {
 		"#[derive(Clone)]\ntype S struct {\n#[serde(rename=\"x\")]\nX int\n}",
 		"#[derive(Serialize)]\ntype (\n A struct { X int }\n B struct { X int }\n)",
 	} {
-		if _, err := Compile("ignored.hgo", []byte("package p\n"+src)); err == nil {
+		if _, err := Compile("ignored.gox", []byte("package p\n"+src)); err == nil {
 			t.Errorf("silently ignored attribute: %s", src)
 		}
 	}

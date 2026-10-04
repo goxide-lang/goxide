@@ -81,7 +81,7 @@ func TestScriptCleanPreflightAndPreservesUnits(t *testing.T) {
 	if _, e = os.Stat(unit.Run); e != nil {
 		t.Fatal("unrelated unit removed", e)
 	}
-	if _, e = os.Stat(filepath.Join(filepath.Dir(cache), ".hgo-unit.json")); e != nil {
+	if _, e = os.Stat(filepath.Join(filepath.Dir(cache), ".goxide-unit.json")); e != nil {
 		t.Fatal("ownership container removed", e)
 	}
 }
@@ -104,7 +104,7 @@ func TestScriptCleanRejectsForeignAndSymlink(t *testing.T) {
 			os.Mkdir(cache, 0700)
 			switch kind {
 			case "marker":
-				os.WriteFile(filepath.Join(filepath.Dir(cache), ".hgo-unit.json"), []byte("{}"), 0600)
+				os.WriteFile(filepath.Join(filepath.Dir(cache), ".goxide-unit.json"), []byte("{}"), 0600)
 			case "unknown":
 				os.WriteFile(filepath.Join(filepath.Dir(cache), "notes"), []byte("keep"), 0600)
 			case "symlink":

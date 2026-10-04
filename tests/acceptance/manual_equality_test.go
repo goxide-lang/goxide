@@ -13,8 +13,8 @@ func TestManualEqualityModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "hgo")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/hgo")
+	cli := filepath.Join(t.TempDir(), "goxide")
+	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	mod := func(name, lib string) string {
 		text := fmt.Sprintf("module %s\ngo 1.27\n", name)
 		if lib != "" {
@@ -24,7 +24,7 @@ func TestManualEqualityModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("manual.example/lib", ""))
-	packagesWrite(t, src, "model/types.hgo", `package model
+	packagesWrite(t, src, "model/types.gox", `package model
 type Person struct{ID int;Name string}
 type Float float64
 type Catch struct{}
@@ -41,7 +41,7 @@ type Index map[Stable]int
 #[derive(PartialEq)]
 type OrdinaryFloat struct{Value float64}
 `)
-	packagesWrite(t, src, "model/impl.hgo", `package model
+	packagesWrite(t, src, "model/impl.gox", `package model
 import "reflect"
 var PersonCalls int
 var GateCalls int
@@ -81,7 +81,7 @@ type Event=m.Event
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("manual.example/app", lib))
-	packagesWrite(t, appsrc, "app.hgo", `package app
+	packagesWrite(t, appsrc, "app.gox", `package app
 import(m "manual.example/lib/model";r "manual.example/lib/relay")
 #[derive(PartialEq,Eq)]
 type Bundle struct{User r.Person;Event r.Event;Users []m.Person;Index map[string]m.Person}
@@ -139,8 +139,8 @@ func TestBusinessEquality(t *testing.T){
 }
 type forged struct{m.Gate}
 func TestManualEnumValidation(t *testing.T){
- var typed *m.HgoCase4_Gate_Unit
- for _,bad:=range []m.Gate{nil,typed,&m.HgoCase4_Gate_Unit{},forged{}}{
+ var typed *m.GoxideCase4_Gate_Unit
+ for _,bad:=range []m.Gate{nil,typed,&m.GoxideCase4_Gate_Unit{},forged{}}{
   for _,right:=range []bool{false,true}{func(){m.GateCalls=0;Trace="";defer func(){if recover()==nil||m.GateCalls!=0||Trace!="LR"{t.Fatal("manual enum boundary",m.GateCalls,Trace)}}();if right{Ordered(m.NewGateUnit(),bad)}else{Ordered(bad,m.NewGateUnit())}}()}
  }
  m.GateCalls=0;Trace="";if !Ordered(m.NewGateUnit(),m.NewGateChild(m.NewLeafUnit()))||m.GateCalls!=1||Trace!="LR"{t.Fatal("valid enum manual body")}
@@ -184,15 +184,15 @@ func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name
 		t.Run(name, func(t *testing.T) {
 			bad := t.TempDir()
 			packagesWrite(t, bad, "go.mod", mod("manual.example/bad", lib))
-			packagesWrite(t, bad, "bad.hgo", "package bad\n"+code)
+			packagesWrite(t, bad, "bad.gox", "package bad\n"+code)
 			packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), bad)
 		})
 	}
 	t.Run("duplicate-across-files", func(t *testing.T) {
 		bad := t.TempDir()
 		packagesWrite(t, bad, "go.mod", mod("manual.example/bad", lib))
-		packagesWrite(t, bad, "type.hgo", "package bad\ntype T struct{}")
-		for _, n := range []string{"a.hgo", "b.hgo"} {
+		packagesWrite(t, bad, "type.gox", "package bad\ntype T struct{}")
+		for _, n := range []string{"a.gox", "b.gox"} {
 			packagesWrite(t, bad, n, "package bad\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}")
 		}
 		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), bad)

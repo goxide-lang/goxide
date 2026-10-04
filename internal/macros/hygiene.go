@@ -190,6 +190,12 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			}
 			return true
 		}
+		if primitiveName(id.Name) {
+			if err := e.checkPrimitiveBinding(ts[i]); err != nil {
+				problem = err
+				return true
+			}
+		}
 		switch id.Name {
 		case "bool", "string", "byte", "rune", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "float32", "float64", "complex64", "complex128", "any", "error":
 			ts[i].text = e.alias("type " + id.Name)

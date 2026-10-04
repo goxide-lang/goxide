@@ -106,7 +106,7 @@ Git 接受无凭据的 HTTPS URL，另支持绝对本地路径/file URL 用于�
 
 Go 对各生成 main module 计算 build list。第一版要求各 hgo 节点中出现的同一原生依赖具有相同实际选中版本/replace；检测到不同则提示统一版本，**不声称已实现全图统一 MVS 规划**。这样避免以依赖 v1 检查过的增强 metadata 被根 v2 悄然复用。
 
-生成的 bundle 包括 module 和所需 deps 副本，go.mod replace 指向本次生成目录。可在该位置用 Go 构建；移动 bundle 后绝对 replace 需要重新生成。每次使用新 bundle，没有持久转译缓存。manifest、启用 feature 集、目标种类/入口和编译器内容摘要形成每个项目模块的配置标记，进入生成源码与 metadata/Go cache 指纹。Go tags、平台及 race 仍使用已有 fingerprint；普通/测试 metadata 继续隔离。无 manifest 的已有外部产物不强加配置标记，保留其 metadata 验证环境。
+生成的 bundle 包括 module 和所需 deps 副本，go.mod replace 指向本次生成目录。可在该位置用 Go 构建；移动 bundle 后绝对 replace 需要重新生成。每次使用新 bundle，默认保留在受管 `target/` 下，没有持久转译缓存命中。manifest、启用 feature 集、目标种类/入口和编译器内容摘要形成每个项目模块的配置标记，进入生成源码与 metadata/Go cache 指纹。Go tags、平台及 race 仍使用已有 fingerprint；普通/测试 metadata 继续隔离。无 manifest 的已有外部产物不强加配置标记，保留其 metadata 验证环境。
 
 ## 双向互操作
 
@@ -117,16 +117,19 @@ Go 对各生成 main module 计算 build list。第一版要求各 hgo 节点中
 ```sh
 hgo run --go /path/to/go --bin cli --features pretty ./app
 hgo run --bin cli --no-default-features --offline --locked ./app
+hgo build --bin web ./app
+hgo build --bin web --target-dir build-output ./app
 hgo build --bin web -o /tmp/app-web ./app
 hgo run --example network --features network ./app
 hgo build --lib ./app
 hgo test --lib --offline ./app
+hgo transpile --bin cli ./app
 hgo transpile --bin cli -o /tmp/app-generated ./app
 ```
 
 单个 bin 可省 --bin；多个 bin 必须显式选择。没有 bin 但有 lib 时默认 lib；`run --lib` 拒绝。`--lib`、`--bin`、`--example` 互斥。`required_features` 是检查条件，不自动启用 feature。每次只构建一个目标及依赖闭包；所有 active manifest 依赖会准备其 lib。项目依赖必须声明 lib；无 manifest 的 Go/旧 hgo 模块可作传统根目录库使用。
 
-build 二进制要求显式 -o，输出不得位于任一输入源码树内；transpile 要求全新输出目录并自动输出逐文件 source map，诊断保持原入口文件位置。run 不支持额外程序参数。test 自动 -race；原生 `_test.go` 的本模块 imports 纳入测试构建闭包，但不混入普通包类型检查；普通构建/transpile 不包含测试文件。`.hgo` 测试文件暂不支持。依赖 lib 只生成其选中闭包，跨模块访问未进入 lib 闭包的 hgo 子包暂不保证，宜由 lib API 暴露。
+build 二进制默认写入受管 `target/bin/<host>/<target>/<kind>/<name>/<config>/`，成功时打印完整路径。transpile 默认保留新的生成 bundle 并打印其中的 module 路径，自动输出逐文件 source map，诊断保持原入口文件位置。`--target-dir` 优先于 `HGO_TARGET_DIR`，最后默认 `target`；相对路径以 manifest 根为基准。显式 `-o` 仍只接受任一源码树和任一受管布局之外的全新输出路径。目录所有权、并发和保留策略见 [target 布局](../design/target-layout.md)。run 不支持额外程序参数。test 自动 -race；原生 `_test.go` 的本模块 imports 纳入测试构建闭包，但不混入普通包类型检查；普通构建/transpile 不包含测试文件。`.hgo` 测试文件暂不支持。依赖 lib 只生成其选中闭包，跨模块访问未进入 lib 闭包的 hgo 子包暂不保证，宜由 lib API 暴露。
 
 examples 仅显式选择构建，不成为默认 bin/lib 产物；本片没有 publish/package 命令，不承诺自动裁剪发布档案，生成副本中的普通非源码资源可能仍保留。Go 消费者继续消费标准 Go 与显式依赖关系，不需要采用 hgo feature 解析器。
 
@@ -138,7 +141,7 @@ examples 仅显式选择构建，不成为默认 bin/lib 产物；本片没有 p
 
 ## 验收与未定项
 
-`cmd/hgo/project_test.go` 使用真实 Go、临时多模块、file proxy 和本地临时 Git，不访问第三方服务。覆盖默认/关闭/显式 feature、菱形依赖并集、optional 来源延迟、多个同目录 bin/example、无 lib、原路径诊断、生成 Go race/vet、A/B/A 配置切换、branch 移动与精确 rev、冷/暖离线、锁定重复构建、原 go.mod replace、传递来源冲突、输出重名、测试 helper 闭包、Git 路径边界、原生 build list 一致性。`internal/project` 覆盖未知/循环 feature、目标重复、source 互斥和路径诊断；前端 cfg 测试覆盖词法/token-tree 与 package/import 前缀、注释/字符串假指令和预处理时机。额外真实项目在同一文件组合 enum、match、derive、macro，覆盖两个 bin、example 和默认/关闭/显式开启的 A/B/A 切换；关闭文件含不存在的 import 与未解析宏也不触发加载。
+`cmd/hgo/project_test.go` 使用真实 Go、临时多模块、file proxy 和本地临时 Git，不访问第三方服务。覆盖默认/关闭/显式 feature、菱形依赖并集、optional 来源延迟、多个同目录 bin/example、无 lib、原路径诊断、生成 Go race/vet、A/B/A 配置切换、branch 移动与精确 rev、冷/暖离线、锁定重复构建、原 go.mod replace、传递来源冲突、输出重名、测试 helper 闭包、Git 路径边界、原生 build list 一致性。`cmd/hgo/layout_test.go` 额外覆盖默认输出、两个文件 bin、目录 web/embed、example、A/B/A、保留 bundle 与绝对 replace、配置目录切换、未知/被修改文件保护、跨项目显式输出拒绝及非宿主拒绝。`internal/project` 覆盖布局所有权/互斥和未知/循环 feature、目标重复、source 互斥及路径诊断；前端 cfg 测试覆盖词法/token-tree 与 package/import 前缀、注释/字符串假指令和预处理时机。额外真实项目在同一文件组合 enum、match、derive、macro，覆盖两个 bin、example 和默认/关闭/显式开启的 A/B/A 切换；关闭文件含不存在的 import 与未解析宏也不触发加载。
 
 可运行示例见 [examples/project](../../examples/project/README.md)。最终验证记录以提交说明与工作结果为准，不将 RFC 的验收目标冒称测试已通过。
 

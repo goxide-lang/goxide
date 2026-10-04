@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/macros"
+	"github.com/hxsf/goxide/internal/project"
 	"github.com/hxsf/goxide/internal/refs"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
@@ -58,6 +59,8 @@ type ModuleOptions struct {
 	// Environment scopes source selection/importer subprocesses for host tools.
 	// Nil preserves ambient environment. Never populated by generated script output.
 	Environment []string
+	// ManagedOutputRoot is an ownership-checked exception to source-tree outputs.
+	ManagedOutputRoot string
 }
 
 func CompileModuleWithOptions(input, destination string, options ModuleOptions) (ModuleResult, error) {
@@ -118,8 +121,12 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 	if err != nil {
 		return ModuleResult{}, err
 	}
+	insideSource := false
 	if rel, e := filepath.Rel(root, destination); e == nil && (rel == "." || !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != "..") {
-		return ModuleResult{}, fmt.Errorf("output directory must be outside the input module")
+		insideSource = true
+		if options.ManagedOutputRoot == "" {
+			return ModuleResult{}, fmt.Errorf("output directory must be outside the input module")
+		}
 	}
 	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
 		return ModuleResult{}, fmt.Errorf("output directory must not exist: %s", destination)
@@ -160,6 +167,16 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 	if modulePath == "" {
 		return ModuleResult{}, fmt.Errorf("go.mod has no module directive")
 	}
+	if insideSource {
+		managed, e := project.ManagedSourceDirectory(options.ManagedOutputRoot, root, modulePath)
+		rel, re := filepath.Rel(options.ManagedOutputRoot, destination)
+		if e != nil {
+			return ModuleResult{}, e
+		}
+		if !managed || re != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return ModuleResult{}, fmt.Errorf("source-tree output must be beneath the verified managed target directory")
+		}
+	}
 	if err = os.MkdirAll(destination, 0755); err != nil {
 		return ModuleResult{}, err
 	}
@@ -195,6 +212,15 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("module input symlinks are unsupported: %s", path)
+		}
+		if entry.IsDir() {
+			managed, e := project.ManagedSourceDirectory(path, root, modulePath)
+			if e != nil {
+				return e
+			}
+			if managed {
+				return filepath.SkipDir
+			}
 		}
 		if entry.IsDir() && options.ExcludeDirs[rel] {
 			return filepath.SkipDir

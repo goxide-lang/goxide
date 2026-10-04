@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -19,8 +20,8 @@ import (
 )
 
 type projectFlags struct {
-	features, bin, example          string
-	noDefault, offline, locked, lib bool
+	features, bin, example, targetDir string
+	noDefault, offline, locked, lib   bool
 }
 
 func runProject(mode, input, dest, tool string, tags []string, flags projectFlags, out, stderr io.Writer) error {
@@ -82,13 +83,46 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	var bundle string
-	if mode == "transpile" {
-		if dest == "" {
-			return fmt.Errorf("project transpile requires -o with a fresh bundle directory")
+	// The layout API owns paths only. Build-script execution/trust/cache remains
+	// a separate pipeline concern; Unit exposes reserved paths for that caller.
+	layoutPath, err := project.ResolveTargetDir(g.Root.Root, flags.targetDir)
+	if err != nil {
+		return err
+	}
+	for _, node := range g.Nodes {
+		if within(layoutPath, node.Root) || node != g.Root && within(node.Root, layoutPath) {
+			return fmt.Errorf("target directory overlaps a dependency/source module")
 		}
+	}
+	layout, err := project.OpenLayout(g.Root.Root, g.Root.Module, flags.targetDir)
+	if err != nil {
+		return err
+	}
+	defer layout.Close()
+	kind := "bin"
+	if flags.lib || (flags.bin == "" && flags.example == "" && len(g.Root.Manifest.Bins) == 0 && g.Root.Manifest.Lib != nil) {
+		kind = "lib"
+	} else if flags.example != "" {
+		kind = "example"
+	}
+	spec, err := projectUnitSpec(g, target, kind, mode, tags, compilerID)
+	if err != nil {
+		return err
+	}
+	unit, err := layout.Begin(spec)
+	if err != nil {
+		return err
+	}
+	bundle := unit.Bundle
+	if mode == "transpile" && dest != "" {
 		bundle, err = filepath.Abs(dest)
 		if err != nil {
+			return err
+		}
+		if err = project.NoSymlinks(bundle); err != nil {
+			return err
+		}
+		if err = project.RejectManagedOutput(bundle); err != nil {
 			return err
 		}
 		if _, e := os.Lstat(bundle); !os.IsNotExist(e) {
@@ -96,25 +130,19 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		}
 		for _, n := range g.Nodes {
 			if within(n.Root, bundle) {
-				return fmt.Errorf("output bundle must be outside every source module")
+				return fmt.Errorf("explicit output bundle must be outside source modules")
 			}
 		}
-		if err = os.MkdirAll(bundle, 0755); err != nil {
-			return err
-		}
-	} else {
-		bundle, err = os.MkdirTemp("", "hgo-project-")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(bundle)
 	}
-	success := false
-	defer func() {
-		if !success && mode == "transpile" {
-			os.RemoveAll(bundle)
-		}
-	}()
+	if err = os.MkdirAll(filepath.Dir(bundle), 0755); err != nil {
+		return err
+	}
+	if err = os.Mkdir(bundle, 0755); err != nil {
+		return err
+	}
+	// Generation directories are retained; the frontend may remove its own new
+	// incomplete module on failure. No generated-source cache hit is claimed.
+
 	generated := map[string]string{}
 	var result frontend.ModuleResult
 	for _, n := range g.Nodes {
@@ -176,7 +204,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 			excluded[filepath.Clean(filepath.Dir(n.Manifest.Build.Entry))] = true
 			configuration = project.Digest([]string{configuration, artifact.Digest})
 		}
-		options := frontend.ModuleOptions{Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files}
+		options := frontend.ModuleOptions{ManagedOutputRoot: layout.Root, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files}
 		options.Prepare = func(root string) error { return prepareProjectModule(g, n, root, generated) }
 		result, err = frontend.CompileModuleWithOptions(inputPath, output, options)
 		if err != nil {
@@ -199,7 +227,6 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		return err
 	}
 	if mode == "transpile" {
-		success = true
 		_, err = fmt.Fprintln(out, result.Root)
 		return err
 	}
@@ -207,42 +234,59 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	if mode == "test" {
 		argv = append(argv, "-race")
 	}
-	if mode == "build" && !(flags.lib || (len(g.Root.Manifest.Bins) == 0 && g.Root.Manifest.Lib != nil && flags.example == "")) {
-		if dest == "" {
-			return fmt.Errorf("project build requires -o for binary output")
-		}
-		dest, err = filepath.Abs(dest)
-		if err != nil {
-			return err
-		}
-		if _, e := os.Lstat(dest); !os.IsNotExist(e) {
-			return fmt.Errorf("refusing to overwrite existing binary output")
-		}
-		parent, e := filepath.EvalSymlinks(filepath.Dir(dest))
-		if e != nil {
-			return e
-		}
-		dest = filepath.Join(parent, filepath.Base(dest))
-		for _, n := range g.Nodes {
-			if within(n.Root, dest) {
-				return fmt.Errorf("binary output must be outside source modules")
+	managedBinary := mode == "build" && kind != "lib" && dest == ""
+	if mode == "build" && kind != "lib" {
+		if managedBinary {
+			dest = filepath.Join(unit.Intermediate, "executable")
+		} else {
+			dest, err = filepath.Abs(dest)
+			if err != nil {
+				return err
+			}
+			if err = project.NoSymlinks(dest); err != nil {
+				return err
+			}
+			if err = project.RejectManagedOutput(dest); err != nil {
+				return err
+			}
+			if _, e := os.Lstat(dest); !os.IsNotExist(e) {
+				return fmt.Errorf("refusing to overwrite existing binary output")
+			}
+			for _, n := range g.Nodes {
+				if within(n.Root, dest) {
+					return fmt.Errorf("binary output must be outside source modules")
+				}
 			}
 		}
 		argv = append(argv, "-o", dest)
 	} else if mode == "build" && dest != "" {
 		return fmt.Errorf("lib build checks the package; -o is reserved for binaries")
 	}
+
 	argv = append(argv, result.Target)
 	cmd := exec.CommandContext(ctx, tool, argv...)
 	cmd.Dir = result.Root
 	cmd.Env = project.GoEnv(true)
+	for i := len(cmd.Env) - 1; i >= 0; i-- {
+		if strings.HasPrefix(cmd.Env[i], "GOTMPDIR=") {
+			cmd.Env = append(cmd.Env[:i], cmd.Env[i+1:]...)
+		}
+	}
+	cmd.Env = append(cmd.Env, "GOTMPDIR="+unit.Intermediate)
 	cmd.Stdout = out
 	cmd.Stderr = stderr
 	cmd.Stdin = os.Stdin
 	if err = cmd.Run(); err != nil {
 		return fmt.Errorf("generated project %s: %w", mode, err)
 	}
-	success = true
+	if managedBinary {
+		path, e := unit.PublishBinary(dest)
+		if e != nil {
+			return e
+		}
+		_, err = fmt.Fprintln(out, path)
+		return err
+	}
 	return nil
 }
 func within(root, path string) bool {
@@ -553,4 +597,53 @@ func validateProjectKind(tool string, result frontend.ModuleResult, lib bool, ta
 		return fmt.Errorf("bin/example target must be package main")
 	}
 	return nil
+}
+
+// projectUnitSpec is configuration identity, not a source-content cache key.
+// Every invocation gets a fresh generation beneath the stable unit directory.
+func projectUnitSpec(g *project.Graph, target project.Target, kind, mode string, tags []string, compiler string) (project.UnitSpec, error) {
+	cmd := exec.Command(g.Tool, "env", "-json", "GOOS", "GOARCH", "CGO_ENABLED", "GOEXPERIMENT", "GOAMD64", "GO386", "GOARM", "GOARM64", "GOMIPS", "GOMIPS64", "GOPPC64", "GORISCV64", "GOWASM", "CC", "CXX", "CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_FFLAGS", "CGO_LDFLAGS", "PKG_CONFIG")
+	cmd.Env = project.GoEnv(true)
+	data, e := cmd.Output()
+	if e != nil {
+		return project.UnitSpec{}, fmt.Errorf("read target Go environment: %w", e)
+	}
+	environment := map[string]string{}
+	if e = json.Unmarshal(data, &environment); e != nil {
+		return project.UnitSpec{}, e
+	}
+	// Keep the frontend's existing host-only semantic guarantee. A separate
+	// compiler change is required before cross-target sizes can be trusted.
+	if environment["GOOS"] != runtime.GOOS || environment["GOARCH"] != runtime.GOARCH {
+		return project.UnitSpec{}, fmt.Errorf("project compilation requires host GOOS/GOARCH; cross-target type sizes are unsupported")
+	}
+	type nodeConfig struct {
+		Module, Root, GoMod string
+		Manifest            project.Manifest
+		Features            []string
+	}
+	nodes := []nodeConfig{}
+	commits := map[string]string{}
+	for _, n := range g.Nodes {
+		mod, e := os.ReadFile(filepath.Join(n.Root, "go.mod"))
+		if e != nil {
+			return project.UnitSpec{}, e
+		}
+		nodes = append(nodes, nodeConfig{n.Module, n.Root, string(mod), n.Manifest, project.Keys(n.Features)})
+		for _, d := range n.Sources {
+			if d.Git != "" {
+				key := project.Digest([]string{d.Git, d.Rev, d.Subdir, d.Module})
+				commits[key] = g.Lock.Git[key]
+			}
+		}
+	}
+	config := project.Digest(struct {
+		Nodes                []nodeConfig
+		Commits, Environment map[string]string
+		Tags                 []string
+		Target               project.Target
+		Kind, Compiler       string
+		Race                 bool
+	}{nodes, commits, environment, tags, target, kind, compiler, mode == "test"})
+	return project.UnitSpec{Host: runtime.GOOS + "-" + runtime.GOARCH, Target: environment["GOOS"] + "-" + environment["GOARCH"], Kind: kind, Name: target.Name, Config: config}, nil
 }

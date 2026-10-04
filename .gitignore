@@ -4,3 +4,5 @@
 /internal/typecheck/browserexports/*.a
 /cmd/hgo-web/dist/
 /bin/
+
+/target/

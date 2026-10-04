@@ -50,6 +50,7 @@ func run(args []string, out, stderr io.Writer) error {
 	bin := f.String("bin", "", "select named project binary")
 	example := f.String("example", "", "select named project example")
 	lib := f.Bool("lib", false, "select the optional project library")
+	targetDir := f.String("target-dir", "", "managed project artifacts (relative to project root; default target or HGO_TARGET_DIR)")
 	offline := f.Bool("offline", false, "use only cached dependencies")
 	locked := f.Bool("locked", false, "require unchanged hgo.lock")
 	if err := f.Parse(args[1:]); err != nil {
@@ -67,14 +68,14 @@ func run(args []string, out, stderr io.Writer) error {
 			return errors.New("directory mode writes per-file .go.map.json automatically; -source-map/-expanded are single-file flags")
 		}
 		if _, e := os.Stat(filepath.Join(input, "hgo.json")); e == nil {
-			return runProject(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), projectFlags{features: *features, bin: *bin, example: *example, noDefault: *noDefault, offline: *offline, locked: *locked, lib: *lib}, out, stderr)
+			return runProject(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), projectFlags{targetDir: *targetDir, features: *features, bin: *bin, example: *example, noDefault: *noDefault, offline: *offline, locked: *locked, lib: *lib}, out, stderr)
 		}
-		if *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
+		if *targetDir != "" || *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
 			return errors.New("project flags require hgo.json in the input directory")
 		}
 		return runDirectoryTags(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), out, stderr)
 	}
-	if *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
+	if *targetDir != "" || *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
 		return errors.New("project flags require a directory with hgo.json")
 	}
 	if *tags != "" {

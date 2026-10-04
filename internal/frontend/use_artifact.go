@@ -192,12 +192,17 @@ func writeUseArtifact(root, path string, m useMetadata, files map[string][]byte,
 }
 func attachUseMetadata(result *PackageResult, u *usePackage) error {
 	m := u.metadata
+	m.UnsupportedKinds = map[string]string{}
 	if result.macros != nil {
-		m.Unsupported = append(m.Unsupported, result.macros.PublicNames()...)
+		for _, name := range result.macros.PublicNames() {
+			m.Unsupported = append(m.Unsupported, name)
+			m.UnsupportedKinds[name] = "macro"
+		}
 	}
 	for _, f := range result.enumMetadata.Families {
 		if result.enumTypes.Scope().Lookup(f.Name) == nil {
 			m.Unsupported = append(m.Unsupported, f.Name)
+			m.UnsupportedKinds[f.Name] = "family"
 		}
 	}
 	sort.Strings(m.Unsupported)

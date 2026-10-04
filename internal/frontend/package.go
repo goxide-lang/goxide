@@ -112,6 +112,14 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	if err != nil {
 		return PackageResult{}, err
 	}
+	for _, name := range sortedUseNames(useContext.bindings) {
+		b := useContext.bindings[name]
+		if b.Kind == "macro" {
+			if err := registry.BindPublicAlias(name, dependencies[b.RoutePath], b.RouteName, b.Public); err != nil {
+				return PackageResult{}, err
+			}
+		}
+	}
 	cfg.macros, cfg.macroImporter = registry, imp
 	cfg.macroBudget = &macros.Budget{}
 	buildBudget := &macros.Budget{}

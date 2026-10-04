@@ -207,18 +207,7 @@ func TestUseCycleAndMacroDiagnostic(t *testing.T) {
 			t.Fatalf("expected cycle, got %v", e)
 		}
 	})
-	t.Run("macro", func(t *testing.T) {
-		src := t.TempDir()
-		useWrite(t, src, map[string]string{
-			"go.mod":  "module example.org/mac\n\ngo 1.27\n",
-			"p/p.hgo": "package p\npub macro_rules! answer { () => { 42 }; }\n",
-			"a/a.hgo": "package a\nimport p \"example.org/mac/p\"\npub use p::*;\n",
-		})
-		_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
-		if e == nil || !strings.Contains(e.Error(), "unsupported macro/family") {
-			t.Fatalf("expected unsupported macro diagnostic, got %v", e)
-		}
-	})
+
 }
 
 func TestUseRouteCannotCaptureLocalImportShadow(t *testing.T) {

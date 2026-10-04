@@ -9,6 +9,6 @@ use api::Count as Counter;
 func main() {
     Counter++
     fmt.Println(api.Label, Counter, api.Count, &Counter == &impl.Count)
-    total, count := api.Add(40, 1, 1)
+    total, count := api.Add(api.identity!(40), 1, 1)
     fmt.Println(total, count, api.Box[int]{Value: 7}.Get())
 }

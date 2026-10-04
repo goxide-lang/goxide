@@ -179,16 +179,29 @@ func (e *engine) resolveMacro(call tok, name string, qualified bool) (definition
 	}
 	return d, nil
 }
-func (e *engine) runtimePath(path string) string {
+func (e *engine) runtimePath(path string) (string, error) {
+	if e.pkg != nil {
+		parts := strings.Split(path, "/")
+		for i, part := range parts {
+			if part != "internal" {
+				continue
+			}
+			parent := strings.Join(parts[:i], "/")
+			if i == 0 || (e.pkg.path != parent && !strings.HasPrefix(e.pkg.path, parent+"/")) {
+				return "", fmt.Errorf("unsupported macro runtime route: Go internal package %s is inaccessible from %s", path, e.pkg.path)
+			}
+		}
+	}
+
 	if alias := e.callerImports[path]; alias != "" {
-		return alias
+		return alias, nil
 	}
 	if alias := e.addedImports[path]; alias != "" {
-		return alias
+		return alias, nil
 	}
 	alias := e.fresh()
 	e.addedImports[path] = alias
-	return alias
+	return alias, nil
 }
 func (e *engine) runtimeFunction(name string) (string, error) {
 	if e.active.pkg == e.pkg {
@@ -197,7 +210,11 @@ func (e *engine) runtimeFunction(name string) (string, error) {
 	if !ast.IsExported(name) || e.active.pkg.privateHelpers[name] {
 		return "", fmt.Errorf("private runtime helper %s cannot cross package boundary; expose a public helper or shim", name)
 	}
-	return e.runtimePath(e.active.pkg.path) + "." + name, nil
+	alias, err := e.runtimePath(e.active.pkg.path)
+	if err != nil {
+		return "", err
+	}
+	return alias + "." + name, nil
 }
 func (e *engine) finishImports(ts []tok) []tok {
 	// A compile-time-only ordinary import remains an explicit blank dependency.
@@ -390,8 +407,8 @@ func declaredDeriveHelpers(ts []tok) map[string]bool {
 	return out
 }
 
-// PublicNames exposes only names for unsupported-reexport diagnostics. It does
-// not serialize macro definitions or change expansion/hygiene behavior.
+// PublicNames enumerates public source bindings for use resolution and artifact
+// diagnostics. It never serializes macro definitions.
 func (p *Package) PublicNames() []string {
 	var names []string
 	for name, definition := range p.defs {
@@ -401,4 +418,38 @@ func (p *Package) PublicNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// PublicBinding reports the canonical source definition, not a facade spelling.
+func (p *Package) PublicBinding(name string) (path, original string, ok bool) {
+	d, ok := p.defs[name]
+	if !ok || !d.public || d.scope == nil {
+		return "", "", false
+	}
+	return d.scope.pkg.path, d.name, true
+}
+
+// BindPublicAlias retains the original definition scope and token provenance.
+// Only source-built registries participate; no macro payload is deserialized.
+func (p *Package) BindPublicAlias(alias string, source *Package, name string, public bool) error {
+	if alias == "print" || alias == "println" || goResultName(alias) {
+		return fmt.Errorf("macro use alias %s is a reserved builtin macro name", alias)
+	}
+
+	if source == nil {
+		return fmt.Errorf("macro use requires a compiled source package")
+	}
+	d, ok := source.defs[name]
+	if !ok || !d.public {
+		return fmt.Errorf("unknown or private macro use %s", name)
+	}
+	if _, exists := p.defs[alias]; exists {
+		return fmt.Errorf("macro use conflicts with declaration %s", alias)
+	}
+	if p.topNames[alias] {
+		return fmt.Errorf("macro use conflicts with package declaration %s", alias)
+	}
+	d.public = public
+	p.defs[alias] = d
+	return nil
 }

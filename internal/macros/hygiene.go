@@ -95,7 +95,12 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 				}
 				key := x.Name + "." + n.Sel.Name
 				if e.pkg != nil {
-					key = e.runtimePath(path) + "." + n.Sel.Name
+					alias, err := e.runtimePath(path)
+					if err != nil {
+						problem = at(ts[0], err.Error())
+						return false
+					}
+					key = alias + "." + n.Sel.Name
 				}
 				alias := e.alias(key)
 				a, ok1 := index(x.Pos())

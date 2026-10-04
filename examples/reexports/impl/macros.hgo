@@ -1,0 +1,5 @@
+package impl
+
+pub macro_rules! identity {
+    ($value:expr) => { $value };
+}

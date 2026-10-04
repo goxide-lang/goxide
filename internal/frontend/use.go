@@ -24,10 +24,11 @@ type useBinding struct {
 	Public                                                   bool
 }
 type useMetadata struct {
-	Version       int
-	Path, Package string
-	Bindings      []useBinding
-	Unsupported   []string
+	Version          int
+	Path, Package    string
+	Bindings         []useBinding
+	Unsupported      []string
+	UnsupportedKinds map[string]string `json:",omitempty"`
 }
 type useDecl struct {
 	qualifier, name, alias, file string
@@ -230,9 +231,51 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 				delete(surface, b.Name)
 			}
 		}
-		if d.name == "*" && len(m.Unsupported) > 0 {
-			return nil, fmt.Errorf("%s: glob includes unsupported macro/family exports %s; use an explicit supported item list", d.pos, strings.Join(m.Unsupported, ", "))
+		unsupported := append([]string(nil), m.Unsupported...)
+		ambiguousKinds := map[string]bool{}
+		if registry := known[p].macros; registry != nil {
+			available := map[string]bool{}
+			for _, name := range registry.PublicNames() {
+				origin, original, ok := registry.PublicBinding(name)
+				if !ok {
+					continue
+				}
+				if _, collision := surface[name]; collision {
+					ambiguousKinds[name] = true
+				}
+				available[name] = true
+				surface[name] = useBinding{Name: name, Kind: "macro", OriginPath: origin, OriginName: original, RoutePath: p, RouteName: name, Public: true}
+			}
+			unsupported = nil
+			for _, name := range m.Unsupported {
+				if !available[name] {
+					unsupported = append(unsupported, name)
+				}
+			}
 		}
+		reason := func(name string) string {
+			switch m.UnsupportedKinds[name] {
+			case "macro":
+				return name + " (macro requires a compiled source registry; external macro artifacts are unsupported)"
+			case "family":
+				return name + " (hgo generic family has no use alias protocol)"
+			default:
+				return name + " (legacy artifact lacks macro/family classification; no compiled source registry)"
+			}
+		}
+		if d.name == "*" && len(unsupported) > 0 {
+			descriptions := make([]string, 0, len(unsupported))
+			for _, name := range unsupported {
+				descriptions = append(descriptions, reason(name))
+			}
+			return nil, fmt.Errorf("%s: glob includes unsupported exports: %s; use an explicit supported item list", d.pos, strings.Join(descriptions, ", "))
+		}
+		for _, name := range unsupported {
+			if name == d.name {
+				return nil, fmt.Errorf("%s: unsupported use item %s::%s: %s", d.pos, d.qualifier, name, reason(name))
+			}
+		}
+
 		names := []string{d.name}
 		if d.name == "*" {
 			names = nil
@@ -242,6 +285,9 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 			sort.Strings(names)
 		}
 		for _, name := range names {
+			if ambiguousKinds[name] {
+				return nil, fmt.Errorf("%s: ambiguous use export %s: macro and Go declaration", d.pos, name)
+			}
 			b, ok := surface[name]
 			if !ok {
 				return nil, fmt.Errorf("%s: unknown, private, or unsupported use item %s::%s", d.pos, d.qualifier, name)
@@ -366,7 +412,9 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 				return nil, fmt.Errorf("public type/constant use alias %s must use a Go-exported name in this version", b.Name)
 			}
 		}
-		u.metadata.Bindings = append(u.metadata.Bindings, b)
+		if b.Kind != "macro" {
+			u.metadata.Bindings = append(u.metadata.Bindings, b)
+		}
 	}
 	return u, nil
 }
@@ -649,7 +697,7 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 			continue
 		}
 		b, ok := u.bindings[id.Name]
-		if !ok || b.Kind == "type" || b.Kind == "constant" {
+		if !ok || b.Kind == "type" || b.Kind == "constant" || b.Kind == "macro" {
 			continue
 		}
 		expr, e := route(b)

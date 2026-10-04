@@ -8,7 +8,7 @@
 
 研究依据与未选方案见 [研究分支 RFC 0007](https://github.com/hxsf/goxide/blob/29d81ecf06d7a9cfb383aa1e264a7bcd31d1fb6b/docs/rfcs/research/0007-modules-and-reexports.md)。本篇的实现范围优先于研究草案中的“尚未实现”状态。包发布协议承接 [RFC 0001](0001-package-loading.md)，Go 消费者不自动获得增强检查的边界承接 [RFC 0015](0015-public-api.md)。
 
-实现位置：`internal/frontend/use.go`、`use_artifact.go`，接入包收集与 DSL 降低后的绑定阶段。宏模块仅增加公开名称查询，用于不支持项诊断；没有改宏展开/卫生语义。
+实现位置：`internal/frontend/use.go`、`use_artifact.go`，接入包收集与 DSL 降低后的绑定阶段。宏模块以原definition/scope绑定源图内别名，保留定义点卫生，并检查实际引入的internal运行时路径；不复制宏为facade新定义。
 
 ## 源级规则
 
@@ -41,7 +41,10 @@ pub use source::*;                  // 枚举来源的有效公开表
 | 函数、泛型函数 | hgo引用直接绑定原Go函数selector，适用于直接调用、函数值、泛型实例化、可变参数、多返回及defer。不生成wrapper/可赋值函数变量。Go消费者从原包调用。 |
 | 可变变量 | hgo读、写、`++`、取地址最终访问原变量；不复制变量槽，不额外提供并发安全。Go消费者从原包访问或使用用户显式提供的accessor。 |
 | 具体enum | 公开类型alias接入既有enum metadata传播；验证了经facade的构造与match。已有internal-origin enum语法限制继续成立。 |
-| 宏、未具可命名Go类型的内建泛型家族 | 本片不重导出。来源公开宏/家族已知时glob明确列名报错，不静默漏掉；使用显式支持列表。外部旧产物没有宏协议时，不猜测其不存在的宏导出。 |
+| 源图内用户宏 | 本次目录module编译中的源构建registry支持显式、别名、glob、多层facade、同源diamond。保留原宏定义点scope、嵌套宏与helper身份。私有runtime helper仍拒绝；跨界internal运行时路径明确拒绝，纯捕获/常量宏可合法使用。 |
+| 独立module产物中的宏 | 拒绝：当前没有宏发布/反序列化协议。metadata记录不可用名称和类别；显式项与混合glob均准确诊断，不漏项。不自动递归读取依赖中的任意hgo源码。 |
+| 有真实Go泛型类型表示的Option/Result家族 | 复用既有enum metadata与真实Go alias，支持公开改名、多层facade、`api.Maybe[int]::Some`等限定构造/match，包括独立module消费。裸`use api::Maybe as Local`可用于Go类型位置；裸`Local[int]::Some`尚不在constructor绑定协议中，使用限定构造路径。 |
+| 无真实Go类型表示的家族、未实现的用户泛型enum | 不假设等同于Go泛型alias，不生成新家族/实例化语义；已知不可用项明确拒绝。 |
 
 普通Go包的公开表来自真实`go/types`，增强包的公开表再由验证后的metadata增补/限制。类型判等使用Go的真实类型身份，不用名称字符串模拟：`Box[int]`、`Box[string]`及实参中不同包的私有结构字段/接口方法必须区别处理。元数据保留真实identity route以恢复类型参数身份。
 
@@ -114,7 +117,7 @@ const Small = source.Small
 | USE-N2 | 包级变量/类型/函数或文件import与use名称冲突 | hgo拒绝，不能由文件遍历顺序决定 |
 | USE-N3 | 外部访问private use或以dot import绕过 | hgo拒绝；普通Go边界另述 |
 | USE-N4 | 通过facade访问不可导入的internal函数/变量 | hgo明确不支持；不绕过Go限制 |
-| USE-N5 | glob包含已知公开宏/未支持家族 | hgo列名拒绝，建议显式选择 |
+| USE-N5 | glob包含外部产物宏/未支持家族 | hgo列名拒绝，建议显式选择 |
 | USE-N6 | alias环/包import环 | 包图拒绝，不声称支持循环模块加载 |
 | USE-N7 | `Box[int]`与`Box[string]`合并 | 真实Go类型不同，拒绝歧义 |
 | USE-N8 | 同拼写匿名结构私有字段或接口私有方法来自不同包 | 真实Go类型不同，拒绝歧义 |
@@ -123,7 +126,7 @@ const Small = source.Small
 
 局部参数和局部变量可以正常遮蔽包内use绑定；新生成的原包import别名不会复用可能被局部变量遮蔽的源import名。属性键/selector成员不当成裸use绑定。当前裸use名出现在无法明确区分字段名与map key的具名composite literal中时会给出限制诊断，使用显式限定map key或不冲突的字段名；不能为了“通过”而重写错误的字段。
 
-现有宏模板直接引用use引入的自由函数名、宏重导出、泛型enum家族别名等未建立独立卫生/家族协议；诊断不代表它们已可用。完整mod及pub(scope)仍另行设计。
+宏模板直接引用use引入的自由函数名、外部宏发布、任意用户泛型enum等未建立新协议；不因为宏重导出而放宽既有helper/捕获/泛型限制。宏与普通Go声明同名时，选择该名称或glob报类别歧义；显式选择其他项仍允许。完整mod及pub(scope)仍另行设计。
 
 ## 双向互操作
 
@@ -131,7 +134,7 @@ hgo → Go：原生Go导出对象是声明身份基础；变量和函数始终�
 
 Go → hgo：消费生成Go源即可使用实际类型/常量alias和普通业务函数；通过原包访问变量/函数。Go不理解`.hgo.uses.json`中的虚拟函数/变量入口，也不自动获得private use限制或其他增强检查。
 
-metadata文件名`.hgo.uses.json`，Go marker为`HgoUseMetadata`，schema版本1。记录公开性、类别、canonical声明、合法Go route及类型identity route；不包含可执行宏代码。恢复校验marker、真实Go对象种类/类型/常量、精确selected source集合、source digest与Go importer的构建/依赖closure fingerprint。JSON必须仅含一个对象，读取有大小上限。普通模式产物不能被test/race模式默默复用。
+metadata文件名`.hgo.uses.json`，Go marker为`HgoUseMetadata`，schema版本1，新增可选`UnsupportedKinds`分类（参与marker digest）；新读者可校验旧产物，旧读者会拒绝新增字段，不能声称双向兼容。记录公开性、类别、canonical声明、合法Go route及类型identity route；不包含可执行宏代码。恢复校验marker、真实Go对象种类/类型/常量、精确selected source集合、source digest与Go importer的构建/依赖closure fingerprint。JSON必须仅含一个对象，读取有大小上限。普通模式产物不能被test/race模式默默复用。
 
 source map在use移除及名称重写后继续回映原文件；生成alias文件是独立产物，不伪装原用户声明。重导出源目录与Go包仍同构；此片不预先固定未来mod/layout设计。已有生成Go+metadata再次进入目录流水线时保留use sidecar，并避免对已验证的相同enum marker重复声明。
 
@@ -162,4 +165,18 @@ go run ./cmd/hgo transpile -o /tmp/reexports-generated examples/reexports
 - 本文 CLI 示例实际输出 `shared 2 2 true`、`42 2 7`。
 - 独立审查发现并推动修复局部 import 遮蔽、声明冲突、dot import 隐私绕过、生成产物 metadata 保留、泛型及私有结构类型身份、JSON 尾随对象校验问题；补充对应回归后审查结论无剩余阻断。
 
-以上验证覆盖此目录包重导出切片；不代表尚未实现的 Cargo features、完整 mod/pub(scope) 或宏重导出已经通过验收。
+以上验证覆盖此目录包重导出切片；不代表尚未实现的 Cargo features、完整 mod/pub(scope) 已经通过验收。宏补片验收另见下节。
+
+### 宏补片与真实家族核查
+
+语法仍是`import p "example.org/lib"`再`pub use p::answer as renamed;`，调用`api.renamed!(...)`；不是`pub use "path"`。`use api::renamed as local;`允许本目录各hgo文件用`local!(...)`。
+
+最小拒绝案例：独立module只有生成Go/metadata时，`pub use api::answer;`报`macro requires a compiled source registry`；私有helper模板经facade调用仍报`private runtime helper`；实际引入不可访问internal依赖时报`unsupported macro runtime route`，而不是等生成Go后才失败。混合glob包含任何不可用项时整体拒绝，并列名、类别、原因。
+
+`TestUseMacroSourceGraph`验证定义点helper、嵌套私有宏、多层/diamond/别名/跨文件、泛型表达式捕获、所有facade初始化和重复构建确定性。`TestUseMacroAndBuiltinFamilies`验证Option/Result限定构造与match，并在独立go.mod中验证真实类型alias及enum metadata继续传播；这与仅能通过Go类型检查的泛型alias是分别验证的能力。外部宏拒绝不妨碍显式选择同一产物的普通类型/常量。
+
+本片不新增T/E推导，不把泛型imported helper从显式捕获规则改成隐式绑定，不序列化宏AST，不公开私有helper，不引入wrapper或变量副本。跨独立module宏支持仍需单独确定源码发布、依赖闭包、认证和config fingerprint合同。
+
+宏补片验证使用同一真实Go 1.27.1离线fixture环境。最后加入builtin保留名guard后，`go test -race ./internal/frontend ./internal/macros -count=1`通过（35.421s / 4.137s）。独立审查实证并推动修复无关宏/Go同名误拒、internal helper非法运行时路径；保留名guard另经独立测试。全树`go vet -tags hgoweb ./...`、设计检查13条Go命令及官网/WASM构建通过；CLI示例输出保持上述值。`TestUseMacroExternalSourceRegistryBoundary`另验证config fingerprint和分类字段digest，`TestUseMacroSourceGraph`逐字节比较重复构建的产物。新增可选分类字段没有引入宏反序列化。
+
+宏补片全树`go test -race -tags hgoweb -count=1 ./...`通过，含CLI、web、验收集和prototype；最后的保留名guard由上述完整frontend/macros race复跑覆盖。最终官网资源重建后`go test -race -tags hgoweb ./cmd/hgo-web`亦通过。

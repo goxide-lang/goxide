@@ -16,7 +16,7 @@ func TestNativeWorkspaceCopiedLockStandalone(t *testing.T) {
 		publishVersion(t, proxy, "example.org/d", v, map[string]string{"go.mod": "module example.org/d\ngo 1.27\n", "d.go": "package d\nconst Value=\"" + v + "\"\n"})
 	}
 	root := nativeWorkspaceFixture(t)
-	workspaceWrite(t, root, "app/go.mod", "module example.org/app\ngo 1.27\ngodebug panicnil=0\nrequire example.org/d v1.0.0\n")
+	workspaceWrite(t, root, "app/go.mod", "module example.org/app\ngo 1.27\ngodebug panicnil=0\nrequire example.org/d v1.0.0\nreplace example.org/lib => ../lib\n")
 	workspaceWrite(t, root, "lib/go.mod", "module example.org/lib\ngo 1.27\nrequire example.org/d v1.1.0\n")
 	workspaceWrite(t, root, "app/main.go", "package main\nimport(\"fmt\";\"example.org/d\";\"runtime/debug\")\nfunc main(){fmt.Println(d.Value);b,_:=debug.ReadBuildInfo();for _,s:=range b.Settings{if s.Key==\"DefaultGODEBUG\"{fmt.Println(s.Value)}}}\n")
 	dest := filepath.Join(t.TempDir(), "new")
@@ -24,6 +24,13 @@ func TestNativeWorkspaceCopiedLockStandalone(t *testing.T) {
 		t.Fatalf("%s %v", out, e)
 	}
 	split := t.TempDir()
+	// The existing local-replace contract validates declared paths even when
+	// unused. Materialize that path; this regression isolates lock identity,
+	// without adding lazy discovery of missing replacement directories.
+	if err := os.MkdirAll(filepath.Join(filepath.Dir(split), "m1"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
 	for _, name := range []string{"goxide.toml", "main.go"} {
 		b, e := os.ReadFile(filepath.Join(dest, "members/m0", name))
 		if e != nil {

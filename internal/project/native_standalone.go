@@ -13,7 +13,7 @@ type NativeMemberRecord struct {
 	Input string `json:"input"`
 }
 
-func nativeMemberInput(m Manifest, root string, locations map[string]string) string {
+func nativeMemberInput(m Manifest, root string, locations map[string]string, localModules map[string]bool) string {
 	b, _ := json.Marshal(m)
 	var normalized Manifest
 	_ = json.Unmarshal(b, &normalized)
@@ -44,7 +44,7 @@ func nativeMemberInput(m Manifest, root string, locations map[string]string) str
 		if r.Path != "" && direct[r.Module] != "" && direct[r.Module] == filepath.Clean(path) {
 			continue
 		}
-		if r.Path != "" && locations[r.Module] == filepath.Clean(path) {
+		if localModules[r.Module] && r.Path != "" && locations[r.Module] == filepath.Clean(path) {
 			r.Path = "local:" + r.Module
 		}
 		normalized.Native.Replace = append(normalized.Native.Replace, r)
@@ -54,16 +54,18 @@ func nativeMemberInput(m Manifest, root string, locations map[string]string) str
 func CaptureNativeMembers(w *Workspace, lock *NativeWorkspaceLock) {
 	lock.Members = map[string]NativeMemberRecord{}
 	locations := map[string]string{}
+	localModules := map[string]bool{}
 	for module, root := range w.Members {
 		locations[module] = root
 	}
 	for module, pin := range lock.Modules {
 		if pin.Replace != nil && pin.Replace.Version == "" && contained(w.Root, pin.Replace.Path) {
 			locations[module] = pin.Replace.Path
+			localModules[module] = true
 		}
 	}
 	for module, root := range w.Members {
-		lock.Members[module] = NativeMemberRecord{Input: nativeMemberInput(w.Manifests[root], root, locations)}
+		lock.Members[module] = NativeMemberRecord{Input: nativeMemberInput(w.Manifests[root], root, locations, localModules)}
 	}
 }
 func (g *Graph) input(n *Node) string {
@@ -81,7 +83,9 @@ func (g *Graph) input(n *Node) string {
 		}
 		locations[d.Module] = filepath.Clean(path)
 	}
+	localModules := map[string]bool{}
 	for module := range g.Lock.NativeWorkspace.LocalSources {
+		localModules[module] = true
 		pin := g.Lock.NativeWorkspace.Modules[module]
 		var fallback, exact string
 		for _, r := range n.Manifest.Native.Replace {
@@ -104,7 +108,7 @@ func (g *Graph) input(n *Node) string {
 			locations[module] = p
 		}
 	}
-	return nativeMemberInput(n.Manifest, n.Root, locations)
+	return nativeMemberInput(n.Manifest, n.Root, locations, localModules)
 }
 func (g *Graph) prepareNativeStandalone() error {
 	n := g.Lock.NativeWorkspace

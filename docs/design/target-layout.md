@@ -16,6 +16,7 @@ target/
       .hgo-run.json
       bundle/module/
       bundle/deps/<module-hash>/
+      bundle/main-anchor/go.mod  # 原生 module 回边的政策锚，不含根包源码
       intermediate/
       script-out/                 # 只预留路径，布局不创建/执行脚本
     script-cache/                 # 只预留路径，布局不定义脚本缓存键
@@ -28,7 +29,7 @@ target/
     .hgo-binary.json
 ```
 
-host/target 为 GOOS-GOARCH；kind 为 lib/bin/example。config 包含整个已解析 hgo 图各节点的 module/root/go.mod/manifest/feature、激活 Git commit、tags、目标入口与种类、编译器内容摘要、Go 目标环境选项以及 test 的 race 模式。**它是配置身份，不是源码内容缓存键。** 源码修改可复用同一最终二进制路径，但每次生成新 run；不会据 config 跳过转译。build/run/transpile 的相同普通配置可共享 unit，test 配置隔离。
+host/target 为 GOOS-GOARCH；kind 为 lib/bin/example。config 包含整个已解析 hgo 图各节点的 module/root/go.mod/manifest/feature、激活 Git commit、tags、目标入口与种类、编译器内容摘要、Go 目标环境选项、共享选版/来源计划以及 test 的 race 模式。**它是配置身份，不是源码内容缓存键。** 源码修改可复用同一最终二进制路径，但每次生成新 run；不会据 config 跳过转译。build/run/transpile 的相同普通配置可共享 unit，test 配置隔离。
 
 本次继续明确拒绝非宿主 GOOS/GOARCH；只有路径分区并不解决前端跨平台类型尺寸问题。不可把目录字段视为已实现交叉编译。
 

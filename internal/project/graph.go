@@ -9,34 +9,38 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 )
 
 type Lock struct {
-	Version int               `json:"version"`
-	Git     map[string]string `json:"git"`
-	Sums    map[string]string `json:"sums"`
+	Version int                             `json:"version"`
+	Git     map[string]string               `json:"git"`
+	Sums    map[string]string               `json:"sums"`
+	Plans   map[string]map[string]Selection `json:"plans,omitempty"`
 }
 type Node struct {
-	Root, Module string
-	HasManifest  bool
-	CheckoutRoot string
-	Manifest     Manifest
-	Features     map[string]bool
-	Requests     map[string]Request
-	Children     map[string]*Node
-	Sources      map[string]Dependency
+	Root, Module    string
+	HasManifest     bool
+	CheckoutRoot    string
+	SourceID        string
+	SelectedVersion string
+	Manifest        Manifest
+	Features        map[string]bool
+	Requests        map[string]Request
+	Children        map[string]*Node
+	Sources         map[string]Dependency
 }
 type Graph struct {
-	Root             *Node
-	Nodes            []*Node
-	Lock             Lock
-	LockPath, Cache  string
-	Offline, Locked  bool
-	original         []byte
-	Tool             string
-	NativeSelections map[string]string
+	Root            *Node
+	Nodes           []*Node
+	Lock            Lock
+	LockPath, Cache string
+	Offline, Locked bool
+	original        []byte
+	Tool            string
+	Plan            map[string]Selection
+	PlanID          string
+	RootMod         ModFile
 }
 
 func Digest(v any) string {
@@ -74,134 +78,9 @@ func Load(root, tool string, requested []string, defaults, offline, locked bool)
 	if g.Lock.Sums == nil {
 		g.Lock.Sums = map[string]string{}
 	}
-	read := func(root string) (*Node, error) {
-		_, manifestErr := os.Stat(filepath.Join(root, ManifestName))
-		m, e := Read(root)
-		if os.IsNotExist(e) {
-			m = Manifest{Version: 1}
-			e = nil
-		}
-		if e != nil {
-			return nil, e
-		}
-		module, e := ModulePath(tool, root)
-		if e != nil {
-			return nil, e
-		}
-		return &Node{Root: root, Module: module, HasManifest: manifestErr == nil, Manifest: m, Children: map[string]*Node{}, Sources: map[string]Dependency{}}, nil
-	}
-	g.Root, e = read(root)
-	if e != nil {
-		return nil, e
-	}
-	nodes := map[string]*Node{g.Root.Module: g.Root}
-	origins := map[string]string{g.Root.Module: root}
-	requests := map[string]Request{g.Root.Module: {Features: requested, Defaults: defaults}}
-	for changed := true; changed; {
-		changed = false
-		for _, module := range keys(nodes) {
-			n := nodes[module]
-			req := requests[module]
-			features, deps, e := Resolve(n.Manifest, req.Features, req.Defaults)
-			if e != nil {
-				return nil, fmt.Errorf("%s: %w", module, e)
-			}
-			n.Features = features
-			n.Requests = deps
-			for _, alias := range keys(deps) {
-				d := n.Manifest.Dependencies[alias]
-				n.Sources[alias] = d
-				if d.Version != "" {
-					if prior, ok := origins[d.Module]; ok && prior != "go-module" {
-						return nil, fmt.Errorf("conflicting sources for module %s", d.Module)
-					}
-					origins[d.Module] = "go-module"
-					if len(deps[alias].Features) > 0 {
-						return nil, fmt.Errorf("native version dependency %s cannot receive hgo features in v1; use path/git", alias)
-					}
-					continue
-				}
-				dir := d.Path
-				boundary := n.CheckoutRoot
-				if d.Git != "" {
-					dir, e = g.gitSource(d)
-					boundary = filepath.Join(g.Cache, Digest([]string{d.Git, d.Rev, d.Subdir, d.Module}))
-					if e != nil {
-						return nil, fmt.Errorf("dependency %s: %w", alias, e)
-					}
-				} else {
-					if !filepath.IsAbs(dir) {
-						dir = filepath.Join(n.Root, dir)
-					}
-					dir, e = filepath.EvalSymlinks(dir)
-					if e != nil {
-						return nil, e
-					}
-				}
-				if boundary != "" {
-					rel, err := filepath.Rel(boundary, dir)
-					if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-						return nil, fmt.Errorf("git dependency path escapes checkout: %s", alias)
-					}
-				}
-				sourceKey := dir
-				if prior, ok := origins[d.Module]; ok && prior != sourceKey {
-					return nil, fmt.Errorf("conflicting sources for module %s", d.Module)
-				}
-				child, ok := nodes[d.Module]
-				if !ok {
-					child, e = read(dir)
-					if e != nil {
-						return nil, e
-					}
-					if child.Module != d.Module {
-						return nil, fmt.Errorf("dependency %s module path mismatch: want %s, got %s", alias, d.Module, child.Module)
-					}
-					child.CheckoutRoot = boundary
-					nodes[d.Module] = child
-					origins[d.Module] = sourceKey
-					changed = true
-				}
-				n.Children[alias] = child
-				r := requests[d.Module]
-				old := Digest(r)
-				r.Defaults = r.Defaults || deps[alias].Defaults
-				set := map[string]bool{}
-				for _, f := range append(r.Features, deps[alias].Features...) {
-					set[f] = true
-				}
-				r.Features = keys(set)
-				requests[d.Module] = r
-				if Digest(r) != old {
-					changed = true
-				}
-			}
-		}
-	}
-	state := map[string]int{}
-	var visit func(*Node) error
-	visit = func(n *Node) error {
-		if state[n.Module] == 1 {
-			return fmt.Errorf("dependency cycle at %s", n.Module)
-		}
-		if state[n.Module] == 2 {
-			return nil
-		}
-		state[n.Module] = 1
-		for _, alias := range keys(n.Children) {
-			if e := visit(n.Children[alias]); e != nil {
-				return e
-			}
-		}
-		state[n.Module] = 2
-		g.Nodes = append(g.Nodes, n)
-		return nil
-	}
-	if e = visit(g.Root); e != nil {
-		return nil, e
-	}
-	return g, nil
+	return g.plan(root, requested, defaults)
 }
+
 func ModulePath(tool, root string) (string, error) {
 	info, err := os.Lstat(filepath.Join(root, "go.mod"))
 	if err != nil || !info.Mode().IsRegular() {
@@ -249,7 +128,7 @@ func (g *Graph) Save() error {
 		if e = json.Unmarshal(g.original, &before); e != nil {
 			return e
 		}
-		if !reflect.DeepEqual(before, g.Lock) {
+		if Digest(before) != Digest(g.Lock) {
 			return fmt.Errorf("--locked: dependency lock would change")
 		}
 		return nil

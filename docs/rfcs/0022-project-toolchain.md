@@ -48,7 +48,7 @@ feature 的数组元素支持：本模块 feature 名、`dep:alias`（只激活 
 - 默认启用已声明的 `default`；`--no-default-features` 仅关闭根模块的默认请求。
 - 所有到同一 module/source 的请求取并集；任一边要求默认 feature，就启用其默认 feature。不能以一条边的 false 撤销另一条边的 true。
 - 未知本地 feature、未知依赖、feature 循环、模块依赖循环诊断；所有本地 feature 边即使未启用也检查。转发到依赖的 feature 名在依赖被激活读取后检查，未激活 optional 来源不下载。
-- 不隐式生成与 optional 依赖同名的 feature。原生 Go version 来源不接受 hgo feature 转发；需要增强源码配置时用 path/git。
+- 不隐式生成与 optional 依赖同名的 feature。version/path/git 是获取渠道；活动 manifest 边取得 hgo.json 源码后使用相同 feature/default/optional/lib 规则。没有 hgo.json 的纯 Go 或固定配置生成 Go 不接受显式 hgo feature 请求。仅 go.mod require/indirect 参与 Go 选版，不隐式开启 hgo defaults 或执行脚本。
 - 原始 go.mod 的 require 不因 hgo optional 关闭而被删除；显式 Go 依赖仍由 Go 解析。
 
 ### 配置选择顺序
@@ -94,7 +94,7 @@ func Pretty() bool { return true }
 {"module":"example.org/lib", "path":"../lib", "features":["fast"]}
 ```
 
-上面仅展示格式，不是测试访问的服务。版本解析、MVS、module 缓存、校验和全部调用真实 Go 工具。原生 go.mod 与本地 replace 可继续使用。manifest 与原 go.mod 的直接版本/来源冲突拒绝；传递本地来源也不能覆盖根已有的不一致 replace。源 go.mod/go.sum 不改写，修改限于生成副本。
+上面仅展示格式，不是测试访问的服务。版本解析、MVS、module 缓存、校验和全部调用真实 Go 工具。原生 go.mod 与本地 replace 可继续使用。manifest 与原 go.mod 的版本请求共同交 Go MVS 选择，不因两个最低版本不同就拒绝；显式本地/Git 来源不能覆盖根已有的不一致 replace。根 replace/exclude 为全局权威，不提升依赖自己的策略。源 go.mod/go.sum 不改写，修改限于生成副本。
 
 每个 path/git 依赖入口（Git 含 subdir 后）必须自带普通文件 go.mod，module 字段必须等于其实际 module path；不会自动包装纯 Go 目录或合成 go.mod，也不采用父模块的 go.mod。缺少 hgo.json 的原生 Go 模块可以使用。
 
@@ -102,11 +102,11 @@ func Pretty() bool { return true }
 
 Git 接受无凭据的 HTTPS URL，另支持绝对本地路径/file URL 用于本地仓库；禁止 URL userinfo/query、SSH 和 ext。命令通过独立 argv 调用，不经 shell，不运行安装脚本/子模块/生成脚本，禁用 hooks、credential helper、askpass、fsmonitor 与外部协议。Git 来源的 path 后代和本地 go.mod replace 不得逃出 checkout。缓存 checkout 必须与锁定 commit 一致且无修改、未跟踪或 ignored 文件；拒绝缓存目录 symlink。
 
-`hgo.lock` 保存 source-key→commit 和精确模块配置→Go sums；应提交。`--locked` 拒绝缺锁、缺配置、校验和或 commit 变化。`--offline` 禁止 Git fetch，Go 强制 `GOPROXY=off GOSUMDB=off GONOPROXY=none GOVCS=*:off`，并固定 `GOTOOLCHAIN=local GOWORK=off`；冷缓存明确失败。离线需预热 Git `.hgo/git` 和 Go module cache，锁文件不代替依赖字节。无自动 update 命令；更新 Git 时显式更换 rev，旧配置锁项保留。锁不冻结用户本地 path 文件内容。
+`hgo.lock` 保存 source-key→commit、模块配置→Go sums，以及稳定 Go 选版/替换/源码 sums 计划；应提交。旧锁可在非 locked 构建中增补计划，缺计划时 --locked 明确拒绝。仅 cfg feature 变化而活动依赖约束/源码声明和模块计划完全相同时可共享计划锁项，产物配置仍分开。`--locked` 拒绝缺锁、缺配置、校验和或 commit 变化。`--offline` 禁止 Git fetch，Go 强制 `GOPROXY=off GOSUMDB=off GONOPROXY=none GOVCS=*:off`，并固定 `GOTOOLCHAIN=local GOWORK=off`；冷缓存明确失败。离线需预热 Git `.hgo/git` 和 Go module cache，锁文件不代替依赖字节。无自动 update 命令；更新 Git 时显式更换 rev，旧配置锁项保留。锁不冻结用户本地 path 文件内容。
 
-Go 对各生成 main module 计算 build list。第一版要求各 hgo 节点中出现的同一原生依赖具有相同实际选中版本/replace；检测到不同则提示统一版本，**不声称已实现全图统一 MVS 规划**。这样避免以依赖 v1 检查过的增强 metadata 被根 v2 悄然复用。
+现在先在共享规划 main module 中让真实 Go 选版：活动 hgo 约束作为根要求，内部 go.mod 桥保留同模块的多个版本请求，桥继承根 Go directive，保持图裁剪规则。取得实际版本后重新从根计算 hgo manifest/feature 闭包；丢弃旧版本的 hgo 边，重复非相邻状态或超过 64 轮拒绝，不自行裁剪 Go 原生图。只有稳定后才确定增强构建顺序；对全部生成模块政策先作无源码预检，再授权/执行脚本和转译，实际生成时再次核对 build list。版本、sums、来源计划进入配置/metadata/脚本身份。完整合同和黑白例见 [version 来源设计](../design/version-source-plan.md)。
 
-生成的 bundle 包括 module 和所需 deps 副本，go.mod replace 指向本次生成目录。可在该位置用 Go 构建；移动 bundle 后绝对 replace 需要重新生成。每次使用新 bundle，默认保留在受管 `target/` 下，没有持久转译缓存命中。manifest、启用 feature 集、目标种类/入口和编译器内容摘要形成每个项目模块的配置标记，进入生成源码与 metadata/Go cache 指纹。Go tags、平台及 race 仍使用已有 fingerprint；普通/测试 metadata 继续隔离。无 manifest 的已有外部产物不强加配置标记，保留其 metadata 验证环境。
+生成的 bundle 包括 module 和所需 deps 副本，go.mod replace 指向本次生成目录。存在依赖时另保留只含 go.mod 的 main-anchor，处理原生 module 回边，不暴露尚未配置的根源码包；实际 package import 环仍拒绝。可在该位置用 Go 构建；移动 bundle 后绝对 replace 需要重新生成。每次使用新 bundle，默认保留在受管 `target/` 下，没有持久转译缓存命中。manifest、启用 feature 集、目标种类/入口和编译器内容摘要形成每个项目模块的配置标记，进入生成源码与 metadata/Go cache 指纹。Go tags、平台及 race 仍使用已有 fingerprint；普通/测试 metadata 继续隔离。无 manifest 的已有外部产物不强加配置标记，保留其 metadata 验证环境。
 
 ## 双向互操作
 
@@ -152,6 +152,12 @@ examples 仅显式选择构建，不成为默认 bin/lib 产物；本片没有 p
 
 多行 cfg! 仍明确拒绝，不能用保留 LF 的简单布尔填充规避：Go 自动分号会使合法表达式变成语法错误。后续若支持，须接入明确 source-map edits，覆盖零缩进闭括号、CRLF、前置否定、尾随运算及后续诊断位置；本次未加入新的谓词或表达式解释器。
 
-## 已批准的 version 来源增强（文档先行）
+## version 来源与发布边界
 
-用户已批准将 Go module version 渠道的 hgo 源码与 path/git 统一处理；实施前合同、统一 MVS/feature 稳定图、发布边界、黑白例及实现顺序见 [version 来源计划](../design/version-source-plan.md)。本段不将尚未完成的实现冒称可用；完成后更新正文中原生 version 不接受 hgo feature、独立 build list 的旧限制。
+version 渠道的 hgo 项目现在使用同一 feature/lib 构建流程。下载缓存先经实际 Go 内容校验；hgo 的 zip 内 go.mod 还必须与代理返回的 .mod 元数据一致，全部修改只发生在生成副本。允许 .hgo 与不同名手写 .go；拒绝同名双源及已知 hgo 生成 metadata/config/source-map 混装。无 hgo.json 的固定 Go 发行物不重配 features。
+
+增强源码的 go.mod 声明仍须匹配消费逻辑 module；不自动重写改名 fork 的源码自导入身份。纯 Go fork 替换继续采用 Go 规则。version/path 同 module 只有根不带版本限定的本地 replace 明确指向同目录时统一；否则来源冲突拒绝。下载模块的 path/host helper/tools 不能越出取得的模块边界。`hgo-planner.invalid/` 为内部保留 module namespace，真实依赖引用会拒绝。
+
+`cmd/hgo/version_test.go` 使用临时 file proxy 和自编脚本 fixture，覆盖统一 MVS/菱形、默认关闭、manifest 变化/振荡、native 回边与 fork、source cache hash/污染、A/B/A、冷暖离线/锁定、源码发布拒绝、脚本升级重新许可/撤销及生成 Go race/vet。实施前文档先保存为 25e3fa6 并独立 review；完整语义与验收对应见 [version 来源设计](../design/version-source-plan.md)。
+
+构建顺序仍是增强 module 级 DAG，不实现跨 module 的包级交错排序。main-anchor 只保证原生 module 图回边的政策解析；依赖不能通过它导入尚未生成的根包，即使某个包级图本身无环也不在本阶段支持范围内。

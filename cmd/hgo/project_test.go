@@ -352,8 +352,8 @@ func TestProjectNativeBuildListConsistency(t *testing.T) {
 	projectWrite(t, native, map[string]string{"go.mod": "module example.org/native\n\ngo 1.27\n", "lib.go": "package native\nfunc Value()int{return 1}\n"})
 	projectWrite(t, dep, map[string]string{"go.mod": "module example.org/dep\n\ngo 1.27\nrequire example.org/native v1.0.0\nreplace example.org/native => ../native\n", "hgo.json": `{"version":1,"lib":{"name":"lib","path":"."}}`, "lib.hgo": "package dep\nimport n \"example.org/native\"\nfunc Value()int{return n.Value()}\n"})
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\nrequire example.org/native v1.1.0\nreplace example.org/native => ../native\n", "hgo.json": `{"version":1,"bins":[{"name":"app","path":"main.hgo"}],"dependencies":{"dep":{"module":"example.org/dep","path":"../dep"}}}`, "main.hgo": "package main\nimport d \"example.org/dep\"\nfunc main(){_=d.Value()}\n"})
-	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "build lists disagree") {
-		t.Fatal(e)
+	if b, e := projectRun(t, root, "run", "--offline"); e != nil {
+		t.Fatalf("shared plan should align native selections: %s %v", b, e)
 	}
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\nrequire example.org/native v1.0.0\nreplace example.org/native => ../native\n"})
 	if b, e := projectRun(t, root, "run", "--offline"); e != nil {

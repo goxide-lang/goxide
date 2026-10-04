@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/frontend"
@@ -64,6 +63,9 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		}
 	}
 	targetInput := g.Root.Root
+	if err = preflightProjectModules(g); err != nil {
+		return err
+	}
 	compilerID := projectCompilerID()
 	layoutPath, err := project.ResolveTargetDir(g.Root.Root, flags.targetDir)
 	if err != nil {
@@ -152,6 +154,23 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	// incomplete module on failure. No generated-source cache hit is claimed.
 
 	generated := map[string]string{}
+	// A main-module anchor preserves native module backedges without exposing an
+	// unconfigured root package to dependency compilation. Actual package cycles
+	// still fail; this directory contains module policy only, never source code.
+	if len(g.Nodes) > 1 {
+		anchor := filepath.Join(bundle, "main-anchor")
+		if err = os.Mkdir(anchor, 0755); err != nil {
+			return err
+		}
+		raw, e := os.ReadFile(filepath.Join(g.Root.Root, "go.mod"))
+		if e != nil {
+			return e
+		}
+		if err = os.WriteFile(filepath.Join(anchor, "go.mod"), raw, 0644); err != nil {
+			return err
+		}
+		generated[g.Root.Module] = anchor
+	}
 	var result frontend.ModuleResult
 	for _, n := range g.Nodes {
 		inputPath := n.Root
@@ -196,11 +215,11 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		configuration := ""
 		if n.HasManifest {
 			configuration = project.Digest(struct {
-				Manifest       project.Manifest
-				Features       []string
-				Target         project.Target
-				Kind, Compiler string
-			}{n.Manifest, project.Keys(n.Features), selected, kind, compilerID})
+				Manifest             project.Manifest
+				Features             []string
+				Target               project.Target
+				Kind, Compiler, Plan string
+			}{n.Manifest, project.Keys(n.Features), selected, kind, compilerID, g.PlanID})
 		} else {
 			features = nil
 		}
@@ -326,6 +345,67 @@ func checkTarget(root, path string) error {
 	}
 	return nil
 }
+
+// Validate every generated module policy before any generator or frontend runs.
+// These shadow modules contain no source code and never become published output.
+func preflightProjectModules(g *project.Graph) error {
+	work, e := os.MkdirTemp("", "hgo-module-preflight-")
+	if e != nil {
+		return e
+	}
+	defer os.RemoveAll(work)
+	generated := map[string]string{}
+	for _, n := range g.Nodes {
+		dir := filepath.Join(work, project.Digest(n.Module))
+		if e = os.Mkdir(dir, 0755); e != nil {
+			return e
+		}
+		for _, name := range []string{"go.mod", "go.sum"} {
+			b, err := os.ReadFile(filepath.Join(n.Root, name))
+			if os.IsNotExist(err) && name == "go.sum" {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if err = os.WriteFile(filepath.Join(dir, name), b, 0644); err != nil {
+				return err
+			}
+		}
+		// Frontend normally normalizes relative replaces while copying. Do the same
+		// for this module-only preflight, without touching the original go.mod.
+		m, err := project.ReadMod(g.Tool, n.Root)
+		if err != nil {
+			return err
+		}
+		args := []string{"mod", "edit"}
+		for _, rep := range m.Replace {
+			if rep.New.Version == "" && !filepath.IsAbs(rep.New.Path) {
+				old := rep.Old.Path
+				if rep.Old.Version != "" {
+					old += "@" + rep.Old.Version
+				}
+				args = append(args, "-replace="+old+"="+filepath.Join(n.Root, rep.New.Path))
+			}
+		}
+		if len(args) > 2 {
+			c := exec.Command(g.Tool, args...)
+			c.Dir = dir
+			c.Env = project.GoEnv(true)
+			if b, e := c.CombinedOutput(); e != nil {
+				return fmt.Errorf("module preflight: %w: %s", e, b)
+			}
+		}
+		generated[n.Module] = dir
+	}
+	for _, n := range g.Nodes {
+		if e = prepareProjectModule(g, n, generated[n.Module], generated); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
 func prepareProjectModule(g *project.Graph, n *project.Node, root string, generated map[string]string) error {
 	run := func(args ...string) ([]byte, error) {
 		cmd := exec.Command(g.Tool, args...)
@@ -335,132 +415,76 @@ func prepareProjectModule(g *project.Graph, n *project.Node, root string, genera
 		cmd.Stderr = &stderr
 		b, e := cmd.Output()
 		if e != nil {
-			return nil, fmt.Errorf("Go module operation in %s: %w", n.Module, e)
+			return nil, fmt.Errorf("Go module operation in %s: %w: %s", n.Module, e, stderr.String())
 		}
 		return b, nil
 	}
-	raw, e := run("mod", "edit", "-json")
+	// Go module cache sources are read-only; only the new generated copies may
+	// be made writable for Go's module operations.
+	for _, name := range []string{"go.mod", "go.sum"} {
+		path := filepath.Join(root, name)
+		if _, e := os.Lstat(path); e == nil {
+			if e = os.Chmod(path, 0644); e != nil {
+				return e
+			}
+		} else if !os.IsNotExist(e) {
+			return e
+		}
+	}
+	mod, e := project.ReadMod(g.Tool, root)
 	if e != nil {
 		return e
 	}
-	var mod struct {
-		Require []struct{ Path, Version string }
-		Replace []struct {
-			Old, New struct{ Path, Version string }
-		}
-	}
-	if e = json.Unmarshal(raw, &mod); e != nil {
-		return e
-	}
-	if n.CheckoutRoot != "" {
-		for _, r := range mod.Replace {
-			if r.New.Version != "" {
-				continue
-			}
+	// Discard dependency-local policy; root replace/exclude is authoritative. Keep
+	// the acquired-source boundary check even for directives Go would ignore.
+	edits := []string{"mod", "edit"}
+	for _, r := range mod.Replace {
+		if n.CheckoutRoot != "" && r.New.Version == "" {
 			resolved, err := filepath.EvalSymlinks(r.New.Path)
-			if err != nil {
-				return fmt.Errorf("git dependency local replace unavailable: %s", r.Old.Path)
+			if err != nil || !within(n.CheckoutRoot, resolved) {
+				return fmt.Errorf("acquired dependency go.mod replace escapes checkout/source boundary: %s", r.Old.Path)
 			}
-			rel, err := filepath.Rel(n.CheckoutRoot, resolved)
-			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				return fmt.Errorf("git dependency go.mod replace escapes checkout: %s", r.Old.Path)
+		}
+		old := r.Old.Path
+		if r.Old.Version != "" {
+			old += "@" + r.Old.Version
+		}
+		edits = append(edits, "-dropreplace="+old)
+	}
+	for _, x := range mod.Exclude {
+		edits = append(edits, "-dropexclude="+x.Path+"@"+x.Version)
+	}
+	for _, x := range g.RootMod.Exclude {
+		edits = append(edits, "-exclude="+x.Path+"@"+x.Version)
+	}
+	if n != g.Root {
+		anchor := generated[g.Root.Module]
+		if anchor == "" {
+			return fmt.Errorf("missing main-module policy anchor")
+		}
+		edits = append(edits, "-replace="+g.Root.Module+"="+anchor)
+	}
+	for _, module := range project.Keys(g.Plan) {
+		if module == n.Module {
+			continue
+		}
+		s := g.Plan[module]
+		edits = append(edits, "-require="+module+"@"+s.Version)
+		if output := generated[module]; output != "" {
+			edits = append(edits, "-replace="+module+"="+output)
+		} else if s.Replace != nil {
+			replacement := s.Replace.Path
+			if s.Replace.Version != "" {
+				replacement += "@" + s.Replace.Version
 			}
+			edits = append(edits, "-replace="+module+"="+replacement)
 		}
 	}
-	requires := map[string]string{}
-	for _, r := range mod.Require {
-		requires[r.Path] = r.Version
-	}
-	applyReplacement := func(module, source, output string) error {
-		for _, r := range mod.Replace {
-			if r.Old.Path == module {
-				if r.New.Version != "" || !samePath(r.New.Path, source) {
-					return fmt.Errorf("manifest source conflicts with go.mod replace for %s", module)
-				}
-				old := r.Old.Path
-				if r.Old.Version != "" {
-					old += "@" + r.Old.Version
-				}
-				if _, e := run("mod", "edit", "-dropreplace="+old); e != nil {
-					return e
-				}
-			}
-		}
-		_, e := run("mod", "edit", "-replace="+module+"="+output)
-		return e
-	}
-	seen := map[string]string{}
-	for _, alias := range project.Keys(n.Sources) {
-		d := n.Sources[alias]
-		version := d.Version
-		replacement := ""
-		if child := n.Children[alias]; child != nil {
-			replacement = generated[child.Module]
-			version = requires[d.Module]
-			if version == "" {
-				version = "v0.0.0"
-				parts := strings.Split(d.Module, "/")
-				last := parts[len(parts)-1]
-				if len(last) > 1 && last[0] == 'v' {
-					if major, e := strconv.Atoi(last[1:]); e == nil && major >= 2 {
-						version = fmt.Sprintf("v%d.0.0", major)
-					}
-				}
-			}
-		}
-		identity := version + "|" + replacement
-		if prior, ok := seen[d.Module]; ok && prior != identity {
-			return fmt.Errorf("conflicting dependency aliases for %s", d.Module)
-		}
-		seen[d.Module] = identity
-		if v := requires[d.Module]; v != "" && v != version {
-			return fmt.Errorf("manifest version conflicts with go.mod for %s", d.Module)
-		}
-		if replacement != "" {
-			if e = applyReplacement(d.Module, n.Children[alias].Root, replacement); e != nil {
-				return e
-			}
-		}
-		if _, e = run("mod", "edit", "-require="+d.Module+"@"+version); e != nil {
+	if len(edits) > 2 {
+		if _, e = run(edits...); e != nil {
 			return e
 		}
 	}
-	// Go ignores replace directives of dependencies. Apply the resolved local
-	// source graph in each generated main module, including transitive modules.
-	reachable := map[string]*project.Node{}
-	var collect func(*project.Node)
-	collect = func(node *project.Node) {
-		for _, child := range node.Children {
-			if reachable[child.Module] == nil {
-				reachable[child.Module] = child
-				collect(child)
-			}
-		}
-	}
-	collect(n)
-	for _, module := range project.Keys(reachable) {
-		if generated[module] == "" {
-			return fmt.Errorf("dependency not generated: %s", module)
-		}
-		if e = applyReplacement(module, reachable[module].Root, generated[module]); e != nil {
-			return e
-		}
-		if requires[module] == "" {
-			version := "v0.0.0"
-			parts := strings.Split(module, "/")
-			last := parts[len(parts)-1]
-			if len(last) > 1 && last[0] == 'v' {
-				if major, e := strconv.Atoi(last[1:]); e == nil && major >= 2 {
-					version = fmt.Sprintf("v%d.0.0", major)
-				}
-			}
-			if _, e = run("mod", "edit", "-require="+module+"@"+version); e != nil {
-				return e
-			}
-		}
-	}
-	// Lock sums are scoped to exact source manifests and go.mod, not cwd or
-	// temporary generated paths. Retain entries for inactive configurations.
 	sourceMod, e := os.ReadFile(filepath.Join(n.Root, "go.mod"))
 	if e != nil {
 		return e
@@ -470,7 +494,8 @@ func prepareProjectModule(g *project.Graph, n *project.Node, root string, genera
 		Manifest project.Manifest
 		Mod      string
 		Sources  map[string]project.Dependency
-	}{n.Module, n.Manifest, string(sourceMod), n.Sources})
+		Plan     string
+	}{n.Module, n.Manifest, string(sourceMod), n.Sources, g.PlanID})
 	if sums, ok := g.Lock.Sums[key]; ok {
 		if e = os.WriteFile(filepath.Join(root, "go.sum"), []byte(sums), 0644); e != nil {
 			return e
@@ -481,21 +506,11 @@ func prepareProjectModule(g *project.Graph, n *project.Node, root string, genera
 	if _, e = run("mod", "download", "all"); e != nil {
 		return e
 	}
-	// Use Go's selected build list, never a second version resolver. Until a
-	// shared planning pass exists, reject inconsistent native graphs before
-	// enhanced metadata can cross differently selected dependencies.
-	buildList, e := run("list", "-m", "-json", "all")
+	list, e := run("list", "-m", "-json", "all")
 	if e != nil {
 		return e
 	}
-	if g.NativeSelections == nil {
-		g.NativeSelections = map[string]string{}
-	}
-	local := map[string]bool{}
-	for _, node := range g.Nodes {
-		local[node.Module] = true
-	}
-	decoder := json.NewDecoder(bytes.NewReader(buildList))
+	decoder := json.NewDecoder(bytes.NewReader(list))
 	for decoder.More() {
 		var m struct {
 			Path, Version string
@@ -505,17 +520,35 @@ func prepareProjectModule(g *project.Graph, n *project.Node, root string, genera
 		if e = decoder.Decode(&m); e != nil {
 			return e
 		}
-		if m.Main || local[m.Path] {
+		if m.Main {
 			continue
 		}
-		identity := project.Digest(struct {
-			Version string
-			Replace any
-		}{m.Version, m.Replace})
-		if prior, ok := g.NativeSelections[m.Path]; ok && prior != identity {
-			return fmt.Errorf("native Go build lists disagree for %s; align versions/replacements across hgo modules (v1)", m.Path)
+		if m.Path == g.Root.Module && n != g.Root {
+			if m.Replace == nil || m.Replace.Path != generated[g.Root.Module] || m.Replace.Version != "" {
+				return fmt.Errorf("main-module policy anchor mismatch")
+			}
+			continue
 		}
-		g.NativeSelections[m.Path] = identity
+		want, ok := g.Plan[m.Path]
+		if !ok || m.Version != want.Version {
+			return fmt.Errorf("generated Go build list disagrees with stable plan for %s", m.Path)
+		}
+		replacement, version := "", ""
+		if want.Replace != nil {
+			replacement = want.Replace.Path
+			version = want.Replace.Version
+		}
+		if output := generated[m.Path]; output != "" {
+			replacement = output
+			version = ""
+		}
+		if replacement == "" {
+			if m.Replace != nil {
+				return fmt.Errorf("unexpected replacement outside stable plan: %s", m.Path)
+			}
+		} else if m.Replace == nil || m.Replace.Path != replacement || m.Replace.Version != version {
+			return fmt.Errorf("generated replacement disagrees with stable plan: %s", m.Path)
+		}
 	}
 	sums, e := os.ReadFile(filepath.Join(root, "go.sum"))
 	if e != nil && !os.IsNotExist(e) {
@@ -650,8 +683,8 @@ func projectUnitSpec(g *project.Graph, target project.Target, kind, mode string,
 		Commits, Environment map[string]string
 		Tags                 []string
 		Target               project.Target
-		Kind, Compiler       string
+		Kind, Compiler, Plan string
 		Race                 bool
-	}{nodes, commits, environment, tags, target, kind, compiler, mode == "test"})
+	}{nodes, commits, environment, tags, target, kind, compiler, g.PlanID, mode == "test"})
 	return project.UnitSpec{Host: runtime.GOOS + "-" + runtime.GOARCH, Target: environment["GOOS"] + "-" + environment["GOARCH"], Kind: kind, Name: target.Name, Config: config}, nil
 }

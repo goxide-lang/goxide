@@ -80,3 +80,5 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 Cargo 风格第一版通过 `hgo.json` 增量启用默认/显式 feature、文件级 cfg、Go version/Git/path 依赖和命名 bin/example。Go 仍负责 module 解析；不声称完整 Cargo 兼容。见 [可运行项目示例](examples/project/README.md) 和 [RFC 0022：语法、命令、锁定与限制](docs/rfcs/0022-project-toolchain.md)。
 
 项目构建默认将产物保留在 `target/`：`hgo build --bin web ./app` 会打印二进制路径，`hgo transpile --bin web ./app` 会打印可独立 Go 构建的生成 module 路径。可用 `--target-dir` 或 `HGO_TARGET_DIR` 配置；相对路径以项目根为准。见 [产物布局与安全边界](docs/design/target-layout.md)。
+
+`version` 渠道现可直接取得带 `hgo.json` 的源码并统一 features；Go 负责共享 MVS 与 sums，稳定后才生成/执行已授权脚本。仅原生 go.mod 不隐式激活 hgo feature；固定配置 Go 发行物不重配。见 [version 来源合同与验收](docs/design/version-source-plan.md)。

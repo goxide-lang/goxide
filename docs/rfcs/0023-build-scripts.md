@@ -134,6 +134,6 @@ python3 scripts/check_design.py --docs-only
 
 整合来源、独立审阅修复和实测结果见 [联合验收记录](../design/build-script-validation.md)。
 
-## version 来源衔接计划
+## version 来源衔接
 
-[version 来源计划](../design/version-source-plan.md)要求完整选版/feature 图稳定后才准备并授权脚本，选中版本及 Go sums 进入非根来源身份；版本变化不能复用旧精确许可。本段为文档先行合同，待实现测试确认。
+[version 来源计划](../design/version-source-plan.md)要求完整选版/feature 图稳定后才准备并授权脚本，选中版本及 Go sums 进入非根来源身份；版本变化不能复用旧精确许可。现在由共享规划器与全图 module 预检实现；脚本 SourceID 绑定稳定计划及来源摘要。选版/许可测试只运行本仓库 localproxy 中的自编 fixture，不默认执行第三方下载脚本。

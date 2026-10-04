@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "7894ddff18f4d5e84c9bba395b0e6a32b27859f9",
+  "compilerCommit": "d23064760e1fb5d4bb77cae17e5d7818fb73139d",
   "reviewedAt": "2026-10-04",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
@@ -350,7 +350,7 @@
       "support": "cli",
       "summary": "format 2 的 goxide.toml 统一 module、原生 Go 依赖政策、增强依赖、feature 与目标；goxide.lock 固定真实解析结果。",
       "usage": "最小工程根只有 TOML 和源码：默认 pretty=true，关闭默认 feature 后 false。Go module 元数据只进入受管 target；锁记录真实选版和校验，不将历史 go.sum 当版本列表。",
-      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 goxide.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 有独立模式；go.work 使用显式迁入模式，旧 format 不自动升级。",
+      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 hgo.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 有独立模式；go.work 使用显式迁入模式，旧 format 不自动升级。",
       "examples": [],
       "evidence": [
         "internal/project/manifest.go",
@@ -593,7 +593,7 @@
       "support": "browser",
       "summary": "当前编译器使用已公开 std/sum 的共享 Option/Result 身份与独立 serde core / JSON。",
       "usage": "生成 Go 导入共享 sum，不再为每个用户包复制通用 Option/Result 定义；具体载荷 validator 仍由编译器生成。JSON 示例使用 github.com/goxide-lang/serde/json。",
-      "limitation": "metadata schema 8；旧 schema 7 产物须重生成，不承诺兼容旧私有 marker 二进制。固定迁移版本不等于 v1 ABI 承诺；next 仍为空，RFC 0024 路径语法另属提案。",
+      "limitation": "enum schema 8 / reference 3 / use 2 / sum ABI 2，必须与新std版本配套；旧marker产物须重生成。固定迁移版本不等于v1 ABI承诺；next仍为空，RFC0024路径语法另属提案。",
       "examples": [
         "result",
         "serde_option"
@@ -642,7 +642,7 @@
       "status": "partial",
       "support": "cli",
       "summary": "Cobra 命令树提供中文 help、四种 shell completion 与 scripts 六个动作子命令。业务入口使用独立 typed request/service。",
-      "usage": "长选项使用 --name，短选项使用 -x；选项放在输入之前。run INPUT -- ARGS 保留程序参数，其他命令不开放任意透传。",
+      "usage": "长选项使用 --name，短选项使用 -x；选项放在输入之前。run INPUT -- ARGS 保留程序参数，其他命令不开放任意透传。 语言名Goxide，命令goxide，源码.gox，环境变量GOXIDE_*；旧.hgo/HGO_*输入拒绝。",
       "limitation": "拒绝旧 Go 风格 -go / -offline 并提示迁移；仅支持已定义的短选项组合，不承诺全部 POSIX 规则。help/completion 不运行构建、下载或脚本。",
       "examples": [],
       "checks": [],

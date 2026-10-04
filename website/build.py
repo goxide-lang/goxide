@@ -15,7 +15,7 @@ sha = catalog_data['compilerCommit']
 catalog.write_index(catalog_data)
 # Bind to actual compiler sources too, including uncommitted adapter changes.
 h = hashlib.sha256(); baseline = hashlib.sha256()
-for path in sorted([*ROOT.glob('internal/**/*.go'), *ROOT.glob('cmd/hgo-playground/*.go'), *ROOT.glob('runtime/*.go'), *ROOT.glob('formatting/*.go'), ROOT/'go.mod', ROOT/'go.sum']):
+for path in sorted([*ROOT.glob('internal/**/*.go'), *ROOT.glob('cmd/hgo-playground/*.go'), *ROOT.glob('cmd/hgo/*.go'), *ROOT.glob('runtime/*.go'), *ROOT.glob('formatting/*.go'), ROOT/'go.mod', ROOT/'go.sum']):
     if path.name.endswith('_test.go'): continue
     relative = str(path.relative_to(ROOT))
     h.update(relative.encode()); h.update(path.read_bytes())

@@ -85,3 +85,39 @@ func TestBuildAndRunGenerated(t *testing.T) {
 		t.Fatalf("run: %v: %s", err, got)
 	}
 }
+
+func TestSingleFilePublicRuntimeBuildAndRun(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "input.hgo")
+	source := `package main
+import("fmt";"github.com/goxide-lang/serde/json")
+#[derive(Deserialize)]
+type Row struct{Value Option[int]}
+func main(){
+ row,err:=serdejson.Unmarshal([]byte("{\"Value\":42}"),DeserializeRow)
+ if err!=nil{panic(err)}
+ match row.Value{Option::Some(n)=>{fmt.Println(n)},Option::None=>{panic("missing")}}
+}
+`
+	if err := os.WriteFile(src, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goTool := filepath.Join(runtime.GOROOT(), "bin/go")
+	var output bytes.Buffer
+	if err := run([]string{"run", "-runtime", root, "-go", goTool, src}, &output, &output); err != nil || output.String() != "42\n" {
+		t.Fatalf("run: %v: %s", err, &output)
+	}
+	output.Reset()
+	binary := filepath.Join(dir, "program")
+	if err := run([]string{"build", "-runtime", root, "-go", goTool, "-o", binary, src}, &output, &output); err != nil {
+		t.Fatalf("build: %v: %s", err, &output)
+	}
+	got, err := exec.Command(binary).CombinedOutput()
+	if err != nil || string(got) != "42\n" {
+		t.Fatalf("built program: %v: %s", err, got)
+	}
+}

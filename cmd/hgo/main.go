@@ -178,11 +178,50 @@ func run(args []string, out, stderr io.Writer) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	// Quoting is go.mod string quoting, not shell interpolation.
-	quoted, _ := json.Marshal(filepath.ToSlash(root))
-	mod := "module hgo.local/generated\n\ngo 1.27\n\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => " + string(quoted) + "\n"
-	if err = os.WriteFile(filepath.Join(tmp, "go.mod"), []byte(mod), 0600); err != nil {
+	// The single-file build is an owned module. Carry the selected runtime's
+	// dependency declarations and checksums, including public std/serde, rather
+	// than relying on requirements inherited through a local compiler replace.
+	if err = os.WriteFile(filepath.Join(tmp, "go.mod"), gomod, 0600); err != nil {
 		return err
+	}
+	sums, err := os.ReadFile(filepath.Join(root, "go.sum"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err == nil {
+		if err = os.WriteFile(filepath.Join(tmp, "go.sum"), sums, 0600); err != nil {
+			return err
+		}
+	}
+	inspect := exec.Command(tool, "mod", "edit", "-json")
+	inspect.Dir, inspect.Env = root, localEnv()
+	raw, err := inspect.Output()
+	if err != nil {
+		return fmt.Errorf("runtime module declarations: %w", err)
+	}
+	var declarations struct {
+		Replace []struct {
+			Old, New struct{ Path, Version string }
+		}
+	}
+	if err = json.Unmarshal(raw, &declarations); err != nil {
+		return err
+	}
+	edits := []string{"mod", "edit", "-module=hgo.local/generated", "-require=github.com/hxsf/goxide@v0.0.0", "-replace=github.com/hxsf/goxide=" + filepath.ToSlash(root)}
+	for _, replace := range declarations.Replace {
+		if replace.New.Version != "" || filepath.IsAbs(replace.New.Path) {
+			continue
+		}
+		old := replace.Old.Path
+		if replace.Old.Version != "" {
+			old += "@" + replace.Old.Version
+		}
+		edits = append(edits, "-replace="+old+"="+filepath.ToSlash(filepath.Join(root, replace.New.Path)))
+	}
+	edit := exec.Command(tool, edits...)
+	edit.Dir, edit.Env = tmp, localEnv()
+	if output, err := edit.CombinedOutput(); err != nil {
+		return fmt.Errorf("generated module declarations: %w: %s", err, output)
 	}
 	if err = os.WriteFile(filepath.Join(tmp, "main.go"), result.Go, 0600); err != nil {
 		return err

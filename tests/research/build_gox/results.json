@@ -1,0 +1,81 @@
+{
+  "scope": "mechanisms and model only; no production runner; all temp fixtures removed",
+  "results": [
+    {
+      "name": "toolchain",
+      "kind": "observed",
+      "evidence": "go version go1.27.1 linux/amd64"
+    },
+    {
+      "name": "host-vs-target",
+      "kind": "observed",
+      "evidence": "host=linux/amd64 target=linux/arm64"
+    },
+    {
+      "name": "cross-go",
+      "kind": "observed",
+      "evidence": "Built Linux ARM64 ELF e_machine=183; never executed; not an hgo cross-target test"
+    },
+    {
+      "name": "schema",
+      "kind": "observed",
+      "evidence": "Self-authored host Go generator produced target Go source; Go compiled generated file"
+    },
+    {
+      "name": "not-filesystem-sandbox",
+      "kind": "observed",
+      "evidence": "Child wrote outside cwd/output, within disposable fixture; OUT_DIR/cwd are conventions"
+    },
+    {
+      "name": "offline-not-network-sandbox",
+      "kind": "observed",
+      "evidence": "GOPROXY=off GOSUMDB=off: self-authored Go child reached loopback HTTP 200; no external request"
+    },
+    {
+      "name": "command-context",
+      "kind": "observed",
+      "evidence": "parent_failed=true descendant_survived=true"
+    },
+    {
+      "name": "atomic-stage",
+      "kind": "observed",
+      "evidence": "Timeout left private partial; harness removed owned stage; old commit intact; complete fresh directory renamed to absent immutable destination (same filesystem)"
+    },
+    {
+      "name": "cache-model",
+      "kind": "model",
+      "evidence": "Target/features/unit/policy and unset-vs-empty change keys; omitted input does NOT change key"
+    },
+    {
+      "name": "directory-path-model",
+      "kind": "model",
+      "evidence": "Recursive inventory model: add/delete/nested content changes alter digest; lexical in-root symlink points outside and is rejected"
+    },
+    {
+      "name": "clean-mechanism",
+      "kind": "observed",
+      "evidence": "Python rmtree removed owned fixture with symlink without deleting external sentinel; NOT proof of future Go clean implementation"
+    },
+    {
+      "name": "unshare-net",
+      "kind": "capability",
+      "evidence": {
+        "exit": 1,
+        "stderr": "unshare: cannot open /proc/self/uid_map: Read-only file system"
+      }
+    },
+    {
+      "name": "bwrap-net",
+      "kind": "capability",
+      "evidence": {
+        "exit": 1,
+        "stderr": "bwrap: setting up uid map: Read-only file system"
+      }
+    },
+    {
+      "name": "generate-explicit",
+      "kind": "observed",
+      "evidence": "go build did not execute directive; explicit go generate executed self-authored fixture"
+    }
+  ]
+}

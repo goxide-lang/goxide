@@ -1,0 +1,85 @@
+// Self-authored mechanism probe, never imported by production packages.
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"time"
+)
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+func main() {
+	switch os.Args[1] {
+	case "host":
+		fmt.Printf("host=%s/%s target=%s/%s\n", runtime.GOOS, runtime.GOARCH, os.Getenv("TARGET_OS"), os.Getenv("TARGET_ARCH"))
+	case "generate":
+		b, err := os.ReadFile(os.Args[2])
+		must(err)
+		must(os.WriteFile(os.Args[3], []byte("package generated\nconst Schema = "+fmt.Sprintf("%q", string(b))+"\n"), 0600))
+	case "outside":
+		must(os.WriteFile(os.Args[2], []byte("outside output dir"), 0600))
+	case "network":
+		client := &http.Client{Timeout: 2 * time.Second}
+		r, err := client.Get(os.Args[2])
+		must(err)
+		defer r.Body.Close()
+		fmt.Println(r.StatusCode)
+	case "partial":
+		must(os.WriteFile(filepath.Join(os.Args[2], "partial.go"), []byte("package generated\n"), 0600))
+		time.Sleep(30 * time.Second)
+	case "child":
+		released := false
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+			if _, e := os.Stat(os.Args[2] + ".release"); e == nil {
+				released = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !released {
+			panic("child release timeout")
+		}
+		must(os.WriteFile(os.Args[2], []byte("descendant survived"), 0600))
+	case "spawn":
+		c := exec.Command(os.Args[0], "child", os.Args[2])
+		must(c.Start())
+		must(os.WriteFile(os.Args[2]+".ready", []byte("ready"), 0600))
+		time.Sleep(30 * time.Second)
+	case "context":
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		c := exec.CommandContext(ctx, os.Args[0], "spawn", os.Args[2])
+		must(c.Start())
+		ready := false
+		for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+			if _, err := os.Stat(os.Args[2] + ".ready"); err == nil {
+				ready = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		cancel()
+		err := c.Wait()
+		if !ready {
+			panic("spawn readiness timeout")
+		}
+		must(os.WriteFile(os.Args[2]+".release", []byte("parent has exited"), 0600))
+		for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+			if _, e := os.Stat(os.Args[2]); e == nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		_, statErr := os.Stat(os.Args[2])
+		fmt.Printf("parent_failed=%t descendant_survived=%t\n", err != nil, statErr == nil)
+	}
+}

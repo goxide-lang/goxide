@@ -443,7 +443,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && !strings.HasPrefix(id.Name, "__hgo_ref_") && id.Name != "__hgo_question" && id.Name != "__hgo_print" && id.Name != "__hgo_println" {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__hgo_") && !strings.HasPrefix(id.Name, "__hgo_enum_") && !strings.HasPrefix(id.Name, "__hgo_match_expr_") && !strings.HasPrefix(id.Name, "__hgo_ref_") && !strings.HasPrefix(id.Name, "__hgo_go_result") && id.Name != "__hgo_question" && id.Name != "__hgo_print" && id.Name != "__hgo_println" {
 			collision = id.Name
 		}
 		return true

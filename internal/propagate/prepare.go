@@ -79,6 +79,9 @@ func PrepareMapped(filename string, source []byte, provenance *sourcemap.Map) ([
 				if i < 0 {
 					return 0, fmt.Errorf("unbalanced propagation operand")
 				}
+				if i > 1 && ts[i-1].k == token.NOT && ts[i-2].k == token.IDENT {
+					return primary(i - 2)
+				}
 				if i > 0 && (ts[i-1].k == token.IDENT || ts[i-1].k == token.RPAREN || ts[i-1].k == token.RBRACK) {
 					return primary(i - 1)
 				}

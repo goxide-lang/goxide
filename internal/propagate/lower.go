@@ -301,7 +301,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if cfg.Namespace != "" && !token.IsIdentifier(cfg.Namespace) {
 		return nil, fmt.Errorf("%s: invalid propagation namespace", filename)
 	}
-	if !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) && !bytes.Contains(source, []byte(matchOperand+"(")) {
+	if !bytes.Contains(source, []byte("__hgo_go_result")) && !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) && !bytes.Contains(source, []byte(matchOperand+"(")) {
 		return source, nil
 	}
 	fs := token.NewFileSet()
@@ -424,6 +424,9 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	f.Decls = keptMatch
 	l.check()
+	if err := l.checkGoResults(); err != nil {
+		return nil, err
+	}
 	if err := l.inferMatches(); err != nil {
 		return nil, err
 	}

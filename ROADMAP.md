@@ -1,6 +1,6 @@
 # hgo Roadmap 与接续入口
 
-> 当前统一入口：[README](README.md)；最小试用见 [enum_trial](examples/enum_trial/README.md)。生产代码候选 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`。本文件保留阶段历史，当前范围以末尾交付清单及统一入口为准；本次整理不改变实现语义。
+> 当前统一入口：[README](README.md)；最小试用见 [enum_trial](examples/enum_trial/README.md)。宏 + 独立 enum 历史基线 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`。本文件保留阶段历史，当前范围以末尾交付清单及统一入口为准；2026-10-04 已增加文末 Go Result 适配宏。
 
 当前覆盖规则：D27 只保留封闭变体 enum；旧开放 raw/C enum 及其别名待决项撤回。数值/string 属于 serde 外部映射，未知 variant 报错，业务 validator 后置。历史阶段 raw 验收不再代表当前支持。RFC 0019/0020 已同步设计，尚不代表 trait/固有 impl 实现。
 更新：2026-10-01。暂名 hgo / Hyper Go，仓库为 `hxsf/goxide`。本文件记录实现进度和依赖顺序；设计确认状态以[决策登记](docs/design/decisions.md)为准。路线本身是暂定建议，不是交付日期承诺。
@@ -272,3 +272,8 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 统一签名调用组与独立 enum 验收（2026-10-03）
 
 静态/变量/函数字段/方法/返回函数/variadic/原生 Go 显式 generic 调用统一从实际 Go 签名获得 match 参数上下文；真实 CLI race/vet、receiver/callee 次序、variadic slice 身份、私有 alias、权限及 0 分配微基准见 RFC 0009 与 `match_call_signatures_test.go`。不借此开放 `.hgo` 用户泛型定义或多结果 return match。独立 enum 的已验收业务闭环、工程边界与用户待决项汇总见 `docs/t0-acceptance.md` 最后清单；本阶段停止，不自动扩展多返回值、字段规则或公开入口契约，也不执行发布。
+
+
+### 2026-10-04 显式 Go Result 增量
+
+D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块及双模块验收，见 [试用说明](examples/go_result/README.md)。T 显式、error-only 自然支持、多非 error 返回需业务 struct；保值问号不自动丢弃 Value。该片不改变指针阶段、完整 trait 或预编译宏 ABI 的状态，其余 T0 缺口仍按现有清单保留。

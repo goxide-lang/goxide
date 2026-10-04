@@ -2,7 +2,7 @@
 
 hgo 在 Go 生态上实现一个可执行语言子集：声明宏、闭合变体 enum/match、Option/Result、显式派生和 serde JSON，生成普通 Go 源码。设计中的完整 trait、LSP、指针体系等并不因此成为当前实现承诺。
 
-**当前宏 + 独立 enum 阶段生产代码候选：`55ef3b3020b3984a8ae360ca469fc13fee345bd2`，已验证 Go 1.27.1。** 后续交付整理只更新文档和示例，运行脚本会打印实际 checkout SHA。此阶段已有可审查的业务闭环，**不宣称整个 MVP 完成**。
+**宏 + 独立 enum 基线为 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`，2026-10-04 已新增显式 Go 返回值适配宏。** 已验证 Go 1.27.1；[适配宏试用](examples/go_result/README.md)展示普通 Ok/Err 和 Reader 错误时保留部分值。此阶段已有可审查的业务闭环，**不宣称整个 MVP 完成**。
 
 ## 开始试用
 
@@ -23,7 +23,7 @@ bash examples/enum_trial/try.sh "$work"
 | --- | --- |
 | 声明宏 | 有限捕获、重复、嵌套、定义点绑定；源码包 `pub macro_rules!` 与 qualified 调用；[准确边界](internal/macros/README.md) |
 | 闭合 enum 与 match | 名义身份、穷尽匹配、guard、非法值在使用点拒绝；有限表达式组合，包括命名单结果、静态已知方法/函数字段/返回函数/variadic/原生 Go 显式 generic 调用；[match 范围](internal/matchexpr/README.md) |
-| Option / Result | 已登记具体实例、match、有限 `?` 组合、Go cause 链；跨独立模块恢复及透明 alias；[验收](docs/t0-acceptance.md) |
+| Option / Result | 已登记具体实例、match、有限 `?` 组合、Go cause 链、显式 `go_result!` / `go_result_keep!`；跨独立模块恢复及透明 alias；[验收](docs/t0-acceptance.md) |
 | 显式协议 | Default、Clone、Debug、serde、PartialEq/Eq 的有限具体类型及跨包登记；已支持手写 Default 和具体 equality，不隐式赋予所有类型协议 |
 | serde | core 协议 + 独立 JSON 实现；default/skip、具体 Option 缺失/null、闭合变体；[JSON 范围](serdejson/README.md) |
 | Go 互操作 | 单文件及现有 go.mod 中多文件/多包目录、独立模块 local replace、生成 helper 的原生 Go 消费；build tags/race 属于具体构建视图 |
@@ -49,7 +49,7 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 
 ## 后续指针阶段
 
-用户已有后续指针目标；本次仅交付宏 + 独立 enum 候选，整理完成后暂停，等待反馈或明确下一片。仓库已有的有限读/写引用验收保留，但本试用不要求使用新指针语法。
+用户已有后续指针目标；本轮只推进明确授权的 Go Result 适配宏，不启动指针实现。仓库已有的有限读/写引用验收保留，但本试用不要求使用新指针语法。
 
 `&T` 路径只读不承诺全局不可变，`mut&` 不承诺独占。复杂别名/借用风险分析是独立长期工作线，不是拿保守拒绝普通 Go 用法来完成的安全保证，也不是当前 MVP 的前置条件。详见[指针与引用设计](docs/design/pointers-and-borrows.md)。
 
@@ -60,7 +60,7 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 - [实现历史](IMPLEMENTATION.md)、[Roadmap](ROADMAP.md)：按阶段保留历史；旧限制以最新验收覆盖，不能截取早期条目代表当前能力。
 - [逐特性 RFC](docs/rfcs/README.md)、[设计总纲](docs/design/overview.md)、[决策登记](docs/design/decisions.md)：区分已确认、暂定、未定。完整 trait 包装器/发布 ABI 等仍须按各自状态阅读。
 - [宏与派生设计](docs/design/macros.md)、[enum/match 设计](docs/design/enums-and-match.md)、[serde core 与格式](docs/rfcs/research/0006-serde-core-and-formats.md)。
-- [测试说明](tests/README.md)：`scripts/check_design.py` 验证文档中的 Go 机制，不能替代真实 hgo 编译执行。候选 SHA 的全树 race/vet/设计检查已通过，本次文档整理不冒充重新执行全部测试。
+- [测试说明](tests/README.md)：`scripts/check_design.py` 验证文档中的 Go 机制，不能替代真实 hgo 编译执行。各轮全树 race/vet/设计检查与独立生成模块证据见验收矩阵。
 - [冻结 MVP 文档基线](docs/mvp-doc-baseline.md)：标签记录设计基线，不代表实现完成；本阶段不修改标签、不合并或发布。
 
 ## 许可证

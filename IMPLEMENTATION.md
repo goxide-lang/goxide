@@ -1,6 +1,6 @@
 # 可运行的 hgo 语言子集
 
-**统一当前入口：[当前支持 / 已知失败 / 待决 / 后续指针](README.md)。生产代码候选为 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`；[最小双模块试用](examples/enum_trial/README.md)提供已实跑命令。**
+**统一当前入口：[当前支持 / 已知失败 / 待决 / 后续指针](README.md)。宏 + 独立 enum 历史基线为 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`；[最小双模块试用](examples/enum_trial/README.md)提供已实跑命令。**
 
 **阅读方式：下文按阶段保留实现历史。最初的“实际支持”“未完成”和包数量是当时快照，尤其“跨包 enum 未实现”等早期条目已由后续阶段覆盖，不代表当前能力；请以 README 和验收清单末尾为准。**
 
@@ -1039,3 +1039,12 @@ Go 规范 Order of evaluation 只规定调用、接收和逻辑运算等的相�
 优化构建探针（非 race；Go 1.27.1，单 CPU，100ms×3）中，方法、slice 展开、显式 generic 的真实 hgo 输出均为 0 B/op、0 allocs/op；中位数约 1.963/1.706/1.655 ns/op，内联原生 Go 对照约 0.5635/0.2835/0.2828 ns/op。微基准可被内联/常量折叠，不代表业务性能等价，记录见 `tests/research/match_lowering/call-signatures-2026-10-03.txt`。原生 receiver 顺序研究属于机制探针，未替代真实 hgo 执行证据。
 
 仍明确未接通：多结果 `return match`；完全无可见类型拼写的私有调用参数（如 `m.Hidden()(match ...)`）；既有 unary/composite/block-arm 等非本组表达式上下文。非法 arity、常量溢出、不可寻址 pointer receiver 和权限擦除属于应拒绝输入，不算功能欠账。带编译器指令的本地函数保持既有明确诊断，不擅改调用的逃逸/活性约束。blank/embedded 字段、公开 enum 入口验证、serde adapters Proposed 均未在此决定。
+
+
+## 显式 Go Result 宏（2026-10-04）
+
+D36 授权的两种显式适配已接通：`go_result!(T,call)` 返回 `Result[T,error]`，`go_result_keep!(T,call)` 返回 `Result[T,struct{Value T; Err error}]`。仅 error 返回使用单参数形式和 struct{} 成功值。T 与真实首结果、末结果与预声明 error 严格核对身份；未引入 tuple、自动适配或自动部分值丢弃。保值载荷没有 error 方法/自动 From，仍遵循既有问号赋值/唯一一步转换规则。
+
+实现复用宏展开与 Result 注册；新增少量内建 marker/finalization 和 typed 签名核对，原调用留在 typed 函数 literal 的实参。问号前处理识别整个 qualified 宏调用。独立审查发现局部 Result 遮蔽后，以具体包级 Result alias 修复，真实执行回归覆盖变量/type 两例。局部自定义 payload 不可在包级命名仍是既有 Result 实例限制；预编译宏规则导入仍未实现。
+
+[示例与逐条运行命令](examples/go_result/README.md)、[真实 CLI 正反例](tests/acceptance/go_result_test.go)、[RFC](docs/rfcs/research/0005-option-result-question.md#显式-go-result-适配宏2026-10-04)同步。验收包含 strconv 与真实 io.Reader 部分读取、错误身份/Is/As/typed nil、单 error、原生泛型、单次求值/顺序、defer/go 参数时机、panic/recover、From、源码跨包宏、双独立模块原生 alias/保值 metadata/问号，以及非法返回签名/误传播拒绝；各生成模块独立 race/vet。普通函数 literal 适配器可能由 Go 内联，本片未做性能等价承诺。不启动指针阶段，不声明整个 MVP 完成。

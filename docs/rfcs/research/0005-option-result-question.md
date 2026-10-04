@@ -67,11 +67,11 @@ Option 在现有候选 ABI 下 nil 表示 None，Some 提取载荷，其他非�
 
 ## 3. 消费 Go API：显式桥接，不普遍套 Result
 
-`strconv.Atoi` 的包装明确选择 err!=nil 时不使用 n，代码短且可审核。可以后续提供普通 `result_from_go(value, err)` 帮助函数或逐 API 包装，但名字/隐式多返回展开未批准；MVP 不需要专门的 Go 多返回捕获宏才能工作。
+`strconv.Atoi` 的包装明确选择 err!=nil 时不使用 n，代码短且可审核。2026-10-04 用户已授权普通/保值两种显式适配宏，首片具体入口与类型见文末；仍不隐式适配原生多返回。
 
 - **typed-nil error**：`var p *MyError=nil; var err error=p` 时 `err!=nil`；应进入 Err 并保留原 error 接口动态类型，不用 reflect 把它变成成功，也不为判断调用 Error()。Go typed-nil 事实见 [Go FAQ](https://go.dev/doc/faq#nil_error)。
 - **多个值**：`host, port, err := net::SplitHostPort(addr)` 后显式构造 `Endpoint{host,port}` 再 Ok；不要求 MVP 自动合成 tuple/payload。若 err 时仍有需保留的数据，选择相应 outcome struct。
-- **部分成功**：`n, err := reader.Read(buf)` 可能 n>0 且 err!=nil。普通 Result 二选一会丢 n；继续原生双返回或现有 ReadOutcome，不能自动 `Read(buf)?`。同理关闭/事务错误与业务值如何合并由调用者决定，不由 `?` 猜测。
+- **部分成功**：`n, err := reader.Read(buf)` 可能 n>0 且 err!=nil。普通 Result 二选一会丢 n；继续原生双返回、显式保值宏或现有 ReadOutcome，不能自动 `Read(buf)?`。同理关闭/事务错误与业务值如何合并由调用者决定，不由 `?` 猜测。
 - **错误映射**：使用现有 match 显式生成 DomainError，再对得到的 `Result[T,DomainError]` 使用 `?`；无需先实现 map_err 方法。若将来提供 map_err，它是普通 API，不等于隐式 From 搜索。
 
 ```hgo
@@ -342,3 +342,16 @@ range 源新增 string、整数、channel、数组和数组指针，沿用原生
 From **不因导入外部包而自动注册**。当前实际源入口仍是本包 Error derive 的明确 `#[from]`：先普通 Go 可赋值，再唯一的显式一步 Source/Target/helper；外部同名 helper、动态错误类型、两跳链均不自动选用。外部 Result 可传播进本包已注册目标，但外部目标只有 helper 名称还不足以授权转换。这是可见性/注册工程边界，不是全 trait 实现。
 
 连续 `outerOption()?` 再对其成功载荷 `?` 暴露了旧 identity typing stub 的陈旧推断。现在每替换一个问号签名后重新类型检查，再解析下一问号；否则 `Some(None)` 的内层值可能错误沿用外层 validator。此改动不移动运行时求值或早退目标，但 Q 个问号可能引起 Q 轮包级类型检查；未声明编译成本不变。保留[实际正反例](../../../tests/acceptance/builtin_external_test.go)及既有多上下文回归。
+
+
+## 显式 Go Result 适配宏（2026-10-04）
+
+用户已确认提供两种显式选择：普通版只返回 Ok(v)/Err(err)，保值版失败时保留 v 与原始 err（包括 Reader 的 n>0,error）。工程入口为 `go_result!(T, call())` 与 `go_result_keep!(T, call())`；返回本包的 `Result[T,error]` 与 `Result[T,struct{Value T; Err error}]`。单参数形式仅接收 error-only 调用，成功类型为 `struct{}`，保值失败载荷的 Value 也为 unit。T 显式提供并与真实首返回类型 identical；透明 alias 保留身份。末结果必须是预声明 error 或其透明 alias，不接受仅可赋给 error 的具体指针类型，避免改变 nil 分支语义。多个非 error 返回值由业务自行装进 struct，不增加 tuple。
+
+保值载荷不实现 Error/Unwrap，不注册自动 From；它的 `?` 仍先检查普通赋值兼容，再查询唯一已登记的一步 From。传播到相同载荷类型保留 Value/Err，赋给 any 保留整体；传播到普通 error 会拒绝，不能默默投影 Err。需要投影时显式 match；`errors.Is/As` 检查原始 `partial.Err`。普通版仍可使用既有 thiserror 单步转换。两者均不复制底层对象、不格式化错误、不做 typed-nil 归一化。
+
+最低实现增强是内建宏延后展开：先复用现有 token/capture/hygiene 和预算，再将适配器降为 `(func(v T,e error)Result[...] { ... })(原调用)`。原调用和它的参数留在调用者实参位置，未移入函数 literal 体；内层问号/direct recover 不改变目标帧。函数体只比较 error 与零 error，并构造已有 Result。生成包级具体别名保护 error 与 Result 免受调用者局部遮蔽；编译期根据真实原生签名检查 arity、T 和 error 身份。没有泛化 type fragment、Residual/Try、隐式 Go 调用转换或新增指针 ABI。
+
+`defer`/`go` 的实参按普通 Go 规则先求值：写 `defer go_result!(call())` 延期的是适配器，call 在注册时执行；`go` 同理。要延期/并发原调用须显式函数体。原生泛型调用自身的推断不受影响，但宏尚不推断 T；包作用域不可命名的局部 payload 沿现有 Result 实例登记限制拒绝。跨独立模块的 Result metadata 可恢复；预编译宏导入仍未实现，不能把这项工程边界视为用户批准的延期。
+
+[可运行例子](../../../examples/go_result/README.md)覆盖解析与 Reader 部分读取。[真实 CLI 验收](../../../tests/acceptance/go_result_test.go)覆盖单次调用/参数次序、typed nil/error identity/Is/As、单 error、透明 alias、原生泛型、宏嵌套与跨源码包、命名遮蔽、最近问号/From、panic/defer/recover/go、保值误传播和非法返回签名拒绝，并单独运行生成模块 race/vet。第二独立模块检验原生 alias、Result metadata、match/问号，并保留外部宏规则导入的明确拒绝。此前本文 §6.1 等历史原型限制不覆盖这次新增入口，也不代表完整 MVP 完成。

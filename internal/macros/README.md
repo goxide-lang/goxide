@@ -29,7 +29,7 @@ consume all input. Expressions preserve precedence when inserted into templates.
 statement/type token injection. Larger syntax fragments need future parser work.
 
 Templates can be Go-shaped expressions or statements, including explicit closures,
-`return`, and `defer`. The expander inserts no implicit function/closure boundary.
+`return`, and `defer`. For user-defined templates, the expander inserts no implicit function/closure boundary; the specialized adapter builtins documented below explicitly emit a typed function literal.
 A template using `$x` twice evaluates it twice; hygiene does not imply once-only
 evaluation. Bind once in the template when that behavior is wanted.
 
@@ -162,3 +162,14 @@ scope exclusion. `append`, `make`, `new`, other builtin functions and complete
 macro-generated declaration support are not enabled by this slice. Existing
 expansion budgets and definition/invocation origins still apply; downstream Go
 argument errors can retain the existing generated/unmapped coordinate label.
+
+
+Compiler-owned `go_result!(T,call)` and `go_result_keep!(T,call)` adapt explicit
+native `(T,error)` calls; one-argument forms accept error-only calls with unit
+success. They share expansion budgets and defer their concrete adapter emission
+until caller fragments have been substituted. The call remains an argument to
+the generated typed function literal, never inside its body. Concrete family and
+error aliases protect compiler-introduced names from caller locals. Native
+signature checks reject implicit T conversions and concrete error-pointer boxing.
+These are specialized builtins, not a general type-fragment implementation.
+See [the API and runnable example](../../examples/go_result/README.md).

@@ -176,6 +176,17 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 	if err != nil {
 		return Result{}, err
 	}
+	beforeAdapters := len(out)
+	out, err = e.finishGoResults(out)
+	if err != nil {
+		return Result{}, err
+	}
+	// Account for specialized output as well as its small intermediate markers
+	// in the shared package/module expansion budget.
+	e.emitted += len(out) - beforeAdapters
+	if e.emitted > maxTokens {
+		return Result{}, fmt.Errorf("%s: macro output token budget exceeded", filename)
+	}
 	if pkg != nil {
 		out = e.finishImports(out)
 	}
@@ -230,8 +241,8 @@ func (e *engine) readDefinitions(ts []tok, tail string) ([]tok, string, error) {
 			return nil, tail, at(start, "expected macro_rules! name { rules }")
 		}
 		name := ts[i+2].text
-		if name == "print" || name == "println" {
-			return nil, tail, at(start, "print and println are reserved builtin macro names")
+		if name == "print" || name == "println" || goResultName(name) {
+			return nil, tail, at(start, "print, println, go_result and go_result_keep are reserved builtin macro names")
 		}
 		if _, ok := e.defs[name]; ok {
 			return nil, tail, at(start, "duplicate macro "+name)
@@ -571,6 +582,30 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 			continue
 		}
 		call := ts[i]
+		if !qualified && goResultName(call.text) {
+			end, err := closeGroup(ts, i+2)
+			if err != nil {
+				return nil, err
+			}
+			if ts[i+2].text != "(" {
+				return nil, at(call, "Go result macros require parenthesized arguments")
+			}
+			e.expansions++
+			if e.expansions > maxExpansions {
+				return nil, at(call, "expansion count budget exceeded")
+			}
+			body, err := e.goResultMarker(call, ts[i+3:end], depth)
+			if err != nil {
+				return nil, err
+			}
+			e.emitted += len(body)
+			if e.emitted > maxTokens {
+				return nil, at(call, "macro output token budget exceeded")
+			}
+			out = append(out, body...)
+			i = end
+			continue
+		}
 		if !qualified && (call.text == "print" || call.text == "println") {
 			if ts[i+2].text != "(" {
 				return nil, at(call, "print macros require parenthesized arguments")

@@ -160,3 +160,6 @@
 已确认 **D34（2026-10-03 容器比较派生）**：slice/map 按 D33 区分 nil/空并递归调用元素/值的 PartialEq/Eq 协议，不以 reflect.DeepEqual 替代。原生 map 首片仅接纳能证明原生查找与相等契约一致的稳定键，不能由 float NaN、自定义 equals 或 Go comparable 偷渡资格；不引入 HashMap。嵌套 struct/array/enum 与 Option 状态需要真实生成验收。手写比较入口可下一片，指针拆分/原位 borrow 不前置阻断本轮独立 enum 阶段。
 
 已确认 **D35（2026-10-03 手写具体比较）**：接通具体 PartialEq/Eq 实现，首参 self 为实例、无 static，复用显式 equals registry，不新增完整 trait。手写 PartialEq 决定业务相等，派生包含该类型时调用其协议；手写 Eq 是作者承诺，不能自动授予原生 map 键资格。当前值参数 `func equals(self T, other T) bool` 与空 Eq impl 沿既有 helper 约定实施；不依赖或默认批准借用/所有权签名。enum 唯一比较入口先校验再执行用户体，保留原函数帧；不是所有公开函数的自动验证。[实施规则](../rfcs/0008-enums.md#手写具体-partialeqeq2026-10-03)区分本片边界与未定扩展。
+
+
+已确认 **D36（2026-10-04 显式 Go 多返回适配）**：提供普通 Ok/Err 与保留错误时返回值两种显式宏，覆盖 Reader 的部分成功。保值版不能经 `?` 静默丢弃 Value；原始 error 身份、typed-nil 语义、单次求值与用户函数边界保持。首片工程 API、具体类型/数量边界和真实验收见 [RFC 0005](../rfcs/research/0005-option-result-question.md#显式-go-result-适配宏2026-10-04)。不授权隐式原生调用转换、Residual/Try、tuple 或新指针设计。

@@ -1,6 +1,6 @@
 # T0 子能力验收矩阵
 
-> 当前统一入口：[README](../README.md)；最小试用见 [enum_trial](../examples/enum_trial/README.md)。生产代码候选 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`。本文件保留阶段历史，当前范围以末尾交付清单及统一入口为准；本次整理不改变实现语义。
+> 当前统一入口：[README](../README.md)；最小试用见 [enum_trial](../examples/enum_trial/README.md)。宏 + 独立 enum 历史基线 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`。本文件保留阶段历史，当前范围以末尾交付清单及统一入口为准；2026-10-04 已增加文末 Go Result 适配宏。
 
 本轮实现基线：`fb74ba2380389b39afe92f35ebdb8500fab74adf`；最新四类状态见文末 T0 收口核对。历史核对包含 `cd495372377cac8bf139427e21fc4490e48a0348` 及远端 work 的 RFC/检查器。**D27 已撤回下文历史开放 raw/C enum 成果；当前只支持封闭变体及 serde 外部映射，最新验收见末节。** 以下先给有限交付标准，再保留历次逐项证据；历史阶段的“未做”若已有后续增量，以最新增量为准。具体类型、Go 宿主语法上的有限 T0 子集与整项 T0/M1–M8 完成是不同结论，不能混用。
 
@@ -775,3 +775,24 @@ Go 规范 Order of evaluation 只规定调用、接收和逻辑运算等的相�
 3. serde field adapters 的具体入口、自定义 deserialize_with 的缺失策略仍为 Proposed；普通 Option 缺失/null→None、显式 default/skip 才使用 Default 已经确定，不重新列为待决。
 
 本轮没有修改这些契约，也未前置完整 trait/Rust、指针拆分、借用或复杂别名分析来充当 enum 收口条件。
+
+
+## 显式 Go Result 宏验收（2026-10-04）
+
+D36：普通 `go_result!(T,call)` 与保值 `go_result_keep!(T,call)` 接通；error-only 使用单参数和 struct{}。真实执行入口为 [go_result 示例](../examples/go_result/README.md)，自动化为 [TestGoResultMacros / TestGoResultIndependentModules](../tests/acceptance/go_result_test.go)。
+
+| 核对项 | 证据/结果 |
+| --- | --- |
+| 真实 hgo 到 Go | CLI build/transpile，生成模块单独 test -race/vet；示例 CLI run 和生成 go run -race 输出 next 42、parse error true、partial 3 abc true |
+| Reader/解析 | n>0,error 同时保留；普通版明确只保留 error；缓冲区、次数、原始身份、errors.Is/As、typed-nil（含 error-only）断言 |
+| 顺序/帧 | 工厂/参数调用一次、variadic、原生泛型、内层问号失败后不调用原生函数、defer清理、直接 recover、panic身份、defer/go实参先求值 |
+| 类型/卫生 | T 和 error 精确身份；transparent alias、包初始化、重复输出确定性、局部 error/nil/Result/type Result 遮蔽；非法arity/具体error指针/非call/错误T拒绝 |
+| 传播 | 普通error的已有唯一From成功；保值同型载荷问号保留Value/Err；直接到Result[U,error]拒绝，不合成Error/Unwrap/From |
+| 导入 | 同模块源码跨包宏成功；两个独立go.mod恢复Result metadata并执行match/问号、消费原生alias；外部预编译宏导入明确拒绝 |
+| 审查 | 独立代码审查发现Result局部遮蔽，修复并独立复验变量/type两例；另有独立原生泛型+内层问号的真实生成race探针 |
+
+边界仍包括显式 T、包作用域可命名载荷、单非 error 返回、既有受限宏模板/问号上下文、预编译宏规则不可导入以及部分 generated/unmapped 诊断。这些是明确记录的工程边界，不是默认为用户批准的延期。没有新增隐式转换、tuple、Residual/Try、泛化 From 或指针 ABI；本片不代表完整 T0 MVP。
+
+本片最终验证环境为 `go1.27.1 linux/amd64`：`go test -race -count=1 ./...` 全树通过（acceptance 294.974s），`go vet ./...` 通过。`python3 scripts/check_design.py` 的文档结构及 13 个 Go 机制命令通过；最终文档复核为 66 Markdown 文件、890 本地链接/锚点、20 RFC。生成模块 race/vet 由上述接受测试单独执行；README CLI run 与生成 `go run -race` 均实跑得到三行预期输出。独立审查修复并复验后无剩余阻断。
+
+首次全树 race 因 `/tmp` 满导致链接器 `no space left on device`，不计通过；将可再生成缓存从 `/tmp/goxide-cache` 迁到 `/workspace/goxide-cache`（保留兼容 symlink），并将 TMPDIR 指向 `/workspace/go-result-tmp` 后才获得上述完整成功结果。没有删除仓库/用户数据，也未修改构建语义或跳过失败测试。

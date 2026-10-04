@@ -1,0 +1,141 @@
+{
+  "compilerCommit": "b8bb3a5e21ea84ef29490ba845c39ce04dbdc739",
+  "toolchain": "go1.27.1 linux/amd64",
+  "command": "go test -race -tags hgoweb -json -count=1 ./...",
+  "exitCode": 0,
+  "failedEvents": 0,
+  "topLevelTestsPassed": 453,
+  "packages": [
+    {
+      "package": "github.com/hxsf/goxide/internal/buildconfig",
+      "status": "skip",
+      "elapsedSeconds": 0
+    },
+    {
+      "package": "github.com/hxsf/goxide/formatting",
+      "status": "pass",
+      "elapsedSeconds": 1.008
+    },
+    {
+      "package": "github.com/hxsf/goxide/cmd/hgo-web",
+      "status": "pass",
+      "elapsedSeconds": 1.184
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/deriveextras",
+      "status": "pass",
+      "elapsedSeconds": 1.272
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/enums",
+      "status": "pass",
+      "elapsedSeconds": 6.439
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/equality",
+      "status": "pass",
+      "elapsedSeconds": 20.437
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/macros",
+      "status": "pass",
+      "elapsedSeconds": 8.074
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/buildscript",
+      "status": "pass",
+      "elapsedSeconds": 32.931
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/printing",
+      "status": "skip",
+      "elapsedSeconds": 0
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/matchexpr",
+      "status": "pass",
+      "elapsedSeconds": 2.616
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/project",
+      "status": "pass",
+      "elapsedSeconds": 1.062
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/refs",
+      "status": "pass",
+      "elapsedSeconds": 2.716
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/scripttrust",
+      "status": "pass",
+      "elapsedSeconds": 1.034
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/sourcemap",
+      "status": "pass",
+      "elapsedSeconds": 1.015
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/testdeps",
+      "status": "skip",
+      "elapsedSeconds": 0
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/propagate",
+      "status": "pass",
+      "elapsedSeconds": 6
+    },
+    {
+      "package": "github.com/hxsf/goxide/runtime",
+      "status": "skip",
+      "elapsedSeconds": 0
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/typecheck",
+      "status": "pass",
+      "elapsedSeconds": 1.577
+    },
+    {
+      "package": "github.com/hxsf/goxide/tests/prototype",
+      "status": "pass",
+      "elapsedSeconds": 7.632
+    },
+    {
+      "package": "github.com/hxsf/goxide/internal/frontend",
+      "status": "pass",
+      "elapsedSeconds": 60.256
+    },
+    {
+      "package": "github.com/hxsf/goxide/cmd/hgo",
+      "status": "pass",
+      "elapsedSeconds": 289.516
+    },
+    {
+      "package": "github.com/hxsf/goxide/tests/acceptance",
+      "status": "pass",
+      "elapsedSeconds": 318.969
+    }
+  ],
+  "rawLogSHA256": "fa03a1d7e542fa32381ae8e3200b2158739a0646b074fe94e61ef0e8ef2e29d0",
+  "publicModules": {
+    "github.com/goxide-lang/std": "v0.0.0-20261004120854-3f2204770fd3",
+    "github.com/goxide-lang/serde": "v0.0.0-20261004120911-a1b791e96d66"
+  },
+  "additionalChecks": [
+    "go vet ./...",
+    "go vet -tags hgoweb ./...",
+    "python3 scripts/check_design.py: documentation and 13 Go mechanism commands",
+    "public std and serde: library race, vet, js/wasm build",
+    "10 website CLI runs and exact native/WASM output comparison",
+    "8 adapter checks and 8 catalog negative examples",
+    "Chromium catalog and full UI QA: no page/console errors, same-origin GET only",
+    "website/hosting/audit.py: 11-file allowlist and known secret/local-path scan",
+    "examples/enum_trial/try.sh: two generated modules race/vet, executable output",
+    "enum_trial hgo test against ordinary generated producer: expected race-view artifact rejection"
+  ],
+  "remaining": [
+    "Newly approved unified authoring model goxide.toml + goxide.lock awaits toolchain interface; no parallel project implementation",
+    "Parent joint review of final integration branch; no main merge or website deployment"
+  ]
+}

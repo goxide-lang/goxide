@@ -23,4 +23,18 @@ Additional real regressions fixed: single-file sum derives lacked an importer; i
 
 Readability commits are integrated semantically: shared marker remains `isOption`/`isResult`; ValidatorPath is retained independently of ExportValidator; public full-digest names are unchanged. Final combined checks are still running.
 
-This is a checkpoint, **not completed migration or MVP acceptance**. Full final race/vet, regenerated browser archives and CLI/WASM parity, website catalog integration, and joint review with the independently owned goxide.toml task remain outstanding. No main merge or website deployment is performed.
+## Final combined validation for the current manifest mode
+
+Code commit `b8bb3a5e21ea84ef29490ba845c39ce04dbdc739` passed full `go test -race -tags hgoweb -count=1 ./...` with exit code 0. Both `go vet ./...` and `go vet -tags hgoweb ./...` passed. The preceding frozen run had exactly three top-level failures: the imported macro source-span loss, obsolete forged-Option marker, and a whitespace-sensitive assignment-guard assertion. Each was diagnosed, repaired without removing its scenario, separately rerun, then covered by this final full run. The 98 failures in the old handoff are not reported as this run's count.
+
+See [machine-readable package/test summary](public-library-validation-20261004.json). Tests preserve exported full-digest validator identities, canonical shared family origin, concrete validator ownership, typed-nil rejection, nested payload validation, source mapping, break/recover, Go consumer identity, From, and explicit derives. A new artifact authorization test rebinds the source marker and artifact digest before attempting owner-path and unregistered-same-signature substitutions; it does not merely test a stale JSON digest. Candidate order is canonicalized by owner path/helper. Old schema 6 is explicitly rejected and producers are regenerated.
+
+Website export archives and WASM were rebuilt from the same source/dependencies. The compiler digest is `212a777039f8cd995b9f993f4b38aff3909e643a60a151de0e9a9ce495e42580`. All 10 live examples execute under CLI and match browser output byte-for-byte; 8 adapter checks and 8 catalog negatives match native/browser results. Chromium QA passed filters, permalinks, snapshots, clipboard, 390px layout, edit/error recovery, timeout, interrupt, reset, no page/console errors and same-origin-only requests. The publish directory passed its 11-file allowlist and known secret/local-path audit. These are **local candidate build results**, not a deployment claim.
+
+The minimum two-module order example independently passed generated-module race/vet, executable build and expected business output. Attempting hgo test against an ordinary-view producer still correctly rejects its changed serde dependency fingerprint; no compatibility or trust check was weakened. Documentation/design checks and all 13 Go mechanism commands passed; mechanism checks are not substituted for hgo execution.
+
+## Remaining integration boundary
+
+The first TOML-format task (`554c0957a05b3000c0d762f3c49d00042451dc4b`) is integrated and covered by the full tests above. The user subsequently approved a new unified authoring model: migrate go.mod/go.sum into goxide.toml + goxide.lock, with mixed .go/.hgo source. That additional lossless-migration interface is owned by the toolchain task and has not yet been delivered to this integration branch. Current root-go.mod code is a transition for the existing mode, not a permanent authority decision. No project parser/planner work is duplicated here. Public std/serde remain ordinary Go module distributions with go.mod.
+
+Parent joint review and integration of that new interface remain. No main merge, tag/release, visibility change, or website deployment was performed. The live public site remains untouched.

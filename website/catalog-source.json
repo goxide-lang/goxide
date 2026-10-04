@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "5f533d7d0b6198f0d3653abbb8df3c53f8d98868",
+  "compilerCommit": "b8bb3a5e21ea84ef29490ba845c39ce04dbdc739",
   "reviewedAt": "2026-10-04",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
@@ -597,5 +597,5 @@
       "development": "共享 origin/validator owner 与独立 ExportValidator 已整合；公开完整摘要保持限定范围。"
     }
   ],
-  "compilerDigest": "0220ffbd25a1bbc040110d2877bbbfb2f1eb241729d2e4676c76c8f197011f79"
+  "compilerDigest": "212a777039f8cd995b9f993f4b38aff3909e643a60a151de0e9a9ce495e42580"
 }

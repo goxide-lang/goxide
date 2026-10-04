@@ -1,6 +1,6 @@
 # 共享 std、独立 serde 与 sum 推导迁移计划
 
-状态：**方向已获用户批准，生产迁移尚未实施**（2026-10-04）。编译器基线 `ae61ec628b55e0fc66ce96d47261c0a6809c0280`，独立工作分支 `feat/shared-std-sums`。本文替代[此前研究](../rfcs/research/shared-sum-abi-and-inference.md)中“先同仓库”的建议；其已验证的 Go 机制与 ABI 风险仍适用。先提交本文与 API 合同，再实现。std 的“稳定核心”是分类，不构成 v1.0、长期 ABI 冻结或发布承诺。
+状态：**独立库已公开提交，compiler 整合进入最终验收**（2026-10-04）。编译器基线 `ae61ec628b55e0fc66ce96d47261c0a6809c0280`，独立工作分支 `feat/shared-std-sums`。本文替代[此前研究](../rfcs/research/shared-sum-abi-and-inference.md)中“先同仓库”的建议；其已验证的 Go 机制与 ABI 风险仍适用。先提交本文与 API 合同，再实现。std 的“稳定核心”是分类，不构成 v1.0、长期 ABI 冻结或发布承诺。
 
 ## 1. 仓库、模块与职责
 
@@ -11,9 +11,9 @@
 | `github.com/goxide-lang/next` | 本轮为空 | 实验性能力，未定 API 不为填仓库而实现 |
 | 现有 compiler 私有仓库 | frontend、metadata、派生与 lowering、RFC/验收 | 本轮不把整个 compiler、RFC、历史、凭据或现场日志搬到公开库 |
 
-serde 的明确坐标：core `github.com/goxide-lang/serde`；格式 `github.com/goxide-lang/serde/json`，源码可使用 `serdejson "github.com/goxide-lang/serde/json"` 避免与 Go encoding/json 混淆。包声明名与具体文件迁移由 serde 任务统一处理，不由 std 任务并行修改。core 使用格式无关协议；现有 Option 缺失/null→None 独立于 Default，default/skip 才走 Default，保持不变。
+serde 的明确坐标：core `github.com/goxide-lang/serde`；格式 `github.com/goxide-lang/serde/json`，源码可使用 `serdejson "github.com/goxide-lang/serde/json"` 避免与 Go encoding/json 混淆。唯一整合 owner 已统一迁移包路径、compiler import 与 field protocol identity。core 使用格式无关协议；现有 Option 缺失/null→None 独立于 Default，default/skip 才走 Default，保持不变。
 
-新仓库 Git 写权限尚未在当前旧执行环境验证。可在隔离目录准备候选库，用 local replace 验证；待新环境可用后交接准确文件/commits。不会尝试凭据绕过、创建 token、改变可见性、tag 或 release。
+新环境已通过正常 Git 发布并核验 std `3f2204770fd3b09cf9f5a1d9228464b7f7c1bdcd`、serde `a1b791e96d660c6be620e110c566a9a171631b7e`。精确 pseudo-version 和 checksum 由 Go 实际解析；compiler 无 std/serde 本地 replace。next 保持空仓库。未创建 token、改变可见性、tag 或 release。详情见[整合记录](../reviews/public-library-migration-20261004.md)。
 
 现有 compiler 根 [LICENSE](../../LICENSE) 是 Mozilla Public License 2.0。迁出的已有代码保留现有许可文本及已有通知，不擅自改为 MIT/Apache 或添加另一许可证；候选库保留来源清单。公开交付仅包含用户要求的库源码、库测试、go.mod、必要说明和原许可，不包括私有 compiler 内容。若后续发现单独文件许可/来源不明，列出该文件再处理，不自行宣称已完成法律审查。
 
@@ -108,7 +108,7 @@ match r {
 | std 共享表示与别名 | `internal/enums/builtins.go` 的 Builtin/builtinDeclarations/builtinInstances | std 任务拥有 ABI；可读性任务先不改这些函数的家族/constructor身份 |
 | schema/origin/owner | `internal/frontend/enum_artifact.go`, `enum_exports.go`, `imported_family.go` | std 任务拥有 family 段；serde 任务只在约定阶段改 field protocol identity 段，避免并写 |
 | typed 注册/推导 | `internal/propagate/lower.go`, `go_result.go`；拟新增独立 sum 推导模块；`frontend/compile.go`, `package.go` 接入 | std/推导任务；可读性私有名改写随后适配生成接口 |
-| serde 独立迁移 | `serde/`, `serdejson/`, serde derive/import/验证及相关 fixtures | 暂无其他实施 owner；本阶段保留当前库，新环境接续统一迁移，不宣称已有并行任务完成 |
+| serde 独立迁移 | `serde/`, `serdejson/`, serde derive/import/验证及相关 fixtures | 由接续的唯一迁移 owner 完成：公开 core/json 已发布，私有旧库实现移除 |
 | 可读性 | 空 payload switch、私有短名、无 guard match if/else；AST格式/映射 | 独立任务；保留 exported HgoInst ABI名，不能删除验证或改 break 目标 |
 | 网站 | `website/build.py` export 闭包/digest、示例及 QA | 合流后统一重建，避免混用旧 compiler/新 std；暂不部署 |
 | use | RFC 0021 现状与后续文档 | 另任务负责，不新增 use 语法 |
@@ -119,11 +119,13 @@ match r {
 
 - [x] 用户确认仓库边界；本计划记录明确 std API、serde 坐标、schema/兼容与任务文件所有权。
 - [x] 文档独立审查通过；按阶段提交 push/fetch，随后隔离准备 std 候选库及 provenance，不推新公开库。
-- [ ] 新环境核实三个 repo 的准确工作区/权限；父任务协调 std 与 serde 的真实 commits/版本，next 不填充。
+- [x] 新环境核实三个 repo；std/serde 真实提交与可下载依赖已核验，next 不填充。
 - [ ] 实施共享 std/schema/registry；真实 hgo 多包和独立模块测试直接互赋、Go consumer、generic alias、问号/From及保值结构。
 - [ ] 迁移 Eq/Clone/Default/Debug/serde 注册与 Option 缺失/null；测试 std/serde 核心 identity 同一，不能只跑纯 Go 原型。
 - [ ] 家族限定缺参构造及 pattern：return/assignment/callarg/scrutinee 正例，信息不足/冲突/typed nil/partialvalue负例。
 - [ ] 全树 race/vet、每个生成模块独立 race/vet、设计检查；网站真实 CLI/WASM 差分与 export data，独立审查后报告完整 SHA。不以机制探针代替生产验收，不合 main、不 tag/release、不部署网站。
 
 
-当前实施证据：`internal/frontend/shared_std_test.go` 使用明确候选库replace执行hgo→Go独立模块，不依赖根go.mod临时替换。共享类型、owner、上下文推导的阶段测试通过；公开版本、全树fixture迁移、serde/网站/可读性合流未完成。上面的总阶段复选框保持未勾选，避免把局部证据当作整体交付。
+当前实施证据：`internal/frontend/shared_std_test.go` 已改用真正发布的 std 依赖执行 hgo→Go 独立模块，并拒绝旧 schema 6。`shared_std_artifact_test.go` 核验 owner 路径、同签名未登记 helper 与候选顺序。serde、网站 catalog、可读性和首轮 TOML 格式迁移已整合；最终整树结果以整合记录为准，不把重点测试冒充完整交付。
+
+用户随后批准统一项目模型：从 Go 迁入时由 go.mod/go.sum 迁成 goxide.toml+goxide.lock，混合指 .go/.hgo 源码。该后续接口由独立工具链任务拥有；当前测试使用现有 manifest 模式，不把根 go.mod authority 固化为长期架构。公开 std/serde 是普通 Go 发行模块，继续保留其 go.mod。

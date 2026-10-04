@@ -11,6 +11,7 @@ hgo 在 Go 生态上实现一个可执行语言子集：声明宏、闭合变体
 ```sh
 # 改成你机器上真实的 Go 1.27.x；这是本次云环境的已验证路径。
 export GO_BIN=/workspace/goxide-environment/go/bin/go
+"$GO_BIN" mod download # 首次联网取得 go.mod/go.sum 固定的依赖；试用脚本本身离线。
 work="$(mktemp -d)"
 bash examples/enum_trial/try.sh "$work"
 ```
@@ -19,7 +20,7 @@ bash examples/enum_trial/try.sh "$work"
 
 ## 网页与浏览器 Playground
 
-[构建独立 hgo-web 二进制](website/README.md)：中文特性介绍、五组真实 hgo → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器仅支持清单内包的单文件转译；CLI 与 WASM 示例逐字节校验。
+[构建独立 hgo-web 二进制](website/README.md)：中文特性目录、十组真实 hgo → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器仅支持清单内包的单文件转译；CLI 与 WASM 示例逐字节校验。
 
 ## 当前支持
 
@@ -83,4 +84,7 @@ Cargo 风格第一版通过 `goxide.toml` 增量启用默认/显式 feature、�
 
 `version` 渠道现可直接取得带 `goxide.toml` 的源码并统一 features；Go 负责共享 MVS 与 sums，稳定后才生成/执行已授权脚本。仅原生 go.mod 不隐式激活 hgo feature；固定配置 Go 发行物不重配。见 [version 来源合同与验收](docs/design/version-source-plan.md)。
 
-项目清单正式采用 [goxide.toml](docs/design/toml-manifest.md)：`[package] format = 1`、`[features]`、`[dependencies.name]`、`[lib]`、`[[bin]]`、`[[example]]` 和 `[build]`。旧 hgo.json 必须改写内容后移出项目根；双配置拒绝。当前仍保留根 go.mod/go.sum 与 hgo.lock，纯 TOML 根项目为后续提案。
+项目清单正式采用 [goxide.toml](docs/design/toml-manifest.md)：`[package] format = 1`、`[features]`、`[dependencies.name]`、`[lib]`、`[[bin]]`、`[[example]]` 和 `[build]`。旧 hgo.json 必须改写内容后移出项目根；双配置拒绝。当前已整合的实现仍保留根 go.mod/go.sum 与 hgo.lock。用户随后批准迁入时统一转换为 goxide.toml+goxide.lock，混合指 .go/.hgo 源码；该无损迁移接口由工具链任务继续实施，不视为本轮已完成，也不自动删除原文件。
+
+
+共享 sum 与 serde 已迁入独立 Go 模块：`github.com/goxide-lang/std/sum`、`github.com/goxide-lang/serde`、`github.com/goxide-lang/serde/json`。本 checkout 的 go.mod/go.sum 固定真实公开提交；不是未发布候选 replace。具体版本、发布白名单和整合验收见[迁移记录](docs/reviews/public-library-migration-20261004.md)。旧 schema 6 产物需用此编译器重新生成；不承诺与旧私有 marker 二进制兼容。

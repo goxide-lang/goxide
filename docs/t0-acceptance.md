@@ -830,3 +830,10 @@ D36 后续：入口无需 T，从 `(T,E)` 或 E 推导具体 Result；保留显�
 本阶段可获取提交：生产接入 `7cb7f0b825b71bfefdb6160600f55bc4ba0acf5d`；serde隔离候选交接 `57c858ee1d1334e52fedf144dd7461785bece65e`，均在 `feat/shared-std-sums` push/fetch核对。后者只允许按provenance白名单迁入独立serde repo，不包含编译器路径切换，也不包含项目manifest；`goxide.toml`由工具链任务统一实施。
 
 验证结论：`go test -race ./internal/frontend -run 'TestSharedStd|TestEnumFamily' -count=1`通过，并在测试内分别执行producer/consumer生成模块race/vet；最新真实CLI多包转译输出另行race/vet通过。`go vet ./...`通过，完整设计检查13条Go命令通过（机制证据），文档链接/RFC检查通过。全树`go test -race ./...`仍失败，最近整树快照为98个顶层失败，涉及8个包；主类为std依赖缺失/低层importer未迁移，另外保留项目ziphash/离线规划调查。整树失败后修复显式分号package的重复分隔符并重跑上述重点race/vet；没有把重点通过冒充整树绿灯。
+
+
+## 2026-10-04 公开 std/serde 与整合回归
+
+独立库已发布并绑定真实 pseudo-version；schema 7、serde canonical identity、可读性与第一阶段 goxide.toml 迁移已联合整合。代码 `b8bb3a5e21ea84ef29490ba845c39ce04dbdc739` 的完整 `go test -race -tags hgoweb -count=1 ./...` 退出 0，普通及 hgoweb 全树 vet 通过。公开库、独立生成模块、10 个浏览器实例、8 个目录反例、8 个适配检查、source map/非法值/owner 授权及发布白名单证据见[整合记录](reviews/public-library-migration-20261004.md)和[逐包摘要](reviews/public-library-validation-20261004.json)。网站仅本地构建验证，未部署。
+
+用户后来批准统一 goxide.toml+goxide.lock authoring 模型；该新的无损迁移接口仍由工具链任务实施，尚未纳入此 SHA。当前模式全绿不代表新接口已交付，也不代表整个 MVP 完成。

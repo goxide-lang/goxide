@@ -214,3 +214,8 @@ CopySlice 按长度复制外层元素；CloneWith 建立输出并执行每个回
 7. Go 支持示例可独立编译；hgo 的权限、借用与 unsafe 诊断须由未来前端单独验证。Go 测试及 `-race` 只能验证实际覆盖路径，不代替这些诊断。
 
 本文列出的是实现目标，尚未完成的源级检查、库实现与包发布不能因文档或 Go 示例存在而标记为已提供。
+
+
+## 已批准独立仓库边界（2026-10-04）
+
+稳定核心使用 `github.com/goxide-lang/std`，实验能力使用 `github.com/goxide-lang/next`，serde core 与 JSON 使用独立 `github.com/goxide-lang/serde`。共享 sum 的具体 API、schema 7/validator owner、统一重生成及首轮家族限定泛型省参计划见 [共享 std 迁移](shared-std-migration.md)。稳定分类不表示已发布 v1.0；新公开仓库尚未由本阶段推送。

@@ -38,6 +38,7 @@ type secret struct{N int}
 func Private()Option[hidden]{return Option[hidden]::Some(hidden{N:7})}
 func Secret()Option[secret]{return Option[secret]::Some(secret{N:8})}
 func Load(kind int)Result[int,error]{if kind==1{return Result[int,error]::Err(Sentinel)};if kind==2{var e *Fault;return Result[int,error]::Err(e)};return Result[int,error]::Ok(4)}
+func LoadNumber(n int)Result[int,error]{if n<0{return Result[int,error]::Err(Sentinel)};return Result[int,error]::Ok(n+1)}
 func Text()Result[string,error]{return Result[string,error]::Ok("ok")}
 func Pick(ok bool)Option[int]{if ok{return Option[int]::Some(5)};return Option[int]::None}
 func Words()Result[int,string]{return Result[int,string]::Err("bad")}
@@ -76,7 +77,8 @@ func Get()Result[int,error]{return nil}
 	appFor := func(source string) string {
 		d := t.TempDir()
 		packagesWrite(t, d, "go.mod", module("sums.example/app", lib))
-		packagesWrite(t, d, "app.hgo", source)
+		// A final source newline is optional, including before imported preludes.
+		packagesWrite(t, d, "app.hgo", strings.TrimRight(source, "\n"))
 		return d
 	}
 	app := appFor(`package app
@@ -104,6 +106,7 @@ func NestedNone()Option[int]{v:=m.OptionalNested()?;n:=v?;return Option[int]::So
 func Guard(v m.Option[int],seen *bool)int{return match v{m.Option[int]::Some(n) if Mark(seen)=>n,_=>0,}}
 func Mark(seen *bool)bool{*seen=true;return true}
 func Shadow()Result[int,error]{input:=m.Load(0);m:=3;_=m;n:=input?;return Result[int,error]::Ok(n)}
+func SumLarge(items []int)Result[int,error]{total:=0;for _,item:=range items{total+=m.LoadNumber(item)?};return Result[int,error]::Ok(total)}
 `)
 	out := filepath.Join(t.TempDir(), "out")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, app)
@@ -151,6 +154,26 @@ func TestBusiness(t *testing.T){if Match(OptionFlow(true))!=6||Match(OptionFlow(
 type forged struct{m.Result[int,error]}
 func TestInvalid(t *testing.T){var typed *m.HgoResultOk[int,error];for _,v:=range []m.Result[int,error]{nil,typed,&m.HgoResultOk[int,error]{Value:1},forged{}}{func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid")}}();Invalid(v,&seen)}()};func(){defer func(){if recover()==nil{t.Fatal("nested validation")}}();Nested()}();func(){seen:=false;var typed *m.HgoOptionSome[int];defer func(){if recover()==nil||seen{t.Fatal("guard")}}();Guard(typed,&seen)}()}
 `)
+	// Measure an optimized real consumer of a separately generated producer.
+	// Values above the runtime's small-integer boxing cache expose per-item
+	// escapes. Race semantics are covered above; allocation gates use plain Go.
+	packagesWrite(t, out, "allocation_test.go", `//go:build !race
+
+package app
+import "testing"
+var allocationSink int
+func TestImportedResultAllocations(t *testing.T){
+ for _,size:=range []int{1,32,1024}{
+  items:=make([]int,size);want:=0
+  for i:=range items{items[i]=1000+i;want+=items[i]+1}
+  allocations:=testing.AllocsPerRun(100,func(){allocationSink=SumLarge(items).(__hgo_enum_case_Result_Ok[int,error]).Value})
+  if allocationSink!=want{t.Fatalf("sum=%d want=%d",allocationSink,want)}
+  // One escaping final Result is allowed; no escaping Result per item.
+  if allocations>1{t.Fatalf("size=%d allocations=%g; want at most final Result allocation",size,allocations)}
+ }
+}
+`)
+	packagesCommand(t, out, tool, true, "test", "-count=1", "-run", "^TestImportedResultAllocations$", ".")
 	plain := t.TempDir()
 	packagesWrite(t, plain, "go.mod", module("sums.example/plain", lib))
 	packagesWrite(t, plain, "plain_test.go", `package plain

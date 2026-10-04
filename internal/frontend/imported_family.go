@@ -21,10 +21,12 @@ func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefi
 		d.Variants = append(d.Variants, enums.Variant{Name: v.Name, Payload: payload, CaseName: prefix + "_" + v.Name, Constructor: prefix + "_new" + v.Name})
 	}
 	var b strings.Builder
-	for i, v := range f.Instances {
-		name := fmt.Sprintf("%s_inst%d", prefix, i)
-		fmt.Fprintf(&b, "\nvar %s = %s.%s;\n", name, origin, v.Validator)
-		d.Instances = append(d.Instances, enums.Decl{Validator: name})
+	b.WriteByte('\n') // Separate generated declarations even without a source EOF newline.
+	for _, v := range f.Instances {
+		// Keep the trusted producer function's identity until the typed consumer
+		// pass can name its concrete parameter. A function-value alias here
+		// would hide the target from Go escape analysis at every `?` call.
+		d.Instances = append(d.Instances, enums.Decl{Validator: origin + "." + v.Validator})
 	}
 	count := 1
 	if f.Family == "Result" {

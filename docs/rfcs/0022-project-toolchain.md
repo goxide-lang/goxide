@@ -48,7 +48,7 @@ name = 'app'
 path = 'src/lib.hgo'
 ```
 
-`[lib]` 为零或一个表；`[[bin]]` / `[[example]]` 是显式数组表，不自动扫描约定目录、父目录或相邻项目。每个类别内名称唯一；bin 和 example 可以同名，因为选择 flag 不同。目标 path 必须是模块内目录或 `.hgo` / `.go` 文件，不能越过嵌套 `go.mod`。未注册 helper 仍按 Go 目录包处理，不能隐式混合多个 main。
+`[lib]` 为零或一个表；`[[bin]]` / `[[example]]` 是显式数组表，不自动扫描约定目录、父目录或相邻项目。每个类别内名称唯一；bin 和 example 可以同名，因为选择 flag 不同。目标 path 必须是模块内目录或 `.hgo` / `.go` 文件，不能越过嵌套 `goxide.toml` 或 `go.mod`。未注册 helper 仍按 Go 目录包处理，不能隐式混合多个 main。
 
 文件入口会显式映射：lib 文件到生成 module 根（包名由源文件决定）；bin/example 到 `hgo_targets/<类别>/<名称>/`。因此同一 src 目录中的多个 main 文件可以分别选择，并通过原 module path 导入 lib。目录入口保持相对目录包路径。文件入口只搬移该文件，不搬移同目录 helper 或相对 `go:embed` 资源；含这些内容的 CLI/web 应选择目录入口。所有目标入口从普通目录源中排除，只恢复选中入口和 lib；最终生成 Go 路径冲突拒绝，不覆盖文件。`hgo_targets` 与 `hgo_project_config.go` 为保留名称。
 

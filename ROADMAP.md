@@ -11,7 +11,7 @@
 - 新增[20 篇逐特性 RFC](docs/rfcs/README.md)：以转译前后、双向互操作和拒绝例子约束设计；部分已有有限端到端实现，完整范围见实现记录。
 - 已有用于核对 Go 降低机制的文档代码和可复现验证；它们不是 hgo 编译器或基础包实现。
 - 已有单文件有限前端、源类型检查、Go 生成与 CLI 构建原型，见 IMPLEMENTATION.md；完整 hgo 解析/包类型系统、必经 linter、LSP、基础包与自举尚未完成。
-- Go 1.27 是已确认的目标语言和工具链下限；实现分支已有根 go.mod，设计和研究夹具由各自模块隔离。
+- Go 1.27 是已确认的目标语言和工具链下限；编译器自身是普通 Go 工程并保留根 go.mod；这不要求迁入后的用户工程保留它，用户项目采用文末 RFC 0025 统一模型。设计和研究夹具由各自模块隔离。
 
 ## 2. 里程碑与完成条件
 
@@ -287,3 +287,15 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 ## 共享 std 阶段接续
 
 共享sum生产接入已推进到独立模块执行，见 [阶段验收](docs/t0-acceptance.md#2026-10-04-共享-std-接入阶段仍未完成-mvp) 和 [迁移方案](docs/design/shared-std-migration.md)。下一步优先在具有std/serde repo配置的新环境完成真实版本锁定，再统一CLI/测试/serde/网站产物；`next` 保持空实验仓库。本阶段不是MVP完成声明，缺失的全树race与CLI/WASM闭环仍是交付阻断。
+
+
+### 2026-10-04 工具链统一作者模型
+
+用户确认：迁入后根由 `goxide.toml` / `goxide.lock` 唯一管理，混合指 `.go` / `.hgo`。首片实现已提交（`4f9710afb8e14a321d632371399f0717f61ca217`），已对齐最新公开 std/serde 集成；完整回归正在收尾，不据此宣称整体工具链完成。
+
+- [RFC 0022](docs/rfcs/0022-project-toolchain.md)：features、来源、多目标；现行 format 2，保留原有边界。
+- [RFC 0023](docs/rfcs/0023-build-scripts.md)：授权/host闭包与缓存；TOML根/纯TOML helper映射同步。
+- [RFC 0025](docs/rfcs/0025-unified-project.md)：原生Go政策映射、schema 2锁、plan/staging迁入、黑白例、离线与发布渠道边界。
+- [早期 TOML 迁移设计](docs/design/toml-manifest.md)保留为 superseded 历史：根go.mod必需、保留hgo.lock、format 1不再是现行规范。
+
+不删除用户原工程，既有format 1/JSON/增强旧锁的自动升级尚不支持；不是完整Cargo或workspace兼容。

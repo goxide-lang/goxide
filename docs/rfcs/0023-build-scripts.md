@@ -4,7 +4,7 @@
 
 用户已确认第一阶段：代码/资源生成、本地 host 工具与依赖、声明输入增量缓存；根项目一次信任，第三方执行闭包单独精确许可；native linking 后置。本分支实现该子集。`build.gox` 仍是研究名称，实际入口支持 `.go` / `.hgo`，不更改语言后缀。
 
-本 RFC 接续 [项目工具链](0022-project-toolchain.md)。研究历史保留于 `research/build-gox-rfc` 分支：`4c54b12290fffd5d593e674a403306a60b3c9708` 包含最初 RFC、官方 Cargo 差距对照、独立审阅与可复现 Go/OS fixture。旧研究中的严格 hermetic/sandbox 门槛与逐 target 运行属于旧候选；以本篇已确认的本地 declared-input 模式为准。
+本 RFC 接续 [项目工具链](0022-project-toolchain.md)。作者根采用 [RFC 0025 统一模型](0025-unified-project.md)：format 2 的 goxide.toml 与 schema 2 的 goxide.lock，混合仅指 .go/.hgo 源码，不要求根 go.mod/go.sum。研究历史保留于 `research/build-gox-rfc` 分支：`4c54b12290fffd5d593e674a403306a60b3c9708` 包含最初 RFC、官方 Cargo 差距对照、独立审阅与可复现 Go/OS fixture。旧研究中的严格 hermetic/sandbox 门槛与逐 target 运行属于旧候选；以本篇已确认的本地 declared-input 模式为准。
 
 这不是 sandbox。普通 Go 可执行文件可以访问当前用户能访问的文件、网络、凭据和进程；快照、路径检查、清理范围和许可用于控制工具自身行为，不构成对恶意脚本的 OS 隔离。第一次需要许可时失败并给出诊断，不默认执行依赖脚本，也不隐式交互批准。
 
@@ -42,7 +42,7 @@ inputs 为包内明确的文件或递归目录，不支持 glob；目录成员�
 
 env 只传入明确列出的已设置变量，未设置与空字符串在缓存中不同。`HOST`、`TARGET`、`OUT_DIR`、`SOURCE_DIR` 为 runner 提供；Go/CGO、PATH/HOME/TMP 与动态装载相关保留变量不能由声明覆盖。没有自动读取系统环境、时间或网络作为隐式缓存输入。
 
-dependencies 是模块名到显式本地源码路径；它们只供 host 脚本使用，不加入 target 依赖图。Go/hgo helper 的完整本地依赖闭包都必须列出。go.mod 仅支持 module/go/require；不接受 replace/toolchain 等其他 directive、嵌套 module 或 helper 自己的 build 脚本。第一版不自动获取 registry/git host helper，也不复用 target resolver 的同模块 feature 节点。Git 来源的脚本及 helper/tools 不能越出该 checkout。
+dependencies 是模块名到显式本地源码路径；它们只供 host 脚本使用，不加入 target 依赖图。Go/hgo helper 的完整本地依赖闭包都必须列出。原生 Go helper 的 go.mod，或纯 TOML helper 合成后的 Go 政策，仅支持 module/go/require；不接受 replace/toolchain 等其他 directive、嵌套 module 或 helper 自己的 build 脚本。TOML helper 根同样拒绝 go.mod/go.sum，生成副本不回写原 helper。第一版不自动获取 registry/git host helper，也不复用 target resolver 的同模块 feature 节点。Git 来源的脚本及 helper/tools 不能越出该 checkout。
 
 tools 是别名到已存在的本地可执行文件；执行前冻结二进制内容，独立许可，request 提供快照绝对路径。动态库、外部配置、工具再次调用的程序不被自动封装或追踪；工具闭包 hermeticity 不受保证。不运行安装器。
 
@@ -57,7 +57,7 @@ tools 是别名到已存在的本地可执行文件；执行前冻结二进制�
 
 脚本以 `generator /absolute/request.json` 启动。request v1 字段：`version`、`source_dir`、`out_dir`、`host_os`、`host_arch`、`target_os`、`target_arch`、`features`、`tools`、`env`。cwd 是声明输入快照，输出目录初始为空。`features` 是所属包解析后的 feature 集合，不能启用 target 依赖或反向改变 feature 图。stdout/stderr 仅日志，最多转发 1 MiB，不解释为 Cargo 指令或编译参数。
 
-host 编译固定本机 GOOS/GOARCH、CGO=0、GOWORK=off、GOTOOLCHAIN=local、依赖获取关闭。环境通过调用参数传递，不修改进程全局环境。当前 frontend 仍拒绝非 host target；request 分开保留 host/target 字段不表示交叉编译已经可用。原始 `go.mod` target 依赖策略仍由项目工具链控制。
+host 编译固定本机 GOOS/GOARCH、CGO=0、GOWORK=off、GOTOOLCHAIN=local、依赖获取关闭。环境通过调用参数传递，不修改进程全局环境。当前 frontend 仍拒绝非 host target；request 分开保留 host/target 字段不表示交叉编译已经可用。TOML 中的 target 原生 Go 依赖策略仍由项目工具链控制；host helper 的受限依赖闭包与之分开。
 
 ### 缓存与信任操作
 

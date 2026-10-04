@@ -2,6 +2,8 @@
 
 ## 状态与范围
 
+状态（2026-10-04）：用户已确认统一模型，首片实现已提交；迁移、锁定、纯 TOML 来源及独立复审通过，最新 std/serde 集成后的完整回归仍在收尾。以下是本片规范及明确限制，不是完整 Cargo 兼容声明。
+
 用户已明确决定：迁入 goxide 的第一步就将 Go 依赖配置迁入 `goxide.toml` / `goxide.lock`。混合项目指 `.go` / `.hgo` 共存，不指两套根依赖配置并存。本篇取代 [TOML 迁移设计](../design/toml-manifest.md) 中长期保留根 go.mod 的兼容模式；未迁入且没有 TOML 的普通 Go/单文件工具行为不变。本轮先实现无损子集，原生 Go 仍负责语法、MVS、下载/checksum 与构建，不重造 resolver。
 
 不自动删除、移动或覆盖用户原文件。迁入采用只读计划与独立 staging 工程验证；用户审阅后可选择迁入后的工程，旧工程完整保留。完整 workspace、发布自动化、跨目标编译、共享 enum ABI、借用/所有权不在本篇范围。
@@ -87,7 +89,7 @@ func main() { fmt.Println("mixed source, one manifest") }
 | 纯 Go module + explicit lib/bin，无不支持指令 | plan只读；staging构建成功后输出TOML+实际锁，旧文件逐字不变 |
 | TOML纯根、两个bin和example、混合源码 | target生成Go metadata；按需构建，共享稳定module身份 |
 | 本地/Git依赖只有TOML | target规划代理元数据，不写原来源；边界/锁commit保持 |
-| 根同时TOML和go.mod/go.sum | 正常build拒绝，只有显式迁移输入读取旧文件 |
+| 根同时TOML和go.mod/go.sum | 正常build拒绝；import-go首片只接受尚无TOML的原生Go输入，既有双配置须显式人工整理 |
 | 目的目录已有TOML/锁或任何内容 | 不覆盖；失败清理仅本次拥有的暂存目录 |
 | 未支持指令/workspace/工具链不满足 | 整体拒绝，源文件和已有输出不变 |
 | go.sum存在旧未选版本 | 不把它当锁版本；实际Go MVS与校验结果决定 |

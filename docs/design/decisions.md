@@ -166,3 +166,8 @@
 
 
 D36 补充（用户已授权，先规范后实现）：`go_result!(call)` / `go_result_keep!(call)` 按真实返回签名推导 T/E，保留具名 nilable 错误类型，按原类型 nil 判断；error 接口不动态猜 E，非 nilable struct 错误明确拒绝。显式 T 形式继续精确核对。完整黑白案例、typed 阶段/多文件/metadata 与网站验收见 [T/E 推导规范](../rfcs/research/0005-option-result-question.md#按静态返回签名推导-te已授权实施前规范)。
+
+
+已确认 **工具链 UT01（2026-10-04，独立于语言决策编号）**：迁入后的项目根只保留 `goxide.toml` / `goxide.lock` 为配置/锁权威；混合项目表示 `.go` / `.hgo` 共存。显式module/Go/toolchain建议及原生require/replace/exclude写入TOML，真实Go负责选版/校验/构建；Go module元数据只在生成视图存在。原Go项目经只读plan、独立staging构建验证后产生新工程，不自动删除/移动/覆盖原文件。具体首片字段、锁与拒绝边界见 [RFC 0025](../rfcs/0025-unified-project.md)，features/多目标见 [RFC 0022](../rfcs/0022-project-toolchain.md)，授权脚本见 [RFC 0023](../rfcs/0023-build-scripts.md)。首片已提交，最终集成回归收尾中；确认方向不等于批准完整Cargo兼容。
+
+UT01 替代记录：早期 [TOML 设计](toml-manifest.md) 的长期根go.mod/go.sum兼容、hgo.lock名称和“纯TOML未来提案”标为superseded，原文仅留研究历史；Go proxy source发行物仍需一致传输元数据，不能把发布合同误当作者根双配置许可。

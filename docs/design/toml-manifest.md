@@ -1,8 +1,8 @@
-# goxide.toml 项目清单迁移
+# goxide.toml 项目清单迁移（历史，superseded）
 
 > 后续用户决定已取代本文长期双清单兼容建议：见 [RFC0025](../rfcs/0025-unified-project.md)。本文保留格式切换的历史验证记录；统一作者模型以新RFC为准。
 
-用户已决定正式清单从 hgo.json 改为 goxide.toml；本设计与实现同步，不兼容读取旧 JSON，也不改变 go.mod、feature 解析、选版、脚本授权或 target 语义。hgo.lock 名称及其 JSON 内容保持不变。
+以下正文记录当时 format 1 的行为，不是当前作者模型。用户当时决定正式清单从 hgo.json 改为 goxide.toml；本设计与实现同步，不兼容读取旧 JSON，也不改变 go.mod、feature 解析、选版、脚本授权或 target 语义。hgo.lock 名称及其 JSON 内容保持不变。
 
 ```toml
 [package]

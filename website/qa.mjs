@@ -33,7 +33,7 @@ for(let i=0;i<manifest.examples.length;i++){
 const checkResults=[];
 const temp=await fs.mkdtemp(path.join(tmpdir(),'goxide-browser-parity-'));
 try {
- for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity']) {
+ for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity','reject_legacy_cfg']) {
   const source=await fs.readFile(new URL(`checks/${name}.gox`,import.meta.url),'utf8');
   const input=path.join(temp,'playground.gox');await fs.writeFile(input,source);
   let nativeGo, nativeError;

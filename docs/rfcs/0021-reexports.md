@@ -134,7 +134,7 @@ goxide → Go：原生Go导出对象是声明身份基础；变量和函数始�
 
 Go → goxide：消费生成Go源即可使用实际类型/常量alias和普通业务函数；通过原包访问变量/函数。Go不理解`.goxide.uses.json`中的虚拟函数/变量入口，也不自动获得private use限制或其他增强检查。
 
-metadata文件名`.goxide.uses.json`，Go marker为`GoxideUseMetadata`，schema版本1，新增可选`UnsupportedKinds`分类（参与marker digest）；新读者可校验旧产物，旧读者会拒绝新增字段，不能声称双向兼容。记录公开性、类别、canonical声明、合法Go route及类型identity route；不包含可执行宏代码。恢复校验marker、真实Go对象种类/类型/常量、精确selected source集合、source digest与Go importer的构建/依赖closure fingerprint。JSON必须仅含一个对象，读取有大小上限。普通模式产物不能被test/race模式默默复用。
+metadata文件名`.goxide.uses.json`，Go marker为`GoxideUseMetadata`，schema版本2，包含可选`UnsupportedKinds`分类（参与marker digest）；正式命名迁移拒绝旧 Hgo marker/schema 1，要求统一重新生成，不提供新旧 ABI 混用。记录公开性、类别、canonical声明、合法Go route及类型identity route；不包含可执行宏代码。恢复校验marker、真实Go对象种类/类型/常量、精确selected source集合、source digest与Go importer的构建/依赖closure fingerprint。JSON必须仅含一个对象，读取有大小上限。普通模式产物不能被test/race模式默默复用。
 
 source map在use移除及名称重写后继续回映原文件；生成alias文件是独立产物，不伪装原用户声明。重导出源目录与Go包仍同构；此片不预先固定未来mod/layout设计。已有生成Go+metadata再次进入目录流水线时保留use sidecar，并避免对已验证的相同enum marker重复声明。
 

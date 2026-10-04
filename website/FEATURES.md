@@ -1,37 +1,37 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`27d2e2740c5ee7dc3e3766bd7b5f0eec6bb852b8`；证据复核日期：2026-10-04。
+编译器基线：`a1ef58b27380fc96551a9b30a81b6dff7f93093e`；证据复核日期：2026-10-04。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
 | 特性 | RFC | 状态 | 当前入口 | 实现/测试/设计证据（基线或注明的开发快照） |
 | --- | --- | --- | --- | --- |
-| 声明宏：模式与重复 | 0011 | 部分实现 | browser | `internal/macros/macros_test.go` (1969fa6ab4c3); `internal/macros/primitive_bindings_test.go` (c0fcfd58b93e); `tests/acceptance/macro_packages_test.go` (b54eeec45e64) |
-| 封闭 enum 与明确状态 | 0008, 0015 | 部分实现 | browser | `internal/enums/lower.go` (c1ef6dd60491); `tests/acceptance/enums_test.go` (8d1a2d6ed0ad); `tests/acceptance/enum_external_test.go` (d34be1f078d5) |
-| match、guard 与表达式 | 0009 | 部分实现 | browser | `internal/matchexpr/lower.go` (5bcbaa55a621); `tests/acceptance/match_call_signatures_test.go` (df045452c6ba); `tests/acceptance/match_named_dynamic_test.go` (a454b7026077) |
-| Option / Result 与 ? | 0008, research/0005 | 部分实现 | browser | `internal/propagate/lower.go` (0e150d2b3d15); `tests/acceptance/propagate_test.go` (f7ea036c894d); `tests/acceptance/propagate_values_test.go` (db822ece928d); `internal/propagate/sum_inference.go` (98c91e02ad82); `internal/frontend/shared_std_test.go` (2b3c470b75c1) |
-| Go 返回值适配：静态 T/E 推导 | research/0005 | 已实现并验证 | browser | `internal/propagate/go_result.go` (b49565c2c198); `tests/acceptance/go_result_inference_test.go` (166aad6b5572) |
-| PartialEq / Eq 与 Clone | 0008, 0013 | 部分实现 | browser | `internal/equality/lower.go` (807a9fe0f526); `tests/acceptance/equality_test.go` (bc292fd3c65d); `tests/acceptance/manual_equality_test.go` (c1db9022a8e9); `tests/acceptance/macros_test.go` (ddf8bb2e7dcc) |
-| Default、Debug 与格式宏 | 0012, 0013 | 部分实现 | browser | `internal/printing/lower.go` (b623e0e543cc); `internal/deriveextras/generate.go` (58ff12efc1a2); `tests/acceptance/manual_default_test.go` (43670534d6af); `tests/acceptance/print_default_test.go` (3f8e0436e5fa) |
-| serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (b2b3b5b7c4b2); `tests/acceptance/serde_defaults_test.go` (1e47b7754dd4); `docs/serde-json.md` (7709e62022f8); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5) |
-| Error 派生与错误链 | 0013, research/0005 | 部分实现 | browser | `internal/deriveextras/error.go` (10ec1a9760c5); `tests/acceptance/serde_causes_test.go` (bff4e268af32); `tests/acceptance/macros_test.go` (ddf8bb2e7dcc) |
-| use / pub use 与 API 聚合 | 0021 | 部分实现 | cli | `cmd/goxide/directory.go` (68b6fb393ac2); `tests/acceptance/qualified_packages_test.go` (c5bfce420056); `examples/reexports/README.md` (9ee7831f088d) |
-| feature、依赖来源与 targets | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (42dc79d3fa45); `internal/project/planner.go` (7b0d95438510); `cmd/goxide/project_test.go` (8090cd1f603b); `cmd/goxide/version_test.go` (5cfcbd7d2820); `cmd/goxide/combination_review_test.go` (23c1636f7550); `docs/rfcs/0025-unified-project.md` (8f0b41a501d8); `cmd/goxide/import_go_test.go` (1a2cf544ba27) |
-| 从普通 Go 迁入：plan → 新目录 | 0025 | 部分实现 | cli | `docs/rfcs/0025-unified-project.md` (8f0b41a501d8); `cmd/goxide/import_go.go` (f735e7005a07); `cmd/goxide/import_go_test.go` (1a2cf544ba27) |
-| 宿主构建脚本与授权 | 0023 | 部分实现 | cli | `internal/scripttrust/store.go` (f0921cd5c9aa); `cmd/goxide/scripts.go` (d446ff660f7d); `cmd/goxide/buildscript_test.go` (e28e9b879b33); `cmd/goxide/combination_review_test.go` (23c1636f7550) |
-| 只读路径与写引用 | 0005, 0006 | 部分实现 | browser | `internal/refs/lower.go` (f8bc43440764); `internal/refs/flow.go` (8a7482599404); `tests/acceptance/refs_test.go` (d86a8c58b151); `tests/acceptance/composite_permissions_test.go` (8aa1757b4743) |
-| 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (64077ea1ab96); `ROADMAP.md` (1ec63af09f7c) |
-| trait、关联类型与 impl | 0002, 0003, 0004, 0019, 0020 | 已确认待实现 | unavailable | `docs/rfcs/0019-uniform-trait-wrappers.md` (2eb3455cf393); `docs/rfcs/0020-associated-functions.md` (fe9214afd14c); `ROADMAP.md` (1ec63af09f7c) |
-| safe std、锁与集合 | 0006, 0007, 0010, 0016, 0017 | 已确认待实现 | unavailable | `docs/rfcs/0007-locks.md` (2cc232953b36); `docs/rfcs/0010-collections.md` (4584de88ecfc); `docs/rfcs/0016-safe-std.md` (4a44a92d8cdf); `docs/rfcs/0017-maps.md` (4f3f0e488622) |
-| quote / syn 与过程宏 | 0014 | 已确认待实现 | unavailable | `docs/rfcs/0014-syntax-tools.md` (a353eb00b301) |
-| 降低约束与公开边界 | 0015, 0018 | 部分实现 | browser | `tests/acceptance/source_lowering_test.go` (54e4fca71f7c); `tests/acceptance/source_mapping_test.go` (09a8b20795ec); `docs/rfcs/0018-lowering-contract.md` (fa6c8182e549) |
+| 声明宏：模式与重复 | 0011 | 部分实现 | browser | `internal/macros/macros_test.go` (39da3595d0fb); `internal/macros/primitive_bindings_test.go` (efff49717468); `tests/acceptance/macro_packages_test.go` (1ba9ea30ef9e) |
+| 封闭 enum 与明确状态 | 0008, 0015 | 部分实现 | browser | `internal/enums/lower.go` (7d08b4daf565); `tests/acceptance/enums_test.go` (a294eb9bffc8); `tests/acceptance/enum_external_test.go` (4fa5baffb003) |
+| match、guard 与表达式 | 0009 | 部分实现 | browser | `internal/matchexpr/lower.go` (98de3e7c1b8b); `tests/acceptance/match_call_signatures_test.go` (c3c0e1f58455); `tests/acceptance/match_named_dynamic_test.go` (212f9b86bd3a) |
+| Option / Result 与 ? | 0008, research/0005 | 部分实现 | browser | `internal/propagate/lower.go` (3b0969eb87f4); `tests/acceptance/propagate_test.go` (bf545583d370); `tests/acceptance/propagate_values_test.go` (4d0b2d61d4e1); `internal/propagate/sum_inference.go` (b81c6f26cd7a); `internal/frontend/shared_std_test.go` (a2cb837c392e) |
+| Go 返回值适配：静态 T/E 推导 | research/0005 | 已实现并验证 | browser | `internal/propagate/go_result.go` (432885922507); `tests/acceptance/go_result_inference_test.go` (f18820be8cd8) |
+| PartialEq / Eq 与 Clone | 0008, 0013 | 部分实现 | browser | `internal/equality/lower.go` (b9456af1badc); `tests/acceptance/equality_test.go` (319372e9bef5); `tests/acceptance/manual_equality_test.go` (ad14d9b199a0); `tests/acceptance/macros_test.go` (b8b834a2cd6e) |
+| Default、Debug 与格式宏 | 0012, 0013 | 部分实现 | browser | `internal/printing/lower.go` (ecf6dd4e3401); `internal/deriveextras/generate.go` (1bf99445b72e); `tests/acceptance/manual_default_test.go` (3c5ce3d9ac6f); `tests/acceptance/print_default_test.go` (8d9cb286c186) |
+| serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (f6f2004804ca); `tests/acceptance/serde_defaults_test.go` (03d817ca4697); `docs/serde-json.md` (7709e62022f8); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5) |
+| Error 派生与错误链 | 0013, research/0005 | 部分实现 | browser | `internal/deriveextras/error.go` (10ec1a9760c5); `tests/acceptance/serde_causes_test.go` (372778994a1a); `tests/acceptance/macros_test.go` (b8b834a2cd6e) |
+| use / pub use 与 API 聚合 | 0021 | 部分实现 | cli | `cmd/goxide/directory.go` (62864a33b3e7); `tests/acceptance/qualified_packages_test.go` (25a4ac44f3c6); `examples/reexports/README.md` (31989fe04d79) |
+| feature、依赖来源与 targets | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (42dc79d3fa45); `internal/project/planner.go` (2c13d82e8dcb); `cmd/goxide/project_test.go` (86c09149ddd1); `cmd/goxide/version_test.go` (1370c81d2b73); `cmd/goxide/combination_review_test.go` (3cda1e895a84); `docs/rfcs/0025-unified-project.md` (85cacb14b359); `cmd/goxide/import_go_test.go` (1ed0248fd8c7) |
+| 从普通 Go 迁入：plan → 新目录 | 0025 | 部分实现 | cli | `docs/rfcs/0025-unified-project.md` (85cacb14b359); `cmd/goxide/import_go.go` (58fc6c7047ae); `cmd/goxide/import_go_test.go` (1ed0248fd8c7) |
+| 宿主构建脚本与授权 | 0023 | 部分实现 | cli | `internal/scripttrust/store.go` (d521e32ece88); `cmd/goxide/scripts.go` (a4e9d6db91b5); `cmd/goxide/buildscript_test.go` (d4c86f8a2a1c); `cmd/goxide/combination_review_test.go` (3cda1e895a84) |
+| 只读路径与写引用 | 0005, 0006 | 部分实现 | browser | `internal/refs/lower.go` (cc41b8b85b7e); `internal/refs/flow.go` (8a7482599404); `tests/acceptance/refs_test.go` (a4125cbb0615); `tests/acceptance/composite_permissions_test.go` (823a192be1cf) |
+| 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (f53eed8aeae8); `ROADMAP.md` (903a6c05f64a) |
+| trait、关联类型与 impl | 0002, 0003, 0004, 0019, 0020 | 已确认待实现 | unavailable | `docs/rfcs/0019-uniform-trait-wrappers.md` (1df569cda8f2); `docs/rfcs/0020-associated-functions.md` (003d302b642a); `ROADMAP.md` (903a6c05f64a) |
+| safe std、锁与集合 | 0006, 0007, 0010, 0016, 0017 | 已确认待实现 | unavailable | `docs/rfcs/0007-locks.md` (ade41b5149bf); `docs/rfcs/0010-collections.md` (4227ef865b5f); `docs/rfcs/0016-safe-std.md` (06d218c8a138); `docs/rfcs/0017-maps.md` (7edff0be2346) |
+| quote / syn 与过程宏 | 0014 | 已确认待实现 | unavailable | `docs/rfcs/0014-syntax-tools.md` (977cadd5ef80) |
+| 降低约束与公开边界 | 0015, 0018 | 部分实现 | browser | `tests/acceptance/source_lowering_test.go` (298633fff97a); `tests/acceptance/source_mapping_test.go` (b332d639202d); `docs/rfcs/0018-lowering-contract.md` (601d5fc37c38) |
 | use 路径与依赖别名 | 0024 | 提案 | unavailable | `@use-path:docs/rfcs/0024-use-paths.md` (9d3a71b5d773) |
-| 分仓标准库与共享 sum | 0008, 0016 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (2b3c470b75c1); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `docs/reviews/public-library-migration-20261004.md` (5c4089eda830) |
-| 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (2b3c470b75c1); `internal/frontend/readability_test.go` (3778ab0cf652); `internal/enums/builtins_test.go` (2dc5aeafcafc) |
-| CLI：明确的长短选项与参数边界 | 0022, 0023 | 部分实现 | cli | `docs/reviews/cobra-cli-20261004.md` (01486298a672); `cmd/goxide/cli_process_test.go` (522eae4b6a44); `cmd/goxide/cli_dependency_graph_test.go` (4d9a665275f7) |
-| 原生 Go vendor：实际字节与离线锁 | 0025 | 部分实现 | cli | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/goxide/vendor_import_test.go` (5d0e84a433bb) |
-| Workspace：作者核心与统一根锁 | 0026 | 部分实现 | cli | `docs/rfcs/0026-workspaces.md` (b6528168c51b); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/goxide/workspace_test.go` (a87e46574fc2); `internal/project/workspace_test.go` (afb658ae2019) |
-| go.work / workspace vendor 迁入与渐进增强 | 0026 | 部分实现 | cli | `docs/design/workspace-import.md` (6df69408b196); `docs/reviews/workspace-import-20261004.md` (62a5cfb20f03); `cmd/goxide/native_enhanced_test.go` (80141f6a1bab); `cmd/goxide/native_standalone_test.go` (f53caf863cb8) |
+| 分仓标准库与共享 sum | 0008, 0016 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `docs/reviews/public-library-migration-20261004.md` (5c4089eda830) |
+| 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/readability_test.go` (4a76f296f046); `internal/enums/builtins_test.go` (df7d2414ab1b) |
+| CLI：明确的长短选项与参数边界 | 0022, 0023 | 部分实现 | cli | `docs/reviews/cobra-cli-20261004.md` (8ea6aedbfb22); `cmd/goxide/cli_process_test.go` (7eb2a08d0445); `cmd/goxide/cli_dependency_graph_test.go` (fcca67ecb0e8) |
+| 原生 Go vendor：实际字节与离线锁 | 0025 | 部分实现 | cli | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/goxide/vendor_import_test.go` (0ed50e05a975) |
+| Workspace：作者核心与统一根锁 | 0026 | 部分实现 | cli | `docs/rfcs/0026-workspaces.md` (4c221c757252); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/goxide/workspace_test.go` (8f2753c45dd2); `internal/project/workspace_test.go` (7856d06c586f) |
+| go.work / workspace vendor 迁入与渐进增强 | 0026 | 部分实现 | cli | `docs/design/workspace-import.md` (6555f4c24c56); `docs/reviews/workspace-import-20261004.md` (62a5cfb20f03); `cmd/goxide/native_enhanced_test.go` (de840752fb2f); `cmd/goxide/native_standalone_test.go` (f53caf863cb8) |
 
 开发快照：{"use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa", "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"}
 

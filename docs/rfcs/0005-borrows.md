@@ -212,7 +212,7 @@ D19/D20 要求不因无法证明别名安全而默认拒绝普通 Go 用法；D0
 
 D30 的首个有界实现接通独立 go.mod 的 goxide 库与 goxide 应用，离线 local replace 定位实际 Go 包；原生 Go 消费者只消费生成指针 API，不执行 goxide 权限。覆盖现有具体元素导出函数参数/单非具名返回、import alias、类型 alias 与转发，不扩展方法/回调/泛型签名或其他增强协议。
 
-内部 `.goxide.refs.json` 采用 ArtifactVersion 1，内嵌权限 Metadata v2。校验 package path、原逻辑 marker、实际选中的非测试 Go 文件 SHA256；根包与每个直接依赖记录传递源内容指纹，增强依赖另记录 marker 与完整 artifact SHA256，并递归校验。传递内容包含 Go list 选择的 Go/native/embed 文件、导入路径、工具链版本、实际目标 GOOS/GOARCH/CGO_ENABLED/GOEXPERIMENT/架构选项及 tags/race。源目录位置不参与摘要，相同替换内容可移动。普通 Go 包也必须绑定：具名 struct 增加 slice 字段会改变旧 readonly 副本分析，即使函数 marker 未变。依赖变化要求重新生成下游，是构建失效规则，不是新的别名分析或普通 Go 调用禁令。
+内部 `.goxide.refs.json` 采用 ArtifactVersion 1，内嵌权限 Metadata v3（正式命名迁移；旧产物需重新生成）。校验 package path、原逻辑 marker、实际选中的非测试 Go 文件 SHA256；根包与每个直接依赖记录传递源内容指纹，增强依赖另记录 marker 与完整 artifact SHA256，并递归校验。传递内容包含 Go list 选择的 Go/native/embed 文件、导入路径、工具链版本、实际目标 GOOS/GOARCH/CGO_ENABLED/GOEXPERIMENT/架构选项及 tags/race。源目录位置不参与摘要，相同替换内容可移动。普通 Go 包也必须绑定：具名 struct 增加 slice 字段会改变旧 readonly 副本分析，即使函数 marker 未变。依赖变化要求重新生成下游，是构建失效规则，不是新的别名分析或普通 Go 调用禁令。
 
 缺失、版本错误、包不匹配、源集/内容/依赖变化均在消费 import 位置诊断；不绕过既有真实签名及类型 identity 检查。单文件消费者也恢复并执行绑定，避免无引用语法的只读返回值绕过检查。单文件生产者无目录产物，仍不作为跨模块发布路径。
 

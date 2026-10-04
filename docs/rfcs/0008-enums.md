@@ -135,7 +135,7 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；goxide 不向第三
 
 ### 跨 module 公开具体 enum 恢复（2026-10-03）
 
-目录构建输出内部 `.goxide.enums.json`（协议/产物 v1）和 `GoxideEnumMetadata` 常量。消费者在 enum 语法 lowering 之前恢复闭合变体集合，并检查真实 Go enum 类型、私有 marker、值型 case、构造器参数/返回和 validator 签名。元数据不保存 AST 或生产者私有载荷名；载荷类型由真实 case.Value 与构造器签名提供，所以私有类型的公开字段读取、转发和重构可继续推断。
+目录构建输出内部 `.goxide.enums.json`（当前 metadata schema 8 / artifact v1；旧命名产物需重新生成）和 `GoxideEnumMetadata` 常量。消费者在 enum 语法 lowering 之前恢复闭合变体集合，并检查真实 Go enum 类型、私有 marker、值型 case、构造器参数/返回和 validator 签名。元数据不保存 AST 或生产者私有载荷名；载荷类型由真实 case.Value 与构造器签名提供，所以私有类型的公开字段读取、转发和重构可继续推断。
 
 产物绑定实际包路径/名称、逻辑元数据摘要、选中 Go 文件、源闭包与目标构建配置，递归绑定增强依赖 artifact；复用引用阶段的离线 importer 指纹机制。enum/ref 两种 marker 均先写入最终 Go，再计算各自产物，不使已有引用文件摘要失效。缺失/陈旧/错包/版本/构建变化在消费 import 处诊断；这不是生产者认证，外部 cgo 输入限制沿用现有边界。
 

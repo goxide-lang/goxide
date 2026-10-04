@@ -1,16 +1,16 @@
-# goxide Roadmap 与接续入口
+# hgo Roadmap 与接续入口
 
 > 当前统一入口：[README](README.md)；最小试用见 [enum_trial](examples/enum_trial/README.md)。宏 + 独立 enum 历史基线 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`。本文件保留阶段历史，当前范围以末尾交付清单及统一入口为准；2026-10-04 已增加文末 Go Result 适配宏。
 
 当前覆盖规则：D27 只保留封闭变体 enum；旧开放 raw/C enum 及其别名待决项撤回。数值/string 属于 serde 外部映射，未知 variant 报错，业务 validator 后置。历史阶段 raw 验收不再代表当前支持。RFC 0019/0020 已同步设计，尚不代表 trait/固有 impl 实现。
-更新：2026-10-01。暂名 goxide / Goxide，仓库为 `hxsf/goxide`。本文件记录实现进度和依赖顺序；设计确认状态以[决策登记](docs/design/decisions.md)为准。路线本身是暂定建议，不是交付日期承诺。
+更新：2026-10-01。暂名 hgo / Hyper Go，仓库为 `hxsf/goxide`。本文件记录实现进度和依赖顺序；设计确认状态以[决策登记](docs/design/decisions.md)为准。路线本身是暂定建议，不是交付日期承诺。
 
 ## 1. 当前仓库实际具备什么
 
 - 已整理总纲与专题设计，并分别列出已确认、暂定、未定事项。
 - 新增[20 篇逐特性 RFC](docs/rfcs/README.md)：以转译前后、双向互操作和拒绝例子约束设计；部分已有有限端到端实现，完整范围见实现记录。
-- 已有用于核对 Go 降低机制的文档代码和可复现验证；它们不是 goxide 编译器或基础包实现。
-- 已有单文件有限前端、源类型检查、Go 生成与 CLI 构建原型，见 IMPLEMENTATION.md；完整 goxide 解析/包类型系统、必经 linter、LSP、基础包与自举尚未完成。
+- 已有用于核对 Go 降低机制的文档代码和可复现验证；它们不是 hgo 编译器或基础包实现。
+- 已有单文件有限前端、源类型检查、Go 生成与 CLI 构建原型，见 IMPLEMENTATION.md；完整 hgo 解析/包类型系统、必经 linter、LSP、基础包与自举尚未完成。
 - Go 1.27 是已确认的目标语言和工具链下限；编译器自身是普通 Go 工程并保留根 go.mod；这不要求迁入后的用户工程保留它，用户项目采用文末 RFC 0025 统一模型。设计和研究夹具由各自模块隔离。
 
 ## 2. 里程碑与完成条件
@@ -23,7 +23,7 @@ T0 是优先级，不是要求全部功能一次交付；下列 M 编号是依�
 | --- | --- | --- |
 | T0 | 卫生宏、有限声明宏与基础派生 | 用户明确优先；分批选择子集，仍验收卫生、求值、诊断/源码映射、生成代码与工具链行为；收益判断不等于已验证无成本 |
 | T0 | enum / match | 只保留封闭变体enum；serde负责数值/string外部映射，未知variant解码报错；现有Go非法表示边界检查保留，业务validator后置，不要求先解决全对象图合法性 |
-| T0 | 只读/可写访问分离 | 基础类型与投影权限；共享/内部可变可经 goxide/std 包装表达。D08 Arc 方向保留，不要求先建整套智能指针库 |
+| T0 | 只读/可写访问分离 | 基础类型与投影权限；共享/内部可变可经 hgo/std 包装表达。D08 Arc 方向保留，不要求先建整套智能指针库 |
 | 实现方案研究 | trait 适配与性能 | R24/RFC0019已确认统一wrapper；优化不改变实现选择、身份与行为，旧双路径仅为历史研究 |
 | 独立长期 | 别名/借用风险分析 | 按 D20 完全非 MVP；未来默认 warning-first，不引入未证明即拒绝 |
 
@@ -33,7 +33,7 @@ D20：别名/借用风险静态分析是独立长期工作线，不是 MVP 或 M
 | 阶段 | 状态 | 依赖与完成条件 |
 | --- | --- | --- |
 | M0 设计基线与交接 | 文档已整理，Go 机制有验证 | 决策 / 遗留问题可查，文档示例验证可重跑；这不表示暂定方案已确认 |
-| M1 最小语义骨架 | 有限 AST / 元数据原型，完整包语义未完成 | 冻结最小语法、包 / 符号身份、位置；goxide AST、Go 包类型加载、诊断与 IR。为卫生 / LSP 预留身份，不先用文本拼接替代语义 |
+| M1 最小语义骨架 | 有限 AST / 元数据原型，完整包语义未完成 | 冻结最小语法、包 / 符号身份、位置；hgo AST、Go 包类型加载、诊断与 IR。为卫生 / LSP 预留身份，不先用文本拼接替代语义 |
 | M2 显式 trait 与 Go 采用 | 未开始 | 基于 M1；统一 wrapper + marker、固定包级工厂、本地 As / 外部 ForT.As helper、限定分派与期望类型适配；原生源文件保持不变；完成正反例和 Go 双向调用 |
 | M3 引用 / unsafe 与锁子集 | 标量读写引用已运行，复杂投影/桥接未完成 | 定义可用引用语法、真实类型/明确 unsafe、U03 接收类型及 U15 原生桥接，完成普通调用与 Go 降低；Lock / RWLock 机制测试可作证据。风险分析不属于此阶段或 MVP 完成条件 |
 | M4 enum / match 与边界 | 本地 enum、有限表达式 match 与内建 Option/Result `?` 已运行，完整阶段未完成 | 明确初始化、公开边界及选定 ABI；实现构造、穷尽、控制流、非法 Go 输入诊断或检查；容器与共享数据的未检查边界明确记录，不因缺证明普遍拒绝 |
@@ -67,8 +67,8 @@ Option/Result 专用问号见 [RFC 0005](docs/rfcs/research/0005-option-result-q
 ## 4. 在另一台机器继续
 
 ```sh
-git clone git@github.com:hxsf/goxide.git goxide
-cd goxide
+git clone git@github.com:hxsf/goxide.git hyper-go
+cd hyper-go
 git switch main
 python3 scripts/check_design.py --docs-only
 python3 scripts/check_design.py
@@ -76,17 +76,17 @@ python3 scripts/check_design.py
 
 已有 checkout 使用正常 fetch / pull 更新，不需要复制本机临时目录。需要 Python 3.10+，以及支持 `go 1.27` 的 Go 1.27 或更新工具链；完整验证包含 race 检查，平台须支持 Go race detector。SSH 不可用时可使用自己的 GitHub HTTPS 认证；仓库不保存机器专属凭证或路径。
 
-验证入口的具体范围、负例与平台要求见 [tests 说明](tests/README.md)。完整检查只证明已覆盖 Go 降低示例的行为；设计文档中的完整 `.gox` / `.d.gox` 片段并非都能编译；可运行输入以 examples/prototype 和 IMPLEMENTATION.md 为准。
+验证入口的具体范围、负例与平台要求见 [tests 说明](tests/README.md)。完整检查只证明已覆盖 Go 降低示例的行为；设计文档中的完整 `.hgo` / `.d.hgo` 片段并非都能编译；可运行输入以 examples/prototype 和 IMPLEMENTATION.md 为准。
 
 接续文档顺序：本文件 → 决策登记 → 总纲 → 当前要处理的专题。临时实验路径不作为设计输入，历史 Go 实验与持久复现范围须分开记录。
 
 ## 5. 进度更新规则
 
-设计确认与实现完成分别更新：有设计、能编译一个 Go 示例、goxide 正反例通过、跨机器互操作通过，是不同证据。阶段完成时记录入口、实际检查与剩余限制；新增讨论同步状态表，避免另一台机器只见到过期“待写”或未经确认的规范。
+设计确认与实现完成分别更新：有设计、能编译一个 Go 示例、hgo 正反例通过、跨机器互操作通过，是不同证据。阶段完成时记录入口、实际检查与剩余限制；新增讨论同步状态表，避免另一台机器只见到过期“待写”或未经确认的规范。
 
 ## 实现分支阶段结果
 
-本地已完成 `.gox → 宏/derive 展开 → Go → 编译运行` 的具体类型闭环：serde 核心及 JSON、Debug/Clone/Error、有限模式宏和 slog 场景。见[可复现命令、测试范围及缺项](IMPLEMENTATION.md)。不将此结果标记为完整 M1/M4/M5/M6 或 LSP 完成；冻结文档标签不变。
+本地已完成 `.hgo → 宏/derive 展开 → Go → 编译运行` 的具体类型闭环：serde 核心及 JSON、Debug/Clone/Error、有限模式宏和 slog 场景。见[可复现命令、测试范围及缺项](IMPLEMENTATION.md)。不将此结果标记为完整 M1/M4/M5/M6 或 LSP 完成；冻结文档标签不变。
 
 用户明确实施顺序：先完成 enum/match 语言闭环，再以同一真实 enum 元数据补 serde enum；不先建立 serde 专用变体表示。当前本地已完成有限非泛型语句 match，用户泛型仍待实现；后续已交付有限表达式 match 与内建 Option/Result 专用 `?`，见[实际边界](IMPLEMENTATION.md)。
 
@@ -103,7 +103,7 @@ Option/Result 阶段已有真实 Go API 显式包装、不同成功类型的传�
 同 module 源码包声明宏现支持 `pub macro_rules!` 和普通 import 的 `alias.name!`，保留每个定义文件的作用域、私有嵌套宏和公开 runtime shim 边界。真实日志包应用覆盖禁用时不求值、跨文件别名、同名宏、enum/serde/Result/Error 组合；包和整个模块共享资源预算，诊断保留有证据的定义/调用原始跨度。见 [实现记录](IMPLEMENTATION.md) 和 [增量验收](docs/t0-acceptance.md)。外部预编译宏 metadata、过程宏、任意模板语法及完整来源映射仍未完成；M6/T0 未整体完成。
 
 
-本轮整体验收在上述同module宏基准上补齐host构建条件（显式tags及test隐含race）和同包多文件引用检查；新任务调度示例从安装CLI到独立生成模块验证宏/JSON/enum/OptionResult/From/基础权限组合。有限T0可运行子集与整项已确认方向分别记录于 [当前交付标准及验收](docs/t0-acceptance.md#有限-t0-的交付标准)。后续已补齐print/println与Default，开放raw路线现已撤回；完整trait、LSP和长期风险分析不是本轮交付前置条件。公开新引用签名、跨目标编译和.gox测试源等限制保持明确，不以降低成Go代码代替权限验证。
+本轮整体验收在上述同module宏基准上补齐host构建条件（显式tags及test隐含race）和同包多文件引用检查；新任务调度示例从安装CLI到独立生成模块验证宏/JSON/enum/OptionResult/From/基础权限组合。有限T0可运行子集与整项已确认方向分别记录于 [当前交付标准及验收](docs/t0-acceptance.md#有限-t0-的交付标准)。后续已补齐print/println与Default，开放raw路线现已撤回；完整trait、LSP和长期风险分析不是本轮交付前置条件。公开新引用签名、跨目标编译和.hgo测试源等限制保持明确，不以降低成Go代码代替权限验证。
 
 
 具体类型Default与固定格式print/println已接通，沿已定unit默认、参数求值及写入错误契约，未扩完整trait/fmt生态。成功/拒绝范围见[验收矩阵](docs/t0-acceptance.md#print--println-与-default-增量)。
@@ -139,7 +139,7 @@ T0 第四组接通普通间接赋值目标的问号：保存容器/索引，按 
 无 panic 私有赋值工程先完成 questionFlow 基础提取：显式失败出口替代 AST return 扫描，尚未替换任何真正私有目标 guard。下一步原始类型记录、局部赋值求值规划及完整赋值 emitter 的模块/风险见 [RFC §6.8](docs/rfcs/research/0005-option-result-question.md#68-显式传播控制流基础重构)；不把该重构算作性能收口。
 
 
-首批私有赋值无 panic lowering 已实现：原 private.gox 验收集及核心研究基准使用普通失败 return，保留完整最终赋值和 Go 上下文类型。仍有明确 guard 范围（含 unsafe 转换链的真实 checkptr 反例），[RFC §6.9](docs/rfcs/research/0005-option-result-question.md#69-首批无-panic-完整赋值-lowering)与最新验收矩阵逐项列出，不宣称全部私有目标或 MVP 完成。
+首批私有赋值无 panic lowering 已实现：原 private.hgo 验收集及核心研究基准使用普通失败 return，保留完整最终赋值和 Go 上下文类型。仍有明确 guard 范围（含 unsafe 转换链的真实 checkptr 反例），[RFC §6.9](docs/rfcs/research/0005-option-result-question.md#69-首批无-panic-完整赋值-lowering)与最新验收矩阵逐项列出，不宣称全部私有目标或 MVP 完成。
 
 
 无 guard 第二组接通静态函数返回类型提供的 private bool witness、signed contextual shift 原生检查及 planner 范围内的 len/cap；专门 fallback 用例由五条降至 tuple/unsafe 两条。其余组合和普通 expr 已知上下文缺口见 [RFC §6.10](docs/rfcs/research/0005-option-result-question.md#610-私有-bool上下文-shift-与-lencap-第二组)。for/range、switch 仍是待实现工程项，不等待 select/adapters 设计，也不默认为批准延期。
@@ -162,7 +162,7 @@ Type switch 的 init/subject 与既有 body 传播、string/整数/channel/数�
 
 ### 2026-10-02：公开复合引用元数据增量
 
-同次 module 构建公开引用参数/单返回扩展到具体 struct、slice/map/array、具名类型和递归指针元素，保留私有/再导出/多文件真实类型身份与既有只读投影。[验收矩阵](docs/t0-acceptance.md#公开复合引用元数据增量2026-10-02)包含真实 CLI 生成模块的独立 race/vet。v2 元数据只供 goxide 构建校验，原生 go build 不执行权限规则。剩余签名/元素、外部恢复、普通权限误拒绝及其他 T0 组合继续留表，整体 MVP 尚未完成。
+同次 module 构建公开引用参数/单返回扩展到具体 struct、slice/map/array、具名类型和递归指针元素，保留私有/再导出/多文件真实类型身份与既有只读投影。[验收矩阵](docs/t0-acceptance.md#公开复合引用元数据增量2026-10-02)包含真实 CLI 生成模块的独立 race/vet。v2 元数据只供 hgo 构建校验，原生 go build 不执行权限规则。剩余签名/元素、外部恢复、普通权限误拒绝及其他 T0 组合继续留表，整体 MVP 尚未完成。
 
 ### 2026-10-02：普通权限跟踪误拒绝首组
 
@@ -271,7 +271,7 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 
 ### 统一签名调用组与独立 enum 验收（2026-10-03）
 
-静态/变量/函数字段/方法/返回函数/variadic/原生 Go 显式 generic 调用统一从实际 Go 签名获得 match 参数上下文；真实 CLI race/vet、receiver/callee 次序、variadic slice 身份、私有 alias、权限及 0 分配微基准见 RFC 0009 与 `match_call_signatures_test.go`。不借此开放 `.gox` 用户泛型定义或多结果 return match。独立 enum 的已验收业务闭环、工程边界与用户待决项汇总见 `docs/t0-acceptance.md` 最后清单；本阶段停止，不自动扩展多返回值、字段规则或公开入口契约，也不执行发布。
+静态/变量/函数字段/方法/返回函数/variadic/原生 Go 显式 generic 调用统一从实际 Go 签名获得 match 参数上下文；真实 CLI race/vet、receiver/callee 次序、variadic slice 身份、私有 alias、权限及 0 分配微基准见 RFC 0009 与 `match_call_signatures_test.go`。不借此开放 `.hgo` 用户泛型定义或多结果 return match。独立 enum 的已验收业务闭环、工程边界与用户待决项汇总见 `docs/t0-acceptance.md` 最后清单；本阶段停止，不自动扩展多返回值、字段规则或公开入口契约，也不执行发布。
 
 
 ### 2026-10-04 显式 Go Result 增量
@@ -291,7 +291,7 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 
 ### 2026-10-04 工具链统一作者模型
 
-用户确认：迁入后根由 `goxide.toml` / `goxide.lock` 唯一管理，混合指 `.go` / `.gox`。首片实现已提交（`4f9710afb8e14a321d632371399f0717f61ca217`），已对齐最新公开 std/serde 集成；本片全包 race 覆盖、vet、设计检查与独立复审已完成，首轮冷缓存失败和重跑明细见 [验收记录](docs/reviews/unified-project-20261004.md)；不据此宣称整体工具链完成。
+用户确认：迁入后根由 `goxide.toml` / `goxide.lock` 唯一管理，混合指 `.go` / `.hgo`。首片实现已提交（`4f9710afb8e14a321d632371399f0717f61ca217`），已对齐最新公开 std/serde 集成；本片全包 race 覆盖、vet、设计检查与独立复审已完成，首轮冷缓存失败和重跑明细见 [验收记录](docs/reviews/unified-project-20261004.md)；不据此宣称整体工具链完成。
 
 - [RFC 0022](docs/rfcs/0022-project-toolchain.md)：features、来源、多目标；现行 format 2，保留原有边界。
 - [RFC 0023](docs/rfcs/0023-build-scripts.md)：授权/host闭包与缓存；TOML根/纯TOML helper映射同步。
@@ -314,6 +314,6 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 
 独立 `feat/workspace-core` 已实现显式成员/模板继承、全 workspace Go MVS 与 schema 3 根唯一锁、按选中闭包合并 feature、多成员 lib/bin 构建、显式 example、根 target 归属和复制根锁的可达校验。没有源码 import 自动补边或成员自动覆盖远端。原生 go.work/workspace vendor 迁入、workspace host resolver 与发布机制仍待后续；不把研究矩阵全部标为完成。见 [实现范围](docs/rfcs/0026-workspaces.md#本次实现范围) 与 [核心验收](docs/reviews/workspace-core-20261004.md)。
 
-## 正式命名迁移（2026-10-04）
+## Goxide 正式命名（2026-10-04）
 
-已确认 Goxide / goxide / .gox，分阶段推进到当前受维护代码完全迁移；pre-1.0 旧 ABI 允许破坏并要求重新生成。跟踪 [RFC 0027](docs/rfcs/0027-goxide-naming.md) 与[迁移清单](docs/design/goxide-naming.md)。不实施未批准的 workspace vendor 拆出转换，不部署官网。
+以上历史记录保留当时名称；当前统一 Goxide / goxide / .gox / GOXIDE_*。旧输入明确拒绝，旧生成产物全部重新生成；enum schema 8、reference 3、use 2、std sum ABI 2。正式 module path 保持不变。迁移范围不包含 workspace vendor 拆出和官网部署。

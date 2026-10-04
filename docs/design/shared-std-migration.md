@@ -19,11 +19,11 @@ serde 的明确坐标：core `github.com/goxide-lang/serde`；格式 `github.com
 
 ## 2. std/sum 首轮 API 合同
 
-canonical origin 为 `github.com/goxide-lang/std/sum`，包名 `sum`，最低 Go 版本沿本项目当前 1.27。初始形状 ABI 标识 `GoxideSumABI = 1`（schema version 另算）。标识不能替代 go/types 签名和类型身份校验。
+canonical origin 为 `github.com/goxide-lang/std/sum`，包名 `sum`，最低 Go 版本沿本项目当前 1.27。当前形状 ABI 标识 `GoxideSumABI = 2`（schema version 另算）。标识不能替代 go/types 签名和类型身份校验。
 
 ```go
 package sum
-const GoxideSumABI = 1
+const GoxideSumABI = 2
 
 type Option[T any] interface { isOption(T) }
 type Some[T any] struct { Value T }
@@ -59,7 +59,7 @@ type GoxideOptionSome[T any] = sum.Some[T]
 
 ## 3. metadata 7 与实例 owner
 
-将 enum metadata schema 从 6 升到 7，旧 artifact 明确要求重生成，不静默接受旧身份。普通用户 enum 的表示不变，但其与 sum 混合的 artifact 也按版本重建。
+共享 std 阶段将 enum metadata schema 从 6 升到 7；正式命名阶段再升至 8，旧 artifact 明确要求重生成，不静默接受旧身份。普通用户 enum 的表示不变，但其与 sum 混合的 artifact 也按版本重建。
 
 生产接入已将 family 记录增加 `ABI`（共享 sum 为 1）；`DefinitionPath/DefinitionName` 是 std canonical origin；case/constructor 从同一 origin 解析。具体 `enumFamilyInstanceExport` 改为 `ValidatorPath, Validator`，把实例检查归属与家族定义分离。泛型 std 家族声明不要求穷举 concrete instances；实际使用的具体实例仍需可信检查记录或本地静态生成检查。
 
@@ -126,6 +126,6 @@ match r {
 - [ ] 全树 race/vet、每个生成模块独立 race/vet、设计检查；网站真实 CLI/WASM 差分与 export data，独立审查后报告完整 SHA。不以机制探针代替生产验收，不合 main、不 tag/release、不部署网站。
 
 
-当前实施证据：`internal/frontend/shared_std_test.go` 已改用真正发布的 std 依赖执行 goxide→Go 独立模块，并拒绝旧 schema 6。`shared_std_artifact_test.go` 核验 owner 路径、同签名未登记 helper 与候选顺序。serde、网站 catalog、可读性和首轮 TOML 格式迁移已整合；最终整树结果以整合记录为准，不把重点测试冒充完整交付。
+当前实施证据：`internal/frontend/shared_std_test.go` 已改用真正发布的 std 依赖执行 goxide→Go 独立模块，并拒绝旧 schema 7。`shared_std_artifact_test.go` 核验 owner 路径、同签名未登记 helper 与候选顺序。serde、网站 catalog、可读性和首轮 TOML 格式迁移已整合；最终整树结果以整合记录为准，不把重点测试冒充完整交付。
 
 用户随后批准统一项目模型：从 Go 迁入时由 go.mod/go.sum 迁成 goxide.toml+goxide.lock，混合指 .go/.gox 源码。该后续接口由独立工具链任务拥有；当前测试使用现有 manifest 模式，不把根 go.mod authority 固化为长期架构。公开 std/serde 是普通 Go 发行模块，继续保留其 go.mod。

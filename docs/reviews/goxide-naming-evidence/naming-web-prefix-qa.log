@@ -1,0 +1,31 @@
+{
+  "examples": 10,
+  "parity": "byte-for-byte",
+  "goResultChecks": [
+    "error_only",
+    "typed_nil",
+    "reject_wrong_type",
+    "pointer_error",
+    "named_error",
+    "slice_error",
+    "reject_value_error",
+    "reject_arity",
+    "reject_legacy_cfg"
+  ],
+  "checks": [
+    "edit",
+    "error recovery",
+    "rapid edits",
+    "copy",
+    "32 KiB",
+    "unsupported import",
+    "XSS",
+    "keyboard",
+    "390px",
+    "hard timeout",
+    "interrupt",
+    "reset",
+    "no external requests"
+  ],
+  "errors": []
+}

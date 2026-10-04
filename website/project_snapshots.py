@@ -13,7 +13,8 @@ def migration(ROOT, GO, run):
         published_stdout=published_stdout.replace(str(new),'new-project').replace(str(old),'old-project')
         assert str(tmp) not in published_stdout
         assert snapshot()==before
-        assert not any((new/n).exists() for n in ['go.mod','go.sum','goxide.lock','target','.gox'])
+        assert not any((new/n).exists() for n in ['go.mod','go.sum','target','.goxide'])
+        assert (new/'goxide.lock').is_file()
         assert tomllib.loads((new/'goxide.toml').read_text())==tomllib.loads(plan)
         files=[dict(path='old-project/'+name,source=data.decode()) for name,data in sorted(before.items())]
         files += [dict(path='new-project/'+name,source=(new/name).read_text()) for name in ['goxide.toml','goxide.lock','main.go']]

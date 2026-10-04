@@ -12,7 +12,7 @@
 
 1. 源码包 `pub macro_rules!` 与 qualified 调用；示例选择 `logkit.event_if!`，展示 disabled 分支不求值、模板明确控制一次或多次求值。不要宣称宏无条件 once-only 或任意标识符完全卫生。
 2. 闭合 enum / 穷尽 match 与 payload；`Mode::Immediate / Mode::Batch(int)` 实例正常，未知 JSON 变体拒绝。enum 生成的是闭合接口和 case 类型，不是零成本整数 tag 的承诺。
-3. 显式 `Result` / `Option` 与 `?`，展示跨模块 `Step` 的成功/错误路径；在本组循环、defer、From 转换内与手写 Go trace 相同，cause 身份保留。不要说原生 Go 多返回值已自动适配：另一任务正在实现显式宏，本基线未审查。
+3. 显式 `Result` / `Option` 与 `?`，展示跨模块 `Step` 的成功/错误路径；在本组循环、defer、From 转换内与手写 Go trace 相同，cause 身份保留。不要说原生 Go 多返回值已自动适配：后续 `ffc9b9b` 提供显式 `go_result!(T,call)` / `go_result_keep!(T,call)`，后者 Err 载荷为 `struct{Value T;Err error}`，error-only 调用有单参数形式。T 当前需显式且包作用域可命名，多非 error 值仍先组织为业务 struct；预编译宏导入仍不支持。与本修复的组合聚焦验收已通过，详见集成记录。
 4. 显式 Default/Clone/Debug/PartialEq/Eq；独立 model 的协议可供消费者派生。展示 None / Some(nil) / Some(empty) 的 Debug 与 equals 结果，Clone 后变更 slice 不影响源。不要说普通赋值变成深复制或所有 Go 类型自动具备协议。
 5. serde JSON 的具体派生、default/skip、未知变体拒绝及 Error/From cause 链。展示默认值、正确 JSON、非法枚举、`strconv.NumError`。不要说是 encoding/json 的无差异替代。
 6. Go 互操作用事实表达：“本样例的两个生成模块通过 Go race/vet，并可普通 go build”。不能升格为全平台、任意依赖、源码不可得时全部支持或 CI 全绿。

@@ -1,0 +1,41 @@
+checkout=09a524a6bae0f9f013376c22cbadfb14f94facd2
+work=/tmp/t0-macro-fixed
+go version go1.27.1 linux/amd64
+/workspace/goxide/tests/research/t0_realworld/macro/shadow_constants/ops/macros.hgo:4:36: macro: template primitive true is shadowed by a caller package declaration; definition-site binding is unsupported for this collision (invoked at /workspace/goxide/tests/research/t0_realworld/macro/shadow_constants/main.hgo:10:44)
+/workspace/goxide/tests/research/t0_realworld/macro/shadow_types/ops/macros.hgo:3:33: macro: template primitive int is shadowed by a caller package declaration; definition-site binding is unsupported for this collision (invoked at /workspace/goxide/tests/research/t0_realworld/macro/shadow_types/main.hgo:10:14)
+ok  	review.example/macroflow	1.045s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/7 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 7/7 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 135854 (45282/sec), new interesting: 0 (total: 7)
+fuzz: elapsed: 3s, execs: 135854 (0/sec), new interesting: 0 (total: 7)
+PASS
+ok  	review.example/macroflow	3.051s
+goos: linux
+goarch: amd64
+pkg: review.example/macroflow
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkMacro-5    	 1391550	       178.5 ns/op	     120 B/op	       4 allocs/op
+BenchmarkMacro-5    	 1600836	       154.5 ns/op	     120 B/op	       4 allocs/op
+BenchmarkNative-5   	 1469499	       160.1 ns/op	     120 B/op	       4 allocs/op
+BenchmarkNative-5   	 1411363	       175.0 ns/op	     120 B/op	       4 allocs/op
+PASS
+ok  	review.example/macroflow	0.997s
+goos: linux
+goarch: amd64
+pkg: github.com/hxsf/goxide/researchmacro
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkRepeatedHelper/imported=false/n=128-5         	       1	   4211366 ns/op	 3643368 B/op	    6113 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=128-5         	       1	   3227059 ns/op	 3643416 B/op	    6114 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=128-5          	       1	  42806184 ns/op	 4977424 B/op	    8215 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=128-5          	       1	   4916626 ns/op	 4401488 B/op	    8128 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=512-5         	       1	  16893022 ns/op	16818448 B/op	   23746 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=512-5         	       1	  15686202 ns/op	16817952 B/op	   23741 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=512-5          	       1	  55691514 ns/op	21385800 B/op	   29236 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=512-5          	       1	  42576938 ns/op	21384752 B/op	   29229 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=2048-5        	       1	  84237168 ns/op	84840552 B/op	   94580 allocs/op
+BenchmarkRepeatedHelper/imported=false/n=2048-5        	       1	 126496619 ns/op	84879288 B/op	   94596 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=2048-5         	       1	 573688527 ns/op	104106416 B/op	  113940 allocs/op
+BenchmarkRepeatedHelper/imported=true/n=2048-5         	       1	1016745757 ns/op	104105392 B/op	  113936 allocs/op
+PASS
+ok  	github.com/hxsf/goxide/researchmacro	2.032s
+Regression failures: 0

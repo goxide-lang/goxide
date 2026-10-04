@@ -1,0 +1,31 @@
+{
+  "date_utc": "2026-10-04T04:20:28.948410+00:00",
+  "base": "3098a30e8e5fcb4696687246b2f39988218f4006",
+  "source_head_during_checks": "09a524a6bae0f9f013376c22cbadfb14f94facd2",
+  "working_tree_patch": true,
+  "go": "go1.27.1 linux/amd64",
+  "network_dependencies": "GOPROXY=off GOTOOLCHAIN=local",
+  "production_sha256": {
+    "internal/frontend/imported_family.go": "2305117d04768cc525e751e13f65fdd72508e9f3124128743df6fe5b2104988d",
+    "internal/propagate/lower.go": "5d227b40639c08464259bf87bdeafc9dfacbf1e7242f8bb678ba6db285ed22dc",
+    "internal/macros/hygiene.go": "a25d77969c15f7fdead424286c8af393bbd70fc5c1d7287d999c8e9d87117c61",
+    "internal/macros/sums.go": "33e56aa9cc12fe65f87675e324d229a0eb9fd42c28e1e82f934212e9f9fa678f",
+    "internal/macros/primitive_bindings.go": "e35d11cd2ca104607f8218d14718f545c43a719891317614d902390ed6b3de1a"
+  },
+  "checks": {
+    "go test -race -count=1 ./...": "passed; acceptance 339.951s",
+    "go vet ./...": "passed",
+    "python3 scripts/check_design.py": "passed; 13 commands including expected negatives",
+    "independent focused acceptance": "passed; see FIX_REVIEW.md",
+    "real dual-module integration": "passed race/vet, property grid, 5s fuzz, optimized build",
+    "macro research regression script": "passed; rejects primitive collisions with located diagnostics",
+    "CI": "not run",
+    "other Result adapter branch": "not merged or tested",
+    "serde independent delegation": "platform content risk check stopped; not retried or rerouted"
+  },
+  "production_commits": [
+    "122caf301259db102da8dc8791b691b277347840",
+    "69cdd28d8d5f17574604889165dcff913c5d3d43"
+  ],
+  "production_hashes_verified_after_commits": true
+}

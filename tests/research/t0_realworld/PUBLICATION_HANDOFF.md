@@ -1,5 +1,7 @@
 # 官网与 playground 的证据交接（不包含网站实现）
 
+> 后续修复状态见 [FIXES.md](FIXES.md)：primitive 包级/文件 import 冲突改为带位置诊断，尚未全面支持这些命名；跨模块 Result `?` 的静态 validator 修复已落生产代码。本页其它基线证据和范围限制仍适用，不应把修复外推到所有 enum/derive 校验。
+
 依据：2026-10-04 实测 `feat/t0-completion@3098a30`，Go 1.27.1 linux/amd64。网站由另一任务负责。本文提供保守宣传口径与可复用源，不代表发布验收或稳定语言规范。
 
 ## 可作主展示的已实证能力
@@ -18,7 +20,7 @@
 - 较小完整订单：仓库 `examples/enum_trial`；本审查复用了其代码并增加 [integration/app/pipeline.hgo](integration/app/pipeline.hgo) 和 [integration/model/config/pipeline.hgo](integration/model/config/pipeline.hgo)。
 - 新的高价值业务回归：[integration/app/pipeline_test.go](integration/app/pipeline_test.go)，能反映真实组合，而不是只重复单元测试。
 - 可供网页错误页展示的真实错误：`{"Name":"bad"}` 保留 `*strconv.NumError`，`{"Name":"1","Mode":{"Unknown":0}}` 拒绝；输出行为见已有 enum_trial README，不编造源码位置精度。
-- 宏卫生已知失败暂不可当正例：调用包遮蔽 primitive 时，当前基线会静默改变结果，见 [macro/shadow_constants](macro/shadow_constants/) 和 [macro/shadow_types](macro/shadow_types/)。应修复后再扩大卫生宣传。
+- 宏卫生已知失败暂不可当正例：调用包遮蔽 primitive 时，原始基线会静默改变结果，当前修复对这些冲突明确拒绝，见 [macro/shadow_constants](macro/shadow_constants/) 和 [macro/shadow_types](macro/shadow_types/)。应修复后再扩大卫生宣传。
 
 `.hgo` 生产者的真实源：
 
@@ -45,8 +47,8 @@ func Step(n int) Result[int, error] {
 ## 必须标实验或具体限制
 
 - 当前是有限原型/可执行子集，完整 trait、用户泛型定义、任意表达式组合与完整借用系统未交付。
-- 宏重复/捕获片段有限，某些 builtin/free names 不支持；源包宏和跨独立模块的预编译宏 ABI 不能混为一谈。本审查确认 primitive shadow 静默错误，修复前应在已知问题列出。
-- Result/enum 为 interface/case 表示。本审查发现跨包 validator 间接绑定导致不必要分配；不得宣称零成本抽象、与手写 Go 性能一致或所有路径零分配。
+- 宏重复/捕获片段有限，某些 builtin/free names 不支持；源包宏和跨独立模块的预编译宏 ABI 不能混为一谈。本审查确认原始 primitive shadow 静默错误；当前修复后仍需标明包级/文件 import 冲突是显式诊断的工程边界。
+- Result/enum 为 interface/case 表示。本审查发现并修复跨包 Result `?` validator 间接绑定导致的逐项分配，最终 Result 返回仍可分配；不得宣称零成本抽象、与手写 Go 性能一致或所有路径零分配。
 - Option JSON null/缺失→None；嵌套 Option 不能完整表达 PATCH missing/null/value 三态。nil 与非 nil 空容器不相等；序列化不能普遍承诺所有内存状态一一往返。
 - serde JSON 拒绝重复键、非法 UTF-8/surrogates、整数目标的指数/小数语法；bytes 是整数数组；输入大小/嵌套有边界。Native JSON adapters/PATCH 不是既有能力。
 - metadata 对源码闭包及 race/tags/平台视图敏感；普通模式生产者不能直接被当成 race 视图依赖。单文件 playground 成功不证明目录、多模块或任意 imports 模式可用。

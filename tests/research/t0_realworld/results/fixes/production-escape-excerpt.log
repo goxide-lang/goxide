@@ -1,0 +1,4 @@
+./pipeline.go:341:6: can inline __hgo_qimport_f1_2 with cost 46 as: func(config.Result[int,error]) { config.HgoInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(__hgo_sum_value) }
+./pipeline.go:129:29: config.__hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:129:29: config.__hgo_enum_case_Result_Ok[go.shape.int,go.shape.interface { Error() string }]{...} does not escape
+./pipeline.go:176:27: config.__hgo_enum_case_Result_Err[go.shape.int,go.shape.interface { Error() string }]{...} does not escape

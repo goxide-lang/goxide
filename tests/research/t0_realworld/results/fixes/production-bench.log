@@ -1,0 +1,24 @@
+goos: linux
+goarch: amd64
+pkg: trial.example/app
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+BenchmarkBatchSum/hgo/1         	11239719	        19.10 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/hgo/1         	13107754	        20.38 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/hgo/1         	10323781	        25.33 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/native/1      	55011451	         4.420 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1      	55062187	         4.371 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1      	56930924	         4.015 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/hgo/32        	 1862866	       127.7 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/hgo/32        	 2034891	       106.7 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/hgo/32        	 2237371	        97.02 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/native/32     	 6277503	        36.94 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/32     	 6930632	        37.18 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/32     	 6513519	        37.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/hgo/1024      	   99694	      2831 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/hgo/1024      	   85536	      3045 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/hgo/1024      	   85028	      2648 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBatchSum/native/1024   	  310471	      1115 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1024   	  218679	      1087 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBatchSum/native/1024   	  257965	       902.5 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	trial.example/app	4.454s

@@ -1,7 +1,9 @@
 # T0 宏独立实用性审查（2026-10-04）
 
 基线 `3098a30e8e5fcb4696687246b2f39988218f4006`；Go 1.27.1 linux/amd64。
-仅新增研究案例、脚本和 benchmark；未修改生产编译器、未推送。
+最初独立审查仅新增研究案例；其后获得修复授权，现已补充 primitive 绑定诊断与回归测试，未在此子任务提交或推送。
+
+修复后的 `run.sh` 接受带定义/调用位置的明确拒绝，也接受未来真正保留定义点语义的成功执行；不再接受静默结果变化。历史原始失败日志保持在 `results/review.log`，修复验证另存 `results/fix-validation.log`。
 
 ## 首要发现：跨包 primitive aliases 丢失定义点绑定
 
@@ -31,7 +33,7 @@ RHS 因而重新解析到调用包作用域。
 避免静默错编译；完整支持再将此类 alias 绑定到定义包的可信生成 helper/exported alias。
 不能简单重命名用户 named type，因为会改变其反射身份。
 常量可在确认定义点确实是预声明 true/false 后生成不依赖名字的布尔常量表达式。
-这是修复建议，未修改编译器，也未擅自决定永久不支持此场景。
+现已实现上述保守诊断，并验证定义点该名字确实未被声明/import 遮蔽；同样保护固定 Option/Result 类型参数。没有擅自决定永久不支持此场景。
 
 ## 次要发现：重复 imported helper 的卫生检查反复扫描整棵 AST
 
@@ -68,7 +70,7 @@ GO_BIN=/workspace/goxide-environment/go/bin/go \
 ```
 
 脚本构建 CLI，执行两个卫生复现、生成 Go 的 race/vet、差分/fuzz 和 benchmark。
-当前基线最终**有意返回 1**：2 个预期行为断言失败，外加类型复现的 vet 失败，共 3 项。
+原始基线执行最终**返回 1**：2 个预期行为断言失败，外加类型复现的 vet 失败，共 3 项。更新后的脚本把明确且带位置的拒绝视为修复成功。
 原始完整日志：`results/review.log`；生成 Go 和映射：日志中的 `/tmp/t0-macro-final`。
 
 `differential/flow.hgo` 组合显式 once closure、disabled 分支、break、return、defer、
@@ -82,3 +84,22 @@ GO_BIN=/workspace/goxide-environment/go/bin/go \
 - 未执行仓库全套 CI、非宿主平台、长时间 fuzz，也未审查正在并行开发的 Go `(v,error)` 适配宏。
 
 宏 README 中的已知限制（nil/free names、复杂 tt、宏内任意 enum 构造等）未当作新增漏洞。
+
+## 授权后修复验证
+
+新增生产检查位于 `internal/macros/primitive_bindings.go`，由 `hygiene.go` 和
+`sums.go` 在创建 primitive alias / 固定类型 helper 前调用。未修改 AST selector 性能路径。
+
+已执行并通过：
+
+- `go test ./internal/macros ./tests/acceptance -run 'Test(MacroPrimitive|Primitive)' -count=1`
+- `go test ./internal/macros -race -count=1`（`results/fix-macros-race.log`）
+- `go test ./tests/acceptance -run 'TestMacro' -race -count=1`（`results/fix-acceptance-race.log`）
+- `go vet ./internal/macros ./tests/acceptance`
+- 更新后的 `run.sh`，退出 0；4096 差分、生成 Go race/vet、3 秒 fuzz 135854 次通过（`results/fix-validation.log`）。
+- `git diff --check`
+
+单元回归覆盖定义点和调用点的跨文件 primitive 常量/类型声明、固定 sum 类型参数、
+显式/隐式 import 名字与文件作用域；验收覆盖真实 .hgo + 原生 .go 模块组合，以及局部
+同名类型保持反射名称、显式 capture、既有 definition-site 函数 helper。
+这里只报告本地执行；完整仓库回归与独立复核由主任务统一负责。

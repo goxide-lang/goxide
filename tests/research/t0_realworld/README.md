@@ -1,5 +1,7 @@
 # T0 独立实用性、回归与性能审查
 
+> 初始审查记录冻结于 `09a524a`。当前分支已获授权继续修复；最新状态、验证和适配宏合并注意事项见 [FIXES.md](FIXES.md)。下文的“未修改/未推送”及缺陷结果描述原审查阶段。
+
 2026-10-04；已执行 `git fetch origin feat/t0-completion`，实际基线为 `3098a30e8e5fcb4696687246b2f39988218f4006`。独立分支 `review/t0-realworld-20261004`。工具链 `/workspace/goxide-environment/go/bin/go`（Go 1.27.1 linux/amd64）。没有采用陈旧 main，没有修改生产编译器、推送或 merge，没有介入 Go `(v,error)` 适配宏实现。
 
 ## 优先处理的发现
@@ -17,11 +19,10 @@
 ```bash
 export GO_BIN=/workspace/goxide-environment/go/bin/go
 bash tests/research/t0_realworld/integration/run.sh /tmp/review-integration-new
-bash tests/research/t0_realworld/integration/compare_direct.sh /tmp/review-integration-new/app /tmp/review-direct-new
 bash tests/research/t0_realworld/macro/run.sh /tmp/review-macro-new
 ```
 
-最后一个脚本在基线上**预期退出 1**，报告两个卫生行为失败及类型案例的 vet 失败；其它正常检查继续执行。不能把此脚本非零退出描述成全部通过。
+旧基线脚本**预期退出 1**，报告两个卫生行为失败及类型案例的 vet 失败。当前脚本要求正确语义或带定义/调用位置的明确诊断，修复后预期退出 0；历史日志保留原始失败。
 
 - [integration](integration/)：真实两模块、多包业务，源宏→JSON→enum/match→Option/Result/?→Error/From，跨模块显式 Default/Clone/Debug/PartialEq/Eq，新增性质、差分与优化 benchmark。
 - [macro](macro/)：最小卫生复现、4096 输入控制流差分、限时 fuzz、运行期与编译期基准。

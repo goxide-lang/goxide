@@ -1,0 +1,87 @@
+=== RUN   TestCrossModuleBuiltinArtifacts
+    builtin_external_test.go:18: go [build -o /tmp/TestCrossModuleBuiltinArtifacts1705345614/001/hgo ./cmd/hgo]:
+    builtin_external_test.go:76: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifacts1705345614/003/lib /tmp/TestCrossModuleBuiltinArtifacts1705345614/002]:
+    builtin_external_test.go:112: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifacts1705345614/005/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/004]:
+    builtin_external_test.go:116: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifacts1705345614/006/repeat /tmp/TestCrossModuleBuiltinArtifacts1705345614/002]:
+    builtin_external_test.go:116: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifacts1705345614/007/repeat /tmp/TestCrossModuleBuiltinArtifacts1705345614/004]:
+    builtin_external_test.go:176: go [test -count=1 -run ^TestImportedResultAllocations$ .]:
+        ok  	sums.example/app	0.003s
+    builtin_external_test.go:184: go [test -race -count=1 -v ./...]:
+        ?   	sums.example/lib/fake	[no test files]
+        === RUN   TestProducer
+        --- PASS: TestProducer (0.00s)
+        PASS
+        ok  	sums.example/lib/model	1.038s
+        ?   	sums.example/lib/relay	[no test files]
+    builtin_external_test.go:185: go [vet ./...]:
+    builtin_external_test.go:184: go [test -race -count=1 -v ./...]:
+        === RUN   TestBusiness
+        --- PASS: TestBusiness (0.00s)
+        === RUN   TestInvalid
+        --- PASS: TestInvalid (0.00s)
+        PASS
+        ok  	sums.example/app	1.034s
+    builtin_external_test.go:185: go [vet ./...]:
+    builtin_external_test.go:184: go [test -race -count=1 -v ./...]:
+        === RUN   TestGo
+        --- PASS: TestGo (0.00s)
+        PASS
+        ok  	sums.example/plain	1.035s
+    builtin_external_test.go:185: go [vet ./...]:
+=== RUN   TestCrossModuleBuiltinArtifacts/constrained-alias-pattern
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsconstrained-alias-pattern3584080827/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/009]:
+        /tmp/TestCrossModuleBuiltinArtifacts1705345614/009/app.hgo:20:37: string does not satisfy ~int (string missing in ~int) [generated/unmapped]
+=== RUN   TestCrossModuleBuiltinArtifacts/fake-family
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsfake-family3470500655/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/010]:
+        package propagate.Lower [generated/unmapped; intermediate coordinates]: /tmp/TestCrossModuleBuiltinArtifacts1705345614/010/app.hgo:6:7: ? requires the builtin nominal Option or Result, not a native tuple or other type
+=== RUN   TestCrossModuleBuiltinArtifacts/private-unnameable
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsprivate-unnameable1218549557/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/011]:
+        package propagate.Lower [generated/unmapped; intermediate coordinates]: /tmp/TestCrossModuleBuiltinArtifacts1705345614/011/app.hgo:5:31: imported sum payload type is not nameable in this file; this prototype requires its exported type package to be imported
+=== RUN   TestCrossModuleBuiltinArtifacts/cross-family
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactscross-family4116633293/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/012]:
+        package propagate.Lower [generated/unmapped; intermediate coordinates]: /tmp/TestCrossModuleBuiltinArtifacts1705345614/012/app.hgo:5:31: Option and Result cannot propagate into each other
+=== RUN   TestCrossModuleBuiltinArtifacts/new-defined
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsnew-defined2071230264/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/013]:
+        enums.Lower [generated/unmapped; intermediate coordinates]: /tmp/TestCrossModuleBuiltinArtifacts1705345614/013/app.hgo:2:58: enum: unknown or cross-package enum constructor
+=== RUN   TestCrossModuleBuiltinArtifacts/unregistered-instance
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsunregistered-instance1675569593/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/014]:
+        package propagate.Lower [generated/unmapped; intermediate coordinates]: /tmp/TestCrossModuleBuiltinArtifacts1705345614/014/app.hgo:6:7: imported sum instance has no matching producer validation metadata; this prototype cannot synthesize cross-package payload validation
+=== RUN   TestCrossModuleBuiltinArtifacts/external-from-not-implicit
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsexternal-from-not-implicit3382714389/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/015]:
+        package propagate.Lower [generated/unmapped; intermediate coordinates]: /tmp/TestCrossModuleBuiltinArtifacts1705345614/015/app.hgo:6:7: Result error requires one unique explicit From conversion; conversion chains are not searched
+=== RUN   TestCrossModuleBuiltinArtifacts/non-exhaustive
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsnon-exhaustive2729295318/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/016]:
+        enums.Lower [generated/unmapped; intermediate coordinates]: /tmp/TestCrossModuleBuiltinArtifacts1705345614/016/app.hgo:4:1: enum: non-exhaustive match; guards do not contribute coverage
+=== RUN   TestCrossModuleBuiltinArtifacts/constrained-alias-ctor
+    builtin_external_test.go:200: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsconstrained-alias-ctor3911046112/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/017]:
+        /tmp/TestCrossModuleBuiltinArtifacts1705345614/017/app.hgo:13:29: string does not satisfy ~int (string missing in ~int) [generated/unmapped]
+=== RUN   TestCrossModuleBuiltinArtifacts/family-tamper
+    builtin_external_test.go:222: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsfamily-tamper3620135857/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/004]:
+        /tmp/TestCrossModuleBuiltinArtifacts1705345614/004/app.hgo:2:8: enum metadata missing, stale or wrong package for sums.example/lib/model: metadata marker digest mismatch
+=== RUN   TestCrossModuleBuiltinArtifacts/missing-and-native
+    builtin_external_test.go:232: hgo [transpile -o /tmp/TestCrossModuleBuiltinArtifactsmissing-and-native449456835/001/out /tmp/TestCrossModuleBuiltinArtifacts1705345614/004]:
+        /tmp/TestCrossModuleBuiltinArtifacts1705345614/004/app.hgo:2:8: enum metadata missing, stale or wrong package for sums.example/lib/model: cannot read .hgo.enums.json: open /tmp/TestCrossModuleBuiltinArtifacts1705345614/003/lib/model/.hgo.enums.json: no such file or directory
+    builtin_external_test.go:236: go [test -race -count=1 ./...]:
+        ok  	sums.example/plain	1.030s
+--- PASS: TestCrossModuleBuiltinArtifacts (15.48s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/constrained-alias-pattern (0.67s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/fake-family (0.11s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/private-unnameable (0.43s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/cross-family (0.38s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/new-defined (0.28s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/unregistered-instance (0.18s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/external-from-not-implicit (0.12s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/non-exhaustive (0.11s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/constrained-alias-ctor (0.26s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/family-tamper (0.11s)
+    --- PASS: TestCrossModuleBuiltinArtifacts/missing-and-native (2.17s)
+=== RUN   TestMacroPrimitivePackageCollisionsAreLocated
+--- PASS: TestMacroPrimitivePackageCollisionsAreLocated (0.39s)
+=== RUN   TestMacroPrimitiveLocalShadowsAndExplicitCapturesRace
+    macro_primitives_test.go:66: go [test -race -count=1 ./...]:
+        ok  	primitive.example/app	1.028s
+        ?   	primitive.example/app/ops	[no test files]
+    macro_primitives_test.go:67: go [vet ./...]:
+--- PASS: TestMacroPrimitiveLocalShadowsAndExplicitCapturesRace (2.37s)
+PASS
+ok  	github.com/hxsf/goxide/tests/acceptance	18.236s

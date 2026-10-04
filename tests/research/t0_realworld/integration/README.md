@@ -1,5 +1,7 @@
 # 双模块业务与跨包 Result 性能审查
 
+> 本文保留 `3098a30` 审查证据；后续生产修复见 [FIXES.md](../FIXES.md)。当前 `run.sh` 使用当前编译器；`compare_direct.sh` 仅适用于旧基线的生成产物，不能把当前修复输出再套用该历史实验。
+
 基线：`3098a30e8e5fcb4696687246b2f39988218f4006`，2026-10-04，Go 1.27.1 linux/amd64。只新增研究文件。源业务复制自 `examples/enum_trial`，新增独立生产者 `config.Step/Fail`、消费者循环、包宏、差分/性质测试及 benchmark；并非将原有案例重新命名为新发现。
 
 ## 运行
@@ -7,7 +9,8 @@
 ```bash
 export GO_BIN=/workspace/goxide-environment/go/bin/go
 bash tests/research/t0_realworld/integration/run.sh /tmp/my-t0-review
-bash tests/research/t0_realworld/integration/compare_direct.sh /tmp/my-t0-review/app /tmp/my-t0-direct
+# 仅在 /tmp/baseline-app 确实来自 3098a30 时运行历史对照：
+bash tests/research/t0_realworld/integration/compare_direct.sh /tmp/baseline-app /tmp/my-t0-direct
 ```
 
 两个输出目录必须不存在或为空（第二个必须不存在）。脚本禁用下载、使用真实 Go，并把缓存放在 `/tmp`。生产者和消费者各有 go.mod；先转译生产者，再将消费者 replace 指向生成后的生产者。源 fixture 的相对 replace 是占位值，runner 在临时输入副本中改成绝对路径；请通过 runner 运行。

@@ -77,3 +77,11 @@ timeout_seconds = 30
 ## 实现与独立审查
 
 本分支已接入严格 TOML 解码、统一 Detect、所有活动来源/helper 的旧/双清单拒绝，并加入 ManifestProtocol 到计划、配置和脚本来源身份。独立审查发现库的 struct 解码大小写折叠；现用同一 TOML 库 AST 和结构体精确 tag 校验补齐，包含内联表/数组，不另写 TOML parser。独立反例与解析/迁移专项 race 已通过；生成脚本禁止输出新旧两种清单、helper bootstrap 脚本仍拒绝。完整回归结果以交付记录为准，不把文档检查等同于执行验证。
+
+### 本轮验证记录
+
+真实 Go 1.27.1；本地临时模块、fixture proxy 和本地 Git，无私人依赖/安装脚本。`go test -race -tags hgoweb -count=1 ./...` 完成全树：CLI 316.756s、acceptance 344.744s，其余包通过；其中 project 包唯一失败为 TOML 库升级后的错误文案断言（旧期待 cannot decode，实际 array table），修正测试后完整 `go test -race ./internal/project -count=1` 通过（1.030s），生产代码未因该断言调整。不把有此断言失败的原始全树命令描述为零退出。
+
+额外版本来源/feature/script专项race通过（114.436s）；解析/迁移专项race通过，独立大小写反例复核通过；脚本保留清单名和helper bootstrap专项通过。全树vet、文档检查、网站/WASM构建通过。公开project示例临时副本真实运行两个bin、example、关闭默认feature的locked离线切换，输出符合README。官网源文案已同步，未部署线上站点。
+
+格式迁移会改变精确脚本来源身份；保留项目信任并不让旧第三方脚本授权自动匹配新来源。迁移后先查看 scripts plan，按既有授权流程审阅新 subject；不由工具自动授予权限。

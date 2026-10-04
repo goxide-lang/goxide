@@ -65,7 +65,7 @@ path = 'b'
 
 [package]
 format = 1
-`, "cannot decode"},
+`, "array table"},
 		{`[dependencies]
 [dependencies.x]
 module = 'example.org/x'

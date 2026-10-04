@@ -16,7 +16,7 @@ target/
       .hgo-run.json
       bundle/module/
       bundle/deps/<module-hash>/
-      bundle/main-anchor/go.mod  # 原生 module 回边的政策锚，不含根包源码
+      bundle/policy-anchors/<module>/go.mod  # 全图政策锚，不含源码
       intermediate/
       script-out/                 # 只预留路径，布局不创建/执行脚本
     script-cache/                 # 只预留路径，布局不定义脚本缓存键

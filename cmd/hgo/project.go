@@ -63,7 +63,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		}
 	}
 	targetInput := g.Root.Root
-	if err = preflightProjectModules(g); err != nil {
+	if err = preflightProjectModules(g, flags.targetDir); err != nil {
 		return err
 	}
 	compilerID := projectCompilerID()
@@ -334,8 +334,13 @@ func checkTarget(root, path string) error {
 
 // Validate every generated module policy before any generator or frontend runs.
 // These shadow modules contain no source code and never become published output.
-func preflightProjectModules(g *project.Graph) error {
-	work, e := os.MkdirTemp("", "hgo-module-preflight-")
+func preflightProjectModules(g *project.Graph, targetDir string) error {
+	layout, e := project.OpenLayout(g.Root.Root, g.Root.Module, targetDir)
+	if e != nil {
+		return e
+	}
+	defer layout.Close()
+	work, e := os.MkdirTemp(layout.Root, ".preflight-")
 	if e != nil {
 		return e
 	}

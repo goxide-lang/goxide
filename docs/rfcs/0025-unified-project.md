@@ -42,7 +42,7 @@ format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取�
 
 ### 无损迁入子集
 
-拟定命令：`hgo import-go --plan --bin app=cmd/app ROOT` 只读输出候选 TOML 和说明；`hgo import-go --out NEWDIR --bin app=cmd/app ROOT` 在全新独立目录复制源码并产生 TOML/锁，构建所选目标验证。库显式用 `--lib .`，不默认递归发现所有 main。NEW目录必须不在输入工程或任何现有受管布局内部，必须不存在；锁以最终逻辑根身份计算，不含临时staging路径；发布前丢弃staging的target/.hgo产物，不搬移布局owner/信任缓存，最终配置的本地replace指向原目录（首片采用规范绝对路径保义）。成功前不发布目的目录，不运行程序、go generate 或安装脚本。允许普通 Go 编译/cgo 所需编译器行为，目标环境沿用既有 host 限制。
+已实现命令：`hgo import-go --plan --bin app=cmd/app ROOT` 只读输出候选 TOML；`hgo import-go --out NEWDIR --bin app=cmd/app ROOT` 在全新独立目录复制源码并产生 TOML/锁，构建所选目标验证。库显式用 `--lib .`，不默认递归发现所有 main。NEW目录必须不在输入工程或任何现有受管布局内部，必须不存在；锁以最终逻辑根身份计算，不含临时staging路径；发布前丢弃staging的target/.hgo产物，不搬移布局owner/信任缓存，最终配置的本地replace指向原目录（首片采用规范绝对路径保义）。成功前不发布目的目录，不运行程序、go generate 或安装脚本。允许普通 Go 编译/cgo 所需编译器行为，目标环境沿用既有 host 限制。
 
 | go.mod 指令 | 首片行为 |
 | --- | --- |
@@ -51,7 +51,7 @@ format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取�
 | require（含 indirect） | 映射 go.require 数组，保留 direct/indirect |
 | replace 本地/版本，含 Old 精确版本限定 | 映射 go.replace；迁移 staging 保持指向同一真实本地目录，首片序列化为规范绝对路径，不改原指向 |
 | exclude | 映射 go.exclude |
-| retract、tool、godebug、ignore 及未来未知指令 | 首片明确不支持，整个迁移失败，不能静默丢弃发布/工具/运行时语义 |
+| module Deprecated 声明、retract、tool、godebug、ignore 及未来未知指令 | 首片明确不支持，整个迁移失败，不能静默丢弃发布/工具/运行时语义 |
 | go.work/workspace | 明确不支持；根或有效上级workspace、显式GOWORK均诊断，不暗中当单module导入 |
 
 映射由实际 `go mod edit -json` 读取，额外保留/拒绝尚未支持字段；不以不完整手写行解析器吞掉指令。Go 版本及工具链写法由真实 Go 核验。原 go.sum 是历史校验集合，不能重命名为锁：在 staging 用其作已知校验输入，再由实际解析/下载结果形成锁；冲突 checksum 必须失败。无效或缺少离线缓存也失败，保留源工程不变。

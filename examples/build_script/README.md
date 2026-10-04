@@ -54,7 +54,7 @@ hgo build --bin app --offline --target-dir "$demo_tmp/chosen-target" .
 # clean 后脚本重新运行。
 ```
 
-`scripts clean` 只清所选受管目录内的脚本结果缓存，保留最终二进制、历史构建 bundle、其他 target 目录、源码、`hgo.lock` 和信任记录。它不是全项目清理命令；遇到陌生目录或不匹配的所有权记录会拒绝删除。`hgo.lock` 留在项目源目录；信任目录必须在源码、helper 和受管产物目录之外，不能放进 `target/` 或交给项目一起分发。
+`scripts clean` 只清所选受管目录内的脚本结果缓存，保留最终二进制、历史构建 bundle、其他 target 目录、源码、`goxide.lock` 和信任记录。它不是全项目清理命令；遇到陌生目录或不匹配的所有权记录会拒绝删除。`goxide.lock` 留在项目源目录；信任目录必须在源码、helper 和受管产物目录之外，不能放进 `target/` 或交给项目一起分发。
 
 ## 能力边界
 

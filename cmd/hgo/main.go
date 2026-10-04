@@ -29,7 +29,7 @@ func main() {
 
 func run(args []string, out, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: hgo <transpile|expand|run|build|test|scripts> [flags] file.hgo-or-directory")
+		return errors.New("usage: hgo <transpile|expand|run|build|test|scripts|import-go> [flags] file.hgo-or-directory")
 	}
 	if args[0] == "import-go" {
 		return runImportGo(args[1:], out, stderr)

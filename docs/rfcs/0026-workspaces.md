@@ -370,3 +370,5 @@ GO-01..04 验证 standalone / 全主模块 / 选中主模块选版；GO-05..06 r
 已确认阶段顺序：阶段一作者workspace核心（根/成员、显式继承/来源、多目标、唯一根锁及拆出复制、layout/并发）；阶段二go.work逐政策迁入和workspace vendor。研究阶段未实现生产 workspace；当前实施子集以上方实现范围为准。W01–W11/W13/W15–W17/W19/W20为核心候选验收，W12/W14/W18为迁入候选验收；dev表、发布自动化、registry、profile另行设计。暂不支持Cargo数字resolver或自动工具链下载。
 
 生产落点预估为 internal/project 清单/图/锁、cmd/goxide 选择、受管layout/metadata上下文；原则上不改宏语法基础设施，cfg使用既有配置入口。未来若需改变前端条件移除顺序，应先单列RFC0022变更并协调其owner。原研究阶段只有文档与机制研究脚本；当前实现验收另见核心验收记录，仍须跑选中图端到端、生成Go、race/vet、适用全量回归和独立对抗review。
+
+来源选择的精确参数、交互/非交互确认、离线与正反例见[执行合同](../design/vendor-local-modules.md#来源选择执行合同2026-10-05)。

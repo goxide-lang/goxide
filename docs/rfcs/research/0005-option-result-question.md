@@ -419,3 +419,8 @@ T/E 的 Go 类型对象应保持身份，不能用 any/interface 退化或伪造
 - 包级推导准备覆盖 A 文件的 `var x = go_result!(f())` 与 B 文件使用 x 的问号/匹配，以及相反文件名顺序；未决结果不是 Result[any,error] 占位值。新增实例须回流所属文件、包级 families、后续 equality 与导出 metadata。
 - 增量实例生成复用既有 nested payload 校验；不可对已降低 Go 整体重跑 enum parser，也不可只登记 ABI 而遗漏 `Result[[]Enum,E]` 的非法元素校验。
 - `*MyError` 到 error 的直接赋值传播可以；不得为了已有 `From[error,Failure]` 先自动装箱再串接转换。From 仍要求精确静态来源和唯一一步。
+
+
+### 静态推导实施记录
+
+上述实施前规范现由 typed 固定点与包级初始化准备落实。具体 Result 实例使用共享载荷 validator 并回流导出登记；共享投影同时修复具名容器的外部 enum 及跨文件 import 作用域绑定。包级辅助函数接收原调用结果，不用 thunk 搬移原调用。节点预算单独测试。[真实推导验收](../../../tests/acceptance/go_result_inference_test.go) 包含生成模块 race/vet；原合法显式形式继续保留。仍明确拒绝无公开类型写法，不声称完整泛型、通用宏 type fragment 或完整源码映射。

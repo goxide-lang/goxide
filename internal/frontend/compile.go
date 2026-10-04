@@ -977,10 +977,13 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 		}
 		imp := singleImporter
-		out, e = propagate.Lower(filename, out, propagate.Config{Families: enumResult.Enums, From: conversions, Importer: imp, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
+		var inferred []enums.Decl
+		out, e = propagate.Lower(filename, out, propagate.Config{InferredFamilies: &inferred, Families: enumResult.Enums, From: conversions, Importer: imp, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
 		}
+		enumResult.Enums = append(enumResult.Enums, inferred...)
+		singleEqCfg.Enums = append(singleEqCfg.Enums, inferred...)
 		eqFiles, err := equality.Lower(map[string][]byte{filename: out}, singleEqCfg)
 		if err != nil {
 			return Result{}, stageError("equality.Lower", err)

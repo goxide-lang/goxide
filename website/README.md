@@ -45,7 +45,7 @@ export GOCACHE=/workspace/goxide-environment/cache
 
 页面依据根 README、`docs/t0-acceptance.md`、`internal/macros/README.md`、`internal/matchexpr/README.md`、`serdejson/README.md` 和相应 RFC。示例明确演示宏、enum/match、Option/Result/?、Default/Debug/Clone、serde JSON、Error（thiserror 风格）和 `.equals`。
 
-不宣称全部 MVP、完整 Rust 借用安全、完整 hygiene 或零分配。本集成分支已合入 primitive 名称冲突诊断与跨模块 Result 静态 validator 修复：包级/文件 import 冲突会拒绝并报告定义和调用位置，不能宣传为完整支持所有遮蔽；特定跨模块循环消除了逐项分配，不能外推为任意载荷零分配。新增单文件 `go_result` 示例真实演示 `go_result!(T, call)` 与 `go_result_keep!(T, call)`，后者保留 `struct{Value T; Err error}`，不是 Clone。需要显式 T，最后一个返回类型须为预声明 error/透明 alias；error-only 可用单参数形式，多成功值须先组织为 struct。完整语义见 `examples/go_result/README.md`。源码包宏组合仍在 CLI 示例中验证，不冒充浏览器支持跨文件/预编译宏包。模块设计仍未整合。
+不宣称全部 MVP、完整 Rust 借用安全、完整 hygiene 或零分配。本集成分支已合入 primitive 名称冲突诊断与跨模块 Result 静态 validator 修复：包级/文件 import 冲突会拒绝并报告定义和调用位置，不能宣传为完整支持所有遮蔽；特定跨模块循环消除了逐项分配，不能外推为任意载荷零分配。单文件 `go_result` 示例真实演示 `go_result!(call)` 与 `go_result_keep!(call)`，按调用的静态签名推导 T/E；保值版保留 `struct{Value T; Err E}`，不是 Clone。E 必须实现 error 且可为 nil，使用原 E 判断 nil，具名接口与指针均保留身份；接口内 typed nil 仍为 Err。兼容显式 T 的双参数形式；单 E 返回得到 unit，多成功值须先组织为 struct。完整语义见 `examples/go_result/README.md`。源码包宏组合仍在 CLI 示例中验证，不冒充浏览器支持跨文件/预编译宏包。
 
 ## 更新与版本绑定
 

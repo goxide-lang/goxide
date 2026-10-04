@@ -277,3 +277,8 @@ Option/Result 通过实际 registry 和生产者具体 validator 恢复，独立
 ### 2026-10-04 显式 Go Result 增量
 
 D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块及双模块验收，见 [试用说明](examples/go_result/README.md)。T 显式、error-only 自然支持、多非 error 返回需业务 struct；保值问号不自动丢弃 Value。该片不改变指针阶段、完整 trait 或预编译宏 ABI 的状态，其余 T0 缺口仍按现有清单保留。
+
+
+### Result 适配 T/E 推导后续
+
+已完成后续授权的静态签名推导与原 E nil 判断，保留显式 T。跨文件实例登记、独立模块和可命名私有 alias 已有真实执行验收，见 [实现说明](IMPLEMENTATION.md#result-适配宏静态-te-推导2026-10-04)。不可命名类型和完整泛型仍是明确边界；不改变其余 T0 条目的状态。

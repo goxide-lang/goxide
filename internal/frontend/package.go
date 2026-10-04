@@ -76,6 +76,15 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	cfg.enumRegistry = metadata
 	cfg.imported, cfg.preludes, cfg.enumGoImports, cfg.enumUnavailable = importedDeclarations(path, sources, metadata)
+	// Share only unique package bindings, never file-local import spellings.
+	for _, name := range names {
+		for _, d := range cfg.imported[name] {
+			if d.Family == "" {
+				d.LookupName = ""
+				cfg.declarations = append(cfg.declarations, d)
+			}
+		}
+	}
 	eqPrelude, eqImports, eqProtocols := importedEquality(path, sources, metadata)
 	for n, p := range eqPrelude {
 		cfg.preludes[n] += p
@@ -159,7 +168,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 			if _, ok := cfg.named[n]; ok {
 				return PackageResult{}, fmt.Errorf("%s: duplicate type %s", name, n)
 			}
-			cfg.named[n] = t
+			cfg.named[n] = enums.BindPayloadType(t, cfg.imported[name])
 		}
 	}
 	// Native declarations participate in enum payload analysis too.
@@ -181,7 +190,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 			if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
 				for _, sp := range gd.Specs {
 					t := sp.(*ast.TypeSpec)
-					cfg.named[t.Name.Name] = t.Type
+					cfg.named[t.Name.Name] = enums.BindPayloadType(t.Type, cfg.imported[name])
 				}
 			}
 		}
@@ -298,6 +307,28 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		}
 		files[name] = source
 	}
+
+	// Resolve cross-file initializer types before file-local question lowering.
+	adapterNodes := 0
+	adapterMaps := map[string]*sourcemap.Map{}
+	for n, r := range result.Files {
+		adapterMaps[n] = r.Diagnostics
+	}
+	adapterFiles, adapterFamilies, err := propagate.PrepareGoResults(files, propagate.Config{Families: families, FileFamilies: result.imported, Importer: imp, PackagePath: path, GoResultNodes: &adapterNodes}, adapterMaps)
+	if err != nil {
+		return result, stageError("package Go result inference", err)
+	}
+	for _, n := range sortedSources(adapterFiles) {
+		source := adapterFiles[n]
+		r := result.Files[n]
+		r.Go = source
+		r.Expanded = source
+		r.Diagnostics = adapterMaps[n]
+		r.Enums = append(r.Enums, adapterFamilies[n]...)
+		families = append(families, adapterFamilies[n]...)
+		result.Files[n] = r
+		files[n] = source
+	}
 	eqCfg := equality.Config{Native: map[string]bool{}, Importer: imp, PackagePath: path, Derives: map[string]equality.Derive{}, Enums: append([]enums.Decl(nil), families...), Imported: result.equalityImports, Maps: map[string]*sourcemap.Map{}}
 	for name, r := range result.Files {
 		eqCfg.Native[name] = strings.HasSuffix(name, ".go")
@@ -326,10 +357,14 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			continue
 		}
 		r.matchReferenceTemps = map[string]bool{}
-		lowered, err := propagate.Lower(name, r.Go, propagate.Config{Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index), MatchReferenceTemps: r.matchReferenceTemps})
+		var inferred []enums.Decl
+		lowered, err := propagate.Lower(name, r.Go, propagate.Config{FileFamilies: result.imported, InferredFamilies: &inferred, GoResultNodes: &adapterNodes, Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index), MatchReferenceTemps: r.matchReferenceTemps})
 		if err != nil {
 			return result, stageError("package propagate.Lower", err)
 		}
+		r.Enums = append(r.Enums, inferred...)
+		families = append(families, inferred...)
+		eqCfg.Enums = append(eqCfg.Enums, inferred...)
 		r.Go = lowered
 		r.Expanded = lowered
 		refreshPackageMap(&r)

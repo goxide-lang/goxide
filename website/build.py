@@ -40,7 +40,7 @@ for name, title, description in [
     ('macro', '声明宏', '有限模式匹配 + 定义点绑定。将重复写法交给编译期。'),
     ('enum', 'enum / match', '闭合变体与 guard；没有覆盖所有分支时给出诊断。'),
     ('result', 'Option / Result / ?', '显式适配 Go 的 (T, error)，沿 Err 分支转换并传播原因。'),
-    ('go_result', 'Go 返回值适配宏', 'go_result! 舍弃失败返回值；go_result_keep! 保留部分值与原始 error。'),
+    ('go_result', 'Go 返回值适配宏', '按原生签名推导 T/E；普通版舍弃失败值，保值版保留部分值与原始 E。'),
     ('derive', '显式派生与 JSON', 'Default、Debug、Clone、.equals 与 serde JSON 来自同一个模型。')]:
     path = ROOT/'website/examples'/f'{name}.hgo'
     generated = run(str(ROOT/'bin/hgo'), 'transpile', str(path)).decode()

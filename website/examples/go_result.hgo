@@ -11,16 +11,16 @@ import (
 type ReadFailure = struct { Value int; Err error }
 
 func parse(text string) Result[int,error] {
-    return go_result!(int, strconv.Atoi(text))
+    return go_result!(strconv.Atoi(text))
 }
 
 func next(text string) Result[int,error] {
-    value := go_result!(int, strconv.Atoi(text))?
+    value := go_result!(strconv.Atoi(text))?
     return Result[int,error]::Ok(value + 1)
 }
 
 func read(reader io.Reader, buffer []byte) Result[int,ReadFailure] {
-    return go_result_keep!(int, reader.Read(buffer))
+    return go_result_keep!(reader.Read(buffer))
 }
 
 // This is a valid Reader: a final nonempty chunk may accompany io.EOF.

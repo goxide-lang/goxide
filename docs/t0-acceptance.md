@@ -796,3 +796,17 @@ D36：普通 `go_result!(T,call)` 与保值 `go_result_keep!(T,call)` 接通；e
 本片最终验证环境为 `go1.27.1 linux/amd64`：`go test -race -count=1 ./...` 全树通过（acceptance 294.974s），`go vet ./...` 通过。`python3 scripts/check_design.py` 的文档结构及 13 个 Go 机制命令通过；最终文档复核为 66 Markdown 文件、890 本地链接/锚点、20 RFC。生成模块 race/vet 由上述接受测试单独执行；README CLI run 与生成 `go run -race` 均实跑得到三行预期输出。独立审查修复并复验后无剩余阻断。
 
 首次全树 race 因 `/tmp` 满导致链接器 `no space left on device`，不计通过；将可再生成缓存从 `/tmp/goxide-cache` 迁到 `/workspace/goxide-cache`（保留兼容 symlink），并将 TMPDIR 指向 `/workspace/go-result-tmp` 后才获得上述完整成功结果。没有删除仓库/用户数据，也未修改构建语义或跳过失败测试。
+
+
+## 静态 T/E 推导验收补充（2026-10-04）
+
+D36 后续：入口无需 T，从 `(T,E)` 或 E 推导具体 Result；保留显式 T 兼容，E 实现 error 且 nilable，按原 E 判断 nil。证据为 [真实 CLI 推导验收](../tests/acceptance/go_result_inference_test.go)，不是纯 Go 机制探针：
+
+- Atoi、Reader 部分读取、单 E、具名接口、指针、slice/map/func/channel，保留 typed nil 与错误身份。
+- 保值结构与精确 From 边界、求值次序、recover、嵌套问号/泛型/适配器、跨文件初始化两种顺序。
+- 独立模块公开 alias、metadata/match/传播、具名容器内外部 enum 校验；不可命名私有 T/E 给出明确诊断。
+- 原显式形式继续验收；全树 race/vet 与生成模块 race/vet，官网单文件 CLI/WASM 差分单独记录。
+
+这不关闭此前 T0 其余条目，也不将无公开类型写法、预编译宏或待批准 serde adapters 视作已获批延期。
+
+本轮验证完成：`go test -race -tags hgoweb -count=1 ./...`、`go vet -tags hgoweb ./...` 通过；新增推导验收最终另跑 `go test -race ./tests/acceptance -run '^TestGoResultInference' -count=1`，内部生成模块独立 race/vet 通过。设计检查通过 76 个 Markdown、23 个 RFC 及 13 条 Go 机制命令；后者不计作 hgo 执行证据。官网 5 示例、8 适配正反例 CLI/WASM 差分通过，记录见 [网站集成](../website/INTEGRATION.md#te-推导分支验证2026-10-04)。两位独立审查者复核无剩余阻断，包含跨文件同名 import 指向不同 enum 包的额外真实执行；该回归也已纳入模块验收。

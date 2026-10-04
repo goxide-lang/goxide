@@ -1,0 +1,3 @@
+package main
+func operation()(int,string,error){return 1,"",nil}
+func main(){_=go_result!(operation())}

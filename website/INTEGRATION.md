@@ -58,3 +58,11 @@ go test ./internal/macros ./tests/acceptance \
 - 网页/CLI/WASM 绑定同一源码。此轮编译器源摘要 `424cb6f7bc63a20c314481f007817dae5278e57ed15d8493ed75865f5c27c5c6`；export 摘要 `fb6815c13033abf01b33b5c3d47c0964d8e693c99b6a49ebc840c78d15e18256`，导出目标 Linux/amd64。版本详情以最终内嵌 `examples.json` 为准。
 - 最终程序仍是单二进制，不依赖 Node/Go/静态目录/CDN；无服务器代码执行接口。运行默认仅 loopback。其他平台交叉构建不等于已在对应操作系统运行。
 - 新包只在云环境生成。本轮没有重试 Library 批量助手的 HTTP 401，也没有切换已启动的上传路径；父任务协调后续分发。
+
+## T/E 推导分支验证（2026-10-04）
+
+`feat/result-type-inference` 在 `f097b1951dde4f8653a0629a7da8a0bb5646ec79` 上独立实现，不包含并行的 version/source-feature 分支。网站示例改用省略 T 的调用，描述保留 E 与原类型 nil 判断。
+
+本地实际浏览器运行通过：5 个示例逐字节 CLI/WASM 对照；8 项适配检查为 error-only、接口 typed nil、错误显式 T、nil 指针错误、具名接口、具名 slice 错误、非 nilable 错误拒绝、返回数量拒绝。原有编辑、错误恢复、快速输入、复制、大小限制、导入限制、XSS、键盘、移动尺寸、超时、取消、重置和无外部请求检查通过。CLI/WASM 差分只验证转译；原生执行与生成模块 race/vet 在 acceptance 中另行验证。
+
+构建资源仍为本地忽略产物，没有发布网站。与 version/source-feature 整合后须重新构建并验证，使网站内嵌版本与最终编译器一致；此前章节的历史 commit/digest 不代表本轮最终版本。

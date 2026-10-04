@@ -145,3 +145,20 @@ func TestFromAndRejections(t *testing.T) {
 		}
 	}
 }
+
+func TestGoResultTypedBudget(t *testing.T) {
+	src := `package p
+ type ResultSeed = Result[struct{},struct{}]
+ func native()(int,error){return 1,nil}
+ func call(){_=__hgo_go_result_auto(native())}
+ `
+	en, err := enums.Lower("budget.hgo", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	used := 200000
+	_, err = Lower("budget.hgo", en.Source, Config{Families: en.Enums, GoResultNodes: &used})
+	if err == nil || !strings.Contains(err.Error(), "typed adapter generated-node budget exceeded") {
+		t.Fatalf("budget not enforced: %v", err)
+	}
+}

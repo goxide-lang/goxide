@@ -4,7 +4,7 @@ type Failure struct{}
 func (*Failure) Error() string { return "failure" }
 func partial() (int,error) { var err *Failure; return 7, err }
 func main() {
-    plain := go_result!(int, partial())
-    kept := go_result_keep!(int, partial())
+    plain := go_result!(partial())
+    kept := go_result_keep!(partial())
     _, _ = plain, kept
 }

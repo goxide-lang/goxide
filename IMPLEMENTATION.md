@@ -1048,3 +1048,14 @@ D36 授权的两种显式适配已接通：`go_result!(T,call)` 返回 `Result[T
 实现复用宏展开与 Result 注册；新增少量内建 marker/finalization 和 typed 签名核对，原调用留在 typed 函数 literal 的实参。问号前处理识别整个 qualified 宏调用。独立审查发现局部 Result 遮蔽后，以具体包级 Result alias 修复，真实执行回归覆盖变量/type 两例。局部自定义 payload 不可在包级命名仍是既有 Result 实例限制；预编译宏规则导入仍未实现。
 
 [示例与逐条运行命令](examples/go_result/README.md)、[真实 CLI 正反例](tests/acceptance/go_result_test.go)、[RFC](docs/rfcs/research/0005-option-result-question.md#显式-go-result-适配宏2026-10-04)同步。验收包含 strconv 与真实 io.Reader 部分读取、错误身份/Is/As/typed nil、单 error、原生泛型、单次求值/顺序、defer/go 参数时机、panic/recover、From、源码跨包宏、双独立模块原生 alias/保值 metadata/问号，以及非法返回签名/误传播拒绝；各生成模块独立 race/vet。普通函数 literal 适配器可能由 Go 内联，本片未做性能等价承诺。不启动指针阶段，不声明整个 MVP 完成。
+
+
+## Result 适配宏静态 T/E 推导（2026-10-04）
+
+D36 后续授权现已实现：`go_result!(call)` 与 `go_result_keep!(call)` 从原生调用真实签名推导 T/E，显式 T 仍校验 identical。E 须实现 error 且可为 nil，以原 E 比较 nil；nil 指针成功、接口内 typed nil 失败。保值载荷完整保留 `struct{Value T; Err E}`，不自动 From/Unwrap。多个成功值先组织为 struct，非 nilable 错误不推定零值成功。
+
+宏仅留下内部标记；typed 固定点解析签名，并将具体 Result 实例回流 validator、equality 与导出 metadata。跨文件初始化先统一准备，嵌套问号/适配器等候真实类型，未使用 any/error 假占位。原调用仍在包级适配函数的实参，保留调用帧与单次求值。生成节点有独立预算。
+
+共享载荷检查同时修复具名容器中的外部 enum selector；跨文件类型形状按声明文件的可信元数据绑定唯一包级名称，避免同名 import 别名串用。[推导验收](tests/acceptance/go_result_inference_test.go) 包含正反文件顺序、独立模块、公开 alias 暴露私有 T/E、原错误身份、嵌套非法 enum 和生成 Go race/vet。
+
+边界：无公开写法的外部私有类型、包作用域不可命名的局部类型仍明确拒绝；不把它们降级成 any，不声称完整用户泛型或预编译宏支持。Proposed serde adapter、native bridge 和完整 trait 状态不变。实现没有宣布整个 T0 完成。

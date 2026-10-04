@@ -19,6 +19,9 @@ import (
 
 type Conversion struct{ Source, Target, Helper string }
 type Config struct {
+	InferredFamilies *[]enums.Decl
+	FileFamilies     map[string][]enums.Decl
+	GoResultNodes    *int
 	// MatchReferenceTemps receives only compiler-generated exhaustive match slots.
 	MatchReferenceTemps map[string]bool
 	Families            []enums.Decl
@@ -309,6 +312,9 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if !bytes.Contains(source, []byte("__hgo_go_result")) && !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) && !bytes.Contains(source, []byte(matchOperand+"(")) {
 		return source, nil
 	}
+	if cfg.GoResultNodes == nil {
+		cfg.GoResultNodes = new(int)
+	}
 	fs := token.NewFileSet()
 	f, e := parser.ParseFile(fs, filename, source, parser.ParseComments)
 	if e != nil {
@@ -341,6 +347,13 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	f.Decls = append(f.Decls, matchSeed.Decls...)
 	for {
 		l.check()
+		adapted, adapterError, adapterPending := l.resolveGoResult()
+		if adapterError != nil {
+			return nil, adapterError
+		}
+		if adapted {
+			continue
+		}
 		changed := false
 		var failure error
 		var unresolved error
@@ -361,7 +374,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 				return false
 			}
 			// Process inner markers before outer markers.
-			nested := false
+			nested := pendingGoResult(c.Args[0])
 			ast.Inspect(c.Args[0], func(n ast.Node) bool {
 				if x, ok := n.(*ast.Ident); ok && x.Name == marker {
 					nested = true
@@ -416,6 +429,9 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 		if matchIssue != nil {
 			unresolved = matchIssue
 		}
+		if unresolved == nil {
+			unresolved = adapterPending
+		}
 		if unresolved != nil {
 			return nil, unresolved
 		}
@@ -429,9 +445,6 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	}
 	f.Decls = keptMatch
 	l.check()
-	if err := l.checkGoResults(); err != nil {
-		return nil, err
-	}
 	if err := l.inferMatches(); err != nil {
 		return nil, err
 	}

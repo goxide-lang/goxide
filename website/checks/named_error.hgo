@@ -1,0 +1,4 @@
+package main
+type NamedError interface{Error() string}
+func operation()(int,NamedError){return 1,nil}
+func main(){_=go_result!(operation())}

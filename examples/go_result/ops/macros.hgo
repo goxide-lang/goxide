@@ -2,5 +2,5 @@ package ops
 
 // A source-package macro can compose the compiler-owned adapter.
 pub macro_rules! parse_result {
-    ($call:expr) => { go_result!(int, $call) };
+    ($call:expr) => { go_result!($call) };
 }

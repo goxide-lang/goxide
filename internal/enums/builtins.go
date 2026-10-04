@@ -247,6 +247,12 @@ func (l *lowerer) builtinDeclarations() string {
 			fmt.Fprintf(&b, "func HgoNew%s%s%s(%s) %s%s { return %s(%s) };\n", d.Family, v.Name, params, arg, d.Family, args, v.Constructor, call)
 		}
 	}
+	b.WriteString(l.builtinInstances())
+	return b.String()
+}
+
+func (l *lowerer) builtinInstances() string {
+	var b strings.Builder
 	for _, d := range l.decls {
 		if d.Family == "" {
 			continue
@@ -354,9 +360,16 @@ func (l *lowerer) checkCompositePayloads() error {
 			named[name] = typ
 		}
 	}
+	selectorDecl := func(n *ast.SelectorExpr) *Decl {
+		var b bytes.Buffer
+		_ = format.Node(&b, token.NewFileSet(), n)
+		return l.byName[b.String()]
+	}
 	var hasEnum func(ast.Expr, map[string]bool) bool
 	hasEnum = func(e ast.Expr, seen map[string]bool) bool {
 		switch n := e.(type) {
+		case *ast.SelectorExpr:
+			return selectorDecl(n) != nil
 		case *ast.Ident:
 			if d := l.byName[n.Name]; d != nil {
 				return true
@@ -409,6 +422,11 @@ func (l *lowerer) checkCompositePayloads() error {
 			return "", nil
 		}
 		switch n := e.(type) {
+		case *ast.SelectorExpr:
+			if d := selectorDecl(n); d != nil {
+				dependencies[owner] = append(dependencies[owner], d.Name)
+				return d.Validator + "(" + path + ");", nil
+			}
 		case *ast.Ident:
 			if d := l.byName[n.Name]; d != nil {
 				dependencies[owner] = append(dependencies[owner], d.Name)
@@ -475,6 +493,10 @@ func (l *lowerer) checkCompositePayloads() error {
 					dependencies[owner] = append(dependencies[owner], d.Name)
 					return d.Validator + "(" + path + ");", nil
 				}
+			}
+			if d := l.byName[compact]; d != nil && d.Family != "" && len(d.TypeArgs) > 0 {
+				dependencies[owner] = append(dependencies[owner], d.Name)
+				return d.Validator + "(" + path + ");", nil
 			}
 		}
 		return "", fmt.Errorf("enum-bearing pointer/container projection")
@@ -600,4 +622,64 @@ func substituteSumType(source string, args map[string]string) (string, error) {
 		source = source[:e.start] + e.text + source[e.end:]
 	}
 	return source, nil
+}
+
+// InstantiateBuiltin emits only the concrete validators, using the same payload
+// projection checks as source-written instances. It never reparses lowered Go
+// or regenerates a nominal family. Callers must retain returned Decl metadata.
+func InstantiateBuiltin(d Decl, declarations []Decl, named map[string]ast.Expr) (string, error) {
+	l := &lowerer{filename: "<Go result instance>", decls: []Decl{d}, byName: map[string]*Decl{}, packageTypes: named}
+	for i := range declarations {
+		prior := &declarations[i]
+		l.byName[prior.Name] = prior
+		if prior.LookupName != "" {
+			l.byName[prior.LookupName] = prior
+		}
+		l.byName[strings.ReplaceAll(prior.Name, " ", "")] = prior
+	}
+	l.byName[d.Name] = &l.decls[0]
+	if err := l.checkCompositePayloads(); err != nil {
+		return "", err
+	}
+	return l.builtinInstances(), nil
+}
+
+// BindPayloadType preserves the declaring file's trusted enum bindings when a
+// type shape is shared with other files. Clone first: source AST is not changed.
+func BindPayloadType(expr ast.Expr, declarations []Decl) ast.Expr {
+	var b bytes.Buffer
+	_ = format.Node(&b, token.NewFileSet(), expr)
+	fs := token.NewFileSet()
+	copy, err := parser.ParseExprFrom(fs, "", b.String(), 0)
+	if err != nil {
+		return expr
+	}
+	bindings := map[string]string{}
+	for _, d := range declarations {
+		if d.Family == "" && d.LookupName != "" {
+			bindings[d.LookupName] = d.Name
+		}
+	}
+	var edits []edit
+	ast.Inspect(copy, func(n ast.Node) bool {
+		if selector, ok := n.(*ast.SelectorExpr); ok {
+			var text bytes.Buffer
+			_ = format.Node(&text, fs, selector)
+			if name := bindings[text.String()]; name != "" {
+				edits = append(edits, edit{int(selector.Pos()) - 1, int(selector.End()) - 1, name})
+				return false
+			}
+		}
+		return true
+	})
+	source := b.String()
+	for i := len(edits) - 1; i >= 0; i-- {
+		e := edits[i]
+		source = source[:e.start] + e.text + source[e.end:]
+	}
+	bound, err := parser.ParseExpr(source)
+	if err != nil {
+		return expr
+	}
+	return bound
 }

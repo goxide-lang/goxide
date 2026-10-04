@@ -111,7 +111,7 @@ func main() { fmt.Println("mixed source, one manifest") }
 
 ## Vendor 自动迁入扩展（2026-10-04，实施合同）
 
-状态：用户已要求实现；本节先于代码提交，验收完成前不标已交付/网站已上线。默认 `import-go` 为只读 plan，指定 `--out NEWDIR` 才复制及验证。无 vendor 输入保持原规则；有 vendor 输入自动选择下列显式策略：
+状态：本节先于代码提交；单模块vendor首片已实现并完成race/vet/设计检查及独立复审，见 [vendor验收记录](../reviews/vendor-import-20261004.md)。这是独立分支交付，网站上线须另行整合。默认 `import-go` 为只读 plan，指定 `--out NEWDIR` 才复制及验证。无 vendor 输入保持原规则；有 vendor 输入自动选择下列显式策略：
 
 ```toml
 [vendor]

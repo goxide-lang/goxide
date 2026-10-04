@@ -1,5 +1,7 @@
 # Unified project model: implementation and verification
 
+Historical snapshot for the initial unified model. Its blanket vendor-import exclusion is superseded by the [native vendor import extension](vendor-import-20261004.md); other boundaries remain as stated.
+
 This branch is based on public std/serde integration `e4d7200bc25c8daf646bf5e3b665b4b13e135e6f`. It preserves schema 7 and the published std/serde module versions. The authoring contract is [RFC 0025](../rfcs/0025-unified-project.md); feature/target semantics remain [RFC 0022](../rfcs/0022-project-toolchain.md).
 
 ## Delivered behavior

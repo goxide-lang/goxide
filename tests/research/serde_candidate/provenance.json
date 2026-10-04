@@ -1,0 +1,85 @@
+{
+  "source_repository": "hxsf/goxide",
+  "source_commit": "ae61ec628b55e0fc66ce96d47261c0a6809c0280",
+  "module": "github.com/goxide-lang/serde",
+  "license": "MPL-2.0; byte-identical existing LICENSE",
+  "transform": "Move serde/*.go to root, serdejson/*.go to json; rewrite core import path only. Retain serdejson Go package name.",
+  "sources": {
+    "error.go": {
+      "source": "serde/error.go",
+      "source_sha256": "b25c8251ab419b8edb401a1bf6227486694cd2c74ea260f0b690b77ff7a3cf26",
+      "candidate_sha256": "b25c8251ab419b8edb401a1bf6227486694cd2c74ea260f0b690b77ff7a3cf26"
+    },
+    "protocol.go": {
+      "source": "serde/protocol.go",
+      "source_sha256": "87351acdd4ac866293080bad7d066fded97696b8b5c769b59ae5a4e71dbc51e0",
+      "candidate_sha256": "87351acdd4ac866293080bad7d066fded97696b8b5c769b59ae5a4e71dbc51e0"
+    },
+    "core_test.go": {
+      "source": "serde/core_test.go",
+      "source_sha256": "1513ebe3ca8d1049c218ff68031a591c01573bf4a7ddb48179467c9d6fa95b18",
+      "candidate_sha256": "1513ebe3ca8d1049c218ff68031a591c01573bf4a7ddb48179467c9d6fa95b18"
+    },
+    "read.go": {
+      "source": "serde/read.go",
+      "source_sha256": "0e5c6c3cab1d9ad98e0805f80c35d220c78195f42aab3780908b08e7af87effd",
+      "candidate_sha256": "0e5c6c3cab1d9ad98e0805f80c35d220c78195f42aab3780908b08e7af87effd"
+    },
+    "visitor.go": {
+      "source": "serde/visitor.go",
+      "source_sha256": "5ab166ca3eb489994f0e4a1e648cb8616b3e93b32ede6bb301d491d06349a368",
+      "candidate_sha256": "5ab166ca3eb489994f0e4a1e648cb8616b3e93b32ede6bb301d491d06349a368"
+    },
+    "json/cause_test.go": {
+      "source": "serdejson/cause_test.go",
+      "source_sha256": "30fdb2ec0ea944388ace2ae9e913769c044c42c5c179f0d269e03e0dc7e20029",
+      "candidate_sha256": "8ac21157225130b270e902a5fe26a4e7736997bf7d60047d1a1d2664b6b8c786"
+    },
+    "json/encode.go": {
+      "source": "serdejson/encode.go",
+      "source_sha256": "c1a196f4b05dc98a08ed7ba6c4e790450fe45d16a9705696879287e6faf03368",
+      "candidate_sha256": "22273455f22155b0fe3cda29903022207c999eec8841557ee5460d6c7f742cdc"
+    },
+    "json/json_test.go": {
+      "source": "serdejson/json_test.go",
+      "source_sha256": "7e8cca5c3d418da00da9b0385d682322fc233e9bde71a8c23d54a5e5daadaf38",
+      "candidate_sha256": "64be64d12cdf5371de54547786daa0ef886e88bc6c729f771e2286bbfacb79c8"
+    },
+    "json/enum_path_test.go": {
+      "source": "serdejson/enum_path_test.go",
+      "source_sha256": "98844d8c7ac32758e2369e62a93acf67a4469708988c9e16de3f975a6577a31d",
+      "candidate_sha256": "9a68f8efa6d536c824730aca914689f47c9d415d56030bbfb8e2ab851fcd9aae"
+    },
+    "json/decode.go": {
+      "source": "serdejson/decode.go",
+      "source_sha256": "cf0c6df5af31759ace9399a26669b63ffefe27fedfcc57516c264d9c71bb047f",
+      "candidate_sha256": "da9751b753ad6c487dc75078b84ebd9803ed4d464b0b0839605f375a7838b22a"
+    }
+  },
+  "files": {
+    "LICENSE": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+    "README.md": "4f92966c2dbcb8e0df0816ed8357d7cc7aff41f428778da618811d71be0d3e6d",
+    "core_test.go": "1513ebe3ca8d1049c218ff68031a591c01573bf4a7ddb48179467c9d6fa95b18",
+    "error.go": "b25c8251ab419b8edb401a1bf6227486694cd2c74ea260f0b690b77ff7a3cf26",
+    "go.mod": "b0c6d759d5b7077078a1260e67465732bf656e092436d3530b9b69213e9e2ab0",
+    "json/cause_test.go": "8ac21157225130b270e902a5fe26a4e7736997bf7d60047d1a1d2664b6b8c786",
+    "json/decode.go": "da9751b753ad6c487dc75078b84ebd9803ed4d464b0b0839605f375a7838b22a",
+    "json/encode.go": "22273455f22155b0fe3cda29903022207c999eec8841557ee5460d6c7f742cdc",
+    "json/enum_path_test.go": "9a68f8efa6d536c824730aca914689f47c9d415d56030bbfb8e2ab851fcd9aae",
+    "json/json_test.go": "64be64d12cdf5371de54547786daa0ef886e88bc6c729f771e2286bbfacb79c8",
+    "protocol.go": "87351acdd4ac866293080bad7d066fded97696b8b5c769b59ae5a4e71dbc51e0",
+    "read.go": "0e5c6c3cab1d9ad98e0805f80c35d220c78195f42aab3780908b08e7af87effd",
+    "visitor.go": "5ab166ca3eb489994f0e4a1e648cb8616b3e93b32ede6bb301d491d06349a368"
+  },
+  "public_push_performed": false,
+  "validation": [
+    "candidate go test -race ./...",
+    "candidate go vet ./..."
+  ],
+  "limits": [
+    "Compiler generation and protocol metadata still use old serde path",
+    "No integrated shared std/serde identity acceptance yet",
+    "No public repository credentials used",
+    "No project manifest included; goxide.toml migration belongs to toolchain task"
+  ]
+}

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Rebuild every published example and the browser compiler from this checkout."""
-import hashlib, json, os, pathlib, shutil, subprocess, tempfile
-import catalog
+import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
+import catalog, project_snapshots, workspace_snapshots
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
 GO = os.environ.get('GO_BIN', 'go')
-env = dict(os.environ, GOTOOLCHAIN='local', GOMAXPROCS='4')
+env = dict(os.environ, GOTOOLCHAIN='local', GOMAXPROCS='4', GOWORK='off')
 def run(*args, **kwargs):
     return subprocess.check_output(args, env=env, **kwargs)
 version = run(GO, 'version').decode().strip()
+run(GO, 'mod', 'verify')
 website_sha = run('git', 'rev-parse', 'HEAD').decode().strip()
 catalog_data = catalog.load()
 sha = catalog_data['compilerCommit']
@@ -46,6 +47,8 @@ assert set(p.name for p in (ROOT/'website/static').iterdir()) == set(static_file
 dist.mkdir()
 for name in static_files:
     shutil.copyfile(ROOT/'website/static'/name, dist/name)
+index = (dist/'index.html').read_text().replace('src="app.js"', f'src="app.js?site={website_sha}"').replace('href="style.css"', f'href="style.css?site={website_sha}"')
+(dist/'index.html').write_text(index)
 (ROOT/'bin').mkdir(exist_ok=True)
 run(GO, 'build', '-o', str(ROOT/'bin/hgo'), './cmd/hgo')
 examples = []
@@ -53,6 +56,10 @@ for entry in catalog_data['examples']:
     name, title, description = entry['id'], entry['title'], entry['description']
     path = ROOT/'website/examples'/f'{name}.hgo'
     generated = run(str(ROOT/'bin/hgo'), 'transpile', str(path)).decode()
+    if name in ['result','go_result','serde_option']:
+        assert 'github.com/goxide-lang/std/sum' in generated
+        families = re.findall(r'^type (?:Option|Result)\[[^\n]+', generated, re.MULTILINE)
+        assert families and all('= __hgo_enum_std.' in line for line in families), 'sum families must be aliases to shared std, not copied definitions'
     stdout = run(str(ROOT/'bin/hgo'), 'run', '--go', GO, str(path)).decode()
     assert stdout == entry['expectedStdout'], f'{name}: runtime output changed'
     examples.append(dict(id=name, title=title, description=description, source=path.read_text(), go=generated, stdout=stdout))
@@ -82,23 +89,42 @@ with tempfile.TemporaryDirectory(prefix='hgo-catalog-features-') as temporary:
     shutil.copytree(ROOT/'website/cli-examples/features', project)
     files = [dict(path=str(p.relative_to(project)), source=p.read_text()) for p in sorted(project.rglob('*')) if p.is_file()]
     feature_runs = []
-    for flags, expected in [([], 'pretty: true\n'), (['--no-default-features'], 'pretty: false\n')]:
+    for flags, expected in [([], 'pretty: true\n'), (['--no-default-features'], 'pretty: false\n'), (['--locked','--offline'], 'pretty: true\n')]:
         stdout = run(str(ROOT/'bin/hgo'), 'run', '--go', GO, '--bin', 'demo', *flags, str(project)).decode()
         assert stdout == expected
         feature_runs.append(dict(command='hgo run --bin demo '+(' '.join(flags)+' ' if flags else '')+'.', stdout=stdout))
+    assert not (project/'go.mod').exists() and not (project/'go.sum').exists()
+    assert list((project/'target').rglob('go.mod'))
+    files.append(dict(path='goxide.lock', source=(project/'goxide.lock').read_text()))
+    generated = sorted({p.read_text() for p in (project/'target').rglob('*.go') if 'pretty:' in p.read_text()})
+    assert generated, 'feature target generated Go missing'
+    files.extend(dict(path=f'target 生成 Go {i+1}（只读）', source=go) for i,go in enumerate(generated))
     feature_example = dict(id='features', title='feature 与 bin：完整最小工程', files=files, runs=feature_runs)
+migration_example = project_snapshots.migration(ROOT, GO, run)
+vendor_example = project_snapshots.vendor(ROOT, GO, run)
+cli_options_example = project_snapshots.cli(ROOT, GO, run)
 public_catalog = catalog.export(catalog_data, checks)
 eh = hashlib.sha256()
 for archive in sorted(exports.glob('*.a')):
     eh.update(archive.name.encode()); eh.update(archive.read_bytes())
 export_target = json.loads(run(GO, 'env', '-json', 'GOOS', 'GOARCH'))
 wasm_flags = ['-trimpath', '-buildvcs=false', '-ldflags=-s -w -buildid=']
-manifest = dict(wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
+public_libraries = []
+for module, commit in [('github.com/goxide-lang/std','3f2204770fd3b09cf9f5a1d9228464b7f7c1bdcd'),('github.com/goxide-lang/serde','a1b791e96d660c6be620e110c566a9a171631b7e')]:
+    selected = json.loads(run(GO, 'list', '-m', '-json', module))
+    assert not selected.get('Replace'), 'public dependency must not use a local replacement'
+    metadata = json.loads(run(GO, 'mod', 'download', '-json', module+'@'+selected['Version']))
+    assert selected['Version'].endswith(commit[:12]) and metadata.get('Sum') and metadata.get('GoModSum')
+    public_libraries.append(dict(module=module, commit=commit, version=selected['Version'], sum=metadata['Sum'], goModSum=metadata['GoModSum']))
+metadata_schema = int(re.search(r'const enumMetadataVersion = (\d+)', (ROOT/'internal/frontend/enum_artifact.go').read_text()).group(1))
+assert metadata_schema == 7
+manifest = dict(metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 importClosure=sorted(closure), maxSourceBytes=32768, compileTimeoutMs=10000,
-                examples=examples, cliExamples=[cli_example], projectExamples=[feature_example])
-(dist/'examples.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n')
+                examples=examples, cliExamples=[cli_example], projectExamples=[feature_example,migration_example,vendor_example,cli_options_example]+workspace_snapshots.build(ROOT, GO))
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')
 subprocess.run([GO, 'build', *wasm_flags, '-o', str(dist/'compiler.wasm'), './cmd/hgo-playground'], env=wasm_env, check=True)
+manifest['wasmSha256'] = hashlib.sha256((dist/'compiler.wasm').read_bytes()).hexdigest()
+(dist/'examples.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n')
 goroot = run(GO, 'env', 'GOROOT').decode().strip()
 shutil.copyfile(pathlib.Path(goroot)/'lib/wasm/wasm_exec.js', dist/'wasm_exec.js')
 shutil.copyfile(pathlib.Path(goroot)/'LICENSE', dist/'GO-LICENSE.txt')

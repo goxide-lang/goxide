@@ -226,7 +226,7 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 			for i, t := range l.ts {
 				if t.text == "package" && i+1 < len(l.ts) {
 					end := l.ts[i+1].end
-					edits = append(edits, edit{t.start, end, string(source[t.start:end]) + ";import __hgo_enum_std " + strconv.Quote(SumPackage) + ";"})
+					edits = append(edits, edit{t.start, end, string(source[t.start:end]) + ";import __hgo_enum_std " + strconv.Quote(SumPackage)})
 					break
 				}
 			}

@@ -825,3 +825,8 @@ D36 后续：入口无需 T，从 `(T,E)` 或 E 推导具体 Result；保留显�
 独立审查实际发现并修复：pattern扫描误入arm构造器的重复展开、延迟AST节点词法作用域、公开owner被internal条目整体屏蔽、表达式match构造器未取得上下文及整数常量过早默认。相关正反例已进入共享std测试；typednil与引用投影另有独立真实CLI复核。
 
 全树race已尝试但未通过：既有临时模块尚未声明新std依赖，低层测试importer与历史预期尚需迁移；另见项目fixture的ziphash/离线module规划失败，尚不能归因于本改动。不得将这些失败标作已批准延期。根go.mod未写入伪造的可下载std版本或本机绝对replace。
+
+
+本阶段可获取提交：生产接入 `7cb7f0b825b71bfefdb6160600f55bc4ba0acf5d`；serde隔离候选交接 `57c858ee1d1334e52fedf144dd7461785bece65e`，均在 `feat/shared-std-sums` push/fetch核对。后者只允许按provenance白名单迁入独立serde repo，不包含编译器路径切换，也不包含项目manifest；`goxide.toml`由工具链任务统一实施。
+
+验证结论：`go test -race ./internal/frontend -run 'TestSharedStd|TestEnumFamily' -count=1`通过，并在测试内分别执行producer/consumer生成模块race/vet；最新真实CLI多包转译输出另行race/vet通过。`go vet ./...`通过，完整设计检查13条Go命令通过（机制证据），文档链接/RFC检查通过。全树`go test -race ./...`仍失败，最近整树快照为98个顶层失败，涉及8个包；主类为std依赖缺失/低层importer未迁移，另外保留项目ziphash/离线规划调查。整树失败后修复显式分号package的重复分隔符并重跑上述重点race/vet；没有把重点通过冒充整树绿灯。

@@ -40,7 +40,7 @@ func sharedStdGo(t *testing.T, dir string, args ...string) {
 }
 func TestSharedStdCrossModuleAndContext(t *testing.T) {
 	producer := sharedStdModule(t, "example.org/producer")
-	sharedStdWrite(t, producer, "internal/source/value.hgo", `package source
+	sharedStdWrite(t, producer, "internal/source/value.hgo", `package source;
 func Make()Result[int,error]{return Result::Ok(7)}
 `)
 	sharedStdWrite(t, producer, "value.hgo", `package producer

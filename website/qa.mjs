@@ -15,6 +15,16 @@ await fs.mkdir(new URL('qa-artifacts/',import.meta.url),{recursive:true});
 const finished=()=>page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('转译完成'),{},{timeout:60000});
 await page.goto(base);await finished();
 const manifest=await (await context.request.get(base+'/examples.json')).json();
+// CLI project snapshots stay read-only, separate from browser example choices.
+assert.equal(await page.locator('#examples option').count(), manifest.examples.length);
+const snapshotText = await page.locator('#cli-example').textContent();
+for (const example of manifest.cliExamples) {
+ for (const file of example.files) {
+  assert.ok(snapshotText.includes(file.source));
+  assert.ok(snapshotText.includes(file.go));
+ }
+ assert.ok(snapshotText.includes(example.stdout));
+}
 for(let i=0;i<manifest.examples.length;i++){
  await page.selectOption('#examples',String(i));await finished();
  assert.equal(await page.inputValue('#output'),manifest.examples[i].go,`${manifest.examples[i].id}: WASM differs from CLI`);

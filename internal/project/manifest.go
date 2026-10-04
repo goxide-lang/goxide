@@ -34,6 +34,7 @@ type Manifest struct {
 	Examples     []Target              `json:"examples,omitempty" toml:"example,omitempty"`
 }
 type Dependency struct {
+	Workspace       bool     `json:"workspace,omitempty" toml:"workspace,omitempty"`
 	Module          string   `json:"module" toml:"module"`
 	Version         string   `json:"version,omitempty" toml:"version,omitempty"`
 	Path            string   `json:"path,omitempty" toml:"path,omitempty"`
@@ -98,6 +99,15 @@ func Read(root string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
+	w, err := DiscoverWorkspace(root)
+	if err != nil {
+		return Manifest{}, err
+	}
+	if w != nil {
+		if m, ok := w.Manifests[root]; ok {
+			return m, nil
+		}
+	}
 	return Parse(filepath.Join(root, ManifestName), b)
 }
 
@@ -128,6 +138,9 @@ func validate(m Manifest) error {
 		return err
 	}
 	for k, d := range m.Dependencies {
+		if d.Workspace {
+			return fmt.Errorf("dependency %s: workspace inheritance requires membership in a workspace", k)
+		}
 		if !ident.MatchString(k) || d.Module == "" {
 			return fmt.Errorf("invalid dependency %q", k)
 		}

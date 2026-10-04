@@ -107,6 +107,8 @@ func NestedNone()Option[int]{v:=m.OptionalNested()?;n:=v?;return Option[int]::So
 func Guard(v m.Option[int],seen *bool)int{return match v{m.Option[int]::Some(n) if Mark(seen)=>n,_=>0,}}
 func Mark(seen *bool)bool{*seen=true;return true}
 func Shadow()Result[int,error]{input:=m.Load(0);m:=3;_=m;n:=input?;return Result[int,error]::Ok(n)}
+// A new concrete shared-family instance gets a local static validator.
+func NewInstance(v m.Option[bool])Option[bool]{n:=v?;return Option[bool]::Some(n)}
 func SumLarge(items []int)Result[int,error]{total:=0;for _,item:=range items{total+=m.LoadNumber(item)?};return Result[int,error]::Ok(total)}
 `)
 	out := filepath.Join(t.TempDir(), "out")
@@ -152,6 +154,11 @@ func TestProducer(t *testing.T){for _,wire:=range []string{"{}",`+"`"+`{"Value":
 	packagesWrite(t, out, "app_test.go", `package app
 import("testing";"errors";m "sums.example/lib/model")
 func TestBusiness(t *testing.T){if Match(OptionFlow(true))!=6||Match(OptionFlow(false))!=0||Alias()!=9||Reorder()!=10||Fixed()!=11||PrivateMatch()!=7||Shape()!=5{t.Fatal("business")};if Private().(__hgo_enum_case_Option_Some[int]).Value!=7{t.Fatal("private")};if ResultFlow(0).(m.HgoResultOk[string,error]).Value!="done"{t.Fatal("result")};if !errors.Is(ResultFlow(1).(m.HgoResultErr[string,error]).Value,m.Sentinel){t.Fatal("cause")};if e:=ResultFlow(2).(m.HgoResultErr[string,error]).Value;e==nil{t.Fatal("typed nil lost")};if !errors.Is(Wrapped(1).(__hgo_enum_case_Result_Err[int,LocalError]).Value,m.Sentinel){t.Fatal("from")};if NestedNone()!=nil{t.Fatal("Some(None)")};_=Shadow()}
+func TestNewConcreteInstance(t *testing.T){
+ if NewInstance(nil)!=nil||!NewInstance(m.HgoNewOptionSome(true)).(m.HgoOptionSome[bool]).Value{t.Fatal("new concrete identity")}
+ defer func(){if recover()==nil{t.Fatal("new concrete shape check missing")}}()
+ NewInstance((*m.HgoOptionSome[bool])(nil))
+}
 type forged struct{m.Result[int,error]}
 func TestInvalid(t *testing.T){var typed *m.HgoResultOk[int,error];for _,v:=range []m.Result[int,error]{nil,typed,&m.HgoResultOk[int,error]{Value:1},forged{}}{func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid")}}();Invalid(v,&seen)}()};func(){defer func(){if recover()==nil{t.Fatal("nested validation")}}();Nested()}();func(){seen:=false;var typed *m.HgoOptionSome[int];defer func(){if recover()==nil||seen{t.Fatal("guard")}}();Guard(typed,&seen)}()}
 `)
@@ -186,7 +193,6 @@ func TestGo(t *testing.T){var v r.Maybe[int]=m.HgoNewOptionSome[int](4);if v.(m.
 		packagesCommand(t, d, tool, true, "vet", "./...")
 	}
 	for name, tc := range map[string]struct{ body, want string }{
-		"unregistered-instance":      {`import m "sums.example/lib/model";func Bad(v m.Option[bool])Option[bool]{n:=v?;return Option[bool]::Some(n)}`, "producer validation metadata"},
 		"fake-family":                {`import f "sums.example/lib/fake";func Bad()Result[int,error]{n:=f.Get()?;return Result[int,error]::Ok(n)}`, "builtin nominal"},
 		"private-unnameable":         {`import m "sums.example/lib/model";func Bad()Option[int]{n:=m.Secret()?;return Option[int]::Some(n.N)}`, "not nameable"},
 		"external-from-not-implicit": {`import m "sums.example/lib/model";func Bad()m.Result[int,m.RemoteError]{n:=m.Load(1)?;return m.HgoNewResultOk[int,m.RemoteError](n)}`, "unique explicit From"},

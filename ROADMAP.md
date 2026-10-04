@@ -291,7 +291,7 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 
 ### 2026-10-04 工具链统一作者模型
 
-用户确认：迁入后根由 `goxide.toml` / `goxide.lock` 唯一管理，混合指 `.go` / `.hgo`。首片实现已提交（`4f9710afb8e14a321d632371399f0717f61ca217`），已对齐最新公开 std/serde 集成；完整回归正在收尾，不据此宣称整体工具链完成。
+用户确认：迁入后根由 `goxide.toml` / `goxide.lock` 唯一管理，混合指 `.go` / `.hgo`。首片实现已提交（`4f9710afb8e14a321d632371399f0717f61ca217`），已对齐最新公开 std/serde 集成；本片全包 race 覆盖、vet、设计检查与独立复审已完成，首轮冷缓存失败和重跑明细见 [验收记录](docs/reviews/unified-project-20261004.md)；不据此宣称整体工具链完成。
 
 - [RFC 0022](docs/rfcs/0022-project-toolchain.md)：features、来源、多目标；现行 format 2，保留原有边界。
 - [RFC 0023](docs/rfcs/0023-build-scripts.md)：授权/host闭包与缓存；TOML根/纯TOML helper映射同步。

@@ -12,8 +12,8 @@ import (
 
 // ConfigureSource runs before import discovery, macro collection, and type
 // checking. It preserves offsets by padding replacements with whitespace.
-// Disabled sources use a deliberately restricted Go-compatible grammar so they
-// can be fully parsed without macro expansion, import or name/type resolution.
+// Disabled sources validate lexical token trees and the package/import prefix,
+// without expanding macros or attempting full declaration/expression parsing.
 func ConfigureSource(filename string, src []byte, features map[string]bool) ([]byte, bool, error) {
 	out := append([]byte(nil), src...)
 	fs := token.NewFileSet()
@@ -74,6 +74,16 @@ func ConfigureSource(filename string, src []byte, features map[string]bool) ([]b
 	if len(stack) != 0 {
 		return nil, false, fmt.Errorf("%s: unclosed delimiter in conditional source", filename)
 	}
+	if !selected {
+		// Reuse the hgo import-prefix parser: it stops before DSL declarations
+		// and validates syntax without loading packages or resolving names.
+		// The scanner and delimiter checks above cover the entire token tree.
+		// Do not inspect macro templates/uses/cfg! in code that is removed.
+		if _, e := parseSourceImports(filename, src); e != nil {
+			return nil, false, fmt.Errorf("disabled cfg file package/import syntax: %w", e)
+		}
+		return out, false, nil
+	}
 	for i := 0; i < len(tokens); i++ {
 		if tokens[i].tok != token.IDENT || tokens[i].lit != "use" || i+3 >= len(tokens) || tokens[i+1].tok != token.IDENT || tokens[i+2].tok != token.COLON || tokens[i+3].tok != token.COLON {
 			continue
@@ -130,14 +140,7 @@ func ConfigureSource(filename string, src []byte, features map[string]bool) ([]b
 
 		i = j
 	}
-	if !selected {
-		// Until a standalone hgo grammar parser exists, do not pretend that
-		// balanced tokens prove valid hgo syntax. Disabled files must use the
-		// Go-compatible grammar; names and types remain completely unresolved.
-		if _, e := parser.ParseFile(token.NewFileSet(), filename, out, parser.AllErrors|parser.SkipObjectResolution); e != nil {
-			return nil, false, fmt.Errorf("disabled cfg file requires valid Go-compatible syntax in v1 (hgo-only syntax needs a future pure syntax parser): %w", e)
-		}
-	}
+
 	return out, selected, nil
 }
 func evalCfg(text string, features map[string]bool) (bool, error) {

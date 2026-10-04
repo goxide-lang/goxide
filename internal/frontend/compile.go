@@ -888,7 +888,14 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	// Insert a distinct import declaration after package; other imports remain intact.
 	provenance = provenance.Format(parsedSource, original.Bytes(), "format.original")
 	text := original.String()
-	idx := strings.Index(text, "\n")
+	headerFS := token.NewFileSet()
+	header, err := parser.ParseFile(headerFS, filename, text, parser.PackageClauseOnly)
+	if err != nil {
+		return Result{}, fmt.Errorf("generated package clause: %w", err)
+	}
+	// Leading cfg/build comments are not the package clause. Insert only after
+	// the AST-confirmed package name, retaining the original provenance ranges.
+	idx := headerFS.Position(header.Name.End()).Offset - 1
 	var ib strings.Builder
 	keys := []string{}
 	for k := range imports {

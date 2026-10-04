@@ -203,6 +203,10 @@ func Load(root, tool string, requested []string, defaults, offline, locked bool)
 	return g, nil
 }
 func ModulePath(tool, root string) (string, error) {
+	info, err := os.Lstat(filepath.Join(root, "go.mod"))
+	if err != nil || !info.Mode().IsRegular() {
+		return "", fmt.Errorf("module directory must contain its own regular go.mod: %s", root)
+	}
 	cmd := exec.Command(tool, "mod", "edit", "-json")
 	cmd.Dir = root
 	cmd.Env = GoEnv(true)

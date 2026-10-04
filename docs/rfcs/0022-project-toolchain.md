@@ -62,7 +62,7 @@ func Pretty() bool { return cfg!(feature("pretty")) }
 
 `//hgo:cfg predicate` 必须位于 package 之前，多个指令取 AND。谓词为 `feature("name")`、`all(...)`、`any(...)`、`not(...)`；任何未知 feature 都报错，包括短路另一侧。先应用 Go 文件名/build tags，再对选中目标的包依赖闭包进行 cfg。未引用包、未选目标不做宏/名称/类型检查。
 
-文件条件为 false 时，在 import 发现、宏收集/展开、use 绑定和类型检查之前移除。该文件仍须语法合法，但不解析 import、标识符或类型。**第一版仅支持关闭 Go 兼容语法的文件**：尚无完整 hgo 纯语法 parser，关闭含 enum、macro_rules 等 DSL 的文件会明确拒绝；不会把“括号平衡”冒称完整语法验证。选中的 hgo 文件仍支持现有 DSL。
+文件条件为 false 时，在 import 依赖发现、宏收集/展开、use 绑定和类型检查之前移除，合法 enum、match、派生、宏均可位于关闭文件中。检查整个文件的词法合法性与括号 token tree 配对，并复用 hgo import-prefix parser 检查 package/import 前缀语法，但不装载 import、不解析名称/类型，也不检查关闭宏体内的 cfg! 或保留绑定。**关闭文件不执行完整声明/表达式语法检查**：例如配对但不完整的 `func F(){x:=}` 会在启用后报错，关闭时不报错；非法字符、未闭合字符串/注释、错配括号和错误 package/import 前缀始终拒绝。这是明确的词法/基础语法边界，不宣称已有完整 hgo 纯语法 parser。
 
 `cfg!(...)` 是单行布尔常量查询，保留源字节位置，不能通过它让普通 if 的另一分支免于类型检查；要移除代码请使用文件条件。多行 cfg!、声明级 `#[cfg]` 暂不支持。project 中宏名/直接 use 绑定 `cfg` 保留，不允许同名声明或 alias 被预处理静默劫持。查询在用户宏展开前处理，不能用宏生成新的 cfg 指令或 cfg!。
 
@@ -95,6 +95,8 @@ func Pretty() bool { return true }
 ```
 
 上面仅展示格式，不是测试访问的服务。版本解析、MVS、module 缓存、校验和全部调用真实 Go 工具。原生 go.mod 与本地 replace 可继续使用。manifest 与原 go.mod 的直接版本/来源冲突拒绝；传递本地来源也不能覆盖根已有的不一致 replace。源 go.mod/go.sum 不改写，修改限于生成副本。
+
+每个 path/git 依赖入口（Git 含 subdir 后）必须自带普通文件 go.mod，module 字段必须等于其实际 module path；不会自动包装纯 Go 目录或合成 go.mod，也不采用父模块的 go.mod。缺少 hgo.json 的原生 Go 模块可以使用。
 
 本地 path 相对声明它的 manifest，而非 cwd，可指向用户明确选定的模块；不递归发现相邻模块。Git 必填显式 rev，可为 commit/tag/branch；首次解析后在 `hgo.lock` 锁定精确 commit，之后移动 tag/branch 不改变锁。Git subdir 必须在 checkout 内，实际 go.mod module path 必须一致。同一 module path 不能由不同来源占用。
 
@@ -136,6 +138,13 @@ examples 仅显式选择构建，不成为默认 bin/lib 产物；本片没有 p
 
 ## 验收与未定项
 
-`cmd/hgo/project_test.go` 使用真实 Go、临时多模块、file proxy 和本地临时 Git，不访问第三方服务。覆盖默认/关闭/显式 feature、菱形依赖并集、optional 来源延迟、多个同目录 bin/example、无 lib、原路径诊断、生成 Go race/vet、A/B/A 配置切换、branch 移动与精确 rev、冷/暖离线、锁定重复构建、原 go.mod replace、传递来源冲突、输出重名、测试 helper 闭包、Git 路径边界、原生 build list 一致性。`internal/project` 覆盖未知/循环 feature、目标重复、source 互斥和路径诊断；前端 cfg 测试覆盖语法与预处理时机。
+`cmd/hgo/project_test.go` 使用真实 Go、临时多模块、file proxy 和本地临时 Git，不访问第三方服务。覆盖默认/关闭/显式 feature、菱形依赖并集、optional 来源延迟、多个同目录 bin/example、无 lib、原路径诊断、生成 Go race/vet、A/B/A 配置切换、branch 移动与精确 rev、冷/暖离线、锁定重复构建、原 go.mod replace、传递来源冲突、输出重名、测试 helper 闭包、Git 路径边界、原生 build list 一致性。`internal/project` 覆盖未知/循环 feature、目标重复、source 互斥和路径诊断；前端 cfg 测试覆盖词法/token-tree 与 package/import 前缀、注释/字符串假指令和预处理时机。额外真实项目在同一文件组合 enum、match、derive、macro，覆盖两个 bin、example 和默认/关闭/显式开启的 A/B/A 切换；关闭文件含不存在的 import 与未解析宏也不触发加载。
 
 可运行示例见 [examples/project](../../examples/project/README.md)。最终验证记录以提交说明与工作结果为准，不将 RFC 的验收目标冒称测试已通过。
+
+
+### 已复现的修复边界
+
+早期实现用 Go 完整 parser 验证关闭文件，误拒合法 hgo DSL；现改为上述基础检查并在任何宏/use/cfg! 查询处理前退出。配置标记的包名前缀读取同样复用 hgo parser。启用文件若 package 前有 cfg/build 注释，派生 import 插入点由格式化 Go AST 的 package 名结束位置确定，不再假设文件第一行是 package。
+
+多行 cfg! 仍明确拒绝，不能用保留 LF 的简单布尔填充规避：Go 自动分号会使合法表达式变成语法错误。后续若支持，须接入明确 source-map edits，覆盖零缩进闭括号、CRLF、前置否定、尾随运算及后续诊断位置；本次未加入新的谓词或表达式解释器。

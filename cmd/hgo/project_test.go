@@ -393,3 +393,72 @@ func TestProjectDependencyAndTargetDiagnostics(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestProjectConditionalHgoAcrossTargets(t *testing.T) {
+	root := t.TempDir()
+	cwd, e := os.Getwd()
+	if e != nil {
+		t.Fatal(e)
+	}
+	runtimeRoot := filepath.Clean(filepath.Join(cwd, "../.."))
+	projectWrite(t, root, map[string]string{
+		"go.mod":   "module example.org/conditional\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => " + filepath.ToSlash(runtimeRoot) + "\n",
+		"hgo.json": `{"version":1,"features":{"default":["extra"],"extra":[],"never":[]},"lib":{"name":"lib","path":"."},"bins":[{"name":"one","path":"cmd/one"},{"name":"two","path":"cmd/two"}],"examples":[{"name":"demo","path":"examples/demo"}]}`,
+		"enabled.hgo": `//hgo:cfg feature("extra")
+package lib
+#[derive(Debug)]
+type Item struct { Value int }
+pub enum State { Empty, Count(int), }
+macro_rules! twice { ($x:expr) => { $x + $x }; }
+func Value() int {
+ return match State::Count(twice!(21)) {State::Empty => 0, State::Count(n) => n,}
+}
+`,
+		"disabled.hgo": "//hgo:cfg not(feature(\"extra\"))\npackage lib\nfunc Value()int{return 0}\n",
+		"never.hgo": `//hgo:cfg feature("never")
+package lib
+import absent "missing.example/never"
+#[derive(Debug)]
+type Missing struct { Value absent.Unknown }
+enum Unresolved { Case(absent.Unknown), }
+macro_rules! query { ($x:expr) => { cfg!(feature($x)) }; }
+func Never(){unknown_macro!(unresolved)}
+`,
+	})
+	for _, entry := range []string{"cmd/one", "cmd/two", "examples/demo"} {
+		projectWrite(t, root, map[string]string{entry + "/main.hgo": "package main\nimport \"fmt\"\nimport lib \"example.org/conditional\"\nfunc main(){fmt.Println(lib.Value())}\n"})
+	}
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"run", "--bin", "one", "--offline"}, "42"},
+		{[]string{"run", "--bin", "one", "--offline", "--locked", "--no-default-features"}, "0"},
+		{[]string{"run", "--bin", "two", "--offline", "--locked"}, "42"},
+		{[]string{"run", "--example", "demo", "--offline", "--locked", "--no-default-features", "--features", "extra"}, "42"},
+		{[]string{"run", "--bin", "one", "--offline", "--locked"}, "42"},
+	} {
+		b, e := projectRun(t, root, tc.args...)
+		if e != nil || strings.TrimSpace(b) != tc.want {
+			t.Fatalf("%v: %s %v", tc.args, b, e)
+		}
+	}
+	// Balanced invalid expression grammar is deferred, not silently accepted when enabled.
+	projectWrite(t, root, map[string]string{"never.hgo": "//hgo:cfg feature(\"never\")\npackage lib\nfunc Broken(){x:=}\n"})
+	if _, e := projectRun(t, root, "run", "--bin", "one", "--offline"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := projectRun(t, root, "run", "--bin", "one", "--offline", "--features", "never"); e == nil {
+		t.Fatal("enabled malformed expression accepted")
+	}
+}
+
+func TestProjectDependencyRequiresOwnGoMod(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "root")
+	projectWrite(t, filepath.Join(base, "dep"), map[string]string{"go.mod": "module example.org/dep\n\ngo 1.27\n", "lib.go": "package dep\nfunc Value()int{return 1}\n", "sub/lib.go": "package dep\nfunc Value()int{return 2}\n"})
+	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "hgo.json": `{"version":1,"bins":[{"name":"app","path":"main.hgo"}],"dependencies":{"dep":{"module":"example.org/dep","path":"../dep/sub"}}}`, "main.hgo": "package main\nimport d \"example.org/dep\"\nfunc main(){_=d.Value()}\n"})
+	if b, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "own regular go.mod") {
+		t.Fatalf("parent module silently adopted: %s %v", b, e)
+	}
+}

@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/build"
-	"go/parser"
-	"go/token"
 	"io"
 	"io/fs"
 	"os"
@@ -368,7 +366,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		}
 		if options.Configuration != "" {
 			original := sortedSources(packages[dir])[0]
-			parsed, e := parser.ParseFile(token.NewFileSet(), original, packages[dir][original], parser.PackageClauseOnly)
+			parsed, e := parseSourceImports(original, packages[dir][original])
 			if e != nil {
 				return e
 			}

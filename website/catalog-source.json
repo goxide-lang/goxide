@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "7894ddff18f4d5e84c9bba395b0e6a32b27859f9",
+  "compilerCommit": "fceeb8669e738ebffc968b8bd948b2334fe627cb",
   "reviewedAt": "2026-10-04",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
@@ -734,5 +734,5 @@
       }
     }
   ],
-  "compilerDigest": "32afe88be9223d2fb51a3129b7cc4973bf9bb8f44b5c137529c3c35d45be3ba3"
+  "compilerDigest": "c03e0b656ede234d0d11f2a8fbeb0a1204534594d70a69737b7d5781fb66b472"
 }

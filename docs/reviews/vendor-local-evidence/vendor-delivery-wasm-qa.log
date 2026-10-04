@@ -1,0 +1,20 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: error_only: CLI rejected input
++ actual - expected
+
++ 'offline export data for github.com/goxide-lang/std/sum: exit status 1: go: could not create module cache: mkdir /home/agent/go: read-only file system'
+- undefined
+
+    at file:///workspace/goxide/website/qa.mjs:49:11 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'offline export data for github.com/goxide-lang/std/sum: exit status 1: go: could not create module cache: mkdir /home/agent/go: read-only file system',
+  expected: undefined,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.19.0

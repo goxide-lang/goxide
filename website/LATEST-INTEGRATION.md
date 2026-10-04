@@ -37,3 +37,9 @@ Go 1.27.1 / Linux amd64，Chromium + Playwright 1.58.2。受限环境必须设�
 - 独立审查再次运行 CLI reexports 并逐字对照，确认真实输出、textContent 和发布目录范围；非阻断的源码快照范围建议已修正文案。
 
 最终干净报告提交后重新构建资源和三个自托管平台包；清单写入最终 HEAD。交付目录的 audit.json、SHA256SUMS 与 standalone.json 记录最终文件身份和空目录/无工具链 PATH 验证。仅 Linux amd64 实机运行；macOS arm64、Windows amd64 只交叉构建，未签名、未宣称本机运行验收。
+
+## 本地模块迁入修正（待网站 owner 同步）
+
+`feat/vendor-local-modules` 的编译器核心为 `fceeb8669e738ebffc968b8bd948b2334fe627cb`，生产源 digest `c03e0b656ede234d0d11f2a8fbeb0a1204534594d70a69737b7d5781fb66b472`。当前 catalog、project/workspace snapshots 和首页文案已同步：原生 vendor 只作迁入输入，输出为普通本地模块；没有 Goxide vendor 构建或拆出模式。迁入先保留修改字节；local 默认的来源候选已显示，TTY/remote 切换尚未交付。
+
+owner 从此分支执行 `python3 website/build.py`，将同批生成的 CLI/WASM/JS/catalog 一并验证发布，不能拿旧 vendor 文案或快照配新 CLI。`--offline` 始终双横线，仅用本地材料/缓存，不探测远端。当前只进行了云端 loopback 构建和验证，没有部署、合 main、tag 或 release。详细证据见 [本地模块验收](../docs/reviews/vendor-local-modules-20261004.md)。

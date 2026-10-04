@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`7894ddff18f4d5e84c9bba395b0e6a32b27859f9`；证据复核日期：2026-10-04。
+编译器基线：`fceeb8669e738ebffc968b8bd948b2334fe627cb`；证据复核日期：2026-10-04。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -16,8 +16,8 @@
 | serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (f6f2004804ca); `tests/acceptance/serde_defaults_test.go` (03d817ca4697); `docs/serde-json.md` (7709e62022f8); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5) |
 | Error 派生与错误链 | 0013, research/0005 | 部分实现 | browser | `internal/deriveextras/error.go` (10ec1a9760c5); `tests/acceptance/serde_causes_test.go` (372778994a1a); `tests/acceptance/macros_test.go` (b8b834a2cd6e) |
 | use / pub use 与 API 聚合 | 0021 | 部分实现 | cli | `cmd/goxide/directory.go` (62864a33b3e7); `tests/acceptance/qualified_packages_test.go` (25a4ac44f3c6); `examples/reexports/README.md` (31989fe04d79) |
-| feature、依赖来源与 targets | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (42dc79d3fa45); `internal/project/planner.go` (2c13d82e8dcb); `cmd/goxide/project_test.go` (86c09149ddd1); `cmd/goxide/version_test.go` (1370c81d2b73); `cmd/goxide/combination_review_test.go` (3cda1e895a84); `docs/rfcs/0025-unified-project.md` (85cacb14b359); `cmd/goxide/import_go_test.go` (1ed0248fd8c7) |
-| 从普通 Go 迁入：plan → 新目录 | 0025 | 部分实现 | cli | `docs/rfcs/0025-unified-project.md` (85cacb14b359); `cmd/goxide/import_go.go` (58fc6c7047ae); `cmd/goxide/import_go_test.go` (1ed0248fd8c7) |
+| feature、依赖来源与 targets | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (52a54105b5cc); `internal/project/planner.go` (cfe35df6ccc7); `cmd/goxide/project_test.go` (86c09149ddd1); `cmd/goxide/version_test.go` (1370c81d2b73); `cmd/goxide/combination_review_test.go` (3cda1e895a84); `docs/rfcs/0025-unified-project.md` (8798e7be2fa0); `cmd/goxide/import_go_test.go` (1ed0248fd8c7) |
+| 从普通 Go 迁入：plan → 新目录 | 0025 | 部分实现 | cli | `docs/rfcs/0025-unified-project.md` (8798e7be2fa0); `cmd/goxide/import_go.go` (4744aee29e79); `cmd/goxide/import_go_test.go` (1ed0248fd8c7) |
 | 宿主构建脚本与授权 | 0023 | 部分实现 | cli | `internal/scripttrust/store.go` (d521e32ece88); `cmd/goxide/scripts.go` (a4e9d6db91b5); `cmd/goxide/buildscript_test.go` (d4c86f8a2a1c); `cmd/goxide/combination_review_test.go` (3cda1e895a84) |
 | 只读路径与写引用 | 0005, 0006 | 部分实现 | browser | `internal/refs/lower.go` (cc41b8b85b7e); `internal/refs/flow.go` (8a7482599404); `tests/acceptance/refs_test.go` (a4125cbb0615); `tests/acceptance/composite_permissions_test.go` (823a192be1cf) |
 | 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (449fd0d8d478); `ROADMAP.md` (648ac14e9ec7) |
@@ -29,9 +29,9 @@
 | 分仓标准库与共享 sum | 0008, 0016 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `docs/reviews/public-library-migration-20261004.md` (5c4089eda830) |
 | 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/readability_test.go` (4a76f296f046); `internal/enums/builtins_test.go` (df7d2414ab1b) |
 | CLI：明确的长短选项与参数边界 | 0022, 0023 | 部分实现 | cli | `docs/reviews/cobra-cli-20261004.md` (8ea6aedbfb22); `cmd/goxide/cli_process_test.go` (7eb2a08d0445); `cmd/goxide/cli_dependency_graph_test.go` (fcca67ecb0e8) |
-| 原生 Go vendor：实际字节与离线锁 | 0025 | 部分实现 | cli | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/goxide/vendor_import_test.go` (0ed50e05a975) |
-| Workspace：作者核心与统一根锁 | 0026 | 部分实现 | cli | `docs/rfcs/0026-workspaces.md` (4c221c757252); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/goxide/workspace_test.go` (8f2753c45dd2); `internal/project/workspace_test.go` (7856d06c586f) |
-| go.work / workspace vendor 迁入与渐进增强 | 0026 | 部分实现 | cli | `docs/design/workspace-import.md` (6555f4c24c56); `docs/reviews/workspace-import-20261004.md` (62a5cfb20f03); `cmd/goxide/native_enhanced_test.go` (de840752fb2f); `cmd/goxide/native_standalone_test.go` (f53caf863cb8) |
+| 原生 Go vendor：实际字节与离线锁 | 0025 | 部分实现 | cli | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/goxide/vendor_import_test.go` (bfe8c6b79782) |
+| Workspace：作者核心与统一根锁 | 0026 | 部分实现 | cli | `docs/rfcs/0026-workspaces.md` (dc93927cf0c8); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/goxide/workspace_test.go` (8f2753c45dd2); `internal/project/workspace_test.go` (7856d06c586f) |
+| go.work / workspace vendor 迁入与渐进增强 | 0026 | 部分实现 | cli | `docs/design/workspace-import.md` (fd45463efc85); `docs/reviews/workspace-import-20261004.md` (62a5cfb20f03); `cmd/goxide/native_enhanced_test.go` (411614571f2c); `cmd/goxide/native_standalone_test.go` (afc6388b3197) |
 
 开发快照：{"use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa", "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"}
 

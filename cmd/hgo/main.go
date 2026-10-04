@@ -42,6 +42,13 @@ func run(args []string, out, stderr io.Writer) error {
 	runtimeRoot := f.String("runtime", "", "local goxide module root for run/build")
 	tags := f.String("tags", "", "comma-separated Go build tags (directory mode)")
 	goTool := f.String("go", "go", "Go compiler executable (must be Go 1.27+)")
+	features := f.String("features", "", "project features (comma separated)")
+	noDefault := f.Bool("no-default-features", false, "disable project default features")
+	bin := f.String("bin", "", "select named project binary")
+	example := f.String("example", "", "select named project example")
+	lib := f.Bool("lib", false, "select the optional project library")
+	offline := f.Bool("offline", false, "use only cached dependencies")
+	locked := f.Bool("locked", false, "require unchanged hgo.lock")
 	if err := f.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -56,7 +63,16 @@ func run(args []string, out, stderr io.Writer) error {
 		if *mapPath != "" || *expandedPath != "" {
 			return errors.New("directory mode writes per-file .go.map.json automatically; -source-map/-expanded are single-file flags")
 		}
+		if _, e := os.Stat(filepath.Join(input, "hgo.json")); e == nil {
+			return runProject(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), projectFlags{features: *features, bin: *bin, example: *example, noDefault: *noDefault, offline: *offline, locked: *locked, lib: *lib}, out, stderr)
+		}
+		if *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
+			return errors.New("project flags require hgo.json in the input directory")
+		}
 		return runDirectoryTags(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), out, stderr)
+	}
+	if *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
+		return errors.New("project flags require a directory with hgo.json")
 	}
 	if *tags != "" {
 		return errors.New("-tags requires directory mode")

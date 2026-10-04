@@ -1,0 +1,6 @@
+package greeting
+
+func Message() string {
+ if cfg!(feature("pretty")) { return "Hello, goxide!" }
+ return "hello"
+}

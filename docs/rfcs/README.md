@@ -40,6 +40,8 @@
 
 | [0021 use 与 pub use](0021-reexports.md) | 目录包公开API聚合 | canonical身份、变量存储、函数defer、合法Go路由与metadata |
 
+| [0022 项目工具链](0022-project-toolchain.md) | 可选 feature、依赖来源、多 bin/example | 前置 cfg、锁定离线、目标映射与配置隔离 |
+
 ## 范围与验证
 
 LSP、自举、构建缓存等工程架构继续由[工具链专题](../design/compiler-and-tooling.md)管理；凡引入新源级行为或改变产物契约，仍需相应 RFC。Box、supertrait、GAT、特化、用户过程宏、锁块等未定或延期能力列在[决策登记](../design/decisions.md)，启用前必须另立 RFC，不能从名字补出未经确认的语义。

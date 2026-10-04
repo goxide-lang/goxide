@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"go/build"
+	"go/parser"
+	"go/token"
 	"io"
 	"io/fs"
 	"os"
@@ -37,8 +39,17 @@ func CompileModuleWithTags(input, destination string, tags []string) (ModuleResu
 }
 
 type ModuleOptions struct {
-	Tags []string
-	Race bool
+	Tags       []string
+	Race       bool
+	Features   map[string]bool
+	OnlyTarget bool
+	Prepare    func(string) error
+	// EntryFiles maps explicitly registered source files to generated module paths.
+	// An empty destination excludes an unselected entry without parsing it.
+	EntryFiles    map[string]string
+	ExcludeDirs   map[string]bool
+	TargetPackage string
+	Configuration string
 }
 
 func CompileModuleWithOptions(input, destination string, options ModuleOptions) (ModuleResult, error) {
@@ -134,6 +145,10 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		}
 	}()
 	packages := map[string]map[string][]byte{}
+	sourceOutputs := map[string]string{}
+	testSources := map[string]map[string][]byte{}
+	outputOwners := map[string]string{}
+	selectedTests := map[string]map[string][]byte{}
 	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -144,7 +159,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		}
 		// Worktrees can use a .git file rather than a directory. Neither belongs
 		// in the independently buildable generated module.
-		if entry.Name() == ".git" {
+		if entry.Name() == ".git" || entry.Name() == ".hgo" {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
@@ -153,15 +168,28 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if entry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("module input symlinks are unsupported: %s", path)
 		}
+		if entry.IsDir() && options.ExcludeDirs[rel] {
+			return filepath.SkipDir
+		}
+		if mapped, ok := options.EntryFiles[rel]; ok {
+			if mapped == "" {
+				return nil
+			}
+			rel = mapped
+		}
+		sourceOutputs[path] = rel
 		target := filepath.Join(destination, rel)
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
+			if entry.Name() == ".git" || entry.Name() == ".hgo" {
 				return filepath.SkipDir
 			}
 			if _, e := os.Stat(filepath.Join(path, "go.mod")); e == nil {
 				return filepath.SkipDir
 			}
 			return os.MkdirAll(target, 0755)
+		}
+		if options.Features != nil && (entry.Name() == "hgo.json" || entry.Name() == "hgo.lock") {
+			return nil
 		}
 		data, e := os.ReadFile(path)
 		if e != nil {
@@ -171,6 +199,16 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			data = []byte(strings.Join(lines, "\n"))
 		}
 		ext := filepath.Ext(path)
+		if !options.OnlyTarget && options.Features != nil && (ext == ".hgo" || ext == ".go") {
+			var selected bool
+			data, selected, e = ConfigureSource(path, data, options.Features)
+			if e != nil {
+				return e
+			}
+			if !selected {
+				return nil
+			}
+		}
 		sourceDir := true
 		for _, part := range strings.Split(filepath.ToSlash(filepath.Dir(rel)), "/") {
 			if part != "." && (part == "testdata" || part == "vendor" || strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_")) {
@@ -178,16 +216,20 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			}
 		}
 		hgoSource := ext == ".hgo" && sourceDir
-		if hgoSource && strings.HasSuffix(strings.TrimSuffix(entry.Name(), ext), "_test") {
+		if !options.OnlyTarget && hgoSource && strings.HasSuffix(strings.TrimSuffix(entry.Name(), ext), "_test") {
 			return fmt.Errorf("%s: .hgo test files are not yet supported; use native Go tests", path)
 		}
 		if hgoSource || sourceDir && ext == ".go" && !strings.HasSuffix(path, "_test.go") {
-			selected, err := matchSourceFile(ctx, path, data)
+			selected := options.OnlyTarget
+			var err error
+			if !selected {
+				selected, err = matchSourceFile(ctx, path, data)
+			}
 			if err != nil {
 				return err
 			}
 			if selected {
-				if hgoSource {
+				if hgoSource && !options.OnlyTarget {
 					if _, err := os.Stat(strings.TrimSuffix(path, ".hgo") + ".go"); err == nil {
 						return fmt.Errorf("%s: generated Go filename conflicts with native source", path)
 					}
@@ -199,6 +241,14 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 				packages[dir][path] = data
 			}
 		}
+		if options.OnlyTarget && sourceDir && strings.HasSuffix(path, "_test.go") {
+			dir := filepath.Dir(rel)
+			if testSources[dir] == nil {
+				testSources[dir] = map[string][]byte{}
+			}
+			testSources[dir][path] = data
+			return nil
+		}
 		if hgoSource {
 			return nil
 		}
@@ -206,13 +256,25 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if e != nil {
 			return e
 		}
+		if e = os.MkdirAll(filepath.Dir(target), 0755); e != nil {
+			return e
+		}
 		return os.WriteFile(target, data, info.Mode().Perm())
 	})
 	if err != nil {
 		return ModuleResult{}, err
 	}
+
+	if options.Prepare != nil {
+		if err = options.Prepare(destination); err != nil {
+			return ModuleResult{}, err
+		}
+	}
 	result := ModuleResult{Root: destination, ModulePath: modulePath, SourceRoot: root, Files: map[string]Result{}}
 	relTarget, _ := filepath.Rel(root, input)
+	if options.TargetPackage != "" {
+		relTarget = options.TargetPackage
+	}
 	result.Target = "./" + filepath.ToSlash(relTarget)
 	if relTarget == "." {
 		result.Target = "."
@@ -229,6 +291,105 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			return fmt.Errorf("module import cycle at %s", dir)
 		}
 		state[dir] = 1
+		if options.OnlyTarget {
+			for _, name := range sortedSources(packages[dir]) {
+				data := packages[dir][name]
+				selected, e := matchSourceFile(ctx, name, data)
+				if e != nil {
+					return e
+				}
+				if selected && options.Features != nil {
+					data, selected, e = ConfigureSource(name, data, options.Features)
+					if e != nil {
+						return e
+					}
+				}
+				if !selected {
+					delete(packages[dir], name)
+					if strings.HasSuffix(name, ".go") {
+						os.Remove(filepath.Join(destination, sourceOutputs[name]))
+					}
+					continue
+				}
+				if strings.HasSuffix(name, "_test.hgo") {
+					return fmt.Errorf("%s: .hgo test files are not yet supported; use native Go tests", name)
+				}
+				packages[dir][name] = data
+				if strings.HasSuffix(name, ".go") {
+					if e = os.WriteFile(filepath.Join(destination, sourceOutputs[name]), data, 0644); e != nil {
+						return e
+					}
+				}
+			}
+			// Go test sources are outside normal package type checking. Configure
+			// them only for test mode; ordinary builds must not resolve their cfg.
+			for name, data := range testSources[dir] {
+				output := filepath.Join(destination, sourceOutputs[name])
+				if !options.Race {
+					os.Remove(output)
+					continue
+				}
+				selected, e := matchSourceFile(ctx, name, data)
+				if e != nil {
+					return e
+				}
+				if selected && options.Features != nil {
+					data, selected, e = ConfigureSource(name, data, options.Features)
+				}
+				if e != nil {
+					return e
+				}
+				if !selected {
+					os.Remove(output)
+					continue
+				}
+				if e = os.WriteFile(output, data, 0644); e != nil {
+					return e
+				}
+				if selectedTests[dir] == nil {
+					selectedTests[dir] = map[string][]byte{}
+				}
+				selectedTests[dir][name] = data
+			}
+		}
+		if len(packages[dir]) == 0 {
+			return fmt.Errorf("package %s has no selected source files", dir)
+		}
+		// Reserve final paths after selection, including moved hgo entries.
+		for _, name := range sortedSources(packages[dir]) {
+			output := sourceOutputs[name]
+			if strings.HasSuffix(output, ".hgo") {
+				output = strings.TrimSuffix(output, ".hgo") + ".go"
+			}
+			if prior, ok := outputOwners[output]; ok && prior != name {
+				return fmt.Errorf("generated Go filename conflicts: %s and %s -> %s", prior, name, output)
+			}
+			outputOwners[output] = name
+		}
+		if options.Configuration != "" {
+			original := sortedSources(packages[dir])[0]
+			parsed, e := parser.ParseFile(token.NewFileSet(), original, packages[dir][original], parser.PackageClauseOnly)
+			if e != nil {
+				return e
+			}
+			file := filepath.Join(root, dir, "hgo_project_config.go")
+			output := filepath.Join(destination, dir, "hgo_project_config.go")
+			if _, exists := outputOwners[filepath.Join(dir, "hgo_project_config.go")]; exists {
+				return fmt.Errorf("reserved project config filename conflicts: %s", output)
+			}
+			if _, e = os.Stat(output); !os.IsNotExist(e) {
+				return fmt.Errorf("reserved project config filename conflicts: %s", output)
+			}
+			data := []byte(fmt.Sprintf("package %s\nconst __hgo_project_configuration = %q\n", parsed.Name.Name, options.Configuration))
+			packages[dir][file] = data
+			sourceOutputs[file] = filepath.Join(dir, "hgo_project_config.go")
+			if e = os.MkdirAll(filepath.Dir(output), 0755); e != nil {
+				return e
+			}
+			if e = os.WriteFile(output, data, 0644); e != nil {
+				return e
+			}
+		}
 		for _, name := range sortedSources(packages[dir]) {
 			source := packages[dir][name]
 			f, e := parseSourceImports(name, source)
@@ -270,10 +431,20 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			if !strings.HasSuffix(name, ".hgo") && checked.enumMarkerFile != name && (checked.useContext == nil || checked.useContext.generatedFile != name) {
 				continue
 			}
-			rel, _ := filepath.Rel(root, name)
+			rel, ok := sourceOutputs[name]
+			if !ok {
+				rel = filepath.Join(dir, filepath.Base(name))
+			}
 			goName := rel
 			if strings.HasSuffix(rel, ".hgo") {
 				goName = strings.TrimSuffix(rel, ".hgo") + ".go"
+			}
+			if prior, ok := outputOwners[goName]; ok && prior != name {
+				return fmt.Errorf("generated Go filename conflicts: %s and %s -> %s", prior, name, goName)
+			}
+			outputOwners[goName] = name
+			if e = os.MkdirAll(filepath.Dir(filepath.Join(destination, goName)), 0755); e != nil {
+				return e
 			}
 			if e = os.WriteFile(filepath.Join(destination, goName), r.Go, 0644); e != nil {
 				return e
@@ -326,9 +497,40 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 
 		metadata[pkgPath] = checked
 		state[dir] = 2
+		// Test-only dependencies may import the package under test. Finish the
+		// ordinary package first so this legitimate edge is not an import cycle.
+		for _, name := range sortedSources(selectedTests[dir]) {
+			f, e := parseSourceImports(name, selectedTests[dir][name])
+			if e != nil {
+				return e
+			}
+			for _, spec := range f.Imports {
+				imp, _ := strconv.Unquote(spec.Path.Value)
+				dep := ""
+				if imp == modulePath {
+					dep = "."
+				} else if strings.HasPrefix(imp, modulePath+"/") {
+					dep = filepath.FromSlash(strings.TrimPrefix(imp, modulePath+"/"))
+				} else {
+					continue
+				}
+				if _, ok := packages[dep]; ok {
+					if e := compileDir(dep); e != nil {
+						return e
+					}
+				}
+			}
+		}
 		return nil
 	}
-	for _, dir := range sortedPackageDirs(packages) {
+	dirs := sortedPackageDirs(packages)
+	if options.OnlyTarget {
+		dirs = []string{relTarget}
+		if len(packages[relTarget]) == 0 {
+			return result, fmt.Errorf("target %s has no selected source files", relTarget)
+		}
+	}
+	for _, dir := range dirs {
 		if err = compileDir(dir); err != nil {
 			return result, err
 		}

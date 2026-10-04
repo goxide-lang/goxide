@@ -72,3 +72,7 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 [Mozilla Public License 2.0](LICENSE)（`MPL-2.0`）。项目暂称 hgo / Hyper Go，仓库名为 `goxide`。
 
 目录包 API 聚合现支持有限的 `use` / `pub use`（逐项、别名、glob），保持变量存储和原函数身份。见 [可运行示例](examples/reexports/README.md) 与 [RFC 0021](docs/rfcs/0021-reexports.md)。这不包含完整 `mod` / `pub(scope)` 或 Cargo 工具链。
+
+## 可选项目配置
+
+Cargo 风格第一版通过 `hgo.json` 增量启用默认/显式 feature、文件级 cfg、Go version/Git/path 依赖和命名 bin/example。Go 仍负责 module 解析；不声称完整 Cargo 兼容。见 [可运行项目示例](examples/project/README.md) 和 [RFC 0022：语法、命令、锁定与限制](docs/rfcs/0022-project-toolchain.md)。

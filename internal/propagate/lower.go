@@ -204,12 +204,17 @@ func (l *lowering) bindImportedFamily(d enums.Decl) (enums.Decl, bool) {
 	if cached, ok := l.boundFamilies[key]; ok {
 		return cached, true
 	}
-	bind := func(value string, isType bool) string {
+	bind := func(value string, kind token.Token) string {
 		l.serial++
 		name := fmt.Sprintf("__hgo_qimport_%s_%d", l.cfg.Namespace, l.serial)
 		text := "var " + name + " = " + value
-		if isType {
+		if kind == token.TYPE {
 			text = "type " + name + " = " + value
+		} else if kind == token.FUNC {
+			// The concrete family alias is already bound at package scope.
+			// A named forwarding function retains definition-site binding while
+			// exposing the trusted validator to Go's inline/escape analysis.
+			text = "func " + name + "(__hgo_sum_value " + d.Name + ") { " + value + "(__hgo_sum_value) }"
 		}
 		decl, err := parser.ParseFile(l.fs, "<imported propagation bindings>", "package "+l.file.Name.Name+";"+text, 0)
 		if err != nil {
@@ -219,16 +224,16 @@ func (l *lowering) bindImportedFamily(d enums.Decl) (enums.Decl, bool) {
 		l.file.Decls = append(l.file.Decls, decl.Decls...)
 		return name
 	}
-	d.Name = bind(d.Name, true)
-	d.Validator = bind(d.Validator, false)
+	d.Name = bind(d.Name, token.TYPE)
+	d.Validator = bind(d.Validator, token.FUNC)
 	for i := range d.TypeArgs {
-		d.TypeArgs[i] = bind(d.TypeArgs[i], true)
+		d.TypeArgs[i] = bind(d.TypeArgs[i], token.TYPE)
 	}
 	for i := range d.Variants {
 		if d.Variants[i].Payload != "" {
-			d.Variants[i].CaseName = bind(d.Variants[i].CaseName, true)
+			d.Variants[i].CaseName = bind(d.Variants[i].CaseName, token.TYPE)
 		}
-		d.Variants[i].Constructor = bind(d.Variants[i].Constructor, false)
+		d.Variants[i].Constructor = bind(d.Variants[i].Constructor, token.VAR)
 	}
 	if l.familyIssue != "" {
 		return enums.Decl{}, false

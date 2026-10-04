@@ -53,7 +53,11 @@ validators preserve producer-side nested payload validation, including typed-nil
 and forged case rejection. Success/error argument types must be nameable in the
 consumer's file import scope; private or otherwise inaccessible argument types
 receive an explicit limitation diagnostic. Generated package bindings preserve
-protocol identity when a local variable shadows an import or payload type.
+protocol identity when a local variable shadows an import or payload type. Trusted
+imported validators remain statically identified until their concrete sum type is
+known, then use named package-level forwarding functions rather than function-value
+aliases. This preserves producer validation and lets Go analyze payload escape;
+it does not change the enum ABI or promise allocation-free Result returns.
 
 From registration remains scoped to the current package, with assignability first
 and exactly one explicit, single-step conversion otherwise. Importing a package

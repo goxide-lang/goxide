@@ -33,7 +33,12 @@ type GoExclude struct {
 	Module  string `json:"module" toml:"module"`
 	Version string `json:"version" toml:"version"`
 }
+type GoDebug struct {
+	Key   string `json:"key" toml:"key"`
+	Value string `json:"value" toml:"value"`
+}
 type GoConfig struct {
+	Godebug []GoDebug   `json:"godebug,omitempty" toml:"godebug,omitempty"`
 	Require []GoRequire `json:"require,omitempty" toml:"require,omitempty"`
 	Replace []GoReplace `json:"replace,omitempty" toml:"replace,omitempty"`
 	Exclude []GoExclude `json:"exclude,omitempty" toml:"exclude,omitempty"`
@@ -80,6 +85,12 @@ func ModuleText(m Manifest) ([]byte, error) {
 	if !safe(m.GoVersion) || !safe(m.Toolchain) {
 		return nil, fmt.Errorf("invalid Go version/toolchain")
 	}
+	for _, debug := range m.Native.Godebug {
+		if debug.Key == "" || strings.ContainsAny(debug.Key+debug.Value, " \t\r\n\x00=()\"/\\#;") {
+			return nil, fmt.Errorf("invalid godebug setting")
+		}
+		fmt.Fprintf(&b, "godebug %s=%s\n", debug.Key, debug.Value)
+	}
 	seen := map[string]bool{}
 	for _, r := range m.Native.Require {
 		if r.Module == "" || r.Version == "" || !safe(r.Version) || seen[r.Module] {
@@ -125,7 +136,9 @@ func ModuleText(m Manifest) ([]byte, error) {
 }
 
 // ImportMod uses Go's parser. Unsupported directives are never silently lost.
-func ImportMod(tool, root string) (Manifest, error) {
+func ImportMod(tool, root string) (Manifest, error)          { return importMod(tool, root, false) }
+func ImportWorkspaceMod(tool, root string) (Manifest, error) { return importMod(tool, root, true) }
+func importMod(tool, root string, debug bool) (Manifest, error) {
 	var m Manifest
 	info, err := os.Lstat(filepath.Join(root, "go.mod"))
 	if err != nil || !info.Mode().IsRegular() {
@@ -140,6 +153,9 @@ func ImportMod(tool, root string) (Manifest, error) {
 		return m, e
 	}
 	allowed := map[string]bool{"Module": true, "Go": true, "Toolchain": true, "Require": true, "Replace": true, "Exclude": true}
+	if debug {
+		allowed["GoDebug"] = true
+	}
 	for k, v := range raw {
 		if !allowed[k] && string(v) != "null" && string(v) != "[]" && string(v) != "\"\"" {
 			return m, fmt.Errorf("go.mod directive %s unsupported by import-go; original files unchanged", k)
@@ -152,6 +168,7 @@ func ImportMod(tool, root string) (Manifest, error) {
 			Path, Version string
 			Indirect      bool
 		}
+		Godebug []GoDebug
 		Replace []ModReplace
 		Exclude []ModuleVersion
 	}
@@ -165,6 +182,7 @@ func ImportMod(tool, root string) (Manifest, error) {
 	m.Module = mod.Module.Path
 	m.GoVersion = mod.Go
 	m.Toolchain = mod.Toolchain
+	m.Native.Godebug = mod.Godebug
 	for _, r := range mod.Require {
 		m.Native.Require = append(m.Native.Require, GoRequire{r.Path, r.Version, r.Indirect})
 	}

@@ -23,11 +23,13 @@ type Workspace struct {
 	Defaults  []string
 }
 type WorkspaceConfig struct {
-	Format       int                   `toml:"format"`
-	Members      []string              `toml:"members"`
-	Defaults     []string              `toml:"default-members,omitempty"`
-	Exclude      []string              `toml:"exclude,omitempty"`
-	Dependencies map[string]Dependency `toml:"dependencies,omitempty"`
+	Go           *NativeWorkspaceConfig `toml:"go,omitempty"`
+	Vendor       *VendorConfig          `toml:"vendor,omitempty"`
+	Format       int                    `toml:"format"`
+	Members      []string               `toml:"members"`
+	Defaults     []string               `toml:"default-members,omitempty"`
+	Exclude      []string               `toml:"exclude,omitempty"`
+	Dependencies map[string]Dependency  `toml:"dependencies,omitempty"`
 	Package      struct {
 		Go        string `toml:"go,omitempty"`
 		Toolchain string `toml:"toolchain,omitempty"`
@@ -60,6 +62,9 @@ func workspaceHeader(root string) (*WorkspaceConfig, error) {
 	var c WorkspaceConfig
 	if e = toml.NewDecoder(bytes.NewReader(b)).DisallowUnknownFields().Decode(&c); e != nil {
 		return nil, fmt.Errorf("workspace: %w", e)
+	}
+	if c.Vendor != nil && (c.Vendor.Mode != "go-work" || c.Go == nil) {
+		return nil, fmt.Errorf("workspace vendor requires native go-work mode")
 	}
 	if c.Format != 1 {
 		return nil, fmt.Errorf("unsupported workspace.format %d", c.Format)

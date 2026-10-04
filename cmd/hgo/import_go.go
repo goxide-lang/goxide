@@ -17,6 +17,12 @@ import (
 // executeImportGo validates and executes an explicit migration request. Parsing and
 // help belong to the CLI adapter; this service never depends on a flag framework.
 func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
+	if req.Workspace {
+		return executeImportWorkspace(req, out, stderr)
+	}
+	if len(req.MemberBins) > 0 || len(req.MemberLibs) > 0 {
+		return fmt.Errorf("member targets require --workspace")
+	}
 	if !req.Plan && req.Out == "" {
 		req.Plan = true
 	}

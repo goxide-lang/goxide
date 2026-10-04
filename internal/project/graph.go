@@ -22,14 +22,15 @@ type UnifiedLock struct {
 	Modules   map[string]Selection `json:"modules"`
 }
 type Lock struct {
-	Unified      *UnifiedLock                    `json:"unified,omitempty"`
-	Vendor       *VendorSnapshot                 `json:"vendor,omitempty"`
-	PlanningSums string                          `json:"planning_sums,omitempty"`
-	Provenance   string                          `json:"provenance,omitempty"`
-	Version      int                             `json:"version"`
-	Git          map[string]string               `json:"git"`
-	Sums         map[string]string               `json:"sums"`
-	Plans        map[string]map[string]Selection `json:"plans,omitempty"`
+	NativeWorkspace *NativeWorkspaceLock            `json:"native_workspace,omitempty"`
+	Unified         *UnifiedLock                    `json:"unified,omitempty"`
+	Vendor          *VendorSnapshot                 `json:"vendor,omitempty"`
+	PlanningSums    string                          `json:"planning_sums,omitempty"`
+	Provenance      string                          `json:"provenance,omitempty"`
+	Version         int                             `json:"version"`
+	Git             map[string]string               `json:"git"`
+	Sums            map[string]string               `json:"sums"`
+	Plans           map[string]map[string]Selection `json:"plans,omitempty"`
 }
 type Node struct {
 	Mod             ModFile

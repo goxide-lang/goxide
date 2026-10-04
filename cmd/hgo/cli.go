@@ -102,6 +102,9 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 	req := ImportRequest{}
 	imp := cliCommand("import-go [flags] ROOT", "Plan or migrate a Go module into a new project")
 	f := imp.Flags()
+	f.BoolVar(&req.Workspace, "workspace", false, "import explicit ROOT/go.work in native mode")
+	f.StringArrayVar(&req.MemberBins, "member-bin", nil, "workspace member MODULE::NAME=PATH binary")
+	f.StringArrayVar(&req.MemberLibs, "member-lib", nil, "workspace member MODULE=PATH library")
 	f.BoolVar(&req.Plan, "plan", false, "show migration plan (default without --out)")
 	f.StringVar(&req.Out, "out", "", "new migrated project directory (never overwritten)")
 	f.StringVar(&req.GoTool, "go", "go", "Go compiler executable")
@@ -262,7 +265,7 @@ var oldLongOptions = map[string]bool{
 	"expanded": true, "runtime": true, "tags": true, "no-default-features": true,
 	"bin": true, "example": true, "lib": true, "target-dir": true, "locked": true,
 	"action": true, "subject": true, "plan": true, "out": true, "help": true,
-	"package": true, "workspace": true,
+	"package": true, "workspace": true, "member-bin": true, "member-lib": true,
 }
 
 func checkOptionTokens(f *pflag.FlagSet, args []string) error {

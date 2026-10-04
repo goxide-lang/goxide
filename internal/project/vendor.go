@@ -33,7 +33,11 @@ type VendorSnapshot struct {
 func vendorPath(s string) bool {
 	return s != "" && s != "." && !strings.HasPrefix(s, "/") && path.Clean(s) == s && !strings.ContainsAny(s, "\\:@\x00\r\n\t ") && !strings.HasPrefix(s, "../")
 }
-func vendorModules(data []byte) ([]VendorModule, error) {
+func vendorModules(data []byte) ([]VendorModule, error) { return vendorModulesMode(data, false) }
+func vendorModulesMode(data []byte, workspace bool) ([]VendorModule, error) {
+	if workspace && !strings.HasPrefix(string(data), "## workspace\n") {
+		return nil, fmt.Errorf("workspace vendor requires ## workspace marker")
+	}
 	var modules []VendorModule
 	current := -1
 	headers := map[string]bool{}
@@ -50,6 +54,9 @@ func vendorModules(data []byte) ([]VendorModule, error) {
 		}
 		if strings.HasPrefix(line, "## ") {
 			if line == "## workspace" {
+				if workspace && i == 0 {
+					continue
+				}
 				return nil, fmt.Errorf("vendor/modules.txt:%d: workspace vendor is unsupported", i+1)
 			}
 			if current < 0 {
@@ -135,6 +142,9 @@ func vendorLicense(name string) bool {
 // InspectVendor records actual supplied bytes, never proxy/checksum provenance.
 // It does not fetch modules or reconstruct missing package/module metadata.
 func InspectVendor(root string, m Manifest) (*VendorSnapshot, error) {
+	return inspectVendor(root, m, "go-mod", Digest([]any{m.Module, m.GoVersion, m.Toolchain, m.Native}))
+}
+func inspectVendor(root string, m Manifest, mode, policy string) (*VendorSnapshot, error) {
 	if version.Compare("go"+m.GoVersion, "go1.17") < 0 {
 		return nil, fmt.Errorf("vendor migration requires go >= 1.17 with modern modules.txt metadata")
 	}
@@ -153,7 +163,7 @@ func InspectVendor(root string, m Manifest) (*VendorSnapshot, error) {
 	if e != nil {
 		return nil, e
 	}
-	modules, e := vendorModules(data)
+	modules, e := vendorModulesMode(data, mode == "go-work")
 	if e != nil {
 		return nil, e
 	}
@@ -165,7 +175,7 @@ func InspectVendor(root string, m Manifest) (*VendorSnapshot, error) {
 			pkgs[pkg] = true
 		}
 	}
-	snap := &VendorSnapshot{Mode: "go-mod", Policy: Digest([]any{m.Module, m.GoVersion, m.Toolchain, m.Native}), Files: map[string]string{}, Modules: modules}
+	snap := &VendorSnapshot{Mode: mode, Policy: policy, Files: map[string]string{}, Modules: modules}
 	sources := map[string]bool{}
 	e = filepath.WalkDir(dir, func(file string, d os.DirEntry, e error) error {
 		if e != nil {

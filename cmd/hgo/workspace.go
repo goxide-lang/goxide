@@ -9,6 +9,9 @@ import (
 )
 
 func runWorkspace(req CompileRequest, input string, w *project.Workspace, out, stderr io.Writer) error {
+	if w.Config.Go != nil {
+		return runNativeWorkspace(req, input, w, out, stderr)
+	}
 	members, e := w.Select(input, req.Packages, req.Workspace)
 	if e != nil {
 		return e

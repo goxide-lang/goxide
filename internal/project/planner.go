@@ -47,6 +47,7 @@ type ModRequire struct {
 	Indirect      bool
 }
 type ModFile struct {
+	Godebug   []GoDebug
 	Toolchain string
 	Module    ModuleVersion
 	Go        string

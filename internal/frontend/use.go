@@ -47,6 +47,8 @@ type useEdit struct {
 }
 type usePackage struct {
 	generatedFile      string
+	generatedMap       *sourcemap.Map
+	positions          map[string]token.Position
 	useImports         map[string]map[string]bool
 	bindings           map[string]useBinding
 	imports            map[string]map[string]string
@@ -144,7 +146,7 @@ func scanUses(name string, source []byte) ([]byte, []useDecl, error) {
 }
 
 func prepareUses(path string, sources map[string][]byte, known map[string]PackageResult, imp types.Importer) (*usePackage, error) {
-	u := &usePackage{useImports: map[string]map[string]bool{}, bindings: map[string]useBinding{}, imports: map[string]map[string]string{}, imported: map[string]useMetadata{}, original: sources, prepared: map[string][]byte{}, imp: imp, known: known, metadata: useMetadata{Version: 1, Path: path}}
+	u := &usePackage{positions: map[string]token.Position{}, useImports: map[string]map[string]bool{}, bindings: map[string]useBinding{}, imports: map[string]map[string]string{}, imported: map[string]useMetadata{}, original: sources, prepared: map[string][]byte{}, imp: imp, known: known, metadata: useMetadata{Version: 1, Path: path}}
 	var declarations []useDecl
 	for _, file := range sortedSources(sources) {
 		src := sources[file]
@@ -324,6 +326,9 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 				b.Public = b.Public || old.Public
 			}
 			u.bindings[b.Name] = b
+			if _, exists := u.positions[b.Name]; !exists {
+				u.positions[b.Name] = d.pos
+			}
 		}
 	}
 	for _, file := range sortedSources(sources) {
@@ -359,33 +364,69 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 			return nil, fmt.Errorf("use requires .hgo source")
 		}
 		imports := map[string]string{}
+		reserved := map[string]bool{}
+		// Imports are file scoped, while every alias parameter list has its own
+		// scope. Reserve all parameter names before allocating any import.
+		for _, source := range sources {
+			fs := token.NewFileSet()
+			f := fs.AddFile("", -1, len(source))
+			var sc scanner.Scanner
+			sc.Init(f, source, func(token.Position, string) {}, 0)
+			for {
+				_, kind, text := sc.Scan()
+				if kind == token.EOF {
+					break
+				}
+				if kind == token.IDENT {
+					reserved[text] = true
+				}
+			}
+		}
+		aliasTypes := map[string]types.Type{}
+		for _, name := range sortedUseNames(u.bindings) {
+			reserved[name] = true
+			b := u.bindings[name]
+			if b.Kind != "type" {
+				continue
+			}
+			pkg, err := imp.Import(b.RoutePath)
+			if err != nil {
+				return nil, u.at(name, err)
+			}
+			obj, ok := pkg.Scope().Lookup(b.RouteName).(*types.TypeName)
+			if !ok {
+				return nil, u.at(name, fmt.Errorf("invalid type use route %s.%s", b.RoutePath, b.RouteName))
+			}
+			aliasTypes[name] = obj.Type()
+			if params := useTypeParameterList(obj.Type()); params != nil {
+				for i := 0; i < params.Len(); i++ {
+					reserved[params.At(i).Obj().Name()] = true
+				}
+			}
+		}
+		nextImport := 0
 		var extra strings.Builder
 		for _, name := range sortedUseNames(u.bindings) {
 			b := u.bindings[name]
 			if b.Kind == "type" || b.Kind == "constant" {
-				alias := fmt.Sprintf("hgoUseImport%d", len(imports))
-				if a := imports[b.RoutePath]; a != "" {
-					alias = a
-				} else {
+				alias := imports[b.RoutePath]
+				if alias == "" {
+					for {
+						alias = fmt.Sprintf("hgoUseImport%d", nextImport)
+						nextImport++
+						if !reserved[alias] {
+							break
+						}
+					}
+					reserved[alias] = true
 					imports[b.RoutePath] = alias
-				}
-				if strings.Contains(string(sources[file]), alias) {
-					return nil, fmt.Errorf("%s: generated use import conflicts with source %s", file, alias)
 				}
 				if b.Kind == "constant" {
 					fmt.Fprintf(&extra, "\nconst %s = %s.%s\n", name, alias, b.RouteName)
 				} else {
-					pkg, e := imp.Import(b.RoutePath)
+					parameters, args, e := useTypeParameters(aliasTypes[name], b.RoutePath, alias)
 					if e != nil {
-						return nil, e
-					}
-					obj, ok := pkg.Scope().Lookup(b.RouteName).(*types.TypeName)
-					if !ok {
-						return nil, fmt.Errorf("invalid type use route %s.%s", b.RoutePath, b.RouteName)
-					}
-					parameters, args, e := useTypeParameters(obj.Type(), b.RoutePath, alias)
-					if e != nil {
-						return nil, fmt.Errorf("use %s: %w", name, e)
+						return nil, u.at(name, fmt.Errorf("use %s: %w", name, e))
 					}
 					fmt.Fprintf(&extra, "\ntype %s%s = %s.%s%s\n", name, parameters, alias, b.RouteName, args)
 				}
@@ -401,6 +442,38 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 				return nil, e
 			}
 			u.prepared[u.generatedFile] = append(source, extra.String()...)
+			u.generatedMap = sourcemap.Identity(u.generatedFile, u.prepared[u.generatedFile])
+			generated, err := parser.ParseFile(token.NewFileSet(), u.generatedFile, u.prepared[u.generatedFile], 0)
+			if err != nil {
+				return nil, err
+			}
+			for _, decl := range generated.Decls {
+				gd, ok := decl.(*ast.GenDecl)
+				if !ok || gd.Tok == token.IMPORT {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					name := ""
+					switch sp := spec.(type) {
+					case *ast.TypeSpec:
+						name = sp.Name.Name
+					case *ast.ValueSpec:
+						name = sp.Names[0].Name
+					}
+					pos := u.positions[name]
+					if !pos.IsValid() {
+						continue
+					}
+					origin := sourcemap.Position(pos.Filename, u.original[pos.Filename], pos.Offset, pos.Offset+len("use"))
+					for i := range u.generatedMap.Segments {
+						seg := &u.generatedMap.Segments[i]
+						if seg.Start >= int(gd.Pos())-1 && seg.End <= int(gd.End())-1 {
+							seg.Origin = &origin
+							seg.Kind = "use alias declaration"
+						}
+					}
+				}
+			}
 		}
 	}
 	for _, name := range sortedUseNames(u.bindings) {
@@ -450,7 +523,7 @@ func sortedUseNames(m map[string]useBinding) []string {
 func isUseMarker(n string) bool {
 	return n == useMetadataMarker || n == enumMetadataMarker || n == "HgoReferenceMetadata"
 }
-func useTypeParameters(t types.Type, path, alias string) (string, string, error) {
+func useTypeParameterList(t types.Type) *types.TypeParamList {
 	var params *types.TypeParamList
 	switch t := t.(type) {
 	case *types.Named:
@@ -458,6 +531,13 @@ func useTypeParameters(t types.Type, path, alias string) (string, string, error)
 	case *types.Alias:
 		params = t.TypeParams()
 	}
+	return params
+}
+func (u *usePackage) at(name string, err error) error {
+	return fmt.Errorf("%s: %w", u.positions[name], err)
+}
+func useTypeParameters(t types.Type, path, alias string) (string, string, error) {
+	params := useTypeParameterList(t)
 	if params == nil || params.Len() == 0 {
 		return "", "", nil
 	}

@@ -180,3 +180,13 @@ go run ./cmd/hgo transpile -o /tmp/reexports-generated examples/reexports
 宏补片验证使用同一真实Go 1.27.1离线fixture环境。最后加入builtin保留名guard后，`go test -race ./internal/frontend ./internal/macros -count=1`通过（35.421s / 4.137s）。独立审查实证并推动修复无关宏/Go同名误拒、internal helper非法运行时路径；保留名guard另经独立测试。全树`go vet -tags hgoweb ./...`、设计检查13条Go命令及官网/WASM构建通过；CLI示例输出保持上述值。`TestUseMacroExternalSourceRegistryBoundary`另验证config fingerprint和分类字段digest，`TestUseMacroSourceGraph`逐字节比较重复构建的产物。新增可选分类字段没有引入宏反序列化。
 
 宏补片全树`go test -race -tags hgoweb -count=1 ./...`通过，含CLI、web、验收集和prototype；最后的保留名guard由上述完整frontend/macros race复跑覆盖。最终官网资源重建后`go test -race -tags hgoweb ./cmd/hgo-web`亦通过。
+
+### 生成名称与use诊断修复
+
+合法源类型`type Box[hgoUseImport0 any] struct{Value hgoUseImport0}`曾使`pub use p::Box;`生成的import被类型参数捕获。现在先收集所有alias的类型参数、所有use名称和所有源文件标识符，再统一确定性分配import名；不因用户选择合法名称而拒绝编译。同源多个alias共享的import也必须避让每一个参数列表。
+
+use绑定保留首个声明位置，不把位置写进外部metadata。宏alias取`print`、`println`、`go_result`、`go_result_keep`时，拒绝规则不变，但错误带准确文件/行/列；类型alias准备阶段的约束错误也指向对应use。生成alias仍在独立Go文件中，其声明token的诊断来源映射到触发生成的use，而非仅显示`generated/unmapped`。
+
+`TestUseGenericImportHygiene`验证多个来源、后续alias参数、另一文件的包级声明、跨层facade、真实Go方法/类型身份，并实际运行生成工程race/vet。生成alias的map直接断言原use文件/行/列。`TestUseMacroReservedAliasPosition`对四个保留名逐字断言完整位置错误，`TestUseGenericConstraintPosition`验证约束错误位置。修复前这些用例实际失败，修复后独立race复核通过（2.760s）。独立审查覆盖上述回归，不代表穷尽全部输入。
+
+本轮修复的真实Go 1.27.1验证：`go test -race -tags hgoweb -count=1 ./...`全树通过（含验收集）；`go vet -tags hgoweb ./...`通过；设计检查70 Markdown/904本地链接/21 RFC及13条Go机制命令通过；官网/WASM重建与最终web race通过。测试使用前述离线本地fixture环境。

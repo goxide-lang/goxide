@@ -116,7 +116,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		b := useContext.bindings[name]
 		if b.Kind == "macro" {
 			if err := registry.BindPublicAlias(name, dependencies[b.RoutePath], b.RouteName, b.Public); err != nil {
-				return PackageResult{}, err
+				return PackageResult{}, useContext.at(name, err)
 			}
 		}
 	}
@@ -227,6 +227,11 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	for index, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
 			result.Files[name] = Result{Go: sources[name]}
+			if name == useContext.generatedFile {
+				r := result.Files[name]
+				r.Diagnostics = useContext.generatedMap
+				result.Files[name] = r
+			}
 			continue
 		}
 		r, err := compile(name, sources[name], cfg)

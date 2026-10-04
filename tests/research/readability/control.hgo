@@ -1,0 +1,42 @@
+package main
+import "fmt"
+func breakLoop() int {
+ n:=0
+ for i:=0;i<3;i++ {
+  match Result[int,error]::Ok(i) {
+   Result[int,error]::Ok(v)=>{n+=v+1;break},
+   Result[int,error]::Err(_)=>{},
+  }
+  n+=100
+ }
+ return n
+}
+func continueLoop() int {
+ n:=0
+ for i:=0;i<3;i++ {
+  match Result[int,error]::Ok(i) {
+   Result[int,error]::Ok(_)=>{n++;continue},
+   Result[int,error]::Err(_)=>{},
+  }
+  n+=100
+ }
+ return n
+}
+func recovered(){
+ defer func(){
+  match Result[int,error]::Ok(1) {
+   Result[int,error]::Ok(_)=>{fmt.Println(recover())},
+   Result[int,error]::Err(_)=>{},
+  }
+ }()
+ panic("kept")
+}
+func invalidNested(){
+ defer func(){fmt.Println(recover()!=nil)}()
+ var value Result[int,error]
+ match Result[Result[int,error],error]::Ok(value) {
+  Result[Result[int,error],error]::Ok(_)=>{fmt.Println("bad")},
+  Result[Result[int,error],error]::Err(_)=>{},
+ }
+}
+func main(){fmt.Println(breakLoop(),continueLoop());recovered();invalidNested()}

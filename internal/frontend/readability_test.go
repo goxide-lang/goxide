@@ -2,7 +2,7 @@ package frontend
 
 import (
 	"bytes"
-	"os"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -40,7 +40,7 @@ func main(){if loops()!=4||calls!=4{panic("control flow or eval count")};recover
 	}
 	dir := t.TempDir()
 	for name, data := range map[string][]byte{"main.go": r.Go, "go.mod": []byte("module readability\ngo 1.27\n")} {
-		if err := os.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}

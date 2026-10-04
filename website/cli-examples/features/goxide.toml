@@ -1,0 +1,10 @@
+[package]
+format = 1
+
+[features]
+default = ["pretty"]
+pretty = []
+
+[[bin]]
+name = "demo"
+path = "src/main.hgo"

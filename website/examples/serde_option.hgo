@@ -1,6 +1,6 @@
 package main
 import "fmt"
-import "github.com/hxsf/goxide/serdejson"
+import "github.com/goxide-lang/serde/json"
 #[derive(Serialize, Deserialize)]
 type Request struct { Limit Option[int] }
 func describe(value Option[int]) string {

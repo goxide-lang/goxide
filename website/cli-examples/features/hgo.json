@@ -1,5 +1,0 @@
-{
-  "version": 1,
-  "features": {"default": ["pretty"], "pretty": []},
-  "bins": [{"name": "demo", "path": "src/main.hgo"}]
-}

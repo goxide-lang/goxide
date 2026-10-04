@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "ae61ec628b55e0fc66ce96d47261c0a6809c0280",
+  "compilerCommit": "5f533d7d0b6198f0d3653abbb8df3c53f8d98868",
   "reviewedAt": "2026-10-04",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
@@ -272,10 +272,10 @@
         "serde_option"
       ],
       "evidence": [
-        "serde/protocol.go",
-        "serdejson/README.md",
         "tests/acceptance/option_serde_test.go",
-        "tests/acceptance/serde_defaults_test.go"
+        "tests/acceptance/serde_defaults_test.go",
+        "docs/serde-json.md",
+        "internal/frontend/serde_protocol_artifact_test.go"
       ],
       "checks": [
         "serde_option_channel"
@@ -355,9 +355,8 @@
       ],
       "checks": [],
       "snippet": {
-        "language": "JSON · 最小工程 hgo.json",
-        "text": "{\n  \"version\": 1,\n  \"features\": {\"default\": [\"pretty\"], \"pretty\": []},\n  \"bins\": [{\"name\": \"demo\", \"path\": \"src/main.hgo\"}]\n}\n",
-        "note": "完整最小工程与两种实际 CLI 输出见工程快照；浏览器不规划依赖或运行目标。"
+        "language": "TOML · 最小工程 goxide.toml",
+        "text": "[package]\nformat = 1\n\n[features]\ndefault = [\"pretty\"]\npretty = []\n\n[[bin]]\nname = \"demo\"\npath = \"src/main.hgo\""
       }
     },
     {
@@ -556,18 +555,22 @@
         "0016",
         "0024"
       ],
-      "status": "accepted",
-      "support": "unavailable",
-      "summary": "std / next / serde 分仓方向已确认；当前在线 WASM 仍绑定旧版本随附包与内建 sum。",
-      "usage": "开发用途：让跨仓库 Option/Result 共享类型身份，并分别管理稳定库、实验库与序列化库。",
-      "limitation": "已有候选 Go fixture 不等于编译器迁移完成。没有核验的安装版本或公共 API，不提供猜测性库链接。",
-      "examples": [],
+      "status": "partial",
+      "support": "browser",
+      "summary": "此构建使用独立 std 的共享 Option/Result 身份，以及独立 serde core / JSON 协议。",
+      "usage": "std/sum 负责共享值表示与形状检查；serde 根包定义协议，serde/json 实现 JSON。具体载荷检查仍由编译器生成。",
+      "limitation": "固定提交的迁移版本，不承诺 v1 ABI 稳定；旧 metadata 必须重生成。next 暂无包；现有线上站点在部署前仍使用旧版本。",
+      "examples": [
+        "result",
+        "serde_option"
+      ],
       "evidence": [
-        "@shared:tests/research/shared_std_candidate/HANDOFF.md",
-        "@shared:tests/research/shared_std_candidate/provenance.json"
+        "internal/frontend/shared_std_test.go",
+        "internal/frontend/serde_protocol_artifact_test.go",
+        "docs/reviews/public-library-migration-20261004.md"
       ],
       "checks": [],
-      "development": "开发分支快照 61a01cc：已有隔离候选 fixture 与迁移阶段说明；尚未合入线上编译器。"
+      "development": "公开提交已核验：std 3f2204770fd3；serde a1b791e96d66。本构建仍是尚未部署的整合候选。"
     },
     {
       "id": "inference-readability",
@@ -577,19 +580,22 @@
         "0008",
         "0018"
       ],
-      "status": "accepted",
-      "support": "unavailable",
-      "summary": "普通 Option/Result 推导与生成 Go 可读性是正在推进的工作，不属于本次线上能力。",
-      "usage": "目标场景：减少普通构造中的重复类型书写，并让辅助生成代码更易审查。这里不预设尚未交付的语法。",
-      "limitation": "只确认当前 go_result! 宏按静态签名推导 T/E；没有核验到普通 sum 推导或可读性改进的可发布实现提交。",
-      "examples": [],
+      "status": "partial",
+      "support": "browser",
+      "summary": "此构建支持有明确上下文的 Option:: / Result:: 构造与 pattern 推导，并简化部分生成 helper。",
+      "usage": "使用显式返回类型、赋值目标或调用参数为缺少的泛型参数提供上下文；match 根据 scrutinee 的真实类型推导。",
+      "limitation": "无足够上下文的 None 或 Result 单侧构造仍拒绝；没有全程序联合推导。可读性改动不承诺性能提升。",
+      "examples": [
+        "result"
+      ],
       "evidence": [
-        "internal/propagate/go_result.go",
-        "tests/acceptance/go_result_inference_test.go"
+        "internal/frontend/shared_std_test.go",
+        "internal/frontend/readability_test.go",
+        "internal/enums/builtins_test.go"
       ],
       "checks": [],
-      "development": "进行中（任务交接报告）；未核验可发布提交。状态不自动升级为已实现。"
+      "development": "共享 origin/validator owner 与独立 ExportValidator 已整合；公开完整摘要保持限定范围。"
     }
   ],
-  "compilerDigest": "cca61b48d36fef75990b55325f075a88c142471398af8fc706ab201c8796d543"
+  "compilerDigest": "0220ffbd25a1bbc040110d2877bbbfb2f1eb241729d2e4676c76c8f197011f79"
 }

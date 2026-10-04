@@ -1,8 +1,10 @@
 # 原生 go.work 与 workspace vendor 迁入合同
 
-状态：2026-10-04 第二阶段实施合同，基于 `2aa0d066`。本文件先于生产实现落地；验收结果另记。保持原目录不变，仅在临时 staging 运行会写 Go 元数据的分析/构建命令，成功后发布新的输出目录。
+状态：2026-10-04 第二阶段原生传输子集已实现，基于 `2aa0d066`。本文件先于生产实现落地；验收结果见 [迁入验收](../reviews/workspace-import-20261004.md)。保持原目录不变，仅在临时 staging 运行会写 Go 元数据的分析/构建命令，成功后发布新的输出目录。
 
 ## 接口与支持范围
+
+可运行脚本见 [迁入示例](../../examples/workspace-import/README.md)。
 
 `hgo import-go --workspace --plan ROOT` 显式读取 ROOT/go.work；`--out NEWDIR` 在不覆盖既有目录的前提下执行该方案。默认只有 plan。单模块 import-go 原接口保留。工作区可以自动识别当前配置的 main 包作为命名 bin、成员根 library；重名 bin 或没有可推导目标时拒绝，允许 `--member-bin MODULE::NAME=PATH`、`--member-lib MODULE=PATH` 显式指定。
 
@@ -14,7 +16,7 @@
 
 迁入在 staging 使用真实 Go `list -deps -test -json` 分析各成员的实际包归属，生成根 path 模板和成员 `{workspace=true}` 边；不能仅按 import 字符串最长 module 前缀猜来源。原本无 require 的 `A import B` 会在 plan 明列新增 A→B 声明。原 native require 仍保留原版本；显式图不产生 `B@v0.0.0` 伪 require，也不改 vendor explicit 记录。
 
-分析范围固定为迁入时的 GOOS/GOARCH/CGO_ENABLED、Go 工具版本和空 build tags，写入 `[workspace.go]` 配置。切换配置明确拒绝并要求重新分析；不能把单配置分析冒称所有平台的无损迁移。源码或新的 import 改变后，构建仍按声明图检查，不能运行时借 go.work 自动扩图。跨成员包级无环但 module 级循环，首片明确拒绝。
+分析范围固定为迁入时的 GOOS/GOARCH/CGO_ENABLED、架构特征（如 GOAMD64）、GOEXPERIMENT/GOFIPS140、Go 工具版本及 C 工具/flags/PKG_CONFIG，且 build tags 为空，写入 `[workspace.go]` 配置。分析普通与测试包；CGO 开启时额外合并 race 配置的实际成员边（现有 hgo test 使用 -race）。切换配置明确拒绝并要求重新分析；不能把单配置分析冒称所有平台的无损迁移。源码或新的 import 改变后，构建仍按声明图检查，不能运行时借 go.work 自动扩图。跨成员包级无环但 module 级循环，首片明确拒绝。
 
 构建某成员时仅复制其显式依赖闭包的源码；其余成员只保留原生 Go 元数据以维持全工作区版本政策。每个选中根独立校验，批量选择本身不使别的成员源码成为允许来源。纯 Go 源码没有宏/脚本展开路径。
 
@@ -22,7 +24,7 @@
 
 保留 work/member replace 的作用域和限定版本，冲突由真实 Go 检查；work 根 override 不会被错误展开为所有成员政策。显式 use 的每个成员单独复制，不递归寻找其他模块；拒绝 symlink、特殊文件、增强旧清单与无法映射的未知指令。外部 use 可映射到新输出的显式成员位置，plan 列出旧→新路径。
 
-非 vendor 的本地非成员 replace 保持显式、规范化的原目录引用，不暗中复制任意目录；因此输出不承诺这种本地依赖自动自足。vendor 模式保留工作区根坐标下的 replace 政策，使其与原 modules.txt 一致；不要求已被 vendor 物化的原 replace 目录仍存在。
+非 vendor 的本地 replace 若 module 身份和目录都明确对应 use 成员，改写到新成员，再映射到受管 Go 视图；迁入后删除原成员路径仍可构建。非成员 replace 保持显式、规范化的原目录引用，不暗中复制任意目录；因此输出不承诺这种本地依赖自动自足。vendor 模式保留工作区根坐标下的 replace 政策，使其与原 modules.txt 一致；不要求已被 vendor 物化的原 replace 目录仍存在。
 
 ## workspace vendor
 
@@ -44,3 +46,22 @@
 | 工作区中增强源码/脚本、未知政策、重复 module、模块级循环 | 明确拒绝；原目录和 NEWDIR 均不改变 |
 
 依据：Go 官方 [模块/工作区](https://go.dev/ref/mod#workspaces) 与 [GODEBUG](https://go.dev/doc/godebug)，以及本仓库 RFC0026 的原生机制研究。最终验收使用临时多模块项目、本地 file proxy 和真实 Go，不访问私人第三方。
+
+## 已实现命令与锁边界
+
+```sh
+hgo import-go --workspace --plan --offline /projects/original
+hgo import-go --workspace --out /projects/migrated --offline /projects/original
+hgo build --workspace --locked --offline /projects/migrated
+hgo run -p example.org/app --bin web --locked --offline /projects/migrated
+hgo test -p example.org/app --locked --offline /projects/migrated
+hgo transpile -p example.org/app --bin web --locked --offline /projects/migrated
+```
+
+`transpile` 输出受管 Go workspace bundle，可由真实 Go 使用其 go.work 编译；它不执行 hgo lowering。所有 flags 在位置 INPUT 前。没有缓存的非 vendor 远端依赖初次迁入不能使用 `--offline`；此时仍由 Go 原生 proxy/checksum 机制获取，没有安装脚本。
+
+根 schema 4 锁保存原生全工作区选版、各成员 sum、work.sum、政策输入摘要以及独立 vendor 清单摘要；它与增强作者模式的 schema 3 锁显式分开，旧 schema 不隐式升级。schema 4 尚不支持拆成员复制锁独立运行，需另行物化独立政策。原本合法的非vendor本地 replace 是可变作者源码，锁不伪造内容不可变保证。
+
+bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳过嵌套 module），不会查找任意兄弟目录。重复目录名可通过重复 `--member-bin example.org/app::first=a/web` 与 `--member-bin example.org/app::second=b/web` 显式命名；对一个成员给出的首个覆盖会替换该成员全部自动 bin 列表。examples 不自动推断，迁入后可在成员 TOML 使用既有 `[[example]]`，仅 `--example NAME` 选择；没有新增发布功能。原生模式目前拒绝 `-o`，使用受管输出。
+
+输出目录、Go 视图和锁共用已有 owner/lease/原子发布机制；配置/成员/目标/normal-test 模式进入 unit 身份，每次仍创建新源码 generation。不存在复用增强外部 metadata 的旁路。未知嵌套 owner 标记拒绝，不能以伪造标记静默丢弃原工程普通目录。

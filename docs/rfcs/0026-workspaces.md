@@ -17,13 +17,13 @@
 
 可运行清单与命令见 [workspace 示例](../../examples/workspace/README.md)，实现证据见 [核心验收](../reviews/workspace-core-20261004.md)。原始研究记录仍是 19 项原生 Go 机制实验，不替代这些 hgo 测试。
 
-**明确限制**：暂不支持 `[workspace.go]` / root override / workspace vendor / go.work import、`publish_version`、dev 表、profile、registry、target-specific features、互斥 feature、Cargo resolver 数字版本、批量 examples/all-targets、manifest-path/workspace-manifest/no-workspace 参数。未知配置字段严格拒绝。现有 host helper 不支持依赖模板继承，不以 workspace 成员资格扩展 host 权限。全 workspace 搬家时绝对本地路径身份需重新锁定；拆出 path 或仍保留继承语法的成员必须先显式物化配置，不能声称复制锁即自足。
+**增强作者核心模式限制**：不支持 `[workspace.go]` / root override / workspace vendor / go.work import（纯原生迁入模式见下一节）、`publish_version`、dev 表、profile、registry、target-specific features、互斥 feature、Cargo resolver 数字版本、批量 examples/all-targets、manifest-path/workspace-manifest/no-workspace 参数。未知配置字段严格拒绝。现有 host helper 不支持依赖模板继承，不以 workspace 成员资格扩展 host 权限。全 workspace 搬家时绝对本地路径身份需重新锁定；拆出 path 或仍保留继承语法的成员必须先显式物化配置，不能声称复制锁即自足。
 
 普通构建在成员清单/根政策改变时重新求解统一版本，保留已有 Git pin；--locked 明确拒绝变化。可达非成员 path 依赖政策变更、schema 2→3 转换、路径改源需要显式重建锁；当前没有细粒度 update 命令。需备份旧锁后移走并重新构建，新锁会重新解析 Git rev，必须审查新旧 commit；不能把该流程当作锁定构建。编译前沿现有脚本合同检查每个所选图，批量任务可能已有前序成员成功后才遇到后序构建失败；不是整个批次的事务性发布。
 
 ### 第二阶段迁入实施合同
 
-已启动基于 `2aa0d066` 的独立 `feat/workspace-import`，具体接口、原生 Go 传输模式、单配置分析边界、vendor 字节合同与黑白例见 [迁入设计](../design/workspace-import.md)。本次采用受管原生 go.work，显式依赖图与 Go 传输政策分开；在生产验收记录更新前，不把此合同视为已实现。
+基于 `2aa0d066` 的独立 `feat/workspace-import` 已实现纯原生 go.work / workspace vendor 迁入子集，接口、单配置分析边界、schema 4 锁与限制见 [迁入设计](../design/workspace-import.md)，实际测试见 [迁入验收](../reviews/workspace-import-20261004.md)。本次采用受管原生 go.work，显式依赖图与 Go 传输政策分开。增强 .hgo/features/scripts 尚不支持此模式，不能视为全 RFC 完成。
 
 ### 官方事实与本篇选择
 
@@ -248,7 +248,7 @@ Go 原生允许没有 require 的成员间import，也会让use成员覆盖同mo
 
 Go 的 go.work sync 会改写成员 go.mod；本工具迁入不得调用它。也不能默认 tidy/get/vendor 修“坏输入”。计划先列每个政策和来源去向，生成与独立新目录验证全成功后发布；失败不留下半个新工程，不修改原来锁/权限。
 
-现有 `[vendor] mode="go-mod"` 只支持 RFC0025 单模块，workspace 仍明确不支持。建议后续新增独立 `[workspace.vendor] mode="go-work"`：保留 workspace modules.txt 标记、根/成员政策、全部 vendor 原始字节、许可证、文件模式及独立内容锁，不冒充 proxy h1。采用真实 Go work vendor 视图，生成 Go workspace 必须与原 vendor 的主模块集合匹配；vendor迁入沿用全workspace统一版本模型，即使只编译 A 也保留完整政策集合。vendor模式同样必须先核验已物化的显式依赖/来源图；原Go主模块集合只用于政策与vendor一致性，不授权源码从未声明成员取包。无法同时保持原vendor政策和显式source图时明确拒绝该迁入，不靠Go use补边。不要从部分 modules.txt 逆造完整 go.mod。
+现有 `[vendor] mode="go-mod"` 只支持 RFC0025 单模块。第二阶段纯原生迁入已新增独立 `[workspace.vendor] mode="go-work"`（增强模式仍不支持）：保留 workspace modules.txt 标记、根/成员政策、全部 vendor 原始字节、许可证、文件模式及独立内容锁，不冒充 proxy h1。采用真实 Go work vendor 视图，生成 Go workspace 必须与原 vendor 的主模块集合匹配；vendor迁入沿用全workspace统一版本模型，即使只编译 A 也保留完整政策集合。vendor模式同样必须先核验已物化的显式依赖/来源图；原Go主模块集合只用于政策与vendor一致性，不授权源码从未声明成员取包。无法同时保持原vendor政策和显式source图时明确拒绝该迁入，不靠Go use补边。不要从部分 modules.txt 逆造完整 go.mod。
 
 模块 vendor 与 workspace vendor 不能合并去重或任挑一个；module-vendor 工程独立构建保持现状，加入非vendor workspace 后若要使用新的统一来源，须显式模式切换/重锁。多个各自修改过 vendor 的成员不能未经选择合成一份。workspace vendor 无需原 replace 目录仍应可冷离线构建（本次 GO-08 已验证 native 机制），缺失一个实际 import 包就失败并给路径，不联网补全；不能宣称含依赖自己的 tests/任意新 import。vendor 中增强 .hgo、脚本或混合增强来源支持需另有合同，首片不自动执行/展开。工作区增删成员或改政策必须重新核验原 vendor，不能擦掉 ## workspace 伪装单模块。
 

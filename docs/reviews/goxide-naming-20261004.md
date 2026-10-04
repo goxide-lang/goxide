@@ -19,6 +19,12 @@
 
 ## 交付与边界
 
-官网 owner 使用此分支完整源码构建；catalog compilerCommit/digest 绑定 a1ef58b，生产编译器源与最终树相同。CLI cmd/goxide、WASM cmd/goxide-playground、JS goxideCompile、tag goxideweb、GOXIDE_*、.gox、schema 和 std 必须整组同步，不能混用旧 WASM/JS/metadata。无部署、main 合并、tag/release 或仓库权限变更。
+官网 owner 使用此分支完整源码构建；catalog compilerCommit/digest 绑定 7894ddf，生产编译器源与最终树相同。CLI cmd/goxide、WASM cmd/goxide-playground、JS goxideCompile、tag goxideweb、GOXIDE_*、.gox、schema 和 std 必须整组同步，不能混用旧 WASM/JS/metadata。无部署、main 合并、tag/release 或仓库权限变更。
 
 历史基线、原始研究结果和发布前候选/provenance 保留旧名。锁中的旧版本记录是解析历史，未机械替换。workspace vendor 拆出不在本次实现范围。
+
+首轮全树 race：CLI 整包达到 Go 默认 10 分钟超时；acceptance 两个动态扩展名夹具错误地拼出 .goxide，修正为 .gox（5cca928）。以 30 分钟预算复验。CLI 展示名另修为 Goxide；真实 CLI/帮助重点 race 验证通过。
+
+## 最终结果
+
+完整 `go test -race -timeout 30m -json ./...` 退出 0：22 个包（含无测试包）、505 个宿主顶层测试、1059 个宿主子测试通过；CLI 94、acceptance 148 个顶层用例全部通过，无失败。生成模块的内部测试由这些宿主用例运行，不混入上述计数。最终 `go vet -tags goxideweb ./...`、web 包 race、最终设计检查（13 Go 命令）均通过。帮助展示名最后微调另有真实 CLI/帮助重点 race 通过。详见[完整包汇总](goxide-naming-evidence/naming-race-summary.log)。

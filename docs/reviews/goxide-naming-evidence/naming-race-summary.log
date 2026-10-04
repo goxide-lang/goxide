@@ -1,0 +1,29 @@
+Command: go test -race -timeout 30m -json ./...
+Go 1.27.1 linux/amd64; GOMAXPROCS=4; complete pinned module cache; no test failures.
+Packages completed: 22; top-level test passes: 505; subtest passes: 1059.
+SKIP github.com/hxsf/goxide/internal/buildconfig elapsed=0s
+PASS github.com/hxsf/goxide/formatting elapsed=1.021s
+PASS github.com/hxsf/goxide/internal/deriveextras elapsed=1.815s
+PASS github.com/hxsf/goxide/internal/enums elapsed=9.544s
+PASS github.com/hxsf/goxide/internal/equality elapsed=23.937s
+PASS github.com/hxsf/goxide/internal/macros elapsed=5.313s
+PASS github.com/hxsf/goxide/internal/matchexpr elapsed=2.413s
+SKIP github.com/hxsf/goxide/internal/naming elapsed=0s
+SKIP github.com/hxsf/goxide/internal/printing elapsed=0s
+PASS github.com/hxsf/goxide/internal/project elapsed=1.221s
+PASS github.com/hxsf/goxide/internal/propagate elapsed=6.856s
+PASS github.com/hxsf/goxide/internal/buildscript elapsed=43.982s
+PASS github.com/hxsf/goxide/internal/scripttrust elapsed=1.018s
+PASS github.com/hxsf/goxide/internal/refs elapsed=3.148s
+SKIP github.com/hxsf/goxide/internal/testdeps elapsed=0s
+PASS github.com/hxsf/goxide/internal/sourcemap elapsed=1.019s
+SKIP github.com/hxsf/goxide/runtime elapsed=0s
+PASS github.com/hxsf/goxide/internal/typecheck elapsed=1.397s
+PASS github.com/hxsf/goxide/tests/prototype elapsed=10.093s
+PASS github.com/hxsf/goxide/internal/frontend elapsed=68.08s
+PASS github.com/hxsf/goxide/tests/acceptance elapsed=443.772s
+PASS github.com/hxsf/goxide/cmd/goxide elapsed=853.763s
+Final help-only display adjustment additionally passed: go test -race ./cmd/goxide -run TestNamingMigrationProcess|TestCLIProcessContract|TestCLIHelp -count=1
+Final tree vet: go vet -tags goxideweb ./... (exit 0).
+Web package race: go test -race -tags goxideweb ./cmd/goxide-web (exit 0).
+std and serde: go test -race ./...; go vet ./... (exit 0).

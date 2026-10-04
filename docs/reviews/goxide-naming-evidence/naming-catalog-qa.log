@@ -1,7 +1,7 @@
 {
   "url": "http://127.0.0.1:8084",
-  "compilerCommit": "a1ef58b27380fc96551a9b30a81b6dff7f93093e",
-  "websiteCommit": "a1ef58b27380fc96551a9b30a81b6dff7f93093e",
+  "compilerCommit": "7894ddff18f4d5e84c9bba395b0e6a32b27859f9",
+  "websiteCommit": "7894ddff18f4d5e84c9bba395b0e6a32b27859f9",
   "wasmSha256": "838a567da027420f4b7a6d665c18d001434257d7119ba1e90c30e52bb5e1f2c7",
   "metadataSchema": 8,
   "cards": 26,

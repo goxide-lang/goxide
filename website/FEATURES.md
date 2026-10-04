@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`a1ef58b27380fc96551a9b30a81b6dff7f93093e`；证据复核日期：2026-10-04。
+编译器基线：`7894ddff18f4d5e84c9bba395b0e6a32b27859f9`；证据复核日期：2026-10-04。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -20,8 +20,8 @@
 | 从普通 Go 迁入：plan → 新目录 | 0025 | 部分实现 | cli | `docs/rfcs/0025-unified-project.md` (85cacb14b359); `cmd/goxide/import_go.go` (58fc6c7047ae); `cmd/goxide/import_go_test.go` (1ed0248fd8c7) |
 | 宿主构建脚本与授权 | 0023 | 部分实现 | cli | `internal/scripttrust/store.go` (d521e32ece88); `cmd/goxide/scripts.go` (a4e9d6db91b5); `cmd/goxide/buildscript_test.go` (d4c86f8a2a1c); `cmd/goxide/combination_review_test.go` (3cda1e895a84) |
 | 只读路径与写引用 | 0005, 0006 | 部分实现 | browser | `internal/refs/lower.go` (cc41b8b85b7e); `internal/refs/flow.go` (8a7482599404); `tests/acceptance/refs_test.go` (a4125cbb0615); `tests/acceptance/composite_permissions_test.go` (823a192be1cf) |
-| 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (f53eed8aeae8); `ROADMAP.md` (903a6c05f64a) |
-| trait、关联类型与 impl | 0002, 0003, 0004, 0019, 0020 | 已确认待实现 | unavailable | `docs/rfcs/0019-uniform-trait-wrappers.md` (1df569cda8f2); `docs/rfcs/0020-associated-functions.md` (003d302b642a); `ROADMAP.md` (903a6c05f64a) |
+| 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (449fd0d8d478); `ROADMAP.md` (648ac14e9ec7) |
+| trait、关联类型与 impl | 0002, 0003, 0004, 0019, 0020 | 已确认待实现 | unavailable | `docs/rfcs/0019-uniform-trait-wrappers.md` (1df569cda8f2); `docs/rfcs/0020-associated-functions.md` (003d302b642a); `ROADMAP.md` (648ac14e9ec7) |
 | safe std、锁与集合 | 0006, 0007, 0010, 0016, 0017 | 已确认待实现 | unavailable | `docs/rfcs/0007-locks.md` (ade41b5149bf); `docs/rfcs/0010-collections.md` (4227ef865b5f); `docs/rfcs/0016-safe-std.md` (06d218c8a138); `docs/rfcs/0017-maps.md` (7edff0be2346) |
 | quote / syn 与过程宏 | 0014 | 已确认待实现 | unavailable | `docs/rfcs/0014-syntax-tools.md` (977cadd5ef80) |
 | 降低约束与公开边界 | 0015, 0018 | 部分实现 | browser | `tests/acceptance/source_lowering_test.go` (298633fff97a); `tests/acceptance/source_mapping_test.go` (b332d639202d); `docs/rfcs/0018-lowering-contract.md` (601d5fc37c38) |

@@ -267,7 +267,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		}
 		for name, r := range checked.Files {
 			// Native Go files only change when carrying a transparent-alias marker.
-			if !strings.HasSuffix(name, ".hgo") && checked.enumMarkerFile != name {
+			if !strings.HasSuffix(name, ".hgo") && checked.enumMarkerFile != name && (checked.useContext == nil || checked.useContext.generatedFile != name) {
 				continue
 			}
 			rel, _ := filepath.Rel(root, name)
@@ -284,9 +284,9 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			result.Files[goName] = r
 		}
 
-		if len(checked.references.Functions) > 0 || checked.enumMetadata.present() {
+		if len(checked.references.Functions) > 0 || checked.enumMetadata.present() || checked.uses.present() {
 			sourceFiles := map[string][]byte{}
-			for name := range packages[dir] {
+			for name := range checked.Files {
 				base := filepath.Base(name)
 				if strings.HasSuffix(base, ".hgo") {
 					base = strings.TrimSuffix(base, ".hgo") + ".go"
@@ -296,6 +296,9 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 					return e
 				}
 				sourceFiles[base] = data
+			}
+			if e = writeUseArtifact(filepath.Join(destination, dir), pkgPath, checked.uses, sourceFiles, packageImporter); e != nil {
+				return e
 			}
 			if len(checked.references.Functions) > 0 {
 				data, e := refs.MarshalMetadataArtifact(checked.references, sourceFiles, packageImporter)

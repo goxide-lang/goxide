@@ -389,3 +389,16 @@ func declaredDeriveHelpers(ts []tok) map[string]bool {
 	}
 	return out
 }
+
+// PublicNames exposes only names for unsupported-reexport diagnostics. It does
+// not serialize macro definitions or change expansion/hygiene behavior.
+func (p *Package) PublicNames() []string {
+	var names []string
+	for name, definition := range p.defs {
+		if definition.public {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}

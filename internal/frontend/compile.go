@@ -99,10 +99,18 @@ var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
 var renameAttr = regexp.MustCompile(`^rename\s*=\s*("(?:[^"\\]|\\.)*")$`)
 
 func Compile(filename string, source []byte) (Result, error) {
+	_, uses, err := scanUses(filename, source)
+	if err != nil {
+		return Result{}, err
+	}
+	if len(uses) > 0 {
+		return Result{}, fmt.Errorf("%s: use/pub use requires directory or package compilation", filename)
+	}
 	return compile(filename, source, nil)
 }
 
 type compileConfig struct {
+	uses              *usePackage
 	protocolFunctions map[string][]*ast.FuncDecl
 	sumDeclarations   []enums.Decl
 	packagePath       string
@@ -392,6 +400,15 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		newOffset += len(lines[i]) + 1
 	}
 	provenance = parsedMap
+	if cfg != nil && cfg.uses != nil {
+		before := []byte(strings.Join(lines, "\n"))
+		after, err := cfg.uses.rewrite(filename, before)
+		if err != nil {
+			return Result{}, err
+		}
+		provenance = provenance.Compose(before, after, "use binding rewrite")
+		lines = strings.Split(string(after), "\n")
+	}
 	fs := token.NewFileSet()
 	f, e := parser.ParseFile(fs, filename, strings.Join(lines, "\n"), parser.ParseComments)
 	if e != nil {
@@ -911,6 +928,13 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	var singleImporter types.Importer
 	if cfg == nil {
 		singleImporter = typecheck.NewImporter(filename)
+		for _, spec := range f.Imports {
+			path, _ := strconv.Unquote(spec.Path.Value)
+			pkg, err := singleImporter.Import(path)
+			if err == nil && pkg != nil && pkg.Scope().Lookup(useMetadataMarker) != nil {
+				return Result{}, fmt.Errorf("%s: imports with use metadata require directory/package compilation: %s", filename, path)
+			}
+		}
 		bound, bindings, err := refs.BindImports(map[string][]byte{filename: out}, singleImporter, nil)
 		importedBindings = bindings
 		if err != nil {

@@ -24,6 +24,8 @@ import (
 
 // PackageResult keeps a separate output and origin map for every source file.
 type PackageResult struct {
+	uses             useMetadata
+	useContext       *usePackage
 	equalityImports  []equality.Protocol
 	enumMarkerFile   string
 	enumTypes        *types.Package
@@ -46,8 +48,13 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 	return preparePackageContext("", sources, metadata, nil)
 }
 func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
+	useContext, err := prepareUses(path, sources, metadata, imp)
+	if err != nil {
+		return PackageResult{}, err
+	}
+	sources = useContext.prepared
 	names := sortedSources(sources)
-	cfg := &compileConfig{protocolFunctions: map[string][]*ast.FuncDecl{}, packagePath: path, builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
+	cfg := &compileConfig{uses: useContext, protocolFunctions: map[string][]*ast.FuncDecl{}, packagePath: path, builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".hgo") {
 			continue
@@ -63,7 +70,6 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 			cfg.manualDefaults[n] = m
 		}
 	}
-	var err error
 	metadata, err = recoverEnumImports(sources, metadata, imp)
 	if err != nil {
 		return PackageResult{}, err
@@ -204,7 +210,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	eqProtocols = append(eqProtocols, aliasProtocols...)
 	cfg.collect = false
 	cfg.macroBudget = buildBudget
-	result := PackageResult{equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
+	result := PackageResult{useContext: useContext, equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
 	for path, p := range metadata {
 		result.referenceImports[path] = p.references
 		result.enumImports[path] = p.enumMetadata
@@ -440,22 +446,38 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		if err := validateEnumMetadata(result.enumMetadata, checkedTypes, imp); err != nil {
 			return result, err
 		}
-		markerFiles := sortedSources(files)
-		for _, name := range markerFiles {
-			if strings.HasSuffix(name, ".hgo") {
-				markerFiles = []string{name}
+		if checkedTypes.Scope().Lookup(enumMetadataMarker) != nil {
+			marker, err := enumPackageMarker(checkedTypes, enumMetadataMarker)
+			if err != nil {
+				return result, err
+			}
+			if marker != result.enumMetadata.Marker() {
+				return result, fmt.Errorf("existing enum metadata marker does not match recovered declarations")
+			}
+		} else {
+			markerFiles := sortedSources(files)
+			for _, name := range markerFiles {
+				if strings.HasSuffix(name, ".hgo") {
+					markerFiles = []string{name}
+					break
+				}
+			}
+			for _, name := range markerFiles {
+				result.enumMarkerFile = name
+				r := result.Files[name]
+				r.Go = append(r.Go, []byte(fmt.Sprintf("\nconst %s = %q\n", enumMetadataMarker, result.enumMetadata.Marker()))...)
+				r.Expanded = r.Go
+				refreshPackageMap(&r)
+				result.Files[name] = r
 				break
 			}
 		}
-		for _, name := range markerFiles {
-			result.enumMarkerFile = name
-			r := result.Files[name]
-			r.Go = append(r.Go, []byte(fmt.Sprintf("\nconst %s = %q\n", enumMetadataMarker, result.enumMetadata.Marker()))...)
-			r.Expanded = r.Go
-			refreshPackageMap(&r)
-			result.Files[name] = r
-			break
+	}
+	if result.useContext != nil {
+		if err := attachUseMetadata(&result, result.useContext); err != nil {
+			return result, err
 		}
+		result.useContext.remap(&result)
 	}
 	return result, nil
 }

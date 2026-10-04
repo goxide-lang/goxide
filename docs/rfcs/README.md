@@ -38,6 +38,8 @@
 | [0019 统一 trait wrapper](0019-uniform-trait-wrappers.md) | 当前 trait 表示与 Go 便利入口 | marker、包级工厂、本地 As 与外部 ForT.As |
 | [0020 类型关联函数](0020-associated-functions.md) | impl 成员、T::method 与构造函数 | 原生 Go 声明边界、Self/self、Go 包函数与方法、泛型与初始化 |
 
+| [0021 use 与 pub use](0021-reexports.md) | 目录包公开API聚合 | canonical身份、变量存储、函数defer、合法Go路由与metadata |
+
 ## 范围与验证
 
 LSP、自举、构建缓存等工程架构继续由[工具链专题](../design/compiler-and-tooling.md)管理；凡引入新源级行为或改变产物契约，仍需相应 RFC。Box、supertrait、GAT、特化、用户过程宏、锁块等未定或延期能力列在[决策登记](../design/decisions.md)，启用前必须另立 RFC，不能从名字补出未经确认的语义。

@@ -6,3 +6,6 @@
 /bin/
 
 /target/
+
+# Python website manifest tooling
+website/__pycache__/

@@ -1,0 +1,4 @@
+package main
+import f "fmt"
+use f::Println as log;
+func main() { log("same Go function", 42) }

@@ -1,0 +1,4 @@
+package main
+import "strconv"
+func parse() Result[string,error] { return go_result!(string, strconv.Atoi("7")) }
+func main() {}

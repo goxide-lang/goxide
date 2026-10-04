@@ -1,0 +1,4 @@
+package main
+#[derive(Clone)]
+type Record struct { Value *int }
+func main() {}

@@ -1,0 +1,4 @@
+package main
+#[derive(Serialize, Deserialize)]
+type Request struct { Value Option[chan int] }
+func main() {}

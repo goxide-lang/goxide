@@ -1,0 +1,13 @@
+package main
+import "fmt"
+#[derive(Debug)]
+type Settings struct { Port int }
+impl Default for Settings {
+    func default() Settings { return Settings{Port: 8080} }
+}
+func main() {
+    var zero Settings
+    chosen := DefaultSettings()
+    fmt.Println(zero.Port, chosen.Port)
+    println!("settings {:?}", chosen)
+}

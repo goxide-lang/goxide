@@ -1,0 +1,21 @@
+package main
+
+import "fmt"
+
+func makeCounter() mut& int {
+    value := 4
+    return mut& value
+}
+func increment(counter mut& int) { (*counter)++ }
+func read(counter &int) int { return *counter }
+
+func main() {
+    counter := makeCounter()
+    shared := counter
+    increment(shared)
+    var view &int = &(*counter)
+    snapshot := read(view)
+    snapshot += 100
+    increment(counter)
+    fmt.Println("shared:", read(view), "snapshot:", snapshot)
+}

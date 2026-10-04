@@ -1,0 +1,6 @@
+package main
+enum State { Empty, Count(int), }
+func label(value State) int {
+    return match value { State::Count(n) => n, }
+}
+func main() {}

@@ -1,0 +1,18 @@
+package main
+import "fmt"
+import "github.com/hxsf/goxide/serdejson"
+#[derive(Serialize, Deserialize)]
+type Request struct { Limit Option[int] }
+func describe(value Option[int]) string {
+    return match value {
+        Option[int]::Some(n) => fmt.Sprintf("Some(%d)", n),
+        Option[int]::None => "None",
+    }
+}
+func main() {
+    for _, input := range []string{`{}`, `{"Limit":null}`, `{"Limit":7}`} {
+        value, err := serdejson.Unmarshal([]byte(input), DeserializeRequest)
+        if err != nil { panic(err) }
+        fmt.Println(input, describe(value.Limit))
+    }
+}

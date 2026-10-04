@@ -1,0 +1,8 @@
+package main
+import "fmt"
+macro_rules! values { ($($x:expr),*) => { []int{ $($x),* } }; }
+func main() {
+    calls := 0
+    next := func() int { calls++; return calls }
+    fmt.Println(values!(next(), next(), 9), calls)
+}

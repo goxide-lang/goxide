@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const base = process.env.QA_URL || 'http://127.0.0.1:8080';
-const browser = await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+const browser = await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',headless:true,args:['--no-sandbox',...(process.env.QA_PROXY_SPKI ? ['--ignore-certificate-errors-spki-list='+process.env.QA_PROXY_SPKI] : [])]});
 const context = await browser.newContext({viewport:{width:1440,height:1000},permissions:['clipboard-read','clipboard-write']});
 const page = await context.newPage();
 const errors=[];const requests=[];
@@ -14,7 +14,7 @@ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.pus
 await fs.mkdir(new URL('qa-artifacts/',import.meta.url),{recursive:true});
 const finished=()=>page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('转译完成'),{},{timeout:60000});
 await page.goto(base);await finished();
-const manifest=await (await context.request.get(base+'/examples.json')).json();
+const manifest=await page.evaluate(async()=>await(await fetch('examples.json')).json());
 // CLI project snapshots stay read-only, separate from browser example choices.
 assert.equal(await page.locator('#examples option').count(), manifest.examples.length);
 const snapshotText = await page.locator('#cli-example').textContent();

@@ -1,0 +1,595 @@
+{
+  "schemaVersion": 1,
+  "compilerCommit": "ae61ec628b55e0fc66ce96d47261c0a6809c0280",
+  "reviewedAt": "2026-10-04",
+  "evidenceRefs": {
+    "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
+    "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"
+  },
+  "statusLabels": {
+    "proposal": "提案",
+    "accepted": "已确认待实现",
+    "partial": "部分实现",
+    "verified": "已实现并验证"
+  },
+  "topics": {
+    "language": "语法与控制流",
+    "protocols": "派生与数据",
+    "interop": "Go 互操作",
+    "projects": "CLI 工程",
+    "safety": "权限与风险",
+    "future": "设计与开发中"
+  },
+  "examples": [
+    {
+      "id": "macro",
+      "title": "声明宏",
+      "description": "显式保存参数，求值一次。",
+      "expectedStdout": "42\n"
+    },
+    {
+      "id": "enum",
+      "title": "enum / match",
+      "description": "变体、穷尽覆盖与 guard。",
+      "expectedStdout": "count: 3\ncount: 0\nempty\n"
+    },
+    {
+      "id": "result",
+      "title": "Option / Result / ?",
+      "description": "缺失、失败传播与错误链。",
+      "expectedStdout": "next port: 8081\nport error: invalid port syntax: true\nname length: 3\nname length: absent\n"
+    },
+    {
+      "id": "go_result",
+      "title": "Go 返回值适配",
+      "description": "按原生签名推导 T/E；保值版保留部分成功。",
+      "expectedStdout": "next: 42\nparse error: true\npartial: 3 abc true\n"
+    },
+    {
+      "id": "derive",
+      "title": "显式派生与 JSON",
+      "description": "Default / Debug / Clone / Eq 与 JSON。",
+      "expectedStdout": "Config { Name: \"goxide\", Enabled: false } true\n{\"Name\":\"goxide\",\"Enabled\":false} <nil>\n"
+    },
+    {
+      "id": "macro_repeat",
+      "title": "宏模式重复",
+      "description": "列表捕获与副作用次数。",
+      "expectedStdout": "[1 2 9] 2\n"
+    },
+    {
+      "id": "equality",
+      "title": "容器 equality 与 Clone",
+      "description": "克隆后独立修改与内容比较。",
+      "expectedStdout": "equal: true\nafter edit: 1 9 false\n"
+    },
+    {
+      "id": "defaults",
+      "title": "Default 与格式化",
+      "description": "零值、手动 Default 和 Debug 输出。",
+      "expectedStdout": "0 8080\nsettings Settings { Port: 8080 }\n"
+    },
+    {
+      "id": "serde_option",
+      "title": "Option 缺失与 null",
+      "description": "缺失/null 都是 None；不是 PATCH 三态。",
+      "expectedStdout": "{} None\n{\"Limit\":null} None\n{\"Limit\":7} Some(7)\n"
+    },
+    {
+      "id": "readonly",
+      "title": "只读与共享引用",
+      "description": "同一存储的只读视图与独立快照。",
+      "expectedStdout": "shared: 6 snapshot: 105\n"
+    }
+  ],
+  "items": [
+    {
+      "id": "macros",
+      "title": "声明宏：模式与重复",
+      "topic": "language",
+      "rfcs": [
+        "0011"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "用有限模式匹配消除重复；表达式、标识符和 token 捕获具有不同边界。",
+      "usage": "values!(next(), next(), 9) 构造列表，两个 next 各调用一次。twice 示例显式保存参数，避免重复求值。",
+      "limitation": "模板重复写两次表达式就可能求值两次；不是自动惰性或完整 hygiene。过程宏与外部预编译宏包未交付。",
+      "examples": [
+        "macro",
+        "macro_repeat"
+      ],
+      "evidence": [
+        "internal/macros/macros_test.go",
+        "internal/macros/primitive_bindings_test.go",
+        "tests/acceptance/macro_packages_test.go"
+      ],
+      "checks": []
+    },
+    {
+      "id": "enums",
+      "title": "封闭 enum 与明确状态",
+      "topic": "language",
+      "rfcs": [
+        "0008",
+        "0015"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "用具名变体表示状态与载荷，避免将任意整数当成有效状态。",
+      "usage": "State::Count(3) 与 State::Empty 具有同一个封闭名义类型；非法原生 Go 表示在已覆盖的使用点校验。",
+      "limitation": "不支持开放 raw/C enum；也不承诺所有公开函数入口都自动校验完整对象图。用户泛型 enum 尚不可用。",
+      "examples": [
+        "enum"
+      ],
+      "evidence": [
+        "internal/enums/lower.go",
+        "tests/acceptance/enums_test.go",
+        "tests/acceptance/enum_external_test.go"
+      ],
+      "checks": [
+        "incomplete_match"
+      ]
+    },
+    {
+      "id": "match",
+      "title": "match、guard 与表达式",
+      "topic": "language",
+      "rfcs": [
+        "0009"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "穷尽匹配配合 guard，把分支结果作为值使用。",
+      "usage": "正数 Count 匹配 guard；其余 Count 和 Empty 提供后备分支。scrutinee 不重复求值。",
+      "limitation": "guard 不代替穷尽覆盖。多结果 return match、部分 unary/composite/block-arm 上下文仍有缺口。",
+      "examples": [
+        "enum"
+      ],
+      "evidence": [
+        "internal/matchexpr/lower.go",
+        "tests/acceptance/match_call_signatures_test.go",
+        "tests/acceptance/match_named_dynamic_test.go"
+      ],
+      "checks": [
+        "incomplete_match"
+      ]
+    },
+    {
+      "id": "option-result",
+      "title": "Option / Result 与 ?",
+      "topic": "language",
+      "rfcs": [
+        "0008",
+        "research/0005"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "显式表达缺失与失败；? 向最近的用户函数传播，并可使用已登记的单步错误转换。",
+      "usage": "nameLength 在 None 时提前返回；nextPort 从 int 成功值构造 string，失败时使用已登记 From。",
+      "limitation": "没有通用 Try/Residual 或转换链搜索。普通构造仍需显式 Option[T] / Result[T,E]，不可把宏推导当成普通构造推导。",
+      "examples": [
+        "result"
+      ],
+      "evidence": [
+        "internal/propagate/lower.go",
+        "tests/acceptance/propagate_test.go",
+        "tests/acceptance/propagate_values_test.go"
+      ],
+      "checks": []
+    },
+    {
+      "id": "result-adapters",
+      "title": "Go 返回值适配：静态 T/E 推导",
+      "topic": "interop",
+      "rfcs": [
+        "research/0005"
+      ],
+      "status": "verified",
+      "support": "browser",
+      "summary": "此条目仅指已验证的 go_result! / go_result_keep! 子集，不代表整篇传播 RFC 完成。",
+      "usage": "Atoi 按静态签名推导 Result；Reader 在 n>0 且 EOF 时，保值版同时留下 Value 和原 Err。",
+      "limitation": "E 必须实现 error 且可为 nil。接口中的 typed nil 仍是 Err；保值载荷不是 Clone，多成功返回值须先组合。",
+      "examples": [
+        "go_result"
+      ],
+      "evidence": [
+        "internal/propagate/go_result.go",
+        "tests/acceptance/go_result_inference_test.go"
+      ],
+      "checks": [
+        "result_wrong_type"
+      ]
+    },
+    {
+      "id": "equality",
+      "title": "PartialEq / Eq 与 Clone",
+      "topic": "protocols",
+      "rfcs": [
+        "0008",
+        "0013"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "显式派生资格，使用 .equals 做内容比较；Clone 不改变普通赋值。",
+      "usage": "Batch 的 slice 克隆后可独立改动；修改前 equals 为 true，改后为 false。",
+      "limitation": "不自动为 pointer/interface 任意载荷提供 Clone/比较协议，不承诺循环容器图比较或全局深拷贝。",
+      "examples": [
+        "equality"
+      ],
+      "evidence": [
+        "internal/equality/lower.go",
+        "tests/acceptance/equality_test.go",
+        "tests/acceptance/manual_equality_test.go",
+        "tests/acceptance/macros_test.go"
+      ],
+      "checks": [
+        "clone_pointer"
+      ]
+    },
+    {
+      "id": "default-debug",
+      "title": "Default、Debug 与格式宏",
+      "topic": "protocols",
+      "rfcs": [
+        "0012",
+        "0013"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "具体类型可显式派生或登记 Default；Debug 和固定格式宏让输出可读。",
+      "usage": "DefaultSettings() 返回端口 8080；普通 var 的零值仍为 0。println!(\"{:?}\", value) 使用登记的 Debug。",
+      "limitation": "完整 trait、手写 Clone/Debug 登记与递归 Default 资格仍有限。占位符数量不匹配会拒绝。",
+      "examples": [
+        "defaults",
+        "derive"
+      ],
+      "evidence": [
+        "internal/printing/lower.go",
+        "internal/deriveextras/generate.go",
+        "tests/acceptance/manual_default_test.go",
+        "tests/acceptance/print_default_test.go"
+      ],
+      "checks": [
+        "format_arity"
+      ]
+    },
+    {
+      "id": "serde",
+      "title": "serde 核心协议与 JSON",
+      "topic": "protocols",
+      "rfcs": [
+        "0013",
+        "research/0006"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "Serialize/Deserialize 派生调用格式无关 typed helper；JSON 是独立格式实现。",
+      "usage": "Config 生成 JSON；Request.Limit 对缺失和 null 都解为 None，数值 7 解为 Some(7)。",
+      "limitation": "Option 不代表 PATCH 的 missing/null/value 三态。Option[chan int] 缺少协议会拒绝；字段 adapter、自动 MarshalJSON、JSON Value 与 YAML 不能按提案当作现有 API。",
+      "examples": [
+        "derive",
+        "serde_option"
+      ],
+      "evidence": [
+        "serde/protocol.go",
+        "serdejson/README.md",
+        "tests/acceptance/option_serde_test.go",
+        "tests/acceptance/serde_defaults_test.go"
+      ],
+      "checks": [
+        "serde_option_channel"
+      ]
+    },
+    {
+      "id": "errors",
+      "title": "Error 派生与错误链",
+      "topic": "protocols",
+      "rfcs": [
+        "0013",
+        "research/0005"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "显式 Error / #[from] 将业务错误、单步转换和 Go errors.Is/As 连起来。",
+      "usage": "PortError 包装解析错误；errors.Is 仍识别 strconv.ErrSyntax，错误链无需压成字符串。",
+      "limitation": "已传入的 cause 可以保留；不凭错误文案重建底层错误身份，也不自动生成任意 From 转换。",
+      "examples": [
+        "result",
+        "go_result"
+      ],
+      "evidence": [
+        "internal/deriveextras/error.go",
+        "tests/acceptance/serde_causes_test.go",
+        "tests/acceptance/macros_test.go"
+      ],
+      "checks": []
+    },
+    {
+      "id": "reexports",
+      "title": "use / pub use 与 API 聚合",
+      "topic": "projects",
+      "rfcs": [
+        "0021"
+      ],
+      "status": "partial",
+      "support": "cli",
+      "summary": "基于同文件 import alias 引入或重导出公开项，保留变量存储与宏定义点。",
+      "usage": "公开工程快照中 Counter 与 impl.Count 指向同一存储；源图宏通过 facade 使用。",
+      "limitation": "只在目录/包编译处理；单文件 Playground 不接受 use。独立模块预编译宏发布、RFC 0024 新路径尚不可用。",
+      "examples": [],
+      "evidence": [
+        "cmd/hgo/directory.go",
+        "tests/acceptance/qualified_packages_test.go",
+        "examples/reexports/README.md"
+      ],
+      "checks": [
+        "use_single_file"
+      ],
+      "snippet": {
+        "language": "hgo · 多文件片段",
+        "text": "// api/api.hgo：impl 为本文件 import 别名\npub use impl::*;\n// main.hgo：api 为本文件 import 别名\nuse api::Count as Counter;",
+        "note": "下方 CLI 工程快照可查看实际源码、生成 Go 与输出。片段不能单独放进 Playground。"
+      }
+    },
+    {
+      "id": "projects",
+      "title": "feature、依赖来源与 targets",
+      "topic": "projects",
+      "rfcs": [
+        "0001",
+        "0022"
+      ],
+      "status": "partial",
+      "support": "cli",
+      "summary": "显式 manifest 规划 path/git/version 源、feature 并集与 bin/example/lib 目标。",
+      "usage": "公开最小工程运行 demo：默认 pretty 为 true；--no-default-features 时为 false。版本源与脚本/target 联合路径由现有 CLI 集成测试覆盖。",
+      "limitation": "offline 需要预热缓存，不冻结本地 path；纯 Go 包不能接收 hgo feature；不自动扫描所有 module 为增强源码。",
+      "examples": [],
+      "evidence": [
+        "internal/project/manifest.go",
+        "internal/project/planner.go",
+        "cmd/hgo/project_test.go",
+        "cmd/hgo/version_test.go",
+        "cmd/hgo/combination_review_test.go"
+      ],
+      "checks": [],
+      "snippet": {
+        "language": "JSON · 最小工程 hgo.json",
+        "text": "{\n  \"version\": 1,\n  \"features\": {\"default\": [\"pretty\"], \"pretty\": []},\n  \"bins\": [{\"name\": \"demo\", \"path\": \"src/main.hgo\"}]\n}\n",
+        "note": "完整最小工程与两种实际 CLI 输出见工程快照；浏览器不规划依赖或运行目标。"
+      }
+    },
+    {
+      "id": "build-scripts",
+      "title": "宿主构建脚本与授权",
+      "topic": "projects",
+      "rfcs": [
+        "0023"
+      ],
+      "status": "partial",
+      "support": "cli",
+      "summary": "已选 manifest 输入/输出与脚本身份参与可信构建、缓存和目标隔离。",
+      "usage": "已知构建脚本可以从 schema 生成 Go/数据；只有精确授权的脚本、helper、依赖和工具才可执行。",
+      "limitation": "这是非沙箱本机程序；offline 不禁止脚本联网。网页不运行脚本，也不请求用户给予构建权限。",
+      "examples": [],
+      "evidence": [
+        "internal/scripttrust/store.go",
+        "cmd/hgo/scripts.go",
+        "cmd/hgo/buildscript_test.go",
+        "cmd/hgo/combination_review_test.go"
+      ],
+      "checks": [],
+      "snippet": {
+        "language": "JSON · 说明片段",
+        "text": "{\n  \"entry\": \"tools/build/main.hgo\",\n  \"inputs\": [\n    \"schema.txt\"\n  ],\n  \"outputs\": [\n    \"gen/schema.go\",\n    \"gen/data.txt\"\n  ],\n  \"timeout_seconds\": 60\n}",
+        "note": "来自已测试的 schema 生成工程之 build 对象；这里只说明配置，未提供可直接执行的完整脚本项目。"
+      }
+    },
+    {
+      "id": "readonly",
+      "title": "只读路径与写引用",
+      "topic": "safety",
+      "rfcs": [
+        "0005",
+        "0006"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "&T 与 mut& T 保留访问权限；复制引用仍可指向同一存储。",
+      "usage": "counter 的两个可写别名共享修改；只读 view 可观察更新，snapshot 是独立值复制。",
+      "limitation": "只读不是全局不可变，写引用不承诺独占。经 &int 写入会拒绝；复杂投影/原生桥接仍有边界。",
+      "examples": [
+        "readonly"
+      ],
+      "evidence": [
+        "internal/refs/lower.go",
+        "internal/refs/flow.go",
+        "tests/acceptance/refs_test.go",
+        "tests/acceptance/composite_permissions_test.go"
+      ],
+      "checks": [
+        "readonly_write"
+      ]
+    },
+    {
+      "id": "borrow-future",
+      "title": "别名与借用风险分析",
+      "topic": "safety",
+      "rfcs": [
+        "0005"
+      ],
+      "status": "accepted",
+      "support": "unavailable",
+      "summary": "已确认独立长期方向，未纳入当前编译器的完整风险分析器。",
+      "usage": "设计用途：在有具体证据时提示别名留存或重入风险；类型权限检查与可选风险诊断分层。",
+      "limitation": "不能宣称 Rust 借用安全或因为无法证明独占就默认拒绝。没有该能力的 Playground 入口。",
+      "examples": [],
+      "evidence": [
+        "docs/rfcs/0005-borrows.md",
+        "ROADMAP.md"
+      ],
+      "checks": []
+    },
+    {
+      "id": "traits",
+      "title": "trait、关联类型与 impl",
+      "topic": "future",
+      "rfcs": [
+        "0002",
+        "0003",
+        "0004",
+        "0019",
+        "0020"
+      ],
+      "status": "accepted",
+      "support": "unavailable",
+      "summary": "显式实现与统一 wrapper 的方向已确认；通用前端尚未交付。",
+      "usage": "设计用途：把原生类型适配到显式协议，保留对象身份；关联函数由所选类型提供入口。",
+      "limitation": "现有 Default 特例与内建派生不等于支持通用 trait、declare impl、关联类型、完整固有 impl 或用户泛型。",
+      "examples": [],
+      "evidence": [
+        "docs/rfcs/0019-uniform-trait-wrappers.md",
+        "docs/rfcs/0020-associated-functions.md",
+        "ROADMAP.md"
+      ],
+      "checks": []
+    },
+    {
+      "id": "safe-libraries",
+      "title": "safe std、锁与集合",
+      "topic": "future",
+      "rfcs": [
+        "0006",
+        "0007",
+        "0010",
+        "0016",
+        "0017"
+      ],
+      "status": "accepted",
+      "support": "unavailable",
+      "summary": "方向是围绕真实 Go 契约逐 API 提供包装；此处是设计范围，不是已发布的库 API。",
+      "usage": "设计用途：锁回调明确访问与释放；集合视图区分复制和别名；I/O 包装保留部分成功。",
+      "limitation": "现有 Go slice/map 与可调用的标准包不等于 safe Vec/Map/Lock/Arc 已交付。候选名称、完整桥接与库版本不能当作安装指引。",
+      "examples": [],
+      "evidence": [
+        "docs/rfcs/0007-locks.md",
+        "docs/rfcs/0010-collections.md",
+        "docs/rfcs/0016-safe-std.md",
+        "docs/rfcs/0017-maps.md"
+      ],
+      "checks": []
+    },
+    {
+      "id": "syntax-tools",
+      "title": "quote / syn 与过程宏",
+      "topic": "future",
+      "rfcs": [
+        "0014"
+      ],
+      "status": "accepted",
+      "support": "unavailable",
+      "summary": "quote / syn 作为额外语法工具包是已确认目标；用户过程宏延期。",
+      "usage": "设计用途：读取或构造带来源的语法数据，再交给语义检查；解析成功不代表类型正确。",
+      "limitation": "公共 API、token 协议与首版范围尚未冻结；当前 macro_rules! 不是运行任意用户 AST 程序的宿主。",
+      "examples": [],
+      "evidence": [
+        "docs/rfcs/0014-syntax-tools.md"
+      ],
+      "checks": []
+    },
+    {
+      "id": "lowering",
+      "title": "降低约束与公开边界",
+      "topic": "interop",
+      "rfcs": [
+        "0015",
+        "0018"
+      ],
+      "status": "partial",
+      "support": "browser",
+      "summary": "真实生成 Go 需要保持求值、控制流、类型身份和已覆盖的权限规则。",
+      "usage": "目录里的 Go 全部由当前 CLI 产生；浏览器同例逐字节对照，CLI 工程单独运行。",
+      "limitation": "测试证明列出的子集，不能推导全部组合完成；源码映射、公开入口及不可命名外部载荷仍存在限制。",
+      "examples": [
+        "enum",
+        "result"
+      ],
+      "evidence": [
+        "tests/acceptance/source_lowering_test.go",
+        "tests/acceptance/source_mapping_test.go",
+        "docs/rfcs/0018-lowering-contract.md"
+      ],
+      "checks": []
+    },
+    {
+      "id": "use-paths",
+      "title": "use 路径与依赖别名",
+      "topic": "future",
+      "rfcs": [
+        "0024"
+      ],
+      "status": "proposal",
+      "support": "unavailable",
+      "summary": "RFC 0024 是提案；新路径语法尚未批准和实现，不改变目前 import alias 的 use 规则。",
+      "usage": "提议用途：用显式依赖键或精确包路径定位公开项，同时保留 Go 包身份与 import DAG。",
+      "limitation": "例如 use \"fmt\"::Println; 是拟议语法，当前编译器不支持；不能靠它自动下载模块、激活 feature 或授权脚本。",
+      "examples": [],
+      "evidence": [
+        "@use-path:docs/rfcs/0024-use-paths.md"
+      ],
+      "checks": [
+        "use_path_proposal"
+      ],
+      "snippet": {
+        "language": "hgo · 提案示意，未实现",
+        "text": "use \"fmt\"::Println;\n// 当前版本请使用目录工程中的 import alias + use。",
+        "note": "仅展示提案与当前版本的区别，不提供“打开 Playground”按钮。"
+      },
+      "development": "文档分支快照 5e4b118：仅新增提案，没有 parser/resolver 实现。"
+    },
+    {
+      "id": "shared-std",
+      "title": "分仓标准库与共享 sum",
+      "topic": "future",
+      "rfcs": [
+        "0016",
+        "0024"
+      ],
+      "status": "accepted",
+      "support": "unavailable",
+      "summary": "std / next / serde 分仓方向已确认；当前在线 WASM 仍绑定旧版本随附包与内建 sum。",
+      "usage": "开发用途：让跨仓库 Option/Result 共享类型身份，并分别管理稳定库、实验库与序列化库。",
+      "limitation": "已有候选 Go fixture 不等于编译器迁移完成。没有核验的安装版本或公共 API，不提供猜测性库链接。",
+      "examples": [],
+      "evidence": [
+        "@shared:tests/research/shared_std_candidate/HANDOFF.md",
+        "@shared:tests/research/shared_std_candidate/provenance.json"
+      ],
+      "checks": [],
+      "development": "开发分支快照 61a01cc：已有隔离候选 fixture 与迁移阶段说明；尚未合入线上编译器。"
+    },
+    {
+      "id": "inference-readability",
+      "title": "普通 sum 推导与输出可读性",
+      "topic": "future",
+      "rfcs": [
+        "0008",
+        "0018"
+      ],
+      "status": "accepted",
+      "support": "unavailable",
+      "summary": "普通 Option/Result 推导与生成 Go 可读性是正在推进的工作，不属于本次线上能力。",
+      "usage": "目标场景：减少普通构造中的重复类型书写，并让辅助生成代码更易审查。这里不预设尚未交付的语法。",
+      "limitation": "只确认当前 go_result! 宏按静态签名推导 T/E；没有核验到普通 sum 推导或可读性改进的可发布实现提交。",
+      "examples": [],
+      "evidence": [
+        "internal/propagate/go_result.go",
+        "tests/acceptance/go_result_inference_test.go"
+      ],
+      "checks": [],
+      "development": "进行中（任务交接报告）；未核验可发布提交。状态不自动升级为已实现。"
+    }
+  ],
+  "compilerDigest": "cca61b48d36fef75990b55325f075a88c142471398af8fc706ab201c8796d543"
+}

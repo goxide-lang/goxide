@@ -59,6 +59,21 @@ document.querySelectorAll('[data-example]').forEach(link => link.addEventListene
   $('examples').replaceChildren(...manifest.examples.map((e,i) => { const option = document.createElement('option'); option.value = i; option.textContent = e.title; return option; }));
   $('version').textContent = `源码提交 ${manifest.commit} · 编译器源摘要 SHA-256 ${manifest.compilerDigest} · ${manifest.toolchain}`;
   $('packages').textContent = manifest.packages.join(' · ');
+  for (const example of manifest.cliExamples || []) {
+    for (const file of example.files) {
+      const detail = document.createElement('details');
+      const summary = document.createElement('summary'); summary.textContent = file.path;
+      detail.append(summary);
+      for (const [label, value] of [['hgo 源码', file.source], ['CLI 生成 Go', file.go]]) {
+        const title = document.createElement('p'); title.textContent = label;
+        const pre = document.createElement('pre'); pre.tabIndex = 0; pre.textContent = value;
+        detail.append(title, pre);
+      }
+      $('cli-example').append(detail);
+    }
+    const pre = document.createElement('pre'); pre.textContent = 'CLI 运行输出\n' + example.stdout;
+    $('cli-example').append(pre);
+  }
   for (const id of ['examples','source','compile','reset']) $(id).disabled = false;
   choose(0);
   if (document.modelContext?.registerTool) {

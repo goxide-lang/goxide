@@ -36,7 +36,7 @@ export GOCACHE=/workspace/goxide-environment/cache
 - 仅支持单文件。默认包：`fmt`、`errors`、`io`、`strconv`、`strings`、`math`、`encoding/json`、本仓库 `runtime`、`formatting`、`serde`、`serdejson`，以及真实导出数据包含的依赖闭包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
 - 适配只在 `js/wasm` 下启用。原生 importer 保持原来的离线 `go list -export` 行为。WASM 导入来自构建时真实 Go export archive 的 `__.PKGDEF`，不是手写伪造类型签名，也不会调用外部服务。
 - 导出数据来自构建机器的原生目标；清单记录 `exportTarget`。当前已运行验证 Linux/amd64 + Go 1.27.1；不把它描述为所有 GOOS/GOARCH 的类型环境。构建时请在宿主平台生成资源，之后可以交叉构建纯静态 HTTP 二进制。
-- 没有浏览器文件系统、任意依赖解析、跨文件模块恢复、目录编译、外部宏包或 Go 执行 API。未来 `mod` / `use` / `pub(scope)` 和 Cargo 风格功能不属于这个版本。
+- 没有浏览器文件系统、任意依赖解析、跨文件模块恢复、目录编译、外部宏包或 Go 执行 API。CLI 的 use/pub use、源码图宏聚合、version/path/git 依赖、feature、target 与受授权 host 构建脚本不在浏览器执行。
 - 浏览器中一个 Worker，450 ms 去抖，32 KiB UTF-8 输入，10 秒编译超时、30 秒加载超时、2 MiB 返回输出上限。取消/超时终止 Worker；下次操作重建。编译器自身宏预算仍然生效。没有独立浏览器堆内存配额，极端输入仍可能造成浏览器内存压力。
 - 失败、源码编辑与中断清空旧 Go，复制按钮同步禁用。Worker 实例 + revision 双重丢弃旧消息。通过 textarea/textContent 显示输入与诊断，不将源码插入 HTML。
 - Clipboard API 不可用时选择生成结果供手动复制。Tab 保持正常导航；Ctrl/⌘+Enter 转译。390 px 布局切换上下编辑器。
@@ -50,7 +50,7 @@ export GOCACHE=/workspace/goxide-environment/cache
 ## 更新与版本绑定
 
 1. 切到要发布的编译器提交，修改 `website/examples/*.hgo` 或 `website/static/*`。
-2. 运行 `python3 website/build.py`。每个示例必须经真实 CLI 成功转译，否则构建失败。输出不是手写 Go。
+2. 运行 `python3 website/build.py`。每个示例必须经真实 CLI 成功转译，否则构建失败。另将仓库 examples/reexports 多包工程真实转译并运行，写入 cliExamples；网页以只读工程快照展示，不作为浏览器示例。构建不会授权或运行用户构建脚本。输出不是手写 Go。
 3. 构建脚本从当前工具链重新提取真实 export data、构建 WASM，并复制匹配版本的 `wasm_exec.js`。所有资源同批更新。
 4. `examples.json` 记录源码提交、编译器与支持库源码 SHA-256、export archives SHA-256、工具链、导出目标与包闭包。摘要覆盖未提交源变化，因此只看提交号不足；正式发布应从干净提交构建。
 5. 构建新 `hgo-web`，运行下面的验证。浏览器生成 Go 与 CLI 输出逐字节比较。生成 Go 若支持库语义改变，必须同时更新本地依赖与清单。
@@ -68,7 +68,7 @@ QA_URL=http://127.0.0.1:8080 npm test --prefix website
 
 Playwright 仅是测试依赖，固定在 lockfile。默认使用 `/usr/bin/chromium`，可设置 `CHROMIUM=/absolute/browser`。正常网站构建与运行均不需要 npm。
 
-`qa.mjs` 验证五例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值四项新增适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
+`qa.mjs` 验证五例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
 
 `read_playground` WebMCP 只读工具在浏览器有 `document.modelContext` 时可注册；普通 Chromium 不支持该原生上下文，未将其作为已通过原生 WebMCP 验证的能力宣传。
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Rebuild every published example and the browser compiler from this checkout."""
-import hashlib, json, os, pathlib, shutil, subprocess
+import hashlib, json, os, pathlib, shutil, subprocess, tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
 GO = os.environ.get('GO_BIN', 'go')
@@ -50,6 +50,17 @@ for name, title, description in [
     path = ROOT/'website/examples'/f'{name}.hgo'
     generated = run(str(ROOT/'bin/hgo'), 'transpile', str(path)).decode()
     examples.append(dict(id=name, title=title, description=description, source=path.read_text(), go=generated))
+# A known repository project, generated and run locally at build time only.
+# It is evidence for CLI multi-package behavior, never a browser compiler input.
+with tempfile.TemporaryDirectory(prefix='hgo-web-reexports-') as temporary:
+    output = pathlib.Path(temporary)/'generated'
+    project = ROOT/'examples/reexports'
+    run(str(ROOT/'bin/hgo'), 'transpile', '-go', GO, '-o', str(output), str(project))
+    cli_example = dict(id='reexports', title='use / pub use：同一存储与定义点',
+        files=[dict(path=str(p.relative_to(project)), source=p.read_text(),
+                    go=(output/p.relative_to(project).with_suffix('.go')).read_text())
+               for p in sorted(project.rglob('*.hgo'))],
+        stdout=run(str(ROOT/'bin/hgo'), 'run', '-go', GO, str(project)).decode())
 eh = hashlib.sha256()
 for archive in sorted(exports.glob('*.a')):
     eh.update(archive.name.encode()); eh.update(archive.read_bytes())
@@ -57,7 +68,7 @@ export_target = json.loads(run(GO, 'env', '-json', 'GOOS', 'GOARCH'))
 wasm_flags = ['-trimpath', '-buildvcs=false', '-ldflags=-s -w -buildid=']
 manifest = dict(wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 importClosure=sorted(closure), maxSourceBytes=32768, compileTimeoutMs=10000,
-                examples=examples)
+                examples=examples, cliExamples=[cli_example])
 (dist/'examples.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n')
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')
 subprocess.run([GO, 'build', *wasm_flags, '-o', str(dist/'compiler.wasm'), './cmd/hgo-playground'], env=wasm_env, check=True)

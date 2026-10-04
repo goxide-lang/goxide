@@ -1,6 +1,6 @@
 # hgo 语言介绍与自托管 Playground
 
-中文优先的静态语言介绍网站，以及真实单文件 hgo → Go 浏览器转译器。网站源、四个 `.hgo` 示例、WASM 适配与编译器在同一仓库。最终交付 `hgo-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
+中文优先的静态语言介绍网站，以及真实单文件 hgo → Go 浏览器转译器。网站源、五个 `.hgo` 示例、WASM 适配与编译器在同一仓库。最终交付 `hgo-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
 ## 构建与运行
 
@@ -31,7 +31,7 @@ export GOCACHE=/workspace/goxide-environment/cache
 ## 真实转译与支持范围
 
 - `cmd/hgo-playground` 调用现有 `internal/frontend.Compile`，不是演示替换或预设输出。WASM 只转译，不运行生成代码。
-- 仅支持单文件。默认包：`fmt`、`errors`、`strconv`、`strings`、`math`、`encoding/json`、本仓库 `runtime`、`formatting`、`serde`、`serdejson`，以及真实导出数据包含的依赖闭包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
+- 仅支持单文件。默认包：`fmt`、`errors`、`io`、`strconv`、`strings`、`math`、`encoding/json`、本仓库 `runtime`、`formatting`、`serde`、`serdejson`，以及真实导出数据包含的依赖闭包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
 - 适配只在 `js/wasm` 下启用。原生 importer 保持原来的离线 `go list -export` 行为。WASM 导入来自构建时真实 Go export archive 的 `__.PKGDEF`，不是手写伪造类型签名，也不会调用外部服务。
 - 导出数据来自构建机器的原生目标；清单记录 `exportTarget`。当前已运行验证 Linux/amd64 + Go 1.27.1；不把它描述为所有 GOOS/GOARCH 的类型环境。构建时请在宿主平台生成资源，之后可以交叉构建纯静态 HTTP 二进制。
 - 没有浏览器文件系统、任意依赖解析、跨文件模块恢复、目录编译、外部宏包或 Go 执行 API。未来 `mod` / `use` / `pub(scope)` 和 Cargo 风格功能不属于这个版本。
@@ -43,7 +43,7 @@ export GOCACHE=/workspace/goxide-environment/cache
 
 页面依据根 README、`docs/t0-acceptance.md`、`internal/macros/README.md`、`internal/matchexpr/README.md`、`serdejson/README.md` 和相应 RFC。示例明确演示宏、enum/match、Option/Result/?、Default/Debug/Clone、serde JSON、Error（thiserror 风格）和 `.equals`。
 
-不宣称全部 MVP、完整 Rust 借用安全、完整 hygiene 或零分配。现有跨包宏原始名遮蔽和 Result 额外分配由独立编译器审查工作处理，本分支不修改其语义。Go `(T,error)` 在本示例中显式适配；不会预先宣传另一任务尚未合入的适配宏或模块设计。
+不宣称全部 MVP、完整 Rust 借用安全、完整 hygiene 或零分配。本集成分支已合入 primitive 名称冲突诊断与跨模块 Result 静态 validator 修复：包级/文件 import 冲突会拒绝并报告定义和调用位置，不能宣传为完整支持所有遮蔽；特定跨模块循环消除了逐项分配，不能外推为任意载荷零分配。新增单文件 `go_result` 示例真实演示 `go_result!(T, call)` 与 `go_result_keep!(T, call)`，后者保留 `struct{Value T; Err error}`，不是 Clone。需要显式 T，最后一个返回类型须为预声明 error/透明 alias；error-only 可用单参数形式，多成功值须先组织为 struct。完整语义见 `examples/go_result/README.md`。源码包宏组合仍在 CLI 示例中验证，不冒充浏览器支持跨文件/预编译宏包。模块设计仍未整合。
 
 ## 更新与版本绑定
 
@@ -66,7 +66,7 @@ QA_URL=http://127.0.0.1:8080 npm test --prefix website
 
 Playwright 仅是测试依赖，固定在 lockfile。默认使用 `/usr/bin/chromium`，可设置 `CHROMIUM=/absolute/browser`。正常网站构建与运行均不需要 npm。
 
-`qa.mjs` 验证四例 CLI/WASM 逐字节一致、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
+`qa.mjs` 验证五例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值四项新增适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
 
 `read_playground` WebMCP 只读工具在浏览器有 `document.modelContext` 时可注册；普通 Chromium 不支持该原生上下文，未将其作为已通过原生 WebMCP 验证的能力宣传。
 
@@ -75,7 +75,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 ## 文件布局
 
 - `website/static/`：手写静态页面、样式、主线程与 Worker，无线上第三方依赖。
-- `website/examples/`：四个可执行 `.hgo` 源例。
+- `website/examples/`：五个可执行 `.hgo` 源例。
 - `website/build.py`：可复现生成链与版本清单。
 - `cmd/hgo-playground/`：WASM 桥接。
 - `internal/typecheck/platform_{native,wasm}.go`：平台特定 importer。

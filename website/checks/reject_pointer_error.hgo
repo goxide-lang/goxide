@@ -1,0 +1,6 @@
+package main
+
+type Failure struct{}
+func (*Failure) Error() string { return "failure" }
+func operation() (int,*Failure) { return 1, nil }
+func main() { _ = go_result_keep!(int, operation()) }

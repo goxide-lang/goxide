@@ -1,6 +1,10 @@
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 const base = process.env.QA_URL || 'http://127.0.0.1:8080';
 const browser = await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',headless:true,args:['--no-sandbox']});
 const context = await browser.newContext({viewport:{width:1440,height:1000},permissions:['clipboard-read','clipboard-write']});
@@ -15,6 +19,29 @@ for(let i=0;i<manifest.examples.length;i++){
  await page.selectOption('#examples',String(i));await finished();
  assert.equal(await page.inputValue('#output'),manifest.examples[i].go,`${manifest.examples[i].id}: WASM differs from CLI`);
 }
+// Native CLI runs only in this local QA process, never in the web server.
+const checkResults=[];
+const temp=await fs.mkdtemp(path.join(tmpdir(),'hgo-browser-parity-'));
+try {
+ for (const name of ['error_only','typed_nil','reject_wrong_type','reject_pointer_error']) {
+  const source=await fs.readFile(new URL(`checks/${name}.hgo`,import.meta.url),'utf8');
+  const input=path.join(temp,'playground.hgo');await fs.writeFile(input,source);
+  let nativeGo, nativeError;
+  try { nativeGo=execFileSync(process.env.HGO_BIN || fileURLToPath(new URL('../bin/hgo',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']}); }
+  catch(e) {nativeError=String(e.stderr).trim().replaceAll(input,'playground.hgo');}
+  await page.fill('#source',source);
+  if(name.startsWith('reject_')) {
+   assert.ok(nativeError,`${name}: CLI unexpectedly accepted input`);
+   await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
+   assert.equal((await page.textContent('#diagnostic')).trim(),nativeError,`${name}: diagnostics differ`);
+   assert.equal(await page.inputValue('#output'),'');
+  } else {
+   assert.equal(nativeError,undefined,`${name}: CLI rejected input`);
+   await finished();assert.equal(await page.inputValue('#output'),nativeGo,`${name}: generated Go differs`);
+  }
+  checkResults.push(name);
+ }
+} finally {await fs.rm(temp,{recursive:true,force:true});}
 await page.selectOption('#examples','0');await finished();
 await page.fill('#source',manifest.examples[0].source.replace('21','37'));await finished();
 assert.match(await page.inputValue('#output'),/37/);
@@ -50,5 +77,5 @@ await page.unroute('**/worker.js');await page.click('#reset');await finished();
 assert.equal(await page.inputValue('#output'),manifest.examples[0].go);
 assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');
-console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
+console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults,checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
 await browser.close();

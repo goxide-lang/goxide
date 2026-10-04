@@ -1,0 +1,53 @@
+package main
+
+import (
+    "fmt"
+    "io"
+    "errors"
+    "strconv"
+    "strings"
+)
+
+type ReadFailure = struct { Value int; Err error }
+
+func parse(text string) Result[int,error] {
+    return go_result!(int, strconv.Atoi(text))
+}
+
+func next(text string) Result[int,error] {
+    value := go_result!(int, strconv.Atoi(text))?
+    return Result[int,error]::Ok(value + 1)
+}
+
+func read(reader io.Reader, buffer []byte) Result[int,ReadFailure] {
+    return go_result_keep!(int, reader.Read(buffer))
+}
+
+// This is a valid Reader: a final nonempty chunk may accompany io.EOF.
+type finalChunk struct { Reader io.Reader }
+func (r finalChunk) Read(p []byte) (int,error) {
+    n, err := r.Reader.Read(p)
+    if n > 0 { return n, io.EOF }
+    return n, err
+}
+
+func main() {
+    match next("41") {
+        Result[int,error]::Ok(n) => { fmt.Println("next:", n) },
+        Result[int,error]::Err(err) => { fmt.Println("unexpected:", err) },
+    }
+    match parse("bad") {
+        Result[int,error]::Ok(n) => { fmt.Println("unexpected:", n) },
+        Result[int,error]::Err(err) => {
+            var number *strconv.NumError
+            fmt.Println("parse error:", errors.As(err, &number))
+        },
+    }
+    buffer := make([]byte, 8)
+    match read(finalChunk{Reader: strings.NewReader("abc")}, buffer) {
+        Result[int,ReadFailure]::Ok(n) => { fmt.Println("read:", n) },
+        Result[int,ReadFailure]::Err(partial) => {
+            fmt.Println("partial:", partial.Value, string(buffer[:partial.Value]), errors.Is(partial.Err, io.EOF))
+        },
+    }
+}

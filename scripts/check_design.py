@@ -61,7 +61,9 @@ def read_markdown(path: Path) -> tuple[str, list[tuple[str, str]], set[str]]:
 
 
 def check_docs() -> dict[Path, tuple[str, list[tuple[str, str]], set[str]]]:
-    files = sorted(p for p in ROOT.rglob("*.md") if ".git" not in p.relative_to(ROOT).parts)
+    # Dependency documentation is not authored repository design material.
+    files = sorted(p for p in ROOT.rglob("*.md")
+                   if not {".git", "node_modules"}.intersection(p.relative_to(ROOT).parts))
     documents = {p.resolve(): read_markdown(p) for p in files}
     links = 0
     problems = []

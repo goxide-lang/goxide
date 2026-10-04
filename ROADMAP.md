@@ -304,3 +304,8 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 ### 2026-10-04 Vendor 自动迁入扩展
 
 用户要求自动迁入 go.mod/go.sum/vendor，已按 [RFC 0025 vendor合同](docs/rfcs/0025-unified-project.md#vendor-自动迁入扩展2026-10-04实施合同) 实现原生 `-mod=vendor` 视图：源码/许可证/修改保留，单独内容锁，真实 Go 校验政策，不重建缺失模块或访问网络补全。默认只读plan、显式NEW目录构建验证；workspace vendor、未知规则和增强来源混用拒绝。独立分支已完成全包race覆盖、vet、设计检查、WASM/CLI一致性及独立复审；见 [vendor验收](docs/reviews/vendor-import-20261004.md)。网站发布仍须另行整合。
+
+
+## Workspace 研究提案（2026-10-04，未批准/未实现）
+
+新增 [RFC 0026](docs/rfcs/0026-workspaces.md)，参考官方 Cargo workspace/feature resolver 与 Go MVS/go.work/vendor；保留 TOML/lock 单一作者权威。建议选中闭包解析、迁入显式全成员政策、根多计划锁与独立成员发布，四项待决及分阶段验收见 RFC。本轮仅原生 Go 隔离机制试验和文档评审，不增加 workspace 生产能力，现有 go.work/workspace vendor 拒绝仍有效。证据见 [研究记录](docs/reviews/workspace-rfc-20261004.md)。

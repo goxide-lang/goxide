@@ -46,6 +46,8 @@
 
 | [0025 统一项目与迁入](0025-unified-project.md) | TOML/lock唯一依赖权威、Go导入与target模块 | 无损指令子集、staging验证、source/Go发行边界 |
 
+| [0026 workspace（Proposed）](0026-workspaces.md) | Cargo风格成员/继承/锁与Go多模块 | 仅研究提案；选中闭包、独立发行、go.work/vendor迁入边界，未实现 |
+
 ## 范围与验证
 
 LSP、自举、构建缓存等工程架构继续由[工具链专题](../design/compiler-and-tooling.md)管理；凡引入新源级行为或改变产物契约，仍需相应 RFC。Box、supertrait、GAT、特化、用户过程宏、锁块等未定或延期能力列在[决策登记](../design/decisions.md)，启用前必须另立 RFC，不能从名字补出未经确认的语义。

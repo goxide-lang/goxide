@@ -9,7 +9,7 @@
 
 ## 运行
 
-需要真正的 Go 1.27+ 编译器，无第三方 Go 依赖。若系统 `go` 是其他程序，先把编译器目录放到 PATH，或为 CLI 指定 `-go /path/to/go`。
+需要真正的 Go 1.27+ 编译器。编译器本身当前无第三方 Go 依赖；共享 sum 迁移分支的生成项目需要显式解析 `github.com/goxide-lang/std/sum`，公开版本锁定尚未完成，见文末迁移记录。若系统 `go` 是其他程序，先把编译器目录放到 PATH，或为 CLI 指定 `-go /path/to/go`。
 
 ```sh
 go test ./...
@@ -1059,3 +1059,14 @@ D36 后续授权现已实现：`go_result!(call)` 与 `go_result_keep!(call)` �
 共享载荷检查同时修复具名容器中的外部 enum selector；跨文件类型形状按声明文件的可信元数据绑定唯一包级名称，避免同名 import 别名串用。[推导验收](tests/acceptance/go_result_inference_test.go) 包含正反文件顺序、独立模块、公开 alias 暴露私有 T/E、原错误身份、嵌套非法 enum 和生成 Go race/vet。
 
 边界：无公开写法的外部私有类型、包作用域不可命名的局部类型仍明确拒绝；不把它们降级成 any，不声称完整用户泛型或预编译宏支持。Proposed serde adapter、native bridge 和完整 trait 状态不变。实现没有宣布整个 T0 完成。
+
+
+## 共享 std 迁移阶段（未完成整体交付）
+
+本阶段在 `feat/shared-std-sums` 上将本地 Option/Result 改成 `github.com/goxide-lang/std/sum` 的透明泛型 alias，保留现有公开 constructor/case helper 名称。metadata schema 7 分离 canonical family origin 与具体 validator owner；旧 schema 和自称本地 sum origin 的新 schema artifact 均要求重生成。普通 enum 表示不变。
+
+家族限定构造器 `Option::Some/None`、`Result::Ok/Err` 接入 typed 固定点：最近函数/闭包返回值、有类型初始化、赋值、已解析调用参数、match 结果上下文；Some 可由明确 payload 推导，None/Result 未约束参数不默认 any/error。family-qualified pattern 由 scrutinee 确定，支持 statement/expression match 与分支构造器；包固定点支持跨文件初始化的先后依赖。局部名义 payload 无法在包作用域命名时仍明确诊断，不将此边界解释为用户批准的长期延期。
+
+`internal/frontend/shared_std_test.go` 的真实独立 producer/consumer 模块覆盖直接类型互赋、`?`、原生 Go consumer、公开 facade/internal owner 并存、原生文件 alias 的 Clone/Debug/Default/Eq、上下文正反例、旧 schema 拒绝和 go_result 的原静态 E/typednil。生成模块分别执行 race 与 vet。测试仅显式 replace 到已审查隔离 std 候选库，不是公开 runtime 版本或生产 vendoring。
+
+**尚未完成：**公开 std 精确版本与所有 CLI/项目/测试依赖迁移；serde 新 core/json module 身份统一；全树 race 绿灯；网站 export data、真实 CLI/WASM 差分；可读性分支合流。全树 vet 和设计机制检查通过不能替代这些验收。完整 trait/native bridge/Value/PATCH/YAML 未加入本阶段，serde field adapter Proposed 入口也未默认为获批。

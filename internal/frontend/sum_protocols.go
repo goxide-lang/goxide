@@ -17,6 +17,7 @@ import (
 type externalSumProtocol struct {
 	family enumFamilyExport
 	origin *types.Package
+	owners map[string]*types.Package
 }
 
 // Use the same lowered/registered declarations and actual Go type identity as
@@ -36,7 +37,15 @@ func (g *generator) prepareSumProtocols(f *ast.File, cfg *compileConfig, imp typ
 				}
 				origin, err := imp.Import(family.DefinitionPath)
 				if err == nil && origin != nil {
-					g.sumExternal = append(g.sumExternal, externalSumProtocol{family, origin})
+					owners := map[string]*types.Package{family.DefinitionPath: origin}
+					for _, instance := range family.Instances {
+						if instance.ValidatorPath != "" && enumOriginImportAllowed(cfg.packagePath, instance.ValidatorPath) {
+							if owner, err := imp.Import(instance.ValidatorPath); err == nil {
+								owners[instance.ValidatorPath] = owner
+							}
+						}
+					}
+					g.sumExternal = append(g.sumExternal, externalSumProtocol{family, origin, owners})
 				}
 			}
 		}
@@ -142,7 +151,14 @@ func (g *generator) registeredSum(t ast.Expr) (enums.Decl, *types.Named, string,
 	// metadata remains available without requiring a source hgo selector.
 	for _, entry := range g.sumExternal {
 		for _, instance := range entry.family.Instances {
-			fn, ok := entry.origin.Scope().Lookup(instance.Validator).(*types.Func)
+			owner := entry.origin
+			if instance.ValidatorPath != "" {
+				owner = entry.owners[instance.ValidatorPath]
+			}
+			if owner == nil {
+				continue
+			}
+			fn, ok := owner.Scope().Lookup(instance.Validator).(*types.Func)
 			if !ok {
 				continue
 			}
@@ -150,7 +166,7 @@ func (g *generator) registeredSum(t ast.Expr) (enums.Decl, *types.Named, string,
 			if sig.Params().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), target) {
 				continue
 			}
-			d := enums.Decl{Family: entry.family.Family, PackagePath: entry.family.DefinitionPath}
+			d := enums.Decl{Family: entry.family.Family, PackagePath: entry.family.DefinitionPath, ValidatorPath: owner.Path()}
 			for _, v := range entry.family.Variants {
 				payload := ""
 				if v.PayloadIndex >= 0 {
@@ -276,7 +292,12 @@ func (g *generator) sumProtocol(kind string, t ast.Expr) (string, bool, error) {
 		g.next++
 		alias := fmt.Sprintf("__hgo_enum_sum_origin_f%d_%d", g.deriveFile, g.next)
 		g.sumImports[alias] = original.PackagePath
-		validator = alias + "." + validator
+		ownerAlias := alias
+		if original.ValidatorPath != "" && original.ValidatorPath != original.PackagePath {
+			ownerAlias = alias + "_validator"
+			g.sumImports[ownerAlias] = original.ValidatorPath
+		}
+		validator = ownerAlias + "." + validator
 		for i := range original.Variants {
 			original.Variants[i].CaseName = alias + "." + original.Variants[i].CaseName
 			original.Variants[i].Constructor = alias + "." + original.Variants[i].Constructor

@@ -11,7 +11,7 @@ import (
 
 // The generic origin is registry-authorized. Alias argument mappings come from
 // go/types, including partial/reordered aliases; names never imply a protocol.
-func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefix string) (enums.Decl, string, string) {
+func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefix string, validatorOwners ...map[string]string) (enums.Decl, string, string) {
 	d := enums.Decl{PackagePath: f.DefinitionPath, Name: origin + "." + f.DefinitionName, LookupName: alias + "." + f.Name, Family: f.Family, Marker: f.Marker}
 	for _, v := range f.Variants {
 		payload := ""
@@ -26,7 +26,17 @@ func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefi
 		// Keep the trusted producer function's identity until the typed consumer
 		// pass can name its concrete parameter. A function-value alias here
 		// would hide the target from Go escape analysis at every `?` call.
-		d.Instances = append(d.Instances, enums.Decl{Validator: origin + "." + v.Validator})
+		owner := origin
+		if len(validatorOwners) > 0 {
+			bound := validatorOwners[0][v.ValidatorPath]
+			if bound == "" {
+				// A facade can expose ordinary Go values without exposing an
+				// internal validator owner. Never invent a helper at the origin.
+				continue
+			}
+			owner = bound
+		}
+		d.Instances = append(d.Instances, enums.Decl{Validator: owner + "." + v.Validator})
 	}
 	count := 1
 	if f.Family == "Result" {

@@ -301,7 +301,7 @@ func PrepareGoResults(files map[string][]byte, cfg Config, maps map[string]*sour
 		round++
 		progress := false
 		for index, name := range names {
-			if !strings.HasSuffix(name, ".hgo") || !bytes.Contains(result[name], []byte("__hgo_go_result")) {
+			if !strings.HasSuffix(name, ".hgo") || (!bytes.Contains(result[name], []byte("__hgo_go_result")) && !bytes.Contains(result[name], []byte("__hgo_enum_pending_"))) {
 				continue
 			}
 			fs := token.NewFileSet()
@@ -326,7 +326,10 @@ func PrepareGoResults(files map[string][]byte, cfg Config, maps map[string]*sour
 				}
 			}
 			l.check()
-			changed, err, _ := l.resolveGoResult()
+			changed, err, _ := l.resolveSumConstructors()
+			if err == nil && !changed {
+				changed, err, _ = l.resolveGoResult()
+			}
 			if err != nil {
 				return nil, nil, err
 			}

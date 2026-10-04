@@ -268,7 +268,8 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	files := map[string][]byte{}
 	var families []enums.Decl
 	var conversions []propagate.Conversion
-	for name, r := range result.Files {
+	for _, name := range sortedResultNames(result) {
+		r := result.Files[name]
 		files[name] = r.Go
 		families = append(families, r.Enums...)
 		conversions = append(conversions, r.conversions...)
@@ -617,7 +618,24 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 	mapping.Segments = append(mapping.Segments, r.Diagnostics.Copy(cursor, len(r.Go), out.Len())...)
 	out.Write(r.Go[cursor:])
 	mapping.Source = out.Bytes()
-	formatted, err := format.Source(out.Bytes())
+	// A later file can lose every shared-family declaration during deduplication.
+	// Keep no unused generated import in that case.
+	raw := out.Bytes()
+	if parsed, err := parser.ParseFile(token.NewFileSet(), name, raw, 0); err == nil {
+		used := false
+		ast.Inspect(parsed, func(n ast.Node) bool {
+			if x, ok := n.(*ast.SelectorExpr); ok {
+				if id, ok := x.X.(*ast.Ident); ok && id.Name == "__hgo_enum_std" {
+					used = true
+				}
+			}
+			return true
+		})
+		if !used {
+			raw = bytes.Replace(raw, []byte("import __hgo_enum_std "), []byte("import _ "), 1)
+		}
+	}
+	formatted, err := format.Source(raw)
 	if err != nil {
 		return err
 	}

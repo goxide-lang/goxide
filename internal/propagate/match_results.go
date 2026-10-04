@@ -251,7 +251,7 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 			}
 			values = append(values, tv)
 		}
-		if blocked || pendingMatchType(target) {
+		if (blocked && target == nil) || pendingMatchType(target) {
 			pending = fail("result types are unresolved or an arm needs a type context")
 			continue
 		}
@@ -323,6 +323,12 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 		// Exact contextual assignment checking also enforces constant range and
 		// contextual shifts. AssignableTo alone lacks the constant's value.
 		for _, arm := range arms {
+			if pendingSumConstructor(arm) {
+				// The proven result context is installed below before the next
+				// typed pass resolves this constructor. Final checking still
+				// enforces assignability and constant bounds.
+				continue
+			}
 			// Newly appended aliases enter scope on the next check; use the proven
 			// spelling here and verify its identity at the arm's lexical position.
 			tv, err := types.Eval(l.fs, l.pkg, arm.Pos(), spelling)

@@ -11,6 +11,9 @@ import (
 	"strings"
 )
 
+const SumPackage = "github.com/goxide-lang/std/sum"
+const SumABI = 1
+
 // Builtin returns the nominal case ABI for an explicitly instantiated built-in.
 // Constructors and markers carry every type parameter, including phantom ones.
 func Builtin(family string, args []string) (Decl, error) {
@@ -47,7 +50,7 @@ func Builtin(family string, args []string) (Decl, error) {
 		norm[i] = b.String()
 	}
 	suffix := "[" + strings.Join(norm, ",") + "]"
-	d := Decl{Name: family + suffix, Family: family, TypeArgs: norm, Marker: "__hgo_enum_marker_" + family, Validator: fmt.Sprintf("__hgo_enum_inst_%x", sha256.Sum256([]byte(family+suffix)))}
+	d := Decl{Name: family + suffix, Family: family, TypeArgs: norm, Marker: "is" + family, Validator: fmt.Sprintf("__hgo_enum_inst_%x", sha256.Sum256([]byte(family+suffix)))}
 	names := []string{"Some", "None"}
 	payloads := []string{norm[0], ""}
 	if family == "Result" {
@@ -106,7 +109,16 @@ func (l *lowerer) collectBuiltins() error {
 		}
 		if i+1 >= len(l.ts) || l.ts[i+1].text != "[" {
 			if i+1 < len(l.ts) && l.ts[i+1].text == ":" {
-				return l.err(t.start, "builtin constructor requires explicit type arguments")
+				args := []string{"struct{}"}
+				if t.text == "Result" {
+					args = append(args, "struct{}")
+				}
+				seed, _ := Builtin(t.text, args)
+				if l.byName[seed.Name] == nil {
+					l.decls = append(l.decls, seed)
+					l.byName[seed.Name] = &l.decls[len(l.decls)-1]
+				}
+				continue
 			}
 			continue
 		}
@@ -207,11 +219,11 @@ func (l *lowerer) builtinDeclarations() string {
 		}
 		seen[d.Family] = true
 		params, args := "[T any]", "[T]"
-		mark := "(T)"
 		if d.Family == "Result" {
-			params, args, mark = "[T any,E any]", "[T,E]", "(T,E)"
+			params, args = "[T any,E any]", "[T,E]"
 		}
-		fmt.Fprintf(&b, "\ntype %s%s interface{%s%s};\n", d.Family, params, d.Marker, mark)
+		fmt.Fprintf(&b, "\nvar _ [%d-__hgo_enum_std.HgoSumABI]struct{};var _ [__hgo_enum_std.HgoSumABI-%d]struct{};\n", SumABI, SumABI)
+		fmt.Fprintf(&b, "\ntype %s%s = __hgo_enum_std.%s%s;\n", d.Family, params, d.Family, args)
 		genericArgs := []string{"T"}
 		if d.Family == "Result" {
 			genericArgs = append(genericArgs, "E")
@@ -221,21 +233,13 @@ func (l *lowerer) builtinDeclarations() string {
 			baseCase := strings.Split(v.CaseName, "[")[0]
 			ctor := strings.Split(v.Constructor, "[")[0]
 			if v.Payload == "" {
-				fmt.Fprintf(&b, "func %s%s() %s%s{return nil};\n", ctor, params, d.Family, args)
+				fmt.Fprintf(&b, "func %s%s() %s%s{return __hgo_enum_std.None%s()};\n", ctor, params, d.Family, args, args)
 				continue
 			}
-			fmt.Fprintf(&b, "type %s%s struct{Value %s};func(%s) %s%s{};func %s%s(v %s)%s%s{return %s{Value:v}};\n", baseCase, params, v.Payload, v.CaseName, d.Marker, mark, ctor, params, v.Payload, d.Family, args, v.CaseName)
+			fmt.Fprintf(&b, "type %s%s = __hgo_enum_std.%s%s;func %s%s(v %s)%s%s{return __hgo_enum_std.New%s%s(v)};\n", baseCase, params, v.Name, args, ctor, params, v.Payload, d.Family, args, v.Name, args)
 		}
-		fmt.Fprintf(&b, "func __hgo_enum_validate_%s%s(v %s%s){switch v.(type){", d.Family, params, d.Family, args)
-		if d.Family == "Option" {
-			b.WriteString("case nil:return;")
-		}
-		for _, v := range g.Variants {
-			if v.Payload != "" {
-				fmt.Fprintf(&b, "case %s:return;", v.CaseName)
-			}
-		}
-		fmt.Fprintf(&b, "default:panic(%q)}};\n", "hgo: invalid enum "+d.Family)
+		fmt.Fprintf(&b, "func __hgo_enum_validate_%s%s(v %s%s){__hgo_enum_std.Validate%s%s(v)};\n", d.Family, params, d.Family, args, d.Family, args)
+
 		for _, v := range g.Variants {
 			if v.Payload != "" {
 				fmt.Fprintf(&b, "type Hgo%s%s%s = %s;\n", d.Family, v.Name, params, v.CaseName)

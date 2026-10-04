@@ -16,12 +16,13 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/refs"
 )
 
 const enumMetadataMarker = "HgoEnumMetadata"
 const enumMetadataFilename = ".hgo.enums.json"
-const enumMetadataVersion = 6
+const enumMetadataVersion = 7
 
 type enumVariantExport struct {
 	Name, Case, Constructor string
@@ -35,8 +36,9 @@ type enumFamilyVariantExport struct {
 	Name, Case, Constructor string
 	PayloadIndex            int
 }
-type enumFamilyInstanceExport struct{ Validator string }
+type enumFamilyInstanceExport struct{ ValidatorPath, Validator string }
 type enumFamilyExport struct {
+	ABI                                                  int
 	Name, Family, DefinitionPath, DefinitionName, Marker string
 	Variants                                             []enumFamilyVariantExport
 	Instances                                            []enumFamilyInstanceExport
@@ -182,6 +184,13 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 	active := map[string]bool{}
 	var load func(string) (enumMetadata, error)
 	load = func(path string) (enumMetadata, error) {
+		if path == enums.SumPackage {
+			pkg, err := imp.Import(path)
+			if err != nil {
+				return enumMetadata{}, err
+			}
+			return sharedSumMetadata(pkg, imp)
+		}
 		bad := func(reason string) (enumMetadata, error) {
 			return enumMetadata{}, fmt.Errorf("enum metadata missing, stale or wrong package for %s: %s", path, reason)
 		}
@@ -213,7 +222,7 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 			return bad("trailing metadata JSON")
 		}
 		if a.ArtifactVersion != 1 || a.Metadata.Version != enumMetadataVersion {
-			return bad("unsupported metadata version")
+			return bad("unsupported metadata version; regenerate producer artifacts")
 		}
 		if a.Metadata.Path != path {
 			return bad("metadata package path mismatch")
@@ -329,7 +338,7 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 				if definition.Name == export.DefinitionName && definition.DefinitionPath == export.DefinitionPath && definition.DefinitionName == export.DefinitionName {
 					want := definition
 					want.Name = export.Name
-					if reflect.DeepEqual(want, export) {
+					if reflect.DeepEqual(familyContract(want), familyContract(export)) {
 						found = true
 					}
 					break
@@ -337,6 +346,32 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 			}
 			if !found {
 				return bad("builtin alias does not match a public defining declaration: " + export.Name)
+			}
+			for _, instance := range export.Instances {
+				owner := instance.ValidatorPath
+				if owner == "" {
+					owner = export.DefinitionPath
+				}
+				if owner == path {
+					continue
+				}
+				om, err := load(owner)
+				if err != nil {
+					return bad("validator owner: " + err.Error())
+				}
+				registered := false
+				for _, of := range om.Families {
+					if reflect.DeepEqual(familyContract(of), familyContract(export)) {
+						for _, oi := range of.Instances {
+							if oi == instance {
+								registered = true
+							}
+						}
+					}
+				}
+				if !registered {
+					return bad("validator not registered by owner: " + owner + "." + instance.Validator)
+				}
 			}
 		}
 		for _, export := range a.Metadata.Equality {
@@ -536,6 +571,11 @@ func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Impor
 			}
 		}
 	}
+	for _, family := range meta.Families {
+		if family.DefinitionPath != enums.SumPackage {
+			return fmt.Errorf("builtin sum origin is not shared std; regenerate producer artifacts")
+		}
+	}
 	if err := validateEnumFamilies(meta, pkg, imp); err != nil {
 		return err
 	}
@@ -620,6 +660,9 @@ func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Impor
 		return true
 	}
 	for _, f := range meta.Families {
+		if f.DefinitionPath == enums.SumPackage && !reflect.DeepEqual(familyContract(f), sharedSumFamily(f.Family)) {
+			return fmt.Errorf("shared sum family ABI mismatch: %s", f.Name)
+		}
 		count := 1
 		names := []string{"Some", "None"}
 		payloads := []int{0, -1}
@@ -630,7 +673,7 @@ func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Impor
 		} else if f.Family != "Option" {
 			return fmt.Errorf("unknown builtin family %q", f.Family)
 		}
-		if !public(f.Name) || !public(f.DefinitionName) || f.DefinitionPath == "" || seen[f.Name] || len(f.Variants) != 2 || len(f.Instances) == 0 {
+		if !public(f.Name) || !public(f.DefinitionName) || f.DefinitionPath == "" || seen[f.Name] || len(f.Variants) != 2 || (len(f.Instances) == 0 && f.DefinitionPath != enums.SumPackage) {
 			return fmt.Errorf("invalid or duplicate builtin family export %q", f.Name)
 		}
 		seen[f.Name] = true
@@ -742,11 +785,26 @@ func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Impor
 		}
 		validators := map[string]bool{}
 		for _, instance := range f.Instances {
-			if !public(instance.Validator) || validators[instance.Validator] {
+			if !public(instance.Validator) || validators[instance.ValidatorPath+"."+instance.Validator] {
 				return fmt.Errorf("invalid or duplicate builtin validator %s", instance.Validator)
 			}
-			validators[instance.Validator] = true
-			fn, ok := origin.Scope().Lookup(instance.Validator).(*types.Func)
+			validators[instance.ValidatorPath+"."+instance.Validator] = true
+			owner := origin
+			if instance.ValidatorPath != "" && instance.ValidatorPath != origin.Path() {
+				if instance.ValidatorPath == pkg.Path() {
+					owner = pkg
+				} else {
+					if imp == nil {
+						return fmt.Errorf("missing validator owner importer")
+					}
+					var err error
+					owner, err = imp.Import(instance.ValidatorPath)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			fn, ok := owner.Scope().Lookup(instance.Validator).(*types.Func)
 			if !ok {
 				return fmt.Errorf("missing builtin validator %s", instance.Validator)
 			}

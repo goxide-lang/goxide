@@ -217,10 +217,13 @@ func enumFamilyTestMetadata() enumMetadata {
 		{Name: "Result", Family: "Result", DefinitionPath: "example.org/producer", DefinitionName: "Result", Marker: "result", Variants: []enumFamilyVariantExport{{Name: "Ok", Case: "HOk", Constructor: "NewOk", PayloadIndex: 0}, {Name: "Err", Case: "HErr", Constructor: "NewErr", PayloadIndex: 1}}, Instances: []enumFamilyInstanceExport{{Validator: "CheckResult"}}},
 	}}
 }
+
+// Structural probes deliberately use a noncanonical family to independently
+// exercise signature validation. Production metadata also requires std origin.
 func TestEnumFamilyMetadataValidation(t *testing.T) {
 	producer := enumTestPackage(t, "example.org/producer", enumFamilyTestSource, nil)
 	imp := enumTestImporter{"example.org/producer": producer}
-	if e := validateEnumMetadata(enumFamilyTestMetadata(), producer, imp); e != nil {
+	if e := validateEnumFamilies(enumFamilyTestMetadata(), producer, imp); e != nil {
 		t.Fatal(e)
 	}
 	relay := enumTestPackage(t, "example.org/relay", `package relay;import p "example.org/producer";type Concrete=p.Result[int,error];type Reordered[A any,B any]=p.Result[B,A];type Partial[T any]=p.Result[T,error]`, imp)
@@ -231,7 +234,7 @@ func TestEnumFamilyMetadataValidation(t *testing.T) {
 			m.Package = relay.Name()
 			m.Families = m.Families[1:]
 			m.Families[0].Name = name
-			if e := validateEnumMetadata(m, relay, imp); e != nil {
+			if e := validateEnumFamilies(m, relay, imp); e != nil {
 				t.Fatal(e)
 			}
 		})
@@ -251,7 +254,7 @@ func TestEnumFamilyMetadataValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enumFamilyTestMetadata()
 			tc.change(&m)
-			e := validateEnumMetadata(m, producer, imp)
+			e := validateEnumFamilies(m, producer, imp)
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
 				t.Fatalf("want %s got %v", tc.want, e)
 			}
@@ -260,7 +263,7 @@ func TestEnumFamilyMetadataValidation(t *testing.T) {
 	t.Run("case-alias-parameter-order", func(t *testing.T) {
 		src := strings.Replace(enumFamilyTestSource, "type HOk[T any,E any]=ok[T,E]", "type HOk[T any,E any]=ok[E,T]", 1)
 		p := enumTestPackage(t, producer.Path(), src, nil)
-		e := validateEnumMetadata(enumFamilyTestMetadata(), p, enumTestImporter{p.Path(): p})
+		e := validateEnumFamilies(enumFamilyTestMetadata(), p, enumTestImporter{p.Path(): p})
 		if e == nil || !strings.Contains(e.Error(), "payload or marker") {
 			t.Fatal(e)
 		}
@@ -272,7 +275,7 @@ func TestEnumFamilyMetadataValidation(t *testing.T) {
 		m.Package = p.Name()
 		m.Families = m.Families[1:]
 		m.Families[0].Name = "Fake"
-		if e := validateEnumMetadata(m, p, imp); e == nil || !strings.Contains(e.Error(), "alias identity") {
+		if e := validateEnumFamilies(m, p, imp); e == nil || !strings.Contains(e.Error(), "alias identity") {
 			t.Fatal(e)
 		}
 	})
@@ -294,8 +297,8 @@ func TestEnumFamilyArtifactRoundTrip(t *testing.T) {
 		t.Fatal(e)
 	}
 	got, e := loadEnumArtifact(m.Path, imp)
-	if e != nil || got.Marker() != m.Marker() {
-		t.Fatal(got, e)
+	if e == nil || !strings.Contains(e.Error(), "origin is not shared std") {
+		t.Fatalf("legacy family origin accepted under new schema: %v %v", got, e)
 	}
 	for _, tc := range []struct{ name, source, want string }{
 		{"phantom-order", strings.ReplaceAll(enumFamilyTestSource, "result(T,E)", "result(E,T)"), "phantom parameter"},
@@ -304,7 +307,7 @@ func TestEnumFamilyArtifactRoundTrip(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := enumTestPackage(t, m.Path, tc.source, nil)
-			e := validateEnumMetadata(m, p, enumTestImporter{m.Path: p})
+			e := validateEnumFamilies(m, p, enumTestImporter{m.Path: p})
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
 				t.Fatalf("want %s got %v", tc.want, e)
 			}

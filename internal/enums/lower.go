@@ -23,6 +23,8 @@ type Variant struct {
 }
 type Decl struct {
 	Name, Marker, Validator string
+	// ValidatorPath records an external instance owner independently of its family origin.
+	ValidatorPath string
 	// PackagePath is set only by the module compiler for trusted producer metadata.
 	PackagePath, LookupName string
 	ConstructorType         string
@@ -218,6 +220,18 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 	}
 	for i := range edits {
 		edits[i].text = l.declaration(l.decls[i])
+	}
+	for _, d := range l.decls {
+		if d.Family != "" {
+			for i, t := range l.ts {
+				if t.text == "package" && i+1 < len(l.ts) {
+					end := l.ts[i+1].end
+					edits = append(edits, edit{t.start, end, string(source[t.start:end]) + ";import __hgo_enum_std " + strconv.Quote(SumPackage) + ";"})
+					break
+				}
+			}
+			break
+		}
 	}
 	edits = append(edits, separators...)
 	out, e := l.region(0, len(source), edits)
@@ -455,6 +469,23 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 		if found {
 			continue
 		}
+		if (t.text == "Option" || t.text == "Result") && i+3 < len(l.ts) && l.ts[i+1].text == ":" && l.ts[i+2].text == ":" {
+			variant := l.ts[i+3].text
+			valid := (t.text == "Option" && (variant == "Some" || variant == "None")) || (t.text == "Result" && (variant == "Ok" || variant == "Err"))
+			if !valid {
+				return "", l.err(t.start, "unknown builtin variant "+variant)
+			}
+			b.WriteString(l.copySource(cursor, t.start))
+			b.WriteString("__hgo_enum_pending_" + t.text + "_" + variant)
+			cursor = l.ts[i+3].end
+			i += 3
+			if variant == "None" {
+				b.WriteString("()")
+			} else if i+1 >= len(l.ts) || l.ts[i+1].text != "(" {
+				return "", l.err(t.start, "payload constructor requires argument")
+			}
+			continue
+		}
 		if t.text == "match" { // Statement only; assignment/return/call contexts must not be silently changed.
 			if i > 0 {
 				p := l.ts[i-1]
@@ -565,6 +596,14 @@ func (l *lowerer) match(i int) (string, int, error) {
 	target, e := l.region(l.ts[i].end, l.ts[j].start, nil)
 	if e != nil {
 		return "", 0, e
+	}
+	// Preserve the arm source until the real scrutinee type is available.
+	for _, head := range contextPatternHeads(l.ts[j : end+1]) {
+		k := j + head
+		if k+2 < end && (l.ts[k].text == "Option" || l.ts[k].text == "Result") && l.ts[k+1].text == ":" && l.ts[k+2].text == ":" {
+			body := string(l.src[l.ts[j].start:l.ts[end].end])
+			return "__hgo_enum_context_match(" + target + "," + strconv.Quote(body) + ")", end, nil
+		}
 	}
 	var d *Decl
 	arms := []arm{}

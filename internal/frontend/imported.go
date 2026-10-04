@@ -93,7 +93,20 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 					extraImports[name] += fmt.Sprintf("; import %s %q", originAlias, export.DefinitionPath)
 				}
 				prefix := fmt.Sprintf("__hgo_enum_family_import_f%d_i%d_b%d", fi, ii, ei)
-				d, code, reason := importedFamily(export, p.enumTypes, alias, originAlias, prefix)
+				owners := map[string]string{path: alias, export.DefinitionPath: originAlias}
+				for vi, instance := range export.Instances {
+					owner := instance.ValidatorPath
+					if owner == "" || owners[owner] != "" {
+						continue
+					}
+					if !enumOriginImportAllowed(consumerPath, owner) {
+						continue
+					}
+					oa := fmt.Sprintf("__hgo_enum_validator_owner_f%d_i%d_b%d_v%d", fi, ii, ei, vi)
+					owners[owner] = oa
+					extraImports[name] += fmt.Sprintf("; import %s %q", oa, owner)
+				}
+				d, code, reason := importedFamily(export, p.enumTypes, alias, originAlias, prefix, owners)
 				if reason != "" {
 					if unavailable[name] == nil {
 						unavailable[name] = map[string]string{}

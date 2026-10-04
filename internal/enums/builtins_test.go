@@ -43,7 +43,6 @@ func TestBuiltinRejects(t *testing.T) {
 		`package p; enum Option { A, }`,
 		`package p; func f[T any](x T)Option[T]{return Option[T]::Some(x)}`,
 		`package p; var x=Result[int]::Ok(1)`,
-		`package p; var x=Option::Some(1)`,
 		`package p; type Option int; var x Option[int]`,
 		`package p; enum E {A,}; type Holder struct {Bad *E}; var x Result[Holder,error]`,
 	} {

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/refs"
 )
 
@@ -39,6 +40,17 @@ func recoverEnumImports(sources map[string][]byte, known map[string]PackageResul
 			pkg, e := imp.Import(path)
 			if e != nil {
 				return nil, e
+			}
+			if path == enums.SumPackage {
+				meta, err := sharedSumMetadata(pkg, imp)
+				if err != nil {
+					return nil, err
+				}
+				p := out[path]
+				p.enumMetadata = meta
+				p.enumTypes = pkg
+				out[path] = p
+				continue
 			}
 			if pkg.Scope().Lookup(enumMetadataMarker) == nil {
 				continue
@@ -121,17 +133,10 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 		}
 		for _, d := range result.Files[file].Enums {
 			if d.Family != "" {
-				key := path + "." + d.Family
+				key := enums.SumPackage + "." + d.Family
 				f := families[key]
 				if f.Name == "" {
-					f = enumFamilyExport{Name: d.Family, Family: d.Family, DefinitionPath: path, DefinitionName: d.Family, Marker: d.Marker}
-					for i, v := range d.Variants {
-						c, idx := "Hgo"+d.Family+v.Name, i
-						if v.Payload == "" {
-							c, idx = "", -1
-						}
-						f.Variants = append(f.Variants, enumFamilyVariantExport{Name: v.Name, Case: c, Constructor: "HgoNew" + d.Family + v.Name, PayloadIndex: idx})
-					}
+					f = sharedSumFamily(d.Family)
 				}
 				validator := "HgoInst" + strings.TrimPrefix(d.Validator, "__hgo_enum_inst_")
 				found := false
@@ -139,7 +144,7 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 					found = found || x.Validator == validator
 				}
 				if !found {
-					f.Instances = append(f.Instances, enumFamilyInstanceExport{Validator: validator})
+					f.Instances = append(f.Instances, enumFamilyInstanceExport{ValidatorPath: path, Validator: validator})
 				}
 				families[key] = f
 				continue
@@ -165,7 +170,21 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 			equalities[x.DefinitionPath+"."+x.DefinitionName] = x
 		}
 		for _, x := range m.Families {
-			families[x.DefinitionPath+"."+x.DefinitionName] = x
+			key := x.DefinitionPath + "." + x.DefinitionName
+			if prior, ok := families[key]; ok {
+				for _, v := range x.Instances {
+					found := false
+					for _, p := range prior.Instances {
+						found = found || p == v
+					}
+					if !found {
+						prior.Instances = append(prior.Instances, v)
+					}
+				}
+				families[key] = prior
+			} else {
+				families[key] = x
+			}
 		}
 		for _, x := range m.Enums {
 			canonical[x.DefinitionPath+"."+x.DefinitionName] = x
@@ -197,7 +216,9 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 		}
 		if f, ok := families[origin.Pkg().Path()+"."+origin.Name()]; ok {
 			f.Name = name
-			sort.Slice(f.Instances, func(i, j int) bool { return f.Instances[i].Validator < f.Instances[j].Validator })
+			sort.Slice(f.Instances, func(i, j int) bool {
+				return f.Instances[i].ValidatorPath+"."+f.Instances[i].Validator < f.Instances[j].ValidatorPath+"."+f.Instances[j].Validator
+			})
 			meta.Families = append(meta.Families, f)
 			continue
 		}

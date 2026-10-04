@@ -810,3 +810,18 @@ D36 后续：入口无需 T，从 `(T,E)` 或 E 推导具体 Result；保留显�
 这不关闭此前 T0 其余条目，也不将无公开类型写法、预编译宏或待批准 serde adapters 视作已获批延期。
 
 本轮验证完成：`go test -race -tags hgoweb -count=1 ./...`、`go vet -tags hgoweb ./...` 通过；新增推导验收最终另跑 `go test -race ./tests/acceptance -run '^TestGoResultInference' -count=1`，内部生成模块独立 race/vet 通过。设计检查通过 76 个 Markdown、23 个 RFC 及 13 条 Go 机制命令；后者不计作 hgo 执行证据。官网 5 示例、8 适配正反例 CLI/WASM 差分通过，记录见 [网站集成](../website/INTEGRATION.md#te-推导分支验证2026-10-04)。两位独立审查者复核无剩余阻断，包含跨文件同名 import 指向不同 enum 包的额外真实执行；该回归也已纳入模块验收。
+
+
+## 2026-10-04 共享 std 接入阶段：仍未完成 MVP
+
+| 分类 | 当前事实 / 下一步 |
+| --- | --- |
+| 已实现并有本阶段执行证据 | std透明alias、schema7 origin/owner分离；独立模块直接互赋与`?`；公开facade可达validator；缺参构造与pattern；原生alias的Clone/Debug/Default/Eq。`TestSharedStd*` 含生成模块独立race/vet。 |
+| 必须完成 | std/serde实际repo提交及精确依赖、CLI与既有fixture依赖迁移、schema7组合负例补齐、serde core/json同一身份、网站export data及CLI/WASM、可读性合流和最终全树race。 |
+| 已有实现待最终组合验证 | 宏、只读/可写权限、From/清理、serde default/skip/普通Option缺失/null等前期能力，必须在新共享依赖闭环重跑，不能沿用旧ABI测试证明完成。 |
+| 明确不纳入本阶段 | 复杂别名/借用分析、完整Rust/trait能力、YAML、Value、PATCH和完整native bridge。 |
+| 仍需新设计决定 | serde-field-adapters-proposed 的入口与自定义deserialize_with缺失策略；本阶段不依赖它。 |
+
+独立审查实际发现并修复：pattern扫描误入arm构造器的重复展开、延迟AST节点词法作用域、公开owner被internal条目整体屏蔽、表达式match构造器未取得上下文及整数常量过早默认。相关正反例已进入共享std测试；typednil与引用投影另有独立真实CLI复核。
+
+全树race已尝试但未通过：既有临时模块尚未声明新std依赖，低层测试importer与历史预期尚需迁移；另见项目fixture的ziphash/离线module规划失败，尚不能归因于本改动。不得将这些失败标作已批准延期。根go.mod未写入伪造的可下载std版本或本机绝对replace。

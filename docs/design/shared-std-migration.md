@@ -61,7 +61,7 @@ type HgoOptionSome[T any] = sum.Some[T]
 
 将 enum metadata schema 从 6 升到 7，旧 artifact 明确要求重生成，不静默接受旧身份。普通用户 enum 的表示不变，但其与 sum 混合的 artifact 也按版本重建。
 
-建议 family 记录增加 `ABI`（共享 sum 为 1）；`DefinitionPath/DefinitionName` 是 std canonical origin；case/constructor 从同一 origin 解析。具体 `enumFamilyInstanceExport` 改为 `ValidatorPath, Validator`，把实例检查归属与家族定义分离。泛型 std 家族声明不要求穷举 concrete instances；实际使用的具体实例仍需可信检查记录或本地静态生成检查。
+生产接入已将 family 记录增加 `ABI`（共享 sum 为 1）；`DefinitionPath/DefinitionName` 是 std canonical origin；case/constructor 从同一 origin 解析。具体 `enumFamilyInstanceExport` 改为 `ValidatorPath, Validator`，把实例检查归属与家族定义分离。泛型 std 家族声明不要求穷举 concrete instances；实际使用的具体实例仍需可信检查记录或本地静态生成检查。
 
 必须同步：
 
@@ -78,7 +78,7 @@ type HgoOptionSome[T any] = sum.Some[T]
 
 现有项目锁与 dependency fingerprint 应包含所选 module version/replace 内容和共享 ABI；Go MVS 只选择模块版本，不证明 ABI 兼容。旧生成 Go/.a 的私有 marker 属于旧用户包，无法用新增 alias 追溯修复，生产者、消费者、metadata 和浏览器 export archives 统一重生成。源码公开类型/构造函数名尽量兼容，反射包路径会变化；不承诺旧二进制或旧 artifact 可混用。
 
-serde 任务需把编译器生成 import、协议 identity 校验、原生手写实现、fixtures 与 JSON 全部切换为同一新 core path。若保留旧 path 的过渡 shim，只能透明转发/alias 同一 core identity，不能复制出另一套协议；是否保留 shim 由同一迁移阶段统一记录，不让 std 任务先创建旧/新双协议。
+serde 迁移需把编译器生成 import、协议 identity 校验、原生手写实现、fixtures 与 JSON 全部切换为同一新 core path。若保留旧 path 的过渡 shim，只能透明转发/alias 同一 core identity，不能复制出另一套协议；是否保留 shim 由同一迁移阶段统一记录，不让 std 任务先创建旧/新双协议。
 
 ## 5. 家族限定构造与 pattern 推导
 
@@ -108,7 +108,7 @@ match r {
 | std 共享表示与别名 | `internal/enums/builtins.go` 的 Builtin/builtinDeclarations/builtinInstances | std 任务拥有 ABI；可读性任务先不改这些函数的家族/constructor身份 |
 | schema/origin/owner | `internal/frontend/enum_artifact.go`, `enum_exports.go`, `imported_family.go` | std 任务拥有 family 段；serde 任务只在约定阶段改 field protocol identity 段，避免并写 |
 | typed 注册/推导 | `internal/propagate/lower.go`, `go_result.go`；拟新增独立 sum 推导模块；`frontend/compile.go`, `package.go` 接入 | std/推导任务；可读性私有名改写随后适配生成接口 |
-| serde 独立迁移 | `serde/`, `serdejson/`, serde derive/import/验证及相关 fixtures | 单独任务；本任务不迁复制同一批文件 |
+| serde 独立迁移 | `serde/`, `serdejson/`, serde derive/import/验证及相关 fixtures | 暂无其他实施 owner；本阶段保留当前库，新环境接续统一迁移，不宣称已有并行任务完成 |
 | 可读性 | 空 payload switch、私有短名、无 guard match if/else；AST格式/映射 | 独立任务；保留 exported HgoInst ABI名，不能删除验证或改 break 目标 |
 | 网站 | `website/build.py` export 闭包/digest、示例及 QA | 合流后统一重建，避免混用旧 compiler/新 std；暂不部署 |
 | use | RFC 0021 现状与后续文档 | 另任务负责，不新增 use 语法 |
@@ -124,3 +124,6 @@ match r {
 - [ ] 迁移 Eq/Clone/Default/Debug/serde 注册与 Option 缺失/null；测试 std/serde 核心 identity 同一，不能只跑纯 Go 原型。
 - [ ] 家族限定缺参构造及 pattern：return/assignment/callarg/scrutinee 正例，信息不足/冲突/typed nil/partialvalue负例。
 - [ ] 全树 race/vet、每个生成模块独立 race/vet、设计检查；网站真实 CLI/WASM 差分与 export data，独立审查后报告完整 SHA。不以机制探针代替生产验收，不合 main、不 tag/release、不部署网站。
+
+
+当前实施证据：`internal/frontend/shared_std_test.go` 使用明确候选库replace执行hgo→Go独立模块，不依赖根go.mod临时替换。共享类型、owner、上下文推导的阶段测试通过；公开版本、全树fixture迁移、serde/网站/可读性合流未完成。上面的总阶段复选框保持未勾选，避免把局部证据当作整体交付。

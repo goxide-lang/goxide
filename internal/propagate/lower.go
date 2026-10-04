@@ -124,14 +124,14 @@ func (l *lowering) family(t types.Type) (enums.Decl, bool) {
 	if !ok || n.Obj().Pkg() == nil {
 		return enums.Decl{}, false
 	}
+	// Prefer a local concrete payload validator over relayed registrations.
 	for _, d := range l.cfg.Families {
-		if d.Family == "" {
-			continue
+		if d.Family != "" && d.PackagePath == "" && (n.Obj().Pkg() == l.pkg || n.Obj().Pkg().Path() == enums.SumPackage) && types.Identical(n, l.resolveType(d.Name)) {
+			return d, true
 		}
-		if d.PackagePath == "" {
-			if n.Obj().Pkg() == l.pkg && types.Identical(n, l.resolveType(d.Name)) {
-				return d, true
-			}
+	}
+	for _, d := range l.cfg.Families {
+		if d.Family == "" || d.PackagePath == "" {
 			continue
 		}
 		// Imported family metadata is supplied only by a compiled producer. Both
@@ -309,7 +309,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if cfg.Namespace != "" && !token.IsIdentifier(cfg.Namespace) {
 		return nil, fmt.Errorf("%s: invalid propagation namespace", filename)
 	}
-	if !bytes.Contains(source, []byte("__hgo_go_result")) && !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) && !bytes.Contains(source, []byte(matchOperand+"(")) {
+	if !bytes.Contains(source, []byte("__hgo_enum_pending_")) && !bytes.Contains(source, []byte("__hgo_enum_context_match")) && !bytes.Contains(source, []byte("__hgo_go_result")) && !bytes.Contains(source, []byte(marker+"(")) && !bytes.Contains(source, []byte("__hgo_enum_infer(")) && !bytes.Contains(source, []byte(matchInfer+"(")) && !bytes.Contains(source, []byte(matchContext+"(")) && !bytes.Contains(source, []byte(matchOperand+"(")) {
 		return source, nil
 	}
 	if cfg.GoResultNodes == nil {
@@ -347,6 +347,37 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	f.Decls = append(f.Decls, matchSeed.Decls...)
 	for {
 		l.check()
+		inferred, inferErr, inferPending := l.resolveSumConstructors()
+		if inferErr != nil {
+			return nil, inferErr
+		}
+		if inferred {
+			continue
+		}
+		matched, matchErr, matchPending := l.resolveSumPatterns()
+		if matchErr != nil {
+			return nil, matchErr
+		}
+		if matched {
+			// Expanded arm nodes were parsed in a separate fragment. Reparse the
+			// active file so go/types scopes and CheckExpr use lexical positions
+			// in the containing user function, including expression-match arms.
+			var rewritten bytes.Buffer
+			if err := format.Node(&rewritten, fs, f); err != nil {
+				return nil, err
+			}
+			if cfg.Provenance != nil {
+				next := cfg.Provenance.AST(fs, f, originalNodes, rewritten.Bytes(), "sum pattern expansion")
+				*cfg.Provenance = *next
+			}
+			f, e = parser.ParseFile(fs, filename, rewritten.Bytes(), parser.ParseComments)
+			if e != nil {
+				return nil, e
+			}
+			l.file = f
+			originalNodes = sourcemap.Nodes(f)
+			continue
+		}
 		adapted, adapterError, adapterPending := l.resolveGoResult()
 		if adapterError != nil {
 			return nil, adapterError
@@ -431,6 +462,12 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 		}
 		if unresolved == nil {
 			unresolved = adapterPending
+		}
+		if unresolved == nil {
+			unresolved = inferPending
+		}
+		if unresolved == nil {
+			unresolved = matchPending
 		}
 		if unresolved != nil {
 			return nil, unresolved

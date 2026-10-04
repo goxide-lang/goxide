@@ -282,3 +282,8 @@ D36 的普通/保值显式宏已实现并进入真实 CLI、独立生成模块�
 ### Result 适配 T/E 推导后续
 
 已完成后续授权的静态签名推导与原 E nil 判断，保留显式 T。跨文件实例登记、独立模块和可命名私有 alias 已有真实执行验收，见 [实现说明](IMPLEMENTATION.md#result-适配宏静态-te-推导2026-10-04)。不可命名类型和完整泛型仍是明确边界；不改变其余 T0 条目的状态。
+
+
+## 共享 std 阶段接续
+
+共享sum生产接入已推进到独立模块执行，见 [阶段验收](docs/t0-acceptance.md#2026-10-04-共享-std-接入阶段仍未完成-mvp) 和 [迁移方案](docs/design/shared-std-migration.md)。下一步优先在具有std/serde repo配置的新环境完成真实版本锁定，再统一CLI/测试/serde/网站产物；`next` 保持空实验仓库。本阶段不是MVP完成声明，缺失的全树race与CLI/WASM闭环仍是交付阻断。

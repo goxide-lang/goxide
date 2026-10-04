@@ -4,6 +4,8 @@
 
 **状态：供用户确认，未批准、未实现 production runner。** 用户确认的是先研究设计并提交黑白例子，不是允许执行任何依赖脚本。本次只添加研究文档与自编临时 fixture；不改生产代码、不改全项目后缀。
 
+后续研究：[与 Cargo build.rs 的逐项差距](build-gox-cargo-gap.md) 已按当前 Cargo 文档和项目工具链 `fa1461f` 补充。它提出放宽 root 信任粒度、允许声明驱动本地增量、默认 package/config 共享的**新候选修订**；本篇保留 bce1efd 原提案作为对照，二者均未获实现批准。
+
 研究基线：2026-10-04 fetch `feat/use-macro-reexports`，提交 `0dfe58bc7b529819e6402aa19ca53f6a3d473a6c`。本机 Go 为 `/workspace/goxide-environment/go/bin/go`，`go1.27.1 linux/amd64`。仓库及父工作目录未发现适用 AGENTS.md 或 `.agents/skills`。遵循[既有 RFC 规范](../README.md)与[模板](../TEMPLATE.md)，不抢占正式 RFC 编号。
 
 现状证据：

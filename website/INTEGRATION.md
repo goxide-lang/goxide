@@ -22,8 +22,8 @@
 在 Go 1.27.1 linux/amd64、`GOTOOLCHAIN=local GOWORK=off GOPROXY=off GOMAXPROCS=4` 下运行，全部退出 0：
 
 ```sh
-go test -race -tags hgoweb -count=1 ./...
-go vet -tags hgoweb ./...
+go test -race -tags goxideweb -count=1 ./...
+go vet -tags goxideweb ./...
 python3 scripts/check_design.py
 GOCACHE=/workspace/goxide-environment/cache \
   QA_URL=http://127.0.0.1:8082 npm test --prefix website
@@ -31,7 +31,7 @@ GOCACHE=/workspace/goxide-environment/cache \
 
 - [联合全树 race](validation/2026-10-04/full-race.log)：包含编译器、两宏、primitive 诊断、跨模块 validator/allocation gate、serde、CLI 与嵌入服务器；acceptance 284.548s、prototype 7.731s。此处是一次真正的组合全树运行，不是拼接各分支的历史通过结果。
 - [联合全树 vet](validation/2026-10-04/full-vet.log)：正常退出，无输出，因此日志为空。
-- [设计检查](validation/2026-10-04/design.log)：67 个 Markdown、891 个本地链接/锚点，20 个 RFC 的结构及 13 条 Go 命令通过。Go 机制检查有预期失败反例，不冒充 hgo frontend 的测试。
+- [设计检查](validation/2026-10-04/design.log)：67 个 Markdown、891 个本地链接/锚点，20 个 RFC 的结构及 13 条 Go 命令通过。Go 机制检查有预期失败反例，不冒充 goxide frontend 的测试。
 - [浏览器回归](validation/2026-10-04/browser.log)：五组官网例子 CLI/WASM 输出逐字节一致；新增 error-only 与 typed-nil 生成一致性，以及错误 T、指针 error 返回值的规范化文件名后诊断一致性。
 - 浏览器实际编辑改变输出，错误恢复、连续快速输入、复制、Ctrl+Enter/Tab、390px 窄屏、32 KiB、未知 import、XSS 字面文本、中断、重置和无外部请求均通过，JS 错误为零。超时通过 QA 路由替换不返回的 Worker 确定性触发，随后恢复真实 WASM；产品没有测试后门。
 - [五组 CLI 实际运行](validation/2026-10-04/cli-examples.log)通过。新适配示例输出 `next: 42`、`parse error: true`、`partial: 3 abc true`。
@@ -49,7 +49,7 @@ go test ./internal/macros ./tests/acceptance \
 
 两包通过；跨模块验收内部还运行生成工程 race/vet。审查确认两种宏相对 `ffc9b9b` 完整保留、修复来源和必要集成挂钩正确，独立重算 compiler/export 摘要相符，8 个 dist/embed 资源逐字节相同。
 
-原网站审查的两项问题继续保持修复：`hgoweb` 标签避免干净 checkout 缺资源时破坏默认检查；摘要覆盖支持库与 export data/目标平台。
+原网站审查的两项问题继续保持修复：`goxideweb` 标签避免干净 checkout 缺资源时破坏默认检查；摘要覆盖支持库与 export data/目标平台。
 
 ## 交付边界
 

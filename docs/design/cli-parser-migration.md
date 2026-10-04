@@ -34,9 +34,9 @@ pflag 的短选项及交错参数规则不同，不能仅换 import；其
 
 ## 2. 已核实的现状
 
-源码入口：[main.go](../../cmd/hgo/main.go)、
-[import_go.go](../../cmd/hgo/import_go.go)、[scripts.go](../../cmd/hgo/scripts.go)、
-[project.go](../../cmd/hgo/project.go)、[directory.go](../../cmd/hgo/directory.go)。
+源码入口：[main.go](../../cmd/goxide/main.go)、
+[import_go.go](../../cmd/goxide/import_go.go)、[scripts.go](../../cmd/goxide/scripts.go)、
+[project.go](../../cmd/goxide/project.go)、[directory.go](../../cmd/goxide/directory.go)。
 
 - `main.go:24–29` 把任意返回错误打印到 stderr 并退出 1，包含 ErrHelp、参数错误、
   编译错误、子进程退出错误。没有稳定的 usage=2 分类，也未透传用户程序退出码。
@@ -49,7 +49,7 @@ pflag 的短选项及交错参数规则不同，不能仅换 import；其
 - project 从 goxide.toml/goxide.lock 读取目标、特性和依赖。`--lib` 与 `--bin/--example`
   冲突；一个 bin 时可自动选中；多个 bin 必须显式选；无 bin 有 lib 时可默认 lib，
   但 lib 不能 run。manifest/lock 是服务的配置权威，没有独立 manifest/lock 命令。
-- `test` 的目录/project 路径已自动启用 race；当前没有 `hgo test --race` 或测试参数
+- `test` 的目录/project 路径已自动启用 race；当前没有 `goxide test --race` 或测试参数
   透传。`run` 的 Go argv 也没有程序参数尾部，不能声称现有 `--` 可透传。
 - scripts 只有 `--action`，默认为 plan，六个合法值见下面命令树。plan 输出 JSON；
   它不运行 build script，但会取得项目/策略锁、解析依赖、准备计划，不能承诺整个过程
@@ -67,7 +67,7 @@ pflag 的短选项及交错参数规则不同，不能仅换 import；其
 | --- | --- | --- |
 | 真正全局 UI | 当前没有；拟新增 root/各级 `-h/--help` | Cobra UI；不要自动加入 verbose/config/yes 等未实现能力 |
 | 常见执行上下文 | `--go=go`；`--offline=false` | 仍按叶命令注册，复用注册函数；不因提升为 persistent flag 而扩大作用域 |
-| project 配置 | `--features=""`、`--no-default-features=false`、`--locked=false`、`--target-dir=""` | 编译命令及 scripts；目标目录保持 flag > HGO_TARGET_DIR > target，路径语义不变 |
+| project 配置 | `--features=""`、`--no-default-features=false`、`--locked=false`、`--target-dir=""` | 编译命令及 scripts；目标目录保持 flag > GOXIDE_TARGET_DIR > target，路径语义不变 |
 | project 目标 | `--bin=""`、`--example=""`、`--lib=false` | 五个编译命令；由现有目标服务验证支持组合 |
 | 输出/生成 | `-o=""`、`--source-map=""`、`--expanded=""` | 编译叶命令；map/expanded 仅单文件，-o 按模式保留意义 |
 | 构建相关 | `--tags=""`、`--runtime=""` | tags 仅目录；runtime 实际用于单文件 run/build；不要从其它模式删去历史可解析选项 |
@@ -87,12 +87,12 @@ import-go bin 是逐次原样追加，不按逗号拆分。不能一律换成 St
 除 UI 外，每个操作都对应现有服务；保留顶层常用命令，不增加多余 `project build` 层。
 
 ```text
-hgo
+goxide
 ├── build      [flags] INPUT
 ├── run        [flags] INPUT [-- PROGRAM_ARGS...]
 ├── test       [flags] DIRECTORY
 ├── transpile  [flags] INPUT
-├── expand     [flags] FILE.hgo
+├── expand     [flags] FILE.gox
 ├── import-go  (--plan | --out NEWDIR) (--lib PATH | --bin NAME=PATH...) ROOT
 ├── scripts
 │   ├── plan           [project-flags] PROJECT
@@ -105,13 +105,13 @@ hgo
 └── completion bash|zsh|fish|powershell    # 新 UI，只输出脚本
 ```
 
-保留 `hgo scripts [flags] PROJECT` 和 `--action ACTION` 的旧拼法，仍默认 plan。
+保留 `goxide scripts [flags] PROJECT` 和 `--action ACTION` 的旧拼法，仍默认 plan。
 不要把 trust-project 简化成含义更宽的 trust/approve-all，不新增 add/update/publish、
 manifest edit、lock update、target list、全局 clean 或 vendor 子命令。
 import-go 的迁移策略由 vendor 任务持有；本轮不拆成 import/plan/apply 新语法。
 
 别名只做旧拼法到同一个 typed request 的映射，不添加 b/r/t 等新缩写。
-特别测试名为 plan、allow、clean 的 PROJECT：旧 `hgo scripts plan` 是针对路径 plan
+特别测试名为 plan、allow、clean 的 PROJECT：旧 `goxide scripts plan` 是针对路径 plan
 的默认 plan，不能因 Cobra 自动子命令发现改变含义。建议在进入 Cobra 前做明确的
 legacy grammar 路由：显式旧 --action 或“只有一个项目位置参数”的旧调用保留；
 新动作后必须显式提供 PROJECT（或请求该动作 help），不自动补 `.`。
@@ -151,15 +151,15 @@ exit 1、错误到 stderr；不得部分解析后先写文件/授权，再报告
    并测试 `SetInterspersed(false)`；除 run 明确的程序边界外，每个现有执行叶要求
    恰好一个 INPUT/PROJECT/ROOT。`build INPUT --offline` 是多余 operand 错误，
    不重新扫描成选项。子命令按树顺序出现，不支持任意父级/子级flags交错。
-7. **`--` 终止 hgo options**：如 `transpile -- -source.hgo`，后者是文件名，不能被
+7. **`--` 终止 goxide options**：如 `transpile -- -source.gox`，后者是文件名，不能被
    旧选项拦截；`--` 本身从解析结果移除，后续项目 operand 原样保留。
    `scripts -- plan` 明确指定名为 plan 的项目目录，不发现 plan 子命令。
 8. **run 程序参数使用独立边界**：迁移目标支持 `run [flags] INPUT -- ARGS...`，
    input 后没有 `--` 时不接受额外参数。若 input 以短横开始，则
-   `run [flags] -- -input.hgo -- ARGS...`：第一个 `--` 终止 hgo options，第二个
+   `run [flags] -- -input.gox -- ARGS...`：第一个 `--` 终止 goxide options，第二个
    在唯一 INPUT 后划分程序 argv。无尾部参数的原调用继续有效，空尾部也有效。
    边界之后的 -aaa、--offline、空字符串、再次出现的 -- 都逐项保留，绝不再解析为
-   hgo options。使用 exec argv，不拼 shell；按已选 Go 工具/构建路径传递，不允许
+   goxide options。使用 exec argv，不拼 shell；按已选 Go 工具/构建路径传递，不允许
    程序参数插入 Go 工具的 flags 区。test/build/transpile/import-go/scripts 不提供
    自由透传；test 的 Go flags 和测试二进制参数不是 run 的同一接口。
    Cobra 的 [ArgsLenAtDash](https://pkg.go.dev/github.com/spf13/cobra#Command.ArgsLenAtDash)
@@ -168,7 +168,7 @@ exit 1、错误到 stderr；不得部分解析后先写文件/授权，再报告
 9. **Cobra 前置词法门禁不是执行器**：只按对应 command schema 检查选项token、旧拼法、
    组合与边界；不得访问 manifest/trust、联网或执行任何服务。之后才进入 pflag/Cobra
    和统一 request 验证。保留 unknown-flags 拒绝；禁用忽略错误与相似命令自动执行。
-10. 不引入 Viper/env 自动绑定；保留 HGO_TARGET_DIR/HGO_TRUST_DIR 的既有规则。
+10. 不引入 Viper/env 自动绑定；保留 GOXIDE_TARGET_DIR/GOXIDE_TRUST_DIR 的既有规则。
     `--offline` 只约束依赖获取，不保证脚本网络隔离。
 
 ### 接受／拒绝测试矩阵（待实现后执行）
@@ -201,7 +201,7 @@ exit 1、错误到 stderr；不得部分解析后先写文件/授权，再报告
 | scripts allow --action trust-project PROJECT | 拒绝矛盾动作，零授权 |
 | scripts trust-project（缺PROJECT） | 不补cwd、不授信；保留旧同名路径的plan解析边界 |
 | run INPUT -- --offline -aaa "" -- | 接受，ProgramArgs为四个原样元素 |
-| run -- -input.hgo -- -h / run INPUT -- | 接受带短横input／空参数列表 |
+| run -- -input.gox -- -h / run INPUT -- | 接受带短横input／空参数列表 |
 | run INPUT arg / test INPUT -- -run TestX | 拒绝无界尾部／未提供的test透传 |
 | --help / help scripts / scripts allow --help | stdout/0；不读plan、不改trust |
 
@@ -257,7 +257,7 @@ type ImportGoRequest struct {
 }
 ```
 
-建议分层 `cmd/hgo`（main/退出）→ `internal/cli`（语法门禁、旧action路由、Cobra、help）→
+建议分层 `cmd/goxide`（main/退出）→ `internal/cli`（语法门禁、旧action路由、Cobra、help）→
 `internal/toolchain`（类型化用例服务）→ 现有 frontend/project/buildscript/scripttrust。
 Cobra RunE 只构造 request 并调用 service，不能将 `*cobra.Command`、FlagSet、
 `cmd.Flags().Changed` 或包级 flag 指针传入业务层。若业务需要“是否显式设置”，在
@@ -286,14 +286,14 @@ Context/取消与 os.Stdin 转发保持。通用 FS/Runner/Context 接口注入�
 - help、completion、UsageError、未知 action、解析失败不调用授权服务。
 - 原始 --action 与新子命令若混合且冲突，明确拒绝；不采用最后一个胜出来扩大权限。
 - 保留执行及缓存复用前的 Authorize；权限检查不能只放在 Cobra hook。未来 clap
-  以及程序化调用也必须走相同授权服务。HGO_TRUST_DIR 仍须在源码/产物之外。
+  以及程序化调用也必须走相同授权服务。GOXIDE_TRUST_DIR 仍须在源码/产物之外。
 
 ## 7. 实施顺序与 vendor 协调门槛
 
 1. **契约先行**：保存旧 CLI argv→request/exit/streams 的 golden cases。覆盖本报告
    18 个历史只读探针，但标出已批准改变：旧单dash长名拒绝、help stdout/0、run显式参数
    边界；增加第4节接受/拒绝矩阵，不能用旧探针结果锁回已撤销的兼容行为。
-2. **vendor 前置条件已完成**：从 d51117d 精确交付点重新审计 cmd/hgo/import-go/project
+2. **vendor 前置条件已完成**：从 d51117d 精确交付点重新审计 cmd/goxide/import-go/project
    和 vendor 选项后才开始生产修改；保留原生 vendor 模式与独立内容摘要。
    随后抽服务：现有 flag parser 可作为内部过渡，只把解析结果变成上述 request；
    按 main/scripts/import-go 分项提交，复用 vendor 新服务，不回滚其新选项/迁移保护。
@@ -337,8 +337,8 @@ Context/取消与 os.Stdin 转发保持。通用 FS/Runner/Context 接口注入�
 `/tmp/codex-daemon-1000` 被文件权限拒绝，未重试进入或绕过；不影响本审查。
 
 用户已批准 help stdout/exit 0、failure exit 1，以及 Cobra/POSIX 风格短选项与 GNU 长选项。
-第4节矩阵已落实为[真实进程测试](../../cmd/hgo/cli_process_test.go)与
-[模拟 schema 测试](../../cmd/hgo/cli_schema_test.go)。每次调用建立独立 Cobra 树和 typed request；
+第4节矩阵已落实为[真实进程测试](../../cmd/goxide/cli_process_test.go)与
+[模拟 schema 测试](../../cmd/goxide/cli_schema_test.go)。每次调用建立独立 Cobra 树和 typed request；
 业务入口为 executeCompile、executeImportGo、executeScripts，均不依赖 Cobra/pflag。
 直接路由仅检查领先命令词，避免 Cobra 自动发现把同名项目路径改成授权动作。
 隐藏 `__complete` 协议也校验已完成选项；最后未完成前缀允许继续补全，且不调用服务。

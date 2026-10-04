@@ -8,7 +8,7 @@
 
 | 基线能力 | 已执行/已实现 | 尚未实现 |
 | --- | --- | --- |
-| 具体 typed helper | 普通 `.hgo` 函数可接收 `serde.Serializer/Deserializer`，调用 `time.Format/Parse`，作为 `serdejson.Marshal/Unmarshal` 参数真实运行 | derive 字段的显式 helper 选择 |
+| 具体 typed helper | 普通 `.gox` 函数可接收 `serde.Serializer/Deserializer`，调用 `time.Format/Parse`，作为 `serdejson.Marshal/Unmarshal` 参数真实运行 | derive 字段的显式 helper 选择 |
 | 错误证据 | `errors.As/Is` 保留真实 Go cause，Field/Index/MapKey/Variant 路径已有实现 | 全格式统一位置 API；不可伪称 Token 返回的 SyntaxError offset 等于 Unmarshal offset |
 | 字段属性 | rename/default/skip/deny_unknown_fields；Option 缺失/null 为 None | with/serialize_with/deserialize_with 均拒绝 |
 | Go JSON | 普通 Go 显式调用 encoding/json、原生方法可用 | 自动采用方法集；核心 raw JSON 子值读写能力 |
@@ -24,21 +24,21 @@
 | --- | --- | --- |
 | [Serde 字段属性](https://serde.rs/field-attrs.html)；[日期格式示例](https://serde.rs/custom-date-format.html) | serialize_with/deserialize_with 选择自定义函数；with 指向一对函数所在模块，字段不必拥有被替代方向的派生 | 保留用户熟悉的属性名，采用具体 Go 函数签名，不复制 Rust 泛型约束 |
 | [v1.0.228 attr.rs](https://github.com/serde-rs/serde/blob/v1.0.228/serde_derive/src/internals/attr.rs)，Field::from_ast、WITH 分支 | with 展开为 serialize/deserialize 路径；重复设置会诊断 | 不采用“最后一个属性覆盖前一个”的规则 |
-| [v1.0.228 de.rs](https://github.com/serde-rs/serde/blob/v1.0.228/serde_derive/src/de.rs)，expr_is_missing | 先处理 default；有 deserialize_with 且没有 default 时直接报 missing_field | 自定义 Option 缺失不是普通 Option 的隐式 None，必须明确 hgo 是否保留自身规则 |
+| [v1.0.228 de.rs](https://github.com/serde-rs/serde/blob/v1.0.228/serde_derive/src/de.rs)，expr_is_missing | 先处理 default；有 deserialize_with 且没有 default 时直接报 missing_field | 自定义 Option 缺失不是普通 Option 的隐式 None，必须明确 goxide 是否保留自身规则 |
 | [v1.0.228 de/struct_.rs](https://github.com/serde-rs/serde/blob/v1.0.228/serde_derive/src/de/struct_.rs)，deserialize_map | 自定义 helper 读整个字段值；字段槽仍追踪出现与重复 | helper 不仅是 Some 的 payload 转换，外层字段管理仍由 derive 负责 |
-| [v1.0.228 ser.rs](https://github.com/serde-rs/serde/blob/v1.0.228/serde_derive/src/ser.rs)，wrap_serialize_field_with | 用生成 wrapper 将已选字段函数接入 Serialize 调用 | hgo 可直接生成 typed 子闭包，不要求新增全局 trait 实现 |
-| [Go JSON 文档](https://pkg.go.dev/encoding/json)；[encode.go](https://go.dev/src/encoding/json/encode.go)，marshalerEncoder、MarshalerError | 原生编码选择方法并检查/压紧返回 JSON；MarshalerError 可 Unwrap | 该过程不能替代 hgo 的重复键/Unicode/预算策略，也不能自动添加方法 |
+| [v1.0.228 ser.rs](https://github.com/serde-rs/serde/blob/v1.0.228/serde_derive/src/ser.rs)，wrap_serialize_field_with | 用生成 wrapper 将已选字段函数接入 Serialize 调用 | goxide 可直接生成 typed 子闭包，不要求新增全局 trait 实现 |
+| [Go JSON 文档](https://pkg.go.dev/encoding/json)；[encode.go](https://go.dev/src/encoding/json/encode.go)，marshalerEncoder、MarshalerError | 原生编码选择方法并检查/压紧返回 JSON；MarshalerError 可 Unwrap | 该过程不能替代 goxide 的重复键/Unicode/预算策略，也不能自动添加方法 |
 | [stream.go](https://go.dev/src/encoding/json/stream.go)，RawMessage.MarshalJSON/UnmarshalJSON | 非 nil RawMessage 编码方法直接返回底层字节；解码方法复制数据，本身不校验 JSON | 桥需要显式校验和所有权边界，不能把调用原生方法等同安全 raw 通道 |
 | [time.go](https://go.dev/src/time/time.go)，Time.MarshalJSON/UnmarshalJSON | 原生方法有自己的时间格式与 null/错误行为 | typed 日期 helper 是业务格式策略，不声称与原生方法等价 |
 | [serde_json RawValue 文档](https://docs.rs/serde_json/latest/serde_json/value/struct.RawValue.html) | raw_value 特性提供一个 JSON 值的原文表示，拥有/借用形态分开 | 只说明格式专用 raw 能力可以独立于 Value 树；不移植其借用/零拷贝承诺 |
 
-本地源码核对的 SHA-256：`encoding/json/stream.go` 为 `065501364e4954cf1c8f1887900248d4c0983593b8c058b2fe7997d9635b793d`，`encoding/json/encode.go` 为 `8ff45e82c60c6e29d11fe57ce0c59d79f40ef0d53be28ac36617482a7463b217`。网络事实只作设计依据，当前 hgo 能力以基线和探针为准。
+本地源码核对的 SHA-256：`encoding/json/stream.go` 为 `065501364e4954cf1c8f1887900248d4c0983593b8c058b2fe7997d9635b793d`，`encoding/json/encode.go` 为 `8ff45e82c60c6e29d11fe57ce0c59d79f40ef0d53be28ac36617482a7463b217`。网络事实只作设计依据，当前 goxide 能力以基线和探针为准。
 
 ## 3. 两种最小注解入口
 
 ### 候选 A：具体函数路径，推荐首个切片
 
-```hgo
+```goxide
 // Proposed：当前编译器拒绝这两个属性。
 #[derive(Serialize, Deserialize)]
 type Event struct {
@@ -47,7 +47,7 @@ type Event struct {
 }
 ```
 
-首版路径仅允许同包具体顶层函数名（可位于另一 `.hgo` 或 native `.go` 文件）；没有闭包、函数变量、接收者方法、泛型实参、任意表达式或字符串 eval。先不接受 imported `pkg.Func`；调用外部库可在同包普通 helper 中完成。这减少导入元数据/包别名卫生负担，但不妨碍 `time.Time` 作为具体 T：新工作是识别被显式选中 codec 的字段及签名，不能继续先套内建字段白名单。
+首版路径仅允许同包具体顶层函数名（可位于另一 `.gox` 或 native `.go` 文件）；没有闭包、函数变量、接收者方法、泛型实参、任意表达式或字符串 eval。先不接受 imported `pkg.Func`；调用外部库可在同包普通 helper 中完成。这减少导入元数据/包别名卫生负担，但不妨碍 `time.Time` 作为具体 T：新工作是识别被显式选中 codec 的字段及签名，不能继续先套内建字段白名单。
 
 候选签名固定为：
 
@@ -62,7 +62,7 @@ func ReadTime(d serde.Deserializer) (time.Time, error)
 
 ### 候选 B：with 导入包约定
 
-```hgo
+```goxide
 // Proposed：timecodec 是当前文件显式导入的普通 Go 包别名。
 #[serde(with="timecodec")]
 Created time.Time
@@ -118,12 +118,12 @@ err = fields.NextValue(func(d serde.Deserializer) error {
 | 无 adapter | 完全沿用基线 | Option 缺失/null→None 已批准，不重开 |
 | 有 adapter，字段存在 | 调用一次字段 helper；包括显式 null | whole-field opt-in 接管 null，不在调用前先拆 Option；helper 若要 None 使用现有 Option/Visitor 协议 |
 | 有 adapter，普通字段缺失 | 不调用 helper；无 default 报 MissingField，有 default 调用已登记 Default | time.Time 尚无可消费的 Default，不能偷偷用 time.Time{}；首例 required |
-| 有 adapter，Option 字段缺失 | **推荐保留 hgo 的 None，不调用 helper**；default 仍为 Option.None | **有意偏离 Serde 1.0.228 自定义解码缺失规则，待用户选择** |
+| 有 adapter，Option 字段缺失 | **推荐保留 goxide 的 None，不调用 helper**；default 仍为 Option.None | **有意偏离 Serde 1.0.228 自定义解码缺失规则，待用户选择** |
 | default + 显式值/错误/null | 存在值由 helper 处理，任何错误不触发 default | 不能把默认工厂当解析失败兜底 |
 | skip + adapter | 建议编译期拒绝冲突配置；要求移除无效 adapter | 已有 skip-alone 保持：格式级消费/预算，不匹配目标类型，成功后调用 Default |
 | 调用时机 | 显式 helper 在字段读取时运行；本层读取和 required 检查通过后再按字段声明顺序回填 default/skip | helper/default 的副作用不回滚，后续重复键/尾部失败也不回滚 |
 
-另一可选策略是自定义解码严格对齐 Serde：Option 也必须显式 `default` 才可缺失。推荐保留 None 是为了减少 hgo 既有可选字段的意外变化，但它必须作为明确选项批准，不能从“仿照 serde-rs”自动推导。whole-field helper 可自定义 null 表示同样属于新属性的 Proposed 契约，不改无属性字段；本文不赋予 PATCH missing/null/value 三态。
+另一可选策略是自定义解码严格对齐 Serde：Option 也必须显式 `default` 才可缺失。推荐保留 None 是为了减少 goxide 既有可选字段的意外变化，但它必须作为明确选项批准，不能从“仿照 serde-rs”自动推导。whole-field helper 可自定义 null 表示同样属于新属性的 Proposed 契约，不改无属性字段；本文不赋予 PATCH missing/null/value 三态。
 
 `Option[time.Time]` 也不自动获得跨包 sum codec 或新 enum 载荷位置。skip-alone 的旧 Default 要求不变，给导入类型加 adapter 并不能让 `serde(default/skip)` 合法。
 
@@ -133,7 +133,7 @@ helper 原样返回 Go error。既有 Struct/Map/Seq/Enum Access 在字段/键/�
 
 native bridge 若以后采用 `json.Marshal`，保留其真实 MarshalerError 与底层 cause；若显式直接调用方法，就只保留真实返回错误，不伪造一个“经过 json.Marshal”的 wrapper。建议固定选一种调用路线并写入协议，不能随类型自动切换。校验器自产的重复键/Unicode/预算错误没有原生 cause 时不制造 cause。
 
-错误位置分别记录：hgo 属性/函数签名诊断回到源码；JSON 当前流由 Decoder.Token 返回的 `*json.SyntaxError.Offset` 保留真实值；native 子值解析器的 offset 是子值相对位置。**首片不把子值 offset 冒充整文档位置**，也不增统一 offset API；可先以字段路径和原 cause 区分来源。
+错误位置分别记录：goxide 属性/函数签名诊断回到源码；JSON 当前流由 Decoder.Token 返回的 `*json.SyntaxError.Offset` 保留真实值；native 子值解析器的 offset 是子值相对位置。**首片不把子值 offset 冒充整文档位置**，也不增统一 offset API；可先以字段路径和原 cause 区分来源。
 
 ## 7. 格式无关 helper 与 JSON 原生桥
 
@@ -147,7 +147,7 @@ native bridge 若以后采用 `json.Marshal`，保留其真实 MarshalerError �
 
 ### 7.1 为什么不自动采用 Go 方法集
 
-自动采用会让依赖新增方法、值/指针方法集、可寻址性等改变派生行为；还可能把 JSON 格式耦合进核心协议。Go 原生默认的重复键、Unicode、[]byte 等行为与 hgo 严格后端不同。明确字段选择使调用及副作用可审计，不自动为原类型注入 MarshalJSON/UnmarshalJSON。见母 RFC [原生接口边界](0006-serde-core-and-formats.md#63-go-json-实现细节与原生接口)。
+自动采用会让依赖新增方法、值/指针方法集、可寻址性等改变派生行为；还可能把 JSON 格式耦合进核心协议。Go 原生默认的重复键、Unicode、[]byte 等行为与 goxide 严格后端不同。明确字段选择使调用及副作用可审计，不自动为原类型注入 MarshalJSON/UnmarshalJSON。见母 RFC [原生接口边界](0006-serde-core-and-formats.md#63-go-json-实现细节与原生接口)。
 
 ### 7.2 未来桥的最低约束（不是已批准 API）
 
@@ -165,7 +165,7 @@ native bridge 若以后采用 `json.Marshal`，保留其真实 MarshalerError �
 
 ## 8. 已执行机制探针与可复现步骤
 
-本轮仓库外路径 `/workspace/goxide-field-adapter-research`，不提交探针为编译器实现：`typed/main.hgo` 经安装 CLI run 输出 `typed="2026-10-02T10:20:30.123Z" ParseError=true`；`mechanism/probe_test.go` 的 2 项 `go test -race -count=1 -v ./...` 通过。检查了重复键/第二值/孤立代理项/超深拒绝，raw 大数字（包括 1e999）可由 Skip 验证，RawMessage 别名/复制以及原生错误链。
+本轮仓库外路径 `/workspace/goxide-field-adapter-research`，不提交探针为编译器实现：`typed/main.gox` 经安装 CLI run 输出 `typed="2026-10-02T10:20:30.123Z" ParseError=true`；`mechanism/probe_test.go` 的 2 项 `go test -race -count=1 -v ./...` 通过。检查了重复键/第二值/孤立代理项/超深拒绝，raw 大数字（包括 1e999）可由 Skip 验证，RawMessage 别名/复制以及原生错误链。
 
 以下短机制程序可脱离该目录重建，使用基线 runtime；它不是字段 adapter 实现：
 
@@ -226,11 +226,11 @@ go mod edit -require=github.com/hxsf/goxide@v0.0.0 -replace=github.com/hxsf/goxi
 go run -race .
 ```
 
-预期：时间字符串往返，ParseError=true；原生接受重复键而 strict 返回 Duplicate；source/owned/snapshot 的 x 分别是 2/3/4。日期 helper 只是选定布局的应用样例，不宣称支持所有 time.Time 状态、单调时钟或保证任意年份可逆。还实际验证候选 A 在基线报 `candidate.hgo:5: unsupported serde attribute serialize_with="WriteTime"`；所以“helper 可以运行”不等于“字段注解已经实现”。
+预期：时间字符串往返，ParseError=true；原生接受重复键而 strict 返回 Duplicate；source/owned/snapshot 的 x 分别是 2/3/4。日期 helper 只是选定布局的应用样例，不宣称支持所有 time.Time 状态、单调时钟或保证任意年份可逆。还实际验证候选 A 在基线报 `candidate.gox:5: unsupported serde attribute serialize_with="WriteTime"`；所以“helper 可以运行”不等于“字段注解已经实现”。
 
 ## 9. 实施前验收与需要选择的最少问题
 
-若批准首片，验收必须有新的 `.hgo` 多文件日期业务，经 CLI 安装→仓库外转译→独立生成模块 race，而非只运行手写 Go：
+若批准首片，验收必须有新的 `.gox` 多文件日期业务，经 CLI 安装→仓库外转译→独立生成模块 race，而非只运行手写 Go：
 
 - time.Time 的正常字符串、非法日期、null、缺失；ParseError cause 与恰好一个 Field 路径；同一类型不同字段可选不同格式，未标注字段仍明确拒绝。
 - 单向派生、错误签名/defined type、同包跨文件、helper/类型/局部同名、原始属性 span；无函数变量或泛型反射 fallback。
@@ -242,7 +242,7 @@ JSON raw 桥不是首片交付条件；若之后单独批准，另加嵌套父�
 需要用户选择仅两项，以下均未批准：
 
 1. **入口/范围：推荐 A（具体函数对）+ time.Time 首例；B 的 with 包糖和 JSON raw 桥后置**，还是 with 必须首片可用？
-2. **带自定义解码的 Option 缺失：推荐保留 hgo None**，还是严格按 Serde 要求显式 default？两者都不把缺失传给 helper，也不扩 PATCH；显式存在值（含 null）由 whole-field helper 接管。
+2. **带自定义解码的 Option 缺失：推荐保留 goxide None**，还是严格按 Serde 要求显式 default？两者都不把缺失传给 helper，也不扩 PATCH；显式存在值（含 null）由 whole-field helper 接管。
 
 ## 10. 本轮研究审查记录
 

@@ -1,12 +1,12 @@
 # RFC 0001 场景：正常 Go 用法与有依据的 warning
 
-更新：2026-10-01。用户已否决前两轮默认保守拒绝；本页替换原来的“必须证明独占才能使用”场景。示例为 hgo 语义草案，最终语法未冻结，也尚不能由仓库执行。诊断依据见 [B01–B08 与 W01–W06](0001-scoped-borrow-views.md)，不是静态安全保证。
+更新：2026-10-01。用户已否决前两轮默认保守拒绝；本页替换原来的“必须证明独占才能使用”场景。示例为 goxide 语义草案，最终语法未冻结，也尚不能由仓库执行。诊断依据见 [B01–B08 与 W01–W06](0001-scoped-borrow-views.md)，不是静态安全保证。
 
 ## 1. 缓存读取与更新
 
 默认允许现有容器装入锁，不要求唯一性证明，不自动复制：
 
-```hgo
+```goxide
 func new_cache(values map[string]int) Lock[map[string]int] {
     return Lock.new(values)
 }
@@ -20,7 +20,7 @@ func put(c Lock[map[string]int], key string, value int) {
 
 三个函数本身无已知外部冲突线索，不因 map/借用参数/未知调用者而逐个告警。普通 Go 的 map 缺失键读取、nil map 写入等行为仍按实际语义处理，以上构造不承诺输入非 nil；显式需要非空类型时另做类型/边界检查。
 
-```hgo
+```goxide
 values := make(map[string]int)
 c := new_cache(values)
 put(c, "quota", 10)
@@ -31,7 +31,7 @@ values["quota"] = 20 // W03：已知同一 map 经 c 保护，这次写绕开 c
 
 ## 2. 指针返回、方法值、error 与 panic
 
-```hgo
+```goxide
 func fresh() mut& int {
     value := 1
     return mut& value  // 允许、不报：普通 Go GC 存活，不是词法悬空
@@ -42,7 +42,7 @@ escaped := c.do(|p| { return p }) // 仅返回不报；记录来源供未来诊�
 
 返回局部指针所需的具体源级拼写仍待 U02；规则目标是允许这一普通 Go 机制，不能借“未设计生命周期”永久拒绝。真实类型不匹配仍 error。
 
-```hgo
+```goxide
 method := counter.do(|p| { return p.increment })
 err := counter.do(|p| { return ViewError{target: p} })
 counter.do(|p| { panic(ViewError{target: p}) })
@@ -52,7 +52,7 @@ counter.do(|p| { panic(ViewError{target: p}) })
 
 ## 3. 集合遍历与快照
 
-```hgo
+```goxide
 snapshot := c.do(|p| { return *p }) // map 浅复制：仅返回不报，后续绕锁访问才提示
 // 用户可选择独立副本，非编译前提：
 snapshot := c.do(|p| {
@@ -64,7 +64,7 @@ snapshot := c.do(|p| {
 
 map 值若含 slice/指针，复制外层不会清除内部来源；能追踪到锁内对象时才告警，未知元素关系不猜测。快照具有分配和复制成本；保留共享视图可能是用户正确的性能选择。
 
-```hgo
+```goxide
 c.do(|p| { put(c, "quota", 10) }) // W04：持有 c → put → 再获取 c
 c.do(|p| { (*p)["quota"] = 10 })  // 同一次回调内更新，无重入警告
 ```
@@ -73,7 +73,7 @@ W04 不阻断，即使风险很明确。建议合并操作或调用不重新加�
 
 ## 4. 异步交接
 
-```hgo
+```goxide
 values := []int{1, 2, 3}
 go func() { total(values) }()
 values[0] = 100
@@ -82,7 +82,7 @@ values[0] = 100
 
 建议通过 channel 等待后台完成后再写、使用同一把锁，或传独立副本。检查器未实现通用 happens-before 证明；自定义同步可能误报，隐藏别名可能漏报。
 
-```hgo
+```goxide
 values := [3]int{1, 2, 3}
 go func(copy [3]int) { total_array(copy) }(values)
 values[0] = 100 // 数组值已复制，无同存储冲突，不报 W02
@@ -92,7 +92,7 @@ values[0] = 100 // 数组值已复制，无同存储冲突，不报 W02
 
 ## 5. 普通 Go API 与显式 unsafe
 
-```hgo
+```goxide
 n := strconv::Itoa(10)  // 普通 Go 符号与签名匹配，不因缺摘要要求 unsafe
 fmt::Println(n)        // 同样允许；没有具体风险链不报
 f := native::Update
@@ -117,6 +117,6 @@ f(nativeValue)         // ABI/类型合法即可；函数值不自动带 unsafe
 
 ## 7. 验证与不报告对照
 
-现有 Go 测试保留 6 个边界/快照夹具，本轮另加普通局部指针返回、共同只读指针并发两项机制正例。它们证明这些 Go 行为可用，不是假装已测试 hgo warning 文本。文档警告目录人工自审以下负对照：标量复制、只读共享、无摘要调用、未知动态方法、独立数组任务、正常指针返回均不应仅因无法证明安全而警告。
+现有 Go 测试保留 6 个边界/快照夹具，本轮另加普通局部指针返回、共同只读指针并发两项机制正例。它们证明这些 Go 行为可用，不是假装已测试 goxide warning 文本。文档警告目录人工自审以下负对照：标量复制、只读共享、无摘要调用、未知动态方法、独立数组任务、正常指针返回均不应仅因无法证明安全而警告。
 
 `go test -race` 检测实际运行中的数据竞争；`go build -race` 只构建插桩程序，运行后才可能报告。静态 warning 在执行前依据代码风险链产生；race 未覆盖路径和未知外部行为单独说明。当前仓库没有完整前端，不能声称已实现上述诊断级别或静态保证。

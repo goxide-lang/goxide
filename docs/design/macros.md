@@ -12,13 +12,13 @@
 | 暂定 | T10–T12：定义点卫生（区别于 Rust mixed-site）、匹配与展开规则、格式子集 / I/O panic、各 derive 的精确协议和静态降低。 |
 | 未定 | U04、U09：静态 Self 与泛型后端、完整宏语法、formatter、上下文 / 缓存协议。 |
 
-状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 hgo 功能已实现。
+状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 goxide 功能已实现。
 
 ## 1. 分类与首版范围
 
 后续独立会话的实现授权：在文档基线之后交付可运行的模式宏和内建派生原型，场景为 log/tracing 风格结构化日志、常见模式宏以及 Debug/Clone/serde/thiserror。JSON 是推荐首版序列化格式，不等于 Rust serde 全协议；thiserror 生成显式 From，问号的目标已知单步转换见 [RFC 0005](../rfcs/research/0005-option-result-question.md)。原型支持语法、已实现范围与失败诊断须单独登记；未完成整套 trait、引用和 enum 前端时，不把 Go helper 生成称为这些语言功能已完成。禁止以宏授权恢复 MVP 借用分析。本标签仅包含文档和机制证据，未包含宏实现。
 
-标签后用户进一步确定 **serde 优先并仿照 serde-rs**：核心 Serialize/Deserialize、Serializer/Deserializer、Visitor/Access 连接类型与格式，Value 属于 serde-json 等格式层，不设公共通用核心树。[RFC 0006](../rfcs/research/0006-serde-core-and-formats.md)已按官方实现修订，撤回此前 core Value 与强制树中转候选。derive 不直接调用 encoding/json，不把 Debug 输出当序列化格式，不自动授予字段写权限；具体 Go/hgo ABI、rename/default/skip 和泛型 codec 子集仍需实施细化。新增内建派生不开放用户过程宏。
+标签后用户进一步确定 **serde 优先并仿照 serde-rs**：核心 Serialize/Deserialize、Serializer/Deserializer、Visitor/Access 连接类型与格式，Value 属于 serde-json 等格式层，不设公共通用核心树。[RFC 0006](../rfcs/research/0006-serde-core-and-formats.md)已按官方实现修订，撤回此前 core Value 与强制树中转候选。derive 不直接调用 encoding/json，不把 Debug 输出当序列化格式，不自动授予字段写权限；具体 Go/goxide ABI、rename/default/skip 和泛型 codec 子集仍需实施细化。新增内建派生不开放用户过程宏。
 
 “如何调用”“如何实现”“是否有副作用”是三个不同维度：
 
@@ -42,13 +42,13 @@
 
 在编译期宏扩展中执行用户 AST 程序、用户可编程 derive、任意宿主 Go 代码或插件、开放 I/O 与自由改写声明的自定义 attribute 均延期。内建 derive 本身当然由编译器程序实现；首版不把这一实现能力开放为用户过程宏接口。此限制不禁止普通程序或离线工具使用语法分析和生成库。
 
-宏是 hgo 转译前端的一个阶段。展开结果接受正常名字解析、类型检查和转译前 linter，再降低为 Go 1.27 源码。不引入另一个运行时，也不改变[总纲](overview.md)中的 Go 支持库与自举方向。
+宏是 goxide 转译前端的一个阶段。展开结果接受正常名字解析、类型检查和转译前 linter，再降低为 Go 1.27 源码。不引入另一个运行时，也不改变[总纲](overview.md)中的 Go 支持库与自举方向。
 
-这里参考 Rust 的是宏入口和派生机制，不是复制 Rust 标准库或引入全局 move / `Copy` 体系。hgo 基础包针对现有 **Go std API** 提供 safe 声明或包装，并补充泛型 slice，见[基础包与 safe Go 标准库](standard-library.md)。`quote` / `syn` 风格工具属于额外语法工具包，是否需要过程宏取决于调用方式，见[语法工具与过程宏边界](syntax-tooling.md)。
+这里参考 Rust 的是宏入口和派生机制，不是复制 Rust 标准库或引入全局 move / `Copy` 体系。goxide 基础包针对现有 **Go std API** 提供 safe 声明或包装，并补充泛型 slice，见[基础包与 safe Go 标准库](standard-library.md)。`quote` / `syn` 风格工具属于额外语法工具包，是否需要过程宏取决于调用方式，见[语法工具与过程宏边界](syntax-tooling.md)。
 
 ## 2. 模式与模板操作结构化语法
 
-模式中的 `expr`、`type`、`ident` 等捕获类别按 hgo 语法解析。模板捕获值是保留来源与上下文的结构化语法片段，不是拼接后重新猜测绑定关系的字符串。
+模式中的 `expr`、`type`、`ident` 等捕获类别按 goxide 语法解析。模板捕获值是保留来源与上下文的结构化语法片段，不是拼接后重新猜测绑定关系的字符串。
 
 首版语法类别的精确名单待解析器设计；不同类别不能任意互换。将一个声明列表插入算术表达式位置应报错，不能借重新解析文本隐藏错误。
 
@@ -67,9 +67,9 @@
 
 当前同 module 源码包原型采用 `pub macro_rules! name` 导出、普通 `import alias "path"` 和 `alias.name!(...)` 调用，复用 Go module/import 身份与依赖顺序。运行时 helper 按现有 Go 导出约定写 `Emit` 等公开函数；私有 helper 跨包不可见，须由作者提供公开 helper/shim。下文 `import macro`、`m::name!` 和 `pub func` 仍是完整语言的草案拼写，不是本轮原型新冻结语法。限定实现与来源/预算边界见[宏实现说明](../../internal/macros/README.md)。
 
-以下使用类似 `macro_rules` 的草案形式，不是当前可运行的 hgo 程序。假设 `macrokit` 包提供一个普通、公开的运行时 helper：
+以下使用类似 `macro_rules` 的草案形式，不是当前可运行的 goxide 程序。假设 `macrokit` 包提供一个普通、公开的运行时 helper：
 
-```hgo
+```goxide
 pub func twice(value int) int {
     return value + value
 }
@@ -89,8 +89,8 @@ pub macro_rules! twice_plus_one {
 
 调用形状同样为草案：
 
-```hgo
-import macro m "example.org/hgo/macrokit"
+```goxide
+import macro m "example.org/goxide/macrokit"
 
 saved := 41
 twice := func(value int) int { return -1000 }
@@ -130,7 +130,7 @@ result := m::twice_plus_one!(saved + next())
 
 Rust 的 `print!` / `println!` 源码是声明宏外层，格式处理转交 `format_args!` 一类入口；`format_args!` 的实现被标记为编译器内建。这说明“声明宏入口”与“有编译器支持”可以同时成立，不能把完整格式检查伪装成普通模式替换。[Rust 打印宏源码](https://doc.rust-lang.org/src/std/macros.rs.html)、[Rust 内建格式入口](https://doc.rust-lang.org/src/core/macros/mod.rs.html)
 
-hgo 也采用这层分工：声明宏处理空参数和普通参数列表；内建入口只产生格式化专用 IR 和待验证的 trait 约束。普通类型检查阶段验证这些约束，然后降低为已选择 formatter 的普通调用。格式化计划不授予任意 AST 反射，也不改变第 3.1 节的规则选择方式。
+goxide 也采用这层分工：声明宏处理空参数和普通参数列表；内建入口只产生格式化专用 IR 和待验证的 trait 约束。普通类型检查阶段验证这些约束，然后降低为已选择 formatter 的普通调用。格式化计划不授予任意 AST 反射，也不改变第 3.1 节的规则选择方式。
 
 首版建议固定以下格式子集，扩展语法另行增加：
 
@@ -139,7 +139,7 @@ hgo 也采用这层分工：声明宏处理空参数和普通参数列表；内�
 - 首版不支持运行时格式串、隐式捕获同名变量、位置重排、宽度精度参数或任意 Go `%v` 透传；如需动态模板，使用另有明确信任和错误契约的普通函数。
 - 每个显式实参按从左到右顺序恰好求值一次，全部求值完后才按占位符顺序调用 formatter。临时量保留源级类型与来源；复制引用默认允许，先后参数存在具体冲突链时 warning，真实只读写入等类型错误仍拒绝。
 
-`{}` / `{:?}` 的协议分工参考 Rust 的格式入口；具体 hgo 格式子集与求值顺序由本设计规定，不代表兼容全部 Rust 格式语法。[Rust format_args](https://doc.rust-lang.org/std/macro.format_args.html)
+`{}` / `{:?}` 的协议分工参考 Rust 的格式入口；具体 goxide 格式子集与求值顺序由本设计规定，不代表兼容全部 Rust 格式语法。[Rust format_args](https://doc.rust-lang.org/std/macro.format_args.html)
 
 `Display` 和 `Debug` 是显式 trait 协议；这里的 safe 不承诺静态别名或并发安全。编译器不能用 Go `fmt.Stringer`、`error.Error()`、反射或 `any` 兜底调用未知方法；原生类型须有经过检查的显式适配。标量可降低为 `strconv` 等具体函数，复合值调用选定的实现。格式化实参可以在合法范围内被临时只读借用；格式化计划、formatter 和借用的留存不默认拒绝；有明确协议离开或冲突链时 warning。
 
@@ -150,17 +150,17 @@ hgo 也采用这层分工：声明宏处理空参数和普通参数列表；内�
 - 正常完成返回 Unit；写入错误或短写转为带原始原因的 panic，不静默丢弃。错误前可能已有部分输出，不承诺回滚、自动重试或跨进程输出原子性。
 - 调用者需要恢复和处理部分写入时，使用 [safe Go std 的普通 I/O 入口](standard-library.md)，保留写入计数和错误。缓冲与 flush 按所选输出适配契约处理，不因为使用 `println!` 就承诺持久化。
 
-以上 I/O 错误策略参考 Rust 打印宏的失败行为；hgo 的具体支持库仍以 Go std 写入接口和明确包装实现，不引入 Rust 标准库运行时。
+以上 I/O 错误策略参考 Rust 打印宏的失败行为；goxide 的具体支持库仍以 Go std 写入接口和明确包装实现，不引入 Rust 标准库运行时。
 
 ### 3.3 实现结果回流：限定打印协议
 
 实现基准 `47af69f` 已交付 `print!` / `println!`：第 3.2 节的固定占位符、参数先按序各求值一次后格式化、空输出/LF 与写错/短写保留 cause 的 panic 契约均有真实运行证据。后端使用具体 typed formatter，不以 Stringer/error/反射/any 兜底；同包可信 Debug 派生可用于 `{:?}`，不自动成为 Display。
 
-当前入口只接受直接语句位置，支持宏模板、显式参数闭包内的嵌套打印和参数中的 `?`；不支持 go/defer、值位置、initializer/post、导入 Debug 类型或用户格式协议。此范围不修改第 3.2 节的长期协议，也不声称完整 trait/格式生态。编译期仅使用可信来源，生成 I/O 代码仍可 unmapped，未实现运行时 panic 的 hgo 源码回映射。实现和独立生成模块 race 证据见 [实现记录](../../IMPLEMENTATION.md#print--default-最终验收)。
+当前入口只接受直接语句位置，支持宏模板、显式参数闭包内的嵌套打印和参数中的 `?`；不支持 go/defer、值位置、initializer/post、导入 Debug 类型或用户格式协议。此范围不修改第 3.2 节的长期协议，也不声称完整 trait/格式生态。编译期仅使用可信来源，生成 I/O 代码仍可 unmapped，未实现运行时 panic 的 goxide 源码回映射。实现和独立生成模块 race 证据见 [实现记录](../../IMPLEMENTATION.md#print--default-最终验收)。
 
 ## 4. 卫生是符号身份，不是随机改名
 
-Rust 的 `macro_rules!` 使用 mixed-site hygiene：局部变量和标签按定义点查找，其他符号通常按调用点查找；`$crate` 可明确指向定义包。hgo 本文选择模板自由名字按定义点绑定，是有意采用的更统一规则，不声称照搬 Rust 的名字解析结果。[Rust 宏卫生规则](https://doc.rust-lang.org/reference/macros-by-example.html#hygiene)
+Rust 的 `macro_rules!` 使用 mixed-site hygiene：局部变量和标签按定义点查找，其他符号通常按调用点查找；`$crate` 可明确指向定义包。goxide 本文选择模板自由名字按定义点绑定，是有意采用的更统一规则，不声称照搬 Rust 的名字解析结果。[Rust 宏卫生规则](https://doc.rust-lang.org/reference/macros-by-example.html#hygiene)
 
 标识符解析依赖 SymbolID、ScopeID 和展开上下文。正式内部结构待前端设计，但必须保留以下区别：
 
@@ -190,7 +190,7 @@ Rust 的 `macro_rules!` 使用 mixed-site hygiene：局部变量和标签按定�
 
 首版提供 `Default`、`Clone`、`Debug`，由编译器登记固定派生算法。它们也是可手写 impl 的普通显式 trait；derive 只是生成这些实现的入口。`Display` 是格式化协议，但没有统一可推导的业务展示形式，首版不提供 `derive(Display)`。后续加入其他可派生 trait 时逐个确定规则，不以“等”字隐含所有 trait 都可自动派生。
 
-```hgo
+```goxide
 #[derive(Default, Clone, Debug)]
 pub struct Point {
     x int
@@ -216,7 +216,7 @@ derive 入口按规范 trait 身份选择内建规则，不能仅凭同名字符
 
 普通 enum 的自动派生要求恰好一个变体标注 `#[default]`，该变体可以有 payload，例如：
 
-```hgo
+```goxide
 #[derive(Default)]
 pub enum Mode {
     #[default]
@@ -249,7 +249,7 @@ pub enum Mode {
 
 `Clone` 的语义是从合法只读借用构造同类型结果 `clone(&Self) -> Self`。struct 派生依字段声明顺序调用各字段的显式 `Clone`；enum 保持当前合法变体，对其 payload 调用相应协议。缺失任一字段协议时拒绝，不回退成普通 Go 赋值。这个逐字段调用思路参考 [Rust Clone](https://doc.rust-lang.org/std/clone/trait.Clone.html)。
 
-hgo 的普通赋值仍遵循既有 Go 值复制方向；不会因为新增 `Clone` 就引入全局 move 或要求所有赋值实现 `Copy`。显式 `Clone` 也不承诺深复制整个可达对象图，协议可以有成本或运行时副作用：
+goxide 的普通赋值仍遵循既有 Go 值复制方向；不会因为新增 `Clone` 就引入全局 move 或要求所有赋值实现 `Copy`。显式 `Clone` 也不承诺深复制整个可达对象图，协议可以有成本或运行时副作用：
 
 | 字段 | Clone 边界 |
 | --- | --- |
@@ -260,9 +260,9 @@ hgo 的普通赋值仍遵循既有 Go 值复制方向；不会因为新增 `Clon
 | `mut& T` | 旧“因独占一律无 Clone”已撤回；是否提供基础 impl 待定，缺 impl 按普通 trait 错误处理，不以别名本身拒绝复制 |
 | slice、map 或自定义容器 | 必须有明确的实现，说明存储与元素如何复制、哪些别名仍共享；不是默认逐字节复制 |
 
-原生 Go `sync.Mutex` / `sync.RWMutex` 没有自动 Clone；派生不能因字段具有 Go 值类型就按值复制锁。表中的 Lock 是 hgo 支持库的指针句柄，与包含原生 mutex 的值结构分开处理。
+原生 Go `sync.Mutex` / `sync.RWMutex` 没有自动 Clone；派生不能因字段具有 Go 值类型就按值复制锁。表中的 Lock 是 goxide 支持库的指针句柄，与包含原生 mutex 的值结构分开处理。
 
-Go `slices.Clone` 用赋值复制元素，属于浅复制；这不能自动等价于 hgo 的逐元素 Clone。基础包中的浅复制入口、显式元素回调和未来容器 Clone impl 分别定义，见[泛型 slice](standard-library.md)。[Go slices.Clone](https://pkg.go.dev/slices#Clone)
+Go `slices.Clone` 用赋值复制元素，属于浅复制；这不能自动等价于 goxide 的逐元素 Clone。基础包中的浅复制入口、显式元素回调和未来容器 Clone impl 分别定义，见[泛型 slice](standard-library.md)。[Go slices.Clone](https://pkg.go.dev/slices#Clone)
 
 Clone 结果仍要保留字段的引用来源。复制 slice header、map、Arc 或锁句柄不洗掉外部别名，锁回调引用形成长寿命结果默认允许，未来有具体违约使用才 W01。手写 Clone 同样接受基于证据的诊断；若想从借用制作独立快照，必须实际复制所需内容并证明结果不依赖该借用，不能只改返回类型。
 
@@ -307,7 +307,7 @@ Debug 不自动隐藏私有字段中的业务内容；需要控制输出的类�
 
 尤其不能由模板生成的 unsafe 替捕获参数里的代码授权。例如下列模板片段：
 
-```hgo
+```goxide
 unsafe raw::Consume($x)
 ```
 
@@ -346,16 +346,16 @@ func main() {
     }
 
     result := func() int {
-        hgoM1Saved := 1
-        hgoM1Value := saved + next()
-        return macroRuntimeTwice(hgoM1Value) + hgoM1Saved
+        goxideM1Saved := 1
+        goxideM1Value := saved + next()
+        return macroRuntimeTwice(goxideM1Value) + goxideM1Saved
     }()
 
     fmt.Println(result, calls, saved)
 }
 ```
 
-本轮已从本文提取示例，在 Go 1.27.1 的独立临时模块中执行，实际输出为 `85 1 41`。`hgoM1Saved` 等名字仅展示绑定后如何避开冲突，卫生检查发生在分配这些文本名字之前。运行这个 Go 示例只能验证特定展开代码的行为，不能证明尚不存在的 hgo 展开器已经正确。
+本轮已从本文提取示例，在 Go 1.27.1 的独立临时模块中执行，实际输出为 `85 1 41`。`goxideM1Saved` 等名字仅展示绑定后如何避开冲突，卫生检查发生在分配这些文本名字之前。运行这个 Go 示例只能验证特定展开代码的行为，不能证明尚不存在的 goxide 展开器已经正确。
 
 ### 8.2 Default 与 Clone 的静态调用
 
@@ -432,9 +432,9 @@ func main() {
 
 内建 derive 复用正常 trait 检查；静态操作按第 5.5 节生成函数，满足运行时 trait 视图要求的方法才生成对应 wrapper、业务方法和 marker。
 
-hgo 调用原生 Go 时，宏可生成已经显式依赖的原生调用，但仍使用选中的 declare 视图或 unsafe 规则，不能因宏包受信就把调用方所有 Go API 提升为 safe。
+goxide 调用原生 Go 时，宏可生成已经显式依赖的原生调用，但仍使用选中的 declare 视图或 unsafe 规则，不能因宏包受信就把调用方所有 Go API 提升为 safe。
 
-Go 源码不能直接调用 hgo 宏，但可以使用宏生成并导出的普通类型、函数、方法和 trait 视图，遵守最终 Go ABI。若生成 API 涉及原生类型的 marker，发布与独立构建视图仍遵循 [Go 适配](go-interop.md)规则；宏不免除相关构建要求。
+Go 源码不能直接调用 goxide 宏，但可以使用宏生成并导出的普通类型、函数、方法和 trait 视图，遵守最终 Go ABI。若生成 API 涉及原生类型的 marker，发布与独立构建视图仍遵循 [Go 适配](go-interop.md)规则；宏不免除相关构建要求。
 
 宏可决定使用方的公开 API，改变生成名称、签名或表示时需要正常兼容性审查，不能仅当作宏包内部实现变化。
 
@@ -466,15 +466,15 @@ LSP 与构建共享宏依赖、展开器、缓存协议及语义数据库，应�
 - 捕获参数错误定位调用者输入；模板错误同时显示定义点和调用点。
 - 将 derive 产生的方法展示在目标类型下，标注内建规则和生成来源。
 - 按 SymbolID 重命名，不因为显示名字相同就改到另一卫生作用域。
-- 将生成 Go 的错误映射回 hgo 节点，同时保留生成位置用于调试。
+- 将生成 Go 的错误映射回 goxide 节点，同时保留生成位置用于调试。
 
 展开预览是只读派生结果。修改规则或输入后重算；首版不支持编辑展开文本后反向猜测应修改哪一段模板。
 
-启动实现使用 Go 编写匹配器、卫生设施与内建 derive，再逐步使用 hgo 自举。用户规则不因编译器用 Go 编写就获得宿主执行能力，也不要求先实现通用的编译期函数解释器。自举前后比较规范展开结构、绑定关系和生成程序行为，不只比较临时变量的文本名字。
+启动实现使用 Go 编写匹配器、卫生设施与内建 derive，再逐步使用 goxide 自举。用户规则不因编译器用 Go 编写就获得宿主执行能力，也不要求先实现通用的编译期函数解释器。自举前后比较规范展开结构、绑定关系和生成程序行为，不只比较临时变量的文本名字。
 
 ## 11. 未来实现的验收条件
 
-以下是未来要求，不代表当前已通过 hgo 端到端测试：
+以下是未来要求，不代表当前已通过 goxide 端到端测试：
 
 1. 第 3 节模板与调用者均使用 saved 时分别绑定；调用者的 twice 不能遮蔽模板定义点的函数。
 2. 同一宏展开两次，其局部绑定不互相引用；缓存命中和未命中的绑定关系一致。

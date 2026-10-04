@@ -1,6 +1,6 @@
 # RFC 0002：原生类型安全指针桥接与低噪声锁诊断
 
-状态：2026-10-01，**候选，待用户确认**。遵循 D19 warning-first；细化 U15，不静默修改 D11。只讨论 Go 互操作及机制夹具，不实现编译器。风险分析部分按 D20 仅属独立长期工作线，不是 MVP 桥接前置条件。本页 `hgo` 是完整调用场景的语义写法，包名用 import 别名表示；类型拼写与桥接元数据尚未冻结。
+状态：2026-10-01，**候选，待用户确认**。遵循 D19 warning-first；细化 U15，不静默修改 D11。只讨论 Go 互操作及机制夹具，不实现编译器。风险分析部分按 D20 仅属独立长期工作线，不是 MVP 桥接前置条件。本页 `goxide` 是完整调用场景的语义写法，包名用 import 别名表示；类型拼写与桥接元数据尚未冻结。
 
 ## 2026-10-02 更新：D31 与首个实现切片
 
@@ -10,7 +10,7 @@
 
 `&T` 或从 `mut& T` 缩窄的只读路径仍不能传给潜在可写 Go 参数。原生返回的普通 `*T` 保持其原生能力，旧只读视图会观察到合法别名写入；不承诺全局不可变或独占。本片未放开引用到 any、raw 变量/返回/转换、复合指针、generic 的通用擦除，当前限制仍是后续工程账，不能推导为用户批准的最终语言禁令。定义指针类型 `type P *int64` 也未在本片接通。
 
-[真实 CLI 多包验收](../../../tests/acceptance/native_write_bridge_test.go)覆盖 atomic、跨 hgo 包引用身份、原生保留/返回别名、GC 后存活、调用形式与权限负例；生成模块单独 race/vet。不是纯 Go 探针替代前端验收。
+[真实 CLI 多包验收](../../../tests/acceptance/native_write_bridge_test.go)覆盖 atomic、跨 goxide 包引用身份、原生保留/返回别名、GC 后存活、调用形式与权限负例；生成模块单独 race/vet。不是纯 Go 探针替代前端验收。
 
 ## 1. D11 的意图与技术边界
 
@@ -28,7 +28,7 @@ D11 要求拆分后的引用经显式 unsafe AsPtr 导出统一 Ptr，保留显�
 
 ### 1.1 写引用核对：省 AsPtr，不省 mut
 
-```hgo
+```goxide
 var count int64 = 0
 atomic::StoreInt64(mut& count, 7) // A 候选：显式创建写引用
 p := mut& count
@@ -37,11 +37,11 @@ r := &count
 atomic::StoreInt64(r, 9)          // 类型权限错误，不能降级为别名 warning
 ```
 
-上面合法调用的 Go lowering 是 `atomic.StoreInt64(&count, 7)`：Go 没有 `mut&` 语法；写权限先在 hgo 类型检查中确认，生成 Go 后不保留该字面标记。不能由 Go 输出倒推源语言允许 `StoreInt64(&count, 7)`。
+上面合法调用的 Go lowering 是 `atomic.StoreInt64(&count, 7)`：Go 没有 `mut&` 语法；写权限先在 goxide 类型检查中确认，生成 Go 后不保留该字面标记。不能由 Go 输出倒推源语言允许 `StoreInt64(&count, 7)`。
 
 未知效果的原生 `*T` 位置按可写能力要求检查。只读桥接只能根据明确选定的只读声明视图/内建契约，或将来已验证的具体实现依据；不得根据 Load/Get 名字、返回值类型或缺少摘要猜测只读。例如可审核 `atomic.LoadInt64` 并提供 `declare func atomic::LoadInt64(p &int64) int64;` 的候选只读视图，此时 `LoadInt64(&count)` 可用；声明需绑定真实符号/版本，正确性由声明作者负责，单纯 Go 签名匹配不证明只读。未提供该视图时本页仍写 `LoadInt64(mut& count)`。这不要求 MVP 实现效果分析。
 
-返回/回调/函数值适配也不能洗掉权限：返回 `&T` 的 helper 不能被改成返回 `mut& T` 或可写 Ptr；明确可写实参只在实际满足权限时降为只读；原生 nullable 返回值不自动成为非空写引用。对只读源接收者做接口装箱也不能借恢复 Go *T 方法集暴露可写方法。原生 `buffer`/`port` 示例保留的是原生类型自身已有能力，不能外推到只读 hgo 视图。D11 明确 unsafe 权限擦除与普通桥接仍分开，本次核对不是对方案 A 的批准。
+返回/回调/函数值适配也不能洗掉权限：返回 `&T` 的 helper 不能被改成返回 `mut& T` 或可写 Ptr；明确可写实参只在实际满足权限时降为只读；原生 nullable 返回值不自动成为非空写引用。对只读源接收者做接口装箱也不能借恢复 Go *T 方法集暴露可写方法。原生 `buffer`/`port` 示例保留的是原生类型自身已有能力，不能外推到只读 goxide 视图。D11 明确 unsafe 权限擦除与普通桥接仍分开，本次核对不是对方案 A 的批准。
 
 ### 1.2 先取得内部引用，再讨论 Go 桥接
 
@@ -56,7 +56,7 @@ atomic::StoreInt64(r, 9)          // 类型权限错误，不能降级为别名 
 
 现有可准确引用的访问协议是锁专题的 `.do` / `.write` 回调，不是 Boxed/Ref/Arc 的假想 `as_mut`：
 
-```hgo
+```goxide
 var count int64 = 0
 p := mut& count
 atomic::StoreInt64(p, 7) // T → mut& T → A 候选桥接
@@ -77,7 +77,7 @@ locked.do(|p| {
 
 只在已解析的原生函数/方法、原生接口赋值或已知函数签名位置插入合法桥接，表达式求值一次。用户不需要先建 Ptr 中间变量。桥接是编译器内建规则，不搜索任意 AsPtr trait，不执行自定义转换方法：
 
-```hgo
+```goxide
 import atomic "sync/atomic"
 import flag "flag"
 import bytes "bytes"
@@ -94,12 +94,12 @@ parseErr := fs.Parse([]string{"-port=9090"})
 // 保留 parseErr；读取 port 按原生可空指针语义，不自动插入非空承诺。
 
 buffer := bytes::NewBuffer([]byte{65, 66})
-var reader io::Reader = buffer // 按真实 Go 方法集，不搜索 hgo trait wrapper
+var reader io::Reader = buffer // 按真实 Go 方法集，不搜索 goxide trait wrapper
 output := make([]byte, 2)
 n, readErr := reader.Read(output)
 ```
 
-Lowering 是正常的 `atomic.StoreInt64(&count, 7)`、`fs.Int(...)`、`var reader io.Reader = buffer` 等。已有 Ptr 可在单层参数处显式转回 `*T`；后端若本来保存原生指针则直接传递。返回类型保留原生身份、nil 能力与真实方法集；在 hgo 类型系统用原生视图元数据表达，不增加一个通用 safe `*T` 类型，也不隐式赋给 Arc。
+Lowering 是正常的 `atomic.StoreInt64(&count, 7)`、`fs.Int(...)`、`var reader io.Reader = buffer` 等。已有 Ptr 可在单层参数处显式转回 `*T`；后端若本来保存原生指针则直接传递。返回类型保留原生身份、nil 能力与真实方法集；在 goxide 类型系统用原生视图元数据表达，不增加一个通用 safe `*T` 类型，也不隐式赋给 Arc。
 
 **对 D11 的改变必须批准**：这是允许实际已取得的 `mut& T` 在指定原生边界不经用户显式 unsafe AsPtr 的窄例外。显式 `as_ptr()` 仍保留 D11，用户自定义 AsPtr 不参与隐式选择。若仅修改实现而不记录这项语义例外，就是绕过旧决策，本 RFC 不这样做。
 
@@ -107,7 +107,7 @@ Lowering 是正常的 `atomic.StoreInt64(&count, 7)`、`fs.Int(...)`、`var read
 
 改写 D11，将精确同类型、保留 nil/地址的 as_ptr 变成普通操作；真正权限绕过或内存重解释另用明确 unsafe 操作：
 
-```hgo
+```goxide
 var count int64 = 0
 p := (mut& count).as_ptr()     // B：普通操作，显式形成 Ptr[int64]
 atomic::StoreInt64(p, 7)      // 根据真实参数做 Ptr[int64] → *int64
@@ -134,7 +134,7 @@ var reader io::Reader = buffer // 原生返回视图仍按真实方法集
 
 实际 Go API：`bytes.NewBuffer([]byte) *Buffer` 保留传入存储，`Buffer.Bytes() []byte` 返回别名；`flag.(*FlagSet).Int(...) *int` 返回可继续使用的配置槽位；`sort.Slice(any, func(int,int) bool)` 原地重排容器并调用比较器。以上签名/行为已读本环境 Go 1.27.1 源码 `src/bytes/buffer.go`、`src/flag/flag.go`、`src/sort/slice.go`，由下列夹具核对所覆盖机制，不泛化到整个包。
 
-```hgo
+```goxide
 import sort "sort"
 items := []*native::Item{first, second} // 原生类型视图示意，保留真实 []*Item
 sort::Slice(items, func(i int, j int) bool {
@@ -144,9 +144,9 @@ sort::Slice(items, func(i int, j int) bool {
 
 原生容器可以原样往返；不把 `[]*T` 重写成 `[]Ptr[T]`，也不把 `map[string]*T` 重写为另一张 map。若用户明确要求不同元素类型的容器，必须用显式逐元素适配或提供具体转换；不能用 unsafe.Pointer 强转，也不能静默复制破坏共享身份。比较器同步调用、原地排序不意味着不能有指针；具体并发修改或重入链才 warning。
 
-常见回调形状 `func(*bytes.Buffer)` 的 hgo `func(Ptr[bytes.Buffer])` 不是同一个 Go 函数类型。A/B 均可在已知目标签名生成 `func(p *bytes.Buffer) { callback(Ptr[bytes.Buffer](../p)) }`。桥接先对回调表达式求值一次并保存函数值，再判断 nil 和捕获该值，不能捕获之后可能重绑定的源变量槽位。nil 函数值须保持 nil，不能总包成非 nil 闭包；闭包留存/指针结果照原生语义，缺效果摘要不拒绝。明确 unsafe callable 属性不能被桥接擦除，须保留属性或由显式有体包装承担调用；这是类型/明确操作检查，不是长期别名分析。参数权限方向要分别检查：只读参数回调可以接收可写对象的降权限视图；要求可写参数的回调不能放到只保证提供只读对象的位置。nullable 是独立维度，不能无检查地把原生 nullable 入参适配为非空 &T/mut& T。
+常见回调形状 `func(*bytes.Buffer)` 的 goxide `func(Ptr[bytes.Buffer])` 不是同一个 Go 函数类型。A/B 均可在已知目标签名生成 `func(p *bytes.Buffer) { callback(Ptr[bytes.Buffer](../p)) }`。桥接先对回调表达式求值一次并保存函数值，再判断 nil 和捕获该值，不能捕获之后可能重绑定的源变量槽位。nil 函数值须保持 nil，不能总包成非 nil 闭包；闭包留存/指针结果照原生语义，缺效果摘要不拒绝。明确 unsafe callable 属性不能被桥接擦除，须保留属性或由显式有体包装承担调用；这是类型/明确操作检查，不是长期别名分析。参数权限方向要分别检查：只读参数回调可以接收可写对象的降权限视图；要求可写参数的回调不能放到只保证提供只读对象的位置。nullable 是独立维度，不能无检查地把原生 nullable 入参适配为非空 &T/mut& T。
 
-接口装箱同样保持原生动态类型和 typed nil；桥接 `Ptr[bytes.Buffer]` 到 io.Reader 时先恢复真实 `*bytes.Buffer` 才检查方法集，不给具名 Ptr 伪造接收者方法，不隐式选 hgo trait 实现。类型不匹配是 error，不用 warning 掩盖；未知 nil 风险也不默认逐个报警。
+接口装箱同样保持原生动态类型和 typed nil；桥接 `Ptr[bytes.Buffer]` 到 io.Reader 时先恢复真实 `*bytes.Buffer` 才检查方法集，不给具名 Ptr 伪造接收者方法，不隐式选 goxide trait 实现。类型不匹配是 error，不用 warning 掩盖；未知 nil 风险也不默认逐个报警。
 
 ## 4. W01 收窄：先有协议，再有使用风险
 
@@ -157,7 +157,7 @@ sort::Slice(items, func(i int, j int) bool {
 3. 来源或后续用途未知、只是导出一个指针/方法值/error/panic 载荷，不报默认 warning；可在按需分析说明中标注未知，不形成安全证明。确有声明的“不留存”协议时，载荷越界本身是具体违约证据，可告警。
 4. 同一风险还满足 W02/W03 时合并，优先显示冲突/绕锁的实际访问点。函数摘要是可选精度改进，不把未导出摘要变成编译错误。
 
-```hgo
+```goxide
 p := lock.do(|value| { return value }) // 仅返回：记录来源，不报
 lock.do(|_| { *p += 1 })              // 同一锁保护该存储：不报 W01
 *p += 1                               // W01/W03 合并：已知绕开同一锁写
@@ -165,7 +165,7 @@ lock.do(|_| { *p += 1 })              // 同一锁保护该存储：不报 W01
 
 第三行是协议风险，不等于已发生 race；若其他访问实际全串行，用户可注明/抑制。复杂外层锁或自定义原子包装可能误报，隐藏外部访问可能漏报。返出的 p 如果指向被替换掉的旧存储，要追踪真实对象身份，不能仅凭同一个变量名套用保护关系。
 
-```hgo
+```goxide
 p := lock.do(|value| { return value })
 atomic::StoreInt64(p, 1)
 x := atomic::LoadInt64(p)
@@ -175,7 +175,7 @@ x := atomic::LoadInt64(p)
 
 ## 5. 机制证据与实现边界
 
-`tests/design/ptr/interop_test.go` 验证原子指针入参、flag 指针返回、bytes slice 别名及 io.Reader、原生指针容器排序、函数适配保持 nil。`tests/design/lock/boundary_test.go` 的同锁返回引用使用对照验证正常同步路径。都不使用 unsafe 包或发起数据竞争；它们证明 Go 机制可行，不是已经实现 A/B 的 hgo 类型检查或 W01 消噪。
+`tests/design/ptr/interop_test.go` 验证原子指针入参、flag 指针返回、bytes slice 别名及 io.Reader、原生指针容器排序、函数适配保持 nil。`tests/design/lock/boundary_test.go` 的同锁返回引用使用对照验证正常同步路径。都不使用 unsafe 包或发起数据竞争；它们证明 Go 机制可行，不是已经实现 A/B 的 goxide 类型检查或 W01 消噪。
 
 对齐、方法集与 nil 等已知约束保持真实 Go 语义。静态成本和闭包分配未基准测试；Go race 仅验证实际执行路径。独立审查与文档检查不能替代未来前端针对只读擦除、nullable→非空、函数 nil、容器身份和自定义 AsPtr 副作用的正反例。
 

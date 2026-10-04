@@ -17,9 +17,9 @@
 
 ## 转译示例
 
-**M01：显式保存实参，保留两侧同名变量。** hgo 片段；`macro_rules!` 为候选语法。
+**M01：显式保存实参，保留两侧同名变量。** goxide 片段；`macro_rules!` 为候选语法。
 
-```hgo
+```goxide
 func twice(value int) int { return value + value }
 macro_rules! twice_plus_one {
     ($x:expr) => {
@@ -48,18 +48,18 @@ _ = twice
 calls := 0
 next := func() int { calls++; return 1 }
 result := func() int {
-    hgoM1Saved := 1
-    hgoM1Value := saved + next()
-    return macroRuntimeTwice(hgoM1Value) + hgoM1Saved
+    goxideM1Saved := 1
+    goxideM1Value := saved + next()
+    return macroRuntimeTwice(goxideM1Value) + goxideM1Saved
 }()
 ```
 
 约束：`result == 85`、`calls == 1`、`saved == 41`；调用者的同名 `twice` 不能替换定义点绑定。
 不得先把捕获表达式按文本粘贴进模板，再按生成后的局部名字重新解析。
 
-**M02：重复捕获表达式会重复执行。** hgo 片段沿用 M01 的 `next`。
+**M02：重复捕获表达式会重复执行。** goxide 片段沿用 M01 的 `next`。
 
-```hgo
+```goxide
 macro_rules! duplicate {
     ($x:expr) => { $x + $x };
 }
@@ -75,9 +75,9 @@ result := next() + next()
 约束：`result == 2`、`calls == 2`。不得将其擅自改为保存一次再相加。
 短路、闭包、defer 和 return 同样遵循实际展开语法，不由卫生额外改写控制流。
 
-**M03：unsafe 来源不随模板移动。** 下列 hgo 候选模板不能替调用者授权。
+**M03：unsafe 来源不随模板移动。** 下列 goxide 候选模板不能替调用者授权。
 
-```hgo
+```goxide
 macro_rules! consume {
     ($x:expr) => { unsafe raw::Consume($x) };
 }
@@ -97,10 +97,10 @@ consume!(raw::Other()) // Other 在调用点没有 unsafe 授权
 
 ## 双向互操作
 
-hgo 宏生成的原生 Go 调用仍遵守所选 `.d.hgo` 契约或 unsafe 规则。
+goxide 宏生成的原生 Go 调用仍遵守所选 `.d.gox` 契约或 unsafe 规则。
 发布模块中的 `.go` 已是展开并检查后的普通代码；Go 消费者不需要宏展开器。
-Go 可调用公开生成函数，不能调用 `m!(...)`；宏规则供 hgo 工具链加载，具体承载格式未定。
-增强检查只覆盖 hgo 工具链管理的代码，不给原生 Go 调用者追加源级权限保证。
+Go 可调用公开生成函数，不能调用 `m!(...)`；宏规则供 goxide 工具链加载，具体承载格式未定。
+增强检查只覆盖 goxide 工具链管理的代码，不给原生 Go 调用者追加源级权限保证。
 
 ## 验收与未定项
 

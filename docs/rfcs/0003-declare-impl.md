@@ -4,7 +4,7 @@
 
 - 已确认：用户包可采用外部 Go 类型的已有方法；统一 wrapper 转发，固定包级工厂位于 impl 声明包 C。
 - 已确认：trait Go 接口包含业务方法与导出 marker，wrapper 实现 marker；Go 便利入口转发同一工厂。
-- 已确认：相容 declare 可合并；有业务方法体的 impl 须唯一。具体相容判定暂定，尚无 hgo 实现。
+- 已确认：相容 declare 可合并；有业务方法体的 impl 须唯一。具体相容判定暂定，尚无 goxide 实现。
 - 未定：采用原生的 declare 与有体 impl 同时出现时的语义、正式符号编码及权限细节。
 
 本篇细化[声明合并规则](../design/go-interop.md#6-校验来源与唯一性)：
@@ -29,9 +29,9 @@
 
 ### D01：两个使用方合并相同采用声明
 
-以下 hgo 是三个包的机制片段；省略包布局，权限接收者语法尚待接合。
+以下 goxide 是三个包的机制片段；省略包布局，权限接收者语法尚待接合。
 
-```hgo
+```goxide
 // 包 protocols
 pub trait ReadValue { read() int }
 
@@ -61,7 +61,7 @@ trait 包的 Go 输出（完整包）：
 package protocols
 type ReadValue interface {
     Read() int
-    HyperGoTraitReadValue()
+    GoxideTraitReadValue()
 }
 ```
 
@@ -77,7 +77,7 @@ import (
 
 type bufferReadValue struct { target *native.Buffer }
 func (v bufferReadValue) Read() int { return v.target.Read() }
-func (v bufferReadValue) HyperGoTraitReadValue() {}
+func (v bufferReadValue) GoxideTraitReadValue() {}
 func AsReadValueForBuffer(b *native.Buffer) protocols.ReadValue {
     return bufferReadValue{target: b}
 }
@@ -93,9 +93,9 @@ client_b 可发布其固定工厂与 wrapper；相容声明只合并逻辑 impl 
 
 ### D02：调用方适配原对象
 
-hgo 片段依赖 D01、具有合法接收权限的 `b`，及接受 ReadValue 的 `consume`。
+goxide 片段依赖 D01、具有合法接收权限的 `b`，及接受 ReadValue 的 `consume`。
 
-```hgo
+```goxide
 consume(b)
 ```
 
@@ -118,16 +118,16 @@ consume(client_a.AsReadValueForBuffer(b))
 - D06：已有同名生成入口签名不兼容，拒绝；不能覆盖原有方法或随机改名。
 - D07：同一实现键有两个有体 impl，拒绝；混合 declare / 有体模式见第 8 条。
 - D08：给外部 native.Buffer 生成原类型 As 方法，拒绝该后端输出；应使用声明包的 facade。其他源级接收者形式的支持范围仍须单独规定。
-- D09：Go 代码手写 marker 不自动创建 hgo impl；必须有显式元数据。
+- D09：Go 代码手写 marker 不自动创建 goxide impl；必须有显式元数据。
 
 marker 必须导出，使 C 的 wrapper 可以实现 A 的接口；它不改变 B 中原类型的方法集。
 生成名称与 C 的现有声明冲突仍须检查；新增依赖不能改变既有工厂选择的业务实现。
 
 ## 双向互操作
 
-- hgo → Go：相容声明通过后，采用原生方法；声明作者承担其外部行为契约。
+- goxide → Go：相容声明通过后，采用原生方法；声明作者承担其外部行为契约。
   marker 不证明原生代码不会留存参数，详见 [RFC 0006](0006-foreign-api.md)。
-- Go → hgo：直接调用声明包的工厂或 facade；普通 Go 调用方按公开 Go API 使用。
+- Go → goxide：直接调用声明包的工厂或 facade；普通 Go 调用方按公开 Go API 使用。
   Go 原始指针不能直接赋给含 marker 的 trait 接口，须先适配。
 - 整个 dist 交付普通 Go wrapper、工厂、便利入口和声明元数据，正常依赖 A/B；
   [RFC 0001](0001-package-loading.md) 的发布不需要 trait 专用 overlay 或增强标准库。

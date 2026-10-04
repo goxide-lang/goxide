@@ -7,7 +7,7 @@
 - 根路径 `/`（本地应用 CF `_headers`）与 `/goxide/`（无自定义响应头，模拟项目 Pages）各一次完整浏览器回归。
 - 两次均包含五组示例 CLI/WASM 逐字节相同、四项 Go Result 宏正反例、编辑、错误恢复、快速编辑、复制、键盘、390px、大小限制、未知包、XSS 字面文本、中断、超时、重置、无外部请求；JS 错误为零。
 - 独立 route QA：`/goxide` 重定向到带斜杠路径、worker/runtime/WASM/JSON 200 与 WASM MIME、五个不存在路径的 404 与独立错误页面。未知路由不返回 Playground。
-- `go test -tags hgoweb ./cmd/hgo-web` 通过；embed 二进制构建成功，静态目录与 embed 目录文件和内容相同。
+- `go test -tags goxideweb ./cmd/goxide-web` 通过；embed 二进制构建成功，静态目录与 embed 目录文件和内容相同。
 - 文档检查通过。此次没有重跑与网站部署准备无关的全树编译器 race。
 
 只读独立审查确认没有阻断：11 个允许列表文件、无检测到的本机路径/已知 secret 标记，WASM custom section 仅 `producers`。DWARF/name section 被移除。审查提出的优化模式绕过 assert 问题已关闭：`audit.py` 在 Python `-O`/优化模式下会明确拒绝执行；普通模式仍必须全部通过。

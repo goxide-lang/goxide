@@ -14,7 +14,7 @@
 
 ## 1. 声明属于使用方 C 包
 
-```hgo
+```goxide
 package C
 import AorB "example.org/protocols"
 import BBB "example.org/native"
@@ -24,7 +24,7 @@ declare impl AorB::XXX for BBB::Type;
 
 C 采用 BBB::Type 的已有业务方法来实现 AorB::XXX；声明、生成 wrapper 和固定工厂均由 C 拥有。不要求 AorB 或 BBB 作者增加方法，不写入其源码、模块缓存或标准库。
 
-hgo 按实际参与编译的源码及元数据加载显式关系。纯 Go 不读取 `.hgo`，但可以调用 dist 内普通 Go 工厂和 wrapper；其他项目继续使用原生 BBB。声明无需专用 `.d.hgo`，声明文件可用于分发契约，不能替代真实 Go 类型信息的验签。
+goxide 按实际参与编译的源码及元数据加载显式关系。纯 Go 不读取 `.gox`，但可以调用 dist 内普通 Go 工厂和 wrapper；其他项目继续使用原生 BBB。声明无需专用 `.d.gox`，声明文件可用于分发契约，不能替代真实 Go 类型信息的验签。
 
 ## 2. 原生包只需要业务方法
 
@@ -39,10 +39,10 @@ func (b *Buffer) Read(p []byte) (int, error) {
 
 使用方可以写：
 
-```hgo
+```goxide
 package adapters
 import native "example.org/native/buffer"
-import byteio "example.org/hgo/byteio"
+import byteio "example.org/goxide/byteio"
 
 type Buffer = *native::Buffer
 declare impl byteio::Reader for Buffer;
@@ -60,7 +60,7 @@ trait 输出包含业务方法及 marker：
 // byteio 包的片段；正式符号编码未定。
 type Reader interface {
     Read([]byte) (int, error)
-    HyperGoTraitByteReader()
+    GoxideTraitByteReader()
 }
 ```
 
@@ -70,15 +70,15 @@ type Reader interface {
 package adapters
 
 import "bytes"
-import byteio "example.org/hgo/byteio"
+import byteio "example.org/goxide/byteio"
 
 type bufferReader struct { target *bytes.Buffer }
-func (v bufferReader) HyperGoTraitByteReader() {}
+func (v bufferReader) GoxideTraitByteReader() {}
 func (v bufferReader) Read(p []byte) (int, error) {
     return v.target.Read(p)
 }
 func AsBufferReader(b *bytes.Buffer) byteio.Reader {
-    if b == nil { panic("hgo: nil Buffer") }
+    if b == nil { panic("goxide: nil Buffer") }
     return bufferReader{target: b}
 }
 ```
@@ -118,20 +118,20 @@ wrapper 所在的 impl 包导入 trait 包和原生包，原生包不因适配�
 
 建议流程：
 
-1. 读取 Go 模块图、原生包类型信息及实际导入的 hgo 元数据。
+1. 读取 Go 模块图、原生包类型信息及实际导入的 goxide 元数据。
 2. 合并相容声明，校验精确接收者方法集、业务签名、权限契约与 impl 身份。
 3. 在 impl 包生成 wrapper、marker、逐方法转发或用户方法体以及固定工厂。
 4. 生成可选的本地 As 或外部 ForBuffer/As helper，确保仅转发固定工厂。
 5. 输出普通 Go 代码及版本一致的声明 / 元数据，由标准 Go 工具链检查与构建。
 
-发布整个 dist，包含 `.go`、`.d.hgo` 与可选 `.hgo`；Go 编译 `.go`，hgo 额外读取声明或源码。所需适配代码已经位于 impl 的普通 Go 包中，`*bytes.Buffer` 示例无需增强标准库或要求下游启用 overlay。加载与发布约束见 [RFC 0001](../rfcs/0001-package-loading.md)。
+发布整个 dist，包含 `.go`、`.d.gox` 与可选 `.gox`；Go 编译 `.go`，goxide 额外读取声明或源码。所需适配代码已经位于 impl 的普通 Go 包中，`*bytes.Buffer` 示例无需增强标准库或要求下游启用 overlay。加载与发布约束见 [RFC 0001](../rfcs/0001-package-loading.md)。
 
 旧稿曾试验向原类型补 marker 的隔离视图。`tests/design/marker` 及[测试说明](../../tests/README.md)中的 overlay / replace 记录仅是历史机制实验，不是当前 trait 生成或发布方案；它们通过不能证明统一 wrapper 前端已实现。
 
 ## 5. 自定义 impl 与原生采用
 
-```hgo
-import textio "example.org/hgo/textio"
+```goxide
+import textio "example.org/goxide/textio"
 impl textio::Reader for Buffer {
     read() string { return string(self.Data) }
 }
@@ -151,7 +151,7 @@ trait 视图不能为满足原生 `*T` 参数而隐式 unwrap；使用保留的�
 
 ## 6. 校验、来源与唯一性
 
-业务方法按 trait 规定的规范 Go 名称、签名和接收者方法集校验，不能隐式改参数、结果或关联类型。wrapper 和工厂接受普通 Go 类型检查，hgo 另外保存精确 impl 元数据；可借助 [go/types](https://pkg.go.dev/go/types) 和 [go/packages](https://pkg.go.dev/golang.org/x/tools/go/packages) 读取原生信息。
+业务方法按 trait 规定的规范 Go 名称、签名和接收者方法集校验，不能隐式改参数、结果或关联类型。wrapper 和工厂接受普通 Go 类型检查，goxide 另外保存精确 impl 元数据；可借助 [go/types](https://pkg.go.dev/go/types) 和 [go/packages](https://pkg.go.dev/golang.org/x/tools/go/packages) 读取原生信息。
 
 外部类型与外部 trait 可在 C 组合声明，实现来源仍是 C，不把这条关系注册为 BBB 对所有项目公开的实现。元数据保留声明来源、接收权限、借用来源、关联类型、业务来源和稳定工厂身份。
 
@@ -159,7 +159,7 @@ trait 视图不能为满足原生 `*T` 参数而隐式 unwrap；使用保留的�
 
 版本、replace、平台、tags 或声明集合改变时应重新校验。缓存需包含原生类型指纹、完整声明集合、生成规则和工具链配置，不能把某次构建的 wrapper 当成原生类型本来具有的方法。
 
-公开 marker 可被 Go 手写或通过嵌入提升，所以不能从它反推新 hgo impl。权限与借用也不能从最终 `*T` 布局推导；marker 保留其接口约束作用，但不承担不可伪造的安全证明。
+公开 marker 可被 Go 手写或通过嵌入提升，所以不能从它反推新 goxide impl。权限与借用也不能从最终 `*T` 布局推导；marker 保留其接口约束作用，但不承担不可伪造的安全证明。
 
 ## 7. LSP 与稳定性
 
@@ -168,8 +168,8 @@ BBB::Type
   原生方法                    [导航到原 Go 源码]
   declare impl AorB::XXX      [来源 C；生成转发 wrapper]
     trait 方法               [导航到采用的 Go 方法]
-  有体 impl                  [来源相应 hgo 包]
-    trait 方法               [导航到 hgo 方法体]
+  有体 impl                  [来源相应 goxide 包]
+    trait 方法               [导航到 goxide 方法体]
 ```
 
 LSP 与编译器使用同一元数据。生成 wrapper、marker、工厂和 helper 均可追溯到声明；不能伪装成上游源码已有方法。

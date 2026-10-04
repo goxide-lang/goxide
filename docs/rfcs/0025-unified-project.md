@@ -4,7 +4,7 @@
 
 状态（2026-10-04）：用户已确认统一模型，首片实现已提交；迁移、锁定、纯 TOML 来源及独立复审通过，最新 std/serde 集成后的全包 race 覆盖已通过（首轮冷缓存失败包预热后重跑），vet/设计检查通过；见 [验收记录](../reviews/unified-project-20261004.md)。以下是本片规范及明确限制，不是完整 Cargo 兼容声明。
 
-用户已明确决定：迁入 goxide 的第一步就将 Go 依赖配置迁入 `goxide.toml` / `goxide.lock`。混合项目指 `.go` / `.hgo` 共存，不指两套根依赖配置并存。本篇取代 [TOML 迁移设计](../design/toml-manifest.md) 中长期保留根 go.mod 的兼容模式；未迁入且没有 TOML 的普通 Go/单文件工具行为不变。本轮先实现无损子集，原生 Go 仍负责语法、MVS、下载/checksum 与构建，不重造 resolver。
+用户已明确决定：迁入 goxide 的第一步就将 Go 依赖配置迁入 `goxide.toml` / `goxide.lock`。混合项目指 `.go` / `.gox` 共存，不指两套根依赖配置并存。本篇取代 [TOML 迁移设计](../design/toml-manifest.md) 中长期保留根 go.mod 的兼容模式；未迁入且没有 TOML 的普通 Go/单文件工具行为不变。本轮先实现无损子集，原生 Go 仍负责语法、MVS、下载/checksum 与构建，不重造 resolver。
 
 不自动删除、移动或覆盖用户原文件。迁入采用只读计划与独立 staging 工程验证；用户审阅后可选择迁入后的工程，旧工程完整保留。完整 workspace、发布自动化、跨目标编译、共享 enum ABI、借用/所有权不在本篇范围。
 
@@ -38,13 +38,13 @@ name = "app"
 path = "cmd/app"
 ```
 
-format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取旁边 go.mod。`[features]`、`[dependencies.alias]`、lib/bin/example/build 保持上一版语义；go.require 是原生 Go 最低版本约束，dependencies 是增强依赖请求，两者均在同一 TOML 内交真实 Go 统一选版。相同 module 的多个要求取 MVS，不按 alias 分裂类型身份。replace/exclude 是根政策，不提升依赖自己的政策。保留indirect标记和原require集合，不将间接依赖误作 hgo feature 请求。
+format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取旁边 go.mod。`[features]`、`[dependencies.alias]`、lib/bin/example/build 保持上一版语义；go.require 是原生 Go 最低版本约束，dependencies 是增强依赖请求，两者均在同一 TOML 内交真实 Go 统一选版。相同 module 的多个要求取 MVS，不按 alias 分裂类型身份。replace/exclude 是根政策，不提升依赖自己的政策。保留indirect标记和原require集合，不将间接依赖误作 goxide feature 请求。
 
 本地作者工程一旦有 TOML，根 go.mod/go.sum 都报双配置迁移诊断。原生 Go 依赖无 TOML 时继续使用自己的 go.mod；带 TOML 的 path/Git 作者依赖从 TOML 合成 module 元数据，不能要求给 readonly checkout 写文件。代理下载的 source 发行物有传输用 go.mod：只有经 Go 校验的版本来源允许这一组合，且传输身份/feature无关原生Go约束须与 TOML 相符；该 go.mod 不是第二个作者配置来源。不能用 manifest 标记让任意本地根绕过双配置检查。
 
 ### 无损迁入子集
 
-已实现命令：`hgo import-go --plan --bin app=cmd/app ROOT` 只读输出候选 TOML；`hgo import-go --out NEWDIR --bin app=cmd/app ROOT` 在全新独立目录复制源码并产生 TOML/锁，构建所选目标验证。库显式用 `--lib .`，不默认递归发现所有 main。NEW目录必须不在输入工程或任何现有受管布局内部，必须不存在；锁以最终逻辑根身份计算，不含临时staging路径；发布前丢弃staging的target/.hgo产物，不搬移布局owner/信任缓存，最终配置的本地replace指向原目录（首片采用规范绝对路径保义）。成功前不发布目的目录，不运行程序、go generate 或安装脚本。允许普通 Go 编译/cgo 所需编译器行为，目标环境沿用既有 host 限制。
+已实现命令：`goxide import-go --plan --bin app=cmd/app ROOT` 只读输出候选 TOML；`goxide import-go --out NEWDIR --bin app=cmd/app ROOT` 在全新独立目录复制源码并产生 TOML/锁，构建所选目标验证。库显式用 `--lib .`，不默认递归发现所有 main。NEW目录必须不在输入工程或任何现有受管布局内部，必须不存在；锁以最终逻辑根身份计算，不含临时staging路径；发布前丢弃staging的target/.gox产物，不搬移布局owner/信任缓存，最终配置的本地replace指向原目录（首片采用规范绝对路径保义）。成功前不发布目的目录，不运行程序、go generate 或安装脚本。允许普通 Go 编译/cgo 所需编译器行为，目标环境沿用既有 host 限制。
 
 | go.mod 指令 | 首片行为 |
 | --- | --- |
@@ -66,8 +66,8 @@ format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取�
 
 ## 转译示例
 
-```hgo
-// 导入后可先原封不动保留 main.go，再逐文件改成 .hgo。
+```goxide
+// 导入后可先原封不动保留 main.go，再逐文件改成 .gox。
 package main
 import "fmt"
 func main() { fmt.Println("mixed source, one manifest") }
@@ -80,7 +80,7 @@ import "fmt"
 func main() { fmt.Println("mixed source, one manifest") }
 ```
 
-同目录或目录入口的 go:embed 资源随选中源码闭包保留；文件入口原有 embed 限制不变。混合 Go→逐文件hgo 的过程不再次迁移依赖。host build script 仍先完成图/配置预检再核对信任；新锁或迁移命令不等于授权执行脚本。
+同目录或目录入口的 go:embed 资源随选中源码闭包保留；文件入口原有 embed 限制不变。混合 Go→逐文件goxide 的过程不再次迁移依赖。host build script 仍先完成图/配置预检再核对信任；新锁或迁移命令不等于授权执行脚本。
 
 ## 拒绝与边界
 
@@ -99,13 +99,13 @@ func main() { fmt.Println("mixed source, one manifest") }
 
 ## 双向互操作
 
-原生Go作者依赖可直接消费；goxide作者工程的根不再可直接运行go build，使用hgo生成目标。原生Go消费者使用固定配置生成Go发行物（含标准go.mod/go.sum），无需理解TOML或增强锁。source发行物面向hgo增强构建，仍须满足Go proxy的.mod/zip/module path与checksum合同；作者根和发布目录是不同对象，本轮不承诺自动发布命令。
+原生Go作者依赖可直接消费；goxide作者工程的根不再可直接运行go build，使用goxide生成目标。原生Go消费者使用固定配置生成Go发行物（含标准go.mod/go.sum），无需理解TOML或增强锁。source发行物面向goxide增强构建，仍须满足Go proxy的.mod/zip/module path与checksum合同；作者根和发布目录是不同对象，本轮不承诺自动发布命令。
 
 官方机制依据：[Go module reference](https://go.dev/ref/mod)、[go mod edit](https://go.dev/ref/mod#go-mod-edit)。TOML路径仍相对各自清单，Git URL不得当shell；保持Go internal/DAG、初始化、原生变量/函数身份与现有metadata校验。原生Go的多module/workspace不能靠换清单自动消除包环。
 
 ## 验收与未定项
 
-实施顺序：先字段与指令映射/只读plan；再project模块元数据适配、target规划、锁schema；接入path/Git纯作者源、proxy传输一致性与host helper；最后staging迁移和文档/fixtures。测试使用真实Go与本地mockproxy/Git，不访问私人第三方：Go→mixed→hgo、localreplace/版本replace、indirect/MVS、offline/locked、Go checksum、未知指令、workspace、双配置、partialfailure/source不变、发布后第一次offline+locked重建及无staging路径残留、版本/feature/target A-B-A、脚本授权、embed、生成Go、race/vet与独立review。
+实施顺序：先字段与指令映射/只读plan；再project模块元数据适配、target规划、锁schema；接入path/Git纯作者源、proxy传输一致性与host helper；最后staging迁移和文档/fixtures。测试使用真实Go与本地mockproxy/Git，不访问私人第三方：Go→mixed→goxide、localreplace/版本replace、indirect/MVS、offline/locked、Go checksum、未知指令、workspace、双配置、partialfailure/source不变、发布后第一次offline+locked重建及无staging路径残留、版本/feature/target A-B-A、脚本授权、embed、生成Go、race/vet与独立review。
 
 本篇不要求用户重新批准已决定的单一清单模型。首片拒绝未支持指令属于无损边界，不以“部分迁移成功”交付。若后续确需retract/tool/godebug/workspace语义，另列精确映射与测试后启用；不在首片默默补默认值。
 
@@ -124,7 +124,7 @@ mode = "go-mod"
 
 Go 负责核查模块版本、explicit、replace 与根政策一致性。工具额外严格核查清单语法、未知规则、package路径/归属、缺目录/源码、未声明Go包、符号链接/特殊文件/嵌套模块及越界路径；不因 Go 清单解析器容忍未知行就静默丢弃。包目录内资源及嵌入子目录、模块层许可证按内容完整保留；未归属文件拒绝并给路径。原项目及已有输出不变，失败只清理本次 staging。
 
-首片要求现代单模块 vendor（Go声明至少1.17，包所属模块需Go版本元数据）；`## workspace`、go.work 或未知metadata明确拒绝。modules.txt是被选包视图，不是完整传递版本图：只锁定这份vendor视图，不承诺恢复遗漏的包、依赖测试或其他模块的vendor。原go.mod中未支持的retract/tool/godebug/ignore/Deprecated等仍整项拒绝。vendor模式不与增强依赖图混合：`dependencies` 非空明确拒绝；root features/bin/example可用，vendored源只作为原生Go消费，不展开其中.hgo或自动执行脚本。根显式脚本继续遵守独立信任策略。
+首片要求现代单模块 vendor（Go声明至少1.17，包所属模块需Go版本元数据）；`## workspace`、go.work 或未知metadata明确拒绝。modules.txt是被选包视图，不是完整传递版本图：只锁定这份vendor视图，不承诺恢复遗漏的包、依赖测试或其他模块的vendor。原go.mod中未支持的retract/tool/godebug/ignore/Deprecated等仍整项拒绝。vendor模式不与增强依赖图混合：`dependencies` 非空明确拒绝；root features/bin/example可用，vendored源只作为原生Go消费，不展开其中.gox或自动执行脚本。根显式脚本继续遵守独立信任策略。
 
 | 白/黑例 | 结果 |
 | --- | --- |

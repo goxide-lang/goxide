@@ -19,10 +19,10 @@ Default 的字段约束、enum 默认变体规则与无 static 的关联函数�
 
 ## 转译示例
 
-**D01：非零业务默认值和具体类型 Clone。** hgo 声明片段。
+**D01：非零业务默认值和具体类型 Clone。** goxide 声明片段。
 依赖：`Label` 已有显式 Default（返回 `"untitled"`）、Clone（同值复制）和 Debug。
 
-```hgo
+```goxide
 #[derive(Default, Clone, Debug)]
 pub struct Record {
     title Label
@@ -53,9 +53,9 @@ func cloneRecord(value *Record) Record {
 `cloneRecord` 的 Go 指针表示源级只读借用；Go 签名本身不提供该检查。
 Debug 同样选择具体字段实现；其 formatter 签名尚未冻结，不能从上述函数自行推导 ABI。
 
-**D02：共享字段的 Clone 仍共享。** hgo 声明片段；依赖 Arc 的显式句柄 Clone。
+**D02：共享字段的 Clone 仍共享。** goxide 声明片段；依赖 Arc 的显式句柄 Clone。
 
-```hgo
+```goxide
 #[derive(Clone)]
 struct Handle {
     shared Arc[Counter]
@@ -76,9 +76,9 @@ func cloneHandle(value *Handle) Handle {
 约束：克隆前后 `shared` 指针相同；不因此获得可变权限或要求 `Counter: Clone`。
 锁句柄也必须共享同一锁和状态，不能按值复制内部 Go mutex。
 
-**D03：缺少字段协议必须拒绝。** hgo 反例，无 Go 输出。
+**D03：缺少字段协议必须拒绝。** goxide 反例，无 Go 输出。
 
-```hgo
+```goxide
 #[derive(Clone)]
 struct Exclusive {
     value mut& int
@@ -101,10 +101,10 @@ struct Exclusive {
 
 ## 双向互操作
 
-hgo 调用生成实现与手写 impl 使用同一套选择、权限和唯一性规则。
+goxide 调用生成实现与手写 impl 使用同一套选择、权限和唯一性规则。
 Go 使用发布 `.go` 中公开的普通函数 / 类型；Default 不自动改变 Go 的零初始化行为。
-原生 Go 调用方不受 hgo 借用检查；派生不能被描述为给整个 Go 程序增加所有权保证。
-回到 hgo 时由 `.d.hgo` 或 `.hgo` 恢复协议信息，不从 Go 方法形状猜测派生语义。
+原生 Go 调用方不受 goxide 借用检查；派生不能被描述为给整个 Go 程序增加所有权保证。
+回到 goxide 时由 `.d.gox` 或 `.gox` 恢复协议信息，不从 Go 方法形状猜测派生语义。
 
 ## 验收与未定项
 
@@ -129,7 +129,7 @@ struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload
 
 目录/模块模式支持消费生产包明确派生的具体 struct/enum Clone、Debug。qualified 字段可经生产者公开透明 alias 转发，跨文件相同 import 名按实际包路径区分。内部 metadata v6 在 v5 校验链上新增 Kind/目标/helper/derive 来源，检查 canonical named 身份及精确 `func(*T) T` / `func(*T) string` 签名；alias 不得凭同名函数或正确签名自行增加协议。内容、marker、依赖产物及 canonical 注册均须一致，旧生成模块需重新生成。
 
-[真实 CLI 三模块验收](../../tests/acceptance/field_protocol_external_test.go)覆盖具体 enum/struct、透明 relay、跨文件/包名差异、array/slice/map 嵌套元素协议、nil/空区别、普通 hgo/Go 赋值仍共享容器、显式 Clone 的独立副本及不保留别名拓扑。容器类型以包级 type alias 绑定，避免生成的 src/item/out 等局部名字截获源 import。Debug 保留生产类型/变体名、字段名、字符串和 map key 引号及内容（含私有字段），不自动脱敏；无需消费者反射或绕过字段可见性。三个生成/消费模块分别 race/vet，生成结果重复一致，原生 Go 可调用公开 helper。
+[真实 CLI 三模块验收](../../tests/acceptance/field_protocol_external_test.go)覆盖具体 enum/struct、透明 relay、跨文件/包名差异、array/slice/map 嵌套元素协议、nil/空区别、普通 goxide/Go 赋值仍共享容器、显式 Clone 的独立副本及不保留别名拓扑。容器类型以包级 type alias 绑定，避免生成的 src/item/out 等局部名字截获源 import。Debug 保留生产类型/变体名、字段名、字符串和 map key 引号及内容（含私有字段），不自动脱敏；无需消费者反射或绕过字段可见性。三个生成/消费模块分别 race/vet，生成结果重复一致，原生 Go 可调用公开 helper。
 
 [协议反例](../../internal/frontend/field_protocol_artifact_test.go)核验参数/返回类型、函数变量/泛型/variadic 拒绝、重复/未知/手写来源拒绝、relay 伪造另一 Kind 及陈旧 producer；CLI 对摘要篡改和源文件变化在消费者 import 位置报错。手写 Clone/Debug 尚无已实现登记入口，本片仅 derive 来源；消费者本地 `type Local = m.T` 字段的协议转发仍未接通，不能把该工程缺口说成类型身份不同。不可直接导入的 internal-origin 协议仍不可用，普通 facade API 保留。外部 enum 载荷类型范围、pointer/interface 自动协议、完整 trait、serde 和零值/公开入口验证不在本片扩展；borrow/Copy/指针拆分不作为本片前置条件。
 
@@ -147,7 +147,7 @@ struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload
 
 消费者包级 `type Local = producer.T`（包括多级 alias、native `.go` 中声明、生产者公开 relay）现统一恢复已登记 Default、Clone、Debug、Serialize、Deserialize 和 PartialEq/Eq。使用保留各文件 import 作用域的 Go 类型解析，只对真正 alias 的 Unalias 结果与已验证 canonical 类型作 Identical 匹配；新 defined 类型、alias 指向新 defined 类型、同名/相同底层结构不继承协议。非类型语句留给既有最终完整包检查，不从源码名称猜 helper。
 
-沿用 metadata v6 及既有签名、来源、内容、依赖、marker 校验，无新 schema 或旧数据宽松恢复。协议绑定放在包级，hgo 文件没有源 import 时也能在 package 声明后插入生成 import。收集后的真实 TypeSpec/Imports 保留 `=` 和宏卫生改名；不新增宏模板 type selector 语法。
+沿用 metadata v6 及既有签名、来源、内容、依赖、marker 校验，无新 schema 或旧数据宽松恢复。协议绑定放在包级，goxide 文件没有源 import 时也能在 package 声明后插入生成 import。收集后的真实 TypeSpec/Imports 保留 `=` 和宏卫生改名；不新增宏模板 type selector 语法。
 
 真实三模块验收 `tests/acceptance/local_protocol_alias_test.go` 覆盖各协议、生产者 manual Default、多级/重复导入/native-only alias、不同包相同导入名、同名局部类型拒绝、同名局部变量、容器与已支持的 Option serde/equality、独立 Go helper 消费、重复生成一致、新 defined/假 helper 拒绝及错误摘要定位原生 consumer import。生产/消费/Go消费模块分别 race/vet；独立审查另验证宏 import 改名与 alias 共存。此处 Option 不宣称 Clone/Debug 已实现。
 

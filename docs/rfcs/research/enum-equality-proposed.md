@@ -9,7 +9,7 @@
 - PartialEq 提供一次布尔比较 `equals`。Eq 依赖已有 PartialEq，只声明自反、对称、传递的等价关系，不生成第二套方法。
 - 建议 `#[derive(PartialEq, Eq)]`。单独 Eq 要求已存在 PartialEq；重复手写/派生诊断。派生 PartialEq 比较变体及活跃载荷，派生 Eq 检查所有载荷的 Eq 资格。
 - 手写拟沿用具体 `impl PartialEq for E` 和 `impl Eq for E {}`，不需一般 trait 求解器。实例首参 self、无 static 的既定约定继续适用；本片明确 `func equals(self T, other T) bool` 值参数签名；借用权限签名仍待确认。手写 Eq 是作者契约，编译器不能证明任意函数满足等价关系。
-- hgo 的 `a.equals(b)` 可静态降低到已登记的具体 helper，建议 Go 导出 `EqualsE(a,b E) bool`。当前 E 是 interface，不能直接给它声明 Go receiver 方法；不按任意同名 Go 方法猜协议，也不因此重写 enum ABI。
+- goxide 的 `a.equals(b)` 可静态降低到已登记的具体 helper，建议 Go 导出 `EqualsE(a,b E) bool`。当前 E 是 interface，不能直接给它声明 Go receiver 方法；不按任意同名 Go 方法猜协议，也不因此重写 enum ABI。
 
 ## Go 互操作资格
 
@@ -31,11 +31,11 @@ Eq 不使 enum 自动成为 Go map key。原生 map 使用自身 `==`/hash，不
 
 建议两个实参先按既有表达式求值规则完成，再在 equals helper 内从左至右验证两侧并比较；普通 enum/Result 的 nil、typed-nil case 与伪造动态值沿现 validator 规则 panic，Option.None 是合法值。是否由公共 wrapper 在手写实现之前保证合法输入、两侧求值/验证顺序及 enum 与 nil 的源级比较例外需写明，不能从“不隐式相等”自行推断。
 
-跨模块沿现有摘要绑定记录具体目标身份、实现 helper、derive/manual 来源与 Eq 标记；检查真实 Go 签名，不从 Go comparable 或函数名猜测协议。普通 Go 可显式调用 helper，但 hgo 的静态比较禁令不会改写任意原生 Go 源码。
+跨模块沿现有摘要绑定记录具体目标身份、实现 helper、derive/manual 来源与 Eq 标记；检查真实 Go 签名，不从 Go comparable 或函数名猜测协议。普通 Go 可显式调用 helper，但 goxide 的静态比较禁令不会改写任意原生 Go 源码。
 
 ## 建议实施顺序与待确认点
 
-第一片先确定上述具体入口，支持有限 scalar/struct/array 载荷的显式 PartialEq/Eq 派生、真实 NaN 反例和跨模块 helper；不引入全 trait、隐式适配或 HashMap。以下分片顺序不是用户批准延期。第二片实现已确认容器语义的 slice/map 递归派生；manual 入口另行收口。每片都需真实 hgo→Go 执行及独立审查。
+第一片先确定上述具体入口，支持有限 scalar/struct/array 载荷的显式 PartialEq/Eq 派生、真实 NaN 反例和跨模块 helper；不引入全 trait、隐式适配或 HashMap。以下分片顺序不是用户批准延期。第二片实现已确认容器语义的 slice/map 递归派生；manual 入口另行收口。每片都需真实 goxide→Go 执行及独立审查。
 
 仍需确认：self/other 的借用权限签名（当前值参数及 EqualsT helper 已实施）；enum 对 nil 比较是否例外；自定义 map 键契约（本轮稳定原生键子集与 nil/空区别已确认）；其他新增手写入口的验证保证（当前具体 enum helper 已在原 body 前插入左右 validator）。当前讨论方向为 enum 统一走显式 equals；落地静态禁令前应在最终契约中写清 `==`/`!=`、隐含比较 switch 和 map key 的边界，不能扩大成普通 Go 类型全局禁令。
 

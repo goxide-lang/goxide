@@ -1,5 +1,7 @@
 [package]
-format = 1
+format = 2
+module = "example.org/catalog"
+go = "1.27"
 
 [features]
 default = ["pretty"]
@@ -7,4 +9,4 @@ pretty = []
 
 [[bin]]
 name = "demo"
-path = "src/main.hgo"
+path = "src/main.gox"

@@ -10,12 +10,12 @@
 
 - 根 `[workspace] format=1`，虚拟根/根包、显式 `members`、单段 glob、`exclude`、`default-members`；成员为 format 2 TOML。拒绝重复 module、嵌套 workspace、成员锁、symlink/受管输出成员；外部成员须显式路径，由根 INPUT 选择。
 - `[workspace.dependencies]` 仅模板；成员须 `{workspace=true}`，可加 feature 请求、设置 default_features/optional；不写该标记就不继承。`package.go.workspace=true` / toolchain 同理。直接 version/Git/path 原有来源继续有效，不自动改为成员 path；显式来源冲突报错。原生 require 与成员 path 共存须显式未限定版本的本地 replace。
-- `hgo build|test|transpile --workspace ROOT`；重复 `-p/--package MODULE`；run、显式 bin/example/lib 和 -o 必须只选择一个成员。默认多成员构建其 lib/bins，未满足 required_features 的默认目标跳过并说明；examples 仅显式选择。多成员 feature 使用 `MODULE/FEATURE`。CLI 保留 POSIX 风格，flags 在 INPUT 前。
+- `goxide build|test|transpile --workspace ROOT`；重复 `-p/--package MODULE`；run、显式 bin/example/lib 和 -o 必须只选择一个成员。默认多成员构建其 lib/bins，未满足 required_features 的默认目标跳过并说明；examples 仅显式选择。多成员 feature 使用 `MODULE/FEATURE`。CLI 保留 POSIX 风格，flags 在 INPUT 前。
 - 根 schema 3 lock 保存统一 Go MVS 版本、有效政策、来源身份和校验和；schema 2 单项目继续支持，不自动迁移为 workspace。全体成员的声明 feature 闭包只用于版本求解；本次构建的 features 另按所选根/活动依赖固定点合并。根写锁串行化更新，不运行求解阶段脚本。Git 保持已锁 commit，已有 Unified 锁缺可达 pin 时即使未传 --locked 也拒绝移动分支解析。
 - 拆出项目可直接读取复制的 schema 3 根锁：只沿实际清单及已校验 Go `.mod` 的可达关系求解，忽略无关记录，核对来源/输入/版本/checksum；不复用旧 workspace 的无关 replace 政策。远端/Git 可在新缓存位置重建；path 不自动物化或改源。`--offline` 使用已缓存的可达已锁版本，不要求被升级低版本的缓存。
 - 根 target 所有权与成员 module/目标/feature/配置共同隔离；既有 normal/test metadata 拒绝机制与脚本 trust 保留。未选成员源码/脚本不编译或执行。host helper **沿用 RFC0023 的显式本地 Go 快照合同**；本片没有新增 workspace host 版本/feature resolver，也不声称跨脚本 helper 来源统一。
 
-可运行清单与命令见 [workspace 示例](../../examples/workspace/README.md)，实现证据见 [核心验收](../reviews/workspace-core-20261004.md)。原始研究记录仍是 19 项原生 Go 机制实验，不替代这些 hgo 测试。
+可运行清单与命令见 [workspace 示例](../../examples/workspace/README.md)，实现证据见 [核心验收](../reviews/workspace-core-20261004.md)。原始研究记录仍是 19 项原生 Go 机制实验，不替代这些 goxide 测试。
 
 **增强作者核心模式限制**：不支持 `[workspace.go]` / root override / workspace vendor / go.work import（纯原生迁入模式见下一节）、`publish_version`、dev 表、profile、registry、target-specific features、互斥 feature、Cargo resolver 数字版本、批量 examples/all-targets、manifest-path/workspace-manifest/no-workspace 参数。未知配置字段严格拒绝。现有 host helper 不支持依赖模板继承，不以 workspace 成员资格扩展 host 权限。全 workspace 搬家时绝对本地路径身份需重新锁定；拆出 path 或仍保留继承语法的成员必须先显式物化配置，不能声称复制锁即自足。
 
@@ -23,7 +23,7 @@
 
 ### 第二阶段迁入实施合同
 
-基于 `2aa0d066` 的独立 `feat/workspace-import` 已实现纯原生 go.work / workspace vendor 迁入子集，接口、单配置分析边界、schema 4 锁与限制见 [迁入设计](../design/workspace-import.md)，实际测试见 [迁入验收](../reviews/workspace-import-20261004.md)。本次采用受管原生 go.work，显式依赖图与 Go 传输政策分开。后续衔接已允许成员渐进使用 .hgo/features/明确授权脚本，非vendor根锁可经显式物化拆出；workspace vendor 拆出仍需单列转换合同，不能视为全 RFC 完成。
+基于 `2aa0d066` 的独立 `feat/workspace-import` 已实现纯原生 go.work / workspace vendor 迁入子集，接口、单配置分析边界、schema 4 锁与限制见 [迁入设计](../design/workspace-import.md)，实际测试见 [迁入验收](../reviews/workspace-import-20261004.md)。本次采用受管原生 go.work，显式依赖图与 Go 传输政策分开。后续衔接已允许成员渐进使用 .goxide/features/明确授权脚本，非vendor根锁可经显式物化拆出；workspace vendor 拆出仍需单列转换合同，不能视为全 RFC 完成。
 
 ### 官方事实与本篇选择
 
@@ -158,15 +158,15 @@ package1只是清单本地别名，不从它推导registry包名、module path�
 候选命令，需和独立 Cobra/POSIX 迁移统一；本分支未实现这些新 flag。保留现有 `--go`，不用 `-go`。`-h` 帮助、`-o` 输出符合 CLI 项目约定。为避免 module path 中 `/` 歧义，`--package` 使用完整 module 身份；将来可给唯一短名，歧义必须列候选。
 
 ```sh
-hgo build --workspace-manifest ./goxide.toml --package example.org/service --bin web
-hgo run --workspace-manifest ./goxide.toml --package example.org/service --bin web -- --listen=:8080
-hgo build --workspace
-hgo test --package example.org/a --package example.org/b --locked --offline
-hgo run --package example.org/service --example hello
-hgo build --package example.org/a --features example.org/a/json --no-default-features
-hgo build --no-workspace --manifest-path ./apps/service/goxide.toml
-hgo import-go --workspace --plan ./old/go.work
-hgo import-go --workspace --out ./new --bin example.org/a=app:cmd/app ./old/go.work
+goxide build --workspace-manifest ./goxide.toml --package example.org/service --bin web
+goxide run --workspace-manifest ./goxide.toml --package example.org/service --bin web -- --listen=:8080
+goxide build --workspace
+goxide test --package example.org/a --package example.org/b --locked --offline
+goxide run --package example.org/service --example hello
+goxide build --package example.org/a --features example.org/a/json --no-default-features
+goxide build --no-workspace --manifest-path ./apps/service/goxide.toml
+goxide import-go --workspace --plan ./old/go.work
+goxide import-go --workspace --out ./new --bin example.org/a=app:cmd/app ./old/go.work
 ```
 
 工作区入口不选成员按 default-members；成员目录入口默认该成员，根包目录适用根的 default-members；`--workspace` 显式全部，和 `--package` 互斥。重复 package 去重、未知报错，不只选第一个。--manifest-path 定位包或根不等于关闭工作区发现。
@@ -181,9 +181,9 @@ hgo import-go --workspace --out ./new --bin example.org/a=app:cmd/app ./old/go.w
 
 | 命令（候选） | 本次构建 | 不因此构建 |
 | --- | --- | --- |
-| hgo build --package example.org/app | app及其显式活动依赖common | server及server专用脚本 |
-| hgo build --package example.org/server | server及common | app |
-| hgo build --workspace | app、server、common的选定目标 | 未声明的外部来源 |
+| goxide build --package example.org/app | app及其显式活动依赖common | server及server专用脚本 |
+| goxide build --package example.org/server | server及common | app |
+| goxide build --workspace | app、server、common的选定目标 | 未声明的外部来源 |
 
 这和“common或它的外部依赖选哪个版本”是两件事。**现已确认：整个workspace统一解析版本并使用根锁，命令仅构建选中成员及其显式活动依赖，未选中成员feature不自动带入。** 不再提供旧草稿selected/all-members两套模式，也不为go.work迁入另选版本策略。
 
@@ -250,7 +250,7 @@ Go 的 go.work sync 会改写成员 go.mod；本工具迁入不得调用它。�
 
 现有 `[vendor] mode="go-mod"` 只支持 RFC0025 单模块。第二阶段纯原生迁入已新增独立 `[workspace.vendor] mode="go-work"`（增强模式仍不支持）：保留 workspace modules.txt 标记、根/成员政策、全部 vendor 原始字节、许可证、文件模式及独立内容锁，不冒充 proxy h1。采用真实 Go work vendor 视图，生成 Go workspace 必须与原 vendor 的主模块集合匹配；vendor迁入沿用全workspace统一版本模型，即使只编译 A 也保留完整政策集合。vendor模式同样必须先核验已物化的显式依赖/来源图；原Go主模块集合只用于政策与vendor一致性，不授权源码从未声明成员取包。无法同时保持原vendor政策和显式source图时明确拒绝该迁入，不靠Go use补边。不要从部分 modules.txt 逆造完整 go.mod。
 
-模块 vendor 与 workspace vendor 不能合并去重或任挑一个；module-vendor 工程独立构建保持现状，加入非vendor workspace 后若要使用新的统一来源，须显式模式切换/重锁。多个各自修改过 vendor 的成员不能未经选择合成一份。workspace vendor 无需原 replace 目录仍应可冷离线构建（本次 GO-08 已验证 native 机制），缺失一个实际 import 包就失败并给路径，不联网补全；不能宣称含依赖自己的 tests/任意新 import。vendor 中增强 .hgo、脚本或混合增强来源支持需另有合同，首片不自动执行/展开。工作区增删成员或改政策必须重新核验原 vendor，不能擦掉 ## workspace 伪装单模块。
+模块 vendor 与 workspace vendor 不能合并去重或任挑一个；module-vendor 工程独立构建保持现状，加入非vendor workspace 后若要使用新的统一来源，须显式模式切换/重锁。多个各自修改过 vendor 的成员不能未经选择合成一份。workspace vendor 无需原 replace 目录仍应可冷离线构建（本次 GO-08 已验证 native 机制），缺失一个实际 import 包就失败并给路径，不联网补全；不能宣称含依赖自己的 tests/任意新 import。vendor 中增强 .gox、脚本或混合增强来源支持需另有合同，首片不自动执行/展开。工作区增删成员或改政策必须重新核验原 vendor，不能擦掉 ## workspace 伪装单模块。
 
 ## 转译示例
 
@@ -258,8 +258,8 @@ Go 的 go.work sync 会改写成员 go.mod；本工具迁入不得调用它。�
 
 `libs/shared` 的 module 是 `example.org/shared`，lib 路径 `.`。service 的两个目录入口通过同一依赖身份引用它；work root/单命令仅改变图与目标，不更名 import path。
 
-```hgo
-// libs/shared/message.hgo：片段，workspace 功能未实现
+```goxide
+// libs/shared/message.gox：片段，workspace 功能未实现
 package shared
 pub func Message() string { return "hello" }
 ```
@@ -281,7 +281,7 @@ import (
 func main() { fmt.Println(shared.Message()) }
 ```
 
-生成的 service Go 视图应使用稳定选版加受管 local replace 指向 shared 生成副本；作者根无 go.mod，不给每个调用点复制不同 Shared 类型。service/web 可独立构建；example hello 仅显式构建，不因 workspace 发布进入库 API。此例是目标合同，未运行 hgo workspace。
+生成的 service Go 视图应使用稳定选版加受管 local replace 指向 shared 生成副本；作者根无 go.mod，不给每个调用点复制不同 Shared 类型。service/web 可独立构建；example hello 仅显式构建，不因 workspace 发布进入库 API。此例是目标合同，未运行 goxide workspace。
 
 ### WS-09：独立仓库开发与独立发布
 
@@ -339,9 +339,9 @@ Go 试验确证上表**原生版本机制**，没有实现 feature 行为；没�
 
 ## 双向互操作
 
-hgo 成员消费原生 Go module 仍通过 Go module 元数据/MVS；原生 Go 文件可调用选中生成库的导出函数。所有 lowering 的 package/import 身份、初始化次序、变量存储、internal/DAG、既有 sum metadata 合同不变。workspace 没有额外运行时，也不定义新 enum 参数校验。
+goxide 成员消费原生 Go module 仍通过 Go module 元数据/MVS；原生 Go 文件可调用选中生成库的导出函数。所有 lowering 的 package/import 身份、初始化次序、变量存储、internal/DAG、既有 sum metadata 合同不变。workspace 没有额外运行时，也不定义新 enum 参数校验。
 
-组织不等于发布：候选 `package/publish --package MODULE` 必须在工作区外 staging 验证。先展开继承，映射活动成员覆盖到明确 publish_version 或原 require；迁入中已物化的本地成员边必须取得显式发行版本，生成require；缺版本则拒绝发行，移除本地 replace/work 政策，保留必要发行元数据，核验能从真实发行渠道取得依赖。若无法取得，说明缺哪一个版本，不能拿本地 checkout 冒充已发布；可本地 mock proxy 验证协议，但不证明公网已有该版本。独立源码发行给 hgo 和固定配置 Go 发行物是两种对象，后者含标准 go.mod/go.sum，不含父工作区清单/私有路径/target缓存/脚本信任。source发行需与传输.mod一致，遵守 RFC0025。
+组织不等于发布：候选 `package/publish --package MODULE` 必须在工作区外 staging 验证。先展开继承，映射活动成员覆盖到明确 publish_version 或原 require；迁入中已物化的本地成员边必须取得显式发行版本，生成require；缺版本则拒绝发行，移除本地 replace/work 政策，保留必要发行元数据，核验能从真实发行渠道取得依赖。若无法取得，说明缺哪一个版本，不能拿本地 checkout 冒充已发布；可本地 mock proxy 验证协议，但不证明公网已有该版本。独立源码发行给 goxide 和固定配置 Go 发行物是两种对象，后者含标准 go.mod/go.sum，不含父工作区清单/私有路径/target缓存/脚本信任。source发行需与传输.mod一致，遵守 RFC0025。
 
 库发行默认不包含其他成员、workspace 根 lock、bin/examples 构建产物；examples 源码是否随包发布由显式 include/exclude 的未来发布合同决定，不改变 Go zip/import 规则。所有应用二进制独立命名交付，不能“发布workspace”顺便发布每个仓库。拆出后复制根锁可用于独立 CI；消费者的图由消费者主模块政策决定，发行库不能强迫消费者使用作者 workspace 锁。发布预检需要 standalone 计划而不是复制 workspace 图；CI 推荐两套：联合开发测试和每成员隔离发行测试。
 
@@ -356,7 +356,7 @@ python3 scripts/research/workspace_go_probe.py --go /workspace/goxide-environmen
 python3 scripts/check_design.py --docs-only
 ```
 
-GO-01..04 验证 standalone / 全主模块 / 选中主模块选版；GO-05..06 replace冲突/根覆盖；GO-07..10 制造workspace vendor、删除原replace目录后冷构建、GOWORK=off不消费work vendor、缺包失败；GO-11真实Go解析go/toolchain/godebug；GO-12未选主模块的未来Go版本仍阻断原生全workspace。GO-13..15对比成员/work/成员的DefaultGODEBUG，验证policy覆盖与恢复；GO-16..17验证原生Go无require的成员import在workspace可用、standalone失败；它是与本提案的差异证据，已撤回把该行为用作goxide运行时自动成员发现的建议。GO-18..19验证最长module前缀不等于包归属，以及真实Go的多来源包歧义拒绝。脚本中的 go work vendor **仅制造研究fixture**，不是迁入行为。尚未验证 hgo workspace CLI/feature/lock/cache/trust/publish，也未测试完整所有Go指令或平台；表W01–W20是未来实现验收。
+GO-01..04 验证 standalone / 全主模块 / 选中主模块选版；GO-05..06 replace冲突/根覆盖；GO-07..10 制造workspace vendor、删除原replace目录后冷构建、GOWORK=off不消费work vendor、缺包失败；GO-11真实Go解析go/toolchain/godebug；GO-12未选主模块的未来Go版本仍阻断原生全workspace。GO-13..15对比成员/work/成员的DefaultGODEBUG，验证policy覆盖与恢复；GO-16..17验证原生Go无require的成员import在workspace可用、standalone失败；它是与本提案的差异证据，已撤回把该行为用作goxide运行时自动成员发现的建议。GO-18..19验证最长module前缀不等于包归属，以及真实Go的多来源包歧义拒绝。脚本中的 go work vendor **仅制造研究fixture**，不是迁入行为。尚未验证 goxide workspace CLI/feature/lock/cache/trust/publish，也未测试完整所有Go指令或平台；表W01–W20是未来实现验收。
 
 ### 已确认与仍待决（按用户原编号核对）
 
@@ -371,4 +371,4 @@ GO-01..04 验证 standalone / 全主模块 / 选中主模块选版；GO-05..06 r
 
 已确认阶段顺序：阶段一作者workspace核心（根/成员、显式继承/来源、多目标、唯一根锁及拆出复制、layout/并发）；阶段二go.work逐政策迁入和workspace vendor。研究阶段未实现生产 workspace；当前实施子集以上方实现范围为准。W01–W11/W13/W15–W17/W19/W20为核心候选验收，W12/W14/W18为迁入候选验收；dev表、发布自动化、registry、profile另行设计。暂不支持Cargo数字resolver或自动工具链下载。
 
-生产落点预估为 internal/project 清单/图/锁、cmd/hgo 选择、受管layout/metadata上下文；原则上不改宏语法基础设施，cfg使用既有配置入口。未来若需改变前端条件移除顺序，应先单列RFC0022变更并协调其owner。原研究阶段只有文档与机制研究脚本；当前实现验收另见核心验收记录，仍须跑选中图端到端、生成Go、race/vet、适用全量回归和独立对抗review。
+生产落点预估为 internal/project 清单/图/锁、cmd/goxide 选择、受管layout/metadata上下文；原则上不改宏语法基础设施，cfg使用既有配置入口。未来若需改变前端条件移除顺序，应先单列RFC0022变更并协调其owner。原研究阶段只有文档与机制研究脚本；当前实现验收另见核心验收记录，仍须跑选中图端到端、生成Go、race/vet、适用全量回归和独立对抗review。

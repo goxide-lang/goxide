@@ -33,7 +33,7 @@ compiler.wasm wasm_exec.js examples.json GO-LICENSE.txt
 _headers .nojekyll
 ```
 
-不复制根仓库、`.git`、完整编译器 `.go` 源文件、RFC、研究日志、QA、Node 依赖、凭据或构建脚本。`examples.json` 仅包含刻意展示的五例 `.hgo`/生成 Go、提交与源摘要、工具链、包清单。Go export data 刻意内嵌在 WASM，不单独发布归档。
+不复制根仓库、`.git`、完整编译器 `.go` 源文件、RFC、研究日志、QA、Node 依赖、凭据或构建脚本。`examples.json` 仅包含刻意展示的五例 `.gox`/生成 Go、提交与源摘要、工具链、包清单。Go export data 刻意内嵌在 WASM，不单独发布归档。
 
 构建现在对 export data 使用 `go list -trimpath`，对 WASM 使用 `-trimpath -buildvcs=false -ldflags='-s -w -buildid='`。审计检查允许列表、每文件 25 MiB、已知本机绝对路径、常见密钥标记与 WASM debug/name 自定义节。所有资源仍复制到 embed 目录，HTTP 二进制不走另一条构建链。
 

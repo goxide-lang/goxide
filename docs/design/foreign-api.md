@@ -6,19 +6,19 @@
 
 | 状态 | 范围 |
 | --- | --- |
-| 已确认 | D10、D11：普通 declare、raw / 声明视图、unsafe expr、Ptr / AsPtr、可选 .d.hgo 和外置声明包。 |
+| 已确认 | D10、D11：普通 declare、raw / 声明视图、unsafe expr、Ptr / AsPtr、可选 .d.gox 和外置声明包。 |
 | 暂定 | T01/T06 旧默认已否决；明确 unsafe 属性传播保留，具体 warning 规则暂定。 |
 | 未定 | U02、U05、U07：裸指针恢复、递归 Go 视图 / 回调 ABI、版本 / 构建条件和导入选择。 |
 
-状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 hgo 功能已实现。
+状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 goxide 功能已实现。
 
 [RFC 0001](../rfcs/research/0001-scoped-borrow-views.md) B04/B07 区分普通原生调用与明确 unsafe 操作；没有效果摘要本身不拒绝、不要求 unsafe、不报告风险。
 
 ## 1. 原生视图与声明视图
 
-同一个 Go 包可以提供两种 hgo 视图，不要求真的复制或重命名 Go 包：
+同一个 Go 包可以提供两种 goxide 视图，不要求真的复制或重命名 Go 包：
 
-| 视图 | hgo 行为 | Go 实现 |
+| 视图 | goxide 行为 | Go 实现 |
 | --- | --- | --- |
 | 原生视图，类似 `xx-sys` | 普通函数/方法不自动 unsafe；D31 具体标量 mut&→*T 参数已接通，其余边界继续 U15 | 原始 Go 符号与布局 |
 | 声明视图，类似 `xx-lib` | `declare` 提供可信的参数、结果和调用约束；按声明进行普通调用或保留 unsafe 属性 | 原始 Go 符号，必要时增加边界检查；改变行为需要实际包装函数 |
@@ -31,9 +31,9 @@
 
 ## 2. declare 补充可检查的调用接口
 
-对于原生 Go 函数 `func Fill(p *T)`，可以在普通 `.hgo`、包内 `.d.hgo` 或外置声明包中写：
+对于原生 Go 函数 `func Fill(p *T)`，可以在普通 `.gox`、包内 `.d.gox` 或外置声明包中写：
 
-```hgo
+```goxide
 declare func native::Fill(p mut& native::T);
 
 var value native::T
@@ -73,7 +73,7 @@ func ToPtr[T any](p *T) Ptr[T] { return Ptr[T](p) }
 func ToGo[T any](p Ptr[T]) *T { return (*T)(p) }
 ```
 
-它保留指针身份和 nil，不复制 T，也不要求 Go 的 unsafe.Pointer 或 uintptr。Go 对部分 `Ptr[T]` 与 `*T` 赋值本来就允许，因此 hgo 的显式转换和 unsafe 规则必须由自己的前端执行，不能依赖输出 Go 的类型检查替代。
+它保留指针身份和 nil，不复制 T，也不要求 Go 的 unsafe.Pointer 或 uintptr。Go 对部分 `Ptr[T]` 与 `*T` 赋值本来就允许，因此 goxide 的显式转换和 unsafe 规则必须由自己的前端执行，不能依赖输出 Go 的类型检查替代。
 
 原生包内已有的结构体字段、容器和函数签名保留实际 Go 布局。尤其不能把 `[]*T`、`**T` 等机械改成含具名 Ptr 的不同 Go 类型，再假设一切都可无成本赋值；递归视图、原位修改及适配策略须分别设计。当前实验只验证单层对象指针。
 
@@ -85,7 +85,7 @@ func ToGo[T any](p Ptr[T]) *T { return (*T)(p) }
 
 沿用普通关联类型，语法草案为：
 
-```hgo
+```goxide
 trait AsPtr {
     type T
     unsafe func as_ptr() Ptr[Self.T]
@@ -96,7 +96,7 @@ trait AsPtr {
 
 在没有 Fill 声明视图的场景：
 
-```hgo
+```goxide
 // p: mut& native::T
 unsafe native::Fill(p.as_ptr());
 ```
@@ -105,13 +105,13 @@ unsafe native::Fill(p.as_ptr());
 
 对应 Go 可以先形成 `Ptr[native.T]`，再以 `(*native.T)(raw)` 调用 native.Fill；已知的恒等转换可以消去。unsafe 关键字及调用效果元数据在生成 Go 时擦除。
 
-Go 不允许以具名指针类型作为接收者基类型。因此不能为 `type Ptr[T any] *T` 直接生成 `func (p Ptr[T]) AsPtr()`。hgo 的 trait 实现沿用既定 wrapper 机制，方法和 marker 定义在 wrapper 上；具体调用也可直接降低为转换。以下只展示 Go 实现机制，unsafe 约束由 hgo 元数据承担。[Go 方法接收者规则](https://go.dev/ref/spec#Method_declarations)
+Go 不允许以具名指针类型作为接收者基类型。因此不能为 `type Ptr[T any] *T` 直接生成 `func (p Ptr[T]) AsPtr()`。goxide 的 trait 实现沿用既定 wrapper 机制，方法和 marker 定义在 wrapper 上；具体调用也可直接降低为转换。以下只展示 Go 实现机制，unsafe 约束由 goxide 元数据承担。[Go 方法接收者规则](https://go.dev/ref/spec#Method_declarations)
 
 ```go
 type ptrView[T any] struct{ target Ptr[T] }
 
 func (v ptrView[T]) AsPtr() Ptr[T] { return v.target }
-func (v ptrView[T]) HyperGoTraitAsPtr() {}
+func (v ptrView[T]) GoxideTraitAsPtr() {}
 ```
 
 unsafe 表达式结束不是指针失效、释放或别名消失的时刻。借用派生的 Ptr 应保留已知来源；传给未知 Go 后不能自动恢复“外部不存在别名”的结论。局部检查、逃逸后的诊断与显式恢复规则仍需引用专题细化；未经证明的外部行为由 unsafe 使用者承担。
@@ -120,9 +120,9 @@ unsafe 表达式结束不是指针失效、释放或别名消失的时刻。借�
 
 ## 5. unsafe 随函数值保留
 
-仅明确要求的 unsafe 是 hgo callable 类型或调用效果的一部分，不能只记在原始 Go 符号上：
+仅明确要求的 unsafe 是 goxide callable 类型或调用效果的一部分，不能只记在原始 Go 符号上：
 
-```hgo
+```goxide
 f := explicitlyUnsafeOperation  // 已明确声明为 unsafe，不是因为缺少摘要
 unsafe f(raw);
 ```
@@ -131,11 +131,11 @@ unsafe f(raw);
 
 将明确 unsafe 的函数包装成普通函数时，作者仍负责体内显式 unsafe 操作；普通原生函数不是因为缺少摘要就需要此包装。
 
-Go 函数类型本身没有该 unsafe 属性，导出 hgo unsafe API 后，纯 Go 调用方不会受到 hgo 前端约束。取函数值或跨回调边界时，如果具名 Ptr 等导致两侧实际 Go 函数类型不同，应生成合法的桥接函数，不能只靠直接调用时的参数转换。
+Go 函数类型本身没有该 unsafe 属性，导出 goxide unsafe API 后，纯 Go 调用方不会受到 goxide 前端约束。取函数值或跨回调边界时，如果具名 Ptr 等导致两侧实际 Go 函数类型不同，应生成合法的桥接函数，不能只靠直接调用时的参数转换。
 
 ## 6. 声明分发与选择
 
-声明可以由调用方普通 `.hgo` 提供，也可以随原生 Go 包放在 `.d.hgo` 中，或由类似 TypeScript `@types/xxx` 的独立声明包提供。`.d.hgo` 是可选分发形式，原生 Go 作者无需配合，不要求已有 wrapper。
+声明可以由调用方普通 `.gox` 提供，也可以随原生 Go 包放在 `.d.gox` 中，或由类似 TypeScript `@types/xxx` 的独立声明包提供。`.d.gox` 是可选分发形式，原生 Go 作者无需配合，不要求已有 wrapper。
 
 声明包必须绑定真实 Go import path、适用版本与构建条件。编译器和 LSP 读取同一份明确选定的声明集合；不同来源的冲突声明应诊断或要求显式选择，不按磁盘扫描顺序、导入顺序或“最后一个覆盖”决定语义。声明格式、包命名及依赖锁定机制待包系统设计。
 
@@ -147,10 +147,10 @@ Go 函数类型本身没有该 unsafe 属性，导出 hgo unsafe API 后，纯 G
 
 已在 Go 1.27.1 上以临时独立模块验证：具名泛型 Ptr 与原生单层指针的双向转换、nil、原地址与原地修改，以及 wrapper 实现 AsPtr。直接为具名 Ptr 定义方法的负例得到预期的 invalid receiver 错误。
 
-未来 hgo 实现还需验证：普通未声明调用允许的对照、declare 签名校验与具体风险 warning、unsafe expr 范围、函数值传播、声明版本和冲突、Ptr 来源与反向转换，以及函数值/回调的 Go 桥接。上述 Go 实验不代表这些前端规则已经实现。
+未来 goxide 实现还需验证：普通未声明调用允许的对照、declare 签名校验与具体风险 warning、unsafe expr 范围、函数值传播、声明版本和冲突、Ptr 来源与反向转换，以及函数值/回调的 Go 桥接。上述 Go 实验不代表这些前端规则已经实现。
 
 U15 的历史候选与 D31 后的实际实现范围见 [RFC 0002](../rfcs/research/0002-native-pointer-bridge.md)。普通同型写引用调用已确认，不再等待 D11 例外批准；容器、接口及引用回调不由此自动获批或完成。
 
-写引用核对：hgo `native::Fill(mut& value)` 中 mut 不由自动桥接省略；已有 `p: mut& T` 可直接传 p。Go 输出 `native.Fill(&value)` 只是 Go 无 mut 语法。未知原生 *T 位置不能接受隐式升级的只读 &T；只读视图须有明确可信声明依据，见 [RFC 0002 权限核对](../rfcs/research/0002-native-pointer-bridge.md#11-写引用核对省-asptr不省-mut)。方案 A 的普通同型写引用调用方向已由 D31 确认；具体标量参数已实现，其余候选不能据此视为完成。
+写引用核对：goxide `native::Fill(mut& value)` 中 mut 不由自动桥接省略；已有 `p: mut& T` 可直接传 p。Go 输出 `native.Fill(&value)` 只是 Go 无 mut 语法。未知原生 *T 位置不能接受隐式升级的只读 &T；只读视图须有明确可信声明依据，见 [RFC 0002 权限核对](../rfcs/research/0002-native-pointer-bridge.md#11-写引用核对省-asptr不省-mut)。方案 A 的普通同型写引用调用方向已由 D31 确认；具体标量参数已实现，其余候选不能据此视为完成。
 
 边界桥接不负责取得容器内部引用：只有已经通过值取址或容器自身方法/协议实际得到的 `mut& T` 才进入写引用桥接；`mut& Arc[T]` 等容器绑定引用不能自动展平成 `mut& T`。Boxed/Ref/Arc 的未定获取 API 不由 AsPtr 或方案 A 自动补齐。

@@ -31,9 +31,9 @@
 
 自编测试位置：
 
-- [core tests](../../internal/buildscript/buildscript_test.go)：冻结字节/配置、内容/目录/env/tool键、真实Go/hgo helper、拒绝路径与链接、声明输出、失败/超时/缓存发布、授权回调、clean、host-only。
-- [CLI tests](../../cmd/hgo/buildscript_test.go)：schema/embed、两bin共享、feature变化、root/helper/tool/依赖包许可、撤销及更新、超时恢复、clean保留信任/源码。
-- [联合布局tests](../../cmd/hgo/buildscript_layout_test.go)：默认target可运行二进制、旧bundle独立重编、CLI/env优先级、跨bin缓存、指定布局clean、修改binary/陌生目录/symlink拒绝、nested target、helper信任位置。
+- [core tests](../../internal/buildscript/buildscript_test.go)：冻结字节/配置、内容/目录/env/tool键、真实Go/goxide helper、拒绝路径与链接、声明输出、失败/超时/缓存发布、授权回调、clean、host-only。
+- [CLI tests](../../cmd/goxide/buildscript_test.go)：schema/embed、两bin共享、feature变化、root/helper/tool/依赖包许可、撤销及更新、超时恢复、clean保留信任/源码。
+- [联合布局tests](../../cmd/goxide/buildscript_layout_test.go)：默认target可运行二进制、旧bundle独立重编、CLI/env优先级、跨bin缓存、指定布局clean、修改binary/陌生目录/symlink拒绝、nested target、helper信任位置。
 - [布局cache tests](../../internal/project/layout_scripts_test.go)、[信任store tests](../../internal/scripttrust/store_test.go)、[生成前端tests](../../internal/frontend/generated_module_test.go)。
 
 ```sh
@@ -41,15 +41,15 @@ export GO_BIN=/workspace/goxide-environment/go/bin/go
 export GOCACHE=/workspace/goxide-environment/cache
 export GOTOOLCHAIN=local
 python3 website/build.py
-"$GO_BIN" test -race -tags hgoweb ./...
-"$GO_BIN" vet -tags hgoweb ./...
+"$GO_BIN" test -race -tags goxideweb ./...
+"$GO_BIN" vet -tags goxideweb ./...
 python3 scripts/check_design.py --docs-only
 ```
 
-网页构建只为 `hgoweb` embed 准备本地资源与WASM，不发布站点。干净checkout若直接加hgoweb标签，缺少dist会在setup阶段失败；需先按上述步骤构建。它不代表普通无标签测试依赖网页资源。
+网页构建只为 `goxideweb` embed 准备本地资源与WASM，不发布站点。干净checkout若直接加goxideweb标签，缺少dist会在setup阶段失败；需先按上述步骤构建。它不代表普通无标签测试依赖网页资源。
 
-专项结果：runner全树普通测试通过（acceptance 263.642s）；联合CLI全脚本race通过（132.890s）；两项联合review回归race通过（9.449s）；core最终race通过（25.2s）。完整联合测试结果记录在下方；这些时长是本机观察，不是性能承诺。实验只在本机host执行，未将Go ELF机制或路径中的host/target字段当作hgo交叉编译支持。
+专项结果：runner全树普通测试通过（acceptance 263.642s）；联合CLI全脚本race通过（132.890s）；两项联合review回归race通过（9.449s）；core最终race通过（25.2s）。完整联合测试结果记录在下方；这些时长是本机观察，不是性能承诺。实验只在本机host执行，未将Go ELF机制或路径中的host/target字段当作goxide交叉编译支持。
 
 [手动试用示例](../../examples/build_script/README.md) 已复制到临时目录完成 plan→trust→生成Go/embed→cache hit→schema修改rerun→独立target build→clean→rerun验证；信任保留，源码无生成目录。使用的生成器只导入标准库。
 
-最终联合结果：`go test -race -tags hgoweb ./...` 通过（cmd/hgo 204.547s，frontend 51.956s，acceptance 316.768s）；`go vet -tags hgoweb ./...` 通过；网页资源与真实WASM构建通过（5个示例）。随后将信任位置检查扩大到图中所有已知源码节点，联合布局/信任身份回归再跑race通过（31.097s）。文档检查通过：76个Markdown、929个本地链接/锚点、23个RFC结构。没有执行浏览器UI测试；本次没有修改网页交互。
+最终联合结果：`go test -race -tags goxideweb ./...` 通过（cmd/goxide 204.547s，frontend 51.956s，acceptance 316.768s）；`go vet -tags goxideweb ./...` 通过；网页资源与真实WASM构建通过（5个示例）。随后将信任位置检查扩大到图中所有已知源码节点，联合布局/信任身份回归再跑race通过（31.097s）。文档检查通过：76个Markdown、929个本地链接/锚点、23个RFC结构。没有执行浏览器UI测试；本次没有修改网页交互。

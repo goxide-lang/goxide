@@ -17,9 +17,9 @@
 
 ## 转译示例
 
-**F01：先执行全部参数，再格式化。** hgo 函数体片段；`left` / `right` 返回 int。
+**F01：先执行全部参数，再格式化。** goxide 函数体片段；`left` / `right` 返回 int。
 
-```hgo
+```goxide
 println!("{} {}", left(), right());
 ```
 
@@ -27,19 +27,19 @@ Go 对照片段；依赖 `strconv`、选定的 stdout 写入 helper 及相同的
 此例已选择 int 的 Display，`strconv.Itoa` 仅表示该具体实现，不是通用格式化 ABI。
 
 ```go
-hgoArg0 := left()
-hgoArg1 := right()
-hgoText0 := strconv.Itoa(hgoArg0)
-hgoText1 := strconv.Itoa(hgoArg1)
-writeChecked(out, hgoText0+" "+hgoText1+"\n")
+goxideArg0 := left()
+goxideArg1 := right()
+goxideText0 := strconv.Itoa(goxideArg0)
+goxideText1 := strconv.Itoa(goxideArg1)
+writeChecked(out, goxideText0+" "+goxideText1+"\n")
 ```
 
 约束：顺序为 `left → right → Display(0) → Display(1) → write`，各参数只执行一次。
 若替换为有副作用的显式 formatter，仍保持这个顺序；借用冲突在生成 Go 前拒绝。
 
-**F02：空参数和换行。** hgo 函数体片段。
+**F02：空参数和换行。** goxide 函数体片段。
 
-```hgo
+```goxide
 print!("");
 println!();
 println!("x\n");
@@ -71,9 +71,9 @@ func writeChecked(out io.Writer, text string) {
 正常返回对应 Unit。写入错误或短写 panic；错误前允许已写出部分内容，不承诺回滚。
 需要处理写入计数与错误的业务代码应使用普通 I/O API。
 
-**F03：格式错误在前端拒绝。** hgo 反例；无对应 Go 输出。
+**F03：格式错误在前端拒绝。** goxide 反例；无对应 Go 输出。
 
-```hgo
+```goxide
 print!();                  // 缺少格式字面量
 println!(runtime_format);  // 不支持运行时格式串
 println!("{}", 1, 2);      // 多余参数
@@ -93,9 +93,9 @@ println!("{:?}", secret);  // 假设 secret 类型没有显式 Debug
 
 ## 双向互操作
 
-hgo 格式化 Go 类型须有显式适配；Go 已有 String 方法不自动构成 hgo Display。
+goxide 格式化 Go 类型须有显式适配；Go 已有 String 方法不自动构成 goxide Display。
 发布 `.go` 包含普通格式化和输出调用，Go 构建不读取宏或格式计划元数据。
-Go 可以调用导出的打印函数；不能直接使用 hgo 宏语法，也不获得 hgo 借用检查。
+Go 可以调用导出的打印函数；不能直接使用 goxide 宏语法，也不获得 goxide 借用检查。
 
 ## 验收与未定项
 

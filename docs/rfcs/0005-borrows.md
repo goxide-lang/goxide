@@ -34,7 +34,7 @@ Arc 的共享性不自动授予独占访问；锁、原子或其他受审核协�
 
 **B01：解引用的读取与写入。** 两个函数分别检查权限；不增加运行时权限对象。
 
-```hgo
+```goxide
 func read(r &i32) i32 {
     return *r
 }
@@ -54,7 +54,7 @@ func update(r *int32) {
 
 **B02：局部写引用与直接传参。** `update` 的写访问资格已知；接受调用不依赖不留存证明。
 
-```hgo
+```goxide
 var value i32
 r := mut& value
 update(r)
@@ -73,7 +73,7 @@ update(r)
 
 **B03：复制共享句柄。** 片段的输入 `a` 分别具有 `Arc[Item]` / `*Item` 类型。
 
-```hgo
+```goxide
 b := a
 ```
 
@@ -84,9 +84,9 @@ b := a
 约束：`a`、`b` 指向同一对象；无深复制，无额外原子引用计数。
 复制不会凭空新增 Arc 的写访问 API；可取得的访问须符合其已声明协议。预先存在的可写别名不会仅因可能冲突而被拒绝，Arc 的具体访问方法仍待定义。
 
-**B04：读借用写入应被拒绝。** Go 可以表达该操作，因此错误必须由 hgo 检查。
+**B04：读借用写入应被拒绝。** Go 可以表达该操作，因此错误必须由 goxide 检查。
 
-```hgo
+```goxide
 func wrong(r &i32) {
     *r = 42 // 拒绝：经读借用写入
 }
@@ -110,12 +110,12 @@ func wrong(r *int32) { *r = 42 }
 
 ## 双向互操作
 
-hgo 调 Go 时，涉及引用/原生指针的实际类型桥接按 [RFC 0006](0006-foreign-api.md) 处理；普通未知 Go 调用不因缺少声明而拒绝或自动 unsafe。
+goxide 调 Go 时，涉及引用/原生指针的实际类型桥接按 [RFC 0006](0006-foreign-api.md) 处理；普通未知 Go 调用不因缺少声明而拒绝或自动 unsafe。
 `declare` 可描述读写契约，但验签只能证明 ABI 兼容；声明作者承担其明确承诺的不留存、无冲突重入等行为前提；没有此类摘要不构成默认拒绝理由。
-Go 调生成函数时只看到 `*T`，普通 Go 调用方不获得 hgo 的静态只读检查；hgo 本身也不承诺独占或期限证明。
+Go 调生成函数时只看到 `*T`，普通 Go 调用方不获得 goxide 的静态只读检查；goxide 本身也不承诺独占或期限证明。
 公开边界的非空检查方案见 [RFC 0015](0015-public-api.md)，判空不能证明独占。
-模块中的 `.d.hgo` 保存源级权限；hgo 消费这些信息，Go 工具链只编译 `.go`。
-本方案不要求给第三方原生 Go 程序追加一套 hgo 静态检查。
+模块中的 `.d.gox` 保存源级权限；goxide 消费这些信息，Go 工具链只编译 `.go`。
+本方案不要求给第三方原生 Go 程序追加一套 goxide 静态检查。
 
 ## 验收与未定项
 
@@ -134,11 +134,11 @@ Go 调生成函数时只看到 `*T`，普通 Go 调用方不获得 hgo 的静态
 
 同一次目录构建按 import 依赖顺序完成 provider 全包权限检查及最终 Go 类型检查，再发布内部 v1 元数据。当前支持公开普通函数的内建标量 `&T` / `mut& T` 参数和单个非具名引用返回值；同包多文件、导入别名、跨包转发返回、显式写转读收窄都保留权限。普通 slot 的私有或传递依赖类型通过 provider 生成的透明类型别名命名，保留 Go 类型身份，不要求消费端额外猜测 import，也不改变同名普通方法的调用。
 
-元数据键为真实 module/import path 与包作用域函数对象；参数/返回位置记录完整 Go 类型身份和引用权限。内部 `Version=1`、path、签名和 JSON 摘要由 `HgoReferenceMetadata` 常量标记核对，普通 slot 别名另核对 Go nominal identity。目录产物中的 `.hgo.refs.json` 用于审计；当前只信任本次构建内存注册表，不从 sidecar 恢复外部包，不承诺稳定公共 ABI。透明别名、marker 与文件格式都属于当前内部生成协议。
+元数据键为真实 module/import path 与包作用域函数对象；参数/返回位置记录完整 Go 类型身份和引用权限。内部 `Version=1`、path、签名和 JSON 摘要由 `GoxideReferenceMetadata` 常量标记核对，普通 slot 别名另核对 Go nominal identity。目录产物中的 `.goxide.refs.json` 用于审计；当前只信任本次构建内存注册表，不从 sidecar 恢复外部包，不承诺稳定公共 ABI。透明别名、marker 与文件格式都属于当前内部生成协议。
 
-消费端包括没有新引用语法的 `.go` 文件。检查期间将解析到的导入函数调用呈现为本地名义权限签名；完整权限检查后删除分析函数并还原原调用。函数值/回调、dot import 及其他未支持位置明确诊断，不能退回普通指针规则。元数据缺失、版本/路径/摘要/签名不一致必须拒绝；无 marker 的普通原生包不是“缺失 hgo 元数据”。marker 不是防篡改签名，也不为任意手改 Go 产物建立可信历史。
+消费端包括没有新引用语法的 `.go` 文件。检查期间将解析到的导入函数调用呈现为本地名义权限签名；完整权限检查后删除分析函数并还原原调用。函数值/回调、dot import 及其他未支持位置明确诊断，不能退回普通指针规则。元数据缺失、版本/路径/摘要/签名不一致必须拒绝；无 marker 的普通原生包不是“缺失 goxide 元数据”。marker 不是防篡改签名，也不为任意手改 Go 产物建立可信历史。
 
-单文件产物的公开引用也生成 marker（内部路径 `hgo/generated`）；单文件消费者无论有无新引用语法都会检查导入 marker。跨构建没有可恢复权限注册表时，在导入位置明确报缺元数据；单文件 marker 只防止自动降级，不表示已实现外部依赖恢复。原始未检查 Go 调用者仍能写入普通 Go 指针，不存在运行时权限包装。
+单文件产物的公开引用也生成 marker（内部路径 `goxide/generated`）；单文件消费者无论有无新引用语法都会检查导入 marker。跨构建没有可恢复权限注册表时，在导入位置明确报缺元数据；单文件 marker 只防止自动降级，不表示已实现外部依赖恢复。原始未检查 Go 调用者仍能写入普通 Go 指针，不存在运行时权限包装。
 
 [真实模块验收](../../tests/acceptance/reference_metadata_test.go)覆盖别名与空白重复导入、同名包路径、同名普通方法、类型私有性、多文件、返回转发、defer/goroutine、既有可写别名可见性、Go 消费者的写入/接口/指针/闭包擦除拒绝、单文件两方向缺失诊断、重复构建字节确定性及生成模块单独 race/vet。[元数据验证单测](../../internal/refs/metadata_test.go)覆盖版本、路径、摘要、完整签名和权限值。新导入/函数值错误有原始 source span；后端引用重建错误仍明确 `generated/unmapped`，未声称所有位置精确。
 
@@ -152,7 +152,7 @@ Go 调生成函数时只看到 `*T`，普通 Go 调用方不获得 hgo 的静态
 
 返回值与转发保留既有投影规则：标量及数组/struct 副本的独立值部分可写，其中 slice/map/pointer 等共享投影不能借复制、接口或方法路径擦除权限；这里没有引入完整方法效果协议。其他可写 alias 与普通 native 指针仍可更新原存储；只读路径可观察更新。对容器的引用已支持，不等于容器中携带新引用已支持。
 
-[模块验收](../../tests/acceptance/composite_metadata_test.go)走真实 CLI→生成 Go，覆盖多文件/再导出/私有类型、同名不同包、显式收窄、容器和读写正反例、两次生成确定性；生成模块独立 race/vet。权限检查包括经过 hgo 的 `.go` 消费文件，但原生 `go build` 不执行它。透明 alias 和 marker 不是原生 Go 的只读机制，也不是稳定外部 ABI。
+[模块验收](../../tests/acceptance/composite_metadata_test.go)走真实 CLI→生成 Go，覆盖多文件/再导出/私有类型、同名不同包、显式收窄、容器和读写正反例、两次生成确定性；生成模块独立 race/vet。权限检查包括经过 goxide 的 `.go` 消费文件，但原生 `go build` 不执行它。透明 alias 和 marker 不是原生 Go 的只读机制，也不是稳定外部 ABI。
 
 尚未支持 interface/channel/function/用户泛型元素、引用方法/回调/引用容器、named/multiple result、dot import、外部恢复。既有投影保守限制与来源映射缺口继续列工程待办，不默认为批准延期；D11 待决部分和长期别名分析保持原分类。
 
@@ -160,7 +160,7 @@ Go 调生成函数时只看到 `*T`，普通 Go 调用方不获得 hgo 的静态
 
 D19/D20 要求不因无法证明别名安全而默认拒绝普通 Go 用法；D08/D21 仍要求只读路径写入和权限擦除属于基础类型错误。本节不引入风险分析或新桥接，修正已有实现把某槽位曾有只读资格永久套到后续独立存储的误拒。
 
-以下五个最小真实 hgo 例子均使用 `func f(r &S,b bool)`、`type S struct{Items []int}`，`touch([]int)` 是普通写入函数。修复前 CLI 均拒绝；前四类现已接通，第五类仍明确保留为工程缺口：
+以下五个最小真实 goxide 例子均使用 `func f(r &S,b bool)`、`type S struct{Items []int}`，`touch([]int)` 是普通写入函数。修复前 CLI 均拒绝；前四类现已接通，第五类仍明确保留为工程缺口：
 
 | 最小函数体片段 | 类型事实与本阶段结果 |
 | --- | --- |
@@ -194,7 +194,7 @@ D19/D20 要求不因无法证明别名安全而默认拒绝普通 Go 用法；D0
 
 字段路径的存储更新只沿有限 AST 选择链重建资格节点及祖先字段 map，复用现有函数内回边收敛；没有新增生成 Go 运行时开销。跨 heap alias 的字段写入、数组/容器元素逐索引强更新、捕获/真实取址根、未建模控制流仍有精度缺口。扩展这些路径需分别处理别名可见的槽位、索引重叠或局部控制流；不能用单个 root 字段 map 假装解决，也不因此启动长期全程序 alias 分析。本片不宣称全部字段场景完成。
 
-[真实 CLI 模块验收](../../tests/acceptance/refs_field_flow_test.go)覆盖 10 个业务函数、2 项生成模块 race 测试与单独 vet，以及 24 个拒绝反例；slice/map/pointer 替换、嵌套和值嵌入、旧副本/兄弟字段、RHS快照/写序、循环/range、接口和隐式取址分别验证。原生 Go build 仍不执行 hgo 权限检查，D11 自动桥接与 D20 长期分析未改变。
+[真实 CLI 模块验收](../../tests/acceptance/refs_field_flow_test.go)覆盖 10 个业务函数、2 项生成模块 race 测试与单独 vet，以及 24 个拒绝反例；slice/map/pointer 替换、嵌套和值嵌入、旧副本/兄弟字段、RHS快照/写序、循环/range、接口和隐式取址分别验证。原生 Go build 仍不执行 goxide 权限检查，D11 自动桥接与 D20 长期分析未改变。
 
 ### 6.19 暴露局部槽位与当前值（2026-10-02）
 
@@ -210,10 +210,10 @@ D19/D20 要求不因无法证明别名安全而默认拒绝普通 Go 用法；D0
 
 ### 6.21 跨 module 引用产物恢复（2026-10-02）
 
-D30 的首个有界实现接通独立 go.mod 的 hgo 库与 hgo 应用，离线 local replace 定位实际 Go 包；原生 Go 消费者只消费生成指针 API，不执行 hgo 权限。覆盖现有具体元素导出函数参数/单非具名返回、import alias、类型 alias 与转发，不扩展方法/回调/泛型签名或其他增强协议。
+D30 的首个有界实现接通独立 go.mod 的 goxide 库与 goxide 应用，离线 local replace 定位实际 Go 包；原生 Go 消费者只消费生成指针 API，不执行 goxide 权限。覆盖现有具体元素导出函数参数/单非具名返回、import alias、类型 alias 与转发，不扩展方法/回调/泛型签名或其他增强协议。
 
-内部 `.hgo.refs.json` 采用 ArtifactVersion 1，内嵌权限 Metadata v2。校验 package path、原逻辑 marker、实际选中的非测试 Go 文件 SHA256；根包与每个直接依赖记录传递源内容指纹，增强依赖另记录 marker 与完整 artifact SHA256，并递归校验。传递内容包含 Go list 选择的 Go/native/embed 文件、导入路径、工具链版本、实际目标 GOOS/GOARCH/CGO_ENABLED/GOEXPERIMENT/架构选项及 tags/race。源目录位置不参与摘要，相同替换内容可移动。普通 Go 包也必须绑定：具名 struct 增加 slice 字段会改变旧 readonly 副本分析，即使函数 marker 未变。依赖变化要求重新生成下游，是构建失效规则，不是新的别名分析或普通 Go 调用禁令。
+内部 `.goxide.refs.json` 采用 ArtifactVersion 1，内嵌权限 Metadata v2。校验 package path、原逻辑 marker、实际选中的非测试 Go 文件 SHA256；根包与每个直接依赖记录传递源内容指纹，增强依赖另记录 marker 与完整 artifact SHA256，并递归校验。传递内容包含 Go list 选择的 Go/native/embed 文件、导入路径、工具链版本、实际目标 GOOS/GOARCH/CGO_ENABLED/GOEXPERIMENT/架构选项及 tags/race。源目录位置不参与摘要，相同替换内容可移动。普通 Go 包也必须绑定：具名 struct 增加 slice 字段会改变旧 readonly 副本分析，即使函数 marker 未变。依赖变化要求重新生成下游，是构建失效规则，不是新的别名分析或普通 Go 调用禁令。
 
 缺失、版本错误、包不匹配、源集/内容/依赖变化均在消费 import 位置诊断；不绕过既有真实签名及类型 identity 检查。单文件消费者也恢复并执行绑定，避免无引用语法的只读返回值绕过检查。单文件生产者无目录产物，仍不作为跨模块发布路径。
 
-这取代此前“仅同次 registry 消费”的现状描述，不冻结外部 ABI，也不做签名认证。信任前提仍为可信 hgo 生产者；外部 cgo headers、pkg-config/工具链输入尚无完整绑定证据。纯预编译无源包、远程 registry/发布、其他增强 metadata 与已有签名限制继续留工程账，不算批准延期。真实测试见 [cross-module acceptance](../../tests/acceptance/reference_external_test.go)。enum ABI 不变。
+这取代此前“仅同次 registry 消费”的现状描述，不冻结外部 ABI，也不做签名认证。信任前提仍为可信 goxide 生产者；外部 cgo headers、pkg-config/工具链输入尚无完整绑定证据。纯预编译无源包、远程 registry/发布、其他增强 metadata 与已有签名限制继续留工程账，不算批准延期。真实测试见 [cross-module acceptance](../../tests/acceptance/reference_external_test.go)。enum ABI 不变。

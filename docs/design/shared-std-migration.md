@@ -19,11 +19,11 @@ serde 的明确坐标：core `github.com/goxide-lang/serde`；格式 `github.com
 
 ## 2. std/sum 首轮 API 合同
 
-canonical origin 为 `github.com/goxide-lang/std/sum`，包名 `sum`，最低 Go 版本沿本项目当前 1.27。初始形状 ABI 标识 `HgoSumABI = 1`（schema version 另算）。标识不能替代 go/types 签名和类型身份校验。
+canonical origin 为 `github.com/goxide-lang/std/sum`，包名 `sum`，最低 Go 版本沿本项目当前 1.27。初始形状 ABI 标识 `GoxideSumABI = 1`（schema version 另算）。标识不能替代 go/types 签名和类型身份校验。
 
 ```go
 package sum
-const HgoSumABI = 1
+const GoxideSumABI = 1
 
 type Option[T any] interface { isOption(T) }
 type Some[T any] struct { Value T }
@@ -49,10 +49,10 @@ shape validator 必须 exact-case switch。外部 embedding 可以提升 marker�
 // 生成在用户包，类型别名共用真正的 std 身份。
 type Result[T,E any] = sum.Result[T,E]
 type Option[T any] = sum.Option[T]
-type HgoResultOk[T,E any] = sum.Ok[T,E]
-type HgoResultErr[T,E any] = sum.Err[T,E]
-type HgoOptionSome[T any] = sum.Some[T]
-// 旧 HgoNew* 名称保留薄函数；新内部降低可直调 sum.New*。
+type GoxideResultOk[T,E any] = sum.Ok[T,E]
+type GoxideResultErr[T,E any] = sum.Err[T,E]
+type GoxideOptionSome[T any] = sum.Some[T]
+// 旧 GoxideNew* 名称保留薄函数；新内部降低可直调 sum.New*。
 ```
 
 共享 core 不导入 compiler 或用户包。具体 payload validator、derive/free helper、From 及需要用户类型可见性的代码继续由适当的源包生成；不承诺零 helper。std 不反射猜测用户 enum 或协议。
@@ -86,7 +86,7 @@ serde 迁移需把编译器生成 import、协议 identity 校验、原生手写
 
 可用上下文：词法最近函数/闭包的 return 类型、有类型变量初始化、已声明赋值目标、已解析函数签名的调用参数，以及 match scrutinee 的真实类型。Some 只有 T，可从明确载荷类型（包括常量通常默认类型）推得；None 或 Result 未给出的另一侧必须有唯一约束。多 RHS/多返回/variadic 等组合不得错配 expected type，不支持的组合须明确诊断而非猜测。
 
-```hgo
+```goxide
 func absent() Option[string] { return Option::None }
 func ok(n int) Result[int,error] { return Result::Ok(n) }
 func fail(e *Failure) Result[int,*Failure] { return Result::Err(e) }
@@ -109,7 +109,7 @@ match r {
 | schema/origin/owner | `internal/frontend/enum_artifact.go`, `enum_exports.go`, `imported_family.go` | std 任务拥有 family 段；serde 任务只在约定阶段改 field protocol identity 段，避免并写 |
 | typed 注册/推导 | `internal/propagate/lower.go`, `go_result.go`；拟新增独立 sum 推导模块；`frontend/compile.go`, `package.go` 接入 | std/推导任务；可读性私有名改写随后适配生成接口 |
 | serde 独立迁移 | `serde/`, `serdejson/`, serde derive/import/验证及相关 fixtures | 由接续的唯一迁移 owner 完成：公开 core/json 已发布，私有旧库实现移除 |
-| 可读性 | 空 payload switch、私有短名、无 guard match if/else；AST格式/映射 | 独立任务；保留 exported HgoInst ABI名，不能删除验证或改 break 目标 |
+| 可读性 | 空 payload switch、私有短名、无 guard match if/else；AST格式/映射 | 独立任务；保留 exported GoxideInst ABI名，不能删除验证或改 break 目标 |
 | 网站 | `website/build.py` export 闭包/digest、示例及 QA | 合流后统一重建，避免混用旧 compiler/新 std；暂不部署 |
 | use | RFC 0021 现状与后续文档 | 另任务负责，不新增 use 语法 |
 
@@ -120,12 +120,12 @@ match r {
 - [x] 用户确认仓库边界；本计划记录明确 std API、serde 坐标、schema/兼容与任务文件所有权。
 - [x] 文档独立审查通过；按阶段提交 push/fetch，随后隔离准备 std 候选库及 provenance，不推新公开库。
 - [x] 新环境核实三个 repo；std/serde 真实提交与可下载依赖已核验，next 不填充。
-- [ ] 实施共享 std/schema/registry；真实 hgo 多包和独立模块测试直接互赋、Go consumer、generic alias、问号/From及保值结构。
+- [ ] 实施共享 std/schema/registry；真实 goxide 多包和独立模块测试直接互赋、Go consumer、generic alias、问号/From及保值结构。
 - [ ] 迁移 Eq/Clone/Default/Debug/serde 注册与 Option 缺失/null；测试 std/serde 核心 identity 同一，不能只跑纯 Go 原型。
 - [ ] 家族限定缺参构造及 pattern：return/assignment/callarg/scrutinee 正例，信息不足/冲突/typed nil/partialvalue负例。
 - [ ] 全树 race/vet、每个生成模块独立 race/vet、设计检查；网站真实 CLI/WASM 差分与 export data，独立审查后报告完整 SHA。不以机制探针代替生产验收，不合 main、不 tag/release、不部署网站。
 
 
-当前实施证据：`internal/frontend/shared_std_test.go` 已改用真正发布的 std 依赖执行 hgo→Go 独立模块，并拒绝旧 schema 6。`shared_std_artifact_test.go` 核验 owner 路径、同签名未登记 helper 与候选顺序。serde、网站 catalog、可读性和首轮 TOML 格式迁移已整合；最终整树结果以整合记录为准，不把重点测试冒充完整交付。
+当前实施证据：`internal/frontend/shared_std_test.go` 已改用真正发布的 std 依赖执行 goxide→Go 独立模块，并拒绝旧 schema 6。`shared_std_artifact_test.go` 核验 owner 路径、同签名未登记 helper 与候选顺序。serde、网站 catalog、可读性和首轮 TOML 格式迁移已整合；最终整树结果以整合记录为准，不把重点测试冒充完整交付。
 
-用户随后批准统一项目模型：从 Go 迁入时由 go.mod/go.sum 迁成 goxide.toml+goxide.lock，混合指 .go/.hgo 源码。该后续接口由独立工具链任务拥有；当前测试使用现有 manifest 模式，不把根 go.mod authority 固化为长期架构。公开 std/serde 是普通 Go 发行模块，继续保留其 go.mod。
+用户随后批准统一项目模型：从 Go 迁入时由 go.mod/go.sum 迁成 goxide.toml+goxide.lock，混合指 .go/.gox 源码。该后续接口由独立工具链任务拥有；当前测试使用现有 manifest 模式，不把根 go.mod authority 固化为长期架构。公开 std/serde 是普通 Go 发行模块，继续保留其 go.mod。

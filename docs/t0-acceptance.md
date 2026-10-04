@@ -67,7 +67,7 @@
 | match arm 内 `?` + Error From 遮蔽保护 | 完整（所测路径）；成功/失败/未选中 arm 均检查，局部同名 From 不截获派生转换 | [propagation_test.go](../internal/frontend/propagation_test.go)：`TestPropagationMatchCompositionRace`，实际生成程序执行 `go run -race` |
 | 宏显式闭包 + Option/Result + `?` | 完整（所测路径）；闭包是显式传播边界，宏不插入隐藏闭包 | [propagate_test.go](../tests/acceptance/propagate_test.go)：`TestPropagationMacroClosureRace`；[sums_test.go](../internal/macros/sums_test.go)：`TestSumHelperDoesNotMovePropagation` |
 | 新标量引用 + `?` + Error/Clone derive + 宏 | 有限，所列正反例已通过：引用复制/读捕获、宏解引用后调用普通标量函数、一次求值、Error From、defer/最近闭包、Option 普通 payload 与 Clone 同文件可用；引用 payload、泛型携带引用、宏定义点引用签名函数别名仍明确拒绝 | [t0_combination_test.go](../tests/acceptance/t0_combination_test.go)：`TestT0ReferencePropagationDeriveMacroRace`（`TestIdentityEvaluationAndCleanup`、`TestClosureBoundaryAndOption`、`TestCloneBesideReferences`、`TestDirectDeferredReferenceArgument`）、`TestT0ReferenceSumAndGenericBoundaries`、`TestT0ReferenceGenericInstantiationBoundary`；[reference_composition_test.go](../internal/frontend/reference_composition_test.go)：`TestReferencePropagationAndDerive`、`TestReferenceCompositionRejections` |
-| 配置应用：真实 enum/match + serde JSON + Error/From + Result/`?` + JSON slog | 完整（所测应用路径）；应用读取 JSON、校验业务字段、两次 `?` 显式转换、输出一个结构化事件和可检查错误链；该应用本身不含宏、新引用或 Option | [config_pipeline.hgo](../examples/prototype/config_pipeline.hgo)；[config_pipeline_test.go](../tests/acceptance/config_pipeline_test.go)：`TestConfigPipelineApplicationRace`，生成模块 `TestAcceptedConfig`、`TestRejectedConfig`（bad-json/bad-enum-payload/zero-workers/too-many-workers/missing-name）。运行通过；宏/引用/Option 组合由上一行单独验收；该应用使用含本地 enum 字段的具体 struct Result payload，不能推导任意对象图投影可用 |
+| 配置应用：真实 enum/match + serde JSON + Error/From + Result/`?` + JSON slog | 完整（所测应用路径）；应用读取 JSON、校验业务字段、两次 `?` 显式转换、输出一个结构化事件和可检查错误链；该应用本身不含宏、新引用或 Option | [config_pipeline.hgo](../examples/prototype/config_pipeline.gox)；[config_pipeline_test.go](../tests/acceptance/config_pipeline_test.go)：`TestConfigPipelineApplicationRace`，生成模块 `TestAcceptedConfig`、`TestRejectedConfig`（bad-json/bad-enum-payload/zero-workers/too-many-workers/missing-name）。运行通过；宏/引用/Option 组合由上一行单独验收；该应用使用含本地 enum 字段的具体 struct Result payload，不能推导任意对象图投影可用 |
 
 有限值投影另由 [sum_projection_test.go](../tests/acceptance/sum_projection_test.go) 的 `TestSumValueProjectionRace` 验证分组声明、别名、重复字段及嵌套 Option 的非法值在 guard/传播副作用前被拒绝；`TestSumProjectionUnsupportedPaths` 明确拒绝指针/集合、嵌入、空白字段及递归投影。不是任意动态对象图校验。
 
@@ -85,7 +85,7 @@
 
 独立验收包含 `TestSourceMappingRepeatedTokensNestedExpansion`、`TestSourceMappingChangedRepeatedTokensStayUnmapped`、`TestSourceMappingDeriveFieldDiagnosticSpan`、`TestSourceMappingDeriveFieldMetadata`、`TestSourceMappingUserHelperNameIsNotGeneratedProvenance`、`TestSourceMappingRealCompilerCLI`、`TestSourceMappingRealCompilerGeneratedHelperStaysUnmapped`；前端另验收 `TestSourceOriginsNestedRealGoError`、`TestSourceOriginsSerializerMethodIsNotField`、`TestTransformedPhaseErrorIsExplicitlyUnmapped`。实际 Go 编译失败是证据，不是拼造一条诊断当作集成验收。
 
-只读缓存示例见 [readonly_cache.hgo](../examples/prototype/readonly_cache.hgo)，`TestReadonlyCacheApplicationRace` 直接读取该文件，对实际生成模块启用 race，检查独立快照和可写别名更新的可见性。
+只读缓存示例见 [readonly_cache.hgo](../examples/prototype/readonly_cache.gox)，`TestReadonlyCacheApplicationRace` 直接读取该文件，对实际生成模块启用 race，检查独立快照和可写别名更新的可见性。
 
 ## 下一优先级与可后置项
 
@@ -116,7 +116,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
   [refs_flow_test.go](../tests/acceptance/refs_flow_test.go) 的 `TestReadonlyRebindingFlowRace` 显式运行生成模块 race；`TestReadonlyRebindingRetainsAliases` 保留旧别名、单分支、同时赋值、捕获、循环及含指针元素浅复制的拒绝。
 - enum/match/? 实质 lowering、嵌套宏、Clone/Debug 同文件的精确重复 token 来源：
   [source_lowering_test.go](../tests/acceptance/source_lowering_test.go) 验证每次原始跨度和 Prepare 改写后的宏栈；真实 go/types 错误分已知原始 token 与生成括号 unmapped。不是任意引用组合完整映射。
-- 显式条件日志宏：[conditional_log.hgo](../examples/prototype/conditional_log.hgo) 与 `TestConditionalLogApplicationRace`。禁用时 message/field 零次，启用时顺序各一次；真实 JSON request_id/error、errors.Is/As 链已验收。状态**有限**：普通条件宏，不是 span/tracing runtime；旧 eager slog 宏保持原语义。
+- 显式条件日志宏：[conditional_log.hgo](../examples/prototype/conditional_log.gox) 与 `TestConditionalLogApplicationRace`。禁用时 message/field 零次，启用时顺序各一次；真实 JSON request_id/error、errors.Is/As 链已验收。状态**有限**：普通条件宏，不是 span/tracing runtime；旧 eager slog 宏保持原语义。
 - 审查矩阵后的高价值后续依赖：配置 enum 字段的 Debug/Clone 需先定义并实现 enum 派生；enum Error/具体 source From 需有限类型与转换设计；常量 enum raw/未知值仍未做。serde 已有静态 struct/enum JSON 路径继续复验，不把 missing/null 或 wire 语义顺手改动。本轮不展开这些独立新语义。
 
 本轮新增接受测试由实施者编写，fresh 非作者只读审查另行复验；不冒称新增测试作者独立。历史线程上限使本轮不能再开两名 fresh 实施者，实际采用单实施者与一名 fresh 只读审查者。
@@ -139,7 +139,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 
 ## 多文件与跨包入口增量
 
-基准 `3a48c8356c535f5852ee4044e2a973fc8e387848` 后，新增 [packages_test.go](../tests/acceptance/packages_test.go) 与 [真实模块应用](../examples/packages/main.hgo)。它们不依赖文本拼接：独立文件 AST/import scope、同包声明和派生共享、实际 module path、Go 导出数据导入共同构成有限包入口。
+基准 `3a48c8356c535f5852ee4044e2a973fc8e387848` 后，新增 [packages_test.go](../tests/acceptance/packages_test.go) 与 [真实模块应用](../examples/packages/main.gox)。它们不依赖文本拼接：独立文件 AST/import scope、同包声明和派生共享、实际 module path、Go 导出数据导入共同构成有限包入口。
 
 | 子能力 | 当前验收 | 尚未完成的契约 |
 | --- | --- | --- |
@@ -161,7 +161,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | 子能力 | 当前验收与证据 | 有限契约和剩余项 |
 | --- | --- | --- |
 | 直接导入的公开 enum qualified 构造/match | [内部测试](../internal/frontend/imported_test.go) `TestQualifiedEnumsKeepFileAliasesAndValidation`、`TestQualifiedEnumsRejectPrivateAndMixedIdentity`：同文件多alias、跨文件alias、同名异包、局部shadow、非法case先于wildcard | 仅同module已成功编译producer的公开metadata；Go canonical path+声明身份，不猜同名native类型；private enum不发布 |
-| 导入具体 Option/Result 直接 `?` | [三包验收](../tests/acceptance/qualified_packages_test.go)及[真实应用](../examples/qualified_packages/main.hgo)：JSON/serde/Clone、qualified expression match、嵌套宏、Result、errors链、typed-nil、独立build/run；生成模块显式race | producer具体实例validator保留嵌套payload检查；缺登记实例、不可命名私有/缺import类型参数明确拒绝；qualified builtin构造/pattern未做 |
+| 导入具体 Option/Result 直接 `?` | [三包验收](../tests/acceptance/qualified_packages_test.go)及[真实应用](../examples/qualified_packages/main.gox)：JSON/serde/Clone、qualified expression match、嵌套宏、Result、errors链、typed-nil、独立build/run；生成模块显式race | producer具体实例validator保留嵌套payload检查；缺登记实例、不可命名私有/缺import类型参数明确拒绝；qualified builtin构造/pattern未做 |
 | From作用域与绑定 | 同上验收：imported error进入当前包From，局部From同名不截获；重复注册歧义拒绝 | 先assignability，再当前包唯一显式一步From；不自动收集依赖包From，不搜索链 |
 | 来源与诚实诊断 | `TestQualifiedMatchBodyDiagnosticOrigin`断言真实consumer arm错误原行；错包身份拒绝和缺实例metadata验收 | typed match临时变量的错包赋值错误仍可能为生成行，明确`generated/unmapped`；不宣称跨包完整映射 |
 | ABI范围 | pub enum公开case alias/ctor/validator；builtin公开case/ctor及具体instance validator，private marker保持Go名义身份 | 有限原型，不是稳定导出元数据格式；外部预编译包、一般泛型trait/Try/Residual仍未做；同 module 声明宏见下文 |
@@ -178,8 +178,8 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | 子能力 | 当前验收与证据 | 有限契约和剩余项 |
 | --- | --- | --- |
 | 定义点绑定与导入身份 | [宏测试](../internal/macros/package_test.go)、[前端测试](../internal/frontend/macro_package_test.go)：私有嵌套宏、同名调用方不捕获、native runtime helper、跨文件生成名；[接受测试](../tests/acceptance/macro_packages_test.go)验证同文件同path多alias | 普通显式 import 的 `alias.name!` 原型；不是设计草案的 `import macro`/`::` 最终拼写 |
-| 可见性与 runtime 隔离 | 直接私有宏/私有 runtime helper 拒绝；[日志包](../examples/macro_packages/logkit/macros.hgo)通过公开 shim 使用私有实现；未知自由名字不回退调用者 | 宏不能绕过 Go 私有访问；外部预编译 metadata 与用户过程宏未做 |
-| 真实业务与原生 Go | [应用](../examples/macro_packages/main.hgo)实际跨包日志、enum/serde/Clone、Result `?`、Error/From；生成模块明确 `go test -race`、独立 build/run，验收禁用零次消息/字段求值与启用顺序 | 不扩展有限 fragment/模板语法，不宣称任意 enum/用户类型可出现在模板中 |
+| 可见性与 runtime 隔离 | 直接私有宏/私有 runtime helper 拒绝；[日志包](../examples/macro_packages/logkit/macros.gox)通过公开 shim 使用私有实现；未知自由名字不回退调用者 | 宏不能绕过 Go 私有访问；外部预编译 metadata 与用户过程宏未做 |
+| 真实业务与原生 Go | [应用](../examples/macro_packages/main.gox)实际跨包日志、enum/serde/Clone、Result `?`、Error/From；生成模块明确 `go test -race`、独立 build/run，验收禁用零次消息/字段求值与启用顺序 | 不扩展有限 fragment/模板语法，不宣称任意 enum/用户类型可出现在模板中 |
 | 来源与资源边界 | 精确类型错误 literal 原跨度、定义和调用栈；同文件及外包在 `?` 预处理后的坐标；包/多文件预算和实际两个包累计超限，依赖循环/宏递归拒绝 | 200,000 输入/输出 token、4,096 次展开及既有深度限制；未知生成区域保持 unmapped |
 
 新增测试由实施及接续集成代理编写，fresh 非作者独立只读审查和定向复验已完成；接续集成另修复同文件同路径多alias的不确定 runtime alias 选择及未用导入。最终验证数量见实现记录，不把宿主 race 当作生成模块 race。
@@ -187,13 +187,13 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 
 ## 整体验收：安装、多文件权限与构建条件
 
-基准 `4e2a9138b9103b5e08b306f585c297aac467fc60` 后，本轮以 [新任务调度示例](../examples/prototype/delivery_job.hgo) 验收，而非重复旧配置/日志应用。复用非作者独立验收者编写 [t0_delivery_test.go](../tests/acceptance/t0_delivery_test.go)；新建空上下文线程请求因平台线程上限未成功，不将复用审查称为空上下文审查。
+基准 `4e2a9138b9103b5e08b306f585c297aac467fc60` 后，本轮以 [新任务调度示例](../examples/prototype/delivery_job.gox) 验收，而非重复旧配置/日志应用。复用非作者独立验收者编写 [t0_delivery_test.go](../tests/acceptance/t0_delivery_test.go)；新建空上下文线程请求因平台线程上限未成功，不将复用审查称为空上下文审查。
 
 | 领域 | 本轮状态与实际证据 | 仍有的有限边界 |
 | --- | --- | --- |
 | 宏 / serde JSON / enum match / OptionResult 与有限 From / 普通 Go API | 新业务同用全部能力：JSON任务、可选名称、批次enum、逐步传播、错误链、条件slog；单文件及拆出只读函数的多文件生成模块实际 race | 保持既有类型/语法子集，不由成功组合推导任意表达式或泛型载荷 |
 | 目录引用 | [目录权限测试](../internal/frontend/directory_reference_test.go) 正向跨文件读/写/收窄；拒绝只读→写、native *T擦除、只读返回写入及公开出口；新业务验证权限阶段与serde/传播共存 | 同包私有引用函数及同模块公开标量引用函数；后续元数据首片见末节。复合公开引用与外部恢复未完成，普通 Go *T API 保持原定位 |
-| Go 构建条件 | [选择测试](../internal/frontend/build_selection_test.go)：平台后缀、go:build/+build、显式tags、忽略文件与被排除语法；[CLI测试](../cmd/hgo/directory_test.go)：真实run/test与race/!race选择 | host目标；不同GOOS/GOARCH明确拒绝，.hgo测试源未实现。产物属于选定配置，换条件需重新转译 |
+| Go 构建条件 | [选择测试](../internal/frontend/build_selection_test.go)：平台后缀、go:build/+build、显式tags、忽略文件与被排除语法；[CLI测试](../cmd/goxide/directory_test.go)：真实run/test与race/!race选择 | host目标；不同GOOS/GOARCH明确拒绝，.hgo测试源未实现。产物属于选定配置，换条件需重新转译 |
 | 安装与独立使用 | 独立验收实际 `go install` 到临时GOBIN、仓库外CLI run、生成模块原生Go build/run及正负业务结果 | runtime依赖由go.mod/replace明确提供；没有下载或发布包的验收 |
 | 输出与诊断 | 输入symlink覆盖拒绝、失败目录清理；真实跨包宏错误同时显示定义和调用位置；相同源两次Go/map产物比较 | 未映射来源仍标unmapped；不承诺移动源码根后绝对路径映射不变，也不承诺二进制逐字节复现 |
 
@@ -212,7 +212,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 | --- | --- | --- |
 | `print!` / `println!` | 字面量 `{}` / `{:?}` / 花括号转义；明确标量协议及同包派生Debug；所有参数先按序一次求值，再格式化和写入；空输出/LF、错误和短写panic保留cause | 动态格式、宽度精度、自动Stringer/error/any、导入Debug协议、用户Display impl；go/defer和值位置打印 |
 | Default | `DefaultType()`；标量字段、同包已派生字段、空struct、唯一指定unit enum、具体Option None；宏定义点helper登记 | 自动Result/容器/引用/外部类型默认、手写协议注册、完整泛型trait |
-| 组合和边界 | 新 [启动配置业务](../examples/prototype/print_default.hgo)：显式默认→JSON覆盖→Clone→宏打印；默认选择第二个unit，不改Go var/make/map缺失或serde(default) | 不将合法显式默认值等同于所有Go零值合法；不把派生Debug当Display |
+| 组合和边界 | 新 [启动配置业务](../examples/prototype/print_default.gox)：显式默认→JSON覆盖→Clone→宏打印；默认选择第二个unit，不改Go var/make/map缺失或serde(default) | 不将合法显式默认值等同于所有Go零值合法；不把派生Debug当Display |
 
 独立非作者新增 [验收测试](../tests/acceptance/print_default_test.go)，覆盖28项拒绝、宏/Default/Debug局部遮蔽、嵌套打印、所有参数先于formatter、短写/部分输出/原始cause，以及未支持协议的准确错误。实际暴露的嵌套打印遗漏和打印参数中 `?` 被当普通未知函数冻结已修复；基础类型同名遮蔽原已有守卫，本轮补跨文件验证，不冒称新修复。审查者复用已有线程，非新空上下文。
 
@@ -247,7 +247,7 @@ go test -race -count=1 ./tests/acceptance ./internal/macros ./internal/frontend 
 
 ## 封闭变体与 serde 外部映射验收
 
-[业务模块](../examples/enum_wire/main.hgo)的Delivery映射字符串、Urgency映射整数；两者始终是声明的封闭变体。原生Go桥接调用生成codec，已知输入进入业务并Clone，未知输入返回带Field路径的UnknownVariant，业务计数为零。由此证明的是结构转换边界，不是业务validator功能。
+[业务模块](../examples/enum_wire/main.gox)的Delivery映射字符串、Urgency映射整数；两者始终是声明的封闭变体。原生Go桥接调用生成codec，已知输入进入业务并Clone，未知输入返回带Field路径的UnknownVariant，业务计数为零。由此证明的是结构转换边界，不是业务validator功能。
 
 [独立验收](../tests/acceptance/enum_wire_test.go)实际安装CLI、转译、生成模块3项race运行测试、独立build、4种二进制输入和仓库外CLI运行。另[归档业务](../tests/acceptance/t0_final_test.go)已改为封闭变体，生成模块2项race运行测试；print/Default旧业务生成4项race测试回归。反例覆盖已撤回raw语法、未知映射、混合/重复/越界属性、未登记协议和非法case；准确数量见实现记录。
 
@@ -274,7 +274,7 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 | 调用顺序与失败 | 本层读取和 required 检查成功后按声明顺序初始化缺失 default/全部 skip；显式字段不调用 | 嵌套字段已执行的默认副作用不回滚，不承诺文档级事务 |
 | 协议组合 | 同包多文件手动 Default、嵌套 struct、选中默认 enum payload 复用当前登记与诊断 | 本阶段不扩大跨包协议、容器级 default、新注解或完整 trait；Option serde 见后续增量 |
 
-[独立业务验收](../tests/acceptance/serde_defaults_test.go)实际安装 CLI、仓库外转译并运行生成模块 4 项 race 测试，另有 8 项缺协议定位反例；[多文件示例](../examples/serde_defaults/main.hgo)输出 `demo 8080 8080 STSS`。[布尔名字捕获回归](../tests/prototype/serde_defaults_test.go)使用普通生成子进程，不计入独立 race 模块。具体命令见 [实现记录](../IMPLEMENTATION.md)。本增量替代上文历史阶段中“serde(default) 不改 Go 零值”的边界，不代表完整 serde-rs 属性或整项 T0 已完成。
+[独立业务验收](../tests/acceptance/serde_defaults_test.go)实际安装 CLI、仓库外转译并运行生成模块 4 项 race 测试，另有 8 项缺协议定位反例；[多文件示例](../examples/serde_defaults/main.gox)输出 `demo 8080 8080 STSS`。[布尔名字捕获回归](../tests/prototype/serde_defaults_test.go)使用普通生成子进程，不计入独立 race 模块。具体命令见 [实现记录](../IMPLEMENTATION.md)。本增量替代上文历史阶段中“serde(default) 不改 Go 零值”的边界，不代表完整 serde-rs 属性或整项 T0 已完成。
 
 
 ## 内建具体 Option serde 增量
@@ -291,14 +291,14 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 
 本增量不改变已有 Default/skip 调用顺序：读取与 required 检查后按字段声明顺序构造缺失 default/全部 skip，嵌套业务副作用不回滚。skip 的“验证输入”指格式级消费，不是强制匹配目标字段类型。
 
-[独立接受测试](../tests/acceptance/option_serde_test.go)验证实际安装 CLI、仓库外转译、生成模块 9 项 race 测试与 9 项边界拒绝；[多文件业务](../examples/option_serde/main.hgo)输出 `option 7 -1 4 0`。[名字捕获回归](../tests/prototype/option_serde_test.go)使用普通生成子进程，验证具体类型名不被 helper 局部变量捕获。完整验证记录见 [实现记录](../IMPLEMENTATION.md)。
+[独立接受测试](../tests/acceptance/option_serde_test.go)验证实际安装 CLI、仓库外转译、生成模块 9 项 race 测试与 9 项边界拒绝；[多文件业务](../examples/option_serde/main.gox)输出 `option 7 -1 4 0`。[名字捕获回归](../tests/prototype/option_serde_test.go)使用普通生成子进程，验证具体类型名不被 helper 局部变量捕获。完整验证记录见 [实现记录](../IMPLEMENTATION.md)。
 
 
 ## JSON 底层 Go 错误链补缺
 
 [格式层测试](https://github.com/goxide-lang/serde/blob/a1b791e96d660c6be620e110c566a9a171631b7e/json/cause_test.go)验证 Token、容器结束、尾部输入、数值转换和 Unicode 数字解析中的真实 Go cause，保持原 Kind/Path；可通过 errors.As/Is 取回 SyntaxError 的原始 Token Offset、NumError 与 sentinel。自检错误没有伪造 cause，已有路径 wrapper 指向内层 serde.Error 属于正常链。
 
-[业务示例](../examples/serde_causes/main.hgo)与[独立验收](../tests/acceptance/serde_causes_test.go)使用真实 CLI 与生成模块 race，覆盖嵌套 Field/Index/Variant、正常订单、语法/范围/类型错误。此项补齐既有 cause 契约，不放宽 enum payload、不自动采用 MarshalJSON，也不新增适配 API。格式 Value、native adapter、PATCH adapter 仍为未实现方向，手写 typed helper 和普通 Go 调用可用。
+[业务示例](../examples/serde_causes/main.gox)与[独立验收](../tests/acceptance/serde_causes_test.go)使用真实 CLI 与生成模块 race，覆盖嵌套 Field/Index/Variant、正常订单、语法/范围/类型错误。此项补齐既有 cause 契约，不放宽 enum payload、不自动采用 MarshalJSON，也不新增适配 API。格式 Value、native adapter、PATCH adapter 仍为未实现方向，手写 typed helper 和普通 Go 调用可用。
 
 
 ## 普通 Option 缺失与 Default 解耦
@@ -324,7 +324,7 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 
 ## T0 收口第二组：多 RHS、解引用/断言与发送
 
-基于 `ab02dc3a26860447a3eb6927013271725a0b3868`，实现标识符目标多 RHS、单 var spec 多值、指针解引用、类型断言/comma-ok、channel/value 中的传播。类型/错误/权限规则不扩大。[接受测试](../tests/acceptance/propagate_values_test.go)实际转译 hgo 并运行生成模块 race；两文件[任务投递业务](../examples/propagate_values/main.hgo)经安装 CLI、仓库外转译和独立生成模块 race，核验真实 NumError cause 与失败不发送。
+基于 `ab02dc3a26860447a3eb6927013271725a0b3868`，实现标识符目标多 RHS、单 var spec 多值、指针解引用、类型断言/comma-ok、channel/value 中的传播。类型/错误/权限规则不扩大。[接受测试](../tests/acceptance/propagate_values_test.go)实际转译 hgo 并运行生成模块 race；两文件[任务投递业务](../examples/propagate_values/main.gox)经安装 CLI、仓库外转译和独立生成模块 race，核验真实 NumError cause 与失败不发送。
 
 | 剩余常用传播位置 | 最小业务例子 | 状态与下一步 |
 | --- | --- | --- |
@@ -342,7 +342,7 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 
 基于 `a229e5f12dfebc953dea75beae867af5161abd3d`，补齐既有 Option/Result 的索引/切片及 struct、数组、slice、map 字面量传播。[接受测试](../tests/acceptance/propagate_aggregate_test.go)包含 **10 项**主生成模块 race、跨包批次业务 **2 项** race、只读数组投影 **1 项** race，另有 **14 项**前端拒绝。拒绝包括不可取址数组切片/元素指针方法、静态边界、重复键/字段、非法 literal key、只读共享字段装入可写容器及不求值 unsafe 参数。
 
-覆盖证据明确分开：源码真实经过 hgo→Go；安装 CLI 在仓库外转译[批次业务](../examples/propagate_aggregate/main.hgo)，独立生成模块执行；纯 Go 规范探针不是前端实现证明。业务保留 strconv.NumError cause，并覆盖外部包私有 scalar、struct/array、隐式指针、map 键值、命名 bool 短路及 comparable 遮蔽。对应 compiler-support 约束见 [runtime](../runtime/constraints.go)，不是新 trait/公共协议；只有遮蔽且需要该 witness 的生成路径引入此包，目录模块须声明 goxide 模块 依赖。
+覆盖证据明确分开：源码真实经过 hgo→Go；安装 CLI 在仓库外转译[批次业务](../examples/propagate_aggregate/main.gox)，独立生成模块执行；纯 Go 规范探针不是前端实现证明。业务保留 strconv.NumError cause，并覆盖外部包私有 scalar、struct/array、隐式指针、map 键值、命名 bool 短路及 comparable 遮蔽。对应 compiler-support 约束见 [runtime](../runtime/constraints.go)，不是新 trait/公共协议；只有遮蔽且需要该 witness 的生成路径引入此包，目录模块须声明 goxide 模块 依赖。
 
 本组保留规定的调用/接收/逻辑顺序；不对变量读取、索引及 map 插入的未规定顺序作新增承诺。动态重复键接受 Go 允许的任一结果。数组原存储和可取址类别、map comma-ok、省略 bounds/类型、常量 key 错误及 len/cap 原求值属性均分别验收。
 
@@ -379,7 +379,7 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 
 覆盖上一节的私有嵌入指针限制：当前 [frame lowering](../internal/propagate/frame.go)保留原 Go assignment，不生成不可访问 selector，也不复制数组/根结构体来冒充原位置。原生包无需配合修改或导出私有字段。仅这类目标使用 [runtime guard](../runtime/assignment.go)，问号失败不进入写阶段；private scalar 的上下文类型与只读权限由原赋值继续保留。
 
-实际[跨包业务](../examples/propagate_places/private.hgo)新增 **10 项**生成模块 race，另 **6 项**前端拒绝，旧限制拒绝用例已替换为正向执行。与既有两项业务合计 **12 项**生成模块测试；legacy `GODEBUG=panicnil=1` 另重跑 panic/Goexit 一项，属于配置验证而非新增测试计数。CLI 业务新增输出 `stock 7 <nil>`、`invalid stock 7`。命名返回遮蔽、非法裸 return、goto 声明作用域三个独立审查发现均已修复并留真实用例。
+实际[跨包业务](../examples/propagate_places/private.gox)新增 **10 项**生成模块 race，另 **6 项**前端拒绝，旧限制拒绝用例已替换为正向执行。与既有两项业务合计 **12 项**生成模块测试；legacy `GODEBUG=panicnil=1` 另重跑 panic/Goexit 一项，属于配置验证而非新增测试计数。CLI 业务新增输出 `stock 7 <nil>`、`invalid stock 7`。命名返回遮蔽、非法裸 return、goto 声明作用域三个独立审查发现均已修复并留真实用例。
 
 这仅接通已识别的普通间接赋值目标功能；后续性能复核未通过，不能称该缺口或 T0 完成。需要纠正旧分析中的过强顺序假设：Go 不保证隐式指针读取早于全部 RHS 调用；本轮只承诺规定的调用顺序与两阶段写入，对未规定的读取顺序不作额外保证。根本不可行的推断撤回，也没有把缺口变成批准延期。
 
@@ -411,7 +411,7 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 
 ### 无 guard 第二组：bool witness、signed shift、len/cap
 
-[effects_context.hgo](../examples/propagate_places/effects_context.hgo)新增无 guard 形状断言，迁入此前 mixed private bool、有符号 contextual shift、含问号 len 三条用例，并加入私有泛型类型身份/右臂未调用、nil 目标、负 shift 不写、private 参数上下文、cap、常量 keyed literal、nil pointer-array 与真实解引用边界。duplicate-key 继续作为前端负例。专门 fallback 文件从五条降到 **两条**（tuple/unsafe），不改变这两条的语义保证。
+[effects_context.hgo](../examples/propagate_places/effects_context.gox)新增无 guard 形状断言，迁入此前 mixed private bool、有符号 contextual shift、含问号 len 三条用例，并加入私有泛型类型身份/右臂未调用、nil 目标、负 shift 不写、private 参数上下文、cap、常量 keyed literal、nil pointer-array 与真实解引用边界。duplicate-key 继续作为前端负例。专门 fallback 文件从五条降到 **两条**（tuple/unsafe），不改变这两条的语义保证。
 
 本组仅覆盖 [RFC §6.10](rfcs/research/0005-option-result-question.md#610-私有-bool上下文-shift-与-lencap-第二组)列明的签名来源和 operand。字段/动态或泛型 bool witness、未规划 literal/表达式及旧普通 expr 的私有上下文问题仍是工程缺口；不能称所有 bool/len 或全部 guard 已收口。循环/range、switch 仍列待办，select/adapters 继续待决。
 
@@ -420,7 +420,7 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 
 ### 无 guard 第三组：赋值 tuple 与 comma-ok
 
-[多值用例](../examples/propagate_places/effects_multivalue.hgo)与 [RFC §6.11](rfcs/research/0005-option-result-question.md#611-单-rhs-tuple-与-comma-ok-的第三组替换)同步实现单 RHS 静态 tuple 调用及 map/assert/receive 二值操作。新增三项真实生成业务测试验证一次求值、跨包私有类型、空白目标、原位置/部分写入、失败不写和 comma-ok 的 private bool；新增三类非法多值语境拒绝。业务模块共 **25 项**，多值生成文件断言无 guard，unsafe fallback 文件恰好一条 Catch。
+[多值用例](../examples/propagate_places/effects_multivalue.gox)与 [RFC §6.11](rfcs/research/0005-option-result-question.md#611-单-rhs-tuple-与-comma-ok-的第三组替换)同步实现单 RHS 静态 tuple 调用及 map/assert/receive 二值操作。新增三项真实生成业务测试验证一次求值、跨包私有类型、空白目标、原位置/部分写入、失败不写和 comma-ok 的 private bool；新增三类非法多值语境拒绝。业务模块共 **25 项**，多值生成文件断言无 guard，unsafe fallback 文件恰好一条 Catch。
 
 | 分类 | 当前状态 |
 | --- | --- |
@@ -436,7 +436,7 @@ unsafe 没有扩大 planner 支持范围，原转换链仍保留；方法/动态
 
 ### 普通循环首批：for header 与 slice/map range 源
 
-[真实示例](../examples/prototype/loop_propagation.hgo)由前端生成独立模块并运行 race，另有安装 CLI transpile/run 验收。覆盖 init/每轮条件/post、失败早退、continue/break/标签与 goto 重入、嵌套循环、defer、最近闭包返回、每轮闭包/地址身份，及 slice/map 源一次求值与两种迭代变量声明。生成代码断言无 Assignment/Catch/Fail。
+[真实示例](../examples/prototype/loop_propagation.gox)由前端生成独立模块并运行 race，另有安装 CLI transpile/run 验收。覆盖 init/每轮条件/post、失败早退、continue/break/标签与 goto 重入、嵌套循环、defer、最近闭包返回、每轮闭包/地址身份，及 slice/map 源一次求值与两种迭代变量声明。生成代码断言无 Assignment/Catch/Fail。
 
 [精确范围与边界](rfcs/research/0005-option-result-question.md#612-for-与-slicemap-range-的首批传播)：只新增 slice/map 源传播；无问号源保留 Go 原行为，验证 nil 数组指针（含原本不求值的解引用）、整数与单值函数 iterator 的循环体传播。其他种类的 range 源问号、range 目标问号及循环内尚需旧 guard 的赋值组合继续列工程缺口。重复/空白标签目标反例已由独立审查发现并修复，不吞掉原 Go 静态错误。
 
@@ -446,7 +446,7 @@ for/range 不再整体列作完全未实现，但也不整体打勾；switch、�
 
 ### 表达式 switch 首批：init、tag、case 与原生分支
 
-[真实 hgo 示例](../examples/prototype/switch_propagation.hgo)验证 case 逗号列表/跨 clause 的求值顺序、匹配后停止、失败不进 body、default 在前/中间、fallthrough、标签重入与外循环 continue、作用域/最近闭包、defer 和接口动态比较 panic。[跨包用例](../examples/propagate_places/effects_switch.hgo)验证 private mask 移位与 private bool 的上下文保持。代码形状断言无 Assignment/Catch/Fail，独立生成模块 race 与安装 CLI transpile/run 另行执行。
+[真实 hgo 示例](../examples/prototype/switch_propagation.gox)验证 case 逗号列表/跨 clause 的求值顺序、匹配后停止、失败不进 body、default 在前/中间、fallthrough、标签重入与外循环 continue、作用域/最近闭包、defer 和接口动态比较 panic。[跨包用例](../examples/propagate_places/effects_switch.gox)验证 private mask 移位与 private bool 的上下文保持。代码形状断言无 Assignment/Catch/Fail，独立生成模块 race 与安装 CLI transpile/run 另行执行。
 
 [范围说明](rfcs/research/0005-option-result-question.md#613-表达式-switch-的传播与循环开销复核)：表达式 switch 已接通，type switch 中的传播本组未接通。重复 case/default、错误 case 类型、不可比较 tag、非法 fallthrough/continue、作用域仍拒绝。unsafe 转换链、其他 range 来源/目标、控制流内未规划私有赋值、旧 expr 上下文与其余 guard 继续列工程缺口，不称完成或批准延期。
 
@@ -456,7 +456,7 @@ for 的耗时差异已单独调查，first 状态只解释一部分，三条路�
 
 ### type switch 与非函数 range 源增量
 
-[真实 hgo 示例](../examples/prototype/type_range_propagation.hgo)接通 type switch init/subject/body 传播，保留原生单类型具体变量、多类型接口变量、nil/typed-nil、作用域、标签和最近函数 return。新增 string/整数/channel/数组/数组指针 range 源，按 [RFC §6.14](rfcs/research/0005-option-result-question.md#614-type-switch-与其他非函数-range-源)区分完整数组保存、指针迭代、整数上下文与原生免求值。非求值子树中的传播仍拒绝，不能笼统强制执行数组源。
+[真实 hgo 示例](../examples/prototype/type_range_propagation.gox)接通 type switch init/subject/body 传播，保留原生单类型具体变量、多类型接口变量、nil/typed-nil、作用域、标签和最近函数 return。新增 string/整数/channel/数组/数组指针 range 源，按 [RFC §6.14](rfcs/research/0005-option-result-question.md#614-type-switch-与其他非函数-range-源)区分完整数组保存、指针迭代、整数上下文与原生免求值。非求值子树中的传播仍拒绝，不能笼统强制执行数组源。
 
 专项生成模块 **8 项** race 测试，另有安装 CLI transpile/run 及 **11 类**静态拒绝。跨包 private 业务模块新增一项整数 range 上下文测试，现 **27 项**独立生成 race；包含 1<<63 不被默认成 int、失败不写和负 shift 检查次序。独立审查自建的零长数组、blank 第二变量与 case/init 闭包反例已纳入永久验收。函数 iterator 源问号、range 目标问号继续留工程缺口，不冒称全 range 完成。
 
@@ -551,7 +551,7 @@ Proposed serde adapters 入口与自定义缺失策略、select 候选语义及�
 
 ### 同模块联合业务验收（2026-10-02）
 
-[业务源](../examples/t0_joint/main.hgo)与[安装 CLI 验收](../tests/acceptance/t0_joint_test.go)把 config/store/logkit/入口四包串成 JSON 订单：封闭 enum、两种 match 赋值、Option 缺失/null、Result 问号与 Go cause 链、手动及派生 Default、serde default/skip、条件宏和读写路径都参与真实执行。独立副本字段替换与可写/native 别名更新可见，未许诺全局不可变或独占。
+[业务源](../examples/t0_joint/main.gox)与[安装 CLI 验收](../tests/acceptance/t0_joint_test.go)把 config/store/logkit/入口四包串成 JSON 订单：封闭 enum、两种 match 赋值、Option 缺失/null、Result 问号与 Go cause 链、手动及派生 Default、serde default/skip、条件宏和读写路径都参与真实执行。独立副本字段替换与可写/native 别名更新可见，未许诺全局不可变或独占。
 
 联合业务发现并修复元数据绑定晚于 match 推断的实际误拒。现在先绑定同次构建 registry，再推断表达式和传播；原始签名留作导出，完整权限校验后才还原 Go 调用。只读写入/擦除和跨构建无 registry 仍拒绝，不放宽 D11。
 

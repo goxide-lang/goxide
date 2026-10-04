@@ -10,7 +10,7 @@
 | 暂定 | T03–T05：interface 加值型 case 的机制候选、nil 策略、panic / 递归验证、模式语法、穷尽与控制流规则。 |
 | 未定 | U06、U08：支持值/引用绑定的最终 ABI、递归对象 / 共享状态校验、完整初始化算法。 |
 
-状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 hgo 功能已实现。
+状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 goxide 功能已实现。
 
 后续已确认按模式区分 `Ok(value)`、`Ok(&value)` 与 `Ok(mut& value)`；具体语法和 ABI 见 [enum RFC](../rfcs/0008-enums.md) 与 [match RFC](../rfcs/0009-match.md)。本文值型 case 的 Go 实验仅覆盖值匹配，不能作为不支持引用模式的最终语言限制。
 
@@ -20,7 +20,7 @@
 
 ### 0.1 封闭 enum 与外部映射
 
-```hgo
+```goxide
 #[derive(Serialize, Deserialize, Clone, Debug)]
 enum State {
     #[serde(rename="pending")]
@@ -66,7 +66,7 @@ Go 调用者仍能造 nil、typed-nil 或伪造 case；当前 match/派生边界
 
 ## 1. 源级类型与构造
 
-```hgo
+```goxide
 pub enum Event[T] {
     Idle,
     Item(T),
@@ -98,7 +98,7 @@ enum 是具有包身份的名义类型。每个值恰好属于一个声明的变
 
 ## 2. match 的求值与控制流
 
-```hgo
+```goxide
 label := match load_result() {
     Result::Ok(value) if value > 0 => "positive",
     Result::Ok(_) => "non-positive",
@@ -144,7 +144,7 @@ match 是表达式，也可在语句位置丢弃结果。有期望类型时，�
 
 以下既有机制候选采用普通 Go interface 加**值型变体 struct**；其原位借用支持尚未闭合，不是最终 ABI。此候选不需要 Go `unsafe`、内存重解释或 union。普通枚举的无 payload 变体也有自己的零字段 case struct；只有标准 Option 的 None 使用 nil 接口这一约定。
 
-| hgo 值 | 生成 Go 值 |
+| goxide 值 | 生成 Go 值 |
 | --- | --- |
 | `Event[T]` | 带枚举专属 marker 的接口 |
 | `Event::Idle` | 精确的 `EventIdle[T]{}` 值 |
@@ -153,7 +153,7 @@ match 是表达式，也可在语句位置丢弃结果。有期望类型时，�
 | `Option::None` | `Option[T]` 的 nil 接口 |
 | `Option::Some(x)` | `Some[T]{Value: x}` 值，包含 x 自身的合法零值 |
 
-marker 名称区分枚举声明，签名携带**全部类型参数**，例如 `hgoResult(T, E)`。即便 Ok 的存储只需要 T，也不能漏掉 E；只有零参数 marker 会使不同实例意外具有相同方法集。marker 只提供 Go 类型约束，不在验证时调用，也不代表额外运行时 payload。
+marker 名称区分枚举声明，签名携带**全部类型参数**，例如 `goxideResult(T, E)`。即便 Ok 的存储只需要 T，也不能漏掉 E；只有零参数 marker 会使不同实例意外具有相同方法集。marker 只提供 Go 类型约束，不在验证时调用，也不代表额外运行时 payload。
 
 所有 case 使用值接收者 marker。Go 因而也允许 `*Some[T]`、`*Ok[T, E]` 满足接口，但这些指针不是规范 case，无论是否 nil 都必须拒绝。case 类型别名解析到同一真实类型可以接受；新定义类型或嵌入 wrapper 不能只凭方法集通过校验。
 
@@ -183,19 +183,19 @@ marker 名称区分枚举声明，签名携带**全部类型参数**，例如 `h
 
 ## 5. Go 双向互操作与边界验证
 
-### 5.1 Go 调用生成的 hgo API
+### 5.1 Go 调用生成的 goxide API
 
-Go 调用方可构造导出的规范 case 值并传给生成接口，例如 `Ok[int, string]{Value: 7}`。它也可对返回值做 type switch；Go 自身不提供 hgo 的穷尽性诊断。公开 case 字段遵循类型可见性设计，构造函数可以提供便利，但不能假设 Go 只经构造函数创建值。
+Go 调用方可构造导出的规范 case 值并传给生成接口，例如 `Ok[int, string]{Value: 7}`。它也可对返回值做 type switch；Go 自身不提供 goxide 的穷尽性诊断。公开 case 字段遵循类型可见性设计，构造函数可以提供便利，但不能假设 Go 只经构造函数创建值。
 
-每个从 Go 进入 hgo 的函数、方法、回调及其他数据入口都按目标签名验证。外部回调返回的 enum、从外部对象字段读取的 enum、从 Go 可写共享容器读取的 enum，也属于输入。hgo 调用 Go 前输出规范值；同一次 Go 调用返回后，任何可能被它改写的别名不能沿用调用前的验证结论。
+每个从 Go 进入 goxide 的函数、方法、回调及其他数据入口都按目标签名验证。外部回调返回的 enum、从外部对象字段读取的 enum、从 Go 可写共享容器读取的 enum，也属于输入。goxide 调用 Go 前输出规范值；同一次 Go 调用返回后，任何可能被它改写的别名不能沿用调用前的验证结论。
 
 验证既检查精确 case，也检查对应 payload 的源级约束。标量 int / string 无需额外检查；嵌套 enum 递归检查，非空句柄检查空值，容器检查当前有效元素。泛型验证需要保留或传入类型参数对应的验证能力，不能以 `T any` 为由把所有 T 都当成天然有效，也不使用开放接口上的用户方法来判断可信度。
 
-一旦值离开受信任的 hgo 路径，精确 case 检查仅说明当前外层合法。共享 slice、map、指针对象可能在之后被 Go 修改；一次深层扫描并不建立永久不变量。首版 safe 声明必须约束同步与修改行为，或通过实际包装复制所需数据；无法建立稳定契约不再自动要求 unsafe；有具体风险链则 warning，已选定的合法值边界检查仍执行。竞争访问仍须同步，验证不能修复数据竞争。循环对象图的遍历、快照与递归验证策略须单独实现，不能承诺所有任意 Go 对象都能无成本安全导入。
+一旦值离开受信任的 goxide 路径，精确 case 检查仅说明当前外层合法。共享 slice、map、指针对象可能在之后被 Go 修改；一次深层扫描并不建立永久不变量。首版 safe 声明必须约束同步与修改行为，或通过实际包装复制所需数据；无法建立稳定契约不再自动要求 unsafe；有具体风险链则 warning，已选定的合法值边界检查仍执行。竞争访问仍须同步，验证不能修复数据竞争。循环对象图的遍历、快照与递归验证策略须单独实现，不能承诺所有任意 Go 对象都能无成本安全导入。
 
-### 5.2 hgo 导入 Go 值与原生 API
+### 5.2 goxide 导入 Go 值与原生 API
 
-对带 hgo 元数据的生成 Go 包，编译器恢复源级 enum 身份、变体及校验规则。没有这些元数据的普通 Go interface / const 集合不会自动被猜成封闭 enum；需要明确声明或实际包装。
+对带 goxide 元数据的生成 Go 包，编译器恢复源级 enum 身份、变体及校验规则。没有这些元数据的普通 Go interface / const 集合不会自动被猜成封闭 enum；需要明确声明或实际包装。
 
 原生 Go `(T, error)` 不自动等价于 `Result[T, E]`。返回约定、成功时的 T、错误时是否保留 T、typed nil error 等行为必须由声明或包装明确处理。同样，`(*T, bool)`、nil 指针与 Option 的转换都必须保留原始协议的信息，不按类型形状一概推断。
 
@@ -205,7 +205,7 @@ Go 调用方可构造导出的规范 case 值并传给生成接口，例如 `Ok[
 
 Go 会为变量、数组元素和新分配存储提供零值，map 缺失查询和已关闭 channel 的接收也能得到元素零值。接口枚举的这个零值是 nil；只有 Option 将其定义成合法 None。[Go 零值](https://go.dev/ref/spec#The_zero_value)、[Go 索引表达式](https://go.dev/ref/spec#Index_expressions)、[Go 接收操作](https://go.dev/ref/spec#Receive_operator)
 
-hgo 前端必须在产生或读取这些值的位置处理，不能等普通 Go 编译器发现：
+goxide 前端必须在产生或读取这些值的位置处理，不能等普通 Go 编译器发现：
 
 | 操作 | 首版规则草案 |
 | --- | --- |
@@ -217,9 +217,9 @@ hgo 前端必须在产生或读取这些值的位置处理，不能等普通 Go 
 | channel 接收且元素没有合法默认值 | 必须区分关闭状态，关闭时不暴露伪造的元素值；可用 Option 或受检查的 comma-ok 形式 |
 | 泛型零值 / 部分初始化构造 | 只有已知类型具有合法默认值时才允许；无约束 T 不满足该条件 |
 
-checked lookup 的具体源码拼写待标准库设计；降低到 Go 时先读取 `(value, ok)`，只在 ok 为 true 时包装 Some 或允许读取 value。value 的临时 Go 零值可以存在于生成代码中，但不得成为可观察的 hgo V。普通 enum 即使有零字段变体也不因此自动得到默认值。
+checked lookup 的具体源码拼写待标准库设计；降低到 Go 时先读取 `(value, ok)`，只在 ok 为 true 时包装 Some 或允许读取 value。value 的临时 Go 零值可以存在于生成代码中，但不得成为可观察的 goxide V。普通 enum 即使有零字段变体也不因此自动得到默认值。
 
-`[6]Option[T]` 的零值可以是六个 None；`[6]Result[T, E]` 的六个 nil 则不是合法 Results。纯 Go 可以自由制造后者并传入，公开边界必须逐元素拒绝，不能声称 hgo 的内部初始化检查限制了纯 Go。即使 Go 只单向导入 hgo，泛型 `Zero[T]`、回调和可变容器也足以制造这些状态。
+`[6]Option[T]` 的零值可以是六个 None；`[6]Result[T, E]` 的六个 nil 则不是合法 Results。纯 Go 可以自由制造后者并传入，公开边界必须逐元素拒绝，不能声称 goxide 的内部初始化检查限制了纯 Go。即使 Go 只单向导入 goxide，泛型 `Zero[T]`、回调和可变容器也足以制造这些状态。
 
 ## 7. 完整 Go 降低示例
 
@@ -231,17 +231,17 @@ package enumdemo
 import "strconv"
 
 type Option[T any] interface {
-    hgoOption(T)
+    goxideOption(T)
 }
 
 type Some[T any] struct {
     Value T
 }
 
-func (Some[T]) hgoOption(T) {}
+func (Some[T]) goxideOption(T) {}
 
 type Result[T, E any] interface {
-    hgoResult(T, E)
+    goxideResult(T, E)
 }
 
 type Ok[T, E any] struct {
@@ -252,8 +252,8 @@ type Err[T, E any] struct {
     Error E
 }
 
-func (Ok[T, E]) hgoResult(T, E)  {}
-func (Err[T, E]) hgoResult(T, E) {}
+func (Ok[T, E]) goxideResult(T, E)  {}
+func (Err[T, E]) goxideResult(T, E) {}
 
 type Ptr[T any] *T
 
@@ -270,14 +270,14 @@ func Describe(input Result[int, string]) string {
     case Err[int, string]:
         return value.Error
     default:
-        panic("hgo: Describe.input: invalid Result[int, string]")
+        panic("goxide: Describe.input: invalid Result[int, string]")
     }
 }
 
 // 外部回调的返回值重新进入验证；fetch 仅调用一次。
 func FetchAndDescribe(fetch func() Result[int, string]) string {
     if fetch == nil {
-        panic("hgo: FetchAndDescribe.fetch: nil callable")
+        panic("goxide: FetchAndDescribe.fetch: nil callable")
     }
     saved := fetch()
     return Describe(saved)
@@ -294,10 +294,10 @@ func NestedState(input Option[Option[int]]) string {
         case Some[int]:
             return "Some(Some(" + strconv.Itoa(inner.Value) + "))"
         default:
-            panic("hgo: NestedState.input.Some: invalid Option[int]")
+            panic("goxide: NestedState.input.Some: invalid Option[int]")
         }
     default:
-        panic("hgo: NestedState.input: invalid Option[Option[int]]")
+        panic("goxide: NestedState.input: invalid Option[Option[int]]")
     }
 }
 
@@ -311,7 +311,7 @@ func PointerState(input Option[Ptr[int]]) string {
         }
         return "Some(pointer)"
     default:
-        panic("hgo: PointerState.input: invalid Option[Ptr[int]]")
+        panic("goxide: PointerState.input: invalid Option[Ptr[int]]")
     }
 }
 ```
@@ -332,7 +332,7 @@ Go 下游可直接调用 `Describe(Ok[int, string]{Value: 7})`；`NestedState(ni
 
 ## 9. 实现验收条件
 
-以下是未来实现条件，Go 示例编译成功只验证降低机制，不代表这些 hgo 规则已经实现：
+以下是未来实现条件，Go 示例编译成功只验证降低机制，不代表这些 goxide 规则已经实现：
 
 本轮从本文提取 Go 示例，在 Go 1.27.1 的独立临时模块中通过六项行为测试：合法 Result 分支、外部非法 case、嵌套 Option、可空 Ptr、回调单次求值与返回值校验、共享字段再次读取的校验。另验证不同 Option 参数和 Result 的 E 参数不能因 marker 同形而混用，两个负例均得到预期的 Go 编译错误。
 
@@ -341,7 +341,7 @@ Go 下游可直接调用 `Describe(Ok[int, string]{Value: 7})`；`NestedState(ni
 3. 值绑定按允许规则复制，读写借用指向原 payload；结果统一、return / break / continue 与 defer 作用域不因降低改变。
 4. nil Result、typed nil、非 nil case 指针及接口嵌入伪造值均在业务副作用前拒绝；合法标量 case 通过。
 5. None、Some(None)、Some(Some(value)) 与 Option[Ptr] 的 Some(nil) 可区分；嵌套非法 payload 被拒绝。
-6. 数组、slice 创建与扩长、map 缺项、关闭 channel、泛型零值和部分 struct 初始化不能在 safe hgo 中暴露非法值。
+6. 数组、slice 创建与扩长、map 缺项、关闭 channel、泛型零值和部分 struct 初始化不能在 safe goxide 中暴露非法值。
 7. Go 入口、外部回调返回、共享容器读取与变更后的再次读取遵循同一边界规则；验证不能被仅一次构造检查代替。
 8. Go 消费者可构造和读取规范 case；原生 `(T, error)` 等协议只经明确桥接转换，生成示例可用 Go 1.27 独立编译。
 9. 新增变体触发必要的源码 / ABI 兼容性检查；LSP 的补全、缺失分支与跳转使用同一 enum 元数据。

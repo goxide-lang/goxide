@@ -79,7 +79,7 @@ already inline; wrapping in source is not necessarily wrapping at runtime.
 - `internal/enums/builtins_test.go` tests the stable full exported ID, normalized
   private names, same-instance reuse, injected collisions including the adapter
   path, empty scalar validation and retained nested payload validation.
-- [control.hgo](../../tests/research/readability/control.hgo) is a CLI-runnable
+- [control.hgo](../../tests/research/readability/control.gox) is a CLI-runnable
   control-flow/nested-validation fixture; its output is `1 3`, `kept`, `true`.
 - [wasm_parity.mjs](../../tests/research/readability/wasm_parity.mjs), after
   `GO_BIN=/path/to/go python3 website/build.py`, checks the five website outputs

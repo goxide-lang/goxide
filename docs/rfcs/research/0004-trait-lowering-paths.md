@@ -8,7 +8,7 @@
 
 建议保持共同的 impl 选择、访问权限、视图能力及外部 ABI。二进制模式只在表示不可观察、目标已知时降低成直接调用；向未知 Go 函数、interface/any、回调、反射、持久容器或公开导出边界传值时，仍构造规范视图。历史上，无体 declare 返回原对象与统一 wrapper 存在身份取舍；后续 R24 已选择统一 wrapper，现行 D05/D06 已据此更新。两种构建模式均应保持 RFC 0019 的规范视图，只在不可观察处消除包装。
 
-这里二进制模式仍是 hgo→Go→Go 工具链，不加入自建机器码后端。可见应用源码不等于能分析或改写所有原生库反射、可选接口和回调；不能以“全程序构建”自动证明可观察行为不存在。
+这里二进制模式仍是 goxide→Go→Go 工具链，不加入自建机器码后端。可见应用源码不等于能分析或改写所有原生库反射、可选接口和回调；不能以“全程序构建”自动证明可观察行为不存在。
 
 ## 2. 冲突必须按语义分类
 
@@ -72,7 +72,7 @@ func Apply[T any](d Dict[T], value T, n int) int { return d.Step(value, n) }
 
 实验同时检验直接原值、值 wrapper、指针 wrapper；读取还增加 Defined/接口字段视图。三个协议各自显式补齐的 `Full` 适配能恢复被测行为。这里 Full 只适用于已知具有对应能力、纯采用原行为的对象；不能把任意 ResponseWriter 强转为 Flusher，不能默认每种 error 都有 Unwrap。
 
-官方分派依据：[io.Copy](https://pkg.go.dev/io#Copy)、[errors.Is](https://pkg.go.dev/errors#Is)、[ResponseController](https://pkg.go.dev/net/http#ResponseController)。hgo 应优先保留原生对象→原生接口的直接结构式路径；进入自定义 trait 视图是明确的能力/行为选择，不是每次调用 Go 都要做的手续。
+官方分派依据：[io.Copy](https://pkg.go.dev/io#Copy)、[errors.Is](https://pkg.go.dev/errors#Is)、[ResponseController](https://pkg.go.dev/net/http#ResponseController)。goxide 应优先保留原生对象→原生接口的直接结构式路径；进入自定义 trait 视图是明确的能力/行为选择，不是每次调用 Go 都要做的手续。
 
 ### 4.2 自动转发并不是通用修复
 
@@ -104,7 +104,7 @@ python3 tests/research/trait_paths/run.py \
   --out /tmp/trait-paths-reproduction --count 5 --benchtime 200ms
 ```
 
-源码中无 `go:noinline`，无 unsafe 内存转换；仅用 unsafe.Sizeof 记录表示尺寸。所有路径同一目标类型/方法体/数据，Go 正常优化打开，GOMAXPROCS=1，五次短基准；没有用人为禁内联制造某条路径劣势。测试不是 hgo 生成产物，不等于前端优化实现完成。
+源码中无 `go:noinline`，无 unsafe 内存转换；仅用 unsafe.Sizeof 记录表示尺寸。所有路径同一目标类型/方法体/数据，Go 正常优化打开，GOMAXPROCS=1，五次短基准；没有用人为禁内联制造某条路径劣势。测试不是 goxide 生成产物，不等于前端优化实现完成。
 
 - Local：目标/视图构造在计时循环外，比较静态原方法、值/指针/Defined、普通函数、已知接口和字典调用。
 - Retain：同一个预先存在的 target，每次把适配结果存入全局，体现实际逃逸；不夹带 target 分配。字典例子存到具体类型全局，不是接口装箱，单列成本边界。
@@ -143,7 +143,7 @@ python3 tests/research/trait_paths/run.py \
 
 Copy 原生约 7.8 ns、Read-only 核心值视图约 69.3 ns、显式保留 WriterTo 的 Full 约 8.9 ns；这主要展示可选协议分派导致工作量不同。io.Discard 的快速路径甚至不需要复制 4 KiB，不能解释为真实 I/O 加速倍数。Full 与原生的微小差值也不能推广到业务。
 
-源码发布实验复现：原包 marker 模式配原依赖预期编译失败，改根配置为增强依赖后成功；本地值 wrapper 配原依赖成功。对应日志 publish-marker-original/enhanced、publish-wrapper-original 保留在 results。固定本地 wrapper 可以减轻发布依赖，也改变了当时 D05 的原动态身份；该产品取舍后来由 R24 确认，不能把性能实验本身当成批准依据。没有测完整 hgo 构建时间或产物代码体积，不能宣称改善了多少。
+源码发布实验复现：原包 marker 模式配原依赖预期编译失败，改根配置为增强依赖后成功；本地值 wrapper 配原依赖成功。对应日志 publish-marker-original/enhanced、publish-wrapper-original 保留在 results。固定本地 wrapper 可以减轻发布依赖，也改变了当时 D05 的原动态身份；该产品取舍后来由 R24 确认，不能把性能实验本身当成批准依据。没有测完整 goxide 构建时间或产物代码体积，不能宣称改善了多少。
 
 ## 6. 决策建议与待选边界
 

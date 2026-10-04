@@ -6,17 +6,17 @@
 
 可运行脚本见 [迁入示例](../../examples/workspace-import/README.md)。
 
-`hgo import-go --workspace --plan ROOT` 显式读取 ROOT/go.work；`--out NEWDIR` 在不覆盖既有目录的前提下执行该方案。默认只有 plan。单模块 import-go 原接口保留。工作区可以自动识别当前配置的 main 包作为命名 bin、成员根 library；重名 bin 或没有可推导目标时拒绝，允许 `--member-bin MODULE::NAME=PATH`、`--member-lib MODULE=PATH` 显式指定。
+`goxide import-go --workspace --plan ROOT` 显式读取 ROOT/go.work；`--out NEWDIR` 在不覆盖既有目录的前提下执行该方案。默认只有 plan。单模块 import-go 原接口保留。工作区可以自动识别当前配置的 main 包作为命名 bin、成员根 library；重名 bin 或没有可推导目标时拒绝，允许 `--member-bin MODULE::NAME=PATH`、`--member-lib MODULE=PATH` 显式指定。
 
 首片是**原生 Go 传输模式**：输出仍以根/成员 goxide.toml 和根 goxide.lock 为作者权威，所有 go.mod/go.work 只生成在受管 target。保留每个成员自己的 go/require/replace/exclude/godebug、根 work go/toolchain/godebug/replace。不把 work.go 赋给所有成员；不把成员 godebug 合并成 work godebug。实际 list/build/run/test 使用同一受控 GOWORK。`GOTOOLCHAIN=local`，不自动安装工具链。
 
-迁入的输入仍必须是原生 Go 工程；迁入完成后允许成员渐进加入 .hgo、现有 features 与明确授权的构建脚本。额外 member-vendor 仍拒绝；增强依赖图当前连接显式成员，其他远端依赖保持原生 Go 版本来源。不扩展 registry、发布或 host resolver。
+迁入的输入仍必须是原生 Go 工程；迁入完成后允许成员渐进加入 .gox、现有 features 与明确授权的构建脚本。额外 member-vendor 仍拒绝；增强依赖图当前连接显式成员，其他远端依赖保持原生 Go 版本来源。不扩展 registry、发布或 host resolver。
 
 ## 显式图与分析范围
 
 迁入在 staging 使用真实 Go `list -deps -test -json` 分析各成员的实际包归属，生成根 path 模板和成员 `{workspace=true}` 边；不能仅按 import 字符串最长 module 前缀猜来源。原本无 require 的 `A import B` 会在 plan 明列新增 A→B 声明。原 native require 仍保留原版本；显式图不产生 `B@v0.0.0` 伪 require，也不改 vendor explicit 记录。
 
-分析范围固定为迁入时的 GOOS/GOARCH/CGO_ENABLED、架构特征（如 GOAMD64）、GOEXPERIMENT/GOFIPS140、Go 工具版本及 C 工具/flags/PKG_CONFIG，且 build tags 为空，写入 `[workspace.go]` 配置。分析普通与测试包；CGO 开启时额外合并 race 配置的实际成员边（现有 hgo test 使用 -race）。切换配置明确拒绝并要求重新分析；不能把单配置分析冒称所有平台的无损迁移。源码或新的 import 改变后，构建仍按声明图检查，不能运行时借 go.work 自动扩图。跨成员包级无环但 module 级循环，首片明确拒绝。
+分析范围固定为迁入时的 GOOS/GOARCH/CGO_ENABLED、架构特征（如 GOAMD64）、GOEXPERIMENT/GOFIPS140、Go 工具版本及 C 工具/flags/PKG_CONFIG，且 build tags 为空，写入 `[workspace.go]` 配置。分析普通与测试包；CGO 开启时额外合并 race 配置的实际成员边（现有 goxide test 使用 -race）。切换配置明确拒绝并要求重新分析；不能把单配置分析冒称所有平台的无损迁移。源码或新的 import 改变后，构建仍按声明图检查，不能运行时借 go.work 自动扩图。跨成员包级无环但 module 级循环，首片明确拒绝。
 
 构建某成员时仅复制其显式依赖闭包的源码；其余成员只保留原生 Go 元数据以维持全工作区版本政策。每个选中根独立校验，批量选择本身不使别的成员源码成为允许来源。纯 Go 源码保持原生路径；增强成员按依赖顺序在同一受管工作区展开，仍不为未选成员提供源码或执行脚本。
 
@@ -50,12 +50,12 @@
 ## 已实现命令与锁边界
 
 ```sh
-hgo import-go --workspace --plan --offline /projects/original
-hgo import-go --workspace --out /projects/migrated --offline /projects/original
-hgo build --workspace --locked --offline /projects/migrated
-hgo run -p example.org/app --bin web --locked --offline /projects/migrated
-hgo test -p example.org/app --locked --offline /projects/migrated
-hgo transpile -p example.org/app --bin web --locked --offline /projects/migrated
+goxide import-go --workspace --plan --offline /projects/original
+goxide import-go --workspace --out /projects/migrated --offline /projects/original
+goxide build --workspace --locked --offline /projects/migrated
+goxide run -p example.org/app --bin web --locked --offline /projects/migrated
+goxide test -p example.org/app --locked --offline /projects/migrated
+goxide transpile -p example.org/app --bin web --locked --offline /projects/migrated
 ```
 
 `transpile` 输出受管 Go workspace bundle，可由真实 Go 使用其 go.work 编译；增强成员在此阶段执行既有 lowering。所有 flags 在位置 INPUT 前。没有缓存的非 vendor 远端依赖初次迁入不能使用 `--offline`；此时仍由 Go 原生 proxy/checksum 机制获取，没有安装脚本。
@@ -68,7 +68,7 @@ bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳�
 
 ## 渐进增强衔接（继续实施）
 
-`70964a8` 完成的是原生 Go 保真迁入，尚非完整第二阶段。`.hgo`、features、脚本与 schema4 拆锁的拒绝是临时实现缺口，不能成为用户迁入后的最终工作流边界。后续仍遵守 RFC0022/0023/0026，不通过删去 work/vendor 政策来绕过缺口。
+`70964a8` 完成的是原生 Go 保真迁入，尚非完整第二阶段。`.gox`、features、脚本与 schema4 拆锁的拒绝是临时实现缺口，不能成为用户迁入后的最终工作流边界。后续仍遵守 RFC0022/0023/0026，不通过删去 work/vendor 政策来绕过缺口。
 
 增强编译将保持同一受管 go.work 与完整政策集合，仅生成显式活动依赖闭包。复用现有 Resolve feature 固定点、cfg→宏→类型检查顺序、目标选择和脚本主体授权。类型导入器默认仍 GOWORK=off，只允许构建器通过显式接口传入已拥有的 Go 工作区；不接受源码/脚本自行指定上下文。未选成员只有元数据，不注入源码。
 
@@ -78,11 +78,11 @@ bin 自动发现只扫描显式 use 成员内当前配置的 Go packages（跳�
 
 ### 已完成衔接与真正需要单列的转换边界
 
-新增可验证路径：成员逐步加入 `.hgo`、现有 features/可选成员依赖/required_features、带原生 vendor 的增强宏，以及 RFC0023 明确授权的构建脚本。前端显式接受受管 Go workspace，不改变 cfg/宏/类型检查顺序；vendor 内容参与 frontend 配置与脚本计划身份。
+新增可验证路径：成员逐步加入 `.gox`、现有 features/可选成员依赖/required_features、带原生 vendor 的增强宏，以及 RFC0023 明确授权的构建脚本。前端显式接受受管 Go workspace，不改变 cfg/宏/类型检查顺序；vendor 内容参与 frontend 配置与脚本计划身份。
 
 schema4 增补逐成员输入记录；非vendor拆出显式物化继承/path后直接复制根锁，复用既有 Go/Unified可达解析和校验，不读无关成员源码、不激活无关脚本。显式本地成员路径可搬迁，逐节点仍核对模块身份与有效清单。成员自身 go/toolchain/godebug/replace 恢复生效；若来源因 work override 消失而改变，必须报错而非沿旧来源偷偷构建。旧schema4缺成员记录时先在原workspace普通构建补锁；复制锁的原字节保留。
 
 **workspace vendor 拆出仍需显式转换合同**。最小反例：A require D，B require E，工作区 vendor 标记 D/E 都 explicit。A 独立后若原样复制整份 vendor，E 的 explicit 不再对应主模块 require，真实 Go 拒绝；若改 modules.txt 删除 E，则已不是原 vendor 政策/摘要；若保留隐藏的 B/go.work，则仍施加原 work replace/godebug，违反已确认独立政策恢复。普通非vendor A 可直接复制根锁、只校验D；vendor A 当前明确拒绝并要求显式转换，绝不擦标记或丢修改字节。建议另立最小转换协议：验证原快照后，依据独立政策派生vendor元数据，保留实际文件和原/派生摘要；在协议确认前暂停这部分，而不阻塞非vendor及workspace内渐进增强。
 
 
-条件编译语法与既有前端完全一致：`//hgo:cfg` 在导入发现/宏/名称解析前移除；未选文件仍校验词法、token tree 与 package/import 前缀，完整声明/表达式语法按既有合同延后到启用时验证。本次未扩大为完整语法解析，也未引入新宏语义。
+条件编译语法与既有前端完全一致：`//goxide:cfg` 在导入发现/宏/名称解析前移除；未选文件仍校验词法、token tree 与 package/import 前缀，完整声明/表达式语法按既有合同延后到启用时验证。本次未扩大为完整语法解析，也未引入新宏语义。

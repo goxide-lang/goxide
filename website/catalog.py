@@ -8,10 +8,10 @@ def load():
     assert re.fullmatch('[0-9a-f]{40}', data['compilerCommit'])
     ids = [e['id'] for e in data['examples']]
     assert len(ids) == len(set(ids))
-    assert set(ids) == {p.stem for p in (ROOT/'website/examples').glob('*.hgo')}
+    assert set(ids) == {p.stem for p in (ROOT/'website/examples').glob('*.gox')}
     cards = data['items']; assert len({c['id'] for c in cards}) == len(cards)
     coverage = {r for c in cards for r in c['rfcs']}
-    assert {f'{n:04}' for n in range(1,25)} <= coverage
+    assert {f'{n:04}' for n in range(1,27)} <= coverage
     for c in cards:
         assert c['status'] in data['statusLabels'] and c['topic'] in data['topics']
         assert c['support'] in ['browser','cli','unavailable']
@@ -20,7 +20,7 @@ def load():
         assert bool(c['examples']) == (c['support'] == 'browser')
         if c['status'] in ['proposal','accepted']: assert c['support'] == 'unavailable'
         if c['status'] == 'verified': assert c['examples'] and any('_test.go' in e for e in c['evidence'])
-        for name in c['checks']: assert (ROOT/'website/checks/catalog'/f'{name}.hgo').is_file()
+        for name in c['checks']: assert (ROOT/'website/checks/catalog'/f'{name}.gox').is_file()
         for e in c['evidence']:
             evidence_bytes(data,e)
     return data
@@ -53,4 +53,4 @@ def write_index(data):
     (ROOT/'website/FEATURES.md').write_text('\n'.join(lines))
 
 if __name__ == '__main__':
-    data=load();write_index(data);print(f"catalog schema/evidence OK: {len(data['items'])} topics, RFC 0001–0024 covered")
+    data=load();write_index(data);print(f"catalog schema/evidence OK: {len(data['items'])} topics, RFC 0001–0026 covered")

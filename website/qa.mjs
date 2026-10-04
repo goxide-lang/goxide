@@ -31,14 +31,14 @@ for(let i=0;i<manifest.examples.length;i++){
 }
 // Native CLI runs only in this local QA process, never in the web server.
 const checkResults=[];
-const temp=await fs.mkdtemp(path.join(tmpdir(),'hgo-browser-parity-'));
+const temp=await fs.mkdtemp(path.join(tmpdir(),'goxide-browser-parity-'));
 try {
  for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity']) {
-  const source=await fs.readFile(new URL(`checks/${name}.hgo`,import.meta.url),'utf8');
-  const input=path.join(temp,'playground.hgo');await fs.writeFile(input,source);
+  const source=await fs.readFile(new URL(`checks/${name}.gox`,import.meta.url),'utf8');
+  const input=path.join(temp,'playground.gox');await fs.writeFile(input,source);
   let nativeGo, nativeError;
-  try { nativeGo=execFileSync(process.env.HGO_BIN || fileURLToPath(new URL('../bin/hgo',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']}); }
-  catch(e) {nativeError=String(e.stderr).trim().replaceAll(input,'playground.hgo');}
+  try { nativeGo=execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']}); }
+  catch(e) {nativeError=String(e.stderr).trim().replaceAll(input,'playground.gox');}
   await page.fill('#source',source);
   if(name.startsWith('reject_')) {
    assert.ok(nativeError,`${name}: CLI unexpectedly accepted input`);
@@ -77,13 +77,13 @@ await page.setViewportSize({width:390,height:844});
 assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
 await page.screenshot({path:new URL('qa-artifacts/mobile.png',import.meta.url).pathname,fullPage:true});
 // Intercept only a QA worker to deterministically exercise hard timeout and cancel.
-await page.route('**/worker.js',r=>r.fulfill({contentType:'application/javascript',body:'postMessage({type:"ready"}); onmessage=()=>{};'}));
+await page.route('**/worker.js*',r=>r.fulfill({contentType:'application/javascript',body:'postMessage({type:"ready"}); onmessage=()=>{};'}));
 await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent==='正在转译…');
 await page.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('超过 10 秒'),{},{timeout:15000});
 assert.equal(await page.inputValue('#output'),'');
 await page.click('#compile');await page.waitForFunction(()=>document.querySelector('#status').textContent==='正在转译…');await page.click('#stop');
 assert.match(await page.textContent('#status'),/已中断/);
-await page.unroute('**/worker.js');await page.click('#reset');await finished();
+await page.unroute('**/worker.js*');await page.click('#reset');await finished();
 assert.equal(await page.inputValue('#output'),manifest.examples[0].go);
 assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');

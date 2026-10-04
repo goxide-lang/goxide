@@ -4,9 +4,9 @@
 
 ## 1. 功能分解
 
-Go 指针、容器和方法集的基础事实据 [Go 规范](https://go.dev/ref/spec#Representation_of_values)。以下 hgo 列是候选设计，不是 Go 自带只读/所有权保证。
+Go 指针、容器和方法集的基础事实据 [Go 规范](https://go.dev/ref/spec#Representation_of_values)。以下 goxide 列是候选设计，不是 Go 自带只读/所有权保证。
 
-| Go *T 常见职责 | 正向场景 | 最小 hgo 能力 | Go lowering / 是否需要智能指针 |
+| Go *T 常见职责 | 正向场景 | 最小 goxide 能力 | Go lowering / 是否需要智能指针 |
 | --- | --- | --- | --- |
 | 间接读取/修改原值 | 函数更新请求统计 | `&T` 读、`mut& T` 写 | 都以 *T 承载；不需独占持有类型 |
 | 避免大值复制 | 读取大数组/配置 | 传 `&Large`，不要先复制整个 Large | 传 *Large；不要求 Box |
@@ -20,7 +20,7 @@ Go 指针、容器和方法集的基础事实据 [Go 规范](https://go.dev/ref/
 
 slice/map/channel 已有共享存储或通信语义，默认不为它们再包 Arc。slice 头复制与底层数组共享不同，改变 len/cap 或替换 map/channel 绑定不等于修改其内容；需要改调用方绑定时才考虑槽位引用。字符串共享不可变字节；不能把这个事实推广到所有容器。[Go 类型与值表示](https://go.dev/ref/spec#Types)
 
-取地址不承诺物理堆位置。Go 编译器按实际逃逸和优化决定分配；返回局部变量地址是合法用法。hgo 构造若声明间接存储，不应顺带承诺强制堆分配或“零分配”。[Go FAQ](https://go.dev/doc/faq#stack_or_heap)
+取地址不承诺物理堆位置。Go 编译器按实际逃逸和优化决定分配；返回局部变量地址是合法用法。goxide 构造若声明间接存储，不应顺带承诺强制堆分配或“零分配”。[Go FAQ](https://go.dev/doc/faq#stack_or_heap)
 
 ## 2. 普通引用已经能承担多少持有职责
 
@@ -37,7 +37,7 @@ slice/map/channel 已有共享存储或通信语义，默认不为它们再包 A
 
 `&T` 表示经这条访问路径不能写普通数据，不是“对象永远不变”。无需全程序别名分析，但必须在类型检查中保留投影权限：
 
-```hgo
+```goxide
 struct State { count int; items []int; counts map[string]int }
 func inspect(r &State) int {
     n := r.items[0]           // 允许读标量副本
@@ -56,7 +56,7 @@ func inspect(r &State) int {
 
 ### 3.1 大值更新、返回和保存
 
-```hgo
+```goxide
 struct Stats { samples [1024]int; total int }
 func make_stats() mut& Stats {
     value := Stats{}
@@ -74,7 +74,7 @@ Go 分别是 `func makeStats() *Stats { return &Stats{} }`、`func increment(p *
 
 ### 3.2 递归结构与可选边
 
-```hgo
+```goxide
 struct Node { value int; next Option[mut& Node] }
 func prepend(value int, next Option[mut& Node]) mut& Node {
     node := Node{value: value, next: next}
@@ -90,7 +90,7 @@ head := prepend(1, Option::Some(tail))
 
 ### 3.3 缓存共享更新
 
-```hgo
+```goxide
 cache := Lock.new(Stats{})
 cache.do(|p| { increment(p) })
 answer := cache.do(|p| { return total(&(*p)) })
@@ -120,7 +120,7 @@ H 的最小方法建议是 Box（若加入）提供 `as_ref -> &T`、`as_mut -> 
 
 若 H 加入 Box，最简单可实现含义是“GC 间接存储，可复制句柄”，而非独占或确定析构。这个名称与 Rust Box 的所有权行为不同，必须明确说明；若未来改成独占会是语义变更，不能悄悄升级。Arc 同样沿 D08 使用 Go GC，不是 Rust 的原子引用计数，也不提供 strong_count/get_mut 唯一性 API。
 
-Rust 官方 Box 的确首先用于拥有堆分配，并支持递归结构；同时具有离开作用域销毁其内容等所有权语义。hgo 应拆开“间接存储”“物理堆位置”“独占”“确定销毁”，不能因需要前一项就要求后三项。[Rust std::boxed](https://doc.rust-lang.org/std/boxed/index.html)
+Rust 官方 Box 的确首先用于拥有堆分配，并支持递归结构；同时具有离开作用域销毁其内容等所有权语义。goxide 应拆开“间接存储”“物理堆位置”“独占”“确定销毁”，不能因需要前一项就要求后三项。[Rust std::boxed](https://doc.rust-lang.org/std/boxed/index.html)
 
 lowering 可把候选 Box/Arc 都用 *T 承载，内部引用投影为同一指针，句柄槽位为 **T；不要求实际两次分配。投影方法应由前端内建/支持函数降低，不能给任意外部 T 增加 Go 方法。若 T 恰有同名方法，候选规定显式持有者方法优先；要调 T 方法先取得内部引用，避免隐式递归解包。这项名称解析仍需与 U03 一起确认。
 
@@ -128,9 +128,9 @@ lowering 可把候选 Box/Arc 都用 *T 承载，内部引用投影为同一指�
 
 ## 5. 内部可变：先复用已有协议
 
-Rust Cell 用值操作，RefCell 动态检查借用；它们不等于跨线程同步。Rust 同步模块提供锁及原子等机制。[std::cell](https://doc.rust-lang.org/std/cell/index.html)、[std::sync](https://doc.rust-lang.org/std/sync/index.html)。下列是 hgo 取舍，不是复制 Rust 的安全保证：
+Rust Cell 用值操作，RefCell 动态检查借用；它们不等于跨线程同步。Rust 同步模块提供锁及原子等机制。[std::cell](https://doc.rust-lang.org/std/cell/index.html)、[std::sync](https://doc.rust-lang.org/std/sync/index.html)。下列是 goxide 取舍，不是复制 Rust 的安全保证：
 
-| 机制 | hgo 真实需求与候选 | MVP 建议 / 缺失代价 |
+| 机制 | goxide 真实需求与候选 | MVP 建议 / 缺失代价 |
 | --- | --- | --- |
 | Cell 小值 get/set/replace | 通过只读外壳更新指定字段，不暴露 mut&；适合标量缓存 | 可延期；先用直接写引用/Lock。泛型返回引用型 T 仍可能共享，不能称深快照 |
 | RefCell 动态借用 | 单线程重入检测；需要明确结束借用及逃逸规则 | 延后。Go 没有 Rust guard 自动析构语义；回调 defer 恢复计数后，逃逸裸引用仍能访问，计数器无法全面保护 |
@@ -145,7 +145,7 @@ H 下示意链为 `arc.as_ref() → &Cell[int] → set(value)` 或 `arc.as_ref()
 
 唯一关键选择改为：是否采用“Arc 名义类型表达保留/转交意图，引用表达临时访问契约”的方案 H？推荐作为下一步候选，不标为用户已确认。不保留的实现保证仍需可信契约或未来 warning，不能同时声称普通引用任意逃逸合法且已强制临时性。此选择不批准 U15 桥接 A，也不默认增加 Cell。
 
-当前仅基础只读/可写类型规则属于语言实现；别名风险 warning 和静态借用分析按 D20 全部长期独立。Go 夹具验证大对象指针身份、返回存活、槽位重绑定不改变旧别名、带锁访问等机制，不能证明新的 hgo 类型投影、Cell 或未来分析器已实现。物理分配和性能没有基准证据。
+当前仅基础只读/可写类型规则属于语言实现；别名风险 warning 和静态借用分析按 D20 全部长期独立。Go 夹具验证大对象指针身份、返回存活、槽位重绑定不改变旧别名、带锁访问等机制，不能证明新的 goxide 类型投影、Cell 或未来分析器已实现。物理分配和性能没有基准证据。
 
 独立审查已修正两点：只读投影不限制独立标量/值数组副本，也不机械限制新分配返回值；可复制 Box 经只读 Arc 恢复写能力的链路明确列为 H 未闭合问题，而非默认内部可变特权。
 
@@ -165,7 +165,7 @@ D11 是另一项真实约束：不能仅因后端同为 *T 就省掉已规定的
 
 基础只读类型验收至少应包括以下反例：
 
-```hgo
+```goxide
 func inspect_again(r &State) {
     items := r.items
     items[0] = 1           // 类型错误：slice 头复制没有取得写权限
@@ -179,7 +179,7 @@ func inspect_again(r &State) {
 }
 ```
 
-写接收者方法、接口/any 装箱后再断言、返回和回调同样不能擦掉资格。限定必须存在于类型/接口视图和断言规则中，仅给源变量附标签不够；MVP 支持范围待这些规则选定，不能依赖 D20 的跨函数来源分析补洞。channel 通信、锁、原子等显式能力应另依协议定义，不能机械冻结所有共享对象。这里列的是类型验收要求，不是当前可执行 hgo 测试。
+写接收者方法、接口/any 装箱后再断言、返回和回调同样不能擦掉资格。限定必须存在于类型/接口视图和断言规则中，仅给源变量附标签不够；MVP 支持范围待这些规则选定，不能依赖 D20 的跨函数来源分析补洞。channel 通信、锁、原子等显式能力应另依协议定义，不能机械冻结所有共享对象。这里列的是类型验收要求，不是当前可执行 goxide 测试。
 
 本轮推荐是“引用能力优先、保留 D08 Arc 方向、复用锁、不新增 Box/Cell 家族”，不是批准一套完整智能指针库。GC 与同步的区别参见 [Go 内存模型](https://go.dev/ref/mem)。
 
@@ -193,10 +193,10 @@ func inspect_again(r &State) {
 | `copy(items, src)`、`clear(items)`；只读 map 的 `delete` / `clear` | 类型错误 | 内建操作同样需要目标内容写权限；只读 slice 可作为 copy 的来源 |
 | 新建 slice 后复制其中的整数 | 允许写新 slice 的元素 | 新存储和标量副本独立，不能把一切派生值永久标成只读 |
 | 新建 slice 后复制其中的对象引用 | 允许替换新 slice 的槽位；不能由此写原引用目标 | 只复制外层数组，不升级元素引用权限；需要写目标就显式取得合法写引用或复制目标数据 |
-| 只读路径调用写接收者方法 | 类型错误 | Go 的指针方法集不表示 hgo 写权限；不能通过自动取址、trait 适配或函数值捕获提升 |
+| 只读路径调用写接收者方法 | 类型错误 | Go 的指针方法集不表示 goxide 写权限；不能通过自动取址、trait 适配或函数值捕获提升 |
 | 将受限容器装入接口再断言成可写容器 | 类型错误 | 接口视图/装箱必须保留资格，断言不是取得权限的操作 |
 
-这里的“只读”约束所选访问路径；预先存在的另一个可写别名仍可修改对象。仅靠 Go `*T` / `[]T` / `map[K]V` 无法表达上述差别，必须由 hgo 类型层保存限定，Go lowering 才可复用原表示。Go 导出边界外的未检查代码不受此规则强制约束，不能宣称整个对象图已不可变。未知原生效果本身不拒绝调用；但确有受限实参时，原生参数视图仍须能接受其权限，不能把“未知不报风险 warning”误作允许权限擦除。只读声明、显式适配或复制可解决具体接口不匹配，不要求整个 Go 标准库预先有摘要。
+这里的“只读”约束所选访问路径；预先存在的另一个可写别名仍可修改对象。仅靠 Go `*T` / `[]T` / `map[K]V` 无法表达上述差别，必须由 goxide 类型层保存限定，Go lowering 才可复用原表示。Go 导出边界外的未检查代码不受此规则强制约束，不能宣称整个对象图已不可变。未知原生效果本身不拒绝调用；但确有受限实参时，原生参数视图仍须能接受其权限，不能把“未知不报风险 warning”误作允许权限擦除。只读声明、显式适配或复制可解决具体接口不匹配，不要求整个 Go 标准库预先有摘要。
 
 **范围结论：**D08 阻止未经确认删除 Arc，不阻止先交付普通读写引用；D11 阻止未经确认省略转换边界，不阻止采用 GC 引用模型。真正尚待闭合的是 U02/U03 的类型限定、投影与方法权限，以及 U05 的递归 Go 类型视图。H 的默认临时访问契约仅作比较，不应成为实现这些能力或通过 MVP 验收的前提。
 
@@ -208,7 +208,7 @@ func inspect_again(r &State) {
 
 验收分三层：语法/类型检查验证实际支持的权限路径；Go 机制夹具验证返回存活、共享身份、槽位及同步行为；长期风险分析验证有证据的 warning。三者不得互相代替。尚不支持的复合权限形式应如实列出实现范围，不能仅凭顶层只读测试通过就宣称完整只读模型已实现。基础类型规则不依赖全程序别名分析，但仍需要符号身份、类型化投影及跨调用的权限签名。
 
-官方依据的适用边界：Go 的[值表示](https://go.dev/ref/spec#Representation_of_values)说明哪些值共享底层存储，[结构体规则](https://go.dev/ref/spec#Struct_types)说明递归布局限制，[栈堆说明](https://go.dev/doc/faq#stack_or_heap)说明分配位置不是取址语法承诺，[内存模型](https://go.dev/ref/mem)规定同步关系。这些材料不提供 hgo 只读权限或 Arc 保留契约的证明；那些仍是本 RFC 的语言设计候选。
+官方依据的适用边界：Go 的[值表示](https://go.dev/ref/spec#Representation_of_values)说明哪些值共享底层存储，[结构体规则](https://go.dev/ref/spec#Struct_types)说明递归布局限制，[栈堆说明](https://go.dev/doc/faq#stack_or_heap)说明分配位置不是取址语法承诺，[内存模型](https://go.dev/ref/mem)规定同步关系。这些材料不提供 goxide 只读权限或 Arc 保留契约的证明；那些仍是本 RFC 的语言设计候选。
 
 ## 7. Arc 的 API 能力标记：保留与访问，不是同步与异步
 
@@ -216,7 +216,7 @@ func inspect_again(r &State) {
 
 ### 7.1 同一业务的两个签名方案
 
-```hgo
+```goxide
 struct Config { limit int }
 
 // H：候选名义能力区分。
@@ -245,7 +245,7 @@ start_value(n)
 
 R 保留同一个普通引用类型，改由参数契约表达区别，以下属性仅是对照记法，不拟引入一整套 effect 系统：
 
-```hgo
+```goxide
 func read_limit(c &Config) int // 参数契约：调用结束不保留
 func register(r mut& RegistryR, c &Config) // 参数契约：may_retain(c)
 func start(c &Config) // 参数契约：may_retain(c)，交给后台
@@ -255,7 +255,7 @@ R 的调用都可传同一个引用，迁移 Go 最轻；但普通类型不显�
 
 ### 7.2 作用域任务与原生边界
 
-```hgo
+```goxide
 func report_before_return(c &Config) {
     done := make(chan int, 1)
     go func() { done <- c.limit }()
@@ -263,9 +263,9 @@ func report_before_return(c &Config) {
 }
 ```
 
-这个任务在发送读取结果后不再访问 c，调用方收到结果才返回，因此可以满足“返回后不再访问，也不向可继续使用的外部位置保留引用”的契约；不要求任何异步代码都接收 Arc。收到结果不证明 goroutine 已退出或捕获引用已经从 GC 根消失；契约不定义成返回瞬间物理上无引用残留。上述事实依赖具体实现，MVP 不做一般 join/cancel/逃逸证明；取消请求也不等于任务完成。hgo 的 &Config 只读并不阻止外部别名同时写。
+这个任务在发送读取结果后不再访问 c，调用方收到结果才返回，因此可以满足“返回后不再访问，也不向可继续使用的外部位置保留引用”的契约；不要求任何异步代码都接收 Arc。收到结果不证明 goroutine 已退出或捕获引用已经从 GC 根消失；契约不定义成返回瞬间物理上无引用残留。上述事实依赖具体实现，MVP 不做一般 join/cancel/逃逸证明；取消请求也不等于任务完成。goxide 的 &Config 只读并不阻止外部别名同时写。
 
-Go API 可能同步保存指针（注册回调、缓存），也可能异步复制值。原生签名 *T 不表明 retain，也不能机械导入成“已证明临时”引用参数。无声明时标为保留行为未知，正常调用，不默认 warning/unsafe；明确声明可记录保留关系，或在 hgo 包装 API 选择 Arc 参数表达意图。Go 导出的 Arc 即使降低成 *T，未检查 Go 调用方也没有名义保留/只读保证。真实类型/桥接错误仍检查，不能因契约未知忽略 ABI。
+Go API 可能同步保存指针（注册回调、缓存），也可能异步复制值。原生签名 *T 不表明 retain，也不能机械导入成“已证明临时”引用参数。无声明时标为保留行为未知，正常调用，不默认 warning/unsafe；明确声明可记录保留关系，或在 goxide 包装 API 选择 Arc 参数表达意图。Go 导出的 Arc 即使降低成 *T，未检查 Go 调用方也没有名义保留/只读保证。真实类型/桥接错误仍检查，不能因契约未知忽略 ABI。
 
 ### 7.3 转换会不会洗掉保留意图
 
@@ -291,4 +291,4 @@ Arc.as_ref 也可能被恶意/错误实现长期保存，名义标记只改善 A
 
 Rust Arc 使用原子引用计数共享所有权，通常需内部可变机制来改共享数据；它本身不令 T 线程安全，Send/Sync 有相应类型条件。[Rust Arc 官方说明](https://doc.rust-lang.org/std/sync/struct.Arc.html)。Rust 的 Send 表达跨线程转移，Sync 表达共享引用可在线程间使用。[Rust Book](https://doc.rust-lang.org/book/ch16-04-extensible-concurrency-sync-and-send.html)
 
-hgo 的标记可提前暴露“临时访问 vs 保留共享”及同步位置，便于人工重构成 Rust API。但 hgo 使用 GC、可复制写引用、允许未检查引用逃逸、没有已实现的生命周期/Send/Sync 和确定析构，循环与释放行为也不同；不能机械改名直接转 Rust。作用域任务需映射到相应生命周期机制，共享可变数据需重审内部可变与线程条件。降低未来迁移的理解成本，是独立于运行时实现的真实收益，不是兼容性保证。
+goxide 的标记可提前暴露“临时访问 vs 保留共享”及同步位置，便于人工重构成 Rust API。但 goxide 使用 GC、可复制写引用、允许未检查引用逃逸、没有已实现的生命周期/Send/Sync 和确定析构，循环与释放行为也不同；不能机械改名直接转 Rust。作用域任务需映射到相应生命周期机制，共享可变数据需重审内部可变与线程条件。降低未来迁移的理解成本，是独立于运行时实现的真实收益，不是兼容性保证。

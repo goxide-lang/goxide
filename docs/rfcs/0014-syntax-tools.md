@@ -17,10 +17,10 @@
 
 ## 转译示例
 
-**S01：quote 构造数据，不执行模板中的调用。** hgo 行为伪代码。
+**S01：quote 构造数据，不执行模板中的调用。** goxide 行为伪代码。
 依赖：候选 quote 入口、字符串 ToTokens；完整 `tt` 和物化协议尚未定义。
 
-```hgo
+```goxide
 argument := "x); dangerous()"
 tokens := quote::quote! {
     call(#argument)
@@ -41,10 +41,10 @@ tokens := SyntaxCallTokens(
 这里的 SyntaxIdentToken 仅构造普通名字数据，不制造已绑定符号身份。
 不能将插入字符串裸拼成代码，生成额外调用。
 
-**S02：文本解析需要显式入口与错误处理。** hgo 行为伪代码。
+**S02：文本解析需要显式入口与错误处理。** goxide 行为伪代码。
 依赖候选 syn parser、普通错误处理与 token 输出接口；API 拼写未定。
 
-```hgo
+```goxide
 parsed := syn::parse_expr(source)
 match parsed {
     Ok(expr) => consume_syntax(expr),
@@ -52,7 +52,7 @@ match parsed {
 }
 ```
 
-Go 行为伪代码；用常见返回形状仅表达成功 / 失败分支，不指定 hgo Result ABI。
+Go 行为伪代码；用常见返回形状仅表达成功 / 失败分支，不指定 goxide Result ABI。
 
 ```go
 expr, err := ParseExprForTool(source)
@@ -66,9 +66,9 @@ if err != nil {
 输入 `1 +` 应进入错误分支；`unknown()` 可以语法解析成功，实际编译仍须检查名字绑定。
 改写后的树不能保留已经失效的“类型已检查”或“借用已批准”证明。
 
-**S03：位置不能伪造卫生或授权。** 下列 hgo 行为伪代码描述禁止公开的能力。
+**S03：位置不能伪造卫生或授权。** 下列 goxide 行为伪代码描述禁止公开的能力。
 
-```hgo
+```goxide
 node := syn::parse_expr("raw::Write()")
 node.span = trusted_file_span
 node.context = forged_context_id
@@ -93,7 +93,7 @@ node.unsafe_authorized = true
 语法包的公开数据和操作可降低为普通 Go 类型与函数；Go 工具可以使用 parser / builder。
 Go 不能直接写 `quote!`，可以调用已展开的普通工具函数，不需要运行时宏解释器。
 Go、反序列化或缓存输入均按公共协议验证，不能因为具有 Go 方法集就成为可信语义节点。
-增强保证在 hgo 工具链内执行；公共语法数据与编译器私有已解析 IR 应保持明确边界。
+增强保证在 goxide 工具链内执行；公共语法数据与编译器私有已解析 IR 应保持明确边界。
 
 ## 验收与未定项
 
@@ -102,4 +102,4 @@ Go、反序列化或缓存输入均按公共协议验证，不能因为具有 Go
 3. 比较文本往返与结构往返时分别断言允许丢失的信息，不能只比较漂亮打印结果。
 4. 成本：解析、遍历和构造在普通工具运行时消耗内存与 CPU；具体复杂度待协议实现验证。
 5. 未定：包路径、token / AST 格式、有限 token 物化、上下文传递、版本策略与首版里程碑。
-6. 本篇没有可直接运行的 syntax / quote / syn 示例；协议冻结后补齐真实 hgo → Go 测试。
+6. 本篇没有可直接运行的 syntax / quote / syn 示例；协议冻结后补齐真实 goxide → Go 测试。

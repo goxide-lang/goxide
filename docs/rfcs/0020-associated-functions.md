@@ -6,7 +6,7 @@
 
 这里的“类函数”指无实例接收者的类型关联函数；构造函数是其中返回新值或句柄的一类。结构体声明只定义数据，增强成员写在 impl 块中。成员种类由首参数是否为 `self` 决定，不能根据函数体是否使用 self 来推断；接收者的类型及权限拼写仍按既有 self 规格另行收敛。
 
-`impl T { ... }` 定义固有成员；`impl Trait for T { ... }` 定义显式 trait 实现，后者的实例 wrapper、marker、As/For helper 继续按 [RFC 0019](0019-uniform-trait-wrappers.md)。这一区分约束函数与方法声明，不将 enum、match 等其他 hgo 语法限制在 impl 内。
+`impl T { ... }` 定义固有成员；`impl Trait for T { ... }` 定义显式 trait 实现，后者的实例 wrapper、marker、As/For helper 继续按 [RFC 0019](0019-uniform-trait-wrappers.md)。这一区分约束函数与方法声明，不将 enum、match 等其他 goxide 语法限制在 impl 内。
 
 ## 源级规则
 
@@ -23,9 +23,9 @@
 
 ### C01：类型上的构造函数，普通 Go 工厂
 
-以下包含直接书写的 Go 类型声明与 hgo impl。已确定的是 impl 块、Self 支持、`Point::new` 调用与包级函数降低；关联函数用 `func` 且不声明首参数 self。
+以下包含直接书写的 Go 类型声明与 goxide impl。已确定的是 impl 块、Self 支持、`Point::new` 调用与包级函数降低；关联函数用 `func` 且不声明首参数 self。
 
-```hgo
+```goxide
 type Point struct {
     x int
     y int
@@ -65,7 +65,7 @@ Go 调用方使用 `geometry.NewPoint(1, 2)`、`geometry.PointOrigin()`。无额
 
 源级片段位于 `impl Point` 内；`Arc::new` 是待定义基础包构造入口的示意拼写，暂假定能将一个合法值放入共享存储：
 
-```hgo
+```goxide
 pub func shared(x int, y int) Arc[Self] {
     return Arc::new(Self::new(x, y))
 }
@@ -86,7 +86,7 @@ func PointShared(x, y int) *Point {
 
 直接书写的 Go 泛型类型声明与泛型 impl；impl 的类型参数声明拼写为草案：
 
-```hgo
+```goxide
 type Pair[T any] struct {
     first T
     second T
@@ -110,11 +110,11 @@ func NewPair[T any](first, second T) Pair[T] {
 // p := NewPair[int](1, 2)
 ```
 
-无参数且仅结果含 T 的构造，也应生成已解析的类型实参；不能指望 Go 从左侧变量类型推导泛型调用。具有 hgo trait 约束的构造还需携带相应实现证据，不能统一擦成 any。
+无参数且仅结果含 T 的构造，也应生成已解析的类型实参；不能指望 Go 从左侧变量类型推导泛型调用。具有 goxide trait 约束的构造还需携带相应实现证据，不能统一擦成 any。
 
 ### C04：取函数值仍是普通函数值
 
-```hgo
+```goxide
 make_point := Point::new
 p := make_point(1, 2)
 ```
@@ -133,7 +133,7 @@ _ = p
 
 源级签名草图：
 
-```hgo
+```goxide
 // impl Point 内的关联函数；函数体应显式返回 Ok 或 Err。
 pub func from_text(text string) Result[Self, string]
 ```
@@ -150,7 +150,7 @@ func PointFromText(text string) Result[Point, string] // 仅签名示意
 
 源文件中的原生 Go 声明片段，依赖 C01 的 Point；这里没有 impl：
 
-```hgo
+```goxide
 func MakePoint(x, y int) Point { return Point{x: x, y: y} }
 func (p Point) LegacySum() int { return p.x + p.y }
 ```
@@ -168,7 +168,7 @@ func (p Point) LegacySum() int { return p.x + p.y }
 
 以下为 `impl Point` 的实例成员概念片段，采用只含 int 字段的可复制 Point 与值接收者来展示绑定；首参数 self 表明实例成员，注释占位并非可编译的接收者声明，不由此冻结接收类型或权限语法：
 
-```hgo
+```goxide
 impl Point {
     pub func translated(self /* 接收类型及权限待定 */, dx int, dy int) Self {
         return Self { x: self.x + dx, y: self.y + dy }
@@ -194,7 +194,7 @@ trait impl 的 Self 同样表示源实现目标；wrapper 内 `self.field` 访�
 
 以下原生 Go 片段单独作为一组示例，不在 impl 内：
 
-```hgo
+```goxide
 type Self int
 func Echo(self Self) Self { return self }
 ```
@@ -223,13 +223,13 @@ func Echo(self Self) Self { return self }
 | C-N9 | 将 impl 中的 Self 换成生成 wrapper 类型，或把原生 Go 的同名参数也改成目标字段 | 错误降低；按源类型与符号绑定分别处理 |
 | C-N10 | 生成的固有方法与直接书写的 Go 方法重名 | 按成员及导出冲突规则诊断，不能覆盖原生方法 |
 
-声明构造函数不会禁止普通 Go 写 `Point{}`，也不会自动禁止 hgo 的合法结构体字面量。若某类型必须只能通过检查后的构造入口取得，需要另行规定字段可见性、合法初始化和公开边界，不能从存在 new 函数直接推导。
+声明构造函数不会禁止普通 Go 写 `Point{}`，也不会自动禁止 goxide 的合法结构体字面量。若某类型必须只能通过检查后的构造入口取得，需要另行规定字段可见性、合法初始化和公开边界，不能从存在 new 函数直接推导。
 
 ## 双向互操作
 
-Go → hgo：impl 中公开关联函数表现为普通 Go 包函数，如 `geometry.NewPoint`；本地类型的实例成员表现为按接收者规则生成的 Go 方法。直接书写的 Go 声明保留原入口。hgo 下游从声明元数据恢复“属于 Point 的 new”、真实符号、签名、泛型及 unsafe 效果，不反向猜测任意 NewPoint 都来自 impl。
+Go → goxide：impl 中公开关联函数表现为普通 Go 包函数，如 `geometry.NewPoint`；本地类型的实例成员表现为按接收者规则生成的 Go 方法。直接书写的 Go 声明保留原入口。goxide 下游从声明元数据恢复“属于 Point 的 new”、真实符号、签名、泛型及 unsafe 效果，不反向猜测任意 NewPoint 都来自 impl。
 
-hgo → Go：原生 `native.NewWidget` 可继续作为包函数调用；若希望在 hgo 视图中组织为 `Widget::new`，应显式绑定真实函数并校验契约。外部关联声明的精确语法、作用域和冲突规则暂不纳入已确认子集，不自动向外部 Go 类型增加成员。
+goxide → Go：原生 `native.NewWidget` 可继续作为包函数调用；若希望在 goxide 视图中组织为 `Widget::new`，应显式绑定真实函数并校验契约。外部关联声明的精确语法、作用域和冲突规则暂不纳入已确认子集，不自动向外部 Go 类型增加成员。
 
 trait 的 `Default.default() -> Self` 仍需选择显式 impl；具体实现可以同样降低为普通函数，但不凭同名 inherent `new/default` 自动建立 Default。泛型静态 trait 调用的证据传递见 [RFC 0013](0013-derive.md)；没有实例的方法不强塞进运行时 marker 接口。
 
@@ -241,7 +241,7 @@ trait 的 `Default.default() -> Self` 仍需选择显式 impl；具体实现可�
 
 ## 当前手动 Default 实现子集
 
-```hgo
+```goxide
 struct Settings {
     Port int
 }

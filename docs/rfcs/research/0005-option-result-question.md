@@ -20,15 +20,15 @@
 
 ### 1.1 thiserror 与静态错误类型
 
-候选拼写 `#[from] Io(IOError)` 表示派生一个明确的 `From[IOError] for AppError`，例如普通 Go helper `AppErrorFromIOError(e IOError) AppError`；目标已知的 `?` 使用该 helper 一次。只生成 helper 并通过 Go 测试不代表 hgo 的 `?` 已实现。错误链通过明确 source/Unwrap 协议保留，不自动把任意 Error 字段当来源。
+候选拼写 `#[from] Io(IOError)` 表示派生一个明确的 `From[IOError] for AppError`，例如普通 Go helper `AppErrorFromIOError(e IOError) AppError`；目标已知的 `?` 使用该 helper 一次。只生成 helper 并通过 Go 测试不代表 goxide 的 `?` 已实现。错误链通过明确 source/Unwrap 协议保留，不自动把任意 Error 字段当来源。
 
 若输入的静态类型是 Go `error`，编译器不能根据运行时动态类型自动选择 Io/Parse 等变体。可显式声明唯一兜底 `From[error] for AppError`，或由业务分类函数使用 errors.As/Is 再构造具体变体；保留部分成功与 typed nil 语义。两个变体都声明来自同一个 error 类型应诊断冲突。From 不同时把 None 转成 Err，也不要求公共 Try/Residual。
 
 ## 2. 完整正向用法与专用 lowering
 
-以下为候选 hgo 语义写法，名字和泛型显式参数不是冻结的 parser 规范：
+以下为候选 goxide 语义写法，名字和泛型显式参数不是冻结的 parser 规范：
 
-```hgo
+```goxide
 func port(text string) Result[int, error] {
     n, err := strconv::Atoi(text)
     if err != nil { return Result::Err(err) }
@@ -57,7 +57,7 @@ func NextPort(text string) Result[int, error] {
     switch v := tmp.(type) {
     case Ok[int, error]: n = v.Value
     case Err[int, error]: return Err[int, error]{Error: v.Error}
-    default: panic("hgo: invalid Result at ?")
+    default: panic("goxide: invalid Result at ?")
     }
     return Ok[int, error]{Value: n + 1}
 }
@@ -74,7 +74,7 @@ Option 在现有候选 ABI 下 nil 表示 None，Some 提取载荷，其他非�
 - **部分成功**：`n, err := reader.Read(buf)` 可能 n>0 且 err!=nil。普通 Result 二选一会丢 n；继续原生双返回、显式保值宏或现有 ReadOutcome，不能自动 `Read(buf)?`。同理关闭/事务错误与业务值如何合并由调用者决定，不由 `?` 猜测。
 - **错误映射**：使用现有 match 显式生成 DomainError，再对得到的 `Result[T,DomainError]` 使用 `?`；无需先实现 map_err 方法。若将来提供 map_err，它是普通 API，不等于隐式 From 搜索。
 
-```hgo
+```goxide
 func require_name(names []string) Result[string, error] {
     // first_name(names)? 在此是类型错误：None 没有自动对应的 error。
     return match first_name(names) {
@@ -112,7 +112,7 @@ Rust 的 `Try` 拆分成功 Output 与短路 Residual，通过 branch 决定继�
 
 ## 6. 验收与证据
 
-Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_test.go)核对 typed-nil 原样保留、恰好一次、失败后跳过后续操作、defer、闭包目标、Option 及部分成功原生 I/O。它没有编译 hgo `?` 或实现错误转换规则。
+Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_test.go)核对 typed-nil 原样保留、恰好一次、失败后跳过后续操作、defer、闭包目标、Option 及部分成功原生 I/O。它没有编译 goxide `?` 或实现错误转换规则。
 
 完整前端的最小验收目标（有限实现证据见下节）：上述两个正例；Option/Result 混用、错误类型不兼容、普通闭包内 `?` 的明确类型诊断；宏插入闭包、短路和参数顺序；非法 Result nil 不被当成 Err。From 正例需验证目标已知、源/目标唯一、转换恰好一次且保留 source/typed nil；负例包括重复来源、仅存在两跳转换、任意 blanket 及从静态 error 猜动态变体。不要求用户自定义 residual、完整映射库或所有原生多返回形式自动适配才能交付首版。
 
@@ -123,9 +123,9 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 
 `internal/propagate` 已在真实前端接入内建容器元数据及 Go 类型检查，以原函数内分支实现专用 `?`。有限内建泛型要求显式 `Option[int]::Some(...)` / `Result[int,error]::Ok(...)`；用户泛型函数、通用 Try/Residual、跨家族转换仍未实现。Error 派生只为唯一静态 `error` 字段的 `#[from]` 注册显式一步 helper；普通赋值兼容优先，不做转换链或动态类型搜索。这不是最终通用 From 声明/可见性协议。
 
-[传播示例](../../../examples/prototype/propagation.hgo) 使用真实 `strconv.Atoi` 显式桥接，含 Result/Option、成功类型变化与保留 source 的错误转换；[表达式 match 示例](../../../examples/prototype/match_expression.hgo) 单独验证有限表达式位置。两者均通过 CLI run 和转译产物 `go run -race`，命令与输出记录在实现说明。
+[传播示例](../../../examples/prototype/propagation.gox) 使用真实 `strconv.Atoi` 显式桥接，含 Result/Option、成功类型变化与保留 source 的错误转换；[表达式 match 示例](../../../examples/prototype/match_expression.gox) 单独验证有限表达式位置。两者均通过 CLI run 和转译产物 `go run -race`，命令与输出记录在实现说明。
 
-[前端接受测试](../../../tests/acceptance/propagate_test.go) 与上面的 Go 机制夹具分开：前者确实编译 `.hgo` `?`，检验顺序、短路、defer、最近闭包、nil Result、typed nil、原生部分成功和错误转换。模块 API 层还覆盖重复/缺失/两跳转换拒绝；这不表示源语言已支持用户声明所有转换。
+[前端接受测试](../../../tests/acceptance/propagate_test.go) 与上面的 Go 机制夹具分开：前者确实编译 `.gox` `?`，检验顺序、短路、defer、最近闭包、nil Result、typed nil、原生部分成功和错误转换。模块 API 层还覆盖重复/缺失/两跳转换拒绝；这不表示源语言已支持用户声明所有转换。
 
 支持上下文限单 RHS、单项 var、return、调用参数、普通运算/selector、短路和无 initializer 的 if 条件。循环/switch/索引/切片/复合字面量/赋值目标/多 RHS/带 initializer 的 if 内传播拒绝。表达式 match 限显式类型局部初始化或单个非具名返回的完整表达式；无普遍类型推断。宏模板仅支持固定内建类型参数及有限 Go 复合类型，不能捕获任意调用者类型；模板显式闭包照常改变传播目标。后续组合阶段已支持普通 sum 载荷与标量引用参数/局部及 derive 同文件使用；引用作为 sum 载荷仍未支持，权限在传播后完整检查才擦除。完整支持表及源码映射限制以[实现说明](../../../IMPLEMENTATION.md)和[传播阶段说明](../../../internal/propagate/README.md)为准。
 
@@ -134,7 +134,7 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 
 沿 §4 一次求值及最近函数早退契约，现支持 `if n := load()?; condition(n)? { ... } else { ... }`，以及普通 initializer 加传播条件。lowering 使用原函数内普通词法块：initializer 先执行一次，条件临时量随后执行，声明覆盖 then/else/else-if，但不泄漏到后续语句。短路仍跳过未选择操作；已注册 defer 仍在函数返回时执行。没有隐藏闭包或新 From 规则。
 
-[真实 hgo 验收](../../../tests/acceptance/propagate_if_test.go)覆盖成功/失败、条件短路、遮蔽、赋值 initializer、Option、else-if、最近闭包，以及作用域泄漏/跨家族/赋值目标的拒绝（多 RHS 已由 §6.3 接通）；生成模块显式 race。[业务例子](../../../examples/prototype/if_propagation.hgo)调用真实 strconv.Atoi，显式包装后传播。循环/switch/索引/切片/复合字面量等剩余上下文仍未实现，这些是实现缺口，不自动视作用户批准的延期。
+[真实 goxide 验收](../../../tests/acceptance/propagate_if_test.go)覆盖成功/失败、条件短路、遮蔽、赋值 initializer、Option、else-if、最近闭包，以及作用域泄漏/跨家族/赋值目标的拒绝（多 RHS 已由 §6.3 接通）；生成模块显式 race。[业务例子](../../../examples/prototype/if_propagation.gox)调用真实 strconv.Atoi，显式包装后传播。循环/switch/索引/切片/复合字面量等剩余上下文仍未实现，这些是实现缺口，不自动视作用户批准的延期。
 
 
 ### 6.3 T0 收口：多 RHS、取值与发送
@@ -143,7 +143,7 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 
 `*loadPointer()?` 和 `loadAny()?.(T)` 保留 Go 解引用/断言行为；单 RHS 的 `value, ok := loadAny()?.(T)` 保留 comma-ok 元组。`channel() <- load()?` 先捕获 channel，再计算传播值，成功才发送；失败不在 nil channel 上阻塞，也不在已关闭 channel 上 panic，成功路径仍保留 Go 发送行为。最近函数/闭包、短路、defer 和显式一步 From 规则不变。
 
-[真实前端与生成模块 race](../../../tests/acceptance/propagate_values_test.go)区分运行结果和错误拒绝；[两文件任务投递业务](../../../examples/propagate_values/main.hgo)用真实 strconv.Atoi 并保留 NumError 错误链。测试还覆盖早退不部分赋值、后续副作用跳过、嵌套闭包、63 位位移、channel 重绑定及已关闭 channel。
+[真实前端与生成模块 race](../../../tests/acceptance/propagate_values_test.go)区分运行结果和错误拒绝；[两文件任务投递业务](../../../examples/propagate_values/main.gox)用真实 strconv.Atoi 并保留 NumError 错误链。测试还覆盖早退不部分赋值、后续副作用跳过、嵌套闭包、63 位位移、channel 重绑定及已关闭 channel。
 
 剩余最小场景：索引 `items[index()?]`、切片 `items[low()?:high()?]`、字面量 `Config{Port: parse()?}`、间接赋值 `items[index()] = load()?`；for 的每轮条件/post 与 continue、switch 的条件/逐 case 求值及 fallthrough、select 的候选求值/选择后赋值需要各自 CFG lowering。前四项主要是已定求值/类型规则的工程缺口，不能归为“等用户设计”。for/switch 中普通传播仍沿最近函数早退；select 候选中失败是否在选择前退出尚未明确规定，先记录待明确的组合规则，不猜成只执行选中分支。完整 generic Try/Residual、From 链和隐式原生多返回适配不加入范围。
 
@@ -156,7 +156,7 @@ Go 机制夹具 [propagation_test.go](../../../tests/design/enum/propagation_tes
 
 Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，不能让原本会求值的操作数变成被跳过的常量表达式。`&T{...?...}`（含括号）支持，任意 `&(load()?)` 仍不支持。`unsafe.Sizeof/Alignof/Offsetof` 不求值参数中的传播明确报限制：现有 prelude 直接搬出参数会错误执行它，需后续有意识的非求值类型降低，不能静默执行或宣称已完成。
 
-[真实前端验收](../../../tests/acceptance/propagate_aggregate_test.go)覆盖三份实际生成模块 race、失败/副作用/defer/最近闭包、slice storage、map/index/pointer、键值顺序、只读数组投影、上下文 private 类型及静态拒绝；[跨包批次业务](../../../examples/propagate_aggregate/main.hgo)真实调用 strconv.Atoi 后解析窗口并构造原生 Go 包容器。间接赋值目标尚未加入：它需要保存 LHS 的地址或 map/key，并在 RHS 成功后才写入，与本节的读取表达式不同。循环/switch/select 未借此放宽，select 候选传播规则仍未确定。
+[真实前端验收](../../../tests/acceptance/propagate_aggregate_test.go)覆盖三份实际生成模块 race、失败/副作用/defer/最近闭包、slice storage、map/index/pointer、键值顺序、只读数组投影、上下文 private 类型及静态拒绝；[跨包批次业务](../../../examples/propagate_aggregate/main.gox)真实调用 strconv.Atoi 后解析窗口并构造原生 Go 包容器。间接赋值目标尚未加入：它需要保存 LHS 的地址或 map/key，并在 RHS 成功后才写入，与本节的读取表达式不同。循环/switch/select 未借此放宽，select 候选传播规则仍未确定。
 
 ### 6.5 T0 收口：间接赋值的两阶段降低
 
@@ -166,7 +166,7 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 
 保留原最终赋值语句，包括 compound `op=`、tuple 和 map comma-ok；不提前读取 compound 旧值。RHS 或后面的 LHS 改变原 pointer/container 时，写入已保存的目标。动态不可比较 map key、nil map 和最终 bounds 均保持写阶段 Go panic。已有类型与权限检查继续执行，不增加借用/别名分析，`&T` 不承诺全局不变，`mut&` 不承诺独占。私有 scalar 的上下文零值见证只用于静态同型 RHS/key；interface 目标、不同类型的位移计数不会被强制换成目标类型。
 
-[真实 hgo 验收](../../../tests/acceptance/propagate_place_test.go)覆盖上述顺序/错误/写入/别名/权限和静态拒绝；[跨包业务](../../../examples/propagate_places/main.hgo)使用真实 strconv.Atoi，验证失败保持已有目标值和 NumError cause，并覆盖外部私有 scalar、纯值嵌入 promotion、63 位 shift、不同类型 compound 及 any 键。安装 CLI 后从仓库外转译，所有新增生成模块分别 race。审查使用的纯 Go panic 阶段探针仅为机制证据，不计作 hgo 验收。
+[真实 goxide 验收](../../../tests/acceptance/propagate_place_test.go)覆盖上述顺序/错误/写入/别名/权限和静态拒绝；[跨包业务](../../../examples/propagate_places/main.gox)使用真实 strconv.Atoi，验证失败保持已有目标值和 NumError cause，并覆盖外部私有 scalar、纯值嵌入 promotion、63 位 shift、不同类型 compound 及 any 键。安装 CLI 后从仓库外转译，所有新增生成模块分别 race。审查使用的纯 Go panic 阶段探针仅为机制证据，不计作 goxide 验收。
 
 **本小节交付时的工程边界（§6.6 仅接通功能，§6.7 性能复核未通过）**：需要保存外包私有嵌入指针的 promoted field 路径，如 `dep.Outer{*privateInner}` 的 `o.X = load()?`，当时给出 `private imported embedded pointer path is not yet lowered`。纯值嵌入 promotion 已支持。私有指针不能直接生成为不可访问 selector，也不能提前对最终字段取地址；本组未引入 unsafe、反射或生产包桥接。这是未完成实现，不是安全拒绝、待用户新语义或获批延期，不能把整个间接赋值项标为完成。
 
@@ -184,13 +184,13 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 
 代价是此特殊路径新增 helper、每次执行的 defer、失败时内部 panic，以及对已有 goxide 模块 的明确依赖；成功 guard 也保留至函数退出，不宣称零开销或稳定 ABI。另一可行架构是由可控制的生产包生成有类型的目标捕获/写入 helper，在其可见范围内读取私有链；它需要生产包重编译、调用方/生产方元数据协议，并不能自动覆盖任意现存原生 Go 依赖，因此本阶段不采用。整条赋值 IIFE 方案因直接 recover 反例被排除；Go 编译器内部 typed-IR 集成则超出当前可独立转译的后端范围。
 
-[真实跨包业务](../../../examples/propagate_places/private.hgo)和[接受测试](../../../tests/acceptance/propagate_private_place_test.go)覆盖业务解析/cause、私有整数与布尔上下文、两层指针、RHS/写阶段重绑、nil/失败不写、named/blank/shadow 返回、直接 recover、source defer、旧 panic、Goexit、legacy panic(nil)、nested closure、goto 和只读权限。纯 Go 研究探针只作方案依据；这些仅为功能证据；§6.7 的性能门槛未通过，本项未完成。非求值 unsafe 参数和其他既有传播限制未扩大。
+[真实跨包业务](../../../examples/propagate_places/private.gox)和[接受测试](../../../tests/acceptance/propagate_private_place_test.go)覆盖业务解析/cause、私有整数与布尔上下文、两层指针、RHS/写阶段重绑、nil/失败不写、named/blank/shadow 返回、直接 recover、source defer、旧 panic、Goexit、legacy panic(nil)、nested closure、goto 和只读权限。纯 Go 研究探针只作方案依据；这些仅为功能证据；§6.7 的性能门槛未通过，本项未完成。非求值 unsafe 参数和其他既有传播限制未扩大。
 
 ### 6.7 性能门槛与无 panic 控制流研究
 
 §6.6 在 `a3f064fbcd0e75bb06bdba406f007e5abd68bd71` 的实现未获性能验收：guard 的 token 地址传入 panic 接口导致 guard 逃逸，成功也每条分配 32 B。失败额外有 Result 重建，某些多 defer 恢复路径还有 runtime 分配。详见[可复现夹具、数据及反例](../../../tests/research/assignment_guard/README.md)。内部 panic 也可被调试器/采样器观察；不能仅说“有少量 helper/defer 成本”。当前不扩到循环。
 
-路由必须只检查赋值存储路径，不能扫描 LHS 内所有 selector：`a[t.Count] = r?` 的 `Count` 只是普通读取；index/key/调用实参和 pointer/slice/map 容器读取可以使用既有普通 lowering。本次真实 hgo 回归检查生成代码不含 guard。
+路由必须只检查赋值存储路径，不能扫描 LHS 内所有 selector：`a[t.Count] = r?` 的 `Count` 只是普通读取；index/key/调用实参和 pointer/slice/map 容器读取可以使用既有普通 lowering。本次真实 goxide 回归检查生成代码不含 guard。
 
 无 panic 正常控制流候选结论：提前 `&t.Field`（含泛型推断 `capture(&t.Field)`）会早触发最终 nil panic；RHS 成功后统一取址仍会阻止多赋值前项本应发生的写入；延迟闭包重新访问根对象会丢失第一阶段的隐藏指针目标。泛型可以推断不可命名类型，但不会延迟实参求值，Go 函数字面量也不提供省略返回类型来构造通用私有指针 getter。这些具体反例不构成“不可能实现”的证明。
 
@@ -212,11 +212,11 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 | 待实现：独立 expression facts 模块，在修改 AST 前保存 | 原始 typed/untyped、地址性、builtin 身份与原 len/cap 求值属性 | 私有 bool 进入泛型/接口不能变为 builtin bool；不能只读上下文具体化后的 TypeOf |
 | 待实现：assignment effects planner | 只覆盖现有 private fixtures 所需调用/接收/短路/传播，保留控制与先后依赖 | callee/receiver、LHS 调用与 RHS 调用、短路条件读取、嵌套 ?、直接 recover；不重写全语言 |
 | 待实现：完整赋值 emitter | 普通失败 return + residual assignment，不展开隐藏字段 | 私有 scalar 上下文、tuple/comma-ok、compound 旧值、多目标前项换链、nil/bounds panic；覆盖后显式删除对应 guard 路由 |
-| 待实现：替换验收 | 真实 hgo 代码形状、跨包权限/race、与显式 match 基准 | 正常 ? 无 panic/recover、成功无新增堆分配；未覆盖路由必须逐项公开 |
+| 待实现：替换验收 | 真实 goxide 代码形状、跨包权限/race、与显式 match 基准 | 正常 ? 无 panic/recover、成功无新增堆分配；未覆盖路由必须逐项公开 |
 
-**本次仍有 guard 的精确位置**：`statement` 对 `needsAssignmentFrame` 为真的赋值仍调用 `assignmentFrame`；后者声明 Assignment 并 defer Catch，`frameExpr` 的问号失败仍调用 Fail。runtime/assignment.go 未变。所有真正私有嵌入指针目标仍在此路径，包括 [private.hgo](../../../examples/propagate_places/private.hgo) 的 stock/stockFields、重绑、writeThenNil、compoundPrivate、direct recover、命名/blank/shadow 返回、Option、privateLHS、重复赋值与嵌套闭包、权限和 goto 用例；研究 Guard1/Guard8/PackedGuard 也仍使用 guard。只有此前已修复的普通读操作数（index/key/call arg）及普通 place 路径不使用 guard。本次没有新覆盖、静默替换或性能改善声明，也没有扩到循环、select 或 adapters。
+**本次仍有 guard 的精确位置**：`statement` 对 `needsAssignmentFrame` 为真的赋值仍调用 `assignmentFrame`；后者声明 Assignment 并 defer Catch，`frameExpr` 的问号失败仍调用 Fail。runtime/assignment.go 未变。所有真正私有嵌入指针目标仍在此路径，包括 [private.gox](../../../examples/propagate_places/private.gox) 的 stock/stockFields、重绑、writeThenNil、compoundPrivate、direct recover、命名/blank/shadow 返回、Option、privateLHS、重复赋值与嵌套闭包、权限和 goto 用例；研究 Guard1/Guard8/PackedGuard 也仍使用 guard。只有此前已修复的普通读操作数（index/key/call arg）及普通 place 路径不使用 guard。本次没有新覆盖、静默替换或性能改善声明，也没有扩到循环、select 或 adapters。
 
-新增 [question_test.go](../../../internal/propagate/question_test.go)是生成 Go 的机制测试：同一控制流分别产生普通 return/可观察出口，验证 Option、Result 成败、validator/转换 panic 不进入出口及只读重复 emit。它不算新的 hgo 功能；既有 private acceptance 继续真实安装 CLI 转译并在独立模块 race。
+新增 [question_test.go](../../../internal/propagate/question_test.go)是生成 Go 的机制测试：同一控制流分别产生普通 return/可观察出口，验证 Option、Result 成败、validator/转换 panic 不进入出口及只读重复 emit。它不算新的 goxide 功能；既有 private acceptance 继续真实安装 CLI 转译并在独立模块 race。
 
 
 ### 6.9 首批无 panic 完整赋值 lowering
@@ -229,29 +229,29 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 
 | 路径 | 本阶段状态 / 证据 |
 | --- | --- |
-| 原 private.hgo 全部用例 | 改走普通 return；真实生成文件无 Assignment/Catch/Fail，原 11 项 private 测试（含读操作数）和两项业务继续独立 race |
-| 新 effects.hgo | 接收先于失败、真正私有 bool vs builtin bool 的原生泛型类型身份、true 遮蔽、未含问号的 len 副作用、私有 uint64 复合 shift；生成文件无 guard |
-| 研究 Guard1/Guard8/PackedGuard | 保留历史函数名便于基准对照，当前生成代码不再使用 guard；实际 hgo 与显式 match 对照，不用手写 IR 探针冒充实现 |
-| effects_fallback.hgo 五个赋值 | mixed private bool 右臂推型、有符号 contextual shift、含问号 len、tuple、unsafe.Pointer 转换链仍显式走 guard；形状断言要求恰好五个 Catch，另有运行验收 |
+| 原 private.gox 全部用例 | 改走普通 return；真实生成文件无 Assignment/Catch/Fail，原 11 项 private 测试（含读操作数）和两项业务继续独立 race |
+| 新 effects.gox | 接收先于失败、真正私有 bool vs builtin bool 的原生泛型类型身份、true 遮蔽、未含问号的 len 副作用、私有 uint64 复合 shift；生成文件无 guard |
+| 研究 Guard1/Guard8/PackedGuard | 保留历史函数名便于基准对照，当前生成代码不再使用 guard；实际 goxide 与显式 match 对照，不用手写 IR 探针冒充实现 |
+| effects_fallback.gox 五个赋值 | mixed private bool 右臂推型、有符号 contextual shift、含问号 len、tuple、unsafe.Pointer 转换链仍显式走 guard；形状断言要求恰好五个 Catch，另有运行验收 |
 
 **仍未替换的范围**：private assignment 的 tuple/comma-ok、map/slice 目标组合、需要猜测右侧私有名义 bool 类型的短路、可能 panic 的未类型化 residual 算术、含问号的非 recover builtin（包括 len/cap/unsafe）、动态 callee/方法调用或 index/slice/literal/断言等尚未规划的含问号表达式。无问号且有独立类型的完整表达式可以整体求值，不按上表把所有相关 Go 语法一律拒绝。支持判定失败仍调用 assignmentFrame，源码合法性仍由既有检查保证；这是公开列出的剩余工程范围，不是已经完成或获批延期。runtime guard 不能删除；其命名结果/返回槽绑定等仅为实际 fallback 生成，不再覆盖已替换文件。
 
-独立审查发现的具体反例：`t.Count, out = 7, unsafe.Pointer(uintptr(unsafe.Pointer(p)) + offset()?)`，p 指向两字节数组、offset=1。把 uintptr 存入临时变量后再转回 pointer 会破坏 Go unsafe 的同表达式转换/存活规则，真实 hgo 生成模块 race 触发 checkptr；旧 frame 则通过。支持判定现按真实类型身份保留 unsafe.Pointer 及从 unsafe.Pointer 到 uintptr 的转换链（也保护 syscall 特殊实参），永久回归验证有效偏移与失败不写。该扫描保守覆盖本赋值包含的嵌套闭包体；这可能保留额外 guard，但不会拒绝合法源码。后续可以细化范围，不能为了零分配破坏指针存活。
+独立审查发现的具体反例：`t.Count, out = 7, unsafe.Pointer(uintptr(unsafe.Pointer(p)) + offset()?)`，p 指向两字节数组、offset=1。把 uintptr 存入临时变量后再转回 pointer 会破坏 Go unsafe 的同表达式转换/存活规则，真实 goxide 生成模块 race 触发 checkptr；旧 frame 则通过。支持判定现按真实类型身份保留 unsafe.Pointer 及从 unsafe.Pointer 到 uintptr 的转换链（也保护 syscall 特殊实参），永久回归验证有效偏移与失败不写。该扫描保守覆盖本赋值包含的嵌套闭包体；这可能保留额外 guard，但不会拒绝合法源码。后续可以细化范围，不能为了零分配破坏指针存活。
 
 这种反例限制当前 planner 的拆分策略，并不证明所有无 panic 方案不可能。下一工作是逐类保留特殊转换/求值单元及补齐上下文类型见证；本组不扩循环、select 或 adapters，也不声称整体 T0/MVP 已完成。
 
 
 ### 6.10 私有 bool、上下文 shift 与 len/cap 第二组
 
-基于 `693282c64f0868cb38beaacd98c113e2aba029b1`，新增 [effect_context.go](../../../internal/propagate/effect_context.go)，把上组五条明确 fallback 中三条迁到 [effects_context.hgo](../../../examples/propagate_places/effects_context.hgo) 的无 guard 路径；tuple 和 unsafe 转换链仍保留。没有取消其余未规划形状的限制或宣布全部私有目标完成。
+基于 `693282c64f0868cb38beaacd98c113e2aba029b1`，新增 [effect_context.go](../../../internal/propagate/effect_context.go)，把上组五条明确 fallback 中三条迁到 [effects_context.gox](../../../examples/propagate_places/effects_context.gox) 的无 guard 路径；tuple 和 unsafe 转换链仍保留。没有取消其余未规划形状的限制或宣布全部私有目标完成。
 
-**私有 bool 短路推型**：对于 `(n==0) && model.Flag(r?==7)`，若右臂提供纯静态、非泛型、非 variadic、非方法的函数签名，编译器通过泛型 zero-result helper 从该签名推导 private 返回类型。helper 只返回零值，既不调用 Flag，也不读取目标字段或执行右臂。先用该零值声明保留名义类型的临时量，再写入左条件；只有选中右臂才执行其调用/传播。真实 hgo 验证原生泛型观察到 private bool 而非 builtin bool、二参数函数 witness、未选中右臂调用计数为零，以及 nil 目标上右臂失败不提前读目标。
+**私有 bool 短路推型**：对于 `(n==0) && model.Flag(r?==7)`，若右臂提供纯静态、非泛型、非 variadic、非方法的函数签名，编译器通过泛型 zero-result helper 从该签名推导 private 返回类型。helper 只返回零值，既不调用 Flag，也不读取目标字段或执行右臂。先用该零值声明保留名义类型的临时量，再写入左条件；只有选中右臂才执行其调用/传播。真实 goxide 验证原生泛型观察到 private bool 而非 builtin bool、二参数函数 witness、未选中右臂调用计数为零，以及 nil 目标上右臂失败不提前读目标。
 
 **上下文有符号 shift**：先保存 count，再在其原求值位置执行 `_ = 0 << count` 的原生 Go 检查；不合成 panic/recover，也不把最终 `1<<count` 默认成 int。负 count 在后续传播前产生原生 shift panic；非负路径仍把真实移位留在私有 uint64 上下文，63 位不丢失。constant 和 unsigned count 不加这项动态检查。残余表达式只有已经排除 panic 的部分延后；contextual 除法/余数等仍未纳入。
 
 **含问号 len/cap**：通过 effects planner 处理 operand，保持私有函数参数的 bool/shift 上下文。显式 array/slice literal 的元素与常量 key 保留，整份 literal 明确求值后再调用 len/cap；不因去掉问号调用而使原本需求值的 array 操作数被常量折叠跳过。pointer-array 值为 nil 时 cap 可取长度，但 `len(*pointerResult?)` 的实际解引用仍 panic；失败传播先于解引用。当前支持 planner 已能处理的普通 operand，加显式 array/slice literal（不含需要推断类型的嵌套省略 literal）；map literal、其他未规划 operand 保持 guard。
 
-独立研究拒绝了“直接复用旧 expr 就足够”的假设：`len(Array((n==0)&&Flag(r?==7)))` 和 `len(ArrayMask(1<<n,r?))` 会在旧普通 expr 路径把 private bool/mask 默认成 bool/int。新路径使用 effects 自己的上下文处理，两条真实跨包 hgo 反例均通过，生成文件无 guard。旧普通目标 expr 的这些组合不是本组已修复范围，仍是具体工程待办；不能借私有目标通过就宣称所有 len 组合已完成。
+独立研究拒绝了“直接复用旧 expr 就足够”的假设：`len(Array((n==0)&&Flag(r?==7)))` 和 `len(ArrayMask(1<<n,r?))` 会在旧普通 expr 路径把 private bool/mask 默认成 bool/int。新路径使用 effects 自己的上下文处理，两条真实跨包 goxide 反例均通过，生成文件无 guard。旧普通目标 expr 的这些组合不是本组已修复范围，仍是具体工程待办；不能借私有目标通过就宣称所有 len 组合已完成。
 
 当前剩余 guard 分组：
 
@@ -267,7 +267,7 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 
 map 查询、类型断言、channel 接收仅在原 `HasOk` 的二值赋值语境进入该路径。保存操作数后原操作执行一次；第二结果以比较恢复未类型化 bool，允许原本合法的 private bool 赋值。函数返回的 bool 是有类型值，不做这种恢复。原目标地址性、只读权限、类型/数量及语境检查不变；不提前取最终字段地址、不复制 array/struct 存储、不拆开最终写入，因此前项重绑隐藏指针后后项仍使用 Go 第一阶段选定的位置，最终 nil 的部分写入也保留。
 
-[真实 hgo 用例](../../../examples/propagate_places/effects_multivalue.hgo)涵盖调用计数、失败不调用/不写、私有 mask/flag 返回、空白目标、前项重绑、最终 nil、map 命中/缺失、断言成败、channel 单次接收/关闭及失败。生成文件必须无 guard；非法混合 RHS、错误数量和多值调用外带实参继续拒绝。专门 fallback 文件由两条降为一条 unsafe 转换链；此数字只描述该文件，绝不代表全语言只剩一处 guard。
+[真实 goxide 用例](../../../examples/propagate_places/effects_multivalue.gox)涵盖调用计数、失败不调用/不写、私有 mask/flag 返回、空白目标、前项重绑、最终 nil、map 命中/缺失、断言成败、channel 单次接收/关闭及失败。生成文件必须无 guard；非法混合 RHS、错误数量和多值调用外带实参继续拒绝。专门 fallback 文件由两条降为一条 unsafe 转换链；此数字只描述该文件，绝不代表全语言只剩一处 guard。
 
 剩余 guard：动态/方法 callee、多值调用作为另一调用唯一实参、map/slice 目标组合、未规划的私有 bool witness、contextual 除法/余数、len/cap 未规划 operand、其他含问号的 index/slice/literal/断言组合，以及 unsafe.Pointer/uintptr 转换链。没有新增可证明安全的 unsafe 拆分子集，本次保持原转换链的 race/checkptr 回归；GC/特殊 syscall 存活约束不能用保存 uintptr 或运行时 KeepAlive 猜测替代。该长尾不阻塞本多值切片独立验收，也没有被视为已批准延期。
 
@@ -275,7 +275,7 @@ for/range 与 switch 仍是 T0 待实现项；普通 expr 的私有上下文问�
 
 ### 6.12 for 与 slice/map range 的首批传播
 
-基于 `863051b9a57b198c3237f2ef06ac7b0e25baa0b1`，本阶段从 guard 长尾转向普通循环控制流。[loops.go](../../../internal/propagate/loops.go)使用原函数中的普通 return，不引入 panic、recover、IIFE 或 Assignment guard。[真实 hgo 示例](../../../examples/prototype/loop_propagation.hgo)与生成模块验收同步。
+基于 `863051b9a57b198c3237f2ef06ac7b0e25baa0b1`，本阶段从 guard 长尾转向普通循环控制流。[loops.go](../../../internal/propagate/loops.go)使用原函数中的普通 return，不引入 panic、recover、IIFE 或 Assignment guard。[真实 goxide 示例](../../../examples/prototype/loop_propagation.gox)与生成模块验收同步。
 
 **for init/条件/post**：含问号 initializer 的求值前缀放在包围 block；若源 initializer 是短声明，最后声明仍留在原生 For.Init 中，因此 Go 1.22 起的每轮变量身份仍由 Go 管理，不能把它简单提升成循环外变量。条件的传播前缀与真假检查在每轮 body 入口执行。含问号 post 放到下一轮入口，用循环外 first 标志只跳过首轮；此时原条件即使不含问号也移到 post 之后，保持 post→条件→body。Go 原生下一轮变量复制先于 post，普通 continue 和带标签 continue 均继续经过该复制及 post。没有 post 传播时保留原生 post。无限循环不额外插入退出条件；源 break/return 跳过 post。
 
@@ -283,7 +283,7 @@ for/range 与 switch 仍是 T0 待实现项；普通 expr 的私有上下文问�
 
 **标签**：源 goto 指向外层 block，重入时重新执行 initializer/range 源前缀；break/continue 改指向内部原生 loop 的新标签。只有 break/continue 使用时不保留已无 goto 用户的外层标签。改写前按原词法函数检查重复标签与空白标签目标，嵌套函数有独立标签作用域；否则删除/改名会掩盖本应拒绝的源码。独立审查发现这两条真实反例，均已修复并加入负例。合法重复 `_:` 定义、仅 goto、仅 continue、两类混用及原本 unused 标签均有验收；不会用伪 goto 消除 unused 诊断。
 
-**range**：新增传播源仅支持 slice/map（含其命名类型），完整求值并保存一次源，再保留原生 RangeStmt；`:=` 逐轮独立变量与 `=` 共享既有变量不改写。nil slice/map 仍为空迭代，失败不进入循环。原 range 源不含问号时不求值、不保存或改写它，因此 `range p` / `range *p`（nil 数组指针、单变量、常量长度）、整数 range 原有规则保留，均有循环体传播验收。当前前端接受的原生函数迭代器也保留原语法，已验证单值 iterator 的 body 失败早退和 defer；由 Go 处理 yield/return 协议，不在 hgo 新造 iterator ABI。
+**range**：新增传播源仅支持 slice/map（含其命名类型），完整求值并保存一次源，再保留原生 RangeStmt；`:=` 逐轮独立变量与 `=` 共享既有变量不改写。nil slice/map 仍为空迭代，失败不进入循环。原 range 源不含问号时不求值、不保存或改写它，因此 `range p` / `range *p`（nil 数组指针、单变量、常量长度）、整数 range 原有规则保留，均有循环体传播验收。当前前端接受的原生函数迭代器也保留原语法，已验证单值 iterator 的 body 失败早退和 defer；由 Go 处理 yield/return 协议，不在 goxide 新造 iterator ABI。
 
 | 范围 | 本阶段状态 |
 | --- | --- |
@@ -295,7 +295,7 @@ for/range 与 switch 仍是 T0 待实现项；普通 expr 的私有上下文问�
 | 循环内需要旧 assignmentFrame 的组合 | 明确未实现 guard-free plan，拒绝新增 guard；这是工程缺口，不是别名安全规则或批准延期 |
 | switch/select、泛型函数原型限制及其他未支持 statement | 不借循环改动扩大；switch 仍待实现，select 仍待决 |
 
-其余 unsafe/私有赋值 guard 长尾仍按 §6.11 留表，不阻塞本切片也不标完成。for/range 只对上表已验收范围完成，整体 T0/MVP 未完成。性能研究使用真实 hgo 循环与相同 Option 协议的显式 match，单独运行非 race 基准；零分配不代表与显式 match 耗时相同。
+其余 unsafe/私有赋值 guard 长尾仍按 §6.11 留表，不阻塞本切片也不标完成。for/range 只对上表已验收范围完成，整体 T0/MVP 未完成。性能研究使用真实 goxide 循环与相同 Option 协议的显式 match，单独运行非 race 基准；零分配不代表与显式 match 耗时相同。
 
 ### 6.13 表达式 switch 的传播与循环开销复核
 
@@ -309,7 +309,7 @@ for/range 与 switch 仍是 T0 待实现项；普通 expr 的私有上下文问�
 
 含问号的 unsafe 转换链不在本 switch plan 中，明确拒绝而不拆 pointer/uintptr 链；仍需旧 assignmentFrame 的控制流赋值同样留工程缺口，不增加 guard。其他 range 源/目标、type switch、旧私有上下文长尾和其余 guard 未完成，select/adapters 不作新设计。
 
-for 性能复核：上一阶段实际生成循环为成功 **39.31 ns**、失败 **21.00 ns**，显式 match 为 **26.64/12.69 ns**，都零分配。独立同轮对照为原生成 **38.90/18.41 ns**、仅去 first/移 post 尾部的手写 Go 机制探针 **36.59/17.00 ns**、显式 match **26.85/13.21 ns**；保持同 Option 协议、输入与结果。三者都超过 inline budget，first 分支仅能解释部分差异，且伴随布局/寄存器变化；不能把明显耗时差距用 0alloc 掩盖。探针对捕获了短声明迭代变量的生产循环不安全，本阶段不作这种替换。完整 [原始数据、汇编与复现](../../../tests/research/loop_propagation/README.md#first-flag-follow-up-isolate-part-of-the-overhead)明确区分真实 hgo 与手写机制探针，后续性能优化仍是独立工程项。
+for 性能复核：上一阶段实际生成循环为成功 **39.31 ns**、失败 **21.00 ns**，显式 match 为 **26.64/12.69 ns**，都零分配。独立同轮对照为原生成 **38.90/18.41 ns**、仅去 first/移 post 尾部的手写 Go 机制探针 **36.59/17.00 ns**、显式 match **26.85/13.21 ns**；保持同 Option 协议、输入与结果。三者都超过 inline budget，first 分支仅能解释部分差异，且伴随布局/寄存器变化；不能把明显耗时差距用 0alloc 掩盖。探针对捕获了短声明迭代变量的生产循环不安全，本阶段不作这种替换。完整 [原始数据、汇编与复现](../../../tests/research/loop_propagation/README.md#first-flag-follow-up-isolate-part-of-the-overhead)明确区分真实 goxide 与手写机制探针，后续性能优化仍是独立工程项。
 
 ### 6.14 type switch 与其他非函数 range 源
 
@@ -323,7 +323,7 @@ range 源新增 string、整数、channel、数组和数组指针，沿用原生
 
 不自行实现一套 Go 常量 len 判定器：公共 go/types 的 TypeAndValue 不直接给出所有数组 range 免求值结论，不能简单依据 X.Value 或剪掉常量子树。源不含传播时完全保留原表达式，尤其 `range *nilArrayPointer` 的原生免求值行为。传播位于 unsafe.Sizeof/Alignof/Offsetof 等现有未支持非求值子树时继续明确拒绝，不为接通 range 而强制执行。函数迭代器源中的传播与 range 赋值目标中的传播仍未实现；无传播的原生 iterator 源及此前已验证的 body 保持既有行为。
 
-[真实示例](../../../examples/prototype/type_range_propagation.hgo)覆盖两种 type guard、单/多类型/接口 nil、init/subject 失败顺序、defer、case/init 闭包捕获和标签，以及上述 range 边界；[私有整数用例](../../../examples/propagate_places/effects_range.hgo)独立跨包验证。没有新增正常传播 panic 或 Assignment guard；原 Go panic 与 channel 阻塞仍是原行为。其余控制流内需要旧 guard 的赋值、unsafe 链与普通 expr 上下文长尾不因此完成。
+[真实示例](../../../examples/prototype/type_range_propagation.gox)覆盖两种 type guard、单/多类型/接口 nil、init/subject 失败顺序、defer、case/init 闭包捕获和标签，以及上述 range 边界；[私有整数用例](../../../examples/propagate_places/effects_range.gox)独立跨包验证。没有新增正常传播 panic 或 Assignment guard；原 Go panic 与 channel 阻塞仍是原行为。其余控制流内需要旧 guard 的赋值、unsafe 链与普通 expr 上下文长尾不因此完成。
 
 后续 T0 优先级不再由问号长尾占满：先推进常用 match 表达式组合，再接通源码依赖/同模块的公开引用权限元数据，并修正普通用法的权限跟踪误拒绝；再按应用补齐剩余传播与性能/诊断。完整 trait、长期别名分析、未定 native bridge/adapters 不能作为这些既定工程的隐性前置，公开元数据也不等于一次冻结最终外部 ABI。
 
@@ -370,7 +370,7 @@ From **不因导入外部包而自动注册**。当前实际源入口仍是本�
 - 保留 `go_result!(T,call())` / keep 的显式 T 形式：要求两个结果、显式 T 与实际首结果 identical；E 同样取自真实末结果，不发生隐式 T/E 转换。旧合法 `(T,error)` 例子保持类型和行为；旧指针 E 拒绝例转成正例。
 - 零返回、三个及以上返回、末结果不实现 error、非调用操作数拒绝。多成功值先组织为业务 struct。
 
-```hgo
+```goxide
 // 正例：这些类型只取决于静态返回声明。
 a := go_result!(strconv.Atoi(text))             // Result[int,error]
 b := go_result_keep!(reader.Read(buffer))       // Result[int,struct{Value int; Err error}]
@@ -408,9 +408,9 @@ T/E 的 Go 类型对象应保持身份，不能用 any/interface 退化或伪造
 
 保值错误载荷不实现 Error/Unwrap，不自动登记投影到 E 的 From。`?` 沿现有普通赋值兼容或唯一显式一步 From；传播相同保值载荷应保留 Value/Err，直接到普通 E/error 拒绝。普通版若 E 为非 nil 错误指针，可按现有赋值规则传播给 error；nil 指针已经走 Ok，不会在失败分支被误装箱。接口 E 的动态类型不参与 From 搜索。
 
-必须以真实 hgo→Go 执行覆盖：Atoi、Reader 部分 n、Close/error-only、error alias、具名错误接口、*MyError nil/非 nil、error 接口内 typed nil、非法 E/arity、显式 T 兼容与错误 T、调用/参数/方法/函数值/variadic 次序、panic/defer/recover、嵌套问号/原生泛型、源码跨包及独立 module 的 metadata/match/传播、外包私有 T/E 的 alias 正例或明确拒绝。保值匿名 payload 保持 T/E 身份，不承诺 Clone。
+必须以真实 goxide→Go 执行覆盖：Atoi、Reader 部分 n、Close/error-only、error alias、具名错误接口、*MyError nil/非 nil、error 接口内 typed nil、非法 E/arity、显式 T 兼容与错误 T、调用/参数/方法/函数值/variadic 次序、panic/defer/recover、嵌套问号/原生泛型、源码跨包及独立 module 的 metadata/match/传播、外包私有 T/E 的 alias 正例或明确拒绝。保值匿名 payload 保持 T/E 身份，不承诺 Clone。
 
-官网可运行示例改用推导形式，旧指针 E 负例更新为正例，并增加具名 E/nil/非法 E 的 CLI-WASM 输出或诊断差分；浏览器只转译，运行语义另由 CLI/生成模块断言。独立 review 后执行全树 `go test -race -tags hgoweb`/vet、生成 Go 独立 race/vet、设计检查和网站 WASM 回归；不要求重新发布网站。
+官网可运行示例改用推导形式，旧指针 E 负例更新为正例，并增加具名 E/nil/非法 E 的 CLI-WASM 输出或诊断差分；浏览器只转译，运行语义另由 CLI/生成模块断言。独立 review 后执行全树 `go test -race -tags goxideweb`/vet、生成 Go 独立 race/vet、设计检查和网站 WASM 回归；不要求重新发布网站。
 
 
 实施前独立审查补充（本轮契约的一部分）：

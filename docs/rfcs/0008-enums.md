@@ -22,18 +22,18 @@
 
 **E01：构造保留变体、payload 和全部类型参数。**
 
-```hgo
+```goxide
 pub enum Result[T, E] { Ok(T), Err(E) }
 var r Result[int, string] = Result::Ok(7)
 ```
 
 ```go
 // 候选 A：interface + 值型 case；符号名仅为示意。
-type Result[T, E any] interface { hgoResult(T, E) }
+type Result[T, E any] interface { goxideResult(T, E) }
 type Ok[T, E any] struct { Value T }
 type Err[T, E any] struct { Error E }
-func (Ok[T, E]) hgoResult(T, E) {}
-func (Err[T, E]) hgoResult(T, E) {}
+func (Ok[T, E]) goxideResult(T, E) {}
+func (Err[T, E]) goxideResult(T, E) {}
 var r Result[int, string] = Ok[int, string]{Value: 7}
 ```
 
@@ -42,7 +42,7 @@ var r Result[int, string] = Ok[int, string]{Value: 7}
 
 **E02：嵌套 Option 保留层级。**
 
-```hgo
+```goxide
 var a Option[Option[int]] = Option::None
 var b Option[Option[int]] = Option::Some(Option::None)
 var c Option[Option[int]] = Option::Some(Option::Some(3))
@@ -50,9 +50,9 @@ var c Option[Option[int]] = Option::Some(Option::Some(3))
 
 ```go
 // 仍采用候选 A；只用 nil 表示外层 None。
-type Option[T any] interface { hgoOption(T) }
+type Option[T any] interface { goxideOption(T) }
 type Some[T any] struct { Value T }
-func (Some[T]) hgoOption(T) {}
+func (Some[T]) goxideOption(T) {}
 var a Option[Option[int]] = nil
 var b Option[Option[int]] = Some[Option[int]]{Value: nil}
 var c Option[Option[int]] = Some[Option[int]]{Value: Some[int]{Value: 3}}
@@ -62,7 +62,7 @@ var c Option[Option[int]] = Some[Option[int]]{Value: Some[int]{Value: 3}}
 
 **E03：没有合法初始化的 Result 不能成为源级可读值。**
 
-```hgo
+```goxide
 var r Result[int, string]
 copy := r // 拒绝：r 尚未取得合法值。
 ```
@@ -74,11 +74,11 @@ copy := r // nil interface，不是任何 Result 变体。
 _ = copy
 ```
 
-拒绝来自 hgo 初始化检查，不依赖 Go 编译器。生成代码内部可有临时零值，但不能让业务代码观察它。
+拒绝来自 goxide 初始化检查，不依赖 Go 编译器。生成代码内部可有临时零值，但不能让业务代码观察它。
 
 **E04：外部值必须按所声明的枚举契约取得合法视图。**
 
-```hgo
+```goxide
 // 签名示意；输入位置的验证策略以公开 API RFC 为准。
 pub func value(r Result[int, string]) int {
     return match r { Result::Ok(v) => v, Result::Err(_) => 0 }
@@ -110,20 +110,20 @@ func Value(r Result[int, string]) int {
 
 ## 双向互操作
 
-hgo 导入带元数据的生成包，应恢复 enum 身份、变体与约束；普通 Go interface 不自动推断为封闭 enum。
+goxide 导入带元数据的生成包，应恢复 enum 身份、变体与约束；普通 Go interface 不自动推断为封闭 enum。
 原生 `(T, error)` 改成 Result 需要实际桥接，并保留原 API 允许的“值和错误同时存在”信息；declare 擦除不能改变结果形状。
-Go 调用生成包时仍使用普通 Go 类型与工具链；hgo 不向第三方 Go 程序追加静态穷尽性或借用规则。
-需要公开的运行时校验随 dist 交付，其位置、失败方式及成本必须记录；不能承诺原始 Go 任意输入都满足 hgo 契约。
+Go 调用生成包时仍使用普通 Go 类型与工具链；goxide 不向第三方 Go 程序追加静态穷尽性或借用规则。
+需要公开的运行时校验随 dist 交付，其位置、失败方式及成本必须记录；不能承诺原始 Go 任意输入都满足 goxide 契约。
 最终表示须兼容 [RFC 0009](0009-match.md) 的三种绑定，导出 ABI 和内部布局是否分离尚未选择。
 
 ## 验收与未定项
 
-当前真实验收：[enum_wire业务](../../examples/enum_wire/main.hgo)与[独立测试](../../tests/acceptance/enum_wire_test.go)，包含安装CLI、Go双向调用、known往返、unknown错误先于业务。旧raw语法是前端拒绝例；数值映射不是任意Go强转。下列未实现的完整范围仍需独立验证。
+当前真实验收：[enum_wire业务](../../examples/enum_wire/main.gox)与[独立测试](../../tests/acceptance/enum_wire_test.go)，包含安装CLI、Go双向调用、known往返、unknown错误先于业务。旧raw语法是前端拒绝例；数值映射不是任意Go强转。下列未实现的完整范围仍需独立验证。
 
-1. 正例 E01、E02 保留类型参数、变体及嵌套层级；E03 在 hgo 阶段拒绝。
+1. 正例 E01、E02 保留类型参数、变体及嵌套层级；E03 在 goxide 阶段拒绝。
 2. E04 对规范标量 case 通过，对 nil、指针 case 和嵌入伪造值拒绝。
 3. 增补带共享字段、递归数据、含借用 payload 及跨包元数据往返样例。
-4. Go 机制测试与 hgo 端到端验证分开记录；当前没有后者的实现。
+4. Go 机制测试与 goxide 端到端验证分开记录；当前没有后者的实现。
 5. 未定：最终 ABI、递归验证、泛型验证证据、完整初始化算法及稳定导出符号。
 6. 不得先冻结值型 case，再把无法实现的原位借用默默降低成副本修改。
 
@@ -135,7 +135,7 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；hgo 不向第三方
 
 ### 跨 module 公开具体 enum 恢复（2026-10-03）
 
-目录构建输出内部 `.hgo.enums.json`（协议/产物 v1）和 `HgoEnumMetadata` 常量。消费者在 enum 语法 lowering 之前恢复闭合变体集合，并检查真实 Go enum 类型、私有 marker、值型 case、构造器参数/返回和 validator 签名。元数据不保存 AST 或生产者私有载荷名；载荷类型由真实 case.Value 与构造器签名提供，所以私有类型的公开字段读取、转发和重构可继续推断。
+目录构建输出内部 `.goxide.enums.json`（协议/产物 v1）和 `GoxideEnumMetadata` 常量。消费者在 enum 语法 lowering 之前恢复闭合变体集合，并检查真实 Go enum 类型、私有 marker、值型 case、构造器参数/返回和 validator 签名。元数据不保存 AST 或生产者私有载荷名；载荷类型由真实 case.Value 与构造器签名提供，所以私有类型的公开字段读取、转发和重构可继续推断。
 
 产物绑定实际包路径/名称、逻辑元数据摘要、选中 Go 文件、源闭包与目标构建配置，递归绑定增强依赖 artifact；复用引用阶段的离线 importer 指纹机制。enum/ref 两种 marker 均先写入最终 Go，再计算各自产物，不使已有引用文件摘要失效。缺失/陈旧/错包/版本/构建变化在消费 import 处诊断；这不是生产者认证，外部 cgo 输入限制沿用现有边界。
 
@@ -151,9 +151,9 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；hgo 不向第三方
 
 目录/local replace 恢复支持 `dep.Option[int]::Some(...)`、None、Result 构造、穷尽 match、既有 `?`；具体 alias、泛型参数换序、部分应用与复合实参从实际 Go alias 求得 canonical 参数。替换只作用于类型引用，不改 struct 字段名或函数参数名；生成代码保留源 alias 的实例化，Go 类型检查继续验证其约束。构造本身沿现有 helper 行为，不新增全入口验证；match/`?` 必须找到真实匹配的生产者 instance validator，不能退回只检查外层 case 的泛型 validator。
 
-私有载荷有实际公开透明类型 alias 时可保持类型身份；没有可见类型拼写的载荷、带私有字段且不可命名的匿名形状仍是增强操作的工程缺口，普通 API 调用/转发保留。native generic aliases 可消费，不代表 `.hgo` 已支持用户泛型定义。internal origin facade、无源产物、单文件外部 enum、消费者跨包 derive 仍未由本片补齐，不视为获批延期。
+私有载荷有实际公开透明类型 alias 时可保持类型身份；没有可见类型拼写的载荷、带私有字段且不可命名的匿名形状仍是增强操作的工程缺口，普通 API 调用/转发保留。native generic aliases 可消费，不代表 `.gox` 已支持用户泛型定义。internal origin facade、无源产物、单文件外部 enum、消费者跨包 derive 仍未由本片补齐，不视为获批延期。
 
-[双模块执行验收](../../tests/acceptance/builtin_external_test.go)区分真实 hgo 构造/match/传播与第三个原生 Go 消费模块，检查 None、Some(None)、typed-nil、非法动态 case、嵌套非法载荷、别名约束与 metadata 缺失/篡改。serde 生产者 helper 的 Option 缺失/null 仍为 None，不依赖 Default。比较/零值/入口策略未在本片修改。
+[双模块执行验收](../../tests/acceptance/builtin_external_test.go)区分真实 goxide 构造/match/传播与第三个原生 Go 消费模块，检查 None、Some(None)、typed-nil、非法动态 case、嵌套非法载荷、别名约束与 metadata 缺失/篡改。serde 生产者 helper 的 Option 缺失/null 仍为 None，不依赖 Default。比较/零值/入口策略未在本片修改。
 
 ### 显式 PartialEq/Eq 首片（2026-10-03）
 
@@ -163,13 +163,13 @@ PartialEq 按字段/元素递归比较；enum 先验证左参数、再验证右�
 
 生成 helper 以保留名绑定防局部同名劫持；布尔常量不引用可遮蔽的 true/false 标识符。scalar equals 同样返回 **typed bool**，不能将比较表达式的 untyped bool 语义泄漏到调用方。需要生成 bool 返回类型时，包级遮蔽 builtin bool 仍给明确当前限制诊断；scalar helper 所需 comparable 被包级遮蔽也单列限制；不改无此功能的普通 Go 代码。
 
-hgo 中两个已知 enum 的直接 `==`/`!=` 给出使用显式 equals 的诊断；现有 enum 与 nil 比较保留。已知包含不可比 enum 载荷的 struct/array、混合 interface 比较、switch tag/case 和原生 map 键使用也在编译期拒绝，含 map[any] 的已知 enum key 及 builtin delete。只按实际类型处理已知 enum，不做全程序 interface/alias 风险分析；普通原生 Go 文件与无 enum 的 Go 比较不受此检查影响。安全载荷的既有 Go map key、expression switch 规则未扩大新许可，Eq 不自动赋予 Go map key 资格；对 nil 与其他隐式比较的最终协议边界仍单列。
+goxide 中两个已知 enum 的直接 `==`/`!=` 给出使用显式 equals 的诊断；现有 enum 与 nil 比较保留。已知包含不可比 enum 载荷的 struct/array、混合 interface 比较、switch tag/case 和原生 map 键使用也在编译期拒绝，含 map[any] 的已知 enum key 及 builtin delete。只按实际类型处理已知 enum，不做全程序 interface/alias 风险分析；普通原生 Go 文件与无 enum 的 Go 比较不受此检查影响。安全载荷的既有 Go map key、expression switch 规则未扩大新许可，Eq 不自动赋予 Go map key 资格；对 nil 与其他隐式比较的最终协议边界仍单列。
 
 enum metadata **v3** 记录 Equality：真实目标身份、helper 与 Eq 标记；存在记录即明确 PartialEq。equality-only 包也生成产物，透明 alias 核对定义包记录与 `(T,T) bool` 实际签名，防止 relay 伪升 Eq。支持跨模块调用与消费者派生组合已登记字段；这是 equality 专用能力，不表示其他 derive 均已跨包实现。当前导出以公开 canonical 类型为界，私有 canonical 的公开 alias 尚未复出 equality 协议。
 
 [真实模块验收](../../tests/acceptance/equality_test.go)验证 NaN、变体/递归字段、array、上下文大整数、`?`、全局初始化、调用遮蔽、参数求值及左右非法值顺序、别名与普通 Go helper 消费。blank/embedded 字段的 struct 派生、builtin Option/Result 的条件泛型比较协议、slice/map 内容相等及 nil/空规则、pointer/chan/interface 自动协议、手写权限入口、Hash/HashMap 均未实现，不由本片自动延期。
 
-后续容器规则已由 [D33](../design/decisions.md) 确认：同类型 nil slice/map 与非 nil 空容器不相等，两个 nil 相等，两个非 nil 空容器按内容相等；Option.None/Some(nil)/Some(empty) 区分，serde 不变。固定长度 array 无 nil。对应 [纯 Go 契约探针](../../tests/design/enum/equality_contract_test.go)不冒充尚未实现的 hgo 容器派生；nil/空不再待决，map 键规则仍单列。
+后续容器规则已由 [D33](../design/decisions.md) 确认：同类型 nil slice/map 与非 nil 空容器不相等，两个 nil 相等，两个非 nil 空容器按内容相等；Option.None/Some(nil)/Some(empty) 区分，serde 不变。固定长度 array 无 nil。对应 [纯 Go 契约探针](../../tests/design/enum/equality_contract_test.go)不冒充尚未实现的 goxide 容器派生；nil/空不再待决，map 键规则仍单列。
 
 ### 容器 PartialEq/Eq 派生（2026-10-03）
 
@@ -185,7 +185,7 @@ struct 依字段顺序、slice/array 依索引短路；map 依 Go 未指定的�
 
 本片沿已批准的具体值参数 helper 路径支持手写比较，不等待 `&T`/`mut&T` 或一般 trait 求解。源级入口使用明确具体类型拼写；首参数必须名为 `self`，两个参数均为目标值类型，单个返回值为 builtin bool。没有 static，不增加隐式只读、独占或全局不可变保证；函数体按普通 Go 值参数和共享容器语义执行。`Self` 简写、泛型 impl、别名/外部目标和借用签名不在此具体入口内。
 
-```hgo
+```goxide
 type User struct { ID int; Display string }
 impl PartialEq for User {
     func equals(self User, other User) bool { return self.ID == other.ID }

@@ -16,7 +16,7 @@
 
 ## 1. 语义与术语
 
-| 概念 | hgo 含义 | Go 承载 |
+| 概念 | goxide 含义 | Go 承载 |
 | --- | --- | --- |
 | 原始类型 | 数据、固有方法与类型身份 | 原始 named type |
 | trait | 必须显式采用的行为协议 | 元数据；满足运行时条件时有对应接口 |
@@ -25,21 +25,21 @@
 | trait 视图 | 选择了特定 impl 的值 | 保存接收者的 wrapper，按需装入接口 |
 | Go interface | 结构式方法集合 | 原生 Go 接口，保留 Go 规则 |
 
-方法签名相同不自动创建 hgo impl。降低后的 trait 接口仍要求业务方法和 marker；marker 必须保留，但显式关系、权限与精确接收者身份由 hgo 元数据决定。
+方法签名相同不自动创建 goxide impl。降低后的 trait 接口仍要求业务方法和 marker；marker 必须保留，但显式关系、权限与精确接收者身份由 goxide 元数据决定。
 
 此模型描述可形成运行时视图的实例方法。`Default.default() -> Self` 等静态操作仍按选定 impl 降低为普通函数，不能强行塞入运行时接口。见[静态 trait 操作](macros.md#55-静态-trait-操作与-go-运行时接口)。`impl A for T` 与 trait 继承是不同功能，supertrait 另行设计。
 
 类型自有成员写在 `impl T { ... }` 中，`T::new(...)` 等无接收者关联函数见 [RFC 0020](../rfcs/0020-associated-functions.md)。它按类型查找函数，trait 静态操作则按显式 impl 选择实现；两者都可降低为包级函数，但前者不会自动创建 Default impl。impl 成员用 `func` 声明，首参数 self 标识实例成员，否则为关联函数，无需 static。手动 Default 的有限实现见该 RFC，完整静态 trait 后端仍未实现。
 
-直接写出的 `func NewT(...) T` 和 `func (recv T) M(...)` 保留普通 Go 函数与方法语义，不自动成为 hgo impl，也不凭名字建立 `T::new` 绑定。impl 的 `Self` / `self` 支持按绑定解析；普通 Go 声明中的同名标识符仍按 Go 规则处理。
+直接写出的 `func NewT(...) T` 和 `func (recv T) M(...)` 保留普通 Go 函数与方法语义，不自动成为 goxide impl，也不凭名字建立 `T::new` 绑定。impl 的 `Self` / `self` 支持按绑定解析；普通 Go 声明中的同名标识符仍按 Go 规则处理。
 
 ## 2. 源级语法
 
 ### 2.1 declare：采用已有业务方法
 
-```hgo
+```goxide
 import native "example.org/native/buffer"
-import byteio "example.org/hgo/byteio"
+import byteio "example.org/goxide/byteio"
 type Buffer = *native::Buffer
 
 declare impl byteio::Reader for Buffer;
@@ -51,7 +51,7 @@ declare 不是等待实现的前置声明。它采用原生方法的业务与可
 
 ### 2.2 有体 impl：执行用户方法体
 
-```hgo
+```goxide
 pub trait ByteReader { read(p []byte) (int, error) }
 pub trait TextReader { read() string }
 pub struct Buffer { data []byte }
@@ -75,7 +75,7 @@ impl TextReader for *Buffer {
 ```go
 // native.Buffer 已有 Read；ByteReader 包含 Read 与对应 marker。
 type nativeByteReader struct { target *native.Buffer }
-func (v nativeByteReader) HyperGoTraitByteReader() {}
+func (v nativeByteReader) GoxideTraitByteReader() {}
 func (v nativeByteReader) Read(p []byte) (int, error) {
     return v.target.Read(p)
 }
@@ -93,11 +93,11 @@ package views
 
 type ByteReader interface {
     Read([]byte) (int, error)
-    HyperGoTraitByteReader()
+    GoxideTraitByteReader()
 }
 type TextReader interface {
     Read() string
-    HyperGoTraitTextReader()
+    GoxideTraitTextReader()
 }
 type Buffer struct { data []byte }
 func NewBuffer(data []byte) *Buffer { return &Buffer{data: data} }
@@ -106,24 +106,24 @@ type bufferByteReader struct { target *Buffer }
 type bufferTextReader struct { target *Buffer }
 
 func AsBufferByteReader(b *Buffer) ByteReader {
-    if b == nil { panic("hgo: nil Buffer") }
+    if b == nil { panic("goxide: nil Buffer") }
     return bufferByteReader{target: b}
 }
 func AsBufferTextReader(b *Buffer) TextReader {
-    if b == nil { panic("hgo: nil Buffer") }
+    if b == nil { panic("goxide: nil Buffer") }
     return bufferTextReader{target: b}
 }
 func (b *Buffer) AsByteReader() ByteReader { return AsBufferByteReader(b) }
 func (b *Buffer) AsTextReader() TextReader { return AsBufferTextReader(b) }
 
-func (v bufferByteReader) HyperGoTraitByteReader() {}
-func (v bufferTextReader) HyperGoTraitTextReader() {}
+func (v bufferByteReader) GoxideTraitByteReader() {}
+func (v bufferTextReader) GoxideTraitTextReader() {}
 func (v bufferByteReader) Read(p []byte) (int, error) {
-    if v.target == nil { panic("hgo: invalid ByteReader view") }
+    if v.target == nil { panic("goxide: invalid ByteReader view") }
     return copy(p, v.target.data), nil
 }
 func (v bufferTextReader) Read() string {
-    if v.target == nil { panic("hgo: invalid TextReader view") }
+    if v.target == nil { panic("goxide: invalid TextReader view") }
     return string(v.target.data)
 }
 ```
@@ -155,7 +155,7 @@ marker 使用导出的稳定符号，使其他包拥有的 wrapper 能实现 tra
 
 ## 5. 同名方法与调用解析
 
-```hgo
+```goxide
 b.read::<ByteReader>(p)
 b.read::<TextReader>()
 b.read::<byteio::Reader>(p)
@@ -163,7 +163,7 @@ b.read::<byteio::Reader>(p)
 
 限定调用选择一个 trait。普通调用暂定固有方法优先；否则查询可见显式实现，候选唯一才能简写，多个候选要求限定。已经是 trait 视图的值调用该 trait 方法，不再按原对象的方法集选择。
 
-新增 impl 可能使未限定的 hgo 调用歧义，但不得改变既有 wrapper 或工厂符号。Go API 稳定与源码调用永不歧义不是同一承诺。
+新增 impl 可能使未限定的 goxide 调用歧义，但不得改变既有 wrapper 或工厂符号。Go API 稳定与源码调用永不歧义不是同一承诺。
 
 ## 6. 期望类型驱动的转换
 
@@ -185,7 +185,7 @@ b.read::<byteio::Reader>(p)
 
 ## 7. 原生类型的采用与公开入口
 
-用户在 C 包声明外部 trait 与外部类型的关系，wrapper、marker 和工厂归 C；不写回原始类型定义包。生成 Go 代码随 dist 交付，纯 Go 可以使用普通工厂，hgo 额外加载实现元数据。
+用户在 C 包声明外部 trait 与外部类型的关系，wrapper、marker 和工厂归 C；不写回原始类型定义包。生成 Go 代码随 dist 交付，纯 Go 可以使用普通工厂，goxide 额外加载实现元数据。
 
 包级工厂是唯一适配语义入口，便利 API 只转发它：
 
@@ -211,7 +211,7 @@ AsBufferByteReader、AsByteReader、ForBuffer 是短示例，正式编码尚待�
 
 包含不可比较 T 的值 wrapper 可能使 Go 接口比较 panic；指针 wrapper 又可能让两次适配获得不同包装对象身份。公开的比较、nil、反射和分配行为须记录，保存原 target 不等于完全透明或零分配。
 
-marker 即使被 Go 手写或嵌入提升，也不会创建新的 hgo impl。源级采用关系、权限、关联类型和业务来源仍以一致的实现元数据为准。
+marker 即使被 Go 手写或嵌入提升，也不会创建新的 goxide impl。源级采用关系、权限、关联类型和业务来源仍以一致的实现元数据为准。
 
 ## 10. 实现验收条件
 
@@ -222,6 +222,6 @@ marker 即使被 Go 手写或嵌入提升，也不会创建新的 hgo impl。源
 5. 适配只求值一次，保留借用范围，不隐式 unwrap，不产生递归 wrapper 链。
 6. 精确 T / *T 方法集、声明冲突、权限与函数值转换均有正反例。
 7. 通过 io.Copy 等原生调用检查没有提升额外方法，新增 impl 不改变既有工厂和视图身份。
-8. LSP 与编译器读取同一元数据，可导航到采用的 Go 方法或 hgo 方法体。
+8. LSP 与编译器读取同一元数据，可导航到采用的 Go 方法或 goxide 方法体。
 
-现有 views Go 夹具验证完整示例的共享对象、自定义分派和 nil 工厂；不代表 hgo 前端或新 declare 工厂已经实现。
+现有 views Go 夹具验证完整示例的共享对象、自定义分派和 nil 工厂；不代表 goxide 前端或新 declare 工厂已经实现。

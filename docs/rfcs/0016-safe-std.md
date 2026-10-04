@@ -7,7 +7,7 @@
 ## 源级规则
 
 1. ABI 与行为保持时可用 declare；改变结果形状、复制存储、判空或验证计数，必须生成真实代码。
-2. 声明作者保证原生实现遵守契约；hgo 检查本侧参数权限和调用效果，不要求证明任意 Go 函数体。
+2. 声明作者保证原生实现遵守契约；goxide 检查本侧参数权限和调用效果，不要求证明任意 Go 函数体。
 3. safe 不表示无副作用、无 panic 或无 I/O 错误。Go 的“部分数据 + 错误”不能被包装丢掉。
 
 ## 转译示例
@@ -16,7 +16,7 @@
 
 源级片段，假设 `math` 是 Go 包的导入别名：
 
-```hgo
+```goxide
 declare func math::Sqrt(x float64) float64;
 y := math::Sqrt(9.0)
 ```
@@ -34,7 +34,7 @@ _ = y
 
 源级结果草图；`GoError` 表示保留原生 nil/typed nil 身份的错误视图，最终名称未定。`ReadOutcome` 与输入权限的完整 API 也仍为候选：
 
-```hgo
+```goxide
 struct ReadOutcome { count int; error GoError }
 // reader 已有可信 Read 契约，dst 为调用期间的可写字节视图。
 let (n, err) = reader.read(dst)
@@ -49,7 +49,7 @@ import "io"
 type ReadOutcome struct { Count int; Error error }
 func ReadOnce(r io.Reader, dst []byte) ReadOutcome {
     n, err := r.Read(dst)
-    if n < 0 || n > len(dst) { panic("hgo: invalid Read count") }
+    if n < 0 || n > len(dst) { panic("goxide: invalid Read count") }
     return ReadOutcome{Count: n, Error: err}
 }
 ```
@@ -67,12 +67,12 @@ func ReadOnce(r io.Reader, dst []byte) ReadOutcome {
 
 ## 双向互操作
 
-hgo → Go：STD-01 直接调用，STD-02 保留真实读取行为；每个 safe 入口记录原生符号、借用/别名、回调、错误和版本依据。
+goxide → Go：STD-01 直接调用，STD-02 保留真实读取行为；每个 safe 入口记录原生符号、借用/别名、回调、错误和版本依据。
 
-Go → hgo：可直接调用生成 `ReadOnce` 并读取 `Count`/`Error`；普通 Go reader 的正确性由调用契约承担，不享有 hgo 的静态缓冲区检查。
+Go → goxide：可直接调用生成 `ReadOnce` 并读取 `Count`/`Error`；普通 Go reader 的正确性由调用契约承担，不享有 goxide 的静态缓冲区检查。
 
 ## 验收与未定项
 
-未来验证 STD-01 的普通数值与 NaN；STD-02 的正数+EOF、零进展 `(0,nil)`、非法计数、typed nil error。既有支持库机制检查见[测试说明](../../tests/README.md)，不等于本 RFC 已有 hgo 实现。
+未来验证 STD-01 的普通数值与 NaN；STD-02 的正数+EOF、零进展 `(0,nil)`、非法计数、typed nil error。既有支持库机制检查见[测试说明](../../tests/README.md)，不等于本 RFC 已有 goxide 实现。
 
 每增加一个 safe API，必须补充本篇同样的调用/包装对照，或另立小 RFC；不会因为包内已有 safe 入口就默认整个包 safe。

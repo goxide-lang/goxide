@@ -20,15 +20,15 @@ default_features = false
 
 [lib]
 name = "app"
-path = "src/lib.hgo"
+path = "src/lib.gox"
 
 [[bin]]
 name = "cli"
-path = "src/main.hgo"
+path = "src/main.gox"
 
 [[example]]
 name = "demo"
-path = "examples/demo.hgo"
+path = "examples/demo.gox"
 required_features = ["pretty"]
 
 [build]
@@ -44,7 +44,7 @@ timeout_seconds = 30
 
 对应关系：旧顶层 version → package.format；bins → bin 数组表；examples → example 数组表；其余字段名/值原样保留（包括 default_features、required_features、timeout_seconds）。不新增 package.name/version/module、workspace、继承或版本简写。依赖 module 字段仍必填，git 的 rev/subdir、optional 等原有字段不变。build.tools 是别名到工具路径的表，沿用旧执行/信任合同。使用正规 github.com/pelletier/go-toml/v2 v2.4.3（TOML 1.1，包含 1.0 语法）解析，固定 go.sum；不是自写 TOML 子集。
 
-识别接口：project.ManifestName = "goxide.toml"；project.Detect(root) (bool, error) 统一检测。无清单返回 false；只有 hgo.json 给出迁移错误；两者存在给出双配置错误；清单必须为普通文件。project.Read(root) 通过 Detect 后严格 TOML 解码。CLI、path/git/version 来源与 host helper 均接入，不能把旧 JSON 误判为纯 Go 并跳过脚本/features。原生图中非活动 hgo 依赖仍不因检测获得增强构建/脚本授权。
+识别接口：project.ManifestName = "goxide.toml"；project.Detect(root) (bool, error) 统一检测。无清单返回 false；只有 hgo.json 给出迁移错误；两者存在给出双配置错误；清单必须为普通文件。project.Read(root) 通过 Detect 后严格 TOML 解码。CLI、path/git/version 来源与 host helper 均接入，不能把旧 JSON 误判为纯 Go 并跳过脚本/features。原生图中非活动 goxide 依赖仍不因检测获得增强构建/脚本授权。
 
 迁移需要按上表改写内容，不能只重命名扩展名。先生成/手写 goxide.toml，核对字段后将旧 hgo.json 移出项目根保存；两文件同时存在会明确失败。本轮不提供自动删除或覆盖文件的迁移命令。旧来源需发布新的源码修订；锁定旧修订时给出迁移诊断，不暗中更换 revision。现有 hgo.lock 可保留，若源码/清单输入变化，按既有 --locked 规则拒绝变更，解锁重建再审阅锁差异。
 
@@ -59,8 +59,8 @@ timeout_seconds = 30
 建议后续模式由显式字段区分，而不是见到/缺少 go.mod 就猜：
 
 - **纯项目模式（提案）**：goxide.toml 中增加经过批准的 module、Go语言版本/工具链策略和依赖声明。根只需 TOML＋增强锁及源码；先在受管 target 的规划 module 统一 MVS，再为各 unit 生成 go.mod/go.sum。不同 bin/example/config 隔离存储，但同一进程的相同逻辑 package 不按feature复制身份；feature并集依然统一。增量及离线构建依赖锁和缓存，不要求根有隐形生成文件。
-- **Go 混用模式（当前能力）**：根保留用户 go.mod/go.sum，TOML只增加features/来源/targets/scripts。module身份和Go语言版本来自go.mod；原生require/replace/exclude与hgo约束按既有规划共同处理。未来纯模式字段若在混用模式出现，建议报冲突而非猜优先级。绝不覆盖用户go.mod/go.sum。
-- **通过 Go proxy 发布 hgo source（当前渠道）**：发布 module 必须符合 Go module/proxy 的 .mod、版本、路径/zip/checksum合同，含适配的go.mod及goxide.toml/hgo源码，消费方显式增强依赖边才编译。开发根可以未来无go.mod，但不能据此声称原生Go发布渠道也无需module元数据。可以由发布步骤从纯清单生成一致source发行目录；需要单独发布协议和验证，不偷偷写回根。
+- **Go 混用模式（当前能力）**：根保留用户 go.mod/go.sum，TOML只增加features/来源/targets/scripts。module身份和Go语言版本来自go.mod；原生require/replace/exclude与goxide约束按既有规划共同处理。未来纯模式字段若在混用模式出现，建议报冲突而非猜优先级。绝不覆盖用户go.mod/go.sum。
+- **通过 Go proxy 发布 goxide source（当前渠道）**：发布 module 必须符合 Go module/proxy 的 .mod、版本、路径/zip/checksum合同，含适配的go.mod及goxide.toml/goxide源码，消费方显式增强依赖边才编译。开发根可以未来无go.mod，但不能据此声称原生Go发布渠道也无需module元数据。可以由发布步骤从纯清单生成一致source发行目录；需要单独发布协议和验证，不偷偷写回根。
 
 例子（路径是设计形状，非新增CLI）：
 
@@ -68,7 +68,7 @@ timeout_seconds = 30
 | --- | --- | --- |
 | 纯 app（未来） | goxide.toml、建议goxide.lock、src/；TOML显式module | target/.../plan/go.mod及go.sum；target/.../units/.../module/go.mod及go.sum；统一选版后构建 |
 | 现有 Go app（现在） | go.mod、go.sum、goxide.toml、hgo.lock | 现有受管unit生成副本；根Go文件保持用户所有权 |
-| proxy上的 hgo source（现在） | zip中go.mod＋goxide.toml＋源码，proxy的.mod与源码一致 | hgo消费方在target生成Go；原生Go不自动转译.hgo，不承诺直接可用 |
+| proxy上的 goxide source（现在） | zip中go.mod＋goxide.toml＋源码，proxy的.mod与源码一致 | goxide消费方在target生成Go；原生Go不自动转译.gox，不承诺直接可用 |
 | 原生Go消费发行物 | 某固定feature配置的生成Go＋go.mod/go.sum及一致metadata | 普通Go可消费；不能再靠features重新配置已生成源码，不混装重复所有权源码 |
 | 只有TOML、无go.mod的远端仓库 | 未来可经显式Git checkout或本地path取得后合成module元数据 | 不能直接当Go proxy可发现module；本轮现有path/git同样仍要求go.mod |
 
@@ -82,7 +82,7 @@ timeout_seconds = 30
 
 ### 本轮验证记录
 
-真实 Go 1.27.1；本地临时模块、fixture proxy 和本地 Git，无私人依赖/安装脚本。`go test -race -tags hgoweb -count=1 ./...` 完成全树：CLI 316.756s、acceptance 344.744s，其余包通过；其中 project 包唯一失败为 TOML 库升级后的错误文案断言（旧期待 cannot decode，实际 array table），修正测试后完整 `go test -race ./internal/project -count=1` 通过（1.030s），生产代码未因该断言调整。不把有此断言失败的原始全树命令描述为零退出。
+真实 Go 1.27.1；本地临时模块、fixture proxy 和本地 Git，无私人依赖/安装脚本。`go test -race -tags goxideweb -count=1 ./...` 完成全树：CLI 316.756s、acceptance 344.744s，其余包通过；其中 project 包唯一失败为 TOML 库升级后的错误文案断言（旧期待 cannot decode，实际 array table），修正测试后完整 `go test -race ./internal/project -count=1` 通过（1.030s），生产代码未因该断言调整。不把有此断言失败的原始全树命令描述为零退出。
 
 额外版本来源/feature/script专项race通过（114.436s）；解析/迁移专项race通过，独立大小写反例复核通过；脚本保留清单名和helper bootstrap专项通过。全树vet、文档检查、网站/WASM构建通过。公开project示例临时副本真实运行两个bin、example、关闭默认feature的locked离线切换，输出符合README。官网源文案已同步，未部署线上站点。
 

@@ -4,7 +4,7 @@
 
 - 已确认：支持普通关联类型的设计方向；关联类型由选定实现决定。
 - 已确认：运行时视图采用统一 wrapper 和声明包工厂；Go 接口保留业务方法及导出 marker。
-- 暂定：显式绑定、限定投影、固定 Go 接口及以下语法；尚无 hgo 端到端实现。
+- 暂定：显式绑定、限定投影、固定 Go 接口及以下语法；尚无 goxide 端到端实现。
 - 未定：完整泛型约束、实现证据、投影的最终拼写及公开泛型 ABI。
 
 依据[普通关联类型](../design/associated-types.md)。本篇不用 Option 表示，
@@ -25,9 +25,9 @@
 
 ### A01：一个实现确定一种 Item
 
-hgo 机制片段；字段与 receiver 使用现有专题的示意语法，省略包及构造函数。
+goxide 机制片段；字段与 receiver 使用现有专题的示意语法，省略包及构造函数。
 
-```hgo
+```goxide
 pub trait Source {
     type Item
     get() Self.Item
@@ -47,21 +47,21 @@ package example
 
 type Source[Item any] interface {
     Get() Item
-    HyperGoTraitSource()
+    GoxideTraitSource()
 }
 type Cell struct { N int }
 type cellSource struct { target *Cell }
 func (v cellSource) Get() int { return v.target.N }
-func (v cellSource) HyperGoTraitSource() {}
+func (v cellSource) GoxideTraitSource() {}
 func AsSourceForCell(v *Cell) Source[int] { return cellSource{target: v} }
 func (v *Cell) AsSource() Source[int] { return AsSourceForCell(v) }
 ```
 
 ### A02：完整绑定的运行时视图
 
-hgo 片段依赖 A01，以及合法接收者 c。
+goxide 片段依赖 A01，以及合法接收者 c。
 
-```hgo
+```goxide
 var s Source[Item = int] = c
 var n int = s.get()
 ```
@@ -78,9 +78,9 @@ var n int = s.Get()
 
 ### A03：采用原生业务方法
 
-hgo 片段位于 adapters 包，依赖 A01 的 Source（假定位于 `example.org/protocols`），以及 `example.org/native` 中的 `*Cell`。
+goxide 片段位于 adapters 包，依赖 A01 的 Source（假定位于 `example.org/protocols`），以及 `example.org/native` 中的 `*Cell`。
 
-```hgo
+```goxide
 import protocols "example.org/protocols"
 import native "example.org/native"
 declare impl protocols::Source[Item = int] for *native::Cell;
@@ -99,7 +99,7 @@ import (
 
 type cellSource struct { target *native.Cell }
 func (v cellSource) Get() int { return v.target.Get() }
-func (v cellSource) HyperGoTraitSource() {}
+func (v cellSource) GoxideTraitSource() {}
 func AsSourceForCell(c *native.Cell) protocols.Source[int] {
     return cellSource{target: c}
 }
@@ -125,11 +125,11 @@ func (v cellFacade) AsSource() protocols.Source[int] { return AsSourceForCell(v.
 
 ## 双向互操作
 
-- hgo → Go：先由 hgo 解析 Item 与 impl，再生成固定业务签名；原生方法按此验签。
-- Go → hgo：Go 可使用固定工厂、同包 Cell 的 As 方法或外部 Cell 的 facade，取得 Source[int]；Go 自行满足接口方法集
-  不足以建立 hgo 显式实现，也不能让 hgo 任意改变已有 Item 绑定。
-- hgo 重导入生成包时，读取实现键与关联类型元数据；信息缺失时不得仅凭 marker 恢复可信绑定。
-- 普通 Go 调用方不承担 hgo 泛型投影检查；公开接口的表达能力由
+- goxide → Go：先由 goxide 解析 Item 与 impl，再生成固定业务签名；原生方法按此验签。
+- Go → goxide：Go 可使用固定工厂、同包 Cell 的 As 方法或外部 Cell 的 facade，取得 Source[int]；Go 自行满足接口方法集
+  不足以建立 goxide 显式实现，也不能让 goxide 任意改变已有 Item 绑定。
+- goxide 重导入生成包时，读取实现键与关联类型元数据；信息缺失时不得仅凭 marker 恢复可信绑定。
+- 普通 Go 调用方不承担 goxide 泛型投影检查；公开接口的表达能力由
   [RFC 0015](0015-public-api.md) 规定，未决定的泛型入口不能声称已可公开。
 - 原生转发与自定义实现的区别见 [RFC 0003](0003-declare-impl.md)，两者都由 wrapper 实现 marker；
   借用规则见 [RFC 0005](0005-borrows.md)。
@@ -140,7 +140,7 @@ func (v cellFacade) AsSource() protocols.Source[int] { return AsSourceForCell(v.
 相容 declare 合并后 Item 仍唯一；改变声明顺序不改变绑定。
 原生 Get 返回 int 的采用成功，返回二元组的采用失败，并给出替换后的目标签名。
 工厂与便利入口使用同一 impl，接口载体为 wrapper，target 保留原指针；外部类型方法集不变。
-hgo 包导出再导入后仍恢复同一 Item、实现模式与权限，不能只验证 Go 能编译。
+goxide 包导出再导入后仍恢复同一 Item、实现模式与权限，不能只验证 Go 能编译。
 
 尚须确定泛型约束和投影语法、实现证据传递、泛型接收者，以及可公开的泛型范围。
 GAT、默认关联类型、特化、重叠实现和未知 Item 的存在类型视图继续延期。

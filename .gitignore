@@ -9,3 +9,7 @@
 
 # Python website manifest tooling
 website/__pycache__/
+
+/website/node_modules/
+/website/dist/
+/website/qa-artifacts/

@@ -1,6 +1,6 @@
 # RFC 0006：按 serde-rs 分层的 serde 核心与格式适配
 
-状态：用户已确定“仿照 serde-rs 的实现”，覆盖此前助手提出的统一 core Value、CoreValue-v1 和首版必须建完整树等候选。已确定 serde 优先、首版 JSON、未来 YAML 独立适配；下文 Go/hgo ABI、支持子集与本地策略仍是实施候选，不声称完整 Rust 兼容。初稿时尚无 serde 或宏前端实现；当前有限实现见末节，冻结标签 `v0.0.0-mvp-doc` 不变。
+状态：用户已确定“仿照 serde-rs 的实现”，覆盖此前助手提出的统一 core Value、CoreValue-v1 和首版必须建完整树等候选。已确定 serde 优先、首版 JSON、未来 YAML 独立适配；下文 Go/goxide ABI、支持子集与本地策略仍是实施候选，不声称完整 Rust 兼容。初稿时尚无 serde 或宏前端实现；当前有限实现见末节，冻结标签 `v0.0.0-mvp-doc` 不变。
 
 当前D27补充：语言只保留封闭变体enum。unit变体可用serde rename映射外部字符串，或完整显式int64 value映射数字；未知外部值返回UnknownVariant，业务validator延期。它不新增开放raw enum，不改变Clone/Debug身份；真实边界见[枚举专题](../../design/enums-and-match.md#01-封闭-enum-与外部映射)。
 
@@ -8,7 +8,7 @@
 
 本轮实际读取 serde-rs 官方文档及 serde/json 主分支源码。链接为移动分支，实施前应锁定参考版本；下表标明所核对的符号，不靠类名推断行为。
 
-| 一手依据 | 核对事实 | hgo 采用方向 |
+| 一手依据 | 核对事实 | goxide 采用方向 |
 | --- | --- | --- |
 | [数据模型](https://serde.rs/data-model.html) | 模型描述类型与格式交互的操作，含 struct/map、tuple/seq、enum、option、bytes 等区别 | 核心是协议，不是所有格式共用的 Value 树 |
 | [serde_core/ser](https://github.com/serde-rs/serde/blob/master/serde_core/src/ser/mod.rs) 的 Serialize、Serializer、SerializeStruct/Seq/Map | 类型调用 serializer；成功/错误及复合状态由关联类型表达 | 派生调用核心协议，格式包实现具体状态 |
@@ -45,7 +45,7 @@ serde-json Serializer/Deserializer    未来 serde-yaml 等格式包
 
 ### 3.1 序列化
 
-源对象实现 `Serialize`；对标量选择对应 serializer 操作，对复合值先取得状态、逐项写入、最后 end。最小能力族如下，最终 hgo 拼写与 Go 接口名称待实施冻结：
+源对象实现 `Serialize`；对标量选择对应 serializer 操作，对复合值先取得状态、逐项写入、最后 end。最小能力族如下，最终 goxide 拼写与 Go 接口名称待实施冻结：
 
 | 能力族 | 需要保留的区别 |
 | --- | --- |
@@ -70,7 +70,7 @@ serde-json Serializer/Deserializer    未来 serde-yaml 等格式包
 
 DeserializeSeed 的带状态初始化、原地更新与复杂恢复可后置；首版用明确的目标函数/visitor 传递子类型证据即可。Visitor 不是一个 `Value` 节点集合，也不要求所有输入都先转通用动态值。
 
-## 4. Go/hgo 的最小实现偏差与接口草图
+## 4. Go/goxide 的最小实现偏差与接口草图
 
 Rust 的泛型方法、关联 `Ok/Error/Value` 及 `'de` 不能直接照搬进当前 Go interface；本仓库 U04 的完整 trait 后端也未决定。推荐原型用 **普通 Go 核心接口 + 具体类型 helper/visitor + typed 子调用闭包**，不以实现全部关联类型求解为前提。下述为协议草图，不是已编译 API：
 
@@ -105,7 +105,7 @@ SeqAccess:
 
 生成的具体 visitor 保存类型化目标/字段槽，例如 `OrderVisitor` 保存 `Order`；`decodeOrder(d) (Order,error)` 创建它，调用 d.Struct 后返回其结果。ReadValue 闭包只把具体字段解码结果写入该字段槽，不把所有字段塞进 any。SeqAccess 的 present 表示“有元素”，null 仍由子 visitor 处理。非泛型核心 interface 避开 Go interface 不支持独立泛型方法的限制；闭包/接口分派可能分配，不能称零成本。
 
-| Rust 机制 | Go/hgo 首版候选 | 保留 / 代价 |
+| Rust 机制 | Go/goxide 首版候选 | 保留 / 代价 |
 | --- | --- | --- |
 | Serializer::Ok 由后端决定 | 所有写协议返回 error，结果由后端 Finish 取出；JSON Value builder 拥有结果 | 保留不同后端，放弃类型关联返回值的直接编码 |
 | S::Error / D::Error | Go error + 核心分类/路径包装，保留 Unwrap cause | 统一签名易实现；不等于 Rust 静态格式错误类型 |
@@ -114,11 +114,11 @@ SeqAccess:
 | `'de` 与 borrowed/transient/owned 字符串 | 首版仅拥有型结果；保留数据复制到自身存储 | 不实现借用生命周期/零复制解码；不得返回复用 reader 缓冲 |
 | by-value 状态/借用限制 | 顺序调用、子值恰好消费一次、结束后失效的运行时协议 | Go GC 不自动证明线性使用；误用返回 State 错误 |
 
-Rust 的反序列化生命周期用于表达输入借用条件，参考[官方生命周期说明](https://serde.rs/lifetimes.html)。hgo D20 不做 MVP 借用分析，因此首版拥有型结果是明确实现范围，不凭同名 Visitor 宣称等价安全保证。原对象编码也不自动快照/加锁；读写权限来自既有规则，共享对象同步仍是调用方职责。
+Rust 的反序列化生命周期用于表达输入借用条件，参考[官方生命周期说明](https://serde.rs/lifetimes.html)。goxide D20 不做 MVP 借用分析，因此首版拥有型结果是明确实现范围，不凭同名 Visitor 宣称等价安全保证。原对象编码也不自动快照/加锁；读写权限来自既有规则，共享对象同步仍是调用方职责。
 
 ## 5. 最小端到端派生路径
 
-```hgo
+```goxide
 #[derive(Serialize, Deserialize)]
 struct Order {
     #[serde(rename="order_id")]
@@ -154,7 +154,7 @@ JSON from_str 可先用 token reader 直接推进 Access，只有目标要求 Va
 
 仿照 serde_json：`Null | Bool | Number | String | Array[Value] | Object[string,Value]`。没有 Missing、Struct、Enum、Bytes 或任意键 Map 节点。Object lookup 的 `(value,found)` 区分不存在与存在 Null；不得为方便 API 把两者只暴露成同一个 null。JSON Value 不保留名义类型、整数源位宽、指针身份或格式注释；按 enum JSON 表示写成 String/Object 后，这些就是普通动态数据。
 
-Number 不统一成 float64。hgo 首版建议 JSON Number 保留经验证的有限数值文本（有长度预算）作为格式层精度策略；普通 int64/uint64 精确解析，目标浮点才舍入。serde_json 源码的 arbitrary_precision 是可选机制，不可声称其默认 Number 都任意精度。该 hgo 选择是工程建议，不是 serde-rs 核心必需节点。
+Number 不统一成 float64。goxide 首版建议 JSON Number 保留经验证的有限数值文本（有长度预算）作为格式层精度策略；普通 int64/uint64 精确解析，目标浮点才舍入。serde_json 源码的 arbitrary_precision 是可选机制，不可声称其默认 Number 都任意精度。该 goxide 选择是工程建议，不是 serde-rs 核心必需节点。
 
 精确 Number 的协议接入有真实额外工作：core 标准标量不足以表达任意精度十进制。参考 serde_json 的私有 Number 约定，可在 JSON 格式包内部以明确保留标记的 newtype/struct 协议传递验证后的数字文本；writer/Value builder/reader 同时识别，并测试不误吞普通业务 struct。标记不是安全边界，不复制 Rust 的私有字符串作为跨语言 ABI。其他格式若不支持该约定，应明确 Unsupported 或使用显式字符串/目标数值转换，不冒充格式通用 Decimal。初版未完成此桥接时，只能宣称 JSON parser/Value 保真，不能宣称任意 Number 字段已支持通用派生。
 
@@ -162,23 +162,23 @@ Number 不统一成 float64。hgo 首版建议 JSON Number 保留经验证的有
 
 ### 6.2 对齐与显式偏差
 
-| 行为 | serde-rs/json 核对结果 / hgo 处置 |
+| 行为 | serde-rs/json 核对结果 / goxide 处置 |
 | --- | --- |
 | struct/map | JSON object；struct 字段已知而 map 动态，核心仍区分 |
 | unit enum | 对齐字符串，例如 `"Idle"`，撤回前稿 `{"Idle":null}` 默认 |
 | 带载荷外标记 enum | 对齐 `{"Named":"Ada"}`、`{"Pair":[1,2]}`、`{"User":{"id":7}}`；首版仅外标记 |
 | Option | 对齐 None→null、Some(x)→x；撤回默认 Some/None 标签封装；嵌套 Option 可能丢区别，见 §7 |
 | bytes | 对齐默认数字数组，例如 `[1,2]`；Base64 是显式字段 adapter，不是核心默认；不照搬 Go []byte 默认行为 |
-| 非有限 float | serde_json 文本 serializer 对 NaN/Inf 输出 null；hgo 建议首版明确报 UnsupportedNumber，属于待冻结的严格策略偏差，不能称完全兼容 |
-| map 键 | serde_json 有独立 key serializer，支持部分可字符串化标量；hgo 首版可限定字符串键，其他明确 UnsupportedKey，而非声称 serde-rs 只允许源 string |
-| 重复字段/对象键 | derive 对重复已知字段诊断；动态 JSON Object 通常无法保存重复。hgo 建议所有对象重复键（含未知/转义同名）在解析时拒绝，须单列为严格策略，不声称默认行为完全一致 |
+| 非有限 float | serde_json 文本 serializer 对 NaN/Inf 输出 null；goxide 建议首版明确报 UnsupportedNumber，属于待冻结的严格策略偏差，不能称完全兼容 |
+| map 键 | serde_json 有独立 key serializer，支持部分可字符串化标量；goxide 首版可限定字符串键，其他明确 UnsupportedKey，而非声称 serde-rs 只允许源 string |
+| 重复字段/对象键 | derive 对重复已知字段诊断；动态 JSON Object 通常无法保存重复。goxide 建议所有对象重复键（含未知/转义同名）在解析时拒绝，须单列为严格策略，不声称默认行为完全一致 |
 | nil slice/map、nil pointer | Go 独有边界：普通容器建议空数组/object；nullable/Option 显式处理 nil；非空引用不能由 null 自动构造 |
 
 内部/相邻标签及 untagged 在 Serde 中还涉及 derive 生成不同映射，不是永远由格式随意重选。未来加入属性时需同时实现派生与格式访问路径；不能期望 JSON Value 恢复已擦掉的 enum 身份。[Serde enum 表示](https://serde.rs/enum-representations.html)
 
 ### 6.3 Go JSON 实现细节与原生接口
 
-本地 Go 1.27.1 的 jsontext 源码仍带实验构建条件，GOEXPERIMENT 为空，本轮未启用或下载依赖。可先用 encoding/json.Decoder 的 Token/UseNumber 做词法推进，配合独立重复键/尾部/预算和 Unicode 校验；不先 Decode 到 map[string]any/float64。v1 的非法 UTF-8/孤立 surrogate 替换、大小写匹配、[]byte Base64 和重复键策略不能悄悄成为 hgo 默认。[Go encoding/json](https://pkg.go.dev/encoding/json)
+本地 Go 1.27.1 的 jsontext 源码仍带实验构建条件，GOEXPERIMENT 为空，本轮未启用或下载依赖。可先用 encoding/json.Decoder 的 Token/UseNumber 做词法推进，配合独立重复键/尾部/预算和 Unicode 校验；不先 Decode 到 map[string]any/float64。v1 的非法 UTF-8/孤立 surrogate 替换、大小写匹配、[]byte Base64 和重复键策略不能悄悄成为 goxide 默认。[Go encoding/json](https://pkg.go.dev/encoding/json)
 
 Serialize/Deserialize derive 不自动生成或调用 Go MarshalJSON/UnmarshalJSON；用户显式选择 JSON 专用 native adapter 才进入这条路径。native 输出验证为单个合法 JSON 值，错误保留 cause；输入交给 native 后，其字段/default/副作用由该实现负责，不宣称核心统一控制。JSON 专用 adapter 不自动适用于 YAML，也不因缺少它阻断普通 Go 调用。不得通过自动添加方法改变原类型的可选协议/方法集。
 
@@ -224,7 +224,7 @@ Serialize/Deserialize derive 不自动生成或调用 Go MarshalJSON/UnmarshalJS
 | JSON null | [serde_json 1.0.145 deserialize_option](https://github.com/serde-rs/json/blob/v1.0.145/src/de.rs#L1671-L1683)：消费 null 后调用 visit_none，否则 visit_some |
 | 自定义字段缺失 | [Serde 1.0.228 expr_is_missing](https://github.com/serde-rs/serde/blob/v1.0.228/serde_derive/src/de.rs#L763-L803)：有 default 先处理；无自定义解码时调用 missing_field；有 deserialize_with 且无 default 时直接报缺失。这不是普通 Option 的规则 |
 
-hgo 当前有限实现：普通 Option 缺失由生成的 struct visitor 直接设置 None，绕过 Default 检查及生成器；JSON null 沿现有 Deserializer.Option → VisitNone 路径。此职责分离不要求先移植通用 MissingFieldDeserializer 或完整 trait，也不改返回行为。标准库层的独立 Default 在当前原型由内建 Default 选择逻辑表示，不声称已实现通用 std trait 后端。
+goxide 当前有限实现：普通 Option 缺失由生成的 struct visitor 直接设置 None，绕过 Default 检查及生成器；JSON null 沿现有 Deserializer.Option → VisitNone 路径。此职责分离不要求先移植通用 MissingFieldDeserializer 或完整 trait，也不改返回行为。标准库层的独立 Default 在当前原型由内建 Default 选择逻辑表示，不声称已实现通用 std trait 后端。
 
 adapter 注解仍未批准、未实现；自定义 deserialize_with 的缺失行为不能从普通 Option 结论自动批准。本文确认普通 Option 规则，不把 Proposed 两项选择视为整体批准。
 
@@ -232,7 +232,7 @@ adapter 注解仍未批准、未实现；自定义 deserialize_with 的缺失行
 
 ## 8. 错误、预算与所有权边界
 
-核心错误构造至少支持 Type、MissingField、DuplicateField、UnknownField/Variant、Range、Unsupported 和 Custom；格式附 Syntax/IO、byte offset，路径 wrapper 增加 Field/Index/MapKey/Variant 段并保留 Unwrap。结构化路径不能用点连接字符串代替，否则字段名里的点/斜杠有歧义。完整路径包装是 hgo 首版建议，不能声称 Rust serde 核心本身保证所有格式输出统一路径。默认不打印完整敏感载荷。
+核心错误构造至少支持 Type、MissingField、DuplicateField、UnknownField/Variant、Range、Unsupported 和 Custom；格式附 Syntax/IO、byte offset，路径 wrapper 增加 Field/Index/MapKey/Variant 段并保留 Unwrap。结构化路径不能用点连接字符串代替，否则字段名里的点/斜杠有歧义。完整路径包装是 goxide 首版建议，不能声称 Rust serde 核心本身保证所有格式输出统一路径。默认不打印完整敏感载荷。
 
 当前 JSON 后端保留实际 Token/数值转换错误为 cause；可用 `errors.As` 读取原始 `json.SyntaxError.Offset` / `strconv.NumError`，或 `errors.Is` 检查底层 sentinel。Kind、Path 与既有消息保持；位置来自实际 Token 调用，不重算为 json.Unmarshal 的 offset。仅由本后端检测的错误不伪造 Go cause，也不新增统一 offset API。
 
@@ -277,7 +277,7 @@ JSON Value 不能保存 YAML 任意键、tag/锚点身份或注释；跨格式�
 
 ## 实现分支进展（不冻结 ABI）
 
-具体类型的核心协议、JSON 后端与 derive 已形成实际 `.hgo → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。当前已接通有限封闭 enum 派生、字段 default/skip 的已登记 Default 调用及内建具体 Option serde；此结果不代表本 RFC 的泛型、全部 enum 表示、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。
+具体类型的核心协议、JSON 后端与 derive 已形成实际 `.gox → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。当前已接通有限封闭 enum 派生、字段 default/skip 的已登记 Default 调用及内建具体 Option serde；此结果不代表本 RFC 的泛型、全部 enum 表示、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。
 
 
 ## Proposed 研究增补：显式字段适配器

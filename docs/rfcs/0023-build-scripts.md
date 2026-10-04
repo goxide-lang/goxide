@@ -2,9 +2,9 @@
 
 ## 状态与范围
 
-用户已确认第一阶段：代码/资源生成、本地 host 工具与依赖、声明输入增量缓存；根项目一次信任，第三方执行闭包单独精确许可；native linking 后置。本分支实现该子集。`build.gox` 仍是研究名称，实际入口支持 `.go` / `.hgo`，不更改语言后缀。
+用户已确认第一阶段：代码/资源生成、本地 host 工具与依赖、声明输入增量缓存；根项目一次信任，第三方执行闭包单独精确许可；native linking 后置。本分支实现该子集。规范入口名为 `build.gox`；显式 entry 仍支持 `.go` / `.gox`，旧 `.hgo` 已移除（RFC 0027）。
 
-本 RFC 接续 [项目工具链](0022-project-toolchain.md)。作者根采用 [RFC 0025 统一模型](0025-unified-project.md)：format 2 的 goxide.toml 与 schema 2 的 goxide.lock，混合仅指 .go/.hgo 源码，不要求根 go.mod/go.sum。研究历史保留于 `research/build-gox-rfc` 分支：`4c54b12290fffd5d593e674a403306a60b3c9708` 包含最初 RFC、官方 Cargo 差距对照、独立审阅与可复现 Go/OS fixture。旧研究中的严格 hermetic/sandbox 门槛与逐 target 运行属于旧候选；以本篇已确认的本地 declared-input 模式为准。
+本 RFC 接续 [项目工具链](0022-project-toolchain.md)。作者根采用 [RFC 0025 统一模型](0025-unified-project.md)：format 2 的 goxide.toml 与 schema 2 的 goxide.lock，混合仅指 .go/.gox 源码，不要求根 go.mod/go.sum。研究历史保留于 `research/build-gox-rfc` 分支：`4c54b12290fffd5d593e674a403306a60b3c9708` 包含最初 RFC、官方 Cargo 差距对照、独立审阅与可复现 Go/OS fixture。旧研究中的严格 hermetic/sandbox 门槛与逐 target 运行属于旧候选；以本篇已确认的本地 declared-input 模式为准。
 
 这不是 sandbox。普通 Go 可执行文件可以访问当前用户能访问的文件、网络、凭据和进程；快照、路径检查、清理范围和许可用于控制工具自身行为，不构成对恶意脚本的 OS 隔离。第一次需要许可时失败并给出诊断，不默认执行依赖脚本，也不隐式交互批准。
 
@@ -23,7 +23,7 @@ name = 'app'
 path = 'cmd/app'
 
 [build]
-entry = 'tools/build/main.hgo'
+entry = 'tools/build/main.gox'
 env = ['SCHEMA_MODE']
 inputs = ['schema.txt', 'templates']
 outputs = ['gen/schema.go', 'gen/data.txt']
@@ -42,7 +42,7 @@ inputs 为包内明确的文件或递归目录，不支持 glob；目录成员�
 
 env 只传入明确列出的已设置变量，未设置与空字符串在缓存中不同。`HOST`、`TARGET`、`OUT_DIR`、`SOURCE_DIR` 为 runner 提供；Go/CGO、PATH/HOME/TMP 与动态装载相关保留变量不能由声明覆盖。没有自动读取系统环境、时间或网络作为隐式缓存输入。
 
-dependencies 是模块名到显式本地源码路径；它们只供 host 脚本使用，不加入 target 依赖图。Go/hgo helper 的完整本地依赖闭包都必须列出。原生 Go helper 的 go.mod，或纯 TOML helper 合成后的 Go 政策，仅支持 module/go/require；不接受 replace/toolchain 等其他 directive、嵌套 module 或 helper 自己的 build 脚本。TOML helper 根同样拒绝 go.mod/go.sum，生成副本不回写原 helper。第一版不自动获取 registry/git host helper，也不复用 target resolver 的同模块 feature 节点。Git 来源的脚本及 helper/tools 不能越出该 checkout。
+dependencies 是模块名到显式本地源码路径；它们只供 host 脚本使用，不加入 target 依赖图。Go/goxide helper 的完整本地依赖闭包都必须列出。原生 Go helper 的 go.mod，或纯 TOML helper 合成后的 Go 政策，仅支持 module/go/require；不接受 replace/toolchain 等其他 directive、嵌套 module 或 helper 自己的 build 脚本。TOML helper 根同样拒绝 go.mod/go.sum，生成副本不回写原 helper。第一版不自动获取 registry/git host helper，也不复用 target resolver 的同模块 feature 节点。Git 来源的脚本及 helper/tools 不能越出该 checkout。
 
 tools 是别名到已存在的本地可执行文件；执行前冻结二进制内容，独立许可，request 提供快照绝对路径。动态库、外部配置、工具再次调用的程序不被自动封装或追踪；工具闭包 hermeticity 不受保证。不运行安装器。
 
@@ -62,30 +62,30 @@ host 编译固定本机 GOOS/GOARCH、CGO=0、GOWORK=off、GOTOOLCHAIN=local、�
 ### 缓存与信任操作
 
 ```sh
-hgo scripts plan ./app
-hgo scripts trust-project ./app
-hgo scripts allow --subject EXACT_SHA256 ./app
-hgo run --bin app ./app
-hgo scripts revoke --subject EXACT_SHA256 ./app
-hgo scripts forget-project ./app
-hgo scripts clean ./app
+goxide scripts plan ./app
+goxide scripts trust-project ./app
+goxide scripts allow --subject EXACT_SHA256 ./app
+goxide run --bin app ./app
+goxide scripts revoke --subject EXACT_SHA256 ./app
+goxide scripts forget-project ./app
+goxide scripts clean ./app
 ```
 
-兼容入口 `hgo scripts --action ACTION [flags] PROJECT` 仍受支持；与显式子命令同时指定时，动作必须一致。所有动作都要求显式项目路径，不会默认信任当前目录。
+兼容入口 `goxide scripts --action ACTION [flags] PROJECT` 仍受支持；与显式子命令同时指定时，动作必须一致。所有动作都要求显式项目路径，不会默认信任当前目录。
 
 所有 flags 放在项目路径之前；可指定 `--target-dir`、`--go`、`--features`、`--no-default-features`、`--offline`、`--locked`。plan 输出 JSON 与逐主体 trusted 状态，不编译/执行脚本；依赖解析仍可能访问网络，应按需要用 offline/locked。allow 只接受当前 plan 中存在的完整摘要，不顺便信任根项目。revoke/forget 不依赖仍能解析旧脚本，缓存存在也不能绕过撤销。
 
-信任记录为用户配置目录 `goxide/build-trust/grants.json`，可由 `HGO_TRUST_DIR` 指定给 CI/测试；CLI 拒绝设置到当前图源码、选定产物根及任何已知受管布局内。项目声明不能授予信任。policy lease 覆盖整次脚本项目构建/运行，防止协作命令在授权使用中途成功撤销；并发修改返回 `B-TRUST-BUSY`，并非即时终止已启动程序。全局 lease 暂时串行化使用同一 store 的不同项目，崩溃遗留锁需确认无进程后人工处理。target 执行期间也持有 lease，长运行服务须注意这一限制。
+信任记录为用户配置目录 `goxide/build-trust/grants.json`，可由 `GOXIDE_TRUST_DIR` 指定给 CI/测试；CLI 拒绝设置到当前图源码、选定产物根及任何已知受管布局内。项目声明不能授予信任。policy lease 覆盖整次脚本项目构建/运行，防止协作命令在授权使用中途成功撤销；并发修改返回 `B-TRUST-BUSY`，并非即时终止已启动程序。全局 lease 暂时串行化使用同一 store 的不同项目，崩溃遗留锁需确认无进程后人工处理。target 执行期间也持有 lease，长运行服务须注意这一限制。
 
-脚本结果缓存键包含完整冻结输入、目录成员、工具、env、features/tags/race、host/target、编译器身份与脚本声明。package 配置不包含 bin/example 名，多个 target 可共享脚本结果。CLI 缓存位于所选 target 根的 `scripts/<host>/<target>/<package-id>/script-cache/entries/<key>`；通过 layout 包级所有权容器与 core 自有cache双层校验。它不放入逐bin Unit.ScriptCache，避免同包不同bin重复执行。输入/执行临时目录仍由runner创建并回收，生成文件保留在当次bundle；Unit.ScriptOut仍为预留。core独立单测的默认 `.hgo/build-scripts` 不是CLI默认。信任 store 与产物分离。Clean 只删除匹配所有权标记的脚本 entries，拒绝陌生结构或 busy lock，保留源码、信任及其他依赖缓存。不是全项目 clean/GC；保留target二进制与旧bundle。遍历先验证所有layout结构，再逐cache清理；后续cache所有权错误不会回滚已清理的其他cache。
+脚本结果缓存键包含完整冻结输入、目录成员、工具、env、features/tags/race、host/target、编译器身份与脚本声明。package 配置不包含 bin/example 名，多个 target 可共享脚本结果。CLI 缓存位于所选 target 根的 `scripts/<host>/<target>/<package-id>/script-cache/entries/<key>`；通过 layout 包级所有权容器与 core 自有cache双层校验。它不放入逐bin Unit.ScriptCache，避免同包不同bin重复执行。输入/执行临时目录仍由runner创建并回收，生成文件保留在当次bundle；Unit.ScriptOut仍为预留。core独立单测的默认 `.goxide/build-scripts` 不是CLI默认。信任 store 与产物分离。Clean 只删除匹配所有权标记的脚本 entries，拒绝陌生结构或 busy lock，保留源码、信任及其他依赖缓存。不是全项目 clean/GC；保留target二进制与旧bundle。遍历先验证所有layout结构，再逐cache清理；后续cache所有权错误不会回滚已清理的其他cache。
 
 超时覆盖 host lowering 的 importer 子进程、host 编译及运行，取消传播至 Go 查询；同步 CPU lowering 在包边界检查，不能保证实时抢占。CommandContext/WaitDelay 不保证杀死所有后代；脚本外部副作用不会回滚。失败不发布新 artifact，但之前完整缓存可保留。
 
 ## 转译示例
 
-BS-01 白例：schema 输入显式声明，已批准根项目；host 生成器读取 request.SourceDir 下 schema.txt，在 request.OutDir 生成模块相对 `gen/schema.hgo`，其内容为：
+BS-01 白例：schema 输入显式声明，已批准根项目；host 生成器读取 request.SourceDir 下 schema.txt，在 request.OutDir 生成模块相对 `gen/schema.gox`，其内容为：
 
-```hgo
+```goxide
 package gen
 func Version() int { return 42 }
 ```
@@ -97,7 +97,7 @@ package gen
 func Version() int { return 42 }
 ```
 
-消费包 import `example.org/app/gen`，无需把生成文件写回源码。generated `.go` 和资源可使用正常 `go:embed`；文件入口映射仍遵循 RFC 0022，不自动移动同目录资源。完整可运行生成器见 [试用示例](../../examples/build_script/README.md)，自动验收见 [端到端测试](../../cmd/hgo/buildscript_test.go)。
+消费包 import `example.org/app/gen`，无需把生成文件写回源码。generated `.go` 和资源可使用正常 `go:embed`；文件入口映射仍遵循 RFC 0022，不自动移动同目录资源。完整可运行生成器见 [试用示例](../../examples/build_script/README.md)，自动验收见 [端到端测试](../../cmd/goxide/buildscript_test.go)。
 
 BS-01 黑例：未信任根项目，输入完全相同，构建在任何 host 编译/执行前返回 `B-TRUST-ROOT`；不会因仅需 transpile 而绕过。trust-project 后再走以上顺序。
 
@@ -111,7 +111,7 @@ BS-01 黑例：未信任根项目，输入完全相同，构建在任何 host �
 | BS-03 输入 | 声明schema文件及templates目录：内容/成员/空目录变化→miss→重跑 | 漏声明schema：快照读不到而运行失败；若脚本用硬编码绝对路径绕出快照，只能警示declared-cache可能陈旧，不能检测所有漏项 | core snapshot/目录 tests；绕出为既有OS机制证据 |
 | BS-04 环境 | MODE在env：值变/设空/取消设置都影响键→重跑 | 未声明MODE不传入；声明PATH/GOFLAGS/OUT_DIR先拒绝 `invalid environment name` | core/CLI env tests |
 | BS-05 路径 | 包内普通相对文件可快照→生成 | `../x`、输入/输出symlink、硬链接、Git checkout外helper拒绝；source-map保留名先拒绝。敌对同UID并发替换不受sandbox保证 | core path/link tests，frontend sidecar test |
-| BS-06 host/target | 本机host脚本生成本机target：request与执行架构一致 | GOARCH设置成外架构：Prepare/frontend先拒绝cross compilation，生成器不执行 | CLI cross-target test；研究Go ELF交叉编译不是hgo支持 |
+| BS-06 host/target | 本机host脚本生成本机target：request与执行架构一致 | GOARCH设置成外架构：Prepare/frontend先拒绝cross compilation，生成器不执行 | CLI cross-target test；研究Go ELF交叉编译不是goxide支持 |
 | BS-07 多target/feature | 两个bin同包配置：首run、后hit；feature变化：新键、重跑 | 正在构建的相同store/cache再次进入：busy而不混写；不允许混用不同env/tool/config的结果 | CLI incremental、core parallel lock tests |
 | BS-08 失败与原子性 | 输出全部存在、退出0：校验→rename→target编译 | 写部分输出后sleep超时/非0/少文件/多文件：失败无新cache；修好后重跑 | CLI timeout恢复、core missing/extra/failure tests |
 | BS-09 清理 | 自有cache且无锁：只删entries，下一次有许可才重跑 | 无owner/陌生文件/正在构建：拒绝clean；不能用clean撤销或授予信任 | CLI clean、core ownership tests |
@@ -123,7 +123,7 @@ BS-01 黑例：未信任根项目，输入完全相同，构建在任何 host �
 
 ## 双向互操作
 
-host `.hgo` 可以 import 已声明本地 Go helper，Go host 可以 import 已 lower 的 hgo helper；helpers不会自动变成target链接依赖。host与target若使用同module，是独立准备的角色视图，不会把host init混入target。生成Go源码是普通Go包，可被target hgo或Go包导入；生成hgo仍经过同一语言前端，不绕过类型检查/metadata约束。
+host `.gox` 可以 import 已声明本地 Go helper，Go host 可以 import 已 lower 的 goxide helper；helpers不会自动变成target链接依赖。host与target若使用同module，是独立准备的角色视图，不会把host init混入target。生成Go源码是普通Go包，可被target goxide或Go包导入；生成goxide仍经过同一语言前端，不绕过类型检查/metadata约束。
 
 与 Cargo 的取舍：采用 host 执行、OUT_DIR分离、按输入重跑的概念，但不直接兼容 stdout Cargo 指令。Cargo build.rs 的默认信任、mtime重跑与持久OUT_DIR不等于本工具策略。[Cargo官方build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html)、[build dependencies](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#build-dependencies)、[features](https://doc.rust-lang.org/cargo/reference/features.html)、[Go generate](https://pkg.go.dev/cmd/go#hdr-Generate_Go_files_by_processing_source)、[Go build](https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies)、[cgo交叉编译](https://pkg.go.dev/cmd/cgo)是研究来源。Go generate不由go build隐式执行；cgo交叉构建需要目标C工具链，本阶段不隐式引入。
 
@@ -136,7 +136,7 @@ host `.hgo` 可以 import 已声明本地 Go helper，Go host 可以 import 已 
 复现使用 Go 1.27.1：
 
 ```sh
-GOCACHE=/workspace/goxide-environment/cache /workspace/goxide-environment/go/bin/go test -race ./internal/buildscript ./internal/scripttrust ./cmd/hgo ./internal/frontend ./internal/typecheck
+GOCACHE=/workspace/goxide-environment/cache /workspace/goxide-environment/go/bin/go test -race ./internal/buildscript ./internal/scripttrust ./cmd/goxide ./internal/frontend ./internal/typecheck
 python3 scripts/check_design.py --docs-only
 ```
 

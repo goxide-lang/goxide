@@ -2,7 +2,7 @@
 
 交付边界（D20）：本文涉及的别名/借用风险 warning 是未来独立长期分析，不属于 MVP 验收；当前语言语法、类型、明确操作与真实 Go 行为照常设计。不得为未实现分析器强制复杂效果注解。
 
-状态：锁句柄采用 Go 指针表示，`Do` 支持独立泛型返回类型，最低 Go 版本为 1.27。下文的 Unit 形式、引用诊断和第三方适配接口属于设计草案；仓库尚无 hgo 转译器或 linter 实现。
+状态：锁句柄采用 Go 指针表示，`Do` 支持独立泛型返回类型，最低 Go 版本为 1.27。下文的 Unit 形式、引用诊断和第三方适配接口属于设计草案；仓库尚无 goxide 转译器或 linter 实现。
 
 | 状态 | 范围 |
 | --- | --- |
@@ -10,28 +10,28 @@
 | 暂定 | T06、T16：Read / Write 类型权限、风险 warning、Unit、第三方锁原语适配。 |
 | 未定 | U02、U03：共享别名与引用检查算法；锁块语法延期。 |
 
-状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 hgo 功能已实现。
+状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 goxide 功能已实现。
 
 [RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)按 D19 采用风险 warning：锁内来源离开、绕锁访问、已知重入分别诊断，默认不阻断。旧严格准入方案已被用户否决。
 
 ## 1. 转译边界
 
-hgo 负责源级语义检查和代码转换；同步由普通 Go 支持库完成，不引入另一套所有权运行时。
+goxide 负责源级语义检查和代码转换；同步由普通 Go 支持库完成，不引入另一套所有权运行时。
 
-| hgo 概念 | Go 表示 |
+| goxide 概念 | Go 表示 |
 | --- | --- |
 | `Arc[T]` | `*T`，共享引用句柄 |
 | `&T`、`mut& T` | `*T`；源级权限差异保留在转译前检查中 |
-| `Lock[T]` | `*hgosync.Lock[T]` |
-| `RWLock[T]` | `*hgosync.RWLock[T]` |
+| `Lock[T]` | `*goxidesync.Lock[T]` |
+| `RWLock[T]` | `*goxidesync.RWLock[T]` |
 
-`hgosync` 是拟议的普通 Go 支持库包名；标准库提供 `sync.Mutex` / `sync.RWMutex`，没有现成的泛型 `sync.Lock[T]`。
+`goxidesync` 是拟议的普通 Go 支持库包名；标准库提供 `sync.Mutex` / `sync.RWMutex`，没有现成的泛型 `sync.Lock[T]`。
 
-在 hgo 中复制 `Lock[T]` 只复制句柄，锁和受保护数据保持在同一对象里。不能转译成会按值复制 mutex 的外层结构体。原生 Go 手动解引用后复制整个支持库对象，属于 hgo 检查之外的互操作行为。
+在 goxide 中复制 `Lock[T]` 只复制句柄，锁和受保护数据保持在同一对象里。不能转译成会按值复制 mutex 的外层结构体。原生 Go 手动解引用后复制整个支持库对象，属于 goxide 检查之外的互操作行为。
 
 ## 2. 泛型返回类型
 
-```hgo
+```goxide
 var s Lock[i32] = Lock.new(0)
 
 next := s.do(|inner| {
@@ -57,7 +57,7 @@ func (s *Lock[T]) Do[P any](f func(*T) P) P
 以下是完整 Go 示例，所有构造入口返回指针：
 
 ```go
-package hgosync
+package goxidesync
 
 import "sync"
 
@@ -100,11 +100,11 @@ func (s *RWLock[T]) Write[P any](f func(*T) P) P {
 
 返回值在持锁期间计算，随后 defer 解锁，再把结果交给调用者。回调 panic 时执行解锁，panic 继续传播，不伪造一个 P 的零值返回。
 
-hgo 将 `Read` 的回调参数视为 `&T`，`Do` / `Write` 的回调参数视为 `mut& T`。上述 Go 签名均为 `*T`，本身不能表达只读、独占或不逃逸；源级只读类型错误仍由前端检查，独占/逃逸按 D19 仅对具体风险 warning。直接由 Go 调用 Read 并修改数据，不受 hgo 类型检查约束。
+goxide 将 `Read` 的回调参数视为 `&T`，`Do` / `Write` 的回调参数视为 `mut& T`。上述 Go 签名均为 `*T`，本身不能表达只读、独占或不逃逸；源级只读类型错误仍由前端检查，独占/逃逸按 D19 仅对具体风险 warning。直接由 Go 调用 Read 并修改数据，不受 goxide 类型检查约束。
 
 ## 4. 没有结果的回调
 
-对只执行副作用的 hgo 回调，建议使用 Unit 作为结果类型，降低为 `struct{}`，并补上 return：
+对只执行副作用的 goxide 回调，建议使用 Unit 作为结果类型，降低为 `struct{}`，并补上 return：
 
 ```go
 // 片段：s 为 *Lock[int32]。
@@ -114,7 +114,7 @@ s.Do(func(inner *int32) struct{} {
 })
 ```
 
-Go 不会自动把 `func(*T)` 转成 `func(*T) struct{}`；这一补充由 hgo 转译完成。Unit 的源级名称和统一布局仍需与语言基础类型设计一并定稿。
+Go 不会自动把 `func(*T)` 转成 `func(*T) struct{}`；这一补充由 goxide 转译完成。Unit 的源级名称和统一布局仍需与语言基础类型设计一并定稿。
 
 回调中的 return 只退出回调，不退出调用 Do 的外层函数。若未来加入锁块语法，需要另行处理外层 return、break、continue 等控制流；不能只在闭括号后附加 Unlock。Go defer 以函数退出为作用点。[Go defer 规则](https://go.dev/ref/spec#Defer_statements)
 
@@ -142,4 +142,4 @@ Go 1.27 的接口方法仍不能声明自己的类型参数，因此不将 `Do[P
 
 支持库的 Go 验证应覆盖：同一锁的多种 P 推导、显式 P、Unit 回调、正常返回、panic 后解锁、复制句柄共享状态，以及 RWLock 的读写路径。
 
-`go test -race` 用于检查实际运行中的并发访问。hgo error/warning/无依据不报要在转译器和 linter 实现后分别验证，不能因为 Go 示例通过就标记完成。
+`go test -race` 用于检查实际运行中的并发访问。goxide error/warning/无依据不报要在转译器和 linter 实现后分别验证，不能因为 Go 示例通过就标记完成。

@@ -2,18 +2,18 @@
 
 ## 状态与范围
 
-已确认：类似 TS/JS，同一个 Go 模块可以携带 `.go`、`.d.hgo` 和可选 `.hgo`；发布整个 dist；Go 工具链编译 `.go`，hgo 工具链额外加载声明或源码。增强语义约束 hgo 工具链管理的代码，不要求普通 Go 调用者获得 hgo 静态检查。
+已确认：类似 TS/JS，同一个 Go 模块可以携带 `.go`、`.d.gox` 和可选 `.gox`；发布整个 dist；Go 工具链编译 `.go`，goxide 工具链额外加载声明或源码。增强语义约束 goxide 工具链管理的代码，不要求普通 Go 调用者获得 goxide 静态检查。
 
 已确认：运行时 trait 统一使用 wrapper；trait 的 Go 接口包含业务方法与导出 marker，wrapper 实现 marker。包级工厂及 Go 便利入口见 [RFC 0019](0019-uniform-trait-wrappers.md)。
 
-暂定：同包源码与生成文件的选择规则。未定：具体命名、版本指纹及完整公开 ABI。没有 hgo 加载器实现。背景见[Go 适配](../design/go-interop.md)。
+暂定：同包源码与生成文件的选择规则。未定：具体命名、版本指纹及完整公开 ABI。没有 goxide 加载器实现。背景见[Go 适配](../design/go-interop.md)。
 
 ## 源级规则
 
-1. `go mod` 负责正常模块分发，不因有 `.d.hgo` 就另建包下载系统。发布内容须实际包含声明文件；`dist/` 是产物目录概念，不强制成为 import path 的一部分。
-2. hgo 使用真实 `.go` 类型信息校验声明；`.d.hgo` 不会给 Go 编译器增加方法，也不是运行时实现。
-3. 同一实现选择 `.go + .d.hgo` 或 `.hgo` 源码路径；不能把源码及其生成 `.go` 当成两份独立业务定义。包内独立手写 `.go` 仍正常参与构建；识别生成文件的协议待定。
-4. 只有 `.hgo` 而没有生成 `.go` 的包，可由 hgo 处理，不能宣称可被普通 Go 直接使用。
+1. `go mod` 负责正常模块分发，不因有 `.d.gox` 就另建包下载系统。发布内容须实际包含声明文件；`dist/` 是产物目录概念，不强制成为 import path 的一部分。
+2. goxide 使用真实 `.go` 类型信息校验声明；`.d.gox` 不会给 Go 编译器增加方法，也不是运行时实现。
+3. 同一实现选择 `.go + .d.gox` 或 `.gox` 源码路径；不能把源码及其生成 `.go` 当成两份独立业务定义。包内独立手写 `.go` 仍正常参与构建；识别生成文件的协议待定。
+4. 只有 `.gox` 而没有生成 `.go` 的包，可由 goxide 处理，不能宣称可被普通 Go 直接使用。
 5. trait wrapper、固定工厂和便利入口随 impl 声明包 C 发布。C 正常依赖 trait 包 A 和原类型包 B，不向 A/B 注入方法；A、B、C 可以重合。
 6. 本方案的 trait 适配不需要依赖副本、GOROOT overlay 或下游继承 replace；dist 提供正常 Go 源码及依赖声明。
 
@@ -21,9 +21,9 @@
 
 ### PKG-01：不涉及外部方法注入的完整发布
 
-源文件 `add.hgo`，名称导出采用 [RFC 0015](0015-public-api.md) 的候选规则：
+源文件 `add.gox`，名称导出采用 [RFC 0015](0015-public-api.md) 的候选规则：
 
-```hgo
+```goxide
 package calc
 pub func add(a int, b int) int { return a + b }
 ```
@@ -35,9 +35,9 @@ package calc
 func Add(a, b int) int { return a + b }
 ```
 
-`dist/add.d.hgo` 描述同一个 `add` 对应 Go `Add`，不是第二份实现。下面是声明形状示意，外部符号绑定格式未冻结：
+`dist/add.d.gox` 描述同一个 `add` 对应 Go `Add`，不是第二份实现。下面是声明形状示意，外部符号绑定格式未冻结：
 
-```hgo
+```goxide
 package calc
 pub declare func add(a int, b int) int;
 ```
@@ -46,17 +46,17 @@ pub declare func add(a int, b int) int;
 dist/                       # 发布模块根，示例 module example.org/calc
   go.mod                    # go 1.27
   add.go
-  add.d.hgo
-  add.hgo                   # 可选
+  add.d.gox
+  add.gox                   # 可选
 ```
 
-Go 使用 `calc.Add(1, 2)`；hgo 读取声明后使用 `calc::add(1, 2)`。两者结果都是 3；调用时无额外包装成本。
+Go 使用 `calc.Add(1, 2)`；goxide 读取声明后使用 `calc::add(1, 2)`。两者结果都是 3；调用时无额外包装成本。
 
 ### PKG-02：外部类型通过本地 wrapper 完整发布
 
-用户包 `example.org/adapters` 中的 hgo 片段。此例 trait 与 impl 同包，原类型来自标准库。`*bytes::Buffer` 仅表示 Go 接收者身份，完整借用权限见 [RFC 0005](0005-borrows.md)：
+用户包 `example.org/adapters` 中的 goxide 片段。此例 trait 与 impl 同包，原类型来自标准库。`*bytes::Buffer` 仅表示 Go 接收者身份，完整借用权限见 [RFC 0005](0005-borrows.md)：
 
-```hgo
+```goxide
 pub trait Sized { len() int }
 declare impl Sized for *bytes::Buffer;
 pub func size(b *bytes::Buffer) int { return b.len::<Sized>() }
@@ -70,11 +70,11 @@ import "bytes"
 
 type Sized interface {
     Len() int
-    HyperGoTraitSized()
+    GoxideTraitSized()
 }
 type bufferSized struct { target *bytes.Buffer }
 func (v bufferSized) Len() int { return v.target.Len() }
-func (v bufferSized) HyperGoTraitSized() {}
+func (v bufferSized) GoxideTraitSized() {}
 func AsSizedForBuffer(b *bytes.Buffer) Sized { return bufferSized{target: b} }
 
 type bufferFacade struct { target *bytes.Buffer }
@@ -109,27 +109,27 @@ var s Sized = b // 错误：原始 *bytes.Buffer 不实现 marker。
 
 | 编号 | 输入 | 预期 |
 | --- | --- | --- |
-| PKG-N1 | `.d.hgo` 声明存在而实际 Go 函数缺失/签名不符 | hgo 导入时诊断 |
+| PKG-N1 | `.d.gox` 声明存在而实际 Go 函数缺失/签名不符 | goxide 导入时诊断 |
 | PKG-N2 | 同一源码和生成文件被当成两份实现 | 加载器拒绝或按明确来源选择，不由目录顺序决定 |
 | PKG-N3 | PKG-03 将原始 bytes.Buffer 直接充当携带 marker 的接口 | Go 编译拒绝；当前输出必须使用 wrapper |
-| PKG-N4 | 将依赖模块的 replace 当成下游主模块自动继承的配置 | 发布验证失败；不归因于 `.d.hgo` 下载 |
+| PKG-N4 | 将依赖模块的 replace 当成下游主模块自动继承的配置 | 发布验证失败；不归因于 `.d.gox` 下载 |
 
 ## 双向互操作
 
-hgo → Go：原生模块仅有 `.go` 也能加载；未声明入口按 [RFC 0006](0006-foreign-api.md) 处理。包自带或显式选定的 `.d.hgo` 恢复可信 hgo 视图。
+goxide → Go：原生模块仅有 `.go` 也能加载；未声明入口按 [RFC 0006](0006-foreign-api.md) 处理。包自带或显式选定的 `.d.gox` 恢复可信 goxide 视图。
 
-Go → hgo：下载发布模块后直接调用生成 `.go` API，如 PKG-01、PKG-02。不要求 Go 理解 trait、借用或宏；生成工厂和 facade 均为普通 Go 代码。源码权限保证与 Go 构建可行性分别验收。
+Go → goxide：下载发布模块后直接调用生成 `.go` API，如 PKG-01、PKG-02。不要求 Go 理解 trait、借用或宏；生成工厂和 facade 均为普通 Go 代码。源码权限保证与 Go 构建可行性分别验收。
 
 ## 验收与未定项
 
-未来须在新主模块中分别运行普通 Go 导入与 hgo 导入，验证 PKG-01、PKG-02、声明缺失/冲突及源码模式。PKG-02 不提供 overlay 或增强标准库，工厂与 facade 应返回相同 wrapper 类型并共享原指针；PKG-03 作为 Go 拒绝的历史反例。当前无 hgo 端到端通过记录。
+未来须在新主模块中分别运行普通 Go 导入与 goxide 导入，验证 PKG-01、PKG-02、声明缺失/冲突及源码模式。PKG-02 不提供 overlay 或增强标准库，工厂与 facade 应返回相同 wrapper 类型并共享原指针；PKG-03 作为 Go 拒绝的历史反例。当前无 goxide 端到端通过记录。
 
 待定：生成文件来源识别、声明格式/指纹、构建条件一致性、公开工厂命名与权限契约。统一 wrapper 的选择已确认，不再将外部 marker 注入视为发布前提。
 
 ### 跨模块引用恢复首片（2026-10-02）
 
-独立模块 local replace 的生成 Go + `.hgo.refs.json` 已能恢复现有引用签名，详见 [RFC 0005 §6.21](0005-borrows.md#621-跨-module-引用产物恢复2026-10-02)。源定位与 build selection 复用离线 Go importer，缺失/陈旧产物不猜测权限；普通 Go 消费无需 metadata。此证据仅覆盖具体引用签名，不代表 trait、宏、enum 等跨模块增强协议全部完成，亦不代表远程 registry 或外部 cgo 输入验证完成。
+独立模块 local replace 的生成 Go + `.goxide.refs.json` 已能恢复现有引用签名，详见 [RFC 0005 §6.21](0005-borrows.md#621-跨-module-引用产物恢复2026-10-02)。源定位与 build selection 复用离线 Go importer，缺失/陈旧产物不猜测权限；普通 Go 消费无需 metadata。此证据仅覆盖具体引用签名，不代表 trait、宏、enum 等跨模块增强协议全部完成，亦不代表远程 registry 或外部 cgo 输入验证完成。
 
 ### 跨模块具体 enum 元数据（2026-10-03）
 
-独立模块 local replace 现可恢复公开具体 enum 的闭合变体与真实类型身份，见 [RFC 0008](0008-enums.md#跨-module-公开具体-enum-恢复2026-10-03)。该产物与 refs 协议分别版本化并复用内容/构建指纹；同 module registry 和原生 Go API 消费不替代外部 hgo 模式验收。通用 Option/Result 家族及跨包 derive 协议未由此片恢复；Go internal 包访问规则仍需尊重，普通 facade API 不因其内部表示不可导入而被拒绝。
+独立模块 local replace 现可恢复公开具体 enum 的闭合变体与真实类型身份，见 [RFC 0008](0008-enums.md#跨-module-公开具体-enum-恢复2026-10-03)。该产物与 refs 协议分别版本化并复用内容/构建指纹；同 module registry 和原生 Go API 消费不替代外部 goxide 模式验收。通用 Option/Result 家族及跨包 derive 协议未由此片恢复；Go internal 包访问规则仍需尊重，普通 facade API 不因其内部表示不可导入而被拒绝。

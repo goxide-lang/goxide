@@ -1,0 +1,12 @@
+=== RUN   TestProjectLocalFeatureUnion
+    project_test.go:136: union:  module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/left v0.0.0: missing ziphash: open hash: no such file or directory
+        example.org/right v0.0.0: missing ziphash: open hash: no such file or directory
+        example.org/shared v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r1 v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r2 v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r3 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectLocalFeatureUnion (0.10s)
+FAIL
+FAIL	github.com/hxsf/goxide/cmd/hgo	0.105s
+FAIL

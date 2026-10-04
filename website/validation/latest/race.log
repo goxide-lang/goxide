@@ -1,0 +1,23 @@
+ok  	github.com/hxsf/goxide/cmd/hgo	256.678s
+ok  	github.com/hxsf/goxide/cmd/hgo-web	1.190s
+ok  	github.com/hxsf/goxide/formatting	(cached)
+?   	github.com/hxsf/goxide/internal/buildconfig	[no test files]
+ok  	github.com/hxsf/goxide/internal/buildscript	(cached)
+ok  	github.com/hxsf/goxide/internal/deriveextras	(cached)
+ok  	github.com/hxsf/goxide/internal/enums	(cached)
+ok  	github.com/hxsf/goxide/internal/equality	(cached)
+ok  	github.com/hxsf/goxide/internal/frontend	(cached)
+ok  	github.com/hxsf/goxide/internal/macros	(cached)
+ok  	github.com/hxsf/goxide/internal/matchexpr	(cached)
+?   	github.com/hxsf/goxide/internal/printing	[no test files]
+ok  	github.com/hxsf/goxide/internal/project	(cached)
+ok  	github.com/hxsf/goxide/internal/propagate	(cached)
+ok  	github.com/hxsf/goxide/internal/refs	(cached)
+ok  	github.com/hxsf/goxide/internal/scripttrust	(cached)
+ok  	github.com/hxsf/goxide/internal/sourcemap	(cached)
+ok  	github.com/hxsf/goxide/internal/typecheck	(cached)
+?   	github.com/hxsf/goxide/runtime	[no test files]
+ok  	github.com/hxsf/goxide/serde	(cached)
+ok  	github.com/hxsf/goxide/serdejson	(cached)
+ok  	github.com/hxsf/goxide/tests/acceptance	306.041s
+ok  	github.com/hxsf/goxide/tests/prototype	(cached)

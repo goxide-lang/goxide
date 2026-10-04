@@ -1,0 +1,60 @@
+--- FAIL: TestBuildScriptDependencyPackagePermissionCLI (0.06s)
+    buildscript_test.go:324: scripts plan: : module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/depscript v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectManagedLayoutEndToEnd (0.04s)
+    layout_test.go:49:  module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/layoutdep v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectLayoutRefusesOutputBypasses (0.12s)
+    layout_test.go:146:  module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/layoutdep v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectLayoutHostBoundaryAndUnknownTarget (0.05s)
+    layout_test.go:172: module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/layoutdep v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectLayoutConfigurationAndGoCaches (0.04s)
+    layout_test.go:197: module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/layoutdep v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectLocalFeatureUnion (0.08s)
+    project_test.go:136: union:  module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/left v0.0.0: missing ziphash: open hash: no such file or directory
+        example.org/right v0.0.0: missing ziphash: open hash: no such file or directory
+        example.org/shared v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r1 v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r2 v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r3 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectGitRevisionLock (0.08s)
+    project_test.go:174:  module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/gitdep v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectNativeBuildListConsistency (0.04s)
+    project_test.go:356: shared plan should align native selections:  module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/dep v0.0.0: missing ziphash: open hash: no such file or directory
+        example.org/native v1.1.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectDependencyAndTargetDiagnostics (0.05s)
+    project_test.go:378: module source verification failed before manifest loading: Go module planning mod: exit status 1: example.org/dep v0.0.0: missing ziphash: open hash: no such file or directory
+        hgo-planner.invalid/requirements/r0 v0.0.0: missing ziphash: open hash: no such file or directory
+--- FAIL: TestProjectConditionalHgoAcrossTargets (0.03s)
+    project_test.go:443: [run --bin one --offline]:  module source verification failed before manifest loading: Go module planning mod: exit status 1: github.com/hxsf/goxide v0.0.0: missing ziphash: open hash: no such file or directory
+FAIL
+FAIL	github.com/hxsf/goxide/cmd/hgo	210.259s
+ok  	github.com/hxsf/goxide/cmd/hgo-web	1.334s
+ok  	github.com/hxsf/goxide/formatting	1.012s
+?   	github.com/hxsf/goxide/internal/buildconfig	[no test files]
+ok  	github.com/hxsf/goxide/internal/buildscript	26.467s
+ok  	github.com/hxsf/goxide/internal/deriveextras	1.219s
+ok  	github.com/hxsf/goxide/internal/enums	6.313s
+ok  	github.com/hxsf/goxide/internal/equality	18.815s
+ok  	github.com/hxsf/goxide/internal/frontend	43.962s
+ok  	github.com/hxsf/goxide/internal/macros	4.231s
+ok  	github.com/hxsf/goxide/internal/matchexpr	2.466s
+?   	github.com/hxsf/goxide/internal/printing	[no test files]
+ok  	github.com/hxsf/goxide/internal/project	1.040s
+ok  	github.com/hxsf/goxide/internal/propagate	5.248s
+ok  	github.com/hxsf/goxide/internal/refs	2.704s
+ok  	github.com/hxsf/goxide/internal/scripttrust	1.022s
+ok  	github.com/hxsf/goxide/internal/sourcemap	1.014s
+ok  	github.com/hxsf/goxide/internal/typecheck	1.263s
+?   	github.com/hxsf/goxide/runtime	[no test files]
+ok  	github.com/hxsf/goxide/serde	1.014s
+ok  	github.com/hxsf/goxide/serdejson	1.020s
+ok  	github.com/hxsf/goxide/tests/acceptance	318.602s
+ok  	github.com/hxsf/goxide/tests/prototype	8.181s
+FAIL

@@ -1,0 +1,37 @@
+# 最新 CLI / 浏览器组合验证
+
+独立分支 `integrate/latest-web-features-inference` 从共同基线 `f097b1951dde4f8653a0629a7da8a0bb5646ec79` 开始，按来源 cherry-pick（保留 -x）：
+
+| 原提交 | 整合提交 | 内容 |
+| --- | --- | --- |
+| 25e3fa6 | 4b1c029 | version 源码规划设计 |
+| 2081933 | 16098cc | version / features 联合 Go 规划 |
+| bf365b9 | 861d763 | Result 静态 T/E 推导设计 |
+| 59d6245 | 44635d7 | 推导实现与原始 E 的 nil 语义 |
+| 0517111 | 0996213 | 11 文件静态托管准备与资产审计 |
+
+网站更新在 3b3b053，审查建议和快照展示检查在 1470e58。生产编译器没有额外修改；基线中的 targets、受授权 build scripts、use/pub use 与源码图宏聚合保留。没有改动源分支、main、冻结标签或创建 release。
+
+网站保持五个真实单文件可编辑示例，推导宏包括保值版本。CLI-only 段落解释已经实现的依赖、feature、target、host scripts 及其边界。构建时实际转译并运行 `examples/reexports`，其 hgo 文件、生成 Go 和 stdout 进入同一清单；不是浏览器多包执行。原生实现和 go.mod 在仓库示例中。输出为 `shared 2 2 true` 和 `42 2 7`。
+
+新增 `TestVersionFeaturesScriptTargetIntegration` 使用本地 Go 版本代理和既有授权机制，在同一 fixture 验证下载版本源码 → root feature 传入脚本 → 改变生成常量 → target 路径隔离与 A/B/A 稳定；升级相同字节脚本仍需新许可，撤销后缓存不执行。独立模块 Result 测试同时验证 keep 的部分值与原错误身份、? 和 match。
+
+## 发布边界
+
+仅准备本地静态资产和自托管二进制；未发布网站。不得把本地 loopback URL 描述为互联网可访问私有 Site。浏览器仅单文件和随附 export data，不运行 Go、不运行构建脚本、不上传代码。host scripts 是需授权的非沙箱本机程序；offline 不限制脚本网络。WASM 包含可逆向的实现和 export data，审计不是源码保密保证。
+
+未访问权限未就绪的公共网站仓库，未再次调用失败的 Library 上传路径。公开发布仍等待用户授权和正常连接权限。
+
+## 验证环境与首次失败
+
+Go 1.27.1 / Linux amd64，Chromium + Playwright 1.58.2。受限环境必须设置可写的 `GOCACHE` **及** `GOMODCACHE`。首次全树 race 中十个 path/git CLI 测试因默认 `/home/agent/go/pkg/mod` 不存在且无法创建而失败，Go mod verify 报 `missing ziphash: open hash`。独立 A/B 只改 GOMODCACHE，`TestProjectLocalFeatureUnion` 从失败变为通过（日志见 validation/latest/cache-*）。没有通过放宽源码校验绕过失败，没有更改生产编译器；后续全树使用 `/workspace/goxide-environment/modcache` 重跑。
+
+## 完成检查
+
+- 完整合成树 `go test -race -tags hgoweb ./...` 通过（CLI 包 256.678 秒；全部 acceptance 通过），`go vet -tags hgoweb ./...` 与 `scripts/check_design.py` 通过。日志保存于 `validation/latest/`；后续报告提交仅改文档与证据。
+- 真实 Chromium 对单二进制、根静态路径和 `/goxide/` 子路径分别通过完整 QA：五例 CLI/WASM 逐字一致，八项推导/诊断差分，编辑、错误恢复、快速编辑、复制、32 KiB、未知 import、XSS、键盘、390px、中断、重置与无外部请求。超时是 QA 拦截 worker 的确定性宿主 watchdog 测试，不声称任意恶意源码内存受硬限额约束。
+- 新增快照与 manifest 的 source/generated/stdout 文本一致性通过；CLI 只读示例不进入浏览器选择列表。390px 展开工程源码，Enter 键操作原生 details，无整页横向溢出。一次临时 QA 等待折叠内容 visible 超时，改为等待 attached 后展开即通过；产品无需修改。
+- 本地 root / project-path 资源路由、WASM MIME、真实 404、模拟 CF 响应头通过。静态目录和 embed 11 文件一致；allowlist、25 MiB/单文件、已知绝对路径/secret 模式及 WASM debug/name 段审计通过。WASM 为 15,613,939 字节。
+- 独立审查再次运行 CLI reexports 并逐字对照，确认真实输出、textContent 和发布目录范围；非阻断的源码快照范围建议已修正文案。
+
+最终干净报告提交后重新构建资源和三个自托管平台包；清单写入最终 HEAD。交付目录的 audit.json、SHA256SUMS 与 standalone.json 记录最终文件身份和空目录/无工具链 PATH 验证。仅 Linux amd64 实机运行；macOS arm64、Windows amd64 只交叉构建，未签名、未宣称本机运行验收。

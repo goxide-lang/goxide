@@ -2,7 +2,7 @@
 
 中文优先的静态语言介绍网站，以及真实单文件 hgo → Go 浏览器转译器。网站源、五个 `.hgo` 示例、WASM 适配与编译器在同一仓库。最终交付 `hgo-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
-本轮组合来源、联合全树验证与独立审查见 [集成交付记录](INTEGRATION.md)。
+本轮组合来源、联合全树验证与独立审查见 [最新组合验证](LATEST-INTEGRATION.md)（[早期交付记录](INTEGRATION.md)为历史证据）。
 
 ## 构建与运行
 
@@ -24,6 +24,7 @@ python3 website/build.py
 ```sh
 export GO_BIN=/workspace/goxide-environment/go/bin/go
 export GOCACHE=/workspace/goxide-environment/cache
+export GOMODCACHE=/workspace/goxide-environment/modcache
 ```
 
 显式传入 `-listen 0.0.0.0:8080` 才会监听所有 IPv4 接口。本服务器没有登录机制；需要私有远程访问时，应自行配置具有身份验证和 HTTPS 的反向代理。默认仅本机。Ctrl+C / SIGTERM 在最多 5 秒内优雅关闭。

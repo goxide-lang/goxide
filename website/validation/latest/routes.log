@@ -1,0 +1,2 @@
+{"base":"http://127.0.0.1:8084/","rootRedirect":true,"resources":true,"real404":true,"cloudflareHeadersSimulated":true}
+{"base":"http://127.0.0.1:8085/goxide/","rootRedirect":true,"resources":true,"real404":true,"cloudflareHeadersSimulated":false}

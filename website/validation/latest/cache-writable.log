@@ -1,0 +1,4 @@
+=== RUN   TestProjectLocalFeatureUnion
+--- PASS: TestProjectLocalFeatureUnion (1.41s)
+PASS
+ok  	github.com/hxsf/goxide/cmd/hgo	1.420s

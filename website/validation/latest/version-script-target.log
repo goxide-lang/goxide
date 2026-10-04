@@ -1,0 +1,8 @@
+=== RUN   TestVersionFeaturesScriptTargetIntegration
+--- PASS: TestVersionFeaturesScriptTargetIntegration (5.70s)
+=== RUN   TestVersionSourceTargetABAAndGeneratedGo
+--- PASS: TestVersionSourceTargetABAAndGeneratedGo (9.23s)
+=== RUN   TestVersionSourceScriptPermissionTracksSelectedVersion
+--- PASS: TestVersionSourceScriptPermissionTracksSelectedVersion (3.19s)
+PASS
+ok  	github.com/hxsf/goxide/cmd/hgo	18.117s

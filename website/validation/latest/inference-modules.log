@@ -1,0 +1,27 @@
+=== RUN   TestGoResultInferenceModules
+    go_result_inference_test.go:148: go [build -o /tmp/TestGoResultInferenceModules108896013/001/hgo ./cmd/hgo]:
+    go_result_inference_test.go:176: hgo [transpile -o /tmp/TestGoResultInferenceModules108896013/003/producer /tmp/TestGoResultInferenceModules108896013/002]:
+    go_result_inference_test.go:214: hgo [transpile -o /tmp/TestGoResultInferenceModules108896013/005/consumer /tmp/TestGoResultInferenceModules108896013/004]:
+    go_result_inference_test.go:220: go [test -race -count=1 ./...]:
+        ?   	inferred.example/producer	[no test files]
+        ?   	inferred.example/producer/other	[no test files]
+    go_result_inference_test.go:221: go [vet ./...]:
+    go_result_inference_test.go:222: go [test -race -count=1 -v ./...]:
+        === RUN   TestIdentity
+        --- PASS: TestIdentity (0.00s)
+        === RUN   TestForeignPayload
+        --- PASS: TestForeignPayload (0.00s)
+        PASS
+        ok  	inferred.example/consumer	1.009s
+    go_result_inference_test.go:223: go [vet ./...]:
+=== RUN   TestGoResultInferenceModules/T
+    go_result_inference_test.go:229: hgo [transpile -o /tmp/TestGoResultInferenceModulesT3190617768/002/negative /tmp/TestGoResultInferenceModulesT3190617768/001]:
+        package Go result inference [generated/unmapped; intermediate coordinates]: /tmp/TestGoResultInferenceModulesT3190617768/001/bad.hgo:5:18: Go result macro: T must be nameable at package scope for the current concrete Result instance registry
+=== RUN   TestGoResultInferenceModules/E
+    go_result_inference_test.go:229: hgo [transpile -o /tmp/TestGoResultInferenceModulesE2884404920/002/negative /tmp/TestGoResultInferenceModulesE2884404920/001]:
+        package Go result inference [generated/unmapped; intermediate coordinates]: /tmp/TestGoResultInferenceModulesE2884404920/001/bad.hgo:5:18: Go result macro: E must be nameable at package scope for the current concrete Result instance registry
+--- PASS: TestGoResultInferenceModules (2.20s)
+    --- PASS: TestGoResultInferenceModules/T (0.03s)
+    --- PASS: TestGoResultInferenceModules/E (0.03s)
+PASS
+ok  	github.com/hxsf/goxide/tests/acceptance	2.198s

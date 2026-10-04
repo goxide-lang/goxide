@@ -101,6 +101,8 @@ with tempfile.TemporaryDirectory(prefix='hgo-catalog-features-') as temporary:
     files.extend(dict(path=f'target 生成 Go {i+1}（只读）', source=go) for i,go in enumerate(generated))
     feature_example = dict(id='features', title='feature 与 bin：完整最小工程', files=files, runs=feature_runs)
 migration_example = project_snapshots.migration(ROOT, GO, run)
+vendor_example = project_snapshots.vendor(ROOT, GO, run)
+cli_options_example = project_snapshots.cli(ROOT, GO, run)
 public_catalog = catalog.export(catalog_data, checks)
 eh = hashlib.sha256()
 for archive in sorted(exports.glob('*.a')):
@@ -118,7 +120,7 @@ metadata_schema = int(re.search(r'const enumMetadataVersion = (\d+)', (ROOT/'int
 assert metadata_schema == 7
 manifest = dict(metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 importClosure=sorted(closure), maxSourceBytes=32768, compileTimeoutMs=10000,
-                examples=examples, cliExamples=[cli_example], projectExamples=[feature_example,migration_example])
+                examples=examples, cliExamples=[cli_example], projectExamples=[feature_example,migration_example,vendor_example,cli_options_example])
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')
 subprocess.run([GO, 'build', *wasm_flags, '-o', str(dist/'compiler.wasm'), './cmd/hgo-playground'], env=wasm_env, check=True)
 manifest['wasmSha256'] = hashlib.sha256((dist/'compiler.wasm').read_bytes()).hexdigest()

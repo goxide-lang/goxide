@@ -90,11 +90,11 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 
 ## RFC 特性目录（公开摘要）
 
-`catalog-source.json` 是人工审阅、可机器检查的状态源；`catalog.py` 校验 0001–0025 覆盖、状态/入口约束和固定提交的证据引用，并生成私有 [FEATURES.md](FEATURES.md) 索引。公开 `examples.json.catalog` 仅导出用途、边界、示例、状态与开发快照，不导出私有证据路径或 RFC 全文。
+`catalog-source.json` 是人工审阅、可机器检查的状态源；`catalog.py` 校验 0001–0026 覆盖、状态/入口约束和固定提交的证据引用，并生成私有 [FEATURES.md](FEATURES.md) 索引。公开 `examples.json.catalog` 仅导出用途、边界、示例、状态与开发快照，不导出私有证据路径或 RFC 全文。
 
 状态针对卡片的限定范围：提案 / 已确认待实现 / 部分实现 / 已实现并验证。开发快照与当前编译器支持分别记录；任务报告不等于可发布实现。RFC 0024 仍是提案。当前 Playground 已包含共享 std/serde、明确上下文下的普通 sum 推导及限定可读性改进；统一 TOML/锁与 import-go 只在 CLI 工程快照说明。
 
-编译器 `commit` 固定为 69c1ab0d6769facd266886deec90337fe4b52498，`websiteCommit` 记录网站源码提交；构建计算真实编译器源摘要并与该基线逐文件核对，不允许文案偷偷升级编译器。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
+编译器 `commit` 固定为 09f1eb258fc98217e5d03506f34957c9ee9aec4f，`websiteCommit` 记录网站源码提交；构建计算真实编译器源摘要并与该基线逐文件核对，不允许文案偷偷升级编译器。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
 
 ```sh
 python3 website/catalog.py
@@ -114,3 +114,7 @@ RFC 管理建议：当前规范仍跟随编译器仓库和版本，Issue 用于�
 CLI snapshot 构建实际运行 format 2 feature 工程 A/B/A、根无 go.mod/go.sum、target 生成 metadata/Go；另对普通 Go 输入执行只读 plan、独立新目录迁入、原文件摘要不变和首次 offline+locked run。只发布刻意示例及实际生成文本，不复制临时路径或执行服务。
 
 完整编译器验收沿用 [统一项目验收](../docs/reviews/unified-project-20261004.md)：首轮 cold-cache 有 8 包因公开依赖未预热失败，预热后八包重跑通过，其他包在首轮通过；这是跨两轮的全包 race 覆盖。本网站任务另外运行定向 CLI race、真实十例 CLI/浏览器联合验证和独立审查，不声称在这里重跑一次全树全绿。
+
+## Cobra CLI 与原生 vendor 同步
+
+本轮基线09f1eb2；上述69c1ab0记录属于历史验证。新增严格长短选项、真实参数透传/旧旗标拒绝快照，以及空 module cache 下原生 vendor 离线迁入、locked运行和字节篡改拒绝快照。plan新增说明注释，按TOML解析结果比较目标配置，保留真实stdout。RFC0026整体仍为提案，仅显式继承约束确认；workspace未实现。RFC0024仍未实现。

@@ -1,0 +1,21 @@
+ok  	github.com/hxsf/goxide/cmd/hgo	388.319s
+ok  	github.com/hxsf/goxide/formatting	1.012s
+?   	github.com/hxsf/goxide/internal/buildconfig	[no test files]
+ok  	github.com/hxsf/goxide/internal/buildscript	26.814s
+ok  	github.com/hxsf/goxide/internal/deriveextras	1.373s
+ok  	github.com/hxsf/goxide/internal/enums	6.502s
+ok  	github.com/hxsf/goxide/internal/equality	18.336s
+ok  	github.com/hxsf/goxide/internal/frontend	50.229s
+ok  	github.com/hxsf/goxide/internal/macros	3.800s
+ok  	github.com/hxsf/goxide/internal/matchexpr	2.319s
+?   	github.com/hxsf/goxide/internal/printing	[no test files]
+ok  	github.com/hxsf/goxide/internal/project	1.098s
+ok  	github.com/hxsf/goxide/internal/propagate	5.655s
+ok  	github.com/hxsf/goxide/internal/refs	2.683s
+ok  	github.com/hxsf/goxide/internal/scripttrust	1.011s
+ok  	github.com/hxsf/goxide/internal/sourcemap	1.010s
+?   	github.com/hxsf/goxide/internal/testdeps	[no test files]
+ok  	github.com/hxsf/goxide/internal/typecheck	1.367s
+?   	github.com/hxsf/goxide/runtime	[no test files]
+ok  	github.com/hxsf/goxide/tests/acceptance	337.111s
+ok  	github.com/hxsf/goxide/tests/prototype	7.348s

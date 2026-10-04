@@ -192,13 +192,13 @@ func ManagedSourceDirectory(path, sourceRoot, module string) (bool, error) {
 		return false, e
 	}
 	expected := layoutOwner{1, sourceRoot, module, path}
-	if owner.Module == "workspace" {
+	if owner.Module == WorkspaceOwner {
 		w, e := DiscoverWorkspace(sourceRoot)
 		if e != nil {
 			return false, e
 		}
 		if w != nil && w.Members[module] == sourceRoot {
-			expected = layoutOwner{1, w.Root, "workspace", path}
+			expected = layoutOwner{1, w.Root, WorkspaceOwner, path}
 		}
 	}
 	if owner != expected {

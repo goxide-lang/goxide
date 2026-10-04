@@ -56,7 +56,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 			return nil, fmt.Errorf("workspace target overlaps member source: %s", dir)
 		}
 	}
-	layout, e := OpenLayout(w.Root, "workspace", targetDir)
+	layout, e := OpenLayout(w.Root, WorkspaceOwner, targetDir)
 	if e != nil {
 		return nil, e
 	}
@@ -66,7 +66,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 		return nil, e
 	}
 	defer os.RemoveAll(work)
-	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(w.Root, ".hgo", "git"), LockPath: filepath.Join(w.Root, "goxide.lock"), Lock: Lock{Version: 3, Git: map[string]string{}, Sums: map[string]string{}}, workspace: w, ownerRoot: w.Root, ownerModule: "workspace", overrides: w.Manifests}
+	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(w.Root, ".hgo", "git"), LockPath: filepath.Join(w.Root, "goxide.lock"), Lock: Lock{Version: 3, Git: map[string]string{}, Sums: map[string]string{}}, workspace: w, ownerRoot: w.Root, ownerModule: WorkspaceOwner, overrides: w.Manifests}
 	b, e := os.ReadFile(g.LockPath)
 	if e == nil {
 		if e = json.Unmarshal(b, &g.Lock); e != nil {

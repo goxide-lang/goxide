@@ -228,7 +228,7 @@ func executeScripts(req ScriptsRequest, out, stderr io.Writer) error {
 	if w, err := project.DiscoverWorkspace(root); err != nil {
 		return err
 	} else if w != nil {
-		ownerRoot, ownerModule = w.Root, "workspace"
+		ownerRoot, ownerModule = w.Root, project.WorkspaceOwner
 	}
 	layoutPath, e := project.ResolveTargetDir(ownerRoot, req.TargetDir)
 	if e != nil {

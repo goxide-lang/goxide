@@ -31,7 +31,9 @@
 
 独立 `/root/review` 对抗 review 先发现并复核修复：复制锁误读旧 replace、根包 output 归属、严格键/类型、直接低版本缓存、legacy synthetic `.mod`、缺 Git pin，以及一度用于预选版的未认证 `native_requires` 索引。最后一项已从 schema 删除，改为读取 Go 校验后的真实 `.mod`；独立 race 红测全部转绿，核心测试已持久化。独立 reviewer 没有修改生产代码。
 
-全量 race/vet 与设计检查的最终结果在本分支提交前记录；原生 Go 研究的 19 项实验另见 [历史研究](workspace-rfc-20261004.md)，不混作 hgo workspace 端到端覆盖。
+全量 `go test -race ./... -count=1` 全部通过（CLI 388.319s、acceptance 337.111s；[完整结果](evidence/workspace-core-race-20261004.txt)）。首次离线全量运行因既有公开 CLI 依赖的传递缓存不完整失败，按现有 go.mod 从官方 proxy 执行 `go mod download all` 后重跑通过；没有修改依赖版本或使用未知源。最终 Git pin/CLI 增量 race 也通过（CLI 39.976s、project 1.028s）；workspace 成员共享 lease 的独立 race 通过。owner 使用不能与合法 Go module 重名的 `<workspace>`，并有普通 module 名 `workspace` 的碰撞回归。
+
+`go vet ./...` 通过；设计检查通过：100 Markdown、1030 本地链接/锚点、25 RFC 结构、13 条真实 Go 命令（含预期失败）。原生 Go 研究的 19 项实验另见 [历史研究](workspace-rfc-20261004.md)，不混作 hgo workspace 端到端覆盖。所有最终生产增量的 CLI/workspace/layout/scripts race 子集通过（CLI 244.395s、project 1.041s），覆盖最终 owner 标识变更。
 
 ## 明确限制
 

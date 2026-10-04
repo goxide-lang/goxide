@@ -149,3 +149,16 @@ func TestWorkspaceMembersShareLease(t *testing.T) {
 	}
 	other()
 }
+
+func TestWorkspaceOwnerCannotCollideWithModule(t *testing.T) {
+	root := t.TempDir()
+	layout, e := OpenLayout(root, "workspace", "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	layout.Close()
+	if other, e := OpenLayout(root, WorkspaceOwner, ""); e == nil {
+		other.Close()
+		t.Fatal("workspace reused standalone module owner")
+	}
+}

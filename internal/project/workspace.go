@@ -11,6 +11,9 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+// WorkspaceOwner cannot collide with a legal Go module identity.
+const WorkspaceOwner = "<workspace>"
+
 // Workspace is an authoring boundary. Membership never supplies a dependency.
 type Workspace struct {
 	Root      string

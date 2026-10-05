@@ -128,3 +128,5 @@ Goxide 没有 vendor 构建模式。原生 Go 的 vendor 只是 `import-go` 的�
 输出不依赖原 vendor/原 replace 目录或临时 staging 路径。新增未供应的包必须失败，即使网络可用也不能静默切回远端；用户须显式提供新的本地源码并审阅依赖声明。原工程始终不变。
 
 具体物化、白黑例和验收见 [供应源码迁入设计](../design/vendor-local-modules.md)。
+
+来源选择的精确参数、交互/非交互确认、离线与正反例见[执行合同](../design/vendor-local-modules.md#来源选择执行合同2026-10-05)。

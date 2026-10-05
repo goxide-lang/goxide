@@ -15,14 +15,16 @@ import (
 // SuppliedModules is an import-time audit, never a build or lock policy.
 // Its native modules contain a pruned snapshot, not a complete upstream release.
 type SuppliedModules struct {
-	MainModules        []string                `json:"main_modules"`
-	Snapshot           *VendorSnapshot         `json:"input"`
-	Selected           map[string]VendorModule `json:"selected_modules"`
-	Paths              map[string]string       `json:"local_modules"`
-	Outputs            map[string][]string     `json:"files"`
-	Metadata           map[string]string       `json:"generated_metadata"`
-	PolicyFiles        map[string]string       `json:"original_metadata"`
-	UpstreamDifference string                  `json:"upstream_difference"`
+	Direct             map[string]bool           `json:"direct_requirements,omitempty"`
+	Sources            map[string]SuppliedSource `json:"source_choices,omitempty"`
+	MainModules        []string                  `json:"main_modules"`
+	Snapshot           *VendorSnapshot           `json:"input"`
+	Selected           map[string]VendorModule   `json:"selected_modules"`
+	Paths              map[string]string         `json:"local_modules"`
+	Outputs            map[string][]string       `json:"files"`
+	Metadata           map[string]string         `json:"generated_metadata"`
+	PolicyFiles        map[string]string         `json:"original_metadata"`
+	UpstreamDifference string                    `json:"upstream_difference"`
 }
 
 func InspectWorkVendor(root, version string, policy any) (*VendorSnapshot, error) {
@@ -41,7 +43,17 @@ func MaterializeSupplied(tool, root, destination, goVersion string, snapshot *Ve
 			return nil, e
 		}
 	}
+	a.Direct = map[string]bool{}
 	for _, module := range Keys(members) {
+		policy, e := ReadMod(tool, members[module])
+		if e != nil {
+			return nil, e
+		}
+		for _, r := range policy.Require {
+			if !r.Indirect {
+				a.Direct[r.Path] = true
+			}
+		}
 		for _, name := range []string{"go.mod", "go.sum"} {
 			b, e := os.ReadFile(filepath.Join(members[module], name))
 			if e == nil {
@@ -332,6 +344,10 @@ func BindSupplied(m *Manifest, a *SuppliedModules, relativeRoot string) {
 		}
 	}
 	for _, module := range Keys(a.Paths) {
+		if choice, ok := a.Sources[module]; ok && choice.Source == "remote" {
+			m.Native.Replace = append(m.Native.Replace, GoReplace{Module: module, With: choice.Module, WithVersion: choice.Version})
+			continue
+		}
 		m.Native.Replace = append(m.Native.Replace, GoReplace{Module: module, Path: filepath.ToSlash(filepath.Join(relativeRoot, a.Paths[module]))})
 		r := &m.Native.Replace[len(m.Native.Replace)-1]
 		if !strings.HasPrefix(r.Path, ".") {
@@ -358,7 +374,11 @@ func SuppliedSourceChoices(a *SuppliedModules, offline bool) []string {
 		if version == "" {
 			remote = "unconfirmed (original replacement is local)"
 		}
-		lines = append(lines, fmt.Sprintf("# source %s: local=%s (default, supplied bytes); remote module=%s version=%s status=%s", module, a.Paths[module], remote, version, status))
+		role := "indirect"
+		if a.Direct[module] {
+			role = "direct"
+		}
+		lines = append(lines, fmt.Sprintf("# source %s: role=%s; local=%s (default, supplied bytes); remote module=%s version=%s status=%s", module, role, a.Paths[module], remote, version, status))
 	}
 	return lines
 }

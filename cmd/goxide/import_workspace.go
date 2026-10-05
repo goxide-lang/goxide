@@ -233,6 +233,14 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 			return e
 		}
 	}
+	if e = chooseImportSources(req, root, supplied, stderr); e != nil {
+		return e
+	}
+	if supplied != nil && !req.Plan {
+		if e = project.WriteSuppliedAudit(stage, supplied); e != nil {
+			return e
+		}
+	}
 	for _, module := range project.Keys(manifests) {
 		rel := destMembers[module]
 		c.Members = append(c.Members, rel)

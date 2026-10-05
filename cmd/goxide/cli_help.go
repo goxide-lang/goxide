@@ -39,7 +39,7 @@ func configureCLIHelp(root *cobra.Command) {
 		},
 		"goxide import-go": {
 			"查看 Go 模块迁移计划或迁移到新目录",
-			"显式选择库或可执行目标。未指定 --out 时只展示计划；迁移在新目录验证成功后发布，不覆盖原工程。\n重复 --bin 可选择多个可执行目标。原生 vendor 校验后物化为普通本地模块，保留供应字节。--offline 关闭远端探测与下载，仅使用本地文件/缓存；远端候选标记未联网核验。",
+			"显式选择库或可执行目标。未指定 --out 时只展示计划；迁移在新目录验证成功后发布，不覆盖原工程。\n重复 --bin 可选择多个可执行目标。原生 vendor 校验后物化为普通本地模块，保留供应字节。--offline 关闭远端探测与下载，仅使用本地文件/缓存；无参数 TTY 一次选择，非 TTY 默认 local。--source MODULE=remote 只接受清单证实的精确版本；差异须逐模块确认或显式 --accept-source-diff MODULE。缓存不足的离线 remote 选择失败。",
 			"  goxide import-go --plan --lib . ./source\n  goxide import-go --out ./migrated --offline --bin app=cmd/app ./source",
 		},
 		"goxide scripts": {

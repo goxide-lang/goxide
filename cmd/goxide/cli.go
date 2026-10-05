@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/hxsf/goxide/internal/naming"
+	"golang.org/x/term"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -114,12 +116,16 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 	f.StringVar(&req.GoTool, "go", "go", "Go compiler executable")
 	f.BoolVar(&req.Offline, "offline", false, "disable remote probing/downloads; use local files and cached modules only")
 	f.StringVar(&req.Lib, "lib", "", "explicit library directory/file")
+	f.StringArrayVar(&req.Sources, "source", nil, "supplied MODULE=local|remote; repeatable, disables automatic selection")
+	f.StringArrayVar(&req.AcceptSourceDiff, "accept-source-diff", nil, "confirm differences for an explicitly remote MODULE")
 	f.StringArrayVar(&req.Bins, "bin", nil, "explicit name=path binary; repeatable, commas preserved")
 	imp.RunE = func(c *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return usageError(c, fmt.Errorf("exactly one ROOT is required; put flags before the input"))
 		}
 		req.Root = args[0]
+		req.Input = os.Stdin
+		req.Interactive = term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
 		return executeImportGo(req, out, stderr)
 	}
 	root.AddCommand(imp)
@@ -269,6 +275,7 @@ var oldLongOptions = map[string]bool{
 	"expanded": true, "runtime": true, "tags": true, "no-default-features": true,
 	"bin": true, "example": true, "lib": true, "target-dir": true, "locked": true,
 	"action": true, "subject": true, "plan": true, "out": true, "help": true,
+	"source": true, "accept-source-diff": true,
 	"package": true, "workspace": true, "member-bin": true, "member-lib": true,
 }
 

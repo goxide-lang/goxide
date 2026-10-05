@@ -94,6 +94,11 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 		if e != nil {
 			return e
 		}
+	}
+	if e = chooseImportSources(req, root, supplied, stderr); e != nil {
+		return e
+	}
+	if supplied != nil {
 		project.BindSupplied(&m, supplied, ".")
 	}
 	data, e := project.Marshal(m)
@@ -204,6 +209,11 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 	}
 	if vendor != nil {
 		if _, e = project.MaterializeSupplied(req.GoTool, root, stage, m.GoVersion, vendor, map[string]string{m.Module: root}); e != nil {
+			return e
+		}
+	}
+	if supplied != nil {
+		if e = project.WriteSuppliedAudit(stage, supplied); e != nil {
 			return e
 		}
 	}

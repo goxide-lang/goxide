@@ -1,8 +1,13 @@
 package main
 
+import "io"
+
 // ImportRequest describes an import without exposing the parser implementation.
 // Bins preserves repeated name=path values without comma splitting.
 type ImportRequest struct {
+	Sources, AcceptSourceDiff    []string
+	Input                        io.Reader
+	Interactive                  bool
 	Root, Out, GoTool, Lib       string
 	Plan, Offline, Workspace     bool
 	Bins, MemberBins, MemberLibs []string

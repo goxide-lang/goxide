@@ -144,3 +144,8 @@ CRLF、已有自由名和 budget 拒绝回归；诊断指向触发规则的 sele
 宏错误保留结构化 token/span、坐标阶段和展开栈；`?` 前处理后的本文件 token
 通过 prepared map 回溯，包定义的原始坐标不重复映射。定义/调用框端点来自各自
 原始 token，不要求包含 `?` 改写的整个框保持等长。
+
+单文件前端的定义点 import 解析也须复用前端 importer：原生使用既有离线导出数据，
+WASM 使用已随附的真实 export archives。单文件无 package registry 不代表可以忽略
+调用方传入的 importer。验收合法 `fmt.Println` 模板和其后错误 selector 在 CLI/WASM
+一致；不增加浏览器包集合、文件系统、网络或外部宏包能力。

@@ -2,6 +2,7 @@ package macros
 
 import (
 	"fmt"
+	"go/types"
 	"strings"
 	"testing"
 )
@@ -49,5 +50,19 @@ func TestPackageHygieneDiagnosticDefinitionFile(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("want %q in %v", want, err)
 		}
+	}
+}
+
+type diagnosticImporter struct{ called bool }
+
+func (i *diagnosticImporter) Import(path string) (*types.Package, error) {
+	i.called = true
+	return nil, fmt.Errorf("injected importer refused %s", path)
+}
+func TestSingleFileMacroImporter(t *testing.T) {
+	imp := &diagnosticImporter{}
+	_, err := ExpandPackage("single.gox", []byte("package p\nimport \"fmt\"\nmacro_rules! show {()=>{fmt.Println(1)};}\nfunc Run(){show!()}\n"), nil, nil, imp)
+	if !imp.called || err == nil || !strings.Contains(err.Error(), "injected importer refused fmt") {
+		t.Fatalf("single-file importer ignored: %v", err)
 	}
 }

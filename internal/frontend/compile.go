@@ -179,7 +179,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if cfg != nil && cfg.macros != nil {
 		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, cfg.macros, cfg.macroImporter)
 	} else {
-		expanded, err = macros.ExpandWithIntrinsics(filename, prepared, []string{"__goxide_question"})
+		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, nil, typecheck.NewImporter(filename))
 	}
 	if err != nil {
 		var diagnostic *macros.Diagnostic

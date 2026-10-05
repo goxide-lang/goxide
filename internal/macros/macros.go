@@ -137,6 +137,9 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 			}
 		}
 	}
+	if imp != nil {
+		e.importer = imp
+	}
 	if pkg != nil {
 		e.pkg = pkg
 		e.active = pkg.scopes[filename]
@@ -146,9 +149,6 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 		e.prefix = fmt.Sprintf("%sF%dN", pkg.prefix, e.active.index)
 		e.defs = pkg.defs
 		e.funcs = pkg.funcs
-		if imp != nil {
-			e.importer = imp
-		}
 		e.callerImports = map[string]string{}
 		e.addedImports = map[string]string{}
 		e.usedMacroImports = map[string]bool{}

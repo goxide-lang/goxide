@@ -1,0 +1,4 @@
+package p
+import "fmt"
+macro_rules! bad {($v:expr)=>{_=$v?;_=fmt.Println};}
+func Run(){bad!(1)}

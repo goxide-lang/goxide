@@ -1,0 +1,66 @@
+package p
+enum First {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ A,
+}
+#[derive(Error)]
+enum E { A, }
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int
+var Z int

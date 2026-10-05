@@ -172,3 +172,19 @@ Default 仅在实例身份确认是已登记 Option 后返回 canonical None；�
 `tests/acceptance/sum_clone_debug_test.go` 提供真实单文件生成模块与独立 producer/consumer/Go-consumer 三模块 race/vet，覆盖深 clone、嵌套 sum、活跃分支、None/Some(nil)/Some(empty)、Err nil/空 map、跨文件/多级/native-only alias、反序 alias 参数、外部具体 Item 载荷、私有载荷 Option Default、不同实例拒绝、new defined/缺载荷协议/Result Default 反例，以及错误 artifact 定位消费 import、重复生成一致。跨文件收集保留必要 validator/constructor 函数签名；基本类型与容器优先按结构拼写，避免无关 slice alias 污染协议选择。独立审查对上述两问题修复后分别执行真实生成模块 race/vet。
 
 边界：Clone/Debug 仍要求载荷的已有协议和可访问类型表达，未新增 pointer/interface 自动协议、手写 Clone/Debug、完整 trait 或递归对象图系统。blank/embedded 字段、公开 enum 入口契约不变。本片完成后先交回；命名返回 match 与动态已知类型函数参数 match 是下一独立工程片，未在此实施。
+
+## 已有具体派生拒绝的原始位置（2026-10-05，实施合同）
+
+对应 MVP 台账 A03。属性解析、生成 helper 冲突及其他已有行级派生诊断，在前置宏
+展开改变行数之后仍须通过已保存的 source map 回到原始文件。原本只能给出行级
+上下文的错误定位该行首个实际 token，不伪称已准确定位属性内部子表达式。已有
+字段类型精确诊断继续保留；没有可证明来源的生成节点保持 generated/unmapped。
+
+验收包括前置多行宏、两个重复类型/字段拼写、CRLF、目录编译不同文件、未知或
+重复 derive/属性及 helper 冲突，断言结构化 origin 和显示行列。此片不新增手写
+Clone/Debug/serde、typed Error source、blank/embedded 字段协议或泛型规则；合法
+具体派生的生成与执行需继续回归。
+
+enum 元数据坐标属于 enum lowering 之前，必须使用该阶段保存的 map 和 offset；
+不得将其行号当作 refs/属性阶段行号。前一个 enum 的空行与降低行数不同、后面
+存在同名声明的负例必须定位到实际 enum，不能误指随后声明。

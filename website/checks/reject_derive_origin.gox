@@ -1,0 +1,9 @@
+package p
+macro_rules! noise {()=>{
+_=1
+_=2
+_=3
+};}
+func Run(){noise!();noise!()}
+#[derive(Unknown)]
+type Item struct{N int}

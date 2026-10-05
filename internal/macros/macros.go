@@ -302,8 +302,22 @@ func (e *engine) readDefinitions(ts []tok, tail string) ([]tok, string, error) {
 	}
 	return clean, tail, nil
 }
+
+// Diagnostic retains the coordinate space of a rejected token. The frontend
+// maps prepared caller tokens while leaving package definition tokens intact.
+type Diagnostic struct {
+	Message  string
+	Position token.Position
+	End      int
+	Original bool
+	Stack    []sourcemap.Expansion
+}
+
+func (d *Diagnostic) Error() string {
+	return fmt.Sprintf("%s:%d:%d: macro: %s", d.Position.Filename, d.Position.Line, d.Position.Column, d.Message)
+}
 func at(t tok, s string) error {
-	return fmt.Errorf("%s:%d:%d: macro: %s", t.pos.Filename, t.pos.Line, t.pos.Column, s)
+	return &Diagnostic{Message: s, Position: t.pos, End: t.sourceEnd, Original: t.original, Stack: append([]sourcemap.Expansion{}, t.stack...)}
 }
 func ident(s string) bool { return token.IsIdentifier(s) }
 func lex(file string, source []byte) ([]tok, string, error) {

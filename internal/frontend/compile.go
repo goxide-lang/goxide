@@ -182,6 +182,37 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		expanded, err = macros.ExpandWithIntrinsics(filename, prepared, []string{"__goxide_question"})
 	}
 	if err != nil {
+		var diagnostic *macros.Diagnostic
+		if errors.As(err, &diagnostic) {
+			mapSpan := func(span sourcemap.Span, original bool) *sourcemap.Span {
+				if original || span.File != filename {
+					return &span
+				}
+				first, last := preparedMap.Lookup(span.Start), preparedMap.Lookup(span.End-1)
+				if first == nil || last == nil || first.Origin == nil || last.Origin == nil || first.Origin.File != last.Origin.File {
+					return nil
+				}
+				mapped := *first.Origin
+				mapped.End = last.Origin.End
+				return &mapped
+			}
+			origin := mapSpan(sourcemap.Span{File: diagnostic.Position.Filename, Start: diagnostic.Position.Offset, End: diagnostic.End, Line: diagnostic.Position.Line, Column: diagnostic.Position.Column}, diagnostic.Original)
+			stack := append([]sourcemap.Expansion{}, diagnostic.Stack...)
+			for i := range stack {
+				definition := mapSpan(stack[i].Definition, stack[i].DefinitionOriginal)
+				callsite := mapSpan(stack[i].Callsite, stack[i].CallsiteOriginal)
+				if definition == nil || callsite == nil {
+					stack = nil
+					break
+				}
+				stack[i].Definition, stack[i].Callsite = *definition, *callsite
+				stack[i].DefinitionOriginal, stack[i].CallsiteOriginal = true, true
+			}
+			if origin == nil {
+				stack = nil
+			}
+			return Result{}, &sourcemap.Error{Message: "macro: " + diagnostic.Message, Origin: origin, Stack: stack, Generated: diagnostic.Position}
+		}
 		return Result{}, err
 	}
 	if cfg != nil && cfg.macroBudget != nil {
@@ -268,6 +299,17 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			return Result{}, stageError("enums.import", err)
 		}
 	}
+	// Enum metadata retains positions from the input of this lowering.
+	enumDiagnosticMap := *provenance
+	failEnum := func(position token.Position, message string) (Result, error) {
+		d := &sourcemap.Error{Message: message, Generated: position}
+		if position.Filename == filename {
+			if segment := enumDiagnosticMap.Lookup(position.Offset); segment != nil {
+				d.Origin, d.Stack = segment.Origin, segment.Stack
+			}
+		}
+		return Result{}, d
+	}
 	var enumResult enums.Result
 	if cfg == nil {
 		enumResult, err = enums.LowerMapped(filename, source, provenance)
@@ -291,8 +333,34 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	provenance = provenance.Compose(source, refResult.Source, "refs.Prepare")
 	source = refResult.Source
+	// Line-based derive diagnostics refer to this stage, before attributes are
+	// erased and generated helpers are appended. Capture its map now rather than
+	// interpreting these line numbers in a later lowering's byte offsets.
+	diagnosticMap := provenance
+	diagnosticSource := source
+	diagnosticFile := token.NewFileSet().AddFile(filename, -1, len(source))
+	diagnosticFile.SetLinesForContent(source)
 	fail := func(line int, msg string) (Result, error) {
-		return Result{}, fmt.Errorf("%s:%d: %s", filename, line, msg)
+		d := &sourcemap.Error{Message: msg, Generated: token.Position{Filename: filename, Line: line, Column: 1}}
+		if line > 0 && line <= diagnosticFile.LineCount() {
+			offset := diagnosticFile.Offset(diagnosticFile.LineStart(line))
+			for offset < len(diagnosticSource) && (diagnosticSource[offset] == ' ' || diagnosticSource[offset] == '\t' || diagnosticSource[offset] == '\r') {
+				offset++
+			}
+			d.Generated = diagnosticFile.Position(diagnosticFile.Pos(offset))
+			if offset < len(diagnosticSource) && diagnosticSource[offset] != '\n' {
+				if segment := diagnosticMap.Lookup(offset); segment != nil {
+					d.Origin, d.Stack = segment.Origin, segment.Stack
+				}
+			}
+		}
+		return Result{}, d
+	}
+	failModel := func(m model, message string) (Result, error) {
+		if m.enum != nil {
+			return failEnum(m.enum.Position, message)
+		}
+		return fail(m.line, message)
 	}
 	lines := strings.Split(string(source), "\n")
 	protected := protectedLines(source)
@@ -524,11 +592,11 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			if ed := enumByName[ts.Name.Name]; ed != nil {
 				for kind := range a.derive {
 					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Default" && kind != "Error" && kind != "PartialEq" && kind != "Eq" {
-						return fail(ed.Position.Line, "unsupported enum derive "+kind)
+						return failEnum(ed.Position, "unsupported enum derive "+kind)
 					}
 				}
 				if a.deny || a.hasMessage {
-					return fail(ed.Position.Line, "enum serde and error attributes are unsupported")
+					return failEnum(ed.Position, "enum serde and error attributes are unsupported")
 				}
 				m := model{name: ed.Name, attrs: a, line: ed.Position.Line, spec: ts, enum: ed}
 				g.models[m.name] = m
@@ -632,7 +700,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		for _, n := range []string{"bool", "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", "byte", "rune", "error"} {
 			if declared[n] || (needsDefault && cfg != nil && cfg.named[n] != nil) {
-				return fail(m.line, "predeclared type shadowing is unsupported by derive: "+n)
+				return failModel(m, "predeclared type shadowing is unsupported by derive: "+n)
 			}
 		}
 		if m.attrs.derive["Error"] {
@@ -652,7 +720,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				}
 				id, ok := rt.(*ast.Ident)
 				if ok && id.Name == m.name && (fd.Name.Name == "Error" || (m.source != "" && fd.Name.Name == "Unwrap")) {
-					return fail(m.line, "derived method conflicts with existing "+fd.Name.Name)
+					return failModel(m, "derived method conflicts with existing "+fd.Name.Name)
 				}
 			}
 		}
@@ -660,11 +728,11 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	for _, m := range ordered {
 		for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone", "Default"} {
 			if m.attrs.derive[kind] && declared[kind+m.name] {
-				return fail(m.line, "generated helper conflicts with declaration "+kind+m.name)
+				return failModel(m, "generated helper conflicts with declaration "+kind+m.name)
 			}
 		}
 		if m.from != "" && declared["From"+m.name] {
-			return fail(m.line, "generated helper conflicts with declaration From"+m.name)
+			return failModel(m, "generated helper conflicts with declaration From"+m.name)
 		}
 	}
 	for _, d := range enumResult.Enums {
@@ -673,13 +741,13 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		for _, v := range d.Variants {
 			if (v.HasSerdeRename || v.HasSerdeValue) && !g.models[d.Name].attrs.derive["Serialize"] && !g.models[d.Name].attrs.derive["Deserialize"] {
-				return fail(d.Position.Line, "variant serde attributes require Serialize or Deserialize derive")
+				return failEnum(d.Position, "variant serde attributes require Serialize or Deserialize derive")
 			}
 			if v.Default && !g.models[d.Name].attrs.derive["Default"] {
-				return fail(d.Position.Line, "default attribute requires Default derive")
+				return failEnum(d.Position, "default attribute requires Default derive")
 			}
 			if (v.HasMessage || v.Source || v.From) && !g.models[d.Name].attrs.derive["Error"] {
-				return fail(d.Position.Line, "error attributes require Error derive")
+				return failEnum(d.Position, "error attributes require Error derive")
 			}
 		}
 	}
@@ -690,14 +758,14 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		for _, v := range m.enum.Variants {
 			if !m.attrs.derive["Error"] && (v.HasMessage || v.Source || v.From) {
-				return fail(m.line, "error attributes require Error derive")
+				return failModel(m, "error attributes require Error derive")
 			}
 			if m.attrs.derive["Error"] && !v.HasMessage {
-				return fail(m.line, "enum Error requires error message on every variant")
+				return failModel(m, "enum Error requires error message on every variant")
 			}
 			if v.From {
 				if m.from != "" {
-					return fail(m.line, "ambiguous enum From: multiple error variants")
+					return failModel(m, "ambiguous enum From: multiple error variants")
 				}
 				m.from = v.Name
 			}
@@ -705,7 +773,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		ordered[i] = m
 		g.models[m.name] = m
 		if m.from != "" && declared["From"+m.name] {
-			return fail(m.line, "generated helper conflicts with declaration From"+m.name)
+			return failModel(m, "generated helper conflicts with declaration From"+m.name)
 		}
 	}
 	if cfg != nil && cfg.collect {
@@ -835,7 +903,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			}
 		}
 		if (m.attrs.hasMessage || m.source != "") && !m.attrs.derive["Error"] {
-			return fail(m.line, "error attributes require Error derive")
+			return failModel(m, "error attributes require Error derive")
 		}
 		for _, kind := range []string{"Debug", "Clone", "Default", "Error"} {
 			if !m.attrs.derive[kind] {
@@ -873,7 +941,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				code, im, e = deriveextras.Generate(kind, m.spec, g.deriveProtocol)
 			}
 			if e != nil {
-				return fail(m.line, e.Error())
+				return failModel(m, e.Error())
 			}
 			g.helpers.WriteString("\n" + code)
 			for k, v := range im {

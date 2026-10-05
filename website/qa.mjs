@@ -33,7 +33,7 @@ for(let i=0;i<manifest.examples.length;i++){
 const checkResults=[];
 const temp=await fs.mkdtemp(path.join(tmpdir(),'goxide-browser-parity-'));
 try {
- for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity','reject_legacy_cfg']) {
+ for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity','reject_legacy_cfg','reject_macro_selector','reject_macro_prepared','reject_derive_origin','reject_enum_derive_origin']) {
   const source=await fs.readFile(new URL(`checks/${name}.gox`,import.meta.url),'utf8');
   const input=path.join(temp,'playground.gox');await fs.writeFile(input,source);
   let nativeGo, nativeError;
@@ -87,5 +87,5 @@ await page.unroute('**/worker.js*');await page.click('#reset');await finished();
 assert.equal(await page.inputValue('#output'),manifest.examples[0].go);
 assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');
-console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults,checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
+console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9),checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
 await browser.close();

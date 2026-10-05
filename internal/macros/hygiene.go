@@ -50,9 +50,20 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 		i, ok := offsets[off]
 		return i, ok
 	}
+	// Resolve diagnostics through the same token offsets used for binding edits.
+	// Never search by spelling: repeated selectors can have different origins.
+	nodeError := func(n ast.Node, message string) error {
+		if i, ok := index(n.Pos()); ok {
+			return at(ts[i], message)
+		}
+		return at(ts[0], message)
+	}
 	ignored := map[*ast.Ident]bool{}
 	var problem error
 	ast.Inspect(root, func(n ast.Node) bool {
+		if problem != nil {
+			return false
+		}
 		switch n := n.(type) {
 		case *ast.SelectorExpr:
 			ignored[n.Sel] = true
@@ -67,7 +78,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 					return true
 				})
 				if !callable {
-					problem = at(ts[0], "import selectors in templates must be direct function calls")
+					problem = nodeError(n.Sel, "import selectors in templates must be direct function calls")
 					return false
 				}
 				path := e.importPaths[x.Name]
@@ -79,25 +90,25 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 					var err error
 					pkg, err = e.importer.Import(path)
 					if err != nil {
-						problem = at(ts[0], "cannot resolve definition-site import "+path+"; pass function as explicit capture: "+err.Error())
+						problem = nodeError(n.X, "cannot resolve definition-site import "+path+"; pass function as explicit capture: "+err.Error())
 						return false
 					}
 					e.importCache[path] = pkg
 				}
 				fn, ok := pkg.Scope().Lookup(n.Sel.Name).(*types.Func)
 				if !ok || !fn.Exported() {
-					problem = at(ts[0], "imported template selector must name a function, not a mutable function variable")
+					problem = nodeError(n.Sel, "imported template selector must name a function, not a mutable function variable")
 					return false
 				}
 				if sig, ok := fn.Type().(*types.Signature); !ok || sig.TypeParams().Len() != 0 {
-					problem = at(ts[0], "generic imported helper requires an explicit capture")
+					problem = nodeError(n.Sel, "generic imported helper requires an explicit capture")
 					return false
 				}
 				key := x.Name + "." + n.Sel.Name
 				if e.pkg != nil {
 					alias, err := e.runtimePath(path)
 					if err != nil {
-						problem = at(ts[0], err.Error())
+						problem = nodeError(n.Sel, err.Error())
 						return false
 					}
 					key = alias + "." + n.Sel.Name
@@ -115,13 +126,13 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			}
 		case *ast.KeyValueExpr:
 			if _, ok := n.Key.(*ast.Ident); ok {
-				problem = at(ts[0], "identifier keyed literals in templates are unsupported; capture the complete expression")
+				problem = nodeError(n.Key, "identifier keyed literals in templates are unsupported; capture the complete expression")
 			}
 		case *ast.StructType, *ast.InterfaceType, *ast.TypeSpec, *ast.LabeledStmt:
-			problem = at(ts[0], "template local type/struct/interface/label declarations are unsupported")
+			problem = nodeError(n, "template local type/struct/interface/label declarations are unsupported")
 		case *ast.BranchStmt:
 			if n.Label != nil {
-				problem = at(ts[0], "template goto and labeled control flow are unsupported")
+				problem = nodeError(n.Label, "template goto and labeled control flow are unsupported")
 			}
 		}
 		return true
@@ -140,6 +151,9 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 	})
 	bindings := map[*ast.Object]string{}
 	ast.Inspect(root, func(n ast.Node) bool {
+		if problem != nil {
+			return false
+		}
 		id, ok := n.(*ast.Ident)
 		if !ok || ignored[id] || id.Name == "_" {
 			return true

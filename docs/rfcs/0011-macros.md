@@ -127,3 +127,20 @@ Go 可调用公开生成函数，不能调用 `m!(...)`；宏规则供 goxide �
 ### T/E 推导增量（已授权，先规范后实现）
 
 两种 Result 适配内建改为在 typed 阶段按真实返回签名确定 arity/T/E，不增加一般声明宏的类型查询或 type fragment。规范、nil 黑白案例、显式 T 兼容、卫生/缓存/source map 及网站差分验收见 [RFC 0005 推导增量](research/0005-option-result-question.md#按静态返回签名推导-te已授权实施前规范)。此处是本轮实施契约；上节固定 error 的首片说明作为历史保留。
+
+## 已有拒绝规则的精确诊断收口（2026-10-05，实施合同）
+
+对应 MVP 台账 A03，本片只修诊断来源，不放宽模板语法或已有拒绝规则。
+模板内部 import selector、具名 literal key、local type/struct/interface/label 等已有
+诊断应定位实际触发规则的 AST token，而不是统一指向模板首 token。多问题模板按
+确定的 AST 遍历顺序报告首个已识别问题，避免后续节点覆盖位置。定义文件、调用栈
+及原始 token span 必须保留；捕获片段与模板来源不可混淆。没有对应 token 的合成
+节点不能凭最近文字猜源位置，保留现有 fallback。
+
+验收包括：前有合法语句的多行模板、同名 selector 重复出现、nested/package 宏、
+CRLF、已有自由名和 budget 拒绝回归；诊断指向触发规则的 selector/key/声明 token，
+保留既有拒绝含义。合法模板生成 Go 与执行行为不因诊断调整而改变。
+
+宏错误保留结构化 token/span、坐标阶段和展开栈；`?` 前处理后的本文件 token
+通过 prepared map 回溯，包定义的原始坐标不重复映射。定义/调用框端点来自各自
+原始 token，不要求包含 `?` 改写的整个框保持等长。

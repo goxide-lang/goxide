@@ -9,6 +9,13 @@ macro ABI. Go compiler diagnostics for appended helper aliases are not fully
 source-mapped. Nested expansion stacks are available; complete coverage across
 all later lowering passes remains future work.
 
+Existing hygiene rejections resolve selector/key/declaration positions through
+AST token offsets and retain the first recognized problem. Structured macro
+diagnostics preserve definition/callsite spans across propagation preparation,
+including nested package macros; frontend diagnostics map them back to source.
+Concrete derive attribute/helper errors also use their own lowering-stage maps.
+See [diagnostic delivery and remaining A03 gaps](../../docs/reviews/macro-derive-diagnostics-20261005.md).
+
 ```go
 macro_rules! event {
     ($message:expr, $($field:expr),*) => {

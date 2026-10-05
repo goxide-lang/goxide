@@ -1,0 +1,4 @@
+PASS Markdown: 116 files, 1250 local links/anchors, balanced fences
+PASS RFC structure: 26 documents with required sections and goxide/Go example blocks
+Scope: inline local Markdown links and ATX headings; external URLs are not fetched.
+RFC structure checks do not compile examples or prove source/Go semantic equivalence.

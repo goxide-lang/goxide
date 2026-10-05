@@ -1,0 +1,3 @@
+ok  	github.com/hxsf/goxide/internal/frontend	1.130s
+ok  	github.com/hxsf/goxide/internal/macros	1.200s
+ok  	github.com/hxsf/goxide/tests/acceptance	6.567s

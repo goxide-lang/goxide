@@ -1,0 +1,21 @@
+{
+  "url": "http://127.0.0.1:8094",
+  "compilerCommit": "50490e113ea668333cdb78e8b36df4850f8543c4",
+  "websiteCommit": "50490e113ea668333cdb78e8b36df4850f8543c4",
+  "wasmSha256": "4942b2beb0f07703009526fa0651548b4f1b99038adeb7fda8b587103e7b08c8",
+  "metadataSchema": 8,
+  "cards": 26,
+  "examples": 10,
+  "negativeExamples": 10,
+  "filters": true,
+  "permalinks": true,
+  "snapshots": true,
+  "mobile390": true,
+  "clipboard": true,
+  "parity": "byte-for-byte",
+  "errors": [],
+  "consoleErrors": [],
+  "network": "same-origin GET only"
+}
+manifest failure state: passed
+stale/corrupt WASM rejected before execution: passed

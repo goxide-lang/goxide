@@ -180,7 +180,7 @@ Default 仅在实例身份确认是已登记 Option 后返回 canonical None；�
 上下文的错误定位该行首个实际 token，不伪称已准确定位属性内部子表达式。已有
 字段类型精确诊断继续保留；没有可证明来源的生成节点保持 generated/unmapped。
 
-验收包括前置多行宏、两个重复类型/字段拼写、CRLF、目录编译不同文件、未知或
+验收包括前置多行宏、多次展开、CRLF、目录编译不同文件、未知或
 重复 derive/属性及 helper 冲突，断言结构化 origin 和显示行列。此片不新增手写
 Clone/Debug/serde、typed Error source、blank/embedded 字段协议或泛型规则；合法
 具体派生的生成与执行需继续回归。

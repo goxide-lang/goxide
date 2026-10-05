@@ -2,6 +2,8 @@
 
 每项新特性在这里单独评审：先看 goxide 输入和 Go 输出，再看必须保持的行为、拒绝例子及双向互操作。本文档目录是设计约束入口；[设计专题](../design/overview.md)保留背景与取舍，[决策登记](../design/decisions.md)维护确认状态。
 
+当前逐项对照见 [MVP 差距台账](../mvp-gap-audit.md)：状态以实际子集与测试为单位，历史 Proposed/未实现不覆盖后续验收，也不把工程边界自动归为延期。
+
 ## 使用规则
 
 1. 新增或修改语言能力，先新增或更新对应 RFC。使用[模板](TEMPLATE.md)，不要只在总纲里增加一句功能描述。
@@ -37,25 +39,23 @@
 | [0018 转译对应约束](0018-lowering-contract.md) | 全特性的共同降低规则 | 副作用、控制流、元数据与源码映射 |
 | [0019 统一 trait wrapper](0019-uniform-trait-wrappers.md) | 当前 trait 表示与 Go 便利入口 | marker、包级工厂、本地 As 与外部 ForT.As |
 | [0020 类型关联函数](0020-associated-functions.md) | impl 成员、T::method 与构造函数 | 原生 Go 声明边界、Self/self、Go 包函数与方法、泛型与初始化 |
-
 | [0021 use 与 pub use](0021-reexports.md) | 目录包公开API聚合 | canonical身份、变量存储、函数defer、合法Go路由与metadata |
-
 | [0022 项目工具链](0022-project-toolchain.md) | 可选 feature、依赖来源、多 bin/example | 前置 cfg、锁定离线、目标映射与配置隔离 |
-
 | [0023 宿主构建脚本](0023-build-scripts.md) | 显式生成、本地host依赖、信任与声明缓存 | 未授权拒绝、原子产物、无沙箱边界 |
-
 | [0025 统一项目与迁入](0025-unified-project.md) | TOML/lock唯一依赖权威、Go导入与target模块 | 无损指令子集、staging验证、source/Go发行边界 |
+| [0026 workspace](0026-workspaces.md) | Cargo风格成员/继承/锁与Go多模块 | 作者核心、根锁及受限go.work迁入已实现；vendor仅作输入转显式local模块；统一host resolver等扩展仍待设计/实现 |
+| [0027 正式命名](0027-goxide-naming.md) | Goxide / goxide / .gox / GOXIDE_* | 已完成命名与ABI迁移，旧输入/产物明确拒绝并重生成 |
 
-| [0026 workspace（Proposed）](0026-workspaces.md) | Cargo风格成员/继承/锁与Go多模块 | 仅研究提案；选中闭包、独立发行、go.work/vendor迁入边界，未实现 |
+RFC 0024 use路径仍在[独立提案分支](https://github.com/hxsf/goxide/blob/5e4b118f25262d8022d1b8f72575d89d69f096aa/docs/rfcs/0024-use-paths.md)，未批准新路径语法；不表示mod/pub(scope)目标取消。
 
 ## 范围与验证
 
 LSP、自举、构建缓存等工程架构继续由[工具链专题](../design/compiler-and-tooling.md)管理；凡引入新源级行为或改变产物契约，仍需相应 RFC。Box、supertrait、GAT、特化、用户过程宏、锁块等未定或延期能力列在[决策登记](../design/decisions.md)，启用前必须另立 RFC，不能从名字补出未经确认的语义。
 
-运行 `python3 scripts/check_design.py --docs-only` 检查链接、围栏及 RFC 基本结构。完整命令继续验证原有手写 Go 机制；不会自动编译这里所有 Go 片段，更不会运行尚不存在的 goxide 前端。每篇的验收表是未来实现要求，不是通过记录。
+运行 `python3 scripts/check_design.py --docs-only` 检查链接、围栏及 RFC 基本结构。完整命令继续验证原有手写 Go 机制；不会自动编译这里所有 Go 片段，也不替代已有 goxide 前端的接受测试。每篇设计验收表不自动构成通过记录；实际子集见源码、测试和阶段报告。
 
 ## 研究补充与同步边界
 
-早期研究 RFC 0001–0006（含诊断业务补充）保留于 [research](research/0001-scoped-borrow-views.md)，与本目录逐特性 0001–0020 分开编号；原有链接已重定位。目录根的 20 篇继续接受唯一编号、六章节与 goxide/Go 示例检查；研究文档仍检查链接和围栏，不冒充已冻结特性规范。远端独立决定编号记 R19–R26，见决策登记。
+早期研究 RFC 0001–0006（含诊断业务补充）保留于 [research](research/0001-scoped-borrow-views.md)，与本目录逐特性 0001–0020 分开编号；原有链接已重定位。目录根的编号特性 RFC 继续接受唯一编号、六章节与 goxide/Go 示例检查；研究文档仍检查链接和围栏，不冒充已冻结特性规范。远端独立决定编号记 R19–R26，见决策登记。
 
-所有借用/效果相关 RFC 受 D19/D20 约束：无法证明独占/不逃逸或缺少摘要，不是默认准入拒绝的依据；风险分析不属 MVP。基础类型权限和显式 unsafe 规则不降级。统一 wrapper（0019）和关联函数（0020）方向已同步，但对应通用前端尚未实现。
+所有借用/效果相关 RFC 受 D19/D20 约束：无法证明独占/不逃逸或缺少摘要，不是默认准入拒绝的依据；风险分析不属 MVP。基础类型权限和显式 unsafe 规则不降级。统一 wrapper（0019）和关联函数（0020）方向已同步；手写 Default/具体 equality 已有有限入口，对应通用 trait/固有 impl 前端仍未完成。

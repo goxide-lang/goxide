@@ -1,0 +1,31 @@
+{
+  "commit": "5d777820c5a617db57bcedb50b4d31ad6f2d3f15",
+  "websiteCommit": "6dc779a651af3eb34121f53637a55bfb6feee387",
+  "compilerDigest": "27323c6bf7a3066bab1d6546355e681e2b2d548e10c07389ffe2793f6541aa42",
+  "abiVersions": {
+    "enum": 8,
+    "reference": 3,
+    "use": 2,
+    "sum": 2
+  },
+  "publicLibraries": [
+    {
+      "module": "github.com/goxide-lang/std",
+      "commit": "ce5bccb4ff9c7fb96b7f192a3a263051590d9288",
+      "version": "v0.0.0-20261004173304-ce5bccb4ff9c",
+      "sum": "h1:ZBIUbtbKxIDJeeHQd1UuwwJ0gzkTnqcRXUfpQD6sMQQ=",
+      "goModSum": "h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ="
+    },
+    {
+      "module": "github.com/goxide-lang/serde",
+      "commit": "a1b791e96d660c6be620e110c566a9a171631b7e",
+      "version": "v0.0.0-20261004120911-a1b791e96d66",
+      "sum": "h1:EelklFYrLNvw20lVNEAO3IWG1Hac7tF/428sTORQKBU=",
+      "goModSum": "h1:m4z9CAWRl/5hQN6+9RQ7Sfr/gK9wcWk+ANoqbSxlW0g="
+    }
+  ],
+  "wasmSha256": "a25799bf67a5ed2e9e8ebff195cbf9b18edcb8fc93741830429687867c060772",
+  "observed_date_utc": "2026-10-05",
+  "source": "https://goxide-lang.github.io/examples.json",
+  "scope": "Read-only manifest identity observation, not a browser execution test."
+}

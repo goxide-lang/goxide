@@ -1,4 +1,6 @@
-# hgo Roadmap 与接续入口
+# Goxide Roadmap 与接续入口
+
+> **当前 MVP 差距与下一轮顺序（2026-10-05）：[逐 RFC 审计台账](docs/mvp-gap-audit.md)。** 宏/派生、enum/match、serde、模块和工具链的已确认剩余工作继续保留；partial 或“本片未做”不等于批准延期。设计待定、工程未做、仅交付未做分别登记。下文阶段表及追加日志保留历史，不能把旧“未开始”覆盖新验收。完整借用风险分析按 D20 明确非 MVP。
 
 > 当前统一入口：[README](README.md)；最小试用见 [enum_trial](examples/enum_trial/README.md)。宏 + 独立 enum 历史基线 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`。本文件保留阶段历史，当前范围以末尾交付清单及统一入口为准；2026-10-04 已增加文末 Go Result 适配宏。
 

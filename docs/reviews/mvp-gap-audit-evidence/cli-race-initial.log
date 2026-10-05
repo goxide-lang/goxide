@@ -1,0 +1,8 @@
+--- FAIL: TestProjectConditionalGoxideAcrossTargets (0.05s)
+    project_test.go:626: [run --bin one --offline]:  Go module planning list: exit status 1: go: module lookup disabled by GOPROXY=off
+        go: module lookup disabled by GOPROXY=off
+        go: module lookup disabled by GOPROXY=off
+        go: module lookup disabled by GOPROXY=off
+FAIL
+FAIL	github.com/hxsf/goxide/cmd/goxide	193.083s
+FAIL

@@ -51,6 +51,13 @@ def build(ROOT, GO):
     out=call(['run','--package','example.org/app','--locked','--offline',str(new)]);assert out=='modified vendor enhanced\n'
     runs.append(dict(command='替换 lib.go 为 lib.gox 后：goxide run --package example.org/app --locked --offline migrated',stdout=out))
     audit=json.loads((new/'goxide-import.json').read_text())
+    assert not (new/'vendor').exists()
+    assert 'vendor' not in tomllib.loads((new/'goxide.toml').read_text())['workspace']
+    files.append(dict(path='migrated/goxide-import.json',source=clean((new/'goxide-import.json').read_text())))
+    for relative in audit['local_modules'].values():
+     for name in ['go.mod','dep.go']:
+      p=new/relative/name
+      if p.exists():files.append(dict(path='migrated/'+str(pathlib.Path(relative)/name),source=clean(p.read_text())))
     for name,outputs in audit['files'].items():
      for output in outputs:
       p=new/output

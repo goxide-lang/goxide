@@ -63,11 +63,16 @@ def vendor(ROOT, GO, run):
         locked=json.loads((new/'goxide.lock').read_text())
         assert 'vendor' not in locked
         audit=json.loads((new/'goxide-import.json').read_text())
+        assert not (new/'vendor').exists()
+        for name in ['go.mod','dep.go']:
+            relative=pathlib.Path(audit['local_modules']['example.org/catalogdep'])/name
+            files.append(dict(path='new-project/'+str(relative),source=(new/relative).read_text()))
+        files.append(dict(path='new-project/goxide-import.json',source=(new/'goxide-import.json').read_text().replace(str(base)+'/', '')))
         assert {str(p.relative_to(old)):p.read_bytes() for p in old.rglob('*') if p.is_file()}==before
         path=new/audit['local_modules']['example.org/catalogdep']/'dep.go';path.write_text(path.read_text().replace('vendored bytes','changed bytes'))
-        rejected=call('run','--go',GO,'--bin','app','--offline','--locked',str(new))
-        assert rejected=='changed bytes\n'
-        return dict(id='vendor',title='供应源码：本地模块冷离线与正常编辑',note='在空 module cache、GOPROXY=off、GOSUMDB=off 下实测；原 replace 目录已移除，Go 构建缓存可用。本机绝对路径仅替换为示例目录名。修改的 vendor 与上游是否相同：未检查，不联网比较。',files=files,runs=[dict(command='goxide import-go --bin app=. old-project',stdout=plan),dict(command='goxide import-go --out new-project --bin app=. --offline old-project',stdout=imported),dict(command='goxide run --bin app --offline --locked new-project',stdout=stdout),dict(command='修改本地模块 dep.go 后重复 locked 运行',stdout=rejected)],verification=dict(coldModuleCache=True,proxyOff=True,originalFilesUnchanged=True,localMutationRebuilt=True))
+        edited=call('run','--go',GO,'--bin','app','--offline','--locked',str(new))
+        assert edited=='changed bytes\n'
+        return dict(id='vendor',title='供应源码：本地模块冷离线与正常编辑',note='在空 module cache、GOPROXY=off、GOSUMDB=off 下实测；原 replace 目录已移除，Go 构建缓存可用。本机绝对路径仅替换为示例目录名。修改的 vendor 与上游是否相同：未检查，不联网比较。',files=files,runs=[dict(command='goxide import-go --bin app=. old-project',stdout=plan),dict(command='goxide import-go --out new-project --bin app=. --offline old-project',stdout=imported),dict(command='goxide run --bin app --offline --locked new-project',stdout=stdout),dict(command='修改本地模块 dep.go 后重复 locked 运行',stdout=edited)],verification=dict(coldModuleCache=True,proxyOff=True,originalFilesUnchanged=True,localMutationRebuilt=True))
 
 def cli(ROOT, GO, run):
     import os, subprocess

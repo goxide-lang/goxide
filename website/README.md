@@ -94,7 +94,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 
 状态针对卡片的限定范围：提案 / 已确认待实现 / 部分实现 / 已实现并验证。开发快照与当前编译器支持分别记录；任务报告不等于可发布实现。RFC 0024 仍是提案。当前 Playground 已包含共享 std/serde、明确上下文下的普通 sum 推导及限定可读性改进；统一 TOML/锁与 import-go 只在 CLI 工程快照说明。
 
-编译器 `commit` 固定为 d23064760e1fb5d4bb77cae17e5d7818fb73139d，`websiteCommit` 记录网站源码提交；构建计算真实编译器源摘要并与该基线逐文件核对，不允许文案偷偷升级编译器。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
+编译器 `commit` 固定为 f1474551cb7f18c5610880b91b54e7367a2a6a2e，`websiteCommit` 记录网站源码提交；构建计算真实编译器源摘要并与该基线逐文件核对，不允许文案偷偷升级编译器。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
 
 ```sh
 python3 website/catalog.py
@@ -132,3 +132,7 @@ CLI snapshot 构建实际运行 format 2 feature 工程 A/B/A、根无 go.mod/go
 本树已基于官网源码 51405a69 同步最新快照功能，并迁移 Goxide / goxide / .gox / GOXIDE_*。历史章节描述当时基线；当前 enum metadata schema 8、reference 3、use 2、sum ABI 2，std ce5bccb，serde 不变。旧生成产物需全部重新生成。CLI cmd/goxide、WASM cmd/goxide-playground、bridge goxideCompile、web tag goxideweb；构建脚本会校验实际 compiler SHA/digest。网站 owner 使用本分支的完整 website 和对应 compiler 源、go.mod/go.sum 构建，不能混用旧 WASM 与新 JS。只完成本地验证，不部署。
 
 本轮发布源码将compiler绑定最终d230647；manifest新增从真实源提取并断言的abiVersions，配套std通过真实Go module解析和GoxideSumABI断言。公开仓库README另行同步，旧名称仅在拒绝迁移说明/历史证据保留。
+
+## 供应源码本地模块：当前架构
+
+本轮f147455撤回旧vendor长期构建与vendor独立拆出方案。vendor只作Go迁移输入，物化普通local-modules，以显式本地replace使用。生成goxide-import.json记录原始政策、供应摘要与映射，本地源码可正常编辑；旧vendor TOML/锁需重新迁入。历史章节记录不代表当前模型。只读local默认来源候选已支持，交互一次选择、remote切换及差异/修改确认尚未实现。offline仅声称实际核验的本地材料/缓存路径，不是用户脚本网络沙箱。保留std ce5bccb及ABI8/3/2/2。

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "compilerCommit": "f1474551cb7f18c5610880b91b54e7367a2a6a2e",
-  "reviewedAt": "2026-10-04",
+  "reviewedAt": "2026-10-05",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
     "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"
@@ -732,7 +732,7 @@
       "snippet": {
         "language": "CLI · 多文件迁入",
         "text": "goxide import-go --workspace --plan --offline native\ngoxide import-go --workspace --out migrated --offline native\ngoxide run --package example.org/app --locked --offline migrated",
-        "note": "offline要求可达依赖已在缓存，或供应完整一致vendor。脚本需先plan、trust-project与精确subject allow；迁入不授权。下方快照由真实CLI生成。"
+        "note": "迁入的offline验证仅使用本地材料、完整供应源码或已缓存依赖；只读remote候选未核验，不探测远端。脚本需先plan、trust-project与精确subject allow，迁入不授权。下方快照由真实CLI生成。"
       }
     }
   ],

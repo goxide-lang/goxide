@@ -118,7 +118,14 @@ for module, commit in [('github.com/goxide-lang/std','ce5bccb4ff9c7fb96b7f192a3a
     public_libraries.append(dict(module=module, commit=commit, version=selected['Version'], sum=metadata['Sum'], goModSum=metadata['GoModSum']))
 metadata_schema = int(re.search(r'const enumMetadataVersion = (\d+)', (ROOT/'internal/frontend/enum_artifact.go').read_text()).group(1))
 assert metadata_schema == 8
-manifest = dict(metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
+def source_version(path, pattern):
+    return int(re.search(pattern, (ROOT/path).read_text()).group(1))
+abi_versions = dict(enum=metadata_schema, reference=source_version('internal/refs/metadata.go', r'const MetadataVersion = (\d+)'), use=source_version('internal/frontend/use_artifact.go', r'a.Version != (\d+)'), sum=source_version('internal/enums/builtins.go', r'const SumABI = (\d+)'))
+assert abi_versions == dict(enum=8, reference=3, use=2, sum=2)
+std_abi = run(GO, 'doc', 'github.com/goxide-lang/std/sum.GoxideSumABI').decode()
+assert re.search(r'GoxideSumABI = 2\b', std_abi), std_abi
+
+manifest = dict(abiVersions=abi_versions, metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=h.hexdigest(), exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 importClosure=sorted(closure), maxSourceBytes=32768, compileTimeoutMs=10000,
                 examples=examples, cliExamples=[cli_example], projectExamples=[feature_example,migration_example,vendor_example,cli_options_example]+workspace_snapshots.build(ROOT, GO)+workspace_import_snapshots.build(ROOT, GO))
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')

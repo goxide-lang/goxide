@@ -28,7 +28,7 @@
 
 ## workspace vendor
 
-vendor 仅是原生 Go 输入。严格验证 `## workspace`、政策与全部供应文件后，按 [供应源码迁入合同](vendor-local-modules.md) 转换为普通本地模块和显式 local replace。所有包/资源/许可证与权限保留，原 metadata 和摘要进入独立 provenance；输出没有 vendor 树或 vendor 锁。原 go.sum 不证明本地修改。缺包、未知条目、symlink、额外增强源码或多个输入 vendor 冲突失败，不下载补全。
+vendor 仅是原生 Go 输入。严格验证 `## workspace`、政策与全部供应文件后，按 [供应源码迁入合同](vendor-local-modules.md) 转换为普通本地模块和显式 local replace。所有包/资源/许可证与权限保留，原 metadata 和摘要进入独立 provenance；输出没有 vendor 树或 vendor 锁。原 go.sum 不证明本地修改。缺包、未知条目、symlink、额外增强源码或多个输入 vendor 冲突失败，默认 local 不下载补全。来源选择与单模块一致：显式 remote 仅接受清单证实的精确 Go module 版本，差异须确认；根/成员通过普通 Go replacement 绑定，供应副本保留，离线只用缓存。
 
 ## 白例与黑例
 

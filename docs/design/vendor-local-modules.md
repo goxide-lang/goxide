@@ -1,6 +1,6 @@
 # 供应源码迁入为本地模块
 
-状态：本地核心已实现于独立分支 `feat/vendor-local-modules`；来源候选、TTY/非 TTY 选择和精确 Go module 远端核验已实现，正在验收。取代旧 Goxide vendor 模式和 workspace vendor 拆出提案，不改冻结历史或原生 Go 自己的 vendoring 行为。
+状态：本地核心已实现于独立分支 `feat/vendor-local-modules`；来源候选、TTY/非 TTY 选择和精确 Go module 远端核验已实现并通过验收。取代旧 Goxide vendor 模式和 workspace vendor 拆出提案，不改冻结历史或原生 Go 自己的 vendoring 行为。
 
 ## 输入与输出
 
@@ -37,7 +37,7 @@ workspace 中供应模块不是隐式 use 成员；它们由普通 require/local
 
 ## 来源选择交互
 
-用户已确认模块级多来源候选，默认供应快照本地模块。TTY 在迁入时展示一次选择清单；非 TTY 默认确定性 local，也可用显式参数覆盖。正常 build 不询问。清单逐模块列逻辑身份、直接/间接关系、local 输出路径、remote module path/实际版本，以及 modified/verified/unknown 状态。显式 remote 选择执行以下核验和确认；本地候选不隐式联网。
+用户已确认模块级多来源候选，默认供应快照本地模块。TTY 在迁入时展示一次选择清单；非 TTY 默认确定性 local，也可用显式参数覆盖。正常 build 不询问。清单逐模块列逻辑身份、直接/间接关系、local 输出路径、remote module path/实际版本，以及 modified/verified/unknown 状态。显式 remote 选择执行以下核验和确认；本地候选不隐式联网。workspace 清单的 direct 表示至少一个原成员直接依赖该模块，否则显示 indirect；每个成员的原依赖角色仍分别保留。
 
 远端候选只来自 go.mod 与 modules.txt 选中版本/替换证据；go.sum 是校验集合，不是 lock，不能从其未选历史行猜版本。Go module path 不等于 Git URL；没有确认的 URL+revision 就不列 Git 候选。原 local replace 没有可证实的远端身份时，显示远端不可确认，不能假定原逻辑 module@version 就是供应源码的上游。
 

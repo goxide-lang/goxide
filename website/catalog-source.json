@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "fceeb8669e738ebffc968b8bd948b2334fe627cb",
-  "reviewedAt": "2026-10-04",
+  "compilerCommit": "3a8f204a4eacc62ba11ac15fce7a29c91f0bd5d7",
+  "reviewedAt": "2026-10-05",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
     "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"
@@ -667,13 +667,16 @@
       "status": "partial",
       "support": "cli",
       "summary": "import-go 接受一致的原生 module vendor，使用 Go 自身检查 modules.txt、版本和 replace；保留实际供应文件字节及权限，物化普通本地模块。",
-      "usage": "迁入保留原工程，生成显式本地 replace；冷 module cache 下可 --offline --locked 运行。本地源码后续编辑遵循普通本地模块规则，见真实快照。",
-      "limitation": "不重建 vendor、不下载补齐缺包、不声称与上游相同；历史 go.sum 仅保留来源信息。符号链接与不受支持的布局拒绝。go.work 迁入同样将供应源码物化为本地模块并支持渐进增强，见迁入条目。",
+      "usage": "默认保留供应字节为本地模块；TTY 一次模块来源清单，非 TTY 默认 local。--source MODULE=remote 只用清单证实的精确 Go module 版本；有差异需逐模块确认，原供应副本仍保留。",
+      "limitation": "verified 仅证明供应文件集合相等，不证明完整上游发行物等价。--offline 只用本地/缓存，remote 缓存不足失败。不能从 go.sum 猜版本或从模块路径猜 Git URL；无 registry、任意 URL 或 Git 选择。默认 local 不下载补包。",
       "examples": [],
       "checks": [],
       "evidence": [
         "docs/reviews/vendor-import-20261004.md",
-        "cmd/goxide/vendor_import_test.go"
+        "cmd/goxide/vendor_import_test.go",
+        "cmd/goxide/import_sources_test.go",
+        "cmd/goxide/import_sources_process_test.go",
+        "internal/project/supplied_sources.go"
       ],
       "snippet": {
         "language": "CLI · 本机使用",
@@ -717,7 +720,7 @@
       "status": "partial",
       "support": "cli",
       "summary": "只读plan后向新目录迁入，保留成员go/require/replace/exclude/godebug与根work政策；真实Go包归属分析物化显式成员边，根schema4锁与作者模式schema3分开。",
-      "usage": "迁入后可逐步加入.gox、现有features与明确授权的scripts；未授权不执行，撤销后缓存也拒绝。成员拆出显式物化继承/path并复制根锁，只消费可达记录，恢复成员独立政策。",
+      "usage": "迁入后可逐步加入.gox、现有features与明确授权的scripts；未授权不执行，撤销后缓存也拒绝。成员拆出显式物化继承/path并复制根锁，只消费可达记录，恢复成员独立政策。 供应模块来源选择与单模块一致，显式 remote 按普通 Go replacement/锁验证。",
       "limitation": "分析限迁入时平台、Go工具与C配置，换配置需重新分析。供应vendor保留字节/权限，不下载补包或重建；供应源码是普通本地模块，没有vendor构建/拆出模式，独立时物化路径并复制根锁。外部非成员replace不自动打包；不承诺全部workspace功能、统一host resolver或publish。",
       "examples": [],
       "checks": [],
@@ -734,5 +737,5 @@
       }
     }
   ],
-  "compilerDigest": "c03e0b656ede234d0d11f2a8fbeb0a1204534594d70a69737b7d5781fb66b472"
+  "compilerDigest": "27323c6bf7a3066bab1d6546355e681e2b2d548e10c07389ffe2793f6541aa42"
 }

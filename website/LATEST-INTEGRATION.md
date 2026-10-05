@@ -43,3 +43,11 @@ Go 1.27.1 / Linux amd64，Chromium + Playwright 1.58.2。受限环境必须设�
 `feat/vendor-local-modules` 的编译器核心为 `fceeb8669e738ebffc968b8bd948b2334fe627cb`，生产源 digest `c03e0b656ede234d0d11f2a8fbeb0a1204534594d70a69737b7d5781fb66b472`。当前 catalog、project/workspace snapshots 和首页文案已同步：原生 vendor 只作迁入输入，输出为普通本地模块；没有 Goxide vendor 构建或拆出模式。迁入先保留修改字节；local 默认的来源候选已显示，TTY/remote 切换尚未交付。
 
 owner 从此分支执行 `python3 website/build.py`，将同批生成的 CLI/WASM/JS/catalog 一并验证发布，不能拿旧 vendor 文案或快照配新 CLI。`--offline` 始终双横线，仅用本地材料/缓存，不探测远端。当前只进行了云端 loopback 构建和验证，没有部署、合 main、tag 或 release。详细证据见 [本地模块验收](../docs/reviews/vendor-local-modules-20261004.md)。
+
+## 来源选择后续交付（2026-10-05，待 owner 同步）
+
+本节接续上面的本地核心，TTY/remote 已实现。编译器 `3a8f204a4eacc62ba11ac15fce7a29c91f0bd5d7`，生产源 digest `27323c6bf7a3066bab1d6546355e681e2b2d548e10c07389ffe2793f6541aa42`。终端迁入展示一次模块清单，默认 local；非 TTY 不读输入，重复 `--source MODULE=local|remote` 显式选择。远端仅支持原清单证实的精确 Go module path/version，包括版本化 replacement；未提供 Git/任意 URL/registry。差异按模块确认，非 TTY 必须 `--accept-source-diff MODULE`；所有供应原字节仍在输出中，remote 通过普通 replacement 成为运行来源。verified 仅针对供应文件集合；完整 Go graph 按普通规则验证。
+
+`--offline` 禁止工具控制的代理、sumdb、Git fetch 与工具链下载，remote 只可用完整缓存；缺缓存明确失败。plan 不读取终端、不执行 remote 比对，正常 build 不询问。owner 同步当前分支 catalog/快照/文案并重建，不把旧“TTY 待实现”边界带入新版本；本轮没有部署。
+
+来源选择完整验收与独立复审见 [2026-10-05 报告](../docs/reviews/source-selection-20261005.md)。

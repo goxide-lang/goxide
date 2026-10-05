@@ -1,0 +1,6 @@
+{
+  "commit": "3a8f204a4eacc62ba11ac15fce7a29c91f0bd5d7",
+  "compilerDigest": "27323c6bf7a3066bab1d6546355e681e2b2d548e10c07389ffe2793f6541aa42",
+  "wasmSha256": "a25799bf67a5ed2e9e8ebff195cbf9b18edcb8fc93741830429687867c060772",
+  "toolchain": "go version go1.27.1 linux/amd64"
+}

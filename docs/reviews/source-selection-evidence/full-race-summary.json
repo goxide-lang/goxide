@@ -1,0 +1,132 @@
+{
+  "command": "go test -race -timeout 30m -json ./...",
+  "compilerCommit": "3a8f204a4eacc62ba11ac15fce7a29c91f0bd5d7",
+  "rawLogSha256": "3f1f4deeab8736fba76fda6b23de38fdd60ed6c98046f395036ff14a642d1a5f",
+  "packageResults": {
+    "github.com/hxsf/goxide/formatting": {
+      "status": "pass",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/buildconfig": {
+      "status": "skip",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/deriveextras": {
+      "status": "pass",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/enums": {
+      "status": "pass",
+      "seconds": 7.083
+    },
+    "github.com/hxsf/goxide/internal/equality": {
+      "status": "pass",
+      "seconds": 22.575
+    },
+    "github.com/hxsf/goxide/internal/macros": {
+      "status": "pass",
+      "seconds": 0.001
+    },
+    "github.com/hxsf/goxide/internal/matchexpr": {
+      "status": "pass",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/naming": {
+      "status": "skip",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/printing": {
+      "status": "skip",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/project": {
+      "status": "pass",
+      "seconds": 1.499
+    },
+    "github.com/hxsf/goxide/internal/propagate": {
+      "status": "pass",
+      "seconds": 6.914
+    },
+    "github.com/hxsf/goxide/internal/refs": {
+      "status": "pass",
+      "seconds": 0.001
+    },
+    "github.com/hxsf/goxide/internal/scripttrust": {
+      "status": "pass",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/sourcemap": {
+      "status": "pass",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/testdeps": {
+      "status": "skip",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/typecheck": {
+      "status": "pass",
+      "seconds": 1.338
+    },
+    "github.com/hxsf/goxide/runtime": {
+      "status": "skip",
+      "seconds": 0
+    },
+    "github.com/hxsf/goxide/internal/buildscript": {
+      "status": "pass",
+      "seconds": 45.256
+    },
+    "github.com/hxsf/goxide/tests/prototype": {
+      "status": "pass",
+      "seconds": 9.111
+    },
+    "github.com/hxsf/goxide/internal/frontend": {
+      "status": "pass",
+      "seconds": 76.083
+    },
+    "github.com/hxsf/goxide/tests/acceptance": {
+      "status": "pass",
+      "seconds": 465.247
+    },
+    "github.com/hxsf/goxide/cmd/goxide": {
+      "status": "pass",
+      "seconds": 1110.47
+    }
+  },
+  "topLevelTests": {
+    "github.com/hxsf/goxide/formatting": 1,
+    "github.com/hxsf/goxide/internal/deriveextras": 2,
+    "github.com/hxsf/goxide/internal/enums": 12,
+    "github.com/hxsf/goxide/internal/equality": 22,
+    "github.com/hxsf/goxide/internal/frontend": 103,
+    "github.com/hxsf/goxide/internal/buildscript": 23,
+    "github.com/hxsf/goxide/cmd/goxide": 103,
+    "github.com/hxsf/goxide/internal/macros": 28,
+    "github.com/hxsf/goxide/internal/matchexpr": 4,
+    "github.com/hxsf/goxide/internal/project": 22,
+    "github.com/hxsf/goxide/internal/propagate": 8,
+    "github.com/hxsf/goxide/internal/refs": 15,
+    "github.com/hxsf/goxide/internal/scripttrust": 3,
+    "github.com/hxsf/goxide/internal/sourcemap": 2,
+    "github.com/hxsf/goxide/internal/typecheck": 4,
+    "github.com/hxsf/goxide/tests/prototype": 16,
+    "github.com/hxsf/goxide/tests/acceptance": 148
+  },
+  "subtests": {
+    "github.com/hxsf/goxide/formatting": 3,
+    "github.com/hxsf/goxide/internal/equality": 18,
+    "github.com/hxsf/goxide/internal/enums": 20,
+    "github.com/hxsf/goxide/internal/frontend": 183,
+    "github.com/hxsf/goxide/internal/buildscript": 10,
+    "github.com/hxsf/goxide/internal/macros": 31,
+    "github.com/hxsf/goxide/internal/matchexpr": 3,
+    "github.com/hxsf/goxide/internal/project": 26,
+    "github.com/hxsf/goxide/internal/refs": 31,
+    "github.com/hxsf/goxide/internal/typecheck": 3,
+    "github.com/hxsf/goxide/tests/acceptance": 586,
+    "github.com/hxsf/goxide/tests/prototype": 4,
+    "github.com/hxsf/goxide/cmd/goxide": 168
+  },
+  "totalTopLevel": 516,
+  "totalSubtests": 1086,
+  "failures": []
+}

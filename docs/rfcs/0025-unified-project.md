@@ -117,7 +117,7 @@ func main() { fmt.Println("mixed source, one manifest") }
 
 Goxide 没有 vendor 构建模式。原生 Go 的 vendor 只是 `import-go` 的迁移输入。旧 `[vendor]`、`[workspace.vendor]` 和含 vendor 来源记录的旧锁要求从保留的原生工程显式重新迁入；不能忽略字段或沿旧模式构建。
 
-先用原生 Go 核验 modules.txt 与原政策，再按原逻辑 module identity 将供应字节物化为普通本地 Go 模块。根 TOML 通过明确的本地 replace 绑定这些模块；workspace 成员和根政策也显式绑定。旧版本与 fork/local replace 记录是迁移来源，不能让它们覆盖已经供应的修改字节。普通本地模块规则适用于 build/run/test/lock；没有 `-mod=vendor`、vendor 内容锁或 modules.txt 运行时权威。
+先用原生 Go 核验 modules.txt 与原政策，再按原逻辑 module identity 将供应字节物化为普通本地 Go 模块。默认根 TOML 通过明确的本地 replace 绑定这些模块；workspace 成员和根政策也显式绑定。显式来源选择可在差异核验与确认后改用清单证实的精确远端版本，原供应副本始终保留。旧版本与 fork/local replace 记录是迁移来源，不能让它们覆盖已经供应的修改字节。普通本地模块规则适用于 build/run/test/lock；没有 `-mod=vendor`、vendor 内容锁或 modules.txt 运行时权威。
 
 这是一份裁剪过的供应源码集合，不是完整上游发行物。合成 go.mod 只表达供应源码实际 import 所需的模块关系及已知版本标签，不声称恢复原始 require 图。扫描全部供应 Go 文件，不按当前 host/tag 裁剪；Go 处理包级环和平台选择，合法的模块级环不得误判为增强依赖环。原生 workspace 成员仍使用已有显式成员边合同。
 

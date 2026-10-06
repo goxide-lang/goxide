@@ -50,7 +50,7 @@ with an explicit-capture alternative. Mutable imported function-valued variables
 are rejected, avoiding an accidental snapshot at package initialization.
 
 There is deliberately no permissive free-name fallback. Unsupported free names
-(including builtin functions other than the explicitly supported `len`/`cap`), generic helpers, imported types and
+(including builtin functions other than the explicitly supported `len`/`cap`/`append`), generic helpers, imported types and
 variables, identifier-keyed literals, local type/struct/interface declarations,
 labels, and external precompiled macro metadata are diagnosed. Pass unsupported call-site
 values/functions as explicit captures. Primitive types/constants used by a
@@ -155,9 +155,9 @@ implicit support. Direct statements, including nested explicit closure bodies,
 are supported; go/defer, initializer, loop-post, and value contexts are rejected.
 See [formatting runtime](../../formatting/print.go) for the checked write contract.
 
-## Definition-site len/cap
+## Definition-site len/cap and append
 
-Templates may call native `len` and `cap` directly. Template locals and actual
+Templates may call native `len`, `cap`, and `append` directly. Template locals and actual
 same-package functions still take precedence; a definition-site variable, type,
 or import is never silently interpreted as a builtin. Compiler-owned markers
 survive DSL lowering, then restore native Go calls. No wrapper changes constant
@@ -169,10 +169,22 @@ identity. Only scopes enclosing a builtin expansion need local renaming.
 A caller package declaration or an enclosing local named type with the same name
 currently gives an explicit diagnostic: renaming named types would change their
 reflection identity. This is an engineering boundary, not approved permanent
-scope exclusion. `append`, `make`, `new`, other builtin functions and complete
+scope exclusion. `make`, `new`, `copy`, other builtin functions and complete
 macro-generated declaration support are not enabled by this slice. Existing
 expansion budgets and definition/invocation origins still apply; downstream Go
 argument errors can retain the existing generated/unmapped coordinate label.
+
+`append` keeps the native Go operation, including named slice identity, backing
+storage/capacity behavior, overlapping slices, zero-length spread, and the
+`[]byte` plus `string...` case. Existing terminal repetition can emit multiple
+arguments; no new fragment or repetition grammar is added. Arguments retain
+native evaluation order and multiplicity, and `?` still returns from the nearest
+user function. Disabled conditional logging does not evaluate append arguments.
+See the [A01 append contract](../../docs/rfcs/0011-macros.md#a01-直接-append-调用实施合同2026-10-06)
+and [CLI acceptance](../../tests/acceptance/macro_append_test.go). Single-file
+transpilation and WASM preserve the existing lowering boundary: ordinary invalid
+append operands can produce identical generated Go and are rejected when that
+Go is compiled; macro binding errors are rejected during expansion.
 
 
 Compiler-owned `go_result!(T,call)` and `go_result_keep!(T,call)` adapt explicit

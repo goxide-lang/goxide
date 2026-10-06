@@ -1,0 +1,13 @@
+package main
+macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}
+macro_rules! own {()=>{func()int{append:=func(int)int{return 17};return append(1)}()};}
+type Record struct{append int}
+func parameter(append int)int{return push!([]int{},append)[0]}
+func main(){
+ append:=func()int{return 4}
+ if push!([]int{},append())[0]!=4{panic("local shadow")}
+ {const append=3;v:=map[int]int{append:7};if push!([]int{},v[append])[0]!=7{panic("const map key")}}
+ {append:=5;v:=Record{append:append};if push!([]int{},v.append)[0]!=5{panic("struct key")}}
+ switch append:=any(8).(type){case int:if push!([]int{},append)[0]!=8{panic("type switch")}}
+ if parameter(6)!=6||own!()!=17{panic("parameter or template local")}
+}

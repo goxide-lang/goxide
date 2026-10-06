@@ -1,0 +1,3 @@
+package p
+macro_rules! value {()=>{append};}
+func run(){_=value!()}

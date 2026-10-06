@@ -149,3 +149,28 @@ CRLF、已有自由名和 budget 拒绝回归；诊断指向触发规则的 sele
 WASM 使用已随附的真实 export archives。单文件无 package registry 不代表可以忽略
 调用方传入的 importer。验收合法 `fmt.Println` 模板和其后错误 selector 在 CLI/WASM
 一致；不增加浏览器包集合、文件系统、网络或外部宏包能力。
+
+
+## A01 直接 append 调用实施合同（2026-10-06）
+
+本片只接通已有宏绑定合同中的原生 `append` 直接调用，不增加捕获类别、重复语法、
+类型查询或额外函数边界。`macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}`
+绑定定义点 builtin；模板定义端的局部绑定和真实函数仍优先。与 `len/cap` 相同，
+最终恢复原生 Go 调用，不生成 wrapper，不以赋值或逐项循环代替原生 append。
+
+| 白例 / 已确认行为 | 黑例 / 保留边界 |
+| --- | --- |
+| `push!(items, event())`；原有有限重复捕获展开成多个实参；参数调用按原生次序与次数执行 | 非 slice 第一实参、错误元素类型、非法 arity/ellipsis 交由真实 Go 类型检查拒绝 |
+| 模板 `append($s,$tail...)`，包括 slice 展开与原生 `[]byte` 加 `string...`；保持命名 slice 类型、容量复用、重叠追加和 nil/空行为 | 不引入新的 type fragment，不为 `make/new/copy` 或泛型 helper 自动取得模板资格 |
+| 调用端局部变量、常量、参数、类型 switch 绑定和 import 同名，均按已有词法绑定机制处理；struct 字段键不被当成变量改名 | 调用包级 `append` 声明和实际覆盖调用点的局部 named type 继续明确拒绝；不改用户类型反射身份 |
+| 定义端真实 `func append` 与模板局部 `append` 调用保持其定义点函数身份；重复/嵌套及同源码图跨包宏保绑定 | 定义端同名 var/const/type/import 不被冒认为 builtin；作为值的裸 `append` 继续要求显式合法绑定或诊断 |
+| 条件日志未启用时不计算 append 的参数；模板含 `$v?` 时仍返回最近的用户函数，失败后不计算后续实参或执行追加 | 不把 `?` 放进新闭包，不承诺全新问号位置、外部预编译宏或 tracing span/subscriber API |
+
+验收先保留失败基线，再执行宏绑定单元、真实 CLI 从无关 cwd 转译、生成模块
+race/vet/run、重复输出与 source map，以及单文件 CLI/WASM 正反例差分。必须覆盖
+定义点/调用点同名、不同文件、LF/CRLF 和原有 len/cap 回归。Mac 原生结果与历史
+Linux 证据分开记录；A01 只关闭本 append 子项，RFC0011 及 A03 仍为 partial。
+
+本片保留单文件 `transpile` / WASM 的既有降低边界：普通 append 的非法实参
+可能得到相同的生成 Go，须由真实 CLI `build` / 生成 Go 编译拒绝；不把浏览器
+转译成功等同于 Go 类型检查成功。宏绑定黑例则要求两端在展开阶段给出相同诊断。

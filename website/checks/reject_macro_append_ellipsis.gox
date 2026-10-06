@@ -1,0 +1,3 @@
+package p
+macro_rules! extend {($s:expr,$v:expr)=>{append($s,1,$v...)};}
+func run(){_=extend!([]int{},[]int{2})}

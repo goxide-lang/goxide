@@ -1,0 +1,4 @@
+package p
+type append int
+macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}
+func run(){_=push!([]int{},2)}

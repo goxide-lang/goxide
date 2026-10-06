@@ -1,0 +1,15 @@
+package main
+macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}
+macro_rules! values {($s:expr,$($v:expr),*)=>{append($s,$($v),*)};}
+macro_rules! size {($s:expr)=>{len($s)};}
+macro_rules! space {($s:expr)=>{cap($s)};}
+type Numbers []int
+func main(){
+ storage:=[4]int{1,2,0,0}
+ var numbers Numbers=push!(Numbers(storage[:2]),3)
+ if size!(numbers)!=3||space!(numbers)!=4||&numbers[0]!=&storage[0]{panic("native append")}
+ numbers=values!(numbers,4,5)
+ if numbers[3]!=4||numbers[4]!=5{panic("repeated arguments")}
+ var absent []int
+ if values!(absent,)!=nil{panic("nil append")}
+}

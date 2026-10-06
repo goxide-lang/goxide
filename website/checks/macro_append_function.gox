@@ -1,0 +1,7 @@
+package main
+func append(s []int,v int)[]int{return []int{len(s)+v+10}}
+macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}
+func main(){
+ append:=func([]int,int)[]int{return []int{99}}
+ if push!([]int{1},2)[0]!=13||append([]int{},0)[0]!=99{panic("definition function")}
+}

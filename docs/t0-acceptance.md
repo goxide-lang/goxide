@@ -1013,3 +1013,23 @@ A04 unary/composite match 另批实施；Linux/托管 CI 未验证，网站未�
 go/defer/control 头、复杂 postfix/receiver、引用/收发 unary、多结果、复杂 LHS、
 block arm、不可命名类型等继续留账；本片只关闭 A04 的上述子集。tuple/struct variant、
 手写协议等未新定语义，未改公开库 ABI。Linux/托管 CI 未运行，网站未部署，main/tag 未改。
+
+
+## A06 已知 Go module 的单文件恢复验收（2026-10-06，实施前）
+
+基线 `e7c10e9fe7bf3854e7dc119b916b620868638bff`，分支 `feat/single-file-external-recovery`。
+完整身份及正反例见 [RFC0001 合同](rfcs/0001-package-loading.md#a06-已知-go-module-的单文件外部恢复2026-10-06实施前合同)；
+本节只列要求，不表示通过。
+
+| 场景 | 必须观察 |
+| --- | --- |
+| producer→file / directory / Go consumer | 同一业务的enum构造/match、具体sum、Default/Clone/Debug/serde/Eq；真正build/run、生成模块race/vet、确定性 |
+| canonical identity | 直接/relay/多级local alias成功；new defined、同名异包、伪helper和错误来源/方向拒绝；单次importer贯穿各阶段 |
+| 输入owner | nearest input go.mod、嵌套module、symlink、unrelated/collision cwd、移动relative replace；runtime/cwd不替换图，源及配置字节不变 |
+| 单文件选择 | sibling不能供应声明或毒化指定文件；已有native/generated跨包依赖正常，不自动编译任意依赖gox源码 |
+| artifact闭包 | 缺失/版本/schema/path/marker/hash/file set/陈旧依赖拒绝；重算摘要的伪登记也由canonical owner拒绝 |
+| internal/private | 同module合法internal成功，跨module非法源码import拒绝；普通public facade API保持，不可达增强helper不绕过 |
+| 边界/交付 | use守卫与refs权限保持；TOML/workspace file配置仍需目录入口；准确源码独立审查、完整Mac门槛、原105/11网站矩阵保留 |
+
+跨包能力仅由原生 CLI/Go 联合用例证明，浏览器不宣称任意 module 加载。
+compiler pin、网站/工具、最终报告提交分开；不改公开库 ABI、main/tag 或部署网站。

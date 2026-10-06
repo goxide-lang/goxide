@@ -1,5 +1,10 @@
 # RFC 0013：Default、Clone、Debug 内建派生
 
+本轮 A06 的单文件外部已登记协议恢复，按
+[RFC0001 实施前合同](0001-package-loading.md#a06-已知-go-module-的单文件外部恢复2026-10-06实施前合同)
+实施。复用下文已有 canonical identity、签名和来源验证；手写 Clone/Debug/serde
+登记不在本片新定，完整交付结果另记。
+
 ## 状态与范围
 
 已确认目标：内建 `#[derive(Default, Clone, Debug)]`；用户可编程 derive 延期（D14）。

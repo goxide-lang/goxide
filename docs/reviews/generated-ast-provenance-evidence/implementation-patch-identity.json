@@ -1,0 +1,12 @@
+{
+  "sha256": "4c0ad23b314ab2162aad76d6736f83196e49bbe6da556f4bcee9835aa0a52feb",
+  "files": 16,
+  "delta_sha256": "ffe200b6b7abcabaeccc6dc0e01e5effbd647de6f77a82e1197a3b73335e0aa4",
+  "delta_files": [
+    "internal/frontend/ast_provenance_test.go",
+    "internal/sourcemap/README.md",
+    "internal/sourcemap/ast.go",
+    "internal/sourcemap/ast_evidence.go",
+    "internal/sourcemap/ast_evidence_test.go"
+  ]
+}

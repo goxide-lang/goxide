@@ -948,3 +948,13 @@ Linux 未验证，网站未部署；查不到的精确提交托管 CI 不算通�
 | 交付 | 独立审查、准确源码的完整 Mac race/vet/design、CLI/WASM全旧矩阵及新差分、错误后恢复；普通分支 push/fetch/远端准确 SHA；Linux/CI 无证据不称通过 |
 
 A01 未在本片扩展。A03 冗余括号、refs、共享 helper/其他临时节点等余项继续按可证明边界列明。
+
+
+## A03 AST 证据模型交付（2026-10-06）
+
+上述AST证据模型验收对应源码 `e36d23dacee64d19b34aac639900c3f5c29e55c2`，分支 `fix/generated-ast-provenance`。
+完整Mac race 597 顶层/1295 子测试、全树vet/design、
+独立审查与真实CLI/WASM结果见[报告](reviews/generated-ast-provenance-20261006.md)。
+questionFlow明确新建token只带已证明完整栈、Origin仍nil；复用operand保留自身来源。
+未知墓碑与冲突不被外层填充，冗余括号/其他temp/refs/共享helper不在本片冒称闭环。
+Linux未运行、网站未部署，精确提交的托管CI状态另记，不由本地成功推断。

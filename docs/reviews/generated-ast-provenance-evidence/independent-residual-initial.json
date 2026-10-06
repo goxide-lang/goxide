@@ -1,0 +1,614 @@
+{
+  "source_commit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+  "baseline_commit": "fd8380c39876c96441857a737be8e32c322a0467",
+  "observations": [
+    {
+      "case": "different-owner-parens",
+      "line_endings": "LF",
+      "category": "remaining",
+      "expectation_met": true,
+      "bytes_equal": true,
+      "baseline": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:3:35: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:35: generated/unmapped\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "c086ff58fa8b79b5ff37873204bb5740ea946d6781ab05129703175a690ee401",
+        "error_segment": {
+          "Start": 48,
+          "End": 49,
+          "Kind": "generated/unmapped"
+        },
+        "native_primary_offset": 48
+      },
+      "final": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:3:35: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:35: generated/unmapped\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "c086ff58fa8b79b5ff37873204bb5740ea946d6781ab05129703175a690ee401",
+        "error_segment": {
+          "Start": 48,
+          "End": 49,
+          "Kind": "generated/unmapped"
+        },
+        "native_primary_offset": 48
+      }
+    },
+    {
+      "case": "different-owner-parens",
+      "line_endings": "CRLF",
+      "category": "remaining",
+      "expectation_met": true,
+      "bytes_equal": true,
+      "baseline": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:3:35: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:35: generated/unmapped\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "c086ff58fa8b79b5ff37873204bb5740ea946d6781ab05129703175a690ee401",
+        "error_segment": {
+          "Start": 48,
+          "End": 49,
+          "Kind": "generated/unmapped"
+        },
+        "native_primary_offset": 48
+      },
+      "final": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:3:35: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:35: generated/unmapped\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "c086ff58fa8b79b5ff37873204bb5740ea946d6781ab05129703175a690ee401",
+        "error_segment": {
+          "Start": 48,
+          "End": 49,
+          "Kind": "generated/unmapped"
+        },
+        "native_primary_offset": 48
+      }
+    },
+    {
+      "case": "nested-append-capture",
+      "line_endings": "LF",
+      "category": "remaining",
+      "expectation_met": true,
+      "bytes_equal": true,
+      "baseline": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:3:37: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:37: generated/unmapped\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "15fc872d91207afc46b71f16f1f8760bad4bdc48c1567085da53f763a3ad8d90",
+        "error_segment": {
+          "Start": 50,
+          "End": 51,
+          "Kind": "generated/unmapped"
+        },
+        "native_primary_offset": 50
+      },
+      "final": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:3:37: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:37: generated/unmapped\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "15fc872d91207afc46b71f16f1f8760bad4bdc48c1567085da53f763a3ad8d90",
+        "error_segment": {
+          "Start": 50,
+          "End": 51,
+          "Kind": "generated/unmapped"
+        },
+        "native_primary_offset": 50
+      }
+    },
+    {
+      "case": "nested-append-capture",
+      "line_endings": "CRLF",
+      "category": "remaining",
+      "expectation_met": true,
+      "bytes_equal": true,
+      "baseline": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:3:37: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:37: generated/unmapped\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "15fc872d91207afc46b71f16f1f8760bad4bdc48c1567085da53f763a3ad8d90",
+        "error_segment": {
+          "Start": 50,
+          "End": 51,
+          "Kind": "generated/unmapped"
+        },
+        "native_primary_offset": 50
+      },
+      "final": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:3:37: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:37: generated/unmapped\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "15fc872d91207afc46b71f16f1f8760bad4bdc48c1567085da53f763a3ad8d90",
+        "error_segment": {
+          "Start": 50,
+          "End": 51,
+          "Kind": "generated/unmapped"
+        },
+        "native_primary_offset": 50
+      }
+    },
+    {
+      "case": "helper-cycle",
+      "line_endings": "LF",
+      "category": "remaining",
+      "expectation_met": false,
+      "bytes_equal": true,
+      "baseline": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:5:5: initialization cycle for Value\n\t./main.go:5:5: Value refers to goxideMacroGenerated1\n\t./main.go:9:5: goxideMacroGenerated1 refers to helper\n\t./main.go:3:6: helper refers to Value\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/helper-cycle-LF.gox:4:5: initialization cycle for Value [source]\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "6abfebd45f8a2b53ea2e860222e79b1900d66130fd4244a0367d132d60d8ecfd",
+        "error_segment": {
+          "Start": 54,
+          "End": 59,
+          "Origin": {
+            "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/helper-cycle-LF.gox",
+            "Start": 84,
+            "End": 89,
+            "Line": 4,
+            "Column": 5
+          },
+          "Kind": "source"
+        },
+        "native_primary_offset": 54
+      },
+      "final": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:5:5: initialization cycle for Value\n\t./main.go:5:5: Value refers to goxideMacroGenerated1\n\t./main.go:9:5: goxideMacroGenerated1 refers to helper\n\t./main.go:3:6: helper refers to Value\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/helper-cycle-LF.gox:4:5: initialization cycle for Value [source]\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "6abfebd45f8a2b53ea2e860222e79b1900d66130fd4244a0367d132d60d8ecfd",
+        "error_segment": {
+          "Start": 54,
+          "End": 59,
+          "Origin": {
+            "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/helper-cycle-LF.gox",
+            "Start": 84,
+            "End": 89,
+            "Line": 4,
+            "Column": 5
+          },
+          "Kind": "source"
+        },
+        "native_primary_offset": 54
+      }
+    },
+    {
+      "case": "helper-cycle",
+      "line_endings": "CRLF",
+      "category": "remaining",
+      "expectation_met": false,
+      "bytes_equal": true,
+      "baseline": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:5:5: initialization cycle for Value\n\t./main.go:5:5: Value refers to goxideMacroGenerated1\n\t./main.go:9:5: goxideMacroGenerated1 refers to helper\n\t./main.go:3:6: helper refers to Value\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/helper-cycle-CRLF.gox:4:5: initialization cycle for Value [source]\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "6abfebd45f8a2b53ea2e860222e79b1900d66130fd4244a0367d132d60d8ecfd",
+        "error_segment": {
+          "Start": 54,
+          "End": 59,
+          "Origin": {
+            "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/helper-cycle-CRLF.gox",
+            "Start": 87,
+            "End": 92,
+            "Line": 4,
+            "Column": 5
+          },
+          "Kind": "source"
+        },
+        "native_primary_offset": 54
+      },
+      "final": {
+        "transpile": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "# goxide.local/generated\n./main.go:5:5: initialization cycle for Value\n\t./main.go:5:5: Value refers to goxideMacroGenerated1\n\t./main.go:9:5: goxideMacroGenerated1 refers to helper\n\t./main.go:3:6: helper refers to Value\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/helper-cycle-CRLF.gox:4:5: initialization cycle for Value [source]\ngenerated Go build: exit status 1\n"
+        },
+        "frames": [],
+        "go_sha256": "6abfebd45f8a2b53ea2e860222e79b1900d66130fd4244a0367d132d60d8ecfd",
+        "error_segment": {
+          "Start": 54,
+          "End": 59,
+          "Origin": {
+            "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/helper-cycle-CRLF.gox",
+            "Start": 87,
+            "End": 92,
+            "Line": 4,
+            "Column": 5
+          },
+          "Kind": "source"
+        },
+        "native_primary_offset": 54
+      }
+    },
+    {
+      "case": "refs-readonly",
+      "line_endings": "LF",
+      "category": "remaining",
+      "expectation_met": true,
+      "bytes_equal": null,
+      "baseline": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/refs-readonly-LF.gox:5:17: refs: cannot write through a readonly projection\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/refs-readonly-LF.gox:5:17: refs: cannot write through a readonly projection\n"
+        },
+        "frames": []
+      },
+      "final": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/refs-readonly-LF.gox:5:17: refs: cannot write through a readonly projection\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/refs-readonly-LF.gox:5:17: refs: cannot write through a readonly projection\n"
+        },
+        "frames": []
+      }
+    },
+    {
+      "case": "refs-readonly",
+      "line_endings": "CRLF",
+      "category": "remaining",
+      "expectation_met": true,
+      "bytes_equal": null,
+      "baseline": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/refs-readonly-CRLF.gox:5:17: refs: cannot write through a readonly projection\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/refs-readonly-CRLF.gox:5:17: refs: cannot write through a readonly projection\n"
+        },
+        "frames": []
+      },
+      "final": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/refs-readonly-CRLF.gox:5:17: refs: cannot write through a readonly projection\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/refs-readonly-CRLF.gox:5:17: refs: cannot write through a readonly projection\n"
+        },
+        "frames": []
+      }
+    },
+    {
+      "case": "unknown-index-temp",
+      "line_endings": "LF",
+      "category": "remaining",
+      "expectation_met": true,
+      "bytes_equal": null,
+      "baseline": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/unknown-index-temp-LF.gox:17:6: cannot index __goxide_qtmp_6 (variable of int type __goxide_qscalar___goxide_qtmp_5) [generated/unmapped]\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/unknown-index-temp-LF.gox:17:6: cannot index __goxide_qtmp_6 (variable of int type __goxide_qscalar___goxide_qtmp_5) [generated/unmapped]\n"
+        },
+        "frames": []
+      },
+      "final": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/unknown-index-temp-LF.gox:18:6: cannot index __goxide_qtmp_6 (variable of int type __goxide_qscalar___goxide_qtmp_5) [generated/unmapped]\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/unknown-index-temp-LF.gox:18:6: cannot index __goxide_qtmp_6 (variable of int type __goxide_qscalar___goxide_qtmp_5) [generated/unmapped]\n"
+        },
+        "frames": []
+      }
+    },
+    {
+      "case": "unknown-index-temp",
+      "line_endings": "CRLF",
+      "category": "remaining",
+      "expectation_met": true,
+      "bytes_equal": null,
+      "baseline": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/unknown-index-temp-CRLF.gox:17:6: cannot index __goxide_qtmp_6 (variable of int type __goxide_qscalar___goxide_qtmp_5) [generated/unmapped]\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/unknown-index-temp-CRLF.gox:17:6: cannot index __goxide_qtmp_6 (variable of int type __goxide_qscalar___goxide_qtmp_5) [generated/unmapped]\n"
+        },
+        "frames": []
+      },
+      "final": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/unknown-index-temp-CRLF.gox:18:6: cannot index __goxide_qtmp_6 (variable of int type __goxide_qscalar___goxide_qtmp_5) [generated/unmapped]\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/unknown-index-temp-CRLF.gox:18:6: cannot index __goxide_qtmp_6 (variable of int type __goxide_qscalar___goxide_qtmp_5) [generated/unmapped]\n"
+        },
+        "frames": []
+      }
+    },
+    {
+      "case": "target-single-question",
+      "line_endings": "LF",
+      "category": "implemented-target",
+      "expectation_met": true,
+      "bytes_equal": null,
+      "baseline": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+        },
+        "frames": []
+      },
+      "final": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:4:23\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:4:23\n"
+        },
+        "frames": [
+          [
+            "m",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:2:1",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-LF.gox:4:23"
+          ]
+        ]
+      }
+    },
+    {
+      "case": "target-single-question",
+      "line_endings": "CRLF",
+      "category": "implemented-target",
+      "expectation_met": true,
+      "bytes_equal": null,
+      "baseline": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+        },
+        "frames": []
+      },
+      "final": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:4:23\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:4:23\n"
+        },
+        "frames": [
+          [
+            "m",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:2:1",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-single-question-CRLF.gox:4:23"
+          ]
+        ]
+      }
+    },
+    {
+      "case": "target-nested-question",
+      "line_endings": "LF",
+      "category": "implemented-target",
+      "expectation_met": true,
+      "bytes_equal": null,
+      "baseline": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+        },
+        "frames": []
+      },
+      "final": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:5:23\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:3:33\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:5:23\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:3:33\n"
+        },
+        "frames": [
+          [
+            "outer",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:3:1",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:5:23"
+          ],
+          [
+            "inner",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:2:1",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-LF.gox:3:33"
+          ]
+        ]
+      }
+    },
+    {
+      "case": "target-nested-question",
+      "line_endings": "CRLF",
+      "category": "implemented-target",
+      "expectation_met": true,
+      "bytes_equal": null,
+      "baseline": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+        },
+        "frames": []
+      },
+      "final": {
+        "transpile": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:5:23\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:3:33\n"
+        },
+        "build": {
+          "exit": 1,
+          "stdout": "",
+          "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:5:23\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:3:33\n"
+        },
+        "frames": [
+          [
+            "outer",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:3:1",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:5:23"
+          ],
+          [
+            "inner",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:2:1",
+            "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/residuals/target-nested-question-CRLF.gox:3:33"
+          ]
+        ]
+      }
+    }
+  ]
+}

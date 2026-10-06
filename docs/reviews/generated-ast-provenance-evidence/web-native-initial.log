@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/validate_web.py", line 208, in <module>
+    globals()[args.phase](args.commit)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/validate_web.py", line 153, in native
+    raise AssertionError(name+' changed generated Go; raw diff preserved; independent proof required')
+AssertionError: example/result changed generated Go; raw diff preserved; independent proof required

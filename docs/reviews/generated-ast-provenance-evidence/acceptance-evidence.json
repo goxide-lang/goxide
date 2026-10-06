@@ -1,0 +1,113 @@
+{
+  "baseline_commit": "f5b6ce658e976d4d5e951e1bb7d3ce4aaea14be1",
+  "baseline_source_commit": "fd8380c39876c96441857a737be8e32c322a0467",
+  "workspace": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/acceptance/scratch",
+  "main_repository_modified": false,
+  "environment": {
+    "GOTOOLCHAIN": "local",
+    "GOMAXPROCS": "4",
+    "TMPDIR": "/Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native",
+    "GOCACHE": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-build",
+    "GOMODCACHE": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod"
+  },
+  "baseline": {
+    "command": "/opt/homebrew/bin/go test ./tests/acceptance -run ^TestMacroASTProvenanceCLI$ -count=1 -v",
+    "exit_code": 1,
+    "log": "baseline.log",
+    "leaf_failed": 13,
+    "leaf_passed": 8,
+    "runtime_checks": "Generated-module go test -race, go vet ./..., go run -race . all succeeded; AB 5. Runtime subtest intentionally fails four output-map payload slot checks."
+  },
+  "files": {
+    "acceptance.patch": "1c740118e758cd561a8936d92c72655e53c8f15966ef5fca852ee90c5aec516e",
+    "scratch/tests/acceptance/macro_ast_provenance_test.go": "1139ebce0efd6ab60e40f0ed23d839bed7d53265d415a91f24e0bd9521aa0a85",
+    "baseline.log": "604f3a0e31e2a8e2e877ab6b47e22ae7233591773c77c6f18af17d64c6dfc1ca",
+    "runtime-baseline/main.go": "92674cda4d3ef3df8d5d73aa5109b8405f218c56a10fe7883646d11d3fc0a4ea",
+    "runtime-baseline/main.go.map.json": "5b19e77610d57ed94f44735714fc2946118fad5eb0017343dc088ec7a83f62ab",
+    "candidate-v1.log": "1536184a9274ad69a7156bdd8e0a762c120dfd835d41fe3dceb95cd34879ddaf",
+    "runtime-candidate-v1.diff": "8a144c1509760d1af5f5a0d8944f8e00897794d64da736a1ee961e94d0cd8bbd",
+    "token-comparison-candidate-v1.json": "c729a94737e8e94063d384fcab75c634899d96ffa47e5092ad89b71afe85cda3",
+    "ast-comparison-candidate-v1.json": "9b8464098628c2eb30394e7f001f043d87a8b4e4388679263bfff843c27d9d51",
+    "compare_ast.go": "73c3df5140a4e3fe2f5ea15427476ccb87e23c2dafe8545d5a66fbe2e14b44db",
+    "runtime-candidate-v1/main.go": "a3afae23d0cc2f96e0c25fbdf005f60b9fabe6aa638f3463a4d8bac3fa6c9db8",
+    "final-race.log": "4652d9ea97c4445d2d2322441018864117950bdc31f15b073b8ac8e0ac9bf5ce",
+    "runtime-final/main.go": "a3afae23d0cc2f96e0c25fbdf005f60b9fabe6aa638f3463a4d8bac3fa6c9db8",
+    "runtime-final/main.go.map.json": "0e52f49438bced12828befd899359f09ce445cdcf1941fa7176938069d1d8655",
+    "runtime-final.diff": "41efb7ae5fecfb3656f969ae5a023673b04af931e0f5250bf0e4c1e8366d5b60",
+    "token-comparison-final.json": "c729a94737e8e94063d384fcab75c634899d96ffa47e5092ad89b71afe85cda3",
+    "ast-comparison-final.json": "254006fe369428d3e09edd18b18d076a88b616a2edc9b916cd538e24cfe19f8b",
+    "final-scratch/tests/acceptance/macro_ast_provenance_test.go": "1139ebce0efd6ab60e40f0ed23d839bed7d53265d415a91f24e0bd9521aa0a85",
+    "goxide-final": "24acfc25ee47b120bc0f6a9b5bf9e0521db5433f2779f7cc9519eb4999ca896a"
+  },
+  "scope": "Unknown later freezeValue index temp remains unmapped with no stack. Existing selector exact point, cross-package owner, and nonmacro controls pass. Builtin-rename loss also erases unrelated precise selector point in baseline. No whole-tree/CI claim.",
+  "route_evidence": {
+    "expr": "Actual generated len argument Ident",
+    "effect": "Private promoted pointer destination; emitted staged binary payload Idents",
+    "frame": "Private promoted pointer destination plus dynamic local callee; actual emitted Catch/Fail guard and helper return Ident"
+  },
+  "fixture_development_logs": [
+    "baseline-initial.log",
+    "runtime-initial.log",
+    "baseline-before-added-controls.log"
+  ],
+  "baseline_test_sha256": "2309561324f7eca0305ce83ec27036fa227d76f638e11af894fea7bff1541d34",
+  "after_baseline_nonbehavior_change": "Grouped internal/sourcemap import after standard-library imports as requested.",
+  "candidate_v1": {
+    "base": "f5b6ce658e976d4d5e951e1bb7d3ce4aaea14be1",
+    "production_patch_sha256": "46620afffca2fb8fdfaf94d0b9a86765459d453152a7c4947d735ffef85ce80d",
+    "command": "/opt/homebrew/bin/go test ./tests/acceptance -run ^TestMacroASTProvenanceCLI$ -count=1 -v",
+    "exit_code": 0,
+    "leaf_passed": 21,
+    "log": "candidate-v1.log",
+    "seconds": 6.895,
+    "final_source_validation": false,
+    "generated_go_comparison": {
+      "main_bytes_equal": false,
+      "strict_tokens_equal": false,
+      "parsed_ast_equal": true,
+      "ast_shape_sha256": "9201aa6be4dc1a125e4eda4f3e058d2f42689790ad6dac8652310a9dbd2b37f2",
+      "reason": "Validator calls acquire newlines and optional trailing commas after operand AST identity is retained; parsed AST fields and runtime behavior match.",
+      "diff": "runtime-candidate-v1.diff",
+      "strict_tokens": "token-comparison-candidate-v1.json",
+      "ast": "ast-comparison-candidate-v1.json"
+    }
+  },
+  "final": {
+    "source_commit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+    "source_tree": "f13b7ad22757b1fa42d8f3ecf601d77eca292f1b",
+    "archive": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/acceptance/final-scratch",
+    "verified_archive_blobs": 1096,
+    "archive_mismatches": [],
+    "go_version": "go version go1.27.1 darwin/arm64",
+    "command": "/opt/homebrew/bin/go test -race ./tests/acceptance -run ^TestMacroASTProvenanceCLI$ -count=1 -v",
+    "exit_code": 0,
+    "leaf_passed": 21,
+    "test_seconds": 6.68,
+    "package_seconds": 8.611,
+    "log": "final-race.log",
+    "generated_module": {
+      "race": "passed",
+      "vet": "passed",
+      "run_race_stdout": "AB 5\n",
+      "behavior": "Same explicit assertions pass on baseline and final: expression operand order/count, early None return/no later evaluation, nearest nested user function, nested question, effect private destination failure/no write, frame guard failure/no write, native division panic and defer, short circuit."
+    },
+    "generated_go_comparison": {
+      "baseline_commit": "f5b6ce658e976d4d5e951e1bb7d3ce4aaea14be1",
+      "baseline_main_sha256": "92674cda4d3ef3df8d5d73aa5109b8405f218c56a10fe7883646d11d3fc0a4ea",
+      "final_main_sha256": "a3afae23d0cc2f96e0c25fbdf005f60b9fabe6aa638f3463a4d8bac3fa6c9db8",
+      "main_bytes_equal": false,
+      "strict_token_exit_code": 1,
+      "strict_tokens_equal": false,
+      "model_bytes_equal": true,
+      "parsed_ast_equal": true,
+      "ast_shape_sha256": "9201aa6be4dc1a125e4eda4f3e058d2f42689790ad6dac8652310a9dbd2b37f2",
+      "reason": "Printed validator calls gain line breaks and optional trailing commas. Parsed AST node types, field roles/order, semantic scalars and token presence (including Assign/Ellipsis) are identical; numeric positions and parser caches excluded.",
+      "diff": "runtime-final.diff",
+      "strict_tokens": "token-comparison-final.json",
+      "ast": "ast-comparison-final.json",
+      "same_as_candidate_v1": true
+    },
+    "comparison_fixture_note": "The persistent baseline/final code comparison uses identical runtime-source bytes and identical module dependency/replace paths. The formal acceptance independently executes a fresh generated module referring to the exact final archive.",
+    "limitations": "Focused Mac acceptance only. Whole-tree race/vet/design and WASM/CI are owned by the parent task; not claimed here."
+  }
+}

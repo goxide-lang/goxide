@@ -1,0 +1,1310 @@
+{
+  "codeCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+  "build": "passed with isolated Homebrew LICENSE path adaptation; not an unmodified website build",
+  "exitStatus": {
+    "wasm-build": 0,
+    "web-build": 0,
+    "web-race": 0,
+    "web-vet": 0,
+    "browser-qa": 0,
+    "catalog-qa": 0,
+    "native-parity": 0
+  },
+  "browser": {
+    "examples": 10,
+    "parity": "byte-for-byte",
+    "goResultChecks": [
+      "error_only",
+      "typed_nil",
+      "reject_wrong_type",
+      "pointer_error",
+      "named_error",
+      "slice_error",
+      "reject_value_error",
+      "reject_arity",
+      "reject_legacy_cfg"
+    ],
+    "diagnosticChecks": [
+      "reject_macro_selector",
+      "reject_macro_prepared",
+      "reject_derive_origin",
+      "reject_enum_derive_origin",
+      "macro_imported_helper"
+    ],
+    "appendChecks": {
+      "positive": [
+        "macro_append_native",
+        "macro_append_shadow",
+        "macro_append_string",
+        "macro_append_question",
+        "macro_append_function"
+      ],
+      "frontendReject": [
+        "reject_macro_append_definition_var",
+        "reject_macro_append_definition_const",
+        "reject_macro_append_definition_type",
+        "reject_macro_append_definition_import",
+        "reject_macro_append_value",
+        "reject_macro_append_named_type"
+      ],
+      "nativeTypeReject": [
+        "reject_macro_append_slice",
+        "reject_macro_append_element",
+        "reject_macro_append_arity",
+        "reject_macro_append_ellipsis"
+      ],
+      "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native"
+    },
+    "copyChecks": {
+      "positive": [
+        "macro_copy_native",
+        "macro_copy_string",
+        "macro_copy_shadow",
+        "macro_copy_function",
+        "macro_copy_question",
+        "macro_copy_readonly_source"
+      ],
+      "frontendReject": [
+        "reject_macro_copy_definition_var",
+        "reject_macro_copy_definition_const",
+        "reject_macro_copy_definition_type",
+        "reject_macro_copy_definition_import",
+        "reject_macro_copy_value",
+        "reject_macro_copy_named_type",
+        "reject_macro_copy_readonly_target",
+        "reject_macro_copy_readonly_pointer"
+      ],
+      "nativeTypeReject": [
+        "reject_macro_copy_slice",
+        "reject_macro_copy_element",
+        "reject_macro_copy_string_rune",
+        "reject_macro_copy_arity",
+        "reject_macro_copy_ellipsis"
+      ],
+      "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native"
+    },
+    "allocationChecks": {
+      "positive": [
+        "macro_allocation_native",
+        "macro_allocation_new_types",
+        "macro_allocation_shadow",
+        "macro_allocation_function",
+        "macro_allocation_question"
+      ],
+      "frontendReject": [
+        "reject_macro_allocation_new_expression",
+        "reject_macro_allocation_capture_expr",
+        "reject_macro_allocation_capture_ident",
+        "reject_macro_allocation_capture_tt",
+        "reject_macro_allocation_nested_capture",
+        "reject_macro_allocation_make_capture",
+        "reject_macro_allocation_named_type",
+        "reject_macro_allocation_generic_type",
+        "reject_macro_allocation_struct_type",
+        "reject_macro_allocation_interface_type",
+        "reject_macro_allocation_func_type",
+        "reject_macro_allocation_local_primitive",
+        "reject_macro_allocation_primitive_function",
+        "reject_macro_allocation_primitive_import",
+        "reject_macro_allocation_definition_var",
+        "reject_macro_allocation_definition_const",
+        "reject_macro_allocation_definition_type",
+        "reject_macro_allocation_definition_import",
+        "reject_macro_allocation_make_value",
+        "reject_macro_allocation_new_value",
+        "reject_macro_allocation_make_local_type",
+        "reject_macro_allocation_new_local_type"
+      ],
+      "nativeTypeReject": [
+        "reject_macro_allocation_make_type",
+        "reject_macro_allocation_make_arity",
+        "reject_macro_allocation_make_negative",
+        "reject_macro_allocation_make_capacity",
+        "reject_macro_allocation_map_key",
+        "reject_macro_allocation_array_length",
+        "reject_macro_allocation_new_arity",
+        "reject_macro_allocation_ellipsis"
+      ],
+      "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native",
+      "nativeValidButUnsupported": [
+        "reject_macro_allocation_new_expression"
+      ]
+    },
+    "originChecks": {
+      "fixtures": 8,
+      "cliObservations": 32,
+      "uiLfObservations": 16,
+      "rawWorkerObservations": 32,
+      "recoveryAfterEach": true,
+      "sourceFile": "playground.gox reused across distinct sources",
+      "scope": "UI LF plus non-UI real WASM worker LF/CRLF; no cross-file/package or effect/frame coverage claim"
+    },
+    "astChecks": {
+      "fixtures": 5,
+      "cliObservations": 20,
+      "uiLfObservations": 10,
+      "rawWorkerObservations": 20,
+      "recoveryAfterEach": true,
+      "sourceFile": "playground.gox reused across distinct sources",
+      "scope": "UI LF plus non-UI real WASM worker LF/CRLF; no cross-file/package or effect/frame coverage claim",
+      "positive": [
+        "macro_ast_question_behavior"
+      ]
+    },
+    "checks": [
+      "edit",
+      "error recovery",
+      "rapid edits",
+      "copy",
+      "32 KiB",
+      "unsupported import",
+      "XSS",
+      "keyboard",
+      "390px",
+      "hard timeout",
+      "interrupt",
+      "reset",
+      "no external requests"
+    ],
+    "errors": []
+  },
+  "catalog": {
+    "url": "http://127.0.0.1:18084",
+    "compilerCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+    "websiteCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+    "wasmSha256": "b96b5373ef081372565f8f3442707fa47f61e2641ee7e29658f3352f07ee9276",
+    "metadataSchema": 8,
+    "cards": 26,
+    "examples": 10,
+    "negativeExamples": 10,
+    "filters": true,
+    "permalinks": true,
+    "snapshots": true,
+    "mobile390": true,
+    "clipboard": true,
+    "parity": "byte-for-byte",
+    "errors": [],
+    "consoleErrors": [],
+    "network": "same-origin GET only"
+  },
+  "compilerDigest": "41f51dffc2aa68535a7617824231065d268cab190adeb7e164e239e3b7022848",
+  "wasmSha256": "b96b5373ef081372565f8f3442707fa47f61e2641ee7e29658f3352f07ee9276",
+  "toolchain": "go version go1.27.1 darwin/arm64",
+  "exportTarget": {
+    "GOARCH": "arm64",
+    "GOOS": "darwin"
+  },
+  "diagnosticBoundary": "Synthetic primary point remains generated/unmapped independently of a proven whole frame chain; original token and frame anchors are independently asserted. UI LF and raw real WASM worker LF/CRLF, all single-file. Multi-file/package/native Go stderr attribution and effect/frame questionFlow consumers are covered separately, not by browser QA.",
+  "nativeTypeBoundary": "Preserved append/copy/allocation native type cases compare CLI/WASM output then require native Go compilation rejection; WASM does not execute final Go compilation",
+  "successfulGoParity": {
+    "baselineCommit": "fd8380c39876c96441857a737be8e32c322a0467",
+    "baselineExecutable": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/baseline-fd8380c/goxide",
+    "baselineExecutableSha256": "d36577742e92143081ff94779de275894027879dddac8f545912df85d28b5ae8",
+    "baselineIdentity": {
+      "commit": "fd8380c39876c96441857a737be8e32c322a0467",
+      "compilerDigest": "fb807e5029c92645606fd7d3536f984e325793ae9f30b254e8448b357e6c1519",
+      "binarySha256": "d36577742e92143081ff94779de275894027879dddac8f545912df85d28b5ae8",
+      "compilerSourceVerifiedAgainstCommit": true,
+      "websiteOverlay": "6dc779a651af3eb34121f53637a55bfb6feee387",
+      "vcsModified": true,
+      "scope": "Previous validated isolated build; site-only overlay dirty state is disclosed, not described as pristine",
+      "priorIdentity": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-synthetic-origin/local-wasm-identity.json"
+    },
+    "currentCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+    "comparison": "same source bytes and exact input filename; byte equality recorded separately from independent complete parsed AST proof",
+    "oracle": {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/acceptance/compare_ast.go",
+      "sourceSha256": "73c3df5140a4e3fe2f5ea15427476ccb87e23c2dafe8545d5a66fbe2e14b44db",
+      "binarySha256": "6c823373bc1bdd1f61148d4fe794476ccb190fca5235c6e98ce397766fed37f2",
+      "contract": "complete parsed AST structure/scalars and token presence; numeric positions/parser caches/comments excluded"
+    },
+    "byteEqualCount": 27,
+    "byteDifferentCount": 6,
+    "astEqualCount": 33,
+    "results": [
+      {
+        "name": "example/macro",
+        "sourceSha256": "fb81b7b2149ddf74cd169bc52961e05545f8272ab5a9c7eeff5ca482525c31bd",
+        "baselineGoSha256": "11a4db1019c59ffbe20321a833087c57197b12a9ddc204e12971295b85c85f73",
+        "currentGoSha256": "11a4db1019c59ffbe20321a833087c57197b12a9ddc204e12971295b85c85f73",
+        "baselineBytes": 295,
+        "currentBytes": 295,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/macro.json",
+        "diff": null
+      },
+      {
+        "name": "example/enum",
+        "sourceSha256": "b2b316001a2be3b1d1ecec3904a777622e97da3af3a28899f5af3c5aa440ebae",
+        "baselineGoSha256": "c91f6c8abe0bbfabf59a9b1a0d6d5915a75ea12ae971a2b0a41604ff5a92a0c6",
+        "currentGoSha256": "c91f6c8abe0bbfabf59a9b1a0d6d5915a75ea12ae971a2b0a41604ff5a92a0c6",
+        "baselineBytes": 2857,
+        "currentBytes": 2857,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/enum.json",
+        "diff": null
+      },
+      {
+        "name": "example/result",
+        "sourceSha256": "689e8f52159861e7e58161893205544d81113fac68223b7908d9c1bd9006fd6f",
+        "baselineGoSha256": "7a5c200400c281cdc831ba4f10a4e6c13d2b5fbfe0f709e26946a2cfcb9e6a65",
+        "currentGoSha256": "997219da341cb563a6952fe83a2b47d5453e2bf6f3af921a0d2930dfb77cf328",
+        "baselineBytes": 7244,
+        "currentBytes": 7238,
+        "byteEqual": false,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/result.json",
+        "diff": "website-native/go-byte-diffs/example/result.diff"
+      },
+      {
+        "name": "example/go_result",
+        "sourceSha256": "f166937eeb3049b064aeb9ea1ed989df58695fb4d780d00e4618de566e65448a",
+        "baselineGoSha256": "3e53b985a8cfc3a44c84b4ba7428df940cb376667e7d779b7dde3b2374729a06",
+        "currentGoSha256": "745b843de4b398260208941f7cc3b69933af2ff4820ee6713a6f2023c9cb387b",
+        "baselineBytes": 8074,
+        "currentBytes": 8071,
+        "byteEqual": false,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/go_result.json",
+        "diff": "website-native/go-byte-diffs/example/go_result.diff"
+      },
+      {
+        "name": "example/derive",
+        "sourceSha256": "3a55408a013b9199cd1b528dcca66790f623c819a51019161e33fa8cc1c2c4e5",
+        "baselineGoSha256": "6e5699ddd81cd67e352ea7b4224ab2bcc0e1da5e7fb77bbf17432359b978c31d",
+        "currentGoSha256": "6e5699ddd81cd67e352ea7b4224ab2bcc0e1da5e7fb77bbf17432359b978c31d",
+        "baselineBytes": 3310,
+        "currentBytes": 3310,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/derive.json",
+        "diff": null
+      },
+      {
+        "name": "example/macro_repeat",
+        "sourceSha256": "6e1b74e44afca6910d0ac9e21d7764dee3b1d3c95ed564112e44fd830c543d20",
+        "baselineGoSha256": "233ec5755da0934d8614972add472e69af2f799072bd7d5f52b9fb0b74c6d8f2",
+        "currentGoSha256": "233ec5755da0934d8614972add472e69af2f799072bd7d5f52b9fb0b74c6d8f2",
+        "baselineBytes": 206,
+        "currentBytes": 206,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/macro_repeat.json",
+        "diff": null
+      },
+      {
+        "name": "example/equality",
+        "sourceSha256": "487cfa49ae27f714b7cb438315ebc851bd2bf611d3f201ff6b445ea23c9d041b",
+        "baselineGoSha256": "92f4a252735d4f55d6de8c53de4af54ae62edd104250aa8cc3c70c4c30031345",
+        "currentGoSha256": "92f4a252735d4f55d6de8c53de4af54ae62edd104250aa8cc3c70c4c30031345",
+        "baselineBytes": 1050,
+        "currentBytes": 1050,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/equality.json",
+        "diff": null
+      },
+      {
+        "name": "example/defaults",
+        "sourceSha256": "d1c741128eabcbf1e9c88857abb34be91b9be996cbba51b9ba7524f665aff1ce",
+        "baselineGoSha256": "d0d95bfc3cd7efd0624b98973b18dd454901f05ed8f1526ad18c14a3f56ad8c2",
+        "currentGoSha256": "d0d95bfc3cd7efd0624b98973b18dd454901f05ed8f1526ad18c14a3f56ad8c2",
+        "baselineBytes": 925,
+        "currentBytes": 925,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/defaults.json",
+        "diff": null
+      },
+      {
+        "name": "example/serde_option",
+        "sourceSha256": "541bdf2855a3e08faaa900d5d93fe2a992fd3813f5cf097fa7f3133560942ca4",
+        "baselineGoSha256": "e48df00e9ec8e231bcf8b0824fa8a0b5e253056227b566b910f69c3cf1e44129",
+        "currentGoSha256": "e48df00e9ec8e231bcf8b0824fa8a0b5e253056227b566b910f69c3cf1e44129",
+        "baselineBytes": 5033,
+        "currentBytes": 5033,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/serde_option.json",
+        "diff": null
+      },
+      {
+        "name": "example/readonly",
+        "sourceSha256": "a12cccd631af9fc29746cf637c9b07f9fbb409802116ce8a04bfa646dca0c680",
+        "baselineGoSha256": "f023cec53efdef10ca3d50d01569ecd16b4ffe17ea26edd94bd5fdb55bb6cb23",
+        "currentGoSha256": "f023cec53efdef10ca3d50d01569ecd16b4ffe17ea26edd94bd5fdb55bb6cb23",
+        "baselineBytes": 412,
+        "currentBytes": 412,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/example/readonly.json",
+        "diff": null
+      },
+      {
+        "name": "check/error_only",
+        "sourceSha256": "abcddf235ce5cad289312b76a31523248d5c8048578414b4eaa65ef541464e14",
+        "baselineGoSha256": "1fc7a83fa850912ecfb2fe2a4103db7f7115f6385ea771cdc8c75e97829937ce",
+        "currentGoSha256": "1fc7a83fa850912ecfb2fe2a4103db7f7115f6385ea771cdc8c75e97829937ce",
+        "baselineBytes": 4315,
+        "currentBytes": 4315,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/error_only.json",
+        "diff": null
+      },
+      {
+        "name": "check/typed_nil",
+        "sourceSha256": "c021185afb99cb37e5a2d717c783f2107fd7dbfe00e6948ea98322964e138c93",
+        "baselineGoSha256": "a4b302acebf9b8f53fd9a30f6ef7ba86abbb3359dcdeda0d977b161648b1c991",
+        "currentGoSha256": "a4b302acebf9b8f53fd9a30f6ef7ba86abbb3359dcdeda0d977b161648b1c991",
+        "baselineBytes": 3486,
+        "currentBytes": 3486,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/typed_nil.json",
+        "diff": null
+      },
+      {
+        "name": "check/pointer_error",
+        "sourceSha256": "1e5f2683288dceedd6c6d442056e7c407dc075fd83bb1839c04c7ce5229b54f5",
+        "baselineGoSha256": "0ea18df23d7424ca56ce5ecbe66e4296a1e7dabaf3d4721ad633e4365a1a966a",
+        "currentGoSha256": "0ea18df23d7424ca56ce5ecbe66e4296a1e7dabaf3d4721ad633e4365a1a966a",
+        "baselineBytes": 2598,
+        "currentBytes": 2598,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/pointer_error.json",
+        "diff": null
+      },
+      {
+        "name": "check/named_error",
+        "sourceSha256": "6624a602b1f27104c52a9ca59300929d3097c1563d5864ca4405b57055bf254e",
+        "baselineGoSha256": "e79cc9c64b69b11e76e0a9bcd1371e38b40695120cd8f456b2f3b293f2c25a9f",
+        "currentGoSha256": "e79cc9c64b69b11e76e0a9bcd1371e38b40695120cd8f456b2f3b293f2c25a9f",
+        "baselineBytes": 2501,
+        "currentBytes": 2501,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/named_error.json",
+        "diff": null
+      },
+      {
+        "name": "check/slice_error",
+        "sourceSha256": "3ebe285e05827c905a453e3b3236724b0ae72faa1edbdee74a3b2dd216d8c2c3",
+        "baselineGoSha256": "3b9b9d2b8c7b97283358f5013f00471dd4179314e04f2ecacc0e13106327330e",
+        "currentGoSha256": "3b9b9d2b8c7b97283358f5013f00471dd4179314e04f2ecacc0e13106327330e",
+        "baselineBytes": 2590,
+        "currentBytes": 2590,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/slice_error.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_imported_helper",
+        "sourceSha256": "d5a44dbbcb04dbd1e6f8e17c0be797c82e4c8c1d393a0f078fcbc999e2902afa",
+        "baselineGoSha256": "c2c980cbbd7e54e74c31a911d583680246d121ee0c3f9b889ef5e861e6c742a1",
+        "currentGoSha256": "c2c980cbbd7e54e74c31a911d583680246d121ee0c3f9b889ef5e861e6c742a1",
+        "baselineBytes": 109,
+        "currentBytes": 109,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_imported_helper.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_append_native",
+        "sourceSha256": "f85d38327054a1ca0f574c0a0a1438c56e411f9447208ce0bf42be7e119fd804",
+        "baselineGoSha256": "a813a04a9dc3a9cc62fdb1f77874c862f7ef30e974bc81cf0c2d9066f0ef1841",
+        "currentGoSha256": "a813a04a9dc3a9cc62fdb1f77874c862f7ef30e974bc81cf0c2d9066f0ef1841",
+        "baselineBytes": 433,
+        "currentBytes": 433,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_append_native.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_append_shadow",
+        "sourceSha256": "460e1d03535f5e3b6b3f78f03720567c6d0ebcf71c0e336780c2d27c6f99ca22",
+        "baselineGoSha256": "6d16622bb498b979eaec46c3403fd0708cb1961e193652a54504caa09bcc3d96",
+        "currentGoSha256": "6d16622bb498b979eaec46c3403fd0708cb1961e193652a54504caa09bcc3d96",
+        "baselineBytes": 1134,
+        "currentBytes": 1134,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_append_shadow.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_append_string",
+        "sourceSha256": "e5e9b883dc076bbeb0ce574b6a8de10391949c376f6f8ba2ee747204e8aa5fe6",
+        "baselineGoSha256": "caee07a527576b8283d8ea4b7df822cee3bfb36a5da9589f63c4e5228b4ef91b",
+        "currentGoSha256": "caee07a527576b8283d8ea4b7df822cee3bfb36a5da9589f63c4e5228b4ef91b",
+        "baselineBytes": 306,
+        "currentBytes": 306,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_append_string.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_append_question",
+        "sourceSha256": "4f45c7394b1085e938fe84d2af0740f0c8a9647391e3942305a0e09c7fb6ada4",
+        "baselineGoSha256": "6ab987fc1baad3617919fe36e5f2d10cfda0c8f22f3d609ba4cefd045ce38f64",
+        "currentGoSha256": "7d705723a787f157ed6af568f50b42418d81f3b19c383c5ed6a329e5d1b770de",
+        "baselineBytes": 3176,
+        "currentBytes": 3179,
+        "byteEqual": false,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_append_question.json",
+        "diff": "website-native/go-byte-diffs/check/macro_append_question.diff"
+      },
+      {
+        "name": "check/macro_append_function",
+        "sourceSha256": "7d56364d901fbb5782c1b2ba9f5887288f75ccb10f38005907301e75f2f830f7",
+        "baselineGoSha256": "d243249a6b25434c9217bc35b755f1ff5bd40ddb161dc23ace2f84598d7ece9c",
+        "currentGoSha256": "d243249a6b25434c9217bc35b755f1ff5bd40ddb161dc23ace2f84598d7ece9c",
+        "baselineBytes": 309,
+        "currentBytes": 309,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_append_function.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_copy_native",
+        "sourceSha256": "f07913c85c75879ef011e756eeebd261e400d53a93cd111acd4711f39eca0215",
+        "baselineGoSha256": "52891b22ef7ed5792e706776f8962c90a8c39b00921c2f0ee216fd26b47e090e",
+        "currentGoSha256": "52891b22ef7ed5792e706776f8962c90a8c39b00921c2f0ee216fd26b47e090e",
+        "baselineBytes": 747,
+        "currentBytes": 747,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_copy_native.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_copy_string",
+        "sourceSha256": "3ebf985ba5aafa2679a4e15e95790aa2960ec656766bbd1eac30fb5c559b0292",
+        "baselineGoSha256": "34933e5433a7b3230291ce05b298342c789a9d66ff00c065934bcf07d8a8d9a1",
+        "currentGoSha256": "34933e5433a7b3230291ce05b298342c789a9d66ff00c065934bcf07d8a8d9a1",
+        "baselineBytes": 269,
+        "currentBytes": 269,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_copy_string.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_copy_shadow",
+        "sourceSha256": "f263085a73e53a17eb6f45222a985447194c099abe2e9b6d90c69252066eb7b5",
+        "baselineGoSha256": "0d00b1276aef6055371ef3bda05ed2db0064d43f202660cc62dd36cdacb1e07a",
+        "currentGoSha256": "0d00b1276aef6055371ef3bda05ed2db0064d43f202660cc62dd36cdacb1e07a",
+        "baselineBytes": 1179,
+        "currentBytes": 1179,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_copy_shadow.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_copy_function",
+        "sourceSha256": "064f2330f20fe3e72a12b7c0174299aad6298b8b1405a5ae2a16dfc29cf2bce5",
+        "baselineGoSha256": "190379d8fb70ae4707e9a6cad115b8a76dfdb1adbf2fe30a12c5741f8c3a9190",
+        "currentGoSha256": "190379d8fb70ae4707e9a6cad115b8a76dfdb1adbf2fe30a12c5741f8c3a9190",
+        "baselineBytes": 302,
+        "currentBytes": 302,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_copy_function.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_copy_question",
+        "sourceSha256": "70d72c662d9958fc49abc268025a2ebe220de0c5a110c81a09fea17bf26ddd69",
+        "baselineGoSha256": "08c92c71dedbe3186d06a2d84c7f76d51063463228ac59a99694ffcc5a7a5e7a",
+        "currentGoSha256": "4c395d2883962bd19c8229d594d6899049a870ae91840690a4cace0d612c747e",
+        "baselineBytes": 3888,
+        "currentBytes": 3894,
+        "byteEqual": false,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_copy_question.json",
+        "diff": "website-native/go-byte-diffs/check/macro_copy_question.diff"
+      },
+      {
+        "name": "check/macro_copy_readonly_source",
+        "sourceSha256": "3f527deb15c15a9349ecf1113965ca10fbb71990ff24091d03b25b3858d1386f",
+        "baselineGoSha256": "7bdd094ade2e8a1c9a4eb4d10cb44ceab1294e1cd99a8d061257d6784b4d4c2f",
+        "currentGoSha256": "7bdd094ade2e8a1c9a4eb4d10cb44ceab1294e1cd99a8d061257d6784b4d4c2f",
+        "baselineBytes": 337,
+        "currentBytes": 337,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_copy_readonly_source.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_allocation_native",
+        "sourceSha256": "07b0739e7ac3ddd1e41ca5db82ad94f150cbed994172da9c481f8220df6065a9",
+        "baselineGoSha256": "d03247af563926855cbbad5919135edb857869a587736e9ad1de605535d5376b",
+        "currentGoSha256": "d03247af563926855cbbad5919135edb857869a587736e9ad1de605535d5376b",
+        "baselineBytes": 913,
+        "currentBytes": 913,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_allocation_native.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_allocation_new_types",
+        "sourceSha256": "90a4788eb29560a169bf125821c15fa4e3ad23f2d13a1e79803845f2d76a3f7a",
+        "baselineGoSha256": "c5cd8224d86f4fa636d7b08720fb9003fbf957dfbac5039e50dae6eb9f02f141",
+        "currentGoSha256": "c5cd8224d86f4fa636d7b08720fb9003fbf957dfbac5039e50dae6eb9f02f141",
+        "baselineBytes": 1000,
+        "currentBytes": 1000,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_allocation_new_types.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_allocation_shadow",
+        "sourceSha256": "0dd97faa142c42ada93cf8995a01310397bda6f602d33effcad1871fe3a49e58",
+        "baselineGoSha256": "26ccf006d4055f8ebc5aba6a6a422b1d1854d11f60e0144ee8a5c49563e5b4de",
+        "currentGoSha256": "26ccf006d4055f8ebc5aba6a6a422b1d1854d11f60e0144ee8a5c49563e5b4de",
+        "baselineBytes": 809,
+        "currentBytes": 809,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_allocation_shadow.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_allocation_function",
+        "sourceSha256": "7ed993815a03e3d5bbf9bc28dd1db1366d1b9387610532a0d3a3b87e719efc0b",
+        "baselineGoSha256": "4ff0fb0fad68a7314086119c82272183b08c7b263056f8a389585aeee12d4a65",
+        "currentGoSha256": "4ff0fb0fad68a7314086119c82272183b08c7b263056f8a389585aeee12d4a65",
+        "baselineBytes": 392,
+        "currentBytes": 392,
+        "byteEqual": true,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_allocation_function.json",
+        "diff": null
+      },
+      {
+        "name": "check/macro_allocation_question",
+        "sourceSha256": "1e1e2696718bdcd7e70ce55842e1951c53b11d99a57cd15bde23b1dcfca57d03",
+        "baselineGoSha256": "636c2a918cb8b02b7171a84955e2798b358c4b8cb18c8a0013510aacab12739d",
+        "currentGoSha256": "59bd2d5eeb5e9216d1473cb91d4f15b8fab1103f0b9d265798a62c76b4978c62",
+        "baselineBytes": 2994,
+        "currentBytes": 2997,
+        "byteEqual": false,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_allocation_question.json",
+        "diff": "website-native/go-byte-diffs/check/macro_allocation_question.diff"
+      },
+      {
+        "name": "check/macro_ast_question_behavior",
+        "sourceSha256": "e0cc7ce0d20c6d345de57cf954059676b5387202c4050e3b26618e4d7453e3c0",
+        "baselineGoSha256": "75c35c0125fd13f84b9b4902445b571dd6afbb9252b85d80ae3cc8c38a6002d1",
+        "currentGoSha256": "5bca5ed6b2760a884f20ea7b512a44fb67d817565a59d3fcb41cace9382419d0",
+        "baselineBytes": 3655,
+        "currentBytes": 3661,
+        "byteEqual": false,
+        "astEqual": true,
+        "astProof": "website-native/ast-proof/check/macro_ast_question_behavior.json",
+        "diff": "website-native/go-byte-diffs/check/macro_ast_question_behavior.diff"
+      }
+    ]
+  },
+  "originNativeObservationCount": 52,
+  "runtimeParity": {
+    "baselineCommit": "fd8380c39876c96441857a737be8e32c322a0467",
+    "currentCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+    "results": [
+      {
+        "name": "macro_append_question",
+        "observations": [
+          {
+            "compiler": "baseline",
+            "exit": 0,
+            "stdout": "",
+            "stderr": ""
+          },
+          {
+            "compiler": "current",
+            "exit": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      {
+        "name": "macro_copy_question",
+        "observations": [
+          {
+            "compiler": "baseline",
+            "exit": 0,
+            "stdout": "",
+            "stderr": ""
+          },
+          {
+            "compiler": "current",
+            "exit": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      {
+        "name": "macro_allocation_question",
+        "observations": [
+          {
+            "compiler": "baseline",
+            "exit": 0,
+            "stdout": "",
+            "stderr": ""
+          },
+          {
+            "compiler": "current",
+            "exit": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      {
+        "name": "macro_ast_question_behavior",
+        "observations": [
+          {
+            "compiler": "baseline",
+            "exit": 0,
+            "stdout": "",
+            "stderr": ""
+          },
+          {
+            "compiler": "current",
+            "exit": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      {
+        "name": "example/result",
+        "observations": [
+          {
+            "compiler": "baseline",
+            "exit": 0,
+            "stdout": "next port: 8081\nport error: invalid port syntax: true\nname length: 3\nname length: absent\n",
+            "stderr": ""
+          },
+          {
+            "compiler": "current",
+            "exit": 0,
+            "stdout": "next port: 8081\nport error: invalid port syntax: true\nname length: 3\nname length: absent\n",
+            "stderr": ""
+          }
+        ]
+      }
+    ]
+  },
+  "qaInputs": "QA and all old/new fixtures taken exactly from codeCommit",
+  "productionBuildAndCatalog": "unchanged",
+  "dependencyInstall": "none; reused existing lockfile Playwright and installed Chromium",
+  "deployment": "none",
+  "linux": "not run",
+  "server": "stopped after QA",
+  "websiteSourceOverlay": "6dc779a651af3eb34121f53637a55bfb6feee387",
+  "wasmBytes": 16298510,
+  "manifestSha256": "93cc9a444da8aafb02e7faf7808449c71e84c0cee6dfb7fcc90b529af7ef2cf7",
+  "homebrewLicenseAdaptation": {
+    "path": "/opt/homebrew/Cellar/go/1.27.1/LICENSE",
+    "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+    "originalBuildPySha256": "36832e23ca588ddefdceba1b703d610a97e9350bfa4f028ee84c1194edec1fa1",
+    "adaptedBuildPySha256": "32b7e574bdced6b9119875ec2c6743ebf39214c3c5a3f3c3536006856fe8e17e",
+    "scope": "isolated validation checkout only; production script and toolchain unchanged"
+  },
+  "playwright": "1.58.2",
+  "chromium": "145.0.7632.6",
+  "packageLockSha256": "89632e9f79b198f01d5258d26d77d2a4c859682d11c8ac18cf008575bd57fea2",
+  "previousWebAssets": {
+    "commit": "fd8380c39876c96441857a737be8e32c322a0467",
+    "file": "previous-web-assets-fd8380c39876c96441857a737be8e32c322a0467.zip",
+    "sha256": "48f38115808b47f78675a62ea325788b1df20dad715a5ab838099f62ba78331a"
+  },
+  "initialStrictByteProbe": {
+    "log": "web-native-initial.log",
+    "firstMismatch": {
+      "name": "example/result",
+      "baselineCommit": "fd8380c39876c96441857a737be8e32c322a0467",
+      "currentCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+      "baselineGoSha256": "7a5c200400c281cdc831ba4f10a4e6c13d2b5fbfe0f709e26946a2cfcb9e6a65",
+      "currentGoSha256": "997219da341cb563a6952fe83a2b47d5453e2bf6f3af921a0d2930dfb77cf328",
+      "diff": "website-native/go-byte-diffs/example/result.diff",
+      "status": "blocked pending independent AST and runtime proof; not byte equal"
+    },
+    "resolution": "Initial strict byte assertion failed and remains recorded. All 33 full parsed AST comparisons and 5 paired native runs subsequently passed; 6 outputs are not byte equal."
+  },
+  "evidence": [
+    {
+      "path": "baseline-fd8380c/go-version-m.txt",
+      "sha256": "2ffd728db4d24aa7ff2b1466122e44cb10e2a3b57df55382e37870cd74df6106"
+    },
+    {
+      "path": "baseline-fd8380c/goxide",
+      "sha256": "d36577742e92143081ff94779de275894027879dddac8f545912df85d28b5ae8"
+    },
+    {
+      "path": "baseline-fd8380c/identity.json",
+      "sha256": "7f4f2bc67da28be7d1f5028113a38db8bf62ef8baf56fa0967e880aa7aca5881"
+    },
+    {
+      "path": "browser-qa.log",
+      "sha256": "2a2c9fb19b4a0583766839b91ecb3a3a11507b38e0a0aeefb562e1da160b7fec"
+    },
+    {
+      "path": "catalog-qa.log",
+      "sha256": "affeebd6498e2833c9204c8ea2ad4af47772ab63ae35ee7afa599c25f56525a0"
+    },
+    {
+      "path": "homebrew-license-validation.patch",
+      "sha256": "0c75208fd39a4bb70df5aa7a0a7480bd8880c3836d6f9b2959bf7b3ac3399819"
+    },
+    {
+      "path": "local-wasm-identity.json",
+      "sha256": "fb3e6ed1a49b3b4b7ede082422e45aae10a40860de1e56b7d086f48269989717"
+    },
+    {
+      "path": "previous-web-assets.json",
+      "sha256": "8205f643222c6965621dad1f3821cbd7527658829c22a28fe3890e4c182541ed"
+    },
+    {
+      "path": "qa-artifacts/catalog-desktop.png",
+      "sha256": "3e20db02ef69030471415550767af1bf5d172429e670b04a7b635468f806ef32"
+    },
+    {
+      "path": "qa-artifacts/catalog-mobile-controls.png",
+      "sha256": "876a7a06903bf77cc631d212fdf44e9f94ec09a7590e706a72181a8fba3ccabd"
+    },
+    {
+      "path": "qa-artifacts/catalog-mobile-example.png",
+      "sha256": "911754a2187d3719f904ff3e41d85d90b379cc4f545d2a044f64a77c3df4d0b3"
+    },
+    {
+      "path": "qa-artifacts/catalog-mobile.png",
+      "sha256": "16039046bd1be0734b7d5ce8bd1a587c3bbb2ccdafa495f7f5d78497b14333ca"
+    },
+    {
+      "path": "qa-artifacts/desktop.png",
+      "sha256": "6b4106f52e66db47829a3daef0ddfad7798e61704b89436d3fea4ee7e675d148"
+    },
+    {
+      "path": "qa-artifacts/mobile.png",
+      "sha256": "24ef2919e53cbfbfbd478bc52ddc95c93a4d717181e1f0dc09525b5539b97682"
+    },
+    {
+      "path": "qa-artifacts/origin-diagnostics.json",
+      "sha256": "bcdbda1542af980f3a5e5233dba28976db283cf7d0f9441b5e185d8c0c45addd"
+    },
+    {
+      "path": "validate_web.py",
+      "sha256": "53db8d1bfb32281c57023acf821c2bba6277e34308b3479ab330cf9e54288c30"
+    },
+    {
+      "path": "wasm-build.log",
+      "sha256": "84ff71fa43519b476595ccc3e1b88e89586bac97bb6ecd3e0fb7de2b62559fe4"
+    },
+    {
+      "path": "web-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "web-exit-status.json",
+      "sha256": "fb104c570f010a0f140f6858fcbe1a1e874877f1755f71537371f14f02e8e47d"
+    },
+    {
+      "path": "web-native-initial.log",
+      "sha256": "050e1c3f856be919e8d37f9c2afa8d5148c0f712f4dc16c62704b301c79689b2"
+    },
+    {
+      "path": "web-native-proof.log",
+      "sha256": "6c733c331d7066244cfa7d81c3cebcf1e8cd04cda3ff8a519f86e75e2c1e8ed0"
+    },
+    {
+      "path": "web-race.log",
+      "sha256": "347c43839fbc3247128f59f4a39b8a41f12f8f9e39b1689c0950b5d025d7151b"
+    },
+    {
+      "path": "web-server.log",
+      "sha256": "bbb04da03d259986013732bc276b11e25e1c7538f0c2b9f23cfa00f9f37c0868"
+    },
+    {
+      "path": "web-source-identity.json",
+      "sha256": "9300833465e0800fe283b15cb0c4eb1c34932d91abe333a0e7000d8b91ad030d"
+    },
+    {
+      "path": "web-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "website-ast-provenance-qa.patch",
+      "sha256": "63a93e2d71c70bd7b9e0c91f67f0f810dcbf74bd9d17965032338055dbe95781"
+    },
+    {
+      "path": "website-native/ast-proof/check/error_only.json",
+      "sha256": "9cbff3c4d4d4d5fe05f7b0f60c3fb8526269b306025f17ad428333c27d89074b"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_allocation_function.json",
+      "sha256": "8ad0c1eda269beab88e7008d9c84afe1aab5d5d9713b8eee75801f9570022a0f"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_allocation_native.json",
+      "sha256": "9290300bf18d4579d39ca49525afb0b62a24f6235a16e16cedfe92cecab16596"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_allocation_new_types.json",
+      "sha256": "814e1c0517d7ce76b7cb5fa835e48679946faa65ba9fc53988ea9e8a661e426b"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_allocation_question.json",
+      "sha256": "a632228c169c285478d271ca238ebd5d61a5817ddea575c41eb5856bf122da19"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_allocation_shadow.json",
+      "sha256": "8b5b0b9aa1650ec3265e88e35fb59151ad761cb02365d02e01fc76d1072c7910"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_append_function.json",
+      "sha256": "3254832ada226fa66f921c10b177c064fe9cc0680a515d6af2a2398b404bac6b"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_append_native.json",
+      "sha256": "b8b707c1ffe5f63f4b8154ad078f2cdb945d9ec36b75420a9325f8297d89b9a6"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_append_question.json",
+      "sha256": "6b433b6a2bcc44acac3efd4044e6fd28204117d6078a35e363b6613b137e84a6"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_append_shadow.json",
+      "sha256": "7ad987de54407c0982945703c73d5be0f067c66f6f0aef3ca28af8ca37b9ad8e"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_append_string.json",
+      "sha256": "ca03c105f0023666f043002fa9dcc23452a76c6227ee13bc69de0f5b36f3355c"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_ast_question_behavior.json",
+      "sha256": "0c25bb3d1676d4fb2debc1e4f838a51eb0a84a9cf268232c276847dfa239c3a0"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_copy_function.json",
+      "sha256": "67347b72ad1a7ec511a3885d57173f183b20efe0bd3896b6220d9a9a551f48ab"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_copy_native.json",
+      "sha256": "9bc5e777463bf5de487d37c4f8402bbeba2f735f41097ce1c921311141c8f6ae"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_copy_question.json",
+      "sha256": "f7bc0e2209609ea22f8d52529f00bc24657570144a4e5f4f3fdfb7eee84ff9c0"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_copy_readonly_source.json",
+      "sha256": "39a2ee4887f0eee23e79031eb925d03f74b3ecd02e3d45620a8d0275858085a8"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_copy_shadow.json",
+      "sha256": "af937f06db60f85e04642914fe168281a7a50b6567f8ca2d2dbb2046dfdf0c44"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_copy_string.json",
+      "sha256": "e81e3cf1f7f37e725ab68a08dae45314e27a23638c4ab49a6237b1935ea7ea35"
+    },
+    {
+      "path": "website-native/ast-proof/check/macro_imported_helper.json",
+      "sha256": "76fec4170fa7a74ea577c181c4bd831b56c470d8a46c1b09dfe57b972dc5d336"
+    },
+    {
+      "path": "website-native/ast-proof/check/named_error.json",
+      "sha256": "43ca4ebe0b1795a3c430cdd25fa7f0257c355930ea779e875082433c0c39b8a9"
+    },
+    {
+      "path": "website-native/ast-proof/check/pointer_error.json",
+      "sha256": "e2ea1c28b550953a440080a9ca1aca308fb49ffbfb8098986a102dc430f469d6"
+    },
+    {
+      "path": "website-native/ast-proof/check/slice_error.json",
+      "sha256": "a02dc1d116f008259e28f5acdd31bf5087f59a95cd00faa454d0fccea29e6969"
+    },
+    {
+      "path": "website-native/ast-proof/check/typed_nil.json",
+      "sha256": "7d27c9c4a587ece6d73d3604a281a0cba8050f9c9854b50608b4b67296733c39"
+    },
+    {
+      "path": "website-native/ast-proof/example/defaults.json",
+      "sha256": "7e5dacd8c95a29039acad779ced15e9818751f3d4194c63f7bba8bb64e7622ea"
+    },
+    {
+      "path": "website-native/ast-proof/example/derive.json",
+      "sha256": "f62bdd7cb8cefb20e7ce15264dec6e617c7ed56c2c0503ffd417cf3a709cbb8a"
+    },
+    {
+      "path": "website-native/ast-proof/example/enum.json",
+      "sha256": "13f2ce0a07e347f46301ddaaf0a40e0cd800364ae8ed606f427aa540c17497c9"
+    },
+    {
+      "path": "website-native/ast-proof/example/equality.json",
+      "sha256": "7f54b7155e60f82f9a77f7be2f54fe8ad8af9775dd28b0ad5bea8db58ea4afad"
+    },
+    {
+      "path": "website-native/ast-proof/example/go_result.json",
+      "sha256": "b39778ba97058fcd2dd575787cc68dddea7b5ffea783b0aa0709bff39455b7d6"
+    },
+    {
+      "path": "website-native/ast-proof/example/macro.json",
+      "sha256": "970baa4dc1f2c2b4c798b435a861aa938549129efc8b5f9b19afdd2a303247bf"
+    },
+    {
+      "path": "website-native/ast-proof/example/macro_repeat.json",
+      "sha256": "7a36a7d51db65968c128506df3e5542c77dd6530337c9c368926d3e4aa2b00cc"
+    },
+    {
+      "path": "website-native/ast-proof/example/readonly.json",
+      "sha256": "29e012fca8b06fdd232edb7a9a7840c5b9af3face5a65774fdceadf21a2cc838"
+    },
+    {
+      "path": "website-native/ast-proof/example/result.json",
+      "sha256": "12b21a981ece136a550807948ab057086ed0ee358a5f7d21f9f6909eaaaf98b3"
+    },
+    {
+      "path": "website-native/ast-proof/example/serde_option.json",
+      "sha256": "daadbcba1b5d13c0a8bcfe9412b49ebe7e7ed34b386cfa2214b7a2660f68aae5"
+    },
+    {
+      "path": "website-native/baseline-go-version-m.txt",
+      "sha256": "2ffd728db4d24aa7ff2b1466122e44cb10e2a3b57df55382e37870cd74df6106"
+    },
+    {
+      "path": "website-native/compare-ast",
+      "sha256": "6c823373bc1bdd1f61148d4fe794476ccb190fca5235c6e98ce397766fed37f2"
+    },
+    {
+      "path": "website-native/first-go-byte-mismatch.json",
+      "sha256": "a69273ed922435b4d908b28ad179100768bcbbe1dbcecd663b9e9a7641d558b3"
+    },
+    {
+      "path": "website-native/go-byte-diffs/check/macro_allocation_question.diff",
+      "sha256": "e45728aab9a1207d8419bb7c07345f8da488e8858bef98a6903a01740f58a822"
+    },
+    {
+      "path": "website-native/go-byte-diffs/check/macro_append_question.diff",
+      "sha256": "199238f7b3628bd1811cb30c4a56c8c00f7212fb56fc90edfbb16b3139abd536"
+    },
+    {
+      "path": "website-native/go-byte-diffs/check/macro_ast_question_behavior.diff",
+      "sha256": "6d56dcb87c0a8cccb030d82cf23d468d19c6a9b5d9c2470afa62c19731659120"
+    },
+    {
+      "path": "website-native/go-byte-diffs/check/macro_copy_question.diff",
+      "sha256": "dfe1d043190efa0ba84ce4ee58e93c07f9da306715aaa3ea4aedaf2b840d70c3"
+    },
+    {
+      "path": "website-native/go-byte-diffs/example/go_result.diff",
+      "sha256": "3c545edf5fe05dafbecd506f319ae7599b3774c7c14c66d99ede5e3aa4154b99"
+    },
+    {
+      "path": "website-native/go-byte-diffs/example/result.diff",
+      "sha256": "b0985ab194f2073ae0fa79faa0cb183260d4fde7f813fc68dc4125b9c73037f1"
+    },
+    {
+      "path": "website-native/oracle-source.go",
+      "sha256": "73c3df5140a4e3fe2f5ea15427476ccb87e23c2dafe8545d5a66fbe2e14b44db"
+    },
+    {
+      "path": "website-native/origin-diagnostics.json",
+      "sha256": "0da139b9b094ad355bbea5ceb4510b58b67f967b14859763e0bddeb88f45d131"
+    },
+    {
+      "path": "website-native/playground.gox",
+      "sha256": "689e8f52159861e7e58161893205544d81113fac68223b7908d9c1bd9006fd6f"
+    },
+    {
+      "path": "website-native/runtime-parity.json",
+      "sha256": "5543fd08c87375728396637fecfb6353597f69b81a7b7c15d1a165ff0bd85a12"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/error_only.go",
+      "sha256": "1fc7a83fa850912ecfb2fe2a4103db7f7115f6385ea771cdc8c75e97829937ce"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_allocation_function.go",
+      "sha256": "4ff0fb0fad68a7314086119c82272183b08c7b263056f8a389585aeee12d4a65"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_allocation_native.go",
+      "sha256": "d03247af563926855cbbad5919135edb857869a587736e9ad1de605535d5376b"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_allocation_new_types.go",
+      "sha256": "c5cd8224d86f4fa636d7b08720fb9003fbf957dfbac5039e50dae6eb9f02f141"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_allocation_question.go",
+      "sha256": "636c2a918cb8b02b7171a84955e2798b358c4b8cb18c8a0013510aacab12739d"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_allocation_shadow.go",
+      "sha256": "26ccf006d4055f8ebc5aba6a6a422b1d1854d11f60e0144ee8a5c49563e5b4de"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_append_function.go",
+      "sha256": "d243249a6b25434c9217bc35b755f1ff5bd40ddb161dc23ace2f84598d7ece9c"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_append_native.go",
+      "sha256": "a813a04a9dc3a9cc62fdb1f77874c862f7ef30e974bc81cf0c2d9066f0ef1841"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_append_question.go",
+      "sha256": "6ab987fc1baad3617919fe36e5f2d10cfda0c8f22f3d609ba4cefd045ce38f64"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_append_shadow.go",
+      "sha256": "6d16622bb498b979eaec46c3403fd0708cb1961e193652a54504caa09bcc3d96"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_append_string.go",
+      "sha256": "caee07a527576b8283d8ea4b7df822cee3bfb36a5da9589f63c4e5228b4ef91b"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_ast_question_behavior.go",
+      "sha256": "75c35c0125fd13f84b9b4902445b571dd6afbb9252b85d80ae3cc8c38a6002d1"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_copy_function.go",
+      "sha256": "190379d8fb70ae4707e9a6cad115b8a76dfdb1adbf2fe30a12c5741f8c3a9190"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_copy_native.go",
+      "sha256": "52891b22ef7ed5792e706776f8962c90a8c39b00921c2f0ee216fd26b47e090e"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_copy_question.go",
+      "sha256": "08c92c71dedbe3186d06a2d84c7f76d51063463228ac59a99694ffcc5a7a5e7a"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_copy_readonly_source.go",
+      "sha256": "7bdd094ade2e8a1c9a4eb4d10cb44ceab1294e1cd99a8d061257d6784b4d4c2f"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_copy_shadow.go",
+      "sha256": "0d00b1276aef6055371ef3bda05ed2db0064d43f202660cc62dd36cdacb1e07a"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_copy_string.go",
+      "sha256": "34933e5433a7b3230291ce05b298342c789a9d66ff00c065934bcf07d8a8d9a1"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/macro_imported_helper.go",
+      "sha256": "c2c980cbbd7e54e74c31a911d583680246d121ee0c3f9b889ef5e861e6c742a1"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/named_error.go",
+      "sha256": "e79cc9c64b69b11e76e0a9bcd1371e38b40695120cd8f456b2f3b293f2c25a9f"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/pointer_error.go",
+      "sha256": "0ea18df23d7424ca56ce5ecbe66e4296a1e7dabaf3d4721ad633e4365a1a966a"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/slice_error.go",
+      "sha256": "3b9b9d2b8c7b97283358f5013f00471dd4179314e04f2ecacc0e13106327330e"
+    },
+    {
+      "path": "website-native/successful-go/baseline/check/typed_nil.go",
+      "sha256": "a4b302acebf9b8f53fd9a30f6ef7ba86abbb3359dcdeda0d977b161648b1c991"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/defaults.go",
+      "sha256": "d0d95bfc3cd7efd0624b98973b18dd454901f05ed8f1526ad18c14a3f56ad8c2"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/derive.go",
+      "sha256": "6e5699ddd81cd67e352ea7b4224ab2bcc0e1da5e7fb77bbf17432359b978c31d"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/enum.go",
+      "sha256": "c91f6c8abe0bbfabf59a9b1a0d6d5915a75ea12ae971a2b0a41604ff5a92a0c6"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/equality.go",
+      "sha256": "92f4a252735d4f55d6de8c53de4af54ae62edd104250aa8cc3c70c4c30031345"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/go_result.go",
+      "sha256": "3e53b985a8cfc3a44c84b4ba7428df940cb376667e7d779b7dde3b2374729a06"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/macro.go",
+      "sha256": "11a4db1019c59ffbe20321a833087c57197b12a9ddc204e12971295b85c85f73"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/macro_repeat.go",
+      "sha256": "233ec5755da0934d8614972add472e69af2f799072bd7d5f52b9fb0b74c6d8f2"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/readonly.go",
+      "sha256": "f023cec53efdef10ca3d50d01569ecd16b4ffe17ea26edd94bd5fdb55bb6cb23"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/result.go",
+      "sha256": "7a5c200400c281cdc831ba4f10a4e6c13d2b5fbfe0f709e26946a2cfcb9e6a65"
+    },
+    {
+      "path": "website-native/successful-go/baseline/example/serde_option.go",
+      "sha256": "e48df00e9ec8e231bcf8b0824fa8a0b5e253056227b566b910f69c3cf1e44129"
+    },
+    {
+      "path": "website-native/successful-go/current/check/error_only.go",
+      "sha256": "1fc7a83fa850912ecfb2fe2a4103db7f7115f6385ea771cdc8c75e97829937ce"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_allocation_function.go",
+      "sha256": "4ff0fb0fad68a7314086119c82272183b08c7b263056f8a389585aeee12d4a65"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_allocation_native.go",
+      "sha256": "d03247af563926855cbbad5919135edb857869a587736e9ad1de605535d5376b"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_allocation_new_types.go",
+      "sha256": "c5cd8224d86f4fa636d7b08720fb9003fbf957dfbac5039e50dae6eb9f02f141"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_allocation_question.go",
+      "sha256": "59bd2d5eeb5e9216d1473cb91d4f15b8fab1103f0b9d265798a62c76b4978c62"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_allocation_shadow.go",
+      "sha256": "26ccf006d4055f8ebc5aba6a6a422b1d1854d11f60e0144ee8a5c49563e5b4de"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_append_function.go",
+      "sha256": "d243249a6b25434c9217bc35b755f1ff5bd40ddb161dc23ace2f84598d7ece9c"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_append_native.go",
+      "sha256": "a813a04a9dc3a9cc62fdb1f77874c862f7ef30e974bc81cf0c2d9066f0ef1841"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_append_question.go",
+      "sha256": "7d705723a787f157ed6af568f50b42418d81f3b19c383c5ed6a329e5d1b770de"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_append_shadow.go",
+      "sha256": "6d16622bb498b979eaec46c3403fd0708cb1961e193652a54504caa09bcc3d96"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_append_string.go",
+      "sha256": "caee07a527576b8283d8ea4b7df822cee3bfb36a5da9589f63c4e5228b4ef91b"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_ast_question_behavior.go",
+      "sha256": "5bca5ed6b2760a884f20ea7b512a44fb67d817565a59d3fcb41cace9382419d0"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_copy_function.go",
+      "sha256": "190379d8fb70ae4707e9a6cad115b8a76dfdb1adbf2fe30a12c5741f8c3a9190"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_copy_native.go",
+      "sha256": "52891b22ef7ed5792e706776f8962c90a8c39b00921c2f0ee216fd26b47e090e"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_copy_question.go",
+      "sha256": "4c395d2883962bd19c8229d594d6899049a870ae91840690a4cace0d612c747e"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_copy_readonly_source.go",
+      "sha256": "7bdd094ade2e8a1c9a4eb4d10cb44ceab1294e1cd99a8d061257d6784b4d4c2f"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_copy_shadow.go",
+      "sha256": "0d00b1276aef6055371ef3bda05ed2db0064d43f202660cc62dd36cdacb1e07a"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_copy_string.go",
+      "sha256": "34933e5433a7b3230291ce05b298342c789a9d66ff00c065934bcf07d8a8d9a1"
+    },
+    {
+      "path": "website-native/successful-go/current/check/macro_imported_helper.go",
+      "sha256": "c2c980cbbd7e54e74c31a911d583680246d121ee0c3f9b889ef5e861e6c742a1"
+    },
+    {
+      "path": "website-native/successful-go/current/check/named_error.go",
+      "sha256": "e79cc9c64b69b11e76e0a9bcd1371e38b40695120cd8f456b2f3b293f2c25a9f"
+    },
+    {
+      "path": "website-native/successful-go/current/check/pointer_error.go",
+      "sha256": "0ea18df23d7424ca56ce5ecbe66e4296a1e7dabaf3d4721ad633e4365a1a966a"
+    },
+    {
+      "path": "website-native/successful-go/current/check/slice_error.go",
+      "sha256": "3b9b9d2b8c7b97283358f5013f00471dd4179314e04f2ecacc0e13106327330e"
+    },
+    {
+      "path": "website-native/successful-go/current/check/typed_nil.go",
+      "sha256": "a4b302acebf9b8f53fd9a30f6ef7ba86abbb3359dcdeda0d977b161648b1c991"
+    },
+    {
+      "path": "website-native/successful-go/current/example/defaults.go",
+      "sha256": "d0d95bfc3cd7efd0624b98973b18dd454901f05ed8f1526ad18c14a3f56ad8c2"
+    },
+    {
+      "path": "website-native/successful-go/current/example/derive.go",
+      "sha256": "6e5699ddd81cd67e352ea7b4224ab2bcc0e1da5e7fb77bbf17432359b978c31d"
+    },
+    {
+      "path": "website-native/successful-go/current/example/enum.go",
+      "sha256": "c91f6c8abe0bbfabf59a9b1a0d6d5915a75ea12ae971a2b0a41604ff5a92a0c6"
+    },
+    {
+      "path": "website-native/successful-go/current/example/equality.go",
+      "sha256": "92f4a252735d4f55d6de8c53de4af54ae62edd104250aa8cc3c70c4c30031345"
+    },
+    {
+      "path": "website-native/successful-go/current/example/go_result.go",
+      "sha256": "745b843de4b398260208941f7cc3b69933af2ff4820ee6713a6f2023c9cb387b"
+    },
+    {
+      "path": "website-native/successful-go/current/example/macro.go",
+      "sha256": "11a4db1019c59ffbe20321a833087c57197b12a9ddc204e12971295b85c85f73"
+    },
+    {
+      "path": "website-native/successful-go/current/example/macro_repeat.go",
+      "sha256": "233ec5755da0934d8614972add472e69af2f799072bd7d5f52b9fb0b74c6d8f2"
+    },
+    {
+      "path": "website-native/successful-go/current/example/readonly.go",
+      "sha256": "f023cec53efdef10ca3d50d01569ecd16b4ffe17ea26edd94bd5fdb55bb6cb23"
+    },
+    {
+      "path": "website-native/successful-go/current/example/result.go",
+      "sha256": "997219da341cb563a6952fe83a2b47d5453e2bf6f3af921a0d2930dfb77cf328"
+    },
+    {
+      "path": "website-native/successful-go/current/example/serde_option.go",
+      "sha256": "e48df00e9ec8e231bcf8b0824fa8a0b5e253056227b566b910f69c3cf1e44129"
+    },
+    {
+      "path": "website-native/successful-go-parity.json",
+      "sha256": "a600b5a57ec031c9655aa8b19be93c0e2b67c75c5b10d80ffdd8722258395486"
+    }
+  ]
+}

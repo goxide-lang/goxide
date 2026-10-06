@@ -1,0 +1,19 @@
+=== RUN   TestReviewTokenEvidenceAtomicity
+=== RUN   TestReviewTokenEvidenceAtomicity/wide-parent-span
+    review_overlay_test.go:35: scenario=wide-parent-span got=&{Start:21 End:27 Origin:0x1432dad6d140 Stack:[{Macro:outer Definition:{File:def.gox Start:1 End:10 Line:1 Column:2} Callsite:{File:call.gox Start:20 End:30 Line:2 Column:4} DefinitionOriginal:false CallsiteOriginal:false}] Kind:parent} origin=&{File:source.gox Start:10 End:26 Line:2 Column:1}
+    review_overlay_test.go:37: whole parent origin presented as exact identifier: &{File:source.gox Start:10 End:26 Line:2 Column:1}
+=== RUN   TestReviewTokenEvidenceAtomicity/partial-unknown-overlay
+    review_overlay_test.go:35: scenario=partial-unknown-overlay got=&{Start:21 End:27 Origin:0x1432dad6dce0 Stack:[{Macro:outer Definition:{File:def.gox Start:1 End:10 Line:1 Column:2} Callsite:{File:call.gox Start:20 End:30 Line:2 Column:4} DefinitionOriginal:false CallsiteOriginal:false}] Kind:source} origin=&{File:source.gox Start:20 End:26 Line:2 Column:11}
+    review_overlay_test.go:39: mixed token evidence accepted as complete input: &{Start:21 End:27 Origin:0x1432dad6dce0 Stack:[{Macro:outer Definition:{File:def.gox Start:1 End:10 Line:1 Column:2} Callsite:{File:call.gox Start:20 End:30 Line:2 Column:4} DefinitionOriginal:false CallsiteOriginal:false}] Kind:source}
+    review_overlay_test.go:40: mixed token authorized generated context
+=== RUN   TestReviewTokenEvidenceAtomicity/partial-different-owner-overlay
+    review_overlay_test.go:35: scenario=partial-different-owner-overlay got=&{Start:21 End:27 Origin:0x1432daec2a50 Stack:[{Macro:outer Definition:{File:def.gox Start:1 End:10 Line:1 Column:2} Callsite:{File:call.gox Start:20 End:30 Line:2 Column:4} DefinitionOriginal:false CallsiteOriginal:false}] Kind:source} origin=&{File:source.gox Start:20 End:26 Line:2 Column:11}
+    review_overlay_test.go:39: mixed token evidence accepted as complete input: &{Start:21 End:27 Origin:0x1432daec2a50 Stack:[{Macro:outer Definition:{File:def.gox Start:1 End:10 Line:1 Column:2} Callsite:{File:call.gox Start:20 End:30 Line:2 Column:4} DefinitionOriginal:false CallsiteOriginal:false}] Kind:source}
+    review_overlay_test.go:40: mixed token authorized generated context
+--- FAIL: TestReviewTokenEvidenceAtomicity (0.00s)
+    --- FAIL: TestReviewTokenEvidenceAtomicity/wide-parent-span (0.00s)
+    --- FAIL: TestReviewTokenEvidenceAtomicity/partial-unknown-overlay (0.00s)
+    --- FAIL: TestReviewTokenEvidenceAtomicity/partial-different-owner-overlay (0.00s)
+FAIL
+FAIL    review.example/sourcemap        0.806s
+FAIL

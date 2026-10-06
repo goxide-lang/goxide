@@ -1,0 +1,149 @@
+[
+  {
+    "name": "len",
+    "before_origin": null,
+    "after_origin": null,
+    "before_stack": [],
+    "after_stack": [
+      "outer",
+      "inner"
+    ],
+    "message_identical": true,
+    "generated_before": {
+      "Filename": "len.gox",
+      "Offset": 593,
+      "Line": 19,
+      "Column": 10
+    },
+    "generated_after": {
+      "Filename": "len.gox",
+      "Offset": 593,
+      "Line": 19,
+      "Column": 10
+    }
+  },
+  {
+    "name": "binary",
+    "before_origin": null,
+    "after_origin": null,
+    "before_stack": [],
+    "after_stack": [
+      "outer",
+      "inner"
+    ],
+    "message_identical": true,
+    "generated_before": {
+      "Filename": "binary.gox",
+      "Offset": 589,
+      "Line": 19,
+      "Column": 6
+    },
+    "generated_after": {
+      "Filename": "binary.gox",
+      "Offset": 589,
+      "Line": 19,
+      "Column": 6
+    }
+  },
+  {
+    "name": "call",
+    "before_origin": null,
+    "after_origin": null,
+    "before_stack": [],
+    "after_stack": [
+      "outer",
+      "inner"
+    ],
+    "message_identical": true,
+    "generated_before": {
+      "Filename": "call.gox",
+      "Offset": 647,
+      "Line": 20,
+      "Column": 22
+    },
+    "generated_after": {
+      "Filename": "call.gox",
+      "Offset": 647,
+      "Line": 20,
+      "Column": 22
+    }
+  },
+  {
+    "name": "selector-exact",
+    "before_origin": {
+      "File": "selector-exact.gox",
+      "Start": 48,
+      "End": 55,
+      "Line": 2,
+      "Column": 39
+    },
+    "after_origin": {
+      "File": "selector-exact.gox",
+      "Start": 48,
+      "End": 55,
+      "Line": 2,
+      "Column": 39
+    },
+    "before_stack": [
+      "outer",
+      "inner"
+    ],
+    "after_stack": [
+      "outer",
+      "inner"
+    ],
+    "message_identical": true,
+    "generated_before": {
+      "Filename": "selector-exact.gox",
+      "Offset": 607,
+      "Line": 19,
+      "Column": 24
+    },
+    "generated_after": {
+      "Filename": "selector-exact.gox",
+      "Offset": 607,
+      "Line": 19,
+      "Column": 24
+    }
+  },
+  {
+    "name": "index-unproved",
+    "before_origin": null,
+    "after_origin": null,
+    "before_stack": [],
+    "after_stack": [],
+    "message_identical": true,
+    "generated_before": {
+      "Filename": "index-unproved.gox",
+      "Offset": 662,
+      "Line": 19,
+      "Column": 6
+    },
+    "generated_after": {
+      "Filename": "index-unproved.gox",
+      "Offset": 662,
+      "Line": 19,
+      "Column": 6
+    }
+  },
+  {
+    "name": "native",
+    "before_origin": null,
+    "after_origin": null,
+    "before_stack": [],
+    "after_stack": [],
+    "message_identical": true,
+    "generated_before": {
+      "Filename": "native.gox",
+      "Offset": 560,
+      "Line": 17,
+      "Column": 10
+    },
+    "generated_after": {
+      "Filename": "native.gox",
+      "Offset": 563,
+      "Line": 18,
+      "Column": 10
+    }
+  }
+]

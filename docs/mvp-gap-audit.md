@@ -81,7 +81,7 @@ MVP 归属以 [决策登记](design/decisions.md) D14/D21–D23/D27–D36、RFC 
 | --- | --- | --- | --- |
 | A01 常用声明宏绑定与 builtin 卫生收口 | E（importer、append/copy、固定类型 make/new 子项已交付），D14/D21；[宏边界](../internal/macros/README.md)、[allocation 验收](../tests/acceptance/macro_allocation_test.go) | 已接通固定预声明类型 make/new 的 AST 门禁、准确 alias 身份和既有原生行为；命名/导入类型、泛型、new(expr)、其他 builtin/绑定仍未收口。类型捕获不因白名单取得资格；调用包同名及覆盖调用点 local type 的既有边界仍开放，A01 不关闭 | 白黑例先规范，真实 CLI/Go/WASM、跨定义包 alias、数组长度表达式与显式类型、捕获/权限拒绝、原生顺序对照、? 最近帧、LF/CRLF及独立审查；合成传播节点来源仍属 A03 |
 | A02 常见模式宏及 log/tracing 场景矩阵 | E+D，已批准常见宏/日志场景；RFC0011 的完整 grammar U09 未冻结 | nested/optional repetition、广义 tt/type/stmt/item fragments 尚无；现有 event_if 是惰性条件日志，未提供完整 tracing span 语义 | 先把具体调用形状及歧义规则定清，保留当前有限 expr/ident/tt；嵌套重复长度/零次/预算拒绝，disabled 日志不求值，source span 保留。span/subscriber API 无明确授权证据时标待确认 |
-| A03 完整宏→降低诊断来源链 | E（已有首片及本轮合成点栈修复），RFC0011/0018；[来源验收](../tests/acceptance/macro_synthetic_origin_test.go)、[本轮证据](reviews/macro-synthetic-origin-20261006.md) | ? 合成点不再丢已证明宏栈，包模式零长伪来源已修，成功输出与具体生成文件 Go 诊断保留独立栈；主点无证明仍 unmapped，未知帧仍省略整链。refs 中间阶段、helper alias 因果链等具体余项见本轮报告，A03 不关闭 | 单文件/目录/跨文件/跨包、nested、LF/CRLF、enum、make/new、真实 Go stderr 与 JSON map、基线对照、精确 SHA 独立审查及 CLI/WASM；不用邻近 token 伪造精度 |
+| A03 完整宏→降低诊断来源链 | E（合成点独立栈及共享AST证据片已交付），RFC0011/0018；[来源验收](../tests/acceptance/macro_synthetic_origin_test.go)、[AST证据](reviews/generated-ast-provenance-20261006.md) | 变换前冻结token证据，builtin改名不再清空整文件，questionFlow明确生成节点可带完整栈；合成点仍无精确Origin。freezeValue其他temp、冗余括号多owner、refs中间阶段及共享helper余项继续开放，A03不关闭 | 单/多文件、跨包同名文件、nested/sibling、LF/CRLF、enum、完整AST/scalar及unknown冲突反例、三consumer、基线Go行为对照、精确SHA独立审查及完整Mac/CLI/WASM；不猜位置或合并栈 |
 | A04 match 普通表达式组合长尾 | E，D31 明确工程欠账；[matchexpr](../internal/matchexpr/README.md) | `return -(match ...)`、`S{N:match ...}`、控制头、package initializer、复杂 LHS；builtin/type-conversion call 未接入 | 从已有 prelude/value 扩展，逐上下文正反例；副作用一次、短路、lhs 先求值后写入/panic、goto、? 失败跳后续、direct recover 无额外帧；不一次新增所有模式 |
 | A05 多结果/不可命名类型的 match 与传播 | E+D，RFC0009/0018 | `return match ... , other()` 组合、多结果 arm 语法/类型需分开；现负例 `func()(int,int){return match ...=>1}` 本身结果数不匹配，**不是合法多结果需求的充分复现**；`m.Hidden()(match...)` 缺可见类型拼写 | 先给合法 expected-type 用例及结果数规则；使用真实类型 witness 不退化 any；保返回槽/defer/原函数帧和 Go 原 arity 错误 |
 | A06 单文件与外部增强恢复补齐 | E，D30；[enum artifact](../internal/frontend/enum_artifact.go)、[refs artifact](../internal/refs/artifact.go) | 单文件导入生成 enum/协议不能按目录模式恢复；internal-origin 不可达 validator/payload、外部受限载荷仍有界 | 明确单文件 package/config 来源；两独立 module + Go consumer，public alias/relay、移动路径、错 schema/hash/权限/owner 拒绝；internal Go 可见性不绕过 |
@@ -245,3 +245,14 @@ A01/RFC0011/MVP 仍开放；Mac 本地通过不推导 Linux 或托管 CI 通过�
 准确 SHA 复核和 A01/A03 逐场景收尾账见[本批报告](reviews/macro-synthetic-origin-20261006.md)。
 完整 Mac race 564 顶层/1226 子测试、vet、设计、真实 CLI/WASM通过。
 Linux 未验证，托管 CI 单独按最终准确 SHA 查询；A01/A03/RFC0011/MVP 整项继续开放。
+
+
+## 2026-10-06 接续：A03 AST 证据与显式生成原因
+
+合同先行提交 `5825463fb035b55562a7104ba642bed081a01dbe`，已验证源码 `e36d23dacee64d19b34aac639900c3f5c29e55c2`，
+普通分支 `fix/generated-ast-provenance`。本片统一frontend改名及propagation打印边界的证据快照，
+共享questionFlow按明确原因登记生成token并保留原operand身份；不是按len或临时名称特判。
+完整Mac race 597 顶层/1295 子测试、vet/design与CLI/WASM
+结果及独立审查见[交付报告](reviews/generated-ast-provenance-20261006.md)。
+其他temp、formatter歧义、refs、共享helper等具体余项仍列明；A01/A03/RFC0011/MVP整项不关闭。
+Linux未运行、网站未部署；托管CI按最终准确SHA单独查询，查不到的记录不算通过。

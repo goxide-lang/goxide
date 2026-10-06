@@ -1,0 +1,31 @@
+=== RUN   TestReviewAdversarialIndependent
+=== RUN   TestReviewAdversarialIndependent/duplicate-leaves-swap
+=== RUN   TestReviewAdversarialIndependent/same-pointer-rename-preserves-neighbor
+=== RUN   TestReviewAdversarialIndependent/own-operator-not-left
+=== RUN   TestReviewAdversarialIndependent/conflict-stays-dead
+=== RUN   TestReviewAdversarialIndependent/mixed-template-unknown-is-atomic
+=== RUN   TestReviewAdversarialIndependent/foreign-cause-cannot-register
+=== RUN   TestReviewAdversarialIndependent/actual-output-scalars
+=== RUN   TestReviewAdversarialIndependent/collapsed-parentheses-retain-only-inner
+--- PASS: TestReviewAdversarialIndependent (0.00s)
+    --- PASS: TestReviewAdversarialIndependent/duplicate-leaves-swap (0.00s)
+    --- PASS: TestReviewAdversarialIndependent/same-pointer-rename-preserves-neighbor (0.00s)
+    --- PASS: TestReviewAdversarialIndependent/own-operator-not-left (0.00s)
+    --- PASS: TestReviewAdversarialIndependent/conflict-stays-dead (0.00s)
+    --- PASS: TestReviewAdversarialIndependent/mixed-template-unknown-is-atomic (0.00s)
+    --- PASS: TestReviewAdversarialIndependent/foreign-cause-cannot-register (0.00s)
+    --- PASS: TestReviewAdversarialIndependent/actual-output-scalars (0.00s)
+    --- PASS: TestReviewAdversarialIndependent/collapsed-parentheses-retain-only-inner (0.00s)
+=== RUN   TestReviewTokenEvidenceAtomicity
+=== RUN   TestReviewTokenEvidenceAtomicity/wide-parent-span
+    review_overlay_test.go:35: scenario=wide-parent-span got=&{Start:21 End:27 Origin:<nil> Stack:[{Macro:outer Definition:{File:def.gox Start:1 End:10 Line:1 Column:2} Callsite:{File:call.gox Start:20 End:30 Line:2 Column:4} DefinitionOriginal:false CallsiteOriginal:false}] Kind:generated/unmapped} origin=<nil>
+=== RUN   TestReviewTokenEvidenceAtomicity/partial-unknown-overlay
+    review_overlay_test.go:35: scenario=partial-unknown-overlay got=&{Start:21 End:27 Origin:<nil> Stack:[] Kind:generated/unmapped} origin=<nil>
+=== RUN   TestReviewTokenEvidenceAtomicity/partial-different-owner-overlay
+    review_overlay_test.go:35: scenario=partial-different-owner-overlay got=&{Start:21 End:27 Origin:<nil> Stack:[] Kind:generated/unmapped} origin=<nil>
+--- PASS: TestReviewTokenEvidenceAtomicity (0.00s)
+    --- PASS: TestReviewTokenEvidenceAtomicity/wide-parent-span (0.00s)
+    --- PASS: TestReviewTokenEvidenceAtomicity/partial-unknown-overlay (0.00s)
+    --- PASS: TestReviewTokenEvidenceAtomicity/partial-different-owner-overlay (0.00s)
+PASS
+ok      review.example/sourcemap        1.811s

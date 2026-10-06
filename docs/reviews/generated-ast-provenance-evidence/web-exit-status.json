@@ -1,0 +1,9 @@
+{
+  "wasm-build": 0,
+  "web-build": 0,
+  "web-race": 0,
+  "web-vet": 0,
+  "browser-qa": 0,
+  "catalog-qa": 0,
+  "native-parity": 0
+}

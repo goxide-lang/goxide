@@ -1,0 +1,85 @@
+{
+  "oracle_sha256": "73c3df5140a4e3fe2f5ea15427476ccb87e23c2dafe8545d5a66fbe2e14b44db",
+  "results": [
+    {
+      "name": "operator",
+      "want_equal": false,
+      "exit": 1,
+      "result": {
+        "baseline": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/operator-a.go",
+        "baseline_shape_sha256": "b219ed9cf3a8801683a0550ca791f1969eb5e47c9f9127aa03148472a8b07c60",
+        "current": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/operator-b.go",
+        "current_shape_sha256": "56183f944d03097bb4cc9db54dc2c711b35a2e9e6ca1aa043736280a4b2c5b27",
+        "identical": false
+      },
+      "stderr": ""
+    },
+    {
+      "name": "ellipsis",
+      "want_equal": false,
+      "exit": 1,
+      "result": {
+        "baseline": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/ellipsis-a.go",
+        "baseline_shape_sha256": "a68cc3c7987f0453aed73e1261431df054a89da20e7c288ea23d42bd6e4c02ae",
+        "current": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/ellipsis-b.go",
+        "current_shape_sha256": "98c7236a38ebb1a822990d7573666d884879de0b1cbf858145f05d7890f77bf7",
+        "identical": false
+      },
+      "stderr": ""
+    },
+    {
+      "name": "channel-direction",
+      "want_equal": false,
+      "exit": 1,
+      "result": {
+        "baseline": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/channel-direction-a.go",
+        "baseline_shape_sha256": "c3588c47da2b2bd66035cb4faa641fcaeba7c9048853c3e32358a89a36856240",
+        "current": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/channel-direction-b.go",
+        "current_shape_sha256": "855bfec16d8cf0c2560a2ae20284af2207b49767515e94964250eedcf3f4ea0c",
+        "identical": false
+      },
+      "stderr": ""
+    },
+    {
+      "name": "type-alias",
+      "want_equal": false,
+      "exit": 1,
+      "result": {
+        "baseline": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/type-alias-a.go",
+        "baseline_shape_sha256": "a79614349d3e400156fe958c66762a1b9cb015be99767819378e0f935c7324c0",
+        "current": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/type-alias-b.go",
+        "current_shape_sha256": "b66c274cec7f08f79e4369b5423120d08a4d33685ce659718d62769488400f41",
+        "identical": false
+      },
+      "stderr": ""
+    },
+    {
+      "name": "trailing-comma",
+      "want_equal": true,
+      "exit": 0,
+      "result": {
+        "baseline": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/trailing-comma-a.go",
+        "baseline_shape_sha256": "98c7236a38ebb1a822990d7573666d884879de0b1cbf858145f05d7890f77bf7",
+        "current": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/independent-review/oracle-controls/trailing-comma-b.go",
+        "current_shape_sha256": "98c7236a38ebb1a822990d7573666d884879de0b1cbf858145f05d7890f77bf7",
+        "identical": true
+      },
+      "stderr": ""
+    },
+    {
+      "name": "actual-runtime-old-v1",
+      "exit": 0,
+      "result": {
+        "baseline": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/acceptance/runtime-baseline/main.go",
+        "baseline_shape_sha256": "9201aa6be4dc1a125e4eda4f3e058d2f42689790ad6dac8652310a9dbd2b37f2",
+        "current": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/ast-provenance-model/acceptance/runtime-candidate-v1/main.go",
+        "current_shape_sha256": "9201aa6be4dc1a125e4eda4f3e058d2f42689790ad6dac8652310a9dbd2b37f2",
+        "identical": true
+      },
+      "stderr": "",
+      "bytes_equal": false,
+      "baseline_sha256": "92674cda4d3ef3df8d5d73aa5109b8405f218c56a10fe7883646d11d3fc0a4ea",
+      "candidate_v1_sha256": "a3afae23d0cc2f96e0c25fbdf005f60b9fabe6aa638f3463a4d8bac3fa6c9db8"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+--- website/build.py (6dc779a)
++++ website/build.py (local Homebrew validation)
+@@ -134,7 +134,7 @@
+ (dist/'examples.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n')
+ goroot = run(GO, 'env', 'GOROOT').decode().strip()
+ shutil.copyfile(pathlib.Path(goroot)/'lib/wasm/wasm_exec.js', dist/'wasm_exec.js')
+-shutil.copyfile(pathlib.Path(goroot)/'LICENSE', dist/'GO-LICENSE.txt')
++shutil.copyfile(pathlib.Path('/opt/homebrew/Cellar/go/1.27.1/LICENSE'), dist/'GO-LICENSE.txt') # local Homebrew validation layout
+ embed = ROOT/'cmd/goxide-web/dist'
+ if embed.exists(): shutil.rmtree(embed)
+ shutil.copytree(dist, embed)

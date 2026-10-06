@@ -1,0 +1,124 @@
+=== RUN   TestMacroASTProvenanceCLI
+    macro_ast_provenance_test.go:26: go [build -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLI2849854366/001/goxide ./cmd/goxide]:
+=== RUN   TestMacroASTProvenanceCLI/LF/single
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsingle3032203541/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsingle3032203541/001/main.gox:69:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsingle3032203541/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsingle3032203541/001/main.gox:7:25
+=== RUN   TestMacroASTProvenanceCLI/LF/nested-enum-multiple-questions
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFnested-enum-multiple-questions2085089804/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFnested-enum-multiple-questions2085089804/001/main.gox:69:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFnested-enum-multiple-questions2085089804/001/main.gox:7:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFnested-enum-multiple-questions2085089804/001/main.gox:8:25
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFnested-enum-multiple-questions2085089804/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFnested-enum-multiple-questions2085089804/001/main.gox:7:33
+=== RUN   TestMacroASTProvenanceCLI/LF/sibling
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsibling3240710918/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsibling3240710918/001/main.gox:81:10: invalid argument: __goxide_qtmp_15 (variable of type int) for built-in len [generated/unmapped]
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsibling3240710918/001/main.gox:7:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsibling3240710918/001/main.gox:8:42
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsibling3240710918/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFsibling3240710918/001/main.gox:7:33
+=== RUN   TestMacroASTProvenanceCLI/LF/multifile
+    macro_ast_provenance_test.go:104: goxide [transpile -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFmultifile3768785784/002/generated /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFmultifile3768785784/001]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFmultifile3768785784/001/main.gox:80:10: invalid argument: __goxide_qtmp_15 (variable of type int) for built-in len [generated/unmapped]
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFmultifile3768785784/001/macros.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFmultifile3768785784/001/main.gox:6:42
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFmultifile3768785784/001/macros.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFmultifile3768785784/001/macros.gox:3:33
+=== RUN   TestMacroASTProvenanceCLI/LF/cross-package-same-basename
+    macro_ast_provenance_test.go:104: goxide [transpile -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-same-basename785947325/002/generated /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-same-basename785947325/001]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-same-basename785947325/001/main.gox:82:10: invalid argument: __goxide_qtmp_15 (variable of type int) for built-in len [generated/unmapped]
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-same-basename785947325/001/defs/main.gox:303:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-same-basename785947325/001/main.gox:8:44
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-same-basename785947325/001/defs/main.gox:302:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-same-basename785947325/001/defs/main.gox:303:37
+=== RUN   TestMacroASTProvenanceCLI/LF/original-selector
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector286789389/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector286789389/001/main.gox:6:39: (__goxide_qtmp_11).Missing undefined (type int has no field or method Missing) (source span [273,280))
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector286789389/001/main.gox:7:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector286789389/001/main.gox:8:25
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector286789389/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector286789389/001/main.gox:7:33
+=== RUN   TestMacroASTProvenanceCLI/LF/original-selector-after-rename
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector-after-rename2475618554/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector-after-rename2475618554/001/main.gox:6:39: (__goxide_qtmp_15).Missing undefined (type int has no field or method Missing) (source span [273,280))
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector-after-rename2475618554/001/main.gox:7:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector-after-rename2475618554/001/main.gox:9:41
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector-after-rename2475618554/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILForiginal-selector-after-rename2475618554/001/main.gox:7:33
+=== RUN   TestMacroASTProvenanceCLI/LF/cross-package-original-selector
+    macro_ast_provenance_test.go:104: goxide [transpile -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-original-selector3596191326/002/generated /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-original-selector3596191326/001]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-original-selector3596191326/001/defs/main.gox:302:39: (__goxide_qtmp_11).Missing undefined (type int has no field or method Missing) (source span [351,358))
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-original-selector3596191326/001/defs/main.gox:303:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-original-selector3596191326/001/main.gox:8:25
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-original-selector3596191326/001/defs/main.gox:302:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFcross-package-original-selector3596191326/001/defs/main.gox:303:37
+=== RUN   TestMacroASTProvenanceCLI/LF/unknown-later-temp
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFunknown-later-temp791350128/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFunknown-later-temp791350128/001/main.gox:69:6: cannot index __goxide_qtmp_14 (variable of int type __goxide_qscalar___goxide_qtmp_13) [generated/unmapped]
+=== RUN   TestMacroASTProvenanceCLI/LF/nonmacro-near-known-macro
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFnonmacro-near-known-macro2328651971/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLILFnonmacro-near-known-macro2328651971/001/main.gox:81:10: invalid argument: __goxide_qtmp_15 (variable of type int) for built-in len [generated/unmapped]
+=== RUN   TestMacroASTProvenanceCLI/CRLF/single
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsingle2653771966/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsingle2653771966/001/main.gox:69:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsingle2653771966/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsingle2653771966/001/main.gox:7:25
+=== RUN   TestMacroASTProvenanceCLI/CRLF/nested-enum-multiple-questions
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFnested-enum-multiple-questions786172095/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFnested-enum-multiple-questions786172095/001/main.gox:69:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFnested-enum-multiple-questions786172095/001/main.gox:7:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFnested-enum-multiple-questions786172095/001/main.gox:8:25
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFnested-enum-multiple-questions786172095/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFnested-enum-multiple-questions786172095/001/main.gox:7:33
+=== RUN   TestMacroASTProvenanceCLI/CRLF/sibling
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsibling608099941/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsibling608099941/001/main.gox:81:10: invalid argument: __goxide_qtmp_15 (variable of type int) for built-in len [generated/unmapped]
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsibling608099941/001/main.gox:7:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsibling608099941/001/main.gox:8:42
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsibling608099941/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFsibling608099941/001/main.gox:7:33
+=== RUN   TestMacroASTProvenanceCLI/CRLF/multifile
+    macro_ast_provenance_test.go:104: goxide [transpile -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFmultifile3078295973/002/generated /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFmultifile3078295973/001]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFmultifile3078295973/001/main.gox:80:10: invalid argument: __goxide_qtmp_15 (variable of type int) for built-in len [generated/unmapped]
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFmultifile3078295973/001/macros.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFmultifile3078295973/001/main.gox:6:42
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFmultifile3078295973/001/macros.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFmultifile3078295973/001/macros.gox:3:33
+=== RUN   TestMacroASTProvenanceCLI/CRLF/cross-package-same-basename
+    macro_ast_provenance_test.go:104: goxide [transpile -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-same-basename2872488877/002/generated /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-same-basename2872488877/001]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-same-basename2872488877/001/main.gox:82:10: invalid argument: __goxide_qtmp_15 (variable of type int) for built-in len [generated/unmapped]
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-same-basename2872488877/001/defs/main.gox:303:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-same-basename2872488877/001/main.gox:8:44
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-same-basename2872488877/001/defs/main.gox:302:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-same-basename2872488877/001/defs/main.gox:303:37
+=== RUN   TestMacroASTProvenanceCLI/CRLF/original-selector
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector1150534723/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector1150534723/001/main.gox:6:39: (__goxide_qtmp_11).Missing undefined (type int has no field or method Missing) (source span [278,285))
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector1150534723/001/main.gox:7:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector1150534723/001/main.gox:8:25
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector1150534723/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector1150534723/001/main.gox:7:33
+=== RUN   TestMacroASTProvenanceCLI/CRLF/original-selector-after-rename
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector-after-rename3418111117/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector-after-rename3418111117/001/main.gox:6:39: (__goxide_qtmp_15).Missing undefined (type int has no field or method Missing) (source span [278,285))
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector-after-rename3418111117/001/main.gox:7:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector-after-rename3418111117/001/main.gox:9:41
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector-after-rename3418111117/001/main.gox:6:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLForiginal-selector-after-rename3418111117/001/main.gox:7:33
+=== RUN   TestMacroASTProvenanceCLI/CRLF/cross-package-original-selector
+    macro_ast_provenance_test.go:104: goxide [transpile -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-original-selector471176779/002/generated /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-original-selector471176779/001]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-original-selector471176779/001/defs/main.gox:302:39: (__goxide_qtmp_11).Missing undefined (type int has no field or method Missing) (source span [652,659))
+          macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-original-selector471176779/001/defs/main.gox:303:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-original-selector471176779/001/main.gox:8:25
+          macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-original-selector471176779/001/defs/main.gox:302:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFcross-package-original-selector471176779/001/defs/main.gox:303:37
+=== RUN   TestMacroASTProvenanceCLI/CRLF/unknown-later-temp
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFunknown-later-temp2670016113/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFunknown-later-temp2670016113/001/main.gox:69:6: cannot index __goxide_qtmp_14 (variable of int type __goxide_qscalar___goxide_qtmp_13) [generated/unmapped]
+=== RUN   TestMacroASTProvenanceCLI/CRLF/nonmacro-near-known-macro
+    macro_ast_provenance_test.go:104: goxide [transpile /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFnonmacro-near-known-macro2143030901/001/main.gox]:
+        /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLICRLFnonmacro-near-known-macro2143030901/001/main.gox:81:10: invalid argument: __goxide_qtmp_15 (variable of type int) for built-in len [generated/unmapped]
+=== RUN   TestMacroASTProvenanceCLI/runtime
+    macro_ast_provenance_test.go:145: goxide [transpile -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLIruntime494618900/002/generated /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLIruntime494618900/001]:
+    macro_ast_provenance_test.go:145: goxide [transpile -o /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLIruntime494618900/003/generated /Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native/TestMacroASTProvenanceCLIruntime494618900/001]:
+    macro_ast_provenance_test.go:162: go [test -race -count=1 .]:
+        ok      packages.example/app    1.384s
+    macro_ast_provenance_test.go:163: go [vet ./...]:
+    macro_ast_provenance_test.go:164: go [run -race .]:
+        AB 5
+--- PASS: TestMacroASTProvenanceCLI (6.68s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/single (0.45s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/nested-enum-multiple-questions (0.05s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/sibling (0.05s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/multifile (0.05s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/cross-package-same-basename (0.10s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/original-selector (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/original-selector-after-rename (0.05s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/cross-package-original-selector (0.09s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/unknown-later-temp (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/LF/nonmacro-near-known-macro (0.05s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/single (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/nested-enum-multiple-questions (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/sibling (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/multifile (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/cross-package-same-basename (0.09s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/original-selector (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/original-selector-after-rename (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/cross-package-original-selector (0.08s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/unknown-later-temp (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/CRLF/nonmacro-near-known-macro (0.04s)
+    --- PASS: TestMacroASTProvenanceCLI/runtime (3.82s)
+PASS
+ok      github.com/hxsf/goxide/tests/acceptance 8.611s

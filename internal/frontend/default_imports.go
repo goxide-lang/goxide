@@ -6,16 +6,15 @@ import (
 	"go/types"
 	"path"
 	"strconv"
-	"strings"
 )
 
 // Source/artifact registrations, not helper spelling, authorize this binding.
 // Each source file keeps its own imports; helpers are anchored at package scope.
-func importedDefaults(consumer string, sources map[string][]byte, known map[string]PackageResult) (map[string]string, map[string]string, map[string]map[string]string) {
+func importedDefaults(consumer string, sources map[string][]byte, known map[string]PackageResult, single ...bool) (map[string]string, map[string]string, map[string]map[string]string) {
 	preludes, imports := map[string]string{}, map[string]string{}
 	protocols := map[string]map[string]string{}
 	for fi, name := range sortedSources(sources) {
-		if !strings.HasSuffix(name, ".gox") {
+		if !isGoxideInput(name, single...) {
 			continue
 		}
 		f, err := parseSourceImports(name, sources[name])

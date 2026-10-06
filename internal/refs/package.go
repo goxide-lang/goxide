@@ -51,6 +51,12 @@ func deduplicateIR(files []*ast.File) {
 // Frontend callers bind imported metadata before this check and publish exports
 // only after final Go validation; ordinary Go pointer APIs are not reclassified.
 func FinishPackage(files map[string][]byte, imp types.Importer, trusted ...map[string]map[string]bool) (map[string]Result, error) {
+	return FinishPackageWithPath(defaultPackagePath, files, imp, trusted...)
+}
+
+// FinishPackageWithPath validates and erases a package's references under its
+// actual package path. An empty path retains FinishPackage's legacy default.
+func FinishPackageWithPath(path string, files map[string][]byte, imp types.Importer, trusted ...map[string]map[string]bool) (map[string]Result, error) {
 	active := false
 	for _, src := range files {
 		active = active || strings.Contains(string(src), "type __goxide_ref_write[")
@@ -64,7 +70,7 @@ func FinishPackage(files map[string][]byte, imp types.Importer, trusted ...map[s
 	}
 
 	for _, name := range sourceNames(files) {
-		restored, err := restore(name, files[name], imp, files)
+		restored, err := restore(path, name, files[name], imp, files)
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +78,7 @@ func FinishPackage(files map[string][]byte, imp types.Importer, trusted ...map[s
 		if len(trusted) > 0 {
 			temps = trusted[0][name]
 		}
-		lowered, err := lowerWithFiles(name, restored, imp, false, files, temps)
+		lowered, err := lowerWithFiles(path, name, restored, imp, false, files, temps)
 		if err != nil {
 			return nil, err
 		}

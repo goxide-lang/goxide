@@ -3,18 +3,17 @@ package frontend
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/hxsf/goxide/internal/equality"
 )
 
 // Bind actual verified protocol exports at package scope; source import aliases
 // stay file-scoped and caller local identifiers cannot capture helper selection.
-func importedEquality(consumer string, sources map[string][]byte, known map[string]PackageResult) (map[string]string, map[string]string, []equality.Protocol) {
+func importedEquality(consumer string, sources map[string][]byte, known map[string]PackageResult, single ...bool) (map[string]string, map[string]string, []equality.Protocol) {
 	prelude, imports := map[string]string{}, map[string]string{}
 	var protocols []equality.Protocol
 	for fi, name := range sortedSources(sources) {
-		if !strings.HasSuffix(name, ".gox") {
+		if !isGoxideInput(name, single...) {
 			continue
 		}
 		f, err := parseSourceImports(name, sources[name])

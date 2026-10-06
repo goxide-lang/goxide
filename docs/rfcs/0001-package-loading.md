@@ -165,6 +165,11 @@ go.sum 与 relative replace 含义。无关 cwd、ambient GOWORK 或 `--runtime`
 明确拥有的临时产物/缓存。若使用临时 modfile 或 Go source overlay，它们只提供原
 配置与指定生成文件的受管视图，不改 module identity、不替换依赖代码或真实源文件。
 
+已知 module 模式的 `-o`、`--source-map`、`--expanded` 输出须是源 module 外的
+全新路径；所有路径在写入任何产物前一起检查，已有文件（包括 symlink/hardlink）
+不覆盖。默认 build 输出若位于源 module 内，须显式给外部 `-o`；transpile/expand
+不指定 `-o` 时仍输出 stdout。临时目录也不得落入源 module；standalone 旧模式不变。
+
 没有输入祖先 Go module 的 standalone 旧模式保留；它不凭 cwd 声称取得一个真实
 consumer package identity。TOML/workspace 的单文件 target/features 选择、单文件
 `--tags`/`test` 及 use/pub use 不在此新定，沿用明确的目录入口边界，不隐选目标。

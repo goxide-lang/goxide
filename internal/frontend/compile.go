@@ -11,7 +11,6 @@ import (
 	"github.com/hxsf/goxide/internal/equality"
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/matchexpr"
-	"github.com/hxsf/goxide/internal/naming"
 	"github.com/hxsf/goxide/internal/printing"
 	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/refs"
@@ -100,20 +99,12 @@ var attribute = regexp.MustCompile(`^\s*#\[(.*)\]\s*$`)
 var renameAttr = regexp.MustCompile(`^rename\s*=\s*("(?:[^"\\]|\\.)*")$`)
 
 func Compile(filename string, source []byte) (Result, error) {
-	if err := naming.Source(filename, source); err != nil {
-		return Result{}, err
-	}
-	_, uses, err := scanUses(filename, source)
-	if err != nil {
-		return Result{}, err
-	}
-	if len(uses) > 0 {
-		return Result{}, fmt.Errorf("%s: use/pub use requires directory or package compilation", filename)
-	}
-	return compile(filename, source, nil)
+	return CompileWithOptions(filename, source, FileOptions{})
 }
 
 type compileConfig struct {
+	single            bool
+	equalityImports   []equality.Protocol
 	uses              *usePackage
 	protocolFunctions map[string][]*ast.FuncDecl
 	sumDeclarations   []enums.Decl
@@ -139,7 +130,21 @@ type compileConfig struct {
 	typeSpecs         map[string]*ast.TypeSpec
 }
 
-func compile(filename string, source []byte, cfg *compileConfig) (Result, error) {
+func compile(filename string, source []byte, cfg *compileConfig, options ...FileOptions) (Result, error) {
+	single := cfg == nil || cfg.single
+	packagePath := "goxide/generated"
+	var sharedImporter types.Importer
+	if cfg != nil {
+		sharedImporter = cfg.macroImporter
+		if cfg.packagePath != "" {
+			packagePath = cfg.packagePath
+		}
+	} else if len(options) > 0 {
+		sharedImporter = options[0].Importer
+	}
+	if sharedImporter == nil {
+		sharedImporter = typecheck.NewImporter(filename)
+	}
 	if bytes.IndexByte(source, 0) >= 0 {
 		return Result{}, fmt.Errorf("%s: NUL byte in source", filename)
 	}
@@ -178,9 +183,9 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	macroOrigins := macroSourceMapper{filename: filename, original: originalSource, prepared: preparedMap}
 	var expanded macros.Result
 	if cfg != nil && cfg.macros != nil {
-		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, cfg.macros, cfg.macroImporter)
+		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, cfg.macros, sharedImporter)
 	} else {
-		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, nil, typecheck.NewImporter(filename))
+		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, nil, sharedImporter)
 	}
 	if err != nil {
 		var diagnostic *macros.Diagnostic
@@ -421,13 +426,12 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		return Result{}, e
 	}
 	astEvidence := provenance.CaptureAST(fs, f)
-	var builtinImporter types.Importer
+	builtinImporter := sharedImporter
 	var builtinNamed map[string]macros.TypeContext
 	if cfg != nil {
-		builtinImporter = cfg.macroImporter
 		builtinNamed = cfg.builtinTypes
 	}
-	if err := macros.ResolveBuiltins(fs, f, expanded.Builtins, builtinImporter, builtinNamed); err != nil {
+	if err := macros.ResolveBuiltinsWithPath(packagePath, fs, f, expanded.Builtins, builtinImporter, builtinNamed); err != nil {
 		if e, ok := err.(*macros.BuiltinBindingError); ok {
 			mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
 			if seg := provenance.Lookup(e.Position.Offset); seg != nil {
@@ -763,7 +767,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			builtinTypes: map[string]macros.TypeContext{filename: {Types: specs, Imports: f.Imports}},
 			models:       g.models, manualDefaults: allManual,
 		}
-		if _, err := bindLocalProtocolAliases("goxide/local", map[string][]byte{filename: originalSource}, local, nil, nil); err != nil {
+		if _, err := bindLocalProtocolAliases(packagePath, map[string][]byte{filename: originalSource}, local, nil, sharedImporter); err != nil {
 			return Result{}, err
 		}
 		g.localProtocols = local.localProtocols
@@ -797,10 +801,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		return Result{}, err
 	}
 	// Shared sums need real imported type identity even in single-file derives.
-	if builtinImporter == nil {
-		builtinImporter = typecheck.NewImporter(filename)
-	}
-	g.prepareSumProtocols(f, cfg, builtinImporter)
+	g.prepareSumProtocols(packagePath, f, cfg, builtinImporter)
 	fieldProtocols := map[string][]string{}
 	for _, m := range ordered {
 		for _, kind := range []string{"Clone", "Debug", "Serialize", "Deserialize"} {
@@ -943,9 +944,8 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	}
 	referenceIR := out
 	var importedBindings refs.ImportBindings
-	var singleImporter types.Importer
-	if cfg == nil {
-		singleImporter = typecheck.NewImporter(filename)
+	singleImporter := sharedImporter
+	if single {
 		for _, spec := range f.Imports {
 			path, _ := strconv.Unquote(spec.Path.Value)
 			pkg, err := singleImporter.Import(path)
@@ -953,7 +953,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 				return Result{}, fmt.Errorf("%s: imports with use metadata require directory/package compilation: %s", filename, path)
 			}
 		}
-		bound, bindings, err := refs.BindImports(map[string][]byte{filename: out}, singleImporter, nil)
+		bound, bindings, err := refs.BindImportsWithPath(packagePath, map[string][]byte{filename: out}, singleImporter, nil)
 		importedBindings = bindings
 		if err != nil {
 			if e, ok := err.(*refs.ImportError); ok {
@@ -969,8 +969,15 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		provenance = provenance.Compose(out, bound[filename], "refs.BindImports")
 		out = bound[filename]
 	}
-	singleEqCfg := equality.Config{Importer: singleImporter, PackagePath: "goxide/generated", Derives: equalityDerives, Enums: enumResult.Enums, Maps: map[string]*sourcemap.Map{filename: provenance}}
-	if cfg == nil {
+	singleFamilies := append([]enums.Decl(nil), enumResult.Enums...)
+	if cfg != nil {
+		singleFamilies = append(singleFamilies, cfg.imported[filename]...)
+	}
+	singleEqCfg := equality.Config{Importer: singleImporter, PackagePath: packagePath, Derives: equalityDerives, Enums: singleFamilies, Maps: map[string]*sourcemap.Map{filename: provenance}}
+	if cfg != nil {
+		singleEqCfg.Imported = cfg.equalityImports
+	}
+	if single {
 		eqFiles, err := equality.Prepare(map[string][]byte{filename: out}, singleEqCfg)
 		if err != nil {
 			return Result{}, stageError("equality.Prepare", err)
@@ -980,7 +987,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		needsTypecheck = needsTypecheck || len(equalityDerives) > 0 || bytes.Contains(originalSource, []byte("equals"))
 	}
 	matchReferenceTemps := map[string]bool{}
-	if cfg == nil && (bytes.Contains(out, []byte("__goxide_question(")) || needsTypecheck || bytes.Contains(out, []byte("__goxide_ref_"))) {
+	if single && (bytes.Contains(out, []byte("__goxide_question(")) || needsTypecheck || bytes.Contains(out, []byte("__goxide_ref_"))) {
 		conversions := []propagate.Conversion{}
 		for _, m := range ordered {
 			if m.from != "" {
@@ -989,7 +996,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		imp := singleImporter
 		var inferred []enums.Decl
-		out, e = propagate.Lower(filename, out, propagate.Config{InferredFamilies: &inferred, Families: enumResult.Enums, From: conversions, Importer: imp, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
+		out, e = propagate.Lower(filename, out, propagate.Config{InferredFamilies: &inferred, Families: singleFamilies, From: conversions, Importer: imp, PackagePath: packagePath, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
 		}
@@ -1001,16 +1008,17 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		out = eqFiles[filename]
 		provenance = singleEqCfg.Maps[filename]
-		if err := checkEnumEquality("goxide/generated", map[string][]byte{filename: out}, imp, enumResult.Enums, true); err != nil {
+		if err := checkEnumEquality(packagePath, map[string][]byte{filename: out}, imp, singleEqCfg.Enums, true); err != nil {
 			return Result{}, err
 		}
-		printed, err := printing.Lower(map[string][]byte{filename: out}, printing.Config{Importer: imp, DebugTypes: debugTypes, Maps: map[string]*sourcemap.Map{filename: provenance}})
+		printed, err := printing.Lower(map[string][]byte{filename: out}, printing.Config{Importer: imp, PackagePath: packagePath, DebugTypes: debugTypes, Maps: map[string]*sourcemap.Map{filename: provenance}})
 		if err != nil {
 			return Result{}, err
 		}
 		out = printed[filename]
+		out = unusedValidatorOwnerImports(filename, out, provenance)
 		beforeReferences := out
-		refResult, e = refs.Finish(filename, out, imp, matchReferenceTemps)
+		refResult, e = refs.FinishWithPackagePath(packagePath, filename, out, imp, matchReferenceTemps)
 		if e != nil {
 			return Result{}, stageError("refs.Finish", e)
 		}
@@ -1020,7 +1028,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 		provenance = provenance.Compose(beforeReferences, refResult.Source, "refs.Finish")
 		out = refResult.Source
-		if e = typecheck.Check(filename, out, imp); e != nil {
+		if e = typecheck.CheckPackage(packagePath, map[string][]byte{filename: out}, imp); e != nil {
 			if te, ok := e.(types.Error); ok {
 				p := te.Fset.Position(te.Pos)
 				mapped := &sourcemap.Error{Message: te.Msg, Generated: p}
@@ -1033,21 +1041,22 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 			return Result{}, stageError("typecheck.Check", e)
 		}
 		erased := map[string][]byte{filename: out}
-		meta, e := refs.ExportMetadata("goxide/generated", map[string][]byte{filename: referenceIR}, erased, imp)
+		meta, e := refs.ExportMetadata(packagePath, map[string][]byte{filename: referenceIR}, erased, imp)
 		if e != nil {
 			return Result{}, e
 		}
 		if len(meta.Functions) > 0 {
 			out = append(erased[filename], []byte(fmt.Sprintf("\nconst %s = %q\n", refs.MetadataMarker, meta.Marker()))...)
-			if e = typecheck.Check(filename, out, imp); e != nil {
+			if e = typecheck.CheckPackage(packagePath, map[string][]byte{filename: out}, imp); e != nil {
 				return Result{}, e
 			}
 			provenance = provenance.Compose(refResult.Source, out, "refs.exportMetadata")
 		}
 	}
 
-	if cfg == nil {
-		if err := checkDefaultCycles("goxide/generated", map[string][]byte{filename: out}, typecheck.NewImporter(filename), defaultHelpers, map[string]*sourcemap.Map{filename: provenance}); err != nil {
+	if single {
+		out = unusedValidatorOwnerImports(filename, out, provenance)
+		if err := checkDefaultCycles(packagePath, map[string][]byte{filename: out}, sharedImporter, defaultHelpers, map[string]*sourcemap.Map{filename: provenance}); err != nil {
 			return Result{}, err
 		}
 	}
@@ -1073,8 +1082,8 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		}
 	}
 	mapping, _ := json.MarshalIndent(map[string]any{"derives": sm, "deriveFields": deriveFields, "macroTokens": expanded.Origins, "macroTokenInputStage": "propagate.Prepare output", "references": refResult.References, "diagnostics": provenance, "sourceBytes": len(originalSource), "note": "diagnostics uses final Go byte offsets; generated/unmapped regions have no proven source; macroTokens uses macro expansion offsets"}, "", "  ")
-	if cfg == nil {
-		if err := checkEnumEquality("goxide/generated", map[string][]byte{filename: out}, singleImporter, enumResult.Enums, true); err != nil {
+	if single {
+		if err := checkEnumEquality(packagePath, map[string][]byte{filename: out}, singleImporter, singleEqCfg.Enums, true); err != nil {
 			return Result{}, err
 		}
 	}

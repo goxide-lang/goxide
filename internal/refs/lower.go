@@ -41,6 +41,14 @@ type Result struct {
 }
 
 const prefix = "__goxide_ref_"
+const defaultPackagePath = "goxide.local/refs"
+
+func packagePath(path string) string {
+	if path == "" {
+		return defaultPackagePath
+	}
+	return path
+}
 
 var scalars = []string{"bool", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "float32", "float64", "complex64", "complex128", "string"}
 
@@ -73,9 +81,9 @@ func referenceName(r Ref, filename string) string {
 	sum := sha256.Sum256([]byte(filename))
 	return fmt.Sprintf("%s_f%x", base, sum[:8])
 }
-func (c *checker) name(r Ref) string { return referenceName(r, c.filename) }
-func element(t types.Type) string    { return elementInFile(t, nil, nil) }
-func elementInFile(t types.Type, file *ast.File, info *types.Info) string {
+func (c *checker) name(r Ref) string                    { return referenceName(r, c.filename) }
+func element(t types.Type, owner *types.Package) string { return elementInFile(t, nil, nil, owner) }
+func elementInFile(t types.Type, file *ast.File, info *types.Info, owner *types.Package) string {
 	if file != nil && info != nil {
 		for _, decl := range file.Decls {
 			if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
@@ -89,7 +97,7 @@ func elementInFile(t types.Type, file *ast.File, info *types.Info) string {
 		}
 	}
 	return types.TypeString(t, func(p *types.Package) string {
-		if p.Path() == "goxide.local/refs" {
+		if p == owner {
 			return ""
 		}
 		if file != nil {
@@ -112,7 +120,7 @@ func elementInFile(t types.Type, file *ast.File, info *types.Info) string {
 		return p.Name()
 	})
 }
-func (c *checker) element(t types.Type) string { return elementInFile(t, c.file, c.info) }
+func (c *checker) element(t types.Type) string { return elementInFile(t, c.file, c.info, c.pkg) }
 func referenceTarget(t types.Type) types.Type {
 	if p, ok := types.Unalias(t).Underlying().(*types.Pointer); ok {
 		return p.Elem()
@@ -134,7 +142,7 @@ func refType(t types.Type, owner *types.Package) (Ref, bool) {
 		if s == "__goxide_ref_rw" {
 			p = Write
 		}
-		return Ref{element(n.TypeArgs().At(0)), p}, true
+		return Ref{element(n.TypeArgs().At(0), owner), p}, true
 	}
 	for _, p := range []Permission{Read, Write} {
 		q := prefix + string(p) + "_"
@@ -281,6 +289,7 @@ func declarations() string {
 type checker struct {
 	matchReferenceTemps map[string]bool
 	pkg                 *types.Package
+	packagePath         string
 	companions          map[string][]byte
 	filename            string
 	source              []byte
@@ -347,7 +356,7 @@ func (c *checker) checkTypes() error {
 	}
 	deduplicateIR(files)
 	conf := types.Config{Importer: imp, DisableUnusedImportCheck: len(c.companions) > 0}
-	pkg, err := conf.Check("goxide.local/refs", c.fs, files, c.info)
+	pkg, err := conf.Check(c.packagePath, c.fs, files, c.info)
 	c.pkg = pkg
 	if err != nil {
 		return fmt.Errorf("%s: refs: source type checking failed: %w", c.filename, err)
@@ -362,14 +371,14 @@ func Lower(filename string, source []byte) (Result, error) {
 }
 
 func lower(filename string, source []byte, imp types.Importer, prepare bool) (Result, error) {
-	return lowerWithFiles(filename, source, imp, prepare, nil)
+	return lowerWithFiles(defaultPackagePath, filename, source, imp, prepare, nil)
 }
-func lowerWithFiles(filename string, source []byte, imp types.Importer, prepare bool, files map[string][]byte, trusted ...map[string]bool) (Result, error) {
+func lowerWithFiles(path, filename string, source []byte, imp types.Importer, prepare bool, files map[string][]byte, trusted ...map[string]bool) (Result, error) {
 	var matchTemps map[string]bool
 	if len(trusted) > 0 {
 		matchTemps = trusted[0]
 	}
-	c := &checker{matchReferenceTemps: matchTemps, companions: files, filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}, elements: map[string]bool{}}
+	c := &checker{matchReferenceTemps: matchTemps, packagePath: packagePath(path), companions: files, filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}, elements: map[string]bool{}}
 	// Attributes belong to the later derive pass; preserve their exact source lines.
 	var attrs []struct {
 		line int

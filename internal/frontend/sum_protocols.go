@@ -22,7 +22,7 @@ type externalSumProtocol struct {
 
 // Use the same lowered/registered declarations and actual Go type identity as
 // match/equality. A spelling resembling Option or Result grants no capability.
-func (g *generator) prepareSumProtocols(f *ast.File, cfg *compileConfig, imp types.Importer) {
+func (g *generator) prepareSumProtocols(packagePath string, f *ast.File, cfg *compileConfig, imp types.Importer) {
 	files := []*ast.File{f}
 	if cfg != nil {
 		paths := make([]string, 0, len(cfg.enumRegistry))
@@ -103,7 +103,7 @@ func (g *generator) prepareSumProtocols(f *ast.File, cfg *compileConfig, imp typ
 		}
 	}
 	conf := types.Config{Importer: imp, IgnoreFuncBodies: true, Error: func(error) {}}
-	g.protocolPkg, _ = conf.Check("goxide/derive", g.fs, files, nil)
+	g.protocolPkg, _ = conf.Check(packagePath, g.fs, files, nil)
 	g.protocolFile = f
 	g.sumHelpers = map[string]string{}
 	g.sumImports = map[string]string{}

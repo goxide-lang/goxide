@@ -18,6 +18,7 @@ import (
 
 	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/project"
+	"github.com/hxsf/goxide/internal/typecheck"
 )
 
 // CompileRequest is the parser-independent input to compilation services.
@@ -112,7 +113,36 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			}
 		}
 	}
-	result, err := frontend.Compile(input, src)
+	owner, err := prepareSingleFileModule(input)
+	if err != nil {
+		return err
+	}
+	var result frontend.Result
+	var configuredTool string
+	if owner != nil {
+		defer owner.close()
+		input = owner.input
+		if err = owner.validateOutputs(&req); err != nil {
+			return err
+		}
+		if mode == "run" || mode == "build" {
+			configuredTool, err = exec.LookPath(*goTool)
+			if err != nil {
+				return err
+			}
+			configuredTool, err = filepath.Abs(configuredTool)
+			if err != nil {
+				return err
+			}
+			if err = checkDirectoryCompiler(configuredTool); err != nil {
+				return fmt.Errorf("configured single-file compiler: %w", err)
+			}
+		}
+		imp := typecheck.NewImporterWithModFile(context.Background(), input, nil, false, singleFileEnvironment(), owner.modFile)
+		result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{PackagePath: owner.packagePath, Importer: imp})
+	} else {
+		result, err = frontend.Compile(input, src)
+	}
 	if err != nil {
 		return err
 	}
@@ -136,6 +166,9 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			return err
 		}
 		return writeArtifact(*dest, input, data)
+	}
+	if owner != nil {
+		return owner.run(req, result, configuredTool, out, stderr)
 	}
 	root := *runtimeRoot
 	if root == "" {

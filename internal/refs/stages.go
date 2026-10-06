@@ -21,16 +21,22 @@ func Prepare(filename string, source []byte) (Result, error) {
 // Lower then performs complete type checking and validates all consuming sites.
 // Provisional typing here is used only to resolve constructor element types.
 func Finish(filename string, source []byte, imp types.Importer, trusted ...map[string]bool) (Result, error) {
-	restored, err := restore(filename, source, imp, nil)
+	return FinishWithPackagePath(defaultPackagePath, filename, source, imp, trusted...)
+}
+
+// FinishWithPackagePath checks and erases references under the consumer's actual
+// package path. An empty path retains Finish's legacy synthetic package path.
+func FinishWithPackagePath(path, filename string, source []byte, imp types.Importer, trusted ...map[string]bool) (Result, error) {
+	restored, err := restore(path, filename, source, imp, nil)
 	if err != nil {
 		return Result{}, err
 	}
 	if !strings.Contains(string(source), "type __goxide_ref_write[") {
 		return Result{Source: source}, nil
 	}
-	return lowerWithFiles(filename, restored, imp, false, nil, trusted...)
+	return lowerWithFiles(path, filename, restored, imp, false, nil, trusted...)
 }
-func restore(filename string, source []byte, imp types.Importer, files map[string][]byte) ([]byte, error) {
+func restore(path, filename string, source []byte, imp types.Importer, files map[string][]byte) ([]byte, error) {
 	if len(files) == 0 && !strings.Contains(string(source), "type __goxide_ref_write[") {
 		return source, nil
 	}
@@ -56,7 +62,7 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 		all = append(all, peer)
 	}
 	deduplicateIR(all)
-	pkg, _ := conf.Check("goxide.local/refs", fs, all, info)
+	pkg, _ := conf.Check(packagePath(path), fs, all, info)
 	offset := func(p token.Pos) int { return fs.Position(p).Offset }
 	var es []edit
 	var failure error
@@ -89,7 +95,7 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 						failure = fmt.Errorf("%s: refs: unresolved write reference element", fs.Position(n.Pos()))
 						return false
 					}
-					if element(p.Elem()) == "" {
+					if element(p.Elem(), pkg) == "" {
 						failure = fmt.Errorf("%s: refs: unsupported reference element", fs.Position(n.Pos()))
 						return false
 					}
@@ -102,13 +108,13 @@ func restore(filename string, source []byte, imp types.Importer, files map[strin
 						failure = fmt.Errorf("%s: refs: unsupported reference element", fs.Position(n.Pos()))
 						return false
 					}
-					es = append(es, edit{offset(n.Pos()), offset(n.End()), "mut& " + elementInFile(info.TypeOf(n.Index), f, info)})
+					es = append(es, edit{offset(n.Pos()), offset(n.End()), "mut& " + elementInFile(info.TypeOf(n.Index), f, info, pkg)})
 					return false
 				}
 			case *ast.Ident:
 				if r, ok := refType(info.TypeOf(n), pkg); ok {
 					if _, isType := info.Uses[n].(*types.TypeName); isType {
-						spelling := "& " + elementInFile(referenceTarget(info.TypeOf(n)), f, info)
+						spelling := "& " + elementInFile(referenceTarget(info.TypeOf(n)), f, info, pkg)
 						if r.Permission == Write {
 							spelling = "mut" + spelling
 						}

@@ -49,20 +49,33 @@ func preparePackageImports(sources map[string][]byte, metadata map[string]Packag
 	return preparePackageContext("", sources, metadata, nil)
 }
 func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
+	return prepareCompilationContext(path, sources, metadata, imp, false, budgets...)
+}
+
+// A single file shares registered import/declaration binding, not the directory
+// publication policy or package finishing pipeline.
+func prepareCompilationContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, single bool, budgets ...*macros.Budget) (PackageResult, error) {
 	for name, source := range sources {
 		if err := naming.Source(name, source); err != nil {
 			return PackageResult{}, err
 		}
 	}
-	useContext, err := prepareUses(path, sources, metadata, imp)
-	if err != nil {
-		return PackageResult{}, err
+	useContext := &usePackage{prepared: sources}
+	var err error
+	if !single {
+		useContext, err = prepareUses(path, sources, metadata, imp)
+		if err != nil {
+			return PackageResult{}, err
+		}
 	}
 	sources = useContext.prepared
 	names := sortedSources(sources)
-	cfg := &compileConfig{uses: useContext, protocolFunctions: map[string][]*ast.FuncDecl{}, packagePath: path, builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
+	cfg := &compileConfig{single: single, protocolFunctions: map[string][]*ast.FuncDecl{}, packagePath: path, builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
+	if !single {
+		cfg.uses = useContext
+	}
 	for _, name := range names {
-		if !strings.HasSuffix(name, ".gox") {
+		if !isGoxideInput(name, single) {
 			continue
 		}
 		_, manual, err := lowerManualDefaults(name, sources[name])
@@ -81,7 +94,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		return PackageResult{}, err
 	}
 	cfg.enumRegistry = metadata
-	cfg.imported, cfg.preludes, cfg.enumGoImports, cfg.enumUnavailable = importedDeclarations(path, sources, metadata)
+	cfg.imported, cfg.preludes, cfg.enumGoImports, cfg.enumUnavailable = importedDeclarations(path, sources, metadata, single)
 	// Share only unique package bindings, never file-local import spellings.
 	for _, name := range names {
 		for _, d := range cfg.imported[name] {
@@ -91,7 +104,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 			}
 		}
 	}
-	eqPrelude, eqImports, eqProtocols := importedEquality(path, sources, metadata)
+	eqPrelude, eqImports, eqProtocols := importedEquality(path, sources, metadata, single)
 	for n, p := range eqPrelude {
 		cfg.preludes[n] += p
 	}
@@ -99,7 +112,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		cfg.enumGoImports[n] += p
 	}
 
-	defaultPrelude, defaultImports, defaultProtocols := importedDefaults(path, sources, metadata)
+	defaultPrelude, defaultImports, defaultProtocols := importedDefaults(path, sources, metadata, single)
 	cfg.defaultImports = defaultProtocols
 	for n, p := range defaultPrelude {
 		cfg.preludes[n] += p
@@ -108,7 +121,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		cfg.enumGoImports[n] += p
 	}
 
-	fieldPrelude, fieldImports, fieldProtocols := importedFieldProtocols(path, sources, metadata)
+	fieldPrelude, fieldImports, fieldProtocols := importedFieldProtocols(path, sources, metadata, single)
 	cfg.fieldImports = fieldProtocols
 	for n, p := range fieldPrelude {
 		cfg.preludes[n] += p
@@ -146,7 +159,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	seen := map[string]string{}
 	for _, name := range names {
-		if !strings.HasSuffix(name, ".gox") {
+		if !isGoxideInput(name, single) {
 			continue
 		}
 		meta, err := enums.CollectPackage(name, sources[name])
@@ -157,7 +170,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 			if prior := seen[d.Name]; prior != "" {
 				return PackageResult{}, fmt.Errorf("%s: duplicate enum %s (also in %s)", name, d.Name, prior)
 			}
-			if ast.IsExported(d.Name) && !d.Public {
+			if !single && ast.IsExported(d.Name) && !d.Public {
 				return PackageResult{}, fmt.Errorf("%s: exported enum %s requires pub in directory mode", d.Position, d.Name)
 			}
 			seen[d.Name] = name
@@ -179,7 +192,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	// Native declarations participate in enum payload analysis too.
 	for _, name := range names {
-		if !strings.HasSuffix(name, ".go") {
+		if single || !strings.HasSuffix(name, ".go") {
 			continue
 		}
 		f, err := parser.ParseFile(token.NewFileSet(), name, sources[name], 0)
@@ -203,7 +216,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	cfg.collect = true
 	for _, name := range names {
-		if !strings.HasSuffix(name, ".gox") {
+		if !isGoxideInput(name, single) {
 			continue
 		}
 		r, err := compile(name, sources[name], cfg)
@@ -231,6 +244,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		return PackageResult{}, err
 	}
 	eqProtocols = append(eqProtocols, aliasProtocols...)
+	cfg.equalityImports = eqProtocols
 	cfg.collect = false
 	cfg.macroBudget = buildBudget
 	result := PackageResult{useContext: useContext, equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
@@ -240,7 +254,7 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 	}
 	generated := map[string]string{}
 	for index, name := range names {
-		if !strings.HasSuffix(name, ".gox") {
+		if !isGoxideInput(name, single) {
 			result.Files[name] = Result{Go: sources[name]}
 			if name == useContext.generatedFile {
 				r := result.Files[name]
@@ -253,8 +267,10 @@ func preparePackageContext(path string, sources map[string][]byte, metadata map[
 		if err != nil {
 			return PackageResult{}, err
 		}
-		if err = packageGeneratedNames(name, &r, index, generated); err != nil {
-			return PackageResult{}, err
+		if !single {
+			if err = packageGeneratedNames(name, &r, index, generated); err != nil {
+				return PackageResult{}, err
+			}
 		}
 		result.Files[name] = r
 	}
@@ -287,7 +303,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	for n, s := range files {
 		referenceIR[n] = s
 	}
-	bound, bindings, err := refs.BindImports(files, imp, result.referenceImports)
+	bound, bindings, err := refs.BindImportsWithPath(path, files, imp, result.referenceImports)
 	if err != nil {
 		if e, ok := err.(*refs.ImportError); ok {
 			mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
@@ -426,7 +442,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			files[name] = cleaned
 		}
 	}
-	finished, err := refs.FinishPackage(files, imp, matchTemps)
+	finished, err := refs.FinishPackageWithPath(path, files, imp, matchTemps)
 	if err != nil {
 		return result, stageError("package refs.Finish", err)
 	}

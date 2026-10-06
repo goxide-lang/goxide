@@ -107,6 +107,15 @@ func declaredNames(ts []tok) map[string]bool {
 // shadows are rejected earlier; renaming user named types would change identity.
 // Markers are allocated by the expander, never inferred from user spelling.
 func ResolveBuiltins(fs *token.FileSet, f *ast.File, markers map[string]string, imp types.Importer, contexts map[string]TypeContext) error {
+	return ResolveBuiltinsWithPath("", fs, f, markers, imp, contexts)
+}
+
+// ResolveBuiltinsWithPath retains the actual consumer identity during binding.
+// An empty path preserves the standalone binding owner used by ResolveBuiltins.
+func ResolveBuiltinsWithPath(packagePath string, fs *token.FileSet, f *ast.File, markers map[string]string, imp types.Importer, contexts map[string]TypeContext) error {
+	if packagePath == "" {
+		packagePath = "macro/builtin/bindings"
+	}
 	needed := map[string]bool{}
 	ast.Inspect(f, func(n ast.Node) bool {
 		if id, ok := n.(*ast.Ident); ok && markers[id.Name] != "" {
@@ -189,7 +198,7 @@ func ResolveBuiltins(fs *token.FileSet, f *ast.File, markers map[string]string, 
 			files = append(files, extra)
 		}
 	}
-	_, _ = conf.Check("macro/builtin/bindings", fs, files, keyInfo)
+	_, _ = conf.Check(packagePath, fs, files, keyInfo)
 	active := map[types.Object]bool{}
 	var scopeError error
 	ast.Inspect(f, func(n ast.Node) bool {
@@ -362,7 +371,11 @@ func (e *engine) finishBuiltins(ts []tok) ([]tok, error) {
 		}
 		return true
 	})
-	if err = ResolveBuiltins(fs, f, e.builtins, e.importer, nil); err != nil {
+	packagePath := ""
+	if e.pkg != nil {
+		packagePath = e.pkg.path
+	}
+	if err = ResolveBuiltinsWithPath(packagePath, fs, f, e.builtins, e.importer, nil); err != nil {
 		if e.pkg != nil && strings.Contains(err.Error(), "cannot resolve keyed identifier") {
 			return ts, nil
 		}

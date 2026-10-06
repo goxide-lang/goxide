@@ -283,6 +283,12 @@ type ImportBindings struct {
 // BindImports temporarily presents imported contracts as local nominal reference
 // signatures. All substitutions are resolved import-object uses, never spelling.
 func BindImports(files map[string][]byte, imp types.Importer, metadata map[string]Metadata) (map[string][]byte, ImportBindings, error) {
+	return BindImportsWithPath(defaultPackagePath, files, imp, metadata)
+}
+
+// BindImportsWithPath resolves imported contracts using the consumer's actual
+// package path. An empty path retains BindImports' legacy synthetic default.
+func BindImportsWithPath(path string, files map[string][]byte, imp types.Importer, metadata map[string]Metadata) (map[string][]byte, ImportBindings, error) {
 	if imp == nil {
 		imp = importer.Default()
 	}
@@ -309,7 +315,7 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 	info := &types.Info{Uses: map[*ast.Ident]types.Object{}, Types: map[ast.Expr]types.TypeAndValue{}}
 	// Provisional errors (including local write IR) are not acceptance; Finish checks all bodies.
 	deduplicateIR(all)
-	_, _ = (&types.Config{Importer: imp, Error: func(error) {}}).Check("goxide.local/refs", fs, all, info)
+	_, _ = (&types.Config{Importer: imp, Error: func(error) {}}).Check(packagePath(path), fs, all, info)
 	serial := 0
 	for _, name := range sourceNames(files) {
 		f := parsed[name]

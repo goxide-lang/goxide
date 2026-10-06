@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"go/ast"
 	"strconv"
-	"strings"
 )
 
 // Restored registrations have already passed exact signature and artifact checks.
-func importedFieldProtocols(consumer string, sources map[string][]byte, known map[string]PackageResult) (map[string]string, map[string]string, map[string]map[string]string) {
+func importedFieldProtocols(consumer string, sources map[string][]byte, known map[string]PackageResult, single ...bool) (map[string]string, map[string]string, map[string]map[string]string) {
 	preludes, imports := map[string]string{}, map[string]string{}
 	protocols := map[string]map[string]string{}
 	for fi, name := range sortedSources(sources) {
-		if !strings.HasSuffix(name, ".gox") {
+		if !isGoxideInput(name, single...) {
 			continue
 		}
 		f, err := parseSourceImports(name, sources[name])

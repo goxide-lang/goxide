@@ -17,13 +17,13 @@ import (
 // Metadata comes from successfully compiled packages or verified external artifacts.
 // Import names are resolved separately for every source file; dependency paths,
 // never package names, authorize an enum or builtin family.
-func importedDeclarations(consumerPath string, sources map[string][]byte, packages map[string]PackageResult) (map[string][]enums.Decl, map[string]string, map[string]string, map[string]map[string]string) {
+func importedDeclarations(consumerPath string, sources map[string][]byte, packages map[string]PackageResult, single ...bool) (map[string][]enums.Decl, map[string]string, map[string]string, map[string]map[string]string) {
 	declarations := map[string][]enums.Decl{}
 	preludes := map[string]string{}
 	extraImports := map[string]string{}
 	unavailable := map[string]map[string]string{}
 	for fi, name := range sortedSources(sources) {
-		if !strings.HasSuffix(name, ".gox") {
+		if !isGoxideInput(name, single...) {
 			continue
 		}
 		f, err := parseSourceImports(name, sources[name])

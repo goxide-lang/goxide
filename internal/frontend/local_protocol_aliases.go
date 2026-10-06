@@ -9,7 +9,6 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
-	"strings"
 
 	"github.com/hxsf/goxide/internal/equality"
 )
@@ -22,7 +21,7 @@ func bindLocalProtocolAliases(path string, sources map[string][]byte, cfg *compi
 	var files []*ast.File
 	destination := ""
 	for _, name := range sortedSources(sources) {
-		if destination == "" && strings.HasSuffix(name, ".gox") {
+		if destination == "" && isGoxideInput(name, cfg.single) {
 			destination = name
 		}
 		context, ok := cfg.builtinTypes[name]

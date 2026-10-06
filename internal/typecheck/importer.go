@@ -50,6 +50,25 @@ func NewImporterWithContext(parent context.Context, filename string, tags []stri
 // NewImporterWithWorkspace accepts only an explicit planner-owned work file.
 // Ambient GOWORK remains ignored by the ordinary importer APIs.
 func NewImporterWithWorkspace(parent context.Context, filename string, tags []string, race bool, environment []string, workFile, moduleMode string) types.Importer {
+	return newImporter(parent, filename, tags, race, environment, workFile, moduleMode, "")
+}
+
+// NewImporterWithModFile queries the source module through a caller-owned copy
+// of its module file and checksums. The absolute modFile must retain the source
+// module's declarations. Graph updates are forbidden; any checksum writes stay
+// beside the copy rather than the source module.
+func NewImporterWithModFile(parent context.Context, filename string, tags []string, race bool, environment []string, modFile string) types.Importer {
+	if !filepath.IsAbs(modFile) {
+		return importerFailure{fmt.Errorf("importer module file must be an absolute path")}
+	}
+	return newImporter(parent, filename, tags, race, environment, "", "-mod=readonly", modFile)
+}
+
+type importerFailure struct{ err error }
+
+func (i importerFailure) Import(string) (*types.Package, error) { return nil, i.err }
+
+func newImporter(parent context.Context, filename string, tags []string, race bool, environment []string, workFile, moduleMode, modFile string) types.Importer {
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -82,23 +101,14 @@ func NewImporterWithWorkspace(parent context.Context, filename string, tags []st
 		if moduleMode != "" {
 			args = append(args, moduleMode)
 		}
+		if modFile != "" {
+			args = append(args, "-modfile="+modFile)
+		}
 		args = append(args, "--", path)
 		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
 		cmd.Dir = dir
 		cmd.WaitDelay = time.Second
-		for _, v := range environment {
-			n, _, _ := strings.Cut(v, "=")
-			switch n {
-			case "GOTOOLCHAIN", "GOWORK", "GOFLAGS", "GOPROXY", "GOSUMDB", "GONOPROXY", "GOVCS":
-				continue
-			}
-			cmd.Env = append(cmd.Env, v)
-		}
-		work := "off"
-		if workFile != "" {
-			work = workFile
-		}
-		cmd.Env = append(cmd.Env, "GOTOOLCHAIN=local", "GOWORK="+work, "GOFLAGS=", "GOPROXY=off", "GOSUMDB=off", "GONOPROXY=none", "GOVCS=*:off")
+		cmd.Env = importerEnvironment(environment, workFile)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		data, err := cmd.Output()
@@ -134,6 +144,22 @@ func NewImporterWithWorkspace(parent context.Context, filename string, tags []st
 		return os.Open(file)
 	}
 	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, fingerprints: map[string]string{}, race: race, tags: append([]string(nil), tags...), environment: environment, context: parent}
+}
+
+func importerEnvironment(environment []string, workFile string) []string {
+	var out []string
+	for _, v := range environment {
+		n, _, _ := strings.Cut(v, "=")
+		switch n {
+		case "GOTOOLCHAIN", "GOWORK", "GOFLAGS", "GOPROXY", "GOSUMDB", "GONOPROXY", "GOVCS":
+			continue
+		}
+		out = append(out, v)
+	}
+	if workFile == "" {
+		workFile = "off"
+	}
+	return append(out, "GOTOOLCHAIN=local", "GOWORK="+workFile, "GOFLAGS=", "GOPROXY=off", "GOSUMDB=off", "GONOPROXY=none", "GOVCS=*:off")
 }
 
 // PackageFiles exposes the exact source selection associated with offline export
@@ -191,7 +217,7 @@ func (i *sourceImporter) PackageFingerprint(path string) (string, error) {
 		defer cancel()
 		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "env", "-json", "GOOS", "GOARCH", "CGO_ENABLED", "GOEXPERIMENT", "GOAMD64", "GO386", "GOARM", "GOARM64", "GOMIPS", "GOMIPS64", "GOPPC64", "GORISCV64", "GOWASM")
 		cmd.WaitDelay = time.Second
-		cmd.Env = append(append([]string(nil), i.environment...), "GOTOOLCHAIN=local", "GOWORK=off")
+		cmd.Env = importerEnvironment(i.environment, "")
 		b, e := cmd.Output()
 		if e != nil {
 			return "", e

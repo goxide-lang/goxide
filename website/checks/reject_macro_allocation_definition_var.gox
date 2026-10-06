@@ -1,0 +1,4 @@
+package p
+var make=func(int)int{return 7}
+macro_rules! allocate {()=>{make([]int,1)};}
+func run(){_=allocate!()}

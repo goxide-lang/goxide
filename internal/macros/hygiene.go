@@ -140,11 +140,19 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 	if problem != nil {
 		return nil, problem
 	}
-	calls := map[*ast.Ident]bool{}
+	// Only exact aliases of checked predeclared types may pass a later nested
+	// allocation type gate. Sum aliases and other generated names are excluded.
+	primitiveAliases := map[string]bool{}
+	for key, alias := range e.aliases {
+		if name, ok := strings.CutPrefix(key, "type "); ok && primitiveName(name) && name != "true" && name != "false" {
+			primitiveAliases[alias] = true
+		}
+	}
+	calls := map[*ast.Ident]*ast.CallExpr{}
 	ast.Inspect(root, func(n ast.Node) bool {
 		if c, ok := n.(*ast.CallExpr); ok {
 			if id, ok := c.Fun.(*ast.Ident); ok {
-				calls[id] = true
+				calls[id] = c
 			}
 		}
 		return true
@@ -178,7 +186,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			ts[i].text = bindings[id.Obj]
 			return true
 		}
-		if (id.Name == "len" || id.Name == "cap" || id.Name == "append" || id.Name == "copy") && e.builtinImportShadow(id.Name) {
+		if (id.Name == "len" || id.Name == "cap" || id.Name == "append" || id.Name == "copy" || id.Name == "make" || id.Name == "new") && e.builtinImportShadow(id.Name) {
 			problem = at(ts[i], "template name "+id.Name+" is a definition-site import, not a builtin")
 			return true
 		}
@@ -195,14 +203,26 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			ts[i].text = e.alias(key)
 			return true
 		}
-		if id.Name == "len" || id.Name == "cap" || id.Name == "append" || id.Name == "copy" {
+		if id.Name == "len" || id.Name == "cap" || id.Name == "append" || id.Name == "copy" || id.Name == "make" || id.Name == "new" {
 			if e.definitionNames()[id.Name] {
 				problem = at(ts[i], "template name "+id.Name+" is a definition-site declaration, not a builtin; pass it as an explicit capture")
-			} else if !calls[id] {
+			} else if calls[id] == nil {
 				problem = at(ts[i], "template builtin "+id.Name+" requires a direct call")
 			} else if e.callerNames()[id.Name] {
 				problem = at(ts[i], "template builtin "+id.Name+" is shadowed by a caller package declaration; this builtin lowering is unsupported")
 			} else {
+				call := calls[id]
+				if (id.Name == "make" || id.Name == "new") && len(call.Args) > 0 {
+					problem = allocationType(call.Args[0], ph, primitiveAliases, func(id *ast.Ident) error {
+						if i, ok := index(id.Pos()); ok {
+							return e.checkPrimitiveBinding(ts[i])
+						}
+						return nodeError(id, "cannot resolve allocation type token")
+					}, nodeError)
+					if problem != nil {
+						return false
+					}
+				}
 				marker := e.fresh()
 				e.builtins[marker] = id.Name
 				ts[i].text = marker

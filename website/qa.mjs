@@ -56,9 +56,59 @@ const copyChecks = ['macro_copy_native',
  'reject_macro_copy_named_type',
  'reject_macro_copy_readonly_target',
  'reject_macro_copy_readonly_pointer'];
+const allocationChecks = [
+ "macro_allocation_native",
+ "macro_allocation_new_types",
+ "macro_allocation_shadow",
+ "macro_allocation_function",
+ "macro_allocation_question",
+ "reject_macro_allocation_new_expression",
+ "reject_macro_allocation_capture_expr",
+ "reject_macro_allocation_capture_ident",
+ "reject_macro_allocation_capture_tt",
+ "reject_macro_allocation_nested_capture",
+ "reject_macro_allocation_make_capture",
+ "reject_macro_allocation_named_type",
+ "reject_macro_allocation_generic_type",
+ "reject_macro_allocation_struct_type",
+ "reject_macro_allocation_interface_type",
+ "reject_macro_allocation_func_type",
+ "reject_macro_allocation_local_primitive",
+ "reject_macro_allocation_primitive_function",
+ "reject_macro_allocation_primitive_import",
+ "reject_macro_allocation_definition_var",
+ "reject_macro_allocation_definition_const",
+ "reject_macro_allocation_definition_type",
+ "reject_macro_allocation_definition_import",
+ "reject_macro_allocation_make_value",
+ "reject_macro_allocation_new_value",
+ "reject_macro_allocation_make_local_type",
+ "reject_macro_allocation_new_local_type",
+ "reject_macro_allocation_make_type",
+ "reject_macro_allocation_make_arity",
+ "reject_macro_allocation_make_negative",
+ "reject_macro_allocation_make_capacity",
+ "reject_macro_allocation_map_key",
+ "reject_macro_allocation_array_length",
+ "reject_macro_allocation_new_arity",
+ "reject_macro_allocation_ellipsis"
+];
+// These are valid Go 1.27 programs, intentionally outside this macro type-form batch.
+const nativeValidControls = {
+ reject_macro_allocation_new_expression: 'macro_allocation_new_expression_native.go.txt',
+};
+const allocationTypeError = /macro allocation requires fixed predeclared type syntax/;
 // Ordinary Go type errors stay in the existing native compilation phase.
 // The browser only transpiles; it must produce identical invalid Go here.
 const nativeTypeReject = {
+ reject_macro_allocation_make_type: /make.*(?:slice|map|chan)|invalid argument.*make/s,
+ reject_macro_allocation_make_arity: /missing len argument to make|not enough arguments.*make|make.*expects.*arguments/s,
+ reject_macro_allocation_make_negative: /negative|must not be negative|overflows/s,
+ reject_macro_allocation_make_capacity: /length and capacity swapped|len.*larger than cap|length.*capacity/s,
+ reject_macro_allocation_map_key: /invalid map key type/,
+ reject_macro_allocation_array_length: /invalid array length|must be non-negative/,
+ reject_macro_allocation_new_arity: /too many arguments.*new/s,
+ reject_macro_allocation_ellipsis: /invalid use of.*with.*make/s,
  reject_macro_copy_slice: /copy.*(?:must be a slice|must be slice)|invalid copy/s,
  reject_macro_copy_element: /different element types/,
  reject_macro_copy_string_rune: /different element types/,
@@ -70,6 +120,29 @@ const nativeTypeReject = {
  reject_macro_append_ellipsis: /too many arguments in call to append/,
 };
 const frontendReject = {
+ reject_macro_allocation_new_expression: allocationTypeError,
+ reject_macro_allocation_capture_expr: /macro allocation type does not support captured types/,
+ reject_macro_allocation_capture_ident: /macro allocation type does not support captured types/,
+ reject_macro_allocation_capture_tt: /macro allocation type does not support captured types/,
+ reject_macro_allocation_nested_capture: /macro allocation type does not support captured types/,
+ reject_macro_allocation_make_capture: /macro allocation type does not support captured types/,
+ reject_macro_allocation_named_type: allocationTypeError,
+ reject_macro_allocation_generic_type: allocationTypeError,
+ reject_macro_allocation_struct_type: /template local type\/struct\/interface\/label declarations are unsupported/,
+ reject_macro_allocation_interface_type: /template local type\/struct\/interface\/label declarations are unsupported/,
+ reject_macro_allocation_func_type: allocationTypeError,
+ reject_macro_allocation_local_primitive: /macro allocation type cannot use a template-local binding/,
+ reject_macro_allocation_primitive_function: /template primitive int.*definition-site/s,
+ reject_macro_allocation_primitive_import: /template primitive int.*definition-site/s,
+ reject_macro_allocation_definition_var: /definition-site declaration/,
+ reject_macro_allocation_definition_const: /definition-site declaration/,
+ reject_macro_allocation_definition_type: /definition-site declaration/,
+ reject_macro_allocation_definition_import: /definition-site import/,
+ reject_macro_allocation_make_value: /requires a direct call/,
+ reject_macro_allocation_new_value: /requires a direct call/,
+ reject_macro_allocation_make_local_type: /local named type/,
+ reject_macro_allocation_new_local_type: /local named type/,
+
  reject_macro_copy_definition_var: /definition-site declaration/,
  reject_macro_copy_definition_const: /definition-site declaration/,
  reject_macro_copy_definition_type: /definition-site declaration/,
@@ -87,7 +160,7 @@ const frontendReject = {
 };
 const temp=await fs.mkdtemp(path.join(tmpdir(),'goxide-browser-parity-'));
 try {
- for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity','reject_legacy_cfg','reject_macro_selector','reject_macro_prepared','reject_derive_origin','reject_enum_derive_origin','macro_imported_helper',...appendChecks,...copyChecks]) {
+ for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity','reject_legacy_cfg','reject_macro_selector','reject_macro_prepared','reject_derive_origin','reject_enum_derive_origin','macro_imported_helper',...appendChecks,...copyChecks,...allocationChecks]) {
   const source=await fs.readFile(new URL(`checks/${name}.gox`,import.meta.url),'utf8');
   const input=path.join(temp,'playground.gox');await fs.writeFile(input,source);
   let nativeGo, nativeError;
@@ -101,6 +174,11 @@ try {
    assert.equal((await page.textContent('#diagnostic')).trim(),nativeError,`${name}: diagnostics differ`);
    assert.equal(await page.inputValue('#output'),'');
    assert.equal(await page.isDisabled('#copy'),true);
+   if(nativeValidControls[name]) {
+    const control=path.join(temp,'valid-go-control.go');
+    await fs.writeFile(control,await fs.readFile(new URL(`checks/${nativeValidControls[name]}`,import.meta.url),'utf8'));
+    execFileSync(process.env.GO_BIN || 'go',['run',control],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']});
+   }
    // Each builtin/readonly rejection must recover through a real subsequent WASM compile.
    if(frontendReject[name]) {
     await page.fill('#source',manifest.examples[0].source);await finished();
@@ -157,5 +235,5 @@ assert.equal(await page.inputValue('#output'),manifest.examples[0].go);
 assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');
 const builtinResults=names=>({positive:checkResults.filter(name=>names.includes(name)&&!name.startsWith('reject_')),frontendReject:Object.keys(frontendReject).filter(name=>names.includes(name)),nativeTypeReject:Object.keys(nativeTypeReject).filter(name=>names.includes(name)),nativeTypeRejectWasm:'transpilation parity only; final Go compilation is native'});
-console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9).filter(name=>!appendChecks.includes(name)&&!copyChecks.includes(name)),appendChecks:builtinResults(appendChecks),copyChecks:builtinResults(copyChecks),checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
+console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9).filter(name=>!appendChecks.includes(name)&&!copyChecks.includes(name)&&!allocationChecks.includes(name)),appendChecks:builtinResults(appendChecks),copyChecks:builtinResults(copyChecks),allocationChecks:{...builtinResults(allocationChecks),nativeValidButUnsupported:Object.keys(nativeValidControls)},checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
 await browser.close();

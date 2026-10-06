@@ -1,0 +1,3 @@
+package p
+macro_rules! allocate {()=>{new(int,1)};}
+func run(){_=allocate!()}

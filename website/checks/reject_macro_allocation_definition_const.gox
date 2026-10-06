@@ -1,0 +1,4 @@
+package p
+const new=3
+macro_rules! allocate {()=>{new(int)};}
+func run(){_=allocate!()}

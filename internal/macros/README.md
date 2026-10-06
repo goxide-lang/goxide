@@ -50,7 +50,7 @@ with an explicit-capture alternative. Mutable imported function-valued variables
 are rejected, avoiding an accidental snapshot at package initialization.
 
 There is deliberately no permissive free-name fallback. Unsupported free names
-(including builtin functions other than the explicitly supported `len`/`cap`/`append`/`copy`), generic helpers, imported types and
+(including builtin functions other than the explicitly supported `len`/`cap`/`append`/`copy`/`make`/type-form `new`), generic helpers, imported types and
 variables, identifier-keyed literals, local type/struct/interface declarations,
 labels, and external precompiled macro metadata are diagnosed. Pass unsupported call-site
 values/functions as explicit captures. Primitive types/constants used by a
@@ -169,8 +169,9 @@ identity. Only scopes enclosing a builtin expansion need local renaming.
 A caller package declaration or an enclosing local named type with the same name
 currently gives an explicit diagnostic: renaming named types would change their
 reflection identity. This is an engineering boundary, not approved permanent
-scope exclusion. `make`, `new`, `clear`, other builtin functions and complete
-macro-generated declaration support are not enabled by this slice. Existing
+scope exclusion. Fixed-type `make` and `new` follow the allocation contract below.
+`clear`, other builtin functions and complete macro-generated declaration support
+are not enabled by these slices. Existing
 expansion budgets and definition/invocation origins still apply; downstream Go
 argument errors can retain the existing generated/unmapped coordinate label.
 
@@ -201,6 +202,40 @@ and [execution/binding tests](copy_test.go). As with append, ordinary operand
 type errors require final Go compilation; single-file transpilation or WASM
 output alone does not establish type correctness. Package/local-type shadowing,
 external precompiled macros, and full downstream source mapping remain open.
+
+
+## Fixed-type make/new
+
+Templates may call native `make` and type-form `new` directly with fixed
+predeclared types and parenthesized, pointer, array/slice, map and channel
+combinations: `make([]int,$n)`, `make(map[string][]byte)`, `make(chan int,$n)`,
+`new(int)` and `new([3]*int)`. Their operation bindings use the same direct-call
+markers and caller-shadow checks as len/cap/append/copy. Template-local and
+actual definition-site functions named make/new remain ordinary calls. Native
+Go checks argument counts, make's type kind, sizes, array constants and map keys;
+no wrapper changes allocation, argument order/multiplicity or the nearest `?`
+return target.
+
+The first argument has an explicit AST type gate. Each type name must really
+resolve to a predeclared type at the definition site and pass the existing
+primitive binding checks. Caller-local `type int string` does not change the
+identity of `new(int)`. A template-local int binding or a definition-site function
+named int is rejected here, avoiding Go 1.27's value-form `new(expr)` semantics.
+Value-form new, captured types of every current fragment kind, named/imported
+types, type parameters, generic instances and anonymous struct/interface/func
+types remain unsupported. This adds no type fragment or global capture-category
+validation.
+
+Array lengths are expression slots: `new([$n]int)` can capture a caller constant
+expression, including the caller's own types. Explicit type syntax written in a
+template length expression still passes the gate, so
+`new([len([2]$T{})]int)` rejects the captured element type. A complete captured
+length expression is kept opaque. Primitive/package/import shadowing and exact
+macro definition/invocation origins keep their existing boundaries. Final Go
+compilation is still required to establish native type correctness; successful
+single-file or WASM transpilation alone is not that check. See the
+[A01 allocation contract](../../docs/rfcs/0011-macros.md#a01-固定类型-makenew-实施合同2026-10-06)
+and [allocation tests](allocation_test.go).
 
 
 Compiler-owned `go_result!(T,call)` and `go_result_keep!(T,call)` adapt explicit

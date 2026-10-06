@@ -1,0 +1,9 @@
+package main
+func make(v int)int{return v+10}
+func new(v int)int{return v+20}
+macro_rules! call_make {($v:expr)=>{make($v)};}
+macro_rules! call_new {($v:expr)=>{new($v)};}
+func main(){
+ make:=func(int)int{return 99};new:=func(int)int{return 98}
+ if call_make!(1)!=11||call_new!(2)!=22||make(0)!=99||new(0)!=98{panic("definition functions")}
+}

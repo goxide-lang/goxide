@@ -158,8 +158,8 @@ func TestCopyBoundaries(t *testing.T) {
 		{`macro_rules! value {()=>{copy};} var v=value!()`, "direct call"},
 		{`macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};} func f(){type copy int;var n copy;_=transfer!([]int{},[]int{int(n)})}`, "local named type"},
 		{`macro_rules! value {()=>{clear()};} func f(){value!()}`, "unsupported free template name"},
-		{`macro_rules! value {()=>{make([]int,1)};} func f(){_=value!()}`, "unsupported free template name"},
-		{`macro_rules! value {()=>{new(int)};} func f(){_=value!()}`, "unsupported free template name"},
+		{`macro_rules! value {()=>{delete()};} func f(){_=value!()}`, "unsupported free template name"},
+		{`macro_rules! value {()=>{close()};} func f(){_=value!()}`, "unsupported free template name"},
 	} {
 		_, err := Expand("boundary.gox", []byte("package p\n"+tc.source))
 		if err == nil || !strings.Contains(err.Error(), tc.want) {

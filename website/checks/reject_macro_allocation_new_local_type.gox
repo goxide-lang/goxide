@@ -1,0 +1,3 @@
+package p
+macro_rules! allocate {()=>{new(int)};}
+func run(){type new int;var n new;_=n;_=allocate!()}

@@ -1,0 +1,3 @@
+package p
+macro_rules! allocate {($T:expr)=>{new([len([2]$T{})]int)};}
+func run(){_=allocate!(int)}

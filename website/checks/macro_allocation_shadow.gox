@@ -1,0 +1,12 @@
+package main
+macro_rules! reserve {($n:expr)=>{make([]byte,$n)};}
+macro_rules! number {()=>{new(int)};}
+macro_rules! local {()=>{func()int{make:=func(int)int{return 17};new:=func(int)int{return 19};return make(1)+new(2)}()};}
+macro_rules! invoke {($f:expr,$v:expr)=>{$f($v)};}
+func main(){
+ type int string
+ var marker int="caller type"
+ make:=func()uint{return 2};new:=func(v uint)uint{return v+3}
+ values:=reserve!(make());p:=number!();*p=7
+ if len(values)!=2||*p!=7||marker!="caller type"||local!()!=36||invoke!(new,2)!=5{panic("lexical binding")}
+}

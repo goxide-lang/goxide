@@ -215,3 +215,33 @@ n := copy(dst,src)
 
 本片只关闭 A01 的直接 copy 子项；make/new、其余绑定、A03 完整来源及 RFC0011 整项
 仍开放。完整 trait/borrow、blank/embedded、serde adapters 和 tracing API 不在本片决定。
+
+
+## A01 固定类型 make/new 实施合同（2026-10-06）
+
+本片接通模板中绑定到定义点 builtin 的 `make` 与类型形式 `new`，复用已有
+预声明类型 alias 和 builtin 标记；不改变自由名按定义点、捕获按调用点解析的规则。
+这是一片有限工程实现，不冻结 U09 的完整类型捕获语法，也不关闭 A01。
+Go 1.27 原生允许 `new(expr)`；本片仅交付 `new(Type)`，前者明确保留为工程缺口，
+不能将其称作 Go 类型错误或借名称白名单顺带开放。
+
+| 白例 / 已确认行为 | 黑例 / 保留边界 |
+| --- | --- |
+| `make([]int,$n)`、`make([]byte,$n,$cap)`、`make(map[string][]byte)`、`make(chan int,$n)`；`new(int)`、`new(*int)`、`new([]int)`、`new([3]int)` | 类型位置不接受任何 expr/ident/tt 捕获，包括 `make($T,$n)`、`new($T)`、`new([]$T)`；`$T:type` 仍未交付 |
+| 固定类型语法递归允许真正预声明类型、括号、指针、数组/slice、map 和 chan；数组长度为表达式位置，可用既有表达式捕获或模板局部常量 | 同包/导入 named type、类型参数、泛型实例、匿名 struct/interface/func 类型不在本片；非法数组常量、map key、make 类型/arity/长度等由最终 Go 检查 |
+| 调用方局部 `type int string` 不得改变模板 `new(int)` 的预声明类型身份；不同文件及同源码图跨包宏保持定义点绑定 | 模板局部 `int := 7` 或定义端 `func int` 不能把 `new(int)` 偷换为值分配；预声明类型的定义包、调用包或当前文件 import 遮蔽沿用既有明确拒绝 |
+| 模板局部和定义端真实 `func make/new` 仍是普通函数调用，不应用 builtin 类型门禁；显式捕获的调用目标保留调用点绑定 | 定义端 var/const/type/import 同名不能误作 builtin；裸 builtin 值、调用包同名声明及覆盖调用点的局部 named type 沿用明确诊断 |
+| 原生分配的长度/容量、零值、独立存储、map/channel 可用性、size 参数顺序与次数保留；`?` 仍返回最近用户函数，失败后不求值后续参数或分配 | 不新增 wrapper、类型查询、捕获类别或问号语法；不把单文件转译/WASM 输出成功当作完整类型检查成功 |
+
+类型检查必须在调用已确认为 builtin 后进行。第一实参的类型槽按 AST 类别检查，
+类型标识符必须无模板局部绑定并通过已有 `checkPrimitiveBinding`，不能让同名函数
+路径先改写为函数 alias。数组的长度不是类型槽，不能通过整棵子树禁用捕获来误伤。
+数组长度表达式中，模板自身写出的显式类型位置也应用门禁，例如拒绝
+`new([len([2]$T{})]int)`；完整捕获 `new([$n]int)` 的 `$n` 仍为调用点表达式，
+其内部类型身份不由模板重新解析。检查针对本片 allocation 类型槽；基线在其他模板返回类型等位置已有的类别泄漏
+单独保留为 A01 工程缺口，不声称本片完成全局捕获类别验证。
+
+验收包括固定类型组合、真实原生执行与类型拒绝、定义/调用端遮蔽、模板普通函数
+对照、跨文件/包、重复与嵌套展开、LF/CRLF、完整 Mac race/vet/设计检查、真实 CLI
+及单文件 CLI/WASM 正反例差分。新增类型槽拒绝应保留宏定义/调用来源；下游生成
+Go 的合成括号等 A03 unmapped 边界继续如实记录，不用邻近位置猜来源。

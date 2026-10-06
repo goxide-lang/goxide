@@ -993,3 +993,23 @@ A04 unary/composite match 另批实施；Linux/托管 CI 未验证，网站未�
 已有网站 97 fixture/10 示例保留并追加本片覆盖；旧编译器不支持的新语法不能冒充旧/新
 成功输出对照。compiler pin、网站/工具提交、最终报告提交分别记录，普通分支 push 后
 核对本地/fetch/远端 SHA。未执行 Linux/托管 CI 不称通过，不部署或改变公开库 ABI。
+
+
+## A04 unary/composite 单值 match 交付（2026-10-06）
+
+实施前合同 `f1da21c21fc9456e257120fefd253f65a5e35d4d`，最终编译器生产源码
+`f2d7a39c4b81a00fff191c89ac847b09af6a62e9`，网站/验证工具
+`0d814dda56009af89ab60e77fcf77ef32d3a63bd`；本交付记录属于之后的文档提交。
+标量 `+ - ! ^`、普通 struct/slice/array/map 及合法类型省略接入既有单值上下文，
+真实类型、一次求值、短路、最近用户函数的 `?` 和原控制流规则保持。
+真实 JSON→enum→match→Clone/Debug→JSON 生成模块 race/vet/run、16 项类型/权限负例、
+4 项一元边界和完整 Mac race 605 顶层/1338 子测试、全树 vet/design、独立审查通过。
+
+干净独立检出的仓内网站七阶段通过：原 97 fixture/10 示例字节保持，追加为 105/11；
+33 对旧/新 AST、5 对原生运行保留；新增 A04 8 fixture 的 32 CLI/16 UI/32 Worker
+观察与 5 个 current-only 程序分别记录。准确 SHA、源码/工具/报告身份、红测和修复、
+短复现命令见[交付报告](reviews/match-unary-composite-20261006.md)。
+
+go/defer/control 头、复杂 postfix/receiver、引用/收发 unary、多结果、复杂 LHS、
+block arm、不可命名类型等继续留账；本片只关闭 A04 的上述子集。tuple/struct variant、
+手写协议等未新定语义，未改公开库 ABI。Linux/托管 CI 未运行，网站未部署，main/tag 未改。

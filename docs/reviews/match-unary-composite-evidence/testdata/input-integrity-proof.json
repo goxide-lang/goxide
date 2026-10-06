@@ -1,0 +1,35 @@
+{
+  "snapshots": [
+    {
+      "name": "source",
+      "path": "/private/tmp/goxide-a04-20261006-ukafjzho/final-checkout",
+      "head": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+      "tree": "f9fc7584e7fa35af250f38160a6083ae8a95b546",
+      "status": "",
+      "trackedInputs": 1206,
+      "mismatches": []
+    },
+    {
+      "name": "current",
+      "path": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/current",
+      "head": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+      "tree": "f9fc7584e7fa35af250f38160a6083ae8a95b546",
+      "status": "",
+      "trackedInputs": 1206,
+      "mismatches": []
+    },
+    {
+      "name": "baseline",
+      "path": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/baseline",
+      "head": "fd8380c39876c96441857a737be8e32c322a0467",
+      "tree": "4db8e8adf8e035b315b47de07dde69f150530e09",
+      "status": "",
+      "trackedInputs": 1042,
+      "mismatches": []
+    }
+  ],
+  "recordedCommands": 243,
+  "commandsReferencingTaskDirectory": [],
+  "gitAlternates": false,
+  "scope": "Command paths and complete tracked input byte verification, not an OS file-access trace. Dependencies and installed tools are explicit external prerequisites."
+}

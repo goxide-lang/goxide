@@ -1,0 +1,366 @@
+{
+  "candidate": "/tmp/goxide-a04-review-20261006/candidate-v2",
+  "scope": "candidate snapshot, not final committed source",
+  "cases": [
+    {
+      "id": "control_direct",
+      "sourceSha256": "c17523fa7d04b42cef6aeb6a9722efcfc2de60ce586086e576059fe58b7760f7",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/control_direct/generated",
+          "/tmp/goxide-a04-review-20261006/cases/control_direct/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/control_direct/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "existing syntax control; Run()==7",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/control_direct/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "8c58b5665da7c6e12f6650154845bb85f8a374151b54ee05d64d7bc23b78a655",
+        "probe.go.map.json": "04bee5fc74be75bb49e4e2f4b0cee07cbfe511a022764050ae2bfbb097595ada",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "fe6c7cfd2d622ada5e6abe2845d9e24b84e24de2fbaec952f29b82fcaef80ff4",
+        "probe.go": "815fac9879285d6786aea78d3df77fe369175bdfedde9b11c8d18b7f4d940eef"
+      },
+      "passed": true
+    },
+    {
+      "id": "unary_named_shift",
+      "sourceSha256": "3054de957cb34602e759ce30e4187cccde391a0ea5fd7eed60ebeda8e6e15ddb",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/unary_named_shift/generated",
+          "/tmp/goxide-a04-review-20261006/cases/unary_named_shift/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/unary_named_shift/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "Run(63)==Word(1)<<63; operand must get Word",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/unary_named_shift/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "0240e651466b50065070a9659a74c9ad6e80fabc4817a518e342ec11b57757b1",
+        "probe.go.map.json": "e56f5af95aa4acd21d583dd0599bcfef8fbb3549e99a5cfa7d826d0f06ef2d9c",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "46de4ddb21970af4f559f2bb9e215761eedd2f2a41c48fbd3f6a5e9f0f297e9b",
+        "probe.go": "885b043190178d186ec6242191e487fceb3cec1668294c847ba802888cef20da"
+      },
+      "passed": true
+    },
+    {
+      "id": "unary_complement",
+      "sourceSha256": "ca31a494447ec2eed7770a20a7a081b4d6a6e46fd59f1374dbfd579256e03e80",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/unary_complement/generated",
+          "/tmp/goxide-a04-review-20261006/cases/unary_complement/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/unary_complement/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "Run()==255; no premature default to signed int",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/unary_complement/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "fe3b73caae3a4546dedf2053257ac2b54abc11525e26aafa76e219a8bec05c66",
+        "probe.go.map.json": "b157115bf5bc0fe6de3a13b5514cdbc8f09d31e1bf8fa8530e4aa1990cd467db",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "961ebf44e1c96392f3b842a208f0bf69e555db8bf9db9d70a3d809914498c460",
+        "probe.go": "3d9c0c5519512f81a07e485c1eacb8f3b28db5716f4cd1fc673b9a57f29fd237"
+      },
+      "passed": true
+    },
+    {
+      "id": "unary_peer",
+      "sourceSha256": "801de0509cf723de09a8fb80fc16b0152cfc49e840af8913223683d58fab308e",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/unary_peer/generated",
+          "/tmp/goxide-a04-review-20261006/cases/unary_peer/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/unary_peer/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "Run()==(Word(1)<<63)+1; unary must not sever typed peer",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/unary_peer/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "84c24ea870e7b4076f4e799f44670ca5283799a7e41c40f4cb725e1087b7bdf4",
+        "probe.go.map.json": "6ecea71c9acc98ada3b6ad3bae2ce52e16445eefbc40e79292e7cc3a5bc506cf",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "cb23c358436e05c20dbaf1ffadb553b9c5f61945c5357d9a01c45b529c3f906f",
+        "probe.go": "e282069ac2dc2765887ca800ad3157a8627c4ab01b919f4e79bcf7c88abf65a4"
+      },
+      "passed": true
+    },
+    {
+      "id": "shift_count_domain",
+      "sourceSha256": "cb20f2f8e21f09b2e59114d0a435cbfe71409d6d6ef1a903fdc70c15d5528eb0",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/shift_count_domain/generated",
+          "/tmp/goxide-a04-review-20261006/cases/shift_count_domain/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/shift_count_domain/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "A returns 0; B panics at runtime; count does not inherit uint8 or become a constant",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/shift_count_domain/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "128a3504a39740a88f838a44e8cd934a75037e1335d13f50a60ea42cb9b21553",
+        "probe.go.map.json": "9c0b1ccfd05b2b3c19bca5ea8d965096eb3fc65f231b2aef16d5db9b96058560",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "bd42af905b7ac25c69ca99dc673fecc8bfb33c1e15a0d7de82e3c99fb35be2a0",
+        "probe.go": "3bb07ca01c88223bf8f63b2110024d92460631191dbcb5ef06f1c58555aac7fb"
+      },
+      "passed": true
+    },
+    {
+      "id": "map_distinct_types",
+      "sourceSha256": "0ea375869c74cb155934ba7a2518c854e9894e3ccbcd699ebe161b701cb8b440",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/map_distinct_types/generated",
+          "/tmp/goxide-a04-review-20261006/cases/map_distinct_types/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/map_distinct_types/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "map has Key(1)<<63 mapped to Value(255), no whole-map or key/value type mixing",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/map_distinct_types/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "c78617f3e7fef9d7d33a3164c7563218eeffdc18f5abd3e0d2c5e48c27046795",
+        "probe.go.map.json": "b2d7b34e57bd8e9c9437a0b5c6349a8368d7c80c5e387bccdf69ee66ec20b412",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "c8cc875595029d1f328fe18d06c3cd5dfd6db317726f69722c16cc08e4710c49",
+        "probe.go": "356e6a4f15398812ec102aa02e1e1ed821a9cf3221bd4ecadb313dfda78ec781"
+      },
+      "passed": true
+    },
+    {
+      "id": "nested_elided",
+      "sourceSha256": "7eddd4c4544c30966e3c46ddc44cec663a5b449feec5eae8323c1beae80c3454",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/nested_elided/generated",
+          "/tmp/goxide-a04-review-20261006/cases/nested_elided/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/nested_elided/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "Run(63)[0].N==uint64(1)<<63; preserve omitted type and implicit pointer literal",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/nested_elided/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "bd805e43377ffe44073faed72c3d91c67a293206252abfde5554d7a89cdb55cb",
+        "probe.go.map.json": "b77d2d5c151bb02786a6e69974c641a816692d049ec1f887c97e0c74ae3feacb",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "84d1f2698767db1fa506c5f2206e904e3da1a44a4cb8f405d42552c0d123bb3b",
+        "probe.go": "f3a5175cb59f0d18330e6533de62578b776adbf3ca4191f5801fe7b7fcf7656e"
+      },
+      "passed": true
+    },
+    {
+      "id": "field_alias_nil",
+      "sourceSha256": "1ffea1ac4c9e500265f52fd40a9053843454f89465770d46ac87005ee2ca5350",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/field_alias_nil/generated",
+          "/tmp/goxide-a04-review-20261006/cases/field_alias_nil/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/field_alias_nil/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "Run(63).N uses outer field Word and P remains nil",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/field_alias_nil/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "fa01bf1e68c91aabb028c3fb6ae4af0e688a2462689c29ac96e32f4cebe7f587",
+        "probe.go.map.json": "cbcb0822e6717ad1c4ef5b65767ac151ff5c4dbb9afbf1d7e9db2f147f155687",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "7c3051cf41f5769a9f45b1aec8e1afb692259eb29c6302326c51d42baf65b4f4",
+        "probe.go": "4d930bd23b43a8db36934cdc51d7e405f1d20471d4644e1549e186b1b0f8267e"
+      },
+      "passed": true
+    },
+    {
+      "id": "recover_composite",
+      "sourceSha256": "2fd05e1ea61bd8d2afaa617b4ffd2b3e9042e661d98a5e031733b70f35df61a0",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/recover_composite/generated",
+          "/tmp/goxide-a04-review-20261006/cases/recover_composite/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/recover_composite/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "Run()==true; hidden IIFE would prevent recover and escape panic",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/recover_composite/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "249e1d63cfe626e34e024607326d2851fb9c2e41a0700b5506c47fea563c1391",
+        "probe.go.map.json": "eeb427666bf1fe2980df8492a820525db7ed999566ca7761d24b6c91d3d2674f",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "8b1ba6b67839be41ea12e242e15a4f4e0967055d74ca0f638f9a5d29dd1fb862",
+        "probe.go": "098c60c5bd85118d5d8df12390d2e1164abdb110437b06be22320236cbae6a5e"
+      },
+      "passed": true
+    },
+    {
+      "id": "goto_composite",
+      "sourceSha256": "7c82a9384a02be1b076db0d275b6cfd430d34bcf716bc9850a4fb493d9c54f27",
+      "transpile": {
+        "argv": [
+          "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+          "transpile",
+          "-o",
+          "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/goto_composite/generated",
+          "/tmp/goxide-a04-review-20261006/cases/goto_composite/source"
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/cases/goto_composite/source",
+        "exitCode": 0
+      },
+      "runtimeOracle": "Run()[0]==9; generated temporaries may not invalidate forward goto",
+      "runtime": {
+        "argv": [
+          "/opt/homebrew/bin/go",
+          "test",
+          "-race",
+          "-count=1",
+          "-v",
+          "."
+        ],
+        "cwd": "/tmp/goxide-a04-review-20261006/candidate-v2/probes-v2/goto_composite/generated",
+        "exitCode": 0
+      },
+      "generatedFiles": {
+        ".goxide.enums.json": "f3b8afb6fa73444b8acb896b99a1543135e42f98d518d90078d9c92215a239d8",
+        "probe.go.map.json": "56111e1134cb89aab58c813871672210239e10c81b8c1267dfdd68443d3b87c9",
+        "go.mod": "637037f82e507ed07b0c256a9698f63bd34edb8f9a728054a2ce99e14f4bb528",
+        "assertions_test.go": "4dda3e6c70f95301fa9195c6a7bc601657da6e2df78527afd6aa97b7f34df0e2",
+        "probe.go": "442e296412eb16ce24caa711ba977d5f96893f6f05ff257c4f0352dba4709683"
+      },
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-review-20261006/function-shape-cases/map-pointer-key/probe.gox:3:57: expression match: embedded expression match unsupported; use a typed local var

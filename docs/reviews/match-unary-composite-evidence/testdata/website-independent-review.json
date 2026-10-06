@@ -1,0 +1,166 @@
+{
+  "websiteCommit": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+  "legacySource": "2cd3b71e4cdeff0fe8ea9ae0a2f460ac52ee416d",
+  "legacyFixtures": 97,
+  "legacyExamples": 10,
+  "legacyByteEqualInputs": 118,
+  "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+  "compilerDigest": "aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8",
+  "files": [
+    {
+      "path": "website/FEATURES.md",
+      "gitBlob": "35aa8d8200e6399420e9e076d974356ecbb2e7f6",
+      "sha256": "fb9905dc1c8345620b2821f709ef5384e6e3ff1c490d0df9e4c3c19582065d02"
+    },
+    {
+      "path": "website/LATEST-INTEGRATION.md",
+      "gitBlob": "afcfef917844cb7a1c4119178a677319600d0400",
+      "sha256": "756a1cb75c36ed3f5e1775f4fb4cd53e1704419d53bfc0878ad12f5cd2e594cf"
+    },
+    {
+      "path": "website/README.md",
+      "gitBlob": "192f79144e7d6d18ab7fe2033d0b09292fe0fb4d",
+      "sha256": "a0a8e9f6fec4988c0a6ce64fc8df61557d35fe4a4b8975c3e387fcec027e816d"
+    },
+    {
+      "path": "website/a04-matrix.json",
+      "gitBlob": "2f5747cb8c8dbd2bd85385bf6a86d0b770cc16b0",
+      "sha256": "1eed119a5ace64199f8e16f11c4252dba24ca184001d1aabf8083f4ae26e8614"
+    },
+    {
+      "path": "website/catalog-source.json",
+      "gitBlob": "d8003304ee88be79040d3de09c52fa1d501e97e5",
+      "sha256": "6fcd8175a9fd1a1b6403ef3c48b421c4a6b56b10a4bd83ebbc24207084fb3587"
+    },
+    {
+      "path": "website/checks/match_a04_literals.gox",
+      "gitBlob": "1bf2c8b04c3ca83c7fd6d71fa16d108b95566f6a",
+      "sha256": "67bd14ba31c68fed8f55d1e541c30822bd41872d96948265a001d8439184b9ab"
+    },
+    {
+      "path": "website/checks/match_a04_question.gox",
+      "gitBlob": "638f9a137322cbc89375a7eae152e184276ff1d2",
+      "sha256": "85295483cd61844b1957d39c4ace5840596d9840bd517dc14bb5ce06c56039a2"
+    },
+    {
+      "path": "website/checks/match_a04_short_circuit.gox",
+      "gitBlob": "d99babde1deb7593e0cfabebdedc4fb766f4b725",
+      "sha256": "681657025bd48f03435732170e27d8c5687730633a59ebe1b9025f0d6756c5c8"
+    },
+    {
+      "path": "website/checks/match_a04_unary.gox",
+      "gitBlob": "0c85093c279831650800aa6baa69c32d724cce67",
+      "sha256": "25d49ff71fad3e5548c63348bbbadaed44f70564bf6b4bfa8e15be3771e7b431"
+    },
+    {
+      "path": "website/checks/reject_match_a04_bool_operand.gox",
+      "gitBlob": "4463a8ac9cdea445c65b1bdbad4bbcfd0f5d70d6",
+      "sha256": "fa1974ca924f8704f4b1127912d3e8a5ad5161ce972ace2c48cc77cbe8bf4a9a"
+    },
+    {
+      "path": "website/checks/reject_match_a04_literal_exhaustive.gox",
+      "gitBlob": "f6c7aed01243ec53e52261e2e9335af7fff77faf",
+      "sha256": "8604d87b3d969c63d6f428d0fd11aa503ebddde2a47c70c90d34a87094118754"
+    },
+    {
+      "path": "website/checks/reject_match_a04_overflow.gox",
+      "gitBlob": "fa6d1a1c460d75ed3e5cdf3808c8e44f0ab10f4d",
+      "sha256": "4f86a9fda9580c9310e3663b34b9d7f94fabd4d01322e1a210b6bd50692010e2"
+    },
+    {
+      "path": "website/checks/reject_match_a04_unary_exhaustive.gox",
+      "gitBlob": "dac49131869e65f507ac4f70db6ad30019a567bf",
+      "sha256": "e56ee41231108f516d00c619ec0b593c5c805a1a60d9d74243ca1262e41a49c8"
+    },
+    {
+      "path": "website/examples/match_composition.gox",
+      "gitBlob": "e9494cace26e5685e9b68c7c0c19d334a6263824",
+      "sha256": "e7a6ecfeb23886d49aa792c7d54323517f308ce5eb893b82cb2e558615cfc9e8"
+    },
+    {
+      "path": "website/qa.mjs",
+      "gitBlob": "7b9037235f4d27a5dea9dd0f62468295d99e2842",
+      "sha256": "6869c042c8fc14b8f89c14d14aaa6534761bce05dac6fb1b415eba7437bcb6ca"
+    },
+    {
+      "path": "website/validation/README.md",
+      "gitBlob": "f2cde87d3517c6e7a50a3f442a54c0527b909ac1",
+      "sha256": "4c6b1134e104b1042946c252a8a6a485c0995de39e93ad41a27d830f25c3d02a"
+    },
+    {
+      "path": "website/validation/legacy-matrix.json",
+      "gitBlob": "3bc8b4458e9da9cc9159029b499653be76690737",
+      "sha256": "269494f39d44dcdd075e8cbfdec060d1e92842ceee660de7fd0248160c351bc8"
+    },
+    {
+      "path": "website/validation/run.py",
+      "gitBlob": "8efa88c2050d4993902c16aec5894cbedba3ea92",
+      "sha256": "8288df3a03b4a297b4f6c883661385c3c38db4032657d779f03b02943cff4bfb"
+    },
+    {
+      "path": "website/validation/run_test.py",
+      "gitBlob": "328ee673f27688d022199584d857f47017b491c2",
+      "sha256": "b77a6d3693bc8d66e3f96c5fd20efdf512faa1d2b8d1bc84b3d4c22b02095f96"
+    }
+  ],
+  "a04Example": {
+    "id": "match_composition",
+    "title": "match \u7ec4\u5408\u4e0e\u4e1a\u52a1\u5bf9\u8c61",
+    "description": "\u4e00\u5143\u8fd0\u7b97\u3001\u590d\u5408\u5b57\u9762\u91cf\u4e0e JSON / Clone / Debug\u3002",
+    "expectedStdout": "Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [3, 4] }\nPlan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [99, 4] }\n{\"Mode\":{\"Workers\":3},\"Enabled\":true,\"Delta\":-3,\"Steps\":[99,4]}\n"
+  },
+  "smallTests": {
+    "runnerFailureAndMatrixTests": 10,
+    "buildSupportTests": 16,
+    "qaJavaScriptSyntax": "passed",
+    "legacyCatalogEntriesUnchanged": 10,
+    "legacySuccessfulComparisons": [
+      "example/macro",
+      "example/enum",
+      "example/result",
+      "example/go_result",
+      "example/derive",
+      "example/macro_repeat",
+      "example/equality",
+      "example/defaults",
+      "example/serde_option",
+      "example/readonly",
+      "check/error_only",
+      "check/typed_nil",
+      "check/pointer_error",
+      "check/named_error",
+      "check/slice_error",
+      "check/macro_imported_helper",
+      "check/macro_append_native",
+      "check/macro_append_shadow",
+      "check/macro_append_string",
+      "check/macro_append_question",
+      "check/macro_append_function",
+      "check/macro_copy_native",
+      "check/macro_copy_string",
+      "check/macro_copy_shadow",
+      "check/macro_copy_function",
+      "check/macro_copy_question",
+      "check/macro_copy_readonly_source",
+      "check/macro_allocation_native",
+      "check/macro_allocation_new_types",
+      "check/macro_allocation_shadow",
+      "check/macro_allocation_function",
+      "check/macro_allocation_question",
+      "check/macro_ast_question_behavior"
+    ],
+    "nativeDiagnostics": 52,
+    "uiLfDiagnostics": 26,
+    "legacyRuntimePrograms": [
+      "macro_append_question",
+      "macro_copy_question",
+      "macro_allocation_question",
+      "macro_ast_question_behavior",
+      "example/result"
+    ],
+    "a04RuntimeResults": "/tmp/goxide-a04-web-small-review-nd6xozyk/results.json"
+  },
+  "reviewedFilesCanonicalSha256": "0dff74724cda852f3cb7b8404a128087a5a8a9a407a68f97dbaedbba63491599",
+  "sourceStatusAfter": "",
+  "sourceHeadAfter": "0d814dda56009af89ab60e77fcf77ef32d3a63bd"
+}

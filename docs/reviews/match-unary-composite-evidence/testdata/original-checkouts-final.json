@@ -1,0 +1,42 @@
+[
+  {
+    "path": "/Users/hxsf/workspace/self/goxide-lang/goxide",
+    "origin": "git@github.com:goxide-lang/goxide.git",
+    "branch": "fix/generated-ast-provenance",
+    "head": "cbd872470d72ca7c3d6ac08acbd89f0799b6c8cc",
+    "unborn": false,
+    "status": ""
+  },
+  {
+    "path": "/Users/hxsf/workspace/self/goxide-lang/std",
+    "origin": "git@github.com:goxide-lang/std.git",
+    "branch": "feat/macro-copy-builtin",
+    "head": "ce5bccb4ff9c7fb96b7f192a3a263051590d9288",
+    "unborn": false,
+    "status": ""
+  },
+  {
+    "path": "/Users/hxsf/workspace/self/goxide-lang/serde",
+    "origin": "git@github.com:goxide-lang/serde.git",
+    "branch": "migration/core-json",
+    "head": "a1b791e96d660c6be620e110c566a9a171631b7e",
+    "unborn": false,
+    "status": ""
+  },
+  {
+    "path": "/Users/hxsf/workspace/self/goxide-lang/next",
+    "origin": "git@github.com:goxide-lang/next.git",
+    "branch": "main",
+    "head": null,
+    "unborn": true,
+    "status": ""
+  },
+  {
+    "path": "/Users/hxsf/workspace/self/goxide-lang/goxide-lang.github.io",
+    "origin": "git@github.com:goxide-lang/goxide-lang.github.io.git",
+    "branch": "main",
+    "head": "15179b2ee9c3911d6abe10b42e1aa2ea38d75b4f",
+    "unborn": false,
+    "status": ""
+  }
+]

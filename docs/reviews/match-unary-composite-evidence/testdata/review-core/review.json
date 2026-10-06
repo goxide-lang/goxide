@@ -1,0 +1,127 @@
+{
+  "outcome": "no blocking findings after fixes",
+  "productionCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+  "contractCommit": "f1da21c21fc9456e257120fefd253f65a5e35d4d",
+  "baseline": "2cd3b71e4cdeff0fe8ea9ae0a2f460ac52ee416d",
+  "reviewer": "independent /root/audit_a01_a03_readonly with typed_context_plan auxiliary reviewer",
+  "productionBinding": "final-source-binding.json",
+  "deltaFromEe5949d": [
+    "internal/matchexpr/composite_test.go",
+    "internal/matchexpr/embedded.go",
+    "internal/matchexpr/functions.go",
+    "internal/matchexpr/functions_test.go",
+    "internal/matchexpr/lower.go"
+  ],
+  "scope": "Independent native CLI and generated Go black-box probes, source read review, and exact production input binding. No full repository/browser/CI/deployment claims.",
+  "evidenceGroups": [
+    {
+      "group": "baseline red/control",
+      "identity": "baseline-identity.json",
+      "evidence": "baseline-results.json",
+      "units": "10 CLI observations: 9 requested new contexts reject, 1 old context accepts; separate old-control generated runtime race passes"
+    },
+    {
+      "group": "core runtime",
+      "source": "candidate-v2; all 122 canonical compiler inputs match ee5949d; one additional website server source was also byte-bound",
+      "evidence": "candidate-v2/probe-results-v2.json",
+      "units": "10 CLI -> generated-module race cases, all pass; not added again from candidate-v1 rerun"
+    },
+    {
+      "group": "targeted static rejects",
+      "source": "candidate-v2/ee5949d",
+      "evidence": [
+        "candidate-v2/extra-results.json",
+        "candidate-v2/supplemental/readonly-explicit/result.json"
+      ],
+      "units": "14 intended type/field/key rejects plus 1 explicit readonly reject; initial readonly-parameter probe failed earlier at existing signature boundary and is excluded from permission evidence"
+    },
+    {
+      "group": "nested typed match valid counterpart",
+      "source": "candidate-v2/ee5949d",
+      "evidence": "candidate-v2/supplemental/nested-outer-valid/result.json",
+      "units": "1 generated-module race case passes; complements 4 inner/outer unselected-arm overflow/nominal negatives"
+    },
+    {
+      "group": "function type regression and fix",
+      "source": "candidate-v2/ee5949d red; candidate-v3 partially fixed; candidate-v4 exactly bound to final production",
+      "evidence": [
+        "candidate-v2/function-shapes/results.json",
+        "candidate-v3/function-shapes/results.json",
+        "candidate-v4/function-shapes/results.json"
+      ],
+      "units": "same 6 input modules: v2 5 reject/1 runtime pass, v3 3 reject/3 runtime pass, v4 6 CLI+race pass; one blocking family, two implementation defects"
+    },
+    {
+      "group": "lexical scope/flow final increment",
+      "source": "candidate-v4 exactly bound to final production",
+      "evidence": "candidate-v4/scope-incremental/results.json",
+      "units": "2 closure-order modules with 1 race test each; 1 flow module with 7 race Test functions. Same flow module was green at v2; rerun not a new distinct scenario"
+    },
+    {
+      "group": "extra type exploration",
+      "source": "candidate-v1; exploratory evidence, not falsely identified as final source execution",
+      "evidence": [
+        "typed-child/results.json",
+        "typed-child/extra-results.json"
+      ],
+      "units": "6 additional generated-module normal Go test passes (not race), 1 overflow reject; 2 closure failures later reproduced green at v2/v4"
+    }
+  ],
+  "resolvedFindings": [
+    {
+      "id": "literal-real-closure",
+      "description": "real closure before/after sibling literal match initially remained unlowered",
+      "red": "typed-child/results.json",
+      "green": "candidate-v4/scope-incremental/results.json",
+      "note": "independently reproduced while root already tracked the implementation issue"
+    },
+    {
+      "id": "function-type-role-and-pointer-precedence",
+      "description": "legal function types in literals were mistaken for function bodies; after structural role repair, pointer star in complete literal type was still mistaken for binary multiplication",
+      "red": [
+        "ee5949d-red-source-binding.json",
+        "candidate-v2/function-shapes/results.json",
+        "candidate-v3/function-shapes/results.json"
+      ],
+      "green": "candidate-v4/function-shapes/results.json"
+    }
+  ],
+  "harnessCorrections": [
+    {
+      "path": "harness-v1",
+      "reason": "exported enum omitted pub in directory mode; all pre-context errors excluded from red feature evidence"
+    },
+    {
+      "path": "candidate-v1/probes/harness-status.json",
+      "reason": "trimpath binary without GOROOT could not find bin/go; corrected declared existing toolchain GOROOT, no compiler source change"
+    },
+    {
+      "path": "candidate-v1/flow-probe",
+      "reason": "initial reviewer module lacked pinned std/serde go.mod/go.sum entries; then supplied existing recorded versions/checksums, no download"
+    },
+    {
+      "path": "candidate-v2/supplemental/readonly-local/classification.json",
+      "reason": "r := &x inferred native pointer, not readonly; correctly accepted control. Real negative uses var r &int = &x"
+    }
+  ],
+  "limits": [
+    "No aggregate test total; compile observations, modules, Test functions, and reruns have different units.",
+    "Some rejects explicitly report generated/unmapped intermediate coordinates; these are not claimed as exact original-source diagnostics.",
+    "Shadowed local nominal type with another visible alias remains an existing naming limitation: old direct-assignment control rejects on old CLI and candidate; not an A04 regression or an approved MVP deferral.",
+    "Final increment is executed using a frozen candidate binary whose complete production inputs match final Git blobs; binary was not built inside a checkout of the final commit. Earlier v2 evidence remains labeled v2/ee5949d, with delta and targeted final reruns.",
+    "No implementation/source worktree files were edited by this reviewer; all probes and review logs are under /tmp/goxide-a04-review-20261006."
+  ],
+  "canonicalCompilerInputs": 123,
+  "compilerDigest": "aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8",
+  "boundSourceFiles": 124,
+  "auxiliaryBoundFiles": [
+    "cmd/goxide-web/main.go"
+  ],
+  "inputCountMeaning": "123 canonical compiler inputs; 124 files byte-bound in total because cmd/goxide-web/main.go was additionally checked. That website server source is excluded from the native compiler inventory and compiler digest.",
+  "publicationCore": {
+    "manifest": "publication-manifest.json",
+    "reproducer": "publication-core/reproduce.py",
+    "scope": "Core function-type red/green family and final lexical/flow increment; not all historical probes.",
+    "runnerValidation": "syntax-checked only after original test runs; not executed as an additional test run"
+  }
+}

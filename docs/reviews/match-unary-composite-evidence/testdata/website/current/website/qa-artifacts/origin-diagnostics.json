@@ -1,0 +1,132 @@
+[
+  {
+    "name": "reject_macro_origin_synthetic_new",
+    "ending": "LF",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_new",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_context",
+    "ending": "LF",
+    "diagnostic": "playground.gox:7:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:8:1; invoked at playground.gox:9:28\n  macro inner defined at playground.gox:7:1; invoked at playground.gox:8:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_context",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:7:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:8:1; invoked at playground.gox:9:28\n  macro inner defined at playground.gox:7:1; invoked at playground.gox:8:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_make",
+    "ending": "LF",
+    "diagnostic": "playground.gox:2:42: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_make",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:2:42: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_syntax",
+    "ending": "LF",
+    "diagnostic": "playground.gox:2:37: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]\n  macro outer defined at playground.gox:3:1; invoked at playground.gox:5:28\n  macro inner defined at playground.gox:2:1; invoked at playground.gox:3:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_syntax",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:2:37: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]\n  macro outer defined at playground.gox:3:1; invoked at playground.gox:5:28\n  macro inner defined at playground.gox:2:1; invoked at playground.gox:3:37"
+  },
+  {
+    "name": "reject_macro_origin_real_new",
+    "ending": "LF",
+    "diagnostic": "playground.gox:4:34: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [194,195))\n  macro outer defined at playground.gox:5:1; invoked at playground.gox:6:19\n  macro inner defined at playground.gox:4:1; invoked at playground.gox:5:30"
+  },
+  {
+    "name": "reject_macro_origin_real_new",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:4:34: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [197,198))\n  macro outer defined at playground.gox:5:1; invoked at playground.gox:6:19\n  macro inner defined at playground.gox:4:1; invoked at playground.gox:5:30"
+  },
+  {
+    "name": "reject_macro_origin_real_make",
+    "ending": "LF",
+    "diagnostic": "playground.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [47,48))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_make",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [48,49))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_syntax",
+    "ending": "LF",
+    "diagnostic": "playground.gox:2:30: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [42,43))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_syntax",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:2:30: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [43,44))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_capture_question",
+    "ending": "LF",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation type does not support captured types (source span [53,54))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_capture_question",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation type does not support captured types (source span [54,55))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_ast_question",
+    "ending": "LF",
+    "diagnostic": "playground.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_ast_question",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_ast_nested",
+    "ending": "LF",
+    "diagnostic": "playground.gox:66:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:7:1; invoked at playground.gox:8:28\n  macro inner defined at playground.gox:6:1; invoked at playground.gox:7:37"
+  },
+  {
+    "name": "reject_macro_ast_nested",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:66:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:7:1; invoked at playground.gox:8:28\n  macro inner defined at playground.gox:6:1; invoked at playground.gox:7:37"
+  },
+  {
+    "name": "reject_macro_ast_sibling",
+    "ending": "LF",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:7:6"
+  },
+  {
+    "name": "reject_macro_ast_sibling",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:7:6"
+  },
+  {
+    "name": "reject_macro_ast_nonmacro",
+    "ending": "LF",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]"
+  },
+  {
+    "name": "reject_macro_ast_nonmacro",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]"
+  },
+  {
+    "name": "reject_macro_ast_real_point",
+    "ending": "LF",
+    "diagnostic": "playground.gox:5:20: cannot use 1 (untyped int constant) as string value in variable declaration (source span [226,227))"
+  },
+  {
+    "name": "reject_macro_ast_real_point",
+    "ending": "CRLF",
+    "diagnostic": "playground.gox:5:20: cannot use 1 (untyped int constant) as string value in variable declaration (source span [230,231))"
+  }
+]

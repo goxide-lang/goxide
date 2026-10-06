@@ -1,0 +1,25 @@
+{
+  "stagedPaths": 142,
+  "onlyDocumentationAndEvidence": true,
+  "rawDiffCheck": {
+    "exit": 2,
+    "stdout": "docs/reviews/match-unary-composite-evidence/testdata/acceptance/acceptance.patch:6: space before tab in indent.\n+ \t\t\"parenthesized type conversion\": `func g(n uint64)uint64{return n};func f(x E)any{type g (int8);return g(match x{E::A=>256,_=>0,})}`,\ndocs/reviews/match-unary-composite-evidence/testdata/acceptance/acceptance.patch:7: space before tab in indent.\n+ \t\t\"grouped type conversion\":       `func g(n uint64)uint64{return n};func f(x E)any{type (g (int8));return g(match x{E::A=>256,_=>0,})}`,\ndocs/reviews/match-unary-composite-evidence/testdata/acceptance/acceptance.patch:8: space before tab in indent.\n+ \t\t\"reference signature shadow\":    `func g(n uint64)uint64{return n};func f(x E,r &int,g (func(int)uint64))uint64{return g(match x{E::A=>1,_=>2,})}`,\ndocs/reviews/match-unary-composite-evidence/testdata/acceptance/acceptance.patch:10: space before tab in indent.\n+ \t\t\"directive\":                     \"//go:uintptrescapes\\nfunc g(n int)int{return n};func f(x E)int{return g(match x{E::A=>1,_=>2,})}\",\ndocs/reviews/match-unary-composite-evidence/testdata/acceptance/acceptance.patch:11: space before tab in indent.\n+ \t\t\"nested missing arm\":            `func f(x E)int{return match x{E::A=>match x{E::A=>1,},_=>2,}}`,\ndocs/reviews/match-unary-composite-evidence/testdata/acceptance/acceptance.patch:12: space before tab in indent.\n+ \t}\ndocs/reviews/match-unary-composite-evidence/testdata/review-origin/review.md:1: trailing whitespace.\n+Source: `f2d7a39c4b81a00fff191c89ac847b09af6a62e9`  \ndocs/reviews/match-unary-composite-evidence/testdata/review-origin/review.md:2: trailing whitespace.\n+Verdict: **no blocking findings in this review scope**.  \ndocs/reviews/match-unary-composite-evidence/testdata/review-origin/review.md:3: trailing whitespace.\n+Independent binary SHA-256: `245d995482476e305fd947f26a7fb64ff45ab5ebbdecc69348fcc44df54434b9`.  \n",
+    "stderr": ""
+  },
+  "preservedRawFormat": "Unified diff context space before tab and Markdown two-space hard line breaks remain byte-exact. No source changes or whitespace config changes.",
+  "authoredAndOtherEvidenceDiffCheck": {
+    "argv": [
+      "git",
+      "diff",
+      "--cached",
+      "--check",
+      "--",
+      ".",
+      ":(exclude)docs/reviews/match-unary-composite-evidence/testdata/acceptance/acceptance.patch",
+      ":(exclude)docs/reviews/match-unary-composite-evidence/testdata/review-origin/review.md"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+}

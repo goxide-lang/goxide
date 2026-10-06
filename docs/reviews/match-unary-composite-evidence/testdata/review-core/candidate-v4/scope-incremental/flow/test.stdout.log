@@ -1,0 +1,16 @@
+=== RUN   TestOrderedMapNested
+--- PASS: TestOrderedMapNested (0.00s)
+=== RUN   TestQuestionStopsKeyAndValue
+--- PASS: TestQuestionStopsKeyAndValue (0.00s)
+=== RUN   TestNearestUserClosure
+--- PASS: TestNearestUserClosure (0.00s)
+=== RUN   TestNilIdentity
+--- PASS: TestNilIdentity (0.00s)
+=== RUN   TestInvalidEnumTiming
+--- PASS: TestInvalidEnumTiming (0.00s)
+=== RUN   TestNamedSlotAndDirectRecover
+--- PASS: TestNamedSlotAndDirectRecover (0.00s)
+=== RUN   TestLoopTargets
+--- PASS: TestLoopTargets (0.00s)
+PASS
+ok  	review.example/probe	1.380s

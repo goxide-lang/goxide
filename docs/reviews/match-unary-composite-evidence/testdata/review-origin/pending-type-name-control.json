@@ -1,0 +1,30 @@
+[
+  {
+    "case": "old-context",
+    "source": "package main\nenum E{A,B,}\ntype X__goxide_match_expr_pendingY int\nfunc f(e E)X__goxide_match_expr_pendingY{var x X__goxide_match_expr_pendingY=match e{E::A=>1,E::B=>2};return x}\nfunc main(){}\n",
+    "baseline": {
+      "exit": 0,
+      "stdout": "package main\n\ntype E interface{ __goxide_enum_marker_E() }\ntype __goxide_enum_case_1_E_A struct{}\n\nfunc (__goxide_enum_case_1_E_A) __goxide_enum_marker_E() {}\nfunc __goxide_enum_new_1_E_A() E                         { return __goxide_enum_case_1_E_A{} }\n\ntype __goxide_enum_case_1_E_B struct{}\n\nfunc (__goxide_enum_case_1_E_B) __goxide_enum_marker_E() {}\nfunc __goxide_enum_new_1_E_B() E                         { return __goxide_enum_case_1_E_B{} }\nfunc __goxide_enum_validate_E(v E) {\n\tswitch x := v.(type) {\n\tcase __goxide_enum_case_1_E_A:\n\t\t_ = x\n\tcase __goxide_enum_case_1_E_B:\n\t\t_ = x\n\tdefault:\n\t\tpanic(\"goxide: invalid enum E\")\n\t}\n}\n\ntype X__goxide_match_expr_pendingY int\n\nfunc f(e E) X__goxide_match_expr_pendingY {\n\tvar __goxide_match_expr_1 X__goxide_match_expr_pendingY\n\t{\n\t\tvar __goxide_enum_saved_1 E = (e)\n\t\t__goxide_enum_validate_E(__goxide_enum_saved_1)\n\t\tif __goxide_enum_payload_1, __goxide_enum_ok_1 := __goxide_enum_saved_1.(__goxide_enum_case_1_E_A); __goxide_enum_ok_1 {\n\t\t\t_ = __goxide_enum_payload_1\n\t\t\t__goxide_match_expr_1 = (1)\n\n\t\t} else if __goxide_enum_payload_1, __goxide_enum_ok_1 := __goxide_enum_saved_1.(__goxide_enum_case_1_E_B); __goxide_enum_ok_1 {\n\t\t\t_ = __goxide_enum_payload_1\n\t\t\t__goxide_match_expr_1 = (2)\n\n\t\t}\n\t}\n\tvar x X__goxide_match_expr_pendingY = __goxide_match_expr_1\n\treturn x\n}\nfunc main() {}\n",
+      "stderr": ""
+    },
+    "candidate": {
+      "exit": 0,
+      "stdout": "package main\n\ntype E interface{ __goxide_enum_marker_E() }\ntype __goxide_enum_case_1_E_A struct{}\n\nfunc (__goxide_enum_case_1_E_A) __goxide_enum_marker_E() {}\nfunc __goxide_enum_new_1_E_A() E                         { return __goxide_enum_case_1_E_A{} }\n\ntype __goxide_enum_case_1_E_B struct{}\n\nfunc (__goxide_enum_case_1_E_B) __goxide_enum_marker_E() {}\nfunc __goxide_enum_new_1_E_B() E                         { return __goxide_enum_case_1_E_B{} }\nfunc __goxide_enum_validate_E(v E) {\n\tswitch x := v.(type) {\n\tcase __goxide_enum_case_1_E_A:\n\t\t_ = x\n\tcase __goxide_enum_case_1_E_B:\n\t\t_ = x\n\tdefault:\n\t\tpanic(\"goxide: invalid enum E\")\n\t}\n}\n\ntype X__goxide_match_expr_pendingY int\n\nfunc f(e E) X__goxide_match_expr_pendingY {\n\tvar __goxide_match_expr_1 X__goxide_match_expr_pendingY\n\t{\n\t\tvar __goxide_enum_saved_1 E = (e)\n\t\t__goxide_enum_validate_E(__goxide_enum_saved_1)\n\t\tif __goxide_enum_payload_1, __goxide_enum_ok_1 := __goxide_enum_saved_1.(__goxide_enum_case_1_E_A); __goxide_enum_ok_1 {\n\t\t\t_ = __goxide_enum_payload_1\n\t\t\t__goxide_match_expr_1 = (1)\n\n\t\t} else if __goxide_enum_payload_1, __goxide_enum_ok_1 := __goxide_enum_saved_1.(__goxide_enum_case_1_E_B); __goxide_enum_ok_1 {\n\t\t\t_ = __goxide_enum_payload_1\n\t\t\t__goxide_match_expr_1 = (2)\n\n\t\t}\n\t}\n\tvar x X__goxide_match_expr_pendingY = __goxide_match_expr_1\n\treturn x\n}\nfunc main() {}\n",
+      "stderr": ""
+    }
+  },
+  {
+    "case": "new-literal",
+    "source": "package main\nenum E{A,B,}\ntype X__goxide_match_expr_pendingY int\nfunc f(e E)[]X__goxide_match_expr_pendingY{return []X__goxide_match_expr_pendingY{match e{E::A=>1,E::B=>2}}}\nfunc main(){}\n",
+    "baseline": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "enums.Lower [generated/unmapped; intermediate coordinates]: /tmp/goxide-a04-origin-review-20261006/fixtures/pending-substring-new-literal.gox:4:91: enum: statement arm requires => { ... }\n"
+    },
+    "candidate": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "propagate.Lower: /tmp/goxide-a04-origin-review-20261006/fixtures/pending-substring-new-literal.gox:4:83: expression match: composite match requires a resolved literal type; use an explicit typed local initializer\n"
+    }
+  }
+]

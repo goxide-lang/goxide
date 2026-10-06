@@ -1,0 +1,10 @@
+=== RUN   TestMatchUnaryCompositeCLI
+    match_unary_composite_test.go:19: go [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI2183233318/001/goxide ./cmd/goxide]:
+=== RUN   TestMatchUnaryCompositeCLI/generated-module
+    match_unary_composite_test.go:37: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI2183233318/001/goxide [transpile -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIgenerated-module2420437242/001/generated /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI2183233318/003]: expected success=true; got exit status 1
+        matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI2183233318/003/app.gox:11:12: expression match: embedded expression match unsupported; use a typed local var
+--- FAIL: TestMatchUnaryCompositeCLI (2.07s)
+    --- FAIL: TestMatchUnaryCompositeCLI/generated-module (0.91s)
+FAIL
+FAIL	github.com/hxsf/goxide/tests/acceptance	2.468s
+FAIL

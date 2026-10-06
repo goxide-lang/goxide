@@ -322,3 +322,22 @@ tuple/struct enum variant、原位 mut& 布局、blank/embedded、手写协议�
 保留（JSON 沿其既有规范）、错误 cause/path 及失败后无后续副作用；生成模块独立 race/vet
 和重复输出确定性。另有独立黑盒审查、准确源码完整 Mac race/vet/design、仓内 CLI/WASM
 网站全矩阵及新例。更新 compiler pin/digest 时与工具提交、最终文档提交分开记录。
+
+## Unary/composite 单值片交付（2026-10-06）
+
+上述合同先提交为 `f1da21c`，最终生产实现为
+`f2d7a39c4b81a00fff191c89ac847b09af6a62e9`。已接通合同内标量 unary 和普通
+composite 单值组合，类型来自真实字段/元素/map key/value；静态类型、选中 arm、
+副作用顺序与 `?` 最近真实函数保持。完整类型 AST 区分函数类型和真实 closure，
+类型中的 `*` 不再被当作二元乘法；不引入改变控制流的运行时 IIFE。
+
+真实业务链、嵌套闭包、short-circuit、defer/direct recover/goto、索引存储与类型/权限
+黑例均有原生运行或真实拒绝证据。准确网站/工具 `0d814dd` 的独立干净检出完成
+完整 Mac race/vet/design、CLI/WASM 与浏览器七阶段，另有独立审查；
+计数、原红记录及生产 pin/工具/后续文档提交的区别见
+[交付报告](../reviews/match-unary-composite-20261006.md)。
+
+本节不撤销合同中的剩余实现边界，尤其新的 postfix/receiver、go/defer/control 头、
+引用/收发 unary、多结果和 block arm。实际 defer 测试先求局部值再登记调用；
+direct recover 在用户 deferred closure 内，不把头内 literal 冒称已接通。
+未新增 tuple/struct variant、手写协议或公开 ABI 决策，A04 与 MVP 整项继续开放。

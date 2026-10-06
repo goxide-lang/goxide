@@ -1,0 +1,77 @@
+{
+  "checks": [
+    {
+      "case": "macro-arm-overflow",
+      "line_endings": "LF",
+      "verified": true,
+      "detail": "new arm error uses original match token position; does not pretend to identify macro arm literal"
+    },
+    {
+      "case": "macro-arm-overflow",
+      "line_endings": "CRLF",
+      "verified": true,
+      "detail": "new arm error uses original match token position; does not pretend to identify macro arm literal"
+    },
+    {
+      "case": "macro-arm-bool",
+      "line_endings": "LF",
+      "verified": true,
+      "detail": "new arm error uses original match token position; does not pretend to identify macro arm literal"
+    },
+    {
+      "case": "macro-arm-bool",
+      "line_endings": "CRLF",
+      "verified": true,
+      "detail": "new arm error uses original match token position; does not pretend to identify macro arm literal"
+    },
+    {
+      "case": "macro-after-composite",
+      "line_endings": "LF",
+      "verified": true,
+      "detail": "source literal and complete exact macro frame order independently anchored"
+    },
+    {
+      "case": "macro-after-composite",
+      "line_endings": "CRLF",
+      "verified": true,
+      "detail": "source literal and complete exact macro frame order independently anchored"
+    },
+    {
+      "case": "macro-after-old-match",
+      "line_endings": "LF",
+      "verified": true,
+      "detail": "source literal and complete exact macro frame order independently anchored"
+    },
+    {
+      "case": "macro-after-old-match",
+      "line_endings": "CRLF",
+      "verified": true,
+      "detail": "source literal and complete exact macro frame order independently anchored"
+    },
+    {
+      "case": "nested-macro-after-composite",
+      "line_endings": "LF",
+      "verified": true,
+      "detail": "source literal and complete exact macro frame order independently anchored"
+    },
+    {
+      "case": "nested-macro-after-composite",
+      "line_endings": "CRLF",
+      "verified": true,
+      "detail": "source literal and complete exact macro frame order independently anchored"
+    },
+    {
+      "case": "macro-arm-exhaustiveness",
+      "line_endings": "LF",
+      "verified": true,
+      "detail": "regenerated statement-match keyword has no original point; explicit intermediate/unmapped label retained"
+    },
+    {
+      "case": "macro-arm-exhaustiveness",
+      "line_endings": "CRLF",
+      "verified": true,
+      "detail": "regenerated statement-match keyword has no original point; explicit intermediate/unmapped label retained"
+    }
+  ],
+  "note": "Initial macro-arm-bool two message expectations looked for !; authoritative error is assignability to bool. Original results retain those false expectation values."
+}

@@ -1,0 +1,47 @@
+package probe
+import "errors"
+pub enum E { A, B, }
+var trace []string
+var seen int
+var stop=errors.New("review-stop")
+func mark(s string,n int)int{trace=append(trace,s);return n}
+func choose(s string)E{trace=append(trace,s);return E::A}
+func guard(s string,b bool)bool{trace=append(trace,s);return b}
+func checked(s string,ok bool)Result[int,error]{mark(s,0);if !ok{return Result[int,error]::Err(stop)};return Result[int,error]::Ok(7)}
+type Row struct{N int;Next []int}
+func Ordered()map[int]Row{
+ return map[int]Row{
+  mark("k0",0):{N:mark("v0",10)},
+  (match choose("s1"){E::A if guard("g0",false)=>mark("wrong",9),E::A if guard("g1",true)=>mark("k1",1),_=>mark("wrong",8)}):{
+   N:+(match choose("s2"){E::A=>mark("v1",20),E::B=>mark("wrong",9)}),
+   Next:[]int{mark("last",30)},
+  },
+ }
+}
+func Build(where int)Result[map[int]int,error]{
+ defer func(){mark("defer",0)}()
+ m:=map[int]int{
+  mark("k0",0):mark("v0",10),
+  (match choose("s1"){E::A=>checked("key",where!=1)?,E::B=>0}):(match choose("s2"){E::A=>checked("value",where!=2)?,E::B=>0}),
+  mark("k2",2):mark("v2",30),
+ }
+ mark("done",0)
+ return Result[map[int]int,error]::Ok(m)
+}
+func BuildOK(where int)bool{return match Build(where){Result[map[int]int,error]::Err(e)=>errors.Is(e,stop),Result[map[int]int,error]::Ok(m)=>len(m)==3&&m[7]==7}}
+func Closure()int{
+ defer func(){mark("outer-defer",0)}()
+ inner:=func()Result[int,error]{
+  defer func(){mark("inner-defer",0)}()
+  xs:=[]int{mark("before",1),match E::A{E::A=>checked("checked",false)?,E::B=>0},mark("wrong",2)}
+  return Result[int,error]::Ok(xs[0])
+ }
+ r:=inner();mark("outer-after",0)
+ match r{Result[int,error]::Err(e)=>{if !errors.Is(e,stop){panic("cause")};return 7},Result[int,error]::Ok(_)=>{return 0}}
+ return -1
+}
+func TypedNils(e E)[]any{return []any{match e{E::A=>nil,E::B=>(*int)(nil)}}}
+func Invalid(e E)[]int{defer func(){mark("defer",0)}();return []int{mark("before",1),match e{E::A if guard("guard",true)=>mark("arm",2),_=>mark("fallback",3)}}}
+func explode()int{mark("explode",0);panic("boom")}
+func Named()(out Row){out=Row{N:7};defer func(){if recover()!=nil{seen=out.N;out.N++;mark("defer",0)}}();return Row{N:match E::A{E::A=>explode(),E::B=>0}}}
+func Loop()int{total:=0;for i:=0;i<5;i++{match E::A{E::A=>{v:=[]int{match E::A{E::A=>i,E::B=>0}};if v[0]==1{continue};if v[0]==3{break};total+=v[0]},E::B=>{}};total+=10};return total}

@@ -1,0 +1,18 @@
+{
+  "source_commit": "ee5949d80c11b513a40700f8ec03dd7050a77876",
+  "verdict": "awaiting_blocker_fix",
+  "own_checks": {
+    "runner_checks_passed": 29,
+    "runner_checks_failed": 0,
+    "map_check_line_endings": [
+      "LF",
+      "CRLF"
+    ]
+  },
+  "blocker_reported_by_primary_reviewer": {
+    "fixture": "/tmp/goxide-a04-review-20261006/typed-child/v2/pointer-function-type/source/probe.gox",
+    "issue": "Composite element type []*func()int is mistaken for a function body; legal in-scope expression match is not normalized."
+  },
+  "own_previously_reported_issue": "pending type substring false rejection fixed and independently reproduced green",
+  "note": "Passing provenance checks do not clear the separate function-type blocker."
+}

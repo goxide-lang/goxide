@@ -1,0 +1,47 @@
+[
+  {
+    "name": "check/match_a04_unary",
+    "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+    "sourceSha256": "25d49ff71fad3e5548c63348bbbadaed44f70564bf6b4bfa8e15be3771e7b431",
+    "exit": 0,
+    "stdout": "unary ok\n",
+    "stderr": "",
+    "expectedStdout": "unary ok\n"
+  },
+  {
+    "name": "check/match_a04_literals",
+    "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+    "sourceSha256": "67bd14ba31c68fed8f55d1e541c30822bd41872d96948265a001d8439184b9ab",
+    "exit": 0,
+    "stdout": "literals ok\n",
+    "stderr": "",
+    "expectedStdout": "literals ok\n"
+  },
+  {
+    "name": "check/match_a04_question",
+    "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+    "sourceSha256": "85295483cd61844b1957d39c4ace5840596d9840bd517dc14bb5ce06c56039a2",
+    "exit": 0,
+    "stdout": "question ok\n",
+    "stderr": "",
+    "expectedStdout": "question ok\n"
+  },
+  {
+    "name": "check/match_a04_short_circuit",
+    "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+    "sourceSha256": "681657025bd48f03435732170e27d8c5687730633a59ebe1b9025f0d6756c5c8",
+    "exit": 0,
+    "stdout": "short circuit ok\n",
+    "stderr": "",
+    "expectedStdout": "short circuit ok\n"
+  },
+  {
+    "name": "example/match_composition",
+    "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+    "sourceSha256": "e7a6ecfeb23886d49aa792c7d54323517f308ce5eb893b82cb2e558615cfc9e8",
+    "exit": 0,
+    "stdout": "Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [3, 4] }\nPlan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [99, 4] }\n{\"Mode\":{\"Workers\":3},\"Enabled\":true,\"Delta\":-3,\"Steps\":[99,4]}\n",
+    "stderr": "",
+    "expectedStdout": "Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [3, 4] }\nPlan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [99, 4] }\n{\"Mode\":{\"Workers\":3},\"Enabled\":true,\"Delta\":-3,\"Steps\":[99,4]}\n"
+  }
+]

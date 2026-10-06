@@ -1,0 +1,32 @@
+=== RUN   TestMatchUnaryCompositeCLI
+    match_unary_composite_test.go:19: go [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI1794569262/001/goxide ./cmd/goxide]:
+=== RUN   TestMatchUnaryCompositeCLI/generated-module
+    match_unary_composite_test.go:37: goxide [transpile -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIgenerated-module2474240687/001/generated /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI1794569262/003]:
+    match_unary_composite_test.go:37: goxide [transpile -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIgenerated-module2474240687/002/generated /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI1794569262/003]:
+    match_unary_composite_test.go:80: go [test -race -count=1 -v ./...]:
+        === RUN   TestBusiness
+        --- PASS: TestBusiness (0.00s)
+        === RUN   TestNilEmptyAndErrorPaths
+        --- PASS: TestNilEmptyAndErrorPaths (0.00s)
+        === RUN   TestRealContexts
+        --- PASS: TestRealContexts (0.00s)
+        === RUN   TestSelectionAndFailure
+        --- PASS: TestSelectionAndFailure (0.00s)
+        === RUN   TestInvalidEnumBeforeGuard
+        --- PASS: TestInvalidEnumBeforeGuard (0.00s)
+        === RUN   TestCallsAndReceives
+        --- PASS: TestCallsAndReceives (0.00s)
+        === RUN   TestFunctionFrames
+        --- PASS: TestFunctionFrames (0.00s)
+        === RUN   TestExistingIndexPlace
+        --- PASS: TestExistingIndexPlace (0.00s)
+        PASS
+        ok  	packages.example/app	1.649s
+        ?   	packages.example/app/model	[no test files]
+    match_unary_composite_test.go:81: /opt/homebrew/Cellar/go/1.27.1/libexec/bin/go [vet ./...]: expected success=true; got exit status 1
+        contexts.go:449:2: unreachable code
+--- FAIL: TestMatchUnaryCompositeCLI (5.33s)
+    --- FAIL: TestMatchUnaryCompositeCLI/generated-module (4.78s)
+FAIL
+FAIL	github.com/hxsf/goxide/tests/acceptance	6.006s
+FAIL

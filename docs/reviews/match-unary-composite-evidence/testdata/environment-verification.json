@@ -1,0 +1,38 @@
+{
+  "validationCommit": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+  "source": "existing pinned dependency copies prepared for this run; no installation or download",
+  "moduleVerification": {
+    "argv": [
+      "/opt/homebrew/bin/go",
+      "mod",
+      "verify"
+    ],
+    "cwd": "/private/tmp/goxide-a04-20261006-ukafjzho/final-checkout",
+    "exitCode": 0,
+    "stdout": "all modules verified\n",
+    "stderr": ""
+  },
+  "dependencies": {
+    "go-mod": {
+      "path": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/go-mod",
+      "files": 1058,
+      "symlinks": [],
+      "escapingSymlinks": []
+    },
+    "node_modules": {
+      "path": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/node_modules",
+      "files": 552,
+      "symlinks": [
+        {
+          "path": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/node_modules/.bin/playwright-core",
+          "target": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/node_modules/playwright-core/cli.js"
+        },
+        {
+          "path": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/node_modules/.bin/playwright",
+          "target": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/node_modules/playwright/cli.js"
+        }
+      ],
+      "escapingSymlinks": []
+    }
+  }
+}

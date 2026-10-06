@@ -1,0 +1,3 @@
+package probe
+pub enum E{A,B,}
+func Run()[]*func()int{return []*func()int{match E::A{E::A=>nativePointer(),E::B=>nil}}}

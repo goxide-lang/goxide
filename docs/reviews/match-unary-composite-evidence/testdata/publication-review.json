@@ -1,0 +1,56 @@
+{
+  "reviewedAt": "2026-10-06T21:39:29.795328+00:00",
+  "outcome": "no remaining blocking documentation findings",
+  "scope": "Read-only final report, README, T0, RFC0009 and MVP increment checked against original JSON/log evidence. No tests were rerun and no repository files were edited.",
+  "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+  "validationCommit": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+  "validationTree": "f9fc7584e7fa35af250f38160a6083ae8a95b546",
+  "baselineWebsiteCommit": "fd8380c39876c96441857a737be8e32c322a0467",
+  "publicationIdentity": "Later documentation/evidence commit; not claimed as tested validation HEAD or compiler pin.",
+  "documentSha256": {
+    "docs/reviews/match-unary-composite-20261006.md": "17df6ad378c24e28396d44cbc11d3bead0228e9b1f03f11e7913745ffe8fa5be",
+    "README.md": "ec00bb55ac81e7c7be411079928284722d8bfa85bb969cc0fa07b4cdf358eed3",
+    "docs/t0-acceptance.md": "2dea75bbea1b950fff78ce75e1e5c25d09fdde1d4b27982336eabd2b35e33aab",
+    "docs/rfcs/0009-match.md": "637daf1db37db1e02130336cc1238d9bb0ca91264e2d15c873fc29f6f1559c9e",
+    "docs/mvp-gap-audit.md": "156125b3d00bc950dcb6da8ef662f3cd5c8ddb6633094f7a7fafe4efab450815"
+  },
+  "rawRaceRecount": {
+    "topPass": 605,
+    "subPass": 1338,
+    "testFail": 0,
+    "testSkip": 0,
+    "packagesPass": 18,
+    "packagesWithNoTests": 5,
+    "recordedRawLogSha256Verified": true
+  },
+  "websiteEvidence": {
+    "legacyFixtures": 97,
+    "legacyExamples": 10,
+    "currentFixtures": 105,
+    "currentExamples": 11,
+    "byteEqualPairs": 27,
+    "byteDifferentPairs": 6,
+    "astEqualPairs": 33,
+    "pairedNativePrograms": 5,
+    "a04Fixtures": 8,
+    "a04CLIObservations": 32,
+    "a04UILFObservations": 16,
+    "a04WorkerMainObservations": 32,
+    "a04WorkerRecoveryObservations": 32,
+    "a04CurrentOnlyPrograms": 5
+  },
+  "publicationLedger": {
+    "entriesVerified": 139,
+    "hashMismatches": []
+  },
+  "resolvedDocumentationIssue": "The early 34 targeted subtests are now accurately described as live working-tree candidate history followed by snapshot/hash comparison with ee5949d, not an exact-commit rerun.",
+  "boundariesVerified": [
+    "Only scalar unary and ordinary composite single-value subset is closed.",
+    "New postfix/receiver, go/defer/control headers and other A04 debt remain open.",
+    "defer uses precomputed local literal; direct recover is inside the explicit user deferred closure body, not a new defer-header or postfix entry.",
+    "Old/new website paired evidence is separate from current-only A04 programs.",
+    "No Linux, hosted CI, deployment or ABI expansion claim."
+  ],
+  "nonBlockingSuggestion": "The 97/10 and 105/11 values are validation-matrix counts; optionally add matrix to the table label for clarity.",
+  "rawEvidenceFormatting": "Preserving byte-identical raw patch/Markdown evidence with documented precise diff-check exclusions does not invalidate these findings."
+}

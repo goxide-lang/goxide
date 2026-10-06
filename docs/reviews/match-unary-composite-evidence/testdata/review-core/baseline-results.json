@@ -1,0 +1,196 @@
+{
+  "scope": "Actual native CLI transpilation only; no new implementation or runtime success claim",
+  "identity": "baseline-identity.json",
+  "cases": [
+    {
+      "id": "control_direct",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": true,
+      "baselineExitCode": 0,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "existing syntax control; Run()==7",
+      "sourceSha256": "c17523fa7d04b42cef6aeb6a9722efcfc2de60ce586086e576059fe58b7760f7",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/control_direct/generated",
+        "/tmp/goxide-a04-review-20261006/cases/control_direct/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/control_direct/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "id": "unary_named_shift",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "Run(63)==Word(1)<<63; operand must get Word",
+      "sourceSha256": "3054de957cb34602e759ce30e4187cccde391a0ea5fd7eed60ebeda8e6e15ddb",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/unary_named_shift/generated",
+        "/tmp/goxide-a04-review-20261006/cases/unary_named_shift/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/unary_named_shift/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "c8b14fcae503e83baa9ba09c7c42b008178fb75726283b59f2dd1e30585b98df"
+    },
+    {
+      "id": "unary_complement",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "Run()==255; no premature default to signed int",
+      "sourceSha256": "ca31a494447ec2eed7770a20a7a081b4d6a6e46fd59f1374dbfd579256e03e80",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/unary_complement/generated",
+        "/tmp/goxide-a04-review-20261006/cases/unary_complement/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/unary_complement/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "c476ef1dd86a9ed307c68d3a21ee4dc2d6413106429f4438a7c645f0a84b2d7c"
+    },
+    {
+      "id": "unary_peer",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "Run()==(Word(1)<<63)+1; unary must not sever typed peer",
+      "sourceSha256": "801de0509cf723de09a8fb80fc16b0152cfc49e840af8913223683d58fab308e",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/unary_peer/generated",
+        "/tmp/goxide-a04-review-20261006/cases/unary_peer/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/unary_peer/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "2ed521969429a38c3d831372fa43c2995cbabb84977553669659eacd6d7c4a42"
+    },
+    {
+      "id": "shift_count_domain",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "A returns 0; B panics at runtime; count does not inherit uint8 or become a constant",
+      "sourceSha256": "cb20f2f8e21f09b2e59114d0a435cbfe71409d6d6ef1a903fdc70c15d5528eb0",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/shift_count_domain/generated",
+        "/tmp/goxide-a04-review-20261006/cases/shift_count_domain/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/shift_count_domain/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "3d08c94aa95fe7e8e3cffaeaf2a8ee2c7e6a5ac771cc4505ba1be5619a8cad1d"
+    },
+    {
+      "id": "map_distinct_types",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "map has Key(1)<<63 mapped to Value(255), no whole-map or key/value type mixing",
+      "sourceSha256": "0ea375869c74cb155934ba7a2518c854e9894e3ccbcd699ebe161b701cb8b440",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/map_distinct_types/generated",
+        "/tmp/goxide-a04-review-20261006/cases/map_distinct_types/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/map_distinct_types/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "b78e942d9fe4c0478f8385f62782bc2640a1213c3b3dd381dff8ece16b1d6af9"
+    },
+    {
+      "id": "nested_elided",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "Run(63)[0].N==uint64(1)<<63; preserve omitted type and implicit pointer literal",
+      "sourceSha256": "7eddd4c4544c30966e3c46ddc44cec663a5b449feec5eae8323c1beae80c3454",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/nested_elided/generated",
+        "/tmp/goxide-a04-review-20261006/cases/nested_elided/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/nested_elided/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "c56bc9e15fad46bcc3d201d6359284f83d67e4d6d5ff5029856174b66de96d13"
+    },
+    {
+      "id": "field_alias_nil",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "Run(63).N uses outer field Word and P remains nil",
+      "sourceSha256": "1ffea1ac4c9e500265f52fd40a9053843454f89465770d46ac87005ee2ca5350",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/field_alias_nil/generated",
+        "/tmp/goxide-a04-review-20261006/cases/field_alias_nil/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/field_alias_nil/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "ced9cf4eee6093f7ea317e8ffef0eb6d677a48e7e82b4ec4461411527ec9aac7"
+    },
+    {
+      "id": "recover_composite",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "Run()==true; hidden IIFE would prevent recover and escape panic",
+      "sourceSha256": "2fd05e1ea61bd8d2afaa617b4ffd2b3e9042e661d98a5e031733b70f35df61a0",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/recover_composite/generated",
+        "/tmp/goxide-a04-review-20261006/cases/recover_composite/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/recover_composite/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "b9746a47accb49102aadd32f3ec60692b3cb0b89b39f628ea0ae58305cc64f83"
+    },
+    {
+      "id": "goto_composite",
+      "expectedNewCompile": true,
+      "expectedBaselineCompile": false,
+      "baselineExitCode": 1,
+      "baselineExpectationMatched": true,
+      "runtimeOracle": "Run()[0]==9; generated temporaries may not invalidate forward goto",
+      "sourceSha256": "7c82a9384a02be1b076db0d275b6cfd430d34bcf716bc9850a4fb493d9c54f27",
+      "argv": [
+        "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/current/bin/goxide",
+        "transpile",
+        "-o",
+        "/tmp/goxide-a04-review-20261006/baseline-v2/goto_composite/generated",
+        "/tmp/goxide-a04-review-20261006/cases/goto_composite/source"
+      ],
+      "cwd": "/tmp/goxide-a04-review-20261006/cases/goto_composite/source",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "926651c4df8b83f1274292efb6baa5dd9c4348b21cc13e17d43673496cf6b6dc"
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+=== RUN   TestMatchUnaryCompositeCLI
+    match_unary_composite_test.go:19: go [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/001/goxide ./cmd/goxide]:
+=== RUN   TestMatchUnaryCompositeCLI/generated-module
+    match_unary_composite_test.go:37: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/001/goxide [transpile -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIgenerated-module2976820007/001/generated /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/003]: expected success=true; got exit status 1
+        /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/003/app.gox:8:23: illegal character U+0023 '#' (and 6 more errors)
+=== RUN   TestMatchUnaryCompositeCLI/reject/overflow
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectoverflow1378545846/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/004]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/004/app.gox:3:57: expression match: arm is not assignable to the result type: cannot use (256) (untyped int constant 256) as uint8 value in array or slice literal (overflows); use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/unary-bool
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectunary-bool1224728721/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/005]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/005/app.gox:3:35: expression match: arm is not assignable to the result type: cannot use (1) (untyped int constant 1) as bool value in array or slice literal; use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/unary-number
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectunary-number1482407814/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/006]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/006/app.gox:3:34: expression match: arm is not assignable to the result type: cannot use (true) (untyped bool constant true) as int value in array or slice literal; use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/defined-identity
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectdefined-identity1689652567/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/007]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/007/app.gox:3:52: expression match: arm is not assignable to the result type: cannot use (cfg.Other(1)) (constant 1 of int type model.Other) as model.Alias value in array or slice literal; use an explicit typed local initializer
+    match_unary_composite_test.go:128: wrong error category (want one of ["not assignable" "cannot use" "different Go types"]): package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/007/app.gox:3:52: expression match: arm is not assignable to the result type: cannot use (cfg.Other(1)) (constant 1 of int type model.Other) as model.Alias value in array or slice literal; use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/map-key-value-identity
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectmap-key-value-identity4185556162/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/008]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/008/app.gox:3:72: expression match: arm is not assignable to the result type: cannot use (cfg.Value(1)) (constant 1 of uint64 type model.Value) as model.Key value in array or slice literal; use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/non-nilable
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectnon-nilable16327925/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/009]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/009/app.gox:3:55: expression match: arm is not assignable to the result type: cannot use nil as int value in array or slice literal; use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/unknown-field
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectunknown-field3843862059/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/010]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/010/app.gox:3:61: expression match: unknown struct literal field Missing; use an explicit typed local initializer
+    match_unary_composite_test.go:128: wrong error category (want one of ["unknown field"]): package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/010/app.gox:3:61: expression match: unknown struct literal field Missing; use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/duplicate-field
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectduplicate-field3550749109/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/011]:
+        /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/011/app.gox:3:105: duplicate field name N in struct literal (source span [157,158))
+=== RUN   TestMatchUnaryCompositeCLI/reject/map-key-type
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectmap-key-type3582995930/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/012]:
+        /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/012/app.gox:3:25: invalid map key type []int (source span [77,78))
+=== RUN   TestMatchUnaryCompositeCLI/reject/duplicate-map-key
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectduplicate-map-key1633750910/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/013]:
+        /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/013/app.gox:3:104: duplicate key 1 in map literal (source span [156,157))
+=== RUN   TestMatchUnaryCompositeCLI/reject/array-runtime-key
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectarray-runtime-key1718543539/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/014]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/014/app.gox:3:43: expression match: match cannot be a constant array literal index; use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/slice-runtime-key
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectslice-runtime-key4186138759/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/015]:
+        package propagate.Lower: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/015/app.gox:3:41: expression match: match cannot be a constant slice literal index; use an explicit typed local initializer
+=== RUN   TestMatchUnaryCompositeCLI/reject/shift-count
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectshift-count810979832/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/016]:
+        /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/016/app.gox:26:28: invalid operation: shift count (__goxide_match_expr_atom_1) (variable of float64 type __goxide_qframe_type_f0__goxide_qtmp_1) must be integer [generated/unmapped]
+=== RUN   TestMatchUnaryCompositeCLI/reject/unaddressable-composite
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectunaddressable-composite1826396573/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/017]:
+        enums.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/017/app.gox:3:66: enum: expression match unsupported; use a statement match
+    match_unary_composite_test.go:128: wrong error category (want one of ["cannot call pointer method" "not addressable"]): enums.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/017/app.gox:3:66: enum: expression match unsupported; use a statement match
+=== RUN   TestMatchUnaryCompositeCLI/reject/readonly-container
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectreadonly-container132277606/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/018]:
+        matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/018/app.gox:3:77: expression match: return requires one concrete result type
+    match_unary_composite_test.go:128: wrong error category (want one of ["read-only" "readonly" "permission" "cannot erase"]): matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/018/app.gox:3:77: expression match: return requires one concrete result type
+=== RUN   TestMatchUnaryCompositeCLI/reject/readonly-erasure
+    match_unary_composite_test.go:110: goxide [build -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIrejectreadonly-erasure829226495/001/rejected /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/019]:
+        matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/019/app.gox:3:47: expression match: return requires one concrete result type
+    match_unary_composite_test.go:128: wrong error category (want one of ["read-only" "readonly" "permission" "cannot erase"]): matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/019/app.gox:3:47: expression match: return requires one concrete result type
+=== RUN   TestMatchUnaryCompositeCLI/boundary/address-value
+    match_unary_composite_test.go:140: goxide [transpile -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIboundaryaddress-value955803576/001/generated /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/020]:
+        matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/020/app.gox:3:35: expression match: embedded expression match unsupported; use a typed local var
+=== RUN   TestMatchUnaryCompositeCLI/boundary/dereference
+    match_unary_composite_test.go:140: goxide [transpile -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIboundarydereference1270048573/001/generated /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/021]:
+        matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/021/app.gox:3:41: expression match: embedded expression match unsupported; use a typed local var
+=== RUN   TestMatchUnaryCompositeCLI/boundary/receive
+    match_unary_composite_test.go:140: goxide [transpile -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIboundaryreceive2074022910/001/generated /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/022]:
+        matchexpr.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/022/app.gox:3:47: expression match: embedded expression match unsupported; use a typed local var
+=== RUN   TestMatchUnaryCompositeCLI/boundary/address-composite
+    match_unary_composite_test.go:140: goxide [transpile -o /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLIboundaryaddress-composite2843642333/001/generated /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/023]:
+        enums.Lower [generated/unmapped; intermediate coordinates]: /private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp/TestMatchUnaryCompositeCLI107816465/023/app.gox:3:57: enum: expression match unsupported; use a statement match
+--- FAIL: TestMatchUnaryCompositeCLI (5.90s)
+    --- FAIL: TestMatchUnaryCompositeCLI/generated-module (0.83s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/overflow (0.26s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/unary-bool (0.25s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/unary-number (0.22s)
+    --- FAIL: TestMatchUnaryCompositeCLI/reject/defined-identity (0.22s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/map-key-value-identity (0.22s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/non-nilable (0.22s)
+    --- FAIL: TestMatchUnaryCompositeCLI/reject/unknown-field (0.22s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/duplicate-field (0.23s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/map-key-type (0.24s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/duplicate-map-key (0.23s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/array-runtime-key (0.22s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/slice-runtime-key (0.23s)
+    --- PASS: TestMatchUnaryCompositeCLI/reject/shift-count (0.22s)
+    --- FAIL: TestMatchUnaryCompositeCLI/reject/unaddressable-composite (0.22s)
+    --- FAIL: TestMatchUnaryCompositeCLI/reject/readonly-container (0.22s)
+    --- FAIL: TestMatchUnaryCompositeCLI/reject/readonly-erasure (0.21s)
+    --- PASS: TestMatchUnaryCompositeCLI/boundary/address-value (0.21s)
+    --- PASS: TestMatchUnaryCompositeCLI/boundary/dereference (0.21s)
+    --- PASS: TestMatchUnaryCompositeCLI/boundary/receive (0.21s)
+    --- PASS: TestMatchUnaryCompositeCLI/boundary/address-composite (0.21s)
+FAIL
+FAIL	github.com/hxsf/goxide/tests/acceptance	6.878s
+FAIL

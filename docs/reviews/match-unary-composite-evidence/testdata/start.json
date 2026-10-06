@@ -1,0 +1,21 @@
+{
+  "validationCommit": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+  "validationTree": "f9fc7584e7fa35af250f38160a6083ae8a95b546",
+  "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+  "cwd": "/private/tmp/goxide-a04-20261006-ukafjzho/final-checkout",
+  "startedAt": "2026-10-06T21:24:39.018623+00:00",
+  "initialCacheEmpty": true,
+  "sourceCleanBefore": true,
+  "gitAlternates": false,
+  "python": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+  "environment": {
+    "GOWORK": null,
+    "GOTOOLCHAIN": "local",
+    "GOPROXY": "off",
+    "GOFLAGS": "",
+    "GOMAXPROCS": "4",
+    "GOMODCACHE": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/go-mod",
+    "GOCACHE": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/final-go-build",
+    "TMPDIR": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/tmp"
+  }
+}

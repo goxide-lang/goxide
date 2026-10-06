@@ -1,0 +1,987 @@
+{
+  "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+  "validationCommit": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+  "policy": "Listed source files are copied byte-for-byte. Relative references inside raw JSON/logs retain their original meaning; original directories and complete raw logs remain under the listed local validation roots. This ledger does not claim all referenced raw files are included.",
+  "files": [
+    {
+      "source": "/tmp/goxide-a04-review-20261006/review.json",
+      "publishedRelativePath": "review-core/review.json",
+      "bytes": 6935,
+      "sha256": "cf4b72ac59d4ad4b977bf998bf3ffd9d4dd8660fe9583e2c55261e80ee79d108",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/review.md",
+      "publishedRelativePath": "review-core/review.md",
+      "bytes": 4811,
+      "sha256": "86b5af2d608701a6992702db85d8405b4983b86ad75830973811e4ae26a5cae9",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/final-source-binding.json",
+      "publishedRelativePath": "review-core/final-source-binding.json",
+      "bytes": 39079,
+      "sha256": "20f44ce24e42d77f10b3e91c6a8460ccc5181b4cb4cc0235de2c9621807cfa92",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/ee5949d-red-source-binding.json",
+      "publishedRelativePath": "review-core/ee5949d-red-source-binding.json",
+      "bytes": 35046,
+      "sha256": "67ea7213a069bef3cf01cad0fa1adeaeb55afd40b1d720b067939ccbec4821d7",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/baseline-identity.json",
+      "publishedRelativePath": "review-core/baseline-identity.json",
+      "bytes": 4651,
+      "sha256": "aaea065f85ad3c0994e15670ae44afdb1269b0113b1ff391da415c39a63ee04a",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/baseline-results.json",
+      "publishedRelativePath": "review-core/baseline-results.json",
+      "bytes": 9421,
+      "sha256": "e163f897611c3c9e2ec0ff48e006df2a6eb8ab3ecab397b9134dc22a61180d4f",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/build.json",
+      "publishedRelativePath": "review-core/candidate-v2/build.json",
+      "bytes": 1545,
+      "sha256": "e06704c7da6a53b14241bf72ac08e9e35ec06d372242971685843d6ed08515d2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v3/build.json",
+      "publishedRelativePath": "review-core/candidate-v3/build.json",
+      "bytes": 1545,
+      "sha256": "59407b435a83bff17a365be35b0fc7e3e907e6e747e732d0d59474fec7ab7334",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/build.json",
+      "publishedRelativePath": "review-core/candidate-v4/build.json",
+      "bytes": 1545,
+      "sha256": "d30f0932974e6159a4a3232d48ba4b0217afb0a9f4d3d4a5ce30dde2d909ff9b",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/probe-results-v2.json",
+      "publishedRelativePath": "review-core/candidate-v2/probe-results-v2.json",
+      "bytes": 14899,
+      "sha256": "a9b07df9f85533a5c109da76d08b0e4cae7fceae5711e1c39daeaf738e8cfe66",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/extra-results.json",
+      "publishedRelativePath": "review-core/candidate-v2/extra-results.json",
+      "bytes": 14013,
+      "sha256": "fa8416f49349d01b232c7cd612f8db397ebb3013e50a18e065e355e80863390b",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/supplemental/readonly-explicit/result.json",
+      "publishedRelativePath": "review-core/candidate-v2/supplemental/readonly-explicit/result.json",
+      "bytes": 377,
+      "sha256": "30f882acda9d7a23e4eca7700355bb0ddf055db18b30d44a8062211f9cb3d02f",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/supplemental/readonly-explicit/stderr.log",
+      "publishedRelativePath": "review-core/candidate-v2/supplemental/readonly-explicit/stderr.log",
+      "bytes": 231,
+      "sha256": "bf6efa766d8cd9020fa5ebe646bac258f2ef593d9f0ac400bcf2f049eb36bab4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/supplemental/nested-outer-valid/result.json",
+      "publishedRelativePath": "review-core/candidate-v2/supplemental/nested-outer-valid/result.json",
+      "bytes": 604,
+      "sha256": "416e50efc6ee3564ddd6f60f89402fb739b9f6fcdfa1618e9239588a55315772",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/function-shapes/results.json",
+      "publishedRelativePath": "review-core/candidate-v2/function-shapes/results.json",
+      "bytes": 3857,
+      "sha256": "77a1912af4de98e2bf37b7e8c1fa54375ddff78e4471250cbc9945a6b36413b0",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v3/function-shapes/results.json",
+      "publishedRelativePath": "review-core/candidate-v3/function-shapes/results.json",
+      "bytes": 4427,
+      "sha256": "6acd9730a3f8f1152181327caf5ac1134446693d5eb438ab33440211a9d6fe46",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/function-shapes/results.json",
+      "publishedRelativePath": "review-core/candidate-v4/function-shapes/results.json",
+      "bytes": 5274,
+      "sha256": "d6110e5ab01d1b8ce56338f4cf256d2c77fa26e405e44c2080054ad0caeb341f",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/scope-incremental/results.json",
+      "publishedRelativePath": "review-core/candidate-v4/scope-incremental/results.json",
+      "bytes": 2428,
+      "sha256": "0a0af6fb6082eb1d1f6ee8c007615e2f90bdf44b094278dea0f45f79fd992493",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v3/source-identity.json",
+      "publishedRelativePath": "review-core/candidate-v3/source-identity.json",
+      "bytes": 201488,
+      "sha256": "6478d2b57ef2584f340987bbc9337446d903b41ac4609ae05564e12225d6cfa4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/source-identity.json",
+      "publishedRelativePath": "review-core/candidate-v4/source-identity.json",
+      "bytes": 201523,
+      "sha256": "53c418f77dd3ac70f8670bfab369958a3bb61d97598710e81c37336faf67cb7f",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v3/source/internal/matchexpr/functions.go",
+      "publishedRelativePath": "review-core/candidate-v3/source/internal/matchexpr/functions.go",
+      "bytes": 2597,
+      "sha256": "e4184ccad55c4f6cf03ae8b1c3277ed8ab786968f855c726d84eca1e074774e6",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v3/source/internal/matchexpr/lower.go",
+      "publishedRelativePath": "review-core/candidate-v3/source/internal/matchexpr/lower.go",
+      "bytes": 10090,
+      "sha256": "a37c0040a656a8ca0cb938341602d3a6995bce401fa1e8c70b883e9a545aa6b4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/run_function_shapes.py",
+      "publishedRelativePath": "review-core/run_function_shapes.py",
+      "bytes": 3267,
+      "sha256": "6af127220fd2aa079bdfce0136ed7da1f72f98bfc97459e8b35b5d34186580a2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/run_scope_incremental.py",
+      "publishedRelativePath": "review-core/run_scope_incremental.py",
+      "bytes": 1865,
+      "sha256": "3f6e250949e7e77af8f6522c3fc187cb0f2e3ceaee7724d7f1aa53079d443f84",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/function-shapes/slice-pointer/transpile.stderr.log",
+      "publishedRelativePath": "review-core/candidate-v2/function-shapes/slice-pointer/transpile.stderr.log",
+      "bytes": 191,
+      "sha256": "8e7d191a404ce957ce9147990da6ce0c2312fe4f92e2becfb4cbc990c4eda1e4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/function-shapes/slice-parenthesized/transpile.stderr.log",
+      "publishedRelativePath": "review-core/candidate-v2/function-shapes/slice-parenthesized/transpile.stderr.log",
+      "bytes": 197,
+      "sha256": "2929de71317bc79ca02587c0dadfd3dfaa70f01235eee61e0b4515973aef5fc8",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/function-shapes/map-pointer-value/transpile.stderr.log",
+      "publishedRelativePath": "review-core/candidate-v2/function-shapes/map-pointer-value/transpile.stderr.log",
+      "bytes": 213,
+      "sha256": "4dd942d7624ce99a1ccfdce01f170f8f40c585ebc0751496c26493b6eebd3a63",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/function-shapes/map-pointer-key/transpile.stderr.log",
+      "publishedRelativePath": "review-core/candidate-v2/function-shapes/map-pointer-key/transpile.stderr.log",
+      "bytes": 236,
+      "sha256": "711120a2bbc49cdd9a25cf4f51dc0ce209daf8cf8655a43dae29fb36974f310a",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v2/function-shapes/array-pointer/transpile.stderr.log",
+      "publishedRelativePath": "review-core/candidate-v2/function-shapes/array-pointer/transpile.stderr.log",
+      "bytes": 191,
+      "sha256": "f3ae7b63c32959da688c956cf26ce73c07aa874dcd1c391c49aa61fd558ae2a2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v3/function-shapes/slice-pointer/transpile.stderr.log",
+      "publishedRelativePath": "review-core/candidate-v3/function-shapes/slice-pointer/transpile.stderr.log",
+      "bytes": 191,
+      "sha256": "8e7d191a404ce957ce9147990da6ce0c2312fe4f92e2becfb4cbc990c4eda1e4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v3/function-shapes/map-pointer-value/transpile.stderr.log",
+      "publishedRelativePath": "review-core/candidate-v3/function-shapes/map-pointer-value/transpile.stderr.log",
+      "bytes": 213,
+      "sha256": "4dd942d7624ce99a1ccfdce01f170f8f40c585ebc0751496c26493b6eebd3a63",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v3/function-shapes/array-pointer/transpile.stderr.log",
+      "publishedRelativePath": "review-core/candidate-v3/function-shapes/array-pointer/transpile.stderr.log",
+      "bytes": 191,
+      "sha256": "f3ae7b63c32959da688c956cf26ce73c07aa874dcd1c391c49aa61fd558ae2a2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/function-shapes/slice-pointer/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/function-shapes/slice-pointer/test.stdout.log",
+      "bytes": 86,
+      "sha256": "d9a37c00ef668ba6e832b28c82457828886220c0383518f2988fb3a3d8b7d874",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/function-shapes/slice-parenthesized/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/function-shapes/slice-parenthesized/test.stdout.log",
+      "bytes": 86,
+      "sha256": "ca3abf467eb8a5324ebe3d0f0e8a5f75da6d06d17a8eb66e18b0cfbd0ea51285",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/function-shapes/map-pointer-value/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/function-shapes/map-pointer-value/test.stdout.log",
+      "bytes": 86,
+      "sha256": "23e50ae0a6922742fb173f7460a68ec7797b8a2a38e0f5236aa3554774767e99",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/function-shapes/map-pointer-key/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/function-shapes/map-pointer-key/test.stdout.log",
+      "bytes": 86,
+      "sha256": "a89013ac7beb096ce9771f398982979e2cb4e7f89aac473529026ca44edb005e",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/function-shapes/array-pointer/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/function-shapes/array-pointer/test.stdout.log",
+      "bytes": 86,
+      "sha256": "6e4b006f6a6d822f3b3a8a2e7578ce832dc723497cc5fa67b51c06a07b922607",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/function-shapes/returned-real-function/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/function-shapes/returned-real-function/test.stdout.log",
+      "bytes": 86,
+      "sha256": "b9edafff11bde4147b507bbddaeb7dd5eb69d5efe5ca1785d3fd5f74a4d46b97",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/scope-incremental/closure-first/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/scope-incremental/closure-first/test.stdout.log",
+      "bytes": 86,
+      "sha256": "47afd1d12e470715af3032ad170fcecd0e3697dbad9ac9ad15b2fbda281ff18c",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/scope-incremental/closure-last/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/scope-incremental/closure-last/test.stdout.log",
+      "bytes": 86,
+      "sha256": "4c4dd78656ba9f40d5485a227722213324e482ed6e73c10be6db5df05cf20d7c",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/candidate-v4/scope-incremental/flow/test.stdout.log",
+      "publishedRelativePath": "review-core/candidate-v4/scope-incremental/flow/test.stdout.log",
+      "bytes": 548,
+      "sha256": "b7af287b3e991649e7cc6c4483596465d1a1936c57cf234dc3bc8b497fb9cb15",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/README.md",
+      "publishedRelativePath": "review-core/publication-core/README.md",
+      "bytes": 2542,
+      "sha256": "547a7e2b4225e39bf58b305bf4985af34e4e380d46d5c90a1215f8ab89e176e4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/array-pointer/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/array-pointer/assertions_test.go",
+      "bytes": 109,
+      "sha256": "37139175b63682180937366f8b1429e468e15481bf5e92d4d7f770622c52f2d9",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/array-pointer/native.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/array-pointer/native.go",
+      "bytes": 129,
+      "sha256": "ea4778451fa8ba412de208881798f1ba557f2fc8a9e07c4f3b7628ecc0bbd82e",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/array-pointer/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/array-pointer/probe.gox",
+      "bytes": 122,
+      "sha256": "49c451c208a62e839dac1f11b51d98d4e1b91702567cfd4ca4c05ddb46e974d2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/map-pointer-key/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/map-pointer-key/assertions_test.go",
+      "bytes": 152,
+      "sha256": "80396ab3c2fded5cb4d8fd1102eed9311aec28c70d93bf16e40c88c6f3124da2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/map-pointer-key/native.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/map-pointer-key/native.go",
+      "bytes": 129,
+      "sha256": "ea4778451fa8ba412de208881798f1ba557f2fc8a9e07c4f3b7628ecc0bbd82e",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/map-pointer-key/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/map-pointer-key/probe.gox",
+      "bytes": 136,
+      "sha256": "bda1ddb9cd72b9c79d051ea61991b46ada635ed2958e2a9e8845a63c5103d4df",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/map-pointer-value/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/map-pointer-value/assertions_test.go",
+      "bytes": 124,
+      "sha256": "262aa5e32c8ccfca38089a463a186809128e690de85ec4082d09647dd23a7031",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/map-pointer-value/native.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/map-pointer-value/native.go",
+      "bytes": 129,
+      "sha256": "ea4778451fa8ba412de208881798f1ba557f2fc8a9e07c4f3b7628ecc0bbd82e",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/map-pointer-value/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/map-pointer-value/probe.gox",
+      "bytes": 142,
+      "sha256": "064e4a657fdb2062e8badaf6d90382df8ec146f28ba79ab93dcee230e2c7eba8",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/returned-real-function/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/returned-real-function/assertions_test.go",
+      "bytes": 117,
+      "sha256": "eeb1487a8e0be4588121929c8396ab71ee9e6e8d5565aaae795d8b01e8f07459",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/returned-real-function/native.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/returned-real-function/native.go",
+      "bytes": 129,
+      "sha256": "ea4778451fa8ba412de208881798f1ba557f2fc8a9e07c4f3b7628ecc0bbd82e",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/returned-real-function/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/returned-real-function/probe.gox",
+      "bytes": 136,
+      "sha256": "24664586efc616ffac20ce77c86b93803f3afd12a2e7364588053d4c7385d3bd",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/slice-parenthesized/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/slice-parenthesized/assertions_test.go",
+      "bytes": 117,
+      "sha256": "c751cfee9a6b8dc7ac07689e5654e6407e9d1583c37be0ca9413b2ca4cf3fd82",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/slice-parenthesized/native.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/slice-parenthesized/native.go",
+      "bytes": 129,
+      "sha256": "ea4778451fa8ba412de208881798f1ba557f2fc8a9e07c4f3b7628ecc0bbd82e",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/slice-parenthesized/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/slice-parenthesized/probe.gox",
+      "bytes": 120,
+      "sha256": "b05cade172819dce5141cd867e73b609770c9139df53085d20b5536dddba5eb6",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/slice-pointer/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/slice-pointer/assertions_test.go",
+      "bytes": 120,
+      "sha256": "eec70a9af196155e347c4168bba83e2c1a2d32e57b8aef22049b5ca9f772677a",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/slice-pointer/native.go",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/slice-pointer/native.go",
+      "bytes": 129,
+      "sha256": "ea4778451fa8ba412de208881798f1ba557f2fc8a9e07c4f3b7628ecc0bbd82e",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/function-shapes/slice-pointer/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/function-shapes/slice-pointer/probe.gox",
+      "bytes": 120,
+      "sha256": "2677d2fcc909e6bc7d93ee9d48cdd603dd5605e9f161eec622f89a51fdb1d675",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/scope/closure-first/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/scope/closure-first/assertions_test.go",
+      "bytes": 116,
+      "sha256": "5c93043497c6db04bad0d8ffc739e3372a7dc740cc9db05f25713618b45f1f6c",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/scope/closure-first/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/scope/closure-first/probe.gox",
+      "bytes": 238,
+      "sha256": "71dafe9befb1a655a405ba6543391307ebdd3a3d4ce6d8c0661330f96969bd87",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/scope/closure-last/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/scope/closure-last/assertions_test.go",
+      "bytes": 116,
+      "sha256": "5c93043497c6db04bad0d8ffc739e3372a7dc740cc9db05f25713618b45f1f6c",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/scope/closure-last/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/scope/closure-last/probe.gox",
+      "bytes": 238,
+      "sha256": "cd205eb2e9bd4437d1b9b911673eb625476c17a9e81419a77819c4878de0d57c",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/scope/flow/assertions_test.go",
+      "publishedRelativePath": "review-core/publication-core/cases/scope/flow/assertions_test.go",
+      "bytes": 1541,
+      "sha256": "2e4064bdc697ec9b9c702f7c8db03b491315bfa828ffdfd3a2f9fd67005b3580",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases/scope/flow/probe.gox",
+      "publishedRelativePath": "review-core/publication-core/cases/scope/flow/probe.gox",
+      "bytes": 2370,
+      "sha256": "056c066bbe751f885a5893fe4a4c7b102fdf8eb1c1328257dead64be5843ca8b",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/cases.json",
+      "publishedRelativePath": "review-core/publication-core/cases.json",
+      "bytes": 3591,
+      "sha256": "4e4b430a7603e86d0cda6683c865a585049be6965ecb30a827a2d4cf6785fa9b",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-core/reproduce.py",
+      "publishedRelativePath": "review-core/publication-core/reproduce.py",
+      "bytes": 4846,
+      "sha256": "1d98c7ad8969136db6f764a28eba4c59777f78a8db3310d7fa9722cbc343e06d",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-review-20261006/publication-manifest.json",
+      "publishedRelativePath": "review-core/publication-manifest.json",
+      "bytes": 23501,
+      "sha256": "95f4a4925965ffea6357d43edd8553f4f649399eb09c74e61b9bfae6423a17d0",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/review.md",
+      "publishedRelativePath": "review-origin/review.md",
+      "bytes": 4969,
+      "sha256": "7c2b332a9a12fb6205706ed7dfc81faabc1a8f1438648616c376d0360f607898",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/review.json",
+      "publishedRelativePath": "review-origin/review.json",
+      "bytes": 4224,
+      "sha256": "1a308c38a5cf4017726a2ed78fbe5e3c5e7e55cebc8f3c6aeb6a0bcc9679f7b6",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/f2d7a39-source-manifest.json",
+      "publishedRelativePath": "review-origin/f2d7a39-source-manifest.json",
+      "bytes": 1781,
+      "sha256": "98641502533c4d2bede71c03aa7d58ff2604880423e9016e890af308a08714f4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/final-observations.json",
+      "publishedRelativePath": "review-origin/final-observations.json",
+      "bytes": 16340,
+      "sha256": "5bb96692c336eafbc91591f70c9001bdebd19bbf5d909640101ab0c8987d74e3",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/f2d7a39-probe.log",
+      "publishedRelativePath": "review-origin/f2d7a39-probe.log",
+      "bytes": 122,
+      "sha256": "1c7c24e429d7613701425350662786b9cb6294f31a17d9ee27f7ed624d283bd7",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/mixed-map-verification.json",
+      "publishedRelativePath": "review-origin/mixed-map-verification.json",
+      "bytes": 750,
+      "sha256": "a9640e0ca1f65d6b36d7dcf29027f999ca8ebef28bcef910d5072cecdc12e030",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/pending-type-name-control.json",
+      "publishedRelativePath": "review-origin/pending-type-name-control.json",
+      "bytes": 4085,
+      "sha256": "94fb4b743f4c2f25e41e867ef72c420e7b84c8c3921ed6ae2279a3f5ab56ac60",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/actual-macro-results.json",
+      "publishedRelativePath": "review-origin/actual-macro-results.json",
+      "bytes": 14115,
+      "sha256": "9f99d2e89eb3766f841bc2ab8b80fe812ce4a0297f0c0e2ddb38d82dc9287887",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/actual-macro-verified.json",
+      "publishedRelativePath": "review-origin/actual-macro-verified.json",
+      "bytes": 2722,
+      "sha256": "3c0808c40a390a92fcca9ed7788cdb06bda5149d7b8b3ab1fda7c2b6f418bb96",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/results.json",
+      "publishedRelativePath": "review-origin/results.json",
+      "bytes": 28807,
+      "sha256": "af317b48fee38dfa26c6292450a0a73fbc287327b590ff84193761e7807aa8b5",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/runtime.json",
+      "publishedRelativePath": "review-origin/runtime.json",
+      "bytes": 994,
+      "sha256": "af7eb1f60066b60e62da83a79637dc1e3a25ade40d9688ef85ef48dc932cea24",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/runtime-with-module.json",
+      "publishedRelativePath": "review-origin/runtime-with-module.json",
+      "bytes": 692,
+      "sha256": "4cf1ba42db8a383af9d029918a70dc42a8724aebbcfd6bc847385a03b712b47f",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/review-ee5949d.json",
+      "publishedRelativePath": "review-origin/review-ee5949d.json",
+      "bytes": 746,
+      "sha256": "b99a01365b48eed706da5320102aa7fa0d14a5a3dc8323600def6184c529e5a1",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/verify_mixed.py",
+      "publishedRelativePath": "review-origin/verify_mixed.py",
+      "bytes": 2572,
+      "sha256": "a481a8458ff616d4c0046d2ac6b3906d7b3e5284be5bfc1d1f78c63928957124",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/ast_ranges.go",
+      "publishedRelativePath": "review-origin/ast_ranges.go",
+      "bytes": 596,
+      "sha256": "84f07f1269a0ecbd15c39745d5c4854a1c144da04c56b18b56c4a9522a1978a2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/final_followup_probe.py",
+      "publishedRelativePath": "review-origin/final_followup_probe.py",
+      "bytes": 4328,
+      "sha256": "23491b7d3816184cf953201592bb8822f44a9fbc6ea4a471aa16ac96f9be12e2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-origin-review-20261006/final_probe.py",
+      "publishedRelativePath": "review-origin/final_probe.py",
+      "bytes": 3908,
+      "sha256": "20adacf93f51917e61e5a4fe3b5f8a65191c40d2533d05039c758645f68fd1e0",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/acceptance-race.log",
+      "publishedRelativePath": "acceptance/acceptance-race.log",
+      "bytes": 23193,
+      "sha256": "1063293f16dd3982a38e87565bf69260d75d08fd3a174e46478580a025a307c6",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/acceptance.patch",
+      "publishedRelativePath": "acceptance/acceptance.patch",
+      "bytes": 21594,
+      "sha256": "cc7e10d2c218b7f87735ed7462782b25a558b067be6c2787e6bbef1ceeeaf9d9",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/baseline-final.log",
+      "publishedRelativePath": "acceptance/baseline-final.log",
+      "bytes": 1126,
+      "sha256": "23a211224b4bc4dc6969ffd9b4aa8f5469454ca70e0410f77ae585eabb42c11f",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/baseline.log",
+      "publishedRelativePath": "acceptance/baseline.log",
+      "bytes": 1126,
+      "sha256": "290ad9a93d32d1d88893e43f8af9f5646aeff12387ca295ce0ddfc774db64ccd",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/candidate-1-state.json",
+      "publishedRelativePath": "acceptance/candidate-1-state.json",
+      "bytes": 805,
+      "sha256": "57789499578ed1b8f7b98d2cbee18c9f5d2577d4ff657c249c76c4bda6a201e1",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/candidate-1.log",
+      "publishedRelativePath": "acceptance/candidate-1.log",
+      "bytes": 16568,
+      "sha256": "5d2c759d8ea7f842e341d3af98019189216fa0503fca2f2113988baf616d5723",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/candidate-business-2.log",
+      "publishedRelativePath": "acceptance/candidate-business-2.log",
+      "bytes": 1111,
+      "sha256": "ce4a5a9aef345f2c23c9a08ccc10893f9ef3b74016741e44cf611fd227b3975a",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/candidate-business-3.log",
+      "publishedRelativePath": "acceptance/candidate-business-3.log",
+      "bytes": 1103,
+      "sha256": "15a234d3fc1dc7af39032fd5a07e5d9f9bb10dd204e3de0e88b1b09499ec5d09",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/candidate-business-4.log",
+      "publishedRelativePath": "acceptance/candidate-business-4.log",
+      "bytes": 1286,
+      "sha256": "849651885863e4047f64fc17e6ff83eb66d361e859b96ff40aa7868ba10cd810",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/candidate-business-5.log",
+      "publishedRelativePath": "acceptance/candidate-business-5.log",
+      "bytes": 2063,
+      "sha256": "1cacc83a0103f7780b65ea395a2ea0453fe6e6169d94f7aae789a284a294dd79",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/candidate-reject-2.log",
+      "publishedRelativePath": "acceptance/candidate-reject-2.log",
+      "bytes": 11292,
+      "sha256": "34ed6042aa544e2cc382f248dd66eb4f715f405c915d73cb9897a274860297d8",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/evidence.json",
+      "publishedRelativePath": "acceptance/evidence.json",
+      "bytes": 10004,
+      "sha256": "4f548c514fde47a23e637b54322e6046d5aff165640cd61bb59864b3d3970652",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/flows-lowered.go",
+      "publishedRelativePath": "acceptance/flows-lowered.go",
+      "bytes": 7050,
+      "sha256": "08487b6a98a791d767f280a1e46f71c47f392a8365c7cb03cc916164382f7138",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/match-unary-composite/acceptance/flows.gox",
+      "publishedRelativePath": "acceptance/flows.gox",
+      "bytes": 3402,
+      "sha256": "bda25b2b07a2f1059c13d92743816ae044bc901b023834120511ca110024591f",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-website-readonly-review-20261006.json",
+      "publishedRelativePath": "website-independent-review.json",
+      "bytes": 6621,
+      "sha256": "b597094148a573e6e9a83b798294f6c937e0affad868e87b71078579ee748779",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-web-small-review-nd6xozyk/results.json",
+      "publishedRelativePath": "website-independent-native-results.json",
+      "bytes": 1604,
+      "sha256": "6cbeb3613510d40137d57837f1f98cbe7047e8ee0134366aae2470f351091157",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/tmp/goxide-a04-publication-review.json",
+      "publishedRelativePath": "publication-review.json",
+      "bytes": 2940,
+      "sha256": "aacca792b217486f5b23f15e3f1c5bec9bb9579f09c3b2bd0a0b55bb8bc5de23",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/summary.json",
+      "publishedRelativePath": "website/summary.json",
+      "bytes": 172409,
+      "sha256": "1d65c85f5f7b2b323416bec48936b58a4e142c8ad1e81860da44b620404a372c",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/identity.json",
+      "publishedRelativePath": "website/identity.json",
+      "bytes": 5255,
+      "sha256": "6475dae423ce5e66b74e59e23318d3531c451325e0342d8c5cd0915aff318cf3",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/request.json",
+      "publishedRelativePath": "website/request.json",
+      "bytes": 557,
+      "sha256": "17266e89d1250846104973e5a28c9951558fbbc93cce8c516fce3ad00ace4110",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/commands.json",
+      "publishedRelativePath": "website/commands.json",
+      "bytes": 158469,
+      "sha256": "5bf567271998d1755af1049512678d67e632feea49070f43b4829154001d4fcb",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/source-inputs.json",
+      "publishedRelativePath": "website/source-inputs.json",
+      "bytes": 205138,
+      "sha256": "35a1b03dfca684e9eb522625b670f9dc6405c491c21eda7d91c853b6619b83b5",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/current-inputs.json",
+      "publishedRelativePath": "website/current-inputs.json",
+      "bytes": 205138,
+      "sha256": "35a1b03dfca684e9eb522625b670f9dc6405c491c21eda7d91c853b6619b83b5",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/baseline-inputs.json",
+      "publishedRelativePath": "website/baseline-inputs.json",
+      "bytes": 174117,
+      "sha256": "04ce53ce26cf08e0fa18e81f31d532e5f98d29e2362d63813a272f13a659bd40",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/playwright-inputs.json",
+      "publishedRelativePath": "website/playwright-inputs.json",
+      "bytes": 92942,
+      "sha256": "98ea67a66687e34f5effe0c5653f7d2b9b3d004981e7f3b39f670488c039a14d",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/qa-result.json",
+      "publishedRelativePath": "website/qa-result.json",
+      "bytes": 5595,
+      "sha256": "d4f3b23e26d4128421bafd2c4ee87b566edfa514b9989ff6c649cc1e83a62dc3",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/catalog-qa-result.json",
+      "publishedRelativePath": "website/catalog-qa-result.json",
+      "bytes": 540,
+      "sha256": "ea9aa084ea0d5a74e0ce4df33b9e22fd3354bf3f3de6642cc0f3c9b1a072d402",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/native/binary-identities.json",
+      "publishedRelativePath": "website/native/binary-identities.json",
+      "bytes": 3007,
+      "sha256": "319a0e5f9da2068813977b28717464e420b2e8d9226b84e58abb9b128c3112ed",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/native/origin-diagnostics.json",
+      "publishedRelativePath": "website/native/origin-diagnostics.json",
+      "bytes": 22719,
+      "sha256": "ed30394f6d4fa42cb429225d0adb4dd2f519dbd1ad1e7c84107ce767aac1255b",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/native/runtime-parity.json",
+      "publishedRelativePath": "website/native/runtime-parity.json",
+      "bytes": 2100,
+      "sha256": "db4fcfa6ec752a8c0c117983bee64f1647c5e822757328f743774654d212545b",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/native/successful-go-parity.json",
+      "publishedRelativePath": "website/native/successful-go-parity.json",
+      "bytes": 17281,
+      "sha256": "def7ee182c9c9b627b6eb8b49913112f1accf7caa23074a8b40a24c8c0b833b9",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/native/summary.json",
+      "publishedRelativePath": "website/native/summary.json",
+      "bytes": 514,
+      "sha256": "240b2c369f7302e556c98d8cd3d374b5dc4f5a7e93b163dafeff4544e34f1ff4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/native/a04/observations.json",
+      "publishedRelativePath": "website/native/a04/observations.json",
+      "bytes": 13391,
+      "sha256": "20191c49956b6fde449399bc8d20471159092097ab658318132f76bb2f031306",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/native/a04/runtime.json",
+      "publishedRelativePath": "website/native/a04/runtime.json",
+      "bytes": 1957,
+      "sha256": "4ce7244d76a2eac458e89bd6126ec747d4216224b1ea7517d451dd770e33f9d8",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/native/a04/summary.json",
+      "publishedRelativePath": "website/native/a04/summary.json",
+      "bytes": 230,
+      "sha256": "cd22b7a1bb41d715d80c8f2aae77fd92867a0a85443c23ae1bc1adf8cdb6b573",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/current/website/qa-artifacts/a04-observations.json",
+      "publishedRelativePath": "website/current/website/qa-artifacts/a04-observations.json",
+      "bytes": 139325,
+      "sha256": "f7e3e35b3d5ad2bedfd2db7a98489a1b5de567a421d3b9cf59a3f31db3d6e07b",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/current/website/qa-artifacts/a04-worker-observations.json",
+      "publishedRelativePath": "website/current/website/qa-artifacts/a04-worker-observations.json",
+      "bytes": 230869,
+      "sha256": "eb3911f0f977f2c6883d760930c6c23113ad156029b28901409fd628ed690fd4",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/current/website/qa-artifacts/origin-diagnostics.json",
+      "publishedRelativePath": "website/current/website/qa-artifacts/origin-diagnostics.json",
+      "bytes": 8241,
+      "sha256": "bcdbda1542af980f3a5e5233dba28976db283cf7d0f9441b5e185d8c0c45addd",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/start.json",
+      "publishedRelativePath": "start.json",
+      "bytes": 840,
+      "sha256": "5c3c478a861b48d6c4c51303aa5a32390ddd80fc15235308b66fd2db6f196e3f",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/environment-verification.json",
+      "publishedRelativePath": "environment-verification.json",
+      "bytes": 1287,
+      "sha256": "ea03a1548587f95308001d820d1c8d42db966d65cea9a3a35273b4df07b6d280",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/input-integrity-proof.json",
+      "publishedRelativePath": "input-integrity-proof.json",
+      "bytes": 1199,
+      "sha256": "dfbe0bb20e2023dfe9faa1669aa883042f4ad449fc3a7c2302a97e3f28389384",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/naming-audit.json",
+      "publishedRelativePath": "naming-audit.json",
+      "bytes": 246,
+      "sha256": "db63980368f4376d2ddff7b4a323bad1922cf5e70cf5757f881ba574dfd900e7",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/full-gates-summary.json",
+      "publishedRelativePath": "full-gates-summary.json",
+      "bytes": 14848,
+      "sha256": "d842b6907a5a71b1b6796eb33e29cab4c6e403f185590705a84241123cbf6bed",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/vet.command.json",
+      "publishedRelativePath": "vet.command.json",
+      "bytes": 715,
+      "sha256": "06b33df473c87f0f1a2dc1513c8c94161e1ed59e7110a7687059135ee4191dc2",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/vet.stdout",
+      "publishedRelativePath": "vet.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/vet.stderr",
+      "publishedRelativePath": "vet.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/design.command.json",
+      "publishedRelativePath": "design.command.json",
+      "bytes": 767,
+      "sha256": "3f434ddfffa07a63fa8343de21d7fc694f1e4670c97aa389dbbb0d29514c8059",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/design.stdout",
+      "publishedRelativePath": "design.stdout",
+      "bytes": 8314,
+      "sha256": "b0b13d36690de4908af4b14c3283b2c343ab236a4f17f5b996b5313370de2b0c",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/design.stderr",
+      "publishedRelativePath": "design.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/website.command.json",
+      "publishedRelativePath": "website.command.json",
+      "bytes": 1392,
+      "sha256": "7b45e265617c776839111487d5aa6eddf681df8dbea452201ea9c375216d0f40",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/publication-package-proof.json",
+      "publishedRelativePath": "publication-package-proof.json",
+      "bytes": 2795,
+      "sha256": "387f34690f37fcd7a7df9ca6a79428c0cf3eae8bb1d913ddaddc467704c49764",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/publication-diff-check.json",
+      "publishedRelativePath": "publication-diff-check.json",
+      "bytes": 2615,
+      "sha256": "62c88ecc4b41802f08872e867ea04a1a73f0f702eda48fc4e4e62a60a1c3c2ed",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/publication-docs.stdout",
+      "publishedRelativePath": "publication-docs.stdout",
+      "bytes": 323,
+      "sha256": "457a26005798f3e88a6327b1563503df501e255f1f06a71178bbdae74c6adddc",
+      "copyPolicy": "verbatim"
+    },
+    {
+      "source": "/private/tmp/goxide-a04-20261006-ukafjzho/final-gates/original-checkouts-final.json",
+      "publishedRelativePath": "original-checkouts-final.json",
+      "bytes": 1245,
+      "sha256": "b4419fa62fa8654ed910144f2dbd512e0e61363a2d6c3bd9d6291fb6d3d7f6b6",
+      "copyPolicy": "verbatim"
+    }
+  ]
+}

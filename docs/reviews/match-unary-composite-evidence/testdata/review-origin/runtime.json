@@ -1,0 +1,10 @@
+{
+  "case": "nested-user-function-question-boundary",
+  "source": "package main\nenum E { A, B, }\nvar trace string\nfunc none()Option[int]{trace+=\"N\";return Option[int]::None}\nfunc outer(e E)Option[int]{\n inner:=func()Option[int]{\n  trace+=\"I\"\n  xs:=[]int{match e{E::A=>none()?,E::B=>2}}\n  trace+=\"bad\"\n  return Option[int]::Some(xs[0])\n }\n _=inner()\n trace+=\"O\"\n return Option[int]::Some(9)\n}\nfunc main(){\n got:=outer(E::A)\n match got {Option[int]::Some(n)=>{if n!=9{panic(\"outer value\")}},Option[int]::None=>{panic(\"wrong user frame\")},}\n if trace!=\"INO\"{panic(trace)}\n}\n",
+  "file": "/tmp/goxide-a04-origin-review-20261006/fixtures/nested-user-function.gox",
+  "result": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "offline export data for github.com/goxide-lang/std/sum: exit status 1: no required module provides package github.com/goxide-lang/std/sum: go.mod file not found in current directory or any parent directory; see 'go help modules'\n"
+  }
+}

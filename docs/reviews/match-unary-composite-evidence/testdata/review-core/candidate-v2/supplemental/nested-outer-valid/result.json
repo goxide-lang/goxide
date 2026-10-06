@@ -1,0 +1,25 @@
+{
+  "id": "nested-outer-valid",
+  "sourceSha256": "3318cc45bcd5129eac0ebf92b8201754060e8f0c26aa17426da5c18ed28951ff",
+  "transpile": {
+    "argv": [
+      "/tmp/goxide-a04-review-20261006/candidate-v2/goxide",
+      "transpile",
+      "-o",
+      "/tmp/goxide-a04-review-20261006/candidate-v2/supplemental/nested-outer-valid/generated",
+      "/tmp/goxide-a04-review-20261006/supplemental-cases/nested-outer-valid"
+    ],
+    "exitCode": 0
+  },
+  "runtime": {
+    "argv": [
+      "/opt/homebrew/bin/go",
+      "test",
+      "-race",
+      "-count=1",
+      "-v",
+      "."
+    ],
+    "exitCode": 0
+  }
+}

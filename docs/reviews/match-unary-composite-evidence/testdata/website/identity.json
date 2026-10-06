@@ -1,0 +1,132 @@
+{
+  "validationCommit": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+  "validationTree": "f9fc7584e7fa35af250f38160a6083ae8a95b546",
+  "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+  "compilerDigest": "aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8",
+  "baselineCommit": "fd8380c39876c96441857a737be8e32c322a0467",
+  "sourceCheckout": "/private/tmp/goxide-a04-20261006-ukafjzho/final-checkout",
+  "sourceStatusBefore": "",
+  "sourceInputs": "source-inputs.json",
+  "sourceInputsSha256": "35a1b03dfca684e9eb522625b670f9dc6405c491c21eda7d91c853b6619b83b5",
+  "toolVersions": {
+    "go": "go version go1.27.1 darwin/arm64",
+    "node": "v26.9.0",
+    "chromium": "Google Chrome for Testing 145.0.7632.6",
+    "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+    "git": "git version 2.55.0"
+  },
+  "goEnvironment": {
+    "CGO_ENABLED": "1",
+    "GOARCH": "arm64",
+    "GOCACHE": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/final-go-build",
+    "GOMODCACHE": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/go-mod",
+    "GONOPROXY": "none",
+    "GONOSUMDB": "*.17usoft.com",
+    "GOOS": "darwin",
+    "GOPRIVATE": "",
+    "GOPROXY": "off",
+    "GOROOT": "/opt/homebrew/Cellar/go/1.27.1/libexec",
+    "GOSUMDB": "sum.golang.org"
+  },
+  "executables": {
+    "go": {
+      "path": "/opt/homebrew/Cellar/go/1.27.1/libexec/bin/go",
+      "sha256": "548608a910c46de32c65a3934f461b1787acf6ddd371044826068d8503b8509b"
+    },
+    "node": {
+      "path": "/opt/homebrew/Cellar/node/26.9.0/bin/node",
+      "sha256": "91ed66b8cd139609427a3e9d93518dd3b0d5407c737fc9a265bfd991ec623d8a"
+    },
+    "chromium": {
+      "path": "/Users/hxsf/Library/Caches/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "sha256": "a46b3b1e63163fa2d2437fb6ae967cb5a73b50050bca32f1964e6129b6228244"
+    }
+  },
+  "playwright": {
+    "playwright": {
+      "version": "1.58.2",
+      "packageSha256": "718c91812946dcfbb4b724cfa0084ee3be205c571df09094f218bc4571f43c2b",
+      "input": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/node_modules/playwright"
+    },
+    "playwright-core": {
+      "version": "1.58.2",
+      "packageSha256": "16a25dbd7368a87af8b58a45c6216b9cec5a91a72cf704533344701997ebde22",
+      "input": "/private/tmp/goxide-a04-20261006-ukafjzho/environment/node_modules/playwright-core"
+    }
+  },
+  "packageLockSha256": "89632e9f79b198f01d5258d26d77d2a4c859682d11c8ac18cf008575bd57fea2",
+  "goLicense": {
+    "path": "/opt/homebrew/Cellar/go/1.27.1/LICENSE",
+    "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+  },
+  "environment": {
+    "GOTOOLCHAIN": "local",
+    "GOWORK": "off",
+    "GOFLAGS": "",
+    "GOPROXY": "off",
+    "GONOPROXY": "none",
+    "TMPDIR": "/private/tmp/goxide-a04-20261006-ukafjzho/final-run/tmp"
+  },
+  "matrix": {
+    "fixtures": 105,
+    "legacyFixtures": 97,
+    "a04Fixtures": 8,
+    "examples": 11,
+    "legacyExamples": 10,
+    "a04Examples": 1,
+    "nativeDiagnosticObservations": 52,
+    "a04NativeObservations": 32,
+    "successfulGoComparisons": 33,
+    "pairedNativePrograms": 5,
+    "a04CurrentNativePrograms": 5
+  },
+  "dependencyInstall": "none; pre-existing cached Go dependencies and installed tools only",
+  "deployment": "none",
+  "snapshotInputs": {
+    "current": "35a1b03dfca684e9eb522625b670f9dc6405c491c21eda7d91c853b6619b83b5",
+    "baseline": "04ce53ce26cf08e0fa18e81f31d532e5f98d29e2362d63813a272f13a659bd40",
+    "playwright": "98ea67a66687e34f5effe0c5653f7d2b9b3d004981e7f3b39f670488c039a14d"
+  },
+  "build": {
+    "commit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+    "websiteCommit": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+    "compilerDigest": "aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8",
+    "wasmSha256": "6ca9c3c7a36788fac832082bc034afb1f5193d9b1d2aabd3f52e178f7808abfb",
+    "exportsDigest": "64cabea20fc79e847825506245fcc0c4d9649762d873908804c29fbad8a89582",
+    "exportTarget": {
+      "GOARCH": "arm64",
+      "GOOS": "darwin"
+    },
+    "toolchain": "go version go1.27.1 darwin/arm64",
+    "publicLibraries": [
+      {
+        "module": "github.com/goxide-lang/std",
+        "commit": "ce5bccb4ff9c7fb96b7f192a3a263051590d9288",
+        "version": "v0.0.0-20261004173304-ce5bccb4ff9c",
+        "sum": "h1:ZBIUbtbKxIDJeeHQd1UuwwJ0gzkTnqcRXUfpQD6sMQQ=",
+        "goModSum": "h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ="
+      },
+      {
+        "module": "github.com/goxide-lang/serde",
+        "commit": "a1b791e96d660c6be620e110c566a9a171631b7e",
+        "version": "v0.0.0-20261004120911-a1b791e96d66",
+        "sum": "h1:EelklFYrLNvw20lVNEAO3IWG1Hac7tF/428sTORQKBU=",
+        "goModSum": "h1:m4z9CAWRl/5hQN6+9RQ7Sfr/gK9wcWk+ANoqbSxlW0g="
+      }
+    ],
+    "metadataSchema": 8,
+    "abiVersions": {
+      "enum": 8,
+      "reference": 3,
+      "use": 2,
+      "sum": 2
+    },
+    "wasmBytes": 16349088
+  },
+  "sourceStatusAfter": "",
+  "sourceHeadAfter": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+  "snapshotStatusAfter": "",
+  "snapshotHeadAfter": "0d814dda56009af89ab60e77fcf77ef32d3a63bd",
+  "baselineStatusAfter": "",
+  "baselineHeadAfter": "fd8380c39876c96441857a737be8e32c322a0467"
+}

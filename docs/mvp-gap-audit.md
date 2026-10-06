@@ -269,3 +269,18 @@ Linux未运行、网站未部署；托管CI按最终准确SHA单独查询，查�
 [交付报告](reviews/website-validation-reproducibility-20261006.md)。
 A04 下一批限定 unary/composite match 与真实业务组合验收；其他工程切片及待决合同继续
 在账。A26/A28 全项、实际网站部署、Linux/托管 CI 与 MVP 整项不因此关闭。
+
+
+## 2026-10-06 接续：A04 unary/composite 单值组合
+
+合同先行 `f1da21c`，编译器生产 pin `f2d7a39c4b81a00fff191c89ac847b09af6a62e9`，
+网站/工具 `0d814dda56009af89ab60e77fcf77ef32d3a63bd`，后续报告属于文档提交。
+只关闭标量 `+ - ! ^` 与普通 struct/slice/array/map 的已有单值上下文组合。
+JSON→enum→match→业务对象→Clone/Debug→JSON、原帧/原类型/顺序/权限与负例，
+完整 Mac race 605 顶层/1338 子测试、vet/design、独立审查及仓内网站七阶段通过，见
+[交付报告](reviews/match-unary-composite-20261006.md)。
+原 97/10 网站输入逐字节保留，新 8 fixture/1 示例单独验证，不冒充旧编译器支持新语法。
+引用/收发 unary、复杂 postfix/receiver、go/defer/control 头、package initializer、
+多结果、复杂 LHS、block arm、不可命名类型及 builtin/type-conversion call 等仍为 E。
+tuple/struct variant 和手写协议未新定语义；Linux/托管 CI 未运行、网站未部署，
+公开库 ABI 不变，A04/MVP 整项不关闭。

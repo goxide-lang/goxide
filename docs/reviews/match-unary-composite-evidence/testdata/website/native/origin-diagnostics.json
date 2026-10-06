@@ -1,0 +1,418 @@
+[
+  {
+    "name": "reject_macro_origin_synthetic_new",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "bf3cdec5865293f7feba41a75487868abf207600a14b9be953bc02c89afc8fd5",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_new",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "bf3cdec5865293f7feba41a75487868abf207600a14b9be953bc02c89afc8fd5",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_new",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "932bb3d6d5d0199af38be1ba7c72b1f4d3d3733624d5011c62d0c67b730a2495",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_new",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "932bb3d6d5d0199af38be1ba7c72b1f4d3d3733624d5011c62d0c67b730a2495",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_context",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "12df92fb63ea5d4611be3a20095227111f756881540f8a4d15ab05c9481cf327",
+    "diagnostic": "playground.gox:7:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:8:1; invoked at playground.gox:9:28\n  macro inner defined at playground.gox:7:1; invoked at playground.gox:8:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_context",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "12df92fb63ea5d4611be3a20095227111f756881540f8a4d15ab05c9481cf327",
+    "diagnostic": "playground.gox:7:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:8:1; invoked at playground.gox:9:28\n  macro inner defined at playground.gox:7:1; invoked at playground.gox:8:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_context",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "75d763cf364f3aee0f2b4b396374d2cde97edac23ad5f4437a394f7d872dae19",
+    "diagnostic": "playground.gox:7:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:8:1; invoked at playground.gox:9:28\n  macro inner defined at playground.gox:7:1; invoked at playground.gox:8:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_context",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "75d763cf364f3aee0f2b4b396374d2cde97edac23ad5f4437a394f7d872dae19",
+    "diagnostic": "playground.gox:7:41: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:8:1; invoked at playground.gox:9:28\n  macro inner defined at playground.gox:7:1; invoked at playground.gox:8:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_make",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "c1b3430bf9fe25a5bf0d2c480e75b09f717df61450ca09ae8260f607bfdc863a",
+    "diagnostic": "playground.gox:2:42: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_make",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "c1b3430bf9fe25a5bf0d2c480e75b09f717df61450ca09ae8260f607bfdc863a",
+    "diagnostic": "playground.gox:2:42: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_make",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "c79595e1b930b8e97a7b9fecd1c87da9755a564d45f62722e4366d4fcc6155d0",
+    "diagnostic": "playground.gox:2:42: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_make",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "c79595e1b930b8e97a7b9fecd1c87da9755a564d45f62722e4366d4fcc6155d0",
+    "diagnostic": "playground.gox:2:42: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_syntax",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "0c2097bc976f4b41a93914d50efaa8f199b0ad8e88d3825b8bdd0cf010cc95fa",
+    "diagnostic": "playground.gox:2:37: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]\n  macro outer defined at playground.gox:3:1; invoked at playground.gox:5:28\n  macro inner defined at playground.gox:2:1; invoked at playground.gox:3:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_syntax",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "0c2097bc976f4b41a93914d50efaa8f199b0ad8e88d3825b8bdd0cf010cc95fa",
+    "diagnostic": "playground.gox:2:37: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]\n  macro outer defined at playground.gox:3:1; invoked at playground.gox:5:28\n  macro inner defined at playground.gox:2:1; invoked at playground.gox:3:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_syntax",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "c92da5032d423403f236b00088bdbb17ec702d635e240e6c25dfc90e17ba6227",
+    "diagnostic": "playground.gox:2:37: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]\n  macro outer defined at playground.gox:3:1; invoked at playground.gox:5:28\n  macro inner defined at playground.gox:2:1; invoked at playground.gox:3:37"
+  },
+  {
+    "name": "reject_macro_origin_synthetic_syntax",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "c92da5032d423403f236b00088bdbb17ec702d635e240e6c25dfc90e17ba6227",
+    "diagnostic": "playground.gox:2:37: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]\n  macro outer defined at playground.gox:3:1; invoked at playground.gox:5:28\n  macro inner defined at playground.gox:2:1; invoked at playground.gox:3:37"
+  },
+  {
+    "name": "reject_macro_origin_real_new",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "d3c527b4421a3cd724a0c70e2635c77c871a44cea118425d8976a63ba707e9ce",
+    "diagnostic": "playground.gox:4:34: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [194,195))\n  macro outer defined at playground.gox:5:1; invoked at playground.gox:6:19\n  macro inner defined at playground.gox:4:1; invoked at playground.gox:5:30"
+  },
+  {
+    "name": "reject_macro_origin_real_new",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "d3c527b4421a3cd724a0c70e2635c77c871a44cea118425d8976a63ba707e9ce",
+    "diagnostic": "playground.gox:4:34: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [194,195))\n  macro outer defined at playground.gox:5:1; invoked at playground.gox:6:19\n  macro inner defined at playground.gox:4:1; invoked at playground.gox:5:30"
+  },
+  {
+    "name": "reject_macro_origin_real_new",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "ec9771ded513c5f01168f2b6a826bdc8f7c3799e3f17c0e2cdfa726827b1b432",
+    "diagnostic": "playground.gox:4:34: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [197,198))\n  macro outer defined at playground.gox:5:1; invoked at playground.gox:6:19\n  macro inner defined at playground.gox:4:1; invoked at playground.gox:5:30"
+  },
+  {
+    "name": "reject_macro_origin_real_new",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "ec9771ded513c5f01168f2b6a826bdc8f7c3799e3f17c0e2cdfa726827b1b432",
+    "diagnostic": "playground.gox:4:34: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [197,198))\n  macro outer defined at playground.gox:5:1; invoked at playground.gox:6:19\n  macro inner defined at playground.gox:4:1; invoked at playground.gox:5:30"
+  },
+  {
+    "name": "reject_macro_origin_real_make",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "66fe48460717e168aeabed36af2ff46b90e434a7358576fa1ffcc13b3cca7fac",
+    "diagnostic": "playground.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [47,48))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_make",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "66fe48460717e168aeabed36af2ff46b90e434a7358576fa1ffcc13b3cca7fac",
+    "diagnostic": "playground.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [47,48))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_make",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "02bb552ac1f34eb477e292979196406f6d36f49d5e210d2561cfad792ea1e6da",
+    "diagnostic": "playground.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [48,49))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_make",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "02bb552ac1f34eb477e292979196406f6d36f49d5e210d2561cfad792ea1e6da",
+    "diagnostic": "playground.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [48,49))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_syntax",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "2bc83cd8b478bc45f612e4cad8b24722d7fb47aaf4021d0a79ef6683406d087a",
+    "diagnostic": "playground.gox:2:30: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [42,43))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_syntax",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "2bc83cd8b478bc45f612e4cad8b24722d7fb47aaf4021d0a79ef6683406d087a",
+    "diagnostic": "playground.gox:2:30: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [42,43))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_syntax",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "e718e39a168a8f5adf107ed2b64e3868b9a67324e9a6e4dd5dc611b3be38c413",
+    "diagnostic": "playground.gox:2:30: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [43,44))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_real_syntax",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "e718e39a168a8f5adf107ed2b64e3868b9a67324e9a6e4dd5dc611b3be38c413",
+    "diagnostic": "playground.gox:2:30: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [43,44))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:3:19"
+  },
+  {
+    "name": "reject_macro_origin_capture_question",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "7697488d39c1e93beafca4a948cd9e653296ac8b98d52f556c44e6982c35628e",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation type does not support captured types (source span [53,54))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_capture_question",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "7697488d39c1e93beafca4a948cd9e653296ac8b98d52f556c44e6982c35628e",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation type does not support captured types (source span [53,54))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_capture_question",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "7bfcad746f59fb5a7517e26559474cc2cc45c4b2910cbf1819f68824bb3039d4",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation type does not support captured types (source span [54,55))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_origin_capture_question",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "7bfcad746f59fb5a7517e26559474cc2cc45c4b2910cbf1819f68824bb3039d4",
+    "diagnostic": "playground.gox:2:41: macro: macro allocation type does not support captured types (source span [54,55))\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_ast_question",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "98cacf1b57f8a574b3963927c80ff01cc392f81f827e81abac02c6967cc979cb",
+    "diagnostic": "playground.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_ast_question",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "98cacf1b57f8a574b3963927c80ff01cc392f81f827e81abac02c6967cc979cb",
+    "diagnostic": "playground.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_ast_question",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "befb4d7898ec16d21f9df76b95d6200686996922338b48ccfce53c85ec578740",
+    "diagnostic": "playground.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_ast_question",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "befb4d7898ec16d21f9df76b95d6200686996922338b48ccfce53c85ec578740",
+    "diagnostic": "playground.gox:18:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:4:28"
+  },
+  {
+    "name": "reject_macro_ast_nested",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "6a4e252d970d9fc7e8ade1e1d33426a0d0db447b76c8f2573d46138d4bed9b9c",
+    "diagnostic": "playground.gox:66:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:7:1; invoked at playground.gox:8:28\n  macro inner defined at playground.gox:6:1; invoked at playground.gox:7:37"
+  },
+  {
+    "name": "reject_macro_ast_nested",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "6a4e252d970d9fc7e8ade1e1d33426a0d0db447b76c8f2573d46138d4bed9b9c",
+    "diagnostic": "playground.gox:66:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:7:1; invoked at playground.gox:8:28\n  macro inner defined at playground.gox:6:1; invoked at playground.gox:7:37"
+  },
+  {
+    "name": "reject_macro_ast_nested",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "29828a5ff0932e948a0b65b4b78dd4424dfeb49f0b06a10afb7b80705363fe33",
+    "diagnostic": "playground.gox:66:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:7:1; invoked at playground.gox:8:28\n  macro inner defined at playground.gox:6:1; invoked at playground.gox:7:37"
+  },
+  {
+    "name": "reject_macro_ast_nested",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "29828a5ff0932e948a0b65b4b78dd4424dfeb49f0b06a10afb7b80705363fe33",
+    "diagnostic": "playground.gox:66:10: invalid argument: __goxide_qtmp_11 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:7:1; invoked at playground.gox:8:28\n  macro inner defined at playground.gox:6:1; invoked at playground.gox:7:37"
+  },
+  {
+    "name": "reject_macro_ast_sibling",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "8fdc392217a7341d9f70564e105dfce59f4dc504b636985a7180aa5409d686eb",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:7:6"
+  },
+  {
+    "name": "reject_macro_ast_sibling",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "8fdc392217a7341d9f70564e105dfce59f4dc504b636985a7180aa5409d686eb",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:7:6"
+  },
+  {
+    "name": "reject_macro_ast_sibling",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "f59059b0136b5e058810797f3d7ef946ae3db1ff4352bcbde44778dc31e5346b",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:7:6"
+  },
+  {
+    "name": "reject_macro_ast_sibling",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "f59059b0136b5e058810797f3d7ef946ae3db1ff4352bcbde44778dc31e5346b",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]\n  macro outer defined at playground.gox:2:1; invoked at playground.gox:7:6"
+  },
+  {
+    "name": "reject_macro_ast_nonmacro",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "5098bab41023144b383460af3689fa0e3339fe3e06c4b4274c636337619075c9",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]"
+  },
+  {
+    "name": "reject_macro_ast_nonmacro",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "5098bab41023144b383460af3689fa0e3339fe3e06c4b4274c636337619075c9",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]"
+  },
+  {
+    "name": "reject_macro_ast_nonmacro",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "7c387dd48aada39f41067872ea9be8072de70e6b0949c41caf18a35fbcbeb5d4",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]"
+  },
+  {
+    "name": "reject_macro_ast_nonmacro",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "7c387dd48aada39f41067872ea9be8072de70e6b0949c41caf18a35fbcbeb5d4",
+    "diagnostic": "playground.gox:34:10: invalid argument: __goxide_qtmp_7 (variable of type int) for built-in len [generated/unmapped]"
+  },
+  {
+    "name": "reject_macro_ast_real_point",
+    "ending": "LF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "c421abbe9b43fbfc265cf5a2b6eab9975ee780a0fece0a0fe3c40bd3afc71a5d",
+    "diagnostic": "playground.gox:5:20: cannot use 1 (untyped int constant) as string value in variable declaration (source span [226,227))"
+  },
+  {
+    "name": "reject_macro_ast_real_point",
+    "ending": "LF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "c421abbe9b43fbfc265cf5a2b6eab9975ee780a0fece0a0fe3c40bd3afc71a5d",
+    "diagnostic": "playground.gox:5:20: cannot use 1 (untyped int constant) as string value in variable declaration (source span [226,227))"
+  },
+  {
+    "name": "reject_macro_ast_real_point",
+    "ending": "CRLF",
+    "repeat": 0,
+    "exit": 1,
+    "sourceSha256": "ffd622adb429ad41e18cec60d6bac77b5bb0843261bc130fef64851bdc442d2b",
+    "diagnostic": "playground.gox:5:20: cannot use 1 (untyped int constant) as string value in variable declaration (source span [230,231))"
+  },
+  {
+    "name": "reject_macro_ast_real_point",
+    "ending": "CRLF",
+    "repeat": 1,
+    "exit": 1,
+    "sourceSha256": "ffd622adb429ad41e18cec60d6bac77b5bb0843261bc130fef64851bdc442d2b",
+    "diagnostic": "playground.gox:5:20: cannot use 1 (untyped int constant) as string value in variable declaration (source span [230,231))"
+  }
+]

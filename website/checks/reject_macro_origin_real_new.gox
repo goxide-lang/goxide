@@ -1,0 +1,6 @@
+package main
+func value() Option[int] { return Option[int]::Some(1) }
+func earlier() Option[int] { a := value()?; b := value()?; return Option[int]::Some(a+b) }
+macro_rules! inner { () => { new(7) }; }
+macro_rules! outer { () => { inner!() }; }
+func main() { _ = outer!() }

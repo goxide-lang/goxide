@@ -175,6 +175,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		return Result{}, err
 	}
 	preparedMap := provenance
+	macroOrigins := macroSourceMapper{filename: filename, original: originalSource, prepared: preparedMap}
 	var expanded macros.Result
 	if cfg != nil && cfg.macros != nil {
 		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, cfg.macros, cfg.macroImporter)
@@ -184,33 +185,8 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if err != nil {
 		var diagnostic *macros.Diagnostic
 		if errors.As(err, &diagnostic) {
-			mapSpan := func(span sourcemap.Span, original bool) *sourcemap.Span {
-				if original || span.File != filename {
-					return &span
-				}
-				first, last := preparedMap.Lookup(span.Start), preparedMap.Lookup(span.End-1)
-				if first == nil || last == nil || first.Origin == nil || last.Origin == nil || first.Origin.File != last.Origin.File {
-					return nil
-				}
-				mapped := *first.Origin
-				mapped.End = last.Origin.End
-				return &mapped
-			}
-			origin := mapSpan(sourcemap.Span{File: diagnostic.Position.Filename, Start: diagnostic.Position.Offset, End: diagnostic.End, Line: diagnostic.Position.Line, Column: diagnostic.Position.Column}, diagnostic.Original)
-			stack := append([]sourcemap.Expansion{}, diagnostic.Stack...)
-			for i := range stack {
-				definition := mapSpan(stack[i].Definition, stack[i].DefinitionOriginal)
-				callsite := mapSpan(stack[i].Callsite, stack[i].CallsiteOriginal)
-				if definition == nil || callsite == nil {
-					stack = nil
-					break
-				}
-				stack[i].Definition, stack[i].Callsite = *definition, *callsite
-				stack[i].DefinitionOriginal, stack[i].CallsiteOriginal = true, true
-			}
-			if origin == nil {
-				stack = nil
-			}
+			origin := macroOrigins.point(sourcemap.Span{File: diagnostic.Position.Filename, Start: diagnostic.Position.Offset, End: diagnostic.End, Line: diagnostic.Position.Line, Column: diagnostic.Position.Column}, diagnostic.Original)
+			stack := macroOrigins.stack(diagnostic.Stack)
 			return Result{}, &sourcemap.Error{Message: "macro: " + diagnostic.Message, Origin: origin, Stack: stack, Generated: diagnostic.Position}
 		}
 		return Result{}, err
@@ -223,53 +199,13 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if len(expanded.Origins) > 0 {
 		provenance = &sourcemap.Map{Source: expanded.Source, Stages: append(provenance.Stages, "macros.Expand")}
 		for _, o := range expanded.Origins {
-			var origin *sourcemap.Span
-			if o.SourceEnd > o.SourceStart {
-				if o.File == filename && !o.Original {
-					if old := preparedMap.Lookup(o.SourceStart); old != nil {
-						origin = old.Origin
-					}
-				} else if o.File != "" {
-					// Package definitions retain their own original source spans.
-					// A caller's same numeric offset is unrelated evidence.
-					origin = &sourcemap.Span{File: o.File, Start: o.SourceStart, End: o.SourceEnd, Line: o.Line, Column: o.Column}
-				}
-			}
+			origin := macroOrigins.point(sourcemap.Span{File: o.File, Start: o.SourceStart, End: o.SourceEnd, Line: o.Line, Column: o.Column}, o.Original)
+			stack := macroOrigins.stack(o.Stack)
 			kind := "source"
-			stack := append([]sourcemap.Expansion{}, o.Stack...)
-			for i := range stack {
-				for j, span := range []*sourcemap.Span{&stack[i].Definition, &stack[i].Callsite} {
-					original := stack[i].DefinitionOriginal
-					if j == 1 {
-						original = stack[i].CallsiteOriginal
-					}
-					if span.File != filename || original {
-						// Package macro metadata was collected from original files.
-						continue
-					}
-					first, last := preparedMap.Lookup(span.Start), preparedMap.Lookup(span.End-1)
-					if first != nil && last != nil && first.Origin != nil && last.Origin != nil && first.Origin.File == last.Origin.File {
-						*span = sourcemap.Position(filename, originalSource, first.Origin.Start, last.Origin.End)
-						if j == 0 {
-							stack[i].DefinitionOriginal = true
-						} else {
-							stack[i].CallsiteOriginal = true
-						}
-					} else {
-						stack = nil
-						break
-					}
-				}
-				if stack == nil {
-					break
-				}
-			}
-			if len(stack) > 0 {
-				kind = "macro"
-			}
 			if origin == nil {
 				kind = "generated/unmapped"
-				stack = nil
+			} else if len(stack) > 0 {
+				kind = "macro"
 			}
 			provenance.Attach(o.OutputStart, o.OutputEnd, origin, stack, kind)
 		}

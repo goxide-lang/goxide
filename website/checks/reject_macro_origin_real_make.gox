@@ -1,0 +1,3 @@
+package main
+macro_rules! outer { () => { make(7, 1) }; }
+func main() { _ = outer!() }

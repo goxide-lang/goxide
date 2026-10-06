@@ -4,6 +4,8 @@
 Go byte offsets**. `Segment.Origin` is a half-open span in original user input;
 `Stack` records outer-to-inner macro definitions and invocations. Missing Origin
 and `Kind: "generated/unmapped"` explicitly mean no proven source location.
+An independently proven expansion stack can still accompany an unmapped token;
+its definition and invocation spans do not establish an origin for that token.
 `deriveFields` records original field **type** spans, independently of generated
 helper output. `sourcemap.Error` exposes those spans for derive validation errors.
 
@@ -46,4 +48,5 @@ Legacy lowering errors preserve their owning phase's error text, wrapped with
 `generated/unmapped; intermediate coordinates` when their original span is not
 proven. The structured original-span API covers derive type validation and final
 Go diagnostics and final go/types errors, not every phase error. A real error
-located on a synthetic macro parenthesis explicitly stays generated/unmapped.
+located on a synthetic macro parenthesis explicitly stays generated/unmapped,
+with any independently proven macro expansion frames shown below it.

@@ -158,6 +158,161 @@ const frontendReject = {
  reject_macro_append_value: /requires a direct call/,
  reject_macro_append_named_type: /local named type/,
 };
+// A03 uses independent source anchors, not CLI/WASM agreement alone, as its oracle.
+// All fixtures reuse playground.gox; different contents and positions must not leak stacks.
+const originDiagnosticChecks = [
+ {
+  "name": "reject_macro_origin_synthetic_new",
+  "message": "macro allocation requires fixed predeclared type syntax",
+  "point": null,
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!(value())"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_origin_synthetic_context",
+  "message": "macro allocation requires fixed predeclared type syntax",
+  "point": null,
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!(value())"
+   },
+   {
+    "macro": "inner",
+    "definition": "macro_rules! inner",
+    "call": "inner!($x)"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_origin_synthetic_make",
+  "message": "macro allocation requires fixed predeclared type syntax",
+  "point": null,
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!(value())"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_origin_synthetic_syntax",
+  "message": "unsupported template syntax:",
+  "point": null,
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!(value())"
+   },
+   {
+    "macro": "inner",
+    "definition": "macro_rules! inner",
+    "call": "inner!($x)"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_origin_real_new",
+  "message": "macro allocation requires fixed predeclared type syntax",
+  "point": {
+   "anchor": "new(7)",
+   "offset": 4,
+   "token": "7"
+  },
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!()"
+   },
+   {
+    "macro": "inner",
+    "definition": "macro_rules! inner",
+    "call": "inner!()"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_origin_real_make",
+  "message": "macro allocation requires fixed predeclared type syntax",
+  "point": {
+   "anchor": "make(7, 1)",
+   "offset": 5,
+   "token": "7"
+  },
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!()"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_origin_real_syntax",
+  "message": "unsupported template syntax:",
+  "point": {
+   "anchor": "1 +",
+   "offset": 0,
+   "token": "1"
+  },
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!()"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_origin_capture_question",
+  "message": "macro allocation type does not support captured types",
+  "point": {
+   "anchor": "new($x)",
+   "offset": 4,
+   "token": "$"
+  },
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!(value()?)"
+   }
+  ]
+ }
+];
+const originResults=[];
+function originPosition(source, anchor, offset=0) {
+ const index=source.indexOf(anchor);
+ assert.ok(index>=0 && source.indexOf(anchor,index+1)<0,`ambiguous origin anchor: ${anchor}`);
+ const prefix=source.slice(0,index+offset);
+ return {start:Buffer.byteLength(prefix),line:prefix.split('\n').length,column:Buffer.byteLength(prefix.slice(prefix.lastIndexOf('\n')+1))+1};
+}
+function assertOriginDiagnostic(diagnostic,check,source) {
+ const [primary,...frames]=diagnostic.split('\n');
+ assert.ok(primary.includes(check.message),`${check.name}: wrong diagnostic`);
+ if(check.point) {
+  const p=originPosition(source,check.point.anchor,check.point.offset);
+  assert.ok(primary.startsWith(`playground.gox:${p.line}:${p.column}:`),`${check.name}: wrong original position`);
+  assert.ok(primary.endsWith(`(source span [${p.start},${p.start+Buffer.byteLength(check.point.token)}))`),`${check.name}: wrong original token span`);
+  assert.doesNotMatch(primary,/generated\/unmapped/);
+ } else {
+  assert.ok(primary.endsWith('[generated/unmapped]'),`${check.name}: synthetic point claimed a source`);
+  assert.doesNotMatch(primary,/source span/);
+ }
+ assert.deepEqual(frames,check.frames.map(frame=>{
+  const d=originPosition(source,frame.definition),c=originPosition(source,frame.call);
+  return `  macro ${frame.macro} defined at playground.gox:${d.line}:${d.column}; invoked at playground.gox:${c.line}:${c.column}`;
+ }),`${check.name}: inaccurate or reordered macro stack`);
+}
 const temp=await fs.mkdtemp(path.join(tmpdir(),'goxide-browser-parity-'));
 try {
  for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity','reject_legacy_cfg','reject_macro_selector','reject_macro_prepared','reject_derive_origin','reject_enum_derive_origin','macro_imported_helper',...appendChecks,...copyChecks,...allocationChecks]) {
@@ -198,6 +353,68 @@ try {
   }
   checkResults.push(name);
  }
+ // UI textarea values normalize CRLF. Raw worker calls separately verify exact CRLF bytes.
+ const originWorkerInputs=[];
+ for(const check of originDiagnosticChecks) {
+  const fixture=await fs.readFile(new URL(`checks/${check.name}.gox`,import.meta.url),'utf8');
+  for(const ending of ['LF','CRLF']) {
+   const source=ending==='LF'?fixture:fixture.replaceAll('\n','\r\n');
+   const input=path.join(temp,'playground.gox');await fs.writeFile(input,source);
+   let expected;
+   for(let repeat=0;repeat<2;repeat++) {
+    let diagnostic;
+    try {execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']});}
+    catch(e) {diagnostic=String(e.stderr).trim().replaceAll(input,'playground.gox');}
+    assert.ok(diagnostic,`${check.name}: CLI unexpectedly accepted input`);
+    assertOriginDiagnostic(diagnostic,check,source);
+    if(repeat)assert.equal(diagnostic,expected,`${check.name}: nondeterministic CLI diagnostic`);
+    expected=diagnostic;
+    if(ending==='LF') {
+     await page.fill('#source',source);await page.click('#compile');
+     await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
+     assert.equal((await page.textContent('#diagnostic')).trim(),expected,`${check.name}: UI diagnostic differs`);
+     assert.equal(await page.inputValue('#output'),'');assert.equal(await page.isDisabled('#copy'),true);
+     await page.fill('#source',manifest.examples[0].source);await finished();
+     assert.equal(await page.inputValue('#output'),manifest.examples[0].go,`${check.name}: UI recovery differs`);
+    }
+    originWorkerInputs.push({source,expected,name:check.name,ending,repeat});
+    originWorkerInputs.push({source:manifest.examples[0].source,go:manifest.examples[0].go,name:check.name,ending,repeat,recovery:true});
+   }
+   originResults.push({name:check.name,ending,diagnostic:expected});
+  }
+ }
+ // One real WASM worker processes every input and recovery, retaining the same filename.
+ const rawResults=await page.evaluate(async({inputs,commit,hash})=>{
+  const worker=new Worker(`worker.js?compiler=${commit}&wasm=${hash}`);
+  let timer;
+  const response=()=>new Promise((resolve,reject)=>{
+   timer=setTimeout(()=>reject(new Error('origin QA worker timeout')),30000);
+   worker.onerror=e=>{clearTimeout(timer);reject(new Error(e.message));};
+   worker.onmessage=({data})=>{clearTimeout(timer);data.type==='fatal'?reject(new Error(data.error)):resolve(data);};
+  });
+  try {
+   if((await response()).type!=='ready')throw new Error('origin QA worker not ready');
+   const results=[];
+   for(let id=0;id<inputs.length;id++) {
+    const pending=response();worker.postMessage({type:'compile',id,source:inputs[id].source});
+    const result=await pending;
+    if(result.type!=='result'||result.id!==id)throw new Error('origin QA worker result mismatch');
+    results.push(result);
+   }
+   return results;
+  } finally {clearTimeout(timer);worker.terminate();}
+ },{inputs:originWorkerInputs,commit:manifest.commit,hash:manifest.wasmSha256});
+ for(let i=0;i<rawResults.length;i++) {
+  const expected=originWorkerInputs[i],actual=rawResults[i];
+  if(expected.recovery) {
+   assert.equal(actual.error,undefined,`${expected.name}: raw worker recovery rejected`);
+   assert.equal(actual.go,expected.go,`${expected.name}: raw worker recovery differs`);
+  } else {
+   assert.equal(actual.error?.trim(),expected.expected,`${expected.name}/${expected.ending}: raw worker diagnostic differs`);
+   assert.equal(actual.go || '', '',`${expected.name}: raw worker leaked output`);
+  }
+ }
+ await fs.writeFile(new URL('qa-artifacts/origin-diagnostics.json',import.meta.url),JSON.stringify(originResults,null,2)+'\n');
 } finally {await fs.rm(temp,{recursive:true,force:true});}
 await page.selectOption('#examples','0');await finished();
 await page.fill('#source',manifest.examples[0].source.replace('21','37'));await finished();
@@ -235,5 +452,5 @@ assert.equal(await page.inputValue('#output'),manifest.examples[0].go);
 assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');
 const builtinResults=names=>({positive:checkResults.filter(name=>names.includes(name)&&!name.startsWith('reject_')),frontendReject:Object.keys(frontendReject).filter(name=>names.includes(name)),nativeTypeReject:Object.keys(nativeTypeReject).filter(name=>names.includes(name)),nativeTypeRejectWasm:'transpilation parity only; final Go compilation is native'});
-console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9).filter(name=>!appendChecks.includes(name)&&!copyChecks.includes(name)&&!allocationChecks.includes(name)),appendChecks:builtinResults(appendChecks),copyChecks:builtinResults(copyChecks),allocationChecks:{...builtinResults(allocationChecks),nativeValidButUnsupported:Object.keys(nativeValidControls)},checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
+console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9).filter(name=>!appendChecks.includes(name)&&!copyChecks.includes(name)&&!allocationChecks.includes(name)),appendChecks:builtinResults(appendChecks),copyChecks:builtinResults(copyChecks),allocationChecks:{...builtinResults(allocationChecks),nativeValidButUnsupported:Object.keys(nativeValidControls)},originChecks:{fixtures:originDiagnosticChecks.length,cliObservations:originResults.length*2,uiLfObservations:originDiagnosticChecks.length*2,rawWorkerObservations:originResults.length*2,recoveryAfterEach:true,sourceFile:'playground.gox reused across distinct sources',scope:'UI LF plus non-UI real WASM worker LF/CRLF; no cross-file/package claim'},checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
 await browser.close();

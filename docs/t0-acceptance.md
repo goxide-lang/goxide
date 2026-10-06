@@ -900,3 +900,21 @@ new($x?) 合成节点诊断显示 unmapped/无栈，与基线同类 A03 控制�
 详细环境、逐项范围、完整日志哈希及 website 隔离 LICENSE 适配见
 [交付报告](reviews/macro-allocation-builtin-20261006.md)。Linux 未运行，网站未部署，
 托管 CI 只在 push 后按精确 SHA 查询。A01、A03、RFC0011 与 MVP 整项不关闭。
+
+
+## A03 合成错误点保留已知宏栈（2026-10-06，实施验收合同）
+
+基线 `c32b94f`；实现前约定如下，交付结果另附准确提交和完整验证证据。
+
+| 场景 | 必须观察到的结果 |
+| --- | --- |
+| new($x?) / make($x?,n) 拒绝 | point 仍 generated/unmapped，不伪造 source span；可证明的定义/调用范围独立保留 |
+| 同包多文件与跨包的合成点 | 不把 package metadata 的零长范围当原始点，不套用调用文件同偏移的 token；栈各 frame 指向自己的文件 |
+| nested、重复调用、多处 ? 与 LF/CRLF | 保留正确 outer→inner 顺序及定义/调用边界，不跨 occurrence 串栈；重复结果确定 |
+| 原始 token 错误与 enum/derive | 真实原始位置不退化，enum 阶段变化不被误称原始坐标 |
+| 真实 Go 编译错误 | 原始 stderr 保留；只对匹配生成文件补充诊断，未知点与已证明栈可共存 |
+| 不可证明 frame / changed token | 不猜近邻或文字，不拼接虚假完整栈；generated/unmapped 边界明确 |
+| 合法程序与 CLI/WASM | 生成 Go 行为不变，原生 race/vet/run、精确诊断差分及错误后恢复通过 |
+
+按 [RFC0018](rfcs/0018-lowering-contract.md#a03-合成错误点与宏展开栈2026-10-06实施合同)执行；
+本片不自动关闭 A01/A03，尤其不把所有合成传播、helper 或 refs 中间阶段来源标为完成。

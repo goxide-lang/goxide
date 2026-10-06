@@ -2,9 +2,9 @@
 
 中文优先的静态语言介绍网站，以及真实单文件 goxide → Go 浏览器转译器。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
-本轮在仓内验证入口中追加 A04 unary/composite match；编译器源码固定为
-`f2d7a39c4b81a00fff191c89ac847b09af6a62e9`，生产源摘要固定为
-`aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8`。
+本轮验证 A06 已知 Go module 的原生单文件外部恢复，并保留全部 A04 对照；编译器源码固定为
+`ed346d320f584f85ca5fa4f3a4a7ceab526ba38f`，生产源摘要固定为
+`14490fc75cadf25cdc164cda5294ed08aec9415a058f04012d9e285e0b55dca1`。
 `websiteCommit` 独立记录实际网站工具 HEAD。仅本地验证，没有部署或更新线上版本。
 [仓内验证说明](validation/README.md)是本片入口；[最新组合记录](LATEST-INTEGRATION.md)和
 [早期交付记录](INTEGRATION.md)中的既往结果不替代这次运行。
@@ -74,8 +74,8 @@ export GOMODCACHE=/workspace/goxide-environment/modcache
 
 - `cmd/goxide-playground` 调用现有 `internal/frontend.Compile`，不是演示替换或预设输出。WASM 只转译，不运行生成代码。
 - 仅支持单文件。默认包：`fmt`、`errors`、`io`、`strconv`、`strings`、`math`、`encoding/json`、本仓库 `runtime`、`formatting`，以及公开 `std/sum`、`serde`、`serde/json`，以及真实导出数据包含的依赖闭包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
-- 适配只在 `js/wasm` 下启用。原生 importer 保持原来的离线 `go list -export` 行为。WASM 导入来自构建时真实 Go export archive 的 `__.PKGDEF`，不是手写伪造类型签名，也不会调用外部服务。
-- 导出数据来自构建机器的原生目标；清单记录 `exportTarget`。当前已运行验证 Linux/amd64 + Go 1.27.1；不把它描述为所有 GOOS/GOARCH 的类型环境。构建时请在宿主平台生成资源，之后可以交叉构建纯静态 HTTP 二进制。
+- 适配只在 `js/wasm` 下启用。原生 importer 使用离线 `go list -export`；已知 Go module 的 CLI 单文件使用输入 owner 的受管 modfile 查询同一依赖图，仅选择指定文件。WASM 导入来自构建时真实 Go export archive 的 `__.PKGDEF`，不是手写伪造类型签名，也不会调用外部服务。
+- 导出数据来自构建机器的原生目标；清单记录 `exportTarget`。早期 Linux/amd64 + Go 1.27.1 记录是历史证据；A06 平台与结果以这次准确提交的验证报告为准，不把它描述为所有 GOOS/GOARCH 的类型环境。构建时请在宿主平台生成资源，之后可以交叉构建纯静态 HTTP 二进制。
 - 没有浏览器文件系统、任意依赖解析、跨文件模块恢复、目录编译、外部宏包或 Go 执行 API。CLI 的 use/pub use、源码图宏聚合、version/path/git 依赖、feature、target 与受授权 host 构建脚本不在浏览器执行。
 - 浏览器中一个 Worker，450 ms 去抖，32 KiB UTF-8 输入，10 秒编译超时、30 秒加载超时、2 MiB 返回输出上限。取消/超时终止 Worker；下次操作重建。编译器自身宏预算仍然生效。没有独立浏览器堆内存配额，极端输入仍可能造成浏览器内存压力。
 - 失败、源码编辑与中断清空旧 Go，复制按钮同步禁用。Worker 实例 + revision 双重丢弃旧消息。通过 textarea/textContent 显示输入与诊断，不将源码插入 HTML。
@@ -94,6 +94,11 @@ export GOMODCACHE=/workspace/goxide-environment/modcache
 3. 构建脚本从当前工具链重新提取真实 export data、构建 WASM，并复制匹配版本的 `wasm_exec.js`。所有资源同批更新。
 4. `examples.json` 记录源码提交、编译器与支持库源码 SHA-256、export archives SHA-256、工具链、导出目标与包闭包。摘要覆盖未提交源变化，因此只看提交号不足；正式发布应从干净提交构建。
 5. 构建新 `goxide-web`，运行下面的验证。浏览器生成 Go 与 CLI 输出逐字节比较。生成 Go 若支持库语义改变，必须同时更新本地依赖与清单。
+
+浏览器示例与拒绝例的原始字节先复制到无祖先 `go.mod` 的临时 `playground.gox`，
+再调用真实 CLI；它们与 WASM 使用同一个 standalone 输入语境。正式验证器也要求
+输出与临时目录没有外层 module。A06 跨包恢复使用原生 acceptance 验证，不把仓库
+module 的已配置入口当成浏览器任意依赖加载能力，也不放宽 CLI/WASM 的逐字节门槛。
 
 ## 验证
 

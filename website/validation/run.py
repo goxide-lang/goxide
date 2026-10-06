@@ -22,8 +22,8 @@ import traceback
 import urllib.request
 
 BASELINE = 'fd8380c39876c96441857a737be8e32c322a0467'
-COMPILER = 'f2d7a39c4b81a00fff191c89ac847b09af6a62e9'
-COMPILER_DIGEST = 'aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8'
+COMPILER = 'ed346d320f584f85ca5fa4f3a4a7ceab526ba38f'
+COMPILER_DIGEST = '14490fc75cadf25cdc164cda5294ed08aec9415a058f04012d9e285e0b55dca1'
 PHASES = ('wasm-build', 'web-build', 'native-parity', 'web-race', 'web-vet',
           'browser-qa', 'catalog-qa')
 ROOT = Path(__file__).resolve().parents[2]
@@ -63,6 +63,14 @@ def executable(value):
     return str(Path(found).resolve())
 
 
+def require_standalone_output(out):
+    # Native playground and QA inputs live below out. A configured ancestor
+    # module would select a different CLI entry from the standalone WASM input.
+    for parent in (out, *out.parents):
+        require(not os.path.lexists(parent / 'go.mod'),
+                '--out ancestors must be free of go.mod for standalone CLI/WASM comparison: ' + str(parent))
+
+
 def reserve_output(value, source):
     requested = Path(value).expanduser()
     require(not os.path.lexists(requested), '--out must name a new directory: ' + str(requested))
@@ -72,6 +80,7 @@ def reserve_output(value, source):
     # earlier run; this makes failed evidence and stale status impossible to hide.
     require(not os.path.lexists(out), '--out must name a new directory: ' + str(out))
     require(out.parent.is_dir(), '--out parent must already exist: ' + str(out.parent))
+    require_standalone_output(out)
     out.mkdir()
     return out
 
@@ -206,6 +215,7 @@ class Runner:
 
     def preflight(self):
         require(sys.version_info >= (3, 11), 'website snapshots require Python 3.11+ (tomllib)')
+        require_standalone_output(self.out.resolve())
         require(self.git('status', '--porcelain=v1', '--untracked-files=all') == '',
                 'formal validation requires a clean committed checkout (including untracked files)')
         head = self.git('rev-parse', 'HEAD')
@@ -267,6 +277,8 @@ class Runner:
                          'playwright': installed, 'packageLockSha256': digest(self.root / 'website/package-lock.json'),
                          'goLicense': {'path': str(license_path), 'sha256': digest(license_path)},
                          'environment': {key: self.env[key] for key in ('GOTOOLCHAIN', 'GOWORK', 'GOFLAGS', 'GOPROXY', 'GONOPROXY', 'TMPDIR')},
+                         'playgroundInputModule': {'owner': None, 'outputAncestorsChecked': True,
+                                                   'temporaryDirectory': self.env['TMPDIR']},
                          'matrix': {'fixtures': 105, 'legacyFixtures': 97, 'a04Fixtures': 8,
                                     'examples': 11, 'legacyExamples': 10, 'a04Examples': 1,
                                     'nativeDiagnosticObservations': 52, 'a04NativeObservations': 32,

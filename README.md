@@ -26,9 +26,15 @@ CLI 长选项使用 `--name`，短选项使用 `-h`、`-o`，拒绝旧式 `-go/-
 支持六个显式动作子命令，仍兼容 `--action`，不会默认授信当前目录。详细规则见
 [CLI 语法合同](docs/design/cli-parser-migration.md)。
 
+已有 Go module 中的单文件输入按其真实路径选择最近的 `go.mod`，恢复已生成依赖中
+登记的外部 enum 和协议，并在同一依赖图中 build/run。只选指定文件；同目录 sibling
+不提供声明，`--runtime` 不替代输入项目的依赖。配置缺失须由 consumer 补齐。
+已知 module 的文件输出须使用 module 外的新路径；未给 `-o` 的 transpile 仍输出 stdout。
+具体正反例与边界见 [单文件恢复合同](docs/rfcs/0001-package-loading.md#a06-已知-go-module-的单文件外部恢复2026-10-06实施前合同)。
+
 ## 网页与浏览器 Playground
 
-[构建独立 goxide-web 二进制](website/README.md)：中文特性目录、十组真实 goxide → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器仅支持清单内包的单文件转译；CLI 与 WASM 示例逐字节校验。
+[构建独立 goxide-web 二进制](website/README.md)：中文特性目录、十一组真实 goxide → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器仅支持清单内包的单文件转译；CLI 与 WASM 示例逐字节校验。
 
 ## 当前支持
 
@@ -50,7 +56,7 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 完整差距、范围依据、依赖与验收见 [MVP 逐 RFC 台账](docs/mvp-gap-audit.md)。以下是工程边界，不自动等于获批延期；本批具体正反例与验证见 [A04 unary/composite 交付](docs/reviews/match-unary-composite-20261006.md)，历史验收保留在 [T0 清单](docs/t0-acceptance.md)。
 
 - **表达式和类型上下文**：单值 match 已接通 `+ - ! ^` 及普通 struct/slice/array/map 字面量组合；多结果 `return match`、引用/收发一元、复杂 postfix/receiver、控制头和 block-arm、完全不可命名的私有参数仍拒绝；`.gox` 用户泛型定义尚未开放，与消费原生 Go 泛型函数不同。
-- **模块与工具模式**：单文件外部增强恢复、受限 internal-origin/无源分发未全面验收；预编译宏 ABI、`.gox` 测试文件与非宿主交叉构建未实现。切换 race/tags/平台不能直接复用另一视图的 metadata；[本试用的具体模式与已知拒绝](examples/enum_trial/README.md#运行与测试模式)。
+- **模块与工具模式**：单文件恢复限配置已知、源可用、已有生成 Go 和合法 metadata 的依赖；不可导入的 internal-origin 增强操作、无源分发、预编译宏 ABI、`.gox` 测试文件与非宿主交叉构建仍有边界。单文件不隐选 TOML/workspace target/features；这些入口仍使用目录模式。切换 race/tags/平台不能直接复用另一视图的 metadata；[本试用的具体模式与已知拒绝](examples/enum_trial/README.md#运行与测试模式)。
 - **协议资格**：手写 Clone/Debug/serde 登记、静态递归 Default、循环容器 equality 等仍有缺口或需另行设计；有限容器正例不证明任意对象图支持。
 - **完整设计能力**：完整 trait、LSP、用户过程宏、格式 Value/PATCH/YAML 等未成为本阶段交付能力；不要把 RFC 示例当作已实现语法。
 

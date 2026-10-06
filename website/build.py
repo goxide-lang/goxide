@@ -2,7 +2,7 @@
 """Rebuild every published example and the browser compiler from this checkout."""
 import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
 import catalog, project_snapshots, workspace_snapshots, workspace_import_snapshots, source_selection_snapshot
-from build_support import go_license_path, verify_compiler_sources
+from build_support import go_license_path, standalone_playground, verify_compiler_sources
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
 GO = os.environ.get('GO_BIN', 'go')
@@ -51,14 +51,17 @@ examples = []
 for entry in catalog_data['examples']:
     name, title, description = entry['id'], entry['title'], entry['description']
     path = ROOT/'website/examples'/f'{name}.gox'
-    generated = run(str(ROOT/'bin/goxide'), 'transpile', str(path)).decode()
-    if name in ['result','go_result','serde_option']:
-        assert 'github.com/goxide-lang/std/sum' in generated
-        families = re.findall(r'^type (?:Option|Result)\[[^\n]+', generated, re.MULTILINE)
-        assert families and all('= __goxide_enum_std.' in line for line in families), 'sum families must be aliases to shared std, not copied definitions'
-    stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, str(path)).decode()
+    source = path.read_bytes()
+    # Match the owner-free browser input, rather than the repository's module.
+    with standalone_playground(source) as input_path:
+        generated = run(str(ROOT/'bin/goxide'), 'transpile', str(input_path)).decode()
+        if name in ['result','go_result','serde_option']:
+            assert 'github.com/goxide-lang/std/sum' in generated
+            families = re.findall(r'^type (?:Option|Result)\[[^\n]+', generated, re.MULTILINE)
+            assert families and all('= __goxide_enum_std.' in line for line in families), 'sum families must be aliases to shared std, not copied definitions'
+        stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, str(input_path)).decode()
     assert stdout == entry['expectedStdout'], f'{name}: runtime output changed'
-    examples.append(dict(id=name, title=title, description=description, source=path.read_text(), go=generated, stdout=stdout))
+    examples.append(dict(id=name, title=title, description=description, source=source.decode(), go=generated, stdout=stdout))
 # A known repository project, generated and run locally at build time only.
 # It is evidence for CLI multi-package behavior, never a browser compiler input.
 with tempfile.TemporaryDirectory(prefix='goxide-web-reexports-') as temporary:
@@ -74,11 +77,13 @@ with tempfile.TemporaryDirectory(prefix='goxide-web-reexports-') as temporary:
 checks = []
 for name in sorted({n for c in catalog_data['items'] for n in c['checks']}):
     path = ROOT/'website/checks/catalog'/f'{name}.gox'
-    result = subprocess.run([str(ROOT/'bin/goxide'), 'transpile', str(path)], env=env, capture_output=True, text=True)
+    source = path.read_bytes()
+    with standalone_playground(source) as input_path:
+        result = subprocess.run([str(ROOT/'bin/goxide'), 'transpile', str(input_path)], env=env, capture_output=True, text=True)
     assert result.returncode != 0, f'{name}: expected rejection'
-    diagnostic = result.stderr.strip().replace(str(path), 'playground.gox')
+    diagnostic = result.stderr.strip().replace(str(input_path), 'playground.gox')
     assert diagnostic and '/workspace/' not in diagnostic
-    checks.append(dict(id=name, source=path.read_text(), diagnostic=diagnostic))
+    checks.append(dict(id=name, source=source.decode(), diagnostic=diagnostic))
 # A complete, deliberately public minimal feature/target project, run without scripts.
 with tempfile.TemporaryDirectory(prefix='goxide-catalog-features-') as temporary:
     project = pathlib.Path(temporary)/'project'

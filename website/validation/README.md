@@ -1,7 +1,7 @@
 # Reproduce the website validation
 
 Run from a **clean committed checkout**, including untracked files. The checkout
-must contain the full ancestor objects for compiler `f2d7a39c4b81a00fff191c89ac847b09af6a62e9`
+must contain the full ancestor objects for compiler `ed346d320f584f85ca5fa4f3a4a7ceab526ba38f`
 and baseline `fd8380c39876c96441857a737be8e32c322a0467`. The runner never fetches
 objects, installs tools, downloads dependencies, deploys assets or triggers CI.
 It needs Python 3.11+, Git, installed Go 1.27 with a working race/C toolchain,
@@ -28,6 +28,15 @@ copy an earlier task's compiler, website source, overlay, oracle or build output
 All generated assets, executable files, temporary projects and QA artifacts stay
 under the output directory. The selected caches may acquire build cache entries.
 The source checkout and all tracked snapshot inputs must remain unchanged.
+
+The resolved output directory must also have no ancestor `go.mod`. The runner
+checks this before creating output and records the module-free playground input
+context in `identity.json`. Native playground and browser-QA temporary files must
+keep the standalone CLI entry; an unrelated module above the output directory
+would otherwise change configuration selection. Website examples and catalog
+rejections copy their unchanged input bytes to the same standalone context before
+invoking the real CLI. CLI/WASM output equality remains required; A06 configured
+module recovery is separately exercised by native acceptance tests.
 
 The seven required phases are WASM build, web build, native comparison, web race,
 web vet, browser QA and catalog QA. The runner preserves the original full QA:

@@ -1,7 +1,32 @@
-"""Read-only identity and toolchain checks shared by website build and validation."""
+"""Build identity, toolchain checks and isolated browser-source helpers."""
+from contextlib import contextmanager
 import hashlib
 import pathlib
 import subprocess
+import tempfile
+
+
+@contextmanager
+def standalone_playground(source):
+    """Copy exact browser input bytes to a temporary file with no module owner.
+
+    A native file beneath go.mod selects configured recovery; the WASM input has
+    no such owner. Resolve TMPDIR first so symlinks cannot hide a module ancestor.
+    The caller still executes the real CLI and checks its unmodified output.
+    """
+    temporary_root = pathlib.Path(tempfile.gettempdir()).resolve(strict=True)
+    for ancestor in (temporary_root, *temporary_root.parents):
+        module = ancestor / 'go.mod'
+        try:
+            module.lstat()
+        except FileNotFoundError:
+            continue
+        raise ValueError('browser CLI inputs require a module-free temporary directory; '
+                         'found ' + str(module))
+    with tempfile.TemporaryDirectory(prefix='goxide-web-playground-', dir=temporary_root) as directory:
+        source_path = pathlib.Path(directory) / 'playground.gox'
+        source_path.write_bytes(source)
+        yield source_path
 
 
 def is_compiler_source(name):

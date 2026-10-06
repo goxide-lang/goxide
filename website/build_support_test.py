@@ -18,6 +18,91 @@ def source_digest(files):
     return digest.hexdigest()
 
 
+class StandalonePlaygroundTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = pathlib.Path(self.temporary.name).resolve()
+        self.scratch = self.root / 'scratch'
+        self.scratch.mkdir()
+        patch = mock.patch.object(build_support.tempfile, 'gettempdir', return_value=str(self.scratch))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_exact_bytes_and_name_without_changing_configured_source(self):
+        owner = self.root / 'configured'
+        owner.mkdir()
+        module = owner / 'go.mod'
+        module.write_bytes(b'module example.org/original\n')
+        source = owner / 'example.gox'
+        content = 'package main\r\n// 中文\r\nfunc main() {}'.encode()
+        source.write_bytes(content)
+        before = {p.name: p.read_bytes() for p in owner.iterdir()}
+        with build_support.standalone_playground(source.read_bytes()) as copied:
+            self.assertEqual(copied.name, 'playground.gox')
+            self.assertEqual(copied.read_bytes(), content)
+            self.assertEqual(copied.parent.parent, self.scratch)
+            self.assertTrue(copied.is_absolute())
+            self.assertNotEqual(copied, source)
+        self.assertFalse(copied.parent.exists())
+        self.assertEqual({p.name: p.read_bytes() for p in owner.iterdir()}, before)
+
+    def test_exception_still_removes_temporary_source(self):
+        with self.assertRaisesRegex(RuntimeError, 'compiler failure'):
+            with build_support.standalone_playground(b'package main\n') as copied:
+                self.assertTrue(copied.is_file())
+                raise RuntimeError('compiler failure')
+        self.assertFalse(copied.parent.exists())
+        self.assertEqual(list(self.scratch.iterdir()), [])
+
+    def test_module_at_temp_root_or_ancestor_rejected_before_creation(self):
+        for directory in (self.scratch, self.root):
+            with self.subTest(directory=directory):
+                module = directory / 'go.mod'
+                module.write_bytes(b'module example.org/ambient\n')
+                with mock.patch.object(build_support.tempfile, 'TemporaryDirectory',
+                                       side_effect=AssertionError('must reject before creating a directory')):
+                    with self.assertRaisesRegex(ValueError, 'module-free temporary directory'):
+                        with build_support.standalone_playground(b'package main\n'):
+                            self.fail('module context was accepted')
+                self.assertEqual(module.read_bytes(), b'module example.org/ambient\n')
+                module.unlink()
+        # Native owner discovery uses Lstat: a dangling go.mod is not standalone.
+        module = self.scratch / 'go.mod'
+        module.symlink_to(self.scratch / 'missing-module')
+        with self.assertRaisesRegex(ValueError, 'module-free temporary directory'):
+            with build_support.standalone_playground(b'package main\n'):
+                self.fail('dangling module context was accepted')
+        self.assertTrue(module.is_symlink())
+
+    def test_symlink_cannot_hide_real_module_ancestor(self):
+        owner = self.root / 'configured'
+        owner.mkdir()
+        (owner / 'go.mod').write_text('module example.org/ambient\n')
+        real_temp = owner / 'tmp'
+        real_temp.mkdir()
+        link = self.scratch / 'innocent-temp'
+        link.symlink_to(real_temp, target_is_directory=True)
+        with mock.patch.object(build_support.tempfile, 'gettempdir', return_value=str(link)):
+            with self.assertRaisesRegex(ValueError, 'module-free temporary directory'):
+                with build_support.standalone_playground(b'package main\n'):
+                    self.fail('symlink hid real module context')
+        self.assertEqual(list(real_temp.iterdir()), [])
+
+    def test_symlink_to_module_free_root_uses_real_input_path(self):
+        owner = self.root / 'configured'
+        owner.mkdir()
+        (owner / 'go.mod').write_text('module example.org/logical-only\n')
+        link = owner / 'tmp'
+        link.symlink_to(self.scratch, target_is_directory=True)
+        with mock.patch.object(build_support.tempfile, 'gettempdir', return_value=str(link)):
+            with build_support.standalone_playground(b'package main\r\n') as copied:
+                self.assertEqual(copied.parent.parent, self.scratch)
+                self.assertEqual(copied, copied.resolve())
+                self.assertEqual(copied.read_bytes(), b'package main\r\n')
+        self.assertFalse(copied.parent.exists())
+
+
 class CompilerIdentityTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

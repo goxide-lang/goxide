@@ -17,6 +17,27 @@ spec.loader.exec_module(runner)
 
 
 class RunnerTests(unittest.TestCase):
+    def test_output_cannot_select_an_ambient_module_for_native_playground(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            source = base / 'source'
+            source.mkdir()
+            module = base / 'unrelated-module'
+            module.mkdir()
+            declaration = module / 'go.mod'
+            declaration.write_text('module unrelated.example/owner\n\ngo 1.27\n')
+            nested = module / 'nested'
+            nested.mkdir()
+            link = base / 'module-link'
+            link.symlink_to(nested, target_is_directory=True)
+            for parent in (module, nested, link):
+                with self.assertRaisesRegex(RuntimeError, 'standalone CLI/WASM comparison'):
+                    runner.reserve_output(parent / 'evidence', source)
+                self.assertFalse((parent / 'evidence').exists())
+            self.assertEqual(declaration.read_text(), 'module unrelated.example/owner\n\ngo 1.27\n')
+            standalone = runner.reserve_output(base / 'standalone', source)
+            self.assertTrue(standalone.is_dir())
+
     def test_output_never_overwrites_or_enters_checkout(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / 'source'

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
+  "compilerCommit": "ed346d320f584f85ca5fa4f3a4a7ceab526ba38f",
   "reviewedAt": "2026-10-06",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
@@ -359,8 +359,8 @@
       "status": "partial",
       "support": "cli",
       "summary": "format 2 的 goxide.toml 统一 module、原生 Go 依赖政策、增强依赖、feature 与目标；goxide.lock 固定真实解析结果。",
-      "usage": "最小工程根只有 TOML 和源码：默认 pretty=true，关闭默认 feature 后 false。Go module 元数据只进入受管 target；锁记录真实选版和校验，不将历史 go.sum 当版本列表。",
-      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 hgo.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 只作输入，物化普通本地模块；go.work 使用显式迁入模式，旧 format 不自动升级。",
+      "usage": "最小工程根只有 TOML 和源码：默认 pretty=true，关闭默认 feature 后 false。Go module 元数据只进入受管 target；锁记录真实选版和校验，不将历史 go.sum 当版本列表。 已有 go.mod 的 CLI 单文件按输入最近祖先 module 恢复已登记外部 enum/协议，在同一图中 build/run；只编译指定文件。",
+      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 hgo.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 只作输入，物化普通本地模块；go.work 使用显式迁入模式，旧 format 不自动升级。 单文件不隐选 TOML/workspace target/features；不可导入的 internal-origin 增强操作仍拒绝，浏览器不解析任意 module。",
       "examples": [],
       "evidence": [
         "internal/project/manifest.go",
@@ -369,7 +369,10 @@
         "cmd/goxide/version_test.go",
         "cmd/goxide/combination_review_test.go",
         "docs/rfcs/0025-unified-project.md",
-        "cmd/goxide/import_go_test.go"
+        "cmd/goxide/import_go_test.go",
+        "internal/frontend/single_file.go",
+        "cmd/goxide/single_file.go",
+        "tests/acceptance/single_file_external_test.go"
       ],
       "checks": [],
       "snippet": {
@@ -749,7 +752,7 @@
       }
     }
   ],
-  "compilerDigest": "aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8",
+  "compilerDigest": "14490fc75cadf25cdc164cda5294ed08aec9415a058f04012d9e285e0b55dca1",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

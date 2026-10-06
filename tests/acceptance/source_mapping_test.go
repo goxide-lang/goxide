@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -210,49 +211,99 @@ func main(){
  _,_=first,second
 }
 `
-	dir := t.TempDir()
-	input := filepath.Join(dir, "original.gox")
-	if err := testdeps.WriteFile(input, []byte(source), 0600); err != nil {
-		t.Fatal(err)
-	}
-	result, err := frontend.Compile(input, []byte(source))
+	result, err := frontend.Compile("original.gox", []byte(source))
 	if err != nil {
 		t.Fatalf("fixture must reach the actual Go compiler: %v", err)
 	}
+	// The independent Go oracle must not give the standalone input a module.
+	oracle := t.TempDir()
 	for name, data := range map[string][]byte{"go.mod": []byte("module compilerfixture\n\ngo 1.27\n"), "main.go": result.Go} {
-		if err := testdeps.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(oracle, name), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	raw, err := sourceMappingGo(t, dir, "build", "-buildvcs=false", ".")
+	raw, err := sourceMappingGo(t, oracle, "build", "-buildvcs=false", ".")
 	if err == nil || bytes.Count(raw, []byte("cannot use")) != 2 {
 		t.Fatalf("expected two actual compiler errors: %v\n%s", err, raw)
 	}
+	// Overlay builds may name a different generated .go file. Compare every
+	// original diagnostic's exact generated line, column and full Go message;
+	// source-map supplements cannot stand in for the raw compiler evidence.
+	diagnostic := regexp.MustCompile(`(?m)^([^\r\n]+\.go):([0-9]+):([0-9]+): ([^\r\n]+)$`)
+	type compilerDiagnostic struct{ file, positionMessage string }
+	compilerErrors := func(output []byte) []compilerDiagnostic {
+		var errors []compilerDiagnostic
+		for _, match := range diagnostic.FindAllSubmatch(output, -1) {
+			if bytes.HasPrefix(match[1], []byte("goxide: ")) {
+				continue
+			}
+			errors = append(errors, compilerDiagnostic{string(match[1]), fmt.Sprintf("%s:%s: %s", match[2], match[3], match[4])})
+		}
+		return errors
+	}
+	wantErrors := compilerErrors(raw)
+	if len(wantErrors) != 2 {
+		t.Fatalf("expected two positioned Go diagnostics:\n%s", raw)
+	}
+	t.Logf("independent real Go compiler stderr:\n%s", raw)
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
-	cli := filepath.Join(dir, "goxide")
+	artifacts := t.TempDir()
+	cli := filepath.Join(artifacts, "goxide")
 	if out, err := sourceMappingGo(t, root, "build", "-o", cli, "./cmd/goxide"); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, out)
 	}
-	cmd := exec.Command(cli, "build", "--runtime", root, "--go", filepath.Join(runtime.GOROOT(), "bin/go"), "-o", filepath.Join(dir, "program"), input)
-	cmd.Env = append(os.Environ(), "GOCACHE=/tmp/goxide-macro-cache", "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("CLI build accepted invalid Go")
+	for _, mode := range []string{"standalone", "configured"} {
+		t.Run(mode, func(t *testing.T) {
+			dir, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			input := filepath.Join(dir, "original.gox")
+			if err := testdeps.WriteFile(input, []byte(source), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "configured" {
+				if err := testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module compilerfixture\n\ngo 1.27\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cmd := exec.Command(cli, "build", "--runtime", root, "--go", filepath.Join(runtime.GOROOT(), "bin/go"), "-o", filepath.Join(artifacts, mode+"-program"), input)
+			cmd.Dir = root
+			cmd.Env = append(os.Environ(), "GOCACHE=/tmp/goxide-macro-cache", "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				t.Fatal("CLI build accepted invalid Go")
+			}
+			gotErrors := compilerErrors(output)
+			if len(gotErrors) != len(wantErrors) {
+				t.Fatalf("CLI lost raw compiler diagnostics: got %q, want %q:\n%s", gotErrors, wantErrors, output)
+			}
+			for i, want := range wantErrors {
+				if gotErrors[i].positionMessage != want.positionMessage {
+					t.Fatalf("CLI changed raw compiler position/message: got %q, want %q:\n%s", gotErrors[i].positionMessage, want.positionMessage, output)
+				}
+				if gotErrors[i].file != gotErrors[0].file {
+					t.Fatalf("CLI diagnostics came from different generated files: %q:\n%s", gotErrors, output)
+				}
+			}
+			if mode == "standalone" {
+				for _, line := range strings.Split(string(raw), "\n") {
+					if strings.Contains(line, "cannot use") && !bytes.Contains(output, []byte(line)) {
+						t.Fatalf("CLI lost original compiler stderr %q:\n%s", line, output)
+					}
+				}
+			}
+			for _, line := range []int{5, 6} {
+				column := strings.Index(strings.Split(source, "\n")[line-1], `"repeated"`) + 1
+				want := fmt.Sprintf("goxide: %s:%d:%d: ", input, line, column)
+				if bytes.Count(output, []byte(want)) != 1 {
+					t.Fatalf("expected one precise mapped occurrence %q:\n%s", want, output)
+				}
+			}
+			t.Logf("real compiler stderr retained with mapped diagnostics:\n%s", output)
+		})
 	}
-	for _, line := range strings.Split(string(raw), "\n") {
-		if strings.Contains(line, "cannot use") && !bytes.Contains(output, []byte(line)) {
-			t.Fatalf("CLI lost original compiler stderr %q:\n%s", line, output)
-		}
-	}
-	for _, line := range []int{5, 6} {
-		column := strings.Index(strings.Split(source, "\n")[line-1], `"repeated"`) + 1
-		want := fmt.Sprintf("%s:%d:%d", input, line, column)
-		if !bytes.Contains(output, []byte(want)) {
-			t.Fatalf("missing precise mapped occurrence %q:\n%s", want, output)
-		}
-	}
-	t.Logf("real compiler stderr retained with mapped diagnostics:\n%s", output)
 }
 
 func TestSourceMappingRealCompilerGeneratedHelperStaysUnmapped(t *testing.T) {

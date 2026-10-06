@@ -1,0 +1,17 @@
+=== RUN   TestMacroSyntheticDiagnosticKeepsKnownFrames
+    macro_origins_test.go:40: synthetic point must keep only its proven stack: synthetic.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]
+--- FAIL: TestMacroSyntheticDiagnosticKeepsKnownFrames (0.00s)
+=== RUN   TestMacroSyntheticCrossFileAndPackageFrames
+    macro_origins_test.go:66: synthetic point must keep only its proven stack: definitions.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [44,44))
+          macro outer defined at definitions.gox:3:1; invoked at caller.gox:2:23
+          macro bad defined at definitions.gox:2:1; invoked at definitions.gox:3:33
+--- FAIL: TestMacroSyntheticCrossFileAndPackageFrames (0.00s)
+=== RUN   TestMacroSyntheticTypeErrorKeepsFrames
+    macro_origins_test.go:95: synthetic point must keep only its proven stack: lowered.gox:33:45: invalid operation: (n) + "wrong" (mismatched types int and untyped string) [generated/unmapped]
+--- FAIL: TestMacroSyntheticTypeErrorKeepsFrames (0.06s)
+=== RUN   TestMacroSyntheticSegmentRetainsStack
+    macro_origins_test.go:116: successful expansion lost every synthetic segment's proven stack
+--- FAIL: TestMacroSyntheticSegmentRetainsStack (0.00s)
+FAIL
+FAIL    github.com/hxsf/goxide/internal/frontend        0.464s
+FAIL

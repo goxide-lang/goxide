@@ -1,0 +1,32 @@
+{
+  "baseline": "c32b94f4375aa5b2750107edffe422315168d5b4",
+  "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-synthetic-origin/acceptance-scratch",
+  "after_command": "go test -race ./tests/acceptance -run '^TestMacroSyntheticOriginCLI$' -count=1 -v",
+  "before_command": "go test ./tests/acceptance -run '^TestMacroSyntheticOriginCLI$' -count=1 -v",
+  "before": {
+    "exit": 1,
+    "cases_failed_for_expected_defects": 12,
+    "exact_token_controls_passed": 6,
+    "legal_control_passed": 1
+  },
+  "after": {
+    "exit": 0,
+    "leaf_cases_passed": 19,
+    "test_seconds": 3.99,
+    "package_seconds": 5.877
+  },
+  "environment": {
+    "GOMAXPROCS": "4",
+    "GOTOOLCHAIN": "local",
+    "TMPDIR": "/Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native",
+    "GOCACHE": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-build",
+    "GOMODCACHE": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod"
+  },
+  "files_sha256": {
+    "internal/frontend/compile.go": "04ded2c11c6fdd8816c31ed4a4bb9cf86af31cd8a2537ed79feef6e588325bc4",
+    "internal/frontend/macro_origins.go": "1d2b654e906a173ea72675035ca44a891e1a4421e275a09697064d25e867a276",
+    "internal/sourcemap/map.go": "407cb7852fb7ff78d78da575f1d03c04acfc5e4f7090f7454922ae0e07c8257c",
+    "tests/acceptance/macro_synthetic_origin_test.go": "741ab2e2a0d4c37087a5147562ac1fbaf249791cf1ea33301b7b4e2616995720"
+  },
+  "acceptance_patch_sha256": "0e1ecba4aadd3d73e69522f4743da79e3bafb27d79209575015ea26efbfde65b"
+}

@@ -1,0 +1,265 @@
+{
+  "baselineCommit": "c32b94f4375aa5b2750107edffe422315168d5b4",
+  "baselineExecutable": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/goxide-baseline",
+  "baselineExecutableSha256": "e98382c81c9e945d9843211ddfe002a01deb44063e0d6ab46339a5ad86bafb34",
+  "currentCommit": "fd8380c39876c96441857a737be8e32c322a0467",
+  "comparison": "same source bytes and exact input filename; generated Go only, excluding source maps/diagnostics",
+  "results": [
+    {
+      "name": "example/macro",
+      "sourceSha256": "fb81b7b2149ddf74cd169bc52961e05545f8272ab5a9c7eeff5ca482525c31bd",
+      "baselineGoSha256": "11a4db1019c59ffbe20321a833087c57197b12a9ddc204e12971295b85c85f73",
+      "currentGoSha256": "11a4db1019c59ffbe20321a833087c57197b12a9ddc204e12971295b85c85f73",
+      "bytes": 295,
+      "byteEqual": true
+    },
+    {
+      "name": "example/enum",
+      "sourceSha256": "b2b316001a2be3b1d1ecec3904a777622e97da3af3a28899f5af3c5aa440ebae",
+      "baselineGoSha256": "c91f6c8abe0bbfabf59a9b1a0d6d5915a75ea12ae971a2b0a41604ff5a92a0c6",
+      "currentGoSha256": "c91f6c8abe0bbfabf59a9b1a0d6d5915a75ea12ae971a2b0a41604ff5a92a0c6",
+      "bytes": 2857,
+      "byteEqual": true
+    },
+    {
+      "name": "example/result",
+      "sourceSha256": "689e8f52159861e7e58161893205544d81113fac68223b7908d9c1bd9006fd6f",
+      "baselineGoSha256": "7a5c200400c281cdc831ba4f10a4e6c13d2b5fbfe0f709e26946a2cfcb9e6a65",
+      "currentGoSha256": "7a5c200400c281cdc831ba4f10a4e6c13d2b5fbfe0f709e26946a2cfcb9e6a65",
+      "bytes": 7244,
+      "byteEqual": true
+    },
+    {
+      "name": "example/go_result",
+      "sourceSha256": "f166937eeb3049b064aeb9ea1ed989df58695fb4d780d00e4618de566e65448a",
+      "baselineGoSha256": "3e53b985a8cfc3a44c84b4ba7428df940cb376667e7d779b7dde3b2374729a06",
+      "currentGoSha256": "3e53b985a8cfc3a44c84b4ba7428df940cb376667e7d779b7dde3b2374729a06",
+      "bytes": 8074,
+      "byteEqual": true
+    },
+    {
+      "name": "example/derive",
+      "sourceSha256": "3a55408a013b9199cd1b528dcca66790f623c819a51019161e33fa8cc1c2c4e5",
+      "baselineGoSha256": "6e5699ddd81cd67e352ea7b4224ab2bcc0e1da5e7fb77bbf17432359b978c31d",
+      "currentGoSha256": "6e5699ddd81cd67e352ea7b4224ab2bcc0e1da5e7fb77bbf17432359b978c31d",
+      "bytes": 3310,
+      "byteEqual": true
+    },
+    {
+      "name": "example/macro_repeat",
+      "sourceSha256": "6e1b74e44afca6910d0ac9e21d7764dee3b1d3c95ed564112e44fd830c543d20",
+      "baselineGoSha256": "233ec5755da0934d8614972add472e69af2f799072bd7d5f52b9fb0b74c6d8f2",
+      "currentGoSha256": "233ec5755da0934d8614972add472e69af2f799072bd7d5f52b9fb0b74c6d8f2",
+      "bytes": 206,
+      "byteEqual": true
+    },
+    {
+      "name": "example/equality",
+      "sourceSha256": "487cfa49ae27f714b7cb438315ebc851bd2bf611d3f201ff6b445ea23c9d041b",
+      "baselineGoSha256": "92f4a252735d4f55d6de8c53de4af54ae62edd104250aa8cc3c70c4c30031345",
+      "currentGoSha256": "92f4a252735d4f55d6de8c53de4af54ae62edd104250aa8cc3c70c4c30031345",
+      "bytes": 1050,
+      "byteEqual": true
+    },
+    {
+      "name": "example/defaults",
+      "sourceSha256": "d1c741128eabcbf1e9c88857abb34be91b9be996cbba51b9ba7524f665aff1ce",
+      "baselineGoSha256": "d0d95bfc3cd7efd0624b98973b18dd454901f05ed8f1526ad18c14a3f56ad8c2",
+      "currentGoSha256": "d0d95bfc3cd7efd0624b98973b18dd454901f05ed8f1526ad18c14a3f56ad8c2",
+      "bytes": 925,
+      "byteEqual": true
+    },
+    {
+      "name": "example/serde_option",
+      "sourceSha256": "541bdf2855a3e08faaa900d5d93fe2a992fd3813f5cf097fa7f3133560942ca4",
+      "baselineGoSha256": "e48df00e9ec8e231bcf8b0824fa8a0b5e253056227b566b910f69c3cf1e44129",
+      "currentGoSha256": "e48df00e9ec8e231bcf8b0824fa8a0b5e253056227b566b910f69c3cf1e44129",
+      "bytes": 5033,
+      "byteEqual": true
+    },
+    {
+      "name": "example/readonly",
+      "sourceSha256": "a12cccd631af9fc29746cf637c9b07f9fbb409802116ce8a04bfa646dca0c680",
+      "baselineGoSha256": "f023cec53efdef10ca3d50d01569ecd16b4ffe17ea26edd94bd5fdb55bb6cb23",
+      "currentGoSha256": "f023cec53efdef10ca3d50d01569ecd16b4ffe17ea26edd94bd5fdb55bb6cb23",
+      "bytes": 412,
+      "byteEqual": true
+    },
+    {
+      "name": "check/error_only",
+      "sourceSha256": "abcddf235ce5cad289312b76a31523248d5c8048578414b4eaa65ef541464e14",
+      "baselineGoSha256": "1fc7a83fa850912ecfb2fe2a4103db7f7115f6385ea771cdc8c75e97829937ce",
+      "currentGoSha256": "1fc7a83fa850912ecfb2fe2a4103db7f7115f6385ea771cdc8c75e97829937ce",
+      "bytes": 4315,
+      "byteEqual": true
+    },
+    {
+      "name": "check/typed_nil",
+      "sourceSha256": "c021185afb99cb37e5a2d717c783f2107fd7dbfe00e6948ea98322964e138c93",
+      "baselineGoSha256": "a4b302acebf9b8f53fd9a30f6ef7ba86abbb3359dcdeda0d977b161648b1c991",
+      "currentGoSha256": "a4b302acebf9b8f53fd9a30f6ef7ba86abbb3359dcdeda0d977b161648b1c991",
+      "bytes": 3486,
+      "byteEqual": true
+    },
+    {
+      "name": "check/pointer_error",
+      "sourceSha256": "1e5f2683288dceedd6c6d442056e7c407dc075fd83bb1839c04c7ce5229b54f5",
+      "baselineGoSha256": "0ea18df23d7424ca56ce5ecbe66e4296a1e7dabaf3d4721ad633e4365a1a966a",
+      "currentGoSha256": "0ea18df23d7424ca56ce5ecbe66e4296a1e7dabaf3d4721ad633e4365a1a966a",
+      "bytes": 2598,
+      "byteEqual": true
+    },
+    {
+      "name": "check/named_error",
+      "sourceSha256": "6624a602b1f27104c52a9ca59300929d3097c1563d5864ca4405b57055bf254e",
+      "baselineGoSha256": "e79cc9c64b69b11e76e0a9bcd1371e38b40695120cd8f456b2f3b293f2c25a9f",
+      "currentGoSha256": "e79cc9c64b69b11e76e0a9bcd1371e38b40695120cd8f456b2f3b293f2c25a9f",
+      "bytes": 2501,
+      "byteEqual": true
+    },
+    {
+      "name": "check/slice_error",
+      "sourceSha256": "3ebe285e05827c905a453e3b3236724b0ae72faa1edbdee74a3b2dd216d8c2c3",
+      "baselineGoSha256": "3b9b9d2b8c7b97283358f5013f00471dd4179314e04f2ecacc0e13106327330e",
+      "currentGoSha256": "3b9b9d2b8c7b97283358f5013f00471dd4179314e04f2ecacc0e13106327330e",
+      "bytes": 2590,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_imported_helper",
+      "sourceSha256": "d5a44dbbcb04dbd1e6f8e17c0be797c82e4c8c1d393a0f078fcbc999e2902afa",
+      "baselineGoSha256": "c2c980cbbd7e54e74c31a911d583680246d121ee0c3f9b889ef5e861e6c742a1",
+      "currentGoSha256": "c2c980cbbd7e54e74c31a911d583680246d121ee0c3f9b889ef5e861e6c742a1",
+      "bytes": 109,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_append_native",
+      "sourceSha256": "f85d38327054a1ca0f574c0a0a1438c56e411f9447208ce0bf42be7e119fd804",
+      "baselineGoSha256": "a813a04a9dc3a9cc62fdb1f77874c862f7ef30e974bc81cf0c2d9066f0ef1841",
+      "currentGoSha256": "a813a04a9dc3a9cc62fdb1f77874c862f7ef30e974bc81cf0c2d9066f0ef1841",
+      "bytes": 433,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_append_shadow",
+      "sourceSha256": "460e1d03535f5e3b6b3f78f03720567c6d0ebcf71c0e336780c2d27c6f99ca22",
+      "baselineGoSha256": "6d16622bb498b979eaec46c3403fd0708cb1961e193652a54504caa09bcc3d96",
+      "currentGoSha256": "6d16622bb498b979eaec46c3403fd0708cb1961e193652a54504caa09bcc3d96",
+      "bytes": 1134,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_append_string",
+      "sourceSha256": "e5e9b883dc076bbeb0ce574b6a8de10391949c376f6f8ba2ee747204e8aa5fe6",
+      "baselineGoSha256": "caee07a527576b8283d8ea4b7df822cee3bfb36a5da9589f63c4e5228b4ef91b",
+      "currentGoSha256": "caee07a527576b8283d8ea4b7df822cee3bfb36a5da9589f63c4e5228b4ef91b",
+      "bytes": 306,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_append_question",
+      "sourceSha256": "4f45c7394b1085e938fe84d2af0740f0c8a9647391e3942305a0e09c7fb6ada4",
+      "baselineGoSha256": "6ab987fc1baad3617919fe36e5f2d10cfda0c8f22f3d609ba4cefd045ce38f64",
+      "currentGoSha256": "6ab987fc1baad3617919fe36e5f2d10cfda0c8f22f3d609ba4cefd045ce38f64",
+      "bytes": 3176,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_append_function",
+      "sourceSha256": "7d56364d901fbb5782c1b2ba9f5887288f75ccb10f38005907301e75f2f830f7",
+      "baselineGoSha256": "d243249a6b25434c9217bc35b755f1ff5bd40ddb161dc23ace2f84598d7ece9c",
+      "currentGoSha256": "d243249a6b25434c9217bc35b755f1ff5bd40ddb161dc23ace2f84598d7ece9c",
+      "bytes": 309,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_copy_native",
+      "sourceSha256": "f07913c85c75879ef011e756eeebd261e400d53a93cd111acd4711f39eca0215",
+      "baselineGoSha256": "52891b22ef7ed5792e706776f8962c90a8c39b00921c2f0ee216fd26b47e090e",
+      "currentGoSha256": "52891b22ef7ed5792e706776f8962c90a8c39b00921c2f0ee216fd26b47e090e",
+      "bytes": 747,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_copy_string",
+      "sourceSha256": "3ebf985ba5aafa2679a4e15e95790aa2960ec656766bbd1eac30fb5c559b0292",
+      "baselineGoSha256": "34933e5433a7b3230291ce05b298342c789a9d66ff00c065934bcf07d8a8d9a1",
+      "currentGoSha256": "34933e5433a7b3230291ce05b298342c789a9d66ff00c065934bcf07d8a8d9a1",
+      "bytes": 269,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_copy_shadow",
+      "sourceSha256": "f263085a73e53a17eb6f45222a985447194c099abe2e9b6d90c69252066eb7b5",
+      "baselineGoSha256": "0d00b1276aef6055371ef3bda05ed2db0064d43f202660cc62dd36cdacb1e07a",
+      "currentGoSha256": "0d00b1276aef6055371ef3bda05ed2db0064d43f202660cc62dd36cdacb1e07a",
+      "bytes": 1179,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_copy_function",
+      "sourceSha256": "064f2330f20fe3e72a12b7c0174299aad6298b8b1405a5ae2a16dfc29cf2bce5",
+      "baselineGoSha256": "190379d8fb70ae4707e9a6cad115b8a76dfdb1adbf2fe30a12c5741f8c3a9190",
+      "currentGoSha256": "190379d8fb70ae4707e9a6cad115b8a76dfdb1adbf2fe30a12c5741f8c3a9190",
+      "bytes": 302,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_copy_question",
+      "sourceSha256": "70d72c662d9958fc49abc268025a2ebe220de0c5a110c81a09fea17bf26ddd69",
+      "baselineGoSha256": "08c92c71dedbe3186d06a2d84c7f76d51063463228ac59a99694ffcc5a7a5e7a",
+      "currentGoSha256": "08c92c71dedbe3186d06a2d84c7f76d51063463228ac59a99694ffcc5a7a5e7a",
+      "bytes": 3888,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_copy_readonly_source",
+      "sourceSha256": "3f527deb15c15a9349ecf1113965ca10fbb71990ff24091d03b25b3858d1386f",
+      "baselineGoSha256": "7bdd094ade2e8a1c9a4eb4d10cb44ceab1294e1cd99a8d061257d6784b4d4c2f",
+      "currentGoSha256": "7bdd094ade2e8a1c9a4eb4d10cb44ceab1294e1cd99a8d061257d6784b4d4c2f",
+      "bytes": 337,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_allocation_native",
+      "sourceSha256": "07b0739e7ac3ddd1e41ca5db82ad94f150cbed994172da9c481f8220df6065a9",
+      "baselineGoSha256": "d03247af563926855cbbad5919135edb857869a587736e9ad1de605535d5376b",
+      "currentGoSha256": "d03247af563926855cbbad5919135edb857869a587736e9ad1de605535d5376b",
+      "bytes": 913,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_allocation_new_types",
+      "sourceSha256": "90a4788eb29560a169bf125821c15fa4e3ad23f2d13a1e79803845f2d76a3f7a",
+      "baselineGoSha256": "c5cd8224d86f4fa636d7b08720fb9003fbf957dfbac5039e50dae6eb9f02f141",
+      "currentGoSha256": "c5cd8224d86f4fa636d7b08720fb9003fbf957dfbac5039e50dae6eb9f02f141",
+      "bytes": 1000,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_allocation_shadow",
+      "sourceSha256": "0dd97faa142c42ada93cf8995a01310397bda6f602d33effcad1871fe3a49e58",
+      "baselineGoSha256": "26ccf006d4055f8ebc5aba6a6a422b1d1854d11f60e0144ee8a5c49563e5b4de",
+      "currentGoSha256": "26ccf006d4055f8ebc5aba6a6a422b1d1854d11f60e0144ee8a5c49563e5b4de",
+      "bytes": 809,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_allocation_function",
+      "sourceSha256": "7ed993815a03e3d5bbf9bc28dd1db1366d1b9387610532a0d3a3b87e719efc0b",
+      "baselineGoSha256": "4ff0fb0fad68a7314086119c82272183b08c7b263056f8a389585aeee12d4a65",
+      "currentGoSha256": "4ff0fb0fad68a7314086119c82272183b08c7b263056f8a389585aeee12d4a65",
+      "bytes": 392,
+      "byteEqual": true
+    },
+    {
+      "name": "check/macro_allocation_question",
+      "sourceSha256": "1e1e2696718bdcd7e70ce55842e1951c53b11d99a57cd15bde23b1dcfca57d03",
+      "baselineGoSha256": "636c2a918cb8b02b7171a84955e2798b358c4b8cb18c8a0013510aacab12739d",
+      "currentGoSha256": "636c2a918cb8b02b7171a84955e2798b358c4b8cb18c8a0013510aacab12739d",
+      "bytes": 2994,
+      "byteEqual": true
+    }
+  ]
+}

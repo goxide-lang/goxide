@@ -1,0 +1,893 @@
+{
+  "source_commit": "c32b94f4375aa5b2750107edffe422315168d5b4",
+  "observations": [
+    {
+      "case": "gate-synthetic",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-synthetic-LF.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-synthetic-LF.gox": "package main\nmacro_rules! m {($x:expr)=>{new($x?)};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "gate-nested",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-nested-LF.gox:2:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-nested-LF.gox": "package main\nmacro_rules! inner {($x:expr)=>{new($x?)};}\nmacro_rules! m {($x:expr)=>{inner!($x)};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "gate-caller-question",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-caller-question-LF.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-caller-question-LF.gox": "package main\nmacro_rules! m {($x:expr)=>{new($x?)};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value())?;return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "gate-enum-before",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-enum-before-LF.gox:3:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-enum-before-LF.gox": "package main\nenum Event { A, B(int), }\nmacro_rules! m {($x:expr)=>{new($x?)};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "gate-question-before",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-question-before-LF.gox:4:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-question-before-LF.gox": "package main\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc earlier()Option[int]{x:=value()?;return Option[int]::Some(x)}\nmacro_rules! m {($x:expr)=>{new($x?)};}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "ordinary-gate-literal",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-LF.gox:2:26: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [38,39))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-LF.gox:3:15",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-LF.gox": "package main\nmacro_rules! m {()=>{new(7)};}\nfunc main(){_=m!()}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          38,
+          39
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-LF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-LF.gox:3:15"
+        ]
+      ]
+    },
+    {
+      "case": "ordinary-gate-after-question",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-LF.gox:4:26: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [158,159))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-LF.gox:4:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-LF.gox:5:15",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-LF.gox": "package main\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc earlier()Option[int]{x:=value()?;return Option[int]::Some(x)}\nmacro_rules! m {()=>{new(7)};}\nfunc main(){_=m!()}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          158,
+          159
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-LF.gox:4:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-LF.gox:5:15"
+        ]
+      ]
+    },
+    {
+      "case": "syntax-synthetic",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-synthetic-LF.gox:2:29: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-synthetic-LF.gox": "package main\nmacro_rules! m {($x:expr)=>{$x? +};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "syntax-synthetic-extra",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-synthetic-extra-LF.gox:2:29: macro: unsupported template syntax: template:3:42: expected ';', found nope (and 1 more errors) [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-synthetic-extra-LF.gox": "package main\nmacro_rules! m {($x:expr)=>{$x? nope};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "syntax-ordinary",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-LF.gox:2:22: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [34,35))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-LF.gox:3:15",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-LF.gox": "package main\nmacro_rules! m {()=>{1 +};}\nfunc main(){_=m!()}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          34,
+          35
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-LF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-LF.gox:3:15"
+        ]
+      ]
+    },
+    {
+      "case": "capture-question-ordinary-token",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-LF.gox:2:33: macro: macro allocation type does not support captured types (source span [45,46))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-LF.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-LF.gox": "package main\nmacro_rules! m {($x:expr)=>{new($x)};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value()?);return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          45,
+          46
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-LF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-LF.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "question-template-before-real-error",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-LF.gox:2:60: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [72,73))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-LF.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-LF.gox": "package main\nmacro_rules! m {($x:expr)=>{func()Option[int]{_= $x?;_=new(7);return Option[int]::None}()};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          72,
+          73
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-LF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-LF.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "downstream-len-question",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/downstream-len-question-LF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/downstream-len-question-LF.gox": "package main\nmacro_rules! m {($x:expr)=>{len($x?)};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "real-error-nested",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:2:30: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [42,43))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:4:15\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:3:22",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox": "package main\nmacro_rules! inner {()=>{new(7)};}\nmacro_rules! m {()=>{inner!()};}\nfunc main(){_=m!()}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          42,
+          43
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:3:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:4:15"
+        ],
+        [
+          "inner",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-LF.gox:3:22"
+        ]
+      ]
+    },
+    {
+      "case": "same-file",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-LF/main.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [45,45))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-LF/main.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-LF/main.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-LF/main.gox": "package main\nmacro_rules! m {($x:expr)=>{new($x?)};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          45,
+          45
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-LF/main.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-LF/main.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "same-file-nested",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:2:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [49,49))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:5:23\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:3:29",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox": "package main\nmacro_rules! inner {($x:expr)=>{new($x?)};}\nmacro_rules! m {($x:expr)=>{inner!($x)};}\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          49,
+          49
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:3:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:5:23"
+        ],
+        [
+          "inner",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-LF/main.gox:3:29"
+        ]
+      ]
+    },
+    {
+      "case": "same-package-multifile",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-LF/macro.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [45,45))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-LF/macro.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-LF/main.gox:3:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-LF/macro.gox": "package main\nmacro_rules! m {($x:expr)=>{new($x?)};}\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-LF/main.gox": "package main\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          45,
+          45
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-LF/macro.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-LF/main.gox:3:23"
+        ]
+      ]
+    },
+    {
+      "case": "same-package-multifile-nested",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/macro.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [45,45))\n  macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/main.gox:5:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/main.gox:3:23\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/macro.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/main.gox:5:33",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/macro.gox": "package main\nmacro_rules! m {($x:expr)=>{new($x?)};}\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/main.gox": "package main\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=outer!(value());return Option[int]::None}\nfunc main(){}\nmacro_rules! outer {($x:expr)=>{m!($x)};}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          45,
+          45
+        ]
+      ],
+      "frames": [
+        [
+          "outer",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/main.gox:5:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/main.gox:3:23"
+        ],
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/macro.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-LF/main.gox:5:33"
+        ]
+      ]
+    },
+    {
+      "case": "cross-package",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-LF/defs/macros.gox:2:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [49,49))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-LF/defs/macros.gox:2:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-LF/main.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-LF/defs/macros.gox": "package defs\npub macro_rules! m {($x:expr)=>{new($x?)};}\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-LF/main.gox": "package main\nimport d \"review.example/stack/defs\"\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=d.m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          49,
+          49
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-LF/defs/macros.gox:2:5",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-LF/main.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "cross-package-nested",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/defs/macros.gox:2:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [49,49))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/defs/macros.gox:3:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/main.gox:4:23\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/defs/macros.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/defs/macros.gox:3:33",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/defs/macros.gox": "package defs\nmacro_rules! inner {($x:expr)=>{new($x?)};}\npub macro_rules! m {($x:expr)=>{inner!($x)};}\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/main.gox": "package main\nimport d \"review.example/stack/defs\"\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=d.m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          49,
+          49
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/defs/macros.gox:3:5",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/main.gox:4:23"
+        ],
+        [
+          "inner",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/defs/macros.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-LF/defs/macros.gox:3:33"
+        ]
+      ]
+    },
+    {
+      "case": "cross-package-question-before",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-LF/defs/macros.gox:4:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [187,187))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-LF/defs/macros.gox:4:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-LF/main.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-LF/defs/macros.gox": "package defs\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc earlier()Option[int]{x:=value()?;return Option[int]::Some(x)}\npub macro_rules! m {($x:expr)=>{new($x?)};}\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-LF/main.gox": "package main\nimport d \"review.example/stack/defs\"\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc f()Option[int]{_=d.m!(value());return Option[int]::None}\nfunc main(){}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          187,
+          187
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-LF/defs/macros.gox:4:5",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-LF/main.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "cross-package-ordinary-control",
+      "line_endings": "LF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-LF/defs/macros.gox:4:30: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [162,163))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-LF/defs/macros.gox:4:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-LF/main.gox:3:15",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-LF/defs/macros.gox": "package defs\nfunc value()Option[int]{return Option[int]::Some(1)}\nfunc earlier()Option[int]{x:=value()?;return Option[int]::Some(x)}\npub macro_rules! m {()=>{new(7)};}\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-LF/main.gox": "package main\nimport d \"review.example/stack/defs\"\nfunc main(){_=d.m!()}\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          162,
+          163
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-LF/defs/macros.gox:4:5",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-LF/main.gox:3:15"
+        ]
+      ]
+    },
+    {
+      "case": "gate-synthetic",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-synthetic-CRLF.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-synthetic-CRLF.gox": "package main\r\nmacro_rules! m {($x:expr)=>{new($x?)};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "gate-nested",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-nested-CRLF.gox:2:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-nested-CRLF.gox": "package main\r\nmacro_rules! inner {($x:expr)=>{new($x?)};}\r\nmacro_rules! m {($x:expr)=>{inner!($x)};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "gate-caller-question",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-caller-question-CRLF.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-caller-question-CRLF.gox": "package main\r\nmacro_rules! m {($x:expr)=>{new($x?)};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value())?;return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "gate-enum-before",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-enum-before-CRLF.gox:3:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-enum-before-CRLF.gox": "package main\r\nenum Event { A, B(int), }\r\nmacro_rules! m {($x:expr)=>{new($x?)};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "gate-question-before",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-question-before-CRLF.gox:4:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/gate-question-before-CRLF.gox": "package main\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc earlier()Option[int]{x:=value()?;return Option[int]::Some(x)}\r\nmacro_rules! m {($x:expr)=>{new($x?)};}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "ordinary-gate-literal",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-CRLF.gox:2:26: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [39,40))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-CRLF.gox:3:15",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-CRLF.gox": "package main\r\nmacro_rules! m {()=>{new(7)};}\r\nfunc main(){_=m!()}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          39,
+          40
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-CRLF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-literal-CRLF.gox:3:15"
+        ]
+      ]
+    },
+    {
+      "case": "ordinary-gate-after-question",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-CRLF.gox:4:26: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [161,162))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-CRLF.gox:4:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-CRLF.gox:5:15",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-CRLF.gox": "package main\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc earlier()Option[int]{x:=value()?;return Option[int]::Some(x)}\r\nmacro_rules! m {()=>{new(7)};}\r\nfunc main(){_=m!()}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          161,
+          162
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-CRLF.gox:4:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/ordinary-gate-after-question-CRLF.gox:5:15"
+        ]
+      ]
+    },
+    {
+      "case": "syntax-synthetic",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-synthetic-CRLF.gox:2:29: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-synthetic-CRLF.gox": "package main\r\nmacro_rules! m {($x:expr)=>{$x? +};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "syntax-synthetic-extra",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-synthetic-extra-CRLF.gox:2:29: macro: unsupported template syntax: template:3:42: expected ';', found nope (and 1 more errors) [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-synthetic-extra-CRLF.gox": "package main\r\nmacro_rules! m {($x:expr)=>{$x? nope};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "syntax-ordinary",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-CRLF.gox:2:22: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [35,36))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-CRLF.gox:3:15",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-CRLF.gox": "package main\r\nmacro_rules! m {()=>{1 +};}\r\nfunc main(){_=m!()}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          35,
+          36
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-CRLF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/syntax-ordinary-CRLF.gox:3:15"
+        ]
+      ]
+    },
+    {
+      "case": "capture-question-ordinary-token",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-CRLF.gox:2:33: macro: macro allocation type does not support captured types (source span [46,47))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-CRLF.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-CRLF.gox": "package main\r\nmacro_rules! m {($x:expr)=>{new($x)};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value()?);return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          46,
+          47
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-CRLF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/capture-question-ordinary-token-CRLF.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "question-template-before-real-error",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-CRLF.gox:2:60: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [73,74))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-CRLF.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-CRLF.gox": "package main\r\nmacro_rules! m {($x:expr)=>{func()Option[int]{_= $x?;_=new(7);return Option[int]::None}()};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          73,
+          74
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-CRLF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/question-template-before-real-error-CRLF.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "downstream-len-question",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/downstream-len-question-CRLF.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/downstream-len-question-CRLF.gox": "package main\r\nmacro_rules! m {($x:expr)=>{len($x?)};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": true,
+      "source_spans": [],
+      "frames": []
+    },
+    {
+      "case": "real-error-nested",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:2:30: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [43,44))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:4:15\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:3:22",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox": "package main\r\nmacro_rules! inner {()=>{new(7)};}\r\nmacro_rules! m {()=>{inner!()};}\r\nfunc main(){_=m!()}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          43,
+          44
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:3:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:4:15"
+        ],
+        [
+          "inner",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/real-error-nested-CRLF.gox:3:22"
+        ]
+      ]
+    },
+    {
+      "case": "same-file",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-CRLF/main.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [46,46))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-CRLF/main.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-CRLF/main.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-CRLF/main.gox": "package main\r\nmacro_rules! m {($x:expr)=>{new($x?)};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          46,
+          46
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-CRLF/main.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-CRLF/main.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "same-file-nested",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:2:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [50,50))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:5:23\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:3:29",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox": "package main\r\nmacro_rules! inner {($x:expr)=>{new($x?)};}\r\nmacro_rules! m {($x:expr)=>{inner!($x)};}\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          50,
+          50
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:3:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:5:23"
+        ],
+        [
+          "inner",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-file-nested-CRLF/main.gox:3:29"
+        ]
+      ]
+    },
+    {
+      "case": "same-package-multifile",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-CRLF/macro.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [46,46))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-CRLF/macro.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-CRLF/main.gox:3:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-CRLF/macro.gox": "package main\r\nmacro_rules! m {($x:expr)=>{new($x?)};}\r\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-CRLF/main.gox": "package main\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          46,
+          46
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-CRLF/macro.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-CRLF/main.gox:3:23"
+        ]
+      ]
+    },
+    {
+      "case": "same-package-multifile-nested",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/macro.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [46,46))\n  macro outer defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/main.gox:5:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/main.gox:3:23\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/macro.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/main.gox:5:33",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/macro.gox": "package main\r\nmacro_rules! m {($x:expr)=>{new($x?)};}\r\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/main.gox": "package main\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=outer!(value());return Option[int]::None}\r\nfunc main(){}\r\nmacro_rules! outer {($x:expr)=>{m!($x)};}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          46,
+          46
+        ]
+      ],
+      "frames": [
+        [
+          "outer",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/main.gox:5:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/main.gox:3:23"
+        ],
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/macro.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/same-package-multifile-nested-CRLF/main.gox:5:33"
+        ]
+      ]
+    },
+    {
+      "case": "cross-package",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-CRLF/defs/macros.gox:2:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [50,50))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-CRLF/defs/macros.gox:2:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-CRLF/main.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-CRLF/defs/macros.gox": "package defs\r\npub macro_rules! m {($x:expr)=>{new($x?)};}\r\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-CRLF/main.gox": "package main\r\nimport d \"review.example/stack/defs\"\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=d.m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          50,
+          50
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-CRLF/defs/macros.gox:2:5",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-CRLF/main.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "cross-package-nested",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/defs/macros.gox:2:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [50,50))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/defs/macros.gox:3:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/main.gox:4:23\n  macro inner defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/defs/macros.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/defs/macros.gox:3:33",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/defs/macros.gox": "package defs\r\nmacro_rules! inner {($x:expr)=>{new($x?)};}\r\npub macro_rules! m {($x:expr)=>{inner!($x)};}\r\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/main.gox": "package main\r\nimport d \"review.example/stack/defs\"\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=d.m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          50,
+          50
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/defs/macros.gox:3:5",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/main.gox:4:23"
+        ],
+        [
+          "inner",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/defs/macros.gox:2:1",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-nested-CRLF/defs/macros.gox:3:33"
+        ]
+      ]
+    },
+    {
+      "case": "cross-package-question-before",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-CRLF/defs/macros.gox:4:37: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [190,190))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-CRLF/defs/macros.gox:4:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-CRLF/main.gox:4:23",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-CRLF/defs/macros.gox": "package defs\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc earlier()Option[int]{x:=value()?;return Option[int]::Some(x)}\r\npub macro_rules! m {($x:expr)=>{new($x?)};}\r\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-CRLF/main.gox": "package main\r\nimport d \"review.example/stack/defs\"\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc f()Option[int]{_=d.m!(value());return Option[int]::None}\r\nfunc main(){}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          190,
+          190
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-CRLF/defs/macros.gox:4:5",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-question-before-CRLF/main.gox:4:23"
+        ]
+      ]
+    },
+    {
+      "case": "cross-package-ordinary-control",
+      "line_endings": "CRLF",
+      "exit": 1,
+      "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-CRLF/defs/macros.gox:4:30: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [165,166))\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-CRLF/defs/macros.gox:4:5; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-CRLF/main.gox:3:15",
+      "files": {
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-CRLF/defs/macros.gox": "package defs\r\nfunc value()Option[int]{return Option[int]::Some(1)}\r\nfunc earlier()Option[int]{x:=value()?;return Option[int]::Some(x)}\r\npub macro_rules! m {()=>{new(7)};}\r\n",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-CRLF/main.gox": "package main\r\nimport d \"review.example/stack/defs\"\r\nfunc main(){_=d.m!()}\r\n"
+      },
+      "unmapped": false,
+      "source_spans": [
+        [
+          165,
+          166
+        ]
+      ],
+      "frames": [
+        [
+          "m",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-CRLF/defs/macros.gox:4:5",
+          "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a03-question-stack/independent-review/fixtures/cross-package-ordinary-control-CRLF/main.gox:3:15"
+        ]
+      ]
+    }
+  ]
+}

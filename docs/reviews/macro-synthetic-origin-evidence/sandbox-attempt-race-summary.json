@@ -1,0 +1,129 @@
+{
+  "compilerCommit": "fd8380c39876c96441857a737be8e32c322a0467",
+  "command": "go test -race -count=1 -timeout 30m -json ./...",
+  "exitCode": 1,
+  "environment": {
+    "platform": "darwin/arm64",
+    "go": "1.27.1",
+    "GOTOOLCHAIN": "local",
+    "GOMAXPROCS": "4",
+    "TMPDIR": "task-local real directory",
+    "GOMODCACHE": "task cache, complete fixed dependency source graph"
+  },
+  "startedAt": "2026-10-07T02:26:04.188089+08:00",
+  "endedAt": "2026-10-07T02:33:20.864044+08:00",
+  "topLevelTests": {
+    "pass": 486,
+    "fail": 1
+  },
+  "subtests": {
+    "pass": 1171
+  },
+  "packageResults": {
+    "skip": 5,
+    "pass": 16,
+    "fail": 1
+  },
+  "packages": {
+    "github.com/hxsf/goxide/internal/buildconfig": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/formatting": {
+      "result": "pass",
+      "elapsedSeconds": 1.806
+    },
+    "github.com/hxsf/goxide/internal/deriveextras": {
+      "result": "pass",
+      "elapsedSeconds": 3.038
+    },
+    "github.com/hxsf/goxide/internal/enums": {
+      "result": "pass",
+      "elapsedSeconds": 7.59
+    },
+    "github.com/hxsf/goxide/internal/equality": {
+      "result": "pass",
+      "elapsedSeconds": 20.233
+    },
+    "github.com/hxsf/goxide/internal/buildscript": {
+      "result": "pass",
+      "elapsedSeconds": 24.302
+    },
+    "github.com/hxsf/goxide/internal/matchexpr": {
+      "result": "pass",
+      "elapsedSeconds": 2.9130000000000003
+    },
+    "github.com/hxsf/goxide/internal/naming": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/printing": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/project": {
+      "result": "pass",
+      "elapsedSeconds": 1.775
+    },
+    "github.com/hxsf/goxide/internal/propagate": {
+      "result": "pass",
+      "elapsedSeconds": 6.725
+    },
+    "github.com/hxsf/goxide/internal/macros": {
+      "result": "pass",
+      "elapsedSeconds": 13.99
+    },
+    "github.com/hxsf/goxide/internal/scripttrust": {
+      "result": "pass",
+      "elapsedSeconds": 1.3900000000000001
+    },
+    "github.com/hxsf/goxide/internal/refs": {
+      "result": "pass",
+      "elapsedSeconds": 3.159
+    },
+    "github.com/hxsf/goxide/internal/testdeps": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/sourcemap": {
+      "result": "pass",
+      "elapsedSeconds": 1.2770000000000001
+    },
+    "github.com/hxsf/goxide/runtime": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/typecheck": {
+      "result": "pass",
+      "elapsedSeconds": 1.6219999999999999
+    },
+    "github.com/hxsf/goxide/tests/prototype": {
+      "result": "pass",
+      "elapsedSeconds": 10.2
+    },
+    "github.com/hxsf/goxide/internal/frontend": {
+      "result": "pass",
+      "elapsedSeconds": 51.456
+    },
+    "github.com/hxsf/goxide/cmd/goxide": {
+      "result": "fail",
+      "elapsedSeconds": 236.637
+    },
+    "github.com/hxsf/goxide/tests/acceptance": {
+      "result": "pass",
+      "elapsedSeconds": 396.744
+    }
+  },
+  "failedTests": [
+    {
+      "package": "github.com/hxsf/goxide/cmd/goxide",
+      "test": "TestImportSourcesVerifiedAndOffline"
+    }
+  ],
+  "skippedTests": [],
+  "rawLogBytes": 2378503,
+  "rawLogSHA256": "fed9a51009da843fefa3412d16abaa30d9a97b93d748f04c7d297588bfdce930",
+  "rawStderrSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "limits": "Actual Mac native run. No Linux execution or hosted CI success is inferred.",
+  "diagnosis": "Sandbox denied httptest loopback listener: bind operation not permitted. cmd/goxide panicked before later package tests could run. Native targeted race passed unchanged after normal permission approval; complete tree rerun follows separately."
+}

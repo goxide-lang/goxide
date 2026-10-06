@@ -918,3 +918,14 @@ new($x?) 合成节点诊断显示 unmapped/无栈，与基线同类 A03 控制�
 
 按 [RFC0018](rfcs/0018-lowering-contract.md#a03-合成错误点与宏展开栈2026-10-06实施合同)执行；
 本片不自动关闭 A01/A03，尤其不把所有合成传播、helper 或 refs 中间阶段来源标为完成。
+
+
+## A03 合成点来源诊断交付（2026-10-06）
+
+上述验收合同的准确源码为 `fd8380c39876c96441857a737be8e32c322a0467`，分支 `fix/macro-synthetic-origin-stack`。
+19 个 CLI leaf case、完整 Mac race 564 顶层/1226 子测试、全树 vet、
+完整设计机制检查、CLI/WASM 与独立审查通过。合成点继续明确 unmapped，
+错误点是否精确与完整宏栈是否可证明分别判断；未知帧不拼接成虚假完整链。
+跨包同名文件的不同 owner、多个 ?、nested、enum 和原生 Go 真实错误均有证据。
+具体改善及仍未关闭的 A01/A03 场景见[交付报告](reviews/macro-synthetic-origin-20261006.md)。
+Linux 未验证，网站未部署；查不到的精确提交托管 CI 不算通过。

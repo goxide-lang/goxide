@@ -1,0 +1,101 @@
+{
+  "source_commit": "fd8380c39876c96441857a737be8e32c322a0467",
+  "baseline_commit": "c32b94f4375aa5b2750107edffe422315168d5b4",
+  "verdict": "no_blocking_findings",
+  "production_review": {
+    "files": [
+      "internal/frontend/macro_origins.go",
+      "internal/frontend/compile.go",
+      "internal/sourcemap/map.go"
+    ],
+    "point": "Structural validation precedes Original. Prepared points require correct source stage/file coordinates, complete equal-width mapped endpoints and a continuous SpanFor proof. Synthetic markers/parentheses cannot borrow nearby locations.",
+    "registry_owner": "Original=true metadata is owned by the source-built registry. Only structural validation is appropriate at the caller: two packages may use the same filename and the dependency may have offsets beyond the caller buffer. Zero-length registry sentinels are rejected. Foreign non-Original coordinates are rejected.",
+    "frame": "Definition/invocation envelopes use proven original endpoints and forward ordering, not continuous-byte point semantics. Synthetic interior question markers do not invalidate a known frame. Any unknown frame clears the entire chain; input metadata is cloned and order retained.",
+    "independence": "Both immediate Diagnostic failure and successful macro token provenance retain a validated Stack independently of Origin. DiagnosticsFile emits known frames for nil-Origin segments while retaining the generated/unmapped primary label and exact generated-file filtering.",
+    "scope": "No change to macro binding, allocation/append/copy semantics, propagation lowering, refs rules, Compose or Format."
+  },
+  "postfix_counts": {
+    "baseline_matrix_observations": 44,
+    "baseline_matrix_expected_outcomes_confirmed": 44,
+    "matrix_synthetic_point_with_exact_complete_stack": 28,
+    "matrix_ordinary_real_token_diagnostics_byte_unchanged": 14,
+    "matrix_downstream_len_question_residuals": 2,
+    "supplement_case_definitions": 8,
+    "supplement_lf_crlf_baseline_final_pairs": 16,
+    "supplement_improved_synthetic_stack_pairs": 8,
+    "supplement_ordinary_real_point_unchanged_pairs": 2,
+    "supplement_confirmed_residual_pairs": 6,
+    "supplement_present_frame_exact_source_checks": 10,
+    "legal_codegen_baseline_final_pairs": 1,
+    "legal_native_race_run_passed": 1,
+    "initial_review_expectations_passed": 58,
+    "initial_review_expectations_failed": 2,
+    "final_explained_case_observations": 60,
+    "contract_covered_case_observations": 52,
+    "confirmed_residual_case_observations": 8
+  },
+  "baseline_final_comparison": [
+    "Single-file question-marker gate/syntax errors gain exact frames while remaining unmapped.",
+    "Directory and cross-package synthetic zero-length source spans are removed while exact existing frames remain.",
+    "Fourteen original-token diagnostics are byte-identical to c32.",
+    "Single-layer captured append/copy/make native failures and enum-plus-question internal type failure gain one correct frame in both line endings.",
+    "All successful supplement transpiles keep byte-identical generated Go; raw physical Go diagnostics are byte-identical across baseline/final.",
+    "Legal allocation control emits byte-identical Go and go run -race prints 1 2 3."
+  ],
+  "remaining_confirmed": [
+    {
+      "case": "len($x?)",
+      "observations": 2,
+      "classification": "existing downstream reconstructed propagation AST mapping boundary",
+      "behavior": "Correct int-for-len rejection, generated/unmapped, no frames; unchanged c32/fd8380c."
+    },
+    {
+      "case": "nested append expression captures",
+      "observations": 2,
+      "classification": "existing formatter boundary, not strict mapper failure",
+      "behavior": "Go removes redundant double capture parentheses; final error parenthesis has nil Origin/Stack while the adjacent literal retains m->inner. Baseline/final code and stderr unchanged.",
+      "stage_evidence": "../../macro-synthetic-origin-scope/nested-append-format-probe.json independently demonstrates raw synthetic parentheses Stack=2, mapper Stack=2, format.original error parenthesis Stack=0, literal Stack=2."
+    },
+    {
+      "case": "helper alias initialization-cycle notes",
+      "observations": 2,
+      "classification": "existing raw note-chain attribution boundary",
+      "behavior": "Primary Value error is mapped. Appended generated alias cycle notes remain raw without macro-frame augmentation; unchanged."
+    },
+    {
+      "case": "refs readonly field increment",
+      "observations": 2,
+      "classification": "existing refs.Finish intermediate coordinates boundary",
+      "behavior": "Correct readonly rejection, explicit generated/unmapped intermediate coordinates, unchanged."
+    }
+  ],
+  "evidence_history": "results.json intentionally retains all_expectations_met=false and the two initial nested-append LF/CRLF failed broad expectations. They were classified only after inspecting exact current/baseline outputs, exported maps and an independent stage probe. No rerun or historical result was rewritten to pretend initial success. review.json records the narrower contract verdict and residuals separately.",
+  "persistent_validation_review": {
+    "frontend": "Tests cover actual source-built same-name package ownership beyond caller bounds, unknown/zero/reversed/partial spans, wrong files/stages/widths, strict point versus frame envelope, partial-chain omission, nonmutation, deterministic LF/CRLF, genuine real-token type errors and synthetic successful segments.",
+    "sourcemap": "Tests distinguish nil segment/nil Origin with and without Stack, mapped origins, exact physical filenames, and same basename in another directory.",
+    "acceptance": "True CLI cross-file/package and nested cases anchor exact source coordinates independently, verify raw native stderr and JSON segment agreement, and compare repeated valid output before a native race execution.",
+    "website": "Eight fixtures use independent source anchors for point and exact frame order; repeated same filename, UI recovery, explicit raw-worker CRLF verification. Browser execution was not performed by this reviewer."
+  },
+  "binary_provenance": "baseline-binary.txt and current-binary.txt confirm exact c32b94f/fd8380c VCS revisions with vcs.modified=false; Go1.27.1 darwin/arm64.",
+  "limits": "Read-only repository. Existing offline dependencies only. No installation, full-tree test repetition, browser/Linux execution, CI claims, commit or push. Full validation belongs to root.",
+  "evidence_files": [
+    "results.json",
+    "review_runner.py",
+    "exact-frame-checks.json",
+    "legal-control.json",
+    "baseline-matrix.json",
+    "baseline-binary.txt",
+    "current-binary.txt",
+    "../../macro-synthetic-origin-scope/nested-append-format-probe.json",
+    "../../macro-synthetic-origin/remaining-scenarios.md"
+  ],
+  "evidence_sha256": {
+    "results.json": "31450676ae7137e7838e9e12c07590d2f4c2303987c069d084cbdd222b24e97d",
+    "review_runner.py": "988a3e0d669f0efff1c50c5cbb2b55115f943104e055a673c9fa1366707745af",
+    "exact-frame-checks.json": "ddf7256ee0cc7eefd9babbea76f0ddc47de1296f32bbd9b45885ee9b1a48cda7",
+    "legal-control.json": "379eed20d2c19e4871779af3992cee11c44d950b6759f36b211046f2a322e826",
+    "baseline-matrix.json": "7ccfba2b96e0d8391ec0739ca13c8417ca5828e3e809cc5c8860dd27d29be081",
+    "baseline-binary.txt": "99ec03c11bd95666fea83565074d49880957dcac5522ffec8b4e68bb55ad2a4a",
+    "current-binary.txt": "6f3c500b0e54107f23a5a5d26c2e673c477bbe86a0bf03edc98c12769eb4fc34"
+  }
+}

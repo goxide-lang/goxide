@@ -1,7 +1,7 @@
 # Reproduce the website validation
 
 Run from a **clean committed checkout**, including untracked files. The checkout
-must contain the full ancestor objects for compiler `e36d23dacee64d19b34aac639900c3f5c29e55c2`
+must contain the full ancestor objects for compiler `f2d7a39c4b81a00fff191c89ac847b09af6a62e9`
 and baseline `fd8380c39876c96441857a737be8e32c322a0467`. The runner never fetches
 objects, installs tools, downloads dependencies, deploys assets or triggers CI.
 It needs Python 3.11+, Git, installed Go 1.27 with a working race/C toolchain,
@@ -30,13 +30,26 @@ under the output directory. The selected caches may acquire build cache entries.
 The source checkout and all tracked snapshot inputs must remain unchanged.
 
 The seven required phases are WASM build, web build, native comparison, web race,
-web vet, browser QA and catalog QA. The runner executes the unchanged full QA:
-97 fixtures, 10 examples, 13 native diagnostics in LF/CRLF twice (52 observations),
+web vet, browser QA and catalog QA. The runner preserves the original full QA:
+97 fixtures and 10 examples byte-for-byte, 13 native diagnostics in LF/CRLF twice (52 observations),
 33 baseline/current Go outputs with both byte differences and complete parsed AST
 proofs, and 5 baseline/current native program pairs. AST oracle controls run before
 comparison: operator, channel direction, type-alias and ellipsis changes must fail;
 optional trailing commas and layout/comments can compare equal. Additional child
 order and malformed-input controls guard the comparison implementation.
+
+A04 adds 8 current-only fixtures (4 successes and 4 frontend rejections) and one
+JSON/enum/match/Clone/Debug example, bringing totals to 105 fixtures and 11 examples.
+The frozen `legacy-matrix.json` guards the original input bytes and membership;
+new A04 syntax never enters the 33 baseline/current comparisons or 5 native pairs.
+`a04-matrix.json` defines independent stdout/error expectations. New fixtures run
+with LF and CRLF twice (32 CLI observations), then 4 positive fixtures and the new
+example execute as 5 current-only native programs. Their actual exit/stdout/stderr
+and expected stdout are recorded separately in `native/a04/`. A failed observation
+is saved before the gate fails; no current-only success is attributed to the baseline.
+Browser QA adds 16 LF UI observations and 32 LF/CRLF real Worker observations, with
+a successful recovery input after each one. The original 13-diagnostic groups keep
+their separate 26 UI and 52 raw Worker observations.
 
 `summary.json` is authoritative: only all seven successful phases plus final
 identity verification produce `passed: true` and exit 0. Any failed command keeps

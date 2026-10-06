@@ -1,0 +1,5 @@
+package main
+enum Mode { Off, Count(int), }
+type Row struct { N int }
+func broken(m Mode) Row { return Row{N: match m { Mode::Count(n) => n, }} }
+func main() {}

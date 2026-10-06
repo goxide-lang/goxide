@@ -1,0 +1,30 @@
+package main
+import (
+    "fmt"
+    "github.com/goxide-lang/serde/json"
+)
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum Mode { Off, Workers(int), }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+type Plan struct { Mode Mode; Enabled bool; Delta int; Steps []int }
+func build(mode Mode) Plan {
+    return Plan{
+        Mode: mode,
+        Enabled: !(match mode { Mode::Off => true, Mode::Workers(_) => false, }),
+        Delta: -(match mode { Mode::Off => 0, Mode::Workers(n) => n, }),
+        Steps: []int{match mode { Mode::Off => 0, Mode::Workers(n) => n, }, +(match mode { Mode::Off => 1, Mode::Workers(n) => n+1, })},
+    }
+}
+func main() {
+    mode, err := serdejson.Unmarshal([]byte(`{"Workers":3}`), DeserializeMode)
+    if err != nil { panic(err) }
+    original := build(mode)
+    copied := ClonePlan(&original)
+    copied.Steps[0] = 99
+    if original.Steps[0] != 3 { panic("Clone shared slice storage") }
+    fmt.Println(DebugPlan(&original))
+    fmt.Println(DebugPlan(&copied))
+    data, err := serdejson.Marshal(&copied, SerializePlan)
+    if err != nil { panic(err) }
+    fmt.Println(string(data))
+}

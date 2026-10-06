@@ -1,0 +1,4 @@
+package main
+enum Mode { Off, Count(int), }
+func broken(m Mode) int { return -(match m { Mode::Count(n) => n, }) }
+func main() {}

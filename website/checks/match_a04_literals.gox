@@ -1,0 +1,18 @@
+package main
+import "fmt"
+enum Mode { Off, Count(int), }
+type Row struct { Before int; Value int; After int }
+type Cell struct { N int }
+var trace string
+func mark(label string, value int) int { trace += label; return value }
+func source() Mode { trace += "s"; return Mode::Count(3) }
+func main() {
+    row := Row{mark("a", 1), match source() { Mode::Off => 0, Mode::Count(n) => mark("v", n), }, mark("z", 9)}
+    if trace != "asvz" || row.Value != 3 { panic("literal order or repeated scrutinee") }
+    m := Mode::Count(3)
+    cells := []Cell{{N: match m { Mode::Off => 0, Mode::Count(n) => n, }}}
+    array := [2]int{0: match m { Mode::Off => 0, Mode::Count(n) => n, }, 1: +(match m { Mode::Off => 1, Mode::Count(n) => n+1, })}
+    table := map[int]Cell{(match m { Mode::Off => 0, Mode::Count(n) => n, }): {N: -(match m { Mode::Off => 0, Mode::Count(n) => n, })}}
+    if cells[0].N != 3 || array[0] != 3 || array[1] != 4 || table[3].N != -3 { panic("nested literal value changed") }
+    fmt.Println("literals ok")
+}

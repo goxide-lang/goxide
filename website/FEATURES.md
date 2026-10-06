@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`e36d23dacee64d19b34aac639900c3f5c29e55c2`；证据复核日期：2026-10-06。
+编译器基线：`f2d7a39c4b81a00fff191c89ac847b09af6a62e9`；证据复核日期：2026-10-06。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -8,9 +8,9 @@
 | --- | --- | --- | --- | --- |
 | 声明宏：模式与重复 | 0011 | 部分实现 | browser | `internal/macros/macros_test.go` (ac3882cf4736); `internal/macros/primitive_bindings_test.go` (efff49717468); `tests/acceptance/macro_packages_test.go` (1ba9ea30ef9e) |
 | 封闭 enum 与明确状态 | 0008, 0015 | 部分实现 | browser | `internal/enums/lower.go` (7d08b4daf565); `tests/acceptance/enums_test.go` (a294eb9bffc8); `tests/acceptance/enum_external_test.go` (4fa5baffb003) |
-| match、guard 与表达式 | 0009 | 部分实现 | browser | `internal/matchexpr/lower.go` (98de3e7c1b8b); `tests/acceptance/match_call_signatures_test.go` (c3c0e1f58455); `tests/acceptance/match_named_dynamic_test.go` (212f9b86bd3a) |
-| Option / Result 与 ? | 0008, research/0005 | 部分实现 | browser | `internal/propagate/lower.go` (9145010b7d21); `tests/acceptance/propagate_test.go` (bf545583d370); `tests/acceptance/propagate_values_test.go` (4d0b2d61d4e1); `internal/propagate/sum_inference.go` (b81c6f26cd7a); `internal/frontend/shared_std_test.go` (a2cb837c392e) |
-| Go 返回值适配：静态 T/E 推导 | research/0005 | 已实现并验证 | browser | `internal/propagate/go_result.go` (eddfb8603eb6); `tests/acceptance/go_result_inference_test.go` (f18820be8cd8) |
+| match、guard 与表达式 | 0009 | 部分实现 | browser | `internal/matchexpr/lower.go` (a37c0040a656); `tests/acceptance/match_call_signatures_test.go` (c3c0e1f58455); `tests/acceptance/match_named_dynamic_test.go` (212f9b86bd3a); `internal/matchexpr/composite.go` (0208a27e7dbc); `internal/propagate/match_literals.go` (0e9dd27f2fa4); `tests/acceptance/match_unary_composite_test.go` (e4d6b82b7518); `docs/rfcs/0009-match.md` (56a0fd5b3ef3) |
+| Option / Result 与 ? | 0008, research/0005 | 部分实现 | browser | `internal/propagate/lower.go` (bc4db5c30665); `tests/acceptance/propagate_test.go` (bf545583d370); `tests/acceptance/propagate_values_test.go` (4d0b2d61d4e1); `internal/propagate/sum_inference.go` (5b9a34aff90d); `internal/frontend/shared_std_test.go` (a2cb837c392e) |
+| Go 返回值适配：静态 T/E 推导 | research/0005 | 已实现并验证 | browser | `internal/propagate/go_result.go` (421c5cdd4406); `tests/acceptance/go_result_inference_test.go` (f18820be8cd8) |
 | PartialEq / Eq 与 Clone | 0008, 0013 | 部分实现 | browser | `internal/equality/lower.go` (b9456af1badc); `tests/acceptance/equality_test.go` (319372e9bef5); `tests/acceptance/manual_equality_test.go` (ad14d9b199a0); `tests/acceptance/macros_test.go` (b8b834a2cd6e) |
 | Default、Debug 与格式宏 | 0012, 0013 | 部分实现 | browser | `internal/printing/lower.go` (ecf6dd4e3401); `internal/deriveextras/generate.go` (1bf99445b72e); `tests/acceptance/manual_default_test.go` (3c5ce3d9ac6f); `tests/acceptance/print_default_test.go` (8d9cb286c186) |
 | serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (f6f2004804ca); `tests/acceptance/serde_defaults_test.go` (03d817ca4697); `docs/serde-json.md` (7709e62022f8); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5) |

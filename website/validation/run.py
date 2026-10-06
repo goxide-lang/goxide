@@ -22,8 +22,8 @@ import traceback
 import urllib.request
 
 BASELINE = 'fd8380c39876c96441857a737be8e32c322a0467'
-COMPILER = 'e36d23dacee64d19b34aac639900c3f5c29e55c2'
-COMPILER_DIGEST = '41f51dffc2aa68535a7617824231065d268cab190adeb7e164e239e3b7022848'
+COMPILER = 'f2d7a39c4b81a00fff191c89ac847b09af6a62e9'
+COMPILER_DIGEST = 'aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8'
 PHASES = ('wasm-build', 'web-build', 'native-parity', 'web-race', 'web-vet',
           'browser-qa', 'catalog-qa')
 ROOT = Path(__file__).resolve().parents[2]
@@ -89,15 +89,53 @@ def qa_matrix(root):
         require(match, 'missing diagnostic group ' + name)
         diagnostics += json.loads(match.group(1))
     names = BASE_CHECKS + sum(groups.values(), []) + [c['name'] for c in diagnostics]
+    legacy = json.loads((root / 'website/validation/legacy-matrix.json').read_text())
+    require(len(names) == len(set(names)) == 97 and set(names) == set(legacy['fixtures']),
+            'legacy QA must retain exactly its original 97 fixtures')
+    for name, sha in legacy['files'].items():
+        require((root / name).is_file() and digest(root / name) == sha,
+                'legacy website input changed: ' + name)
+    a04 = a04_matrix(root)
+    extra = [c['name'] for c in a04['checks']]
     actual = {p.stem for p in (root / 'website/checks').glob('*.gox')}
-    require(len(names) == len(set(names)) == len(actual) == 97 and set(names) == actual,
-            'QA must cover exactly the complete 97-fixture inventory')
+    require(len(actual) == 105 and set(names + extra) == actual and not set(names).intersection(extra),
+            'QA must cover all 97 legacy and 8 separate A04 fixtures exactly once')
     require(len(diagnostics) == 13, 'expected 13 diagnostic fixtures')
     examples = json.loads((root / 'website/catalog-source.json').read_text())['examples']
-    require(len(examples) == 10, 'expected 10 catalog examples')
+    require(len(examples) == 11 and {e['id'] for e in examples} == set(legacy['examples'] + a04['examples']),
+            'expected 10 preserved catalog examples and one current-only A04 example')
     require({c['id'] for c in examples} == {p.stem for p in (root / 'website/examples').glob('*.gox')},
             'catalog example inventory differs from source files')
     return groups, diagnostics
+
+
+def a04_matrix(root):
+    value = json.loads((root / 'website/a04-matrix.json').read_text())
+    require(value['schemaVersion'] == 1, 'unsupported A04 matrix schema')
+    checks = value['checks']
+    require(len(checks) == len({c['name'] for c in checks}) == 8, 'expected 8 unique A04 fixtures')
+    require(sum(c['expect'] == 'success' for c in checks) == 4 and
+            sum(c['expect'] == 'frontend-reject' for c in checks) == 4, 'expected four A04 successes and four frontend rejections')
+    for case in checks:
+        require(re.fullmatch(r'(?:reject_)?match_a04_[a-z_]+', case['name']), 'invalid A04 fixture name')
+        require(('stdout' in case) if case['expect'] == 'success' else bool(case.get('message')),
+                'A04 fixture lacks an independent output/error expectation')
+    require(value['examples'] == ['match_composition'], 'expected one separately named A04 example')
+    return value
+
+
+def legacy_success_sources(root, manifest, groups):
+    """Only the unchanged legacy inputs are valid baseline/current comparisons."""
+    legacy = json.loads((root / 'website/validation/legacy-matrix.json').read_text())
+    examples = {entry['id']: entry for entry in manifest['examples']}
+    names = ['error_only', 'typed_nil', 'pointer_error', 'named_error', 'slice_error', 'macro_imported_helper']
+    names += [n for group in groups.values() for n in group if not n.startswith('reject_')]
+    require(set(names) <= set(legacy['fixtures']), 'current-only fixture entered baseline comparison')
+    sources = [('example/' + name, examples[name]['source']) for name in legacy['examples']]
+    sources += [('check/' + name, (root / 'website/checks' / (name + '.gox')).read_text()) for name in names]
+    require(len(sources) == 33 and len({name for name, _ in sources}) == 33,
+            'incomplete frozen successful-Go comparison matrix')
+    return sources
 
 
 def position(source, anchor, offset=0, occurrence=None):
@@ -196,6 +234,7 @@ class Runner:
         require(catalog['compilerCommit'] == COMPILER and catalog['compilerDigest'] == COMPILER_DIGEST,
                 'catalog must retain the separately reviewed compiler pin/digest')
         self.groups, self.diagnostics = qa_matrix(self.root)
+        self.a04 = a04_matrix(self.root)
         modules = Path(self.args.playwright_node_modules).expanduser().resolve()
         lock = json.loads((self.root / 'website/package-lock.json').read_text())
         installed = {}
@@ -228,8 +267,11 @@ class Runner:
                          'playwright': installed, 'packageLockSha256': digest(self.root / 'website/package-lock.json'),
                          'goLicense': {'path': str(license_path), 'sha256': digest(license_path)},
                          'environment': {key: self.env[key] for key in ('GOTOOLCHAIN', 'GOWORK', 'GOFLAGS', 'GOPROXY', 'GONOPROXY', 'TMPDIR')},
-                         'matrix': {'fixtures': 97, 'examples': 10, 'nativeDiagnosticObservations': 52,
-                                    'successfulGoComparisons': 33, 'pairedNativePrograms': 5},
+                         'matrix': {'fixtures': 105, 'legacyFixtures': 97, 'a04Fixtures': 8,
+                                    'examples': 11, 'legacyExamples': 10, 'a04Examples': 1,
+                                    'nativeDiagnosticObservations': 52, 'a04NativeObservations': 32,
+                                    'successfulGoComparisons': 33, 'pairedNativePrograms': 5,
+                                    'a04CurrentNativePrograms': 5},
                          'dependencyInstall': 'none; pre-existing cached Go dependencies and installed tools only',
                          'deployment': 'none'}
         save(self.out / 'identity.json', self.identity)
@@ -290,7 +332,7 @@ class Runner:
         require(manifest['commit'] == COMPILER and manifest['websiteCommit'] == self.identity['validationCommit'], 'manifest mixes compiler/tool identities')
         require(manifest['compilerDigest'] == COMPILER_DIGEST, 'manifest source digest differs')
         require(manifest['wasmSha256'] == digest(self.current / 'website/dist/compiler.wasm'), 'WASM content hash differs')
-        require(len(manifest['examples']) == 10, 'missing built examples')
+        require(len(manifest['examples']) == 11, 'missing legacy/A04 built examples')
         for path in (self.current / 'website/dist').iterdir():
             if path.is_file():
                 require(path.read_bytes() == (self.current / 'cmd/goxide-web/dist' / path.name).read_bytes(), 'web embedded asset differs: ' + path.name)
@@ -349,11 +391,7 @@ class Runner:
                     require(repeat == 0 or error == previous, 'non-deterministic diagnostic: ' + error)
                     previous = error
         require(len(records) == 52, 'incomplete native diagnostic observations')
-        names = ['error_only', 'typed_nil', 'pointer_error', 'named_error', 'slice_error', 'macro_imported_helper']
-        names += [n for group in self.groups.values() for n in group if not n.startswith('reject_')]
-        sources = [('example/' + v['id'], v['source']) for v in self.manifest['examples']]
-        sources += [('check/' + name, (self.current / 'website/checks' / (name + '.gox')).read_text()) for name in names]
-        require(len(sources) == 33 and len({name for name, _ in sources}) == 33, 'incomplete successful-Go comparison matrix')
+        sources = legacy_success_sources(self.current, self.manifest, self.groups)
         comparisons = []
         save(folder / 'successful-go-parity.json', comparisons)
         for name, source in sources:
@@ -408,6 +446,59 @@ class Runner:
              'astEqualCount': sum(v['astEqual'] for v in comparisons), 'pairedNativePrograms': len(runtime),
              'oracleSourceSha256': digest(self.current / 'website/validation/compare_ast.go'),
              'oracleTestSha256': digest(self.current / 'website/validation/compare_ast_test.go')})
+        self.current_a04(cli)
+
+    def current_a04(self, cli):
+        """Exercise new syntax with the current compiler, never the old baseline."""
+        folder = self.out / 'native/a04'
+        folder.mkdir(parents=True)
+        input_file = folder / 'playground.gox'
+        observations, runtime = [], []
+        save(folder / 'observations.json', observations)
+        save(folder / 'runtime.json', runtime)
+        runtime_sources = []
+        for case in self.a04['checks']:
+            fixture = (self.current / 'website/checks' / (case['name'] + '.gox')).read_text()
+            for ending, source in [('LF', fixture), ('CRLF', fixture.replace('\n', '\r\n'))]:
+                input_file.write_bytes(source.encode())
+                previous = None
+                for repeat in range(2):
+                    code, stdout, stderr = self.command('a04-' + case['name'] + '-' + ending + '-' + str(repeat),
+                                                      [cli, 'transpile', input_file], expected=None)
+                    error = stderr.decode().strip().replace(str(input_file), 'playground.gox')
+                    observations.append({'name': case['name'], 'ending': ending, 'repeat': repeat,
+                                         'sourceSha256': hashlib.sha256(source.encode()).hexdigest(),
+                                         'expected': case['expect'], 'exit': code,
+                                         'goSha256': hashlib.sha256(stdout).hexdigest(), 'diagnostic': error})
+                    save(folder / 'observations.json', observations)
+                    if case['expect'] == 'success':
+                        require(code == 0 and stdout, 'current compiler rejected valid A04 input: ' + case['name'])
+                    else:
+                        require(code != 0 and re.search(case['message'], error, re.IGNORECASE),
+                                'wrong/missing A04 frontend rejection: ' + case['name'] + ': ' + error)
+                    value = (code, stdout, error)
+                    require(previous is None or value == previous, 'non-deterministic A04 observation: ' + case['name'])
+                    previous = value
+            if case['expect'] == 'success':
+                runtime_sources.append(('check/' + case['name'], fixture, case['stdout']))
+        catalog_examples = {entry['id']: entry for entry in
+                            json.loads((self.current / 'website/catalog-source.json').read_text())['examples']}
+        for name in self.a04['examples']:
+            runtime_sources.append(('example/' + name, (self.current / 'website/examples' / (name + '.gox')).read_text(),
+                                    catalog_examples[name]['expectedStdout']))
+        require(len(observations) == 32 and len(runtime_sources) == 5, 'incomplete current-only A04 matrix')
+        for name, source, expected_stdout in runtime_sources:
+            input_file.write_bytes(source.encode())
+            code, stdout, stderr = self.command('a04-runtime-' + name, [cli, 'run', '--go', self.go, input_file], expected=None)
+            runtime.append({'name': name, 'compilerCommit': COMPILER,
+                            'sourceSha256': hashlib.sha256(source.encode()).hexdigest(), 'exit': code,
+                            'stdout': stdout.decode(), 'stderr': stderr.decode(), 'expectedStdout': expected_stdout})
+            save(folder / 'runtime.json', runtime)
+            require(code == 0 and stdout.decode() == expected_stdout and stderr == b'',
+                    'A04 native behavior differs: ' + name)
+        save(folder / 'summary.json', {'compilerCommit': COMPILER, 'validationCommit': self.identity['validationCommit'],
+                                      'currentOnly': True, 'baselineCompared': False,
+                                      'observations': len(observations), 'nativePrograms': len(runtime)})
 
     def start_server(self):
         # Do not accidentally validate someone else's existing service.
@@ -438,12 +529,18 @@ class Runner:
             self.start_server()
         _, stdout, _ = self.command(script, [self.node, 'website/' + script + '.mjs'])
         value, _ = json.JSONDecoder().raw_decode(stdout.decode())
-        require(value['examples'] == 10 and value['errors'] == [], 'browser result is incomplete')
+        require(value['examples'] == 11 and value['errors'] == [], 'browser result is incomplete')
         if script == 'qa':
             require(value['originChecks']['fixtures'] == 8 and value['astChecks']['fixtures'] == 5, 'browser diagnostic matrix changed')
             require(value['originChecks']['cliObservations'] + value['astChecks']['cliObservations'] == 52, 'browser native observations missing')
             require(value['originChecks']['uiLfObservations'] + value['astChecks']['uiLfObservations'] == 26, 'UI LF observations missing')
             require(value['originChecks']['rawWorkerObservations'] + value['astChecks']['rawWorkerObservations'] == 52, 'raw Worker LF/CRLF observations missing')
+            a04 = value['a04Checks']
+            require(a04['fixtures'] == 8 and len(a04['positive']) == len(a04['frontendReject']) == 4,
+                    'A04 browser fixture matrix changed')
+            require(a04['cliObservations'] == 32 and a04['uiLfObservations'] == 16 and
+                    a04['rawWorkerObservations'] == 32 and a04['recoveryAfterEach'], 'A04 parity/recovery observations missing')
+            require(a04['currentOnlyExamples'] == ['match_composition'], 'A04 example missing')
         else:
             require(value['cards'] == 26 and value['negativeExamples'] == 10 and value['consoleErrors'] == [], 'catalog matrix changed')
         save(self.out / (script + '-result.json'), value)
@@ -468,7 +565,7 @@ class Runner:
                  'boundaries': {'cliWasm': 'same-current-compiler byte equality, separately from old/new AST comparison',
                                 'nativeTypeRejects': 'final Go type checking is native, not WASM',
                                 'lineEndings': 'UI LF; raw real Worker LF/CRLF',
-                                'nativeRuntime': 'five paired programs, not all 33 outputs',
+                                'nativeRuntime': 'five legacy paired programs, not all 33 outputs; five separate current-only A04 programs',
                                 'multiFileAndEffectFrame': 'native acceptance evidence is separate from single-file browser QA',
                                 'deployment': 'none', 'hostedCI': 'not run by this command'}}
         if final:

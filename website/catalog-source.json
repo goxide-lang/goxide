@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+  "compilerCommit": "f2d7a39c4b81a00fff191c89ac847b09af6a62e9",
   "reviewedAt": "2026-10-06",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
@@ -79,6 +79,12 @@
       "title": "只读与共享引用",
       "description": "同一存储的只读视图与独立快照。",
       "expectedStdout": "shared: 6 snapshot: 105\n"
+    },
+    {
+      "id": "match_composition",
+      "title": "match 组合与业务对象",
+      "description": "一元运算、复合字面量与 JSON / Clone / Debug。",
+      "expectedStdout": "Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [3, 4] }\nPlan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [99, 4] }\n{\"Mode\":{\"Workers\":3},\"Enabled\":true,\"Delta\":-3,\"Steps\":[99,4]}\n"
     }
   ],
   "items": [
@@ -140,15 +146,20 @@
       "status": "partial",
       "support": "browser",
       "summary": "穷尽匹配配合 guard，把分支结果作为值使用。",
-      "usage": "正数 Count 匹配 guard；其余 Count 和 Empty 提供后备分支。scrutinee 不重复求值。",
-      "limitation": "guard 不代替穷尽覆盖。多结果 return match、部分 unary/composite/block-arm 上下文仍有缺口。",
+      "usage": "正数 Count 匹配 guard；其余 Count 和 Empty 提供后备分支。scrutinee 不重复求值。单值 match 可组合 + - ! ^ 与有真实类型的 struct/slice/array/map 字面量；新业务例展示 JSON→enum→对象→Clone/Debug→JSON。",
+      "limitation": "guard 不代替穷尽覆盖。本片不接 * & <-、控制头、package initializer、多结果、复杂 LHS、block arm 与不可命名类型；这些仍是未收口用例，不能称 match 全部完成。",
       "examples": [
-        "enum"
+        "enum",
+        "match_composition"
       ],
       "evidence": [
         "internal/matchexpr/lower.go",
         "tests/acceptance/match_call_signatures_test.go",
-        "tests/acceptance/match_named_dynamic_test.go"
+        "tests/acceptance/match_named_dynamic_test.go",
+        "internal/matchexpr/composite.go",
+        "internal/propagate/match_literals.go",
+        "tests/acceptance/match_unary_composite_test.go",
+        "docs/rfcs/0009-match.md"
       ],
       "checks": [
         "incomplete_match"
@@ -738,7 +749,7 @@
       }
     }
   ],
-  "compilerDigest": "41f51dffc2aa68535a7617824231065d268cab190adeb7e164e239e3b7022848",
+  "compilerDigest": "aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

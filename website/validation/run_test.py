@@ -3,6 +3,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -141,6 +142,94 @@ class RunnerTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             runner.position('x x', 'x')
         self.assertEqual(runner.position('x x', 'x', occurrence=1), (2, 1, 3))
+
+    def test_baseline_comparison_excludes_current_only_inputs(self):
+        root = Path(__file__).resolve().parents[2]
+        groups, _ = runner.qa_matrix(root)
+        catalog = json.loads((root / 'website/catalog-source.json').read_text())
+        manifest = {'examples': [dict(entry, source=(root / 'website/examples' / (entry['id'] + '.gox')).read_text())
+                                 for entry in catalog['examples']]}
+        sources = runner.legacy_success_sources(root, manifest, groups)
+        self.assertEqual(len(sources), 33)
+        self.assertFalse(any('match_a04_' in name or name == 'example/match_composition' for name, _ in sources))
+        contaminated = dict(groups, additional=['match_a04_unary'])
+        with self.assertRaisesRegex(RuntimeError, 'current-only fixture'):
+            runner.legacy_success_sources(root, manifest, contaminated)
+
+    def test_fixture_inventory_rejects_changed_legacy_missing_and_unlisted_inputs(self):
+        source = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ('checks', 'examples', 'validation'):
+                shutil.copytree(source / 'website' / name, root / 'website' / name)
+            for name in ('qa.mjs', 'catalog-source.json', 'a04-matrix.json'):
+                shutil.copyfile(source / 'website' / name, root / 'website' / name)
+            legacy = root / 'website/checks/error_only.gox'
+            original = legacy.read_bytes()
+            legacy.write_bytes(original + b'\n')
+            with self.assertRaisesRegex(RuntimeError, 'legacy website input changed'):
+                runner.qa_matrix(root)
+            legacy.write_bytes(original)
+            added = root / 'website/checks/match_a04_unlisted.gox'
+            added.write_text('package main\n')
+            with self.assertRaisesRegex(RuntimeError, 'cover all 97 legacy and 8 separate A04'):
+                runner.qa_matrix(root)
+            added.unlink()
+            (root / 'website/checks/match_a04_unary.gox').unlink()
+            with self.assertRaisesRegex(RuntimeError, 'cover all 97 legacy and 8 separate A04'):
+                runner.qa_matrix(root)
+
+    def test_current_only_matrix_requires_independent_error_and_output_expectations(self):
+        source = Path(__file__).resolve().parents[2]
+        original = (source / 'website/a04-matrix.json').read_text()
+        for case in json.loads(original)['checks']:
+            if case['expect'] == 'frontend-reject':
+                self.assertNotRegex('expression match: unsupported unary operator ! or composite operand', case['message'])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / 'website/a04-matrix.json'
+            path.parent.mkdir()
+            for field, index in [('stdout', 0), ('message', 4)]:
+                value = json.loads(original)
+                del value['checks'][index][field]
+                runner.save(path, value)
+                with self.assertRaisesRegex(RuntimeError, 'independent output/error expectation'):
+                    runner.a04_matrix(root)
+            value = json.loads(original)
+            value['checks'][-1] = value['checks'][0]
+            runner.save(path, value)
+            with self.assertRaisesRegex(RuntimeError, 'unique A04 fixtures'):
+                runner.a04_matrix(root)
+
+    def test_current_only_runtime_failure_keeps_actual_output(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary:
+            out = Path(temporary)
+            obj = runner.Runner(root, out, argparse.Namespace())
+            obj.current, obj.go = root, 'existing-go'
+            obj.a04 = runner.a04_matrix(root)
+            obj.identity = {'validationCommit': 'website-revision'}
+            def command(name, argv, cwd=None, expected=(0,)):
+                if 'runtime' in name:
+                    return 7, b'actual partial stdout\n', b'actual runtime failure\n'
+                if 'reject_' in name:
+                    if 'overflow' in name:
+                        message = 'arm is not assignable to the result type: cannot use 256 as uint8 value in array or slice literal (overflows)'
+                    elif 'bool_operand' in name:
+                        message = 'arm is not assignable to the result type: cannot use 1 as bool value in array or slice literal'
+                    else:
+                        message = 'enum: non-exhaustive match; guards do not contribute coverage'
+                    return 1, b'', message.encode()
+                return 0, b'package main\n', b''
+            with mock.patch.object(obj, 'command', side_effect=command):
+                with self.assertRaisesRegex(RuntimeError, 'A04 native behavior differs'):
+                    obj.current_a04('current-compiler')
+            self.assertEqual(len(json.loads((out / 'native/a04/observations.json').read_text())), 32)
+            runtime = json.loads((out / 'native/a04/runtime.json').read_text())
+            self.assertEqual(runtime[0]['exit'], 7)
+            self.assertEqual(runtime[0]['stdout'], 'actual partial stdout\n')
+            self.assertEqual(runtime[0]['stderr'], 'actual runtime failure\n')
+            self.assertFalse((out / 'native/a04/summary.json').exists())
 
 
 if __name__ == '__main__':

@@ -1,0 +1,4 @@
+package main
+enum Mode { Off, Count(int), }
+func broken(m Mode) bool { return !(match m { Mode::Off => 1, Mode::Count(_) => 0, }) }
+func main() {}

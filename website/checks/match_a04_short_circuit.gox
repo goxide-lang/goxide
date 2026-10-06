@@ -1,0 +1,14 @@
+package main
+import "fmt"
+enum Mode { Off, Count(int), }
+var calls int
+var guards int
+func source() Mode { calls++; return Mode::Count(3) }
+func guard(n int) bool { guards++; return n > 0 }
+func main() {
+    skipped := false && !(match source() { Mode::Off => true, Mode::Count(_) => false, })
+    if skipped || calls != 0 { panic("short circuit executed match prelude") }
+    selected := true && !(match source() { Mode::Off => true, Mode::Count(n) if guard(n) => false, Mode::Count(_) => true, })
+    if !selected || calls != 1 || guards != 1 { panic("scrutinee or guard repeated") }
+    fmt.Println("short circuit ok")
+}

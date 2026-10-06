@@ -1,10 +1,10 @@
 # goxide 语言介绍与自托管 Playground
 
-中文优先的静态语言介绍网站，以及真实单文件 goxide → Go 浏览器转译器。网站源、十个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
+中文优先的静态语言介绍网站，以及真实单文件 goxide → Go 浏览器转译器。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
-本分支将网站验证入口收回仓内；编译器源码固定为
-`e36d23dacee64d19b34aac639900c3f5c29e55c2`，生产源摘要固定为
-`41f51dffc2aa68535a7617824231065d268cab190adeb7e164e239e3b7022848`。
+本轮在仓内验证入口中追加 A04 unary/composite match；编译器源码固定为
+`f2d7a39c4b81a00fff191c89ac847b09af6a62e9`，生产源摘要固定为
+`aeaaa2ca69563c064b47ecb757415e1a8478b771248e79144cecf9d9b79bc1e8`。
 `websiteCommit` 独立记录实际网站工具 HEAD。仅本地验证，没有部署或更新线上版本。
 [仓内验证说明](validation/README.md)是本片入口；[最新组合记录](LATEST-INTEGRATION.md)和
 [早期交付记录](INTEGRATION.md)中的既往结果不替代这次运行。
@@ -32,8 +32,11 @@ python3 -B website/validation/run.py \
   --mod-cache /absolute/complete/go-mod
 ```
 
-入口从准确提交创建隔离副本，保留全部 97 个 fixture、10 个示例、七阶段输出和失败记录。
-旧/新 Go 字节、完整 AST、实际运行分别记账；既有排版差异不计为字节相等。正式运行要求
+入口从准确提交创建隔离副本，逐字节保留原 97 个 fixture、10 个示例；A04 单独追加
+8 个 fixture 和 1 个业务示例，共 105 个 fixture、11 个示例。七阶段输出和失败记录保留。
+旧/新 Go 字节、完整 AST、实际运行分别记账；原 33 组成功输出与 5 对原生程序保持不变，
+新增语法只测当前编译器，另存 32 次 LF/CRLF CLI 观察及 5 个实际原生程序输出。
+既有排版差异不计为字节相等。正式运行要求
 源树已提交且干净，输出必须是新的外部目录。快速构建辅助自测为
 `python3 -B website/build_support_test.py`；它不代替七阶段验收或完整原生测试。
 
@@ -106,7 +109,13 @@ Playwright 仅是测试依赖，固定在 lockfile；这里要求它已可用，
 `/usr/bin/chromium`，可设置 `CHROMIUM=/absolute/browser`。隔离入口可用 `--playwright-node-modules`
 指定既有安装。正常网站构建与运行均不需要 npm。
 
-`qa.mjs` 验证十例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
+`qa.mjs` 验证十一例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
+
+A04 的 4 个正例和 4 个拒绝例单独记录 CLI/WASM 差分：LF/CRLF 各两次、共 32 次；
+UI 验证 16 次 LF 输入，真实 Worker 验证 32 次 LF/CRLF 输入，每次之后用已知合法输入
+验证恢复。`a04-matrix.json` 提供独立的原生 stdout/错误预期；新增 JSON→enum→match→
+Clone/Debug→JSON 示例只属于当前编译器。浏览器只转译，实际程序运行证据在隔离入口的
+`native/a04/`，不会混入旧编译器的 33 组 AST 对照或原 13 个诊断 fixture。
 
 `read_playground` WebMCP 只读工具在浏览器有 `document.modelContext` 时可注册；普通 Chromium 不支持该原生上下文，未将其作为已通过原生 WebMCP 验证的能力宣传。
 
@@ -119,7 +128,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 ## 文件布局
 
 - `website/static/`：手写静态页面、样式、主线程与 Worker，无线上第三方依赖。
-- `website/examples/`：十个可执行 `.gox` 源例。
+- `website/examples/`：十一个可执行 `.gox` 源例。
 - `website/build.py`：可复现生成链与版本清单。
 - `cmd/goxide-playground/`：WASM 桥接。
 - `internal/typecheck/platform_{native,wasm}.go`：平台特定 importer。
@@ -131,14 +140,14 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 
 状态针对卡片的限定范围：提案 / 已确认待实现 / 部分实现 / 已实现并验证。开发快照与当前编译器支持分别记录；任务报告不等于可发布实现。RFC 0024 仍是提案。当前 Playground 已包含共享 std/serde、明确上下文下的普通 sum 推导及限定可读性改进；统一 TOML/锁与 import-go 只在 CLI 工程快照说明。
 
-编译器 `commit` 固定为 `e36d23dacee64d19b34aac639900c3f5c29e55c2`，`websiteCommit` 记录网站源码提交；构建独立枚举 pin 与当前生产文件集，再逐文件核对字节和固定摘要，增加、缺少或修改源码均拒绝。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
+编译器 `commit` 固定为 `f2d7a39c4b81a00fff191c89ac847b09af6a62e9`，`websiteCommit` 记录网站源码提交；构建独立枚举 pin 与当前生产文件集，再逐文件核对字节和固定摘要，增加、缺少或修改源码均拒绝。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
 
 ```sh
 python3 website/catalog.py
 QA_URL=http://127.0.0.1:8084 node website/catalog-qa.mjs
 ```
 
-额外 QA 覆盖所有目录入口、10 例实际转译、10 个拒绝例、主题/状态/入口/搜索过滤、永久链接、缺失清单错误状态、复制、390px 与无外部上传。HTTPS 云环境若 Chromium 缺少平台代理 CA，可显式提供已安装 CA 的 `QA_PROXY_SPKI` 公钥摘要；测试不使用全局跳过证书校验。线上实际 HTTP 哈希独立经系统 CA 验证。
+额外 QA 覆盖所有目录入口、11 例实际转译、10 个拒绝例、主题/状态/入口/搜索过滤、永久链接、缺失清单错误状态、复制、390px 与无外部上传。HTTPS 云环境若 Chromium 缺少平台代理 CA，可显式提供已安装 CA 的 `QA_PROXY_SPKI` 公钥摘要；测试不使用全局跳过证书校验。线上实际 HTTP 哈希独立经系统 CA 验证。
 
 RFC 管理建议：当前规范仍跟随编译器仓库和版本，Issue 用于讨论/跟踪、PR 用于变更评审。没有为此次目录新建仓库或 Issue；公开网站不是私有 RFC 镜像。
 

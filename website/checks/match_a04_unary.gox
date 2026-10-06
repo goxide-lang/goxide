@@ -1,0 +1,19 @@
+package main
+import "fmt"
+enum Mode { Off, Count(int), }
+type Wide = uint64
+func wide(m Mode, shift uint) Wide {
+    type Wide = int8
+    _ = Wide(1)
+    return +(match m { Mode::Off => 1 << shift, Mode::Count(_) => 0, })
+}
+func main() {
+    m := Mode::Count(3)
+    positive := +(match m { Mode::Off => 0, Mode::Count(n) => n, })
+    negative := -(match m { Mode::Off => 0, Mode::Count(n) => n, })
+    flipped := ^(match m { Mode::Off => 0, Mode::Count(n) => n, })
+    enabled := !(match m { Mode::Off => true, Mode::Count(_) => false, })
+    if positive != 3 || negative != -3 || flipped != -4 || !enabled { panic("unary value changed") }
+    if wide(Mode::Off, 63) != uint64(1)<<63 { panic("real expected type was shadowed") }
+    fmt.Println("unary ok")
+}

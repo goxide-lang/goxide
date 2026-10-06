@@ -1,0 +1,105 @@
+{
+  "sourceCommit": "c93461c27e67fce30fa6ace726d0c85c54fc4700",
+  "verdict": "no_blocking_findings",
+  "independentReviewer": "audit_a01_a03_readonly",
+  "scope": "Identity/provenance, catalog snapshots, AST oracle, runner failure lifecycle and final checkout integrity. No implementation edits or full builds by reviewer.",
+  "identity": {
+    "changedFileBlobsVerified": 20,
+    "reviewedCoreHashesBound": 4,
+    "twoCleanCheckoutsVerified": true,
+    "compilerCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+    "compilerDigest": "41f51dffc2aa68535a7617824231065d268cab190adeb7e164e239e3b7022848"
+  },
+  "resolvedFindings": [
+    {
+      "id": "PROPOSAL-MUTABLE-REF",
+      "before": "Matching evidenceRefs and sourceCommit set to HEAD were accepted.",
+      "after": "Full lowercase commit/digest/blob identities validated; same independent counterexample rejects.",
+      "redEvidence": "v1-python-results.json",
+      "greenEvidence": "v2-python-results.json"
+    },
+    {
+      "id": "SNAPSHOT-HEAD-FINAL",
+      "before": "An empty commit changed current snapshot HEAD without changing tree/bytes/status; final run incorrectly passed.",
+      "after": "Final snapshot HEAD is recorded and must equal validationCommit; same counterexample fails with preserved identity.",
+      "redEvidence": "v3b-runner-identity-results.json",
+      "greenEvidence": "v4-runner-identity-results.json"
+    }
+  ],
+  "checks": [
+    {
+      "group": "compiler inventory, license and catalog evidence",
+      "observations": 22,
+      "passed": 22,
+      "evidence": "v2-python-results.json"
+    },
+    {
+      "group": "independent AST executable controls",
+      "comparisons": 13,
+      "passed": 13,
+      "evidence": "v1-ast-results.json"
+    },
+    {
+      "group": "real-Git compiler/tool identity and index idempotence",
+      "scenarios": 1,
+      "assertions": 6,
+      "passed": true,
+      "evidence": "v4-catalog-pin-results.json"
+    },
+    {
+      "group": "phase failure, stale output, matrix preservation",
+      "assertions": 11,
+      "passed": 11,
+      "evidence": "v4-runner-results.json"
+    },
+    {
+      "group": "real-Git dirtiness/identity mutation and process cleanup",
+      "scenarios": 10,
+      "passed": 10,
+      "evidence": "v4-runner-identity-results.json"
+    }
+  ],
+  "counting": "Groups measure different units (observations, AST comparisons, scenario assertions). No summed test total; reruns/red-green history are not added to final coverage.",
+  "matrix": "All 97 direct fixture files and 10 examples plus qa.mjs remain identical to cbd8724; source-derived parser finds all 13 diagnostics. Existing nested catalog inputs also have no diff.",
+  "proposal": "Actual 19926-byte snapshot equals 5e4b118:docs/rfcs/0024-use-paths.md. Git ancestor check returns 1 against compiler e36; copied SHA256 and Git blob match; snapshot passes without requiring its source object in the test fixture and stays absent from public export.",
+  "failureHistory": "Original mutable-ref and empty-commit failures retained without rewriting. Existing all-pass cases are distinguished from expected rejection subprocesses.",
+  "limits": "Injected phase tests use no-op/mutation bodies in place of compiler/browser work, while runner lifecycle, Git, files, exit statuses and owned process cleanup are real. Reviewer built only the small AST oracle. Root owns full exact-SHA Mac/website/native/browser gates. No Linux/hosted-CI assertion, deployment, workflow trigger or library ABI change.",
+  "evidence": {
+    "exact-source-binding.json": {
+      "bytes": 6089,
+      "sha256": "a1454d21e3d4995d464321ae4fabd0e907616210edc1a4a4a69055907516cfde"
+    },
+    "v1-python-results.json": {
+      "bytes": 5470,
+      "sha256": "4cb5268443cdd9eaf40366d4c2a4cf9b38ecd254a1871319fd01ee7e709b4c09"
+    },
+    "v2-python-results.json": {
+      "bytes": 5539,
+      "sha256": "b903610b516a6f4670c1f6444555129c3fbcda4dd9ce43aef85540a879293578"
+    },
+    "v1-ast-results.json": {
+      "bytes": 7391,
+      "sha256": "c0569131a37aa80d903aa787aa613cfb9ad491852cd27e12b87e5e7e1a66a6a7"
+    },
+    "v4-catalog-pin-results.json": {
+      "bytes": 418,
+      "sha256": "6612f2d9b0dffbb087844ca8d66ba65aa43b00b832c8857af04f692c48457d7c"
+    },
+    "v4-runner-results.json": {
+      "bytes": 1227,
+      "sha256": "1ed2f158ca6d5917e16344e84638caa59ceb0ddccbe9c56443b0fb4a41df7459"
+    },
+    "v3b-runner-identity-results.json": {
+      "bytes": 3845,
+      "sha256": "56025c06a4791cb2cf6f47eeaf3682aa086a4e2084016168796f62c095464d75"
+    },
+    "v4-runner-identity-results.json": {
+      "bytes": 3901,
+      "sha256": "8bfb45dbf2e76484d5b39cd22e2879d27383cbe54a693ec899baf3a6ed339572"
+    },
+    "proposal-source-proof.json": {
+      "bytes": 457,
+      "sha256": "46d914866e93b3898b3c1c8c104f5386ce06c05920bbfeb4b5f9f03cd542941a"
+    }
+  }
+}

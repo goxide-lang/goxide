@@ -256,3 +256,16 @@ Linux 未验证，托管 CI 单独按最终准确 SHA 查询；A01/A03/RFC0011/M
 结果及独立审查见[交付报告](reviews/generated-ast-provenance-20261006.md)。
 其他temp、formatter歧义、refs、共享helper等具体余项仍列明；A01/A03/RFC0011/MVP整项不关闭。
 Linux未运行、网站未部署；托管CI按最终准确SHA单独查询，查不到的记录不算通过。
+
+
+## 2026-10-06 接续：网站验证仓内复现
+
+只关闭 A26/A28 中“已报告网站验证依赖任务目录 overlay”的本地交付欠账。
+准确网站/验证工具为 `c93461c27e67fce30fa6ace726d0c85c54fc4700`，被验证编译器生产 pin
+仍为 `e36d23dacee64d19b34aac639900c3f5c29e55c2`，后续报告提交另记，不形成 catalog 自引用。
+构建、快照、完整 AST oracle、LICENSE 定位与固定提案证据已入仓；独立干净 worktree
+实际通过七阶段网站验证、完整 Mac race 600 顶层/1302 子测试、vet/design 及独立审查。
+97 fixture/10 示例保持，失败历史、输入身份、复现命令见
+[交付报告](reviews/website-validation-reproducibility-20261006.md)。
+A04 下一批限定 unary/composite match 与真实业务组合验收；其他工程切片及待决合同继续
+在账。A26/A28 全项、实际网站部署、Linux/托管 CI 与 MVP 整项不因此关闭。

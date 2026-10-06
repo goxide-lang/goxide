@@ -1,0 +1,226 @@
+[
+  {
+    "file": "clean-checkout-proof.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-clean-checkout-proof.json",
+    "bytes": 687,
+    "sha256": "741bfbe1729d33c00be801e35178de5d0345683a7cd36b557fc245b2b3bbb5ae",
+    "normalization": "none"
+  },
+  {
+    "file": "validation-identity.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/identity.json",
+    "bytes": 5144,
+    "sha256": "d1b890b8a5768c161b2105bfbbed56c4c89a8b1fd17e24ef58a595fd02a19747",
+    "normalization": "none"
+  },
+  {
+    "file": "web-summary.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/summary.json",
+    "bytes": 149179,
+    "sha256": "f52659777fe3c22d0ac4c46833a73d6360a8d8a44ff785641f3832a0e26dd7f2",
+    "normalization": "none"
+  },
+  {
+    "file": "qa-result.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/qa-result.json",
+    "bytes": 4926,
+    "sha256": "2a2c9fb19b4a0583766839b91ecb3a3a11507b38e0a0aeefb562e1da160b7fec",
+    "normalization": "none"
+  },
+  {
+    "file": "catalog-qa-result.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/catalog-qa-result.json",
+    "bytes": 540,
+    "sha256": "d2da29b8137a8514b864bb12858b7bdeead4f7ee00b2947eac2bf39d9005d442",
+    "normalization": "none"
+  },
+  {
+    "file": "native-summary.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/native/summary.json",
+    "bytes": 514,
+    "sha256": "39501b9e6d8a8b93b0659d5c7eb44d7cd7d71f8f75c9d82e723c066506923038",
+    "normalization": "none"
+  },
+  {
+    "file": "native-binary-identities.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/native/binary-identities.json",
+    "bytes": 3037,
+    "sha256": "aa209219b659e908584584eca83ade70e9ba1137b3f3d71eba5932213cb28bd1",
+    "normalization": "none"
+  },
+  {
+    "file": "native-successful-go-parity.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/native/successful-go-parity.json",
+    "bytes": 17281,
+    "sha256": "def7ee182c9c9b627b6eb8b49913112f1accf7caa23074a8b40a24c8c0b833b9",
+    "normalization": "none"
+  },
+  {
+    "file": "native-runtime-parity.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/native/runtime-parity.json",
+    "bytes": 2100,
+    "sha256": "db4fcfa6ec752a8c0c117983bee64f1647c5e822757328f743774654d212545b",
+    "normalization": "none"
+  },
+  {
+    "file": "native-origin-diagnostics.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/native/origin-diagnostics.json",
+    "bytes": 22719,
+    "sha256": "ed30394f6d4fa42cb429225d0adb4dd2f519dbd1ad1e7c84107ce767aac1255b",
+    "normalization": "none"
+  },
+  {
+    "file": "independent-review.json",
+    "source": "/tmp/goxide-repro-review-20261006/review.json",
+    "bytes": 4838,
+    "sha256": "4283af9acdc1e698117d127bbf6345d4974df6fb7be4bd010dff905770b377bb",
+    "normalization": "none"
+  },
+  {
+    "file": "exact-source-binding.json",
+    "source": "/tmp/goxide-repro-review-20261006/exact-source-binding.json",
+    "bytes": 6089,
+    "sha256": "a1454d21e3d4995d464321ae4fabd0e907616210edc1a4a4a69055907516cfde",
+    "normalization": "none"
+  },
+  {
+    "file": "review-mutable-ref-red.json",
+    "source": "/tmp/goxide-repro-review-20261006/v1-python-results.json",
+    "bytes": 5470,
+    "sha256": "4cb5268443cdd9eaf40366d4c2a4cf9b38ecd254a1871319fd01ee7e709b4c09",
+    "normalization": "none"
+  },
+  {
+    "file": "review-python-green.json",
+    "source": "/tmp/goxide-repro-review-20261006/v2-python-results.json",
+    "bytes": 5539,
+    "sha256": "b903610b516a6f4670c1f6444555129c3fbcda4dd9ce43aef85540a879293578",
+    "normalization": "none"
+  },
+  {
+    "file": "review-ast-controls.json",
+    "source": "/tmp/goxide-repro-review-20261006/v1-ast-results.json",
+    "bytes": 7391,
+    "sha256": "c0569131a37aa80d903aa787aa613cfb9ad491852cd27e12b87e5e7e1a66a6a7",
+    "normalization": "none"
+  },
+  {
+    "file": "review-catalog-pin.json",
+    "source": "/tmp/goxide-repro-review-20261006/v4-catalog-pin-results.json",
+    "bytes": 418,
+    "sha256": "6612f2d9b0dffbb087844ca8d66ba65aa43b00b832c8857af04f692c48457d7c",
+    "normalization": "none"
+  },
+  {
+    "file": "review-phase-failures.json",
+    "source": "/tmp/goxide-repro-review-20261006/v4-runner-results.json",
+    "bytes": 1227,
+    "sha256": "1ed2f158ca6d5917e16344e84638caa59ceb0ddccbe9c56443b0fb4a41df7459",
+    "normalization": "none"
+  },
+  {
+    "file": "review-snapshot-head-red.json",
+    "source": "/tmp/goxide-repro-review-20261006/v3b-runner-identity-results.json",
+    "bytes": 3845,
+    "sha256": "56025c06a4791cb2cf6f47eeaf3682aa086a4e2084016168796f62c095464d75",
+    "normalization": "none"
+  },
+  {
+    "file": "review-snapshot-head-green.json",
+    "source": "/tmp/goxide-repro-review-20261006/v4-runner-identity-results.json",
+    "bytes": 3901,
+    "sha256": "8bfb45dbf2e76484d5b39cd22e2879d27383cbe54a693ec899baf3a6ed339572",
+    "normalization": "none"
+  },
+  {
+    "file": "proposal-source-proof.json",
+    "source": "/tmp/goxide-repro-review-20261006/proposal-source-proof.json",
+    "bytes": 457,
+    "sha256": "46d914866e93b3898b3c1c8c104f5386ce06c05920bbfeb4b5f9f03cd542941a",
+    "normalization": "none"
+  },
+  {
+    "file": "race-environment-correction.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/race-environment-correction.json",
+    "bytes": 641,
+    "sha256": "54e494855c94e688b37c068f569d972a87d6f1eaedf1a945c973438e7d032dbb",
+    "normalization": "none"
+  },
+  {
+    "file": "full-vet.log",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-vet.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "none"
+  },
+  {
+    "file": "full-design.log",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-design.log",
+    "bytes": 8464,
+    "sha256": "8000fa21c50f9f02ea171a688a4c2e97bec379e43a8db84ca7756ef5c8e068e5",
+    "normalization": "none"
+  },
+  {
+    "file": "full-gates-summary.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/full-gates-summary.json",
+    "bytes": 7004,
+    "sha256": "884416a2c784b35456167bee35fc5160674dca1fe3f1f996f34b10e880e2fb9e",
+    "normalization": "none"
+  },
+  {
+    "file": "no-task-dependency-proof.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/no-task-dependency-proof.json",
+    "bytes": 622,
+    "sha256": "70384eb0c8e2797733a271638e7ff8fdc6d446bf9cf2dd9f6e4c5e6c8a5941b2",
+    "normalization": "none"
+  },
+  {
+    "file": "naming-audit.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-naming-audit.json",
+    "bytes": 246,
+    "sha256": "db63980368f4376d2ddff7b4a323bad1922cf5e70cf5757f881ba574dfd900e7",
+    "normalization": "none"
+  },
+  {
+    "file": "environment-preparation.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/environment-preparation.json",
+    "bytes": 568,
+    "sha256": "5efb0b0f6bf9f258a1e69d00fa5fe59e7d9b2aa5c14afcb7f40fa9e86ca1b780",
+    "normalization": "none"
+  },
+  {
+    "file": "input-inventory-proof.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/input-inventory-proof.json",
+    "bytes": 1317,
+    "sha256": "d5b34d11fad83f96ff6880ba2b73fef4aad03ce4bd2d18aee24671d0d9a09afc",
+    "normalization": "none"
+  },
+  {
+    "file": "validation-commands.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/commands.json",
+    "bytes": 139384,
+    "sha256": "339f9e2c2504945763e3531e7d9c05176f254a8951d9821e08b92fc60172552e",
+    "normalization": "none"
+  },
+  {
+    "file": "source-inputs.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/source-inputs.json",
+    "bytes": 195376,
+    "sha256": "7c63cc3446cf2a3f6609df218f21b3a09e8d9d4b9cc8190f0f7a0e2577b6d019",
+    "normalization": "none"
+  },
+  {
+    "file": "baseline-inputs.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/baseline-inputs.json",
+    "bytes": 174117,
+    "sha256": "04ce53ce26cf08e0fa18e81f31d532e5f98d29e2362d63813a272f13a659bd40",
+    "normalization": "none"
+  },
+  {
+    "file": "playwright-inputs.json",
+    "source": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-run/playwright-inputs.json",
+    "bytes": 92942,
+    "sha256": "98ea67a66687e34f5effe0c5653f7d2b9b3d004981e7f3b39f670488c039a14d",
+    "normalization": "none"
+  }
+]

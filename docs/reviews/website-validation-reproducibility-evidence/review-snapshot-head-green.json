@@ -1,0 +1,81 @@
+{
+  "runner_sha256": "1505605002ad45282f8e1d03e2bb7feff041f2f2de8e20ebe3677680af8ee640",
+  "evidence_directory": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu",
+  "results": [
+    {
+      "name": "dirty-tracked-preflight-rejects",
+      "passed": true,
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/dirty-tracked/out/summary.json"
+    },
+    {
+      "name": "dirty-untracked-preflight-rejects",
+      "passed": true,
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/dirty-untracked/out/summary.json"
+    },
+    {
+      "name": "final-identity-none",
+      "passed": true,
+      "exit": 0,
+      "failure": null,
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/none/out/summary.json",
+      "scope": "phase bodies intentionally replaced with no-op/injected mutation; final identity logic and Git/file I/O are real"
+    },
+    {
+      "name": "final-identity-source-content",
+      "passed": true,
+      "exit": 1,
+      "failure": "source checkout changed during validation",
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/source-content/out/summary.json",
+      "scope": "phase bodies intentionally replaced with no-op/injected mutation; final identity logic and Git/file I/O are real"
+    },
+    {
+      "name": "final-identity-source-clean-head",
+      "passed": true,
+      "exit": 1,
+      "failure": "source checkout changed during validation",
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/source-clean-head/out/summary.json",
+      "scope": "phase bodies intentionally replaced with no-op/injected mutation; final identity logic and Git/file I/O are real"
+    },
+    {
+      "name": "final-identity-snapshot-content",
+      "passed": true,
+      "exit": 1,
+      "failure": "validation altered snapshot HEAD or tracked inputs",
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/snapshot-content/out/summary.json",
+      "scope": "phase bodies intentionally replaced with no-op/injected mutation; final identity logic and Git/file I/O are real"
+    },
+    {
+      "name": "final-identity-baseline-content",
+      "passed": true,
+      "exit": 1,
+      "failure": "validation altered baseline snapshot inputs",
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/baseline-content/out/summary.json",
+      "scope": "phase bodies intentionally replaced with no-op/injected mutation; final identity logic and Git/file I/O are real"
+    },
+    {
+      "name": "final-identity-baseline-clean-head",
+      "passed": true,
+      "exit": 1,
+      "failure": "validation altered baseline snapshot inputs",
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/baseline-clean-head/out/summary.json",
+      "scope": "phase bodies intentionally replaced with no-op/injected mutation; final identity logic and Git/file I/O are real"
+    },
+    {
+      "name": "final-identity-snapshot-empty-head",
+      "passed": true,
+      "exit": 1,
+      "failure": "validation altered snapshot HEAD or tracked inputs",
+      "summary": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/snapshot-empty-head/out/summary.json",
+      "scope": "phase bodies intentionally replaced with no-op/injected mutation; final identity logic and Git/file I/O are real"
+    },
+    {
+      "name": "failed-run-stops-owned-process",
+      "passed": true,
+      "process_exit": -15,
+      "command_log": "/private/tmp/goxide-repro-review-20261006/identity evidence no9p07bu/cleanup/out/logs/server/command.json"
+    }
+  ],
+  "passed": 10,
+  "failed": 0,
+  "scope": "Lightweight real Git/dirty/mutation/process-cleanup checks; simulated compiler/browser phase bodies, no build or network"
+}

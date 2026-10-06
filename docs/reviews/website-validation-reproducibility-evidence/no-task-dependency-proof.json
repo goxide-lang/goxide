@@ -1,0 +1,12 @@
+{
+  "sourceCommit": "c93461c27e67fce30fa6ace726d0c85c54fc4700",
+  "commandsChecked": 206,
+  "taskDirectoryInCommandsOrCwd": false,
+  "taskDirectoryInGoEnvironment": false,
+  "allSevenPhasesPassed": true,
+  "sourceAndSnapshotsClean": true,
+  "toolInputs": "all tracked files hashed in source/current/baseline-inputs.json",
+  "dependencies": "existing tools plus independently copied pinned module and Playwright caches; a fresh Go build cache was used",
+  "noHiddenSourceOverlay": true,
+  "limitations": "This checks recorded commands, identities and source inventories; it is not an operating-system file-access trace."
+}

@@ -1,0 +1,12 @@
+{
+  "go-mod": {
+    "preparedFromExistingDependencyCache": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod",
+    "independentCopy": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/environment/go-mod",
+    "symlinksEscapingCopy": []
+  },
+  "node_modules": {
+    "preparedFromExistingDependencyCache": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/node_modules",
+    "independentCopy": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/environment/node_modules",
+    "symlinksEscapingCopy": []
+  }
+}

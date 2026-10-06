@@ -1,0 +1,159 @@
+{
+  "checkedAt": "2026-10-06T20:28:47.850515+00:00",
+  "sourceCommit": "c93461c27e67fce30fa6ace726d0c85c54fc4700",
+  "contractCommit": "d7d585031b4573fe04d4586d1e593c9a26873d43",
+  "compilerCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+  "compilerDigest": "41f51dffc2aa68535a7617824231065d268cab190adeb7e164e239e3b7022848",
+  "changedFiles": 20,
+  "dynamicallyReviewedCoreFiles": 4,
+  "files": [
+    {
+      "path": "website/FEATURES.md",
+      "gitBlob": "d2ea67ab963d6dabe1e6e0a4413bf882b370b60e",
+      "sha256": "de7d204e852c649d4455626a5cd5ff69c851c2d9e76ffaff4bcd056ed242abbf",
+      "bytes": 7733,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/LATEST-INTEGRATION.md",
+      "gitBlob": "431f53ab59869b8e9de2cf511bbb68e6945059db",
+      "sha256": "ae8c8b095d8d73c51f6e80cba9adc4223770e34dadd5167b2e04e5cdbac74c93",
+      "bytes": 7160,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/README.md",
+      "gitBlob": "fb718a466ae8ee1d8c5a82d057929d1e23f6eab6",
+      "sha256": "be813369382028ba910c0caf561609cf094ec216907d3a50964d288085be1f9e",
+      "bytes": 16570,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/build.py",
+      "gitBlob": "3295c65086175c7c48d51c25a76c709f83307f0e",
+      "sha256": "74d586bf6d1d5c53029bcc313ced8d22f671101131468791849b192ec256e46b",
+      "bytes": 10211,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/build_support.py",
+      "gitBlob": "2a87e9c0e8caaaa2d17fa9ecc3275dad38675810",
+      "sha256": "3f79972ed2519bd3df46e7db38c5fbbc43e9178b781dda74135952be2eefaac9",
+      "bytes": 2878,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/build_support_test.py",
+      "gitBlob": "d4980ea39b994a21ad142e2a3a0f5dea61efcfee",
+      "sha256": "033b6c3f01b28c45bd1bdf21d0fd7d3b3310b41cb266733bb78a3b01da3d7916",
+      "bytes": 9854,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/catalog-qa.mjs",
+      "gitBlob": "b1510a9bb86953e1103b699ca0373620d712bbf8",
+      "sha256": "732523ed6b7b6c2be620c38db65766554a25d6e36bbd8de5d06055de4b0ab07c",
+      "bytes": 8568,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/catalog-source.json",
+      "gitBlob": "b12145eb39a0c027fe3f8597e166579877b2cad3",
+      "sha256": "2831f58e4f2685af86b89deffbec7cd278a213f169e99a7e8ffd5d5ba615365e",
+      "bytes": 32381,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/catalog.py",
+      "gitBlob": "8a8958678ee34bd591322b7c32b24a14c345f871",
+      "sha256": "417096238d3c75aef4e60d2bb69c990d90cc513bbbace3c5a4cce9e97337ec3d",
+      "bytes": 6018,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/evidence/0024-use-paths-5e4b118.txt",
+      "gitBlob": "9e386b2155290b6d62ce06cead194e8b4ad10ee5",
+      "sha256": "9d3a71b5d773fb3c7b721c7c61bc9e2ec20e6a9773be53b8ea1b66cfbf2a3af9",
+      "bytes": 19926,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/hosting/naming-audit.py",
+      "gitBlob": "e8d1a2d5d575226dd0f6be6a16a590e3268dc593",
+      "sha256": "b854af89559a4d2fa4998fe707daa4c25078aa2c20101a48bcf6865d7f0efc98",
+      "bytes": 1811,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/project_snapshots.py",
+      "gitBlob": "5b5892187a989e97244ff5dde64df8f51ee0c435",
+      "sha256": "98708f0dfd3aa68cad6a6f2c87812321843f9ae5356c25a8680ad81aafcbb50f",
+      "bytes": 7978,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/source_selection_snapshot.py",
+      "gitBlob": "a8e607d732499c2a145c984644ba1cd0a9ab0bf8",
+      "sha256": "e3bc1c831112a61a35c9bfaf69ab36b25b89a7c6ef9c69a2ec5e258a034802cf",
+      "bytes": 6593,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/validation/README.md",
+      "gitBlob": "ea9b5e9e629a83b7bc7dfab9ad9ba345e604f888",
+      "sha256": "81764ce7eebe05a71f520942884b04b466bf15168da062a0635e53a59719321d",
+      "bytes": 4807,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/validation/compare_ast.go",
+      "gitBlob": "c12f76e606cb987496b0e940fad97d060a393843",
+      "sha256": "051e76795ae400686eb98d73eca3403b4cb070464d65746dc4eaa232cd52f2c9",
+      "bytes": 2498,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/validation/compare_ast_test.go",
+      "gitBlob": "883ecc80df6f57942d358ab0a5f849de67572ebc",
+      "sha256": "68dac737ec51413b6bcb8262145362abbf6dffe2aa23bfc5e491b81edb4fe3e1",
+      "bytes": 1873,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/validation/run.py",
+      "gitBlob": "978b7caf39e2657bda2414147af2bf0c85ab9d07",
+      "sha256": "1505605002ad45282f8e1d03e2bb7feff041f2f2de8e20ebe3677680af8ee640",
+      "bytes": 35459,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/validation/run_test.py",
+      "gitBlob": "4e82017cbd58f943df231584e778cb85dd16ff59",
+      "sha256": "872e748c2240e24fe57dfa2f6d84e58420c5c874458d0ea2b240bd410b176867",
+      "bytes": 7799,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/validation/runner_test.go",
+      "gitBlob": "7ff8b2e38fc577eac907212a152a32f9ecdecd09",
+      "sha256": "4c844ce080af2d29481fd67c5009096e31d6a2fc1c84ff71773f5f5fb552860e",
+      "bytes": 433,
+      "authorAndCleanCheckoutMatch": true
+    },
+    {
+      "path": "website/workspace_import_snapshots.py",
+      "gitBlob": "c40c4d34e123667ced5f5742b1d473db77350e58",
+      "sha256": "8c456fdcba3b1515b101999d61595eadca1ff5dad0a87f2fc13f6f17ce102937",
+      "bytes": 8415,
+      "authorAndCleanCheckoutMatch": true
+    }
+  ],
+  "authorCheckout": "/Users/hxsf/Documents/Codex/2026-10-06/task/worktrees/website-validation-reproducibility",
+  "cleanCheckout": "/private/tmp/goxide-website-repro-20261006-jy8y93vh/final-checkout",
+  "clean": true,
+  "unchangedCanonicalFixtures": {
+    "checks": 97,
+    "examples": 10
+  },
+  "compilerTreeUnchangedFromPin": true
+}

@@ -958,3 +958,16 @@ A01 未在本片扩展。A03 冗余括号、refs、共享 helper/其他临时节
 questionFlow明确新建token只带已证明完整栈、Origin仍nil；复用operand保留自身来源。
 未知墓碑与冲突不被外层填充，冗余括号/其他temp/refs/共享helper不在本片冒称闭环。
 Linux未运行、网站未部署，精确提交的托管CI状态另记，不由本地成功推断。
+
+
+## 网站验证仓内复现交付（2026-10-06）
+
+实施前合同 `d7d585031b4573fe04d4586d1e593c9a26873d43`，准确网站/工具提交
+`c93461c27e67fce30fa6ace726d0c85c54fc4700`；编译器生产 pin 仍为
+`e36d23dacee64d19b34aac639900c3f5c29e55c2`。独立干净 worktree 的仓内七阶段入口、
+完整 Mac race **600 顶层/1302 子测试**、全树 vet/design 与独立审查通过。
+97 fixture/10 示例保持；33 对生成 Go 为 27 字节相同、6 排版差异、33 完整 AST 相同，
+5 对原生程序实际运行。无任务目录源码/overlay 依赖证据、失败历史与短命令见
+[交付报告](reviews/website-validation-reproducibility-20261006.md)。
+报告后续追加属于文档/证据提交，不能混同已测工具身份；catalog 不滚动自引用 hash。
+A04 unary/composite match 另批实施；Linux/托管 CI 未验证，网站未部署，公开库 ABI 未改。

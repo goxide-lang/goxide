@@ -76,3 +76,15 @@ The Go package includes AST controls and invokes the Python runner's failure-pat
 checks, so these tests also run under `go test -race -count=1 -timeout 30m ./...`.
 The full compiler race/vet/design gates remain separate from the seven website
 phases and must be recorded for the exact implementation commit.
+
+```sh
+# Workspace fixtures must discover their own go.work. Do not export GOWORK=off
+# for the repository-wide gate; the website runner controls its own environment.
+env -u GOWORK go test -race -count=1 -timeout 30m ./...
+go vet ./...
+python3 scripts/check_design.py
+```
+
+Use an installed Go 1.27 toolchain (`GOTOOLCHAIN=local`), the complete pinned module
+cache and a writable, resolved temporary directory. A successful website run does
+not substitute for these full-tree gates.

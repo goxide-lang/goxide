@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('website_validation_runner', Path(__file__).with_name('run.py'))
@@ -82,6 +83,55 @@ class RunnerTests(unittest.TestCase):
             self.assertIn('clean committed checkout', summary['failure'])
             self.assertTrue(all(p['status'] == 'blocked' for p in summary['phases'].values()))
             self.assertEqual((root / 'untracked').read_text(), 'work in progress')
+
+    def test_clean_empty_commit_in_current_snapshot_fails_identity_gate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / 'source'
+            root.mkdir()
+            out = Path(temporary) / 'evidence'
+            out.mkdir()
+
+            def git(directory, *args):
+                return subprocess.check_output(['git', '-C', str(directory), *args], stderr=subprocess.PIPE).decode().strip()
+
+            git(root, 'init', '-q')
+            (root / 'input.txt').write_text('unchanged tracked source')
+            git(root, 'add', 'input.txt')
+            commit_options = ['-c', 'user.name=Validation Test', '-c', 'user.email=validation@example.invalid',
+                              '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null']
+            git(root, *commit_options, 'commit', '-q', '-m', 'initial input')
+            initial = git(root, 'rev-parse', 'HEAD')
+            for name in ('current', 'baseline'):
+                git(out, 'clone', '-q', '--no-hardlinks', str(root), str(out / name))
+
+            class LightweightRunner(runner.Runner):
+                # Only replace expensive stage bodies. Git observations and the
+                # final identity gate are the real production implementation.
+                def preflight(self):
+                    self.identity = {'validationCommit': initial}
+                    self.source_inputs = self.inventory(self.root)
+                    self.baseline_inputs = self.inventory(self.baseline)
+
+                def phase(self, name, action, dependencies=()):
+                    self.phases[name] = {'status': 'passed'}
+                    if name == 'catalog-qa':
+                        git(self.current, *commit_options, 'commit', '-q', '--allow-empty', '-m', 'different identity, same tree')
+
+            obj = LightweightRunner(root, out, argparse.Namespace())
+            with mock.patch.object(runner, 'BASELINE', initial):
+                self.assertEqual(obj.run(), 1)
+            changed = git(out / 'current', 'rev-parse', 'HEAD')
+            self.assertNotEqual(changed, initial)
+            self.assertEqual(git(out / 'current', 'status', '--porcelain'), '')
+            self.assertEqual(git(out / 'current', 'rev-parse', 'HEAD^{tree}'), git(root, 'rev-parse', 'HEAD^{tree}'))
+            summary = json.loads((out / 'summary.json').read_text())
+            identity = json.loads((out / 'identity.json').read_text())
+            self.assertTrue(all(phase['status'] == 'passed' for phase in summary['phases'].values()))
+            self.assertFalse(summary['passed'])
+            self.assertIn('snapshot', summary['failure'])
+            self.assertEqual(identity['snapshotHeadAfter'], changed)
+            self.assertEqual(identity['validationCommit'], initial)
+            self.assertEqual(git(root, 'rev-parse', 'HEAD'), initial)
 
     def test_complete_matrix_and_byte_positions(self):
         groups, diagnostics = runner.qa_matrix(Path(__file__).resolve().parents[2])

@@ -505,15 +505,22 @@ class Runner:
                 if self.identity:
                     status = self.git('status', '--porcelain=v1', '--untracked-files=all')
                     self.identity['sourceStatusAfter'] = status
-                    require(status == '' and self.git('rev-parse', 'HEAD') == self.identity['validationCommit'] and self.inventory(self.root) == self.source_inputs,
+                    self.identity['sourceHeadAfter'] = self.git('rev-parse', 'HEAD')
+                    require(status == '' and self.identity['sourceHeadAfter'] == self.identity['validationCommit'] and self.inventory(self.root) == self.source_inputs,
                             'source checkout changed during validation')
                     self.identity['snapshotStatusAfter'] = self.git('status', '--porcelain=v1', '--untracked-files=all', root=self.current)
-                    require(self.identity['snapshotStatusAfter'] == '' and self.inventory(self.current) == self.source_inputs, 'validation altered tracked snapshot inputs')
+                    self.identity['snapshotHeadAfter'] = self.git('rev-parse', 'HEAD', root=self.current)
+                    require(self.identity['snapshotStatusAfter'] == '' and self.identity['snapshotHeadAfter'] == self.identity['validationCommit'] and self.inventory(self.current) == self.source_inputs, 'validation altered snapshot HEAD or tracked inputs')
                     self.identity['baselineStatusAfter'] = self.git('status', '--porcelain=v1', '--untracked-files=all', root=self.baseline)
-                    require(self.identity['baselineStatusAfter'] == '' and self.git('rev-parse', 'HEAD', root=self.baseline) == BASELINE and self.inventory(self.baseline) == self.baseline_inputs, 'validation altered baseline snapshot inputs')
-                    save(self.out / 'identity.json', self.identity)
+                    self.identity['baselineHeadAfter'] = self.git('rev-parse', 'HEAD', root=self.baseline)
+                    require(self.identity['baselineStatusAfter'] == '' and self.identity['baselineHeadAfter'] == BASELINE and self.inventory(self.baseline) == self.baseline_inputs, 'validation altered baseline snapshot inputs')
             except BaseException as exc:
                 error = (error + '; ' if error else '') + str(exc)
+            finally:
+                if self.identity:
+                    # Preserve the observed mismatched identity as well as the
+                    # successful one; failure must not leave only initial data.
+                    save(self.out / 'identity.json', self.identity)
             passed = self.summarize(error, final=True)
         print(('PASS' if passed else 'FAIL') + ': ' + str(self.out / 'summary.json'), flush=True)
         return 0 if passed else 1

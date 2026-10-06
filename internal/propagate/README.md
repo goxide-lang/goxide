@@ -43,6 +43,16 @@ Go with `go run -race`, including ordering, short circuit, closure and defer cas
 API negatives cover ambiguous/missing/two-hop From. These are compiler tests, not
 claims about future general ownership analysis.
 
+With a provenance map, AST stages freeze evidence before mutation and transport
+only structurally verified output tokens. A question flow registers its fresh
+validation, payload and exit scaffold from the original marker identifier's
+complete macro context. These generated tokens keep no exact source point. The
+already-lowered operand remains the same AST child, with its independent point
+and context; it is not printed and reparsed into the scaffold. Ordinary, effect
+plan and guard frame consumers use the same flow construction. Shared top-level
+aliases/helpers and other temporary factories do not inherit a first-use or
+nearby context; unresolved evidence remains generated/unmapped.
+
 ## Imported sums in directory compilation
 
 An imported call can be used directly as `dep.Load()?`. Only families and concrete

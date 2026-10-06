@@ -38,6 +38,7 @@ type Config struct {
 	Namespace string
 }
 type lowering struct {
+	evidence             *sourcemap.ASTEvidence
 	checkErrors          []types.Error
 	guardFreeDepth       int
 	expressionFacts      map[ast.Expr]expressionFact
@@ -320,8 +321,10 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 	if e != nil {
 		return nil, e
 	}
-	originalNodes := sourcemap.Nodes(f)
 	l := &lowering{fs: fs, file: f, cfg: cfg, questions: map[string]enums.Decl{}, conversions: map[string]string{}}
+	if cfg.Provenance != nil {
+		l.evidence = cfg.Provenance.CaptureAST(fs, f)
+	}
 	names := make([]string, 0, len(cfg.Files))
 	for name := range cfg.Files {
 		if name != filename {
@@ -367,7 +370,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 				return nil, err
 			}
 			if cfg.Provenance != nil {
-				next := cfg.Provenance.AST(fs, f, originalNodes, rewritten.Bytes(), "sum pattern expansion")
+				next := l.evidence.Print(f, rewritten.Bytes(), "sum pattern expansion")
 				*cfg.Provenance = *next
 			}
 			f, e = parser.ParseFile(fs, filename, rewritten.Bytes(), parser.ParseComments)
@@ -375,7 +378,9 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 				return nil, e
 			}
 			l.file = f
-			originalNodes = sourcemap.Nodes(f)
+			if cfg.Provenance != nil {
+				l.evidence = cfg.Provenance.CaptureAST(fs, f)
+			}
 			continue
 		}
 		adapted, adapterError, adapterPending := l.resolveGoResult()
@@ -527,7 +532,7 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 		return nil, e
 	}
 	if cfg.Provenance != nil {
-		next := cfg.Provenance.AST(fs, f, originalNodes, out.Bytes(), "propagate.Lower")
+		next := l.evidence.Print(f, out.Bytes(), "propagate.Lower")
 		*cfg.Provenance = *next
 	}
 	return out.Bytes(), nil
@@ -1205,7 +1210,7 @@ func (l *lowering) expr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Expr, err
 				if e != nil {
 					return nil, nil, e
 				}
-				return append(p, flow.emit(returnFailure)...), flow.value, nil
+				return append(p, flow.emit(returnFailureExit)...), flow.value, nil
 			}
 		}
 		// Freeze earlier evaluated runtime operands before lowering a later ?. Constants

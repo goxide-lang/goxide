@@ -289,10 +289,77 @@ const originDiagnosticChecks = [
   ]
  }
 ];
+const astPositiveChecks = ["macro_ast_question_behavior"];
+const astDiagnosticChecks = [
+ {
+  "name": "reject_macro_ast_question",
+  "message": "for built-in len",
+  "point": null,
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!(value())"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_ast_nested",
+  "message": "for built-in len",
+  "point": null,
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!(value())"
+   },
+   {
+    "macro": "inner",
+    "definition": "macro_rules! inner",
+    "call": "inner!($x)"
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_ast_sibling",
+  "message": "for built-in len",
+  "point": null,
+  "frames": [
+   {
+    "macro": "outer",
+    "definition": "macro_rules! outer",
+    "call": "outer!(value())",
+    "callOccurrence": 1
+   }
+  ]
+ },
+ {
+  "name": "reject_macro_ast_nonmacro",
+  "message": "for built-in len",
+  "point": null,
+  "frames": []
+ },
+ {
+  "name": "reject_macro_ast_real_point",
+  "message": "cannot use 1",
+  "point": {
+   "anchor": "var wrong string = 1",
+   "offset": 19,
+   "token": "1"
+  },
+  "frames": []
+ }
+];
+const allOriginChecks=[...originDiagnosticChecks,...astDiagnosticChecks];
 const originResults=[];
-function originPosition(source, anchor, offset=0) {
- const index=source.indexOf(anchor);
- assert.ok(index>=0 && source.indexOf(anchor,index+1)<0,`ambiguous origin anchor: ${anchor}`);
+function originPosition(source, anchor, offset=0, occurrence) {
+ let index=source.indexOf(anchor);
+ if(occurrence===undefined)assert.ok(index>=0 && source.indexOf(anchor,index+1)<0,`ambiguous origin anchor: ${anchor}`);
+ else {
+  assert.ok(Number.isInteger(occurrence)&&occurrence>=0,`invalid origin occurrence: ${anchor}`);
+  for(let i=0;i<occurrence&&index>=0;i++)index=source.indexOf(anchor,index+1);
+  assert.ok(index>=0,`missing origin occurrence: ${anchor}`);
+ }
  const prefix=source.slice(0,index+offset);
  return {start:Buffer.byteLength(prefix),line:prefix.split('\n').length,column:Buffer.byteLength(prefix.slice(prefix.lastIndexOf('\n')+1))+1};
 }
@@ -309,13 +376,13 @@ function assertOriginDiagnostic(diagnostic,check,source) {
   assert.doesNotMatch(primary,/source span/);
  }
  assert.deepEqual(frames,check.frames.map(frame=>{
-  const d=originPosition(source,frame.definition),c=originPosition(source,frame.call);
+  const d=originPosition(source,frame.definition),c=originPosition(source,frame.call,0,frame.callOccurrence);
   return `  macro ${frame.macro} defined at playground.gox:${d.line}:${d.column}; invoked at playground.gox:${c.line}:${c.column}`;
  }),`${check.name}: inaccurate or reordered macro stack`);
 }
 const temp=await fs.mkdtemp(path.join(tmpdir(),'goxide-browser-parity-'));
 try {
- for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity','reject_legacy_cfg','reject_macro_selector','reject_macro_prepared','reject_derive_origin','reject_enum_derive_origin','macro_imported_helper',...appendChecks,...copyChecks,...allocationChecks]) {
+ for (const name of ['error_only','typed_nil','reject_wrong_type','pointer_error','named_error','slice_error','reject_value_error','reject_arity','reject_legacy_cfg','reject_macro_selector','reject_macro_prepared','reject_derive_origin','reject_enum_derive_origin','macro_imported_helper',...appendChecks,...copyChecks,...allocationChecks,...astPositiveChecks]) {
   const source=await fs.readFile(new URL(`checks/${name}.gox`,import.meta.url),'utf8');
   const input=path.join(temp,'playground.gox');await fs.writeFile(input,source);
   let nativeGo, nativeError;
@@ -355,7 +422,7 @@ try {
  }
  // UI textarea values normalize CRLF. Raw worker calls separately verify exact CRLF bytes.
  const originWorkerInputs=[];
- for(const check of originDiagnosticChecks) {
+ for(const check of allOriginChecks) {
   const fixture=await fs.readFile(new URL(`checks/${check.name}.gox`,import.meta.url),'utf8');
   for(const ending of ['LF','CRLF']) {
    const source=ending==='LF'?fixture:fixture.replaceAll('\n','\r\n');
@@ -451,6 +518,7 @@ await page.unroute('**/worker.js*');await page.click('#reset');await finished();
 assert.equal(await page.inputValue('#output'),manifest.examples[0].go);
 assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');
+const originGroupResults=checks=>({fixtures:checks.length,cliObservations:checks.length*4,uiLfObservations:checks.length*2,rawWorkerObservations:checks.length*4,recoveryAfterEach:true,sourceFile:'playground.gox reused across distinct sources',scope:'UI LF plus non-UI real WASM worker LF/CRLF; no cross-file/package or effect/frame coverage claim'});
 const builtinResults=names=>({positive:checkResults.filter(name=>names.includes(name)&&!name.startsWith('reject_')),frontendReject:Object.keys(frontendReject).filter(name=>names.includes(name)),nativeTypeReject:Object.keys(nativeTypeReject).filter(name=>names.includes(name)),nativeTypeRejectWasm:'transpilation parity only; final Go compilation is native'});
-console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9).filter(name=>!appendChecks.includes(name)&&!copyChecks.includes(name)&&!allocationChecks.includes(name)),appendChecks:builtinResults(appendChecks),copyChecks:builtinResults(copyChecks),allocationChecks:{...builtinResults(allocationChecks),nativeValidButUnsupported:Object.keys(nativeValidControls)},originChecks:{fixtures:originDiagnosticChecks.length,cliObservations:originResults.length*2,uiLfObservations:originDiagnosticChecks.length*2,rawWorkerObservations:originResults.length*2,recoveryAfterEach:true,sourceFile:'playground.gox reused across distinct sources',scope:'UI LF plus non-UI real WASM worker LF/CRLF; no cross-file/package claim'},checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
+console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9).filter(name=>!appendChecks.includes(name)&&!copyChecks.includes(name)&&!allocationChecks.includes(name)&&!astPositiveChecks.includes(name)),appendChecks:builtinResults(appendChecks),copyChecks:builtinResults(copyChecks),allocationChecks:{...builtinResults(allocationChecks),nativeValidButUnsupported:Object.keys(nativeValidControls)},originChecks:originGroupResults(originDiagnosticChecks),astChecks:{...originGroupResults(astDiagnosticChecks),positive:checkResults.filter(name=>astPositiveChecks.includes(name))},checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
 await browser.close();

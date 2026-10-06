@@ -309,7 +309,10 @@ func PrepareGoResults(files map[string][]byte, cfg Config, maps map[string]*sour
 			if err != nil {
 				return nil, nil, err
 			}
-			originals := sourcemap.Nodes(f)
+			var evidence *sourcemap.ASTEvidence
+			if maps[name] != nil {
+				evidence = maps[name].CaptureAST(fs, f)
+			}
 			local := cfg
 			local.Namespace = fmt.Sprintf("p%d_r%d", index, round)
 			local.Families = append(append([]enums.Decl(nil), cfg.Families...), cfg.FileFamilies[name]...)
@@ -341,7 +344,7 @@ func PrepareGoResults(files map[string][]byte, cfg Config, maps map[string]*sour
 				return nil, nil, err
 			}
 			if maps[name] != nil {
-				maps[name] = maps[name].AST(fs, f, originals, out.Bytes(), "Go result package inference")
+				maps[name] = evidence.Print(f, out.Bytes(), "Go result package inference")
 			}
 			result[name] = out.Bytes()
 			added[name] = append(added[name], newFamilies...)

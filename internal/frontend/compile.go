@@ -420,6 +420,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 	if e != nil {
 		return Result{}, e
 	}
+	astEvidence := provenance.CaptureAST(fs, f)
 	var builtinImporter types.Importer
 	var builtinNamed map[string]macros.TypeContext
 	if cfg != nil {
@@ -896,7 +897,7 @@ func compile(filename string, source []byte, cfg *compileConfig) (Result, error)
 		return Result{}, e
 	}
 	// Insert a distinct import declaration after package; other imports remain intact.
-	provenance = provenance.Format(parsedSource, original.Bytes(), "format.original")
+	provenance = astEvidence.Print(f, original.Bytes(), "format.original")
 	text := original.String()
 	headerFS := token.NewFileSet()
 	header, err := parser.ParseFile(headerFS, filename, text, parser.PackageClauseOnly)

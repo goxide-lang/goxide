@@ -25,13 +25,16 @@ func TestQuestionFlowExitOrderingRace(t *testing.T) {
 		value: parseExpr("payload"), failure: parseExpr("none()"),
 		optionCondition: parseExpr("input == nil"), success: parseStatements(`payload = *input`),
 	}
-	observed := func(value ast.Expr) ast.Stmt {
-		return &ast.BlockStmt{List: []ast.Stmt{
+	observed := func() (ast.Stmt, *ast.Expr) {
+		value := ast.NewIdent("_")
+		assignment := &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("result")}, Tok: token.DEFINE, Rhs: []ast.Expr{value}}
+		block := &ast.BlockStmt{List: []ast.Stmt{
 			// Bind the failure first, just as a call's argument is evaluated before
 			// entering guard.Fail. An exception here must not set the observer flag.
-			&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("result")}, Tok: token.DEFINE, Rhs: []ast.Expr{value}},
+			assignment,
 			parseStatements(`trace += "E"`)[0], returnFailure(ast.NewIdent("result")),
 		}}
+		return block, &assignment.Rhs[0]
 	}
 	source := `package main
 import "testing"
@@ -53,7 +56,7 @@ func observe(f func()int)(n int,p any){defer func(){p=recover()}();n=f();return}
 		for _, exit := range []struct {
 			name string
 			fn   failureExit
-		}{{"Return", returnFailure}, {"Observed", observed}, {"ReturnAgain", returnFailure}} {
+		}{{"Return", returnFailureExit}, {"Observed", observed}, {"ReturnAgain", returnFailureExit}} {
 			body := family.flow.emit(exit.fn)
 			body = append(body, returnFailure(family.flow.value))
 			source += "func " + family.name + exit.name + "()int" + printNode(&ast.BlockStmt{List: body}) + "\n"

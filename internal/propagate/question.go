@@ -7,6 +7,7 @@ import (
 	"go/types"
 
 	"github.com/hxsf/goxide/internal/enums"
+	"github.com/hxsf/goxide/internal/sourcemap"
 )
 
 // questionFlow describes a single sum check after its operand has been lowered.
@@ -15,6 +16,8 @@ import (
 // A consumer selects the failure exit explicitly instead of rewriting returns
 // in generated (or potentially source-authored) syntax.
 type questionFlow struct {
+	evidence        *sourcemap.ASTEvidence
+	context         sourcemap.ASTContext
 	setup           []ast.Stmt
 	value           ast.Expr
 	failure         ast.Expr
@@ -25,27 +28,65 @@ type questionFlow struct {
 	resultErr       ast.Expr
 }
 
-type failureExit func(ast.Expr) ast.Stmt
+// A failure exit creates a closed, fresh template and identifies its one value
+// slot. Evidence is registered before the existing failure expression is spliced
+// into that slot; no generated parent can relabel a reused child.
+type failureExit func() (ast.Stmt, *ast.Expr)
 
 func returnFailure(value ast.Expr) ast.Stmt {
 	return &ast.ReturnStmt{Results: []ast.Expr{value}}
 }
+func returnFailureExit() (ast.Stmt, *ast.Expr) {
+	r := &ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent("_")}}
+	return r, &r.Results[0]
+}
+
+func (q *questionFlow) generated(nodes ...ast.Node) {
+	if q.evidence != nil {
+		for _, n := range nodes {
+			q.evidence.Generated(n, q.context)
+		}
+	}
+}
+func (q *questionFlow) generatedTree(n ast.Node) {
+	if q.evidence != nil {
+		q.evidence.GeneratedTree(n, q.context)
+	}
+}
+func (q *questionFlow) expression(source string) ast.Expr {
+	x := parseExpr(source)
+	q.generatedTree(x)
+	return x
+}
+func (q *questionFlow) statements(source string) []ast.Stmt {
+	statements := parseStatements(source)
+	for _, statement := range statements {
+		q.generatedTree(statement)
+	}
+	return statements
+}
 
 // emit builds fresh branch containers so choosing an exit never mutates the
-// flow's other consumers. The failure value (including From) is evaluated before
-// the selected exit; guard pending is therefore not set by a failed conversion.
+// flow's other consumers. Each container owns only its own tokens; reused
+// conditions, success statements and the failure value retain their identities.
 func (q *questionFlow) emit(exit failureExit) []ast.Stmt {
 	out := append([]ast.Stmt(nil), q.setup...)
-	failure := exit(q.failure)
+	failure, valueSlot := exit()
+	q.generatedTree(failure)
+	*valueSlot = q.failure
 	if q.optionCondition != nil {
-		out = append(out, &ast.IfStmt{Cond: q.optionCondition, Body: &ast.BlockStmt{List: []ast.Stmt{failure}}})
+		body := &ast.BlockStmt{List: []ast.Stmt{failure}}
+		branch := &ast.IfStmt{Cond: q.optionCondition, Body: body}
+		q.generated(body, branch)
+		out = append(out, branch)
 		return append(out, q.success...)
 	}
-	dispatch := &ast.TypeSwitchStmt{Assign: q.resultSubject, Body: &ast.BlockStmt{List: []ast.Stmt{
-		&ast.CaseClause{List: []ast.Expr{q.resultOK}, Body: append([]ast.Stmt(nil), q.success...)},
-		&ast.CaseClause{List: []ast.Expr{q.resultErr}, Body: []ast.Stmt{failure}},
-		&ast.CaseClause{Body: parseStatements(`panic("goxide: invalid Result at ?")`)},
-	}}}
+	success := &ast.CaseClause{List: []ast.Expr{q.resultOK}, Body: append([]ast.Stmt(nil), q.success...)}
+	failed := &ast.CaseClause{List: []ast.Expr{q.resultErr}, Body: []ast.Stmt{failure}}
+	invalid := &ast.CaseClause{Body: q.statements(`panic("goxide: invalid Result at ?")`)}
+	body := &ast.BlockStmt{List: []ast.Stmt{success, failed, invalid}}
+	dispatch := &ast.TypeSwitchStmt{Assign: q.resultSubject, Body: body}
+	q.generated(success, failed, invalid, body, dispatch)
 	return append(out, dispatch)
 }
 
@@ -58,16 +99,23 @@ func (l *lowering) questionFlow(n *ast.CallExpr, operand ast.Expr, ft *ast.FuncT
 		return nil, l.fail(n, "Option and Result cannot propagate into each other")
 	}
 	tmp, val := l.temp(), l.temp()
-	q := &questionFlow{
-		setup: parseStatements(tmp + " := " + printNode(operand) + "; " + d.Validator + "(" + tmp + "); var " + val + " " + d.TypeArgs[0]),
-		value: ast.NewIdent(val),
+	q := &questionFlow{evidence: l.evidence, value: ast.NewIdent(val)}
+	if l.evidence != nil {
+		q.context = l.evidence.Context(n.Fun, sourcemap.IdentToken)
 	}
+	// The marker owns this lowering operation. Its operand may have a different
+	// macro context and must remain the exact already-lowered AST child.
+	save := &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(tmp)}, Tok: token.DEFINE, Rhs: []ast.Expr{ast.NewIdent("_")}}
+	q.generatedTree(save)
+	save.Rhs[0] = operand
+	q.generated(q.value)
+	q.setup = append([]ast.Stmt{save}, q.statements(d.Validator+"("+tmp+"); var "+val+" "+d.TypeArgs[0])...)
 	if d.Family == "Option" {
 		none := "__goxide_enum_none_" + l.temp()
-		q.setup = append(q.setup, parseStatements(none+" := "+d.Variants[1].Constructor+"()")...)
-		q.optionCondition = parseExpr(tmp + " == " + none)
-		q.failure = parseExpr(target.Variants[1].Constructor + "()")
-		q.success = parseStatements(val + " = " + tmp + ".(" + d.Variants[0].CaseName + ").Value")
+		q.setup = append(q.setup, q.statements(none+" := "+d.Variants[1].Constructor+"()")...)
+		q.optionCondition = q.expression(tmp + " == " + none)
+		q.failure = q.expression(target.Variants[1].Constructor + "()")
+		q.success = q.statements(val + " = " + tmp + ".(" + d.Variants[0].CaseName + ").Value")
 		return q, nil
 	}
 	errVal := "__goxide_failure.Value"
@@ -107,10 +155,11 @@ func (l *lowering) questionFlow(n *ast.CallExpr, operand ast.Expr, ft *ast.FuncT
 		}
 		errVal = bound + "(" + errVal + ")"
 	}
-	q.failure = parseExpr(target.Variants[1].Constructor + "(" + errVal + ")")
+	q.failure = q.expression(target.Variants[1].Constructor + "(" + errVal + ")")
 	q.resultSubject = &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("__goxide_failure")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(tmp)}}}
-	q.resultOK = parseExpr(d.Variants[0].CaseName)
-	q.resultErr = parseExpr(d.Variants[1].CaseName)
-	q.success = parseStatements(val + " = __goxide_failure.Value")
+	q.generatedTree(q.resultSubject)
+	q.resultOK = q.expression(d.Variants[0].CaseName)
+	q.resultErr = q.expression(d.Variants[1].CaseName)
+	q.success = q.statements(val + " = __goxide_failure.Value")
 	return q, nil
 }

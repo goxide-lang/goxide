@@ -1,0 +1,6 @@
+package main
+macro_rules! outer { ($x:expr) => { len($x?) }; }
+func values() Option[[]int] { return Option[[]int]::Some([]int{1}) }
+func good() Option[int] { _ = outer!(values()); return Option[int]::None }
+var wrong string = 1
+func main() {}

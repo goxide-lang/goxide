@@ -261,7 +261,7 @@ func (l *lowering) effectExpr(x ast.Expr, ft *ast.FuncType) ([]ast.Stmt, ast.Exp
 				if e != nil {
 					return nil, nil, e
 				}
-				return append(p, flow.emit(returnFailure)...), flow.value, nil
+				return append(p, flow.emit(returnFailureExit)...), flow.value, nil
 			}
 		}
 		if b := l.builtin(n); b != nil && (b.Name() == "len" || b.Name() == "cap") {

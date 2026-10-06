@@ -176,8 +176,9 @@ func (l *lowering) frameExpr(x ast.Expr, ft *ast.FuncType, guard string) (ast.Ex
 				if e != nil {
 					return nil, e
 				}
-				pre := flow.emit(func(value ast.Expr) ast.Stmt {
-					return &ast.ExprStmt{X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(guard), Sel: ast.NewIdent("Fail")}, Args: []ast.Expr{value}}}
+				pre := flow.emit(func() (ast.Stmt, *ast.Expr) {
+					call := &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent(guard), Sel: ast.NewIdent("Fail")}, Args: []ast.Expr{ast.NewIdent("_")}}
+					return &ast.ExprStmt{X: call}, &call.Args[0]
 				})
 				operand, e := l.frameExpr(original, ft, guard)
 				if e != nil {

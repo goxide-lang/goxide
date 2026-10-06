@@ -837,3 +837,30 @@ D36 后续：入口无需 T，从 `(T,E)` 或 E 推导具体 Result；保留显�
 独立库已发布并绑定真实 pseudo-version；schema 7、serde canonical identity、可读性与第一阶段 goxide.toml 迁移已联合整合。代码 `b8bb3a5e21ea84ef29490ba845c39ce04dbdc739` 的完整 `go test -race -tags hgoweb -count=1 ./...` 退出 0，普通及 hgoweb 全树 vet 通过。公开库、独立生成模块、10 个浏览器实例、8 个目录反例、8 个适配检查、source map/非法值/owner 授权及发布白名单证据见[整合记录](reviews/public-library-migration-20261004.md)和[逐包摘要](reviews/public-library-validation-20261004.json)。网站仅本地构建验证，未部署。
 
 用户后来批准统一 goxide.toml+goxide.lock authoring 模型；该新的无损迁移接口仍由工具链任务实施，尚未纳入此 SHA。当前模式全绿不代表新接口已交付，也不代表整个 MVP 完成。
+
+
+## A01 宏模板直接 append（2026-10-06）
+
+从恢复基线 `771d464` 创建独立 `feat/macro-append-builtin`；
+源码/测试/合同提交 `a2c7300966f3bf2c0a446ff13818bd4a8ce06c68`。
+先写 RFC0011 白例/黑例，再让直接 append 复用 len/cap 卫生绑定并恢复原生调用。
+命名 slice、容量复用/扩容、重叠、nil/空、slice/string spread、模板捕获次数和求值顺序，
+跨包/跨文件绑定、LF/CRLF 与重复 Go/map 均有真实执行验收；? 保持最近用户函数，
+失败不执行 append 写入，关闭的条件日志不求值参数。
+
+Mac mini、Go 1.27.1 darwin/arm64：整树 race 完成 535 项，534 项通过，唯一跨目标
+离线用例因完整依赖源码缓存不足失败。补齐 go.sum 已固定的缓存后，原用例 race 连续
+三次通过；没有修改代码、测试或 offline 策略。该组合覆盖全部 535 项、17 个有测试包，
+5 个无测试包；没有跳过或未解决失败，但不宣称存在一次退出 0 的整树命令。
+全树 vet、完整设计检查 13 条 Go 机制命令、宏包 race、真实 CLI 生成模块 race/vet/run 通过。
+Mac 默认 TMPDIR 的 /var symlink 问题通过使用任务真实目录解决，安全检查保持。
+
+CLI/WASM 原 10 示例和 14 检查通过，新增 append 5 正例、6 绑定错误、4 原生类型错误
+差分通过。最后四项是生成 Go 一致且原生 Go 实际拒绝，浏览器不执行最终 Go 类型检查。
+web race/vet、26 卡片/10 catalog 负例及桌面/移动/失败恢复通过。
+本地验证 website overlay 和 Homebrew LICENSE 路径适配单独留证，生产构建脚本/catalog
+未改、未部署。独立审查无阻断，15 个旧/新来源对照保留 A03 已有 synthetic/unmapped 边界。
+详细结果、失败记录、环境修正及证据见[交付报告](reviews/macro-append-builtin-20261006.md)。
+
+A01 仅直接 append 子项完成；其他 builtin/绑定、A03 完整来源链仍待收口，RFC0011 与
+完整 MVP 未关闭。Linux 未重跑；没有借此实施完整 trait/borrow、blank/embedded 或 Proposed adapters。

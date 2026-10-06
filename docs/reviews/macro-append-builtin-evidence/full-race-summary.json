@@ -1,0 +1,80 @@
+{
+  "compilerCommit": "a2c7300966f3bf2c0a446ff13818bd4a8ce06c68",
+  "compilerProductionDigest": "7f0b5bb5b5cbab65fb2db7f71ca899a3b5ced46eacebd1a70f5f1eb03c4009cc",
+  "environment": {
+    "go": "go1.27.1",
+    "GOOS": "darwin",
+    "GOARCH": "arm64",
+    "GOTOOLCHAIN": "local",
+    "GOMAXPROCS": "4",
+    "TMPDIR": "task-local real directory, no /var symlink"
+  },
+  "result": "All 535 distinct top-level tests covered by full-tree run plus focused recovery; no unresolved failing tests. This is NOT one exit-zero full-tree invocation.",
+  "fullTreeAttempt": {
+    "command": "go test -race -count=1 -timeout 30m -json ./...",
+    "exitCode": 1,
+    "topLevelTests": {
+      "pass": 534,
+      "fail": 1
+    },
+    "subtests": {
+      "pass": 1117
+    },
+    "packageResults": {
+      "skip": 5,
+      "pass": 16,
+      "fail": 1
+    },
+    "failedTests": [
+      {
+        "package": "github.com/hxsf/goxide/cmd/goxide",
+        "test": "TestProjectConditionalGoxideAcrossTargets"
+      }
+    ],
+    "reason": "The offline planner calls go mod download -json all. Four checksummed dependency source zips were absent; initial go mod download had not populated the complete graph.",
+    "rawLog": {
+      "path": "full-race-canonical.jsonl",
+      "bytes": 2170402,
+      "sha256": "ee3815ebd423250757b1fd4515f8f98f22cd6c2f4761403f9ff1692a807998c5"
+    },
+    "rawStderr": {
+      "path": "full-race-canonical.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "recovery": {
+    "cachePreparation": "go mod download all; go mod verify => all modules verified; existing task-local GOMODCACHE only, go.mod/go.sum unchanged",
+    "missingFixedModules": [
+      "github.com/cpuguy83/go-md2man/v2@v2.0.6",
+      "github.com/russross/blackfriday/v2@v2.1.0",
+      "go.yaml.in/yaml/v3@v3.0.4",
+      "gopkg.in/check.v1@v0.0.0-20161208181325-20d25e280405"
+    ],
+    "command": "go test -race -count=3 -timeout 10m -json ./cmd/goxide -run '^TestProjectConditionalGoxideAcrossTargets$'",
+    "exitCode": 0,
+    "testPasses": 3,
+    "testElapsedSeconds": [
+      13.49,
+      13.23,
+      13.21
+    ],
+    "rawLog": {
+      "path": "conditional-targets-fixed.jsonl",
+      "bytes": 3023,
+      "sha256": "09722ebc3af67d2e6ef538790272fbcbf2f626de81896dd4a8c48d419287eb1a"
+    },
+    "productionOrTestChanges": "none"
+  },
+  "coverageAfterRecovery": {
+    "distinctTopLevelTests": 535,
+    "cliTopLevelTests": 103,
+    "acceptanceTopLevelTests": 150,
+    "packagesWithTests": 17,
+    "packagesWithoutTests": 5,
+    "skippedTests": [],
+    "unresolvedFailures": []
+  },
+  "limits": "Native Mac validation only; Linux-specific builds and execution were not run. Existing generated/unmapped synthetic macro parenthesis diagnostics remain open under A03.",
+  "earlierAttempt": "Initial default macOS TMPDIR run failed on /var symlink safety and canonical-path comparisons; initial-full-race-summary.json retains that result. No production checks or tests were relaxed."
+}

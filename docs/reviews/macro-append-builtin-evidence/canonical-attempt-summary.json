@@ -1,0 +1,123 @@
+{
+  "compilerCommit": "a2c7300966f3bf2c0a446ff13818bd4a8ce06c68",
+  "compilerProductionDigest": "7f0b5bb5b5cbab65fb2db7f71ca899a3b5ced46eacebd1a70f5f1eb03c4009cc",
+  "environment": {
+    "go": "go1.27.1",
+    "GOOS": "darwin",
+    "GOARCH": "arm64",
+    "GOTOOLCHAIN": "local",
+    "GOMAXPROCS": "4",
+    "TMPDIR": "task-local real directory, no /var symlink"
+  },
+  "command": "go test -race -count=1 -timeout 30m -json ./...",
+  "exitCode": 1,
+  "packages": {
+    "github.com/hxsf/goxide/internal/buildconfig": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/formatting": {
+      "result": "pass",
+      "elapsedSeconds": 1.791
+    },
+    "github.com/hxsf/goxide/internal/deriveextras": {
+      "result": "pass",
+      "elapsedSeconds": 2.383
+    },
+    "github.com/hxsf/goxide/internal/enums": {
+      "result": "pass",
+      "elapsedSeconds": 7.423
+    },
+    "github.com/hxsf/goxide/internal/equality": {
+      "result": "pass",
+      "elapsedSeconds": 20.297
+    },
+    "github.com/hxsf/goxide/internal/buildscript": {
+      "result": "pass",
+      "elapsedSeconds": 24.062
+    },
+    "github.com/hxsf/goxide/internal/matchexpr": {
+      "result": "pass",
+      "elapsedSeconds": 2.957
+    },
+    "github.com/hxsf/goxide/internal/naming": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/printing": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/project": {
+      "result": "pass",
+      "elapsedSeconds": 1.78
+    },
+    "github.com/hxsf/goxide/internal/macros": {
+      "result": "pass",
+      "elapsedSeconds": 9.781
+    },
+    "github.com/hxsf/goxide/internal/propagate": {
+      "result": "pass",
+      "elapsedSeconds": 6.764
+    },
+    "github.com/hxsf/goxide/internal/refs": {
+      "result": "pass",
+      "elapsedSeconds": 3.224
+    },
+    "github.com/hxsf/goxide/internal/scripttrust": {
+      "result": "pass",
+      "elapsedSeconds": 1.401
+    },
+    "github.com/hxsf/goxide/internal/testdeps": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/sourcemap": {
+      "result": "pass",
+      "elapsedSeconds": 1.334
+    },
+    "github.com/hxsf/goxide/runtime": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/typecheck": {
+      "result": "pass",
+      "elapsedSeconds": 1.611
+    },
+    "github.com/hxsf/goxide/tests/prototype": {
+      "result": "pass",
+      "elapsedSeconds": 9.512
+    },
+    "github.com/hxsf/goxide/internal/frontend": {
+      "result": "pass",
+      "elapsedSeconds": 49.01
+    },
+    "github.com/hxsf/goxide/tests/acceptance": {
+      "result": "pass",
+      "elapsedSeconds": 370.967
+    },
+    "github.com/hxsf/goxide/cmd/goxide": {
+      "result": "fail",
+      "elapsedSeconds": 622.822
+    }
+  },
+  "topLevelTests": {
+    "pass": 534,
+    "fail": 1
+  },
+  "subtests": {
+    "pass": 1117
+  },
+  "failedTests": [
+    {
+      "package": "github.com/hxsf/goxide/cmd/goxide",
+      "test": "TestProjectConditionalGoxideAcrossTargets"
+    }
+  ],
+  "skippedTests": [],
+  "rawLogSHA256": "ee3815ebd423250757b1fd4515f8f98f22cd6c2f4761403f9ff1692a807998c5",
+  "rawLogBytes": 2170402,
+  "rawStderrSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "earlierAttempt": "Initial default macOS TMPDIR run failed on /var symlink safety and canonical-path comparisons; initial-full-race-summary.json retains that result. No production checks or tests were relaxed.",
+  "limits": "Native Mac validation only; Linux-specific builds and execution were not run. Existing generated/unmapped synthetic macro parenthesis diagnostics remain open under A03."
+}

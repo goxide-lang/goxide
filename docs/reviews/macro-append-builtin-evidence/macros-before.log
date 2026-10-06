@@ -1,0 +1,15 @@
+--- FAIL: TestAppendNativeEvaluationAndStorage (0.00s)
+    append_test.go:11: input.gox:3:40: macro: unsupported free template name "append"; pass it as an explicit capture (unsupported builtins included) (invoked at input.gox:12:10)
+--- FAIL: TestAppendLexicalBindings (0.00s)
+    append_test.go:50: input.gox:5:40: macro: unsupported free template name "append"; pass it as an explicit capture (unsupported builtins included) (invoked at input.gox:8:38)
+--- FAIL: TestAppendDefinitionBindings (0.00s)
+    append_test.go:84: var append=func([]int,int)[]int{return []int{9}}: shadow.gox:3:40: macro: unsupported free template name "append"; pass it as an explicit capture (unsupported builtins included) (invoked at shadow.gox:4:12)
+--- FAIL: TestAppendConditionalEvaluation (0.06s)
+    append_test.go:96: input.gox:3:106: macro: unsupported free template name "append"; pass it as an explicit capture (unsupported builtins included) (invoked at input.gox:10:2)
+--- FAIL: TestAppendBoundaries (0.00s)
+    append_test.go:124: macro_rules! value {()=>{append};} var v=value!(): got boundary.gox:2:26: macro: unsupported free template name "append"; pass it as an explicit capture (unsupported builtins included) (invoked at boundary.gox:2:42) want direct call
+--- FAIL: TestAppendDeterminismAndOrigins (0.00s)
+    append_test.go:135: origin.gox:3:22: macro: unsupported free template name "append"; pass it as an explicit capture (unsupported builtins included) (invoked at origin.gox:5:12)
+FAIL
+FAIL	github.com/hxsf/goxide/internal/macros	1.063s
+FAIL

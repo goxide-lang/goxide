@@ -1,0 +1,24 @@
+=== RUN   TestSuppliedCrossPlatformLicensesAndCollision
+=== RUN   TestSuppliedCrossPlatformLicensesAndCollision/nested-licenses
+=== RUN   TestSuppliedCrossPlatformLicensesAndCollision/collision
+--- PASS: TestSuppliedCrossPlatformLicensesAndCollision (0.16s)
+    --- PASS: TestSuppliedCrossPlatformLicensesAndCollision/nested-licenses (0.08s)
+    --- PASS: TestSuppliedCrossPlatformLicensesAndCollision/collision (0.08s)
+PASS
+ok  	github.com/hxsf/goxide/internal/project	1.444s
+=== RUN   TestUseGenericImportHygiene
+--- PASS: TestUseGenericImportHygiene (1.88s)
+=== RUN   TestUseMacroReservedAliasPosition
+=== RUN   TestUseMacroReservedAliasPosition/print
+=== RUN   TestUseMacroReservedAliasPosition/println
+=== RUN   TestUseMacroReservedAliasPosition/go_result
+=== RUN   TestUseMacroReservedAliasPosition/go_result_keep
+--- PASS: TestUseMacroReservedAliasPosition (0.22s)
+    --- PASS: TestUseMacroReservedAliasPosition/print (0.06s)
+    --- PASS: TestUseMacroReservedAliasPosition/println (0.05s)
+    --- PASS: TestUseMacroReservedAliasPosition/go_result (0.05s)
+    --- PASS: TestUseMacroReservedAliasPosition/go_result_keep (0.06s)
+=== RUN   TestUseGenericConstraintPosition
+--- PASS: TestUseGenericConstraintPosition (0.03s)
+PASS
+ok  	github.com/hxsf/goxide/internal/frontend	3.979s

@@ -79,9 +79,9 @@ MVP 归属以 [决策登记](design/decisions.md) D14/D21–D23/D27–D36、RFC 
 
 | ID / 建议标题 | 分类与范围依据 | 当前差距 / 最小用例 | 依赖与验收标准 |
 | --- | --- | --- | --- |
-| A01 常用声明宏绑定与 builtin 卫生收口 | E（单文件 importer 已交付），D14/D21；[宏边界](../internal/macros/README.md) | 已复用前端离线/WASM importer，包集合不变； `append($s,$v)`/make/new 模板未开放；len/cap 调用包级同名、覆盖调用点 named type 拒绝；imported type/var、generic helper 仍需显式捕获 | 分 builtin/类型/函数/变量小片；验定义点身份、局部/import/包级遮蔽、常量数组 len 不求值、? 最近函数、重复输出；不能用改 named type 反射身份绕过 |
+| A01 常用声明宏绑定与 builtin 卫生收口 | E（单文件 importer 与直接 append 子项已交付），D14/D21；[宏边界](../internal/macros/README.md)、[append 验收](../tests/acceptance/macro_append_test.go) | 已复用前端离线/WASM importer；直接 append、slice/string 展开和现有重复捕获已接通，保留原生求值、存储与 ? 最近函数语义。make/new/copy、imported type/var、generic helper 仍未收口；定义点指向 builtin 时，调用包级同名声明及覆盖展开点的局部 type 名称仍拒绝，A01 不关闭 | 已验定义点函数/局部绑定、调用点局部/import 遮蔽、命名 slice、容量复用/增长、重叠、nil/空、条件日志、? 失败跳过后续实参、跨文件和重复输出；后续分 builtin/类型/函数/变量小片，不通过改用户类型身份绕过 |
 | A02 常见模式宏及 log/tracing 场景矩阵 | E+D，已批准常见宏/日志场景；RFC0011 的完整 grammar U09 未冻结 | nested/optional repetition、广义 tt/type/stmt/item fragments 尚无；现有 event_if 是惰性条件日志，未提供完整 tracing span 语义 | 先把具体调用形状及歧义规则定清，保留当前有限 expr/ident/tt；嵌套重复长度/零次/预算拒绝，disabled 日志不求值，source span 保留。span/subscriber API 无明确授权证据时标待确认 |
-| A03 完整宏→降低诊断来源链 | E（已交付首片），RFC0011/0018；[source tests](../tests/acceptance/source_mapping_test.go)、[诊断收口](reviews/macro-derive-diagnostics-20261005.md) | 已修模板 AST token、`?` 前处理来源/栈、具体 derive 行级原始位置与 enum 阶段错位；单文件 importer 复用随 A01 收口；appended helper alias、合成传播节点及部分后端诊断仍 generated/unmapped，A03 不关闭 | 从真实 Go 编译失败倒查定义/调用/捕获位置；重复 token、多层、CRLF、跨文件保身份；真正无法证明的合成节点保留 unmapped |
+| A03 完整宏→降低诊断来源链 | E（已交付首片），RFC0011/0018；[source tests](../tests/acceptance/source_mapping_test.go)、[诊断收口](reviews/macro-derive-diagnostics-20261005.md) | 已修模板 AST token、`?` 前处理来源/栈、具体 derive 行级原始位置与 enum 阶段错位；单文件 importer 复用随 A01 收口；捕获生成括号、appended helper alias、合成传播节点及部分后端诊断仍 generated/unmapped，A03 不关闭 | 从真实 Go 编译失败倒查定义/调用/捕获位置；重复 token、多层、CRLF、跨文件保身份；真正无法证明的合成节点保留 unmapped |
 | A04 match 普通表达式组合长尾 | E，D31 明确工程欠账；[matchexpr](../internal/matchexpr/README.md) | `return -(match ...)`、`S{N:match ...}`、控制头、package initializer、复杂 LHS；builtin/type-conversion call 未接入 | 从已有 prelude/value 扩展，逐上下文正反例；副作用一次、短路、lhs 先求值后写入/panic、goto、? 失败跳后续、direct recover 无额外帧；不一次新增所有模式 |
 | A05 多结果/不可命名类型的 match 与传播 | E+D，RFC0009/0018 | `return match ... , other()` 组合、多结果 arm 语法/类型需分开；现负例 `func()(int,int){return match ...=>1}` 本身结果数不匹配，**不是合法多结果需求的充分复现**；`m.Hidden()(match...)` 缺可见类型拼写 | 先给合法 expected-type 用例及结果数规则；使用真实类型 witness 不退化 any；保返回槽/defer/原函数帧和 Go 原 arity 错误 |
 | A06 单文件与外部增强恢复补齐 | E，D30；[enum artifact](../internal/frontend/enum_artifact.go)、[refs artifact](../internal/refs/artifact.go) | 单文件导入生成 enum/协议不能按目录模式恢复；internal-origin 不可达 validator/payload、外部受限载荷仍有界 | 明确单文件 package/config 来源；两独立 module + Go consumer，public alias/relay、移动路径、错 schema/hash/权限/owner 拒绝；internal Go 可见性不绕过 |
@@ -180,3 +180,22 @@ MVP 归属以 [决策登记](design/decisions.md) D14/D21–D23/D27–D36、RFC 
 ## 9. 本轮验证与证据边界
 
 本轮只改文档。重跑结果、命令和线上身份记录见 [审计验证记录](reviews/mvp-gap-audit-20261005.md)。历史全树基线另见 [source-selection 报告](reviews/source-selection-20261005.md) 与 [全树摘要](reviews/source-selection-evidence/full-race-summary.json)：报告记录22包、516顶层/1086子测试通过；本轮不把它冒称自己重新执行的全树测试。
+
+
+## 2026-10-06 接续：A01 直接 append 子项
+
+交付源码 `a2c7300966f3bf2c0a446ff13818bd4a8ce06c68`，工作分支 `feat/macro-append-builtin`。
+先写 RFC0011 白例/黑例合同，复用既有 builtin 卫生机制，未引入新语义决定。
+[交付与独立审查记录](reviews/macro-append-builtin-20261006.md)保留原生 Mac、CLI/WASM、
+生成模块与来源对照证据。整树 534 项通过加唯一缓存失败补齐依赖后三次通过，覆盖 535 项；
+不是一次整树退出 0，Linux 未重跑。
+
+| 子项 | 状态 | 证据与剩余 |
+| --- | --- | --- |
+| A01 单文件 importer | C（前片） | 复用前端离线/WASM importer；浏览器可用包集合不扩大 |
+| A01 直接 append | C（本片） | 命名 slice/存储/展开、定义点函数与模板局部身份、调用点局部/import 卫生、条件日志、? 最近帧、重复输出与黑例 |
+| A01 其他 builtin/绑定 | E | make/new/copy；定义点 builtin 被调用包级同名或覆盖展开点局部 type 名称遮蔽；imported type/var/generic helper 的合法需求仍待收口，不以拒绝测试永久排除 |
+| A03 完整来源链 | E | 15 个旧/新对照证实捕获合成括号等后端错误仍 generated/unmapped；append() 与宏绑定错误保留准确位置及展开栈 |
+
+只关闭上述具体子项，A01/RFC0011 整项及 MVP 仍开放；blank/embedded、完整 trait、
+borrow checker、待定 serde adapters 未在本片实施。

@@ -1,0 +1,37 @@
+[
+  {
+    "case": "header-mutation-spread-first-question-named-result-range",
+    "status": "passed",
+    "stdout": "adversarial append passed"
+  },
+  {
+    "case": "cross-file-import-shadow-late-marker-restoration-question",
+    "status": "passed",
+    "stdout": "x yy"
+  },
+  {
+    "case": "nil",
+    "status": "rejected",
+    "diagnostic": "# goxide.local/generated\n./main.go:3:26: invalid append: argument must be a slice; have untyped nil\ngoxide: ./main.go:3:26: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "overflow",
+    "status": "rejected",
+    "diagnostic": "# goxide.local/generated\n./main.go:3:38: cannot use (256) (untyped int constant 256) as byte value in argument to append (overflows)\ngoxide: ./main.go:3:38: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "rune_string",
+    "status": "rejected",
+    "diagnostic": "# goxide.local/generated\n./main.go:3:38: cannot use (\"abc\") (untyped string constant \"abc\") as []rune value in argument to append\ngoxide: ./main.go:3:38: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "mixed_spread",
+    "status": "rejected",
+    "diagnostic": "# goxide.local/generated\n./main.go:3:40: too many arguments in call to append\n\thave ([]int, number, []int...)\n\twant ([]int, ...int)\ngoxide: ./main.go:3:40: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "go_call",
+    "status": "rejected",
+    "diagnostic": "# goxide.local/generated\n./main.go:3:18: go discards result of append(([]int{}), (1)) (value of type []int)\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/go_call.gox:2:42: go discards result of append(([]int{}), (1)) (value of type []int) [macro]\n  macro bad defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/go_call.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/go_call.gox:3:13\ngenerated Go build: exit status 1"
+  }
+]

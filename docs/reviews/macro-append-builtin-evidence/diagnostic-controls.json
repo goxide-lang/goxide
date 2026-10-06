@@ -1,0 +1,238 @@
+[
+  {
+    "case": "len_capture",
+    "version": "baseline",
+    "unmapped": true,
+    "caret": "(1)) }\n",
+    "segment": {
+      "Start": 36,
+      "End": 37,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:23: invalid argument: (1) (untyped int constant 1) for built-in len\ngoxide: ./main.go:3:23: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "len_capture",
+    "version": "current",
+    "unmapped": true,
+    "caret": "(1)) }\n",
+    "segment": {
+      "Start": 36,
+      "End": 37,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:23: invalid argument: (1) (untyped int constant 1) for built-in len\ngoxide: ./main.go:3:23: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "cap_capture",
+    "version": "baseline",
+    "unmapped": true,
+    "caret": "(1)) }\n",
+    "segment": {
+      "Start": 36,
+      "End": 37,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:23: invalid argument: (1) (untyped int constant 1) for built-in cap\ngoxide: ./main.go:3:23: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "cap_capture",
+    "version": "current",
+    "unmapped": true,
+    "caret": "(1)) }\n",
+    "segment": {
+      "Start": 36,
+      "End": 37,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:23: invalid argument: (1) (untyped int constant 1) for built-in cap\ngoxide: ./main.go:3:23: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "native_append",
+    "version": "baseline",
+    "unmapped": false,
+    "caret": "1, 2) }\n",
+    "segment": {
+      "Start": 39,
+      "End": 40,
+      "Origin": {
+        "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/native_append.gox",
+        "Start": 34,
+        "End": 35,
+        "Line": 2,
+        "Column": 22
+      },
+      "Kind": "source"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:26: invalid append: argument must be a slice; have 1 (untyped int constant)\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/native_append.gox:2:22: invalid append: argument must be a slice; have 1 (untyped int constant) [source]\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "native_append",
+    "version": "current",
+    "unmapped": false,
+    "caret": "1, 2) }\n",
+    "segment": {
+      "Start": 39,
+      "End": 40,
+      "Origin": {
+        "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/native_append.gox",
+        "Start": 34,
+        "End": 35,
+        "Line": 2,
+        "Column": 22
+      },
+      "Kind": "source"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:26: invalid append: argument must be a slice; have 1 (untyped int constant)\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/native_append.gox:2:22: invalid append: argument must be a slice; have 1 (untyped int constant) [source]\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "native_element",
+    "version": "baseline",
+    "unmapped": false,
+    "caret": "\"bad\") }\n",
+    "segment": {
+      "Start": 48,
+      "End": 53,
+      "Origin": {
+        "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/native_element.gox",
+        "Start": 42,
+        "End": 47,
+        "Line": 2,
+        "Column": 30
+      },
+      "Kind": "source"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:35: cannot use \"bad\" (untyped string constant) as int value in argument to append\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/native_element.gox:2:30: cannot use \"bad\" (untyped string constant) as int value in argument to append [source]\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "native_element",
+    "version": "current",
+    "unmapped": false,
+    "caret": "\"bad\") }\n",
+    "segment": {
+      "Start": 48,
+      "End": 53,
+      "Origin": {
+        "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/native_element.gox",
+        "Start": 42,
+        "End": 47,
+        "Line": 2,
+        "Column": 30
+      },
+      "Kind": "source"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:35: cannot use \"bad\" (untyped string constant) as int value in argument to append\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/native_element.gox:2:30: cannot use \"bad\" (untyped string constant) as int value in argument to append [source]\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "captured_function",
+    "version": "baseline",
+    "unmapped": true,
+    "caret": "(\"bad\")) }\n\n",
+    "segment": {
+      "Start": 84,
+      "End": 85,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:5:41: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to goxideMacroGenerated2\ngoxide: ./main.go:5:41: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "captured_function",
+    "version": "current",
+    "unmapped": true,
+    "caret": "(\"bad\")) }\n\n",
+    "segment": {
+      "Start": 84,
+      "End": 85,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:5:41: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to goxideMacroGenerated2\ngoxide: ./main.go:5:41: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "append_non_slice",
+    "version": "current",
+    "unmapped": true,
+    "caret": "(1), (2)) }\n",
+    "segment": {
+      "Start": 39,
+      "End": 40,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:26: invalid append: argument must be a slice; have (1) (untyped int constant 1)\ngoxide: ./main.go:3:26: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "append_element",
+    "version": "current",
+    "unmapped": true,
+    "caret": "(\"bad\")) }\n",
+    "segment": {
+      "Start": 50,
+      "End": 51,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:37: cannot use (\"bad\") (untyped string constant \"bad\") as int value in argument to append\ngoxide: ./main.go:3:37: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "append_spread",
+    "version": "current",
+    "unmapped": true,
+    "caret": "(1)...) }\n",
+    "segment": {
+      "Start": 50,
+      "End": 51,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:37: cannot use (1) (untyped int constant 1) as []int value in argument to append\ngoxide: ./main.go:3:37: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "append_mixed_spread",
+    "version": "current",
+    "unmapped": true,
+    "caret": "([]int{2})..",
+    "segment": {
+      "Start": 53,
+      "End": 54,
+      "Kind": "generated/unmapped"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:40: too many arguments in call to append\n\thave ([]int, number, []int...)\n\twant ([]int, ...int)\ngoxide: ./main.go:3:40: generated/unmapped\ngenerated Go build: exit status 1"
+  },
+  {
+    "case": "append_empty",
+    "version": "current",
+    "unmapped": false,
+    "caret": "append() }\n",
+    "segment": {
+      "Start": 32,
+      "End": 38,
+      "Origin": {
+        "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/append_empty.gox",
+        "Start": 34,
+        "End": 40,
+        "Line": 2,
+        "Column": 22
+      },
+      "Stack": [
+        {
+          "Macro": "m",
+          "Definition": {
+            "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/append_empty.gox",
+            "Start": 13,
+            "End": 45,
+            "Line": 2,
+            "Column": 1
+          },
+          "Callsite": {
+            "File": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/append_empty.gox",
+            "Start": 60,
+            "End": 64,
+            "Line": 3,
+            "Column": 15
+          },
+          "DefinitionOriginal": true,
+          "CallsiteOriginal": true
+        }
+      ],
+      "Kind": "macro"
+    },
+    "stderr": "# goxide.local/generated\n./main.go:3:19: invalid operation: not enough arguments for append() (expected 1, found 0)\ngoxide: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/append_empty.gox:2:22: invalid operation: not enough arguments for append() (expected 1, found 0) [macro]\n  macro m defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/append_empty.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/append-review/append_empty.gox:3:15\ngenerated Go build: exit status 1"
+  }
+]

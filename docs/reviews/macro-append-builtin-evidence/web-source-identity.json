@@ -1,0 +1,15 @@
+{
+  "commit": "a2c7300966f3bf2c0a446ff13818bd4a8ce06c68",
+  "websiteSourceOverlay": "6dc779a651af3eb34121f53637a55bfb6feee387",
+  "qaSource": "a2c7300966f3bf2c0a446ff13818bd4a8ce06c68",
+  "compilerDigest": "7f0b5bb5b5cbab65fb2db7f71ca899a3b5ced46eacebd1a70f5f1eb03c4009cc",
+  "localOnly": true,
+  "TMPDIR": "/Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native",
+  "homebrewLicenseAdaptation": {
+    "path": "/opt/homebrew/Cellar/go/1.27.1/LICENSE",
+    "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+    "originalBuildPySha256": "36832e23ca588ddefdceba1b703d610a97e9350bfa4f028ee84c1194edec1fa1",
+    "adaptedBuildPySha256": "32b7e574bdced6b9119875ec2c6743ebf39214c3c5a3f3c3536006856fe8e17e",
+    "scope": "isolated validation checkout only; production script and toolchain unchanged"
+  }
+}

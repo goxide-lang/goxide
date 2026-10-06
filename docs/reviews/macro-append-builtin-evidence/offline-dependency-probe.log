@@ -1,0 +1,112 @@
+{
+	"Path": "github.com/cpuguy83/go-md2man/v2",
+	"Version": "v2.0.6",
+	"Error": "module lookup disabled by GOPROXY=off",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/cpuguy83/go-md2man/v2/@v/v2.0.6.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/cpuguy83/go-md2man/v2/@v/v2.0.6.mod",
+	"GoModSum": "h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g="
+}
+{
+	"Path": "github.com/goxide-lang/serde",
+	"Version": "v0.0.0-20261004120911-a1b791e96d66",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/goxide-lang/serde/@v/v0.0.0-20261004120911-a1b791e96d66.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/goxide-lang/serde/@v/v0.0.0-20261004120911-a1b791e96d66.mod",
+	"Zip": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/goxide-lang/serde/@v/v0.0.0-20261004120911-a1b791e96d66.zip",
+	"Dir": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/github.com/goxide-lang/serde@v0.0.0-20261004120911-a1b791e96d66",
+	"Sum": "h1:EelklFYrLNvw20lVNEAO3IWG1Hac7tF/428sTORQKBU=",
+	"GoModSum": "h1:m4z9CAWRl/5hQN6+9RQ7Sfr/gK9wcWk+ANoqbSxlW0g="
+}
+{
+	"Path": "github.com/goxide-lang/std",
+	"Version": "v0.0.0-20261004173304-ce5bccb4ff9c",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/goxide-lang/std/@v/v0.0.0-20261004173304-ce5bccb4ff9c.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/goxide-lang/std/@v/v0.0.0-20261004173304-ce5bccb4ff9c.mod",
+	"Zip": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/goxide-lang/std/@v/v0.0.0-20261004173304-ce5bccb4ff9c.zip",
+	"Dir": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/github.com/goxide-lang/std@v0.0.0-20261004173304-ce5bccb4ff9c",
+	"Sum": "h1:ZBIUbtbKxIDJeeHQd1UuwwJ0gzkTnqcRXUfpQD6sMQQ=",
+	"GoModSum": "h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ="
+}
+{
+	"Path": "github.com/inconshreveable/mousetrap",
+	"Version": "v1.1.0",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/inconshreveable/mousetrap/@v/v1.1.0.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/inconshreveable/mousetrap/@v/v1.1.0.mod",
+	"Zip": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/inconshreveable/mousetrap/@v/v1.1.0.zip",
+	"Dir": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/github.com/inconshreveable/mousetrap@v1.1.0",
+	"Sum": "h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=",
+	"GoModSum": "h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw="
+}
+{
+	"Path": "github.com/pelletier/go-toml/v2",
+	"Version": "v2.4.3",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/pelletier/go-toml/v2/@v/v2.4.3.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/pelletier/go-toml/v2/@v/v2.4.3.mod",
+	"Zip": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/pelletier/go-toml/v2/@v/v2.4.3.zip",
+	"Dir": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/github.com/pelletier/go-toml/v2@v2.4.3",
+	"Sum": "h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY=",
+	"GoModSum": "h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY="
+}
+{
+	"Path": "github.com/russross/blackfriday/v2",
+	"Version": "v2.1.0",
+	"Error": "module lookup disabled by GOPROXY=off",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/russross/blackfriday/v2/@v/v2.1.0.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/russross/blackfriday/v2/@v/v2.1.0.mod",
+	"GoModSum": "h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM="
+}
+{
+	"Path": "github.com/spf13/cobra",
+	"Version": "v1.10.2",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/spf13/cobra/@v/v1.10.2.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/spf13/cobra/@v/v1.10.2.mod",
+	"Zip": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/spf13/cobra/@v/v1.10.2.zip",
+	"Dir": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/github.com/spf13/cobra@v1.10.2",
+	"Sum": "h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU=",
+	"GoModSum": "h1:7C1pvHqHw5A4vrJfjNwvOdzYu0Gml16OCs2GRiTUUS4="
+}
+{
+	"Path": "github.com/spf13/pflag",
+	"Version": "v1.0.9",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/spf13/pflag/@v/v1.0.9.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/spf13/pflag/@v/v1.0.9.mod",
+	"Zip": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/github.com/spf13/pflag/@v/v1.0.9.zip",
+	"Dir": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/github.com/spf13/pflag@v1.0.9",
+	"Sum": "h1:9exaQaMOCwffKiiiYk6/BndUBv+iRViNW+4lEMi0PvY=",
+	"GoModSum": "h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg="
+}
+{
+	"Path": "go.yaml.in/yaml/v3",
+	"Version": "v3.0.4",
+	"Error": "module lookup disabled by GOPROXY=off",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/go.yaml.in/yaml/v3/@v/v3.0.4.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/go.yaml.in/yaml/v3/@v/v3.0.4.mod",
+	"GoModSum": "h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg="
+}
+{
+	"Path": "golang.org/x/sys",
+	"Version": "v0.31.0",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/golang.org/x/sys/@v/v0.31.0.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/golang.org/x/sys/@v/v0.31.0.mod",
+	"Zip": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/golang.org/x/sys/@v/v0.31.0.zip",
+	"Dir": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/golang.org/x/sys@v0.31.0",
+	"Sum": "h1:ioabZlmFYtWhL+TRYpcnNlLwhyxaM9kWTDEmfnprqik=",
+	"GoModSum": "h1:BJP2sWEmIv4KK5OTEluFJCKSidICx8ciO85XgH3Ak8k="
+}
+{
+	"Path": "golang.org/x/term",
+	"Version": "v0.30.0",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/golang.org/x/term/@v/v0.30.0.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/golang.org/x/term/@v/v0.30.0.mod",
+	"Zip": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/golang.org/x/term/@v/v0.30.0.zip",
+	"Dir": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/golang.org/x/term@v0.30.0",
+	"Sum": "h1:PQ39fJZ+mfadBm0y5WlL4vlM7Sx1Hgf13sMIY2+QS9Y=",
+	"GoModSum": "h1:NYYFdzHoI5wRh/h5tDMdMqCqPJZEuNqVR5xJLd/n67g="
+}
+{
+	"Path": "gopkg.in/check.v1",
+	"Version": "v0.0.0-20161208181325-20d25e280405",
+	"Error": "module lookup disabled by GOPROXY=off",
+	"Info": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/gopkg.in/check.v1/@v/v0.0.0-20161208181325-20d25e280405.info",
+	"GoMod": "/Users/hxsf/Documents/Codex/2026-10-06/task/cache/go-mod/cache/download/gopkg.in/check.v1/@v/v0.0.0-20161208181325-20d25e280405.mod",
+	"GoModSum": "h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0="
+}

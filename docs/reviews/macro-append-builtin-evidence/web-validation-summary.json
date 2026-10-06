@@ -1,0 +1,142 @@
+{
+  "codeCommit": "a2c7300966f3bf2c0a446ff13818bd4a8ce06c68",
+  "environment": {
+    "os": "darwin",
+    "arch": "arm64",
+    "go": "1.27.1",
+    "node": "26.9.0",
+    "playwright": "1.58.2",
+    "chromium": "145.0.7632.6"
+  },
+  "build": "passed with isolated Homebrew LICENSE path adaptation; original script failed at missing GOROOT/LICENSE",
+  "webRace": "passed",
+  "webVet": "passed",
+  "browser": {
+    "examples": 10,
+    "parity": "byte-for-byte",
+    "goResultChecks": [
+      "error_only",
+      "typed_nil",
+      "reject_wrong_type",
+      "pointer_error",
+      "named_error",
+      "slice_error",
+      "reject_value_error",
+      "reject_arity",
+      "reject_legacy_cfg"
+    ],
+    "diagnosticChecks": [
+      "reject_macro_selector",
+      "reject_macro_prepared",
+      "reject_derive_origin",
+      "reject_enum_derive_origin",
+      "macro_imported_helper"
+    ],
+    "appendChecks": {
+      "positive": [
+        "macro_append_native",
+        "macro_append_shadow",
+        "macro_append_string",
+        "macro_append_question",
+        "macro_append_function"
+      ],
+      "frontendReject": [
+        "reject_macro_append_definition_var",
+        "reject_macro_append_definition_const",
+        "reject_macro_append_definition_type",
+        "reject_macro_append_definition_import",
+        "reject_macro_append_value",
+        "reject_macro_append_named_type"
+      ],
+      "nativeTypeReject": [
+        "reject_macro_append_slice",
+        "reject_macro_append_element",
+        "reject_macro_append_arity",
+        "reject_macro_append_ellipsis"
+      ],
+      "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native"
+    },
+    "checks": [
+      "edit",
+      "error recovery",
+      "rapid edits",
+      "copy",
+      "32 KiB",
+      "unsupported import",
+      "XSS",
+      "keyboard",
+      "390px",
+      "hard timeout",
+      "interrupt",
+      "reset",
+      "no external requests"
+    ],
+    "errors": []
+  },
+  "catalog": {
+    "url": "http://127.0.0.1:18084",
+    "compilerCommit": "a2c7300966f3bf2c0a446ff13818bd4a8ce06c68",
+    "websiteCommit": "a2c7300966f3bf2c0a446ff13818bd4a8ce06c68",
+    "wasmSha256": "8c698061e8d48eb0247df23e52efee4df7d34e040ed473d59fb2b701c4087dfe",
+    "metadataSchema": 8,
+    "cards": 26,
+    "examples": 10,
+    "negativeExamples": 10,
+    "filters": true,
+    "permalinks": true,
+    "snapshots": true,
+    "mobile390": true,
+    "clipboard": true,
+    "parity": "byte-for-byte",
+    "errors": [],
+    "consoleErrors": [],
+    "network": "same-origin GET only"
+  },
+  "frontendAndGoTypeBoundary": "6 append macro binding errors rejected identically by CLI/WASM; 4 ordinary Go type errors transpiled identically then rejected by native go build; browser does not execute final Go compiler",
+  "productionBuildAndCatalog": "unchanged",
+  "deployment": "none",
+  "linux": "not run",
+  "server": "stopped after QA",
+  "evidence": [
+    {
+      "path": "wasm-build.log",
+      "sha256": "7a997ab77e3841ac427d18a4d3eb2659f635320186fbfdfb40f049e34ffdca7b"
+    },
+    {
+      "path": "wasm-build-before-homebrew.log",
+      "sha256": "86277e794007dab3d91eefddeb79de2eb145752219f33398b395ad65ad05aff6"
+    },
+    {
+      "path": "browser-qa.log",
+      "sha256": "8f368bffaf8f096db450ce06cd44b921c355f2fac36cfbea84bf98e35d05b4f5"
+    },
+    {
+      "path": "catalog-qa.log",
+      "sha256": "4e77d246a85187e4a9b6d30e77e557a301d4564b940b1459953d8cc385679bd9"
+    },
+    {
+      "path": "web-race.log",
+      "sha256": "ba1afee6d33a8bacf4a81af65ee8b516f23d1edeefdbc589abcd591b81673951"
+    },
+    {
+      "path": "web-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "local-wasm-identity.json",
+      "sha256": "2d00a5427dc11c0a4b50c7c20b340e0ab1baddd7e69c8bf52144379db50f1145"
+    },
+    {
+      "path": "homebrew-license-validation.patch",
+      "sha256": "0c75208fd39a4bb70df5aa7a0a7480bd8880c3836d6f9b2959bf7b3ac3399819"
+    }
+  ],
+  "screenshots": [
+    "web-checkout/website/qa-artifacts/catalog-desktop.png",
+    "web-checkout/website/qa-artifacts/catalog-mobile-controls.png",
+    "web-checkout/website/qa-artifacts/catalog-mobile-example.png",
+    "web-checkout/website/qa-artifacts/catalog-mobile.png",
+    "web-checkout/website/qa-artifacts/desktop.png",
+    "web-checkout/website/qa-artifacts/mobile.png"
+  ]
+}

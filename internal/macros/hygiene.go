@@ -178,7 +178,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			ts[i].text = bindings[id.Obj]
 			return true
 		}
-		if (id.Name == "len" || id.Name == "cap" || id.Name == "append") && e.builtinImportShadow(id.Name) {
+		if (id.Name == "len" || id.Name == "cap" || id.Name == "append" || id.Name == "copy") && e.builtinImportShadow(id.Name) {
 			problem = at(ts[i], "template name "+id.Name+" is a definition-site import, not a builtin")
 			return true
 		}
@@ -195,7 +195,7 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 			ts[i].text = e.alias(key)
 			return true
 		}
-		if id.Name == "len" || id.Name == "cap" || id.Name == "append" {
+		if id.Name == "len" || id.Name == "cap" || id.Name == "append" || id.Name == "copy" {
 			if e.definitionNames()[id.Name] {
 				problem = at(ts[i], "template name "+id.Name+" is a definition-site declaration, not a builtin; pass it as an explicit capture")
 			} else if !calls[id] {

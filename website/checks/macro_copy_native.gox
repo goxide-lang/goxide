@@ -1,0 +1,16 @@
+package main
+macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
+type Numbers []int
+func main(){
+ backing:=[5]int{1,2,3,4,5}
+ dst:=Numbers(backing[1:4])
+ if transfer!(dst,backing[:4])!=3||backing!=[5]int{1,1,2,3,5}{panic("overlap or count")}
+ if len(dst)!=3||cap(dst)!=4||&dst[0]!=&backing[1]{panic("slice identity")}
+ if transfer!(dst,[]int{9})!=1||dst[0]!=9||dst[1]!=2{panic("short source")}
+ var absent []int
+ if transfer!(absent,dst)!=0||transfer!(dst,absent)!=0{panic("nil count")}
+ trace:=""
+ target:=func()[]int{trace+="D";return dst}
+ source:=func()[]int{trace+="S";return []int{7,8}}
+ if transfer!(target(),source())!=2||trace!="DS"||dst[0]!=7||dst[1]!=8{panic("evaluation")}
+}

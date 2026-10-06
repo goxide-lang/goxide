@@ -1,0 +1,14 @@
+package main
+macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
+macro_rules! own {()=>{func()int{copy:=func()int{return 17};return copy()}()};}
+type Record struct{copy int}
+func parameter(copy []int)int{dst:=[]int{0};return transfer!(dst,copy)+dst[0]}
+func main(){
+ dst:=[]int{0}
+ copy:=func()[]int{return []int{4}}
+ if transfer!(dst,copy())!=1||dst[0]!=4{panic("local shadow")}
+ {const copy=3;v:=map[int]int{copy:7};transfer!(dst,[]int{v[copy]});if dst[0]!=7{panic("const key")}}
+ {copy:=5;v:=Record{copy:copy};transfer!(dst,[]int{v.copy});if dst[0]!=5{panic("field key")}}
+ switch copy:=any(8).(type){case int:transfer!(dst,[]int{copy});if dst[0]!=8{panic("type switch")}}
+ if parameter([]int{6})!=7||own!()!=17{panic("parameter or template local")}
+}

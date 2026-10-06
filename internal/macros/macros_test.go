@@ -98,7 +98,7 @@ func TestErrors(t *testing.T) {
 		{`macro_rules! x {()=>{1};} func f(){other!()}`, "unknown macro"},
 		{`macro_rules! x {($a:expr,$a:expr)=>{1};}`, "duplicate capture"},
 		{`macro_rules! x {($($a:expr),+)=>{[]int{$($a),+}};} func f(){x!()}`, "no rule matches"},
-		{`macro_rules! x {()=>{copy()};} func f(){x!()}`, "unsupported free template name"},
+		{`macro_rules! x {()=>{clear()};} func f(){x!()}`, "unsupported free template name"},
 	}
 	for _, c := range cases {
 		t.Run(c.needle, func(t *testing.T) {

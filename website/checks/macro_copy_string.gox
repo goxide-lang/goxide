@@ -1,0 +1,8 @@
+package main
+macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
+type Bytes []byte
+func main(){
+ dst:=Bytes{0,0,0,0}
+ if transfer!(dst,"abc")!=3||string(dst[:3])!="abc"||dst[3]!=0{panic("string source")}
+ if transfer!(dst[:2],"xyz")!=2||string(dst)!="xyc\x00"{panic("string count")}
+}

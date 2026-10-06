@@ -1,0 +1,4 @@
+package p
+macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
+type State struct{Items []int}
+func run(r &State){transfer!(r.Items,[]int{9})}

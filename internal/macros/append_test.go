@@ -147,7 +147,7 @@ func TestAppendBoundaries(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
 		{`macro_rules! value {()=>{append};} var v=value!()`, "direct call"},
 		{`macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};} func f(){type append int;var n append;_=push!([]int{},int(n))}`, "local named type"},
-		{`macro_rules! value {()=>{copy()};} func f(){value!()}`, "unsupported free template name"},
+		{`macro_rules! value {()=>{clear()};} func f(){value!()}`, "unsupported free template name"},
 		{`macro_rules! value {()=>{make([]int,1)};} func f(){_=value!()}`, "unsupported free template name"},
 		{`macro_rules! value {()=>{new(int)};} func f(){_=value!()}`, "unsupported free template name"},
 	} {

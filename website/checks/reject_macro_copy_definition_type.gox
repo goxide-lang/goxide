@@ -1,0 +1,4 @@
+package p
+type copy int
+macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
+func run(){_=transfer!([]int{},[]int{})}

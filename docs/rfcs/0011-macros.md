@@ -115,7 +115,7 @@ Go 可调用公开生成函数，不能调用 `m!(...)`；宏规则供 goxide �
 
 模板可直接写 `len($x)` / `cap($x)`，无需 wrapper。定义端局部/函数绑定优先，变量、类型与 import 不能误当 builtin。编译器标记在 DSL 降低后恢复原生 Go 调用，保留常量上下文、数组/数组指针的不求值规则、实参次数与 `?` 所在 frame。调用端局部变量/常量与 import 按绑定改名；struct 字段键和 map 表达式键区分处理。
 
-[单元执行](../../internal/macros/builtins_test.go)与[真实生成模块验收](../../tests/acceptance/macro_builtins_test.go)覆盖嵌套/跨包宏、局部及 import 遮蔽、定义端同名声明、常量/数组、None/Some 传播次数，以及生成模块 race/vet。调用包级同名声明和实际覆盖调用点的局部 named type 目前明确诊断；无关作用域的类型名称保持不变。它们是工程边界，不自动视为获批延期。其他 builtin（含 append/make/new）未开放，不宣称完整 Rust 宏或全面卫生已完成。零值/公开入口契约未修改。
+[单元执行](../../internal/macros/builtins_test.go)与[真实生成模块验收](../../tests/acceptance/macro_builtins_test.go)覆盖嵌套/跨包宏、局部及 import 遮蔽、定义端同名声明、常量/数组、None/Some 传播次数，以及生成模块 race/vet。调用包级同名声明和实际覆盖调用点的局部 named type 目前明确诊断；无关作用域的类型名称保持不变。它们是工程边界，不自动视为获批延期。首片当时未开放其他 builtin（含 append/make/new）；后续 append/copy 增量见文末，不宣称完整 Rust 宏或全面卫生已完成。零值/公开入口契约未修改。
 
 
 ## 显式 Go 返回值适配（2026-10-04）
@@ -174,3 +174,44 @@ Linux 证据分开记录；A01 只关闭本 append 子项，RFC0011 及 A03 仍�
 本片保留单文件 `transpile` / WASM 的既有降低边界：普通 append 的非法实参
 可能得到相同的生成 Go，须由真实 CLI `build` / 生成 Go 编译拒绝；不把浏览器
 转译成功等同于 Go 类型检查成功。宏绑定黑例则要求两端在展开阶段给出相同诊断。
+
+
+## A01 直接 copy 调用实施合同（2026-10-06）
+
+接续 A01 的已确认 builtin/卫生工程账，仅接通 `copy($dst,$src)` 直接调用。
+实施前最小合法例在 `1cf4b58` 仍报 unsupported free template name；原生 copy 对照成功。
+沿用现有词法绑定、builtin marker 与最终原生 Go 调用，不引入 wrapper、逐项循环、
+深复制、新 type fragment、借用分析或新的捕获/重复语法。
+
+```goxide
+macro_rules! transfer {
+    ($dst:expr,$src:expr) => { copy($dst,$src) };
+}
+// dst 与 src 是调用端已有的合法 slice。
+n := transfer!(dst,src)
+```
+
+对应原生操作（捕获括号及卫生名属于实现细节）：
+
+```go
+n := copy(dst,src)
+```
+
+| 白例 / 不变合同 | 黑例 / 本片边界 |
+| --- | --- |
+| 目标短于/长于源、nil/空、命名 slice、重叠区域；返回 `int` 复制数 `min(len(dst),len(src))`，目标长度/容量和原存储身份不变 | 非 slice 目标、不同元素类型、错误 arity/ellipsis 交给真实 Go 编译拒绝，不默默转换或额外分配 |
+| 原生 `[]byte` 目标与 string 来源；普通指针元素保持共享 pointee 身份，复制仍为原生浅复制 | 不引入 Clone/深复制，不放开 `[]rune` 与 string 等原生非法组合 |
+| 两侧函数操作数按原生次序各执行一次；模板显式复制捕获则保留重复次数；作为原生副作用语句合法 | 不把所有宏捕获擅改为一次求值，也不把 builtin 当普通函数值 |
+| 模板局部和定义点真实 `func copy` 保原绑定；调用点局部变量/常量/参数/type-switch 与 import alias 按已有机制处理 | 定义点 var/const/type/import 不冒认 builtin；定义点为 builtin 时调用包级同名声明和覆盖展开点的 local type 名称继续拒绝，不改类型身份 |
+| `$dst?` 或 `$src?` 仍返回最近用户函数；失败后不执行复制及失败点之后的实参；禁用条件宏不求值两实参 | 不添加隐式闭包、不扩大问号允许位置；晚失败不产生部分复制 |
+| 已有 defer 调用位置中，参数在注册 defer 时求值，复制在返回时执行；使用源 slice 时不提前复制其内容 | 不改变原生 defer 时序或偷偷捕获副本 |
+| `copy(dst,r.Items)` 的只读标量来源可复制到独立可写目标；普通可写指针元素复制继续共享对象 | `copy(r.Items,src)` 不能写只读目标；只读指针/容器元素不能借复制抹去权限，沿用既有 refs 规则 |
+
+验收必须包括：先红例；单元执行及 LF/CRLF 定义/调用来源；跨文件/包与重复 Go/map；
+真实 CLI 生成模块独立 race/vet/run；只读正反例与原生类型黑例；CLI/WASM 分阶段差分；
+独立审查及 Mac 全树 race/vet/design。Go 机制探针与 Goxide 执行证据分开。
+单文件 transpile/WASM 仍可能输出普通类型错误的 Go，最终拒绝须由真实 Go 编译证明，
+不宣称浏览器具备完整 Go 类型检查。既有合成括号 generated/unmapped 边界继续归 A03。
+
+本片只关闭 A01 的直接 copy 子项；make/new、其余绑定、A03 完整来源及 RFC0011 整项
+仍开放。完整 trait/borrow、blank/embedded、serde adapters 和 tracing API 不在本片决定。

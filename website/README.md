@@ -2,11 +2,47 @@
 
 中文优先的静态语言介绍网站，以及真实单文件 goxide → Go 浏览器转译器。网站源、十个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
-本轮组合来源、联合全树验证与独立审查见 [最新组合验证](LATEST-INTEGRATION.md)（[早期交付记录](INTEGRATION.md)为历史证据）。
+本分支将网站验证入口收回仓内；编译器源码固定为
+`e36d23dacee64d19b34aac639900c3f5c29e55c2`，生产源摘要固定为
+`41f51dffc2aa68535a7617824231065d268cab190adeb7e164e239e3b7022848`。
+`websiteCommit` 独立记录实际网站工具 HEAD。仅本地验证，没有部署或更新线上版本。
+[仓内验证说明](validation/README.md)是本片入口；[最新组合记录](LATEST-INTEGRATION.md)和
+[早期交付记录](INTEGRATION.md)中的既往结果不替代这次运行。
+
+## 从干净 checkout 复现
+
+使用本分支的完整、非 shallow checkout。当前编译器 pin 与旧对照
+`fd8380c39876c96441857a737be8e32c322a0467` 都是本分支祖先；验证器只读取本地 Git 对象，
+缺少时明确失败，不自动 fetch。RFC 0024 原文另存于 `website/evidence/`，保留原提交、
+文件路径、SHA-256 和 Git blob 校验；无需额外拉取提案分支，原文不进入发布目录。
+
+准备已安装的 Go 1.27.1、race 可用的 C 编译器、Python 3.11+、Node、Playwright 1.58.2
+和 Chromium，以及完整的 `go.mod/go.sum` 模块缓存。检查不安装工具、不下载依赖；本地
+file proxy 和临时 Git 仓库只制造工程验收数据。Go 缓存和输出目录必须可写，浏览器测试
+需要 loopback 监听与本机浏览器进程权限。
+
+```sh
+python3 -B website/validation/run.py \
+  --out /absolute/new-validation-output \
+  --go /absolute/path/to/go \
+  --node /absolute/path/to/node \
+  --chromium /absolute/path/to/chromium \
+  --playwright-node-modules /absolute/existing/node_modules \
+  --go-cache /absolute/writable/go-build \
+  --mod-cache /absolute/complete/go-mod
+```
+
+入口从准确提交创建隔离副本，保留全部 97 个 fixture、10 个示例、七阶段输出和失败记录。
+旧/新 Go 字节、完整 AST、实际运行分别记账；既有排版差异不计为字节相等。正式运行要求
+源树已提交且干净，输出必须是新的外部目录。快速构建辅助自测为
+`python3 -B website/build_support_test.py`；它不代替七阶段验收或完整原生测试。
 
 ## 构建与运行
 
-在仓库根目录，以 **Go 1.27.x** 和 Python 3 构建。Go 命令必须与用于构建 CLI 的 GOROOT 一致。
+以下是单独构建入口；完整验证优先使用上面的隔离入口。在仓库根目录，以 **Go 1.27.x**
+和 Python 3.11+ 构建。Go 命令必须与用于构建 CLI 的 GOROOT 一致。构建只使用已缓存依赖，
+保留 std/serde 精确版本、checksum 和无本地 replace 检查。Go LICENSE 使用所选工具链的
+`GOROOT/LICENSE`，或 Homebrew `libexec` 对应发行目录的 `LICENSE`；缺失即失败。
 
 ```sh
 export GO_BIN=/absolute/path/to/go
@@ -63,11 +99,12 @@ export GOMODCACHE=/workspace/goxide-environment/modcache
 "$GO_BIN" test -race -tags goxideweb ./cmd/goxide-web ./internal/typecheck
 "$GO_BIN" vet -tags goxideweb ./cmd/goxide-web ./internal/typecheck
 # 启动独立二进制后，在另一个终端：
-npm ci --prefix website
 QA_URL=http://127.0.0.1:8080 npm test --prefix website
 ```
 
-Playwright 仅是测试依赖，固定在 lockfile。默认使用 `/usr/bin/chromium`，可设置 `CHROMIUM=/absolute/browser`。正常网站构建与运行均不需要 npm。
+Playwright 仅是测试依赖，固定在 lockfile；这里要求它已可用，不自动安装。默认使用
+`/usr/bin/chromium`，可设置 `CHROMIUM=/absolute/browser`。隔离入口可用 `--playwright-node-modules`
+指定既有安装。正常网站构建与运行均不需要 npm。
 
 `qa.mjs` 验证十例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
 
@@ -94,7 +131,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 
 状态针对卡片的限定范围：提案 / 已确认待实现 / 部分实现 / 已实现并验证。开发快照与当前编译器支持分别记录；任务报告不等于可发布实现。RFC 0024 仍是提案。当前 Playground 已包含共享 std/serde、明确上下文下的普通 sum 推导及限定可读性改进；统一 TOML/锁与 import-go 只在 CLI 工程快照说明。
 
-编译器 `commit` 固定为 27d2e2740c5ee7dc3e3766bd7b5f0eec6bb852b8，`websiteCommit` 记录网站源码提交；构建计算真实编译器源摘要并与该基线逐文件核对，不允许文案偷偷升级编译器。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
+编译器 `commit` 固定为 `e36d23dacee64d19b34aac639900c3f5c29e55c2`，`websiteCommit` 记录网站源码提交；构建独立枚举 pin 与当前生产文件集，再逐文件核对字节和固定摘要，增加、缺少或修改源码均拒绝。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
 
 ```sh
 python3 website/catalog.py

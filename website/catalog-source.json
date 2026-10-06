@@ -1,10 +1,9 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "3a8f204a4eacc62ba11ac15fce7a29c91f0bd5d7",
-  "reviewedAt": "2026-10-05",
+  "compilerCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
+  "reviewedAt": "2026-10-06",
   "evidenceRefs": {
-    "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
-    "shared": "61a01cc3a717585fb58600fe0dc70e1d5995e150"
+    "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
   },
   "statusLabels": {
     "proposal": "提案",
@@ -350,7 +349,7 @@
       "support": "cli",
       "summary": "format 2 的 goxide.toml 统一 module、原生 Go 依赖政策、增强依赖、feature 与目标；goxide.lock 固定真实解析结果。",
       "usage": "最小工程根只有 TOML 和源码：默认 pretty=true，关闭默认 feature 后 false。Go module 元数据只进入受管 target；锁记录真实选版和校验，不将历史 go.sum 当版本列表。",
-      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 goxide.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 只作输入，物化普通本地模块；go.work 使用显式迁入模式，旧 format 不自动升级。",
+      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 hgo.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 只作输入，物化普通本地模块；go.work 使用显式迁入模式，旧 format 不自动升级。",
       "examples": [],
       "evidence": [
         "internal/project/manifest.go",
@@ -593,7 +592,7 @@
       "support": "browser",
       "summary": "当前编译器使用已公开 std/sum 的共享 Option/Result 身份与独立 serde core / JSON。",
       "usage": "生成 Go 导入共享 sum，不再为每个用户包复制通用 Option/Result 定义；具体载荷 validator 仍由编译器生成。JSON 示例使用 github.com/goxide-lang/serde/json。",
-      "limitation": "metadata schema 8；旧 schema 7 产物须重生成，不承诺兼容旧私有 marker 二进制。固定迁移版本不等于 v1 ABI 承诺；next 仍为空，RFC 0024 路径语法另属提案。",
+      "limitation": "enum schema 8 / reference 3 / use 2 / sum ABI 2，必须与新std版本配套；旧marker产物须重生成。固定迁移版本不等于v1 ABI承诺；next仍为空，RFC0024路径语法另属提案。",
       "examples": [
         "result",
         "serde_option"
@@ -642,7 +641,7 @@
       "status": "partial",
       "support": "cli",
       "summary": "Cobra 命令树提供中文 help、四种 shell completion 与 scripts 六个动作子命令。业务入口使用独立 typed request/service。",
-      "usage": "长选项使用 --name，短选项使用 -x；选项放在输入之前。run INPUT -- ARGS 保留程序参数，其他命令不开放任意透传。",
+      "usage": "长选项使用 --name，短选项使用 -x；选项放在输入之前。run INPUT -- ARGS 保留程序参数，其他命令不开放任意透传。 语言名Goxide，命令goxide，源码.gox，环境变量GOXIDE_*；旧.hgo/HGO_*输入拒绝。",
       "limitation": "拒绝旧 Go 风格 -go / -offline 并提示迁移；仅支持已定义的短选项组合，不承诺全部 POSIX 规则。help/completion 不运行构建、下载或脚本。",
       "examples": [],
       "checks": [],
@@ -659,16 +658,16 @@
     },
     {
       "id": "vendor",
-      "title": "原生 Go vendor：实际字节与离线锁",
+      "title": "供应模块：local 默认与显式 remote 选择",
       "topic": "projects",
       "rfcs": [
         "0025"
       ],
       "status": "partial",
       "support": "cli",
-      "summary": "import-go 接受一致的原生 module vendor，使用 Go 自身检查 modules.txt、版本和 replace；保留实际供应文件字节及权限，物化普通本地模块。",
-      "usage": "默认保留供应字节为本地模块；TTY 一次模块来源清单，非 TTY 默认 local。--source MODULE=remote 只用清单证实的精确 Go module 版本；有差异需逐模块确认，原供应副本仍保留。",
-      "limitation": "verified 仅证明供应文件集合相等，不证明完整上游发行物等价。--offline 只用本地/缓存，remote 缓存不足失败。不能从 go.sum 猜版本或从模块路径猜 Git URL；无 registry、任意 URL 或 Git 选择。默认 local 不下载补包。",
+      "summary": "vendor仅作Go迁移输入，没有长期vendor构建模式；默认将供应字节物化普通本地模块，也可明确选择有证据的精确Go module远端来源。",
+      "usage": "stdin/stderr都为TTY且无source参数时，一次展示模块清单；空行全部local，cancel/EOF取消。非TTY默认local且不读管道；重复--source MODULE=local|remote显式选择。差异逐文件列出，TTY需逐模块输入remote MODULE，非TTY需--accept-source-diff MODULE；原供应字节始终保留。",
+      "limitation": "remote仅限原清单证实的精确module path/version（含版本化replacement），local replacement不能确认remote。无Git推断、任意URL、新版本搜索或registry。verified subset只证明供应文件集合相同；unknown不可冒称全发行物等价。--offline禁止工具控制的网络，暖完整缓存可核验remote，缺缓存失败；不隔离用户脚本网络。plan不读取终端、不比对remote，常规build不询问。",
       "examples": [],
       "checks": [],
       "evidence": [
@@ -676,12 +675,13 @@
         "cmd/goxide/vendor_import_test.go",
         "cmd/goxide/import_sources_test.go",
         "cmd/goxide/import_sources_process_test.go",
-        "internal/project/supplied_sources.go"
+        "internal/project/supplied_sources.go",
+        "docs/reviews/source-selection-20261005.md"
       ],
       "snippet": {
         "language": "CLI · 本机使用",
-        "text": "goxide import-go --bin app=. old-project\ngoxide import-go --out new-project --bin app=. --offline old-project\ngoxide run --bin app --offline --locked new-project",
-        "note": "浏览器不执行 CLI；下方快照来自构建时真实验证。"
+        "text": "goxide import-go --out new-project --bin app=. --offline --source example.org/d=remote --accept-source-diff example.org/d old-project\ngoxide run --bin app --offline --locked new-project",
+        "note": "示例候选来自原清单；offline remote要求完整缓存。下方真实CLI快照展示差异拒绝/确认和原字节保留；浏览器不执行迁入或网络请求。"
       }
     },
     {
@@ -712,7 +712,7 @@
     },
     {
       "id": "workspace-import",
-      "title": "go.work / workspace vendor 迁入与渐进增强",
+      "title": "go.work 迁入与本地模块渐进增强",
       "topic": "projects",
       "rfcs": [
         "0026"
@@ -728,14 +728,24 @@
         "docs/design/workspace-import.md",
         "docs/reviews/workspace-import-20261004.md",
         "cmd/goxide/native_enhanced_test.go",
-        "cmd/goxide/native_standalone_test.go"
+        "cmd/goxide/native_standalone_test.go",
+        "docs/reviews/vendor-local-modules-20261004.md"
       ],
       "snippet": {
         "language": "CLI · 多文件迁入",
         "text": "goxide import-go --workspace --plan --offline native\ngoxide import-go --workspace --out migrated --offline native\ngoxide run --package example.org/app --locked --offline migrated",
-        "note": "offline要求可达依赖已在缓存，或供应完整一致vendor。脚本需先plan、trust-project与精确subject allow；迁入不授权。下方快照由真实CLI生成。"
+        "note": "offline只使用本地材料和完整缓存，remote缺缓存失败；所有来源选择受同一规则约束。脚本仍需明确授权，网页不执行迁入。"
       }
     }
   ],
-  "compilerDigest": "27323c6bf7a3066bab1d6546355e681e2b2d548e10c07389ffe2793f6541aa42"
+  "compilerDigest": "41f51dffc2aa68535a7617824231065d268cab190adeb7e164e239e3b7022848",
+  "evidenceSnapshots": {
+    "@use-path:docs/rfcs/0024-use-paths.md": {
+      "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
+      "sourcePath": "docs/rfcs/0024-use-paths.md",
+      "path": "website/evidence/0024-use-paths-5e4b118.txt",
+      "sha256": "9d3a71b5d773fb3c7b721c7c61bc9e2ec20e6a9773be53b8ea1b66cfbf2a3af9",
+      "gitBlob": "9e386b2155290b6d62ce06cead194e8b4ad10ee5"
+    }
+  }
 }

@@ -2,10 +2,23 @@
 import hashlib, json, pathlib, re, subprocess
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+def validate_identities(data):
+    def require_hex(value, width, label):
+        if not isinstance(value, str) or not re.fullmatch(f'[0-9a-f]{{{width}}}', value):
+            raise ValueError(f'{label} must be a complete {width}-digit lowercase hexadecimal identity')
+    require_hex(data.get('compilerCommit'), 40, 'compilerCommit')
+    require_hex(data.get('compilerDigest'), 64, 'compilerDigest')
+    for key, ref in data.get('evidenceRefs', {}).items():
+        require_hex(ref, 40, f'evidenceRefs[{key}]')
+    for entry, snapshot in data.get('evidenceSnapshots', {}).items():
+        require_hex(snapshot.get('sourceCommit'), 40, f'{entry} sourceCommit')
+        require_hex(snapshot.get('sha256'), 64, f'{entry} sha256')
+        require_hex(snapshot.get('gitBlob'), 40, f'{entry} gitBlob')
+
 def load():
     data = json.loads((ROOT/'website/catalog-source.json').read_text())
     assert data['schemaVersion'] == 1
-    assert re.fullmatch('[0-9a-f]{40}', data['compilerCommit'])
+    validate_identities(data)
     ids = [e['id'] for e in data['examples']]
     assert len(ids) == len(set(ids))
     assert set(ids) == {p.stem for p in (ROOT/'website/examples').glob('*.gox')}
@@ -26,9 +39,26 @@ def load():
     return data
 
 def evidence_bytes(data, entry):
+    validate_identities(data)
     if entry.startswith('@'):
         key, path = entry[1:].split(':',1)
-        return subprocess.check_output(['git','show',data['evidenceRefs'][key]+':'+path],cwd=ROOT)
+        # A proposal may live on a non-ancestor branch. Keep its exact reviewed
+        # bytes here rather than requiring an unrelated ref in a clean clone.
+        snapshot = data.get('evidenceSnapshots', {}).get(entry)
+        if not snapshot:
+            raise ValueError(f'versioned evidence snapshot is required: {entry}')
+        if (snapshot['sourceCommit'] != data['evidenceRefs'][key] or
+                snapshot['sourcePath'] != path):
+            raise ValueError(f'evidence snapshot source does not match reference: {entry}')
+        target = (ROOT / snapshot['path']).resolve()
+        if not target.is_relative_to((ROOT / 'website/evidence').resolve()):
+            raise ValueError(f'evidence snapshot must be inside website/evidence: {entry}')
+        content = target.read_bytes()
+        git_blob = hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest()
+        if (hashlib.sha256(content).hexdigest() != snapshot['sha256'] or
+                git_blob != snapshot['gitBlob']):
+            raise ValueError(f'evidence snapshot hash differs from reviewed source: {entry}')
+        return content
     # Always bind evidence to the actual published compiler, not a mutable worktree.
     return subprocess.check_output(['git','show',data['compilerCommit']+':'+entry],cwd=ROOT)
 
@@ -50,6 +80,8 @@ def write_index(data):
             evidence.append(f'`{entry}` ({digest})')
         lines.append('| '+' | '.join([c['title'],', '.join(c['rfcs']),data['statusLabels'][c['status']],c['support'],'; '.join(evidence)])+' |')
     lines += ['', '开发快照：'+json.dumps(data['evidenceRefs'],ensure_ascii=False), '', '管理建议：规范留在编译器仓库随版本评审；Issue 讨论/跟踪，PR 变更规范与实现；公共网站只发布审核后的摘要。未创建新仓库或 Issue。','']
+    for entry, snapshot in data.get('evidenceSnapshots', {}).items():
+        lines += [f"提案原文快照 `{entry}`：`{snapshot['path']}`；来源 `{snapshot['sourceCommit']}:{snapshot['sourcePath']}`，SHA-256 `{snapshot['sha256']}`，Git blob `{snapshot['gitBlob']}`。仅供仓内审核，不导出到公开清单。", '']
     (ROOT/'website/FEATURES.md').write_text('\n'.join(lines))
 
 if __name__ == '__main__':

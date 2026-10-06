@@ -1,0 +1,97 @@
+"""Failure-path tests for the runner; no compiler/browser/download is needed."""
+import argparse
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+sys.dont_write_bytecode = True
+spec = importlib.util.spec_from_file_location('website_validation_runner', Path(__file__).with_name('run.py'))
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
+
+
+class RunnerTests(unittest.TestCase):
+    def test_output_never_overwrites_or_enters_checkout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / 'source'
+            root.mkdir()
+            existing = Path(temporary) / 'prior-run'
+            existing.mkdir()
+            sentinel = existing / 'evidence'
+            sentinel.write_text('must survive')
+            for value in (existing, root / 'run'):
+                with self.assertRaises(RuntimeError):
+                    runner.reserve_output(value, root)
+            self.assertEqual(sentinel.read_text(), 'must survive')
+            self.assertFalse((root / 'run').exists())
+            fresh = runner.reserve_output(Path(temporary) / 'fresh', root)
+            self.assertTrue(fresh.is_dir())
+            missing = Path(temporary) / 'missing-target'
+            dangling = Path(temporary) / 'dangling-output'
+            dangling.symlink_to(missing)
+            with self.assertRaises(RuntimeError):
+                runner.reserve_output(dangling, root)
+            self.assertTrue(dangling.is_symlink())
+            self.assertFalse(missing.exists())
+
+    def test_failed_command_keeps_stdout_stderr_and_partial_summary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            obj = runner.Runner(root, root, argparse.Namespace())
+            obj.current = root
+            obj.phase('wasm-build', lambda: obj.command('expected-build-failure', [sys.executable, '-c', 'import sys;print("before failure");print("reason",file=sys.stderr);sys.exit(7)']))
+            self.assertEqual(obj.phases['wasm-build']['status'], 'failed')
+            command = json.loads((root / 'commands.json').read_text())[0]
+            self.assertEqual(command['exit'], 7)
+            self.assertEqual((root / command['stdout']).read_text(), 'before failure\n')
+            self.assertEqual((root / command['stderr']).read_text(), 'reason\n')
+            obj.phase('web-build', lambda: self.fail('dependent phase ran'), ('wasm-build',))
+            self.assertEqual(obj.phases['web-build']['status'], 'blocked')
+            self.assertFalse(obj.summarize(final=True))
+            self.assertFalse(json.loads((root / 'summary.json').read_text())['passed'])
+
+    def test_missing_executable_preserves_launch_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            obj = runner.Runner(root, root, argparse.Namespace())
+            obj.current = root
+            obj.phase('native-parity', lambda: obj.command('missing', [str(root / 'not-installed')]))
+            command = json.loads((root / 'commands.json').read_text())[0]
+            self.assertIsNone(command['exit'])
+            self.assertIn('error', command)
+            self.assertTrue((root / command['stdout']).exists())
+            self.assertTrue((root / command['stderr']).exists())
+            self.assertEqual(obj.phases['native-parity']['status'], 'failed')
+
+    def test_dirty_checkout_stops_before_tool_or_snapshot_creation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / 'source'
+            root.mkdir()
+            subprocess.run(['git', 'init', '-q', str(root)], check=True)
+            (root / 'untracked').write_text('work in progress')
+            out = Path(temporary) / 'evidence'
+            out.mkdir()
+            obj = runner.Runner(root, out, argparse.Namespace())
+            self.assertEqual(obj.run(), 1)
+            self.assertFalse((out / 'current').exists())
+            summary = json.loads((out / 'summary.json').read_text())
+            self.assertIn('clean committed checkout', summary['failure'])
+            self.assertTrue(all(p['status'] == 'blocked' for p in summary['phases'].values()))
+            self.assertEqual((root / 'untracked').read_text(), 'work in progress')
+
+    def test_complete_matrix_and_byte_positions(self):
+        groups, diagnostics = runner.qa_matrix(Path(__file__).resolve().parents[2])
+        self.assertEqual(len(diagnostics), 13)
+        self.assertEqual(sum(len(x) for x in groups.values()), 70)
+        self.assertEqual(runner.position('é\r\nx', 'x'), (4, 2, 1))
+        with self.assertRaises(RuntimeError):
+            runner.position('x x', 'x')
+        self.assertEqual(runner.position('x x', 'x', occurrence=1), (2, 1, 3))
+
+
+if __name__ == '__main__':
+    unittest.main()

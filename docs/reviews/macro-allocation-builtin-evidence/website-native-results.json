@@ -1,0 +1,208 @@
+[
+  {
+    "name": "macro_allocation_native",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "runReturncode": 0,
+    "runStdout": "",
+    "runStderr": ""
+  },
+  {
+    "name": "macro_allocation_new_types",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "runReturncode": 0,
+    "runStdout": "",
+    "runStderr": ""
+  },
+  {
+    "name": "macro_allocation_shadow",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "runReturncode": 0,
+    "runStdout": "",
+    "runStderr": ""
+  },
+  {
+    "name": "macro_allocation_function",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "runReturncode": 0,
+    "runStdout": "",
+    "runStderr": ""
+  },
+  {
+    "name": "macro_allocation_question",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "runReturncode": 0,
+    "runStdout": "",
+    "runStderr": ""
+  },
+  {
+    "name": "reject_macro_allocation_new_expression",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_expression.gox:3:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [125,126))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_expression.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_expression.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_capture_expr",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_expr.gox:2:40: macro: macro allocation type does not support captured types (source span [49,50))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_expr.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_expr.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_capture_ident",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_ident.gox:2:41: macro: macro allocation type does not support captured types (source span [50,51))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_ident.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_ident.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_capture_tt",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_tt.gox:2:38: macro: macro allocation type does not support captured types (source span [47,48))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_tt.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_capture_tt.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_nested_capture",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_nested_capture.gox:2:48: macro: macro allocation type does not support captured types (source span [57,58))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_nested_capture.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_nested_capture.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_make_capture",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_capture.gox:2:49: macro: macro allocation type does not support captured types (source span [58,59))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_capture.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_capture.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_named_type",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_named_type.gox:3:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [56,60))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_named_type.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_named_type.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_generic_type",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_generic_type.gox:3:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [74,77))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_generic_type.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_generic_type.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_struct_type",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_struct_type.gox:2:33: macro: template local type/struct/interface/label declarations are unsupported (source span [42,48))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_struct_type.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_struct_type.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_interface_type",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_interface_type.gox:2:33: macro: template local type/struct/interface/label declarations are unsupported (source span [42,51))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_interface_type.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_interface_type.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_func_type",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_func_type.gox:2:33: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported (source span [42,46))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_func_type.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_func_type.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_local_primitive",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_local_primitive.gox:2:58: macro: macro allocation type cannot use a template-local binding (source span [67,70))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_local_primitive.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_local_primitive.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_primitive_function",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_primitive_function.gox:3:33: macro: template primitive int names a definition-site declaration, not a predeclared object; pass it as an explicit capture (source span [55,58))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_primitive_function.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_primitive_function.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_primitive_import",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_primitive_import.gox:3:33: macro: template primitive int names a definition-site import, not a predeclared object; pass it as an explicit capture (source span [63,66))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_primitive_import.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_primitive_import.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_definition_var",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_var.gox:3:29: macro: template name make is a definition-site declaration, not a builtin; pass it as an explicit capture (source span [70,74))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_var.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_var.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_definition_const",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_const.gox:3:29: macro: template name new is a definition-site declaration, not a builtin; pass it as an explicit capture (source span [50,53))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_const.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_const.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_definition_type",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_type.gox:3:29: macro: template name make is a definition-site declaration, not a builtin; pass it as an explicit capture (source span [52,56))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_type.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_type.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_definition_import",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_import.gox:3:29: macro: template name new is a definition-site import, not a builtin (source span [59,62))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_import.gox:3:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_definition_import.gox:4:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_make_value",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_value.gox:2:26: macro: template builtin make requires a direct call (source span [35,39))\n  macro value defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_value.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_value.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_new_value",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_value.gox:2:26: macro: template builtin new requires a direct call (source span [35,38))\n  macro value defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_value.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_value.gox:3:14\n"
+  },
+  {
+    "name": "reject_macro_allocation_make_local_type",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_local_type.gox:2:29: macro builtin make is shadowed by a local named type; renaming its identity is unsupported (source span [38,42))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_local_type.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_make_local_type.gox:3:43\n"
+  },
+  {
+    "name": "reject_macro_allocation_new_local_type",
+    "transpileReturncode": 1,
+    "diagnostic": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_local_type.gox:2:29: macro builtin new is shadowed by a local named type; renaming its identity is unsupported (source span [38,41))\n  macro allocate defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_local_type.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-append-builtin/web-checkout/website/checks/reject_macro_allocation_new_local_type.gox:3:41\n"
+  },
+  {
+    "name": "reject_macro_allocation_make_type",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "nativeTypeReturncode": 1,
+    "nativeTypeError": "# command-line-arguments\n../../macro-allocation-builtin/website-native/reject_macro_allocation_make_type.go:3:23: invalid argument: cannot make goxideMacroGenerated2: type must be slice, map, or channel\n"
+  },
+  {
+    "name": "reject_macro_allocation_make_arity",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "nativeTypeReturncode": 1,
+    "nativeTypeError": "# command-line-arguments\n../../macro-allocation-builtin/website-native/reject_macro_allocation_make_arity.go:3:18: invalid operation: make([]goxideMacroGenerated2) expects 2 or 3 arguments; found 1\n"
+  },
+  {
+    "name": "reject_macro_allocation_make_negative",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "nativeTypeReturncode": 1,
+    "nativeTypeError": "# command-line-arguments\n../../macro-allocation-builtin/website-native/reject_macro_allocation_make_negative.go:3:48: invalid argument: index -1 (constant of type int) must not be negative\n"
+  },
+  {
+    "name": "reject_macro_allocation_make_capacity",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "nativeTypeReturncode": 1,
+    "nativeTypeError": "# command-line-arguments\n../../macro-allocation-builtin/website-native/reject_macro_allocation_make_capacity.go:3:48: invalid argument: length and capacity swapped\n"
+  },
+  {
+    "name": "reject_macro_allocation_map_key",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "nativeTypeReturncode": 1,
+    "nativeTypeError": "# command-line-arguments\n../../macro-allocation-builtin/website-native/reject_macro_allocation_map_key.go:3:27: invalid map key type []goxideMacroGenerated2\n"
+  },
+  {
+    "name": "reject_macro_allocation_array_length",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "nativeTypeReturncode": 1,
+    "nativeTypeError": "# command-line-arguments\n../../macro-allocation-builtin/website-native/reject_macro_allocation_array_length.go:3:23: invalid array length -1 (untyped int constant)\n"
+  },
+  {
+    "name": "reject_macro_allocation_new_arity",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "nativeTypeReturncode": 1,
+    "nativeTypeError": "# command-line-arguments\n../../macro-allocation-builtin/website-native/reject_macro_allocation_new_arity.go:3:18: invalid operation: too many arguments for new(goxideMacroGenerated2, 1) (expected 1, found 2)\n"
+  },
+  {
+    "name": "reject_macro_allocation_ellipsis",
+    "transpileReturncode": 0,
+    "diagnostic": "",
+    "nativeTypeReturncode": 1,
+    "nativeTypeError": "# command-line-arguments\n../../macro-allocation-builtin/website-native/reject_macro_allocation_ellipsis.go:3:18: invalid operation: invalid use of ... with built-in make\n"
+  }
+]

@@ -1,0 +1,82 @@
+{
+  "source_commit": "ec9dcbfba578c8c0553e4b1bfa32d0909463ae02",
+  "baseline_commit": "9ca38dc283ebd615498535de100057585b2492ac",
+  "verdict": "no_blocking_findings",
+  "production_review": {
+    "files": [
+      "internal/macros/hygiene.go",
+      "internal/macros/allocation_types.go"
+    ],
+    "binding": "The gate runs after template-local and real definition-function bindings have precedence and only for proven direct make/new builtins. Captured callees remain caller expressions. Type leaves cannot use capture placeholders or template-local bindings; genuine primitives use existing definition/caller checks.",
+    "nested_alias": "Only exact engine aliases whose keys are type <predeclared primitive> are trusted. Capture/local checks precede alias acceptance; generated-looking user spellings and sum aliases are not trusted. Existing inner-definition identity is not reinterpreted in outer definition scope.",
+    "array_length": "Array.Len stays an expression slot. Complete caller captures are opaque, while explicit template type nodes inside composite literals, assertions and pointer conversions are checked. Constantness is left to Go.",
+    "complexity": "Slice nil length is guarded. The expression walk skips types already recursively checked while preserving literal-element and assertion-operand traversal, avoiding the identified exponential revisit. The persistent depth40 occurrence-count check and independent depth24 CLI runtime probe cover this regression.",
+    "semantics": "Generated native allocation remains direct, with no wrapper or change to storage, multiplicity, propagation frames or reference checks. Plain make operand order is compared with the same native Go toolchain, not hard-coded to an assumed lexical order."
+  },
+  "independent_execution": {
+    "environment": "Mac darwin/arm64 Go1.27.1; GOTOOLCHAIN=local; GOMAXPROCS=4; offline existing task caches; TMPDIR=task/tmp-native",
+    "binary_identity": "go version -m confirms baseline9ca38dc and currentec9dcbf, both vcs.modified=false.",
+    "single_file_case_definitions": 37,
+    "cross_definition_modules": 1,
+    "final_observations": 56,
+    "expectation_counts": {
+      "pass": 15,
+      "existing-gap": 1,
+      "macro-reject": 34,
+      "native-reject": 4,
+      "synthetic-macro-reject": 2
+    },
+    "native_commands_after_environment_cleanup": 20,
+    "lf_crlf_diagnostic_pairs": 18,
+    "evidence": "results.json, clean-native-recheck.json, probes.py, binary-identities.log",
+    "high_value_cases": [
+      "Array.Len captured3.0 and named integer constant accepted; typed float/variable/function call rejected by native checks.",
+      "Nil array-pointer and nil element expressions in constant len are not evaluated.",
+      "Builtin len inside template bypasses caller shadow; complete caller length expression retains its own shadow binding.",
+      "Deep captured type nodes and Array.Len explicit type injection reject, including nested macro expansion.",
+      "Nested primitive aliases survive exact inner/outer/caller scopes: fixed package int stays int despite ops package type int string.",
+      "Captured builtin callee new(value) and complete caller make(Local,2) remain existing expression routes.",
+      "Go1.27 new(expr) macro engineering rejection is distinct from native illegality."
+    ],
+    "execution_history": "Initial runner exposed an invalid Option-constructor capture in one reviewer fixture; corrected only that fixture to value() returning Option. Its synthetic propagation diagnostic was investigated rather than silently weakened. Initial TMPDIR equaled review module root, causing Go to warn it ignored that root go.mod; changed to task/tmp-native, verified go env GOMOD separately for single-file and cross-package modules, and reran all20 native commands. Original records retained in initial-results.json and pre-tmpdir-results.json. Final evidence is a combined verified set, not a claim that the initial runner invocation exited0."
+  },
+  "diagnostic_boundary": {
+    "case": "macro_rules! m {($x:expr)=>{new($x?)};} invoked with value() returning Option",
+    "current_behavior": "Correct allocation/new(expr) rejection at generated __goxide_question call; generated/unmapped and no expansion stack, for both LF and CRLF.",
+    "cause": "propagate.PrepareMapped copies the operand but synthesizes marker(...). allocationType rejects CallExpr at its actual synthetic Pos. Existing frontend/compile.go mapSpan obtains no Origin and explicitly clears Stack when Origin is nil. These mapping/prepare files are unchanged in this commit.",
+    "baseline_controls": "16 observations: baseline/current x2 line endings for synthetic-first template syntax errors, synthetic extra-token error, ordinary-token syntax error, and len($x?) type error. Each baseline/current pair has identical diagnostics; synthetic cases have no Origin/Stack while ordinary-token case retains both.",
+    "classification": "Existing A03 synthetic propagation boundary newly reached by the more specific allocation rejection. Baseline new($x?) stopped earlier on unsupported free name new and had a mapped diagnostic; do not claim identical diagnostic quality for that same source or that every new type-gate rejection retains a source stack. Do not fabricate argument provenance by attributing it to the new token.",
+    "evidence": "synthetic-baseline-controls.json; synthetic-diagnostic-controls.json includes the direct old/new new($x?) comparison."
+  },
+  "persistent_validation_review": {
+    "unit": "10 targeted groups cover fixed types/native allocation, binding, rejected captures/value forms, imports/package boundaries, deterministic maps, linear nested lengths and exact nested primitive alias identity.",
+    "acceptance": "Real CLI covers all21 predeclared leaves, generated module race/vet/run, native order comparison, eight propagation outcomes, readonly sizing/rejection, generic declarations supplied by native.go, source diagnostics and repeated maps. Parent/author test reports are not counted as independently rerun here.",
+    "website": "Reviewed35 allocation fixtures and QA classification:5 positive,22 frontend rejects,8 native type rejects, plus a native-valid new(7) control. Ordinary Go type errors compare transpilation then require native build rejection; no browser final typecheck claim. Browser execution belongs to other agent."
+  },
+  "remaining_scope": [
+    "General new(expr) macro templates, named/imported/generic type operands and general type fragments remain open.",
+    "Baseline expression-to-type leakage in other template type slots remains observed and separately classified; this slice does not close global fragment validation.",
+    "A03 synthetic propagation, captured parentheses/helper aliases and other downstream origin gaps remain open."
+  ],
+  "limits": "Reviewer made no repository edits, installed nothing, and performed no commit/push, full-tree test run, browser run or Linux validation.",
+  "evidence_sha256": {
+    "results.json": "44c68c6bf6e31188392b0a17564a3731addf6b597446834fc102b0c478e3f56c",
+    "clean-native-recheck.json": "c07694ab229c526394ad7830e528a356810b90edb9195305a6fdba7f2e8e4624",
+    "synthetic-baseline-controls.json": "8c8f2f331658364e54ef0deb63e6dc1e06be19f6df1dd2860a0af431ad7887d6",
+    "binary-identities.log": "92c85a332b97beaf414a331824452c09a6a4ca77eab43556758f93fc855a0684",
+    "probes.py": "0b9ed2d31fa21706c060dd8030fa2e1822057ca603b8fd88f37a788483429aa0"
+  },
+  "non_blocking_boundaries": [
+    {
+      "case": "new($x?) with value() returning Option",
+      "line_endings": [
+        "LF",
+        "CRLF"
+      ],
+      "outcome": "Rejected with generated/unmapped and no expansion stack.",
+      "baseline_difference": "The same source at baseline stops earlier on unsupported free name new and retains a mapped diagnostic. Current source reaches the allocation gate on the synthetic propagation marker; same-source diagnostics are not identical.",
+      "control_evidence": "synthetic-baseline-controls.json: 16 observations compare unchanged baseline/current synthetic template/len diagnostics and ordinary-token mapped controls.",
+      "classification": "Existing A03 synthetic propagation mapping boundary newly reached by this allocation rejection; no fabricated source span. Initial failed expectations remain in initial-results.json and pre-tmpdir-results.json."
+    }
+  ]
+}

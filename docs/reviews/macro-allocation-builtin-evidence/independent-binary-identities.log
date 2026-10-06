@@ -1,0 +1,44 @@
+/Users/hxsf/Documents/Codex/2026-10-06/task/validation/a01-make-new-research/baseline: go1.27.1
+        path    github.com/hxsf/goxide/cmd/goxide
+        mod     github.com/hxsf/goxide  v0.0.0-mvp-doc.0.20261006172024-9ca38dc283eb
+        dep     github.com/pelletier/go-toml/v2 v2.4.3  h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY=
+        dep     github.com/spf13/cobra  v1.10.2 h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU=
+        dep     github.com/spf13/pflag  v1.0.9  h1:9exaQaMOCwffKiiiYk6/BndUBv+iRViNW+4lEMi0PvY=
+        dep     golang.org/x/sys        v0.31.0 h1:ioabZlmFYtWhL+TRYpcnNlLwhyxaM9kWTDEmfnprqik=
+        dep     golang.org/x/term       v0.30.0 h1:PQ39fJZ+mfadBm0y5WlL4vlM7Sx1Hgf13sMIY2+QS9Y=
+        build   -buildmode=exe
+        build   -compiler=gc
+        build   CGO_ENABLED=1
+        build   CGO_CFLAGS=
+        build   CGO_CPPFLAGS=
+        build   CGO_CXXFLAGS=
+        build   CGO_LDFLAGS=
+        build   GOARCH=arm64
+        build   GOOS=darwin
+        build   GOARM64=v8.0
+        build   vcs=git
+        build   vcs.revision=9ca38dc283ebd615498535de100057585b2492ac
+        build   vcs.time=2026-10-06T17:20:24Z
+        build   vcs.modified=false
+/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/goxide: go1.27.1
+        path    github.com/hxsf/goxide/cmd/goxide
+        mod     github.com/hxsf/goxide  v0.0.0-mvp-doc.0.20261006175351-ec9dcbfba578
+        dep     github.com/pelletier/go-toml/v2 v2.4.3  h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY=
+        dep     github.com/spf13/cobra  v1.10.2 h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU=
+        dep     github.com/spf13/pflag  v1.0.9  h1:9exaQaMOCwffKiiiYk6/BndUBv+iRViNW+4lEMi0PvY=
+        dep     golang.org/x/sys        v0.31.0 h1:ioabZlmFYtWhL+TRYpcnNlLwhyxaM9kWTDEmfnprqik=
+        dep     golang.org/x/term       v0.30.0 h1:PQ39fJZ+mfadBm0y5WlL4vlM7Sx1Hgf13sMIY2+QS9Y=
+        build   -buildmode=exe
+        build   -compiler=gc
+        build   CGO_ENABLED=1
+        build   CGO_CFLAGS=
+        build   CGO_CPPFLAGS=
+        build   CGO_CXXFLAGS=
+        build   CGO_LDFLAGS=
+        build   GOARCH=arm64
+        build   GOOS=darwin
+        build   GOARM64=v8.0
+        build   vcs=git
+        build   vcs.revision=ec9dcbfba578c8c0553e4b1bfa32d0909463ae02
+        build   vcs.time=2026-10-06T17:53:51Z
+        build   vcs.modified=false

@@ -1,0 +1,283 @@
+{
+  "environment": {
+    "TMPDIR": "/Users/hxsf/Documents/Codex/2026-10-06/task/tmp-native"
+  },
+  "checks": [
+    {
+      "command": "go env GOMOD",
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "moduleFile": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/go.mod",
+      "stderr": ""
+    },
+    {
+      "command": "go env GOMOD",
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/cross-definition-generated",
+      "moduleFile": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/cross-definition-generated/go.mod",
+      "stderr": ""
+    },
+    {
+      "case": "array-length-scalar",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-scalar-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "array-length-named-constant",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-named-constant-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "array-length-template-int-constant",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-template-int-constant-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "array-length-whole-capture-local-type",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-whole-capture-local-type-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "array-length-nil-pointer-no-eval",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-nil-pointer-no-eval-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "array-length-nil-element-no-eval",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-nil-element-no-eval-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "array-length-caller-len-shadow",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-caller-len-shadow-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "nested-array-expression",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/nested-array-expression-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "template-local-new-function",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/template-local-new-function-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "definition-new-function",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/definition-new-function-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "captured-new-callee-value",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/captured-new-callee-value-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "complete-caller-allocation-expression",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/complete-caller-allocation-expression-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "existing-other-type-slot-gap",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/existing-other-type-slot-gap-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "array-length-nonconstant",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-nonconstant-LF.bin",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-nonconstant-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "# command-line-arguments\n./array-length-nonconstant-LF.go:3:32: array length (n) (variable of type int) must be constant\n"
+    },
+    {
+      "case": "array-length-typed-float",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-typed-float-LF.bin",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-typed-float-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "# command-line-arguments\n./array-length-typed-float-LF.go:3:45: array length (n) (constant 3 of type float64) must be integer\n"
+    },
+    {
+      "case": "array-length-function-call",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-function-call-LF.bin",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-function-call-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "# command-line-arguments\n./array-length-function-call-LF.go:5:24: array length len((f())) (value of type int) must be constant\n"
+    },
+    {
+      "case": "array-length-whole-caller-len-function",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-whole-caller-len-function-LF.bin",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/array-length-whole-caller-len-function-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "# command-line-arguments\n./array-length-whole-caller-len-function-LF.go:3:62: array length (len([2]int{})) (value of type int) must be constant\n"
+    },
+    {
+      "case": "nested-verified-primitive-alias",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/nested-verified-primitive-alias-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "deep-array-length-walk",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/deep-array-length-walk-LF.go"
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "cross-definition-verified-alias-not-reinterpreted",
+      "command": [
+        "go",
+        "run",
+        "-race",
+        "."
+      ],
+      "cwd": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/cross-definition-generated",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

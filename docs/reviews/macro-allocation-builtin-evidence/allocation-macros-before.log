@@ -1,0 +1,23 @@
+=== RUN   TestAllocationFixedTypesAndNativeSemantics
+    allocation_test.go:12: input.gox:3:41: macro: unsupported free template name "make"; pass it as an explicit capture (unsupported builtins included) (invoked at input.gox:17:5)
+--- FAIL: TestAllocationFixedTypesAndNativeSemantics (0.00s)
+=== RUN   TestAllocationPrimitiveIdentityAndOperationShadows
+    allocation_test.go:43: input.gox:3:27: macro: unsupported free template name "new"; pass it as an explicit capture (unsupported builtins included) (invoked at input.gox:10:5)
+--- FAIL: TestAllocationPrimitiveIdentityAndOperationShadows (0.00s)
+=== RUN   TestAllocationDefinitionFunctionsRemainOrdinary
+--- PASS: TestAllocationDefinitionFunctionsRemainOrdinary (0.43s)
+=== RUN   TestAllocationRejectsCapturedAndValueTypes
+    allocation_test.go:94: macro_rules! allocate {($T:expr)=>{make($T,2)};}: got allocation.gox:2:36: macro: unsupported free template name "make"; pass it as an explicit capture (unsupported builtins included) (invoked at allocation.gox:3:12) want captured types
+--- FAIL: TestAllocationRejectsCapturedAndValueTypes (0.00s)
+=== RUN   TestAllocationDefinitionTypeBindings
+    allocation_test.go:106: type int string: definition.gox:3:27: macro: unsupported free template name "new"; pass it as an explicit capture (unsupported builtins included) (invoked at definition.gox:4:12)
+--- FAIL: TestAllocationDefinitionTypeBindings (0.00s)
+=== RUN   TestAllocationPackageScopesAndImportShadows
+    allocation_test.go:128: definitions.gox:2:26: macro: unsupported free template name "make"; pass it as an explicit capture (unsupported builtins included) (invoked at caller.gox:3:29)
+--- FAIL: TestAllocationPackageScopesAndImportShadows (0.00s)
+=== RUN   TestAllocationOriginsAndDeterminism
+    allocation_test.go:147: origin.gox:3:2: macro: unsupported free template name "new"; pass it as an explicit capture (unsupported builtins included) (invoked at origin.gox:5:12)
+--- FAIL: TestAllocationOriginsAndDeterminism (0.00s)
+FAIL
+FAIL    github.com/hxsf/goxide/internal/macros  1.236s
+FAIL

@@ -884,3 +884,19 @@ race/vet/run、19 项新增 copy 与全部旧 CLI/WASM 差分、web race/vet/cat
 CI 查询见[本批交付报告](reviews/macro-copy-builtin-20261006.md)。未查到的托管 CI 不记为
 通过，也不将空 contexts 的聚合 pending 视作运行中；Linux 未运行、网站未部署。
 A01 只再关闭直接 copy；make/new、其余绑定与 A03 完整来源仍开放，MVP 未完成。
+
+
+## A01 固定类型 make/new（2026-10-06）
+
+源码 `ec9dcbfba578c8c0553e4b1bfa32d0909463ae02`，分支 `feat/macro-allocation-builtins`。先写 RFC 白黑例，
+后接通定义点 builtin 与固定预声明类型 AST 门禁；不靠名称白名单开放类型捕获。
+完整 Mac 整树 race 555 个顶层/1200 个子测试通过，无失败或跳过测试，
+全树 vet、完整设计检查、真实 CLI 生成模块 race/vet/run 与 35 项新增 CLI/WASM 差分通过。
+
+独立审查确认嵌套 alias 的真实类型身份、Array.Len 内外捕获类别区别及线性工作量。
+普通 make 求值与同工具链原生操作对照，? 保留最近帧及早退；readonly 规则未放宽。
+new(expr) 在 Go 1.27 合法但本片未交付，命名/导入/泛型类型仍是工程账。
+new($x?) 合成节点诊断显示 unmapped/无栈，与基线同类 A03 控制一致，不声称完整来源。
+详细环境、逐项范围、完整日志哈希及 website 隔离 LICENSE 适配见
+[交付报告](reviews/macro-allocation-builtin-20261006.md)。Linux 未运行，网站未部署，
+托管 CI 只在 push 后按精确 SHA 查询。A01、A03、RFC0011 与 MVP 整项不关闭。

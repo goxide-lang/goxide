@@ -1,0 +1,137 @@
+{
+  "examples": 10,
+  "parity": "byte-for-byte",
+  "goResultChecks": [
+    "error_only",
+    "typed_nil",
+    "reject_wrong_type",
+    "pointer_error",
+    "named_error",
+    "slice_error",
+    "reject_value_error",
+    "reject_arity",
+    "reject_legacy_cfg"
+  ],
+  "diagnosticChecks": [
+    "reject_macro_selector",
+    "reject_macro_prepared",
+    "reject_derive_origin",
+    "reject_enum_derive_origin",
+    "macro_imported_helper"
+  ],
+  "appendChecks": {
+    "positive": [
+      "macro_append_native",
+      "macro_append_shadow",
+      "macro_append_string",
+      "macro_append_question",
+      "macro_append_function"
+    ],
+    "frontendReject": [
+      "reject_macro_append_definition_var",
+      "reject_macro_append_definition_const",
+      "reject_macro_append_definition_type",
+      "reject_macro_append_definition_import",
+      "reject_macro_append_value",
+      "reject_macro_append_named_type"
+    ],
+    "nativeTypeReject": [
+      "reject_macro_append_slice",
+      "reject_macro_append_element",
+      "reject_macro_append_arity",
+      "reject_macro_append_ellipsis"
+    ],
+    "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native"
+  },
+  "copyChecks": {
+    "positive": [
+      "macro_copy_native",
+      "macro_copy_string",
+      "macro_copy_shadow",
+      "macro_copy_function",
+      "macro_copy_question",
+      "macro_copy_readonly_source"
+    ],
+    "frontendReject": [
+      "reject_macro_copy_definition_var",
+      "reject_macro_copy_definition_const",
+      "reject_macro_copy_definition_type",
+      "reject_macro_copy_definition_import",
+      "reject_macro_copy_value",
+      "reject_macro_copy_named_type",
+      "reject_macro_copy_readonly_target",
+      "reject_macro_copy_readonly_pointer"
+    ],
+    "nativeTypeReject": [
+      "reject_macro_copy_slice",
+      "reject_macro_copy_element",
+      "reject_macro_copy_string_rune",
+      "reject_macro_copy_arity",
+      "reject_macro_copy_ellipsis"
+    ],
+    "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native"
+  },
+  "allocationChecks": {
+    "positive": [
+      "macro_allocation_native",
+      "macro_allocation_new_types",
+      "macro_allocation_shadow",
+      "macro_allocation_function",
+      "macro_allocation_question"
+    ],
+    "frontendReject": [
+      "reject_macro_allocation_new_expression",
+      "reject_macro_allocation_capture_expr",
+      "reject_macro_allocation_capture_ident",
+      "reject_macro_allocation_capture_tt",
+      "reject_macro_allocation_nested_capture",
+      "reject_macro_allocation_make_capture",
+      "reject_macro_allocation_named_type",
+      "reject_macro_allocation_generic_type",
+      "reject_macro_allocation_struct_type",
+      "reject_macro_allocation_interface_type",
+      "reject_macro_allocation_func_type",
+      "reject_macro_allocation_local_primitive",
+      "reject_macro_allocation_primitive_function",
+      "reject_macro_allocation_primitive_import",
+      "reject_macro_allocation_definition_var",
+      "reject_macro_allocation_definition_const",
+      "reject_macro_allocation_definition_type",
+      "reject_macro_allocation_definition_import",
+      "reject_macro_allocation_make_value",
+      "reject_macro_allocation_new_value",
+      "reject_macro_allocation_make_local_type",
+      "reject_macro_allocation_new_local_type"
+    ],
+    "nativeTypeReject": [
+      "reject_macro_allocation_make_type",
+      "reject_macro_allocation_make_arity",
+      "reject_macro_allocation_make_negative",
+      "reject_macro_allocation_make_capacity",
+      "reject_macro_allocation_map_key",
+      "reject_macro_allocation_array_length",
+      "reject_macro_allocation_new_arity",
+      "reject_macro_allocation_ellipsis"
+    ],
+    "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native",
+    "nativeValidButUnsupported": [
+      "reject_macro_allocation_new_expression"
+    ]
+  },
+  "checks": [
+    "edit",
+    "error recovery",
+    "rapid edits",
+    "copy",
+    "32 KiB",
+    "unsupported import",
+    "XSS",
+    "keyboard",
+    "390px",
+    "hard timeout",
+    "interrupt",
+    "reset",
+    "no external requests"
+  ],
+  "errors": []
+}

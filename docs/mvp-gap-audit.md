@@ -79,7 +79,7 @@ MVP 归属以 [决策登记](design/decisions.md) D14/D21–D23/D27–D36、RFC 
 
 | ID / 建议标题 | 分类与范围依据 | 当前差距 / 最小用例 | 依赖与验收标准 |
 | --- | --- | --- | --- |
-| A01 常用声明宏绑定与 builtin 卫生收口 | E（单文件 importer、直接 append/copy 子项已交付），D14/D21；[宏边界](../internal/macros/README.md)、[copy 验收](../tests/acceptance/macro_copy_test.go) | 已复用前端离线/WASM importer；直接 append/copy 接通，保留原生求值、存储、? 最近函数和既有只读权限规则。make/new、imported type/var、generic helper 仍未收口；定义点为 builtin 时调用包级同名及覆盖展开点 local type 名称仍拒绝，A01 不关闭 | 已验定义点/模板局部、调用点局部/import、命名 slice、重叠/浅共享、nil/空/string、条件禁用、? 失败无写入、defer 时序、只读标量复制及权限拒绝、跨文件与重复输出；其余分片保真实类型身份 |
+| A01 常用声明宏绑定与 builtin 卫生收口 | E（importer、append/copy、固定类型 make/new 子项已交付），D14/D21；[宏边界](../internal/macros/README.md)、[allocation 验收](../tests/acceptance/macro_allocation_test.go) | 已接通固定预声明类型 make/new 的 AST 门禁、准确 alias 身份和既有原生行为；命名/导入类型、泛型、new(expr)、其他 builtin/绑定仍未收口。类型捕获不因白名单取得资格；调用包同名及覆盖调用点 local type 的既有边界仍开放，A01 不关闭 | 白黑例先规范，真实 CLI/Go/WASM、跨定义包 alias、数组长度表达式与显式类型、捕获/权限拒绝、原生顺序对照、? 最近帧、LF/CRLF及独立审查；合成传播节点来源仍属 A03 |
 | A02 常见模式宏及 log/tracing 场景矩阵 | E+D，已批准常见宏/日志场景；RFC0011 的完整 grammar U09 未冻结 | nested/optional repetition、广义 tt/type/stmt/item fragments 尚无；现有 event_if 是惰性条件日志，未提供完整 tracing span 语义 | 先把具体调用形状及歧义规则定清，保留当前有限 expr/ident/tt；嵌套重复长度/零次/预算拒绝，disabled 日志不求值，source span 保留。span/subscriber API 无明确授权证据时标待确认 |
 | A03 完整宏→降低诊断来源链 | E（已交付首片），RFC0011/0018；[source tests](../tests/acceptance/source_mapping_test.go)、[诊断收口](reviews/macro-derive-diagnostics-20261005.md) | 已修模板 AST token、`?` 前处理来源/栈、具体 derive 行级原始位置与 enum 阶段错位；单文件 importer 复用随 A01 收口；捕获生成括号、appended helper alias、合成传播节点及部分后端诊断仍 generated/unmapped，A03 不关闭 | 从真实 Go 编译失败倒查定义/调用/捕获位置；重复 token、多层、CRLF、跨文件保身份；真正无法证明的合成节点保留 unmapped |
 | A04 match 普通表达式组合长尾 | E，D31 明确工程欠账；[matchexpr](../internal/matchexpr/README.md) | `return -(match ...)`、`S{N:match ...}`、控制头、package initializer、复杂 LHS；builtin/type-conversion call 未接入 | 从已有 prelude/value 扩展，逐上下文正反例；副作用一次、短路、lhs 先求值后写入/panic、goto、? 失败跳后续、direct recover 无额外帧；不一次新增所有模式 |
@@ -218,3 +218,20 @@ borrow checker、待定 serde adapters 未在本片实施。
 
 只关闭直接 copy 子项，A01/RFC0011/MVP 整项不关闭。托管 CI 未查到的状态与本地验证
 分开记录；没有引入新 trait/borrow、blank/embedded 或 serde adapters 规则。
+
+
+## 2026-10-06 接续：A01 固定类型 make/new
+
+从 `9ca38dc` 创建 `feat/macro-allocation-builtins`，精确源码 `ec9dcbfba578c8c0553e4b1bfa32d0909463ae02`。
+[本批研究、交付与证据](reviews/macro-allocation-builtin-20261006.md)记录类型门禁、
+完整 Mac 整树 555 顶层/1200 子测试通过、vet/design、CLI/WASM及独立审查。
+
+| 子项 | 状态 | 完成 / 剩余 |
+| --- | --- | --- |
+| A01 固定类型 make/new | C | 预声明类型与固定组合、数组长度表达式、嵌套 primitive alias 真身份；阻止类型槽捕获和顺带泛型开放 |
+| A01 其余合法分配/绑定 | E | new(expr)、同包/导入命名类型与泛型身份、其他 builtin、调用包同名/覆盖点 local type；不能以当前拒绝永久排除 |
+| A01 已有类别泄漏 | E | 其他模板返回类型等明确类型位置的 expr 捕获泄漏是基线已有问题，本片不冒称全局修复 |
+| A03 完整来源 | E | new($x?) 更深门禁触发既有合成传播节点 unmapped/无栈；其他后端/helper/捕获括号边界照旧，不能伪定位 |
+
+一般 type fragment 与完整模式语法仍需设计确认。只关闭固定类型 allocation 子项，
+A01/RFC0011/MVP 仍开放；Mac 本地通过不推导 Linux 或托管 CI 通过。

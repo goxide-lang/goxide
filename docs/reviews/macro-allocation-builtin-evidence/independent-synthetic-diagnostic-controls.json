@@ -1,0 +1,74 @@
+[
+  {
+    "case": "synthetic-first-syntax",
+    "variant": "baseline",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/synthetic-first-syntax-control.gox:2:31: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]\n"
+  },
+  {
+    "case": "synthetic-first-syntax",
+    "variant": "current",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/synthetic-first-syntax-control.gox:2:31: macro: unsupported template syntax: template:4:1: expected operand, found '}' [generated/unmapped]\n"
+  },
+  {
+    "case": "synthetic-first-extra",
+    "variant": "baseline",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/synthetic-first-extra-control.gox:2:31: macro: unsupported template syntax: template:3:42: expected ';', found nope (and 1 more errors) [generated/unmapped]\n"
+  },
+  {
+    "case": "synthetic-first-extra",
+    "variant": "current",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/synthetic-first-extra-control.gox:2:31: macro: unsupported template syntax: template:3:42: expected ';', found nope (and 1 more errors) [generated/unmapped]\n"
+  },
+  {
+    "case": "synthetic-first-type",
+    "variant": "baseline",
+    "exit": 0,
+    "stderr": ""
+  },
+  {
+    "case": "synthetic-first-type",
+    "variant": "current",
+    "exit": 0,
+    "stderr": ""
+  },
+  {
+    "case": "ordinary-first-syntax",
+    "variant": "baseline",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/ordinary-first-syntax-control.gox:2:31: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [43,44))\n  macro bad defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/ordinary-first-syntax-control.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/ordinary-first-syntax-control.gox:4:23\n"
+  },
+  {
+    "case": "ordinary-first-syntax",
+    "variant": "current",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/ordinary-first-syntax-control.gox:2:31: macro: unsupported template syntax: template:4:1: expected operand, found '}' (source span [43,44))\n  macro bad defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/ordinary-first-syntax-control.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/ordinary-first-syntax-control.gox:4:23\n"
+  },
+  {
+    "case": "new-question",
+    "variant": "baseline",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/new-question-control.gox:2:31: macro: unsupported free template name \"new\"; pass it as an explicit capture (unsupported builtins included) (source span [43,46))\n  macro bad defined at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/new-question-control.gox:2:1; invoked at /Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/new-question-control.gox:4:23\n"
+  },
+  {
+    "case": "new-question",
+    "variant": "current",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/new-question-control.gox:2:35: macro: macro allocation requires fixed predeclared type syntax; named/generic types and new(expr) are unsupported [generated/unmapped]\n"
+  },
+  {
+    "case": "len-question-type",
+    "variant": "baseline",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/len-question-type-control.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+  },
+  {
+    "case": "len-question-type",
+    "variant": "current",
+    "exit": 1,
+    "stderr": "/Users/hxsf/Documents/Codex/2026-10-06/task/validation/macro-allocation-builtins/independent-review/len-question-type-control.gox:17:10: invalid argument: __goxide_qtmp_3 (variable of type int) for built-in len [generated/unmapped]\n"
+  }
+]

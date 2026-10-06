@@ -110,7 +110,7 @@ func (l *lowering) resolveGoResult() (bool, error, error) {
 		if count == 2 {
 			t = sig.Results().At(0).Type()
 		}
-		if containsTypeParam(t) || containsTypeParam(e) || pendingMatchType(t) || pendingMatchType(e) {
+		if containsTypeParam(t) || containsTypeParam(e) || l.pendingMatchType(t) || l.pendingMatchType(e) {
 			pending = l.fail(call, "Go result macro: native generic or match result types remain unresolved")
 			return true
 		}

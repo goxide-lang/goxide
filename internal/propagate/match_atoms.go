@@ -94,6 +94,22 @@ func (l *lowering) matchPeerType(slot *ast.ValueSpec, parents map[ast.Node]ast.N
 			node = parent
 			continue
 		}
+		if unary, ok := parent.(*ast.UnaryExpr); ok {
+			next := "numeric"
+			switch unary.Op {
+			case token.NOT:
+				next = "boolean"
+			case token.ADD, token.SUB, token.XOR:
+			default:
+				return nil
+			}
+			if category != "" && category != next {
+				return nil
+			}
+			category = next
+			node = parent
+			continue
+		}
 		binary, ok := parent.(*ast.BinaryExpr)
 		if !ok {
 			return nil
@@ -124,7 +140,7 @@ func (l *lowering) matchPeerType(slot *ast.ValueSpec, parents map[ast.Node]ast.N
 		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
 		if types.CheckExpr(l.fs, l.pkg, peer.Pos(), peer, info) == nil {
 			t := info.Types[peer].Type
-			if t != nil && !pendingMatchType(t) {
+			if t != nil && !l.pendingMatchType(t) {
 				if b, ok := t.Underlying().(*types.Basic); ok && b.Info()&types.IsUntyped == 0 {
 					if (comparison && b.Info()&(types.IsNumeric|types.IsString|types.IsBoolean) != 0) || (next == "numeric" && b.Info()&(types.IsNumeric|types.IsString) != 0) || (next == "boolean" && b.Info()&types.IsBoolean != 0) {
 						return t

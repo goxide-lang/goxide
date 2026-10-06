@@ -124,7 +124,7 @@ func (l *lowering) sumExpected(call ast.Expr, parents []ast.Node) types.Type {
 func (l *lowering) registerSum(family string, args []types.Type) (enums.Decl, error) {
 	spellings := []string{}
 	for _, t := range args {
-		if containsTypeParam(t) || pendingMatchType(t) {
+		if containsTypeParam(t) || l.pendingMatchType(t) {
 			return enums.Decl{}, fmt.Errorf("sum type remains unresolved")
 		}
 		s, ok := l.goResultType(t)
@@ -229,7 +229,7 @@ func (l *lowering) resolveSumConstructors() (bool, error, error) {
 					return false
 				}
 				expected := l.sumExpected(call, stack)
-				if l.contextualMatchAssignment(stack) && (expected == nil || pendingMatchType(expected) || expected == types.Typ[types.Invalid]) {
+				if l.contextualMatchAssignment(stack) && (expected == nil || l.pendingMatchType(expected) || expected == types.Typ[types.Invalid]) {
 					pending = l.fail(call, "sum constructor awaits match result context")
 					stack = append(stack, n)
 					return true

@@ -9,18 +9,23 @@ import (
 // composer lowers only complete expressions with a proven contextual type.
 // Every generated statement stays in the original function, including ? exits.
 type composer struct {
-	source []byte
-	ts     []tok
-	pairs  map[int]int
-	copy   func(int, int) string
-	fail   func(int, string) error
-	origin func(int) string
-	serial int
+	source    []byte
+	ts        []tok
+	pairs     map[int]int
+	functions map[int]int
+	copy      func(int, int) string
+	fail      func(int, string) error
+	origin    func(int) string
+	serial    int
 }
 
 func (c *composer) temp() string { c.serial++; return fmt.Sprintf("__goxide_match_expr_%d", c.serial) }
 func (c *composer) contains(a, b int) bool {
 	for i := a; i < b; i++ {
+		if end, ok := c.functions[i]; ok {
+			i = end
+			continue
+		}
 		if c.ts[i].k == token.IDENT && c.ts[i].s == "match" {
 			return true
 		}

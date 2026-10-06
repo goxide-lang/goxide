@@ -49,7 +49,7 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 
 完整差距、范围依据、依赖与验收见 [MVP 逐 RFC 台账](docs/mvp-gap-audit.md)。以下是工程边界，不自动等于获批延期；具体正反例见[最新验收清单](docs/t0-acceptance.md#独立-enum-现阶段交付验收与待决清单2026-10-03统一调用组后)。
 
-- **表达式和类型上下文**：多结果 `return match`、部分 unary/composite/block-arm 组合、完全不可命名的私有参数仍拒绝；`.gox` 用户泛型定义尚未开放，与消费原生 Go 泛型函数不同。
+- **表达式和类型上下文**：单值 match 已接通 `+ - ! ^` 及普通 struct/slice/array/map 字面量组合；多结果 `return match`、引用/收发一元、复杂 postfix/receiver、控制头和 block-arm、完全不可命名的私有参数仍拒绝；`.gox` 用户泛型定义尚未开放，与消费原生 Go 泛型函数不同。
 - **模块与工具模式**：单文件外部增强恢复、受限 internal-origin/无源分发未全面验收；预编译宏 ABI、`.gox` 测试文件与非宿主交叉构建未实现。切换 race/tags/平台不能直接复用另一视图的 metadata；[本试用的具体模式与已知拒绝](examples/enum_trial/README.md#运行与测试模式)。
 - **协议资格**：手写 Clone/Debug/serde 登记、静态递归 Default、循环容器 equality 等仍有缺口或需另行设计；有限容器正例不证明任意对象图支持。
 - **完整设计能力**：完整 trait、LSP、用户过程宏、格式 Value/PATCH/YAML 等未成为本阶段交付能力；不要把 RFC 示例当作已实现语法。

@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -100,12 +101,29 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		result      string
 	}
 	var funcs []fn
+	functions := map[int]int{}
 	for i, t := range ts {
 		if t.k != token.FUNC {
 			continue
 		}
+		// In []func() T / [N]func() T / map[K]func() T, the brace
+		// after the signature belongs to the composite, not a function body.
+		if i > 0 && ts[i-1].k == token.RBRACK {
+			continue
+		}
 		j := i + 1
-		for j < len(ts) && ts[j].k != token.LBRACE && ts[j].k != token.SEMICOLON {
+		for j < len(ts) && ts[j].k != token.SEMICOLON {
+			if ts[j].k == token.LBRACE {
+				// An anonymous struct/interface result contains a type body before
+				// the function body; it is not the lexical return owner.
+				if j > i && (ts[j-1].k == token.STRUCT || ts[j-1].k == token.INTERFACE) {
+					if end, ok := pairs[j]; ok {
+						j = end + 1
+						continue
+					}
+				}
+				break
+			}
 			if ts[j].k == token.LPAREN || ts[j].k == token.LBRACK {
 				if e, ok := pairs[j]; ok {
 					j = e
@@ -138,9 +156,37 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 			result = b.String()
 		}
 		funcs = append(funcs, fn{j, end, result})
+		functions[i] = end
 	}
 	var edits []edit
-	c := composer{source: src, ts: ts, pairs: pairs, copy: copySource, fail: fail}
+	// Normalize real nested function bodies before a containing expression.
+	// Copying that expression incorporates already-normalized child statements,
+	// while contains treats each user function as a separate lexical boundary.
+	copyEdits := func(a, b int) string {
+		var out strings.Builder
+		at := a
+		for _, e := range edits {
+			if a <= e.a && e.b <= b {
+				out.WriteString(copySource(at, e.a))
+				out.WriteString(e.s)
+				at = e.b
+			}
+		}
+		out.WriteString(copySource(at, b))
+		return out.String()
+	}
+	addEdit := func(e edit) {
+		kept := edits[:0]
+		for _, old := range edits {
+			if e.a <= old.a && old.b <= e.b {
+				continue
+			}
+			kept = append(kept, old)
+		}
+		edits = append(kept, e)
+		sort.Slice(edits, func(i, j int) bool { return edits[i].a < edits[j].a })
+	}
+	c := composer{source: src, ts: ts, pairs: pairs, functions: functions, copy: copyEdits, fail: fail}
 
 	c.origin = func(i int) string {
 		origin := f.Position(token.Pos(f.Base() + ts[i].a)).String()
@@ -154,8 +200,28 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		return origin
 	}
 
-	for i := 0; i < len(ts); i++ {
-		if ts[i].s != "match" || ts[i].k != token.IDENT {
+	var matches []int
+	depth := map[int]int{}
+	for i := range ts {
+		if ts[i].s == "match" && ts[i].k == token.IDENT {
+			matches = append(matches, i)
+			for _, fn := range funcs {
+				if fn.open < i && i < fn.close {
+					depth[i]++
+				}
+			}
+		}
+	}
+	sort.SliceStable(matches, func(i, j int) bool { return depth[matches[i]] > depth[matches[j]] })
+	for _, i := range matches {
+		covered := false
+		for _, e := range edits {
+			if e.a <= ts[i].a && ts[i].b <= e.b {
+				covered = true
+				break
+			}
+		}
+		if covered {
 			continue
 		}
 		start := i
@@ -170,13 +236,12 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		}
 		if owner >= 0 {
 			serial := c.serial
-			e, end, ok, err := c.embedded(i, funcs[owner].open, funcs[owner].result)
+			e, _, ok, err := c.embedded(i, funcs[owner].open, funcs[owner].result)
 			if err != nil {
 				return nil, err
 			}
 			if ok {
-				edits = append(edits, e)
-				i = end
+				addEdit(e)
 				continue
 			}
 			c.serial = serial
@@ -291,8 +356,7 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 		if mode == "assign" || mode == "return" {
 			text = "{\n" + text + "\n}"
 		}
-		edits = append(edits, edit{ts[start].a, ts[end].b, text})
-		i = end
+		addEdit(edit{ts[start].a, ts[end].b, text})
 	}
 	var out bytes.Buffer
 	at := 0

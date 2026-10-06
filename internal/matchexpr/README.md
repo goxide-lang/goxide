@@ -4,8 +4,8 @@
 whole initializers of single typed or inferred **local** declarations, single
 identifier assignments and short declarations, and whole
 return expressions in functions or closures with one named or unnamed, Go-parseable result.
-It also supports recursive complete-arm matches and same-file known-signature
-call arguments (see the bounded composition rules below):
+It also supports recursive complete-arm matches, arguments whose actual Go call
+signature can be resolved, and the bounded unary/composite forms below:
 
 ```goxide
 enum State { Empty, Count(int), }
@@ -38,7 +38,8 @@ retain an explicit boundary. Expression-statement expansions are block scoped.
 
 Not supported yet: target forms beyond a single identifier subscript, multiple assignment
 targets, control-header match declarations, package initializers; whole matches in
-multiple returns; match in arbitrary unary/composite literal contexts; unresolved/unnameable parameter types; user generic definitions in goxide; labelled standalone calls and control headers; expression blocks;
+multiple returns; address/dereference/receive around match, new postfix receiver/index
+combinations, and go/defer headers; unresolved/unnameable parameter types; user generic definitions in goxide; labelled standalone calls and control headers; expression blocks;
 unsupported complex signatures. These are
 implementation gaps, not language prohibitions or approved deferrals. Statement
 matches pass through. All enum validation, guard order and exhaustiveness remain
@@ -173,3 +174,41 @@ is checked before emission. Match failure remains a return from the user functio
 positive/negative scope and permission tests, deterministic output and optional
 optimized microbenchmarks (`GOXIDE_MATCH_CALL_BENCH=1`). See the corresponding RFC
 0009 stage for measured scope and remaining boundaries.
+
+## Unary scalar operations and composite literals
+
+Scalar `+`, `-`, `!` and `^` accept single-value matches. Struct, slice, array and
+map literals recursively accept matches in their value slots, and map key slots;
+ordinary Go nested literal type elision and implicit pointer elements retain their
+existing syntax and identity. These forms compose in supported local declarations,
+assignments, single-result returns, call arguments and expression arms. Struct
+field selectors and array/slice constant indices do not become runtime expressions.
+
+Each slot takes its expected type from the actual `go/types` composite field or
+element role. Map key/value identities remain distinct; nominal types, transparent
+aliases, locally shadowed spelling, contextual shifts and nil retain the existing
+exact assignment rules. Typed peers can propagate through scalar unary operators;
+comparison results and shift counts still delimit the operand domain. Pending
+compiler types are recognized by real type identity, not by substrings in legal
+user type names. A known outer context is installed before resolving a nested match,
+then final typing checks every arm, including unselected ones.
+
+Real nested function bodies normalize before enclosing expressions, and their
+completed edits are composed without changing source ownership. A function field
+with its own match and `?` can coexist with outer literal matches: each question
+still exits its own user function. The existing propagation literal planner stages
+calls/receives in the approved order, preserves short-circuit branches and skips
+remaining fields/elements after failure. It leaves Go's ordinary-read and map
+insertion timing choices to Go. Generated atoms do not remain as runtime functions.
+
+`tests/acceptance/match_unary_composite_test.go` runs the real CLI from an unrelated
+directory, compares all generated artifacts, and race-tests/vets/runs a generated
+module. It joins JSON, a closed enum, match-based object assembly, Clone, Debug and
+JSON output; covers failure/cause/path, nil/empty, once-only effects, direct recover,
+defer, goto, loop control and existing indexed storage; and checks real type and
+permission rejection separately from unsupported syntax. The earlier literal
+rejection is preserved as a positively executed scenario.
+
+This does not add block arms, multi-result matching, complex places, arbitrary
+postfix/receiver contexts, reference/receive unary matching, or new enum/derive
+protocols. Remaining forms are implementation work, not language prohibitions.

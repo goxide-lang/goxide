@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// expression retains the host binary expression, using compiler-only closures
+// expression retains the host expression, using compiler-only closures
 // as typed match atoms. propagate removes these closures before Go emission;
 // they are not user function boundaries and never execute as calls.
 func (c *composer) expression(a, b int, context, kind string) (string, error) {
@@ -64,6 +64,20 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 		}
 		return "(" + left + " " + op.String() + " " + right + ")", nil
 	}
+	// These unary operations preserve their operand's scalar identity. Address,
+	// dereference and receive contexts keep their existing explicit boundary.
+	switch ts[a].k {
+	case token.ADD, token.SUB, token.XOR, token.NOT:
+		childKind := "numeric"
+		if ts[a].k == token.NOT {
+			childKind = "boolean"
+		}
+		value, err := c.expression(a+1, b, context, childKind)
+		return ts[a].k.String() + "(" + value + ")", err
+	}
+	if value, matched, err := c.literal(a, b, context); matched {
+		return value, err
+	}
 	// Find the final call suffix, independent of callee surface syntax. The
 	// actual signature and parameter identity are resolved by go/types later.
 	for open := a; open < b; open++ {
@@ -108,7 +122,7 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 		return callee + "(" + strings.Join(args, ",") + ")", nil
 	}
 	if ts[a].k != token.IDENT || ts[a].s != "match" {
-		return "", c.fail(a, "embedded match currently requires binary operands or parentheses")
+		return "", c.fail(a, "embedded match requires supported operators, calls, parentheses or composite elements")
 	}
 	name := strings.Replace(c.temp(), "__goxide_match_expr_", "__goxide_match_expr_atom_", 1)
 	marker := "__goxide_match_expr_infer(" + strconv.Quote(c.origin(a)) + ")"
@@ -136,6 +150,10 @@ func (c *composer) embedded(i, open int, result string) (edit, int, bool, error)
 	for start > open {
 		if a, ok := reverse[start]; ok {
 			start = a - 1
+			continue
+		}
+		if ts[start].k == token.LBRACE && c.compositeOpen(start, open) {
+			start--
 			continue
 		}
 		if ts[start].k == token.SEMICOLON || ts[start].k == token.LBRACE || ts[start].k == token.RBRACE {

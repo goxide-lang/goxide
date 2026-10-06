@@ -15,13 +15,76 @@ const matchOperand = "__goxide_match_expr_operand_context"
 const matchZero = "__goxide_match_expr_zero"
 const matchArgument = "__goxide_match_expr_argument"
 const matchReturn = "__goxide_match_expr_return"
+const matchLiteral = "__goxide_match_expr_literal"
 const matchPending = "__goxide_match_expr_pending"
 
 // pendingMatchType distinguishes unresolved inference from a user interface.
 // No provisional type facts are used for emission: resolving a slot restarts
 // whole-package typing before propagation captures contextual expression facts.
-func pendingMatchType(t types.Type) bool {
-	return t != nil && strings.Contains(types.TypeString(t, nil), matchPending)
+func (l *lowering) pendingMatchType(t types.Type) bool {
+	if t == nil || l.pkg == nil {
+		return false
+	}
+	obj := l.pkg.Scope().Lookup(matchPending)
+	if obj == nil {
+		return false
+	}
+	seen := map[types.Type]bool{}
+	var visit func(types.Type) bool
+	visit = func(t types.Type) bool {
+		if t == nil || seen[t] {
+			return false
+		}
+		seen[t] = true
+		if types.Identical(t, obj.Type()) {
+			return true
+		}
+		switch x := types.Unalias(t).(type) {
+		case *types.Named:
+			for i := 0; i < x.TypeArgs().Len(); i++ {
+				if visit(x.TypeArgs().At(i)) {
+					return true
+				}
+			}
+		case *types.Pointer:
+			return visit(x.Elem())
+		case *types.Array:
+			return visit(x.Elem())
+		case *types.Slice:
+			return visit(x.Elem())
+		case *types.Map:
+			return visit(x.Key()) || visit(x.Elem())
+		case *types.Chan:
+			return visit(x.Elem())
+		case *types.Tuple:
+			for i := 0; i < x.Len(); i++ {
+				if visit(x.At(i).Type()) {
+					return true
+				}
+			}
+		case *types.Signature:
+			return visit(x.Params()) || visit(x.Results())
+		case *types.Struct:
+			for i := 0; i < x.NumFields(); i++ {
+				if visit(x.Field(i).Type()) {
+					return true
+				}
+			}
+		case *types.Interface:
+			for i := 0; i < x.NumExplicitMethods(); i++ {
+				if visit(x.ExplicitMethod(i).Type()) {
+					return true
+				}
+			}
+			for i := 0; i < x.NumEmbeddeds(); i++ {
+				if visit(x.EmbeddedType(i)) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return visit(t)
 }
 
 type matchResultError struct{ origin, message string }
@@ -69,6 +132,9 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 	preferred := map[*ast.ValueSpec]bool{}
 	for _, slot := range slots {
 		obj := l.info.Defs[slot.Names[0]]
+		if obj == nil {
+			continue
+		}
 		ast.Inspect(l.file, func(n ast.Node) bool {
 			a, ok := n.(*ast.AssignStmt)
 			if !ok || len(a.Lhs) != 1 || len(a.Rhs) != 1 {
@@ -81,7 +147,7 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 			info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
 			if types.CheckExpr(l.fs, l.pkg, a.Rhs[0].Pos(), a.Rhs[0], info) == nil {
 				t := info.Types[a.Rhs[0]].Type
-				if t != nil && !pendingMatchType(t) {
+				if t != nil && !l.pendingMatchType(t) {
 					b, ok := t.(*types.Basic)
 					if !ok || b.Info()&types.IsUntyped == 0 {
 						preferred[slot] = true
@@ -110,6 +176,13 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 		call := slot.Values[0].(*ast.CallExpr)
 		fail := func(s string) error { return matchResultFailure(call, s) }
 		obj := l.info.Defs[slot.Names[0]]
+		// An unresolved map key can prevent go/types from visiting its value.
+		// Resolve another slot and recheck before consulting this slot's arms;
+		// nil objects must never make unrelated assignments look like arms.
+		if obj == nil {
+			pending = fail("result scope depends on an unresolved enclosing expression")
+			continue
+		}
 		var arms []ast.Expr
 		ast.Inspect(l.file, func(n ast.Node) bool {
 			a, ok := n.(*ast.AssignStmt)
@@ -172,6 +245,13 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 						return false, fail(err.Error())
 					}
 				}
+				if id, ok := rc.Fun.(*ast.Ident); ok && id.Name == matchLiteral {
+					var err error
+					target, err = l.matchLiteralType(slot, parents)
+					if err != nil {
+						return false, fail(err.Error())
+					}
+				}
 				if id, ok := rc.Fun.(*ast.Ident); ok && id.Name == matchReturn {
 					// Resolve the enclosing user signature, not a copied spelling
 					// that a local declaration may shadow or a package cannot name.
@@ -213,7 +293,7 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 					target = nil
 				}
 			}
-			if pendingMatchType(target) {
+			if l.pendingMatchType(target) {
 				target = nil
 			}
 		}
@@ -245,13 +325,13 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 				break
 			}
 			tv := info.Types[arm]
-			if tv.Type == nil || pendingMatchType(tv.Type) {
+			if tv.Type == nil || l.pendingMatchType(tv.Type) {
 				blocked = true
 				break
 			}
 			values = append(values, tv)
 		}
-		if (blocked && target == nil) || pendingMatchType(target) {
+		if (blocked && target == nil) || l.pendingMatchType(target) {
 			pending = fail("result types are unresolved or an arm needs a type context")
 			continue
 		}
@@ -323,9 +403,9 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 		// Exact contextual assignment checking also enforces constant range and
 		// contextual shifts. AssignableTo alone lacks the constant's value.
 		for _, arm := range arms {
-			if pendingSumConstructor(arm) {
+			if pendingSumConstructor(arm) || pendingMatchAtom(arm) {
 				// The proven result context is installed below before the next
-				// typed pass resolves this constructor. Final checking still
+				// typed pass resolves this constructor or nested match. Final checking still
 				// enforces assignability and constant bounds.
 				continue
 			}
@@ -366,10 +446,28 @@ func (l *lowering) resolveMatchResult() (bool, error) {
 
 func matchSeedDecl(d ast.Decl) bool {
 	if f, ok := d.(*ast.FuncDecl); ok {
-		return f.Name.Name == matchInfer || f.Name.Name == matchContext || f.Name.Name == matchOperand || f.Name.Name == matchZero || f.Name.Name == matchReturn || f.Name.Name == matchArgument
+		return f.Name.Name == matchInfer || f.Name.Name == matchContext || f.Name.Name == matchOperand || f.Name.Name == matchZero || f.Name.Name == matchReturn || f.Name.Name == matchArgument || f.Name.Name == matchLiteral
 	}
 	if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.TYPE && len(g.Specs) == 1 {
 		return g.Specs[0].(*ast.TypeSpec).Name.Name == matchPending
 	}
 	return false
+}
+
+// A proven outer context may be needed by a nested match before its expression
+// can be checked. Install that context, restart typing, then let the final type
+// check validate the complete arm after every compiler atom is concrete.
+func pendingMatchAtom(n ast.Node) bool {
+	pending := false
+	ast.Inspect(n, func(n ast.Node) bool {
+		if fn := matchAtom(n); fn != nil {
+			slot := fn.Body.List[0].(*ast.DeclStmt).Decl.(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
+			if len(slot.Values) > 0 {
+				pending = true
+				return false
+			}
+		}
+		return !pending
+	})
+	return pending
 }

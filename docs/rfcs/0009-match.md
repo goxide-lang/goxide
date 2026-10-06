@@ -210,3 +210,115 @@ Go 规范 Order of evaluation 只规定调用、接收和逻辑运算等的相�
 优化构建探针（非 race；Go 1.27.1，单 CPU，100ms×3）中，方法、slice 展开、显式 generic 的真实 goxide 输出均为 0 B/op、0 allocs/op；中位数约 1.963/1.706/1.655 ns/op，内联原生 Go 对照约 0.5635/0.2835/0.2828 ns/op。微基准可被内联/常量折叠，不代表业务性能等价，记录见 `tests/research/match_lowering/call-signatures-2026-10-03.txt`。原生 receiver 顺序研究属于机制探针，未替代真实 goxide 执行证据。
 
 仍明确未接通：多结果 `return match`；完全无可见类型拼写的私有调用参数（如 `m.Hidden()(match ...)`）；既有 unary/composite/block-arm 等非本组表达式上下文。非法 arity、常量溢出、不可寻址 pointer receiver 和权限擦除属于应拒绝输入，不算功能欠账。带编译器指令的本地函数保持既有明确诊断，不擅改调用的逃逸/活性约束。blank/embedded 字段、公开 enum 入口验证、serde adapters Proposed 均未在此决定。
+
+## Unary/composite 单值 match（2026-10-06，实施前合同）
+
+从 `2cd3b71e4cdeff0fe8ea9ae0a2f460ac52ee416d` 建立独立分支
+`feat/match-unary-composite`。本节先定义本批验收，实际实现与准确验证提交另记。
+沿既有 atom → prelude/value 扩展单值 match，不增模式语法、枚举表示或公开库 ABI。
+
+首片支持前缀 `+ - ! ^`，以及显式 struct/slice/array/map composite literal 的字段、
+元素、map key/value；递归保留 Go 允许的嵌套省略类型字面量。可放入已支持的局部
+initializer、单目标赋值、单结果 return、调用参数及表达式 arm。struct 字段名与
+array/slice 常量 index 不当作普通运行时 value；非法 key/field/arity 仍由真实类型规则拒绝。
+
+**U01：数值和 bool 一元操作，以及普通业务对象装配，应接受。**
+
+```goxide
+enum Mode { Off, Count(int), }
+type Summary struct { Negative int; Active bool; Values []int }
+func negative(m Mode) int {
+    return -(match m { Mode::Off => 0, Mode::Count(n) => n })
+}
+func summary(m Mode) Summary {
+    return Summary{
+        Negative: -(match m { Mode::Off => 0, Mode::Count(n) => n }),
+        Active: !(match m { Mode::Off => true, Mode::Count(_) => false }),
+        Values: []int{1, match m { Mode::Off => 0, Mode::Count(n) => n }, 3},
+    }
+}
+```
+
+**U02：类型来自实际字段/元素/参数，不来自同名拼写。**
+
+```goxide
+type Wide = uint64
+type Entry struct { Bits Wide; Pointer *int }
+func entry(m Mode, shift uint) Entry {
+    type Wide = int8
+    _ = Wide(1)
+    return Entry{
+        Bits: +(match m { Mode::Off => 1 << shift, Mode::Count(_) => 0 }),
+        Pointer: match m { Mode::Off => nil, Mode::Count(_) => nil },
+    }
+}
+```
+
+调用 `entry(Mode::Off, 63)` 必须保留 uint64 结果。真实 Go 类型身份决定 expected type，
+保留本地/导入名义类型与透明 alias；所有 arm 遵守已有精确可赋值、常量范围、shift、
+nil 和引用资格规则，不以 any、共同 interface 或隐式 widening 解决不兼容类型。
+二元比较的 bool 结果、shift 的计数域、外层 interface 不得污染 match 的数值 operand。
+没有可命名的真实类型时保留现有明确诊断。
+
+**U03：副作用在原用户函数内按既定表达式规则执行。**
+
+```goxide
+func collect(m Mode, trace *[]string, ok bool) Result[Summary, error] {
+    defer record(trace, "defer")
+    value := Summary{
+        Negative: mark(trace, "before", 1),
+        Values: []int{
+            match m {
+                Mode::Off => 0,
+                Mode::Count(_) => checked(trace, ok)?,
+            },
+            mark(trace, "after", 2),
+        },
+    }
+    return Result[Summary, error]::Ok(value)
+}
+```
+
+此例中的 `record`、`mark`、`checked` 是验收夹具：分别记录事件、记录后返回值、
+记录后返回 `Result[int,error]`。checked 失败时只见 before/checked/defer，不执行 after
+或最后的成功返回。成功时各事件一次且顺序保持；scrutinee 一次、guard 有序、只执行
+选中 arm。map key/value 和嵌套 literal 的调用/receive 顺序复用现有 propagation 规则，
+不承诺 Go 未规定的普通读取与非调用 panic 的额外全序。
+
+编译期 atom 包装必须在输出 Go 前消除，不能留下改变行为的 IIFE、额外用户函数帧或
+正常失败 panic。`?` 退出最近用户函数；真实闭包保留自己的退出边界。既有 statement
+match 的 return/break/continue、用户 defer、panic/direct recover 与 goto 不因本片改变。
+短路 RHS 的完整 prelude 留在原条件分支。无效 enum 在 guard/所选业务 arm 副作用前
+拒绝，先前已完成的外层调用效果保留。既有索引赋值继续操作原存储，目标操作数求值一次，
+RHS 之后发生 bounds/nil 写入检查；本片不扩展复杂 LHS。
+
+**U04：以下是真实类型错误，必须继续拒绝。**
+
+```goxide
+type Tiny struct { N uint8 }
+func overflow(m Mode) Tiny {
+    return Tiny{N: match m { Mode::Off => 256, Mode::Count(_) => 0 }}
+}
+func wrongBool(m Mode) bool {
+    return !(match m { Mode::Off => 1, Mode::Count(_) => 0 })
+}
+func runtimeIndex(m Mode) [2]int {
+    return [2]int{(match m { Mode::Off => 0, Mode::Count(_) => 1 }): 3}
+}
+```
+
+另外必须拒绝不兼容 defined type、non-nilable 的全 nil arm、未知或重复 struct 字段、
+非法 map key 和只读权限擦除；不能为接受 composite 将原先不可寻址的表达式变成合法
+可写位置。错误须能定位原输入；没有证明的中间节点来源不能冒充精确原坐标。
+
+本片不接 `* & <-` 及读写引用相关一元组合、控制头、package initializer、多结果、
+复杂 LHS、block arm 与不可命名类型。这些仍为工程/表示账，不是语言禁令或获准延期。
+tuple/struct enum variant、原位 mut& 布局、blank/embedded、手写协议登记、serde adapters
+和公开 enum 入口规则不在此定约。出现必须新定语义的例子，单独说明输入、预期冲突及
+候选行为，交回用户选择，不靠放宽或永久拒绝掩盖。
+
+端到端验收须走实际 CLI：JSON → 现有 closed enum → unary/composite match →
+含 slice 的业务对象 → 现有 Clone 并修改副本 → Debug → JSON。证明原对象不变、nil/empty
+保留（JSON 沿其既有规范）、错误 cause/path 及失败后无后续副作用；生成模块独立 race/vet
+和重复输出确定性。另有独立黑盒审查、准确源码完整 Mac race/vet/design、仓内 CLI/WASM
+网站全矩阵及新例。更新 compiler pin/digest 时与工具提交、最终文档提交分开记录。

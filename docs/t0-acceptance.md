@@ -971,3 +971,25 @@ Linux未运行、网站未部署，精确提交的托管CI状态另记，不由�
 [交付报告](reviews/website-validation-reproducibility-20261006.md)。
 报告后续追加属于文档/证据提交，不能混同已测工具身份；catalog 不滚动自引用 hash。
 A04 unary/composite match 另批实施；Linux/托管 CI 未验证，网站未部署，公开库 ABI 未改。
+
+
+## A04 unary/composite 单值 match 验收（2026-10-06，实施前）
+
+基线 `2cd3b71e4cdeff0fe8ea9ae0a2f460ac52ee416d`，独立分支 `feat/match-unary-composite`。
+按 [RFC0009 本批合同](rfcs/0009-match.md#unarycomposite-单值-match2026-10-06实施前合同)
+先提交文档，再实现；本节是要求，不表示已通过。
+
+| 场景 | 黑白验收要求 |
+| --- | --- |
+| unary / composite 正例 | + - ! ^；struct/slice/array/map 字段、元素及合法嵌套；return/局部/赋值/已有调用和 arm 组合 |
+| 真实类型 | 实际字段/元素/参数身份，alias/local/nominal、uint64 runtime shift、typed nil；不以 any 擦除 |
+| 应拒绝类型错误 | overflow、bool/numeric 错用、不同 defined type、non-nilable nil、未知/重复字段、非法 map key、运行时 array index、权限擦除 |
+| 次数和顺序 | scrutinee/guard/选中 arm 一次；literal key/value/元素调用顺序，短路、invalid enum 检查时点 |
+| 失败与控制流 | ? 最近用户函数、后续 field/element 不执行；真实闭包、return/break/continue/defer/panic/direct recover/goto 不换语义，无运行时 IIFE |
+| 原有 place 行为 | index LHS 保存原存储、一次求值、RHS 后写入检查；失败无写入 |
+| 真实业务 | JSON→enum→match→含 slice 对象→Clone/Debug→JSON；原值不变，nil/empty、cause/path、成功/失败均执行 |
+| 交付 | 先行合同、基线红测、准确源码独立审查、生成模块 race/vet/确定性、完整 Mac race/vet/design、仓内网站矩阵、新例和错误恢复 |
+
+已有网站 97 fixture/10 示例保留并追加本片覆盖；旧编译器不支持的新语法不能冒充旧/新
+成功输出对照。compiler pin、网站/工具提交、最终报告提交分别记录，普通分支 push 后
+核对本地/fetch/远端 SHA。未执行 Linux/托管 CI 不称通过，不部署或改变公开库 ABI。

@@ -246,7 +246,8 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		safe := consumer(t, singleExternalPlain)
 		packagesWrite(t, safe, "poison.gox", "package main\nthis is invalid source\n")
 		execute(t, outside, filepath.Join(safe, "app.gox"), "7\n", nil)
-		deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), safe)
+		msg = deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), safe)
+		singleExternalContains(t, msg, "poison.gox:2:1:", "expected declaration, found this")
 	})
 	t.Run("internal-and-public-facade", func(t *testing.T) {
 		lib := filepath.Join(t.TempDir(), "library")
@@ -260,7 +261,7 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 		bad := consumer(t, "package main\nimport h \"a06.example/lib/internal/hidden\"\nfunc main(){_=h.Get()}\n")
 		rejected := func(path string) {
 			msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), path)
-			singleExternalContains(t, msg, "internal")
+			singleExternalContains(t, msg, "app.gox:2:", "internal package is not accessible from a06.example/app: a06.example/lib/internal/hidden")
 		}
 		rejected(filepath.Join(bad, "app.gox"))
 		link := filepath.Join(lib, "tools/linked.gox")
@@ -272,7 +273,7 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 		execute(t, outside, filepath.Join(facade, "app.gox"), "8\n", nil)
 		enhanced := consumer(t, "package main\nimport a \"a06.example/lib/api\"\nfunc main(){var n int=match a.Get(){a.Public::Value(n)=>n};_=n}\n")
 		msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "bad.go"), filepath.Join(enhanced, "app.gox"))
-		singleExternalContains(t, msg, "internal-origin")
+		singleExternalContains(t, msg, "enum syntax through an internal-origin alias is not yet supported", "origin a06.example/lib/internal/hidden")
 	})
 	t.Run("metadata-validation", func(t *testing.T) {
 		input := consumer(t, "package main\nimport m \"a06.example/lib/model\"\nfunc main(){_=m.Plain()}\n")
@@ -285,21 +286,21 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 			name, want string
 			change     func(map[string]any)
 		}{
-			{"artifact-version", "version", func(v map[string]any) { v["ArtifactVersion"] = 99 }},
-			{"schema", "version", func(v map[string]any) { v["Metadata"].(map[string]any)["Version"] = 99 }},
-			{"package", "package path", func(v map[string]any) { v["Metadata"].(map[string]any)["Path"] = "wrong.example/model" }},
-			{"marker", "marker", func(v map[string]any) {
+			{"artifact-version", "unsupported metadata version", func(v map[string]any) { v["ArtifactVersion"] = 99 }},
+			{"schema", "unsupported metadata version", func(v map[string]any) { v["Metadata"].(map[string]any)["Version"] = 99 }},
+			{"package", "metadata package path mismatch", func(v map[string]any) { v["Metadata"].(map[string]any)["Path"] = "wrong.example/model" }},
+			{"marker", "metadata marker digest mismatch", func(v map[string]any) {
 				v["Metadata"].(map[string]any)["Enums"].([]any)[0].(map[string]any)["Validator"] = "PretendValidator"
 			}},
-			{"file-set", "source set", func(v map[string]any) { v["Files"] = map[string]any{} }},
-			{"file-hash", "source content", func(v map[string]any) {
+			{"file-set", "selected Go source set mismatch", func(v map[string]any) { v["Files"] = map[string]any{} }},
+			{"file-hash", "Go source content mismatch: model.go", func(v map[string]any) {
 				for k := range v["Files"].(map[string]any) {
 					v["Files"].(map[string]any)[k] = "bad"
 					break
 				}
 			}},
-			{"content", "configuration", func(v map[string]any) { v["Content"] = "stale" }},
-			{"dependency-set", "dependency set", func(v map[string]any) { v["Dependencies"] = map[string]any{} }},
+			{"content", "package source closure or build configuration changed", func(v map[string]any) { v["Content"] = "stale" }},
+			{"dependency-set", "dependency set mismatch", func(v map[string]any) { v["Dependencies"] = map[string]any{} }},
 		}
 		reject := func(t *testing.T, want string) {
 			t.Helper()
@@ -312,7 +313,7 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 						dest += ".go"
 					}
 					msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, arg)
-					singleExternalContains(t, msg, "metadata", "app.gox:2:", want)
+					singleExternalContains(t, msg, "enum metadata missing, stale or wrong package for a06.example/lib/model:", "app.gox:2:8:", want)
 				})
 			}
 		}
@@ -339,7 +340,7 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 				t.Fatal(err)
 			}
 			defer os.WriteFile(path, original, 0600)
-			reject(t, "cannot read")
+			reject(t, "cannot read .goxide.enums.json:")
 		})
 		t.Run("stale-source", func(t *testing.T) {
 			p := filepath.Join(library, "model/model.go")
@@ -351,7 +352,7 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 				t.Fatal(err)
 			}
 			defer os.WriteFile(p, b, 0600)
-			reject(t, "source content")
+			reject(t, "Go source content mismatch: model.go")
 		})
 	})
 	t.Run("canonical-source-rehashed", func(t *testing.T) {
@@ -504,7 +505,7 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 		packagesWrite(t, dir, "app.gox", "package main\nimport s \"github.com/goxide-lang/std/sum\"\nfunc main(){var v s.Option[int];_=v}\n")
 		before := singleExternalSnapshot(t, dir)
 		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), filepath.Join(dir, "app.gox"))
-		singleExternalContains(t, msg, "github.com/goxide-lang/std")
+		singleExternalContains(t, msg, "app.gox:2:8:", "cannot find module providing package github.com/goxide-lang/std/sum", "import lookup disabled by -mod=readonly")
 		singleExternalUnchanged(t, dir, before)
 	})
 	t.Run("existing-file-boundaries", func(t *testing.T) {

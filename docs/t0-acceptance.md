@@ -929,3 +929,22 @@ new($x?) 合成节点诊断显示 unmapped/无栈，与基线同类 A03 控制�
 跨包同名文件的不同 owner、多个 ?、nested、enum 和原生 Go 真实错误均有证据。
 具体改善及仍未关闭的 A01/A03 场景见[交付报告](reviews/macro-synthetic-origin-20261006.md)。
 Linux 未验证，网站未部署；查不到的精确提交托管 CI 不算通过。
+
+
+## A03 AST 证据模型分阶段验收（2026-10-06，实施前合同）
+
+依据 [RFC0018 的 AST 证据合同](rfcs/0018-lowering-contract.md#a03-ast-变换的证据快照与生成节点2026-10-06实施合同)。
+基线 `f5b6ce658e976d4d5e951e1bb7d3ce4aaea14be1`，分支 `fix/generated-ast-provenance`；
+此处是验收要求，交付记录须另附实际结果，不能把模型或概念验证当作全部测试通过。
+
+| 层次 | 必须证明 |
+| --- | --- |
+| registry | 变换前快照不受原 Map/AST 后续变化影响；自有 token 与复合 Pos 区分；改名无伪点；原始/未知节点不可被生成登记覆盖；冲突失败关闭 |
+| AST→print | 比较完整子字段角色及相关语义标量；重复文字、错 operator/ellipsis、foreign FileSet/同偏移不可蒙混通过；可证明 punctuation 保留，歧义不猜 |
+| frontend | builtin alias/local/import 改名不清空无关点和完整栈；新 token 只带已证明 context；原始精确点仍正确 |
+| questionFlow | expr/effect/frame 共享构造；原 operand 身份保留；生成值/本次 scaffold 只继承 marker 的完整链；不标共享顶层 helper |
+| 外部结果 | 单/多文件、跨包同名文件、nested/sibling、LF/CRLF、enum 与多 ?；合成点 Origin=nil，完整链 owner/顺序准确；非宏和未知内层不被误标 |
+| 行为/运行时 | 合法输入对照生成 Go/原生执行，次数、顺序、短路、? 最近帧、guard/panic/recover及权限不变；真实 Go stderr及生成文件过滤保持 |
+| 交付 | 独立审查、准确源码的完整 Mac race/vet/design、CLI/WASM全旧矩阵及新差分、错误后恢复；普通分支 push/fetch/远端准确 SHA；Linux/CI 无证据不称通过 |
+
+A01 未在本片扩展。A03 冗余括号、refs、共享 helper/其他临时节点等余项继续按可证明边界列明。

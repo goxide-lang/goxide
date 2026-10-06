@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/hxsf/goxide/internal/sourcemap"
-	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/scanner"
@@ -102,13 +101,9 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 	}
 	var funcs []fn
 	functions := map[int]int{}
+	typeFunctions := compositeFunctionTypes(src, ts, pairs)
 	for i, t := range ts {
-		if t.k != token.FUNC {
-			continue
-		}
-		// In []func() T / [N]func() T / map[K]func() T, the brace
-		// after the signature belongs to the composite, not a function body.
-		if i > 0 && ts[i-1].k == token.RBRACK {
+		if t.k != token.FUNC || typeFunctions[t.a] {
 			continue
 		}
 		j := i + 1
@@ -139,15 +134,9 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 			continue
 		}
 		header := string(src[t.a:ts[j].a])
-		var ft *ast.FuncType
-		if ex, e := parser.ParseExpr(header + "{}"); e == nil {
-			if fl, ok := ex.(*ast.FuncLit); ok {
-				ft = fl.Type
-			}
-		} else if file, e := parser.ParseFile(token.NewFileSet(), "", "package p\n"+header+"{}", 0); e == nil {
-			if d, ok := file.Decls[0].(*ast.FuncDecl); ok {
-				ft = d.Type
-			}
+		ft, adjustment := functionSignature(header)
+		if ft != nil {
+			markFunctionTypes(ft, ft, t.a+adjustment, typeFunctions)
 		}
 		result := ""
 		if ft != nil && ft.Results != nil && len(ft.Results.List) == 1 && len(ft.Results.List[0].Names) <= 1 {

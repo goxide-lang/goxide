@@ -27,7 +27,7 @@ func compileCompositeMatch(source string) ([]byte, error) {
 	}
 	enum, err := enums.Lower("composite.gox", normalized)
 	if err != nil {
-		return nil, err
+		return normalized, err
 	}
 	imp := typecheck.NewImporter("input.gox")
 	out, err := propagate.Lower("composite.gox", enum.Source, propagate.Config{Importer: imp, Families: enum.Enums})
@@ -61,6 +61,18 @@ func contextual(m Mode,shift uint)Entry{
 }
 func elision(m Mode)[]*Entry{return []*Entry{{N:match m{Mode::Off=>9,_=>0}},{Values:Words{match m{Mode::Off=>4,_=>0}}}}}
 func functions(m Mode)[]func()int{return []func()int{match m{Mode::Off=>func()int{return -match m{Mode::Off=>3,_=>4}},_=>func()int{return 0}}}}
+func nativeFunction()*func()int{f:=func()int{return 7};return &f}
+func pointerFunctions(m Mode)int{
+ a:=[]*func()int{match m{Mode::Off=>nativeFunction(),_=>nil}}
+ b:=map[int]*func()int{1:match m{Mode::Off=>nativeFunction(),_=>nil}}
+ c:=[1]*func()int{match m{Mode::Off=>nativeFunction(),_=>nil}}
+ d:=[](*func()int){match m{Mode::Off=>nativeFunction(),_=>nil}}
+ e:=map[*func()int]int{(match m{Mode::Off=>nativeFunction(),_=>nil}):7}
+ f:=[](func()int){match m{Mode::Off=>*nativeFunction(),_=>nil}}
+ sum:=(*a[0])()+(*b[1])()+(*c[0])()+(*d[0])()+f[0]();for k,v:=range e{sum+=(*k)()+v};return sum
+}
+func factory(m Mode)func()int{return match m{Mode::Off=>func()int{return -match m{Mode::Off=>8,_=>0}},_=>func()int{return 0}}}
+func derefClosure(m Mode)int{return *func()*int{v:=match m{Mode::Off=>6,_=>0};return &v}()}
 func pendingName(m Mode)[]X__goxide_match_expr_pendingY{return []X__goxide_match_expr_pendingY{match m{Mode::Off=>4,_=>0}}}
 func armLiteral(m Mode)[]int{return match m{Mode::Off=>[]int{match m{Mode::Off=>3,_=>4}},_=>[]int{0}}}
 func nested(m Mode)[][]Word{return [][]Word{{match m{Mode::Off=>5,_=>0}}}}
@@ -77,7 +89,7 @@ type Closure struct{A int;Run func()Result[[]int,string];B int}
 func closure(m Mode)int{x:=Closure{A:match m{Mode::Off=>mark("F",1),_=>0},Run:func()Result[[]int,string]{defer func(){trace+="C"}();v:=[]int{match m{Mode::Off=>get(false)?,_=>0},mark("Z",2)};return Result[[]int,string]::Ok(v)},B:match m{Mode::Off=>mark("L",2),_=>0}};_=x.Run();return 8}
 func iface(m Mode)interface{String()string}{return match m{Mode::Off=>nil,_=>nil}}
 func recoverDirect(m Mode)(out bool){defer func(){out=(match m{Mode::Off=>recover()!=nil,_=>false})}();panic("original")}
-func main(){m:=Mode::Off;v:=contextual(m,63);if v.N!=Word(1)<<63||v.Bits!=^Word(0)||v.Negative!=-7||!v.B||v.P!=nil||v.Values[0]!=v.N||v.Mapping[v.N]!=2{panic(v)};if functions(m)[0]()!=-3||pendingName(m)[0]!=4||armLiteral(m)[0]!=3||nested(m)[0][0]!=5||array(m)[2]!=7||positional(m).X!=6||!positional(m).Y||peer(m,63)!=(Word(1)<<63)+1{panic("contexts")};p:=elision(m);if p[0].N!=9||p[0]==p[1]||p[1].Values[0]!=4{panic("elision")};collect(m,true);if trace!="AQBD"{panic(trace)};trace="";collect(m,false);if trace!="AQD"{panic(trace)};trace="";x:=mapping(m);if trace!="KVLW"||x[1]!=2||x[3]!=4{panic(trace)};trace="";if short(m)||trace!=""||closure(m)!=8||trace!="FLQC"||iface(m)!=nil||!recoverDirect(m){panic("control")};fmt.Print("ok")}
+func main(){m:=Mode::Off;v:=contextual(m,63);if v.N!=Word(1)<<63||v.Bits!=^Word(0)||v.Negative!=-7||!v.B||v.P!=nil||v.Values[0]!=v.N||v.Mapping[v.N]!=2{panic(v)};if pointerFunctions(m)!=49||factory(m)()!=-8||derefClosure(m)!=6||functions(m)[0]()!=-3||pendingName(m)[0]!=4||armLiteral(m)[0]!=3||nested(m)[0][0]!=5||array(m)[2]!=7||positional(m).X!=6||!positional(m).Y||peer(m,63)!=(Word(1)<<63)+1{panic("contexts")};p:=elision(m);if p[0].N!=9||p[0]==p[1]||p[1].Values[0]!=4{panic("elision")};collect(m,true);if trace!="AQBD"{panic(trace)};trace="";collect(m,false);if trace!="AQD"{panic(trace)};trace="";x:=mapping(m);if trace!="KVLW"||x[1]!=2||x[3]!=4{panic(trace)};trace="";if short(m)||trace!=""||closure(m)!=8||trace!="FLQC"||iface(m)!=nil||!recoverDirect(m){panic("control")};fmt.Print("ok")}
 `
 	out, err := compileCompositeMatch(source)
 	if err != nil {

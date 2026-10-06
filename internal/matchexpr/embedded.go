@@ -22,6 +22,11 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 	if !c.contains(a, b) {
 		return c.copy(ts[a].a, ts[b-1].b), nil
 	}
+	// A parsed composite owns its entire type. In particular, a pointer in
+	// []*func() T is a type operator, not a multiplication expression root.
+	if value, matched, err := c.literal(a, b, context); matched {
+		return value, err
+	}
 	split, prec := -1, 100
 	for i := a; i < b; i++ {
 		if end, ok := c.pairs[i]; ok {
@@ -74,9 +79,6 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 		}
 		value, err := c.expression(a+1, b, context, childKind)
 		return ts[a].k.String() + "(" + value + ")", err
-	}
-	if value, matched, err := c.literal(a, b, context); matched {
-		return value, err
 	}
 	// Find the final call suffix, independent of callee surface syntax. The
 	// actual signature and parameter identity are resolved by go/types later.

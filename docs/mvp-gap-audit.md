@@ -79,7 +79,7 @@ MVP 归属以 [决策登记](design/decisions.md) D14/D21–D23/D27–D36、RFC 
 
 | ID / 建议标题 | 分类与范围依据 | 当前差距 / 最小用例 | 依赖与验收标准 |
 | --- | --- | --- | --- |
-| A01 常用声明宏绑定与 builtin 卫生收口 | E（单文件 importer 与直接 append 子项已交付），D14/D21；[宏边界](../internal/macros/README.md)、[append 验收](../tests/acceptance/macro_append_test.go) | 已复用前端离线/WASM importer；直接 append、slice/string 展开和现有重复捕获已接通，保留原生求值、存储与 ? 最近函数语义。make/new/copy、imported type/var、generic helper 仍未收口；定义点指向 builtin 时，调用包级同名声明及覆盖展开点的局部 type 名称仍拒绝，A01 不关闭 | 已验定义点函数/局部绑定、调用点局部/import 遮蔽、命名 slice、容量复用/增长、重叠、nil/空、条件日志、? 失败跳过后续实参、跨文件和重复输出；后续分 builtin/类型/函数/变量小片，不通过改用户类型身份绕过 |
+| A01 常用声明宏绑定与 builtin 卫生收口 | E（单文件 importer、直接 append/copy 子项已交付），D14/D21；[宏边界](../internal/macros/README.md)、[copy 验收](../tests/acceptance/macro_copy_test.go) | 已复用前端离线/WASM importer；直接 append/copy 接通，保留原生求值、存储、? 最近函数和既有只读权限规则。make/new、imported type/var、generic helper 仍未收口；定义点为 builtin 时调用包级同名及覆盖展开点 local type 名称仍拒绝，A01 不关闭 | 已验定义点/模板局部、调用点局部/import、命名 slice、重叠/浅共享、nil/空/string、条件禁用、? 失败无写入、defer 时序、只读标量复制及权限拒绝、跨文件与重复输出；其余分片保真实类型身份 |
 | A02 常见模式宏及 log/tracing 场景矩阵 | E+D，已批准常见宏/日志场景；RFC0011 的完整 grammar U09 未冻结 | nested/optional repetition、广义 tt/type/stmt/item fragments 尚无；现有 event_if 是惰性条件日志，未提供完整 tracing span 语义 | 先把具体调用形状及歧义规则定清，保留当前有限 expr/ident/tt；嵌套重复长度/零次/预算拒绝，disabled 日志不求值，source span 保留。span/subscriber API 无明确授权证据时标待确认 |
 | A03 完整宏→降低诊断来源链 | E（已交付首片），RFC0011/0018；[source tests](../tests/acceptance/source_mapping_test.go)、[诊断收口](reviews/macro-derive-diagnostics-20261005.md) | 已修模板 AST token、`?` 前处理来源/栈、具体 derive 行级原始位置与 enum 阶段错位；单文件 importer 复用随 A01 收口；捕获生成括号、appended helper alias、合成传播节点及部分后端诊断仍 generated/unmapped，A03 不关闭 | 从真实 Go 编译失败倒查定义/调用/捕获位置；重复 token、多层、CRLF、跨文件保身份；真正无法证明的合成节点保留 unmapped |
 | A04 match 普通表达式组合长尾 | E，D31 明确工程欠账；[matchexpr](../internal/matchexpr/README.md) | `return -(match ...)`、`S{N:match ...}`、控制头、package initializer、复杂 LHS；builtin/type-conversion call 未接入 | 从已有 prelude/value 扩展，逐上下文正反例；副作用一次、短路、lhs 先求值后写入/panic、goto、? 失败跳后续、direct recover 无额外帧；不一次新增所有模式 |
@@ -199,3 +199,22 @@ MVP 归属以 [决策登记](design/decisions.md) D14/D21–D23/D27–D36、RFC 
 
 只关闭上述具体子项，A01/RFC0011 整项及 MVP 仍开放；blank/embedded、完整 trait、
 borrow checker、待定 serde adapters 未在本片实施。
+
+
+## 2026-10-06 接续：基线整树补验与 A01 直接 copy
+
+上一片交付 `1cf4b58` 已用完整缓存补跑一次整树 race：535 项顶层/1117 子测试、
+17 个测试包通过，无失败或跳过；先前离线缓存失败已在整树中消除。
+新片从该提交建立 `feat/macro-copy-builtin`，先写 RFC 白黑例，代码提交
+`49c428767de35259ce66d4e50887725f2fc0b85f`。
+[本批交付、精确验证与独立审查](reviews/macro-copy-builtin-20261006.md)记录原生 Mac
+完整整树 544 项顶层通过、vet/design、真实 CLI 和 CLI/WASM 差分。Linux 未运行。
+
+| 子项 | 状态 | 完成 / 剩余 |
+| --- | --- | --- |
+| A01 直接 copy | C | 原生计数/存储/重叠/string/浅共享、绑定、条件/?/defer时序；已有只读标量来源许可及目标/指针/容器元素拒绝保持 |
+| A01 其他 builtin/绑定 | E | make/new、调用包级同名/覆盖展开点 local type、imported type/var/generic helper；前节 append 交付时列出的 copy 缺口在本节关闭 |
+| A03 完整来源 | E | 捕获合成括号、helper alias、传播节点及 refs 中间坐标等剩余继续保留；没有伪造源码精度 |
+
+只关闭直接 copy 子项，A01/RFC0011/MVP 整项不关闭。托管 CI 未查到的状态与本地验证
+分开记录；没有引入新 trait/borrow、blank/embedded 或 serde adapters 规则。

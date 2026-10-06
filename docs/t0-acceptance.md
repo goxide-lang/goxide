@@ -864,3 +864,23 @@ web race/vet、26 卡片/10 catalog 负例及桌面/移动/失败恢复通过。
 
 A01 仅直接 append 子项完成；其他 builtin/绑定、A03 完整来源链仍待收口，RFC0011 与
 完整 MVP 未关闭。Linux 未重跑；没有借此实施完整 trait/borrow、blank/embedded 或 Proposed adapters。
+
+
+## 基线整树补验与 A01 宏模板直接 copy（2026-10-06）
+
+上节提交 `1cf4b58` 在固定依赖完整缓存下重新执行一次全树 race，535 顶层/1117 子测试
+全部通过，17 个测试包通过，无失败或跳过；先前缓存失败用例也在该整树内通过。
+随后在独立 `feat/macro-copy-builtin` 先规范后实现直接 copy，源码
+`49c428767de35259ce66d4e50887725f2fc0b85f` 的完整整树 race 544 项顶层全部通过。
+Mac Go 1.27.1 darwin/arm64，全树 vet、完整设计 13 个 Go 机制命令、真实 CLI 生成模块
+race/vet/run、19 项新增 copy 与全部旧 CLI/WASM 差分、web race/vet/catalog 通过。
+
+复制保持原生返回计数、存储、重叠、命名 slice、nil/空/string及指针浅共享；捕获次数、
+? 最近用户帧与失败不写入、defer 参数/执行时序、条件关闭零求值有真实运行证据。
+只读标量来源允许，目标写入及指针/容器元素权限逃逸继续拒绝，未引入新借用分析。
+独立审查 8 对普通copy/宏权限对照和额外真实执行无阻断。
+
+详细日志、源码身份、网站隔离 overlay/LICENSE 适配、CLI/WASM 类型阶段区分及基线
+CI 查询见[本批交付报告](reviews/macro-copy-builtin-20261006.md)。未查到的托管 CI 不记为
+通过，也不将空 contexts 的聚合 pending 视作运行中；Linux 未运行、网站未部署。
+A01 只再关闭直接 copy；make/new、其余绑定与 A03 完整来源仍开放，MVP 未完成。

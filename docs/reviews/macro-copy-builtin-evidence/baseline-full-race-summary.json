@@ -1,0 +1,121 @@
+{
+  "compilerCommit": "1cf4b58f628bca028cda12ba9b7cde651b644060",
+  "command": "go test -race -count=1 -timeout 30m -json ./...",
+  "exitCode": 0,
+  "environment": {
+    "platform": "darwin/arm64",
+    "go": "1.27.1",
+    "GOTOOLCHAIN": "local",
+    "GOMAXPROCS": "4",
+    "TMPDIR": "task-local real directory",
+    "GOMODCACHE": "task cache, complete fixed dependency source graph"
+  },
+  "startedAt": "2026-10-07T00:49:02.173029+08:00",
+  "endedAt": "2026-10-07T00:59:37.952661+08:00",
+  "topLevelTests": {
+    "pass": 535
+  },
+  "subtests": {
+    "pass": 1117
+  },
+  "packageResults": {
+    "skip": 5,
+    "pass": 17
+  },
+  "packages": {
+    "github.com/hxsf/goxide/internal/buildconfig": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/formatting": {
+      "result": "pass",
+      "elapsedSeconds": 2.142
+    },
+    "github.com/hxsf/goxide/internal/deriveextras": {
+      "result": "pass",
+      "elapsedSeconds": 2.885
+    },
+    "github.com/hxsf/goxide/internal/enums": {
+      "result": "pass",
+      "elapsedSeconds": 7.346
+    },
+    "github.com/hxsf/goxide/internal/equality": {
+      "result": "pass",
+      "elapsedSeconds": 20.029
+    },
+    "github.com/hxsf/goxide/internal/buildscript": {
+      "result": "pass",
+      "elapsedSeconds": 23.953
+    },
+    "github.com/hxsf/goxide/internal/matchexpr": {
+      "result": "pass",
+      "elapsedSeconds": 2.912
+    },
+    "github.com/hxsf/goxide/internal/naming": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/printing": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/project": {
+      "result": "pass",
+      "elapsedSeconds": 1.791
+    },
+    "github.com/hxsf/goxide/internal/macros": {
+      "result": "pass",
+      "elapsedSeconds": 9.586
+    },
+    "github.com/hxsf/goxide/internal/propagate": {
+      "result": "pass",
+      "elapsedSeconds": 6.643
+    },
+    "github.com/hxsf/goxide/internal/refs": {
+      "result": "pass",
+      "elapsedSeconds": 3.1
+    },
+    "github.com/hxsf/goxide/internal/scripttrust": {
+      "result": "pass",
+      "elapsedSeconds": 1.3719999999999999
+    },
+    "github.com/hxsf/goxide/internal/testdeps": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/sourcemap": {
+      "result": "pass",
+      "elapsedSeconds": 1.33
+    },
+    "github.com/hxsf/goxide/runtime": {
+      "result": "skip",
+      "elapsedSeconds": 0
+    },
+    "github.com/hxsf/goxide/internal/typecheck": {
+      "result": "pass",
+      "elapsedSeconds": 1.645
+    },
+    "github.com/hxsf/goxide/tests/prototype": {
+      "result": "pass",
+      "elapsedSeconds": 9.205
+    },
+    "github.com/hxsf/goxide/internal/frontend": {
+      "result": "pass",
+      "elapsedSeconds": 49.416
+    },
+    "github.com/hxsf/goxide/tests/acceptance": {
+      "result": "pass",
+      "elapsedSeconds": 367.466
+    },
+    "github.com/hxsf/goxide/cmd/goxide": {
+      "result": "pass",
+      "elapsedSeconds": 635.779
+    }
+  },
+  "failedTests": [],
+  "skippedTests": [],
+  "rawLogBytes": 2169979,
+  "rawLogSHA256": "9203cd4e3202a66fcece40bd1a58ffa69bec5dd90e62c81ed7e021bd7379c461",
+  "rawStderrSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "limits": "Actual Mac native run. No Linux execution or hosted CI success is inferred."
+}

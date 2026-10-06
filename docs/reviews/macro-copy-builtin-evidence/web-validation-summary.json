@@ -1,0 +1,199 @@
+{
+  "codeCommit": "49c428767de35259ce66d4e50887725f2fc0b85f",
+  "environment": {
+    "os": "darwin",
+    "arch": "arm64",
+    "go": "1.27.1",
+    "node": "26.9.0",
+    "playwright": "1.58.2",
+    "chromium": "145.0.7632.6"
+  },
+  "build": "passed with isolated Homebrew LICENSE path adaptation; not an unmodified website build",
+  "webRace": "passed",
+  "webVet": "passed",
+  "browser": {
+    "examples": 10,
+    "parity": "byte-for-byte",
+    "goResultChecks": [
+      "error_only",
+      "typed_nil",
+      "reject_wrong_type",
+      "pointer_error",
+      "named_error",
+      "slice_error",
+      "reject_value_error",
+      "reject_arity",
+      "reject_legacy_cfg"
+    ],
+    "diagnosticChecks": [
+      "reject_macro_selector",
+      "reject_macro_prepared",
+      "reject_derive_origin",
+      "reject_enum_derive_origin",
+      "macro_imported_helper"
+    ],
+    "appendChecks": {
+      "positive": [
+        "macro_append_native",
+        "macro_append_shadow",
+        "macro_append_string",
+        "macro_append_question",
+        "macro_append_function"
+      ],
+      "frontendReject": [
+        "reject_macro_append_definition_var",
+        "reject_macro_append_definition_const",
+        "reject_macro_append_definition_type",
+        "reject_macro_append_definition_import",
+        "reject_macro_append_value",
+        "reject_macro_append_named_type"
+      ],
+      "nativeTypeReject": [
+        "reject_macro_append_slice",
+        "reject_macro_append_element",
+        "reject_macro_append_arity",
+        "reject_macro_append_ellipsis"
+      ],
+      "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native"
+    },
+    "copyChecks": {
+      "positive": [
+        "macro_copy_native",
+        "macro_copy_string",
+        "macro_copy_shadow",
+        "macro_copy_function",
+        "macro_copy_question",
+        "macro_copy_readonly_source"
+      ],
+      "frontendReject": [
+        "reject_macro_copy_definition_var",
+        "reject_macro_copy_definition_const",
+        "reject_macro_copy_definition_type",
+        "reject_macro_copy_definition_import",
+        "reject_macro_copy_value",
+        "reject_macro_copy_named_type",
+        "reject_macro_copy_readonly_target",
+        "reject_macro_copy_readonly_pointer"
+      ],
+      "nativeTypeReject": [
+        "reject_macro_copy_slice",
+        "reject_macro_copy_element",
+        "reject_macro_copy_string_rune",
+        "reject_macro_copy_arity",
+        "reject_macro_copy_ellipsis"
+      ],
+      "nativeTypeRejectWasm": "transpilation parity only; final Go compilation is native"
+    },
+    "checks": [
+      "edit",
+      "error recovery",
+      "rapid edits",
+      "copy",
+      "32 KiB",
+      "unsupported import",
+      "XSS",
+      "keyboard",
+      "390px",
+      "hard timeout",
+      "interrupt",
+      "reset",
+      "no external requests"
+    ],
+    "errors": []
+  },
+  "catalog": {
+    "url": "http://127.0.0.1:18084",
+    "compilerCommit": "49c428767de35259ce66d4e50887725f2fc0b85f",
+    "websiteCommit": "49c428767de35259ce66d4e50887725f2fc0b85f",
+    "wasmSha256": "613977e397eba3a2f7ec75504755c66687a51b906e00f98f8bc9e6371efb4022",
+    "metadataSchema": 8,
+    "cards": 26,
+    "examples": 10,
+    "negativeExamples": 10,
+    "filters": true,
+    "permalinks": true,
+    "snapshots": true,
+    "mobile390": true,
+    "clipboard": true,
+    "parity": "byte-for-byte",
+    "errors": [],
+    "consoleErrors": [],
+    "network": "same-origin GET only"
+  },
+  "compilerDigest": "45aec417fcd3766749633def2fa92c8ad69ea660a224086f1c70afb8eb6c56e8",
+  "wasmSha256": "613977e397eba3a2f7ec75504755c66687a51b906e00f98f8bc9e6371efb4022",
+  "frontendAndGoTypeBoundary": "8 copy frontend errors rejected identically by CLI/WASM, including readonly target and readonly pointer-element source; 5 ordinary Go type errors transpiled identically then rejected by native go build; browser does not execute final Go compiler",
+  "readonlyDiagnosticBoundary": "Existing refs.Finish generated/unmapped intermediate coordinates remain explicit; this batch does not close A03",
+  "nativePositiveRuntime": "All 6 copy positive fixtures passed real CLI run from unrelated cwd",
+  "qaInputs": "All QA and every old/new fixture match codeCommit byte-for-byte",
+  "productionBuildAndCatalog": "unchanged",
+  "dependencyInstall": "none in this batch; reused existing lockfile Playwright and installed Chromium",
+  "deployment": "none",
+  "linux": "not run",
+  "server": "stopped after QA",
+  "priorAppendAssets": "../macro-append-builtin/web-assets-a2c7300-preserved.zip",
+  "evidence": [
+    {
+      "path": "wasm-build.log",
+      "sha256": "de9b566c0b7d3bc692757a52c10e8fe35a80bb078f28e472f7b567de54118b9e"
+    },
+    {
+      "path": "browser-qa.log",
+      "sha256": "16eb94cfdd5c8f306e0c589ddf7b7d3ec0d06a75ab7260c9158f85992d454c2b"
+    },
+    {
+      "path": "catalog-qa.log",
+      "sha256": "ee178565292c3b34fefd28e836266000a7fda4604014209e262c67ebbfb89517"
+    },
+    {
+      "path": "web-race.log",
+      "sha256": "69f5a7c7cd887c8a6a774c65aaa86287a883d01c708f9f5e4111545319c85610"
+    },
+    {
+      "path": "web-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "local-wasm-identity.json",
+      "sha256": "201671ac03903105f78ab11ee1179cbeab362bdf9efdac8aff54978edc6400ad"
+    },
+    {
+      "path": "web-source-identity.json",
+      "sha256": "81eb98cc6ca4a452d7f11d4d5bcc6914a77bbfeb047d419b46e78cbaaad2591a"
+    },
+    {
+      "path": "homebrew-license-validation.patch",
+      "sha256": "0c75208fd39a4bb70df5aa7a0a7480bd8880c3836d6f9b2959bf7b3ac3399819"
+    },
+    {
+      "path": "website-native/results.json",
+      "sha256": "039ae692677f0f3f90e2e278aba3f2ef89540581724e503cada728be6f7a5b53"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "qa-artifacts/catalog-desktop.png",
+      "sha256": "c5d8f3f09db7cdd5a1c47593406715e0512bbcf2b7f7424f0a5dbd1f771bc535"
+    },
+    {
+      "path": "qa-artifacts/catalog-mobile-controls.png",
+      "sha256": "f1ca4351875976f2899564e232910005c9bea5ce7c2c690de549ad7f30992fd5"
+    },
+    {
+      "path": "qa-artifacts/catalog-mobile-example.png",
+      "sha256": "911754a2187d3719f904ff3e41d85d90b379cc4f545d2a044f64a77c3df4d0b3"
+    },
+    {
+      "path": "qa-artifacts/catalog-mobile.png",
+      "sha256": "22e09c64fd805b55aa498fdf11d6a336f2f6d8697274d6d9d930ad82b10e7297"
+    },
+    {
+      "path": "qa-artifacts/desktop.png",
+      "sha256": "03cdf7dd82a755ad4d218413ee341aed7df9f9598dbb17cf8a7147cdf855c67a"
+    },
+    {
+      "path": "qa-artifacts/mobile.png",
+      "sha256": "fdceb362c5299a2707825a0361d7c1675e2d181533ef1e77d503933dfcba9833"
+    }
+  ]
+}

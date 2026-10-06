@@ -1,0 +1,119 @@
+[
+  {
+    "case": "readonly_target",
+    "variant": "native",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_target-native.gox:11:26: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_target",
+    "variant": "macro",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_target-macro.gox:11:26: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_target_alias",
+    "variant": "native",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_target_alias-native.gox:11:42: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_target_alias",
+    "variant": "macro",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_target_alias-macro.gox:11:42: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_pointer_source",
+    "variant": "native",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_pointer_source-native.gox:13:12: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_pointer_source",
+    "variant": "macro",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_pointer_source-macro.gox:13:14: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_rows_source",
+    "variant": "native",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_rows_source-native.gox:13:12: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_rows_source",
+    "variant": "macro",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_rows_source-macro.gox:13:14: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_maps_source",
+    "variant": "native",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_maps_source-native.gox:13:12: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_maps_source",
+    "variant": "macro",
+    "expected": "readonly rejection",
+    "passed": true,
+    "diagnostic": "refs.Finish [generated/unmapped; intermediate coordinates]: /Users/hxsf/Documents/Codex/2026-10-06/task/validation/t0-next-1cf4b58/independent-review/readonly_maps_source-macro.gox:13:14: refs: readonly projection qualification would be erased; this boundary is unsupported"
+  },
+  {
+    "case": "readonly_scalar_source",
+    "variant": "native",
+    "expected": "accept",
+    "passed": true,
+    "diagnostic": ""
+  },
+  {
+    "case": "readonly_scalar_source",
+    "variant": "macro",
+    "expected": "accept",
+    "passed": true,
+    "diagnostic": ""
+  },
+  {
+    "case": "readonly_array_source",
+    "variant": "native",
+    "expected": "accept",
+    "passed": true,
+    "diagnostic": ""
+  },
+  {
+    "case": "readonly_array_source",
+    "variant": "macro",
+    "expected": "accept",
+    "passed": true,
+    "diagnostic": ""
+  },
+  {
+    "case": "readonly_source_deferred",
+    "variant": "native",
+    "expected": "accept",
+    "passed": true,
+    "diagnostic": ""
+  },
+  {
+    "case": "readonly_source_deferred",
+    "variant": "macro",
+    "expected": "accept",
+    "passed": true,
+    "diagnostic": ""
+  },
+  {
+    "case": "runtime storage/defer/question/shadow/readonly",
+    "passed": true,
+    "stdout": "copy independent runtime passed"
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "verdict": "no_blocking_findings",
+  "source_commit": "49c428767de35259ce66d4e50887725f2fc0b85f",
+  "review_scope": [
+    "Production builtin whitelist changes and existing marker restoration/reference checker integration",
+    "RFC0011 direct copy contract and macro README",
+    "Eight persistent unit tests plus migration of previous unsupported-copy assertions to clear",
+    "Real CLI acceptance including six generated runtime groups, readonly boundaries, native type errors and hygiene errors",
+    "Nineteen website fixtures and QA frontend-versus-native rejection classification"
+  ],
+  "production_assessment": "Two existing builtin dispatch lists now include copy. Template-local and definition-site real functions retain precedence. Builtin markers restore native copy, retaining int count, shallow element semantics, native storage, operand timing and defer behavior. Refs uses actual types.Builtin identity; the production change does not alter reference rules or add an alias/wrapper.",
+  "independent_native_validation": {
+    "environment": "Mac darwin/arm64 Go 1.27.1, local toolchain, offline locked module cache",
+    "readonly_pairs": 16,
+    "readonly_pairs_explanation": "Eight cases each compiled as ordinary native copy and macro transfer!: readonly target; target local alias; pointer source; nested slice source; map-element source; scalar source; array-of-scalars source; scalar source in deferred copy. Native and macro results agree in every pair. First five cases reject; last three accept.",
+    "runtime": "Real CLI generated Go followed by go run -race passed: independent writable copy of readonly scalars and value arrays; defer operand evaluation and retained source/destination slice headers while bindings change; defer observes source content mutation at return; dst?/src? four success/failure combinations preserve order and suppress writes; caller-local copy shadow; ordinary pointer and nested slice copies preserve sharing.",
+    "runtime_stdout": "copy independent runtime passed",
+    "evidence": ["results.json", "review_probes.py", "runtime.gox", "runtime.go", "runtime-execution.log"]
+  },
+  "persistent_test_assessment": "Unit/acceptance coverage matches the contract, including definition/caller shadow distinctions, crossed file imports, actual native errors, repetition multiplicity, nearest explicit closure frame, LF/CRLF, deterministic Go/maps and no deep copy. Acceptance uses only synthetic-argument cases for generated/unmapped assertions; arity, ellipsis and binding errors require precise template origin and macro stack. Existing refs failures retain explicitly labelled intermediate coordinates.",
+  "qa_assessment": "Six positive fixtures, eight frontend binding/readonly rejects and five native type rejects are separated. Frontend rejects require CLI/WASM diagnostic parity and error recovery. Native type rejects require identical generated Go followed by actual native go build rejection; reported output explicitly limits WASM to transpilation parity. No claim that browser execution performs final Go typechecking.",
+  "remaining_scope": "A01 other builtins/package and local-type shadows and A03 full source provenance remain open. Synthetic captured parentheses and refs intermediate-coordinate diagnostics are existing boundaries, not fixed by this slice.",
+  "limits": "No repository edits, tool installs, commits or pushes performed by the reviewer. Full-tree race/vet/design and browser execution are assigned to the parent/validation agents and were not repeated in this review. No Linux execution claimed."
+}

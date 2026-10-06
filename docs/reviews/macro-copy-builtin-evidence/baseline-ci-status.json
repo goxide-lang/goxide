@@ -1,0 +1,24 @@
+{
+  "repository": "goxide-lang/goxide",
+  "commit": "1cf4b58f628bca028cda12ba9b7cde651b644060",
+  "checkedAtUTC": "2026-10-06T16:50:12Z",
+  "combinedStatusConnector": {
+    "success": true,
+    "statuses": []
+  },
+  "actionsViaExistingGh": {
+    "exitCode": 1,
+    "httpStatus": 404,
+    "message": "Not Found"
+  },
+  "trackedWorkflowFilesAtCommit": [],
+  "conclusion": "No hosted CI found for this exact commit. Local validation is recorded separately; do not wait on aggregate pending with zero contexts.",
+  "credentialChanges": "none",
+  "independentReadOnlyLookupReportedInDelegation": {
+    "actionsRuns": 0,
+    "checkRuns": 0,
+    "commitStatusContexts": 0,
+    "commit": "1cf4b58f628bca028cda12ba9b7cde651b644060",
+    "aggregatePendingInterpretation": "No contexts: pending does not prove running CI."
+  }
+}

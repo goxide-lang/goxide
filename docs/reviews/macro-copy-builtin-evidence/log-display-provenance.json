@@ -1,0 +1,40 @@
+{
+  "normalization": "Display logs expand tabs to eight-column spaces and remove trailing whitespace only. Raw logs remain in the task validation directory. JSON summaries describe raw logs unless explicitly marked display.",
+  "changedFiles": [
+    {
+      "file": "copy-macros-before.log",
+      "rawBytes": 2316,
+      "rawSHA256": "2f64889b51928cc3fddd70c83deafab6438412c2866c5f94c8232b619dca214d",
+      "displayBytes": 2320,
+      "displaySHA256": "bf6ef4b59ef27adb9c20d9e0d3f57bfd1d7687f24b88a029d6aab0f3be9090e4"
+    },
+    {
+      "file": "copy-macros-race.log",
+      "rawBytes": 9131,
+      "rawSHA256": "71ba834efe58966f5825a40d261a48150d28b10281f5db65c2f8fa239146cc61",
+      "displayBytes": 9135,
+      "displaySHA256": "96b2e8a7c51ccb61c9929680cae177c0b8c5052d6400c84ac57ded067bfb52c9"
+    },
+    {
+      "file": "copy-acceptance-cli-race.log",
+      "rawBytes": 26321,
+      "rawSHA256": "ad4d982714816dd2327668bc24bfde08cb481f3154f17f5dc6d64eb5f897d315",
+      "displayBytes": 26346,
+      "displaySHA256": "3c8d16da82b34ae585230671cfc7236cf2eebd511bb16c64a0713127c20905f4"
+    },
+    {
+      "file": "copy-design.log",
+      "rawBytes": 8269,
+      "rawSHA256": "ce99dfa41cf2d71e4b6d0a7b1b6ddd3efc7dd38fa2720a77680554c47dcfe9d7",
+      "displayBytes": 8397,
+      "displaySHA256": "f1a20bd2c847827588fc3d51715f09dd40db9050c0b9302104e39dd074b997d5"
+    },
+    {
+      "file": "web-race.log",
+      "rawBytes": 104,
+      "rawSHA256": "69f5a7c7cd887c8a6a774c65aaa86287a883d01c708f9f5e4111545319c85610",
+      "displayBytes": 118,
+      "displaySHA256": "424f1ee6459f945ce7f69d4f2290afbb2e8eaa505b0420cbd2e97d4bb3ed1ec1"
+    }
+  ]
+}

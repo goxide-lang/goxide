@@ -1045,3 +1045,26 @@ Mac 整树 race 619 项顶层/1451 项子测试、全树 vet/design 和仓内网
 独立审查、首次完整运行失败及夹具修正、最终完整门槛分别记录在
 [交付报告](reviews/single-file-external-recovery-20261006.md)。
 internal-origin、无源分发及 TOML/workspace 单文件配置等余项不据此关闭。
+
+
+## A01 模板明确类型槽验收（2026-10-07）
+
+[RFC0011 FC-01–10](rfcs/0011-macros.md#a01-模板明确类型槽的捕获类别检查2026-10-07实施前合同)
+绑定[宏类别用例](../internal/macros/fragment_categories_test.go)、
+[准确诊断](../internal/macros/fragment_category_diagnostics_test.go)与
+[真实 CLI 联合验收](../tests/acceptance/macro_fragment_categories_test.go)。
+
+| 场景 | 本片实际观察 |
+| --- | --- |
+| FC-01–05 / FC-10 | expr/ident/tt 进入模板明确类型槽时拒绝；多实参实例化类型参数与目标表达式分别分类；长度表达式内显式类型继续检查 |
+| FC-06–09 | 完整 make([]Local,2)、函数/断言/literal 捕获保持调用点身份；数组长度、普通调用/索引和函数指针解引用保持表达式角色 |
+| 来源与组合 | LF/CRLF、嵌套跨包、重复零次/非零次、准确占位符 token 与完整宏栈；完整捕获不被拆解重判 |
+| 绑定边界 | 无关作用域、定义点真实函数和完整捕获保持；实际 type len/alias 遮蔽仍拒绝，匿名字段及提升方法身份不能靠改名改变 |
+| Mac / 浏览器 | 准确35221fe完整 race 631 顶层/1610 子测试、vet/design、真实生成模块和网站七阶段通过；117 fixture/11 示例，旧输入保留 |
+
+生产 pin `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，完整验证源码／工具
+`35221fe9f5cb49b152ea5faad9529dbefa14cd69`，之后精简报告单独提交。
+FC-10 真红测、路径失败、执行会话丢失与最终重跑结果保留于
+[交付报告](reviews/macro-fragment-categories-20261007.md)；原始日志和截图在仓外。
+普通实参和上下文仍由最终 Go 检查；未引入 type fragment、命名/导入类型分配、
+新泛型声明或公开 ABI。A01/A03/RFC0011/MVP 整项不关闭，本批未 push 或部署。

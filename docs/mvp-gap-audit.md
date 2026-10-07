@@ -79,7 +79,7 @@ MVP 归属以 [决策登记](design/decisions.md) D14/D21–D23/D27–D36、RFC 
 
 | ID / 建议标题 | 分类与范围依据 | 当前差距 / 最小用例 | 依赖与验收标准 |
 | --- | --- | --- | --- |
-| A01 常用声明宏绑定与 builtin 卫生收口 | E（importer、append/copy、固定类型 make/new 子项已交付），D14/D21；[宏边界](../internal/macros/README.md)、[allocation 验收](../tests/acceptance/macro_allocation_test.go) | 已接通固定预声明类型 make/new 的 AST 门禁、准确 alias 身份和既有原生行为；命名/导入类型、泛型、new(expr)、其他 builtin/绑定仍未收口。类型捕获不因白名单取得资格；调用包同名及覆盖调用点 local type 的既有边界仍开放，A01 不关闭 | 白黑例先规范，真实 CLI/Go/WASM、跨定义包 alias、数组长度表达式与显式类型、捕获/权限拒绝、原生顺序对照、? 最近帧、LF/CRLF及独立审查；合成传播节点来源仍属 A03 |
+| A01 常用声明宏绑定与 builtin 卫生收口 | E（importer、append/copy、固定类型 make/new、明确类型槽类别检查子项已交付），D14/D21；[宏边界](../internal/macros/README.md)、[类别交付](reviews/macro-fragment-categories-20261007.md) | 已接通固定分配、准确 alias 身份，并在模板明确类型槽拒绝 expr/ident/tt 捕获；完整调用点表达式保留。命名/导入类型分配、new(expr)、其他 builtin/绑定及语义歧义仍未收口；实际覆盖调用点 local type/alias 的拒绝仍为工程边界，A01 不关闭 | RFC FC-01–10、真实 CLI/Go/WASM、跨包嵌套、数组长度与显式类型、多实参类型槽、捕获/权限拒绝、准确 token/栈与 LF/CRLF及独立审查；通用 type fragment 合同与 A03 其余来源继续留账 |
 | A02 常见模式宏及 log/tracing 场景矩阵 | E+D，已批准常见宏/日志场景；RFC0011 的完整 grammar U09 未冻结 | nested/optional repetition、广义 tt/type/stmt/item fragments 尚无；现有 event_if 是惰性条件日志，未提供完整 tracing span 语义 | 先把具体调用形状及歧义规则定清，保留当前有限 expr/ident/tt；嵌套重复长度/零次/预算拒绝，disabled 日志不求值，source span 保留。span/subscriber API 无明确授权证据时标待确认 |
 | A03 完整宏→降低诊断来源链 | E（合成点独立栈及共享AST证据片已交付），RFC0011/0018；[来源验收](../tests/acceptance/macro_synthetic_origin_test.go)、[AST证据](reviews/generated-ast-provenance-20261006.md) | 变换前冻结token证据，builtin改名不再清空整文件，questionFlow明确生成节点可带完整栈；合成点仍无精确Origin。freezeValue其他temp、冗余括号多owner、refs中间阶段及共享helper余项继续开放，A03不关闭 | 单/多文件、跨包同名文件、nested/sibling、LF/CRLF、enum、完整AST/scalar及unknown冲突反例、三consumer、基线Go行为对照、精确SHA独立审查及完整Mac/CLI/WASM；不猜位置或合并栈 |
 | A04 match 普通表达式组合长尾 | C：标量 unary/普通 composite 单值片；其余 E，D31 明确工程欠账；[matchexpr](../internal/matchexpr/README.md) | `return -(match ...)`、`S{N:match ...}` 和普通 slice/array/map 已接通；引用/收发一元、复杂 postfix/receiver、go/defer/control 头、package initializer、复杂 LHS、builtin/type-conversion call 仍在账 | 从已有 prelude/value 扩展，逐上下文正反例；副作用一次、短路、lhs 先求值后写入/panic、goto、? 失败跳后续、direct recover 无额外帧；不一次新增所有模式 |
@@ -284,3 +284,20 @@ JSON→enum→match→业务对象→Clone/Debug→JSON、原帧/原类型/顺�
 多结果、复杂 LHS、block arm、不可命名类型及 builtin/type-conversion call 等仍为 E。
 tuple/struct variant 和手写协议未新定语义；Linux/托管 CI 未运行、网站未部署，
 公开库 ABI 不变，A04/MVP 整项不关闭。
+
+
+## 2026-10-07 接续：A01 模板明确类型槽
+
+从 `2804d655a7660479839a0d9741319afdd19151f6` 新建 `fix/macro-fragment-categories`。
+先提交 RFC FC-01–09，再实现统一 AST 角色检查；独立补查发现多实参泛型漏检后，
+补充 FC-10 并修复，最终生产 pin 为 `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`。
+明确类型位置的 expr/ident/tt 捕获拒绝，完整捕获与数组长度的调用点身份保留。
+实际 `type len`/局部 alias 遮蔽仍为工程拒绝，命名/导入类型分配、通用 type fragment
+及普通调用/单索引的语义歧义继续在账，不把既有拒绝记为批准延期。
+
+准确验证源码／工具 `35221fe9f5cb49b152ea5faad9529dbefa14cd69` 的完整 Mac race
+631 顶层/1610 子测试、vet/design、CLI/WASM 七阶段及独立审查通过。
+首次路径失败、第二轮执行器会话丢失、第三轮完整成功和复现入口见
+[精简交付报告](reviews/macro-fragment-categories-20261007.md)。
+117 fixture/11 示例保留原有输入；公开 ABI 和依赖锁未变，Linux/托管 CI 未运行、
+网站未部署。本批仅本地提交审查，未 push；A01/A03/RFC0011/MVP 整项继续开放。

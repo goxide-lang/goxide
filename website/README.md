@@ -2,9 +2,9 @@
 
 中文优先的静态语言介绍网站，以及真实单文件 goxide → Go 浏览器转译器。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
-本轮验证 A06 已知 Go module 的原生单文件外部恢复，并保留全部 A04 对照；编译器源码固定为
-`ed346d320f584f85ca5fa4f3a4a7ceab526ba38f`，生产源摘要固定为
-`14490fc75cadf25cdc164cda5294ed08aec9415a058f04012d9e285e0b55dca1`。
+本轮验证 A01 宏捕获类别与明确类型槽边界，并保留 A04 / A06 对照；编译器源码固定为
+`afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，生产源摘要固定为
+`2412f1a252c1dd195d1a4d5deed55e2dcd605e65d18edb0b838da36b1976203c`。
 `websiteCommit` 独立记录实际网站工具 HEAD。仅本地验证，没有部署或更新线上版本。
 [仓内验证说明](validation/README.md)是本片入口；[最新组合记录](LATEST-INTEGRATION.md)和
 [早期交付记录](INTEGRATION.md)中的既往结果不替代这次运行。
@@ -33,9 +33,11 @@ python3 -B website/validation/run.py \
 ```
 
 入口从准确提交创建隔离副本，逐字节保留原 97 个 fixture、10 个示例；A04 单独追加
-8 个 fixture 和 1 个业务示例，共 105 个 fixture、11 个示例。七阶段输出和失败记录保留。
+8 个 fixture 和 1 个业务示例，A01 再追加 12 个 fixture，共 117 个 fixture、11 个示例。
+七阶段输出和失败记录保留。
 旧/新 Go 字节、完整 AST、实际运行分别记账；原 33 组成功输出与 5 对原生程序保持不变，
-新增语法只测当前编译器，另存 32 次 LF/CRLF CLI 观察及 5 个实际原生程序输出。
+新增语法只测当前编译器；A04 另存 32 次 LF/CRLF CLI 观察及 5 个实际原生程序输出，
+A01 另存 48 次 CLI 观察及 2 个原生程序输出。
 既有排版差异不计为字节相等。正式运行要求
 源树已提交且干净，输出必须是新的外部目录。快速构建辅助自测为
 `python3 -B website/build_support_test.py`；它不代替七阶段验收或完整原生测试。
@@ -121,6 +123,13 @@ UI 验证 16 次 LF 输入，真实 Worker 验证 32 次 LF/CRLF 输入，每次
 验证恢复。`a04-matrix.json` 提供独立的原生 stdout/错误预期；新增 JSON→enum→match→
 Clone/Debug→JSON 示例只属于当前编译器。浏览器只转译，实际程序运行证据在隔离入口的
 `native/a04/`，不会混入旧编译器的 33 组 AST 对照或原 13 个诊断 fixture。
+
+A01 单独追加 2 个完整表达式正例和 10 个明确类型槽拒绝例。`a01-matrix.json` 固定
+原 A04 输入摘要，并独立指定类型槽 `$` token 位置、宏调用栈及原生 stdout 预期。
+CLI / 真实 Worker 各验证 48 次 LF/CRLF 输入，UI 验证 24 次 LF 输入，每次都有恢复
+检查；中途 Worker 协议失败先保存部分观察再失败。浏览器不执行 Go；两个正例的实际
+运行证据独立保存在 `native/a01/`。不扩展为 type 片段、歧义转换/单实参泛型判断或跨包浏览器支持。
+FC-10 多实参泛型的明确类型槽另有真实原生 CLI 验收，不计入这 12 个网站 fixture。
 
 `read_playground` WebMCP 只读工具在浏览器有 `document.modelContext` 时可注册；普通 Chromium 不支持该原生上下文，未将其作为已通过原生 WebMCP 验证的能力宣传。
 

@@ -1,0 +1,4 @@
+package main
+// 类型槽：捕获类别必须在模板使用点拒绝。
+macro_rules! slot { ($T:expr) => { func() int { var value map[int]$T; return len(value) }() }; }
+func main() { _ = slot!(int) }

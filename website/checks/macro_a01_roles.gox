@@ -1,0 +1,19 @@
+package main
+import "fmt"
+macro_rules! call { ($f:expr, $x:expr) => { $f($x) }; }
+macro_rules! index { ($x:expr, $i:expr) => { $x[$i] }; }
+macro_rules! choose { ($n:expr) => { func() int { switch 2 { case $n: return 7; default: return 0 } }() }; }
+macro_rules! pointer_call { ($f:expr) => { (*$f)(4) }; }
+macro_rules! dereference { ($p:expr) => { *$p }; }
+macro_rules! binder { ($name:ident, $value:expr) => { func() int { $name := $value; return $name }() }; }
+macro_rules! fixed { () => { func() int { return 4 }() }; }
+func main() {
+    f := func(value int) int { return value + 1 }
+    double := func(value int) int { return value * 2 }
+    n := 7
+    a, b, c := call!(double, 3), index!([]int{8, 9}, 1), choose!(2)
+    d, e, g := pointer_call!(&f), dereference!(&n), binder!(value, 3)
+    type int string
+    fixedValue := fixed!()
+    fmt.Printf("roles %v %v %v %v %v %v %T %v\n", a, b, c, d, e, g, fixedValue, fixedValue)
+}

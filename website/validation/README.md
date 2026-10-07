@@ -1,7 +1,7 @@
 # Reproduce the website validation
 
 Run from a **clean committed checkout**, including untracked files. The checkout
-must contain the full ancestor objects for compiler `ed346d320f584f85ca5fa4f3a4a7ceab526ba38f`
+must contain the full ancestor objects for compiler `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`
 and baseline `fd8380c39876c96441857a737be8e32c322a0467`. The runner never fetches
 objects, installs tools, downloads dependencies, deploys assets or triggers CI.
 It needs Python 3.11+, Git, installed Go 1.27 with a working race/C toolchain,
@@ -59,6 +59,23 @@ is saved before the gate fails; no current-only success is attributed to the bas
 Browser QA adds 16 LF UI observations and 32 LF/CRLF real Worker observations, with
 a successful recovery input after each one. The original 13-diagnostic groups keep
 their separate 26 UI and 52 raw Worker observations.
+
+A01 adds 12 current-only macro category fixtures (2 successes and 10 explicit
+template type-slot rejections), bringing totals to 117 fixtures and 11 examples.
+`a01-matrix.json` freezes the A04 input hashes and supplies independent stdout,
+template `$` token and ordered macro-frame expectations. Its 48 LF/CRLF CLI,
+24 LF UI and 48 real Worker observations each retain recovery checks; two positive
+programs also execute natively with exact stdout/exit checks in `native/a01/`.
+The opaque-expression controls include call-site local types, nested forwarding
+and array lengths. These cases do not enter the legacy 33 comparisons or the A04
+matrix, and do not claim general type fragments, ambiguous conversion/single-argument generic
+classification or browser cross-package support. Explicit multi-argument generic
+type slots (RFC FC-10) have separate native CLI acceptance coverage. Raw output stays under the
+external validation directory, including partial Worker results on failure. The
+Worker record has `complete`, `observations` and `failure` fields; a protocol error
+retains the failed input/index and raw response and still fails the gate. The QA
+phase first runs `node website/validation/worker-observations_test.mjs` to check
+success, fatal, timeout, wrong-id, crash, readiness and page-evaluation paths.
 
 `summary.json` is authoritative: only all seven successful phases plus final
 identity verification produce `passed: true` and exit 0. Any failed command keeps

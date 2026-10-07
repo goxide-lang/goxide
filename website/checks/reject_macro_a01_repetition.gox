@@ -1,0 +1,4 @@
+package main
+// 重复捕获仍不提供类型片段资格。
+macro_rules! slots { ($($T:expr),*) => { len([]int{$(func() int { var value $T; _ = value; return 0 }()),*}) }; }
+func main() { _ = slots!(int, string) }

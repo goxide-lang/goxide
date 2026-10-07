@@ -1,0 +1,16 @@
+package main
+import "fmt"
+macro_rules! passthrough { ($x:expr) => { $x }; }
+macro_rules! nested { ($x:expr) => { passthrough!($x) }; }
+macro_rules! array { ($n:expr) => { new([$n]int) }; }
+func main() {
+    type Local int
+    values := nested!(make([]Local, 2))
+    values[0] = Local(3)
+    closure := passthrough!(func(value Local) Local { return value }(Local(4)))
+    literal := passthrough!([]Local{Local(5)})
+    var boxed any = Local(6)
+    asserted := passthrough!(boxed.(Local))
+    sized := array!(len([2]Local{}))
+    fmt.Printf("%T %d %d | %T %d | %T %d | %T %d | %d\n", values, len(values), values[0], closure, closure, literal, literal[0], asserted, asserted, len(sized))
+}

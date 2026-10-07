@@ -1,0 +1,4 @@
+package main
+// 类型槽：捕获类别必须在模板使用点拒绝。
+macro_rules! slot { ($T:ident) => { []$T{4}[0] }; }
+func main() { _ = slot!(int) }

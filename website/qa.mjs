@@ -5,6 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {recordWorkerObservations} from './validation/worker-observations.mjs';
 const base = process.env.QA_URL || 'http://127.0.0.1:8080';
 const browser = await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',headless:true,args:['--no-sandbox',...(process.env.QA_PROXY_SPKI ? ['--ignore-certificate-errors-spki-list='+process.env.QA_PROXY_SPKI] : [])]});
 const context = await browser.newContext({viewport:{width:1440,height:1000},permissions:['clipboard-read','clipboard-write']});
@@ -17,6 +18,8 @@ await page.goto(base);await finished();
 const manifest=await page.evaluate(async()=>await(await fetch('examples.json')).json());
 const a04Matrix=JSON.parse(await fs.readFile(new URL('a04-matrix.json',import.meta.url),'utf8'));
 const a04Results=[];
+const a01Matrix=JSON.parse(await fs.readFile(new URL('a01-matrix.json',import.meta.url),'utf8'));
+const a01Results=[];
 // CLI project snapshots stay read-only, separate from browser example choices.
 assert.equal(await page.locator('#examples option').count(), manifest.examples.length);
 const snapshotText = await page.locator('#cli-example').textContent();
@@ -484,11 +487,12 @@ try {
   }
  }
  await fs.writeFile(new URL('qa-artifacts/origin-diagnostics.json',import.meta.url),JSON.stringify(originResults,null,2)+'\n');
- // A04 is current-only: keep its observations separate from the A03 matrix.
- const a04WorkerInputs=[];
- const saveA04=()=>fs.writeFile(new URL('qa-artifacts/a04-observations.json',import.meta.url),JSON.stringify(a04Results,null,2)+'\n');
- await saveA04();
- for(const check of a04Matrix.checks) {
+ // Current-only matrices share the real CLI/UI/Worker path, with separate evidence.
+ for(const [label,matrix,results] of [['a04',a04Matrix,a04Results],['a01',a01Matrix,a01Results]]) {
+ const matrixWorkerInputs=[];
+ const saveMatrix=()=>fs.writeFile(new URL(`qa-artifacts/${label}-observations.json`,import.meta.url),JSON.stringify(results,null,2)+'\n');
+ await saveMatrix();
+ for(const check of matrix.checks) {
   const fixture=await fs.readFile(new URL(`checks/${check.name}.gox`,import.meta.url),'utf8');
   for(const ending of ['LF','CRLF']) {
    const source=ending==='LF'?fixture:fixture.replaceAll('\n','\r\n');
@@ -499,15 +503,16 @@ try {
     try {go=execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']});}
     catch(e) {exit=e.status;go=String(e.stdout || '');diagnostic=String(e.stderr).trim().replaceAll(input,'playground.gox');}
     const observation={name:check.name,ending,repeat,expect:check.expect,exit,go,diagnostic};
-    a04Results.push(observation);await saveA04();
+    results.push(observation);await saveMatrix();
     if(check.expect==='success') {
-     assert.equal(diagnostic,undefined,`${check.name}: current CLI rejected A04 input`);
+     assert.equal(diagnostic,undefined,`${check.name}: current CLI rejected current matrix input`);
      assert.ok(go,`${check.name}: missing generated Go`);
     } else {
      assert.equal(check.expect,'frontend-reject');
-     assert.ok(diagnostic,`${check.name}: current CLI accepted invalid A04 input`);
-     assert.match(diagnostic,new RegExp(check.message,'i'),`${check.name}: wrong A04 rejection`);
+     assert.ok(diagnostic,`${check.name}: current CLI accepted invalid current matrix input`);
+     assert.match(diagnostic,new RegExp(check.message,'i'),`${check.name}: wrong current matrix rejection`);
      assert.equal(go,'',`${check.name}: rejected CLI input leaked Go`);
+     if(check.point)assertOriginDiagnostic(diagnostic,check,source);
     }
     const expected=check.expect==='success'?go:diagnostic;
     if(repeat)assert.equal(expected,previous,`${check.name}/${ending}: nondeterministic output`);
@@ -520,53 +525,39 @@ try {
       await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
      }
      observation.ui={go:await page.inputValue('#output'),diagnostic:(await page.textContent('#diagnostic')).trim(),copyDisabled:await page.isDisabled('#copy')};
-     await saveA04();
-     if(check.expect==='success')assert.equal(observation.ui.go,go,`${check.name}: A04 UI Go differs`);
+     await saveMatrix();
+     if(check.expect==='success')assert.equal(observation.ui.go,go,`${check.name}: current matrix UI Go differs`);
      else {
-      assert.equal(observation.ui.diagnostic,diagnostic,`${check.name}: A04 UI diagnostic differs`);
+      assert.equal(observation.ui.diagnostic,diagnostic,`${check.name}: current matrix UI diagnostic differs`);
       assert.equal(observation.ui.go,'');assert.equal(observation.ui.copyDisabled,true);
      }
      await page.fill('#source',manifest.examples[0].source);await finished();
-     observation.uiRecoveryGo=await page.inputValue('#output');await saveA04();
-     assert.equal(observation.uiRecoveryGo,manifest.examples[0].go,`${check.name}: A04 UI recovery differs`);
+     observation.uiRecoveryGo=await page.inputValue('#output');await saveMatrix();
+     assert.equal(observation.uiRecoveryGo,manifest.examples[0].go,`${check.name}: current matrix UI recovery differs`);
     }
-    a04WorkerInputs.push({source,go,error:diagnostic,name:check.name,ending,repeat});
-    a04WorkerInputs.push({source:manifest.examples[0].source,go:manifest.examples[0].go,name:check.name,ending,repeat,recovery:true});
+    matrixWorkerInputs.push({source,go,error:diagnostic,name:check.name,ending,repeat});
+    matrixWorkerInputs.push({source:manifest.examples[0].source,go:manifest.examples[0].go,name:check.name,ending,repeat,recovery:true});
    }
   }
  }
- const a04RawResults=await page.evaluate(async({inputs,commit,hash})=>{
-  const worker=new Worker(`worker.js?compiler=${commit}&wasm=${hash}`);let timer;
-  const response=()=>new Promise((resolve,reject)=>{
-   timer=setTimeout(()=>reject(new Error('A04 QA worker timeout')),30000);
-   worker.onerror=e=>{clearTimeout(timer);reject(new Error(e.message));};
-   worker.onmessage=({data})=>{clearTimeout(timer);data.type==='fatal'?reject(new Error(data.error)):resolve(data);};
-  });
-  try {
-   if((await response()).type!=='ready')throw new Error('A04 QA worker not ready');
-   const results=[];
-   for(let id=0;id<inputs.length;id++) {
-    const pending=response();worker.postMessage({type:'compile',id,source:inputs[id].source});
-    const result=await pending;
-    if(result.type!=='result'||result.id!==id)throw new Error('A04 QA worker result mismatch');
-    results.push(result);
-   }
-   return results;
-  } finally {clearTimeout(timer);worker.terminate();}
- },{inputs:a04WorkerInputs,commit:manifest.commit,hash:manifest.wasmSha256});
- await fs.writeFile(new URL('qa-artifacts/a04-worker-observations.json',import.meta.url),JSON.stringify(a04RawResults.map((result,i)=>({input:a04WorkerInputs[i],result})),null,2)+'\n');
- assert.equal(a04RawResults.length,a04WorkerInputs.length);
- for(let i=0;i<a04RawResults.length;i++) {
-  const expected=a04WorkerInputs[i],actual=a04RawResults[i];
+ const matrixRawResults=await recordWorkerObservations(
+  (collect,args)=>page.evaluate(collect,args),
+  {inputs:matrixWorkerInputs,commit:manifest.commit,hash:manifest.wasmSha256},
+  batch=>fs.writeFile(new URL(`qa-artifacts/${label}-worker-observations.json`,import.meta.url),JSON.stringify(batch,null,2)+'\n')
+ );
+ assert.equal(matrixRawResults.length,matrixWorkerInputs.length);
+ for(let i=0;i<matrixRawResults.length;i++) {
+  const expected=matrixWorkerInputs[i],actual=matrixRawResults[i];
   if(expected.error) {
-   assert.equal(actual.error?.trim(),expected.error,`${expected.name}/${expected.ending}: A04 worker diagnostic differs`);
-   assert.equal(actual.go || '','',`${expected.name}: A04 worker leaked output`);
+   assert.equal(actual.error?.trim(),expected.error,`${expected.name}/${expected.ending}: current matrix worker diagnostic differs`);
+   assert.equal(actual.go || '','',`${expected.name}: current matrix worker leaked output`);
   } else {
-   assert.equal(actual.error,undefined,`${expected.name}: A04 worker success/recovery rejected`);
-   assert.equal(actual.go,expected.go,`${expected.name}/${expected.ending}: A04 worker Go differs`);
+   assert.equal(actual.error,undefined,`${expected.name}: current matrix worker success/recovery rejected`);
+   assert.equal(actual.go,expected.go,`${expected.name}/${expected.ending}: current matrix worker Go differs`);
   }
  }
- await saveA04();
+ await saveMatrix();
+ }
 } finally {await fs.rm(temp,{recursive:true,force:true});}
 await page.selectOption('#examples','0');await finished();
 await page.fill('#source',manifest.examples[0].source.replace('21','37'));await finished();
@@ -605,5 +596,6 @@ assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');
 const originGroupResults=checks=>({fixtures:checks.length,cliObservations:checks.length*4,uiLfObservations:checks.length*2,rawWorkerObservations:checks.length*4,recoveryAfterEach:true,sourceFile:'playground.gox reused across distinct sources',scope:'UI LF plus non-UI real WASM worker LF/CRLF; no cross-file/package or effect/frame coverage claim'});
 const builtinResults=names=>({positive:checkResults.filter(name=>names.includes(name)&&!name.startsWith('reject_')),frontendReject:Object.keys(frontendReject).filter(name=>names.includes(name)),nativeTypeReject:Object.keys(nativeTypeReject).filter(name=>names.includes(name)),nativeTypeRejectWasm:'transpilation parity only; final Go compilation is native'});
-console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9).filter(name=>!appendChecks.includes(name)&&!copyChecks.includes(name)&&!allocationChecks.includes(name)&&!astPositiveChecks.includes(name)),appendChecks:builtinResults(appendChecks),copyChecks:builtinResults(copyChecks),allocationChecks:{...builtinResults(allocationChecks),nativeValidButUnsupported:Object.keys(nativeValidControls)},originChecks:originGroupResults(originDiagnosticChecks),astChecks:{...originGroupResults(astDiagnosticChecks),positive:checkResults.filter(name=>astPositiveChecks.includes(name))},a04Checks:{fixtures:a04Matrix.checks.length,positive:a04Matrix.checks.filter(c=>c.expect==='success').map(c=>c.name),frontendReject:a04Matrix.checks.filter(c=>c.expect==='frontend-reject').map(c=>c.name),cliObservations:a04Results.length,uiLfObservations:a04Results.filter(c=>c.ending==='LF').length,rawWorkerObservations:a04Results.length,recoveryAfterEach:true,currentOnlyExamples:a04Matrix.examples,scope:'Current compiler CLI/WASM parity and recovery only; no baseline support or browser Go execution claim'},checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
+const currentGroupResults=(matrix,results)=>({fixtures:matrix.checks.length,positive:matrix.checks.filter(c=>c.expect==='success').map(c=>c.name),frontendReject:matrix.checks.filter(c=>c.expect==='frontend-reject').map(c=>c.name),cliObservations:results.length,uiLfObservations:results.filter(c=>c.ending==='LF').length,rawWorkerObservations:results.length,recoveryAfterEach:true,currentOnlyExamples:matrix.examples,scope:'Current compiler CLI/WASM parity and recovery only; no baseline support or browser Go execution claim'});
+console.log(JSON.stringify({examples:manifest.examples.length,parity:'byte-for-byte',goResultChecks:checkResults.slice(0,9),diagnosticChecks:checkResults.slice(9).filter(name=>!appendChecks.includes(name)&&!copyChecks.includes(name)&&!allocationChecks.includes(name)&&!astPositiveChecks.includes(name)),appendChecks:builtinResults(appendChecks),copyChecks:builtinResults(copyChecks),allocationChecks:{...builtinResults(allocationChecks),nativeValidButUnsupported:Object.keys(nativeValidControls)},originChecks:originGroupResults(originDiagnosticChecks),astChecks:{...originGroupResults(astDiagnosticChecks),positive:checkResults.filter(name=>astPositiveChecks.includes(name))},a04Checks:currentGroupResults(a04Matrix,a04Results),a01Checks:{...currentGroupResults(a01Matrix,a01Results),diagnosticAnchorChecks:a01Matrix.checks.filter(c=>c.point).length},checks:['edit','error recovery','rapid edits','copy','32 KiB','unsupported import','XSS','keyboard','390px','hard timeout','interrupt','reset','no external requests'],errors},null,2));
 await browser.close();

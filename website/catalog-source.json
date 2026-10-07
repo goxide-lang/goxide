@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "ed346d320f584f85ca5fa4f3a4a7ceab526ba38f",
-  "reviewedAt": "2026-10-06",
+  "compilerCommit": "afa3f0a52b2d8206d75df38d10833e537ea7a0dd",
+  "reviewedAt": "2026-10-07",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
   },
@@ -97,9 +97,9 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "用有限模式匹配消除重复；表达式、标识符和 token 捕获具有不同边界。",
+      "summary": "用有限模式匹配消除重复；expr、ident、tt 捕获在模板明确类型槽拒绝，完整捕获表达式保持调用点类型。",
       "usage": "values!(next(), next(), 9) 构造列表，两个 next 各调用一次。twice 示例显式保存参数，避免重复求值。",
-      "limitation": "模板重复写两次表达式就可能求值两次；不是自动惰性或完整 hygiene。过程宏与外部预编译宏包未交付。",
+      "limitation": "模板重复写两次表达式就可能求值两次；不是自动惰性或完整 hygiene。没有 type 片段；歧义转换/单实参泛型不在本轮类别判断范围。过程宏与外部预编译宏包未交付。",
       "examples": [
         "macro",
         "macro_repeat"
@@ -107,7 +107,10 @@
       "evidence": [
         "internal/macros/macros_test.go",
         "internal/macros/primitive_bindings_test.go",
-        "tests/acceptance/macro_packages_test.go"
+        "tests/acceptance/macro_packages_test.go",
+        "docs/rfcs/0011-macros.md",
+        "internal/macros/fragment_categories_test.go",
+        "tests/acceptance/macro_fragment_categories_test.go"
       ],
       "checks": []
     },
@@ -752,7 +755,7 @@
       }
     }
   ],
-  "compilerDigest": "14490fc75cadf25cdc164cda5294ed08aec9415a058f04012d9e285e0b55dca1",
+  "compilerDigest": "2412f1a252c1dd195d1a4d5deed55e2dcd605e65d18edb0b838da36b1976203c",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

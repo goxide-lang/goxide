@@ -172,10 +172,11 @@ class RunnerTests(unittest.TestCase):
                                  for entry in catalog['examples']]}
         sources = runner.legacy_success_sources(root, manifest, groups)
         self.assertEqual(len(sources), 33)
-        self.assertFalse(any('match_a04_' in name or name == 'example/match_composition' for name, _ in sources))
-        contaminated = dict(groups, additional=['match_a04_unary'])
-        with self.assertRaisesRegex(RuntimeError, 'current-only fixture'):
-            runner.legacy_success_sources(root, manifest, contaminated)
+        self.assertFalse(any('match_a04_' in name or 'macro_a01_' in name or name == 'example/match_composition' for name, _ in sources))
+        for name in ('match_a04_unary', 'macro_a01_opaque'):
+            contaminated = dict(groups, additional=[name])
+            with self.assertRaisesRegex(RuntimeError, 'current-only fixture'):
+                runner.legacy_success_sources(root, manifest, contaminated)
 
     def test_fixture_inventory_rejects_changed_legacy_missing_and_unlisted_inputs(self):
         source = Path(__file__).resolve().parents[2]
@@ -183,7 +184,7 @@ class RunnerTests(unittest.TestCase):
             root = Path(temporary)
             for name in ('checks', 'examples', 'validation'):
                 shutil.copytree(source / 'website' / name, root / 'website' / name)
-            for name in ('qa.mjs', 'catalog-source.json', 'a04-matrix.json'):
+            for name in ('qa.mjs', 'catalog-source.json', 'a04-matrix.json', 'a01-matrix.json'):
                 shutil.copyfile(source / 'website' / name, root / 'website' / name)
             legacy = root / 'website/checks/error_only.gox'
             original = legacy.read_bytes()
@@ -193,11 +194,11 @@ class RunnerTests(unittest.TestCase):
             legacy.write_bytes(original)
             added = root / 'website/checks/match_a04_unlisted.gox'
             added.write_text('package main\n')
-            with self.assertRaisesRegex(RuntimeError, 'cover all 97 legacy and 8 separate A04'):
+            with self.assertRaisesRegex(RuntimeError, 'cover all 97 legacy, 8 A04 and 12 A01'):
                 runner.qa_matrix(root)
             added.unlink()
             (root / 'website/checks/match_a04_unary.gox').unlink()
-            with self.assertRaisesRegex(RuntimeError, 'cover all 97 legacy and 8 separate A04'):
+            with self.assertRaisesRegex(RuntimeError, 'preserved A04 input changed'):
                 runner.qa_matrix(root)
 
     def test_current_only_matrix_requires_independent_error_and_output_expectations(self):
@@ -243,7 +244,7 @@ class RunnerTests(unittest.TestCase):
                     return 1, b'', message.encode()
                 return 0, b'package main\n', b''
             with mock.patch.object(obj, 'command', side_effect=command):
-                with self.assertRaisesRegex(RuntimeError, 'A04 native behavior differs'):
+                with self.assertRaisesRegex(RuntimeError, 'current-only native behavior differs'):
                     obj.current_a04('current-compiler')
             self.assertEqual(len(json.loads((out / 'native/a04/observations.json').read_text())), 32)
             runtime = json.loads((out / 'native/a04/runtime.json').read_text())
@@ -251,6 +252,65 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(runtime[0]['stdout'], 'actual partial stdout\n')
             self.assertEqual(runtime[0]['stderr'], 'actual runtime failure\n')
             self.assertFalse((out / 'native/a04/summary.json').exists())
+
+    def test_a01_diagnostics_require_exact_dollar_span_and_nested_frame_order(self):
+        root = Path(__file__).resolve().parents[2]
+        matrix = runner.a01_matrix(root)
+        case = next(c for c in matrix['checks'] if c['name'] == 'reject_macro_a01_nested')
+        fixture = (root / 'website/checks' / (case['name'] + '.gox')).read_text()
+        for source in (fixture, fixture.replace('\n', '\r\n')):
+            point = case['point']
+            start, line, column = runner.position(source, point['anchor'], point['offset'])
+            primary = f"playground.gox:{line}:{column}: {case['message']} (source span [{start},{start + 1}))"
+            frames = []
+            for frame in case['frames']:
+                _, dl, dc = runner.position(source, frame['definition'])
+                _, cl, cc = runner.position(source, frame['call'])
+                frames.append(f"  macro {frame['macro']} defined at playground.gox:{dl}:{dc}; invoked at playground.gox:{cl}:{cc}")
+            correct = '\n'.join([primary, *frames])
+            runner.assert_origin_diagnostic(correct, case, source)
+            # Same message and matching CLI/WASM output alone are insufficient:
+            # claiming the full $T span or swapping valid frames must fail.
+            with self.assertRaisesRegex(RuntimeError, 'inaccurate original diagnostic point'):
+                runner.assert_origin_diagnostic(correct.replace(f'[{start},{start + 1})', f'[{start},{start + 2})'), case, source)
+            with self.assertRaisesRegex(RuntimeError, 'reordered macro stack'):
+                runner.assert_origin_diagnostic('\n'.join([primary, *reversed(frames)]), case, source)
+
+    def test_a01_matrix_cannot_weaken_category_rejection_to_parser_error(self):
+        root = Path(__file__).resolve().parents[2]
+        original = (root / 'website/a01-matrix.json').read_text()
+        with tempfile.TemporaryDirectory() as temporary:
+            copied = Path(temporary)
+            (copied / 'website').mkdir()
+            for key, value in [('message', 'unsupported template syntax'), ('point', None), ('frames', [])]:
+                matrix = json.loads(original)
+                matrix['checks'][2][key] = value
+                runner.save(copied / 'website/a01-matrix.json', matrix)
+                with self.assertRaisesRegex(RuntimeError, 'exact message, dollar token and macro frames'):
+                    runner.a01_matrix(copied)
+
+    def test_a01_inaccurate_source_evidence_is_saved_before_failure(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary:
+            out = Path(temporary)
+            obj = runner.Runner(root, out, argparse.Namespace())
+            obj.current, obj.go = root, 'existing-go'
+            matrix = runner.a01_matrix(root)
+            obj.identity = {'validationCommit': 'website-revision'}
+            def command(name, argv, cwd=None, expected=(0,)):
+                self.assertNotIn('runtime', name)
+                if 'reject_' in name:
+                    return 1, b'', b'playground.gox:1:1: macro type position does not support captured syntax\n'
+                return 0, b'package main\n', b''
+            with mock.patch.object(obj, 'command', side_effect=command):
+                with self.assertRaisesRegex(RuntimeError, 'inaccurate original diagnostic point'):
+                    obj.current_matrix('current-compiler', 'a01', matrix, 2)
+            observations = json.loads((out / 'native/a01/observations.json').read_text())
+            self.assertEqual(len(observations), 9)
+            self.assertEqual(observations[-1]['name'], 'reject_macro_a01_var_expr')
+            self.assertIn('playground.gox:1:1:', observations[-1]['diagnostic'])
+            self.assertEqual(json.loads((out / 'native/a01/runtime.json').read_text()), [])
+            self.assertFalse((out / 'native/a01/summary.json').exists())
 
 
 if __name__ == '__main__':

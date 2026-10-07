@@ -1,12 +1,12 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`ed346d320f584f85ca5fa4f3a4a7ceab526ba38f`；证据复核日期：2026-10-06。
+编译器基线：`afa3f0a52b2d8206d75df38d10833e537ea7a0dd`；证据复核日期：2026-10-07。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
 | 特性 | RFC | 状态 | 当前入口 | 实现/测试/设计证据（基线或注明的开发快照） |
 | --- | --- | --- | --- | --- |
-| 声明宏：模式与重复 | 0011 | 部分实现 | browser | `internal/macros/macros_test.go` (ac3882cf4736); `internal/macros/primitive_bindings_test.go` (efff49717468); `tests/acceptance/macro_packages_test.go` (1ba9ea30ef9e) |
+| 声明宏：模式与重复 | 0011 | 部分实现 | browser | `internal/macros/macros_test.go` (ac3882cf4736); `internal/macros/primitive_bindings_test.go` (efff49717468); `tests/acceptance/macro_packages_test.go` (1ba9ea30ef9e); `docs/rfcs/0011-macros.md` (c2ce5a9b4e0f); `internal/macros/fragment_categories_test.go` (6296785c2a76); `tests/acceptance/macro_fragment_categories_test.go` (0b11b9bf0d0f) |
 | 封闭 enum 与明确状态 | 0008, 0015 | 部分实现 | browser | `internal/enums/lower.go` (7d08b4daf565); `tests/acceptance/enums_test.go` (a294eb9bffc8); `tests/acceptance/enum_external_test.go` (4fa5baffb003) |
 | match、guard 与表达式 | 0009 | 部分实现 | browser | `internal/matchexpr/lower.go` (a37c0040a656); `tests/acceptance/match_call_signatures_test.go` (c3c0e1f58455); `tests/acceptance/match_named_dynamic_test.go` (212f9b86bd3a); `internal/matchexpr/composite.go` (0208a27e7dbc); `internal/propagate/match_literals.go` (0e9dd27f2fa4); `tests/acceptance/match_unary_composite_test.go` (e4d6b82b7518); `docs/rfcs/0009-match.md` (637daf1db37d) |
 | Option / Result 与 ? | 0008, research/0005 | 部分实现 | browser | `internal/propagate/lower.go` (bc4db5c30665); `tests/acceptance/propagate_test.go` (bf545583d370); `tests/acceptance/propagate_values_test.go` (4d0b2d61d4e1); `internal/propagate/sum_inference.go` (5b9a34aff90d); `internal/frontend/shared_std_test.go` (a2cb837c392e) |
@@ -24,7 +24,7 @@
 | trait、关联类型与 impl | 0002, 0003, 0004, 0019, 0020 | 已确认待实现 | unavailable | `docs/rfcs/0019-uniform-trait-wrappers.md` (1df569cda8f2); `docs/rfcs/0020-associated-functions.md` (003d302b642a); `ROADMAP.md` (39ae0da9312a) |
 | safe std、锁与集合 | 0006, 0007, 0010, 0016, 0017 | 已确认待实现 | unavailable | `docs/rfcs/0007-locks.md` (ade41b5149bf); `docs/rfcs/0010-collections.md` (4227ef865b5f); `docs/rfcs/0016-safe-std.md` (06d218c8a138); `docs/rfcs/0017-maps.md` (7edff0be2346) |
 | quote / syn 与过程宏 | 0014 | 已确认待实现 | unavailable | `docs/rfcs/0014-syntax-tools.md` (977cadd5ef80) |
-| 降低约束与公开边界 | 0015, 0018 | 部分实现 | browser | `tests/acceptance/source_lowering_test.go` (298633fff97a); `tests/acceptance/source_mapping_test.go` (b332d639202d); `docs/rfcs/0018-lowering-contract.md` (401aec7ab0cf) |
+| 降低约束与公开边界 | 0015, 0018 | 部分实现 | browser | `tests/acceptance/source_lowering_test.go` (298633fff97a); `tests/acceptance/source_mapping_test.go` (7e583cd57250); `docs/rfcs/0018-lowering-contract.md` (401aec7ab0cf) |
 | use 路径与依赖别名 | 0024 | 提案 | unavailable | `@use-path:docs/rfcs/0024-use-paths.md` (9d3a71b5d773) |
 | 分仓标准库与共享 sum | 0008, 0016 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `docs/reviews/public-library-migration-20261004.md` (5c4089eda830) |
 | 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/readability_test.go` (4a76f296f046); `internal/enums/builtins_test.go` (df7d2414ab1b) |

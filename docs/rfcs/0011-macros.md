@@ -275,9 +275,14 @@ Go 的合成括号等 A03 unmapped 边界继续如实记录，不用邻近位置
 | FC-07：`($x:expr)=>{$x}`，调用 `!(make([]Local,2))` | 等价于原生 `make([]Local,2)`；保留 Local 类型、长度 2、零值及调用点 make 绑定 |
 | FC-08：完整捕获 `func(value Local) Local { return value }(Local(3))` | 整个表达式原样保留调用点绑定，值为 Local(3)，函数内部的类型不是模板类型槽 |
 | FC-09：`($f:expr,$x:expr)=>{$f($x)}`、`($x:expr,$i:expr)=>{$x[$i]}`、`(*$f)(4)` | 普通调用目标、索引及函数指针解引用仍为表达式位置；没有语义证据时不能按名字把它们当作类型/泛型槽 |
+| FC-10：`($f:ident,$A:ident,$B:ident)=>{$f[$A,$B](7,"x")}`，传入原生 Go `Pair[A,B any]` | 多实参实例化的 `IndexListExpr.Indices` 是明确类型槽；expr/ident/tt 捕获均在展开阶段拒绝，不把目标 `$f` 错分为类型 |
 
 这是一项覆盖**明确类型位置**的类别修复，不声称仅凭 Go AST 就能区分所有命名
-转换、泛型实例和普通调用/索引。通用 type fragment、命名/导入类型分配及其可见性、
+转换、单实参泛型实例和普通调用/索引。多实参实例化没有普通索引歧义，FC-10
+在初版修复的真实 CLI 审查中仍可运行，故在本批补入明确类型槽。完整捕获
+`identity!(Pair[int,string](7,"x"))` 或捕获整个 `Pair[int,string]` 调用目标继续
+保留调用点身份；不得为阻止部分类型捕获而扫描完整表达式内部。
+通用 type fragment、命名/导入类型分配及其可见性、
 类别推导与诊断合同另行明确，本片不通过隐式类型捕获扩展它们。
 已有模板局部 type/struct/interface 等拒绝规则继续适用。
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// RFC0011 FC-01..09: use the real CLI from an unrelated cwd, then execute
+// RFC0011 FC-01..10: use the real CLI from an unrelated cwd, then execute
 // generated Go independently. A macro-category error must precede Go compilation.
 func TestMacroFragmentCategoriesCLI(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
@@ -172,6 +172,40 @@ func main(){
 			if !strings.Contains(output, "local named type") || !strings.Contains(output, "macro size defined at") {
 				t.Fatalf("unsafe type identity rewrite instead of explicit boundary: %s", output)
 			}
+		}
+	})
+
+	t.Run("FC-10-multiple-type-arguments", func(t *testing.T) {
+		// Native .go supplies the generic declaration so an unrelated Goxide
+		// generic-declaration boundary cannot mask the template category error.
+		helper := "package main\nimport \"fmt\"\nfunc Pair[A,B any](a A,b B)string{return fmt.Sprintf(\"%T=%v %T=%v\",a,a,b,b)}\n"
+		for _, fragment := range []string{"expr", "ident", "tt"} {
+			t.Run(fragment, func(t *testing.T) {
+				source := t.TempDir()
+				packagesWrite(t, source, "go.mod", "module fragments.example/generic\ngo 1.27\n")
+				packagesWrite(t, source, "helper.go", helper)
+				packagesWrite(t, source, "main.gox", fmt.Sprintf("package main\nmacro_rules! bad {($f:ident,$A:%s,$B:%s)=>{$f[$A,$B](7,\"x\")};}\nfunc main(){_=bad!(Pair,int,string)}\n", fragment, fragment))
+				output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
+				for _, want := range []string{"macro type position does not support captured syntax", "main.gox:2:", "macro bad defined at", "main.gox:3:"} {
+					if !strings.Contains(output, want) {
+						t.Fatalf("lost explicit generic-argument category rejection %q: %s", want, output)
+					}
+				}
+			})
+		}
+		source := t.TempDir()
+		packagesWrite(t, source, "go.mod", "module fragments.example/generic\ngo 1.27\n")
+		packagesWrite(t, source, "helper.go", helper)
+		packagesWrite(t, source, "main.gox", `package main
+import "fmt"
+macro_rules! keep {($x:expr)=>{$x};}
+macro_rules! invoke {($f:expr,$a:expr,$b:expr)=>{$f($a,$b)};}
+func main(){fmt.Println(keep!(Pair[int,string](7,"x")));fmt.Println(invoke!(Pair[int,string],9,"y"))}
+`)
+		generated := filepath.Join(t.TempDir(), "generated")
+		deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+		if output := deliveryCommand(t, generated, tool, true, nil, "run", "-race", "."); output != "int=7 string=x\nint=9 string=y\n" {
+			t.Fatalf("whole generic capture lost caller identity: %q", output)
 		}
 	})
 }

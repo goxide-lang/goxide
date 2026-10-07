@@ -91,3 +91,39 @@ func main(){
 }
 `, "[]main.Local 2 0 main.Local 3 main.Local 4 []main.Local 5\n2 2\n5 5 8 5 4 9 6 7 10\nmain.Local 10\n")
 }
+
+func TestFragmentCategoriesRejectInstantiationTypes(t *testing.T) {
+	for _, fragment := range []string{"expr", "ident", "tt"} {
+		for _, body := range []string{
+			`$f[$T,string](7,"x")`,
+			`$f[int,$T](7,"x")`,
+		} {
+			t.Run(fragment+"/"+body, func(t *testing.T) {
+				src := fmt.Sprintf(`package p
+macro_rules! invoke {($f:ident,$T:%s)=>{%s};}
+func Run(){_=invoke!(Pair,int)}
+`, fragment, body)
+				_, err := Expand("instantiation.gox", []byte(src))
+				if err == nil || !strings.Contains(err.Error(), "macro type position does not support captured syntax") {
+					t.Fatalf("explicit type argument not diagnosed: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestFragmentCategoriesPreserveWholeInstantiation(t *testing.T) {
+	run(t, `package main
+import "fmt"
+func Pair[A,B any](a A,b B)string{return fmt.Sprintf("%T:%v %T:%v",a,a,b,b)}
+macro_rules! identity {($x:expr)=>{$x};}
+macro_rules! invoke {($f:expr,$a:expr,$b:expr)=>{$f($a,$b)};}
+macro_rules! forward {($f:expr,$a:expr,$b:expr)=>{invoke!($f,$a,$b)};}
+func main(){
+ type Local int
+ fmt.Println(identity!(Pair[Local,string](7,"x")))
+ fmt.Println(invoke!(Pair[Local,string],8,"y"))
+ fmt.Println(forward!(Pair[Local,string],9,"z"))
+}
+`, "main.Local:7 string:x\nmain.Local:8 string:y\nmain.Local:9 string:z\n")
+}

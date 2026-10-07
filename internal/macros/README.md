@@ -38,11 +38,13 @@ statement/type token injection. Larger syntax fragments need future parser work.
 Before substitution, one AST role walk rejects every current fragment kind in
 explicit template type slots: variable/constant types, function parameters and
 results, composite element/key/value types, literal and assertion types, and type
-switch cases. Array lengths remain expressions; explicit types written inside
+switch cases and multiple-argument instantiations. Array lengths remain expressions; explicit types written inside
 those length expressions are checked in turn. Whole caller expressions such as
 `make([]Local,2)` remain opaque and keep their caller-owned types and bindings.
-Ordinary calls, indexes and function-pointer dereferences are not guessed to be
-types or generic instantiations. This enforces explicit type positions without
+Ordinary calls, single indexes and function-pointer dereferences are not guessed
+to be types or generic instantiations; `f[T,U]` has unambiguous type arguments.
+Whole captures of instantiated callees still keep their caller identity.
+This enforces explicit type positions without
 adding a type fragment or claiming full semantic fragment classification. See
 [the contract](../../docs/rfcs/0011-macros.md#a01-模板明确类型槽的捕获类别检查2026-10-07实施前合同),
 [role tests](fragment_categories_test.go) and

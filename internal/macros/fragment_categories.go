@@ -5,7 +5,7 @@ import "go/ast"
 // checkCaptureTypePositions checks the template before capture substitution.
 // A placeholder is an opaque caller fragment: only its use in an explicitly
 // typed template slot is inspected, never the tokens that it will substitute.
-// This does not resolve ambiguous calls/conversions or indexing/instantiation,
+// This does not resolve ambiguous calls/conversions or single-index syntax,
 // and does not replace allocationType's narrower fixed-type/binding policy.
 func checkCaptureTypePositions(root ast.Node, captures map[string][]tok, nodeError func(ast.Node, string) error) error {
 	if len(captures) == 0 {
@@ -62,6 +62,14 @@ func (c *captureTypeChecker) expression(root ast.Node) {
 		case *ast.TypeAssertExpr:
 			c.expression(n.X)
 			c.typeExpression(n.Type) // nil for the guard of a type switch
+			return false
+		case *ast.IndexListExpr:
+			// Unlike a single index, multiple arguments prove instantiation.
+			// The target remains an expression and may be a caller capture.
+			c.expression(n.X)
+			for _, typ := range n.Indices {
+				c.typeExpression(typ)
+			}
 			return false
 		case *ast.TypeSwitchStmt:
 			c.expression(n.Init)

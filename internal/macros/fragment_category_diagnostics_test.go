@@ -55,6 +55,25 @@ func TestFragmentCategoryDiagnosticTokenAndStack(t *testing.T) {
 	}
 }
 
+func TestFragmentCategoryIndexListDiagnosticTokenAndStack(t *testing.T) {
+	for _, kind := range []string{"expr", "ident", "tt"} {
+		for _, slot := range []struct{ name, capture, indices string }{
+			{"first", "A", "[$A,int]"},
+			{"second", "B", "[int,$B]"},
+		} {
+			for _, newline := range []string{"\n", "\r\n"} {
+				t.Run(fmt.Sprintf("%s/%s/%q", kind, slot.name, newline), func(t *testing.T) {
+					definition := "macro_rules! instantiate {($f:ident,$" + slot.capture + ":" + kind + ")=>{" + newline + "$f" + slot.indices + "(1,2)" + newline + "};}"
+					source := "package p" + newline + definition + newline + "func Pair[A,B any](a A,b B)int{return 0}" + newline + "func Run(){_=instantiate!(Pair,int)}" + newline
+					_, err := ExpandWithMap("index-list.gox", []byte(source))
+					stack := []sourcemap.Expansion{{Macro: "instantiate", Definition: fragmentCategorySpan(t, "index-list.gox", source, definition), Callsite: fragmentCategorySpan(t, "index-list.gox", source, "instantiate!(Pair,int)")}}
+					fragmentCategoryDiagnostic(t, err, "index-list.gox", source, slot.indices, false, stack)
+				})
+			}
+		}
+	}
+}
+
 func TestFragmentCategoryNestedDiagnosticTokenAndStack(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
 		t.Run(fmt.Sprintf("%q", newline), func(t *testing.T) {

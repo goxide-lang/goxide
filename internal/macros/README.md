@@ -35,6 +35,19 @@ consume all input. Expressions preserve precedence when inserted into templates.
 `tt` supports expression tokens or parenthesized argument groups, not arbitrary
 statement/type token injection. Larger syntax fragments need future parser work.
 
+Before substitution, one AST role walk rejects every current fragment kind in
+explicit template type slots: variable/constant types, function parameters and
+results, composite element/key/value types, literal and assertion types, and type
+switch cases. Array lengths remain expressions; explicit types written inside
+those length expressions are checked in turn. Whole caller expressions such as
+`make([]Local,2)` remain opaque and keep their caller-owned types and bindings.
+Ordinary calls, indexes and function-pointer dereferences are not guessed to be
+types or generic instantiations. This enforces explicit type positions without
+adding a type fragment or claiming full semantic fragment classification. See
+[the contract](../../docs/rfcs/0011-macros.md#a01-模板明确类型槽的捕获类别检查2026-10-07实施前合同),
+[role tests](fragment_categories_test.go) and
+[real CLI acceptance](../../tests/acceptance/macro_fragment_categories_test.go).
+
 Templates can be Go-shaped expressions or statements, including explicit closures,
 `return`, and `defer`. For user-defined templates, the expander inserts no implicit function/closure boundary; the specialized adapter builtins documented below explicitly emit a typed function literal.
 A template using `$x` twice evaluates it twice; hygiene does not imply once-only
@@ -223,8 +236,8 @@ identity of `new(int)`. A template-local int binding or a definition-site functi
 named int is rejected here, avoiding Go 1.27's value-form `new(expr)` semantics.
 Value-form new, captured types of every current fragment kind, named/imported
 types, type parameters, generic instances and anonymous struct/interface/func
-types remain unsupported. This adds no type fragment or global capture-category
-validation.
+types remain unsupported. This allocation policy adds no type fragment; the
+general explicit-type-position check above also applies outside allocations.
 
 Array lengths are expression slots: `new([$n]int)` can capture a caller constant
 expression, including the caller's own types. Explicit type syntax written in a

@@ -246,6 +246,9 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 		problem = at(ts[i], fmt.Sprintf("unsupported free template name %q; pass it as an explicit capture (unsupported builtins included)", id.Name))
 		return true
 	})
+	if problem == nil {
+		problem = checkCaptureTypePositions(root, ph, nodeError)
+	}
 	return ts, problem
 }
 func (e *engine) alias(key string) string {

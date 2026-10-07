@@ -11,7 +11,17 @@ python3 scripts/check_design.py
 
 示例命令以仓库根目录为当前目录。脚本自身根据文件位置定位仓库，不依赖当前目录；从其他目录调用时给出脚本的实际路径。
 
-文档检查需要 Python 3.10 或更新版本。完整检查还需要本地 Go 1.27 或更新版本，以及可运行 Go race detector 的平台和 C 编译器。脚本使用 `GOTOOLCHAIN=local`，不会自动下载工具链；隔离外部 `go.work` 与 `GOFLAGS`，不修改仓库或依赖中的 Go 文件，不创建仓库根 `go.mod`。
+文档检查需要 Python 3.10 或更新版本、Git 以及包含产物检查固定基线的完整仓库历史。
+检查包含暂存区和已提交历史中的 review 产物；缺少历史时明确失败，不自动 fetch。
+也可在提交前单独运行 `python3 -B scripts/check_review_artifacts.py`；`--commit REV`
+检查指定提交。原始日志、截图和大型运行记录留在仓外或被忽略的输出目录，不使用
+整目录 force-add。产物检查的回归测试为 `python3 -B scripts/check_review_artifacts_test.py`。
+规则作用于 `docs/reviews`：原始产物禁止新增；固定基线中的旧产物保持原样。
+新增或修改的文本每文件不超过 64 KiB，每次提交或暂存变更合计不超过 256 KiB；
+JSON 只保留摘要，不嵌入原始日志。正常的 `scripts`、`tests` 源码与夹具不受此大小规则约束。
+完整检查还需要本地 Go 1.27 或更新版本，以及可运行 Go race detector 的平台和 C 编译器。
+脚本使用 `GOTOOLCHAIN=local`，不会自动下载工具链；隔离外部 `go.work` 与 `GOFLAGS`，
+不修改仓库或依赖中的 Go 文件，不创建仓库根 `go.mod`。
 
 完整检查会创建临时模块，从设计文档提取完整 Go fenced code，并复制此目录中的既有行为夹具。执行日志、生成源码、环境与成功汇总保留在输出的临时目录；失败时也保留已产生的工件。临时目录可在检查结束后自行删除。文档正文、夹具和脚本都在版本控制中，因此复现不依赖某台机器旧的临时目录。
 

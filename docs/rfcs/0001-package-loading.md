@@ -228,7 +228,7 @@ cause/path。保留 nil/empty、选中 arm、非法 enum 在 guard/业务前拒�
 | 重算摘要后的伪 relay 登记、替换 helper owner、伪 validator、伪造 derive/manual 来源 | 仍由真实 Go identity 与 canonical 定义包登记拒绝，不能只靠摘要完整接受 |
 | `type New p.Item`、同名异包、alias 指向新 defined、错误 serde 方向或 Eq 提升 | 不继承原类型协议；不 widening 或擦除为 any |
 | consumer 合法访问本 module 的 internal native/generated 包 | 保持 Go 允许的访问，frontend 与最终执行路径一致 |
-| 源码直接 import 另一个 module 的 internal/private 对象 | 拒绝；importer 能载入不是可见性授权 |
+| 源码直接 import 不可见的 internal 包，或引用其他包未导出对象 | 按 Go 可见性规则拒绝；importer 能载入不是可见性授权 |
 | 公开 facade 的普通 Go API | 保持可用；不因内部表示不可命名而误禁普通调用 |
 | facade 的增强操作需要消费者不可导入的 internal validator/payload/helper | 保留明确工程边界；不强行生成不可访问 import，不复制原类型或制造新 relay 协议 |
 | readonly/reference 擦除、single-file use/pub use 或 imported-use metadata 守卫 | 原拒绝保持；不借 A06 打开其他协议入口 |
@@ -245,3 +245,11 @@ CLI、生成 Go race/vet/run、重复输出确定性与拒绝定位分别报告�
 跨包能力由原生 CLI 证明，浏览器仍限已有单文件可用包，不宣称任意 module 加载。
 compiler pin、网站/工具、最终报告 SHA 分开记录；普通分支提交/push 后核对本地、
 fetch 与远端。无 Linux/托管 CI 证据不称通过，不 merge main/tag、不部署网站。
+
+### A06 本片交付记录
+
+实现沿用上述合同：CLI 按真实输入 owner 提供 importer/临时 modfile，frontend
+共享已登记能力恢复并保留单文件 finishing，refs/macro/sum 等阶段使用真实包身份。
+producer、file/directory consumer 与 Go consumer 的业务及拒绝矩阵见
+[2026-10-06 交付报告](../reviews/single-file-external-recovery-20261006.md)。报告分别记录
+编译器、网站/工具、独立审查和正式门槛；不把当前支持扩大到无源或不可达 internal origin。

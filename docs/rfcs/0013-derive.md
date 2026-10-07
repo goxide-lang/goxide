@@ -3,7 +3,7 @@
 本轮 A06 的单文件外部已登记协议恢复，按
 [RFC0001 实施前合同](0001-package-loading.md#a06-已知-go-module-的单文件外部恢复2026-10-06实施前合同)
 实施。复用下文已有 canonical identity、签名和来源验证；手写 Clone/Debug/serde
-登记不在本片新定，完整交付结果另记。
+登记不在本片新定，结果见[单文件外部恢复报告](../reviews/single-file-external-recovery-20261006.md)。
 
 ## 状态与范围
 

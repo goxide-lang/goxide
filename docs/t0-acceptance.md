@@ -1033,3 +1033,15 @@ block arm、不可命名类型等继续留账；本片只关闭 A04 的上述子
 
 跨包能力仅由原生 CLI/Go 联合用例证明，浏览器不宣称任意 module 加载。
 compiler pin、网站/工具、最终报告提交分开；不改公开库 ABI、main/tag 或部署网站。
+
+### A06 本片交付
+
+已知 Go module 的既有外部登记恢复已接通，编译器 pin
+`ed346d320f584f85ca5fa4f3a4a7ceab526ba38f`，网站/工具
+`8ba3174bd43481c396e75be5a95aa8e622456271`。联合验收实际运行 producer、同一源码的
+file/directory consumer 与无 enum metadata 的 Go consumer，检查协议行为、真实
+build/run、配置归属、源字节不变、internal/private、伪造 canonical 登记和既有权限守卫。
+Mac 整树 race 619 项顶层/1451 项子测试、全树 vet/design 和仓内网站七阶段通过。
+独立审查、首次完整运行失败及夹具修正、最终完整门槛分别记录在
+[交付报告](reviews/single-file-external-recovery-20261006.md)。
+internal-origin、无源分发及 TOML/workspace 单文件配置等余项不据此关闭。

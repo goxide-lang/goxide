@@ -17,6 +17,8 @@ import tempfile
 import unicodedata
 from urllib.parse import unquote
 
+import check_review_artifacts
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "design"
@@ -150,7 +152,7 @@ def tree_hash(directory: Path) -> str:
 def check_go(documents) -> None:
     go = shutil.which("go")
     if not go:
-        raise CheckFailure("Go >= 1.27 is required for full checks; --docs-only needs only Python 3.10+.")
+        raise CheckFailure("Go >= 1.27 is required for full checks; --docs-only needs Python 3.10+ and Git with complete baseline history.")
     env = os.environ.copy()
     # Do not download a toolchain or inherit a parent workspace/build overlay.
     env.update(GOTOOLCHAIN="local", GOWORK="off", GOFLAGS="")
@@ -253,13 +255,15 @@ def check_go(documents) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--docs-only", action="store_true", help="check local Markdown links, anchors, fences, and RFC structure without Go")
+    parser.add_argument("--docs-only", action="store_true", help="check staged/committed review artifacts, Markdown links, anchors, fences, and RFC structure without Go")
     args = parser.parse_args()
     try:
+        review = check_review_artifacts.check_repository(ROOT)
+        print("PASS review artifacts: " + json.dumps(review, sort_keys=True), flush=True)
         documents = check_docs()
         if not args.docs_only:
             check_go(documents)
-    except (CheckFailure, OSError, subprocess.SubprocessError, ValueError) as error:
+    except (CheckFailure, check_review_artifacts.CheckFailure, OSError, subprocess.SubprocessError, ValueError) as error:
         print(f"FAIL: {error}", file=sys.stderr, flush=True)
         return 1
     return 0

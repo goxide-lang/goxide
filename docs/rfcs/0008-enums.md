@@ -213,10 +213,11 @@ metadata v4 在已验证身份、helper 签名和 Eq 资格之外记录 PartialE
 
 ### A06 单文件外部恢复实施合同（2026-10-06）
 
-下一片按 [RFC0001 的 A06 合同](0001-package-loading.md#a06-已知-go-module-的单文件外部恢复2026-10-06实施前合同)
+本片按先提交的 [RFC0001 A06 合同](0001-package-loading.md#a06-已知-go-module-的单文件外部恢复2026-10-06实施前合同)
 接通配置已知的单文件 consumer；复用当前 schema 8、真实 canonical enum/family 身份
 及完整 artifact 校验链。不新定 enum 表示、公开入口验证、internal-origin relay 或
-private payload 的新发布协议。实际交付与准确 SHA 后续记录，本节不代表已经通过。
+private payload 的新发布协议。实际交付、正反例和准确 SHA 见
+[单文件外部恢复报告](../reviews/single-file-external-recovery-20261006.md)，不以合同本身作为测试证明。
 
 ## 具体 builtin sum 字段协议（2026-10-03）
 

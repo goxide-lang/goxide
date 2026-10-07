@@ -13,3 +13,17 @@ website/__pycache__/
 /website/node_modules/
 /website/dist/
 /website/qa-artifacts/
+
+# Review reports and reproducible inputs belong in Git; raw run output stays local.
+/docs/reviews/**/raw/
+/docs/reviews/**/logs/
+/docs/reviews/**/qa-artifacts/
+/docs/reviews/**/*.log
+/docs/reviews/**/*.stdout
+/docs/reviews/**/*.stderr
+/docs/reviews/**/*.jsonl
+/docs/reviews/**/*.png
+/docs/reviews/**/*.jpg
+/docs/reviews/**/*.jpeg
+/docs/reviews/**/*.gif
+/docs/reviews/**/*.webp

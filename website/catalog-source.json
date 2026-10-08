@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "afa3f0a52b2d8206d75df38d10833e537ea7a0dd",
-  "reviewedAt": "2026-10-07",
+  "compilerCommit": "cd3add0bcb3a66ac02f9ea2a8313bb4aa7eaa5b8",
+  "reviewedAt": "2026-10-08",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
   },
@@ -110,7 +110,8 @@
         "tests/acceptance/macro_packages_test.go",
         "docs/rfcs/0011-macros.md",
         "internal/macros/fragment_categories_test.go",
-        "tests/acceptance/macro_fragment_categories_test.go"
+        "tests/acceptance/macro_fragment_categories_test.go",
+        "internal/macros/primitive_aliases_test.go"
       ],
       "checks": []
     },
@@ -189,7 +190,8 @@
         "tests/acceptance/propagate_test.go",
         "tests/acceptance/propagate_values_test.go",
         "internal/propagate/sum_inference.go",
-        "internal/frontend/shared_std_test.go"
+        "internal/frontend/shared_std_test.go",
+        "internal/frontend/explicit_std_test.go"
       ],
       "checks": [
         "option_no_context",
@@ -239,7 +241,8 @@
         "internal/equality/lower.go",
         "tests/acceptance/equality_test.go",
         "tests/acceptance/manual_equality_test.go",
-        "tests/acceptance/macros_test.go"
+        "tests/acceptance/macros_test.go",
+        "internal/frontend/derive_container_bindings_test.go"
       ],
       "checks": [
         "clone_pointer"
@@ -266,7 +269,8 @@
         "internal/printing/lower.go",
         "internal/deriveextras/generate.go",
         "tests/acceptance/manual_default_test.go",
-        "tests/acceptance/print_default_test.go"
+        "tests/acceptance/print_default_test.go",
+        "internal/frontend/derive_container_bindings_test.go"
       ],
       "checks": [
         "format_arity"
@@ -755,7 +759,7 @@
       }
     }
   ],
-  "compilerDigest": "2412f1a252c1dd195d1a4d5deed55e2dcd605e65d18edb0b838da36b1976203c",
+  "compilerDigest": "78a0e2ab02cde733ec2579ca6db4d01962fca8b2baaf97e81702fa449e2a250d",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

@@ -1,4 +1,6 @@
-> 当前仓内验证固定编译器源码为 `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，网站工具 HEAD 单独记录。
+> 当前构建与本批验证入口见 [README](README.md) 和 [focused 验证](validation/README.md)。以下保留历史记录，不能用旧 pin 推断当前或线上版本。
+
+> 历史仓内验证固定编译器源码为 `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，网站工具 HEAD 单独记录。
 > 原 97 fixture / 10 示例逐字节保留，A04 追加 8 fixture / 1 示例，A01 再追加 12 fixture（合计 117 / 11）；旧 33 组 AST 对照和 5 对原生程序独立保留。
 > 编译器 pin、网站工具提交与正式验收结果分别记录。网站工具 `35221fe9f5cb49b152ea5faad9529dbefa14cd69` 的七阶段已通过，见[本轮报告](../docs/reviews/macro-fragment-categories-20261007.md)；复现入口见[验证说明](validation/README.md)，未部署。
 > A06 外部恢复由原生 CLI 验收；浏览器仍只加载随附 export data，样例 CLI 对照使用 module-free standalone 输入。

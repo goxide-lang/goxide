@@ -1068,3 +1068,14 @@ FC-10 真红测、路径失败、执行会话丢失与最终重跑结果保留�
 [交付报告](reviews/macro-fragment-categories-20261007.md)；原始日志和截图在仓外。
 普通实参和上下文仍由最终 Go 检查；未引入 type fragment、命名/导入类型分配、
 新泛型声明或公开 ABI。A01/A03/RFC0011/MVP 整项不关闭，本批未 push 或部署。
+
+
+## 官网 alias 与显式 std 局部具体登记（2026-10-08）
+
+生产 pin `dd6031e7572a557b9d01305bacb64fd81eb719b2`；当前网站验证提交
+`25894641372ff44e67aad86f27492469769de33f`。无冲突 primitive/derive alias 精简，
+显式 canonical Option/Result 构造、match、`?` 补齐本地具体实例及完整 payload 校验。
+Linux focused race/vet、设计门禁和 11 原例 + 7 新输入的 CLI/Node GoWASM/保留 sandbox
+HTTP Worker 一致性通过。整树唯一过期拒绝断言及修正后的针对性通过分别记录，
+不宣称最终提交的一次整树全绿，详见[本批报告](reviews/website-semantic-cleanups-20261008.md)。
+无新语法或公开 ABI 变更，A01/A03/MVP 整项、runtime 迁移及多文件 UI 继续开放。

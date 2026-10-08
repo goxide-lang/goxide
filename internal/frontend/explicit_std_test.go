@@ -217,3 +217,33 @@ func TestNativePayload(t *testing.T){valid:=s.NewSome(Box{Events:map[string][]e.
 		}
 	})
 }
+
+func TestExplicitStdPayloadDoesNotImportUnrelatedFacade(t *testing.T) {
+	dir := sharedStdModule(t, "example.org/payloadroute")
+	sharedStdWrite(t, dir, "event/event.gox", `package event
+pub enum Event { Ready, }
+`)
+	sharedStdWrite(t, dir, "a_alias/alias.gox", `package alias
+import e "example.org/payloadroute/event"
+type Alias = e.Event
+func init(){panic("unrelated facade was initialized")}
+`)
+	sharedStdWrite(t, dir, "box/box.go", `package box
+import e "example.org/payloadroute/event"
+type Box struct{Event e.Event}
+`)
+	sharedStdWrite(t, dir, "zzzconsumer/read.gox", `package consumer
+import(s "github.com/goxide-lang/std/sum";b "example.org/payloadroute/box")
+func Read(v s.Option[b.Box]){match v{_=>{}}}
+`)
+	output := filepath.Join(t.TempDir(), "out")
+	if _, err := CompileModuleWithOptions(dir, output, ModuleOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	sharedStdWrite(t, output, "zzzconsumer/read_test.go", `package consumer
+import("testing";s "github.com/goxide-lang/std/sum";b "example.org/payloadroute/box";e "example.org/payloadroute/event")
+func TestCanonicalPayloadRoute(t *testing.T){Read(s.NewSome(b.Box{Event:e.NewEventReady()}));defer func(){if recover()==nil{t.Fatal("missing payload validation")}}();Read(s.NewSome(b.Box{}))}
+`)
+	sharedStdGo(t, output, "test", "-race", "./zzzconsumer")
+	sharedStdGo(t, output, "vet", "./zzzconsumer")
+}

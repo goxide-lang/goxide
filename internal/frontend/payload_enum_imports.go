@@ -83,11 +83,14 @@ func payloadEnumResolver(owner string, known map[string]PackageResult, imp types
 				if !ok || !types.Identical(t, obj.Type()) {
 					continue
 				}
-				if !enumOriginImportAllowed(owner, path) || !enumOriginImportAllowed(owner, e.DefinitionPath) {
+				if !enumOriginImportAllowed(owner, e.DefinitionPath) {
 					inaccessible = true
 					continue
 				}
-				return propagate.PayloadEnum{TypePath: path, TypeName: e.Name, ValidatorPath: e.DefinitionPath, Validator: e.Validator}, true, nil
+				// The registry may contain unrelated facades reexporting this type.
+				// Its public canonical origin is already a payload dependency;
+				// importing a facade could introduce a new init side effect.
+				return propagate.PayloadEnum{TypePath: e.DefinitionPath, TypeName: e.DefinitionName, ValidatorPath: e.DefinitionPath, Validator: e.Validator}, true, nil
 			}
 		}
 		if inaccessible {

@@ -442,6 +442,7 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 		}
 		return Result{}, stageError("macros.ResolveBuiltins", err)
 	}
+	macros.ResolvePrimitiveAliases(packagePath, fs, f, expanded.PrimitiveAliases, builtinImporter)
 	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__goxide_serde"}
 	if cfg != nil {
 		g.localProtocols = cfg.localProtocols

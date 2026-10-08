@@ -268,7 +268,7 @@ pub macro_rules! allocate {()=>{new([len(inner.values!())]byte)};}
 		length := ast.Unparen(array.Len).(*ast.CallExpr)
 		literal := ast.Unparen(length.Args[0]).(*ast.CompositeLit)
 		element := literal.Type.(*ast.ArrayType).Elt.(*ast.Ident)
-		if aliases[element.Name] != "int" {
+		if element.Name != "int" && aliases[element.Name] != "int" {
 			t.Fatalf("inner primitive rebound through outer int declaration: %s", expanded.Source)
 		}
 		found = true

@@ -17,6 +17,7 @@
 - 生产摘要：`15de732b6cebac4fba64b65ff2138c40670a06e4e6210d099ffc732d67625c86`。
 - 最终网站/fixture 验证提交：`25894641372ff44e67aad86f27492469769de33f`。
 - 合同断言修正提交：`357950768cff3872dd234f888715cffb4073974a`，仅测试变化；之后本报告与验收账为文档提交。
+- 后续完整整树 race 的源码/测试提交：`1cf209b8b646bfa44c3cca0c8c913a95054e0592`；本次报告补记是其仅文档后继，源码与测试相同，运行验证仍归属该准确 SHA。
 - std `ce5bccb4ff9c7fb96b7f192a3a263051590d9288`；serde `a1b791e96d660c6be620e110c566a9a171631b7e`；无本机 replace。
 - ABI 保持 enum 8、reference 3、use 2、sum 2。每个 Go shell 按实际 start.md 激活 Go 1.27.1；原生 GOMAXPROCS=4，只有 Node GoWASM 子进程为 1。
 
@@ -25,14 +26,15 @@
 | 检查 | 结果与范围 |
 | --- | --- |
 | Focused compiler / generated modules | 宏、derive、显式 std 与相关回归 race/vet 通过；独立审查的 native/transitive、artifact 和 init 探针通过 |
-| 整树 race | 单次整树运行 exit 1：645 顶层及 1638 子测试通过，1 项过期合同断言失败；17 个包通过、1 个包失败、5 个包无测试。修复后的 5 项 qualified acceptance race 与包 vet 通过，详情见下文 |
+| 首轮整树 race（历史） | exit 1：645 顶层及 1638 子测试通过，1 项过期合同断言失败；17 个包通过、1 个包失败、5 个包无测试。修复后的 5 项 qualified acceptance race 与包 vet 通过，详情见下文 |
+| 后续最终整树 race | 准确 `1cf209b` 一次完整运行 exit 0，耗时 729 秒（729.199 秒）：18 个有测试包、646 顶层及 1638 子测试全部 PASS，FAIL=0、测试 SKIP=0；另 5 个包无测试文件 |
 | vet / web | `go vet -mod=readonly -tags goxideweb ./...` 通过；最终构建后 `go test -mod=readonly -race -tags goxideweb -count=1 ./cmd/goxide-web` 通过 |
 | 设计门禁 | `python3 -B scripts/check_design.py` 通过：生产源码门禁为 131 Markdown、26 RFC、13 条 Go 机制命令；最终报告另跑 docs-only，机制证据与编译器测试分开 |
 | 网站构建 | `website/build.py` 通过，11 原网站例子逐字节保留并真实原生执行；共享 std/serde、export data、WASM、manifest 源码摘要核验通过 |
 | 当前 CLI/WASM/Worker | 11 原例 + 7 新输入，36 组 LF/CRLF CLI/Node GoWASM 字节或诊断完全一致；真实 HTTP Worker 36 组一致；16 个成功输入执行原生程序并核对独立 stdout |
 | Chromium | 151.0.7922.173 / Python Playwright 1.62.0，`chromium_sandbox=True`；获准上下文运行，仅回环 HTTP 请求 |
 
-整树命令为 `env -u GOWORK go test -mod=readonly -race -count=1 -timeout 30m -json ./...`，
+首轮整树命令为 `env -u GOWORK go test -mod=readonly -race -count=1 -timeout 30m -json ./...`，
 在 `2c1df02` 启动，生产源码与最终 pin 相同。
 唯一失败 `TestQualifiedPackagesRequireConcreteValidation` 仍要求 producer 没有
 `Result[string,error]` 登记就拒绝；它与本次消费端可信 canonical 实例补齐合同冲突。
@@ -41,7 +43,15 @@
 错误类型身份和未登记家族的邻接负例保留。独立只读审查认可此合同迁移。
 随后 `go test -mod=readonly -race -count=1 ./tests/acceptance -run '^TestQualifiedPackages'`
 通过（5 项，含生成模块 race/vet），`go vet -mod=readonly ./tests/acceptance` 通过。
-未为纯测试/文档改动重复整树，不将这一组合证据描述为最终提交的一次整树全绿。
+当时尚未再次运行整树，未把这一组合证据描述为一次整树全绿。
+
+随后按主线合入前要求，在干净的 `1cf209b8b646bfa44c3cca0c8c913a95054e0592`
+上实际完成一次完整整树 race，2026-10-08 07:37:15–07:49:24 UTC，结果见表。
+实际命令为 `env -u GOWORK "$GO_BIN" test -mod=readonly -race -count=1 -timeout 30m -json ./...`，
+其中 `GO_BIN=/workspace/.cloud-setup/toolchains/go1.27.1/bin/go`。
+运行前后 HEAD 相同、工作树均干净，修正后的 5 项 qualified acceptance 也在该次整树中全部通过。
+复核确认合同更新仍要求真实 canonical 身份与完整 payload validator，保留非法值及副作用次序检查。
+此后仅补记本报告，未改源码或测试、未重跑测试或已通过的网页矩阵；此前失败与修复历史保留。
 
 当前验收入口和失败保留规则见 [验证说明](../../website/validation/README.md)，
 用例为 [semantic-cleanups-cases.json](../../website/validation/semantic-cleanups-cases.json)。
@@ -65,13 +75,15 @@ python3 -B website/validation/focused.py \
 `focused-v1/summary.json`、`focused-v2/summary.json`、`logs/full-race.jsonl`、
 `logs/qualified-repair-race.txt`、`logs/qualified-repair-vet.txt`、`logs/vet-tagged.txt`、
 `logs/web-race-v2.txt`、`logs/design-final.txt` 和 `logs/design-report.txt`。
+后续最终整树证据为该根目录 `final-race-1cf209b/` 下的 `summary.json`、`identity.json`、
+`events.jsonl`、`stderr.txt` 和 `remote-refs.txt`；summary 记录命令、准确身份、结果及证据摘要。
 独立语义探针见仓外 `/workspace/.cloud-setup/semantic-cleanups-review/REVIEW.md`；
 这些运行证据未加入 Git。
 
 ## 边界与整合
 
-- 宏 + Eq 派生组合存在基线已有 A03 展开栈缺失，禁用新 resolver 的对照仍复现；本片未修复。普通 struct DSL 后置路径和 LF/CRLF 模板 token/栈回归通过。
+- 宏 + Eq 派生组合存在基线已有 A03 展开栈缺失，本片未修复。后续在准确 main `eb6ddf0` 与最终 `1cf209b` 用同一 overlay 探针复验：`PartialEq/Eq` 与 `zero!() → int(0)` 同文件时，两边均编译成功，但生成调用位置的宏定义/调用栈均为空；这证明该场景不是本批引入。探针 PASS 表示取证成功，不表示缺陷修复，影响仍是诊断追溯。证据见仓外 `/workspace/.cloud-setup/a03-exact-provenance-20261008/report.md`。普通 struct DSL 后置路径和 LF/CRLF 模板 token/栈回归通过。
 - 未运行完整网站 UI/历史七阶段 AST 等价矩阵；alias 精简有意改变生成 AST，旧 oracle 和冻结矩阵原样保留，可在旧准确提交复现。此次不宣称 Mac 或托管 CI 通过。
 - 无自动 family reexport、新手写 generic alias、新派生协议、runtime 迁移、多文件浏览器 UI、限定 derive 或部署。
 - 原始日志/资产/探针均在忽略目录或 `/workspace/.cloud-setup/semantic-cleanups-20261008/` 等仓外目录；仓内只有源码、测试和本短报告。
-- 建议父协调合入整个已验证功能分支，保留源码 pin 对象与网站绑定提交的关系；没有更新 main、force push、tag 或发布网站。
+- 建议父协调合入整个已验证功能分支，保留源码 pin 对象与网站绑定提交的关系；main 合入仍待批准，本批仅推送功能分支，没有更新 main、force push、tag 或发布网站。

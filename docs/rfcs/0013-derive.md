@@ -193,3 +193,16 @@ Clone/Debug/serde、typed Error source、blank/embedded 字段协议或泛型规
 enum 元数据坐标属于 enum lowering 之前，必须使用该阶段保存的 map 和 offset；
 不得将其行号当作 refs/属性阶段行号。前一个 enum 的空行与降低行数不同、后面
 存在同名声明的负例必须定位到实际 enum，不能误指随后声明。
+
+
+## 无冲突容器类型拼写（2026-10-08）
+
+Clone/Debug 的容器类型保护可以由生成局部绑定的统一 fresh-name 分配提供；不再
+要求简单 `[]int` 必须额外生成 package type alias。生成的 `src`、`item`、`out` 等
+绑定必须避开类型表达式真正使用的类型和 import 名，嵌套容器也遵守同一规则。
+在原文件环境中保留类型表达式，不能通过新 defined type 或改用户类型名消除冲突。
+若仍需 alias，只能在相同身份及文件解析环境下复用。
+
+验收同时核对简单与嵌套容器、named type/import 遮蔽、nil/empty、普通赋值共享、
+显式容器 Clone 的独立存储、元素协议以及类型身份/method set。Eq-only 不因此
+新增 alias；不改变已有深浅复制、递归资格、手写协议或 blank/embedded 字段边界。

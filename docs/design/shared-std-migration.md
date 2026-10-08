@@ -129,3 +129,17 @@ match r {
 当前实施证据：`internal/frontend/shared_std_test.go` 已改用真正发布的 std 依赖执行 goxide→Go 独立模块，并拒绝旧 schema 7。`shared_std_artifact_test.go` 核验 owner 路径、同签名未登记 helper 与候选顺序。serde、网站 catalog、可读性和首轮 TOML 格式迁移已整合；最终整树结果以整合记录为准，不把重点测试冒充完整交付。
 
 用户随后批准统一项目模型：从 Go 迁入时由 go.mod/go.sum 迁成 goxide.toml+goxide.lock，混合指 .go/.gox 源码。该后续接口由独立工具链任务拥有；当前测试使用现有 manifest 模式，不把根 go.mod authority 固化为长期架构。公开 std/serde 是普通 Go 发行模块，继续保留其 go.mod。
+
+
+## 显式 std 具体实例登记（2026-10-08）
+
+直接导入 `github.com/goxide-lang/std/sum` 后，`s.Option[T]` / `s.Result[T,E]`
+与兼容的裸家族使用同一 canonical 身份。已支持的限定构造、match 和 `?` 应为
+实际使用的具体参数登记本地实例及完整 payload validator，不要求用户先用裸
+Option/Result 触发登记。不以名称、相同底层结构或 shape-only validator 代替
+canonical 类型、全部实参和载荷契约核验。
+
+保留现有 use/透明 alias 路径、生成 Go 的 Option/Result/Goxide* 兼容 API、
+exact-case 检查、递归载荷检查及 `?` 单次求值/最近函数帧。手写 generic alias
+和新 defined 类型的既有边界不放宽。验收包括直接构造/Go 构造函数、match/传播、
+跨文件 import 环境、嵌套非法 enum、typed-nil/指针/伪 case 及重复生成一致性。

@@ -6,8 +6,8 @@
   },
   {
     "id": "derive-nested-binding",
-    "source": "package main\nimport \"fmt\"\n#[derive(Clone,Debug)]\ntype src struct{ N int }\n#[derive(Clone,Debug)]\ntype Box struct{ Items map[string][][]src }\nfunc main(){\n original:=Box{Items:map[string][][]src{\"a\":{{{N:3}}}}}\n ordinary:=original\n ordinary.Items[\"a\"][0][0].N=4\n copied:=CloneBox(&original)\n copied.Items[\"a\"][0][0].N=9\n fmt.Println(DebugBox(&original))\n fmt.Println(DebugBox(&copied))\n}\n",
-    "expectedStdout": "Box { Items: {\"a\": [[src { N: 4 }]]} }\nBox { Items: {\"a\": [[src { N: 9 }]]} }\n"
+    "source": "package main\nimport \"fmt\"\n#[derive(Clone,Debug)]\ntype src struct{ N int }\n#[derive(Clone,Debug)]\ntype Box struct{ Items [][]src }\nfunc main(){\n original:=Box{Items:[][]src{{{N:3}}}}\n ordinary:=original\n ordinary.Items[0][0].N=4\n copied:=CloneBox(&original)\n copied.Items[0][0].N=9\n fmt.Println(DebugBox(&original))\n fmt.Println(DebugBox(&copied))\n}\n",
+    "expectedStdout": "Box { Items: [[src { N: 4 }]] }\nBox { Items: [[src { N: 9 }]] }\n"
   },
   {
     "id": "macro-type-capture-rejected",

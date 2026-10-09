@@ -30,7 +30,7 @@ func TestManualDefaultInstalledBusinessRace(t *testing.T) {
 	// Explicit Default registration now crosses source packages. Defining an
 	// implementation for a foreign target remains unsupported.
 	foreign := t.TempDir()
-	packagesWrite(t, foreign, "go.mod", "module manualdefault.example/rejected\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
+	packagesWrite(t, foreign, "go.mod", "module manualdefault.example/rejected\ngo 1.27\n")
 	packagesWrite(t, foreign, "config/types.gox", "package config\ntype Settings struct { Port int }\nimpl Default for Settings { func default() Settings { return Settings{Port:9090} } }\n")
 	for i, body := range []string{
 		"#[derive(Default)]\ntype Service struct { Value config.Settings }\n",

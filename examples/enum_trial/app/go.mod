@@ -2,12 +2,10 @@ module trial.example/app
 
 go 1.27
 
-require (
-    github.com/hxsf/goxide v0.0.0
-    trial.example/model v0.0.0
-)
-replace github.com/hxsf/goxide => ../../..
+require trial.example/model v0.0.0
+
 replace trial.example/model => ../model
 
-require github.com/goxide-lang/serde v0.0.0-20261004120911-a1b791e96d66
-require github.com/goxide-lang/std v0.0.0-20261004173304-ce5bccb4ff9c
+require github.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0
+
+require github.com/goxide-lang/std v0.0.0-20261009053434-9ed27c85088a

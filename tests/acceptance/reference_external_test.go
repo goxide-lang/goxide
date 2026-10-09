@@ -18,7 +18,7 @@ func TestCrossModuleReferenceArtifacts(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	module := func(path, library string) string {
-		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", path, filepath.ToSlash(root))
+		s := fmt.Sprintf("module %s\ngo 1.27\n", path)
 		if library != "" {
 			s += fmt.Sprintf("require library.example/refs v0.0.0\nreplace library.example/refs => %s\n", filepath.ToSlash(library))
 		}
@@ -119,6 +119,10 @@ func TestCrossModule(t *testing.T){if a.Run()!=11||a.Extra()!=3||c.Read()!=8{t.F
 	for _, dir := range []string{library, app} {
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
+		graph := packagesCommand(t, dir, tool, true, "list", "-mod=readonly", "-m", "all")
+		if strings.Contains(graph, "github.com/hxsf/goxide") {
+			t.Fatalf("generated reference module depends on compiler: %s", graph)
+		}
 	}
 	plain := t.TempDir()
 	packagesWrite(t, plain, "go.mod", module("plain.example/app", library))

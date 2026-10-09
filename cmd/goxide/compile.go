@@ -4,7 +4,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/hxsf/goxide/internal/naming"
@@ -179,18 +178,11 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		}
 	}
 	if root == "" {
-		return errors.New("run/build requires --runtime pointing to the local goxide module")
+		return errors.New("standalone run/build requires --runtime pointing to a Go module manifest with pinned std/serde dependencies")
 	}
 	root, err = filepath.Abs(root)
 	if err != nil {
 		return err
-	}
-	gomod, err := os.ReadFile(filepath.Join(root, "go.mod"))
-	if err != nil {
-		return err
-	}
-	if !bytes.Contains(gomod, []byte("module github.com/hxsf/goxide")) {
-		return errors.New("--runtime does not identify the goxide module")
 	}
 	// Select only a real Go executable; this environment may have a board game named go.
 	tool, err := exec.LookPath(*goTool)
@@ -214,50 +206,8 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	// The single-file build is an owned module. Carry the selected runtime's
-	// dependency declarations and checksums, including public std/serde, rather
-	// than relying on requirements inherited through a local compiler replace.
-	if err = os.WriteFile(filepath.Join(tmp, "go.mod"), gomod, 0600); err != nil {
+	if err = writeStandaloneSupportModule(tool, root, tmp); err != nil {
 		return err
-	}
-	sums, err := os.ReadFile(filepath.Join(root, "go.sum"))
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if err == nil {
-		if err = os.WriteFile(filepath.Join(tmp, "go.sum"), sums, 0600); err != nil {
-			return err
-		}
-	}
-	inspect := exec.Command(tool, "mod", "edit", "-json")
-	inspect.Dir, inspect.Env = root, localEnv()
-	raw, err := inspect.Output()
-	if err != nil {
-		return fmt.Errorf("runtime module declarations: %w", err)
-	}
-	var declarations struct {
-		Replace []struct {
-			Old, New struct{ Path, Version string }
-		}
-	}
-	if err = json.Unmarshal(raw, &declarations); err != nil {
-		return err
-	}
-	edits := []string{"mod", "edit", "-module=goxide.local/generated", "-require=github.com/hxsf/goxide@v0.0.0", "-replace=github.com/hxsf/goxide=" + filepath.ToSlash(root)}
-	for _, replace := range declarations.Replace {
-		if replace.New.Version != "" || filepath.IsAbs(replace.New.Path) {
-			continue
-		}
-		old := replace.Old.Path
-		if replace.Old.Version != "" {
-			old += "@" + replace.Old.Version
-		}
-		edits = append(edits, "-replace="+old+"="+filepath.ToSlash(filepath.Join(root, replace.New.Path)))
-	}
-	edit := exec.Command(tool, edits...)
-	edit.Dir, edit.Env = tmp, localEnv()
-	if output, err := edit.CombinedOutput(); err != nil {
-		return fmt.Errorf("generated module declarations: %w: %s", err, output)
 	}
 	if err = os.WriteFile(filepath.Join(tmp, "main.go"), result.Go, 0600); err != nil {
 		return err
@@ -308,8 +258,8 @@ func localEnv() []string {
 }
 func findModule(dir string) string {
 	for {
-		b, e := os.ReadFile(filepath.Join(dir, "go.mod"))
-		if e == nil && bytes.Contains(b, []byte("module github.com/hxsf/goxide")) {
+		_, e := os.Stat(filepath.Join(dir, "go.mod"))
+		if e == nil {
 			return dir
 		}
 		p := filepath.Dir(dir)

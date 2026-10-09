@@ -79,7 +79,7 @@ func TestDeferredSetterLosesPhaseOnePlace(t *testing.T) {
 func contextIR(t *model.Tree, first *int, n uint, r Result[int, error]) Result[int, error] {
 	cond := false
 	if n == 63 {
-		__goxide_enum_inst_54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(r)
+		GoxideInst54ff08137ead5d4ca33b5ab78a762fed110119a4e0a0ad7c089db72bd5ca2ae2(r)
 		switch v := r.(type) {
 		case __goxide_enum_case_Result_Ok[int, error]:
 			cond = v.Value == 7

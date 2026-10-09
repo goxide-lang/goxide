@@ -73,7 +73,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.StringVarP(&req.Output, "o", "o", "", "output source/directory (transpile), expanded source (expand), or binary (build)")
 		f.StringVar(&req.SourceMap, "source-map", "", "write single-file source mapping JSON")
 		f.StringVar(&req.Expanded, "expanded", "", "write single-file expanded Go source")
-		f.StringVar(&req.Runtime, "runtime", "", "local goxide module root (standalone single-file run/build only)")
+		f.StringVar(&req.Runtime, "runtime", "", "Go module root selecting pinned public std/serde dependencies (standalone single-file run/build only)")
 		f.StringVar(&req.Tags, "tags", "", "Go build tags (directory mode; comma/space separated)")
 		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (Go 1.27+; unused for single-file transpile/expand)")
 		f.StringArrayVarP(&req.Packages, "package", "p", nil, "select workspace member by module identity (repeatable)")

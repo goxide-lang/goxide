@@ -2,7 +2,8 @@
 
 中文优先的静态语言介绍网站，以及同包多文件 goxide → Go 浏览器转译器（保留旧单文件入口）。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
-本轮整合同包多文件 Playground、无冲突宏/派生 alias 精简、显式 std/sum 实例校验及宏/Eq 来源追溯修复。
+本轮把 formatting/runtime 支持包迁到 std；同包多文件 Playground 同步
+导出数据与只读依赖来源。
 编译器准确提交与生产源码摘要由 `catalog-source.json` 的 `compilerCommit` /
 `compilerDigest` 记录，构建前逐文件核对；`websiteCommit` 独立记录网站工具 HEAD。
 这不表示已更新线上版本。[仓内验证说明](validation/README.md)区分当前验证和历史记录。
@@ -22,7 +23,8 @@ GoFiles/CgoFiles，以及真实模块/工具链版本、源码路径和 SHA-256�
 用户包输入，不支持任意模块下载、多包工程编辑、上传或外部构建脚本。
 
 定向验收见 [同包验证入口](validation/package-files/README.md)。下面的完整历史
-验证流程仍保留；本次验收结果以[交付报告](../docs/reviews/playground-package-files-20261009.md)为准，不借用旧轮次结论。
+验证流程仍保留；[多文件初版交付报告](../docs/reviews/playground-package-files-20261009.md)
+记录之前版本，当前改动需按本文命令重新验证。
 
 ## 从干净 checkout 复现
 
@@ -38,7 +40,8 @@ python3 -B website/validation/focused.py \
   --go /absolute/path/to/go \
   --node /absolute/path/to/node \
   --chromium /absolute/path/to/chromium \
-  --cases website/validation/semantic-cleanups-cases.json
+  --cases website/validation/semantic-cleanups-cases.json \
+  --cases website/validation/std-support-cases.json
 ```
 
 当前入口验证全部 11 个真实网站例子及本批正反例，核对 LF/CRLF 的 CLI、Node GoWASM
@@ -83,7 +86,7 @@ export GOMODCACHE=/workspace/goxide-environment/modcache
 ## 真实转译与支持范围
 
 - `cmd/goxide-playground` 的旧单文件入口调用 `internal/frontend.Compile`，同包文件集合入口调用 `internal/frontend.CompilePackage`。WASM 只转译，不运行生成代码。
-- 支持同一个用户包的 1–16 个普通 `.gox` 文件，保留旧单文件兼容入口。固定随附包：`fmt`、`errors`、`io`、`strconv`、`strings`、`math`、`encoding/json`、本仓库 `runtime`、`formatting`，以及公开 `std/sum`、`serde`、`serde/json`，以及真实导出数据包含的依赖闭包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
+- 支持同一个用户包的 1–16 个普通 `.gox` 文件，保留单文件入口。固定随附包：`fmt`、`errors`、`io`、`strconv`、`strings`、`math`、`encoding/json`，以及公开 `github.com/goxide-lang/std` 的 `runtime`、`formatting`、`sum` 子包和 `serde`、`serde/json`，以及真实导出数据包含的依赖闭包。支持包直接来自固定版本的 std，不再导入或浏览编译器仓库中的旧支持包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
 - 适配只在 `js/wasm` 下启用。原生 importer 使用离线 `go list -export`；已知 Go module 的 CLI 单文件使用输入 owner 的受管 modfile 查询同一依赖图，仅选择指定文件。WASM 导入来自构建时真实 Go export archive 的 `__.PKGDEF`，不是手写伪造类型签名，也不会调用外部服务。
 - 导出数据来自构建机器的原生目标；清单记录 `exportTarget`。早期 Linux/amd64 + Go 1.27.1 记录是历史证据；A06 平台与结果以这次准确提交的验证报告为准，不把它描述为所有 GOOS/GOARCH 的类型环境。构建时请在宿主平台生成资源，之后可以交叉构建纯静态 HTTP 二进制。
 - 没有浏览器文件系统、任意依赖解析、跨模块恢复、目录工程载入、外部宏包或 Go 执行 API。CLI 的 use/pub use、源码图宏聚合、version/path/git 依赖、feature、target 与受授权 host 构建脚本不在浏览器执行。

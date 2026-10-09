@@ -44,7 +44,7 @@ func TestPackagesApplication(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		packagesWrite(t, source, "go.mod", packagesModule(root))
+		packagesWrite(t, source, "go.mod", packagesModule())
 		generated := filepath.Join(t.TempDir(), "generated")
 		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
 		packagesWrite(t, generated, "application_test.go", packagesAssertions)
@@ -77,7 +77,7 @@ func TestPackagesApplication(t *testing.T) {
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {
 				source := t.TempDir()
-				packagesWrite(t, source, "go.mod", packagesModule(root))
+				packagesWrite(t, source, "go.mod", packagesModule())
 				packagesWrite(t, source, test.filename, test.source)
 				for name, data := range test.files {
 					packagesWrite(t, source, name, data)
@@ -92,8 +92,8 @@ func TestPackagesApplication(t *testing.T) {
 	})
 }
 
-func packagesModule(root string) string {
-	return "module packages.example/app\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => " + fmt.Sprintf("%q", filepath.ToSlash(root)) + "\n"
+func packagesModule() string {
+	return "module packages.example/app\n\ngo 1.27\n"
 }
 
 func packagesWrite(t *testing.T, root, name, data string) {

@@ -8,7 +8,10 @@ tabs, file editing/add/delete, example changes, and read-only dependency identit
 Saved events from real Workers test both old request IDs and obsolete Worker
 instances deterministically. Helper-file clipboard copy, 390px mobile selectors
 and overflow, served WASM/dependency source hashes, and actual toolchain/module
-versions are also checked. The browser is launched with its sandbox enabled.
+versions are also checked. Every dependency file is opened in the read-only UI;
+the formatting/runtime/sum packages must have the pinned std module identity,
+and the export dependency closure must contain no compiler packages. The browser
+is launched with its sandbox enabled.
 
 Use an already-built matching website and CLI; serve the generated website on
 loopback in the tool-approved context. No installation, network module fetch,

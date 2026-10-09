@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "e68bfe6ed83de432e2c2ee79936bda4150cc78ca",
+  "compilerCommit": "05a53b907e7930b23d2c80015135dff0f61a7a44",
   "reviewedAt": "2026-10-09",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
@@ -612,7 +612,7 @@
       "status": "partial",
       "support": "browser",
       "summary": "当前编译器使用已公开 std/sum 的共享 Option/Result 身份与独立 serde core / JSON。",
-      "usage": "生成 Go 导入共享 sum，不再为每个用户包复制通用 Option/Result 定义；具体载荷 validator 仍由编译器生成。JSON 示例使用 github.com/goxide-lang/serde/json。",
+      "usage": "生成 Go 导入共享 std/sum、std/formatting 和 std/runtime，不再依赖编译器支持包；具体载荷 validator 仍由编译器生成。JSON 示例使用 github.com/goxide-lang/serde/json。",
       "limitation": "enum schema 8 / reference 3 / use 2 / sum ABI 2，必须与新std版本配套；旧marker产物须重生成。固定迁移版本不等于v1 ABI承诺；next仍为空，RFC0024路径语法另属提案。",
       "examples": [
         "result",
@@ -759,7 +759,7 @@
       }
     }
   ],
-  "compilerDigest": "26be044904505b198ee009615cc318ecd2286db37f74a19b0919a8b712ee9d52",
+  "compilerDigest": "8a18f2a831c75d2a20d7e9a85b7704231b76edd52751eb0d4484cdb16e2ad3b5",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

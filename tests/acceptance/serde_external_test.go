@@ -16,7 +16,7 @@ func TestExternalSerdeModules(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	mod := func(name, lib string) string {
-		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", name, filepath.ToSlash(root))
+		s := fmt.Sprintf("module %s\ngo 1.27\n", name)
 		if lib != "" {
 			s += fmt.Sprintf("require wire.example/lib v0.0.0\nreplace wire.example/lib => %s\n", filepath.ToSlash(lib))
 		}

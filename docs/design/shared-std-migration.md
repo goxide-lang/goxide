@@ -1,6 +1,6 @@
 # 共享 std、独立 serde 与 sum 推导迁移计划
 
-状态：**独立库已公开提交，compiler 整合进入最终验收**（2026-10-04）。编译器基线 `ae61ec628b55e0fc66ce96d47261c0a6809c0280`，独立工作分支 `feat/shared-std-sums`。本文替代[此前研究](../rfcs/research/shared-sum-abi-and-inference.md)中“先同仓库”的建议；其已验证的 Go 机制与 ABI 风险仍适用。先提交本文与 API 合同，再实现。std 的“稳定核心”是分类，不构成 v1.0、长期 ABI 冻结或发布承诺。
+状态：本文记录 2026-10-04 的共享 sum/serde 迁移。2026-10-09 的 formatting/runtime 归属与直接切换要求以[支持库迁移合同](support-library-migration.md)为准，覆盖本文首轮不迁移一般 runtime helper 的边界。编译器基线 `ae61ec628b55e0fc66ce96d47261c0a6809c0280`，独立工作分支 `feat/shared-std-sums`。本文替代[此前研究](../rfcs/research/shared-sum-abi-and-inference.md)中“先同仓库”的建议；其已验证的 Go 机制与 ABI 风险仍适用。std 的“稳定核心”是分类，不构成 v1.0、长期 ABI 冻结或发布承诺。
 
 ## 1. 仓库、模块与职责
 
@@ -84,7 +84,7 @@ type GoxideOptionSome[T any] = sum.Some[T]
 
 现有项目锁与 dependency fingerprint 应包含所选 module version/replace 内容和共享 ABI；Go MVS 只选择模块版本，不证明 ABI 兼容。旧生成 Go/.a 的私有 marker 属于旧用户包，无法用新增 alias 追溯修复，生产者、消费者、metadata 和浏览器 export archives 统一重生成。源码公开类型/构造函数名尽量兼容，反射包路径会变化；不承诺旧二进制或旧 artifact 可混用。
 
-serde 迁移需把编译器生成 import、协议 identity 校验、原生手写实现、fixtures 与 JSON 全部切换为同一新 core path。若保留旧 path 的过渡 shim，只能透明转发/alias 同一 core identity，不能复制出另一套协议；是否保留 shim 由同一迁移阶段统一记录，不让 std 任务先创建旧/新双协议。
+serde 迁移需把编译器生成 import、协议 identity 校验、原生手写实现、fixtures 与 JSON 全部切换为同一新 core path。当前直接切换政策不保留旧 path 的过渡 shim 或第二套协议；正常 Go 互操作与卫生类型绑定不因此删除。
 
 ## 5. 家族限定构造与 pattern 推导
 

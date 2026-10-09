@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"fmt"
 	"github.com/hxsf/goxide/internal/testdeps"
 	"io/fs"
 	"os"
@@ -40,7 +39,7 @@ func qualifiedSource(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	packagesWrite(t, source, "go.mod", fmt.Sprintf("module qualified.example/app\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %q\n", filepath.ToSlash(root)))
+	packagesWrite(t, source, "go.mod", "module qualified.example/app\ngo 1.27\n")
 	return source, root
 }
 

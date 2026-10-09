@@ -21,11 +21,9 @@ func enumGeneratedModule(t *testing.T, source, assertions string, wantFailure bo
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, here, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":       "module enumfixture\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => " + root + "\n",
+		"go.mod":       "module enumfixture\n\ngo 1.27\n",
 		"generated.go": string(result.Go), "generated_test.go": assertions,
 	} {
 		if err := testdeps.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {

@@ -178,7 +178,7 @@ Go 的数组 `len/cap` 是否求值也保留：移除 `?` 的调用标记后，�
 
 **研究校正**：Go 规定的是 §6.4 的偏序与赋值两阶段，不规定所有隐式 pointer 读取都在 RHS 调用之前。先前“浅拷贝必因 RHS 重绑而写错旧/新目标”的推断过强，不能据此宣称根本不可降低。普通 place 路径选择先捕获操作数是允许实现；私有路径选择保留原完整赋值同样允许。测试对 RHS 重绑只接受 Go 允许结果集合；对第二阶段第一项重绑深指针、第二项写 promoted field，则必须写入第一阶段确定的旧位置，不能重走新链。
 
-当前方案保留完整 assignment，让 Go 负责隐藏操作数、上下文类型、可取址性及写阶段；仅把 `?` 替换为接收原 sum 值的有类型 helper。所有源操作数作为 helper 实参在原函数执行帧中求值，直接 recover 仍是直接调用。失败先完成验证与错误转换，再经 [compiler-support guard](../../../runtime/assignment.go)的私有 token 退出该赋值；源函数直接 defer 的 Catch 只在自身 pending 时恢复该 token、填写原函数返回槽，随后正常执行先前用户 defer。普通 panic、invalid sum、panic(nil)、Goexit 不进入此恢复路径。没有反射、unsafe、导出私有字段或生产包专用捕获接口。
+当前方案保留完整 assignment，让 Go 负责隐藏操作数、上下文类型、可取址性及写阶段；仅把 `?` 替换为接收原 sum 值的有类型 helper。所有源操作数作为 helper 实参在原函数执行帧中求值，直接 recover 仍是直接调用。失败先完成验证与错误转换，再经 [compiler-support guard](https://github.com/goxide-lang/std/blob/9ed27c85088abd91ac7b32c98cfa532f559ad4d7/runtime/assignment.go)的私有 token 退出该赋值；源函数直接 defer 的 Catch 只在自身 pending 时恢复该 token、填写原函数返回槽，随后正常执行先前用户 defer。普通 panic、invalid sum、panic(nil)、Goexit 不进入此恢复路径。没有反射、unsafe、导出私有字段或生产包专用捕获接口。
 
 返回槽在原函数入口以保留名字的指针绑定，避免内层遮蔽；原无名结果增加 hygienic 名字前先检查完整函数的非法 bare return，blank 名结果也正确处理。guard/defer/赋值放普通词法块，避免声明挡住原合法 forward goto；不增加整条赋值的闭包执行帧。嵌套源闭包保持自己的传播目标，重复遍历不会重复插入入口绑定。
 

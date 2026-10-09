@@ -998,7 +998,7 @@ func (l *lowering) mapConstraint() string {
 	}
 	if l.comparableConstraint == "" {
 		name := "__goxide_qconstraints_" + l.cfg.Namespace
-		spec := &ast.ImportSpec{Name: ast.NewIdent(name), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("github.com/hxsf/goxide/runtime")}}
+		spec := &ast.ImportSpec{Name: ast.NewIdent(name), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("github.com/goxide-lang/std/runtime")}}
 		// Imports must precede declarations even when the original file had none.
 		l.file.Decls = append([]ast.Decl{&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{spec}}}, l.file.Decls...)
 		l.file.Imports = append(l.file.Imports, spec)

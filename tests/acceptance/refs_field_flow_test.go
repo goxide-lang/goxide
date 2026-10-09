@@ -26,7 +26,7 @@ func TestReadonlyFieldReplacementModules(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := filepath.Join(t.TempDir(), "source")
-		packagesWrite(t, dir, "go.mod", packagesModule(root))
+		packagesWrite(t, dir, "go.mod", packagesModule())
 		packagesWrite(t, dir, "model/model.gox", fieldFlowAPI)
 		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\n"+body)
 		return dir

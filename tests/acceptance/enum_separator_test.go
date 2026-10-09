@@ -32,7 +32,7 @@ func TestEnumSeparatorPackageCLI(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	src := t.TempDir()
-	packagesWrite(t, src, "go.mod", packagesModule(root))
+	packagesWrite(t, src, "go.mod", packagesModule())
 	packagesWrite(t, src, "model/types.gox", `package model
 pub enum E { A, B(int), } /* preserved between */ ; // preserved after
 func Read(e E)int{return match e{E::A=>0,E::B(n)=>n,}}

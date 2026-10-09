@@ -42,7 +42,7 @@ func TestPrivateRangeIntegerContext(t *testing.T){tree:=model.NewTree(3);r:=__go
 
 `
 
-func privateAssignmentNegatives(t *testing.T, cli, outside, root string) {
+func privateAssignmentNegatives(t *testing.T, cli, outside string) {
 	t.Helper()
 	for name, body := range map[string]string{
 		"tuple-mixed-rhs":      `func pair(n int)(int,int){return n,n};func f(r *dep.Tree)Option[int]{r.X,r.A[0]=pair(Option[int]::Some(1)?),2;return Option[int]::None}`,
@@ -60,7 +60,7 @@ func privateAssignmentNegatives(t *testing.T, cli, outside, root string) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			src := t.TempDir()
-			packagesWrite(t, src, "go.mod", "module private.example/fixture\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+root+"\n")
+			packagesWrite(t, src, "go.mod", "module private.example/fixture\n\ngo 1.27\n")
 			packagesWrite(t, src, "dep/dep.go", `package dep;type inner struct{X int;A [2]int};type Tree struct{*inner};type V struct{N int};func(*Tree)Value()V{return V{}}`)
 			packagesWrite(t, src, "main.gox", `package fixture;import "private.example/fixture/dep";`+body)
 			got := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), src)

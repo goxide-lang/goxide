@@ -136,7 +136,7 @@ func TestMacroASTProvenanceCLI(t *testing.T) {
 	}
 	t.Run("runtime", func(t *testing.T) {
 		source := t.TempDir()
-		packagesWrite(t, source, "go.mod", packagesModule(root))
+		packagesWrite(t, source, "go.mod", packagesModule())
 		packagesWrite(t, source, "main.gox", astProvenanceRuntime)
 		packagesWrite(t, source, "model/model.go", astProvenanceModel)
 		first := filepath.Join(t.TempDir(), "generated")

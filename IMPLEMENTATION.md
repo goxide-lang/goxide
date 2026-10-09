@@ -636,7 +636,7 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 
 实现保留 map comma-ok、数组原存储与不可取址值类别、上下界/容量、省略 bounds、常量错误、重复 key/field、嵌套省略类型与隐式指针 literal。`len/cap` 原本需求值的 array 操作数显式保持求值，避免去掉 marker 后变常量；仅 composite literal 可带传播取地址，不放开任意 `&(load()?)`。类型迭代对暂未访问到的 marker 等待本轮其他 payload 签名解析后重查；无进展仍报错，不忽略最终类型检查。
 
-独立审查发现并修复外部包 private scalar 上下文丢失，包括 uint64 位移、命名 bool 比较/短路。使用原 container 的纯零值类型见证保留类型，不读用户存储、不调用用户方法或 Default。又修复源码包级/file import 的 comparable 遮蔽：只有该特殊路径引入 [compiler-support 约束](runtime/constraints.go)，目录模块显式依赖 goxide 模块，普通生成路径不增加此依赖。这不是新语言协议、稳定 ABI 或零成本承诺。
+独立审查发现并修复外部包 private scalar 上下文丢失，包括 uint64 位移、命名 bool 比较/短路。使用原 container 的纯零值类型见证保留类型，不读用户存储、不调用用户方法或 Default。又修复源码包级/file import 的 comparable 遮蔽：只有该特殊路径引入 [compiler-support 约束](https://github.com/goxide-lang/std/blob/9ed27c85088abd91ac7b32c98cfa532f559ad4d7/runtime/constraints.go)，目录模块显式依赖 goxide 模块，普通生成路径不增加此依赖。这不是新语言协议、稳定 ABI 或零成本承诺。
 
 [真实前端接受测试](tests/acceptance/propagate_aggregate_test.go)中，主生成模块 **10 项 race** 覆盖调用/接收顺序、错误/副作用、map/pointer/index、slice storage、literal 键值、上下文类型、短路/嵌套闭包/defer、动态不可比较 map key 与 len/cap panic；另有 **14 项**前端拒绝。第二份[跨包批次业务](examples/propagate_aggregate/main.gox)经安装 CLI、仓库外转译、生成模块 **2 项 race** 与 CLI run，输出 `batch 2 9223372036854775808`、`invalid bounds`，保留 strconv.NumError cause；第三份生成模块 **1 项 race** 验证只读数组索引观察正常可写别名更新，另拒绝共享只读字段进入可写 literal。生成模块 **10+2+1** 与宿主统计分开，纯 Go 规范探针不算前端完成证据。
 
@@ -660,7 +660,7 @@ ROADMAP 的 Default 待答记录已修正：仅选中 enum 默认变体要求 pa
 
 基于 `067ead774bf27a0366e7b69c5349f25ae5fa3574`。普通 Go 允许访问私有嵌入指针上的导出提升字段，而旧 place pass 会展开不可访问 selector；私有 scalar 的零值 witness 也不能经 nil 嵌入指针取字段。新增 [frame lowering](internal/propagate/frame.go)仅对这类赋值保留完整原 Go assignment，让后端负责隐藏路径、上下文类型和两阶段写入。问号 helper 的源操作数留在原函数执行帧中作实参求值，避免整条赋值 IIFE 破坏直接 recover。
 
-[compiler-support guard](runtime/assignment.go)只在失败返回值完成验证/转换后设置 pending 并抛出私有 token，由源函数直接 defer 的 Catch 消费并写回原返回槽，再执行先前源 defer。普通 panic、invalid sum、panic(nil)、Goexit 不被当业务失败。无反射、unsafe、根对象/数组复制、私有字段导出或原生生产包捕获桥接。代价是该特殊路径的 helper/defer、失败时内部 panic，以及已有 goxide 模块 依赖；guard 保留到函数返回，不承诺零开销/稳定 ABI。源泛型、非求值 unsafe 和 From 规则没有扩大。
+[compiler-support guard](https://github.com/goxide-lang/std/blob/9ed27c85088abd91ac7b32c98cfa532f559ad4d7/runtime/assignment.go)只在失败返回值完成验证/转换后设置 pending 并抛出私有 token，由源函数直接 defer 的 Catch 消费并写回原返回槽，再执行先前源 defer。普通 panic、invalid sum、panic(nil)、Goexit 不被当业务失败。无反射、unsafe、根对象/数组复制、私有字段导出或原生生产包捕获桥接。代价是该特殊路径的 helper/defer、失败时内部 panic，以及已有 goxide 模块 依赖；guard 保留到函数返回，不承诺零开销/稳定 ABI。源泛型、非求值 unsafe 和 From 规则没有扩大。
 
 独立审查修复三个真实反例：返回槽在函数入口绑定以免内层同名变量遮蔽；函数体记录只保留完整原词法函数，防止命名无名结果后误放行外层非法裸 return；guard 声明放普通 block，避免合法 forward goto 被新增声明阻挡。入口绑定在首次插入后移除待插队列，嵌套闭包重复遍历不重复声明。复审自建跨包反例与生成模块 race 均通过。
 

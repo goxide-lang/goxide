@@ -16,7 +16,7 @@ func TestPropagationPrivateBoolContexts(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
-		packagesWrite(t, dir, "go.mod", packagesModule(root))
+		packagesWrite(t, dir, "go.mod", packagesModule())
 		packagesWrite(t, dir, "model/model.go", `package model
 type flag bool
 var Calls int

@@ -15,7 +15,7 @@ func TestNativeWritableScalarArguments(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
-		packagesWrite(t, dir, "go.mod", packagesModule(root))
+		packagesWrite(t, dir, "go.mod", packagesModule())
 		packagesWrite(t, dir, "native/native.go", `package native
 import "sync/atomic"
 var saved *int64

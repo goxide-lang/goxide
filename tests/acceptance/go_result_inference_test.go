@@ -15,7 +15,7 @@ func TestGoResultInference(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	source := t.TempDir()
-	packagesWrite(t, source, "go.mod", packagesModule(root))
+	packagesWrite(t, source, "go.mod", packagesModule())
 	packagesWrite(t, source, "ops/macros.gox", `package ops
 pub macro_rules! infer {($x:expr)=>{go_result!($x)};}
 pub macro_rules! retain {($x:expr)=>{go_result_keep!($x)};}
@@ -130,7 +130,7 @@ func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			packagesWrite(t, dir, "go.mod", packagesModule(root))
+			packagesWrite(t, dir, "go.mod", packagesModule())
 			packagesWrite(t, dir, "bad.gox", "package bad\n"+tc.body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), dir)
 			if !strings.Contains(out, tc.want) {
@@ -147,7 +147,7 @@ func TestGoResultInferenceModules(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	producer := t.TempDir()
-	packagesWrite(t, producer, "go.mod", strings.Replace(packagesModule(root), "packages.example/app", "inferred.example/producer", 1))
+	packagesWrite(t, producer, "go.mod", strings.Replace(packagesModule(), "packages.example/app", "inferred.example/producer", 1))
 	packagesWrite(t, producer, "native.go", `package producer
  type secret int
  type Count = secret
@@ -175,7 +175,7 @@ func TestGoResultInferenceModules(t *testing.T) {
 	prodOut := filepath.Join(t.TempDir(), "producer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", prodOut, producer)
 	consumer := t.TempDir()
-	mod := strings.Replace(packagesModule(root), "packages.example/app", "inferred.example/consumer", 1) + "\nrequire inferred.example/producer v0.0.0\nreplace inferred.example/producer => " + filepath.ToSlash(prodOut) + "\n"
+	mod := strings.Replace(packagesModule(), "packages.example/app", "inferred.example/consumer", 1) + "\nrequire inferred.example/producer v0.0.0\nreplace inferred.example/producer => " + filepath.ToSlash(prodOut) + "\n"
 	packagesWrite(t, consumer, "go.mod", mod)
 	packagesWrite(t, consumer, "a.gox", `package consumer
  import p "inferred.example/producer"

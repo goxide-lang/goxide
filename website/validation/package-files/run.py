@@ -219,11 +219,12 @@ def ui_checks(page, manifest, evidence):
     check(page.locator('#dependency-source').evaluate('(e) => e.readOnly'), 'dependency source is editable')
     for index, dependency in enumerate(manifest['dependencies']):
         page.select_option('#dependencies', str(index))
-        page.select_option('#dependency-files', index=0)
-        check(page.input_value('#dependency-source') == dependency['files'][0]['source'], 'dependency source differs from artifact')
-        provenance = page.inner_text('#dependency-provenance')
-        for value in [dependency['package'], dependency['version'], dependency['source'], dependency['files'][0]['path'], dependency['files'][0]['sha256']]:
-            check(value in provenance, 'dependency identity missing from provenance: ' + value)
+        for file_index, file in enumerate(dependency['files']):
+            page.select_option('#dependency-files', index=file_index)
+            check(page.input_value('#dependency-source') == file['source'], 'dependency source differs from artifact')
+            provenance = page.inner_text('#dependency-provenance')
+            for value in [dependency['package'], dependency['version'], dependency['source'], file['path'], file['sha256']]:
+                check(value in provenance, 'dependency identity missing from provenance: ' + value)
     page.select_option('#examples', str(package_index))
     done(page)
     evidence.append('source/output/helper tabs and complete clipboard copy; edit persistence; invalid/add/delete file names; error/recovery/repeat; legacy/package switches; dependency readonly/provenance')
@@ -233,6 +234,19 @@ def asset_checks(args, page, manifest, evidence):
     response = page.request.get(urljoin(args.url.rstrip('/') + '/', 'compiler.wasm'))
     check(response.ok, 'served WASM could not be read')
     check(hashlib.sha256(response.body()).hexdigest() == manifest['wasmSha256'], 'served WASM hash differs from manifest')
+    dependencies = {dependency['package']: dependency for dependency in manifest['dependencies']}
+    libraries = {library['module']: library for library in manifest['publicLibraries']}
+    std = libraries['github.com/goxide-lang/std']
+    for suffix in ['runtime', 'formatting', 'sum']:
+        package = 'github.com/goxide-lang/std/' + suffix
+        check(package in dependencies, 'std dependency is missing: ' + package)
+        dependency = dependencies[package]
+        check(dependency['kind'] == 'module' and dependency['module'] == std['module'], 'support package owner differs from std')
+        for key in ['version', 'sum', 'goModSum']:
+            check(dependency[key] == std[key], 'support package identity differs from public std: ' + key)
+    for package in manifest['importClosure']:
+        check(not package.startswith(('github.com/hxsf/goxide/', 'github.com/goxide-lang/goxide/')),
+              'compiler package leaked into the browser dependency closure: ' + package)
     for dependency in manifest['dependencies']:
         for file in dependency['files']:
             check(hashlib.sha256(file['source'].encode()).hexdigest() == file['sha256'], 'dependency source hash differs: ' + file['path'])
@@ -244,7 +258,7 @@ def asset_checks(args, page, manifest, evidence):
             env=native_env, cwd=ROOT.parents[2], text=True))
         check(not selected.get('Replace'), 'local replacement is not a published dependency identity')
         check(selected['Version'] == library['version'], 'manifest library version differs from actual go.mod')
-    evidence.append('served WASM SHA-256; every dependency source SHA-256; actual Go toolchain and go.mod library version identity')
+    evidence.append('served WASM SHA-256; every dependency source SHA-256; actual Go toolchain and go.mod library version identity; std support provenance and no compiler dependency closure')
 
 
 def mobile_checks(browser, args, manifest, evidence):

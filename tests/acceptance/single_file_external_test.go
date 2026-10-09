@@ -27,7 +27,7 @@ func TestSingleFileExternalRecoveryCLI(t *testing.T) {
 	producer := filepath.Join(base, "producer")
 	library := filepath.Join(base, "library")
 	module := func(name, replacement string) string {
-		s := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", name, strconvQuote(root))
+		s := fmt.Sprintf("module %s\ngo 1.27\n", name)
 		if replacement != "" {
 			s += "require a06.example/lib v0.0.0\nreplace a06.example/lib => " + strconvQuote(replacement) + "\n"
 		}

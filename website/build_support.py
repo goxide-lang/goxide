@@ -6,8 +6,7 @@ import subprocess
 import tempfile
 
 
-def dependency_sources(packages, records, *, root, goroot, toolchain_version,
-                       compiler_commit, exports):
+def dependency_sources(packages, records, *, goroot, toolchain_version, exports):
     """Snapshot the fixed direct imports selected for the native export build.
 
     ``records`` must be the very same ``go list -export -deps -json`` output
@@ -16,7 +15,6 @@ def dependency_sources(packages, records, *, root, goroot, toolchain_version,
     Paths identify the original package/distribution; no build-machine paths
     or module-cache paths are exposed. This helper never fetches or builds.
     """
-    root = pathlib.Path(root).resolve(strict=True)
     goroot = pathlib.Path(goroot).resolve(strict=True)
     exports = pathlib.Path(exports)
     by_package = {record['ImportPath']: record for record in records}
@@ -54,14 +52,7 @@ def dependency_sources(packages, records, *, root, goroot, toolchain_version,
                              sha256=hashlib.sha256(license_bytes).hexdigest())]
             identity = dict(kind='toolchain')
         elif module.get('Main'):
-            base = pathlib.Path(module['Dir']).resolve(strict=True)
-            if base != root:
-                raise ValueError(f'dependency uses an unexpected main module: {package}')
-            prefix = module['Path'] + '/'
-            version = compiler_commit
-            origin = module['Path'] + '@' + version
-            licenses = [source_file(base, 'LICENSE', prefix)]
-            identity = dict(kind='compiler', module=module['Path'])
+            raise ValueError(f'compiler main module is not a published dependency: {package}')
         else:
             if not all(module.get(key) for key in ('Path', 'Dir', 'Version', 'Sum', 'GoModSum')):
                 raise ValueError(f'dependency has no verified module identity: {package}')
@@ -116,7 +107,7 @@ def is_compiler_source(name):
         return True
     if path.suffix != ".go" or path.name.endswith("_test.go"):
         return False
-    return (path.parts[0] in {"internal", "runtime", "formatting"} or
+    return (path.parts[0] == "internal" or
             path.parts[:2] in {("cmd", "goxide"), ("cmd", "goxide-playground")})
 
 
@@ -136,7 +127,7 @@ def verify_compiler_sources(root, pin, expected_digest):
     current = {
         path.relative_to(root).as_posix()
         for pattern in ("internal/**/*.go", "cmd/goxide/**/*.go", "cmd/goxide-playground/**/*.go",
-                        "runtime/**/*.go", "formatting/**/*.go", "go.mod", "go.sum")
+                        "go.mod", "go.sum")
         for path in root.glob(pattern)
         if path.is_file() and is_compiler_source(path.relative_to(root).as_posix())
     }

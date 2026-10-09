@@ -6,7 +6,7 @@
 
 ## 1. 已证实现状
 
-Option/Result 目前是前端内建家族，但其 Go 定义**每个使用包生成一套**，不是从共享 std/runtime 导入。目录编译会处理包内重复定义，不等于跨包共享。现有 [runtime](../../../runtime/constraints.go) 是 lowering 支持，不含 Option/Result。
+Option/Result 目前是前端内建家族，但其 Go 定义**每个使用包生成一套**，不是从共享 std/runtime 导入。目录编译会处理包内重复定义，不等于跨包共享。现有 [runtime](https://github.com/goxide-lang/std/blob/9ed27c85088abd91ac7b32c98cfa532f559ad4d7/runtime/constraints.go) 是 lowering 支持，不含 Option/Result。
 
 关键源码：
 

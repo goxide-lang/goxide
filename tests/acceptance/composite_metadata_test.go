@@ -31,7 +31,7 @@ func TestCompositeReferenceMetadataModules(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body, ext string) string {
 		dir := filepath.Join(t.TempDir(), "source")
-		packagesWrite(t, dir, "go.mod", packagesModule(root))
+		packagesWrite(t, dir, "go.mod", packagesModule())
 		packagesWrite(t, dir, "model/model.gox", compositeMetadataAPI)
 		packagesWrite(t, dir, "model/again.gox", "package model\nfunc Again(r &State)&State{return View(r)}\n")
 		packagesWrite(t, dir, "mid/mid.gox", `package mid

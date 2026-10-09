@@ -17,7 +17,7 @@ func TestMatchNamedDynamicModules(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
-		packagesWrite(t, dir, "go.mod", packagesModule(root))
+		packagesWrite(t, dir, "go.mod", packagesModule())
 		prefix := "package app\n"
 		if strings.HasPrefix(body, "import ") {
 			line, rest, _ := strings.Cut(body, "\n")

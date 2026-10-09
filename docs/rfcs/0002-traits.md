@@ -4,10 +4,10 @@
 
 - 已确认：显式实现、期望类型适配；运行时 trait 统一 wrapper 与固定包级工厂，Go 接口保留业务方法和导出 marker。
 - 已确认：类型与 impl 同包且满足 Go 方法接收者规则时生成 As 便利方法；其他类型使用含命名字段的 facade，两者都转发同一工厂。
-- 暂定：方法解析与具体降低细节；不存在可运行的 goxide 编译器验收。
+- 暂定：实例视图的方法解析与具体降低细节；下文实例 wrapper 示例仍是设计机制，不是完整 trait 编译器验收。
 - 未定：接收权限语法、泛型实现证据、正式符号编码及公开 ABI。
 
-本篇约束 `impl Trait for T` 的实例方法；静态 trait 操作见 [RFC 0013](0013-derive.md)。
+本篇主要约束 `impl Trait for T` 的实例方法。当前新增的用户关联协议子集见[用户说明](../static-protocols.md)：非泛型 `trait`、本包具体 struct/enum 的显式 `impl`、单协议泛型函数约束和 `U::Abc()` / `T::Abc()`，通过空 carrier 与普通 `std/typeinfo.Of` 降低。这不实现下文的运行时视图、实例方法自动适配或泛型 impl。既有业务派生继续按 [RFC 0013](0013-derive.md) 使用。
 类型自有的 `impl T { ... }` 见 [RFC 0020](0020-associated-functions.md)，不会自动建立 trait 实现关系。
 详细背景见[显式 trait](../design/traits.md)与[决策登记](../design/decisions.md)。
 下文 `*Value` 仅标识 Go 接收者身份，不引入 safe 指针语法。

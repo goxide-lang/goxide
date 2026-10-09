@@ -1,0 +1,25 @@
+package main
+
+use fmt;
+
+trait Build {
+    func Abc() Self
+}
+
+type User struct { Name string }
+
+impl Build for User {
+    func Abc() Self {
+        return Self{Name: "Ada"}
+    }
+}
+
+func Make[T Build]() T {
+    return T::Abc()
+}
+
+func main() {
+    direct := User::Abc()
+    generic := Make[User]()
+    fmt::Println(direct.Name, generic.Name)
+}

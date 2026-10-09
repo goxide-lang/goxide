@@ -109,7 +109,9 @@ func (l *lowerer) builtinAt(i int) (Decl, int, error) {
 func (l *lowerer) collectBuiltins() error {
 	for i, t := range l.ts {
 		if t.text == "func" && i+2 < len(l.ts) && l.ts[i+1].kind == token.IDENT && l.ts[i+2].text == "[" {
-			return l.err(t.start, "user generic functions unsupported; builtin sums require concrete type arguments")
+			if !l.genericFunctions[l.ts[i+1].text] {
+				return l.err(t.start, "user generic functions unsupported; builtin sums require concrete type arguments")
+			}
 		}
 		if t.text != "Option" && t.text != "Result" {
 			continue

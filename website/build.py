@@ -102,9 +102,9 @@ with tempfile.TemporaryDirectory(prefix='goxide-web-package-') as temporary:
     assert {pathlib.Path(file['path']).with_suffix('.go').name for file in package_files} <= {file['path'] for file in generated_files}
     assert any(file['path'].startswith('goxide_helpers_') and file['path'].endswith('.go') for file in generated_files), 'package example must expose real helper files'
     stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, '--roots', str(roots_file), str(project)).decode()
-    assert stdout == '42 GOXIDE Item { Value: 21 }\n', 'package example runtime output changed'
-    package_examples = [dict(id='package_files', title='同包多文件：文件作用域与宏/派生',
-                             description='三个可编辑 .gox 文件属于同一个包；每个文件保留独立 use 作用域，共享类型、函数、宏与派生结果。',
+    assert stdout == '42 GOXIDE Item { Value: 21 }\nAda Ada\n', 'package example runtime output changed'
+    package_examples = [dict(id='package_files', title='同包多文件：宏、派生与静态协议',
+                             description='五个可编辑 .gox 文件属于同一个包；每个文件保留独立 use 作用域，共享宏、派生，以及分文件声明的 trait、impl 和泛型函数。',
                              files=package_files, generatedFiles=generated_files, stdout=stdout)]
 # A known repository project, generated and run locally at build time only.
 # It is evidence for CLI multi-package behavior, never a browser compiler input.
@@ -167,10 +167,13 @@ metadata_schema = int(re.search(r'const enumMetadataVersion = (\d+)', (ROOT/'int
 assert metadata_schema == 9
 def source_version(path, pattern):
     return int(re.search(pattern, (ROOT/path).read_text()).group(1))
-abi_versions = dict(enum=metadata_schema, reference=source_version('internal/refs/metadata.go', r'const MetadataVersion = (\d+)'), use=source_version('internal/frontend/use_artifact.go', r'const useMetadataVersion = (\d+)'), sum=source_version('internal/enums/builtins.go', r'const SumABI = (\d+)'))
-assert abi_versions == dict(enum=9, reference=3, use=3, sum=3)
+abi_versions = dict(enum=metadata_schema, reference=source_version('internal/refs/metadata.go', r'const MetadataVersion = (\d+)'), use=source_version('internal/frontend/use_artifact.go', r'const useMetadataVersion = (\d+)'), sum=source_version('internal/enums/builtins.go', r'const SumABI = (\d+)'), protocol=source_version('internal/protocols/ir.go', r'const MetadataVersion = (\d+)'))
+assert abi_versions == dict(enum=9, reference=3, use=3, sum=3, protocol=1)
 std_abi = run(GO, 'doc', 'github.com/goxide-lang/std/sum.GoxideSumABI').decode()
 assert re.search(r'GoxideSumABI = 3\b', std_abi), std_abi
+typeinfo_abi = run(GO, 'doc', 'github.com/goxide-lang/std/typeinfo.GoxideTypeInfoABI').decode()
+assert re.search(r'GoxideTypeInfoABI = 1\b', typeinfo_abi), typeinfo_abi
+abi_versions['typeinfo'] = int(re.search(r'GoxideTypeInfoABI = (\d+)', typeinfo_abi).group(1))
 
 manifest = dict(abiVersions=abi_versions, metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=compiler_digest, exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 dependencies=dependencies, dependencyContext=context, dependencySourceScope='fixed explicit project roots; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',

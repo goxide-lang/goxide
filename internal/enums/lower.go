@@ -59,18 +59,19 @@ type edit struct {
 	text       string
 }
 type lowerer struct {
-	filename        string
-	src             []byte
-	ts              []tok
-	decls           []Decl
-	byName          map[string]*Decl
-	serial          int
-	payloadChecks   map[string]string
-	packageTypes    map[string]ast.Expr
-	fragments       *sourcemap.Fragments
-	referenceTemps  map[string]bool
-	payloadAliases  strings.Builder
-	payloadAliasSet map[string]bool
+	filename         string
+	src              []byte
+	ts               []tok
+	decls            []Decl
+	byName           map[string]*Decl
+	serial           int
+	payloadChecks    map[string]string
+	packageTypes     map[string]ast.Expr
+	fragments        *sourcemap.Fragments
+	referenceTemps   map[string]bool
+	payloadAliases   strings.Builder
+	payloadAliasSet  map[string]bool
+	genericFunctions map[string]bool
 }
 
 func Lower(filename string, source []byte) (Result, error) {
@@ -92,18 +93,30 @@ func CollectPackage(filename string, source []byte) (Result, error) {
 	return lowerPackageTypes(filename, source, nil, nil, map[string]ast.Expr{}, true)
 }
 
+// CollectPackageWithGenericFunctions carries declaration evidence supplied by
+// the associated-protocol frontend. Names alone in user source are not proof.
+func CollectPackageWithGenericFunctions(filename string, source []byte, genericFunctions map[string]bool) (Result, error) {
+	return lowerPackageTypes(filename, source, nil, nil, map[string]ast.Expr{}, true, genericFunctions)
+}
+
 // LowerPackage resolves enum names against independently parsed package declarations.
 func LowerPackage(filename string, source []byte, provenance *sourcemap.Map, declarations []Decl, named map[string]ast.Expr) (Result, error) {
 	return lowerPackageTypes(filename, source, provenance, declarations, named, false)
 }
+func LowerPackageWithGenericFunctions(filename string, source []byte, provenance *sourcemap.Map, declarations []Decl, named map[string]ast.Expr, genericFunctions map[string]bool) (Result, error) {
+	return lowerPackageTypes(filename, source, provenance, declarations, named, false, genericFunctions)
+}
 func lowerPackage(filename string, source []byte, provenance *sourcemap.Map, declarations []Decl, collect bool) (Result, error) {
 	return lowerPackageTypes(filename, source, provenance, declarations, nil, collect)
 }
-func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map, declarations []Decl, named map[string]ast.Expr, collect bool) (Result, error) {
+func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map, declarations []Decl, named map[string]ast.Expr, collect bool, registered ...map[string]bool) (Result, error) {
 	if strings.IndexByte(string(source), 0) >= 0 {
 		return Result{}, fmt.Errorf("%s: NUL byte in source", filename)
 	}
 	l := &lowerer{filename: filename, src: source, byName: map[string]*Decl{}, packageTypes: named, referenceTemps: map[string]bool{}}
+	if len(registered) > 0 {
+		l.genericFunctions = registered[0]
+	}
 	if provenance != nil {
 		l.fragments = &sourcemap.Fragments{Input: provenance}
 	}

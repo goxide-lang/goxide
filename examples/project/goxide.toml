@@ -33,7 +33,7 @@ version = "v0.0.0-20261009021520-f342a31e20d0"
 
 [[go.require]]
 module = "github.com/goxide-lang/std"
-version = "v0.0.0-20261009091333-a75c971aa755"
+version = "v0.0.0-20261009104839-c02a09d8c417"
 
 [dependencies.fmt]
 source = "toolchain"

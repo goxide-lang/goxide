@@ -2,16 +2,21 @@
 
 This focused suite compares real browser Worker output with the current native
 CLI, then exercises the actual page. It preserves the legacy single-file examples
-and checks same-package file scopes, cross-file macros/derive, filenames in
+and checks same-package file scopes, cross-file macros/derive/static protocols, filenames in
 diagnostics, invalid inputs, LF/CRLF, recovery, repeat compilation, source/output
 tabs, file editing/add/delete, example changes, and read-only dependency identity.
 Saved events from real Workers test both old request IDs and obsolete Worker
 instances deterministically. Helper-file clipboard copy, 390px mobile selectors
 and overflow, served WASM/dependency source hashes, and actual toolchain/module
 versions are also checked. Every dependency file is opened in the read-only UI;
-the formatting/runtime/sum packages must have the pinned std module identity,
+the formatting/runtime/sum/typeinfo packages must have the pinned std module identity,
 and the export dependency closure must contain no compiler packages. The browser
 is launched with its sandbox enabled.
+
+The five source files also split a `Build` trait and generic factory into
+`protocol.gox`, its `User` implementation into `builder.gox`, and concrete /
+generic calls into `main.gox`. The native output checks both calls. These are
+same-package declarations; this fixture does not load external protocol artifacts.
 
 The model file binds `util` to serde; main and helpers independently bind it to
 strconv and strings. Serde derives and JSON round-trip are exercised across the
@@ -52,4 +57,5 @@ editable browser inputs. Expected native stdout is:
 
 ```text
 42 GOXIDE Item { Value: 21 }
+Ada Ada
 ```

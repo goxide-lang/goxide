@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/paths"
+	"github.com/hxsf/goxide/internal/protocols"
 	"github.com/hxsf/goxide/internal/sourcemap"
 )
 
@@ -67,6 +68,7 @@ type usePackage struct {
 	metadata           useMetadata
 	imp                types.Importer
 	known              map[string]PackageResult
+	protocols          map[string]protocols.Metadata
 }
 
 func scanUses(name string, source []byte) ([]byte, []useDecl, error) {
@@ -386,9 +388,10 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 		}
 		nextImport := 0
 		var extra strings.Builder
+		protocolAliases := map[string]bool{}
 		for _, name := range sortedUseNames(u.bindings) {
 			b := u.bindings[name]
-			if b.Kind == "type" || b.Kind == "constant" {
+			if b.Kind == "type" || b.Kind == "constant" || b.Kind == "protocol" {
 				alias := imports[b.RoutePath]
 				if alias == "" {
 					for {
@@ -401,7 +404,16 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 					reserved[alias] = true
 					imports[b.RoutePath] = alias
 				}
-				if b.Kind == "constant" {
+				if b.Kind == "protocol" {
+					def, e := u.protocolDefinition(b.OriginPath, b.OriginName)
+					if e != nil {
+						return nil, u.at(name, e)
+					}
+					if !protocolAliases[def.OpsName] {
+						fmt.Fprintf(&extra, "\ntype %s[Self any] = %s.%s[Self]\n", def.OpsName, alias, b.RouteName)
+						protocolAliases[def.OpsName] = true
+					}
+				} else if b.Kind == "constant" {
 					fmt.Fprintf(&extra, "\nconst %s = %s.%s\n", name, alias, b.RouteName)
 				} else {
 					parameters, args, e := useTypeParameters(aliasTypes[name], b.RoutePath, alias)
@@ -413,6 +425,13 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 			}
 		}
 		if extra.Len() > 0 {
+			protocolSymbols := make([]string, 0, len(protocolAliases))
+			for name := range protocolAliases {
+				protocolSymbols = append(protocolSymbols, name)
+			}
+			if err := checkProtocolGeneratedNames(sources, protocolSymbols, nil); err != nil {
+				return nil, err
+			}
 			u.generatedFile = filepath.Join(filepath.Dir(file), "goxide_use_aliases.go")
 			if _, exists := sources[u.generatedFile]; exists {
 				return nil, fmt.Errorf("reserved generated use alias filename conflicts: %s", u.generatedFile)
@@ -465,6 +484,13 @@ func prepareUses(path string, sources map[string][]byte, known map[string]Packag
 				return nil, fmt.Errorf("public type/constant use alias %s must use a Go-exported name in this version", b.Name)
 			}
 		}
+		if b.Kind == "protocol" {
+			def, err := u.protocolDefinition(b.OriginPath, b.OriginName)
+			if err != nil {
+				return nil, u.at(name, err)
+			}
+			b.RoutePath, b.RouteName = path, def.OpsName
+		}
 		if b.Kind != "macro" {
 			u.metadata.Bindings = append(u.metadata.Bindings, b)
 		}
@@ -501,7 +527,7 @@ func sortedUseNames(m map[string]useBinding) []string {
 	return names
 }
 func isUseMarker(n string) bool {
-	return n == useMetadataMarker || n == enumMetadataMarker || n == "GoxideReferenceMetadata"
+	return n == useMetadataMarker || n == enumMetadataMarker || n == "GoxideReferenceMetadata" || n == protocolMetadataMarker
 }
 func useTypeParameterList(t types.Type) *types.TypeParamList {
 	var params *types.TypeParamList
@@ -617,6 +643,7 @@ func (u *usePackage) rewrite(file string, source []byte, provenance ...*sourcema
 		importNames[im] = name
 	}
 	edits := []useEdit{}
+	boundEdits := map[int]bool{}
 	extra := map[string]string{}
 	ignored := map[*ast.Ident]bool{}
 	usedImports := map[string]bool{}
@@ -730,12 +757,16 @@ func (u *usePackage) rewrite(file string, source []byte, provenance ...*sourcema
 					problem = diagnostic(n.Sel.Pos(), fmt.Sprintf("private use binding %s.%s", x.Name, b.Name))
 					return false
 				}
+				if b.Kind == "protocol" {
+					continue
+				}
 				expr, e := route(b)
 				if e != nil {
 					problem = e
 					return false
 				}
 				edits = append(edits, useEdit{int(n.Pos()) - 1, int(n.End()) - 1, expr})
+				boundEdits[int(n.Pos())-1] = true
 				handledImports[x.Name] = true
 			}
 			if !found {
@@ -782,7 +813,7 @@ func (u *usePackage) rewrite(file string, source []byte, provenance ...*sourcema
 			if mapLiteral {
 				continue
 			}
-			if binding, alias := bindings[id.Name]; alias && binding.Kind != "namespace" && binding.Kind != "derive" && binding.Kind != "macro" {
+			if binding, alias := bindings[id.Name]; alias && binding.Kind != "namespace" && binding.Kind != "derive" && binding.Kind != "macro" && binding.Kind != "protocol" {
 				if _, isStruct := lit.Type.(*ast.StructType); !isStruct {
 					problem = fmt.Errorf("%s: use name %s as a named composite-literal key is ambiguous in this version; use an explicit qualified expression for map keys", fs.Position(id.Pos()), id.Name)
 				}
@@ -827,7 +858,7 @@ func (u *usePackage) rewrite(file string, source []byte, provenance ...*sourcema
 			continue
 		}
 		b, ok := bindings[id.Name]
-		if !ok || b.Kind == "macro" || b.Kind == "derive" || b.Kind == "namespace" || b.Public && (b.Kind == "type" || b.Kind == "constant") {
+		if !ok || b.Kind == "macro" || b.Kind == "derive" || b.Kind == "protocol" || b.Kind == "namespace" || b.Public && (b.Kind == "type" || b.Kind == "constant") {
 			continue
 		}
 		expr, e := route(b)
@@ -835,6 +866,7 @@ func (u *usePackage) rewrite(file string, source []byte, provenance ...*sourcema
 			return nil, e
 		}
 		edits = append(edits, useEdit{int(id.Pos()) - 1, int(id.End()) - 1, expr})
+		boundEdits[int(id.Pos())-1] = true
 	}
 	// A facade-only use is still an initialization dependency; retain blank import.
 	for _, im := range f.Imports {
@@ -855,7 +887,7 @@ func (u *usePackage) rewrite(file string, source []byte, provenance ...*sourcema
 			edits = append(edits, useEdit{int(im.Pos()) - 1, int(im.End()) - 1, replacement})
 		}
 	}
-	out, err := applyUseEdits(source, mapping, edits, "use bindings", true)
+	out, err := applyBoundUseEdits(source, mapping, edits, boundEdits)
 	if err != nil {
 		return nil, err
 	}

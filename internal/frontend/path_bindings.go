@@ -66,7 +66,7 @@ func (u *usePackage) surface(node paths.Namespace) (map[string]useBinding, error
 			return nil, err
 		}
 		for _, name := range pkg.Scope().Names() {
-			if ast.IsExported(name) && !isUseMarker(name) {
+			if ast.IsExported(name) && !isUseMarker(name) && !reservedProtocolName(name) {
 				if b, e := nativeUseBinding(pkg.Scope().Lookup(name), node.PackagePath, name); e == nil {
 					out[name] = b
 				}
@@ -118,6 +118,19 @@ func (u *usePackage) surface(node paths.Namespace) (map[string]useBinding, error
 				out[name] = useBinding{Name: name, Kind: "derive", OriginPath: def.Owner, OriginName: def.Name, RoutePath: def.Owner, RouteName: def.Name, Public: true}
 			}
 		}
+		protocolMetadata, err := u.protocolMetadata(node.PackagePath)
+		if err != nil {
+			return nil, err
+		}
+		for _, def := range protocolMetadata.Definitions {
+			if !def.Public {
+				continue
+			}
+			if prior, exists := out[def.Name]; exists && prior.Kind != "protocol" {
+				return nil, fmt.Errorf("ambiguous namespace member %s: protocol and declaration", def.Name)
+			}
+			out[def.Name] = useBinding{Name: def.Name, Kind: "protocol", OriginPath: def.Owner, OriginName: def.Name, RoutePath: node.PackagePath, RouteName: def.OpsName, Public: true}
+		}
 	}
 	for name, child := range node.Children {
 		if _, exists := out[name]; exists {
@@ -163,7 +176,7 @@ func (u *usePackage) bindUse(file string, d useDecl, b useBinding) error {
 	if _, exists := u.localDeclarations[b.Name]; exists {
 		return fmt.Errorf("%s: use binding %s conflicts with a package declaration", d.pos, b.Name)
 	}
-	if !paths.ValidIdentifier(b.Name) || isUseMarker(b.Name) || strings.HasPrefix(b.Name, "__goxide_") || b.Name == "init" || b.Name == "main" {
+	if !paths.ValidIdentifier(b.Name) || isUseMarker(b.Name) || reservedProtocolName(b.Name) || strings.HasPrefix(b.Name, "__goxide_") || b.Name == "init" || b.Name == "main" {
 		return fmt.Errorf("%s: reserved use binding %s", d.pos, b.Name)
 	}
 	if (b.Kind == "function" || b.Kind == "variable") && !enumOriginImportAllowed(u.metadata.Path, b.RoutePath) {
@@ -199,7 +212,7 @@ func (u *usePackage) bindUse(file string, d useDecl, b useBinding) error {
 }
 
 func sameUseBinding(a, b useBinding) bool {
-	if a.Kind == "macro" && b.Kind == "macro" {
+	if (a.Kind == "macro" && b.Kind == "macro") || (a.Kind == "protocol" && b.Kind == "protocol") {
 		return a.OriginPath == b.OriginPath && a.OriginName == b.OriginName
 	}
 	return a.Kind == b.Kind && a.OriginPath == b.OriginPath && a.OriginName == b.OriginName && a.RoutePath == b.RoutePath && a.RouteName == b.RouteName && reflect.DeepEqual(a.Namespace, b.Namespace)
@@ -388,7 +401,7 @@ func (u *usePackage) prepareNamespaceImports(file string, source []byte) ([]byte
 		for j < len(ts) && ts[j].kind == token.IDENT {
 			surface, err := u.surface(node)
 			if err != nil {
-				return nil, err
+				return nil, protocolPathError(file, source, u.preparedMaps[file], ts[j], err)
 			}
 			b, ok := surface[ts[j].text]
 			if !ok || b.Kind != "namespace" || b.Namespace == nil {

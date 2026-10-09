@@ -133,6 +133,12 @@ func (u *usePackage) load(path string) (useMetadata, error) {
 			}
 			continue
 		}
+		if b.Kind == "protocol" {
+			if err := u.validateProtocolUse(b); err != nil {
+				return useMetadata{}, err
+			}
+			continue
+		}
 		if b.RoutePath == "" || b.RouteName == "" || b.OriginPath == "" || b.OriginName == "" {
 			return useMetadata{}, fmt.Errorf("invalid use binding metadata in %s", path)
 		}

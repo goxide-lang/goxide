@@ -1,6 +1,6 @@
 # goxide 语言介绍与自托管 Playground
 
-中文优先的静态语言介绍网站，以及同包多文件 goxide → Go 浏览器转译器（保留旧单文件入口）。网站源、十二个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
+中文优先的静态语言介绍网站，以及同包多文件 goxide → Go 浏览器转译器（保留旧单文件入口）。网站源、十三个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
 本轮将 .gox 包使用统一为 use 与静态 :: 路径，序列化派生限定为 serde 协议拥有者；
 Playground 的 CLI/WASM 共用项目显式依赖根，同时展示配置、包来源与源码身份。
@@ -54,10 +54,11 @@ python3 -B website/validation/focused.py \
   --cases website/validation/semantic-cleanups-cases.json \
   --cases website/validation/std-support-cases.json \
   --cases website/validation/static-paths-cases.json \
-  --cases website/validation/enum-borrows-cases.json
+  --cases website/validation/enum-borrows-cases.json \
+  --cases website/validation/static-protocol-cases.json
 ```
 
-当前入口验证全部 12 个真实网站例子及本批正反例，核对 LF/CRLF 的 CLI、Node GoWASM
+当前入口验证全部 13 个真实网站例子及本批正反例，核对 LF/CRLF 的 CLI、Node GoWASM
 和 HTTP Worker 输出，并按独立预期执行原生程序。输出留在新的仓外目录。
 Chromium sandbox 保持开启；环境拒绝时明确报告阻塞，不自动降级。
 
@@ -103,7 +104,7 @@ hash -r
 ## 真实转译与支持范围
 
 - `cmd/goxide-playground` 的旧单文件入口调用 `internal/frontend.CompileWithOptions`，同包文件集合入口调用 `internal/frontend.CompilePackageWithOptions`。WASM 只转译，不运行生成代码。
-- 支持同一个用户包的 1–16 个普通 `.gox` 文件，保留单文件入口。固定随附包：`fmt`、`errors`、`io`、`strconv`、`strings`、`math`、`encoding/json`，以及公开 `github.com/goxide-lang/std` 的 `runtime`、`formatting`、`sum` 子包和 `serde`、`serde/json`，以及真实导出数据包含的依赖闭包。支持包直接来自固定版本的 std，不再导入或浏览编译器仓库中的旧支持包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
+- 支持同一个用户包的 1–16 个普通 `.gox` 文件，保留单文件入口。固定随附包：`fmt`、`errors`、`io`、`strconv`、`strings`、`math`、`encoding/json`，以及公开 `github.com/goxide-lang/std` 的 `runtime`、`formatting`、`sum`、`typeinfo` 子包和 `serde`、`serde/json`，以及真实导出数据包含的依赖闭包。支持包直接来自固定版本的 std，不再导入或浏览编译器仓库中的旧支持包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
 - 适配只在 `js/wasm` 下启用。原生 importer 使用离线 `go list -export`；已知 Go module 的 CLI 单文件使用输入 owner 的受管 modfile 查询同一依赖图，仅选择指定文件。WASM 导入来自构建时真实 Go export archive 的 `__.PKGDEF`，不是手写伪造类型签名，也不会调用外部服务。
 - 导出数据来自构建机器的原生目标；清单记录 `exportTarget`。早期 Linux/amd64 + Go 1.27.1 记录是历史证据；A06 平台与结果以这次准确提交的验证报告为准，不把它描述为所有 GOOS/GOARCH 的类型环境。构建时请在宿主平台生成资源，之后可以交叉构建纯静态 HTTP 二进制。
 - 没有浏览器文件系统、任意依赖解析、跨模块恢复、目录工程载入、外部宏包或 Go 执行 API。CLI 的跨包源码图宏聚合、version/path/git 依赖、feature、target 与受授权 host 构建脚本不在浏览器执行。
@@ -113,7 +114,7 @@ hash -r
 
 ## 内容来源与成熟度
 
-页面依据根 README、`docs/t0-acceptance.md`、`internal/macros/README.md`、`internal/matchexpr/README.md`、`docs/serde-json.md` 和相应 RFC。示例明确演示宏、enum/match、Option/Result/?、Default/Debug/Clone、serde JSON、Error（thiserror 风格）和 `.equals`。
+页面依据根 README、`docs/t0-acceptance.md`、`internal/macros/README.md`、`internal/matchexpr/README.md`、`docs/serde-json.md` 和相应 RFC。示例明确演示宏、enum/match、Option/Result/?、Default/Debug/Clone、serde JSON、Error（thiserror 风格）、`.equals` 和显式静态协议关联函数。
 
 不宣称全部 MVP、完整 Rust 借用安全、完整 hygiene 或零分配。本集成分支已合入 primitive 名称冲突诊断与跨模块 Result 静态 validator 修复：包级/文件 use 冲突会拒绝并报告定义和调用位置，不能宣传为完整支持所有遮蔽；特定跨模块循环消除了逐项分配，不能外推为任意载荷零分配。单文件 `go_result` 示例真实演示 `go_result!(call)` 与 `go_result_keep!(call)`，按调用的静态签名推导 T/E；保值版保留 `struct{Value T; Err E}`，不是 Clone。E 必须实现 error 且可为 nil，使用原 E 判断 nil，具名接口与指针均保留身份；接口内 typed nil 仍为 Err。兼容显式 T 的双参数形式；单 E 返回得到 unit，多成功值须先组织为 struct。完整语义见 `examples/go_result/README.md`。源码包宏组合仍在 CLI 示例中验证，不冒充浏览器支持跨包/独立预编译宏包。
 
@@ -144,7 +145,7 @@ Playwright 仅是测试依赖，固定在 lockfile；这里要求它已可用，
 `/usr/bin/chromium`，可设置 `CHROMIUM=/absolute/browser`。隔离入口可用 `--playwright-node-modules`
 指定既有安装。正常网站构建与运行均不需要 npm。
 
-`qa.mjs` 验证十二例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
+`qa.mjs` 验证十三例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
 
 A04 的 4 个正例和 4 个拒绝例单独记录 CLI/WASM 差分：LF/CRLF 各两次、共 32 次；
 UI 验证 16 次 LF 输入，真实 Worker 验证 32 次 LF/CRLF 输入，每次之后用已知合法输入
@@ -170,7 +171,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 ## 文件布局
 
 - `website/static/`：手写静态页面、样式、主线程与 Worker，无线上第三方依赖。
-- `website/examples/`：十二个可执行 `.gox` 源例。
+- `website/examples/`：十三个可执行 `.gox` 源例。
 - `website/build.py`：可复现生成链与版本清单。
 - `cmd/goxide-playground/`：WASM 桥接。
 - `internal/typecheck/platform_{native,wasm}.go`：平台特定 importer。
@@ -189,7 +190,7 @@ python3 website/catalog.py
 QA_URL=http://127.0.0.1:8084 node website/catalog-qa.mjs
 ```
 
-额外 QA 覆盖所有目录入口、12 例实际转译、10 个拒绝例、主题/状态/入口/搜索过滤、永久链接、缺失清单错误状态、复制、390px 与无外部上传。HTTPS 云环境若 Chromium 缺少平台代理 CA，可显式提供已安装 CA 的 `QA_PROXY_SPKI` 公钥摘要；测试不使用全局跳过证书校验。线上实际 HTTP 哈希独立经系统 CA 验证。
+额外 QA 覆盖所有目录入口、13 例实际转译、10 个拒绝例、主题/状态/入口/搜索过滤、永久链接、缺失清单错误状态、复制、390px 与无外部上传。HTTPS 云环境若 Chromium 缺少平台代理 CA，可显式提供已安装 CA 的 `QA_PROXY_SPKI` 公钥摘要；测试不使用全局跳过证书校验。线上实际 HTTP 哈希独立经系统 CA 验证。
 
 RFC 管理建议：当前规范仍跟随编译器仓库和版本，Issue 用于讨论/跟踪、PR 用于变更评审。没有为此次目录新建仓库或 Issue；公开网站不是私有 RFC 镜像。
 

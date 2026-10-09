@@ -1,0 +1,9 @@
+package main
+
+type User struct { Name string }
+
+impl Build for User {
+    func Abc() Self {
+        return Self{Name: "Ada"}
+    }
+}

@@ -103,7 +103,7 @@ def native_package(args, out, files, label, expected_error=None):
     (work / 'run.json').write_text(json.dumps(dict(argv=command, exit=result.returncode,
         stdout=result.stdout, stderr=result.stderr), ensure_ascii=False, indent=2))
     check(result.returncode == 0, label + ': native execution failed: ' + result.stderr)
-    check(result.stdout == '42 GOXIDE Item { Value: 21 }\n', label + ': native stdout changed')
+    check(result.stdout == '42 GOXIDE Item { Value: 21 }\nAda Ada\n', label + ': native stdout changed')
     return outputs
 
 
@@ -254,7 +254,7 @@ def asset_checks(args, page, manifest, evidence):
     dependencies = {dependency['package']: dependency for dependency in manifest['dependencies']}
     libraries = {library['module']: library for library in manifest['publicLibraries']}
     std = libraries['github.com/goxide-lang/std']
-    for suffix in ['runtime', 'formatting', 'sum']:
+    for suffix in ['runtime', 'formatting', 'sum', 'typeinfo']:
         package = 'github.com/goxide-lang/std/' + suffix
         check(package in dependencies, 'std dependency is missing: ' + package)
         dependency = dependencies[package]

@@ -12,4 +12,7 @@ func main() {
     if err != nil { panic(err) }
     copy := CloneItem(&item)
     fmt::Println(util::Itoa(twice!(copy.Value)), title(), DebugItem(&copy))
+    direct := User::Abc()
+    generic := Make[User]()
+    fmt::Println(direct.Name, generic.Name)
 }

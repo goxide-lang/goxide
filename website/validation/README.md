@@ -28,7 +28,7 @@ python3 -B website/validation/focused.py \
   --chromium /absolute/path/to/chromium
 ```
 
-The build runs all twelve website examples and their catalog stdout assertions.
+The build runs all thirteen website examples and their catalog stdout assertions.
 The focused gate independently reruns their native programs, copies their exact
 source into module-free temporary input directories, and compares LF and CRLF
 CLI output with the same current compiler in Node GoWASM. With `--chromium`, it
@@ -74,6 +74,11 @@ the exact roots TOML embedded into WASM; readiness verifies its SHA-256.
 whole-enum replacement, invalid zero Result rejection before user effects, and
 readonly payload write rejection. The catalog also includes a returned payload
 reference and an independent ordinary enum copy.
+`--cases website/validation/static-protocol-cases.json` checks concrete aliases,
+forwarding protocol-constrained generic calls, the public std/typeinfo carrier,
+and missing-member / reserved-anchor rejections. The five-file package fixture
+separates the trait, implementation and call sites in one user package. This does
+not demonstrate arbitrary browser loading of external protocol artifacts.
 This gate does not claim full browser UI QA, historical AST equivalence, native
 race/vet, or design-gate coverage. Run applicable compiler checks separately.
 `summary.json` records success or failure and the layers actually run; raw

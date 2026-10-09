@@ -13,6 +13,6 @@
     "id": "enum-readonly-payload-write",
     "source": "package main\nenum E{Item(int),}\nfunc bad(v &E){match &*v{E::Item(p)=>{*p=2},}}\nfunc main(){}\n",
     "expect": "frontend-reject",
-    "diagnosticContains": "cannot write through a read reference"
+    "diagnosticContains": "cannot write through a readonly projection"
   }
 ]

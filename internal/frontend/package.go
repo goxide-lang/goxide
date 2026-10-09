@@ -25,6 +25,7 @@ import (
 
 // PackageResult keeps a separate output and origin map for every source file.
 type PackageResult struct {
+	payloadEnums     func(types.Type) (propagate.PayloadEnum, bool, error)
 	uses             useMetadata
 	useContext       *usePackage
 	equalityImports  []equality.Protocol
@@ -89,7 +90,21 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 			cfg.manualDefaults[n] = m
 		}
 	}
-	metadata, err = recoverEnumImports(sources, metadata, imp)
+	if single && path == "" {
+		// Standalone/WASM has no consumer owner for arbitrary user artifacts.
+		// std's compiler-known canonical contract does not need such an owner.
+		pkg, importErr := imp.Import(enums.SumPackage)
+		if importErr != nil {
+			return PackageResult{}, importErr
+		}
+		meta, metadataErr := sharedSumMetadata(pkg, imp)
+		if metadataErr != nil {
+			return PackageResult{}, metadataErr
+		}
+		metadata = map[string]PackageResult{enums.SumPackage: {enumTypes: pkg, enumMetadata: meta}}
+	} else {
+		metadata, err = recoverEnumImports(sources, metadata, imp)
+	}
 	if err != nil {
 		return PackageResult{}, err
 	}
@@ -247,7 +262,7 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 	cfg.equalityImports = eqProtocols
 	cfg.collect = false
 	cfg.macroBudget = buildBudget
-	result := PackageResult{useContext: useContext, equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
+	result := PackageResult{payloadEnums: payloadEnumResolver(path, metadata, imp), useContext: useContext, equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
 	for path, p := range metadata {
 		result.referenceImports[path] = p.references
 		result.enumImports[path] = p.enumMetadata
@@ -337,7 +352,8 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	for n, r := range result.Files {
 		adapterMaps[n] = r.Diagnostics
 	}
-	adapterFiles, adapterFamilies, err := propagate.PrepareGoResults(files, propagate.Config{Families: families, FileFamilies: result.imported, Importer: imp, PackagePath: path, GoResultNodes: &adapterNodes}, adapterMaps)
+	payloadEnums := result.payloadEnums
+	adapterFiles, adapterFamilies, err := propagate.PrepareGoResults(files, propagate.Config{ResolvePayloadEnum: payloadEnums, Families: families, FileFamilies: result.imported, Importer: imp, PackagePath: path, GoResultNodes: &adapterNodes}, adapterMaps)
 	if err != nil {
 		return result, stageError("package Go result inference", err)
 	}
@@ -381,7 +397,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		}
 		r.matchReferenceTemps = map[string]bool{}
 		var inferred []enums.Decl
-		lowered, err := propagate.Lower(name, r.Go, propagate.Config{FileFamilies: result.imported, InferredFamilies: &inferred, GoResultNodes: &adapterNodes, Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index), MatchReferenceTemps: r.matchReferenceTemps})
+		lowered, err := propagate.Lower(name, r.Go, propagate.Config{ResolvePayloadEnum: payloadEnums, FileFamilies: result.imported, InferredFamilies: &inferred, GoResultNodes: &adapterNodes, Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index), MatchReferenceTemps: r.matchReferenceTemps})
 		if err != nil {
 			return result, stageError("package propagate.Lower", err)
 		}

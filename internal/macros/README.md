@@ -69,7 +69,10 @@ There is deliberately no permissive free-name fallback. Unsupported free names
 variables, identifier-keyed literals, local type/struct/interface declarations,
 labels, and external precompiled macro metadata are diagnosed. Pass unsupported call-site
 values/functions as explicit captures. Primitive types/constants used by a
-template have definition-site aliases. These spellings must actually denote predeclared
+template retain definition-site bindings. A primitive type keeps its original
+spelling wherever Go resolves it to the same predeclared object; caller-local
+shadows and unresolved bindings keep a shared definition-site alias. Constants
+keep their definition-site aliases. These spellings must actually denote predeclared
 objects at the definition site. A conflicting definition-site declaration/import or
 caller package declaration/file import is a located diagnostic, including in fixed
 Option/Result type arguments; caller-local shadows remain supported. This boundary

@@ -83,12 +83,9 @@ func (g *generator) deriveProtocol(kind string, t ast.Expr) (string, bool) {
 		return g.importedDefault(t)
 	}
 	if kind == "Type" {
-		// Container types remain in package scope so generated locals (src, item,
-		// out, ...) cannot capture source import aliases or named element types.
-		g.next++
-		name := fmt.Sprintf("__goxide_enum_derive_type_f%d_%d", g.deriveFile, g.next)
-		fmt.Fprintf(&g.helpers, "\ntype %s = %s\n", name, g.typeName(t))
-		return name, true
+		// Derive locals avoid names in the source type expressions. Helpers stay
+		// in this file, preserving both package types and file-scoped imports.
+		return g.typeName(t), true
 	}
 	return g.importedField(kind, t)
 }

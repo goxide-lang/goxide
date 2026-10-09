@@ -442,6 +442,7 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 		}
 		return Result{}, stageError("macros.ResolveBuiltins", err)
 	}
+	macros.ResolvePrimitiveAliases(packagePath, fs, f, expanded.PrimitiveAliases, builtinImporter)
 	g := generator{provenance: provenance, fs: fs, file: filename, models: map[string]model{}, alias: "__goxide_serde"}
 	if cfg != nil {
 		g.localProtocols = cfg.localProtocols
@@ -996,7 +997,12 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 		}
 		imp := singleImporter
 		var inferred []enums.Decl
-		out, e = propagate.Lower(filename, out, propagate.Config{InferredFamilies: &inferred, Families: singleFamilies, From: conversions, Importer: imp, PackagePath: packagePath, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
+		owner := ""
+		var registry map[string]PackageResult
+		if cfg != nil {
+			owner, registry = cfg.packagePath, cfg.enumRegistry
+		}
+		out, e = propagate.Lower(filename, out, propagate.Config{ResolvePayloadEnum: payloadEnumResolver(owner, registry, imp), InferredFamilies: &inferred, Families: singleFamilies, From: conversions, Importer: imp, PackagePath: packagePath, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
 		}

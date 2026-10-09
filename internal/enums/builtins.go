@@ -257,13 +257,17 @@ func (l *lowerer) builtinDeclarations() string {
 	return b.String()
 }
 
-func (l *lowerer) builtinInstances() string {
+func (l *lowerer) builtinInstances(shapeValidator ...string) string {
 	var b strings.Builder
 	for _, d := range l.decls {
 		if d.Family == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "func %s(__goxide_enum_value %s){ __goxide_enum_validate_%s[%s](__goxide_enum_value);", d.Validator, d.Name, d.Family, strings.Join(d.TypeArgs, ","))
+		shape := fmt.Sprintf("__goxide_enum_validate_%s[%s]", d.Family, strings.Join(d.TypeArgs, ","))
+		if len(shapeValidator) > 0 {
+			shape = shapeValidator[0]
+		}
+		fmt.Fprintf(&b, "func %s(__goxide_enum_value %s){ %s(__goxide_enum_value);", d.Validator, d.Name, shape)
 		hasChecks := false
 		for _, v := range d.Variants {
 			hasChecks = hasChecks || l.payloadChecks[d.Name+"/"+v.Name] != ""
@@ -642,7 +646,9 @@ func substituteSumType(source string, args map[string]string) (string, error) {
 // InstantiateBuiltin emits only the concrete validators, using the same payload
 // projection checks as source-written instances. It never reparses lowered Go
 // or regenerates a nominal family. Callers must retain returned Decl metadata.
-func InstantiateBuiltin(d Decl, declarations []Decl, named map[string]ast.Expr) (string, error) {
+// An optional shapeValidator selects an already-authorized shared std helper;
+// the complete concrete payload checks are still generated unconditionally.
+func InstantiateBuiltin(d Decl, declarations []Decl, named map[string]ast.Expr, shapeValidator ...string) (string, error) {
 	if err := CheckBuiltinValidatorNames(append(append([]Decl(nil), declarations...), d)); err != nil {
 		return "", err
 	}
@@ -659,7 +665,7 @@ func InstantiateBuiltin(d Decl, declarations []Decl, named map[string]ast.Expr) 
 	if err := l.checkCompositePayloads(); err != nil {
 		return "", err
 	}
-	return l.builtinInstances(), nil
+	return l.builtinInstances(shapeValidator...), nil
 }
 
 // BindPayloadType preserves the declaring file's trusted enum bindings when a

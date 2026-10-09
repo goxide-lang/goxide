@@ -17,6 +17,35 @@ type Resolver func(kind string, t ast.Expr) (string, bool)
 type generator struct {
 	imports   map[string]string
 	resolvers []Resolver
+	bindings  map[string]bool
+}
+
+// Generated helpers live in the source type's file scope. Reserve every name
+// in its type expressions before introducing locals so those locals cannot
+// capture a named type or an import qualifier, including in nested containers.
+func newGenerator(resolvers []Resolver, nodes ...ast.Node) *generator {
+	g := &generator{imports: map[string]string{}, resolvers: resolvers, bindings: map[string]bool{}}
+	for _, node := range nodes {
+		if node == nil {
+			continue
+		}
+		ast.Inspect(node, func(n ast.Node) bool {
+			if id, ok := n.(*ast.Ident); ok {
+				g.bindings[id.Name] = true
+			}
+			return true
+		})
+	}
+	return g
+}
+
+func (g *generator) fresh(name string) string {
+	base := name
+	for i := 1; g.bindings[name]; i++ {
+		name = base + strconv.Itoa(i)
+	}
+	g.bindings[name] = true
+	return name
 }
 
 func resolve(rs []Resolver, kind string, t ast.Expr) (string, bool) {
@@ -81,39 +110,46 @@ func Generate(kind string, spec *ast.TypeSpec, resolvers ...Resolver) (string, m
 	if err != nil {
 		return "", nil, err
 	}
-	g := &generator{imports: map[string]string{}, resolvers: resolvers}
+	nodes := []ast.Node{spec.Name}
+	for _, f := range s.Fields.List {
+		nodes = append(nodes, f.Type)
+	}
+	g := newGenerator(resolvers, nodes...)
 	var b strings.Builder
 	switch kind {
 	case "Default":
-		fmt.Fprintf(&b, "func Default%s() %s { var out %s\n", spec.Name.Name, spec.Name.Name, spec.Name.Name)
+		out := g.fresh("out")
+		fmt.Fprintf(&b, "func Default%s() %s { var %s %s\n", spec.Name.Name, spec.Name.Name, out, spec.Name.Name)
 		for _, f := range s.Fields.List {
 			for _, n := range f.Names {
 				x, e := defaultValue(f.Type, resolvers)
 				if e != nil {
 					return "", nil, fmt.Errorf("field %s: %w", n.Name, e)
 				}
-				fmt.Fprintf(&b, "out.%s = %s\n", n.Name, x)
+				fmt.Fprintf(&b, "%s.%s = %s\n", out, n.Name, x)
 			}
 		}
-		b.WriteString("return out\n}\n")
+		fmt.Fprintf(&b, "return %s\n}\n", out)
 	case "Clone":
-		fmt.Fprintf(&b, "func Clone%s(v *%s) %s { var out %s\n", spec.Name.Name, spec.Name.Name, spec.Name.Name, spec.Name.Name)
+		v, out := g.fresh("v"), g.fresh("out")
+		fmt.Fprintf(&b, "func Clone%s(%s *%s) %s { var %s %s\n", spec.Name.Name, v, spec.Name.Name, spec.Name.Name, out, spec.Name.Name)
 		for _, f := range s.Fields.List {
 			for _, n := range f.Names {
-				x, e := g.clone(f.Type, "v."+n.Name)
+				x, e := g.clone(f.Type, v+"."+n.Name)
 				if e != nil {
 					return "", nil, fmt.Errorf("field %s: %w", n.Name, e)
 				}
-				fmt.Fprintf(&b, "out.%s = %s\n", n.Name, x)
+				fmt.Fprintf(&b, "%s.%s = %s\n", out, n.Name, x)
 			}
 		}
-		b.WriteString("return out\n}\n")
+		fmt.Fprintf(&b, "return %s\n}\n", out)
 	case "Debug":
+		v := g.fresh("v")
 		parts := []string{strconv.Quote(spec.Name.Name + " {")}
 		first := true
 		for _, f := range s.Fields.List {
 			for _, n := range f.Names {
-				x, e := g.debug(f.Type, "v."+n.Name)
+				x, e := g.debug(f.Type, v+"."+n.Name)
 				if e != nil {
 					return "", nil, fmt.Errorf("field %s: %w", n.Name, e)
 				}
@@ -126,7 +162,7 @@ func Generate(kind string, spec *ast.TypeSpec, resolvers ...Resolver) (string, m
 			}
 		}
 		parts = append(parts, strconv.Quote(" }"))
-		fmt.Fprintf(&b, "func Debug%s(v *%s) string { return %s }\n", spec.Name.Name, spec.Name.Name, strings.Join(parts, " + "))
+		fmt.Fprintf(&b, "func Debug%s(%s *%s) string { return %s }\n", spec.Name.Name, v, spec.Name.Name, strings.Join(parts, " + "))
 	default:
 		return "", nil, fmt.Errorf("unsupported derive %s", kind)
 	}
@@ -146,27 +182,29 @@ func (g *generator) clone(t ast.Expr, x string) (string, error) {
 		}
 		return "Clone" + t.Name + "(&" + x + ")", nil
 	case *ast.ArrayType:
-		child, e := g.clone(t.Elt, "src[i]")
+		src, i, dst := g.fresh("src"), g.fresh("i"), g.fresh("dst")
+		child, e := g.clone(t.Elt, src+"["+i+"]")
 		if e != nil {
 			return "", e
 		}
 		typ := g.typeText(t)
-		init := "var dst " + typ
+		init := "var " + dst + " " + typ
 		if t.Len == nil {
-			init = "if src == nil { return nil }; dst := make(" + typ + ", len(src))"
+			init = "if " + src + " == nil { return nil }; " + dst + " := make(" + typ + ", len(" + src + "))"
 		}
-		return "func(src " + typ + ") " + typ + " { " + init + "; for i := range src { dst[i] = " + child + " }; return dst }(" + x + ")", nil
+		return "func(" + src + " " + typ + ") " + typ + " { " + init + "; for " + i + " := range " + src + " { " + dst + "[" + i + "] = " + child + " }; return " + dst + " }(" + x + ")", nil
 	case *ast.MapType:
 		key, ok := t.Key.(*ast.Ident)
 		if !ok || !scalar(key.Name) {
 			return "", fmt.Errorf("Clone map keys must be built-in scalars")
 		}
-		child, e := g.clone(t.Value, "item")
+		src, keyName, item, dst := g.fresh("src"), g.fresh("key"), g.fresh("item"), g.fresh("dst")
+		child, e := g.clone(t.Value, item)
 		if e != nil {
 			return "", e
 		}
 		typ := g.typeText(t)
-		return "func(src " + typ + ") " + typ + " { if src == nil { return nil }; dst := make(" + typ + ", len(src)); for key, item := range src { dst[key] = " + child + " }; return dst }(" + x + ")", nil
+		return "func(" + src + " " + typ + ") " + typ + " { if " + src + " == nil { return nil }; " + dst + " := make(" + typ + ", len(" + src + ")); for " + keyName + ", " + item + " := range " + src + " { " + dst + "[" + keyName + "] = " + child + " }; return " + dst + " }(" + x + ")", nil
 	}
 	return "", fmt.Errorf("Clone has no explicit implementation for %s (pointer, external, interface and synchronization types are not copied implicitly)", typeText(t))
 }
@@ -197,27 +235,29 @@ func (g *generator) debug(t ast.Expr, x string) (string, error) {
 			return "Debug" + t.Name + "(&" + x + ")", nil
 		}
 	case *ast.ArrayType:
-		child, e := g.debug(t.Elt, "src[i]")
+		src, i, parts := g.fresh("src"), g.fresh("i"), g.fresh("parts")
+		child, e := g.debug(t.Elt, src+"["+i+"]")
 		if e != nil {
 			return "", e
 		}
 		typ := g.typeText(t)
 		nilCheck := ""
 		if t.Len == nil {
-			nilCheck = "if src == nil { return \"nil\" }; "
+			nilCheck = "if " + src + " == nil { return \"nil\" }; "
 		}
-		return "func(src " + typ + ") string { " + nilCheck + "parts := make([]string, len(src)); for i := range src { parts[i] = " + child + " }; return \"[\" + " + g.imp("strings") + ".Join(parts, \", \") + \"]\" }(" + x + ")", nil
+		return "func(" + src + " " + typ + ") string { " + nilCheck + parts + " := make([]string, len(" + src + ")); for " + i + " := range " + src + " { " + parts + "[" + i + "] = " + child + " }; return \"[\" + " + g.imp("strings") + ".Join(" + parts + ", \", \") + \"]\" }(" + x + ")", nil
 	case *ast.MapType:
 		key, ok := t.Key.(*ast.Ident)
 		if !ok || key.Name != "string" {
 			return "", fmt.Errorf("Debug maps currently require string keys")
 		}
-		child, e := g.debug(t.Value, "item")
+		src, keys, keyName, item, parts := g.fresh("src"), g.fresh("keys"), g.fresh("key"), g.fresh("item"), g.fresh("parts")
+		child, e := g.debug(t.Value, item)
 		if e != nil {
 			return "", e
 		}
 		typ := g.typeText(t)
-		return "func(src " + typ + ") string { if src == nil { return \"nil\" }; keys := make([]string, 0, len(src)); for key := range src { keys = append(keys, key) }; " + g.imp("sort") + ".Strings(keys); parts := make([]string, 0, len(keys)); for _, key := range keys { item := src[key]; parts = append(parts, " + g.imp("strconv") + ".Quote(key) + \": \" + " + child + ") }; return \"{\" + " + g.imp("strings") + ".Join(parts, \", \") + \"}\" }(" + x + ")", nil
+		return "func(" + src + " " + typ + ") string { if " + src + " == nil { return \"nil\" }; " + keys + " := make([]string, 0, len(" + src + ")); for " + keyName + " := range " + src + " { " + keys + " = append(" + keys + ", " + keyName + ") }; " + g.imp("sort") + ".Strings(" + keys + "); " + parts + " := make([]string, 0, len(" + keys + ")); for _, " + keyName + " := range " + keys + " { " + item + " := " + src + "[" + keyName + "]; " + parts + " = append(" + parts + ", " + g.imp("strconv") + ".Quote(" + keyName + ") + \": \" + " + child + ") }; return \"{\" + " + g.imp("strings") + ".Join(" + parts + ", \", \") + \"}\" }(" + x + ")", nil
 	}
 	return "", fmt.Errorf("Debug has no explicit implementation for %s", typeText(t))
 }
@@ -259,20 +299,27 @@ func GenerateSum(kind string, d enums.Decl, helper string, resolvers ...Resolver
 }
 
 func generateVariantProtocol(kind string, d enums.Decl, helper, display string, resolvers ...Resolver) (string, map[string]string, error) {
-	g := &generator{imports: map[string]string{}, resolvers: resolvers}
+	nodes := []ast.Node{ast.NewIdent(d.Name)}
+	for _, v := range d.Variants {
+		if v.Type != nil {
+			nodes = append(nodes, v.Type)
+		}
+	}
+	g := newGenerator(resolvers, nodes...)
+	value, active := g.fresh("v"), g.fresh("x")
 	var b strings.Builder
 	result := "string"
 	if kind == "Clone" {
 		result = d.Name
 	}
-	fmt.Fprintf(&b, "func %s(v *%s) %s { %s(*v); switch x:=(*v).(type){", helper, d.Name, result, d.Validator)
+	fmt.Fprintf(&b, "func %s(%s *%s) %s { %s(*%s); switch %s:=(*%s).(type){", helper, value, d.Name, result, d.Validator, value, active, value)
 	for _, v := range d.Variants {
-		fmt.Fprintf(&b, "case %s: _=x;", v.CaseName)
+		fmt.Fprintf(&b, "case %s: _=%s;", v.CaseName, active)
 		if kind == "Clone" {
 			if v.Type == nil {
 				fmt.Fprintf(&b, "return %s();", v.Constructor)
 			} else {
-				x, e := g.clone(v.Type, "x.Value")
+				x, e := g.clone(v.Type, active+".Value")
 				if e != nil {
 					return "", nil, e
 				}
@@ -282,7 +329,7 @@ func generateVariantProtocol(kind string, d enums.Decl, helper, display string, 
 			if v.Type == nil {
 				fmt.Fprintf(&b, "return %q;", display+"::"+v.Name)
 			} else {
-				x, e := g.debug(v.Type, "x.Value")
+				x, e := g.debug(v.Type, active+".Value")
 				if e != nil {
 					return "", nil, e
 				}

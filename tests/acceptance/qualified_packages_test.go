@@ -102,20 +102,41 @@ func wrong() Result[int,AppError] {
 	}
 }
 
-func TestQualifiedPackagesRequireConcreteValidation(t *testing.T) {
+func TestQualifiedPackagesGenerateConcreteValidation(t *testing.T) {
 	source, _ := qualifiedSource(t)
-	packagesWrite(t, source, "bad.gox", `package main
+	packagesWrite(t, source, "concrete.gox", `package main
 import p "qualified.example/app/source"
-func absent() p.Result[string,error] {
- n:=p.Fetch("ok")?
+func absent(kind string) p.Result[string,error] {
+ n:=p.Fetch(kind)?
  _=n
  return p.GoxideNewResultOk[string,error]("ok")
 }
+func concrete(value p.Result[string,error], seen *int) string {
+ out:=match value {p.Result[string,error]::Ok(text)=>text,p.Result[string,error]::Err(_)=>"err"}
+ *seen+=1
+ return out
+}
 `)
-	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
-	if err == nil || !strings.Contains(err.Error(), "producer validation metadata") {
-		t.Fatalf("missing concrete validator accepted or wrong failure: %v", err)
+	dest := filepath.Join(t.TempDir(), "generated")
+	if _, err := frontend.CompileModule(source, dest); err != nil {
+		t.Fatal(err)
 	}
+	packagesWrite(t, dest, "concrete_test.go", `package main
+import("testing";p "qualified.example/app/source")
+type forgedConcrete struct{p.Result[string,error]}
+func TestLocalConcreteValidation(t *testing.T){
+ if absent("ok").(p.GoxideResultOk[string,error]).Value!="ok"{t.Fatal("concrete success")}
+ if absent("error").(p.GoxideResultErr[string,error]).Value!=p.Sentinel{t.Fatal("failure propagation")}
+ seen:=0
+ if concrete(p.GoxideNewResultOk[string,error]("valid"),&seen)!="valid"||seen!=1{t.Fatal("valid match")}
+ for _,value:=range []p.Result[string,error]{nil,(*p.GoxideResultOk[string,error])(nil),&p.GoxideResultOk[string,error]{Value:"invalid"},forgedConcrete{}}{
+  func(){seen:=0;defer func(){if recover()!="goxide: invalid enum Result"{t.Error("invalid case accepted or wrong panic")};if seen!=0{t.Error("effect before validation")}}();concrete(value,&seen)}()
+ }
+}
+`)
+	tool := filepath.Join(runtime.GOROOT(), "bin/go")
+	packagesCommand(t, dest, tool, true, "test", "-race", "-count=1", "./...")
+	packagesCommand(t, dest, tool, true, "vet", "./...")
 }
 
 func TestQualifiedPackagesRejectDuplicateFrom(t *testing.T) {

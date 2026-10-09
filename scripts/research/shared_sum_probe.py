@@ -19,7 +19,8 @@ run('build-cli',root,['go','build','-o',str(cli),'./cmd/goxide'])
 src=out/'goxide-source'
 write(src,'go.mod','module fixture.example/current\ngo 1.27\n')
 write(src,'a/a.gox','package a\nfunc Make()Result[int,error]{return Result[int,error]::Ok(7)}\n')
-write(src,'b/b.gox','package b\nimport "fixture.example/current/a"\nfunc Make()Result[int,error]{n:=a.Make()?;return Result[int,error]::Ok(n)}\n')
+write(src,'b/b.gox','package b\nuse a;\nfunc Make()Result[int,error]{n:=a::Make()?;return Result[int,error]::Ok(n)}\n')
+write(src,'goxide.roots.toml','[roots.a]\nmodule="fixture.example/current"\npackage="fixture.example/current/a"\n')
 gen=out/'goxide-generated'
 run('goxide-transpile',root,[str(cli),'transpile','-o',str(gen),str(src)])
 write(gen,'b/b_test.go','''package b

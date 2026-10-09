@@ -4,6 +4,7 @@ module = "example.org/worker"
 go.workspace = true
 
 [dependencies]
+fmt = { workspace = true }
 shared = { workspace = true, features = ["yaml"] }
 
 [[bin]]

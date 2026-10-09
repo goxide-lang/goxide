@@ -32,13 +32,14 @@ func TestCompositeReferenceMetadataModules(t *testing.T) {
 	sourceFor := func(body, ext string) string {
 		dir := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, dir, "go.mod", packagesModule())
+		writeAcceptanceSerdeRoots(t, dir, "packages.example/app", "model", "mid", "other")
 		packagesWrite(t, dir, "model/model.gox", compositeMetadataAPI)
 		packagesWrite(t, dir, "model/again.gox", "package model\nfunc Again(r &State)&State{return View(r)}\n")
 		packagesWrite(t, dir, "mid/mid.gox", `package mid
-import a "packages.example/app/model"
-type State=a.State
-func View(r &State)&State{return a.Again(r)}
-func Edit(r mut& State)mut& State{return a.Edit(r)}
+use library::model as a;
+type State=a::State
+func View(r &State)&State{return a::Again(r)}
+func Edit(r mut& State)mut& State{return a::Edit(r)}
 `)
 		packagesWrite(t, dir, "other/other.gox", `package model
 type State struct{N int;A [2]int;S []int;M map[string]int;P *int}
@@ -49,24 +50,24 @@ func View(p &State)&State{return p}
 	}
 	t.Run("business-shapes-aliases-race", func(t *testing.T) {
 		source := sourceFor(`package app
-import a "packages.example/app/model"
-import b "packages.example/app/model"
-import m "packages.example/app/mid"
-type Alias=a.State
-func forwarded(r &Alias)&b.State{return m.View(r)}
-func Run()int{n:=5;s:=a.State{N:1,A:[2]int{2,0},S:[]int{3},M:map[string]int{"x":4},P:&n};w:=mut& s;r:=forwarded(&*w);copy:=*r;copy.N++;copy.A[0]++;m.Edit(w).N++;a.Native(&s);s.Touch();if r.N!=4||r.S[0]!=4||copy.N!=2||copy.A[0]!=3{panic("identity/copy changed")};return b.Read(r)}
-func Containers()int{s:=[]int{1};w:=mut& s;(*a.SliceEdit(w))[0]++;r:=a.Slice(&*w);m:=map[string]int{"x":3};mr:=a.Map(&m);v:=[2]int{4,5};ar:=a.Array(&v);copy:=*ar;copy[0]++;return (*r)[0]+(*mr)["x"]+copy[0]}
-func Private()int{return a.Hidden().N}
+use library::model as a;
+use library::model as b;
+use library::mid as m;
+type Alias=a::State
+func forwarded(r &Alias)&b::State{return m::View(r)}
+func Run()int{n:=5;s:=a::State{N:1,A:[2]int{2,0},S:[]int{3},M:map[string]int{"x":4},P:&n};w:=mut& s;r:=forwarded(&*w);copy:=*r;copy.N++;copy.A[0]++;m::Edit(w).N++;a::Native(&s);s.Touch();if r.N!=4||r.S[0]!=4||copy.N!=2||copy.A[0]!=3{panic("identity/copy changed")};return b::Read(r)}
+func Containers()int{s:=[]int{1};w:=mut& s;(*a::SliceEdit(w))[0]++;r:=a::Slice(&*w);m:=map[string]int{"x":3};mr:=a::Map(&m);v:=[2]int{4,5};ar:=a::Array(&v);copy:=*ar;copy[0]++;return (*r)[0]+(*mr)["x"]+copy[0]}
+func Private()int{return a::Hidden().N}
 `, "gox")
 		packagesWrite(t, source, "left.gox", `package app
-import a "packages.example/app/model"
-func left(r &a.State)int{return r.N}
-func Left()int{s:=a.State{N:10};return left(&s)}
+use library::model as a;
+func left(r &a::State)int{return r.N}
+func Left()int{s:=a::State{N:10};return left(&s)}
 `)
 		packagesWrite(t, source, "right.gox", `package app
-import a "packages.example/app/other"
-func right(r &a.State)int{return r.N}
-func Right()int{s:=a.State{N:20};return right(&s)}
+use library::other as a;
+func right(r &a::State)int{return r.N}
+func Right()int{s:=a::State{N:20};return right(&s)}
 `)
 		packagesWrite(t, source, "native.go", `package app
 import a "packages.example/app/model"
@@ -138,14 +139,14 @@ func TestPathsAndNative(t *testing.T){if Left()!=10||Right()!=20||NativeRead()!=
 	}
 	t.Run("goxide-upgrade-and-defined-identity", func(t *testing.T) {
 		for _, body := range []string{
-			`func bad(){s:=a.State{};r:=a.View(&s);a.Edit(r)}`,
-			`func bad(){s:=a.State{};r:=a.View(&s);_=mut& *r}`,
-			`type Other a.State;func bad(r &a.State)&Other{return r}`,
-			`func bad(){s:=a.State{};r:=a.View(&s);other.View(r)}`,
+			`func bad(){s:=a::State{};r:=a::View(&s);a::Edit(r)}`,
+			`func bad(){s:=a::State{};r:=a::View(&s);_=mut& *r}`,
+			`type Other a::State;func bad(r &a::State)&Other{return r}`,
+			`func bad(){s:=a::State{};r:=a::View(&s);other::View(r)}`,
 		} {
-			imports := "import a \"packages.example/app/model\"\n"
-			if strings.Contains(body, "other.") {
-				imports += "import other \"packages.example/app/other\"\n"
+			imports := "use library::model as a;\n"
+			if strings.Contains(body, "other::") {
+				imports += "use library::other as other;\n"
 			}
 			source := sourceFor("package app\n"+imports+body+"\n", "gox")
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)

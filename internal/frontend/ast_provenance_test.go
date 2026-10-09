@@ -79,8 +79,8 @@ func TestGeneratedASTExactAndUnprovedControls(t *testing.T) {
 
 func TestGeneratedASTBuiltinRenamesPreserveOtherTokens(t *testing.T) {
 	definitions := []byte("package p\nmacro_rules! size {($x:expr)=>{len($x)};}\n")
-	caller := "package p\nimport len \"strings\"\nfunc f()int{_=len.TrimSpace(\" x \");len:=3;_=len;unaffected:=4;return size!([]int{unaffected})}\n"
-	result, err := CompilePackage("example/renames", map[string][]byte{"definitions.gox": definitions, "caller.gox": []byte(caller)}, typecheck.NewImporter("caller.gox"))
+	caller := "package p\nuse strings as len;\nfunc f()int{_=len::TrimSpace(\" x \");len:=3;_=len;unaffected:=4;return size!([]int{unaffected})}\n"
+	result, err := CompilePackageWithOptions("example/renames", map[string][]byte{"definitions.gox": definitions, "caller.gox": []byte(caller)}, PackageOptions{Importer: typecheck.NewImporter("caller.gox"), Roots: frontendFixtureRoots(nil)})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 package main
 
-import "fmt"
+use fmt;
 
 enum State { Empty, Count(int), }
 
@@ -11,13 +11,13 @@ func label(state State) string {
         State::Empty => 0,
     }
     return match state {
-        State::Count(_) => fmt.Sprintf("count: %d", size),
+        State::Count(_) => fmt::Sprintf("count: %d", size),
         State::Empty => "empty",
     }
 }
 
 func main() {
-    fmt.Println(label(State::Count(3)))
-    fmt.Println(label(State::Count(-1)))
-    fmt.Println(label(State::Empty))
+    fmt::Println(label(State::Count(3)))
+    fmt::Println(label(State::Count(-1)))
+    fmt::Println(label(State::Empty))
 }

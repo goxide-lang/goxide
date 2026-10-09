@@ -42,7 +42,7 @@ func TestModulePreservesResourcesAndQuotedReplacement(t *testing.T) {
 }
 func TestModuleOutputAndSelectionBoundaries(t *testing.T) {
 	for _, tc := range []struct{ name, filename, source, want string }{
-		{"macro", "input.gox", "package p\nfunc f(){dep.log!()}\n", "explicit import"},
+		{"macro", "input.gox", "package p\nfunc f(){dep::log!()}\n", "explicit use"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := t.TempDir()

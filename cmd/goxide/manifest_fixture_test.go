@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -92,6 +93,9 @@ func fixtureAuthoring(t *testing.T, root string, files map[string]string) {
 		}
 	}
 	if mod == "" {
+		if has {
+			files["goxide.toml"] = fixtureNamespaceManifest(t, text)
+		}
 		return
 	}
 	files["goxide.toml"] = fixtureManifest(t, text, mod)
@@ -121,6 +125,11 @@ func fixtureManifest(t *testing.T, text, mod string) string {
 	if e = toml.Unmarshal([]byte(text), &mapdata); e != nil {
 		t.Fatal(e)
 	}
+	if original, ok := mapdata["package"].(map[string]any); ok {
+		if namespaces, ok := original["namespaces"]; ok {
+			identity["package"].(map[string]any)["namespaces"] = namespaces
+		}
+	}
 	mapdata["package"] = identity["package"]
 	if v, ok := identity["go"]; ok {
 		mapdata["go"] = v
@@ -131,5 +140,86 @@ func fixtureManifest(t *testing.T, text, mod string) string {
 	if e != nil {
 		t.Fatal(e)
 	}
-	return string(b)
+	return fixtureNamespaceManifest(t, string(b))
+}
+
+// These version/layout fixtures consistently expose each declared dependency's
+// root Go package, plus this module's library and generated gen package. Write
+// those choices explicitly into the fixture manifest; source syntax is never
+// rewritten or accepted by this helper.
+func fixtureNamespaceManifest(t *testing.T, text string) string {
+	t.Helper()
+	var doc map[string]any
+	if err := toml.Unmarshal([]byte(text), &doc); err != nil {
+		t.Fatal(err)
+	}
+	pkg, _ := doc["package"].(map[string]any)
+	if pkg == nil {
+		return text
+	}
+	module, _ := pkg["module"].(string)
+	if module == "" {
+		return text
+	}
+	deps, _ := doc["dependencies"].(map[string]any)
+	if deps == nil {
+		deps = map[string]any{}
+		doc["dependencies"] = deps
+	}
+	for _, raw := range deps {
+		dep, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		module, _ := dep["module"].(string)
+		if module != "" {
+			if _, exists := dep["package"]; !exists {
+				dep["package"] = module
+			}
+		}
+	}
+	for alias, path := range map[string]string{"fmt": "fmt", "json": "encoding/json", "os": "os", "filepath": "path/filepath", "strings": "strings"} {
+		if _, exists := deps[alias]; !exists {
+			deps[alias] = map[string]any{"source": "toolchain", "package": path}
+		}
+	}
+	namespaces, _ := pkg["namespaces"].(map[string]any)
+	if namespaces == nil {
+		namespaces = map[string]any{}
+		pkg["namespaces"] = namespaces
+	}
+	for alias, path := range map[string]string{module[strings.LastIndex(module, "/")+1:]: module, "gen": module + "/gen"} {
+		if _, collision := deps[alias]; !collision {
+			namespaces[alias] = path
+		}
+	}
+	data, err := toml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+const fixtureToolchainRoots = `[roots.fmt]
+source="toolchain"
+package="fmt"
+[roots.json]
+source="toolchain"
+package="encoding/json"
+[roots.os]
+source="toolchain"
+package="os"
+`
+const fixtureSerdeRoots = `[roots.serde]
+module="github.com/goxide-lang/serde"
+package="github.com/goxide-lang/serde"
+[roots.serde.namespaces]
+json="github.com/goxide-lang/serde/json"
+`
+
+func fixtureRootsFile(t *testing.T, root, extra string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, "goxide.roots.toml"), []byte(fixtureToolchainRoots+extra), 0600); err != nil {
+		t.Fatal(err)
+	}
 }

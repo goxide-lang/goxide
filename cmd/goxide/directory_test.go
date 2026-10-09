@@ -39,7 +39,7 @@ func TestDirectoryTagsReferencesAndExplicitCompiler(t *testing.T) {
 	os.MkdirAll(filepath.Join(src, "dep"), 0700)
 	for name, source := range map[string]string{
 		"go.mod":         "module example.org/app\ngo 1.27\n",
-		"main.gox":       "package main\nimport (\"fmt\"; d \"example.org/app/dep\")\nfunc main(){fmt.Println(Run(),d.Value())}\nfunc Run()int{n:=40;w:=mut& n;increment(w);return read(&*w)}\n",
+		"main.gox":       "package main\nuse fmt;\nuse dep as d;\nfunc main(){fmt::Println(Run(),d::Value())}\nfunc Run()int{n:=40;w:=mut& n;increment(w);return read(&*w)}\n",
 		"read.gox":       "package main\nfunc read(r &int)int{return *r}\n",
 		"write.gox":      "package main\nfunc increment(r mut& int){*r+=2}\n",
 		"race.gox":       "//go:build race\n\npackage main\nfunc RaceSelected()bool{return true}\n",
@@ -53,6 +53,10 @@ func TestDirectoryTagsReferencesAndExplicitCompiler(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	fixtureRootsFile(t, src, `[roots.dep]
+module="example.org/app"
+package="example.org/app/dep"
+`)
 	fake := filepath.Join(root, "bin")
 	os.Mkdir(fake, 0700)
 	os.WriteFile(filepath.Join(fake, "go"), []byte("#!/bin/sh\nexit 97\n"), 0700)

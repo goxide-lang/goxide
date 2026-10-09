@@ -1,9 +1,10 @@
 package main
+use serde;
 
-import "os"
-import "github.com/goxide-lang/serde/json"
+use os;
+use serde::json as serdejson;
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Delivery {
     #[default]
     #[serde(rename="queued")]
@@ -11,7 +12,7 @@ pub enum Delivery {
     #[serde(rename="sent")]
     Delivered,
 }
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Urgency {
     #[serde(value=9)]
     Rush,
@@ -19,7 +20,7 @@ pub enum Urgency {
     #[serde(value=2)]
     Normal,
 }
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 type Ticket struct { Delivery Delivery; Urgency Urgency; Note string }
 
 func Describe(value Delivery) string {
@@ -34,14 +35,14 @@ func IsRush(value Urgency) bool {
     panic("unreachable")
 }
 func Process(data []byte, submitted *int) (Ticket,error) {
-    ticket,err:=serdejson.Unmarshal(data,DeserializeTicket)
+    ticket,err:=serdejson::Unmarshal(data,DeserializeTicket)
     if err!=nil { return Ticket{},err }
     *submitted++
     return CloneTicket(&ticket),nil
 }
 func main() {
     input:=`{"Delivery":"sent","Urgency":9,"Note":"webhook"}`
-    if len(os.Args)>1 { input=os.Args[1] }
+    if len(os::Args)>1 { input=os::Args[1] }
     submitted:=0
     ticket,err:=NativeDispatch([]byte(input),&submitted)
     if err!=nil { println!("rejected {}",submitted);return }

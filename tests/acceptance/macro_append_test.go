@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"bytes"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,6 +23,10 @@ func TestMacroAppendCLI(t *testing.T) {
 	t.Run("generated-module", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module append.example/app\ngo 1.27\n")
+		writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+			"ops": {Module: "append.example/app", Package: "append.example/app/ops"},
+			"own": {Module: "append.example/app", Package: "append.example/app/own"},
+		})
 		packagesWrite(t, source, "ops/macros.gox", macroAppendDefinitions)
 		packagesWrite(t, source, "own/own.gox", `package own
 func append(s []int,v int)[]int{return []int{41,v}}
@@ -80,11 +85,12 @@ func Run()[]int{append:=func([]int,int)[]int{return []int{-1}};_=append;return o
 		for _, newline := range []struct{ name, value string }{{"LF", "\n"}, {"CRLF", "\r\n"}} {
 			t.Run(newline.name, func(t *testing.T) {
 				source := t.TempDir()
+				writeMacroFixtureRoots(t, source, nil)
 				input := filepath.Join(source, "main.gox")
 				packagesWrite(t, source, "main.gox", strings.ReplaceAll(`package main
-import "fmt"
+use fmt;
 macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}
-func main(){append:=2;fmt.Println(push!([]int{1},append))}
+func main(){append:=2;fmt::Println(push!([]int{1},append))}
 `, "\n", newline.value))
 				generated := t.TempDir()
 				first := filepath.Join(generated, "main.go")
@@ -134,6 +140,19 @@ func main(){_=bad!()}
 		}
 	})
 
+	t.Run("namespace-alias-and-value-builtin", func(t *testing.T) {
+		source := t.TempDir()
+		writeMacroFixtureRoots(t, source, nil)
+		packagesWrite(t, source, "main.gox", `package main
+use strings as append;
+macro_rules! push { ($s:expr,$v:expr)=>{append($s,$v)}; }
+func main(){v:=push!([]int{1},2);if len(v)!=2||v[1]!=2||append::Repeat("x",2)!="xx"{panic("builtin or namespace binding")}}
+`)
+		binary := filepath.Join(t.TempDir(), "application")
+		deliveryCommand(t, outside, cli, true, nil, "build", "--go", tool, "--runtime", root, "-o", binary, filepath.Join(source, "main.gox"))
+		deliveryCommand(t, outside, binary, true, nil)
+	})
+
 	t.Run("invalid-calls-and-boundaries", func(t *testing.T) {
 		for _, tc := range []struct {
 			name, declaration, template, body, want string
@@ -148,11 +167,11 @@ func main(){_=bad!()}
 			{"definition-var", "var append=func([]int,int)[]int{return nil}", "append($s,$v)", "bad!([]int{},1)", "definition-site", false},
 			{"definition-const", "const append=1", "append($s,$v)", "bad!([]int{},1)", "definition-site", false},
 			{"definition-type", "type append int", "append($s,$v)", "bad!([]int{},1)", "definition-site", false},
-			{"definition-import", `import append "strings"`, "append($s,$v)", "bad!([]int{},1)", "definition-site", false},
 			{"bare-builtin", "", "append", "bad!(1,2)", "direct call", false},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				source := t.TempDir()
+				writeMacroFixtureRoots(t, source, nil)
 				packagesWrite(t, source, "invalid.gox", "package main\n"+tc.declaration+"\nmacro_rules! bad {($s:expr,$v:expr)=>{"+tc.template+"};}\nfunc main(){_="+tc.body+"}\n")
 				input := filepath.Join(source, "invalid.gox")
 				output := deliveryCommand(t, outside, cli, false, nil, "build", "--go", tool, "--runtime", root, "-o", filepath.Join(t.TempDir(), "rejected"), input)
@@ -178,8 +197,11 @@ func main(){_=bad!()}
 			t.Run("caller-package-"+declaration.name, func(t *testing.T) {
 				source := t.TempDir()
 				packagesWrite(t, source, "go.mod", "module append.example/rejected\ngo 1.27\n")
+				writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+					"ops": {Module: "append.example/rejected", Package: "append.example/rejected/ops"},
+				})
 				packagesWrite(t, source, "ops/macros.gox", "package ops\npub macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}\n")
-				packagesWrite(t, source, "app.gox", "package main\nimport m \"append.example/rejected/ops\"\nfunc main(){_=m.push!([]int{},1)}\n")
+				packagesWrite(t, source, "app.gox", "package main\nuse ops as m;\nfunc main(){_=m::push!([]int{},1)}\n")
 				packagesWrite(t, source, "shadow.go", "package main\n"+declaration.source+"\n")
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
 				if !strings.Contains(output, "caller package declaration") || !strings.Contains(output, "macros.gox:2:") || !strings.Contains(output, "app.gox:3:") {
@@ -191,56 +213,56 @@ func main(){_=bad!()}
 }
 
 const macroAppendDefinitions = `package ops
-import "log/slog"
+use slog;
 pub macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}
 pub macro_rules! many {($s:expr,$($v:expr),*)=>{append($s,$($v),*)};}
 pub macro_rules! extend {($s:expr,$tail:expr)=>{append($s,$tail...)};}
 pub macro_rules! nested {($s:expr,$v:expr)=>{push!(push!($s,$v),$v)};}
 pub macro_rules! question {($s:expr,$v:expr,$later:expr)=>{append($s,$v?,$later)};}
 pub macro_rules! local {($s:expr,$v:expr)=>{func()[]int{append:=func([]int,int)[]int{return []int{17}};return append($s,$v)}()};}
-pub macro_rules! log_if {($enabled:expr,$s:expr,$v:expr)=>{if $enabled {slog.Info("append","values",append($s,$v))}};}
+pub macro_rules! log_if {($enabled:expr,$s:expr,$v:expr)=>{if $enabled {slog::Info("append","values",append($s,$v))}};}
 `
 
 const macroAppendBindings = `package main
-import m "append.example/app/ops"
-import append "strings"
+use ops as m;
+use strings as append;
 func Bindings()int{
- imported:=m.push!([]int{},len(append.Repeat("x",2)))[0]
+ imported:=m::push!([]int{},len(append::Repeat("x",2)))[0]
  append:=func(n int)int{return n+1}
- total:=imported+m.push!([]int{},append(3))[0]
- {const append=2;total+=m.push!([]int{},append)[0]}
- switch append:=any(3).(type){case int:total+=m.push!([]int{},append)[0]}
- {append:=4;r:=Record{append:append};total+=m.push!([]int{},r.append)[0];total+=m.push!([]int{},map[int]int{append:7}[append])[0]}
+ total:=imported+m::push!([]int{},append(3))[0]
+ {const append=2;total+=m::push!([]int{},append)[0]}
+ switch append:=any(3).(type){case int:total+=m::push!([]int{},append)[0]}
+ {append:=4;r:=Record{append:append};total+=m::push!([]int{},r.append)[0];total+=m::push!([]int{},map[int]int{append:7}[append])[0]}
  return total
 }
-func Parameter(append int)[]int{return m.push!([]int{},append)}
+func Parameter(append int)[]int{return m::push!([]int{},append)}
 `
 
 const macroAppendProgram = `package main
-import "fmt"
-import m "append.example/app/ops"
-import o "append.example/app/own"
-func Push(s Items,v int)Items{return m.push!(s,v)}
-func Extend(s Items,tail []int)Items{return m.extend!(s,tail)}
-func Bytes(s []byte,tail string)[]byte{return m.extend!(s,tail)}
-func Order(base func()[]int,one func()int,two func()int)[]int{return m.many!(base(),one(),two())}
-func Repeated(base []int,next func()int)[]int{return m.nested!(base,next())}
-func DefinitionLocal()[]int{return m.local!([]int{},1)}
-func DefinitionFunction()[]int{return o.Run()}
+use fmt;
+use ops as m;
+use own as o;
+func Push(s Items,v int)Items{return m::push!(s,v)}
+func Extend(s Items,tail []int)Items{return m::extend!(s,tail)}
+func Bytes(s []byte,tail string)[]byte{return m::extend!(s,tail)}
+func Order(base func()[]int,one func()int,two func()int)[]int{return m::many!(base(),one(),two())}
+func Repeated(base []int,next func()int)[]int{return m::nested!(base,next())}
+func DefinitionLocal()[]int{return m::local!([]int{},1)}
+func DefinitionFunction()[]int{return o::Run()}
 var Trace string
 var Storage [4]int
 func Base()[]int{Trace+="S";return Storage[:1]}
 func Next(ok bool)Option[int]{Trace+="V";if ok{return Option[int]::Some(2)};return Option[int]::None}
 func Later()int{Trace+="L";return 3}
-func Question(ok bool)Option[[]int]{items:=m.question!(Base(),Next(ok),Later());Trace+="A";return Option[[]int]::Some(items)}
+func Question(ok bool)Option[[]int]{items:=m::question!(Base(),Next(ok),Later());Trace+="A";return Option[[]int]::Some(items)}
 func QuestionLen(ok bool)int{return match Question(ok){Option[[]int]::Some(v)=>len(v),Option[[]int]::None=>-1,}}
 func NestedQuestion(ok bool)int{
- inner:=func()Option[[]int]{items:=m.question!(Base(),Next(ok),Later());Trace+="A";return Option[[]int]::Some(items)}
+ inner:=func()Option[[]int]{items:=m::question!(Base(),Next(ok),Later());Trace+="A";return Option[[]int]::Some(items)}
  result:=inner();Trace+="O"
  return match result{Option[[]int]::Some(v)=>len(v),Option[[]int]::None=>-1,}
 }
-func Logging(enabled func()bool,base func()[]int,value func()int){m.log_if!(enabled(),base(),value())}
-func main(){fmt.Println(m.many!([]int{1},2,3),string(Bytes([]byte("a"),"b")))}
+func Logging(enabled func()bool,base func()[]int,value func()int){m::log_if!(enabled(),base(),value())}
+func main(){fmt::Println(m::many!([]int{1},2,3),string(Bytes([]byte("a"),"b")))}
 `
 
 const macroAppendAssertions = `package main

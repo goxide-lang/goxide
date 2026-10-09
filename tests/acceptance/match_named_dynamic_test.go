@@ -18,8 +18,9 @@ func TestMatchNamedDynamicModules(t *testing.T) {
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, dir, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 		prefix := "package app\n"
-		if strings.HasPrefix(body, "import ") {
+		if strings.HasPrefix(body, "use ") {
 			line, rest, _ := strings.Cut(body, "\n")
 			prefix += line + "\n"
 			body = rest
@@ -28,7 +29,7 @@ func TestMatchNamedDynamicModules(t *testing.T) {
 		return dir
 	}
 	t.Run("execution", func(t *testing.T) {
-		source := sourceFor(`import "errors"
+		source := sourceFor(`use errors;
 var trace []int
 func mark(n int)int{trace=append(trace,n);return n}
 func choice()E{mark(2);return E::A(3)}
@@ -57,12 +58,12 @@ func Binary(g func(uint64)uint64,n uint)uint64{return g(0+match E::B{E::A(_)=>1,
 func Nested(g func(int)int)int{return g(match E::A(2){E::A(n)=>g(match E::B{E::A(_)=>0,E::B=>n}),E::B=>0})}
 func NilCall(){var g func(int,int,int);g(mark(1),match choice(){E::A(n)=>mark(n),E::B=>0},mark(5))}
 func NilArgPanic(){var g func(int,int);g(match E::B{E::A(_)=>0,E::B=>mark(1)},explode())}
-var stop=errors.New("stop")
+var stop=errors::New("stop")
 func payload(ok bool)Result[int,error]{mark(3);if !ok{return Result[int,error]::Err(stop)};return Result[int,error]::Ok(7)}
 func Failure(ok bool)(out Result[int,error]){g:=func(a,b int)Result[int,error]{mark(8);return Result[int,error]::Ok(a+b)};defer func(){match out{Result[int,error]::Ok(_)=>{mark(10)},Result[int,error]::Err(_)=>{mark(11)}}}();return g(match choice(){E::A(_)=>payload(ok)?,E::B=>0},mark(9))}
 func NilFailure()(out Result[int,error]){var g func(int)Result[int,error];return g(match E::B{E::A(_)=>0,E::B=>payload(false)?})}
 func ClosureTarget()int{f:=func()(out Result[int,error]){g:=func(n int)Result[int,error]{return Result[int,error]::Ok(n)};return g(match E::B{E::A(_)=>0,E::B=>payload(false)?})};v:=f();match v{Result[int,error]::Ok(_)=>{return 0},Result[int,error]::Err(_)=>{return 7}};return -1}
-func IsErr(v Result[int,error])bool{return match v{Result[int,error]::Ok(_)=>false,Result[int,error]::Err(e)=>errors.Is(e,stop)}}
+func IsErr(v Result[int,error])bool{return match v{Result[int,error]::Ok(_)=>false,Result[int,error]::Err(e)=>errors::Is(e,stop)}}
 func MakeA()E{return E::A(1)}
 `)
 		generated := filepath.Join(t.TempDir(), "generated")

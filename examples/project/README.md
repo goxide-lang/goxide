@@ -1,6 +1,6 @@
 # 显式项目目标
 
-这个纯 TOML 项目 含一个 lib、同一 src 目录中的两个 main，以及一个 example。
+这个纯 TOML 项目含一个 lib、同一 src 目录中的两个 main，以及一个 example。`[package.namespaces]` 把 `greeting` 映射到本模块的库包；`[dependencies.fmt]` 明确声明 Go 工具链的 `fmt` 包。各源文件再通过 `use` 绑定名称，使用 `::` 访问包成员。
 在仓库根构建 CLI 后运行；把 GO_BIN 设为真实 Go 1.27+ 路径：
 
 ```sh

@@ -51,10 +51,10 @@ path = 'src/lib.gox'
 [package]
 format = 1
 `,
-		"src/lib.gox":         "package lib\nimport d \"example.org/layoutdep\"\nfunc Value()string{if cfg!(feature(\"extra\")){return \"on \"+d.Value()};return \"off \"+d.Value()}\n",
-		"src/one.gox":         "package main\nimport \"fmt\"\nimport l \"example.org/layout\"\nfunc main(){fmt.Println(l.Value())}\n",
-		"src/two.gox":         "package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"two\")}\n",
-		"examples/demo.gox":   "package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"example\")}\n",
+		"src/lib.gox":         "package lib\nuse dep as d;\nfunc Value()string{if cfg!(feature(\"extra\")){return \"on \"+d::Value()};return \"off \"+d::Value()}\n",
+		"src/one.gox":         "package main\nuse fmt;\nuse layout as l;\nfunc main(){fmt::Println(l::Value())}\n",
+		"src/two.gox":         "package main\nuse fmt;\nfunc main(){fmt::Println(\"two\")}\n",
+		"examples/demo.gox":   "package main\nuse fmt;\nfunc main(){fmt::Println(\"example\")}\n",
 		"cmd/web/main.go":     "package main\nimport \"fmt\"\nimport _ \"embed\"\n//go:embed message.txt\nvar message string\nfunc main(){fmt.Println(message)}\n",
 		"cmd/web/message.txt": "embedded asset",
 	})

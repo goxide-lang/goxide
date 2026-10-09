@@ -6,7 +6,7 @@ globalThis.fs = fs;
 globalThis.require = require;
 globalThis.crypto ??= require('node:crypto').webcrypto;
 globalThis.performance ??= require('node:perf_hooks').performance;
-const [wasm, runtime, inputsFile, outputsFile] = process.argv.slice(2);
+const [wasm, runtime, inputsFile, outputsFile, rootsHash] = process.argv.slice(2);
 assert.equal(process.env.GOMAXPROCS, '1', 'only this Node process must use GOMAXPROCS=1');
 require(runtime);
 const go = new Go();
@@ -15,6 +15,8 @@ let readyResolve;
 const ready = new Promise(resolve => {readyResolve = resolve;});
 globalThis.postMessage = message => {
   assert.equal(message.type, 'ready');
+  assert.match(rootsHash, /^[a-f0-9]{64}$/);
+  assert.equal(message.rootsSha256, rootsHash, 'WASM uses another project dependency context');
   readyResolve();
 };
 (async () => {

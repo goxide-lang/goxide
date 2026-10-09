@@ -153,6 +153,10 @@ positive runtime assertions and negative source-location assertions.
 ## Unified call contexts and receiver evaluation
 
 The parser preserves the complete callee expression and argument expansion.
+Syntax-only Go parser calls use a same-length view for static `::` paths, including
+pointer method expressions such as `(*model::S)::Pointer`. Copied callees and
+types retain their original separators and positions for later resolution; this
+pass does not authorize a Go-style dot as a static access.
 `propagate.matchArgumentType` resolves its actual Go signature, checks arity and
 selects the fixed parameter, variadic element, or expanded slice type. Builtin and
 type-conversion calls remain explicitly unsupported contexts. Native Go generic

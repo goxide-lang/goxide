@@ -18,7 +18,7 @@ func (i legacyNamingImporter) Import(path string) (*types.Package, error) {
 }
 func TestNamingRejectsOldProducer(t *testing.T) {
 	for _, marker := range []string{"HgoEnumMetadata", "HgoReferenceMetadata", "HgoUseMetadata", "HgoSumABI"} {
-		_, err := CompilePackage("example.org/new", map[string][]byte{"new.gox": []byte("package newer\nimport _ \"example.org/old\"\n")}, legacyNamingImporter{marker})
+		_, err := CompilePackageWithOptions("example.org/new", map[string][]byte{"new.gox": []byte("package newer\nuse old as _;\n")}, PackageOptions{Importer: legacyNamingImporter{marker}, Roots: frontendFixtureRoots(map[string]string{"old": "example.org/old"})})
 		if err == nil || !strings.Contains(err.Error(), "regenerate") {
 			t.Fatalf("%s: %v", marker, err)
 		}

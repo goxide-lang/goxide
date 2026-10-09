@@ -436,7 +436,7 @@ func BindImportsWithPath(path string, files map[string][]byte, imp types.Importe
 			}
 			call, ok := parents[callTarget].(*ast.CallExpr)
 			if !ok || call.Fun != callTarget {
-				failure = &ImportError{fs.Position(target.Pos()), "reference function values/callbacks are outside this metadata slice"}
+				failure = &ImportError{fs.Position(id.Pos()), "reference function values/callbacks are outside this metadata slice"}
 				return false
 			}
 			serial++

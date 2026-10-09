@@ -1,0 +1,23 @@
+[roots.config]
+module = "trial.example/model"
+package = "trial.example/model/config"
+
+[roots.errors]
+source = "toolchain"
+package = "errors"
+
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+
+[roots.logkit]
+module = "trial.example/app"
+package = "trial.example/app/logkit"
+
+[roots.os]
+source = "toolchain"
+package = "os"
+
+[roots.strconv]
+source = "toolchain"
+package = "strconv"

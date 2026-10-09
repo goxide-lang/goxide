@@ -20,7 +20,7 @@ import threading
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'website'))
-from build_support import verify_compiler_sources
+from build_support import dependency_context, verify_compiler_sources
 
 
 def require(condition, message):
@@ -123,7 +123,7 @@ def http_worker(root, dist, inputs, expected, manifest, out, chromium):
                 served = page.evaluate("async () => await (await fetch('examples.json')).json()")
                 require(served == manifest, 'HTTP manifest differs from validated local manifest')
                 try:
-                    batch = page.evaluate(collector, dict(inputs=inputs, commit=served['commit'], hash=served['wasmSha256']))
+                    batch = page.evaluate(collector, dict(inputs=inputs, commit=served['commit'], hash=served['wasmSha256'], rootsHash=served['dependencyContext']['sha256']))
                 except Exception as error:
                     batch = dict(complete=False, observations=[], failure=dict(stage='page-evaluate', error=str(error)))
                 save(out / 'http-worker.json', batch)
@@ -150,6 +150,9 @@ def run(args, out, summary):
     go = args.go
     native_env = dict(os.environ, GOMAXPROCS='4', GOWORK='off', GOPROXY='off', GOTOOLCHAIN='local')
     manifest = json.loads((dist / 'examples.json').read_text())
+    context = dependency_context(root)
+    require(context == manifest['dependencyContext'], 'explicit dependency context differs from manifest')
+    roots_file = root / context['path']
     verify_compiler_sources(root, manifest['commit'], manifest['compilerDigest'])
     require(digest(dist / 'compiler.wasm') == manifest['wasmSha256'], 'WASM manifest hash differs')
     require(subprocess.check_output(['git', 'status', '--porcelain=v1', '--untracked-files=all'], cwd=root) == b'', 'focused acceptance requires a clean committed checkout')
@@ -189,7 +192,7 @@ def run(args, out, summary):
                 source = source.replace('\n', '\r\n')
             input_path = folder / 'playground.gox'
             input_path.write_bytes(source.encode())
-            result = command([str(cli), 'transpile', str(input_path)], name)
+            result = command([str(cli), 'transpile', '--roots', str(roots_file), str(input_path)], name)
             observation = dict(id=name, sourceSha256=digest(input_path), exit=result.returncode)
             if result.returncode:
                 observation['error'] = result.stderr.decode().strip().replace(str(input_path), 'playground.gox')
@@ -202,13 +205,13 @@ def run(args, out, summary):
             else:
                 require(result.returncode == 0, 'CLI transpile failed: ' + name)
                 if ending == 'LF':
-                    result = command([str(cli), 'run', '--go', go, str(input_path)], name + '-native')
+                    result = command([str(cli), 'run', '--go', go, '--roots', str(roots_file), str(input_path)], name + '-native')
                     native_results.append(dict(id=case['id'], exit=result.returncode, stdout=result.stdout.decode(), stderr=result.stderr.decode()))
                     save(out / 'native-results.json', native_results)
                     require(result.returncode == 0 and result.stdout.decode() == case['expectedStdout'] and result.stderr.decode() == case.get('expectedStderr', ''), 'native behavior differs: ' + name)
             inputs.append(dict(id=name, source=source))
     save(out / 'inputs.json', inputs)
-    wasm = command([args.node, str(Path(__file__).with_name('focused-wasm.cjs')), str(dist / 'compiler.wasm'), str(dist / 'wasm_exec.js'), str(out / 'inputs.json'), str(out / 'node-wasm.json')], 'node-wasm', env=dict(native_env, GOMAXPROCS='1'), timeout=180)
+    wasm = command([args.node, str(Path(__file__).with_name('focused-wasm.cjs')), str(dist / 'compiler.wasm'), str(dist / 'wasm_exec.js'), str(out / 'inputs.json'), str(out / 'node-wasm.json'), context['sha256']], 'node-wasm', env=dict(native_env, GOMAXPROCS='1'), timeout=180)
     require(wasm.returncode == 0, 'Node GoWASM failed; see node-wasm.stderr')
     wasm_results = json.loads((out / 'node-wasm.json').read_text())
     require(wasm_results['complete'] and len(wasm_results['outputs']) == len(cli_results), 'Node GoWASM response count differs')

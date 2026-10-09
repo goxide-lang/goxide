@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/refs"
 )
 
@@ -116,7 +115,7 @@ type State struct { N int; Value Leaf; Values [2]int; Items []int; Index map[str
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("composite_consumer.gox", []byte(declarations+body+"\n"))
+			_, err := compileAcceptanceLanguageFixture("composite_consumer.gox", []byte(declarations+body+"\n"))
 			if err == nil || !strings.Contains(err.Error(), "composite_consumer.gox") {
 				t.Fatalf("expected located permission/boundary rejection, got %v", err)
 			}

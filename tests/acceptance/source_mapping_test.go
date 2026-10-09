@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/sourcemap"
 )
@@ -74,7 +73,7 @@ func second()int{return outer!(7)}
 	if i != len(wantOrigins) {
 		t.Fatalf("checked %d repeated output tokens, want %d", i, len(wantOrigins))
 	}
-	compiled, err := frontend.Compile("nested.gox", []byte(source))
+	compiled, err := compileAcceptanceLanguageFixture("nested.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +128,7 @@ type Broken struct{
 }
 
 `
-	_, err := frontend.Compile("derive_span.gox", []byte(source))
+	_, err := compileAcceptanceLanguageFixture("derive_span.gox", []byte(source))
 	if err == nil {
 		t.Fatal("accepted missing nested Clone implementation")
 	}
@@ -146,7 +145,7 @@ type Broken struct{
 
 func TestSourceMappingDeriveFieldMetadata(t *testing.T) {
 	const source = "package fixture\ntype Earlier struct{ Values []int }\n#[derive(Clone)]\ntype Item struct{ Values []int; Other []int }\n"
-	result, err := frontend.Compile("fields.gox", []byte(source))
+	result, err := compileAcceptanceLanguageFixture("fields.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +182,7 @@ func sourceMappingGo(t *testing.T, dir string, args ...string) ([]byte, error) {
 
 func TestSourceMappingUserHelperNameIsNotGeneratedProvenance(t *testing.T) {
 	const source = "package fixture\n#[derive(Debug)]\ntype Item struct{ Value int }\nfunc CloneItem(v *Item)int{return v.Value}\n"
-	result, err := frontend.Compile("user_helper.gox", []byte(source))
+	result, err := compileAcceptanceLanguageFixture("user_helper.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +210,7 @@ func main(){
  _,_=first,second
 }
 `
-	result, err := frontend.Compile("original.gox", []byte(source))
+	result, err := compileAcceptanceLanguageFixture("original.gox", []byte(source))
 	if err != nil {
 		t.Fatalf("fixture must reach the actual Go compiler: %v", err)
 	}
@@ -313,7 +312,7 @@ func len()int{return 0}
 type Item struct{ Values []int }
 func main(){}
 `
-	result, err := frontend.Compile("generated_helper.gox", []byte(source))
+	result, err := compileAcceptanceLanguageFixture("generated_helper.gox", []byte(source))
 	if err != nil {
 		t.Fatalf("fixture must reach generated helper compiler error: %v", err)
 	}

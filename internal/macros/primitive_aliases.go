@@ -8,6 +8,8 @@ import (
 	"go/types"
 	"sort"
 	"strings"
+
+	"github.com/hxsf/goxide/internal/paths"
 )
 
 func (e *engine) primitiveAliases() map[string]string {
@@ -115,7 +117,7 @@ func (e *engine) finishPrimitiveAliases(ts []tok, aliases map[string]string) []t
 		source.WriteString("\ntype " + alias + " = " + aliases[alias] + "\n")
 	}
 	fs := token.NewFileSet()
-	f, err := parser.ParseFile(fs, e.file, source.String(), 0)
+	f, err := parser.ParseFile(fs, e.file, paths.GoView([]byte(source.String())), 0)
 	if err != nil {
 		return ts
 	}

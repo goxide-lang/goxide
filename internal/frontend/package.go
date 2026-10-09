@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/hxsf/goxide/internal/naming"
+	"github.com/hxsf/goxide/internal/paths"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
 	"go/types"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
@@ -47,34 +49,28 @@ func preparePackage(sources map[string][]byte) (PackageResult, error) {
 }
 
 func preparePackageImports(sources map[string][]byte, metadata map[string]PackageResult) (PackageResult, error) {
-	return preparePackageContext("", sources, metadata, nil)
+	return preparePackageContext("", sources, metadata, nil, nil)
 }
-func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, budgets ...*macros.Budget) (PackageResult, error) {
-	return prepareCompilationContext(path, sources, metadata, imp, false, budgets...)
+func preparePackageContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, roots paths.Roots, budgets ...*macros.Budget) (PackageResult, error) {
+	return prepareCompilationContext(path, sources, metadata, imp, false, roots, budgets...)
 }
 
 // A single file shares registered import/declaration binding, not the directory
 // publication policy or package finishing pipeline.
-func prepareCompilationContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, single bool, budgets ...*macros.Budget) (PackageResult, error) {
+func prepareCompilationContext(path string, sources map[string][]byte, metadata map[string]PackageResult, imp types.Importer, single bool, roots paths.Roots, budgets ...*macros.Budget) (PackageResult, error) {
 	for name, source := range sources {
 		if err := naming.Source(name, source); err != nil {
 			return PackageResult{}, err
 		}
 	}
-	useContext := &usePackage{prepared: sources}
-	var err error
-	if !single {
-		useContext, err = prepareUses(path, sources, metadata, imp)
-		if err != nil {
-			return PackageResult{}, err
-		}
+	useContext, err := prepareUses(path, sources, metadata, imp, roots, single)
+	if err != nil {
+		return PackageResult{}, err
 	}
 	sources = useContext.prepared
 	names := sortedSources(sources)
 	cfg := &compileConfig{single: single, protocolFunctions: map[string][]*ast.FuncDecl{}, packagePath: path, builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
-	if !single {
-		cfg.uses = useContext
-	}
+	cfg.uses = useContext
 	for _, name := range names {
 		if !isGoxideInput(name, single) {
 			continue
@@ -90,7 +86,7 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 			cfg.manualDefaults[n] = m
 		}
 	}
-	if single && path == "" {
+	if single && path == "" && sourcesImport(sources, enums.SumPackage) {
 		// Standalone/WASM has no consumer owner for arbitrary user artifacts.
 		// std's compiler-known canonical contract does not need such an owner.
 		pkg, importErr := imp.Import(enums.SumPackage)
@@ -103,7 +99,7 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 		}
 		metadata = map[string]PackageResult{enums.SumPackage: {enumTypes: pkg, enumMetadata: meta}}
 	} else {
-		metadata, err = recoverEnumImports(sources, metadata, imp)
+		metadata, err = recoverEnumImports(sources, metadata, imp, useContext.preparedMaps)
 	}
 	if err != nil {
 		return PackageResult{}, err
@@ -151,17 +147,16 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 			dependencies[path] = p.macros
 		}
 	}
-	registry, err := macros.CollectPackage(path, sources, dependencies)
+	macroMaps := map[string]*sourcemap.Map{}
+	for name := range sources {
+		macroMaps[name] = useContext.sourceMap(name)
+	}
+	registry, err := macros.CollectPackage(path, sources, dependencies, useContext.resolveDerive, macroMaps)
 	if err != nil {
 		return PackageResult{}, err
 	}
-	for _, name := range sortedUseNames(useContext.bindings) {
-		b := useContext.bindings[name]
-		if b.Kind == "macro" {
-			if err := registry.BindPublicAlias(name, dependencies[b.RoutePath], b.RouteName, b.Public); err != nil {
-				return PackageResult{}, useContext.at(name, err)
-			}
-		}
+	if err := useContext.bindMacros(registry, dependencies); err != nil {
+		return PackageResult{}, err
 	}
 	cfg.macros, cfg.macroImporter = registry, imp
 	cfg.macroBudget = &macros.Budget{}
@@ -182,6 +177,9 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 			return PackageResult{}, err
 		}
 		for _, d := range meta.Enums {
+			if single && d.Public {
+				return PackageResult{}, fmt.Errorf("%s: pub enum requires package compilation", d.Position)
+			}
 			if prior := seen[d.Name]; prior != "" {
 				return PackageResult{}, fmt.Errorf("%s: duplicate enum %s (also in %s)", name, d.Name, prior)
 			}
@@ -295,11 +293,27 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 // CompilePackage checks the complete package under its actual module import path.
 // sources may contain .gox and native .go files already selected for this build.
 func CompilePackage(path string, sources map[string][]byte, imp types.Importer) (PackageResult, error) {
-	result, err := preparePackageContext(path, sources, nil, imp)
+	return CompilePackageWithOptions(path, sources, PackageOptions{Importer: imp})
+}
+
+// PackageOptions supplies the explicit namespace roots and type graph shared by
+// every source file. Roots are available to use declarations, not implicit names.
+type PackageOptions struct {
+	Roots         paths.Roots
+	Importer      types.Importer
+	Configuration string // Planner-owned build context, before the roots fingerprint.
+}
+
+func CompilePackageWithOptions(path string, sources map[string][]byte, options PackageOptions) (PackageResult, error) {
+	sources, _, err := packageConfigurationSources(sources, options.Roots, options.Configuration, "")
+	if err != nil {
+		return PackageResult{}, err
+	}
+	result, err := preparePackageContext(path, sources, nil, options.Importer, options.Roots)
 	if err != nil {
 		return result, err
 	}
-	return finishPackage(path, result, imp)
+	return finishPackage(path, result, options.Importer)
 }
 func finishPackage(path string, result PackageResult, imp types.Importer) (PackageResult, error) {
 	files := map[string][]byte{}
@@ -331,6 +345,21 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			return result, mapped
 		}
 		return result, err
+	}
+	if result.useContext != nil {
+		changed := false
+		for name, source := range bound {
+			changed = changed || !bytes.Equal(files[name], source)
+		}
+		if changed {
+			beforeMaps := map[string]*sourcemap.Map{}
+			for name, r := range result.Files {
+				beforeMaps[name] = r.Diagnostics
+			}
+			if err := result.useContext.validateSelectors(path, files, beforeMaps, imp); err != nil {
+				return result, err
+			}
+		}
 	}
 	for name, source := range bound {
 		r := result.Files[name]
@@ -397,7 +426,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		}
 		r.matchReferenceTemps = map[string]bool{}
 		var inferred []enums.Decl
-		lowered, err := propagate.Lower(name, r.Go, propagate.Config{ResolvePayloadEnum: payloadEnums, FileFamilies: result.imported, InferredFamilies: &inferred, GoResultNodes: &adapterNodes, Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index), MatchReferenceTemps: r.matchReferenceTemps})
+		lowered, err := propagate.Lower(name, r.Go, propagate.Config{RewriteExpanded: result.useContext.rewriteExpanded, ResolvePayloadEnum: payloadEnums, FileFamilies: result.imported, InferredFamilies: &inferred, GoResultNodes: &adapterNodes, Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index), MatchReferenceTemps: r.matchReferenceTemps})
 		if err != nil {
 			return result, stageError("package propagate.Lower", err)
 		}
@@ -458,6 +487,16 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			files[name] = cleaned
 		}
 	}
+	// Finish erases permission IR; enforce source operators before that
+	// transformation can discard provenance for replaced syntax.
+	if result.useContext != nil {
+		for name, r := range result.Files {
+			maps[name] = r.Diagnostics
+		}
+		if err := result.useContext.validateSelectors(path, files, maps, imp); err != nil {
+			return result, err
+		}
+	}
 	finished, err := refs.FinishPackageWithPath(path, files, imp, matchTemps)
 	if err != nil {
 		return result, stageError("package refs.Finish", err)
@@ -478,6 +517,14 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			refreshPackageMap(&r)
 			result.Files[name] = r
 			files[name] = ref.Source
+		}
+	}
+	if result.useContext != nil {
+		for name, r := range result.Files {
+			maps[name] = r.Diagnostics
+		}
+		if err := result.useContext.validateSelectors(path, files, maps, imp); err != nil {
+			return result, err
 		}
 	}
 	if err := typecheck.CheckPackage(path, files, imp); err != nil {
@@ -573,7 +620,6 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		if err := attachUseMetadata(&result, result.useContext); err != nil {
 			return result, err
 		}
-		result.useContext.remap(&result)
 	}
 	return result, nil
 }
@@ -762,4 +808,21 @@ func unusedValidatorOwnerImports(name string, source []byte, provenance *sourcem
 		}
 	}
 	return result
+}
+
+// sourcesImport examines imports inserted by the common static-path preparation.
+func sourcesImport(sources map[string][]byte, path string) bool {
+	for name, source := range sources {
+		file, err := parseSourceImports(name, source)
+		if err != nil {
+			continue
+		}
+		for _, spec := range file.Imports {
+			p, _ := strconv.Unquote(spec.Path.Value)
+			if p == path {
+				return true
+			}
+		}
+	}
+	return false
 }

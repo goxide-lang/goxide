@@ -5,8 +5,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 func TestManualDefaultInstalledBusinessRace(t *testing.T) {
@@ -31,12 +29,13 @@ func TestManualDefaultInstalledBusinessRace(t *testing.T) {
 	// implementation for a foreign target remains unsupported.
 	foreign := t.TempDir()
 	packagesWrite(t, foreign, "go.mod", "module manualdefault.example/rejected\ngo 1.27\n")
+	writeAcceptanceFixtureRoots(t, foreign, "manualdefault.example/rejected", map[string]string{"config": "manualdefault.example/rejected/config"})
 	packagesWrite(t, foreign, "config/types.gox", "package config\ntype Settings struct { Port int }\nimpl Default for Settings { func default() Settings { return Settings{Port:9090} } }\n")
 	for i, body := range []string{
-		"#[derive(Default)]\ntype Service struct { Value config.Settings }\n",
-		"impl Default for config.Settings { func default() config.Settings { return config.Settings{} } }\n",
+		"#[derive(Default)]\ntype Service struct { Value config::Settings }\n",
+		"impl Default for config::Settings { func default() config::Settings { return config::Settings{} } }\n",
 	} {
-		packagesWrite(t, foreign, "main.gox", "package main\nimport \"manualdefault.example/rejected/config\"\n"+body+"func main(){}\n")
+		packagesWrite(t, foreign, "main.gox", "package main\nuse config;\n"+body+"func main(){}\n")
 		destination := filepath.Join(t.TempDir(), "generated")
 		output := deliveryCommand(t, outside, cli, i == 0, nil, "transpile", "-o", destination, foreign)
 		if i == 0 {
@@ -76,7 +75,7 @@ impl Default for Settings { func default() Settings { return DefaultSettings() }
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), tc.name+".gox")
-			_, err := frontend.Compile(filename, []byte("package rejected\n"+tc.source+"\n"))
+			_, err := compileAcceptanceLanguageFixture(filename, []byte("package rejected\n"+tc.source+"\n"))
 			if err == nil || !strings.Contains(err.Error(), filepath.Base(filename)+":") || !strings.Contains(strings.ToLower(err.Error()), "default") {
 				t.Fatalf("want source-located rejection, got %v", err)
 			}

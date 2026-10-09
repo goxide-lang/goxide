@@ -1,21 +1,20 @@
 package prototype_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"strings"
 	"testing"
 )
 
 func TestMacrosAndDerivesIntegrated(t *testing.T) {
-	source := `package fixture
-import "fmt"
-macro_rules! publish { ($message:expr, $($field:expr),*) => { fmt.Sprint($message, $($field),*) }; }
+	source := `package fixture; use serde;
+use fmt;
+macro_rules! publish { ($message:expr, $($field:expr),*) => { fmt::Sprint($message, $($field),*) }; }
 macro_rules! once { ($value:expr) => {func() int { temporary := $value; return temporary + temporary }()}; }
 macro_rules! exit { ($value:expr) => { return $value }; }
 macro_rules! cleanup { ($action:ident) => { defer $action() }; }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct Item { Name string }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct Batch { Items []Item; Lookup map[string]Item }
 #[derive(Error)]
 #[error("storage unavailable")]
@@ -37,7 +36,7 @@ func Exercise() (int,string) {
 }
 func Boundaries(done *bool) int {mark:=func(){*done=true};cleanup!(mark);exit!(4)}
 `
-	result, err := frontend.Compile("application.gox", []byte(source))
+	result, err := compilePrototypeFixture("application.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +86,7 @@ struct Bad {
 `,
 	}
 	for _, source := range cases {
-		_, err := frontend.Compile("diagnostic.gox", []byte(source))
+		_, err := compilePrototypeFixture("diagnostic.gox", []byte(source))
 		if err == nil || !strings.Contains(err.Error(), "diagnostic.gox") {
 			t.Fatalf("missing source-aware rejection: %v", err)
 		}
@@ -96,13 +95,13 @@ struct Bad {
 
 func TestMacroTemplateLocalShadowsImportedPackage(t *testing.T) {
 	source := `package fixture
-import "fmt"
+use fmt;
 macro_rules! local {($value:expr)=>{func() string {fmt := $value; return fmt.String()}()};}
-func exerciseLocal(value *Builder) string { _ = fmt.Sprint(1); return local!(value) }
+func exerciseLocal(value *Builder) string { _ = fmt::Sprint(1); return local!(value) }
 type Builder struct{}
 func(*Builder)String()string{return "local-method"}
 `
-	result, err := frontend.Compile("shadow.gox", []byte(source))
+	result, err := compilePrototypeFixture("shadow.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}

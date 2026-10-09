@@ -40,7 +40,7 @@ func TestVersionFeaturesScriptTargetIntegration(t *testing.T) {
 	}
 	files["goxide.toml"] = projectManifest(m)
 	files["go.mod"] = "module example.org/goxidelib\n\ngo 1.27\n"
-	files["lib/lib.gox"] = "package lib\nimport \"example.org/goxidelib/gen\"\nfunc Value()string{return gen.Value}\n"
+	files["lib/lib.gox"] = "package lib\nuse gen;\nfunc Value()string{return gen::Value}\n"
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", files)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", files)
 	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)

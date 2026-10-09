@@ -23,7 +23,7 @@ func compileImportedFixture(t *testing.T, files map[string]string) (string, erro
 		}
 	}
 	out := filepath.Join(t.TempDir(), "generated")
-	_, err := CompileModule(src, out)
+	_, err := CompileModuleWithOptions(src, out, ModuleOptions{Roots: frontendFixtureRoots(map[string]string{"a": "example.org/qualified/a", "b": "example.org/qualified/b", "producer": "example.org/qualified/producer"})})
 	return out, err
 }
 
@@ -32,31 +32,31 @@ func TestQualifiedEnumsKeepFileAliasesAndValidation(t *testing.T) {
 		"a/a.gox": "package unusual\npub enum State { Idle, Number(int), }\n",
 		"b/b.gox": "package unusual\npub enum State { Idle, Number(int), }\n",
 		"first.gox": `package app
-import first "example.org/qualified/a"
-import same "example.org/qualified/a"
+use a as first;
+use a as same;
 var Effects int
-func One(v first.State) int {
+func One(v first::State) int {
  first := 99; _ = first
  match v {
- first.State::Number(n) if n > 0 => { return n },
+ first::State::Number(n) if n > 0 => { return n },
  _ => { Effects++; return -1 },
  }
  return 0
 }
-func Make() first.State { return first.State::Number(7) }
-func Same(v first.State) int {
- match v { first.State::Idle => { return 0 }, same.State::Number(n) => { return n } }
+func Make() first::State { return first::State::Number(7) }
+func Same(v first::State) int {
+ match v { first::State::Idle => { return 0 }, same::State::Number(n) => { return n } }
  return -1
 }
 `,
 		"second.gox": `package app
-import first "example.org/qualified/b"
-import other "example.org/qualified/a"
-func Two(v first.State) int {
- match v { first.State::Idle => { return 2 }, first.State::Number(n) => { return n } }
+use b as first;
+use a as other;
+func Two(v first::State) int {
+ match v { first::State::Idle => { return 2 }, first::State::Number(n) => { return n } }
  return 0
 }
-func Again(v other.State) int { return One(v) }
+func Again(v other::State) int { return One(v) }
 `,
 		"consumer_test.go": `package app
 import("testing"; a "example.org/qualified/a"; b "example.org/qualified/b")
@@ -83,9 +83,9 @@ func TestValues(t *testing.T) {
 
 func TestQualifiedEnumsRejectPrivateAndMixedIdentity(t *testing.T) {
 	for _, tc := range []struct{ name, consumer, want string }{
-		{"private", `func f(){match 0 { p.secret::Idle => {} }}`, "unknown enum"},
-		{"same-spelling", `func f(v p.State){match v { p.State::Idle => {}, q.State::Number(n) => { _=n } }}`, "mixed enum identities"},
-		{"native", `func f(v p.State){match v { p.State::Idle => {} }}`, "unknown enum"},
+		{"private", `func f(){match 0 { p::secret::Idle => {} }}`, "unknown enum"},
+		{"same-spelling", `func f(v p::State){match v { p::State::Idle => {}, q::State::Number(n) => { _=n } }}`, "mixed enum identities"},
+		{"native", `func f(v p::State){match v { p::State::Idle => {} }}`, "unknown enum"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			producer := "package p\npub enum State { Idle, Number(int), }\nenum secret { Idle, }\n"
@@ -94,9 +94,9 @@ func TestQualifiedEnumsRejectPrivateAndMixedIdentity(t *testing.T) {
 				producer = "package p\ntype State int\n"
 				extension = ".go"
 			}
-			imports := `import p "example.org/qualified/a"` + "\n"
+			imports := `use a as p;` + "\n"
 			if tc.name == "same-spelling" {
-				imports += `import q "example.org/qualified/b"` + "\n"
+				imports += `use b as q;` + "\n"
 			}
 			_, err := compileImportedFixture(t, map[string]string{"a/a" + extension: producer, "b/b.gox": "package p\npub enum State { Idle, Number(int), }\n", "main.gox": "package main\n" + imports + tc.consumer + "\n"})
 			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "main.gox:") {
@@ -117,11 +117,11 @@ func TestQualifiedMatchBodyDiagnosticOrigin(t *testing.T) {
 	_, err := compileImportedFixture(t, map[string]string{
 		"a/a.gox": "package p\npub enum State { Idle, Number(int), }\n",
 		"main.gox": `package app
-import p "example.org/qualified/a"
-func f(v p.State) {
+use a as p;
+func f(v p::State) {
  match v {
-  p.State::Idle => {},
-  p.State::Number(n) => { var bad string = n; _ = bad },
+  p::State::Idle => {},
+  p::State::Number(n) => { var bad string = n; _ = bad },
  }
 }
 `,

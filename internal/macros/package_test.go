@@ -8,7 +8,7 @@ import (
 
 func registry(t *testing.T, path string, sources map[string][]byte, deps map[string]*Package) *Package {
 	t.Helper()
-	p, err := CollectPackage(path, sources, deps)
+	p, err := CollectPackage(path, sources, deps, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,10 +25,10 @@ pub macro_rules! log { ($x:expr) => { inner!($x) }; }
 	src := []byte(`package client
 import renamed "example/log"
 macro_rules! inner { ($x:expr) => { missing($x) }; }
-func Run() int { Emit := 999; renamed := 123; _=Emit; _=renamed; return renamed.log!(41) }
+func Run() int { Emit := 999; renamed := 123; _=Emit; _=renamed; return renamed::log!(41) }
 `)
 	p := registry(t, "example/client", map[string][]byte{"caller.gox": src}, map[string]*Package{"example/log": dep})
-	r, err := ExpandPackage("caller.gox", src, nil, p, nil)
+	r, err := ExpandPackage("caller.gox", src, nil, p, nil, ExpansionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,15 +53,15 @@ func Run() int { Emit := 999; renamed := 123; _=Emit; _=renamed; return renamed.
 }
 func TestPackagePrivacyAndNoCallerFallback(t *testing.T) {
 	for _, tt := range []struct{ body, call, want string }{
-		{`macro_rules! secret {()=>{1};}`, `d.secret!()`, "private"},
-		{`pub macro_rules! run {()=>{hidden()};}\nfunc hidden() int{return 1}`, `d.run!()`, "private runtime helper"},
-		{`pub macro_rules! run {()=>{caller()};}`, `d.run!()`, "unsupported free template name"},
+		{`macro_rules! secret {()=>{1};}`, `d::secret!()`, "private"},
+		{`pub macro_rules! run {()=>{hidden()};}\nfunc hidden() int{return 1}`, `d::run!()`, "private runtime helper"},
+		{`pub macro_rules! run {()=>{caller()};}`, `d::run!()`, "unsupported free template name"},
 	} {
 		t.Run(tt.want, func(t *testing.T) {
 			dep := registry(t, "example/dep", map[string][]byte{"dep.gox": []byte("package dep\n" + strings.ReplaceAll(tt.body, `\n`, "\n"))}, nil)
 			src := []byte("package main\nimport d \"example/dep\"\nfunc caller()int{return 99}\nfunc run()int{return " + tt.call + "}\n")
 			p := registry(t, "example/main", map[string][]byte{"main.gox": src}, map[string]*Package{"example/dep": dep})
-			_, err := ExpandPackage("main.gox", src, nil, p, nil)
+			_, err := ExpandPackage("main.gox", src, nil, p, nil, ExpansionOptions{})
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("got %v, want %q", err, tt.want)
 			}
@@ -71,7 +71,7 @@ func TestPackagePrivacyAndNoCallerFallback(t *testing.T) {
 func TestPackageRegistryConcurrentExpansion(t *testing.T) {
 	src := []byte("package p\nmacro_rules! twice {($x:expr)=>{func()int{x:=$x;return x+x}()};}\nfunc Run()int{return twice!(21)}\n")
 	p := registry(t, "example/p", map[string][]byte{"p.gox": src}, nil)
-	want, err := ExpandPackage("p.gox", src, nil, p, nil)
+	want, err := ExpandPackage("p.gox", src, nil, p, nil, ExpansionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestPackageRegistryConcurrentExpansion(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			got, err := ExpandPackage("p.gox", src, nil, p, nil)
+			got, err := ExpandPackage("p.gox", src, nil, p, nil, ExpansionOptions{})
 			if err != nil || string(got.Source) != string(want.Source) {
 				t.Errorf("non-deterministic expansion: %v", err)
 			}
@@ -107,11 +107,11 @@ func TestPackageBudget(t *testing.T) {
 func TestPackageDirectImportAndMacroOnlyDependency(t *testing.T) {
 	dep := registry(t, "example/wrap", map[string][]byte{"dep.gox": []byte(`package wrap
 import "fmt"
-pub macro_rules! show {($x:expr)=>{fmt.Sprint($x)};}
+pub macro_rules! show {($x:expr)=>{fmt::Sprint($x)};}
 `)}, nil)
-	src := []byte("package p\nimport w \"example/wrap\"\nfunc Run()string{return w.show!(1)}\n")
+	src := []byte("package p\nimport w \"example/wrap\"\nfunc Run()string{return w::show!(1)}\n")
 	p := registry(t, "example/p", map[string][]byte{"p.gox": src}, map[string]*Package{"example/wrap": dep})
-	r, err := ExpandPackage("p.gox", src, nil, p, nil)
+	r, err := ExpandPackage("p.gox", src, nil, p, nil, ExpansionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,24 +122,24 @@ pub macro_rules! show {($x:expr)=>{fmt.Sprint($x)};}
 	}
 	dr, err := ExpandPackage("dep.gox", []byte(`package wrap
 import "fmt"
-pub macro_rules! show {($x:expr)=>{fmt.Sprint($x)};}
-`), nil, dep, nil)
+pub macro_rules! show {($x:expr)=>{fmt::Sprint($x)};}
+`), nil, dep, nil, ExpansionOptions{})
 	if err != nil || !strings.Contains(string(dr.Source), `import _ "fmt"`) {
 		t.Fatalf("definition dependency: %s, %v", dr.Source, err)
 	}
 }
 
 func TestSingleFileCannotDiscardQualifier(t *testing.T) {
-	_, err := Expand("p.gox", []byte("package p\nmacro_rules! value {()=>{1};}\nfunc Run()int{return missing.value!()}\n"))
+	_, err := Expand("p.gox", []byte("package p\nmacro_rules! value {()=>{1};}\nfunc Run()int{return missing::value!()}\n"))
 	if err == nil || !strings.Contains(err.Error(), "directory compilation") {
 		t.Fatalf("qualified local macro bypass: %v", err)
 	}
 }
 func TestMacroOnlyImportShadowSelector(t *testing.T) {
 	dep := registry(t, "example/d", map[string][]byte{"d.gox": []byte("package d\npub macro_rules! literal {()=>{1};}\n")}, nil)
-	src := []byte("package p\nimport d \"example/d\"\nfunc Run()int{d:=struct{V int}{1};return d.V+d.literal!()}\n")
+	src := []byte("package p\nimport d \"example/d\"\nfunc Run()int{d:=struct{V int}{1};return d.V+d::literal!()}\n")
 	p := registry(t, "example/p", map[string][]byte{"p.gox": src}, map[string]*Package{"example/d": dep})
-	r, err := ExpandPackage("p.gox", src, nil, p, nil)
+	r, err := ExpandPackage("p.gox", src, nil, p, nil, ExpansionOptions{})
 	if err != nil || !strings.Contains(string(r.Source), `import _ "example/d"`) {
 		t.Fatalf("shadow selector mistaken for runtime import use: %v\n%s", err, r.Source)
 	}

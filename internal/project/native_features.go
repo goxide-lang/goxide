@@ -43,6 +43,15 @@ func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested ma
 			}
 			for alias, r := range deps {
 				d := m.Dependencies[alias]
+				if d.IsToolchain() {
+					continue
+				}
+				if _, member := w.Members[d.Module]; !member {
+					if _, selected := lock.NativeWorkspace.Modules[d.Module]; !selected {
+						return nil, fmt.Errorf("native workspace dependency %s: selected native module %s is missing", alias, d.Module)
+					}
+					continue // Requests exposes the root; Go owns its fixed artifact.
+				}
 				n.Sources[alias] = d
 				old, exists := requests[d.Module]
 				merged := map[string]bool{}
@@ -64,8 +73,8 @@ func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested ma
 		}
 	}
 	for _, n := range nodes {
-		for alias := range n.Requests {
-			n.Children[alias] = nodes[n.Manifest.Dependencies[alias].Module]
+		for alias, dependency := range n.Sources {
+			n.Children[alias] = nodes[dependency.Module]
 		}
 	}
 	graphs := map[string]*Graph{}

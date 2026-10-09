@@ -1,21 +1,19 @@
 package main
 
-import (
-    "errors"
-    "fmt"
-    "log/slog"
-    cfg "packages.example/app/model"
-    transport "packages.example/app/native"
-)
+use errors;
+use fmt;
+use slog;
+use model as cfg;
+use native as transport;
 
-func Run(logger *slog.Logger, id string, data []byte) error {
-    config, err := cfg.Load(data)
+func Run(logger *slog::Logger, id string, data []byte) error {
+    config, err := cfg::Load(data)
     if err != nil {
-        logger.Error("configuration rejected", "request_id", transport.RequestID(id), "error", err.Error(), "cause", fmt.Sprint(errors.Unwrap(err)))
+        logger.Error("configuration rejected", "request_id", transport::RequestID(id), "error", err.Error(), "cause", fmt::Sprint(errors::Unwrap(err)))
         return err
     }
-    copy := cfg.CloneConfig(&config)
-    mode, workers := cfg.Describe(copy.Mode)
-    logger.Info("configuration accepted", "request_id", transport.RequestID(id), "name", copy.Name, "mode", mode, "workers", workers)
+    copy := cfg::CloneConfig(&config)
+    mode, workers := cfg::Describe(copy.Mode)
+    logger.Info("configuration accepted", "request_id", transport::RequestID(id), "name", copy.Name, "mode", mode, "workers", workers)
     return nil
 }

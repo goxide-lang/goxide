@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"bytes"
 	"fmt"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -24,11 +25,16 @@ func TestMacroAllocationCLI(t *testing.T) {
 	t.Run("generated-module", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module allocation.example/app\ngo 1.27\n")
+		writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+			"ops":       {Module: "allocation.example/app", Package: "allocation.example/app/ops"},
+			"own":       {Module: "allocation.example/app", Package: "allocation.example/app/own"},
+			"primitive": {Module: "allocation.example/app", Package: "allocation.example/app/primitive"},
+		})
 		definitions := macroAllocationDefinitions
 		var calls []string
 		for _, name := range []string{"bool", "string", "byte", "rune", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "float32", "float64", "complex64", "complex128", "any", "error"} {
 			definitions += fmt.Sprintf("pub macro_rules! zero_%s {()=>{new(%s)};}\n", name, name)
-			calls = append(calls, "m.zero_"+name+"!()")
+			calls = append(calls, "m::zero_"+name+"!()")
 		}
 		packagesWrite(t, source, "ops/macros.gox", definitions)
 		packagesWrite(t, source, "own/own.gox", `package own
@@ -102,7 +108,7 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 			{"native-generic-tt", "", "$T:tt", "new([]$T)", "(Generic[int])", "captured types"},
 			{"native-named", "", "", "new(Local)", "", "fixed predeclared"},
 			{"native-generic-fixed", "", "", "new(Generic[int])", "", "fixed predeclared"},
-			{"imported-named", `import "time"`, "", "new(time.Duration)", "", "direct function calls"},
+			{"imported-named", `use time;`, "", "new(time::Duration)", "", "direct function calls"},
 			{"anonymous-struct", "", "", "new(struct{N int})", "", "unsupported"},
 			{"anonymous-interface", "", "", "new(interface{})", "", "unsupported"},
 			{"anonymous-function", "", "", "new(func())", "", "unsupported"},
@@ -116,6 +122,9 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 			t.Run(tc.name, func(t *testing.T) {
 				source := t.TempDir()
 				packagesWrite(t, source, "go.mod", "module allocation.example/rejected\ngo 1.27\n")
+				writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+					"ops": {Module: "allocation.example/rejected", Package: "allocation.example/rejected/ops"},
+				})
 				// Keep generic declarations in native .go so a generic declaration
 				// prohibition elsewhere cannot mask a leaked allocation type slot.
 				packagesWrite(t, source, "native.go", "package main\ntype Generic[T any] struct{Value T}\ntype Local int\ntype Slice []int\n")
@@ -142,6 +151,7 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				source := t.TempDir()
+				writeMacroFixtureRoots(t, source, nil)
 				packagesWrite(t, source, "bad.gox", "package main\nmacro_rules! bad {()=>{"+tc.template+"};}\nfunc main(){_=bad!()}\n")
 				input := filepath.Join(source, "bad.gox")
 				output := deliveryCommand(t, outside, cli, false, nil, "build", "--go", tool, "--runtime", root, "-o", filepath.Join(t.TempDir(), "rejected"), input)
@@ -155,16 +165,31 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 		}
 	})
 
+	t.Run("namespace-alias-and-value-builtin", func(t *testing.T) {
+		source := t.TempDir()
+		writeMacroFixtureRoots(t, source, nil)
+		packagesWrite(t, source, "main.gox", `package main
+use strings as make;
+use strings as new;
+macro_rules! slice {($n:expr)=>{make([]int,$n)};}
+macro_rules! pointer {()=>{new(int)};}
+func main(){v:=slice!(2);p:=pointer!();*p=7;if len(v)!=2||v[0]!=0||*p!=7||make::Repeat("x",2)!=new::Repeat("x",2){panic("builtin or namespace binding")}}
+`)
+		binary := filepath.Join(t.TempDir(), "application")
+		deliveryCommand(t, outside, cli, true, nil, "build", "--go", tool, "--runtime", root, "-o", binary, filepath.Join(source, "main.gox"))
+		deliveryCommand(t, outside, binary, true, nil)
+	})
+
 	t.Run("binding-boundaries", func(t *testing.T) {
 		for _, builtin := range []string{"make", "new"} {
 			for _, declaration := range []struct{ name, source string }{
 				{"variable", "var %s=func(int)int{return 9}"},
 				{"constant", "const %s=1"},
 				{"type", "type %s int"},
-				{"import", "import %s \"strings\""},
 			} {
 				t.Run(builtin+"-definition-"+declaration.name, func(t *testing.T) {
 					source := t.TempDir()
+					writeMacroFixtureRoots(t, source, nil)
 					packagesWrite(t, source, "bad.gox", "package main\n"+fmt.Sprintf(declaration.source, builtin)+"\nmacro_rules! bad {()=>{"+builtin+"(int)};}\nfunc main(){_=bad!()}\n")
 					output := deliveryCommand(t, outside, cli, false, nil, "transpile", filepath.Join(source, "bad.gox"))
 					if !strings.Contains(output, "definition-site") || !strings.Contains(output, "bad.gox:3:") || !strings.Contains(output, "bad.gox:4:") {
@@ -179,12 +204,15 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 				t.Run(builtin+"-caller-package-"+declaration.name, func(t *testing.T) {
 					source := t.TempDir()
 					packagesWrite(t, source, "go.mod", "module allocation.example/shadow\ngo 1.27\n")
+					writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+						"ops": {Module: "allocation.example/shadow", Package: "allocation.example/shadow/ops"},
+					})
 					body := "new(int)"
 					if builtin == "make" {
 						body = "make([]int,1)"
 					}
 					packagesWrite(t, source, "ops/macros.gox", "package ops\npub macro_rules! bad {()=>{"+body+"};}\n")
-					packagesWrite(t, source, "main.gox", "package main\nimport m \"allocation.example/shadow/ops\"\nfunc main(){_=m.bad!()}\n")
+					packagesWrite(t, source, "main.gox", "package main\nuse ops as m;\nfunc main(){_=m::bad!()}\n")
 					packagesWrite(t, source, "shadow.go", "package main\n"+fmt.Sprintf(declaration.source, builtin)+"\n")
 					output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
 					if !strings.Contains(output, "caller package declaration") || !strings.Contains(output, "macros.gox:2:") || !strings.Contains(output, "main.gox:3:") {
@@ -200,6 +228,7 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 			for _, bare := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s-bare-%v", builtin, bare), func(t *testing.T) {
 					source := t.TempDir()
+					writeMacroFixtureRoots(t, source, nil)
 					template := "new(int)"
 					if builtin == "make" {
 						template = "make([]int,1)"
@@ -226,8 +255,11 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 			t.Run(where, func(t *testing.T) {
 				source := t.TempDir()
 				packagesWrite(t, source, "go.mod", "module allocation.example/primitive\ngo 1.27\n")
+				writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+					"ops": {Module: "allocation.example/primitive", Package: "allocation.example/primitive/ops"},
+				})
 				packagesWrite(t, source, "ops/macros.gox", "package ops\npub macro_rules! zero {()=>{new(int)};}\n")
-				caller := "package main\nimport m \"allocation.example/primitive/ops\"\nfunc main(){_=m.zero!()}\n"
+				caller := "package main\nuse ops as m;\nfunc main(){_=m::zero!()}\n"
 				want := "caller package declaration"
 				switch where {
 				case "definition":
@@ -236,11 +268,17 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 				case "caller-package":
 					packagesWrite(t, source, "shadow.go", "package main\ntype int string\n")
 				case "caller-import":
-					caller = "package main\nimport m \"allocation.example/primitive/ops\"\nimport int \"strings\"\nfunc main(){_=int.Repeat(\"x\",1);_=m.zero!()}\n"
-					want = "caller file import"
+					caller = "package main\nuse ops as m;\nuse strings as int;\nfunc main(){_=int::Repeat(\"x\",1);_=m::zero!()}\n"
+					want = "namespace int conflicts with a predeclared type"
 				}
 				packagesWrite(t, source, "main.gox", caller)
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
+				if where == "caller-import" {
+					if !strings.Contains(output, want) || !strings.Contains(output, "main.gox:3:") {
+						t.Fatal(output)
+					}
+					return
+				}
 				if !strings.Contains(output, want) || !strings.Contains(output, "macros.gox:2:") || !strings.Contains(output, "main.gox:") {
 					t.Fatal(output)
 				}
@@ -250,6 +288,7 @@ func Run()int{make:=func(int)int{return -1};new:=func(int)int{return -2};_=make;
 
 	t.Run("readonly-allocation-does-not-grant-write", func(t *testing.T) {
 		source := t.TempDir()
+		writeMacroFixtureRoots(t, source, nil)
 		packagesWrite(t, source, "bad.gox", `package main
 macro_rules! allocate {($n:expr)=>{make([]int,$n)};}
 type State struct{Items []int}
@@ -266,12 +305,13 @@ func main(){}
 		for _, newline := range []struct{ name, value string }{{"LF", "\n"}, {"CRLF", "\r\n"}} {
 			t.Run(newline.name, func(t *testing.T) {
 				source := t.TempDir()
+				writeMacroFixtureRoots(t, source, nil)
 				input := filepath.Join(source, "main.gox")
 				packagesWrite(t, source, "main.gox", strings.ReplaceAll(`package main
-import "fmt"
+use fmt;
 macro_rules! allocate {($n:expr)=>{make([]int,$n)};}
 macro_rules! pointer {()=>{new(int)};}
-func main(){type int string;v:=pointer!();*v=3;fmt.Println(len(allocate!(2)),*v)}
+func main(){type int string;v:=pointer!();*v=3;fmt::Println(len(allocate!(2)),*v)}
 `, "\n", newline.value))
 				first := filepath.Join(t.TempDir(), "main.go")
 				second := filepath.Join(t.TempDir(), "main.go")
@@ -329,53 +369,53 @@ pub macro_rules! call {($f:ident,$x:expr)=>{$f($x)};}
 `
 
 const macroAllocationBindings = `package primitive
-import m "allocation.example/app/ops"
-import "reflect"
+use ops as m;
+use reflect;
 func PrimitiveShadow()string{
  type int string
- original:=int("kept");p:=m.pointer!();*p=7
- return reflect.TypeOf(*p).Name()+"/"+reflect.TypeOf(original).Name()+"/"+string(original)
+ original:=int("kept");p:=m::pointer!();*p=7
+ return reflect::TypeOf(*p).Name()+"/"+reflect::TypeOf(original).Name()+"/"+string(original)
 }
 `
 
 const macroAllocationCallerBindings = `package main
-import m "allocation.example/app/ops"
+use ops as m;
 func BuiltinShadows()int{
  make:=func(n int)int{return n+10};new:=func(n int)int{return n+20}
- a:=m.slice!(2);p:=m.pointer!();*p=3
- return len(a)+*p+m.call!(make,4)+m.call!(new,5)+m.local_functions!(3)
+ a:=m::slice!(2);p:=m::pointer!();*p=3
+ return len(a)+*p+m::call!(make,4)+m::call!(new,5)+m::local_functions!(3)
 }
 `
 
 const macroAllocationProgram = `package main
-import "fmt"
-import m "allocation.example/app/ops"
-import o "allocation.example/app/own"
-import p "allocation.example/app/primitive"
-func PrimitiveShadow()string{return p.PrimitiveShadow()}
-func Slice(n int)[]int{return m.nested!(n)}
-func Bytes(n,c int)[]byte{return m.bytes!(n,c)}
-func Mapping()map[string][]byte{return m.mapping!()}
-func Channel(n int)chan int{return m.channel!(n)}
-func Receive(n int)<-chan int{return m.receive!(n)}
-func Pointer()*int{return m.pointer!()}
-func Parenthesized()*int{return m.parenthesized!()}
-func DoublePointer()**int{return m.double_pointer!()}
-func SlicePointer()*[]int{return m.slice_pointer!()}
-func Array()*[3]int{return m.array!(1+2)}
-func LocalArray()*[3]int{return m.local_array!()}
-func Compound(n int)[][2]*int{return m.compound!(n)}
-func ChannelArray()*[2]chan<- int{return m.channel_array!()}
-func Order(n,c func()int)[]byte{return m.bytes!(n(),c())}
-func Repeated(n func()int)int{return m.repeated!(n())}
-func DefinitionFunctions()int{return o.Run()}
-func ReadonlySize(r &[]int)[]byte{return m.bytes!(len(*r),cap(*r))}
+use fmt;
+use ops as m;
+use own as o;
+use primitive as p;
+func PrimitiveShadow()string{return p::PrimitiveShadow()}
+func Slice(n int)[]int{return m::nested!(n)}
+func Bytes(n,c int)[]byte{return m::bytes!(n,c)}
+func Mapping()map[string][]byte{return m::mapping!()}
+func Channel(n int)chan int{return m::channel!(n)}
+func Receive(n int)<-chan int{return m::receive!(n)}
+func Pointer()*int{return m::pointer!()}
+func Parenthesized()*int{return m::parenthesized!()}
+func DoublePointer()**int{return m::double_pointer!()}
+func SlicePointer()*[]int{return m::slice_pointer!()}
+func Array()*[3]int{return m::array!(1+2)}
+func LocalArray()*[3]int{return m::local_array!()}
+func Compound(n int)[][2]*int{return m::compound!(n)}
+func ChannelArray()*[2]chan<- int{return m::channel_array!()}
+func Order(n,c func()int)[]byte{return m::bytes!(n(),c())}
+func Repeated(n func()int)int{return m::repeated!(n())}
+func DefinitionFunctions()int{return o::Run()}
+func ReadonlySize(r &[]int)[]byte{return m::bytes!(len(*r),cap(*r))}
 var Trace string
 func Size(ok bool,tag string,value int)Option[int]{Trace+=tag;if ok{return Option[int]::Some(value)};return Option[int]::None}
-func Question(nOK,cOK bool)Option[int]{v:=m.question!(Size(nOK,"N",2),Size(cOK,"C",4));Trace+="A";return Option[int]::Some(len(v)+cap(v))}
+func Question(nOK,cOK bool)Option[int]{v:=m::question!(Size(nOK,"N",2),Size(cOK,"C",4));Trace+="A";return Option[int]::Some(len(v)+cap(v))}
 func QuestionSize(nOK,cOK bool)int{return match Question(nOK,cOK){Option[int]::Some(n)=>n,Option[int]::None=>-1,}}
-func NestedQuestion(nOK,cOK bool)int{inner:=func()Option[int]{v:=m.question!(Size(nOK,"N",2),Size(cOK,"C",4));Trace+="A";return Option[int]::Some(len(v)+cap(v))};result:=inner();Trace+="O";return match result{Option[int]::Some(n)=>n,Option[int]::None=>-1,}}
-func main(){v:=m.bytes!(2,4);fmt.Println(len(v),cap(v),len(m.array!(3)),*m.pointer!())}
+func NestedQuestion(nOK,cOK bool)int{inner:=func()Option[int]{v:=m::question!(Size(nOK,"N",2),Size(cOK,"C",4));Trace+="A";return Option[int]::Some(len(v)+cap(v))};result:=inner();Trace+="O";return match result{Option[int]::Some(n)=>n,Option[int]::None=>-1,}}
+func main(){v:=m::bytes!(2,4);fmt::Println(len(v),cap(v),len(m::array!(3)),*m::pointer!())}
 `
 
 const macroAllocationAssertions = `package main

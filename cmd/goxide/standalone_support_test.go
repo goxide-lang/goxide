@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/paths"
 )
 
 func TestStandaloneSupportModule(t *testing.T) {
@@ -47,16 +48,16 @@ func TestStandaloneSupportModule(t *testing.T) {
 			t.Fatalf("non-support dependency leaked into generated module: %s", mod)
 		}
 	}
-	compiled, err := frontend.Compile(filepath.Join(generated, "main.gox"), []byte(`package main
-import rt "github.com/goxide-lang/std/runtime"
+	compiled, err := frontend.CompileWithOptions(filepath.Join(generated, "main.gox"), []byte(`package main
+use runtime as rt;
 func fail()(result int){
- guard:=rt.Assignment[int]{}
+ guard:=rt::Assignment[int]{}
  defer guard.Catch(&result)
  guard.Fail(42)
  return 0
 }
 func main(){println!("value={}",fail())}
-`))
+`), frontend.FileOptions{Roots: paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

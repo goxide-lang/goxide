@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
 )
 
@@ -151,6 +152,24 @@ func Prepare(o Options) (*Plan, error) {
 		return nil, err
 	}
 	o = copied
+	if o.ToolchainRoots == nil {
+		o.ToolchainRoots = paths.Roots{}
+	}
+	var validateRoots func(map[string]paths.Namespace) error
+	validateRoots = func(roots map[string]paths.Namespace) error {
+		for alias, root := range roots {
+			if root.Source != "toolchain" || root.ModulePath != "" {
+				return fmt.Errorf("host root %s: only explicit toolchain roots are supported; target module mappings do not authorize host imports", alias)
+			}
+			if err := validateRoots(root.Children); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := validateRoots(o.ToolchainRoots); err != nil {
+		return nil, err
+	}
 	var err error
 	o.ProjectRoot, err = filepath.Abs(o.ProjectRoot)
 	if err != nil {
@@ -355,9 +374,10 @@ func Prepare(o Options) (*Plan, error) {
 			return nil, err
 		}
 		p.Subjects = append(p.Subjects, Subject{digest(struct {
-			Module string
-			Files  map[string][]byte
-		}{mod, files}), "host helper " + mod})
+			Module         string
+			Files          map[string][]byte
+			ToolchainRoots paths.Roots
+		}{mod, files, o.ToolchainRoots}), "host helper " + mod})
 	}
 	for alias, path := range o.Config.Tools {
 		if safeRel(alias) != nil || strings.ContainsAny(alias, "/\\\x00") {
@@ -404,11 +424,12 @@ func Prepare(o Options) (*Plan, error) {
 	p.RootIdentity = digest([]string{o.ProjectRoot, o.Module})
 	p.Subject = digest(struct {
 		Config         Config
+		ToolchainRoots paths.Roots
 		SourceID       string
 		Script, Inputs map[string][]byte
 		Helpers        map[string]map[string][]byte
 		Tools          map[string][]byte
-	}{o.Config, o.SourceID, p.script, p.inputs, p.helpers, p.tools})
+	}{o.Config, o.ToolchainRoots, o.SourceID, p.script, p.inputs, p.helpers, p.tools})
 	if !o.Root {
 		p.Subjects = append(p.Subjects, Subject{p.Subject, "dependency build script " + o.Module + " (execution closure)"})
 	}

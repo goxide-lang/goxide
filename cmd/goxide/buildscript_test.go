@@ -56,11 +56,23 @@ func main(){
  fmt.Println("FIXTURE_HOST_TARGET",q.HostOS,q.HostArch,q.TargetOS,q.TargetArch)
 }
 `, extraImport, extraValue)
+	if goxide {
+		generator = strings.Replace(generator, `import("encoding/json";"fmt";"os";"path/filepath";"strings"; `+extraImport+`)`, "use json;\nuse fmt;\nuse os;\nuse filepath;\nuse strings;", 1)
+		for _, name := range []string{"json", "fmt", "os", "filepath", "strings"} {
+			generator = strings.ReplaceAll(generator, name+".", name+"::")
+		}
+		if helper {
+			// Explicit native host bridge keeps the helper execution/permission
+			// contract without granting target module roots to Goxide bootstrap.
+			generator = strings.Replace(generator, "helper.Value()", "helperValue()", 1)
+			projectWrite(t, root, map[string]string{"tools/build/helper.go": "package main\nimport \"example.org/helper\"\nfunc helperValue()string{return helper.Value()}\n"})
+		}
+	}
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/generated\n\ngo 1.27\n", "goxide.toml": projectManifest(manifest), entry: generator,
 		"schema.txt": "schema-one", "templates/value.txt": "template-one",
-		"cmd/one/main.gox": "package main\nimport \"fmt\"\nimport \"example.org/generated/gen\"\nfunc main(){fmt.Println(\"APP_ONE\",gen.Value,gen.Resource)}\n",
-		"cmd/two/main.gox": "package main\nimport \"fmt\"\nimport \"example.org/generated/gen\"\nfunc main(){fmt.Println(\"APP_TWO\",gen.Value,gen.Resource)}\n",
+		"cmd/one/main.gox": "package main\nuse fmt;\nuse gen;\nfunc main(){fmt::Println(\"APP_ONE\",gen::Value,gen::Resource)}\n",
+		"cmd/two/main.gox": "package main\nuse fmt;\nuse gen;\nfunc main(){fmt::Println(\"APP_TWO\",gen::Value,gen::Resource)}\n",
 	})
 	return root
 }
@@ -318,7 +330,7 @@ func TestBuildScriptDependencyPackagePermissionCLI(t *testing.T) {
 	projectWrite(t, dep, map[string]string{
 		"go.mod":      "module example.org/depscript\n\ngo 1.27\n",
 		"goxide.toml": projectManifest(m),
-		"lib/lib.gox": "package depscript\nimport \"example.org/depscript/gen\"\nfunc Value()string{return gen.Value+\" \"+gen.Resource}\n",
+		"lib/lib.gox": "package depscript\nuse gen;\nfunc Value()string{return gen::Value+\" \"+gen::Resource}\n",
 	})
 	root := filepath.Join(filepath.Dir(dep), "consumer")
 	projectWrite(t, root, map[string]string{
@@ -335,7 +347,7 @@ path = '../root'
 [package]
 format = 1
 `,
-		"main.gox": "package main\nimport \"fmt\"\nimport d \"example.org/depscript\"\nfunc main(){fmt.Println(\"DEPENDENT_APP\",d.Value())}\n",
+		"main.gox": "package main\nuse fmt;\nuse generator as d;\nfunc main(){fmt::Println(\"DEPENDENT_APP\",d::Value())}\n",
 	})
 	scriptAction(t, root, "trust-project")
 	p := scriptPlan(t, root)

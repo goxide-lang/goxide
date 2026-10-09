@@ -142,7 +142,7 @@ func TestPrimitiveAliasesAcrossDefinitionFilesAndPackages(t *testing.T) {
 		}
 		var deps map[string]*Package
 		if external {
-			macroImport, call = "import ops \"example/ops\"\n", "ops.zero!()"
+			macroImport, call = "import ops \"example/ops\"\n", "ops::zero!()"
 			deps = map[string]*Package{"example/ops": registry(t, "example/ops", map[string][]byte{
 				"definition.gox": []byte("package ops\npub macro_rules! zero {()=>{int(0)};}\n"),
 			}, nil)}
@@ -154,7 +154,7 @@ func TestPrimitiveAliasesAcrossDefinitionFilesAndPackages(t *testing.T) {
 			"func main(){Plain();type int string;fmt.Printf(\"%T %s\\n\"," + call + ",int(\"caller\"))}\n"
 		sources["caller.gox"] = []byte(source)
 		p := registry(t, "example/caller", sources, deps)
-		expanded, err := ExpandPackage("caller.gox", sources["caller.gox"], nil, p, nil)
+		expanded, err := ExpandPackage("caller.gox", sources["caller.gox"], nil, p, nil, ExpansionOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -163,6 +163,32 @@ func TestPrimitiveAliasesAcrossDefinitionFilesAndPackages(t *testing.T) {
 		}
 		if !external {
 			run(t, string(expanded.Source)+"\nfunc Caller() int {return 7}\n", "int 7\nint caller\n")
+		}
+	}
+}
+
+func TestPrimitiveAliasesStaticPathOrigins(t *testing.T) {
+	for _, newline := range []string{"\n", "\r\n"} {
+		source := strings.ReplaceAll("package p\nimport \"fmt\"\nmacro_rules! zero {()=>{int(0)};}\nfunc f(){fmt::Println(zero!())}\n", "\n", newline)
+		expanded, err := ExpandWithMap("static-origin.gox", []byte(source))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(expanded.PrimitiveAliases) != 0 {
+			t.Fatalf("static parser view prevented primitive proof: %s", expanded.Source)
+		}
+		found := false
+		for _, origin := range expanded.Origins {
+			if string(expanded.Source[origin.OutputStart:origin.OutputEnd]) != "int" {
+				continue
+			}
+			if source[origin.SourceStart:origin.SourceEnd] != "int" || len(origin.Stack) != 1 || origin.Stack[0].Macro != "zero" {
+				t.Fatalf("lost copied primitive token: %+v", origin)
+			}
+			found = true
+		}
+		if !found {
+			t.Fatal("missing proven primitive origin")
 		}
 	}
 }

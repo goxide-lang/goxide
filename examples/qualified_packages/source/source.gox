@@ -1,9 +1,10 @@
 package source
-import "errors"
+use serde;
+use errors;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum Mode { Idle, Ready(int), }
-var Sentinel = errors.New("source failed")
+var Sentinel = errors::New("source failed")
 type Fault struct{}
 func (*Fault) Error() string { return "typed failure" }
 func Fetch(kind string) Result[int,error] {

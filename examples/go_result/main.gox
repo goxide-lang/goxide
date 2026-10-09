@@ -1,13 +1,11 @@
 package main
 
-import (
-    "fmt"
-    "io"
-    "errors"
-    "strconv"
-    "strings"
-    ops "example.org/go-result/ops"
-)
+use fmt;
+use io;
+use errors;
+use strconv;
+use strings;
+use ops;
 
 // go_result! / go_result_keep! are compiler builtins, with no macro import.
 // Result shares the github.com/goxide-lang/std/sum type identity.
@@ -15,45 +13,45 @@ import (
 type ReadFailure = struct { Value int; Err error }
 
 func parse(text string) Result[int,error] {
-    return ops.parse_result!(strconv.Atoi(text))
+    return ops::parse_result!(strconv::Atoi(text))
 }
 
 func next(text string) Result[int,error] {
     // A failed parse discards its int explicitly; ? propagates the original error.
-    value := go_result!(strconv.Atoi(text))?
+    value := go_result!(strconv::Atoi(text))?
     return Result[int,error]::Ok(value + 1)
 }
 
-func read(reader io.Reader, buffer []byte) Result[int,ReadFailure] {
+func read(reader io::Reader, buffer []byte) Result[int,ReadFailure] {
     // A Reader can return both n > 0 and an error; keep preserves both fields.
     return go_result_keep!(reader.Read(buffer))
 }
 
 // This is a valid Reader: a final nonempty chunk may accompany io.EOF.
-type finalChunk struct { Reader io.Reader }
+type finalChunk struct { Reader io::Reader }
 func (r finalChunk) Read(p []byte) (int,error) {
     n, err := r.Reader.Read(p)
-    if n > 0 { return n, io.EOF }
+    if n > 0 { return n, io::EOF }
     return n, err
 }
 
 func main() {
     match next("41") {
-        Result[int,error]::Ok(n) => { fmt.Println("next:", n) },
-        Result[int,error]::Err(err) => { fmt.Println("unexpected:", err) },
+        Result[int,error]::Ok(n) => { fmt::Println("next:", n) },
+        Result[int,error]::Err(err) => { fmt::Println("unexpected:", err) },
     }
     match parse("bad") {
-        Result[int,error]::Ok(n) => { fmt.Println("unexpected:", n) },
+        Result[int,error]::Ok(n) => { fmt::Println("unexpected:", n) },
         Result[int,error]::Err(err) => {
-            var number *strconv.NumError
-            fmt.Println("parse error:", errors.As(err, &number))
+            var number *strconv::NumError
+            fmt::Println("parse error:", errors::As(err, &number))
         },
     }
     buffer := make([]byte, 8)
-    match read(finalChunk{Reader: strings.NewReader("abc")}, buffer) {
-        Result[int,ReadFailure]::Ok(n) => { fmt.Println("read:", n) },
+    match read(finalChunk{Reader: strings::NewReader("abc")}, buffer) {
+        Result[int,ReadFailure]::Ok(n) => { fmt::Println("read:", n) },
         Result[int,ReadFailure]::Err(partial) => {
-            fmt.Println("partial:", partial.Value, string(buffer[:partial.Value]), errors.Is(partial.Err, io.EOF))
+            fmt::Println("partial:", partial.Value, string(buffer[:partial.Value]), errors::Is(partial.Err, io::EOF))
         },
     }
 }

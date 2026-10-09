@@ -9,11 +9,11 @@ import (
 )
 
 const referenceAPI = `package api
-import "time"
+use time;
 type hidden struct{N int}
 func Hidden()hidden{return hidden{9}}
-func Now()time.Time{return time.Unix(0,0)}
-func Context(r &int,t time.Time,h hidden)int{return *r+t.Second()+h.N}
+func Now()time::Time{return time::Unix(0,0)}
+func Context(r &int,t time::Time,h hidden)int{return *r+t.Second()+h.N}
 type Value struct{}
 func(Value)Read()int{return 11}
 func Read(r &int)int{return *r}
@@ -31,12 +31,13 @@ func TestReferenceMetadataModules(t *testing.T) {
 	makeSource := func(body, ext string) string {
 		source := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, source, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, source, "packages.example/app", map[string]string{"api": "packages.example/app/api", "mid": "packages.example/app/mid", "other": "packages.example/app/other"})
 		packagesWrite(t, source, "api/read.gox", referenceAPI)
 		packagesWrite(t, source, "api/other.gox", "package api\nfunc Again(r &int)&int{return View(r)}\n")
 		packagesWrite(t, source, "mid/mid.gox", `package mid
-import x "packages.example/app/api"
-func View(r &int)&int{return x.Again(r)}
-func Edit(r mut& int)mut& int{return x.Edit(r)}
+use api as x;
+func View(r &int)&int{return x::Again(r)}
+func Edit(r mut& int)mut& int{return x::Edit(r)}
 `)
 		packagesWrite(t, source, "other/other.gox", `package api
 func View(r mut& int)mut& int{return r}
@@ -46,11 +47,11 @@ func View(r mut& int)mut& int{return r}
 	}
 	t.Run("business-race-determinism", func(t *testing.T) {
 		source := makeSource(`package app
-import a "packages.example/app/api"
-import m "packages.example/app/mid"
-func Run()int{n:=40;w:=mut& n;a.Inc(w);r:=m.View(&*w);a.Inc(w);if a.Read(r)!=42{panic("alias visibility")};*m.Edit(w)+=1;return n}
-func Deferred()int{n:=0;w:=mut& n;func(){defer a.Inc(w)}();return n}
-func Goroutine()int{n:=0;w:=mut& n;done:=make(chan bool);go func(){a.Inc(w);done<-true}();<-done;return n}
+use api as a;
+use mid as m;
+func Run()int{n:=40;w:=mut& n;a::Inc(w);r:=m::View(&*w);a::Inc(w);if a::Read(r)!=42{panic("alias visibility")};*m::Edit(w)+=1;return n}
+func Deferred()int{n:=0;w:=mut& n;func(){defer a::Inc(w)}();return n}
+func Goroutine()int{n:=0;w:=mut& n;done:=make(chan bool);go func(){a::Inc(w);done<-true}();<-done;return n}
 func Native()int{n:=4;p:=&n;native(p);return n}
 func native(p *int){*p+=1}
 `, "gox")
@@ -109,7 +110,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 		"raw escape":       `n:=1;r:=m.View(&n);raw(r)`,
 		"interface escape": `n:=1;r:=m.View(&n);var erased any=r;_=erased`,
 		"closure escape":   `n:=1;r:=m.View(&n);f:=func()*int{return r};_=f`,
-		"function value":   `f:=a.Read;_=f`,
+		"function value":   `f:=a::Read;_=f`,
 		"wrong path":       `n:=1;r:=a.View(&n);other.View(r)`,
 	}
 	for name, body := range cases {
@@ -127,6 +128,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 			ext := "go"
 			if name == "function value" {
 				ext = "gox"
+				imports = "use api as a;\n"
 			}
 			source := makeSource("package app\n"+imports+"func bad(){"+body+"}\nfunc raw(p *int){}\n", ext)
 			generated := filepath.Join(t.TempDir(), "generated")
@@ -152,8 +154,9 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 		}
 		copied := filepath.Join(t.TempDir(), "copied")
 		packagesWrite(t, copied, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, copied, "packages.example/app", map[string]string{"api": "packages.example/app/api", "mid": "packages.example/app/mid", "other": "packages.example/app/other"})
 		packagesWrite(t, copied, "api/api.go", string(data))
-		consumer := "package app\nimport x \"packages.example/app/api\"\nfunc Run(){n:=1;*x.View(&n)=7}\n"
+		consumer := "package app\nuse api as x;\nfunc Run(){n:=1;*x::View(&n)=7}\n"
 		packagesWrite(t, copied, "app.gox", consumer)
 		output := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), copied)
 		if !strings.Contains(output, "metadata missing") {
@@ -174,11 +177,12 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 	t.Run("missing-metadata-native-distinction", func(t *testing.T) {
 		source := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, source, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, source, "packages.example/app", map[string]string{"api": "packages.example/app/api", "mid": "packages.example/app/mid", "other": "packages.example/app/other"})
 		packagesWrite(t, source, "api/api.go", `package api
 const GoxideReferenceMetadata="v1:missing"
 func View(p *int)*int{return p}
 `)
-		packagesWrite(t, source, "app.gox", "package app\nimport x \"packages.example/app/api\"\nfunc Run(){n:=1;*x.View(&n)=2}\n")
+		packagesWrite(t, source, "app.gox", "package app\nuse api as x;\nfunc Run(){n:=1;*x::View(&n)=2}\n")
 		output := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), source)
 		if !strings.Contains(output, "metadata missing") || !strings.Contains(output, "app.gox:2:") {
 			t.Fatal(output)

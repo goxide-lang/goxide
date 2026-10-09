@@ -1,10 +1,8 @@
 package main
 
-import (
-    "errors"
-    "fmt"
-    "strconv"
-)
+use errors;
+use fmt;
+use strconv;
 
 #[derive(Error)]
 #[error("invalid port")]
@@ -15,7 +13,7 @@ type PortError struct {
 
 // The caller explicitly decides what to do with Go's (int, error).
 func parsePort(text string) Result[int,error] {
-    n, err := strconv.Atoi(text)
+    n, err := strconv::Atoi(text)
     if err != nil { return Result::Err(err) }
     return Result::Ok(n)
 }
@@ -24,7 +22,7 @@ func parsePort(text string) Result[int,error] {
 // The success type changes from int to string.
 func nextPort(text string) Result[string,PortError] {
     n := parsePort(text)?
-    return Result::Ok(strconv.Itoa(n + 1))
+    return Result::Ok(strconv::Itoa(n + 1))
 }
 
 func firstName(names []string) Option[string] {
@@ -39,17 +37,17 @@ func nameLength(names []string) Option[int] {
 
 func showPort(text string) {
     match nextPort(text) {
-        Result::Ok(port) => { fmt.Println("next port:", port) },
+        Result::Ok(port) => { fmt::Println("next port:", port) },
         Result::Err(err) => {
-            fmt.Println("port error:", err.Error(), "syntax:", errors.Is(err, strconv.ErrSyntax))
+            fmt::Println("port error:", err.Error(), "syntax:", errors::Is(err, strconv::ErrSyntax))
         },
     }
 }
 
 func showLength(names []string) {
     match nameLength(names) {
-        Option::Some(n) => { fmt.Println("name length:", n) },
-        Option::None => { fmt.Println("name length: absent") },
+        Option::Some(n) => { fmt::Println("name length:", n) },
+        Option::None => { fmt::Println("name length: absent") },
     }
 }
 

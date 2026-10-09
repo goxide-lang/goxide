@@ -37,17 +37,18 @@ func sharedStdGo(t *testing.T, dir string, args ...string) {
 	}
 }
 func TestSharedStdCrossModuleAndContext(t *testing.T) {
+	roots := frontendFixtureRoots(map[string]string{"source": "example.org/producer/internal/source", "producer": "example.org/producer"})
 	producer := sharedStdModule(t, "example.org/producer")
 	sharedStdWrite(t, producer, "internal/source/value.gox", `package source;
 func Make()Result[int,error]{return Result::Ok(7)}
 `)
 	sharedStdWrite(t, producer, "value.gox", `package producer
-import "example.org/producer/internal/source"
-func Make()Result[int,error]{return source.Make()}
+use source;
+func Make()Result[int,error]{return source::Make()}
 func Optional()Option[int]{return Option::Some(3)}
 `)
 	output := filepath.Join(t.TempDir(), "producer")
-	if _, err := CompileModuleWithOptions(producer, output, ModuleOptions{}); err != nil {
+	if _, err := CompileModuleWithOptions(producer, output, ModuleOptions{Roots: roots}); err != nil {
 		t.Fatal(err)
 	}
 	sharedStdGo(t, output, "test", "-race", "./...")
@@ -73,7 +74,7 @@ import "example.org/producer"
 type NativeOption = producer.Option[int]
 `)
 	sharedStdWrite(t, consumer, "value.gox", `package consumer
-import "example.org/producer"
+use producer;
 #[derive(Default,Clone,Debug,PartialEq,Eq)]
 type Holder struct{V NativeOption}
 type Failure struct{}
@@ -84,9 +85,9 @@ func PointerAdapter()Result[int,*Failure]{return go_result!(pointerCall())}
 func InterfaceAdapter()Result[int,error]{return go_result!(interfaceCall())}
 func Pair()(Option[int],Result[string,error]){return Option::Some(2),Result::Ok("pair")}
 func Many(v ...Option[int])int{return Take(v[0])}
-func Direct()Result[int,error]{return producer.Make()}
-func Qualified(v producer.Result[int,error])int{return match v {producer.Result[int,error]::Ok(n)=>n,producer.Result[int,error]::Err(_)=>-1,}}
-func Propagate()Result[int,error]{n:=producer.Make()?;return Result::Ok(n)}
+func Direct()Result[int,error]{return producer::Make()}
+func Qualified(v producer::Result[int,error])int{return match v {producer::Result[int,error]::Ok(n)=>n,producer::Result[int,error]::Err(_)=>-1,}}
+func Propagate()Result[int,error]{n:=producer::Make()?;return Result::Ok(n)}
 func Absent()Option[string]{return Option::None}
 func Take(v Option[int])int{return match v {Option::Some(n)=>n,Option::None=>0,}}
 func Context()int{var x Option[int]=Option::Some(3);x=Option::Some(4);return Take(Option::Some(Take(x)+1))}
@@ -96,7 +97,7 @@ func ExprArm(x Option[int])Option[int]{return match x {Option::Some(n)=>Option::
 func Closure()Option[int]{f:=func()Option[int]{return Option::Some(6)};return f()}
 `)
 	target := filepath.Join(t.TempDir(), "consumer")
-	if _, err := CompileModuleWithOptions(consumer, target, ModuleOptions{}); err != nil {
+	if _, err := CompileModuleWithOptions(consumer, target, ModuleOptions{Roots: roots}); err != nil {
 		t.Fatal(err)
 	}
 	sharedStdWrite(t, target, "value_test.go", `package consumer
@@ -115,7 +116,7 @@ func TestShared(t *testing.T){if PointerAdapter().(sum.Ok[int,*Failure]).Value!=
 	if err = testdeps.WriteFile(artifact, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, err = CompileModuleWithOptions(consumer, filepath.Join(t.TempDir(), "stale"), ModuleOptions{})
+	_, err = CompileModuleWithOptions(consumer, filepath.Join(t.TempDir(), "stale"), ModuleOptions{Roots: roots})
 	if err == nil || !strings.Contains(err.Error(), "unsupported metadata version") {
 		t.Fatalf("old schema accepted: %v", err)
 	}

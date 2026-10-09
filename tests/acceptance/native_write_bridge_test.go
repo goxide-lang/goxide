@@ -1,6 +1,7 @@
 package acceptance_test
 
 import (
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -16,6 +17,7 @@ func TestNativeWritableScalarArguments(t *testing.T) {
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule())
+		writeAcceptanceRoots(t, dir, map[string]rootconfig.Mapping{"atomic": {Source: "toolchain", Package: "sync/atomic"}, "runtime": {Source: "toolchain", Package: "runtime"}, "native": {Module: "packages.example/app", Package: "packages.example/app/native"}, "views": {Module: "packages.example/app", Package: "packages.example/app/views"}})
 		packagesWrite(t, dir, "native/native.go", `package native
 import "sync/atomic"
 var saved *int64
@@ -41,25 +43,25 @@ func Edit(p mut& int64)mut& int64{return p}
 func View(p &int64)&int64{return p}
 `)
 		packagesWrite(t, dir, "app.gox", `package app
-import("sync/atomic";"runtime";n "packages.example/app/native";v "packages.example/app/views")
-var _=atomic.LoadInt64
-var _=runtime.GC
-var _=n.Saved
-func importedView(){var x int64;_=v.Edit(mut& x)}
+use atomic;use runtime;use native as n;use views as v;
+var _=atomic::LoadInt64
+var _=runtime::GC
+var _=n::Saved
+func importedView(){var x int64;_=v::Edit(mut& x)}
 `+body)
 		return dir
 	}
 	t.Run("original-storage", func(t *testing.T) {
 		source := sourceFor(`
-func Direct()int64{var x int64;w:=v.Edit(mut& x);r:=v.View(&(*w));atomic.AddInt64(w,3);n.Write(w,5);p:=n.Echo(w);*p+=2;n.Keep(w);*n.Saved()+=4;return *r}
+func Direct()int64{var x int64;w:=v::Edit(mut& x);r:=v::View(&(*w));atomic::AddInt64(w,3);n::Write(w,5);p:=n::Echo(w);*p+=2;n::Keep(w);*n::Saved()+=4;return *r}
 func Local(p *int64){*p+=2}
-func Forms()int64{var x int64;w:=mut& x;Local(w);f:=n.Write;f(w,3);var g n.Writer=n.Write;g(w,4);n.Many(w,w);n.AliasWrite(w);done:=make(chan struct{});go n.Async(w,done);<-done;return x}
-func Deferred()int64{var x int64;w:=mut& x;func(){defer n.Write(w,9)}();return x}
-func KeepLocal(){var x int64=12;n.Keep(mut& x)}
-func Lifetime()int64{KeepLocal();runtime.GC();*n.Saved()+=1;return *n.Saved()}
-func Named()n.Count{var x n.Count=2;n.CountWrite(mut& x);return x}
+func Forms()int64{var x int64;w:=mut& x;Local(w);f:=n::Write;f(w,3);var g n::Writer=n::Write;g(w,4);n::Many(w,w);n::AliasWrite(w);done:=make(chan struct{});go n::Async(w,done);<-done;return x}
+func Deferred()int64{var x int64;w:=mut& x;func(){defer n::Write(w,9)}();return x}
+func KeepLocal(){var x int64=12;n::Keep(mut& x)}
+func Lifetime()int64{KeepLocal();runtime::GC();*n::Saved()+=1;return *n::Saved()}
+func Named()n::Count{var x n::Count=2;n::CountWrite(mut& x);return x}
 func Once(w mut& int64,c mut& int)mut& int64{*c+=1;return w}
-func EvaluatedOnce()(int64,int){var x int64;count:=0;n.Write(Once(mut& x,mut& count),7);return x,count}
+func EvaluatedOnce()(int64,int){var x int64;count:=0;n::Write(Once(mut& x,mut& count),7);return x,count}
 `)
 		generated := filepath.Join(t.TempDir(), "generated")
 		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
@@ -73,17 +75,17 @@ func TestEvaluation(t *testing.T){x,n:=EvaluatedOnce();if x!=7||n!=1{t.Fatal(x,n
 		packagesCommand(t, generated, tool, true, "vet", "./...")
 	})
 	for name, body := range map[string]string{
-		"readonly":         `func Bad(r &int64){n.Write(r,1)}`,
-		"narrowed":         `func Bad(w mut& int64){n.Write(&(*w),1)}`,
-		"readonly-upgrade": `func Bad(r &int64){n.Write(mut& (*r),1)}`,
-		"interface":        `func Bad(w mut& int64){n.Sink(w)}`,
+		"readonly":         `func Bad(r &int64){n::Write(r,1)}`,
+		"narrowed":         `func Bad(w mut& int64){n::Write(&(*w),1)}`,
+		"readonly-upgrade": `func Bad(r &int64){n::Write(mut& (*r),1)}`,
+		"interface":        `func Bad(w mut& int64){n::Sink(w)}`,
 		"raw-variable":     `func Bad(w mut& int64){var p *int64=w;_=p}`,
 		"raw-return":       `func Bad(w mut& int64)*int64{return w}`,
 		"raw-conversion":   `func Bad(w mut& int64){_=(*int64)(w)}`,
-		"wrong-named":      `func Bad(w mut& n.Count){n.Write(w,1)}`,
-		"other-named":      `func Bad(w mut& n.Count){n.OtherWrite(w)}`,
-		"composite":        `func Bad(w mut& []int){n.Composite(w)}`,
-		"generic":          `func Bad(w mut& int64){n.Generic[int64](w)}`,
+		"wrong-named":      `func Bad(w mut& n::Count){n::Write(w,1)}`,
+		"other-named":      `func Bad(w mut& n::Count){n::OtherWrite(w)}`,
+		"composite":        `func Bad(w mut& []int){n::Composite(w)}`,
+		"generic":          `func Bad(w mut& int64){n::Generic[int64](w)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)

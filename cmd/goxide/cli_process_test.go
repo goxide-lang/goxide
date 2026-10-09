@@ -301,12 +301,13 @@ func TestCLIProcessContract(t *testing.T) {
 		t.Run("native-run-"+mode, func(t *testing.T) {
 			d := t.TempDir()
 			files := map[string]string{
-				"main.gox": "package main\nimport (\"encoding/json\"; \"os\")\nfunc main(){json.NewEncoder(os.Stdout).Encode(os.Args[1:])}\n",
+				"main.gox": "package main\nuse json;\nuse os;\nfunc main(){json::NewEncoder(os::Stdout).Encode(os::Args[1:])}\n",
 			}
 			if mode == "directory" {
 				files["go.mod"] = "module example.org/cliargv\ngo 1.27\n"
+				files["goxide.roots.toml"] = fixtureToolchainRoots
 			} else {
-				files["goxide.toml"] = "[package]\nformat=2\nmodule='example.org/cliargv'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n"
+				files["goxide.toml"] = fixtureNamespaceManifest(t, "[package]\nformat=2\nmodule='example.org/cliargv'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n")
 			}
 			for name, content := range files {
 				if err := os.WriteFile(filepath.Join(d, name), []byte(content), 0600); err != nil {
@@ -327,7 +328,8 @@ func TestCLIProcessContract(t *testing.T) {
 
 	t.Run("native-run-verbatim-argv", func(t *testing.T) {
 		d := fixture(t)
-		source := []byte("package main\nimport (\"encoding/json\"; \"os\")\nfunc main(){json.NewEncoder(os.Stdout).Encode(os.Args[1:])}\n")
+		fixtureRootsFile(t, d, "")
+		source := []byte("package main\nuse json;\nuse os;\nfunc main(){json::NewEncoder(os::Stdout).Encode(os::Args[1:])}\n")
 		for _, input := range []string{"input.gox", "-input.gox"} {
 			if err := os.WriteFile(filepath.Join(d, input), source, 0600); err != nil {
 				t.Fatal(err)

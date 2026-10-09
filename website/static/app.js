@@ -51,7 +51,10 @@ function compile() {
   instance.onmessage = ({data}) => {
     if (worker !== instance) return;
     if (data.type === 'fatal') { fail(data.error); return; }
-    if (data.type === 'ready') { clearTimeout(timer); ready = true; send(); return; }
+    if (data.type === 'ready') {
+      if (data.rootsSha256 !== manifest.dependencyContext.sha256) { fail('项目依赖根与编译器不匹配，请刷新页面重试'); return; }
+      clearTimeout(timer); ready = true; send(); return;
+    }
     if (data.type !== 'result' || data.id !== revision) return;
     clearTimeout(timer); busy = false; $('stop').disabled = true;
     if (data.error) { clearOutput(); status('转译失败 · 未保留旧结果', 'error'); $('diagnostic').textContent = data.error; $('diagnostic').hidden = false; return; }
@@ -108,13 +111,16 @@ $('copy').onclick = async () => {
 };
 function renderDependencies() {
   const dependencies = manifest.dependencies || [];
+  const context = manifest.dependencyContext;
+  $('dependency-roots-source').value = context.source;
+  $('dependency-roots-provenance').textContent = `${context.path} · SHA-256 ${context.sha256}`;
   const option = (value, label) => { const node = document.createElement('option'); node.value = value; node.textContent = label; return node; };
-  $('dependencies').replaceChildren(...dependencies.map((dependency, index) => option(index, dependency.package)));
+  $('dependencies').replaceChildren(...dependencies.map((dependency, index) => option(index, `${dependency.staticPaths.join(', ')} → ${dependency.package}`)));
   function showFile() {
     const dependency = dependencies[Number($('dependencies').value)];
     const file = dependency?.files[Number($('dependency-files').value)];
     $('dependency-source').value = file?.source || '';
-    $('dependency-provenance').textContent = dependency && file ? `${dependency.package} @ ${dependency.version} · ${dependency.source} · ${file.path} · SHA-256 ${file.sha256}` : '本构建没有随附可核验依赖源码。';
+    $('dependency-provenance').textContent = dependency && file ? `${dependency.staticPaths.join(', ')} → ${dependency.package} @ ${dependency.version} · ${dependency.source} · ${file.path} · SHA-256 ${file.sha256}` : '本构建没有随附可核验依赖源码。';
   }
   function showDependency() {
     const dependency = dependencies[Number($('dependencies').value)];
@@ -178,6 +184,10 @@ function renderCatalog() {
   const response = await fetch('examples.json', {cache:'no-store'});
   if (!response.ok) throw new Error(`示例清单 HTTP ${response.status}`);
   manifest = await response.json();
+  const context = manifest.dependencyContext;
+  if (typeof context?.source !== 'string' || !/^[a-f0-9]{64}$/.test(context.sha256 || '')) throw new Error('项目依赖根清单缺少完整性摘要，请刷新重试');
+  const contextHash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(context.source))), b => b.toString(16).padStart(2, '0')).join('');
+  if (contextHash !== context.sha256) throw new Error('项目依赖根源码摘要不匹配，请刷新页面重试');
   examples = [...manifest.examples, ...(manifest.packageExamples || [])];
   if (!/^[a-f0-9]{64}$/.test(manifest.wasmSha256 || '')) throw new Error('编译器清单缺少完整性摘要，请刷新重试');
   renderCatalog(); renderDependencies();

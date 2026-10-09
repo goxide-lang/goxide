@@ -1,6 +1,6 @@
 package main
 
-import "fmt"
+use fmt;
 
 type Cache struct {
     Reads int
@@ -39,5 +39,5 @@ func main() {
     before := inspectCache(reader)
     updateCache(writer)
     after := inspectCache(reader)
-    fmt.Println("totals:", before, after, "stored:", cache.Reads, cache.Samples[0], cache.Values[0], cache.Counts["hits"], limit)
+    fmt::Println("totals:", before, after, "stored:", cache.Reads, cache.Samples[0], cache.Values[0], cache.Counts["hits"], limit)
 }

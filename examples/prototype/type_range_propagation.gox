@@ -1,5 +1,5 @@
 package main
-import "fmt"
+use fmt;
 func trValue(v Option[int])int{match v{Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
 func trInit(ok bool,trace *[]int)Option[int]{*trace=append(*trace,1);if !ok{return Option[int]::None};return Option[int]::Some(10)}
 func trSubject(v any,ok bool,trace *[]int)Option[any]{*trace=append(*trace,2);if !ok{return Option[any]::None};return Option[any]::Some(v)}
@@ -24,7 +24,7 @@ func rangeChannelBreak(ch chan int)Option[int]{for n:=range Option[chan int]::So
 func rangeArray(p *[3]int,ok bool,pointer bool,trace *[]int)Option[int]{r:=Option[*[3]int]::Some(p);if !ok{r=Option[*[3]int]::None};sum:=0;if pointer{for i,v:=range r?{sum+=v;*trace=append(*trace,i);if i==0{p[1]=99}}}else{for i,v:=range *r?{sum+=v;*trace=append(*trace,i);if i==0{p[1]=99}}};return Option[int]::Some(sum)}
 func rangeArrayIndex(p *[3]int,ok bool,deref bool)Option[int]{r:=Option[*[3]int]::Some(p);if !ok{r=Option[*[3]int]::None};sum:=0;if deref{for i:=range *r?{sum+=i}}else{for i:=range r?{sum+=i}};return Option[int]::Some(sum)}
 func rangeNativeUnevaluated()Option[int]{var p *[3]int;sum:=0;for i:=range *p{sum+=Option[int]::Some(i)?};return Option[int]::Some(sum)}
-func main(){trace:=[]int{};fmt.Println(trValue(typeKinds(3,true,true,&trace)),trace)}
+func main(){trace:=[]int{};fmt::Println(trValue(typeKinds(3,true,true,&trace)),trace)}
 func rangeZeroArray(r Option[*[0]int])Option[int]{for range *r?{};return Option[int]::Some(1)}
 func rangeBlankArray(r Option[*[2]int])Option[int]{sum:=0;for i,_:=range r?{sum+=i};return Option[int]::Some(sum)}
 func typeCapturedInit()Option[int]{var seen []func()int;switch x:=Option[int]::Some(7)?;v:=Option[any]::Some(x)?.(type){case int:seen=append(seen,func()int{return v+x});case string:seen=append(seen,func()int{return len(v)+x})};return Option[int]::Some(seen[0]())}

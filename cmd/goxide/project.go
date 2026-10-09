@@ -223,7 +223,11 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 			excluded[filepath.Clean(filepath.Dir(n.Manifest.Build.Entry))] = true
 			configuration = project.Digest([]string{configuration, artifact.Digest})
 		}
-		options := frontend.ModuleOptions{ManagedOutputRoot: layout.Root, SourceModuleRoot: n.Root, SourceModuleFile: n.ModBytes, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files}
+		roots, e := projectRoots(n)
+		if e != nil {
+			return e
+		}
+		options := frontend.ModuleOptions{ManagedOutputRoot: layout.Root, SourceModuleRoot: n.Root, SourceModuleFile: n.ModBytes, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files, Roots: roots}
 		options.Prepare = func(root string) error { return prepareProjectModule(g, n, root, generated) }
 		result, err = frontend.CompileModuleWithOptions(inputPath, output, options)
 		if err != nil {

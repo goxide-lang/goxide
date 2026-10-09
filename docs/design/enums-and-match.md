@@ -21,14 +21,15 @@
 ### 0.1 封闭 enum 与外部映射
 
 ```goxide
-#[derive(Serialize, Deserialize, Clone, Debug)]
+use serde;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 enum State {
     #[serde(rename="pending")]
     Pending,
     #[serde(rename="paid")]
     Paid,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Code {
     #[serde(value=1)]
     Accepted,

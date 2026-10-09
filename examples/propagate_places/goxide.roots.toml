@@ -1,0 +1,19 @@
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+
+[roots.model]
+module = "places.example/update"
+package = "places.example/update/model"
+
+[roots.runtime]
+source = "toolchain"
+package = "runtime"
+
+[roots.strconv]
+source = "toolchain"
+package = "strconv"
+
+[roots.unsafe]
+source = "toolchain"
+package = "unsafe"

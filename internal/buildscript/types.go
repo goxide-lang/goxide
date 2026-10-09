@@ -2,7 +2,10 @@
 // Declared-input caching is an optimization, not an OS sandbox or hermeticity guarantee.
 package buildscript
 
-import "github.com/hxsf/goxide/internal/buildconfig"
+import (
+	"github.com/hxsf/goxide/internal/buildconfig"
+	"github.com/hxsf/goxide/internal/paths"
+)
 
 // Config is the shared manifest contract; this alias preserves runner callers.
 type Config = buildconfig.Config
@@ -11,6 +14,7 @@ type Options struct {
 	ProjectRoot, PackageRoot, Module, SourceID, GoTool, CompilerID, ArtifactRoot, Boundary string
 	Root                                                                                   bool
 	Config                                                                                 Config
+	ToolchainRoots                                                                         paths.Roots
 	Features, Tags                                                                         []string
 	Race                                                                                   bool
 }

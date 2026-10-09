@@ -56,9 +56,9 @@ func (v Item) First()int{return v.Values[0]}
 type Item struct{Text string}
 `,
 		"client/other.gox": `package client
-import src "example.org/derivebindings/other"
+use other as src;
 #[derive(Clone,Debug)]
-type Other struct{Items []src.Item}
+type Other struct{Items []src::Item}
 `,
 		"local/local_test.go": `package local
 import("testing";"reflect";"strings")
@@ -98,12 +98,12 @@ func TestBehavior(t *testing.T){
 	local.WriteString("#[derive(Clone,Debug)]\ntype Local struct{\n")
 	for i, name := range names {
 		fmt.Fprintf(&local, "F%d [][]%s\n", i, name)
-		files["client/import_"+name+".gox"] = fmt.Sprintf("package client\nimport %s %q\n#[derive(Clone,Debug)]\ntype Import%s struct{Items []map[string][2]%s.Item}\n", name, "example.org/derivebindings/model", strings.ToUpper(name[:1])+name[1:], name)
+		files["client/import_"+name+".gox"] = fmt.Sprintf("package client\nuse model as %s;\n#[derive(Clone,Debug)]\ntype Import%s struct{Items []map[string][2]%s::Item}\n", name, strings.ToUpper(name[:1])+name[1:], name)
 	}
 	local.WriteString("Items map[string][]item\n}\n#[derive(Clone,Debug)]\nenum choice{Items([]x),Empty,}\nfunc MakeChoice()choice{return choice::Items([]x{{N:4}})}\n")
 	files["local/local.gox"] = local.String()
 	useWrite(t, src, files)
-	if _, err := CompileModule(src, dst); err != nil {
+	if _, err := CompileModuleWithOptions(src, dst, ModuleOptions{Roots: frontendFixtureRoots(map[string]string{"model": "example.org/derivebindings/model", "other": "example.org/derivebindings/other"})}); err != nil {
 		t.Fatal(err)
 	}
 	err := filepath.WalkDir(dst, func(path string, entry os.DirEntry, err error) error {

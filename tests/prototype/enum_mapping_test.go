@@ -1,14 +1,13 @@
 package prototype_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"strings"
 	"testing"
 )
 
 func TestClosedEnumWireMapping(t *testing.T) {
-	r, e := frontend.Compile("wire.gox", []byte(`package fixture
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+	r, e := compilePrototypeFixture("wire.gox", []byte(`package fixture; use serde;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 enum Status {
  #[default]
  #[serde(rename="pending")]
@@ -16,7 +15,7 @@ enum Status {
  #[serde(rename="paid")]
  Paid,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Code {
  #[serde(value=-9223372036854775808)]
  Min,
@@ -25,11 +24,11 @@ enum Code {
  #[serde(value=9223372036854775807)]
  Max,
 }
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 enum Output { #[serde(value=9)] Done }
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 enum Input { #[serde(rename="received")] Received }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Envelope { Code Code }
 func PendingStatus() Status {return Status::Pending}
 func MaxCode() Code {return Code::Max}
@@ -65,34 +64,38 @@ func TestUnknownAndMalformed(t *testing.T){
 
 func TestClosedEnumWireMappingRejects(t *testing.T) {
 	cases := []struct{ body, want string }{
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(value=1)] A, #[serde(value=1)] B }`, "duplicate enum serde mapping"},
-		{`#[derive(Deserialize)]
+		{`#[derive(serde::Deserialize)]
 enum E { #[serde(rename="same")] A, #[serde(rename="same")] B }`, "duplicate enum serde mapping"},
-		{`#[derive(Deserialize)]
+		{`#[derive(serde::Deserialize)]
 enum E { #[serde(rename="B")] A, B }`, "duplicate enum serde mapping"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(value=1)] A, B }`, "explicit value on every variant"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(value=1)] A, #[serde(rename="b")] B }`, "cannot mix"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(value=1)] A(int) }`, "no payload"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(rename="a")] A, B(int) }`, "no payload"},
 		{`enum E { #[serde(value=1)] A }`, "require Serialize or Deserialize"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(value=9223372036854775808)] A }`, "int64 range"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(value=-9223372036854775809)] A }`, "int64 range"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(value=1.5)] A }`, "decimal literal"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(skip)] A }`, "requires rename"},
-		{`#[derive(Serialize)]
+		{`#[derive(serde::Serialize)]
 enum E { #[serde(rename="x")] #[serde(value=1)] A }`, "mixed variant"},
 	}
 	for _, tc := range cases {
-		_, e := frontend.Compile("invalid-wire.gox", []byte("package fixture\n"+tc.body+"\n"))
+		header := "package fixture\n"
+		if strings.Contains(tc.body, "serde::") {
+			header = "package fixture; use serde;\n"
+		}
+		_, e := compilePrototypeFixture("invalid-wire.gox", []byte(header+tc.body+"\n"))
 		if e == nil || !strings.Contains(e.Error(), tc.want) || !strings.Contains(e.Error(), "invalid-wire.gox") {
 			t.Errorf("want %s, got %v", tc.want, e)
 		}

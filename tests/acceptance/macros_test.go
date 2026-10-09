@@ -8,18 +8,17 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 // Independent acceptance: the generated program itself is race-instrumented.
 func macroRaceModule(t *testing.T, source, assertions string) {
 	t.Helper()
-	result, err := frontend.Compile("acceptance.gox", []byte(source))
+	result, err := compileAcceptanceLanguageFixture("acceptance.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
+	writeMacroFixtureRoots(t, dir, nil)
 	for name, data := range map[string]string{
 		"go.mod":       "module acceptancefixture\n\ngo 1.27\n",
 		"generated.go": string(result.Go), "generated_test.go": assertions,
@@ -40,7 +39,7 @@ func macroRaceModule(t *testing.T, source, assertions string) {
 
 func TestMacroAcceptanceRace(t *testing.T) {
 	macroRaceModule(t, `package fixture
-import "log/slog"
+use slog;
 func helper(x int) int { return x+3 }
 macro_rules! twice {($x:expr)=>{$x+$x};}
 macro_rules! once {($x:expr)=>{func() int { temporary := $x; return temporary+temporary }()};}
@@ -48,7 +47,7 @@ macro_rules! bound {($x:expr)=>{helper($x)};}
 macro_rules! nested {($x:expr)=>{twice!(bound!($x))};}
 macro_rules! repeated {($f:ident,$($x:expr),*)=>{$($f($x));*};}
 macro_rules! choice {($x:expr)=>{1};($y:expr)=>{2};}
-macro_rules! logevent {($message:expr,$($field:expr),*)=>{slog.Info($message,$($field),*)};}
+macro_rules! logevent {($message:expr,$($field:expr),*)=>{slog::Info($message,$($field),*)};}
 func exercise() (int,int,int,int,int) {
  temporary:=100
  count:=0
@@ -127,9 +126,9 @@ func f(){_=bad!(42)}
 type Bad struct { Value *int }
 `,
 		"external clone": `package fixture
-import "sync"
+use sync;
 #[derive(Clone)]
-type Bad struct { Mutex sync.Mutex }
+type Bad struct { Mutex sync::Mutex }
 `,
 		"generic clone": `package fixture
 #[derive(Clone)]
@@ -148,7 +147,7 @@ func(*Other)Error()string{return "other"}
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("rejected.gox", []byte(source))
+			_, err := compileAcceptanceLanguageFixture("rejected.gox", []byte(source))
 			if err == nil || !strings.Contains(err.Error(), "rejected.gox:") {
 				t.Fatalf("expected located rejection; got %v", err)
 			}

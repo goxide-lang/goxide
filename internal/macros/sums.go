@@ -105,11 +105,6 @@ func (e *engine) prepareSums(ts []tok) ([]tok, error) {
 			i = end
 		}
 	}
-	for i := 0; i+1 < len(out); i++ {
-		if out[i].text == ":" && out[i+1].text == ":" {
-			return nil, at(out[i], "only fixed Option/Result constructors are supported in macro templates")
-		}
-	}
 	return out, nil
 }
 func fixedType(source string) bool {

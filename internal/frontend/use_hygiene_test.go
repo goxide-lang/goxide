@@ -8,6 +8,8 @@ import (
 )
 
 func TestUseGenericImportHygiene(t *testing.T) {
+	options := useTestOptions(map[string]string{"api": "example.org/hygiene/api", "facade": "example.org/hygiene/facade", "p": "example.org/hygiene/p", "q": "example.org/hygiene/q"})
+
 	src := t.TempDir()
 	useWrite(t, src, map[string]string{
 		"go.mod": "module example.org/hygiene\n\ngo 1.27\n",
@@ -19,14 +21,14 @@ func TestUseGenericImportHygiene(t *testing.T) {
 		"q/q.go":     "package q\ntype Other[goxideUseImport2 any] struct{Value goxideUseImport2}\n",
 		"api/pre.go": "package api\nvar goxideUseImport3=3\n",
 		"api/api.gox": `package api
- import p "example.org/hygiene/p"
- import q "example.org/hygiene/q"
+ use p;
+ use q;
  pub use p::Box;
  pub use p::Later as Another;
  pub use q::Other;
  `,
 		"facade/api.gox": `package facade
- import a "example.org/hygiene/api"
+ use api as a;
  pub use a::*;
  `,
 		"client/client.go": `package client
@@ -42,7 +44,7 @@ func TestUseGenericImportHygiene(t *testing.T) {
  `,
 	})
 	out := filepath.Join(t.TempDir(), "out")
-	result, e := CompileModule(src, out)
+	result, e := CompileModuleWithOptions(src, out, options)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -69,6 +71,8 @@ func TestUseGenericImportHygiene(t *testing.T) {
 }
 
 func TestUseMacroReservedAliasPosition(t *testing.T) {
+	options := useTestOptions(map[string]string{"p": "example.org/position/p"})
+
 	for _, alias := range []string{"print", "println", "go_result", "go_result_keep"} {
 		t.Run(alias, func(t *testing.T) {
 			src := t.TempDir()
@@ -76,9 +80,9 @@ func TestUseMacroReservedAliasPosition(t *testing.T) {
 			useWrite(t, src, map[string]string{
 				"go.mod":  "module example.org/position\n\ngo 1.27\n",
 				"p/p.gox": "package p\npub macro_rules! answer { () => { 1 }; }\n",
-				"api.gox": "package api\nimport p \"example.org/position/p\"\n\n  pub use p::answer as " + alias + ";\n",
+				"api.gox": "package api\nuse p;\n\n  pub use p::answer as " + alias + ";\n",
 			})
-			_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
+			_, e := CompileModuleWithOptions(src, filepath.Join(t.TempDir(), "out"), options)
 			want := fmt.Sprintf("%s:4:3: macro use alias %s is a reserved builtin macro name", file, alias)
 			if e == nil || e.Error() != want {
 				t.Fatalf("want exact source position %q, got %v", want, e)
@@ -88,14 +92,16 @@ func TestUseMacroReservedAliasPosition(t *testing.T) {
 }
 
 func TestUseGenericConstraintPosition(t *testing.T) {
+	options := useTestOptions(map[string]string{"p": "example.org/position/p"})
+
 	src := t.TempDir()
 	file := filepath.Join(src, "api.gox")
 	useWrite(t, src, map[string]string{
 		"go.mod":  "module example.org/position\n\ngo 1.27\n",
 		"p/p.go":  "package p\ntype Box[T interface{hidden()}] struct{Value T}\n",
-		"api.gox": "package api\nimport p \"example.org/position/p\"\n\n  pub use p::Box;\n",
+		"api.gox": "package api\nuse p;\n\n  pub use p::Box;\n",
 	})
-	_, e := CompileModule(src, filepath.Join(t.TempDir(), "out"))
+	_, e := CompileModuleWithOptions(src, filepath.Join(t.TempDir(), "out"), options)
 	want := file + ":4:3: use Box: generic alias constraint has private methods"
 	if e == nil || !strings.HasPrefix(e.Error(), want) {
 		t.Fatalf("want source position %q, got %v", want, e)

@@ -1,34 +1,32 @@
 package main
 
-import (
- "runtime"
- "places.example/update/model"
-)
+use runtime;
+use model;
 
-func stock(t *model.Tree,text string)Result[int,error]{t.Count=parse(text)?;return Result[int,error]::Ok(t.Count)}
-func stockFields(t *model.Tree,n uint,text string)Result[int,error]{t.Wide,t.Enabled,t.Values[0]=1<<n,n==63&&parse(text)?==7,7;return Result[int,error]::Ok(t.Values[0])}
-func replaceDeep(t *model.Tree)Result[int,error]{model.Replace(t,99);return Result[int,error]::Ok(7)}
-func replaceDuringRHS(t *model.Tree)Result[int,error]{t.Count=replaceDeep(t)?;return Result[int,error]::Ok(t.Count)}
-func replaceDuringWrite(t *model.Tree)Result[int,error]{*model.LeafSlot(t),t.Count=model.NewLeaf(99),parse("7")?;return Result[int,error]::Ok(t.Count)}
-func replaceRoot(t **model.Tree)Result[int,error]{next:=model.NewTree(99);*t=&next;return Result[int,error]::Ok(7)}
-func replaceRootRHS(t **model.Tree)Result[int,error]{(*t).Count=replaceRoot(t)?;return Result[int,error]::Ok(1)}
-func writeThenNil(first *int,t *model.Tree,text string)Result[int,error]{*first,t.Count=5,parse(text)?;return Result[int,error]::Ok(1)}
-func compoundPrivate(t *model.Tree)Result[int,error]{t.Wide<<=model.Count(parse("1")?)+model.Count(parse("1")?);return Result[int,error]::Ok(int(t.Wide))}
+func stock(t *model::Tree,text string)Result[int,error]{t.Count=parse(text)?;return Result[int,error]::Ok(t.Count)}
+func stockFields(t *model::Tree,n uint,text string)Result[int,error]{t.Wide,t.Enabled,t.Values[0]=1<<n,n==63&&parse(text)?==7,7;return Result[int,error]::Ok(t.Values[0])}
+func replaceDeep(t *model::Tree)Result[int,error]{model::Replace(t,99);return Result[int,error]::Ok(7)}
+func replaceDuringRHS(t *model::Tree)Result[int,error]{t.Count=replaceDeep(t)?;return Result[int,error]::Ok(t.Count)}
+func replaceDuringWrite(t *model::Tree)Result[int,error]{*model::LeafSlot(t),t.Count=model::NewLeaf(99),parse("7")?;return Result[int,error]::Ok(t.Count)}
+func replaceRoot(t **model::Tree)Result[int,error]{next:=model::NewTree(99);*t=&next;return Result[int,error]::Ok(7)}
+func replaceRootRHS(t **model::Tree)Result[int,error]{(*t).Count=replaceRoot(t)?;return Result[int,error]::Ok(1)}
+func writeThenNil(first *int,t *model::Tree,text string)Result[int,error]{*first,t.Count=5,parse(text)?;return Result[int,error]::Ok(1)}
+func compoundPrivate(t *model::Tree)Result[int,error]{t.Wide<<=model::Count(parse("1")?)+model::Count(parse("1")?);return Result[int,error]::Ok(int(t.Wide))}
 func originalRecover(v any)int{if v=="original"{return 40};return 0}
-func deferredRecover(t *model.Tree,text string)Result[int,error]{t.Count=parse(text)?+originalRecover(recover());return Result[int,error]::Ok(t.Count)}
-func namedFailure(t *model.Tree,text string)(out Result[int,error]){defer func(){out=Result[int,error]::Ok(77)}();t.Count=parse(text)?;return Result[int,error]::Ok(1)}
-func blankFailure(t *model.Tree)(_ Result[int,error]){t.Count=parse("bad")?;return}
-func panicInput(kind int)Result[int,error]{if kind==0{panic("user")};if kind==1{panic(nil)};runtime.Goexit();return Result[int,error]::Ok(0)}
-func deferredBehavior(t *model.Tree,kind int,trace *[]string)(out Result[int,error]){defer func(){_=recover();*trace=append(*trace,"defer");out=Result[int,error]::Ok(77)}();t.Count=panicInput(kind)?;*trace=append(*trace,"after");return Result[int,error]::Ok(1)}
-func optionPrivate(t *model.Tree,ok bool)Option[int]{v:=Option[int]::None;if ok{v=Option[int]::Some(8)};t.Count=v?;return Option[int]::Some(t.Count)}
+func deferredRecover(t *model::Tree,text string)Result[int,error]{t.Count=parse(text)?+originalRecover(recover());return Result[int,error]::Ok(t.Count)}
+func namedFailure(t *model::Tree,text string)(out Result[int,error]){defer func(){out=Result[int,error]::Ok(77)}();t.Count=parse(text)?;return Result[int,error]::Ok(1)}
+func blankFailure(t *model::Tree)(_ Result[int,error]){t.Count=parse("bad")?;return}
+func panicInput(kind int)Result[int,error]{if kind==0{panic("user")};if kind==1{panic(nil)};runtime::Goexit();return Result[int,error]::Ok(0)}
+func deferredBehavior(t *model::Tree,kind int,trace *[]string)(out Result[int,error]){defer func(){_=recover();*trace=append(*trace,"defer");out=Result[int,error]::Ok(77)}();t.Count=panicInput(kind)?;*trace=append(*trace,"after");return Result[int,error]::Ok(1)}
+func optionPrivate(t *model::Tree,ok bool)Option[int]{v:=Option[int]::None;if ok{v=Option[int]::Some(8)};t.Count=v?;return Option[int]::Some(t.Count)}
 func optionNumber(v Option[int])int{match v{Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
-func questionTree(t *model.Tree,ok bool)Result[*model.Tree,error]{if !ok{return Result[*model.Tree,error]::Err(parseError())};return Result[*model.Tree,error]::Ok(t)}
+func questionTree(t *model::Tree,ok bool)Result[*model::Tree,error]{if !ok{return Result[*model::Tree,error]::Err(parseError())};return Result[*model::Tree,error]::Ok(t)}
 func parseError()error{_,e:=unpack(parse("bad"));return e}
-func privateLHS(t *model.Tree,ok bool)Result[int,error]{questionTree(t,ok)?.Values[parse("0")?]=parse("8")?;return Result[int,error]::Ok(t.Values[0])}
-func repeatedGuards(t *model.Tree,seen *any)Result[int,error]{t.Count=parse("1")?;defer func(){*seen=recover()}();t.Count=parse("bad")?;return Result[int,error]::Ok(9)}
-func nestedPrivate(t *model.Tree)Result[int,error]{inner:=func()Option[int]{t.Count=Option[int]::None?;return Option[int]::Some(0)};if optionNumber(inner())!=-1{panic("closure target")};t.Count=parse("9")?;return Result[int,error]::Ok(t.Count)}
-func privateAliases()Result[int,error]{tree:=model.NewTree(3);var r &model.Tree=&tree;var w mut&model.Tree=mut&tree;w.Count=parse("9")?;return Result[int,error]::Ok(r.Count)}
-func invalidPrivate(t *model.Tree)Result[int,error]{var broken Result[int,error];t.Count=broken?;return Result[int,error]::Ok(0)}
-func shadowResult(t *model.Tree)(out Result[int,error]){{out:=1;_=out;t.Count=parse("bad")?};return Result[int,error]::Ok(2)}
-func privateGoto(t *model.Tree,skip bool)Result[int,error]{if skip{goto Done};t.Count=parse("7")?;Done:return Result[int,error]::Ok(t.Count)}
-func blockClosure(t *model.Tree)Result[int,error]{if true{inner:=func()Option[int]{t.Count=Option[int]::None?;return Option[int]::Some(1)};_=inner()};return Result[int,error]::Ok(t.Count)}
+func privateLHS(t *model::Tree,ok bool)Result[int,error]{questionTree(t,ok)?.Values[parse("0")?]=parse("8")?;return Result[int,error]::Ok(t.Values[0])}
+func repeatedGuards(t *model::Tree,seen *any)Result[int,error]{t.Count=parse("1")?;defer func(){*seen=recover()}();t.Count=parse("bad")?;return Result[int,error]::Ok(9)}
+func nestedPrivate(t *model::Tree)Result[int,error]{inner:=func()Option[int]{t.Count=Option[int]::None?;return Option[int]::Some(0)};if optionNumber(inner())!=-1{panic("closure target")};t.Count=parse("9")?;return Result[int,error]::Ok(t.Count)}
+func privateAliases()Result[int,error]{tree:=model::NewTree(3);var r &model::Tree=&tree;var w mut&model::Tree=mut&tree;w.Count=parse("9")?;return Result[int,error]::Ok(r.Count)}
+func invalidPrivate(t *model::Tree)Result[int,error]{var broken Result[int,error];t.Count=broken?;return Result[int,error]::Ok(0)}
+func shadowResult(t *model::Tree)(out Result[int,error]){{out:=1;_=out;t.Count=parse("bad")?};return Result[int,error]::Ok(2)}
+func privateGoto(t *model::Tree,skip bool)Result[int,error]{if skip{goto Done};t.Count=parse("7")?;Done:return Result[int,error]::Ok(t.Count)}
+func blockClosure(t *model::Tree)Result[int,error]{if true{inner:=func()Option[int]{t.Count=Option[int]::None?;return Option[int]::Some(1)};_=inner()};return Result[int,error]::Ok(t.Count)}

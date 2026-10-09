@@ -45,24 +45,25 @@ func TestPrivateRangeIntegerContext(t *testing.T){tree:=model.NewTree(3);r:=__go
 func privateAssignmentNegatives(t *testing.T, cli, outside string) {
 	t.Helper()
 	for name, body := range map[string]string{
-		"tuple-mixed-rhs":      `func pair(n int)(int,int){return n,n};func f(r *dep.Tree)Option[int]{r.X,r.A[0]=pair(Option[int]::Some(1)?),2;return Option[int]::None}`,
-		"tuple-wrong-arity":    `func pair(n int)(int,int,int){return n,n,n};func f(r *dep.Tree)Option[int]{r.X,r.A[0]=pair(Option[int]::Some(1)?);return Option[int]::None}`,
-		"tuple-extra-argument": `func pair(n int)(int,int){return n,n};func take(a,b,c int)(int,int){return a,b};func f(r *dep.Tree)Option[int]{r.X,r.A[0]=take(pair(Option[int]::Some(1)?),2);return Option[int]::None}`,
+		"tuple-mixed-rhs":      `func pair(n int)(int,int){return n,n};func f(r *dep::Tree)Option[int]{r.X,r.A[0]=pair(Option[int]::Some(1)?),2;return Option[int]::None}`,
+		"tuple-wrong-arity":    `func pair(n int)(int,int,int){return n,n,n};func f(r *dep::Tree)Option[int]{r.X,r.A[0]=pair(Option[int]::Some(1)?);return Option[int]::None}`,
+		"tuple-extra-argument": `func pair(n int)(int,int){return n,n};func take(a,b,c int)(int,int){return a,b};func f(r *dep::Tree)Option[int]{r.X,r.A[0]=take(pair(Option[int]::Some(1)?),2);return Option[int]::None}`,
 
-		"readonly-field":        `func f(r &dep.Tree)Option[int]{r.X=Option[int]::Some(1)?;return Option[int]::None}`,
-		"readonly-array":        `func f(r &dep.Tree)Option[int]{r.A[0]=Option[int]::Some(1)?;return Option[int]::None}`,
-		"outer-bare-return":     `func f(r *dep.Tree)Option[int]{if true{r.X=Option[int]::Some(1)?};return}`,
-		"bare-return":           `func f(r *dep.Tree)Option[int]{r.X=Option[int]::Some(1)?;return}`,
-		"type-mismatch":         `func f(r *dep.Tree)Option[int]{r.X=Option[string]::Some("a")?;return Option[int]::None}`,
-		"measure-duplicate-key": `func f(r *dep.Tree)Option[int]{r.X=len([2]int{0:Option[int]::Some(1)?,0:2});return Option[int]::None}`,
-		"mixed-not-addressable": `func f(r *dep.Tree)Option[int]{r.X,r.Value().N=1,Option[int]::Some(1)?;return Option[int]::None}`,
-		"not-addressable":       `func f(r *dep.Tree)Option[int]{r.Value().N=Option[int]::Some(1)?;return Option[int]::None}`,
+		"readonly-field":        `func f(r &dep::Tree)Option[int]{r.X=Option[int]::Some(1)?;return Option[int]::None}`,
+		"readonly-array":        `func f(r &dep::Tree)Option[int]{r.A[0]=Option[int]::Some(1)?;return Option[int]::None}`,
+		"outer-bare-return":     `func f(r *dep::Tree)Option[int]{if true{r.X=Option[int]::Some(1)?};return}`,
+		"bare-return":           `func f(r *dep::Tree)Option[int]{r.X=Option[int]::Some(1)?;return}`,
+		"type-mismatch":         `func f(r *dep::Tree)Option[int]{r.X=Option[string]::Some("a")?;return Option[int]::None}`,
+		"measure-duplicate-key": `func f(r *dep::Tree)Option[int]{r.X=len([2]int{0:Option[int]::Some(1)?,0:2});return Option[int]::None}`,
+		"mixed-not-addressable": `func f(r *dep::Tree)Option[int]{r.X,r.Value().N=1,Option[int]::Some(1)?;return Option[int]::None}`,
+		"not-addressable":       `func f(r *dep::Tree)Option[int]{r.Value().N=Option[int]::Some(1)?;return Option[int]::None}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			src := t.TempDir()
 			packagesWrite(t, src, "go.mod", "module private.example/fixture\n\ngo 1.27\n")
+			writeAcceptanceFixtureRoots(t, src, "private.example/fixture", map[string]string{"dep": "private.example/fixture/dep"})
 			packagesWrite(t, src, "dep/dep.go", `package dep;type inner struct{X int;A [2]int};type Tree struct{*inner};type V struct{N int};func(*Tree)Value()V{return V{}}`)
-			packagesWrite(t, src, "main.gox", `package fixture;import "private.example/fixture/dep";`+body)
+			packagesWrite(t, src, "main.gox", `package fixture;use dep;`+body)
 			got := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), src)
 			if !strings.Contains(got, "main.gox") {
 				t.Fatalf("located rejection: %s", got)

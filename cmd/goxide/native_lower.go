@@ -132,7 +132,11 @@ func lowerNativeView(ctx context.Context, w *project.Workspace, g *project.Graph
 			features[f] = n.Features[f]
 		}
 		config := project.Digest([]any{"native-enhanced-v1", g.PlanID, n.Manifest, project.Keys(n.Features), target, targetKind, race, artifact.Digest, projectCompilerID()})
-		options := frontend.ModuleOptions{WorkspaceFile: filepath.Join(bundle, "go.work"), ModuleMode: project.NativeMode(w), Context: ctx, Environment: project.NativeGoEnv(filepath.Join(bundle, "go.work"), true), SourceModuleRoot: n.Root, SourceModuleFile: mod, ManagedOutputRoot: layout.Root, Features: features, Race: race, OnlyTarget: true, EntryFiles: files, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files, Configuration: config}
+		roots, e := projectRoots(n)
+		if e != nil {
+			return "", e
+		}
+		options := frontend.ModuleOptions{WorkspaceFile: filepath.Join(bundle, "go.work"), ModuleMode: project.NativeMode(w), Context: ctx, Environment: project.NativeGoEnv(filepath.Join(bundle, "go.work"), true), SourceModuleRoot: n.Root, SourceModuleFile: mod, ManagedOutputRoot: layout.Root, Features: features, Race: race, OnlyTarget: true, EntryFiles: files, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files, Configuration: config, Roots: roots}
 		options.Prepare = func(dir string) error {
 			if e := os.WriteFile(filepath.Join(dir, "go.mod"), mod, 0644); e != nil {
 				return e

@@ -150,6 +150,15 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 			return fmt.Errorf("native workspace rejects member vendor: %s", module)
 		}
 		for alias, d := range m.Dependencies {
+			if d.IsToolchain() {
+				continue
+			}
+			if _, member := w.Members[d.Module]; !member {
+				if e := validateNativeExternalDependency(m, alias, d); e != nil {
+					return e
+				}
+				continue
+			}
 			if d.Git != "" || d.Version != "" || d.Path == "" {
 				return fmt.Errorf("native workspace dependency %s must be an explicit member path", alias)
 			}
@@ -164,12 +173,42 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 				return e
 			}
 		}
+		// Validate dormant forwarding too. External mappings name fixed native
+		// artifacts; they never join the member feature-resolution graph.
+		_, requests, e := Resolve(m, keys(m.Features), false)
+		if e != nil {
+			return e
+		}
+		for alias, request := range requests {
+			d := m.Dependencies[alias]
+			if _, member := w.Members[d.Module]; !member && !d.IsToolchain() && len(request.Features) != 0 {
+				return fmt.Errorf("native workspace dependency %s: external Go artifacts cannot receive feature requests", alias)
+			}
+		}
 		allowed[module] = true
 		state[module] = 2
 		return nil
 	}
 	e := visit(module)
 	return allowed, e
+}
+
+// An external namespace only exposes an existing native requirement. Go's
+// policy remains authoritative for versions and replacement/source selection;
+// this mapping must not add a second version or an independent source policy.
+func validateNativeExternalDependency(m Manifest, alias string, d Dependency) error {
+	if d.Version == "" || d.Path != "" || d.Git != "" || d.Rev != "" || d.Subdir != "" {
+		return fmt.Errorf("native workspace dependency %s: external roots require a version matching go.require; configure sources with go.replace", alias)
+	}
+	if len(d.Features) != 0 {
+		return fmt.Errorf("native workspace dependency %s: external Go artifacts cannot receive feature requests", alias)
+	}
+	for _, requirement := range m.Native.Require {
+		if requirement.Module == d.Module && requirement.Version == d.Version {
+			return nil
+		}
+	}
+	return fmt.Errorf("native workspace dependency %s: module/version must match this member's go.require for %s@%s", alias, d.Module, d.Version)
 }
 
 // CopyNativeSource never follows symlinks or enters nested module/managed trees.

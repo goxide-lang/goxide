@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
@@ -24,6 +25,14 @@ func TestCrossModuleReferenceArtifacts(t *testing.T) {
 		}
 		return s
 	}
+	writeRoots := func(dir string) {
+		writeAcceptanceRoots(t, dir, map[string]rootconfig.Mapping{
+			"api":   {Module: "library.example/refs", Package: "library.example/refs/api"},
+			"relay": {Module: "library.example/refs", Package: "library.example/refs/relay"},
+			"model": {Module: "library.example/refs", Package: "library.example/refs/model"},
+			"app":   {Module: "consumer.example/app", Package: "consumer.example/app"},
+		})
+	}
 	const api = `package api
 type Cell struct{N int}
 func Read(p &int)int{return *p}
@@ -37,6 +46,7 @@ func CellView(p &Cell)&Cell{return p}
 	makeLibrary := func(relay, drift bool) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", module("library.example/refs", ""))
+		writeRoots(dir)
 		src := api
 		if drift {
 			src = strings.Replace(src, "func Read(p &int)int{return *p}", "func Read(p mut& int)int{*p+=1;return *p}", 1)
@@ -46,13 +56,13 @@ func CellView(p &Cell)&Cell{return p}
 		packagesWrite(t, dir, "api/native_extra.go", "//go:build extra\n\npackage api\nfunc Native()int{return 2}\n")
 		if relay {
 			packagesWrite(t, dir, "relay/relay.gox", `package relay
-import a "library.example/refs/api"
-type Cell=a.Cell
-func Global()&int{return a.Global()}
-func Read(p &int)int{return a.Read(p)}
-func View(p &int)&int{return a.View(p)}
-func Edit(p mut& int)mut& int{return a.Edit(p)}
-func CellView(p &Cell)&Cell{return a.CellView(p)}
+use api as a;
+type Cell=a::Cell
+func Global()&int{return a::Global()}
+func Read(p &int)int{return a::Read(p)}
+func View(p &int)&int{return a::View(p)}
+func Edit(p mut& int)mut& int{return a::Edit(p)}
+func CellView(p &Cell)&Cell{return a::CellView(p)}
 `)
 		}
 		return dir
@@ -93,16 +103,17 @@ func CellView(p &Cell)&Cell{return a.CellView(p)}
 	makeApp := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", module("consumer.example/app", library))
-		packagesWrite(t, dir, "app.gox", "package app\nimport r \"library.example/refs/relay\"\n"+body)
+		writeRoots(dir)
+		packagesWrite(t, dir, "app.gox", "package app\nuse relay as r;\n"+body)
 		return dir
 	}
-	body := `import a "library.example/refs/api"
-func Run()int{n:=1;w:=r.Edit(mut& n);*w+=2;a.Inc(w);c:=a.Cell{N:5};v:=r.CellView(&c);c.N=7;return r.Read(&n)+v.N}
-func Again(p &int)&int{return r.View(p)}
+	body := `use api as a;
+func Run()int{n:=1;w:=r::Edit(mut& n);*w+=2;a::Inc(w);c:=a::Cell{N:5};v:=r::CellView(&c);c.N=7;return r::Read(&n)+v.N}
+func Again(p &int)&int{return r::View(p)}
 `
 	appSource := makeApp(body)
-	packagesWrite(t, appSource, "extra.gox", "package app\nimport renamed \"library.example/refs/api\"\nfunc Extra()int{n:=2;renamed.Inc(mut& n);return renamed.Read(&n)}\n")
-	packagesWrite(t, appSource, "client/client.gox", "package client\nimport app \"consumer.example/app\"\nfunc Read()int{n:=8;return *app.Again(&n)}\n")
+	packagesWrite(t, appSource, "extra.gox", "package app\nuse api as renamed;\nfunc Extra()int{n:=2;renamed::Inc(mut& n);return renamed::Read(&n)}\n")
+	packagesWrite(t, appSource, "client/client.gox", "package client\nuse app;\nfunc Read()int{n:=8;return *app::Again(&n)}\n")
 	app := filepath.Join(t.TempDir(), "app")
 	packagesCommand(t, root, cli, true, "transpile", "-o", app, appSource)
 	appTwice := filepath.Join(t.TempDir(), "app")
@@ -133,11 +144,11 @@ func TestGoIgnoresGoxidePermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.R
 	packagesCommand(t, plain, tool, true, "test", "-race", "-count=1", "-v", "./...")
 	packagesCommand(t, plain, tool, true, "vet", "./...")
 	for name, bad := range map[string]string{
-		"readonly-return-only": `func Bad(){p:=r.Global();*p=9}`,
-		"readonly-write":       `func Bad(){n:=1;p:=r.View(&n);*p=9}`,
-		"readonly-upgrade":     `func Bad(){n:=1;p:=r.View(&n);_=r.Edit(p)}`,
-		"readonly-field":       `func Bad(){c:=r.Cell{N:1};p:=r.CellView(&c);p.N=9}`,
-		"readonly-interface":   `func Bad(){n:=1;p:=r.View(&n);var x any=p;_=x}`,
+		"readonly-return-only": `func Bad(){p:=r::Global();*p=9}`,
+		"readonly-write":       `func Bad(){n:=1;p:=r::View(&n);*p=9}`,
+		"readonly-upgrade":     `func Bad(){n:=1;p:=r::View(&n);_=r::Edit(p)}`,
+		"readonly-field":       `func Bad(){c:=r::Cell{N:1};p:=r::CellView(&c);p.N=9}`,
+		"readonly-interface":   `func Bad(){n:=1;p:=r::View(&n);var x any=p;_=x}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := makeApp(bad)
@@ -148,7 +159,7 @@ func TestGoIgnoresGoxidePermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.R
 		})
 	}
 	t.Run("single-file-permissions", func(t *testing.T) {
-		good := makeApp("func Read()int{return *r.Global()}")
+		good := makeApp("func Read()int{return *r::Global()}")
 		out := filepath.Join(t.TempDir(), "read.go")
 		packagesCommand(t, root, cli, true, "transpile", "-o", out, filepath.Join(good, "app.gox"))
 		b, e := os.ReadFile(out)
@@ -158,13 +169,13 @@ func TestGoIgnoresGoxidePermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.R
 		if strings.Contains(string(b), "__goxide_permission_call_") {
 			t.Fatal("binding stub leaked")
 		}
-		bad := makeApp("func Bad(){p:=r.Global();*p=9}")
+		bad := makeApp("func Bad(){p:=r::Global();*p=9}")
 		diagnostic := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad.go"), filepath.Join(bad, "app.gox"))
 		if !strings.Contains(diagnostic, "readonly") {
 			t.Fatal(diagnostic)
 		}
 	})
-	valid := makeApp("func Read()int{n:=1;return r.Read(&n)}")
+	valid := makeApp("func Read()int{n:=1;return r::Read(&n)}")
 	metaPath := filepath.Join(library, "relay/.goxide.refs.json")
 	original, e := os.ReadFile(metaPath)
 	if e != nil {
@@ -289,19 +300,21 @@ func TestGoIgnoresGoxidePermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.R
 	t.Run("native-named-aggregate-drift", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", module("library.example/refs", ""))
+		writeRoots(source)
 		packagesWrite(t, source, "model/model.go", "package model\ntype Cell struct{N int}\nfunc Consume(c Cell){}\n")
 		packagesWrite(t, source, "relay/relay.gox", `package relay
-import n "library.example/refs/model"
-func Touch(p &n.Cell){v:=*p;n.Consume(v)}
+use model as n;
+func Touch(p &n::Cell){v:=*p;n::Consume(v)}
 `)
 		generated := filepath.Join(t.TempDir(), "library")
 		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
 		packagesWrite(t, generated, "model/model.go", "package model\ntype Cell struct{N int;Items []int}\nfunc Consume(c Cell){c.Items[0]=9}\n")
 		app := t.TempDir()
 		packagesWrite(t, app, "go.mod", module("consumer.example/app", generated))
+		writeRoots(app)
 		packagesWrite(t, app, "app.gox", `package app
-import(n "library.example/refs/model";r "library.example/refs/relay")
-func Run()int{c:=n.Cell{Items:[]int{1}};r.Touch(&c);return c.Items[0]}
+use model as n; use relay as r;
+func Run()int{c:=n::Cell{Items:[]int{1}};r::Touch(&c);return c.Items[0]}
 `)
 		out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), app)
 		if !strings.Contains(out, "dependency source closure changed: library.example/refs/model") {

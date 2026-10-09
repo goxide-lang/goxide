@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -59,7 +58,7 @@ func TestPropagationIfInitializerRejections(t *testing.T) {
 		"family": `func f()Option[int]{if n:=Result[int,error]::Ok(1)?;n>0{};return Option[int]::None}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("if_bad.gox", []byte("package fixture\n"+body))
+			_, err := compileAcceptanceLanguageFixture("if_bad.gox", []byte("package fixture\n"+body))
 			if err == nil || !strings.Contains(err.Error(), "if_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
@@ -77,12 +76,12 @@ func TestPropagationIfInstalledCLI(t *testing.T) {
 	outside := t.TempDir()
 	source := filepath.Join(root, "examples/prototype/if_propagation.gox")
 	generated := filepath.Join(outside, "main.go")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", generated, source)
 	want := "port 8080\ndisabled\ninvalid port\n"
 	if got := deliveryCommand(t, root, tool, true, nil, "run", "-race", generated); got != want {
 		t.Fatalf("generated output: %q", got)
 	}
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--runtime", root, "--go", tool, source); got != want {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "--runtime", root, "--go", tool, source); got != want {
 		t.Fatalf("CLI output: %q", got)
 	}
 }

@@ -1,6 +1,6 @@
 package main
 
-// The same alias belongs to a different import in main.gox.
-import util "strings"
+// The same alias belongs to a different namespace in main.gox.
+use strings as util;
 
-func title() string { return util.ToUpper("goxide") }
+func title() string { return util::ToUpper("goxide") }

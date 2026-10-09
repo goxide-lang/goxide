@@ -19,7 +19,7 @@ func nativeMemberInput(m Manifest, root string, locations map[string]string, loc
 	_ = json.Unmarshal(b, &normalized)
 	direct := map[string]string{}
 	for alias, d := range normalized.Dependencies {
-		if d.Path == "" {
+		if d.IsToolchain() || d.Path == "" {
 			continue
 		}
 		path := d.Path
@@ -74,6 +74,9 @@ func (g *Graph) input(n *Node) string {
 	}
 	locations := map[string]string{n.Module: n.Root}
 	for _, d := range n.Manifest.Dependencies {
+		if d.IsToolchain() {
+			continue
+		}
 		if _, known := g.Lock.NativeWorkspace.Members[d.Module]; !known || d.Path == "" {
 			continue
 		}

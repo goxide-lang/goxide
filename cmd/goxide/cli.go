@@ -74,6 +74,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.StringVar(&req.SourceMap, "source-map", "", "write single-file source mapping JSON")
 		f.StringVar(&req.Expanded, "expanded", "", "write single-file expanded Go source")
 		f.StringVar(&req.Runtime, "runtime", "", "Go module root selecting pinned public std/serde dependencies (standalone single-file run/build only)")
+		f.StringVar(&req.RootsFile, "roots", "", "explicit dependency namespace mapping file (native Go module or standalone source)")
 		f.StringVar(&req.Tags, "tags", "", "Go build tags (directory mode; comma/space separated)")
 		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (Go 1.27+; unused for single-file transpile/expand)")
 		f.StringArrayVarP(&req.Packages, "package", "p", nil, "select workspace member by module identity (repeatable)")
@@ -272,7 +273,7 @@ func executeCLI(c *cobra.Command, args []string) error {
 // Values and everything after the first operand/-- are deliberately opaque.
 var oldLongOptions = map[string]bool{
 	"go": true, "offline": true, "features": true, "source-map": true,
-	"expanded": true, "runtime": true, "tags": true, "no-default-features": true,
+	"expanded": true, "runtime": true, "roots": true, "tags": true, "no-default-features": true,
 	"bin": true, "example": true, "lib": true, "target-dir": true, "locked": true,
 	"action": true, "subject": true, "plan": true, "out": true, "help": true,
 	"source": true, "accept-source-diff": true,

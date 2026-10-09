@@ -13,6 +13,8 @@ Default 的字段约束、enum 默认变体规则与无 static 的关联函数�
 
 ## 源级规则
 
+当前序列化派生由 serde core 拥有：先 `use serde;`，再写 `#[derive(serde::Serialize, serde::Deserialize)]`。显式导入某一派生或改名后按 canonical owner 解析；缺失/错误 owner、JSON owner、同名普通类型均拒绝。旧全局裸名不再保留。见[静态路径合同](../design/static-paths.md)。
+
 最新 D28 补充确认：struct 自动 Default 必须每个字段有 Default，否则手动实现；enum 恰好标记一个默认变体，可以携带 payload，仅该变体的字段递归要求 Default，非默认变体不要求 Default。手动 Default 首期使用 `impl Default for T { func default() T { ... } }`，限同包本地非泛型 struct，具体边界见 [RFC 0020](0020-associated-functions.md#当前手动-default-实现子集)。
 
 - 按规范 trait 身份选择固定内建规则；只读目标类型形状和固定辅助属性。

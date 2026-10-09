@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/hxsf/goxide/internal/naming"
+	"github.com/hxsf/goxide/internal/paths"
 	"go/build"
+	"go/types"
 	"io"
 	"io/fs"
 	"os"
@@ -18,6 +20,7 @@ import (
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/project"
 	"github.com/hxsf/goxide/internal/refs"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
 
@@ -41,8 +44,9 @@ func CompileModuleWithTags(input, destination string, tags []string) (ModuleResu
 }
 
 type ModuleOptions struct {
-	WorkspaceFile string // Explicit planner-owned Go workspace; ambient GOWORK is ignored.
-	ModuleMode    string // -mod=readonly for the owned workspace.
+	Roots         paths.Roots // Explicit external namespaces, shared with single-file and WASM compilation.
+	WorkspaceFile string      // Explicit planner-owned Go workspace; ambient GOWORK is ignored.
+	ModuleMode    string      // -mod=readonly for the owned workspace.
 	// SourceModuleRoot/File are a trusted project-planner virtual Go module, never source directives.
 	SourceModuleRoot string
 	SourceModuleFile []byte
@@ -125,6 +129,12 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			return ModuleResult{}, fmt.Errorf("directory mode requires an existing go.mod")
 		}
 		root = parent
+	}
+	if options.Roots == nil {
+		options.Roots, err = rootconfig.Load(root)
+		if err != nil {
+			return ModuleResult{}, err
+		}
 	}
 	destination, err = canonicalOutput(destination)
 	if err != nil {
@@ -429,6 +439,14 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 	if relTarget == "." {
 		result.Target = "."
 	}
+	localPackages := map[string]bool{}
+	for dir := range packages {
+		p := modulePath
+		if dir != "." {
+			p += "/" + filepath.ToSlash(dir)
+		}
+		localPackages[p] = true
+	}
 	metadata := map[string]PackageResult{}
 	buildBudget := &macros.Budget{}
 	state := map[string]int{}
@@ -519,43 +537,60 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			}
 			outputOwners[output] = name
 		}
-		if options.Configuration != "" {
-			original := sortedSources(packages[dir])[0]
-			parsed, e := parseSourceImports(original, packages[dir][original])
-			if e != nil {
-				return e
-			}
-			file := filepath.Join(root, dir, "goxide_project_config.go")
-			output := filepath.Join(destination, dir, "goxide_project_config.go")
-			if _, exists := outputOwners[filepath.Join(dir, "goxide_project_config.go")]; exists {
+		configuredSources, configFile, e := packageConfigurationSources(packages[dir], options.Roots, options.Configuration, filepath.Join(root, dir, packageConfigurationFile))
+		if e != nil {
+			return e
+		}
+		if configFile != "" {
+			output := filepath.Join(destination, dir, packageConfigurationFile)
+			if _, exists := outputOwners[filepath.Join(dir, packageConfigurationFile)]; exists {
 				return fmt.Errorf("reserved project config filename conflicts: %s", output)
 			}
 			if _, e = os.Stat(output); !os.IsNotExist(e) {
 				return fmt.Errorf("reserved project config filename conflicts: %s", output)
 			}
-			data := []byte(fmt.Sprintf("package %s\nconst __goxide_project_configuration = %q\n", parsed.Name.Name, options.Configuration))
-			packages[dir][file] = data
-			sourceOutputs[file] = filepath.Join(dir, "goxide_project_config.go")
+			packages[dir] = configuredSources
+			sourceOutputs[configFile] = filepath.Join(dir, packageConfigurationFile)
 			if e = os.MkdirAll(filepath.Dir(output), 0755); e != nil {
 				return e
 			}
-			if e = os.WriteFile(output, data, 0644); e != nil {
+			if e = os.WriteFile(output, configuredSources[configFile], 0644); e != nil {
 				return e
 			}
 		}
+		pkgPath := modulePath
+		if dir != "." {
+			pkgPath += "/" + filepath.ToSlash(dir)
+		}
+		packageRoots, e := LocalDeclarations(pkgPath, packages[dir], options.Roots, localPackages, modulePath)
+		if e != nil {
+			return e
+		}
+		plans, e := PreparePackageSourcePaths(pkgPath, packages[dir], packageRoots, localPackages)
+		if e != nil {
+			return e
+		}
 		for _, name := range sortedSources(packages[dir]) {
 			source := packages[dir][name]
-			f, e := parseSourceImports(name, source)
-			if e != nil {
-				return e
+			var dependencies []string
+			if isGoxideInput(name) {
+				dependencies = plans[name].Imports
+			} else {
+				f, e := parseSourceImports(name, source)
+				if e != nil {
+					return e
+				}
+				for _, spec := range f.Imports {
+					dependency, _ := strconv.Unquote(spec.Path.Value)
+					dependencies = append(dependencies, dependency)
+				}
 			}
-			for _, spec := range f.Imports {
-				imp, _ := strconv.Unquote(spec.Path.Value)
+			for _, dependency := range dependencies {
 				dep := ""
-				if imp == modulePath {
+				if dependency == modulePath {
 					dep = "."
-				} else if strings.HasPrefix(imp, modulePath+"/") {
-					dep = filepath.FromSlash(strings.TrimPrefix(imp, modulePath+"/"))
+				} else if strings.HasPrefix(dependency, modulePath+"/") {
+					dep = filepath.FromSlash(strings.TrimPrefix(dependency, modulePath+"/"))
 				} else {
 					continue
 				}
@@ -566,12 +601,18 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 				}
 			}
 		}
-		pkgPath := modulePath
-		if dir != "." {
-			pkgPath += "/" + filepath.ToSlash(dir)
-		}
-		packageImporter := typecheck.NewImporterWithWorkspace(options.Context, filepath.Join(destination, dir, "package.go"), options.Tags, options.Race, options.Environment, options.WorkspaceFile, options.ModuleMode)
-		p, e := preparePackageContext(pkgPath, packages[dir], metadata, packageImporter, buildBudget)
+		baseImporter := typecheck.NewImporterWithWorkspace(options.Context, filepath.Join(destination, dir, "package.go"), options.Tags, options.Race, options.Environment, options.WorkspaceFile, options.ModuleMode)
+		var packageImporter types.Importer = selectedModuleImporter{base: baseImporter, prepare: func(dependency string) error {
+			if dependency == pkgPath || !localPackages[dependency] {
+				return nil
+			}
+			dep := "."
+			if dependency != modulePath {
+				dep = filepath.FromSlash(strings.TrimPrefix(dependency, modulePath+"/"))
+			}
+			return compileDir(dep)
+		}}
+		p, e := preparePackageContext(pkgPath, packages[dir], metadata, packageImporter, packageRoots, buildBudget)
 		if e != nil {
 			return e
 		}

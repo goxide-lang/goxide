@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,7 +14,7 @@ func TestPropagationTypeRangeRace(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := frontend.Compile("type_range.gox", source)
+	r, e := compileAcceptanceLanguageFixture("type_range.gox", source)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -52,14 +51,14 @@ func TestPropagationTypeRangeRejections(t *testing.T) {
 		"channel-sendonly":      `func f()Option[int]{for range Option[chan<- int]::None?{};return Option[int]::None}`,
 		"integer-two-vars":      `func f()Option[int]{for i,v:=range Option[int]::Some(3)?{_,_=i,v};return Option[int]::None}`,
 		"iterator-source":       `func f()Option[int]{for range Option[func(func(int)bool)]::None?{};return Option[int]::None}`,
-		"unevaluated-question":  `func f()Option[int]{for range [1]uintptr{unsafe.Sizeof(Option[int]::None?)}{};return Option[int]::None}`,
+		"unevaluated-question":  `func f()Option[int]{for range [1]uintptr{unsafe::Sizeof(Option[int]::None?)}{};return Option[int]::None}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			imports := ""
 			if name == "unevaluated-question" {
-				imports = `import "unsafe";`
+				imports = `use unsafe;;`
 			}
-			_, e := frontend.Compile("type_range_bad.gox", []byte("package fixture;"+imports+body))
+			_, e := compileAcceptanceLanguageFixture("type_range_bad.gox", []byte("package fixture;"+imports+body))
 			if e == nil || !strings.Contains(e.Error(), "type_range_bad.gox") {
 				t.Fatalf("expected located rejection: %v", e)
 			}
@@ -77,12 +76,12 @@ func TestPropagationTypeRangeInstalledCLI(t *testing.T) {
 	outside := t.TempDir()
 	source := filepath.Join(root, "examples/prototype/type_range_propagation.gox")
 	generated := filepath.Join(outside, "main.go")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", generated, source)
 	want := "14 [1 2 9]\n"
 	if got := deliveryCommand(t, root, tool, true, nil, "run", "-race", generated); got != want {
 		t.Fatalf("generated output %q", got)
 	}
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--runtime", root, "--go", tool, source); got != want {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "--runtime", root, "--go", tool, source); got != want {
 		t.Fatalf("CLI output %q", got)
 	}
 }

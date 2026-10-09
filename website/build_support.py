@@ -4,6 +4,25 @@ import hashlib
 import pathlib
 import subprocess
 import tempfile
+import tomllib
+
+
+DEPENDENCY_CONTEXT = 'cmd/goxide-playground/goxide.roots.toml'
+
+
+def dependency_context(root):
+    """Publish the project's explicit declarations, never infer source roots."""
+    content = (pathlib.Path(root) / DEPENDENCY_CONTEXT).read_bytes()
+    roots = tomllib.loads(content.decode('utf-8'))['roots']
+    bindings = []
+    for name, declaration in roots.items():
+        common = dict(module=declaration.get('module', ''), source=declaration.get('source', 'module'))
+        if declaration.get('package'):
+            bindings.append(dict(path=name, package=declaration['package'], **common))
+        for namespace, package in declaration.get('namespaces', {}).items():
+            bindings.append(dict(path=name + '::' + namespace, package=package, **common))
+    return dict(path=DEPENDENCY_CONTEXT, source=content.decode('utf-8'),
+                sha256=hashlib.sha256(content).hexdigest(), bindings=bindings)
 
 
 def dependency_sources(packages, records, *, goroot, toolchain_version, exports):
@@ -103,7 +122,7 @@ def standalone_playground(source):
 
 def is_compiler_source(name):
     path = pathlib.PurePosixPath(name)
-    if name in {"go.mod", "go.sum"}:
+    if name in {"go.mod", "go.sum", DEPENDENCY_CONTEXT}:
         return True
     if path.suffix != ".go" or path.name.endswith("_test.go"):
         return False
@@ -127,7 +146,7 @@ def verify_compiler_sources(root, pin, expected_digest):
     current = {
         path.relative_to(root).as_posix()
         for pattern in ("internal/**/*.go", "cmd/goxide/**/*.go", "cmd/goxide-playground/**/*.go",
-                        "go.mod", "go.sum")
+                        "go.mod", "go.sum", DEPENDENCY_CONTEXT)
         for path in root.glob(pattern)
         if path.is_file() and is_compiler_source(path.relative_to(root).as_posix())
     }

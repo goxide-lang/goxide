@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"bytes"
 	"fmt"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,6 +24,9 @@ func TestMacroFragmentCategoriesCLI(t *testing.T) {
 	t.Run("FC-06-09-caller-expressions-and-definition-bindings", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module fragments.example/app\ngo 1.27\n")
+		writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+			"ops": {Module: "fragments.example/app", Package: "fragments.example/app/ops"},
+		})
 		packagesWrite(t, source, "ops/macros.gox", `package ops
 func Helper(n int)int{return n+10}
 pub macro_rules! identity {($x:expr)=>{$x};}
@@ -35,30 +39,30 @@ pub macro_rules! value_case {($x:expr,$n:expr)=>{func()int{switch $x{case $n:ret
 pub macro_rules! typed {($x:expr)=>{func()int{var value int=$x;return value}()};}
 `)
 		packagesWrite(t, source, "main.gox", `package main
-import "fmt"
-import "reflect"
-import m "fragments.example/app/ops"
+use fmt;
+use reflect;
+use ops as m;
 func main(){
  type Local int
  calls:=0
  next:=func()int{calls++;return 3}
- values:=m.nested!(make([]Local,2))
+ values:=m::nested!(make([]Local,2))
  if len(values)!=2||values[0]!=0{panic("allocation")}
- if reflect.TypeOf(values).Elem().Name()!="Local"{panic("caller type")}
- n:=m.identity!(func(value Local)Local{return value}(Local(3)))
- a:=m.array!(len([2]Local{}))
+ if reflect::TypeOf(values).Elem().Name()!="Local"{panic("caller type")}
+ n:=m::identity!(func(value Local)Local{return value}(Local(3)))
+ a:=m::array!(len([2]Local{}))
  if len(a)!=2||n!=Local(3){panic("opaque type syntax")}
- if m.identity!(any(Local(4)).(Local))!=Local(4){panic("opaque assertion")}
+ if m::identity!(any(Local(4)).(Local))!=Local(4){panic("opaque assertion")}
  f:=func(n int)int{return n+1}
- if m.pointer_call!(&f,4)!=5||m.value_case!(3,3)!=7{panic("expression roles")}
- if m.typed!(next())!=3||calls!=1{panic("evaluation count")}
+ if m::pointer_call!(&f,4)!=5||m::value_case!(3,3)!=7{panic("expression roles")}
+ if m::typed!(next())!=3||calls!=1{panic("evaluation count")}
  Helper:=func(int)int{return -1};_=Helper
- if m.bound!(2)!=12{panic("definition binding")}
- {len:=func(string)int{return 90};if m.size!("abc")!=3||len("x")!=90{panic("local value binding")}}
- {type len int;if reflect.TypeOf(m.identity!(len(4))).Name()!="len"{panic("capture type identity")}}
- if m.size!("abcd")!=4{panic("unrelated type scope")}
- {make:=func()[]Local{calls++;return []Local{9}};if m.identity!(make())[0]!=9||calls!=2{panic("captured callee binding")}}
- fmt.Println("fragment categories and bindings ok")
+ if m::bound!(2)!=12{panic("definition binding")}
+ {len:=func(string)int{return 90};if m::size!("abc")!=3||len("x")!=90{panic("local value binding")}}
+ {type len int;if reflect::TypeOf(m::identity!(len(4))).Name()!="len"{panic("capture type identity")}}
+ if m::size!("abcd")!=4{panic("unrelated type scope")}
+ {make:=func()[]Local{calls++;return []Local{9}};if m::identity!(make())[0]!=9||calls!=2{panic("captured callee binding")}}
+ fmt::Println("fragment categories and bindings ok")
 }
 `)
 		first := filepath.Join(t.TempDir(), "generated")
@@ -127,6 +131,7 @@ func main(){
 			for _, ending := range []string{"LF", "CRLF"} {
 				t.Run(tc.name+"-"+ending, func(t *testing.T) {
 					source := t.TempDir()
+					writeMacroFixtureRoots(t, source, nil)
 					text := "package main\nmacro_rules! bad {($T:expr)=>{" + tc.template + "};}\nfunc main(){_=bad!(int)}\n"
 					if ending == "CRLF" {
 						text = strings.ReplaceAll(text, "\n", "\r\n")
@@ -152,8 +157,11 @@ func main(){
 			t.Run(fragment, func(t *testing.T) {
 				source := t.TempDir()
 				packagesWrite(t, source, "go.mod", "module fragments.example/rejected\ngo 1.27\n")
+				writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+					"ops": {Module: "fragments.example/rejected", Package: "fragments.example/rejected/ops"},
+				})
 				packagesWrite(t, source, "ops/macros.gox", fmt.Sprintf("package ops\nmacro_rules! inner {($T:%s)=>{func()int{var value $T;_=value;return 0}()};}\npub macro_rules! outer {($T:%s)=>{inner!($T)};}\n", fragment, fragment))
-				packagesWrite(t, source, "main.gox", "package main\nimport m \"fragments.example/rejected/ops\"\nfunc main(){_=m.outer!(int)}\n")
+				packagesWrite(t, source, "main.gox", "package main\nuse ops as m;\nfunc main(){_=m::outer!(int)}\n")
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
 				for _, want := range []string{"macro type position does not support captured syntax", "ops/macros.gox:2:", "macro inner defined at", "macro outer defined at", "main.gox:3:"} {
 					if !strings.Contains(output, want) {
@@ -167,6 +175,7 @@ func main(){
 	t.Run("named-type-and-alias-boundary", func(t *testing.T) {
 		for _, declaration := range []string{"type len int", "type len = int"} {
 			source := t.TempDir()
+			writeMacroFixtureRoots(t, source, nil)
 			packagesWrite(t, source, "bad.gox", "package main\nmacro_rules! size {($x:expr)=>{len($x)};}\nfunc main(){"+declaration+";var n len;_=n;_=size!(\"abc\")}\n")
 			output := deliveryCommand(t, outside, cli, false, nil, "transpile", filepath.Join(source, "bad.gox"))
 			if !strings.Contains(output, "local named type") || !strings.Contains(output, "macro size defined at") {
@@ -182,6 +191,7 @@ func main(){
 		for _, fragment := range []string{"expr", "ident", "tt"} {
 			t.Run(fragment, func(t *testing.T) {
 				source := t.TempDir()
+				writeMacroFixtureRoots(t, source, nil)
 				packagesWrite(t, source, "go.mod", "module fragments.example/generic\ngo 1.27\n")
 				packagesWrite(t, source, "helper.go", helper)
 				packagesWrite(t, source, "main.gox", fmt.Sprintf("package main\nmacro_rules! bad {($f:ident,$A:%s,$B:%s)=>{$f[$A,$B](7,\"x\")};}\nfunc main(){_=bad!(Pair,int,string)}\n", fragment, fragment))
@@ -194,13 +204,14 @@ func main(){
 			})
 		}
 		source := t.TempDir()
+		writeMacroFixtureRoots(t, source, nil)
 		packagesWrite(t, source, "go.mod", "module fragments.example/generic\ngo 1.27\n")
 		packagesWrite(t, source, "helper.go", helper)
 		packagesWrite(t, source, "main.gox", `package main
-import "fmt"
+use fmt;
 macro_rules! keep {($x:expr)=>{$x};}
 macro_rules! invoke {($f:expr,$a:expr,$b:expr)=>{$f($a,$b)};}
-func main(){fmt.Println(keep!(Pair[int,string](7,"x")));fmt.Println(invoke!(Pair[int,string],9,"y"))}
+func main(){fmt::Println(keep!(Pair[int,string](7,"x")));fmt::Println(invoke!(Pair[int,string],9,"y"))}
 `)
 		generated := filepath.Join(t.TempDir(), "generated")
 		deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)

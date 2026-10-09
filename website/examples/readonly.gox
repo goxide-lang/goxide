@@ -1,6 +1,6 @@
 package main
 
-import "fmt"
+use fmt;
 
 func makeCounter() mut& int {
     value := 4
@@ -17,5 +17,5 @@ func main() {
     snapshot := read(view)
     snapshot += 100
     increment(counter)
-    fmt.Println("shared:", read(view), "snapshot:", snapshot)
+    fmt::Println("shared:", read(view), "snapshot:", snapshot)
 }

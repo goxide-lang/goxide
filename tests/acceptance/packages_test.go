@@ -68,16 +68,17 @@ func TestPackagesApplication(t *testing.T) {
 			files                  map[string]string
 		}{
 			{"cross-file-type-error", "package main\nfunc main() { var n int = Shared; _ = n }\n", "bad.gox", 2, map[string]string{"shared.gox": "package main\nvar Shared = \"wrong\"\n"}},
-			{"imports-are-file-scoped", "package main\nfunc main() { fmt.Println(1) }\n", "bad.gox", 2, map[string]string{"other.gox": "package main\nimport \"fmt\"\nfunc other() { fmt.Println(2) }\n"}},
-			{"private-function", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { cfg.hidden() }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nfunc hidden() {}\n"}},
-			{"private-enum", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { var value cfg.secret; _ = value }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nenum secret { Idle, }\n"}},
-			{"nominal-enums", "package main\nimport cfg \"packages.example/app/model\"\npub enum Mode { Idle, }\nfunc main() { var local Mode; cfg.Accept(local) }\n", "bad.gox", 4, map[string]string{"model/model.gox": "package model\npub enum Mode { Idle, }\nfunc Accept(value Mode) {}\n"}},
-			{"cross-package-macro", "package main\nimport cfg \"packages.example/app/model\"\nfunc main() { cfg.identity!(1) }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nmacro_rules! identity { ($value:expr) => { $value }; }\n"}},
+			{"uses-are-file-scoped", "package main\nfunc main() { printing::Println(1) }\n", "bad.gox", 2, map[string]string{"other.gox": "package main\nuse fmt as printing;\nfunc other() { printing::Println(2) }\n"}},
+			{"private-function", "package main\nuse model as cfg;\nfunc main() { cfg::hidden() }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nfunc hidden() {}\n"}},
+			{"private-enum", "package main\nuse model as cfg;\nfunc main() { var value cfg::secret; _ = value }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nenum secret { Idle, }\n"}},
+			{"nominal-enums", "package main\nuse model as cfg;\npub enum Mode { Idle, }\nfunc main() { var local Mode; cfg::Accept(local) }\n", "bad.gox", 4, map[string]string{"model/model.gox": "package model\npub enum Mode { Idle, }\nfunc Accept(value Mode) {}\n"}},
+			{"cross-package-macro", "package main\nuse model as cfg;\nfunc main() { cfg::identity!(1) }\n", "bad.gox", 3, map[string]string{"model/model.gox": "package model\nmacro_rules! identity { ($value:expr) => { $value }; }\n"}},
 		}
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {
 				source := t.TempDir()
 				packagesWrite(t, source, "go.mod", packagesModule())
+				writeAcceptanceFixtureRoots(t, source, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 				packagesWrite(t, source, test.filename, test.source)
 				for name, data := range test.files {
 					packagesWrite(t, source, name, data)

@@ -5,8 +5,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 func TestPropagationValueContextsRace(t *testing.T) {
@@ -75,9 +73,9 @@ func nestedValues(trace *[]string)Result[string,error]{
  a,b:=optionInt(f()),load(true,trace)?
  if a!=-1||b!=4{panic("closure target")};return Result[string,error]::Ok("done")
 }
-func pointer(ok bool,trace *[]string)Result[*int,error]{*trace=append(*trace,"pointer");if !ok{return Result[*int,error]::Err(errors.New("pointer failed"))};return Result[*int,error]::Ok(&beyond)}
+func pointer(ok bool,trace *[]string)Result[*int,error]{*trace=append(*trace,"pointer");if !ok{return Result[*int,error]::Err(errors::New("pointer failed"))};return Result[*int,error]::Ok(&beyond)}
 func dereferenced(ok bool,trace *[]string)Result[int,error]{return Result[int,error]::Ok(*pointer(ok,trace)?)}
-func boxed(ok bool,trace *[]string)Result[any,error]{*trace=append(*trace,"boxed");if !ok{return Result[any,error]::Err(errors.New("box failed"))};return Result[any,error]::Ok(23)}
+func boxed(ok bool,trace *[]string)Result[any,error]{*trace=append(*trace,"boxed");if !ok{return Result[any,error]::Err(errors::New("box failed"))};return Result[any,error]::Ok(23)}
 func asserted(ok bool,trace *[]string)Result[int,error]{return Result[int,error]::Ok(boxed(ok,trace)?.(int))}
 func checkedAssertion(trace *[]string)Result[int,error]{v,ok:=boxed(true,trace)?.(string);if ok||v!=""{panic("comma ok")};return Result[int,error]::Ok(5)}
 func panickingAssertion(trace *[]string)Result[int,error]{v:=boxed(true,trace)?.(string);return Result[int,error]::Ok(len(v))}
@@ -85,7 +83,7 @@ func nilPointer()Option[int]{v:=*Option[*int]::Some(nil)?;return Option[int]::So
 func intResult(v Result[int,error])int{match v{Result[int,error]::Ok(n)=>{return n},Result[int,error]::Err(_)=>{return -1},};panic("unreachable")}
 func sendChannel(ch chan int,trace *[]string)chan int{*trace=append(*trace,"channel");return ch}
 func sendValue(ok bool,ch chan int,trace *[]string)Result[string,error]{defer func(){*trace=append(*trace,"cleanup")}();sendChannel(ch,trace)<-load(ok,trace)?;return Result[string,error]::Ok("sent")}
-func channelResult(ok bool,ch chan int,trace *[]string)Result[chan int,error]{*trace=append(*trace,"channel-result");if !ok{return Result[chan int,error]::Err(errors.New("channel failed"))};return Result[chan int,error]::Ok(ch)}
+func channelResult(ok bool,ch chan int,trace *[]string)Result[chan int,error]{*trace=append(*trace,"channel-result");if !ok{return Result[chan int,error]::Err(errors::New("channel failed"))};return Result[chan int,error]::Ok(ch)}
 func rebindDuringValue(ch *chan int,next chan int)Option[int]{*ch=next;return Option[int]::Some(8)}
 func sendCaptured(ch *chan int,next chan int)Option[int]{*ch<-rebindDuringValue(ch,next)?;return Option[int]::Some(1)}
 func sendBoth(channelOK,valueOK bool,ch chan int,trace *[]string)Result[string,error]{channelResult(channelOK,ch,trace)?<-load(valueOK,trace)?;return Result[string,error]::Ok("sent")}
@@ -130,7 +128,7 @@ func TestPropagationValueContextRejections(t *testing.T) {
 		"bad-dereference": `func f()Option[int]{v:=*Option[int]::Some(1)?;return Option[int]::Some(v)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("value_bad.gox", []byte("package fixture\n"+source))
+			_, err := compileAcceptanceLanguageFixture("value_bad.gox", []byte("package fixture\n"+source))
 			if err == nil || !strings.Contains(err.Error(), "value_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}

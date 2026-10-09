@@ -2,7 +2,6 @@ package acceptance_test
 
 import (
 	"errors"
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"strings"
 	"testing"
@@ -27,7 +26,7 @@ func run()Option[int]{
 }
 func expression(s State)int{return match s {State::Ready(v)=>outer!(771)+v, State::Empty=>771}}
 `
-	r, err := frontend.Compile("lowered.gox", []byte(src))
+	r, err := compileAcceptanceLanguageFixture("lowered.gox", []byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +94,7 @@ func prefix()Option[int]{x:=Option[int]::Some(1)?;return Option[int]::Some(x)}
 macro_rules! bad {()=>{var broken int="wrong";_=broken};}
 func run()Option[int]{n:=Option[int]::Some(7)?;bad!();return Option[int]::Some(n)}
 `
-	_, err := frontend.Compile("real_lowered.gox", []byte(src))
+	_, err := compileAcceptanceLanguageFixture("real_lowered.gox", []byte(src))
 	var mapped *sourcemap.Error
 	if !errors.As(err, &mapped) || mapped.Origin == nil {
 		t.Fatalf("real go/types error lacks proven origin: %v", err)
@@ -116,14 +115,14 @@ func TestSourceMappingSyntheticErrorRemainsUnmapped(t *testing.T) {
 macro_rules! bad {($x:expr)=>{$x+"wrong"};}
 func run()Option[int]{n:=Option[int]::Some(7)?;return Option[int]::Some(bad!(n))}
 `
-	_, err := frontend.Compile("synthetic.gox", []byte(src))
+	_, err := compileAcceptanceLanguageFixture("synthetic.gox", []byte(src))
 	var mapped *sourcemap.Error
 	if !errors.As(err, &mapped) || mapped.Origin != nil || !strings.Contains(err.Error(), "generated/unmapped") {
 		t.Fatalf("synthetic macro parentheses borrowed an origin: %v", err)
 	}
 }
 func TestSourceMappingPrivateDelimiterRejected(t *testing.T) {
-	_, err := frontend.Compile("nul.gox", []byte("package p\nvar s=\"\x000\x00\""))
+	_, err := compileAcceptanceLanguageFixture("nul.gox", []byte("package p\nvar s=\"\x000\x00\""))
 	if err == nil || !strings.Contains(err.Error(), "NUL") {
 		t.Fatalf("private delimiter accepted: %v", err)
 	}

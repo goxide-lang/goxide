@@ -2,6 +2,7 @@ package macros
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/ast"
@@ -32,11 +33,19 @@ type scope struct {
 	pkg             *Package
 	imports         map[string]string
 	dependencies    map[string]*Package
+	macroAliases    map[string]definition
+	functionAliases map[string]functionBinding
+	useNames        map[string]bool
 }
+type functionBinding struct{ path, name string }
+
+// DeriveResolver is supplied by the frontend's canonical protocol registry.
+// Macro collection must not recognize external protocols by their short names.
+type DeriveResolver func(file, path string) (kind string, err error)
 
 // CollectPackage collects selected source files, retaining file-local imports.
 // dependencies must come from successfully compiled source packages.
-func CollectPackage(path string, sources map[string][]byte, dependencies map[string]*Package) (*Package, error) {
+func CollectPackage(path string, sources map[string][]byte, dependencies map[string]*Package, resolveDerive DeriveResolver, sourceMaps map[string]*sourcemap.Map) (*Package, error) {
 	p := &Package{topNames: map[string]bool{}, path: path, defs: map[string]definition{}, funcs: map[string]bool{}, privateHelpers: map[string]bool{}, scopes: map[string]*scope{}}
 	names := make([]string, 0, len(sources))
 	for n := range sources {
@@ -69,6 +78,9 @@ func CollectPackage(path string, sources map[string][]byte, dependencies map[str
 	for fileIndex, name := range names {
 		source := sources[name]
 		mapping := sourcemap.Identity(name, source)
+		if prior := sourceMaps[name]; prior != nil {
+			mapping = &sourcemap.Map{Source: prior.Source, Segments: append([]sourcemap.Segment(nil), prior.Segments...), Stages: append([]string(nil), prior.Stages...)}
+		}
 		prepared, err := propagate.PrepareMapped(name, source, mapping)
 		if err != nil {
 			return nil, err
@@ -81,19 +93,25 @@ func CollectPackage(path string, sources map[string][]byte, dependencies map[str
 		if total > maxTokens {
 			return nil, fmt.Errorf("%s: macro package input token budget exceeded", path)
 		}
-		sc := &scope{index: fileIndex, pkg: p, imports: map[string]string{}, dependencies: map[string]*Package{}}
+		sc := &scope{index: fileIndex, pkg: p, imports: map[string]string{}, dependencies: map[string]*Package{}, macroAliases: map[string]definition{}, functionAliases: map[string]functionBinding{}, useNames: map[string]bool{}}
 		for path, dep := range dependencies {
 			sc.dependencies[path] = dep
 		}
 		p.scopes[name] = sc
 		for i := range ts {
 			ts[i].scope = sc
-			ts[i].original = true
 			first, last := mapping.Lookup(ts[i].pos.Offset), mapping.Lookup(ts[i].sourceEnd-1)
 			if first != nil && last != nil && first.Origin != nil && last.Origin != nil {
-				span := sourcemap.Position(name, source, first.Origin.Start, last.Origin.End)
-				ts[i].pos = token.Position{Filename: name, Offset: span.Start, Line: span.Line, Column: span.Column}
-				ts[i].sourceEnd = span.End
+				span := first.Origin
+				ts[i].pos = token.Position{Filename: span.File, Offset: span.Start, Line: span.Line, Column: span.Column}
+				ts[i].sourceEnd = last.Origin.End
+				ts[i].original = true
+				if first.Kind == "namespace-path" {
+					// A resolved namespace alias proves an invocation envelope,
+					// not an unchanged source token. Keep its starting coordinate
+					// for macro frames but suppress point provenance.
+					ts[i].sourceEnd = ts[i].pos.Offset
+				}
 			} else {
 				ts[i].sourceEnd = ts[i].pos.Offset
 			}
@@ -112,7 +130,11 @@ func CollectPackage(path string, sources map[string][]byte, dependencies map[str
 		for n := range declaredNames(clean) {
 			p.topNames[n] = true
 		}
-		for helper, public := range declaredDeriveHelpers(clean) {
+		helpers, err := declaredDeriveHelpers(clean, name, resolveDerive)
+		if err != nil {
+			return nil, err
+		}
+		for helper, public := range helpers {
 			p.funcs[helper] = true
 			if !public {
 				p.privateHelpers[helper] = true
@@ -147,9 +169,15 @@ func CollectPackage(path string, sources map[string][]byte, dependencies map[str
 	return p, nil
 }
 
+// ExpansionOptions controls the boundary between expansion and later frontend passes.
+type ExpansionOptions struct {
+	// PreserveImports leaves caller bindings intact while later DSL lowering can still add uses.
+	PreserveImports bool
+}
+
 // ExpandPackage uses only the supplied source registry and ordinary Go importer.
-func ExpandPackage(filename string, source []byte, intrinsics []string, p *Package, imp types.Importer) (Result, error) {
-	return expandPackage(filename, source, intrinsics, p, imp)
+func ExpandPackage(filename string, source []byte, intrinsics []string, p *Package, imp types.Importer, options ExpansionOptions) (Result, error) {
+	return expandPackage(filename, source, intrinsics, p, imp, options)
 }
 func (e *engine) resolveMacro(call tok, name string, qualified bool) (definition, error) {
 	sc := call.scope
@@ -157,10 +185,15 @@ func (e *engine) resolveMacro(call tok, name string, qualified bool) (definition
 		sc = e.active
 	}
 	p := sc.pkg
+	if !qualified {
+		if d, ok := sc.macroAliases[name]; ok {
+			return d, nil
+		}
+	}
 	if qualified {
 		path, ok := sc.imports[call.text]
 		if !ok {
-			return definition{}, at(call, "macro qualifier is not an explicit import: "+call.text)
+			return definition{}, at(call, "macro qualifier is not an explicit use: "+call.text)
 		}
 		p = sc.dependencies[path]
 		if p == nil {
@@ -204,6 +237,29 @@ func (e *engine) runtimePath(path string) (string, error) {
 	return alias, nil
 }
 func (e *engine) runtimeFunction(name string) (string, error) {
+	if binding, ok := e.active.functionAliases[name]; ok {
+		pkg := e.importCache[binding.path]
+		if pkg == nil {
+			var err error
+			pkg, err = e.importer.Import(binding.path)
+			if err != nil {
+				return "", fmt.Errorf("cannot resolve definition-site use %s::%s: %w", binding.path, binding.name, err)
+			}
+			e.importCache[binding.path] = pkg
+		}
+		fn, ok := pkg.Scope().Lookup(binding.name).(*types.Func)
+		if !ok || !fn.Exported() {
+			return "", fmt.Errorf("definition-site use %s must name an exported function", name)
+		}
+		if sig, ok := fn.Type().(*types.Signature); !ok || sig.TypeParams().Len() != 0 {
+			return "", fmt.Errorf("generic imported helper requires an explicit capture")
+		}
+		alias, err := e.runtimePath(binding.path)
+		if err != nil {
+			return "", err
+		}
+		return alias + "." + binding.name, nil
+	}
 	if e.active.pkg == e.pkg {
 		return name, nil
 	}
@@ -219,7 +275,7 @@ func (e *engine) runtimeFunction(name string) (string, error) {
 func (e *engine) finishImports(ts []tok) []tok {
 	// A compile-time-only ordinary import remains an explicit blank dependency.
 	used := map[string]bool{}
-	if file, _ := parser.ParseFile(token.NewFileSet(), e.file, render(ts), parser.AllErrors); file != nil {
+	if file, _ := parser.ParseFile(token.NewFileSet(), e.file, goSyntaxView(ts), parser.AllErrors); file != nil {
 		ast.Inspect(file, func(n ast.Node) bool {
 			if sel, ok := n.(*ast.SelectorExpr); ok {
 				if id, ok := sel.X.(*ast.Ident); ok && id.Obj == nil {
@@ -273,7 +329,7 @@ func (e *engine) finishImports(ts []tok) []tok {
 			if aliasIndex >= 0 {
 				alias = ts[aliasIndex].text
 			}
-			if e.usedMacroImports[alias] && !used[alias] {
+			if !e.preserveImports && e.usedMacroImports[alias] && !used[alias] {
 				if aliasIndex >= 0 {
 					ts[aliasIndex].text = "_"
 				} else {
@@ -302,8 +358,15 @@ func (e *engine) finishImports(ts []tok) []tok {
 	// Generated import syntax has no source origin.
 	for i := 0; i+1 < len(ts); i++ {
 		if ts[i].text == "package" {
+			at := i + 2
+			// Prepared source can put generated imports after an explicit
+			// package-clause semicolon. Keep it with the package clause rather
+			// than stranding it after our newly inserted import declaration.
+			if at < len(ts) && ts[at].text == ";" {
+				at++
+			}
 			insert := tok{text: code.String()}
-			return append(ts[:i+2], append([]tok{insert}, ts[i+2:]...)...)
+			return append(ts[:at], append([]tok{insert}, ts[at:]...)...)
 		}
 	}
 	return ts
@@ -335,7 +398,7 @@ func (b *Budget) AddPackage(p *Package) error {
 // declaredDeriveHelpers registers compiler-owned names only from explicit
 // derive attributes on named declarations. Full attribute/type validation stays
 // in frontend; malformed programs never become a compiled package dependency.
-func declaredDeriveHelpers(ts []tok) map[string]bool {
+func declaredDeriveHelpers(ts []tok, file string, resolveDerive DeriveResolver) (map[string]bool, error) {
 	out := map[string]bool{}
 	// Explicit manual Default is protocol evidence too. The frontend validates
 	// its signature and target before a dependency's metadata can be consumed.
@@ -354,11 +417,36 @@ func declaredDeriveHelpers(ts []tok) map[string]bool {
 			continue
 		}
 		kinds := []string{}
-		for j := i + 4; j < end; j++ {
-			switch ts[j].text {
-			case "Default", "Clone", "Debug", "Serialize", "Deserialize":
-				kinds = append(kinds, ts[j].text)
+		start := i + 4
+		for j := start; j < end; j++ {
+			if ts[j].text != "," && ts[j].text != ")" {
+				continue
 			}
+			spelling := strings.TrimSpace(render(ts[start:j]))
+			kind := ""
+			if resolveDerive != nil {
+				var err error
+				kind, err = resolveDerive(file, spelling)
+				if err != nil {
+					t := ts[start]
+					if t.original && t.sourceEnd > t.pos.Offset {
+						return nil, &sourcemap.Error{Message: err.Error(), Origin: &sourcemap.Span{File: t.pos.Filename, Start: t.pos.Offset, End: t.sourceEnd, Line: t.pos.Line, Column: t.pos.Column}, Generated: t.pos, Stack: t.stack}
+					}
+					return nil, at(t, err.Error())
+				}
+			} else if path, err := paths.Parse(spelling); err == nil && len(path.Segments) == 1 {
+				// These local builtin protocols have no external owner. Serde is
+				// registered only through the caller's validated binding resolver.
+				switch path.Segments[0].Name {
+				case "Default", "Clone", "Debug":
+					kind = path.Segments[0].Name
+				}
+			}
+			switch kind {
+			case "Default", "Clone", "Debug", "Serialize", "Deserialize":
+				kinds = append(kinds, kind)
+			}
+			start = j + 1
 		}
 		j := end + 1
 		for j < len(ts) {
@@ -404,7 +492,7 @@ func declaredDeriveHelpers(ts []tok) map[string]bool {
 			out[derive+name] = public
 		}
 	}
-	return out
+	return out, nil
 }
 
 // PublicNames enumerates public source bindings for use resolution and artifact
@@ -429,9 +517,9 @@ func (p *Package) PublicBinding(name string) (path, original string, ok bool) {
 	return d.scope.pkg.path, d.name, true
 }
 
-// BindPublicAlias retains the original definition scope and token provenance.
+// BindAlias retains the original definition scope and token provenance.
 // Only source-built registries participate; no macro payload is deserialized.
-func (p *Package) BindPublicAlias(alias string, source *Package, name string, public bool) error {
+func (p *Package) BindAlias(file, alias string, source *Package, name string, public bool) error {
 	if alias == "print" || alias == "println" || goResultName(alias) {
 		return fmt.Errorf("macro use alias %s is a reserved builtin macro name", alias)
 	}
@@ -449,7 +537,46 @@ func (p *Package) BindPublicAlias(alias string, source *Package, name string, pu
 	if p.topNames[alias] {
 		return fmt.Errorf("macro use conflicts with package declaration %s", alias)
 	}
+	sc := p.scopes[file]
+	if sc == nil {
+		return fmt.Errorf("unknown macro use source file %s", file)
+	}
+	if _, exists := sc.macroAliases[alias]; exists {
+		return fmt.Errorf("duplicate macro use %s in %s", alias, file)
+	}
 	d.public = public
-	p.defs[alias] = d
+	if public {
+		p.defs[alias] = d
+	} else {
+		sc.macroAliases[alias] = d
+	}
+	return nil
+}
+
+// BindUseName records lexical declarations, including unsupported template
+// kinds, so primitive and builtin hygiene cannot reinterpret their spelling.
+func (p *Package) BindUseName(file, name string) error {
+	sc := p.scopes[file]
+	if sc == nil {
+		return fmt.Errorf("unknown use source file %s", file)
+	}
+	sc.useNames[name] = true
+	return nil
+}
+
+// BindFunctionAlias accepts an already-resolved frontend binding. Expansion
+// verifies the named Go function and preserves its definition-site route.
+func (p *Package) BindFunctionAlias(file, alias, packagePath, name string) error {
+	if err := p.BindUseName(file, alias); err != nil {
+		return err
+	}
+	sc := p.scopes[file]
+	if _, exists := sc.functionAliases[alias]; exists {
+		return fmt.Errorf("duplicate function use %s in %s", alias, file)
+	}
+	if p.topNames[alias] {
+		return fmt.Errorf("function use conflicts with package declaration %s", alias)
+	}
+	sc.functionAliases[alias] = functionBinding{packagePath, name}
 	return nil
 }

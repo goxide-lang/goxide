@@ -17,6 +17,7 @@ func TestPropagationPrivateBoolContexts(t *testing.T) {
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, dir, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 		packagesWrite(t, dir, "model/model.go", `package model
 type flag bool
 var Calls int
@@ -25,23 +26,23 @@ func FlagArray(v flag)[1]flag{return [1]flag{v}}
 func Kind(v any)int{f,ok:=v.(flag);if !ok{return -1};if f{return 1};return 0}
 func Consume(v flag)int{return Kind(v)}
 `)
-		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\n"+body)
+		packagesWrite(t, dir, "app.gox", "package app\nuse model as m;\n"+body)
 		return dir
 	}
 	t.Run("private-type-and-short-circuit", func(t *testing.T) {
-		source := sourceFor(`import "errors"
-var Stop=errors.New("stop")
+		source := sourceFor(`use errors;
+var Stop=errors::New("stop")
 var Loads,Cleanup,After int
 func load(ok bool)Result[int,error]{Loads++;if ok{return Result[int,error]::Ok(7)};return Result[int,error]::Err(Stop)}
-func And(enabled,ok bool)Result[int,error]{defer func(){Cleanup++}();x:=m.Kind((enabled==true)&&m.Flag(load(ok)?==7));After++;return Result[int,error]::Ok(x)}
-func Or(enabled,ok bool)Result[int,error]{x:=m.Kind((enabled==true)||m.Flag(load(ok)?==7));return Result[int,error]::Ok(x)}
-func Length(enabled,ok bool)Result[int,error]{x:=len(m.FlagArray((enabled==true)&&m.Flag(load(ok)?==7)));return Result[int,error]::Ok(x)}
-func Capacity(enabled,ok bool)Result[int,error]{x:=cap(m.FlagArray((enabled==true)||m.Flag(load(ok)?==7)));return Result[int,error]::Ok(x)}
-func Local(enabled,ok bool)Result[int,error]{x:=(enabled==true)&&m.Flag(load(ok)?==7);var v any=x;return Result[int,error]::Ok(m.Kind(v))}
-func Nested(enabled,ok bool)Result[int,error]{x:=m.Consume(!((enabled==true)&&m.Flag(load(ok)?==7)));return Result[int,error]::Ok(x)}
-func Closure()Result[int,error]{f:=func()Result[int,error]{x:=m.Kind((1==1)&&m.Flag(load(false)?==7));return Result[int,error]::Ok(x)};_=f();return Result[int,error]::Ok(9)}
-func NativeRecover() (out int){defer func()Result[int,error]{r:=Result[int,error]::Ok(7);x:=m.Kind((1==1)&&m.Flag((recover()!=nil)&&(r?==7)));out=x;return Result[int,error]::Ok(x)}();panic("native")}
-func Input(enabled bool,r Result[int,error])Result[int,error]{x:=m.Consume((enabled==true)&&m.Flag(r?==7));return Result[int,error]::Ok(x)}
+func And(enabled,ok bool)Result[int,error]{defer func(){Cleanup++}();x:=m::Kind((enabled==true)&&m::Flag(load(ok)?==7));After++;return Result[int,error]::Ok(x)}
+func Or(enabled,ok bool)Result[int,error]{x:=m::Kind((enabled==true)||m::Flag(load(ok)?==7));return Result[int,error]::Ok(x)}
+func Length(enabled,ok bool)Result[int,error]{x:=len(m::FlagArray((enabled==true)&&m::Flag(load(ok)?==7)));return Result[int,error]::Ok(x)}
+func Capacity(enabled,ok bool)Result[int,error]{x:=cap(m::FlagArray((enabled==true)||m::Flag(load(ok)?==7)));return Result[int,error]::Ok(x)}
+func Local(enabled,ok bool)Result[int,error]{x:=(enabled==true)&&m::Flag(load(ok)?==7);var v any=x;return Result[int,error]::Ok(m::Kind(v))}
+func Nested(enabled,ok bool)Result[int,error]{x:=m::Consume(!((enabled==true)&&m::Flag(load(ok)?==7)));return Result[int,error]::Ok(x)}
+func Closure()Result[int,error]{f:=func()Result[int,error]{x:=m::Kind((1==1)&&m::Flag(load(false)?==7));return Result[int,error]::Ok(x)};_=f();return Result[int,error]::Ok(9)}
+func NativeRecover() (out int){defer func()Result[int,error]{r:=Result[int,error]::Ok(7);x:=m::Kind((1==1)&&m::Flag((recover()!=nil)&&(r?==7)));out=x;return Result[int,error]::Ok(x)}();panic("native")}
+func Input(enabled bool,r Result[int,error])Result[int,error]{x:=m::Consume((enabled==true)&&m::Flag(r?==7));return Result[int,error]::Ok(x)}
 func Read(r Result[int,error])(int,error){match r{Result[int,error]::Ok(v)=>{return v,nil},Result[int,error]::Err(e)=>{return 0,e}};return -1,nil}
 `)
 		generated := filepath.Join(t.TempDir(), "generated")
@@ -85,8 +86,8 @@ func TestNearestFailureAndCleanup(t *testing.T){
 		packagesCommand(t, generated, tool, true, "vet", "./...")
 	})
 	for name, body := range map[string]string{
-		"typed-bool-not-convertible": `func Bad(b bool,r Result[int,error])Result[int,error]{x:=m.Consume(b&&m.Flag(r?==7));return Result[int,error]::Ok(x)}`,
-		"private-to-builtin":         `func Bool(v bool){};func Bad(r Result[int,error])Result[int,error]{Bool((1==1)&&m.Flag(r?==7));return r}`,
+		"typed-bool-not-convertible": `func Bad(b bool,r Result[int,error])Result[int,error]{x:=m::Consume(b&&m::Flag(r?==7));return Result[int,error]::Ok(x)}`,
+		"private-to-builtin":         `func Bool(v bool){};func Bad(r Result[int,error])Result[int,error]{Bool((1==1)&&m::Flag(r?==7));return r}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)

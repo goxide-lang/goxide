@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,7 +16,7 @@ func TestT0FinalAuditBusinessRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := frontend.Compile(source, input)
+	result, err := compileAcceptanceLanguageFixture(source, input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +28,7 @@ func TestT0FinalAuditBusinessRace(t *testing.T) {
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
 	cli := filepath.Join(t.TempDir(), "goxide")
 	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
-	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--go", tool, "--runtime", root, source)
+	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "--go", tool, "--runtime", root, source)
 	if got != "audit webhook done\n" {
 		t.Fatalf("unexpected business output: %q", got)
 	}
@@ -45,7 +44,7 @@ func TestT0FinalAuditBoundaries(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			name := filepath.Join(t.TempDir(), tc.name+".gox")
-			_, err := frontend.Compile(name, []byte("package boundary\n"+tc.source+"\n"))
+			_, err := compileAcceptanceLanguageFixture(name, []byte("package boundary\n"+tc.source+"\n"))
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) || !strings.Contains(err.Error(), filepath.Base(name)+":") {
 				t.Fatalf("want located %s rejection, got %v", tc.want, err)
 			}

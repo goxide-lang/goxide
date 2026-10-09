@@ -8,15 +8,19 @@ import (
 
 func TestDiagnosticLocationsAndUnsupported(t *testing.T) {
 	for _, tc := range []struct{ src, msg string }{
-		{"#[derive(Serialize)]\ntype S struct { X chan int }", "unsupported field type"},
-		{"#[derive(Serialize)]\ntype S struct { X Other }", "unsupported field type"},
+		{"#[derive(serde::Serialize)]\ntype S struct { X chan int }", "unsupported field type"},
+		{"#[derive(serde::Serialize)]\ntype S struct { X Other }", "unsupported field type"},
 		{"#[derive(Clone)]\ntype S struct { X Other }", "nested type requires Clone"},
-		{"#[derive(Serialize)]\ntype S struct { X int }\nfunc SerializeS() {}", "conflicts"},
-		{"#[derive(Serialize)]\ntype S struct { __goxide_serde int }", "reserved"},
-		{"#[derive(Serialize)]\ntype S[T any] struct { X T }", "generic"},
-		{"#[derive(Serialize)]\ntype S struct {\n#[serde(unknown)]\nX int\n}", "unsupported serde attribute"},
+		{"#[derive(serde::Serialize)]\ntype S struct { X int }\nfunc SerializeS() {}", "conflicts"},
+		{"#[derive(serde::Serialize)]\ntype S struct { __goxide_serde int }", "reserved"},
+		{"#[derive(serde::Serialize)]\ntype S[T any] struct { X T }", "generic"},
+		{"#[derive(serde::Serialize)]\ntype S struct {\n#[serde(unknown)]\nX int\n}", "unsupported serde attribute"},
 	} {
-		_, e := Compile("input.gox", []byte("package p\n"+tc.src))
+		header := "package p\n"
+		if strings.Contains(tc.src, "serde::") {
+			header = "package p; use serde;\n"
+		}
+		_, e := compileSerdeFixture("input.gox", []byte(header+tc.src))
 		if e == nil || !strings.Contains(e.Error(), tc.msg) || !strings.Contains(e.Error(), "input.gox:") {
 			t.Errorf("%q: %v", tc.src, e)
 		}
@@ -50,8 +54,8 @@ Cause error
 	}
 }
 func TestEmptyAndCommaNames(t *testing.T) {
-	r, e := Compile("input.gox", []byte(`package p
-#[derive(Serialize, Deserialize)]
+	r, e := compileSerdeFixture("input.gox", []byte(`package p; use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 type S struct {
 #[serde(rename="")]
 X int
@@ -87,9 +91,13 @@ func TestAttributesCannotBeSilentlyIgnored(t *testing.T) {
 	for _, src := range []string{
 		"#[derive(Debug)]\n#[serde(deny_unknown_fields)]\ntype S struct { X int }",
 		"#[derive(Clone)]\ntype S struct {\n#[serde(rename=\"x\")]\nX int\n}",
-		"#[derive(Serialize)]\ntype (\n A struct { X int }\n B struct { X int }\n)",
+		"#[derive(serde::Serialize)]\ntype (\n A struct { X int }\n B struct { X int }\n)",
 	} {
-		if _, err := Compile("ignored.gox", []byte("package p\n"+src)); err == nil {
+		header := "package p\n"
+		if strings.Contains(src, "serde::") {
+			header = "package p; use serde;\n"
+		}
+		if _, err := compileSerdeFixture("ignored.gox", []byte(header+src)); err == nil {
 			t.Errorf("silently ignored attribute: %s", src)
 		}
 	}

@@ -22,9 +22,10 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 		t.Helper()
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, dir, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 		packagesWrite(t, dir, "model/model.gox", matchUnaryModel)
 		packagesWrite(t, dir, "model/scalars.go", matchUnaryScalars)
-		packagesWrite(t, dir, "app.gox", "package main\nimport cfg \"packages.example/app/model\"\n"+body)
+		packagesWrite(t, dir, "app.gox", "package main\nuse model as cfg;\n"+body)
 		return dir
 	}
 	t.Run("generated-module", func(t *testing.T) {
@@ -88,22 +89,22 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 		name, body string
 		words      []string
 	}{
-		{"overflow", `type S struct{N uint8};func Bad(c cfg.Mode)S{return S{N:match c{cfg.Mode::Off=>256,cfg.Mode::Workers(_)=>0}}}`, []string{"overflow", "assignable"}},
-		{"unary-bool", `func Bad(c cfg.Mode)bool{return !(match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>0})}`, []string{"operator !", "boolean", "not assignable"}},
-		{"unary-number", `func Bad(c cfg.Mode)int{return -(match c{cfg.Mode::Off=>true,cfg.Mode::Workers(_)=>false})}`, []string{"operator -", "not assignable"}},
-		{"defined-identity", `func Bad(c cfg.Mode)[]cfg.Count{return []cfg.Count{match c{cfg.Mode::Off=>cfg.Other(1),cfg.Mode::Workers(_)=>cfg.Other(2)}}}`, []string{"not assignable", "cannot use", "different Go types"}},
-		{"map-key-value-identity", `func Bad(c cfg.Mode)map[cfg.Key]cfg.Value{return map[cfg.Key]cfg.Value{match c{cfg.Mode::Off=>cfg.Value(1),cfg.Mode::Workers(_)=>cfg.Value(2)}:3}}`, []string{"not assignable", "cannot use", "different Go types"}},
-		{"non-nilable", `type S struct{N int};func Bad(c cfg.Mode)S{return S{N:match c{cfg.Mode::Off=>nil,cfg.Mode::Workers(_)=>nil}}}`, []string{"cannot use nil", "untyped nil", "not assignable"}},
-		{"unknown-field", `type S struct{N int};func Bad(c cfg.Mode)S{return S{Missing:match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2}}}`, []string{"unknown struct literal field", "unknown field"}},
-		{"duplicate-field", `type S struct{N int};func Bad(c cfg.Mode)S{return S{N:match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2},N:3}}`, []string{"duplicate field"}},
-		{"map-key-type", `func Bad(c cfg.Mode)map[[]int]int{return map[[]int]int{match c{cfg.Mode::Off=>[]int{1},cfg.Mode::Workers(_)=>[]int{2}}:3}}`, []string{"invalid map key"}},
-		{"duplicate-map-key", `func Bad(c cfg.Mode)map[int]int{return map[int]int{1:match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2},1:3}}`, []string{"duplicate key"}},
-		{"array-runtime-key", `func Bad(c cfg.Mode)[2]int{return [2]int{(match c{cfg.Mode::Off=>0,cfg.Mode::Workers(_)=>1}):3}}`, []string{"constant"}},
-		{"slice-runtime-key", `func Bad(c cfg.Mode)[]int{return []int{(match c{cfg.Mode::Off=>0,cfg.Mode::Workers(_)=>1}):3}}`, []string{"constant"}},
-		{"shift-count", `func Bad(c cfg.Mode)[]uint64{return []uint64{1<<(match c{cfg.Mode::Off=>1.5,cfg.Mode::Workers(_)=>2.5})}}`, []string{"shift count", "non-integer", "must be integer"}},
-		{"unaddressable-composite", `type S struct{N int};func(*S)Write([]int){};func Bad(c cfg.Mode){(S{N:0}).Write([]int{match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2}})}`, []string{"cannot call pointer method", "not addressable"}},
-		{"readonly-container", `type S struct{Values []int};func Bad(c cfg.Mode,r &S){v:=[][]int{match c{cfg.Mode::Off=>r.Values,cfg.Mode::Workers(_)=>r.Values}};v[0][0]=9}`, []string{"read-only", "readonly", "permission", "cannot erase"}},
-		{"readonly-erasure", `func Bad(c cfg.Mode,r &int){v:=[]any{match c{cfg.Mode::Off=>r,cfg.Mode::Workers(_)=>r}};_=v}`, []string{"read-only", "readonly", "permission", "cannot erase"}},
+		{"overflow", `type S struct{N uint8};func Bad(c cfg::Mode)S{return S{N:match c{cfg::Mode::Off=>256,cfg::Mode::Workers(_)=>0}}}`, []string{"overflow", "assignable"}},
+		{"unary-bool", `func Bad(c cfg::Mode)bool{return !(match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>0})}`, []string{"operator !", "boolean", "not assignable"}},
+		{"unary-number", `func Bad(c cfg::Mode)int{return -(match c{cfg::Mode::Off=>true,cfg::Mode::Workers(_)=>false})}`, []string{"operator -", "not assignable"}},
+		{"defined-identity", `func Bad(c cfg::Mode)[]cfg::Count{return []cfg::Count{match c{cfg::Mode::Off=>cfg::Other(1),cfg::Mode::Workers(_)=>cfg::Other(2)}}}`, []string{"not assignable", "cannot use", "different Go types"}},
+		{"map-key-value-identity", `func Bad(c cfg::Mode)map[cfg::Key]cfg::Value{return map[cfg::Key]cfg::Value{match c{cfg::Mode::Off=>cfg::Value(1),cfg::Mode::Workers(_)=>cfg::Value(2)}:3}}`, []string{"not assignable", "cannot use", "different Go types"}},
+		{"non-nilable", `type S struct{N int};func Bad(c cfg::Mode)S{return S{N:match c{cfg::Mode::Off=>nil,cfg::Mode::Workers(_)=>nil}}}`, []string{"cannot use nil", "untyped nil", "not assignable"}},
+		{"unknown-field", `type S struct{N int};func Bad(c cfg::Mode)S{return S{Missing:match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}}}`, []string{"unknown struct literal field", "unknown field"}},
+		{"duplicate-field", `type S struct{N int};func Bad(c cfg::Mode)S{return S{N:match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2},N:3}}`, []string{"duplicate field"}},
+		{"map-key-type", `func Bad(c cfg::Mode)map[[]int]int{return map[[]int]int{match c{cfg::Mode::Off=>[]int{1},cfg::Mode::Workers(_)=>[]int{2}}:3}}`, []string{"invalid map key"}},
+		{"duplicate-map-key", `func Bad(c cfg::Mode)map[int]int{return map[int]int{1:match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2},1:3}}`, []string{"duplicate key"}},
+		{"array-runtime-key", `func Bad(c cfg::Mode)[2]int{return [2]int{(match c{cfg::Mode::Off=>0,cfg::Mode::Workers(_)=>1}):3}}`, []string{"constant"}},
+		{"slice-runtime-key", `func Bad(c cfg::Mode)[]int{return []int{(match c{cfg::Mode::Off=>0,cfg::Mode::Workers(_)=>1}):3}}`, []string{"constant"}},
+		{"shift-count", `func Bad(c cfg::Mode)[]uint64{return []uint64{1<<(match c{cfg::Mode::Off=>1.5,cfg::Mode::Workers(_)=>2.5})}}`, []string{"shift count", "non-integer", "must be integer"}},
+		{"unaddressable-composite", `type S struct{N int};func(*S)Write([]int){};func Bad(c cfg::Mode){(S{N:0}).Write([]int{match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}})}`, []string{"cannot call pointer method", "not addressable"}},
+		{"readonly-container", `type S struct{Values []int};func Bad(c cfg::Mode,r &S){v:=[][]int{match c{cfg::Mode::Off=>r.Values,cfg::Mode::Workers(_)=>r.Values}};v[0][0]=9}`, []string{"read-only", "readonly", "permission", "cannot erase"}},
+		{"readonly-erasure", `func Bad(c cfg::Mode,r &int){v:=[]any{match c{cfg::Mode::Off=>r,cfg::Mode::Workers(_)=>r}};_=v}`, []string{"read-only", "readonly", "permission", "cannot erase"}},
 	} {
 		t.Run("reject/"+tc.name, func(t *testing.T) {
 			source := sourceFor(tc.body + "\nfunc main(){}\n")
@@ -130,10 +131,10 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 		})
 	}
 	for name, body := range map[string]string{
-		"address-composite": `type S struct{N int};func Bad(c cfg.Mode)*S{return &S{N:match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2}}}`,
-		"address-value":     `func Bad(c cfg.Mode)*int{return &(match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2})}`,
-		"dereference":       `func Bad(c cfg.Mode,p *int)int{return *(match c{cfg.Mode::Off=>p,cfg.Mode::Workers(_)=>p})}`,
-		"receive":           `func Bad(c cfg.Mode,ch chan int)int{return <-(match c{cfg.Mode::Off=>ch,cfg.Mode::Workers(_)=>ch})}`,
+		"address-composite": `type S struct{N int};func Bad(c cfg::Mode)*S{return &S{N:match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}}}`,
+		"address-value":     `func Bad(c cfg::Mode)*int{return &(match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2})}`,
+		"dereference":       `func Bad(c cfg::Mode,p *int)int{return *(match c{cfg::Mode::Off=>p,cfg::Mode::Workers(_)=>p})}`,
+		"receive":           `func Bad(c cfg::Mode,ch chan int)int{return <-(match c{cfg::Mode::Off=>ch,cfg::Mode::Workers(_)=>ch})}`,
 	} {
 		t.Run("boundary/"+name, func(t *testing.T) {
 			source := sourceFor(body)
@@ -146,9 +147,10 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 }
 
 const matchUnaryModel = `package model
-#[derive(Serialize,Deserialize,Clone,Debug)]
+use serde;
+#[derive(serde::Serialize,serde::Deserialize,Clone,Debug)]
 pub enum Mode { Off, Workers(int), }
-#[derive(Serialize,Deserialize,Clone,Debug)]
+#[derive(serde::Serialize,serde::Deserialize,Clone,Debug)]
 type Plan struct { Mode Mode; Enabled bool; Delta int; Steps []int }
 `
 const matchUnaryScalars = `package model
@@ -160,75 +162,75 @@ type Value uint64
 type Word = uint64
 `
 const matchUnaryBusiness = `
-import "fmt"
-import "github.com/goxide-lang/serde/json"
+use fmt;
+use serde::json as serdejson;
 #[derive(Error)]
 #[error("plan input")]
 type Failure struct {
  #[from]
  Cause error
 }
-func Build(c cfg.Mode)cfg.Plan{return cfg.Plan{
+func Build(c cfg::Mode)cfg::Plan{return cfg::Plan{
  Mode:c,
- Enabled:!(match c{cfg.Mode::Off=>true,cfg.Mode::Workers(_)=>false}),
- Delta:-(match c{cfg.Mode::Off=>0,cfg.Mode::Workers(n)=>n}),
- Steps:[]int{match c{cfg.Mode::Off=>0,cfg.Mode::Workers(n)=>n},+(match c{cfg.Mode::Off=>1,cfg.Mode::Workers(n)=>n+1})},
+ Enabled:!(match c{cfg::Mode::Off=>true,cfg::Mode::Workers(_)=>false}),
+ Delta:-(match c{cfg::Mode::Off=>0,cfg::Mode::Workers(n)=>n}),
+ Steps:[]int{match c{cfg::Mode::Off=>0,cfg::Mode::Workers(n)=>n},+(match c{cfg::Mode::Off=>1,cfg::Mode::Workers(n)=>n+1})},
 }}
 func Run(input []byte)(string,string,string,error){
- c,e:=serdejson.Unmarshal(input,cfg.DeserializeMode);if e!=nil{return "","","",FromFailure(e)}
- original:=Build(c);copy:=cfg.ClonePlan(&original);copy.Steps[0]=99
- before:=cfg.DebugPlan(&original);after:=cfg.DebugPlan(&copy)
- wire,e:=serdejson.Marshal(&copy,cfg.SerializePlan);return before,after,string(wire),e
+ c,e:=serdejson::Unmarshal(input,cfg::DeserializeMode);if e!=nil{return "","","",FromFailure(e)}
+ original:=Build(c);copy:=cfg::ClonePlan(&original);copy.Steps[0]=99
+ before:=cfg::DebugPlan(&original);after:=cfg::DebugPlan(&copy)
+ wire,e:=serdejson::Marshal(&copy,cfg::SerializePlan);return before,after,string(wire),e
 }
-func Empty(c cfg.Mode)cfg.Plan{return cfg.Plan{Mode:c,Steps:match c{cfg.Mode::Off=>nil,cfg.Mode::Workers(_)=>[]int{}}}}
-func main(){_,debug,wire,e:=Run([]byte("{\"Workers\":3}"));if e!=nil{panic(e)};fmt.Println(debug);fmt.Println(wire)}
+func Empty(c cfg::Mode)cfg::Plan{return cfg::Plan{Mode:c,Steps:match c{cfg::Mode::Off=>nil,cfg::Mode::Workers(_)=>[]int{}}}}
+func main(){_,debug,wire,e:=Run([]byte("{\"Workers\":3}"));if e!=nil{panic(e)};fmt::Println(debug);fmt::Println(wire)}
 `
 const matchUnaryContexts = `package main
-import cfg "packages.example/app/model"
+use model as cfg;
 type Wide = uint64
-type Context struct{Bits Wide;Count cfg.Alias;Pointer *int}
+type Context struct{Bits Wide;Count cfg::Alias;Pointer *int}
 type Tiny struct{N int}
-func Contexts(c cfg.Mode,n uint)Context{type Wide=int8;_=Wide(1);return Context{Bits:+(match c{cfg.Mode::Off=>1<<n,cfg.Mode::Workers(_)=>0}),Count:match c{cfg.Mode::Off=>cfg.Count(7),cfg.Mode::Workers(_)=>cfg.Count(8)},Pointer:match c{cfg.Mode::Off=>nil,cfg.Mode::Workers(_)=>nil}}}
-func Unary(c cfg.Mode)(int,int,uint64,bool){a:=-(match c{cfg.Mode::Off=>2,cfg.Mode::Workers(n)=>n});var b int=+(match c{cfg.Mode::Off=>3,cfg.Mode::Workers(n)=>n});var bits uint64=^(match c{cfg.Mode::Off=>0,cfg.Mode::Workers(_)=>1});flag:=!(match c{cfg.Mode::Off=>false,cfg.Mode::Workers(_)=>true});return a,b,bits,flag}
-func Local(c cfg.Mode)int{type N int;x:=[]N{match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2}};return int(x[0])}
-func Maps(c cfg.Mode,n uint)map[cfg.Key]cfg.Value{return map[cfg.Key]cfg.Value{match c{cfg.Mode::Off=>"off",cfg.Mode::Workers(_)=>"on"}:match c{cfg.Mode::Off=>1<<n,cfg.Mode::Workers(_)=>7}}}
-func Array(c cfg.Mode)[4]int{return [...]int{2:match c{cfg.Mode::Off=>5,cfg.Mode::Workers(_)=>6},+(match c{cfg.Mode::Off=>7,cfg.Mode::Workers(_)=>8})}}
-func NestedLiteral(c cfg.Mode)[][]*Tiny{return [][]*Tiny{{{N:match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2}},{N:-(match c{cfg.Mode::Off=>3,cfg.Mode::Workers(_)=>4})}}}}
+func Contexts(c cfg::Mode,n uint)Context{type Wide=int8;_=Wide(1);return Context{Bits:+(match c{cfg::Mode::Off=>1<<n,cfg::Mode::Workers(_)=>0}),Count:match c{cfg::Mode::Off=>cfg::Count(7),cfg::Mode::Workers(_)=>cfg::Count(8)},Pointer:match c{cfg::Mode::Off=>nil,cfg::Mode::Workers(_)=>nil}}}
+func Unary(c cfg::Mode)(int,int,uint64,bool){a:=-(match c{cfg::Mode::Off=>2,cfg::Mode::Workers(n)=>n});var b int=+(match c{cfg::Mode::Off=>3,cfg::Mode::Workers(n)=>n});var bits uint64=^(match c{cfg::Mode::Off=>0,cfg::Mode::Workers(_)=>1});flag:=!(match c{cfg::Mode::Off=>false,cfg::Mode::Workers(_)=>true});return a,b,bits,flag}
+func Local(c cfg::Mode)int{type N int;x:=[]N{match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}};return int(x[0])}
+func Maps(c cfg::Mode,n uint)map[cfg::Key]cfg::Value{return map[cfg::Key]cfg::Value{match c{cfg::Mode::Off=>"off",cfg::Mode::Workers(_)=>"on"}:match c{cfg::Mode::Off=>1<<n,cfg::Mode::Workers(_)=>7}}}
+func Array(c cfg::Mode)[4]int{return [...]int{2:match c{cfg::Mode::Off=>5,cfg::Mode::Workers(_)=>6},+(match c{cfg::Mode::Off=>7,cfg::Mode::Workers(_)=>8})}}
+func NestedLiteral(c cfg::Mode)[][]*Tiny{return [][]*Tiny{{{N:match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}},{N:-(match c{cfg::Mode::Off=>3,cfg::Mode::Workers(_)=>4})}}}}
 func sum(s []int)int{n:=0;for _,v:=range s{n+=v};return n}
 // This is the former composition-boundary literal, now positively executed.
-func CompositionLiteral(c cfg.Mode)int{return sum([]int{match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2}})}
-func ArmLiteral(c cfg.Mode)[]int{return match c{cfg.Mode::Off=>[]int{match c{cfg.Mode::Off=>3,cfg.Mode::Workers(_)=>4}},cfg.Mode::Workers(n)=>[]int{n}}}
-func ShiftCount(c cfg.Mode)[]uint64{return []uint64{1<<(match c{cfg.Mode::Off=>3,cfg.Mode::Workers(_)=>4})}}
-func LoopControl(c cfg.Mode)int{count:=0;for i:=0;i<3;i++{v:=[]int{match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>0}};match c{cfg.Mode::Off=>{count+=v[0];break},cfg.Mode::Workers(_)=>{}};count+=100};for i:=0;i<3;i++{v:=[]int{match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>0}};match c{cfg.Mode::Off=>{count+=v[0];continue},cfg.Mode::Workers(_)=>{}};count+=100};return count}
-func Goto(c cfg.Mode)int{skip:=true;if skip{goto Done};_=Tiny{N:match c{cfg.Mode::Off=>1,cfg.Mode::Workers(_)=>2}};Done:return 9}
+func CompositionLiteral(c cfg::Mode)int{return sum([]int{match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}})}
+func ArmLiteral(c cfg::Mode)[]int{return match c{cfg::Mode::Off=>[]int{match c{cfg::Mode::Off=>3,cfg::Mode::Workers(_)=>4}},cfg::Mode::Workers(n)=>[]int{n}}}
+func ShiftCount(c cfg::Mode)[]uint64{return []uint64{1<<(match c{cfg::Mode::Off=>3,cfg::Mode::Workers(_)=>4})}}
+func LoopControl(c cfg::Mode)int{count:=0;for i:=0;i<3;i++{v:=[]int{match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>0}};match c{cfg::Mode::Off=>{count+=v[0];break},cfg::Mode::Workers(_)=>{}};count+=100};for i:=0;i<3;i++{v:=[]int{match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>0}};match c{cfg::Mode::Off=>{count+=v[0];continue},cfg::Mode::Workers(_)=>{}};count+=100};return count}
+func Goto(c cfg::Mode)int{skip:=true;if skip{goto Done};_=Tiny{N:match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}};Done:return 9}
 `
 const matchUnaryFlows = `package main
-import "errors"
-import cfg "packages.example/app/model"
+use errors;
+use model as cfg;
 var Trace []string
-var stopped=errors.New("checked failure")
+var stopped=errors::New("checked failure")
 func mark(label string,n int)int{Trace=append(Trace,label);return n}
 func record(label string){Trace=append(Trace,label)}
-func choice(c cfg.Mode)cfg.Mode{record("target");return c}
+func choice(c cfg::Mode)cfg::Mode{record("target");return c}
 func guard(n int)bool{record("guard");return n>0}
 func checked(ok bool,n int)Result[int,error]{record("checked");if !ok{return Result[int,error]::Err(stopped)};return Result[int,error]::Ok(n)}
 type Bundle struct{First int;Values []int;Last int}
-func collect(c cfg.Mode,ok bool)Result[Bundle,error]{defer record("defer");b:=Bundle{First:mark("before",1),Values:[]int{-(match choice(c){cfg.Mode::Off=>mark("off",0),cfg.Mode::Workers(n) if guard(n)=>checked(ok,n)?,cfg.Mode::Workers(_)=>0}),mark("element-after",2)},Last:mark("field-after",3)};return Result[Bundle,error]::Ok(b)}
-func Collect(c cfg.Mode,ok bool)(Bundle,error){match collect(c,ok){Result[Bundle,error]::Ok(v)=>{return v,nil},Result[Bundle,error]::Err(e)=>{return Bundle{},e}};panic("unreachable")}
-func mapOrder(c cfg.Mode)map[int]int{return map[int]int{match choice(c){cfg.Mode::Off=>mark("key1",1),cfg.Mode::Workers(_)=>mark("key1",1)}:match c{cfg.Mode::Off=>mark("value1",2),cfg.Mode::Workers(_)=>mark("value1",2)},mark("key2",3):mark("value2",4)}}
-func receiveOrder(c cfg.Mode,ch <-chan int)[]int{return []int{<-ch,match c{cfg.Mode::Off=>receiveMiddle(ch),cfg.Mode::Workers(_)=>0},<-ch}}
+func collect(c cfg::Mode,ok bool)Result[Bundle,error]{defer record("defer");b:=Bundle{First:mark("before",1),Values:[]int{-(match choice(c){cfg::Mode::Off=>mark("off",0),cfg::Mode::Workers(n) if guard(n)=>checked(ok,n)?,cfg::Mode::Workers(_)=>0}),mark("element-after",2)},Last:mark("field-after",3)};return Result[Bundle,error]::Ok(b)}
+func Collect(c cfg::Mode,ok bool)(Bundle,error){match collect(c,ok){Result[Bundle,error]::Ok(v)=>{return v,nil},Result[Bundle,error]::Err(e)=>{return Bundle{},e}};panic("unreachable")}
+func mapOrder(c cfg::Mode)map[int]int{return map[int]int{match choice(c){cfg::Mode::Off=>mark("key1",1),cfg::Mode::Workers(_)=>mark("key1",1)}:match c{cfg::Mode::Off=>mark("value1",2),cfg::Mode::Workers(_)=>mark("value1",2)},mark("key2",3):mark("value2",4)}}
+func receiveOrder(c cfg::Mode,ch <-chan int)[]int{return []int{<-ch,match c{cfg::Mode::Off=>receiveMiddle(ch),cfg::Mode::Workers(_)=>0},<-ch}}
 func receiveMiddle(ch <-chan int)int{if len(ch)!=1{panic("receive moved across match")};return mark("middle",2)}
-func Short(c cfg.Mode)bool{v:=false&&!(match choice(c){cfg.Mode::Off=>false,cfg.Mode::Workers(_)=>true});return v}
-func DirectRecover()(out bool){defer func(){v:=[]bool{!(match cfg.Mode::Off{cfg.Mode::Off=>recover()==nil,cfg.Mode::Workers(_)=>true})};out=v[0]}();panic("direct")}
-func deferred(c cfg.Mode,ok bool)Result[int,error]{defer record("cleanup");v:=[]int{mark("first",1),match c{cfg.Mode::Off=>checked(ok,2)?,cfg.Mode::Workers(_)=>0},mark("last",3)};defer consume(v);return Result[int,error]::Ok(1)}
+func Short(c cfg::Mode)bool{v:=false&&!(match choice(c){cfg::Mode::Off=>false,cfg::Mode::Workers(_)=>true});return v}
+func DirectRecover()(out bool){defer func(){v:=[]bool{!(match cfg::Mode::Off{cfg::Mode::Off=>recover()==nil,cfg::Mode::Workers(_)=>true})};out=v[0]}();panic("direct")}
+func deferred(c cfg::Mode,ok bool)Result[int,error]{defer record("cleanup");v:=[]int{mark("first",1),match c{cfg::Mode::Off=>checked(ok,2)?,cfg::Mode::Workers(_)=>0},mark("last",3)};defer consume(v);return Result[int,error]::Ok(1)}
 func consume([]int){record("registered")}
-func Deferred(c cfg.Mode,ok bool)bool{return match deferred(c,ok){Result[int,error]::Ok(_)=>true,Result[int,error]::Err(_)=>false}}
+func Deferred(c cfg::Mode,ok bool)bool{return match deferred(c,ok){Result[int,error]::Ok(_)=>true,Result[int,error]::Err(_)=>false}}
 type WithClosure struct{First int;Run func()Result[int,error];Last int}
-func Nearest(c cfg.Mode)int{x:=WithClosure{First:match c{cfg.Mode::Off=>mark("outer-first",1),cfg.Mode::Workers(_)=>0},Run:func()Result[int,error]{defer record("inner-defer");v:=[]int{match c{cfg.Mode::Off=>checked(false,1)?,cfg.Mode::Workers(_)=>0},mark("never",9)};return Result[int,error]::Ok(v[0])},Last:match c{cfg.Mode::Off=>mark("outer-last",2),cfg.Mode::Workers(_)=>0}};_=x.Run();return mark("outer",8)}
-func Rebind(c cfg.Mode)(int,int){a:=[]int{1};old:=a;replace:=func()int{a=[]int{9};return mark("arm",3)};a[mark("index",0)]=-(match choice(c){cfg.Mode::Off=>replace(),cfg.Mode::Workers(_)=>0});return old[0],a[0]}
-func Bounds(c cfg.Mode){a:=[]int{};a[mark("index",2)]=-(match choice(c){cfg.Mode::Off=>mark("arm",3),cfg.Mode::Workers(_)=>0})}
-func indexFailure(c cfg.Mode)Result[int,error]{a:=[]int{};a[mark("index",2)]=-(match choice(c){cfg.Mode::Off=>checked(false,1)?,cfg.Mode::Workers(_)=>0});return Result[int,error]::Ok(1)}
-func IndexFailure(c cfg.Mode)bool{return match indexFailure(c){Result[int,error]::Ok(_)=>true,Result[int,error]::Err(_)=>false}}
+func Nearest(c cfg::Mode)int{x:=WithClosure{First:match c{cfg::Mode::Off=>mark("outer-first",1),cfg::Mode::Workers(_)=>0},Run:func()Result[int,error]{defer record("inner-defer");v:=[]int{match c{cfg::Mode::Off=>checked(false,1)?,cfg::Mode::Workers(_)=>0},mark("never",9)};return Result[int,error]::Ok(v[0])},Last:match c{cfg::Mode::Off=>mark("outer-last",2),cfg::Mode::Workers(_)=>0}};_=x.Run();return mark("outer",8)}
+func Rebind(c cfg::Mode)(int,int){a:=[]int{1};old:=a;replace:=func()int{a=[]int{9};return mark("arm",3)};a[mark("index",0)]=-(match choice(c){cfg::Mode::Off=>replace(),cfg::Mode::Workers(_)=>0});return old[0],a[0]}
+func Bounds(c cfg::Mode){a:=[]int{};a[mark("index",2)]=-(match choice(c){cfg::Mode::Off=>mark("arm",3),cfg::Mode::Workers(_)=>0})}
+func indexFailure(c cfg::Mode)Result[int,error]{a:=[]int{};a[mark("index",2)]=-(match choice(c){cfg::Mode::Off=>checked(false,1)?,cfg::Mode::Workers(_)=>0});return Result[int,error]::Ok(1)}
+func IndexFailure(c cfg::Mode)bool{return match indexFailure(c){Result[int,error]::Ok(_)=>true,Result[int,error]::Err(_)=>false}}
 `
 const matchUnaryAssertions = `package main
 import("testing";"reflect";"errors";"strings";cfg "packages.example/app/model";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")

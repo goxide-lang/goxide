@@ -1,8 +1,9 @@
 # use / pub use：统一 goxide API 入口
 
-`api/api.gox` 使用 `pub use impl::*;` 聚合公开类型、常量、函数、变量及本次源图内的用户宏。
-调用方的 `Counter` 和 `api.Count` 仍是 `impl.Count` 的同一存储位置；
-`api.Add` 调用原函数，没有生成函数变量或调用 wrapper。
+`api/api.gox` 使用 `pub use implementation::*;` 聚合公开类型、常量、函数、变量及本次源图内的用户宏。
+`goxide.roots.toml` 将 `implementation` 精确映射到 Go 包 `example.org/reexports/impl`。
+调用方的 `Counter` 和 `api::Count` 仍是 `implementation::Count` 的同一存储位置；
+`api::Add` 调用原函数，没有生成函数变量或调用 wrapper。
 
 ```sh
 go run ./cmd/goxide run --go /path/to/go examples/reexports

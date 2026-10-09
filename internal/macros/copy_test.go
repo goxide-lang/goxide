@@ -106,7 +106,7 @@ import copy "strings"
 func main(){dst:=[]byte{0,0};fmt.Println(transfer!(dst,copy.Repeat("x",2)),string(dst),copy.Repeat("y",2))}
 `)
 	pkg := registry(t, "example/main", map[string][]byte{"definitions.gox": definitions, "caller.gox": source}, nil)
-	result, err := ExpandPackage("caller.gox", source, nil, pkg, nil)
+	result, err := ExpandPackage("caller.gox", source, nil, pkg, nil, ExpansionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,9 +144,9 @@ func TestCopyCallerPackageShadow(t *testing.T) {
 		`var copy=func([]int,[]int)int{return 9}`,
 		`type copy int`,
 	} {
-		source := []byte("package caller\nimport ops \"example/ops\"\nfunc f(){_=ops.transfer!([]int{},[]int{})}\n" + declaration + "\n")
+		source := []byte("package caller\nimport ops \"example/ops\"\nfunc f(){_=ops::transfer!([]int{},[]int{})}\n" + declaration + "\n")
 		pkg := registry(t, "example/caller", map[string][]byte{"caller.gox": source}, map[string]*Package{"example/ops": ops})
-		_, err := ExpandPackage("caller.gox", source, nil, pkg, nil)
+		_, err := ExpandPackage("caller.gox", source, nil, pkg, nil, ExpansionOptions{})
 		if err == nil || !strings.Contains(err.Error(), "caller package declaration") {
 			t.Fatalf("%s: %v", declaration, err)
 		}

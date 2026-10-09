@@ -4,7 +4,7 @@
 
 用户已确认：优先 goxide 的透明重导出，不要求普通 Go 消费者具有完全相同的 facade 外观。变量不能通过复制实现；函数不能用会改变 `defer` / `recover` 的调用 wrapper 代替。
 
-本片在已有 Go module / 目录包模型上实现 `use` 与 `pub use` 的逐项、别名、glob 绑定。没有新增完整 `mod`、`pub(scope)` 或普通声明的统一 `pub` 语义，也没有合入 Cargo/manifest 草稿。现有原生 Go 公开规则、`pub enum`、`pub macro_rules!` 保持各自既有语义。
+本片在已有 Go module / 目录包模型上实现 `use` 与 `pub use` 的逐项、别名、glob 绑定。当前统一静态路径与依赖根语义见[路径合同](../design/static-paths.md)；仅支持目录内本地 `mod`，没有完整 `pub(scope)` 或普通声明的统一 `pub`。现有原生 Go 公开规则、`pub enum`、`pub macro_rules!` 保持各自既有语义。
 
 研究依据与未选方案见 [研究分支 RFC 0007](https://github.com/hxsf/goxide/blob/29d81ecf06d7a9cfb383aa1e264a7bcd31d1fb6b/docs/rfcs/research/0007-modules-and-reexports.md)。本篇的实现范围优先于研究草案中的“尚未实现”状态。包发布协议承接 [RFC 0001](0001-package-loading.md)，Go 消费者不自动获得增强检查的边界承接 [RFC 0015](0015-public-api.md)。
 
@@ -16,21 +16,21 @@
 
 ```goxide
 package api
-import source "example.org/library/impl"
+use source; // configured dependency root
 
-use source::Count;                  // 当前目录包内使用
-use source::Add as sum;             // 当前目录包内别名
+use source::Count;                  // 当前文件内使用
+use source::Add as sum;             // 当前文件内别名
 pub use source::Item as Record;     // 对 goxide 消费者公开
 pub use source::*;                  // 枚举来源的有效公开表
 ```
 
-- `source` 必须是同一源文件中显式 Go import 的包别名（省略alias时使用真实Go包名）。本片不猜目录相对路径，不装载 Rust 模块树。
-- use声明位于包顶层。绑定属于该目录包，可由其他 `.gox` 文件使用；import仍是文件局部。函数体内use、嵌套路径、分组导入和namespace整体别名不在本片范围。
-- 使用绑定时沿用现有 Go/goxide 表达式：裸 `sum(...)` 或包选择 `api.Add(...)`。`::` 是本片 use 声明的路径分隔符；不新增通用 `api::Add` 表达式语法。enum 的 `E::Variant` 仍按既有规则处理。
-- 同名来自同一声明且真实 Go 类型身份一致时去重；任何不同声明/类型冲突均诊断，显式项不覆盖glob，声明顺序不影响结果。别名必须避开现有包级声明与文件import名。
-- `use` 不授权外部goxide包访问该绑定；`pub use` 才增加公开路径。原生Go仍只见实际导出符号。当前private类型/常量use会产生Go alias供包内使用；若alias首字母大写，普通Go能看到它，但goxide通过metadata拒绝外部访问，不能声称Go强制这种增强隐私。
-- 带use metadata的包不支持goxide dot import，以免绕过绑定与私有检查；原生`.go`不受这项增强限制。
-- 包循环（包括导出依赖环）仍拒绝，不能用re-export绕过Go DAG或初始化规则。
+- `source` 来自显式依赖根，或本文件 `use` / 包级 `pub use` 绑定；不猜目录相对路径。
+- 私有 use 是文件作用域；pub use 是包公开绑定。namespace、逐项别名、glob 和明确配置的嵌套 namespace 均支持，函数体内 use 与分组列表语法未实现。
+- 包、类型、宏和派生路径统一使用 `::`，值字段与接收者方法使用 `.`。普通函数项可裸名调用；`api::Add(...)` 为包限定调用。
+- 不同声明/类型占同名均诊断；显式项不覆盖 glob，声明顺序不决定结果。生成名字避开所有源文件的声明。
+- 私有项不生成可供 sibling 源文件偷用的 Go alias；公开类型/常量输出真实 Go alias。普通 Go 只见实际声明，不自动获得增强语言的虚拟入口。
+- `.gox` 不再接受 Go import 或旧包点号语法；原生 `.go` 仍遵守 Go 规则。
+- 包循环（包括重导出依赖环）仍拒绝；未选中的 namespace 子项不提前加载。
 
 ### 类别与首片限制
 
@@ -43,7 +43,7 @@ pub use source::*;                  // 枚举来源的有效公开表
 | 具体enum | 公开类型alias接入既有enum metadata传播；验证了经facade的构造与match。已有internal-origin enum语法限制继续成立。 |
 | 源图内用户宏 | 本次目录module编译中的源构建registry支持显式、别名、glob、多层facade、同源diamond。保留原宏定义点scope、嵌套宏与helper身份。私有runtime helper仍拒绝；跨界internal运行时路径明确拒绝，纯捕获/常量宏可合法使用。 |
 | 独立module产物中的宏 | 拒绝：当前没有宏发布/反序列化协议。metadata记录不可用名称和类别；显式项与混合glob均准确诊断，不漏项。不自动递归读取依赖中的任意goxide源码。 |
-| 有真实Go泛型类型表示的Option/Result家族 | 复用既有enum metadata与真实Go alias，支持公开改名、多层facade、`api.Maybe[int]::Some`等限定构造/match，包括独立module消费。裸`use api::Maybe as Local`可用于Go类型位置；裸`Local[int]::Some`尚不在constructor绑定协议中，使用限定构造路径。 |
+| 有真实Go泛型类型表示的Option/Result家族 | 复用既有enum metadata与真实Go alias，支持公开改名、多层facade、`api::Maybe[int]::Some`等限定构造/match，包括独立module消费。裸`use api::Maybe as Local`可用于Go类型位置；裸`Local[int]::Some`尚不在constructor绑定协议中，使用限定构造路径。 |
 | 无真实Go类型表示的家族、未实现的用户泛型enum | 不假设等同于Go泛型alias，不生成新家族/实例化语义；已知不可用项明确拒绝。 |
 
 普通Go包的公开表来自真实`go/types`，增强包的公开表再由验证后的metadata增补/限制。类型判等使用Go的真实类型身份，不用名称字符串模拟：`Box[int]`、`Box[string]`及实参中不同包的私有结构字段/接口方法必须区别处理。元数据保留真实identity route以恢复类型参数身份。
@@ -52,23 +52,23 @@ pub use source::*;                  // 枚举来源的有效公开表
 
 ### USE-01：变量是同一存储，函数仍是原函数
 
-假定 `impl` 原生包提供 `var Count int`、`func Catch(){ _=recover() }`。
+假定 `example.org/demo/impl` 原生包提供 `var Count int`、`func Catch(){ _=recover() }`，依赖根名配置为 `implementation`（`impl` 是源语言保留字）。
 
 ```goxide
 // api/api.gox
 package api
-import impl "example.org/demo/impl"
-pub use impl::Count;
-pub use impl::Catch;
+use implementation; // configured dependency root
+pub use implementation::Count;
+pub use implementation::Catch;
 ```
 
 ```goxide
 // client/client.gox
 package client
-import api "example.org/demo/api"
+use api; // configured dependency root
 use api::Count as Counter;
-func Increment() { Counter++; api.Count = Counter + 1 }
-func Handle() { defer api.Catch(); panic("example") }
+func Increment() { Counter++; api::Count = Counter + 1 }
+func Handle() { defer api::Catch(); panic("example") }
 ```
 
 Go输出的行为形状如下（片段；实际生成import名会避免所有源标识符冲突）：
@@ -87,9 +87,9 @@ API包通过普通Go blank dependency保留impl初始化。每进程同一个Go�
 
 ```goxide
 package api
-import impl "example.org/demo/impl"
-pub use impl::Box;
-pub use impl::Small;
+use implementation; // configured dependency root
+pub use implementation::Box;
+pub use implementation::Small;
 ```
 
 生成包中的独立 `goxide_use_aliases.go` 形状（完整片段，要求impl提供相应定义）：
@@ -105,7 +105,7 @@ const Small = source.Small
 
 ### USE-03：internal合法路由
 
-`producer` 可从 `producer/internal/impl` 重导出类型T，并生成 `type T = impl.T`。外部goxide消费者走 `producer.T` 的合法alias路径，原类型身份不变。
+`producer` 可从 `producer/internal/impl` 重导出类型T，并生成 Go 声明 `type T = impl.T`。外部goxide消费者走 `producer::T` 的合法alias路径，原类型身份不变。
 
 同一internal包的函数F或变量V没有Go原生透明alias。外部消费者如果无法直接访问其原包，本片报 `unsupported ... internal ... route`，不生成会改变recover的函数wrapper、变量副本或unsafe/linkname桥。用户可以提供公开的原生API；本片不偷偷改写第三方依赖。
 
@@ -114,7 +114,7 @@ const Small = source.Small
 | 编号 | 反例 | 判据 |
 | --- | --- | --- |
 | USE-N1 | 两个不同来源的Count经glob或显式导出占同名 | goxide报歧义及两个来源 |
-| USE-N2 | 包级变量/类型/函数或文件import与use名称冲突 | goxide拒绝，不能由文件遍历顺序决定 |
+| USE-N2 | 包级变量/类型/函数与use名称冲突，或局部类型与可见namespace同名 | goxide拒绝，不能由文件遍历顺序决定；其他原生Go文件的import仍是其文件私有绑定 |
 | USE-N3 | 外部访问private use或以dot import绕过 | goxide拒绝；普通Go边界另述 |
 | USE-N4 | 通过facade访问不可导入的internal函数/变量 | goxide明确不支持；不绕过Go限制 |
 | USE-N5 | glob包含外部产物宏/未支持家族 | goxide列名拒绝，建议显式选择 |
@@ -122,11 +122,11 @@ const Small = source.Small
 | USE-N7 | `Box[int]`与`Box[string]`合并 | 真实Go类型不同，拒绝歧义 |
 | USE-N8 | 同拼写匿名结构私有字段或接口私有方法来自不同包 | 真实Go类型不同，拒绝歧义 |
 | USE-N9 | 元数据缺失、marker不符、源或依赖变更、test/race/tags环境不符 | 拒绝恢复；不猜原声明 |
-| USE-N10 | 单文件Compile、CLI文件模式或Playground使用use/导入use元数据包 | 明确要求目录/包编译；不降级为可绕过私有检查的Go视图 |
+| USE-N10 | 单文件使用pub use或mod | 公开metadata与子包选择要求目录/包编译；普通私有use支持单文件 |
 
 局部参数和局部变量可以正常遮蔽包内use绑定；新生成的原包import别名不会复用可能被局部变量遮蔽的源import名。属性键/selector成员不当成裸use绑定。当前裸use名出现在无法明确区分字段名与map key的具名composite literal中时会给出限制诊断，使用显式限定map key或不冲突的字段名；不能为了“通过”而重写错误的字段。
 
-宏模板直接引用use引入的自由函数名、外部宏发布、任意用户泛型enum等未建立新协议；不因为宏重导出而放宽既有helper/捕获/泛型限制。宏与普通Go声明同名时，选择该名称或glob报类别歧义；显式选择其他项仍允许。完整mod及pub(scope)仍另行设计。
+宏模板可按定义文件绑定显式use选择的函数/宏；外部预编译宏发布、任意用户泛型enum等未建立新协议；不因为宏重导出而放宽既有helper/捕获/泛型限制。宏与普通Go声明同名时，选择该名称或glob报类别歧义；显式选择其他项仍允许。完整mod及pub(scope)仍另行设计。
 
 ## 双向互操作
 
@@ -134,7 +134,7 @@ goxide → Go：原生Go导出对象是声明身份基础；变量和函数始�
 
 Go → goxide：消费生成Go源即可使用实际类型/常量alias和普通业务函数；通过原包访问变量/函数。Go不理解`.goxide.uses.json`中的虚拟函数/变量入口，也不自动获得private use限制或其他增强检查。
 
-metadata文件名`.goxide.uses.json`，Go marker为`GoxideUseMetadata`，schema版本2，包含可选`UnsupportedKinds`分类（参与marker digest）；正式命名迁移拒绝旧 Hgo marker/schema 1，要求统一重新生成，不提供新旧 ABI 混用。记录公开性、类别、canonical声明、合法Go route及类型identity route；不包含可执行宏代码。恢复校验marker、真实Go对象种类/类型/常量、精确selected source集合、source digest与Go importer的构建/依赖closure fingerprint。JSON必须仅含一个对象，读取有大小上限。普通模式产物不能被test/race模式默默复用。
+metadata文件名`.goxide.uses.json`，Go marker为`GoxideUseMetadata`，schema版本3，包含namespace树、派生canonical身份及`UnsupportedKinds`分类（参与marker digest）；拒绝旧schema，要求统一重新生成，不提供新旧 ABI 混用。记录公开性、类别、canonical声明、合法Go route及类型identity route；不包含可执行宏代码。恢复校验marker、真实Go对象种类/类型/常量、精确selected source集合、source digest与Go importer的构建/依赖closure fingerprint。JSON必须仅含一个对象，读取有大小上限。普通模式产物不能被test/race模式默默复用。
 
 source map在use移除及名称重写后继续回映原文件；生成alias文件是独立产物，不伪装原用户声明。重导出源目录与Go包仍同构；此片不预先固定未来mod/layout设计。已有生成Go+metadata再次进入目录流水线时保留use sidecar，并避免对已验证的相同enum marker重复声明。
 
@@ -155,6 +155,8 @@ go run ./cmd/goxide transpile -o /tmp/reexports-generated examples/reexports
 
 ### 本片验证记录（2026-10-04）
 
+本节为历史证据，旧语法与当时功能边界不作为当前入口合同；本次切换须以新提交的验证为准。
+
 执行环境为 Linux amd64、真实 Go 1.27.1（`/workspace/goxide-environment/go/bin/go`）。使用独立本地临时 module / replace fixture，`GOPROXY=off GOTOOLCHAIN=local GOWORK=off`，不需要网络依赖下载。
 
 - `go test -race -tags goxideweb -count=1 ./...`：全树回归通过，包括 CLI、官网 embed 与验收集。
@@ -169,7 +171,7 @@ go run ./cmd/goxide transpile -o /tmp/reexports-generated examples/reexports
 
 ### 宏补片与真实家族核查
 
-语法仍是`import p "example.org/lib"`再`pub use p::answer as renamed;`，调用`api.renamed!(...)`；不是`pub use "path"`。`use api::renamed as local;`允许本目录各goxide文件用`local!(...)`。
+当前语法为`use library as p;`再`pub use p::answer as renamed;`，调用`api::renamed!(...)`；依赖根提供真实路径。`use api::renamed as local;`仅允许声明该use的文件用`local!(...)`。
 
 最小拒绝案例：独立module只有生成Go/metadata时，`pub use api::answer;`报`macro requires a compiled source registry`；私有helper模板经facade调用仍报`private runtime helper`；实际引入不可访问internal依赖时报`unsupported macro runtime route`，而不是等生成Go后才失败。混合glob包含任何不可用项时整体拒绝，并列名、类别、原因。
 

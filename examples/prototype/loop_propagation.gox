@@ -1,5 +1,5 @@
 package main
-import "fmt"
+use fmt;
 func loopInt(n int,fail bool,tag int,trace *[]int)Option[int]{*trace=append(*trace,tag+n);if fail{return Option[int]::None};return Option[int]::Some(n)}
 func loopCond(n int,fail bool,trace *[]int)Option[bool]{*trace=append(*trace,100+n);if fail{return Option[bool]::None};return Option[bool]::Some(n<3)}
 func loopValue(v Option[int])int{match v{Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
@@ -38,7 +38,7 @@ Again:for _,v:=range loopSlice(true,calls)?{
 }
 func loopClosure(trace *[]int)Option[int]{f:=func()Option[int]{defer func(){*trace=append(*trace,1)}();for Option[bool]::None?{};return Option[int]::Some(1)};_=f();*trace=append(*trace,2);return Option[int]::Some(8)}
 func nilAndNativeRange()Option[int]{sum:=0;var s []int;for _,v:=range Option[[]int]::Some(s)?{sum+=v};var m map[int]int;for k:=range Option[map[int]int]::Some(m)?{sum+=k};var p *[3]int;for i:=range p{sum+=Option[int]::Some(i)?};for i:=range *p{sum+=Option[int]::Some(i)?};for i:=range 3{sum+=Option[int]::Some(i)?};return Option[int]::Some(sum)}
-func main(){trace:=[]int{};captures:=[]func()int{};fmt.Println(loopValue(forPhases(0,&trace,&captures)),trace)}
+func main(){trace:=[]int{};captures:=[]func()int{};fmt::Println(loopValue(forPhases(0,&trace,&captures)),trace)}
 func postIdentity(saved *[]*int,postSaved *[]*int)Option[int]{for i:=Option[int]::Some(0)?;i<3;i=recordPost(&i,postSaved)?{*saved=append(*saved,&i)};return Option[int]::Some(1)}
 func recordPost(p *int,saved *[]*int)Option[int]{*saved=append(*saved,p);return Option[int]::Some(*p+1)}
 func nativeEach(yield func(int)bool){for _,v:=range []int{1,2,3}{if !yield(v){return}}}

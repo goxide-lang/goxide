@@ -11,22 +11,22 @@ import (
 
 func TestExplicitStdStandalone(t *testing.T) {
 	for name, body := range map[string]string{
-		"option": `func Make()s.Option[int]{return s.Option[int]::Some(7)}
-func Read(v s.Option[int])int{return match v{s.Option[int]::Some(n)=>n,s.Option[int]::None=>0}}`,
-		"result":                  `func Next(v s.Result[int,error])s.Result[int,error]{n:=v?;return s.Result[int,error]::Ok(n+1)}`,
-		"inferred-go-constructor": `func Read()int{return match s.NewSome(8){s.Option[int]::Some(n)=>n,s.Option[int]::None=>0}}`,
-		"alias-shadow": `type Value=int;type Maybe=s.Option[Value]
+		"option": `func Make()s::Option[int]{return s::Option[int]::Some(7)}
+func Read(v s::Option[int])int{return match v{s::Option[int]::Some(n)=>n,s::Option[int]::None=>0}}`,
+		"result":                  `func Next(v s::Result[int,error])s::Result[int,error]{n:=v?;return s::Result[int,error]::Ok(n+1)}`,
+		"inferred-go-constructor": `func Read()int{return match s::NewSome(8){s::Option[int]::Some(n)=>n,s::Option[int]::None=>0}}`,
+		"alias-shadow": `type Value=int;type Maybe=s::Option[Value]
 func Read(v Maybe)int{type Value=string;s:=0;_=s;return match v{_=>9}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			result, err := Compile("explicit.gox", []byte("package sample\nimport s \"github.com/goxide-lang/std/sum\"\n"+body))
+			result, err := compileFrontendFixture("explicit.gox", []byte("package sample\nuse std::sum as s;\n"+body))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if err = typecheck.CheckPackage("goxide/generated", map[string][]byte{"explicit.go": result.Go}, typecheck.NewImporter("explicit.gox")); err != nil {
 				t.Fatal(err)
 			}
-			again, err := Compile("explicit.gox", []byte("package sample\nimport s \"github.com/goxide-lang/std/sum\"\n"+body))
+			again, err := compileFrontendFixture("explicit.gox", []byte("package sample\nuse std::sum as s;\n"+body))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -41,6 +41,7 @@ func Read(v Maybe)int{type Value=string;s:=0;_=s;return match v{_=>9}}`,
 }
 
 func TestExplicitStdModulePayloadValidation(t *testing.T) {
+	roots := frontendFixtureRoots(map[string]string{"dep": "example.org/explicit/dep", "box": "example.org/explicit/box", "explicit": "example.org/explicit"})
 	dir := sharedStdModule(t, "example.org/explicit")
 	sharedStdWrite(t, dir, "dep/enum.gox", `package dep
 pub enum Event { Ready, Count(int), }
@@ -51,11 +52,11 @@ import d "example.org/explicit/dep"
 type Box struct{Events map[string][]d.Event}
 `)
 	sharedStdWrite(t, dir, "a_types.gox", `package explicit
-import s "example.org/explicit/dep"
+use dep as s;
 pub enum Mode { Idle, Workers(int), }
 type Modes []Mode
 type Lookup map[string]Modes
-type Foreign struct { Event s.Event }
+type Foreign struct { Event s::Event }
 `)
 	sharedStdWrite(t, dir, "native.go", `package explicit
 import(s "github.com/goxide-lang/std/sum";d "example.org/explicit/dep")
@@ -64,25 +65,25 @@ type Other d.Event
 type Reordered[E,T any] = s.Result[T,E]
 `)
 	sharedStdWrite(t, dir, "b_use.gox", `package explicit
-import s "github.com/goxide-lang/std/sum"
-import b "example.org/explicit/box"
+use std::sum as s;
+use box as b;
 use s::Option as Maybe;
-type Envelope struct { Nested s.Option[Lookup]; Direct [1]Mode; Foreign Foreign; Native NativeForeign; Transitive b.Box }
-func OtherValue(v s.Option[Other]){match v{_=>{}}}
-type Public = s.Option[Envelope]
-func Some()s.Option[int]{return s.Option[int]::Some(7)}
-func Read(v s.Option[int])int{return match v{s.Option[int]::Some(n)=>n,s.Option[int]::None=>0}}
-func Inferred()int{return match s.NewSome(8){s.Option[int]::Some(n)=>n,s.Option[int]::None=>0}}
-func ViaUse(v Maybe[int])int{return match v{s.Option[int]::Some(n)=>n,s.Option[int]::None=>0}}
-func Next(v Reordered[error,int])s.Result[int,error]{n:=v?;return s.Result[int,error]::Ok(n+1)}
-func Inspect(v s.Result[Envelope,Modes],seen *int){match v{s.Result[Envelope,Modes]::Ok(_) if guard(seen)=>{},s.Result[Envelope,Modes]::Ok(_)=>{},s.Result[Envelope,Modes]::Err(_)=>{}}}
-func Propagate(v s.Result[Envelope,Modes],seen *int)s.Result[int,Modes]{_=v?;*seen+=1;return s.Result[int,Modes]::Ok(1)}
+type Envelope struct { Nested s::Option[Lookup]; Direct [1]Mode; Foreign Foreign; Native NativeForeign; Transitive b::Box }
+func OtherValue(v s::Option[Other]){match v{_=>{}}}
+type Public = s::Option[Envelope]
+func Some()s::Option[int]{return s::Option[int]::Some(7)}
+func Read(v s::Option[int])int{return match v{s::Option[int]::Some(n)=>n,s::Option[int]::None=>0}}
+func Inferred()int{return match s::NewSome(8){s::Option[int]::Some(n)=>n,s::Option[int]::None=>0}}
+func ViaUse(v Maybe[int])int{return match v{s::Option[int]::Some(n)=>n,s::Option[int]::None=>0}}
+func Next(v Reordered[error,int])s::Result[int,error]{n:=v?;return s::Result[int,error]::Ok(n+1)}
+func Inspect(v s::Result[Envelope,Modes],seen *int){match v{s::Result[Envelope,Modes]::Ok(_) if guard(seen)=>{},s::Result[Envelope,Modes]::Ok(_)=>{},s::Result[Envelope,Modes]::Err(_)=>{}}}
+func Propagate(v s::Result[Envelope,Modes],seen *int)s::Result[int,Modes]{_=v?;*seen+=1;return s::Result[int,Modes]::Ok(1)}
 func InspectPublic(v Public){match v{_=>{}}}
 func guard(seen *int)bool{*seen+=1;return true}
-func Shadow(v s.Option[int])int{type int=string;s:=0;_=s;return match v{_=>9}}
+func Shadow(v s::Option[int])int{type int=string;s:=0;_=s;return match v{_=>9}}
 `)
 	output := filepath.Join(t.TempDir(), "generated")
-	if _, err := CompileModuleWithOptions(dir, output, ModuleOptions{}); err != nil {
+	if _, err := CompileModuleWithOptions(dir, output, ModuleOptions{Roots: roots}); err != nil {
 		t.Fatal(err)
 	}
 	sharedStdWrite(t, output, "explicit_test.go", `package explicit
@@ -101,12 +102,12 @@ func TestPayloadBeforeEffects(t *testing.T){for _,kind:=range []string{"slice","
 	consumer := sharedStdModule(t, "example.org/consumer")
 	sharedStdWrite(t, consumer, "go.mod", "module example.org/consumer\ngo 1.27\nrequire example.org/explicit v0.0.0\nreplace example.org/explicit => "+filepath.ToSlash(output)+"\n")
 	sharedStdWrite(t, consumer, "read.gox", `package consumer
-import(p "example.org/explicit";b "example.org/explicit/box";s "github.com/goxide-lang/std/sum")
-func Transitive(v s.Option[b.Box]){match v{_=>{}}}
-func Check(v p.Public){match v{p.Public::Some(_)=>{},p.Public::None=>{}}}
+use explicit as p; use box as b; use std::sum as s;
+func Transitive(v s::Option[b::Box]){match v{_=>{}}}
+func Check(v p::Public){match v{p::Public::Some(_)=>{},p::Public::None=>{}}}
 `)
 	target := filepath.Join(t.TempDir(), "consumer")
-	if _, err := CompileModuleWithOptions(consumer, target, ModuleOptions{}); err != nil {
+	if _, err := CompileModuleWithOptions(consumer, target, ModuleOptions{Roots: roots}); err != nil {
 		t.Fatal(err)
 	}
 	sharedStdWrite(t, target, "read_test.go", `package consumer
@@ -123,24 +124,25 @@ func TestExplicitStdProjectionBoundaries(t *testing.T) {
 		"pointer":   `type Holder struct{Bad *Mode}`,
 		"embedded":  `type Holder struct{Mode}`,
 		"blank":     `type Holder struct{_ Mode}`,
-		"recursive": `type Holder struct{Next s.Option[Holder]}`,
+		"recursive": `type Holder struct{Next s::Option[Holder]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Compile("bad.gox", []byte("package bad\nimport s \"github.com/goxide-lang/std/sum\"\nenum Mode{Idle,}\n"+declaration+"\nfunc F(v s.Option[Holder]){match v{_=>{}}}"))
+			_, err := compileFrontendFixture("bad.gox", []byte("package bad\nuse std::sum as s;\nenum Mode{Idle,}\n"+declaration+"\nfunc F(v s::Option[Holder]){match v{_=>{}}}"))
 			if err == nil || !strings.Contains(err.Error(), "projection") {
 				t.Fatalf("wanted projection rejection: %v", err)
 			}
 		})
 	}
-	_, err := Compile("generic.gox", []byte("package bad\nimport s \"github.com/goxide-lang/std/sum\"\ntype Maybe[T any] = s.Option[T]"))
+	_, err := compileFrontendFixture("generic.gox", []byte("package bad\nuse std::sum as s;\ntype Maybe[T any] = s::Option[T]"))
 	if err == nil || !strings.Contains(err.Error(), "user generic") {
 		t.Fatalf("handwritten generic alias accepted: %v", err)
 	}
 }
 
-// Neither consumer has a .gox import of the enum's package: the only route is
+// Neither consumer has a .gox use of the enum's package: the only route is
 // native Go type information, and each consumer uses a fresh module importer.
 func TestExplicitStdNativePayloadRoutes(t *testing.T) {
+	roots := frontendFixtureRoots(map[string]string{"event": "example.org/wrappers/event", "box": "example.org/wrappers/box", "privatebox": "example.org/wrappers/privatebox", "publicbox": "example.org/wrappers/publicbox"})
 	producer := sharedStdModule(t, "example.org/wrappers")
 	sharedStdWrite(t, producer, "event/event.gox", `package event
 pub enum Event { Ready, }
@@ -162,7 +164,7 @@ import e "example.org/wrappers/internal/model"
 type Box struct{Events []e.Event}
 `)
 	output := filepath.Join(t.TempDir(), "producer")
-	if _, err := CompileModuleWithOptions(producer, output, ModuleOptions{}); err != nil {
+	if _, err := CompileModuleWithOptions(producer, output, ModuleOptions{Roots: roots}); err != nil {
 		t.Fatal(err)
 	}
 	consumer := func(t *testing.T) string {
@@ -181,13 +183,13 @@ import e "example.org/wrappers/event"
 type Box struct{Events map[string][]e.Event}
 `)
 			} else {
-				prefix = "import b \"example.org/wrappers/box\"\ntype Box = b.Box\n"
+				prefix = "use box as b;\ntype Box = b::Box\n"
 			}
-			sharedStdWrite(t, dir, "read.gox", "package route\nimport s \"github.com/goxide-lang/std/sum\"\n"+prefix+`func Read(v s.Option[Box])int{return match v{s.Option[Box]::Some(b)=>len(b.Events),s.Option[Box]::None=>0}}
-func Next(v s.Option[Box])s.Option[int]{b:=v?;return s.Option[int]::Some(len(b.Events))}
+			sharedStdWrite(t, dir, "read.gox", "package route\nuse std::sum as s;\n"+prefix+`func Read(v s::Option[Box])int{return match v{s::Option[Box]::Some(b)=>len(b.Events),s::Option[Box]::None=>0}}
+func Next(v s::Option[Box])s::Option[int]{b:=v?;return s::Option[int]::Some(len(b.Events))}
 `)
 			target := filepath.Join(t.TempDir(), "consumer")
-			if _, err := CompileModuleWithOptions(dir, target, ModuleOptions{}); err != nil {
+			if _, err := CompileModuleWithOptions(dir, target, ModuleOptions{Roots: roots}); err != nil {
 				t.Fatal(err)
 			}
 			sharedStdWrite(t, target, "read_test.go", `package route
@@ -201,8 +203,8 @@ func TestNativePayload(t *testing.T){valid:=s.NewSome(Box{Events:map[string][]e.
 	for kind, want := range map[string]string{"privatebox": "inaccessible enum-bearing field", "publicbox": "inaccessible internal origin"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := consumer(t)
-			sharedStdWrite(t, dir, "read.gox", "package route\nimport(s \"github.com/goxide-lang/std/sum\";b \"example.org/wrappers/"+kind+"\")\nfunc Read(v s.Option[b.Box]){match v{_=>{}}}")
-			_, err := CompileModuleWithOptions(dir, filepath.Join(t.TempDir(), "blocked"), ModuleOptions{})
+			sharedStdWrite(t, dir, "read.gox", "package route\nuse std::sum as s; use "+kind+" as b;\nfunc Read(v s::Option[b::Box]){match v{_=>{}}}")
+			_, err := CompileModuleWithOptions(dir, filepath.Join(t.TempDir(), "blocked"), ModuleOptions{Roots: roots})
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("wanted %q: %v", want, err)
 			}
@@ -211,21 +213,22 @@ func TestNativePayload(t *testing.T){valid:=s.NewSome(Box{Events:map[string][]e.
 	t.Run("standalone-scalar-retains-identity", func(t *testing.T) {
 		dir := consumer(t)
 		file := filepath.Join(dir, "input.gox")
-		source := []byte("package route\nimport(s \"github.com/goxide-lang/std/sum\";e \"example.org/wrappers/event\")\nfunc Read(v s.Option[e.Scalar])int{return match v{s.Option[e.Scalar]::Some(n)=>int(n),s.Option[e.Scalar]::None=>0}}")
-		if _, err := Compile(file, source); err != nil {
+		source := []byte("package route\nuse std::sum as s; use event as e;\nfunc Read(v s::Option[e::Scalar])int{return match v{s::Option[e::Scalar]::Some(n)=>int(n),s::Option[e::Scalar]::None=>0}}")
+		if _, err := CompileWithOptions(file, source, FileOptions{Roots: roots}); err != nil {
 			t.Fatal(err)
 		}
 	})
 }
 
 func TestExplicitStdPayloadDoesNotImportUnrelatedFacade(t *testing.T) {
+	roots := frontendFixtureRoots(map[string]string{"event": "example.org/payloadroute/event", "box": "example.org/payloadroute/box"})
 	dir := sharedStdModule(t, "example.org/payloadroute")
 	sharedStdWrite(t, dir, "event/event.gox", `package event
 pub enum Event { Ready, }
 `)
 	sharedStdWrite(t, dir, "a_alias/alias.gox", `package alias
-import e "example.org/payloadroute/event"
-type Alias = e.Event
+use event as e;
+type Alias = e::Event
 func init(){panic("unrelated facade was initialized")}
 `)
 	sharedStdWrite(t, dir, "box/box.go", `package box
@@ -233,11 +236,11 @@ import e "example.org/payloadroute/event"
 type Box struct{Event e.Event}
 `)
 	sharedStdWrite(t, dir, "zzzconsumer/read.gox", `package consumer
-import(s "github.com/goxide-lang/std/sum";b "example.org/payloadroute/box")
-func Read(v s.Option[b.Box]){match v{_=>{}}}
+use std::sum as s; use box as b;
+func Read(v s::Option[b::Box]){match v{_=>{}}}
 `)
 	output := filepath.Join(t.TempDir(), "out")
-	if _, err := CompileModuleWithOptions(dir, output, ModuleOptions{}); err != nil {
+	if _, err := CompileModuleWithOptions(dir, output, ModuleOptions{Roots: roots}); err != nil {
 		t.Fatal(err)
 	}
 	sharedStdWrite(t, output, "zzzconsumer/read_test.go", `package consumer

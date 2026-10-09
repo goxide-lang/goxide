@@ -47,9 +47,12 @@ def build(ROOT, GO):
    out=call(['run','--package','example.org/app','--locked','--offline',str(new)]);assert out==('modified vendor\n' if vendored else 'hello workspace\n');runs.append(dict(command='goxide run --package example.org/app --locked --offline migrated',stdout=out))
    (lib/'lib.go').unlink()
    if vendored:
-    write(lib/'lib.gox','package lib\nimport "example.org/dep"\nmacro_rules! suffix { () => { " enhanced" }; }\nfunc Value()string{return dep.Value()+suffix!()}\n')
+    with (lib/'goxide.toml').open('a') as config:config.write('\n[dependencies.dep]\nmodule="example.org/dep"\npackage="example.org/dep"\nversion="v1.0.0"\n')
+    write(lib/'lib.gox','package lib\nuse dep;\nmacro_rules! suffix { () => { " enhanced" }; }\nfunc Value()string{return dep::Value()+suffix!()}\n')
+    out=call(['run','--package','example.org/app','--offline',str(new)]);assert out=='modified vendor enhanced\n'
+    runs.append(dict(command='替换 lib.go 为 lib.gox 并声明 dep 根后更新锁：goxide run --package example.org/app --offline migrated',stdout=out))
     out=call(['run','--package','example.org/app','--locked','--offline',str(new)]);assert out=='modified vendor enhanced\n'
-    runs.append(dict(command='替换 lib.go 为 lib.gox 后：goxide run --package example.org/app --locked --offline migrated',stdout=out))
+    runs.append(dict(command='固定新依赖根重复运行：goxide run --package example.org/app --locked --offline migrated',stdout=out))
     audit=json.loads((new/'goxide-import.json').read_text())
     assert not (new/'vendor').exists()
     assert 'vendor' not in tomllib.loads((new/'goxide.toml').read_text())['workspace']

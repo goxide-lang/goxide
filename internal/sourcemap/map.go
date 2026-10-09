@@ -222,6 +222,9 @@ type Error struct {
 	Generated token.Position
 }
 
+// SourceDiagnostic reports only a verified original span, never intermediate coordinates.
+func (e *Error) SourceDiagnostic() bool { return e.Origin != nil }
+
 func (e *Error) Error() string {
 	var out strings.Builder
 	if e.Origin == nil {

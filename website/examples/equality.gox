@@ -1,11 +1,11 @@
 package main
-import "fmt"
+use fmt;
 #[derive(Clone, PartialEq, Eq)]
 type Batch struct { Values []int }
 func main() {
     original := Batch{Values: []int{1, 2}}
     copied := CloneBatch(&original)
-    fmt.Println("equal:", original.equals(copied))
+    fmt::Println("equal:", original.equals(copied))
     copied.Values[0] = 9
-    fmt.Println("after edit:", original.Values[0], copied.Values[0], original.equals(copied))
+    fmt::Println("after edit:", original.Values[0], copied.Values[0], original.equals(copied))
 }

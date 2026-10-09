@@ -317,6 +317,9 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 			}
 			for _, alias := range keys(deps) {
 				d := n.Manifest.Dependencies[alias]
+				if d.IsToolchain() {
+					continue // Available in Requests, never a Go module requirement.
+				}
 				if g.Lock.Unified != nil && !g.unifiedPlanning {
 					if _, ok := g.Lock.Unified.Modules[d.Module]; !ok {
 						return nil, fmt.Errorf("unified lock missing reachable module %s", d.Module)

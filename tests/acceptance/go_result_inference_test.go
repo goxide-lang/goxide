@@ -1,6 +1,7 @@
 package acceptance_test
 
 import (
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,6 +17,10 @@ func TestGoResultInference(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", packagesModule())
+	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
+		"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
+	})
 	packagesWrite(t, source, "ops/macros.gox", `package ops
 pub macro_rules! infer {($x:expr)=>{go_result!($x)};}
 pub macro_rules! retain {($x:expr)=>{go_result_keep!($x)};}
@@ -24,7 +29,10 @@ pub macro_rules! retain {($x:expr)=>{go_result_keep!($x)};}
 func Generic[T any](v T)(T,error){return v,nil}
 `)
 	packagesWrite(t, source, "a.gox", `package app
-import("io";"strconv";"strings";m "packages.example/app/ops")
+use io;
+use strconv;
+use strings;
+use ops as m;
 type Failure struct{N int}
 func(e *Failure)Error()string{return "failure"}
 func(e *Failure)Code()int{if e==nil{return 0};return e.N}
@@ -40,22 +48,22 @@ func erased()(int,error){var e *Failure;return 4,e}
 func closeError()NamedError{return nil}
 func Pointer(ok bool)Result[int,*Failure]{return go_result!(pointer(ok))}
 func Explicit(ok bool)Result[int,*Failure]{return go_result!(int,pointer(ok))}
-func Retained(ok bool)Result[int,Partial]{return m.retain!(pointer(ok))}
+func Retained(ok bool)Result[int,Partial]{return m::retain!(pointer(ok))}
 func Named(mode int)Result[int,Alias]{return go_result!(named(mode))}
 func Erased()Result[int,error]{return go_result!(erased())}
 func Unit()Result[struct{},NamedError]{return go_result!(closeError())}
 func UnitKeep()Result[struct{},struct{Value struct{};Err NamedError}]{return go_result_keep!(closeError())}
-func Parse(s string)Result[int,error]{return m.infer!(strconv.Atoi(s))}
+func Parse(s string)Result[int,error]{return m::infer!(strconv::Atoi(s))}
 func Nested(ok bool)Result[int,error]{defer func(){mark(9)}();n:=go_result!(Generic(Pointer(ok)?))?;return Result[int,error]::Ok(n)}
-func Propagate(ok bool)Result[string,Partial]{n:=go_result_keep!(pointer(ok))?;return Result[string,Partial]::Ok(strconv.Itoa(n))}
+func Propagate(ok bool)Result[string,Partial]{n:=go_result_keep!(pointer(ok))?;return Result[string,Partial]::Ok(strconv::Itoa(n))}
 func BoxPartial()Result[string,any]{_=go_result_keep!(pointer(false))?;return Result[string,any]::Ok("")}
 func AnyOrder()Result[int,*Failure]{f:=func()func(int)(int,*Failure){mark(1);return func(n int)(int,*Failure){mark(3);return n,nil}};return go_result!(f()(mark(2)))}
 func Variadic()Result[int,*Failure]{f:=func(xs ...int)(int,*Failure){return xs[0]+xs[1],nil};return go_result!(f([]int{3,4}...))}
-func Reader()Result[int,struct{Value int;Err error}]{r:=strings.NewReader("abc");return go_result_keep!(io.ReadFull(r,make([]byte,8)))}
+func Reader()Result[int,struct{Value int;Err error}]{r:=strings::NewReader("abc");return go_result_keep!(io::ReadFull(r,make([]byte,8)))}
 func Recover()(v any){defer func(){f:=func(x any)(any,*Failure){v=x;return x,nil};_=go_result!(f(recover()))}();panic("boom")}
 func Hygiene()Result[int,*Failure]{nil:=42;error:=5;Result:=9;_=nil;_=error;_=Result;return go_result!(pointer(true))}
 func Cross()Result[int,*Failure]{n:=InferredGlobal?;return Result[int,*Failure]::Ok(n+1)}
-func NestedAdapter()Result[int,error]{value:=go_result!(Generic(go_result!(strconv.Atoi("8"))?))?;return Result[int,error]::Ok(value)}
+func NestedAdapter()Result[int,error]{value:=go_result!(Generic(go_result!(strconv::Atoi("8"))?))?;return Result[int,error]::Ok(value)}
 type SliceError []int
 func(SliceError)Error()string{return "slice"}
 func sliceError(empty bool)(int,SliceError){if empty{return 4,SliceError{}};return 7,nil}
@@ -131,6 +139,10 @@ func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			packagesWrite(t, dir, "go.mod", packagesModule())
+			writeMacroFixtureRoots(t, dir, map[string]rootconfig.Mapping{
+				"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
+				"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
+			})
 			packagesWrite(t, dir, "bad.gox", "package bad\n"+tc.body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), dir)
 			if !strings.Contains(out, tc.want) {
@@ -148,6 +160,10 @@ func TestGoResultInferenceModules(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	producer := t.TempDir()
 	packagesWrite(t, producer, "go.mod", strings.Replace(packagesModule(), "packages.example/app", "inferred.example/producer", 1))
+	writeMacroFixtureRoots(t, producer, map[string]rootconfig.Mapping{
+		"producer": {Module: "inferred.example/producer", Package: "inferred.example/producer"},
+		"other":    {Module: "inferred.example/producer", Package: "inferred.example/producer/other"},
+	})
 	packagesWrite(t, producer, "native.go", `package producer
  type secret int
  type Count = secret
@@ -175,33 +191,37 @@ func TestGoResultInferenceModules(t *testing.T) {
 	prodOut := filepath.Join(t.TempDir(), "producer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", prodOut, producer)
 	consumer := t.TempDir()
+	writeMacroFixtureRoots(t, consumer, map[string]rootconfig.Mapping{
+		"producer": {Module: "inferred.example/producer", Package: "inferred.example/producer"},
+		"other":    {Module: "inferred.example/producer", Package: "inferred.example/producer/other"},
+	})
 	mod := strings.Replace(packagesModule(), "packages.example/app", "inferred.example/consumer", 1) + "\nrequire inferred.example/producer v0.0.0\nreplace inferred.example/producer => " + filepath.ToSlash(prodOut) + "\n"
 	packagesWrite(t, consumer, "go.mod", mod)
 	packagesWrite(t, consumer, "a.gox", `package consumer
- import p "inferred.example/producer"
- func Native(ok bool)Result[p.Count,*p.Error]{return go_result!(p.Read(ok))}
- func Keep()Result[p.Count,p.Partial]{return go_result_keep!(p.Read(false))}
- func Forward()Result[string,p.Partial]{_=p.Wrapped(false)?;return Result[string,p.Partial]::Ok("unexpected")}
- func Match()int{return match p.Wrapped(false){p.Result[p.Count,p.Partial]::Ok(n)=>int(n),p.Result[p.Count,p.Partial]::Err(e)=>int(e.Value)}}
- func Cross()Result[p.Count,*p.Error]{n:=Inferred?;return Result[p.Count,*p.Error]::Ok(n)}
+ use producer as p;
+ func Native(ok bool)Result[p::Count,*p::Error]{return go_result!(p::Read(ok))}
+ func Keep()Result[p::Count,p::Partial]{return go_result_keep!(p::Read(false))}
+ func Forward()Result[string,p::Partial]{_=p::Wrapped(false)?;return Result[string,p::Partial]::Ok("unexpected")}
+ func Match()int{return match p::Wrapped(false){p::Result[p::Count,p::Partial]::Ok(n)=>int(n),p::Result[p::Count,p::Partial]::Err(e)=>int(e.Value)}}
+ func Cross()Result[p::Count,*p::Error]{n:=Inferred?;return Result[p::Count,*p::Error]::Ok(n)}
  func localEvents()(Events,error){return Events{nil},nil}
  func NamedForeignInvalid(){r:=go_result!(localEvents());match r {_=>{panic("missed named foreign enum")},}}
  func ExplicitForeignInvalid(){r:=Result[Events,error]::Ok(Events{nil});match r {_=>{panic("missed explicit foreign enum")},}}
- func ForeignInvalid(){r:=go_result!(p.InvalidEvents());match r {_=>{panic("missed foreign enum")},}}
+ func ForeignInvalid(){r:=go_result!(p::InvalidEvents());match r {_=>{panic("missed foreign enum")},}}
  `)
 	packagesWrite(t, consumer, "z.gox", `package consumer
- import p "inferred.example/producer"
- type Events []p.Event
- var Inferred=go_result!(p.Read(true))
+ use producer as p;
+ type Events []p::Event
+ var Inferred=go_result!(p::Read(true))
  `)
 	packagesWrite(t, consumer, "left.gox", `package consumer
- import m "inferred.example/producer"
- type Left []m.Event
+ use producer as m;
+ type Left []m::Event
  `)
 	packagesWrite(t, consumer, "right.gox", `package consumer
- import m "inferred.example/producer/other"
- type Right []m.Event
- func right()(Right,error){return m.Events()}
+ use other as m;
+ type Right []m::Event
+ func right()(Right,error){return m::Events()}
  `)
 	packagesWrite(t, consumer, "scope.gox", `package consumer
  func invalidLeft()(Left,error){return Left{nil},nil}
@@ -221,11 +241,12 @@ func TestGoResultInferenceModules(t *testing.T) {
 	packagesCommand(t, prodOut, tool, true, "vet", "./...")
 	packagesCommand(t, out, tool, true, "test", "-race", "-count=1", "-v", "./...")
 	packagesCommand(t, out, tool, true, "vet", "./...")
-	for _, tc := range []struct{ name, call, want string }{{"T", "p.HiddenT()", "T must be nameable"}, {"E", "p.HiddenE()", "E must be nameable"}} {
+	for _, tc := range []struct{ name, call, want string }{{"T", "p::HiddenT()", "T must be nameable"}, {"E", "p::HiddenE()", "E must be nameable"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			packagesWrite(t, dir, "go.mod", mod)
-			packagesWrite(t, dir, "bad.gox", "package consumer\nimport p \"inferred.example/producer\"\nfunc Bad(){_=go_result!("+tc.call+")}\n")
+			writeMacroFixtureRoots(t, dir, map[string]rootconfig.Mapping{"producer": {Module: "inferred.example/producer", Package: "inferred.example/producer"}})
+			packagesWrite(t, dir, "bad.gox", "package consumer\nuse producer as p;\nfunc Bad(){_=go_result!("+tc.call+")}\n")
 			message := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "negative"), dir)
 			if !strings.Contains(message, tc.want) {
 				t.Fatal(message)

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "05a53b907e7930b23d2c80015135dff0f61a7a44",
+  "compilerCommit": "33af584eebbb050886156cf25a0f9432caaa4824",
   "reviewedAt": "2026-10-09",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
@@ -41,7 +41,7 @@
     {
       "id": "go_result",
       "title": "Go 返回值适配",
-      "description": "无需 import 的编译器 builtin；普通版适配错误，keep 版保留部分值。",
+      "description": "无需 use 声明的编译器 builtin；普通版适配错误，keep 版保留部分值。",
       "expectedStdout": "next: 42\nparse error: true\npartial: 3 abc true\n"
     },
     {
@@ -207,8 +207,8 @@
       ],
       "status": "verified",
       "support": "browser",
-      "summary": "go_result! / go_result_keep! 是编译器保留 builtin，无须 import 宏，不是 std 导出宏。编译器生成适配与载荷检查，std/sum 提供共享 Result 类型和构造器。",
-      "usage": "原生 Go 包照常 import；显式适配只求值原调用一次。Atoi 失败时普通版丢弃 int；Reader 返回 n>0 与 EOF 时，keep 版保留 Value 和原 Err。? 沿用可赋值优先、精确一步 From 的错误传播，不自动丢弃 partial value。",
+      "summary": "go_result! / go_result_keep! 是编译器保留 builtin，无须 use 宏，不是 std 导出宏。编译器生成适配与载荷检查，std/sum 提供共享 Result 类型和构造器。",
+      "usage": "用 use 绑定原生 Go 包；显式适配只求值原调用一次。Atoi 失败时普通版丢弃 int；Reader 返回 n>0 与 EOF 时，keep 版保留 Value 和原 Err。? 沿用可赋值优先、精确一步 From 的错误传播，不自动丢弃 partial value。",
       "limitation": "只接收一个返回 E 或 (T,E) 的调用；兼容 (T,call) 形式要求两个结果且 T 完全相同。E 须实现 error 且可为 nil，按原静态 E 判断：nil 指针可成功，接口内 typed nil 仍失败。T/E 须在包作用域可命名；保值不是 Clone，多成功值先组合。普通 .go 不支持这些宏或 ?；没有 std.go_result! 限定入口。",
       "examples": [
         "go_result"
@@ -286,8 +286,8 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "Serialize/Deserialize 派生调用格式无关 typed helper；JSON 是独立格式实现。",
-      "usage": "Config 生成 JSON；Request.Limit 对缺失和 null 都解为 None，数值 7 解为 Some(7)。",
+      "summary": "serde::Serialize / serde::Deserialize 由当前文件 use 的 serde 协议拥有者解析；JSON 是独立格式实现。",
+      "usage": "use serde; 后可派生 serde::Serialize 和 serde::Deserialize；别名与直接项 use 保留真实 owner。Config 用 serde::json 生成 JSON；Request.Limit 的缺失与 null 都解为 None。",
       "limitation": "Option 不代表 PATCH 的 missing/null/value 三态。Option[chan int] 缺少协议会拒绝；字段 adapter、自动 MarshalJSON、JSON Value 与 YAML 不能按提案当作现有 API。",
       "examples": [
         "derive",
@@ -297,7 +297,9 @@
         "tests/acceptance/option_serde_test.go",
         "tests/acceptance/serde_defaults_test.go",
         "docs/serde-json.md",
-        "internal/frontend/serde_protocol_artifact_test.go"
+        "internal/frontend/serde_protocol_artifact_test.go",
+        "internal/derives/registry.go",
+        "internal/frontend/derive_bindings_test.go"
       ],
       "checks": [
         "serde_option_channel"
@@ -336,9 +338,9 @@
       ],
       "status": "partial",
       "support": "cli",
-      "summary": "基于同文件 import alias 引入或重导出公开项，保留变量存储与宏定义点。",
-      "usage": "公开工程快照中 Counter 与 impl.Count 指向同一存储；源图宏通过 facade 使用。",
-      "limitation": "只在目录/包编译处理；单文件 Playground 不接受 use。独立模块预编译宏发布、RFC 0024 新路径尚不可用。",
+      "summary": "从显式项目依赖根 use 包或公开项；pub use 重导出公开项，保留变量存储与宏定义点。",
+      "usage": "公开工程快照中 Counter 与 impl::Count 指向同一存储；源图宏通过 facade 使用。",
+      "limitation": "跨包源码图与外部宏需要 CLI 工程；Playground 只接受固定依赖上下文和一个用户包，未声明根会拒绝。",
       "examples": [],
       "evidence": [
         "cmd/goxide/directory.go",
@@ -350,7 +352,7 @@
       ],
       "snippet": {
         "language": "goxide · 多文件片段",
-        "text": "// api/api.gox：impl 为本文件 import 别名\npub use impl::*;\n// main.gox：api 为本文件 import 别名\nuse api::Count as Counter;",
+        "text": "// api/api.gox：impl 来自项目明确声明的依赖根\nuse impl;\npub use impl::*;\n// main.gox\nuse api::Count as Counter;",
         "note": "下方 CLI 工程快照可查看实际源码、生成 Go 与输出。片段不能单独放进 Playground。"
       }
     },
@@ -577,29 +579,36 @@
     },
     {
       "id": "use-paths",
-      "title": "use 路径与依赖别名",
-      "topic": "future",
+      "title": "显式依赖根与静态路径",
+      "topic": "interop",
       "rfcs": [
         "0024"
       ],
-      "status": "proposal",
-      "support": "unavailable",
-      "summary": "RFC 0024 是提案；新路径语法尚未批准和实现，不改变目前 import alias 的 use 规则。",
-      "usage": "提议用途：用显式依赖键或精确包路径定位公开项，同时保留 Go 包身份与 import DAG。",
-      "limitation": "例如 use \"fmt\"::Println; 是拟议语法，当前编译器不支持；不能靠它自动下载模块、激活 feature 或授权脚本。",
-      "examples": [],
+      "status": "partial",
+      "support": "browser",
+      "summary": "use 从项目显式声明的依赖根选择包或公开项；静态包、类型、宏和派生路径使用 ::，值成员使用 .。",
+      "usage": "use serde::json as json; 绑定明确命名空间，json::Marshal 调用包项；item.Value 访问值字段。Playground 展示并验证同一 CLI/WASM 依赖根配置。",
+      "limitation": "不接受 .gox 的旧 import、包成员点号或字符串 use 路径；不会猜测模块根或扫描目录。依赖映射不下载模块、激活 feature 或授权脚本。",
+      "examples": [
+        "derive",
+        "serde_option"
+      ],
       "evidence": [
-        "@use-path:docs/rfcs/0024-use-paths.md"
+        "internal/paths/paths.go",
+        "internal/rootconfig/roots.go",
+        "internal/frontend/static_paths_test.go",
+        "internal/frontend/deferred_use_test.go",
+        "cmd/goxide-playground/main.go"
       ],
       "checks": [
         "use_path_proposal"
       ],
       "snippet": {
-        "language": "goxide · 提案示意，未实现",
-        "text": "use \"fmt\"::Println;\n// 当前版本请使用目录工程中的 import alias + use。",
-        "note": "仅展示提案与当前版本的区别，不提供“打开 Playground”按钮。"
+        "language": "goxide · 显式依赖上下文",
+        "text": "use fmt;\nuse serde;\nuse serde::json as json;\n#[derive(serde::Serialize, serde::Deserialize)]\ntype Item struct { Value int }",
+        "note": "Playground 的固定项目声明在下方依赖源码视图展示。包静态路径与值成员使用不同分隔符。"
       },
-      "development": "文档分支快照 5e4b118：仅新增提案，没有 parser/resolver 实现。"
+      "development": "本轮实现显式项目依赖根、use 绑定与 :: 静态路径；支持范围以当前源码、CLI/WASM 定向验收和下方限制为准。"
     },
     {
       "id": "shared-std",
@@ -613,7 +622,7 @@
       "support": "browser",
       "summary": "当前编译器使用已公开 std/sum 的共享 Option/Result 身份与独立 serde core / JSON。",
       "usage": "生成 Go 导入共享 std/sum、std/formatting 和 std/runtime，不再依赖编译器支持包；具体载荷 validator 仍由编译器生成。JSON 示例使用 github.com/goxide-lang/serde/json。",
-      "limitation": "enum schema 8 / reference 3 / use 2 / sum ABI 2，必须与新std版本配套；旧marker产物须重生成。固定迁移版本不等于v1 ABI承诺；next仍为空，RFC0024路径语法另属提案。",
+      "limitation": "enum schema 8 / reference 3 / use 2 / sum ABI 2，必须与新std版本配套；旧marker产物须重生成。固定迁移版本不等于v1 ABI承诺。",
       "examples": [
         "result",
         "serde_option"
@@ -759,7 +768,7 @@
       }
     }
   ],
-  "compilerDigest": "8a18f2a831c75d2a20d7e9a85b7704231b76edd52751eb0d4484cdb16e2ad3b5",
+  "compilerDigest": "3686a57d8843b053cbe468baa486893f23dd59906c2c67a683270cfa20c4e194",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

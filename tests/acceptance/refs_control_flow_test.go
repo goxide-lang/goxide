@@ -18,43 +18,44 @@ func TestReadonlyControlFlowModules(t *testing.T) {
 	sourceFor := func(body string) string {
 		dir := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, dir, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, dir, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 		packagesWrite(t, dir, "model/model.gox", `package model
  type State struct { Items []int; Rows [][]int; P *int; A [1][]int }
  func View(s &State)&State{return s}
  `)
 		packagesWrite(t, dir, "app.gox", `package app
- import "packages.example/app/model"
+ use model;
  func touch(v []int){v[0]++}
  `+body)
 		return dir
 	}
 	t.Run("fresh-paths-race", func(t *testing.T) {
 		source := sourceFor(`
-func For(r &model.State)int{
+func For(r &model::State)int{
  x:=r.Items; total:=0
  for i:=0;i<3;i++ { x=append([]int(nil),x...);touch(x);total+=x[0] }
  return total
 }
-func Range(r &model.State)int{
+func Range(r &model::State)int{
  x:=r.Items;total:=0
  for _,v:=range r.Items {x=[]int{v};touch(x);total+=x[0]}
  for _,row:=range r.Rows {row=append([]int(nil),row...);touch(row);total+=row[0]}
  return total
 }
-func Branch(r &model.State,b bool)int{
+func Branch(r &model::State,b bool)int{
  x:=[]int{10};if b{x=r.Items;return len(x)};touch(x);return x[0]
 }
-func Address(r &model.State)int{
+func Address(r &model::State)int{
  x:=r.Items;old:=&x[0];x=[]int{10};touch(x)
  p:=r.P;oldp:=&*p;n:=20;p=&n;*p++
  return *old+x[0]+*oldp+*p
 }
-func Break(r &model.State,b bool)int{
+func Break(r &model::State,b bool)int{
  x:=r.Items
  for {if b{x=[]int{10};break};x=[]int{20};break}
  touch(x);return x[0]
 }
-func Continue(r &model.State)int{
+func Continue(r &model::State)int{
  x:=r.Items;total:=0
  Outer:for i:=0;i<3;touch(x){
   x=[]int{i};i++
@@ -62,24 +63,24 @@ func Continue(r &model.State)int{
  }
  return total+x[0]
 }
-func LabelBreak(r &model.State)int{
+func LabelBreak(r &model::State)int{
  x:=r.Items
  Outer:for {for {x=[]int{30};break Outer}}
  touch(x);return x[0]
 }
-func LocalCopies(r &model.State)int{
+func LocalCopies(r &model::State)int{
  total:=0
  for i:=0;i<2;i++ {v:=*r;v.A=[1][]int{};_ = v; x:=r.Items;x=append([]int(nil),x...);touch(x);total+=x[0]}
  return total
 }
-func ZeroLocals(r &model.State)int{
+func ZeroLocals(r &model::State)int{
  total:=0
  for i:=0;i<2;i++ {var x []int;if x!=nil{panic("nonzero fresh slot")};touchEmpty(x);x=r.Items;total+=len(x)}
  return total
 }
 func touchEmpty(x []int){if x!=nil{panic("expected nil")}}
 func Run(which int,b bool)int{
- n:=4;s:=model.State{Items:[]int{3,5},Rows:[][]int{{7}},P:&n};r:=model.View(&s)
+ n:=4;s:=model::State{Items:[]int{3,5},Rows:[][]int{{7}},P:&n};r:=model::View(&s)
  var out int
  switch which{case 0:out=For(r);case 1:out=Range(r);case 2:out=Branch(r,b);case 3:out=Address(r);case 4:out=Break(r,b);case 5:out=Continue(r);case 6:out=LabelBreak(r);case 7:out=LocalCopies(r);case 8:out=ZeroLocals(r)}
  if s.Items[0]!=3||s.Items[1]!=5||s.Rows[0][0]!=7||n!=4{panic("readonly source changed")}
@@ -121,7 +122,7 @@ func TestAddressIdentity(t *testing.T){if got:=Run(3,false);got!=39{t.Fatal(got)
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			source := sourceFor("func Bad(r &model.State,n int,rmap &map[*int]int){" + strings.ReplaceAll(body, "range rmap", "range *rmap") + "}\n")
+			source := sourceFor("func Bad(r &model::State,n int,rmap &map[*int]int){" + strings.ReplaceAll(body, "range rmap", "range *rmap") + "}\n")
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
 			if !strings.Contains(out, "readonly") {
 				t.Fatalf("not a permission rejection: %s", out)

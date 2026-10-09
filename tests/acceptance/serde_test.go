@@ -10,13 +10,11 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 // This independent acceptance suite executes actual frontend output under race.
 func TestSerdeBlackBoxRace(t *testing.T) {
-	result, err := frontend.Compile("acceptance.gox", []byte(acceptanceSource))
+	result, err := compileAcceptanceSerdeFixture("acceptance.gox", []byte(acceptanceSource))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,15 +42,15 @@ func TestSerdeBlackBoxRace(t *testing.T) {
 
 func TestUnsupportedSerdeIsDiagnosed(t *testing.T) {
 	cases := map[string]string{
-		"skip-wire-collision": "package fixture\n#[derive(Serialize, Deserialize)]\ntype Collision struct {\n #[serde(skip, rename=\"same\")]\n Secret string\n #[serde(rename=\"same\")]\n Public string\n}",
-		"generic":             "package fixture\n#[derive(Serialize)]\ntype Generic[T any] struct { Value T }",
-		"public-enum":         "package fixture\n#[derive(Serialize)]\npub enum Choice { A, B }",
-		"external":            "package fixture\nimport \"time\"\n#[derive(Serialize)]\ntype Event struct { At time.Time }",
-		"interface":           "package fixture\n#[derive(Deserialize)]\ntype Dynamic struct { Value any }",
+		"skip-wire-collision": "package fixture; use serde;\n#[derive(serde::Serialize, serde::Deserialize)]\ntype Collision struct {\n #[serde(skip, rename=\"same\")]\n Secret string\n #[serde(rename=\"same\")]\n Public string\n}",
+		"generic":             "package fixture; use serde;\n#[derive(serde::Serialize)]\ntype Generic[T any] struct { Value T }",
+		"public-enum":         "package fixture; use serde;\n#[derive(serde::Serialize)]\npub enum Choice { A, B }",
+		"external":            "package fixture; use serde;\nuse time;\n#[derive(serde::Serialize)]\ntype Event struct { At time::Time }",
+		"interface":           "package fixture; use serde;\n#[derive(serde::Deserialize)]\ntype Dynamic struct { Value any }",
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("unsupported.gox", []byte(source))
+			_, err := compileAcceptanceSerdeFixture("unsupported.gox", []byte(source))
 			if err == nil {
 				t.Fatal("unsupported derive accepted")
 			}
@@ -63,10 +61,10 @@ func TestUnsupportedSerdeIsDiagnosed(t *testing.T) {
 	}
 }
 
-const acceptanceSource = `package fixture
-#[derive(Serialize, Deserialize)]
+const acceptanceSource = `package fixture; use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 type Leaf struct { Name string; N int64 }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 type Record struct {
  #[serde(rename="rows")]
@@ -77,9 +75,9 @@ type Record struct {
  Token string
  Optional *int
 }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type Numbers struct { I int64; U uint64; F float64; Small float32 }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type Node struct { Value int; Next *Node }
 `
 

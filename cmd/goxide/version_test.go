@@ -72,12 +72,12 @@ path = '.'
 
 [package]
 format = 1
-`, "lib.gox": "package lib\nimport \"fmt\"\nfunc Value()string{return fmt.Sprint(\"" + version + " \",cfg!(feature(\"d\")),\" \",cfg!(feature(\"a\")),\" \",cfg!(feature(\"b\")))}\n"}
+`, "lib.gox": "package lib\nuse fmt;\nfunc Value()string{return fmt::Sprint(\"" + version + " \",cfg!(feature(\"d\")),\" \",cfg!(feature(\"a\")),\" \",cfg!(feature(\"b\")))}\n"}
 }
 func versionApp(t *testing.T, dependency string) string {
 	t.Helper()
 	root := t.TempDir()
-	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"version":1,"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":` + dependency + `}}`), "main.gox": "package main\nimport \"fmt\"\nimport l \"example.org/goxidelib\"\nfunc main(){fmt.Println(l.Value())}\n"})
+	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"version":1,"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":` + dependency + `}}`), "main.gox": "package main\nuse fmt;\nuse lib as l;\nfunc main(){fmt::Println(l::Value())}\n"})
 	return root
 }
 func sourceHash(t *testing.T, root string) string {
@@ -164,7 +164,7 @@ func TestVersionSourceUnifiedMVSAndDiamond(t *testing.T) {
 		if name == "right" {
 			f = "b"
 		}
-		projectWrite(t, filepath.Join(base, name), map[string]string{"go.mod": "module example.org/" + name + "\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"version":1,"lib":{"name":"lib","path":"."},"dependencies":{"lib":{"module":"example.org/goxidelib","version":"v1.0.0","default_features":false,"features":["` + f + `"]}}}`), "lib.gox": "package lib\nimport l \"example.org/goxidelib\"\nfunc Value()string{return l.Value()}\n"})
+		projectWrite(t, filepath.Join(base, name), map[string]string{"go.mod": "module example.org/" + name + "\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"version":1,"lib":{"name":"lib","path":"."},"dependencies":{"lib":{"module":"example.org/goxidelib","version":"v1.0.0","default_features":false,"features":["` + f + `"]}}}`), "lib.gox": "package lib\nuse lib as l;\nfunc Value()string{return l::Value()}\n"})
 	}
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\nrequire example.org/native v1.0.0\n", "goxide.toml": `[[bin]]
 name = 'app'
@@ -181,7 +181,7 @@ path = '../right'
 
 [package]
 format = 1
-`, "main.gox": "package main\nimport \"fmt\"\nimport l \"example.org/left\"\nimport r \"example.org/right\"\nfunc main(){fmt.Println(l.Value(),r.Value())}\n"})
+`, "main.gox": "package main\nuse fmt;\nuse left as l;\nuse right as r;\nfunc main(){fmt::Println(l::Value(),r::Value())}\n"})
 	if b, e := projectRun(t, root, "run"); e != nil || strings.TrimSpace(b) != "v2 false true true v2 false true true" {
 		t.Fatalf("%s %v", b, e)
 	}
@@ -406,7 +406,7 @@ func TestVersionSourceScriptPermissionTracksSelectedVersion(t *testing.T) {
 	}
 	files["goxide.toml"] = projectManifest(m)
 	files["go.mod"] = "module example.org/goxidelib\n\ngo 1.27\n"
-	files["lib/lib.gox"] = "package lib\nimport \"example.org/goxidelib/gen\"\nfunc Value()string{return gen.Value}\n"
+	files["lib/lib.gox"] = "package lib\nuse gen;\nfunc Value()string{return gen::Value}\n"
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", files)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", files)
 	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
@@ -546,7 +546,7 @@ version = 'v1.1.0'
 
 [package]
 format = 1
-`})
+`, "main.gox": "package main\nuse fmt;\nuse a as l;\nfunc main(){fmt::Println(l::Value())}\n"})
 	g, e := project.Load(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, true, false, false)
 	if e != nil {
 		t.Fatal(e)

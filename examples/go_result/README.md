@@ -1,6 +1,6 @@
 # 显式适配 Go 返回值
 
-`go_result!` 和 `go_result_keep!` 是 **Goxide 编译器保留的 builtin 宏**，可以直接调用，无须 import 宏定义。它们不是 `std` 或 `std/sum` 导出的源码包宏，也没有 `std.go_result!` 这样的限定入口。普通版在失败时只保留原 E；保值版同时保留返回值和原 E。
+`go_result!` 和 `go_result_keep!` 是 **Goxide 编译器保留的 builtin 宏**，可以直接调用，无须 `use` 宏定义。它们不是 `std` 或 `std/sum` 导出的源码包宏，也没有 `std::go_result!` 这样的限定入口。普通版在失败时只保留原 E；保值版同时保留返回值和原 E。
 
 编译器负责识别调用、检查原生 Go 签名、生成适配 helper，并登记具体 Result 的载荷检查。`github.com/goxide-lang/std/sum` 提供共享的 `Result[T,E]` 类型、Ok/Err cases 和构造器；源码中的 `Result` 由编译器接到这个共享类型，不是在每个用户包定义一个新家族。无须导入 builtin 不等于生成程序没有 std 模块依赖：依赖版本由工程的 manifest 固定。
 

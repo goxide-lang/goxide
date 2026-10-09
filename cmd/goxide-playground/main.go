@@ -4,12 +4,21 @@
 package main
 
 import (
+	"crypto/sha256"
+	_ "embed"
 	"fmt"
 	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/playground"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"github.com/hxsf/goxide/internal/typecheck"
 	"syscall/js"
 )
+
+//go:embed goxide.roots.toml
+var dependencyContext []byte
+
+var dependencyRoots paths.Roots
 
 func compile(_ js.Value, args []js.Value) (result any) {
 	defer func() {
@@ -24,7 +33,9 @@ func compile(_ js.Value, args []js.Value) (result any) {
 	if len(source) > 32768 {
 		return map[string]any{"error": "source exceeds 32 KiB"}
 	}
-	r, err := frontend.Compile("playground.gox", []byte(source))
+	r, err := frontend.CompileWithOptions("playground.gox", []byte(source), frontend.FileOptions{
+		Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox"),
+	})
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
@@ -57,7 +68,9 @@ func compilePackage(_ js.Value, args []js.Value) (result any) {
 	}
 	// On js/wasm this reads only the export archives embedded at website build
 	// time. Each request receives a fresh importer and no request-local state.
-	output, err := playground.CompilePackage(files, typecheck.NewImporter("playground.gox"))
+	output, err := playground.CompilePackage(files, frontend.PackageOptions{
+		Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox"),
+	})
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
@@ -69,8 +82,14 @@ func compilePackage(_ js.Value, args []js.Value) (result any) {
 }
 
 func main() {
+	var err error
+	dependencyRoots, err = rootconfig.Parse("goxide.roots.toml", dependencyContext)
+	if err != nil {
+		js.Global().Call("postMessage", map[string]any{"type": "fatal", "error": err.Error()})
+		return
+	}
 	js.Global().Set("goxideCompile", js.FuncOf(compile))
 	js.Global().Set("goxideCompilePackage", js.FuncOf(compilePackage))
-	js.Global().Call("postMessage", map[string]any{"type": "ready"})
+	js.Global().Call("postMessage", map[string]any{"type": "ready", "rootsSha256": fmt.Sprintf("%x", sha256.Sum256(dependencyContext))})
 	select {}
 }

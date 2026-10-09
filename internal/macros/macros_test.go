@@ -66,7 +66,7 @@ func main(){ fmt.Println(values!(1,wrap!(2),3), values!()) }
 func TestLogAndReturnDefer(t *testing.T) {
 	run(t, `package main
 import "fmt"
-macro_rules! event { ($msg:expr, $($field:expr),*) => {fmt.Println($msg,$($field),*)}; }
+macro_rules! event { ($msg:expr, $($field:expr),*) => {fmt::Println($msg,$($field),*)}; }
 macro_rules! leave { ($x:expr) => {return $x}; }
 macro_rules! cleanup { ($f:ident) => {defer $f()}; }
 func work()int { done:=func(){fmt.Println("done")}; cleanup!(done);event!("request", "id", 7);leave!(9) }
@@ -112,7 +112,7 @@ func TestErrors(t *testing.T) {
 func TestPreserveAttributeAndOrigins(t *testing.T) {
 	src := `package p
 macro_rules! identity {($x:expr)=>{$x};}
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 type Item struct { Value int }
 func f()int{return identity!(7)}
 `
@@ -120,7 +120,7 @@ func f()int{return identity!(7)}
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(r.Source), "#[derive(Serialize)]\ntype Item") {
+	if !strings.Contains(string(r.Source), "#[derive(serde::Serialize)]\ntype Item") {
 		t.Fatalf("attribute changed: %s", r.Source)
 	}
 	found := false

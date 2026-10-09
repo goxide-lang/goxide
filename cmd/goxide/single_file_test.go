@@ -51,13 +51,27 @@ func TestSingleFileModuleGraphAndOverlay(t *testing.T) {
 	module := filepath.Join(bundle, "consumer")
 	mod := "module example.org/consumer\n\ngo 1.27\n\nrequire example.org/dep v0.0.0\nreplace example.org/dep => ../dep\ngodebug panicnil=1\n"
 	singleFileWrite(t, module, "go.mod", mod)
+	fixtureRootsFile(t, module, `[roots.dep]
+module="example.org/dep"
+package="example.org/dep"
+[roots.hidden]
+module="example.org/consumer"
+package="example.org/consumer/internal/hidden"
+[roots.native]
+module="example.org/consumer"
+package="example.org/consumer/native"
+`)
 	singleFileWrite(t, bundle, "dep/go.mod", "module example.org/dep\ngo 1.27\n")
 	singleFileWrite(t, bundle, "dep/value.go", "package dep\nfunc Value()int{return 3}\n")
 	singleFileWrite(t, module, "internal/hidden/value.go", "package hidden\nfunc Value()int{return 5}\n")
 	singleFileWrite(t, module, "native/value.go", "package native\nfunc Value()int{return 7}\n")
 	singleFileWrite(t, module, "cmd/app/main.gox", `package main
-import("fmt";"os";"example.org/dep";"example.org/consumer/internal/hidden";"example.org/consumer/native")
-func main(){fmt.Printf("%d %q\n",dep.Value()+hidden.Value()+native.Value(),os.Args[1:])}
+use fmt;
+use os;
+use dep;
+use hidden;
+use native;
+func main(){fmt::Printf("%d %q\n",dep::Value()+hidden::Value()+native::Value(),os::Args[1:])}
 `)
 	singleFileWrite(t, module, "cmd/app/poison.go", "package main\ninvalid sibling Go\n")
 	singleFileWrite(t, module, "cmd/app/poison.gox", "invalid sibling Goxide\n")
@@ -123,7 +137,8 @@ func TestSingleFileModuleSiblingAndMissingDependency(t *testing.T) {
 	base := t.TempDir()
 	module := filepath.Join(base, "consumer")
 	singleFileWrite(t, module, "go.mod", "module example.org/consumer\ngo 1.27\n")
-	singleFileWrite(t, module, "main.gox", "package main\nimport \"fmt\"\nfunc main(){fmt.Println(sibling())}\n")
+	fixtureRootsFile(t, module, fixtureSerdeRoots)
+	singleFileWrite(t, module, "main.gox", "package main\nuse fmt;\nfunc main(){fmt::Println(sibling())}\n")
 	singleFileWrite(t, module, "sibling.go", "package main\nfunc sibling()int{return 19}\n")
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	var out, stderr bytes.Buffer
@@ -140,7 +155,7 @@ func TestSingleFileModuleSiblingAndMissingDependency(t *testing.T) {
 	}
 	// The compiler's own graph contains this dependency; a configured consumer
 	// must not acquire it from --runtime or cwd.
-	singleFileWrite(t, module, "missing.gox", "package main\nimport _ \"github.com/goxide-lang/serde/json\"\nfunc main(){}\n")
+	singleFileWrite(t, module, "missing.gox", "package main\nuse serde::json as _;\nfunc main(){}\n")
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +163,7 @@ func TestSingleFileModuleSiblingAndMissingDependency(t *testing.T) {
 	before := singleFileSnapshot(t, module)
 	out.Reset()
 	stderr.Reset()
-	if err := run([]string{"run", "--go", tool, "--runtime", root, filepath.Join(module, "missing.gox")}, &out, &stderr); err == nil || !strings.Contains(err.Error()+stderr.String(), "github.com/goxide-lang/serde/json") {
+	if err := run([]string{"run", "--go", tool, "--runtime", root, filepath.Join(module, "missing.gox")}, &out, &stderr); err == nil || !strings.Contains(err.Error()+stderr.String(), "github.com/goxide-lang/serde") {
 		t.Fatalf("missing dependency was supplied by runtime: %v: %s", err, &stderr)
 	}
 	if got := singleFileSnapshot(t, module); !reflect.DeepEqual(before, got) {
@@ -161,8 +176,12 @@ func TestSingleFileModuleNearestOwnerAndOutputs(t *testing.T) {
 	singleFileWrite(t, base, "outer/go.mod", "module example.org/outer\ngo 1.27\n")
 	inner := filepath.Join(base, "outer/nested")
 	singleFileWrite(t, inner, "go.mod", "module example.org/inner\ngo 1.27\n")
+	fixtureRootsFile(t, inner, `[roots.leaf]
+module="example.org/inner"
+package="example.org/inner/internal/leaf"
+`)
 	singleFileWrite(t, inner, "internal/leaf/leaf.go", "package leaf\nfunc Value()int{return 23}\n")
-	singleFileWrite(t, inner, "app/main.gox", "package main\nimport(\"fmt\";\"example.org/inner/internal/leaf\")\nfunc main(){fmt.Println(leaf.Value())}\n")
+	singleFileWrite(t, inner, "app/main.gox", "package main\nuse fmt;\nuse leaf;\nfunc main(){fmt::Println(leaf::Value())}\n")
 	input := filepath.Join(inner, "app/main.gox")
 	m, err := prepareSingleFileModule(input)
 	if err != nil {

@@ -12,10 +12,11 @@ import (
 )
 
 type PackageConfig struct {
-	Format    int    `toml:"format"`
-	Module    string `toml:"module"`
-	Go        string `toml:"go"`
-	Toolchain string `toml:"toolchain,omitempty"`
+	Format     int               `toml:"format"`
+	Module     string            `toml:"module"`
+	Go         string            `toml:"go"`
+	Toolchain  string            `toml:"toolchain,omitempty"`
+	Namespaces map[string]string `toml:"namespaces,omitempty"`
 }
 type GoRequire struct {
 	Module   string `json:"module" toml:"module"`

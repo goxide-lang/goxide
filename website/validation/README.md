@@ -1,6 +1,6 @@
 # Focused same-package Playground validation
 
-For issue #5, use [package-files/run.py](package-files/README.md) with the matching
+For same-package Playground changes, use [package-files/run.py](package-files/README.md) with the matching
 built site and CLI. It checks real CLI/browser file-set parity, legacy examples,
 full helper files, fixed dependency provenance, browser interactions and delayed
 Worker results. Chromium runs with its own sandbox enabled. This targeted suite
@@ -65,6 +65,11 @@ stdout. Transpilation parity alone does not prove runtime payload validation.
 `--cases website/validation/std-support-cases.json` checks direct imports of the
 public std formatting/runtime packages, an assignment guard, and the generated
 std formatting call on the native CLI, Node GoWASM, and HTTP Worker.
+`--cases website/validation/static-paths-cases.json` checks deferred match arms, static type paths, value members, explicit use bindings,
+serde owner aliases, direct derive aliases, static namespaces alongside same-name
+local values, and rejects old imports/package
+dots, bare derives, wrong owners and missing roots. Every CLI command receives
+the exact roots TOML embedded into WASM; readiness verifies its SHA-256.
 This gate does not claim full browser UI QA, historical AST equivalence, native
 race/vet, or design-gate coverage. Run applicable compiler checks separately.
 `summary.json` records success or failure and the layers actually run; raw
@@ -83,6 +88,13 @@ The instructions below describe the frozen compiler `afa3f0a...` versus
 `fd8380c...` comparison. Run them from its complete historical checkout, such as
 `eb6ddf0ce026251b4e9b791d0271ee05b9438749`, whose catalog and production sources
 retain those identities. The current website may bind a newer compiler.
+The runner's failure-path unit tests materialize their historical inputs with
+local `git archive` from `eb6ddf0ce026251b4e9b791d0271ee05b9438749`. They run the
+current runner code against the unchanged frozen hashes, test corruption and
+missing-input failures, and explicitly reject the active migrated sources as
+historical evidence. They need that existing Git object, fetch nothing, and do
+not execute the historical compiler or browser. CI checks out full history.
+
 `run.py` intentionally rejects a changed catalog, compiler inventory, or AST;
 do not change its pin or relax its oracle to turn an intentional AST change into
 a historical pass. The historical browser scripts contain `--no-sandbox` and

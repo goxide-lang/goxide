@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/testdeps"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
@@ -16,21 +18,26 @@ import (
 func TestPackageFilesScopeHelpersAndNativeBuild(t *testing.T) {
 	files := []File{
 		{"main.gox", `package p
-import native "fmt"
-func Value() string { return native.Sprint(add!(Item{N: 6}.N), ":", label()) }
+use fmt as native;
+func Value() string { native := Item{N: 6}; return native::Sprint(add!(native.N), ":", label()) }
 `},
 		{"model.gox", `package p
-#[derive(Clone,Debug)]
+use serde;
+#[derive(Clone,Debug,serde::Serialize)]
 type Item struct { N int }
 macro_rules! add { ($n:expr) => { $n + 1 }; }
 `},
 		{"label.gox", `package p
-import native "strings"
-func label() string { return native.ToUpper("ok") }
+use strings as native;
+func label() string { return native::ToUpper("ok") }
 `},
 	}
-	imp := typecheck.NewImporter("playground.gox")
-	output, err := CompilePackage(files, imp)
+	options := frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
+		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
+		"strings": {PackagePath: "strings", Source: "toolchain"},
+		"serde":   {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module"},
+	}}
+	output, err := CompilePackage(files, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,8 +58,40 @@ func label() string { return native.ToUpper("ok") }
 			t.Fatal(err)
 		}
 	}
-	if !reflect.DeepEqual(names, []string{"goxide_helpers_model.go", "label.go", "main.go", "model.go"}) {
+	if !reflect.DeepEqual(names, []string{"goxide_helpers_model.go", "goxide_project_config.go", "label.go", "main.go", "model.go"}) {
 		t.Fatalf("outputs: %v", names)
+	}
+	// Directory CLI and in-memory WASM consume the same explicit context. Compare
+	// every generated Go byte, including configuration and helper file indices.
+	input := t.TempDir()
+	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module playground\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(input, file.Path), []byte(file.Source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moduleOutput := filepath.Join(t.TempDir(), "module")
+	if _, err := frontend.CompileModuleWithOptions(input, moduleOutput, frontend.ModuleOptions{Roots: options.Roots}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(moduleOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var moduleFiles []File
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".go") {
+			data, err := os.ReadFile(filepath.Join(moduleOutput, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			moduleFiles = append(moduleFiles, File{Path: entry.Name(), Source: string(data)})
+		}
+	}
+	if !reflect.DeepEqual(moduleFiles, output) {
+		t.Fatal("directory and in-memory package outputs differ")
 	}
 	if err := os.WriteFile(filepath.Join(dir, "output_test.go"), []byte(`package p
 import "testing"
@@ -72,11 +111,11 @@ func TestOutput(t *testing.T) {
 	}
 	// A failed edit cannot contaminate declarations or import bindings in the next call.
 	bad := append([]File(nil), files...)
-	bad[2].Source = "package p\nfunc label()string{return native.ToUpper(\"bad\")}\n"
-	if _, err := CompilePackage(bad, imp); err == nil || !strings.Contains(err.Error(), "native") {
+	bad[2].Source = "package p\nfunc label()string{return native::Sprint(\"bad\")}\n"
+	if _, err := CompilePackage(bad, options); err == nil || !strings.Contains(err.Error(), "label.gox") || !strings.Contains(err.Error(), "::") {
 		t.Fatalf("import leaked from sibling: %v", err)
 	}
-	again, err := CompilePackage(files, imp)
+	again, err := CompilePackage(files, options)
 	if err != nil || !reflect.DeepEqual(output, again) {
 		t.Fatalf("recovery changed outputs: %v", err)
 	}
@@ -103,7 +142,7 @@ func TestPackageRejectsInvalidCollections(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := CompilePackage(tc.files, nil); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := CompilePackage(tc.files, frontend.PackageOptions{}); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("expected %q: %v", tc.want, err)
 			}
 		})
@@ -111,7 +150,10 @@ func TestPackageRejectsInvalidCollections(t *testing.T) {
 }
 
 func TestPackageConflictsAndRecovery(t *testing.T) {
-	imp := typecheck.NewImporter("playground.gox")
+	options := frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
+		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
+		"strings": {PackagePath: "strings", Source: "toolchain"},
+	}}
 	cases := []struct{ name, first, second, want string }{
 		{"declaration", "func F(){}", "func F(){}", "redeclared"},
 		{"macro", "macro_rules! item {()=>{1};}", "macro_rules! item {()=>{2};}", "duplicate macro"},
@@ -119,11 +161,11 @@ func TestPackageConflictsAndRecovery(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := CompilePackage([]File{{"first.gox", "package p\n" + tc.first + "\n"}, {"second.gox", "package p\n" + tc.second + "\n"}}, imp)
+			_, err := CompilePackage([]File{{"first.gox", "package p\n" + tc.first + "\n"}, {"second.gox", "package p\n" + tc.second + "\n"}}, options)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("expected %q: %v", tc.want, err)
 			}
-			if _, err := CompilePackage([]File{{"recovered.gox", "package p\nfunc F()int{return 42}\n"}}, imp); err != nil {
+			if _, err := CompilePackage([]File{{"recovered.gox", "package p\nfunc F()int{return 42}\n"}}, options); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -134,7 +176,7 @@ func TestPackageBuiltinSumHelpersAreComplete(t *testing.T) {
 	files, err := CompilePackage([]File{
 		{"make.gox", "package p\nfunc Make()Option[int]{return Option::Some(7)}\n"},
 		{"read.gox", "package p\nfunc Read()int{return match Make(){Option::Some(n)=>n,Option::None=>0,}}\n"},
-	}, typecheck.NewImporter("playground.gox"))
+	}, frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox")})
 	if err != nil {
 		t.Fatal(err)
 	}

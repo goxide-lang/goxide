@@ -18,7 +18,7 @@ func TestPrintDefaultBusinessRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compiled, err := frontend.Compile(source, append(input, []byte(printDefaultExtra)...))
+	compiled, err := compileAcceptanceLanguageFixture(source, append(input, []byte(printDefaultExtra)...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestPrintDefaultBusinessRace(t *testing.T) {
 	}
 	cli := filepath.Join(t.TempDir(), "goxide")
 	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
-	output := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--go", tool, "--runtime", root, source)
+	output := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "--go", tool, "--runtime", root, source)
 	for _, want := range []string{"startup=standby retries=0\n", "snapshot Settings {", "ready nightly active\n"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in real CLI output: %s", want, output)
@@ -78,7 +78,7 @@ func TestPrintDefaultExplicitRejections(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), tc.name+".gox")
-			_, err := frontend.Compile(filename, []byte("package rejected\n"+tc.source+"\n"))
+			_, err := compileAcceptanceLanguageFixture(filename, []byte("package rejected\n"+tc.source+"\n"))
 			if err == nil {
 				t.Fatal("unsupported operation accepted")
 			}
@@ -138,7 +138,7 @@ type NoDefault struct { Signal chan int }
 #[derive(Default)]
 type OptionalSettings struct { Value Option[NoDefault] }
 func hasNoOptionalValue(value OptionalSettings)bool {match value.Value {Option[NoDefault]::Some(_)=>{return false},Option[NoDefault]::None=>{return true},};panic("unreachable")}
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 type WireDefault struct {
  #[serde(default)]
  State state

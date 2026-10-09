@@ -135,16 +135,16 @@ import("fmt";make "strings";new "strconv")
 func main(){fmt.Println(len(items!()),*number!(),make.Repeat("x",2),new.Itoa(7))}
 `)
 	pkg := registry(t, "example/main", map[string][]byte{"definitions.gox": definitions, "caller.gox": caller}, nil)
-	expanded, err := ExpandPackage("caller.gox", caller, nil, pkg, nil)
+	expanded, err := ExpandPackage("caller.gox", caller, nil, pkg, nil, ExpansionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	run(t, string(expanded.Source), "2 0 xx 7\n")
 	dep := registry(t, "example/ops", map[string][]byte{"ops.gox": []byte("package ops\npub macro_rules! number {()=>{new(int)};}\n")}, nil)
 	for _, declaration := range []string{"type int string", "var new=1", "type new int", "import int \"strings\""} {
-		src := []byte("package caller\nimport ops \"example/ops\"\n" + declaration + "\nfunc f(){_=ops.number!()}\n")
+		src := []byte("package caller\nimport ops \"example/ops\"\n" + declaration + "\nfunc f(){_=ops::number!()}\n")
 		p := registry(t, "example/caller", map[string][]byte{"caller.gox": src}, map[string]*Package{"example/ops": dep})
-		_, err := ExpandPackage("caller.gox", src, nil, p, nil)
+		_, err := ExpandPackage("caller.gox", src, nil, p, nil, ExpansionOptions{})
 		if err == nil || !strings.Contains(err.Error(), "caller") {
 			t.Fatalf("%s: %v", declaration, err)
 		}
@@ -233,11 +233,11 @@ pub macro_rules! values {()=>{[2]int{}};}
 	outer := registry(t, "example/outer", map[string][]byte{"outer.gox": []byte(`package outer
 import inner "example/inner"
 type int string
-pub macro_rules! allocate {()=>{new([len(inner.values!())]byte)};}
+pub macro_rules! allocate {()=>{new([len(inner::values!())]byte)};}
 `)}, map[string]*Package{"example/inner": inner})
-	src := []byte("package caller\nimport outer \"example/outer\"\nfunc f(){_=outer.allocate!()}\n")
+	src := []byte("package caller\nimport outer \"example/outer\"\nfunc f(){_=outer::allocate!()}\n")
 	caller := registry(t, "example/caller", map[string][]byte{"caller.gox": src}, map[string]*Package{"example/outer": outer})
-	expanded, err := ExpandPackage("caller.gox", src, nil, caller, nil)
+	expanded, err := ExpandPackage("caller.gox", src, nil, caller, nil, ExpansionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

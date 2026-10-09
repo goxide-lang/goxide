@@ -1,0 +1,3 @@
+[roots.model]
+module = "places.example/update"
+package = "places.example/update/model"

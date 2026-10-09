@@ -1,0 +1,22 @@
+[roots.errors]
+source = "toolchain"
+package = "errors"
+
+[roots.json]
+source = "toolchain"
+package = "encoding/json"
+
+[roots.os]
+source = "toolchain"
+package = "os"
+
+[roots.serde]
+module = "github.com/goxide-lang/serde"
+package = "github.com/goxide-lang/serde"
+
+[roots.serde.namespaces]
+"json" = "github.com/goxide-lang/serde/json"
+
+[roots.strconv]
+source = "toolchain"
+package = "strconv"

@@ -65,7 +65,7 @@
 
 ## 3. 函数式声明宏示例
 
-当前同 module 源码包原型采用 `pub macro_rules! name` 导出、普通 `import alias "path"` 和 `alias.name!(...)` 调用，复用 Go module/import 身份与依赖顺序。运行时 helper 按现有 Go 导出约定写 `Emit` 等公开函数；私有 helper 跨包不可见，须由作者提供公开 helper/shim。下文 `import macro`、`m::name!` 和 `pub func` 仍是完整语言的草案拼写，不是本轮原型新冻结语法。限定实现与来源/预算边界见[宏实现说明](../../internal/macros/README.md)。
+当前源码包采用 `pub macro_rules! name` 导出、`use root as alias;` 绑定、`alias::name!(...)` 调用。根及精确 Go 包映射由[依赖配置](dependency-roots.md)声明；宏与运行时项共用静态路径解析。运行时 helper 按 Go 导出约定写 `Emit` 等公开函数；私有 helper 跨包不可见，须由作者提供公开 helper。旧包点号调用与 `import macro` 不再支持；下文 `pub func` 等完整协议仍是草案。限定实现与来源/预算边界见[宏实现说明](../../internal/macros/README.md)。
 
 以下使用类似 `macro_rules` 的草案形式，不是当前可运行的 goxide 程序。假设 `macrokit` 包提供一个普通、公开的运行时 helper：
 
@@ -90,7 +90,7 @@ pub macro_rules! twice_plus_one {
 调用形状同样为草案：
 
 ```goxide
-import macro m "example.org/goxide/macrokit"
+use macrokit as m; // dependency root maps to example.org/goxide/macrokit
 
 saved := 41
 twice := func(value int) int { return -1000 }
@@ -107,7 +107,7 @@ result := m::twice_plus_one!(saved + next())
 
 这个示例只求值一次，是因为模板明确生成了 `value := $x` 这个局部绑定，并复用 `value`。**卫生本身不保证求值次数。** 模板如果写 `$x + $x`，就会执行实参两次；丢弃实参则可能不执行它。求值顺序、短路、闭包、`defer` 和 `return` 的行为都由实际生成的普通语法决定。
 
-`import macro` 表示显式编译期依赖，拼写待包系统冻结。模板使用的运行时 helper 也必须来自宏包已声明的依赖；展开不能临时产生未知 import 路径。编译器根据绑定后的引用记录所需的普通 Go 依赖。
+`use` 显式选择宏项或 namespace。模板使用的运行时 helper 也必须来自宏定义文件已声明的依赖；展开不能临时产生未知包路径。编译器根据绑定后的引用记录所需的普通 Go 依赖。
 
 ### 3.1 规则选择与重复
 

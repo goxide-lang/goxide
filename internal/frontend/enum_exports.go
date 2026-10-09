@@ -18,7 +18,7 @@ import (
 
 // Recover before syntax lowering: match needs a closed variant set, not merely
 // the generated Go interface. A marker requires its matching producer artifact.
-func recoverEnumImports(sources map[string][]byte, known map[string]PackageResult, imp types.Importer) (map[string]PackageResult, error) {
+func recoverEnumImports(sources map[string][]byte, known map[string]PackageResult, imp types.Importer, maps map[string]*sourcemap.Map) (map[string]PackageResult, error) {
 	out := map[string]PackageResult{}
 	for p, r := range known {
 		out[p] = r
@@ -62,11 +62,11 @@ func recoverEnumImports(sources map[string][]byte, known map[string]PackageResul
 			}
 			provider, ok := imp.(refs.ArtifactImporter)
 			if !ok {
-				return nil, enumImportError(name, sources[name], int(spec.Pos())-1, "enum metadata source importer unavailable for "+path)
+				return nil, mappedEnumImportError(name, sources[name], maps[name], int(spec.Pos())-1, "enum metadata source importer unavailable for "+path)
 			}
 			meta, e := loadEnumArtifact(path, provider)
 			if e != nil {
-				return nil, enumImportError(name, sources[name], int(spec.Pos())-1, e.Error())
+				return nil, mappedEnumImportError(name, sources[name], maps[name], int(spec.Pos())-1, e.Error())
 			}
 			p := out[path]
 			p.enumMetadata = meta
@@ -76,6 +76,15 @@ func recoverEnumImports(sources map[string][]byte, known map[string]PackageResul
 	}
 	return out, nil
 }
+func mappedEnumImportError(name string, source []byte, mapping *sourcemap.Map, offset int, message string) error {
+	if mapping != nil {
+		if segment := mapping.Lookup(offset); segment != nil && segment.Origin != nil {
+			return &sourcemap.Error{Message: message, Origin: segment.Origin, Stack: segment.Stack}
+		}
+	}
+	return enumImportError(name, source, offset, message)
+}
+
 func enumImportError(name string, source []byte, offset int, message string) error {
 	if offset < 0 || offset > len(source) {
 		offset = 0

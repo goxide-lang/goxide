@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/enums"
+	"github.com/hxsf/goxide/internal/paths"
+	"github.com/hxsf/goxide/internal/sourcemap"
 )
 
 func sumType(t types.Type) (string, []types.Type) {
@@ -313,24 +315,35 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 				fatal = l.fail(c, "invalid contextual match body")
 				return false
 			}
-			body, err := strconv.Unquote(literal.Value)
+			encoded, err := strconv.Unquote(literal.Value)
+			if err != nil {
+				fatal = err
+				return false
+			}
+			bodySource, mapping, err := enums.DecodeContextBody(encoded)
 			if err != nil {
 				fatal = err
 				return false
 			}
 			// Token-aware rewriting avoids touching comments, strings or arm expressions.
-			body, err = enums.BindContextPatterns(body, d)
+			body, err := enums.BindContextPatternsMapped(string(bodySource), d, mapping)
 			if err != nil {
 				fatal = l.fail(c, err.Error())
 				return false
 			}
-			source := "package " + l.file.Name.Name + ";func goxideContextStatement(){match goxideContextValue " + body + "}"
-			lowered, err := enums.LowerPackage("<contextual match>", []byte(source), nil, append(l.cfg.Families, d), nil)
+			fragments := sourcemap.Fragments{Input: mapping}
+			source, mapping := fragments.Finish("package "+l.file.Name.Name+";func goxideContextStatement(){match goxideContextValue "+fragments.Copy(0, len(body))+"}", "contextual match wrapper")
+			lowered, err := enums.LowerPackage("<contextual match>", source, mapping, append(l.cfg.Families, d), nil)
 			if err != nil {
 				fatal = err
 				return false
 			}
-			prepared, err := refs.Prepare("<contextual match>", lowered.Source)
+			// Enum constructors have now been lowered. Remaining static type paths
+			// get a same-width Go view while copied member tokens keep their source
+			// operator evidence for the final typed selector check.
+			lowered.Source = paths.GoView(lowered.Source)
+			mapping.Source = lowered.Source
+			prepared, err := refs.PrepareMapped("<contextual match>", lowered.Source, mapping)
 			if err != nil {
 				fatal = err
 				return false
@@ -338,6 +351,10 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 			f, err := parser.ParseFile(l.fs, "<contextual match>", prepared.Source, 0)
 			if err != nil {
 				fatal = err
+				return false
+			}
+			if l.evidence != nil && !l.evidence.AddInput(l.fs, f, mapping) {
+				fatal = l.fail(c, "cannot register contextual match source evidence")
 				return false
 			}
 			present := map[string]bool{}

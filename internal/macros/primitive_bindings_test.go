@@ -27,7 +27,7 @@ func TestPrimitivePackageBindingsRejectRebinding(t *testing.T) {
 			}
 			t.Run(tc.name+"/"+where, func(t *testing.T) {
 				defs := map[string][]byte{"definitions.gox": []byte("package ops\npub macro_rules! value { ($v:expr) => {" + tc.body + "}; }\n")}
-				caller := map[string][]byte{"caller.gox": []byte("package caller\nimport ops \"example/ops\"\nfunc Run() { _ = ops.value!(nil) }\n")}
+				caller := map[string][]byte{"caller.gox": []byte("package caller\nimport ops \"example/ops\"\nfunc Run() { _ = ops::value!(nil) }\n")}
 				want := "caller package declaration"
 				if atDefinition {
 					defs["shadow.go"] = []byte("package ops\n" + tc.declaration + "\n")
@@ -37,7 +37,7 @@ func TestPrimitivePackageBindingsRejectRebinding(t *testing.T) {
 				}
 				dep := registry(t, "example/ops", defs, nil)
 				p := registry(t, "example/caller", caller, map[string]*Package{"example/ops": dep})
-				result, err := ExpandPackage("caller.gox", caller["caller.gox"], nil, p, nil)
+				result, err := ExpandPackage("caller.gox", caller["caller.gox"], nil, p, nil, ExpansionOptions{})
 				if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "definitions.gox:2:") || !strings.Contains(err.Error(), "caller.gox:3:") {
 					t.Fatalf("expected located %s, got %v", want, err)
 				}
@@ -63,7 +63,7 @@ func TestPrimitiveImportsAreFileLocalAndResolveActualPackageNames(t *testing.T) 
 				im = `import "example/odd"`
 			}
 			defs := map[string][]byte{"definitions.gox": []byte("package ops\npub macro_rules! zero {()=>{int(0)};}\n")}
-			caller := map[string][]byte{"caller.gox": []byte("package caller\nimport ops \"example/ops\"\nfunc Run(){_=ops.zero!()}\n")}
+			caller := map[string][]byte{"caller.gox": []byte("package caller\nimport ops \"example/ops\"\nfunc Run(){_=ops::zero!()}\n")}
 			want := "caller file import"
 			if definition {
 				defs["definitions.gox"] = []byte(strings.Replace(string(defs["definitions.gox"]), "package ops\n", "package ops\n"+im+"\n", 1))
@@ -73,7 +73,7 @@ func TestPrimitiveImportsAreFileLocalAndResolveActualPackageNames(t *testing.T) 
 			}
 			dep := registry(t, "example/ops", defs, nil)
 			p := registry(t, "example/caller", caller, map[string]*Package{"example/ops": dep})
-			_, err := ExpandPackage("caller.gox", caller["caller.gox"], nil, p, primitiveNameImporter{})
+			_, err := ExpandPackage("caller.gox", caller["caller.gox"], nil, p, primitiveNameImporter{}, ExpansionOptions{})
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("implicit=%v definition=%v: %v", implicit, definition, err)
 			}
@@ -81,9 +81,9 @@ func TestPrimitiveImportsAreFileLocalAndResolveActualPackageNames(t *testing.T) 
 	}
 	// An import in a different source file cannot shadow the generated alias.
 	dep := registry(t, "example/ops", map[string][]byte{"definitions.gox": []byte("package ops\npub macro_rules! zero {()=>{int(0)};}\n")}, nil)
-	src := []byte("package caller\nimport ops \"example/ops\"\nfunc Run(){_=ops.zero!()}\n")
+	src := []byte("package caller\nimport ops \"example/ops\"\nfunc Run(){_=ops::zero!()}\n")
 	p := registry(t, "example/caller", map[string][]byte{"caller.gox": src, "other.go": []byte("package caller\nimport int \"example/odd\"\n")}, map[string]*Package{"example/ops": dep})
-	if _, err := ExpandPackage("caller.gox", src, nil, p, primitiveNameImporter{}); err != nil {
+	if _, err := ExpandPackage("caller.gox", src, nil, p, primitiveNameImporter{}, ExpansionOptions{}); err != nil {
 		t.Fatal(err)
 	}
 }

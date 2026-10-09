@@ -66,11 +66,16 @@ go = '1.27'
 module = 'example.org/nativea'
 version = 'v1.0.0'
 
+[dependencies.nativea]
+module = 'example.org/nativea'
+package = 'example.org/nativea'
+version = 'v1.0.0'
+
 [[bin]]
 name = 'app'
 path = 'main.gox'
 `,
-		"main.gox": "package main\nimport \"fmt\"\nimport a \"example.org/nativea\"\nfunc main() { fmt.Println(a.Value()) }\n",
+		"main.gox": "package main\nuse fmt;\nuse nativea as a;\nfunc main() { fmt::Println(a::Value()) }\n",
 	})
 	if out, err := projectRun(t, root, "run", "--offline"); err != nil || strings.TrimSpace(out) != "42" {
 		t.Fatalf("offline run: %s: %v", out, err)

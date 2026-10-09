@@ -4,6 +4,7 @@ module = "example.org/service"
 go.workspace = true
 
 [dependencies]
+fmt = { workspace = true }
 shared = { workspace = true, features = ["json"] }
 
 [[bin]]

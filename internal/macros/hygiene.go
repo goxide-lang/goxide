@@ -7,6 +7,8 @@ import (
 	"go/token"
 	"go/types"
 	"strings"
+
+	"github.com/hxsf/goxide/internal/paths"
 )
 
 // hygiene resolves template bindings before inserting caller fragments. It does
@@ -33,13 +35,14 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 	fs := token.NewFileSet()
 	prefix := "package p\nvar template = "
 	var root ast.Node
-	f, err := parser.ParseFile(fs, "template", prefix+text.String()+"\n", 0)
+	view := string(paths.GoView([]byte(text.String())))
+	f, err := parser.ParseFile(fs, "template", prefix+view+"\n", 0)
 	if err == nil {
 		root = f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec).Values[0]
 	} else {
 		fs = token.NewFileSet()
 		prefix = "package p\nfunc template(){\n"
-		f, x := parser.ParseFile(fs, "template", prefix+text.String()+"\n}", 0)
+		f, x := parser.ParseFile(fs, "template", prefix+view+"\n}", 0)
 		if x != nil {
 			return nil, at(ts[0], "unsupported template syntax: "+x.Error())
 		}
@@ -67,7 +70,19 @@ func (e *engine) hygiene(ts []tok, ph map[string][]tok) ([]tok, error) {
 		switch n := n.(type) {
 		case *ast.SelectorExpr:
 			ignored[n.Sel] = true
+			member, located := index(n.Sel.Pos())
+			static := located && member >= 2 && ts[member-1].text == ":" && ts[member-2].text == ":"
+			x, imported := n.X.(*ast.Ident)
+			imported = imported && x.Obj == nil && e.isImport(x.Name)
+			if static && !imported {
+				problem = nodeError(n.Sel, "static template paths require a definition-site package function; only fixed Option/Result constructors are supported in macro templates")
+				return false
+			}
 			if x, ok := n.X.(*ast.Ident); ok && x.Obj == nil && e.isImport(x.Name) {
+				if !static {
+					problem = nodeError(n.Sel, "package template paths require ::, not .")
+					return false
+				}
 				// Only named package function calls are supported: no imported global
 				// snapshots, constants, types, generic indexing or arbitrary selector chains.
 				callable := false
@@ -266,7 +281,8 @@ func (e *engine) isImport(name string) bool {
 }
 func (e *engine) isFunction(name string) bool {
 	if e.active != nil {
-		return e.active.pkg.funcs[name]
+		_, bound := e.active.functionAliases[name]
+		return bound || e.active.pkg.funcs[name]
 	}
 	return e.funcs[name]
 }

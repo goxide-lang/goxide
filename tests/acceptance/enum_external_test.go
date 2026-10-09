@@ -26,10 +26,11 @@ func TestCrossModuleEnumArtifacts(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", module("enum.example/library", ""))
-	packagesWrite(t, src, "model/model.gox", `package model
-#[derive(Clone,Debug,Serialize,Deserialize)]
+	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "model/model.gox", `package model; use serde;
+#[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
 type hidden struct{N int}
-#[derive(Default,Clone,Debug,Serialize,Deserialize)]
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize)]
 pub enum E {
  #[default]
  A,
@@ -96,24 +97,25 @@ pub enum E { A, Count(int), }
 	appFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", module("enum.example/app", library))
+		writeAcceptanceSerdeRoots(t, dir, "enum.example/library", "model", "relay", "other", "api")
 		packagesWrite(t, dir, "app.gox", body)
 		return dir
 	}
 	app := appFor(`package app
-import(r "enum.example/library/relay";m "enum.example/library/model";"github.com/goxide-lang/serde/json")
-func Score(e r.Alias)int{return match e{r.Alias::A=>0,r.Alias::Count(n)=>n,r.Alias::Batch(xs)=>len(xs),r.Alias::Hidden(v)=>v.N,}}
-func Run()int{return Score(r.Get())+Score(r.Alias::Count(7))+Score(m.Secret())}
-func Rebuild(e r.Alias)r.Alias{return match e{r.Alias::Hidden(v)=>r.Alias::Hidden(v),_=>e,}}
-func Decode()(int,error){e,err:=serdejson.Unmarshal([]byte("{\"Count\":4}"),m.DeserializeE);if err!=nil{return 0,err};return Score(e),nil}
-func Ordered(e r.Alias,seen *bool)int{return match e{r.Alias::Count(n) if mark(seen)=>n,_=>0,}}
+use library::relay as r; use library::model as m; use serde::json as serdejson;
+func Score(e r::Alias)int{return match e{r::Alias::A=>0,r::Alias::Count(n)=>n,r::Alias::Batch(xs)=>len(xs),r::Alias::Hidden(v)=>v.N,}}
+func Run()int{return Score(r::Get())+Score(r::Alias::Count(7))+Score(m::Secret())}
+func Rebuild(e r::Alias)r::Alias{return match e{r::Alias::Hidden(v)=>r::Alias::Hidden(v),_=>e,}}
+func Decode()(int,error){e,err:=serdejson::Unmarshal([]byte("{\"Count\":4}"),m::DeserializeE);if err!=nil{return 0,err};return Score(e),nil}
+func Ordered(e r::Alias,seen *bool)int{return match e{r::Alias::Count(n) if mark(seen)=>n,_=>0,}}
 func mark(seen *bool)bool{*seen=true;return true}
-func Read()int{n:=3;return *m.View(&n)}
-func Cross(e r.Alias)int{return match e{m.E::A=>0,r.Alias::Count(n)=>n,m.E::Batch(xs)=>len(xs),r.Alias::Hidden(v)=>v.N,}}
+func Read()int{n:=3;return *m::View(&n)}
+func Cross(e r::Alias)int{return match e{m::E::A=>0,r::Alias::Count(n)=>n,m::E::Batch(xs)=>len(xs),r::Alias::Hidden(v)=>v.N,}}
 `)
 	packagesWrite(t, app, "other.gox", `package app
-import(renamed "enum.example/library/model";a "enum.example/library/api")
-func Facade()int{return a.Read(a.Get())}
-func Other()int{return match renamed.E::Count(2){renamed.E::Count(n)=>n,_=>0,}}
+use library::model as renamed; use library::api as a;
+func Facade()int{return a::Read(a::Get())}
+func Other()int{return match renamed::E::Count(2){renamed::E::Count(n)=>n,_=>0,}}
 `)
 	out := filepath.Join(t.TempDir(), "app")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, app)
@@ -141,12 +143,12 @@ func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if e.(m.Go
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
 	for name, body := range map[string]string{
-		"non-exhaustive":  `func Bad(e r.Alias)int{return match e{r.Alias::A=>0,}}`,
-		"unknown-variant": `func Bad()r.Alias{return r.Alias::Missing}`,
-		"readonly":        `func Bad(r &int){m.View(r);*r=1}`,
+		"non-exhaustive":  `func Bad(e r::Alias)int{return match e{r::Alias::A=>0,}}`,
+		"unknown-variant": `func Bad()r::Alias{return r::Alias::Missing}`,
+		"readonly":        `func Bad(r &int){m::View(r);*r=1}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			src := appFor("package app\nimport(r \"enum.example/library/relay\";m \"enum.example/library/model\")\nvar _=m.Secret\n" + body)
+			src := appFor("package app\nuse library::relay as r; use library::model as m;\nvar _=m::Secret\n" + body)
 			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), src)
 			if !strings.Contains(msg, ".gox:") {
 				t.Fatal(msg)
@@ -154,12 +156,12 @@ func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if e.(m.Go
 		})
 	}
 	for name, body := range map[string]string{
-		"new-defined-not-alias": `import r "enum.example/library/relay"
-func Bad()r.New{return r.New::Count(1)}`,
-		"distinct-package-identity": `import(r "enum.example/library/relay";o "enum.example/library/other")
-func Bad(e r.Alias)int{return match e{r.Alias::A=>0,o.E::Count(n)=>n,_=>0,}}`,
-		"internal-origin-pattern": `import a "enum.example/library/api"
-func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
+		"new-defined-not-alias": `use library::relay as r;
+func Bad()r::New{return r::New::Count(1)}`,
+		"distinct-package-identity": `use library::relay as r; use library::other as o;
+func Bad(e r::Alias)int{return match e{r::Alias::A=>0,o::E::Count(n)=>n,_=>0,}}`,
+		"internal-origin-pattern": `use library::api as a;
+func Bad()int{return match a::Get(){a::Public::A(n)=>n,}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := appFor("package app\n" + body)
@@ -173,7 +175,7 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		})
 	}
 
-	valid := appFor("package app\nimport r \"enum.example/library/relay\"\nfunc Read()int{return match r.Get(){r.Alias::Count(n)=>n,_=>0,}}\n")
+	valid := appFor("package app\nuse library::relay as r;\nfunc Read()int{return match r::Get(){r::Alias::Count(n)=>n,_=>0,}}\n")
 	metaPath := filepath.Join(library, "relay/.goxide.enums.json")
 	original, e := os.ReadFile(metaPath)
 	if e != nil {

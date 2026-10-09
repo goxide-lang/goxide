@@ -151,6 +151,12 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	}
 	originalSource := append([]byte(nil), source...)
 	provenance := sourcemap.Identity(filename, source)
+	if cfg != nil && cfg.uses != nil {
+		if original, ok := cfg.uses.original[filename]; ok {
+			originalSource = append([]byte(nil), original...)
+			provenance = cfg.uses.sourceMap(filename)
+		}
+	}
 	// Reject user access to reserved generated names before adding enum helpers.
 	reserveFS := token.NewFileSet()
 	reserveFile := reserveFS.AddFile(filename, -1, len(source))
@@ -184,9 +190,9 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	macroOrigins := macroSourceMapper{filename: filename, original: originalSource, prepared: preparedMap}
 	var expanded macros.Result
 	if cfg != nil && cfg.macros != nil {
-		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, cfg.macros, sharedImporter)
+		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, cfg.macros, sharedImporter, macros.ExpansionOptions{PreserveImports: true})
 	} else {
-		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, nil, sharedImporter)
+		expanded, err = macros.ExpandPackage(filename, prepared, []string{"__goxide_question"}, nil, sharedImporter, macros.ExpansionOptions{PreserveImports: true})
 	}
 	if err != nil {
 		var diagnostic *macros.Diagnostic
@@ -205,15 +211,24 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	if len(expanded.Origins) > 0 {
 		provenance = &sourcemap.Map{Source: expanded.Source, Stages: append(provenance.Stages, "macros.Expand")}
 		for _, o := range expanded.Origins {
-			origin := macroOrigins.point(sourcemap.Span{File: o.File, Start: o.SourceStart, End: o.SourceEnd, Line: o.Line, Column: o.Column}, o.Original)
+			span := sourcemap.Span{File: o.File, Start: o.SourceStart, End: o.SourceEnd, Line: o.Line, Column: o.Column}
+			origin := macroOrigins.point(span, o.Original)
 			stack := macroOrigins.stack(o.Stack)
 			kind := "source"
-			if origin == nil {
+			if cause := macroOrigins.causalImport(span, o.Original); cause != nil {
+				origin, kind = cause, "use import"
+			} else if origin == nil {
 				kind = "generated/unmapped"
 			} else if len(stack) > 0 {
 				kind = "macro"
 			}
 			provenance.Attach(o.OutputStart, o.OutputEnd, origin, stack, kind)
+		}
+	}
+	if cfg != nil && cfg.uses != nil {
+		expanded.Source, err = cfg.uses.normalizeNamespacePaths(filename, expanded.Source, provenance)
+		if err != nil {
+			return Result{}, err
 		}
 	}
 	manualSource, manual, err := lowerManualDefaults(filename, expanded.Source)
@@ -262,6 +277,12 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 		return Result{}, stageError("enums.Lower", err)
 	}
 	source = enumResult.Source
+	if cfg != nil && cfg.uses != nil {
+		source, err = cfg.uses.normalizeTypePaths(filename, source, provenance)
+		if err != nil {
+			return Result{}, err
+		}
+	}
 	if cfg != nil {
 		source, err = insertEnumImports(filename, source, cfg.enumGoImports[filename], provenance)
 		if err != nil {
@@ -269,11 +290,10 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 		}
 		source = append(source, []byte(cfg.preludes[filename])...)
 	}
-	refResult, err := refs.Prepare(filename, source)
+	refResult, err := refs.PrepareMapped(filename, source, provenance)
 	if err != nil {
 		return Result{}, stageError("refs.Prepare", err)
 	}
-	provenance = provenance.Compose(source, refResult.Source, "refs.Prepare")
 	source = refResult.Source
 	// Line-based derive diagnostics refer to this stage, before attributes are
 	// erased and generated helpers are appended. Capture its map now rather than
@@ -319,15 +339,22 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 					return fail(i+1, "duplicate derive")
 				}
 				pending.derive = map[string]bool{}
-				for _, x := range strings.Split(body[7:len(body)-1], ",") {
-					x = strings.TrimSpace(x)
-					if x != "Serialize" && x != "Deserialize" && x != "Debug" && x != "Clone" && x != "Default" && x != "Error" && x != "PartialEq" && x != "Eq" {
-						return fail(i+1, "unsupported derive "+x)
+				for _, text := range strings.Split(body[7:len(body)-1], ",") {
+					text = strings.TrimSpace(text)
+					var kind string
+					var err error
+					if cfg != nil && cfg.uses != nil {
+						kind, err = cfg.uses.resolveDerive(filename, text)
+					} else {
+						kind, err = resolveDerive(text, nil, sharedImporter)
 					}
-					if pending.derive[x] {
-						return fail(i+1, "duplicate derive "+x)
+					if err != nil {
+						return fail(i+1, err.Error())
 					}
-					pending.derive[x] = true
+					if pending.derive[kind] {
+						return fail(i+1, "duplicate derive "+kind)
+					}
+					pending.derive[kind] = true
 				}
 			} else if strings.HasPrefix(body, "error(") && strings.HasSuffix(body, ")") {
 				v, e := strconv.Unquote(body[6 : len(body)-1])
@@ -414,11 +441,10 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	provenance = parsedMap
 	if cfg != nil && cfg.uses != nil {
 		before := []byte(strings.Join(lines, "\n"))
-		after, err := cfg.uses.rewrite(filename, before)
+		after, err := cfg.uses.rewrite(filename, before, provenance)
 		if err != nil {
 			return Result{}, err
 		}
-		provenance = provenance.Compose(before, after, "use binding rewrite")
 		lines = strings.Split(string(after), "\n")
 	}
 	fs := token.NewFileSet()
@@ -533,11 +559,6 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 				return fail(line, "generic derive is not supported in this prototype")
 			}
 			if ed := enumByName[ts.Name.Name]; ed != nil {
-				for kind := range a.derive {
-					if kind != "Serialize" && kind != "Deserialize" && kind != "Debug" && kind != "Clone" && kind != "Default" && kind != "Error" && kind != "PartialEq" && kind != "Eq" {
-						return failEnum(ed.Position, "unsupported enum derive "+kind)
-					}
-				}
 				if a.deny || a.hasMessage {
 					return failEnum(ed.Position, "enum serde and error attributes are unsupported")
 				}
@@ -948,13 +969,6 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	var importedBindings refs.ImportBindings
 	singleImporter := sharedImporter
 	if single {
-		for _, spec := range f.Imports {
-			path, _ := strconv.Unquote(spec.Path.Value)
-			pkg, err := singleImporter.Import(path)
-			if err == nil && pkg != nil && pkg.Scope().Lookup(useMetadataMarker) != nil {
-				return Result{}, fmt.Errorf("%s: imports with use metadata require directory/package compilation: %s", filename, path)
-			}
-		}
 		bound, bindings, err := refs.BindImportsWithPath(packagePath, map[string][]byte{filename: out}, singleImporter, nil)
 		importedBindings = bindings
 		if err != nil {
@@ -967,6 +981,11 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 				return Result{}, mapped
 			}
 			return Result{}, err
+		}
+		if !bytes.Equal(out, bound[filename]) && cfg != nil && cfg.uses != nil {
+			if err := cfg.uses.validateSelectors(packagePath, map[string][]byte{filename: out}, map[string]*sourcemap.Map{filename: provenance}, singleImporter); err != nil {
+				return Result{}, err
+			}
 		}
 		provenance = provenance.Compose(out, bound[filename], "refs.BindImports")
 		out = bound[filename]
@@ -1003,7 +1022,12 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 		if cfg != nil {
 			owner, registry = cfg.packagePath, cfg.enumRegistry
 		}
-		out, e = propagate.Lower(filename, out, propagate.Config{ResolvePayloadEnum: payloadEnumResolver(owner, registry, imp), InferredFamilies: &inferred, Families: singleFamilies, From: conversions, Importer: imp, PackagePath: packagePath, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
+		out, e = propagate.Lower(filename, out, propagate.Config{RewriteExpanded: func(file string, source []byte, mapping *sourcemap.Map) ([]byte, error) {
+			if cfg == nil {
+				return source, nil
+			}
+			return cfg.uses.rewriteExpanded(file, source, mapping)
+		}, ResolvePayloadEnum: payloadEnumResolver(owner, registry, imp), InferredFamilies: &inferred, Families: singleFamilies, From: conversions, Importer: imp, PackagePath: packagePath, Provenance: provenance, MatchReferenceTemps: matchReferenceTemps})
 		if e != nil {
 			return Result{}, stageError("propagate.Lower", e)
 		}
@@ -1024,6 +1048,13 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 		}
 		out = printed[filename]
 		out = unusedValidatorOwnerImports(filename, out, provenance)
+		// Reference erasure may replace tokens. Check source operators while
+		// the complete typed IR still carries their exact copied origins.
+		if cfg != nil && cfg.uses != nil {
+			if err := cfg.uses.validateSelectors(packagePath, map[string][]byte{filename: out}, map[string]*sourcemap.Map{filename: provenance}, imp); err != nil {
+				return Result{}, err
+			}
+		}
 		beforeReferences := out
 		refResult, e = refs.FinishWithPackagePath(packagePath, filename, out, imp, matchReferenceTemps)
 		if e != nil {
@@ -1064,6 +1095,11 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	if single {
 		out = unusedValidatorOwnerImports(filename, out, provenance)
 		if err := checkDefaultCycles(packagePath, map[string][]byte{filename: out}, sharedImporter, defaultHelpers, map[string]*sourcemap.Map{filename: provenance}); err != nil {
+			return Result{}, err
+		}
+	}
+	if single && cfg != nil && cfg.uses != nil {
+		if err := cfg.uses.validateSelectors(packagePath, map[string][]byte{filename: out}, map[string]*sourcemap.Map{filename: provenance}, sharedImporter); err != nil {
 			return Result{}, err
 		}
 	}
@@ -1121,11 +1157,34 @@ func (g *generator) err(t ast.Expr, msg string) error {
 		return fmt.Errorf("%s [generated/unmapped; enum stage coordinates]: %s", *g.enumPosition, msg)
 	}
 	p := g.fs.Position(t.Pos())
-	e := &sourcemap.Error{Message: msg, Generated: p, Origin: g.provenance.SpanFor(p.Offset, g.fs.Position(t.End()).Offset)}
+	origin := g.provenance.SpanFor(p.Offset, g.fs.Position(t.End()).Offset)
+	if origin == nil {
+		// A namespace alias is generated, while the selected source type token
+		// is copied exactly. Diagnose that proven token instead of guessing the
+		// full qualified expression's span.
+		if selector, ok := t.(*ast.SelectorExpr); ok {
+			p = g.fs.Position(selector.Sel.Pos())
+			origin = g.provenance.SpanFor(p.Offset, g.fs.Position(selector.Sel.End()).Offset)
+		}
+	}
+	e := &sourcemap.Error{Message: msg, Generated: p, Origin: origin}
 	if s := g.provenance.Lookup(p.Offset); s != nil {
 		e.Stack = s.Stack
 	}
 	return e
+}
+
+// protocolDiagnosticType identifies an imported protocol target without exposing the
+// compiler's private import alias or guessing which public spelling was used.
+func (g *generator) protocolDiagnosticType(t ast.Expr) string {
+	if selector, ok := t.(*ast.SelectorExpr); ok {
+		if namespace, ok := selector.X.(*ast.Ident); ok {
+			if owner := g.defaultImportPaths[namespace.Name]; owner != "" {
+				return owner + "::" + selector.Sel.Name
+			}
+		}
+	}
+	return g.typeName(t)
 }
 
 func (g *generator) emitModel(m model) error {
@@ -1250,7 +1309,7 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 		read, hasRead := g.importedField("Deserialize", t)
 		if hasWrite || hasRead {
 			if wantS && !hasWrite || wantR && !hasRead {
-				return "", "", g.err(t, "nested type lacks required registered serde protocol: "+typ)
+				return "", "", g.err(t, "nested type lacks required registered serde protocol: "+g.protocolDiagnosticType(t))
 			}
 			w = "return " + write + "(s,&v)"
 			b = "return " + read + "(d)"
@@ -1296,7 +1355,7 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 		write, hasWrite := g.importedField("Serialize", t)
 		read, hasRead := g.importedField("Deserialize", t)
 		if wantS && !hasWrite || wantR && !hasRead {
-			return "", "", g.err(t, "nested type lacks required registered serde protocol: "+typ)
+			return "", "", g.err(t, "nested type lacks required registered serde protocol: "+g.protocolDiagnosticType(t))
 		}
 		w = "return " + write + "(s,&v)"
 		b = "return " + read + "(d)"

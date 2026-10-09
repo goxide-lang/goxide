@@ -17,6 +17,7 @@ func TestMatchCallSignatures(t *testing.T) {
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, dir, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 		packagesWrite(t, dir, "model/model.go", `package model
  type secret uint64
  type Alias = secret
@@ -35,7 +36,7 @@ func TestMatchCallSignatures(t *testing.T) {
 		packagesWrite(t, dir, "native.go", `package app
  func Generic[T any](v T)T{return v}
  `)
-		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\npub enum E{A,B,}\n"+body)
+		packagesWrite(t, dir, "app.gox", "package app\nuse model as m;\npub enum E{A,B,}\n"+body)
 		return dir
 	}
 	t.Run("execution", func(t *testing.T) {
@@ -49,36 +50,36 @@ func Sum(xs ...int)int{n:=0;for _,v:=range xs{n+=v};return n}
 func StaticVariadic()int{return Sum(match E::A{E::A=>2,E::B=>0},3)}
 func Factory()func(int)int{mark(1);return func(n int)int{mark(8);return n+10}}
 func FactoryCall()int{return Factory()(match choice(){E::A=>mark(3),E::B=>0})}
-func Fields()int{s:=m.S{F:func(n int)int{mark(8);return n+10}};get:=func()*m.S{mark(1);return &s};change:=func()int{s.F=func(n int)int{mark(99);return 99};return mark(3)};return get().F(match choice(){E::A=>change(),E::B=>0})}
-func Methods()(int,int){s:=m.S{N:10};change:=func()int{s.N=20;return 3};v:=s.Value(match E::A{E::A=>change(),E::B=>0});s.N=10;p:=s.Pointer(match E::A{E::A=>change(),E::B=>0});return v,p}
-func Bounds(){a:=[]m.S{};idx:=func()int{mark(1);return 1};_=a[idx()].Value(match E::A{E::A=>mark(3),E::B=>0})}
-func AssertPointer(){var a any;_=a.(*m.S).Value(match E::A{E::A=>mark(3),E::B=>0})}
-func Assert(){var a any=0;_=a.(m.S).Value(match E::A{E::A=>mark(3),E::B=>0})}
-func NilValue(){var s *m.S;_=s.Value(match E::A{E::A=>mark(3),E::B=>0})}
-func NilPointer()int{var s *m.S;return s.Pointer(match E::A{E::A=>mark(3),E::B=>0})}
-func NilInterface(){var s m.I;_=s.Pointer(match E::A{E::A=>mark(3),E::B=>0})}
-func TypedNilInterface()int{var p *m.S;var s m.I=p;return s.Pointer(match E::A{E::A=>mark(3),E::B=>0})}
-func EmbeddedPointer()int{var s m.Embedded;return s.Pointer(match E::A{E::A=>mark(3),E::B=>0})}
-func EmbeddedValue(){var s m.Embedded;_=s.Value(match E::A{E::A=>mark(3),E::B=>0})}
-func MethodExpression()int{return (*m.S).Pointer(nil,match E::A{E::A=>mark(3),E::B=>0})}
+func Fields()int{s:=m::S{F:func(n int)int{mark(8);return n+10}};get:=func()*m::S{mark(1);return &s};change:=func()int{s.F=func(n int)int{mark(99);return 99};return mark(3)};return get().F(match choice(){E::A=>change(),E::B=>0})}
+func Methods()(int,int){s:=m::S{N:10};change:=func()int{s.N=20;return 3};v:=s.Value(match E::A{E::A=>change(),E::B=>0});s.N=10;p:=s.Pointer(match E::A{E::A=>change(),E::B=>0});return v,p}
+func Bounds(){a:=[]m::S{};idx:=func()int{mark(1);return 1};_=a[idx()].Value(match E::A{E::A=>mark(3),E::B=>0})}
+func AssertPointer(){var a any;_=a.(*m::S).Value(match E::A{E::A=>mark(3),E::B=>0})}
+func Assert(){var a any=0;_=a.(m::S).Value(match E::A{E::A=>mark(3),E::B=>0})}
+func NilValue(){var s *m::S;_=s.Value(match E::A{E::A=>mark(3),E::B=>0})}
+func NilPointer()int{var s *m::S;return s.Pointer(match E::A{E::A=>mark(3),E::B=>0})}
+func NilInterface(){var s m::I;_=s.Pointer(match E::A{E::A=>mark(3),E::B=>0})}
+func TypedNilInterface()int{var p *m::S;var s m::I=p;return s.Pointer(match E::A{E::A=>mark(3),E::B=>0})}
+func EmbeddedPointer()int{var s m::Embedded;return s.Pointer(match E::A{E::A=>mark(3),E::B=>0})}
+func EmbeddedValue(){var s m::Embedded;_=s.Value(match E::A{E::A=>mark(3),E::B=>0})}
+func MethodExpression()int{return (*m::S)::Pointer(nil,match E::A{E::A=>mark(3),E::B=>0})}
 func NilFactory(){f:=func()func(int)int{mark(1);return nil};_=f()(match choice(){E::A=>mark(3),E::B=>0})}
 func Variadic()int{g:=func(xs ...int)int{n:=0;for _,x:=range xs{n+=x};return n};return g(match E::A{E::A=>2,E::B=>0},3)}
 func VariadicEmpty()bool{g:=func(n int,xs ...int)bool{return n==2&&xs==nil};return g(match E::A{E::A=>2,E::B=>0})}
 func Spread(rest []int)int{g:=func(a,b int,xs ...int)int{xs[0]+=a+b;return len(xs)};return g(1,match E::A{E::A=>2,E::B=>0},rest...)}
 func SpreadMatch(rest []int)bool{g:=func(xs ...int)bool{if len(xs)>0{xs[0]=9};return xs==nil};return g(match E::A{E::A=>rest,E::B=>nil}...)}
-func WideSpread()m.Alias{g:=func(xs ...m.Alias)m.Alias{return xs[0]};return g(match E::A{E::A=>1<<63,E::B=>0})}
-func PrivateAlias()m.Alias{return m.Sink()(match E::A{E::A=>1<<63,E::B=>0})}
-func ExplicitGeneric()m.Alias{return m.Identity[m.Alias](match E::A{E::A=>1<<63,E::B=>0})}
+func WideSpread()m::Alias{g:=func(xs ...m::Alias)m::Alias{return xs[0]};return g(match E::A{E::A=>1<<63,E::B=>0})}
+func PrivateAlias()m::Alias{return m::Sink()(match E::A{E::A=>1<<63,E::B=>0})}
+func ExplicitGeneric()m::Alias{return m::Identity[m::Alias](match E::A{E::A=>1<<63,E::B=>0})}
 func LocalGeneric()uint64{return Generic[uint64](match E::A{E::A=>1<<63,E::B=>0})}
-func Shadow()uint64{type m int;_ = m(0);return Generic[uint64](match E::A{E::A=>1<<63,E::B=>0})}
+func Shadow()uint64{type Count int;_ = Count(0);return Generic[uint64](match E::A{E::A=>1<<63,E::B=>0})}
 func RecoverField()(ok bool){defer func(){s:=struct{F func(any)}{F:func(v any){ok=v=="boom"}};s.F(match E::A{E::A=>recover(),E::B=>nil})}();panic("boom")}
 func Failed()Result[int,string]{mark(3);return Result[int,string]::Err("stop")}
 func Failure()Result[int,string]{factory:=func()func(int,int)Result[int,string]{mark(1);return nil};defer func(){mark(9)}();return factory()(match choice(){E::A=>Failed()?,E::B=>0},mark(8))}
 func IsErr(v Result[int,string])bool{return match v{Result[int,string]::Ok(_)=>false,Result[int,string]::Err(e)=>e=="stop"}}
-func Jump(){if true{goto Done};m.Value().Value(match E::A{E::A=>1,E::B=>0});Done:return}
-func BenchMethod(s *m.S)int{return s.Pointer(match E::A{E::A=>1,E::B=>0})}
+func Jump(){if true{goto Done};m::Value().Value(match E::A{E::A=>1,E::B=>0});Done:return}
+func BenchMethod(s *m::S)int{return s.Pointer(match E::A{E::A=>1,E::B=>0})}
 func BenchSpread(rest []int)bool{return SpreadMatch(rest)}
-func BenchGeneric()int{return m.Identity[int](match E::A{E::A=>1,E::B=>0})}
+func BenchGeneric()int{return m::Identity[int](match E::A{E::A=>1,E::B=>0})}
 `)
 		generated := filepath.Join(t.TempDir(), "generated")
 		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
@@ -129,17 +130,19 @@ func BenchmarkGenericGo(b *testing.B){for i:=0;i<b.N;i++{sink=m.Identity[int](1)
 		}
 	})
 	for name, body := range map[string]string{
-		"multiple":               `func Bad()(a,b int){return match E::A{E::A=>1,E::B=>0}}`,
-		"goxide-generic-definition": `func own[T any](v T)T{return v};func Bad()int{return own[int](match E::A{E::A=>1,E::B=>0})}`,
-		"unaddressable-array":    `func Bad()int{return m.Array()[0].Pointer(match E::A{E::A=>1,E::B=>0})}`,
-		"readonly-method":        `func Bad(r &m.S){(*r).Pointer(match E::A{E::A=>1,E::B=>0})}`,
-		"unaddressable":          `func Bad()int{return m.Value().Pointer(match E::A{E::A=>1,E::B=>0})}`,
-		"spread-arity":           `func Bad(g func(int,...int)int,rest []int)int{return g(1,match E::A{E::A=>2,E::B=>0},rest...)}`,
-		"spread-element":         `func Bad(g func(...int)int)int{return g(match E::A{E::A=>2,E::B=>0}...)}`,
-		"bad-generic":            `func Bad()uint8{return m.Identity[uint8](match E::A{E::A=>256,E::B=>0})}`,
-		"private-unnameable":     `func Bad()int{return m.Hidden()(match E::A{E::A=>1,E::B=>0})}`,
-		"readonly-native":        `func native(p *int){};func Bad(r &int){native(match E::A{E::A=>r,E::B=>r})}`,
-		"readonly-any":           `func native(v any){};func Bad(r &int){native(match E::A{E::A=>r,E::B=>r})}`,
+		"legacy-method-expression-dot":   `func Bad()int{return (*m::S).Pointer(nil,match E::A{E::A=>1,E::B=>0})}`,
+		"static-type-namespace-conflict": `func Bad(){type m int;_ = m(0)}`,
+		"multiple":                       `func Bad()(a,b int){return match E::A{E::A=>1,E::B=>0}}`,
+		"goxide-generic-definition":      `func own[T any](v T)T{return v};func Bad()int{return own[int](match E::A{E::A=>1,E::B=>0})}`,
+		"unaddressable-array":            `func Bad()int{return m::Array()[0].Pointer(match E::A{E::A=>1,E::B=>0})}`,
+		"readonly-method":                `func Bad(r &m::S){(*r).Pointer(match E::A{E::A=>1,E::B=>0})}`,
+		"unaddressable":                  `func Bad()int{return m::Value().Pointer(match E::A{E::A=>1,E::B=>0})}`,
+		"spread-arity":                   `func Bad(g func(int,...int)int,rest []int)int{return g(1,match E::A{E::A=>2,E::B=>0},rest...)}`,
+		"spread-element":                 `func Bad(g func(...int)int)int{return g(match E::A{E::A=>2,E::B=>0}...)}`,
+		"bad-generic":                    `func Bad()uint8{return m::Identity[uint8](match E::A{E::A=>256,E::B=>0})}`,
+		"private-unnameable":             `func Bad()int{return m::Hidden()(match E::A{E::A=>1,E::B=>0})}`,
+		"readonly-native":                `func native(p *int){};func Bad(r &int){native(match E::A{E::A=>r,E::B=>r})}`,
+		"readonly-any":                   `func native(v any){};func Bad(r &int){native(match E::A{E::A=>r,E::B=>r})}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)

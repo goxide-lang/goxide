@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/derives"
 	"github.com/hxsf/goxide/internal/naming"
+	"github.com/hxsf/goxide/internal/paths"
 	"go/constant"
 	"go/types"
 	"io"
@@ -14,6 +16,8 @@ import (
 
 	"github.com/hxsf/goxide/internal/refs"
 )
+
+const useMetadataVersion = 3
 
 const useMetadataMarker = "GoxideUseMetadata"
 const useMetadataFilename = ".goxide.uses.json"
@@ -82,7 +86,7 @@ func (u *usePackage) load(path string) (useMetadata, error) {
 	if e = d.Decode(&extra); e != io.EOF {
 		return useMetadata{}, fmt.Errorf("use metadata must contain exactly one JSON object for %s", path)
 	}
-	if a.Version != 2 || a.Metadata.Version != 2 || a.Metadata.Path != path || a.Metadata.Package != pkg.Name() || a.Metadata.marker() != constant.StringVal(c.Val()) {
+	if a.Version != useMetadataVersion || a.Metadata.Version != useMetadataVersion || a.Metadata.Path != path || a.Metadata.Package != pkg.Name() || a.Metadata.marker() != constant.StringVal(c.Val()) {
 		return useMetadata{}, fmt.Errorf("use metadata marker/schema mismatch for %s", path)
 	}
 	if len(a.Files) != len(names) {
@@ -106,10 +110,32 @@ func (u *usePackage) load(path string) (useMetadata, error) {
 	}
 	seen := map[string]bool{}
 	for _, b := range a.Metadata.Bindings {
-		if seen[b.Name] || b.Name == "" || b.RoutePath == "" || b.RouteName == "" || b.OriginPath == "" || b.OriginName == "" {
+		if seen[b.Name] || !paths.ValidIdentifier(b.Name) || !b.Public {
 			return useMetadata{}, fmt.Errorf("invalid use binding metadata in %s", path)
 		}
 		seen[b.Name] = true
+		if b.Kind == "namespace" {
+			if b.Namespace == nil || b.RoutePath != b.Namespace.PackagePath || b.OriginPath != b.Namespace.PackagePath || b.RouteName != b.Name || b.OriginName != b.Name {
+				return useMetadata{}, fmt.Errorf("missing namespace metadata in %s", path)
+			}
+			if err := u.validateNamespaceMetadata(*b.Namespace, 0); err != nil {
+				return useMetadata{}, err
+			}
+			continue
+		}
+		if b.Kind == "derive" {
+			def, ok := derives.Lookup(b.OriginPath, b.OriginName)
+			if !ok || b.RoutePath != b.OriginPath || b.RouteName != b.OriginName {
+				return useMetadata{}, fmt.Errorf("invalid derive use owner in %s", path)
+			}
+			if err := derives.Validate(def, u.imp); err != nil {
+				return useMetadata{}, err
+			}
+			continue
+		}
+		if b.RoutePath == "" || b.RouteName == "" || b.OriginPath == "" || b.OriginName == "" {
+			return useMetadata{}, fmt.Errorf("invalid use binding metadata in %s", path)
+		}
 		switch b.Kind {
 		case "type", "constant", "function", "variable":
 		default:
@@ -172,6 +198,33 @@ func (u *usePackage) load(path string) (useMetadata, error) {
 	}
 	return a.Metadata, nil
 }
+
+func (u *usePackage) validateNamespaceMetadata(node paths.Namespace, depth int) error {
+	if depth > 64 {
+		return fmt.Errorf("namespace metadata nesting limit exceeded")
+	}
+	switch node.Source {
+	case "", "toolchain":
+	case "module", "local":
+		if node.ModulePath == "" {
+			return fmt.Errorf("namespace metadata missing module identity")
+		}
+	default:
+		return fmt.Errorf("unknown namespace metadata source %q", node.Source)
+	}
+	if node.PackagePath == "" && len(node.Children) == 0 {
+		return fmt.Errorf("invalid namespace group metadata")
+	}
+	for name, child := range node.Children {
+		if !paths.ValidIdentifier(name) {
+			return fmt.Errorf("invalid namespace child %q", name)
+		}
+		if err := u.validateNamespaceMetadata(child, depth+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func writeUseArtifact(root, path string, m useMetadata, files map[string][]byte, imp types.Importer) error {
 	if !m.present() {
 		return nil
@@ -184,7 +237,7 @@ func writeUseArtifact(root, path string, m useMetadata, files map[string][]byte,
 	if e != nil {
 		return e
 	}
-	a := useArtifact{Version: 2, Metadata: m, Content: content, Files: map[string]string{}}
+	a := useArtifact{Version: useMetadataVersion, Metadata: m, Content: content, Files: map[string]string{}}
 	for name, source := range files {
 		a.Files[name] = enumDigest(source)
 	}

@@ -3,6 +3,7 @@ package macros
 import (
 	"bytes"
 	"fmt"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/ast"
 	"go/format"
@@ -33,15 +34,29 @@ func bindingError(fs *token.FileSet, p token.Pos, message string) error {
 
 func (e *engine) definitionNames() map[string]bool {
 	if e.active != nil {
-		return e.active.pkg.topNames
+		return scopeNames(e.active)
 	}
 	return e.topNames
 }
 func (e *engine) callerNames() map[string]bool {
 	if e.pkg != nil {
-		return e.pkg.topNames
+		return scopeNames(e.pkg.scopes[e.file])
 	}
 	return e.topNames
+}
+
+func scopeNames(sc *scope) map[string]bool {
+	if len(sc.useNames) == 0 {
+		return sc.pkg.topNames
+	}
+	names := make(map[string]bool, len(sc.pkg.topNames)+len(sc.useNames))
+	for name := range sc.pkg.topNames {
+		names[name] = true
+	}
+	for name := range sc.useNames {
+		names[name] = true
+	}
+	return names
 }
 
 // Only declaration heads are inspected: a builtin in an initializer is not a
@@ -345,7 +360,7 @@ func ResolveBuiltinsWithPath(packagePath string, fs *token.FileSet, f *ast.File,
 
 func (e *engine) finishBuiltins(ts []tok) ([]tok, error) {
 	fs := token.NewFileSet()
-	f, err := parser.ParseFile(fs, e.file, render(ts), 0)
+	f, err := parser.ParseFile(fs, e.file, paths.GoView([]byte(render(ts))), 0)
 	if err != nil {
 		return ts, nil
 	} // The frontend resolves after lowering the DSL.

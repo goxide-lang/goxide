@@ -1,12 +1,12 @@
 package main
-import "places.example/update/model"
+use model;
 func fallbackPair(n int)(int,bool){return n,true}
-func fallbackTuple(t *model.Tree,r Result[int,error])Result[int,error]{var ok bool;t.Count,ok=fallbackPair(r?);_=ok;return r}
+func fallbackTuple(t *model::Tree,r Result[int,error])Result[int,error]{var ok bool;t.Count,ok=fallbackPair(r?);_=ok;return r}
 func multiPair(n int,calls *int)(int,int){*calls++;return n,n+1}
-func multiTuple(t *model.Tree,r Result[int,error],calls *int)Result[int,error]{t.Count,t.Values[0]=multiPair(r?,calls);return r}
-func multiMap(t *model.Tree,m map[int]int,r Result[int,error])Result[int,error]{t.Count,t.Enabled=m[r?];return r}
-func multiAssert(t *model.Tree,r Result[any,error])Result[int,error]{t.Count,t.Enabled=(r?).(int);return Result[int,error]::Ok(t.Count)}
-func multiReceive(t *model.Tree,r Result[chan int,error])Result[int,error]{t.Count,t.Enabled=<-r?;return Result[int,error]::Ok(t.Count)}
-func multiPrivate(t *model.Tree,r Result[int,error])Result[int,error]{t.Wide,t.Enabled=model.MultiPrivate(r?);t.Count,_=fallbackPair(r?);return r}
-func multiRebind(t *model.Tree,r Result[int,error])Result[int,error]{*model.LeafSlot(t),t.Count=model.MultiLeaf(r?);return r}
-func multiNil(t *model.Tree,first *int,r Result[int,error],calls *int)Result[int,error]{*first,t.Count=multiPair(r?,calls);return r}
+func multiTuple(t *model::Tree,r Result[int,error],calls *int)Result[int,error]{t.Count,t.Values[0]=multiPair(r?,calls);return r}
+func multiMap(t *model::Tree,m map[int]int,r Result[int,error])Result[int,error]{t.Count,t.Enabled=m[r?];return r}
+func multiAssert(t *model::Tree,r Result[any,error])Result[int,error]{t.Count,t.Enabled=(r?).(int);return Result[int,error]::Ok(t.Count)}
+func multiReceive(t *model::Tree,r Result[chan int,error])Result[int,error]{t.Count,t.Enabled=<-r?;return Result[int,error]::Ok(t.Count)}
+func multiPrivate(t *model::Tree,r Result[int,error])Result[int,error]{t.Wide,t.Enabled=model::MultiPrivate(r?);t.Count,_=fallbackPair(r?);return r}
+func multiRebind(t *model::Tree,r Result[int,error])Result[int,error]{*model::LeafSlot(t),t.Count=model::MultiLeaf(r?);return r}
+func multiNil(t *model::Tree,first *int,r Result[int,error],calls *int)Result[int,error]{*first,t.Count=multiPair(r?,calls);return r}

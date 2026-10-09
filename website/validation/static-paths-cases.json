@@ -1,0 +1,97 @@
+[
+  {
+    "id": "serde-owner-alias-and-value-shadow",
+    "source": "package main\nuse fmt;\nuse serde as wire;\nuse serde::json as json;\n#[derive(wire::Serialize,wire::Deserialize)]\ntype Item struct { Value int }\nfunc main(){wire:=7;_=wire;original:=Item{Value:42};data,err:=json::Marshal(&original,SerializeItem);if err!=nil{panic(err)};copy,err:=json::Unmarshal(data,DeserializeItem);if err!=nil{panic(err)};fmt::Println(string(data),copy.Value)}\n",
+    "expectedStdout": "{\"Value\":42} 42\n"
+  },
+  {
+    "id": "direct-member-and-derive-alias",
+    "source": "package main\nuse fmt::Println as print;\nuse serde::Serialize as Encode;\nuse serde::json as json;\n#[derive(Encode)]\ntype Item struct { Value int }\nfunc main(){item:=Item{Value:9};data,err:=json::Marshal(&item,SerializeItem);print(string(data),err)}\n",
+    "expectedStdout": "{\"Value\":9} <nil>\n"
+  },
+  {
+    "id": "explicit-group-namespace",
+    "source": "package main\nuse encoding;\nuse fmt;\nfunc main(){data,err:=encoding::json::Marshal(map[string]int{\"n\":5});fmt::Println(string(data),err)}\n",
+    "expectedStdout": "{\"n\":5} <nil>\n"
+  },
+  {
+    "id": "static-namespace-and-local-value",
+    "source": "package main\nuse fmt;\ntype Box struct { Value int }\nfunc main(){fmt:=Box{Value:3};fmt::Println(fmt.Value)}\n",
+    "expectedStdout": "3\n"
+  },
+  {
+    "id": "deferred-match-use-and-shadow",
+    "source": "package main\nuse fmt;\nuse strconv::Itoa as render;\nfunc item()Option[int]{return Option::Some(3)}\nfunc main(){output:=\"\";match item(){Option::Some(n)=>{output=render(n)},Option::None=>{output=\"empty\"},};{render:=func(int)string{return \"local\"};match item(){Option::Some(n)=>{output+=\" \"+render(n)},Option::None=>{output=\"empty\"},}};fmt::Println(output)}\n",
+    "expectedStdout": "3 local\n"
+  },
+  {
+    "id": "deferred-static-type-and-value-methods",
+    "source": "package main\nuse fmt;\ntype T struct{}\nfunc(T)M()int{return 9}\nfunc item()Option[int]{return Option::Some(3)}\nfunc Statement()int{result:=0;match item(){Option::Some(n)=>{result=T::M(T{})+n},Option::None=>{},};return result}\nfunc Expression()int{return match item(){Option::Some(n)=>(*T)::M(&T{})+n,Option::None=>0,}}\nfunc main(){v:=T{};fmt::Println(Statement(),Expression(),v.M())}\n",
+    "expectedStdout": "12 12 9\n"
+  },
+  {
+    "id": "deferred-old-type-dot-rejected",
+    "source": "package main\nuse fmt;\ntype T struct{}\nfunc(T)M()int{return 9}\nfunc item()Option[int]{return Option::Some(3)}\nfunc main(){v:=T{};_=v.M;match item(){Option::Some(n)=>{fmt::Println(T.M(T{})+n)},Option::None=>{},}}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "static package and type paths"
+  },
+  {
+    "id": "deferred-value-static-path-rejected",
+    "source": "package main\nuse fmt;\ntype T struct{}\nfunc(T)M()int{return 9}\nfunc item()Option[int]{return Option::Some(3)}\nfunc main(){v:=T{};_=v.M;match item(){Option::Some(n)=>{fmt::Println(v::M()+n)},Option::None=>{},}}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "value members"
+  },
+  {
+    "id": "local-value-is-not-static-namespace",
+    "source": "package main\ntype Box struct { Value int }\nfunc main(){fmt:=Box{Value:3};_=fmt;_=fmt::Value}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "value members"
+  },
+  {
+    "id": "old-import-rejected",
+    "source": "package main\nimport \"fmt\"\nfunc main(){fmt.Println(1)}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "import"
+  },
+  {
+    "id": "package-dot-rejected",
+    "source": "package main\nuse fmt;\nfunc main(){fmt.Println(1)}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "::"
+  },
+  {
+    "id": "bare-serde-derive-rejected",
+    "source": "package main\nuse serde;\n#[derive(Serialize,Deserialize)]\ntype Item struct { Value int }\nfunc main(){}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "derive"
+  },
+  {
+    "id": "dot-serde-derive-rejected",
+    "source": "package main\nuse serde;\n#[derive(serde.Serialize)]\ntype Item struct { Value int }\nfunc main(){}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "::"
+  },
+  {
+    "id": "json-cannot-own-serde-derive",
+    "source": "package main\nuse serde::json as serde;\n#[derive(serde::Serialize)]\ntype Item struct { Value int }\nfunc main(){}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "derive"
+  },
+  {
+    "id": "missing-serde-use-rejected",
+    "source": "package main\n#[derive(serde::Serialize)]\ntype Item struct { Value int }\nfunc main(){}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "serde"
+  },
+  {
+    "id": "unknown-project-root-rejected",
+    "source": "package main\nuse missing;\nfunc main(){}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "missing"
+  },
+  {
+    "id": "grouped-default-macro-helper-hygiene",
+    "source": "package main\nuse fmt;\ntype (\n #[derive(Default)]\n Settings struct { N int }\n)\nmacro_rules! create {()=>{DefaultSettings()};}\nfunc Construct() Settings {DefaultSettings:=func()Settings{panic(\"captured\")};_=DefaultSettings;return create!()}\nfunc main(){fmt::Println(Construct().N)}\n",
+    "expectedStdout": "0\n"
+  }
+]

@@ -45,7 +45,7 @@ func TestModuleTaggedImportsAndExcludedSyntax(t *testing.T) {
 		os.Mkdir(filepath.Join(src, "dep"), 0700)
 		files := map[string]string{
 			"go.mod":         "module example.org/p\ngo 1.27\n",
-			"main.gox":       "package main\nimport d \"example.org/p/dep\"\nfunc main(){_=d.Value()}\n",
+			"main.gox":       "package main\nuse dep as d;\nfunc main(){_=d::Value()}\n",
 			"excluded.gox":   "//go:build never_selected\n\ninvalid excluded language syntax\n",
 			"_ignored.gox":   "invalid ignored language syntax\n",
 			"dep/base.gox":   "//go:build !feature\n\npackage dep\nfunc Value()int{return 1}\n",
@@ -62,7 +62,7 @@ func TestModuleTaggedImportsAndExcludedSyntax(t *testing.T) {
 			tags = []string{"feature"}
 		}
 		out := filepath.Join(t.TempDir(), "out")
-		_, err := CompileModuleWithTags(src, out, tags)
+		_, err := CompileModuleWithOptions(src, out, ModuleOptions{Tags: tags, Roots: frontendFixtureRoots(map[string]string{"dep": "example.org/p/dep"})})
 		if err != nil {
 			t.Fatal(err)
 		}

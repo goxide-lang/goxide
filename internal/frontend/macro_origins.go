@@ -32,7 +32,14 @@ func (m macroSourceMapper) mappedSpan(span *sourcemap.Span) bool {
 // Prepare transports complete token bytes. A mapped endpoint with a changed
 // width cannot be one of those copied tokens, even if its offsets are in range.
 func (m macroSourceMapper) copiedToken(segment *sourcemap.Segment) bool {
-	return segment != nil && segment.Start >= 0 && segment.End > segment.Start && segment.End <= len(m.prepared.Source) && m.mappedSpan(segment.Origin) && segment.End-segment.Start == segment.Origin.End-segment.Origin.Start
+	return segment != nil && segment.Kind != "namespace-path" && segment.Start >= 0 && segment.End > segment.Start && segment.End <= len(m.prepared.Source) && m.mappedSpan(segment.Origin) && segment.End-segment.Start == segment.Origin.End-segment.Origin.Start
+}
+
+// A bound namespace replacement records a source envelope separately from
+// copied tokens. It can anchor an invocation frame even when the hygienic Go
+// alias has a different width; it never proves an unchanged diagnostic point.
+func (m macroSourceMapper) namespaceEnvelope(segment *sourcemap.Segment) bool {
+	return segment != nil && segment.Kind == "namespace-path" && segment.Start >= 0 && segment.End > segment.Start && segment.End <= len(m.prepared.Source) && m.mappedSpan(segment.Origin)
 }
 
 // point requires a complete, explicitly mapped token range. In particular,
@@ -60,6 +67,20 @@ func (m macroSourceMapper) point(span sourcemap.Span, original bool) *sourcemap.
 	return mapped
 }
 
+// causalImport transports the declared cause of one synthetic import token.
+// This is deliberately separate from copied-token provenance: its spelling and
+// width need not match the original use keyword, and it never proves a selector.
+func (m macroSourceMapper) causalImport(span sourcemap.Span, original bool) *sourcemap.Span {
+	if original || !m.preparedSpan(span) {
+		return nil
+	}
+	segment := m.prepared.Lookup(span.Start)
+	if segment == nil || segment.Kind != "use import" || segment.Start != span.Start || segment.End != span.End || !m.mappedSpan(segment.Origin) {
+		return nil
+	}
+	return segment.Origin
+}
+
 // frame maps a known macro definition/invocation envelope, not every byte in
 // it. Its real token endpoints can enclose inserted question markers and changed
 // displacements. SpanFor would incorrectly reject those reliable frames.
@@ -74,7 +95,7 @@ func (m macroSourceMapper) frame(span sourcemap.Span, original bool) *sourcemap.
 		return nil
 	}
 	first, last := m.prepared.Lookup(span.Start), m.prepared.Lookup(span.End-1)
-	if !m.copiedToken(first) || !m.copiedToken(last) || first.Start != span.Start || last.End != span.End {
+	if (!m.copiedToken(first) && !m.namespaceEnvelope(first)) || !m.copiedToken(last) || first.Start != span.Start || last.End != span.End {
 		return nil
 	}
 	if first.Origin.Start > last.Origin.Start || first.Origin.End > last.Origin.End {

@@ -24,22 +24,23 @@ func TestExternalSerdeModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("wire.example/lib", ""))
-	packagesWrite(t, src, "model/item.gox", `package model
-#[derive(Serialize,Deserialize)]
+	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "model/item.gox", `package model; use serde;
+#[derive(serde::Serialize,serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 type Item struct{N int;Name string}
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 type Output struct{N int}
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 type Input struct{N int}
 `)
-	packagesWrite(t, src, "model/event.gox", `package model
-#[derive(Serialize,Deserialize)]
+	packagesWrite(t, src, "model/event.gox", `package model; use serde;
+#[derive(serde::Serialize,serde::Deserialize)]
 pub enum E{Empty,Item(Item),}
 func Event(n int)E{return E::Item(Item{N:n,Name:"business"})}
 `)
-	packagesWrite(t, src, "other/item.gox", `package different
-#[derive(Serialize,Deserialize)]
+	packagesWrite(t, src, "other/item.gox", `package different; use serde;
+#[derive(serde::Serialize,serde::Deserialize)]
 type Item struct{Text string}
 `)
 	packagesWrite(t, src, "relay/relay.go", `package relay
@@ -58,24 +59,25 @@ func DeserializeItem(d serde.Deserializer)(Item,error){n,e:=serde.ReadInt64(d);r
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("wire.example/app", lib))
-	packagesWrite(t, appsrc, "app.gox", `package app
-import v "wire.example/lib/relay"
-#[derive(Serialize,Deserialize)]
-type Wrap struct{V v.E;Items []v.Item;Index map[string]v.Item;Pair [1]v.Item;Maybe *v.Item;Opt Option[v.Item]}
-#[derive(Serialize,Deserialize)]
-type Nested struct{Items [][]v.E}
+	writeAcceptanceSerdeRoots(t, appsrc, "wire.example/lib", "model", "other", "relay", "fake")
+	packagesWrite(t, appsrc, "app.gox", `package app; use serde;
+use library::relay as v;
+#[derive(serde::Serialize,serde::Deserialize)]
+type Wrap struct{V v::E;Items []v::Item;Index map[string]v::Item;Pair [1]v::Item;Maybe *v::Item;Opt Option[v::Item]}
+#[derive(serde::Serialize,serde::Deserialize)]
+type Nested struct{Items [][]v::E}
 `)
-	packagesWrite(t, appsrc, "other.gox", `package app
-import v "wire.example/lib/other"
-#[derive(Serialize,Deserialize)]
-type Other struct{Items []v.Item}
+	packagesWrite(t, appsrc, "other.gox", `package app; use serde;
+use library::other as v;
+#[derive(serde::Serialize,serde::Deserialize)]
+type Other struct{Items []v::Item}
 `)
-	packagesWrite(t, appsrc, "directions.gox", `package app
-import m "wire.example/lib/model"
-#[derive(Serialize)]
-type Out struct{V m.Output}
-#[derive(Deserialize)]
-type In struct{V m.Input}
+	packagesWrite(t, appsrc, "directions.gox", `package app; use serde;
+use library::model as m;
+#[derive(serde::Serialize)]
+type Out struct{V m::Output}
+#[derive(serde::Deserialize)]
+type In struct{V m::Input}
 `)
 	out := filepath.Join(t.TempDir(), "app")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
@@ -121,7 +123,8 @@ func TestGoHelpers(t *testing.T){v:=a.Out{V:m.Output{N:9}};b,e:=serdejson.Encode
 	for _, tc := range []struct{ kind, pkg, typ string }{{"Serialize", "fake", "Item"}, {"Deserialize", "fake", "Item"}, {"Serialize", "relay", "New"}, {"Deserialize", "relay", "New"}, {"Serialize", "model", "Input"}, {"Deserialize", "model", "Output"}} {
 		bad := t.TempDir()
 		packagesWrite(t, bad, "go.mod", mod("wire.example/bad", lib))
-		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nimport m %q\n#[derive(%s)]\ntype Wrap struct{V m.%s}\n", "wire.example/lib/"+tc.pkg, tc.kind, tc.typ))
+		writeAcceptanceSerdeRoots(t, bad, "wire.example/lib", "model", "other", "relay", "fake")
+		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; use serde;\nuse library::%s as m;\n#[derive(serde::%s)]\ntype Wrap struct{V m::%s}\n", tc.pkg, tc.kind, tc.typ))
 		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
 		if !strings.Contains(log, "registered serde protocol") || !strings.Contains(log, "bad.gox:") {
 			t.Fatal(log)

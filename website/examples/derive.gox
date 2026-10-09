@@ -1,11 +1,10 @@
 package main
+use serde;
 
-import (
-    "fmt"
-    "github.com/goxide-lang/serde/json"
-)
+use fmt;
+use serde::json as serdejson;
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 type Config struct {
     Name string
     Enabled bool
@@ -15,7 +14,7 @@ func main() {
     config := DefaultConfig()
     config.Name = "goxide"
     copy := CloneConfig(&config)
-    fmt.Println(DebugConfig(&copy), config.equals(copy))
-    data, err := serdejson.Marshal(&config, SerializeConfig)
-    fmt.Println(string(data), err)
+    fmt::Println(DebugConfig(&copy), config.equals(copy))
+    data, err := serdejson::Marshal(&config, SerializeConfig)
+    fmt::Println(string(data), err)
 }

@@ -55,6 +55,31 @@ func TestBuiltinRejects(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupedPayloadAttributesKeepValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name, source, diagnostic string
+	}{
+		{"valid", "type (\n#[derive(Default)]\nSettings struct{N int}\n)\n", ""},
+		{"reference payload", "enum Mode{Idle}\ntype (\n#[derive(Clone)]\nHolder struct{Value *Mode}\n)\nvar x Result[Holder,error]\n", "enum-bearing pointer/container projection"},
+		{"generic declaration", "type (\n#[derive(Default)]\nSettings[T any] struct{N T}\n)\n", "user generic type declarations unsupported"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := []byte("package fixture\n" + tc.source)
+			declarations, err := CollectPackage("group.gox", source)
+			if err == nil {
+				_, err = LowerPackage("group.gox", source, nil, declarations.Enums, declarations.Types)
+			}
+			if tc.diagnostic == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.diagnostic) || !strings.Contains(err.Error(), "group.gox:") {
+				t.Fatalf("expected located %q, got %v", tc.diagnostic, err)
+			}
+		})
+	}
+}
 func TestBuiltinNominalAndInvalidCases(t *testing.T) {
 	r, e := Lower("sum.gox", []byte(`package main
 var a Option[int]

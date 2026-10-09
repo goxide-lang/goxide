@@ -72,3 +72,23 @@ macro_rules! size {($x:expr)=>{len($x)};}
 func main() { {type len int;fmt.Print(reflect.TypeOf(len(1)).Name()," ")};fmt.Println(size!("abc")) }
 `, "len 3\n")
 }
+
+func TestBuiltinStaticPathParserView(t *testing.T) {
+	source := []byte("package p\nimport \"fmt\"\nmacro_rules! size {($x:expr)=>{len($x)};}\nfunc f(){len:=func(string)int{return 9};fmt::Println(size!(\"abc\"),len(\"x\"))}\n")
+	expanded, err := ExpandWithMap("static-builtins.gox", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, _, err := lex("static-builtins.gox", expanded.Source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range tokens {
+		if expanded.Builtins[token.text] != "" {
+			t.Fatalf("static path prevented builtin resolution: %s", expanded.Source)
+		}
+	}
+	if !strings.Contains(string(expanded.Source), "fmt::Println") {
+		t.Fatal("parser view altered source static path")
+	}
+}

@@ -2,7 +2,9 @@ package buildscript
 
 import (
 	"bytes"
+	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/naming"
+	"github.com/hxsf/goxide/internal/paths"
 	"go/build"
 	"go/parser"
 	"go/token"
@@ -18,7 +20,7 @@ import (
 // does not infer dependencies from comments, string constants, test files, or
 // source files selected only for another platform. Host tools intentionally do
 // not inherit the target's feature tags or race instrumentation.
-func hostImports(files map[string][]byte) ([]string, error) {
+func hostImports(owner string, files map[string][]byte, roots paths.Roots) ([]string, error) {
 	ctx := build.Default
 	ctx.GOOS, ctx.GOARCH, ctx.CgoEnabled = runtime.GOOS, runtime.GOARCH, false
 	ctx.BuildTags = nil
@@ -56,6 +58,20 @@ func hostImports(files map[string][]byte) ([]string, error) {
 			return nil, err
 		}
 		if !selected {
+			continue
+		}
+		if ext == ".gox" {
+			packageOwner := owner
+			if dir := filepath.ToSlash(filepath.Dir(name)); dir != "." {
+				packageOwner += "/" + dir
+			}
+			plan, err := frontend.PrepareSourcePaths(packageOwner, name, source, roots, nil)
+			if err != nil {
+				return nil, err
+			}
+			for _, path := range plan.Imports {
+				imports[path] = true
+			}
 			continue
 		}
 		parsed, err := parser.ParseFile(token.NewFileSet(), name, source, parser.ImportsOnly)

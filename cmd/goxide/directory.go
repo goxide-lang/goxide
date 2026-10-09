@@ -20,10 +20,22 @@ func runDirectory(mode, input, dest, goTool string, out, stderr io.Writer) error
 	return runDirectoryTags(mode, input, dest, goTool, nil, out, stderr)
 }
 func runDirectoryTags(mode, input, dest, goTool string, tags []string, out, stderr io.Writer) error {
-	return runDirectoryArgs(mode, input, dest, goTool, tags, nil, out, stderr)
+	return runDirectoryArgs(mode, input, dest, goTool, tags, nil, "", out, stderr)
 }
-func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []string, out, stderr io.Writer) error {
-	options := frontend.ModuleOptions{Tags: tags, Race: mode == "test"}
+func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []string, rootsFile string, out, stderr io.Writer) error {
+	rootInput, err := filepath.EvalSymlinks(input)
+	if err != nil {
+		return err
+	}
+	rootInput, err = filepath.Abs(rootInput)
+	if err != nil {
+		return err
+	}
+	roots, err := sourceRoots(findModule(rootInput), rootInput, rootsFile)
+	if err != nil {
+		return err
+	}
+	options := frontend.ModuleOptions{Tags: tags, Race: mode == "test", Roots: roots}
 	if mode == "expand" {
 		return fmt.Errorf("expand is a single-file command; use transpile for packages")
 	}

@@ -126,6 +126,8 @@ func TestStandaloneSupportManifestSelection(t *testing.T) {
 	}
 }
 
+// Only the provider-selected writer version is available offline. Resolving the
+// overwritten v1.0.0 first would reject an otherwise valid support graph.
 func TestStandaloneSupportForkGraph(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	provider, generated := t.TempDir(), t.TempDir()
@@ -140,7 +142,6 @@ require (
 )
 replace github.com/goxide-lang/std => ./std
 replace github.com/goxide-lang/serde => ./serde
-replace example.org/supportwriter v1.0.0 => ./writer-old
 replace example.org/supportwriter v1.1.0 => ./writer-new
 replace unrelated.example/cli => ./does-not-exist
 exclude unrelated.example/cli v0.9.0
@@ -148,8 +149,6 @@ exclude unrelated.example/cli v0.9.0
 		"std/go.mod":          "module github.com/goxide-lang/std\ngo 1.27\nrequire example.org/supportwriter v1.0.0\n",
 		"std/value.go":        "package std\nimport w \"example.org/supportwriter\"\nfunc Value()int{return w.Value()}\n",
 		"serde/go.mod":        "module github.com/goxide-lang/serde\ngo 1.27\n",
-		"writer-old/go.mod":   "module example.org/supportwriter\ngo 1.27\n",
-		"writer-old/value.go": "package supportwriter\nfunc Value()int{return 1}\n",
 		"writer-new/go.mod":   "module example.org/supportwriter\ngo 1.27\n",
 		"writer-new/value.go": "package supportwriter\nfunc Value()int{return 2}\n",
 	}
@@ -197,5 +196,61 @@ exclude unrelated.example/cli v0.9.0
 	}
 	if err := writeStandaloneSupportModule(tool, provider, t.TempDir()); err == nil || !strings.Contains(err.Error(), "must not depend on the compiler") {
 		t.Fatalf("support -> compiler edge accepted: %v", err)
+	}
+}
+
+func TestStandaloneSupportSelectedGraphErrors(t *testing.T) {
+	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	for _, tc := range []struct {
+		name, selectedRequirements, want string
+	}{
+		{"discard-old-compiler-edge", "", ""},
+		{"selected-compiler-edge", "require github.com/hxsf/goxide v0.0.0\n", "must not depend on the compiler"},
+		{"selected-unavailable-dependency", "require missing.example/support v1.0.0\n", "missing.example/support"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, generated := t.TempDir(), t.TempDir()
+			files := map[string]string{
+				"go.mod": `module selector.example
+go 1.27
+require (
+ github.com/goxide-lang/std v0.0.0
+ github.com/goxide-lang/serde v0.0.0
+ example.org/supportwriter v1.1.0
+)
+replace github.com/goxide-lang/std => ./std
+replace github.com/goxide-lang/serde => ./serde
+replace example.org/supportwriter v1.0.0 => ./writer-old
+replace example.org/supportwriter v1.1.0 => ./writer-new
+`,
+				"std/go.mod":        "module github.com/goxide-lang/std\ngo 1.27\nrequire example.org/supportwriter v1.0.0\n",
+				"serde/go.mod":      "module github.com/goxide-lang/serde\ngo 1.27\n",
+				"writer-old/go.mod": "module example.org/supportwriter\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\n",
+				"writer-new/go.mod": "module example.org/supportwriter\ngo 1.27\n" + tc.selectedRequirements,
+			}
+			for name, source := range files {
+				path := filepath.Join(provider, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := writeStandaloneSupportModule(tool, provider, generated)
+			if tc.want != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("error = %v, want %q", err, tc.want)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			mod, err := os.ReadFile(filepath.Join(generated, "go.mod"))
+			if err != nil || bytes.Contains(mod, []byte("github.com/hxsf/goxide")) {
+				t.Fatalf("discarded compiler edge leaked: %v: %s", err, mod)
+			}
+		})
 	}
 }

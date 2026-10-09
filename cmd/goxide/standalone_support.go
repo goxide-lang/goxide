@@ -91,11 +91,12 @@ func writeStandaloneSupportModule(tool, root, destination string) error {
 	type graphModule struct {
 		Path, Version string
 		Main          bool
+		Error         *struct{ Err string }
 		Replace       *moduleVersion
 	}
 	var graph []graphModule
 	for {
-		list := exec.Command(tool, "list", "-mod=readonly", "-m", "-json", "all")
+		list := exec.Command(tool, "list", "-mod=readonly", "-m", "-e", "-json", "all")
 		list.Dir, list.Env = destination, localEnv()
 		var stderr bytes.Buffer
 		list.Stderr = &stderr
@@ -116,9 +117,6 @@ func writeStandaloneSupportModule(tool, root, destination string) error {
 			if module.Main {
 				continue
 			}
-			if compilerModule(module.Path) || module.Replace != nil && compilerModule(module.Replace.Path) {
-				return fmt.Errorf("public support dependencies must not depend on the compiler module: %s", module.Path)
-			}
 			reachable[module.Path] = true
 			graph = append(graph, module)
 		}
@@ -132,6 +130,17 @@ func writeStandaloneSupportModule(tool, root, destination string) error {
 			}
 		}
 		if len(extra) == 2 {
+			// Only the stable selected graph is authoritative. An intermediate
+			// version may be unavailable or carry dependencies removed by a
+			// provider's higher minimum; -e exposes its path for that override.
+			for _, module := range graph {
+				if compilerModule(module.Path) || module.Replace != nil && compilerModule(module.Replace.Path) {
+					return fmt.Errorf("public support dependencies must not depend on the compiler module: %s", module.Path)
+				}
+				if module.Error != nil {
+					return fmt.Errorf("public support dependency graph: %s: %s", module.Path, module.Error.Err)
+				}
+			}
 			break
 		}
 		if err := editModule(extra); err != nil {

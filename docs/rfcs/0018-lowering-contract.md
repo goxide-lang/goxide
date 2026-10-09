@@ -172,3 +172,23 @@ Go AST 本身没有所属 FileSet 标记；人为把另一个 parse 的 root 与
 
 本片不关闭 A03 整项。冗余括号消除的多 owner 歧义、refs 编辑坐标、共享 helper 因果备注，
 以及其他尚无单原因证明的临时节点继续独立保留；需要猜测或新增契约时停在建议。
+
+## A03 宏与 equality 派生组合（issue #6，2026-10-09）
+
+`zero!() → int(0)` 与 `PartialEq` / `Eq` 派生同文件时，equality 追加 helper
+改变整文件 token 串，旧 `Compose` 因而清空未变宏调用的来源。本片将上述 AST
+合同接入 `equality.Prepare` / `equality.Lower`：每次 parse 后、任何改写前按文件
+冻结证据，打印后用实际 AST 结构对应传递；不放宽 `Compose` 的拒绝猜测规则。
+逐文件记录实质改写，完全未改写的文件继续使用整串 token 证明，保留 AST 自有槽
+尚未覆盖的标点精度；改写文件只保留已经支持且有证据的 AST 自有 token。
+
+原调用和参数的存活 token 保留各自点与栈。把 `receiver.equals(arg)` 改写为
+helper 调用时，新 callee 只从原 `equals` 标识的自有 token 取得完整栈；延迟
+intrinsic 的后续改写同样只从该标识取得栈。新 token 保持 `Origin=nil` 和
+`generated/unmapped`，不能把 receiver 的位置充作调用标识来源。共享派生 helper、
+别名绑定和手写 enum 的验证前缀无唯一宏调用原因，保持未知，不继承首个调用者。
+
+验收包括独立最小失败回归、PartialEq/Eq、嵌套和重复调用、同包多文件、LF/CRLF、
+非宏与共享 helper 对照，并比较结构化来源、最终 Go map、适用 CLI 诊断及
+CLI/Go WASM 输出。原生成 Go 行为和既有编译拒绝合同不变；本片只关闭 issue #6
+的已复现组合，不关闭 A03 整项或其他 lowering 的来源缺口。

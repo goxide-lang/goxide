@@ -199,6 +199,109 @@ class LicenseTests(unittest.TestCase):
             build_support.go_license_path(self.root / 'other-go')
 
 
+class DependencySourcesTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = pathlib.Path(self.temporary.name).resolve()
+        self.compiler = self.root / 'compiler'
+        self.goroot = self.root / 'toolchain'
+        self.module = self.root / 'cached-module'
+        self.exports = self.root / 'exports'
+        for directory in (self.compiler, self.goroot, self.module, self.exports):
+            directory.mkdir()
+            (directory / 'LICENSE').write_text('license\n')
+        self.records = []
+
+    def package(self, path, directory, **identity):
+        directory.mkdir(parents=True)
+        content = b'package dependency\r\n// complete helper\r\nfunc helper() {}\r\n'
+        (directory / 'source.go').write_bytes(content)
+        (directory / 'source_test.go').write_text('must not publish tests')
+        (directory / 'inactive.go').write_text('must not publish another target')
+        archive = path.replace('/', '_') + '.a'
+        (self.exports / archive).write_bytes(b'exact native export archive for ' + path.encode())
+        record = dict(ImportPath=path, Dir=str(directory), Export='/unused/native-export.a',
+                      GoFiles=['source.go'], TestGoFiles=['source_test.go'],
+                      IgnoredGoFiles=['inactive.go'], **identity)
+        self.records.append(record)
+        return record, content
+
+    def snapshot(self, packages):
+        return build_support.dependency_sources(
+            packages, self.records, root=self.compiler, goroot=self.goroot,
+            toolchain_version='go1.27.1', compiler_commit='a' * 40, exports=self.exports)
+
+    def test_fixed_scope_complete_bytes_and_archive_identity(self):
+        record, content = self.package('example.org/library/value', self.module / 'value',
+                                      Module=dict(Path='example.org/library', Dir=str(self.module),
+                                                  Version='v1.2.3', Sum='h1:module', GoModSum='h1:mod'))
+        self.package('transitive', self.goroot / 'src/transitive', Standard=True, Goroot=True)
+        cgo = b'package dependency\n// a complete cgo source\n'
+        (self.module / 'value/cgo.go').write_bytes(cgo)
+        record['CgoFiles'] = ['cgo.go']
+        result = self.snapshot(['example.org/library/value'])
+        self.assertEqual(len(result), 1)
+        dependency = result[0]
+        self.assertEqual(dependency['version'], 'v1.2.3')
+        self.assertEqual(dependency['source'], 'example.org/library@v1.2.3')
+        self.assertEqual(dependency['sum'], 'h1:module')
+        self.assertEqual(dependency['goModSum'], 'h1:mod')
+        self.assertEqual([file['path'] for file in dependency['files']],
+                         ['example.org/library/value/cgo.go', 'example.org/library/value/source.go'])
+        for file, expected in zip(dependency['files'], [cgo, content]):
+            self.assertEqual(file['source'].encode(), expected)
+            self.assertEqual(file['sha256'], hashlib.sha256(expected).hexdigest())
+        archive = self.exports / 'example.org_library_value.a'
+        self.assertEqual(dependency['exportSha256'], hashlib.sha256(archive.read_bytes()).hexdigest())
+        self.assertEqual(dependency['licenses'][0]['path'], 'example.org/library/LICENSE')
+
+    def test_toolchain_and_compiler_sources_have_their_actual_identity(self):
+        self.package('fmt', self.goroot / 'src/fmt', Standard=True, Goroot=True)
+        self.package('example.org/compiler/runtime', self.compiler / 'runtime',
+                     Module=dict(Path='example.org/compiler', Main=True, Dir=str(self.compiler)))
+        standard, compiler = self.snapshot(['fmt', 'example.org/compiler/runtime'])
+        self.assertEqual(standard['source'], 'Go distribution go1.27.1')
+        self.assertEqual(standard['version'], 'go1.27.1')
+        self.assertEqual(standard['files'][0]['path'], 'GOROOT/src/fmt/source.go')
+        self.assertEqual(compiler['source'], 'example.org/compiler@' + 'a' * 40)
+        self.assertEqual(compiler['version'], 'a' * 40)
+        self.assertEqual(compiler['files'][0]['path'], 'example.org/compiler/runtime/source.go')
+
+    def test_missing_or_unexported_dependency_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'export record missing'):
+            self.snapshot(['missing'])
+        record, _ = self.package('fmt', self.goroot / 'src/fmt', Standard=True, Goroot=True)
+        del record['Export']
+        with self.assertRaisesRegex(ValueError, 'export record missing'):
+            self.snapshot(['fmt'])
+
+    def test_module_replacement_or_missing_checksum_is_rejected(self):
+        record, _ = self.package('example.org/library/value', self.module / 'value',
+                                Module=dict(Path='example.org/library', Dir=str(self.module),
+                                            Version='v1.2.3', Sum='h1:module', GoModSum='h1:mod'))
+        record['Module']['Replace'] = dict(Dir='/unreviewed')
+        with self.assertRaisesRegex(ValueError, 'replacements are not publishable'):
+            self.snapshot(['example.org/library/value'])
+        del record['Module']['Replace']
+        del record['Module']['Sum']
+        with self.assertRaisesRegex(ValueError, 'verified module identity'):
+            self.snapshot(['example.org/library/value'])
+
+    def test_missing_source_and_path_escape_fail_instead_of_partial_snapshot(self):
+        record, _ = self.package('fmt', self.goroot / 'src/fmt', Standard=True, Goroot=True)
+        record['GoFiles'] = ['missing.go']
+        with self.assertRaises(FileNotFoundError):
+            self.snapshot(['fmt'])
+        record['GoFiles'] = ['../../../compiler/LICENSE']
+        with self.assertRaisesRegex(ValueError, 'source escapes'):
+            self.snapshot(['fmt'])
+        (self.goroot / 'src/fmt/link.go').symlink_to(self.compiler / 'LICENSE')
+        record['GoFiles'] = ['link.go']
+        with self.assertRaisesRegex(ValueError, 'source escapes'):
+            self.snapshot(['fmt'])
+
+
 class ProposalEvidenceTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

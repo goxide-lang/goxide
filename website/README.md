@@ -1,6 +1,6 @@
 # goxide 语言介绍与自托管 Playground
 
-中文优先的静态语言介绍网站，以及真实单文件 goxide → Go 浏览器转译器。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
+中文优先的静态语言介绍网站，以及同包多文件 goxide → Go 浏览器转译器（保留旧单文件入口）。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
 本轮验证 A01 宏捕获类别与明确类型槽边界，并保留 A04 / A06 对照；编译器源码固定为
 `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，生产源摘要固定为
@@ -8,6 +8,23 @@
 `websiteCommit` 独立记录实际网站工具 HEAD。仅本地验证，没有部署或更新线上版本。
 [仓内验证说明](validation/README.md)是本片入口；[最新组合记录](LATEST-INTEGRATION.md)和
 [早期交付记录](INTEGRATION.md)中的既往结果不替代这次运行。
+
+## 同包多文件 Playground
+
+Playground 接受一个用户包的 1–16 个普通 `.gox` 文件，总 UTF-8 源码不超过
+32 KiB；每个文件保留独立 import 作用域。旧示例和 `goxideCompile(string)` 保持
+单文件结果；新增文件切换到包级规则，删回一个文件也不改变模式，重置旧例可恢复。
+新入口 `goxideCompilePackage([{path, source}])` 返回按真实文件分开的完整 Go。
+CLI 和浏览器共用 helper 输出层，helper 独立为 `goxide_helpers_<原文件名>.go`，
+未隐藏或删减生成代码。浏览器仅转译，不执行生成 Go。
+
+依赖视图只读，显示固定直接依赖在本次原生 export data 构建中选中的完整
+GoFiles/CgoFiles，以及真实模块/工具链版本、源码路径和 SHA-256。该视图不含
+整个发行包的测试、其他平台或汇编文件；传递依赖闭包仍列在清单。依赖不会成为
+用户包输入，不支持任意模块下载、多包工程编辑、上传或外部构建脚本。
+
+定向验收见 [同包验证入口](validation/package-files/README.md)。下面的完整历史
+验证流程仍保留；本次验收结果以新的交付报告为准，不借用旧轮次结论。
 
 ## 从干净 checkout 复现
 

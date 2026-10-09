@@ -45,6 +45,7 @@ type Result struct {
 	typeSpecs               map[string]*ast.TypeSpec
 	defaultHelpers          map[string]bool
 	equalityDerives         map[string]equality.Derive
+	generatedHelpers        map[string]bool
 }
 type attrs struct {
 	derive          map[string]bool
@@ -1087,7 +1088,22 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 			return Result{}, err
 		}
 	}
-	return Result{fieldProtocols: fieldProtocols, defaultRegistrations: defaultRegistrations, equalityDerives: equalityDerives, matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
+	generatedHelpers := map[string]bool{}
+	for _, m := range ordered {
+		for _, kind := range []string{"Serialize", "Deserialize", "Debug", "Clone", "Default"} {
+			if m.attrs.derive[kind] {
+				generatedHelpers[kind+m.name] = true
+			}
+		}
+		if m.attrs.derive["Error"] {
+			generatedHelpers[m.name+".Error"] = true
+			generatedHelpers[m.name+".Unwrap"] = true
+		}
+		if m.from != "" {
+			generatedHelpers["From"+m.name] = true
+		}
+	}
+	return Result{generatedHelpers: generatedHelpers, fieldProtocols: fieldProtocols, defaultRegistrations: defaultRegistrations, equalityDerives: equalityDerives, matchReferenceTemps: matchReferenceTemps, Diagnostics: provenance, Go: out, Expanded: out, SourceMap: append(mapping, '\n'), Enums: enumResult.Enums, References: refResult.References, conversions: conversions, debugTypes: debugTypes, defaultHelpers: defaultHelpers}, nil
 }
 func (g *generator) typeName(t ast.Expr) string {
 	var b bytes.Buffer

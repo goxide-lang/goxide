@@ -1,3 +1,11 @@
+# Focused same-package Playground validation
+
+For issue #5, use [package-files/run.py](package-files/README.md) with the matching
+built site and CLI. It checks real CLI/browser file-set parity, legacy examples,
+full helper files, fixed dependency provenance, browser interactions and delayed
+Worker results. Chromium runs with its own sandbox enabled. This targeted suite
+does not modify CI or replace the later coordinated full acceptance.
+
 # Reproduce the website validation
 
 Run from a **clean committed checkout**, including untracked files. The checkout

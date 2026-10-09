@@ -1,0 +1,6 @@
+package main
+
+// The same alias belongs to a different import in main.gox.
+import util "strings"
+
+func title() string { return util.ToUpper("goxide") }

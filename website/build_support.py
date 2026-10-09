@@ -6,6 +6,87 @@ import subprocess
 import tempfile
 
 
+def dependency_sources(packages, records, *, root, goroot, toolchain_version,
+                       compiler_commit, exports):
+    """Snapshot the fixed direct imports selected for the native export build.
+
+    ``records`` must be the very same ``go list -export -deps -json`` output
+    used for the embedded export archives. Publish complete selected GoFiles
+    and CgoFiles, not tests, inactive target files, or the transitive closure.
+    Paths identify the original package/distribution; no build-machine paths
+    or module-cache paths are exposed. This helper never fetches or builds.
+    """
+    root = pathlib.Path(root).resolve(strict=True)
+    goroot = pathlib.Path(goroot).resolve(strict=True)
+    exports = pathlib.Path(exports)
+    by_package = {record['ImportPath']: record for record in records}
+    if len(set(packages)) != len(packages):
+        raise ValueError('duplicate direct dependency package')
+
+    def source_file(base, path, prefix):
+        # Both lexical and resolved checks matter: neither traversal names nor
+        # symlinks may turn the explicit source allowlist into a tree export.
+        relative = pathlib.PurePosixPath(path)
+        if relative.is_absolute() or '..' in relative.parts:
+            raise ValueError(f'dependency source escapes its root: {path}')
+        selected = base / relative
+        if not selected.resolve(strict=True).is_relative_to(base):
+            raise ValueError(f'dependency source escapes its root: {path}')
+        content = selected.read_bytes()
+        return dict(path=prefix + relative.as_posix(), source=content.decode('utf-8'),
+                    sha256=hashlib.sha256(content).hexdigest())
+
+    dependencies = []
+    for package in packages:
+        selected = by_package.get(package)
+        if not selected or not selected.get('Export'):
+            raise ValueError(f'dependency export record missing: {package}')
+        directory = pathlib.Path(selected['Dir']).resolve(strict=True)
+        module = selected.get('Module', {})
+        if module.get('Replace'):
+            raise ValueError(f'dependency replacements are not publishable: {package}')
+        if selected.get('Standard') and selected.get('Goroot'):
+            base, prefix = goroot, 'GOROOT/'
+            version = toolchain_version
+            origin = f'Go distribution {version}'
+            license_bytes = go_license_path(goroot).read_bytes()
+            licenses = [dict(path='Go distribution/LICENSE', source=license_bytes.decode('utf-8'),
+                             sha256=hashlib.sha256(license_bytes).hexdigest())]
+            identity = dict(kind='toolchain')
+        elif module.get('Main'):
+            base = pathlib.Path(module['Dir']).resolve(strict=True)
+            if base != root:
+                raise ValueError(f'dependency uses an unexpected main module: {package}')
+            prefix = module['Path'] + '/'
+            version = compiler_commit
+            origin = module['Path'] + '@' + version
+            licenses = [source_file(base, 'LICENSE', prefix)]
+            identity = dict(kind='compiler', module=module['Path'])
+        else:
+            if not all(module.get(key) for key in ('Path', 'Dir', 'Version', 'Sum', 'GoModSum')):
+                raise ValueError(f'dependency has no verified module identity: {package}')
+            base = pathlib.Path(module['Dir']).resolve(strict=True)
+            prefix = module['Path'] + '/'
+            version = module['Version']
+            origin = module['Path'] + '@' + version
+            licenses = [source_file(base, 'LICENSE', prefix)]
+            identity = dict(kind='module', module=module['Path'], sum=module['Sum'],
+                            goModSum=module['GoModSum'])
+        if not directory.is_relative_to(base):
+            raise ValueError(f'dependency package escapes its source root: {package}')
+        names = [*selected.get('GoFiles', []), *selected.get('CgoFiles', [])]
+        if not names or len(names) != len(set(names)):
+            raise ValueError(f'dependency has an invalid selected Go file inventory: {package}')
+        files = [source_file(base, (directory.relative_to(base) / name).as_posix(), prefix)
+                 for name in sorted(names)]
+        archive = exports / (package.replace('/', '_') + '.a')
+        dependencies.append(dict(package=package, version=version, source=origin,
+                                 files=files, licenses=licenses,
+                                 exportSha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+                                 **identity))
+    return dependencies
+
+
 @contextmanager
 def standalone_playground(source):
     """Copy exact browser input bytes to a temporary file with no module owner.

@@ -582,9 +582,14 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if e != nil {
 			return e
 		}
-		for name, r := range checked.Files {
+		emitted, e := PackageGoFiles(pkgPath, checked, packageImporter)
+		if e != nil {
+			return e
+		}
+		for name, r := range emitted {
 			// Native Go files only change when carrying a transparent-alias marker.
-			if !strings.HasSuffix(name, ".gox") && checked.enumMarkerFile != name && (checked.useContext == nil || checked.useContext.generatedFile != name) {
+			_, sourceFile := checked.Files[name]
+			if sourceFile && !strings.HasSuffix(name, ".gox") && checked.enumMarkerFile != name && (checked.useContext == nil || checked.useContext.generatedFile != name) {
 				continue
 			}
 			rel, ok := sourceOutputs[name]
@@ -594,6 +599,16 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			goName := rel
 			if strings.HasSuffix(rel, ".gox") {
 				goName = strings.TrimSuffix(rel, ".gox") + ".go"
+			}
+			if !sourceFile {
+				// Unselected native files and resources were copied earlier, but
+				// do not occur in checked.Files or outputOwners. A new helper may
+				// never replace one of those original package files.
+				if _, err := os.Lstat(filepath.Join(destination, goName)); err == nil {
+					return fmt.Errorf("generated helper filename conflicts with existing output: %s", goName)
+				} else if !os.IsNotExist(err) {
+					return err
+				}
 			}
 			if prior, ok := outputOwners[goName]; ok && prior != name {
 				return fmt.Errorf("generated Go filename conflicts: %s and %s -> %s", prior, name, goName)
@@ -613,7 +628,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 
 		if len(checked.references.Functions) > 0 || checked.enumMetadata.present() || checked.uses.present() {
 			sourceFiles := map[string][]byte{}
-			for name := range checked.Files {
+			for name := range emitted {
 				base := filepath.Base(name)
 				if strings.HasSuffix(base, ".gox") {
 					base = strings.TrimSuffix(base, ".gox") + ".go"

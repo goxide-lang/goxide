@@ -1,0 +1,12 @@
+package main
+
+import (
+    "fmt"
+    util "strconv"
+)
+
+func main() {
+    item := Item{Value: 21}
+    copy := CloneItem(&item)
+    fmt.Println(util.Itoa(twice!(copy.Value)), title(), DebugItem(&copy))
+}

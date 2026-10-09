@@ -167,8 +167,8 @@ metadata_schema = int(re.search(r'const enumMetadataVersion = (\d+)', (ROOT/'int
 assert metadata_schema == 8
 def source_version(path, pattern):
     return int(re.search(pattern, (ROOT/path).read_text()).group(1))
-abi_versions = dict(enum=metadata_schema, reference=source_version('internal/refs/metadata.go', r'const MetadataVersion = (\d+)'), use=source_version('internal/frontend/use_artifact.go', r'a.Version != (\d+)'), sum=source_version('internal/enums/builtins.go', r'const SumABI = (\d+)'))
-assert abi_versions == dict(enum=8, reference=3, use=2, sum=2)
+abi_versions = dict(enum=metadata_schema, reference=source_version('internal/refs/metadata.go', r'const MetadataVersion = (\d+)'), use=source_version('internal/frontend/use_artifact.go', r'const useMetadataVersion = (\d+)'), sum=source_version('internal/enums/builtins.go', r'const SumABI = (\d+)'))
+assert abi_versions == dict(enum=8, reference=3, use=3, sum=2)
 std_abi = run(GO, 'doc', 'github.com/goxide-lang/std/sum.GoxideSumABI').decode()
 assert re.search(r'GoxideSumABI = 2\b', std_abi), std_abi
 

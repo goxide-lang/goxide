@@ -316,7 +316,8 @@ func (l *lowerer) collectNamedTypes() (map[string]ast.Expr, error) {
 			if err != nil {
 				return nil, err
 			}
-			f, err := parser.ParseFile(token.NewFileSet(), "", "package p;"+string(paths.GoView(l.src[t.start:l.ts[end].end])), 0)
+			declaration := withoutPayloadAttrs(string(l.src[t.start:l.ts[end].end]))
+			f, err := parser.ParseFile(token.NewFileSet(), "", "package p;"+string(paths.GoView([]byte(declaration))), 0)
 			if err != nil {
 				return nil, l.err(t.start, "unsupported grouped type declaration in sum payload analysis")
 			}
@@ -598,14 +599,15 @@ func (l *lowerer) checkCompositePayloads() error {
 	return nil
 }
 
-// Field attributes belong to derive processing; erase only whole attribute lines
-// while recovering the host type shape for projection checks.
+// Type and field attributes belong to derive processing; blank only whole
+// attribute lines while recovering the host type shape for projection checks.
+// Preserve byte offsets in this parser-only view; the source is not rewritten.
 func withoutPayloadAttrs(s string) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
 		t := strings.TrimSpace(line)
 		if strings.HasPrefix(t, "#[") && strings.HasSuffix(t, "]") {
-			lines[i] = ""
+			lines[i] = strings.Repeat(" ", len(line))
 		}
 	}
 	return strings.Join(lines, "\n")

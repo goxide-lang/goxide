@@ -1,0 +1,5 @@
+# CPython 3.12, Linux x86_64 CI wheels; install with --require-hashes --only-binary=:all:.
+playwright==1.58.0 --hash=sha256:c95568ba1eda83812598c1dc9be60b4406dffd60b149bc1536180ad108723d6b
+greenlet==3.3.2 --hash=sha256:43e99d1749147ac21dde49b99c9abffcbc1e2d55c67501465ef0930d6e78e070
+pyee==13.0.0 --hash=sha256:48195a3cddb3b1515ce0695ed76036b5ccc2ef3a9f963ff9f77aec0139845498
+typing_extensions==4.15.0 --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548

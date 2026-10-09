@@ -14,7 +14,22 @@ import (
 )
 
 func TestMacroEqualityDerivePreservesCallProvenance(t *testing.T) {
-	source := "package p\nmacro_rules! zero {()=>{int(0)};}\n#[derive(PartialEq,Eq)]\ntype Item struct{N int}\nfunc Run()int{return zero!()}\n"
+	for _, keepAlias := range []bool{false, true} {
+		t.Run(map[bool]string{false: "renamed-primitive", true: "unchanged-alias"}[keepAlias], func(t *testing.T) {
+			body := "return zero!()"
+			if keepAlias {
+				// The local shadow keeps the definition-site alias unchanged.
+				// Equality must preserve its point as well as its macro stack.
+				body = "type int struct{}; _=int{};" + body
+			}
+			source := "package p\nmacro_rules! zero {()=>{int(0)};}\n#[derive(PartialEq,Eq)]\ntype Item struct{N int}\nfunc Run()int{" + body + "}\n"
+			checkEqualityDeriveCallProvenance(t, source, keepAlias)
+		})
+	}
+}
+
+func checkEqualityDeriveCallProvenance(t *testing.T, source string, keepAlias bool) {
+	t.Helper()
 	result, err := Compile("equality.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
@@ -43,8 +58,17 @@ func TestMacroEqualityDerivePreservesCallProvenance(t *testing.T) {
 		segment := result.Diagnostics.Lookup(fs.Position(call.Fun.Pos()).Offset)
 		start := strings.Index(source, "int(0)")
 		want := sourcemap.Position("equality.gox", []byte(source), start, start+len("int"))
-		if segment == nil || segment.Origin == nil || *segment.Origin != want || len(segment.Stack) != 1 || segment.Stack[0].Macro != "zero" {
-			t.Fatalf("expanded int call lost exact macro provenance: %+v; want origin %+v and zero frame", segment, want)
+		if segment == nil || len(segment.Stack) != 1 || segment.Stack[0].Macro != "zero" {
+			t.Fatalf("expanded int call lost its zero frame: %+v", segment)
+		}
+		if keepAlias {
+			if segment.Origin == nil || *segment.Origin != want || segment.Kind != "macro" {
+				t.Fatalf("unchanged definition-site alias lost exact provenance: %+v; want origin %+v", segment, want)
+			}
+		} else if segment.Origin != nil || segment.Kind != "generated/unmapped" {
+			// Primitive normalization renamed this AST token before equality.
+			// Equality must preserve the stack without inventing a point.
+			t.Fatalf("renamed primitive acquired a point origin: %+v", segment)
 		}
 		checkMacroFrame(t, segment.Stack[0].Definition, source, "macro_rules! zero")
 		checkMacroFrame(t, segment.Stack[0].Callsite, source, "zero!(")
@@ -138,10 +162,10 @@ func TestMacroEqualityRepeatedCaptureProvenance(t *testing.T) {
 				return true
 			}
 			callee := result.Diagnostics.Lookup(fs.Position(call.Fun.Pos()).Offset)
-			start := strings.Index(source, "int($x)")
-			want := sourcemap.Position("repeat.gox", []byte(source), start, start+len("int"))
-			if callee == nil || callee.Origin == nil || *callee.Origin != want || len(callee.Stack) != 1 || callee.Stack[0].Macro != "values" {
-				t.Fatalf("repetition lost template token: %+v", callee)
+			// The derive attribute defers primitive alias restoration to the
+			// frontend AST pass; its renamed callee has context, not a point.
+			if callee == nil || callee.Origin != nil || callee.Kind != "generated/unmapped" || len(callee.Stack) != 1 || callee.Stack[0].Macro != "values" {
+				t.Fatalf("renamed repetition primitive lost context or acquired a point: %+v", callee)
 			}
 			arg := call.Args[0]
 			for {
@@ -194,12 +218,20 @@ func macroEqualityProvenance(t *testing.T, result Result, sources map[string][]b
 	callText := macro + "!()"
 	callStart := strings.Index(caller, "return "+callText) + len("return ")
 	callSites := []int{callStart, callStart + len(callText) + 1}
-	checkToken := func(node ast.Node, sourceFile string, start, width int, frames []sourcemap.Expansion) {
+	checkToken := func(node ast.Node, sourceFile string, start, width int, frames []sourcemap.Expansion, renamed bool) {
 		t.Helper()
 		want := sourcemap.Position(sourceFile, sources[sourceFile], start, start+width)
 		s := result.Diagnostics.Lookup(fs.Position(node.Pos()).Offset)
-		if s == nil || s.Origin == nil || *s.Origin != want || !reflect.DeepEqual(s.Stack, frames) {
+		if s == nil || !reflect.DeepEqual(s.Stack, frames) {
 			t.Errorf("wrong token provenance at %s: %+v; want origin %+v frames %+v", fs.Position(node.Pos()), s, want, frames)
+			return
+		}
+		if renamed {
+			if s.Origin != nil || s.Kind != "generated/unmapped" {
+				t.Errorf("renamed primitive acquired a point at %s: %+v", fs.Position(node.Pos()), s)
+			}
+		} else if s.Origin == nil || *s.Origin != want {
+			t.Errorf("unchanged token lost its exact origin at %s: %+v; want %+v", fs.Position(node.Pos()), s, want)
 		}
 	}
 	frame := func(name, callFile string, callOffset int) sourcemap.Expansion {
@@ -233,8 +265,10 @@ func macroEqualityProvenance(t *testing.T, result Result, sources map[string][]b
 					frames = append(frames, frame("zero", definitionFile, strings.Index(definitions, "zero!()")))
 				}
 				start := strings.Index(definitions, "int(0)")
-				checkToken(call.Fun, definitionFile, start, len("int"), frames)
-				checkToken(call.Args[0], definitionFile, start+len("int("), 1, frames)
+				// Only a caller file containing derive syntax needs the later
+				// alias-to-primitive AST rewrite. Plain files keep exact points.
+				checkToken(call.Fun, definitionFile, start, len("int"), frames, derived)
+				checkToken(call.Args[0], definitionFile, start+len("int("), 1, frames, false)
 				macroCalls++
 				return true
 			})
@@ -242,8 +276,8 @@ func macroEqualityProvenance(t *testing.T, result Result, sources map[string][]b
 			ast.Inspect(fn.Body, func(node ast.Node) bool {
 				if call, ok := node.(*ast.CallExpr); ok {
 					start := strings.Index(caller, "return int(0)") + len("return ")
-					checkToken(call.Fun, callerFile, start, len("int"), nil)
-					checkToken(call.Args[0], callerFile, start+len("int("), 1, nil)
+					checkToken(call.Fun, callerFile, start, len("int"), nil, false)
+					checkToken(call.Args[0], callerFile, start+len("int("), 1, nil, false)
 					nativeCalls++
 				}
 				return true

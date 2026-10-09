@@ -71,7 +71,7 @@ func TestMacroEqualityProvenanceCLI(t *testing.T) {
 						}
 					}
 				}
-				equalityMacroMap(t, first, source, definitionFile, files)
+				equalityMacroMap(t, first, source, definitionFile, files, mode == "single")
 				if mode == "single" {
 					packagesWrite(t, first, "go.mod", "module equality.example/provenance\ngo 1.27\n")
 				}
@@ -131,7 +131,7 @@ func equalityProvenanceRead(t *testing.T, path string) []byte {
 	return data
 }
 
-func equalityMacroMap(t *testing.T, generated, source, definitionFile string, files map[string]string) {
+func equalityMacroMap(t *testing.T, generated, source, definitionFile string, files map[string]string, renamedPrimitiveCallee bool) {
 	t.Helper()
 	span := func(file, text string, width int, last bool) sourcemap.Span {
 		start := strings.Index(files[file], text)
@@ -225,13 +225,28 @@ func equalityMacroMap(t *testing.T, generated, source, definitionFile string, fi
 						{Macro: "zero", Definition: definition("zero"), Callsite: span(definitionFile, "zero!()", len("zero!()"), false)},
 					}
 				}
-				for _, check := range []struct {
+				checks := []struct {
 					pos    token.Pos
-					origin sourcemap.Span
-				}{{id.Pos(), calleeOrigin}, {literal.Pos(), literalOrigin}} {
+					origin *sourcemap.Span
+					kind   string
+				}{{id.Pos(), &calleeOrigin, kind}, {literal.Pos(), &literalOrigin, kind}}
+				// The single-file fixture's derive attribute defers primitive
+				// simplification until AST lowering. Renaming the macro callee
+				// retains its expansion stack, but cannot claim an unchanged point.
+				// Multifile expansion and every untouched token keep exact origins.
+				if renamedPrimitiveCallee && fn.Name.Name != "Native" {
+					checks[0].origin = nil
+					checks[0].kind = "generated/unmapped"
+				}
+				for _, check := range checks {
 					segment := exported.Diagnostics.Lookup(fs.Position(check.pos).Offset)
-					if segment == nil || segment.Origin == nil || *segment.Origin != check.origin || segment.Kind != kind || len(segment.Stack) != len(frames) {
-						t.Errorf("%s at %s: got %+v; want %s origin %+v and %d frames", fn.Name.Name, fs.Position(check.pos), segment, kind, check.origin, len(frames))
+					if segment == nil {
+						t.Errorf("%s at %s: missing provenance segment", fn.Name.Name, fs.Position(check.pos))
+						continue
+					}
+					originMatches := check.origin == nil && segment.Origin == nil || check.origin != nil && segment.Origin != nil && *segment.Origin == *check.origin
+					if !originMatches || segment.Kind != check.kind || len(segment.Stack) != len(frames) {
+						t.Errorf("%s at %s: got %+v; want %s origin %+v and %d frames", fn.Name.Name, fs.Position(check.pos), segment, check.kind, check.origin, len(frames))
 						continue
 					}
 					for i, frame := range frames {

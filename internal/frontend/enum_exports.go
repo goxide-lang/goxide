@@ -147,6 +147,12 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 		}
 		for _, d := range result.Files[file].Enums {
 			if d.Family != "" {
+				// Imported families can also appear here after typed lowering
+				// binds their helpers in a consumer file. Their registrations
+				// come from verified enumImports below, not a local validator.
+				if d.PackagePath != "" {
+					continue
+				}
 				key := enums.SumPackage + "." + d.Family
 				f := families[key]
 				if f.Name == "" {

@@ -566,8 +566,10 @@ format = 1
 
 func TestProjectConditionalGoxideAcrossTargets(t *testing.T) {
 	root := t.TempDir()
+	// Inline enum discriminants use std/sum.Tag for type-name hygiene. This
+	// project selects that public dependency explicitly, including offline runs.
 	projectWrite(t, root, map[string]string{
-		"go.mod": "module example.org/conditional\n\ngo 1.27\n",
+		"go.mod": "module example.org/conditional\n\ngo 1.27\nrequire github.com/goxide-lang/std v0.0.0-20261009091333-a75c971aa755\n",
 		"goxide.toml": `[[bin]]
 name = 'one'
 path = 'cmd/one'

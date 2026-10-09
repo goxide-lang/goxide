@@ -1,6 +1,7 @@
 package acceptance_test
 
 import (
+	"fmt"
 	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
@@ -92,7 +93,8 @@ func TestT0JointBusiness(t *testing.T) {
 			if name != "source-type" {
 				imports += "use store;\n"
 			}
-			packagesWrite(t, dir, "bad.gox", "package main\n"+imports+body+"\n")
+			source := "package main\n" + imports + body + "\n"
+			packagesWrite(t, dir, "bad.gox", source)
 			out := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), dir)
 			if !strings.Contains(out, "bad.gox") {
 				t.Fatal(out)
@@ -101,8 +103,23 @@ func TestT0JointBusiness(t *testing.T) {
 				if !strings.Contains(out, "bad.gox:3:") || !strings.Contains(out, "explicit typed local initializer") {
 					t.Fatal(out)
 				}
-			} else if !strings.Contains(out, "refs:") || !strings.Contains(out, "generated/unmapped") {
-				t.Fatal(out)
+			} else {
+				marker, advance := "r.History[0]", 0
+				want := "cannot write through a readonly projection"
+				if name == "readonly-erasure" {
+					// The unsupported interface qualification belongs to the
+					// destination binding, whose source identifier is "a".
+					marker, advance = "var a any=r", len("var ")
+					want = "readonly interface/channel/function projections are unsupported"
+				}
+				start := strings.Index(source, marker) + advance
+				line := strings.Count(source[:start], "\n") + 1
+				column := start - strings.LastIndex(source[:start], "\n")
+				location := fmt.Sprintf("bad.gox:%d:%d:", line, column)
+				span := fmt.Sprintf("source span [%d,%d)", start, start+1)
+				if !strings.Contains(out, location) || !strings.Contains(out, span) || !strings.Contains(out, "refs: "+want) || strings.Contains(out, "generated/unmapped") {
+					t.Fatal(out)
+				}
 			}
 		})
 	}

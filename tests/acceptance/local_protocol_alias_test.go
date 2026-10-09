@@ -111,7 +111,7 @@ type Other struct{V Different}
 		t.Fatal(err)
 	}
 	packagesWrite(t, out, "app_test.go", `package app
-import("testing";"reflect";"strings";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";m "aliases.example/lib/model")
+import("testing";"reflect";"strings";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";sum "github.com/goxide-lang/std/sum";m "aliases.example/lib/model")
 func TestAllProtocols(t *testing.T){
  v:=DefaultWrap();if v.V.N!=7||v.Again.Name!="producer"{t.Fatal(v)}
  c:=CloneWrap(&v);if !Equal(v,c)||!strings.Contains(DebugWrap(&v),"E::Item(Item {"){t.Fatal(v,c,DebugWrap(&v))};c.V.N=8;if Equal(v,c){t.Fatal("wrong equality")}
@@ -121,7 +121,7 @@ func TestAllProtocols(t *testing.T){
  b,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeBag(s,&bag)});bd,e2:=serdejson.Unmarshal(b,DeserializeBag);if e!=nil||e2!=nil||!EqualsBag(bag,bd){t.Fatal(string(b),e,e2)}
  o:=DefaultOther();o.V.Text="other";oc:=CloneOther(&o);if !EqualsOther(o,oc)||DebugOther(&o)!="Other { V: Item { Text: \"other\" } }"{t.Fatal(o,oc)}
  b,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeOther(s,&o)});od,e2:=serdejson.Unmarshal(b,DeserializeOther);if e!=nil||e2!=nil||od.V.Text!="other"{t.Fatal(string(b),e,e2)}
- opt,e:=serdejson.Unmarshal([]byte("{}"),DeserializeOptional);if e!=nil||opt.Maybe!=nil{t.Fatal(opt,e)}
+ opt,e:=serdejson.Unmarshal([]byte("{}"),DeserializeOptional);if e!=nil||sum.TagOption(opt.Maybe)!=0{t.Fatal(opt,e)}
  b,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeOptional(s,&opt)});opt2,e2:=serdejson.Unmarshal(b,DeserializeOptional);if e!=nil||e2!=nil||!EqualsOptional(opt,opt2){t.Fatal(string(b),e,e2)}
 }
 `)

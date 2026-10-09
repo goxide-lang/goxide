@@ -36,7 +36,7 @@ func enumGeneratedModule(t *testing.T, source, assertions string, wantFailure bo
 	if (err != nil) != wantFailure {
 		t.Fatalf("generated race module expected failure=%t: %v\n%s\n%s", wantFailure, err, output, result.Go)
 	}
-	if wantFailure && !strings.Contains(string(output), "does not implement E") {
+	if wantFailure && (!strings.Contains(string(output), "cannot use") || !strings.Contains(string(output), "type F") || !strings.Contains(string(output), "as E value in return statement")) {
 		t.Fatalf("unexpected compile failure: %s", output)
 	}
 	t.Logf("generated go test -race -count=1 -v .:\n%s", output)

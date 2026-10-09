@@ -79,7 +79,7 @@ func TestArrayMeasurementEvaluation(t *testing.T){
 func TestNearestFailureAndCleanup(t *testing.T){
  reset();_,e:=Read(And(true,false));if !errors.Is(e,Stop)||After!=0||Cleanup!=1||Loads!=1||m.Calls!=0{t.Fatal(e,After,Cleanup,Loads,m.Calls)}
  _,e=Read(Length(true,false));if !errors.Is(e,Stop)||m.Calls!=0{t.Fatal(e,m.Calls)}
- check(t,Input(false,nil),0);check(t,Closure(),9);if NativeRecover()!=1{t.Fatal("recover changed")}
+ check(t,Input(false,Result[int,error]{}),0);check(t,Closure(),9);if NativeRecover()!=1{t.Fatal("recover changed")}
 }
 `)
 		packagesCommand(t, generated, tool, true, "test", "-race", "-count=1", "-v", "./...")

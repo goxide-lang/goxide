@@ -3,6 +3,7 @@ package matchexpr
 import (
 	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/propagate"
+	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,13 +42,17 @@ func TestGeneratedRace(t *testing.T) {
 		t.Fatal(e)
 	}
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
-	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module check\ngo 1.27\n"), 0600)
+	if e := os.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module check\ngo 1.27\n"), 0600); e != nil {
+		t.Fatal(e)
+	}
 	tool, e := exec.LookPath("go")
 	if e != nil {
 		t.Fatal(e)
 	}
-	cmd := exec.Command(tool, "run", "-race", ".")
+	cmd := exec.Command(tool, "run", "-mod=readonly", "-race", ".")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
 	b, e := cmd.CombinedOutput()

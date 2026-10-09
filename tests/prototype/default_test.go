@@ -22,6 +22,8 @@ struct Config { First Inner; State Status; Last uint64; Maybe Option[*int] }
 struct Empty {}
 macro_rules! fresh {()=>{DefaultConfig()};}
 func Fresh() Config {DefaultConfig:=func() Config{panic("captured")};_=DefaultConfig;return fresh!()}
+func IsReady(value Status) bool {return match value {Status::Ready=>true,Status::Other(_)=>false}}
+func IsNone(value Option[*int]) bool {return match value {Option::None=>true,Option::Some(_)=>false}}
 `
 	r, e := frontend.Compile("default.gox", []byte(source))
 	if e != nil {
@@ -34,10 +36,10 @@ func Fresh() Config {DefaultConfig:=func() Config{panic("captured")};_=DefaultCo
 import "testing"
 func TestDefaults(t *testing.T){
  v:=Fresh(); if v.First.Count!=0||v.First.Enabled||v.First.Label!=""||v.Last!=0 {t.Fatalf("bad defaults: %#v",v)}
- if v.State==nil {t.Fatal("Default produced invalid nil enum")}; if v.Maybe!=nil {t.Fatal("Option default must be None under current ABI")}
- if _,ok:=v.State.(__goxide_enum_case_6_Status_Ready);!ok{t.Fatal("wrong default variant")}
+ if !IsReady(v.State){t.Fatal("wrong default variant")};if !IsNone(v.Maybe){t.Fatal("Option default must be None")}
  _=DefaultEmpty()
- var raw Status;if raw!=nil{t.Fatal("Go zero value implicitly rewritten")}
+ var raw Status;if raw!=(Status{}){t.Fatal("Go zero value implicitly rewritten")}
+ rejected:=false;func(){defer func(){rejected=recover()!=nil}();_=IsReady(raw)}();if !rejected{t.Fatal("invalid zero enum accepted by match")}
 }
 `)
 }

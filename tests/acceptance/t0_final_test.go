@@ -73,10 +73,10 @@ func TestAuditClonesClosedVariants(t *testing.T){
  }
 }
 func TestReceiptValidationPrecedesEffects(t *testing.T){
- caseType:=reflect.TypeOf(accepted())
- typedNil:=reflect.Zero(reflect.PointerTo(caseType)).Interface().(Receipt)
- casePointer:=reflect.New(caseType).Interface().(Receipt)
- for _,tc:=range []struct{valid bool;value Receipt}{{true,accepted()},{false,nil},{false,typedNil},{false,casePointer}}{
+ // The closed typed ABI has no nil or pointer-case Receipt values. Its zero
+ // value remains invalid, including zero values made through reflection.
+ reflectedZero:=reflect.Zero(reflect.TypeOf(accepted())).Interface().(Receipt)
+ for _,tc:=range []struct{valid bool;value Receipt}{{true,accepted()},{false,Receipt{}},{false,reflectedZero}}{
   valid,value:=tc.valid,tc.value
   trace:=[]string{};reads,guards:=0,0
   panicked:=false

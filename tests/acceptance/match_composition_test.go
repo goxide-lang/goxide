@@ -44,6 +44,8 @@ func closure(t *[]string)int{f:=func()Result[uint64,error]{return finish(0,match
 func jumping(c Config){goto Done;use(1,match c{Config::Off=>2,_=>3,},4);Done:return}
 func wrap(f func()uint64)uint64{return f()}
 func inlineClosure(c Config)uint64{return wrap(func()uint64{return takeWide(match c{Config::Off=>7,_=>0,})})}
+func shadowedCallback(n uint64)uint64{panic("captured package function")}
+func referenceSignatureShadow(c Config,r &int,shadowedCallback (func(int)uint64))uint64{return shadowedCallback(match c{Config::Off=>*r,_=>2,})}
 func unpack(r Result[uint64,error])uint64{return match r {Result[uint64,error]::Ok(n)=>n,Result[uint64,error]::Err(_)=>0,}}
 `
 	enumGeneratedModule(t, source, `package fixture
@@ -52,13 +54,14 @@ func TestConfigSuccessFailureAndSelection(t *testing.T){for _,tt:=range []struct
 func TestContextAndNestedBinding(t *testing.T){c,e:=serdejson.Unmarshal([]byte("{\"Enabled\":3}"),DeserializeConfig);if e!=nil{t.Fatal(e)};if wide(63)!=uint64(1)<<63||!nils()||nested(c)!=4||nestedCall(c)!=3{t.Fatal("context or binding changed")}}
 func TestStatementAndNearestFunction(t *testing.T){c,e:=serdejson.Unmarshal([]byte("\"Off\""),DeserializeConfig);if e!=nil{t.Fatal(e)};jumping(c);if inlineClosure(c)!=7{t.Fatal("inline closure")};trace:=[]string{};discard(c,&trace);if !reflect.DeepEqual(trace,[]string{"before","arm","after"}){t.Fatal(trace)};trace=nil;if closure(&trace)!=42||!reflect.DeepEqual(trace,[]string{"checked","outer"}){t.Fatal(trace)}}
 func TestInvalidBeforeArms(t *testing.T){trace:=[]string{};defer func(){if recover()==nil||!reflect.DeepEqual(trace,[]string{"first","defer"}){t.Fatalf("trace=%v",trace)}}();run(Config{},true,&trace)}
+func TestReferenceSignatureKeepsLocalCallback(t *testing.T){c,e:=serdejson.Unmarshal([]byte("\"Off\""),DeserializeConfig);if e!=nil{t.Fatal(e)};n:=41;if referenceSignatureShadow(c,&n,func(n int)uint64{return uint64(n+1)})!=42{t.Fatal("captured package signature")}}
 `, false)
 }
 func TestMatchCompositionBoundaries(t *testing.T) {
 	cases := map[string]string{
 		"parenthesized type conversion": `func g(n uint64)uint64{return n};func f(x E)any{type g (int8);return g(match x{E::A=>256,_=>0,})}`,
 		"grouped type conversion":       `func g(n uint64)uint64{return n};func f(x E)any{type (g (int8));return g(match x{E::A=>256,_=>0,})}`,
-		"reference signature shadow":    `func g(n uint64)uint64{return n};func f(x E,r &int,g (func(int)uint64))uint64{return g(match x{E::A=>1,_=>2,})}`,
+		"reference signature shadow":    `func g(n uint64)uint64{return n};func f(x E,r &int,g (func(int)uint64))uint64{return g(match x{E::A=>1<<63,_=>2,})}`,
 		"directive":                     "//go:uintptrescapes\nfunc g(n int)int{return n};func f(x E)int{return g(match x{E::A=>1,_=>2,})}",
 		"nested missing arm":            `func f(x E)int{return match x{E::A=>match x{E::A=>1,},_=>2,}}`,
 	}

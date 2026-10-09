@@ -39,7 +39,6 @@ func OutputValue() Output{return Output::Done}
 	}
 	runGenerated(t, r.Go, `package fixture
 import("errors";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
-type forgedCode struct { Code }
 func readCode(s string)(Code,error){var v Code;e:=serdejson.Decode([]byte(s),func(d serde.Deserializer)error{var e error;v,e=DeserializeCode(d);return e});return v,e}
 func TestMapping(t *testing.T){
  for _,wire:=range []string{"-9223372036854775808","0","9223372036854775807"}{v,e:=readCode(wire);if e!=nil{t.Fatal(e)};got,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&v)});if e!=nil||string(got)!=wire{t.Fatalf("numeric roundtrip: %s %v",got,e)}}
@@ -55,9 +54,8 @@ func TestUnknownAndMalformed(t *testing.T){
  for _,tc:=range []struct{wire,kind string}{{"7",serde.UnknownVariant},{"\"0\"",serde.Type},{"null",serde.Type},{"1.0",serde.Range},{"9223372036854775808",serde.Range}}{_,e:=readCode(tc.wire);var typed *serde.Error;if !errors.As(e,&typed)||typed.Kind!=tc.kind{t.Fatalf("%s: want %s got %v",tc.wire,tc.kind,e)}}
  e:=serdejson.Decode([]byte("\"future\""),func(d serde.Deserializer)error{_,e:=DeserializeStatus(d);return e});var typed *serde.Error;if !errors.As(e,&typed)||typed.Kind!=serde.UnknownVariant{t.Fatalf("unknown string: %v",e)}
  e=serdejson.Decode([]byte("{\"Code\":99}"),func(d serde.Deserializer)error{_,e:=DeserializeEnvelope(d);return e});if !errors.As(e,&typed)||typed.Kind!=serde.UnknownVariant||len(typed.Path)!=1||typed.Path[0].Name!="Code"{t.Fatalf("missing contextual path: %v",e)}
- invalidForged:=Code(forgedCode{Code:MaxCode()});_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&invalidForged)});if e==nil{t.Fatal("embedded foreign case accepted")}
- var invalid Code;_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&invalid)});if e==nil{t.Fatal("nil enum accepted")}
- var typedNil *__goxide_enum_case_4_Code_Max;invalid=typedNil;_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&invalid)});if e==nil{t.Fatal("typed nil enum accepted")}
+ for _,invalid:=range []Code{{},{__goxide_tag:-1},{__goxide_tag:99}}{_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,&invalid)});if !errors.As(e,&typed)||typed.Kind!=serde.Type{t.Fatalf("invalid zero/forged enum tag accepted: %#v %v",invalid,e)}}
+ var absent *Code;_,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeCode(s,absent)});if !errors.As(e,&typed)||typed.Kind!=serde.Type{t.Fatalf("nil enum pointer accepted: %v",e)}
 }
 `)
 }

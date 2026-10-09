@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "db78da5768fa24e7679971762f75116b0df8974d",
+  "compilerCommit": "03251a7cb31cee22a41c37af1df1ff0b90aba6d3",
   "reviewedAt": "2026-10-09",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
@@ -91,6 +91,12 @@
       "title": "enum 载荷原位借用",
       "description": "保存可写载荷引用，普通 enum 复制保持独立槽。",
       "expectedStdout": "5 1\n5\n"
+    },
+    {
+      "id": "static_protocol",
+      "title": "显式静态协议与泛型调用",
+      "description": "trait 声明关联函数，impl 提供 Self 构造，具体类型和泛型参数共享同一入口。",
+      "expectedStdout": "Ada Ada\n"
     }
   ],
   "items": [
@@ -500,8 +506,8 @@
     },
     {
       "id": "traits",
-      "title": "trait、关联类型与 impl",
-      "topic": "future",
+      "title": "静态协议、关联函数与 impl",
+      "topic": "protocols",
       "rfcs": [
         "0002",
         "0003",
@@ -509,16 +515,19 @@
         "0019",
         "0020"
       ],
-      "status": "accepted",
-      "support": "unavailable",
-      "summary": "显式实现与统一 wrapper 的方向已确认；通用前端尚未交付。",
-      "usage": "设计用途：把原生类型适配到显式协议，保留对象身份；关联函数由所选类型提供入口。",
-      "limitation": "现有 Default 特例与内建派生不等于支持通用 trait、declare impl、关联类型、完整固有 impl 或用户泛型。",
-      "examples": [],
+      "status": "partial",
+      "support": "browser",
+      "summary": "显式 trait / impl 支持返回 Self 的关联函数；具体类型与协议约束泛型参数都可用静态路径调用。",
+      "usage": "用 trait Build 声明 Abc() Self，再为 User 编写 impl。User::Abc() 与 Make[T Build] 中的 T::Abc() 调用对应实现；同包多文件示例将协议和实现分开。",
+      "limitation": "当前是具有限定语法的静态协议切片，不包括关联类型、动态 trait 对象、declare impl、完整固有 impl 或完整 RFC 泛型能力。浏览器只编辑一个包，不加载任意跨模块协议产物。",
+      "examples": [
+        "static_protocol"
+      ],
       "evidence": [
-        "docs/rfcs/0019-uniform-trait-wrappers.md",
-        "docs/rfcs/0020-associated-functions.md",
-        "ROADMAP.md"
+        "docs/static-protocols.md",
+        "internal/protocols/lower.go",
+        "internal/frontend/protocol_artifact.go",
+        "tests/acceptance/static_protocol_test.go"
       ],
       "checks": []
     },
@@ -624,7 +633,7 @@
     },
     {
       "id": "shared-std",
-      "title": "分仓标准库与共享 sum",
+      "title": "分仓标准库与编译器支持",
       "topic": "interop",
       "rfcs": [
         "0008",
@@ -632,17 +641,19 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "当前编译器使用已公开 std/sum 的共享 Option/Result 身份与独立 serde core / JSON。",
-      "usage": "生成 Go 导入共享 std/sum、std/formatting 和 std/runtime，不再依赖编译器支持包；具体载荷 validator 仍由编译器生成。JSON 示例使用 github.com/goxide-lang/serde/json。",
-      "limitation": "enum schema 9 / reference 3 / use 3 / sum ABI 3，必须与配套 std 版本共同使用；旧 interface case API 已删除，旧生成产物须重生成。Option 零值为 None，Result 零值非法。固定迁移版本不等于 v1 ABI 承诺。",
+      "summary": "公开 std 提供共享 Option/Result 身份、格式化与运行时支持，以及静态协议的零值类型载体；serde core / JSON 独立分层。",
+      "usage": "生成 Go 导入 std/sum、std/formatting、std/runtime 或 std/typeinfo，不依赖编译器支持包。typeinfo::Of 提取零值载体，不构造目标 T 或运行锚点方法；具体载荷 validator 仍由编译器生成。JSON 使用独立 serde/json。",
+      "limitation": "enum schema 9 / reference 3 / use 3 / sum ABI 3 / protocol metadata 1 / typeinfo ABI 1 必须与配套 std 版本共同使用。旧 interface case API 已删除，旧产物须重生成。Option 零值为 None，Result 零值非法。固定版本不等于 v1 ABI 承诺。",
       "examples": [
         "result",
-        "serde_option"
+        "serde_option",
+        "static_protocol"
       ],
       "evidence": [
         "internal/frontend/shared_std_test.go",
         "internal/frontend/serde_protocol_artifact_test.go",
-        "docs/reviews/public-library-migration-20261004.md"
+        "docs/reviews/public-library-migration-20261004.md",
+        "internal/frontend/protocol_typeinfo.go"
       ],
       "checks": []
     },
@@ -780,7 +791,7 @@
       }
     }
   ],
-  "compilerDigest": "9a67e63e83df65533cd73f8ce89c6faa76ab54887111ebbea27ca445b07317c1",
+  "compilerDigest": "880df58f2a8c3d94284344ac83843866a0c5e9d7844659e2dd5701e297213e68",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

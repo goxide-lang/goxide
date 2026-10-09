@@ -667,7 +667,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			result.Files[goName] = r
 		}
 
-		if len(checked.references.Functions) > 0 || checked.enumMetadata.present() || checked.uses.present() {
+		if len(checked.references.Functions) > 0 || checked.enumMetadata.present() || checked.uses.present() || checked.protocolMetadata.Present() {
 			sourceFiles := map[string][]byte{}
 			for name := range emitted {
 				base := filepath.Base(name)
@@ -702,6 +702,15 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 					return e
 				}
 				if e = os.WriteFile(filepath.Join(destination, dir, enumMetadataFilename), data, 0644); e != nil {
+					return e
+				}
+			}
+			if checked.protocolMetadata.Present() {
+				data, e := marshalProtocolArtifact(checked.protocolMetadata, sourceFiles, packageImporter)
+				if e != nil {
+					return e
+				}
+				if e = os.WriteFile(filepath.Join(destination, dir, protocolMetadataFilename), data, 0644); e != nil {
 					return e
 				}
 			}

@@ -49,6 +49,8 @@ func localDeclarationBindings(owner string, sources map[string][]byte) map[strin
 			if depth == 0 && start {
 				kind := ""
 				switch {
+				case t.text == "trait":
+					kind = "protocol"
 				case t.kind == token.TYPE || t.kind == token.STRUCT || t.text == "enum":
 					kind = "type"
 				case t.kind == token.VAR:

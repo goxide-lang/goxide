@@ -20,6 +20,7 @@ import (
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/printing"
 	"github.com/hxsf/goxide/internal/propagate"
+	"github.com/hxsf/goxide/internal/protocols"
 	"github.com/hxsf/goxide/internal/refs"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"github.com/hxsf/goxide/internal/typecheck"
@@ -27,6 +28,9 @@ import (
 
 // PackageResult keeps a separate output and origin map for every source file.
 type PackageResult struct {
+	staticProtocols  *protocols.Package
+	protocolMetadata protocols.Metadata
+	protocolImports  map[string]protocols.Metadata
 	payloadEnums     func(types.Type) (propagate.PayloadEnum, bool, error)
 	uses             useMetadata
 	useContext       *usePackage
@@ -63,6 +67,9 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 			return PackageResult{}, err
 		}
 	}
+	if err := checkProtocolSourceNames(sources, single); err != nil {
+		return PackageResult{}, err
+	}
 	useContext, err := prepareUses(path, sources, metadata, imp, roots, single)
 	if err != nil {
 		return PackageResult{}, err
@@ -71,11 +78,56 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 	names := sortedSources(sources)
 	cfg := &compileConfig{single: single, protocolFunctions: map[string][]*ast.FuncDecl{}, packagePath: path, builtinTypes: map[string]macros.TypeContext{}, declarations: []enums.Decl{}, named: map[string]ast.Expr{}, models: map[string]model{}, manualDefaults: map[string]manualDefault{}, manualEquality: map[string]manualEquality{}, typeSpecs: map[string]*ast.TypeSpec{}}
 	cfg.uses = useContext
+	protocolImports, err := recoverProtocolImports(sources, metadata, imp, useContext.preparedMaps)
+	if err != nil {
+		return PackageResult{}, err
+	}
+	protocolSources := map[string][]byte{}
+	for _, name := range names {
+		if !isGoxideInput(name, single) {
+			protocolSources[name] = sources[name]
+			continue
+		}
+		protocolSources[name], err = useContext.normalizeNamespacePaths(name, sources[name], nil)
+		if err != nil {
+			return PackageResult{}, err
+		}
+	}
+	protocolOwner := path
+	if protocolOwner == "" {
+		protocolOwner = "goxide/generated"
+	}
+	protocolOptions, err := protocolOptions(useContext, protocolImports)
+	if err != nil {
+		return PackageResult{}, err
+	}
+	protocolOptions.Single = single
+	cfg.staticProtocols, err = protocols.CollectPackage(protocolOwner, protocolSources, protocolOptions)
+	if err != nil {
+		return PackageResult{}, err
+	}
+	if single {
+		for _, definition := range cfg.staticProtocols.Definitions {
+			if definition.Public {
+				return PackageResult{}, fmt.Errorf("%s: pub trait requires package compilation", definition.File)
+			}
+		}
+	}
+	protocolViews := map[string]protocols.Result{}
 	for _, name := range names {
 		if !isGoxideInput(name, single) {
 			continue
 		}
-		_, manual, err := lowerManualDefaults(name, sources[name])
+		view, err := cfg.staticProtocols.LowerFile(name, protocolSources[name], nil)
+		if err != nil {
+			return PackageResult{}, err
+		}
+		view.Source, err = lowerProtocolPaths(name, view.Source, nil, cfg.staticProtocols, useContext)
+		if err != nil {
+			return PackageResult{}, err
+		}
+		protocolViews[name] = view
+		_, manual, err := lowerManualDefaults(name, view.Source)
 		if err != nil {
 			return PackageResult{}, err
 		}
@@ -172,7 +224,8 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 		if !isGoxideInput(name, single) {
 			continue
 		}
-		meta, err := enums.CollectPackage(name, sources[name])
+		protocolSource := protocolViews[name]
+		meta, err := enums.CollectPackageWithGenericFunctions(name, protocolSource.Source, protocolSource.GenericFunctions)
 		if err != nil {
 			return PackageResult{}, err
 		}
@@ -260,7 +313,7 @@ func prepareCompilationContext(path string, sources map[string][]byte, metadata 
 	cfg.equalityImports = eqProtocols
 	cfg.collect = false
 	cfg.macroBudget = buildBudget
-	result := PackageResult{payloadEnums: payloadEnumResolver(path, metadata, imp), useContext: useContext, equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
+	result := PackageResult{staticProtocols: cfg.staticProtocols, protocolImports: protocolImports, payloadEnums: payloadEnumResolver(path, metadata, imp), useContext: useContext, equalityImports: eqProtocols, enumImports: map[string]enumMetadata{}, macros: registry, Files: map[string]Result{}, imported: cfg.imported, referenceImports: map[string]refs.Metadata{}}
 	for path, p := range metadata {
 		result.referenceImports[path] = p.references
 		result.enumImports[path] = p.enumMetadata
@@ -568,6 +621,14 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			return result, err
 		}
 	}
+	if result.useContext != nil {
+		for name, r := range result.Files {
+			maps[name] = r.Diagnostics
+		}
+		if err := result.useContext.validateProtocolSourceCalls(path, files, maps, result.staticProtocols, result.protocolImports, imp); err != nil {
+			return result, err
+		}
+	}
 	if err := typecheck.CheckPackage(path, files, imp); err != nil {
 		if te, ok := err.(types.Error); ok {
 			p := te.Fset.Position(te.Pos)
@@ -661,6 +722,9 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		if err := attachUseMetadata(&result, result.useContext); err != nil {
 			return result, err
 		}
+	}
+	if err := attachProtocolMetadata(&result, checkedTypes, imp); err != nil {
+		return result, mapProtocolDeclarationError(err, result.useContext)
 	}
 	return result, nil
 }

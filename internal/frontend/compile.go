@@ -13,6 +13,7 @@ import (
 	"github.com/hxsf/goxide/internal/matchexpr"
 	"github.com/hxsf/goxide/internal/printing"
 	"github.com/hxsf/goxide/internal/propagate"
+	"github.com/hxsf/goxide/internal/protocols"
 	"github.com/hxsf/goxide/internal/refs"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"github.com/hxsf/goxide/internal/typecheck"
@@ -104,6 +105,7 @@ func Compile(filename string, source []byte) (Result, error) {
 }
 
 type compileConfig struct {
+	staticProtocols   *protocols.Package
 	single            bool
 	equalityImports   []equality.Protocol
 	uses              *usePackage
@@ -231,6 +233,28 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 			return Result{}, err
 		}
 	}
+	var staticProtocolResult protocols.Result
+	if cfg != nil && cfg.staticProtocols != nil {
+		staticProtocolResult, err = cfg.staticProtocols.LowerFile(filename, expanded.Source, provenance)
+		if err != nil {
+			return Result{}, stageError("protocols.Lower", err)
+		}
+		if cfg.uses != nil {
+			if err := checkProtocolGeneratedNames(cfg.uses.original, staticProtocolResult.GeneratedSymbols, staticProtocolResult.AnchorTargets); err != nil {
+				return Result{}, err
+			}
+		}
+		expanded.Source = staticProtocolResult.Source
+		expanded.Source, err = lowerProtocolPaths(filename, expanded.Source, provenance, cfg.staticProtocols, cfg.uses)
+		if err != nil {
+			return Result{}, err
+		}
+		if bytes.Contains(expanded.Source, []byte(strconv.Quote(protocols.TypeInfoPackage))) {
+			if err := validateTypeInfoSupport(sharedImporter); err != nil {
+				return Result{}, fmt.Errorf("%s: %w", filename, err)
+			}
+		}
+	}
 	manualSource, manual, err := lowerManualDefaults(filename, expanded.Source)
 	if err != nil {
 		return Result{}, err
@@ -271,12 +295,17 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	if cfg == nil {
 		enumResult, err = enums.LowerMapped(filename, source, provenance)
 	} else {
-		enumResult, err = enums.LowerPackage(filename, source, provenance, append(append([]enums.Decl{}, cfg.declarations...), cfg.imported[filename]...), cfg.named)
+		enumResult, err = enums.LowerPackageWithGenericFunctions(filename, source, provenance, append(append([]enums.Decl{}, cfg.declarations...), cfg.imported[filename]...), cfg.named, staticProtocolResult.GenericFunctions)
 	}
 	if err != nil {
 		return Result{}, stageError("enums.Lower", err)
 	}
 	source = enumResult.Source
+	if len(staticProtocolResult.LateDeclarations) > 0 {
+		source = append(source, staticProtocolResult.LateDeclarations...)
+		provenance.Source = source
+		provenance.Stages = append(provenance.Stages, "protocols.generated declarations")
+	}
 	if cfg != nil && cfg.uses != nil {
 		source, err = cfg.uses.normalizeTypePaths(filename, source, provenance)
 		if err != nil {
@@ -499,7 +528,7 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_") && !strings.HasPrefix(id.Name, "__goxide_enum_") && id.Name != "__goxide_tag" && !strings.HasPrefix(id.Name, "__goxide_payload_") && !strings.HasPrefix(id.Name, "__goxide_match_expr_") && !strings.HasPrefix(id.Name, "__goxide_ref_") && !strings.HasPrefix(id.Name, "__goxide_go_result") && id.Name != "__goxide_question" && id.Name != "__goxide_print" && id.Name != "__goxide_println" {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_") && !staticProtocolResult.GeneratedIdentifiers[id.Name] && !strings.HasPrefix(id.Name, "__goxide_enum_") && id.Name != "__goxide_tag" && !strings.HasPrefix(id.Name, "__goxide_payload_") && !strings.HasPrefix(id.Name, "__goxide_match_expr_") && !strings.HasPrefix(id.Name, "__goxide_ref_") && !strings.HasPrefix(id.Name, "__goxide_go_result") && id.Name != "__goxide_question" && id.Name != "__goxide_print" && id.Name != "__goxide_println" {
 			collision = id.Name
 		}
 		return true
@@ -961,7 +990,7 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 			debugTypes[m.name] = true
 		}
 	}
-	needsTypecheck := len(defaultHelpers) > 0 || bytes.Contains(out, []byte("__goxide_enum_infer(")) || bytes.Contains(out, []byte("__goxide_match_expr_")) || bytes.Contains(out, []byte("__goxide_print"))
+	needsTypecheck := len(staticProtocolResult.GeneratedSymbols) > 0 || len(defaultHelpers) > 0 || bytes.Contains(out, []byte(strconv.Quote(protocols.TypeInfoPackage))) || bytes.Contains(out, []byte("__goxide_enum_infer(")) || bytes.Contains(out, []byte("__goxide_match_expr_")) || bytes.Contains(out, []byte("__goxide_print"))
 	for _, d := range enumResult.Enums {
 		needsTypecheck = needsTypecheck || d.Family != ""
 	}
@@ -1136,6 +1165,18 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	if single && cfg != nil && cfg.uses != nil {
 		if err := cfg.uses.validateSelectors(packagePath, map[string][]byte{filename: out}, map[string]*sourcemap.Map{filename: provenance}, sharedImporter); err != nil {
 			return Result{}, err
+		}
+		if err := cfg.uses.validateProtocolSourceCalls(packagePath, map[string][]byte{filename: out}, map[string]*sourcemap.Map{filename: provenance}, cfg.staticProtocols, nil, sharedImporter); err != nil {
+			return Result{}, err
+		}
+	}
+	if single && cfg != nil && cfg.staticProtocols != nil && cfg.staticProtocols.SemanticMetadata().Present() {
+		checked, err := typecheck.CheckPackageTypes(packagePath, map[string][]byte{filename: out}, sharedImporter)
+		if err != nil {
+			return Result{}, err
+		}
+		if err := validateProtocolDeclarations(cfg.staticProtocols.SemanticMetadata(), checked, sharedImporter); err != nil {
+			return Result{}, mapProtocolDeclarationError(err, cfg.uses)
 		}
 	}
 	sm := []map[string]any{}

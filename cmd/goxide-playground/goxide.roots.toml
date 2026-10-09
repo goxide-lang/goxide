@@ -30,7 +30,7 @@ namespaces = { json = "encoding/json" }
 
 [roots.std]
 module = "github.com/goxide-lang/std"
-namespaces = { runtime = "github.com/goxide-lang/std/runtime", formatting = "github.com/goxide-lang/std/formatting", sum = "github.com/goxide-lang/std/sum" }
+namespaces = { runtime = "github.com/goxide-lang/std/runtime", formatting = "github.com/goxide-lang/std/formatting", sum = "github.com/goxide-lang/std/sum", typeinfo = "github.com/goxide-lang/std/typeinfo" }
 
 [roots.serde]
 module = "github.com/goxide-lang/serde"

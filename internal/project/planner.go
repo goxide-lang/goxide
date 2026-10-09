@@ -224,7 +224,7 @@ func validatePublished(root string) error {
 			return nil
 		}
 		name := d.Name()
-		if name == "goxide_project_config.go" || name == ".goxide.refs.json" || name == ".goxide.enums.json" || name == ".goxide.uses.json" || strings.HasSuffix(name, ".go.map.json") {
+		if name == "goxide_project_config.go" || name == ".goxide.refs.json" || name == ".goxide.enums.json" || name == ".goxide.uses.json" || name == ".goxide.protocols.json" || strings.HasSuffix(name, ".go.map.json") {
 			return fmt.Errorf("published goxide source mixes generated artifacts: %s", path)
 		}
 		if strings.HasSuffix(name, ".gox") {

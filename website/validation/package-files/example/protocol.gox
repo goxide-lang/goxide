@@ -1,0 +1,9 @@
+package main
+
+trait Build {
+    func Abc() Self
+}
+
+func Make[T Build]() T {
+    return T::Abc()
+}

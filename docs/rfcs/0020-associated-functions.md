@@ -8,6 +8,8 @@
 
 `impl T { ... }` 定义固有成员；`impl Trait for T { ... }` 定义显式 trait 实现，后者的实例 wrapper、marker、As/For helper 继续按 [RFC 0019](0019-uniform-trait-wrappers.md)。这一区分约束函数与方法声明，不将 enum、match 等其他 goxide 语法限制在 impl 内。
 
+当前新增的[用户关联协议子集](../static-protocols.md)支持 `trait P { func Abc() Self }`、本包具体 struct/enum 的 `impl P for U`，以及 `U::Abc()` 和单协议约束的 `T::Abc()`。这组关联函数统一通过空 carrier 与 `std/typeinfo.Of` 降低；它不采用下面固有构造函数示例的候选 `NewT` 命名，也不代表通用 `impl T` 或实例 wrapper 已实现。
+
 ## 源级规则
 
 1. 前端区分原生 Go 声明与 impl 成员。直接写 `func NewPoint(...) Point` 或 `func (p Point) M()` 时，保留 Go 的声明、接收者、名称和行为；不按函数名自动注册 `Point::new`，不自动改成 wrapper 方法。原生调用的权限边界仍见 [RFC 0006](0006-foreign-api.md)。
@@ -235,7 +237,7 @@ trait 的 `Default.default() -> Self` 仍需选择显式 impl；具体实现可�
 
 ## 验收与未定项
 
-未来验收：C01 的两种构造、C02 的独立对象和共享句柄、C03 的明确类型实参、C04 的调用次数与效果、C05 的成功/失败保留、C06 的原生声明不变、C07 的 Self/self 绑定及接收者语义、C08 的普通同名符号不变，以及 C-N1–C-N10。这些通用关联函数与实例成员示例不作为当前实现验收；本轮仅实现以下手动 Default 子集。
+未来验收：C01 的两种构造、C02 的独立对象和共享句柄、C03 的明确类型实参、C04 的调用次数与效果、C05 的成功/失败保留、C06 的原生声明不变、C07 的 Self/self 绑定及接收者语义、C08 的普通同名符号不变，以及 C-N1–C-N10。这些通用固有关联函数与实例成员示例不作为当前实现验收。用户关联协议的真实源码与独立模块验收见[专项说明](../static-protocols.md)；下面保留既有手动 Default 入口的范围，不将其改写成新协议语法。
 
 下一轮只需收敛：实例成员的接收类型及权限拼写；Go 公共名称是否采用 NewT/TMethod；固有关联函数与同名静态 trait 操作如何限定。impl 块承担增强成员定义、Self/self 按绑定转译、原生 Go 声明保留原语义，以及 `T::method` 与包级 Go 函数的直接对应均已确定。
 

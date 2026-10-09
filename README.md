@@ -44,6 +44,7 @@ CLI 长选项使用 `--name`，短选项使用 `-h`、`-o`，拒绝旧式 `-go/-
 | 闭合 enum 与 match | 名义身份、穷尽匹配、guard、非法值在使用点拒绝；有限表达式组合，包括命名单结果、静态已知方法/函数字段/返回函数/variadic/原生 Go 显式 generic 调用；[match 范围](internal/matchexpr/README.md) |
 | Option / Result | 已登记具体实例、match、有限 `?` 组合、Go cause 链、显式 `go_result!` / `go_result_keep!`；跨独立模块恢复及透明 alias；[验收](docs/t0-acceptance.md) |
 | 显式协议 | Default、Clone、Debug、serde、PartialEq/Eq 的有限具体类型及跨包登记；已支持手写 Default 和具体 equality，不隐式赋予所有类型协议 |
+| 用户关联协议 | 非泛型 `trait`、本包具体 struct/enum 的显式 `impl`、`U::Abc()` 与单协议约束的 `T::Abc()`；[范围](docs/static-protocols.md)、[示例](examples/static_protocol/README.md) |
 | serde | core 协议 + 独立 JSON 实现；default/skip、具体 Option 缺失/null、闭合变体；[JSON 范围](docs/serde-json.md) |
 | Go 互操作 | 单文件及现有 go.mod 中多文件/多包目录、独立模块 local replace、生成 helper 的原生 Go 消费；build tags/race 属于具体构建视图 |
 
@@ -55,7 +56,7 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 
 完整差距、范围依据、依赖与验收见 [MVP 逐 RFC 台账](docs/mvp-gap-audit.md)。以下是工程边界，不自动等于获批延期；具体正反例与验证见 [A06 单文件外部恢复](docs/reviews/single-file-external-recovery-20261006.md)和 [A04 unary/composite 交付](docs/reviews/match-unary-composite-20261006.md)，历史验收保留在 [T0 清单](docs/t0-acceptance.md)。
 
-- **表达式和类型上下文**：单值 match 已接通 `+ - ! ^` 及普通 struct/slice/array/map 字面量组合；多结果 `return match`、引用/收发一元、复杂 postfix/receiver、控制头和 block-arm、完全不可命名的私有参数仍拒绝；`.gox` 用户泛型定义尚未开放，与消费原生 Go 泛型函数不同。
+- **表达式和类型上下文**：单值 match 已接通 `+ - ! ^` 及普通 struct/slice/array/map 字面量组合；多结果 `return match`、引用/收发一元、复杂 postfix/receiver、控制头和 block-arm、完全不可命名的私有参数仍拒绝。用户泛型函数新增单个关联协议约束子集；泛型协议、泛型 impl 和多协议组合不由此成为已支持能力。
 - **模块与工具模式**：单文件恢复限配置已知、源可用、已有生成 Go 和合法 metadata 的依赖；不可导入的 internal-origin 增强操作、无源分发、预编译宏 ABI、`.gox` 测试文件与非宿主交叉构建仍有边界。单文件不隐选 TOML/workspace target/features；这些入口仍使用目录模式。切换 race/tags/平台不能直接复用另一视图的 metadata；[本试用的具体模式与已知拒绝](examples/enum_trial/README.md#运行与测试模式)。
 - **协议资格**：手写 Clone/Debug/serde 登记、静态递归 Default、循环容器 equality 等仍有缺口或需另行设计；有限容器正例不证明任意对象图支持。
 - **完整设计能力**：完整 trait、LSP、用户过程宏、格式 Value/PATCH/YAML 等未成为本阶段交付能力；不要把 RFC 示例当作已实现语法。

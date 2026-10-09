@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -40,6 +41,7 @@ func TestMacroSyntheticOriginCLI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				writeMacroFixtureRoots(t, source, nil)
 				const earlier = "func value()Option[int]{return Option[int]::Some(1)}\nfunc before()Option[int]{a:=value()?;b:=value()?;return Option[int]::Some(a+b)}\n"
 				const enumeration = "enum event { A, B(int), }\n"
 				definitions := "macro_rules! inner {($x:expr)=>{" + tc.body + "};}\nmacro_rules! outer {($x:expr)=>{inner!($x)};}\n"
@@ -58,10 +60,10 @@ func TestMacroSyntheticOriginCLI(t *testing.T) {
 					definitionFile = "defs/main.gox"
 					definitions = strings.Replace(definitions, "macro_rules! outer", "pub macro_rules! outer", 1)
 					files[definitionFile] = "package defs\n" + earlier + definitions
-					call = "m.outer!(value())"
+					call = "m::outer!(value())"
 					// The other package deliberately repeats the basename, macro
 					// name and literal. None is evidence for the dependency token.
-					files[callerFile] = "package main\nimport m \"origin.example/app/defs\"\n" + earlier + enumeration + "macro_rules! inner {()=>{new(7)};}\n" + strings.Replace(caller, "outer!(value())", call, 1)
+					files[callerFile] = "package main\nuse defs as m;\n" + earlier + enumeration + "macro_rules! inner {()=>{new(7)};}\n" + strings.Replace(caller, "outer!(value())", call, 1)
 				}
 				for file, text := range files {
 					files[file] = strings.ReplaceAll(text, "\n", ending.text)
@@ -71,6 +73,9 @@ func TestMacroSyntheticOriginCLI(t *testing.T) {
 				args := []string{"transpile", input}
 				if tc.mode != "single" {
 					packagesWrite(t, source, "go.mod", "module origin.example/app\ngo 1.27\n")
+					writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+						"defs": {Module: "origin.example/app", Package: "origin.example/app/defs"},
+					})
 					args = []string{"transpile", "-o", filepath.Join(t.TempDir(), "generated"), source}
 				}
 				output := deliveryCommand(t, outside, cli, false, nil, args...)
@@ -106,6 +111,7 @@ func TestMacroSyntheticOriginCLI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				writeMacroFixtureRoots(t, source, nil)
 				pattern, body, call := "$n:expr", "make([]int,$n)", `allocate!("bad")`
 				if !synthetic {
 					pattern = ""
@@ -177,11 +183,12 @@ func TestMacroSyntheticOriginCLI(t *testing.T) {
 
 	t.Run("legal-output-unchanged", func(t *testing.T) {
 		source := t.TempDir()
+		writeMacroFixtureRoots(t, source, nil)
 		packagesWrite(t, source, "main.gox", `package main
-import "fmt"
+use fmt;
 macro_rules! buffer {($n:expr)=>{make([]int,$n)};}
 macro_rules! pointer {()=>{new(int)};}
-func main(){fmt.Println(len(buffer!(2)),*pointer!())}
+func main(){fmt::Println(len(buffer!(2)),*pointer!())}
 `)
 		input := filepath.Join(source, "main.gox")
 		first := filepath.Join(t.TempDir(), "main.go")

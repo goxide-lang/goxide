@@ -1,4 +1,4 @@
 package main
-import "fmt"
-import "example.org/shared"
-func main() { fmt.Println(shared.Mode()) }
+use fmt;
+use shared;
+func main() { fmt::Println(shared::Mode()) }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
-	"go/types"
 	"regexp"
 	"sort"
 	"strings"
@@ -29,8 +28,9 @@ type File struct {
 var sourceName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*\.gox$`)
 
 // CompilePackage compiles one user package without reading a filesystem or
-// resolving dependencies. The caller supplies the fixed build's importer.
-func CompilePackage(files []File, imp types.Importer) (output []File, err error) {
+// selecting dependency versions. The caller supplies the fixed build's importer
+// and explicit namespace roots.
+func CompilePackage(files []File, options frontend.PackageOptions) (output []File, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			output = nil
@@ -68,14 +68,14 @@ func CompilePackage(files []File, imp types.Importer) (output []File, err error)
 		packageName = name
 		sources[file.Path] = []byte(file.Source)
 	}
-	if imp == nil {
+	if options.Importer == nil {
 		return nil, fmt.Errorf("playground requires its bundled dependency importer")
 	}
-	result, err := frontend.CompilePackage(PackagePath, sources, imp)
+	result, err := frontend.CompilePackageWithOptions(PackagePath, sources, options)
 	if err != nil {
 		return nil, err
 	}
-	emitted, err := frontend.PackageGoFiles(PackagePath, result, imp)
+	emitted, err := frontend.PackageGoFiles(PackagePath, result, options.Importer)
 	if err != nil {
 		return nil, err
 	}

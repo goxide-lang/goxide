@@ -1,29 +1,27 @@
 package main
 
-import (
- "fmt"
- "strconv"
- "places.example/update/model"
-)
+use fmt;
+use strconv;
+use model;
 
-func parse(s string)Result[int,error]{n,e:=strconv.Atoi(s);if e!=nil{return Result[int,error]::Err(e)};return Result[int,error]::Ok(n)}
+func parse(s string)Result[int,error]{n,e:=strconv::Atoi(s);if e!=nil{return Result[int,error]::Err(e)};return Result[int,error]::Ok(n)}
 func update(items []int,totals map[int]int,key,value string)Result[int,error]{items[parse(key)?],totals[0]=parse(value)?,9;return Result[int,error]::Ok(items[0])}
 func unpack(v Result[int,error])(int,error){match v{Result[int,error]::Ok(n)=>{return n,nil},Result[int,error]::Err(e)=>{return 0,e},};panic("unreachable")}
 func hidden(n uint)Result[int,error]{
- s:=make(model.Masks,1);m:=make(model.Table);a:=model.Pair{};r:=model.Record{};p:=model.NewMask()
+ s:=make(model::Masks,1);m:=make(model::Table);a:=model::Pair{};r:=model::Record{};p:=model::NewMask()
  s[0],m[1<<n],a[0],r.Wide,*p=1<<n,1<<n,1<<n,1<<n,1<<Result[uint,error]::Ok(n)?
  r.Enabled,s[0]=n==63&&Result[uint,error]::Ok(n)?==63,1<<n
  if uint64(s[0])!=uint64(1)<<n||uint64(m[1<<n])!=uint64(1)<<n||uint64(a[0])!=uint64(1)<<n||uint64(r.Wide)!=uint64(1)<<n||uint64(*p)!=uint64(1)<<n||!r.Enabled{panic("private contextual type")}
  return Result[int,error]::Ok(1)
 }
 func distinctTypes()Result[int,error]{
- model.N=1
- model.N <<= model.Count(Result[int,error]::Ok(1)?) + model.Count(Result[int,error]::Ok(1)?)
+ model::N=1
+ model::N <<= model::Count(Result[int,error]::Ok(1)?) + model::Count(Result[int,error]::Ok(1)?)
  var a any
- a = model.Count(Result[int,error]::Ok(2)?) + model.Count(Result[int,error]::Ok(3)?)
+ a = model::Count(Result[int,error]::Ok(2)?) + model::Count(Result[int,error]::Ok(3)?)
  keys:=map[any]int{}
- keys[model.Count(Result[int,error]::Ok(2)?)+model.Count(Result[int,error]::Ok(3)?)]=7
- if model.N!=4||a!=model.Count(5)||keys[model.Count(5)]!=7{panic("different contextual types")}
+ keys[model::Count(Result[int,error]::Ok(2)?)+model::Count(Result[int,error]::Ok(3)?)]=7
+ if model::N!=4||a!=model::Count(5)||keys[model::Count(5)]!=7{panic("different contextual types")}
  return Result[int,error]::Ok(1)
 }
-func main(){s:=[]int{0};m:=map[int]int{};n,e:=unpack(update(s,m,"0","42"));fmt.Println(n,m[0],e);_,e=unpack(update(s,m,"0","bad"));if e!=nil{fmt.Println("invalid value",s[0],m[0])};tree:=model.NewTree(3);n,e=unpack(stock(&tree,"7"));fmt.Println("stock",n,e);_,e=unpack(stock(&tree,"bad"));if e!=nil{fmt.Println("invalid stock",tree.Count)}}
+func main(){s:=[]int{0};m:=map[int]int{};n,e:=unpack(update(s,m,"0","42"));fmt::Println(n,m[0],e);_,e=unpack(update(s,m,"0","bad"));if e!=nil{fmt::Println("invalid value",s[0],m[0])};tree:=model::NewTree(3);n,e=unpack(stock(&tree,"7"));fmt::Println("stock",n,e);_,e=unpack(stock(&tree,"bad"));if e!=nil{fmt::Println("invalid stock",tree.Count)}}

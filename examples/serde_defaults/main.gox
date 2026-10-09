@@ -1,9 +1,9 @@
 package main
 
-import "github.com/goxide-lang/serde/json"
+use serde::json as serdejson;
 
 func main() {
-    value, err := serdejson.Unmarshal([]byte(`{"Required":"demo","Optional":null}`), DeserializeRequest)
+    value, err := serdejson::Unmarshal([]byte(`{"Required":"demo","Optional":null}`), DeserializeRequest)
     if err != nil { panic(err) }
     println!("{} {} {} {}", value.Required, value.First.Port, value.Child.Value.Port, defaultTrace)
 }

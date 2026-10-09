@@ -42,6 +42,8 @@ format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取�
 
 本地作者工程一旦有 TOML，根 go.mod/go.sum 都报双配置迁移诊断。原生 Go 依赖无 TOML 时继续使用自己的 go.mod；带 TOML 的 path/Git 作者依赖从 TOML 合成 module 元数据，不能要求给 readonly checkout 写文件。代理下载的 source 发行物有传输用 go.mod：只有经 Go 校验的版本来源允许这一组合，且传输身份/feature无关原生Go约束须与 TOML 相符；该 go.mod 不是第二个作者配置来源。不能用 manifest 标记让任意本地根绕过双配置检查。
 
+源级 dependency alias 到精确 package/namespace 的映射、toolchain 来源、未迁入 Go module 的 `goxide.roots.toml` 及 `--roots` 作用域，见 [显式依赖根设计](../design/dependency-roots.md)。映射参与清单与锁身份，不改变 Go 的 module 选版权威。
+
 ### 无损迁入子集
 
 已实现命令：`goxide import-go --plan --bin app=cmd/app ROOT` 只读输出候选 TOML；`goxide import-go --out NEWDIR --bin app=cmd/app ROOT` 在全新独立目录复制源码并产生 TOML/锁，构建所选目标验证。库显式用 `--lib .`，不默认递归发现所有 main。NEW目录必须不在输入工程或任何现有受管布局内部，必须不存在；锁以最终逻辑根身份计算，不含临时staging路径；发布前丢弃staging的target/.gox产物，不搬移布局owner/信任缓存，最终配置的本地replace指向原目录（首片采用规范绝对路径保义）。成功前不发布目的目录，不运行程序、go generate 或安装脚本。允许普通 Go 编译/cgo 所需编译器行为，目标环境沿用既有 host 限制。
@@ -69,9 +71,11 @@ format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取�
 ```goxide
 // 导入后可先原封不动保留 main.go，再逐文件改成 .gox。
 package main
-import "fmt"
-func main() { fmt.Println("mixed source, one manifest") }
+use output;
+func main() { output::Println("mixed source, one manifest") }
 ```
+
+对应清单需要 `[dependencies.output] source = "toolchain", package = "fmt"`（分别写作 TOML 字段）；原生 `main.go` 保持 Go import 语法。
 
 ```go
 // target/.../module/main.go：相同 Go 包身份，生成器不更名业务 module。

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
 )
 
@@ -93,8 +94,9 @@ func TestLocalHelperGoAndGoxide(t *testing.T) {
 	for _, ext := range []string{"go", "gox"} {
 		t.Run(ext, func(t *testing.T) {
 			o := fixture(t)
-			o.Config.Entry = "scripts/build." + ext
-			os.Remove(filepath.Join(o.PackageRoot, "scripts/build.go"))
+			// The native host entry exercises Go -> Go/Goxide helper interop.
+			// Goxide host entries have their own explicit toolchain-root test.
+			o.Config.Entry = "scripts/build.go"
 			put(t, o.PackageRoot, o.Config.Entry, strings.Replace(generator, "func main(){", "func main(){_ = helper.Value;", 1))
 			b, _ := os.ReadFile(filepath.Join(o.PackageRoot, o.Config.Entry))
 			put(t, o.PackageRoot, o.Config.Entry, strings.Replace(string(b), "import(", "import(\"example.test/helper\";", 1))
@@ -284,14 +286,14 @@ func TestHostImportsSelectRealImports(t *testing.T) {
 		opposite = "linux"
 	}
 	files := map[string][]byte{
-		"main.gox":                  []byte("package x\nimport alias `example.test/real/sub`\n// import \"example.test/comment\"\nconst s=\"example.test/string\""),
+		"main.gox":                  []byte("package x\nuse real as alias;\n// import \"example.test/comment\"\nconst s=\"example.test/string\""),
 		"main_test.go":              []byte("package x\nimport _ \"example.test/test\""),
 		"other_" + opposite + ".go": []byte("package x\nimport _ \"example.test/platform\""),
 		"tagged.gox":                []byte("//go:build nonexistent_host_tag\n\npackage x\nimport _ \"example.test/tagged\""),
 		"testdata/ignored.go":       []byte("package x\nimport _ \"example.test/testdata\""),
 		"cgo.go":                    []byte("package x\nimport \"C\"\nimport _ \"example.test/cgo\""),
 	}
-	got, e := hostImports(files)
+	got, e := hostImports("example.test/host", files, paths.Roots{"real": {PackagePath: "example.test/real/sub", ModulePath: "example.test/real", Source: "module"}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -308,7 +310,7 @@ func TestOutputSourceMapReserved(t *testing.T) {
 	}
 }
 func TestHostUseRetainsImportEdge(t *testing.T) {
-	imports, e := hostImports(map[string][]byte{"use.gox": []byte("package helper\nimport other \"example.test/other\"\npub use other::*;\n")})
+	imports, e := hostImports("example.test/host", map[string][]byte{"use.gox": []byte("package helper\npub use other::*;\n")}, paths.Roots{"other": {PackagePath: "example.test/other", ModulePath: "example.test/other", Source: "module"}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -337,7 +339,8 @@ func TestOverlappingHelperModulesNoFalseCycle(t *testing.T) {
 	for mod, source := range sources {
 		root := t.TempDir()
 		put(t, root, "go.mod", "module "+mod+"\n\ngo 1.27\n")
-		put(t, root, "value.gox", source)
+		put(t, root, "value.go", source)
+		put(t, root, "extra.gox", "package "+strings.SplitN(strings.TrimPrefix(source, "package "), "\n", 2)[0]+"\nconst Extra=1\n")
 		o.Config.Dependencies[mod] = root
 	}
 	run(t, prepare(t, o))
@@ -422,5 +425,34 @@ func TestNestedPureManifestHelperRejected(t *testing.T) {
 		if err := validateModule("example.org/helper", files, nil); err == nil {
 			t.Fatal("accepted nested helper", name)
 		}
+	}
+}
+
+func TestToolchainRootGenerator(t *testing.T) {
+	o := fixture(t)
+	os.Remove(filepath.Join(o.PackageRoot, "scripts/build.go"))
+	o.Config.Entry = "scripts/build.gox"
+	source := strings.Replace(generator, `import("encoding/json";"os";"path/filepath")`, "use json;\nuse os;\nuse filepath;", 1)
+	for _, name := range []string{"json", "os", "filepath"} {
+		source = strings.ReplaceAll(source, name+".", name+"::")
+	}
+	put(t, o.PackageRoot, o.Config.Entry, source)
+	o.ToolchainRoots = paths.Roots{
+		"json":     {PackagePath: "encoding/json", Source: "toolchain"},
+		"os":       {PackagePath: "os", Source: "toolchain"},
+		"filepath": {PackagePath: "path/filepath", Source: "toolchain"},
+	}
+	p := prepare(t, o)
+	if !strings.Contains(string(run(t, p).Files["generated.go"]), "42") {
+		t.Fatal("goxide host generation failed")
+	}
+	o.ToolchainRoots["os"] = paths.Namespace{PackagePath: "fmt", Source: "toolchain"}
+	changed := prepare(t, o)
+	if changed.ID == p.ID || changed.Subject == p.Subject {
+		t.Fatal("host root mapping absent from cache/trust identity")
+	}
+	o.ToolchainRoots["target"] = paths.Namespace{PackagePath: "example.test/app", ModulePath: "example.test/app", Source: "module"}
+	if _, err := Prepare(o); err == nil || !strings.Contains(err.Error(), "target module mappings do not authorize host imports") {
+		t.Fatalf("target root accepted by host: %v", err)
 	}
 }

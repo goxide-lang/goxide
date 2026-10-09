@@ -1,20 +1,19 @@
 package main
+use serde;
 
-import (
-    "errors"
-    "fmt"
-    "github.com/goxide-lang/serde/json"
-)
+use errors;
+use fmt;
+use serde::json as serdejson;
 
 // Multiple data items live in an ordinary struct, carried by one enum payload.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 type WorkItem struct {
     Name string
     Retries []int
     Labels map[string]string
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 enum Command {
     Idle,
     Submit(WorkItem),
@@ -24,14 +23,14 @@ enum Command {
 }
 
 // Struct field attributes remain effective inside a single enum payload.
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type TaggedItem struct {
     #[serde(rename="id")]
     ID string
     #[serde(default)]
     Attempts int
 }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 enum TaggedCommand { Change(TaggedItem), }
 func taggedItem(command TaggedCommand) TaggedItem {
     match command {TaggedCommand::Change(item) => {return item},}
@@ -68,7 +67,7 @@ func errorKind(err AppError) string {
 }
 
 func decodeCommand(data []byte) Result[Command,error] {
-    command, err := serdejson.Unmarshal(data, DeserializeCommand)
+    command, err := serdejson::Unmarshal(data, DeserializeCommand)
     if err != nil { return Result[Command,error]::Err(err) }
     return Result[Command,error]::Ok(command)
 }
@@ -129,8 +128,8 @@ func main() {
     snapshot := CloneCommand(&command)
     item := submitted(snapshot)
     item.Retries[0] = 9
-    fmt.Println(DebugCommand(&command))
-    fmt.Println(DebugCommand(&snapshot))
+    fmt::Println(DebugCommand(&command))
+    fmt::Println(DebugCommand(&snapshot))
     err := rejected(loadCommand([]byte("{")))
-    fmt.Println("error:", err, "cause:", errors.Unwrap(err))
+    fmt::Println("error:", err, "cause:", errors::Unwrap(err))
 }

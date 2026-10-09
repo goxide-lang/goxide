@@ -1,19 +1,17 @@
 package main
 
-import (
-    "fmt"
-    "github.com/goxide-lang/serde"
-    "github.com/goxide-lang/serde/json"
-)
+use fmt;
+use serde;
+use serde::json as serdejson;
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 enum JobState {
     Queued,
     Running(int),
     Failed(string),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type Notification struct {
     ID uint64
     State JobState
@@ -21,14 +19,14 @@ type Notification struct {
 
 func main() {
     original := Notification{ID: 42, State: JobState::Running(70)}
-    data, err := serdejson.Encode(func(s serde.Serializer) error { return SerializeNotification(s, &original) })
+    data, err := serdejson::Encode(func(s serde::Serializer) error { return SerializeNotification(s, &original) })
     if err != nil { panic(err) }
-    fmt.Println(string(data))
-    decoded, err := serdejson.Unmarshal(data, DeserializeNotification)
+    fmt::Println(string(data))
+    decoded, err := serdejson::Unmarshal(data, DeserializeNotification)
     if err != nil { panic(err) }
     match decoded.State {
-        JobState::Queued => { fmt.Println("queued") },
-        JobState::Running(progress) => { fmt.Println("progress:", progress) },
-        JobState::Failed(reason) => { fmt.Println("failed:", reason) },
+        JobState::Queued => { fmt::Println("queued") },
+        JobState::Running(progress) => { fmt::Println("progress:", progress) },
+        JobState::Failed(reason) => { fmt::Println("failed:", reason) },
     }
 }

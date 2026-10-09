@@ -1,8 +1,6 @@
 package main
-import (
- "unsafe"
- "places.example/update/model"
-)
+use unsafe;
+use model;
 
 // These combinations are explicitly not covered by the new planner yet.
-func fallbackUnsafe(t *model.Tree,p *[2]byte,n uintptr,ok bool)Result[int,error]{r:=Result[uintptr,error]::Ok(n);if !ok{r=Result[uintptr,error]::Err(parseError())};var out unsafe.Pointer;t.Count,out=7,unsafe.Pointer(uintptr(unsafe.Pointer(p))+r?);return Result[int,error]::Ok(int(*(*byte)(out)))}
+func fallbackUnsafe(t *model::Tree,p *[2]byte,n uintptr,ok bool)Result[int,error]{r:=Result[uintptr,error]::Ok(n);if !ok{r=Result[uintptr,error]::Err(parseError())};var out unsafe::Pointer;t.Count,out=7,unsafe::Pointer(uintptr(unsafe::Pointer(p))+r?);return Result[int,error]::Ok(int(*(*byte)(out)))}

@@ -142,7 +142,7 @@ default = [
  "fast", # trailing comments and commas
 ]
 fast = []
-[dependencies."some-lib"]
+[dependencies."some_lib"]
 module = 'example.org/lib/v2'
 version = "v2.1.0"
 default_features = false
@@ -173,14 +173,14 @@ formatter = '/tools/formatter'
 		t.Fatal(e)
 	}
 	enabled, deps, e := Resolve(m, nil, true)
-	if e != nil || !enabled["fast"] || deps["some-lib"].Defaults {
+	if e != nil || !enabled["fast"] || deps["some_lib"].Defaults {
 		t.Fatalf("%v %v %v", enabled, deps, e)
 	}
-	if m.Version != 2 || len(m.Bins) != 1 || len(m.Examples) != 1 || m.Lib.Path != "src/lib.gox" || m.Build.TimeoutSeconds != 5 || m.Dependencies["some-lib"].Version != "v2.1.0" {
+	if m.Version != 2 || len(m.Bins) != 1 || len(m.Examples) != 1 || m.Lib.Path != "src/lib.gox" || m.Build.TimeoutSeconds != 5 || m.Dependencies["some_lib"].Version != "v2.1.0" {
 		t.Fatal(m)
 	}
 	doc := manifestDocument{Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
-	doc.Package = PackageConfig{m.Version, m.Module, m.GoVersion, m.Toolchain}
+	doc.Package = PackageConfig{Format: m.Version, Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain, Namespaces: m.PackageNamespaces}
 	b, e := toml.Marshal(doc)
 	if e != nil {
 		t.Fatal(e)
@@ -190,7 +190,7 @@ formatter = '/tools/formatter'
 		t.Fatalf("roundtrip %s %v", b, e)
 	}
 	var old Manifest
-	if e = json.Unmarshal([]byte(`{"version":2,"module":"example.org/fixture","go":"1.27","features":{"default":["fast"],"fast":[]},"dependencies":{"some-lib":{"module":"example.org/lib/v2","version":"v2.1.0","default_features":false,"features":[]}},"lib":{"name":"lib","path":"src/lib.gox"},"bins":[{"name":"cli","path":"cmd/cli","required_features":["fast"]}],"examples":[{"name":"demo","path":"examples/demo"}],"build":{"entry":"tools/build.go","inputs":["schema.txt"],"outputs":["gen/a.go"],"env":[],"timeout_seconds":5,"dependencies":{"example.org/helper":"../helper"},"tools":{"formatter":"/tools/formatter"}}}`), &old); e != nil {
+	if e = json.Unmarshal([]byte(`{"version":2,"module":"example.org/fixture","go":"1.27","features":{"default":["fast"],"fast":[]},"dependencies":{"some_lib":{"module":"example.org/lib/v2","version":"v2.1.0","default_features":false,"features":[]}},"lib":{"name":"lib","path":"src/lib.gox"},"bins":[{"name":"cli","path":"cmd/cli","required_features":["fast"]}],"examples":[{"name":"demo","path":"examples/demo"}],"build":{"entry":"tools/build.go","inputs":["schema.txt"],"outputs":["gen/a.go"],"env":[],"timeout_seconds":5,"dependencies":{"example.org/helper":"../helper"},"tools":{"formatter":"/tools/formatter"}}}`), &old); e != nil {
 		t.Fatal(e)
 	}
 	if !reflect.DeepEqual(old, m) {

@@ -12,7 +12,7 @@ func TestPropagationAliasIdentity(t *testing.T) {
 	for name, source := range map[string]string{
 		"return-alias":  `type Out = Result[int,error];func f() Out {n:=Result[int,error]::Ok(1)?;return Result[int,error]::Ok(n)}`,
 		"payload-alias": `type Number = int;func source()Result[Number,error]{return Result[Number,error]::Ok(1)};func f()Result[int,error]{n:=source()?;return Result[int,error]::Ok(n)}`,
-		"import-alias":  `import tm "time";func f()Result[tm.Duration,error]{n:=Result[tm.Duration,error]::Ok(1)?;return Result[tm.Duration,error]::Ok(n)}`,
+		"import-alias":  `use time as tm;func f()Result[tm::Duration,error]{n:=Result[tm::Duration,error]::Ok(1)?;return Result[tm::Duration,error]::Ok(n)}`,
 		"from-alias": `type WrappedAlias = Wrapped
 #[derive(Error)]
 type Wrapped struct {
@@ -22,7 +22,7 @@ Cause error
 func f()Result[int,WrappedAlias]{n:=Result[int,error]::Err(nil)?;return Result[int,WrappedAlias]::Ok(n)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Compile("alias.gox", []byte("package p\n"+source)); err != nil {
+			if _, err := compileFrontendFixture("alias.gox", []byte("package p\n"+source)); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -36,7 +36,7 @@ func TestCompleteSumAndMatchTypecheck(t *testing.T) {
 		"unrelated-error": `func f()Option[int]{n:=Option[int]::Some(1)?;return Option[int]::Some(n)};func bad()int{return "bad"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Compile("invalid.gox", []byte("package p\n"+source))
+			_, err := compileFrontendFixture("invalid.gox", []byte("package p\n"+source))
 			if err == nil || !strings.Contains(err.Error(), "invalid.gox") {
 				t.Fatalf("need located final type error: %v", err)
 			}
@@ -66,7 +66,7 @@ func compute(v Option[int],fail bool)Result[int,string]{
 func answer(v Result[int,string])int{return match v {Result[int,string]::Ok(n) => n,Result[int,string]::Err(_) => -1,}}
 func main(){if !conversionOK(converted()){panic("wrong conversion")};if answer(compute(Option[int]::Some(1),false))!=7||calls!=1{panic("success")};if answer(compute(Option[int]::Some(1),true))!=-1||calls!=2{panic("failure")};if answer(compute(Option[int]::None,true))!=0||calls!=2{panic("unselected arm evaluated")}}
 `
-	r, err := Compile("composition.gox", []byte(src))
+	r, err := compileFrontendFixture("composition.gox", []byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}

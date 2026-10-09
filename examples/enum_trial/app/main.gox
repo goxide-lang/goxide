@@ -1,13 +1,11 @@
 package main
 
-import (
-    "errors"
-    "fmt"
-    "os"
-    "strconv"
-    cfg "trial.example/model/config"
-    "trial.example/app/logkit"
-)
+use errors;
+use fmt;
+use os;
+use strconv;
+use config as cfg;
+use logkit;
 
 #[derive(Error)]
 #[error("order rejected")]
@@ -17,15 +15,15 @@ type Failure struct {
 }
 
 type Receipt struct { ID int; Units int; Retry int; Port int }
-var OverCapacity = errors.New("capacity exceeded")
+var OverCapacity = errors::New("capacity exceeded")
 
-func load(input []byte) Result[cfg.Request,error] {
-    q, err := cfg.Decode(input)
-    if err != nil { return Result[cfg.Request,error]::Err(err) }
-    return Result[cfg.Request,error]::Ok(q)
+func load(input []byte) Result[cfg::Request,error] {
+    q, err := cfg::Decode(input)
+    if err != nil { return Result[cfg::Request,error]::Err(err) }
+    return Result[cfg::Request,error]::Ok(q)
 }
 func number(s string) Result[int,error] {
-    n, err := strconv.Atoi(s)
+    n, err := strconv::Atoi(s)
     if err != nil { return Result[int,error]::Err(err) }
     return Result[int,error]::Ok(n)
 }
@@ -37,12 +35,12 @@ func prepare(input []byte, enabled bool) Result[Receipt,Failure] {
     q := load(input)?
     id := number(q.Name)?
     units := match q.Mode {
-        cfg.Mode::Immediate => 1,
-        cfg.Mode::Batch(n) => allowed(n)?,
+        cfg::Mode::Immediate => 1,
+        cfg::Mode::Batch(n) => allowed(n)?,
     }
-    logkit.event_if!(enabled, id + units)
+    logkit::event_if!(enabled, id + units)
     return Result[Receipt,Failure]::Ok(Receipt{
-        ID: id, Units: units, Retry: cfg.RetryCount(q), Port: q.Settings.Port,
+        ID: id, Units: units, Retry: cfg::RetryCount(q), Port: q.Settings.Port,
     })
 }
 func Run(input string, enabled bool) (Receipt,error) {
@@ -51,38 +49,38 @@ func Run(input string, enabled bool) (Receipt,error) {
         Result[Receipt,Failure]::Ok(v) => { return v,nil },
         Result[Receipt,Failure]::Err(err) => { return Receipt{},err },
     }
-    return Receipt{},errors.New("unreachable result")
+    return Receipt{},errors::New("unreachable result")
 }
 
 // These field protocols are registered by the separately generated model module.
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
-type Snapshot struct { Data cfg.Samples }
+type Snapshot struct { Data cfg::Samples }
 func Same(a, b Snapshot) bool { return a.equals(b) }
 
 func ShowSamples() {
     none := DefaultSnapshot()
-    nilSome := Snapshot{Data: cfg.Some(nil)}
-    emptySome := Snapshot{Data: cfg.Some([]int{})}
-    fmt.Println(DebugSnapshot(&none))
-    fmt.Println(DebugSnapshot(&nilSome))
-    fmt.Println(DebugSnapshot(&emptySome))
-    fmt.Printf("equals none/some(nil)=%t some(nil)/some(empty)=%t\n",
+    nilSome := Snapshot{Data: cfg::Some(nil)}
+    emptySome := Snapshot{Data: cfg::Some([]int{})}
+    fmt::Println(DebugSnapshot(&none))
+    fmt::Println(DebugSnapshot(&nilSome))
+    fmt::Println(DebugSnapshot(&emptySome))
+    fmt::Printf("equals none/some(nil)=%t some(nil)/some(empty)=%t\n",
         none.equals(nilSome), nilSome.equals(emptySome))
-    original := Snapshot{Data: cfg.Some([]int{1})}
+    original := Snapshot{Data: cfg::Some([]int{1})}
     copied := CloneSnapshot(&original)
-    cfg.Items(copied.Data)[0] = 9
-    fmt.Printf("clone source=%v copy=%v equals=%t\n",
-        cfg.Items(original.Data), cfg.Items(copied.Data), original.equals(copied))
+    cfg::Items(copied.Data)[0] = 9
+    fmt::Printf("clone source=%v copy=%v equals=%t\n",
+        cfg::Items(original.Data), cfg::Items(copied.Data), original.equals(copied))
 }
 func main() {
     input := `{"Name":"42","Mode":{"Batch":3}}`
-    if len(os.Args) > 1 { input = os.Args[1] }
+    if len(os::Args) > 1 { input = os::Args[1] }
     receipt, err := Run(input, true)
     if err != nil {
-        fmt.Fprintf(os.Stderr, "%v: %v\n", err, errors.Unwrap(err))
-        os.Exit(1)
+        fmt::Fprintf(os::Stderr, "%v: %v\n", err, errors::Unwrap(err))
+        os::Exit(1)
     }
-    fmt.Printf("accepted %d units=%d retry=%d port=%d\n",
+    fmt::Printf("accepted %d units=%d retry=%d port=%d\n",
         receipt.ID, receipt.Units, receipt.Retry, receipt.Port)
     ShowSamples()
 }

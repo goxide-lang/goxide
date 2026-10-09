@@ -1,20 +1,19 @@
 package main
+use serde;
 
-import (
-    "errors"
-    "fmt"
-    "log/slog"
-    "os"
-    "github.com/goxide-lang/serde/json"
-)
+use errors;
+use fmt;
+use slog;
+use os;
+use serde::json as serdejson;
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 enum RunMode {
     DryRun,
     Workers(int),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type Config struct {
     Name string
     Mode RunMode
@@ -27,12 +26,12 @@ type ConfigError struct {
     Cause error
 }
 
-var ErrInvalidWorkers = errors.New("workers must be between 1 and 64")
-var ErrMissingName = errors.New("name is required")
+var ErrInvalidWorkers = errors::New("workers must be between 1 and 64")
+var ErrMissingName = errors::New("name is required")
 
 // Ordinary Go (T, error) calls cross an explicit Result boundary.
 func decodeConfig(data []byte) Result[Config,error] {
-    config, err := serdejson.Unmarshal(data, DeserializeConfig)
+    config, err := serdejson::Unmarshal(data, DeserializeConfig)
     if err != nil { return Result[Config,error]::Err(err) }
     return Result[Config,error]::Ok(config)
 }
@@ -57,7 +56,7 @@ func loadConfig(data []byte) Result[Config,ConfigError] {
 }
 
 // The application emits one JSON event and exposes the original error chain.
-func runConfig(logger *slog.Logger, requestID string, data []byte) error {
+func runConfig(logger *slog::Logger, requestID string, data []byte) error {
     match loadConfig(data) {
         Result[Config,ConfigError]::Ok(config) => {
             match config.Mode {
@@ -71,7 +70,7 @@ func runConfig(logger *slog.Logger, requestID string, data []byte) error {
             return nil
         },
         Result[Config,ConfigError]::Err(err) => {
-            logger.Error("configuration rejected", "request_id", requestID, "error", err.Error(), "cause", fmt.Sprint(errors.Unwrap(err)))
+            logger.Error("configuration rejected", "request_id", requestID, "error", err.Error(), "cause", fmt::Sprint(errors::Unwrap(err)))
             return err
         },
     }
@@ -79,8 +78,8 @@ func runConfig(logger *slog.Logger, requestID string, data []byte) error {
 }
 
 func main() {
-    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+    logger := slog::New(slog::NewJSONHandler(os::Stdout, nil))
     input := `{"Name":"mail-dispatch","Mode":{"Workers":4}}`
-    if len(os.Args) > 1 { input = os.Args[1] }
-    if err := runConfig(logger, "config-startup", []byte(input)); err != nil { os.Exit(1) }
+    if len(os::Args) > 1 { input = os::Args[1] }
+    if err := runConfig(logger, "config-startup", []byte(input)); err != nil { os::Exit(1) }
 }

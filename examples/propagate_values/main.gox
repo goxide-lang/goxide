@@ -1,12 +1,10 @@
 package main
 
-import (
- "fmt"
- "strconv"
-)
+use fmt;
+use strconv;
 
 func parsePort(text string) Result[int,error] {
- value,err:=strconv.Atoi(text)
+ value,err:=strconv::Atoi(text)
  if err!=nil{return Result[int,error]::Err(err)}
  return Result[int,error]::Ok(value)
 }
@@ -18,7 +16,7 @@ func priority() Result[*int,error] {
 
 func job(text string) Result[string,error] {
  port,rank:=parsePort(text)?,*priority()?
- return Result[string,error]::Ok(fmt.Sprintf("port %d priority %d",port,rank))
+ return Result[string,error]::Ok(fmt::Sprintf("port %d priority %d",port,rank))
 }
 
 func deliver(text string,jobs chan string) Result[int,error] {
@@ -36,6 +34,6 @@ func resultError(result Result[int,error]) error {
 
 func main() {
  jobs:=make(chan string,1)
- if resultError(deliver("8080",jobs))==nil {fmt.Println(<-jobs)}
- if resultError(deliver("invalid",jobs))!=nil {fmt.Println("invalid port")}
+ if resultError(deliver("8080",jobs))==nil {fmt::Println(<-jobs)}
+ if resultError(deliver("invalid",jobs))!=nil {fmt::Println("invalid port")}
 }

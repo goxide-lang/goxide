@@ -1,17 +1,16 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"strings"
 	"testing"
 )
 
-const enumSerdeSource = `package fixture
-#[derive(Serialize, Deserialize)]
+const enumSerdeSource = `package fixture; use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Event { Idle, Item(int), Text(string), }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Envelope { Empty, Nested(Event), }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type Batch struct { Events []Event; Lookup map[string]Envelope; Maybe *Event }
 func idle() Event {return Event::Idle}
 func item(n int) Event {return Event::Item(n)}
@@ -20,7 +19,7 @@ func nested(v Event) Envelope {return Envelope::Nested(v)}
 `
 
 func TestEnumSerdeBusinessRace(t *testing.T) {
-	result, err := frontend.Compile("enum_serde.gox", []byte(enumSerdeSource))
+	result, err := compileAcceptanceSerdeFixture("enum_serde.gox", []byte(enumSerdeSource))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,14 +56,14 @@ func TestEnumInvalidGoBoundaryReturnsError(t *testing.T){for _,v:=range []Event{
 `
 
 func TestEnumSerdeIndependentDirectionsRace(t *testing.T) {
-	enumGeneratedModule(t, `package fixture
-#[derive(Serialize)]
+	enumGeneratedModule(t, `package fixture; use serde;
+#[derive(serde::Serialize)]
 enum Out { Empty, Value(int), }
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 enum OuterOut { Nested(Out), }
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 enum In { Empty, Value(int), }
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 enum OuterIn { Nested(In), }
 func output() OuterOut {return OuterOut::Nested(Out::Value(3))}
 `, `package fixture
@@ -75,16 +74,16 @@ func TestDirectionOnly(t *testing.T){v:=output();out,e:=serdejson.Encode(func(s 
 
 func TestEnumSerdeUnsupportedAttributes(t *testing.T) {
 	cases := map[string]string{
-		"container-rename":  "#[derive(Serialize)]\n#[serde(rename=\"Other\")]\nenum E {A,}",
-		"container-unknown": "#[derive(Deserialize)]\n#[serde(deny_unknown_fields)]\nenum E {A,}",
-		"variant-alias":     "#[derive(Serialize)]\nenum E {\n#[serde(alias=\"Other\")]\nA,}",
-		"variant-skip":      "#[derive(Serialize)]\nenum E {\n#[serde(skip)]\nA,}",
-		"generic":           "#[derive(Serialize)]\nenum E[T] {A(T),}",
-		"pointer-payload":   "#[derive(Serialize)]\nenum E {A(*int),}",
+		"container-rename":  "#[derive(serde::Serialize)]\n#[serde(rename=\"Other\")]\nenum E {A,}",
+		"container-unknown": "#[derive(serde::Deserialize)]\n#[serde(deny_unknown_fields)]\nenum E {A,}",
+		"variant-alias":     "#[derive(serde::Serialize)]\nenum E {\n#[serde(alias=\"Other\")]\nA,}",
+		"variant-skip":      "#[derive(serde::Serialize)]\nenum E {\n#[serde(skip)]\nA,}",
+		"generic":           "#[derive(serde::Serialize)]\nenum E[T] {A(T),}",
+		"pointer-payload":   "#[derive(serde::Serialize)]\nenum E {A(*int),}",
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("enum_attrs.gox", []byte("package fixture\n"+source))
+			_, err := compileAcceptanceSerdeFixture("enum_attrs.gox", []byte("package fixture; use serde;\n"+source))
 			if err == nil || !strings.Contains(err.Error(), "enum_attrs.gox") {
 				t.Fatalf("need explicit located rejection: %v", err)
 			}

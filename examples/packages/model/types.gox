@@ -1,6 +1,7 @@
 package model
+use serde;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum RunMode {
     DryRun,
     Workers(int),

@@ -82,15 +82,15 @@ func TestT0JointBusiness(t *testing.T) {
 		}
 	}
 	for name, body := range map[string]string{
-		"readonly-write":   `func Bad(){b:=store.Budget{History:[]int{1}};r:=match cfg.Mode::Immediate{cfg.Mode::Immediate=>store.View(&b),cfg.Mode::Batch(_)=>store.View(&b)};r.History[0]=2}`,
-		"readonly-erasure": `func Bad(){b:=store.Budget{};r:=match cfg.Mode::Immediate{cfg.Mode::Immediate=>store.View(&b),cfg.Mode::Batch(_)=>store.View(&b)};var a any=r;_=a}`,
-		"source-type":      `func Bad(){r:=match cfg.Mode::Immediate{cfg.Mode::Immediate=>1,cfg.Mode::Batch(_)=>"bad"};_=r}`,
+		"readonly-write":   `func Bad(){b:=store::Budget{History:[]int{1}};r:=match cfg::Mode::Immediate{cfg::Mode::Immediate=>store::View(&b),cfg::Mode::Batch(_)=>store::View(&b)};r.History[0]=2}`,
+		"readonly-erasure": `func Bad(){b:=store::Budget{};r:=match cfg::Mode::Immediate{cfg::Mode::Immediate=>store::View(&b),cfg::Mode::Batch(_)=>store::View(&b)};var a any=r;_=a}`,
+		"source-type":      `func Bad(){r:=match cfg::Mode::Immediate{cfg::Mode::Immediate=>1,cfg::Mode::Batch(_)=>"bad"};_=r}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := sourceFor()
-			imports := "import cfg \"joint.example/app/config\"\n"
+			imports := "use config as cfg;\n"
 			if name != "source-type" {
-				imports += "import \"joint.example/app/store\"\n"
+				imports += "use store;\n"
 			}
 			packagesWrite(t, dir, "bad.gox", "package main\n"+imports+body+"\n")
 			out := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), dir)

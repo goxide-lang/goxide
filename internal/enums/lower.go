@@ -3,6 +3,7 @@ package enums
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/ast"
 	"go/parser"
@@ -398,7 +399,7 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 				return d, 0, e
 			}
 			v.Payload = strings.TrimSpace(string(l.src[l.ts[j].end:l.ts[k].start]))
-			v.Type, e = parser.ParseExpr(v.Payload)
+			v.Type, e = parser.ParseExpr(string(paths.GoView([]byte(v.Payload))))
 			if e != nil || v.Payload == "" {
 				return d, 0, l.err(l.ts[j].start, "expected one payload type")
 			}
@@ -475,6 +476,16 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 		if found {
 			continue
 		}
+		// Attribute paths belong to their own binding phase. A derive owner is
+		// not an enum constructor merely because both use static separators.
+		if t.text == "#" && i+1 < len(l.ts) && l.ts[i+1].text == "[" {
+			last, err := l.close(i + 1)
+			if err != nil {
+				return "", err
+			}
+			i = last
+			continue
+		}
 		if (t.text == "Option" || t.text == "Result") && i+3 < len(l.ts) && l.ts[i+1].text == ":" && l.ts[i+2].text == ":" {
 			variant := l.ts[i+3].text
 			valid := (t.text == "Option" && (variant == "Some" || variant == "None")) || (t.text == "Result" && (variant == "Ok" || variant == "Err"))
@@ -515,7 +526,9 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 		}
 		if qualified {
 			if d == nil {
-				return "", l.err(t.start, "unknown or cross-package enum constructor")
+				// Ordinary type/member paths are validated by the shared static
+				// binding pass, after enum constructors have been lowered.
+				continue
 			}
 			name := l.ts[colon+2].text
 			var v *Variant
@@ -607,7 +620,14 @@ func (l *lowerer) match(i int) (string, int, error) {
 	for _, head := range contextPatternHeads(l.ts[j : end+1]) {
 		k := j + head
 		if k+2 < end && (l.ts[k].text == "Option" || l.ts[k].text == "Result") && l.ts[k+1].text == ":" && l.ts[k+2].text == ":" {
-			body := string(l.src[l.ts[j].start:l.ts[end].end])
+			var mapping *sourcemap.Map
+			if l.fragments != nil {
+				mapping = l.fragments.Input
+			}
+			body, err := encodeContextBody(l.src, l.ts[j].start, l.ts[end].end, mapping)
+			if err != nil {
+				return "", 0, err
+			}
 			return "__goxide_enum_context_match(" + target + "," + strconv.Quote(body) + ")", end, nil
 		}
 	}

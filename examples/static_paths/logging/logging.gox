@@ -1,0 +1,6 @@
+package logging
+
+use fmt;
+
+func Emit(value any) { fmt::Println(value) }
+pub macro_rules! show { ($value:expr) => { Emit($value) }; }

@@ -1,23 +1,22 @@
 package main
+use serde;
 
-import (
-    "errors"
-    "fmt"
-    "log/slog"
-    "os"
-    "github.com/goxide-lang/serde/json"
-)
+use errors;
+use fmt;
+use slog;
+use os;
+use serde::json as serdejson;
 
 macro_rules! job_event {
     ($enabled:expr, $name:expr, $units:expr) => {
-        if $enabled { slog.Info("job accepted", "name", $name, "units", $units) }
+        if $enabled { slog::Info("job accepted", "name", $name, "units", $units) }
     };
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 enum mode { Immediate, Batch(int), }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 type Job struct { Name string; Mode mode; Labels []string }
 
@@ -29,11 +28,11 @@ type JobFailure struct {
 }
 
 type Receipt struct { Name string; Units int }
-var missingName = errors.New("name is required")
-var exceededLimit = errors.New("batch exceeds available capacity")
+var missingName = errors::New("name is required")
+var exceededLimit = errors::New("batch exceeds available capacity")
 
 func decodeJob(input []byte) Result[Job,error] {
-    job,err:=serdejson.Unmarshal(input,DeserializeJob)
+    job,err:=serdejson::Unmarshal(input,DeserializeJob)
     if err!=nil { return Result[Job,error]::Err(err) }
     return Result[Job,error]::Ok(job)
 }
@@ -75,10 +74,10 @@ func RunJob(input []byte, capacity int, enabled bool) (Receipt,error) {
     panic("unreachable")
 }
 func main() {
-    slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout,nil)))
+    slog::SetDefault(slog::New(slog::NewJSONHandler(os::Stdout,nil)))
     input:=`{"Name":"mail","Mode":{"Batch":3},"Labels":["priority"]}`
-    if len(os.Args)>1 { input=os.Args[1] }
+    if len(os::Args)>1 { input=os::Args[1] }
     receipt,err:=RunJob([]byte(input),4,true)
-    if err!=nil { fmt.Fprintln(os.Stderr,err);os.Exit(1) }
-    fmt.Printf("scheduled %s: %d units\n",receipt.Name,receipt.Units)
+    if err!=nil { fmt::Fprintln(os::Stderr,err);os::Exit(1) }
+    fmt::Printf("scheduled %s: %d units\n",receipt.Name,receipt.Units)
 }

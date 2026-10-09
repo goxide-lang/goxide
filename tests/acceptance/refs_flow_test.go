@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"strings"
 	"testing"
 )
@@ -35,7 +34,7 @@ func TestReadonlyRebindingRetainsAliases(t *testing.T) {
 		"struct-copy":  `x:=append([]Node(nil),r.Nodes...);*x[0].P++`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("flow.gox", []byte("package fixture\ntype Node struct{P *int};type Cache struct{Items []int;Pointers []*int;Nodes []Node};func f(r &Cache,b bool){"+body+";_ = b}\n"))
+			_, err := compileAcceptanceLanguageFixture("flow.gox", []byte("package fixture\ntype Node struct{P *int};type Cache struct{Items []int;Pointers []*int;Nodes []Node};func f(r &Cache,b bool){"+body+";_ = b}\n"))
 			if err == nil || !strings.Contains(err.Error(), "readonly") {
 				t.Fatalf("bad rejection: %v", err)
 			}

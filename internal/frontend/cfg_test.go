@@ -10,7 +10,7 @@ import (
 
 func TestProjectCfg(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
-		source := []byte("//goxide:cfg feature(\"extra\")\npackage p\nimport \"missing.example/never\"\nfunc F()Unknown{return missing()}\n")
+		source := []byte("//goxide:cfg feature(\"extra\")\npackage p\nuse missing;\nfunc F()Unknown{return missing()}\n")
 		out, selected, e := ConfigureSource("p.gox", source, map[string]bool{"extra": enabled})
 		if e != nil || selected != enabled || !bytes.Equal(out, source) {
 			t.Fatalf("selection: %s %v %v", out, selected, e)

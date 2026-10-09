@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -49,6 +50,7 @@ func TestMacroASTProvenanceCLI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				writeMacroFixtureRoots(t, source, nil)
 				definitions := "macro_rules! inner {($x:expr)=>{" + tc.body + "};}\n"
 				if tc.nested {
 					definitions += "macro_rules! outer {($x:expr)=>{inner!($x)};}\n"
@@ -61,7 +63,7 @@ func TestMacroASTProvenanceCLI(t *testing.T) {
 				}
 				prefix := ""
 				if tc.mode == "cross" {
-					prefix = "m."
+					prefix = "m::"
 				}
 				badCall := prefix + name + "!(value())"
 				body := ""
@@ -89,7 +91,7 @@ func TestMacroASTProvenanceCLI(t *testing.T) {
 				case "cross":
 					defFile = "defs/main.gox"
 					files[defFile] = "package defs\n" + strings.Repeat("\n", 300) + strings.Replace(definitions, "macro_rules! outer", "pub macro_rules! outer", 1)
-					files["main.gox"] = "package main\nimport m \"ast.example/app/defs\"\n" + values + earlier + "macro_rules! inner {($x:expr)=>{len($x?)};}\n" + caller
+					files["main.gox"] = "package main\nuse defs as m;\n" + values + earlier + "macro_rules! inner {($x:expr)=>{len($x?)};}\n" + caller
 				}
 				for name, src := range files {
 					files[name] = strings.ReplaceAll(src, "\n", ending.text)
@@ -99,6 +101,9 @@ func TestMacroASTProvenanceCLI(t *testing.T) {
 				args := []string{"transpile", input}
 				if tc.mode == "multifile" || tc.mode == "cross" {
 					packagesWrite(t, source, "go.mod", "module ast.example/app\ngo 1.27\n")
+					writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+						"defs": {Module: "ast.example/app", Package: "ast.example/app/defs"},
+					})
 					args = []string{"transpile", "-o", filepath.Join(t.TempDir(), "generated"), source}
 				}
 				output := deliveryCommand(t, outside, cli, false, nil, args...)
@@ -137,6 +142,10 @@ func TestMacroASTProvenanceCLI(t *testing.T) {
 	t.Run("runtime", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", packagesModule())
+		writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+			"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
+			"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
+		})
 		packagesWrite(t, source, "main.gox", astProvenanceRuntime)
 		packagesWrite(t, source, "model/model.go", astProvenanceModel)
 		first := filepath.Join(t.TempDir(), "generated")
@@ -191,6 +200,7 @@ func astProvenancePayloads(t *testing.T, generated, source string) {
 		t.Fatal(err)
 	}
 	counts := map[string]int{}
+	catchGuards, failGuards := map[string]bool{}, map[string]bool{}
 	check := func(route string, id *ast.Ident, macro, call string) {
 		counts[route]++
 		segment := exported.Diagnostics.Lookup(fs.Position(id.Pos()).Offset)
@@ -230,6 +240,20 @@ func astProvenancePayloads(t *testing.T, generated, source string) {
 					}
 				}
 			case "Frame":
+				if d, ok := n.(*ast.DeferStmt); ok {
+					if sel, ok := d.Call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Catch" {
+						if guard, ok := sel.X.(*ast.Ident); ok {
+							catchGuards[guard.Name] = true
+						}
+					}
+				}
+				if call, ok := n.(*ast.CallExpr); ok {
+					if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Fail" {
+						if guard, ok := sel.X.(*ast.Ident); ok {
+							failGuards[guard.Name] = true
+						}
+					}
+				}
 				if ret, ok := n.(*ast.ReturnStmt); ok && len(ret.Results) == 1 {
 					if id, ok := ret.Results[0].(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_qtmp_") {
 						check("frame", id, "payload", `payload!(number("G"`)
@@ -244,16 +268,21 @@ func astProvenancePayloads(t *testing.T, generated, source string) {
 			t.Errorf("expected one %s payload use; got %d", route, counts[route])
 		}
 	}
-	// Dynamic local callee forces the private-place guard route. The emitted
-	// Catch/Fail calls prove this fixture did not silently take the effect route.
-	if !bytes.Contains(code, []byte(".Catch(")) || !bytes.Contains(code, []byte(".Fail(")) {
+	// The same guard must catch deferred propagation and receive its failure;
+	// AST checks do not depend on formatter line breaks around selectors.
+	guardRoute := false
+	for guard := range catchGuards {
+		guardRoute = guardRoute || failGuards[guard]
+	}
+	if !guardRoute {
 		t.Error("frame fixture lost its guard route")
 	}
+
 }
 
 const astProvenanceRuntime = `package main
-import "fmt"
-import "packages.example/app/model"
+use fmt;
+use model;
 var trace string
 macro_rules! payload {($x:expr)=>{$x?};}
 macro_rules! length {($x:expr)=>{len($x?)};}
@@ -263,11 +292,11 @@ func Expr(ok bool)Option[int]{n:=payload!(number("A",ok,3));m:=length!(list("B",
 func Nearest()Option[int]{f:=func()Option[int]{_=payload!(number("N",false,0));trace+="bad";return Option[int]::Some(1)};_=f();trace+="O";return Option[int]::Some(9)}
 func nestedValue()Option[Option[int]]{return Option[Option[int]]::Some(number("N",true,4))}
 func Nested()Option[int]{x:=payload!(nestedValue())?;return Option[int]::Some(x)}
-func Effect(t *model.Tree,ok bool)Option[int]{t.Count=payload!(number("E",ok,3))+payload!(number("F",true,4));return Option[int]::Some(t.Count)}
-func Frame(t *model.Tree,ok bool,d int)Option[int]{defer func(){trace+="D"}();calc:=func(n int)int{return 12/n};t.Count=calc(payload!(number("G",ok,d)));trace+="Z";return Option[int]::Some(t.Count)}
-func Short(t *model.Tree,on bool)Option[int]{t.Enabled=on&&payload!(number("S",false,0))>0;return Option[int]::Some(1)}
+func Effect(t *model::Tree,ok bool)Option[int]{t.Count=payload!(number("E",ok,3))+payload!(number("F",true,4));return Option[int]::Some(t.Count)}
+func Frame(t *model::Tree,ok bool,d int)Option[int]{defer func(){trace+="D"}();calc:=func(n int)int{return 12/n};t.Count=calc(payload!(number("G",ok,d)));trace+="Z";return Option[int]::Some(t.Count)}
+func Short(t *model::Tree,on bool)Option[int]{t.Enabled=on&&payload!(number("S",false,0))>0;return Option[int]::Some(1)}
 func Unwrap(x Option[int])(int,bool){match x{Option[int]::Some(n)=>{return n,true},Option[int]::None=>{return 0,false},};panic("unreachable")}
-func main(){n,_:=Unwrap(Expr(true));fmt.Println(trace,n)}
+func main(){n,_:=Unwrap(Expr(true));fmt::Println(trace,n)}
 `
 const astProvenanceModel = `package model
 type inner struct{Count int;Enabled bool}

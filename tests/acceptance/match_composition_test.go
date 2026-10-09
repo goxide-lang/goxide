@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -10,12 +9,13 @@ import (
 
 func TestMatchCompositionRace(t *testing.T) {
 	source := `package fixture
-import "errors"
-#[derive(Serialize, Deserialize)]
+use serde;
+use errors;
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Config { Off, Enabled(int), }
 type Wide = uint64
 func mark(t *[]string,s string,n int)int{*t=append(*t,s);return n}
-func checked(t *[]string,ok bool)Result[uint64,error]{mark(t,"checked",0);if !ok{return Result[uint64,error]::Err(errors.New("bad"))};return Result[uint64,error]::Ok(7)}
+func checked(t *[]string,ok bool)Result[uint64,error]{mark(t,"checked",0);if !ok{return Result[uint64,error]::Err(errors::New("bad"))};return Result[uint64,error]::Ok(7)}
 func finish(a int,n Wide,b int)Result[uint64,error]{return Result[uint64,error]::Ok(uint64(a+b)+n)}
 func run(c Config,ok bool,t *[]string)Result[uint64,error]{
  defer func(){mark(t,"defer",0)}()
@@ -64,7 +64,7 @@ func TestMatchCompositionBoundaries(t *testing.T) {
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("composition_bad.gox", []byte("package fixture\nenum E{A,B,}\n"+body))
+			_, err := compileAcceptanceLanguageFixture("composition_bad.gox", []byte("package fixture\nenum E{A,B,}\n"+body))
 			if err == nil || !strings.Contains(err.Error(), "composition_bad.gox") {
 				t.Fatalf("expected located diagnostic: %v", err)
 			}
@@ -80,20 +80,22 @@ func TestMatchCompositionPackagesRace(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	source := filepath.Join(t.TempDir(), "source")
 	packagesWrite(t, source, "go.mod", packagesModule())
+	writeAcceptanceFixtureRoots(t, source, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 	packagesWrite(t, source, "model/types.gox", `package model
-#[derive(Serialize, Deserialize)]
+use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum Mode { Off, Workers(int), }
 `)
 	packagesWrite(t, source, "app.gox", `package app
-import cfg "packages.example/app/model"
+use model as cfg;
 func add(a,b int)int{return a+b}
-func Composed(m cfg.Mode)int{return add(1,match m {cfg.Mode::Workers(n)=>match cfg.Mode::Workers(n+1){cfg.Mode::Workers(n)=>n,_=>0,},_=>0,})}
-func Explicit(m cfg.Mode)int{
+func Composed(m cfg::Mode)int{return add(1,match m {cfg::Mode::Workers(n)=>match cfg::Mode::Workers(n+1){cfg::Mode::Workers(n)=>n,_=>0,},_=>0,})}
+func Explicit(m cfg::Mode)int{
  var result int
- match m {cfg.Mode::Workers(n)=>{match cfg.Mode::Workers(n+1){cfg.Mode::Workers(n)=>{result=n},_=>{result=0},}},_=>{result=0},}
+ match m {cfg::Mode::Workers(n)=>{match cfg::Mode::Workers(n+1){cfg::Mode::Workers(n)=>{result=n},_=>{result=0},}},_=>{result=0},}
  return add(1,result)
 }
-func Ordered(m cfg.Mode,t *[]int)int{return add(mark(t,1),match m{cfg.Mode::Workers(n)=>mark(t,n),_=>mark(t,2),})}
+func Ordered(m cfg::Mode,t *[]int)int{return add(mark(t,1),match m{cfg::Mode::Workers(n)=>mark(t,n),_=>mark(t,2),})}
 func mark(t *[]int,n int)int{*t=append(*t,n);return n}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")

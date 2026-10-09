@@ -6,8 +6,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 func TestEnumDerivesApplicationRace(t *testing.T) {
@@ -16,7 +14,7 @@ func TestEnumDerivesApplicationRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := frontend.Compile("enum_derives.gox", source)
+	result, err := compileAcceptanceLanguageFixture("enum_derives.gox", source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +65,7 @@ func TestEnumDerivesExplicitRejections(t *testing.T) {
 		"clone-pointer":                "#[derive(Clone)]\nenum E{Value(*int),}",
 		"clone-no-nested-protocol":     "type Item struct{N int}\n#[derive(Clone)]\nenum E{Value(Item),}",
 		"debug-no-nested-protocol":     "type Item struct{N int}\n#[derive(Debug)]\nenum E{Value(Item),}",
-		"serde-no-nested-protocol":     "type Item struct{N int}\n#[derive(Serialize)]\nenum E{Value(Item),}",
+		"serde-no-nested-protocol":     "type Item struct{N int}\n#[derive(serde::Serialize)]\nenum E{Value(Item),}",
 		"error-missing-message":        "#[derive(Error)]\nenum E{Value(int),}",
 		"source-not-error":             "#[derive(Error)]\nenum E{\n#[error(\"bad\")]\n#[source]\nValue(int),\n}",
 		"from-not-error":               "#[derive(Error)]\nenum E{\n#[error(\"bad\")]\n#[from]\nValue(int),\n}",
@@ -82,7 +80,7 @@ func TestEnumDerivesExplicitRejections(t *testing.T) {
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("enum_derives_bad.gox", []byte("package fixture\n"+body))
+			_, err := compileAcceptanceLanguageFixture("enum_derives_bad.gox", []byte("package fixture\n"+body))
 			if err == nil || !strings.Contains(err.Error(), "enum_derives_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
@@ -93,13 +91,14 @@ func TestEnumDerivesExplicitRejections(t *testing.T) {
 
 func TestEnumDerivesNestedValidationRace(t *testing.T) {
 	source := `package fixture
-#[derive(Serialize, Deserialize, Debug, Clone)]
+use serde;
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 enum Phase { Ready, }
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 type Detail struct { Phase Phase }
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 enum Packet { Data(Detail), }
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 enum Bundle { Items([]Phase), Indexed(map[string]Phase), }
 func bundleItems(values []Phase)Bundle{return Bundle::Items(values)}
 func bundleIndex(values map[string]Phase)Bundle{return Bundle::Indexed(values)}

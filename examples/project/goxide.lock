@@ -3,10 +3,10 @@
   "version": 2,
   "git": {},
   "sums": {
-    "5423463d20ac7caebf02be33c34c62bc93361c88dac8fe306840e280cd54bb14": "github.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0 h1:SP87Kr41DUhtaUT+nFCVxdhcAPWYRm/+DF/5cp34Of0=\ngithub.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0/go.mod h1:m4z9CAWRl/5hQN6+9RQ7Sfr/gK9wcWk+ANoqbSxlW0g=\ngithub.com/goxide-lang/std v0.0.0-20261009053434-9ed27c85088a h1:9ns84W4GfdwKMsFJ+g3NOlGIN27w2UO3B6d8FQeYE/0=\ngithub.com/goxide-lang/std v0.0.0-20261009053434-9ed27c85088a/go.mod h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ=\n"
+    "448ec0df23ede26ff0e8527d39ae54027684c08d34772b2767ab7aa8e2d4f2f1": "github.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0 h1:SP87Kr41DUhtaUT+nFCVxdhcAPWYRm/+DF/5cp34Of0=\ngithub.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0/go.mod h1:m4z9CAWRl/5hQN6+9RQ7Sfr/gK9wcWk+ANoqbSxlW0g=\ngithub.com/goxide-lang/std v0.0.0-20261009053434-9ed27c85088a h1:9ns84W4GfdwKMsFJ+g3NOlGIN27w2UO3B6d8FQeYE/0=\ngithub.com/goxide-lang/std v0.0.0-20261009053434-9ed27c85088a/go.mod h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ=\n"
   },
   "plans": {
-    "f4217b7d70886b03f7b07dfbe372a15e40af4783319859f62a2d61e6cd94aff3": {
+    "672c6f039f3abfd42e51e7b4a0f6d17df94cac128b6b935a484c5bdd56cf2b35": {
       "github.com/goxide-lang/serde": {
         "Path": "github.com/goxide-lang/serde",
         "Version": "v0.0.0-20261009021520-f342a31e20d0",

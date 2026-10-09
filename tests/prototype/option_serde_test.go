@@ -1,23 +1,22 @@
 package prototype_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"testing"
 )
 
 func TestOptionSerdePayloadNamesDoNotCaptureHelpers(t *testing.T) {
-	r, err := frontend.Compile("option-names.gox", []byte(`package fixture
-#[derive(Serialize,Deserialize)]
+	r, err := compilePrototypeFixture("option-names.gox", []byte(`package fixture; use serde;
+#[derive(serde::Serialize,serde::Deserialize)]
 type d struct { N int }
-#[derive(Serialize,Deserialize)]
+#[derive(serde::Serialize,serde::Deserialize)]
 type v struct { N int }
-#[derive(Serialize,Deserialize)]
+#[derive(serde::Serialize,serde::Deserialize)]
 type e struct { N int }
-#[derive(Serialize,Deserialize)]
+#[derive(serde::Serialize,serde::Deserialize)]
 type s struct { N int }
-#[derive(Serialize,Deserialize)]
+#[derive(serde::Serialize,serde::Deserialize)]
 type x struct { N int }
-#[derive(Serialize,Deserialize)]
+#[derive(serde::Serialize,serde::Deserialize)]
 type Request struct {
  Direct Option[s]
  Switched Option[x]

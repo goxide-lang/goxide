@@ -193,6 +193,7 @@ func TestImportSourcesWorkspace(t *testing.T) {
 	base := filepath.Dir(root)
 	projectWrite(t, base, map[string]string{"go.work": "go 1.27\nuse ./old\n"})
 	os.RemoveAll(filepath.Join(root, "vendor"))
+	t.Setenv("GOWORK", "")
 	vendorGo(t, base, "work", "vendor")
 	projectWrite(t, base, map[string]string{"vendor/example.org/d/d.go": "package d\nconst Value=\"workspace modification\"\n"})
 	out := filepath.Join(t.TempDir(), "migrated")

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/testdeps"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
@@ -16,8 +18,8 @@ import (
 func TestPackageFilesScopeHelpersAndNativeBuild(t *testing.T) {
 	files := []File{
 		{"main.gox", `package p
-import native "fmt"
-func Value() string { return native.Sprint(add!(Item{N: 6}.N), ":", label()) }
+use fmt as native;
+func Value() string { native := Item{N: 6}; return native::Sprint(add!(native.N), ":", label()) }
 `},
 		{"model.gox", `package p
 #[derive(Clone,Debug)]
@@ -25,12 +27,15 @@ type Item struct { N int }
 macro_rules! add { ($n:expr) => { $n + 1 }; }
 `},
 		{"label.gox", `package p
-import native "strings"
-func label() string { return native.ToUpper("ok") }
+use strings as native;
+func label() string { return native::ToUpper("ok") }
 `},
 	}
-	imp := typecheck.NewImporter("playground.gox")
-	output, err := CompilePackage(files, imp)
+	options := frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
+		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
+		"strings": {PackagePath: "strings", Source: "toolchain"},
+	}}
+	output, err := CompilePackage(files, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,11 +77,11 @@ func TestOutput(t *testing.T) {
 	}
 	// A failed edit cannot contaminate declarations or import bindings in the next call.
 	bad := append([]File(nil), files...)
-	bad[2].Source = "package p\nfunc label()string{return native.ToUpper(\"bad\")}\n"
-	if _, err := CompilePackage(bad, imp); err == nil || !strings.Contains(err.Error(), "native") {
+	bad[2].Source = "package p\nfunc label()string{return native::Sprint(\"bad\")}\n"
+	if _, err := CompilePackage(bad, options); err == nil || !strings.Contains(err.Error(), "label.gox") || !strings.Contains(err.Error(), "::") {
 		t.Fatalf("import leaked from sibling: %v", err)
 	}
-	again, err := CompilePackage(files, imp)
+	again, err := CompilePackage(files, options)
 	if err != nil || !reflect.DeepEqual(output, again) {
 		t.Fatalf("recovery changed outputs: %v", err)
 	}
@@ -103,7 +108,7 @@ func TestPackageRejectsInvalidCollections(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := CompilePackage(tc.files, nil); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := CompilePackage(tc.files, frontend.PackageOptions{}); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("expected %q: %v", tc.want, err)
 			}
 		})
@@ -111,7 +116,10 @@ func TestPackageRejectsInvalidCollections(t *testing.T) {
 }
 
 func TestPackageConflictsAndRecovery(t *testing.T) {
-	imp := typecheck.NewImporter("playground.gox")
+	options := frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
+		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
+		"strings": {PackagePath: "strings", Source: "toolchain"},
+	}}
 	cases := []struct{ name, first, second, want string }{
 		{"declaration", "func F(){}", "func F(){}", "redeclared"},
 		{"macro", "macro_rules! item {()=>{1};}", "macro_rules! item {()=>{2};}", "duplicate macro"},
@@ -119,11 +127,11 @@ func TestPackageConflictsAndRecovery(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := CompilePackage([]File{{"first.gox", "package p\n" + tc.first + "\n"}, {"second.gox", "package p\n" + tc.second + "\n"}}, imp)
+			_, err := CompilePackage([]File{{"first.gox", "package p\n" + tc.first + "\n"}, {"second.gox", "package p\n" + tc.second + "\n"}}, options)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("expected %q: %v", tc.want, err)
 			}
-			if _, err := CompilePackage([]File{{"recovered.gox", "package p\nfunc F()int{return 42}\n"}}, imp); err != nil {
+			if _, err := CompilePackage([]File{{"recovered.gox", "package p\nfunc F()int{return 42}\n"}}, options); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -134,7 +142,7 @@ func TestPackageBuiltinSumHelpersAreComplete(t *testing.T) {
 	files, err := CompilePackage([]File{
 		{"make.gox", "package p\nfunc Make()Option[int]{return Option::Some(7)}\n"},
 		{"read.gox", "package p\nfunc Read()int{return match Make(){Option::Some(n)=>n,Option::None=>0,}}\n"},
-	}, typecheck.NewImporter("playground.gox"))
+	}, frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox")})
 	if err != nil {
 		t.Fatal(err)
 	}

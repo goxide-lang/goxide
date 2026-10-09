@@ -113,15 +113,15 @@ func TestFragmentCategoryPackageDiagnosticTokenAndStack(t *testing.T) {
 			inner := "macro_rules! reject {($T:expr)=>{func()int{" + newline + "var value $T;_=value;return 0" + newline + "}()};}"
 			coreSource := "package core" + newline + "pub " + inner + newline
 			core := registry(t, "example/core", map[string][]byte{"core.gox": []byte(coreSource)}, nil)
-			outer := "macro_rules! outer {($U:expr)=>{c.reject!($U)};}"
+			outer := "macro_rules! outer {($U:expr)=>{c::reject!($U)};}"
 			middleSource := "package middle" + newline + "import c \"example/core\"" + newline + "pub " + outer + newline
 			middle := registry(t, "example/middle", map[string][]byte{"middle.gox": []byte(middleSource)}, map[string]*Package{"example/core": core})
-			callerSource := "package caller" + newline + "import m \"example/middle\"" + newline + "func Run(){type Local int;_=m.outer!(Local)}" + newline
+			callerSource := "package caller" + newline + "import m \"example/middle\"" + newline + "func Run(){type Local int;_=m::outer!(Local)}" + newline
 			caller := registry(t, "example/caller", map[string][]byte{"caller.gox": []byte(callerSource)}, map[string]*Package{"example/middle": middle})
-			_, err := ExpandPackage("caller.gox", []byte(callerSource), nil, caller, nil)
+			_, err := ExpandPackage("caller.gox", []byte(callerSource), nil, caller, nil, ExpansionOptions{})
 			stack := []sourcemap.Expansion{
-				{Macro: "outer", Definition: fragmentCategorySpan(t, "middle.gox", middleSource, outer), Callsite: fragmentCategorySpan(t, "caller.gox", callerSource, "m.outer!(Local)"), DefinitionOriginal: true},
-				{Macro: "reject", Definition: fragmentCategorySpan(t, "core.gox", coreSource, inner), Callsite: fragmentCategorySpan(t, "middle.gox", middleSource, "c.reject!($U)"), DefinitionOriginal: true, CallsiteOriginal: true},
+				{Macro: "outer", Definition: fragmentCategorySpan(t, "middle.gox", middleSource, outer), Callsite: fragmentCategorySpan(t, "caller.gox", callerSource, "m::outer!(Local)"), DefinitionOriginal: true},
+				{Macro: "reject", Definition: fragmentCategorySpan(t, "core.gox", coreSource, inner), Callsite: fragmentCategorySpan(t, "middle.gox", middleSource, "c::reject!($U)"), DefinitionOriginal: true, CallsiteOriginal: true},
 			}
 			fragmentCategoryDiagnostic(t, err, "core.gox", coreSource, "var value $T", true, stack)
 		})
@@ -161,15 +161,15 @@ func TestFragmentCategoryPackageOpaqueCaptureOrigins(t *testing.T) {
 		t.Run(fmt.Sprintf("%q", newline), func(t *testing.T) {
 			coreSource := "package core" + newline + "pub macro_rules! identity {($x:expr)=>{$x};}" + newline
 			core := registry(t, "example/core", map[string][]byte{"core.gox": []byte(coreSource)}, nil)
-			middleSource := "package middle" + newline + "import c \"example/core\"" + newline + "pub macro_rules! forward {($x:expr)=>{c.identity!($x)};}" + newline
+			middleSource := "package middle" + newline + "import c \"example/core\"" + newline + "pub macro_rules! forward {($x:expr)=>{c::identity!($x)};}" + newline
 			middle := registry(t, "example/middle", map[string][]byte{"middle.gox": []byte(middleSource)}, map[string]*Package{"example/core": core})
-			callerSource := "package caller" + newline + "import m \"example/middle\"" + newline + "type Local int" + newline + "func Run()Local{return m.forward!(func(value Local)Local{return value}(Local(3)))}" + newline
+			callerSource := "package caller" + newline + "import m \"example/middle\"" + newline + "type Local int" + newline + "func Run()Local{return m::forward!(func(value Local)Local{return value}(Local(3)))}" + newline
 			caller := registry(t, "example/caller", map[string][]byte{"caller.gox": []byte(callerSource)}, map[string]*Package{"example/middle": middle})
-			first, err := ExpandPackage("caller.gox", []byte(callerSource), nil, caller, nil)
+			first, err := ExpandPackage("caller.gox", []byte(callerSource), nil, caller, nil, ExpansionOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			second, err := ExpandPackage("caller.gox", []byte(callerSource), nil, caller, nil)
+			second, err := ExpandPackage("caller.gox", []byte(callerSource), nil, caller, nil, ExpansionOptions{})
 			if err != nil || !bytes.Equal(first.Source, second.Source) || !reflect.DeepEqual(first.Origins, second.Origins) {
 				t.Fatalf("opaque capture is not deterministic: %v", err)
 			}

@@ -3,6 +3,9 @@ format = 2
 module = "example.org/goxide-project"
 go = "1.27"
 
+[package.namespaces]
+greeting = "example.org/goxide-project"
+
 [[bin]]
 name = 'hello'
 path = 'src/main.gox'
@@ -31,3 +34,7 @@ version = "v0.0.0-20261009021520-f342a31e20d0"
 [[go.require]]
 module = "github.com/goxide-lang/std"
 version = "v0.0.0-20261009053434-9ed27c85088a"
+
+[dependencies.fmt]
+source = "toolchain"
+package = "fmt"

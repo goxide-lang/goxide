@@ -81,9 +81,9 @@ func TestInferredMatchImportedAndSumValidation(t *testing.T) {
 pub enum Event {Value(int),}
 `,
 		"consumer.gox": `package app
-import p "example.org/qualified/producer"
+use producer as p;
 var Effects int
-func Payload(v p.Event) {p:=0;_=p;match v {_ if false=>{Effects++},whole=>{_=whole;Effects++},}}
+func Payload(v p::Event) {p:=0;_=p;match v {_ if false=>{Effects++},whole=>{_=whole;Effects++},}}
 func OptionZero() {var v Option[int];match v {_=>{Effects++},}}
 func ResultZero() {var v Result[int,string];match v {_=>{Effects++},}}
 `,

@@ -13,7 +13,7 @@ import (
 
 func runMappedGo(t *testing.T, src string, mode string) (Result, []byte, error) {
 	t.Helper()
-	r, e := Compile("provenance.gox", []byte(src))
+	r, e := compileFrontendFixture("provenance.gox", []byte(src))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -48,15 +48,15 @@ func main(){_=outer!(missing)}
 	t.Logf("raw: %s\nmapped: %s", raw, mapped)
 }
 func TestSourceOriginsRawLineDirectivePreserved(t *testing.T) {
-	src := "package main\nimport \"fmt\"\n#[derive(Clone)]\ntype Item struct{Value int}\nfunc main(){fmt.Print(`before\n//line imaginary.go:1\nafter`)}\n"
+	src := "package main\nuse fmt;\n#[derive(Clone)]\ntype Item struct{Value int}\nfunc main(){fmt::Print(`before\n//line imaginary.go:1\nafter`)}\n"
 	_, out, e := runMappedGo(t, src, "run")
 	if e != nil || string(out) != "before\n//line imaginary.go:1\nafter" {
 		t.Fatalf("literal changed: %v %q", e, out)
 	}
 }
 func TestSourceOriginsSerializerMethodIsNotField(t *testing.T) {
-	src := []byte("package fixture\n#[derive(Serialize)]\ntype Item struct{Struct int}\n")
-	r, e := Compile("serializer.gox", src)
+	src := []byte("package fixture; use serde;\n#[derive(serde::Serialize)]\ntype Item struct{Struct int}\n")
+	r, e := compileSerdeFixture("serializer.gox", src)
 	if e != nil {
 		t.Fatal(e)
 	}

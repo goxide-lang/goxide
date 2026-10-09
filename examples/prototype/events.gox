@@ -1,6 +1,6 @@
 package main
 
-import "fmt"
+use fmt;
 
 enum JobState {
     Queued,
@@ -12,7 +12,7 @@ func describe(state JobState) string {
     match state {
         JobState::Queued => { return "queued" },
         JobState::Running(progress) if progress == 100 => { return "complete" },
-        JobState::Running(progress) => { return fmt.Sprintf("running: %d%%", progress) },
+        JobState::Running(progress) => { return fmt::Sprintf("running: %d%%", progress) },
         JobState::Failed(reason) => { return "failed: " + reason },
     }
     panic("unreachable")
@@ -20,5 +20,5 @@ func describe(state JobState) string {
 
 func main() {
     jobs := []JobState{JobState::Queued, JobState::Running(40), JobState::Running(100), JobState::Failed("timeout")}
-    for _, job := range jobs { fmt.Println(describe(job)) }
+    for _, job := range jobs { fmt::Println(describe(job)) }
 }

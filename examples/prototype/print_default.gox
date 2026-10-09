@@ -1,18 +1,19 @@
 package main
+use serde;
 
-import "github.com/goxide-lang/serde/json"
+use serde::json as serdejson;
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 enum state {
     Active(int),
     #[default]
     Standby,
 }
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 type Limits struct { Retries int; Enabled bool }
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
 type Settings struct { Name string; State state; Limits Limits }
 
 macro_rules! snapshot {
@@ -34,7 +35,7 @@ func main() {
     initial:=fresh_settings!()
     print!("startup={}",stateName(initial.State))
     println!(" retries={}",initial.Limits.Retries)
-    loaded,err:=serdejson.Unmarshal([]byte(`{"Name":"nightly","State":{"Active":3},"Limits":{"Retries":2,"Enabled":true}}`),DeserializeSettings)
+    loaded,err:=serdejson::Unmarshal([]byte(`{"Name":"nightly","State":{"Active":3},"Limits":{"Retries":2,"Enabled":true}}`),DeserializeSettings)
     if err!=nil { panic(err) }
     copied:=CloneSettings(&loaded)
     snapshot!(copied)

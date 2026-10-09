@@ -87,6 +87,7 @@ func newImporter(parent context.Context, filename string, tags []string, race bo
 	}
 	exports := map[string]string{}
 	sources := map[string]packageFiles{}
+	origins := map[string]packageOrigin{}
 	lookup := func(path string) (io.ReadCloser, error) {
 		if file := exports[path]; file != "" {
 			return os.Open(file)
@@ -118,6 +119,8 @@ func newImporter(parent context.Context, filename string, tags []string, race bo
 		d := json.NewDecoder(bytes.NewReader(data))
 		for {
 			var p struct {
+				Standard                                                                                                                     bool
+				Module                                                                                                                       *struct{ Path string }
 				ImportPath, Export, Dir                                                                                                      string
 				GoFiles, CgoFiles, CFiles, CXXFiles, MFiles, HFiles, FFiles, SFiles, SwigFiles, SwigCXXFiles, SysoFiles, EmbedFiles, Imports []string
 			}
@@ -128,6 +131,11 @@ func newImporter(parent context.Context, filename string, tags []string, race bo
 			if err != nil {
 				return nil, err
 			}
+			origin := packageOrigin{standard: p.Standard}
+			if p.Module != nil {
+				origin.module = p.Module.Path
+			}
+			origins[p.ImportPath] = origin
 			if p.Export != "" {
 				exports[p.ImportPath] = p.Export
 				inputs := []string{}
@@ -143,7 +151,7 @@ func newImporter(parent context.Context, filename string, tags []string, race bo
 		}
 		return os.Open(file)
 	}
-	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, fingerprints: map[string]string{}, race: race, tags: append([]string(nil), tags...), environment: environment, context: parent}
+	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, origins: origins, fingerprints: map[string]string{}, race: race, tags: append([]string(nil), tags...), environment: environment, context: parent}
 }
 
 func importerEnvironment(environment []string, workFile string) []string {
@@ -169,15 +177,37 @@ type packageFiles struct {
 	names           []string
 	inputs, imports []string
 }
+type packageOrigin struct {
+	module   string
+	standard bool
+}
+
 type sourceImporter struct {
 	types.Importer
 	sources      map[string]packageFiles
+	origins      map[string]packageOrigin
 	fingerprints map[string]string
 	build        string
 	race         bool
 	tags         []string
 	environment  []string
 	context      context.Context
+}
+
+// PackageOrigin reports the Go resolver's actual selected module. Namespace
+// bindings use this proof instead of inferring ownership from a path prefix.
+func (i *sourceImporter) PackageOrigin(path string) (module string, standard bool, err error) {
+	if path == "unsafe" {
+		return "", true, nil
+	}
+	if _, err := i.Import(path); err != nil {
+		return "", false, err
+	}
+	origin, ok := i.origins[path]
+	if !ok {
+		return "", false, fmt.Errorf("package origin unavailable for %s", path)
+	}
+	return origin.module, origin.standard, nil
 }
 
 func (i *sourceImporter) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {

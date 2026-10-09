@@ -107,6 +107,28 @@ func (m *Map) CaptureAST(fs *token.FileSet, root ast.Node) *ASTEvidence {
 	return e
 }
 
+// AddInput admits a freshly parsed fragment with its own matching source map.
+// Nodes are joined by identity, never by positions or equal text. Existing
+// records cannot be replaced, including unknown or conflicting records.
+func (e *ASTEvidence) AddInput(fs *token.FileSet, root ast.Node, mapping *Map) bool {
+	if e == nil || nilASTNode(root) || mapping == nil {
+		return false
+	}
+	input := mapping.CaptureAST(fs, root)
+	for node := range input.records {
+		if e.records[node] != nil {
+			return false
+		}
+	}
+	if e.records == nil {
+		e.records = map[ast.Node]*astRecord{}
+	}
+	for node, record := range input.records {
+		e.records[node] = record
+	}
+	return true
+}
+
 // One winning segment must cover the entire token. A later partial overlay
 // invalidates both proofs; contexts from separately covering pieces cannot be
 // merged by comparing their stack values. A wide winner can still prove context.

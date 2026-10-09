@@ -29,6 +29,10 @@ type Config struct {
 	From                []Conversion
 	Importer            types.Importer
 	Provenance          *sourcemap.Map
+	// RewriteExpanded rebinds source-level names after a deferred match body
+	// becomes ordinary syntax in its complete containing function. The callback
+	// must transport edits through provenance; it must not infer origin by text.
+	RewriteExpanded func(string, []byte, *sourcemap.Map) ([]byte, error)
 	// Files contains lowered companion files in the same package, not source
 	// fragments. Each file retains its own import scope. The active filename,
 	// if present, is ignored in favor of Lower's source argument.
@@ -384,7 +388,14 @@ func Lower(filename string, source []byte, cfg Config) ([]byte, error) {
 				next := l.evidence.Print(f, rewritten.Bytes(), "sum pattern expansion")
 				*cfg.Provenance = *next
 			}
-			f, e = parser.ParseFile(fs, filename, rewritten.Bytes(), parser.ParseComments)
+			body := rewritten.Bytes()
+			if cfg.RewriteExpanded != nil {
+				body, e = cfg.RewriteExpanded(filename, body, cfg.Provenance)
+				if e != nil {
+					return nil, e
+				}
+			}
+			f, e = parser.ParseFile(fs, filename, body, parser.ParseComments)
 			if e != nil {
 				return nil, e
 			}

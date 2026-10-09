@@ -3,6 +3,7 @@ package frontend
 import (
 	"errors"
 	"github.com/hxsf/goxide/internal/sourcemap"
+	"github.com/hxsf/goxide/internal/typecheck"
 	"strings"
 	"testing"
 )
@@ -17,7 +18,7 @@ macro_rules! noise {()=>{
 func Run(){noise!();noise!()}
 `
 	for _, tc := range []struct{ name, body, target, message string }{
-		{"unknown derive", "#[derive(Unknown)]\ntype Item struct{N int}\n", "#[derive(Unknown)]", "unsupported derive Unknown"},
+		{"unknown derive", "#[derive(Unknown)]\ntype Item struct{N int}\n", "Unknown", "unbound derive Unknown"},
 		{"duplicate derive", "#[derive(Clone,Clone)]\ntype Item struct{N int}\n", "#[derive(Clone,Clone)]", "duplicate derive Clone"},
 		{"helper conflict", "func CloneItem(){}\n#[derive(Clone)]\ntype Item struct{N int}\n", "type Item", "generated helper conflicts"},
 		{"unknown field attribute", "#[derive(Clone)]\ntype Item struct{\n #[unknown]\n N int\n}\n", "#[unknown]", "unsupported attribute"},
@@ -43,24 +44,24 @@ func TestDeriveDiagnosticPackageFile(t *testing.T) {
 		"item.gox":   []byte(source),
 	}, nil)
 	var d *sourcemap.Error
-	if !errors.As(err, &d) || d.Origin == nil || d.Origin.File != "item.gox" || d.Origin.Line != 3 || d.Origin.Start != strings.Index(source, "#[derive") {
+	if !errors.As(err, &d) || d.Origin == nil || d.Origin.File != "item.gox" || d.Origin.Line != 3 || d.Origin.Start != strings.Index(source, "Unknown") {
 		t.Fatalf("wrong package origin: %v", err)
 	}
 }
 
 func TestMacroDiagnosticPreparedCoordinates(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
-		source := strings.ReplaceAll("package p\nimport \"fmt\"\nmacro_rules! bad {($v:expr)=>{_=$v?;_=fmt.Println};}\nfunc Run(){bad!(1)}\n", "\n", newline)
+		source := strings.ReplaceAll("package p\nuse fmt;\nmacro_rules! bad {($v:expr)=>{_=$v?;_=fmt::Println};}\nfunc Run(){bad!(1)}\n", "\n", newline)
 		for _, packaged := range []bool{false, true} {
 			var err error
 			if packaged {
-				_, err = CompilePackage("example/p", map[string][]byte{"prepare.gox": []byte(source)}, nil)
+				_, err = CompilePackageWithOptions("example/p", map[string][]byte{"prepare.gox": []byte(source)}, PackageOptions{Roots: frontendFixtureRoots(nil), Importer: typecheck.NewImporter("prepare.gox")})
 			} else {
-				_, err = Compile("prepare.gox", []byte(source))
+				_, err = compileFrontendFixture("prepare.gox", []byte(source))
 			}
 			var d *sourcemap.Error
 			start := strings.Index(source, "Println")
-			if !errors.As(err, &d) || d.Origin == nil || d.Origin.Start != start || d.Origin.Column != 43 || len(d.Stack) != 1 || d.Stack[0].Callsite.Line != 4 || d.Stack[0].Callsite.Start != strings.Index(source, "bad!(1)") {
+			if !errors.As(err, &d) || d.Origin == nil || d.Origin.Start != start || d.Origin.Column != 44 || len(d.Stack) != 1 || d.Stack[0].Callsite.Line != 4 || d.Stack[0].Callsite.Start != strings.Index(source, "bad!(1)") {
 				t.Fatalf("packaged=%v: wrong prepared diagnostic: %v", packaged, err)
 			}
 		}
@@ -81,9 +82,9 @@ func TestDeriveDiagnosticEnumStage(t *testing.T) {
 
 func TestMacroDiagnosticNestedPreparedCoordinates(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
-		defs := strings.ReplaceAll("package p\nimport \"fmt\"\nmacro_rules! inner {($v:expr)=>{_=$v?;_=fmt.Println};}\nmacro_rules! outer {($v:expr)=>{inner!($v)};}\n", "\n", newline)
+		defs := strings.ReplaceAll("package p\nuse fmt;\nmacro_rules! inner {($v:expr)=>{_=$v?;_=fmt::Println};}\nmacro_rules! outer {($v:expr)=>{inner!($v)};}\n", "\n", newline)
 		caller := strings.ReplaceAll("package p\nfunc Run(){_=Next()?;outer!(1)}\n", "\n", newline)
-		_, err := CompilePackage("example/p", map[string][]byte{"definitions.gox": []byte(defs), "caller.gox": []byte(caller)}, nil)
+		_, err := CompilePackageWithOptions("example/p", map[string][]byte{"definitions.gox": []byte(defs), "caller.gox": []byte(caller)}, PackageOptions{Roots: frontendFixtureRoots(nil), Importer: typecheck.NewImporter("prepare.gox")})
 		var d *sourcemap.Error
 		if !errors.As(err, &d) || d.Origin == nil || d.Origin.File != "definitions.gox" || d.Origin.Start != strings.Index(defs, "Println") || len(d.Stack) != 2 {
 			t.Fatalf("bad %v", err)

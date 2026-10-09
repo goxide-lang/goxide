@@ -20,31 +20,41 @@ const LegacyManifestName = "hgo.json"
 const ManifestProtocol = "goxide-unified-v2"
 
 type Manifest struct {
-	Vendor       *VendorConfig         `json:"vendor,omitempty" toml:"vendor,omitempty"`
-	Module       string                `json:"module"`
-	GoVersion    string                `json:"go"`
-	Toolchain    string                `json:"toolchain,omitempty"`
-	Native       GoConfig              `json:"native,omitempty"`
-	Version      int                   `json:"version" toml:"-"`
-	Build        *buildconfig.Config   `json:"build,omitempty" toml:"build,omitempty"`
-	Features     map[string][]string   `json:"features,omitempty" toml:"features,omitempty"`
-	Dependencies map[string]Dependency `json:"dependencies,omitempty" toml:"dependencies,omitempty"`
-	Lib          *Target               `json:"lib,omitempty" toml:"lib,omitempty"`
-	Bins         []Target              `json:"bins,omitempty" toml:"bin,omitempty"`
-	Examples     []Target              `json:"examples,omitempty" toml:"example,omitempty"`
+	Vendor            *VendorConfig         `json:"vendor,omitempty" toml:"vendor,omitempty"`
+	Module            string                `json:"module"`
+	GoVersion         string                `json:"go"`
+	Toolchain         string                `json:"toolchain,omitempty"`
+	PackageNamespaces map[string]string     `json:"package_namespaces,omitempty"`
+	Native            GoConfig              `json:"native,omitempty"`
+	Version           int                   `json:"version" toml:"-"`
+	Build             *buildconfig.Config   `json:"build,omitempty" toml:"build,omitempty"`
+	Features          map[string][]string   `json:"features,omitempty" toml:"features,omitempty"`
+	Dependencies      map[string]Dependency `json:"dependencies,omitempty" toml:"dependencies,omitempty"`
+	Lib               *Target               `json:"lib,omitempty" toml:"lib,omitempty"`
+	Bins              []Target              `json:"bins,omitempty" toml:"bin,omitempty"`
+	Examples          []Target              `json:"examples,omitempty" toml:"example,omitempty"`
 }
 type Dependency struct {
-	Workspace       bool     `json:"workspace,omitempty" toml:"workspace,omitempty"`
-	Module          string   `json:"module" toml:"module"`
-	Version         string   `json:"version,omitempty" toml:"version,omitempty"`
-	Path            string   `json:"path,omitempty" toml:"path,omitempty"`
-	Git             string   `json:"git,omitempty" toml:"git,omitempty"`
-	Rev             string   `json:"rev,omitempty" toml:"rev,omitempty"`
-	Subdir          string   `json:"subdir,omitempty" toml:"subdir,omitempty"`
-	Optional        bool     `json:"optional,omitempty" toml:"optional,omitempty"`
-	Features        []string `json:"features,omitempty" toml:"features,omitempty"`
-	DefaultFeatures *bool    `json:"default_features,omitempty" toml:"default_features,omitempty"`
+	Workspace       bool              `json:"workspace,omitempty" toml:"workspace,omitempty"`
+	Source          string            `json:"source,omitempty" toml:"source,omitempty"`
+	Module          string            `json:"module,omitempty" toml:"module,omitempty"`
+	Package         string            `json:"package,omitempty" toml:"package,omitempty"`
+	Namespaces      map[string]string `json:"namespaces,omitempty" toml:"namespaces,omitempty"`
+	Version         string            `json:"version,omitempty" toml:"version,omitempty"`
+	Path            string            `json:"path,omitempty" toml:"path,omitempty"`
+	Git             string            `json:"git,omitempty" toml:"git,omitempty"`
+	Rev             string            `json:"rev,omitempty" toml:"rev,omitempty"`
+	Subdir          string            `json:"subdir,omitempty" toml:"subdir,omitempty"`
+	Optional        bool              `json:"optional,omitempty" toml:"optional,omitempty"`
+	Features        []string          `json:"features,omitempty" toml:"features,omitempty"`
+	DefaultFeatures *bool             `json:"default_features,omitempty" toml:"default_features,omitempty"`
 }
+
+// IsToolchain identifies roots supplied by Go itself, outside the module graph.
+// Package and Namespaces declare exact packages; an absent Package is a group,
+// including for module dependencies. Module paths are never package defaults.
+func (d Dependency) IsToolchain() bool { return d.Source == "toolchain" }
+
 type Target struct {
 	Name             string   `json:"name" toml:"name"`
 	Path             string   `json:"path" toml:"path"`
@@ -121,7 +131,7 @@ func Parse(filename string, b []byte) (Manifest, error) {
 	if d.Workspace != nil {
 		return Manifest{}, fmt.Errorf("workspace manifest requires workspace-aware loading")
 	}
-	m := Manifest{Vendor: d.Vendor, Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
+	m := Manifest{Vendor: d.Vendor, Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, PackageNamespaces: d.Package.Namespaces, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validateNames(filename, b); err != nil {
 		return m, err
 	}
@@ -141,12 +151,27 @@ func validate(m Manifest) error {
 	if _, err := ModuleText(m); err != nil {
 		return err
 	}
+	if err := validateNamespaceMappings("package", m.PackageNamespaces); err != nil {
+		return err
+	}
+	for _, namespace := range keys(m.PackageNamespaces) {
+		root, _, _ := strings.Cut(namespace, "::")
+		if _, exists := m.Dependencies[root]; exists {
+			return fmt.Errorf("package namespace %s: root %s conflicts with dependency alias", namespace, root)
+		}
+	}
 	for k, d := range m.Dependencies {
 		if d.Workspace {
 			return fmt.Errorf("dependency %s: workspace inheritance requires membership in a workspace", k)
 		}
-		if !ident.MatchString(k) || d.Module == "" {
+		if !dependencyIdentifier(k) {
 			return fmt.Errorf("invalid dependency %q", k)
+		}
+		if err := validateDependency(k, d); err != nil {
+			return err
+		}
+		if d.IsToolchain() {
+			continue
 		}
 		n := 0
 		for _, v := range []string{d.Version, d.Path, d.Git} {
@@ -226,10 +251,13 @@ func Resolve(m Manifest, requested []string, defaults bool) (map[string]bool, ma
 		if !ok {
 			return fmt.Errorf("unknown dependency %q", n)
 		}
+		if d.IsToolchain() && (f != "" || d.Features != nil || d.DefaultFeatures != nil) {
+			return fmt.Errorf("dependency %s: toolchain source cannot receive feature requests", n)
+		}
 		r, exists := deps[n]
 		if !exists {
 			r.Features = append([]string(nil), d.Features...)
-			r.Defaults = d.DefaultFeatures == nil || *d.DefaultFeatures
+			r.Defaults = !d.IsToolchain() && (d.DefaultFeatures == nil || *d.DefaultFeatures)
 		}
 		if f != "" {
 			r.Features = append(r.Features, f)
@@ -239,7 +267,9 @@ func Resolve(m Manifest, requested []string, defaults bool) (map[string]bool, ma
 	}
 	for n, d := range m.Dependencies {
 		if !d.Optional {
-			_ = activate(n, "")
+			if err := activate(n, ""); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	var visit func(string) error
@@ -324,6 +354,6 @@ func Select(m Manifest, bin, example string, features map[string]bool) (Target, 
 
 // Marshal emits the authoring schema, not the internal JSON identity representation.
 func Marshal(m Manifest) ([]byte, error) {
-	d := manifestDocument{Vendor: m.Vendor, Package: PackageConfig{m.Version, m.Module, m.GoVersion, m.Toolchain}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	d := manifestDocument{Vendor: m.Vendor, Package: PackageConfig{Format: m.Version, Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain, Namespaces: m.PackageNamespaces}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
 	return toml.Marshal(d)
 }

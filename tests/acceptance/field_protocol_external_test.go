@@ -25,6 +25,7 @@ func TestExternalCloneDebugModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("fields.example/lib", ""))
+	writeAcceptanceSerdeRoots(t, src, "")
 	packagesWrite(t, src, "model/item.gox", `package model
 #[derive(Clone,Debug)]
 type Item struct{Name string;secret string;Values []int;Index map[string][]int}
@@ -55,16 +56,17 @@ func DebugItem(v *Item)string{return "fake"}
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("fields.example/app", lib))
+	writeAcceptanceSerdeRoots(t, appsrc, "fields.example/lib", "model", "relay", "other", "fake")
 	packagesWrite(t, appsrc, "app.gox", `package app
-import src "fields.example/lib/relay"
+use library::relay as src;
 #[derive(Clone,Debug)]
-type Wrap struct{V src.E;Items []src.Renamed;Index map[string]src.Renamed;Pair [2]src.Renamed;Nested [][]src.Renamed}
+type Wrap struct{V src::E;Items []src::Renamed;Index map[string]src::Renamed;Pair [2]src::Renamed;Nested [][]src::Renamed}
 func Assign(v Wrap)Wrap{return v}
 `)
 	packagesWrite(t, appsrc, "other.gox", `package app
-import src "fields.example/lib/other"
+use library::other as src;
 #[derive(Clone,Debug)]
-type Other struct{Items []src.Item}
+type Other struct{Items []src::Item}
 `)
 	out := filepath.Join(t.TempDir(), "app")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
@@ -123,7 +125,8 @@ func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=a.CloneWr
 		for _, tc := range []struct{ pkg, typ string }{{"fake", "Item"}, {"relay", "New"}} {
 			bad := t.TempDir()
 			packagesWrite(t, bad, "go.mod", mod("fields.example/bad", lib))
-			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nimport m %q\n#[derive(%s)]\ntype Wrap struct{V m.%s}\n", "fields.example/lib/"+tc.pkg, kind, tc.typ))
+			writeAcceptanceSerdeRoots(t, bad, "fields.example/lib", "model", "relay", "other", "fake")
+			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nuse library::%s as m;\n#[derive(%s)]\ntype Wrap struct{V m::%s}\n", tc.pkg, kind, tc.typ))
 			log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
 			if !strings.Contains(log, kind) || !strings.Contains(log, "bad.gox:") {
 				t.Fatal(log)

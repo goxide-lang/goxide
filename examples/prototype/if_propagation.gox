@@ -1,19 +1,17 @@
 package main
 
-import (
- "fmt"
- "strconv"
-)
+use fmt;
+use strconv;
 
 func parsePort(text string) Result[int,error] {
- n,err:=strconv.Atoi(text)
+ n,err:=strconv::Atoi(text)
  if err!=nil{return Result[int,error]::Err(err)}
  return Result[int,error]::Ok(n)
 }
 
 func route(text string) Result[string,error] {
  if port:=parsePort(text)?; port>0 && port<65536 {
-  return Result[string,error]::Ok(fmt.Sprintf("port %d",port))
+  return Result[string,error]::Ok(fmt::Sprintf("port %d",port))
  } else if port==0 {
   return Result[string,error]::Ok("disabled")
  }
@@ -23,8 +21,8 @@ func route(text string) Result[string,error] {
 func main() {
  for _,text:=range []string{"8080","0","bad"} {
   match route(text) {
-   Result[string,error]::Ok(value)=>{fmt.Println(value)},
-   Result[string,error]::Err(_)=>{fmt.Println("invalid port")},
+   Result[string,error]::Ok(value)=>{fmt::Println(value)},
+   Result[string,error]::Err(_)=>{fmt::Println("invalid port")},
   }
  }
 }

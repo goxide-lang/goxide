@@ -19,7 +19,7 @@ See [diagnostic delivery and remaining A03 gaps](../../docs/reviews/macro-derive
 ```go
 macro_rules! event {
     ($message:expr, $($field:expr),*) => {
-        fmt.Println($message, $($field),*)
+        fmt::Println($message, $($field),*)
     };
 }
 event!("request", "id", 7)
@@ -113,10 +113,11 @@ change existing eager `event!` semantics and does not implement tracing spans.
 
 ## Source packages in one Go module
 
-Directory mode exports `pub macro_rules! name { ... }`. A normal explicit Go
-import enables `alias.name!(...)`; its alias is file-local and its identity is
-the canonical module import path. The design's `import macro` and `m::name!`
-spellings remain drafts. Runtime helpers follow current Go visibility: use an
+Directory mode exports `pub macro_rules! name { ... }`. External roots come from
+the dependency mapping; `use` selects a namespace or item in the current file.
+Package macro calls use `alias::name!(...)`; the old `alias.name!(...)` spelling
+is rejected. The frontend supplies resolved backend Go imports to this package,
+retaining canonical package identity. Runtime helpers follow Go visibility: use an
 exported function such as `Emit`, or expose a public shim around private state.
 
 ```go
@@ -132,18 +133,20 @@ package logkit
 func Emit(message string) { /* ordinary runtime implementation */ }
 // caller/main.gox
 package caller
-import logs "example.org/app/logkit"
-func Run() { logs.event_if!(true, "request") }
+use app::logkit as logs;
+func Run() { logs::event_if!(true, "request") }
 ```
 
 Definitions and runtime function declarations are shared across selected files in
-a package. Each definition retains its own file's imports; private nested macros
+a package. Each definition retains its own file's resolved imports; private nested macros
 resolve there, never to a caller macro with the same name. Direct access to a
 private imported macro is rejected. A runtime helper must be public when its
 macro expands in another package; macro expansion grants no private access.
-Imported function calls are checked through the existing Go importer. Only
+Template package function calls use `::`; value field and method selectors use
+`.`. Captured static paths retain their spelling and caller origin for frontend
+resolution. Imported function calls are checked through the existing Go importer. Only
 already-declared dependencies may be introduced into generated runtime imports.
-An ordinary import used only for macros becomes a blank runtime import, preserving
+A backend import used only for macros becomes a blank runtime import, preserving
 the explicit dependency without causing an unused-import error.
 
 Registries are opaque compiler-owned source data, published internally only after

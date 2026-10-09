@@ -1,6 +1,6 @@
 package main
-import "places.example/update/model"
-func readIndex(t *model.Tree,r Result[int,error])Result[int,error]{a:=[1]int{};a[t.Count]=r?;return Result[int,error]::Ok(a[0])}
-func readKey(t *model.Tree,m map[int]int,r Result[int,error])Result[int,error]{m[t.Count]=r?;return r}
+use model;
+func readIndex(t *model::Tree,r Result[int,error])Result[int,error]{a:=[1]int{};a[t.Count]=r?;return Result[int,error]::Ok(a[0])}
+func readKey(t *model::Tree,m map[int]int,r Result[int,error])Result[int,error]{m[t.Count]=r?;return r}
 func indexedPointer(a *[1]int,n int)*int{return &a[n]}
-func readArgument(t *model.Tree,a *[1]int,r Result[int,error])Result[int,error]{*indexedPointer(a,t.Count)=r?;return r}
+func readArgument(t *model::Tree,a *[1]int,r Result[int,error])Result[int,error]{*indexedPointer(a,t.Count)=r?;return r}

@@ -1,0 +1,38 @@
+# Explicit dependency context for this Playground project. The CLI and WASM
+# consume these exact bytes; neither derives package roots from import strings.
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+
+[roots.errors]
+source = "toolchain"
+package = "errors"
+
+[roots.io]
+source = "toolchain"
+package = "io"
+
+[roots.strconv]
+source = "toolchain"
+package = "strconv"
+
+[roots.strings]
+source = "toolchain"
+package = "strings"
+
+[roots.math]
+source = "toolchain"
+package = "math"
+
+[roots.encoding]
+source = "toolchain"
+namespaces = { json = "encoding/json" }
+
+[roots.std]
+module = "github.com/goxide-lang/std"
+namespaces = { runtime = "github.com/goxide-lang/std/runtime", formatting = "github.com/goxide-lang/std/formatting", sum = "github.com/goxide-lang/std/sum" }
+
+[roots.serde]
+module = "github.com/goxide-lang/serde"
+package = "github.com/goxide-lang/serde"
+namespaces = { json = "github.com/goxide-lang/serde/json" }

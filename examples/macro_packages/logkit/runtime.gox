@@ -1,14 +1,13 @@
 package logkit
-import (
-    "errors"
-    "log/slog"
-)
-func emit(message string, fields ...any) { slog.Info(message, fields...) }
+use serde;
+use errors;
+use slog;
+func emit(message string, fields ...any) { slog::Info(message, fields...) }
 func Emit(message string, fields ...any) { emit(message, fields...) }
-var Sentinel=errors.New("logkit source failure")
+var Sentinel=errors::New("logkit source failure")
 func Fetch(fail bool) Result[int,error] {
     if fail { return Result[int,error]::Err(Sentinel) }
     return Result[int,error]::Ok(4)
 }
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum Mode { Idle, Workers(int), }

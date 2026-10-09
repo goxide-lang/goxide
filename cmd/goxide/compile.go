@@ -26,6 +26,7 @@ type CompileRequest struct {
 	Packages                                                        []string
 	Workspace                                                       bool
 	Mode, Input, Output, SourceMap, Expanded, Runtime, Tags, GoTool string
+	RootsFile                                                       string
 	Features, Bin, Example, TargetDir                               string
 	NoDefaultFeatures, Lib, Offline, Locked                         bool
 	ProgramArgs                                                     []string
@@ -63,6 +64,9 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if w, e := project.DiscoverWorkspace(input); e != nil {
 			return e
 		} else if w != nil {
+			if req.RootsFile != "" {
+				return fmt.Errorf("--roots cannot override a goxide workspace; declare roots in member dependencies")
+			}
 			return runWorkspace(req, input, w, out, stderr)
 		}
 		if req.Workspace || len(req.Packages) > 0 {
@@ -71,12 +75,15 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if exists, e := project.Detect(input); e != nil {
 			return e
 		} else if exists {
+			if req.RootsFile != "" {
+				return fmt.Errorf("--roots cannot override goxide.toml dependency mappings")
+			}
 			return runProject(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), projectFlags{targetDir: *targetDir, features: *features, bin: *bin, example: *example, noDefault: *noDefault, offline: *offline, locked: *locked, lib: *lib, programArgs: req.ProgramArgs}, out, stderr)
 		}
 		if *targetDir != "" || *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
 			return errors.New("project flags require goxide.toml in the input directory")
 		}
-		return runDirectoryArgs(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), req.ProgramArgs, out, stderr)
+		return runDirectoryArgs(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), req.ProgramArgs, req.RootsFile, out, stderr)
 	}
 	if req.Workspace || len(req.Packages) > 0 {
 		return errors.New("workspace selection requires a directory")
@@ -118,6 +125,24 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	}
 	var result frontend.Result
 	var configuredTool string
+	moduleRoot := ""
+	if owner != nil {
+		moduleRoot = owner.root
+	}
+	rootInput, err := filepath.EvalSymlinks(input)
+	if err != nil {
+		if owner != nil {
+			owner.close()
+		}
+		return err
+	}
+	roots, err := sourceRoots(moduleRoot, filepath.Dir(rootInput), req.RootsFile)
+	if err != nil {
+		if owner != nil {
+			owner.close()
+		}
+		return err
+	}
 	if owner != nil {
 		defer owner.close()
 		input = owner.input
@@ -138,9 +163,9 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			}
 		}
 		imp := typecheck.NewImporterWithModFile(context.Background(), input, nil, false, singleFileEnvironment(), owner.modFile)
-		result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{PackagePath: owner.packagePath, Importer: imp})
+		result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{PackagePath: owner.packagePath, Importer: imp, Roots: roots})
 	} else {
-		result, err = frontend.Compile(input, src)
+		result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{Roots: roots})
 	}
 	if err != nil {
 		return err

@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,7 +14,7 @@ func TestPropagationSwitchRace(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := frontend.Compile("switch.gox", source)
+	r, e := compileAcceptanceLanguageFixture("switch.gox", source)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -51,7 +50,7 @@ func TestPropagationSwitchRejections(t *testing.T) {
 		"scope":             `func f()Option[int]{switch n:=Option[int]::Some(1)?;n{};return Option[int]::Some(n)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, e := frontend.Compile("switch_bad.gox", []byte("package fixture;"+body))
+			_, e := compileAcceptanceLanguageFixture("switch_bad.gox", []byte("package fixture;"+body))
 			if e == nil || !strings.Contains(e.Error(), "switch_bad.gox") {
 				t.Fatalf("expected located rejection: %v", e)
 			}
@@ -69,12 +68,12 @@ func TestPropagationSwitchInstalledCLI(t *testing.T) {
 	outside := t.TempDir()
 	source := filepath.Join(root, "examples/prototype/switch_propagation.gox")
 	generated := filepath.Join(outside, "main.go")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", generated, source)
 	want := "8 [2 1 2 10 99]\n"
 	if got := deliveryCommand(t, root, tool, true, nil, "run", "-race", generated); got != want {
 		t.Fatalf("generated output %q", got)
 	}
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--runtime", root, "--go", tool, source); got != want {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "--runtime", root, "--go", tool, source); got != want {
 		t.Fatalf("CLI output %q", got)
 	}
 }

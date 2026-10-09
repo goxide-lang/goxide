@@ -5,6 +5,7 @@ package macros
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/importer"
 	"go/parser"
@@ -54,6 +55,7 @@ type definition struct {
 	scope  *scope
 }
 type engine struct {
+	preserveImports           bool
 	implicitImports           []string
 	topNames                  map[string]bool
 	builtins                  map[string]string
@@ -91,9 +93,9 @@ func ExpandWithMap(filename string, source []byte) (Result, error) {
 // ExpandWithIntrinsics is for compiler-produced markers only. The caller must
 // reject these reserved names in user input before preparing the source.
 func ExpandWithIntrinsics(filename string, source []byte, names []string) (Result, error) {
-	return expandPackage(filename, source, names, nil, nil)
+	return expandPackage(filename, source, names, nil, nil, ExpansionOptions{})
 }
-func expandPackage(filename string, source []byte, names []string, pkg *Package, imp types.Importer) (Result, error) {
+func expandPackage(filename string, source []byte, names []string, pkg *Package, imp types.Importer, options ExpansionOptions) (Result, error) {
 	ts, tail, err := lex(filename, source)
 	if err != nil {
 		return Result{}, err
@@ -101,7 +103,7 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 	if len(ts) > maxTokens {
 		return Result{}, fmt.Errorf("%s: macro input token budget exceeded", filename)
 	}
-	e := engine{importPaths: map[string]string{}, importCache: map[string]*types.Package{}, importer: importer.Default(), file: filename, defs: map[string]definition{}, funcs: map[string]bool{}, imports: map[string]bool{}, aliases: map[string]string{}, prefix: "goxideMacroGenerated"}
+	e := engine{preserveImports: options.PreserveImports, importPaths: map[string]string{}, importCache: map[string]*types.Package{}, importer: importer.Default(), file: filename, defs: map[string]definition{}, funcs: map[string]bool{}, imports: map[string]bool{}, aliases: map[string]string{}, prefix: "goxideMacroGenerated"}
 	e.intrinsics = map[string]bool{}
 	for _, n := range names {
 		e.intrinsics[n] = true
@@ -115,8 +117,14 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 	}
 	e.topNames = declaredNames(clean)
 	e.builtins = map[string]string{}
-	for helper := range declaredDeriveHelpers(clean) {
-		e.funcs[helper] = true
+	if pkg == nil {
+		helpers, err := declaredDeriveHelpers(clean, filename, nil)
+		if err != nil {
+			return Result{}, err
+		}
+		for helper := range helpers {
+			e.funcs[helper] = true
+		}
 	}
 	for i := 0; i+2 < len(clean); i++ {
 		if clean[i].text == "func" && ident(clean[i+1].text) && clean[i+2].text == "(" {
@@ -158,8 +166,8 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 		for _, d := range pkg.defs {
 			if d.scope == e.active {
 				for _, r := range d.rules {
-					for i := 0; i+1 < len(r.body); i++ {
-						if r.body[i+1].text == "." && e.active.imports[r.body[i].text] != "" {
+					for i := 0; i+2 < len(r.body); i++ {
+						if r.body[i+1].text == ":" && r.body[i+2].text == ":" && e.active.imports[r.body[i].text] != "" {
 							e.usedMacroImports[r.body[i].text] = true
 						}
 					}
@@ -167,6 +175,11 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 			}
 		}
 		for alias, path := range e.active.imports {
+			for _, binding := range e.active.functionAliases {
+				if binding.path == path {
+					e.usedMacroImports[alias] = true
+				}
+			}
 			if old := e.callerImports[path]; old == "" || alias < old {
 				e.callerImports[path] = alias
 			}
@@ -381,6 +394,12 @@ func render(ts []tok) string {
 	}
 	return b.String()
 }
+
+// goSyntaxView is only a parser view. Captures and emitted source retain their
+// static separators for the frontend's binding and selector-category checks.
+func goSyntaxView(ts []tok) string {
+	return string(paths.GoView([]byte(render(ts))))
+}
 func closeGroup(ts []tok, i int) (int, error) { return closeGroupDepth(ts, i, 0) }
 func closeGroupDepth(ts []tok, i, depth int) (int, error) {
 	if depth > 256 {
@@ -532,7 +551,7 @@ func take(kind string, ts []tok) ([]tok, int, bool) {
 			check = append(check[:i+1], check[end+1:]...)
 		}
 	}
-	_, e := parser.ParseExpr(render(check))
+	_, e := parser.ParseExpr(goSyntaxView(check))
 	return ts[:n], n, e == nil
 }
 func match(ps []part, ts []tok) (map[string]capture, bool) {
@@ -588,12 +607,25 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 	var out []tok
 	for i := 0; i < len(ts); i++ {
 		start := i
-		qualified := i+4 < len(ts) && ident(ts[i].text) && ts[i+1].text == "." && ident(ts[i+2].text) && ts[i+3].text == "!"
+		if i+4 < len(ts) && ident(ts[i].text) && ts[i+1].text == "." && ident(ts[i+2].text) && ts[i+3].text == "!" {
+			return nil, at(ts[i+1], "package macro paths require ::, not .")
+		}
+		// Namespace prefixes must already be bound to one import alias by the
+		// frontend. Never peel off a prefix and accidentally resolve its tail in
+		// the caller's scope.
+		last := i
+		for last+3 < len(ts) && ident(ts[last].text) && ts[last+1].text == ":" && ts[last+2].text == ":" && ident(ts[last+3].text) {
+			last += 3
+		}
+		if last > i+3 && last+1 < len(ts) && ts[last+1].text == "!" {
+			return nil, at(ts[i], "macro namespace path must be resolved to an explicit package binding")
+		}
+		qualified := i+5 < len(ts) && ident(ts[i].text) && ts[i+1].text == ":" && ts[i+2].text == ":" && ident(ts[i+3].text) && ts[i+4].text == "!"
 		if qualified {
 			if e.pkg == nil {
 				return nil, at(ts[i], "cross-package macros require directory compilation")
 			}
-			i += 2
+			i += 3
 		}
 		if i+2 >= len(ts) || !ident(ts[i].text) || ts[i+1].text != "!" || (ts[i+2].text != "(" && ts[i+2].text != "[" && ts[i+2].text != "{") {
 			i = start
@@ -667,6 +699,7 @@ func (e *engine) expand(ts []tok, depth int) ([]tok, error) {
 		if qualified {
 			call.before = ts[start].before
 			call.pos = ts[start].pos
+			call.original = ts[start].original
 		}
 		end, x := closeGroup(ts, i+2)
 		if x != nil {
@@ -823,12 +856,12 @@ func (e *engine) instantiate(ts []tok, cs map[string]capture, index int, ph map[
 		value := append([]tok(nil), c.values[n]...)
 		if c.kind == "tt" {
 			if len(value) > 0 && value[0].text == "(" {
-				if _, err := parser.ParseExpr("f" + render(value)); err != nil {
+				if _, err := parser.ParseExpr("f" + goSyntaxView(value)); err != nil {
 					return nil, at(t, "tt supports parenthesized expression arguments, not statement/type injection")
 				}
 				value = value[1 : len(value)-1]
 				c.kind = "expr"
-			} else if _, err := parser.ParseExpr(render(value)); err != nil {
+			} else if _, err := parser.ParseExpr(goSyntaxView(value)); err != nil {
 				return nil, at(t, "tt supports expression tokens or parenthesized argument groups")
 			}
 		}

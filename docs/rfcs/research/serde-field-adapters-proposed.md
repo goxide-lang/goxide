@@ -40,7 +40,8 @@
 
 ```goxide
 // Proposed：当前编译器拒绝这两个属性。
-#[derive(Serialize, Deserialize)]
+use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 type Event struct {
     #[serde(serialize_with="WriteTime", deserialize_with="ReadTime")]
     Created time.Time

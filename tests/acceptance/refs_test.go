@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/refs"
 )
 
@@ -81,7 +80,7 @@ func exercise()int{
  return read(r)*100+n+reader()-6
 }
 `
-	result, err := frontend.Compile("reference_run.gox", []byte(source))
+	result, err := compileAcceptanceLanguageFixture("reference_run.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +110,7 @@ func TestReferenceFrontendRejectsEscapes(t *testing.T) {
 		"closure": "func f(r &int)func()any{return func()any{return r}}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := frontend.Compile("reference_frontend.gox", []byte("package fixture\n"+body)); err == nil {
+			if _, err := compileAcceptanceLanguageFixture("reference_frontend.gox", []byte("package fixture\n"+body)); err == nil {
 				t.Fatal("frontend accepted reference escape")
 			}
 		})

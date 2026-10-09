@@ -1,4 +1,4 @@
 package main
-import "places.example/update/model"
-func rangePrivateInteger(t *model.Tree,r Result[uint,error])Result[int,error]{for t.Wide=range 1<<r?{return Result[int,error]::Ok(int(t.Wide)+1)};return Result[int,error]::Ok(0)}
-func rangePrivateNegative(t *model.Tree,n int,r Result[uint,error])Result[int,error]{for t.Wide=range (1<<n)|(1<<r?){return Result[int,error]::Ok(1)};return Result[int,error]::Ok(0)}
+use model;
+func rangePrivateInteger(t *model::Tree,r Result[uint,error])Result[int,error]{for t.Wide=range 1<<r?{return Result[int,error]::Ok(int(t.Wide)+1)};return Result[int,error]::Ok(0)}
+func rangePrivateNegative(t *model::Tree,n int,r Result[uint,error])Result[int,error]{for t.Wide=range (1<<n)|(1<<r?){return Result[int,error]::Ok(1)};return Result[int,error]::Ok(0)}

@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"strings"
 	"testing"
 )
@@ -11,11 +10,11 @@ func TestPropagationControlFlowRace(t *testing.T) {
 }
 
 const propagationSource = `package fixture
-import "errors"
+use errors;
 var nestedContinued bool
 func rows(v []Option[int])Result[[]Option[int],error]{return Result[[]Option[int],error]::Ok(v)}
 func rowCount(v []Option[int])Result[int,error]{r:=rows(v)?;nestedContinued=true;return Result[int,error]::Ok(len(r))}
-func load(ok bool,trace *[]string) Result[int,error] {*trace=append(*trace,"load");if !ok{return Result[int,error]::Err(errors.New("failed"))};return Result[int,error]::Ok(4)}
+func load(ok bool,trace *[]string) Result[int,error] {*trace=append(*trace,"load");if !ok{return Result[int,error]::Err(errors::New("failed"))};return Result[int,error]::Ok(4)}
 func mark(s string,trace *[]string) int {*trace=append(*trace,s);return 1}
 func combine(a,b,c int)int{return a+b+c}
 func sequence(ok bool,trace *[]string) Result[string,error] {
@@ -72,7 +71,7 @@ func TestInvalidResultIsNotBusinessFailure(t *testing.T){defer func(){if recover
 
 func TestPropagationExplicitRejections(t *testing.T) {
 	cases := map[string]string{
-		"goxide-holder-enum":        `enum E {A,};struct Holder { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
+		"goxide-holder-enum":     `enum E {A,};struct Holder { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
 		"go-holder-enum":         `enum E {A,};type Holder struct { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
 		"option-to-result":       `func f()Result[int,error]{x:=Option[int]::None?;return Result[int,error]::Ok(x)}`,
 		"result-to-option":       `func f()Option[int]{x:=Result[int,error]::Ok(1)?;return Option[int]::Some(x)}`,
@@ -82,7 +81,7 @@ func TestPropagationExplicitRejections(t *testing.T) {
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("propagation_bad.gox", []byte("package fixture\n"+source))
+			_, err := compileAcceptanceLanguageFixture("propagation_bad.gox", []byte("package fixture\n"+source))
 			if err == nil || !strings.Contains(err.Error(), "propagation_bad.gox") {
 				t.Fatalf("need located rejection: %v", err)
 			}
@@ -92,14 +91,14 @@ func TestPropagationExplicitRejections(t *testing.T) {
 
 func TestPropagationFromRace(t *testing.T) {
 	enumGeneratedModule(t, `package fixture
-import "errors"
+use errors;
 #[derive(Error)]
 #[error("wrapped")]
 type AppError struct {
  #[from]
  Cause error
 }
-var sentinel=errors.New("sentinel")
+var sentinel=errors::New("sentinel")
 func source()Result[int,error]{return Result[int,error]::Err(sentinel)}
 func converted()Result[string,AppError]{_=source()?;return Result[string,AppError]::Ok("wrong")}
 func assignable()Result[string,error]{_=converted()?;return Result[string,error]::Ok("wrong")}
@@ -113,8 +112,8 @@ func TestOneStepFromAndAssignableFirst(t *testing.T){if cause(converted())!=sent
 
 func TestPropagationMacroClosureRace(t *testing.T) {
 	enumGeneratedModule(t, `package fixture
-import "errors"
-func source()Result[int,error]{return Result[int,error]::Err(errors.New("failed"))}
+use errors;
+func source()Result[int,error]{return Result[int,error]::Err(errors::New("failed"))}
 macro_rules! inside { ($v:expr) => {func()Result[int,error]{return Result[int,error]::Ok($v?)}()} }
 func macroClosure()Result[string,error]{_=inside!(source());return Result[string,error]::Ok("continued")}
 func text(v Result[string,error])string{match v {Result[string,error]::Ok(s)=>{return s},Result[string,error]::Err(_)=>{return "failed"},};panic("unreachable")}

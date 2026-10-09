@@ -2,10 +2,12 @@ package frontend
 
 import (
 	"errors"
+	"go/types"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/propagate"
 	"github.com/hxsf/goxide/internal/sourcemap"
 )
@@ -76,12 +78,12 @@ func TestMacroSyntheticCrossFileAndPackageFrames(t *testing.T) {
 		// The dependency deliberately uses the caller's filename but a much larger
 		// original offset. Its registry-owned coordinates must not use caller bytes.
 		depSource := strings.ReplaceAll("package dep\n"+strings.Repeat("\n", 300)+"pub macro_rules! bad {($v:expr)=>{new($v?)};}\n", "\n", newline)
-		dep, err := preparePackageContext("example/dep", map[string][]byte{"shared.gox": []byte(depSource)}, nil, nil)
+		dep, err := preparePackageContext("example/dep", map[string][]byte{"shared.gox": []byte(depSource)}, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		caller = strings.ReplaceAll("package caller\nimport dep \"example/dep\"\nmacro_rules! outer {($v:expr)=>{dep.bad!($v)};}\nfunc f(){_=First()?;_=outer!(value)}\n", "\n", newline)
-		_, err = preparePackageContext("example/caller", map[string][]byte{"shared.gox": []byte(caller)}, map[string]PackageResult{"example/dep": dep}, nil)
+		caller = strings.ReplaceAll("package caller\nuse dep;\nmacro_rules! outer {($v:expr)=>{dep::bad!($v)};}\nfunc f(){_=First()?;_=outer!(value)}\n", "\n", newline)
+		_, err = preparePackageContext("example/caller", map[string][]byte{"shared.gox": []byte(caller)}, map[string]PackageResult{"example/dep": dep}, enumTestImporter{"example/dep": types.NewPackage("example/dep", "dep")}, paths.Roots{"dep": {PackagePath: "example/dep"}})
 		d = requireSyntheticMacroError(t, err, 2)
 		if d.Stack[1].Definition.Start <= len(caller) {
 			t.Fatal("fixture must place dependency definition outside the same-named caller's byte range")
@@ -89,7 +91,7 @@ func TestMacroSyntheticCrossFileAndPackageFrames(t *testing.T) {
 		checkMacroFrame(t, d.Stack[0].Definition, caller, "macro_rules! outer")
 		checkMacroFrame(t, d.Stack[0].Callsite, caller, "outer!(")
 		checkMacroFrame(t, d.Stack[1].Definition, depSource, "macro_rules! bad")
-		checkMacroFrame(t, d.Stack[1].Callsite, caller, "dep.bad!(")
+		checkMacroFrame(t, d.Stack[1].Callsite, caller, "dep::bad!(")
 	}
 }
 func TestMacroSyntheticTypeErrorKeepsFrames(t *testing.T) {
@@ -162,6 +164,36 @@ func TestMacroOriginMapperSeparatesPointAndFrame(t *testing.T) {
 	input = append(input, sourcemap.Expansion{Macro: "unknown", Definition: frame, Callsite: synthetic})
 	if got := mapper.stack(input); got != nil {
 		t.Fatalf("incomplete chain was presented as complete: %+v", got)
+	}
+}
+
+func TestMacroOriginMapperNamespaceEnvelopeIsNotPoint(t *testing.T) {
+	for _, namespace := range []string{"dep", "root::child"} {
+		source := []byte(namespace + "::bad!(value)")
+		for _, alias := range []string{"gen", "goxideNamespace0"} {
+			prepared := []byte(alias + "::bad!(value)")
+			mapping := sourcemap.Identity("unit.gox", prepared)
+			prefix := sourcemap.Position("unit.gox", source, 0, len(namespace))
+			mapping.Attach(0, len(alias), &prefix, nil, "namespace-path")
+			for i := range mapping.Segments {
+				segment := &mapping.Segments[i]
+				if segment.Start < len(alias) {
+					continue
+				}
+				origin := sourcemap.Position("unit.gox", source, segment.Start-len(alias)+len(namespace), segment.End-len(alias)+len(namespace))
+				segment.Origin = &origin
+			}
+			mapper := macroSourceMapper{filename: "unit.gox", original: source, prepared: mapping}
+			frame := sourcemap.Position("unit.gox", prepared, 0, len(prepared))
+			want := sourcemap.Position("unit.gox", source, 0, len(source))
+			if got := mapper.frame(frame, false); got == nil || *got != want {
+				t.Fatalf("namespace frame lost: %+v", got)
+			}
+			point := sourcemap.Position("unit.gox", prepared, 0, len(alias))
+			if got := mapper.point(point, false); got != nil {
+				t.Fatalf("namespace alias invented token provenance: %+v", got)
+			}
+		}
 	}
 }
 

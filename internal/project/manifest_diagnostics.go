@@ -45,7 +45,7 @@ func validateNames(filename string, data []byte) error {
 				pos := p.Shape(k.Raw).Start
 				return fmt.Errorf("%s:%d:%d: unknown field/table %s (keys are case-sensitive)", filename, pos.Line, pos.Column, strings.Join(key, "."))
 			}
-			if len(key) == 2 && (key[0] == "dependencies" || key[0] == "features") && !ident.MatchString(key[1]) {
+			if len(key) == 2 && ((key[0] == "dependencies" && !dependencyIdentifier(key[1])) || (key[0] == "features" && !ident.MatchString(key[1]))) {
 				pos := p.Shape(k.Raw).Start
 				return fmt.Errorf("%s:%d:%d: invalid %s name %q", filename, pos.Line, pos.Column, key[0], key[1])
 			}
@@ -92,6 +92,38 @@ func validateNames(filename string, data []byte) error {
 		case unstable.KeyValue:
 			if err := walk(n, table); err != nil {
 				return err
+			}
+		}
+	}
+	return validateToolchainFields(filename, data)
+}
+
+// Preserve source-kind restrictions even for explicitly empty keys. Struct
+// zero values alone cannot distinguish module="" from an absent module key.
+func validateToolchainFields(filename string, data []byte) error {
+	var doc map[string]any
+	if err := toml.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	tables := []map[string]any{doc}
+	if workspace, ok := doc["workspace"].(map[string]any); ok {
+		tables = append(tables, workspace)
+	}
+	for _, table := range tables {
+		deps, _ := table["dependencies"].(map[string]any)
+		for _, alias := range keys(deps) {
+			d, _ := deps[alias].(map[string]any)
+			// Inherited entries are validated after merging the workspace template;
+			// the inheritance layer diagnoses prohibited source/mapping overrides.
+			if d["source"] != "toolchain" || d["workspace"] == true {
+				continue
+			}
+			for _, key := range keys(d) {
+				switch key {
+				case "source", "package", "namespaces", "optional":
+				default:
+					return fmt.Errorf("%s: dependency %s: toolchain source cannot declare %s", filename, alias, key)
+				}
 			}
 		}
 	}

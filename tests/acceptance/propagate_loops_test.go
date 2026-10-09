@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,7 +14,7 @@ func TestPropagationLoopsRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := frontend.Compile("loops.gox", source)
+	result, err := compileAcceptanceLanguageFixture("loops.gox", source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +58,7 @@ func TestPropagationLoopRejections(t *testing.T) {
 		"goto-scope":         `func f()Option[int]{goto L;{L:for Option[bool]::Some(false)?{}};return Option[int]::None}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("loop_bad.gox", []byte("package fixture;"+body))
+			_, err := compileAcceptanceLanguageFixture("loop_bad.gox", []byte("package fixture;"+body))
 			if err == nil || !strings.Contains(err.Error(), "loop_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
@@ -77,12 +76,12 @@ func TestPropagationLoopInstalledCLI(t *testing.T) {
 	outside := t.TempDir()
 	source := filepath.Join(root, "examples/prototype/loop_propagation.gox")
 	generated := filepath.Join(outside, "main.go")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", generated, source)
 	want := "2 [10 100 300 201 101 301 202 102 302 203 103 900]\n"
 	if got := deliveryCommand(t, root, tool, true, nil, "run", "-race", generated); got != want {
 		t.Fatalf("generated output %q", got)
 	}
-	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--runtime", root, "--go", tool, source); got != want {
+	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "--runtime", root, "--go", tool, source); got != want {
 		t.Fatalf("CLI output %q", got)
 	}
 }

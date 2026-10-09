@@ -1,7 +1,9 @@
 package refs
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/ast"
 	"go/importer"
 	"go/parser"
@@ -14,6 +16,37 @@ import (
 // code. Its result is compiler IR, not checked Go and must pass Finish.
 func Prepare(filename string, source []byte) (Result, error) {
 	return lower(filename, source, nil, true)
+}
+
+// PrepareMapped carries only bytes actually copied by the reference lowerer.
+// Replacement IR receives no fabricated token origin. The coarse diagnostic
+// origin index used by the permission checker is intentionally not sufficient.
+func PrepareMapped(filename string, source []byte, provenance *sourcemap.Map) (Result, error) {
+	result, err := Prepare(filename, source)
+	if err != nil || provenance == nil {
+		return result, err
+	}
+	if bytes.Equal(source, result.Source) {
+		provenance.Source = result.Source
+		provenance.Stages = append(provenance.Stages, "refs.Prepare")
+		return result, nil
+	}
+	next := &sourcemap.Map{Source: result.Source, Stages: append(append([]string{}, provenance.Stages...), "refs.Prepare")}
+	for start := 0; start < len(result.copied); {
+		input := result.copied[start]
+		if input < 0 || input >= len(source) || start >= len(result.Source) || result.Source[start] != source[input] {
+			start++
+			continue
+		}
+		end := start + 1
+		for end < len(result.copied) && end < len(result.Source) && result.copied[end] == input+end-start && result.copied[end] < len(source) && result.Source[end] == source[result.copied[end]] {
+			end++
+		}
+		next.Segments = append(next.Segments, provenance.Copy(input, input+end-start, start)...)
+		start = end
+	}
+	*provenance = *next
+	return result, nil
 }
 
 // Finish checks the complete, generated program before erasing permissions.

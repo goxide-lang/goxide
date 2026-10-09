@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"github.com/hxsf/goxide/internal/paths"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -28,7 +29,7 @@ func Builtin(family string, args []string) (Decl, error) {
 	}
 	norm := make([]string, len(args))
 	for i, arg := range args {
-		e, err := parser.ParseExpr(arg)
+		e, err := parser.ParseExpr(string(paths.GoView([]byte(arg))))
 		if err != nil {
 			return Decl{}, err
 		}
@@ -62,7 +63,7 @@ func Builtin(family string, args []string) (Decl, error) {
 	for i, n := range names {
 		var typ ast.Expr
 		if payloads[i] != "" {
-			typ, _ = parser.ParseExpr(payloads[i])
+			typ, _ = parser.ParseExpr(string(paths.GoView([]byte(payloads[i]))))
 		}
 		d.Variants = append(d.Variants, Variant{Name: n, Payload: payloads[i], Type: typ, CaseName: "__goxide_enum_case_" + family + "_" + n + suffix, Constructor: "__goxide_enum_ctor_" + family + "_" + n + suffix})
 	}
@@ -315,7 +316,7 @@ func (l *lowerer) collectNamedTypes() (map[string]ast.Expr, error) {
 			if err != nil {
 				return nil, err
 			}
-			f, err := parser.ParseFile(token.NewFileSet(), "", "package p;"+string(l.src[t.start:l.ts[end].end]), 0)
+			f, err := parser.ParseFile(token.NewFileSet(), "", "package p;"+string(paths.GoView(l.src[t.start:l.ts[end].end])), 0)
 			if err != nil {
 				return nil, l.err(t.start, "unsupported grouped type declaration in sum payload analysis")
 			}
@@ -332,7 +333,7 @@ func (l *lowerer) collectNamedTypes() (map[string]ast.Expr, error) {
 			if err != nil {
 				return nil, err
 			}
-			if e, err := parser.ParseExpr(withoutPayloadAttrs("struct " + string(l.src[l.ts[i+2].start:l.ts[end].end]))); err == nil {
+			if e, err := parser.ParseExpr(string(paths.GoView([]byte(withoutPayloadAttrs("struct " + string(l.src[l.ts[i+2].start:l.ts[end].end])))))); err == nil {
 				named[l.ts[i+1].text] = e
 			}
 		}
@@ -355,13 +356,13 @@ func (l *lowerer) collectNamedTypes() (map[string]ast.Expr, error) {
 			end++
 		}
 		if end > start {
-			declaration := "package p;" + string(l.src[t.start:l.ts[end-1].end])
+			declaration := "package p;" + string(paths.GoView(l.src[t.start:l.ts[end-1].end]))
 			if f, e := parser.ParseFile(token.NewFileSet(), "", declaration, 0); e == nil {
 				if spec, ok := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.TypeSpec); ok && spec.TypeParams != nil {
 					return nil, l.err(t.start, "user generic type declarations unsupported")
 				}
 			}
-			if e, err := parser.ParseExpr(withoutPayloadAttrs(string(l.src[l.ts[start].start:l.ts[end-1].end]))); err == nil {
+			if e, err := parser.ParseExpr(string(paths.GoView([]byte(withoutPayloadAttrs(string(l.src[l.ts[start].start:l.ts[end-1].end])))))); err == nil {
 				named[l.ts[i+1].text] = e
 			}
 		}

@@ -1,6 +1,7 @@
 package matchexpr
 
 import (
+	"github.com/hxsf/goxide/internal/paths"
 	"go/parser"
 	"go/token"
 	"strconv"
@@ -92,7 +93,7 @@ func (c *composer) expression(a, b int, context, kind string) (string, error) {
 			continue
 		}
 		callee := c.copy(ts[a].a, ts[open].a)
-		if _, err := parser.ParseExpr(string(c.source[ts[a].a:ts[open].a])); err != nil {
+		if _, err := parser.ParseExpr(string(paths.GoView(c.source[ts[a].a:ts[open].a]))); err != nil {
 			break
 		}
 		var args []string

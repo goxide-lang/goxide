@@ -1,13 +1,11 @@
 package main
 
-import (
-    cfg "log/slog"
-    "os"
-)
+use slog as cfg;
+use os;
 
 func main() {
     input := `{"Name":"mail-dispatch","Mode":{"Workers":4},"Labels":["queue"]}`
-    if len(os.Args) > 1 { input = os.Args[1] }
-    logger := cfg.New(cfg.NewJSONHandler(os.Stdout, nil))
-    if err := Run(logger, "42", []byte(input)); err != nil { os.Exit(1) }
+    if len(os::Args) > 1 { input = os::Args[1] }
+    logger := cfg::New(cfg::NewJSONHandler(os::Stdout, nil))
+    if err := Run(logger, "42", []byte(input)); err != nil { os::Exit(1) }
 }

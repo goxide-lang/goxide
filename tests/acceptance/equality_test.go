@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
@@ -66,37 +67,38 @@ type New m.E
 	appFor := func(code string) string {
 		src := t.TempDir()
 		packagesWrite(t, src, "go.mod", mod("equal.example/app", lib))
+		writeAcceptanceRoots(t, src, map[string]rootconfig.Mapping{"model": {Module: "equal.example/lib", Package: "equal.example/lib/model"}, "relay": {Module: "equal.example/lib", Package: "equal.example/lib/relay"}})
 		packagesWrite(t, src, "app.gox", code)
 		return src
 	}
 	app := appFor(`package app
-import(m "equal.example/lib/model";r "equal.example/lib/relay")
+use model as m;use relay as r;
 #[derive(PartialEq,Eq)]
-type Pair struct{P r.Point;E r.Alias}
+type Pair struct{P r::Point;E r::Alias}
 #[derive(PartialEq,Eq)]
-type ExternalSums struct{Direct m.Option[[]int];Alias r.Options;Result m.Result[[]int,map[string]int]}
-var Initial=m.Point{X:1}.equals(m.Point{X:1})
-func Same(a,b r.Alias)bool{return a.equals(b)}
+type ExternalSums struct{Direct m::Option[[]int];Alias r::Options;Result m::Result[[]int,map[string]int]}
+var Initial=m::Point{X:1}.equals(m::Point{X:1})
+func Same(a,b r::Alias)bool{return a.equals(b)}
 func PairSame(a,b Pair)bool{return a.equals(b)}
 func ExternalSumsSame(a,b ExternalSums)bool{return a.equals(b)}
-func Big()bool{return m.Count(1<<63).equals(1<<63)}
-func Row()bool{a:=m.Row{{X:1},{Y:2}};return a.equals(m.Row{{X:1},{Y:2}})}
-func FloatSame(a,b m.Float)bool{return a.equals(b)}
-func ComplexSame(a,b m.Complex)bool{return a.equals(b)}
-func DatasetSame(a,b r.Dataset)bool{return a.equals(b)}
-func OptionalSame(a,b m.Optional)bool{return a.equals(b)}
-func CollectionSame(a,b m.Collection)bool{return a.equals(b)}
-func FloatsSame(a,b m.FloatCollections)bool{return a.equals(b)}
-func Skipped(a,b r.Alias)bool{return false && Left(a).equals(Right(b))}
-func Shadow(a,b r.Alias)bool{EqualsE:=func(r.Alias,r.Alias)bool{panic("shadow")};_=EqualsE;m:=3;_=m;return a.equals(b)}
-func Load(a r.Alias)Result[r.Alias,string]{return Result[r.Alias,string]::Ok(a)}
-func Question(a,b r.Alias)Result[bool,string]{v:=Load(a)?.equals(b);return Result[bool,string]::Ok(v)}
+func Big()bool{return m::Count(1<<63).equals(1<<63)}
+func Row()bool{a:=m::Row{{X:1},{Y:2}};return a.equals(m::Row{{X:1},{Y:2}})}
+func FloatSame(a,b m::Float)bool{return a.equals(b)}
+func ComplexSame(a,b m::Complex)bool{return a.equals(b)}
+func DatasetSame(a,b r::Dataset)bool{return a.equals(b)}
+func OptionalSame(a,b m::Optional)bool{return a.equals(b)}
+func CollectionSame(a,b m::Collection)bool{return a.equals(b)}
+func FloatsSame(a,b m::FloatCollections)bool{return a.equals(b)}
+func Skipped(a,b r::Alias)bool{return false && Left(a).equals(Right(b))}
+func Shadow(a,b r::Alias)bool{EqualsE:=func(r::Alias,r::Alias)bool{panic("shadow")};_=EqualsE;m:=3;_=m;return a.equals(b)}
+func Load(a r::Alias)Result[r::Alias,string]{return Result[r::Alias,string]::Ok(a)}
+func Question(a,b r::Alias)Result[bool,string]{v:=Load(a)?.equals(b);return Result[bool,string]::Ok(v)}
 func OptionFlow(x Option[int])Option[int]{n:=x?;return Option[int]::Some(n)}
 var Trace string
-func Left(a r.Alias)r.Alias{Trace+="L";return a}
-func Right(a r.Alias)r.Alias{Trace+="R";return a}
-func Ordered(a,b r.Alias)bool{return Left(a).equals(Right(b))}
-func Nil(a r.Alias)bool{return a==nil}
+func Left(a r::Alias)r::Alias{Trace+="L";return a}
+func Right(a r::Alias)r::Alias{Trace+="R";return a}
+func Ordered(a,b r::Alias)bool{return Left(a).equals(Right(b))}
+func Nil(a r::Alias)bool{return a==nil}
 `)
 	out := filepath.Join(t.TempDir(), "out")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, app)
@@ -195,8 +197,8 @@ func TestNative(t *testing.T){a:=m.NewEUnit();if !m.EqualsDataset(m.Dataset{Slic
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
 	for name, tc := range map[string]struct{ code, want string }{
-		"enum-direct":          {`import m "equal.example/lib/model";func Bad(a,b m.E)bool{return a==b}`, "explicit PartialEq"},
-		"enum-not-equal":       {`import m "equal.example/lib/model";func Bad(a,b m.E)bool{return a!=b}`, "explicit PartialEq"},
+		"enum-direct":          {`use model as m;func Bad(a,b m::E)bool{return a==b}`, "explicit PartialEq"},
+		"enum-not-equal":       {`use model as m;func Bad(a,b m::E)bool{return a!=b}`, "explicit PartialEq"},
 		"float-eq":             {"#[derive(PartialEq,Eq)]\ntype Bad struct{F float64}", "Eq"},
 		"complex-eq":           {"#[derive(PartialEq,Eq)]\ntype Bad complex128", "Eq"},
 		"missing-partial":      {"#[derive(Eq)]\ntype Bad struct{N int}", "PartialEq"},
@@ -210,7 +212,7 @@ func TestNative(t *testing.T){a:=m.NewEUnit();if !m.EqualsDataset(m.Dataset{Slic
 		"map-enum-key":         {"pub enum Key{A,}\n#[derive(PartialEq)]\ntype Bad struct{Items map[Key]int}", "map"},
 		"map-nested-float-key": {"type Key struct{F float64}\n#[derive(PartialEq)]\ntype Bad struct{Items map[Key]int}", "map"},
 		"pointer":              {"#[derive(PartialEq,Eq)]\ntype Bad struct{P *int}", "automatic"},
-		"unregistered":         {`import r "equal.example/lib/relay";func Bad(a,b r.New)bool{return a.equals(b)}`, "equals"},
+		"unregistered":         {`use relay as r;func Bad(a,b r::New)bool{return a.equals(b)}`, "equals"},
 		"map-key": {`pub enum Bad{Items([]int),}
 func F(){_=map[Bad]int{}}`, "map key"},
 		"nested-map-key": {`pub enum Bad{Items([]int),}
@@ -226,9 +228,9 @@ func Bad(v E){m:=map[any]int{};m[v]=1}`, "map key"},
 func Bad(){_=map[any]int{E::S([]int{1}):1}}`, "map key"},
 		"mixed-interface-comparison": {`pub enum E{A,S([]int),}
 func Bad(v E,other any)bool{return v==other}`, "non-comparable payload"},
-		"imported-partial-not-eq": {`import m "equal.example/lib/model"
+		"imported-partial-not-eq": {`use model as m;
 #[derive(PartialEq,Eq)]
-type Bad struct{F m.Float}`, "Eq"},
+type Bad struct{F m::Float}`, "Eq"},
 		"scalar-result-type": {`type B bool
 func Takes(B){}
 func Bad(){a:=1;Takes(a.equals(1))}`, "cannot use"},

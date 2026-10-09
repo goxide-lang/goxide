@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,8 +13,8 @@ func TestPropagationAssignmentPlacesRace(t *testing.T) {
 }
 
 const placePropagationSource = `package fixture
-import "errors"
-var failure=errors.New("failed")
+use errors;
+var failure=errors::New("failed")
 func num(n int,ok bool,trace *[]string)Result[int,error]{*trace=append(*trace,"rhs");if !ok{return Result[int,error]::Err(failure)};return Result[int,error]::Ok(n)}
 func value(v Result[int,error])(int,error){match v{Result[int,error]::Ok(n)=>{return n,nil},Result[int,error]::Err(e)=>{return 0,e},};panic("unreachable")}
 type Cell struct{X int;A [2]int;P *Cell;S []int;M map[int]int}
@@ -85,7 +84,7 @@ func TestPropagationAssignmentPlaceRejections(t *testing.T) {
 		"constant-bound":   `func f(a *[2]int)Option[int]{a[3]=Option[int]::Some(1)?;return Option[int]::Some(0)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("place_bad.gox", []byte("package fixture\n"+source))
+			_, err := compileAcceptanceLanguageFixture("place_bad.gox", []byte("package fixture\n"+source))
 			if err == nil || !strings.Contains(err.Error(), "place_bad.gox") {
 				t.Fatalf("expected located rejection: %v", err)
 			}
@@ -146,19 +145,19 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 
 func TestPropagationUnsafeOperandBoundary(t *testing.T) {
 	for _, expr := range []string{
-		`unsafe.Sizeof([1]int{Option[int]::Some(1)?})`,
-		`unsafe.Alignof([1]int{Option[int]::Some(1)?})`,
-		`unsafe.Offsetof(Option[S]::Some(S{})?.X)`,
+		`unsafe::Sizeof([1]int{Option[int]::Some(1)?})`,
+		`unsafe::Alignof([1]int{Option[int]::Some(1)?})`,
+		`unsafe::Offsetof(Option[S]::Some(S{})?.X)`,
 	} {
-		_, err := frontend.Compile("unsafe_bad.gox", []byte(`package fixture;import "unsafe";type S struct{X int};func f()Option[int]{n:=`+expr+`;return Option[int]::Some(int(n))}`))
+		_, err := compileAcceptanceLanguageFixture("unsafe_bad.gox", []byte(`package fixture;use unsafe;type S struct{X int};func f()Option[int]{n:=`+expr+`;return Option[int]::Some(int(n))}`))
 		if err == nil || !strings.Contains(err.Error(), "unsafe compile-time operands") {
 			t.Fatalf("%s: %v", expr, err)
 		}
 	}
 	enumGeneratedModule(t, `package fixture
-import "unsafe"
+use unsafe;
 func Sizeof(n int)int{return n}
-func allowed(p *int)Option[int]{q:=unsafe.Add(unsafe.Pointer(p),Option[uintptr]::Some(0)?);s:=unsafe.Slice((*int)(q),Option[int]::Some(1)?);n:=Sizeof(Option[int]::Some(s[0])?);return Option[int]::Some(n)}
+func allowed(p *int)Option[int]{q:=unsafe::Add(unsafe::Pointer(p),Option[uintptr]::Some(0)?);s:=unsafe::Slice((*int)(q),Option[int]::Some(1)?);n:=Sizeof(Option[int]::Some(s[0])?);return Option[int]::Some(n)}
 func result(v Option[int])int{match v{Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
 `, `package fixture
 import "testing"

@@ -25,6 +25,7 @@ func TestExternalDefaultModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("defaults.example/lib", ""))
+	writeAcceptanceSerdeRoots(t, src, "")
 	packagesWrite(t, src, "model/types.gox", `package model
 type Manual struct{value int}
 var Calls int
@@ -58,33 +59,34 @@ func DefaultValue()Value{return Value{N:99}}
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("defaults.example/app", lib))
+	writeAcceptanceSerdeRoots(t, appsrc, "defaults.example/lib", "model", "relay", "other", "fake")
 	packagesWrite(t, appsrc, "app.gox", `package app
-import(out "defaults.example/lib/relay";m "defaults.example/lib/model")
+use library::relay as out; use library::model as m;
 #[derive(Default)]
-type Wrap struct{V out.E;M m.Manual}
+type Wrap struct{V out::E;M m::Manual}
 
 `)
 	packagesWrite(t, appsrc, "other.gox", `package app
-import m "defaults.example/lib/other"
+use library::other as m;
 #[derive(Default)]
-type Other struct{V m.Manual}
+type Other struct{V m::Manual}
 `)
 	packagesWrite(t, appsrc, "ops/macros.gox", `package ops
 pub macro_rules! size {($x:expr)=>{len($x)};}
 `)
 	packagesWrite(t, appsrc, "builtin.gox", `package app
-import len "defaults.example/lib/model"
-import ops "defaults.example/app/ops"
+use library::model as len;
+mod ops;
 #[derive(Default)]
-type Both struct{M len.Manual}
-func Count()int{return ops.size!("abc")}
+type Both struct{M len::Manual}
+func Count()int{return ops::size!("abc")}
 `)
-	packagesWrite(t, appsrc, "skip.gox", `package app
-import m "defaults.example/lib/model"
-#[derive(Deserialize)]
+	packagesWrite(t, appsrc, "skip.gox", `package app; use serde;
+use library::model as m;
+#[derive(serde::Deserialize)]
 type Skipped struct {
  #[serde(skip)]
- V m.Manual
+ V m::Manual
 }
 `)
 	out := filepath.Join(t.TempDir(), "out")
@@ -132,7 +134,8 @@ func TestGoConsumer(t *testing.T){v:=a.DefaultWrap();if m.Read(v.V)!=7||m.Value(
 	for _, tc := range []struct{ path, typ string }{{"fake", "Value"}, {"relay", "New"}} {
 		bad := t.TempDir()
 		packagesWrite(t, bad, "go.mod", mod("defaults.example/bad", lib))
-		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nimport m %q\n#[derive(Default)]\ntype Wrap struct{V m.%s}\n", "defaults.example/lib/"+tc.path, tc.typ))
+		writeAcceptanceSerdeRoots(t, bad, "defaults.example/lib", "model", "relay", "other", "fake")
+		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nuse library::%s as m;\n#[derive(Default)]\ntype Wrap struct{V m::%s}\n", tc.path, tc.typ))
 		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
 		if !strings.Contains(log, "Default") {
 			t.Fatal(log)

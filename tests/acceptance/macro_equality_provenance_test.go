@@ -34,15 +34,16 @@ func TestMacroEqualityProvenanceCLI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				writeMacroFixtureRoots(t, source, nil)
 				files := map[string]string{}
 				definitionFile := "main.gox"
 				if mode == "single" {
-					files["main.gox"] = "package main\nimport \"fmt\"\n" + equalityMacroDefinitions + equalityMacroDerive + equalityMacroProgram
+					files["main.gox"] = "package main\nuse fmt;\n" + equalityMacroDefinitions + equalityMacroDerive + equalityMacroProgram
 				} else {
 					definitionFile = "macros.gox"
 					files[definitionFile] = "package main\n" + equalityMacroDefinitions
 					files["types.gox"] = "package main\n" + equalityMacroDerive
-					files["main.gox"] = "package main\nimport \"fmt\"\n" + equalityMacroProgram
+					files["main.gox"] = "package main\nuse fmt;\n" + equalityMacroProgram
 					packagesWrite(t, source, "go.mod", "module equality.example/provenance\ngo 1.27\n")
 				}
 				for name, text := range files {
@@ -204,6 +205,28 @@ func equalityMacroMap(t *testing.T, generated, source, definitionFile string, fi
 			continue
 		}
 		output := filepath.Join(generated, name)
+		if name == "goxide_project_config.go" {
+			// Root context contributes a generated configuration constant, not
+			// a user source file. Any optional map must claim no user origin.
+			data, err := os.ReadFile(output + ".map.json")
+			if err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			if err == nil {
+				var helper struct {
+					Diagnostics sourcemap.Map `json:"diagnostics"`
+				}
+				if err := json.Unmarshal(data, &helper); err != nil {
+					t.Fatal(err)
+				}
+				for _, segment := range helper.Diagnostics.Segments {
+					if segment.Origin != nil || len(segment.Stack) != 0 {
+						t.Fatalf("configuration helper acquired user provenance: %+v", segment)
+					}
+				}
+			}
+			continue
+		}
 		var exported struct {
 			Diagnostics sourcemap.Map `json:"diagnostics"`
 		}
@@ -333,7 +356,7 @@ func Native()int{return int(0)}
 var calls int
 func next()int{calls++;return calls}
 func Effect()int{return convert!(next())+convert!(next())}
-func main(){if Direct()!=0||First()!=0||Second()!=0||Native()!=0||Effect()!=3||calls!=2||!EqualsItem(Item{N:1},Item{N:1})||EqualsItem(Item{N:1},Item{N:2}){panic("macro equality behavior")};fmt.Println("macro equality provenance ok")}
+func main(){if Direct()!=0||First()!=0||Second()!=0||Native()!=0||Effect()!=3||calls!=2||!EqualsItem(Item{N:1},Item{N:1})||EqualsItem(Item{N:1},Item{N:2}){panic("macro equality behavior")};fmt::Println("macro equality provenance ok")}
 `
 
 const equalityMacroRuntimeAssertions = `package main

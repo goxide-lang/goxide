@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"bytes"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,6 +23,10 @@ func TestMacroCopyCLI(t *testing.T) {
 	t.Run("generated-module", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module copy.example/app\ngo 1.27\n")
+		writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+			"ops": {Module: "copy.example/app", Package: "copy.example/app/ops"},
+			"own": {Module: "copy.example/app", Package: "copy.example/app/own"},
+		})
 		packagesWrite(t, source, "ops/macros.gox", macroCopyDefinitions)
 		packagesWrite(t, source, "own/own.gox", `package own
 func copy(dst,src []int)int{return 41}
@@ -80,11 +85,12 @@ func Run()int{copy:=func([]int,[]int)int{return -1};_=copy;return own!([]int{},[
 		for _, newline := range []struct{ name, value string }{{"LF", "\n"}, {"CRLF", "\r\n"}} {
 			t.Run(newline.name, func(t *testing.T) {
 				source := t.TempDir()
+				writeMacroFixtureRoots(t, source, nil)
 				input := filepath.Join(source, "main.gox")
 				packagesWrite(t, source, "main.gox", strings.ReplaceAll(`package main
-import "fmt"
+use fmt;
 macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
-func main(){copy:=[]int{2};dst:=[]int{1};fmt.Println(transfer!(dst,copy),dst)}
+func main(){copy:=[]int{2};dst:=[]int{1};fmt::Println(transfer!(dst,copy),dst)}
 `, "\n", newline.value))
 				generated := t.TempDir()
 				first := filepath.Join(generated, "main.go")
@@ -136,21 +142,37 @@ func main(){_=bad!()}
 
 	t.Run("readonly-boundaries", func(t *testing.T) {
 		for _, tc := range []struct{ name, body string }{
-			{"destination", "m.transfer!(r.Items,[]int{9})"},
-			{"pointer-elements", "dst:=make([]*int,len(r.Pointers));m.transfer!(dst,r.Pointers);*dst[0]=9"},
-			{"container-elements", "dst:=make([][]int,len(r.Rows));m.transfer!(dst,r.Rows);dst[0][0]=9"},
+			{"destination", "m::transfer!(r.Items,[]int{9})"},
+			{"pointer-elements", "dst:=make([]*int,len(r.Pointers));m::transfer!(dst,r.Pointers);*dst[0]=9"},
+			{"container-elements", "dst:=make([][]int,len(r.Rows));m::transfer!(dst,r.Rows);dst[0][0]=9"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				source := t.TempDir()
 				packagesWrite(t, source, "go.mod", "module copy.example/readonly\ngo 1.27\n")
+				writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+					"ops": {Module: "copy.example/readonly", Package: "copy.example/readonly/ops"},
+				})
 				packagesWrite(t, source, "ops/macros.gox", "package ops\npub macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}\n")
-				packagesWrite(t, source, "app.gox", "package main\nimport m \"copy.example/readonly/ops\"\ntype State struct{Items []int;Pointers []*int;Rows [][]int}\nfunc Reject(r &State){"+tc.body+"}\nfunc main(){}\n")
+				packagesWrite(t, source, "app.gox", "package main\nuse ops as m;\ntype State struct{Items []int;Pointers []*int;Rows [][]int}\nfunc Reject(r &State){"+tc.body+"}\nfunc main(){}\n")
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
 				if !strings.Contains(output, "readonly") || !strings.Contains(output, "app.gox") {
 					t.Fatalf("lost readonly rejection: %s", output)
 				}
 			})
 		}
+	})
+
+	t.Run("namespace-alias-and-value-builtin", func(t *testing.T) {
+		source := t.TempDir()
+		writeMacroFixtureRoots(t, source, nil)
+		packagesWrite(t, source, "main.gox", `package main
+use strings as copy;
+macro_rules! transfer { ($s:expr,$v:expr)=>{copy($s,$v)}; }
+func main(){v:=[]int{0,0};n:=transfer!(v,[]int{3,4});if n!=2||v[0]!=3||v[1]!=4||copy::Repeat("x",2)!="xx"{panic("builtin or namespace binding")}}
+`)
+		binary := filepath.Join(t.TempDir(), "application")
+		deliveryCommand(t, outside, cli, true, nil, "build", "--go", tool, "--runtime", root, "-o", binary, filepath.Join(source, "main.gox"))
+		deliveryCommand(t, outside, binary, true, nil)
 	})
 
 	t.Run("invalid-calls-and-boundaries", func(t *testing.T) {
@@ -168,11 +190,11 @@ func main(){_=bad!()}
 			{"definition-var", "var copy=func([]int,[]int)int{return 9}", "copy($s,$v)", "bad!([]int{},[]int{})", "definition-site", false},
 			{"definition-const", "const copy=1", "copy($s,$v)", "bad!([]int{},[]int{})", "definition-site", false},
 			{"definition-type", "type copy int", "copy($s,$v)", "bad!([]int{},[]int{})", "definition-site", false},
-			{"definition-import", `import copy "strings"`, "copy($s,$v)", "bad!([]int{},[]int{})", "definition-site", false},
 			{"bare-builtin", "", "copy", "bad!(1,2)", "direct call", false},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				source := t.TempDir()
+				writeMacroFixtureRoots(t, source, nil)
 				packagesWrite(t, source, "invalid.gox", "package main\n"+tc.declaration+"\nmacro_rules! bad {($s:expr,$v:expr)=>{"+tc.template+"};}\nfunc main(){_="+tc.body+"}\n")
 				input := filepath.Join(source, "invalid.gox")
 				output := deliveryCommand(t, outside, cli, false, nil, "build", "--go", tool, "--runtime", root, "-o", filepath.Join(t.TempDir(), "rejected"), input)
@@ -198,8 +220,11 @@ func main(){_=bad!()}
 			t.Run("caller-package-"+declaration.name, func(t *testing.T) {
 				source := t.TempDir()
 				packagesWrite(t, source, "go.mod", "module copy.example/rejected\ngo 1.27\n")
+				writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+					"ops": {Module: "copy.example/rejected", Package: "copy.example/rejected/ops"},
+				})
 				packagesWrite(t, source, "ops/macros.gox", "package ops\npub macro_rules! push {($s:expr,$v:expr)=>{copy($s,$v)};}\n")
-				packagesWrite(t, source, "app.gox", "package main\nimport m \"copy.example/rejected/ops\"\nfunc main(){_=m.push!([]int{},[]int{})}\n")
+				packagesWrite(t, source, "app.gox", "package main\nuse ops as m;\nfunc main(){_=m::push!([]int{},[]int{})}\n")
 				packagesWrite(t, source, "shadow.go", "package main\n"+declaration.source+"\n")
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
 				if !strings.Contains(output, "caller package declaration") || !strings.Contains(output, "macros.gox:2:") || !strings.Contains(output, "app.gox:3:") {
@@ -211,57 +236,57 @@ func main(){_=bad!()}
 }
 
 const macroCopyDefinitions = `package ops
-import "log/slog"
+use slog;
 pub macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
 pub macro_rules! twice {($dst:expr,$src:expr)=>{transfer!($dst,$src)+transfer!($dst,$src)};}
 pub macro_rules! question {($dst:expr,$src:expr)=>{copy($dst?,$src?)};}
 pub macro_rules! local {($dst:expr,$src:expr)=>{func()int{copy:=func([]int,[]int)int{return 17};return copy($dst,$src)}()};}
-pub macro_rules! log_if {($enabled:expr,$dst:expr,$src:expr)=>{if $enabled {slog.Info("copy","count",copy($dst,$src))}};}
+pub macro_rules! log_if {($enabled:expr,$dst:expr,$src:expr)=>{if $enabled {slog::Info("copy","count",copy($dst,$src))}};}
 `
 
 const macroCopyBindings = `package main
-import m "copy.example/app/ops"
-import copy "strings"
+use ops as m;
+use strings as copy;
 func Bindings()int{
- total:=m.transfer!([]byte{0,0},copy.Repeat("x",2))
+ total:=m::transfer!([]byte{0,0},copy::Repeat("x",2))
  dst:=[]int{0}
  copy:=func(n int)[]int{return []int{n}}
- total+=m.transfer!(dst,copy(7))+dst[0]
- {const copy=2;total+=m.transfer!(dst,[]int{copy})+dst[0]}
- switch copy:=any(3).(type){case int:total+=m.transfer!(dst,[]int{copy})+dst[0]}
- {copy:=4;r:=Record{copy:copy};total+=m.transfer!(dst,[]int{r.copy})+dst[0];total+=m.transfer!(dst,[]int{map[int]int{copy:7}[copy]})+dst[0]}
+ total+=m::transfer!(dst,copy(7))+dst[0]
+ {const copy=2;total+=m::transfer!(dst,[]int{copy})+dst[0]}
+ switch copy:=any(3).(type){case int:total+=m::transfer!(dst,[]int{copy})+dst[0]}
+ {copy:=4;r:=Record{copy:copy};total+=m::transfer!(dst,[]int{r.copy})+dst[0];total+=m::transfer!(dst,[]int{map[int]int{copy:7}[copy]})+dst[0]}
  return total
 }
-func Parameter(copy []int)int{return m.transfer!([]int{0},copy)}
+func Parameter(copy []int)int{return m::transfer!([]int{0},copy)}
 `
 
 const macroCopyProgram = `package main
-import "fmt"
-import m "copy.example/app/ops"
-import o "copy.example/app/own"
-func Transfer(dst Items,src []int)int{return m.transfer!(dst,src)}
-func Bytes(dst []byte,src string)int{return m.transfer!(dst,src)}
-func Pointers(dst,src []*int)int{return m.transfer!(dst,src)}
-func Order(dst,src func()[]int)int{return m.transfer!(dst(),src())}
-func Repeated(dst,src func()[]int)int{return m.twice!(dst(),src())}
-func Statement(dst,src []int){m.transfer!(dst,src)}
-func DeferCopy(dst,src func()[]int,after func()){defer m.transfer!(dst(),src());after()}
-func DefinitionLocal()int{return m.local!([]int{},[]int{})}
-func DefinitionFunction()int{return o.Run()}
-func Snapshot(r &State)int{dst:=make([]int,len(r.Items));n:=m.transfer!(dst,r.Items);dst[0]++;return n*10+dst[0]}
+use fmt;
+use ops as m;
+use own as o;
+func Transfer(dst Items,src []int)int{return m::transfer!(dst,src)}
+func Bytes(dst []byte,src string)int{return m::transfer!(dst,src)}
+func Pointers(dst,src []*int)int{return m::transfer!(dst,src)}
+func Order(dst,src func()[]int)int{return m::transfer!(dst(),src())}
+func Repeated(dst,src func()[]int)int{return m::twice!(dst(),src())}
+func Statement(dst,src []int){m::transfer!(dst,src)}
+func DeferCopy(dst,src func()[]int,after func()){defer m::transfer!(dst(),src());after()}
+func DefinitionLocal()int{return m::local!([]int{},[]int{})}
+func DefinitionFunction()int{return o::Run()}
+func Snapshot(r &State)int{dst:=make([]int,len(r.Items));n:=m::transfer!(dst,r.Items);dst[0]++;return n*10+dst[0]}
 var Trace string
 var Storage [3]int
 func Destination(ok bool)Option[[]int]{Trace+="D";if ok{return Option[[]int]::Some(Storage[:])};return Option[[]int]::None}
 func Source(ok bool)Option[[]int]{Trace+="S";if ok{return Option[[]int]::Some([]int{4,5})};return Option[[]int]::None}
-func Question(dstOK,srcOK bool)Option[int]{n:=m.question!(Destination(dstOK),Source(srcOK));Trace+="A";return Option[int]::Some(n)}
+func Question(dstOK,srcOK bool)Option[int]{n:=m::question!(Destination(dstOK),Source(srcOK));Trace+="A";return Option[int]::Some(n)}
 func QuestionCount(dstOK,srcOK bool)int{return match Question(dstOK,srcOK){Option[int]::Some(n)=>n,Option[int]::None=>-1,}}
 func NestedQuestion(dstOK,srcOK bool)int{
- inner:=func()Option[int]{n:=m.question!(Destination(dstOK),Source(srcOK));Trace+="A";return Option[int]::Some(n)}
+ inner:=func()Option[int]{n:=m::question!(Destination(dstOK),Source(srcOK));Trace+="A";return Option[int]::Some(n)}
  result:=inner();Trace+="O"
  return match result{Option[int]::Some(n)=>n,Option[int]::None=>-1,}
 }
-func Logging(enabled func()bool,dst,src func()[]int){m.log_if!(enabled(),dst(),src())}
-func main(){dst:=Items{0,0,0};n:=m.transfer!(dst,[]int{4,5});data:=[]byte{0,0};b:=Bytes(data,"abc");fmt.Println(n,dst,b,string(data))}
+func Logging(enabled func()bool,dst,src func()[]int){m::log_if!(enabled(),dst(),src())}
+func main(){dst:=Items{0,0,0};n:=m::transfer!(dst,[]int{4,5});data:=[]byte{0,0};b:=Bytes(data,"abc");fmt::Println(n,dst,b,string(data))}
 `
 
 const macroCopyAssertions = `package main

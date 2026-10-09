@@ -61,9 +61,9 @@ path = 'src/lib.gox'
 format = 1
 `,
 		"src/lib.gox":       "package app\nfunc Value()int{return 42}\n",
-		"src/one.gox":       "package main\nimport \"fmt\"\nimport a \"example.org/project\"\nfunc main(){fmt.Println(\"one\",a.Value(),cfg!(feature(\"pretty\")))}\n",
-		"src/two.gox":       "package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"two\")}\n",
-		"examples/demo.gox": "package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"example\")}\n",
+		"src/one.gox":       "package main\nuse fmt;\nuse project as a;\nfunc main(){fmt::Println(\"one\",a::Value(),cfg!(feature(\"pretty\")))}\n",
+		"src/two.gox":       "package main\nuse fmt;\nfunc main(){fmt::Println(\"two\")}\n",
+		"examples/demo.gox": "package main\nuse fmt;\nfunc main(){fmt::Println(\"example\")}\n",
 	})
 	for _, tc := range []struct {
 		args []string
@@ -162,7 +162,7 @@ format = 1
 		projectWrite(t, filepath.Join(base, name), map[string]string{
 			"go.mod":      "module example.org/" + name + "\n\ngo 1.27\n",
 			"goxide.toml": manifestJSON(`{"version":1,"lib":{"name":"lib","path":"lib.gox"},"dependencies":{"shared":{"module":"example.org/shared","path":"../shared","default_features":false,"features":["` + feature + `"]}}}`),
-			"lib.gox":     "package " + name + "\nimport s \"example.org/shared\"\nfunc Flags()string{return s.Flags()}\n",
+			"lib.gox":     "package " + name + "\nuse shared as s;\nfunc Flags()string{return s::Flags()}\n",
 		})
 	}
 	projectWrite(t, root, map[string]string{
@@ -191,8 +191,8 @@ missing = ['dep:optional']
 [package]
 format = 1
 `,
-		"main.gox":     "package main\nimport \"fmt\"\nimport l \"example.org/left\"\nimport r \"example.org/right\"\nfunc main(){fmt.Println(l.Flags(),r.Flags())}\n",
-		"disabled.gox": "//goxide:cfg feature(\"missing\")\npackage main\nimport \"missing.example/no-fetch\"\nfunc Never()Unknown{return nonexistent()}\n",
+		"main.gox":     "package main\nuse fmt;\nuse left as l;\nuse right as r;\nfunc main(){fmt::Println(l::Flags(),r::Flags())}\n",
+		"disabled.gox": "//goxide:cfg feature(\"missing\")\npackage main\nuse missing_dependency;\nfunc Never()Unknown{return nonexistent()}\n",
 	})
 	if b, e := projectRun(t, root, "run", "--offline"); e != nil || strings.TrimSpace(b) != "ab ab" {
 		t.Fatalf("union: %s %v", b, e)
@@ -228,7 +228,7 @@ func TestProjectGitRevisionLock(t *testing.T) {
 	manifest := func(rev string) string {
 		return projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]string{"module": "example.org/gitdep", "git": repo, "rev": rev}}})
 	}
-	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": manifest("main"), "main.gox": "package main\nimport \"fmt\"\nimport d \"example.org/gitdep\"\nfunc main(){fmt.Println(d.Value())}\n"})
+	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": manifest("main"), "main.gox": "package main\nuse fmt;\nuse dep as d;\nfunc main(){fmt::Println(d::Value())}\n"})
 	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "not cached") {
 		t.Fatal(e)
 	}
@@ -311,7 +311,7 @@ version = 'v1.0.0'
 [package]
 format = 1
 `,
-		"main.gox": "package main\nimport \"fmt\"\nimport n \"example.org/native\"\nfunc main(){fmt.Println(n.Value())}\n",
+		"main.gox": "package main\nuse fmt;\nuse native as n;\nfunc main(){fmt::Println(n::Value())}\n",
 	})
 	if _, e := projectRun(t, root, "run", "--offline"); e == nil {
 		t.Fatal("offline cold cache accepted")
@@ -339,7 +339,12 @@ path = 'main.gox'
 
 [package]
 format = 1
-`, "main.gox": "package main\nimport \"fmt\"\nimport n \"example.org/native\"\nfunc main(){fmt.Println(n.Value())}\n"})
+
+[dependencies.native]
+module = 'example.org/native'
+package = 'example.org/native'
+version = 'v1.0.0'
+`, "main.gox": "package main\nuse fmt;\nuse native as n;\nfunc main(){fmt::Println(n::Value())}\n"})
 	if b, e := projectRun(t, app, "run", "--offline"); e != nil || strings.TrimSpace(b) != "17" {
 		t.Fatalf("native local replace: %s %v", b, e)
 	}
@@ -360,11 +365,11 @@ path = '.'
 format = 1
 `,
 		"lib.gox":           "package lib\nfunc Value()int{return 3}\n",
-		"off.gox":           "//goxide:cfg feature(\"extra\")\npackage lib\nimport \"never.example/no\"\nfunc Missing()Unknown{return nope()}\n",
+		"off.gox":           "//goxide:cfg feature(\"extra\")\npackage lib\nuse no;\nfunc Missing()Unknown{return nope()}\n",
 		"tagged.gox":        "//go:build unavailable\n\npackage lib\nvar X=cfg!(feature(\"unknown\"))\n",
 		"unrelated/bad.gox": "package other\nvar X=cfg!(feature(\"unknown\"))\n",
 		"lib_test.go":       "package lib_test\nimport \"testing\"\nimport h \"example.org/selection/helper\"\nfunc TestValue(t *testing.T){if h.Value()!=3{t.Fatal(\"bad\")}}\n",
-		"helper/helper.gox": "package helper\nimport l \"example.org/selection\"\nfunc Value()int{return l.Value()}\n",
+		"helper/helper.gox": "package helper\nuse selection as l;\nfunc Value()int{return l::Value()}\n",
 	})
 	if b, e := projectRun(t, root, "build", "--lib", "--offline"); e != nil {
 		t.Fatalf("%s %v", b, e)
@@ -408,7 +413,7 @@ path = '.'
 
 [package]
 format = 1
-`, "lib.gox": "package dep\nimport s \"example.org/shared\"\nfunc Value()int{return s.Value()}\n"})
+`, "lib.gox": "package dep\nuse shared as s;\nfunc Value()int{return s::Value()}\n"})
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/root\n\ngo 1.27\nreplace example.org/shared => ../override\n", "goxide.toml": `[[bin]]
 name = 'app'
@@ -421,7 +426,7 @@ path = '../dep'
 
 [package]
 format = 1
-`, "main.gox": "package main\nimport d \"example.org/dep\"\nfunc main(){_=d.Value()}\n"})
+`, "main.gox": "package main\nuse dep as d;\nfunc main(){_=d::Value()}\n"})
 	if _, e := projectRun(t, root, "build", "--offline", "-o", filepath.Join(base, "app")); e == nil || !strings.Contains(e.Error(), "conflicts with go.mod replace") {
 		t.Fatal(e)
 	}
@@ -475,7 +480,12 @@ path = '.'
 
 [package]
 format = 1
-`, "lib.gox": "package dep\nimport n \"example.org/native\"\nfunc Value()int{return n.Value()}\n"})
+
+[dependencies.native]
+module = 'example.org/native'
+package = 'example.org/native'
+version = 'v1.0.0'
+`, "lib.gox": "package dep\nuse native as n;\nfunc Value()int{return n::Value()}\n"})
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\nrequire example.org/native v1.1.0\nreplace example.org/native => ../native\n", "goxide.toml": `[[bin]]
 name = 'app'
 path = 'main.gox'
@@ -487,7 +497,7 @@ path = '../dep'
 
 [package]
 format = 1
-`, "main.gox": "package main\nimport d \"example.org/dep\"\nfunc main(){_=d.Value()}\n"})
+`, "main.gox": "package main\nuse dep as d;\nfunc main(){_=d::Value()}\n"})
 	if b, e := projectRun(t, root, "run", "--offline"); e != nil {
 		t.Fatalf("shared plan should align native selections: %s %v", b, e)
 	}
@@ -595,16 +605,16 @@ func Value() int {
 		"disabled.gox": "//goxide:cfg not(feature(\"extra\"))\npackage lib\nfunc Value()int{return 0}\n",
 		"never.gox": `//goxide:cfg feature("never")
 package lib
-import absent "missing.example/never"
+use never as absent;
 #[derive(Debug)]
-type Missing struct { Value absent.Unknown }
-enum Unresolved { Case(absent.Unknown), }
+type Missing struct { Value absent::Unknown }
+enum Unresolved { Case(absent::Unknown), }
 macro_rules! query { ($x:expr) => { cfg!(feature($x)) }; }
 func Never(){unknown_macro!(unresolved)}
 `,
 	})
 	for _, entry := range []string{"cmd/one", "cmd/two", "examples/demo"} {
-		projectWrite(t, root, map[string]string{entry + "/main.gox": "package main\nimport \"fmt\"\nimport lib \"example.org/conditional\"\nfunc main(){fmt.Println(lib.Value())}\n"})
+		projectWrite(t, root, map[string]string{entry + "/main.gox": "package main\nuse fmt;\nuse conditional as lib;\nfunc main(){fmt::Println(lib::Value())}\n"})
 	}
 	for _, tc := range []struct {
 		args []string
@@ -646,7 +656,7 @@ path = '../dep/sub'
 
 [package]
 format = 1
-`, "main.gox": "package main\nimport d \"example.org/dep\"\nfunc main(){_=d.Value()}\n"})
+`, "main.gox": "package main\nuse dep as d;\nfunc main(){_=d::Value()}\n"})
 	if b, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "own regular go.mod") {
 		t.Fatalf("parent module silently adopted: %s %v", b, e)
 	}

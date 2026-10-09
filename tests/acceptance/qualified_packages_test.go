@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/rootconfig"
 )
 
 func qualifiedSource(t *testing.T) (string, string) {
@@ -43,10 +44,19 @@ func qualifiedSource(t *testing.T) (string, string) {
 	return source, root
 }
 
+func compileQualifiedModule(t *testing.T, source, destination string) (frontend.ModuleResult, error) {
+	t.Helper()
+	roots, err := rootconfig.Load(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return frontend.CompileModuleWithOptions(source, destination, frontend.ModuleOptions{Roots: roots})
+}
+
 func TestQualifiedPackagesApplicationRace(t *testing.T) {
 	source, _ := qualifiedSource(t)
 	dest := filepath.Join(t.TempDir(), "generated")
-	if _, err := frontend.CompileModule(source, dest); err != nil {
+	if _, err := compileQualifiedModule(t, source, dest); err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, dest, "qualified_test.go", qualifiedAssertions)
@@ -65,13 +75,13 @@ func TestQualifiedPackagesApplicationRace(t *testing.T) {
 func TestQualifiedPackagesRejectWrongIdentity(t *testing.T) {
 	source, _ := qualifiedSource(t)
 	packagesWrite(t, source, "bad.gox", `package main
-import a "qualified.example/app/source"
-import b "qualified.example/app/other"
-func wrong(value b.Mode) string {
- return match value {a.Mode::Idle => "idle",a.Mode::Ready(_) => "ready",}
+use source as a;
+use other as b;
+func wrong(value b::Mode) string {
+ return match value {a::Mode::Idle => "idle",a::Mode::Ready(_) => "ready",}
 }
 `)
-	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
+	_, err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil {
 		t.Fatal("matched different packages' Mode values by name")
 	}
@@ -88,14 +98,14 @@ type Result[T,E any] interface{}
 func Fetch() Result[int,error] {return nil}
 `)
 	packagesWrite(t, source, "bad.gox", `package main
-import fake "qualified.example/app/fake"
+mod fake;
 func wrong() Result[int,AppError] {
- n:=fake.Fetch()?
+ n:=fake::Fetch()?
  return Result[int,AppError]::Ok(n)
 }
 
 `)
-	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
+	_, err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(err.Error(), "builtin nominal") {
 		t.Fatalf("unregistered lookalike accepted or wrong failure: %v", err)
 	}
@@ -104,20 +114,20 @@ func wrong() Result[int,AppError] {
 func TestQualifiedPackagesGenerateConcreteValidation(t *testing.T) {
 	source, _ := qualifiedSource(t)
 	packagesWrite(t, source, "concrete.gox", `package main
-import p "qualified.example/app/source"
-func absent(kind string) p.Result[string,error] {
- n:=p.Fetch(kind)?
+use source as p;
+func absent(kind string) p::Result[string,error] {
+ n:=p::Fetch(kind)?
  _=n
- return p.GoxideNewResultOk[string,error]("ok")
+ return p::GoxideNewResultOk[string,error]("ok")
 }
-func concrete(value p.Result[string,error], seen *int) string {
- out:=match value {p.Result[string,error]::Ok(text)=>text,p.Result[string,error]::Err(_)=>"err"}
+func concrete(value p::Result[string,error], seen *int) string {
+ out:=match value {p::Result[string,error]::Ok(text)=>text,p::Result[string,error]::Err(_)=>"err"}
  *seen+=1
  return out
 }
 `)
 	dest := filepath.Join(t.TempDir(), "generated")
-	if _, err := frontend.CompileModule(source, dest); err != nil {
+	if _, err := compileQualifiedModule(t, source, dest); err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, dest, "concrete_test.go", `package main
@@ -151,7 +161,7 @@ pub enum Duplicate {
  Second(error),
 }
 `)
-	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
+	_, err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "from") {
 		t.Fatalf("duplicate From accepted or wrong failure: %v", err)
 	}

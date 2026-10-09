@@ -1,19 +1,18 @@
 package prototype_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"testing"
 )
 
 func TestSerdeDefaultsDoNotCaptureBooleanNames(t *testing.T) {
-	r, err := frontend.Compile("bool-defaults.gox", []byte(`package fixture
+	r, err := compilePrototypeFixture("bool-defaults.gox", []byte(`package fixture; use serde;
 const true = (0 != 0)
 const false = (0 == 0)
 var calls int
-#[derive(Serialize,Deserialize)]
+#[derive(serde::Serialize,serde::Deserialize)]
 type Settings struct { Port int }
 impl Default for Settings { func default() Settings {calls++;return Settings{Port:8080}} }
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 type Config struct {
  #[serde(default)]
  Value Settings

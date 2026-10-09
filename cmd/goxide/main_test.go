@@ -67,9 +67,10 @@ func TestTranspileArtifacts(t *testing.T) {
 
 func TestBuildAndRunGenerated(t *testing.T) {
 	d := t.TempDir()
+	fixtureRootsFile(t, d, "")
 	src := filepath.Join(d, "input.gox")
 	target := filepath.Join(d, "program")
-	if err := os.WriteFile(src, []byte("package main\nimport \"fmt\"\nfunc main(){fmt.Println(42)}\n"), 0600); err != nil {
+	if err := os.WriteFile(src, []byte("package main\nuse fmt;\nfunc main(){fmt::Println(42)}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	root, err := filepath.Abs("../..")
@@ -88,15 +89,18 @@ func TestBuildAndRunGenerated(t *testing.T) {
 
 func TestSingleFilePublicRuntimeBuildAndRun(t *testing.T) {
 	dir := t.TempDir()
+	fixtureRootsFile(t, dir, fixtureSerdeRoots)
 	src := filepath.Join(dir, "input.gox")
 	source := `package main
-import("fmt";"github.com/goxide-lang/serde/json")
-#[derive(Deserialize)]
+use serde;
+use fmt;
+use serde::json as serdejson;
+#[derive(serde::Deserialize)]
 type Row struct{Value Option[int]}
 func main(){
- row,err:=serdejson.Unmarshal([]byte("{\"Value\":42}"),DeserializeRow)
+ row,err:=serdejson::Unmarshal([]byte("{\"Value\":42}"),DeserializeRow)
  if err!=nil{panic(err)}
- match row.Value{Option::Some(n)=>{fmt.Println(n)},Option::None=>{panic("missing")}}
+ match row.Value{Option::Some(n)=>{fmt::Println(n)},Option::None=>{panic("missing")}}
 }
 `
 	if err := os.WriteFile(src, []byte(source), 0600); err != nil {

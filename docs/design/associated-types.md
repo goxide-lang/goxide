@@ -34,7 +34,7 @@ impl Iterator for *Counter {
 
 上例省略方法体，是类型关系示意，不是完整实现。有体 impl 必须完整定义方法，其关联类型在 body 内用 `type Item = ...` 给出。无方法体的 `declare impl` 在头部给出关联类型绑定，在 wrapper 中逐项转发现有业务方法并保留 marker，见第 5 节。两种形式都必须显式给出全部关联类型，不从方法返回类型反向猜测，也不提供默认值。
 
-`Self.Item` 在 trait 内引用其关联类型。外部泛型代码使用限定投影 `T::Iterator.Item`；跨包可写 `T::iter::Iterator.Item`。这组拼写是草案，解析时 trait 引用以最后的 `.Item` 为界。
+`Self::Item` 在 trait 内引用其关联类型。外部泛型代码使用限定投影 `T::Iterator::Item`；跨包可写 `T::iter::Iterator::Item`。这组拼写是草案，全部静态段统一使用 `::`；完整关联类型实现仍待单独交付。
 
 只有已证明 `T` 满足对应 trait 实例，才能使用投影。多个 trait 都有 `Item` 时必须限定；首版不增加依赖候选搜索的 `T.Item` 简写。
 
@@ -79,8 +79,8 @@ Go 接口参数只承载解析后的类型；marker 表达对应 trait 的显式
 实现关联类型支持后，用户在自己的 C 包普通 `.gox` 文件中使用具名绑定；本文统一采用 `declare impl` 的草案拼写：
 
 ```goxide
-import iter "example.org/goxide/iter"
-import native "example.org/native/counter"
+use iter; // explicit dependency root
+use native; // explicit dependency root
 
 declare impl iter::Iterator[Item = int] for *native::Counter;
 ```

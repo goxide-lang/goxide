@@ -77,7 +77,7 @@ import append "strings"
 func main(){fmt.Println(string(push!([]byte{},append.Repeat("x",2)[0])),append.Repeat("y",2))}
 `)
 	pkg := registry(t, "example/main", map[string][]byte{"definitions.gox": definitions, "caller.gox": source}, nil)
-	result, err := ExpandPackage("caller.gox", source, nil, pkg, nil)
+	result, err := ExpandPackage("caller.gox", source, nil, pkg, nil, ExpansionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,9 +92,9 @@ func TestAppendCallerPackageShadow(t *testing.T) {
 		`var append=func([]int,int)[]int{return []int{9}}`,
 		`type append int`,
 	} {
-		source := []byte("package caller\nimport ops \"example/ops\"\nfunc f(){_=ops.push!([]int{},1)}\n" + declaration + "\n")
+		source := []byte("package caller\nimport ops \"example/ops\"\nfunc f(){_=ops::push!([]int{},1)}\n" + declaration + "\n")
 		pkg := registry(t, "example/caller", map[string][]byte{"caller.gox": source}, map[string]*Package{"example/ops": ops})
-		_, err := ExpandPackage("caller.gox", source, nil, pkg, nil)
+		_, err := ExpandPackage("caller.gox", source, nil, pkg, nil, ExpansionOptions{})
 		if err == nil || !strings.Contains(err.Error(), "caller package declaration") {
 			t.Fatalf("%s: %v", declaration, err)
 		}
@@ -127,7 +127,7 @@ func main(){append:=func([]int,int)[]int{return []int{99}};fmt.Println(push!([]i
 func TestAppendConditionalEvaluation(t *testing.T) {
 	run(t, `package main
 import "fmt"
-macro_rules! event_if {($enabled:expr,$message:expr,$s:expr,$v:expr)=>{if $enabled {fmt.Println($message,append($s,$v))}};}
+macro_rules! event_if {($enabled:expr,$message:expr,$s:expr,$v:expr)=>{if $enabled {fmt::Println($message,append($s,$v))}};}
 func main(){
  trace:=""
  enabled:=func(value bool)bool{trace+="E";return value}

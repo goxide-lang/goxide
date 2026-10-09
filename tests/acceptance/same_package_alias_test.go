@@ -5,14 +5,12 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
-const samePackageAliasTypes = `package fixture
-#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+const samePackageAliasTypes = `package fixture; use serde;
+#[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Item struct{N int;Name string}
-#[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 pub enum E{
 #[default]
 Item(Item),
@@ -22,13 +20,13 @@ impl Default for Item{func default()Item{return Item{N:7,Name:"local"}}}
 #[derive(Default)]
 type Recursive struct{V Local}
 `
-const samePackageAliasWrappers = `package fixture
+const samePackageAliasWrappers = `package fixture; use serde;
 type Local=Native
 type Level=Local
 type Event=E
-#[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Wrap struct{V Level;E Event}
-#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Bag struct{Items []Level;Index map[string]Local}
 func Equal(a,b Wrap)bool{Local:=1;_=Local;return a.equals(b)}
 func ShadowDefault()Item{DefaultItem:=func()Item{return Item{N:9}};return DefaultItem()}
@@ -52,6 +50,7 @@ func TestSamePackageAliasModules(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", "module local.example/fixture\ngo 1.27\n")
+	writeAcceptanceSerdeRoots(t, src, "")
 	packagesWrite(t, src, "types.gox", samePackageAliasTypes)
 	packagesWrite(t, src, "wrap.gox", samePackageAliasWrappers)
 	packagesWrite(t, src, "alias.go", "package fixture\ntype Native=Item\n")
@@ -62,7 +61,7 @@ func TestSamePackageAliasModules(t *testing.T) {
 	packagesCommand(t, out, tool, true, "vet", "./...")
 }
 func TestSamePackageAliasSingleFileRace(t *testing.T) {
-	source := strings.Replace(samePackageAliasTypes, "pub enum", "enum", 1) + "\ntype Native=Item\n" + strings.TrimPrefix(samePackageAliasWrappers, "package fixture\n")
+	source := strings.Replace(samePackageAliasTypes, "pub enum", "enum", 1) + "\ntype Native=Item\n" + strings.TrimPrefix(samePackageAliasWrappers, "package fixture; use serde;\n")
 	enumGeneratedModule(t, source, samePackageAliasAssertions, false, true)
 }
 func TestSamePackageAliasRejections(t *testing.T) {
@@ -72,11 +71,11 @@ func TestSamePackageAliasRejections(t *testing.T) {
 		"derive-alias":            "#[derive(Clone)]\ntype Item struct{N int}\n#[derive(Clone)]\ntype Local=Item",
 		"manual-alias":            "type Item struct{N int}\ntype Local=Item\nimpl Default for Local{func default()Local{return Local{}}}",
 		"derive-manual-conflict":  "#[derive(Default)]\ntype Item struct{N int}\ntype Local=Item\nimpl Default for Item{func default()Item{return Item{}}}",
-		"wrong-direction":         "#[derive(Serialize)]\ntype Item struct{N int}\ntype Local=Item\n#[derive(Deserialize)]\ntype Wrap struct{V Local}",
+		"wrong-direction":         "#[derive(serde::Serialize)]\ntype Item struct{N int}\ntype Local=Item\n#[derive(serde::Deserialize)]\ntype Wrap struct{V Local}",
 		"bad-manual-return":       "type Item struct{N int}\ntype Local=Item\nimpl Default for Item{func default()Item{return 1}}\n#[derive(Default)]\ntype Wrap struct{V Local}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile(name+".gox", []byte("package fixture\n"+body+"\n"))
+			_, err := compileAcceptanceSerdeFixture(name+".gox", []byte("package fixture; use serde;\n"+body+"\n"))
 			if err == nil || !strings.Contains(err.Error(), name+".gox") {
 				t.Fatal(err)
 			}

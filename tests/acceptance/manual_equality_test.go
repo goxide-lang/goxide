@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -24,6 +25,7 @@ func TestManualEqualityModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("manual.example/lib", ""))
+	writeAcceptanceRoots(t, src, map[string]rootconfig.Mapping{"reflect": {Source: "toolchain", Package: "reflect"}})
 	packagesWrite(t, src, "model/types.gox", `package model
 type Person struct{ID int;Name string}
 type Float float64
@@ -42,7 +44,7 @@ type Index map[Stable]int
 type OrdinaryFloat struct{Value float64}
 `)
 	packagesWrite(t, src, "model/impl.gox", `package model
-import "reflect"
+use reflect;
 var PersonCalls int
 var GateCalls int
 var Recovered interface{}
@@ -62,7 +64,7 @@ impl Eq for Stable {}
 impl PartialEq for Catch {
  func equals(self Catch,other Catch)bool{Recovered=recover();return true}
 }
-func LocalTypeName()string{type EqualsPerson int;_=(Person{ID:1}).equals(Person{ID:1});return reflect.TypeOf(EqualsPerson(0)).Name()}
+func LocalTypeName()string{type EqualsPerson int;_=(Person{ID:1}).equals(Person{ID:1});return reflect::TypeOf(EqualsPerson(0)).Name()}
 func RecoverDirect(){defer (Catch{}).equals(Catch{});panic("manual-recover")}
 impl PartialEq for Counter {
  func equals(self Counter,other Counter)bool{if self==0||other==0{return self==other};EqualsCounter:=func(Counter,Counter)bool{return false};_=EqualsCounter;return descend(self-1,other-1)}
@@ -81,18 +83,19 @@ type Event=m.Event
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("manual.example/app", lib))
+	writeAcceptanceRoots(t, appsrc, map[string]rootconfig.Mapping{"model": {Module: "manual.example/lib", Package: "manual.example/lib/model"}, "relay": {Module: "manual.example/lib", Package: "manual.example/lib/relay"}})
 	packagesWrite(t, appsrc, "app.gox", `package app
-import(m "manual.example/lib/model";r "manual.example/lib/relay")
+use model as m;use relay as r;
 #[derive(PartialEq,Eq)]
-type Bundle struct{User r.Person;Event r.Event;Users []m.Person;Index map[string]m.Person}
+type Bundle struct{User r::Person;Event r::Event;Users []m::Person;Index map[string]m::Person}
 func Same(a,b Bundle)bool{return a.equals(b)}
-func People(a,b r.Person)bool{return a.equals(b)}
-func FloatSame(a,b m.Float)bool{return a.equals(b)}
-func DefaultFloat(a,b m.OrdinaryFloat)bool{return a.equals(b)}
+func People(a,b r::Person)bool{return a.equals(b)}
+func FloatSame(a,b m::Float)bool{return a.equals(b)}
+func DefaultFloat(a,b m::OrdinaryFloat)bool{return a.equals(b)}
 var Trace string
-func Left(a m.Gate)m.Gate{Trace+="L";return a}
-func Right(a m.Gate)m.Gate{Trace+="R";return a}
-func Ordered(a,b m.Gate)bool{return Left(a).equals(Right(b))}
+func Left(a m::Gate)m::Gate{Trace+="L";return a}
+func Right(a m::Gate)m::Gate{Trace+="R";return a}
+func Ordered(a,b m::Gate)bool{return Left(a).equals(Right(b))}
 `)
 	out := filepath.Join(t.TempDir(), "out")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
@@ -178,12 +181,13 @@ func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name
 		"duplicate-eq":           `type T struct{};impl PartialEq for T {func equals(self T,other T)bool{return true}};impl Eq for T {};impl Eq for T {}`,
 		"manual-native-key":      "type T struct{ID int}\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}\nimpl Eq for T {}\n#[derive(PartialEq,Eq)]\ntype Index map[T]int",
 		"wrapped-manual-key":     "type T int\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}\nimpl Eq for T {}\n#[derive(PartialEq,Eq)]\ntype K struct{Value T}\n#[derive(PartialEq,Eq)]\ntype Index map[K]int",
-		"imported-manual-key":    "import m \"manual.example/lib/model\"\n#[derive(PartialEq,Eq)]\ntype Index map[m.Person]int",
+		"imported-manual-key":    "use model as m;\n#[derive(PartialEq,Eq)]\ntype Index map[m::Person]int",
 		"partial-only-field":     "type T struct{}\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}\n#[derive(PartialEq,Eq)]\ntype Outer struct{Value T}",
 	} {
 		t.Run(name, func(t *testing.T) {
 			bad := t.TempDir()
 			packagesWrite(t, bad, "go.mod", mod("manual.example/bad", lib))
+			writeAcceptanceRoots(t, bad, map[string]rootconfig.Mapping{"model": {Module: "manual.example/lib", Package: "manual.example/lib/model"}, "relay": {Module: "manual.example/lib", Package: "manual.example/lib/relay"}})
 			packagesWrite(t, bad, "bad.gox", "package bad\n"+code)
 			packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), bad)
 		})
@@ -191,6 +195,7 @@ func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name
 	t.Run("duplicate-across-files", func(t *testing.T) {
 		bad := t.TempDir()
 		packagesWrite(t, bad, "go.mod", mod("manual.example/bad", lib))
+		writeAcceptanceRoots(t, bad, map[string]rootconfig.Mapping{"model": {Module: "manual.example/lib", Package: "manual.example/lib/model"}, "relay": {Module: "manual.example/lib", Package: "manual.example/lib/relay"}})
 		packagesWrite(t, bad, "type.gox", "package bad\ntype T struct{}")
 		for _, n := range []string{"a.gox", "b.gox"} {
 			packagesWrite(t, bad, n, "package bad\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}")

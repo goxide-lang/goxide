@@ -1,24 +1,25 @@
 package main
+use serde;
 
-import "os"
-import "errors"
-import "encoding/json"
-import "strconv"
-import "github.com/goxide-lang/serde/json"
+use os;
+use errors;
+use json;
+use strconv;
+use serde::json as serdejson;
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum Operation { Charge(int64), }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type Order struct { Operations []Operation }
 
 func main() {
     input:=`{"Operations":[{"Charge":7}]}`
-    if len(os.Args)>1 { input=os.Args[1] }
-    order,err:=serdejson.Unmarshal([]byte(input),DeserializeOrder)
+    if len(os::Args)>1 { input=os::Args[1] }
+    order,err:=serdejson::Unmarshal([]byte(input),DeserializeOrder)
     if err!=nil {
-        var syntax *json.SyntaxError
-        if errors.As(err,&syntax) { println!("syntax {}",syntax.Offset); return }
-        if errors.Is(err,strconv.ErrRange) { println!("range"); return }
+        var syntax *json::SyntaxError
+        if errors::As(err,&syntax) { println!("syntax {}",syntax.Offset); return }
+        if errors::Is(err,strconv::ErrRange) { println!("range"); return }
         println!("rejected");return
     }
     println!("accepted {}",len(order.Operations))

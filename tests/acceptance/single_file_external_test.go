@@ -34,6 +34,7 @@ func TestSingleFileExternalRecoveryCLI(t *testing.T) {
 		return s
 	}
 	packagesWrite(t, producer, "go.mod", module("a06.example/lib", ""))
+	writeSingleExternalRoots(t, producer)
 	packagesWrite(t, producer, "model/model.gox", singleExternalProducer)
 	packagesWrite(t, producer, "relay/relay.go", `package relay
 import m "a06.example/lib/model"
@@ -62,7 +63,7 @@ func EqualsItem(a,b Item)bool{return true}
 func SerializeItem(s serde.Serializer,v *Item)error{return nil}
 func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 `)
-	packagesWrite(t, producer, "uses/api.gox", "package uses\nimport p \"a06.example/lib/model\"\npub use p::Plain;\n")
+	packagesWrite(t, producer, "uses/api.gox", "package uses\nuse library::model as p;\npub use p::Plain;\n")
 	beforeProducer := singleExternalSnapshot(t, producer)
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", library, producer)
 	again := filepath.Join(t.TempDir(), "library")
@@ -77,6 +78,7 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		t.Helper()
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", module("a06.example/app", library))
+		writeSingleExternalRoots(t, dir)
 		packagesWrite(t, dir, "app.gox", body)
 		return dir
 	}
@@ -204,6 +206,7 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		packagesWrite(t, parent, "go.work", "go 1.27\nuse .\n")
 		nested := filepath.Join(parent, "nested")
 		packagesWrite(t, nested, "go.mod", module("a06.example/nested", library))
+		writeSingleExternalRoots(t, nested)
 		packagesWrite(t, nested, "app.gox", singleExternalPlain)
 		extra := []string{"GOWORK=" + filepath.Join(parent, "go.work")}
 		execute(t, parent, filepath.Join(nested, "app.gox"), "7\n", extra)
@@ -221,6 +224,7 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		singleExternalCopyTree(t, library, filepath.Join(original, "library"))
 		app := filepath.Join(original, "consumer")
 		packagesWrite(t, app, "go.mod", module("a06.example/movable", "../library"))
+		writeSingleExternalRoots(t, app)
 		packagesWrite(t, app, "app.gox", singleExternalPlain)
 		execute(t, parent, filepath.Join(app, "app.gox"), "7\n", extra)
 		moved := filepath.Join(t.TempDir(), "moved")
@@ -232,7 +236,7 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		singleExternalUnchanged(t, moved, before)
 	})
 	t.Run("selected-file-only", func(t *testing.T) {
-		src := consumer(t, "package main\nimport \"fmt\"\nfunc main(){fmt.Println(fromSibling())}\n")
+		src := consumer(t, "package main\nuse fmt;\nfunc main(){fmt::Println(fromSibling())}\n")
 		packagesWrite(t, src, "sibling.go", "package main\nfunc fromSibling()int{return 12}\n")
 		before := singleExternalSnapshot(t, src)
 		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), filepath.Join(src, "app.gox"))
@@ -254,14 +258,14 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		singleExternalCopyTree(t, library, lib)
 		input := filepath.Join(lib, "tools/main.gox")
 		packagesWrite(t, lib, "tools/main.gox", `package main
-import("fmt";h "a06.example/lib/internal/hidden")
-func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
+use fmt; use library::internal::hidden as h;
+func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
 `)
 		execute(t, outside, input, "8\n", nil)
-		bad := consumer(t, "package main\nimport h \"a06.example/lib/internal/hidden\"\nfunc main(){_=h.Get()}\n")
+		bad := consumer(t, "package main\nuse library::internal::hidden as h;\nfunc main(){_=h::Get()}\n")
 		rejected := func(path string) {
 			msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), path)
-			singleExternalContains(t, msg, "app.gox:2:", "internal package is not accessible from a06.example/app: a06.example/lib/internal/hidden")
+			singleExternalContains(t, msg, "app.gox:2:", "internal package a06.example/lib/internal/hidden is inaccessible from a06.example/app")
 		}
 		rejected(filepath.Join(bad, "app.gox"))
 		link := filepath.Join(lib, "tools/linked.gox")
@@ -269,14 +273,14 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 			t.Fatal(err)
 		}
 		rejected(link)
-		facade := consumer(t, "package main\nimport(\"fmt\";a \"a06.example/lib/api\")\nfunc main(){fmt.Println(a.Read(a.Get()))}\n")
+		facade := consumer(t, "package main\nuse fmt; use library::api as a;\nfunc main(){fmt::Println(a::Read(a::Get()))}\n")
 		execute(t, outside, filepath.Join(facade, "app.gox"), "8\n", nil)
-		enhanced := consumer(t, "package main\nimport a \"a06.example/lib/api\"\nfunc main(){var n int=match a.Get(){a.Public::Value(n)=>n};_=n}\n")
+		enhanced := consumer(t, "package main\nuse library::api as a;\nfunc main(){var n int=match a::Get(){a::Public::Value(n)=>n};_=n}\n")
 		msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "bad.go"), filepath.Join(enhanced, "app.gox"))
 		singleExternalContains(t, msg, "enum syntax through an internal-origin alias is not yet supported", "origin a06.example/lib/internal/hidden")
 	})
 	t.Run("metadata-validation", func(t *testing.T) {
-		input := consumer(t, "package main\nimport m \"a06.example/lib/model\"\nfunc main(){_=m.Plain()}\n")
+		input := consumer(t, "package main\nuse library::model as m;\nfunc main(){_=m::Plain()}\n")
 		path := filepath.Join(library, "model/.goxide.enums.json")
 		original, err := os.ReadFile(path)
 		if err != nil {
@@ -322,7 +326,7 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 						dest += ".go"
 					}
 					msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, arg)
-					singleExternalContains(t, msg, "enum metadata missing, stale or wrong package for a06.example/lib/model:", "app.gox:2:8:", want)
+					singleExternalContains(t, msg, "enum metadata missing, stale or wrong package for a06.example/lib/model:", "app.gox:2:1:", want)
 				})
 			}
 		}
@@ -428,7 +432,7 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 			t.Fatal(err)
 		}
 		defer os.WriteFile(path, original, 0600)
-		src := consumer(t, "package main\nimport r \"a06.example/lib/relay\"\nfunc main(){_=r.Get()}\n")
+		src := consumer(t, "package main\nuse library::relay as r;\nfunc main(){_=r::Get()}\n")
 		for _, mode := range []string{"file", "directory"} {
 			t.Run(mode, func(t *testing.T) {
 				input := src
@@ -462,6 +466,10 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 		}
 		for _, kind := range []string{"Default", "Clone", "Debug", "Serialize", "Deserialize", "PartialEq", "PartialEq,Eq"} {
 			t.Run("fake-"+kind, func(t *testing.T) {
+				derive, ownerUse := kind, ""
+				if kind == "Serialize" || kind == "Deserialize" {
+					derive, ownerUse = "serde::"+kind, "use serde;"
+				}
 				location := "app.gox:5:"
 				want := "nested type requires " + kind + " derive or explicit implementation: Local"
 				if kind == "Serialize" || kind == "Deserialize" {
@@ -476,26 +484,26 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 					}
 					want = "named type a06.example/lib/fake.Item requires an explicit " + protocol + " protocol"
 				}
-				reject(t, "package main\nimport f \"a06.example/lib/fake\"\ntype Local=f.Item\n#[derive("+kind+")]\ntype Wrap struct{V Local}\nfunc main(){}\n", location, want)
+				reject(t, "package main; "+ownerUse+"\nuse library::fake as f;\ntype Local=f::Item\n#[derive("+derive+")]\ntype Wrap struct{V Local}\nfunc main(){}\n", location, want)
 			})
 		}
 		for _, tc := range []struct {
 			name, source string
 			words        []string
 		}{
-			{"new-defined", "import m \"a06.example/lib/model\"\ntype New m.Item\ntype Local=New\n#[derive(Clone)]\ntype Wrap struct{V Local}\n", []string{"nested type requires Clone derive or explicit implementation: Local"}},
-			{"wrong-serde-direction", "import m \"a06.example/lib/model\"\n#[derive(Deserialize)]\ntype Wrap struct{V m.Output}\n", []string{"nested type lacks required registered serde protocol: m.Output"}},
-			{"different-enum", "import(m \"a06.example/lib/model\";o \"a06.example/lib/other\")\nfunc Bad(v m.E)int{return match v{m.E::Empty=>0,o.E::Item(n)=>n,_=>0}}\n", []string{"enum: mixed enum identities in match"}},
-			{"readonly", "import m \"a06.example/lib/model\"\nfunc Bad(){n:=1;p:=m.View(&n);*p=2}\n", []string{"cannot write through a readonly projection"}},
+			{"new-defined", "use library::model as m;\ntype New m::Item\ntype Local=New\n#[derive(Clone)]\ntype Wrap struct{V Local}\n", []string{"nested type requires Clone derive or explicit implementation: Local"}},
+			{"wrong-serde-direction", "use library::model as m; use serde;\n#[derive(serde::Deserialize)]\ntype Wrap struct{V m::Output}\n", []string{"nested type lacks required registered serde protocol: a06.example/lib/model::Output", "app.gox:4:23:", "source span [101,107)"}},
+			{"different-enum", "use library::model as m; use library::other as o;\nfunc Bad(v m::E)int{return match v{m::E::Empty=>0,o::E::Item(n)=>n,_=>0}}\n", []string{"enum: mixed enum identities in match"}},
+			{"readonly", "use library::model as m;\nfunc Bad(){n:=1;p:=m::View(&n);*p=2}\n", []string{"cannot write through a readonly projection"}},
 		} {
 			t.Run(tc.name, func(t *testing.T) { reject(t, "package main\n"+tc.source+"func main(){}\n", "app.gox", tc.words...) })
 		}
 	})
 	t.Run("private-type-rejection", func(t *testing.T) {
-		src := consumer(t, "package main\nimport m \"a06.example/lib/model\"\nfunc main(){var x m.hidden;_=x}\n")
+		src := consumer(t, "package main\nuse library::model as m;\nfunc main(){var x m::hidden;_=x}\n")
 		for _, input := range []string{filepath.Join(src, "app.gox"), src} {
 			msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), input)
-			singleExternalContains(t, msg, "undefined: m.hidden", "app.gox:3:21:")
+			singleExternalContains(t, msg, "undefined: goxideNamespace0.hidden", "app.gox:3:22:")
 			if input == src {
 				// Directory mode already performs full source typechecking.
 				singleExternalContains(t, msg, "source span")
@@ -511,26 +519,32 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module a06.example/missing\ngo 1.27\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
-		packagesWrite(t, dir, "app.gox", "package main\nimport s \"github.com/goxide-lang/std/sum\"\nfunc main(){var v s.Option[int];_=v}\n")
+		writeSingleExternalRoots(t, dir)
+		packagesWrite(t, dir, "app.gox", "package main\nuse std::sum as s;\nfunc main(){var v s::Option[int];_=v}\n")
 		before := singleExternalSnapshot(t, dir)
 		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), filepath.Join(dir, "app.gox"))
-		singleExternalContains(t, msg, "app.gox:2:8:", "cannot find module providing package github.com/goxide-lang/std/sum", "import lookup disabled by -mod=readonly")
+		singleExternalContains(t, msg, "app.gox:2:1:", "cannot find module providing package github.com/goxide-lang/std/sum", "import lookup disabled by -mod=readonly")
 		singleExternalUnchanged(t, dir, before)
 	})
 	t.Run("existing-file-boundaries", func(t *testing.T) {
-		src := consumer(t, "package main\nimport \"fmt\"\nenum Local{A,}\nfunc main(){fmt.Println(match Local::A{Local::A=>3})}\n")
+		src := consumer(t, "package main\nuse fmt;\nenum Local{A,}\nfunc main(){fmt::Println(match Local::A{Local::A=>3})}\n")
 		execute(t, outside, filepath.Join(src, "app.gox"), "3\n", nil)
-		for _, tc := range []struct{ name, source, want string }{
-			{"local-use", "package main\nimport p \"a06.example/lib/model\"\nuse p::Plain;\nfunc main(){_=Plain()}\n", "use/pub use requires directory or package compilation"},
-			{"imported-use", "package main\nimport p \"a06.example/lib/uses\"\nfunc main(){_=p.Plain()}\n", "imports with use metadata require directory/package compilation"},
+		for _, tc := range []struct{ name, source string }{
+			{"local-use", "package main\nuse library::model::Plain;\nfunc main(){_=Plain()}\n"},
+			{"imported-use", "package main\nuse library::uses as p;\nfunc main(){_=p::Plain()}\n"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				input := consumer(t, tc.source)
-				msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out.go"), filepath.Join(input, "app.gox"))
-				singleExternalContains(t, msg, "app.gox", tc.want)
+				deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out.go"), filepath.Join(input, "app.gox"))
 				deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), input)
 			})
 		}
+		t.Run("pub-use-needs-package-publication", func(t *testing.T) {
+			input := consumer(t, "package main\npub use library::model::Plain;\nfunc main(){_=Plain()}\n")
+			msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out.go"), filepath.Join(input, "app.gox"))
+			singleExternalContains(t, msg, "app.gox", "pub use requires package compilation")
+			deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), input)
+		})
 
 		for _, args := range [][]string{{"transpile", "--tags", "custom"}, {"test"}, {"run", "--features", "extra"}, {"run", "--workspace"}} {
 			argv := append(append([]string(nil), args...), filepath.Join(src, "app.gox"))
@@ -538,6 +552,36 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 			singleExternalContains(t, msg, "directory")
 		}
 	})
+}
+
+func writeSingleExternalRoots(t *testing.T, dir string) {
+	t.Helper()
+	packagesWrite(t, dir, "goxide.roots.toml", `[roots.serde]
+module = "github.com/goxide-lang/serde"
+package = "github.com/goxide-lang/serde"
+[roots.serde.namespaces]
+json = "github.com/goxide-lang/serde/json"
+[roots.library]
+module = "a06.example/lib"
+[roots.library.namespaces]
+model = "a06.example/lib/model"
+relay = "a06.example/lib/relay"
+other = "a06.example/lib/other"
+fake = "a06.example/lib/fake"
+api = "a06.example/lib/api"
+uses = "a06.example/lib/uses"
+"internal::hidden" = "a06.example/lib/internal/hidden"
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+[roots.errors]
+source = "toolchain"
+package = "errors"
+[roots.std]
+module = "github.com/goxide-lang/std"
+[roots.std.namespaces]
+sum = "github.com/goxide-lang/std/sum"
+`)
 }
 
 func singleExternalSnapshot(t *testing.T, root string) map[string]string {
@@ -612,17 +656,17 @@ func singleExternalContains(t *testing.T, text string, words ...string) {
 }
 
 const singleExternalPlain = `package main
-import("fmt";m "a06.example/lib/model")
-func main(){fmt.Println(m.Plain())}
+use fmt; use library::model as m;
+func main(){fmt::Println(m::Plain())}
 `
 
-const singleExternalProducer = `package model
-import "errors"
+const singleExternalProducer = `package model; use serde;
+use errors;
 var DefaultCalls int
-#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Item struct{N int;Name string}
 impl Default for Item{func default()Item{DefaultCalls++;return Item{N:7,Name:"producer"}}}
-#[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 pub enum E{
  #[default]
  Item(Item),
@@ -631,30 +675,25 @@ pub enum E{
 func Plain()int{return 7}
 func View(r &int)&int{return r}
 type hidden struct{N int}
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 type Output struct{N int}
-var Sentinel=errors.New("external failure")
+var Sentinel=errors::New("external failure")
 type Fault struct{}
 func(*Fault)Error()string{return "typed nil failure"}
 func Pick(ok bool)Option[int]{if ok{return Option[int]::Some(5)};return Option[int]::None}
 func Load(kind int)Result[int,error]{if kind==1{return Result[int,error]::Err(Sentinel)};if kind==2{var e *Fault;return Result[int,error]::Err(e)};return Result[int,error]::Ok(4)}
 `
 
-const singleExternalConsumer = `package main
-import (
- "fmt"
- m "a06.example/lib/model"
- r "a06.example/lib/relay"
- "github.com/goxide-lang/serde/json"
-)
-type Local=r.Item
+const singleExternalConsumer = `package main; use serde;
+use fmt; use library::model as m; use library::relay as r; use serde::json as serdejson;
+type Local=r::Item
 type Level=Local
-type Event=r.E
-#[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
-type Wrap struct{Direct m.Item;Value Level;Event Event}
-#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+type Event=r::E
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
+type Wrap struct{Direct m::Item;Value Level;Event Event}
+#[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Bag struct{Items []Level;Index map[string]Local}
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 type Skipped struct{
  #[serde(skip)]
  Value Level
@@ -666,29 +705,29 @@ type Failure struct{
  Cause error
 }
 func Equal(a,b Wrap)bool{return a.equals(b)}
-func SameDirect(a,b m.Item)bool{return a.equals(b)}
-func Read(e Event)int{return match e{r.E::Item(v)=>v.N,r.E::Empty=>0}}
+func SameDirect(a,b m::Item)bool{return a.equals(b)}
+func Read(e Event)int{return match e{r::E::Item(v)=>v.N,r::E::Empty=>0}}
 func Mark(hit *bool)bool{*hit=true;return true}
-func Guard(e Event,hit *bool)int{return match e{r.E::Item(v) if Mark(hit)=>v.N,r.E::Empty if Mark(hit)=>0,_=>-1}}
-func Decode(input []byte)(Wrap,error){v,e:=serdejson.Unmarshal(input,DeserializeWrap);if e!=nil{return Wrap{},FromFailure(e)};return v,nil}
+func Guard(e Event,hit *bool)int{return match e{r::E::Item(v) if Mark(hit)=>v.N,r::E::Empty if Mark(hit)=>0,_=>-1}}
+func Decode(input []byte)(Wrap,error){v,e:=serdejson::Unmarshal(input,DeserializeWrap);if e!=nil{return Wrap{},FromFailure(e)};return v,nil}
 func Business(input []byte)(string,string,string,error){
- v,e:=serdejson.Unmarshal(input,DeserializeBag);if e!=nil{return "","","",e}
+ v,e:=serdejson::Unmarshal(input,DeserializeBag);if e!=nil{return "","","",e}
  c:=CloneBag(&v);c.Items[0].N=9;c.Index["x"]=Local{N:8,Name:"copy"}
  before:=DebugBag(&v);after:=DebugBag(&c)
- data,e:=serdejson.Marshal(&c,SerializeBag);return before,after,string(data),e
+ data,e:=serdejson::Marshal(&c,SerializeBag);return before,after,string(data),e
 }
 var Trace []string
 func record(s string){Trace=append(Trace,s)}
 func mark(s string,n int)int{record(s);return n}
-func OptionFlow(ok bool)r.Maybe{defer record("option-defer");record("option-before");n:=m.Pick(ok)?;record("option-after");return r.Maybe::Some(n+1)}
-func ResultFlow(kind int)r.Outcome{defer record("result-defer");record("result-before");n:=m.Load(kind)?;record("result-after");return r.Outcome::Ok(n+1)}
-func finish(a,b int)r.Outcome{return r.Outcome::Ok(a+b)}
-func CallFlow(kind int)r.Outcome{return finish(m.Load(kind)?,mark("last-argument",2))}
-func Nearest(kind int)int{f:=func()r.Outcome{defer record("inner-defer");n:=m.Load(kind)?;record("inner-after");return r.Outcome::Ok(n)};_=f();return mark("outer",42)}
+func OptionFlow(ok bool)r::Maybe{defer record("option-defer");record("option-before");n:=m::Pick(ok)?;record("option-after");return r::Maybe::Some(n+1)}
+func ResultFlow(kind int)r::Outcome{defer record("result-defer");record("result-before");n:=m::Load(kind)?;record("result-after");return r::Outcome::Ok(n+1)}
+func finish(a,b int)r::Outcome{return r::Outcome::Ok(a+b)}
+func CallFlow(kind int)r::Outcome{return finish(m::Load(kind)?,mark("last-argument",2))}
+func Nearest(kind int)int{f:=func()r::Outcome{defer record("inner-defer");n:=m::Load(kind)?;record("inner-after");return r::Outcome::Ok(n)};_=f();return mark("outer",42)}
 func main(){
- v:=DefaultWrap();fmt.Println(Read(v.Event),v.Direct.N,v.Value.Name)
+ v:=DefaultWrap();fmt::Println(Read(v.Event),v.Direct.N,v.Value.Name)
  _,after,wire,e:=Business([]byte("{\"Items\":[{\"N\":7,\"Name\":\"producer\"}],\"Index\":{\"x\":{\"N\":7,\"Name\":\"producer\"}}}"));if e!=nil{panic(e)}
- fmt.Println(after);fmt.Println(wire)
+ fmt::Println(after);fmt::Println(wire)
 }
 `
 

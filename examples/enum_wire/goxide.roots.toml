@@ -1,0 +1,10 @@
+[roots.os]
+source = "toolchain"
+package = "os"
+
+[roots.serde]
+module = "github.com/goxide-lang/serde"
+package = "github.com/goxide-lang/serde"
+
+[roots.serde.namespaces]
+"json" = "github.com/goxide-lang/serde/json"

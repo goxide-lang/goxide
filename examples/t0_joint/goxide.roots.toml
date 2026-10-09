@@ -1,0 +1,34 @@
+[roots.config]
+module = "joint.example/app"
+package = "joint.example/app/config"
+
+[roots.errors]
+source = "toolchain"
+package = "errors"
+
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+
+[roots.logkit]
+module = "joint.example/app"
+package = "joint.example/app/logkit"
+
+[roots.os]
+source = "toolchain"
+package = "os"
+
+[roots.serde]
+module = "github.com/goxide-lang/serde"
+package = "github.com/goxide-lang/serde"
+
+[roots.serde.namespaces]
+"json" = "github.com/goxide-lang/serde/json"
+
+[roots.store]
+module = "joint.example/app"
+package = "joint.example/app/store"
+
+[roots.strconv]
+source = "toolchain"
+package = "strconv"

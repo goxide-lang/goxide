@@ -67,7 +67,15 @@ func TestNativeWorkspaceProgressiveVendor(t *testing.T) {
 	}
 	lib := filepath.Join(dest, "members/m1")
 	os.Remove(filepath.Join(lib, "lib.go"))
-	workspaceWrite(t, lib, "lib.gox", "package lib\nimport \"example.org/dep\"\nmacro_rules! suffix { () => { \" enhanced\" }; }\nfunc Value()string{return dep.Value()+suffix!()}\n")
+	workspaceWrite(t, lib, "lib.gox", "package lib\nuse dep;\nmacro_rules! suffix { () => { \" enhanced\" }; }\nfunc Value()string{return dep::Value()+suffix!()}\n")
+	manifest, err := os.ReadFile(filepath.Join(lib, "goxide.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspaceWrite(t, lib, "goxide.toml", string(manifest)+"\n[dependencies.dep]\nmodule='example.org/dep'\nversion='v1.0.0'\npackage='example.org/dep'\n")
+	if out, e := projectRun(t, dest, "run", "-p", "example.org/app", "--offline"); e != nil {
+		t.Fatalf("refresh explicit roots: %s %v", out, e)
+	}
 	out, e := projectRun(t, dest, "run", "-p", "example.org/app", "--offline", "--locked")
 	if e != nil || !strings.Contains(out, "modified enhanced") {
 		t.Fatalf("%s %v", out, e)
@@ -91,13 +99,13 @@ func TestNativeWorkspaceProgressiveScriptPermissions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	workspaceWrite(t, lib, "goxide.toml", string(b)+"\n[build]\nentry='tools/build/main.go'\noutputs=['gen/data.go']\n")
+	workspaceWrite(t, lib, "goxide.toml", string(b)+"\n[package.namespaces]\ngen='example.org/lib/gen'\n[build]\nentry='tools/build/main.go'\noutputs=['gen/data.go']\n")
 	workspaceWrite(t, lib, "tools/build/main.go", `package main
 import("encoding/json";"fmt";"os";"path/filepath")
 func main(){var q struct{OutDir string `+"`json:\"out_dir\"`"+`};b,e:=os.ReadFile(os.Args[1]);if e!=nil{panic(e)};if e=json.Unmarshal(b,&q);e!=nil{panic(e)};if e=os.MkdirAll(filepath.Join(q.OutDir,"gen"),0755);e!=nil{panic(e)};if e=os.WriteFile(filepath.Join(q.OutDir,"gen/data.go"),[]byte("package gen\nconst Value=\"script-output\"\n"),0644);e!=nil{panic(e)};fmt.Println("NATIVE_SCRIPT_EXECUTED")}
 `)
 	os.Remove(filepath.Join(lib, "lib.go"))
-	workspaceWrite(t, lib, "lib.gox", "package lib\nimport \"example.org/lib/gen\"\nfunc Value()string{return gen.Value}\n")
+	workspaceWrite(t, lib, "lib.gox", "package lib\nuse gen;\nfunc Value()string{return gen::Value}\n")
 	scriptAction(t, app, "trust-project")
 	plan := scriptPlan(t, app)
 	if len(plan.Subjects) != 1 {
@@ -140,7 +148,9 @@ func TestNativeWorkspaceOptionalCfg(t *testing.T) {
 	m = w.Manifests[app]
 	d := m.Dependencies["member1"]
 	d.Optional = true
+	d.Package = "example.org/lib"
 	m.Dependencies["member1"] = d
+	m.Dependencies["fmt"] = project.Dependency{Source: "toolchain", Package: "fmt"}
 	m.Features = map[string][]string{"default": {"use_lib"}, "use_lib": {"dep:member1"}, "never": {}}
 	b, e := project.Marshal(m)
 	if e != nil {
@@ -148,10 +158,10 @@ func TestNativeWorkspaceOptionalCfg(t *testing.T) {
 	}
 	workspaceWrite(t, app, "goxide.toml", string(b))
 	os.Remove(filepath.Join(app, "main.go"))
-	workspaceWrite(t, app, "main.gox", "package main\nimport \"fmt\"\nfunc main(){fmt.Println(value())}\n")
-	workspaceWrite(t, app, "on.gox", "//goxide:cfg feature(\"use_lib\")\npackage main\nimport \"example.org/lib\"\nfunc value()string{return lib.Value()}\n")
+	workspaceWrite(t, app, "main.gox", "package main\nuse fmt;\nfunc main(){fmt::Println(value())}\n")
+	workspaceWrite(t, app, "on.gox", "//goxide:cfg feature(\"use_lib\")\npackage main\nuse member1 as lib;\nfunc value()string{return lib::Value()}\n")
 	workspaceWrite(t, app, "off.gox", "//goxide:cfg not(feature(\"use_lib\"))\npackage main\nfunc value()string{return \"inactive\"}\n")
-	workspaceWrite(t, app, "never.gox", "//goxide:cfg feature(\"never\")\npackage main\nimport \"missing.example/no\"\nfunc Never()Unknown{return missing()}\n")
+	workspaceWrite(t, app, "never.gox", "//goxide:cfg feature(\"never\")\npackage main\nuse no;\nfunc Never()Unknown{return missing()}\n")
 	out, e := projectRun(t, dest, "run", "-p", "example.org/app", "--offline")
 	if e != nil || !strings.Contains(out, "work") {
 		t.Fatalf("%s %v", out, e)

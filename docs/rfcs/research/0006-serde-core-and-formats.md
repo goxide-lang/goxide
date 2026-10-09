@@ -119,7 +119,8 @@ Rust 的反序列化生命周期用于表达输入借用条件，参考[官方�
 ## 5. 最小端到端派生路径
 
 ```goxide
-#[derive(Serialize, Deserialize)]
+use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Order {
     #[serde(rename="order_id")]
     id uint64

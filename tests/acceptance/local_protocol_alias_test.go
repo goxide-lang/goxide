@@ -24,19 +24,20 @@ func TestLocalProtocolAliasModules(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("aliases.example/lib", ""))
-	packagesWrite(t, src, "model/item.gox", `package model
-#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "model/item.gox", `package model; use serde;
+#[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Item struct{N int;Name string}
 impl Default for Item{func default()Item{return Item{N:7,Name:"producer"}}}
-#[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 pub enum E{
 #[default]
 Item(Item),
 Empty,
 }
 `)
-	packagesWrite(t, src, "other/item.gox", `package different
-#[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+	packagesWrite(t, src, "other/item.gox", `package different; use serde;
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Item struct{Text string}
 `)
 	packagesWrite(t, src, "relay/relay.go", `package relay
@@ -55,6 +56,7 @@ func EqualsItem(a,b Item)bool{return true}
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("aliases.example/app", lib))
+	writeAcceptanceSerdeRoots(t, appsrc, "aliases.example/lib", "model", "other", "relay", "fake")
 	// Both canonical imports exist only in native Go: no goxide selector is available.
 	packagesWrite(t, appsrc, "aliases.go", `package app
 import m "aliases.example/lib/relay"
@@ -63,22 +65,22 @@ type Native=m.Item
 type NativeE=m.E
 type Duplicate=again.Item
 `)
-	packagesWrite(t, appsrc, "chain.gox", `package app
+	packagesWrite(t, appsrc, "chain.gox", `package app; use serde;
 type Local=Native
 type Level=Local
 type Event=NativeE
-#[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Wrap struct{V Level;E Event;Again Duplicate}
-#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Bag struct{Items []Level;Lookup map[string]Local}
-#[derive(Serialize,Deserialize,PartialEq,Eq)]
+#[derive(serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Optional struct{Maybe Option[Level]}
 func Equal(a,b Wrap)bool{Local:=3;_=Local;return a.equals(b)}
 `)
-	packagesWrite(t, appsrc, "other.gox", `package app
-import m "aliases.example/lib/other"
-type Different=m.Item
-#[derive(Default,Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+	packagesWrite(t, appsrc, "other.gox", `package app; use serde;
+use library::other as m;
+type Different=m::Item
+#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Other struct{V Different}
 `)
 	out := filepath.Join(t.TempDir(), "app")
@@ -137,10 +139,15 @@ func TestPublicGoHelpers(t *testing.T){v:=a.DefaultWrap();c:=a.CloneWrap(&v);if 
 		if kind == "Eq" {
 			kind = "PartialEq,Eq"
 		}
-		for _, definition := range []string{"type Local m.Item", "type Fresh m.Item;type Local=Fresh"} {
+		derive, ownerUse := kind, ""
+		if kind == "Serialize" || kind == "Deserialize" {
+			derive, ownerUse = "serde::"+kind, "use serde;"
+		}
+		for _, definition := range []string{"type Local m::Item", "type Fresh m::Item;type Local=Fresh"} {
 			bad := t.TempDir()
 			packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
-			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nimport m \"aliases.example/lib/model\"\n%s\n#[derive(%s)]\ntype W struct{V Local}\n", definition, kind))
+			writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib", "model", "other", "relay", "fake")
+			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; %s\nuse library::model as m;\n%s\n#[derive(%s)]\ntype W struct{V Local}\n", ownerUse, definition, derive))
 			log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
 			if !strings.Contains(log, "bad.gox") && !strings.Contains(log, "requires an explicit ") {
 				t.Fatal(log)
@@ -149,9 +156,10 @@ func TestPublicGoHelpers(t *testing.T){v:=a.DefaultWrap();c:=a.CloneWrap(&v);if 
 	}
 	shadow := t.TempDir()
 	packagesWrite(t, shadow, "go.mod", mod("aliases.example/shadow", lib))
+	writeAcceptanceSerdeRoots(t, shadow, "aliases.example/lib", "model")
 	packagesWrite(t, shadow, "shadow.gox", `package shadow
-import m "aliases.example/lib/model"
-type Local=m.Item
+use library::model as m;
+type Local=m::Item
 func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
 `)
 	logShadow := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "shadow"), shadow)
@@ -161,7 +169,8 @@ func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
 	// Matching shape/helper spellings in another package do not convey registration.
 	bad := t.TempDir()
 	packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
-	packagesWrite(t, bad, "bad.gox", "package bad\nimport m \"aliases.example/lib/fake\"\ntype Local=m.Item\n#[derive(Clone)]\ntype W struct{V Local}\n")
+	writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib", "model", "other", "relay", "fake")
+	packagesWrite(t, bad, "bad.gox", "package bad\nuse library::fake as m;\ntype Local=m::Item\n#[derive(Clone)]\ntype W struct{V Local}\n")
 	packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "fake"), bad)
 	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
 	saved, err := os.ReadFile(artifact)

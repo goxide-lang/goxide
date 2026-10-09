@@ -1,7 +1,7 @@
 package main
-import "places.example/update/model"
+use model;
 func pair(n int)(int,int){return n,n+1}
-func MultiTuple(t *model.Tree,r Result[int,error])Result[int,error]{t.Count,t.Values[0]=pair(r?);return r}
-func ExplicitTuple(t *model.Tree,r Result[int,error])Result[int,error]{match r{Result[int,error]::Ok(v)=>{t.Count,t.Values[0]=pair(v)},Result[int,error]::Err(e)=>{return Result[int,error]::Err(e)},};return r}
-func MultiMap(t *model.Tree,m map[int]int,r Result[int,error])Result[int,error]{t.Count,t.Enabled=m[r?];return r}
-func ExplicitMap(t *model.Tree,m map[int]int,r Result[int,error])Result[int,error]{match r{Result[int,error]::Ok(v)=>{t.Count,t.Enabled=m[v]},Result[int,error]::Err(e)=>{return Result[int,error]::Err(e)},};return r}
+func MultiTuple(t *model::Tree,r Result[int,error])Result[int,error]{t.Count,t.Values[0]=pair(r?);return r}
+func ExplicitTuple(t *model::Tree,r Result[int,error])Result[int,error]{match r{Result[int,error]::Ok(v)=>{t.Count,t.Values[0]=pair(v)},Result[int,error]::Err(e)=>{return Result[int,error]::Err(e)},};return r}
+func MultiMap(t *model::Tree,m map[int]int,r Result[int,error])Result[int,error]{t.Count,t.Enabled=m[r?];return r}
+func ExplicitMap(t *model::Tree,m map[int]int,r Result[int,error])Result[int,error]{match r{Result[int,error]::Ok(v)=>{t.Count,t.Enabled=m[v]},Result[int,error]::Err(e)=>{return Result[int,error]::Err(e)},};return r}

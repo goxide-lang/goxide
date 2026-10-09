@@ -1,10 +1,10 @@
 package main
-import renamed "qualified.example/app/source"
-func otherFileAlias() renamed.Result[int,error] {
-    n := renamed.Fetch("ok")?
-    return renamed.Success(n+3)
+use source as renamed;
+func otherFileAlias() renamed::Result[int,error] {
+    n := renamed::Fetch("ok")?
+    return renamed::Success(n+3)
 }
-func producerTypeAlias() renamed.Result[int,error] {
-    n := renamed.AliasSuccess()?
-    return renamed.Success(n)
+func producerTypeAlias() renamed::Result[int,error] {
+    n := renamed::AliasSuccess()?
+    return renamed::Success(n)
 }

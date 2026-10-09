@@ -1,6 +1,7 @@
 package acceptance_test
 
 import (
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -18,8 +19,11 @@ func TestMacroPrimitivePackageCollisionsAreLocated(t *testing.T) {
 		for _, definition := range []bool{false, true} {
 			source := t.TempDir()
 			packagesWrite(t, source, "go.mod", "module primitive.example/app\ngo 1.27\n")
+			writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+				"ops": {Module: "primitive.example/app", Package: "primitive.example/app/ops"},
+			})
 			packagesWrite(t, source, "ops/macros.gox", "package ops\npub macro_rules! value {()=>{"+tc.body+"};}\n")
-			packagesWrite(t, source, "app.gox", "package app\nimport m \"primitive.example/app/ops\"\nfunc Run(){_=m.value!()}\n")
+			packagesWrite(t, source, "app.gox", "package app\nuse ops as m;\nfunc Run(){_=m::value!()}\n")
 			shadow, want := "shadow.go", "caller package declaration"
 			packageName := "app"
 			if definition {
@@ -39,19 +43,22 @@ func TestMacroPrimitivePackageCollisionsAreLocated(t *testing.T) {
 func TestMacroPrimitiveLocalShadowsAndExplicitCapturesRace(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module primitive.example/app\ngo 1.27\n")
+	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"ops": {Module: "primitive.example/app", Package: "primitive.example/app/ops"},
+	})
 	packagesWrite(t, source, "ops/macros.gox", `package ops
 pub macro_rules! zero {()=>{int(0)};}
 pub macro_rules! enabled {()=>{true};}
 pub macro_rules! convert {($t:ident,$v:expr)=>{$t($v)};}
 `)
 	packagesWrite(t, source, "app.gox", `package app
-import m "primitive.example/app/ops"
-import "reflect"
+use ops as m;
+use reflect;
 func Run()(int,bool,string,string){
  type int string
  true:=false;_=true
- value:=m.convert!(int,"kept")
- return m.zero!(),m.enabled!(),string(value),reflect.TypeOf(value).Name()
+ value:=m::convert!(int,"kept")
+ return m::zero!(),m::enabled!(),string(value),reflect::TypeOf(value).Name()
 }
 `)
 	generated := filepath.Join(t.TempDir(), "generated")

@@ -1,9 +1,9 @@
 package model
 
-import "errors"
+use errors;
 
-var ErrInvalidWorkers = errors.New("workers must be between 1 and 64")
-var ErrMissingName = errors.New("name is required")
+var ErrInvalidWorkers = errors::New("workers must be between 1 and 64")
+var ErrMissingName = errors::New("name is required")
 
 func validate(config Config) Result[Config,error] {
     if config.Name == "" { return Result[Config,error]::Err(ErrMissingName) }

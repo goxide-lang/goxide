@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/macros"
 	"github.com/hxsf/goxide/internal/refs"
 )
@@ -26,7 +25,7 @@ func TestDirectDeferredReferenceArgument(t *testing.T){for _,ok:=range []bool{fa
 }
 
 const t0CombinationSource = `package fixture
-import "errors"
+use errors;
 #[derive(Error)]
 #[error("failed")]
 type Failure struct {
@@ -35,7 +34,7 @@ type Failure struct {
 }
 #[derive(Clone)]
 type Data struct { Values []int }
-var sentinel=errors.New("sentinel")
+var sentinel=errors::New("sentinel")
 func load(ok bool,trace *[]string)Result[int,error]{*trace=append(*trace,"load");if !ok{return Result[int,error]::Err(sentinel)};return Result[int,error]::Ok(4)}
 func read(r &int)int{return *r}
 func bump(w mut& int){(*w)++}
@@ -71,7 +70,7 @@ func runDeferred(ok bool,trace *[]string)int{n:=2;w:=mut& n;_=registerDeferred(w
 `
 
 func TestT0CombinationSourceMetadata(t *testing.T) {
-	result, err := frontend.Compile("t0_combination.gox", []byte(t0CombinationSource))
+	result, err := compileAcceptanceLanguageFixture("t0_combination.gox", []byte(t0CombinationSource))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +150,7 @@ func f(r &int)Option[any]{_=Option[int]::Some(1)?;return Option[any]::Some(box!(
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("t0_boundary.gox", []byte("package fixture\n"+body+"\n"))
+			_, err := compileAcceptanceLanguageFixture("t0_boundary.gox", []byte("package fixture\n"+body+"\n"))
 			if err == nil || !strings.Contains(err.Error(), "t0_boundary.gox") {
 				t.Fatalf("need located boundary rejection, got %v", err)
 			}

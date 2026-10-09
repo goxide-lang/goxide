@@ -1,0 +1,23 @@
+[roots.errors]
+source = "toolchain"
+package = "errors"
+
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+
+[roots.io]
+source = "toolchain"
+package = "io"
+
+[roots.ops]
+module = "example.org/go-result"
+package = "example.org/go-result/ops"
+
+[roots.strconv]
+source = "toolchain"
+package = "strconv"
+
+[roots.strings]
+source = "toolchain"
+package = "strings"

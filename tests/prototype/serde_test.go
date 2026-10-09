@@ -10,16 +10,14 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 // These tests run generated output, not handwritten stand-ins for derive.
 func TestSerdeGeneratedEndToEnd(t *testing.T) {
-	source := `package fixture
-#[derive(Serialize, Deserialize)]
+	source := `package fixture; use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 type Address struct { City string }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type Order struct {
  #[serde(rename="id")]
  ID uint64
@@ -34,7 +32,7 @@ type Order struct {
  Secret string
 }
 `
-	result, err := frontend.Compile("business.gox", []byte(source))
+	result, err := compilePrototypeFixture("business.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,30 +76,30 @@ func runGenerated(t *testing.T, generated []byte, assertions string) {
 
 func TestDeriveRejectsInvalidInput(t *testing.T) {
 	cases := []struct{ name, source string }{
-		{"unknown attribute", `package fixture
-#[derive(Serialize)]
+		{"unknown attribute", `package fixture; use serde;
+#[derive(serde::Serialize)]
 type A struct {
  #[serde(unknown)]
  X int
 }`},
-		{"rename collision", `package fixture
-#[derive(Serialize, Deserialize)]
+		{"rename collision", `package fixture; use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 type A struct {
  #[serde(rename="same")]
  X int
  #[serde(rename="same")]
  Y int
 }`},
-		{"generic", `package fixture
-#[derive(Serialize)]
+		{"generic", `package fixture; use serde;
+#[derive(serde::Serialize)]
 type A[T any] struct { X T }`},
-		{"unsupported map key", `package fixture
-#[derive(Serialize, Deserialize)]
+		{"unsupported map key", `package fixture; use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 type A struct { X map[bool]int }`},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := frontend.Compile("invalid.gox", []byte(tt.source))
+			_, err := compilePrototypeFixture("invalid.gox", []byte(tt.source))
 			if err == nil {
 				t.Fatal("invalid input accepted")
 			}
@@ -171,15 +169,15 @@ func TestUnknownAndOwnedResults(t *testing.T){
 `
 
 func TestIndependentDerivesAndFloat32(t *testing.T) {
-	source := `package fixture
-#[derive(Serialize)]
+	source := `package fixture; use serde;
+#[derive(serde::Serialize)]
 struct OutChild { Value string }
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 struct Output { Child OutChild }
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 struct Input { Value float32 }
 `
-	result, err := frontend.Compile("directions.gox", []byte(source))
+	result, err := compilePrototypeFixture("directions.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,8 +194,8 @@ func TestDirections(t *testing.T){
 }
 
 func TestAttributesInsideGoLiteralsAreNotSyntax(t *testing.T) {
-	source := "package fixture\nconst Template = `\n#[derive(NotAMacro)]\nstruct literal {\n`\n/*\n#[serde(unsupported)]\n*/\n#[derive(Serialize)]\ntype Actual struct { Value string }\n"
-	result, err := frontend.Compile("literal.gox", []byte(source))
+	source := "package fixture; use serde;\nconst Template = `\n#[derive(NotAMacro)]\nstruct literal {\n`\n/*\n#[serde(unsupported)]\n*/\n#[derive(serde::Serialize)]\ntype Actual struct { Value string }\n"
+	result, err := compilePrototypeFixture("literal.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,8 +203,8 @@ func TestAttributesInsideGoLiteralsAreNotSyntax(t *testing.T) {
 }
 
 func TestWireNamesAndUnknownFieldPolicy(t *testing.T) {
-	source := `package fixture
-#[derive(Serialize, Deserialize)]
+	source := `package fixture; use serde;
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 type Names struct {
  #[serde(rename="")]
@@ -215,7 +213,7 @@ type Names struct {
  Comma int
 }
 `
-	result, err := frontend.Compile("names.gox", []byte(source))
+	result, err := compilePrototypeFixture("names.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,11 @@
+[roots.api]
+module = "example.org/reexports"
+package = "example.org/reexports/api"
+
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+
+[roots.implementation]
+module = "example.org/reexports"
+package = "example.org/reexports/impl"

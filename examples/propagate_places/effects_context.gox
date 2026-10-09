@@ -1,12 +1,12 @@
 package main
-import "places.example/update/model"
+use model;
 
-func contextMixedBool(t *model.Tree,n int,r Result[int,error])Result[int,error]{t.Enabled=(n==0)&&model.Flag(r?==7);return Result[int,error]::Ok(1)}
-func contextSignedShift(t *model.Tree,n int,r Result[int,error])Result[int,error]{t.Wide,t.Count=1<<n,r?;return r}
-func contextLen(t *model.Tree,r Result[int,error])Result[int,error]{t.Count=len([1]int{r?});return r}
-func contextBoolKind(t *model.Tree,n int,r Result[int,error],calls *int)Result[int,error]{t.Count=model.BoolKind((n==0)&&model.TrackedFlag(r?==7,calls));return Result[int,error]::Ok(t.Count)}
-func contextBoolLen(t *model.Tree,n int,r Result[int,error])Result[int,error]{t.Count=len(model.FlagArray((n==0)&&model.Flag(r?==7)));return Result[int,error]::Ok(t.Count)}
-func contextMaskLen(t *model.Tree,n uint,r Result[int,error])Result[int,error]{t.Count=len(model.MaskArray(1<<n,r?));return Result[int,error]::Ok(t.Count)}
-func contextCap(t *model.Tree,r Result[int,error])Result[int,error]{t.Count=cap([]int{r?,2});return Result[int,error]::Ok(t.Count)}
-func contextKeyedLen(t *model.Tree,r Result[int,error])Result[int,error]{t.Count=len([3]int{2:r?});return Result[int,error]::Ok(t.Count)}
-func contextNilArray(t *model.Tree,p *[2]int,ok bool,deref bool)Result[int,error]{r:=Result[*[2]int,error]::Ok(p);if !ok{r=Result[*[2]int,error]::Err(parseError())};if deref{t.Count=len(*r?)}else{t.Count=cap(r?)};return Result[int,error]::Ok(t.Count)}
+func contextMixedBool(t *model::Tree,n int,r Result[int,error])Result[int,error]{t.Enabled=(n==0)&&model::Flag(r?==7);return Result[int,error]::Ok(1)}
+func contextSignedShift(t *model::Tree,n int,r Result[int,error])Result[int,error]{t.Wide,t.Count=1<<n,r?;return r}
+func contextLen(t *model::Tree,r Result[int,error])Result[int,error]{t.Count=len([1]int{r?});return r}
+func contextBoolKind(t *model::Tree,n int,r Result[int,error],calls *int)Result[int,error]{t.Count=model::BoolKind((n==0)&&model::TrackedFlag(r?==7,calls));return Result[int,error]::Ok(t.Count)}
+func contextBoolLen(t *model::Tree,n int,r Result[int,error])Result[int,error]{t.Count=len(model::FlagArray((n==0)&&model::Flag(r?==7)));return Result[int,error]::Ok(t.Count)}
+func contextMaskLen(t *model::Tree,n uint,r Result[int,error])Result[int,error]{t.Count=len(model::MaskArray(1<<n,r?));return Result[int,error]::Ok(t.Count)}
+func contextCap(t *model::Tree,r Result[int,error])Result[int,error]{t.Count=cap([]int{r?,2});return Result[int,error]::Ok(t.Count)}
+func contextKeyedLen(t *model::Tree,r Result[int,error])Result[int,error]{t.Count=len([3]int{2:r?});return Result[int,error]::Ok(t.Count)}
+func contextNilArray(t *model::Tree,p *[2]int,ok bool,deref bool)Result[int,error]{r:=Result[*[2]int,error]::Ok(p);if !ok{r=Result[*[2]int,error]::Err(parseError())};if deref{t.Count=len(*r?)}else{t.Count=cap(r?)};return Result[int,error]::Ok(t.Count)}

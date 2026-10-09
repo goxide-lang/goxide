@@ -1,6 +1,6 @@
 package main
 
-import "github.com/goxide-lang/serde/json"
+use serde::json as serdejson;
 
 func count(value Option[int]) int {
     match value {
@@ -11,7 +11,7 @@ func count(value Option[int]) int {
 }
 
 func main() {
-    value, err := serdejson.Unmarshal([]byte(`{"Count":7,"Items":[null,2],"Lookup":{},"Fixed":[null,4]}`), DeserializeRequest)
+    value, err := serdejson::Unmarshal([]byte(`{"Count":7,"Items":[null,2],"Lookup":{},"Fixed":[null,4]}`), DeserializeRequest)
     if err != nil { panic(err) }
     println!("option {} {} {} {}", count(value.Count), count(value.Items[0]), count(value.Fixed[1]), defaultCalls)
 }

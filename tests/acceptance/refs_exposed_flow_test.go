@@ -16,10 +16,11 @@ func TestReadonlyExposedReplacementModules(t *testing.T) {
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule())
+		writeAcceptanceFixtureRoots(t, dir, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 		packagesWrite(t, dir, "model/model.gox", `package model
 func View(r &[]int)&[]int{return r}
 `)
-		packagesWrite(t, dir, "app.gox", "package app\nimport m \"packages.example/app/model\"\n"+body+"\nfunc Imported(v []int)int{return Capture(m.View(&v))}\n")
+		packagesWrite(t, dir, "app.gox", "package app\nuse model as m;\n"+body+"\nfunc Imported(v []int)int{return Capture(m::View(&v))}\n")
 		return dir
 	}
 	const capture = `func Capture(r &[]int)int{x:=*r;f:=func()int{return x[0]};x=[]int{1};x[0]=2;return f()}`

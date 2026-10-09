@@ -7,8 +7,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 func TestSumCloneDebugLocalRace(t *testing.T) {
@@ -86,6 +84,7 @@ type Flip[A,B any]=m.Result[B,A]
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("sums.example/app", lib))
+	writeAcceptanceFixtureRoots(t, appsrc, "sums.example/lib", map[string]string{"model": "sums.example/lib/model", "relay": "sums.example/lib/relay"})
 	packagesWrite(t, appsrc, "aliases.go", `package app
 import m "sums.example/lib/relay"
 type Opt=m.Opt
@@ -108,14 +107,14 @@ func LocalSome(v []int)Local{return Option[[]int]::Some(v)}
 type LocalHolder struct{V Local}
 `)
 	packagesWrite(t, appsrc, "secret.gox", `package app
-import m "sums.example/lib/model"
-import r "sums.example/lib/relay"
+use model as m;
+use relay as r;
 #[derive(Default)]
-type SecretHolder struct{V m.Secret}
+type SecretHolder struct{V m::Secret}
 #[derive(Clone,Debug)]
-type Reverse struct{V r.Flip[map[string][]int,[]int]}
+type Reverse struct{V r::Flip[map[string][]int,[]int]}
 #[derive(Clone,Debug)]
-type ItemHolder struct{V m.Option[m.Item]}
+type ItemHolder struct{V m::Option[m::Item]}
 `)
 	out := filepath.Join(t.TempDir(), "app")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
@@ -175,7 +174,8 @@ func TestGoHelpers(t *testing.T){v:=a.Holder{V:m.Some([]int{5})};c:=a.CloneHolde
 	// The producer has no concrete validator for Option[string]. Same family is insufficient.
 	bad := t.TempDir()
 	packagesWrite(t, bad, "go.mod", mod("sums.example/bad", lib))
-	packagesWrite(t, bad, "bad.gox", "package bad\nimport m \"sums.example/lib/model\"\n#[derive(Clone)]\ntype W struct{V m.Option[string]}\n")
+	writeAcceptanceFixtureRoots(t, bad, "sums.example/lib", map[string]string{"model": "sums.example/lib/model"})
+	packagesWrite(t, bad, "bad.gox", "package bad\nuse model as m;\n#[derive(Clone)]\ntype W struct{V m::Option[string]}\n")
 	packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
 	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
 	saved, e := os.ReadFile(artifact)
@@ -201,14 +201,14 @@ func TestSumProtocolsRejectMissingPayload(t *testing.T) {
 		"new-defined":     "type Fresh Option[int]\n#[derive(Clone)]\ntype S struct{V Fresh}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile(name+".gox", []byte("package fixture\n"+body))
+			_, err := compileAcceptanceLanguageFixture(name+".gox", []byte("package fixture\n"+body))
 			if err == nil {
 				t.Fatal("unexpected protocol")
 			}
 		})
 	}
 	// None Default must not require any payload protocol.
-	if _, err := frontend.Compile("default.gox", []byte("package fixture\n#[derive(Default)]\ntype S struct{V Option[chan int]}")); err != nil {
+	if _, err := compileAcceptanceLanguageFixture("default.gox", []byte("package fixture\n#[derive(Default)]\ntype S struct{V Option[chan int]}")); err != nil {
 		t.Fatal(err)
 	}
 }

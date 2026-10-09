@@ -1,0 +1,11 @@
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+
+[roots.model]
+module = "aggregate.example/batches"
+package = "aggregate.example/batches/model"
+
+[roots.strconv]
+source = "toolchain"
+package = "strconv"

@@ -2,15 +2,15 @@ package acceptance_test
 
 import (
 	"github.com/hxsf/goxide/internal/enums"
-	"github.com/hxsf/goxide/internal/frontend"
 	"strings"
 	"testing"
 )
 
 func TestMatchExpressionBusinessRace(t *testing.T) {
 	source := `package fixture
+use serde;
 macro_rules! twice {($x:expr)=>{$x+$x};}
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Response { Empty, Number(int), Text(string), }
 func number(n int) Response {return Response::Number(n)}
 func business(next func()Response,trace *[]int) int {
@@ -70,7 +70,7 @@ func TestMatchExpressionUnsupportedContexts(t *testing.T) {
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := frontend.Compile("expression_bad.gox", []byte("package fixture\nenum E {A,B,}\n"+body))
+			_, err := compileAcceptanceLanguageFixture("expression_bad.gox", []byte("package fixture\nenum E {A,B,}\n"+body))
 			if err == nil || !strings.Contains(err.Error(), "expression_bad.gox") {
 				t.Fatalf("expected located rejection, got %v", err)
 			}

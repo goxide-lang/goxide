@@ -1,9 +1,9 @@
 package main
 
-import "fmt"
-import "example.org/buildscript/gen"
+use fmt;
+use gen;
 
 func main() {
-	fmt.Println("schema:", gen.Schema)
-	fmt.Print("embedded: ", gen.Resource)
+	fmt::Println("schema:", gen::Schema)
+	fmt::Print("embedded: ", gen::Resource)
 }

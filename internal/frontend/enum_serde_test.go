@@ -9,30 +9,28 @@ import (
 )
 
 func TestEnumSerdeGeneratedRuntime(t *testing.T) {
-	r, e := Compile("event.gox", []byte(`package main
-import (
- "fmt"
- "github.com/goxide-lang/serde"
- "github.com/goxide-lang/serde/json"
-)
-#[derive(Serialize, Deserialize)]
+	r, e := compileSerdeFixture("event.gox", []byte(`package main
+use fmt;
+use serde;
+use serde::json as serdejson;
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Status { Idle, Code(int8), }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Event { Start, Status(Status), Text(string), }
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 type Envelope struct { Event Event }
 func main(){
  values:=[]Event{Event::Start,Event::Text("ready"),Event::Status(Status::Code(12))}
  for _,v:=range values {
-  data,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEvent(s,&v)});if e!=nil{panic(e)}
-  var out Event;e=serdejson.Decode(data,func(d serde.Deserializer)error{var e error;out,e=DeserializeEvent(d);return e});if e!=nil{panic(e)}
-  again,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEvent(s,&out)});if e!=nil||string(data)!=string(again){panic("roundtrip")};fmt.Println(string(data))
+  data,e:=serdejson::Encode(func(s serde::Serializer)error{return SerializeEvent(s,&v)});if e!=nil{panic(e)}
+  var out Event;e=serdejson::Decode(data,func(d serde::Deserializer)error{var e error;out,e=DeserializeEvent(d);return e});if e!=nil{panic(e)}
+  again,e:=serdejson::Encode(func(s serde::Serializer)error{return SerializeEvent(s,&out)});if e!=nil||string(data)!=string(again){panic("roundtrip")};fmt::Println(string(data))
  }
  var bad Event
- if _,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEvent(s,&bad)});e==nil{panic("accepted nil")}
+ if _,e:=serdejson::Encode(func(s serde::Serializer)error{return SerializeEvent(s,&bad)});e==nil{panic("accepted nil")}
  nested:=Event::Status(nil)
- if _,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEvent(s,&nested)});e==nil{panic("accepted invalid nested enum")}
- for _,text:=range []string{"null","\"Unknown\"","{\"Text\":null}","{\"Status\":{\"Code\":128}}"}{if e:=serdejson.Decode([]byte(text),func(d serde.Deserializer)error{_,e:=DeserializeEvent(d);return e});e==nil{panic("accepted invalid JSON")}}
+ if _,e:=serdejson::Encode(func(s serde::Serializer)error{return SerializeEvent(s,&nested)});e==nil{panic("accepted invalid nested enum")}
+ for _,text:=range []string{"null","\"Unknown\"","{\"Text\":null}","{\"Status\":{\"Code\":128}}"}{if e:=serdejson::Decode([]byte(text),func(d serde::Deserializer)error{_,e:=DeserializeEvent(d);return e});e==nil{panic("accepted invalid JSON")}}
 }
 `))
 	if e != nil {
@@ -62,11 +60,15 @@ func main(){
 func TestEnumSerdeDiagnostics(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{"#[derive(Error)]\nenum E { A, }", "requires error message"},
-		{"#[derive(Serialize)]\n#[serde(deny_unknown_fields)]\nenum E { A, }", "enum serde"},
-		{"enum Inner { A, }\n#[derive(Serialize)]\nenum Outer { Item(Inner), }", "required derive"},
-		{"#[derive(Serialize)]\nenum E {\n#[serde(unsupported=\"other\")]\nA, }", "unsupported enum variant serde attribute"},
+		{"#[derive(serde::Serialize)]\n#[serde(deny_unknown_fields)]\nenum E { A, }", "enum serde"},
+		{"enum Inner { A, }\n#[derive(serde::Serialize)]\nenum Outer { Item(Inner), }", "required derive"},
+		{"#[derive(serde::Serialize)]\nenum E {\n#[serde(unsupported=\"other\")]\nA, }", "unsupported enum variant serde attribute"},
 	} {
-		_, e := Compile("bad.gox", []byte("package p\n"+tc.src))
+		header := "package p\n"
+		if strings.Contains(tc.src, "serde::") {
+			header = "package p; use serde;\n"
+		}
+		_, e := compileSerdeFixture("bad.gox", []byte(header+tc.src))
 		if e == nil || !strings.Contains(e.Error(), tc.want) {
 			t.Fatalf("%s: %v", tc.src, e)
 		}

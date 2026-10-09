@@ -31,9 +31,9 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	generated := t.TempDir()
 	first := filepath.Join(generated, "main.go")
 	firstMap := first + ".map.json"
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", first, "--source-map", firstMap, input)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", first, "--source-map", firstMap, input)
 	second := filepath.Join(t.TempDir(), "main.go")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", second, "--source-map", second+".map.json", input)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", second, "--source-map", second+".map.json", input)
 	for _, suffix := range []string{"", ".map.json"} {
 		a, err := os.ReadFile(first + suffix)
 		if err != nil {
@@ -58,7 +58,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	if len(lines) != 2 || json.Unmarshal([]byte(lines[0]), &event) != nil || event["msg"] != "job accepted" || event["name"] != "mail" || event["units"] != float64(3) || lines[1] != "scheduled mail: 3 units" {
 		t.Fatalf("unexpected independent application output: %s", output)
 	}
-	cliOutput := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, "--runtime", root, input)
+	cliOutput := deliveryCommand(t, outside, cli, true, nil, "run", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "--go", tool, "--runtime", root, input)
 	if !strings.Contains(cliOutput, `"msg":"job accepted"`) || !strings.Contains(cliOutput, "scheduled mail: 3 units") {
 		t.Fatalf("installed CLI run with explicit runtime failed: %s", cliOutput)
 	}
@@ -91,6 +91,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 			t.Fatal("example no longer has the expected readonly helper")
 		}
 		packagesWrite(t, source, "go.mod", "module delivery.example/package\ngo 1.27\n")
+		writeAcceptanceFixtureRoots(t, source, "", nil)
 		packagesWrite(t, source, "main.gox", strings.Replace(string(original), readLimit, "", 1))
 		packagesWrite(t, source, "limits.gox", "package main\n"+readLimit+"\n")
 		dest := filepath.Join(t.TempDir(), "generated")
@@ -129,6 +130,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	t.Run("readonly-write-rejected", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module delivery.example/invalid\ngo 1.27\n")
+		writeAcceptanceFixtureRoots(t, source, "", nil)
 		packagesWrite(t, source, "bad.gox", string(original)+"\nfunc illegalWrite(limit &int) { *limit = 9 }\n")
 		dest := filepath.Join(t.TempDir(), "bad.go")
 		output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, filepath.Join(source, "bad.gox"))
@@ -143,8 +145,9 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	t.Run("cross-package-diagnostic-and-cleanup", func(t *testing.T) {
 		source := t.TempDir()
 		packagesWrite(t, source, "go.mod", "module delivery.example/broken\ngo 1.27\n")
+		writeAcceptanceFixtureRoots(t, source, "delivery.example/broken", map[string]string{"kit": "delivery.example/broken/kit"})
 		packagesWrite(t, source, "kit/definition.gox", "package kit\nfunc Emit(value string){}\npub macro_rules! broken {()=>{Emit(17)};}\n")
-		packagesWrite(t, source, "main.gox", "package main\nimport k \"delivery.example/broken/kit\"\nfunc main(){k.broken!()}\n")
+		packagesWrite(t, source, "main.gox", "package main\nuse kit as k;\nfunc main(){k::broken!()}\n")
 		dest := filepath.Join(t.TempDir(), "generated")
 		output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, source)
 		for _, want := range []string{"definition.gox:3:", "main.gox:3:"} {

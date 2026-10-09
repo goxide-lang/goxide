@@ -1,0 +1,30 @@
+[roots.errors]
+source = "toolchain"
+package = "errors"
+
+[roots.fmt]
+source = "toolchain"
+package = "fmt"
+
+[roots.logkit]
+module = "macros.example/app"
+package = "macros.example/app/logkit"
+
+[roots.os]
+source = "toolchain"
+package = "os"
+
+[roots.other]
+module = "macros.example/app"
+package = "macros.example/app/other"
+
+[roots.serde]
+module = "github.com/goxide-lang/serde"
+package = "github.com/goxide-lang/serde"
+
+[roots.serde.namespaces]
+"json" = "github.com/goxide-lang/serde/json"
+
+[roots.slog]
+source = "toolchain"
+package = "log/slog"

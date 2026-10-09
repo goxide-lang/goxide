@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"errors"
 	"fmt"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	"github.com/hxsf/goxide/internal/testdeps"
 	"io/fs"
 	"os"
@@ -42,6 +43,7 @@ func macroPackageSource(t *testing.T) string {
 		t.Fatal(err)
 	}
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
+
 	return source
 }
 
@@ -68,26 +70,33 @@ func TestMacroPackagesPrivateAndBudgets(t *testing.T) {
 func hidden() int{return 7}
 pub macro_rules! secret { () => { hidden() }; }
 `, `package main
-import m "macros.example/app/logkit"
-func main(){_=m.secret!()}
+use logkit as m;
+func main(){_=m::secret!()}
 `, "private"},
 		{"private-macro", `package logkit
 macro_rules! secret { () => { 7 }; }
 `, `package main
-import m "macros.example/app/logkit"
-func main(){_=m.secret!()}
+use logkit as m;
+func main(){_=m::secret!()}
 `, "macro"},
 		{"recursive", `package logkit
 pub macro_rules! forever { () => { forever!() }; }
 `, `package main
-import m "macros.example/app/logkit"
-func main(){_=m.forever!()}
+use logkit as m;
+func main(){_=m::forever!()}
 `, "budget"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			source := t.TempDir()
 			packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
+			writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+				"a":      {Module: "macros.example/app", Package: "macros.example/app/a"},
+				"b":      {Module: "macros.example/app", Package: "macros.example/app/b"},
+				"dep":    {Module: "macros.example/app", Package: "macros.example/app/dep"},
+				"logkit": {Module: "macros.example/app", Package: "macros.example/app/logkit"},
+				"other":  {Module: "macros.example/app", Package: "macros.example/app/other"},
+			})
 			packagesWrite(t, source, "logkit/macros.gox", tc.definition)
 			packagesWrite(t, source, "main.gox", tc.main)
 			_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
@@ -104,8 +113,15 @@ func main(){_=m.forever!()}
 func TestMacroPackagesDependencyCycle(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
-	packagesWrite(t, source, "a/a.gox", "package a\nimport b \"macros.example/app/b\"\npub macro_rules! value {()=>{b.value!()};}\n")
-	packagesWrite(t, source, "b/b.gox", "package b\nimport a \"macros.example/app/a\"\npub macro_rules! value {()=>{a.value!()};}\n")
+	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"a":      {Module: "macros.example/app", Package: "macros.example/app/a"},
+		"b":      {Module: "macros.example/app", Package: "macros.example/app/b"},
+		"dep":    {Module: "macros.example/app", Package: "macros.example/app/dep"},
+		"logkit": {Module: "macros.example/app", Package: "macros.example/app/logkit"},
+		"other":  {Module: "macros.example/app", Package: "macros.example/app/other"},
+	})
+	packagesWrite(t, source, "a/a.gox", "package a\nuse b;\npub macro_rules! value {()=>{b::value!()};}\n")
+	packagesWrite(t, source, "b/b.gox", "package b\nuse a;\npub macro_rules! value {()=>{a::value!()};}\n")
 	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Fatalf("dependency cycle accepted: %v", err)
@@ -115,13 +131,20 @@ func TestMacroPackagesDependencyCycle(t *testing.T) {
 func TestMacroPackagesDefinitionDiagnostic(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
+	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"a":      {Module: "macros.example/app", Package: "macros.example/app/a"},
+		"b":      {Module: "macros.example/app", Package: "macros.example/app/b"},
+		"dep":    {Module: "macros.example/app", Package: "macros.example/app/dep"},
+		"logkit": {Module: "macros.example/app", Package: "macros.example/app/logkit"},
+		"other":  {Module: "macros.example/app", Package: "macros.example/app/other"},
+	})
 	packagesWrite(t, source, "logkit/macros.gox", `package logkit
 func Emit(value string) {}
 pub macro_rules! broken { () => { Emit(71) }; }
 `)
 	packagesWrite(t, source, "main.gox", `package main
-import m "macros.example/app/logkit"
-func main(){m.broken!()}
+use logkit as m;
+func main(){m::broken!()}
 `)
 	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
 	var mapped *sourcemap.Error
@@ -178,6 +201,13 @@ func TestImportedMacroQuestionAndErrorChain(t *testing.T) {
 func TestMacroPackagesWholeBuildBudget(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
+	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"a":      {Module: "macros.example/app", Package: "macros.example/app/a"},
+		"b":      {Module: "macros.example/app", Package: "macros.example/app/b"},
+		"dep":    {Module: "macros.example/app", Package: "macros.example/app/dep"},
+		"logkit": {Module: "macros.example/app", Package: "macros.example/app/logkit"},
+		"other":  {Module: "macros.example/app", Package: "macros.example/app/other"},
+	})
 	// Each package is below the limit; the module must share the counter.
 	for _, name := range []string{"a", "b"} {
 		packagesWrite(t, source, name+"/macros.gox", "package "+name+"\nmacro_rules! one {()=>{1};}\nfunc Run(){"+strings.Repeat("_=one!();", 2200)+"}\n")
@@ -193,6 +223,13 @@ func TestMacroPackagesPreparedDefinitionDiagnostic(t *testing.T) {
 		t.Run(fmt.Sprintf("same-file-%t", sameFile), func(t *testing.T) {
 			source := t.TempDir()
 			packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
+			writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+				"a":      {Module: "macros.example/app", Package: "macros.example/app/a"},
+				"b":      {Module: "macros.example/app", Package: "macros.example/app/b"},
+				"dep":    {Module: "macros.example/app", Package: "macros.example/app/dep"},
+				"logkit": {Module: "macros.example/app", Package: "macros.example/app/logkit"},
+				"other":  {Module: "macros.example/app", Package: "macros.example/app/other"},
+			})
 			definition := `package logkit
 func first() Result[int,error] { return Result[int,error]::Ok(1) }
 func prepared() Result[int,error] { n:=first()?; return Result[int,error]::Ok(n) }
@@ -200,8 +237,8 @@ func Emit(value string) {}
 pub macro_rules! broken { () => { Emit(71) }; }
 `
 			caller := `package main
-import m "macros.example/app/logkit"
-func main(){m.broken!()}
+use logkit as m;
+func main(){m::broken!()}
 `
 			callLine := 3
 			definitionFile := "macros.gox"
@@ -230,16 +267,21 @@ func main(){m.broken!()}
 func TestMacroPackagesSameFileAliases(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
+	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"a":      {Module: "macros.example/app", Package: "macros.example/app/a"},
+		"b":      {Module: "macros.example/app", Package: "macros.example/app/b"},
+		"dep":    {Module: "macros.example/app", Package: "macros.example/app/dep"},
+		"logkit": {Module: "macros.example/app", Package: "macros.example/app/logkit"},
+		"other":  {Module: "macros.example/app", Package: "macros.example/app/other"},
+	})
 	packagesWrite(t, source, "dep/macros.gox", `package dep
 func Emit() int { return 7 }
 pub macro_rules! value {()=>{Emit()};}
 `)
 	packagesWrite(t, source, "main.gox", `package main
-import (
- a "macros.example/app/dep"
- b "macros.example/app/dep"
-)
-func main(){_=a.value!();_=b.value!()}
+use dep as a;
+use dep as b;
+func main(){_=a::value!();_=b::value!()}
 `)
 	if _, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated")); err != nil {
 		t.Fatal(err)

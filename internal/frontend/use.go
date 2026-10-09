@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/sourcemap"
 )
 
@@ -22,6 +23,7 @@ type useBinding struct {
 	Name, Kind, OriginPath, OriginName, RoutePath, RouteName string
 	IdentityPath, IdentityName                               string
 	Public                                                   bool
+	Namespace                                                *paths.Namespace `json:",omitempty"`
 }
 type useMetadata struct {
 	Version          int
@@ -34,6 +36,7 @@ type useDecl struct {
 	qualifier, name, alias, file string
 	public                       bool
 	pos                          token.Position
+	segments                     []string
 }
 type useToken struct {
 	text       string
@@ -46,6 +49,11 @@ type useEdit struct {
 	text       string
 }
 type usePackage struct {
+	localDeclarations  map[string]paths.Binding
+	fileBindings       map[string]map[string]useBinding
+	namespaces         map[string]map[string]paths.Namespace
+	roots              paths.Roots
+	single             bool
 	generatedFile      string
 	generatedMap       *sourcemap.Map
 	positions          map[string]token.Position
@@ -54,6 +62,8 @@ type usePackage struct {
 	imports            map[string]map[string]string
 	imported           map[string]useMetadata
 	original, prepared map[string][]byte
+	preparedMaps       map[string]*sourcemap.Map
+	plans              map[string]PathPreparation
 	metadata           useMetadata
 	imp                types.Importer
 	known              map[string]PackageResult
@@ -106,26 +116,27 @@ func scanUses(name string, source []byte) ([]byte, []useDecl, error) {
 		j++
 		d := useDecl{public: public, file: name, pos: t.pos}
 		bad := func() ([]byte, []useDecl, error) {
-			return nil, nil, fmt.Errorf("%s: expected [pub] use importAlias::Name [as Alias]; or importAlias::*;", t.pos)
+			return nil, nil, fmt.Errorf("%s: expected [pub] use root[::Name...] [as Alias];", t.pos)
 		}
 		if j >= len(ts) || ts[j].kind != token.IDENT {
 			return bad()
 		}
-		d.qualifier = ts[j].text
+		d.segments = append(d.segments, ts[j].text)
 		j++
-		if j+1 >= len(ts) || ts[j].kind != token.COLON || ts[j+1].kind != token.COLON {
-			return bad()
+		for j+1 < len(ts) && ts[j].kind == token.COLON && ts[j+1].kind == token.COLON {
+			j += 2
+			if j >= len(ts) || (ts[j].kind != token.IDENT && ts[j].kind != token.MUL) {
+				return bad()
+			}
+			d.segments = append(d.segments, ts[j].text)
+			j++
 		}
-		j += 2
-		if j >= len(ts) || (ts[j].kind != token.IDENT && ts[j].kind != token.MUL) {
-			return bad()
-		}
-		d.name = ts[j].text
+		d.qualifier = d.segments[0]
+		d.name = d.segments[len(d.segments)-1]
 		d.alias = d.name
-		j++
 		if j < len(ts) && ts[j].text == "as" {
 			j++
-			if d.name == "*" || j >= len(ts) || ts[j].kind != token.IDENT || ts[j].text == "_" {
+			if d.name == "*" || j >= len(ts) || ts[j].kind != token.IDENT {
 				return bad()
 			}
 			d.alias = ts[j].text
@@ -145,217 +156,186 @@ func scanUses(name string, source []byte) ([]byte, []useDecl, error) {
 	return out, decls, nil
 }
 
-func prepareUses(path string, sources map[string][]byte, known map[string]PackageResult, imp types.Importer) (*usePackage, error) {
-	u := &usePackage{positions: map[string]token.Position{}, useImports: map[string]map[string]bool{}, bindings: map[string]useBinding{}, imports: map[string]map[string]string{}, imported: map[string]useMetadata{}, original: sources, prepared: map[string][]byte{}, imp: imp, known: known, metadata: useMetadata{Version: 2, Path: path}}
-	var declarations []useDecl
-	for _, file := range sortedSources(sources) {
-		src := sources[file]
-		if strings.HasSuffix(file, ".gox") {
-			clean, ds, e := scanUses(file, src)
-			if e != nil {
-				return nil, e
+func prepareUses(path string, sources map[string][]byte, known map[string]PackageResult, imp types.Importer, roots paths.Roots, single bool) (*usePackage, error) {
+	u := &usePackage{positions: map[string]token.Position{}, useImports: map[string]map[string]bool{}, bindings: map[string]useBinding{}, fileBindings: map[string]map[string]useBinding{}, namespaces: map[string]map[string]paths.Namespace{}, imports: map[string]map[string]string{}, imported: map[string]useMetadata{}, original: sources, prepared: map[string][]byte{}, imp: imp, known: known, roots: roots, single: single, metadata: useMetadata{Version: useMetadataVersion, Path: path}}
+	u.preparedMaps = map[string]*sourcemap.Map{}
+	if single {
+		for file, source := range sources {
+			_, mods, err := scanModules(file, source)
+			if err != nil {
+				return nil, err
 			}
-			src = clean
-			declarations = append(declarations, ds...)
-		}
-		u.prepared[file] = src
-		f, e := parseSourceImports(file, src)
-		if e != nil {
-			return nil, e
-		}
-		u.metadata.Package = f.Name.Name
-		u.imports[file] = map[string]string{}
-		for _, spec := range f.Imports {
-			p, _ := strconv.Unquote(spec.Path.Value)
-			if p == "C" {
-				continue
-			}
-			alias := ""
-			if spec.Name != nil {
-				alias = spec.Name.Name
-			}
-			if alias == "" {
-				if imp == nil {
-					continue
-				}
-				pkg, e := imp.Import(p)
-				if e != nil {
-					return nil, e
-				}
-				alias = pkg.Name()
-			}
-			u.imports[file][alias] = p
-			m, cached := u.imported[p]
-			if !cached {
-				m, e = u.load(p)
-				if e != nil {
-					return nil, e
-				}
-			}
-			if alias == "." && m.present() && strings.HasSuffix(file, ".gox") {
-				return nil, fmt.Errorf("%s: dot imports of packages with use metadata are unsupported; use a named import", file)
-			}
-			u.imported[p] = m
-		}
-	}
-	for _, d := range declarations {
-		if u.useImports[d.file] == nil {
-			u.useImports[d.file] = map[string]bool{}
-		}
-		u.useImports[d.file][d.qualifier] = true
-		p, ok := u.imports[d.file][d.qualifier]
-		if !ok || d.qualifier == "_" || d.qualifier == "." {
-			return nil, fmt.Errorf("%s: use qualifier must be an explicit named Go import: %s", d.pos, d.qualifier)
-		}
-		if imp == nil {
-			return nil, fmt.Errorf("%s: use requires a package importer", d.pos)
-		}
-		pkg, e := imp.Import(p)
-		if e != nil {
-			return nil, e
-		}
-		m := u.imported[p]
-		surface := map[string]useBinding{}
-		for _, name := range pkg.Scope().Names() {
-			if !ast.IsExported(name) || isUseMarker(name) {
-				continue
-			}
-			b, e := nativeUseBinding(pkg.Scope().Lookup(name), p, name)
-			if e != nil {
-				continue
-			}
-			surface[name] = b
-		}
-		for _, b := range m.Bindings {
-			if b.Public {
-				surface[b.Name] = b
-			} else {
-				delete(surface, b.Name)
-			}
-		}
-		unsupported := append([]string(nil), m.Unsupported...)
-		ambiguousKinds := map[string]bool{}
-		if registry := known[p].macros; registry != nil {
-			available := map[string]bool{}
-			for _, name := range registry.PublicNames() {
-				origin, original, ok := registry.PublicBinding(name)
-				if !ok {
-					continue
-				}
-				if _, collision := surface[name]; collision {
-					ambiguousKinds[name] = true
-				}
-				available[name] = true
-				surface[name] = useBinding{Name: name, Kind: "macro", OriginPath: origin, OriginName: original, RoutePath: p, RouteName: name, Public: true}
-			}
-			unsupported = nil
-			for _, name := range m.Unsupported {
-				if !available[name] {
-					unsupported = append(unsupported, name)
-				}
-			}
-		}
-		reason := func(name string) string {
-			switch m.UnsupportedKinds[name] {
-			case "macro":
-				return name + " (macro requires a compiled source registry; external macro artifacts are unsupported)"
-			case "family":
-				return name + " (goxide generic family has no use alias protocol)"
-			default:
-				return name + " (legacy artifact lacks macro/family classification; no compiled source registry)"
-			}
-		}
-		if d.name == "*" && len(unsupported) > 0 {
-			descriptions := make([]string, 0, len(unsupported))
-			for _, name := range unsupported {
-				descriptions = append(descriptions, reason(name))
-			}
-			return nil, fmt.Errorf("%s: glob includes unsupported exports: %s; use an explicit supported item list", d.pos, strings.Join(descriptions, ", "))
-		}
-		for _, name := range unsupported {
-			if name == d.name {
-				return nil, fmt.Errorf("%s: unsupported use item %s::%s: %s", d.pos, d.qualifier, name, reason(name))
-			}
-		}
-
-		names := []string{d.name}
-		if d.name == "*" {
-			names = nil
-			for name := range surface {
-				names = append(names, name)
-			}
-			sort.Strings(names)
-		}
-		for _, name := range names {
-			if ambiguousKinds[name] {
-				return nil, fmt.Errorf("%s: ambiguous use export %s: macro and Go declaration", d.pos, name)
-			}
-			b, ok := surface[name]
-			if !ok {
-				return nil, fmt.Errorf("%s: unknown, private, or unsupported use item %s::%s", d.pos, d.qualifier, name)
-			}
-			if d.name != "*" {
-				b.Name = d.alias
-			}
-			b.Public = d.public
-			if isUseMarker(b.Name) || strings.HasPrefix(b.Name, "__goxide_") || b.Name == "init" || b.Name == "main" {
-				return nil, fmt.Errorf("%s: reserved use binding %s", d.pos, b.Name)
-			}
-			if (b.Kind == "function" || b.Kind == "variable") && !enumOriginImportAllowed(path, b.RoutePath) {
-				return nil, fmt.Errorf("%s: unsupported use route for %s: Go internal package %s is inaccessible from %s; no wrapper or variable copy is generated", d.pos, b.Name, b.RoutePath, path)
-			}
-			if old, ok := u.bindings[b.Name]; ok {
-				if old.Kind != b.Kind || old.OriginPath != b.OriginPath || old.OriginName != b.OriginName {
-					return nil, fmt.Errorf("%s: ambiguous use %s: %s.%s and %s.%s; choose explicit aliases", d.pos, b.Name, old.OriginPath, old.OriginName, b.OriginPath, b.OriginName)
-				}
-				if b.Kind == "type" {
-					oldPkg, e := imp.Import(old.RoutePath)
-					if e != nil {
-						return nil, e
-					}
-					newPkg, e := imp.Import(b.RoutePath)
-					if e != nil {
-						return nil, e
-					}
-					oldType, oldOK := oldPkg.Scope().Lookup(old.RouteName).(*types.TypeName)
-					newType, newOK := newPkg.Scope().Lookup(b.RouteName).(*types.TypeName)
-					if !oldOK || !newOK || !sameUseType(oldType.Type(), newType.Type()) {
-						return nil, fmt.Errorf("%s: ambiguous use %s: distinct Go type identities", d.pos, b.Name)
-					}
-				}
-				b.Public = b.Public || old.Public
-			}
-			u.bindings[b.Name] = b
-			if _, exists := u.positions[b.Name]; !exists {
-				u.positions[b.Name] = d.pos
+			if len(mods) > 0 {
+				return nil, fmt.Errorf("%s: local mod requires directory package compilation to select its child package", mods[0].pos)
 			}
 		}
 	}
-	for _, file := range sortedSources(sources) {
-		for alias := range u.imports[file] {
-			if _, ok := u.bindings[alias]; ok {
-				return nil, fmt.Errorf("%s: use binding conflicts with import alias %s", file, alias)
-			}
+	merged, err := LocalDeclarations(path, sources, roots, nil)
+	if err != nil {
+		return nil, err
+	}
+	u.roots = merged
+	u.localDeclarations = localDeclarationBindings(path, sources)
+	if !single {
+		u.plans, err = PreparePackageSourcePaths(path, sources, merged, nil)
+		if err != nil {
+			return nil, err
 		}
-		if !strings.HasSuffix(file, ".go") {
+	} else {
+		u.plans = map[string]PathPreparation{}
+	}
+	for _, file := range sortedSources(sources) {
+		source := sources[file]
+		if !isGoxideInput(file, single) {
+			u.prepared[file] = source
 			continue
 		}
-		f, e := parser.ParseFile(token.NewFileSet(), file, sources[file], 0)
-		if e != nil {
-			return nil, e
+		plan := u.plans[file]
+		if single {
+			plan, err = PrepareSourcePaths(path, file, source, merged, nil)
+			if err != nil {
+				return nil, err
+			}
+			u.plans[file] = plan
 		}
-		for name := range f.Scope.Objects {
-			if _, ok := u.bindings[name]; ok {
-				return nil, fmt.Errorf("%s: use binding conflicts with native declaration %s", file, name)
+		u.prepared[file] = plan.Source
+		// Stripping use/mod only blanks their exact byte ranges. Every surviving
+		// token therefore retains its original offset, even repeated spellings.
+		u.preparedMaps[file] = sourceMapAfterBlanks(file, source, plan.Source)
+		f, err := parseSourceImports(file, plan.Source)
+		if err != nil {
+			return nil, err
+		}
+		u.metadata.Package = f.Name.Name
+		u.fileBindings[file] = map[string]useBinding{}
+		u.namespaces[file] = map[string]paths.Namespace{}
+		u.imports[file] = map[string]string{}
+		u.useImports[file] = map[string]bool{}
+		for n, ns := range plan.Locals {
+			u.namespaces[file][n] = ns
+		}
+		for _, d := range plan.declarations {
+			if single && d.public {
+				return nil, fmt.Errorf("%s: pub use/mod requires directory package compilation", d.pos)
+			}
+			node, remaining, err := u.resolveNamespace(d.segments)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", d.pos, err)
+			}
+			if len(remaining) == 0 {
+				if d.alias == "_" {
+					if d.public || node.PackagePath == "" {
+						return nil, fmt.Errorf("%s: side-effect use requires a concrete package and cannot be public", d.pos)
+					}
+					if _, err := u.checkedPackage(node); err != nil {
+						return nil, fmt.Errorf("%s: %w", d.pos, err)
+					}
+					// The pre-scan may only know a facade package. Preserve the
+					// resolved namespace's own initialization dependency too.
+					selected := u.plans[file]
+					found := false
+					for _, p := range selected.Imports {
+						found = found || p == node.PackagePath
+					}
+					if !found {
+						selected.Imports = append(selected.Imports, node.PackagePath)
+						sort.Strings(selected.Imports)
+						u.plans[file] = selected
+					}
+					continue
+				}
+				b := useBinding{Name: d.alias, Kind: "namespace", OriginPath: node.PackagePath, OriginName: d.alias, RoutePath: node.PackagePath, RouteName: d.alias, Namespace: &node, Public: d.public}
+				if err := u.bindUse(file, d, b); err != nil {
+					return nil, err
+				}
+				u.namespaces[file][d.alias] = node
+				continue
+			}
+			if len(remaining) != 1 {
+				return nil, fmt.Errorf("%s: unsupported use path after item %s", d.pos, strings.Join(remaining, "::"))
+			}
+			surface, err := u.surface(node)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", d.pos, err)
+			}
+			names := []string{remaining[0]}
+			if remaining[0] == "*" {
+				names = sortedUseNames(surface)
+			}
+			if d.alias == "_" {
+				return nil, fmt.Errorf("%s: side-effect use requires a concrete package, not an item", d.pos)
+			}
+			for _, name := range names {
+				b, ok := surface[name]
+				if !ok {
+					return nil, fmt.Errorf("%s: unknown, private, or unsupported use item %s", d.pos, strings.Join(d.segments, "::"))
+				}
+				if b.Kind == "unsupported" {
+					return nil, fmt.Errorf("%s: unsupported use item %s", d.pos, name)
+				}
+				if b.Kind == "macro-unavailable" {
+					return nil, fmt.Errorf("%s: macro use %s requires a compiled source registry", d.pos, name)
+				}
+				if b.Kind == "ambiguous" {
+					return nil, fmt.Errorf("%s: ambiguous use item %s: macro and Go declaration", d.pos, name)
+				}
+				if remaining[0] != "*" {
+					b.Name = d.alias
+				}
+				b.Public = d.public
+				if err := u.bindUse(file, d, b); err != nil {
+					return nil, err
+				}
+				if b.Kind == "namespace" && b.Namespace != nil {
+					u.namespaces[file][b.Name] = *b.Namespace
+				}
 			}
 		}
+		// Namespace declarations are visible as declarations throughout this package.
+		_, mods, err := scanModules(file, source)
+		if err != nil {
+			return nil, err
+		}
+		for _, mod := range mods {
+			node := merged[mod.alias]
+			u.namespaces[file][mod.alias] = node
+			if mod.public {
+				if single {
+					return nil, fmt.Errorf("%s: pub mod requires directory package compilation", mod.pos)
+				}
+				b := useBinding{Name: mod.alias, Kind: "namespace", OriginPath: node.PackagePath, OriginName: mod.alias, RoutePath: node.PackagePath, RouteName: mod.alias, Namespace: &node, Public: true}
+				if err := u.bindUse(file, mod, b); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	for _, file := range sortedSources(sources) {
+		if !isGoxideInput(file, single) {
+			continue
+		}
+		for name, public := range u.bindings {
+			if private, ok := u.fileBindings[file][name]; ok && !sameUseBinding(public, private) {
+				return nil, fmt.Errorf("%s: use binding %s conflicts with public declaration", file, name)
+			}
+			if public.Kind == "namespace" && public.Namespace != nil {
+				u.namespaces[file][name] = *public.Namespace
+			}
+		}
+		// Expand only explicit namespace tree prefixes, retaining the final ::
+		// for macro/derive/type-aware lowering.
+		out, err := u.prepareNamespaceImports(file, u.prepared[file])
+		if err != nil {
+			return nil, err
+		}
+		u.prepared[file] = out
 	}
 	// Alias declarations are native Go aliases, not defined types. Their import
 	// routes remain the facade path where required by Go's internal restrictions.
 	if len(u.bindings) > 0 {
 		file := ""
 		for _, n := range sortedSources(sources) {
-			if strings.HasSuffix(n, ".gox") {
+			if isGoxideInput(n, single) {
 				file = n
 				break
 			}
@@ -575,7 +555,7 @@ func addUseImports(file string, source []byte, imports map[string]string) ([]byt
 	if len(imports) == 0 {
 		return source, nil
 	}
-	f, e := parser.ParseFile(token.NewFileSet(), file, source, parser.PackageClauseOnly)
+	f, e := parseSourceImports(file, source)
 	if e != nil {
 		return nil, e
 	}
@@ -598,13 +578,29 @@ func addUseImports(file string, source []byte, imports map[string]string) ([]byt
 
 // rewrite resolves unbound Go identifiers after DSL syntax lowering, before
 // semantic passes. Parser bindings protect locals, parameters and type params.
-func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
+func (u *usePackage) rewrite(file string, source []byte, provenance ...*sourcemap.Map) ([]byte, error) {
+	bindings := u.bindingsFor(file)
+	var mapping *sourcemap.Map
+	if len(provenance) > 0 {
+		mapping = provenance[0]
+	}
 	fs := token.NewFileSet()
 	f, e := parser.ParseFile(fs, file, source, parser.ParseComments)
 	if e != nil {
 		return nil, e
 	}
+	diagnostic := func(pos token.Pos, message string) error {
+		position := fs.Position(pos)
+		mapped := &sourcemap.Error{Message: message, Generated: position}
+		if mapping != nil {
+			if segment := mapping.Lookup(position.Offset); segment != nil {
+				mapped.Origin, mapped.Stack = segment.Origin, segment.Stack
+			}
+		}
+		return mapped
+	}
 	aliases := map[string]string{}
+	importNames := map[*ast.ImportSpec]string{}
 	for _, im := range f.Imports {
 		p, _ := strconv.Unquote(im.Path.Value)
 		name := ""
@@ -618,6 +614,7 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 			name = pkg.Name()
 		}
 		aliases[name] = p
+		importNames[im] = name
 	}
 	edits := []useEdit{}
 	extra := map[string]string{}
@@ -627,6 +624,43 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 	for alias := range u.useImports[file] {
 		handledImports[alias] = true
 	}
+	// Contextual enum arms are compiler-owned syntax suspended in a string
+	// argument. Keep imports until those nodes have been expanded and rewritten
+	// in their complete lexical scope; ordinary string literals never count.
+	deferredMatch := false
+	shadowedAliases := map[string]bool{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && id.Obj != nil {
+			shadowedAliases[id.Name] = true
+		}
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 2 {
+			return true
+		}
+		id, ok := call.Fun.(*ast.Ident)
+		if !ok || id.Name != "__goxide_enum_context_match" {
+			return true
+		}
+		literal, ok := call.Args[1].(*ast.BasicLit)
+		deferredMatch = deferredMatch || ok && literal.Kind == token.STRING
+		return true
+	})
+	// Deferred arms can expose another use of an already materialized route.
+	// Reuse its import rather than creating a duplicate package import on every
+	// expansion. A locally shadowed alias is not a usable lexical route.
+	routes := map[string]string{}
+	blankImports := map[string]*ast.ImportSpec{}
+	for _, im := range f.Imports {
+		path, _ := strconv.Unquote(im.Path.Value)
+		if im.Name != nil && im.Name.Name == "_" {
+			blankImports[path] = im
+			continue
+		}
+		alias := importNames[im]
+		if alias != "" && alias != "." && alias != "_" && !shadowedAliases[alias] && routes[path] == "" {
+			routes[path] = alias
+		}
+	}
 	route := func(b useBinding) (string, error) {
 		if !enumOriginImportAllowed(u.metadata.Path, b.RoutePath) {
 			return "", fmt.Errorf("%s: unsupported re-export route for %s: Go internal package %s is inaccessible", file, b.Name, b.RoutePath)
@@ -634,13 +668,19 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 		if b.RoutePath == u.metadata.Path {
 			return b.RouteName, nil
 		}
-		a := extra[b.RoutePath]
+		a := routes[b.RoutePath]
+		if a != "" {
+			usedImports[a] = true
+			return a + "." + b.RouteName, nil
+		}
+		a = extra[b.RoutePath]
 		if a == "" {
 			for i := len(extra); ; i++ {
 				a = fmt.Sprintf("goxideUseRoute%d", i)
-				if !bytes.Contains(source, []byte(a)) {
+				_, declared := u.localDeclarations[a]
+				if !declared && !bytes.Contains(source, []byte(a)) {
 					used := false
-					for _, prior := range extra {
+					for _, prior := range routes {
 						used = used || prior == a
 					}
 					if !used {
@@ -648,7 +688,13 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 					}
 				}
 			}
-			extra[b.RoutePath] = a
+			if blank := blankImports[b.RoutePath]; blank != nil {
+				edits = append(edits, useEdit{int(blank.Pos()) - 1, int(blank.End()) - 1, a + " " + blank.Path.Value})
+				delete(blankImports, b.RoutePath)
+			} else {
+				extra[b.RoutePath] = a
+			}
+			routes[b.RoutePath] = a
 		}
 		return a + "." + b.RouteName, nil
 	}
@@ -664,6 +710,10 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 			if !ok || x.Obj != nil {
 				return true
 			}
+			if _, namespace := u.namespaces[file][x.Name]; namespace && u.imports[file][x.Name] == "" {
+				problem = diagnostic(n.Sel.Pos(), "static package and type paths use '::', not '.'")
+				return false
+			}
 			p, ok := aliases[x.Name]
 			if !ok {
 				return true
@@ -677,7 +727,7 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 				}
 				found = true
 				if !b.Public {
-					problem = fmt.Errorf("%s: private use binding %s.%s", fs.Position(n.Pos()), x.Name, b.Name)
+					problem = diagnostic(n.Sel.Pos(), fmt.Sprintf("private use binding %s.%s", x.Name, b.Name))
 					return false
 				}
 				expr, e := route(b)
@@ -732,7 +782,7 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 			if mapLiteral {
 				continue
 			}
-			if _, alias := u.bindings[id.Name]; alias {
+			if binding, alias := bindings[id.Name]; alias && binding.Kind != "namespace" && binding.Kind != "derive" && binding.Kind != "macro" {
 				if _, isStruct := lit.Type.(*ast.StructType); !isStruct {
 					problem = fmt.Errorf("%s: use name %s as a named composite-literal key is ambiguous in this version; use an explicit qualified expression for map keys", fs.Position(id.Pos()), id.Name)
 				}
@@ -750,20 +800,20 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
 			if d.Recv == nil {
-				if _, ok := u.bindings[d.Name.Name]; ok {
+				if _, ok := bindings[d.Name.Name]; ok {
 					return nil, fmt.Errorf("%s: use binding conflicts with function %s", fs.Position(d.Pos()), d.Name.Name)
 				}
 			}
 		case *ast.GenDecl:
 			for _, sp := range d.Specs {
 				if typ, ok := sp.(*ast.TypeSpec); ok {
-					if _, exists := u.bindings[typ.Name.Name]; exists {
+					if _, exists := bindings[typ.Name.Name]; exists {
 						return nil, fmt.Errorf("%s: use binding conflicts with type declaration %s", fs.Position(typ.Pos()), typ.Name.Name)
 					}
 				}
 				if v, ok := sp.(*ast.ValueSpec); ok {
 					for _, id := range v.Names {
-						b, exists := u.bindings[id.Name]
+						b, exists := bindings[id.Name]
 						if exists && b.Kind != "constant" {
 							return nil, fmt.Errorf("%s: use binding conflicts with declaration %s", fs.Position(id.Pos()), id.Name)
 						}
@@ -776,8 +826,8 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 		if ignored[id] {
 			continue
 		}
-		b, ok := u.bindings[id.Name]
-		if !ok || b.Kind == "type" || b.Kind == "constant" || b.Kind == "macro" {
+		b, ok := bindings[id.Name]
+		if !ok || b.Kind == "macro" || b.Kind == "derive" || b.Kind == "namespace" || b.Public && (b.Kind == "type" || b.Kind == "constant") {
 			continue
 		}
 		expr, e := route(b)
@@ -800,47 +850,23 @@ func (u *usePackage) rewrite(file string, source []byte) ([]byte, error) {
 				}
 			}
 		}
-		if handledImports[a] && !usedImports[a] {
+		if !deferredMatch && handledImports[a] && !usedImports[a] {
 			replacement := "_ " + im.Path.Value
 			edits = append(edits, useEdit{int(im.Pos()) - 1, int(im.End()) - 1, replacement})
 		}
 	}
-	sort.Slice(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
-	out := append([]byte(nil), source...)
-	last := len(source) + 1
-	for _, ed := range edits {
-		if ed.end > last {
-			return nil, fmt.Errorf("%s: overlapping use rewrite", file)
-		}
-		out = append(append(append([]byte(nil), out[:ed.start]...), ed.text...), out[ed.end:]...)
-		last = ed.start
+	out, err := applyUseEdits(source, mapping, edits, "use bindings", true)
+	if err != nil {
+		return nil, err
 	}
-	return addUseImports(file, out, extra)
+	return addUseImportsMapped(file, out, extra, mapping)
 }
 
-func (u *usePackage) remap(result *PackageResult) {
-	for name, r := range result.Files {
-		original, ok := u.original[name]
-		if !ok || r.Diagnostics == nil || bytes.Equal(original, u.prepared[name]) {
-			continue
-		}
-		base := sourcemap.Identity(name, original).Compose(original, u.prepared[name], "use declarations")
-		for i := range r.Diagnostics.Segments {
-			seg := &r.Diagnostics.Segments[i]
-			if seg.Origin == nil || seg.Origin.File != name {
-				continue
-			}
-			old := seg.Origin
-			first := base.Lookup(old.Start)
-			if first != nil {
-				seg.Origin = first.Origin
-			} else {
-				seg.Origin = nil
-			}
-		}
-		refreshPackageMap(&r)
-		result.Files[name] = r
+func (u *usePackage) rewriteExpanded(file string, source []byte, mapping *sourcemap.Map) ([]byte, error) {
+	if u == nil {
+		return source, nil
 	}
+	return u.rewrite(file, source, mapping)
 }
 
 // Ask Go for complete identity, including type arguments, private fields and

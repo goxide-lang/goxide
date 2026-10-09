@@ -33,7 +33,7 @@ format=1
 members=["app","server","common"]
 default-members=["app"]
 [workspace.dependencies]
-common={module="example.org/common",path="common",default_features=false}
+common={module="example.org/common",package="example.org/common",path="common",default_features=false}
 `)
 	for _, m := range []string{"app", "server"} {
 		f := "json"
@@ -48,14 +48,16 @@ module="example.org/%s"
 go="1.27"
 [dependencies]
 common={workspace=true,features=[%q]}
+fmt={source="toolchain",package="fmt"}
+d={module="example.org/d",package="example.org/d",version=%q}
 [[go.require]]
 module="example.org/d"
 version=%q
 [[bin]]
 name="%s"
 path="main.gox"
-`, m, f, v, m))
-		workspaceWrite(t, root, m+"/main.gox", "package main\nimport (\"fmt\"; \"example.org/common\"; \"example.org/d\")\nfunc main(){fmt.Println(d.Version(),common.Flags())}\n")
+`, m, f, v, v, m))
+		workspaceWrite(t, root, m+"/main.gox", "package main\nuse fmt;\nuse common;\nuse d;\nfunc main(){fmt::Println(d::Version(),common::Flags())}\n")
 	}
 	workspaceWrite(t, root, "common/goxide.toml", `[package]
 format=2

@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 func TestOptionSerdeInstalledBusinessRace(t *testing.T) {
@@ -30,17 +28,17 @@ func TestOptionSerdeInstalledBusinessRace(t *testing.T) {
 
 func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 	for name, source := range map[string]string{
-		"serialize-only-payload-cannot-decode":   "#[derive(Serialize)]\ntype Payload struct { Port int }\n#[derive(Deserialize)]\ntype Request struct { Value Option[Payload] }",
-		"deserialize-only-payload-cannot-encode": "#[derive(Deserialize)]\ntype Payload struct { Port int }\n#[derive(Serialize)]\ntype Request struct { Value Option[Payload] }",
-		"channel-payload":                        "#[derive(Serialize,Deserialize)]\ntype Request struct { Value Option[chan int] }",
-		"missing-payload-serde":                  "type Settings struct { Port int }\n#[derive(Serialize,Deserialize)]\ntype Request struct { Value Option[Settings] }",
-		"default-cannot-mask-unsupported":        "#[derive(Deserialize)]\ntype Request struct {\n#[serde(default)]\nValue Option[chan int]\n}",
-		"ordinary-enum-option-payload":           "#[derive(Serialize,Deserialize)]\nenum Event { Empty, Data(Option[int]), }",
-		"ordinary-enum-struct-option-payload":    "#[derive(Serialize,Deserialize)]\ntype Payload struct { Value Option[int] }\n#[derive(Serialize,Deserialize)]\nenum Event { Data(Payload), }",
+		"serialize-only-payload-cannot-decode":   "#[derive(serde::Serialize)]\ntype Payload struct { Port int }\n#[derive(serde::Deserialize)]\ntype Request struct { Value Option[Payload] }",
+		"deserialize-only-payload-cannot-encode": "#[derive(serde::Deserialize)]\ntype Payload struct { Port int }\n#[derive(serde::Serialize)]\ntype Request struct { Value Option[Payload] }",
+		"channel-payload":                        "#[derive(serde::Serialize,serde::Deserialize)]\ntype Request struct { Value Option[chan int] }",
+		"missing-payload-serde":                  "type Settings struct { Port int }\n#[derive(serde::Serialize,serde::Deserialize)]\ntype Request struct { Value Option[Settings] }",
+		"default-cannot-mask-unsupported":        "#[derive(serde::Deserialize)]\ntype Request struct {\n#[serde(default)]\nValue Option[chan int]\n}",
+		"ordinary-enum-option-payload":           "#[derive(serde::Serialize,serde::Deserialize)]\nenum Event { Empty, Data(Option[int]), }",
+		"ordinary-enum-struct-option-payload":    "#[derive(serde::Serialize,serde::Deserialize)]\ntype Payload struct { Value Option[int] }\n#[derive(serde::Serialize,serde::Deserialize)]\nenum Event { Data(Payload), }",
 	} {
 		t.Run(name, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), name+".gox")
-			_, err := frontend.Compile(filename, []byte("package rejected\n"+source+"\n"))
+			_, err := compileAcceptanceSerdeFixture(filename, []byte("package rejected; use serde;\n"+source+"\n"))
 			if err == nil || !strings.Contains(err.Error(), filepath.Base(filename)+":") {
 				t.Fatalf("want located rejection, got %v", err)
 			}
@@ -74,12 +72,13 @@ func TestOptionSerdeNestedContainersRace(t *testing.T) {
 	bin, outside, source := t.TempDir(), t.TempDir(), t.TempDir()
 	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
 	packagesWrite(t, source, "go.mod", "module nestedoption.example/app\ngo 1.27\n")
-	packagesWrite(t, source, "nested.gox", `package nested
-import("github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
-#[derive(Serialize,Deserialize)]
+	writeAcceptanceSerdeRoots(t, source, "")
+	packagesWrite(t, source, "nested.gox", `package nested; use serde;
+use serde::json as serdejson;
+#[derive(serde::Serialize,serde::Deserialize)]
 type Request struct { List Option[[]Option[int]]; Lookup Option[map[string]Option[int]] }
-func Decode(data []byte)(Request,error){return serdejson.Unmarshal(data,DeserializeRequest)}
-func Encode(v Request)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeRequest(s,&v)})}
+func Decode(data []byte)(Request,error){return serdejson::Unmarshal(data,DeserializeRequest)}
+func Encode(v Request)([]byte,error){return serdejson::Encode(func(s serde::Serializer)error{return SerializeRequest(s,&v)})}
 var Entered int
 func ListLength(v Option[[]Option[int]])int{
  match v {Option[[]Option[int]]::Some(rows)=>{Entered++;return len(rows)},Option[[]Option[int]]::None=>{return -1}}
@@ -135,8 +134,8 @@ func TestInvalidInnerValueBeforeArm(t *testing.T){
 `
 
 func TestOptionProtocolDoesNotGrantPayloadDefault(t *testing.T) {
-	_, err := frontend.Compile("no-payload-default.gox", []byte(`package fixture
-#[derive(Deserialize)]
+	_, err := compileAcceptanceSerdeFixture("no-payload-default.gox", []byte(`package fixture; use serde;
+#[derive(serde::Deserialize)]
 type InputPayload struct { Port int }
 #[derive(Default)]
 type RequiresDefault struct { Payload InputPayload }

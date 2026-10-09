@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 func TestSerdeDefaultsInstalledBusinessRace(t *testing.T) {
@@ -42,10 +40,10 @@ func TestSerdeDefaultsMissingProtocolDiagnostics(t *testing.T) {
 				case "ordinary-function":
 					extra = "func DefaultSettings() Settings { return Settings{Port:99} }\n"
 				}
-				source := "package rejected\n#[derive(Serialize,Deserialize)]\ntype Settings struct { Port int }\n" + extra +
-					"#[derive(Deserialize)]\ntype Request struct {\n#[serde(" + attribute + ")]\nValue " + typ + "\n}\n"
+				source := "package rejected; use serde;\n#[derive(serde::Serialize,serde::Deserialize)]\ntype Settings struct { Port int }\n" + extra +
+					"#[derive(serde::Deserialize)]\ntype Request struct {\n#[serde(" + attribute + ")]\nValue " + typ + "\n}\n"
 				filename := filepath.Join(t.TempDir(), "missing_protocol.gox")
-				_, err := frontend.Compile(filename, []byte(source))
+				_, err := compileAcceptanceSerdeFixture(filename, []byte(source))
 				wantLocation := "missing_protocol.gox:" + strconv.Itoa(strings.Count(source[:strings.Index(source, "Value ")], "\n")+1) + ":"
 				if err == nil || !strings.Contains(strings.ToLower(err.Error()), "default") || !strings.Contains(err.Error(), wantLocation) {
 					t.Fatalf("want source-located missing Default diagnostic: %v", err)

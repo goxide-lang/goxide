@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/frontend"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -51,13 +50,13 @@ func TestEnumWireExplicitBoundaries(t *testing.T) {
 		{"channel-default-missing", "#[derive(Default)]\ntype Config struct { Value chan int }", "default"},
 		{"enum-default-not-selected", "#[derive(Default)]\nenum E { A, B, }", "default"},
 		{"two-default-variants", "#[derive(Default)]\nenum E {\n#[default]\nA,\n#[default]\nB,\n}", "default"},
-		{"duplicate-string-mapping", "#[derive(Serialize,Deserialize)]\nenum E {\n#[serde(rename=\"wire\")]\nA,\n#[serde(rename=\"wire\")]\nB,\n}", "duplicate"},
-		{"duplicate-number-mapping", "#[derive(Serialize,Deserialize)]\nenum E {\n#[serde(value=1)]\nA,\n#[serde(value=1)]\nB,\n}", "duplicate"},
+		{"duplicate-string-mapping", "#[derive(serde::Serialize,serde::Deserialize)]\nenum E {\n#[serde(rename=\"wire\")]\nA,\n#[serde(rename=\"wire\")]\nB,\n}", "duplicate"},
+		{"duplicate-number-mapping", "#[derive(serde::Serialize,serde::Deserialize)]\nenum E {\n#[serde(value=1)]\nA,\n#[serde(value=1)]\nB,\n}", "duplicate"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), tc.name+".gox")
-			_, err := frontend.Compile(filename, []byte("package rejected\n"+tc.source+"\n"))
+			_, err := compileAcceptanceLanguageFixture(filename, []byte("package rejected\n"+tc.source+"\n"))
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) || !strings.Contains(err.Error(), filepath.Base(filename)+":") {
 				t.Fatalf("want located %s rejection, got %v", tc.want, err)
 			}

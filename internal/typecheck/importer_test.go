@@ -15,6 +15,23 @@ func TestLocalRuntimeAndStandardIdentity(t *testing.T) {
 	if runtime.Scope().Lookup("Serializer") == nil {
 		t.Fatal("missing actual runtime export")
 	}
+	origins := imp.(interface {
+		PackageOrigin(string) (string, bool, error)
+	})
+	for _, tc := range []struct {
+		path, module string
+		standard     bool
+	}{
+		{"github.com/goxide-lang/serde", "github.com/goxide-lang/serde", false},
+		{"github.com/goxide-lang/std/runtime", "github.com/goxide-lang/std", false},
+		{"fmt", "", true},
+		{"unsafe", "", true},
+	} {
+		module, standard, err := origins.PackageOrigin(tc.path)
+		if err != nil || module != tc.module || standard != tc.standard {
+			t.Fatalf("origin(%s) = %q, %t, %v", tc.path, module, standard, err)
+		}
+	}
 	fmtPackage, err := imp.Import("fmt")
 	if err != nil {
 		t.Fatal(err)

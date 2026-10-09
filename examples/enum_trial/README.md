@@ -22,7 +22,7 @@ bash examples/enum_trial/try.sh "$work"
 3. 复制 [app 模块](app/go.mod) 到临时输入目录，将其 `replace` 指向**已生成的 model**，再转译消费者。不会修改仓库的 go.mod。
 4. 在两个生成模块执行 `go test -race -count=1 -v ./...`、`go vet ./...`，构建并运行 `orders`。
 
-产物保留在 `$work`；重复尝试请使用新的空目录。生成模块通过真实固定版本依赖公开 std/serde，并通过本地 `replace` 依赖当前仍在 compiler 仓库的其他支持 helper；**不是自包含发布包**。宏在 app 自己的源码包 [logkit](app/logkit/events.gox) 中导入；此例不声称跨独立模块的预编译宏 ABI 已实现。
+产物保留在 `$work`；重复尝试请使用新的空目录。生成模块通过固定版本依赖公开 std/serde，formatting/runtime helper 也来自 std；生成物不依赖编译器模块。两个模块分别使用 `goxide.roots.toml` 声明确切包映射，源文件用 `use` 选名及 `::` 静态路径。宏在 app 自己的源码包 [logkit](app/logkit/events.gox) 中导入；此例不声称跨独立模块的预编译宏 ABI 已实现。
 
 默认输出：
 

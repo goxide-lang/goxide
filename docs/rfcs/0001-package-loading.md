@@ -182,7 +182,8 @@ producer 通过目录/模块入口生成普通 Go 和 metadata，公开 API 例�
 ```goxide
 package model
 pub enum Event { Idle, Count(int), }
-#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+use serde;
+#[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 type Item struct { N int }
 ```
 
@@ -190,13 +191,14 @@ consumer 的 `go.mod` 明确依赖该生成模块；同一个指定 `.gox` 中�
 
 ```goxide
 package main
-import p "a06.example/producer/model"
-type Local = p.Item
+use producer::model as p;
+type Local = p::Item
 type Level = Local
-#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+use serde;
+#[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 type Envelope struct { Item Level }
-func count(e p.Event) int {
-    return match e { p.Event::Idle => 0, p.Event::Count(n) => n }
+func count(e p::Event) int {
+    return match e { p::Event::Idle => 0, p::Event::Count(n) => n }
 }
 ```
 

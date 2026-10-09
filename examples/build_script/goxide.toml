@@ -3,6 +3,9 @@ format = 2
 module = "example.org/buildscript"
 go = "1.27"
 
+[package.namespaces]
+gen = "example.org/buildscript/gen"
+
 [[bin]]
 name = 'app'
 path = 'cmd/app'
@@ -21,3 +24,23 @@ version = "v0.0.0-20261009021520-f342a31e20d0"
 [[go.require]]
 module = "github.com/goxide-lang/std"
 version = "v0.0.0-20261009053434-9ed27c85088a"
+
+[dependencies.fmt]
+source = "toolchain"
+package = "fmt"
+
+[dependencies.json]
+source = "toolchain"
+package = "encoding/json"
+
+[dependencies.os]
+source = "toolchain"
+package = "os"
+
+[dependencies.filepath]
+source = "toolchain"
+package = "path/filepath"
+
+[dependencies.strings]
+source = "toolchain"
+package = "strings"

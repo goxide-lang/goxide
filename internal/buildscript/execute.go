@@ -271,7 +271,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 	}
 	imports := map[string][]string{}
 	for _, m := range mods {
-		imports[m], e = hostImports(p.helpers[m])
+		imports[m], e = hostImports(m, p.helpers[m], p.options.ToolchainRoots)
 		if e != nil {
 			return fail, fmt.Errorf("host helper %s imports: %w", m, e)
 		}
@@ -302,7 +302,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 			}
 			if hasGoxide(p.helpers[m]) {
 				dst := paths[m] + "-lowered"
-				if _, e = frontend.CompileModuleWithOptions(paths[m], dst, frontend.ModuleOptions{Environment: p.compileEnv(), Context: ctx}); e != nil {
+				if _, e = frontend.CompileModuleWithOptions(paths[m], dst, frontend.ModuleOptions{Environment: p.compileEnv(), Context: ctx, Roots: p.options.ToolchainRoots}); e != nil {
 					return fail, fmt.Errorf("host helper %s: %w", m, e)
 				}
 				paths[m] = dst
@@ -333,8 +333,8 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 	}
 	if hasGoxide(p.script) {
 		dst := filepath.Join(scratch, "lowered")
-		if _, e = frontend.CompileModuleWithOptions(host, dst, frontend.ModuleOptions{Environment: p.compileEnv(), Context: ctx}); e != nil {
-			return fail, fmt.Errorf("host script lowering: %w", e)
+		if _, e = frontend.CompileModuleWithOptions(host, dst, frontend.ModuleOptions{Environment: p.compileEnv(), Context: ctx, Roots: p.options.ToolchainRoots}); e != nil {
+			return fail, fmt.Errorf("host script lowering (only explicit toolchain roots are available): %w", e)
 		}
 		host = dst
 	}

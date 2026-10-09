@@ -26,14 +26,15 @@ func TestCrossModuleBuiltinArtifacts(t *testing.T) {
 	}
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", module("sums.example/lib", ""))
-	packagesWrite(t, src, "model/model.gox", `package model
-import "errors"
-var Sentinel=errors.New("failed")
+	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "model/model.gox", `package model; use serde;
+use errors;
+var Sentinel=errors::New("failed")
 type Fault struct{}
 func(*Fault)Error()string{return "typed"}
 type hidden struct{N int}
 type Exposed=hidden
-#[derive(Serialize,Deserialize)]
+#[derive(serde::Serialize,serde::Deserialize)]
 type Config struct{Value Option[int]}
 type secret struct{N int}
 func Private()Option[hidden]{return Option[hidden]::Some(hidden{N:7})}
@@ -78,38 +79,39 @@ func Get()Result[int,error]{return nil}
 	appFor := func(source string) string {
 		d := t.TempDir()
 		packagesWrite(t, d, "go.mod", module("sums.example/app", lib))
+		writeAcceptanceSerdeRoots(t, d, "sums.example/lib", "model", "relay", "fake")
 		// A final source newline is optional, including before imported preludes.
 		packagesWrite(t, d, "app.gox", strings.TrimRight(source, "\n"))
 		return d
 	}
 	app := appFor(`package app
-import(m "sums.example/lib/model";r "sums.example/lib/relay")
+use library::model as m; use library::relay as r;
 #[derive(Error)]
 pub enum LocalError{
  #[error("local")]
  #[from]
  Cause(error),
 }
-func OptionFlow(ok bool)m.Option[int]{n:=m.Pick(ok)?;return m.Option[int]::Some(n+1)}
-func ResultFlow(kind int)m.Result[string,error]{n:=m.Load(kind)?;_=n;return m.Result[string,error]::Ok("done")}
-func Wrapped(kind int)Result[int,LocalError]{n:=m.Load(kind)?;return Result[int,LocalError]::Ok(n)}
-func Match(v m.Option[int])int{return match v{m.Option[int]::Some(n)=>n,m.Option[int]::None=>0,}}
-func Alias()int{v:=r.Numeric[int]::Some(9);return match v{r.Int::Some(n)=>n,r.Maybe[int]::None=>0,}}
-func Reorder()int{v:=r.Swap[error,int]::Ok(10);return match v{r.Outcome[int,error]::Ok(n)=>n,r.Swap[error,int]::Err(_)=>0,}}
-func Fixed()int{v:=r.Fixed[int]::Ok(11);return match v{r.Fixed[int]::Ok(n)=>n,r.Fixed[int]::Err(_)=>0,}}
-func Private()Option[int]{n:=m.Private()?;return Option[int]::Some(n.N)}
-func Shape()int{v:=r.Wrap[int]::Some(struct{T int;V int}{T:2,V:3});return match v{r.Wrap[int]::Some(n)=>n.T+n.V,r.Wrap[int]::None=>0,}}
-func PrivateMatch()int{return match m.Private(){r.Private::Some(n)=>n.N,r.Private::None=>0,}}
-func Forward(){_=m.Secret()}
-func Invalid(v m.Result[int,error],seen *bool)Result[int,error]{n:=v?;*seen=true;return Result[int,error]::Ok(n)}
-func Nested()Result[int,error]{_=m.Nested()?;return Result[int,error]::Ok(1)}
-func NestedNone()Option[int]{v:=m.OptionalNested()?;n:=v?;return Option[int]::Some(n)}
-func Guard(v m.Option[int],seen *bool)int{return match v{m.Option[int]::Some(n) if Mark(seen)=>n,_=>0,}}
+func OptionFlow(ok bool)m::Option[int]{n:=m::Pick(ok)?;return m::Option[int]::Some(n+1)}
+func ResultFlow(kind int)m::Result[string,error]{n:=m::Load(kind)?;_=n;return m::Result[string,error]::Ok("done")}
+func Wrapped(kind int)Result[int,LocalError]{n:=m::Load(kind)?;return Result[int,LocalError]::Ok(n)}
+func Match(v m::Option[int])int{return match v{m::Option[int]::Some(n)=>n,m::Option[int]::None=>0,}}
+func Alias()int{v:=r::Numeric[int]::Some(9);return match v{r::Int::Some(n)=>n,r::Maybe[int]::None=>0,}}
+func Reorder()int{v:=r::Swap[error,int]::Ok(10);return match v{r::Outcome[int,error]::Ok(n)=>n,r::Swap[error,int]::Err(_)=>0,}}
+func Fixed()int{v:=r::Fixed[int]::Ok(11);return match v{r::Fixed[int]::Ok(n)=>n,r::Fixed[int]::Err(_)=>0,}}
+func Private()Option[int]{n:=m::Private()?;return Option[int]::Some(n.N)}
+func Shape()int{v:=r::Wrap[int]::Some(struct{T int;V int}{T:2,V:3});return match v{r::Wrap[int]::Some(n)=>n.T+n.V,r::Wrap[int]::None=>0,}}
+func PrivateMatch()int{return match m::Private(){r::Private::Some(n)=>n.N,r::Private::None=>0,}}
+func Forward(){_=m::Secret()}
+func Invalid(v m::Result[int,error],seen *bool)Result[int,error]{n:=v?;*seen=true;return Result[int,error]::Ok(n)}
+func Nested()Result[int,error]{_=m::Nested()?;return Result[int,error]::Ok(1)}
+func NestedNone()Option[int]{v:=m::OptionalNested()?;n:=v?;return Option[int]::Some(n)}
+func Guard(v m::Option[int],seen *bool)int{return match v{m::Option[int]::Some(n) if Mark(seen)=>n,_=>0,}}
 func Mark(seen *bool)bool{*seen=true;return true}
-func Shadow()Result[int,error]{input:=m.Load(0);m:=3;_=m;n:=input?;return Result[int,error]::Ok(n)}
+func Shadow()Result[int,error]{input:=m::Load(0);m:=3;_=m;n:=input?;return Result[int,error]::Ok(n)}
 // A new concrete shared-family instance gets a local static validator.
-func NewInstance(v m.Option[bool])Option[bool]{n:=v?;return Option[bool]::Some(n)}
-func SumLarge(items []int)Result[int,error]{total:=0;for _,item:=range items{total+=m.LoadNumber(item)?};return Result[int,error]::Ok(total)}
+func NewInstance(v m::Option[bool])Option[bool]{n:=v?;return Option[bool]::Some(n)}
+func SumLarge(items []int)Result[int,error]{total:=0;for _,item:=range items{total+=m::LoadNumber(item)?};return Result[int,error]::Ok(total)}
 `)
 	out := filepath.Join(t.TempDir(), "out")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, app)
@@ -193,19 +195,19 @@ func TestGo(t *testing.T){var v r.Maybe[int]=m.GoxideNewOptionSome[int](4);if v.
 		packagesCommand(t, d, tool, true, "vet", "./...")
 	}
 	for name, tc := range map[string]struct{ body, want string }{
-		"fake-family":                {`import f "sums.example/lib/fake";func Bad()Result[int,error]{n:=f.Get()?;return Result[int,error]::Ok(n)}`, "builtin nominal"},
-		"private-unnameable":         {`import m "sums.example/lib/model";func Bad()Option[int]{n:=m.Secret()?;return Option[int]::Some(n.N)}`, "not nameable"},
-		"external-from-not-implicit": {`import m "sums.example/lib/model";func Bad()m.Result[int,m.RemoteError]{n:=m.Load(1)?;return m.GoxideNewResultOk[int,m.RemoteError](n)}`, "unique explicit From"},
-		"cross-family":               {`import m "sums.example/lib/model";func Bad()Option[int]{n:=m.Load(0)?;return Option[int]::Some(n)}`, "cannot propagate"},
-		"non-exhaustive":             {`import m "sums.example/lib/model";func Bad(v m.Option[int])int{return match v{m.Option[int]::Some(n)=>n,}}`, "non-exhaustive"},
-		"constrained-alias-ctor":     {`import r "sums.example/lib/relay";func Bad(){_=r.Numeric[string]::Some("bad")}`, "does not satisfy"},
-		"constrained-alias-pattern":  {`import(m "sums.example/lib/model";r "sums.example/lib/relay");func Bad(v m.Option[string])int{return match v{r.Numeric[string]::Some(_)=>1,r.Numeric[string]::None=>0,}}`, "does not satisfy"},
-		"new-defined":                {`import r "sums.example/lib/relay";func Bad()r.New{return r.New::Some(1)}`, "unknown"},
+		"fake-family":                {`use library::fake as f;func Bad()Result[int,error]{n:=f::Get()?;return Result[int,error]::Ok(n)}`, "builtin nominal"},
+		"private-unnameable":         {`use library::model as m;func Bad()Option[int]{n:=m::Secret()?;return Option[int]::Some(n.N)}`, "not nameable"},
+		"external-from-not-implicit": {`use library::model as m;func Bad()m::Result[int,m::RemoteError]{n:=m::Load(1)?;return m::GoxideNewResultOk[int,m::RemoteError](n)}`, "unique explicit From"},
+		"cross-family":               {`use library::model as m;func Bad()Option[int]{n:=m::Load(0)?;return Option[int]::Some(n)}`, "cannot propagate"},
+		"non-exhaustive":             {`use library::model as m;func Bad(v m::Option[int])int{return match v{m::Option[int]::Some(n)=>n,}}`, "non-exhaustive"},
+		"constrained-alias-ctor":     {`use library::relay as r;func Bad(){_=r::Numeric[string]::Some("bad")}`, "does not satisfy"},
+		"constrained-alias-pattern":  {`use library::model as m; use library::relay as r;func Bad(v m::Option[string])int{return match v{r::Numeric[string]::Some(_)=>1,r::Numeric[string]::None=>0,}}`, "does not satisfy"},
+		"new-defined":                {`use library::relay as r;func Bad()r::New{return r::New::Some(1)}`, "has no field or method Some"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := appFor("package app\n" + tc.body)
 			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), s)
-			if !strings.Contains(msg, tc.want) {
+			if !strings.Contains(msg, tc.want) || !strings.Contains(msg, "app.gox:") {
 				t.Fatal(msg)
 			}
 		})

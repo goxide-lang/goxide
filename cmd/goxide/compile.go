@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hxsf/goxide/internal/frontend"
+	sourcepaths "github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
@@ -57,6 +58,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	nativeGo := filepath.Ext(input) == ".go"
 	if info, statErr := os.Stat(input); statErr == nil && info.IsDir() {
 		if *mapPath != "" || *expandedPath != "" {
 			return errors.New("directory mode writes per-file .go.map.json automatically; --source-map/--expanded are single-file flags")
@@ -136,12 +138,22 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		}
 		return err
 	}
-	roots, err := sourceRoots(moduleRoot, filepath.Dir(rootInput), req.RootsFile)
-	if err != nil {
-		if owner != nil {
-			owner.close()
+	var roots sourcepaths.Roots
+	if nativeGo {
+		if req.RootsFile != "" {
+			if owner != nil {
+				owner.close()
+			}
+			return errors.New("--roots applies to Goxide source; native .go uses Go imports")
 		}
-		return err
+	} else {
+		roots, err = sourceRoots(moduleRoot, filepath.Dir(rootInput), req.RootsFile)
+		if err != nil {
+			if owner != nil {
+				owner.close()
+			}
+			return err
+		}
 	}
 	if owner != nil {
 		defer owner.close()
@@ -162,8 +174,14 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 				return fmt.Errorf("configured single-file compiler: %w", err)
 			}
 		}
-		imp := typecheck.NewImporterWithModFile(context.Background(), input, nil, false, singleFileEnvironment(), owner.modFile)
-		result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{PackagePath: owner.packagePath, Importer: imp, Roots: roots})
+		if nativeGo {
+			result, err = compileNativeGoFile(input, src)
+		} else {
+			imp := typecheck.NewImporterWithModFile(context.Background(), input, nil, false, singleFileEnvironment(), owner.modFile)
+			result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{PackagePath: owner.packagePath, Importer: imp, Roots: roots})
+		}
+	} else if nativeGo {
+		result, err = compileNativeGoFile(input, src)
 	} else {
 		result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{Roots: roots})
 	}

@@ -88,12 +88,11 @@ func Shadow(v s::Option[int])int{type int=string;s:=0;_=s;return match v{_=>9}}
 	}
 	sharedStdWrite(t, output, "explicit_test.go", `package explicit
 import("testing";s "github.com/goxide-lang/std/sum";"example.org/explicit/dep";"example.org/explicit/box")
-type forgedOption struct{s.Option[int]}
 func rejects(t *testing.T, f func()){t.Helper();defer func(){if recover()==nil{t.Error("accepted invalid sum")}}();f()}
 func valid()Envelope{return Envelope{Nested:s.NewSome(Lookup{"ok":Modes{NewModeIdle()}}),Direct:[1]Mode{NewModeIdle()},Foreign:Foreign{Event:dep.NewEventReady()},Native:NativeForeign{Events:map[string][]dep.Event{"ok":{dep.NewEventReady()}}},Transitive:box.Box{Events:map[string][]dep.Event{"ok":{dep.NewEventReady()}}}}}
-func TestValues(t *testing.T){if Read(Some())!=7||Inferred()!=8||ViaUse(Some())!=7||Shadow(Some())!=9{t.Fatal("option")};if Next(s.NewOk[int,error](4)).(s.Ok[int,error]).Value!=5{t.Fatal("result")};OtherValue(s.NewSome[Other](nil));v:=valid();n:=0;Inspect(s.NewOk[Envelope,Modes](v),&n);_=Propagate(s.NewOk[Envelope,Modes](v),&n);InspectPublic(s.NewSome(v));if n!=2{t.Fatal(n)}}
-func TestShape(t *testing.T){for _,v:=range []s.Option[int]{(*s.Some[int])(nil),forgedOption{Some()}}{rejects(t,func(){Read(v)})};for _,v:=range []s.Result[int,error]{nil,(*s.Ok[int,error])(nil)}{rejects(t,func(){Next(v)})}}
-func TestPayloadBeforeEffects(t *testing.T){for _,kind:=range []string{"slice","map","nested","array","foreign","native","transitive","err"}{t.Run(kind,func(t *testing.T){v:=valid();r:=s.NewOk[Envelope,Modes](v);switch kind{case "slice":v.Nested=s.NewSome(Lookup{"bad":Modes{nil}});case "map":v.Nested=s.NewSome(Lookup{"bad":Modes{(*GoxideCase4_Mode_Idle)(nil)}});case "nested":v.Nested=(*s.Some[Lookup])(nil);case "array":v.Direct[0]=nil;case "foreign":v.Foreign.Event=nil;case "native":v.Native.Events["bad"]=[]dep.Event{nil};case "transitive":v.Transitive.Events["bad"]=[]dep.Event{nil};case "err":r=s.NewErr[Envelope,Modes](Modes{nil})};if kind!="err"{r=s.NewOk[Envelope,Modes](v)};checks:=[]func(){func(){n:=0;defer func(){if n!=0{t.Error("guard before validation")}}();Inspect(r,&n)},func(){n:=0;defer func(){if n!=0{t.Error("effect before validation")}}();_=Propagate(r,&n)}};if kind!="err"{checks=append(checks,func(){InspectPublic(s.NewSome(v))})};for _,f:=range checks{rejects(t,f)}})}}
+func TestValues(t *testing.T){if Read(Some())!=7||Inferred()!=8||ViaUse(Some())!=7||Shadow(Some())!=9{t.Fatal("option")};if s.ValueOk(Next(s.NewOk[int,error](4)))!=5{t.Fatal("result")};OtherValue(s.NewSome[Other](Other{}));v:=valid();n:=0;Inspect(s.NewOk[Envelope,Modes](v),&n);_=Propagate(s.NewOk[Envelope,Modes](v),&n);InspectPublic(s.NewSome(v));if n!=2{t.Fatal(n)}}
+func TestShape(t *testing.T){if Read(s.Option[int]{})!=0{t.Fatal("zero Option must be None")};rejects(t,func(){Next(s.Result[int,error]{})})}
+func TestPayloadBeforeEffects(t *testing.T){for _,kind:=range []string{"slice","map","nested","array","foreign","native","transitive","err"}{t.Run(kind,func(t *testing.T){v:=valid();r:=s.NewOk[Envelope,Modes](v);switch kind{case "slice":v.Nested=s.NewSome(Lookup{"bad":Modes{{}}});case "map":v.Nested=s.NewSome(Lookup{"bad":Modes{{__goxide_tag:99}}});case "nested":v.Nested=s.NewSome(Lookup{"nested":Modes{{}}});case "array":v.Direct[0]=Mode{};case "foreign":v.Foreign.Event=dep.Event{};case "native":v.Native.Events["bad"]=[]dep.Event{{}};case "transitive":v.Transitive.Events["bad"]=[]dep.Event{{}};case "err":r=s.NewErr[Envelope,Modes](Modes{{}})};if kind!="err"{r=s.NewOk[Envelope,Modes](v)};checks:=[]func(){func(){n:=0;defer func(){if n!=0{t.Error("guard before validation")}}();Inspect(r,&n)},func(){n:=0;defer func(){if n!=0{t.Error("effect before validation")}}();_=Propagate(r,&n)}};if kind!="err"{checks=append(checks,func(){InspectPublic(s.NewSome(v))})};for _,f:=range checks{rejects(t,f)}})}}
 `)
 	sharedStdGo(t, output, "test", "-race", "./...")
 	sharedStdGo(t, output, "vet", "./...")
@@ -112,7 +111,7 @@ func Check(v p::Public){match v{p::Public::Some(_)=>{},p::Public::None=>{}}}
 	}
 	sharedStdWrite(t, target, "read_test.go", `package consumer
 import("testing";p "example.org/explicit";b "example.org/explicit/box";d "example.org/explicit/dep";s "github.com/goxide-lang/std/sum")
-func TestTransitiveArtifact(t *testing.T){defer func(){if recover()==nil{t.Fatal("lost transitive payload check")}}();Transitive(s.NewSome(b.Box{Events:map[string][]d.Event{"bad":{nil}}}))}
+func TestTransitiveArtifact(t *testing.T){defer func(){if recover()==nil{t.Fatal("lost transitive payload check")}}();Transitive(s.NewSome(b.Box{Events:map[string][]d.Event{"bad":{{}}}}))}
 func TestOwnerValidation(t *testing.T){defer func(){if recover()==nil{t.Fatal("lost producer payload check")}}();Check(s.NewSome(p.Envelope{}))}
 `)
 	sharedStdGo(t, target, "test", "-race", "./...")
@@ -128,7 +127,7 @@ func TestExplicitStdProjectionBoundaries(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := compileFrontendFixture("bad.gox", []byte("package bad\nuse std::sum as s;\nenum Mode{Idle,}\n"+declaration+"\nfunc F(v s::Option[Holder]){match v{_=>{}}}"))
-			if err == nil || !strings.Contains(err.Error(), "projection") {
+			if err == nil || !(strings.Contains(err.Error(), "projection") || name == "recursive" && strings.Contains(err.Error(), "invalid recursive type")) {
 				t.Fatalf("wanted projection rejection: %v", err)
 			}
 		})
@@ -194,7 +193,7 @@ func Next(v s::Option[Box])s::Option[int]{b:=v?;return s::Option[int]::Some(len(
 			}
 			sharedStdWrite(t, target, "read_test.go", `package route
 import("testing";s "github.com/goxide-lang/std/sum";e "example.org/wrappers/event")
-func TestNativePayload(t *testing.T){valid:=s.NewSome(Box{Events:map[string][]e.Event{"ok":{e.NewEventReady()}}});if Read(valid)!=1{t.Fatal("valid payload")};for _,check:=range []func(s.Option[Box]){func(v s.Option[Box]){_=Read(v)},func(v s.Option[Box]){_=Next(v)}}{for _,bad:=range []e.Event{nil,(*e.GoxideCase5_Event_Ready)(nil)}{func(){defer func(){if recover()==nil{t.Error("lost native enum validation")}}();check(s.NewSome(Box{Events:map[string][]e.Event{"bad":{bad}}}))}()}}}
+func TestNativePayload(t *testing.T){valid:=s.NewSome(Box{Events:map[string][]e.Event{"ok":{e.NewEventReady()}}});if Read(valid)!=1{t.Fatal("valid payload")};for _,check:=range []func(s.Option[Box]){func(v s.Option[Box]){_=Read(v)},func(v s.Option[Box]){_=Next(v)}}{for _,bad:=range []e.Event{{}}{func(){defer func(){if recover()==nil{t.Error("lost native enum validation")}}();check(s.NewSome(Box{Events:map[string][]e.Event{"bad":{bad}}}))}()}}}
 `)
 			sharedStdGo(t, target, "test", "-race", "./...")
 			sharedStdGo(t, target, "vet", "./...")

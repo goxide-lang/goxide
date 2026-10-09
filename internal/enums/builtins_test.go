@@ -85,10 +85,10 @@ func TestBuiltinNominalAndInvalidCases(t *testing.T) {
 var a Option[int]
 var b Result[int,string]
 var c Result[string,string]
-var nested Option[Option[int]]
+var nested Option[Result[int,string]]
 var visited int
-func checkRows(v Result[[]Option[int],error])int {
- match v {Result[[]Option[int],error]::Ok(rows)=>{visited++;return len(rows)},Result[[]Option[int],error]::Err(_)=>{return -1}}
+func checkRows(v Result[[]Result[int,string],error])int {
+ match v {Result[[]Result[int,string],error]::Ok(rows)=>{visited++;return len(rows)},Result[[]Result[int,string],error]::Err(_)=>{return -1}}
  return -2
 }
 func main(){}
@@ -99,22 +99,22 @@ func main(){}
 	oi, _ := Builtin("Option", []string{"int"})
 	ri, _ := Builtin("Result", []string{"int", "string"})
 	rs, _ := Builtin("Result", []string{"string", "string"})
-	nested, _ := Builtin("Option", []string{"Option[int]"})
-	rows, _ := Builtin("Result", []string{"[]Option[int]", "error"})
+	nested, _ := Builtin("Option", []string{"Result[int,string]"})
+	rows, _ := Builtin("Result", []string{"[]Result[int,string]", "error"})
 	tests := `package main
 import "testing"
 func panics(t *testing.T,f func()){t.Helper();defer func(){if recover()==nil{t.Fatal("expected invalid case panic")}}();f()}
 func TestInvalid(t *testing.T){`
-	tests += `panics(t,func(){` + ri.Validator + `(nil)});`
-	tests += `panics(t,func(){var p *` + oi.Variants[0].CaseName + `;` + oi.Validator + `(p)});`
-	tests += `panics(t,func(){` + nested.Validator + `(` + nested.Variants[0].Constructor + `((*` + oi.Variants[0].CaseName + `)(nil)))});}`
+	tests += `panics(t,func(){` + ri.Validator + `(Result[int,string]{})});`
+	tests += oi.Validator + `(Option[int]{});panics(t,func(){` + oi.Variants[0].Value + `(Option[int]{})});`
+	tests += `panics(t,func(){` + nested.Validator + `(` + nested.Variants[0].Constructor + `(Result[int,string]{}))});}`
 	tests += `
 func TestContainerPayload(t *testing.T){
- if checkRows(` + rows.Variants[0].Constructor + `([]Option[int]{nil,` + oi.Variants[0].Constructor + `(7)}))!=2||visited!=1{t.Fatal("valid nested sum")}
+ if checkRows(` + rows.Variants[0].Constructor + `([]Result[int,string]{` + ri.Variants[0].Constructor + `(0),` + ri.Variants[0].Constructor + `(7)}))!=2||visited!=1{t.Fatal("valid nested sum")}
  if checkRows(` + rows.Variants[0].Constructor + `(nil))!=0||visited!=2{t.Fatal("nil slice")}
  visited=0
- panics(t,func(){checkRows(` + rows.Variants[0].Constructor + `([]Option[int]{nil,(*` + oi.Variants[0].CaseName + `)(nil)}))})
- if visited!=0{t.Fatal("invalid inner Option reached match arm")}
+ panics(t,func(){checkRows(` + rows.Variants[0].Constructor + `([]Result[int,string]{{}}))})
+ if visited!=0{t.Fatal("invalid inner Result reached match arm")}
 }
 `
 	dir := t.TempDir()
@@ -131,7 +131,7 @@ func TestContainerPayload(t *testing.T){
 	c = exec.Command(goTool(t), "build", "-buildvcs=false", ".")
 	c.Dir = dir
 	c.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
-	if out, e := c.CombinedOutput(); e == nil || !strings.Contains(string(out), "wrong type for method") {
+	if out, e := c.CombinedOutput(); e == nil || !strings.Contains(string(out), "cannot use") {
 		t.Fatalf("nominal failure expected: %v %s", e, out)
 	}
 }

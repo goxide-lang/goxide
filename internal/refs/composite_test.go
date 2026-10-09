@@ -16,7 +16,7 @@ func TestCompositeConcreteReferenceElements(t *testing.T) {
 		`type S struct{Items []int};func f(r &S)int{var items []int=r.Items;return items[0]}`,
 		`type S struct{Items []int};func f(r &S)int{g:=func()int{var items=r.Items;return len(items)};return g()}`,
 		`type S struct{N int;Items []int};func f(r &S)int{dst:=make([]int,len(r.Items));copy(dst,r.Items);dst[0]++;return dst[0]}`,
-		`type S struct{N int};func f(r &S)int{{r:=S{};r.N++;};v:=*r;w:=mut&v;w.N++;return w.N}`,
+		`type S struct{N int};func f(r &S)int{{r:=S{};r.N++;};v:=*r;w:=&mut v;w.N++;return w.N}`,
 	} {
 		if _, err := Lower("composite.gox", []byte("package p\n"+src)); err != nil {
 			t.Fatalf("%s: %v", src, err)
@@ -30,7 +30,7 @@ func TestCompositeFixedPointAndSharedCopies(t *testing.T) {
 		`func f(r &S){var items []int=r.Items;items[0]++}`,
 		`func f(r &S){var items any=r.Items;items.([]int)[0]++}`,
 		`func f(r &S,b bool){a:=[]int{1};for b{a[0]++;a=r.Items}}`,
-		`func f(r &S){v:=*r;w:=mut&v;w.Items[0]++}`,
+		`func f(r &S){v:=*r;w:=&mut v;w.Items[0]++}`,
 		`func f(r &S){m:=map[*int]int{};m[r.Pointers[0]]=1;for p:=range m{*p=2}}`,
 		`func f(r &S){dst:=make([]*int,len(r.Pointers));copy(dst,r.Pointers);*dst[0]++}`,
 	} {

@@ -14,9 +14,19 @@ import (
 func referenceElement(src []byte, ts []lex, start int) (string, int) {
 	var best string
 	end := 0
+	depth := 0
 	for j := start; j < len(ts); j++ {
-		if ts[j].kind == token.SEMICOLON || ts[j].kind == token.LBRACE || ts[j].kind == token.COMMA {
+		if ts[j].kind == token.SEMICOLON || ts[j].kind == token.LBRACE || ts[j].kind == token.COMMA && depth == 0 {
 			break
+		}
+		switch ts[j].kind {
+		case token.LBRACK, token.LPAREN:
+			depth++
+		case token.RBRACK, token.RPAREN:
+			if depth == 0 {
+				return best, end
+			}
+			depth--
 		}
 		e, err := parser.ParseExpr(string(src[ts[start].start:ts[j].end]))
 		if err != nil {
@@ -40,6 +50,18 @@ func typeSyntax(e ast.Expr) bool {
 		return true
 	case *ast.SelectorExpr:
 		return typeSyntax(e.X)
+	case *ast.IndexExpr:
+		return typeSyntax(e.X) && typeSyntax(e.Index)
+	case *ast.IndexListExpr:
+		if !typeSyntax(e.X) {
+			return false
+		}
+		for _, index := range e.Indices {
+			if !typeSyntax(index) {
+				return false
+			}
+		}
+		return true
 	case *ast.StarExpr:
 		return typeSyntax(e.X)
 	case *ast.ArrayType:
@@ -168,6 +190,10 @@ func (c *checker) quality(e ast.Expr) *qualification {
 		return &qualification{deep: true}
 	}
 	switch e := e.(type) {
+	case *ast.CallExpr:
+		if proof, ok := c.enumObserver(e); ok && proof.Kind == "value" {
+			return copied(c.typ(e), projection(c.quality(e.Args[0]), proof.Field))
+		}
 	case *ast.Ident:
 		if q, ok := c.pointQualifications[e]; ok {
 			return q
@@ -381,10 +407,15 @@ func (c *checker) checkQualifications() error {
 				if r.Permission == Write {
 					if u, ok := unparen(n.Args[0]).(*ast.UnaryExpr); ok {
 						if q := c.quality(u.X); restricted(q) {
-							fail(n, "cannot obtain write access through a readonly projection")
+							fail(unparen(u.X), "cannot obtain write access through a readonly projection")
 						}
 					}
 				}
+				break
+			}
+			if _, ok := c.enumObserver(n); ok {
+				// These exact helpers inspect a value snapshot; value getters
+				// retain the selected field's qualification in quality above.
 				break
 			}
 			boundary(n.Fun)

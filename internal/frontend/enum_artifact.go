@@ -22,26 +22,27 @@ import (
 
 const enumMetadataMarker = "GoxideEnumMetadata"
 const enumMetadataFilename = ".goxide.enums.json"
-const enumMetadataVersion = 8
+const enumMetadataVersion = 9
 
 type enumVariantExport struct {
-	Name, Case, Constructor string
-	HasPayload              bool
+	Name, Field, PayloadAlias, Constructor, Value, Project string
+	Tag                                                    int
+	HasPayload                                             bool
 }
 type enumExport struct {
-	Name, DefinitionPath, DefinitionName, Marker, Validator string
-	Variants                                                []enumVariantExport
+	Name, DefinitionPath, DefinitionName, TagField, Tag, Validator string
+	Variants                                                       []enumVariantExport
 }
 type enumFamilyVariantExport struct {
-	Name, Case, Constructor string
-	PayloadIndex            int
+	Name, Field, PayloadAlias, Constructor, Value, Project string
+	Tag, PayloadIndex                                      int
 }
 type enumFamilyInstanceExport struct{ ValidatorPath, Validator string }
 type enumFamilyExport struct {
-	ABI                                                  int
-	Name, Family, DefinitionPath, DefinitionName, Marker string
-	Variants                                             []enumFamilyVariantExport
-	Instances                                            []enumFamilyInstanceExport
+	ABI                                                                    int
+	Name, Family, DefinitionPath, DefinitionName, TagField, Tag, Validator string
+	Variants                                                               []enumFamilyVariantExport
+	Instances                                                              []enumFamilyInstanceExport
 }
 
 // Equality records are explicit PartialEq registrations; Eq adds qualification.
@@ -452,40 +453,119 @@ func loadEnumArtifact(path string, imp refs.ArtifactImporter) (enumMetadata, err
 	return load(path)
 }
 
+// Helpers are real functions owned by the canonical definition package. A
+// same-shaped variable, alias or foreign helper never grants enum authority.
+func enumFunction(origin *types.Package, name string, args []types.Type) (*types.Signature, error) {
+	if !token.IsIdentifier(name) || !token.IsExported(name) {
+		return nil, fmt.Errorf("invalid exported enum helper %q", name)
+	}
+	fn, ok := origin.Scope().Lookup(name).(*types.Func)
+	if !ok || fn.Pkg() != origin {
+		return nil, fmt.Errorf("missing canonical enum helper %s.%s", origin.Path(), name)
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok || sig.Recv() != nil || sig.Variadic() || !enumUnconstrained(sig.TypeParams(), len(args)) {
+		return nil, fmt.Errorf("invalid enum helper signature %s", name)
+	}
+	if len(args) > 0 {
+		t, err := types.Instantiate(nil, sig, args, true)
+		if err != nil {
+			return nil, err
+		}
+		sig = t.(*types.Signature)
+	}
+	return sig, nil
+}
+func enumUnconstrained(list *types.TypeParamList, count int) bool {
+	if list.Len() != count {
+		return false
+	}
+	for i := 0; i < count; i++ {
+		c, ok := list.At(i).Constraint().Underlying().(*types.Interface)
+		if !ok || !c.Empty() {
+			return false
+		}
+	}
+	return true
+}
+func enumSignature(sig *types.Signature, params, results []types.Type) bool {
+	if sig.Params().Len() != len(params) || sig.Results().Len() != len(results) {
+		return false
+	}
+	for i, t := range params {
+		if !types.Identical(sig.Params().At(i).Type(), t) {
+			return false
+		}
+	}
+	for i, t := range results {
+		if !types.Identical(sig.Results().At(i).Type(), t) {
+			return false
+		}
+	}
+	return true
+}
+func enumPrivateField(st *types.Struct, index int, name string, origin *types.Package) bool {
+	if index >= st.NumFields() || !token.IsIdentifier(name) || token.IsExported(name) || name == "_" {
+		return false
+	}
+	f := st.Field(index)
+	return f.Name() == name && f.Pkg() == origin && !f.Embedded() && st.Tag(index) == ""
+}
+
+// Payload aliases expose the exact type needed to spell a nominal reference
+// without granting access to its private storage or inventing a wrapper type.
+func enumPayloadAlias(origin *types.Package, name string, args []types.Type, payload types.Type) error {
+	if !token.IsIdentifier(name) || !token.IsExported(name) {
+		return fmt.Errorf("invalid enum payload alias %q", name)
+	}
+	obj, ok := origin.Scope().Lookup(name).(*types.TypeName)
+	if !ok || obj.Pkg() != origin || !obj.IsAlias() || !enumUnconstrained(enumGenericParameters(obj.Type()), len(args)) {
+		return fmt.Errorf("invalid canonical enum payload alias %s", name)
+	}
+	actual := obj.Type()
+	if len(args) > 0 {
+		var err error
+		actual, err = types.Instantiate(nil, actual, args, true)
+		if err != nil {
+			return err
+		}
+	}
+	if !types.Identical(actual, payload) {
+		return fmt.Errorf("enum payload alias identity mismatch: %s", name)
+	}
+	return nil
+}
+
+func enumShape(t types.Type, origin *types.Package, tagField string, fields int, tagType types.Type) (*types.Struct, error) {
+	st, ok := t.Underlying().(*types.Struct)
+	if !ok || st.NumFields() != fields+1 {
+		return nil, fmt.Errorf("enum inline payload shape mismatch: %s", t)
+	}
+	if !enumPrivateField(st, 0, tagField, origin) || !types.Identical(st.Field(0).Type(), tagType) {
+		return nil, fmt.Errorf("enum private tag field mismatch: %s", t)
+	}
+	return st, nil
+}
 func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Importer) error {
 	if meta.Version != enumMetadataVersion || meta.Path != pkg.Path() || meta.Package != pkg.Name() || !meta.present() {
 		return fmt.Errorf("enum metadata package identity or version mismatch")
 	}
 	exported := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
-	function := func(p *types.Package, name string) (*types.Signature, error) {
-		if !exported(name) {
-			return nil, fmt.Errorf("invalid exported helper %q", name)
-		}
-		fn, ok := p.Scope().Lookup(name).(*types.Func)
-		if !ok {
-			return nil, fmt.Errorf("missing enum helper %s.%s", p.Path(), name)
-		}
-		sig, ok := fn.Type().(*types.Signature)
-		if !ok || sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() != 0 {
-			return nil, fmt.Errorf("invalid enum helper signature %s", name)
-		}
-		return sig, nil
-	}
 	seen := map[string]bool{}
 	for _, d := range meta.Enums {
 		if !exported(d.Name) || !exported(d.DefinitionName) || d.DefinitionPath == "" || seen[d.Name] || len(d.Variants) == 0 {
 			return fmt.Errorf("invalid or duplicate enum export %q", d.Name)
 		}
 		seen[d.Name] = true
-		if !token.IsIdentifier(d.Marker) || token.IsExported(d.Marker) || d.Marker == "_" {
-			return fmt.Errorf("invalid private enum marker %q", d.Marker)
-		}
 		origin := pkg
-		var e error
 		if d.DefinitionPath != pkg.Path() {
-			origin, e = imp.Import(d.DefinitionPath)
-			if e != nil {
-				return e
+			if imp == nil {
+				return fmt.Errorf("missing enum definition importer")
+			}
+			var err error
+			origin, err = imp.Import(d.DefinitionPath)
+			if err != nil {
+				return err
 			}
 		}
 		obj, ok := origin.Scope().Lookup(d.DefinitionName).(*types.TypeName)
@@ -493,81 +573,81 @@ func validateEnumMetadata(meta enumMetadata, pkg *types.Package, imp types.Impor
 			return fmt.Errorf("missing enum definition %s.%s", d.DefinitionPath, d.DefinitionName)
 		}
 		enum, ok := types.Unalias(obj.Type()).(*types.Named)
-		if !ok || enum.Obj().Pkg() == nil || enum.Obj().Pkg().Path() != d.DefinitionPath || enum.Obj().Name() != d.DefinitionName || enum.TypeParams().Len() != 0 {
+		if !ok || enum.Obj().Pkg() != origin || enum.Obj().Name() != d.DefinitionName || enum.TypeParams().Len() != 0 {
 			return fmt.Errorf("invalid canonical enum definition %s", d.DefinitionName)
 		}
 		exposed, ok := pkg.Scope().Lookup(d.Name).(*types.TypeName)
 		if !ok || !types.Identical(types.Unalias(exposed.Type()), enum) {
 			return fmt.Errorf("enum alias identity mismatch: %s", d.Name)
 		}
-		iface, ok := enum.Underlying().(*types.Interface)
-		if !ok || !iface.IsMethodSet() {
-			return fmt.Errorf("enum definition is not a concrete interface: %s", d.Name)
-		}
-		iface.Complete()
-		hasMarker := false
-		for i := 0; i < iface.NumMethods(); i++ {
-			m := iface.Method(i)
-			if m.Name() == d.Marker && m.Pkg() != nil && m.Pkg().Path() == d.DefinitionPath {
-				s := m.Type().(*types.Signature)
-				hasMarker = s.Params().Len() == 0 && s.Results().Len() == 0 && !s.Variadic()
+		fields := 0
+		for _, v := range d.Variants {
+			if v.HasPayload {
+				fields++
 			}
 		}
-		if !hasMarker {
-			return fmt.Errorf("enum private marker signature mismatch: %s", d.Name)
+		st, err := enumShape(enum, origin, d.TagField, fields, types.Typ[types.Int])
+		if err != nil {
+			return err
 		}
-		validator, e := function(origin, d.Validator)
-		if e != nil {
-			return e
+		validator, err := enumFunction(origin, d.Validator, nil)
+		if err != nil {
+			return err
 		}
-		if validator.Params().Len() != 1 || validator.Results().Len() != 0 || !types.Identical(validator.Params().At(0).Type(), enum) {
+		if !enumSignature(validator, []types.Type{enum}, nil) {
 			return fmt.Errorf("enum validator signature mismatch: %s", d.Name)
 		}
+		tag, err := enumFunction(origin, d.Tag, nil)
+		if err != nil {
+			return err
+		}
+		if !enumSignature(tag, []types.Type{enum}, []types.Type{types.Typ[types.Int]}) {
+			return fmt.Errorf("enum tag signature mismatch: %s", d.Name)
+		}
 		variants := map[string]bool{}
-		caseTypes := []types.Type{}
-		for _, v := range d.Variants {
-			if !token.IsIdentifier(v.Name) || v.Name == "_" || variants[v.Name] || !exported(v.Case) {
+		slot := 1
+		for i, v := range d.Variants {
+			if !token.IsIdentifier(v.Name) || v.Name == "_" || variants[v.Name] || v.Tag != i+1 {
 				return fmt.Errorf("invalid enum variant %q", v.Name)
 			}
 			variants[v.Name] = true
-			caseObj, ok := origin.Scope().Lookup(v.Case).(*types.TypeName)
-			if !ok {
-				return fmt.Errorf("missing enum case %s", v.Case)
-			}
-			ct := types.Unalias(caseObj.Type())
-			named, ok := ct.(*types.Named)
-			if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() != d.DefinitionPath || named.TypeParams().Len() != 0 {
-				return fmt.Errorf("invalid enum case identity %s", v.Case)
-			}
-			st, ok := ct.Underlying().(*types.Struct)
-			if !ok || !types.Implements(ct, iface) {
-				return fmt.Errorf("invalid enum value case %s", v.Case)
-			}
-			fields := 0
+			var payload types.Type
 			if v.HasPayload {
-				fields = 1
-			}
-			if st.NumFields() != fields {
-				return fmt.Errorf("enum case payload shape mismatch: %s", v.Case)
-			}
-			if v.HasPayload && (st.Field(0).Name() != "Value" || st.Field(0).Embedded()) {
-				return fmt.Errorf("enum case payload field mismatch: %s", v.Case)
-			}
-			for _, prior := range caseTypes {
-				if types.Identical(prior, ct) {
-					return fmt.Errorf("duplicate enum case type %s", v.Case)
+				if !enumPrivateField(st, slot, v.Field, origin) {
+					return fmt.Errorf("enum payload field mismatch: %s", v.Name)
 				}
+				payload = st.Field(slot).Type()
+				if err := enumPayloadAlias(origin, v.PayloadAlias, nil, payload); err != nil {
+					return err
+				}
+				slot++
+				value, err := enumFunction(origin, v.Value, nil)
+				if err != nil {
+					return err
+				}
+				if !enumSignature(value, []types.Type{enum}, []types.Type{payload}) {
+					return fmt.Errorf("enum getter payload signature mismatch: %s", v.Name)
+				}
+				project, err := enumFunction(origin, v.Project, nil)
+				if err != nil {
+					return err
+				}
+				if !enumSignature(project, []types.Type{types.NewPointer(enum)}, []types.Type{types.NewPointer(payload)}) {
+					return fmt.Errorf("enum projector payload signature mismatch: %s", v.Name)
+				}
+			} else if v.Field != "" || v.PayloadAlias != "" || v.Value != "" || v.Project != "" {
+				return fmt.Errorf("unit enum variant must not name payload helpers: %s", v.Name)
 			}
-			caseTypes = append(caseTypes, ct)
-			constructor, e := function(origin, v.Constructor)
-			if e != nil {
-				return e
+			ctor, err := enumFunction(origin, v.Constructor, nil)
+			if err != nil {
+				return err
 			}
-			if constructor.Params().Len() != fields || constructor.Results().Len() != 1 || !types.Identical(constructor.Results().At(0).Type(), enum) {
-				return fmt.Errorf("enum constructor signature mismatch: %s", v.Constructor)
+			params := []types.Type{}
+			if payload != nil {
+				params = append(params, payload)
 			}
-			if v.HasPayload && !types.Identical(constructor.Params().At(0).Type(), st.Field(0).Type()) {
-				return fmt.Errorf("enum constructor payload mismatch: %s", v.Constructor)
+			if !enumSignature(ctor, params, []types.Type{enum}) {
+				return fmt.Errorf("enum constructor payload signature mismatch: %s", v.Constructor)
 			}
 		}
 	}
@@ -639,26 +719,14 @@ func enumUniqueJSON(data []byte) error {
 	return nil
 }
 
-// Verify generic protocol identities by substituting the family's own type
-// parameters into every case and constructor. No payload type spelling is used.
+// Instantiate every protocol helper with the canonical family's own type
+// parameters. Payload spelling and consumer aliases never substitute identity.
 func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Importer) error {
 	seen := map[string]bool{}
 	for _, d := range meta.Enums {
 		seen[d.Name] = true
 	}
 	public := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
-	unconstrained := func(list *types.TypeParamList, count int) bool {
-		if list.Len() != count {
-			return false
-		}
-		for i := 0; i < count; i++ {
-			c, ok := list.At(i).Constraint().Underlying().(*types.Interface)
-			if !ok || !c.Empty() {
-				return false
-			}
-		}
-		return true
-	}
 	for _, f := range meta.Families {
 		if f.DefinitionPath == enums.SumPackage && !reflect.DeepEqual(familyContract(f), sharedSumFamily(f.Family)) {
 			return fmt.Errorf("shared sum family ABI mismatch: %s", f.Name)
@@ -666,26 +734,28 @@ func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Impor
 		count := 1
 		names := []string{"Some", "None"}
 		payloads := []int{0, -1}
+		tags := []int{1, 0}
 		if f.Family == "Result" {
 			count = 2
 			names = []string{"Ok", "Err"}
 			payloads = []int{0, 1}
+			tags = []int{1, 2}
 		} else if f.Family != "Option" {
 			return fmt.Errorf("unknown builtin family %q", f.Family)
 		}
-		if !public(f.Name) || !public(f.DefinitionName) || f.DefinitionPath == "" || seen[f.Name] || len(f.Variants) != 2 || (len(f.Instances) == 0 && f.DefinitionPath != enums.SumPackage) {
+		if f.ABI != enums.SumABI || !public(f.Name) || !public(f.DefinitionName) || f.DefinitionPath == "" || seen[f.Name] || len(f.Variants) != 2 || (len(f.Instances) == 0 && f.DefinitionPath != enums.SumPackage) {
 			return fmt.Errorf("invalid or duplicate builtin family export %q", f.Name)
 		}
 		seen[f.Name] = true
-		if !token.IsIdentifier(f.Marker) || token.IsExported(f.Marker) || f.Marker == "_" {
-			return fmt.Errorf("invalid builtin private marker %q", f.Marker)
-		}
 		origin := pkg
-		var e error
 		if f.DefinitionPath != pkg.Path() {
-			origin, e = imp.Import(f.DefinitionPath)
-			if e != nil {
-				return e
+			if imp == nil {
+				return fmt.Errorf("missing builtin origin importer")
+			}
+			var err error
+			origin, err = imp.Import(f.DefinitionPath)
+			if err != nil {
+				return err
 			}
 		}
 		obj, ok := origin.Scope().Lookup(f.DefinitionName).(*types.TypeName)
@@ -693,7 +763,7 @@ func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Impor
 			return fmt.Errorf("missing builtin family definition %s", f.DefinitionName)
 		}
 		canonical, ok := types.Unalias(obj.Type()).(*types.Named)
-		if !ok || canonical.Obj().Pkg() == nil || canonical.Obj().Pkg().Path() != f.DefinitionPath || canonical.Obj().Name() != f.DefinitionName || canonical.TypeArgs().Len() != 0 || !unconstrained(canonical.TypeParams(), count) {
+		if !ok || canonical.Obj().Pkg() != origin || canonical.Obj().Name() != f.DefinitionName || canonical.TypeArgs().Len() != 0 || !enumUnconstrained(canonical.TypeParams(), count) {
 			return fmt.Errorf("invalid builtin family definition %s", f.DefinitionName)
 		}
 		exposed, ok := pkg.Scope().Lookup(f.Name).(*types.TypeName)
@@ -708,89 +778,79 @@ func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Impor
 		for i := range args {
 			args[i] = canonical.TypeParams().At(i)
 		}
-		concrete, e := types.Instantiate(nil, canonical, args, true)
-		if e != nil {
-			return e
+		concrete, err := types.Instantiate(nil, canonical, args, true)
+		if err != nil {
+			return err
 		}
-		iface, ok := concrete.Underlying().(*types.Interface)
-		if !ok || !iface.IsMethodSet() {
-			return fmt.Errorf("builtin family is not an interface: %s", f.Name)
+		st, err := enumShape(concrete, origin, f.TagField, count, types.Typ[types.Uint8])
+		if err != nil {
+			return err
 		}
-		iface.Complete()
-		if iface.NumMethods() != 1 {
-			return fmt.Errorf("builtin marker method set mismatch: %s", f.Name)
+		tag, err := enumFunction(origin, f.Tag, args)
+		if err != nil {
+			return err
 		}
-		marker := iface.Method(0)
-		sig, ok := marker.Type().(*types.Signature)
-		if !ok || marker.Name() != f.Marker || marker.Pkg() == nil || marker.Pkg().Path() != f.DefinitionPath || sig.Params().Len() != count || sig.Results().Len() != 0 || sig.Variadic() {
-			return fmt.Errorf("builtin marker signature mismatch: %s", f.Name)
+		if !enumSignature(tag, []types.Type{concrete}, []types.Type{types.Typ[types.Int]}) {
+			return fmt.Errorf("builtin tag signature mismatch: %s", f.Name)
 		}
-		for i, a := range args {
-			if !types.Identical(sig.Params().At(i).Type(), a) {
-				return fmt.Errorf("builtin phantom parameter mismatch: %s", f.Name)
-			}
+		validator, err := enumFunction(origin, f.Validator, args)
+		if err != nil {
+			return err
 		}
+		if !enumSignature(validator, []types.Type{concrete}, nil) {
+			return fmt.Errorf("builtin validator signature mismatch: %s", f.Name)
+		}
+		slot := 1
 		for i, v := range f.Variants {
-			if v.Name != names[i] || v.PayloadIndex != payloads[i] || !public(v.Constructor) {
+			if v.Name != names[i] || v.PayloadIndex != payloads[i] || v.Tag != tags[i] {
 				return fmt.Errorf("builtin variant protocol mismatch: %s", f.Name)
 			}
+			var payload types.Type
 			if v.PayloadIndex < 0 {
-				if v.Case != "" {
-					return fmt.Errorf("Option None must not name a case type")
+				if v.Field != "" || v.PayloadAlias != "" || v.Value != "" || v.Project != "" {
+					return fmt.Errorf("Option None must not name payload helpers")
 				}
 			} else {
-				if !public(v.Case) {
-					return fmt.Errorf("invalid builtin case %q", v.Case)
+				payload = args[v.PayloadIndex]
+				if !enumPrivateField(st, slot, v.Field, origin) || !types.Identical(st.Field(slot).Type(), payload) {
+					return fmt.Errorf("builtin payload slot type or owner mismatch: %s", v.Name)
 				}
-				obj, ok := origin.Scope().Lookup(v.Case).(*types.TypeName)
-				if !ok {
-					return fmt.Errorf("missing builtin case %s", v.Case)
+				slot++
+				value, err := enumFunction(origin, v.Value, args)
+				if err != nil {
+					return err
 				}
-				caseType, ok := types.Unalias(obj.Type()).(*types.Named)
-				if !ok || caseType.Obj().Pkg() == nil || caseType.Obj().Pkg().Path() != f.DefinitionPath || !unconstrained(enumGenericParameters(obj.Type()), count) {
-					return fmt.Errorf("invalid builtin case identity %s", v.Case)
+				if !enumSignature(value, []types.Type{concrete}, []types.Type{payload}) {
+					return fmt.Errorf("builtin getter payload signature mismatch: %s", v.Name)
 				}
-				actual, e := types.Instantiate(nil, obj.Type(), args, true)
-				if e != nil {
-					return e
+				project, err := enumFunction(origin, v.Project, args)
+				if err != nil {
+					return err
 				}
-				st, ok := actual.Underlying().(*types.Struct)
-				if !ok || st.NumFields() != 1 || st.Field(0).Name() != "Value" || st.Field(0).Embedded() || !types.Identical(st.Field(0).Type(), args[v.PayloadIndex]) || !types.Implements(actual, iface) {
-					return fmt.Errorf("builtin case payload or marker mismatch: %s", v.Case)
+				if !enumSignature(project, []types.Type{types.NewPointer(concrete)}, []types.Type{types.NewPointer(payload)}) {
+					return fmt.Errorf("builtin projector payload signature mismatch: %s", v.Name)
 				}
 			}
-			fn, ok := origin.Scope().Lookup(v.Constructor).(*types.Func)
-			if !ok {
-				return fmt.Errorf("missing builtin constructor %s", v.Constructor)
+			ctor, err := enumFunction(origin, v.Constructor, args)
+			if err != nil {
+				return err
 			}
-			ctor, ok := fn.Type().(*types.Signature)
-			if !ok || ctor.Recv() != nil || ctor.Variadic() || !unconstrained(ctor.TypeParams(), count) {
-				return fmt.Errorf("builtin constructor generic signature mismatch: %s", v.Constructor)
+			params := []types.Type{}
+			if payload != nil {
+				params = append(params, payload)
 			}
-			instantiated, e := types.Instantiate(nil, ctor, args, true)
-			if e != nil {
-				return e
-			}
-			bound := instantiated.(*types.Signature)
-			arity := 1
-			if v.PayloadIndex < 0 {
-				arity = 0
-			}
-			if bound.Params().Len() != arity || bound.Results().Len() != 1 || !types.Identical(bound.Results().At(0).Type(), concrete) {
-				return fmt.Errorf("builtin constructor result or arity mismatch: %s", v.Constructor)
-			}
-			if arity == 1 && !types.Identical(bound.Params().At(0).Type(), args[v.PayloadIndex]) {
-				return fmt.Errorf("builtin constructor payload mismatch: %s", v.Constructor)
+			if !enumSignature(ctor, params, []types.Type{concrete}) {
+				return fmt.Errorf("builtin constructor payload signature mismatch: %s", v.Constructor)
 			}
 		}
 		validators := map[string]bool{}
 		for _, instance := range f.Instances {
-			if !public(instance.Validator) || validators[instance.ValidatorPath+"."+instance.Validator] {
+			if !public(instance.Validator) || instance.ValidatorPath == "" || validators[instance.ValidatorPath+"."+instance.Validator] {
 				return fmt.Errorf("invalid or duplicate builtin validator %s", instance.Validator)
 			}
 			validators[instance.ValidatorPath+"."+instance.Validator] = true
 			owner := origin
-			if instance.ValidatorPath != "" && instance.ValidatorPath != origin.Path() {
+			if instance.ValidatorPath != origin.Path() {
 				if instance.ValidatorPath == pkg.Path() {
 					owner = pkg
 				} else {
@@ -804,15 +864,14 @@ func validateEnumFamilies(meta enumMetadata, pkg *types.Package, imp types.Impor
 					}
 				}
 			}
-			fn, ok := owner.Scope().Lookup(instance.Validator).(*types.Func)
-			if !ok {
-				return fmt.Errorf("missing builtin validator %s", instance.Validator)
+			sig, err := enumFunction(owner, instance.Validator, nil)
+			if err != nil {
+				return err
 			}
-			s, ok := fn.Type().(*types.Signature)
-			if !ok || s.Recv() != nil || s.Variadic() || s.TypeParams().Len() != 0 || s.Params().Len() != 1 || s.Results().Len() != 0 {
+			if sig.Params().Len() != 1 || sig.Results().Len() != 0 {
 				return fmt.Errorf("builtin instance validator signature mismatch: %s", instance.Validator)
 			}
-			n, ok := types.Unalias(s.Params().At(0).Type()).(*types.Named)
+			n, ok := types.Unalias(sig.Params().At(0).Type()).(*types.Named)
 			if !ok || !types.Identical(n.Origin(), canonical) || n.TypeArgs().Len() != count {
 				return fmt.Errorf("builtin instance validator family mismatch: %s", instance.Validator)
 			}

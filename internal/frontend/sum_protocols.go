@@ -167,13 +167,13 @@ func (g *generator) registeredSum(t ast.Expr) (enums.Decl, *types.Named, string,
 			if sig.Params().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), target) {
 				continue
 			}
-			d := enums.Decl{Family: entry.family.Family, PackagePath: entry.family.DefinitionPath, ValidatorPath: owner.Path()}
+			d := enums.Decl{Family: entry.family.Family, PackagePath: entry.family.DefinitionPath, Identity: entry.family.DefinitionName, ValidatorPath: owner.Path(), Tag: entry.family.Tag, TagField: entry.family.TagField}
 			for _, v := range entry.family.Variants {
 				payload := ""
 				if v.PayloadIndex >= 0 {
 					payload = "registered"
 				}
-				d.Variants = append(d.Variants, enums.Variant{Name: v.Name, Payload: payload, CaseName: v.Case, Constructor: v.Constructor})
+				d.Variants = append(d.Variants, enums.Variant{Name: v.Name, Payload: payload, Tag: v.Tag, Field: v.Field, PayloadAlias: v.PayloadAlias, Value: v.Value, Project: v.Project, Constructor: v.Constructor})
 			}
 			return d, target, instance.Validator, true, true
 		}
@@ -284,10 +284,13 @@ func (g *generator) sumProtocol(kind string, t ast.Expr) (string, bool, error) {
 		return "", true, g.err(t, "Result has no implicit Default protocol")
 	}
 	if kind == "Default" {
-		// Registered Option's canonical None is nil. No payload name, Default,
-		// constructor instantiation, or import is needed for this branch.
-		g.sumHelpers[key] = "nil"
-		return "nil", true, nil
+		// A compiler-owned alias binds the complete Option type before helper
+		// locals can shadow a payload type. Zero initializes canonical None.
+		g.next++
+		name := fmt.Sprintf("__goxide_enum_default_f%d_%d", g.deriveFile, g.next)
+		fmt.Fprintf(&g.helpers, "\ntype %s_type = %s\nfunc %s() %s_type {var value %s_type;return value}\n", name, g.typeName(t), name, name, name)
+		g.sumHelpers[key] = name + "()"
+		return name + "()", true, nil
 	}
 	if fromMetadata {
 		g.next++
@@ -299,8 +302,12 @@ func (g *generator) sumProtocol(kind string, t ast.Expr) (string, bool, error) {
 			g.sumImports[ownerAlias] = original.ValidatorPath
 		}
 		validator = ownerAlias + "." + validator
+		original.Tag = alias + "." + original.Tag
 		for i := range original.Variants {
-			original.Variants[i].CaseName = alias + "." + original.Variants[i].CaseName
+			if original.Variants[i].Payload != "" {
+				original.Variants[i].Value = alias + "." + original.Variants[i].Value
+				original.Variants[i].Project = alias + "." + original.Variants[i].Project
+			}
 			original.Variants[i].Constructor = alias + "." + original.Variants[i].Constructor
 		}
 	}
@@ -326,28 +333,28 @@ func (g *generator) sumProtocol(kind string, t ast.Expr) (string, bool, error) {
 	d := original
 	d.Name = prefix + "_type"
 	d.Validator = prefix + "_validate"
+	d.Tag = prefix + "_tag"
 	d.Variants = append([]enums.Variant(nil), original.Variants...)
 	var prelude strings.Builder
 	fmt.Fprintf(&prelude, "\ntype %s = %s\nvar %s = %s\n", d.Name, g.typeName(t), d.Validator, validator)
+	fmt.Fprintf(&prelude, "var %s = %s[%s]\n", d.Tag, strings.Split(original.Tag, "[")[0], strings.Join(args, ","))
 	for i := range d.Variants {
 		v := &d.Variants[i]
 		ctor := v.Constructor
-		cas := v.CaseName
 		suffix := "[" + strings.Join(args, ",") + "]"
 		ctor = strings.Split(ctor, "[")[0] + suffix
-		cas = strings.Split(cas, "[")[0] + suffix
 		v.Constructor = fmt.Sprintf("%s_new%d", prefix, i)
 		fmt.Fprintf(&prelude, "var %s = %s\n", v.Constructor, ctor)
 		if original.Family == "Option" && i == 1 {
 			v.Type = nil
 			v.Payload = ""
-			v.CaseName = "nil"
 			continue
 		}
 		v.Type, _ = parser.ParseExpr(args[i])
 		v.Payload = args[i]
-		v.CaseName = fmt.Sprintf("%s_case%d", prefix, i)
-		fmt.Fprintf(&prelude, "type %s = %s\n", v.CaseName, cas)
+		value, project := strings.Split(v.Value, "[")[0]+suffix, strings.Split(v.Project, "[")[0]+suffix
+		v.Value, v.Project = fmt.Sprintf("%s_value%d", prefix, i), fmt.Sprintf("%s_project%d", prefix, i)
+		fmt.Fprintf(&prelude, "var %s = %s\nvar %s = %s\n", v.Value, value, v.Project, project)
 	}
 	helper := prefix + "_" + kind
 	code, imports, err := deriveextras.GenerateSum(kind, d, helper, g.deriveProtocol)

@@ -2,7 +2,10 @@ package frontend
 
 import (
 	"bytes"
+	"github.com/hxsf/goxide/internal/refs"
+	"github.com/hxsf/goxide/internal/sourcemap"
 	"github.com/hxsf/goxide/internal/testdeps"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,7 +80,7 @@ func TestSourceOriginsSerializerMethodIsNotField(t *testing.T) {
 	}
 }
 
-func TestTransformedPhaseErrorIsExplicitlyUnmapped(t *testing.T) {
+func TestReferenceErrorPreservesCopiedMacroArgument(t *testing.T) {
 	src := `package p
 macro_rules! bad {($r:ident)=>{$r.N++};}
 type S struct{N int}
@@ -88,7 +91,25 @@ func f(r &S){
 }
 `
 	_, err := Compile("phase.gox", []byte(src))
-	if err == nil || !strings.Contains(err.Error(), "refs.Finish [generated/unmapped; intermediate coordinates]") {
-		t.Fatalf("transformed position must not claim original source precision: %v", err)
+	if err == nil {
+		t.Fatal("readonly write accepted")
+	}
+	for _, want := range []string{"phase.gox:7:7: refs: cannot write", "source span [94,95)", "macro bad defined at phase.gox:2:1; invoked at phase.gox:7:2"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("missing copied argument evidence %q: %v", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "generated/unmapped") {
+		t.Fatalf("verified source argument was marked generated: %v", err)
+	}
+}
+
+func TestGeneratedReferenceErrorDoesNotAcquireOrigin(t *testing.T) {
+	source := []byte("package p\nvar x int\n")
+	position := token.Position{Filename: "phase.gox", Offset: bytes.Index(source, []byte("x int")), Line: 2, Column: 5}
+	err := &refs.Error{Position: position, Message: "synthetic checker failure", Generated: true}
+	mapped := mapReferenceError(err, map[string]*sourcemap.Map{"phase.gox": sourcemap.Identity("phase.gox", source)})
+	if mapped != err || !strings.Contains(stageError("refs.Finish", mapped).Error(), "generated/unmapped") {
+		t.Fatalf("generated coordinates acquired an unproved source origin: %v", mapped)
 	}
 }

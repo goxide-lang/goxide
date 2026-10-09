@@ -130,34 +130,34 @@ func observeNested(x Outer,touched *bool) {
   _ => {*touched=true},
  }
 }
+func invalidOuter()Outer{return Outer::Wrap(State{})}
 `
 	lowered, err := enums.Lower("enum_acceptance.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
 	}
-	idle, wrap := "", ""
+	idle, wrap := false, false
 	for _, d := range lowered.Enums {
 		for _, v := range d.Variants {
 			if d.Name == "State" && v.Name == "Idle" {
-				idle = v.CaseName
+				idle = true
 			}
 			if d.Name == "Outer" && v.Name == "Wrap" {
-				wrap = v.CaseName
+				wrap = true
 			}
 		}
 	}
-	if idle == "" || wrap == "" {
+	if !idle || !wrap {
 		t.Fatal("missing public lowering metadata")
 	}
-	assertions := strings.NewReplacer("IDLE_CASE", idle, "WRAP_CASE", wrap).Replace(`package fixture
+	assertions := `package fixture
 import "testing"
-type forged struct{State}
 func TestInvalidBeforeWildcard(t *testing.T){
- values:=[]State{nil,(*IDLE_CASE)(nil),&IDLE_CASE{},forged{}}
+ values:=[]State{{}}
  for _,value:=range values{touched:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();observe(value,&touched)}();if !panicked||touched{t.Fatalf("invalid %T: panic=%t sideEffect=%t",value,panicked,touched)}}
 }
-func TestNestedBeforeWildcard(t *testing.T){touched:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();observeNested(WRAP_CASE{Value:nil},&touched)}();if !panicked||touched{t.Fatalf("nested invalid panic=%t sideEffect=%t",panicked,touched)}}
-`)
+func TestNestedBeforeWildcard(t *testing.T){touched:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();observeNested(invalidOuter(),&touched)}();if !panicked||touched{t.Fatalf("nested invalid panic=%t sideEffect=%t",panicked,touched)}}
+`
 	enumGeneratedModule(t, source, assertions, false)
 }
 

@@ -68,7 +68,7 @@ func scalarRefExpr(e ast.Expr) (Permission, bool) {
 
 // ExportMetadata runs only after complete package permission validation. It
 // checks erased signatures under their actual package identity before publishing.
-func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importer) (Metadata, error) {
+func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importer, enumTypes ...map[string]bool) (Metadata, error) {
 	if imp == nil {
 		imp = importer.Default()
 	}
@@ -182,7 +182,7 @@ func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importe
 				if sig.Variadic() || sig.TypeParams().Len() > 0 {
 					return m, fmt.Errorf("%s: reference metadata: variadic/generic exports unsupported", name)
 				}
-				if err := validateSignature(sig, data); err != nil {
+				if err := validateSignature(sig, data, enumTypes...); err != nil {
 					return m, fmt.Errorf("%s: exported reference %s: %w", name, fn.Name.Name, err)
 				}
 				m.Functions[fn.Name.Name] = data
@@ -197,7 +197,7 @@ func ExportMetadata(path string, ir, erased map[string][]byte, imp types.Importe
 	}
 	return m, nil
 }
-func validateSignature(sig *types.Signature, meta Signature) error {
+func validateSignature(sig *types.Signature, meta Signature, enumTypes ...map[string]bool) error {
 	if sig.Recv() != nil || sig.Variadic() || sig.TypeParams().Len() > 0 {
 		return fmt.Errorf("unsupported reference signature")
 	}
@@ -223,7 +223,7 @@ func validateSignature(sig *types.Signature, meta Signature) error {
 			if !ok {
 				return fmt.Errorf("reference metadata requires pointer representation")
 			}
-			if !supportedReferenceElement(ptr.Elem(), map[types.Type]bool{}) {
+			if !supportedReferenceElement(ptr.Elem(), map[types.Type]bool{}, enumTypes...) {
 				return fmt.Errorf("reference metadata element is outside the concrete data subset")
 			}
 
@@ -234,8 +234,16 @@ func validateSignature(sig *types.Signature, meta Signature) error {
 
 // Matches the concrete data shapes supported by projection checking; no
 // interface/channel/function or user generic reference element is inferred.
-func supportedReferenceElement(t types.Type, seen map[types.Type]bool) bool {
+func supportedReferenceElement(t types.Type, seen map[types.Type]bool, enumTypes ...map[string]bool) bool {
 	t = types.Unalias(t)
+	if named, ok := t.(*types.Named); ok && len(enumTypes) > 0 && enumTypes[0][EnumTypeID(t)] {
+		// The frontend supplies only canonical enum instances whose generated
+		// slot layout and helper identities it has independently validated.
+		// Registration does not turn interfaces or ordinary raw pointers into
+		// reference-bearing enum values.
+		_, concrete := named.Underlying().(*types.Struct)
+		return concrete || types.Identical(named, types.Universe.Lookup("error").Type())
+	}
 	if seen[t] {
 		return true
 	}
@@ -247,22 +255,22 @@ func supportedReferenceElement(t types.Type, seen map[types.Type]bool) bool {
 		if t.TypeArgs().Len() > 0 {
 			return false
 		}
-		return supportedReferenceElement(t.Underlying(), seen)
+		return supportedReferenceElement(t.Underlying(), seen, enumTypes...)
 	case *types.Struct:
 		for i := 0; i < t.NumFields(); i++ {
-			if !supportedReferenceElement(t.Field(i).Type(), seen) {
+			if !supportedReferenceElement(t.Field(i).Type(), seen, enumTypes...) {
 				return false
 			}
 		}
 		return true
 	case *types.Array:
-		return supportedReferenceElement(t.Elem(), seen)
+		return supportedReferenceElement(t.Elem(), seen, enumTypes...)
 	case *types.Slice:
-		return supportedReferenceElement(t.Elem(), seen)
+		return supportedReferenceElement(t.Elem(), seen, enumTypes...)
 	case *types.Map:
-		return supportedReferenceElement(t.Key(), seen) && supportedReferenceElement(t.Elem(), seen)
+		return supportedReferenceElement(t.Key(), seen, enumTypes...) && supportedReferenceElement(t.Elem(), seen, enumTypes...)
 	case *types.Pointer:
-		return supportedReferenceElement(t.Elem(), seen)
+		return supportedReferenceElement(t.Elem(), seen, enumTypes...)
 	}
 	return false
 }
@@ -278,6 +286,12 @@ type ImportBindings struct {
 	Imports   map[string]bool
 	Originals map[string]string
 	Stubs     map[string]bool
+	// ReferenceElements is populated only by validated enum projection
+	// bindings. It admits concrete registered owners and payloads, including
+	// error slots, without changing readonly interface projection checks.
+	ReferenceElements map[string]bool
+	Copied            map[string][]int // exact copied input bytes for projection binding
+	Stage             string
 }
 
 // BindImports temporarily presents imported contracts as local nominal reference
@@ -288,12 +302,12 @@ func BindImports(files map[string][]byte, imp types.Importer, metadata map[strin
 
 // BindImportsWithPath resolves imported contracts using the consumer's actual
 // package path. An empty path retains BindImports' legacy synthetic default.
-func BindImportsWithPath(path string, files map[string][]byte, imp types.Importer, metadata map[string]Metadata) (map[string][]byte, ImportBindings, error) {
+func BindImportsWithPath(path string, files map[string][]byte, imp types.Importer, metadata map[string]Metadata, enumTypes ...map[string]bool) (map[string][]byte, ImportBindings, error) {
 	if imp == nil {
 		imp = importer.Default()
 	}
 	out := map[string][]byte{}
-	bindings := ImportBindings{Originals: map[string]string{}, Stubs: map[string]bool{}, Imports: map[string]bool{}}
+	bindings := ImportBindings{Originals: map[string]string{}, Stubs: map[string]bool{}, Imports: map[string]bool{}, Copied: map[string][]int{}, Stage: "refs.BindImports"}
 	fs := token.NewFileSet()
 	parsed := map[string]*ast.File{}
 	used := map[string]bool{}
@@ -411,7 +425,7 @@ func BindImportsWithPath(path string, files map[string][]byte, imp types.Importe
 				return true
 			}
 			sig := fn.Type().(*types.Signature)
-			if e := validateSignature(sig, contract); e != nil {
+			if e := validateSignature(sig, contract, enumTypes...); e != nil {
 				failure = fmt.Errorf("%s: %w", fs.Position(id.Pos()), e)
 				return false
 			}
@@ -581,10 +595,9 @@ func BindImportsWithPath(path string, files map[string][]byte, imp types.Importe
 			edits = append(edits, edit{at, at, block.String()})
 		}
 		// Avoid duplicating IR already present in this file.
-		changed := original(files[name]).apply(edits).text
-		changed = append(changed, []byte(suffix.String())...)
-
-		out[name] = changed
+		changed := original(files[name]).apply(edits)
+		bindings.Copied[name] = changed.copied
+		out[name] = append(changed.text, []byte(suffix.String())...)
 	}
 	return out, bindings, nil
 }

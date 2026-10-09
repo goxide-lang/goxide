@@ -47,6 +47,8 @@ type Key struct{ID int;Flags [2]bool}
 type Dataset struct{Slices [][]int;Lookup map[string][]Point;Codes map[Key]Row;Enabled map[bool]int;Items []E;Events map[string]E}
 #[derive(PartialEq,Eq)]
 type Optional struct{Value Option[[]int]}
+#[derive(PartialEq,Eq)]
+type OptionalLeaf struct{Value Option[Leaf]}
 #[derive(PartialEq)]
 type FloatCollections struct{Values []float64;ByName map[string]complex128}
 #[derive(PartialEq,Eq)]
@@ -76,7 +78,7 @@ use model as m;use relay as r;
 #[derive(PartialEq,Eq)]
 type Pair struct{P r::Point;E r::Alias}
 #[derive(PartialEq,Eq)]
-type ExternalSums struct{Direct m::Option[[]int];Alias r::Options;Result m::Result[[]int,map[string]int]}
+type ExternalSums struct{Direct m::Option[[]int];Alias r::Options;Result m::Result[[]int,map[string]int];Nested m::Option[m::Leaf]}
 var Initial=m::Point{X:1}.equals(m::Point{X:1})
 func Same(a,b r::Alias)bool{return a.equals(b)}
 func PairSame(a,b Pair)bool{return a.equals(b)}
@@ -87,6 +89,7 @@ func FloatSame(a,b m::Float)bool{return a.equals(b)}
 func ComplexSame(a,b m::Complex)bool{return a.equals(b)}
 func DatasetSame(a,b r::Dataset)bool{return a.equals(b)}
 func OptionalSame(a,b m::Optional)bool{return a.equals(b)}
+func OptionalLeafSame(a,b m::OptionalLeaf)bool{return a.equals(b)}
 func CollectionSame(a,b m::Collection)bool{return a.equals(b)}
 func FloatsSame(a,b m::FloatCollections)bool{return a.equals(b)}
 func Skipped(a,b r::Alias)bool{return false && Left(a).equals(Right(b))}
@@ -98,7 +101,6 @@ var Trace string
 func Left(a r::Alias)r::Alias{Trace+="L";return a}
 func Right(a r::Alias)r::Alias{Trace+="R";return a}
 func Ordered(a,b r::Alias)bool{return Left(a).equals(Right(b))}
-func Nil(a r::Alias)bool{return a==nil}
 `)
 	out := filepath.Join(t.TempDir(), "out")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, app)
@@ -130,9 +132,10 @@ func Nil(a r::Alias)bool{return a==nil}
 		}
 	}
 	packagesWrite(t, out, "app_test.go", `package app
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import("testing";"math";"strings";"fmt";m "equal.example/lib/model")
-func TestValues(t *testing.T){a:=m.NewEP(m.Point{X:1,Y:2});b:=m.NewEP(m.Point{X:1,Y:2});if !Initial||!Same(a,b)||Same(a,m.NewEUnit())||Same(a,m.NewEP(m.Point{X:3}))||!Row()||!Big()||!Shadow(a,b)||!PairSame(Pair{m.Point{X:2},a},Pair{m.Point{X:2},b}){t.Fatal("value equality")};if !Question(a,b).(__goxide_enum_case_Result_Ok[bool,string]).Value{t.Fatal("question")};if OptionFlow(nil)!=nil||!Nil(nil){t.Fatal("nil unchanged")};n:=math.NaN();if FloatSame(m.NewFloatValue(n),m.NewFloatValue(n))||ComplexSame(m.Complex{Z:complex(n,0)},m.Complex{Z:complex(n,0)}){t.Fatal("NaN")};if !FloatSame(m.NewFloatValue(math.Copysign(0,-1)),m.NewFloatValue(0)){t.Fatal("zero")}}
-type forged struct{m.E}
+func TestValues(t *testing.T){a:=m.NewEP(m.Point{X:1,Y:2});b:=m.NewEP(m.Point{X:1,Y:2});if !Initial||!Same(a,b)||Same(a,m.NewEUnit())||Same(a,m.NewEP(m.Point{X:3}))||!Row()||!Big()||!Shadow(a,b)||!PairSame(Pair{m.Point{X:2},a},Pair{m.Point{X:2},b}){t.Fatal("value equality")};if !__borrow_std.ValueOk(Question(a, b)){t.Fatal("question")};if __borrow_std.TagOption(OptionFlow(__borrow_std.None[int]()))!=0{t.Fatal("None propagation")};n:=math.NaN();if FloatSame(m.NewFloatValue(n),m.NewFloatValue(n))||ComplexSame(m.Complex{Z:complex(n,0)},m.Complex{Z:complex(n,0)}){t.Fatal("NaN")};if !FloatSame(m.NewFloatValue(math.Copysign(0,-1)),m.NewFloatValue(0)){t.Fatal("zero")}}
 func TestRecursiveContainers(t *testing.T){
  key:=m.Key{ID:7,Flags:[2]bool{true,false}}
  makeData:=func()m.Dataset{return m.Dataset{Slices:[][]int{{1,2},{3}},Lookup:map[string][]m.Point{"p":{{X:1,Y:2}}},Codes:map[m.Key]m.Row{key:{{X:4},{Y:5}}},Enabled:map[bool]int{true:1,false:0},Items:[]m.E{m.NewEUnit(),m.NewEP(m.Point{X:8})},Events:map[string]m.E{"ready":m.NewEUnit()}}}
@@ -146,7 +149,7 @@ func TestNilEmptyAndOptions(t *testing.T){
  if DatasetSame(m.Dataset{Slices:[][]int{nil}},m.Dataset{Slices:[][]int{{}}}){t.Fatal("nested nil vs empty")}
  none:=m.Optional{Value:m.GoxideNewOptionNone[[]int]()};nilSome:=m.Optional{Value:m.GoxideNewOptionSome[[]int](nil)};emptySome:=m.Optional{Value:m.GoxideNewOptionSome[[]int]([]int{})}
  if !OptionalSame(none,none)||!OptionalSame(nilSome,nilSome)||!OptionalSame(emptySome,emptySome)||OptionalSame(none,nilSome)||OptionalSame(nilSome,emptySome)||OptionalSame(none,emptySome){t.Fatal("None/Some(nil)/Some(empty)")}
- var typed *m.GoxideOptionSome[[]int];func(){defer func(){if recover()==nil{t.Fatal("typed nil Option case")}}();OptionalSame(m.Optional{Value:typed},none)}()
+ func(){defer func(){if recover()==nil{t.Fatal("invalid nested Option payload")}}();OptionalLeafSame(m.OptionalLeaf{Value:__borrow_std.NewSome(m.Leaf{})},m.OptionalLeaf{})}()
 }
 func TestConsumerDerivedExternalSumContainers(t *testing.T){
  okNil:=m.GoxideNewResultOk[[]int,map[string]int](nil);okEmpty:=m.GoxideNewResultOk[[]int,map[string]int]([]int{})
@@ -162,25 +165,22 @@ func TestConsumerDerivedExternalSumContainers(t *testing.T){
   if alias{nilSome.Alias=m.GoxideNewOptionSome[[]int](nil);emptySome.Alias=m.GoxideNewOptionSome[[]int]([]int{})}else{nilSome.Direct=m.GoxideNewOptionSome[[]int](nil);emptySome.Direct=m.GoxideNewOptionSome[[]int]([]int{})}
   if !ExternalSumsSame(nilSome,nilSome)||ExternalSumsSame(base,nilSome)||ExternalSumsSame(nilSome,emptySome){t.Fatal("consumer Option None/Some nil/empty",alias)}
  }
- var typedResult *m.GoxideResultOk[[]int,map[string]int]
- for _,bad:=range []m.Result[[]int,map[string]int]{nil,typedResult}{func(){defer func(){if recover()==nil{t.Fatal("consumer Result validation")}}();ExternalSumsSame(ExternalSums{Result:bad},base)}()}
- var typedOption *m.GoxideOptionSome[[]int]
- for _,alias:=range []bool{false,true}{func(){bad:=base;if alias{bad.Alias=typedOption}else{bad.Direct=typedOption};defer func(){if recover()==nil{t.Fatal("consumer Option validation",alias)}}();ExternalSumsSame(bad,base)}()}
+ for _,bad:=range []m.Result[[]int,map[string]int]{{}}{func(){defer func(){if recover()==nil{t.Fatal("consumer Result validation")}}();ExternalSumsSame(ExternalSums{Result:bad},base)}()}
+ func(){bad:=base;bad.Nested=__borrow_std.NewSome(m.Leaf{});defer func(){if recover()==nil{t.Fatal("consumer nested Option validation")}}();ExternalSumsSame(bad,base)}()
 }
 func TestContainerNaNAndShortCircuit(t *testing.T){
  nan:=math.NaN();a:=m.FloatCollections{Values:[]float64{nan}};if FloatsSame(a,a){t.Fatal("slice NaN reflexivity")};a=m.FloatCollections{ByName:map[string]complex128{"z":complex(nan,0)}};if FloatsSame(a,a){t.Fatal("map value NaN reflexivity")}
- Trace="";if Skipped(nil,nil)||Trace!=""{t.Fatal("boolean short circuit")}
+ Trace="";if Skipped(m.E{},m.E{})||Trace!=""{t.Fatal("boolean short circuit")}
  // Struct and container comparison short-circuit; unvisited enum tails are not new validation boundaries.
- if DatasetSame(m.Dataset{Slices:[][]int{{1}},Items:[]m.E{nil}},m.Dataset{Slices:[][]int{{2}},Items:[]m.E{nil}}){t.Fatal("struct first field")}
- left:=m.Dataset{Items:[]m.E{m.NewEUnit(),nil}};right:=m.Dataset{Items:[]m.E{m.NewEP(m.Point{}),nil}}
+ if DatasetSame(m.Dataset{Slices:[][]int{{1}},Items:[]m.E{{}}},m.Dataset{Slices:[][]int{{2}},Items:[]m.E{{}}}){t.Fatal("struct first field")}
+ left:=m.Dataset{Items:[]m.E{m.NewEUnit(),{}}};right:=m.Dataset{Items:[]m.E{m.NewEP(m.Point{}),{}}}
  if DatasetSame(left,right){t.Fatal("slice first element")}
- var typed *m.GoxideCase1_E_Unit
- for _,bad:=range []m.E{nil,typed,forged{}}{func(){defer func(){if recover()==nil{t.Fatal("visited enum element")}}();DatasetSame(m.Dataset{Items:[]m.E{bad}},m.Dataset{Items:[]m.E{m.NewEUnit()}})}();func(){defer func(){if recover()==nil{t.Fatal("visited map enum element")}}();DatasetSame(m.Dataset{Events:map[string]m.E{"x":bad}},m.Dataset{Events:map[string]m.E{"x":m.NewEUnit()}})}()}
+ for _,bad:=range []m.E{{}}{func(){defer func(){if recover()==nil{t.Fatal("visited enum element")}}();DatasetSame(m.Dataset{Items:[]m.E{bad}},m.Dataset{Items:[]m.E{m.NewEUnit()}})}();func(){defer func(){if recover()==nil{t.Fatal("visited map enum element")}}();DatasetSame(m.Dataset{Events:map[string]m.E{"x":bad}},m.Dataset{Events:map[string]m.E{"x":m.NewEUnit()}})}()}
  // The outer enum's existing validator still runs before comparison, including its nested payload validation.
  func(){defer func(){if recover()==nil{t.Fatal("outer enum must validate before unequal fields")}}();CollectionSame(m.NewCollectionData(left),m.NewCollectionData(right))}()
 }
-func TestLeftValidationFirst(t *testing.T){Trace="";defer func(){p:=recover();if p==nil||!strings.Contains(fmt.Sprint(p),"Leaf")||Trace!="LR"{t.Fatal(p,Trace)}}();Ordered(m.NewEChild(nil),nil)}
-func TestValidationAndOrder(t *testing.T){valid:=m.NewEUnit();var typed *m.GoxideCase1_E_Unit;for _,bad:=range []m.E{nil,typed,&m.GoxideCase1_E_Unit{},forged{}}{func(){Trace="";defer func(){if recover()==nil||Trace!="LR"{t.Fatal("evaluation/validation",Trace)}}();Ordered(bad,valid)}();func(){Trace="";defer func(){if recover()==nil||Trace!="LR"{t.Fatal("right validation",Trace)}}();Ordered(valid,bad)}()}}
+func TestLeftValidationFirst(t *testing.T){Trace="";defer func(){p:=recover();if p==nil||!strings.Contains(fmt.Sprint(p),"Leaf")||Trace!="LR"{t.Fatal(p,Trace)}}();Ordered(m.NewEChild(m.Leaf{}),m.E{})}
+func TestValidationAndOrder(t *testing.T){valid:=m.NewEUnit();for _,bad:=range []m.E{{}}{func(){Trace="";defer func(){if recover()==nil||Trace!="LR"{t.Fatal("evaluation/validation",Trace)}}();Ordered(bad,valid)}();func(){Trace="";defer func(){if recover()==nil||Trace!="LR"{t.Fatal("right validation",Trace)}}();Ordered(valid,bad)}()}}
 `)
 	packagesWrite(t, lib, "model/model_test.go", `package model
 import "testing"
@@ -196,7 +196,12 @@ func TestNative(t *testing.T){a:=m.NewEUnit();if !m.EqualsDataset(m.Dataset{Slic
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
+	assertLegacySumGoRejected(t, out, tool, map[string]legacySumGoCase{
+		"optional-case-pointer": {"package app\nimport m \"equal.example/lib/model\"\nvar _=m.Optional{Value:(*m.GoxideOptionSome[[]int])(nil)}\n", "undefined: m.GoxideOptionSome"},
+		"alias-option-nil":      {"package app\nvar _=ExternalSums{Alias:nil}\n", "cannot use nil"},
+	})
 	for name, tc := range map[string]struct{ code, want string }{
+		"enum-nil":             {`use model as m;func Bad(a m::E)bool{return a==nil}`, "nil"},
 		"enum-direct":          {`use model as m;func Bad(a,b m::E)bool{return a==b}`, "explicit PartialEq"},
 		"enum-not-equal":       {`use model as m;func Bad(a,b m::E)bool{return a!=b}`, "explicit PartialEq"},
 		"float-eq":             {"#[derive(PartialEq,Eq)]\ntype Bad struct{F float64}", "Eq"},

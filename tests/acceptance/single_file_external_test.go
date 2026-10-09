@@ -736,6 +736,8 @@ const singleExternalOutput = "7 7 producer\n" +
 	"{\"Items\":[{\"N\":9,\"Name\":\"producer\"}],\"Index\":{\"x\":{\"N\":8,\"Name\":\"copy\"}}}\n"
 
 const singleExternalAssertions = `package main
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import (
  "errors"
  "reflect"
@@ -775,24 +777,22 @@ func TestSerdeCauseAndPath(t *testing.T){
  want:=[]serde.PathSegment{{Kind:"Field",Name:"Event"},{Kind:"Variant",Name:"Item"},{Kind:"Field",Name:"N"}}
  if e==nil||e.Error()!="external input"||!errors.As(e,&detail)||detail.Kind!=serde.Range||!reflect.DeepEqual(detail.Path,want)||!errors.As(e,&numeric)||!errors.Is(e,strconv.ErrRange)||errors.Unwrap(e)!=error(detail){t.Fatalf("cause/path=%#v %v",detail,e)}
 }
-type forgedExternalEnum struct{m.E}
 func TestInvalidEnumBeforeGuard(t *testing.T){
- var typed *m.GoxideCase1_E_Item
- for _,v:=range []m.E{nil,typed,&m.GoxideCase1_E_Item{Value:m.Item{N:1}},forgedExternalEnum{}}{
+ for _,v:=range []m.E{{}}{
   func(){hit:=false;defer func(){if recover()==nil||hit{t.Errorf("invalid %T reached guard or did not panic",v)}}();Guard(v,&hit)}()
  }
  hit:=false;if Guard(m.NewEItem(m.Item{N:9}),&hit)!=9||!hit{t.Fatal("valid guard")}
 }
 func wantTrace(t *testing.T,want []string){t.Helper();if !reflect.DeepEqual(Trace,want){t.Fatalf("trace=%v want=%v",Trace,want)};Trace=nil}
 func TestExternalSumsPropagationAndFrames(t *testing.T){
- Trace=nil;if OptionFlow(true).(m.GoxideOptionSome[int]).Value!=6{t.Fatal("some")};wantTrace(t,[]string{"option-before","option-after","option-defer"})
- if OptionFlow(false)!=nil{t.Fatal("none")};wantTrace(t,[]string{"option-before","option-defer"})
- if ResultFlow(0).(m.GoxideResultOk[int,error]).Value!=5{t.Fatal("ok")};wantTrace(t,[]string{"result-before","result-after","result-defer"})
- if e:=ResultFlow(1).(m.GoxideResultErr[int,error]).Value;!errors.Is(e,m.Sentinel){t.Fatal("sentinel",e)};wantTrace(t,[]string{"result-before","result-defer"})
- e:=ResultFlow(2).(m.GoxideResultErr[int,error]).Value;var typed *m.Fault
+ Trace=nil;if __borrow_std.ValueSome(OptionFlow(true))!=6{t.Fatal("some")};wantTrace(t,[]string{"option-before","option-after","option-defer"})
+ if __borrow_std.TagOption(OptionFlow(false))!=0{t.Fatal("none")};wantTrace(t,[]string{"option-before","option-defer"})
+ if __borrow_std.ValueOk(ResultFlow(0))!=5{t.Fatal("ok")};wantTrace(t,[]string{"result-before","result-after","result-defer"})
+ if e:=__borrow_std.ValueErr(ResultFlow(1));!errors.Is(e,m.Sentinel){t.Fatal("sentinel",e)};wantTrace(t,[]string{"result-before","result-defer"})
+ e:=__borrow_std.ValueErr(ResultFlow(2));var typed *m.Fault
  if e==nil||!errors.As(e,&typed)||typed!=nil||e!=error((*m.Fault)(nil)){t.Fatal("typed nil changed",e)};wantTrace(t,[]string{"result-before","result-defer"})
- if e:=CallFlow(1).(m.GoxideResultErr[int,error]).Value;!errors.Is(e,m.Sentinel){t.Fatal(e)};wantTrace(t,nil)
- if CallFlow(0).(m.GoxideResultOk[int,error]).Value!=6{t.Fatal("call result")};wantTrace(t,[]string{"last-argument"})
+ if e:=__borrow_std.ValueErr(CallFlow(1));!errors.Is(e,m.Sentinel){t.Fatal(e)};wantTrace(t,nil)
+ if __borrow_std.ValueOk(CallFlow(0))!=6{t.Fatal("call result")};wantTrace(t,[]string{"last-argument"})
  if Nearest(1)!=42{t.Fatal("nearest failure frame")};wantTrace(t,[]string{"inner-defer","outer"})
  if Nearest(0)!=42{t.Fatal("nearest success frame")};wantTrace(t,[]string{"inner-after","inner-defer","outer"})
 }
@@ -803,6 +803,8 @@ import "testing"
 func TestProducer(t *testing.T){DefaultCalls=0;v:=DefaultE();if DebugE(&v)!="E::Item(Item { N: 7, Name: \"producer\" })"||DefaultCalls!=1{t.Fatal(v,DefaultCalls)};c:=CloneE(&v);if !EqualsE(v,c){t.Fatal("producer equality")}}
 `
 const singleExternalNativeAssertions = `package plain
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import("testing";"github.com/goxide-lang/serde/json";m "a06.example/lib/model";r "a06.example/lib/relay";a "a06.example/lib/api")
-func TestNativeWithoutMetadata(t *testing.T){var v r.Item=m.DefaultItem();c:=m.CloneItem(&v);if !m.EqualsItem(v,c)||m.DebugItem(&v)!="Item { N: 7, Name: \"producer\" }"{t.Fatal(v,c)};b,e:=serdejson.Marshal(&v,m.SerializeItem);if e!=nil{t.Fatal(e)};d,e:=serdejson.Unmarshal(b,m.DeserializeItem);if e!=nil||!m.EqualsItem(v,d){t.Fatal(d,e)};event:=m.NewEItem(v);m.ValidateE(event);if event.(m.GoxideCase1_E_Item).Value.N!=7||a.Read(a.Get())!=8{t.Fatal(event)};if m.Load(0).(m.GoxideResultOk[int,error]).Value!=4{t.Fatal("sum")}}
+func TestNativeWithoutMetadata(t *testing.T){var v r.Item=m.DefaultItem();c:=m.CloneItem(&v);if !m.EqualsItem(v,c)||m.DebugItem(&v)!="Item { N: 7, Name: \"producer\" }"{t.Fatal(v,c)};b,e:=serdejson.Marshal(&v,m.SerializeItem);if e!=nil{t.Fatal(e)};d,e:=serdejson.Unmarshal(b,m.DeserializeItem);if e!=nil||!m.EqualsItem(v,d){t.Fatal(d,e)};event:=m.NewEItem(v);m.ValidateE(event);if m.GoxideValue1_E_Item(event).N!=7||a.Read(a.Get())!=8{t.Fatal(event)};if __borrow_std.ValueOk(m.Load(0))!=4{t.Fatal("sum")}}
 `

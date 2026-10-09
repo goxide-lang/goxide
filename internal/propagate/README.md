@@ -59,15 +59,26 @@ An imported call can be used directly as `dep.Load()?`. Only families and concre
 instances registered by a successfully compiled producer in the same module or
 a verified source-backed external artifact are eligible. The nominal Go package path and actual instantiated type must match;
 a native Go type named `Result` does not authorize propagation. Concrete exported
-validators preserve producer-side nested payload validation, including typed-nil
-and forged case rejection. Success/error argument types must be nameable in the
+validators preserve producer-side nested payload validation before user effects.
+Success/error argument types must be nameable in the
 consumer's file import scope; private or otherwise inaccessible argument types
 receive an explicit limitation diagnostic. Generated package bindings preserve
 protocol identity when a local variable shadows an import or payload type. Trusted
 imported validators remain statically identified until their concrete sum type is
 known, then use named package-level forwarding functions rather than function-value
 aliases. This preserves producer validation and lets Go analyze payload escape;
-it does not change the enum ABI or promise allocation-free Result returns.
+it does not change registered payload contracts or promise allocation-free Result returns.
+
+ABI 3 propagation validates the operand, reads its tag, and copies the selected
+payload through the registered value helper. It emits no interface case assertion
+or None/nil comparison, including when a payload is a non-comparable slice or map.
+Projectors remain actual package functions for reference identity checks; fresh
+import names and type bindings protect them from source-local shadowing.
+
+Deferred contextual matches retain their value/read/write default mode and any
+explicit payload borrow. Recovery substitutes the original qualified owner into
+the first storage capture, before taking a value snapshot. It must not substitute
+the snapshot or evaluate the source place again.
 
 From registration remains scoped to the current package, with assignability first
 and exactly one explicit, single-step conversion otherwise. Importing a package

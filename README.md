@@ -34,7 +34,7 @@ CLI 长选项使用 `--name`，短选项使用 `-h`、`-o`，拒绝旧式 `-go/-
 
 ## 网页与浏览器 Playground
 
-[构建独立 goxide-web 二进制](website/README.md)：中文特性目录、十一组真实 goxide → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器支持一个用户包内的多个 `.gox` 文件及固定随附依赖；旧例保留单文件入口。完整生成 Go 按文件查看，依赖源码只读并标明真实来源。CLI 与 WASM 示例逐字节校验。
+[构建独立 goxide-web 二进制](website/README.md)：中文特性目录、十二组真实 goxide → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器支持一个用户包内的多个 `.gox` 文件及固定随附依赖，也提供单文件入口。完整生成 Go 按文件查看，依赖源码只读并标明真实来源。CLI 与 WASM 示例逐字节校验。
 
 ## 当前支持
 
@@ -68,11 +68,11 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 
 既定方向和未定项以[决策登记](docs/design/decisions.md)及对应 RFC 为准，不将上述事项默认标为批准延期。
 
-## 后续指针阶段
+## enum payload 引用
 
-用户已有后续指针目标；本轮只推进明确授权的 Go Result 适配宏，不启动指针实现。仓库已有的有限读/写引用验收保留，但本试用不要求使用新指针语法。
+引用类型为 `&T` / `&mut T`，取引用使用 `&value` / `&mut value`。`V(ref p)` / `V(ref mut p)` 绑定原 payload；`match &e` / `match &mut e` 为普通 payload 绑定提供相同的读写默认值。enum 和共享 Option/Result 使用各变体独立内联槽，普通赋值仍是 Go 浅复制。完整语义、Go API 和迁移见[原位 payload 合同](docs/design/enum-payload-borrows.md)。
 
-`&T` 路径只读不承诺全局不可变，`mut&` 不承诺独占。复杂别名/借用风险分析是独立长期工作线，不是拿保守拒绝普通 Go 用法来完成的安全保证，也不是当前 MVP 的前置条件。详见[指针与引用设计](docs/design/pointers-and-borrows.md)。
+`&T` 路径只读，`&mut T` 不承诺独占。普通引用可复制、保存、返回和捕获。本轮不新增生命周期、逃逸、借用冲突或跨变体失效检查；后续分析独立跟踪于 [#17](https://github.com/goxide-lang/goxide/issues/17)。
 
 ## 验收与设计导航
 
@@ -104,7 +104,7 @@ Cargo 风格第一版通过 `goxide.toml` 增量启用默认/显式 feature、�
 
 项目采用 [统一项目模型](docs/rfcs/0025-unified-project.md)：根以 `goxide.toml`（`package.format = 2`，显式 module/go）和 `goxide.lock` 为配置与锁定权威，`.go` / `.gox` 可共存。原生 require/replace/exclude 写入 TOML；Go 元数据仅生成到 target。普通 Go 工程可用 `goxide import-go --plan --bin app=cmd/app ROOT` 查看方案，再用 `--out NEWDIR --offline` 在新目录验证迁移，原工程保持不变。旧 JSON、format 1、双根配置和旧锁均明确拒绝；不自动删除或改名。 `import-go` 未指定输出时默认只读计划；原生 Go vendor 仅是迁入输入，验证后物化为显式本地模块，保留修改字节、资源和许可；Goxide 没有 vendor 构建模式。旧 vendor 清单/锁须从原工程显式重新迁入，详见 [供应源码迁入合同](docs/design/vendor-local-modules.md)。
 
-共享 sum 与 serde 已迁入独立 Go 模块：`github.com/goxide-lang/std/sum`、`github.com/goxide-lang/serde`、`github.com/goxide-lang/serde/json`。本 checkout 的 go.mod/go.sum 固定真实公开提交；不是未发布候选 replace。具体版本、发布白名单和整合验收见[迁移记录](docs/reviews/public-library-migration-20261004.md)。旧 schema 6 产物需用此编译器重新生成；不承诺与旧私有 marker 二进制兼容。
+共享 sum 与 serde 已迁入独立 Go 模块：`github.com/goxide-lang/std/sum`、`github.com/goxide-lang/serde`、`github.com/goxide-lang/serde/json`。本 checkout 的 go.mod/go.sum 固定真实公开提交；不是未发布候选 replace。具体版本、发布白名单和整合验收见[迁移记录](docs/reviews/public-library-migration-20261004.md)。当前 enum metadata 为 9、sum ABI 为 3。旧 interface/case 产物须全部重新生成；不保留旧 case 类型或 marker 转发层。
 
 格式化写入与赋值传播支持也由 `github.com/goxide-lang/std/formatting` 和
 `github.com/goxide-lang/std/runtime` 提供。旧 compiler 支持包已删除，项目须更新

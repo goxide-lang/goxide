@@ -1,5 +1,7 @@
 # 变体枚举、Option / Result 与模式匹配
 
+2026-10-09 更新：本轮直接切换至内联独立 payload 槽、`ref` / `ref mut` 模式和 `&mut` 引用拼写，详见[当前原位 payload 合同](enum-payload-borrows.md)。下文旧 interface/case、旧 Go case API 和布局待定的章节记录历史阶段，不是当前接口或兼容承诺；完整 Rust 模式规则不由本轮实现。
+
 交付边界（D20）：本文涉及的别名/借用风险 warning 是未来独立长期分析，不属于 MVP 验收；当前语言语法、类型、明确操作与真实 Go 行为照常设计。不得为未实现分析器强制复杂效果注解。
 
 状态：**首版设计草案**。已确认变体枚举、模式匹配及与 Go 互操作的方向，并接受 Go 调用方能够构造非法值。本文提出穷尽检查、边界验证和候选 Go 表示；具体规则、语法与 ABI 尚未冻结。目标工具链与生成模块语言版本均为 Go 1.27；实现分支已有有限本地 enum / 语句 match 及 serde 派生，见[准确边界](../../IMPLEMENTATION.md)；本篇完整语义与 linter 尚未全部实现。
@@ -12,7 +14,7 @@
 
 状态编号见[决策登记](decisions.md)。除已确认范围外，正文的具体规则与验收条件均为暂定方案；Go 示例验证不代表 goxide 功能已实现。
 
-后续已确认按模式区分 `Ok(value)`、`Ok(&value)` 与 `Ok(mut& value)`；具体语法和 ABI 见 [enum RFC](../rfcs/0008-enums.md) 与 [match RFC](../rfcs/0009-match.md)。本文值型 case 的 Go 实验仅覆盖值匹配，不能作为不支持引用模式的最终语言限制。
+后续已确认按模式区分 `Ok(value)`、`Ok(&value)` 与 `Ok(&mut value)`；具体语法和 ABI 见 [enum RFC](../rfcs/0008-enums.md) 与 [match RFC](../rfcs/0009-match.md)。本文值型 case 的 Go 实验仅覆盖值匹配，不能作为不支持引用模式的最终语言限制。
 
 ## 0. 当前确认：只保留封闭变体 enum
 
@@ -127,9 +129,9 @@ label := match load_result() {
 
 ### 2.2 绑定与作用域
 
-值模式 `Ok(value)` 按允许的复制规则绑定 payload；改写局部副本不回写枚举。`Ok(&value)` 和 `Ok(mut& value)` 则分别借用 payload 原存储，后者修改应由原枚举观察到。匹配目标只求值一次不等于无条件复制目标，借用模式需要保存位置和权限。精确语法与 guard/借用作用域见 [RFC 0009](../rfcs/0009-match.md)。
+值模式 `Ok(value)` 按允许的复制规则绑定 payload；改写局部副本不回写枚举。`Ok(&value)` 和 `Ok(&mut value)` 则分别借用 payload 原存储，后者修改应由原枚举观察到。匹配目标只求值一次不等于无条件复制目标，借用模式需要保存位置和权限。精确语法与 guard/借用作用域见 [RFC 0009](../rfcs/0009-match.md)。
 
-不自动取地址，不把值匹配变成 `mut&`，也不从 Go type switch 得到的 case 副本中制造“指向原枚举字段”的可变借用。首版不支持 `match mut& place` 等原位借用模式；普通引用 payload 的值复制不因借用身份拒绝；真正明确不可复制的资源类型约束另行定义，不能借此恢复全局独占检查。已有 `&T` / `mut& T` 的装箱、返回、闭包、goroutine 和接口逃逸继续受引用专题约束；枚举不会绕过这些检查。
+不自动取地址，不把值匹配变成 `&mut`，也不从 Go type switch 得到的 case 副本中制造“指向原枚举字段”的可变借用。首版不支持 `match &mut place` 等原位借用模式；普通引用 payload 的值复制不因借用身份拒绝；真正明确不可复制的资源类型约束另行定义，不能借此恢复全局独占检查。已有 `&T` / `&mut T` 的装箱、返回、闭包、goroutine 和接口逃逸继续受引用专题约束；枚举不会绕过这些检查。
 
 ### 2.3 表达式结果与非局部退出
 

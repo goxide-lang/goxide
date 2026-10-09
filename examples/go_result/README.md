@@ -41,7 +41,7 @@ func readSize(reader io.Reader, buffer []byte) Result[string,ReadFailure] {
 
 ## 运行
 
-在仓库根目录，使用真实 Go 1.27.x，并让 CLI 构建与运行使用同一工具链。示例依赖 [go.mod](go.mod) 固定的 `github.com/goxide-lang/std v0.0.0-20261004173304-ce5bccb4ff9c`（sum ABI 2）；根模块的 std 版本相同。首次运行前需缓存 manifest 指定的依赖。
+在仓库根目录，使用真实 Go 1.27.x，并让 CLI 构建与运行使用同一工具链。示例依赖 [go.mod](go.mod) 固定的 `github.com/goxide-lang/std v0.0.0-20261009091333-a75c971aa755`（sum ABI 3）；根模块的 std 版本相同。首次运行前需缓存 manifest 指定的依赖。
 
 ```sh
 export GO_BIN=/absolute/path/to/go1.27.1/bin/go

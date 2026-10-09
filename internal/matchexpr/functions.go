@@ -1,7 +1,6 @@
 package matchexpr
 
 import (
-	"github.com/hxsf/goxide/internal/paths"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -44,7 +43,7 @@ func compositeFunctionTypes(source []byte, ts []tok, pairs map[int]int) map[int]
 			default:
 				continue
 			}
-			expr, err := parser.ParseExpr(string(paths.GoView(source[ts[start].a:t.a])) + "{}")
+			expr, err := parser.ParseExpr(string(parseView(source[ts[start].a:t.a])) + "{}")
 			literal, ok := expr.(*ast.CompositeLit)
 			if err == nil && ok {
 				markFunctionTypes(literal.Type, nil, ts[start].a, types)
@@ -72,7 +71,7 @@ func markFunctionTypes(root ast.Node, outer *ast.FuncType, offset int, found map
 // functionSignature parses a declaration or literal header and returns the
 // adjustment from parser positions to offsets within that original header.
 func functionSignature(header string) (*ast.FuncType, int) {
-	header = string(paths.GoView([]byte(header)))
+	header = string(parseView([]byte(header)))
 	if expr, err := parser.ParseExpr(header + "{}"); err == nil {
 		if literal, ok := expr.(*ast.FuncLit); ok {
 			return literal.Type, 0

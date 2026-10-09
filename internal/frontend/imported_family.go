@@ -13,13 +13,13 @@ import (
 // The generic origin is registry-authorized. Alias argument mappings come from
 // go/types, including partial/reordered aliases; names never imply a protocol.
 func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefix string, validatorOwners map[string]string, visible map[*types.Package]string) (enums.Decl, string, string) {
-	d := enums.Decl{PackagePath: f.DefinitionPath, Name: origin + "." + f.DefinitionName, LookupName: alias + "." + f.Name, Family: f.Family, Marker: f.Marker}
+	d := enums.Decl{PackagePath: f.DefinitionPath, Identity: f.DefinitionName, Name: origin + "." + f.DefinitionName, LookupName: alias + "." + f.Name, Family: f.Family, Tag: origin + "." + f.Tag, TagField: f.TagField}
 	for _, v := range f.Variants {
 		payload := ""
 		if v.PayloadIndex >= 0 {
 			payload = "__goxide_imported_payload"
 		}
-		d.Variants = append(d.Variants, enums.Variant{Name: v.Name, Payload: payload, CaseName: prefix + "_" + v.Name, Constructor: prefix + "_new" + v.Name})
+		d.Variants = append(d.Variants, enums.Variant{Name: v.Name, Payload: payload, Tag: v.Tag, Field: v.Field, Value: origin + "." + v.Value, Project: origin + "." + v.Project, Constructor: prefix + "_new" + v.Name})
 	}
 	var b strings.Builder
 	b.WriteByte('\n') // Separate generated declarations even without a source EOF newline.
@@ -53,7 +53,6 @@ func importedFamily(f enumFamilyExport, pkg *types.Package, alias, origin, prefi
 	for _, v := range f.Variants {
 		input, call := "", ""
 		if v.PayloadIndex >= 0 {
-			fmt.Fprintf(&b, "type %s_%s%s = %s.%s%s;\n", prefix, v.Name, ps, origin, v.Case, as)
 			input, call = "value "+args[v.PayloadIndex], "value"
 		}
 		fmt.Fprintf(&b, "func %s_new%s%s(%s) %s%s {return %s.%s%s(%s)};\n", prefix, v.Name, ps, input, d.Name, as, origin, v.Constructor, as, call)

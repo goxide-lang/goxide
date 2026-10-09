@@ -39,9 +39,9 @@ func TestDirectoryTagsReferencesAndExplicitCompiler(t *testing.T) {
 	os.MkdirAll(filepath.Join(src, "dep"), 0700)
 	for name, source := range map[string]string{
 		"go.mod":         "module example.org/app\ngo 1.27\n",
-		"main.gox":       "package main\nuse fmt;\nuse dep as d;\nfunc main(){fmt::Println(Run(),d::Value())}\nfunc Run()int{n:=40;w:=mut& n;increment(w);return read(&*w)}\n",
+		"main.gox":       "package main\nuse fmt;\nuse dep as d;\nfunc main(){fmt::Println(Run(),d::Value())}\nfunc Run()int{n:=40;w:=&mut n;increment(w);return read(&*w)}\n",
 		"read.gox":       "package main\nfunc read(r &int)int{return *r}\n",
-		"write.gox":      "package main\nfunc increment(r mut& int){*r+=2}\n",
+		"write.gox":      "package main\nfunc increment(r &mut int){*r+=2}\n",
 		"race.gox":       "//go:build race\n\npackage main\nfunc RaceSelected()bool{return true}\n",
 		"notrace.gox":    "//go:build !race\n\npackage main\nfunc RaceSelected()bool{return false}\n",
 		"main_test.go":   "package main\nimport \"testing\"\nfunc TestRun(t *testing.T){if Run()!=42{t.Fatal(Run())};if !RaceSelected(){t.Fatal(\"wrong race selection\")}}\n",

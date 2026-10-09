@@ -57,7 +57,7 @@ pub enum E { A(int), }
 import h "enum.example/library/internal/hidden"
 type Public=h.E
 func Get()Public{return h.NewEA(8)}
-func Read(e Public)int{return e.(h.GoxideCase1_E_A).Value}
+func Read(e Public)int{return h.GoxideValue1_E_A(e)}
 `)
 	packagesWrite(t, src, "other/other.gox", `package other
 pub enum E { A, Count(int), }
@@ -124,9 +124,8 @@ func Other()int{return match renamed::E::Count(2){renamed::E::Count(n)=>n,_=>0,}
 	compare(out, out2)
 	packagesWrite(t, out, "app_test.go", `package app
 import("testing";m "enum.example/library/model";r "enum.example/library/relay")
-type forged struct{r.Alias}
 func TestBusiness(t *testing.T){if Run()!=22||Other()!=2||Read()!=3||Facade()!=8||Cross(m.NewECount(4))!=4||Score(Rebuild(m.Secret()))!=9{t.Fatal("business")};if n,e:=Decode();e!=nil||n!=4{t.Fatal(n,e)}}
-func TestInvalidBeforeGuard(t *testing.T){var typed *m.GoxideCase1_E_Count;for _,e:=range []r.Alias{nil,typed,&m.GoxideCase1_E_Count{Value:1},forged{}}{func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid before guard")}}();Ordered(e,&seen)}()}}
+func TestInvalidBeforeGuard(t *testing.T){for _,e:=range []r.Alias{{}}{func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid before guard")}}();Ordered(e,&seen)}()}}
 `)
 	packagesWrite(t, library, "model/model_test.go", `package model
 import "testing"
@@ -136,12 +135,19 @@ func TestProducer(t *testing.T){e:=DefaultE();if DebugE(&e)!="E::A"{t.Fatal(Debu
 	packagesWrite(t, plain, "go.mod", module("enum.example/plain", library))
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import("testing";m "enum.example/library/model";r "enum.example/library/relay")
-func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if e.(m.GoxideCase1_E_Count).Value!=5{t.Fatal(e)}}
+func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if m.GoxideValue1_E_Count(e)!=5{t.Fatal(e)}}
 `)
 	for _, dir := range []string{library, out, plain} {
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
+	// These former dynamic cases are no longer assignable to the closed value
+	// representation. Runtime validation above still checks its invalid zero.
+	assertLegacySumGoRejected(t, out, tool, map[string]legacySumGoCase{
+		"enum-nil":          {"package app\nimport m \"enum.example/library/model\"\nvar _ m.E=nil\n", "cannot use nil"},
+		"enum-pointer-case": {"package app\nimport m \"enum.example/library/model\"\nvar _ m.E=(*m.GoxideCase1_E_Count)(nil)\n", "undefined: m.GoxideCase1_E_Count"},
+		"enum-forged":       {"package app\nimport m \"enum.example/library/model\"\ntype forged struct{m.E}\nvar _ m.E=forged{}\n", "cannot use"},
+	})
 	for name, body := range map[string]string{
 		"non-exhaustive":  `func Bad(e r::Alias)int{return match e{r::Alias::A=>0,}}`,
 		"unknown-variant": `func Bad()r::Alias{return r::Alias::Missing}`,

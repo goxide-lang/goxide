@@ -536,24 +536,22 @@ func (g *generator) generate(r *registered) error {
 			return fmt.Errorf("equality: generic builtin derive is unsupported")
 		}
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s(a);%s(b);switch x:=a.(type){", d.Validator, d.Validator)
+		fmt.Fprintf(&b, "%s(a);%s(b);if %s(a)!=%s(b){return (0!=0)};switch %s(a){", d.Validator, d.Validator, d.Tag, d.Tag, d.Tag)
 		for _, v := range d.Variants {
-			tv, e := types.Eval(g.u.fs, g.u.pkg, token.NoPos, v.CaseName)
-			if e != nil {
-				return fmt.Errorf("equality: enum case %s: %w", v.CaseName, e)
-			}
-			st, ok := types.Unalias(tv.Type).Underlying().(*types.Struct)
-			if !ok {
-				return fmt.Errorf("equality: invalid enum value case %s", v.CaseName)
-			}
-			fmt.Fprintf(&b, "case %s:y,ok:=b.(%s);if !ok{return (0!=0)};_=x;_=y;", v.CaseName, v.CaseName)
+			fmt.Fprintf(&b, "case %d:", v.Tag)
 			if v.Payload == "" {
 				b.WriteString("return (0==0);")
 			} else {
-				if st.NumFields() != 1 || st.Field(0).Name() != "Value" {
-					return fmt.Errorf("equality: invalid enum payload case %s", v.CaseName)
+				vt, e := g.eval(v.Value)
+				if e != nil {
+					return fmt.Errorf("equality: enum payload helper %s: %w", v.Value, e)
 				}
-				x, e := g.expression(st.Field(0).Type(), "x.Value", "y.Value", requireEq)
+				sig, ok := vt.(*types.Signature)
+				if !ok || sig.Params().Len() != 1 || sig.Results().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), r.typ) {
+					return fmt.Errorf("equality: invalid enum payload helper %s", v.Value)
+				}
+				fmt.Fprintf(&b, "x:=%s(a);y:=%s(b);", v.Value, v.Value)
+				x, e := g.expression(sig.Results().At(0).Type(), "x", "y", requireEq)
 				if e != nil {
 					return fmt.Errorf("equality: %s::%s: %w", r.name, v.Name, e)
 				}
@@ -1033,7 +1031,8 @@ func (g *generator) sumExpression(t *types.Named, a, b string, eq bool) (string,
 			return "", true, fmt.Errorf("equality: invalid trusted sum family %s", d.Name)
 		}
 		validator := ""
-		candidates := append([]enums.Decl{{Validator: d.Validator}}, d.Instances...)
+		candidates := append([]enums.Decl{d}, d.Instances...)
+		instanceDecl := d
 		for _, instance := range candidates {
 			if instance.Validator == "" {
 				continue
@@ -1045,64 +1044,88 @@ func (g *generator) sumExpression(t *types.Named, a, b string, eq bool) (string,
 			sig, ok := vt.(*types.Signature)
 			if ok && sig.Params().Len() == 1 && sig.Results().Len() == 0 && types.Identical(sig.Params().At(0).Type(), t) {
 				validator = instance.Validator
+				if instance.Tag != "" {
+					instanceDecl = instance
+				}
 				break
 			}
 		}
 		if validator == "" {
 			return "", true, fmt.Errorf("equality: sum instance has no matching trusted validation metadata: %s", t)
 		}
+		tag, e := g.sumAccessor(instanceDecl.Tag, t, types.Typ[types.Int])
+		if e != nil {
+			return "", true, e
+		}
 		g.serial++
 		prefix := fmt.Sprintf("__goxide_enum_eq_sum%d", g.serial)
-		left, right, matched := prefix+"a", prefix+"b", prefix+"ok"
+		left, right := prefix+"a", prefix+"b"
 		var text strings.Builder
-		fmt.Fprintf(&text, "func()bool{%s(%s);%s(%s);switch %s:=(%s).(type){", validator, a, validator, b, left, a)
-		if d.Family == "Option" {
-			if g.u.pkg.Scope().Lookup("nil") != nil {
-				return "", true, fmt.Errorf("equality: Option comparison requires unshadowed predeclared nil")
-			}
-			fmt.Fprintf(&text, "case nil:return %s==nil;", b)
-		}
-		for i, v := range d.Variants {
-			if d.Family == "Option" && i == 1 {
+		fmt.Fprintf(&text, "func()bool{%s:=(%s);%s:=(%s);%s(%s);%s(%s);if %s(%s)!=%s(%s){return (0!=0)};switch %s(%s){", left, a, right, b, validator, left, validator, right, tag, left, tag, right, tag, left)
+		for i, v := range instanceDecl.Variants {
+			fmt.Fprintf(&text, "case %d:", v.Tag)
+			if v.Payload == "" {
+				text.WriteString("return (0==0);")
 				continue
 			}
-			caseName := v.CaseName
-			ct, e := g.eval(caseName)
-			if e != nil {
-				return "", true, fmt.Errorf("equality: missing trusted sum case %s: %w", caseName, e)
+			if i >= count {
+				return "", true, fmt.Errorf("equality: invalid trusted sum payload index")
 			}
-			named, ok := types.Unalias(ct).(*types.Named)
-			if !ok {
-				return "", true, fmt.Errorf("equality: invalid trusted sum case %s", caseName)
+			payloadType := t.TypeArgs().At(i)
+			value, err := g.sumAccessor(v.Value, t, payloadType)
+			if err != nil {
+				return "", true, err
 			}
-			if named.TypeArgs().Len() == 0 || !types.Implements(ct, t.Underlying().(*types.Interface)) {
-				args := make([]string, count)
-				for ai := range args {
-					args[ai], e = g.typeSpelling(t.TypeArgs().At(ai))
-					if e != nil {
-						return "", true, e
-					}
-				}
-				caseName += "[" + strings.Join(args, ",") + "]"
-				ct, e = g.eval(caseName)
-				if e != nil {
-					return "", true, e
-				}
+			x, y := prefix+"x", prefix+"y"
+			fmt.Fprintf(&text, "%s:=%s(%s);%s:=%s(%s);", x, value, left, y, value, right)
+			comparison, err := g.expression(payloadType, x, y, eq)
+			if err != nil {
+				return "", true, err
 			}
-			st, ok := ct.Underlying().(*types.Struct)
-			if !ok || st.NumFields() != 1 || !types.Identical(st.Field(0).Type(), t.TypeArgs().At(i)) || !types.Implements(ct, t.Underlying().(*types.Interface)) {
-				return "", true, fmt.Errorf("equality: sum case payload identity mismatch: %s", caseName)
-			}
-			x, e := g.expression(st.Field(0).Type(), left+".Value", right+".Value", eq)
-			if e != nil {
-				return "", true, e
-			}
-			fmt.Fprintf(&text, "case %s:%s,%s:=(%s).(%s);if !%s{return (0!=0)};return %s;", caseName, right, matched, b, caseName, matched, x)
+			fmt.Fprintf(&text, "return %s;", comparison)
 		}
 		text.WriteString("};return (0!=0)}()")
 		return text.String(), true, nil
 	}
 	return "", false, nil
+}
+
+// sumAccessor checks the actual instantiated Go signature from trusted enum
+// metadata. A familiar helper spelling alone never grants a sum protocol.
+func (g *generator) sumAccessor(name string, target *types.Named, result types.Type) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("equality: missing trusted sum accessor")
+	}
+	t, err := g.eval(name)
+	if err != nil {
+		return "", fmt.Errorf("equality: missing trusted sum accessor %s: %w", name, err)
+	}
+	sig, ok := t.(*types.Signature)
+	if !ok {
+		return "", fmt.Errorf("equality: invalid trusted sum accessor %s", name)
+	}
+	if sig.TypeParams().Len() > 0 {
+		if sig.TypeParams().Len() != target.TypeArgs().Len() {
+			return "", fmt.Errorf("equality: sum accessor type-parameter mismatch: %s", name)
+		}
+		args := make([]string, target.TypeArgs().Len())
+		for i := range args {
+			args[i], err = g.typeSpelling(target.TypeArgs().At(i))
+			if err != nil {
+				return "", err
+			}
+		}
+		name += "[" + strings.Join(args, ",") + "]"
+		t, err = g.eval(name)
+		if err != nil {
+			return "", err
+		}
+		sig, ok = t.(*types.Signature)
+	}
+	if !ok || sig.Params().Len() != 1 || sig.Results().Len() != 1 || !types.Identical(sig.Params().At(0).Type(), target) || !types.Identical(sig.Results().At(0).Type(), result) {
+		return "", fmt.Errorf("equality: sum accessor payload identity mismatch: %s", name)
+	}
+	return name, nil
 }
 
 func (g *generator) typeSpelling(t types.Type) (string, error) {

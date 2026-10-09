@@ -24,7 +24,7 @@ func inspectCache(view &Cache) int {
     return snapshot.Reads + snapshot.Samples[0] + values[0] + view.Counts["hits"] + *view.Limit
 }
 
-func updateCache(writer mut& Cache) {
+func updateCache(writer &mut Cache) {
     writer.Reads++
     writer.Values[0]++
     writer.Counts["hits"]++
@@ -35,7 +35,7 @@ func main() {
     limit := 11
     cache := Cache{Reads: 2, Samples: [3]int{3, 4, 5}, Values: []int{5, 8}, Counts: map[string]int{"hits": 7}, Limit: &limit}
     var reader &Cache = &cache
-    writer := mut& cache
+    writer := &mut cache
     before := inspectCache(reader)
     updateCache(writer)
     after := inspectCache(reader)

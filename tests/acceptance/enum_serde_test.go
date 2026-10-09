@@ -26,19 +26,18 @@ func TestEnumSerdeBusinessRace(t *testing.T) {
 	if strings.Contains(string(result.Go), "encoding/json") || strings.Contains(string(result.Go), "serdejson") {
 		t.Fatal("derive depends on JSON backend")
 	}
-	idleCase := ""
+	foundIdle := false
 	for _, d := range result.Enums {
 		for _, v := range d.Variants {
 			if d.Name == "Event" && v.Name == "Idle" {
-				idleCase = v.CaseName
+				foundIdle = true
 			}
 		}
 	}
-	if idleCase == "" {
+	if !foundIdle {
 		t.Fatal("missing enum metadata")
 	}
-	assertions := strings.ReplaceAll(enumSerdeAssertions, "IDLE_CASE", idleCase)
-	enumGeneratedModule(t, enumSerdeSource, assertions, false)
+	enumGeneratedModule(t, enumSerdeSource, enumSerdeAssertions, false)
 }
 
 const enumSerdeAssertions = `package fixture
@@ -51,8 +50,7 @@ func TestEnumInvalidInput(t *testing.T){cases:=map[string]string{"unknown-unit":
 func TestEnumVariantErrorPath(t *testing.T){_,e:=serdejson.Unmarshal([]byte("{\"Nested\":{\"Item\":false}}"),DeserializeEnvelope);var typed *serde.Error;if !errors.As(e,&typed){t.Fatalf("no typed error: %v",e)};want:=[]serde.PathSegment{{Kind:"Variant",Name:"Nested"},{Kind:"Variant",Name:"Item"}};if !reflect.DeepEqual(typed.Path,want){t.Fatalf("path %#v want %#v (%v)",typed.Path,want,e)}}
 func TestEnumEncodingVariantPath(t *testing.T){v:=nested(text(string([]byte{255})));_,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEnvelope(s,&v)});var typed *serde.Error;if !errors.As(e,&typed){t.Fatalf("no typed encoding error: %v",e)};want:=[]serde.PathSegment{{Kind:"Variant",Name:"Nested"},{Kind:"Variant",Name:"Text"}};if !reflect.DeepEqual(typed.Path,want){t.Fatalf("encoding path %#v want %#v (%v)",typed.Path,want,e)}}
 func TestEnumUnknownCategory(t *testing.T){for _,input:=range []string{"\"Nope\"","{\"Nope\":1}"}{_,e:=dec(input);var typed *serde.Error;if !errors.As(e,&typed)||typed.Kind!=serde.UnknownVariant{t.Fatalf("unknown variant category: %v",e)}}}
-type forged struct {Event}
-func TestEnumInvalidGoBoundaryReturnsError(t *testing.T){for _,v:=range []Event{nil,(*IDLE_CASE)(nil),&IDLE_CASE{},forged{}}{if _,e:=enc(v);e==nil{t.Fatalf("accepted invalid %T",v)}};if _,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEvent(s,nil)});e==nil{t.Fatal("nil input pointer accepted")};v:=nested(nil);if _,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEnvelope(s,&v)});e==nil{t.Fatal("invalid nested enum accepted")}}
+func TestEnumInvalidGoBoundaryReturnsError(t *testing.T){for _,v:=range []Event{{}}{if _,e:=enc(v);e==nil{t.Fatalf("accepted invalid %T",v)}};if _,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEvent(s,nil)});e==nil{t.Fatal("nil input pointer accepted")};v:=nested(Event{});if _,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeEnvelope(s,&v)});e==nil{t.Fatal("invalid nested enum accepted")}}
 `
 
 func TestEnumSerdeIndependentDirectionsRace(t *testing.T) {

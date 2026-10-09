@@ -12,7 +12,7 @@ D19/D20 边界：读写权限和已确认类型不变量照常检查；别名、
 
 背景：[原生 API](../design/foreign-api.md)。声明分发见 [RFC 0001](0001-package-loading.md)。
 
-2026-10-02 更新：D31 已纠正普通写引用调用要求显式 AsPtr 的旧前提。具体标量 `mut& T` 到同型普通 Go `*T` 参数已直接接通，原生可留存/返回指针，readonly 不升级；[实现及验收范围](research/0002-native-pointer-bridge.md)。下文 Ptr/AsPtr 和函数适配示例保留历史候选，不是每个普通调用的必经步骤。
+2026-10-02 更新：D31 已纠正普通写引用调用要求显式 AsPtr 的旧前提。具体标量 `&mut T` 到同型普通 Go `*T` 参数已直接接通，原生可留存/返回指针，readonly 不升级；[实现及验收范围](research/0002-native-pointer-bridge.md)。下文 Ptr/AsPtr 和函数适配示例保留历史候选，不是每个普通调用的必经步骤。
 
 ## 源级规则
 
@@ -35,10 +35,10 @@ unsafe callable 的赋值、返回、参数传递和泛型使用均应保留其�
 **F01：declare 采用原函数。** 不生成第二份 Fill 实现。
 
 ```goxide
-declare func native::Fill(p mut& native::T);
+declare func native::Fill(p &mut native::T);
 
 var value native::T
-native::Fill(mut& value)
+native::Fill(&mut value)
 ```
 
 ```go
@@ -52,7 +52,7 @@ native.Fill(&value)
 **F02：raw 调用与指针导出。** 此例没有 F01 的声明，`p` 是现有写借用。
 
 ```goxide
-// p: mut& native::T
+// p: &mut native::T
 unsafe native::Fill(p.as_ptr());
 ```
 
@@ -112,7 +112,7 @@ native.Fill(value)
 
 ## 拒绝与边界
 
-- Ptr 判空只证明非空；不能凭此安全恢复任意 `&T` / `mut& T`。
+- Ptr 判空只证明非空；不能凭此安全恢复任意 `&T` / `&mut T`。
 - `[]*T`、`**T`、含指针结构体和回调不得机械替换成含具名 Ptr 的不同布局。
 - `Option[Ptr[T]]` 必须区分 None 与 Some(nil)，不能直接套用可空 Arc 优化。
 - Go 不允许给具名指针接收者类型 `type Ptr[T any] *T` 定义方法；AsPtr 方法应使用 wrapper 或直接降低为转换。

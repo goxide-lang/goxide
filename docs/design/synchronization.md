@@ -21,7 +21,7 @@ goxide 负责源级语义检查和代码转换；同步由普通 Go 支持库完
 | goxide 概念 | Go 表示 |
 | --- | --- |
 | `Arc[T]` | `*T`，共享引用句柄 |
-| `&T`、`mut& T` | `*T`；源级权限差异保留在转译前检查中 |
+| `&T`、`&mut T` | `*T`；源级权限差异保留在转译前检查中 |
 | `Lock[T]` | `*goxidesync.Lock[T]` |
 | `RWLock[T]` | `*goxidesync.RWLock[T]` |
 
@@ -100,7 +100,7 @@ func (s *RWLock[T]) Write[P any](f func(*T) P) P {
 
 返回值在持锁期间计算，随后 defer 解锁，再把结果交给调用者。回调 panic 时执行解锁，panic 继续传播，不伪造一个 P 的零值返回。
 
-goxide 将 `Read` 的回调参数视为 `&T`，`Do` / `Write` 的回调参数视为 `mut& T`。上述 Go 签名均为 `*T`，本身不能表达只读、独占或不逃逸；源级只读类型错误仍由前端检查，独占/逃逸按 D19 仅对具体风险 warning。直接由 Go 调用 Read 并修改数据，不受 goxide 类型检查约束。
+goxide 将 `Read` 的回调参数视为 `&T`，`Do` / `Write` 的回调参数视为 `&mut T`。上述 Go 签名均为 `*T`，本身不能表达只读、独占或不逃逸；源级只读类型错误仍由前端检查，独占/逃逸按 D19 仅对具体风险 warning。直接由 Go 调用 Read 并修改数据，不受 goxide 类型检查约束。
 
 ## 4. 没有结果的回调
 

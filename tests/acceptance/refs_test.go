@@ -15,7 +15,7 @@ import (
 func TestReferenceConsumerRejections(t *testing.T) {
 	cases := map[string]string{
 		"range-write":               `func f(r &int){for *r = range 3 {}}`,
-		"explicit-write-conversion": `func f(){w:=(mut& int)(nil);*w=1}`,
+		"explicit-write-conversion": `func f(){w:=(&mut int)(nil);*w=1}`,
 		"generic-erase":             `func erase[T ~*int](v T)*int{return v};func f(r &int){p:=erase(r);*p=2}`,
 		"write-read":                `func f(r &int){*r=2}`,
 		"increment-read":            `func f(r &int){(*r)++}`,
@@ -27,7 +27,7 @@ func TestReferenceConsumerRejections(t *testing.T) {
 		"interface-call":            `func sink(v any){};func f(r &int){sink(r)}`,
 		"variadic-interface":        `func sink(v ...any){};func f(r &int){sink(r)}`,
 		"read-reborrow-write":       `func f(r &int){p:=&((*r));*p=2}`,
-		"read-to-write-reborrow":    `func f(r &int){p:=mut&(*r);*p=2}`,
+		"read-to-write-reborrow":    `func f(r &int){p:=&mut (*r);*p=2}`,
 		"slice-box":                 `func f(r &int){p:=[]*int{r};*p[0]=2}`,
 		"map-box":                   `func f(r &int){p:=map[int]*int{0:r};*p[0]=2}`,
 		"channel-send":              `func f(r &int,c chan *int){c<-r}`,
@@ -63,10 +63,10 @@ func TestReferenceLegacyGoUntouched(t *testing.T) {
 
 func TestReferenceGeneratedModuleRace(t *testing.T) {
 	source := `package fixture
-func makeValue() mut& int { n:=4;return mut& n }
+func makeValue() &mut int { n:=4;return &mut n }
 func read(r &int)int{return *r}
 func capture(r &int)func()int{return func()int{return *r}}
-func increment(w mut& int){(*w)++}
+func increment(w &mut int){(*w)++}
 func exercise()int{
  w:=makeValue()
  copy:=w

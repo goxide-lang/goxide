@@ -37,13 +37,13 @@ type Data struct { Values []int }
 var sentinel=errors::New("sentinel")
 func load(ok bool,trace *[]string)Result[int,error]{*trace=append(*trace,"load");if !ok{return Result[int,error]::Err(sentinel)};return Result[int,error]::Ok(4)}
 func read(r &int)int{return *r}
-func bump(w mut& int){(*w)++}
+func bump(w &mut int){(*w)++}
 func capture(r &int)func()int{return func()int{return *r}}
 func scalar(n int)int{return n}
 macro_rules! access {($r:expr)=>{scalar(*$r)};}
 macro_rules! take {($v:expr)=>{$v?};}
 func exercise(ok bool,trace *[]string)Result[int,Failure]{
- n:=2;w:=mut& n;alias:=w;bump(alias)
+ n:=2;w:=&mut n;alias:=w;bump(alias)
  var r &int = &(*w)
  reader:=capture(r)
  defer func(){*trace=append(*trace,"cleanup")}()
@@ -64,9 +64,9 @@ func number(v Result[int,Failure])int{match v {Result[int,Failure]::Ok(n)=>{retu
 func cause(v Result[int,Failure])error{match v {Result[int,Failure]::Ok(_)=>{return nil},Result[int,Failure]::Err(e)=>{return e},};panic("unreachable")}
 func optionNumber(v Option[int])int{match v {Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
 func cloneRead()int{n:=3;var r &int = &n;original:=Data{Values:[]int{read(r)}};copy:=CloneData(&original);copy.Values[0]=8;return original.Values[0]}
-func deferBump(w mut& int,n int){*w+=n}
-func registerDeferred(w mut& int,ok bool,trace *[]string)Result[int,error]{defer deferBump(w,load(ok,trace)?);return Result[int,error]::Ok(*w)}
-func runDeferred(ok bool,trace *[]string)int{n:=2;w:=mut& n;_=registerDeferred(w,ok,trace);return n}
+func deferBump(w &mut int,n int){*w+=n}
+func registerDeferred(w &mut int,ok bool,trace *[]string)Result[int,error]{defer deferBump(w,load(ok,trace)?);return Result[int,error]::Ok(*w)}
+func runDeferred(ok bool,trace *[]string)int{n:=2;w:=&mut n;_=registerDeferred(w,ok,trace);return n}
 `
 
 func TestT0CombinationSourceMetadata(t *testing.T) {

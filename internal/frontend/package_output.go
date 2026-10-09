@@ -130,14 +130,13 @@ func packageHelperNames(r Result) map[string]bool {
 	}
 	base := func(n string) string { n, _, _ = strings.Cut(n, "["); return n }
 	for _, e := range r.Enums {
-		names[e.Validator], names[e.ExportValidator] = true, true
+		names[e.Validator], names[e.ExportValidator], names[base(e.Tag)] = true, true, true
 		if e.Family != "" {
 			names[e.Family] = true
 		}
 		for _, v := range e.Variants {
-			names[base(v.CaseName)], names[base(v.Constructor)] = true, true
+			names[base(v.Value)], names[base(v.Project)], names[base(v.Constructor)], names[base(v.PayloadAlias)] = true, true, true, true
 			if e.Family != "" {
-				names["Goxide"+e.Family+v.Name] = true
 				names["GoxideNew"+e.Family+v.Name] = true
 			}
 		}

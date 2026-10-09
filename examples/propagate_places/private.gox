@@ -25,7 +25,7 @@ func parseError()error{_,e:=unpack(parse("bad"));return e}
 func privateLHS(t *model::Tree,ok bool)Result[int,error]{questionTree(t,ok)?.Values[parse("0")?]=parse("8")?;return Result[int,error]::Ok(t.Values[0])}
 func repeatedGuards(t *model::Tree,seen *any)Result[int,error]{t.Count=parse("1")?;defer func(){*seen=recover()}();t.Count=parse("bad")?;return Result[int,error]::Ok(9)}
 func nestedPrivate(t *model::Tree)Result[int,error]{inner:=func()Option[int]{t.Count=Option[int]::None?;return Option[int]::Some(0)};if optionNumber(inner())!=-1{panic("closure target")};t.Count=parse("9")?;return Result[int,error]::Ok(t.Count)}
-func privateAliases()Result[int,error]{tree:=model::NewTree(3);var r &model::Tree=&tree;var w mut&model::Tree=mut&tree;w.Count=parse("9")?;return Result[int,error]::Ok(r.Count)}
+func privateAliases()Result[int,error]{tree:=model::NewTree(3);var r &model::Tree=&tree;var w &mut model::Tree=&mut tree;w.Count=parse("9")?;return Result[int,error]::Ok(r.Count)}
 func invalidPrivate(t *model::Tree)Result[int,error]{var broken Result[int,error];t.Count=broken?;return Result[int,error]::Ok(0)}
 func shadowResult(t *model::Tree)(out Result[int,error]){{out:=1;_=out;t.Count=parse("bad")?};return Result[int,error]::Ok(2)}
 func privateGoto(t *model::Tree,skip bool)Result[int,error]{if skip{goto Done};t.Count=parse("7")?;Done:return Result[int,error]::Ok(t.Count)}

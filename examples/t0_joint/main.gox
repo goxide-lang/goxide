@@ -37,7 +37,7 @@ func prepare(input []byte,capacity int,enabled bool)Result[Receipt,Failure]{
     snapshot:=*view
     snapshot.History=append([]int(nil),snapshot.History...)
     snapshot.History[0]+=units
-    writable:=store::Edit(mut& budget)
+    writable:=store::Edit(&mut budget)
     writable.Limit+=units
     if view.Limit!=capacity+units{panic("writable alias visibility")}
     store::NativeUpdate(&budget)

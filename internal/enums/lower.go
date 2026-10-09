@@ -2,6 +2,7 @@
 package enums
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/sourcemap"
@@ -14,16 +15,19 @@ import (
 )
 
 type Variant struct {
-	SerdeRename, SerdeValue              string
-	HasSerdeRename, HasSerdeValue        bool
-	Name, Payload, CaseName, Constructor string
-	Type                                 ast.Expr
-	Message                              string
-	HasMessage, Source, From, Default    bool
-	Position                             token.Position
+	SerdeRename, SerdeValue             string
+	HasSerdeRename, HasSerdeValue       bool
+	Name, Payload, Constructor          string
+	Tag                                 int
+	Field, Value, Project, PayloadAlias string
+	Type                                ast.Expr
+	Message                             string
+	HasMessage, Source, From, Default   bool
+	Position                            token.Position
 }
 type Decl struct {
-	Name, Marker, Validator string
+	Name, Identity, Validator string
+	Tag, TagField             string
 	// ValidatorPath records an external instance owner independently of its family origin.
 	ValidatorPath string
 	// ExportValidator is the stable full-digest ABI name. Validator is private
@@ -40,9 +44,10 @@ type Decl struct {
 	Position                token.Position
 }
 type Result struct {
-	Source []byte
-	Enums  []Decl
-	Types  map[string]ast.Expr
+	Source         []byte
+	Enums          []Decl
+	Types          map[string]ast.Expr
+	ReferenceTemps map[string]bool
 }
 type tok struct {
 	kind       token.Token
@@ -54,15 +59,18 @@ type edit struct {
 	text       string
 }
 type lowerer struct {
-	filename      string
-	src           []byte
-	ts            []tok
-	decls         []Decl
-	byName        map[string]*Decl
-	serial        int
-	payloadChecks map[string]string
-	packageTypes  map[string]ast.Expr
-	fragments     *sourcemap.Fragments
+	filename        string
+	src             []byte
+	ts              []tok
+	decls           []Decl
+	byName          map[string]*Decl
+	serial          int
+	payloadChecks   map[string]string
+	packageTypes    map[string]ast.Expr
+	fragments       *sourcemap.Fragments
+	referenceTemps  map[string]bool
+	payloadAliases  strings.Builder
+	payloadAliasSet map[string]bool
 }
 
 func Lower(filename string, source []byte) (Result, error) {
@@ -95,7 +103,7 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 	if strings.IndexByte(string(source), 0) >= 0 {
 		return Result{}, fmt.Errorf("%s: NUL byte in source", filename)
 	}
-	l := &lowerer{filename: filename, src: source, byName: map[string]*Decl{}, packageTypes: named}
+	l := &lowerer{filename: filename, src: source, byName: map[string]*Decl{}, packageTypes: named, referenceTemps: map[string]bool{}}
 	if provenance != nil {
 		l.fragments = &sourcemap.Fragments{Input: provenance}
 	}
@@ -151,6 +159,11 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 			return Result{}, e
 		}
 		d.Public = public
+		if !public {
+			for i := range d.Variants {
+				d.Variants[i].PayloadAlias = "__goxide_enum_payload_type_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + d.Variants[i].Name
+			}
+		}
 		if public && !ast.IsExported(d.Name) {
 			return Result{}, l.err(l.ts[i].start, "pub enum requires an exported Go name")
 		}
@@ -228,16 +241,13 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 	for i := range edits {
 		edits[i].text = l.declaration(l.decls[i])
 	}
-	for _, d := range l.decls {
-		if d.Family != "" {
-			for i, t := range l.ts {
-				if t.text == "package" && i+1 < len(l.ts) {
-					end := l.ts[i+1].end
-					edits = append(edits, edit{t.start, end, string(source[t.start:end]) + ";import __goxide_enum_std " + strconv.Quote(SumPackage)})
-					break
-				}
+	if len(l.decls) > 0 {
+		for i, t := range l.ts {
+			if t.text == "package" && i+1 < len(l.ts) {
+				end := l.ts[i+1].end
+				edits = append(edits, edit{t.start, end, string(source[t.start:end]) + ";import __goxide_enum_std " + strconv.Quote(SumPackage)})
+				break
 			}
-			break
 		}
 	}
 	edits = append(edits, separators...)
@@ -246,12 +256,13 @@ func lowerPackageTypes(filename string, source []byte, provenance *sourcemap.Map
 		return Result{}, e
 	}
 	out += l.builtinDeclarations()
+	out += l.payloadAliases.String()
 	if provenance != nil {
 		data, m := l.fragments.Finish(out, "enums.Lower")
 		*provenance = *m
 		out = string(data)
 	}
-	return Result{Source: []byte(out), Enums: l.decls}, nil
+	return Result{Source: []byte(out), Enums: l.decls, ReferenceTemps: l.referenceTemps}, nil
 }
 func scalar(s string) bool {
 	switch s {
@@ -318,8 +329,10 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 	if d.Name == "Option" || d.Name == "Result" {
 		return d, 0, l.err(l.ts[i+1].start, "reserved builtin sum type name")
 	}
-	d.Marker = "__goxide_enum_marker_" + d.Name
+	d.Identity = d.Name
 	d.Validator = "__goxide_enum_validate_" + d.Name
+	d.Tag = "__goxide_enum_tag_" + strconv.Itoa(len(d.Name)) + "_" + d.Name
+	d.TagField = "__goxide_tag"
 	end, e := l.close(i + 2)
 	if e != nil {
 		return d, 0, e
@@ -389,7 +402,12 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 			return d, 0, l.err(t.start, "duplicate variant")
 		}
 		seen[t.text] = true
-		v := Variant{Name: t.text, Position: l.position(t.start), CaseName: "__goxide_enum_case_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text, Constructor: "__goxide_enum_new_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text}
+		v := Variant{Name: t.text, Position: l.position(t.start), Constructor: "__goxide_enum_new_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + t.text}
+		v.Tag = len(d.Variants) + 1
+		v.Field = "__goxide_payload_" + v.Name
+		v.Value = "__goxide_enum_value_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + v.Name
+		v.Project = "__goxide_enum_project_" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + v.Name
+		v.PayloadAlias = "GoxidePayload" + strconv.Itoa(len(d.Name)) + "_" + d.Name + "_" + v.Name
 		v.Message, v.HasMessage, v.Source, v.From, v.Default = attr.Message, attr.HasMessage, attr.Source, attr.From, attr.Default
 		v.SerdeRename, v.SerdeValue, v.HasSerdeRename, v.HasSerdeValue = attr.SerdeRename, attr.SerdeValue, attr.HasSerdeRename, attr.HasSerdeValue
 		j++
@@ -417,39 +435,46 @@ func (l *lowerer) parseDecl(i int) (Decl, int, error) {
 }
 func (l *lowerer) declaration(d Decl) string {
 	var b strings.Builder
-	methods := ""
+	fmt.Fprintf(&b, "type %s struct { %s __goxide_enum_std.Tag;", d.Name, d.TagField)
 	for _, v := range d.Variants {
-		if v.HasMessage {
-			methods = "Error() string; Unwrap() error;"
-		}
-	}
-	fmt.Fprintf(&b, "type %s interface { %s(); %s };\n", d.Name, d.Marker, methods)
-	for _, v := range d.Variants {
-		payload := ""
-		arg := ""
-		value := ""
 		if v.Payload != "" {
-			payload = "Value " + v.Payload
-			arg = "v " + v.Payload
-			value = "Value:v"
+			fmt.Fprintf(&b, "%s %s;", v.Field, v.Payload)
 		}
-		fmt.Fprintf(&b, "type %s struct { %s }; func (%s) %s() {}; func %s(%s) %s { return %s{%s} };\n", v.CaseName, payload, v.CaseName, d.Marker, v.Constructor, arg, d.Name, v.CaseName, value)
 	}
-	fmt.Fprintf(&b, "func %s(v %s) { switch x := v.(type) {\n", d.Validator, d.Name)
+	b.WriteString("};\n")
+	fmt.Fprintf(&b, "func %s(v %s) __goxide_enum_std.Tag { return v.%s };\n", d.Tag, d.Name, d.TagField)
 	for _, v := range d.Variants {
-		fmt.Fprintf(&b, "case %s: _ = x;", v.CaseName)
+		arg, value := "", ""
+		if v.Payload != "" {
+			arg = "v " + v.Payload
+			value = "," + v.Field + ":v"
+		}
+		fmt.Fprintf(&b, "func %s(%s) %s { return %s{%s:%d%s} };\n", v.Constructor, arg, d.Name, d.Name, d.TagField, v.Tag, value)
+		if v.Payload != "" {
+			fmt.Fprintf(&b, "type %s = %s;\n", v.PayloadAlias, v.Payload)
+			fmt.Fprintf(&b, "func %s(v %s) %s { if v.%s != %d { panic(%q) }; return v.%s };\n", v.Value, d.Name, v.Payload, d.TagField, v.Tag, "goxide: inactive enum payload "+d.Name+"::"+v.Name, v.Field)
+			fmt.Fprintf(&b, "func %s(v *%s) *%s { var zero *%s; if v == zero || v.%s != %d { panic(%q) }; return &v.%s };\n", v.Project, d.Name, v.Payload, d.Name, d.TagField, v.Tag, "goxide: inactive enum payload "+d.Name+"::"+v.Name, v.Field)
+		}
+	}
+	fmt.Fprintf(&b, "func %s(v %s) { switch v.%s {\n", d.Validator, d.Name, d.TagField)
+	for _, v := range d.Variants {
+		fmt.Fprintf(&b, "case %d:", v.Tag)
 		b.WriteString(l.payloadChecks[d.Name+"/"+v.Name])
 		b.WriteByte('\n')
 	}
 	fmt.Fprintf(&b, "default: panic(%q) } };\n", "goxide: invalid enum "+d.Name)
 	if d.Public {
+		fmt.Fprintf(&b, "func GoxideTag%d_%s(v %s) __goxide_enum_std.Tag { return %s(v) };\n", len(d.Name), d.Name, d.Name, d.Tag)
 		for _, v := range d.Variants {
-			fmt.Fprintf(&b, "type GoxideCase%d_%s_%s = %s;\n", len(d.Name), d.Name, v.Name, v.CaseName)
 			arg, call := "", ""
 			if v.Payload != "" {
 				arg, call = "v "+v.Payload, "v"
 			}
 			fmt.Fprintf(&b, "func New%s%s(%s) %s { return %s(%s) };\n", d.Name, v.Name, arg, d.Name, v.Constructor, call)
+			if v.Payload != "" {
+				fmt.Fprintf(&b, "func GoxideValue%d_%s_%s(v %s) %s { return %s(v) };\n", len(d.Name), d.Name, v.Name, d.Name, v.Payload, v.Value)
+				fmt.Fprintf(&b, "func GoxideProject%d_%s_%s(v *%s) *%s { return %s(v) };\n", len(d.Name), d.Name, v.Name, d.Name, v.Payload, v.Project)
+			}
 		}
 		fmt.Fprintf(&b, "func Validate%s(v %s) { %s(v) };\n", d.Name, d.Name, d.Validator)
 	}
@@ -590,6 +615,7 @@ func (l *lowerer) region(start, end int, edits []edit) (string, error) {
 
 type arm struct {
 	variant, bind, guard, body string
+	mode                       string
 	pos                        int
 }
 
@@ -612,9 +638,52 @@ func (l *lowerer) match(i int) (string, int, error) {
 	if e != nil {
 		return "", 0, e
 	}
-	target, e := l.region(l.ts[i].end, l.ts[j].start, nil)
+	mode := "value"
+	targetStart := l.ts[i].end
+	if i+1 < j && l.ts[i+1].text == "&" {
+		mode = "read"
+		targetStart = l.ts[i+1].end
+		if i+2 < j && l.ts[i+2].text == "mut" {
+			mode = "write"
+			targetStart = l.ts[i+2].end
+		}
+	}
+	target, e := l.region(targetStart, l.ts[j].start, nil)
 	if e != nil {
 		return "", 0, e
+	}
+	borrow := ""
+	if mode != "value" {
+		borrow = mode
+	}
+	// Pattern-head tokens alone determine whether contextual inference must keep
+	// the original place. Body references do not change the scrutinee mode.
+	for _, head := range contextPatternHeads(l.ts[j : end+1]) {
+		for k := j + head; k < end && l.ts[k].text != "if" && l.ts[k].text != "="; k++ {
+			if l.ts[k].text == "[" {
+				last, err := l.close(k)
+				if err != nil {
+					return "", 0, err
+				}
+				k = last
+				continue
+			}
+			if l.ts[k].text != "(" {
+				continue
+			}
+			if k+1 < end && l.ts[k+1].text == "ref" {
+				if borrow == "" {
+					borrow = "read"
+				}
+				if k+2 < end && l.ts[k+2].text == "mut" {
+					borrow = "write"
+				}
+			}
+			break
+		}
+	}
+	if mode == "read" && borrow == "write" {
+		return "", 0, l.err(l.ts[i].start, "mutable payload binding requires a writable match scrutinee")
 	}
 	// Preserve the arm source until the real scrutinee type is available.
 	for _, head := range contextPatternHeads(l.ts[j : end+1]) {
@@ -624,9 +693,16 @@ func (l *lowerer) match(i int) (string, int, error) {
 			if l.fragments != nil {
 				mapping = l.fragments.Input
 			}
-			body, err := encodeContextBody(l.src, l.ts[j].start, l.ts[end].end, mapping)
+			body, err := encodeContextBody(l.src, l.ts[j].start, l.ts[end].end, mapping, mode, borrow)
 			if err != nil {
 				return "", 0, err
+			}
+			if borrow != "" {
+				prefix := "&"
+				if borrow == "write" {
+					prefix = "&mut "
+				}
+				target = prefix + "(" + target + ")"
 			}
 			return "__goxide_enum_context_match(" + target + "," + strconv.Quote(body) + ")", end, nil
 		}
@@ -638,7 +714,7 @@ func (l *lowerer) match(i int) (string, int, error) {
 			k++
 			continue
 		}
-		a := arm{pos: l.ts[k].start}
+		a := arm{pos: l.ts[k].start, mode: mode}
 		nd, colon, qualified, qe := l.qualified(k)
 		if qe != nil {
 			return "", 0, qe
@@ -647,7 +723,7 @@ func (l *lowerer) match(i int) (string, int, error) {
 			if nd == nil {
 				return "", 0, l.err(a.pos, "unknown enum in pattern")
 			}
-			if d != nil && d != nd && !(d.PackagePath != "" && d.PackagePath == nd.PackagePath && d.Marker == nd.Marker) {
+			if d != nil && d != nd && !(d.PackagePath != "" && d.PackagePath == nd.PackagePath && d.Identity == nd.Identity && strings.Join(d.TypeArgs, ",") == strings.Join(nd.TypeArgs, ",")) {
 				return "", 0, l.err(a.pos, "mixed enum identities in match")
 			}
 			d = nd
@@ -658,10 +734,19 @@ func (l *lowerer) match(i int) (string, int, error) {
 				if e != nil {
 					return "", 0, e
 				}
-				if p != k+2 || l.ts[k+1].kind != token.IDENT {
+				binding := k + 1
+				if binding < p && l.ts[binding].text == "ref" {
+					a.mode = "read"
+					binding++
+					if binding < p && l.ts[binding].text == "mut" {
+						a.mode = "write"
+						binding++
+					}
+				}
+				if binding+1 != p || l.ts[binding].kind != token.IDENT || l.ts[binding].text == "ref" || l.ts[binding].text == "mut" {
 					return "", 0, l.err(a.pos, "nested or complex patterns unsupported")
 				}
-				a.bind = l.ts[k+1].text
+				a.bind = l.ts[binding].text
 				k = p + 1
 			}
 		} else if l.ts[k].kind == token.IDENT {
@@ -749,82 +834,125 @@ func (l *lowerer) match(i int) (string, int, error) {
 	l.serial++
 	id := strconv.Itoa(l.serial)
 	saved := "__goxide_enum_saved_" + id
+	owner := "__goxide_enum_owner_" + id
+	tag := "__goxide_enum_tag_saved_" + id
 	matched := "__goxide_enum_matched_" + id
 	var b strings.Builder
-	if inferred {
-		fmt.Fprintf(&b, "{ %s := (%s); __goxide_enum_infer(%s);", saved, target, saved)
-	} else {
-		fmt.Fprintf(&b, "{ var %s %s = (%s);", saved, d.Name, target)
-		fmt.Fprintf(&b, "%s(%s);", d.Validator, saved)
+	b.WriteString("{ ")
+	if borrow != "" {
+		prefix := "&"
+		if borrow == "write" {
+			prefix = "&mut "
+		}
+		fmt.Fprintf(&b, "%s := %s(%s);", owner, prefix, target)
+		target = "*" + owner
 	}
-	// A plain variant chain needs no matched flag. Unlike a type switch, an
-	// if/else chain does not intercept a user arm's unlabelled break/continue.
+	if inferred {
+		fmt.Fprintf(&b, "%s := (%s); __goxide_enum_infer(%s);", saved, target, saved)
+	} else {
+		fmt.Fprintf(&b, "var %s %s = (%s); %s(%s); %s := %s(%s);", saved, d.Name, target, d.Validator, saved, tag, d.Tag, saved)
+	}
+	// Only these compiler-declared slots may be uninitialized reference IR.
+	// Each is assigned under the same immutable entry tag that guards its uses.
+	handles := map[string]string{}
+	handleModes := map[string]string{}
+	variants := map[string]Variant{}
+	for _, v := range d.Variants {
+		variants[v.Name] = v
+		handleMode := ""
+		for _, a := range arms {
+			if a.variant == v.Name && a.bind != "" && a.bind != "_" && a.mode != "value" {
+				if handleMode == "" || a.mode == "write" {
+					handleMode = a.mode
+				}
+			}
+		}
+		if handleMode == "" {
+			continue
+		}
+		h := "__goxide_enum_ref_" + id + "_" + v.Name
+		handles[v.Name] = h
+		handleModes[v.Name] = handleMode
+		l.referenceTemps[h] = true
+		payload := v.PayloadAlias
+		if payload == "" {
+			digest := sha256.Sum256([]byte(l.filename + "\x00" + v.Project + "\x00" + v.Payload))
+			payload = fmt.Sprintf("__goxide_enum_payload_binding_%x", digest[:12])
+			if l.payloadAliasSet == nil {
+				l.payloadAliasSet = map[string]bool{}
+			}
+			if !l.payloadAliasSet[payload] {
+				fmt.Fprintf(&l.payloadAliases, "\ntype %s = %s;\n", payload, v.Payload)
+				l.payloadAliasSet[payload] = true
+			}
+		}
+		permission := "&"
+		input := "&(*" + owner + ")"
+		if handleMode == "write" {
+			permission = "&mut "
+			input = owner
+		}
+		fmt.Fprintf(&b, "var %s %s%s; if %s == %d {%s = __goxide_enum_project_%s(%s,%s)};", h, permission, payload, tag, v.Tag, h, handleMode, v.Project, input)
+	}
+	bind := func(a arm) {
+		if a.bind == "" || a.bind == "_" {
+			return
+		}
+		expression := saved
+		if a.variant != "" {
+			v := variants[a.variant]
+			if a.mode == "value" {
+				expression = v.Value + "(" + saved + ")"
+			} else {
+				expression = handles[a.variant]
+				if a.mode == "read" && handleModes[a.variant] == "write" {
+					expression = "&(*" + expression + ")"
+				}
+			}
+		} else if a.mode != "value" {
+			expression = owner
+			if a.mode == "read" {
+				expression = "&(*" + owner + ")"
+			}
+		}
+		fmt.Fprintf(&b, "%s := %s; _ = %s;", a.bind, expression, a.bind)
+	}
 	plain := !inferred
 	for _, a := range arms {
 		plain = plain && a.variant != "" && a.guard == ""
 	}
 	if plain {
 		for index, a := range arms {
-			var v Variant
-			for _, candidate := range d.Variants {
-				if candidate.Name == a.variant {
-					v = candidate
-					break
-				}
-			}
 			if index > 0 {
 				b.WriteString(" else ")
 			}
-			tmp := "__goxide_enum_payload_" + id
-			if d.Family == "Option" && v.Name == "None" {
-				// Keep the constructor rather than spelling nil in caller scope.
-				fmt.Fprintf(&b, "if __goxide_enum_none_%s := %s(); %s == __goxide_enum_none_%s {", id, v.Constructor, saved, id)
-			} else {
-				fmt.Fprintf(&b, "if %s, __goxide_enum_ok_%s := %s.(%s); __goxide_enum_ok_%s { _ = %s;", tmp, id, saved, v.CaseName, id, tmp)
-			}
-			if a.bind != "" && a.bind != "_" {
-				fmt.Fprintf(&b, "%s := %s.Value; _ = %s;", a.bind, tmp, a.bind)
-			}
+			fmt.Fprintf(&b, "if %s == %d {", tag, variants[a.variant].Tag)
+			bind(a)
 			b.WriteString(a.body)
 			b.WriteString("\n}")
 		}
-		b.WriteString("\n}")
-		return b.String(), end, nil
+	} else {
+		fmt.Fprintf(&b, "%s := (0 != 0); _ = %s;", matched, matched)
+		for _, a := range arms {
+			fmt.Fprintf(&b, "if !%s {", matched)
+			if a.variant != "" {
+				fmt.Fprintf(&b, "if %s == %d {", tag, variants[a.variant].Tag)
+			}
+			bind(a)
+			if a.guard != "" {
+				fmt.Fprintf(&b, "if %s {", a.guard)
+			}
+			fmt.Fprintf(&b, "%s = (0 == 0); %s\n", matched, a.body)
+			if a.guard != "" {
+				b.WriteString("}")
+			}
+			if a.variant != "" {
+				b.WriteString("}")
+			}
+			b.WriteString("};")
+		}
 	}
-	fmt.Fprintf(&b, "%s := (0 != 0); _ = %s;\n", matched, matched)
-	for _, a := range arms {
-		fmt.Fprintf(&b, "if !%s {\n", matched)
-		if a.variant != "" {
-			var v Variant
-			for _, x := range d.Variants {
-				if x.Name == a.variant {
-					v = x
-				}
-			}
-			tmp := "__goxide_enum_payload_" + id
-			if d.Family == "Option" && v.Name == "None" {
-				fmt.Fprintf(&b, "__goxide_enum_none_%s := %s(); if %s == __goxide_enum_none_%s {\n", id, v.Constructor, saved, id)
-			} else {
-				fmt.Fprintf(&b, "if %s, __goxide_enum_ok_%s := %s.(%s); __goxide_enum_ok_%s { _ = %s;\n", tmp, id, saved, v.CaseName, id, tmp)
-			}
-			if a.bind != "" && a.bind != "_" {
-				fmt.Fprintf(&b, "%s := %s.Value; _ = %s;\n", a.bind, tmp, a.bind)
-			}
-		} else if a.bind != "_" {
-			fmt.Fprintf(&b, "%s := %s; _ = %s;\n", a.bind, saved, a.bind)
-		}
-		if a.guard != "" {
-			fmt.Fprintf(&b, "if %s {\n", a.guard)
-		}
-		fmt.Fprintf(&b, "%s = (0 == 0); %s\n", matched, a.body)
-		if a.guard != "" {
-			b.WriteString("}\n")
-		}
-		if a.variant != "" {
-			b.WriteString("}\n")
-		}
-		b.WriteString("}\n")
-	}
+
 	b.WriteString("}")
 	return b.String(), end, nil
 }

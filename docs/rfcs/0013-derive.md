@@ -88,11 +88,11 @@ func cloneHandle(value *Handle) Handle {
 ```goxide
 #[derive(Clone)]
 struct Exclusive {
-    value mut& int
+    value &mut int
 }
 ```
 
-依赖借用类型规则；若 `mut& int` 尚无明确 Clone 协议，派生按缺协议拒绝；mut& 不承诺独占，不能因复制别名本身拒绝（D19/D20）。
+依赖借用类型规则；若 `&mut int` 尚无明确 Clone 协议，派生按缺协议拒绝；&mut 不承诺独占，不能因复制别名本身拒绝（D19/D20）。
 结构合法性若已在更早阶段拒绝，也不得由 derive 把它变成可接受程序。
 
 ## 拒绝与边界

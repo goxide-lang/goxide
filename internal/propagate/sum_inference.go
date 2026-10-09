@@ -154,6 +154,13 @@ func (l *lowering) registerSum(family string, args []types.Type) (enums.Decl, er
 	for _, owner := range owners {
 		ds := l.cfg.FileFamilies[owner]
 		for _, v := range ds {
+			if v.Family == "" {
+				bound, err := l.bindCompanionEnum(v, owner)
+				if err != nil {
+					return d, err
+				}
+				v = bound
+			}
 			v.LookupName = ""
 			decls = append(decls, v)
 		}
@@ -305,11 +312,6 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 				fatal = l.fail(c, "invalid contextual match")
 				return false
 			}
-			d, ok := l.matchedEnum(l.info.TypeOf(c.Args[0]))
-			if !ok {
-				pending = l.fail(c, "cannot infer match family from scrutinee")
-				continue
-			}
 			literal, ok := c.Args[1].(*ast.BasicLit)
 			if !ok {
 				fatal = l.fail(c, "invalid contextual match body")
@@ -320,10 +322,28 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 				fatal = err
 				return false
 			}
-			bodySource, mapping, err := enums.DecodeContextBody(encoded)
+			bodySource, mapping, mode, borrow, err := enums.DecodeContextBody(encoded)
 			if err != nil {
 				fatal = err
 				return false
+			}
+			scrutinee := l.info.TypeOf(c.Args[0])
+			if borrow != "" {
+				element, permission, ok := refs.PreparedReferenceElement(c.Args[0], l.info, l.pkg)
+				if !ok {
+					pending = l.fail(c, "cannot infer borrowed match family from qualified reference")
+					continue
+				}
+				if borrow == "write" && permission != refs.Write {
+					fatal = l.fail(c, "writable match requires a writable reference")
+					return false
+				}
+				scrutinee = element
+			}
+			d, ok := l.matchedEnum(scrutinee)
+			if !ok {
+				pending = l.fail(c, "cannot infer match family from scrutinee")
+				continue
 			}
 			// Token-aware rewriting avoids touching comments, strings or arm expressions.
 			body, err := enums.BindContextPatternsMapped(string(bodySource), d, mapping)
@@ -332,11 +352,25 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 				return false
 			}
 			fragments := sourcemap.Fragments{Input: mapping}
-			source, mapping := fragments.Finish("package "+l.file.Name.Name+";func goxideContextStatement(){match goxideContextValue "+fragments.Copy(0, len(body))+"}", "contextual match wrapper")
+			target := "goxideContextValue"
+			if borrow != "" {
+				target = "*" + target
+			}
+			if mode == "read" {
+				target = "&" + target
+			} else if mode == "write" {
+				target = "&mut " + target
+			}
+			source, mapping := fragments.Finish("package "+l.file.Name.Name+";func goxideContextStatement(){match "+target+" "+fragments.Copy(0, len(body))+"}", "contextual match wrapper")
 			lowered, err := enums.LowerPackage("<contextual match>", source, mapping, append(l.cfg.Families, d), nil)
 			if err != nil {
 				fatal = err
 				return false
+			}
+			for name := range lowered.ReferenceTemps {
+				if l.cfg.MatchReferenceTemps != nil {
+					l.cfg.MatchReferenceTemps[name] = true
+				}
 			}
 			// Enum constructors have now been lowered. Remaining static type paths
 			// get a same-width Go view while copied member tokens keep their source
@@ -383,14 +417,16 @@ func (l *lowering) resolveSumPatterns() (bool, error, error) {
 			}
 			for _, decl := range f.Decls {
 				key := declName(decl)
-				if strings.HasPrefix(key, "__goxide_ref_") && !present[key] {
+				if (strings.HasPrefix(key, "__goxide_ref_") || strings.HasPrefix(key, "__goxide_enum_payload_binding_")) && !present[key] {
 					l.file.Decls = append(l.file.Decls, decl)
 					present[key] = true
 				}
 			}
 			for _, decl := range f.Decls {
 				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "goxideContextStatement" {
-					// The enum lowering saves its operand exactly once as the first assignment.
+					// The first assignment is either the value snapshot or the qualified
+					// owner reference. Replacing that RHS preserves the original place,
+					// permissions and single evaluation; never replace the later snapshot.
 					for _, s := range fn.Body.List {
 						if b, ok := s.(*ast.BlockStmt); ok && len(b.List) > 0 {
 							if a, ok := b.List[0].(*ast.AssignStmt); ok {

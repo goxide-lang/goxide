@@ -1,0 +1,31 @@
+package main
+
+enum Counter { Count(int), Empty, }
+
+func edit(counter &mut Counter) &mut int {
+    match *counter {
+        Counter::Count(ref mut value) => { return value },
+        Counter::Empty => { panic("empty counter") },
+    }
+    panic("exhaustive match")
+}
+
+func read(counter Counter) int {
+    return match counter { Counter::Count(value) => value, Counter::Empty => 0 }
+}
+
+func main() {
+    counter := Counter::Count(1)
+    before := counter
+    saved := edit(&mut counter)
+    match &mut counter {
+        Counter::Count(value) => { *value += 1 },
+        Counter::Empty => {},
+    }
+    *saved += 3
+    println(read(counter), read(before)) // 5 1: the copy has independent storage.
+    match &counter {
+        Counter::Count(value) => { println(*value) },
+        Counter::Empty => {},
+    }
+}

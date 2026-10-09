@@ -27,8 +27,9 @@ func main(){
   again,e:=serdejson::Encode(func(s serde::Serializer)error{return SerializeEvent(s,&out)});if e!=nil||string(data)!=string(again){panic("roundtrip")};fmt::Println(string(data))
  }
  var bad Event
- if _,e:=serdejson::Encode(func(s serde::Serializer)error{return SerializeEvent(s,&bad)});e==nil{panic("accepted nil")}
- nested:=Event::Status(nil)
+ if _,e:=serdejson::Encode(func(s serde::Serializer)error{return SerializeEvent(s,&bad)});e==nil{panic("accepted invalid zero tag")}
+ var invalidStatus Status
+ nested:=Event::Status(invalidStatus)
  if _,e:=serdejson::Encode(func(s serde::Serializer)error{return SerializeEvent(s,&nested)});e==nil{panic("accepted invalid nested enum")}
  for _,text:=range []string{"null","\"Unknown\"","{\"Text\":null}","{\"Status\":{\"Code\":128}}"}{if e:=serdejson::Decode([]byte(text),func(d serde::Deserializer)error{_,e:=DeserializeEvent(d);return e});e==nil{panic("accepted invalid JSON")}}
 }

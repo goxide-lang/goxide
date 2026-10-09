@@ -13,14 +13,15 @@ import (
 // contextBody is compiler IR. Its token origins are copied at serialization,
 // before contextual type inference delays lowering the arm expressions.
 type contextBody struct {
-	Version  int
-	Source   string
-	Segments []sourcemap.Segment
-	Stages   []string
+	Version      int
+	Mode, Borrow string
+	Source       string
+	Segments     []sourcemap.Segment
+	Stages       []string
 }
 
-func encodeContextBody(source []byte, start, end int, mapping *sourcemap.Map) (string, error) {
-	body := contextBody{Version: 1, Source: string(source[start:end])}
+func encodeContextBody(source []byte, start, end int, mapping *sourcemap.Map, mode, borrow string) (string, error) {
+	body := contextBody{Version: 2, Mode: mode, Borrow: borrow, Source: string(source[start:end])}
 	if mapping != nil {
 		body.Segments = mapping.Copy(start, end, 0)
 		body.Stages = append([]string(nil), mapping.Stages...)
@@ -31,21 +32,24 @@ func encodeContextBody(source []byte, start, end int, mapping *sourcemap.Map) (s
 
 // DecodeContextBody restores the exact source fragment recorded by the enum
 // lowerer. Plain strings are not an alternate IR representation.
-func DecodeContextBody(encoded string) ([]byte, *sourcemap.Map, error) {
+func DecodeContextBody(encoded string) ([]byte, *sourcemap.Map, string, string, error) {
 	var body contextBody
 	if err := json.Unmarshal([]byte(encoded), &body); err != nil {
-		return nil, nil, fmt.Errorf("invalid contextual match payload: %w", err)
+		return nil, nil, "", "", fmt.Errorf("invalid contextual match payload: %w", err)
 	}
-	if body.Version != 1 {
-		return nil, nil, fmt.Errorf("invalid contextual match payload version")
+	if body.Version != 2 {
+		return nil, nil, "", "", fmt.Errorf("invalid contextual match payload version")
+	}
+	if (body.Mode != "value" && body.Mode != "read" && body.Mode != "write") || (body.Borrow != "" && body.Borrow != "read" && body.Borrow != "write") {
+		return nil, nil, "", "", fmt.Errorf("invalid contextual match binding mode")
 	}
 	source := []byte(body.Source)
 	for _, s := range body.Segments {
 		if s.Start < 0 || s.End < s.Start || s.End > len(source) {
-			return nil, nil, fmt.Errorf("invalid contextual match token range")
+			return nil, nil, "", "", fmt.Errorf("invalid contextual match token range")
 		}
 	}
-	return source, &sourcemap.Map{Source: source, Segments: body.Segments, Stages: body.Stages}, nil
+	return source, &sourcemap.Map{Source: source, Segments: body.Segments, Stages: body.Stages}, body.Mode, body.Borrow, nil
 }
 
 // BindContextPatterns substitutes only qualified variant heads at arm depth.

@@ -2,6 +2,8 @@
 
 结论：**MVP 尚未完成；RFC 的 partial 不表示退出 MVP。** 现有路线图主要按实现切片追加，旧“未开始”、新“已通过”、设计待决和当前工程限制同时存在。不能据标题、网站状态或某次阶段停止，把未闭环的已确认工作改成远期。本表恢复可追踪的工作项，不批准新语法、不改变生产代码、不创建 Issues、不部署。
 
+2026-10-09 A20 更新：已按 [#14](https://github.com/goxide-lang/goxide/issues/14) 的 pre-MVP 决定实施内联独立 payload 槽、`ref` / `ref mut` 和基本 `match &e` / `match &mut e`。当前合同与真实验收入口见[原位 payload](design/enum-payload-borrows.md)；精确提交的通过状态以 Draft PR 和 CI 为准。本轮不新增借用风险检查，后续独立见 [#17](https://github.com/goxide-lang/goxide/issues/17)。下表版本为原始审计基线，不能用它恢复旧 ABI 或旧语法。
+
 ## 1. 审计基线与判定规则
 
 | 对象 | 本次核对版本 / 证据 |
@@ -98,7 +100,7 @@ MVP 归属以 [决策登记](design/decisions.md) D14/D21–D23/D27–D36、RFC 
 | A17 target/dep 作者闭环 | E+D，RFC0022/25 | 无 `.gox` 测试入口、run 程序参数、非 host target；依赖 lib 未引用的增强子包不保证构建，module DAG 不支持所有包级无环交错 | 逐项核对首版范围，保留已批准多 bin/example/0–1lib 成果；新增子包按实际 import 图、missing edge、跨 module metadata；跨目标须 host/target 分离，不能引用 CLI 交叉构建冒充用户项目支持 |
 | A18 workspace/host resolver 与锁运维 | E+D，RFC0026 主合同已做，扩展 Proposed | 统一 host 依赖/继承 resolver、dev 分组、weak/profile、精细 lock update、自动物化/发布无实现；全局 trust lease 有并发限制 | 分角色 feature/来源闭包、根锁统一版本、更新限定来源且不动无关 pin；搬移/复制锁离线、未选成员不激活、脚本新版本重新许可。扩展首版范围待确认，不重做 workspace 核心 |
 | A19 独立 module 宏发布合同与实现 | D→E，RFC0011/0021、D30 增强消费目标 | source registry 同 module 可用；仅生成 Go/metadata 的宏无法反序列化，mixed glob 明确拒绝 | 确定源码/规则承载、版本/配置闭包及定义点身份；两 module source/version 渠道、缓存篡改/旧 schema/internal helper/递归预算；普通 Go 消费不需展开器 |
-| A20 原位 match mut& 的表示与实现 | D→E，D29 首版要求；独立 enum 后阶段 | 当前 interface+值 case 无可写原 payload 地址；不能取副本地址，不能偷偷改普通赋值为共享 | 按 [place 研究](rfcs/research/match-place-and-expression-options.md) 收敛 ABI；借用改原槽、enum 复制不变、旧别名与 serde/跨模块/Go API 回归；完整风险分析不是依赖 |
+| A20 原位 match payload 引用 | pre-MVP 固定槽已实施，整合审查中 | 显式 ref/ref mut 与基本自动绑定复用原位引擎；普通 enum 浅复制；无新增生命周期、冲突或替换失效检查 | [当前合同](design/enum-payload-borrows.md)、[真实 CLI 验收](../tests/acceptance/enum_payload_borrow_test.go)；std ABI 3 / enum metadata 9，跨模块/serde/派生/Go 指针与权限反例分别验收，完整风险分析在 #17 |
 | A21 自然 Go pointer 桥复合用例 | E+D，D31，RFC0006 | 标量已成；struct/slice/map/返回/callback/定义指针边界未全通 | 真实 go/types 同型判断、原存储/GC/留存、readonly 不升级；递归视图语义先定，不用 unsafe 强转或 default-deny |
 | A22 普通引用类型/局部权限精度 | E+D，D21/RFC0005 | named/multiple result、引用 method/callback/container，以及 switch/select/goto/暴露字段部分更新精度 | 按明确合法例逐个补，旧 alias/兄弟字段/同步重绑仍拒权限擦除；不要求 W01–W06、不发明 escape 禁令；Arc API D08 另定 |
 | A23 trait/declare/关联类型/固有 impl 首版切片 | D→E，D04–D07/R24/RFC0002–04/19/20 | 方向已确认、精确 MVP 范围待确认；Default/Eq 特例不是通用实现；“完整 trait 后置”不能撤销全部具体 impl | 先 receiver/固定 wrapper 元数据和非泛型具体调用，后普通 Item/泛型证据；T/D/A/W/C 用例按各 RFC 编号转测试；优化不得变 impl/动态身份 |

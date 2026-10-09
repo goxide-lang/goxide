@@ -153,12 +153,13 @@ func TestGoHelpers(t *testing.T){v:=a.Out{V:m.Output{N:9}};b,e:=serdejson.Encode
 }
 
 const externalSerdeAssertions = `package app
+import __borrow_std "github.com/goxide-lang/std/sum"
 import("testing";"errors";"reflect";"strconv";"strings";"encoding/json";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";m "wire.example/lib/model";other "wire.example/lib/other")
 const valid="{\"V\":{\"Item\":{\"N\":7,\"Name\":\"business\"}},\"Items\":[],\"Index\":{},\"Pair\":[{\"N\":1,\"Name\":\"pair\"}],\"Maybe\":null}"
 func enc(v Wrap)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeWrap(s,&v)})}
 func detail(t *testing.T,e error,kind string,path []serde.PathSegment){t.Helper();var d *serde.Error;if !errors.As(e,&d)||d.Kind!=kind||!reflect.DeepEqual(d.Path,path){t.Fatalf("error %v %#v want %s %#v",e,d,kind,path)}}
 func TestExternalRoundTripAndOption(t *testing.T){
- v,e:=serdejson.Unmarshal([]byte(valid),DeserializeWrap);if e!=nil||v.Opt!=nil||v.Items==nil||v.Index==nil{t.Fatal(v,e)}
+ v,e:=serdejson.Unmarshal([]byte(valid),DeserializeWrap);if e!=nil||__borrow_std.TagOption(v.Opt)!=0||v.Items==nil||v.Index==nil{t.Fatal(v,e)}
  b,e:=enc(v);if e!=nil{t.Fatal(e)};w,e:=serdejson.Unmarshal(b,DeserializeWrap);if e!=nil||!reflect.DeepEqual(v,w){t.Fatal(string(b),w,e)}
  for _,value:=range []string{"null","{\"N\":3,\"Name\":\"option\"}"}{input:=strings.TrimSuffix(valid,"}")+",\"Opt\":"+value+"}";v,e:=serdejson.Unmarshal([]byte(input),DeserializeWrap);if e!=nil{t.Fatal(e)};b,e:=enc(v);if e!=nil||!strings.Contains(string(b),"\"Opt\":"+value){t.Fatal(string(b),e)}}
  // Existing serde sequence/map projection emits empty for nil, then decodes nonnil empty.
@@ -179,6 +180,5 @@ func TestExternalErrors(t *testing.T){
  _,e=serdejson.Unmarshal([]byte(strings.TrimSuffix(valid,"}")+",\"extra\":{\"ignored\":[1,2]}}"),DeserializeWrap);if e!=nil{t.Fatal(e)}
  _,e=serdejson.Unmarshal([]byte(strings.TrimSuffix(valid,"}")+",\"extra\":"+strings.Repeat("[",serdejson.MaxDepth+2)+"0"+strings.Repeat("]",serdejson.MaxDepth+2)+"}"),DeserializeWrap);var d *serde.Error;if !errors.As(e,&d)||d.Kind!="Limit"{t.Fatal("skip budget lost",e)}
 }
-type invalid struct{m.E}
-func TestExternalInvalidBoundary(t *testing.T){v,e:=serdejson.Unmarshal([]byte(valid),DeserializeWrap);if e!=nil{t.Fatal(e)};for _,x:=range []m.E{nil,(*m.GoxideCase1_E_Empty)(nil),&m.GoxideCase1_E_Empty{},(*invalid)(nil),invalid{}}{v.V=x;_,e:=enc(v);detail(t,e,serde.Type,[]serde.PathSegment{{Kind:"Field",Name:"V"}})}}
+func TestExternalInvalidBoundary(t *testing.T){v,e:=serdejson.Unmarshal([]byte(valid),DeserializeWrap);if e!=nil{t.Fatal(e)};for _,x:=range []m.E{{}}{v.V=x;_,e:=enc(v);detail(t,e,serde.Type,[]serde.PathSegment{{Kind:"Field",Name:"V"}})}}
 `

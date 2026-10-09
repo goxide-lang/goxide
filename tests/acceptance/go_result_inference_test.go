@@ -78,7 +78,7 @@ type ChanError chan int
 func(ChanError)Error()string{return "chan"}
 func Chan(v ChanError)Result[struct{},ChanError]{f:=func()ChanError{return v};return go_result!(f())}
 pub enum Event{A,B,}
-func invalid()([]Event,error){return []Event{nil},nil}
+func invalid()([]Event,error){return []Event{{}},nil}
 func ValidateNested(){r:=go_result!(invalid());match r {_=>{panic("validator missed")},}}
 `)
 	packagesWrite(t, source, "z.gox", `package app
@@ -94,11 +94,13 @@ var InferredGlobal=go_result!(pointer(true))
 		t.Fatal("unstable typed adapter output")
 	}
 	packagesWrite(t, generated, "inference_test.go", `package app
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import("testing";"errors";"io";"reflect";"strings")
-func TestPointerAndNamed(t *testing.T){if v:=Pointer(true).(GoxideResultOk[int,*Failure]).Value;v!=7{t.Fatal(v)};if e:=Pointer(false).(GoxideResultErr[int,*Failure]).Value;e!=sentinel{t.Fatal(e)};if e:=Explicit(false).(GoxideResultErr[int,*Failure]).Value;e!=sentinel{t.Fatal(e)};if _,ok:=Named(0).(GoxideResultOk[int,NamedError]);!ok{t.Fatal("named nil")};e:=Named(1).(GoxideResultErr[int,NamedError]).Value;var ptr *Failure;if e==nil||!errors.As(e,&ptr)||ptr!=nil{t.Fatal("interface typed nil")};if e:=Named(2).(GoxideResultErr[int,NamedError]).Value;e!=sentinel{t.Fatal(e)};if e:=Erased().(GoxideResultErr[int,error]).Value;e==nil||!errors.As(e,&ptr){t.Fatal("erased")};if _,ok:=Unit().(GoxideResultOk[struct{},NamedError]);!ok{t.Fatal("unit")};if _,ok:=UnitKeep().(GoxideResultOk[struct{},struct{Value struct{};Err NamedError}]);!ok{t.Fatal("keep unit")};if v:=Hygiene().(GoxideResultOk[int,*Failure]).Value;v!=7{t.Fatal(v)}}
-func TestPreserve(t *testing.T){e:=Retained(false).(GoxideResultErr[int,Partial]).Value;if e.Value!=4||e.Err!=sentinel{t.Fatal(e)};v:=Propagate(false).(GoxideResultErr[string,Partial]).Value;if v!=e{t.Fatal(v)};boxed:=BoxPartial().(GoxideResultErr[string,any]).Value.(Partial);if boxed!=e{t.Fatal(boxed)};p:=Reader().(GoxideResultErr[int,struct{Value int;Err error}]).Value;if p.Value!=3||!errors.Is(p.Err,io.ErrUnexpectedEOF){t.Fatal(p)}}
-func TestFrames(t *testing.T){trace=nil;if e:=Nested(false).(GoxideResultErr[int,error]).Value;e!=sentinel||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(e,trace)};trace=nil;if n:=Nested(true).(GoxideResultOk[int,error]).Value;n!=7||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(n,trace)};trace=nil;if n:=AnyOrder().(GoxideResultOk[int,*Failure]).Value;n!=2||!reflect.DeepEqual(trace,[]int{1,2,3}){t.Fatal(n,trace)};if n:=Variadic().(GoxideResultOk[int,*Failure]).Value;n!=7{t.Fatal(n)};if Recover()!="boom"{t.Fatal("recover")};if n:=Cross().(GoxideResultOk[int,*Failure]).Value;n!=8{t.Fatal(n)};if n:=NestedAdapter().(GoxideResultOk[int,error]).Value;n!=8{t.Fatal(n)};if n:=Parse("9").(GoxideResultOk[int,error]).Value;n!=9{t.Fatal(n)}}
-func TestNilable(t *testing.T){if _,ok:=Slice(false).(GoxideResultOk[int,SliceError]);!ok{t.Fatal("nil slice")};if e:=Slice(true).(GoxideResultErr[int,SliceError]).Value;e==nil||len(e)!=0{t.Fatal(e)};if _,ok:=Map(nil).(GoxideResultOk[struct{},MapError]);!ok{t.Fatal("nil map")};if e:=Map(MapError{}).(GoxideResultErr[struct{},MapError]).Value;e==nil{t.Fatal(e)};if _,ok:=Func(nil).(GoxideResultOk[struct{},FuncError]);!ok{t.Fatal("nil func")};if e:=Func(func(){}).(GoxideResultErr[struct{},FuncError]).Value;e==nil{t.Fatal("nonnull func")};if _,ok:=Chan(nil).(GoxideResultOk[struct{},ChanError]);!ok{t.Fatal("nil chan")};if e:=Chan(make(ChanError)).(GoxideResultErr[struct{},ChanError]).Value;e==nil{t.Fatal("nonnull chan")}}
+func TestPointerAndNamed(t *testing.T){if v:=__borrow_std.ValueOk(Pointer(true));v!=7{t.Fatal(v)};if e:=__borrow_std.ValueErr(Pointer(false));e!=sentinel{t.Fatal(e)};if e:=__borrow_std.ValueErr(Explicit(false));e!=sentinel{t.Fatal(e)};if ok := __borrow_std.TagResult(Named(0))==1;!ok{t.Fatal("named nil")};e:=__borrow_std.ValueErr(Named(1));var ptr *Failure;if e==nil||!errors.As(e,&ptr)||ptr!=nil{t.Fatal("interface typed nil")};if e:=__borrow_std.ValueErr(Named(2));e!=sentinel{t.Fatal(e)};if e:=__borrow_std.ValueErr(Erased());e==nil||!errors.As(e,&ptr){t.Fatal("erased")};if ok := __borrow_std.TagResult(Unit())==1;!ok{t.Fatal("unit")};if ok := __borrow_std.TagResult(UnitKeep())==1;!ok{t.Fatal("keep unit")};if v:=__borrow_std.ValueOk(Hygiene());v!=7{t.Fatal(v)}}
+func TestPreserve(t *testing.T){e:=__borrow_std.ValueErr(Retained(false));if e.Value!=4||e.Err!=sentinel{t.Fatal(e)};v:=__borrow_std.ValueErr(Propagate(false));if v!=e{t.Fatal(v)};boxed:=__borrow_std.ValueErr(BoxPartial()).(Partial);if boxed!=e{t.Fatal(boxed)};p:=__borrow_std.ValueErr(Reader());if p.Value!=3||!errors.Is(p.Err,io.ErrUnexpectedEOF){t.Fatal(p)}}
+func TestFrames(t *testing.T){trace=nil;if e:=__borrow_std.ValueErr(Nested(false));e!=sentinel||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(e,trace)};trace=nil;if n:=__borrow_std.ValueOk(Nested(true));n!=7||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(n,trace)};trace=nil;if n:=__borrow_std.ValueOk(AnyOrder());n!=2||!reflect.DeepEqual(trace,[]int{1,2,3}){t.Fatal(n,trace)};if n:=__borrow_std.ValueOk(Variadic());n!=7{t.Fatal(n)};if Recover()!="boom"{t.Fatal("recover")};if n:=__borrow_std.ValueOk(Cross());n!=8{t.Fatal(n)};if n:=__borrow_std.ValueOk(NestedAdapter());n!=8{t.Fatal(n)};if n:=__borrow_std.ValueOk(Parse("9"));n!=9{t.Fatal(n)}}
+func TestNilable(t *testing.T){if ok := __borrow_std.TagResult(Slice(false))==1;!ok{t.Fatal("nil slice")};if e:=__borrow_std.ValueErr(Slice(true));e==nil||len(e)!=0{t.Fatal(e)};if ok := __borrow_std.TagResult(Map(nil))==1;!ok{t.Fatal("nil map")};if e:=__borrow_std.ValueErr(Map(MapError{}));e==nil{t.Fatal(e)};if ok := __borrow_std.TagResult(Func(nil))==1;!ok{t.Fatal("nil func")};if e:=__borrow_std.ValueErr(Func(func() {}));e==nil{t.Fatal("nonnull func")};if ok := __borrow_std.TagResult(Chan(nil))==1;!ok{t.Fatal("nil chan")};if e:=__borrow_std.ValueErr(Chan(make(ChanError)));e==nil{t.Fatal("nonnull chan")}}
 func TestNestedValidation(t *testing.T){defer func(){p:=recover();if p==nil||!strings.Contains(p.(string),"invalid enum"){t.Fatal(p)}}();ValidateNested()}
 `)
 	packagesCommand(t, generated, tool, true, "test", "-race", "-count=1", "-v", "./...")
@@ -182,7 +184,7 @@ func TestGoResultInferenceModules(t *testing.T) {
  type Partial = struct{Value Count; Err *Error}
  func Wrapped(ok bool)Result[Count,Partial]{return go_result_keep!(Read(ok))}
  pub enum Event{Ready,Failed,}
- func InvalidEvents()([]Event,error){return []Event{nil},nil}
+ func InvalidEvents()([]Event,error){return []Event{{}},nil}
  `)
 	packagesWrite(t, producer, "other/event.gox", `package other
  pub enum Event{Other,Failed,}
@@ -204,9 +206,9 @@ func TestGoResultInferenceModules(t *testing.T) {
  func Forward()Result[string,p::Partial]{_=p::Wrapped(false)?;return Result[string,p::Partial]::Ok("unexpected")}
  func Match()int{return match p::Wrapped(false){p::Result[p::Count,p::Partial]::Ok(n)=>int(n),p::Result[p::Count,p::Partial]::Err(e)=>int(e.Value)}}
  func Cross()Result[p::Count,*p::Error]{n:=Inferred?;return Result[p::Count,*p::Error]::Ok(n)}
- func localEvents()(Events,error){return Events{nil},nil}
+ func localEvents()(Events,error){return Events{{}},nil}
  func NamedForeignInvalid(){r:=go_result!(localEvents());match r {_=>{panic("missed named foreign enum")},}}
- func ExplicitForeignInvalid(){r:=Result[Events,error]::Ok(Events{nil});match r {_=>{panic("missed explicit foreign enum")},}}
+ func ExplicitForeignInvalid(){r:=Result[Events,error]::Ok(Events{{}});match r {_=>{panic("missed explicit foreign enum")},}}
  func ForeignInvalid(){r:=go_result!(p::InvalidEvents());match r {_=>{panic("missed foreign enum")},}}
  `)
 	packagesWrite(t, consumer, "z.gox", `package consumer
@@ -224,8 +226,8 @@ func TestGoResultInferenceModules(t *testing.T) {
  func right()(Right,error){return m::Events()}
  `)
 	packagesWrite(t, consumer, "scope.gox", `package consumer
- func invalidLeft()(Left,error){return Left{nil},nil}
- func invalidRight()(Right,error){return Right{nil},nil}
+ func invalidLeft()(Left,error){return Left{{}},nil}
+ func invalidRight()(Right,error){return Right{{}},nil}
  func LeftInvalid(){r:=go_result!(invalidLeft());match r {_=>{panic("missed left")},}}
  func RightInvalid(){r:=go_result!(invalidRight());match r {_=>{panic("missed right")},}}
  func RightValid(){r:=go_result!(right());match r {_=>{},}}
@@ -233,8 +235,10 @@ func TestGoResultInferenceModules(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "consumer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, consumer)
 	packagesWrite(t, out, "consumer_test.go", `package consumer
+import __borrow_std "github.com/goxide-lang/std/sum"
+
  import("testing";"strings";p "inferred.example/producer")
- func TestIdentity(t *testing.T){if n:=Native(true).(GoxideResultOk[p.Count,*p.Error]).Value;n!=7{t.Fatal(n)};if e:=Native(false).(GoxideResultErr[p.Count,*p.Error]).Value;e!=p.Sentinel{t.Fatal(e)};a:=Keep().(GoxideResultErr[p.Count,p.Partial]).Value;b:=Forward().(GoxideResultErr[string,p.Partial]).Value;if a.Value!=4||a.Err!=p.Sentinel||a!=b||Match()!=4{t.Fatal(a,b)};if n:=Cross().(GoxideResultOk[p.Count,*p.Error]).Value;n!=7{t.Fatal(n)}}
+ func TestIdentity(t *testing.T){if n:=__borrow_std.ValueOk(Native(true));n!=7{t.Fatal(n)};if e:=__borrow_std.ValueErr(Native(false));e!=p.Sentinel{t.Fatal(e)};a:=__borrow_std.ValueErr(Keep());b:=__borrow_std.ValueErr(Forward());if a.Value!=4||a.Err!=p.Sentinel||a!=b||Match()!=4{t.Fatal(a,b)};if n:=__borrow_std.ValueOk(Cross());n!=7{t.Fatal(n)}}
  func TestForeignPayload(t *testing.T){RightValid();for _, f:=range []func(){ForeignInvalid,NamedForeignInvalid,ExplicitForeignInvalid,LeftInvalid,RightInvalid}{func(){defer func(){p:=recover();if p==nil||!strings.Contains(p.(string),"invalid enum"){t.Fatal(p)}}();f()}()}}
  `)
 	packagesCommand(t, prodOut, tool, true, "test", "-race", "-count=1", "./...")

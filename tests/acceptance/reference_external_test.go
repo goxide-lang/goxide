@@ -39,8 +39,8 @@ func Read(p &int)int{return *p}
 var global int=6
 func Global()&int{return &global}
 func View(p &int)&int{return p}
-func Edit(p mut& int)mut& int{return p}
-func Inc(p mut& int){*p+=1}
+func Edit(p &mut int)&mut int{return p}
+func Inc(p &mut int){*p+=1}
 func CellView(p &Cell)&Cell{return p}
 `
 	makeLibrary := func(relay, drift bool) string {
@@ -49,7 +49,7 @@ func CellView(p &Cell)&Cell{return p}
 		writeRoots(dir)
 		src := api
 		if drift {
-			src = strings.Replace(src, "func Read(p &int)int{return *p}", "func Read(p mut& int)int{*p+=1;return *p}", 1)
+			src = strings.Replace(src, "func Read(p &int)int{return *p}", "func Read(p &mut int)int{*p+=1;return *p}", 1)
 		}
 		packagesWrite(t, dir, "api/api.gox", src)
 		packagesWrite(t, dir, "api/native_default.go", "//go:build !extra\n\npackage api\nfunc Native()int{return 1}\n")
@@ -61,7 +61,7 @@ type Cell=a::Cell
 func Global()&int{return a::Global()}
 func Read(p &int)int{return a::Read(p)}
 func View(p &int)&int{return a::View(p)}
-func Edit(p mut& int)mut& int{return a::Edit(p)}
+func Edit(p &mut int)&mut int{return a::Edit(p)}
 func CellView(p &Cell)&Cell{return a::CellView(p)}
 `)
 		}
@@ -108,11 +108,11 @@ func CellView(p &Cell)&Cell{return a::CellView(p)}
 		return dir
 	}
 	body := `use api as a;
-func Run()int{n:=1;w:=r::Edit(mut& n);*w+=2;a::Inc(w);c:=a::Cell{N:5};v:=r::CellView(&c);c.N=7;return r::Read(&n)+v.N}
+func Run()int{n:=1;w:=r::Edit(&mut n);*w+=2;a::Inc(w);c:=a::Cell{N:5};v:=r::CellView(&c);c.N=7;return r::Read(&n)+v.N}
 func Again(p &int)&int{return r::View(p)}
 `
 	appSource := makeApp(body)
-	packagesWrite(t, appSource, "extra.gox", "package app\nuse api as renamed;\nfunc Extra()int{n:=2;renamed::Inc(mut& n);return renamed::Read(&n)}\n")
+	packagesWrite(t, appSource, "extra.gox", "package app\nuse api as renamed;\nfunc Extra()int{n:=2;renamed::Inc(&mut n);return renamed::Read(&n)}\n")
 	packagesWrite(t, appSource, "client/client.gox", "package client\nuse app;\nfunc Read()int{n:=8;return *app::Again(&n)}\n")
 	app := filepath.Join(t.TempDir(), "app")
 	packagesCommand(t, root, cli, true, "transpile", "-o", app, appSource)

@@ -51,7 +51,7 @@ import("testing";"reflect";"github.com/goxide-lang/serde/json")
 func TestConfigSuccessFailureAndSelection(t *testing.T){for _,tt:=range []struct{json string;ok bool;want uint64;trace []string}{{"{\"Enabled\":3}",true,10,[]string{"first","guard","checked","last","defer"}},{"{\"Enabled\":3}",false,0,[]string{"first","guard","checked","defer"}},{"\"Off\"",false,4,[]string{"first","last","defer"}}}{c,e:=serdejson.Unmarshal([]byte(tt.json),DeserializeConfig);if e!=nil{t.Fatal(e)};trace:=[]string{};got:=unpack(run(c,tt.ok,&trace));if got!=tt.want||!reflect.DeepEqual(trace,tt.trace){t.Fatalf("got %d trace %v",got,trace)}}}
 func TestContextAndNestedBinding(t *testing.T){c,e:=serdejson.Unmarshal([]byte("{\"Enabled\":3}"),DeserializeConfig);if e!=nil{t.Fatal(e)};if wide(63)!=uint64(1)<<63||!nils()||nested(c)!=4||nestedCall(c)!=3{t.Fatal("context or binding changed")}}
 func TestStatementAndNearestFunction(t *testing.T){c,e:=serdejson.Unmarshal([]byte("\"Off\""),DeserializeConfig);if e!=nil{t.Fatal(e)};jumping(c);if inlineClosure(c)!=7{t.Fatal("inline closure")};trace:=[]string{};discard(c,&trace);if !reflect.DeepEqual(trace,[]string{"before","arm","after"}){t.Fatal(trace)};trace=nil;if closure(&trace)!=42||!reflect.DeepEqual(trace,[]string{"checked","outer"}){t.Fatal(trace)}}
-func TestInvalidBeforeArms(t *testing.T){trace:=[]string{};defer func(){if recover()==nil||!reflect.DeepEqual(trace,[]string{"first","defer"}){t.Fatalf("trace=%v",trace)}}();run(nil,true,&trace)}
+func TestInvalidBeforeArms(t *testing.T){trace:=[]string{};defer func(){if recover()==nil||!reflect.DeepEqual(trace,[]string{"first","defer"}){t.Fatalf("trace=%v",trace)}}();run(Config{},true,&trace)}
 `, false)
 }
 func TestMatchCompositionBoundaries(t *testing.T) {
@@ -102,9 +102,8 @@ func mark(t *[]int,n int)int{*t=append(*t,n);return n}
 	packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
 	packagesWrite(t, generated, "app_test.go", `package app
 import("testing";"reflect";cfg "packages.example/app/model";"github.com/goxide-lang/serde/json")
-type forged struct{cfg.Mode}
 func TestCrossPackageConfig(t *testing.T){for n:=0;n<20;n++{m:=cfg.NewModeWorkers(n);if Composed(m)!=n+2||Composed(m)!=Explicit(m){t.Fatal(n)}};m,e:=serdejson.Unmarshal([]byte("{\"Workers\":3}"),cfg.DeserializeMode);if e!=nil||Composed(m)!=5{t.Fatal(e)}}
-func TestCrossPackageInvalid(t *testing.T){var typed *cfg.GoxideCase4_Mode_Workers;for _,m:=range []cfg.Mode{nil,typed,&cfg.GoxideCase4_Mode_Workers{Value:1},forged{}}{func(){trace:=[]int{};defer func(){if recover()==nil||!reflect.DeepEqual(trace,[]int{1}){t.Fatalf("invalid %T trace %v",m,trace)}}();Ordered(m,&trace)}()}}
+func TestCrossPackageInvalid(t *testing.T){for _,m:=range []cfg.Mode{{}}{func(){trace:=[]int{};defer func(){if recover()==nil||!reflect.DeepEqual(trace,[]int{1}){t.Fatalf("invalid %T trace %v",m,trace)}}();Ordered(m,&trace)}()}}
 var sink int
 func BenchmarkComposed(b *testing.B){m:=cfg.NewModeWorkers(3);b.ReportAllocs();for i:=0;i<b.N;i++{sink=Composed(m)}}
 func BenchmarkExplicit(b *testing.B){m:=cfg.NewModeWorkers(3);b.ReportAllocs();for i:=0;i<b.N;i++{sink=Explicit(m)}}

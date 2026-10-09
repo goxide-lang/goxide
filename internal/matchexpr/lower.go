@@ -4,7 +4,6 @@ package matchexpr
 import (
 	"bytes"
 	"fmt"
-	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/sourcemap"
 	"go/format"
 	"go/parser"
@@ -262,7 +261,7 @@ func LowerMapped(filename string, src []byte, provenance *sourcemap.Map) ([]byte
 					mode = "varinfer"
 				} else {
 					typ = strings.TrimSpace(string(src[ts[j+2].a:ts[i-1].a]))
-					if _, e := parser.ParseExpr(string(paths.GoView([]byte(typ)))); e != nil {
+					if _, e := parser.ParseExpr(string(parseView([]byte(typ)))); e != nil {
 						return nil, fail(i, "invalid or unsupported explicit result type")
 					}
 					// Parsing uses a Go view, but generated type text retains

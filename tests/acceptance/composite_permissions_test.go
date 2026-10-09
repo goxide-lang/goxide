@@ -27,7 +27,7 @@ func inspect(r &State) int {
  pointer := r.Pointer
  return copy.N+copy.Value.N+copy.Values[0]+value.N+array[0]+items[0]+index["x"]+*pointer
 }
-func update(w mut& State) {
+func update(w &mut State) {
  w.N++
  w.Items[0]++
  w.Index["x"]++
@@ -38,7 +38,7 @@ func exercise() [3]int {
  state:=State{N:1,Value:Leaf{N:2},Values:[2]int{3,4},Items:[]int{5},Index:map[string]int{"x":6},Pointer:&n}
  var r &State = &state
  first:=inspect(r)
- w:=mut& state
+ w:=&mut state
  update(w)
  second:=inspect(r)
  return [3]int{first,second,state.N+state.Value.N+state.Values[0]+state.Items[0]+state.Index["x"]+n}
@@ -72,7 +72,7 @@ type State struct { N int; Value Leaf; Values [2]int; Items []int; Index map[str
 		"promoted-shared-field":      `type Inner struct{Items []int};type Outer struct{Inner};func f(r &Outer){copy:=*r;copy.Items[0]=9}`,
 		"promoted-pointer-field":     `type Inner struct{Pointer *int};type Outer struct{Inner};func f(r &Outer){copy:=*r;*copy.Pointer=9}`,
 
-		"copy-write-ref-upgrade":  `func f(r &State){copy:=*r;w:=mut& copy;w.Items[0]=9}`,
+		"copy-write-ref-upgrade":  `func f(r &State){copy:=*r;w:=&mut copy;w.Items[0]=9}`,
 		"map-comma-ok":            `func f(r &State){node,ok:=r.PointerMap["x"];if ok{node.N=9}}`,
 		"range-pointer-key":       `func f(r &State){for node:=range r.KeyMap{node.N=9}}`,
 		"dynamic-assertion":       `func f(r &State){r.Dynamic.(*Leaf).N=9}`,
@@ -92,8 +92,8 @@ type State struct { N int; Value Leaf; Values [2]int; Items []int; Index map[str
 		"slice-struct-element":    `func f(r &State){items:=r.Nodes;items[0].N=9}`,
 		"range-pointer-element":   `func f(r &State){for _,node:=range r.Pointers{node.N=9}}`,
 		"pointer-address":         `func f(r &State){raw:=&r.N;*raw=9}`,
-		"write-reborrow-field":    `func f(r &State){w:=mut& r.N;*w=9}`,
-		"write-reborrow-slice":    `func f(r &State){w:=mut& r.Items[0];*w=9}`,
+		"write-reborrow-field":    `func f(r &State){w:=&mut r.N;*w=9}`,
+		"write-reborrow-slice":    `func f(r &State){w:=&mut r.Items[0];*w=9}`,
 		"raw-return":              `func f(r &State)[]int{return r.Items}`,
 		"any-box":                 `func f(r &State)any{return r.Items}`,
 		"any-box-whole-copy":      `func f(r &State)any{return *r}`,

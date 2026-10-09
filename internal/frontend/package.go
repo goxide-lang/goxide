@@ -299,11 +299,16 @@ func CompilePackage(path string, sources map[string][]byte, imp types.Importer) 
 // PackageOptions supplies the explicit namespace roots and type graph shared by
 // every source file. Roots are available to use declarations, not implicit names.
 type PackageOptions struct {
-	Roots    paths.Roots
-	Importer types.Importer
+	Roots         paths.Roots
+	Importer      types.Importer
+	Configuration string // Planner-owned build context, before the roots fingerprint.
 }
 
 func CompilePackageWithOptions(path string, sources map[string][]byte, options PackageOptions) (PackageResult, error) {
+	sources, _, err := packageConfigurationSources(sources, options.Roots, options.Configuration, "")
+	if err != nil {
+		return PackageResult{}, err
+	}
 	result, err := preparePackageContext(path, sources, nil, options.Importer, options.Roots)
 	if err != nil {
 		return result, err

@@ -22,7 +22,8 @@ use fmt as native;
 func Value() string { native := Item{N: 6}; return native::Sprint(add!(native.N), ":", label()) }
 `},
 		{"model.gox", `package p
-#[derive(Clone,Debug)]
+use serde;
+#[derive(Clone,Debug,serde::Serialize)]
 type Item struct { N int }
 macro_rules! add { ($n:expr) => { $n + 1 }; }
 `},
@@ -34,6 +35,7 @@ func label() string { return native::ToUpper("ok") }
 	options := frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
 		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
 		"strings": {PackagePath: "strings", Source: "toolchain"},
+		"serde":   {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module"},
 	}}
 	output, err := CompilePackage(files, options)
 	if err != nil {
@@ -56,8 +58,40 @@ func label() string { return native::ToUpper("ok") }
 			t.Fatal(err)
 		}
 	}
-	if !reflect.DeepEqual(names, []string{"goxide_helpers_model.go", "label.go", "main.go", "model.go"}) {
+	if !reflect.DeepEqual(names, []string{"goxide_helpers_model.go", "goxide_project_config.go", "label.go", "main.go", "model.go"}) {
 		t.Fatalf("outputs: %v", names)
+	}
+	// Directory CLI and in-memory WASM consume the same explicit context. Compare
+	// every generated Go byte, including configuration and helper file indices.
+	input := t.TempDir()
+	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module playground\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(input, file.Path), []byte(file.Source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moduleOutput := filepath.Join(t.TempDir(), "module")
+	if _, err := frontend.CompileModuleWithOptions(input, moduleOutput, frontend.ModuleOptions{Roots: options.Roots}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(moduleOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var moduleFiles []File
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".go") {
+			data, err := os.ReadFile(filepath.Join(moduleOutput, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			moduleFiles = append(moduleFiles, File{Path: entry.Name(), Source: string(data)})
+		}
+	}
+	if !reflect.DeepEqual(moduleFiles, output) {
+		t.Fatal("directory and in-memory package outputs differ")
 	}
 	if err := os.WriteFile(filepath.Join(dir, "output_test.go"), []byte(`package p
 import "testing"

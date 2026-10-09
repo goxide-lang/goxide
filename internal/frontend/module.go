@@ -3,8 +3,6 @@ package frontend
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"github.com/hxsf/goxide/internal/naming"
 	"github.com/hxsf/goxide/internal/paths"
@@ -137,13 +135,6 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		if err != nil {
 			return ModuleResult{}, err
 		}
-	}
-	if len(options.Roots) > 0 {
-		data, encodeErr := json.Marshal(options.Roots)
-		if encodeErr != nil {
-			return ModuleResult{}, fmt.Errorf("dependency roots: %w", encodeErr)
-		}
-		options.Configuration += fmt.Sprintf(" roots=%x", sha256.Sum256(data))
 	}
 	destination, err = canonicalOutput(destination)
 	if err != nil {
@@ -546,27 +537,24 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 			}
 			outputOwners[output] = name
 		}
-		if options.Configuration != "" {
-			original := sortedSources(packages[dir])[0]
-			parsed, e := parseSourceImports(original, packages[dir][original])
-			if e != nil {
-				return e
-			}
-			file := filepath.Join(root, dir, "goxide_project_config.go")
-			output := filepath.Join(destination, dir, "goxide_project_config.go")
-			if _, exists := outputOwners[filepath.Join(dir, "goxide_project_config.go")]; exists {
+		configuredSources, configFile, e := packageConfigurationSources(packages[dir], options.Roots, options.Configuration, filepath.Join(root, dir, packageConfigurationFile))
+		if e != nil {
+			return e
+		}
+		if configFile != "" {
+			output := filepath.Join(destination, dir, packageConfigurationFile)
+			if _, exists := outputOwners[filepath.Join(dir, packageConfigurationFile)]; exists {
 				return fmt.Errorf("reserved project config filename conflicts: %s", output)
 			}
 			if _, e = os.Stat(output); !os.IsNotExist(e) {
 				return fmt.Errorf("reserved project config filename conflicts: %s", output)
 			}
-			data := []byte(fmt.Sprintf("package %s\nconst __goxide_project_configuration = %q\n", parsed.Name.Name, options.Configuration))
-			packages[dir][file] = data
-			sourceOutputs[file] = filepath.Join(dir, "goxide_project_config.go")
+			packages[dir] = configuredSources
+			sourceOutputs[configFile] = filepath.Join(dir, packageConfigurationFile)
 			if e = os.MkdirAll(filepath.Dir(output), 0755); e != nil {
 				return e
 			}
-			if e = os.WriteFile(output, data, 0644); e != nil {
+			if e = os.WriteFile(output, configuredSources[configFile], 0644); e != nil {
 				return e
 			}
 		}

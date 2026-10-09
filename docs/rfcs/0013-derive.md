@@ -134,7 +134,7 @@ struct 仍要求所有字段有协议；enum 仅选中默认变体要求 payload
 
 目录/模块模式支持消费生产包明确派生的具体 struct/enum Clone、Debug。qualified 字段可经生产者公开透明 alias 转发，跨文件相同 import 名按实际包路径区分。内部 metadata v6 在 v5 校验链上新增 Kind/目标/helper/derive 来源，检查 canonical named 身份及精确 `func(*T) T` / `func(*T) string` 签名；alias 不得凭同名函数或正确签名自行增加协议。内容、marker、依赖产物及 canonical 注册均须一致，旧生成模块需重新生成。
 
-[真实 CLI 三模块验收](../../tests/acceptance/field_protocol_external_test.go)覆盖具体 enum/struct、透明 relay、跨文件/包名差异、array/slice/map 嵌套元素协议、nil/空区别、普通 goxide/Go 赋值仍共享容器、显式 Clone 的独立副本及不保留别名拓扑。容器类型以包级 type alias 绑定，避免生成的 src/item/out 等局部名字截获源 import。Debug 保留生产类型/变体名、字段名、字符串和 map key 引号及内容（含私有字段），不自动脱敏；无需消费者反射或绕过字段可见性。三个生成/消费模块分别 race/vet，生成结果重复一致，原生 Go 可调用公开 helper。
+[真实 CLI 三模块验收](../../tests/acceptance/field_protocol_external_test.go)覆盖具体 enum/struct、透明 relay、跨文件/包名差异、array/slice/map 嵌套元素协议、nil/空区别、普通 goxide/Go 赋值仍共享容器、显式 Clone 的独立副本及不保留别名拓扑。当时以包级 type alias 保护容器类型；2026-10-08 改为统一分配无冲突局部名，保留源类型表达式及其文件 import 环境。Debug 保留生产类型/变体名、字段名、字符串和 map key 引号及内容（含私有字段），不自动脱敏；无需消费者反射或绕过字段可见性。三个生成/消费模块分别 race/vet，生成结果重复一致，原生 Go 可调用公开 helper。
 
 [协议反例](../../internal/frontend/field_protocol_artifact_test.go)核验参数/返回类型、函数变量/泛型/variadic 拒绝、重复/未知/手写来源拒绝、relay 伪造另一 Kind 及陈旧 producer；CLI 对摘要篡改和源文件变化在消费者 import 位置报错。手写 Clone/Debug 尚无已实现登记入口，本片仅 derive 来源；消费者本地 `type Local = m.T` 字段的协议转发仍未接通，不能把该工程缺口说成类型身份不同。不可直接导入的 internal-origin 协议仍不可用，普通 facade API 保留。外部 enum 载荷类型范围、pointer/interface 自动协议、完整 trait、serde 和零值/公开入口验证不在本片扩展；borrow/Copy/指针拆分不作为本片前置条件。
 
@@ -193,3 +193,16 @@ Clone/Debug/serde、typed Error source、blank/embedded 字段协议或泛型规
 enum 元数据坐标属于 enum lowering 之前，必须使用该阶段保存的 map 和 offset；
 不得将其行号当作 refs/属性阶段行号。前一个 enum 的空行与降低行数不同、后面
 存在同名声明的负例必须定位到实际 enum，不能误指随后声明。
+
+
+## 无冲突容器类型拼写（2026-10-08）
+
+Clone/Debug 的容器类型保护可以由生成局部绑定的统一 fresh-name 分配提供；不再
+要求简单 `[]int` 必须额外生成 package type alias。生成的 `src`、`item`、`out` 等
+绑定必须避开类型表达式真正使用的类型和 import 名，嵌套容器也遵守同一规则。
+在原文件环境中保留类型表达式，不能通过新 defined type 或改用户类型名消除冲突。
+若仍需 alias，只能在相同身份及文件解析环境下复用。
+
+验收同时核对简单与嵌套容器、named type/import 遮蔽、nil/empty、普通赋值共享、
+显式容器 Clone 的独立存储、元素协议以及类型身份/method set。Eq-only 不因此
+新增 alias；不改变已有深浅复制、递归资格、手写协议或 blank/embedded 字段边界。

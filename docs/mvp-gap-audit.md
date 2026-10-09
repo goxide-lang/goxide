@@ -301,3 +301,15 @@ tuple/struct variant 和手写协议未新定语义；Linux/托管 CI 未运行�
 [精简交付报告](reviews/macro-fragment-categories-20261007.md)。
 117 fixture/11 示例保留原有输入；公开 ABI 和依赖锁未变，Linux/托管 CI 未运行、
 网站未部署。本批仅本地提交审查，未 push；A01/A03/RFC0011/MVP 整项继续开放。
+
+
+## 2026-10-08 接续：官网 alias 与显式 std 校验
+
+从实际 main `eb6ddf0ce026251b4e9b791d0271ee05b9438749` 开始，
+以真实绑定精简无冲突宏/派生 alias，为显式 canonical std/sum 补齐消费端具体实例
+及完整 payload validator；保留遮蔽规则、Clone 语义和 Go 兼容 API。
+生产 pin `dd6031e7572a557b9d01305bacb64fd81eb719b2` 的 Linux 证据、
+CLI/WASM/保留 sandbox HTTP Worker、整树旧合同断言失败及针对性修复见
+[精简交付报告](reviews/website-semantic-cleanups-20261008.md)。
+未运行历史七阶段 AST 矩阵或完整 UI；A03 宏 + Eq 展开栈缺失仍在账，
+runtime 迁移、多文件 UI、限定 derive、A01/A03/MVP 整项继续开放。

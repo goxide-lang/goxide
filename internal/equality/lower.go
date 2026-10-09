@@ -41,12 +41,14 @@ const intrinsic = "__goxide_enum_equals"
 const shim = "\nfunc __goxide_enum_equals[T interface{}](a,b T)bool{return (0!=0)}\n"
 
 type unit struct {
-	fs    *token.FileSet
-	names []string
-	trees map[string]*ast.File
-	list  []*ast.File
-	pkg   *types.Package
-	info  *types.Info
+	fs       *token.FileSet
+	names    []string
+	trees    map[string]*ast.File
+	list     []*ast.File
+	pkg      *types.Package
+	info     *types.Info
+	evidence map[string]*sourcemap.ASTEvidence
+	changed  map[string]bool
 }
 
 func parse(files map[string][]byte) (*unit, error) {
@@ -65,6 +67,28 @@ func parse(files map[string][]byte) (*unit, error) {
 	}
 	return u, nil
 }
+
+// Freeze the matching input AST/map before any helper insertion, renaming or
+// call rewrite. Token-stream composition cannot preserve untouched expressions
+// once a derive has appended declarations to the same file.
+func (u *unit) capture(cfg Config) {
+	u.evidence = map[string]*sourcemap.ASTEvidence{}
+	u.changed = map[string]bool{}
+	for _, name := range u.names {
+		if !cfg.Native[name] && cfg.Maps[name] != nil {
+			u.evidence[name] = cfg.Maps[name].CaptureAST(u.fs, u.trees[name])
+		}
+	}
+}
+
+func (u *unit) generatedIdent(file, name string, cause *ast.Ident) *ast.Ident {
+	u.changed[file] = true
+	id := ast.NewIdent(name)
+	evidence := u.evidence[file]
+	evidence.Generated(id, evidence.Context(cause, sourcemap.IdentToken))
+	return id
+}
+
 func (u *unit) check(cfg Config, ignoreBodies, tolerate bool) error {
 	u.info = &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{}, Defs: map[*ast.Ident]types.Object{}, Selections: map[*ast.SelectorExpr]*types.Selection{}}
 	path := cfg.PackagePath
@@ -95,7 +119,13 @@ func write(u *unit, files map[string][]byte, cfg Config, stage string) (map[stri
 		}
 		out[name] = b.Bytes()
 		if cfg.Maps[name] != nil {
-			cfg.Maps[name] = cfg.Maps[name].Compose(files[name], out[name], stage)
+			if u.changed[name] {
+				cfg.Maps[name] = u.evidence[name].Print(u.trees[name], out[name], stage)
+			} else {
+				// This file was only printed. Keep the existing full-token proof,
+				// including punctuation without an owned AST token slot.
+				cfg.Maps[name] = cfg.Maps[name].Compose(files[name], out[name], stage)
+			}
 		}
 	}
 	return out, nil
@@ -247,12 +277,14 @@ func (g *generator) protectLocalHelpers() {
 	}
 	used := map[string]bool{}
 	editable := map[*ast.Ident]bool{}
+	owners := map[*ast.Ident]string{}
 	for _, name := range g.u.names {
 		ast.Inspect(g.u.trees[name], func(n ast.Node) bool {
 			if id, ok := n.(*ast.Ident); ok {
 				used[id.Name] = true
 				if !g.cfg.Native[name] {
 					editable[id] = true
+					owners[id] = name
 				}
 			}
 			return true
@@ -295,11 +327,13 @@ func (g *generator) protectLocalHelpers() {
 	}
 	for id, obj := range g.u.info.Defs {
 		if name := renamed[obj]; name != "" && editable[id] {
+			g.u.changed[owners[id]] = true
 			id.Name = name
 		}
 	}
 	for id, obj := range g.u.info.Uses {
 		if name := renamed[obj]; name != "" && editable[id] {
+			g.u.changed[owners[id]] = true
 			id.Name = name
 		}
 	}
@@ -355,6 +389,12 @@ func (g *generator) protectLocalHelpers() {
 				prefix = append(prefix, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent(alias)}, Tok: token.DEFINE, Rhs: []ast.Expr{ast.NewIdent(name)}}, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("_")}, Tok: token.ASSIGN, Rhs: []ast.Expr{ast.NewIdent(alias)}})
 			}
 			if len(bindings) > 0 {
+				g.u.changed[file] = true
+				// These bindings serve all calls in the function, with no unique
+				// macro cause. Register only the closed, newly generated prefix.
+				for _, stmt := range prefix {
+					g.u.evidence[file].GeneratedTree(stmt, sourcemap.ASTContext{})
+				}
 				ast.Inspect(body, func(n ast.Node) bool {
 					if call, ok := n.(*ast.CallExpr); ok {
 						g.callBindings[call] = bindings
@@ -561,6 +601,7 @@ func (g *generator) prepareManual(r *registered) error {
 	if r.enum == nil {
 		return nil
 	}
+	g.u.changed[file] = true
 	vt, e := g.eval(r.enum.Validator)
 	vs, ok := vt.(*types.Signature)
 	if e != nil || !ok || vs.Variadic() || vs.TypeParams().Len() != 0 || vs.Params().Len() != 1 || vs.Results().Len() != 0 || !types.Identical(vs.Params().At(0).Type(), r.typ) {
@@ -584,7 +625,9 @@ func (g *generator) prepareManual(r *registered) error {
 	}
 	prefix := []ast.Stmt{}
 	for _, arg := range args {
-		prefix = append(prefix, &ast.ExprStmt{X: &ast.CallExpr{Fun: ast.NewIdent(bound), Args: []ast.Expr{ast.NewIdent(arg.Name)}}})
+		stmt := &ast.ExprStmt{X: &ast.CallExpr{Fun: ast.NewIdent(bound), Args: []ast.Expr{ast.NewIdent(arg.Name)}}}
+		g.u.evidence[file].GeneratedTree(stmt, sourcemap.ASTContext{})
+		prefix = append(prefix, stmt)
 	}
 	decl.Body.List = append(prefix, decl.Body.List...)
 	return nil
@@ -593,6 +636,14 @@ func appendDeclarations(u *unit, name, text string) error {
 	f, e := parser.ParseFile(u.fs, "<equality helpers>", "package "+u.trees[name].Name.Name+"\n"+text, parser.ParseComments)
 	if e != nil {
 		return e
+	}
+	// Shared declarations are not caused by any one macro invocation. Their
+	// parser positions belong to a synthetic file, not the destination source.
+	for _, decl := range f.Decls {
+		u.evidence[name].GeneratedTree(decl, sourcemap.ASTContext{})
+	}
+	if len(f.Decls) > 0 {
+		u.changed[name] = true
 	}
 	u.trees[name].Decls = append(u.trees[name].Decls, f.Decls...)
 	return nil
@@ -625,6 +676,7 @@ func Prepare(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 	if len(u.names) == 0 {
 		return files, nil
 	}
+	u.capture(cfg)
 	if e = u.check(cfg, true, true); e != nil {
 		return nil, e
 	}
@@ -716,14 +768,14 @@ func Prepare(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 				}
 			}
 			if r != nil {
-				call.Fun = ast.NewIdent(g.callHelper(call, r))
+				call.Fun = u.generatedIdent(name, g.callHelper(call, r), sel.Sel)
 				call.Args = append([]ast.Expr{sel.X}, call.Args...)
 				return true
 			}
 			if receiver != nil && !basic(receiver, false) {
 				return true
 			}
-			call.Fun = ast.NewIdent(intrinsic)
+			call.Fun = u.generatedIdent(name, intrinsic, sel.Sel)
 			call.Args = append([]ast.Expr{sel.X}, call.Args...)
 			needed = true
 			return true
@@ -756,6 +808,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 	if e != nil {
 		return nil, e
 	}
+	u.capture(cfg)
 	_ = u.check(cfg, false, true)
 	g, e := registry(u, cfg)
 	if e != nil {
@@ -774,12 +827,12 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 				return true
 			}
 			if r := g.find(u.info.TypeOf(call.Args[0])); r != nil {
-				call.Fun = ast.NewIdent(g.callHelper(call, r))
+				call.Fun = u.generatedIdent(name, g.callHelper(call, r), id)
 			} else if basic(u.info.TypeOf(call.Args[0]), false) {
-				call.Fun = ast.NewIdent("__goxide_enum_scalar_equals")
+				call.Fun = u.generatedIdent(name, "__goxide_enum_scalar_equals", id)
 				needScalarHelper = true
 			} else {
-				call.Fun = &ast.SelectorExpr{X: call.Args[0], Sel: ast.NewIdent("equals")}
+				call.Fun = &ast.SelectorExpr{X: call.Args[0], Sel: u.generatedIdent(name, "equals", id)}
 				call.Args = call.Args[1:]
 			}
 			return true
@@ -787,6 +840,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 		keep := u.trees[name].Decls[:0]
 		for _, d := range u.trees[name].Decls {
 			if f, ok := d.(*ast.FuncDecl); ok && f.Name.Name == intrinsic {
+				u.changed[name] = true
 				continue
 			}
 			keep = append(keep, d)

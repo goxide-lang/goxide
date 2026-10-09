@@ -8,6 +8,84 @@ does not modify CI or replace the later coordinated full acceptance.
 
 # Reproduce the website validation
 
+## Current compiler: focused CLI / WASM gate
+
+Use `focused.py` for the current compiler when an intentional generated-code
+change, such as removing redundant aliases, does not preserve the historical Go
+AST. It leaves the historical oracle and frozen matrices below unchanged.
+
+First commit the compiler changes, bind `website/catalog-source.json` to that
+compiler commit and production digest, regenerate `website/FEATURES.md`, and
+commit the website changes. From the resulting clean checkout, activate the
+selected Go toolchain and build matching assets:
+
+```sh
+python3 -B website/build.py
+python3 -B website/validation/focused.py \
+  --out /absolute/new-focused-output \
+  --go /absolute/path/to/go \
+  --node /absolute/path/to/node \
+  --chromium /absolute/path/to/chromium
+```
+
+The build runs all eleven website examples and their catalog stdout assertions.
+The focused gate independently reruns their native programs, copies their exact
+source into module-free temporary input directories, and compares LF and CRLF
+CLI output with the same current compiler in Node GoWASM. With `--chromium`, it
+also serves the actual `dist/` assets on a temporary loopback HTTP server and
+checks the real `worker.js`, manifest commit/hash initialization, and GoWASM
+responses. Chromium uses Python Playwright with `chromium_sandbox=True`; no
+`--no-sandbox` fallback is provided. An environment that blocks this launch must
+report that layer as blocked. Without `--chromium`, HTTP Worker checks are
+explicitly `not-run`.
+
+The selected Go distribution, Node, Python Playwright and Chromium must already
+be installed. Python Playwright is separate from the historical Node Playwright
+lockfile; the focused report records the actual Python Playwright and Chromium
+versions. Native subprocesses use `GOMAXPROCS=4`; only the Node GoWASM process uses
+`GOMAXPROCS=1`. No dependencies are installed and no publication occurs. The
+output must be fresh, outside the checkout, and have no ancestor `go.mod`.
+
+Add task-specific positive and rejection cases with repeatable `--cases` JSON
+files. Each entry needs a unique `id` and either inline `source` or `sourcePath`
+relative to the JSON file. A success must provide independently expected native
+`expectedStdout` (and optional `expectedStderr`). A frontend rejection must have
+`"expect": "frontend-reject"` and `diagnosticContains`. For example:
+
+```json
+[
+  {"id": "nested-validation", "sourcePath": "nested-validation.gox", "expectedStdout": "rejected invalid payload\n"},
+  {"id": "unsupported-form", "sourcePath": "unsupported-form.gox", "expect": "frontend-reject", "diagnosticContains": "unsupported"}
+]
+```
+
+Runtime-invalid payload cases should catch the expected validation panic inside
+the native program and assert its exact diagnostic before printing the expected
+stdout. Transpilation parity alone does not prove runtime payload validation.
+This gate does not claim full browser UI QA, historical AST equivalence, native
+race/vet, or design-gate coverage. Run applicable compiler checks separately.
+`summary.json` records success or failure and the layers actually run; raw
+transpilation, native stdout/stderr and Worker observations remain in `--out`.
+
+Small checks for the focused tooling require no compiler build or browser:
+
+```sh
+python3 -B website/validation/focused_test.py
+node --check website/validation/focused-wasm.cjs
+```
+
+## Historical seven-phase acceptance
+
+The instructions below describe the frozen compiler `afa3f0a...` versus
+`fd8380c...` comparison. Run them from its complete historical checkout, such as
+`eb6ddf0ce026251b4e9b791d0271ee05b9438749`, whose catalog and production sources
+retain those identities. The current website may bind a newer compiler.
+`run.py` intentionally rejects a changed catalog, compiler inventory, or AST;
+do not change its pin or relax its oracle to turn an intentional AST change into
+a historical pass. The historical browser scripts contain `--no-sandbox` and
+are not the sandbox-preserving browser entry above; their old results are not
+current browser acceptance.
+
 Run from a **clean committed checkout**, including untracked files. The checkout
 must contain the full ancestor objects for compiler `7779255b9b058a083e0a97184d8d780d9bbd2a8e`
 and baseline `fd8380c39876c96441857a737be8e32c322a0467`. The runner never fetches

@@ -57,6 +57,12 @@ type GoxideOptionSome[T any] = sum.Some[T]
 
 共享 core 不导入 compiler 或用户包。具体 payload validator、derive/free helper、From 及需要用户类型可见性的代码继续由适当的源包生成；不承诺零 helper。std 不反射猜测用户 enum 或协议。
 
+### Go 返回值适配的职责边界（当前入口说明）
+
+`go_result!` / `go_result_keep!` 是编译器保留的 builtin 宏，直接可用，无须从任何源码包 import 宏定义，也不是 std/sum 的导出宏。宏阶段识别入口，typed lowering 读取原生调用的静态签名、生成具体适配 helper 并登记载荷 validator；std/sum 只提供共享 Result 表示、cases、构造与形状检查。生成程序仍须依赖匹配的 std 模块。
+
+适配只在显式宏调用处发生，判断原静态 E 的 nil 值，不由外层期望类型先改写 E。`?` 继续按普通可赋值优先、精确一步 From 的既有规则处理错误；不会自动取保值结构的 Err 或丢弃 Value。普通 Go API 的双返回保持原状，`.go` 消费者使用 std/sum 的 Go API 或已生成包。可执行例子及参数限制见[内建宏使用说明](../../examples/go_result/README.md)。本说明不增加 namespace/prelude 或限定宏语法；未来是否迁移入口仍须另行决定。
+
 ## 3. metadata 7 与实例 owner
 
 共享 std 阶段将 enum metadata schema 从 6 升到 7；正式命名阶段再升至 8，旧 artifact 明确要求重生成，不静默接受旧身份。普通用户 enum 的表示不变，但其与 sum 混合的 artifact 也按版本重建。
@@ -129,3 +135,17 @@ match r {
 当前实施证据：`internal/frontend/shared_std_test.go` 已改用真正发布的 std 依赖执行 goxide→Go 独立模块，并拒绝旧 schema 7。`shared_std_artifact_test.go` 核验 owner 路径、同签名未登记 helper 与候选顺序。serde、网站 catalog、可读性和首轮 TOML 格式迁移已整合；最终整树结果以整合记录为准，不把重点测试冒充完整交付。
 
 用户随后批准统一项目模型：从 Go 迁入时由 go.mod/go.sum 迁成 goxide.toml+goxide.lock，混合指 .go/.gox 源码。该后续接口由独立工具链任务拥有；当前测试使用现有 manifest 模式，不把根 go.mod authority 固化为长期架构。公开 std/serde 是普通 Go 发行模块，继续保留其 go.mod。
+
+
+## 显式 std 具体实例登记（2026-10-08）
+
+直接导入 `github.com/goxide-lang/std/sum` 后，`s.Option[T]` / `s.Result[T,E]`
+与兼容的裸家族使用同一 canonical 身份。已支持的限定构造、match 和 `?` 应为
+实际使用的具体参数登记本地实例及完整 payload validator，不要求用户先用裸
+Option/Result 触发登记。不以名称、相同底层结构或 shape-only validator 代替
+canonical 类型、全部实参和载荷契约核验。
+
+保留现有 use/透明 alias 路径、生成 Go 的 Option/Result/Goxide* 兼容 API、
+exact-case 检查、递归载荷检查及 `?` 单次求值/最近函数帧。手写 generic alias
+和新 defined 类型的既有边界不放宽。验收包括直接构造/Go 构造函数、match/传播、
+跨文件 import 环境、嵌套非法 enum、typed-nil/指针/伪 case 及重复生成一致性。

@@ -2,7 +2,7 @@
 
 Goxide 在 Go 生态上实现一个可执行语言子集：声明宏、闭合变体 enum/match、Option/Result、显式派生和 serde JSON，生成普通 Go 源码。设计中的完整 trait、LSP、指针体系等并不因此成为当前实现承诺。
 
-**宏 + 独立 enum 基线为 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`，2026-10-04 已新增显式 Go 返回值适配宏。** 已验证 Go 1.27.1；[适配宏试用](examples/go_result/README.md)展示普通 Ok/Err 和 Reader 错误时保留部分值。此阶段已有可审查的业务闭环，**不宣称整个 MVP 完成**。
+**宏 + 独立 enum 基线为 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`，2026-10-04 已新增显式 Go 返回值适配宏。** 已验证 Go 1.27.1；[适配宏试用](examples/go_result/README.md)展示普通 Ok/Err 和 Reader 错误时保留部分值。`go_result!` / `go_result_keep!` 是无需 import 的编译器保留 builtin，结果类型由共享 `std/sum` 提供，不是 std 导出宏。此阶段已有可审查的业务闭环，**不宣称整个 MVP 完成**。
 
 正式命名为 **Goxide**；CLI `goxide`、源码 `.gox`、环境变量 `GOXIDE_*`。pre-1.0 命名迁移要求重新生成所有旧产物并更新 std，见[迁移合同](docs/rfcs/0027-goxide-naming.md)。
 

@@ -1,0 +1,39 @@
+[
+  {
+    "id": "macro-binding",
+    "source": "package main\nimport \"fmt\"\nmacro_rules! twice {($value:expr)=>{func() int {value:=$value;return value+value}()};}\nmacro_rules! zero {()=>{int(0)};}\nmacro_rules! capture {($value:expr)=>{$value};}\nfunc main(){\n fmt.Println(twice!(21))\n {type int string; value:=capture!(int(\"caller\"));fmt.Printf(\"%T %s\\n\",zero!(),value)}\n {type int int64; value:=capture!(int(7));fmt.Printf(\"%T %T %d\\n\",zero!(),value,value)}\n}\n",
+    "expectedStdout": "42\nint caller\nint main.int 7\n"
+  },
+  {
+    "id": "derive-nested-binding",
+    "source": "package main\nimport \"fmt\"\n#[derive(Clone,Debug)]\ntype src struct{ N int }\n#[derive(Clone,Debug)]\ntype Box struct{ Items [][]src }\nfunc main(){\n original:=Box{Items:[][]src{{{N:3}}}}\n ordinary:=original\n ordinary.Items[0][0].N=4\n copied:=CloneBox(&original)\n copied.Items[0][0].N=9\n fmt.Println(DebugBox(&original))\n fmt.Println(DebugBox(&copied))\n}\n",
+    "expectedStdout": "Box { Items: [[src { N: 4 }]] }\nBox { Items: [[src { N: 9 }]] }\n"
+  },
+  {
+    "id": "macro-type-capture-rejected",
+    "source": "package main\nmacro_rules! invalid {($T:expr)=>{func() int {var value $T;_=value;return 0}()};}\nfunc main(){_=invalid!(int)}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "type position"
+  },
+  {
+    "id": "explicit-std-option",
+    "source": "package main\nimport \"fmt\"\nimport s \"github.com/goxide-lang/std/sum\"\nfunc Make()s.Option[int]{return s.Option[int]::Some(7)}\nfunc Read(v s.Option[int])int{return match v{s.Option[int]::Some(n)=>n,s.Option[int]::None=>0}}\nfunc Inferred()int{return match s.NewSome(8){s.Option[int]::Some(n)=>n,s.Option[int]::None=>0}}\nfunc main(){fmt.Println(Read(Make()),Read(s.None[int]()),Inferred())}\n",
+    "expectedStdout": "7 0 8\n"
+  },
+  {
+    "id": "explicit-std-result",
+    "source": "package main\nimport \"fmt\"\nimport s \"github.com/goxide-lang/std/sum\"\nfunc Next(v s.Result[int,error])s.Result[int,error]{n:=v?;return s.Result[int,error]::Ok(n+1)}\nfunc Read(v s.Result[int,error])int{return match v{s.Result[int,error]::Ok(n)=>n,s.Result[int,error]::Err(_)=>-1}}\nfunc main(){fmt.Println(Read(Next(s.NewOk[int,error](4))),Read(Next(s.NewErr[int,error](fmt.Errorf(\"bad\")))))}\n",
+    "expectedStdout": "5 -1\n"
+  },
+  {
+    "id": "explicit-std-nested-validation",
+    "source": "package main\nimport \"fmt\"\nimport s \"github.com/goxide-lang/std/sum\"\nenum Mode{Idle,}\ntype Modes []Mode\ntype Envelope struct{Items map[string]Modes}\nfunc Inspect(v s.Option[Envelope],seen *int){match v{s.Option[Envelope]::Some(_)=>{*seen+=1},s.Option[Envelope]::None=>{}}}\nfunc rejected(v s.Option[Envelope],want string)(ok bool){seen:=0;defer func(){ok=fmt.Sprint(recover())==want && seen==0}();Inspect(v,&seen);return false}\nfunc main(){\n good:=Envelope{Items:map[string]Modes{\"ok\":{Mode::Idle}}}\n seen:=0\n Inspect(s.NewSome(good),&seen)\n bad:=Envelope{Items:map[string]Modes{\"bad\":{nil}}}\n fmt.Println(seen,rejected(s.NewSome(bad),\"goxide: invalid enum Mode\"),rejected((*s.Some[Envelope])(nil),\"goxide: invalid enum Option\"))\n}\n",
+    "expectedStdout": "1 true true\n"
+  },
+  {
+    "id": "explicit-std-generic-alias-rejected",
+    "source": "package main\nimport s \"github.com/goxide-lang/std/sum\"\ntype Maybe[T any] = s.Option[T]\nfunc main(){}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "user generic"
+  }
+]

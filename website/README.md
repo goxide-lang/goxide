@@ -2,9 +2,9 @@
 
 中文优先的静态语言介绍网站，以及同包多文件 goxide → Go 浏览器转译器（保留旧单文件入口）。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
-本轮验证 A01 宏捕获类别与明确类型槽边界，并保留 A04 / A06 对照；编译器源码固定为
-`afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，生产源摘要固定为
-`2412f1a252c1dd195d1a4d5deed55e2dcd605e65d18edb0b838da36b1976203c`。
+本轮实现 issue #5 同包多文件与完整源码浏览；编译器源码固定为
+`7779255b9b058a083e0a97184d8d780d9bbd2a8e`，生产源摘要固定为
+`aa2a8596c0df606df9ae083af78a7c5918456221aa21b69d2c0f89b8d43d4f2d`。
 `websiteCommit` 独立记录实际网站工具 HEAD。仅本地验证，没有部署或更新线上版本。
 [仓内验证说明](validation/README.md)是本片入口；[最新组合记录](LATEST-INTEGRATION.md)和
 [早期交付记录](INTEGRATION.md)中的既往结果不替代这次运行。
@@ -24,7 +24,7 @@ GoFiles/CgoFiles，以及真实模块/工具链版本、源码路径和 SHA-256�
 用户包输入，不支持任意模块下载、多包工程编辑、上传或外部构建脚本。
 
 定向验收见 [同包验证入口](validation/package-files/README.md)。下面的完整历史
-验证流程仍保留；本次验收结果以新的交付报告为准，不借用旧轮次结论。
+验证流程仍保留；本次验收结果以[交付报告](../docs/reviews/playground-package-files-20261009.md)为准，不借用旧轮次结论。
 
 ## 从干净 checkout 复现
 
@@ -171,7 +171,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 
 状态针对卡片的限定范围：提案 / 已确认待实现 / 部分实现 / 已实现并验证。开发快照与当前编译器支持分别记录；任务报告不等于可发布实现。RFC 0024 仍是提案。当前 Playground 已包含共享 std/serde、明确上下文下的普通 sum 推导及限定可读性改进；统一 TOML/锁与 import-go 只在 CLI 工程快照说明。
 
-编译器 `commit` 固定为 `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，`websiteCommit` 记录网站源码提交；构建独立枚举 pin 与当前生产文件集，再逐文件核对字节和固定摘要，增加、缺少或修改源码均拒绝。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
+编译器 `commit` 固定为 `7779255b9b058a083e0a97184d8d780d9bbd2a8e`，`websiteCommit` 记录网站源码提交；构建独立枚举 pin 与当前生产文件集，再逐文件核对字节和固定摘要，增加、缺少或修改源码均拒绝。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
 
 ```sh
 python3 website/catalog.py

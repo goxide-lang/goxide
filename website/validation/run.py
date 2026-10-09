@@ -22,8 +22,8 @@ import traceback
 import urllib.request
 
 BASELINE = 'fd8380c39876c96441857a737be8e32c322a0467'
-COMPILER = 'afa3f0a52b2d8206d75df38d10833e537ea7a0dd'
-COMPILER_DIGEST = '2412f1a252c1dd195d1a4d5deed55e2dcd605e65d18edb0b838da36b1976203c'
+COMPILER = '7779255b9b058a083e0a97184d8d780d9bbd2a8e'
+COMPILER_DIGEST = 'aa2a8596c0df606df9ae083af78a7c5918456221aa21b69d2c0f89b8d43d4f2d'
 PHASES = ('wasm-build', 'web-build', 'native-parity', 'web-race', 'web-vet',
           'browser-qa', 'catalog-qa')
 ROOT = Path(__file__).resolve().parents[2]

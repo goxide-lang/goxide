@@ -9,7 +9,7 @@ does not modify CI or replace the later coordinated full acceptance.
 # Reproduce the website validation
 
 Run from a **clean committed checkout**, including untracked files. The checkout
-must contain the full ancestor objects for compiler `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`
+must contain the full ancestor objects for compiler `7779255b9b058a083e0a97184d8d780d9bbd2a8e`
 and baseline `fd8380c39876c96441857a737be8e32c322a0467`. The runner never fetches
 objects, installs tools, downloads dependencies, deploys assets or triggers CI.
 It needs Python 3.11+, Git, installed Go 1.27 with a working race/C toolchain,

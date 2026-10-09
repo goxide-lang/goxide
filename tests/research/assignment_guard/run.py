@@ -40,7 +40,9 @@ if not version.startswith('go version go'):
 run([go, 'build', '-o', str(out / 'goxide'), './cmd/goxide'], ROOT, 'build.txt')
 source = out / 'source'
 shutil.copytree(HERE / 'source', source)
-(source / 'go.mod').write_text(f'module places.example/update\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => {json.dumps(str(ROOT))}\n')
+support = run([go, 'list', '-m', '-f', '{{.Path}} {{.Version}}', 'github.com/goxide-lang/std', 'github.com/goxide-lang/serde'], ROOT, 'support-modules.txt')
+(source / 'go.mod').write_text('module places.example/update\n\ngo 1.27\n\nrequire (\n' + support + ')\n')
+(source / 'go.sum').write_text(''.join(line for line in (ROOT / 'go.sum').read_text().splitlines(keepends=True) if line.startswith(('github.com/goxide-lang/std ', 'github.com/goxide-lang/serde '))))
 generated = out / 'generated'
 run([str(out / 'goxide'), 'transpile', '-o', str(generated), str(source)], out, 'transpile.txt')
 if a.expect_no_guard:

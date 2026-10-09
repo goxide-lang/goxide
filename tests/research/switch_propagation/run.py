@@ -42,7 +42,9 @@ run([str(out / 'goxide'), 'transpile', '-o', str(generated / 'generated.go'), st
 code = (generated / 'generated.go').read_text()
 if any(x in code for x in ('.Catch(', '.Fail(', '.Assignment[')):
     raise SystemExit('Unexpected switch guard')
-(generated / 'go.mod').write_text(f'module switchfixture\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => {json.dumps(str(ROOT))}\n')
+support = run([go, 'list', '-m', '-f', '{{.Path}} {{.Version}}', 'github.com/goxide-lang/std', 'github.com/goxide-lang/serde'], ROOT, 'support-modules.txt')
+(generated / 'go.mod').write_text('module switchfixture\n\ngo 1.27\n\nrequire (\n' + support + ')\n')
+(generated / 'go.sum').write_text(''.join(line for line in (ROOT / 'go.sum').read_text().splitlines(keepends=True) if line.startswith(('github.com/goxide-lang/std ', 'github.com/goxide-lang/serde '))))
 shutil.copyfile(HERE / 'switch_test.go.fixture', generated / 'switch_test.go')
 run([go, 'test', '-race', '-count=1', '-v', './...'], generated, 'race.txt')
 run([go, 'vet', './...'], generated, 'vet.txt')

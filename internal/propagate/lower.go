@@ -19,9 +19,10 @@ import (
 
 type Conversion struct{ Source, Target, Helper string }
 type Config struct {
-	InferredFamilies *[]enums.Decl
-	FileFamilies     map[string][]enums.Decl
-	GoResultNodes    *int
+	ResolvePayloadEnum func(types.Type) (PayloadEnum, bool, error)
+	InferredFamilies   *[]enums.Decl
+	FileFamilies       map[string][]enums.Decl
+	GoResultNodes      *int
 	// MatchReferenceTemps receives only compiler-generated exhaustive match slots.
 	MatchReferenceTemps map[string]bool
 	Families            []enums.Decl
@@ -52,6 +53,8 @@ type lowering struct {
 	conversions          map[string]string
 	companions           []*ast.File
 	boundFamilies        map[string]enums.Decl
+	sharedInstances      []sharedInstance
+	sharedActive         []types.Type
 	familyIssue          string
 	scalarNames          map[types.Type]string
 	arrayValueHelper     string
@@ -182,6 +185,14 @@ func (l *lowering) family(t types.Type) (enums.Decl, bool) {
 			}
 		}
 		if validator == "" {
+			if d.PackagePath == enums.SumPackage {
+				local, err := l.instantiateSharedFamily(n, d)
+				if err != nil {
+					l.familyIssue = err.Error()
+					return enums.Decl{}, false
+				}
+				return local, true
+			}
 			l.familyIssue = "imported sum instance has no matching producer validation metadata; this prototype cannot synthesize cross-package payload validation"
 			return enums.Decl{}, false
 		}

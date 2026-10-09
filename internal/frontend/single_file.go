@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/enums"
 	"github.com/hxsf/goxide/internal/naming"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
@@ -42,7 +43,18 @@ func CompileWithOptions(filename string, source []byte, options FileOptions) (Re
 		return Result{}, err
 	}
 	if options.PackagePath == "" {
-		return compile(filename, source, nil, options)
+		f, err := parseSourceImports(filename, source)
+		if err != nil {
+			return Result{}, err
+		}
+		hasSharedSum := false
+		for _, spec := range f.Imports {
+			path, _ := strconv.Unquote(spec.Path.Value)
+			hasSharedSum = hasSharedSum || path == enums.SumPackage
+		}
+		if !hasSharedSum {
+			return compile(filename, source, nil, options)
+		}
 	}
 	result, err := prepareCompilationContext(options.PackagePath, map[string][]byte{filename: source}, nil, options.Importer, true)
 	if err != nil {

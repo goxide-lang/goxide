@@ -2,45 +2,36 @@
 
 中文优先的静态语言介绍网站，以及真实单文件 goxide → Go 浏览器转译器。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
-本轮验证 A01 宏捕获类别与明确类型槽边界，并保留 A04 / A06 对照；编译器源码固定为
-`afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，生产源摘要固定为
-`2412f1a252c1dd195d1a4d5deed55e2dcd605e65d18edb0b838da36b1976203c`。
-`websiteCommit` 独立记录实际网站工具 HEAD。仅本地验证，没有部署或更新线上版本。
-[仓内验证说明](validation/README.md)是本片入口；[最新组合记录](LATEST-INTEGRATION.md)和
-[早期交付记录](INTEGRATION.md)中的既往结果不替代这次运行。
+本轮验证无冲突宏/派生 alias 精简，以及显式导入 std/sum 的具体实例校验。
+编译器准确提交与生产源码摘要由 `catalog-source.json` 的 `compilerCommit` /
+`compilerDigest` 记录，构建前逐文件核对；`websiteCommit` 独立记录网站工具 HEAD。
+这不表示已更新线上版本。[仓内验证说明](validation/README.md)区分当前验证和历史记录。
 
 ## 从干净 checkout 复现
 
-使用本分支的完整、非 shallow checkout。当前编译器 pin 与旧对照
-`fd8380c39876c96441857a737be8e32c322a0467` 都是本分支祖先；验证器只读取本地 Git 对象，
-缺少时明确失败，不自动 fetch。RFC 0024 原文另存于 `website/evidence/`，保留原提交、
-文件路径、SHA-256 和 Git blob 校验；无需额外拉取提案分支，原文不进入发布目录。
-
-准备已安装的 Go 1.27.1、race 可用的 C 编译器、Python 3.11+、Node、Playwright 1.58.2
-和 Chromium，以及完整的 `go.mod/go.sum` 模块缓存。检查不安装工具、不下载依赖；本地
-file proxy 和临时 Git 仓库只制造工程验收数据。Go 缓存和输出目录必须可写，浏览器测试
-需要 loopback 监听与本机浏览器进程权限。
+使用完整、非 shallow checkout，保留 catalog 引用的 compiler/evidence Git 对象。
+准备已安装的 Go 1.27.1、race 可用的 C 编译器、Python 3.11+、Node、Python Playwright
+和 Chromium，以及完整 `go.mod/go.sum` 缓存。先在当前 shell 按环境启动约定激活 Go。
+检查不安装工具、不下载依赖；浏览器测试需要 loopback 监听和保留 sandbox 的执行权限。
 
 ```sh
-python3 -B website/validation/run.py \
+python3 -B website/build.py
+python3 -B website/validation/focused.py \
   --out /absolute/new-validation-output \
   --go /absolute/path/to/go \
   --node /absolute/path/to/node \
   --chromium /absolute/path/to/chromium \
-  --playwright-node-modules /absolute/existing/node_modules \
-  --go-cache /absolute/writable/go-build \
-  --mod-cache /absolute/complete/go-mod
+  --cases website/validation/semantic-cleanups-cases.json
 ```
 
-入口从准确提交创建隔离副本，逐字节保留原 97 个 fixture、10 个示例；A04 单独追加
-8 个 fixture 和 1 个业务示例，A01 再追加 12 个 fixture，共 117 个 fixture、11 个示例。
-七阶段输出和失败记录保留。
-旧/新 Go 字节、完整 AST、实际运行分别记账；原 33 组成功输出与 5 对原生程序保持不变，
-新增语法只测当前编译器；A04 另存 32 次 LF/CRLF CLI 观察及 5 个实际原生程序输出，
-A01 另存 48 次 CLI 观察及 2 个原生程序输出。
-既有排版差异不计为字节相等。正式运行要求
-源树已提交且干净，输出必须是新的外部目录。快速构建辅助自测为
-`python3 -B website/build_support_test.py`；它不代替七阶段验收或完整原生测试。
+当前入口验证全部 11 个真实网站例子及本批正反例，核对 LF/CRLF 的 CLI、Node GoWASM
+和 HTTP Worker 输出，并按独立预期执行原生程序。输出留在新的仓外目录。
+Chromium sandbox 保持开启；环境拒绝时明确报告阻塞，不自动降级。
+
+历史 `validation/run.py` 的七阶段矩阵及 AST oracle 原样保留，须按
+[历史入口说明](validation/README.md#historical-seven-phase-acceptance)在旧准确提交中复现。
+本次 alias 精简有意改变生成 AST，不把当前 focused 结果冒称旧 AST 等价或完整 UI QA。
+完整 compiler race/vet/design 仍须另行运行；构建资源、推送分支、合入 main 和部署分开记录。
 
 ## 构建与运行
 
@@ -154,7 +145,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 
 状态针对卡片的限定范围：提案 / 已确认待实现 / 部分实现 / 已实现并验证。开发快照与当前编译器支持分别记录；任务报告不等于可发布实现。RFC 0024 仍是提案。当前 Playground 已包含共享 std/serde、明确上下文下的普通 sum 推导及限定可读性改进；统一 TOML/锁与 import-go 只在 CLI 工程快照说明。
 
-编译器 `commit` 固定为 `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，`websiteCommit` 记录网站源码提交；构建独立枚举 pin 与当前生产文件集，再逐文件核对字节和固定摘要，增加、缺少或修改源码均拒绝。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
+编译器 `commit` 绑定 `catalog-source.json` 的准确提交，`websiteCommit` 记录网站源码提交；构建独立枚举 pin 与当前生产文件集，再逐文件核对字节和固定摘要，增加、缺少或修改源码均拒绝。只有真实 CLI 转译、执行输出断言和浏览器差分通过的单文件示例提供入口。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
 
 ```sh
 python3 website/catalog.py

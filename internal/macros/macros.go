@@ -27,7 +27,10 @@ type TokenOrigin struct {
 }
 type Result struct {
 	// Builtins maps compiler-owned markers to definition-site builtin operations.
-	Builtins                      map[string]string
+	Builtins map[string]string
+	// PrimitiveAliases identifies definition-site type bindings which may be
+	// simplified after DSL lowering exposes the caller's complete Go scopes.
+	PrimitiveAliases              map[string]string
 	ExpansionCount, EmittedTokens int
 	Source                        []byte
 	Origins                       []TokenOrigin
@@ -197,6 +200,8 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 			return Result{}, err
 		}
 	}
+	primitiveAliases := e.primitiveAliases()
+	out = e.finishPrimitiveAliases(out, primitiveAliases)
 	var b strings.Builder
 	var origins []TokenOrigin
 	for _, t := range out {
@@ -222,7 +227,7 @@ func expandPackage(filename string, source []byte, names []string, pkg *Package,
 			fmt.Fprintf(&b, "\nvar %s = %s\n", e.aliases[key], key)
 		}
 	}
-	return Result{Builtins: e.builtins, Source: []byte(b.String()), Origins: origins, ExpansionCount: e.expansions, EmittedTokens: e.emitted}, nil
+	return Result{Builtins: e.builtins, PrimitiveAliases: primitiveAliases, Source: []byte(b.String()), Origins: origins, ExpansionCount: e.expansions, EmittedTokens: e.emitted}, nil
 }
 func (e *engine) readDefinitions(ts []tok, tail string) ([]tok, string, error) {
 	var clean []tok

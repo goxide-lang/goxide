@@ -13,3 +13,10 @@ func TestValidationRunnerFailurePaths(t *testing.T) {
 		t.Fatalf("runner failure-path checks: %v\n%s", err, output)
 	}
 }
+
+func TestFocusedValidationFailurePaths(t *testing.T) {
+	cmd := exec.Command("python3", "-B", "focused_test.py")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("focused validation failure-path checks: %v\n%s", err, output)
+	}
+}

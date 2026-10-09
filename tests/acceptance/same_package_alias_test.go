@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -52,7 +51,7 @@ func TestSamePackageAliasModules(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	src := t.TempDir()
-	packagesWrite(t, src, "go.mod", fmt.Sprintf("module local.example/fixture\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", filepath.ToSlash(root)))
+	packagesWrite(t, src, "go.mod", "module local.example/fixture\ngo 1.27\n")
 	packagesWrite(t, src, "types.gox", samePackageAliasTypes)
 	packagesWrite(t, src, "wrap.gox", samePackageAliasWrappers)
 	packagesWrite(t, src, "alias.go", "package fixture\ntype Native=Item\n")

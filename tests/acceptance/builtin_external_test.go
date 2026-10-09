@@ -18,7 +18,7 @@ func TestCrossModuleBuiltinArtifacts(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	module := func(name, lib string) string {
-		text := fmt.Sprintf("module %s\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %s\n", name, filepath.ToSlash(root))
+		text := fmt.Sprintf("module %s\ngo 1.27\n", name)
 		if lib != "" {
 			text += fmt.Sprintf("require sums.example/lib v0.0.0\nreplace sums.example/lib => %s\n", filepath.ToSlash(lib))
 		}

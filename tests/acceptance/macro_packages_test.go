@@ -41,7 +41,7 @@ func macroPackageSource(t *testing.T) string {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	packagesWrite(t, source, "go.mod", fmt.Sprintf("module macros.example/app\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %q\n", filepath.ToSlash(root)))
+	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
 	return source
 }
 

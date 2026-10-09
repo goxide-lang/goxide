@@ -55,11 +55,9 @@ type Order struct {
 
 func runGenerated(t *testing.T, generated []byte, assertions string) {
 	t.Helper()
-	_, here, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	dir := t.TempDir()
 	files := map[string][]byte{
-		"go.mod":            []byte("module fixture\n\ngo 1.27\n\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => " + filepath.ToSlash(root) + "\n"),
+		"go.mod":            []byte("module fixture\n\ngo 1.27\n"),
 		"generated.go":      generated,
 		"generated_test.go": []byte(assertions),
 	}

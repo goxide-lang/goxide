@@ -108,7 +108,7 @@ runtime leaves and propagation branches, not a new map insertion algorithm.
 Private scalar element/field types can be inferred using pure zero witnesses
 through the exported container; those helpers never read user storage or call
 user methods. When a source declaration shadows comparable, map witness helpers
-use the qualified compiler-support constraint in github.com/hxsf/goxide/runtime.
+use the qualified compiler-support constraint in github.com/goxide-lang/std/runtime.
 Directory modules using that path need the same explicit goxide module dependency
 as other generated runtime imports. This is a lowering detail, not a new source
 protocol, stable ABI or zero-cost guarantee.

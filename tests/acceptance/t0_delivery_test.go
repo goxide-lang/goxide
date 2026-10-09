@@ -47,7 +47,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 			t.Fatalf("repeated CLI generation differs: %s", suffix)
 		}
 	}
-	packagesWrite(t, generated, "go.mod", "module delivery.example/app\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
+	packagesWrite(t, generated, "go.mod", "module delivery.example/app\ngo 1.27\n")
 	packagesWrite(t, generated, "delivery_test.go", deliveryAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
 	application := filepath.Join(t.TempDir(), "job")
@@ -90,7 +90,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 		if strings.Count(string(original), readLimit) != 1 {
 			t.Fatal("example no longer has the expected readonly helper")
 		}
-		packagesWrite(t, source, "go.mod", "module delivery.example/package\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
+		packagesWrite(t, source, "go.mod", "module delivery.example/package\ngo 1.27\n")
 		packagesWrite(t, source, "main.gox", strings.Replace(string(original), readLimit, "", 1))
 		packagesWrite(t, source, "limits.gox", "package main\n"+readLimit+"\n")
 		dest := filepath.Join(t.TempDir(), "generated")
@@ -128,7 +128,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	})
 	t.Run("readonly-write-rejected", func(t *testing.T) {
 		source := t.TempDir()
-		packagesWrite(t, source, "go.mod", "module delivery.example/invalid\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
+		packagesWrite(t, source, "go.mod", "module delivery.example/invalid\ngo 1.27\n")
 		packagesWrite(t, source, "bad.gox", string(original)+"\nfunc illegalWrite(limit &int) { *limit = 9 }\n")
 		dest := filepath.Join(t.TempDir(), "bad.go")
 		output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, filepath.Join(source, "bad.gox"))

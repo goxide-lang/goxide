@@ -24,7 +24,6 @@ printf 'Source checkout: %s\n' "$(git -C "$repo" rev-parse HEAD)"
 "$work/goxide" transpile -o "$work/model" "$repo/examples/enum_trial/model"
 cp -R -- "$repo/examples/enum_trial/app" "$work/input"
 "$go_tool" -C "$work/input" mod edit \
-    "-replace=github.com/hxsf/goxide=$repo" \
     "-replace=trial.example/model=$work/model"
 "$work/goxide" transpile -o "$work/app" "$work/input"
 for module in "$work/model" "$work/app"; do

@@ -140,7 +140,7 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 		t.Fatalf("business: %q", got)
 	}
 	deliveryCommand(t, generated, tool, true, []string{"GODEBUG=panicnil=1"}, "test", "-race", "-count=1", "-v", "-run", "TestPrivateUserPanicAndGoexit", ".")
-	privateAssignmentNegatives(t, cli, outside, root)
+	privateAssignmentNegatives(t, cli, outside)
 
 }
 

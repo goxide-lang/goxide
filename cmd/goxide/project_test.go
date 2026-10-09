@@ -556,13 +556,8 @@ format = 1
 
 func TestProjectConditionalGoxideAcrossTargets(t *testing.T) {
 	root := t.TempDir()
-	cwd, e := os.Getwd()
-	if e != nil {
-		t.Fatal(e)
-	}
-	runtimeRoot := filepath.Clean(filepath.Join(cwd, "../.."))
 	projectWrite(t, root, map[string]string{
-		"go.mod": "module example.org/conditional\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => " + filepath.ToSlash(runtimeRoot) + "\n",
+		"go.mod": "module example.org/conditional\n\ngo 1.27\n",
 		"goxide.toml": `[[bin]]
 name = 'one'
 path = 'cmd/one'

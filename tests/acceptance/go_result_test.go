@@ -16,7 +16,7 @@ func TestGoResultMacros(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	source := t.TempDir()
-	packagesWrite(t, source, "go.mod", packagesModule(root))
+	packagesWrite(t, source, "go.mod", packagesModule())
 	packagesWrite(t, source, "ops/macros.gox", `package ops
 pub macro_rules! ordinary { ($x:expr) => { go_result!(int, $x) }; }
 pub macro_rules! retained { ($x:expr) => { go_result_keep!(int, $x) }; }
@@ -113,7 +113,7 @@ func TestOrderAndFrames(t *testing.T){trace=nil;e:=Factory().(GoxideResultErr[in
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			packagesWrite(t, dir, "go.mod", packagesModule(root))
+			packagesWrite(t, dir, "go.mod", packagesModule())
 			packagesWrite(t, dir, "bad.gox", "package bad\nimport \"strconv\"\nvar _=strconv.Atoi\n"+body)
 			output := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), dir)
 			if !strings.Contains(output, "bad.gox") {
@@ -133,7 +133,7 @@ func TestGoResultIndependentModules(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	producer := t.TempDir()
-	packagesWrite(t, producer, "go.mod", fmt.Sprintf("module adapter.example/producer\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => %q\n", root))
+	packagesWrite(t, producer, "go.mod", "module adapter.example/producer\ngo 1.27\n")
 	packagesWrite(t, producer, "native.go", `package producer
 import "io"
 type Count = int
@@ -148,7 +148,7 @@ func Wrapped()Result[int,Partial]{return go_result_keep!(int,Read())}
 	prodOut := filepath.Join(t.TempDir(), "producer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", prodOut, producer)
 	consumer := t.TempDir()
-	packagesWrite(t, consumer, "go.mod", fmt.Sprintf("module adapter.example/consumer\ngo 1.27\nrequire (\n github.com/hxsf/goxide v0.0.0\n adapter.example/producer v0.0.0\n)\nreplace github.com/hxsf/goxide => %q\nreplace adapter.example/producer => %q\n", root, prodOut))
+	packagesWrite(t, consumer, "go.mod", fmt.Sprintf("module adapter.example/consumer\ngo 1.27\nrequire adapter.example/producer v0.0.0\nreplace adapter.example/producer => %q\n", prodOut))
 	packagesWrite(t, consumer, "consumer.gox", `package consumer
 import(p "adapter.example/producer";"strconv")
 func Native()Result[p.Count,p.Partial]{return go_result_keep!(p.Count,p.Read())}

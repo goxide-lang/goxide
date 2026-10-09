@@ -73,7 +73,7 @@ func TestOptionSerdeNestedContainersRace(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin, outside, source := t.TempDir(), t.TempDir(), t.TempDir()
 	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
-	packagesWrite(t, source, "go.mod", "module nestedoption.example/app\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconv.Quote(root)+"\n")
+	packagesWrite(t, source, "go.mod", "module nestedoption.example/app\ngo 1.27\n")
 	packagesWrite(t, source, "nested.gox", `package nested
 import("github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 #[derive(Serialize,Deserialize)]

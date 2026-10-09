@@ -316,7 +316,7 @@ func Lower(files map[string][]byte, cfg Config) (map[string][]byte, error) {
 			continue
 		}
 		changed = true
-		edits = append(edits, edit{pos(tree.Name.End()), pos(tree.Name.End()), fmt.Sprintf("\nimport %s %q\n", runtimeAlias, "github.com/hxsf/goxide/formatting"), nil})
+		edits = append(edits, edit{pos(tree.Name.End()), pos(tree.Name.End()), fmt.Sprintf("\nimport %s %q\n", runtimeAlias, "github.com/goxide-lang/std/formatting"), nil})
 		edits = append(edits, edit{len(source), len(source), aliases.String(), nil})
 		sort.SliceStable(edits, func(i, j int) bool { return edits[i].start < edits[j].start })
 		var out bytes.Buffer

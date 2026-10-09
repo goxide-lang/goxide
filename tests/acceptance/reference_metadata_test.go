@@ -30,7 +30,7 @@ func TestReferenceMetadataModules(t *testing.T) {
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	makeSource := func(body, ext string) string {
 		source := filepath.Join(t.TempDir(), "source")
-		packagesWrite(t, source, "go.mod", packagesModule(root))
+		packagesWrite(t, source, "go.mod", packagesModule())
 		packagesWrite(t, source, "api/read.gox", referenceAPI)
 		packagesWrite(t, source, "api/other.gox", "package api\nfunc Again(r &int)&int{return View(r)}\n")
 		packagesWrite(t, source, "mid/mid.gox", `package mid
@@ -151,7 +151,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 			t.Fatalf("single export marker: %s %v", data, e)
 		}
 		copied := filepath.Join(t.TempDir(), "copied")
-		packagesWrite(t, copied, "go.mod", packagesModule(root))
+		packagesWrite(t, copied, "go.mod", packagesModule())
 		packagesWrite(t, copied, "api/api.go", string(data))
 		consumer := "package app\nimport x \"packages.example/app/api\"\nfunc Run(){n:=1;*x.View(&n)=7}\n"
 		packagesWrite(t, copied, "app.gox", consumer)
@@ -173,7 +173,7 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 	})
 	t.Run("missing-metadata-native-distinction", func(t *testing.T) {
 		source := filepath.Join(t.TempDir(), "source")
-		packagesWrite(t, source, "go.mod", packagesModule(root))
+		packagesWrite(t, source, "go.mod", packagesModule())
 		packagesWrite(t, source, "api/api.go", `package api
 const GoxideReferenceMetadata="v1:missing"
 func View(p *int)*int{return p}

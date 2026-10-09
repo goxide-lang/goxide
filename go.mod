@@ -10,8 +10,8 @@ require (
 )
 
 require (
-	github.com/goxide-lang/serde v0.0.0-20261004120911-a1b791e96d66 // indirect
-	github.com/goxide-lang/std v0.0.0-20261004173304-ce5bccb4ff9c // indirect
+	github.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0 // indirect
+	github.com/goxide-lang/std v0.0.0-20261009053434-9ed27c85088a // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 )

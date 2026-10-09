@@ -117,7 +117,7 @@ func (l *lowering) assignmentFrame(s *ast.AssignStmt, ft *ast.FuncType) ([]ast.S
 	}
 	if l.frameRuntime == "" {
 		l.frameRuntime = "__goxide_qframe_runtime_" + l.cfg.Namespace
-		spec := &ast.ImportSpec{Name: ast.NewIdent(l.frameRuntime), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("github.com/hxsf/goxide/runtime")}}
+		spec := &ast.ImportSpec{Name: ast.NewIdent(l.frameRuntime), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("github.com/goxide-lang/std/runtime")}}
 		l.file.Decls = append([]ast.Decl{&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{spec}}}, l.file.Decls...)
 		l.file.Imports = append(l.file.Imports, spec)
 	}

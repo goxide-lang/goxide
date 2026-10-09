@@ -104,4 +104,10 @@ Cargo 风格第一版通过 `goxide.toml` 增量启用默认/显式 feature、�
 
 共享 sum 与 serde 已迁入独立 Go 模块：`github.com/goxide-lang/std/sum`、`github.com/goxide-lang/serde`、`github.com/goxide-lang/serde/json`。本 checkout 的 go.mod/go.sum 固定真实公开提交；不是未发布候选 replace。具体版本、发布白名单和整合验收见[迁移记录](docs/reviews/public-library-migration-20261004.md)。旧 schema 6 产物需用此编译器重新生成；不承诺与旧私有 marker 二进制兼容。
 
+格式化写入与赋值传播支持也由 `github.com/goxide-lang/std/formatting` 和
+`github.com/goxide-lang/std/runtime` 提供。旧 compiler 支持包已删除，项目须更新
+std 并重新生成；不保留旧路径转发。单文件 CLI 的 `--runtime` 选择支持依赖清单，
+生成模块只包含公共支持库的实际依赖图，不再注入 compiler 模块。格式字符串检查
+仍属于编译器，正常 Go 互操作及卫生类型保护保持原语义。见[支持库迁移合同](docs/design/support-library-migration.md)。
+
 供应模块来源选择：真实终端迁入默认展示一次模块清单，空行保留全部 local；非终端默认 local，不等待读取 stdin。重复 `--source MODULE=local|remote` 可确定性选择清单证实的精确版本；`--plan` 只显示请求，不联网比对。remote 与供应字节有差异时须逐模块确认，非终端使用 `--accept-source-diff MODULE`；所有原供应字节仍保留于输出本地模块和审计。`--offline` 的 remote 选择只用已缓存完整包，缓存不足失败，不访问代理、sumdb、Git 或下载工具链。verified 仅证明供应文件集合相等，不证明完整发行物等价；不猜 Git URL，不支持任意远端或 registry 搜索。

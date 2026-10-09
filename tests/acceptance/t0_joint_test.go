@@ -37,7 +37,7 @@ func TestT0JointBusiness(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		packagesWrite(t, dir, "go.mod", "module joint.example/app\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
+		packagesWrite(t, dir, "go.mod", "module joint.example/app\ngo 1.27\n")
 		return dir
 	}
 	source, generated := sourceFor(), filepath.Join(t.TempDir(), "generated")

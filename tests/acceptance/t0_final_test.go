@@ -22,7 +22,7 @@ func TestT0FinalAuditBusinessRace(t *testing.T) {
 		t.Fatal(err)
 	}
 	generated := t.TempDir()
-	packagesWrite(t, generated, "go.mod", "module finalaudit.example/business\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+strconvQuote(root)+"\n")
+	packagesWrite(t, generated, "go.mod", "module finalaudit.example/business\ngo 1.27\n")
 	packagesWrite(t, generated, "main.go", string(result.Go))
 	packagesWrite(t, generated, "audit_test.go", finalAuditAssertions)
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")

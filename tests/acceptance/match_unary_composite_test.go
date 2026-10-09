@@ -21,7 +21,7 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 	sourceFor := func(body string) string {
 		t.Helper()
 		dir := t.TempDir()
-		packagesWrite(t, dir, "go.mod", packagesModule(root))
+		packagesWrite(t, dir, "go.mod", packagesModule())
 		packagesWrite(t, dir, "model/model.gox", matchUnaryModel)
 		packagesWrite(t, dir, "model/scalars.go", matchUnaryScalars)
 		packagesWrite(t, dir, "app.gox", "package main\nimport cfg \"packages.example/app/model\"\n"+body)

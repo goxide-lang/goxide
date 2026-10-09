@@ -171,7 +171,7 @@ formatters; only trusted same-package Debug derives enable composite `{:?}`.
 Named scalar definitions and imported/custom formatting protocols do not gain
 implicit support. Direct statements, including nested explicit closure bodies,
 are supported; go/defer, initializer, loop-post, and value contexts are rejected.
-See [formatting runtime](../../formatting/print.go) for the checked write contract.
+See [formatting runtime](https://github.com/goxide-lang/std/blob/9ed27c85088abd91ac7b32c98cfa532f559ad4d7/formatting/print.go) for the checked write contract.
 
 ## Definition-site len/cap, append and copy
 

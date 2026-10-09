@@ -342,7 +342,7 @@ RFC0019/0020、全部逐特性RFC及检查器已同步；这些方向不因为�
 
 基于 `a229e5f12dfebc953dea75beae867af5161abd3d`，补齐既有 Option/Result 的索引/切片及 struct、数组、slice、map 字面量传播。[接受测试](../tests/acceptance/propagate_aggregate_test.go)包含 **10 项**主生成模块 race、跨包批次业务 **2 项** race、只读数组投影 **1 项** race，另有 **14 项**前端拒绝。拒绝包括不可取址数组切片/元素指针方法、静态边界、重复键/字段、非法 literal key、只读共享字段装入可写容器及不求值 unsafe 参数。
 
-覆盖证据明确分开：源码真实经过 hgo→Go；安装 CLI 在仓库外转译[批次业务](../examples/propagate_aggregate/main.gox)，独立生成模块执行；纯 Go 规范探针不是前端实现证明。业务保留 strconv.NumError cause，并覆盖外部包私有 scalar、struct/array、隐式指针、map 键值、命名 bool 短路及 comparable 遮蔽。对应 compiler-support 约束见 [runtime](../runtime/constraints.go)，不是新 trait/公共协议；只有遮蔽且需要该 witness 的生成路径引入此包，目录模块须声明 goxide 模块 依赖。
+覆盖证据明确分开：源码真实经过 hgo→Go；安装 CLI 在仓库外转译[批次业务](../examples/propagate_aggregate/main.gox)，独立生成模块执行；纯 Go 规范探针不是前端实现证明。业务保留 strconv.NumError cause，并覆盖外部包私有 scalar、struct/array、隐式指针、map 键值、命名 bool 短路及 comparable 遮蔽。对应 compiler-support 约束见 [runtime](https://github.com/goxide-lang/std/blob/9ed27c85088abd91ac7b32c98cfa532f559ad4d7/runtime/constraints.go)，不是新 trait/公共协议；只有遮蔽且需要该 witness 的生成路径引入此包，目录模块须声明 goxide 模块 依赖。
 
 本组保留规定的调用/接收/逻辑顺序；不对变量读取、索引及 map 插入的未规定顺序作新增承诺。动态重复键接受 Go 允许的任一结果。数组原存储和可取址类别、map comma-ok、省略 bounds/类型、常量 key 错误及 len/cap 原求值属性均分别验收。
 
@@ -377,7 +377,7 @@ unsafe 的现有限制精确匹配真实 Sizeof/Alignof/Offsetof builtin；Add/S
 
 ## T0 第四组补齐：外包私有嵌入指针目标
 
-覆盖上一节的私有嵌入指针限制：当前 [frame lowering](../internal/propagate/frame.go)保留原 Go assignment，不生成不可访问 selector，也不复制数组/根结构体来冒充原位置。原生包无需配合修改或导出私有字段。仅这类目标使用 [runtime guard](../runtime/assignment.go)，问号失败不进入写阶段；private scalar 的上下文类型与只读权限由原赋值继续保留。
+覆盖上一节的私有嵌入指针限制：当前 [frame lowering](../internal/propagate/frame.go)保留原 Go assignment，不生成不可访问 selector，也不复制数组/根结构体来冒充原位置。原生包无需配合修改或导出私有字段。仅这类目标使用 [runtime guard](https://github.com/goxide-lang/std/blob/9ed27c85088abd91ac7b32c98cfa532f559ad4d7/runtime/assignment.go)，问号失败不进入写阶段；private scalar 的上下文类型与只读权限由原赋值继续保留。
 
 实际[跨包业务](../examples/propagate_places/private.gox)新增 **10 项**生成模块 race，另 **6 项**前端拒绝，旧限制拒绝用例已替换为正向执行。与既有两项业务合计 **12 项**生成模块测试；legacy `GODEBUG=panicnil=1` 另重跑 panic/Goexit 一项，属于配置验证而非新增测试计数。CLI 业务新增输出 `stock 7 <nil>`、`invalid stock 7`。命名返回遮蔽、非法裸 return、goto 声明作用域三个独立审查发现均已修复并留真实用例。
 

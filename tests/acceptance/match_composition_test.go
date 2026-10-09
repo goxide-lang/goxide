@@ -79,7 +79,7 @@ func TestMatchCompositionPackagesRace(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
 	source := filepath.Join(t.TempDir(), "source")
-	packagesWrite(t, source, "go.mod", packagesModule(root))
+	packagesWrite(t, source, "go.mod", packagesModule())
 	packagesWrite(t, source, "model/types.gox", `package model
 #[derive(Serialize, Deserialize)]
 pub enum Mode { Off, Workers(int), }

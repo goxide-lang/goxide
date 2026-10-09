@@ -39,11 +39,7 @@ func main(){
 		t.Fatal(e)
 	}
 	dir := t.TempDir()
-	root, e := filepath.Abs("../..")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e = testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module generated\n\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\nreplace github.com/hxsf/goxide => "+root+"\n"), 0600); e != nil {
+	if e = testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module generated\n\ngo 1.27\n"), 0600); e != nil {
 		t.Fatal(e)
 	}
 	if e = testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Go, 0600); e != nil {

@@ -1,13 +1,13 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`93eb73f8c8b835347ab9d1fd055d7801f9ceb817`；证据复核日期：2026-10-09。
+编译器基线：`e68bfe6ed83de432e2c2ee79936bda4150cc78ca`；证据复核日期：2026-10-09。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
 | 特性 | RFC | 状态 | 当前入口 | 实现/测试/设计证据（基线或注明的开发快照） |
 | --- | --- | --- | --- | --- |
 | 声明宏：模式与重复 | 0011 | 部分实现 | browser | `internal/macros/macros_test.go` (ac3882cf4736); `internal/macros/primitive_bindings_test.go` (efff49717468); `tests/acceptance/macro_packages_test.go` (1ba9ea30ef9e); `docs/rfcs/0011-macros.md` (92e24451181f); `internal/macros/fragment_categories_test.go` (6296785c2a76); `tests/acceptance/macro_fragment_categories_test.go` (0b11b9bf0d0f); `internal/macros/primitive_aliases_test.go` (0fde220258ea) |
-| 封闭 enum 与明确状态 | 0008, 0015 | 部分实现 | browser | `internal/enums/lower.go` (7d08b4daf565); `tests/acceptance/enums_test.go` (a294eb9bffc8); `tests/acceptance/enum_external_test.go` (4fa5baffb003) |
+| 封闭 enum 与明确状态 | 0008, 0015 | 部分实现 | browser | `internal/enums/lower.go` (7d08b4daf565); `tests/acceptance/enums_test.go` (a294eb9bffc8); `tests/acceptance/enum_external_test.go` (a26a70696ba6) |
 | match、guard 与表达式 | 0009 | 部分实现 | browser | `internal/matchexpr/lower.go` (a37c0040a656); `tests/acceptance/match_call_signatures_test.go` (c3c0e1f58455); `tests/acceptance/match_named_dynamic_test.go` (212f9b86bd3a); `internal/matchexpr/composite.go` (0208a27e7dbc); `internal/propagate/match_literals.go` (0e9dd27f2fa4); `tests/acceptance/match_unary_composite_test.go` (e4d6b82b7518); `docs/rfcs/0009-match.md` (637daf1db37d) |
 | Option / Result 与 ? | 0008, research/0005 | 部分实现 | browser | `internal/propagate/lower.go` (5868351d3694); `tests/acceptance/propagate_test.go` (bf545583d370); `tests/acceptance/propagate_values_test.go` (4d0b2d61d4e1); `internal/propagate/sum_inference.go` (5b9a34aff90d); `internal/frontend/shared_std_test.go` (a2cb837c392e); `internal/frontend/explicit_std_test.go` (af714c812a63) |
 | Go 返回值适配：静态 T/E 推导 | research/0005 | 已实现并验证 | browser | `internal/propagate/go_result.go` (421c5cdd4406); `tests/acceptance/go_result_inference_test.go` (f18820be8cd8) |

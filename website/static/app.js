@@ -1,27 +1,51 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let manifest, worker, ready = false, busy = false, revision = 0, debounce, timer, selected = 0;
-const MAX_BYTES = 32768, COMPILE_MS = 10000, LOAD_MS = 30000;
+let manifest, examples, worker, ready = false, busy = false, revision = 0, debounce, timer, selected = 0;
+let files = [], activeFile = 0, packageMode = false, generatedFiles = [], activeGenerated = 0;
+const MAX_BYTES = 32768, MAX_FILES = 16, COMPILE_MS = 10000, LOAD_MS = 30000;
 function status(message, state = '') { $('status').textContent = message; $('status').dataset.state = state; }
-function clearOutput() { $('output').value = ''; $('copy').disabled = true; $('diagnostic').hidden = true; }
+function clearOutput() {
+  generatedFiles = []; activeGenerated = 0; $('generated-files').replaceChildren();
+  $('output').value = ''; $('output-path').textContent = '生成结果 / Go';
+  $('copy').disabled = true; $('diagnostic').hidden = true;
+}
+function tabs(container, entries, active, select) {
+  $(container).replaceChildren(...entries.map((file, index) => {
+    const button = document.createElement('button'); button.type = 'button';
+    button.textContent = file.path; button.setAttribute('aria-pressed', String(index === active));
+    button.onclick = () => select(index); return button;
+  }));
+}
+function showSource(index = activeFile) {
+  activeFile = index; $('source').value = files[index].source;
+  $('source-path').textContent = '源码 / ' + files[index].path;
+  $('delete-file').disabled = files.length <= 1;
+  tabs('source-files', files, index, showSource);
+  $('input-mode').textContent = packageMode ? `同包 · ${files.length} 个文件` : '单文件兼容入口';
+}
+function showGenerated(index = activeGenerated) {
+  activeGenerated = index; $('output').value = generatedFiles[index].source;
+  $('output-path').textContent = '生成结果 / ' + generatedFiles[index].path;
+  tabs('generated-files', generatedFiles, index, showGenerated);
+}
 function kill() { clearTimeout(timer); worker?.terminate(); worker = null; ready = busy = false; $('stop').disabled = true; }
 function fail(message) { kill(); clearOutput(); status('转译未完成。修正源码或点击「转译」重试。', 'error'); $('diagnostic').textContent = message; $('diagnostic').hidden = false; }
 function send() {
   if (!ready || !worker) return;
-  const source = $('source').value;
-  if (new TextEncoder().encode(source).length > MAX_BYTES) { fail('源码超过 32 KiB UTF-8 限制。'); return; }
+  if (files.reduce((size, file) => size + new TextEncoder().encode(file.source).length, 0) > MAX_BYTES) { fail('源码集合超过 32 KiB UTF-8 限制。'); return; }
   busy = true; $('stop').disabled = false;
   status('正在转译…');
   timer = setTimeout(() => fail('编译超过 10 秒，Worker 已终止。可修改、重置或重新转译。'), COMPILE_MS);
-  worker.postMessage({type:'compile', id:revision, source});
+  worker.postMessage({type:'compile', id:revision, ...(packageMode ? {files:files.map(file => ({...file}))} : {source:files[0].source})});
 }
 function compile() {
+  if (!manifest || !files.length) return;
   clearTimeout(debounce); revision++; clearOutput();
   if (busy) kill();
   if (ready) { send(); return; }
-  if (worker) return; // Loading: the eventual ready handler compiles newest source.
+  if (worker) return; // Loading: the eventual ready handler compiles newest files.
   status('正在载入浏览器编译器…'); $('stop').disabled = false;
-  const instance = new Worker(`worker.js?compiler=${manifest.commit}&wasm=${manifest.wasmSha256}`); worker = instance;
+  const instance = new Worker(`worker.js?site=${manifest.websiteCommit}&compiler=${manifest.commit}&wasm=${manifest.wasmSha256}`); worker = instance;
   timer = setTimeout(() => fail('编译器加载超过 30 秒。请重试。'), LOAD_MS);
   instance.onerror = e => { if (worker === instance) fail(e.message || 'Worker 启动失败'); };
   instance.onmessage = ({data}) => {
@@ -31,8 +55,10 @@ function compile() {
     if (data.type !== 'result' || data.id !== revision) return;
     clearTimeout(timer); busy = false; $('stop').disabled = true;
     if (data.error) { clearOutput(); status('转译失败 · 未保留旧结果', 'error'); $('diagnostic').textContent = data.error; $('diagnostic').hidden = false; return; }
-    $('output').value = data.go; $('copy').disabled = false;
-    status(`转译完成 · ${new TextEncoder().encode(data.go).length.toLocaleString()} bytes Go · 未执行`);
+    generatedFiles = data.files || [{path:'playground.go', source:data.go}];
+    showGenerated(0); $('copy').disabled = false;
+    const bytes = generatedFiles.reduce((size, file) => size + new TextEncoder().encode(file.source).length, 0);
+    status(`转译完成 · ${generatedFiles.length} 个 Go 文件 · ${bytes.toLocaleString()} bytes Go · 未执行`);
   };
 }
 function changed() {
@@ -40,18 +66,64 @@ function changed() {
   if (busy) kill();
   status('源码已更新，等待转译…'); debounce = setTimeout(compile, 450);
 }
-function choose(index) { selected = index; $('examples').value = String(index); $('source').value = manifest.examples[index].source; $('example-description').textContent = manifest.examples[index].description; compile(); }
-$('source').addEventListener('input', changed);
+function choose(index) {
+  selected = index; $('examples').value = String(index); const example = examples[index];
+  packageMode = Array.isArray(example.files);
+  files = packageMode ? example.files.map(file => ({...file})) : [{path:'playground.gox', source:example.source}];
+  $('example-description').textContent = example.description; $('file-error').hidden = true; $('new-file-name').value = '';
+  showSource(0); compile();
+}
+$('source').addEventListener('input', () => { files[activeFile].source = $('source').value; changed(); });
 $('source').addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); compile(); } });
+$('add-file').onclick = () => {
+  const path = $('new-file-name').value;
+  let error = '';
+  if (!/^[A-Za-z][A-Za-z0-9_-]*\.gox$/.test(path) || path.endsWith('_test.gox') || path.startsWith('goxide_')) error = '请输入普通 .gox 文件名（字母开头，无目录；不接受测试或保留文件名）。';
+  else if (files.some(file => file.path.toLowerCase() === path.toLowerCase())) error = '文件名已存在。';
+  else if (files.length >= MAX_FILES) error = '最多 16 个同包文件。';
+  $('file-error').textContent = error; $('file-error').hidden = !error;
+  if (error) return;
+  const packageName = files.map(file => file.source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ' ').match(/^\s*package\s+([\p{L}_][\p{L}\p{Nd}_]*)/mu)?.[1]).find(Boolean) || 'main';
+  files.push({path, source:`package ${packageName}\n`}); packageMode = true;
+  $('new-file-name').value = ''; showSource(files.length - 1); changed();
+};
+$('delete-file').onclick = () => {
+  if (files.length <= 1) return;
+  files.splice(activeFile, 1); $('file-error').hidden = true;
+  showSource(Math.min(activeFile, files.length - 1)); changed();
+};
 $('compile').onclick = compile;
 $('reset').onclick = () => choose(selected);
 $('stop').onclick = () => { revision++; clearTimeout(debounce); kill(); clearOutput(); status('已中断。点击「转译」或「重置示例」可恢复。'); };
 $('examples').onchange = () => choose(Number($('examples').value));
 $('copy').onclick = async () => {
-  try { await navigator.clipboard.writeText($('output').value); status('已复制生成的 Go 源码。'); }
-  catch { $('output').focus(); $('output').select(); status('浏览器未允许剪贴板。已选中结果，请按 Ctrl / ⌘ + C。'); }
+  const currentRevision = revision, path = generatedFiles[activeGenerated]?.path;
+  try {
+    await navigator.clipboard.writeText($('output').value);
+    if (revision === currentRevision && generatedFiles[activeGenerated]?.path === path) status('已复制完整 Go 文件：' + path);
+  } catch {
+    if (revision !== currentRevision || generatedFiles[activeGenerated]?.path !== path) return;
+    $('output').focus(); $('output').select(); status('浏览器未允许剪贴板。已选中结果，请按 Ctrl / ⌘ + C。');
+  }
 };
-document.querySelectorAll('[data-example]').forEach(link => link.addEventListener('click', () => { if (manifest) choose(manifest.examples.findIndex(e => e.id === link.dataset.example)); }));
+function renderDependencies() {
+  const dependencies = manifest.dependencies || [];
+  const option = (value, label) => { const node = document.createElement('option'); node.value = value; node.textContent = label; return node; };
+  $('dependencies').replaceChildren(...dependencies.map((dependency, index) => option(index, dependency.package)));
+  function showFile() {
+    const dependency = dependencies[Number($('dependencies').value)];
+    const file = dependency?.files[Number($('dependency-files').value)];
+    $('dependency-source').value = file?.source || '';
+    $('dependency-provenance').textContent = dependency && file ? `${dependency.package} @ ${dependency.version} · ${dependency.source} · ${file.path} · SHA-256 ${file.sha256}` : '本构建没有随附可核验依赖源码。';
+  }
+  function showDependency() {
+    const dependency = dependencies[Number($('dependencies').value)];
+    $('dependency-files').replaceChildren(...(dependency?.files || []).map((file, index) => option(index, file.path)));
+    showFile();
+  }
+  $('dependencies').onchange = showDependency; $('dependency-files').onchange = showFile; showDependency();
+}
+document.querySelectorAll('[data-example]').forEach(link => link.addEventListener('click', () => { if (manifest) choose(examples.findIndex(e => e.id === link.dataset.example)); }));
 function renderCatalog() {
   const catalog = manifest.catalog;
   if (!catalog || catalog.compilerCommit !== manifest.commit) throw new Error('特性目录与编译器版本不一致');
@@ -106,9 +178,10 @@ function renderCatalog() {
   const response = await fetch('examples.json', {cache:'no-store'});
   if (!response.ok) throw new Error(`示例清单 HTTP ${response.status}`);
   manifest = await response.json();
+  examples = [...manifest.examples, ...(manifest.packageExamples || [])];
   if (!/^[a-f0-9]{64}$/.test(manifest.wasmSha256 || '')) throw new Error('编译器清单缺少完整性摘要，请刷新重试');
-  renderCatalog();
-  $('examples').replaceChildren(...manifest.examples.map((e,i) => { const option = document.createElement('option'); option.value = i; option.textContent = e.title; return option; }));
+  renderCatalog(); renderDependencies();
+  $('examples').replaceChildren(...examples.map((e,i) => { const option = document.createElement('option'); option.value = i; option.textContent = e.title; return option; }));
   $('version').textContent = `源码提交 ${manifest.commit} · 编译器源摘要 SHA-256 ${manifest.compilerDigest} · ${manifest.toolchain}`;
   $('packages').textContent = manifest.packages.join(' · ');
   $('library-versions').textContent = manifest.publicLibraries.map(p=>`${p.module} @ ${p.version}`).join(' · ');
@@ -127,11 +200,11 @@ function renderCatalog() {
     const pre = document.createElement('pre'); pre.textContent = 'CLI 运行输出\n' + example.stdout;
     $('cli-example').append(pre);
   }
-  for (const id of ['examples','source','compile','reset']) $(id).disabled = false;
+  for (const id of ['examples','source','compile','reset','new-file-name','add-file']) $(id).disabled = false;
   choose(0);
   if (document.modelContext?.registerTool) {
     const lifecycle = new AbortController();
     addEventListener('pagehide', () => lifecycle.abort(), {once:true});
-    Promise.resolve(document.modelContext.registerTool({name:'read_playground',description:'Read the current goxide source, generated Go and compiler status without executing code.', inputSchema:{type:'object',properties:{},additionalProperties:false}, annotations:{readOnlyHint:true,untrustedContentHint:true}, execute(input) { if (!input || typeof input !== 'object' || Object.keys(input).length) throw new Error('expected empty object'); return {source:$('source').value,go:$('output').value,status:$('status').textContent,diagnostic:$('diagnostic').hidden ? '' : $('diagnostic').textContent}; }}, {signal:lifecycle.signal})).catch(() => {});
+    Promise.resolve(document.modelContext.registerTool({name:'read_playground',description:'Read the current goxide source, generated Go and compiler status without executing code.', inputSchema:{type:'object',properties:{},additionalProperties:false}, annotations:{readOnlyHint:true,untrustedContentHint:true}, execute(input) { if (!input || typeof input !== 'object' || Object.keys(input).length) throw new Error('expected empty object'); return {mode:packageMode?'package':'single',files:files.map(file=>({...file})),generatedFiles:generatedFiles.map(file=>({...file})),source:$('source').value,go:$('output').value,status:$('status').textContent,diagnostic:$('diagnostic').hidden ? '' : $('diagnostic').textContent}; }}, {signal:lifecycle.signal})).catch(() => {});
   }
 })().catch(e => { $('catalog-count').textContent = '特性目录暂时不可用，请刷新重试。'; fail(String(e)); });

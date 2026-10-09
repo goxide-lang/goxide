@@ -34,7 +34,7 @@ CLI 长选项使用 `--name`，短选项使用 `-h`、`-o`，拒绝旧式 `-go/-
 
 ## 网页与浏览器 Playground
 
-[构建独立 goxide-web 二进制](website/README.md)：中文特性目录、十一组真实 goxide → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器仅支持清单内包的单文件转译；CLI 与 WASM 示例逐字节校验。
+[构建独立 goxide-web 二进制](website/README.md)：中文特性目录、十一组真实 goxide → Go 对照与浏览器 WASM 转译。资源全部 Go embed，默认本机监听，不需要 Node、外部服务或运行时资源目录。浏览器支持一个用户包内的多个 `.gox` 文件及固定随附依赖；旧例保留单文件入口。完整生成 Go 按文件查看，依赖源码只读并标明真实来源。CLI 与 WASM 示例逐字节校验。
 
 ## 当前支持
 

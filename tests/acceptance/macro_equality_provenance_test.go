@@ -61,14 +61,24 @@ func TestMacroEqualityProvenanceCLI(t *testing.T) {
 					}
 					deliveryCommand(t, outside, cli, true, nil, args...)
 				}
+				firstFiles, secondFiles := equalityGeneratedFiles(t, first), equalityGeneratedFiles(t, second)
+				// Every input must still have its complete Go output and source map.
 				for name := range files {
 					generated := strings.TrimSuffix(name, ".gox") + ".go"
 					for _, suffix := range []string{"", ".map.json"} {
-						a := equalityProvenanceRead(t, filepath.Join(first, generated+suffix))
-						b := equalityProvenanceRead(t, filepath.Join(second, generated+suffix))
-						if !bytes.Equal(a, b) {
-							t.Fatalf("repeated transpilation changed %s", generated+suffix)
+						if _, ok := firstFiles[generated+suffix]; !ok {
+							t.Fatalf("missing generated source or sidecar: %s", generated+suffix)
 						}
+					}
+				}
+				// Include standalone helpers and metadata sidecars, and reject a
+				// file-set change even when all original user files match.
+				if len(firstFiles) != len(secondFiles) {
+					t.Fatal("repeated transpilation changed its output file set")
+				}
+				for name, a := range firstFiles {
+					if b, ok := secondFiles[name]; !ok || !bytes.Equal(a, b) {
+						t.Fatalf("repeated transpilation changed %s", name)
 					}
 				}
 				equalityMacroMap(t, first, source, definitionFile, files, mode == "single")
@@ -131,6 +141,41 @@ func equalityProvenanceRead(t *testing.T, path string) []byte {
 	return data
 }
 
+// Read the complete pre-execution output, including compiler-owned helpers and
+// all sidecars. Source maps must stay paired with their actual emitted Go file.
+func equalityGeneratedFiles(t *testing.T, directory string) map[string][]byte {
+	t.Helper()
+	files := map[string][]byte{}
+	err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("unexpected generated entry: %s", path)
+		}
+		name, err := filepath.Rel(directory, path)
+		if err != nil {
+			return err
+		}
+		files[name] = equalityProvenanceRead(t, path)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name := range files {
+		if strings.HasSuffix(name, ".go.map.json") {
+			if _, ok := files[strings.TrimSuffix(name, ".map.json")]; !ok {
+				t.Fatalf("source map without generated Go: %s", name)
+			}
+		}
+	}
+	return files
+}
+
 func equalityMacroMap(t *testing.T, generated, source, definitionFile string, files map[string]string, renamedPrimitiveCallee bool) {
 	t.Helper()
 	span := func(file, text string, width int, last bool) sourcemap.Span {
@@ -154,9 +199,11 @@ func equalityMacroMap(t *testing.T, generated, source, definitionFile string, fi
 	}
 	counts := map[string]int{}
 	helperTokens := 0
-	for name := range files {
-		output := filepath.Join(generated, strings.TrimSuffix(name, ".gox")+".go")
-		code := equalityProvenanceRead(t, output)
+	for name, code := range equalityGeneratedFiles(t, generated) {
+		if !strings.HasSuffix(name, ".go") {
+			continue
+		}
+		output := filepath.Join(generated, name)
 		var exported struct {
 			Diagnostics sourcemap.Map `json:"diagnostics"`
 		}

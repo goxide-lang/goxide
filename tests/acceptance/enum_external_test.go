@@ -269,7 +269,17 @@ func Bad()int{return match a.Get(){a.Public::A(n)=>n,}}`,
 		if string(x) != string(y) {
 			t.Fatal("probe must keep logical variant metadata unchanged")
 		}
-		for _, name := range []string{"model.go", ".goxide.enums.json", ".goxide.refs.json"} {
+		// Refresh the whole regenerated producer package, including split helpers
+		// and maps, so this probe reaches the relay's dependency closure check.
+		entries, e := os.ReadDir(filepath.Join(updated, "model"))
+		if e != nil {
+			t.Fatal(e)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
 			path := filepath.Join(library, "model", name)
 			old, e := os.ReadFile(path)
 			if e != nil {

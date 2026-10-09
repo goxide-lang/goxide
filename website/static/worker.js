@@ -6,7 +6,7 @@ importScripts(`wasm_exec.js?compiler=${compiler}`);
 const go = new Go();
 onmessage = ({data}) => {
   if (data.type !== 'compile') return;
-  try { postMessage({type: 'result', id: data.id, ...self.goxideCompile(data.source)}); }
+  try { postMessage({type: 'result', id: data.id, ...(Object.hasOwn(data, 'files') ? self.goxideCompilePackage(data.files) : self.goxideCompile(data.source))}); }
   catch (e) { postMessage({type: 'result', id: data.id, error: String(e)}); }
 };
 (async () => {

@@ -282,6 +282,15 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 		if err != nil {
 			t.Fatal(err)
 		}
+		var artifact struct{ Files map[string]string }
+		if err := json.Unmarshal(original, &artifact); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"model.go", "goxide_helpers_model.go"} {
+			if artifact.Files[name] == "" {
+				t.Fatalf("fixture must include a content hash for %s", name)
+			}
+		}
 		mutations := []struct {
 			name, want string
 			change     func(map[string]any)
@@ -294,10 +303,10 @@ func main(){fmt.Println(match h.Get(){h.E::Value(n)=>n})}
 			}},
 			{"file-set", "selected Go source set mismatch", func(v map[string]any) { v["Files"] = map[string]any{} }},
 			{"file-hash", "Go source content mismatch: model.go", func(v map[string]any) {
-				for k := range v["Files"].(map[string]any) {
-					v["Files"].(map[string]any)[k] = "bad"
-					break
-				}
+				v["Files"].(map[string]any)["model.go"] = "bad"
+			}},
+			{"helper-file-hash", "Go source content mismatch: goxide_helpers_model.go", func(v map[string]any) {
+				v["Files"].(map[string]any)["goxide_helpers_model.go"] = "bad"
 			}},
 			{"content", "package source closure or build configuration changed", func(v map[string]any) { v["Content"] = "stale" }},
 			{"dependency-set", "dependency set mismatch", func(v map[string]any) { v["Dependencies"] = map[string]any{} }},

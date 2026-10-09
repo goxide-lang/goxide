@@ -83,7 +83,7 @@ $('add-file').onclick = () => {
   else if (files.length >= MAX_FILES) error = '最多 16 个同包文件。';
   $('file-error').textContent = error; $('file-error').hidden = !error;
   if (error) return;
-  const packageName = files.map(file => file.source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '').match(/^\s*package\s+([\p{L}_][\p{L}\p{Nd}_]*)/mu)?.[1]).find(Boolean) || 'main';
+  const packageName = files.map(file => file.source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ' ').match(/^\s*package\s+([\p{L}_][\p{L}\p{Nd}_]*)/mu)?.[1]).find(Boolean) || 'main';
   files.push({path, source:`package ${packageName}\n`}); packageMode = true;
   $('new-file-name').value = ''; showSource(files.length - 1); changed();
 };

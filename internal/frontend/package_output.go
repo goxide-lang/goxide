@@ -67,6 +67,17 @@ func PackageGoFiles(path string, result PackageResult, imp types.Importer) (map[
 		if _, exists := result.Files[strings.TrimSuffix(helperName, ".go")+".gox"]; exists {
 			return nil, fmt.Errorf("generated helper filename conflicts: %s", helperName)
 		}
+		// Reuse the original declaration nodes as evidence across both halves.
+		// Whole-file token composition cannot preserve mappings after removal.
+		mapping := r.Diagnostics
+		if mapping != nil && bytes.HasPrefix(r.Go, mapping.Source) {
+			// Package finishing may append an unmapped metadata marker. The
+			// proven prefix stays byte-identical; the new suffix gets no origin.
+			snapshot := *mapping
+			snapshot.Source = r.Go
+			mapping = &snapshot
+		}
+		evidence := mapping.CaptureAST(fs, f)
 		for _, part := range []struct {
 			name   string
 			decls  []ast.Decl
@@ -91,7 +102,7 @@ func PackageGoFiles(path string, result PackageResult, imp types.Importer) (map[
 			file := r
 			file.Go, file.Expanded = b.Bytes(), b.Bytes()
 			if r.Diagnostics != nil {
-				file.Diagnostics = r.Diagnostics.Compose(r.Go, file.Go, "package helper emission")
+				file.Diagnostics = evidence.Print(&tree, file.Go, "package helper emission")
 			}
 			refreshPackageMap(&file)
 			out[part.name] = file

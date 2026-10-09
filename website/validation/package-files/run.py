@@ -203,7 +203,7 @@ def ui_checks(page, manifest, evidence):
     check('同包' in page.inner_text('#input-mode'), 'delete silently restored legacy single-file semantics')
 
     # Adding a file follows the package clause, including Go Unicode identifiers.
-    page.fill('#source', '/* package decoy */\npackage 示例\nfunc F() {}\n')
+    page.fill('#source', '/* package decoy */\npackage/**/示例\nfunc F() {}\n')
     page.click('#compile')
     done(page)
     page.fill('#new-file-name', 'unicode.gox')

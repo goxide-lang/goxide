@@ -2,12 +2,17 @@ package frontend
 
 import (
 	"bytes"
+	"go/ast"
 	"go/build"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/hxsf/goxide/internal/sourcemap"
 	"github.com/hxsf/goxide/internal/testdeps"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
@@ -118,5 +123,122 @@ func TestPackageHelperRejectsUnselectedNativeCollision(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(dir, "goxide_helpers_model.go"))
 	if err != nil || !strings.Contains(string(data), "NativeSentinel") {
 		t.Fatalf("source changed: %v", err)
+	}
+}
+
+// Helper extraction is a structural rewrite: identical repeated macro calls
+// must keep their own origins/stacks, and generated helpers cannot borrow them.
+func TestPackageGoFilesPreservesMacroProvenance(t *testing.T) {
+	for _, ending := range []struct{ name, text string }{{"LF", "\n"}, {"CRLF", "\r\n"}} {
+		for _, nested := range []bool{false, true} {
+			name := "direct"
+			if nested {
+				name = "nested"
+			}
+			t.Run(ending.name+"/"+name, func(t *testing.T) {
+				definitions := "macro_rules! zero {()=>{int(0)};}\n"
+				macro, frames := "zero", 1
+				if nested {
+					definitions += "macro_rules! outer {()=>{zero!()};}\n"
+					macro, frames = "outer", 2
+				}
+				sources := map[string][]byte{
+					"definitions.gox": []byte("package p\n" + definitions),
+					"caller.gox":      []byte("package p\n#[derive(PartialEq,Eq)]\ntype Item struct{N int}\nfunc Run()int{return " + macro + "!()+" + macro + "!()}\nfunc Native()int{return int(0)}\nfunc Compare(a,b Item)bool{return a.equals(b)}\n"),
+				}
+				for name, source := range sources {
+					sources[name] = bytes.ReplaceAll(source, []byte("\n"), []byte(ending.text))
+				}
+				imp := typecheck.NewImporter("playground.gox")
+				result, err := CompilePackage("example/provenance", sources, imp)
+				if err != nil {
+					t.Fatal(err)
+				}
+				original := result.Files["caller.gox"]
+				originalMap, originalSource := append([]byte(nil), original.SourceMap...), append([]byte(nil), original.Diagnostics.Source...)
+				calls := func(r Result) map[string][]sourcemap.Segment {
+					fs := token.NewFileSet()
+					f, err := parser.ParseFile(fs, "caller.go", r.Go, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					found := map[string][]sourcemap.Segment{}
+					for _, d := range f.Decls {
+						fn, ok := d.(*ast.FuncDecl)
+						if !ok || (fn.Name.Name != "Run" && fn.Name.Name != "Native") {
+							continue
+						}
+						ast.Inspect(fn.Body, func(n ast.Node) bool {
+							if call, ok := n.(*ast.CallExpr); ok {
+								for _, node := range []ast.Node{call.Fun, call.Args[0]} {
+									segment := r.Diagnostics.Lookup(fs.Position(node.Pos()).Offset)
+									if segment == nil {
+										t.Fatalf("missing token evidence in %s", fn.Name.Name)
+									}
+									copy := *segment
+									copy.Start, copy.End = 0, 0 // Output offsets intentionally change.
+									found[fn.Name.Name] = append(found[fn.Name.Name], copy)
+								}
+							}
+							return true
+						})
+					}
+					return found
+				}
+				before := calls(original)
+				if len(before["Run"]) != 4 || len(before["Native"]) != 2 {
+					t.Fatal("missing probe calls")
+				}
+				for name, tokens := range before {
+					for index, token := range tokens {
+						want := 0
+						if name == "Run" {
+							want = frames
+						}
+						// Primitive alias normalization may retain only the macro
+						// context on its rewritten callee. Arguments/native tokens
+						// still have point origins; never invent one for the callee.
+						wantOrigin := name == "Native" || index%2 == 1
+						if (wantOrigin && token.Origin == nil) || len(token.Stack) != want {
+							t.Fatalf("invalid initial %s evidence: %+v", name, token)
+						}
+					}
+				}
+				if reflect.DeepEqual(before["Run"][0].Stack, before["Run"][2].Stack) {
+					t.Fatal("repeated calls lost distinct callsites")
+				}
+				emitted, err := PackageGoFiles("example/provenance", result, imp)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if after := calls(emitted["caller.gox"]); !reflect.DeepEqual(before, after) {
+					t.Fatalf("helper extraction changed origins/stacks:\nbefore=%+v\nafter=%+v", before, after)
+				}
+				helper, ok := emitted["goxide_helpers_caller.go"]
+				if !ok || !strings.Contains(string(helper.Go), "func EqualsItem") {
+					t.Fatal("missing equality helper")
+				}
+				fs := token.NewFileSet()
+				f, err := parser.ParseFile(fs, "helper.go", helper.Go, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, d := range f.Decls {
+					fn, ok := d.(*ast.FuncDecl)
+					if !ok || fn.Name.Name != "EqualsItem" {
+						continue
+					}
+					start, end := fs.Position(fn.Pos()).Offset, fs.Position(fn.End()).Offset
+					for _, s := range helper.Diagnostics.Segments {
+						if s.Start >= start && s.End <= end && (s.Origin != nil || len(s.Stack) != 0) {
+							t.Fatalf("generated helper borrowed source: %+v", s)
+						}
+					}
+				}
+				if !bytes.Equal(originalMap, result.Files["caller.gox"].SourceMap) || !bytes.Equal(originalSource, result.Files["caller.gox"].Diagnostics.Source) {
+					t.Fatal("emission mutated original provenance")
+				}
+			})
+		}
 	}
 }

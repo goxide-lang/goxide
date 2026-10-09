@@ -44,6 +44,7 @@ Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译
 不得修改内核或浏览器安全设置来使测试通过。这里的 WASM 构建和 HTTP 通过不代表
 浏览器 QA 通过，也不替代该验收；汇总和 PR 持续显示此缺口。
 
-A03 既有诊断来源缺陷继续由 [issue #6](https://github.com/goxide-lang/goxide/issues/6)
-跟踪，不因 CI 接入变成已修复。新增工作流只有 `contents: read`，checkout 不保留凭据，
+A03 宏/Eq 组合的来源丢失由 [PR #10](https://github.com/goxide-lang/goxide/pull/10)
+修复，具体验收见 [issue #6](https://github.com/goxide-lang/goxide/issues/6)；这不代表全部
+A03 lowering 路径完成。工作流只有 `contents: read`，checkout 不保留凭据，
 不使用 `pull_request_target`、secrets 或发布服务。

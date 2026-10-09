@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "dd6031e7572a557b9d01305bacb64fd81eb719b2",
-  "reviewedAt": "2026-10-08",
+  "compilerCommit": "93eb73f8c8b835347ab9d1fd055d7801f9ceb817",
+  "reviewedAt": "2026-10-09",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
   },
@@ -759,7 +759,7 @@
       }
     }
   ],
-  "compilerDigest": "15de732b6cebac4fba64b65ff2138c40670a06e4e6210d099ffc732d67625c86",
+  "compilerDigest": "162a3a1e0cbed1e289635d27b1ac23504498523949c5afacd25867b10ed663ff",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

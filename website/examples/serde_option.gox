@@ -1,18 +1,19 @@
 package main
-import "fmt"
-import "github.com/goxide-lang/serde/json"
-#[derive(Serialize, Deserialize)]
+use serde;
+use fmt;
+use serde::json as serdejson;
+#[derive(serde::Serialize, serde::Deserialize)]
 type Request struct { Limit Option[int] }
 func describe(value Option[int]) string {
     return match value {
-        Option::Some(n) => fmt.Sprintf("Some(%d)", n),
+        Option::Some(n) => fmt::Sprintf("Some(%d)", n),
         Option::None => "None",
     }
 }
 func main() {
     for _, input := range []string{`{}`, `{"Limit":null}`, `{"Limit":7}`} {
-        value, err := serdejson.Unmarshal([]byte(input), DeserializeRequest)
+        value, err := serdejson::Unmarshal([]byte(input), DeserializeRequest)
         if err != nil { panic(err) }
-        fmt.Println(input, describe(value.Limit))
+        fmt::Println(input, describe(value.Limit))
     }
 }

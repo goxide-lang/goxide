@@ -1,5 +1,5 @@
 package main
-import "fmt"
+use fmt;
 #[derive(Debug)]
 type Settings struct { Port int }
 impl Default for Settings {
@@ -8,6 +8,6 @@ impl Default for Settings {
 func main() {
     var zero Settings
     chosen := DefaultSettings()
-    fmt.Println(zero.Port, chosen.Port)
+    fmt::Println(zero.Port, chosen.Port)
     println!("settings {:?}", chosen)
 }

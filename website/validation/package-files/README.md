@@ -13,6 +13,13 @@ the formatting/runtime/sum packages must have the pinned std module identity,
 and the export dependency closure must contain no compiler packages. The browser
 is launched with its sandbox enabled.
 
+The model file binds `util` to serde; main and helpers independently bind it to
+strconv and strings. Serde derives and JSON round-trip are exercised across the
+package. Missing/wrong owners and dot-qualified derives reject with source file
+identity, including a correct serde owner imported only by a sibling file.
+The read-only roots TOML, its SHA-256, package static paths and real
+Go export origins are checked; an altered roots hash must fail before compilation.
+
 Use an already-built matching website and CLI; serve the generated website on
 loopback in the tool-approved context. No installation, network module fetch,
 full-tree validation, deployment, or build scripts are performed by this runner.
@@ -37,7 +44,10 @@ Worker byte parity, all UI checks, and no page exceptions. Native commands and
 their stdout/stderr, complete Worker observations, manifest identity, and a page
 screenshot remain in that output directory. Go subprocesses use native
 `GOMAXPROCS=4`; this runner does not invoke Node Go WASM. The test fixture's
-`go.mod` fixes the CLI package path to `playground`; only its `.gox` files become
+`go.mod` fixes the CLI package path to `playground` and selects the exact std/serde
+versions used by the compiler; `go.sum` supplies their checked module identities.
+These Go module selections are distinct from the namespace-only roots TOML.
+Only the fixture's `.gox` files become
 editable browser inputs. Expected native stdout is:
 
 ```text

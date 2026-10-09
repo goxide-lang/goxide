@@ -2,7 +2,7 @@
 """Rebuild every published example and the browser compiler from this checkout."""
 import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
 import catalog, project_snapshots, workspace_snapshots, workspace_import_snapshots, source_selection_snapshot
-from build_support import dependency_sources, go_license_path, standalone_playground, verify_compiler_sources
+from build_support import dependency_context, dependency_sources, go_license_path, standalone_playground, verify_compiler_sources
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
 GO = os.environ.get('GO_BIN', 'go')
@@ -19,15 +19,16 @@ compiler_digest = verify_compiler_sources(ROOT, sha, catalog_data['compilerDiges
 goroot = run(GO, 'env', 'GOROOT').decode().strip()
 license_path = go_license_path(goroot)
 catalog.write_index(catalog_data)
-packages = ['fmt', 'errors', 'io', 'strconv', 'strings', 'math', 'encoding/json',
-            'github.com/goxide-lang/std/runtime', 'github.com/goxide-lang/std/formatting',
-            'github.com/goxide-lang/std/sum', 'github.com/goxide-lang/serde', 'github.com/goxide-lang/serde/json']
+context = dependency_context(ROOT)
+roots_file = ROOT / context['path']
+packages = list(dict.fromkeys(binding['package'] for binding in context['bindings']))
 exports = ROOT/'internal/typecheck/browserexports'
 exports.mkdir(exist_ok=True)
 for old in exports.glob('*.a'): old.unlink()
 # Use native export archives as compiler metadata, never execute user Go.
 raw = run(GO, 'list', '-trimpath', '-export', '-deps', '-json', *packages).decode()
 decoder = json.JSONDecoder(); closure = []; export_records = []
+origins = {}
 while raw.strip():
     p, end = decoder.raw_decode(raw.lstrip()); raw = raw.lstrip()[end:]
     export_records.append(p)
@@ -35,10 +36,18 @@ while raw.strip():
         data = run(GO, 'tool', 'pack', 'p', p['Export'], '__.PKGDEF')
         header = f"{'__.PKGDEF':<16}{0:<12}{0:<6}{0:<6}{'644':<8}{len(data):<10}`\n".encode()
         (exports/(p['ImportPath'].replace('/', '_')+'.a')).write_bytes(b'!<arch>\n' + header + data + (b'\n' if len(data)%2 else b''))
+        origins[p['ImportPath']] = dict(module=p.get('Module', {}).get('Path', ''), standard=bool(p.get('Standard')),
+            exportSha256=hashlib.sha256((exports/(p['ImportPath'].replace('/', '_')+'.a')).read_bytes()).hexdigest())
         closure.append(p['ImportPath'])
+(exports/'origins.json').write_text(json.dumps(origins, sort_keys=True, indent=2)+'\n')
+for binding in context['bindings']:
+    origin = origins[binding['package']]
+    assert origin['standard'] == (binding['source'] == 'toolchain') and origin['module'] == binding['module'], 'explicit root differs from actual Go package owner: ' + binding['path']
 dependencies = dependency_sources(packages, export_records, goroot=goroot,
                                   toolchain_version=run(GO, 'env', 'GOVERSION').decode().strip(),
                                   exports=exports)
+for dependency in dependencies:
+    dependency['staticPaths'] = [binding['path'] for binding in context['bindings'] if binding['package'] == dependency['package']]
 dist = ROOT/'website/dist'
 if dist.exists(): shutil.rmtree(dist)
 # Explicit publish allowlist: no source tree, RFCs, configs or accidental files.
@@ -58,12 +67,12 @@ for entry in catalog_data['examples']:
     source = path.read_bytes()
     # Match the owner-free browser input, rather than the repository's module.
     with standalone_playground(source) as input_path:
-        generated = run(str(ROOT/'bin/goxide'), 'transpile', str(input_path)).decode()
+        generated = run(str(ROOT/'bin/goxide'), 'transpile', '--roots', str(roots_file), str(input_path)).decode()
         if name in ['result','go_result','serde_option']:
             assert 'github.com/goxide-lang/std/sum' in generated
             families = re.findall(r'^type (?:Option|Result)\[[^\n]+', generated, re.MULTILINE)
             assert families and all('= __goxide_enum_std.' in line for line in families), 'sum families must be aliases to shared std, not copied definitions'
-        stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, str(input_path)).decode()
+        stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, '--roots', str(roots_file), str(input_path)).decode()
     assert stdout == entry['expectedStdout'], f'{name}: runtime output changed'
     examples.append(dict(id=name, title=title, description=description, source=source.decode(), go=generated, stdout=stdout))
 # A fixed, single user package. Its minimal module selects the same package
@@ -74,23 +83,28 @@ with tempfile.TemporaryDirectory(prefix='goxide-web-package-') as temporary:
     project.mkdir()
     fixture = ROOT/'website/validation/package-files/example'
     module = (fixture/'go.mod').read_bytes()
-    assert module == b'module playground\n\ngo 1.27\n', 'unexpected package example module policy'
-    (project/'go.mod').write_bytes(module)
+    assert module.startswith(b'module playground\n\ngo 1.27\n'), 'unexpected package example module policy'
+    for metadata in ['go.mod', 'go.sum']:
+        shutil.copyfile(fixture/metadata, project/metadata)
+    fixture_modules = json.loads(run(GO, 'mod', 'edit', '-json', cwd=project))
+    expected_modules = {name: json.loads(run(GO, 'list', '-m', '-json', name))['Version'] for name in ['github.com/goxide-lang/std', 'github.com/goxide-lang/serde']}
+    assert {item['Path']: item['Version'] for item in fixture_modules['Require']} == expected_modules, 'package fixture module selections differ from compiler'
+    assert not fixture_modules.get('Replace'), 'package fixture must not replace public dependencies'
     package_files = []
     for path in sorted(fixture.glob('*.gox')):
         source = path.read_bytes()
         (project/path.name).write_bytes(source)
         package_files.append(dict(path=path.name, source=source.decode()))
     output = pathlib.Path(temporary)/'generated'
-    run(str(ROOT/'bin/goxide'), 'transpile', '--go', GO, '-o', str(output), str(project))
+    run(str(ROOT/'bin/goxide'), 'transpile', '--go', GO, '--roots', str(roots_file), '-o', str(output), str(project))
     generated_files = [dict(path=path.name, source=path.read_bytes().decode())
                        for path in sorted(output.glob('*.go'))]
     assert {pathlib.Path(file['path']).with_suffix('.go').name for file in package_files} <= {file['path'] for file in generated_files}
     assert any(file['path'].startswith('goxide_helpers_') and file['path'].endswith('.go') for file in generated_files), 'package example must expose real helper files'
-    stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, str(project)).decode()
+    stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, '--roots', str(roots_file), str(project)).decode()
     assert stdout == '42 GOXIDE Item { Value: 21 }\n', 'package example runtime output changed'
     package_examples = [dict(id='package_files', title='同包多文件：文件作用域与宏/派生',
-                             description='三个可编辑 .gox 文件属于同一个包；每个文件保留独立 import 作用域，共享类型、函数、宏与派生结果。',
+                             description='三个可编辑 .gox 文件属于同一个包；每个文件保留独立 use 作用域，共享类型、函数、宏与派生结果。',
                              files=package_files, generatedFiles=generated_files, stdout=stdout)]
 # A known repository project, generated and run locally at build time only.
 # It is evidence for CLI multi-package behavior, never a browser compiler input.
@@ -109,7 +123,7 @@ for name in sorted({n for c in catalog_data['items'] for n in c['checks']}):
     path = ROOT/'website/checks/catalog'/f'{name}.gox'
     source = path.read_bytes()
     with standalone_playground(source) as input_path:
-        result = subprocess.run([str(ROOT/'bin/goxide'), 'transpile', str(input_path)], env=env, capture_output=True, text=True)
+        result = subprocess.run([str(ROOT/'bin/goxide'), 'transpile', '--roots', str(roots_file), str(input_path)], env=env, capture_output=True, text=True)
     assert result.returncode != 0, f'{name}: expected rejection'
     diagnostic = result.stderr.strip().replace(str(input_path), 'playground.gox')
     assert diagnostic and '/workspace/' not in diagnostic
@@ -159,7 +173,8 @@ std_abi = run(GO, 'doc', 'github.com/goxide-lang/std/sum.GoxideSumABI').decode()
 assert re.search(r'GoxideSumABI = 2\b', std_abi), std_abi
 
 manifest = dict(abiVersions=abi_versions, metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=compiler_digest, exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
-                dependencies=dependencies, dependencySourceScope='fixed direct imports; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',
+                dependencies=dependencies, dependencyContext=context, dependencySourceScope='fixed explicit project roots; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',
+                exportOrigins=origins, exportOriginsSha256=hashlib.sha256((exports/'origins.json').read_bytes()).hexdigest(),
                 importClosure=sorted(closure), maxSourceBytes=32768, maxFiles=16, compileTimeoutMs=10000,
                 examples=examples, packageExamples=package_examples, cliExamples=[cli_example], projectExamples=[feature_example,migration_example,vendor_example,cli_options_example]+workspace_snapshots.build(ROOT, GO)+workspace_import_snapshots.build(ROOT, GO)+[source_selection_snapshot.build(ROOT, GO)])
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')

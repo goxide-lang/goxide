@@ -110,7 +110,8 @@ class CompilerIdentityTests(unittest.TestCase):
         self.root = pathlib.Path(self.temporary.name).resolve()
         self.files = {'go.mod': b'module fixture\n', 'go.sum': b'',
                       'internal/probe/probe.go': b'package probe\n',
-                      'cmd/goxide/main.go': b'package main\n'}
+                      'cmd/goxide/main.go': b'package main\n',
+                      build_support.DEPENDENCY_CONTEXT: b'[roots.fmt]\nsource="toolchain"\npackage="fmt"\n'}
         for name, data in self.files.items():
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -159,6 +160,11 @@ class CompilerIdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'digest differs'):
             self.verify('0' * 64)
 
+    def test_changed_embedded_dependency_context_rejected(self):
+        (self.root / build_support.DEPENDENCY_CONTEXT).write_text('[roots.undeclared]\n')
+        with self.assertRaisesRegex(ValueError, 'compiler source differs'):
+            self.verify()
+
     def test_added_nested_production_package_is_not_outside_inventory(self):
         for name in ['internal/nested/extra.go', 'cmd/goxide/nested/extra.go', 'cmd/goxide-playground/nested/extra.go']:
             with self.subTest(name=name):
@@ -168,6 +174,20 @@ class CompilerIdentityTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'inventory differs'):
                     self.verify()
                 path.unlink()
+
+
+class DependencyContextTests(unittest.TestCase):
+    def test_groups_do_not_infer_packages_and_published_bytes_are_exact(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            path = root / build_support.DEPENDENCY_CONTEXT
+            path.parent.mkdir(parents=True)
+            source = b'[roots.std]\nmodule="example.org/std"\nnamespaces={value="example.org/std/value"}\n'
+            path.write_bytes(source)
+            context = build_support.dependency_context(root)
+            self.assertEqual(context['source'].encode(), source)
+            self.assertEqual(context['sha256'], hashlib.sha256(source).hexdigest())
+            self.assertEqual(context['bindings'], [dict(path='std::value', package='example.org/std/value', module='example.org/std', source='module')])
 
 
 class LicenseTests(unittest.TestCase):

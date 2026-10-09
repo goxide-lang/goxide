@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import {collectWorkerObservations,recordWorkerObservations} from './worker-observations.mjs';
 const inputs=[{name:'first',source:'first'},{name:'second',source:'second'},{name:'recovery',source:'good'}];
-const args={inputs,commit:'compiler',hash:'wasm',timeoutMs:10};
+const args={inputs,commit:'compiler',hash:'wasm',rootsHash:'roots',timeoutMs:10};
 const original=globalThis.Worker;
 let checks=0;
 try {
- for(const failure of ['success','fatal','wrong-id','timeout','error','not-ready']) {
+ for(const failure of ['success','fatal','wrong-id','timeout','error','not-ready','wrong-roots']) {
   let terminated=false;
   globalThis.Worker=class {
-   constructor(){queueMicrotask(()=>this.onmessage({data:{type:failure==='not-ready'?'result':'ready'}}));}
+   constructor(){queueMicrotask(()=>this.onmessage({data:{type:failure==='not-ready'?'result':'ready',rootsSha256:failure==='wrong-roots'?'other':'roots'}}));}
    postMessage({id}) {
     if(id===1&&failure==='timeout')return;
     queueMicrotask(()=>{
@@ -26,7 +26,7 @@ try {
   } else {
    await assert.rejects(execute,/current matrix QA worker failed/);
    assert.equal(saved.complete,false);assert.ok(saved.failure.error);
-   const ready=failure==='not-ready';
+   const ready=failure==='not-ready'||failure==='wrong-roots';
    assert.equal(saved.observations.length,ready?0:1);
    assert.equal(saved.failure.index,ready?-1:1);
    assert.deepEqual(saved.failure.input,ready?null:inputs[1]);

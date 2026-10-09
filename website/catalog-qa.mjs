@@ -2,8 +2,8 @@ import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 const base=process.env.QA_URL||'http://127.0.0.1:8084';
-const args=['--no-sandbox'];if(process.env.QA_PROXY_SPKI)args.push('--ignore-certificate-errors-spki-list='+process.env.QA_PROXY_SPKI);
-const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/usr/bin/chromium',headless:true,args});
+const args=[];if(process.env.QA_PROXY_SPKI)args.push('--ignore-certificate-errors-spki-list='+process.env.QA_PROXY_SPKI);
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/usr/bin/chromium',headless:true,chromiumSandbox:true,args});
 try {
  const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write']});
  const page=await context.newPage();const errors=[],requests=[],consoleErrors=[];
@@ -25,7 +25,7 @@ try {
   assert.ok((await card.locator('.status-badge').textContent())===manifest.catalog.statusLabels[item.status]);
  }
  await page.fill('#catalog-search','0024');assert.equal(await page.locator('.feature-card:visible').count(),manifest.catalog.items.filter(c=>c.rfcs.includes('0024')).length);
- await page.selectOption('#catalog-status','proposal');assert.equal(await page.locator('.feature-card:visible').count(),1);
+ await page.selectOption('#catalog-status','partial');assert.equal(await page.locator('.feature-card:visible').count(),manifest.catalog.items.filter(c=>c.rfcs.includes('0024')&&c.status==='partial').length);
  await page.fill('#catalog-search','no-such-feature');assert.equal(await page.locator('.feature-card:visible').count(),0);assert.ok(await page.locator('#catalog-empty').isVisible());
  await page.click('#catalog-clear');assert.equal(await page.locator('.feature-card:visible').count(),manifest.catalog.items.length);
  for(const topic of Object.keys(manifest.catalog.topics)){await page.click(`[data-topic="${topic}"]`);assert.equal(await page.locator('.feature-card:visible').count(),manifest.catalog.items.filter(c=>c.topic===topic).length);}

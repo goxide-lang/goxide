@@ -1,12 +1,15 @@
 package main
 
-import (
-    "fmt"
-    util "strconv"
-)
+use fmt;
+use strconv as util;
+use serde::json as serdejson;
 
 func main() {
     item := Item{Value: 21}
+    data, err := serdejson::Marshal(&item, SerializeItem)
+    if err != nil { panic(err) }
+    item, err = serdejson::Unmarshal(data, DeserializeItem)
+    if err != nil { panic(err) }
     copy := CloneItem(&item)
-    fmt.Println(util.Itoa(twice!(copy.Value)), title(), DebugItem(&copy))
+    fmt::Println(util::Itoa(twice!(copy.Value)), title(), DebugItem(&copy))
 }

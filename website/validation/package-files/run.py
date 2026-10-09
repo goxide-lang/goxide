@@ -30,6 +30,7 @@ WORKER_BATCH = """async ({inputs, manifest}) => {
   try {
     const ready = await response();
     if (ready.type !== 'ready') throw new Error(JSON.stringify(ready));
+    if (ready.rootsSha256 !== manifest.dependencyContext.sha256) throw new Error('Worker dependency roots differ from manifest');
     for (let id = 0; id < inputs.length; id++) {
       const pending = response();
       worker.postMessage({type:'compile', id, ...inputs[id]});
@@ -78,12 +79,14 @@ def native_package(args, out, files, label, expected_error=None):
     work.mkdir()
     source = work / 'source'
     source.mkdir()
-    shutil.copyfile(ROOT / 'example/go.mod', source / 'go.mod')
+    for metadata in ['go.mod', 'go.sum']:
+        shutil.copyfile(ROOT / 'example' / metadata, source / metadata)
     for item in files:
         (source / item['path']).write_text(item['source'])
     generated = work / 'generated'
     env = dict(os.environ, GOMAXPROCS='4', GOPROXY='off', GOTOOLCHAIN='local', GOWORK='off')
-    command = [args.cli, 'transpile', '--go', args.go, '-o', str(generated), str(source)]
+    roots = str(ROOT.parents[2] / 'cmd/goxide-playground/goxide.roots.toml')
+    command = [args.cli, 'transpile', '--go', args.go, '--roots', roots, '-o', str(generated), str(source)]
     result = subprocess.run(command, env=env, text=True, capture_output=True)
     (work / 'transpile.json').write_text(json.dumps(dict(argv=command, exit=result.returncode,
         stdout=result.stdout, stderr=result.stderr), ensure_ascii=False, indent=2))
@@ -95,7 +98,7 @@ def native_package(args, out, files, label, expected_error=None):
     check(result.returncode == 0, label + ': ' + result.stderr)
     outputs = [dict(path=p.name, source=p.read_text()) for p in sorted(generated.glob('*.go'))]
     check(outputs, label + ': no native generated files')
-    command = [args.cli, 'run', '--go', args.go, str(source)]
+    command = [args.cli, 'run', '--go', args.go, '--roots', roots, str(source)]
     result = subprocess.run(command, env=env, text=True, capture_output=True)
     (work / 'run.json').write_text(json.dumps(dict(argv=command, exit=result.returncode,
         stdout=result.stdout, stderr=result.stderr), ensure_ascii=False, indent=2))
@@ -217,13 +220,18 @@ def ui_checks(page, manifest, evidence):
     check(dependencies.count() > 0, 'dependency browser is empty')
     page.locator('#dependency-browser > summary').click()
     check(page.locator('#dependency-source').evaluate('(e) => e.readOnly'), 'dependency source is editable')
+    page.get_by_text('项目显式依赖根', exact=True).click()
+    check(page.locator('#dependency-roots-source').evaluate('(e) => e.readOnly'), 'dependency roots are editable')
+    check(page.input_value('#dependency-roots-source') == manifest['dependencyContext']['source'], 'dependency roots differ from artifact')
+    for value in ['path', 'sha256']:
+        check(manifest['dependencyContext'][value] in page.inner_text('#dependency-roots-provenance'), 'dependency context identity missing: ' + value)
     for index, dependency in enumerate(manifest['dependencies']):
         page.select_option('#dependencies', str(index))
         for file_index, file in enumerate(dependency['files']):
             page.select_option('#dependency-files', index=file_index)
             check(page.input_value('#dependency-source') == file['source'], 'dependency source differs from artifact')
             provenance = page.inner_text('#dependency-provenance')
-            for value in [dependency['package'], dependency['version'], dependency['source'], file['path'], file['sha256']]:
+            for value in [*dependency['staticPaths'], dependency['package'], dependency['version'], dependency['source'], file['path'], file['sha256']]:
                 check(value in provenance, 'dependency identity missing from provenance: ' + value)
     page.select_option('#examples', str(package_index))
     done(page)
@@ -234,6 +242,15 @@ def asset_checks(args, page, manifest, evidence):
     response = page.request.get(urljoin(args.url.rstrip('/') + '/', 'compiler.wasm'))
     check(response.ok, 'served WASM could not be read')
     check(hashlib.sha256(response.body()).hexdigest() == manifest['wasmSha256'], 'served WASM hash differs from manifest')
+    context = manifest['dependencyContext']
+    declared = (ROOT.parents[2] / 'cmd/goxide-playground/goxide.roots.toml').read_bytes()
+    check(context['source'].encode() == declared and hashlib.sha256(declared).hexdigest() == context['sha256'], 'dependency context differs from CLI/WASM source')
+    origins = (ROOT.parents[2] / 'internal/typecheck/browserexports/origins.json').read_bytes()
+    check(hashlib.sha256(origins).hexdigest() == manifest['exportOriginsSha256'], 'export origin metadata hash differs')
+    check(json.loads(origins) == manifest['exportOrigins'], 'export origin metadata differs from artifact')
+    for binding in context['bindings']:
+        origin = manifest['exportOrigins'][binding['package']]
+        check(origin['standard'] == (binding['source'] == 'toolchain') and origin['module'] == binding['module'], 'root declaration differs from actual Go package owner')
     dependencies = {dependency['package']: dependency for dependency in manifest['dependencies']}
     libraries = {library['module']: library for library in manifest['publicLibraries']}
     std = libraries['github.com/goxide-lang/std']
@@ -248,6 +265,8 @@ def asset_checks(args, page, manifest, evidence):
         check(not package.startswith(('github.com/hxsf/goxide/', 'github.com/goxide-lang/goxide/')),
               'compiler package leaked into the browser dependency closure: ' + package)
     for dependency in manifest['dependencies']:
+        check(dependency['staticPaths'] == [binding['path'] for binding in context['bindings'] if binding['package'] == dependency['package']], 'dependency static paths differ from explicit context')
+        check(dependency['exportSha256'] == manifest['exportOrigins'][dependency['package']]['exportSha256'], 'dependency origin archive hash differs')
         for file in dependency['files']:
             check(hashlib.sha256(file['source'].encode()).hexdigest() == file['sha256'], 'dependency source hash differs: ' + file['path'])
     native_env = dict(os.environ, GOMAXPROCS='4', GOPROXY='off', GOTOOLCHAIN='local', GOWORK='off')
@@ -258,7 +277,7 @@ def asset_checks(args, page, manifest, evidence):
             env=native_env, cwd=ROOT.parents[2], text=True))
         check(not selected.get('Replace'), 'local replacement is not a published dependency identity')
         check(selected['Version'] == library['version'], 'manifest library version differs from actual go.mod')
-    evidence.append('served WASM SHA-256; every dependency source SHA-256; actual Go toolchain and go.mod library version identity; std support provenance and no compiler dependency closure')
+    evidence.append('served WASM SHA-256; explicit CLI/WASM dependency context and real Go export origins; every dependency source SHA-256; actual Go toolchain and go.mod library version identity; std support provenance and no compiler dependency closure')
 
 
 def mobile_checks(browser, args, manifest, evidence):
@@ -282,6 +301,29 @@ def mobile_checks(browser, args, manifest, evidence):
         evidence.append('390px mobile source/generated/dependency selectors and no document horizontal overflow')
     finally:
         page.close()
+
+
+def mismatched_context_check(browser, args, evidence):
+    for matching_source_hash in [False, True]:
+        context = browser.new_context()
+        try:
+            def change_context(route):
+                response = route.fetch()
+                manifest = response.json()
+                roots = manifest['dependencyContext']
+                roots['source'] += '# changed context\n'
+                if matching_source_hash:
+                    roots['sha256'] = hashlib.sha256(roots['source'].encode()).hexdigest()
+                route.fulfill(status=200, content_type='application/json', body=json.dumps(manifest))
+            context.route('**/examples.json', change_context)
+            page = context.new_page()
+            page.goto(args.url)
+            diagnostic = '项目依赖根与编译器不匹配' if matching_source_hash else '项目依赖根源码摘要不匹配'
+            page.locator('#diagnostic').filter(has_text=diagnostic).wait_for(timeout=60000)
+            check(page.input_value('#output') == '', 'mismatched dependency context retained generated code')
+        finally:
+            context.close()
+    evidence.append('page rejects altered displayed roots bytes and a self-consistent manifest context that differs from the embedded WASM project')
 
 
 def stale_result_checks(browser, args, manifest, evidence):
@@ -349,6 +391,25 @@ def main():
         conflict_diagnostic = native_package(args, args.out, conflicts, 'native-conflict', ['a.gox', 'b.gox', 'duplicate'])
         malformed = [dict(path='broken.gox', source='package main\nfunc broken(\n')]
         syntax_diagnostic = native_package(args, args.out, malformed, 'native-syntax', ['broken.gox'])
+        derive_rejections = []
+        for label, before, after, diagnostic in [
+            ('missing-derive-owner', 'use serde as util;', '', 'util'),
+            ('json-derive-owner', 'use serde as util;', 'use serde::json as util;', 'Serialize'),
+            ('dot-derive-owner', 'util::Serialize', 'util.Serialize', '::'),
+        ]:
+            rejected = [dict(item, source=item['source'].replace(before, after) if item['path'] == 'models.gox' else item['source']) for item in files]
+            message = native_package(args, args.out, rejected, 'native-' + label, ['models.gox', diagnostic])
+            derive_rejections.append((rejected, message))
+        # A correct owner in another file must not rescue a missing local use.
+        # Wrong sibling owners alone cannot detect a missing-binding fallback.
+        sibling_owner = [dict(item, source=item['source'].replace('use serde as util;', '') if item['path'] == 'models.gox' else item['source']) for item in files]
+        for item in sibling_owner:
+            alias = {'main.gox': 'numbers', 'helpers.gox': 'text'}.get(item['path'])
+            if alias:
+                item['source'] = item['source'].replace(' as util;', ' as ' + alias + ';').replace('util::', alias + '::')
+        sibling_owner.append(dict(path='owner.gox', source='package main\nuse serde as util;\n#[derive(util::Serialize)]\ntype Sibling struct { Value int }\n'))
+        message = native_package(args, args.out, sibling_owner, 'native-sibling-derive-owner', ['models.gox', 'util'])
+        derive_rejections.append((sibling_owner, message))
         evidence['checks'].append('native LF/CRLF package execution; expected stdout; named syntax/conflict diagnostics')
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(executable_path=args.chromium, headless=True, chromium_sandbox=True)
@@ -376,7 +437,7 @@ def main():
             for _ in range(2):
                 for variant in [files, crlf]:
                     add(dict(files=variant), output=expected)
-                for invalid, errors in [(conflicts, conflict_diagnostic), (malformed, syntax_diagnostic),
+                for invalid, errors in [(conflicts, conflict_diagnostic), (malformed, syntax_diagnostic), *derive_rejections,
                     ([], []), ([files[0], files[0]], ['duplicate']),
                     ([dict(path=p, source='package main\n') for p in ['a.go']], []),
                     ([dict(path='../escape.gox', source='package main\n')], []),
@@ -411,6 +472,7 @@ def main():
             page.screenshot(path=str(args.out / 'package-playground.png'), full_page=True)
             stale_result_checks(browser, args, manifest, evidence['checks'])
             mobile_checks(browser, args, manifest, evidence['checks'])
+            mismatched_context_check(browser, args, evidence['checks'])
             check(not page_errors, 'browser page errors: ' + repr(page_errors))
             evidence['manifest'] = {key: manifest[key] for key in ['commit', 'compilerDigest', 'wasmSha256', 'toolchain']}
             evidence['passed'] = True

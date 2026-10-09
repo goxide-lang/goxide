@@ -1,6 +1,6 @@
 # Focused same-package Playground validation
 
-For issue #5, use [package-files/run.py](package-files/README.md) with the matching
+For same-package Playground changes, use [package-files/run.py](package-files/README.md) with the matching
 built site and CLI. It checks real CLI/browser file-set parity, legacy examples,
 full helper files, fixed dependency provenance, browser interactions and delayed
 Worker results. Chromium runs with its own sandbox enabled. This targeted suite
@@ -65,6 +65,11 @@ stdout. Transpilation parity alone does not prove runtime payload validation.
 `--cases website/validation/std-support-cases.json` checks direct imports of the
 public std formatting/runtime packages, an assignment guard, and the generated
 std formatting call on the native CLI, Node GoWASM, and HTTP Worker.
+`--cases website/validation/static-paths-cases.json` checks deferred match arms, static type paths, value members, explicit use bindings,
+serde owner aliases, direct derive aliases, static namespaces alongside same-name
+local values, and rejects old imports/package
+dots, bare derives, wrong owners and missing roots. Every CLI command receives
+the exact roots TOML embedded into WASM; readiness verifies its SHA-256.
 This gate does not claim full browser UI QA, historical AST equivalence, native
 race/vet, or design-gate coverage. Run applicable compiler checks separately.
 `summary.json` records success or failure and the layers actually run; raw

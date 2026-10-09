@@ -10,3 +10,7 @@ pretty = []
 [[bin]]
 name = "demo"
 path = "src/main.gox"
+
+[dependencies.fmt]
+source = "toolchain"
+package = "fmt"

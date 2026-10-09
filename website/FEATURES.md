@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`ed63c635e6f998caad80c2847f5127d48fd2b3f2`；证据复核日期：2026-10-09。
+编译器基线：`33af584eebbb050886156cf25a0f9432caaa4824`；证据复核日期：2026-10-09。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -27,7 +27,7 @@
 | 降低约束与公开边界 | 0015, 0018 | 部分实现 | browser | `tests/acceptance/source_lowering_test.go` (edf7edba31f6); `tests/acceptance/source_mapping_test.go` (8b4f7794d1e5); `docs/rfcs/0018-lowering-contract.md` (abfe6d012fbf) |
 | 显式依赖根与静态路径 | 0024 | 部分实现 | browser | `internal/paths/paths.go` (372570a90ffc); `internal/rootconfig/roots.go` (06cd24c6c0f1); `internal/frontend/static_paths_test.go` (2f3377a6056c); `internal/frontend/deferred_use_test.go` (05852da09703); `cmd/goxide-playground/main.go` (4b4a80a3e8ab) |
 | 分仓标准库与共享 sum | 0008, 0016 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (344020cf3ff6); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `docs/reviews/public-library-migration-20261004.md` (5c4089eda830) |
-| 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (344020cf3ff6); `internal/frontend/readability_test.go` (4a76f296f046); `internal/enums/builtins_test.go` (df7d2414ab1b) |
+| 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (344020cf3ff6); `internal/frontend/readability_test.go` (4a76f296f046); `internal/enums/builtins_test.go` (6a97bd9bb8f4) |
 | CLI：明确的长短选项与参数边界 | 0022, 0023 | 部分实现 | cli | `docs/reviews/cobra-cli-20261004.md` (8ea6aedbfb22); `cmd/goxide/cli_process_test.go` (5e824179e254); `cmd/goxide/cli_dependency_graph_test.go` (50a8779ca7d2) |
 | 供应模块：local 默认与显式 remote 选择 | 0025 | 部分实现 | cli | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/goxide/vendor_import_test.go` (bfe8c6b79782); `cmd/goxide/import_sources_test.go` (e47dab18e690); `cmd/goxide/import_sources_process_test.go` (8c56c8aeb536); `internal/project/supplied_sources.go` (72144f6a51ac); `docs/reviews/source-selection-20261005.md` (10a95c11af1a) |
 | Workspace：作者核心与统一根锁 | 0026 | 部分实现 | cli | `docs/rfcs/0026-workspaces.md` (e3abc1196e95); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/goxide/workspace_test.go` (c77c1683d71a); `internal/project/workspace_test.go` (7856d06c586f) |

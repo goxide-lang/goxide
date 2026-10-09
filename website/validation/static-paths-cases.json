@@ -88,5 +88,10 @@
     "source": "package main\nuse missing;\nfunc main(){}\n",
     "expect": "frontend-reject",
     "diagnosticContains": "missing"
+  },
+  {
+    "id": "grouped-default-macro-helper-hygiene",
+    "source": "package main\nuse fmt;\ntype (\n #[derive(Default)]\n Settings struct { N int }\n)\nmacro_rules! create {()=>{DefaultSettings()};}\nfunc Construct() Settings {DefaultSettings:=func()Settings{panic(\"captured\")};_=DefaultSettings;return create!()}\nfunc main(){fmt::Println(Construct().N)}\n",
+    "expectedStdout": "0\n"
   }
 ]

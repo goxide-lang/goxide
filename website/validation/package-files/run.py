@@ -8,6 +8,8 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import time
 from pathlib import Path
 import shutil
 import subprocess
@@ -103,7 +105,7 @@ def native_package(args, out, files, label, expected_error=None):
 
 
 def done(page):
-    page.wait_for_function("document.querySelector('#status').textContent.startsWith('转译完成')", timeout=60000)
+    page.locator('#status').filter(has_text=re.compile('^转译完成')).wait_for(timeout=60000)
 
 
 def generated_files(page):
@@ -125,11 +127,11 @@ def ui_checks(page, manifest, evidence):
     page.select_option('#examples', str(package_index))
     done(page)
     check(generated_files(page) == example['generatedFiles'], 'package example generated tabs differ')
-    helper = next((f for f in example['generatedFiles'] if f['path'].startswith('goxide_') and f['path'].endswith('_helpers.go')), None)
+    helper = next((f for f in example['generatedFiles'] if f['path'].startswith('goxide_helpers_') and f['path'].endswith('.go')), None)
     check(helper, 'package example has no complete generated helper file')
     page.locator('#generated-files').get_by_role('button', name=helper['path'], exact=True).click()
     page.click('#copy')
-    page.wait_for_function("document.querySelector('#status').textContent.startsWith('已复制完整 Go 文件')")
+    page.locator('#status').filter(has_text=re.compile('^已复制完整 Go 文件')).wait_for()
     check(page.evaluate('navigator.clipboard.readText()') == helper['source'], 'helper copy omitted generated content')
     for item in example['files']:
         source_tab(page, item['path'])
@@ -168,7 +170,7 @@ def ui_checks(page, manifest, evidence):
     original = page.input_value('#source')
     page.fill('#source', original + '\nfunc broken(\n')
     page.click('#compile')
-    page.wait_for_function("!document.querySelector('#diagnostic').hidden", timeout=60000)
+    page.locator('#diagnostic').wait_for(state='visible', timeout=60000)
     check('helpers.gox' in page.inner_text('#diagnostic'), 'diagnostic lost its source filename')
     check(page.input_value('#output') == '', 'failure retained previous generated code')
     page.fill('#source', original)
@@ -284,7 +286,10 @@ def stale_result_checks(browser, args, manifest, evidence):
         page.evaluate('window.__packageQA.hold = true')
         page.fill('#source', 'package main\nfunc main() { println(222) }\n')
         page.click('#compile')
-        page.wait_for_function('window.__packageQA.results.length === 1', timeout=60000)
+        deadline = time.monotonic() + 60
+        while not page.evaluate('() => window.__packageQA.results.length === 1'):
+            check(time.monotonic() < deadline, 'timed out waiting for held real Worker result')
+            page.wait_for_timeout(50)
         page.evaluate('window.__packageQA.hold = false')
         page.select_option('#examples', str(len(manifest['examples'])))
         done(page)
@@ -341,6 +346,14 @@ def main():
             done(page)
             manifest = page.evaluate("async () => (await fetch('examples.json')).json()")
             check(manifest.get('packageExamples'), 'no built package example')
+            # Compare served assets with this checkout's generated artifact bytes.
+            # A live page alone cannot prove the page, Worker and runtime match.
+            for asset in ['examples.json', 'app.js', 'worker.js', 'style.css', 'wasm_exec.js']:
+                served = page.request.get(args.url.rstrip('/') + '/' + asset)
+                check(served.ok, 'asset HTTP failure: ' + asset)
+                expected_asset = (ROOT.parents[1] / 'dist' / asset).read_bytes()
+                check(served.body() == expected_asset, 'served asset differs from build: ' + asset)
+            evidence['checks'].append('served manifest/app/Worker/style/Go runtime bytes match local build')
             asset_checks(args, page, manifest, evidence['checks'])
             inputs, checks = [], []
             def add(payload, output=None, errors=None):

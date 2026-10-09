@@ -131,14 +131,15 @@ func concrete(value p::Result[string,error], seen *int) string {
 		t.Fatal(err)
 	}
 	packagesWrite(t, dest, "concrete_test.go", `package main
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import("testing";p "qualified.example/app/source")
-type forgedConcrete struct{p.Result[string,error]}
 func TestLocalConcreteValidation(t *testing.T){
- if absent("ok").(p.GoxideResultOk[string,error]).Value!="ok"{t.Fatal("concrete success")}
- if absent("error").(p.GoxideResultErr[string,error]).Value!=p.Sentinel{t.Fatal("failure propagation")}
+ if __borrow_std.ValueOk(absent("ok"))!="ok"{t.Fatal("concrete success")}
+ if __borrow_std.ValueErr(absent("error"))!=p.Sentinel{t.Fatal("failure propagation")}
  seen:=0
  if concrete(p.GoxideNewResultOk[string,error]("valid"),&seen)!="valid"||seen!=1{t.Fatal("valid match")}
- for _,value:=range []p.Result[string,error]{nil,(*p.GoxideResultOk[string,error])(nil),&p.GoxideResultOk[string,error]{Value:"invalid"},forgedConcrete{}}{
+ for _,value:=range []p.Result[string,error]{{}}{
   func(){seen:=0;defer func(){if recover()!="goxide: invalid enum Result"{t.Error("invalid case accepted or wrong panic")};if seen!=0{t.Error("effect before validation")}}();concrete(value,&seen)}()
  }
 }
@@ -197,15 +198,13 @@ func TestImportedNestedValidationBeforeEffect(t *testing.T) {
  defer func(){if recover()==nil{t.Fatal("invalid nested payload accepted")};if continuation!=0{t.Fatal("effect before validation")}}()
  nestedInvalid()
 }
-type forgedResult struct { source.Result[int,error] }
 func TestImportedInvalidSumBeforeEffect(t *testing.T) {
- var typed *source.GoxideResultOk[int,error]
- for _,v:=range []source.Result[int,error]{nil,typed,&source.GoxideResultOk[int,error]{Value:2},forgedResult{}} {
+ for _,v:=range []source.Result[int,error]{{}} {
   func(){ continuation=0;defer func(){if recover()==nil{t.Fatal("invalid sum accepted")};if continuation!=0{t.Fatal("effect before sum validation")}}();importedInput(v) }()
  }
 }
 func TestImportedInvalidBeforeMatch(t *testing.T) {
- defer func(){if recover()==nil{t.Fatal("nil imported enum accepted")}}()
- describe(nil)
+ defer func(){if recover()==nil{t.Fatal("zero imported enum accepted")}}()
+ describe(source.Mode{})
 }
 `

@@ -16,14 +16,14 @@ func TestQuestionFlowExitOrderingRace(t *testing.T) {
 	q := &questionFlow{
 		setup: parseStatements(`input := operand(); validate(input); var payload int`),
 		value: parseExpr("payload"), failure: parseExpr("converted(input)"),
-		resultSubject: parseStatements(`switch failure := input.(type) {}`)[0].(*ast.TypeSwitchStmt).Assign,
-		resultOK:      parseExpr("good"), resultErr: parseExpr("bad"),
-		success: parseStatements(`payload = int(failure)`),
+		resultSubject: parseExpr("input.tag"),
+		resultOK:      parseExpr("1"), resultErr: parseExpr("2"),
+		success: parseStatements(`payload = input.value`),
 	}
 	option := &questionFlow{
 		setup: parseStatements(`input := optionOperand(); var payload int`),
 		value: parseExpr("payload"), failure: parseExpr("none()"),
-		optionCondition: parseExpr("input == nil"), success: parseStatements(`payload = *input`),
+		optionCondition: parseExpr("input.tag == 0"), success: parseStatements(`payload = input.value`),
 	}
 	observed := func() (ast.Stmt, *ast.Expr) {
 		value := ast.NewIdent("_")
@@ -38,14 +38,14 @@ func TestQuestionFlowExitOrderingRace(t *testing.T) {
 	}
 	source := `package main
 import "testing"
-type good int
-type bad int
+type result struct{tag,value int}
+type option struct{tag,value int}
 var mode int
 var trace string
-func operand() any { trace+="O"; return func() any {if mode==0{return good(7)};return bad(1)}() }
+func operand() result { trace+="O"; if mode==0{return result{1,7}};return result{2,1} }
 func validate(any) {trace+="V";if mode==2{panic("validator")}}
 func converted(any) int {trace+="C";if mode==3{panic("conversion")};return -1}
-func optionOperand()*int{trace+="O";if mode==0{n:=7;return &n};return nil}
+func optionOperand()option{trace+="O";if mode==0{return option{1,7}};return option{}}
 func none()int{trace+="N";return -1}
 func observe(f func()int)(n int,p any){defer func(){p=recover()}();n=f();return}
 `

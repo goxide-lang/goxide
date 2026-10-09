@@ -32,11 +32,12 @@ func Data(v Reply)[]Item{return match v.V{Result[[]Item,map[string][]int]::Ok(x)
 func ErrorData(v Reply)map[string][]int{return match v.V{Result[[]Item,map[string][]int]::Ok(_)=>nil,Result[[]Item,map[string][]int]::Err(x)=>x,}}
 func Nested()Reply{return Reply{V:Result[[]Item,map[string][]int]::Ok(nil),Nested:Option[Result[[]int,string]]::Some(Result[[]int,string]::Err("quoted\n"))}}
 `, `package fixture
+import __borrow_std "github.com/goxide-lang/std/sum"
 import("testing";"strings")
 func TestStatesAndDeepClone(t *testing.T){
  branch:=Branch();bc:=CloneBranches(&branch);if DebugBranches(&bc)!="Branches { V: Option::None, R: Result::Ok(3) }"{t.Fatal(DebugBranches(&bc))}
 
- n:=DefaultHolder();if n.V!=nil||CloneHolder(&n).V!=nil||DebugHolder(&n)!="Holder { V: Option::None }"{t.Fatal(n,DebugHolder(&n))}
+ n:=DefaultHolder();if __borrow_std.TagOption(n.V)!=0||__borrow_std.TagOption(CloneHolder(&n).V)!=0||DebugHolder(&n)!="Holder { V: Option::None }"{t.Fatal(n,DebugHolder(&n))}
  for _,tc:=range []struct{items []Item;display string}{{nil,"nil"},{[]Item{},"[]"}}{v:=Holder{V:Some(tc.items)};c:=CloneHolder(&v);if (Values(c.V)==nil)!=(tc.items==nil)||DebugHolder(&v)!="Holder { V: Option::Some("+tc.display+") }"{t.Fatal(v,c,DebugHolder(&v))}}
  v:=Holder{V:Some([]Item{{Values:[]int{1}}})};c:=CloneHolder(&v);Values(c.V)[0].Values[0]=9;if Values(v.V)[0].Values[0]!=1{t.Fatal("payload shared")}
  ok:=Ok([]Item{{Values:[]int{2}}});oc:=CloneReply(&ok);Data(oc)[0].Values[0]=8;if Data(ok)[0].Values[0]!=2||!strings.Contains(DebugReply(&ok),"Result::Ok([Item { Values: [2] }])"){t.Fatal(ok,DebugReply(&ok))}
@@ -70,6 +71,9 @@ func Err(v map[string][]int)Result[[]int,map[string][]int]{return Result[[]int,m
 #[derive(Clone,Debug)]
 type Item struct{Values []int}
 func ItemOption(v Item)Option[Item]{return Option[Item]::Some(v)}
+#[derive(Clone,Debug)]
+pub enum State{Valid,}
+func StateOption()Option[State]{return Option[State]::Some(State::Valid)}
 type secret struct{N int}
 type Secret=Option[secret]
 func Hidden()Secret{return Option[secret]::None}
@@ -115,6 +119,8 @@ type SecretHolder struct{V m::Secret}
 type Reverse struct{V r::Flip[map[string][]int,[]int]}
 #[derive(Clone,Debug)]
 type ItemHolder struct{V m::Option[m::Item]}
+#[derive(Clone,Debug)]
+type StateHolder struct{V m::Option[m::State]}
 `)
 	out := filepath.Join(t.TempDir(), "app")
 	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
@@ -144,22 +150,30 @@ type ItemHolder struct{V m::Option[m::Item]}
 		t.Fatal(err)
 	}
 	packagesWrite(t, out, "app_test.go", `package app
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import("testing";"strings";m "sums.example/lib/model")
-type forged struct{m.Option[[]int]}
 func TestRegisteredStates(t *testing.T){
- item:=ItemHolder{V:m.ItemOption(m.Item{Values:[]int{1}})};ic:=CloneItemHolder(&item);ic.V.(m.GoxideOptionSome[m.Item]).Value.Values[0]=9;if item.V.(m.GoxideOptionSome[m.Item]).Value.Values[0]!=1||DebugItemHolder(&item)!="ItemHolder { V: Option::Some(Item { Values: [1] }) }"{t.Fatal("external payload protocol")}
+ item:=ItemHolder{V:m.ItemOption(m.Item{Values:[]int{1}})};ic:=CloneItemHolder(&item);__borrow_std.ValueSome(ic.V).Values[0]=9;if __borrow_std.ValueSome(item.V).Values[0]!=1||DebugItemHolder(&item)!="ItemHolder { V: Option::Some(Item { Values: [1] }) }"{t.Fatal("external payload protocol")}
 
- if DefaultSecretHolder().V!=nil||DefaultLocalHolder().V!=nil{t.Fatal("None default")}
- local:=LocalHolder{V:LocalSome([]int{4})};lc:=CloneLocalHolder(&local);lc.V.(GoxideOptionSome[[]int]).Value[0]=8;if local.V.(GoxideOptionSome[[]int]).Value[0]!=4||DebugLocalHolder(&local)!="LocalHolder { V: Option::Some([4]) }"{t.Fatal("peer local protocol")}
- reverse:=Reverse{V:m.Ok([]int{6})};rc:=CloneReverse(&reverse);rc.V.(m.GoxideResultOk[[]int,map[string][]int]).Value[0]=9;if reverse.V.(m.GoxideResultOk[[]int,map[string][]int]).Value[0]!=6||DebugReverse(&reverse)!="Reverse { V: Result::Ok([6]) }"{t.Fatal("alias argument order")}
+ if __borrow_std.TagOption(DefaultSecretHolder().V)!=0||__borrow_std.TagOption(DefaultLocalHolder().V)!=0{t.Fatal("None default")}
+ local:=LocalHolder{V:LocalSome([]int{4})};lc:=CloneLocalHolder(&local);__borrow_std.ValueSome(lc.V)[0]=8;if __borrow_std.ValueSome(local.V)[0]!=4||DebugLocalHolder(&local)!="LocalHolder { V: Option::Some([4]) }"{t.Fatal("peer local protocol")}
+ reverse:=Reverse{V:m.Ok([]int{6})};rc:=CloneReverse(&reverse);__borrow_std.ValueOk(rc.V)[0]=9;if __borrow_std.ValueOk(reverse.V)[0]!=6||DebugReverse(&reverse)!="Reverse { V: Result::Ok([6]) }"{t.Fatal("alias argument order")}
 
- n:=DefaultHolder();if n.V!=nil||DebugHolder(&n)!="Holder { V: Option::None }"{t.Fatal(n)}
- for _,tc:=range []struct{v []int;text string}{{nil,"nil"},{[]int{},"[]"},{[]int{1},"[1]"}}{v:=Holder{V:m.Some(tc.v)};c:=CloneHolder(&v);data:=c.V.(m.GoxideOptionSome[[]int]).Value;if (data==nil)!=(tc.v==nil)||DebugHolder(&v)!="Holder { V: Option::Some("+tc.text+") }"{t.Fatal(v,c,DebugHolder(&v))};if len(data)>0{data[0]=9;if tc.v[0]!=1{t.Fatal("shared slice")}}}
- ok:=Reply{V:m.Ok([]int{2})};c:=CloneReply(&ok);c.V.(m.GoxideResultOk[[]int,map[string][]int]).Value[0]=9;if ok.V.(m.GoxideResultOk[[]int,map[string][]int]).Value[0]!=2||!strings.Contains(DebugReply(&ok),"Result::Ok([2])"){t.Fatal(ok)}
- for _,tc:=range []struct{v map[string][]int;text string}{{nil,"nil"},{map[string][]int{},"{}"}}{v:=Reply{V:m.Err(tc.v)};c:=CloneReply(&v);data:=c.V.(m.GoxideResultErr[[]int,map[string][]int]).Value;if (data==nil)!=(tc.v==nil)||DebugReply(&v)!="Reply { V: Result::Err("+tc.text+") }"{t.Fatal(v,c)}}
- er:=Reply{V:m.Err(map[string][]int{"x":{3}})};c=CloneReply(&er);c.V.(m.GoxideResultErr[[]int,map[string][]int]).Value["x"][0]=9;if er.V.(m.GoxideResultErr[[]int,map[string][]int]).Value["x"][0]!=3||!strings.Contains(DebugReply(&er),"Result::Err({\"x\": [3]})"){t.Fatal(er)}
+ n:=DefaultHolder();if __borrow_std.TagOption(n.V)!=0||DebugHolder(&n)!="Holder { V: Option::None }"{t.Fatal(n)}
+ for _,tc:=range []struct{v []int;text string}{{nil,"nil"},{[]int{},"[]"},{[]int{1},"[1]"}}{v:=Holder{V:m.Some(tc.v)};c:=CloneHolder(&v);data:=__borrow_std.ValueSome(c.V);if (data==nil)!=(tc.v==nil)||DebugHolder(&v)!="Holder { V: Option::Some("+tc.text+") }"{t.Fatal(v,c,DebugHolder(&v))};if len(data)>0{data[0]=9;if tc.v[0]!=1{t.Fatal("shared slice")}}}
+ ok:=Reply{V:m.Ok([]int{2})};c:=CloneReply(&ok);__borrow_std.ValueOk(c.V)[0]=9;if __borrow_std.ValueOk(ok.V)[0]!=2||!strings.Contains(DebugReply(&ok),"Result::Ok([2])"){t.Fatal(ok)}
+ for _,tc:=range []struct{v map[string][]int;text string}{{nil,"nil"},{map[string][]int{},"{}"}}{v:=Reply{V:m.Err(tc.v)};c:=CloneReply(&v);data:=__borrow_std.ValueErr(c.V);if (data==nil)!=(tc.v==nil)||DebugReply(&v)!="Reply { V: Result::Err("+tc.text+") }"{t.Fatal(v,c)}}
+ er:=Reply{V:m.Err(map[string][]int{"x":{3}})};c=CloneReply(&er);__borrow_std.ValueErr(c.V)["x"][0]=9;if __borrow_std.ValueErr(er.V)["x"][0]!=3||!strings.Contains(DebugReply(&er),"Result::Err({\"x\": [3]})"){t.Fatal(er)}
 }
-func TestInvalidCases(t *testing.T){for _,v:=range []m.Option[[]int]{(*m.GoxideOptionSome[[]int])(nil),&m.GoxideOptionSome[[]int]{},forged{}}{x:=Holder{V:v};for _,f:=range []func(){func(){_=CloneHolder(&x)},func(){_=DebugHolder(&x)}}{func(){defer func(){if recover()==nil{t.Fatal("invalid case accepted")}}();f()}()}}}
+// Option's zero value is valid None. Invalid Result and nested enum values are
+// still constructible through the public typed ABI and must remain rejected.
+func TestInvalidCases(t *testing.T){
+ nested:=StateHolder{V:__borrow_std.NewSome(m.State{})}
+ for name,f:=range map[string]func(){"result-clone":func(){_=CloneReply(&Reply{})},"result-debug":func(){_=DebugReply(&Reply{})},"nested-clone":func(){_=CloneStateHolder(&nested)},"nested-debug":func(){_=DebugStateHolder(&nested)}}{
+  t.Run(name,func(t *testing.T){defer func(){if recover()==nil{t.Fatal("invalid value accepted")}}();f()})
+ }
+}
 `)
 	plain := t.TempDir()
 	packagesWrite(t, plain, "go.mod", mod("sums.example/plain", lib)+fmt.Sprintf("require sums.example/app v0.0.0\nreplace sums.example/app => %s\n", filepath.ToSlash(out)))
@@ -171,6 +185,10 @@ func TestGoHelpers(t *testing.T){v:=a.Holder{V:m.Some([]int{5})};c:=a.CloneHolde
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
+	assertLegacySumGoRejected(t, out, tool, map[string]legacySumGoCase{
+		"pointer-case":  {"package app\nimport m \"sums.example/lib/model\"\nvar _ m.Option[[]int]=(*m.GoxideOptionSome[[]int])(nil)\n", "undefined: m.GoxideOptionSome"},
+		"forged-option": {"package app\nimport m \"sums.example/lib/model\"\ntype forged struct{m.Option[[]int]}\nvar _ m.Option[[]int]=forged{}\n", "cannot use"},
+	})
 	// The producer has no concrete validator for Option[string]. Same family is insufficient.
 	bad := t.TempDir()
 	packagesWrite(t, bad, "go.mod", mod("sums.example/bad", lib))

@@ -164,13 +164,13 @@ for module in ['github.com/goxide-lang/std', 'github.com/goxide-lang/serde']:
     assert metadata['Path'] == module and metadata['Version'] == selected['Version']
     public_libraries.append(dict(module=module, commit=commit, version=selected['Version'], sum=metadata['Sum'], goModSum=metadata['GoModSum']))
 metadata_schema = int(re.search(r'const enumMetadataVersion = (\d+)', (ROOT/'internal/frontend/enum_artifact.go').read_text()).group(1))
-assert metadata_schema == 8
+assert metadata_schema == 9
 def source_version(path, pattern):
     return int(re.search(pattern, (ROOT/path).read_text()).group(1))
 abi_versions = dict(enum=metadata_schema, reference=source_version('internal/refs/metadata.go', r'const MetadataVersion = (\d+)'), use=source_version('internal/frontend/use_artifact.go', r'const useMetadataVersion = (\d+)'), sum=source_version('internal/enums/builtins.go', r'const SumABI = (\d+)'))
-assert abi_versions == dict(enum=8, reference=3, use=3, sum=2)
+assert abi_versions == dict(enum=9, reference=3, use=3, sum=3)
 std_abi = run(GO, 'doc', 'github.com/goxide-lang/std/sum.GoxideSumABI').decode()
-assert re.search(r'GoxideSumABI = 2\b', std_abi), std_abi
+assert re.search(r'GoxideSumABI = 3\b', std_abi), std_abi
 
 manifest = dict(abiVersions=abi_versions, metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=compiler_digest, exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 dependencies=dependencies, dependencyContext=context, dependencySourceScope='fixed explicit project roots; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',

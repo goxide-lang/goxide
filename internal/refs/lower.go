@@ -123,10 +123,50 @@ func elementInFile(t types.Type, file *ast.File, info *types.Info, owner *types.
 }
 func (c *checker) element(t types.Type) string { return elementInFile(t, c.file, c.info, c.pkg) }
 func referenceTarget(t types.Type) types.Type {
+	if t == nil {
+		return nil
+	}
 	if p, ok := types.Unalias(t).Underlying().(*types.Pointer); ok {
 		return p.Elem()
 	}
 	return nil
+}
+
+// ReferenceElement exposes only this analysis package's nominal references.
+// Ordinary Go pointers and similarly named types owned by another package are
+// not checked references.
+func ReferenceElement(t types.Type, owner *types.Package) (types.Type, Permission, bool) {
+	r, ok := refType(t, owner)
+	if !ok {
+		return nil, "", false
+	}
+	return referenceTarget(t), r.Permission, true
+}
+
+// PreparedReferenceElement reads the staged type evidence used before Finish.
+// It recognizes the compiler's provisional write constructor and an explicit
+// unary read address, but never classifies an arbitrary native pointer value as
+// a reference. This is inference only; Finish must still validate the place and
+// its complete readonly qualifications before erasing anything.
+func PreparedReferenceElement(expr ast.Expr, info *types.Info, owner *types.Package) (types.Type, Permission, bool) {
+	if expr == nil || info == nil {
+		return nil, "", false
+	}
+	t := info.TypeOf(expr)
+	if elem, permission, ok := ReferenceElement(t, owner); ok {
+		return elem, permission, true
+	}
+	if t != nil {
+		if named, ok := types.Unalias(t).(*types.Named); ok && named.Obj().Pkg() == owner && named.Obj().Name() == "__goxide_ref_write" && named.TypeArgs().Len() == 1 {
+			return named.TypeArgs().At(0), Write, true
+		}
+	}
+	if address, ok := unparen(expr).(*ast.UnaryExpr); ok && address.Op == token.AND && t != nil {
+		if pointer, ok := types.Unalias(t).(*types.Pointer); ok {
+			return pointer.Elem(), Read, true
+		}
+	}
+	return nil, "", false
 }
 
 func refType(t types.Type, owner *types.Package) (Ref, bool) {
@@ -239,6 +279,22 @@ func tokens(src []byte) []lex {
 	return out
 }
 
+// unaryAddress distinguishes an expression-starting ampersand from Go's binary
+// AND by syntax, never by whether an identifier named mut happens to resolve.
+// A reference type after a parameter/field name is handled separately from the
+// Go parser's type-position error, so an operand-ending token stays binary here.
+func unaryAddress(ts []lex, at int) bool {
+	if at == 0 {
+		return true
+	}
+	switch ts[at-1].kind {
+	case token.IDENT, token.INT, token.FLOAT, token.IMAG, token.CHAR, token.STRING,
+		token.RPAREN, token.RBRACK, token.RBRACE, token.INC, token.DEC:
+		return false
+	}
+	return true
+}
+
 // protectedAt keeps attribute-looking text inside Go literals/comments untouched.
 func protectedAt(source []byte) func(int) bool {
 	fs := token.NewFileSet()
@@ -294,6 +350,8 @@ func declarations() string {
 
 type checker struct {
 	matchReferenceTemps map[string]bool
+	enumTypes           map[string]bool
+	observers           []EnumObserver
 	pkg                 *types.Package
 	packagePath         string
 	companions          map[string][]byte
@@ -328,7 +386,7 @@ func (c *checker) position(p token.Pos) token.Position {
 	return f.Position(f.Pos(off))
 }
 func (c *checker) fail(n ast.Node, msg string) error {
-	return fmt.Errorf("%s: refs: %s", c.position(n.Pos()), msg)
+	return &Error{Position: c.position(n.Pos()), Message: msg}
 }
 func (c *checker) parse() error {
 	c.fs = token.NewFileSet()
@@ -365,6 +423,9 @@ func (c *checker) checkTypes() error {
 	pkg, err := conf.Check(c.packagePath, c.fs, files, c.info)
 	c.pkg = pkg
 	if err != nil {
+		if diagnostic, ok := err.(types.Error); ok && c.fs.PositionFor(diagnostic.Pos, false).Filename == c.filename {
+			return &Error{Position: c.position(diagnostic.Pos), Message: "source type checking failed: " + diagnostic.Msg}
+		}
 		return fmt.Errorf("%s: refs: source type checking failed: %w", c.filename, err)
 	}
 	return nil
@@ -380,11 +441,20 @@ func lower(filename string, source []byte, imp types.Importer, prepare bool) (Re
 	return lowerWithFiles(defaultPackagePath, filename, source, imp, prepare, nil)
 }
 func lowerWithFiles(path, filename string, source []byte, imp types.Importer, prepare bool, files map[string][]byte, trusted ...map[string]bool) (Result, error) {
+	var evidence PermissionEvidence
+	if len(trusted) > 1 {
+		evidence.EnumTypes = trusted[1]
+	}
+	return lowerWithEvidence(path, filename, source, imp, prepare, files, evidence, trusted...)
+}
+func lowerWithEvidence(path, filename string, source []byte, imp types.Importer, prepare bool, files map[string][]byte, evidence PermissionEvidence, trusted ...map[string]bool) (Result, error) {
 	var matchTemps map[string]bool
 	if len(trusted) > 0 {
 		matchTemps = trusted[0]
 	}
 	c := &checker{matchReferenceTemps: matchTemps, packagePath: packagePath(path), companions: files, filename: filename, source: source, imp: imp, m: original(source), mut: map[int]bool{}, synthetic: map[int]bool{}, elements: map[string]bool{}}
+	c.enumTypes = evidence.EnumTypes
+	c.observers = evidence.Observers
 	// Attributes belong to the later derive pass; preserve their exact source lines.
 	var attrs []struct {
 		line int
@@ -406,18 +476,6 @@ func lowerWithFiles(path, filename string, source []byte, imp types.Importer, pr
 		}
 		off += len(line)
 	}
-	// A lexically bound host-Go identifier named mut keeps its existing meaning.
-	boundMut := map[int]bool{}
-	hostFS := token.NewFileSet()
-	hostFile, _ := parser.ParseFile(hostFS, filename, c.m.text, parser.AllErrors)
-	if hostFile != nil {
-		ast.Inspect(hostFile, func(n ast.Node) bool {
-			if id, ok := n.(*ast.Ident); ok && id.Name == "mut" && id.Obj != nil {
-				boundMut[hostFS.PositionFor(id.Pos(), false).Offset] = true
-			}
-			return true
-		})
-	}
 	ts := tokens(c.m.text)
 	reserved := ""
 	var es []edit
@@ -425,9 +483,10 @@ func lowerWithFiles(path, filename string, source []byte, imp types.Importer, pr
 		if t.kind == token.IDENT && strings.HasPrefix(t.text, prefix) {
 			reserved = t.text
 		}
-		if t.text == "mut" && i+1 < len(ts) && ts[i+1].kind == token.AND && !boundMut[t.start] && (i == 0 || ts[i-1].kind != token.PERIOD) {
-			es = append(es, edit{t.start, t.end, strings.Repeat(" ", t.end-t.start)})
-			c.mut[ts[i+1].start] = true
+		if t.kind == token.AND && i+1 < len(ts) && ts[i+1].text == "mut" && unaryAddress(ts, i) {
+			modifier := ts[i+1]
+			es = append(es, edit{modifier.start, modifier.end, strings.Repeat(" ", modifier.end-modifier.start)})
+			c.mut[t.start] = true
 		}
 	}
 	c.m = c.m.apply(es)
@@ -456,12 +515,20 @@ func lowerWithFiles(path, filename string, source []byte, imp types.Importer, pr
 				if i+1 >= len(ts) {
 					continue
 				}
-				e, end := referenceElement(c.m.text, ts, i+1)
+				elementStart := i + 1
+				perm := Read
+				if ts[elementStart].text == "mut" {
+					perm = Write
+					elementStart++
+				}
+				if elementStart >= len(ts) {
+					return Result{}, fmt.Errorf("%s: refs: missing reference element", pe.Pos)
+				}
+				e, end := referenceElement(c.m.text, ts, elementStart)
 				if e == "" {
 					return Result{}, fmt.Errorf("%s: refs: unsupported reference element", pe.Pos)
 				}
 				c.elements[e] = true
-				perm := Read
 				if c.mut[c.m.origin[pos]] {
 					perm = Write
 					delete(c.mut, c.m.origin[pos])
@@ -785,7 +852,7 @@ func (c *checker) transfer(dst types.Type, src ast.Expr) error {
 			}
 		}
 	}
-	return c.fail(src, "reference initialization requires explicit &value (read) or mut& value (write); nil/raw-pointer adoption is unsupported")
+	return c.fail(src, "reference initialization requires explicit &value (read) or &mut value (write); nil/raw-pointer adoption is unsupported")
 }
 func (c *checker) validate() error {
 	var err error
@@ -797,6 +864,11 @@ func (c *checker) validate() error {
 			return false
 		}
 		fail := func(s string) bool { err = c.fail(n, s); return false }
+		if expression, ok := n.(ast.Expr); ok {
+			if _, ref := c.refType(c.typ(expression)); ref && !supportedReferenceElement(referenceTarget(c.typ(expression)), map[types.Type]bool{}, c.enumTypes) {
+				return fail("reference element is outside the registered concrete data subset")
+			}
+		}
 		switch x := n.(type) {
 		case *ast.TypeSpec:
 			bad := false
@@ -977,7 +1049,8 @@ func (c *checker) validate() error {
 				r, _ := c.refType(c.typ(x))
 				if s, ok := unparen(u.X).(*ast.StarExpr); ok {
 					if from, yes := c.refType(c.typ(s.X)); yes && r.Permission == Write && from.Permission == Read {
-						return fail("cannot obtain write access through a read reference")
+						err = c.fail(unparen(u.X), "cannot obtain write access through a read reference")
+						return false
 					}
 				}
 				break

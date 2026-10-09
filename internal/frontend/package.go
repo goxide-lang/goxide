@@ -316,6 +316,12 @@ func CompilePackageWithOptions(path string, sources map[string][]byte, options P
 	return finishPackage(path, result, options.Importer)
 }
 func finishPackage(path string, result PackageResult, imp types.Importer) (PackageResult, error) {
+	if imp == nil {
+		names := sortedResultNames(result)
+		if len(names) > 0 {
+			imp = typecheck.NewImporter(names[0])
+		}
+	}
 	files := map[string][]byte{}
 	var families []enums.Decl
 	var conversions []propagate.Conversion
@@ -332,7 +338,15 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	for n, s := range files {
 		referenceIR[n] = s
 	}
-	bound, bindings, err := refs.BindImportsWithPath(path, files, imp, result.referenceImports)
+	referenceDecls := map[string][]enums.Decl{}
+	for _, name := range sortedSources(files) {
+		referenceDecls[name] = append(append([]enums.Decl(nil), families...), result.imported[name]...)
+	}
+	_, enumTypes, _, err := enumReferenceEvidence(path, files, imp, referenceDecls, result.enumImports)
+	if err != nil {
+		return result, err
+	}
+	bound, bindings, err := refs.BindImportsWithPath(path, files, imp, result.referenceImports, enumTypes)
 	if err != nil {
 		if e, ok := err.(*refs.ImportError); ok {
 			mapped := &sourcemap.Error{Message: e.Message, Generated: e.Position}
@@ -365,7 +379,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		r := result.Files[name]
 		if !bytes.Equal(r.Go, source) {
 			if r.Diagnostics != nil {
-				r.Diagnostics = r.Diagnostics.Compose(r.Go, source, "package refs.BindImports")
+				r.Diagnostics = bindings.MapSource(name, source, r.Diagnostics)
 			}
 			r.Go = source
 			r.Expanded = source
@@ -424,7 +438,9 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 		if !strings.HasSuffix(name, ".gox") {
 			continue
 		}
-		r.matchReferenceTemps = map[string]bool{}
+		if r.matchReferenceTemps == nil {
+			r.matchReferenceTemps = map[string]bool{}
+		}
 		var inferred []enums.Decl
 		lowered, err := propagate.Lower(name, r.Go, propagate.Config{RewriteExpanded: result.useContext.rewriteExpanded, ResolvePayloadEnum: payloadEnums, FileFamilies: result.imported, InferredFamilies: &inferred, GoResultNodes: &adapterNodes, Families: append(append([]enums.Decl{}, families...), result.imported[name]...), From: conversions, Importer: imp, Provenance: r.Diagnostics, Files: files, PackagePath: path, Namespace: fmt.Sprintf("f%d", index), MatchReferenceTemps: r.matchReferenceTemps})
 		if err != nil {
@@ -497,11 +513,36 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 			return result, err
 		}
 	}
-	finished, err := refs.FinishPackageWithPath(path, files, imp, matchTemps)
+	for _, name := range sortedSources(files) {
+		referenceDecls[name] = append(append([]enums.Decl(nil), families...), result.imported[name]...)
+	}
+	projections, updatedEnumTypes, observers, err := enumReferenceEvidence(path, files, imp, referenceDecls, result.enumImports)
 	if err != nil {
-		return result, stageError("package refs.Finish", err)
+		return result, err
+	}
+	for id := range updatedEnumTypes {
+		enumTypes[id] = true
+	}
+	projected, projectionBindings, err := refs.BindProjectionsWithPath(path, files, imp, projections)
+	if err != nil {
+		return result, stageError("package refs.BindProjections", err)
+	}
+	for id := range projectionBindings.ReferenceElements {
+		enumTypes[id] = true
+	}
+	projectionMaps := map[string]*sourcemap.Map{}
+	for name, source := range projected {
+		projectionMaps[name] = projectionBindings.MapSource(name, source, result.Files[name].Diagnostics)
+	}
+	finished, err := refs.FinishPackageWithEvidence(path, projected, imp, refs.PermissionEvidence{EnumTypes: enumTypes, Observers: observers}, matchTemps)
+	if err != nil {
+		return result, stageError("package refs.Finish", mapReferenceError(err, projectionMaps))
 	}
 	for name, ref := range finished {
+		ref.Source, err = projectionBindings.Restore(name, ref.Source)
+		if err != nil {
+			return result, err
+		}
 		ref.Source, err = bindings.Restore(name, ref.Source)
 		if err != nil {
 			return result, err
@@ -552,7 +593,7 @@ func finishPackage(path string, result PackageResult, imp types.Importer) (Packa
 	if err := checkDefaultCycles(path, files, imp, helpers, maps); err != nil {
 		return result, err
 	}
-	result.references, err = refs.ExportMetadata(path, referenceIR, files, imp)
+	result.references, err = refs.ExportMetadata(path, referenceIR, files, imp, enumTypes)
 	if err != nil {
 		return result, err
 	}
@@ -660,7 +701,6 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 			seen[identityKey] = d.ExportValidator
 		}
 		for _, v := range d.Variants {
-			exportedBuiltins["Goxide"+d.Family+v.Name] = true
 			exportedBuiltins["GoxideNew"+d.Family+v.Name] = true
 		}
 	}
@@ -683,7 +723,7 @@ func packageGeneratedNames(name string, r *Result, index int, seen map[string]st
 				}
 			}
 		}
-		builtin := strings.HasPrefix(key, "__goxide_ref_") || exportedBuiltins[key] || privateValidators[key] || strings.Contains(key, "__goxide_enum_case_Result_") || strings.Contains(key, "__goxide_enum_case_Option_") || strings.HasPrefix(key, "__goxide_enum_ctor_Result_") || strings.HasPrefix(key, "__goxide_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__goxide_enum_validate_Result" || key == "__goxide_enum_validate_Option"
+		builtin := strings.HasPrefix(key, "__goxide_ref_") || exportedBuiltins[key] || privateValidators[key] || strings.HasPrefix(key, "__goxide_enum_tag_Result") || strings.HasPrefix(key, "__goxide_enum_tag_Option") || strings.HasPrefix(key, "__goxide_enum_value_Result_") || strings.HasPrefix(key, "__goxide_enum_value_Option_") || strings.HasPrefix(key, "__goxide_enum_project_Result_") || strings.HasPrefix(key, "__goxide_enum_project_Option_") || strings.HasPrefix(key, "__goxide_enum_ctor_Result_") || strings.HasPrefix(key, "__goxide_enum_ctor_Option_") || key == "Result" || key == "Option" || key == "__goxide_enum_validate_Result" || key == "__goxide_enum_validate_Option"
 		if !builtin {
 			continue
 		}

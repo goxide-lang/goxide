@@ -82,15 +82,16 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 					extraImports[name] += fmt.Sprintf("; import %s %q", originAlias, export.DefinitionPath)
 				}
 				prefix := fmt.Sprintf("__goxide_enum_import_f%d_i%d_%s", fi, ii, export.Name)
-				d := enums.Decl{Name: prefix, LookupName: alias + "." + export.Name, PackagePath: export.DefinitionPath, Marker: export.Marker, Validator: prefix + "_validate", Public: true}
+				d := enums.Decl{Name: prefix, LookupName: alias + "." + export.Name, PackagePath: export.DefinitionPath, Identity: export.DefinitionName, Tag: originAlias + "." + export.Tag, TagField: export.TagField, Validator: originAlias + "." + export.Validator, Public: true}
 				var code strings.Builder
-				fmt.Fprintf(&code, "\ntype %s = %s.%s; var %s = %s.%s;\n", prefix, alias, export.Name, d.Validator, originAlias, export.Validator)
+				fmt.Fprintf(&code, "\ntype %s = %s.%s;\n", prefix, alias, export.Name)
 				for vi, v := range export.Variants {
-					variant := enums.Variant{Name: v.Name, CaseName: fmt.Sprintf("%s_case%d", prefix, vi), Constructor: fmt.Sprintf("%s_new%d", prefix, vi)}
+					variant := enums.Variant{Name: v.Name, Tag: v.Tag, Field: v.Field, PayloadAlias: originAlias + "." + v.PayloadAlias, Constructor: fmt.Sprintf("%s_new%d", prefix, vi)}
 					if v.HasPayload {
 						variant.Payload = "__goxide_imported_payload"
+						variant.Value, variant.Project = originAlias+"."+v.Value, originAlias+"."+v.Project
 					}
-					fmt.Fprintf(&code, "type %s = %s.%s; var %s = %s.%s;\n", variant.CaseName, originAlias, v.Case, variant.Constructor, originAlias, v.Constructor)
+					fmt.Fprintf(&code, "var %s = %s.%s;\n", variant.Constructor, originAlias, v.Constructor)
 					d.Variants = append(d.Variants, variant)
 				}
 				preludes[name] += code.String()
@@ -135,57 +136,7 @@ func importedDeclarations(consumerPath string, sources map[string][]byte, packag
 				preludes[name] += code
 				declarations[name] = append(declarations[name], d)
 			}
-			seen := map[string]bool{}
-			for _, export := range p.enumMetadata.Enums {
-				seen[export.Name] = true
-			}
-			families := map[string]*enums.Decl{}
-			for _, fn := range sortedResultNames(p) {
-				for _, d := range p.Files[fn].Enums {
-					if seen[d.Name] {
-						continue
-					}
-					seen[d.Name] = true
-					if d.Family != "" {
-						if len(p.enumMetadata.Families) > 0 {
-							continue
-						}
-						family := families[d.Family]
-						if family == nil {
-							family = &enums.Decl{PackagePath: path, Name: alias + "." + d.Family, Family: d.Family}
-							for _, v := range d.Variants {
-								family.Variants = append(family.Variants, enums.Variant{Name: v.Name, Payload: v.Payload, CaseName: alias + ".Goxide" + d.Family + v.Name, Constructor: alias + ".GoxideNew" + d.Family + v.Name})
-							}
-							families[d.Family] = family
-						}
-						family.Instances = append(family.Instances, enums.Decl{Validator: alias + "." + d.ExportValidator})
-						continue
-					}
-					if !d.Public {
-						continue
-					}
-					original := d.Name
-					prefix := fmt.Sprintf("__goxide_enum_import_f%d_i%d_%s", fi, ii, original)
-					d.PackagePath, d.LookupName, d.Name = path, alias+"."+original, prefix
 
-					d.Validator = prefix + "_validate"
-					var code strings.Builder
-					fmt.Fprintf(&code, "\ntype %s = %s.%s; var %s = %s.Validate%s;\n", prefix, alias, original, d.Validator, alias, original)
-					d.Variants = append([]enums.Variant(nil), d.Variants...)
-					for vi := range d.Variants {
-						v := &d.Variants[vi]
-						v.CaseName, v.Constructor = fmt.Sprintf("%s_case%d", prefix, vi), fmt.Sprintf("%s_new%d", prefix, vi)
-						fmt.Fprintf(&code, "type %s = %s.GoxideCase%d_%s_%s; var %s = %s.New%s%s;\n", v.CaseName, alias, len(original), original, v.Name, v.Constructor, alias, original, v.Name)
-					}
-					preludes[name] += code.String()
-					declarations[name] = append(declarations[name], d)
-				}
-			}
-			for _, family := range []string{"Option", "Result"} {
-				if d := families[family]; d != nil {
-					declarations[name] = append(declarations[name], *d)
-				}
-			}
 		}
 	}
 	return declarations, preludes, extraImports, unavailable

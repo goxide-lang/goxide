@@ -84,9 +84,9 @@ import model "example/model"
 type Node struct { N int }
 type Alias = Node
 func read(r &Alias) int { return r.N }
-func local() int { n:=Node{}; w:=mut&n; w.N=2; return read(&*w) }
+func local() int { n:=Node{}; w:=&mut n; w.N=2; return read(&*w) }
 func imported(r &model.Node) int { return r.N }
-func external() int { n:=model.Node{}; w:=mut&n; w.N=3; return imported(&*w) }
+func external() int { n:=model.Node{}; w:=&mut n; w.N=3; return imported(&*w) }
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func TestFinishPackagePathAcrossFiles(t *testing.T) {
 	files := map[string][]byte{}
 	for name, source := range map[string]string{
 		"a.gox": "package consumer\ntype Node struct{N int}\nfunc read(r &Node)int{return r.N}\n",
-		"b.gox": "package consumer\nfunc f()int{n:=Node{};w:=mut&n;w.N=5;return read(&*w)}\n",
+		"b.gox": "package consumer\nfunc f()int{n:=Node{};w:=&mut n;w.N=5;return read(&*w)}\n",
 	} {
 		ir, err := Prepare(name, []byte(source))
 		if err != nil {

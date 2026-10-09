@@ -2,8 +2,12 @@
 
 This finite prototype implements source access permissions from D08/D21. It adds
 no ownership, uniqueness, non-escape, lifetime, race-freedom, Arc/Box protocol, or
-native-pointer bridge. `&T` protects a selected access path; `mut& T` does not
+native-pointer bridge. `&T` protects a selected access path; `&mut T` does not
 exclude other aliases. Existing writable aliases can still modify the object.
+
+Writable types and expressions use `&mut T` and `&mut value`; the former
+`mut&` reference interpretation has been removed. `mut & x`, `mut&x`, and
+`x & mut` remain ordinary binary expressions independently of name lookup.
 
 `Lower(filename, source)` returns ordinary Go plus reference position, element,
 permission, and resolved symbol metadata. Frontend integration uses
@@ -33,7 +37,7 @@ func inspect(r &State) int {
     items := r.Items            // inferred readonly shared-storage view
     // items[0]++               // error
     // v.Items[0]++             // error: copying the struct preserves shared fields
-    // w := mut& v              // error: would upgrade those shared fields
+    // w := &mut v              // error: would upgrade those shared fields
     copied := make([]int, len(items))
     copy(copied, items)           // independent scalar element storage
     copied[0]++

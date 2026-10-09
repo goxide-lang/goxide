@@ -17,9 +17,9 @@ func Context(r &int,t time::Time,h hidden)int{return *r+t.Second()+h.N}
 type Value struct{}
 func(Value)Read()int{return 11}
 func Read(r &int)int{return *r}
-func Inc(r mut& int){*r+=1}
+func Inc(r &mut int){*r+=1}
 func View(r &int)&int{return r}
-func Edit(r mut& int)mut& int{return r}
+func Edit(r &mut int)&mut int{return r}
 `
 
 func TestReferenceMetadataModules(t *testing.T) {
@@ -37,10 +37,10 @@ func TestReferenceMetadataModules(t *testing.T) {
 		packagesWrite(t, source, "mid/mid.gox", `package mid
 use api as x;
 func View(r &int)&int{return x::Again(r)}
-func Edit(r mut& int)mut& int{return x::Edit(r)}
+func Edit(r &mut int)&mut int{return x::Edit(r)}
 `)
 		packagesWrite(t, source, "other/other.gox", `package api
-func View(r mut& int)mut& int{return r}
+func View(r &mut int)&mut int{return r}
 `)
 		packagesWrite(t, source, "app."+ext, body)
 		return source
@@ -49,9 +49,9 @@ func View(r mut& int)mut& int{return r}
 		source := makeSource(`package app
 use api as a;
 use mid as m;
-func Run()int{n:=40;w:=mut& n;a::Inc(w);r:=m::View(&*w);a::Inc(w);if a::Read(r)!=42{panic("alias visibility")};*m::Edit(w)+=1;return n}
-func Deferred()int{n:=0;w:=mut& n;func(){defer a::Inc(w)}();return n}
-func Goroutine()int{n:=0;w:=mut& n;done:=make(chan bool);go func(){a::Inc(w);done<-true}();<-done;return n}
+func Run()int{n:=40;w:=&mut n;a::Inc(w);r:=m::View(&*w);a::Inc(w);if a::Read(r)!=42{panic("alias visibility")};*m::Edit(w)+=1;return n}
+func Deferred()int{n:=0;w:=&mut n;func(){defer a::Inc(w)}();return n}
+func Goroutine()int{n:=0;w:=&mut n;done:=make(chan bool);go func(){a::Inc(w);done<-true}();<-done;return n}
 func Native()int{n:=4;p:=&n;native(p);return n}
 func native(p *int){*p+=1}
 `, "gox")

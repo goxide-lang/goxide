@@ -33,20 +33,18 @@ func enumTestPackage(t *testing.T, path, source string, imp types.Importer) *typ
 	return pkg
 }
 func enumTestMetadata() enumMetadata {
-	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/producer", Package: "producer", Enums: []enumExport{{Name: "Event", DefinitionPath: "example.org/producer", DefinitionName: "Event", Marker: "sealed", Validator: "ValidateEvent", Variants: []enumVariantExport{{Name: "Empty", Case: "EmptyCase", Constructor: "NewEmpty"}, {Name: "Item", Case: "ItemCase", Constructor: "NewItem", HasPayload: true}}}}}
+	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/producer", Package: "producer", Enums: []enumExport{{Name: "Event", DefinitionPath: "example.org/producer", DefinitionName: "Event", TagField: "tag", Tag: "TagEvent", Validator: "ValidateEvent", Variants: []enumVariantExport{{Name: "Empty", Tag: 1, Constructor: "NewEmpty"}, {Name: "Item", Tag: 2, Field: "item", PayloadAlias: "ItemPayload", Value: "ValueItem", Project: "ProjectItem", Constructor: "NewItem", HasPayload: true}}}}}
 }
 
 const enumTestSource = `package producer
-type Event interface{sealed()}
+type Event struct{tag int;item private}
 type private struct{ N int }
-type empty struct{}
-func(empty)sealed(){}
-type item struct{Value private}
-func(item)sealed(){}
-type EmptyCase=empty
-type ItemCase=item
-func NewEmpty()Event{return empty{}}
-func NewItem(v private)Event{return item{v}}
+type ItemPayload=private
+func NewEmpty()Event{return Event{tag:1}}
+func NewItem(v private)Event{return Event{tag:2,item:v}}
+func TagEvent(v Event)int{return v.tag}
+func ValueItem(v Event)private{return v.item}
+func ProjectItem(v *Event)*private{return &v.item}
 func ValidateEvent(v Event){}
 `
 
@@ -65,14 +63,23 @@ func TestEnumMetadataTypedValidation(t *testing.T) {
 		t.Fatal("transparent alias/private payload", e)
 	}
 	for _, tc := range []struct{ name, old, new, want string }{
-		{"pointer-case", "type ItemCase=item", "type ItemCase=*item", "case identity"},
+		{"pointer-storage", "type Event struct{tag int;item private}", "type Event struct{tag int;item *private}", "getter payload"},
 		{"payload-type", "func NewItem(v private)Event", "func NewItem(v int)Event", "constructor payload"},
 		{"wrong-validator", "func ValidateEvent(v Event)", "func ValidateEvent(v any)", "validator signature"},
-		{"extra-case-field", "type item struct{Value private}", "type item struct{Value private; Extra int}", "payload shape"},
+		{"extra-field", "type Event struct{tag int;item private}", "type Event struct{tag int;item private;extra int}", "payload shape"},
+		{"wrong-getter", "func ValueItem(v Event)private", "func ValueItem(v Event)any", "getter payload"},
+		{"wrong-projector", "func ProjectItem(v *Event)*private", "func ProjectItem(v *Event)*int", "projector payload"},
+		{"exported-storage", "type Event struct{tag int;item private}", "type Event struct{tag int;Item private}", "payload field"},
+		{"helper-variable", "func TagEvent(v Event)int{return v.tag}", "var TagEvent=func(v Event)int{return v.tag}", "canonical enum helper"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := strings.Replace(enumTestSource, tc.old, tc.new, 1)
-			src = strings.Replace(src, "return item{v}", "return item{}", 1)
+			src = strings.Replace(src, "return Event{tag:2,item:v}", "return Event{tag:2}", 1)
+			if tc.name == "pointer-storage" {
+				src = strings.Replace(src, "type ItemPayload=private", "type ItemPayload=*private", 1)
+			}
+			src = strings.Replace(src, "return v.item", "panic(\"stub\")", 1)
+			src = strings.Replace(src, "return &v.item", "panic(\"stub\")", 1)
 			pkg := enumTestPackage(t, "example.org/producer", src, nil)
 			e := validateEnumMetadata(enumTestMetadata(), pkg, enumTestImporter{"example.org/producer": pkg})
 			if e == nil || !strings.Contains(e.Error(), tc.want) {
@@ -80,7 +87,7 @@ func TestEnumMetadataTypedValidation(t *testing.T) {
 			}
 		})
 	}
-	t.Run("new-defined-interface-is-not-alias", func(t *testing.T) {
+	t.Run("new-defined-struct-is-not-alias", func(t *testing.T) {
 		p := enumTestPackage(t, "example.org/relay", `package relay;import p "example.org/producer";type Renamed p.Event`, imp)
 		if e := validateEnumMetadata(alias, p, imp); e == nil || !strings.Contains(e.Error(), "alias identity") {
 			t.Fatal(e)
@@ -144,6 +151,7 @@ func TestEnumArtifactBindings(t *testing.T) {
 		mutate     func(*enumArtifact)
 	}{
 		{"version", "unsupported metadata version", func(a *enumArtifact) { a.ArtifactVersion = 2 }},
+		{"retired-interface-schema", "unsupported metadata version", func(a *enumArtifact) { a.Metadata.Version = 8 }},
 		{"path", "package path mismatch", func(a *enumArtifact) { a.Metadata.Path = "wrong.example/pkg" }},
 		{"marker", "marker digest mismatch", func(a *enumArtifact) { a.Metadata.Enums[0].Variants[0].Name = "Changed" }},
 		{"files", "source set mismatch", func(a *enumArtifact) { a.Files = map[string]string{} }},
@@ -191,35 +199,37 @@ func TestEnumArtifactBindings(t *testing.T) {
 }
 
 const enumFamilyTestSource = `package producer
-type Option[T any] interface{ option(T) }
-type some[T any] struct{Value T}
-func(some[T])option(T){}
-type HSome[T any]=some[T]
-func NewSome[T any](v T)Option[T]{return some[T]{v}}
-func NewNone[T any]()Option[T]{return nil}
+type Option[T any] struct{tag uint8;some T}
+func NewSome[T any](v T)Option[T]{return Option[T]{tag:1,some:v}}
+func NewNone[T any]()Option[T]{return Option[T]{}}
+func TagOption[T any](v Option[T])int{return int(v.tag)}
+func ValidateOption[T any](v Option[T]){}
+func ValueSome[T any](v Option[T])T{return v.some}
+func ProjectSome[T any](v *Option[T])*T{return &v.some}
 type private struct{N int}
 func CheckOption(v Option[private]){}
-type Result[T any,E any] interface{ result(T,E) }
-type ok[T any,E any] struct{Value T}
-func(ok[T,E])result(T,E){}
-type errCase[T any,E any] struct{Value E}
-func(errCase[T,E])result(T,E){}
-type HOk[T any,E any]=ok[T,E]
-type HErr[T any,E any]=errCase[T,E]
-func NewOk[T any,E any](v T)Result[T,E]{return ok[T,E]{v}}
-func NewErr[T any,E any](v E)Result[T,E]{return errCase[T,E]{v}}
+type Result[T any,E any] struct{tag uint8;ok T;err E}
+func NewOk[T any,E any](v T)Result[T,E]{return Result[T,E]{tag:1,ok:v}}
+func NewErr[T any,E any](v E)Result[T,E]{return Result[T,E]{tag:2,err:v}}
+func TagResult[T any,E any](v Result[T,E])int{return int(v.tag)}
+func ValidateResult[T any,E any](v Result[T,E]){}
+func ValueOk[T any,E any](v Result[T,E])T{return v.ok}
+func ValueErr[T any,E any](v Result[T,E])E{return v.err}
+func ProjectOk[T any,E any](v *Result[T,E])*T{return &v.ok}
+func ProjectErr[T any,E any](v *Result[T,E])*E{return &v.err}
 func CheckResult(v Result[int,error]){}
 `
 
 func enumFamilyTestMetadata() enumMetadata {
-	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/producer", Package: "producer", Families: []enumFamilyExport{
-		{Name: "Option", Family: "Option", DefinitionPath: "example.org/producer", DefinitionName: "Option", Marker: "option", Variants: []enumFamilyVariantExport{{Name: "Some", Case: "HSome", Constructor: "NewSome", PayloadIndex: 0}, {Name: "None", Constructor: "NewNone", PayloadIndex: -1}}, Instances: []enumFamilyInstanceExport{{Validator: "CheckOption"}}},
-		{Name: "Result", Family: "Result", DefinitionPath: "example.org/producer", DefinitionName: "Result", Marker: "result", Variants: []enumFamilyVariantExport{{Name: "Ok", Case: "HOk", Constructor: "NewOk", PayloadIndex: 0}, {Name: "Err", Case: "HErr", Constructor: "NewErr", PayloadIndex: 1}}, Instances: []enumFamilyInstanceExport{{Validator: "CheckResult"}}},
-	}}
+	option, result := sharedSumFamily("Option"), sharedSumFamily("Result")
+	for _, f := range []*enumFamilyExport{&option, &result} {
+		f.DefinitionPath = "example.org/producer"
+		f.Instances = []enumFamilyInstanceExport{{ValidatorPath: "example.org/producer", Validator: "Check" + f.Family}}
+	}
+	option.Variants[1].Constructor = "NewNone"
+	return enumMetadata{Version: enumMetadataVersion, Path: "example.org/producer", Package: "producer", Families: []enumFamilyExport{option, result}}
 }
 
-// Structural probes deliberately use a noncanonical family to independently
-// exercise signature validation. Production metadata also requires std origin.
 func TestEnumFamilyMetadataValidation(t *testing.T) {
 	producer := enumTestPackage(t, "example.org/producer", enumFamilyTestSource, nil)
 	imp := enumTestImporter{"example.org/producer": producer}
@@ -246,10 +256,10 @@ func TestEnumFamilyMetadataValidation(t *testing.T) {
 	}{
 		{"variant-order", func(m *enumMetadata) { v := m.Families[1].Variants; v[0], v[1] = v[1], v[0] }, "variant protocol"},
 		{"payload-index", func(m *enumMetadata) { m.Families[1].Variants[1].PayloadIndex = 0 }, "variant protocol"},
-		{"none-case", func(m *enumMetadata) { m.Families[0].Variants[1].Case = "HSome" }, "None must not"},
+		{"none-projector", func(m *enumMetadata) { m.Families[0].Variants[1].Project = "ProjectSome" }, "None must not"},
 		{"missing-instance", func(m *enumMetadata) { m.Families[0].Instances = nil }, "invalid or duplicate"},
 		{"wrong-instance-family", func(m *enumMetadata) { m.Families[0].Instances[0].Validator = "CheckResult" }, "validator family"},
-		{"wrong-marker", func(m *enumMetadata) { m.Families[0].Marker = "result" }, "marker signature"},
+		{"wrong-tag", func(m *enumMetadata) { m.Families[0].Tag = "ValueSome" }, "tag signature"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enumFamilyTestMetadata()
@@ -260,11 +270,11 @@ func TestEnumFamilyMetadataValidation(t *testing.T) {
 			}
 		})
 	}
-	t.Run("case-alias-parameter-order", func(t *testing.T) {
-		src := strings.Replace(enumFamilyTestSource, "type HOk[T any,E any]=ok[T,E]", "type HOk[T any,E any]=ok[E,T]", 1)
+	t.Run("projector-parameter-order", func(t *testing.T) {
+		src := strings.Replace(enumFamilyTestSource, "func ProjectOk[T any,E any](v *Result[T,E])*T{return &v.ok}", "func ProjectOk[T any,E any](v *Result[E,T])*T{return &v.err}", 1)
 		p := enumTestPackage(t, producer.Path(), src, nil)
 		e := validateEnumFamilies(enumFamilyTestMetadata(), p, enumTestImporter{p.Path(): p})
-		if e == nil || !strings.Contains(e.Error(), "payload or marker") {
+		if e == nil || !strings.Contains(e.Error(), "projector payload") {
 			t.Fatal(e)
 		}
 	})
@@ -301,9 +311,9 @@ func TestEnumFamilyArtifactRoundTrip(t *testing.T) {
 		t.Fatalf("legacy family origin accepted under new schema: %v %v", got, e)
 	}
 	for _, tc := range []struct{ name, source, want string }{
-		{"phantom-order", strings.ReplaceAll(enumFamilyTestSource, "result(T,E)", "result(E,T)"), "phantom parameter"},
-		{"constructor-result-order", strings.Replace(enumFamilyTestSource, "func NewOk[T any,E any](v T)Result[T,E]{return ok[T,E]{v}}", "func NewOk[T any,E any](v T)Result[E,T]{return nil}", 1), "constructor result"},
-		{"generic-instance-validator", strings.Replace(enumFamilyTestSource, "func CheckResult(v Result[int,error])", "func CheckResult[T any](v Result[T,error])", 1), "validator signature"},
+		{"getter-parameter-order", strings.Replace(enumFamilyTestSource, "func ValueOk[T any,E any](v Result[T,E])T{return v.ok}", "func ValueOk[T any,E any](v Result[E,T])T{return v.err}", 1), "getter payload"},
+		{"constructor-result-order", strings.Replace(enumFamilyTestSource, "func NewOk[T any,E any](v T)Result[T,E]{return Result[T,E]{tag:1,ok:v}}", "func NewOk[T any,E any](v T)Result[E,T]{return Result[E,T]{}}", 1), "constructor payload"},
+		{"generic-instance-validator", strings.Replace(enumFamilyTestSource, "func CheckResult(v Result[int,error])", "func CheckResult[T any](v Result[T,error])", 1), "helper signature"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := enumTestPackage(t, m.Path, tc.source, nil)

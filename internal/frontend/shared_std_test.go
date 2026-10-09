@@ -102,7 +102,7 @@ func Closure()Option[int]{f:=func()Option[int]{return Option::Some(6)};return f(
 	}
 	sharedStdWrite(t, target, "value_test.go", `package consumer
 import("testing";"example.org/producer";"github.com/goxide-lang/std/sum")
-func TestShared(t *testing.T){if PointerAdapter().(sum.Ok[int,*Failure]).Value!=12{t.Fatal("static pointer nil")};e:=InterfaceAdapter().(sum.Err[int,error]).Value;if e==nil||e.(*Failure)!=nil{t.Fatal("static interface typednil")};first,second:=Pair();if Many(first)!=2||second.(sum.Ok[string,error]).Value!="pair"{t.Fatal("tuple context")};h:=Holder{V:producer.Optional()};c:=CloneHolder(&h);if Take(c.V)!=3||DefaultHolder().V!=nil||DebugHolder(&c)!="Holder { V: Option::Some(3) }"||!EqualsHolder(h,c){t.Fatal("protocols")};if Narrow(producer.Optional()).(sum.Some[uint8]).Value!=3{t.Fatal("constant context")};var v Result[int,error]=producer.Make();if v.(sum.Ok[int,error]).Value!=7||Direct().(sum.Ok[int,error]).Value!=7||Propagate().(sum.Ok[int,error]).Value!=7||Qualified(v)!=7{t.Fatal("identity or propagation")};if Absent()!=nil||Context()!=5||CrossFile()!=11||Take(Arm(producer.Optional()))!=3||Take(Closure())!=6||Take(ExprArm(producer.Optional()))!=3{t.Fatal("context")}}
+func TestShared(t *testing.T){if sum.ValueOk(PointerAdapter())!=12{t.Fatal("static pointer nil")};e:=sum.ValueErr(InterfaceAdapter());if e==nil||e.(*Failure)!=nil{t.Fatal("static interface typednil")};first,second:=Pair();if Many(first)!=2||sum.ValueOk(second)!="pair"{t.Fatal("tuple context")};h:=Holder{V:producer.Optional()};c:=CloneHolder(&h);if Take(c.V)!=3||sum.TagOption(DefaultHolder().V)!=0||DebugHolder(&c)!="Holder { V: Option::Some(3) }"||!EqualsHolder(h,c){t.Fatal("protocols")};if sum.ValueSome(Narrow(producer.Optional()))!=3{t.Fatal("constant context")};var v Result[int,error]=producer.Make();if sum.ValueOk(v)!=7||sum.ValueOk(Direct())!=7||sum.ValueOk(Propagate())!=7||Qualified(v)!=7{t.Fatal("identity or propagation")};if sum.TagOption(Absent())!=0||Context()!=5||CrossFile()!=11||Take(Arm(producer.Optional()))!=3||Take(Closure())!=6||Take(ExprArm(producer.Optional()))!=3{t.Fatal("context")}}
 `)
 	sharedStdGo(t, target, "test", "-race", "./...")
 	sharedStdGo(t, target, "vet", "./...")
@@ -112,7 +112,7 @@ func TestShared(t *testing.T){if PointerAdapter().(sum.Ok[int,*Failure]).Value!=
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = []byte(strings.Replace(string(data), `"Version": 8`, `"Version": 7`, 1))
+	data = []byte(strings.Replace(string(data), `"Version": 9`, `"Version": 8`, 1))
 	if err = testdeps.WriteFile(artifact, data, 0600); err != nil {
 		t.Fatal(err)
 	}

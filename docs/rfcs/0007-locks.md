@@ -17,7 +17,7 @@ D19/D20 边界：读写权限和已确认类型不变量照常检查；别名、
 | --- | --- | --- |
 | `Lock[T]` | `*goxidesync.Lock[T]` | 复制句柄共享同一锁与数据 |
 | `RWLock[T]` | `*goxidesync.RWLock[T]` | 读写操作使用同一同步协议 |
-| `do` / `write` | 持写锁调用 `func(*T) P` | 回调得到 `mut& T` |
+| `do` / `write` | 持写锁调用 `func(*T) P` | 回调得到 `&mut T` |
 | `read` | 持读锁调用 `func(*T) P` | 回调得到 `&T` |
 | 无结果的回调 | 返回 `struct{}` 的回调 | Unit 精确名称与统一布局暂定 |
 

@@ -92,7 +92,7 @@ import("testing";p "example.org/qualified/producer")
 func TestInferred(t *testing.T){
  Payload(p.NewEventValue(3));OptionZero()
  if Effects!=2 {t.Fatal("valid sum",Effects)}
- for _, f:=range []func(){func(){Payload(nil)},ResultZero}{
+ for _, f:=range []func(){func(){Payload(p.Event{})},ResultZero}{
   func(){defer func(){if recover()==nil {t.Error("invalid sum accepted")}}();f()}()
   if Effects!=2 {t.Fatal("body before validation")}
  }

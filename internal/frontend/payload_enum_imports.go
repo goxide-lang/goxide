@@ -26,7 +26,7 @@ func payloadEnumResolver(owner string, known map[string]PackageResult, imp types
 			return propagate.PayloadEnum{}, false, nil
 		}
 		origin := n.Obj().Pkg()
-		iface, ok := n.Underlying().(*types.Interface)
+		st, ok := n.Underlying().(*types.Struct)
 		if !ok {
 			return propagate.PayloadEnum{}, false, nil
 		}
@@ -38,11 +38,10 @@ func payloadEnumResolver(owner string, known map[string]PackageResult, imp types
 			return propagate.PayloadEnum{}, false, err
 		}
 		origin = currentOrigin
-		reservedMarker := false
-		for i := 0; i < iface.NumMethods(); i++ {
-			m := iface.Method(i)
-			reservedMarker = reservedMarker || (m.Pkg() == origin && m.Name() == "__goxide_enum_marker_"+n.Obj().Name())
-		}
+		// Reserved private storage only triggers missing-authority rejection;
+		// recognition still requires the validated producer artifact below.
+		reservedMarker := st.NumFields() > 0 && st.Field(0).Name() == "__goxide_tag" && st.Field(0).Pkg() != nil && st.Field(0).Pkg().Path() == origin.Path()
+
 		if origin.Scope().Lookup(enumMetadataMarker) != nil && !registry[origin.Path()].enumMetadata.present() {
 			if owner == "" {
 				if !reservedMarker {

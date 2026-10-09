@@ -67,21 +67,19 @@ func TestValues(t *testing.T){if !Init||!Values()||!Big()||Host()!=3{t.Fatal("va
 `)
 }
 func TestEnumValidationOrder(t *testing.T) {
-	d := enums.Decl{Name: "E", Validator: "check", Variants: []enums.Variant{{Name: "Unit", CaseName: "unit"}, {Name: "Item", CaseName: "item", Payload: "int"}}}
+	d := enums.Decl{Name: "E", Validator: "check", Tag: "tag", Variants: []enums.Variant{{Name: "Unit", Tag: 1}, {Name: "Item", Tag: 2, Value: "itemValue", Payload: "int"}}}
 	execute(t, `package fixture
-type E interface{marker()}
-type unit struct{}
-func(unit)marker(){}
-type item struct{Value int}
-func(item)marker(){}
+type E struct{kind int; value int}
+func tag(e E)int{return e.kind}
+func itemValue(e E)int{return e.value}
 var Trace []int
-func check(e E){Trace=append(Trace,3);switch e.(type){case unit,item:default:panic("invalid")}}
-func arg(n int)E{Trace=append(Trace,n);return item{1}}
+func check(e E){Trace=append(Trace,3);switch e.kind{case 1,2:default:panic("invalid")}}
+func arg(n int)E{Trace=append(Trace,n);return E{2,1}}
 func Run()bool{return arg(1).equals(arg(2))}
 func Bad(a,b E)bool{return a.equals(b)}
 `, Config{Derives: map[string]Derive{"E": {PartialEq: true, Eq: true}}, Enums: []enums.Decl{d}}, `package fixture
 import("testing";"reflect")
-func TestOrder(t *testing.T){if !Run()||!reflect.DeepEqual(Trace,[]int{1,2,3,3}){t.Fatal(Trace)};Trace=nil;defer func(){if recover()==nil||!reflect.DeepEqual(Trace,[]int{3}){t.Fatal(Trace)}}();Bad(nil,item{1})}
+func TestOrder(t *testing.T){if !Run()||!reflect.DeepEqual(Trace,[]int{1,2,3,3}){t.Fatal(Trace)};Trace=nil;defer func(){if recover()==nil||!reflect.DeepEqual(Trace,[]int{3}){t.Fatal(Trace)}}();Bad(E{},E{2,1})}
 `)
 }
 func TestRejectedProtocols(t *testing.T) {
@@ -235,15 +233,16 @@ func Failed()Result[[]int,int]{return Result[[]int,int]::Err(2)}
 		t.Fatal(e)
 	}
 	execute(t, string(lowered.Source), Config{Enums: lowered.Enums, Derives: map[string]Derive{"Record": {PartialEq: true, Eq: true}}}, `package fixture
-import("testing";"reflect")
+import "testing"
 func TestStates(t *testing.T){
  vals:=[]Option[[]int]{None(),Nil(),Empty()}
  for i,a:=range vals{for j,b:=range vals{if EqualsRecord(Record{a,Good()},Record{b,Good()})!=(i==j){t.Fatal("collapsed option states",i,j)}}}
  if EqualsRecord(Record{None(),Good()},Record{None(),Failed()}){t.Fatal("collapsed result variants")}
  if !EqualsRecord(Record{None(),Failed()},Record{None(),Failed()}){t.Fatal("Err equality")}
- var bad=reflect.Zero(reflect.PointerTo(reflect.TypeOf(Empty()))).Interface().(Option[[]int])
- defer func(){if recover()==nil{t.Fatal("right invalid Option skipped after left None")}}()
- EqualsRecord(Record{None(),Good()},Record{bad,Good()})
+ // Private Option slots make the old forged/pointer case inputs unrepresentable.
+ // Result still has an invalid zero value that must be validated on the right.
+ defer func(){if recover()==nil{t.Fatal("right invalid Result skipped after equal None")}}()
+ EqualsRecord(Record{None(),Good()},Record{None(),Result[[]int,int]{}})
 }
 `)
 }
@@ -276,9 +275,9 @@ func TestImportedSumFileAliasIdentity(t *testing.T) {
 	for _, name := range []string{"first", "second"} {
 		fs := token.NewFileSet()
 		f, e := parser.ParseFile(fs, name+".go", `package sum
-type Option[T any]interface{mark(T)}
-type Some[T any]struct{Value T}
-func(Some[T])mark(T){}
+type Option[T any]struct{tag int;value T}
+func Tag[T any](v Option[T])int{return v.tag}
+func Value[T any](v Option[T])T{return v.value}
 func Check(v Option[int]){}
 `, 0)
 		if e != nil {
@@ -291,11 +290,11 @@ func Check(v Option[int]){}
 		imp[p.Path()] = p
 	}
 	files := map[string][]byte{
-		"a.gox": []byte(`package app;import q "fixture/first";type A struct{V q.Option[int]};type FirstSome[T any]=q.Some[T];var FirstCheck=q.Check`),
-		"b.gox": []byte(`package app;import q "fixture/second";type B struct{V q.Option[int]};type SecondSome[T any]=q.Some[T];var SecondCheck=q.Check`),
+		"a.gox": []byte(`package app;import q "fixture/first";type A struct{V q.Option[int]};func FirstTag[T any](v q.Option[T])int{return q.Tag(v)};func FirstValue[T any](v q.Option[T])T{return q.Value(v)};var FirstCheck=q.Check`),
+		"b.gox": []byte(`package app;import q "fixture/second";type B struct{V q.Option[int]};func SecondTag[T any](v q.Option[T])int{return q.Tag(v)};func SecondValue[T any](v q.Option[T])T{return q.Value(v)};var SecondCheck=q.Check`),
 	}
 	family := func(path, prefix string) enums.Decl {
-		return enums.Decl{Name: "q.Option", PackagePath: path, Family: "Option", Variants: []enums.Variant{{Name: "Some", CaseName: prefix + "Some", Payload: "bound"}, {Name: "None"}}, Instances: []enums.Decl{{Validator: prefix + "Check"}}}
+		return enums.Decl{Name: "q.Option", PackagePath: path, Family: "Option", Tag: prefix + "Tag", Variants: []enums.Variant{{Name: "Some", Tag: 1, Value: prefix + "Value", Payload: "bound"}, {Name: "None", Tag: 0}}, Instances: []enums.Decl{{Validator: prefix + "Check"}}}
 	}
 	cfg := Config{Importer: imp, PackagePath: "fixture/app", Derives: map[string]Derive{"A": {PartialEq: true, Eq: true}, "B": {PartialEq: true, Eq: true}}, Enums: []enums.Decl{family("fixture/first", "First"), family("fixture/second", "Second")}}
 	out, e := Prepare(files, cfg)
@@ -309,7 +308,7 @@ func Check(v Option[int]){}
 	if e = u.check(cfg, false, false); e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(out["b.gox"]), "SecondCheck(a.V)") || strings.Contains(string(out["b.gox"]), "FirstCheck(a.V)") {
+	if !strings.Contains(string(out["b.gox"]), "SecondCheck(") || strings.Contains(string(out["b.gox"]), "FirstCheck(") {
 		t.Fatal("wrong producer family", string(out["b.gox"]))
 	}
 }
@@ -348,13 +347,12 @@ func TestImportedMapKeyNeedsSemanticProof(t *testing.T) {
 
 func TestImportedNestedPublicSumExecution(t *testing.T) {
 	producer := `package sum
-type Option[T any]interface{mark(T)}
-type some[T any]struct{Value T}
-func(some[T])mark(T){}
-type Some[T any]=some[T]
-func New[T any](v T)Option[T]{return some[T]{v}}
-func CheckInt(v Option[int]){switch v.(type){case nil,some[int]:default:panic("invalid int")}}
-func CheckOuter(v Option[[]Option[int]]){switch v.(type){case nil:case some[[]Option[int]]:for _,x:=range v.(some[[]Option[int]]).Value{CheckInt(x)};default:panic("invalid outer")}}
+type Option[T any]struct{tag int;value T}
+func Tag[T any](v Option[T])int{return v.tag}
+func Value[T any](v Option[T])T{return v.value}
+func New[T any](v T)Option[T]{return Option[T]{1,v}}
+func CheckInt(v Option[int]){switch v.tag{case 0,1:default:panic("invalid int")}}
+func CheckOuter(v Option[[]Option[int]]){switch v.tag{case 0:case 1:for _,x:=range v.value{CheckInt(x)};default:panic("invalid outer")}}
 type hidden[A any,B any]struct{A A;B B}
 type Public[X any,Y any]=hidden[Y,X]
 `
@@ -370,12 +368,11 @@ type Public[X any,Y any]=hidden[Y,X]
 	src := []byte(`package fixture
 import q "eqsum"
 type Holder struct{V q.Option[[]q.Option[int]]}
-type Case[T any]=q.Some[T]
 var CheckInt=q.CheckInt
 var CheckOuter=q.CheckOuter
-func Sample(n int)Holder{return Holder{q.New([]q.Option[int]{nil,q.New(n)})}}
+func Sample(n int)Holder{return Holder{q.New([]q.Option[int]{{},q.New(n)})}}
 `)
-	cfg := Config{PackagePath: "eqnested", Importer: fixtureImporter{p.Path(): p}, Derives: map[string]Derive{"Holder": {PartialEq: true, Eq: true}}, Enums: []enums.Decl{{Name: "q.Option", PackagePath: p.Path(), Family: "Option", Variants: []enums.Variant{{Name: "Some", CaseName: "Case", Payload: "bound"}, {Name: "None"}}, Instances: []enums.Decl{{Validator: "CheckInt"}, {Validator: "CheckOuter"}}}}}
+	cfg := Config{PackagePath: "eqnested", Importer: fixtureImporter{p.Path(): p}, Derives: map[string]Derive{"Holder": {PartialEq: true, Eq: true}}, Enums: []enums.Decl{{Name: "q.Option", PackagePath: p.Path(), Family: "Option", Tag: "q.Tag", Variants: []enums.Variant{{Name: "Some", Tag: 1, Value: "q.Value", Payload: "bound"}, {Name: "None", Tag: 0}}, Instances: []enums.Decl{{Validator: "CheckInt"}, {Validator: "CheckOuter"}}}}}
 	prepared, e := Prepare(map[string][]byte{"input.gox": src}, cfg)
 	if e != nil {
 		t.Fatal(e)
@@ -447,19 +444,19 @@ func TestManualEquality(t *testing.T) {
  `)
 }
 func TestManualEnumEntryValidation(t *testing.T) {
-	d := enums.Decl{Name: "E", Validator: "check", Variants: []enums.Variant{{Name: "Item", CaseName: "item", Payload: "int"}}}
+	d := enums.Decl{Name: "E", Validator: "check", Tag: "tag", Variants: []enums.Variant{{Name: "Item", Tag: 1, Value: "itemValue", Payload: "int"}}}
 	execute(t, `package fixture
- type E interface{marker()}
- type item struct{Value int}
- func(item)marker(){}
+ type E struct{kind int;value int}
+ func tag(e E)int{return e.kind}
+ func itemValue(e E)int{return e.value}
  var Trace []int
- func check(e E){Trace=append(Trace,3);switch e.(type){case item:default:panic("invalid")}}
+ func check(e E){Trace=append(Trace,3);if e.kind!=1{panic("invalid")}}
  func EqualsE(check E, other E)bool{Trace=append(Trace,4);return true}
- func arg(n int)E{Trace=append(Trace,n);return item{1}}
+ func arg(n int)E{Trace=append(Trace,n);return E{1,1}}
  func Run()bool{return arg(1).equals(arg(2))}
  `, Config{Derives: map[string]Derive{"E": {PartialEq: true, Eq: true, ManualPartialEq: true, ManualEq: true}}, Enums: []enums.Decl{d}}, `package fixture
  import("testing";"reflect")
- func TestOrder(t *testing.T){if !Run()||!reflect.DeepEqual(Trace,[]int{1,2,3,3,4}){t.Fatal(Trace)};Trace=nil;defer func(){if recover()==nil||!reflect.DeepEqual(Trace,[]int{3,3}){t.Fatal(Trace)}}();EqualsE(item{1},(*item)(nil))}
+ func TestOrder(t *testing.T){if !Run()||!reflect.DeepEqual(Trace,[]int{1,2,3,3,4}){t.Fatal(Trace)};Trace=nil;defer func(){if recover()==nil||!reflect.DeepEqual(Trace,[]int{3,3}){t.Fatal(Trace)}}();EqualsE(E{1,1},E{})}
  `)
 }
 func TestManualEqualityRejected(t *testing.T) {

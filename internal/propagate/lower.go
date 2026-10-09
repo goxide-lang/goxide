@@ -71,6 +71,7 @@ type lowering struct {
 	frameRuntime         string
 	resultPointers       map[*ast.FuncType]string
 	functionPrologues    map[*ast.FuncType][]ast.Stmt
+	projectionImports    map[string]string
 }
 
 func printNode(n any) string {
@@ -201,12 +202,14 @@ func (l *lowering) family(t types.Type) (enums.Decl, bool) {
 			return enums.Decl{}, false
 		}
 		d.Validator = validator
+		d.Tag += suffix
 		d.TypeArgs = args
 		d.Variants = append([]enums.Variant(nil), d.Variants...)
 		for i := range d.Variants {
-			d.Variants[i].CaseName += suffix
 			d.Variants[i].Constructor += suffix
 			if d.Family == "Result" || i == 0 {
+				d.Variants[i].Value += suffix
+				d.Variants[i].Project += suffix
 				d.Variants[i].Payload = args[i]
 				d.Variants[i].Type = parseExpr(args[i])
 			}
@@ -248,9 +251,28 @@ func (l *lowering) bindImportedFamily(d enums.Decl) (enums.Decl, bool) {
 	for i := range d.TypeArgs {
 		d.TypeArgs[i] = bind(d.TypeArgs[i], token.TYPE)
 	}
+	tag, err := l.bindProjectionFunction(d.Tag, d.TypeArgs)
+	if err != nil {
+		l.familyIssue = err.Error()
+		return enums.Decl{}, false
+	}
+	d.Tag = tag
 	for i := range d.Variants {
 		if d.Variants[i].Payload != "" {
-			d.Variants[i].CaseName = bind(d.Variants[i].CaseName, token.TYPE)
+			value, err := l.bindProjectionFunction(d.Variants[i].Value, d.TypeArgs)
+			if err != nil {
+				l.familyIssue = err.Error()
+				return enums.Decl{}, false
+			}
+			d.Variants[i].Value = value
+			d.Variants[i].Payload = d.TypeArgs[i]
+			d.Variants[i].Type = parseExpr(d.TypeArgs[i])
+			project, err := l.bindProjectionFunction(d.Variants[i].Project, d.TypeArgs)
+			if err != nil {
+				l.familyIssue = err.Error()
+				return enums.Decl{}, false
+			}
+			d.Variants[i].Project = project
 		}
 		d.Variants[i].Constructor = bind(d.Variants[i].Constructor, token.VAR)
 	}
@@ -261,6 +283,9 @@ func (l *lowering) bindImportedFamily(d enums.Decl) (enums.Decl, bool) {
 		l.boundFamilies = map[string]enums.Decl{}
 	}
 	l.boundFamilies[key] = d
+	if l.cfg.InferredFamilies != nil {
+		*l.cfg.InferredFamilies = append(*l.cfg.InferredFamilies, d)
+	}
 	return d, true
 }
 

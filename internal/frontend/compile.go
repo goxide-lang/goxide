@@ -499,7 +499,7 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	}
 	var collision string
 	ast.Inspect(f, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_") && !strings.HasPrefix(id.Name, "__goxide_enum_") && !strings.HasPrefix(id.Name, "__goxide_match_expr_") && !strings.HasPrefix(id.Name, "__goxide_ref_") && !strings.HasPrefix(id.Name, "__goxide_go_result") && id.Name != "__goxide_question" && id.Name != "__goxide_print" && id.Name != "__goxide_println" {
+		if id, ok := n.(*ast.Ident); ok && strings.HasPrefix(id.Name, "__goxide_") && !strings.HasPrefix(id.Name, "__goxide_enum_") && id.Name != "__goxide_tag" && !strings.HasPrefix(id.Name, "__goxide_payload_") && !strings.HasPrefix(id.Name, "__goxide_match_expr_") && !strings.HasPrefix(id.Name, "__goxide_ref_") && !strings.HasPrefix(id.Name, "__goxide_go_result") && id.Name != "__goxide_question" && id.Name != "__goxide_print" && id.Name != "__goxide_println" {
 			collision = id.Name
 		}
 		return true
@@ -968,8 +968,23 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 	referenceIR := out
 	var importedBindings refs.ImportBindings
 	singleImporter := sharedImporter
+	singleFamilies := append([]enums.Decl(nil), enumResult.Enums...)
+	referenceMetadata := map[string]enumMetadata{}
+	if cfg != nil {
+		singleFamilies = append(singleFamilies, cfg.imported[filename]...)
+		for path, p := range cfg.enumRegistry {
+			referenceMetadata[path] = p.enumMetadata
+		}
+	}
+	enumTypes := map[string]bool{}
 	if single {
-		bound, bindings, err := refs.BindImportsWithPath(packagePath, map[string][]byte{filename: out}, singleImporter, nil)
+		_, enumTypes, _, e = enumReferenceEvidence(packagePath, map[string][]byte{filename: out}, singleImporter, map[string][]enums.Decl{filename: singleFamilies}, referenceMetadata)
+		if e != nil {
+			return Result{}, e
+		}
+	}
+	if single {
+		bound, bindings, err := refs.BindImportsWithPath(packagePath, map[string][]byte{filename: out}, singleImporter, nil, enumTypes)
 		importedBindings = bindings
 		if err != nil {
 			if e, ok := err.(*refs.ImportError); ok {
@@ -987,12 +1002,8 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 				return Result{}, err
 			}
 		}
-		provenance = provenance.Compose(out, bound[filename], "refs.BindImports")
+		provenance = importedBindings.MapSource(filename, bound[filename], provenance)
 		out = bound[filename]
-	}
-	singleFamilies := append([]enums.Decl(nil), enumResult.Enums...)
-	if cfg != nil {
-		singleFamilies = append(singleFamilies, cfg.imported[filename]...)
 	}
 	singleEqCfg := equality.Config{Importer: singleImporter, PackagePath: packagePath, Derives: equalityDerives, Enums: singleFamilies, Maps: map[string]*sourcemap.Map{filename: provenance}}
 	if cfg != nil {
@@ -1008,6 +1019,9 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 		needsTypecheck = needsTypecheck || len(equalityDerives) > 0 || bytes.Contains(originalSource, []byte("equals"))
 	}
 	matchReferenceTemps := map[string]bool{}
+	for name := range enumResult.ReferenceTemps {
+		matchReferenceTemps[name] = true
+	}
 	if single && (bytes.Contains(out, []byte("__goxide_question(")) || needsTypecheck || bytes.Contains(out, []byte("__goxide_ref_"))) {
 		conversions := []propagate.Conversion{}
 		for _, m := range ordered {
@@ -1032,6 +1046,7 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 			return Result{}, stageError("propagate.Lower", e)
 		}
 		enumResult.Enums = append(enumResult.Enums, inferred...)
+		singleFamilies = append(singleFamilies, inferred...)
 		singleEqCfg.Enums = append(singleEqCfg.Enums, inferred...)
 		eqFiles, err := equality.Lower(map[string][]byte{filename: out}, singleEqCfg)
 		if err != nil {
@@ -1056,9 +1071,29 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 			}
 		}
 		beforeReferences := out
-		refResult, e = refs.FinishWithPackagePath(packagePath, filename, out, imp, matchReferenceTemps)
+		projections, updatedEnumTypes, observers, err := enumReferenceEvidence(packagePath, map[string][]byte{filename: out}, imp, map[string][]enums.Decl{filename: singleFamilies}, referenceMetadata)
+		if err != nil {
+			return Result{}, err
+		}
+		for id := range updatedEnumTypes {
+			enumTypes[id] = true
+		}
+		projected, projectionBindings, err := refs.BindProjectionsWithPath(packagePath, map[string][]byte{filename: out}, imp, projections)
+		if err != nil {
+			return Result{}, stageError("refs.BindProjections", err)
+		}
+		for id := range projectionBindings.ReferenceElements {
+			enumTypes[id] = true
+		}
+		out = projected[filename]
+		projectionMap := projectionBindings.MapSource(filename, out, provenance)
+		refResult, e = refs.FinishWithEvidence(packagePath, filename, out, imp, refs.PermissionEvidence{EnumTypes: enumTypes, Observers: observers}, matchReferenceTemps)
 		if e != nil {
-			return Result{}, stageError("refs.Finish", e)
+			return Result{}, stageError("refs.Finish", mapReferenceError(e, map[string]*sourcemap.Map{filename: projectionMap}))
+		}
+		refResult.Source, e = projectionBindings.Restore(filename, refResult.Source)
+		if e != nil {
+			return Result{}, e
 		}
 		refResult.Source, e = importedBindings.Restore(filename, refResult.Source)
 		if e != nil {
@@ -1079,7 +1114,7 @@ func compile(filename string, source []byte, cfg *compileConfig, options ...File
 			return Result{}, stageError("typecheck.Check", e)
 		}
 		erased := map[string][]byte{filename: out}
-		meta, e := refs.ExportMetadata(packagePath, map[string][]byte{filename: referenceIR}, erased, imp)
+		meta, e := refs.ExportMetadata(packagePath, map[string][]byte{filename: referenceIR}, erased, imp, enumTypes)
 		if e != nil {
 			return Result{}, e
 		}
@@ -1241,24 +1276,16 @@ func (g *generator) emitModel(m model) error {
 	// back if an enclosing decode later fails.
 	if m.attrs.derive["Deserialize"] {
 		for i, f := range m.fields {
-			_, optional := g.option(f.typ)
 			if !f.def && !f.skip {
-				// Ordinary missing Option fields follow the serde protocol, not
-				// Default resolution. nil is the builtin's canonical None.
-				if optional {
-					fmt.Fprintf(&des, "if !seen%d{v.%s=nil};", i, f.name)
-				}
+				// The zero-valued registered Option is None. Missing fields
+				// already retain that value without naming payload types here.
 				continue
 			}
 			if err := g.validateExtra(f.typ, "Default"); err != nil {
 				return fmt.Errorf("serde default/skip field %s: %w", f.name, err)
 			}
 			value, err := deriveextras.DefaultValue(f.typ, func(t ast.Expr) (string, bool) { return g.deriveProtocol("Default", t) })
-			// Explicit default/skip uses the builtin Option Default (None).
-			// Avoid re-resolving type arguments inside the visitor scope.
-			if optional {
-				value = "nil"
-			}
+
 			if err != nil {
 				return g.err(f.typ, fmt.Sprintf("serde default/skip field %s: %v", f.name, err))
 			}
@@ -1368,14 +1395,10 @@ func (g *generator) codec(t ast.Expr, wantS, wantR bool) (string, string, error)
 		if e != nil {
 			return "", "", e
 		}
-		// Bind the concrete case at package scope: payload type names may be s/d/v,
-		// which are also ordinary helper parameter names. The alias is compiler-owned
-		// and is namespaced with the other helpers during multi-file lowering.
-		caseType := s + "_option_case"
-		if wantS {
-			fmt.Fprintf(&g.helpers, "type %s = %s\n", caseType, option.Variants[0].CaseName)
-		}
-		w = "switch item:=v.(type){case nil:return s.None();case " + caseType + ":return s.Some(func(s " + a + ".Serializer)error{return " + cs + "(s,item.Value)});default:return " + a + ".NewError(" + a + ".Type,\"invalid enum Option\") }"
+		tag := strings.Split(option.Tag, "[")[0]
+		value := strings.Split(option.Variants[0].Value, "[")[0]
+		w = "switch " + tag + "(v){case 0:return s.None();case 1:return s.Some(func(s " + a + ".Serializer)error{return " + cs + "(s," + value + "(v))});default:return " + a + ".NewError(" + a + ".Type,\"invalid enum Option\") }"
+
 		// Some has no phantom argument: infer its type from the statically typed
 		// decoded payload, avoiding local names capturing a repeated type argument.
 		some := strings.Split(option.Variants[0].Constructor, "[")[0]
@@ -1521,7 +1544,7 @@ func (g *generator) validateExtra(t ast.Expr, kind string) error {
 }
 
 // emitEnum uses only enum-lowerer's nominal metadata, never inferred interfaces.
-// Exact value-case dispatch rejects typed nil, pointer, and embedded foreign cases.
+// Tag dispatch reads only the active typed slot and rejects invalid tags.
 func (g *generator) emitEnum(m model) error {
 	a := g.alias
 	d := m.enum
@@ -1529,7 +1552,7 @@ func (g *generator) emitEnum(m model) error {
 		return g.emitNumericEnum(m)
 	}
 	var w, r strings.Builder
-	fmt.Fprintf(&w, "\nfunc Serialize%s(s %s.Serializer,v *%s)error{if v==nil{return %s.NewError(%s.Type,\"nil enum pointer\")};switch x:=(*v).(type){", m.name, a, m.name, a, a)
+	fmt.Fprintf(&w, "\nfunc Serialize%s(s %s.Serializer,v *%s)error{if v==nil{return %s.NewError(%s.Type,\"nil enum pointer\")};switch %s(*v){", m.name, a, m.name, a, a, d.Tag)
 	fmt.Fprintf(&r, "\nfunc Deserialize%s(d %s.Deserializer)(v %s,e error){e=d.Enum(%q,[]string{", m.name, a, m.name, m.name)
 	for _, v := range d.Variants {
 		name := v.Name
@@ -1544,7 +1567,7 @@ func (g *generator) emitEnum(m model) error {
 		if v.HasSerdeRename {
 			name = v.SerdeRename
 		}
-		fmt.Fprintf(&w, "case %s:_=x;", v.CaseName)
+		fmt.Fprintf(&w, "case %d:", v.Tag)
 		fmt.Fprintf(&r, "case %q:", name)
 		if v.Payload == "" {
 			fmt.Fprintf(&w, "return s.UnitVariant(%q,%q);", m.name, name)
@@ -1559,7 +1582,7 @@ func (g *generator) emitEnum(m model) error {
 		if e != nil {
 			return fmt.Errorf("%s: enum payload %s: %w", v.Position, v.Name, e)
 		}
-		fmt.Fprintf(&w, "return s.NewtypeVariant(%q,%q,func(s %s.Serializer)error{return %s(s,x.Value)});", m.name, v.Name, a, ws)
+		fmt.Fprintf(&w, "return s.NewtypeVariant(%q,%q,func(s %s.Serializer)error{return %s(s,%s(*v))});", m.name, name, a, ws, v.Value)
 		fmt.Fprintf(&r, "return payload.Newtype(func(d %s.Deserializer)error{x,e:=%s(d);if e!=nil{return e};v=%s(x);return nil});", a, rd, v.Constructor)
 	}
 	fmt.Fprintf(&w, "default:return %s.NewError(%s.Type,%q)}}\n", a, a, "invalid enum "+m.name)
@@ -1581,4 +1604,22 @@ func stageError(stage string, err error) error {
 		return fmt.Errorf("%s: %w", stage, err)
 	}
 	return fmt.Errorf("%s [generated/unmapped; intermediate coordinates]: %w", stage, err)
+}
+
+// Reference checking reports offsets in its input buffer, after temporary
+// projection bindings. Only the binder's copied-byte map can identify a source
+// token; generated aliases and signatures deliberately remain unmapped.
+func mapReferenceError(err error, maps map[string]*sourcemap.Map) error {
+	var diagnostic *refs.Error
+	if !errors.As(err, &diagnostic) || diagnostic.Generated {
+		return err
+	}
+	mapped := &sourcemap.Error{Message: "refs: " + diagnostic.Message, Generated: diagnostic.Position}
+	if mapping := maps[diagnostic.Position.Filename]; mapping != nil {
+		if segment := mapping.Lookup(diagnostic.Position.Offset); segment != nil {
+			mapped.Origin = segment.Origin
+			mapped.Stack = segment.Stack
+		}
+	}
+	return mapped
 }

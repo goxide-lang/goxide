@@ -107,24 +107,26 @@ func typedResult(e error,seen *bool)int{return resultValue(Result[int,error]::Er
 	if err != nil {
 		t.Fatal(err)
 	}
-	some, ok := "", ""
+	some, ok := false, false
 	for _, v := range opt.Variants {
 		if v.Name == "Some" {
-			some = v.CaseName
+			some = v.Tag == 1
 		}
 	}
 	for _, v := range res.Variants {
 		if v.Name == "Ok" {
-			ok = v.CaseName
+			ok = v.Tag == 1
 		}
 	}
-	assertions := strings.NewReplacer("SOME_CASE", some, "OK_CASE", ok).Replace(`package fixture
+	if !some || !ok {
+		t.Fatal("missing builtin active-variant metadata")
+	}
+	assertions := `package fixture
 import "testing"
 type typedError struct{}
 func(*typedError)Error()string{return "typed"}
-type forgedResult struct{Result[int,error]}
 func TestBuiltinDistinctions(t *testing.T){if got:=cases();got!=([6]int{-1,4,-2,-1,7,1}){t.Fatalf("states=%v",got)};var typed *typedError;seen:=false;if typedResult(typed,&seen)!=-2||!seen{t.Fatal("typednil error payload collapsed")}}
-func TestInvalidBuiltinBeforeEffect(t *testing.T){for _,v:=range []Result[int,error]{nil,(*OK_CASE)(nil),&OK_CASE{Value:3},forgedResult{}}{seen:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();resultValue(v,&seen)}();if !panicked||seen{t.Fatalf("invalid %T panic=%t sideEffect=%t",v,panicked,seen)}};panicked:=false;func(){defer func(){panicked=recover()!=nil}();optionValue((*SOME_CASE)(nil))}();if !panicked{t.Fatal("typednil Some treated as None")}}
-`)
+func TestInvalidBuiltinBeforeEffect(t *testing.T){for _,v:=range []Result[int,error]{{}}{seen:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();resultValue(v,&seen)}();if !panicked||seen{t.Fatalf("invalid %T panic=%t sideEffect=%t",v,panicked,seen)}}}
+`
 	enumGeneratedModule(t, source, assertions, false)
 }

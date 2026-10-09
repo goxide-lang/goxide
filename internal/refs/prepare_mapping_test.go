@@ -9,7 +9,7 @@ import (
 
 func TestPrepareMappedCopiedTokensAndGeneratedIR(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
-		source := []byte(strings.ReplaceAll("package p\nimport route \"example.org/model\"\n#[derive(Clone)]\ntype Record struct{N int}\nfunc F(p mut& int)int{q:=mut& (*p);_ = route.Value;*q=3;return route.Value}\n", "\n", newline))
+		source := []byte(strings.ReplaceAll("package p\nimport route \"example.org/model\"\n#[derive(Clone)]\ntype Record struct{N int}\nfunc F(p &mut int)int{q:=&mut (*p);_ = route.Value;*q=3;return route.Value}\n", "\n", newline))
 		mapping := sourcemap.Identity("input.gox", source)
 		result, err := PrepareMapped("input.gox", source, mapping)
 		if err != nil {

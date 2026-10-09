@@ -135,12 +135,11 @@ func check(e E) {
 	testdeps.WriteFile(filepath.Join(dir, "main.go"), r.Source, 0600)
 	tests := `package p
 import "testing"
-type forged struct { E }
 func TestInvalid(t *testing.T) {
- inputs:=[]E{nil, (*__goxide_enum_case_1_E_A)(nil), &__goxide_enum_case_1_E_A{}, forged{}, __goxide_enum_case_1_E_B{Value:nil}}
+ inputs:=[]E{{}, {__goxide_tag:99}, __goxide_enum_new_1_E_B(Inner{})}
  for _,v:=range inputs {func(){defer func(){if recover()==nil {t.Error("accepted invalid")}}();check(v)}()}
  if effects != 0 {t.Fatal("wildcard ran before validation")}
- check(__goxide_enum_case_1_E_A{});if effects!=1{t.Fatal(effects)}
+ check(__goxide_enum_new_1_E_A());if effects!=1{t.Fatal(effects)}
 }
 `
 	testdeps.WriteFile(filepath.Join(dir, "main_test.go"), []byte(tests), 0600)
@@ -164,7 +163,7 @@ func TestNominalTypeMismatchCompilesAsError(t *testing.T) {
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
 	out, e := cmd.CombinedOutput()
-	if e == nil || !strings.Contains(string(out), "missing method") {
+	if e == nil || !strings.Contains(string(out), "cannot use") {
 		t.Fatalf("expected nominal mismatch: %v %s", e, out)
 	}
 }

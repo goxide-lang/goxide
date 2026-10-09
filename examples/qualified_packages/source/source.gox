@@ -29,6 +29,6 @@ func ReadOption(value Option[int]) (int,bool) {
     }
     panic("unreachable")
 }
-func InvalidNested() Result[Mode,error] { return Result[Mode,error]::Ok(nil) }
+func InvalidNested() Result[Mode,error] { return Result[Mode,error]::Ok(Mode{}) }
 type Count = int
 func AliasSuccess() Result[Count,error] { return Result[Count,error]::Ok(9) }

@@ -14,6 +14,9 @@ use errors;
 var nestedContinued bool
 func rows(v []Option[int])Result[[]Option[int],error]{return Result[[]Option[int],error]::Ok(v)}
 func rowCount(v []Option[int])Result[int,error]{r:=rows(v)?;nestedContinued=true;return Result[int,error]::Ok(len(r))}
+enum RowState{Ready,}
+func stateRows(v []RowState)Result[[]RowState,error]{return Result[[]RowState,error]::Ok(v)}
+func stateRowCount(v []RowState)Result[int,error]{r:=stateRows(v)?;nestedContinued=true;return Result[int,error]::Ok(len(r))}
 func load(ok bool,trace *[]string) Result[int,error] {*trace=append(*trace,"load");if !ok{return Result[int,error]::Err(errors::New("failed"))};return Result[int,error]::Ok(4)}
 func mark(s string,trace *[]string) int {*trace=append(*trace,s);return 1}
 func combine(a,b,c int)int{return a+b+c}
@@ -38,7 +41,7 @@ func closure(trace *[]string)Result[string,error]{
  _=inner();*trace=append(*trace,"outer-continued");return Result[string,error]::Ok("outer")
 }
 func deferredArgument(ok bool,trace *[]string)Result[int,error]{defer func(){*trace=append(*trace,"cleanup")}();defer func(n int){*trace=append(*trace,"deferred-body")}(load(ok,trace)?);return Result[int,error]::Ok(1)}
-func invalidResult()Result[int,error]{return nil}
+func invalidResult()Result[int,error]{return Result[int,error]{}}
 func invalidPropagation()Result[string,error]{_=invalidResult()?;return Result[string,error]::Ok("incorrect")}
 type NilError struct{}
 func (*NilError)Error()string{panic("typed nil error must not be formatted")}
@@ -53,12 +56,16 @@ func failure(v Result[string,error])error{match v {Result[string,error]::Ok(_)=>
 `
 
 const propagationAssertions = `package fixture
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import("testing";"reflect")
 func TestNestedContainerPropagation(t *testing.T){
- for _,v:=range [][]Option[int]{nil,{}, {nil,GoxideNewOptionSome[int](1)}}{nestedContinued=false;got:=rowCount(v).(__goxide_enum_case_Result_Ok[int,error]).Value;if got!=len(v)||!nestedContinued{t.Fatal("container propagation")}}
- var bad *GoxideOptionSome[int];nestedContinued=false
+ for _,v:=range [][]Option[int]{nil,{}, {__borrow_std.None[int](),GoxideNewOptionSome[int](1)}}{nestedContinued=false;got:=__borrow_std.ValueOk(rowCount(v));if got!=len(v)||!nestedContinued{t.Fatal("container propagation")}}
+ // Some/None are closed value constructors; preserve recursive validation
+ // with a still-constructible invalid user enum inside a Result payload.
+ nestedContinued=false
  defer func(){if recover()==nil||nestedContinued{t.Fatal("invalid inner value passed question boundary")}}()
- rowCount([]Option[int]{bad})
+ stateRowCount([]RowState{{}})
 }
 func TestDifferentSuccessTypesAndOrder(t *testing.T){for _,ok:=range []bool{false,true}{trace:=[]string{};v:=sequence(ok,&trace);want:=[]string{"first","load","cleanup"};text:="failed";if ok{want=[]string{"first","load","last","late","cleanup"};text="six"};if resultText(v)!=text||!reflect.DeepEqual(trace,want){t.Fatalf("ok=%t text=%s trace=%v",ok,resultText(v),trace)}};if optionInt(optionalLength(true))!=3||optionInt(optionalLength(false))!=-1{t.Fatal("Option propagation")}}
 func TestCalleeBeforeArguments(t *testing.T){for _,ok:=range []bool{false,true}{trace:=[]string{};_=calleeSequence(ok,&trace);want:=[]string{"callee","first","load"};if ok{want=[]string{"callee","first","load","last","body"}};if !reflect.DeepEqual(trace,want){t.Fatalf("callee order ok=%t: %v",ok,trace)}}}
@@ -66,7 +73,7 @@ func TestUnselectedBranchStaysUnevaluated(t *testing.T){trace:=[]string{};if res
 func TestShortCircuit(t *testing.T){trace:=[]string{};if boolResult(shortCircuit(false,&trace))!=0{t.Fatal("short circuit result")};if len(trace)!=0{t.Fatalf("evaluated skipped branch: %v",trace)};if boolResult(shortCircuit(true,&trace))!=-1{t.Fatal("short circuit failed propagation")};if !reflect.DeepEqual(trace,[]string{"load"}){t.Fatalf("wrong branch order: %v",trace)}}
 func TestNearestClosureAndDefer(t *testing.T){trace:=[]string{};if resultText(closure(&trace))!="outer"||!reflect.DeepEqual(trace,[]string{"load","inner-cleanup","outer-continued"}){t.Fatalf("closure trace %v",trace)};for _,ok:=range []bool{false,true}{trace=nil;_=deferredArgument(ok,&trace);want:=[]string{"load","cleanup"};if ok{want=[]string{"load","deferred-body","cleanup"}};if !reflect.DeepEqual(trace,want){t.Fatalf("defer ok=%t trace %v",ok,trace)}}}
 func TestNativePartialAndTypedNil(t *testing.T){out:=readOutcome(preservedPartial());if out.N!=3||out.Err==nil{t.Fatal("lost partial result")};if p,ok:=out.Err.(*NilError);!ok||p!=nil{t.Fatal("lost typed nil identity")};err:=failure(preservedFailure());if p,ok:=err.(*NilError);!ok||p!=nil{t.Fatal("typed nil was normalized or reclassified")}}
-func TestInvalidResultIsNotBusinessFailure(t *testing.T){defer func(){if recover()==nil{t.Fatal("nil Result silently accepted")}}();_=invalidPropagation()}
+func TestInvalidResultIsNotBusinessFailure(t *testing.T){defer func(){if recover()==nil{t.Fatal("zero Result silently accepted")}}();_=invalidPropagation()}
 `
 
 func TestPropagationExplicitRejections(t *testing.T) {

@@ -185,8 +185,11 @@ func (l *lowering) resolveGoResult() (bool, error, error) {
 		for _, owner := range owners {
 			for _, imported := range l.cfg.FileFamilies[owner] {
 				if imported.Family == "" {
-					imported.LookupName = ""
-					declarations = append(declarations, imported)
+					bound, err := l.bindCompanionEnum(imported, owner)
+					if err != nil {
+						return bad(err.Error())
+					}
+					declarations = append(declarations, bound)
 				}
 			}
 		}

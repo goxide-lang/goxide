@@ -63,7 +63,7 @@ func ReadOnce(r io.Reader, dst []byte) ReadOutcome {
 | STD-N1 | 将 `(3, io.EOF)` 只映射为 `Err(io.EOF)` 并丢弃已读数据 | 违反结果保留契约 |
 | STD-N2 | 通过一条 declare 把 `bytes.Buffer.Bytes()` 宣称为独立拥有的 Vec | 拒绝这一契约；需实际复制或有期限的借用视图 |
 | STD-N3 | 将可能留存回调的 API 声明为普通同步短借用且无行为依据 | 不纳入已审核 safe std |
-| STD-N4 | 任意 `Unmarshal(any)` 只改写成 `mut& T` 即宣称失败不修改输入 | 不成立；需定义独立临时对象与验证/发布步骤 |
+| STD-N4 | 任意 `Unmarshal(any)` 只改写成 `&mut T` 即宣称失败不修改输入 | 不成立；需定义独立临时对象与验证/发布步骤 |
 
 ## 双向互操作
 

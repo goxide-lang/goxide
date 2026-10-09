@@ -140,14 +140,12 @@ func TestBusinessEquality(t *testing.T){
  if m.LocalTypeName()!="EqualsPerson"{t.Fatal("local type identity changed")}
  m.RecoverDirect();if m.Recovered!="manual-recover"{t.Fatal("manual body acquired another frame",m.Recovered)}
 }
-type forged struct{m.Gate}
 func TestManualEnumValidation(t *testing.T){
- var typed *m.GoxideCase4_Gate_Unit
- for _,bad:=range []m.Gate{nil,typed,&m.GoxideCase4_Gate_Unit{},forged{}}{
+ for _,bad:=range []m.Gate{{}}{
   for _,right:=range []bool{false,true}{func(){m.GateCalls=0;Trace="";defer func(){if recover()==nil||m.GateCalls!=0||Trace!="LR"{t.Fatal("manual enum boundary",m.GateCalls,Trace)}}();if right{Ordered(m.NewGateUnit(),bad)}else{Ordered(bad,m.NewGateUnit())}}()}
  }
  m.GateCalls=0;Trace="";if !Ordered(m.NewGateUnit(),m.NewGateChild(m.NewLeafUnit()))||m.GateCalls!=1||Trace!="LR"{t.Fatal("valid enum manual body")}
- func(){defer func(){p:=recover();if p==nil||!strings.Contains(fmt.Sprint(p),"Leaf"){t.Fatal("left validator must run first",p)}}();Ordered(m.NewGateChild(nil),nil)}()
+ func(){defer func(){p:=recover();if p==nil||!strings.Contains(fmt.Sprint(p),"Leaf"){t.Fatal("left validator must run first",p)}}();Ordered(m.NewGateChild(m.Leaf{}),m.Gate{})}()
 }
 `)
 	packagesWrite(t, lib, "model/model_test.go", `package model
@@ -158,7 +156,7 @@ func TestNativeConsistentDerivedKeys(t *testing.T){if !EqualsIndex(Index{{ID:1}:
 	packagesWrite(t, plain, "go.mod", mod("manual.example/plain", lib))
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import("testing";m "manual.example/lib/model")
-func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name:"a"},m.Person{ID:1,Name:"b"}){t.Fatal("Go helper")};m.GateCalls=0;defer func(){if recover()==nil||m.GateCalls!=0{t.Fatal("Go helper bypassed enum validation")}}();m.EqualsGate(nil,m.NewGateUnit())}
+func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name:"a"},m.Person{ID:1,Name:"b"}){t.Fatal("Go helper")};m.GateCalls=0;defer func(){if recover()==nil||m.GateCalls!=0{t.Fatal("Go helper bypassed enum validation")}}();m.EqualsGate(m.Gate{},m.NewGateUnit())}
 `)
 	for _, dir := range []string{lib, out, plain} {
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")

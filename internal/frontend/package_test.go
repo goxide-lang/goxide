@@ -100,8 +100,7 @@ func Count(v Result[Container,string])int {
 import "testing"
 func TestGroupedValidation(t *testing.T){
  if Count(GoxideNewResultOk[Container,string](Container{Modes:[]Mode{NewModeIdle()}}))!=1{t.Fatal("valid grouped container")}
- var typed *GoxideCase4_Mode_Idle
- for _,bad:=range []Mode{nil,typed}{func(){defer func(){if recover()==nil{t.Fatal("invalid nested enum escaped validator")}}();Count(GoxideNewResultOk[Container,string](Container{Modes:[]Mode{bad}}))}()}
+ for _,bad:=range []Mode{{},{__goxide_tag:99}}{func(){defer func(){if recover()==nil{t.Fatal("invalid nested enum escaped validator")}}();Count(GoxideNewResultOk[Container,string](Container{Modes:[]Mode{bad}}))}()}
 }
 `
 	if err := testdeps.WriteFile(filepath.Join(out, "grouped_test.go"), []byte(assertions), 0600); err != nil {

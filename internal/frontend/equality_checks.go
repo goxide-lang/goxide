@@ -84,19 +84,16 @@ func checkEnumEquality(path string, sources map[string][]byte, imp types.Importe
 				}
 				return false, true
 			}
-			for _, v := range d.Variants {
-				for _, f := range files {
-					tv, e := types.Eval(fs, pkg, f.Pos(), v.CaseName)
-					if e != nil {
-						continue
-					}
-					bad, _ := risk(tv.Type, active)
+			st, ok := n.Underlying().(*types.Struct)
+			if ok {
+				for i := 1; i < st.NumFields(); i++ {
+					bad, _ := risk(st.Field(i).Type(), active)
 					if bad {
 						return true, true
 					}
-					break
 				}
 			}
+
 			return false, true
 		}
 		switch x := types.Unalias(t).Underlying().(type) {

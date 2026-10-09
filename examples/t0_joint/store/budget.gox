@@ -2,5 +2,5 @@ package store
 
 type Budget struct { Limit int; History []int }
 func View(b &Budget)&Budget{return b}
-func Edit(b mut& Budget)mut& Budget{return b}
+func Edit(b &mut Budget)&mut Budget{return b}
 func NativeUpdate(b *Budget){b.History[0]++}

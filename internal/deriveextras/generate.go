@@ -292,8 +292,8 @@ func GenerateEnum(kind string, d enums.Decl, resolvers ...Resolver) (string, map
 	return generateVariantProtocol(kind, d, kind+d.Name, d.Name, resolvers...)
 }
 
-// GenerateSum consumes a registry-verified concrete builtin instance. None has
-// the nil case; payload protocols still come exclusively from the resolver.
+// GenerateSum consumes a registry-verified concrete builtin instance. None is
+// the zero-tag variant; payload protocols come exclusively from the resolver.
 func GenerateSum(kind string, d enums.Decl, helper string, resolvers ...Resolver) (string, map[string]string, error) {
 	return generateVariantProtocol(kind, d, helper, d.Family, resolvers...)
 }
@@ -306,20 +306,23 @@ func generateVariantProtocol(kind string, d enums.Decl, helper, display string, 
 		}
 	}
 	g := newGenerator(resolvers, nodes...)
-	value, active := g.fresh("v"), g.fresh("x")
+	value, saved, active := g.fresh("v"), g.fresh("saved"), g.fresh("x")
 	var b strings.Builder
 	result := "string"
 	if kind == "Clone" {
 		result = d.Name
 	}
-	fmt.Fprintf(&b, "func %s(%s *%s) %s { %s(*%s); switch %s:=(*%s).(type){", helper, value, d.Name, result, d.Validator, value, active, value)
+	fmt.Fprintf(&b, "func %s(%s *%s) %s { %s:=*%s;%s(%s); switch %s(%s){", helper, value, d.Name, result, saved, value, d.Validator, saved, d.Tag, saved)
 	for _, v := range d.Variants {
-		fmt.Fprintf(&b, "case %s: _=%s;", v.CaseName, active)
+		fmt.Fprintf(&b, "case %d:", v.Tag)
+		if v.Type != nil {
+			fmt.Fprintf(&b, "%s:=%s(%s);_=%s;", active, v.Value, saved, active)
+		}
 		if kind == "Clone" {
 			if v.Type == nil {
 				fmt.Fprintf(&b, "return %s();", v.Constructor)
 			} else {
-				x, e := g.clone(v.Type, active+".Value")
+				x, e := g.clone(v.Type, active)
 				if e != nil {
 					return "", nil, e
 				}
@@ -329,7 +332,7 @@ func generateVariantProtocol(kind string, d enums.Decl, helper, display string, 
 			if v.Type == nil {
 				fmt.Fprintf(&b, "return %q;", display+"::"+v.Name)
 			} else {
-				x, e := g.debug(v.Type, active+".Value")
+				x, e := g.debug(v.Type, active)
 				if e != nil {
 					return "", nil, e
 				}

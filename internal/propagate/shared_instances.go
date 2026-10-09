@@ -120,9 +120,21 @@ func (l *lowering) instantiateSharedFamily(t *types.Named, family enums.Decl) (e
 	// The imported generic helpers and all payload types are bound at package
 	// scope. A caller's local import/type names cannot capture generated uses.
 	suffix := "[" + strings.Join(args, ",") + "]"
+	d.Tag, err = l.bindProjectionFunction(family.Tag+suffix, args)
+	if err != nil {
+		return d, err
+	}
 	for i := range d.Variants {
 		if d.Variants[i].Payload != "" {
-			d.Variants[i].CaseName = bind(family.Variants[i].CaseName + suffix)
+			d.Variants[i].Value, err = l.bindProjectionFunction(family.Variants[i].Value+suffix, args)
+			if err != nil {
+				return d, err
+			}
+			project, err := l.bindProjectionFunction(family.Variants[i].Project+suffix, args)
+			if err != nil {
+				return d, err
+			}
+			d.Variants[i].Project = project
 		}
 		d.Variants[i].Constructor = family.Variants[i].Constructor + suffix
 	}
@@ -173,9 +185,21 @@ func (l *lowering) sharedPayloadType(t types.Type, named map[string]ast.Expr, se
 	}
 	sort.Strings(owners)
 	for _, owner := range owners {
+		source, err := l.enumDeclarationFile(owner)
+		if err != nil {
+			return nil, err
+		}
 		for _, d := range l.cfg.FileFamilies[owner] {
-			if d.Family == "" && types.Identical(t, l.resolveType(d.Name)) {
-				d.LookupName = ""
+			if d.Family != "" {
+				continue
+			}
+			value, err := types.Eval(l.fs, l.pkg, source.Pos(), d.Name)
+			if err == nil && types.Identical(t, value.Type) {
+				bound, err := l.bindCompanionEnum(d, owner)
+				if err != nil {
+					return nil, err
+				}
+				d = bound
 				l.cfg.Families = append(l.cfg.Families, d)
 				return parseExpr(d.Name), nil
 			}

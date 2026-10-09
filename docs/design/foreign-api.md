@@ -20,7 +20,7 @@
 
 | 视图 | goxide 行为 | Go 实现 |
 | --- | --- | --- |
-| 原生视图，类似 `xx-sys` | 普通函数/方法不自动 unsafe；D31 具体标量 mut&→*T 参数已接通，其余边界继续 U15 | 原始 Go 符号与布局 |
+| 原生视图，类似 `xx-sys` | 普通函数/方法不自动 unsafe；D31 具体标量 &mut →*T 参数已接通，其余边界继续 U15 | 原始 Go 符号与布局 |
 | 声明视图，类似 `xx-lib` | `declare` 提供可信的参数、结果和调用约束；按声明进行普通调用或保留 unsafe 属性 | 原始 Go 符号，必要时增加边界检查；改变行为需要实际包装函数 |
 
 `declare` 本身不加 unsafe。它是作者提供的类型与行为契约，不是执行危险操作。若某个声明后的函数仍需要调用者承担未被类型表达的前提，可以将函数本身声明为 unsafe；该属性与 declare 关键字分开。
@@ -34,10 +34,10 @@
 对于原生 Go 函数 `func Fill(p *T)`，可以在普通 `.gox`、包内 `.d.gox` 或外置声明包中写：
 
 ```goxide
-declare func native::Fill(p mut& native::T);
+declare func native::Fill(p &mut native::T);
 
 var value native::T
-native::Fill(mut& value)
+native::Fill(&mut value)
 ```
 
 生成的 Go 调用仍是：
@@ -50,7 +50,7 @@ native.Fill(&value)
 
 声明不生成另一个 Fill 业务实现。编译器检查真实 Go 符号存在，并检查降低后的参数、返回值及调用方式与真实签名兼容；不能随意改变指针层级、布局或将不兼容的函数类型当成等价类型。
 
-`mut& T` 表达写访问，不自动证明独占。声明可另外记录不留存、回调和同步契约来改善诊断；无这些契约仍允许普通 Go 调用。只读类型上的直接写仍不合法，间接别名风险按 D19 warning。
+`&mut T` 表达写访问，不自动证明独占。声明可另外记录不留存、回调和同步契约来改善诊断；无这些契约仍允许普通 Go 调用。只读类型上的直接写仍不合法，间接别名风险按 D19 warning。
 
 这些外部行为不是编译器仅通过 ABI 校验就能证明的；正确性依赖声明作者。包升级后，即使签名没变，指针留存等行为也可能改变，应重新审核相关契约。源码分析未来可以辅助检查，但不作为首版必需的全程序证明。
 
@@ -81,7 +81,7 @@ func ToGo[T any](p Ptr[T]) *T { return (*T)(p) }
 
 ## 4. AsPtr 与 unsafe 表达式
 
-以下为旧显式导出候选。D31 后，已有具体标量 `mut& T` 调用同型普通 Go `*T` 参数无需 AsPtr/unsafe；参见[实际规则与验收](../rfcs/research/0002-native-pointer-bridge.md)。这不批准 readonly 升级或真正内存重解释。
+以下为旧显式导出候选。D31 后，已有具体标量 `&mut T` 调用同型普通 Go `*T` 参数无需 AsPtr/unsafe；参见[实际规则与验收](../rfcs/research/0002-native-pointer-bridge.md)。这不批准 readonly 升级或真正内存重解释。
 
 沿用普通关联类型，语法草案为：
 
@@ -92,12 +92,12 @@ trait AsPtr {
 }
 ```
 
-为已定义的 `Arc[T]`、`&T`、`mut& T` 等分别提供显式实现。可空句柄的适配必须明确 None 到 nil 的行为。其他句柄的关联类型应指向其真实后端对象，不能例如将锁句柄的地址自动当成锁内 T 的地址。
+为已定义的 `Arc[T]`、`&T`、`&mut T` 等分别提供显式实现。可空句柄的适配必须明确 None 到 nil 的行为。其他句柄的关联类型应指向其真实后端对象，不能例如将锁句柄的地址自动当成锁内 T 的地址。
 
 在没有 Fill 声明视图的场景：
 
 ```goxide
-// p: mut& native::T
+// p: &mut native::T
 unsafe native::Fill(p.as_ptr());
 ```
 
@@ -116,7 +116,7 @@ func (v ptrView[T]) GoxideTraitAsPtr() {}
 
 unsafe 表达式结束不是指针失效、释放或别名消失的时刻。借用派生的 Ptr 应保留已知来源；传给未知 Go 后不能自动恢复“外部不存在别名”的结论。局部检查、逃逸后的诊断与显式恢复规则仍需引用专题细化；未经证明的外部行为由 unsafe 使用者承担。
 
-从 Ptr 反向构造高层引用是独立能力。判空只能建立非空性，不能证明独占、不逃逸或锁仍被持有；不提供能任意恢复 `&T` / `mut& T` 的安全通用 from_ptr。
+从 Ptr 反向构造高层引用是独立能力。判空只能建立非空性，不能证明独占、不逃逸或锁仍被持有；不提供能任意恢复 `&T` / `&mut T` 的安全通用 from_ptr。
 
 ## 5. unsafe 随函数值保留
 
@@ -151,6 +151,6 @@ Go 函数类型本身没有该 unsafe 属性，导出 goxide unsafe API 后，�
 
 U15 的历史候选与 D31 后的实际实现范围见 [RFC 0002](../rfcs/research/0002-native-pointer-bridge.md)。普通同型写引用调用已确认，不再等待 D11 例外批准；容器、接口及引用回调不由此自动获批或完成。
 
-写引用核对：goxide `native::Fill(mut& value)` 中 mut 不由自动桥接省略；已有 `p: mut& T` 可直接传 p。Go 输出 `native.Fill(&value)` 只是 Go 无 mut 语法。未知原生 *T 位置不能接受隐式升级的只读 &T；只读视图须有明确可信声明依据，见 [RFC 0002 权限核对](../rfcs/research/0002-native-pointer-bridge.md#11-写引用核对省-asptr不省-mut)。方案 A 的普通同型写引用调用方向已由 D31 确认；具体标量参数已实现，其余候选不能据此视为完成。
+写引用核对：goxide `native::Fill(&mut value)` 中 mut 不由自动桥接省略；已有 `p: &mut T` 可直接传 p。Go 输出 `native.Fill(&value)` 只是 Go 无 mut 语法。未知原生 *T 位置不能接受隐式升级的只读 &T；只读视图须有明确可信声明依据，见 [RFC 0002 权限核对](../rfcs/research/0002-native-pointer-bridge.md#11-写引用核对省-asptr不省-mut)。方案 A 的普通同型写引用调用方向已由 D31 确认；具体标量参数已实现，其余候选不能据此视为完成。
 
-边界桥接不负责取得容器内部引用：只有已经通过值取址或容器自身方法/协议实际得到的 `mut& T` 才进入写引用桥接；`mut& Arc[T]` 等容器绑定引用不能自动展平成 `mut& T`。Boxed/Ref/Arc 的未定获取 API 不由 AsPtr 或方案 A 自动补齐。
+边界桥接不负责取得容器内部引用：只有已经通过值取址或容器自身方法/协议实际得到的 `&mut T` 才进入写引用桥接；`&mut Arc[T]` 等容器绑定引用不能自动展平成 `&mut T`。Boxed/Ref/Arc 的未定获取 API 不由 AsPtr 或方案 A 自动补齐。

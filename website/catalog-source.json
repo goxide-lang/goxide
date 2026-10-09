@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "33af584eebbb050886156cf25a0f9432caaa4824",
+  "compilerCommit": "db78da5768fa24e7679971762f75116b0df8974d",
   "reviewedAt": "2026-10-09",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
@@ -85,6 +85,12 @@
       "title": "match 组合与业务对象",
       "description": "一元运算、复合字面量与 JSON / Clone / Debug。",
       "expectedStdout": "Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [3, 4] }\nPlan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [99, 4] }\n{\"Mode\":{\"Workers\":3},\"Enabled\":true,\"Delta\":-3,\"Steps\":[99,4]}\n"
+    },
+    {
+      "id": "enum_borrows",
+      "title": "enum 载荷原位借用",
+      "description": "保存可写载荷引用，普通 enum 复制保持独立槽。",
+      "expectedStdout": "5 1\n5\n"
     }
   ],
   "items": [
@@ -126,15 +132,17 @@
       "status": "partial",
       "support": "browser",
       "summary": "用具名变体表示状态与载荷，避免将任意整数当成有效状态。",
-      "usage": "State::Count(3) 与 State::Empty 具有同一个封闭名义类型；非法原生 Go 表示在已覆盖的使用点校验。",
-      "limitation": "不支持开放 raw/C enum；也不承诺所有公开函数入口都自动校验完整对象图。用户泛型 enum 尚不可用。",
+      "usage": "State::Count(3) 与 State::Empty 具有同一个封闭名义类型。每个变体使用独立的内联载荷槽；普通赋值按 Go 的浅值复制规则复制它们。非法原生 Go 表示在已覆盖的使用点校验。",
+      "limitation": "直接递归值布局须通过指针或容器间接层打断；slice、map、pointer 等载荷仍保留普通 Go 浅复制语义。不支持开放 raw/C enum，也不承诺所有公开函数入口都校验完整对象图。用户泛型 enum 尚不可用。",
       "examples": [
-        "enum"
+        "enum",
+        "enum_borrows"
       ],
       "evidence": [
         "internal/enums/lower.go",
         "tests/acceptance/enums_test.go",
-        "tests/acceptance/enum_external_test.go"
+        "tests/acceptance/enum_external_test.go",
+        "internal/frontend/enum_borrow_test.go"
       ],
       "checks": [
         "incomplete_match"
@@ -150,11 +158,12 @@
       "status": "partial",
       "support": "browser",
       "summary": "穷尽匹配配合 guard，把分支结果作为值使用。",
-      "usage": "正数 Count 匹配 guard；其余 Count 和 Empty 提供后备分支。scrutinee 不重复求值。单值 match 可组合 + - ! ^ 与有真实类型的 struct/slice/array/map 字面量；新业务例展示 JSON→enum→对象→Clone/Debug→JSON。",
-      "limitation": "guard 不代替穷尽覆盖。本片不接 * & <-、控制头、package initializer、多结果、复杂 LHS、block arm 与不可命名类型；这些仍是未收口用例，不能称 match 全部完成。",
+      "usage": "正数 Count 匹配 guard，其余 Count 和 Empty 提供后备分支。scrutinee 不重复求值。值模式复制载荷；ref / ref mut 显式绑定原始槽，match &value / match &mut value 设置默认绑定。",
+      "limitation": "guard 不代替穷尽覆盖。借用模式保留入口判别快照与固定载荷槽；guard 修改 owner 不会重新选择变体。引用元素及 Go 桥接仍受现有类型权限约束，不代表完整借用检查。",
       "examples": [
         "enum",
-        "match_composition"
+        "match_composition",
+        "enum_borrows"
       ],
       "evidence": [
         "internal/matchexpr/lower.go",
@@ -451,17 +460,20 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "&T 与 mut& T 保留访问权限；复制引用仍可指向同一存储。",
-      "usage": "counter 的两个可写别名共享修改；只读 view 可观察更新，snapshot 是独立值复制。",
-      "limitation": "只读不是全局不可变，写引用不承诺独占。经 &int 写入会拒绝；复杂投影/原生桥接仍有边界。",
+      "summary": "&T 与 &mut T 保留访问权限；引用可复制、保存、返回和捕获，并可指向同一存储。",
+      "usage": "ref value / ref mut value 绑定原始 enum 载荷槽；match &value / match &mut value 设置默认绑定模式。示例返回并保存载荷引用，修改原值时普通 enum 副本保持独立。",
+      "limitation": "只读不是全局不可变，可写引用不承诺独占。替换 enum 后，旧引用仍指向原来的固定槽；它不跟随当前变体，写入非活跃槽也不切换变体。没有新增生命周期或借用风险检查器。",
       "examples": [
-        "readonly"
+        "readonly",
+        "enum_borrows"
       ],
       "evidence": [
         "internal/refs/lower.go",
         "internal/refs/flow.go",
         "tests/acceptance/refs_test.go",
-        "tests/acceptance/composite_permissions_test.go"
+        "tests/acceptance/composite_permissions_test.go",
+        "internal/frontend/enum_borrow_test.go",
+        "internal/refs/projections_test.go"
       ],
       "checks": [
         "readonly_write"
@@ -622,7 +634,7 @@
       "support": "browser",
       "summary": "当前编译器使用已公开 std/sum 的共享 Option/Result 身份与独立 serde core / JSON。",
       "usage": "生成 Go 导入共享 std/sum、std/formatting 和 std/runtime，不再依赖编译器支持包；具体载荷 validator 仍由编译器生成。JSON 示例使用 github.com/goxide-lang/serde/json。",
-      "limitation": "enum schema 8 / reference 3 / use 2 / sum ABI 2，必须与新std版本配套；旧marker产物须重生成。固定迁移版本不等于v1 ABI承诺。",
+      "limitation": "enum schema 9 / reference 3 / use 3 / sum ABI 3，必须与配套 std 版本共同使用；旧 interface case API 已删除，旧生成产物须重生成。Option 零值为 None，Result 零值非法。固定迁移版本不等于 v1 ABI 承诺。",
       "examples": [
         "result",
         "serde_option"
@@ -768,7 +780,7 @@
       }
     }
   ],
-  "compilerDigest": "3686a57d8843b053cbe468baa486893f23dd59906c2c67a683270cfa20c4e194",
+  "compilerDigest": "9a67e63e83df65533cd73f8ce89c6faa76ab54887111ebbea27ca445b07317c1",
   "evidenceSnapshots": {
     "@use-path:docs/rfcs/0024-use-paths.md": {
       "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",

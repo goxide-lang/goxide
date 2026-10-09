@@ -81,7 +81,7 @@ safe context 视图继续使用 Go context 的期限、取消与 Done 信号。D
 
 ### 3.5 encoding/json 需要类型与修改策略
 
-`encoding/json.Unmarshal` 会按目标类型修改存储：例如复用已有 slice / map、把 JSON null 写成某些 Go 类型的 nil，并可能调用用户定义的解码方法。类型不匹配等错误不保证目标完全没有变化。这些行为必须进入安全视图设计，不能只把 `any` 改成 `mut& T` 就宣布完成。[encoding/json.Unmarshal](https://pkg.go.dev/encoding/json#Unmarshal)
+`encoding/json.Unmarshal` 会按目标类型修改存储：例如复用已有 slice / map、把 JSON null 写成某些 Go 类型的 nil，并可能调用用户定义的解码方法。类型不匹配等错误不保证目标完全没有变化。这些行为必须进入安全视图设计，不能只把 `any` 改成 `&mut T` 就宣布完成。[encoding/json.Unmarshal](https://pkg.go.dev/encoding/json#Unmarshal)
 
 首版不为任意 T 提供一行 declare 的全能 safe Unmarshal。可以先支持明确审核的目标类型与解码协议，或提供“解码到独立临时对象、验证、成功后发布结果”的实际包装。临时对象必须有独立的可写存储；把旧对象浅复制过去仍可能通过 slice、map、指针字段修改原对象。用户解码方法的回调效果、引用留存和失败副作用也需采用可信契约，返回错误不自动回滚它们。
 
@@ -103,7 +103,7 @@ Go 已经有泛型 slice 及 `slices` 包。goxide 要补充的是权限、初�
 
 首版建议基础包提供名义 `Slice[T]` 门面，内部保存 Go `[]T`，例如由普通支持 struct 的未导出 data 字段承载。`[]T` 保留为原生 Go 互操作形状；二者不是仅靠重命名就相等的类型。这个选择是草案，尚未冻结为语言内置类型或 Go ABI。
 
-Slice 的普通值复制会复制其 slice 头，多个头仍可能指向同一底层数组；一个头的 len / cap 改变不自动更新其他头。多个共享句柄指向同一个 Slice 对象时，连头部状态也共享。`mut& Slice[T]` 授予对该门面的修改权限，不凭空证明底层数组或 T 可达对象没有其他别名。
+Slice 的普通值复制会复制其 slice 头，多个头仍可能指向同一底层数组；一个头的 len / cap 改变不自动更新其他头。多个共享句柄指向同一个 Slice 对象时，连头部状态也共享。`&mut Slice[T]` 授予对该门面的修改权限，不凭空证明底层数组或 T 可达对象没有其他别名。
 
 raw `[]T` 到 Slice 有两条明确途径：复制元素形成新的外层存储，或在已知作用域和契约下借用原存储。后者必须保留外部来源和权限；从 Slice 暴露原始 `[]T` 也保留同样的边界，不能提供一个无限制的 safe raw 导出方法后继续声称可变别名受控。Go 下游只受普通 Go 规则约束，生成代码或支持类型的私有字段不构成完整安全证明。
 

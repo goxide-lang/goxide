@@ -62,9 +62,9 @@ func Again(v other::State) int { return One(v) }
 import("testing"; a "example.org/qualified/a"; b "example.org/qualified/b")
 func TestValues(t *testing.T) {
  if Same(Make()) != 7 || One(Make()) != 7 || Again(Make()) != 7 || Two(b.NewStateIdle()) != 2 { t.Fatal("wrong identity") }
- type forged struct { a.GoxideCase5_State_Number }
- var bad *a.GoxideCase5_State_Number
- for _, v := range []a.State{nil,bad,&a.GoxideCase5_State_Number{Value:1},forged{}} {
+ // Closed structs cannot accept nil, embedded cases or pointers. The native
+ // zero value is still representable and must be rejected before any guard.
+ for _, v := range []a.State{{}} {
   func(){defer func(){if recover()==nil {t.Error("invalid enum accepted")}}(); One(v)}()
   if Effects != 0 { t.Fatal("wildcard ran before validation") }
  }

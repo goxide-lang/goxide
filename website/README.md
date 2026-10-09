@@ -1,6 +1,6 @@
 # goxide 语言介绍与自托管 Playground
 
-中文优先的静态语言介绍网站，以及同包多文件 goxide → Go 浏览器转译器（保留旧单文件入口）。网站源、十一个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
+中文优先的静态语言介绍网站，以及同包多文件 goxide → Go 浏览器转译器（保留旧单文件入口）。网站源、十二个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
 
 本轮将 .gox 包使用统一为 use 与静态 :: 路径，序列化派生限定为 serde 协议拥有者；
 Playground 的 CLI/WASM 共用项目显式依赖根，同时展示配置、包来源与源码身份。
@@ -53,10 +53,11 @@ python3 -B website/validation/focused.py \
   --chromium /absolute/path/to/chromium \
   --cases website/validation/semantic-cleanups-cases.json \
   --cases website/validation/std-support-cases.json \
-  --cases website/validation/static-paths-cases.json
+  --cases website/validation/static-paths-cases.json \
+  --cases website/validation/enum-borrows-cases.json
 ```
 
-当前入口验证全部 11 个真实网站例子及本批正反例，核对 LF/CRLF 的 CLI、Node GoWASM
+当前入口验证全部 12 个真实网站例子及本批正反例，核对 LF/CRLF 的 CLI、Node GoWASM
 和 HTTP Worker 输出，并按独立预期执行原生程序。输出留在新的仓外目录。
 Chromium sandbox 保持开启；环境拒绝时明确报告阻塞，不自动降级。
 
@@ -143,7 +144,7 @@ Playwright 仅是测试依赖，固定在 lockfile；这里要求它已可用，
 `/usr/bin/chromium`，可设置 `CHROMIUM=/absolute/browser`。隔离入口可用 `--playwright-node-modules`
 指定既有安装。正常网站构建与运行均不需要 npm。
 
-`qa.mjs` 验证十一例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
+`qa.mjs` 验证十二例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
 
 A04 的 4 个正例和 4 个拒绝例单独记录 CLI/WASM 差分：LF/CRLF 各两次、共 32 次；
 UI 验证 16 次 LF 输入，真实 Worker 验证 32 次 LF/CRLF 输入，每次之后用已知合法输入
@@ -169,7 +170,7 @@ HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路
 ## 文件布局
 
 - `website/static/`：手写静态页面、样式、主线程与 Worker，无线上第三方依赖。
-- `website/examples/`：十一个可执行 `.gox` 源例。
+- `website/examples/`：十二个可执行 `.gox` 源例。
 - `website/build.py`：可复现生成链与版本清单。
 - `cmd/goxide-playground/`：WASM 桥接。
 - `internal/typecheck/platform_{native,wasm}.go`：平台特定 importer。
@@ -188,7 +189,7 @@ python3 website/catalog.py
 QA_URL=http://127.0.0.1:8084 node website/catalog-qa.mjs
 ```
 
-额外 QA 覆盖所有目录入口、11 例实际转译、10 个拒绝例、主题/状态/入口/搜索过滤、永久链接、缺失清单错误状态、复制、390px 与无外部上传。HTTPS 云环境若 Chromium 缺少平台代理 CA，可显式提供已安装 CA 的 `QA_PROXY_SPKI` 公钥摘要；测试不使用全局跳过证书校验。线上实际 HTTP 哈希独立经系统 CA 验证。
+额外 QA 覆盖所有目录入口、12 例实际转译、10 个拒绝例、主题/状态/入口/搜索过滤、永久链接、缺失清单错误状态、复制、390px 与无外部上传。HTTPS 云环境若 Chromium 缺少平台代理 CA，可显式提供已安装 CA 的 `QA_PROXY_SPKI` 公钥摘要；测试不使用全局跳过证书校验。线上实际 HTTP 哈希独立经系统 CA 验证。
 
 RFC 管理建议：当前规范仍跟随编译器仓库和版本，Issue 用于讨论/跟踪、PR 用于变更评审。没有为此次目录新建仓库或 Issue；公开网站不是私有 RFC 镜像。
 
@@ -216,4 +217,22 @@ CLI snapshot 构建实际运行 format 2 feature 工程 A/B/A、根无 go.mod/go
 
 ## Goxide 命名接入（2026-10-04）
 
-本树已基于官网源码 51405a69 同步最新快照功能，并迁移 Goxide / goxide / .gox / GOXIDE_*。历史章节描述当时基线；当前 enum metadata schema 8、reference 3、use 2、sum ABI 2，std ce5bccb，serde 不变。旧生成产物需全部重新生成。CLI cmd/goxide、WASM cmd/goxide-playground、bridge goxideCompile、web tag goxideweb；构建脚本会校验实际 compiler SHA/digest。网站 owner 使用本分支的完整 website 和对应 compiler 源、go.mod/go.sum 构建，不能混用旧 WASM 与新 JS。只完成本地验证，不部署。
+本节记录基于官网源码 51405a69 的 Goxide / goxide / .gox / GOXIDE_* 命名迁移。该轮 enum metadata schema 8、reference 3、use 2、sum ABI 2、std ce5bccb 是历史版本；当前 ABI 见下一节。旧生成产物需全部重新生成。CLI cmd/goxide、WASM cmd/goxide-playground、bridge goxideCompile、web tag goxideweb；构建脚本会校验实际 compiler SHA/digest。网站 owner 使用本分支的完整 website 和对应 compiler 源、go.mod/go.sum 构建，不能混用旧 WASM 与新 JS。只完成本地验证，不部署。
+
+## enum 载荷借用与内联 sum
+
+当前源码要求 enum metadata 9、reference metadata 3、use metadata 3、sum ABI 3，
+实际提交与 std/serde 版本以匹配构建的清单为准；旧 interface case 产物须重新生成。
+`Option` 零值是 `None`，`Result` 零值非法。普通 enum 赋值复制独立的内联槽，
+slice、map、pointer 等载荷保持 Go 浅复制规则。
+
+`enum_borrows` 示例复用 `examples/enum_borrows/main.gox` 的控制流，通过返回并保存
+载荷引用验证原位修改与独立值副本；使用 `fmt::Println` 将预期输出写到 stdout。
+引用语法为 `&T` / `&mut T` 和 `&value` / `&mut value`；`ref` / `ref mut`
+显式借用载荷，`match &value` / `match &mut value` 设置默认绑定模式。
+引用可复制、保存、返回和捕获，不承诺独占或生命周期检查。整体替换 enum 后旧引用
+仍指向原固定槽，写入非活跃槽不改变当前变体。
+
+`enum-borrows-cases.json` 补充固定槽替换、非法 Result 零值的运行预期与只读写入拒绝。
+新增示例和 ABI 门槛需在固定生产提交后重新完成 CLI / Node WASM / HTTP Worker 验证；
+修改这些源文件本身不代表浏览器验证或网站发布已经完成。

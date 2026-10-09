@@ -19,12 +19,12 @@ func TestQuestionFlowProvenanceConsumers(t *testing.T) {
 	for _, consumer := range []string{"expr", "effect", "frame"} {
 		t.Run(consumer, func(t *testing.T) {
 			source := []byte(`package p
- type Option interface{ option() }
- type Some struct{ Value int };func(Some) option(){}
- type None struct{};func(None) option(){}
- func none() Option{return None{}}
+ type Option struct{tag,value int}
+ func none() Option{return Option{}}
+ func tag(v Option)int{return v.tag}
+ func value(v Option)int{return v.value}
  func validate(Option){}
- func operand() Option{return Some{1}}
+ func operand() Option{return Option{1,1}}
  func question(Option) int{return 0}
  type guardType struct{};func(guardType) Fail(Option){}
  func f() Option {guard:=guardType{};_=guard;_=question(operand());return none()}
@@ -34,7 +34,7 @@ func TestQuestionFlowProvenanceConsumers(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			declaration := enums.Decl{Name: "Option", Family: "Option", TypeArgs: []string{"int"}, Validator: "validate", Variants: []enums.Variant{{CaseName: "Some"}, {CaseName: "None", Constructor: "none"}}}
+			declaration := enums.Decl{Name: "Option", Family: "Option", TypeArgs: []string{"int"}, Validator: "validate", Tag: "tag", Variants: []enums.Variant{{Tag: 1, Value: "value"}, {Tag: 0, Constructor: "none"}}}
 			m := sourcemap.Identity("flow.go", source)
 			questionPos := strings.LastIndex(string(source), "question(")
 			operandPos := strings.LastIndex(string(source), "operand(")

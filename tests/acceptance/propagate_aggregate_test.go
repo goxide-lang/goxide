@@ -143,7 +143,7 @@ func TestPropagationAggregatePermissionsRace(t *testing.T) {
 	enumGeneratedModule(t, `package fixture
 func read(r &[4]int)Option[int]{return Option[int]::Some((*r)[Option[int]::Some(1)?])}
 func value(v Option[int])int{match v{Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
-func observe()int{a:=[4]int{1,2,3,4};var r &[4]int=&a;w:=mut& a;(*w)[1]=9;return value(read(r))}
+func observe()int{a:=[4]int{1,2,3,4};var r &[4]int=&a;w:=&mut a;(*w)[1]=9;return value(read(r))}
 `, `package fixture
 import "testing"
 func TestReadonlyArrayIndex(t *testing.T){if observe()!=9{t.Fatal("array storage/permission")}}

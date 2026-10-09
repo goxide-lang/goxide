@@ -50,10 +50,10 @@ func index(trace *[]string)int{*trace=append(*trace,"index");return 0}
 func ifDestination(s []int,ok bool,trace *[]string)Result[int,error]{if s[index(trace)]=num(7,ok,trace)?;s[0]>0{return Result[int,error]::Ok(s[0])};return Result[int,error]::Ok(0)}
 func swapSlice(s *[]int)Result[[]int,error]{*s=[]int{99};return Result[[]int,error]::Ok(*s)}
 func laterLHS(s *[]int)Result[int,error]{(*s)[0],swapSlice(s)?[0]=7,8;return Result[int,error]::Ok(1)}
-func sharedAlias(trace *[]string)Result[int,error]{a:=[2]int{};var r &[2]int=&a;var w mut&[2]int=mut&a;w[0]=num(8,true,trace)?;return Result[int,error]::Ok(r[0])}
+func sharedAlias(trace *[]string)Result[int,error]{a:=[2]int{};var r &[2]int=&a;var w &mut [2]int=&mut a;w[0]=num(8,true,trace)?;return Result[int,error]::Ok(r[0])}
 func readonlyRead(r &[2]int,trace *[]string)Result[int,error]{x:=r[0];return num(x,true,trace)}
-func writable(r mut&[2]int,trace *[]string)Result[int,error]{r[0]=num(8,true,trace)?;return Result[int,error]::Ok(r[0])}
-func checkWritable(trace *[]string)Result[int,error]{a:=[2]int{};var r mut&[2]int=mut&a;writable(r,trace)?;return Result[int,error]::Ok(a[0])}
+func writable(r &mut [2]int,trace *[]string)Result[int,error]{r[0]=num(8,true,trace)?;return Result[int,error]::Ok(r[0])}
+func checkWritable(trace *[]string)Result[int,error]{a:=[2]int{};var r &mut [2]int=&mut a;writable(r,trace)?;return Result[int,error]::Ok(a[0])}
 `
 
 const placePropagationAssertions = `package fixture

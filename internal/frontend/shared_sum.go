@@ -8,20 +8,14 @@ import (
 	"github.com/hxsf/goxide/internal/enums"
 )
 
-// The compiler knows this representation contract; ordinary interface shapes
-// and package aliases do not grant a family protocol.
+// Only the canonical shared package and its exact inline representation grant
+// the sum protocol; source aliases do not change the definition or helper owner.
 func sharedSumFamily(family string) enumFamilyExport {
-	f := enumFamilyExport{Name: family, Family: family, DefinitionPath: enums.SumPackage, DefinitionName: family, Marker: "is" + family, ABI: enums.SumABI}
-	names := []string{"Some", "None"}
-	if family == "Result" {
-		names = []string{"Ok", "Err"}
-	}
-	for i, name := range names {
-		c, ctor, index := name, "New"+name, i
-		if name == "None" {
-			c, ctor, index = "", "None", -1
-		}
-		f.Variants = append(f.Variants, enumFamilyVariantExport{Name: name, Case: c, Constructor: ctor, PayloadIndex: index})
+	f := enumFamilyExport{Name: family, Family: family, DefinitionPath: enums.SumPackage, DefinitionName: family, TagField: "tag", Tag: "Tag" + family, Validator: "Validate" + family, ABI: enums.SumABI}
+	if family == "Option" {
+		f.Variants = []enumFamilyVariantExport{{Name: "Some", Tag: 1, Field: "some", Value: "ValueSome", Project: "ProjectSome", Constructor: "NewSome", PayloadIndex: 0}, {Name: "None", Tag: 0, Constructor: "None", PayloadIndex: -1}}
+	} else {
+		f.Variants = []enumFamilyVariantExport{{Name: "Ok", Tag: 1, Field: "ok", Value: "ValueOk", Project: "ProjectOk", Constructor: "NewOk", PayloadIndex: 0}, {Name: "Err", Tag: 2, Field: "err", Value: "ValueErr", Project: "ProjectErr", Constructor: "NewErr", PayloadIndex: 1}}
 	}
 	return f
 }

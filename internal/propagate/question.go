@@ -23,7 +23,7 @@ type questionFlow struct {
 	failure         ast.Expr
 	optionCondition ast.Expr
 	success         []ast.Stmt
-	resultSubject   ast.Stmt
+	resultSubject   ast.Expr
 	resultOK        ast.Expr
 	resultErr       ast.Expr
 }
@@ -85,7 +85,7 @@ func (q *questionFlow) emit(exit failureExit) []ast.Stmt {
 	failed := &ast.CaseClause{List: []ast.Expr{q.resultErr}, Body: []ast.Stmt{failure}}
 	invalid := &ast.CaseClause{Body: q.statements(`panic("goxide: invalid Result at ?")`)}
 	body := &ast.BlockStmt{List: []ast.Stmt{success, failed, invalid}}
-	dispatch := &ast.TypeSwitchStmt{Assign: q.resultSubject, Body: body}
+	dispatch := &ast.SwitchStmt{Tag: q.resultSubject, Body: body}
 	q.generated(success, failed, invalid, body, dispatch)
 	return append(out, dispatch)
 }
@@ -111,14 +111,12 @@ func (l *lowering) questionFlow(n *ast.CallExpr, operand ast.Expr, ft *ast.FuncT
 	q.generated(q.value)
 	q.setup = append([]ast.Stmt{save}, q.statements(d.Validator+"("+tmp+"); var "+val+" "+d.TypeArgs[0])...)
 	if d.Family == "Option" {
-		none := "__goxide_enum_none_" + l.temp()
-		q.setup = append(q.setup, q.statements(none+" := "+d.Variants[1].Constructor+"()")...)
-		q.optionCondition = q.expression(tmp + " == " + none)
+		q.optionCondition = q.expression(fmt.Sprintf("%s(%s) == %d", d.Tag, tmp, d.Variants[1].Tag))
 		q.failure = q.expression(target.Variants[1].Constructor + "()")
-		q.success = q.statements(val + " = " + tmp + ".(" + d.Variants[0].CaseName + ").Value")
+		q.success = q.statements(val + " = " + d.Variants[0].Value + "(" + tmp + ")")
 		return q, nil
 	}
-	errVal := "__goxide_failure.Value"
+	errVal := d.Variants[1].Value + "(" + tmp + ")"
 	srcType := l.info.TypeOf(n.Args[0])
 	srcNamed, _ := types.Unalias(srcType).(*types.Named)
 	targetType := l.info.TypeOf(ft.Results.List[0].Type)
@@ -156,10 +154,9 @@ func (l *lowering) questionFlow(n *ast.CallExpr, operand ast.Expr, ft *ast.FuncT
 		errVal = bound + "(" + errVal + ")"
 	}
 	q.failure = q.expression(target.Variants[1].Constructor + "(" + errVal + ")")
-	q.resultSubject = &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("__goxide_failure")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent(tmp)}}}
-	q.generatedTree(q.resultSubject)
-	q.resultOK = q.expression(d.Variants[0].CaseName)
-	q.resultErr = q.expression(d.Variants[1].CaseName)
-	q.success = q.statements(val + " = __goxide_failure.Value")
+	q.resultSubject = q.expression(d.Tag + "(" + tmp + ")")
+	q.resultOK = q.expression(fmt.Sprint(d.Variants[0].Tag))
+	q.resultErr = q.expression(fmt.Sprint(d.Variants[1].Tag))
+	q.success = q.statements(val + " = " + d.Variants[0].Value + "(" + tmp + ")")
 	return q, nil
 }

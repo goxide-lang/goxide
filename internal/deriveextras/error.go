@@ -39,6 +39,23 @@ func GenerateError(spec *ast.TypeSpec, message, sourceField, fromField string) (
 			return "", nil, fmt.Errorf("source field %s must have type error", sourceField)
 		}
 	}
+	formatted, imports, err := formatErrorMessage(message, byName, func(name string) string { return "v." + name })
+	if err != nil {
+		return "", nil, err
+	}
+	name := spec.Name.Name
+	code := "func (v " + name + ") Error() string { return " + formatted + " }\n"
+	if sourceField != "" {
+		code += "func (v " + name + ") Unwrap() error { return v." + sourceField + " }\n"
+	}
+	if fromField != "" {
+		code += "func From" + name + "(err error) " + name + " { return " + name + "{" + fromField + ": err} }\n"
+	}
+	return code, imports, nil
+}
+
+// formatErrorMessage shares the attribute grammar between structs and tagged enums.
+func formatErrorMessage(message string, byName map[string]ast.Expr, fieldValue func(string) string) (string, map[string]string, error) {
 	g := &generator{imports: map[string]string{}}
 	var parts []string
 	var literal strings.Builder
@@ -70,8 +87,9 @@ func GenerateError(spec *ast.TypeSpec, message, sourceField, fromField string) (
 			if !ok || !scalar(id.Name) {
 				return "", nil, fmt.Errorf("error placeholder %s requires a built-in scalar", name)
 			}
-			value := "v." + name
+			value := fieldValue(name)
 			if id.Name != "string" {
+				var err error
 				value, err = g.debug(typ, value)
 				if err != nil {
 					return "", nil, err
@@ -96,45 +114,52 @@ func GenerateError(spec *ast.TypeSpec, message, sourceField, fromField string) (
 	if len(parts) == 0 {
 		parts = []string{`""`}
 	}
-	name := spec.Name.Name
-	code := "func (v " + name + ") Error() string { return " + strings.Join(parts, " + ") + " }\n"
-	if sourceField != "" {
-		code += "func (v " + name + ") Unwrap() error { return v." + sourceField + " }\n"
-	}
-	if fromField != "" {
-		code += "func From" + name + "(err error) " + name + " { return " + name + "{" + fromField + ": err} }\n"
-	}
-	return code, g.imports, nil
+	return strings.Join(parts, " + "), g.imports, nil
 }
 
-// GenerateEnumError implements explicitly attributed value cases.
+// GenerateEnumError dispatches on an enum value snapshot, never inactive slots.
 func GenerateEnumError(d enums.Decl) (string, map[string]string, error) {
-	var b strings.Builder
+	var methods, errorBody, unwrapBody strings.Builder
 	imports := map[string]string{}
+	const receiver = "__goxide_enum_error_receiver"
+	const payload = "__goxide_enum_error_payload"
+	fmt.Fprintf(&errorBody, "%s(%s);switch %s(%s){", d.Validator, receiver, d.Tag, receiver)
+	fmt.Fprintf(&unwrapBody, "%s(%s);switch %s(%s){", d.Validator, receiver, d.Tag, receiver)
 	for _, v := range d.Variants {
-		fields := &ast.FieldList{}
+		fields := map[string]ast.Expr{}
 		if v.Type != nil {
-			fields.List = append(fields.List, &ast.Field{Names: []*ast.Ident{ast.NewIdent("Value")}, Type: v.Type})
+			fields["Value"] = v.Type
 		}
-		spec := &ast.TypeSpec{Name: ast.NewIdent(v.CaseName), Type: &ast.StructType{Fields: fields}}
-		source := ""
 		if v.Source || v.From {
-			source = "Value"
+			id, ok := v.Type.(*ast.Ident)
+			if !ok || id.Name != "error" {
+				return "", nil, fmt.Errorf("source field Value must have type error")
+			}
 		}
-		code, im, e := GenerateError(spec, v.Message, source, "")
-		if e != nil {
-			return "", nil, e
+		expression, im, err := formatErrorMessage(v.Message, fields, func(string) string { return payload })
+		if err != nil {
+			return "", nil, err
 		}
-		b.WriteString(code)
-		if source == "" {
-			fmt.Fprintf(&b, "func(v %s) Unwrap()error{return nil};", v.CaseName)
+		for k, path := range im {
+			imports[k] = path
+		}
+		fmt.Fprintf(&errorBody, "case %d:", v.Tag)
+		if v.Type != nil {
+			fmt.Fprintf(&errorBody, "%s:=%s(%s);_=%s;", payload, v.Value, receiver, payload)
+		}
+		fmt.Fprintf(&errorBody, "return %s;", expression)
+		fmt.Fprintf(&unwrapBody, "case %d:", v.Tag)
+		if v.Source || v.From {
+			fmt.Fprintf(&unwrapBody, "return %s(%s);", v.Value, receiver)
+		} else {
+			unwrapBody.WriteString("return nil;")
 		}
 		if v.From {
-			fmt.Fprintf(&b, "func From%s(err error)%s{return %s(err)};", d.Name, d.Name, v.Constructor)
-		}
-		for k, x := range im {
-			imports[k] = x
+			fmt.Fprintf(&methods, "func From%s(err error)%s{return %s(err)};", d.Name, d.Name, v.Constructor)
 		}
 	}
-	return b.String(), imports, nil
+	fmt.Fprintf(&errorBody, "default:panic(%q)}", "goxide: invalid enum "+d.Name)
+	fmt.Fprintf(&unwrapBody, "default:panic(%q)}", "goxide: invalid enum "+d.Name)
+	fmt.Fprintf(&methods, "func(%s %s) Error()string{%s};func(%s %s) Unwrap()error{%s};", receiver, d.Name, errorBody.String(), receiver, d.Name, unwrapBody.String())
+	return methods.String(), imports, nil
 }

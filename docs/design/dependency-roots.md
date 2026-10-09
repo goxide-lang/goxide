@@ -19,7 +19,7 @@ json = "github.com/goxide-lang/serde/json"
 
 [dependencies.standard]
 module = "github.com/goxide-lang/std"
-version = "v0.0.0-20261009053434-9ed27c85088a"
+version = "v0.0.0-20261009091333-a75c971aa755"
 
 [dependencies.standard.namespaces]
 sum = "github.com/goxide-lang/std/sum"

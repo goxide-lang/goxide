@@ -26,8 +26,8 @@ both inputs left-to-right after argument evaluation before comparing active case
 Scalar calls keep a typed bool result. No general trait, deep-pointer protocol or HashMap is implemented.
 
 The frontend separately rejects direct enum equality and known dangerous enum
-comparisons/map keys in goxide source; native Go semantics and the existing nil
-exception remain. Metadata v3 carries exact target/helper identity and Eq status.
+comparisons/map keys in goxide source; native Go semantics remain. Enum values
+are inline structs and cannot be compared with nil; Option None is its zero tag. Metadata v3 carries exact target/helper identity and Eq status.
 A helper's name alone never authorizes a protocol. See
 [real module tests](../../tests/acceptance/equality_test.go).
 

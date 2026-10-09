@@ -18,20 +18,20 @@ func TestEnumDerivesApplicationRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idleCase := ""
+	foundIdle := false
 	for _, decl := range result.Enums {
 		if decl.Name == "Command" {
 			for _, variant := range decl.Variants {
 				if variant.Name == "Idle" {
-					idleCase = variant.CaseName
+					foundIdle = true
 				}
 			}
 		}
 	}
-	if idleCase == "" {
+	if !foundIdle {
 		t.Fatal("missing nominal Command metadata")
 	}
-	macroRaceModule(t, string(source), strings.ReplaceAll(enumDeriveAssertions, "COMMAND_IDLE_CASE", idleCase))
+	macroRaceModule(t, string(source), enumDeriveAssertions)
 }
 
 const enumDeriveAssertions = `package main
@@ -45,15 +45,14 @@ func TestEnumDebugOrder(t *testing.T){value:=submit(sample());want:="Command::Su
 func TestEnumStructuredPathsAndBadInputs(t *testing.T){_,err:=serdejson.Unmarshal([]byte("{\"Submit\":{\"Name\":\"mail\",\"Retries\":[1,false],\"Labels\":{}}}"),DeserializeCommand);var detail *serde.Error;if !errors.As(err,&detail){t.Fatalf("missing structured error: %v",err)};want:=[]serde.PathSegment{{Kind:"Variant",Name:"Submit"},{Kind:"Field",Name:"Retries"},{Kind:"Index",Index:1}};if !reflect.DeepEqual(detail.Path,want){t.Fatalf("path=%#v",detail.Path)};for name,input:=range map[string]string{"null":"null","missing-field":"{\"Submit\":{\"Name\":\"x\"}}","wrong-container":"{\"Batch\":{}}","wrong-map-value":"{\"Indexed\":{\"a\":false}}","array-length":"{\"Window\":[]}","duplicate-variant":"{\"Idle\":null,\"Idle\":null}","unknown":"\"Unknown\""}{t.Run(name,func(t *testing.T){if _,err:=serdejson.Unmarshal([]byte(input),DeserializeCommand);err==nil{t.Fatalf("accepted %s",input)}})};bad:=sample();bad.Name=string([]byte{255});_,err=encodeCommand(submit(bad));if !errors.As(err,&detail)||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Variant",Name:"Submit"},{Kind:"Field",Name:"Name"}}){t.Fatalf("encoding path: %v",err)}}
 type pointerError struct{}
 func(*pointerError)Error()string{return "typed nil"}
-func TestEnumErrorFromAndPropagation(t *testing.T){good:=accepted(loadCommand([]byte("{\"Submit\":{\"Name\":\"mail\",\"Retries\":[],\"Labels\":{}}}")));if submitted(good).Name!="mail"{t.Fatal("success propagation")};err:=rejected(loadCommand([]byte("{")));var detail *serde.Error;if err==nil||err.Error()!="could not load jobs"||!errors.As(err,&detail){t.Fatalf("decode error chain: %v",err)};business:=rejected(loadCommand([]byte("{\"Batch\":[]}")));if business==nil||business.Error()!="invalid job count 0"{t.Fatalf("business classification: %v",business)};sentinel:=errors.New("sentinel");if errors.Unwrap(remote(sentinel))!=sentinel||missing().Error()!="missing job"||errors.Unwrap(missing())!=nil{t.Fatal("explicit source/unit error")};wrapped:=FromAppError(sentinel);if errors.Unwrap(wrapped)!=sentinel||!errors.Is(wrapped,sentinel){t.Fatal("From lost source identity")};var typed *pointerError;typedWrapped:=FromAppError(typed);var found *pointerError;if !errors.As(typedWrapped,&found)||found!=nil||errors.Unwrap(typedWrapped)!=error(typed){t.Fatal("typed nil collapsed")};nilWrapped:=FromAppError(nil);if nilWrapped==nil||nilWrapped.Error()!="could not load jobs"||errors.Unwrap(nilWrapped)!=nil{t.Fatal("nil input erased business variant")}}
+func TestEnumErrorFromAndPropagation(t *testing.T){good:=accepted(loadCommand([]byte("{\"Submit\":{\"Name\":\"mail\",\"Retries\":[],\"Labels\":{}}}")));if submitted(good).Name!="mail"{t.Fatal("success propagation")};err:=rejected(loadCommand([]byte("{")));var detail *serde.Error;if err==nil||err.Error()!="could not load jobs"||!errors.As(err,&detail){t.Fatalf("decode error chain: %v",err)};business:=rejected(loadCommand([]byte("{\"Batch\":[]}")));if business==nil||business.Error()!="invalid job count 0"{t.Fatalf("business classification: %v",business)};sentinel:=errors.New("sentinel");if errors.Unwrap(remote(sentinel))!=sentinel||missing().Error()!="missing job"||errors.Unwrap(missing())!=nil{t.Fatal("explicit source/unit error")};wrapped:=FromAppError(sentinel);if errors.Unwrap(wrapped)!=sentinel||!errors.Is(wrapped,sentinel){t.Fatal("From lost source identity")};var typed *pointerError;typedWrapped:=FromAppError(typed);var found *pointerError;if !errors.As(typedWrapped,&found)||found!=nil||errors.Unwrap(typedWrapped)!=error(typed){t.Fatal("typed nil collapsed")};nilWrapped:=FromAppError(nil);if error(nilWrapped)==nil||nilWrapped.Error()!="could not load jobs"||errors.Unwrap(nilWrapped)!=nil{t.Fatal("nil input erased business variant")}}
 func TestPropagationPreservesStaticClassification(t *testing.T){sentinel:=errors.New("remote");original:=remote(sentinel);wrapped:=failureValue(failWith(original));if errorKind(wrapped)!="input"||!errors.Is(wrapped,sentinel)||errors.Unwrap(wrapped)!=error(original){t.Fatal("dynamic error guessed or chain normalized")};var typed *pointerError;typedWrapped:=failureValue(failWith(typed));if errorKind(typedWrapped)!="input"||errors.Unwrap(typedWrapped)!=error(typed){t.Fatal("propagation collapsed typed nil")}}
 func TestContainerPayloadErrorPaths(t *testing.T){for _,c:=range []struct{input string;path []serde.PathSegment}{
  {"{\"Batch\":[{\"Name\":false,\"Retries\":[],\"Labels\":{}}]}",[]serde.PathSegment{{Kind:"Variant",Name:"Batch"},{Kind:"Index",Index:0},{Kind:"Field",Name:"Name"}}},
  {"{\"Indexed\":{\"west\":{\"Name\":false,\"Retries\":[],\"Labels\":{}}}}",[]serde.PathSegment{{Kind:"Variant",Name:"Indexed"},{Kind:"MapKey",Name:"west"},{Kind:"Field",Name:"Name"}}},
  }{_,err:=serdejson.Unmarshal([]byte(c.input),DeserializeCommand);var detail *serde.Error;if !errors.As(err,&detail)||!reflect.DeepEqual(detail.Path,c.path){t.Fatalf("path for %s: %v",c.input,err)}}}
 func TestStructAttributesInsideEnumPayload(t *testing.T){value,err:=serdejson.Unmarshal([]byte("{\"Change\":{\"id\":\"request\"}}"),DeserializeTaggedCommand);if err!=nil{t.Fatal(err)};if got:=taggedItem(value);got.ID!="request"||got.Attempts!=0{t.Fatalf("field attributes lost: %#v",got)};data,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeTaggedCommand(s,&value)});if err!=nil||string(data)!="{\"Change\":{\"id\":\"request\",\"Attempts\":0}}"{t.Fatalf("wire=%s err=%v",data,err)}}
-type forgedCommand struct{Command}
-func TestInvalidEnumsAtDeriveBoundary(t *testing.T){for _,value:=range []Command{nil,(*COMMAND_IDLE_CASE)(nil),&COMMAND_IDLE_CASE{},forgedCommand{}}{if _,err:=encodeCommand(value);err==nil{t.Fatalf("encoded invalid %T",value)};for name,run:=range map[string]func(){"debug":func(){_=DebugCommand(&value)},"clone":func(){_=CloneCommand(&value)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid %T",name,value)}}();run()}()}}}
+func TestInvalidEnumsAtDeriveBoundary(t *testing.T){for _,value:=range []Command{{}}{if _,err:=encodeCommand(value);err==nil{t.Fatalf("encoded invalid %T",value)};for name,run:=range map[string]func(){"debug":func(){_=DebugCommand(&value)},"clone":func(){_=CloneCommand(&value)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid %T",name,value)}}();run()}()}}}
 `
 
 func TestEnumDerivesExplicitRejections(t *testing.T) {
@@ -128,8 +127,7 @@ func TestNestedEnumContainerDerives(t *testing.T){
  }
 }
 func TestInvalidNestedContainerBeforeEffects(t *testing.T){
- var typed * __goxide_enum_case_5_Phase_Ready
- for _,bad:=range []Phase{nil,typed}{
+ for _,bad:=range []Phase{{}}{
   for _,tc:=range []struct{value Bundle;path []serde.PathSegment}{
    {bundleItems([]Phase{bad}),[]serde.PathSegment{{Kind:"Variant",Name:"Items"},{Kind:"Index",Index:0}}},
    {bundleIndex(map[string]Phase{"bad":bad}),[]serde.PathSegment{{Kind:"Variant",Name:"Indexed"},{Kind:"MapKey",Name:"bad"}}},

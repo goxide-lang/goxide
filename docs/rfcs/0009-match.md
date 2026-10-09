@@ -1,8 +1,10 @@
 # RFC 0009：模式匹配与按模式绑定
 
+2026-10-09 更新：本轮直接切换至内联独立 payload 槽、`ref` / `ref mut` 模式和 `&mut` 引用拼写，详见[当前原位 payload 合同](../design/enum-payload-borrows.md)。下文旧 interface/case、旧 Go case API 和布局待定的章节记录历史阶段，不是当前接口或兼容承诺；完整 Rust 模式规则不由本轮实现。
+
 ## 状态与范围
 
-变体分派与穷尽检查是已确认目标；用户已明确需要按 `Ok(value)`、`Ok(&value)`、`Ok(mut& value)` 区分复制和借用。
+变体分派与穷尽检查是已确认目标；用户已明确需要按 `Ok(value)`、`Ok(&value)`、`Ok(&mut value)` 区分复制和借用。
 具体借用模式、guard 规则及支持原位访问的 Go ABI 尚未冻结；已有有限值匹配前端不代表这些借用模式已实现。
 
 D19/D20 边界：读写权限和已确认类型不变量照常检查；别名、留存、独占与重入风险分析独立长期推进，不属 MVP。未来仅有具体风险证据才 warning；未知不默认拒绝或告警。
@@ -16,7 +18,7 @@ D19/D20 边界：读写权限和已确认类型不变量照常检查；别名、
 | --- | --- | --- |
 | `Ok(value)` | 复制 payload 到局部值 | 要求该复制合法，不是隐式 move |
 | `Ok(&value)` | 对原 payload 建立读借用 | 保留原存储身份和只读资格，不借用隐藏副本 |
-| `Ok(mut& value)` | 对原 payload 建立写借用 | 需要可写位置和写资格；不承诺独占 |
+| `Ok(&mut value)` | 对原 payload 建立写借用 | 需要可写位置和写资格；不承诺独占 |
 
 被匹配表达式求值一次；对位置表达式，一次确定其来源位置，不要求先复制整个枚举。
 “求值一次”不决定复制还是借用，也不表示整个可达对象图只读。trait 适配中的同一要求只约束接收者表达式次数。
@@ -79,7 +81,7 @@ default:
 
 ```goxide
 match r {
-    Result::Ok(mut& value) => { *value = 2 },
+    Result::Ok(&mut value) => { *value = 2 },
     Result::Err(_) => (),
 }
 ```
@@ -171,7 +173,7 @@ goxide 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开
 
 ## 原位借用与表达式实现选择（2026-10-02）
 
-用户 D29 已明确 `match mut& enum_value` 的可写 payload 原位借用是首版必需，不再作为可后置候选。D30/D31 同时要求跨 module goxide 增强恢复和自然可写指针 Go 互操作。现有值型 case 不能借副本地址冒充原位；[有界实现评审](research/match-place-and-expression-options.md)给出 tag struct 候选、实际 Go API/比较/旧借用取舍，以及用户提出的 typed IIFE 机制实验。布局尚未冻结，当前前端尚不支持新借用语法；纯 Go 探针不算实现。普通复杂目标/嵌入表达式仍是工程欠账，不能因 IIFE 的复杂分支限制而拒绝评估纯分支，也不能让生成包装改变问号或 recover 的用户函数边界。
+用户 D29 已明确 `match &mut enum_value` 的可写 payload 原位借用是首版必需，不再作为可后置候选。D30/D31 同时要求跨 module goxide 增强恢复和自然可写指针 Go 互操作。现有值型 case 不能借副本地址冒充原位；[有界实现评审](research/match-place-and-expression-options.md)给出 tag struct 候选、实际 Go API/比较/旧借用取舍，以及用户提出的 typed IIFE 机制实验。布局尚未冻结，当前前端尚不支持新借用语法；纯 Go 探针不算实现。普通复杂目标/嵌入表达式仍是工程欠账，不能因 IIFE 的复杂分支限制而拒绝评估纯分支，也不能让生成包装改变问号或 recover 的用户函数边界。
 
 ## 二元表达式与简单索引目标（2026-10-02）
 
@@ -313,7 +315,7 @@ func runtimeIndex(m Mode) [2]int {
 
 本片不接 `* & <-` 及读写引用相关一元组合、控制头、package initializer、多结果、
 复杂 LHS、block arm 与不可命名类型。这些仍为工程/表示账，不是语言禁令或获准延期。
-tuple/struct enum variant、原位 mut& 布局、blank/embedded、手写协议登记、serde adapters
+tuple/struct enum variant、原位 &mut 布局、blank/embedded、手写协议登记、serde adapters
 和公开 enum 入口规则不在此定约。出现必须新定语义的例子，单独说明输入、预期冲突及
 候选行为，交回用户选择，不靠放宽或永久拒绝掩盖。
 

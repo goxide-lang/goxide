@@ -60,23 +60,42 @@ func Finish(filename string, source []byte, imp types.Importer, trusted ...map[s
 // FinishWithPackagePath checks and erases references under the consumer's actual
 // package path. An empty path retains Finish's legacy synthetic package path.
 func FinishWithPackagePath(path, filename string, source []byte, imp types.Importer, trusted ...map[string]bool) (Result, error) {
-	restored, err := restore(path, filename, source, imp, nil)
+	return FinishWithEnumTypes(path, filename, source, imp, nil, trusted...)
+}
+
+// FinishWithEnumTypes admits only frontend-validated canonical enum instances
+// beyond the ordinary concrete data subset. Existing permission checks remain
+// identical; enum registration is not permission to adopt an arbitrary pointer.
+func FinishWithEnumTypes(path, filename string, source []byte, imp types.Importer, enumTypes map[string]bool, trusted ...map[string]bool) (Result, error) {
+	return FinishWithEvidence(path, filename, source, imp, PermissionEvidence{EnumTypes: enumTypes}, trusted...)
+}
+
+func FinishWithEvidence(path, filename string, source []byte, imp types.Importer, evidence PermissionEvidence, trusted ...map[string]bool) (Result, error) {
+	restored, err := restoreMapped(path, filename, source, imp, nil)
 	if err != nil {
 		return Result{}, err
 	}
 	if !strings.Contains(string(source), "type __goxide_ref_write[") {
 		return Result{Source: source}, nil
 	}
-	return lowerWithFiles(path, filename, restored, imp, false, nil, trusted...)
+	var temps map[string]bool
+	if len(trusted) > 0 {
+		temps = trusted[0]
+	}
+	result, err := lowerWithEvidence(path, filename, restored.text, imp, false, nil, evidence, temps)
+	if err != nil {
+		return Result{}, restoreError(err, restored, filename, source)
+	}
+	return result, nil
 }
-func restore(path, filename string, source []byte, imp types.Importer, files map[string][]byte) ([]byte, error) {
+func restoreMapped(path, filename string, source []byte, imp types.Importer, files map[string][]byte) (mapped, error) {
 	if len(files) == 0 && !strings.Contains(string(source), "type __goxide_ref_write[") {
-		return source, nil
+		return original(source), nil
 	}
 	fs := token.NewFileSet()
 	f, err := parser.ParseFile(fs, filename, source, parser.AllErrors)
 	if err != nil {
-		return nil, err
+		return mapped{}, err
 	}
 	info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{}}
 	if imp == nil {
@@ -90,7 +109,7 @@ func restore(path, filename string, source []byte, imp types.Importer, files map
 		}
 		peer, err := parser.ParseFile(fs, name, files[name], parser.AllErrors)
 		if err != nil {
-			return nil, err
+			return mapped{}, err
 		}
 		all = append(all, peer)
 	}
@@ -132,7 +151,14 @@ func restore(path, filename string, source []byte, imp types.Importer, files map
 						failure = fmt.Errorf("%s: refs: unsupported reference element", fs.Position(n.Pos()))
 						return false
 					}
-					es = append(es, edit{offset(n.Pos()), offset(n.Args[0].Pos()), "(mut"}, edit{offset(n.Args[0].End()), offset(n.End()), ")"})
+					address, ok := unparen(n.Args[0]).(*ast.UnaryExpr)
+					if !ok || address.Op != token.AND {
+						failure = fmt.Errorf("%s: refs: write constructor requires an explicit address", fs.Position(n.Pos()))
+						return false
+					}
+					// Preserve the actual address token. The generated modifier
+					// has no token origin; a copied operand/address still does.
+					es = append(es, edit{offset(n.Pos()), offset(address.Pos()), "("}, edit{offset(address.Pos()) + 1, offset(address.Pos()) + 1, "mut "}, edit{offset(address.End()), offset(n.End()), ")"})
 					return true
 				}
 			case *ast.IndexExpr:
@@ -141,7 +167,7 @@ func restore(path, filename string, source []byte, imp types.Importer, files map
 						failure = fmt.Errorf("%s: refs: unsupported reference element", fs.Position(n.Pos()))
 						return false
 					}
-					es = append(es, edit{offset(n.Pos()), offset(n.End()), "mut& " + elementInFile(info.TypeOf(n.Index), f, info, pkg)})
+					es = append(es, edit{offset(n.Pos()), offset(n.End()), "&mut " + elementInFile(info.TypeOf(n.Index), f, info, pkg)})
 					return false
 				}
 			case *ast.Ident:
@@ -149,7 +175,7 @@ func restore(path, filename string, source []byte, imp types.Importer, files map
 					if _, isType := info.Uses[n].(*types.TypeName); isType {
 						spelling := "& " + elementInFile(referenceTarget(info.TypeOf(n)), f, info, pkg)
 						if r.Permission == Write {
-							spelling = "mut" + spelling
+							spelling = "&mut " + elementInFile(referenceTarget(info.TypeOf(n)), f, info, pkg)
 						}
 						es = append(es, edit{offset(n.Pos()), offset(n.End()), spelling})
 					}
@@ -159,8 +185,8 @@ func restore(path, filename string, source []byte, imp types.Importer, files map
 		})
 	}
 	if failure != nil {
-		return nil, failure
+		return mapped{}, failure
 	}
-	restored := original(source).apply(es).text
+	restored := original(source).apply(es)
 	return restored, nil
 }

@@ -57,6 +57,16 @@ func FinishPackage(files map[string][]byte, imp types.Importer, trusted ...map[s
 // FinishPackageWithPath validates and erases a package's references under its
 // actual package path. An empty path retains FinishPackage's legacy default.
 func FinishPackageWithPath(path string, files map[string][]byte, imp types.Importer, trusted ...map[string]map[string]bool) (map[string]Result, error) {
+	return FinishPackageWithEnumTypes(path, files, imp, nil, trusted...)
+}
+
+// FinishPackageWithEnumTypes shares the same validated enum identities across
+// all files without weakening file-local reference permissions or bindings.
+func FinishPackageWithEnumTypes(path string, files map[string][]byte, imp types.Importer, enumTypes map[string]bool, trusted ...map[string]map[string]bool) (map[string]Result, error) {
+	return FinishPackageWithEvidence(path, files, imp, PermissionEvidence{EnumTypes: enumTypes}, trusted...)
+}
+
+func FinishPackageWithEvidence(path string, files map[string][]byte, imp types.Importer, evidence PermissionEvidence, trusted ...map[string]map[string]bool) (map[string]Result, error) {
 	active := false
 	for _, src := range files {
 		active = active || strings.Contains(string(src), "type __goxide_ref_write[")
@@ -70,7 +80,7 @@ func FinishPackageWithPath(path string, files map[string][]byte, imp types.Impor
 	}
 
 	for _, name := range sourceNames(files) {
-		restored, err := restore(path, name, files[name], imp, files)
+		restored, err := restoreMapped(path, name, files[name], imp, files)
 		if err != nil {
 			return nil, err
 		}
@@ -78,9 +88,9 @@ func FinishPackageWithPath(path string, files map[string][]byte, imp types.Impor
 		if len(trusted) > 0 {
 			temps = trusted[0][name]
 		}
-		lowered, err := lowerWithFiles(path, name, restored, imp, false, files, temps)
+		lowered, err := lowerWithEvidence(path, name, restored.text, imp, false, files, evidence, temps)
 		if err != nil {
-			return nil, err
+			return nil, restoreError(err, restored, name, files[name])
 		}
 		result[name] = lowered
 	}

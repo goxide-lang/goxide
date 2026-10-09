@@ -1,6 +1,6 @@
 # 宏 + 独立 enum：最小双模块试用
 
-本例从 [t0_joint](../t0_joint/) 的订单、配置和条件日志宏缩减而来：JSON 输入 → 闭合 enum/match → Result `?`/错误链 → 回执。移除了 Budget/读写引用部分，不使用 `&T`、`mut&` 等新指针语法；helper 调用中的 `&value` 是普通 Go 取址。
+本例从 [t0_joint](../t0_joint/) 的订单、配置和条件日志宏缩减而来：JSON 输入 → 闭合 enum/match → Result `?`/错误链 → 回执。移除了 Budget/读写引用部分，不使用 `&T`、`&mut` 等新指针语法；helper 调用中的 `&value` 是普通 Go 取址。
 
 **生产代码候选：`55ef3b3020b3984a8ae360ca469fc13fee345bd2`。** 本次交付只增补示例和文档，不改变编译器/运行时语义。已实跑 Go **1.27.1 linux/amd64**（race detector 可用）；脚本要求真实 Go 1.27.x，不自动下载工具链。实际 checkout SHA 会由脚本打印。目录/多模块实现是有限子集，不代表整个 MVP 完成。
 

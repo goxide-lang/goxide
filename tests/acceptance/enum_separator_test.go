@@ -17,9 +17,10 @@ func TestEnumDeclarationSeparators(t *testing.T) {
  func statement(x F)int{match x{F::B(n)=>{return n+offset},};panic("unreachable")}
  enum H { D, } // inserted newline separator
  func newline()H{return H::D}
+ func newlineValid()int{return match newline(){H::D=>1,}}
  enum Last { End, };`, `package fixture
  import "testing"
- func TestSeparators(t *testing.T){if expression(__goxide_enum_new_1_E_A())!=1||statement(__goxide_enum_new_1_F_B(3))!=5||newline()==nil{t.Fatal("separator changed behavior")}}
+ func TestSeparators(t *testing.T){if expression(__goxide_enum_new_1_E_A())!=1||statement(__goxide_enum_new_1_F_B(3))!=5||newlineValid()!=1{t.Fatal("separator changed behavior")}}
  `, false)
 }
 

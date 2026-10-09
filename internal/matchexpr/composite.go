@@ -1,7 +1,6 @@
 package matchexpr
 
 import (
-	"github.com/hxsf/goxide/internal/paths"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -73,7 +72,7 @@ func (c *composer) literal(a, b int, context string) (string, bool, error) {
 }
 
 func (c *composer) literalType(a, open int) bool {
-	expr, err := parser.ParseExpr(string(paths.GoView(c.source[c.ts[a].a:c.ts[open].a])) + "{}")
+	expr, err := parser.ParseExpr(string(parseView(c.source[c.ts[a].a:c.ts[open].a])) + "{}")
 	_, ok := expr.(*ast.CompositeLit)
 	return err == nil && ok
 }

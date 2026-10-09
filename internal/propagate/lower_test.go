@@ -119,7 +119,7 @@ func TestFromAndRejections(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(out), "= FromWrapped") || !strings.Contains(strings.Join(strings.Fields(string(out)), ""), "(__goxide_failure.Value)") {
+	if !strings.Contains(string(out), "= FromWrapped") || !strings.Contains(string(out), "__goxide_enum_value_Result_Err") {
 		t.Fatal(string(out))
 	}
 	identity := strings.ReplaceAll(base, "Result[string,Wrapped]", "Result[string,error]")

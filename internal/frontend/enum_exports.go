@@ -17,7 +17,7 @@ import (
 )
 
 // Recover before syntax lowering: match needs a closed variant set, not merely
-// the generated Go interface. A marker requires its matching producer artifact.
+// the generated Go struct. A marker requires its matching producer artifact.
 func recoverEnumImports(sources map[string][]byte, known map[string]PackageResult, imp types.Importer, maps map[string]*sourcemap.Map) (map[string]PackageResult, error) {
 	out := map[string]PackageResult{}
 	for p, r := range known {
@@ -147,6 +147,12 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 		}
 		for _, d := range result.Files[file].Enums {
 			if d.Family != "" {
+				// Imported families can also appear here after typed lowering
+				// binds their helpers in a consumer file. Their registrations
+				// come from verified enumImports below, not a local validator.
+				if d.PackagePath != "" {
+					continue
+				}
 				key := enums.SumPackage + "." + d.Family
 				f := families[key]
 				if f.Name == "" {
@@ -166,9 +172,15 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 			if !d.Public {
 				continue
 			}
-			x := enumExport{Name: d.Name, DefinitionPath: path, DefinitionName: d.Name, Marker: d.Marker, Validator: "Validate" + d.Name}
+			x := enumExport{Name: d.Name, DefinitionPath: path, DefinitionName: d.Name, Tag: fmt.Sprintf("GoxideTag%d_%s", len(d.Name), d.Name), TagField: d.TagField, Validator: "Validate" + d.Name}
 			for _, v := range d.Variants {
-				x.Variants = append(x.Variants, enumVariantExport{Name: v.Name, HasPayload: v.Payload != "", Case: fmt.Sprintf("GoxideCase%d_%s_%s", len(d.Name), d.Name, v.Name), Constructor: "New" + d.Name + v.Name})
+				variant := enumVariantExport{Name: v.Name, HasPayload: v.Payload != "", Tag: v.Tag, Constructor: "New" + d.Name + v.Name}
+				if variant.HasPayload {
+					variant.Field, variant.PayloadAlias = v.Field, v.PayloadAlias
+					variant.Value = fmt.Sprintf("GoxideValue%d_%s_%s", len(d.Name), d.Name, v.Name)
+					variant.Project = fmt.Sprintf("GoxideProject%d_%s_%s", len(d.Name), d.Name, v.Name)
+				}
+				x.Variants = append(x.Variants, variant)
 			}
 			canonical[path+"."+d.Name] = x
 		}
@@ -240,7 +252,7 @@ func collectEnumExports(path string, result PackageResult, pkg *types.Package) (
 		if !ok {
 			continue
 		}
-		// A new defined interface type does not inherit closed enum identity.
+		// A new defined struct type does not inherit closed enum identity.
 		if !types.Identical(obj.Type(), named) {
 			continue
 		}

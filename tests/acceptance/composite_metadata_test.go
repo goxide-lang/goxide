@@ -12,11 +12,11 @@ const compositeMetadataAPI = `package model
 type State struct{N int;A [2]int;S []int;M map[string]int;P *int}
 func(s *State)Touch(){s.N++}
 func View(p &State)&State{return p}
-func Edit(p mut& State)mut& State{return p}
+func Edit(p &mut State)&mut State{return p}
 func Read(p &State)int{return p.N+p.A[0]+p.S[0]+p.M["x"]+*p.P}
 func Native(p *State){p.N++;p.S[0]++}
 func Slice(p &[]int)&[]int{return p}
-func SliceEdit(p mut& []int)mut& []int{return p}
+func SliceEdit(p &mut []int)&mut []int{return p}
 func Map(p &map[string]int)&map[string]int{return p}
 func Array(p &[2]int)&[2]int{return p}
 type hidden struct{N int}
@@ -39,7 +39,7 @@ func TestCompositeReferenceMetadataModules(t *testing.T) {
 use library::model as a;
 type State=a::State
 func View(r &State)&State{return a::Again(r)}
-func Edit(r mut& State)mut& State{return a::Edit(r)}
+func Edit(r &mut State)&mut State{return a::Edit(r)}
 `)
 		packagesWrite(t, dir, "other/other.gox", `package model
 type State struct{N int;A [2]int;S []int;M map[string]int;P *int}
@@ -55,8 +55,8 @@ use library::model as b;
 use library::mid as m;
 type Alias=a::State
 func forwarded(r &Alias)&b::State{return m::View(r)}
-func Run()int{n:=5;s:=a::State{N:1,A:[2]int{2,0},S:[]int{3},M:map[string]int{"x":4},P:&n};w:=mut& s;r:=forwarded(&*w);copy:=*r;copy.N++;copy.A[0]++;m::Edit(w).N++;a::Native(&s);s.Touch();if r.N!=4||r.S[0]!=4||copy.N!=2||copy.A[0]!=3{panic("identity/copy changed")};return b::Read(r)}
-func Containers()int{s:=[]int{1};w:=mut& s;(*a::SliceEdit(w))[0]++;r:=a::Slice(&*w);m:=map[string]int{"x":3};mr:=a::Map(&m);v:=[2]int{4,5};ar:=a::Array(&v);copy:=*ar;copy[0]++;return (*r)[0]+(*mr)["x"]+copy[0]}
+func Run()int{n:=5;s:=a::State{N:1,A:[2]int{2,0},S:[]int{3},M:map[string]int{"x":4},P:&n};w:=&mut s;r:=forwarded(&*w);copy:=*r;copy.N++;copy.A[0]++;m::Edit(w).N++;a::Native(&s);s.Touch();if r.N!=4||r.S[0]!=4||copy.N!=2||copy.A[0]!=3{panic("identity/copy changed")};return b::Read(r)}
+func Containers()int{s:=[]int{1};w:=&mut s;(*a::SliceEdit(w))[0]++;r:=a::Slice(&*w);m:=map[string]int{"x":3};mr:=a::Map(&m);v:=[2]int{4,5};ar:=a::Array(&v);copy:=*ar;copy[0]++;return (*r)[0]+(*mr)["x"]+copy[0]}
 func Private()int{return a::Hidden().N}
 `, "gox")
 		packagesWrite(t, source, "left.gox", `package app
@@ -140,7 +140,7 @@ func TestPathsAndNative(t *testing.T){if Left()!=10||Right()!=20||NativeRead()!=
 	t.Run("goxide-upgrade-and-defined-identity", func(t *testing.T) {
 		for _, body := range []string{
 			`func bad(){s:=a::State{};r:=a::View(&s);a::Edit(r)}`,
-			`func bad(){s:=a::State{};r:=a::View(&s);_=mut& *r}`,
+			`func bad(){s:=a::State{};r:=a::View(&s);_=&mut *r}`,
 			`type Other a::State;func bad(r &a::State)&Other{return r}`,
 			`func bad(){s:=a::State{};r:=a::View(&s);other::View(r)}`,
 		} {

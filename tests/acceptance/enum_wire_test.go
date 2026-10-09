@@ -97,15 +97,15 @@ func TestUnknownWireFailsBeforeBusiness(t *testing.T){
 func TestDefaultAndDebugAreNotWireMapping(t *testing.T){
  v:=DefaultTicket()
  if Describe(v.Delivery)!="waiting"||IsRush(v.Urgency)||v.Note!=""{t.Fatalf("wrong explicit field defaults: %#v",v)}
- // Urgency's default is the second declaration; Go nil is not a default constructor.
- var zero Ticket;if zero.Delivery!=nil||zero.Urgency!=nil{t.Fatal("Go zero changed")}
+ // Urgency's default is the second declaration; a zero tag is not a default constructor.
+ var zero Ticket;if GoxideTag8_Delivery(zero.Delivery)!=0||GoxideTag7_Urgency(zero.Urgency)!=0{t.Fatal("Go zero changed")}
  v.Note="private business text"
  debug:=DebugTicket(&v)
  for _,part:=range []string{"Waiting","Normal","private business text"}{if !strings.Contains(debug,part){t.Fatalf("debug omitted declared content %q: %s",part,debug)}}
  wire,err:=encodeTicket(v);if err!=nil{t.Fatal(err)}
  if debug==string(wire)||!strings.Contains(string(wire),"queued")||!strings.Contains(string(wire),":2"){t.Fatalf("Debug and wire confused: %s / %s",debug,wire)}
  cloned:=CloneTicket(&v);cloned.Note="changed";if v.Note!="private business text"{t.Fatal("value Clone changed source")}
- if _,err:=encodeTicket(zero);err==nil{t.Fatal("invalid Go enum nil serialized")}
+ if _,err:=encodeTicket(zero);err==nil{t.Fatal("invalid Go enum zero serialized")}
  for _,action:=range []func(){func(){_=DebugTicket(&zero)},func(){_=CloneTicket(&zero)}}{
   panicked:=false;func(){defer func(){panicked=recover()!=nil}();action()}();if !panicked{t.Fatal("invalid Go value passed derived operation")}
  }

@@ -1,5 +1,7 @@
 # RFC 0008：变体枚举、Option 与 Result
 
+2026-10-09 更新：本轮直接切换至内联独立 payload 槽、`ref` / `ref mut` 模式和 `&mut` 引用拼写，详见[当前原位 payload 合同](../design/enum-payload-borrows.md)。下文旧 interface/case、旧 Go case API 和布局待定的章节记录历史阶段，不是当前接口或兼容承诺；完整 Rust 模式规则不由本轮实现。
+
 ## 状态与范围
 
 变体枚举、Option / Result、名义类型身份是已确认目标；本分支已实现有限值型case子集；完整RFC尚未实现。
@@ -183,7 +185,7 @@ struct 依字段顺序、slice/array 依索引短路；map 依 Go 未指定的�
 
 ### 手写具体 PartialEq/Eq（2026-10-03）
 
-本片沿已批准的具体值参数 helper 路径支持手写比较，不等待 `&T`/`mut&T` 或一般 trait 求解。源级入口使用明确具体类型拼写；首参数必须名为 `self`，两个参数均为目标值类型，单个返回值为 builtin bool。没有 static，不增加隐式只读、独占或全局不可变保证；函数体按普通 Go 值参数和共享容器语义执行。`Self` 简写、泛型 impl、别名/外部目标和借用签名不在此具体入口内。
+本片沿已批准的具体值参数 helper 路径支持手写比较，不等待 `&T`/`&mut T` 或一般 trait 求解。源级入口使用明确具体类型拼写；首参数必须名为 `self`，两个参数均为目标值类型，单个返回值为 builtin bool。没有 static，不增加隐式只读、独占或全局不可变保证；函数体按普通 Go 值参数和共享容器语义执行。`Self` 简写、泛型 impl、别名/外部目标和借用签名不在此具体入口内。
 
 ```goxide
 type User struct { ID int; Display string }

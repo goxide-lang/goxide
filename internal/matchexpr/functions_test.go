@@ -30,6 +30,8 @@ func TestFunctionSignatureMarksOnlyNestedTypes(t *testing.T) {
 		"func (x Receiver) f(v func() int) func() int ",
 		"func f(v func() m::Item) func() m::Item ",
 		"func (x m::Receiver) f(v func() m::Item) func() m::Item ",
+		"func f(v &m::Item, w &mut m::Item) func() int ",
+		"func f(v func(&mut m::Item) int) &mut m::Item ",
 	} {
 		t.Run(header, func(t *testing.T) {
 			ft, adjustment := functionSignature(header)

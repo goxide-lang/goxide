@@ -194,6 +194,26 @@ class RunnerTests(unittest.TestCase):
             runner.position('x x', 'x')
         self.assertEqual(runner.position('x x', 'x', occurrence=1), (2, 1, 3))
 
+    def test_browser_count_matches_the_served_manifest(self):
+        # The historical matrix remains fixed; browser result completeness
+        # follows the exact manifest already checked by start_server.
+        for expected, observed in [(11, 11), (12, 12), (12, 11)]:
+            with self.subTest(expected=expected, observed=observed), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                obj = runner.Runner(root, root, argparse.Namespace())
+                obj.node = 'unused-node'
+                obj.server = object()
+                obj.manifest = {'examples': [{}] * expected}
+                result = dict(examples=observed, errors=[], cards=26,
+                              negativeExamples=10, consoleErrors=[])
+                with mock.patch.object(obj, 'command', return_value=(0, json.dumps(result).encode(), b'')):
+                    if observed != expected:
+                        with self.assertRaisesRegex(RuntimeError, 'browser result is incomplete'):
+                            obj.browser('catalog-qa')
+                    else:
+                        obj.browser('catalog-qa')
+                        self.assertEqual(json.loads((root / 'catalog-qa-result.json').read_text()), result)
+
     def test_baseline_comparison_excludes_current_only_inputs(self):
         root = self.historical_root
         groups, _ = runner.qa_matrix(root)

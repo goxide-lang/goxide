@@ -20,7 +20,7 @@ goroot = run(GO, 'env', 'GOROOT').decode().strip()
 license_path = go_license_path(goroot)
 catalog.write_index(catalog_data)
 packages = ['fmt', 'errors', 'io', 'strconv', 'strings', 'math', 'encoding/json',
-            'github.com/hxsf/goxide/runtime', 'github.com/hxsf/goxide/formatting',
+            'github.com/goxide-lang/std/runtime', 'github.com/goxide-lang/std/formatting',
             'github.com/goxide-lang/std/sum', 'github.com/goxide-lang/serde', 'github.com/goxide-lang/serde/json']
 exports = ROOT/'internal/typecheck/browserexports'
 exports.mkdir(exist_ok=True)
@@ -36,9 +36,9 @@ while raw.strip():
         header = f"{'__.PKGDEF':<16}{0:<12}{0:<6}{0:<6}{'644':<8}{len(data):<10}`\n".encode()
         (exports/(p['ImportPath'].replace('/', '_')+'.a')).write_bytes(b'!<arch>\n' + header + data + (b'\n' if len(data)%2 else b''))
         closure.append(p['ImportPath'])
-dependencies = dependency_sources(packages, export_records, root=ROOT, goroot=goroot,
+dependencies = dependency_sources(packages, export_records, goroot=goroot,
                                   toolchain_version=run(GO, 'env', 'GOVERSION').decode().strip(),
-                                  compiler_commit=sha, exports=exports)
+                                  exports=exports)
 dist = ROOT/'website/dist'
 if dist.exists(): shutil.rmtree(dist)
 # Explicit publish allowlist: no source tree, RFCs, configs or accidental files.

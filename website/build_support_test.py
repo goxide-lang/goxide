@@ -110,7 +110,7 @@ class CompilerIdentityTests(unittest.TestCase):
         self.root = pathlib.Path(self.temporary.name).resolve()
         self.files = {'go.mod': b'module fixture\n', 'go.sum': b'',
                       'internal/probe/probe.go': b'package probe\n',
-                      'runtime/value.go': b'package runtime\n'}
+                      'cmd/goxide/main.go': b'package main\n'}
         for name, data in self.files.items():
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -138,15 +138,15 @@ class CompilerIdentityTests(unittest.TestCase):
         self.assertEqual(self.verify(), source_digest(self.files))
 
     def test_source_change_rejected_even_with_recomputed_digest(self):
-        changed = dict(self.files, **{'runtime/value.go': b'package different\n'})
-        (self.root / 'runtime/value.go').write_bytes(changed['runtime/value.go'])
+        changed = dict(self.files, **{'cmd/goxide/main.go': b'package different\n'})
+        (self.root / 'cmd/goxide/main.go').write_bytes(changed['cmd/goxide/main.go'])
         with self.assertRaisesRegex(ValueError, 'source differs'):
             self.verify(source_digest(changed))
 
     def test_missing_source_rejected_even_with_recomputed_digest(self):
-        (self.root / 'runtime/value.go').unlink()
-        reduced = {k: v for k, v in self.files.items() if k != 'runtime/value.go'}
-        with self.assertRaisesRegex(ValueError, 'missing=.*runtime/value.go'):
+        (self.root / 'cmd/goxide/main.go').unlink()
+        reduced = {k: v for k, v in self.files.items() if k != 'cmd/goxide/main.go'}
+        with self.assertRaisesRegex(ValueError, 'missing=.*cmd/goxide/main.go'):
             self.verify(source_digest(reduced))
 
     def test_added_source_rejected_even_with_recomputed_digest(self):
@@ -160,7 +160,7 @@ class CompilerIdentityTests(unittest.TestCase):
             self.verify('0' * 64)
 
     def test_added_nested_production_package_is_not_outside_inventory(self):
-        for name in ['runtime/nested/extra.go', 'formatting/nested/extra.go', 'cmd/goxide/nested/extra.go']:
+        for name in ['internal/nested/extra.go', 'cmd/goxide/nested/extra.go', 'cmd/goxide-playground/nested/extra.go']:
             with self.subTest(name=name):
                 path = self.root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -229,8 +229,8 @@ class DependencySourcesTests(unittest.TestCase):
 
     def snapshot(self, packages):
         return build_support.dependency_sources(
-            packages, self.records, root=self.compiler, goroot=self.goroot,
-            toolchain_version='go1.27.1', compiler_commit='a' * 40, exports=self.exports)
+            packages, self.records, goroot=self.goroot,
+            toolchain_version='go1.27.1', exports=self.exports)
 
     def test_fixed_scope_complete_bytes_and_archive_identity(self):
         record, content = self.package('example.org/library/value', self.module / 'value',
@@ -256,17 +256,18 @@ class DependencySourcesTests(unittest.TestCase):
         self.assertEqual(dependency['exportSha256'], hashlib.sha256(archive.read_bytes()).hexdigest())
         self.assertEqual(dependency['licenses'][0]['path'], 'example.org/library/LICENSE')
 
-    def test_toolchain_and_compiler_sources_have_their_actual_identity(self):
+    def test_toolchain_sources_have_their_actual_identity(self):
         self.package('fmt', self.goroot / 'src/fmt', Standard=True, Goroot=True)
-        self.package('example.org/compiler/runtime', self.compiler / 'runtime',
-                     Module=dict(Path='example.org/compiler', Main=True, Dir=str(self.compiler)))
-        standard, compiler = self.snapshot(['fmt', 'example.org/compiler/runtime'])
+        standard, = self.snapshot(['fmt'])
         self.assertEqual(standard['source'], 'Go distribution go1.27.1')
         self.assertEqual(standard['version'], 'go1.27.1')
         self.assertEqual(standard['files'][0]['path'], 'GOROOT/src/fmt/source.go')
-        self.assertEqual(compiler['source'], 'example.org/compiler@' + 'a' * 40)
-        self.assertEqual(compiler['version'], 'a' * 40)
-        self.assertEqual(compiler['files'][0]['path'], 'example.org/compiler/runtime/source.go')
+
+    def test_compiler_sources_cannot_be_published_as_support_dependencies(self):
+        self.package('example.org/compiler/runtime', self.compiler / 'runtime',
+                     Module=dict(Path='example.org/compiler', Main=True, Dir=str(self.compiler)))
+        with self.assertRaisesRegex(ValueError, 'compiler main module is not a published dependency'):
+            self.snapshot(['example.org/compiler/runtime'])
 
     def test_missing_or_unexported_dependency_is_rejected(self):
         with self.assertRaisesRegex(ValueError, 'export record missing'):

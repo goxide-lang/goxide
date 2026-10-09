@@ -10,6 +10,15 @@ Local defined type names are preserved (including reflection): a function-local
 helper binding before their declarations avoids capture. No package function-value
 binding or extra call frame is introduced for recursive manual bodies.
 
+Both AST passes capture per-file source evidence before mutation. Changed files
+print through that snapshot: unchanged supported AST-owned tokens keep their
+point origins and macro stacks even when a derived helper is appended. Files
+without AST changes retain whole-token composition, including punctuation not
+covered by AST token slots. Rewritten call identifiers carry only the
+stack proven by the original `equals` identifier (or deferred intrinsic), with
+no invented point origin. Shared helpers, helper bindings and manual enum
+validation prefixes have no single macro caller and remain generated/unmapped.
+
 Derived Eq requires explicit PartialEq plus recursively qualified fields. Bool, integers
 and strings support ordinary scalar Eq; floats/complex retain PartialEq only.
 Structs and arrays recurse, named types require registration, and enums validate

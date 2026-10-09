@@ -57,6 +57,12 @@ type GoxideOptionSome[T any] = sum.Some[T]
 
 共享 core 不导入 compiler 或用户包。具体 payload validator、derive/free helper、From 及需要用户类型可见性的代码继续由适当的源包生成；不承诺零 helper。std 不反射猜测用户 enum 或协议。
 
+### Go 返回值适配的职责边界（当前入口说明）
+
+`go_result!` / `go_result_keep!` 是编译器保留的 builtin 宏，直接可用，无须从任何源码包 import 宏定义，也不是 std/sum 的导出宏。宏阶段识别入口，typed lowering 读取原生调用的静态签名、生成具体适配 helper 并登记载荷 validator；std/sum 只提供共享 Result 表示、cases、构造与形状检查。生成程序仍须依赖匹配的 std 模块。
+
+适配只在显式宏调用处发生，判断原静态 E 的 nil 值，不由外层期望类型先改写 E。`?` 继续按普通可赋值优先、精确一步 From 的既有规则处理错误；不会自动取保值结构的 Err 或丢弃 Value。普通 Go API 的双返回保持原状，`.go` 消费者使用 std/sum 的 Go API 或已生成包。可执行例子及参数限制见[内建宏使用说明](../../examples/go_result/README.md)。本说明不增加 namespace/prelude 或限定宏语法；未来是否迁移入口仍须另行决定。
+
 ## 3. metadata 7 与实例 owner
 
 共享 std 阶段将 enum metadata schema 从 6 升到 7；正式命名阶段再升至 8，旧 artifact 明确要求重生成，不静默接受旧身份。普通用户 enum 的表示不变，但其与 sum 混合的 artifact 也按版本重建。

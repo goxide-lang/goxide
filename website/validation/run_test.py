@@ -1,11 +1,13 @@
 """Failure-path tests for the runner; no compiler/browser/download is needed."""
 import argparse
 import importlib.util
+import io
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from unittest import mock
@@ -16,7 +18,35 @@ runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
 
+# These tests exercise the historical runner's error handling, not the current
+# language examples. Its unchanged hashes belong to this documented snapshot.
+HISTORICAL_INPUTS_COMMIT = 'eb6ddf0ce026251b4e9b791d0271ee05b9438749'
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
+
+
 class RunnerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temporary_inputs = tempfile.TemporaryDirectory(prefix='goxide-historical-inputs-')
+        cls.addClassCleanup(cls.temporary_inputs.cleanup)
+        cls.historical_root = Path(cls.temporary_inputs.name)
+        inputs = ['website/checks', 'website/examples', 'website/qa.mjs',
+                  'website/catalog-source.json', 'website/a04-matrix.json',
+                  'website/a01-matrix.json', 'website/validation/legacy-matrix.json']
+        # Local immutable Git objects only: no fetch, checkout, compiler or browser.
+        archive = subprocess.check_output(
+            ['git', 'archive', HISTORICAL_INPUTS_COMMIT, '--', *inputs], cwd=SOURCE_ROOT)
+        with tarfile.open(fileobj=io.BytesIO(archive)) as files:
+            files.extractall(cls.historical_root, filter='data')
+        runner.qa_matrix(cls.historical_root)
+
+    def test_current_source_is_not_historical_validation_evidence(self):
+        catalog = json.loads((self.historical_root / 'website/catalog-source.json').read_text())
+        self.assertEqual(catalog['compilerCommit'], runner.COMPILER)
+        self.assertNotEqual(json.loads((SOURCE_ROOT / 'website/catalog-source.json').read_text())['compilerCommit'], runner.COMPILER)
+        with self.assertRaisesRegex(RuntimeError, 'legacy website input changed|preserved A04 input changed'):
+            runner.qa_matrix(SOURCE_ROOT)
+
     def test_output_cannot_select_an_ambient_module_for_native_playground(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary).resolve()
@@ -156,7 +186,7 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(git(root, 'rev-parse', 'HEAD'), initial)
 
     def test_complete_matrix_and_byte_positions(self):
-        groups, diagnostics = runner.qa_matrix(Path(__file__).resolve().parents[2])
+        groups, diagnostics = runner.qa_matrix(self.historical_root)
         self.assertEqual(len(diagnostics), 13)
         self.assertEqual(sum(len(x) for x in groups.values()), 70)
         self.assertEqual(runner.position('é\r\nx', 'x'), (4, 2, 1))
@@ -165,7 +195,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(runner.position('x x', 'x', occurrence=1), (2, 1, 3))
 
     def test_baseline_comparison_excludes_current_only_inputs(self):
-        root = Path(__file__).resolve().parents[2]
+        root = self.historical_root
         groups, _ = runner.qa_matrix(root)
         catalog = json.loads((root / 'website/catalog-source.json').read_text())
         manifest = {'examples': [dict(entry, source=(root / 'website/examples' / (entry['id'] + '.gox')).read_text())
@@ -179,7 +209,7 @@ class RunnerTests(unittest.TestCase):
                 runner.legacy_success_sources(root, manifest, contaminated)
 
     def test_fixture_inventory_rejects_changed_legacy_missing_and_unlisted_inputs(self):
-        source = Path(__file__).resolve().parents[2]
+        source = self.historical_root
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for name in ('checks', 'examples', 'validation'):
@@ -202,7 +232,7 @@ class RunnerTests(unittest.TestCase):
                 runner.qa_matrix(root)
 
     def test_current_only_matrix_requires_independent_error_and_output_expectations(self):
-        source = Path(__file__).resolve().parents[2]
+        source = self.historical_root
         original = (source / 'website/a04-matrix.json').read_text()
         for case in json.loads(original)['checks']:
             if case['expect'] == 'frontend-reject':
@@ -224,7 +254,7 @@ class RunnerTests(unittest.TestCase):
                 runner.a04_matrix(root)
 
     def test_current_only_runtime_failure_keeps_actual_output(self):
-        root = Path(__file__).resolve().parents[2]
+        root = self.historical_root
         with tempfile.TemporaryDirectory() as temporary:
             out = Path(temporary)
             obj = runner.Runner(root, out, argparse.Namespace())
@@ -254,7 +284,7 @@ class RunnerTests(unittest.TestCase):
             self.assertFalse((out / 'native/a04/summary.json').exists())
 
     def test_a01_diagnostics_require_exact_dollar_span_and_nested_frame_order(self):
-        root = Path(__file__).resolve().parents[2]
+        root = self.historical_root
         matrix = runner.a01_matrix(root)
         case = next(c for c in matrix['checks'] if c['name'] == 'reject_macro_a01_nested')
         fixture = (root / 'website/checks' / (case['name'] + '.gox')).read_text()
@@ -277,7 +307,7 @@ class RunnerTests(unittest.TestCase):
                 runner.assert_origin_diagnostic('\n'.join([primary, *reversed(frames)]), case, source)
 
     def test_a01_matrix_cannot_weaken_category_rejection_to_parser_error(self):
-        root = Path(__file__).resolve().parents[2]
+        root = self.historical_root
         original = (root / 'website/a01-matrix.json').read_text()
         with tempfile.TemporaryDirectory() as temporary:
             copied = Path(temporary)
@@ -290,7 +320,7 @@ class RunnerTests(unittest.TestCase):
                     runner.a01_matrix(copied)
 
     def test_a01_inaccurate_source_evidence_is_saved_before_failure(self):
-        root = Path(__file__).resolve().parents[2]
+        root = self.historical_root
         with tempfile.TemporaryDirectory() as temporary:
             out = Path(temporary)
             obj = runner.Runner(root, out, argparse.Namespace())

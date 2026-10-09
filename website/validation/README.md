@@ -88,6 +88,13 @@ The instructions below describe the frozen compiler `afa3f0a...` versus
 `fd8380c...` comparison. Run them from its complete historical checkout, such as
 `eb6ddf0ce026251b4e9b791d0271ee05b9438749`, whose catalog and production sources
 retain those identities. The current website may bind a newer compiler.
+The runner's failure-path unit tests materialize their historical inputs with
+local `git archive` from `eb6ddf0ce026251b4e9b791d0271ee05b9438749`. They run the
+current runner code against the unchanged frozen hashes, test corruption and
+missing-input failures, and explicitly reject the active migrated sources as
+historical evidence. They need that existing Git object, fetch nothing, and do
+not execute the historical compiler or browser. CI checks out full history.
+
 `run.py` intentionally rejects a changed catalog, compiler inventory, or AST;
 do not change its pin or relax its oracle to turn an intentional AST change into
 a historical pass. The historical browser scripts contain `--no-sandbox` and

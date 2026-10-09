@@ -27,8 +27,8 @@
   },
   {
     "id": "explicit-std-nested-validation",
-    "source": "package main\nuse fmt;\nuse std::sum as s;\nenum Mode{Idle,}\ntype Modes []Mode\ntype Envelope struct{Items map[string]Modes}\nfunc Inspect(v s::Option[Envelope],seen *int){match v{s::Option[Envelope]::Some(_)=>{*seen+=1},s::Option[Envelope]::None=>{}}}\nfunc rejected(v s::Option[Envelope],want string)(ok bool){seen:=0;defer func(){ok=fmt::Sprint(recover())==want && seen==0}();Inspect(v,&seen);return false}\nfunc main(){\n good:=Envelope{Items:map[string]Modes{\"ok\":{Mode::Idle}}}\n seen:=0\n Inspect(s::NewSome(good),&seen)\n bad:=Envelope{Items:map[string]Modes{\"bad\":{nil}}}\n fmt::Println(seen,rejected(s::NewSome(bad),\"goxide: invalid enum Mode\"),rejected((*s::Some[Envelope])(nil),\"goxide: invalid enum Option\"))\n}\n",
-    "expectedStdout": "1 true true\n"
+    "source": "package main\nuse fmt;\nuse std::sum as s;\nenum Mode{Idle,}\ntype Modes []Mode\ntype Envelope struct{Items map[string]Modes}\nfunc Inspect(v s::Option[Envelope],seen *int){match v{s::Option[Envelope]::Some(_)=>{*seen+=1},s::Option[Envelope]::None=>{}}}\nfunc rejected(v s::Option[Envelope],want string)(ok bool){seen:=0;defer func(){ok=fmt::Sprint(recover())==want && seen==0}();Inspect(v,&seen);return false}\nfunc main(){\n good:=Envelope{Items:map[string]Modes{\"ok\":{Mode::Idle}}}\n seen:=0\n Inspect(s::NewSome(good),&seen)\n var invalid Mode\n bad:=Envelope{Items:map[string]Modes{\"bad\":{invalid}}}\n fmt::Println(seen,rejected(s::NewSome(bad),\"goxide: invalid enum Mode\"))\n}\n",
+    "expectedStdout": "1 true\n"
   },
   {
     "id": "explicit-std-generic-alias-rejected",

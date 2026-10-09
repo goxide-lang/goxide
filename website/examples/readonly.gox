@@ -2,11 +2,11 @@ package main
 
 use fmt;
 
-func makeCounter() mut& int {
+func makeCounter() &mut int {
     value := 4
-    return mut& value
+    return &mut value
 }
-func increment(counter mut& int) { (*counter)++ }
+func increment(counter &mut int) { (*counter)++ }
 func read(counter &int) int { return *counter }
 
 func main() {

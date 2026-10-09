@@ -2,10 +2,10 @@
 import pathlib,json,re
 root=pathlib.Path(__file__).resolve().parents[1]/'dist'
 m=json.loads((root/'examples.json').read_text())
-assert m['abiVersions']==dict(enum=8,reference=3,use=2,sum=2)
-assert m['metadataSchema']==8
+assert m['abiVersions']==dict(enum=9,reference=3,use=3,sum=3)
+assert m['metadataSchema']==9
 std=next(x for x in m['publicLibraries'] if x['module']=='github.com/goxide-lang/std')
-assert std['commit']=='ce5bccb4ff9c7fb96b7f192a3a263051590d9288' and std['version']=='v0.0.0-20261004173304-ce5bccb4ff9c'
+assert std['commit']=='a75c971aa755e0e9f17b412ca4a8f37f32acc933' and std['version']=='v0.0.0-20261009091333-a75c971aa755'
 legacy=re.compile(r'hgo|HGO|Hgo')
 allowed={'projects':'旧 hgo.lock','cli-options':'旧.hgo/HGO_*输入拒绝。'}
 for card in m['catalog']['items']:

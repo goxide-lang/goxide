@@ -598,7 +598,8 @@ class Runner:
             self.start_server()
         _, stdout, _ = self.command(script, [self.node, 'website/' + script + '.mjs'])
         value, _ = json.JSONDecoder().raw_decode(stdout.decode())
-        require(value['examples'] == 11 and value['errors'] == [], 'browser result is incomplete')
+        require(value['examples'] == len(self.manifest['examples']) and value['errors'] == [],
+                'browser result is incomplete')
         if script == 'qa':
             require(value['originChecks']['fixtures'] == 8 and value['astChecks']['fixtures'] == 5, 'browser diagnostic matrix changed')
             require(value['originChecks']['cliObservations'] + value['astChecks']['cliObservations'] == 52, 'browser native observations missing')

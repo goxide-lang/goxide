@@ -1,0 +1,18 @@
+[
+  {
+    "id": "enum-fixed-payload-slots",
+    "source": "package main\nuse fmt;\nenum State { Count(int), Other(int), }\nfunc slot(v &mut State)&mut int { match &mut *v {State::Count(p)=>{return p},_=>{panic(\"wrong variant\")},};panic(\"unreachable\") }\nfunc read(v State)int{return match v{State::Count(n)=>n,State::Other(n)=>n}}\nfunc main(){v:=State::Count(1);p:=slot(&mut v);v=State::Other(8);if *p!=0{panic(\"slot not reset\")};*p=11;if read(v)!=8{panic(\"old slot retargeted\")};v=State::Count(13);fmt::Println(*p,read(v))}\n",
+    "expectedStdout": "13 13\n"
+  },
+  {
+    "id": "result-zero-invalid",
+    "source": "package main\nuse fmt;\nfunc main(){seen:=0;defer func(){if fmt::Sprint(recover())!=\"goxide: invalid enum Result\"||seen!=0{panic(\"zero Result validation\")};fmt::Println(\"rejected before effects\")}();var zero Result[int,error];match zero {Result::Ok(_)=>{seen++},Result::Err(_)=>{seen++}}}\n",
+    "expectedStdout": "rejected before effects\n"
+  },
+  {
+    "id": "enum-readonly-payload-write",
+    "source": "package main\nenum E{Item(int),}\nfunc bad(v &E){match &*v{E::Item(p)=>{*p=2},}}\nfunc main(){}\n",
+    "expect": "frontend-reject",
+    "diagnosticContains": "cannot write through a read reference"
+  }
+]

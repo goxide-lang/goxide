@@ -7,7 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {recordWorkerObservations} from './validation/worker-observations.mjs';
 const base = process.env.QA_URL || 'http://127.0.0.1:8080';
-const browser = await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',headless:true,args:['--no-sandbox',...(process.env.QA_PROXY_SPKI ? ['--ignore-certificate-errors-spki-list='+process.env.QA_PROXY_SPKI] : [])]});
+const browser = await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',headless:true,chromiumSandbox:true,args:process.env.QA_PROXY_SPKI ? ['--ignore-certificate-errors-spki-list='+process.env.QA_PROXY_SPKI] : []});
 const context = await browser.newContext({viewport:{width:1440,height:1000},permissions:['clipboard-read','clipboard-write']});
 const page = await context.newPage();
 const errors=[];const requests=[];
@@ -21,7 +21,7 @@ const a04Results=[];
 const a01Matrix=JSON.parse(await fs.readFile(new URL('a01-matrix.json',import.meta.url),'utf8'));
 const a01Results=[];
 // CLI project snapshots stay read-only, separate from browser example choices.
-assert.equal(await page.locator('#examples option').count(), manifest.examples.length);
+assert.equal(await page.locator('#examples option').count(), manifest.examples.length + (manifest.packageExamples || []).length);
 const snapshotText = await page.locator('#cli-example').textContent();
 for (const example of manifest.cliExamples) {
  for (const file of example.files) {

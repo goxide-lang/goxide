@@ -13,7 +13,7 @@ try {
  const done=()=>page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('转译完成'),{},{timeout:60000});await done();
  const manifest=await page.evaluate(async()=>await(await fetch('examples.json')).json());
  assert.equal(manifest.catalog.compilerCommit,manifest.commit);
- assert.deepEqual(manifest.abiVersions,{enum:8,reference:3,use:3,sum:2});assert.equal(manifest.metadataSchema,8);assert.equal(manifest.publicLibraries.length,2);
+ assert.deepEqual(manifest.abiVersions,{enum:9,reference:3,use:3,sum:3});assert.equal(manifest.metadataSchema,9);assert.equal(manifest.publicLibraries.length,2);
  assert.ok(requests.some(r=>new URL(r.url).pathname.endsWith('/compiler.wasm')&&new URL(r.url).searchParams.get('compiler')===manifest.commit));
  const wasmHash=await page.evaluate(async sha=>{const bytes=await(await fetch('compiler.wasm?compiler='+sha)).arrayBuffer();return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');},manifest.commit);
  assert.equal(wasmHash,manifest.wasmSha256);

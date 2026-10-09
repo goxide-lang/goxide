@@ -1,0 +1,3 @@
+module example.org/goxide-research/match-payload-borrows
+
+go 1.27

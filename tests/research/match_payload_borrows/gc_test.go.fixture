@@ -1,0 +1,49 @@
+package representationprobe
+
+import (
+	"runtime"
+	"sync/atomic"
+	"testing"
+)
+
+type gcPayload struct {
+	value   int
+	padding [4096]byte // Avoid tiny, pointer-free allocation batching.
+}
+
+type referenceInline struct {
+	tag     uint8
+	a       *gcPayload
+	b       int
+	padding [4096]byte
+}
+
+//go:noinline
+func escapedInteriorOnly() (**gcPayload, *atomic.Bool, *atomic.Bool) {
+	owner := &referenceInline{tag: 1}
+	cell := &owner.a
+	*owner = referenceInline{tag: 2, b: 20}
+	*cell = &gcPayload{value: 37} // An escaped pointer writes the inactive slot.
+	ownerCleaned, payloadCleaned := new(atomic.Bool), new(atomic.Bool)
+	// Neither callback nor its argument references the object being tracked.
+	runtime.AddCleanup(owner, func(flag *atomic.Bool) { flag.Store(true) }, ownerCleaned)
+	runtime.AddCleanup(*cell, func(flag *atomic.Bool) { flag.Store(true) }, payloadCleaned)
+	return cell, ownerCleaned, payloadCleaned
+}
+
+func TestInteriorReferenceAloneKeepsOwnerAndInactivePayloadAlive(t *testing.T) {
+	cell, ownerCleaned, payloadCleaned := escapedInteriorOnly()
+	// The caller has no owner pointer, closure capturing the owner, or separate
+	// payload pointer. Go traces the allocation containing the interior pointer.
+	for range 3 {
+		runtime.GC()
+	}
+	require(t, !ownerCleaned.Load() && !payloadCleaned.Load(), "cleanup must not run while the interior reference keeps the objects reachable")
+	before := (*cell).value
+	(*cell).value = 41
+	runtime.GC()
+	require(t, before == 37 && (*cell).value == 41, "the inactive pointer field and its payload must remain usable across GC")
+	observe(t, "interior_pointer_only_and_inactive_payload_gc", map[string]any{"before": before, "after": (*cell).value, "owner_cleanup_while_reachable": ownerCleaned.Load(), "payload_cleanup_while_reachable": payloadCleaned.Load(), "reclamation_timing_tested": false})
+	runtime.KeepAlive(cell)
+	// No assertion about when cleanup runs after cell becomes unreachable.
+}

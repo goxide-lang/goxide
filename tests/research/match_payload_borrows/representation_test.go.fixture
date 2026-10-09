@@ -1,0 +1,333 @@
+// Pure Go mechanism probes for an unapproved representation proposal.
+// No test invokes the Goxide frontend or implements recursive Goxide enums.
+package representationprobe
+
+import (
+	"encoding/json"
+	"fmt"
+	"runtime"
+	"testing"
+)
+
+type inline struct {
+	tag  uint8
+	a, b int // Distinct slots even though both variants have the same Go type.
+}
+
+func variantA(n int) inline { return inline{tag: 1, a: n} }
+func variantB(n int) inline { return inline{tag: 2, b: n} }
+func borrowA(e *inline) *int {
+	if e.tag != 1 {
+		panic("wrong variant")
+	}
+	return &e.a
+}
+func active(e inline) int {
+	switch e.tag {
+	case 1:
+		return e.a
+	case 2:
+		return e.b
+	}
+	panic("invalid tag")
+}
+func require(t *testing.T, ok bool, detail string) {
+	t.Helper()
+	if !ok {
+		t.Fatal(detail)
+	}
+}
+func observe(t *testing.T, name string, values map[string]any) {
+	t.Helper()
+	data, err := json.Marshal(struct {
+		Case   string         `json:"case"`
+		Values map[string]any `json:"values"`
+	}{name, values})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// run.py preserves this JSON verbatim alongside the original go test log.
+	fmt.Println("OBSERVATION " + string(data))
+}
+
+func TestInlineCopyBeforeAndAfterBorrow(t *testing.T) {
+	e := variantA(1)
+	before := e
+	p := borrowA(&e)
+	after := e
+	*p = 2
+	require(t, e.a == 2 && before.a == 1 && after.a == 1 && p == &e.a, "inline copies must retain independent scalar storage")
+	observe(t, "inline_copy_before_after_borrow", map[string]any{"original": e.a, "copy_before": before.a, "copy_after": after.a, "same_slot": p == &e.a})
+}
+
+func TestInlineSameVariantReplacement(t *testing.T) {
+	e := variantA(1)
+	p := borrowA(&e)
+	replace := func() { e = variantA(5) }
+	replace()
+	seen := *p
+	*p = 8
+	require(t, seen == 5 && e.a == 8 && p == &e.a, "whole-value assignment must reuse the existing field slot")
+	observe(t, "inline_callback_same_variant", map[string]any{"old_ref_sees_replacement": seen, "old_ref_write_updates_current": e.a})
+}
+
+func TestInlineOtherVariantAndReturn(t *testing.T) {
+	e := variantA(7)
+	p := borrowA(&e)
+	e = variantB(20)
+	zero := *p
+	*p = 9
+	inactiveCopy := e
+	activeB := active(e)
+	e = variantA(5)
+	returned := *p
+	*p = 6
+	require(t, zero == 0 && activeB == 20 && inactiveCopy.a == 9 && returned == 5 && e.a == 6, "distinct inactive slots must not become the other variant's payload")
+	observe(t, "inline_old_reference_across_replacement", map[string]any{"after_A_to_B": zero, "active_B_after_inactive_write": activeB, "copied_inactive_slot": inactiveCopy.a, "after_return_to_A": returned, "active_A_after_write": e.a})
+}
+
+func TestSameTypedSlotsCannotBeCoalescedTransparently(t *testing.T) {
+	type sharedSlot struct {
+		tag   uint8
+		value int
+	}
+	e := sharedSlot{1, 1}
+	p := &e.value
+	e = sharedSlot{2, 20}
+	*p = 9
+	require(t, e.tag == 2 && e.value == 9, "counterexample must modify the active B slot through the old A pointer")
+	observe(t, "coalesced_same_typed_variant_slots", map[string]any{"old_A_reference_changes_active_B": e.value, "distinct_slot_equivalent": false})
+}
+
+func escaped() (*inline, *int, func() int) {
+	e := variantA(7)
+	p := borrowA(&e)
+	copy := p
+	return &e, copy, func() int { return *p }
+}
+
+func TestReturnedStoredAndCapturedReferenceAcrossGC(t *testing.T) {
+	owner, p, read := escaped()
+	stored := []*int{p}
+	runtime.GC()
+	*owner = variantB(3)
+	zero := read()
+	*stored[0] = 9
+	inactive := owner.a
+	*owner = variantA(11)
+	runtime.GC()
+	latest := read()
+	require(t, zero == 0 && inactive == 9 && latest == 11 && p == &owner.a, "returned/copied/stored/captured references must keep their allocation alive")
+	observe(t, "inline_reference_return_store_capture_gc", map[string]any{"after_replace": zero, "inactive_write": inactive, "after_reactivate_and_gc": latest, "same_slot": p == &owner.a})
+}
+
+func TestParentAndNestedReplacement(t *testing.T) {
+	type parent struct {
+		tag   uint8
+		inner inline
+		other int
+	}
+	p := parent{tag: 1, inner: variantA(1)}
+	before := p
+	ref := borrowA(&p.inner)
+	inner := &p.inner
+	after := p
+	p = parent{tag: 2, other: 30}
+	zero := *ref
+	*ref = 9
+	activeOuter := p.other
+	p = parent{tag: 1, inner: variantA(5)}
+	five := *ref
+	*inner = variantB(7)
+	*ref = 10
+	require(t, before.inner.a == 1 && after.inner.a == 1 && zero == 0 && activeOuter == 30 && five == 5 && active(p.inner) == 7 && ref == &p.inner.a, "nested field locations must survive whole-parent replacement")
+	current := &p
+	current = &parent{tag: 1, inner: variantA(8)}
+	require(t, *ref == 10 && current.inner.a == 8, "pointer rebinding must not retarget an existing field pointer")
+	observe(t, "nested_parent_replacement_and_pointer_rebinding", map[string]any{"copies_before_after": []int{before.inner.a, after.inner.a}, "parent_replacement_zero": zero, "outer_active_unchanged": activeOuter, "parent_reactivated": five, "inner_B_after_old_write": active(p.inner), "old_allocation_after_rebind": *ref, "new_allocation": current.inner.a})
+}
+
+func TestArrayStorageAndSliceBackingRelocation(t *testing.T) {
+	a := [1]inline{variantA(1)}
+	p := borrowA(&a[0])
+	copy := a
+	a = [1]inline{variantA(4)}
+	four := *p
+	*p = 8
+	s := make([]inline, 1, 1)
+	s[0] = variantA(1)
+	old := borrowA(&s[0])
+	s = append(s, variantA(2)) // len exceeds the known capacity: new backing storage.
+	s[0] = variantA(5)
+	*old = 9
+	require(t, four == 4 && a[0].a == 8 && copy[0].a == 1 && s[0].a == 5 && *old == 9 && old != &s[0].a, "array assignment and slice reallocation have different storage identities")
+	observe(t, "array_assignment_vs_slice_relocation", map[string]any{"array_slot_after_assignment": four, "array_copy": copy[0].a, "new_slice_backing": s[0].a, "old_slice_backing": *old, "old_reference_retargeted": old == &s[0].a})
+}
+
+func TestExplicitRecursiveIndirectionIsShallow(t *testing.T) {
+	// These are ordinary Go types, not recursive Goxide enum declarations.
+	type sliceTree struct {
+		value    int
+		children []sliceTree
+	}
+	type pointerTree struct {
+		value int
+		next  *pointerTree
+	}
+	tree := sliceTree{children: []sliceTree{{value: 1}}}
+	copy := tree
+	p := &tree.children[0].value
+	*p = 3
+	linked := pointerTree{next: &pointerTree{value: 4}}
+	linkedCopy := linked
+	linked.next.value = 5
+	tree.children = []sliceTree{{value: 8}}
+	require(t, copy.children[0].value == 3 && linkedCopy.next.value == 5 && *p == 3 && tree.children[0].value == 8, "explicit indirection retains normal Go shallow sharing and old backing storage")
+	observe(t, "explicit_recursive_indirection_shallow_copy", map[string]any{"slice_child_copy": copy.children[0].value, "pointer_child_copy": linkedCopy.next.value, "old_child_after_replacement": *p, "new_child": tree.children[0].value, "goxide_recursive_frontend_verified": false})
+}
+
+type box struct{ value int }
+type valueCase struct{ value int }
+
+func TestPointerBoxCopiesShareAndReplacementDetaches(t *testing.T) {
+	e := &box{1}
+	before := e
+	p := &e.value
+	after := e
+	*p = 2
+	shared := before.value
+	e = &box{5}
+	*p = 9
+	require(t, shared == 2 && before == after && before.value == 9 && e.value == 5, "pointer-case copies must expose the sharing counterexample")
+	observe(t, "pointer_box_copy_and_replacement", map[string]any{"copy_before_after_borrow_write": shared, "old_reference_after_replacement": *p, "current_payload": e.value, "copies_still_share_old_object": before == after})
+}
+
+func lazyBorrow(e *any) *int {
+	switch v := (*e).(type) {
+	case valueCase:
+		p := &box{v.value}
+		*e = p
+		return &p.value
+	case *box:
+		return &v.value
+	}
+	panic("wrong variant")
+}
+func boxedValue(e any) int {
+	switch v := e.(type) {
+	case valueCase:
+		return v.value
+	case *box:
+		return v.value
+	}
+	panic("wrong variant")
+}
+
+func TestLazyBoxChangesCopySemanticsAfterBorrow(t *testing.T) {
+	var e any = valueCase{1}
+	before := e
+	p := lazyBorrow(&e)
+	after := e
+	*p = 2
+	beforeValue, afterValue := boxedValue(before), boxedValue(after)
+	e = valueCase{5}
+	*p = 9
+	require(t, beforeValue == 1 && afterValue == 2 && boxedValue(e) == 5 && boxedValue(after) == 9, "lazy boxing must expose history-dependent copy behavior")
+	observe(t, "lazy_box_copy_before_and_after_borrow", map[string]any{"copy_before": beforeValue, "copy_after": afterValue, "current_after_replacement": boxedValue(e), "old_reference": *p})
+}
+
+func cloneBox(b *box) *box { return &box{b.value} }
+
+func TestCopyHookMissesNativeAggregateAndContainerCopies(t *testing.T) {
+	e := &box{1}
+	p := &e.value
+	instrumented := cloneBox(e)
+	native := e
+	holder := struct{ value *box }{e}
+	holderCopy := holder
+	container := []*box{e}
+	*p = 7
+	require(t, instrumented.value == 1 && native.value == 7 && holderCopy.value.value == 7 && container[0].value == 7, "an explicit clone hook must not be mistaken for a Go assignment hook")
+	observe(t, "copy_hook_uncovered_copy_boundaries", map[string]any{"instrumented_copy": instrumented.value, "native_copy": native.value, "aggregate_copy": holderCopy.value.value, "container_copy": container[0].value})
+}
+
+func TestLateCopyOnWriteCannotRecoverEarlierSnapshot(t *testing.T) {
+	e := &box{1}
+	p := &e.value
+	copy := e
+	*p = 6 // A retained raw pointer bypasses any later access hook.
+	detached := cloneBox(copy)
+	require(t, detached.value == 6, "late detachment cannot reconstruct the value at copy time")
+	observe(t, "late_copy_on_write_after_raw_pointer_write", map[string]any{"value_at_copy": 1, "value_at_late_detach": detached.value, "earlier_snapshot_preserved": false})
+}
+
+func TestFalseGuardSnapshotAndLiveDispatchDiffer(t *testing.T) {
+	choose := func(snapshot bool) string {
+		e := variantA(1)
+		savedTag := e.tag
+		ref := borrowA(&e)
+		guard := func() bool { e = variantB(20); return false }
+		if guard() {
+			panic("guard should fail")
+		}
+		tag := e.tag
+		if snapshot {
+			tag = savedTag
+		}
+		if tag == 1 {
+			return fmt.Sprintf("A:%d:old=%d", e.a, *ref)
+		}
+		return fmt.Sprintf("B:%d:old=%d", e.b, *ref)
+	}
+	snapshot, live := choose(true), choose(false)
+	require(t, snapshot == "A:0:old=0" && live == "B:20:old=0", "the two explicit dispatch policies must have distinct observations")
+	observe(t, "false_guard_snapshot_vs_live_dispatch", map[string]any{"snapshot": snapshot, "live": live, "language_policy_selected": false})
+}
+
+func TestInactiveSlotsAffectRawGoEqualityAndMapKeys(t *testing.T) {
+	e := variantA(1)
+	p := borrowA(&e)
+	e = variantB(20)
+	*p = 9
+	fresh := variantB(20)
+	keys := map[inline]int{e: 1, fresh: 2}
+	require(t, active(e) == active(fresh) && e != fresh && len(keys) == 2, "raw Go comparison observes inactive fields")
+	observe(t, "inactive_storage_raw_go_equality", map[string]any{"same_active_variant_payload": true, "raw_go_equal": e == fresh, "raw_go_map_entries": len(keys), "existing_goxide_equality_bug_claimed": false})
+}
+
+func TestGenerationCheckedProxyDoesNotConstrainRawPointer(t *testing.T) {
+	type managed struct {
+		generation uint64
+		value      *int
+	}
+	first, next := 1, 5
+	owner := managed{value: &first}
+	savedGeneration := owner.generation
+	raw := owner.value
+	readChecked := func() int {
+		if savedGeneration != owner.generation {
+			panic("stale reference")
+		}
+		return *owner.value
+	}
+	owner.generation++
+	owner.value = &next
+	trapped := false
+	func() {
+		defer func() { trapped = recover() != nil }()
+		_ = readChecked()
+	}()
+	*raw = 9
+	require(t, trapped && *owner.value == 5 && *raw == 9, "a proxy's generation check cannot revoke an ordinary Go pointer")
+	observe(t, "generation_proxy_vs_raw_pointer", map[string]any{"checked_reference_traps": trapped, "raw_pointer_still_writes_old": *raw, "current_payload": *owner.value})
+}
+
+func TestBorrowPayloadCellDiffersFromCopiedPointee(t *testing.T) {
+	x, y := 2, 8
+	payload := struct{ pointer *int }{&x}
+	cell := &payload.pointer // **int: reference to the payload's pointer slot.
+	copiedPointee := *payload.pointer
+	*cell = &y
+	require(t, **cell == 8 && copiedPointee == 2 && x == 2, "borrowing a pointer payload slot is distinct from reading its pointee")
+	observe(t, "payload_cell_borrow_vs_pointee_value", map[string]any{"borrowed_cell_current_pointee": **cell, "copied_pointee": copiedPointee, "original_referent": x})
+}

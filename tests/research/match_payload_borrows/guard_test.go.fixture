@@ -1,0 +1,68 @@
+package representationprobe
+
+import "testing"
+
+func TestLiveGuardDispatchCanPassAnEarlierExhaustiveArm(t *testing.T) {
+	choose := func(snapshot bool) string {
+		e := variantA(1)
+		savedTag := e.tag
+		tag := func() uint8 {
+			if snapshot {
+				return savedTag
+			}
+			return e.tag
+		}
+		// These three arms are examined once, in source order. Both variants
+		// have an unguarded arm; re-reading the tag alone changes that guarantee.
+		if tag() == 2 {
+			return "B-arm"
+		}
+		if tag() == 1 {
+			p := borrowA(&e)
+			guard := func() bool { e = variantB(20); return false }
+			if guard() {
+				return "guarded-A"
+			}
+			_ = p
+		}
+		if tag() == 1 {
+			return "A-fallback"
+		}
+		return "no-arm"
+	}
+	snapshot, live := choose(true), choose(false)
+	require(t, snapshot == "A-fallback" && live == "no-arm", "live tag dispatch can pass the new variant's earlier arm")
+	observe(t, "live_tag_source_order_exhaustiveness", map[string]any{"snapshot": snapshot, "live": live, "both_variants_have_unguarded_arm": true, "restart_dispatch_tested": false})
+}
+
+func TestTrueGuardCanReplaceVariantBeforeBorrowingBody(t *testing.T) {
+	e := variantA(1)
+	p := borrowA(&e)
+	guard := func() bool { e = variantB(20); return true }
+	ran := false
+	if guard() {
+		ran = true
+		*p = 9
+	}
+	require(t, ran && active(e) == 20 && *p == 9, "selected A body still writes the old A slot after a true guard replaces the value")
+	observe(t, "true_guard_replaces_variant_before_body", map[string]any{"A_body_ran": ran, "active_B": active(e), "inactive_A": *p})
+}
+
+func TestCopyBindingAfterBorrowGuardHasIndependentSnapshotChoice(t *testing.T) {
+	choose := func(copySnapshot bool) int {
+		e := variantA(1)
+		savedValue := e
+		p := borrowA(&e)
+		guard := func() bool { *p = 5; return false }
+		if guard() {
+			panic("guard should fail")
+		}
+		if copySnapshot {
+			return savedValue.a
+		}
+		return e.a
+	}
+	snapshot, current := choose(true), choose(false)
+	require(t, snapshot == 1 && current == 5, "copy-binding policy differs even when the tag never changes")
+	observe(t, "copy_binding_after_borrowing_guard", map[string]any{"entry_value_snapshot": snapshot, "copy_current_slot_at_arm": current, "tag_unchanged": true})
+}

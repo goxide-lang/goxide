@@ -9,6 +9,9 @@ import (
     ops "example.org/go-result/ops"
 )
 
+// go_result! / go_result_keep! are compiler builtins, with no macro import.
+// Result shares the github.com/goxide-lang/std/sum type identity.
+// The ops import is only needed for the user-defined parse_result! wrapper.
 type ReadFailure = struct { Value int; Err error }
 
 func parse(text string) Result[int,error] {
@@ -16,11 +19,13 @@ func parse(text string) Result[int,error] {
 }
 
 func next(text string) Result[int,error] {
+    // A failed parse discards its int explicitly; ? propagates the original error.
     value := go_result!(strconv.Atoi(text))?
     return Result[int,error]::Ok(value + 1)
 }
 
 func read(reader io.Reader, buffer []byte) Result[int,ReadFailure] {
+    // A Reader can return both n > 0 and an error; keep preserves both fields.
     return go_result_keep!(reader.Read(buffer))
 }
 

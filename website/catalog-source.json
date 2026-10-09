@@ -41,7 +41,7 @@
     {
       "id": "go_result",
       "title": "Go 返回值适配",
-      "description": "按原生签名推导 T/E；保值版保留部分成功。",
+      "description": "无需 import 的编译器 builtin；普通版适配错误，keep 版保留部分值。",
       "expectedStdout": "next: 42\nparse error: true\npartial: 3 abc true\n"
     },
     {
@@ -205,9 +205,9 @@
       ],
       "status": "verified",
       "support": "browser",
-      "summary": "此条目仅指已验证的 go_result! / go_result_keep! 子集，不代表整篇传播 RFC 完成。",
-      "usage": "Atoi 按静态签名推导 Result；Reader 在 n>0 且 EOF 时，保值版同时留下 Value 和原 Err。",
-      "limitation": "E 必须实现 error 且可为 nil。接口中的 typed nil 仍是 Err；保值载荷不是 Clone，多成功返回值须先组合。",
+      "summary": "go_result! / go_result_keep! 是编译器保留 builtin，无须 import 宏，不是 std 导出宏。编译器生成适配与载荷检查，std/sum 提供共享 Result 类型和构造器。",
+      "usage": "原生 Go 包照常 import；显式适配只求值原调用一次。Atoi 失败时普通版丢弃 int；Reader 返回 n>0 与 EOF 时，keep 版保留 Value 和原 Err。? 沿用可赋值优先、精确一步 From 的错误传播，不自动丢弃 partial value。",
+      "limitation": "只接收一个返回 E 或 (T,E) 的调用；兼容 (T,call) 形式要求两个结果且 T 完全相同。E 须实现 error 且可为 nil，按原静态 E 判断：nil 指针可成功，接口内 typed nil 仍失败。T/E 须在包作用域可命名；保值不是 Clone，多成功值先组合。普通 .go 不支持这些宏或 ?；没有 std.go_result! 限定入口。",
       "examples": [
         "go_result"
       ],

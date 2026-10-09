@@ -1,0 +1,199 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CGO_ENABLED: '1'
+  GOTOOLCHAIN: local
+  GOMAXPROCS: '4'
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      full: ${{ steps.paths.outputs.full }}
+      native: ${{ steps.paths.outputs.native }}
+      web: ${{ steps.paths.outputs.web }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select checks without skipping the workflow
+        id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          FULL: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          full = os.environ['FULL'] == 'true'
+          base = os.environ['BASE_SHA']
+          has_base = bool(base) and set(base) != {'0'}
+          if has_base:
+              separator = '...' if os.environ['EVENT_NAME'] == 'pull_request' else '..'
+              changed = subprocess.check_output([
+                  'git', 'diff', '--name-only', '-z',
+                  base + separator + os.environ['HEAD_SHA'],
+              ]).decode().split('\0')
+          else:
+              changed = []
+          ci = any(p.startswith(('.github/', 'scripts/ci_')) for p in changed)
+          native = full or ci or any(
+              p.endswith('.go') or p in ('go.mod', 'go.sum') or
+              p.startswith(('examples/', 'tests/acceptance/')) for p in changed)
+          web = not has_base or ci or any(
+              p in ('go.mod', 'go.sum') or p.startswith((
+                  'website/', 'cmd/', 'internal/', 'runtime/', 'formatting/',
+                  'examples/', 'docs/rfcs/',
+              )) for p in changed)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              for name, value in [('full', full), ('native', native), ('web', web)]:
+                  print(f'{name}={str(value).lower()}', file=out)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              print(f'Mode: {"full" if full else "draft smoke"}; native={native}; web={web}.', file=out)
+              print('Browser QA is a tracked gap: see docs/ci.md.', file=out)
+          PY
+
+  checks:
+    needs: scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: needs.scope.outputs.native == 'true'
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Prepare the pinned module graph
+        if: needs.scope.outputs.native == 'true'
+        run: |
+          go version
+          gcc --version
+          echo "GO_BIN=$(command -v go)" >> "$GITHUB_ENV"
+          module_prep_dir="$(mktemp -d "$RUNNER_TEMP/modules.XXXXXX")"
+          cp go.mod go.sum "$module_prep_dir/"
+          GOWORK=off GOFLAGS=-mod=readonly go mod download -modfile="$module_prep_dir/go.mod" all
+          GOWORK=off GOFLAGS=-mod=readonly go mod verify -modfile="$module_prep_dir/go.mod"
+          cmp go.mod "$module_prep_dir/go.mod"
+          cmp go.sum "$module_prep_dir/go.sum"
+          echo 'GOPROXY=off' >> "$GITHUB_ENV"
+      - name: Review artifact regression checks
+        run: python3 -B scripts/check_review_artifacts_test.py
+      - name: Draft documentation gate
+        if: needs.scope.outputs.full != 'true'
+        run: python3 -B scripts/check_design.py --docs-only
+      - name: Draft compiler and CLI smoke
+        if: needs.scope.outputs.full != 'true' && needs.scope.outputs.native == 'true'
+        run: >-
+          python3 -B scripts/ci_go_test.py draft-smoke
+          -mod=readonly -count=1 -vet=off -timeout=10m
+          -run '^(TestPrintFrontend|TestFragmentCategoriesRejectTypeSlots|TestCLIShortSchema|TestCLIProcessContract|TestCheckPackageFileScopesAndDeclarations|TestASTOracleControls|TestASTOracleMalformedInput|TestValidationRunnerFailurePaths)$'
+          ./internal/frontend ./internal/macros ./cmd/goxide ./internal/typecheck ./website/validation
+      - name: Full native race gate
+        if: needs.scope.outputs.full == 'true'
+        run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -vet=off -count=1 -timeout=30m ./...
+      - name: Full native vet gate
+        if: needs.scope.outputs.full == 'true'
+        run: env -u GOWORK go vet -mod=readonly ./...
+      - name: Full design gate
+        if: needs.scope.outputs.full == 'true'
+        run: python3 -B scripts/check_design.py
+      - name: Ensure checks did not change tracked inputs
+        run: git diff --exit-code
+
+  web:
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Prepare the pinned module graph
+        run: |
+          go version
+          gcc --version
+          echo "GO_BIN=$(command -v go)" >> "$GITHUB_ENV"
+          module_prep_dir="$(mktemp -d "$RUNNER_TEMP/modules.XXXXXX")"
+          cp go.mod go.sum "$module_prep_dir/"
+          GOWORK=off GOFLAGS=-mod=readonly go mod download -modfile="$module_prep_dir/go.mod" all
+          GOWORK=off GOFLAGS=-mod=readonly go mod verify -modfile="$module_prep_dir/go.mod"
+          cmp go.mod "$module_prep_dir/go.mod"
+          cmp go.sum "$module_prep_dir/go.sum"
+          echo 'GOPROXY=off' >> "$GITHUB_ENV"
+      - name: Website build identity regressions
+        run: python3 -B website/build_support_test.py
+      - name: Worker observation protocol regressions
+        run: node --test website/validation/worker-observations_test.mjs
+      - name: Build matching CLI examples, exports and WASM offline
+        run: python3 -B website/build.py
+      - name: Embedded HTTP server race gate
+        run: python3 -B scripts/ci_go_test.py web-race -mod=readonly -race -vet=off -tags=goxideweb -count=1 -timeout=10m ./cmd/goxide-web
+      - name: Embedded HTTP server vet gate
+        run: go vet -mod=readonly -tags=goxideweb ./cmd/goxide-web
+      - name: Ensure build did not change tracked inputs
+        run: git diff --exit-code
+
+  summary:
+    name: CI summary
+    if: always()
+    needs: [scope, checks, web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Report required results
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          CHECKS: ${{ needs.checks.result }}
+          WEB: ${{ needs.web.result }}
+          WEB_REQUIRED: ${{ needs.scope.outputs.web }}
+          FULL: ${{ needs.scope.outputs.full }}
+        run: |
+          {
+            echo '| Layer | Result |'
+            echo '| --- | --- |'
+            echo "| Scope | $SCOPE |"
+            echo "| Native / design (full=$FULL) | $CHECKS |"
+            echo "| WASM build / HTTP | $WEB |"
+            echo '| Browser UI / real Worker QA | Not run; tracked gap in docs/ci.md |'
+          } >> "$GITHUB_STEP_SUMMARY"
+          test "$SCOPE" = success
+          test "$CHECKS" = success
+          if [ "$WEB_REQUIRED" = true ]; then
+            test "$WEB" = success
+          else
+            test "$WEB" = skipped
+          fi

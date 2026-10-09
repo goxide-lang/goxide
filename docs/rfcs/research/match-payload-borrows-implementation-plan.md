@@ -1,5 +1,14 @@
 # Match payload 借用：实施准备与验收计划
 
+> **2026-10-09 pre-MVP 决定更新**：用户已明确“pre-mvp先让match enum 能用。不做检查。”
+> 实施采用固定类型的独立原位槽，保持普通 enum 浅值复制；交付显式 `ref` / `ref mut`
+> 及共用 lowering 的基础 `match &e` / `match &mut e` 自动绑定。保留已有类型正确性与
+> 只读/可写权限检查，不新增 lifetime、escape、跨 variant 失效或借用风险检查；不加
+> generation、受检引用 wrapper 或运行时 borrow 机制。保存、返回、捕获不被禁止，
+> 跨 owner 整值替换使用旧 payload 引用不受保护，不声称 Rust 独占或借用安全。
+> 下文“未批准”及长期候选推荐记录此前设计讨论，不再构成 pre-MVP 前置或重新确认要求；
+> 代际受检方案仅为后续候选。设计和纯 Go 探针本身仍不代表生产实现完成。
+
 状态：**研究提案，未实现，未运行本文新增验收案例**。代码阅读基线为
 `906c10f302f651bb25a5630dda0489c5cab38a3a`，准备分支为
 `feat/match-payload-borrows`。本文记录实现面和未来验收要求，不声明目前编译器能够编译下面的新语法。

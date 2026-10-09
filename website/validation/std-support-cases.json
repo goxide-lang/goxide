@@ -1,7 +1,7 @@
 [
   {
-    "id": "std-support-imports-and-hygiene",
-    "source": "package main\nimport (\"fmt\"; f \"github.com/goxide-lang/std/formatting\"; r \"github.com/goxide-lang/std/runtime\")\ntype comparable struct{}\nfunc keep[T r.Comparable](value T) T { return value }\nfunc main(){fmt.Println(f.Int(keep(42)),f.Bool(true));println!(\"std {}\",7)}\n",
+    "id": "std-support-imports",
+    "source": "package main\nimport (\"fmt\"; f \"github.com/goxide-lang/std/formatting\"; r \"github.com/goxide-lang/std/runtime\")\nfunc guarded() (result int) { guard:=r.Assignment[int]{}; defer guard.Catch(&result); guard.Fail(42); return 0 }\nfunc main(){fmt.Println(f.Int(guarded()),f.Bool(true));println!(\"std {}\",7)}\n",
     "expectedStdout": "42 true\nstd 7\n"
   }
 ]

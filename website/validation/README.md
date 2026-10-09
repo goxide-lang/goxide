@@ -63,8 +63,8 @@ Runtime-invalid payload cases should catch the expected validation panic inside
 the native program and assert its exact diagnostic before printing the expected
 stdout. Transpilation parity alone does not prove runtime payload validation.
 `--cases website/validation/std-support-cases.json` checks direct imports of the
-public std formatting/runtime packages, a shadowed `comparable` binding, and the
-generated std formatting call on the native CLI, Node GoWASM, and HTTP Worker.
+public std formatting/runtime packages, an assignment guard, and the generated
+std formatting call on the native CLI, Node GoWASM, and HTTP Worker.
 This gate does not claim full browser UI QA, historical AST equivalence, native
 race/vet, or design-gate coverage. Run applicable compiler checks separately.
 `summary.json` records success or failure and the layers actually run; raw

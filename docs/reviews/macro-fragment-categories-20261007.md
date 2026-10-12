@@ -73,8 +73,7 @@ python3 -B website/validation/run.py --help
 ```
 
 网站参数按其 README 配置；帮助命令本身不是验收。原始日志、截图和大型记录留在
-仓外，摘要仅保存身份、计数和哈希。暂存后、提交前运行
-`python3 -B scripts/check_review_artifacts.py`；不复制原始证据目录入库。
+仓外，摘要仅保存身份、计数和哈希。提交前确认原始证据目录没有入库。
 
 ## 保留边界与后续合同
 

@@ -6,17 +6,18 @@
 
 | 触发 / 层 | 检查范围 |
 | --- | --- |
-| Draft PR | 文档与 review 产物合同；源码相关变更跑指定编译器、CLI、AST/验证器 smoke |
-| Ready PR、push main、手动触发 | 一次完整全树 race、独立 vet、完整设计门禁；不再先跑 Draft smoke/文档门禁 |
+| 所有 PR、push main、手动触发 | 全树 race、独立 vet、Markdown 链接/锚点/围栏门禁 |
 | 网站及依赖相关变更 | 网站工具回归、离线 CLI 示例/导出数据/WASM 构建、带 `goxideweb` 标签的 HTTP race/vet |
 | CI summary | 无路径过滤，始终汇总；失败、取消或应运行却跳过都不能报告成功 |
 
-PR 在 `opened`、`synchronize`、`reopened`、`ready_for_review` 和
-`converted_to_draft` 时运行；同一 PR 的新运行取消旧运行。普通 feature push 不另触发，
-避免与 PR 双跑。手动触发是完整门禁；首次 bootstrap 时可能要工作流先进入默认分支，
-本次不以自动合并绕过。新 CI Draft PR 的 PR 事件可先验证 Draft 与网站层；完整原生门禁
-仍需 ready/main/manual 事件。读取精确 head 对应 run 的状态/汇总，失败才读取对应 job 日志。
-最终 SHA 已绿后停止重复本地或远端验证；本地仅做实现所需的定向检查。
+PR 在 `opened`、`synchronize`、`reopened` 和 `ready_for_review` 时运行；同一 PR
+的新运行取消旧运行。普通 feature push 不另触发，避免与 PR 双跑。手动触发是完整门禁。
+读取精确 head 对应 run 的状态/汇总，失败才读取对应 job 日志。最终 SHA 已绿后停止
+重复本地或远端验证；本地仅做实现所需的定向检查。
+
+网站选择包含 `website/`、`cmd/`、`internal/`、`go.mod/go.sum`、`examples/`、
+`docs/rfcs/` 和 CI 本身。生成产物保持被忽略，不上传或部署。编译器固定对象/生产
+源码摘要不匹配必须失败，由功能改动同步审阅对应 pin，不能在 CI 自动重写摘要使之通过。
 
 网站选择包含 `website/`、`cmd/`、`internal/`、`runtime/`、`formatting/`、
 `go.mod/go.sum`、`examples/`、`docs/rfcs/` 和 CI 本身。不只看页面目录。
@@ -26,7 +27,7 @@ race/vet，不重复全树已经覆盖的 `internal/typecheck`。生成产物保
 自动重写摘要使之通过。
 
 Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译器；web job显式安装Node 22，并用website/package-lock.json执行npm ci，供Preact/Vite/Monaco构建与worker检查使用。
-完整 Git 历史用于 catalog 与 review 产物合同。缓存按锁文件选取；先用仓外清单副本
+完整 Git 历史用于 catalog 快照。缓存按锁文件选取；先用仓外清单副本
 预热完整固定模块图并 `verify`，逐字节确认 `go.mod/go.sum` 未变，然后 `GOPROXY=off`。
 缓存仅加速，冷 cache、离线、校验和、权限/安全夹具仍由原测试自行构造，不改夹具环境。
 全树测试移除外层 `GOWORK` 以保留 workspace 发现合同；其余脚本保留自身隔离规则。

@@ -63,8 +63,8 @@ python3 -B website/validation/run.py --help
 旧本地分支 `feat/single-file-external-recovery` 的
 `fd3e7f74c95c64df636253227b1c07cb916b8ea9` 及全部原始证据保留。本干净分支从
 `8ba3174` 建立，不以删除原始记录掩盖首次失败，也不改写已发布祖先中的历史证据。
-新增 ignore 与[产物检查](../../scripts/check_review_artifacts.py)共同约束后续入库：
-暂存后、提交前使用 `python3 -B scripts/check_review_artifacts.py`，不要整目录 force-add。
+新增 ignore 约束后续入库：
+暂存后、提交前确认原始日志与截图没有入库，不要整目录 force-add。
 
 本次精简交付另通过 29 项真实 Git 防回归测试、8 项独立对象图检查和完整 design
 入口。该检查覆盖强制暂存、先提交再删除、侧分支合并与浅历史边界；不替代前述

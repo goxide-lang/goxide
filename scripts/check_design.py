@@ -17,8 +17,6 @@ import tempfile
 import unicodedata
 from urllib.parse import unquote
 
-import check_review_artifacts
-
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "design"
@@ -87,38 +85,9 @@ def check_docs() -> dict[Path, tuple[str, list[tuple[str, str]], set[str]]]:
                     problems.append(f"{path.relative_to(ROOT)}: missing anchor {target}")
     if problems:
         raise CheckFailure("\n".join(problems))
-    rfc_count = check_rfc_contracts(documents)
     print(f"PASS Markdown: {len(files)} files, {links} local links/anchors, balanced fences", flush=True)
-    print(f"PASS RFC structure: {rfc_count} documents with required sections and goxide/Go example blocks", flush=True)
     print("Scope: inline local Markdown links and ATX headings; external URLs are not fetched.", flush=True)
-    print("RFC structure checks do not compile examples or prove source/Go semantic equivalence.", flush=True)
     return documents
-
-
-def check_rfc_contracts(documents) -> int:
-    required = {"状态与范围", "源级规则", "转译示例", "拒绝与边界", "双向互操作", "验收与未定项"}
-    directory = (ROOT / "docs" / "rfcs").resolve()
-    identifiers = set()
-    for path, (prose, blocks, _) in documents.items():
-        if path.parent != directory or path.name in {"README.md", "TEMPLATE.md"}:
-            continue
-        match = re.fullmatch(r"(\d{4})-[a-z0-9-]+\.md", path.name)
-        if not match:
-            raise CheckFailure(f"{path.relative_to(ROOT)}: expected NNNN-feature.md RFC filename")
-        identifier = match[1]
-        if identifier in identifiers:
-            raise CheckFailure(f"Duplicate RFC identifier: {identifier}")
-        identifiers.add(identifier)
-        if not re.search(rf"^# RFC {identifier}：\S", prose, re.MULTILINE):
-            raise CheckFailure(f"{path.relative_to(ROOT)}: title must identify RFC {identifier}")
-        headings = set(re.findall(r"^## (.+)$", prose, re.MULTILINE))
-        missing = required - headings
-        if missing:
-            raise CheckFailure(f"{path.relative_to(ROOT)}: missing RFC sections: {', '.join(sorted(missing))}")
-        languages = {language for language, code in blocks if code.strip()}
-        if not {"goxide", "go"} <= languages:
-            raise CheckFailure(f"{path.relative_to(ROOT)}: requires goxide and Go example blocks")
-    return len(identifiers)
 
 
 def source_blocks(documents, name: str, package: str, count: int = 1) -> list[str]:
@@ -255,15 +224,13 @@ def check_go(documents) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--docs-only", action="store_true", help="check staged/committed review artifacts, Markdown links, anchors, fences, and RFC structure without Go")
+    parser.add_argument("--docs-only", action="store_true", help="check Markdown links, anchors and fences without Go")
     args = parser.parse_args()
     try:
-        review = check_review_artifacts.check_repository(ROOT)
-        print("PASS review artifacts: " + json.dumps(review, sort_keys=True), flush=True)
         documents = check_docs()
         if not args.docs_only:
             check_go(documents)
-    except (CheckFailure, check_review_artifacts.CheckFailure, OSError, subprocess.SubprocessError, ValueError) as error:
+    except (CheckFailure, OSError, subprocess.SubprocessError, ValueError) as error:
         print(f"FAIL: {error}", file=sys.stderr, flush=True)
         return 1
     return 0

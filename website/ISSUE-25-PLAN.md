@@ -1,55 +1,37 @@
-# #25：网站工作区的最小实施方案
+# #25：React + Vite + Monaco 网站工作区方案
 
-状态：方案先行；本提交只有本文，无 UI 实现。关联 [#25](https://github.com/goxide-lang/goxide/issues/25)，依赖 [#23](https://github.com/goxide-lang/goxide/issues/23)；运行入口属于未决的 [#26](https://github.com/goxide-lang/goxide/issues/26)。起点为 main `cf56a52c22acff7a1ab353f86515745b542d6abd`。先建立 Draft PR 并报告链接，再在同一 PR 推进无争议 UI；不合并、部署、release 或修改权限/凭据。
+关联 [#25](https://github.com/goxide-lang/goxide/issues/25)、[Draft PR #28](https://github.com/goxide-lang/goxide/pull/28)。起点 main `cf56a52c22acff7a1ab353f86515745b542d6abd`。本方案按用户最新选择替代原生 textarea 路线；先更新 issue / Draft 方案，再实现同一 PR。不合并、部署、release 或修改凭据。
 
-## 栈与范围
+## 当前栈与技术选择
 
-源码在 `website/`；`goxide-lang.github.io` 只放部署产物。本次已读环境启动说明、根/网站/验证/托管 README、T0 与 gap 入口、RFC 0025/0026 和上述三个 issue。适用源码树未发现 AGENTS.md 或仓内 SKILL.md；这次是已有仓库的短方案提交，不套用建站/托管工作流。
+原网站为静态 HTML/CSS/原生 JS，已有同包多文件、生成 Go 与依赖源码浏览、Worker WASM 转译及 revision/实例防迟到响应。源码仍在本仓 `website/`，`goxide-lang.github.io` 仅为部署产物仓。已读启动说明、相关 README、RFC0025/0026、#25/#23/#26；适用源码树没有 AGENTS.md / 仓内 SKILL.md。
 
-当前是静态 HTML/CSS/原生 JS。`static/app.js` 已有 textarea、源码/结果 tabs、同包多文件增删、readonly 依赖源码、一个 Worker、去抖与 revision/实例校验。`package.json` 仅固定 Playwright 1.58.2 为验证依赖。复用原生 textarea 和编译调度，提取小函数/组件；暂无引入 Monaco、CodeMirror、React、路由库或打包器的必要。若实际交互证明原生编辑器不够，先说明具体缺口、依赖成本再调整方案。不自建 IDE、通用框架、插件系统或虚拟文件系统。
+用户选择 React + Vite + Monaco Editor：面向桌面编程受众，保留熟悉的编辑快捷键与模型能力。React 负责 tree/tabs/布局与页面，React Router 负责客户端导航，Vite 负责模块、按需加载与 worker 打包，Monaco 负责编辑、逐文件 models、view state、undo 和 diagnostics markers。只接 Monaco 必要的编辑功能和 Go 基础着色，不引入整套 VSCode workbench、扩展宿主或未经实现的 Go/Goxide 语言服务。基础着色不等于语义补全。依赖固定在 npm lock，运行时资源同源，无 CDN。
 
-本片 UI 包括统一 tree + tabs + editor（源码、结果、依赖和工程快照都可复用），可收起 tree、可编辑集合的 tree 与 tabs 各有新建按钮、四种双编辑器布局、多页路由、RFC 左小列表右简介/设计说明/代码示例，以及两处文案。首页泛型限制按 `docs/static-protocols.md` 收窄：已有单关联协议约束的用户泛型函数；泛型协议/impl、多协议组合等仍有限。根 README 删除“十二组”的手工计数，说明真实单文件/同包示例，以当前 manifest 为准。文案与 UI 在 Draft PR 建立后再改。
+原生 textarea UI 不保留，也不引入 Vue / CodeMirror / 双套兼容 wrapper。已有文件模型、命名/数量/大小限制和 WASM 调度可复用；编辑器选择/撤销/光标交给 Monaco，不另造 IDE 状态系统。编辑器模块只在打开文件视图时加载，普通介绍页不下载 Monaco。
 
-完整项目示例是 #25 的剩余验收，等 #23 schema 定稿才改。已有 format 2 / roots 快照不是新合同；不自创 TOML schema，不把只读配置或跨包快照送进同包 WASM 输入。#26 未决，不增加远程 run、localhost 执行服务、上传或分享源码。用于 Playwright 的临时 loopback 静态预览仅为测试，不是产品运行入口。
+## 最小组件与行为
 
-## 两个小组件与编译边界
+| 部分 | 窄接口与责任 |
+| --- | --- |
+| FileView | files、activePath、readonly、select/edit/create/delete；可收起 tree 与 tabs 使用同一文件集合，两处新建按钮共用校验动作；只读集合没有创建/删除能力 |
+| MonacoPane | 当前 file、readonly、markers、change；按文件 URI 管理 models，保存/恢复 editor view state，删除/重置/卸载 dispose；结果/依赖/快照可选择复制，不能写回源码 |
+| 双面板 | source/result FileView 和 source/result/horizontal/vertical 布局；不复制文件状态、不因切布局编译；源与结果按 path 独立选择 |
 
-接口为拟实施的原生 JS 函数边界，名称可按实际代码简化；不增加公共组件协议。
+可编辑仍仅为一个用户包，普通 `.gox` 名称、最多16文件、总UTF-8 32KiB与现有编译合同不变。WASM 在独立 Worker 中只转译，450ms去抖、10秒编译/30秒加载超时、停止后重建、摘要校验及迟到响应丢弃继续保留。编辑/失败/中断清除旧结果与复制能力；诊断文本保留，并把有可靠 path/line/column 的位置映射为源 model markers，不猜测无映射诊断。
 
-| 组件 | 最小输入与状态 | 行为 |
-| --- | --- | --- |
-| FileView | `files: [{path, source}]`、`activePath`、集合级 `readonly`、`treeCollapsed`；本组件按集合单独挂载 | tree 与 tabs 从同一数组渲染，选择同一 activePath；textarea 显示当前文件；两处新建入口调用同一新增动作；readonly 隐藏新增/删除入口，textarea 设置 readOnly，修改动作也拒绝写入 |
-| DualEditor | source/result 两个 FileView、`layout: source / result / horizontal / vertical` | 仅源码、仅结果、左右、上下；布局只决定可见性和排版，不复制文件状态或触发编译；结果始终 readonly |
+## 路由与内容
 
-FileView 仅需选择、编辑、新建、删除回调。文件 path 在集合内是稳定身份；依赖以包分组并显示已有 provenance。不引入随机 ID、事件总线或独立 store。共享一个新建文件名入口/校验逻辑，沿用当前普通 `.gox` 名称、重复文件名、最多 16 文件和 32 KiB 总量限制。只读集合包括生成结果、依赖、项目配置和 CLI 快照；可编辑集合仍仅为同一个用户包。
+采用 BrowserRouter 客户端路由：`/` 介绍、`/rfc.html?feature=<catalog id>`、`/playground.html?example=<id>`、`/local.html`。实体 HTML 仅由同一个 Vite 页面壳生成，供 GitHub Pages 直接打开/刷新；站内通过 Link / History 切换，不整页刷新。Playground 状态保存在页面顶层，离开再返回仍保留草稿与文件选择；显式选其他示例/重置可以重置该示例。不额外做草稿持久化、项目序列化或旧hash路由兼容层。
 
-编辑时立即写回当前文件；换文件前保存光标/选择区/滚动位置，用按 path 的小 Map 恢复。tree 与 tabs 始终反映同一选择。源码与结果各自保留选中 path，不能假设一份源码恰好对应一份生成文件；转译成功后保留仍存在的结果 path，否则选择首个。readonly 内容可选择/复制，不能通过编辑或新增动作写回输入。
+托管目标是 `goxide-lang.github.io` 根站，Vite `base: '/'`，不是 `/goxide/` 项目子路径。验证真实根站路径及本地同布局模拟；不改 Pages 配置。404仍为真实独立页；未知 feature/example有可读错误，不静默选择另一条。
 
-继续复用现有 compile/changed/kill、Worker 协议、WASM 与依赖摘要校验。源码改变、失败、中断仍清空旧结果并禁用复制，隐藏结果面板不改变这一规则；迟到响应不复活旧结果。不重写编译器、不扩大浏览器模块加载能力。tree 折叠与四种布局通过明确按钮控制；窄屏左右布局以 CSS 改为上下，保留用户选择，回到宽屏恢复。按钮带可理解的名称、选中/展开状态；Tab 保留导航，折叠/隐藏时将焦点移至可见控件。
+RFC：左侧较窄编号/名称/状态列表，右侧连续简介、设计/用法、边界与代码；共享 readonly FileView，移除主内容 card/accordion，不重造状态来源。完整项目示例等待 [#23](https://github.com/goxide-lang/goxide/issues/23) 的新 schema 定稿，既有配置快照明确为当前合同，不自创字段。两处暂停文案在同一 PR：收窄首页泛型限制，根 README 不手工写死示例数量。[#26](https://github.com/goxide-lang/goxide/issues/26)未决，不实现远程 run、localhost执行服务、上传或分享。
 
-## 多页路由与 RFC
+## 构建与验证
 
-拟用实体 HTML 入口：`index.html`（介绍/边界）、`rfc.html?feature=<catalog id>`、`playground.html?example=<example id>`、`local.html`（本地使用/工程快照）。使用 catalog 的已有 id，RFC 编号在列表显示；不复制第二套状态来源。直接加载或刷新由对应 HTML 提供页面骨架，共享相对 JS/CSS/manifest，根路径和项目子路径都能使用，不依赖服务端 rewrite。
+父任务已协调网站 assets 归本任务：Vite 输出 hashed JS/CSS、Monaco editor worker 与第三方 license；build.py 与发布允许列表、静态模拟器、embed HTTP测试同步处理生成子目录。#23不并行提交 website生成清单；本任务不改其CLI/compiler/schema/根Go依赖文件。
 
-实体入口由构建从同一个 HTML 页面壳生成，URL 决定初始可见 section；不复制四套手写页面内容。站内只切已有 section，不 fetch HTML、不动态挂载框架。少量 URL/History API 处理站内导航、pushState 和 popstate。同一文档中保持一个 Playground 状态/DOM，不因路由重新挂载或重置；切页保存/恢复页滚动，更新标题、当前导航和主内容焦点。RFC/示例参数通过已有 catalog/manifest 校验；相同示例不重置草稿，显式选择其他示例仍遵循当前重置语义。刷新保证回到正确页面；本片不承诺刷新或新标签保留未保存草稿，不增加持久存储/项目序列化机制。缺失页面仍走真实 404；不存在的 feature/example 显示明确未找到状态，不静默选择另一项。
+先完成一个真实多文件编辑→转译例子，再复用到只读依赖/RFC/快照。Playwright在桌面Chromium且 `chromiumSandbox:true` 下检查：tree/tabs双新建、切文件编辑/undo/view state、readonly键盘输入、diagnostics/错误恢复/停止与过期响应、四种布局、客户端前后退草稿不丢、深链接/刷新/未知参数、Monaco按需加载与workers同源，实际根站assets路径。窄尺寸仅做阅读/排版回归，不据用户聊天设备设计两套编辑器。更新相关QA；使用真实WASM/CLI产物对照；定向build/HTTP/CI，不反复全套native。
 
-RFC 页左侧窄列表（编号、名称、状态），右侧连续展示当前项的简介、设计/用法、边界和完整示例。复用 catalog 数据与安全 textContent/textarea 输出。代码文件统一 FileView，只读快照也使用 tabs，不以 card 网格或文件 details/accordion 组织主内容。手机尺寸将列表放上方，保持当前项可见和正常阅读顺序。RFC 链接与“打开 Playground”链接能直接访问、刷新及前后退。
-
-## 文件边界与顺序
-
-1. 本次只提交 `website/ISSUE-25-PLAN.md`，#25 留言归并文案，建立关联 Draft PR 并报告短方案。
-2. Draft PR 后先做 FileView/DualEditor 与两处文案，复用现有 app/style；再接 RFC 布局与路由。替换旧 UI，不保留旧 card/accordion UI 或 hash 导航兼容层。单文件/同包编译入口仍按现有编译合同处理，不属于旧 UI 兼容层。
-3. 路由新增 HTML/JS 文件需要同步构建拷贝、site commit URL 绑定、发布允许列表、hosting preview/audit 与 embed HTTP 路由测试，不能只改前端让直接刷新失败。这些位于 `website/build.py`、`website/hosting/*`、`cmd/goxide-web/*`；在改前先交父任务协调归属，避免与 #23 的生成清单工作冲突。协调完成前可先做现有 app/style 内的组件与文案。
-4. #23 拥有项目 schema、构建/依赖实现及相关生成清单；本任务不并行修改这些文件、根 go.mod/go.sum、CLI 或 compiler。完整示例要拿到 #23 确定合同及对应提交，再保存完整 goxide.toml/必要源码与可重放命令，核对实际 target 输出/依赖来源，按风险做一次定向 CLI 复现。延后期间明确记录验收未完成。
-
-## 定向验证与独立审核
-
-本次文档检查：链接/路径、源码接口核对与 git diff 检查；不跑 native 全套或把历史网站记录当成本次验证。后续 UI 必须用匹配当前源码的构建产物与 manifest，Playwright 明确 `chromiumSandbox: true`，不带 `--no-sandbox`。现有 `qa.mjs` / `catalog-qa.mjs` 已启用 sandbox，`hosting/qa-routes.mjs` 仍有关闭 sandbox 的旧参数，触及路由验证时须更正；不改系统权限。
-
-- 多文件：两处新增入口、重复/非法名称拒绝、切换后编辑/选择区/滚动恢复、删除当前文件后的选择一致；真实 Worker 多文件转译结果与当前 CLI 对照。
-- readonly：结果/依赖/配置/工程快照可以选择复制，但编辑/粘贴不改变数据、不显示新增按钮、不进入 Worker 输入。
-- 布局：四种模式、隐藏结果期间编辑/失败/中断、快速输入与迟到结果；宽屏和 390px 移动尺寸，无横向页面溢出，恢复宽屏布局。
-- 路由：实体入口直接打开/刷新，根路径与 `/goxide/` 子路径，RFC/示例深链接、前后退、未保存源码在站内导航后保留、未知路由/参数、焦点与键盘导航；浏览器不请求外部执行服务。
-- 只运行改动涉及的 UI/路由检查、一次必要的 WASM/CLI 定向对照；若修改构建/允许列表，追加对应构建/静态审计与 embed HTTP 测试。不反复重跑全套 native 验收。
-
-独立审核重点为可删减机制：是否只有两种必要组件、是否复制状态/渲染器、History 处理是否能更短、是否误加持久化/框架/IDE 功能或旧 UI 兼容层；同时查 readonly 写入边界、路由直接刷新及 #23/#26 越界。审核结论与未完成依赖写回同一 Draft PR；保留 Draft 直至完整验收。
+独立审核关注删减：没有双套UI或wrapper、重复file store、额外框架/语言服务、错误兼容路由或运行接口；检查model/worker生命周期、readonly写入边界、路由草稿与实际asset清单。完整项目示例未完成前保持Draft。

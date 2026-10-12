@@ -6,10 +6,12 @@
 
 承接 [0022 项目工具链](0022-project-toolchain.md)、[0023 构建脚本](0023-build-scripts.md)、[0025 单一项目清单](0025-unified-project.md)。继续以 `goxide.toml` / `goxide.lock` 为作者配置权威，根不并存 go.mod/go.sum/go.work/go.work.sum。原生 Go 负责 module path、版本、MVS、checksum 和编译；生成 Go 配置只在受管 target。目标是组织多包开发与独立发布，不引入 Rust resolver、所有权、Copy、enum ABI 或新借用语义。
 
+依赖来源字段的现行语法以 [TOML schema](../design/toml-manifest.md) 为准；下文的候选扩展不改变已实现的互斥来源规则。
+
 ### 本次实现范围
 
 - 根 `[workspace] format=1`，虚拟根/根包、显式 `members`、单段 glob、`exclude`、`default-members`；成员为 format 2 TOML。拒绝重复 module、嵌套 workspace、成员锁、symlink/受管输出成员；外部成员须显式路径，由根 INPUT 选择。
-- `[workspace.dependencies]` 仅模板；成员须 `{workspace=true}`，可加 feature 请求、设置 default_features/optional；不写该标记就不继承。`package.go.workspace=true` / toolchain 同理。直接 version/Git/path 原有来源继续有效，不自动改为成员 path；显式来源冲突报错。原生 require 与成员 path 共存须显式未限定版本的本地 replace。
+- `[workspace.dependencies]` 仅模板；成员须 `{workspace=true}`，可加 feature 请求、设置 default_features/optional；不写该标记就不继承。`package.go.workspace=true` / toolchain 同理。显式 Go module/Git/path 来源继续有效，不自动改为成员 path；显式来源冲突报错。原生 require 与成员 path 共存须显式未限定版本的本地 replace。
 - `goxide build|test|transpile --workspace ROOT`；重复 `-p/--package MODULE`；run、显式 bin/example/lib 和 -o 必须只选择一个成员。默认多成员构建其 lib/bins，未满足 required_features 的默认目标跳过并说明；examples 仅显式选择。多成员 feature 使用 `MODULE/FEATURE`。CLI 保留 POSIX 风格，flags 在 INPUT 前。
 - 根 schema 3 lock 保存统一 Go MVS 版本、有效政策、来源身份和校验和；schema 2 单项目继续支持，不自动迁移为 workspace。全体成员的声明 feature 闭包只用于版本求解；本次构建的 features 另按所选根/活动依赖固定点合并。根写锁串行化更新，不运行求解阶段脚本。Git 保持已锁 commit，已有 Unified 锁缺可达 pin 时即使未传 --locked 也拒绝移动分支解析。
 - 拆出项目可直接读取复制的 schema 3 根锁：只沿实际清单及已校验 Go `.mod` 的可达关系求解，忽略无关记录，核对来源/输入/版本/checksum；不复用旧 workspace 的无关 replace 政策。远端/Git 可在新缓存位置重建；path 不自动物化或改源。`--offline` 使用已缓存的可达已锁版本，不要求被升级低版本的缓存。
@@ -105,7 +107,7 @@ name = "hello"
 path = "examples/hello"
 ```
 
-workspace.dependencies 是模板库，**不注入依赖边**。成员按 alias 显式 `workspace=true` 才继承。module/path/git/rev/subdir/version/publish_version 从模板一次性取得，成员不得同时重新指定来源；features 按集合相加；optional 只在成员声明，根模板禁止 optional；default_features 以成员显式值覆盖模板缺省，但任何其他活动依赖边仍可启用默认请求。本篇新增的键沿用现有 TOML `default_features` 拼写；CLI 使用 `--no-default-features`。共享 package 字段首片只允许 go、toolchain 显式 `字段.workspace=true`；module 身份不继承。version/license/readme 等先有独立发布元数据合同再扩展，不假定 Cargo 字段已被本仓库实现。
+workspace.dependencies 是模板库，**不注入依赖边**。成员按 alias 显式 `workspace=true` 才继承。go/module/path/git/rev/tag/branch/subdir/version/publish_version 从模板一次性取得，成员不得同时重新指定来源；features 按集合相加；optional 只在成员声明，根模板禁止 optional；default_features 以成员显式值覆盖模板缺省，但任何其他活动依赖边仍可启用默认请求。本篇新增的键沿用现有 TOML `default_features` 拼写；CLI 使用 `--no-default-features`。共享 package 字段首片只允许 go、toolchain 显式 `字段.workspace=true`；module 身份不继承。version/license/readme 等先有独立发布元数据合同再扩展，不假定 Cargo 字段已被本仓库实现。
 
 加入成员不等于依赖该成员，源码 import 也不能创建清单依赖或启用模板。只有显式继承模板中的 path、成员自己声明的本地 path，或明确的 override/replace 条目才能把来源切到本地成员；version、Git、path 和原生 go.require 不因另一个目录被列为 member 就自动改指该目录。`workspace=true` 若继承的是 version/Git，仍消费该远端来源；它不是“自动找同名本地包”开关。未来若需要 Cargo 式 workspace patch，必须另提明确条目与优先级，不能默认启用。
 
@@ -129,7 +131,7 @@ package1 = { workspace = true }
 package1 = {} # WS-INHERIT-EXPLICIT：不完整独立声明
 ```
 
-完全省略成员的 package1 条目也不继承；若源码需要该库且显式活动依赖图没有提供它，报未声明依赖，不因 member/template 存在而搜索。独立完整声明 `package1 = { module = "example.org/package1", version = "v1.2.0" }` 则合法：即使根有同名 path 模板、同身份 member，也不得暗改版本来源；若全图同时要求本地同身份根，声明合法不代表图无冲突，须按来源冲突规则显式处理。显式依赖图包含已声明的传递依赖和原生 Go 解析出的依赖，并非要求每个 import 都新增直接增强依赖条目；关键是不能借 workspace 成员列表扩大来源图。
+完全省略成员的 package1 条目也不继承；若源码需要该库且显式活动依赖图没有提供它，报未声明依赖，不因 member/template 存在而搜索。独立完整声明 `package1 = { go = "example.org/package1", version = "v1.2.0" }` 则合法：即使根有同名 path 模板、同身份 member，也不得暗改版本来源；若全图同时要求本地同身份根，声明合法不代表图无冲突，须按来源冲突规则显式处理。显式依赖图包含已声明的传递依赖和原生 Go 解析出的依赖，并非要求每个 import 都新增直接增强依赖条目；关键是不能借 workspace 成员列表扩大来源图。
 
 未激活 optional 边不会被 import、同名模板或成员搜索激活；没有其他有效活动边提供该来源时，保留源码 import 报 WS-INACTIVE-DEPENDENCY。关闭文件不装载 import。纯 path 成员依赖无需虚构版本；`publish_version` 如存在是发行最低版本，原生 go.require 保留最低要求。显式本地替换不声称未打 tag 的工作树满足发布版本；发行预检用真实版本验证路径/major 和可获取性，不能把工作树 HEAD 当已发布 tag。
 
@@ -151,7 +153,7 @@ package1 = { module = "example.org/package1", git = "https://example.org/team/pa
 
 package1只是清单本地别名，不从它推导registry包名、module path或Git URL。rev经获取核验后锁成commit；重建用已锁commit，branch/tag移动不自动更新。类似crates.io的“名字+版本”注册中心发现留后续设计，`package1 = "1.2.0"` 当前不能解释为这类registry请求。
 
-这不删除现有Go module互操作：显式 `module = "example.org/package1", version = "v1.2.0"` 及原生go.require仍沿现有Go机制处理；它们使用完整Go module身份，不是新的registry短名解析。显式path和workspace=true继承继续支持，Git优先是作者来源方向，不把所有Go互操作依赖强制改写为Git。
+这不删除现有Go module互操作：显式 `go = "example.org/package1", version = "v1.2.0"` 及原生go.require仍沿现有Go机制处理；它们使用完整Go module身份，不是新的registry短名解析。显式path和workspace=true继承继续支持，Git优先是作者来源方向，不把所有Go互操作依赖强制改写为Git。
 
 ### WS-03：CLI 与目标选择
 
@@ -333,7 +335,7 @@ Go 试验确证上表**原生版本机制**，没有实现 feature 行为；没�
 | W17 显式继承/缺边 | package1={workspace=true}继承path模板；直接path也可；同名完整version声明保留远端 | 空声明/未workspace=true不继承；源码或生成import缺显式活动来源报错；optional不靠成员旁路 |
 | W18 迁入物化 | go.work隐式边在plan逐条物化，审阅后验证所声明配置范围 | 未知条件/生成import不能推断时列缺项、要求范围或拒绝；生成Go use不得恢复隐式边 |
 | W19 拆出复制锁 | app复制根锁，仅取显式可达common/D记录；server专用条目留存但不下载/执行；身份校验成功可locked | 可达commit/sum缺失或身份不符：拒绝；path源码缺失不能靠复制锁恢复；不得重新解析移动tag |
-| W20 Git与别名 | 显式Git URL+module锁commit；完整module+version原生互操作继续可用 | 仅别名+版本不得猜registry/Git；template未workspace=true不得继承 |
+| W20 Git与别名 | 显式Git URL+module锁commit；完整go+version原生互操作继续可用 | 仅别名+版本不得猜registry/Git；template未workspace=true不得继承 |
 
 ## 双向互操作
 

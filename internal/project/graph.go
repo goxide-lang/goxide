@@ -1,6 +1,7 @@
 package project
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -141,7 +142,7 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 	}
 	defer os.RemoveAll(work)
 	defer layout.Close()
-	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(root, ".goxide", "git"), LockPath: filepath.Join(root, "goxide.lock"), Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}}}
+	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(layout.Root, "cache", "git"), LockPath: filepath.Join(root, "goxide.lock"), Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}}}
 	b, e := os.ReadFile(g.LockPath)
 	if e == nil {
 		if e = json.Unmarshal(b, &g.Lock); e != nil {
@@ -220,6 +221,13 @@ func (g *Graph) Save() error {
 		}
 		return nil
 	}
+	if current, err := os.ReadFile(g.LockPath); err == nil {
+		if bytes.Equal(b, current) {
+			return nil
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	tmp, e := os.CreateTemp(filepath.Dir(g.LockPath), ".goxide-lock-*")
 	if e != nil {
 		return e
@@ -280,7 +288,13 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 	if strings.HasPrefix(d.Rev, "-") || strings.ContainsAny(d.Rev, "\x00\n\r") {
 		return "", fmt.Errorf("invalid git revision")
 	}
-	key := Digest([]string{d.Git, d.Rev, d.Subdir, d.Module})
+	if d.Tag != "" || d.Branch != "" {
+		ref := d.gitRef()
+		if _, e := git("", "check-ref-format", ref); e != nil {
+			return "", fmt.Errorf("invalid git tag/branch: %w", e)
+		}
+	}
+	key := d.GitKey()
 	commit := g.Lock.Git[key]
 	if g.Lock.Unified != nil {
 		if expected, exists := g.Lock.Unified.GitPins[key]; exists && expected != commit {
@@ -290,12 +304,10 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 	if commit == "" && (g.Locked || g.Lock.Unified != nil && !g.unifiedPlanning) {
 		return "", fmt.Errorf("--locked: git source absent from lock")
 	}
-	for _, p := range []string{g.Cache, filepath.Join(g.Cache, key)} {
-		if info, e := os.Lstat(p); e == nil && info.Mode()&os.ModeSymlink != 0 {
-			return "", fmt.Errorf("git cache must not contain symlink directories")
-		}
-	}
 	dir := filepath.Join(g.Cache, key)
+	if e := NoSymlinks(dir); e != nil {
+		return "", e
+	}
 	if _, e := os.Stat(filepath.Join(dir, ".git")); e != nil {
 		if g.Offline {
 			return "", fmt.Errorf("offline: git source is not cached")
@@ -313,11 +325,13 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 		}
 		ref := commit
 		if ref == "" {
-			ref = d.Rev
+			ref = d.gitRef()
 		}
 		c, e := git(tmp, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
-		if e != nil && commit == "" {
-			c, e = git(tmp, "rev-parse", "--verify", "--end-of-options", "refs/remotes/origin/"+ref+"^{commit}")
+		if e != nil && (commit != "" || d.Rev != "") {
+			if _, e = git(tmp, "fetch", "--", "origin", ref); e == nil {
+				c, e = git(tmp, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
+			}
 		}
 		if e != nil {
 			return "", e
@@ -341,10 +355,7 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 			return "", fmt.Errorf("cached git checkout does not match locked commit")
 		}
 		if commit == "" {
-			want, err := git(dir, "rev-parse", "--verify", "--end-of-options", d.Rev+"^{commit}")
-			if err != nil {
-				want, err = git(dir, "rev-parse", "--verify", "--end-of-options", "refs/remotes/origin/"+d.Rev+"^{commit}")
-			}
+			want, err := git(dir, "rev-parse", "--verify", "--end-of-options", d.gitRef()+"^{commit}")
 			if err != nil || want != actual {
 				return "", fmt.Errorf("unlocked cached checkout does not match requested revision")
 			}
@@ -391,14 +402,7 @@ func LockProject(root string) (func(), error) {
 	} else if w != nil {
 		root = w.Root
 	}
-	cache := filepath.Join(root, ".goxide")
-	if info, e := os.Lstat(cache); e == nil && info.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf(".gox must not be a symlink")
-	}
-	if e = os.MkdirAll(cache, 0755); e != nil {
-		return nil, e
-	}
-	lock := filepath.Join(cache, "build.lock")
+	lock := filepath.Join(root, "goxide.lock.guard")
 	if e = os.Mkdir(lock, 0700); e != nil {
 		return nil, fmt.Errorf("project build lock unavailable (another build or stale lock): %w", e)
 	}

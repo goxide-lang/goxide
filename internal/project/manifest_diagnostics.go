@@ -95,12 +95,12 @@ func validateNames(filename string, data []byte) error {
 			}
 		}
 	}
-	return validateToolchainFields(filename, data)
+	return validateDependencyFields(filename, data)
 }
 
 // Preserve source-kind restrictions even for explicitly empty keys. Struct
 // zero values alone cannot distinguish module="" from an absent module key.
-func validateToolchainFields(filename string, data []byte) error {
+func validateDependencyFields(filename string, data []byte) error {
 	var doc map[string]any
 	if err := toml.Unmarshal(data, &doc); err != nil {
 		return err
@@ -115,14 +115,23 @@ func validateToolchainFields(filename string, data []byte) error {
 			d, _ := deps[alias].(map[string]any)
 			// Inherited entries are validated after merging the workspace template;
 			// the inheritance layer diagnoses prohibited source/mapping overrides.
-			if d["source"] != "toolchain" || d["workspace"] == true {
+			if d["workspace"] == true {
+				continue
+			}
+			for _, key := range []string{"go", "git", "path", "version", "registry", "rev", "tag", "branch"} {
+				if value, exists := d[key]; exists && value == "" {
+					return fmt.Errorf("%s: dependency %s: %s must not be empty", filename, alias, key)
+				}
+			}
+			goPath, goSource := d["go"].(string)
+			if !goSource || d["version"] != nil || goPath == "" {
 				continue
 			}
 			for _, key := range keys(d) {
 				switch key {
-				case "source", "package", "namespaces", "optional":
+				case "go", "namespaces", "optional":
 				default:
-					return fmt.Errorf("%s: dependency %s: toolchain source cannot declare %s", filename, alias, key)
+					return fmt.Errorf("%s: dependency %s: Go standard library source cannot declare %s", filename, alias, key)
 				}
 			}
 		}

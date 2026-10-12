@@ -233,7 +233,7 @@ func CopyNativeSource(src, dst string, workRoot ...string) error {
 		if rel == "." {
 			return os.MkdirAll(dst, 0755)
 		}
-		if d.Name() == ".git" || d.Name() == ".goxide" || d.Name() == ".goxide-migration" {
+		if d.Name() == ".git" || d.Name() == ".goxide" || d.Name() == ".goxide-migration" || d.Name() == "goxide.lock.guard" {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}

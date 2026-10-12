@@ -14,13 +14,12 @@ func nativeRootMappingFixture(t *testing.T) (*Workspace, Manifest) {
 	app := filepath.Join(root, "app")
 	m, err := Parse("native.toml", []byte(mappingHeader+`
 [dependencies.dep]
-module="example.org/dep"
-version="v1.0.0"
+go = "example.org/dep"
+version = "v1.0.0"
 package="example.org/dep"
 optional=true
 [dependencies.fmt]
-source="toolchain"
-package="fmt"
+go = "fmt"
 [[go.require]]
 module="example.org/dep"
 version="v1.0.0"

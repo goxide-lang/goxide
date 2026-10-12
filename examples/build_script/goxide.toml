@@ -26,21 +26,16 @@ module = "github.com/goxide-lang/std"
 version = "v0.0.0-20261009104839-c02a09d8c417"
 
 [dependencies.fmt]
-source = "toolchain"
-package = "fmt"
+go = "fmt"
 
 [dependencies.json]
-source = "toolchain"
-package = "encoding/json"
+go = "encoding/json"
 
 [dependencies.os]
-source = "toolchain"
-package = "os"
+go = "os"
 
 [dependencies.filepath]
-source = "toolchain"
-package = "path/filepath"
+go = "path/filepath"
 
 [dependencies.strings]
-source = "toolchain"
-package = "strings"
+go = "strings"

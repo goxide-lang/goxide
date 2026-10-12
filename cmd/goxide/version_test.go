@@ -106,7 +106,7 @@ func sourceHash(t *testing.T, root string) string {
 func TestVersionSourceDefaultsAndReadonlyCache(t *testing.T) {
 	proxy, cache := versionProxy(t)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", versionLibrary("v1"))
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 	if _, e := projectRun(t, root, "run", "--offline"); e == nil {
 		t.Fatal("cold offline accepted")
 	}
@@ -128,7 +128,7 @@ path = 'main.gox'
 [dependencies.lib]
 default_features = false
 features = ['a']
-module = 'example.org/goxidelib'
+go = 'example.org/goxidelib'
 version = 'v1.0.0'
 
 [package]
@@ -164,7 +164,7 @@ func TestVersionSourceUnifiedMVSAndDiamond(t *testing.T) {
 		if name == "right" {
 			f = "b"
 		}
-		projectWrite(t, filepath.Join(base, name), map[string]string{"go.mod": "module example.org/" + name + "\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"version":1,"lib":{"name":"lib","path":"."},"dependencies":{"lib":{"module":"example.org/goxidelib","version":"v1.0.0","default_features":false,"features":["` + f + `"]}}}`), "lib.gox": "package lib\nuse lib as l;\nfunc Value()string{return l::Value()}\n"})
+		projectWrite(t, filepath.Join(base, name), map[string]string{"go.mod": "module example.org/" + name + "\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"version":1,"lib":{"name":"lib","path":"."},"dependencies":{"lib":{"go":"example.org/goxidelib","version":"v1.0.0","default_features":false,"features":["` + f + `"]}}}`), "lib.gox": "package lib\nuse lib as l;\nfunc Value()string{return l::Value()}\n"})
 	}
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\nrequire example.org/native v1.0.0\n", "goxide.toml": `[[bin]]
 name = 'app'
@@ -194,14 +194,14 @@ func TestVersionSourceNativeAndMixedDiagnostics(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			proxy, _ := versionProxy(t)
 			files := versionLibrary("v1")
-			dep := `{"module":"example.org/goxidelib","version":"v1.0.0"}`
+			dep := `{"go":"example.org/goxidelib","version":"v1.0.0"}`
 			want := "mixes generated"
 			switch kind {
 			case "native":
 				delete(files, "goxide.toml")
 				delete(files, "lib.gox")
 				files["lib.go"] = "package lib\nfunc Value()string{return \"fixed\"}\n"
-				dep = `{"module":"example.org/goxidelib","version":"v1.0.0","features":["a"]}`
+				dep = `{"go":"example.org/goxidelib","version":"v1.0.0","features":["a"]}`
 				want = "cannot receive goxide features"
 			case "metadata":
 				files[".goxide.enums.json"] = "{}"
@@ -224,7 +224,7 @@ func TestVersionSourceGraphChangeAndOscillation(t *testing.T) {
 			first := versionLibrary("v1")
 			first["goxide.toml"] = `[dependencies]
 [dependencies.bridge]
-module = 'example.org/bridge'
+go = 'example.org/bridge'
 version = 'v1.0.0'
 
 [lib]
@@ -239,7 +239,7 @@ format = 1
 			if !oscillates {
 				second["goxide.toml"] = `[dependencies]
 [dependencies.new]
-module = 'example.org/newbridge'
+go = 'example.org/newbridge'
 version = 'v1.0.0'
 
 [features]
@@ -260,7 +260,7 @@ format = 1
 			publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", first)
 			publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", second)
 			publishVersion(t, proxy, "example.org/bridge", "v1.0.0", map[string]string{"go.mod": "module example.org/bridge\n\ngo 1.27\nrequire example.org/goxidelib v1.1.0\n", "lib.go": "package bridge\n"})
-			root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0","features":["a"]}`)
+			root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0","features":["a"]}`)
 			b, e := projectRun(t, root, "run")
 			if oscillates {
 				if e == nil || !strings.Contains(e.Error(), "oscillates") {
@@ -309,7 +309,7 @@ func TestVersionSourceRootReplacement(t *testing.T) {
 	base := t.TempDir()
 	local := filepath.Join(base, "lib")
 	projectWrite(t, local, versionLibrary("local"))
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0","default_features":false,"features":["a"]}`)
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0","default_features":false,"features":["a"]}`)
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\nreplace example.org/goxidelib => " + filepath.ToSlash(local) + "\n"})
 	if b, e := projectRun(t, root, "run", "--offline"); e != nil || strings.TrimSpace(b) != "local false true false" {
 		t.Fatalf("%s %v", b, e)
@@ -327,9 +327,9 @@ func TestVersionSourceTargetABAAndGeneratedGo(t *testing.T) {
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", versionLibrary("v1"))
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", versionLibrary("v2"))
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0","default_features":false}`)
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0","default_features":false}`)
 	manifest := func(version string) string {
-		return manifestJSON(`{"version":1,"features":{"a":["lib/a"]},"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":{"module":"example.org/goxidelib","version":"` + version + `","default_features":false}}}`)
+		return manifestJSON(`{"version":1,"features":{"a":["lib/a"]},"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":{"go":"example.org/goxidelib","version":"` + version + `","default_features":false}}}`)
 	}
 	projectWrite(t, root, map[string]string{"goxide.toml": manifest("v1.0.0")})
 	build := func(args ...string) string {
@@ -409,7 +409,7 @@ func TestVersionSourceScriptPermissionTracksSelectedVersion(t *testing.T) {
 	files["lib/lib.gox"] = "package lib\nuse gen;\nfunc Value()string{return gen::Value}\n"
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", files)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", files)
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 	scriptAction(t, root, "trust-project")
 	plan := scriptPlan(t, root)
 	if len(plan.Subjects) != 1 {
@@ -438,7 +438,7 @@ path = 'main.gox'
 
 [dependencies]
 [dependencies.lib]
-module = 'example.org/goxidelib'
+go = 'example.org/goxidelib'
 version = 'v1.1.0'
 
 [package]
@@ -465,7 +465,7 @@ format = 1
 func TestVersionSourceNamespaceAndNativeBackedge(t *testing.T) {
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", versionLibrary("v1"))
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\nrequire goxide-planner.invalid/requirements/r0 v1.0.0\n"})
 	if _, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "reserved planner") {
 		t.Fatal(e)
@@ -498,7 +498,7 @@ format = 1
 func TestVersionSourceForkAndPathIdentity(t *testing.T) {
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/fork", "v1.0.0", map[string]string{"go.mod": "module example.org/fork\n\ngo 1.27\n", "lib.go": "package lib\nfunc Value()string{return \"native fork\"}\n"})
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\nreplace example.org/goxidelib => example.org/fork v1.0.0\n"})
 	if b, e := projectRun(t, root, "run"); e != nil || strings.TrimSpace(b) != "native fork" {
 		t.Fatalf("native renamed fork: %s %v", b, e)
@@ -512,7 +512,7 @@ func TestVersionSourceForkAndPathIdentity(t *testing.T) {
 	}
 	local := t.TempDir()
 	projectWrite(t, local, versionLibrary("local"))
-	manifest := projectManifest(map[string]any{"version": 1, "bins": []map[string]string{{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"lib": map[string]any{"module": "example.org/goxidelib", "version": "v1.0.0", "default_features": false, "features": []string{"a"}}, "local": map[string]any{"module": "example.org/goxidelib", "path": local, "features": []string{"b"}}}})
+	manifest := projectManifest(map[string]any{"version": 1, "bins": []map[string]string{{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"lib": map[string]any{"go": "example.org/goxidelib", "version": "v1.0.0", "default_features": false, "features": []string{"a"}}, "local": map[string]any{"module": "example.org/goxidelib", "path": local, "features": []string{"b"}}}})
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\n", "goxide.toml": manifest})
 	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "conflicting version/path") {
 		t.Fatal(e)
@@ -530,18 +530,18 @@ func TestVersionSourceHigherBridgeConstraintClosure(t *testing.T) {
 	high["go.mod"] += "require example.org/onlyhigh v1.0.0\n"
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", high)
 	publishVersion(t, proxy, "example.org/onlyhigh", "v1.0.0", map[string]string{"go.mod": "module example.org/onlyhigh\n\ngo 1.27\n", "lib.go": "package onlyhigh\n"})
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 	projectWrite(t, root, map[string]string{"goxide.toml": `[[bin]]
 name = 'app'
 path = 'main.gox'
 
 [dependencies]
 [dependencies.a]
-module = 'example.org/goxidelib'
+go = 'example.org/goxidelib'
 version = 'v1.0.0'
 
 [dependencies.z]
-module = 'example.org/goxidelib'
+go = 'example.org/goxidelib'
 version = 'v1.1.0'
 
 [package]
@@ -565,7 +565,7 @@ func TestVersionSourceMetadataAgreementAndLegacyGo(t *testing.T) {
 		files := versionLibrary("v1")
 		publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", files)
 		projectWrite(t, filepath.Join(proxy, "example.org/goxidelib/@v"), map[string]string{"v1.0.0.mod": files["go.mod"] + "// mismatched proxy metadata\n"})
-		root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+		root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 		if _, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "differs between selected metadata") {
 			t.Fatal(e)
 		}
@@ -585,7 +585,7 @@ func TestVersionSourceMetadataAgreementAndLegacyGo(t *testing.T) {
 			t.Fatal(e)
 		}
 		projectWrite(t, filepath.Join(proxy, "example.org/goxidelib/@v"), map[string]string{"v1.0.0.zip": b.String()})
-		root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+		root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 		if b, e := projectRun(t, root, "run"); e != nil || strings.TrimSpace(b) != "legacy" {
 			t.Fatalf("native synthetic go.mod: %s %v", b, e)
 		}
@@ -596,14 +596,14 @@ func TestVersionSourceDormantAndFeatureErrors(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			proxy, cache := versionProxy(t)
 			files := versionLibrary("v1")
-			dep := `{"module":"example.org/goxidelib","version":"v1.0.0"}`
+			dep := `{"go":"example.org/goxidelib","version":"v1.0.0"}`
 			want := ""
 			switch kind {
 			case "optional":
 				files["goxide.toml"] = `[dependencies]
 [dependencies.missing]
-module = 'example.org/missing'
 optional = true
+go = 'example.org/missing'
 version = 'v1.0.0'
 
 [features]
@@ -631,7 +631,7 @@ format = 1
 `
 				want = "must declare lib"
 			case "unknown":
-				dep = `{"module":"example.org/goxidelib","version":"v1.0.0","features":["missing"]}`
+				dep = `{"go":"example.org/goxidelib","version":"v1.0.0","features":["missing"]}`
 				want = "unknown feature"
 			case "cycle":
 				files["goxide.toml"] = `[features]
@@ -721,13 +721,13 @@ func TestVersionSourceLateGitBoundary(t *testing.T) {
 	git("add", ".")
 	git("commit", "-m", "boundary fixture")
 	rev := git("rev-parse", "HEAD")
-	gitdep := map[string]string{"module": "example.org/a", "git": repo, "rev": rev}
+	gitdep := map[string]any{"module": "example.org/a", "git": repo, "rev": rev}
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "lib.go": "package root\n", "goxide.toml": manifest(map[string]any{"a": gitdep})})
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	if _, e := project.Load(root, tool, nil, true, false, false); e == nil || !strings.Contains(e.Error(), "escapes checkout/acquired") {
 		t.Fatal(e)
 	}
-	cached := filepath.Join(root, ".goxide", "git", project.Digest([]string{repo, rev, "", "example.org/a"}))
+	cached := filepath.Join(root, "target", "cache", "git", project.Digest([]string{repo, rev, "", "example.org/a"}))
 	projectWrite(t, bdir, map[string]string{"go.mod": "module example.org/b\n\ngo 1.27\n", "lib.go": "package b\n", "goxide.toml": manifest(map[string]any{"z": map[string]string{"module": "example.org/z", "path": zdir}})})
 	projectWrite(t, zdir, map[string]string{"go.mod": "module example.org/z\n\ngo 1.27\n", "lib.go": "package z\n", "goxide.toml": manifest(map[string]any{"a": gitdep})})
 	// a/c were already traversed as path nodes before z supplies the stronger

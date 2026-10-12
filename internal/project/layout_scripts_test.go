@@ -78,7 +78,7 @@ func TestScriptCleanPreflightAndPreservesUnits(t *testing.T) {
 	if e = l.CleanScriptCaches(clean); e != nil || calls != 1 {
 		t.Fatalf("clean %v calls %d", e, calls)
 	}
-	if _, e = os.Stat(unit.Run); e != nil {
+	if _, e = os.Stat(unit.Directory); e != nil {
 		t.Fatal("unrelated unit removed", e)
 	}
 	if _, e = os.Stat(filepath.Join(filepath.Dir(cache), ".goxide-unit.json")); e != nil {

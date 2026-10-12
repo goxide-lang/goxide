@@ -307,8 +307,8 @@ func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
 	first["goxide.toml"] += "\n[vendor]\nmode='go-mod'\n"
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", first)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", versionLibrary("v2"))
-	publishVersion(t, proxy, "example.org/middle", "v1.0.0", map[string]string{"go.mod": "module example.org/middle\ngo 1.27\n", "goxide.toml": "[package]\nformat=1\n[lib]\nname='middle'\npath='.'\n[dependencies.lib]\nmodule='example.org/goxidelib'\nversion='v1.1.0'\n", "middle.go": "package middle\n"})
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+	publishVersion(t, proxy, "example.org/middle", "v1.0.0", map[string]string{"go.mod": "module example.org/middle\ngo 1.27\n", "goxide.toml": "[package]\nformat=1\n[lib]\nname='middle'\npath='.'\n[dependencies.lib]\ngo = 'example.org/goxidelib'\nversion = 'v1.1.0' \n", "middle.go": "package middle\n"})
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 	if b, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "obsolete vendor") {
 		t.Fatalf("stable unsupported vendor: %s %v", b, e)
 	}
@@ -316,7 +316,7 @@ func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	m.Dependencies["middle"] = project.Dependency{Module: "example.org/middle", Version: "v1.0.0"}
+	m.Dependencies["middle"] = project.Dependency{Go: "example.org/middle", Module: "example.org/middle", Version: "v1.0.0"}
 	b, e := project.Marshal(m)
 	if e != nil {
 		t.Fatal(e)

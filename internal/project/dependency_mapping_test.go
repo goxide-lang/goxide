@@ -15,21 +15,19 @@ func TestDependencyMappingSchema(t *testing.T) {
 [features]
 fast-mode = []
 [dependencies.serde]
-module = "github.com/goxide-lang/serde"
+go = "github.com/goxide-lang/serde"
 version = "v1.0.0"
 package = "github.com/goxide-lang/serde"
 [dependencies.serde.namespaces]
 json = "github.com/goxide-lang/serde/json"
 "formats::custom" = "example.org/explicit/format"
 [dependencies.std]
-source = "module"
 module = "github.com/goxide-lang/std"
 path = "../std"
 [dependencies.std.namespaces]
 sum = "github.com/goxide-lang/std/sum"
 [dependencies._json]
-source = "toolchain"
-package = "encoding/json"
+go = "encoding/json"
 `
 	m, err := Parse("roots.toml", []byte(text))
 	if err != nil {
@@ -59,7 +57,7 @@ package = "encoding/json"
 		t.Fatal("namespace mapping missing from manifest identity")
 	}
 	d = m.Dependencies["std"]
-	d.Source = ""
+	d.Path = "../different-std"
 	m.Dependencies["std"] = d
 	if Digest(m) == before {
 		t.Fatal("source declaration missing from manifest identity")
@@ -77,15 +75,18 @@ func TestDependencyMappingDiagnostics(t *testing.T) {
 		{"namespace dot", "[dependencies.a]\nmodule='example.org/a'\npath='a'\nnamespaces={'a.b'='example.org/a/b'}", "invalid namespace path"},
 		{"namespace empty segment", "[dependencies.a]\nmodule='example.org/a'\npath='a'\nnamespaces={'a::::b'='example.org/a/b'}", "invalid namespace path"},
 		{"namespace blank", "[dependencies.a]\nmodule='example.org/a'\npath='a'\nnamespaces={'a::_'='example.org/a/b'}", "invalid namespace path"},
-		{"package url", "[dependencies.a]\nsource='toolchain'\npackage='https://example.org/a'", "invalid exact package path"},
-		{"package relative", "[dependencies.a]\nsource='toolchain'\npackage='../fmt'", "invalid exact package path"},
-		{"package normalized", "[dependencies.a]\nsource='toolchain'\npackage='encoding/../fmt'", "invalid exact package path"},
-		{"package trailing slash", "[dependencies.a]\nsource='toolchain'\npackage='fmt/'", "invalid exact package path"},
-		{"package empty segment", "[dependencies.a]\nsource='toolchain'\npackage='encoding//json'", "invalid exact package path"},
-		{"namespace package empty", "[dependencies.a]\nsource='toolchain'\nnamespaces={b=''}", "invalid exact package path"},
-		{"unknown source", "[dependencies.a]\nsource='automatic'\npackage='fmt'", "unknown source"},
-		{"missing module", "[dependencies.a]\nversion='v1.0.0'\npackage='example.org/a'", "module source requires module"},
-		{"feature forward", "[dependencies.a]\nsource='toolchain'\npackage='fmt'\n[features]\nunused=['a/format']", "cannot receive feature requests"},
+		{"package url", "[dependencies.a]\ngo = 'https://example.org/a' ", "path without protocol"},
+		{"package relative", "[dependencies.a]\ngo = '../fmt' ", "path without protocol"},
+		{"package normalized", "[dependencies.a]\ngo = 'encoding/../fmt' ", "path without protocol"},
+		{"package trailing slash", "[dependencies.a]\ngo = 'fmt/' ", "path without protocol"},
+		{"package empty segment", "[dependencies.a]\ngo = 'encoding//json' ", "path without protocol"},
+		{"namespace package empty", "[dependencies.a]\nnamespaces={b=''}\ngo = 'encoding/json'\n", "invalid exact package path"},
+		{"old source selector", "[dependencies.a]\nsource='toolchain'\npackage='fmt'", "unknown field"},
+		{"conflicting sources", "[dependencies.a]\nmodule='example.org/a'\ngit='https://example.org/a'\npath='../a'", "exactly one"},
+		{"conflicting refs", "[dependencies.a]\nmodule='example.org/a'\ngit='https://example.org/a'\nrev='deadbeef'\nbranch='main'", "at most one"},
+		{"registry unavailable", "[dependencies.a]\nversion='1.0'", "registry source is not implemented"},
+		{"missing module", "[dependencies.a]\ngo='example.org/a'", "requires version"},
+		{"feature forward", "[dependencies.a]\ngo = 'fmt' \n[features]\nunused=['a/format']", "cannot receive feature requests"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse("roots.toml", []byte(mappingHeader+tc.body))
@@ -96,8 +97,8 @@ func TestDependencyMappingDiagnostics(t *testing.T) {
 	}
 	for _, field := range []string{"module=''", "version=''", "path=''", "git=''", "rev=''", "subdir=''", "features=[]", "default_features=false", "workspace=false"} {
 		t.Run("toolchain "+field, func(t *testing.T) {
-			_, err := Parse("roots.toml", []byte(mappingHeader+"[dependencies.a]\nsource='toolchain'\npackage='fmt'\n"+field))
-			if err == nil || !strings.Contains(err.Error(), "toolchain source cannot declare") {
+			_, err := Parse("roots.toml", []byte(mappingHeader+"[dependencies.a]\ngo = 'fmt' \n"+field))
+			if err == nil {
 				t.Fatalf("forbidden toolchain field %s: %v", field, err)
 			}
 		})
@@ -107,11 +108,9 @@ func TestDependencyMappingDiagnostics(t *testing.T) {
 func TestDependencyMappingOptionalActivation(t *testing.T) {
 	m, err := Parse("roots.toml", []byte(mappingHeader+`
 [dependencies.fmt]
-source = "toolchain"
-package = "fmt"
+go = "fmt"
 [dependencies.json]
-source = "toolchain"
-package = "encoding/json"
+go = "encoding/json"
 optional = true
 [dependencies.missing]
 module = "example.org/missing"
@@ -146,20 +145,19 @@ missing = ["dep:missing"]
 }
 
 func TestDependencyMappingWorkspaceInheritance(t *testing.T) {
-	for _, override := range []string{"", "package='other'", "namespaces={other='other'}", "source='toolchain'"} {
+	for _, override := range []string{"", "package='other'", "namespaces={other='other'}", "go = 'fmt'"} {
 		t.Run(override, func(t *testing.T) {
 			root := t.TempDir()
 			wsWrite(t, root, ManifestName, `[workspace]
 format=1
 members=["app"]
 [workspace.dependencies.serde]
-module="example.org/serde"
-version="v1.0.0"
+go = "example.org/serde"
+version = "v1.0.0"
 package="example.org/serde"
 namespaces={json="example.org/serde/json", "formats::custom"="example.org/serde/custom"}
 [workspace.dependencies.json]
-source="toolchain"
-package="encoding/json"
+go = "encoding/json"
 `)
 			wsWrite(t, root, "app/"+ManifestName, mappingHeader+"[dependencies.serde]\nworkspace=true\n"+override+"\n[dependencies.json]\nworkspace=true\noptional=true\n[features]\njson=['dep:json']\n")
 			m, err := Read(filepath.Join(root, "app"))
@@ -190,12 +188,11 @@ func TestToolchainModulePlan(t *testing.T) {
 	root := t.TempDir()
 	manifest := mappingHeader + `
 [dependencies.fmt]
-source="toolchain"
-package="fmt"
+go = "fmt"
 [dependencies.encoding]
-source="toolchain"
 namespaces={json="encoding/json"}
 optional=true
+go = 'encoding/json'
 [dependencies.missing]
 module="example.org/missing"
 path="does-not-exist"
@@ -234,11 +231,9 @@ func TestToolchainNativeFeatureGraph(t *testing.T) {
 	root := t.TempDir()
 	m, err := Parse("roots.toml", []byte(mappingHeader+`
 [dependencies.fmt]
-source="toolchain"
-package="fmt"
+go = "fmt"
 [dependencies.json]
-source="toolchain"
-package="encoding/json"
+go = "encoding/json"
 optional=true
 [features]
 json=["dep:json"]
@@ -271,11 +266,10 @@ func TestToolchainWorkspacePlan(t *testing.T) {
 format=1
 members=["app"]
 [workspace.dependencies.fmt]
-source="toolchain"
-package="fmt"
+go = "fmt"
 [workspace.dependencies.encoding]
-source="toolchain"
 namespaces={json="encoding/json"}
+go = 'encoding/json'
 `)
 	wsWrite(t, root, "app/"+ManifestName, mappingHeader+`
 [dependencies.fmt]

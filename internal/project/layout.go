@@ -28,9 +28,9 @@ type Layout struct {
 }
 type UnitSpec struct{ Host, Target, Kind, Name, Config string }
 type Unit struct {
-	Spec                                                                          UnitSpec
-	Directory, Run, Bundle, Intermediate, ScriptOut, ScriptCache, BinaryDirectory string
-	layout                                                                        *Layout
+	Spec                                             UnitSpec
+	Directory, Bundle, Intermediate, BinaryDirectory string
+	layout                                           *Layout
 }
 
 func contained(root, path string) bool {
@@ -264,25 +264,11 @@ func (l *Layout) Begin(spec UnitSpec) (*Unit, error) {
 	if e := l.ownedDirectory(dir, spec); e != nil {
 		return nil, e
 	}
-	runs := filepath.Join(dir, "runs")
-	if e := NoSymlinks(runs); e != nil {
+	u := &Unit{Spec: spec, Directory: dir, Bundle: filepath.Join(dir, "bundle"), Intermediate: filepath.Join(dir, "intermediate"), BinaryDirectory: filepath.Join(l.Root, "bin", rel), layout: l}
+	if e := NoSymlinks(u.Intermediate); e != nil {
 		return nil, e
 	}
-	if e := os.MkdirAll(runs, 0755); e != nil {
-		return nil, e
-	}
-	run, e := os.MkdirTemp(runs, "build-")
-	if e != nil {
-		return nil, e
-	}
-	u := &Unit{Spec: spec, Directory: dir, Run: run, Bundle: filepath.Join(run, "bundle"), Intermediate: filepath.Join(run, "intermediate"), ScriptOut: filepath.Join(run, "script-out"), ScriptCache: filepath.Join(dir, "script-cache"), BinaryDirectory: filepath.Join(l.Root, "bin", rel), layout: l}
-	if e = writeExclusive(filepath.Join(run, ".goxide-run.json"), struct {
-		Owner layoutOwner
-		Unit  UnitSpec
-	}{l.owner, spec}); e != nil {
-		return nil, e
-	}
-	if e = os.Mkdir(u.Intermediate, 0755); e != nil {
+	if e := os.MkdirAll(u.Intermediate, 0755); e != nil {
 		return nil, e
 	}
 	return u, nil
@@ -315,8 +301,7 @@ func fileDigest(path string) (string, os.FileMode, error) {
 	return hex.EncodeToString(h.Sum(nil)), info.Mode().Perm(), nil
 }
 
-// PublishBinary replaces only a previously recorded, unmodified artifact. Each
-// generation's bundle remains at its original paths, preserving absolute replace.
+// PublishBinary replaces only a previously recorded, unmodified artifact.
 func (u *Unit) PublishBinary(source string) (string, error) {
 	l := u.layout
 	if e := l.ownedDirectory(u.BinaryDirectory, u.Spec); e != nil {
@@ -353,6 +338,11 @@ func (u *Unit) PublishBinary(source string) (string, error) {
 	hash, mode, e := fileDigest(source)
 	if e != nil {
 		return "", e
+	}
+	if recordErr == nil && hash == old.Hash && uint32(mode) == old.Mode {
+		if _, e := os.Stat(dest); e == nil {
+			return dest, nil
+		}
 	}
 	f, e := os.Open(source)
 	if e != nil {

@@ -78,7 +78,8 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		return err
 	}
 	for _, node := range g.Nodes {
-		if within(layoutPath, node.Root) || node != g.Root && within(node.Root, layoutPath) {
+		cachedSource := node.CheckoutRoot != "" && within(g.Cache, node.CheckoutRoot) && within(node.CheckoutRoot, node.Root)
+		if within(layoutPath, node.Root) && !cachedSource || node != g.Root && within(node.Root, layoutPath) {
 			return fmt.Errorf("target directory overlaps a dependency/source module")
 		}
 	}
@@ -129,7 +130,15 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	if err != nil {
 		return err
 	}
-	bundle := unit.Bundle
+	bundle, err := os.MkdirTemp(unit.Intermediate, ".generation-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(bundle)
+	if err = os.Remove(bundle); err != nil {
+		return err
+	}
+	managedBundle := mode != "transpile" || dest == ""
 	if mode == "transpile" && dest != "" {
 		bundle, err = filepath.Abs(dest)
 		if err != nil {
@@ -156,8 +165,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	if err = os.Mkdir(bundle, 0755); err != nil {
 		return err
 	}
-	// Generation directories are retained; the frontend may remove its own new
-	// incomplete module on failure. No generated-source cache hit is claimed.
+	// Lower into a fresh temporary view; publish only changed files to stable paths.
 
 	generated, err := projectModuleAnchors(g, filepath.Join(bundle, "policy-anchors"))
 	if err != nil {
@@ -227,7 +235,7 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 		if e != nil {
 			return e
 		}
-		options := frontend.ModuleOptions{ManagedOutputRoot: layout.Root, SourceModuleRoot: n.Root, SourceModuleFile: n.ModBytes, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: true, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files, Roots: roots}
+		options := frontend.ModuleOptions{ManagedOutputRoot: layout.Root, SourceModuleRoot: n.Root, SourceModuleFile: n.ModBytes, Context: ctx, Configuration: configuration, Tags: tags, Race: mode == "test", OnlyTarget: n.HasManifest || n == g.Root, Features: features, EntryFiles: entryFiles, ExcludeDirs: excluded, TargetPackage: targetPackage, GeneratedFiles: artifact.Files, Roots: roots}
 		options.Prepare = func(root string) error { return prepareProjectModule(g, n, root, generated) }
 		result, err = frontend.CompileModuleWithOptions(inputPath, output, options)
 		if err != nil {
@@ -248,6 +256,12 @@ func runProject(mode, input, dest, tool string, tags []string, flags projectFlag
 	}
 	if err = g.Save(); err != nil {
 		return err
+	}
+	if managedBundle {
+		if err = unit.PublishBundle(bundle); err != nil {
+			return err
+		}
+		result.Root = filepath.Join(unit.Bundle, "module")
 	}
 	if mode == "transpile" {
 		_, err = fmt.Fprintln(out, result.Root)
@@ -400,10 +414,7 @@ func projectModuleAnchors(g *project.Graph, work string) (map[string]string, err
 		}
 		// Frontend normally normalizes relative replaces while copying. Do the same
 		// for this module-only preflight, without touching the original go.mod.
-		m, err := n.Mod, error(nil)
-		if err != nil {
-			return nil, err
-		}
+		m := n.Mod
 		args := []string{"mod", "edit"}
 		for _, rep := range m.Replace {
 			if rep.New.Version == "" && !filepath.IsAbs(rep.New.Path) {
@@ -511,10 +522,7 @@ func prepareProjectModule(g *project.Graph, n *project.Node, root string, genera
 			return e
 		}
 	}
-	sourceMod, e := n.ModBytes, error(nil)
-	if e != nil {
-		return e
-	}
+	sourceMod := n.ModBytes
 	key := project.Digest(struct {
 		Module   string
 		Manifest project.Manifest
@@ -684,7 +692,7 @@ func validateProjectKind(tool string, result frontend.ModuleResult, lib bool, ta
 }
 
 // projectUnitSpec is configuration identity, not a source-content cache key.
-// Every invocation gets a fresh generation beneath the stable unit directory.
+// Generated source is refreshed beneath the stable unit directory.
 func projectUnitSpec(g *project.Graph, target project.Target, kind, mode string, tags []string, compiler string) (project.UnitSpec, error) {
 	cmd := exec.Command(g.Tool, "env", "-json", "GOOS", "GOARCH", "CGO_ENABLED", "GOEXPERIMENT", "GOAMD64", "GO386", "GOARM", "GOARM64", "GOMIPS", "GOMIPS64", "GOPPC64", "GORISCV64", "GOWASM", "CC", "CXX", "CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_FFLAGS", "CGO_LDFLAGS", "PKG_CONFIG")
 	cmd.Env = project.GoEnv(true)
@@ -709,14 +717,11 @@ func projectUnitSpec(g *project.Graph, target project.Target, kind, mode string,
 	nodes := []nodeConfig{}
 	commits := map[string]string{}
 	for _, n := range g.Nodes {
-		mod, e := n.ModBytes, error(nil)
-		if e != nil {
-			return project.UnitSpec{}, e
-		}
+		mod := n.ModBytes
 		nodes = append(nodes, nodeConfig{n.Module, n.Root, string(mod), n.Manifest, project.Keys(n.Features)})
 		for _, d := range n.Sources {
 			if d.Git != "" {
-				key := project.Digest([]string{d.Git, d.Rev, d.Subdir, d.Module})
+				key := d.GitKey()
 				commits[key] = g.Lock.Git[key]
 			}
 		}

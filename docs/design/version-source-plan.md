@@ -6,11 +6,11 @@
 
 ## 格式和发布合同
 
-无需新的 source 字段。`version`、`git`、`path` 是获取渠道，goxide.toml 则表明是否使用 goxide 的 feature/lib/build 项目规则。例如：
+无需新的 source 字段。`go = "模块路径"` 加 `version`、`git`、`path` 是获取渠道；单独 version 的 registry 不实现，goxide.toml 则表明是否使用 goxide 的 feature/lib/build 项目规则。例如：
 
 ```toml
 [dependencies.lib]
-module = "example.org/lib"
+go = "example.org/lib"
 version = "v1.2.0"
 features = ["fast"]
 default_features = false

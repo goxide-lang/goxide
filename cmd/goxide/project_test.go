@@ -209,7 +209,8 @@ func TestProjectGitRevisionLock(t *testing.T) {
 	base := t.TempDir()
 	repo := filepath.Join(base, "repo")
 	root := filepath.Join(base, "root")
-	projectWrite(t, repo, map[string]string{"go.mod": "module example.org/gitdep\n\ngo 1.27\n", "lib.go": "package gitdep\nfunc Value()int{return 1}\n"})
+	libRoot := filepath.Join(repo, "packages", "lib")
+	projectWrite(t, libRoot, map[string]string{"go.mod": "module example.org/gitdep\n\ngo 1.27\n", "lib.go": "package gitdep\nfunc Value()int{return 1}\n"})
 	git := func(args ...string) string {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-c", "core.hooksPath=/dev/null"}, args...)...)
@@ -226,9 +227,13 @@ func TestProjectGitRevisionLock(t *testing.T) {
 	git("commit", "-m", "one")
 	first := git("rev-parse", "HEAD")
 	manifest := func(rev string) string {
-		return projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]string{"module": "example.org/gitdep", "git": repo, "rev": rev}}})
+		dep := map[string]any{"module": "example.org/gitdep", "git": repo, "subdir": "packages/lib"}
+		if rev != "" {
+			dep["rev"] = rev
+		}
+		return projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": dep}})
 	}
-	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": manifest("main"), "main.gox": "package main\nuse fmt;\nuse dep as d;\nfunc main(){fmt::Println(d::Value())}\n"})
+	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": manifest(""), "main.gox": "package main\nuse fmt;\nuse dep as d;\nfunc main(){fmt::Println(d::Value())}\n"})
 	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "not cached") {
 		t.Fatal(e)
 	}
@@ -239,12 +244,19 @@ func TestProjectGitRevisionLock(t *testing.T) {
 	if e != nil || !bytes.Contains(lock, []byte(first)) {
 		t.Fatalf("commit not locked: %s %v", lock, e)
 	}
-	projectWrite(t, repo, map[string]string{"lib.go": "package gitdep\nfunc Value()int{return 2}\n"})
+	projectWrite(t, libRoot, map[string]string{"lib.go": "package gitdep\nfunc Value()int{return 2}\n"})
 	git("add", ".")
 	git("commit", "-m", "two")
 	second := git("rev-parse", "HEAD")
 	if b, e := projectRun(t, root, "run", "--offline", "--locked"); e != nil || strings.TrimSpace(b) != "1" {
 		t.Fatalf("moving branch changed lock: %s %v", b, e)
+	}
+	// A second cache location must fetch the locked commit, even after HEAD moved.
+	if b, e := projectRun(t, root, "run", "--locked", "--target-dir", "other-target"); e != nil || strings.TrimSpace(b) != "1" {
+		t.Fatalf("locked cache relocation: %s %v", b, e)
+	}
+	if after, e := os.ReadFile(filepath.Join(root, "goxide.lock")); e != nil || !bytes.Equal(after, lock) {
+		t.Fatal("cache location changed committed lock", e)
 	}
 	projectWrite(t, root, map[string]string{"goxide.toml": manifest(second)})
 	if _, e := projectRun(t, root, "run", "--locked"); e == nil || !strings.Contains(e.Error(), "absent from lock") {
@@ -256,7 +268,7 @@ func TestProjectGitRevisionLock(t *testing.T) {
 	if b, e := projectRun(t, root, "run", "--locked", "--offline"); e != nil || strings.TrimSpace(b) != "2" {
 		t.Fatalf("offline revision: %s %v", b, e)
 	}
-	projectWrite(t, root, map[string]string{"goxide.toml": manifest("main")})
+	projectWrite(t, root, map[string]string{"goxide.toml": manifest("")})
 	if b, e := projectRun(t, root, "run", "--locked", "--offline"); e != nil || strings.TrimSpace(b) != "1" {
 		t.Fatalf("revision A/B/A: %s %v", b, e)
 	}
@@ -305,7 +317,7 @@ path = 'main.gox'
 
 [dependencies]
 [dependencies.native]
-module = 'example.org/native'
+go = 'example.org/native'
 version = 'v1.0.0'
 
 [package]
@@ -341,8 +353,8 @@ path = 'main.gox'
 format = 1
 
 [dependencies.native]
-module = 'example.org/native'
 package = 'example.org/native'
+go = 'example.org/native'
 version = 'v1.0.0'
 `, "main.gox": "package main\nuse fmt;\nuse native as n;\nfunc main(){fmt::Println(n::Value())}\n"})
 	if b, e := projectRun(t, app, "run", "--offline"); e != nil || strings.TrimSpace(b) != "17" {
@@ -461,7 +473,7 @@ func TestProjectGitCheckoutBoundaries(t *testing.T) {
 		git("add", ".")
 		git("commit", "-m", kind)
 		rev := git("rev-parse", "HEAD")
-		projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]string{"module": "example.org/gitdep", "git": repo, "rev": rev}}}), "main.gox": "package main\nfunc main(){}\n"})
+		projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]any{"module": "example.org/gitdep", "git": repo, "rev": rev}}}), "main.gox": "package main\nfunc main(){}\n"})
 		if _, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "escapes checkout") {
 			t.Fatalf("%s: %v", kind, e)
 		}
@@ -482,8 +494,8 @@ path = '.'
 format = 1
 
 [dependencies.native]
-module = 'example.org/native'
 package = 'example.org/native'
+go = 'example.org/native'
 version = 'v1.0.0'
 `, "lib.gox": "package dep\nuse native as n;\nfunc Value()int{return n::Value()}\n"})
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\nrequire example.org/native v1.1.0\nreplace example.org/native => ../native\n", "goxide.toml": `[[bin]]

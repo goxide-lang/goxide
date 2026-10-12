@@ -75,7 +75,7 @@ use output;
 func main() { output::Println("mixed source, one manifest") }
 ```
 
-对应清单需要 `[dependencies.output] source = "toolchain", package = "fmt"`（分别写作 TOML 字段）；原生 `main.go` 保持 Go import 语法。
+对应清单需要 `[dependencies.output] go = "fmt"`（分别写作 TOML 字段）；原生 `main.go` 保持 Go import 语法。
 
 ```go
 // target/.../module/main.go：相同 Go 包身份，生成器不更名业务 module。

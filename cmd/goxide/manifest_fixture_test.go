@@ -172,6 +172,9 @@ func fixtureNamespaceManifest(t *testing.T, text string) string {
 			continue
 		}
 		module, _ := dep["module"].(string)
+		if goSource, ok := dep["go"].(string); ok && dep["version"] != nil {
+			module = goSource
+		}
 		if module != "" {
 			if _, exists := dep["package"]; !exists {
 				dep["package"] = module
@@ -180,7 +183,7 @@ func fixtureNamespaceManifest(t *testing.T, text string) string {
 	}
 	for alias, path := range map[string]string{"fmt": "fmt", "json": "encoding/json", "os": "os", "filepath": "path/filepath", "strings": "strings"} {
 		if _, exists := deps[alias]; !exists {
-			deps[alias] = map[string]any{"source": "toolchain", "package": path}
+			deps[alias] = map[string]any{"go": path}
 		}
 	}
 	namespaces, _ := pkg["namespaces"].(map[string]any)

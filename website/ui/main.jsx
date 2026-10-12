@@ -196,9 +196,10 @@ function Local({ manifest }) {
         网站构建时由当前 CLI 转译并运行以下快照。它们不属于浏览器的可编辑输入。
       </p>
       <p>
-        新的完整 goxide.toml
-        示例等待项目配置合同定稿。既有配置只说明当前实现，不作为新 schema
-        承诺。构建脚本需要明确授权，本网站不会执行或授权它们。
+        完整工程采用 go/git/path 来源的新 goxide.toml
+        schema。下载包含清单、锁文件、全部源码与复现命令；首次构建可下载锁定的
+        Go 支持库，随后可 locked/offline
+        重放。构建脚本需要明确授权，本网站不会执行或授权它们。
       </p>
       <div id="cli-example">
         {manifest.cliExamples.map((example) => (
@@ -223,6 +224,13 @@ function Local({ manifest }) {
           <div key={project.id}>
             <h2>{project.title}</h2>
             {project.note && <p>{project.note}</p>}
+            {project.download && (
+              <p>
+                <a href={"/" + project.download.path} download>
+                  下载完整工程 ZIP
+                </a>
+              </p>
+            )}
             <Readonly label="工程快照" files={project.files} />
             {project.runs.map((run, index) => (
               <div key={index}>

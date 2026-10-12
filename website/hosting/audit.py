@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Fail closed on accidental publish files, oversized assets or local path leaks."""
-import hashlib,json,pathlib,re
+import hashlib,json,pathlib,re,zipfile
 if not __debug__:
  raise SystemExit('audit refuses Python optimization; checks must remain enabled')
 root=pathlib.Path(__file__).resolve().parents[1]/'dist'
-allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt'}
+allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt','project-features.zip','project-targets.zip'}
 frontend_record=json.loads((root/'frontend-assets.json').read_text())
 assert frontend_record['websiteCommit']==json.loads((root/'examples.json').read_text())['websiteCommit'], 'frontend/compiler website identities differ'
 frontend=frontend_record['assets']
@@ -22,6 +22,17 @@ patterns={
  'github-token':rb'(?:ghp_|github_pat_)[A-Za-z0-9_]{30,}',
  'aws-access-key':rb'AKIA[0-9A-Z]{16}',
 }
+for project in json.loads((root/'examples.json').read_text())['projectExamples']:
+ if 'download' not in project:continue
+ download=project['download'];path=root/download['path']
+ assert path.name in {'project-features.zip','project-targets.zip'}
+ assert hashlib.sha256(path.read_bytes()).hexdigest()==download['sha256'], 'project archive digest differs'
+ with zipfile.ZipFile(path) as archive:
+  assert archive.namelist()==download['files'], 'project archive inventory differs'
+  for name in archive.namelist():
+   assert not pathlib.PurePosixPath(name).is_absolute() and '..' not in pathlib.PurePosixPath(name).parts
+   for label,pattern in patterns.items():
+    assert not re.search(pattern,archive.read(name)),f'project archive: detected {label}'
 for p in sorted(p for p in root.rglob('*') if p.is_file()):
  assert p.is_file() and not p.is_symlink(),p.name
  b=p.read_bytes();assert len(b)<=25*1024*1024,f'{p.name}: exceeds CF 25 MiB'

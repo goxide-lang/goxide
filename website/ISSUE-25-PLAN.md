@@ -26,7 +26,7 @@
 
 托管目标是 `goxide-lang.github.io` 根站，Vite `base: '/'`，不是 `/goxide/` 项目子路径。验证真实根站路径及本地同布局模拟；不改 Pages 配置。404仍为真实独立页；未知 feature/example有可读错误，不静默选择另一条。
 
-RFC：左侧较窄编号/名称/状态列表，右侧连续简介、设计/用法、边界与代码；共享 readonly FileView，移除主内容 card/accordion，不重造状态来源。完整项目示例等待 [#23](https://github.com/goxide-lang/goxide/issues/23) 的新 schema 定稿，既有配置快照明确为当前合同，不自创字段。两处暂停文案在同一 PR：收窄首页泛型限制，根 README 不手工写死示例数量。[#26](https://github.com/goxide-lang/goxide/issues/26)未决，不实现远程 run、localhost执行服务、上传或分享。
+RFC：左侧较窄编号/名称/状态列表，右侧连续简介、设计/用法、边界与代码；共享 readonly FileView，移除主内容 card/accordion，不重造状态来源。完整项目示例采用 [#23](https://github.com/goxide-lang/goxide/issues/23) / [#27](https://github.com/goxide-lang/goxide/pull/27) 定稿的新 schema；提供含锁文件和全部源码的 ZIP，并从实际下载包解压后复现，不自创字段。两处暂停文案在同一 PR：收窄首页泛型限制，根 README 不手工写死示例数量。[#26](https://github.com/goxide-lang/goxide/issues/26)未决，不实现远程 run、localhost执行服务、上传或分享。
 
 ## 构建与验证
 
@@ -38,4 +38,4 @@ RFC：左侧较窄编号/名称/状态列表，右侧连续简介、设计/用�
 
 配置参考：[Monaco官方ESM集成](https://github.com/microsoft/monaco-editor/blob/main/docs/integrate-esm.md)、[Vite官方Pages base规则](https://vite.dev/guide/static-deploy.html#github-pages)。本次只读Pages API已确认站点URL为https://goxide-lang.github.io/、source path为 `/`，未修改该配置。
 
-迁移验证沿用同一真实WASM/业务例子，检查前进后退、直接刷新、文件草稿/选中状态、lazy加载、Monaco重置/销毁重建、readonly与四布局。可比较同口径首页JS产物，不把整个产物算作框架本体；不做两套benchmark。#27的compiler inventory/pin由项目任务处理，本次不改，等其最终CI候选再stack和配套新schema完整示例。
+迁移验证沿用同一真实WASM/业务例子，检查前进后退、直接刷新、文件草稿/选中状态、lazy加载、Monaco重置/销毁重建、readonly与四布局。可比较同口径首页JS产物，不把整个产物算作框架本体；不做两套benchmark。#27最终候选 `690cd5178dc11a0089a41e9320ed1275778383e1` 已普通merge到本分支；PR base为plan/project-build-23，合并顺序27→28。compiler pin绑定该候选，生产摘要逐文件核验。完整feature/bin与lib/双bin/example工程含goxide.toml、goxide.lock、全部源码和命令；ZIP实际解压重放，不含target或运行服务。

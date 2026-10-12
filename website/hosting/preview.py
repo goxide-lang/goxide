@@ -16,7 +16,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
   code=200 if valid else 404
   file=root/name if valid else root/'404.html'
   data=file.read_bytes()
-  mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json','.ttf':'font/ttf'}.get(file.suffix,'text/plain')
+  mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json','.ttf':'font/ttf','.zip':'application/zip'}.get(file.suffix,'text/plain')
   self.send_response(code);self.send_header('Content-Type',mime);self.send_header('Content-Length',str(len(data)))
   if args.headers:
    for line in (root/'_headers').read_text().splitlines():

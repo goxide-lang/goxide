@@ -21,6 +21,8 @@ build.py校验当前源码与catalog编译器pin/摘要，使用同一CLI生成�
 
 examples.json区分compiler commit/digest、websiteCommit、工具链、ABI、固定库版本与实际WASM摘要。frontend-assets.json固定Vite生成资源路径及SHA-256；审计拒绝额外文件或字节改动。THIRD-PARTY-LICENSES.txt包含锁定生产依赖的许可文本。
 
+完整工程下载：`project-features.zip` 与 `project-targets.zip` 包含新 schema 清单、锁文件、全部源码和复现说明；构建时解压实际 ZIP 并核验 CLI 输出。首次本机构建可下载固定支持依赖，offline 运行需要已有缓存。#28 stack于#27候选690cd517，合并顺序27→28。
+
 ## 页面与工作区
 
 preact-iso Router处理介绍 `/`、RFC `/rfc.html?feature=ID`、Playground `/playground.html?example=ID` 与本地说明 `/local.html`。实体HTML由同一个Vite壳生成，仅供直接打开/刷新；站内链接导航与前后退保留Playground实例、草稿、选择与models。刷新不承诺保留未保存草稿。未知条目显示明确错误，未知文件返回真实404。

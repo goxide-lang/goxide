@@ -5,7 +5,7 @@ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/usr/
 try{
  const context=await browser.newContext();const page=await context.newPage();
  const assetResponse=await context.request.get(base+'/frontend-assets.json');assert.equal(assetResponse.status(),200);const assets=(await assetResponse.json()).assets;
- for(const asset of ['rfc.html','playground.html','local.html','worker.js','wasm_exec.js','compiler.wasm','examples.json','THIRD-PARTY-LICENSES.txt',...Object.keys(assets)]){const response=await context.request.get(base+'/'+asset);assert.equal(response.status(),200,asset);if(asset.endsWith('.wasm'))assert.match(response.headers()['content-type'],/application\/wasm/);}
+ for(const asset of ['rfc.html','playground.html','local.html','worker.js','wasm_exec.js','compiler.wasm','examples.json','THIRD-PARTY-LICENSES.txt','project-features.zip','project-targets.zip',...Object.keys(assets)]){const response=await context.request.get(base+'/'+asset);assert.equal(response.status(),200,asset);if(asset.endsWith('.wasm'))assert.match(response.headers()['content-type'],/application\/wasm/);}
  for(const path of ['/missing','/deep/unknown','/private/rfcs.md','/.git/config','/compile']){assert.equal((await page.goto(base+path)).status(),404);assert.match(await page.textContent('h1'),/404/);assert.equal(await page.locator('#root').count(),0);}
  console.log(JSON.stringify({base,rootSite:true,assets:Object.keys(assets).length,real404:true}));
 }finally{await browser.close();}

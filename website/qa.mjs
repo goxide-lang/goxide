@@ -1,3 +1,4 @@
+import {write as writeSource,read as readEditor,view} from './monaco-qa.mjs';
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -14,7 +15,7 @@ const errors=[];const requests=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));
 await fs.mkdir(new URL('qa-artifacts/',import.meta.url),{recursive:true});
 const finished=()=>page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('转译完成'),{},{timeout:60000});
-await page.goto(base);await finished();
+await page.goto(base.replace(/\/$/,'')+'/playground.html');await finished();
 const manifest=await page.evaluate(async()=>await(await fetch('examples.json')).json());
 const a04Matrix=JSON.parse(await fs.readFile(new URL('a04-matrix.json',import.meta.url),'utf8'));
 const a04Results=[];
@@ -22,17 +23,10 @@ const a01Matrix=JSON.parse(await fs.readFile(new URL('a01-matrix.json',import.me
 const a01Results=[];
 // CLI project snapshots stay read-only, separate from browser example choices.
 assert.equal(await page.locator('#examples option').count(), manifest.examples.length + (manifest.packageExamples || []).length);
-const snapshotText = await page.locator('#cli-example').textContent();
-for (const example of manifest.cliExamples) {
- for (const file of example.files) {
-  assert.ok(snapshotText.includes(file.source));
-  assert.ok(snapshotText.includes(file.go));
- }
- assert.ok(snapshotText.includes(example.stdout));
-}
+// Readonly browsing and route snapshots are verified by catalog-qa.mjs.
 for(let i=0;i<manifest.examples.length;i++){
- await page.selectOption('#examples',String(i));await finished();
- assert.equal(await page.inputValue('#output'),manifest.examples[i].go,`${manifest.examples[i].id}: WASM differs from CLI`);
+ await page.selectOption('#examples',manifest.examples[i].id);await finished();
+ assert.equal(await readEditor(page,'生成结果'),manifest.examples[i].go,`${manifest.examples[i].id}: WASM differs from CLI`);
 }
 // Native CLI runs only in this local QA process, never in the web server.
 const checkResults=[];
@@ -393,14 +387,14 @@ try {
   let nativeGo, nativeError;
   try { nativeGo=execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']}); }
   catch(e) {nativeError=String(e.stderr).trim().replaceAll(input,'playground.gox');}
-  await page.fill('#source',source);
+  await writeSource(page,source);
   if(name.startsWith('reject_') && !nativeTypeReject[name]) {
    assert.ok(nativeError,`${name}: CLI unexpectedly accepted input`);
    if(frontendReject[name])assert.match(nativeError,frontendReject[name],`${name}: wrong rejection`);
    await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
    assert.equal((await page.textContent('#diagnostic')).trim(),nativeError,`${name}: diagnostics differ`);
-   assert.equal(await page.inputValue('#output'),'');
-   assert.equal(await page.isDisabled('#copy'),true);
+   assert.equal(await readEditor(page,'生成结果'),'');
+   assert.equal(await view(page,'生成结果').getByRole('button',{name:'复制文件',exact:true}).isDisabled(),true);
    if(nativeValidControls[name]) {
     const control=path.join(temp,'valid-go-control.go');
     await fs.writeFile(control,await fs.readFile(new URL(`checks/${nativeValidControls[name]}`,import.meta.url),'utf8'));
@@ -408,12 +402,12 @@ try {
    }
    // Each builtin/readonly rejection must recover through a real subsequent WASM compile.
    if(frontendReject[name]) {
-    await page.fill('#source',manifest.examples[0].source);await finished();
-    assert.equal(await page.inputValue('#output'),manifest.examples[0].go,`${name}: error recovery differs`);
+    await writeSource(page,manifest.examples[0].source);await finished();
+    assert.equal(await readEditor(page,'生成结果'),manifest.examples[0].go,`${name}: error recovery differs`);
    }
   } else {
    assert.equal(nativeError,undefined,`${name}: CLI rejected input`);
-   await finished();assert.equal(await page.inputValue('#output'),nativeGo,`${name}: generated Go differs`);
+   await finished();assert.equal(await readEditor(page,'生成结果'),nativeGo,`${name}: generated Go differs`);
    if(nativeTypeReject[name]) {
     const generated=path.join(temp,'invalid.go');await fs.writeFile(generated,nativeGo);
     let goError;
@@ -442,12 +436,12 @@ try {
     if(repeat)assert.equal(diagnostic,expected,`${check.name}: nondeterministic CLI diagnostic`);
     expected=diagnostic;
     if(ending==='LF') {
-     await page.fill('#source',source);await page.click('#compile');
+     await writeSource(page,source);await page.click('#compile');
      await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
      assert.equal((await page.textContent('#diagnostic')).trim(),expected,`${check.name}: UI diagnostic differs`);
-     assert.equal(await page.inputValue('#output'),'');assert.equal(await page.isDisabled('#copy'),true);
-     await page.fill('#source',manifest.examples[0].source);await finished();
-     assert.equal(await page.inputValue('#output'),manifest.examples[0].go,`${check.name}: UI recovery differs`);
+     assert.equal(await readEditor(page,'生成结果'),'');assert.equal(await view(page,'生成结果').getByRole('button',{name:'复制文件',exact:true}).isDisabled(),true);
+     await writeSource(page,manifest.examples[0].source);await finished();
+     assert.equal(await readEditor(page,'生成结果'),manifest.examples[0].go,`${check.name}: UI recovery differs`);
     }
     originWorkerInputs.push({source,expected,name:check.name,ending,repeat});
     originWorkerInputs.push({source:manifest.examples[0].source,go:manifest.examples[0].go,name:check.name,ending,repeat,recovery:true});
@@ -518,21 +512,21 @@ try {
     if(repeat)assert.equal(expected,previous,`${check.name}/${ending}: nondeterministic output`);
     previous=expected;
     if(ending==='LF') {
-     await page.fill('#source',source);await page.click('#compile');
+     await writeSource(page,source);await page.click('#compile');
      if(check.expect==='success') {
       await finished();
      } else {
       await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
      }
-     observation.ui={go:await page.inputValue('#output'),diagnostic:(await page.textContent('#diagnostic')).trim(),copyDisabled:await page.isDisabled('#copy')};
+     observation.ui={go:await readEditor(page,'生成结果'),diagnostic:(await page.textContent('#diagnostic')).trim(),copyDisabled:await view(page,'生成结果').getByRole('button',{name:'复制文件',exact:true}).isDisabled()};
      await saveMatrix();
      if(check.expect==='success')assert.equal(observation.ui.go,go,`${check.name}: current matrix UI Go differs`);
      else {
       assert.equal(observation.ui.diagnostic,diagnostic,`${check.name}: current matrix UI diagnostic differs`);
       assert.equal(observation.ui.go,'');assert.equal(observation.ui.copyDisabled,true);
      }
-     await page.fill('#source',manifest.examples[0].source);await finished();
-     observation.uiRecoveryGo=await page.inputValue('#output');await saveMatrix();
+     await writeSource(page,manifest.examples[0].source);await finished();
+     observation.uiRecoveryGo=await readEditor(page,'生成结果');await saveMatrix();
      assert.equal(observation.uiRecoveryGo,manifest.examples[0].go,`${check.name}: current matrix UI recovery differs`);
     }
     matrixWorkerInputs.push({source,go,error:diagnostic,name:check.name,ending,repeat});
@@ -559,39 +553,39 @@ try {
  await saveMatrix();
  }
 } finally {await fs.rm(temp,{recursive:true,force:true});}
-await page.selectOption('#examples','0');await finished();
-await page.fill('#source',manifest.examples[0].source.replace('21','37'));await finished();
-assert.match(await page.inputValue('#output'),/37/);
-await page.click('#copy');assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),await page.inputValue('#output'));
-await page.fill('#source','package main\nfunc main( {');
+await page.selectOption('#examples',manifest.examples[0].id);await finished();
+await writeSource(page,manifest.examples[0].source.replace('21','37'));await finished();
+assert.match(await readEditor(page,'生成结果'),/37/);
+await view(page,'生成结果').getByRole('button',{name:'复制文件',exact:true}).click();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),await readEditor(page,'生成结果'));
+await writeSource(page,'package main\nfunc main( {');
 await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
-assert.equal(await page.inputValue('#output'),'');assert.equal(await page.isDisabled('#copy'),true);
+assert.equal(await readEditor(page,'生成结果'),'');assert.equal(await view(page,'生成结果').getByRole('button',{name:'复制文件',exact:true}).isDisabled(),true);
 await page.click('#reset');await finished();
-for(let n=0;n<6;n++)await page.fill('#source',manifest.examples[0].source.replace('21',String(80+n)));
-await finished();assert.match(await page.inputValue('#output'),/85/);
-await page.fill('#source','package main\nfunc main(){}\n'+' '.repeat(32769));
+for(let n=0;n<6;n++)await writeSource(page,manifest.examples[0].source.replace('21',String(80+n)));
+await finished();assert.match(await readEditor(page,'生成结果'),/85/);
+await writeSource(page,'package main\nfunc main(){}\n'+' '.repeat(32769));
 await page.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('32 KiB'));
 await page.click('#reset');await finished();
-await page.fill('#source','package main\nimport "net/http"\nfunc main(){ _ = http.MethodGet }');
+await writeSource(page,'package main\nimport "net/http"\nfunc main(){ _ = http.MethodGet }');
 await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
 assert.match(await page.textContent('#diagnostic'),/outside the bundled package set/);
-await page.fill('#source','package main\n// <img src=x onerror=alert(1)>\nfunc main() {}');await finished();assert.equal(await page.locator('img').count(),0);
-await page.locator('#source').focus();await page.keyboard.press('Control+Enter');await finished();await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.id),'copy');
+await writeSource(page,'package main\n// <img src=x onerror=alert(1)>\nfunc main() {}');await finished();assert.equal(await page.locator('img').count(),0);
+await view(page,'源码').getByRole('textbox').focus();await page.keyboard.press('Control+Enter');await finished();await page.keyboard.press('Tab');assert.ok(await page.evaluate(()=>document.activeElement!==document.body));
 await page.click('#reset');await finished();
-await page.locator('h1').click();
+await page.locator('#playground h1').click();
 await page.screenshot({path:new URL('qa-artifacts/desktop.png',import.meta.url).pathname,fullPage:true});
 await page.setViewportSize({width:390,height:844});
 assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
 await page.screenshot({path:new URL('qa-artifacts/mobile.png',import.meta.url).pathname,fullPage:true});
 // Intercept only a QA worker to deterministically exercise hard timeout and cancel.
-await page.route('**/worker.js*',r=>r.fulfill({contentType:'application/javascript',body:'postMessage({type:"ready"}); onmessage=()=>{};'}));
+await page.route('**/worker.js*',r=>r.fulfill({contentType:'application/javascript',body:`postMessage({type:'ready',rootsSha256:'${manifest.dependencyContext.sha256}'}); onmessage=()=>{};`}));
 await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent==='正在转译…');
 await page.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('超过 10 秒'),{},{timeout:15000});
-assert.equal(await page.inputValue('#output'),'');
+assert.equal(await readEditor(page,'生成结果'),'');
 await page.click('#compile');await page.waitForFunction(()=>document.querySelector('#status').textContent==='正在转译…');await page.click('#stop');
 assert.match(await page.textContent('#status'),/已中断/);
 await page.unroute('**/worker.js*');await page.click('#reset');await finished();
-assert.equal(await page.inputValue('#output'),manifest.examples[0].go);
+assert.equal(await readEditor(page,'生成结果'),manifest.examples[0].go);
 assert.deepEqual(errors,[]);
 assert.equal(requests.every(u=>u.startsWith(base)),true,'external network request');
 const originGroupResults=checks=>({fixtures:checks.length,cliObservations:checks.length*4,uiLfObservations:checks.length*2,rawWorkerObservations:checks.length*4,recoveryAfterEach:true,sourceFile:'playground.gox reused across distinct sources',scope:'UI LF plus non-UI real WASM worker LF/CRLF; no cross-file/package or effect/frame coverage claim'});

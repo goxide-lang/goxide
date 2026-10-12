@@ -3,7 +3,6 @@
 import argparse,http.server,pathlib,urllib.parse
 parser=argparse.ArgumentParser()
 parser.add_argument('--port',type=int,default=8084)
-parser.add_argument('--prefix',choices=['/','/goxide/'],default='/')
 parser.add_argument('--headers',action='store_true',help='simulate CF _headers for this build')
 args=parser.parse_args();root=pathlib.Path(__file__).resolve().parents[1]/'dist'
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -11,15 +10,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
  def do_GET(self):self.serve(True)
  def serve(self,body):
   path=urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
-  if args.prefix!='/' and path==args.prefix[:-1]:
-   self.send_response(301);self.send_header('Location',args.prefix);self.end_headers();return
-  name=path[len(args.prefix):] if path.startswith(args.prefix) else None
+  name=path[1:] if path.startswith('/') else None
   if name=='':name='index.html'
-  valid=name is not None and '/' not in name and '\\' not in name and name not in ['.','..'] and (root/name).is_file()
+  valid=name is not None and '\\' not in name and '..' not in pathlib.PurePosixPath(name).parts and (root/name).is_file() and (root/name).resolve().is_relative_to(root.resolve())
   code=200 if valid else 404
   file=root/name if valid else root/'404.html'
   data=file.read_bytes()
-  mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json'}.get(file.suffix,'text/plain')
+  mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json','.ttf':'font/ttf','.zip':'application/zip'}.get(file.suffix,'text/plain')
   self.send_response(code);self.send_header('Content-Type',mime);self.send_header('Content-Length',str(len(data)))
   if args.headers:
    for line in (root/'_headers').read_text().splitlines():

@@ -1,1 +1,19 @@
-{"name":"goxide-website-checks","private":true,"scripts":{"test":"node qa.mjs"},"devDependencies":{"playwright":"1.58.2"}}
+{
+  "name": "goxide-website-checks",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "test": "node catalog-qa.mjs",
+    "test:compiler": "node qa.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2",
+    "vite": "8.3.4"
+  },
+  "dependencies": {
+    "monaco-editor": "0.57.0",
+    "preact": "11.0.1",
+    "preact-iso": "2.12.2"
+  },
+  "type": "module"
+}

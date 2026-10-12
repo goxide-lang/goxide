@@ -1,239 +1,52 @@
-# goxide 语言介绍与自托管 Playground
+# Goxide 网站与 Monaco Playground
 
-中文优先的静态语言介绍网站，以及同包多文件 goxide → Go 浏览器转译器（保留旧单文件入口）。网站源、十三个 `.gox` 示例、WASM 适配与编译器在同一仓库。最终交付 `goxide-web` **一个 Go 二进制**，内嵌网站、示例、真实编译器 WASM、Go JS runtime 和 license。运行不需要 Node、Go 工具链、资源目录、CDN、账号或数据库。
+网站开发源码在本仓 `website/`；`goxide-lang.github.io` 仅存部署产物。当前 UI 使用 Preact、preact-iso、Vite 与 Monaco。普通介绍页只加载页面脚本，Monaco 在文件视图打开时按需加载；所有脚本、编辑器 worker、编译器 WASM、字体/样式与许可证均随静态资源交付，不依赖 CDN。
 
-本轮将 .gox 包使用统一为 use 与静态 :: 路径，序列化派生限定为 serde 协议拥有者；
-Playground 的 CLI/WASM 共用项目显式依赖根，同时展示配置、包来源与源码身份。
-编译器准确提交与生产源码摘要由 `catalog-source.json` 的 `compilerCommit` /
-`compilerDigest` 记录，构建前逐文件核对；`websiteCommit` 独立记录网站工具 HEAD。
-这不表示已更新线上版本。[仓内验证说明](validation/README.md)区分当前验证和历史记录。
+浏览器只转译一个用户包及构建时固定的随附依赖，不运行生成 Go、不解析任意模块、不执行或授权构建脚本。可编辑 `.gox` 文件最多16个，总 UTF-8 ≤32KiB；一个编译器 Worker，450ms去抖、10秒转译/30秒加载超时。WASM 摘要、项目依赖根摘要、Worker实例和revision均校验。编辑/失败/中断清空旧结果。
 
-## 同包多文件 Playground
+Monaco提供文件模型、撤销/重做、查找、多光标、view state、当前文档词汇补全和基础Go着色。编译器诊断文本保留；明确的文件/行/列映射到markers。这里不是VSCode workbench，没有扩展宿主，也不提供完整Go/Goxide语义语言服务。
 
-Playground 接受一个用户包的 1–16 个普通 `.gox` 文件，总 UTF-8 源码不超过
-32 KiB；每个文件保留独立 use 作用域。旧示例和 `goxideCompile(string)` 保持
-单文件结果；新增文件切换到包级规则，删回一个文件也不改变模式，重置旧例可恢复。
-新入口 `goxideCompilePackage([{path, source}])` 返回按真实文件分开的完整 Go。
-CLI 和浏览器共用 helper 输出层，helper 独立为 `goxide_helpers_<原文件名>.go`，
-未隐藏或删减生成代码。浏览器仅转译，不执行生成 Go。
+## 构建
 
-依赖视图只读，显示固定直接依赖在本次原生 export data 构建中选中的完整
-GoFiles/CgoFiles，以及真实模块/工具链版本、源码路径和 SHA-256。该视图不含
-整个发行包的测试、其他平台或汇编文件；传递依赖闭包仍列在清单。依赖不会成为
-用户包输入，不支持任意模块下载、多包工程编辑、上传或外部构建脚本。
-
-`cmd/goxide-playground/goxide.roots.toml` 是本项目唯一的依赖根声明：CLI 验证通过
-`--roots` 传入，WASM 内嵌相同字节并使用相同解析器。`use fmt;`、
-`use serde::json as json;` 等由这份显式声明解析；根不存在时不猜模块名或搜索目录。
-`#[derive(serde::Serialize, serde::Deserialize)]` 需要同文件 `use serde;`，JSON
-只提供数据格式。静态包、类型和宏路径使用 `::`，值字段、方法仍使用 `.`；旧
-`.gox import`、包成员点号和裸序列化派生名直接拒绝。生成的 Go 保持正常 Go 语法。
-
-依赖浏览展示该配置的原文与 SHA-256，以及每个静态路径对应的真实 Go 包。
-WASM 使用与 export archive 同批生成的 Module.Path / Standard 元数据验证包来源，
-并核对每份 archive 摘要；页面核验显示的配置原文字节，并拒绝配置摘要与 WASM 不一致的清单。
-
-定向验收见 [同包验证入口](validation/package-files/README.md)。下面的完整历史
-验证流程仍保留；[多文件初版交付报告](../docs/reviews/playground-package-files-20261009.md)
-记录之前版本，当前改动需按本文命令重新验证。
-
-## 从干净 checkout 复现
-
-使用完整、非 shallow checkout，保留 catalog 引用的 compiler/evidence Git 对象。
-准备已安装的 Go 1.27.1、race 可用的 C 编译器、Python 3.11+、Node、Python Playwright
-和 Chromium，以及完整 `go.mod/go.sum` 缓存。先在当前 shell 按环境启动约定激活 Go。
-检查不安装工具、不下载依赖；浏览器测试需要 loopback 监听和保留 sandbox 的执行权限。
+要求已安装 Go 1.27.x、Python 3.11+、Node 22.12+（或满足Vite要求的较新版本）、完整Go模块缓存。npm依赖精确版本见package-lock.json；构建不下载Go依赖。工具链与缓存按工作环境启动说明设置。
 
 ```sh
+npm ci --prefix website
 python3 -B website/build.py
-python3 -B website/validation/focused.py \
-  --out /absolute/new-validation-output \
-  --go /absolute/path/to/go \
-  --node /absolute/path/to/node \
-  --chromium /absolute/path/to/chromium \
-  --cases website/validation/semantic-cleanups-cases.json \
-  --cases website/validation/std-support-cases.json \
-  --cases website/validation/static-paths-cases.json \
-  --cases website/validation/enum-borrows-cases.json \
-  --cases website/validation/static-protocol-cases.json
+"$GO_BIN" build -mod=readonly -tags goxideweb -trimpath -o bin/goxide-web ./cmd/goxide-web
+./bin/goxide-web
 ```
 
-当前入口验证全部 13 个真实网站例子及本批正反例，核对 LF/CRLF 的 CLI、Node GoWASM
-和 HTTP Worker 输出，并按独立预期执行原生程序。输出留在新的仓外目录。
-Chromium sandbox 保持开启；环境拒绝时明确报告阻塞，不自动降级。
+build.py校验当前源码与catalog编译器pin/摘要，使用同一CLI生成真实单文件/同包输出、固定依赖export data、工程快照与WASM；Vite生成hashed页面脚本、按需Monaco与worker。网站输出到忽略的website/dist/，同批复制到cmd/goxide-web/dist/；普通go test不需要尚未生成的embed资源。Node/npm只用于开发构建与验证，最终静态托管或Go embed运行不需要Node。
 
-历史 `validation/run.py` 的七阶段矩阵及 AST oracle 原样保留，须按
-[历史入口说明](validation/README.md#historical-seven-phase-acceptance)在旧准确提交中复现。
-本次 alias 精简有意改变生成 AST，不把当前 focused 结果冒称旧 AST 等价或完整 UI QA。
-完整 compiler race/vet/design 仍须另行运行；构建资源、推送分支、合入 main 和部署分开记录。
+examples.json区分compiler commit/digest、websiteCommit、工具链、ABI、固定库版本与实际WASM摘要。frontend-assets.json固定Vite生成资源路径及SHA-256；审计拒绝额外文件或字节改动。THIRD-PARTY-LICENSES.txt包含锁定生产依赖的许可文本。
 
-## 构建与运行
+完整工程下载：`project-features.zip` 与 `project-targets.zip` 包含新 schema 清单、锁文件、全部源码和复现说明；构建时解压实际 ZIP 并核验 CLI 输出。首次本机构建可下载固定支持依赖，offline 运行需要已有缓存。#28 stack于#27候选690cd517，合并顺序27→28。
 
-以下是单独构建入口；完整验证优先使用上面的隔离入口。在仓库根目录，以 **Go 1.27.x**
-和 Python 3.11+ 构建。Go 命令必须与用于构建 CLI 的 GOROOT 一致。构建只使用已缓存依赖，
-保留 std/serde 精确版本、checksum 和无本地 replace 检查。Go LICENSE 使用所选工具链的
-`GOROOT/LICENSE`，或 Homebrew `libexec` 对应发行目录的 `LICENSE`；缺失即失败。
+## 页面与工作区
+
+preact-iso Router处理介绍 `/`、RFC `/rfc.html?feature=ID`、Playground `/playground.html?example=ID` 与本地说明 `/local.html`。实体HTML由同一个Vite壳生成，仅供直接打开/刷新；站内链接导航与前后退保留Playground实例、草稿、选择与models。刷新不承诺保留未保存草稿。未知条目显示明确错误，未知文件返回真实404。
+
+源码、生成结果、依赖、RFC例子与CLI快照复用可收起tree + tabs + Monaco视图。可编辑tree/tabs各有新建按钮，共用命名校验。源/结果可选仅源、仅结果、左右、上下；两边按path独立选择。只读配置/依赖/快照不进入编译输入。显式选另一示例/重置清理models；删除、卸载dispose。
+
+当前完整goxide.toml新schema示例仍依赖#23定稿。既有CLI快照说明当前合同，不是新schema承诺；#26运行入口未决。本任务不新增运行、上传、分享接口。
+
+## 验证与本地静态预览
+
+组织根站为https://goxide-lang.github.io/，Vite base固定 `/`；不使用 `/goxide/` 项目子路径。以下服务仅用于验证，默认loopback，不是产品执行服务。
 
 ```sh
-export GO_BIN=/absolute/path/to/go
-python3 website/build.py
-"$GO_BIN" build -tags goxideweb -trimpath -o bin/goxide-web ./cmd/goxide-web
-./bin/goxide-web -version
-./bin/goxide-web                       # http://127.0.0.1:8080
-./bin/goxide-web -listen 127.0.0.1:9090
+python3 -B website/hosting/audit.py
+python3 website/hosting/preview.py --port 8084 --headers
+# 另一终端：
+QA_URL=http://127.0.0.1:8084 npm test --prefix website
+node website/hosting/qa-routes.mjs
+"$GO_BIN" test -mod=readonly -race -tags goxideweb ./cmd/goxide-web
+"$GO_BIN" vet -mod=readonly -tags goxideweb ./cmd/goxide-web
 ```
 
-`goxideweb` 标签使干净 checkout 的常规 `go test ./...` 不依赖尚未生成的嵌入资源。网站构建后用 `go test -tags goxideweb ./cmd/goxide-web` 测试服务器。不要使用普通 `go build ./cmd/goxide-web`。
+Playwright 1.58.2为固定测试依赖。Chromium路径默认/usr/bin/chromium，可设CHROMIUM；必须chromiumSandbox:true，不加--no-sandbox。在受限环境下使用启动说明允许的浏览器验证上下文，不能靠关闭浏览器沙箱通过检查。
 
-若要在受限云环境复现本次验证：
+catalog-qa.mjs验证真实Monaco键盘、多文件/readonly/布局、客户端路由与根站直达刷新、RFC内容、实际Worker/CLI字节一致、按需资源与桌面尺寸；截图在忽略的qa-artifacts/。qa.mjs保留较完整的编译器fixture与原生对照，使用Monaco交互助手；它是单独的test:compiler入口，不在每次UI调整重跑。历史七阶段隔离入口固定旧compiler与11例，说明/原native矩阵仍见validation/README.md；它不是当前Preact构建入口，不把过去运行作为当前UI通过证据。
 
-```sh
-source /workspace/.cloud-setup/env.sh
-export GOROOT=/workspace/.cloud-setup/toolchains/go1.27.1
-export GO_BIN="$GOROOT/bin/go"
-export PATH="$GOROOT/bin:$PATH"
-export GOPATH=/workspace/.cloud-setup/cache/gopath
-hash -r
-"$GO_BIN" version
-```
-
-显式传入 `-listen 0.0.0.0:8080` 才会监听所有 IPv4 接口。本服务器没有登录机制；需要私有远程访问时，应自行配置具有身份验证和 HTTPS 的反向代理。默认仅本机。Ctrl+C / SIGTERM 在最多 5 秒内优雅关闭。
-
-构建阶段生成 `website/dist/`（可独立静态托管）并复制到 `cmd/goxide-web/dist/`，全部为被忽略的构建物。只把网站构建物部署出去，不要把整个仓库作为静态目录。没有创建公共站点；自托管程序不依赖 Sites。
-
-## 真实转译与支持范围
-
-- `cmd/goxide-playground` 的旧单文件入口调用 `internal/frontend.CompileWithOptions`，同包文件集合入口调用 `internal/frontend.CompilePackageWithOptions`。WASM 只转译，不运行生成代码。
-- 支持同一个用户包的 1–16 个普通 `.gox` 文件，保留单文件入口。固定随附包：`fmt`、`errors`、`io`、`strconv`、`strings`、`math`、`encoding/json`，以及公开 `github.com/goxide-lang/std` 的 `runtime`、`formatting`、`sum`、`typeinfo` 子包和 `serde`、`serde/json`，以及真实导出数据包含的依赖闭包。支持包直接来自固定版本的 std，不再导入或浏览编译器仓库中的旧支持包。**完整列表在 `examples.json.importClosure`**；未随附包给出诊断。
-- 适配只在 `js/wasm` 下启用。原生 importer 使用离线 `go list -export`；已知 Go module 的 CLI 单文件使用输入 owner 的受管 modfile 查询同一依赖图，仅选择指定文件。WASM 导入来自构建时真实 Go export archive 的 `__.PKGDEF`，不是手写伪造类型签名，也不会调用外部服务。
-- 导出数据来自构建机器的原生目标；清单记录 `exportTarget`。早期 Linux/amd64 + Go 1.27.1 记录是历史证据；A06 平台与结果以这次准确提交的验证报告为准，不把它描述为所有 GOOS/GOARCH 的类型环境。构建时请在宿主平台生成资源，之后可以交叉构建纯静态 HTTP 二进制。
-- 没有浏览器文件系统、任意依赖解析、跨模块恢复、目录工程载入、外部宏包或 Go 执行 API。CLI 的跨包源码图宏聚合、version/path/git 依赖、feature、target 与受授权 host 构建脚本不在浏览器执行。
-- 浏览器中一个 Worker，450 ms 去抖，32 KiB UTF-8 输入，10 秒编译超时、30 秒加载超时、2 MiB 返回输出上限。取消/超时终止 Worker；下次操作重建。编译器自身宏预算仍然生效。没有独立浏览器堆内存配额，极端输入仍可能造成浏览器内存压力。
-- 失败、源码编辑与中断清空旧 Go，复制按钮同步禁用。Worker 实例 + revision 双重丢弃旧消息。通过 textarea/textContent 显示输入与诊断，不将源码插入 HTML。
-- Clipboard API 不可用时选择生成结果供手动复制。Tab 保持正常导航；Ctrl/⌘+Enter 转译。390 px 布局切换上下编辑器。
-
-## 内容来源与成熟度
-
-页面依据根 README、`docs/t0-acceptance.md`、`internal/macros/README.md`、`internal/matchexpr/README.md`、`docs/serde-json.md` 和相应 RFC。示例明确演示宏、enum/match、Option/Result/?、Default/Debug/Clone、serde JSON、Error（thiserror 风格）、`.equals` 和显式静态协议关联函数。
-
-不宣称全部 MVP、完整 Rust 借用安全、完整 hygiene 或零分配。本集成分支已合入 primitive 名称冲突诊断与跨模块 Result 静态 validator 修复：包级/文件 use 冲突会拒绝并报告定义和调用位置，不能宣传为完整支持所有遮蔽；特定跨模块循环消除了逐项分配，不能外推为任意载荷零分配。单文件 `go_result` 示例真实演示 `go_result!(call)` 与 `go_result_keep!(call)`，按调用的静态签名推导 T/E；保值版保留 `struct{Value T; Err E}`，不是 Clone。E 必须实现 error 且可为 nil，使用原 E 判断 nil，具名接口与指针均保留身份；接口内 typed nil 仍为 Err。兼容显式 T 的双参数形式；单 E 返回得到 unit，多成功值须先组织为 struct。完整语义见 `examples/go_result/README.md`。源码包宏组合仍在 CLI 示例中验证，不冒充浏览器支持跨包/独立预编译宏包。
-
-## 更新与版本绑定
-
-1. 切到要发布的编译器提交，修改 `website/examples/*.gox` 或 `website/static/*`。
-2. 运行 `python3 website/build.py`。每个示例必须经真实 CLI 成功转译，否则构建失败。另将仓库 examples/reexports 多包工程真实转译并运行，写入 cliExamples；网页以只读工程快照展示，不作为浏览器示例。构建不会授权或运行用户构建脚本。输出不是手写 Go。
-3. 构建脚本从当前工具链重新提取真实 export data、构建 WASM，并复制匹配版本的 `wasm_exec.js`。所有资源同批更新。
-4. `examples.json` 记录源码提交、编译器与支持库源码 SHA-256、export archives SHA-256、工具链、导出目标与包闭包。摘要覆盖未提交源变化，因此只看提交号不足；正式发布应从干净提交构建。
-5. 构建新 `goxide-web`，运行下面的验证。浏览器生成 Go 与 CLI 输出逐字节比较。生成 Go 若支持库语义改变，必须同时更新本地依赖与清单。
-
-浏览器示例与拒绝例的原始字节先复制到无祖先 `go.mod` 的临时 `playground.gox`，
-再调用真实 CLI；它们与 WASM 使用同一个 standalone 输入语境。正式验证器也要求
-输出与临时目录没有外层 module。A06 跨包恢复使用原生 acceptance 验证，不把仓库
-module 的已配置入口当成浏览器任意依赖加载能力，也不放宽 CLI/WASM 的逐字节门槛。
-
-## 验证
-
-```sh
-"$GO_BIN" test ./...
-"$GO_BIN" test -race -tags goxideweb ./cmd/goxide-web ./internal/typecheck
-"$GO_BIN" vet -tags goxideweb ./cmd/goxide-web ./internal/typecheck
-# 启动独立二进制后，在另一个终端：
-QA_URL=http://127.0.0.1:8080 npm test --prefix website
-```
-
-Playwright 仅是测试依赖，固定在 lockfile；这里要求它已可用，不自动安装。默认使用
-`/usr/bin/chromium`，可设置 `CHROMIUM=/absolute/browser`。隔离入口可用 `--playwright-node-modules`
-指定既有安装。正常网站构建与运行均不需要 npm。
-
-`qa.mjs` 验证十三例 CLI/WASM 逐字节一致，并以本地 CLI 对照 error-only、typed-nil、错误 T 和指针 error 返回值八项适配宏正反例（包括规范化文件名后的诊断一致性）、编辑真实改变结果、语法错误恢复、连续快速输入、32 KiB 拒绝、未知包、XSS 文本、复制、快捷键/Tab、桌面与 390 px 窄屏、中断/重置、无外部请求。超时测试只在测试浏览器路由中替换 Worker 为不返回结果的版本，确定性验证宿主 10 秒 watchdog，然后移除拦截恢复真实 WASM；不在产品引入测试后门。截图输出到忽略的 `website/qa-artifacts/`。
-
-A04 的 4 个正例和 4 个拒绝例单独记录 CLI/WASM 差分：LF/CRLF 各两次、共 32 次；
-UI 验证 16 次 LF 输入，真实 Worker 验证 32 次 LF/CRLF 输入，每次之后用已知合法输入
-验证恢复。`a04-matrix.json` 提供独立的原生 stdout/错误预期；新增 JSON→enum→match→
-Clone/Debug→JSON 示例只属于当前编译器。浏览器只转译，实际程序运行证据在隔离入口的
-`native/a04/`，不会混入旧编译器的 33 组 AST 对照或原 13 个诊断 fixture。
-
-A01 单独追加 2 个完整表达式正例和 10 个明确类型槽拒绝例。`a01-matrix.json` 固定
-原 A04 输入摘要，并独立指定类型槽 `$` token 位置、宏调用栈及原生 stdout 预期。
-CLI / 真实 Worker 各验证 48 次 LF/CRLF 输入，UI 验证 24 次 LF 输入，每次都有恢复
-检查；中途 Worker 协议失败先保存部分观察再失败。浏览器不执行 Go；两个正例的实际
-运行证据独立保存在 `native/a01/`。不扩展为 type 片段、歧义转换/单实参泛型判断或跨包浏览器支持。
-FC-10 多实参泛型的明确类型槽另有真实原生 CLI 验收，不计入这 12 个网站 fixture。
-
-`read_playground` WebMCP 只读工具在浏览器有 `document.modelContext` 时可注册；普通 Chromium 不支持该原生上下文，未将其作为已通过原生 WebMCP 验证的能力宣传。
-
-HTTP 测试验证嵌入资源、WASM MIME、GET/HEAD、拒绝写入、目录/路径穿越/仓库文件不可见以及安全 header。服务器设置读取、写入、空闲超时和 header 大小限制。程序从只含二进制的独立目录启动后仍可完成浏览器测试。
-
-## 静态托管准备
-
-根路径与项目子路径的本地验证、发布资产允许列表、CF Direct Upload 与独立网站仓库 Pages 的待批准方案见 [托管准备说明](hosting/README.md)。这些准备不会自动发布。
-
-## 文件布局
-
-- `website/static/`：手写静态页面、样式、主线程与 Worker，无线上第三方依赖。
-- `website/examples/`：十三个可执行 `.gox` 源例。
-- `website/build.py`：可复现生成链与版本清单。
-- `cmd/goxide-playground/`：WASM 桥接。
-- `internal/typecheck/platform_{native,wasm}.go`：平台特定 importer。
-- `cmd/goxide-web/`：Go embed HTTP 可执行程序（`goxideweb` 标签）。
-
-## RFC 特性目录（公开摘要）
-
-`catalog-source.json` 是人工审阅、可机器检查的状态源；`catalog.py` 校验 0001–0026 覆盖、状态/入口约束和固定提交的证据引用，并生成私有 [FEATURES.md](FEATURES.md) 索引。公开 `examples.json.catalog` 仅导出用途、边界、示例、状态与开发快照，不导出私有证据路径或 RFC 全文。
-
-状态针对卡片的限定范围：提案 / 已确认待实现 / 部分实现 / 已实现并验证。开发快照与当前编译器支持分别记录；任务报告不等于可发布实现。RFC 0024 的显式依赖根、use 与静态路径已在限定范围实现；pub use 和本地 mod 仍需 CLI 目录编译。当前 Playground 已包含共享 std/serde、明确上下文下的普通 sum 推导及限定可读性改进；统一 TOML/锁与 import-go 只在 CLI 工程快照说明。
-
-编译器 `commit` 绑定 `catalog-source.json` 的准确提交，`websiteCommit` 记录网站源码提交；构建独立枚举 pin 与当前生产文件集，再逐文件核对字节和固定摘要，增加、缺少或修改源码均拒绝。单文件与同包多文件示例均经过真实 CLI 转译、执行输出断言和浏览器逐文件差分。生成 Go 默认折叠；拒绝例来自真实 CLI 并再次通过 WASM 对照。完整最小 feature 工程在临时目录运行，use 多包快照与脚本说明不冒充浏览器执行。
-
-```sh
-python3 website/catalog.py
-QA_URL=http://127.0.0.1:8084 node website/catalog-qa.mjs
-```
-
-额外 QA 覆盖所有目录入口、13 例实际转译、10 个拒绝例、主题/状态/入口/搜索过滤、永久链接、缺失清单错误状态、复制、390px 与无外部上传。HTTPS 云环境若 Chromium 缺少平台代理 CA，可显式提供已安装 CA 的 `QA_PROXY_SPKI` 公钥摘要；测试不使用全局跳过证书校验。线上实际 HTTP 哈希独立经系统 CA 验证。
-
-RFC 管理建议：当前规范仍跟随编译器仓库和版本，Issue 用于讨论/跟踪、PR 用于变更评审。没有为此次目录新建仓库或 Issue；公开网站不是私有 RFC 镜像。
-
-## 统一项目版本的构建与证据
-
-本次编译器基线 69c1ab0，使用公开 std 3f2204770fd3 与 serde a1b791e96d66 的真实 Go module 版本，无本机 replace。`publicLibraries` 记录版本和 zip/go.mod checksum，`metadataSchema` 为 7；旧 schema 6 producer 须重生成。生成 Go 的共享 sum 身份与本地 payload validator 分开，不能宣称无辅助代码或 v1 ABI 稳定。
-
-`examples.json.wasmSha256` 是实际 WASM 字节摘要；Worker 根据 compilerCommit 使用版本 URL，执行前计算 SHA-256。app/style URL 绑定 websiteCommit，清单以 no-store 读取。哈希不匹配时拒绝执行并清空结果，而非混用旧编译器。测试覆盖损坏/陈旧 WASM 的拒绝状态。
-
-CLI snapshot 构建实际运行 format 2 feature 工程 A/B/A、根无 go.mod/go.sum、target 生成 metadata/Go；另对普通 Go 输入执行只读 plan、独立新目录迁入、原文件摘要不变和首次 offline+locked run。只发布刻意示例及实际生成文本，不复制临时路径或执行服务。
-
-完整编译器验收沿用 [统一项目验收](../docs/reviews/unified-project-20261004.md)：首轮 cold-cache 有 8 包因公开依赖未预热失败，预热后八包重跑通过，其他包在首轮通过；这是跨两轮的全包 race 覆盖。本网站任务另外运行定向 CLI race、真实十例 CLI/浏览器联合验证和独立审查，不声称在这里重跑一次全树全绿。
-
-## Cobra CLI 与原生 vendor 同步
-
-本轮基线09f1eb2；上述69c1ab0记录属于历史验证。新增严格长短选项、真实参数透传/旧旗标拒绝快照，以及空 module cache 下原生 vendor 离线迁入、locked运行和字节篡改拒绝快照。plan新增说明注释，按TOML解析结果比较目标配置，保留真实stdout。RFC0026整体仍为提案，仅显式继承约束确认；workspace未实现。RFC0024仍未实现。
-
-## Workspace 作者核心同步
-
-当前2aa0d06已经实现RFC0026作者核心，覆盖显式继承、全workspace统一版本、根唯一schema3锁、selected feature/build、多目标及复制根锁拆出。上节Cobra轮的“workspace未实现”是历史状态。本轮CLI快照在本地file proxy/Git fixture上实际执行，不使用公网示例模块，也不把工程送入浏览器。路径归一化后的锁仅展示，不能直接复用。go.work/workspace vendor迁入、统一host resolver、细粒度lock update、publish仍未实现。
-
-## 原生 workspace 迁入同步
-
-当前27d2e274已实现go.work/workspace vendor向新目录迁入，保留原生政策并物化显式成员边；迁入后支持渐进.gox/features/明确授权scripts。schema4非vendor根锁经显式物化可复制拆出。上节“迁入未实现”是历史状态；workspace vendor独立拆出仍未支持，须确认转换合同。既有host resolver/publish等限制不变。新增两个真实CLI快照，授权脚本由本轮NativeWorkspaceProgressiveScriptPermissions测试验证，网站构建本身不运行或授权脚本。
-
-## Goxide 命名接入（2026-10-04）
-
-本节记录基于官网源码 51405a69 的 Goxide / goxide / .gox / GOXIDE_* 命名迁移。该轮 enum metadata schema 8、reference 3、use 2、sum ABI 2、std ce5bccb 是历史版本；当前 ABI 见下一节。旧生成产物需全部重新生成。CLI cmd/goxide、WASM cmd/goxide-playground、bridge goxideCompile、web tag goxideweb；构建脚本会校验实际 compiler SHA/digest。网站 owner 使用本分支的完整 website 和对应 compiler 源、go.mod/go.sum 构建，不能混用旧 WASM 与新 JS。只完成本地验证，不部署。
-
-## enum 载荷借用与内联 sum
-
-当前源码要求 enum metadata 9、reference metadata 3、use metadata 3、sum ABI 3，
-实际提交与 std/serde 版本以匹配构建的清单为准；旧 interface case 产物须重新生成。
-`Option` 零值是 `None`，`Result` 零值非法。普通 enum 赋值复制独立的内联槽，
-slice、map、pointer 等载荷保持 Go 浅复制规则。
-
-`enum_borrows` 示例复用 `examples/enum_borrows/main.gox` 的控制流，通过返回并保存
-载荷引用验证原位修改与独立值副本；使用 `fmt::Println` 将预期输出写到 stdout。
-引用语法为 `&T` / `&mut T` 和 `&value` / `&mut value`；`ref` / `ref mut`
-显式借用载荷，`match &value` / `match &mut value` 设置默认绑定模式。
-引用可复制、保存、返回和捕获，不承诺独占或生命周期检查。整体替换 enum 后旧引用
-仍指向原固定槽，写入非活跃槽不改变当前变体。
-
-`enum-borrows-cases.json` 补充固定槽替换、非法 Result 零值的运行预期与只读写入拒绝。
-新增示例和 ABI 门槛需在固定生产提交后重新完成 CLI / Node WASM / HTTP Worker 验证；
-修改这些源文件本身不代表浏览器验证或网站发布已经完成。
+CI从锁文件安装前端、构建匹配WASM与静态资源，运行定向HTTP race/vet及现有Draft smoke。浏览器UI仍须本任务实际Playwright记录，CI本身不声称已运行浏览器。

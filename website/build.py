@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild every published example and the browser compiler from this checkout."""
 import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
-import catalog, project_snapshots, workspace_snapshots, workspace_import_snapshots, source_selection_snapshot
+import catalog, project_snapshots, workspace_snapshots, workspace_import_snapshots, source_selection_snapshot, project_downloads
 from build_support import dependency_context, dependency_sources, go_license_path, standalone_playground, verify_compiler_sources
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
@@ -49,15 +49,23 @@ dependencies = dependency_sources(packages, export_records, goroot=goroot,
 for dependency in dependencies:
     dependency['staticPaths'] = [binding['path'] for binding in context['bindings'] if binding['package'] == dependency['package']]
 dist = ROOT/'website/dist'
-if dist.exists(): shutil.rmtree(dist)
-# Explicit publish allowlist: no source tree, RFCs, configs or accidental files.
-static_files = ['index.html', '404.html', 'style.css', 'app.js', 'worker.js', '_headers', '.nojekyll']
+# Vite produces the single client-route shell and lazy editor/worker assets.
+run('npm', 'run', 'build', '--prefix', str(ROOT/'website'))
+static_files = ['404.html', 'worker.js', '_headers', '.nojekyll']
 assert set(p.name for p in (ROOT/'website/static').iterdir()) == set(static_files), 'unexpected static input'
-dist.mkdir()
 for name in static_files:
     shutil.copyfile(ROOT/'website/static'/name, dist/name)
-index = (dist/'index.html').read_text().replace('src="app.js"', f'src="app.js?site={website_sha}"').replace('href="style.css"', f'href="style.css?site={website_sha}"')
-(dist/'index.html').write_text(index)
+index = (dist/'index.html').read_text()
+for page in ['rfc.html', 'playground.html', 'local.html']:
+    (dist/page).write_text(index)
+# Record the precise Vite output graph; audit rejects extras and byte changes.
+frontend_assets = {}
+for asset in sorted((dist/'assets').rglob('*')):
+    if asset.is_file():
+        assert re.fullmatch(r'[A-Za-z0-9_.-]+\.(?:js|css|ttf)', asset.name), 'unexpected frontend output'
+        frontend_assets[asset.relative_to(dist).as_posix()] = hashlib.sha256(asset.read_bytes()).hexdigest()
+(dist/'frontend-assets.json').write_text(json.dumps(dict(websiteCommit=website_sha, assets=frontend_assets), indent=2)+'\n')
+(dist/'THIRD-PARTY-LICENSES.txt').write_bytes(run('node', str(ROOT/'website/frontend-licenses.mjs')))
 (ROOT/'bin').mkdir(exist_ok=True)
 run(GO, 'build', '-o', str(ROOT/'bin/goxide'), './cmd/goxide')
 examples = []
@@ -141,10 +149,12 @@ with tempfile.TemporaryDirectory(prefix='goxide-catalog-features-') as temporary
     assert not (project/'go.mod').exists() and not (project/'go.sum').exists()
     assert list((project/'target').rglob('go.mod'))
     files.append(dict(path='goxide.lock', source=(project/'goxide.lock').read_text()))
+    download = project_downloads.archive(dist, 'project-features.zip', files, feature_runs, GO, run, str(ROOT/'bin/goxide'))
     generated = sorted({p.read_text() for p in (project/'target').rglob('*.go') if 'pretty:' in p.read_text()})
     assert generated, 'feature target generated Go missing'
     files.extend(dict(path=f'target 生成 Go {i+1}（只读）', source=go) for i,go in enumerate(generated))
-    feature_example = dict(id='features', title='feature 与 bin：完整最小工程', files=files, runs=feature_runs)
+    feature_example = dict(id='features', title='feature 与 bin：完整最小工程', files=files, runs=feature_runs, download=download)
+targets_example = project_downloads.targets(ROOT, dist, GO, run)
 migration_example = project_snapshots.migration(ROOT, GO, run)
 vendor_example = project_snapshots.vendor(ROOT, GO, run)
 cli_options_example = project_snapshots.cli(ROOT, GO, run)
@@ -179,7 +189,7 @@ manifest = dict(abiVersions=abi_versions, metadataSchema=metadata_schema, public
                 dependencies=dependencies, dependencyContext=context, dependencySourceScope='fixed explicit project roots; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',
                 exportOrigins=origins, exportOriginsSha256=hashlib.sha256((exports/'origins.json').read_bytes()).hexdigest(),
                 importClosure=sorted(closure), maxSourceBytes=32768, maxFiles=16, compileTimeoutMs=10000,
-                examples=examples, packageExamples=package_examples, cliExamples=[cli_example], projectExamples=[feature_example,migration_example,vendor_example,cli_options_example]+workspace_snapshots.build(ROOT, GO)+workspace_import_snapshots.build(ROOT, GO)+[source_selection_snapshot.build(ROOT, GO)])
+                examples=examples, packageExamples=package_examples, cliExamples=[cli_example], projectExamples=[feature_example,targets_example,migration_example,vendor_example,cli_options_example]+workspace_snapshots.build(ROOT, GO)+workspace_import_snapshots.build(ROOT, GO)+[source_selection_snapshot.build(ROOT, GO)])
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')
 subprocess.run([GO, 'build', *wasm_flags, '-o', str(dist/'compiler.wasm'), './cmd/goxide-playground'], env=wasm_env, check=True)
 manifest['wasmSha256'] = hashlib.sha256((dist/'compiler.wasm').read_bytes()).hexdigest()

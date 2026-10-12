@@ -154,10 +154,19 @@ jobs:
           cmp go.mod "$module_prep_dir/go.mod"
           cmp go.sum "$module_prep_dir/go.sum"
           echo 'GOPROXY=off' >> "$GITHUB_ENV"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install locked frontend and QA dependencies
+        run: npm ci --prefix website
       - name: Website build identity regressions
         run: python3 -B website/build_support_test.py
       - name: Worker observation protocol regressions
         run: node --test website/validation/worker-observations_test.mjs
+      - name: Compiler UI synchronous invalidation regressions
+        run: node website/compiler_test.mjs
       - name: Build matching CLI examples, exports and WASM offline
         run: python3 -B website/build.py
       - name: Embedded HTTP server race gate

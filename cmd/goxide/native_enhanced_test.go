@@ -18,18 +18,38 @@ func TestNativeWorkspaceProgressiveFeatures(t *testing.T) {
 	if e := os.Remove(filepath.Join(lib, "lib.go")); e != nil {
 		t.Fatal(e)
 	}
-	workspaceWrite(t, lib, "lib.gox", "package lib\nfunc Value()string{if cfg!(feature(\"fancy\")){return \"enhanced\"};return \"plain\"}\n")
+	workspaceWrite(t, lib, "lib.gox", "package lib\npub enum E { A, B }\nfunc Value()string{if cfg!(feature(\"fancy\")){return \"enhanced\"};return \"plain\"}\n")
 	b, e := os.ReadFile(filepath.Join(lib, "goxide.toml"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	workspaceWrite(t, lib, "goxide.toml", string(b)+"\n[features]\nfancy=[]\n")
+	workspaceWrite(t, lib, "goxide.toml", string(b)+"\n[[go.require]]\nmodule='github.com/goxide-lang/std'\nversion='v0.0.0-20261009104839-c02a09d8c417'\n[features]\nfancy=[]\n")
 	app := filepath.Join(dest, "members/m0")
 	b, e = os.ReadFile(filepath.Join(app, "goxide.toml"))
 	if e != nil {
 		t.Fatal(e)
 	}
 	workspaceWrite(t, app, "goxide.toml", string(b)+"\n[features]\ndefault=[\"member1/fancy\"]\n")
+	first, e := projectRun(t, dest, "build", "-p", "example.org/app", "--offline")
+	if e != nil {
+		t.Fatalf("%s %v", first, e)
+	}
+	configs, e := filepath.Glob(filepath.Join(dest, "target/units/*/*/bin/app/*/bundle/members/m1/goxide_project_config.go"))
+	if e != nil || len(configs) != 1 {
+		t.Fatalf("generated configurations: %v %v", configs, e)
+	}
+	before, e := os.Stat(configs[0])
+	if e != nil {
+		t.Fatal(e)
+	}
+	second, e := projectRun(t, dest, "build", "-p", "example.org/app", "--offline", "--locked")
+	if e != nil || first != second {
+		t.Fatalf("unstable native output: %s / %s %v", first, second, e)
+	}
+	after, e := os.Stat(configs[0])
+	if e != nil || before.ModTime() != after.ModTime() {
+		t.Fatalf("native configuration rewritten after checksum completion: %v", e)
+	}
 	for _, test := range []struct {
 		args []string
 		want string
@@ -72,7 +92,7 @@ func TestNativeWorkspaceProgressiveVendor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspaceWrite(t, lib, "goxide.toml", string(manifest)+"\n[dependencies.dep]\nmodule='example.org/dep'\nversion='v1.0.0'\npackage='example.org/dep'\n")
+	workspaceWrite(t, lib, "goxide.toml", string(manifest)+"\n[dependencies.dep]\ngo = 'example.org/dep'\nversion = 'v1.0.0' \npackage='example.org/dep'\n")
 	if out, e := projectRun(t, dest, "run", "-p", "example.org/app", "--offline"); e != nil {
 		t.Fatalf("refresh explicit roots: %s %v", out, e)
 	}
@@ -150,7 +170,7 @@ func TestNativeWorkspaceOptionalCfg(t *testing.T) {
 	d.Optional = true
 	d.Package = "example.org/lib"
 	m.Dependencies["member1"] = d
-	m.Dependencies["fmt"] = project.Dependency{Source: "toolchain", Package: "fmt"}
+	m.Dependencies["fmt"] = project.Dependency{Go: "fmt", Package: "fmt"}
 	m.Features = map[string][]string{"default": {"use_lib"}, "use_lib": {"dep:member1"}, "never": {}}
 	b, e := project.Marshal(m)
 	if e != nil {

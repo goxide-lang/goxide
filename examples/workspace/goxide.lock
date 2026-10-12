@@ -1,0 +1,58 @@
+{
+  "unified": {
+    "git_pins": {},
+    "minimum_go": "1.27",
+    "workspace": "8cc7ab05f0d677681d16cc35b71563bfc756175905e753461e0d8170134bb6ac",
+    "sources": {
+      "example.org/service": "833f8b488d8f15484d57c38798744330f866eaa70b9b08844d5b411f5b502ae1",
+      "example.org/shared": "8dbebfb2db8269a8e5a81aa5c83c86cd411be29d2cc1b67aeb19465c219cb703",
+      "example.org/worker": "41ad3c1a9db1b5928399913a6fe2536cfedd1654d4b2eabdcd3f1b61887cd1c1"
+    },
+    "policy": {
+      "Godebug": null,
+      "Toolchain": "",
+      "Module": {
+        "Path": "goxide-workspace.invalid/root",
+        "Version": ""
+      },
+      "Go": "1.27",
+      "Require": null,
+      "Replace": null,
+      "Exclude": null
+    },
+    "inputs": {
+      "example.org/service": "24f542ee24f804f4695fccaaf664744a9768dafd54a4a3a7342964df1b9acc34",
+      "example.org/shared": "456501b63dbd2c8cafced783ea6607db23df743dc05e74cbe1ec0aa8c4a2855b",
+      "example.org/worker": "b7717f32a1f199e374fc04696d70a131f7a36fc799603fa67b6fe2af58e8275e"
+    },
+    "modules": {
+      "example.org/service": {
+        "Path": "example.org/service",
+        "Version": "v0.0.0",
+        "Replace": {
+          "Path": "./apps/service",
+          "Version": ""
+        }
+      },
+      "example.org/shared": {
+        "Path": "example.org/shared",
+        "Version": "v0.0.0",
+        "Replace": {
+          "Path": "./libs/shared",
+          "Version": ""
+        }
+      },
+      "example.org/worker": {
+        "Path": "example.org/worker",
+        "Version": "v0.0.0",
+        "Replace": {
+          "Path": "./apps/worker",
+          "Version": ""
+        }
+      }
+    }
+  },
+  "version": 3,
+  "git": {},
+  "sums": {}
+}

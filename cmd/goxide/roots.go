@@ -34,7 +34,11 @@ func projectRoots(node *project.Node) (paths.Roots, error) {
 	mappings := map[string]rootconfig.Mapping{}
 	for alias := range node.Requests {
 		dependency := node.Manifest.Dependencies[alias]
-		mappings[alias] = rootconfig.Mapping{Module: dependency.Module, Package: dependency.Package, Source: dependency.Source, Namespaces: dependency.Namespaces}
+		if dependency.IsToolchain() {
+			mappings[alias] = rootconfig.Mapping{Package: dependency.Package, Source: "toolchain", Namespaces: dependency.Namespaces}
+			continue
+		}
+		mappings[alias] = rootconfig.Mapping{Module: dependency.Module, Package: dependency.Package, Source: "module", Namespaces: dependency.Namespaces}
 	}
 	roots, err := rootconfig.Build(mappings)
 	if err != nil {

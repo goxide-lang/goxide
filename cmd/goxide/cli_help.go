@@ -14,22 +14,22 @@ func configureCLIHelp(root *cobra.Command) {
 		},
 		"goxide build": {
 			"编译文件、目录或项目并保留构建产物",
-			"编译指定输入。项目构建会打印保留的二进制路径；用 --bin、--example 或 --lib 选择项目目标。",
+			"省略输入时，从当前目录向上发现 goxide.toml 与 workspace。项目构建会打印稳定的二进制路径；用 --bin、--example 或 --lib 选择项目目标。",
 			"  goxide build -o ./app main.gox\n  goxide build --bin app --offline ./project",
 		},
 		"goxide run": {
 			"编译并运行程序",
-			"运行指定输入。程序参数必须放在输入路径后的 -- 之后，并原样传给程序。\n路径以短横线开头时，先用 -- 结束 goxide 选项，再用第二个 -- 分隔程序参数。",
+			"省略输入时，从当前目录向上发现项目。传递程序参数时，显式输入路径（当前目录可写 .）后使用 -- 分隔。\n路径以短横线开头时，先用 -- 结束 goxide 选项，再用第二个 -- 分隔程序参数。",
 			"  goxide run main.gox -- --port 8080\n  goxide run -- -input.gox -- --verbose",
 		},
 		"goxide test": {
 			"测试目录或项目",
-			"转译目录或项目并运行带 race 检测的 Go 测试。此命令不接受单个 .gox 文件或额外 Go 测试参数。",
+			"转译目录或项目并运行带 race 检测的 Go 测试；省略输入时从当前目录向上发现项目。此命令不接受单个 .gox 文件或额外 Go 测试参数。",
 			"  goxide test --go /absolute/path/to/go ./project\n  goxide test --offline --locked ./project",
 		},
 		"goxide transpile": {
 			"将源码转译为 Go 文件或模块",
-			"转译指定文件、目录或项目。单文件可用 --source-map 输出源码映射；目录输入可用 -o 指定生成目录。",
+			"转译文件、目录或项目；省略输入时从当前目录向上发现项目。单文件可用 --source-map 输出源码映射；目录输入可用 -o 指定生成目录。",
 			"  goxide transpile -o main.go --source-map main.map.json main.gox\n  goxide transpile -o ./generated ./source",
 		},
 		"goxide expand": {

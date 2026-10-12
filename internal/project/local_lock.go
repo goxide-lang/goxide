@@ -94,3 +94,23 @@ func (g *Graph) bindNativeLocal(module string, pin Selection, replacements []Mod
 	g.forced[module] = pin
 	return pin, nil
 }
+
+// Acquired sources are identified by their module and pinned Git/source record,
+// not the target directory chosen to materialize their checkout.
+func (g *Graph) portablePlan(root string, selections map[string]Selection, nodes map[string]*Node) map[string]Selection {
+	out := portableSelections(root, selections)
+	for module, n := range nodes {
+		if n.CheckoutRoot == "" || !contained(g.Cache, n.CheckoutRoot) {
+			continue
+		}
+		s, ok := out[module]
+		if !ok || s.Replace == nil || s.Replace.Version != "" {
+			continue
+		}
+		replacement := *s.Replace
+		replacement.Path = module
+		s.Replace = &replacement
+		out[module] = s
+	}
+	return out
+}

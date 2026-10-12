@@ -1,11 +1,9 @@
 package project
 
 import (
-	"encoding/json"
 	"github.com/pelletier/go-toml/v2"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -68,8 +66,8 @@ format = 1
 `, "array table"},
 		{`[dependencies]
 [dependencies.x]
-module = 'example.org/x'
 path = 'x'
+go = 'example.org/x'
 version = 'v1.0.0'
 
 [package]
@@ -78,9 +76,9 @@ format = 1
 		{`[dependencies]
 [dependencies.x]
 git = 'https://example.invalid/x'
-module = 'example.org/x'
-rev = 'main'
+branch = 'main'
 subdir = '../x'
+module = 'example.org/x'
 
 [package]
 format = 1
@@ -123,11 +121,11 @@ func TestGitURLAndLockBoundaries(t *testing.T) {
 		t.Fatal("parallel writer accepted")
 	}
 	other := t.TempDir()
-	if e = os.Symlink(root, filepath.Join(other, ".goxide")); e != nil {
+	if e = os.Symlink(root, filepath.Join(other, "goxide.lock.guard")); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = LockProject(other); e == nil {
-		t.Fatal("symlink cache accepted")
+		t.Fatal("symlink build guard accepted")
 	}
 }
 
@@ -143,7 +141,7 @@ default = [
 ]
 fast = []
 [dependencies."some_lib"]
-module = 'example.org/lib/v2'
+go = 'example.org/lib/v2'
 version = "v2.1.0"
 default_features = false
 features = []
@@ -179,7 +177,7 @@ formatter = '/tools/formatter'
 	if m.Version != 2 || len(m.Bins) != 1 || len(m.Examples) != 1 || m.Lib.Path != "src/lib.gox" || m.Build.TimeoutSeconds != 5 || m.Dependencies["some_lib"].Version != "v2.1.0" {
 		t.Fatal(m)
 	}
-	doc := manifestDocument{Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	doc := manifestDocument{Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
 	doc.Package = PackageConfig{Format: m.Version, Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain, Namespaces: m.PackageNamespaces}
 	b, e := toml.Marshal(doc)
 	if e != nil {
@@ -188,13 +186,6 @@ formatter = '/tools/formatter'
 	again, e := Parse("roundtrip.toml", b)
 	if e != nil || Digest(m) != Digest(again) {
 		t.Fatalf("roundtrip %s %v", b, e)
-	}
-	var old Manifest
-	if e = json.Unmarshal([]byte(`{"version":2,"module":"example.org/fixture","go":"1.27","features":{"default":["fast"],"fast":[]},"dependencies":{"some_lib":{"module":"example.org/lib/v2","version":"v2.1.0","default_features":false,"features":[]}},"lib":{"name":"lib","path":"src/lib.gox"},"bins":[{"name":"cli","path":"cmd/cli","required_features":["fast"]}],"examples":[{"name":"demo","path":"examples/demo"}],"build":{"entry":"tools/build.go","inputs":["schema.txt"],"outputs":["gen/a.go"],"env":[],"timeout_seconds":5,"dependencies":{"example.org/helper":"../helper"},"tools":{"formatter":"/tools/formatter"}}}`), &old); e != nil {
-		t.Fatal(e)
-	}
-	if !reflect.DeepEqual(old, m) {
-		t.Fatalf("format changed semantics: %#v %#v", old, m)
 	}
 	for _, tc := range []struct{ name, src, want string }{
 		{"case root", "[Package]\nformat=1", "case-sensitive"},

@@ -112,17 +112,17 @@ func TestProjectManagedLayoutEndToEnd(t *testing.T) {
 			t.Fatal("source-only change should retain configuration output path")
 		}
 		runLayoutBinary(t, latest, "on new dependency")
-		// The old bundle remains independently buildable, including its old copies.
-		artifact := filepath.Join(t.TempDir(), "old-bundle")
+		// The stable bundle now reflects the current dependency and remains Go-buildable.
+		artifact := filepath.Join(t.TempDir(), "stable-bundle")
 		c := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-buildvcs=false", "-mod=readonly", "-o", artifact, "./goxide_targets/bin/one")
 		c.Dir = generated
 		c.Env = project.GoEnv(true)
 		if out, e := c.CombinedOutput(); e != nil {
 			t.Fatalf("retained bundle: %s %v", out, e)
 		}
-		runLayoutBinary(t, artifact, "on dependency")
+		runLayoutBinary(t, artifact, "on new dependency")
 		if b, e := os.ReadFile(filepath.Join(generated, "go.mod")); e != nil || !bytes.Equal(b, oldMod) {
-			t.Fatal("retained go.mod mutated", e)
+			t.Fatal("stable go.mod unnecessarily changed", e)
 		}
 	}
 	runLayoutBinary(t, build("--bin", "two"), "two")

@@ -8,4 +8,4 @@ go = "1.27"
 
 [workspace.dependencies]
 shared = { module = "example.org/shared", package = "example.org/shared", path = "libs/shared", default_features = false }
-fmt = { source = "toolchain", package = "fmt" }
+fmt = { go = "fmt" }

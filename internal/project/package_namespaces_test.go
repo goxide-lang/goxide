@@ -49,9 +49,9 @@ func TestPackageNamespacesDiagnostics(t *testing.T) {
 		{"empty package", "[package.namespaces]\nmodels=''", "invalid exact package path"},
 		{"relative package", "[package.namespaces]\nmodels='./models'", "invalid exact package path"},
 		{"bad case", "[package.Namespaces]\nmodels='example.org/app/models'", "case-sensitive"},
-		{"dependency collision", "[package.namespaces]\nmodels='example.org/app/models'\n[dependencies.models]\nmodule='example.org/models'\nversion='v1.0.0'", "conflicts with dependency alias"},
-		{"nested optional collision", "[package.namespaces]\n'models::item'='example.org/app/models/item'\n[dependencies.models]\nmodule='example.org/models'\nversion='v1.0.0'\noptional=true", "conflicts with dependency alias"},
-		{"toolchain collision", "[package.namespaces]\nfmt='example.org/app/fmt'\n[dependencies.fmt]\nsource='toolchain'\npackage='fmt'", "conflicts with dependency alias"},
+		{"dependency collision", "[package.namespaces]\nmodels='example.org/app/models'\n[dependencies.models]\ngo = 'example.org/models'\nversion = 'v1.0.0' ", "conflicts with dependency alias"},
+		{"nested optional collision", "[package.namespaces]\n'models::item'='example.org/app/models/item'\n[dependencies.models]\ngo = 'example.org/models'\nversion = 'v1.0.0' \noptional=true", "conflicts with dependency alias"},
+		{"toolchain collision", "[package.namespaces]\nfmt='example.org/app/fmt'\n[dependencies.fmt]\ngo = 'fmt' ", "conflicts with dependency alias"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse("self.toml", []byte(mappingHeader+tc.body))

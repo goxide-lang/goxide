@@ -36,7 +36,8 @@ type Manifest struct {
 }
 type Dependency struct {
 	Workspace       bool              `json:"workspace,omitempty" toml:"workspace,omitempty"`
-	Source          string            `json:"source,omitempty" toml:"source,omitempty"`
+	Go              string            `json:"go,omitempty" toml:"go,omitempty"`
+	Registry        string            `json:"registry,omitempty" toml:"registry,omitempty"`
 	Module          string            `json:"module,omitempty" toml:"module,omitempty"`
 	Package         string            `json:"package,omitempty" toml:"package,omitempty"`
 	Namespaces      map[string]string `json:"namespaces,omitempty" toml:"namespaces,omitempty"`
@@ -44,6 +45,8 @@ type Dependency struct {
 	Path            string            `json:"path,omitempty" toml:"path,omitempty"`
 	Git             string            `json:"git,omitempty" toml:"git,omitempty"`
 	Rev             string            `json:"rev,omitempty" toml:"rev,omitempty"`
+	Tag             string            `json:"tag,omitempty" toml:"tag,omitempty"`
+	Branch          string            `json:"branch,omitempty" toml:"branch,omitempty"`
 	Subdir          string            `json:"subdir,omitempty" toml:"subdir,omitempty"`
 	Optional        bool              `json:"optional,omitempty" toml:"optional,omitempty"`
 	Features        []string          `json:"features,omitempty" toml:"features,omitempty"`
@@ -53,7 +56,7 @@ type Dependency struct {
 // IsToolchain identifies roots supplied by Go itself, outside the module graph.
 // Package and Namespaces declare exact packages; an absent Package is a group,
 // including for module dependencies. Module paths are never package defaults.
-func (d Dependency) IsToolchain() bool { return d.Source == "toolchain" }
+func (d Dependency) IsToolchain() bool { return d.Go != "" && d.Version == "" }
 
 type Target struct {
 	Name             string   `json:"name" toml:"name"`
@@ -62,6 +65,29 @@ type Target struct {
 }
 
 var ident = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// DiscoverProject selects the nearest author manifest, including a virtual
+// workspace root. Native Go modules do not hide an outer workspace.
+func DiscoverProject(dir string) (string, error) {
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	for {
+		found, err := Detect(dir)
+		if err != nil {
+			return "", err
+		}
+		if found {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", nil
+		}
+		dir = parent
+	}
+}
 
 // Detect rejects ambiguous/legacy projects before any native Go fallback.
 func Detect(root string) (bool, error) {
@@ -102,7 +128,9 @@ type manifestDocument struct {
 	Examples     []Target              `toml:"example,omitempty"`
 }
 
-func Read(root string) (Manifest, error) {
+func Read(root string) (Manifest, error) { return readManifest(root, "") }
+
+func readManifest(root, checkout string) (Manifest, error) {
 	if _, err := Detect(root); err != nil {
 		return Manifest{}, err
 	}
@@ -110,7 +138,7 @@ func Read(root string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	w, err := DiscoverWorkspace(root)
+	w, err := discoverWorkspace(root, checkout)
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -131,10 +159,14 @@ func Parse(filename string, b []byte) (Manifest, error) {
 	if d.Workspace != nil {
 		return Manifest{}, fmt.Errorf("workspace manifest requires workspace-aware loading")
 	}
-	m := Manifest{Vendor: d.Vendor, Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, PackageNamespaces: d.Package.Namespaces, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: d.Dependencies, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validateNames(filename, b); err != nil {
-		return m, err
+		return Manifest{}, err
 	}
+	deps, err := resolveAuthorDependencies(d.Dependencies)
+	if err != nil {
+		return Manifest{}, fmt.Errorf("%s:1:1: %w", filename, err)
+	}
+	m := Manifest{Vendor: d.Vendor, Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, PackageNamespaces: d.Package.Namespaces, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: deps, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validate(m); err != nil {
 		return m, fmt.Errorf("%s:1:1: %w", filename, err)
 	}
@@ -184,9 +216,6 @@ func validate(m Manifest) error {
 		}
 		if d.Git == "" && (d.Rev != "" || d.Subdir != "") {
 			return fmt.Errorf("dependency %s: rev/subdir require git", k)
-		}
-		if d.Git != "" && d.Rev == "" {
-			return fmt.Errorf("dependency %s: git requires explicit rev", k)
 		}
 		if d.Subdir != "" && !safeRelative(d.Subdir) {
 			return fmt.Errorf("dependency %s: subdir must stay inside repository", k)
@@ -354,6 +383,6 @@ func Select(m Manifest, bin, example string, features map[string]bool) (Target, 
 
 // Marshal emits the authoring schema, not the internal JSON identity representation.
 func Marshal(m Manifest) ([]byte, error) {
-	d := manifestDocument{Vendor: m.Vendor, Package: PackageConfig{Format: m.Version, Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain, Namespaces: m.PackageNamespaces}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: m.Dependencies, Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	d := manifestDocument{Vendor: m.Vendor, Package: PackageConfig{Format: m.Version, Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain, Namespaces: m.PackageNamespaces}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
 	return toml.Marshal(d)
 }

@@ -237,7 +237,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		}
 		// Worktrees can use a .git file rather than a directory. Neither belongs
 		// in the independently buildable generated module.
-		if entry.Name() == ".git" || entry.Name() == ".goxide" || entry.Name() == ".goxide-migration" {
+		if entry.Name() == ".git" || entry.Name() == ".goxide" || entry.Name() == ".goxide-migration" || entry.Name() == "goxide.lock.guard" {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
@@ -267,7 +267,7 @@ func CompileModuleWithOptions(input, destination string, options ModuleOptions) 
 		sourceOutputs[path] = rel
 		target := filepath.Join(destination, rel)
 		if entry.IsDir() {
-			if entry.Name() == ".git" || entry.Name() == ".goxide" || entry.Name() == ".goxide-migration" {
+			if entry.Name() == ".git" || entry.Name() == ".goxide" || entry.Name() == ".goxide-migration" || entry.Name() == "goxide.lock.guard" {
 				return filepath.SkipDir
 			}
 			if _, e := os.Stat(filepath.Join(path, "goxide.toml")); e == nil {

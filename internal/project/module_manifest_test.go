@@ -27,7 +27,7 @@ func TestPublishedTransportPolicy(t *testing.T) {
 				}
 			}
 			g := Graph{Tool: tool, WorkRoot: t.TempDir()}
-			_, err := g.readNode(root, true)
+			_, err := g.readNode(root, true, "")
 			if kind == "permuted" && err != nil {
 				t.Fatal(err)
 			}

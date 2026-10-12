@@ -4,6 +4,20 @@
   "git": {},
   "sums": {},
   "plans": {
+    "76da31db5d09fda707717c68c5e462c8bb163a5a64eadef0c4bd2b68e9d66c75": {
+      "github.com/goxide-lang/serde": {
+        "Path": "github.com/goxide-lang/serde",
+        "Version": "v0.0.0-20261009021520-f342a31e20d0",
+        "Sum": "h1:SP87Kr41DUhtaUT+nFCVxdhcAPWYRm/+DF/5cp34Of0=",
+        "GoModSum": "h1:m4z9CAWRl/5hQN6+9RQ7Sfr/gK9wcWk+ANoqbSxlW0g="
+      },
+      "github.com/goxide-lang/std": {
+        "Path": "github.com/goxide-lang/std",
+        "Version": "v0.0.0-20261009104839-c02a09d8c417",
+        "Sum": "h1:qZkTUGMRpdJJTcFeNd0nal+Yv08fo7yGGPTX9IUKNRw=",
+        "GoModSum": "h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ="
+      }
+    },
     "d3190c155c0eda5384596e595fd331f1913a62aa9398943ea35f7f7e9ce0d7c5": {
       "github.com/goxide-lang/serde": {
         "Path": "github.com/goxide-lang/serde",

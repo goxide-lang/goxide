@@ -39,8 +39,8 @@ func TestLayoutOwnershipAndPublishing(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if u.Run == u2.Run || u.Directory != u2.Directory {
-		t.Fatal("unit/generation identity mismatch")
+	if u.Bundle != u2.Bundle || u.Directory != u2.Directory {
+		t.Fatal("stable unit identity mismatch")
 	}
 	src2 := filepath.Join(u2.Intermediate, "program")
 	os.WriteFile(src2, []byte("two"), 0755)
@@ -65,8 +65,8 @@ func TestLayoutOwnershipAndPublishing(t *testing.T) {
 	if b, _ := os.ReadFile(unknown); string(b) != "keep" {
 		t.Fatal("unknown data removed")
 	}
-	if _, e = os.Stat(u.Run); e != nil {
-		t.Fatal("old generation removed")
+	if _, e = os.Stat(u.Directory); e != nil {
+		t.Fatal("stable unit removed")
 	}
 }
 func TestLayoutUnknownAndSymlinkBoundaries(t *testing.T) {

@@ -9,6 +9,20 @@ import (
 	"strings"
 )
 
+// NativeSelectionIdentity excludes checksums completed during package loading.
+// Those integrity records do not change the selected source configuration.
+func NativeSelectionIdentity(selections map[string]Selection) map[string]Selection {
+	out := map[string]Selection{}
+	for path, selected := range selections {
+		identity := Selection{Path: selected.Path, Version: selected.Version}
+		if selected.Replace != nil {
+			identity.Replace = &Selection{Path: selected.Replace.Path, Version: selected.Replace.Version}
+		}
+		out[path] = identity
+	}
+	return out
+}
+
 // NativeFeatureGraphs uses the same additive Resolve semantics as the author
 // graph, while leaving all Go version/replacement policy in the native view.
 func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested map[string][]string, defaults bool, lock Lock) (map[string]*Graph, error) {
@@ -79,7 +93,7 @@ func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested ma
 	}
 	graphs := map[string]*Graph{}
 	for _, module := range roots {
-		g := &Graph{Root: nodes[module], Tool: tool, Lock: lock, LockPath: filepath.Join(w.Root, "goxide.lock"), ownerRoot: w.Root, ownerModule: WorkspaceOwner, Plan: lock.NativeWorkspace.Modules, PlanID: Digest([]any{lock.NativeWorkspace.Input, lock.NativeWorkspace.Modules}), workspace: w}
+		g := &Graph{Root: nodes[module], Tool: tool, Lock: lock, LockPath: filepath.Join(w.Root, "goxide.lock"), ownerRoot: w.Root, ownerModule: WorkspaceOwner, Plan: lock.NativeWorkspace.Modules, PlanID: Digest([]any{lock.NativeWorkspace.Input, NativeSelectionIdentity(lock.NativeWorkspace.Modules)}), workspace: w}
 		seen := map[string]bool{}
 		var visit func(*Node)
 		visit = func(n *Node) {

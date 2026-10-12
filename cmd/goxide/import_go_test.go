@@ -123,19 +123,19 @@ func TestUnifiedLocalReplaceAndPureGit(t *testing.T) {
 			lib := filepath.Join(base, "lib")
 			root := filepath.Join(base, "app")
 			projectWrite(t, lib, map[string]string{"goxide.toml": "[package]\nformat=2\nmodule='example.org/lib'\ngo='1.27'\n[features]\ndefault=['on']\non=[]\n[lib]\nname='lib'\npath='.'\n", "lib.gox": "package lib\nfunc Value()bool{return cfg!(feature(\"on\"))}\n"})
-			dependency := "path='../lib'\n"
+			dependency := "module='example.org/lib'\npath='../lib'\n"
 			extra := ""
 			if kind == "replace" {
-				dependency = "version='v1.0.0'\n"
+				dependency = "go = 'example.org/lib'\nversion = 'v1.0.0'\n"
 				extra = "[[go.replace]]\nmodule='example.org/lib'\npath='../lib'\n"
 			}
 			if kind == "git" {
 				migrationGit(t, lib, "init")
 				migrationGit(t, lib, "add", ".")
 				migrationGit(t, lib, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "pure")
-				dependency = "git='" + lib + "'\nrev='HEAD'\n"
+				dependency = "module='example.org/lib'\ngit = '" + lib + "'\nrev = '" + migrationGit(t, lib, "rev-parse", "HEAD") + "'\n"
 			}
-			projectWrite(t, root, map[string]string{"goxide.toml": "[package]\nformat=2\nmodule='example.org/app'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.go'\n[dependencies.lib]\nmodule='example.org/lib'\n" + dependency + extra, "main.go": "package main\nimport (\"fmt\";\"example.org/lib\")\nfunc main(){fmt.Println(lib.Value())}\n"})
+			projectWrite(t, root, map[string]string{"goxide.toml": "[package]\nformat=2\nmodule='example.org/app'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.go'\n[dependencies.lib]\n" + dependency + extra, "main.go": "package main\nimport (\"fmt\";\"example.org/lib\")\nfunc main(){fmt.Println(lib.Value())}\n"})
 			before := sourceHash(t, lib)
 			flags := []string{"run"}
 			if kind != "git" {

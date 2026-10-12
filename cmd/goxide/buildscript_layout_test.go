@@ -80,7 +80,7 @@ func scriptLayoutArtifacts(t *testing.T, root string) int {
 	}
 	return count
 }
-func TestBuildScriptManagedLayoutRetainsBundle(t *testing.T) {
+func TestBuildScriptManagedLayoutReusesBundle(t *testing.T) {
 	root := buildScriptFixture(t, false, false)
 	t.Setenv("GOXIDE_TARGET_DIR", "")
 	scriptAction(t, root, "trust-project")
@@ -93,30 +93,20 @@ func TestBuildScriptManagedLayoutRetainsBundle(t *testing.T) {
 		t.Fatalf("wanted single package script artifact, got %d", n)
 	}
 	generated, _ := scriptLayoutOutput(t, root, "transpile", "cache hit", "--bin", "one")
-	original := scriptLayoutFiles(t, generated)
 	projectWrite(t, root, map[string]string{"schema.txt": "schema-new"})
 	next, _ := scriptLayoutOutput(t, root, "build", "run", "--bin", "one")
 	if next != first {
 		t.Fatalf("input-only change moved final binary: %s -> %s", first, next)
 	}
 	scriptLayoutBinary(t, next, "APP_ONE schema-new")
-	retained := scriptLayoutFiles(t, generated)
-	if len(retained) != len(original) {
-		t.Fatal("old bundle file set changed")
-	}
-	for name, b := range original {
-		if !bytes.Equal(b, retained[name]) {
-			t.Fatalf("old bundle modified: %s", name)
-		}
-	}
-	oldBinary := filepath.Join(t.TempDir(), "old-app")
-	cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-buildvcs=false", "-mod=readonly", "-o", oldBinary, "./cmd/one")
+	rebuiltBinary := filepath.Join(t.TempDir(), "rebuilt-app")
+	cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-buildvcs=false", "-mod=readonly", "-o", rebuiltBinary, "./cmd/one")
 	cmd.Dir = generated
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off")
 	if out, e := cmd.CombinedOutput(); e != nil {
-		t.Fatalf("retained bundle build: %s %v", out, e)
+		t.Fatalf("stable bundle build: %s %v", out, e)
 	}
-	scriptLayoutBinary(t, oldBinary, "APP_ONE schema-one/template-one/alpha//local embedded-resource")
+	scriptLayoutBinary(t, rebuiltBinary, "APP_ONE schema-new/template-one/alpha//local embedded-resource")
 	if _, e := os.Stat(filepath.Join(root, "gen")); !os.IsNotExist(e) {
 		t.Fatal("generator outputs leaked into source root", e)
 	}

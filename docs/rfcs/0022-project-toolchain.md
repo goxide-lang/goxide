@@ -2,6 +2,8 @@
 
 ## 状态与范围
 
+当前依赖 schema 与 cwd 默认发现规则以 [goxide.toml schema](../design/toml-manifest.md) 为准：Go 来源显式写 go 加 version，Git 可省略 ref 并锁定默认分支，registry 不实现。正文保留 feature/目标与历史实现细节，不提供旧来源语法兼容。
+
 第一版已实现，采用可选 `goxide.toml`，以 TOML 声明的 module path 和 Go 目录包为身份。没有 manifest 的单文件、目录命令保持原行为。这不是完整 Cargo 兼容实现；不引入所有权、enum ABI、完整 mod 树或 workspace resolver。
 
 实现集中于 `cmd/goxide/project.go`、`internal/project`。前端接入点为 `internal/frontend/module.go` 的按目标构建、配置标记和文件映射，以及 `cfg.go` 的前置配置选择。现有 use / pub use 的 canonical identity 与增强 metadata 校验不变。显式构建脚本作为独立特性见 [RFC 0023](0023-build-scripts.md)，其 host 依赖角色与 target feature 图分开。

@@ -11,14 +11,14 @@
 | 获取来源 | 本片建议 |
 | --- | --- |
 | registry | 单独 `version`，或 `version` 加 `registry`；明确报未实现，不猜默认 registry |
-| Git | `git = "https://…"`，恰好一个 `rev/tag/branch`；可加 `subdir`，不同时声明 path/go/version |
+| Git | `git = "https://…"`，零或一个 `rev/tag/branch`；缺省使用默认分支并锁定 commit；可加 `subdir`，不同时声明 path/go/version |
 | 本地 | `path = "../lib"` 直接指向项目根，不同时声明 git/go/version |
 | Go module | `go = "github.com/…"` 加 `version = "v…"`；路径不带协议，按 Go MVS 选版并锁定结果 |
 | Go 标准库 | `go = "fmt"`，没有 version，不下载；用所选 Go 工具链的真实包信息核验标准库归属 |
 
 公共字段保留现有 `module`、`package`、`namespaces`、`features`、`default_features`、`optional`。Git/path 的 `module` 是选中项目的身份；Go 来源的身份由 `go` 给出，不重复填写 module。`package` 和 namespaces 是精确 import package 绑定；这里的 package 沿用 Goxide 包映射含义，不等于 Cargo 的发行 crate 名。未映射到 package 的依赖根只作显式 namespace 分组。标准库的 go 本身给出精确 package，无需再写 package；不接受 feature 请求。
 
-Go module 是一起选版和分发的一组 packages，import package 是其中一个包，见 [Go 官方模块说明](https://go.dev/ref/mod#module-path)。Go 版本只接受规范版本或 pseudo-version，本片不实现 Cargo SemVer 范围。Git 的 rev 建议支持 commit hash 或远端公开 ref，tag/branch 分别按对应 ref 解析；多个选择器报错，没有隐含优先级。解析后把完整 commit 写入 lock，普通二次构建不重新解析移动 branch/tag。
+Go module 是一起选版和分发的一组 packages，import package 是其中一个包，见 [Go 官方模块说明](https://go.dev/ref/mod#module-path)。Go 版本只接受规范版本或 pseudo-version，本片不实现 Cargo SemVer 范围。Git 的 rev 建议支持 commit hash 或远端公开 ref，tag/branch 分别按对应 ref 解析；多个选择器报错，没有隐含优先级。没有选择器时按 Cargo 使用仓库默认分支。首次解析后把完整 commit 写入 lock，普通二次构建不重新解析移动的默认分支、branch 或 tag。
 
 真实来源例：本仓库 main 的 go.mod 已固定下述 std 版本，该提交有 `formatting` 包，没有 `fmt`。依赖语法是待确认提案，源码路径与版本已核对；新 schema 首构建留待实施验收。
 
@@ -53,7 +53,7 @@ module = "github.com/goxide-lang/std"
 package = "github.com/goxide-lang/std/sum"
 ```
 
-`goxide build/run/test/transpile` 无 INPUT 时，从 cwd 向上找最近 goxide.toml；显式目录采用同一规则，显式文件保留单文件入口。建议遇到原生 go.mod 边界停止项目查找，找不到清单则诊断；原生 Go 目录需显式输入，不借父项目切换其语义。
+`goxide build/run/test/transpile` 无 INPUT 时，从 cwd 向上找最近 goxide.toml；显式目录采用同一规则，显式文件保留单文件入口。go.mod 不终止向上发现项目或 workspace；找不到清单则诊断，原生 Go 目录需显式输入。
 
 找到成员清单后向上发现所属 workspace，沿用显式 members 与 `workspace = true` 继承；成员子目录选最近成员，根目录选 default-members，`-p`/`--workspace` 显式改变选择。未列出的项目不变成成员；成员资格不补依赖边。workspace 仍唯一根 lock/target；单项目使用自身根。源依赖自身的 workspace 继承只在其 checkout 内解析，不继承消费项目的 workspace。
 
@@ -70,7 +70,7 @@ package = "github.com/goxide-lang/std/sum"
 ## 请用户决定
 
 1. 是否采用 `go = "module-path"` 加 version，并用 `go = "fmt"` 表示免下载标准库；保留现有精确 package/namespaces 绑定？
-2. Git 是否要求恰好一个 rev/tag/branch，缺选择器报错；rev 接受 commit hash/远端公开 ref；本片不支持 version 与 git/path 的发布组合？
-3. 是否采用显式项目根 subdir、不自动搜索；原生 go.mod 停止向上项目发现；单一受管 target/cache 默认？
+2. Git 当前方案为零或一个 rev/tag/branch，缺省使用默认分支并锁定 commit；是否接受 rev 支持 commit hash/远端公开 ref，并且本片不支持 version 与 git/path 的发布组合？
+3. 是否采用显式项目根 subdir、不自动搜索；单一受管 target/cache 默认？
 
 这些仍是待确认建议，PR 建立不代表批准实现。registry、本片未覆盖的发布与依赖扩展留在 Issue #23 的后续范围，不在此添加机制。

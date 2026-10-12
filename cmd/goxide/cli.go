@@ -65,9 +65,9 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 	root.CompletionOptions.DisableDefaultCmd = true
 	for _, mode := range []string{"build", "run", "test", "transpile", "expand"} {
 		req := CompileRequest{Mode: mode}
-		c := cliCommand(mode+" [flags] INPUT", "Compile "+mode+" input (flags precede input)")
+		c := cliCommand(mode+" [flags] [INPUT]", "Compile "+mode+" input (defaults to the current project)")
 		if mode == "run" {
-			c.Use = "run [flags] INPUT [-- PROGRAM_ARGS...]"
+			c.Use = "run [flags] [INPUT] [-- PROGRAM_ARGS...]"
 		}
 		f := c.Flags()
 		f.StringVarP(&req.Output, "o", "o", "", "output source/directory (transpile), expanded source (expand), or binary (build)")
@@ -88,13 +88,17 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.BoolVar(&req.Offline, "offline", false, "use cached dependencies; does not sandbox scripts")
 		f.BoolVar(&req.Locked, "locked", false, "require unchanged goxide.lock")
 		c.RunE = func(c *cobra.Command, operands []string) error {
-			if len(operands) == 0 {
-				return usageError(c, inputError())
+			req.Input = ""
+			req.ProgramArgs = nil
+			if len(operands) > 0 {
+				req.Input = operands[0]
+				if mode == "run" && len(operands) >= 2 && operands[1] == "--" {
+					req.ProgramArgs = append([]string(nil), operands[2:]...)
+				} else if len(operands) != 1 {
+					return usageError(c, inputError())
+				}
 			}
-			req.Input = operands[0]
-			if mode == "run" && len(operands) >= 2 && operands[1] == "--" {
-				req.ProgramArgs = append([]string(nil), operands[2:]...)
-			} else if len(operands) != 1 {
+			if req.Input == "" && mode == "expand" {
 				return usageError(c, inputError())
 			}
 			return executeCompile(req, out, stderr)

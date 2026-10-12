@@ -66,7 +66,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 		return nil, e
 	}
 	defer os.RemoveAll(work)
-	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(w.Root, ".goxide", "git"), LockPath: filepath.Join(w.Root, "goxide.lock"), Lock: Lock{Version: 3, Git: map[string]string{}, Sums: map[string]string{}}, workspace: w, ownerRoot: w.Root, ownerModule: WorkspaceOwner, overrides: w.Manifests}
+	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(layout.Root, "cache", "git"), LockPath: filepath.Join(w.Root, "goxide.lock"), Lock: Lock{Version: 3, Git: map[string]string{}, Sums: map[string]string{}}, workspace: w, ownerRoot: w.Root, ownerModule: WorkspaceOwner, overrides: w.Manifests}
 	b, e := os.ReadFile(g.LockPath)
 	if e == nil {
 		if e = json.Unmarshal(b, &g.Lock); e != nil {
@@ -106,7 +106,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 	}
 	if !fresh {
 		for _, dir := range keys(w.Manifests) {
-			n, e := g.readNode(dir, false)
+			n, e := g.readNode(dir, false, "")
 			if e != nil {
 				return nil, e
 			}
@@ -182,11 +182,15 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 		if _, e = g.plan(synthRoot, nil, false); e != nil {
 			return nil, e
 		}
-		u := &UnifiedLock{GitPins: map[string]string{}, MinimumGo: g.RootMod.Go, Workspace: workspaceID, Sources: map[string]string{}, Policy: g.RootMod, Inputs: map[string]string{}, Modules: g.Plan}
+		nodes := map[string]*Node{}
+		for _, n := range g.Nodes {
+			nodes[n.Module] = n
+		}
+		u := &UnifiedLock{GitPins: map[string]string{}, MinimumGo: g.RootMod.Go, Workspace: workspaceID, Sources: map[string]string{}, Policy: g.RootMod, Inputs: map[string]string{}, Modules: g.portablePlan(w.Root, g.Plan, nodes)}
 		for _, n := range g.Nodes {
 			for _, d := range n.Sources {
 				if d.Git != "" {
-					key := Digest([]string{d.Git, d.Rev, d.Subdir, d.Module})
+					key := d.GitKey()
 					u.GitPins[key] = g.Lock.Git[key]
 				}
 			}

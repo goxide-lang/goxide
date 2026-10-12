@@ -28,7 +28,7 @@ func writeRootFixture(t *testing.T, root string, files map[string]string) {
 func TestProjectDependencyRootActivation(t *testing.T) {
 	node := &project.Node{Root: t.TempDir(), HasManifest: true, Manifest: project.Manifest{Dependencies: map[string]project.Dependency{
 		"codec": {Module: "example.org/codec", Package: "example.org/codec/core", Namespaces: map[string]string{"json": "example.org/codec/json"}},
-		"text":  {Source: "toolchain", Package: "fmt"},
+		"text":  {Go: "fmt", Package: "fmt"},
 		"extra": {Module: "example.org/extra", Package: "example.org/extra", Optional: true},
 	}}, Requests: map[string]project.Request{"codec": {}, "text": {}}}
 	roots, err := projectRoots(node)
@@ -138,8 +138,7 @@ format = 2
 module = "example.org/app"
 go = "1.27"
 [dependencies.output]
-source = "toolchain"
-package = "fmt"
+go = "fmt"
 [dependencies.dependency]
 module = "example.org/dependency"
 path = "../dep"
@@ -207,8 +206,7 @@ go="1.27"
 [package.namespaces]
 library="example.org/app"
 [dependencies.output]
-source="toolchain"
-package="fmt"
+go = "fmt"
 [lib]
 name="library"
 path="src/lib.gox"

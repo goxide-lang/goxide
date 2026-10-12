@@ -1,93 +1,133 @@
-# goxide.toml 项目清单迁移（历史，superseded）
+# goxide.toml schema
 
-> 后续用户决定已取代本文长期双清单兼容建议：见 [RFC0025](../rfcs/0025-unified-project.md)。本文保留格式切换的历史验证记录；统一作者模型以新RFC为准。
+当前作者清单与可提交的 `goxide.lock` 位于项目根；Go 元数据和生成源码只写入受管 target。依赖字段参考 [Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)，Go module 选版仍用 [Go MVS](https://go.dev/ref/mod#minimal-version-selection)。不读取旧 source 标签或嵌套来源表，不实现 registry。
 
-以下正文记录当时 format 1 的行为，不是当前作者模型。用户当时决定正式清单从 hgo.json 改为 goxide.toml；本设计与实现同步，不兼容读取旧 JSON，也不改变 go.mod、feature 解析、选版、脚本授权或 target 语义。hgo.lock 名称及其 JSON 内容保持不变。
+## 最小项目与真实依赖
+
+新目录放两个文件即可运行；需 Go 1.27+，首次允许联网：
 
 ```toml
+# goxide.toml
 [package]
-format = 1 # 清单格式版本，不是包发布版本；module 身份仍来自 go.mod
-
-[features]
-default = ["pretty"]
-pretty = []
-
-[dependencies.codec]
-module = "example.org/codec"
-path = "../codec" # 或 version / git，三选一；路径相对清单
-features = ["json"]
-default_features = false
-
-[lib]
-name = "app"
-path = "src/lib.hgo"
+format = 2
+module = "example.org/hello"
+go = "1.27"
 
 [[bin]]
-name = "cli"
-path = "src/main.hgo"
+name = "hello"
+path = "src"
 
-[[example]]
-name = "demo"
-path = "examples/demo.hgo"
-required_features = ["pretty"]
-
-[build]
-entry = "tools/build/main.go"
-inputs = ["schema.txt"]
-outputs = ["generated.go"]
-env = []
-timeout_seconds = 30
-
-[build.dependencies]
-"example.org/helper" = "../helper"
+[dependencies]
+fmt = { go = "fmt" }
+errors = { go = "github.com/pkg/errors", version = "v0.9.1", package = "github.com/pkg/errors" }
 ```
 
-对应关系：旧顶层 version → package.format；bins → bin 数组表；examples → example 数组表；其余字段名/值原样保留（包括 default_features、required_features、timeout_seconds）。不新增 package.name/version/module、workspace、继承或版本简写。依赖 module 字段仍必填，git 的 rev/subdir、optional 等原有字段不变。build.tools 是别名到工具路径的表，沿用旧执行/信任合同。使用正规 github.com/pelletier/go-toml/v2 v2.4.3（TOML 1.1，包含 1.0 语法）解析，固定 go.sum；不是自写 TOML 子集。
+```goxide
+// src/main.gox
+package main
+use fmt;
+use errors;
+func main() { fmt::Println(errors::New("clean dependency download")) }
+```
 
-识别接口：project.ManifestName = "goxide.toml"；project.Detect(root) (bool, error) 统一检测。无清单返回 false；只有 hgo.json 给出迁移错误；两者存在给出双配置错误；清单必须为普通文件。project.Read(root) 通过 Detect 后严格 TOML 解码。CLI、path/git/version 来源与 host helper 均接入，不能把旧 JSON 误判为纯 Go 并跳过脚本/features。原生图中非活动 hgo 依赖仍不因检测获得增强构建/脚本授权。
+```sh
+goxide build                    # 自动下载声明的依赖；打印 target 中的可执行文件路径
+goxide build --offline --locked # 同一输出路径；不改写相同生成文件或锁
+goxide run --offline --locked   # clean dependency download
+```
 
-迁移需要按上表改写内容，不能只重命名扩展名。先生成/手写 goxide.toml，核对字段后将旧 hgo.json 移出项目根保存；两文件同时存在会明确失败。本轮不提供自动删除或覆盖文件的迁移命令。旧来源需发布新的源码修订；锁定旧修订时给出迁移诊断，不暗中更换 revision。现有 hgo.lock 可保留，若源码/清单输入变化，按既有 --locked 规则拒绝变更，解锁重建再审阅锁差异。
+也可在项目子目录执行。`--go /absolute/path/to/go` 选择 Go 工具，须与构建 CLI 的 importer 版本一致。作者根不补 go.mod、go.sum，不手工 go get；依赖写入 TOML。
 
-新格式身份进入构建配置、依赖计划和脚本来源指纹，旧配置产物不得直接当新配置命中。内部 Manifest JSON 序列化仍可用于确定性摘要/锁内部数据，它不是用户清单协议。脚本输出禁止生成两种清单；host helper 也检查旧/双清单及 bootstrap script，避免改名绕过授权。
+## 字段
 
-未知字段、重复 key/table、错误类型和非法 TOML 语法必须有文件/行/列诊断；动态 feature/依赖表名及业务字段继续既有校验。注释、引号键、多行数组和字符串等由 TOML 库处理。测试包括严格解码与格式等价、旧/双配置在根和依赖/host helper的拒绝、feature A/B/A、mock proxy 多版本、local git、targets/examples、脚本授权/cache、生成 Go 和全量 race/vet。文档示例/feature catalog/官网源文案同步；不声称线上官网已部署。
+| 表 | 字段与含义 |
+| --- | --- |
+| package | 必填 format=2、module、go；可选 toolchain（建议版本，不自动下载）、namespaces（本项目精确包映射） |
+| dependencies.alias | 下述来源加公共 module/package/namespaces、features、default_features、optional；alias 是 use 的根名 |
+| features | 名称到字符串数组；default 为默认集合，dep:alias 激活 optional，alias/feature 转发 feature |
+| lib | 至多一项 name、path，可加 required_features |
+| bin / example | 数组表，各项 name、path、可选 required_features；path 为项目内目录或单个 .gox/.go 入口 |
+| go.require | 数组表 module、version、可选 indirect；生成原生 Go require，供已有 Go 政策和编译器支持库依赖使用 |
+| go.replace | 数组表 module、可选 version，以及 path 或 with+with_version；保留 Go replacement 语义 |
+| go.exclude / go.godebug | 数组表 module+version，或 key+value；沿用当前受支持的 Go 政策 |
+| build | entry、inputs、outputs、env、timeout_seconds、dependencies、tools，见 [脚本合同](../rfcs/0023-build-scripts.md)；下载不授权执行脚本 |
+| workspace | format=1、members、default-members、exclude、package、dependencies，以及已有原生迁入 go 政策，见 [workspace 合同](../rfcs/0026-workspaces.md) |
 
-## 后续纯 goxide 根目录：待确认架构，不随格式切换生效
+未知字段、错误类型、非法 TOML 和大小写错误有文件/行/列诊断。来源语义错误指出依赖名。不提供旧 schema 兼容。
 
-用户询问根是否只保留 goxide.toml 与 goxide.lock。**可行，推荐作为显式纯项目模式；当前实现仍要求根 go.mod，本轮不删除它。** Go 没有单独 lock 文件：go.sum 是完整性校验记录，不等于锁定所有选版/feature/来源；hgo.lock 目前承担增强锁。本轮保留该名称，改为 goxide.lock 是待确认迁移建议。
+## 来源与包身份
 
-建议后续模式由显式字段区分，而不是见到/缺少 go.mod 就猜：
+| 来源 | 声明 |
+| --- | --- |
+| Go 标准库 | `fmt = { go = "fmt" }`；没有 version，不下载，不接收 features/default_features；真实加载时核验 Go 的 Standard 标志 |
+| Go module | `errors = { go = "github.com/pkg/errors", version = "v0.9.1", package = "github.com/pkg/errors" }`；go 是无协议 module path，version 是 Go 规范版本/pseudo-version；MVS 可选更高版本，lock 记录结果 |
+| Git | git 为 HTTPS 仓库 URL；可选零或一个 rev/tag/branch；缺省默认分支，完整 commit 写入 lock；可选 subdir |
+| 本地 | path 直接选项目根，相对声明所在清单；module 校验项目身份；本地字节不冒充不可变远端 checksum |
+| registry | 单独 version，或 version 加 registry；明确报未实现，不猜 registry/Git URL |
 
-- **纯项目模式（提案）**：goxide.toml 中增加经过批准的 module、Go语言版本/工具链策略和依赖声明。根只需 TOML＋增强锁及源码；先在受管 target 的规划 module 统一 MVS，再为各 unit 生成 go.mod/go.sum。不同 bin/example/config 隔离存储，但同一进程的相同逻辑 package 不按feature复制身份；feature并集依然统一。增量及离线构建依赖锁和缓存，不要求根有隐形生成文件。
-- **Go 混用模式（当前能力）**：根保留用户 go.mod/go.sum，TOML只增加features/来源/targets/scripts。module身份和Go语言版本来自go.mod；原生require/replace/exclude与hgo约束按既有规划共同处理。未来纯模式字段若在混用模式出现，建议报冲突而非猜优先级。绝不覆盖用户go.mod/go.sum。
-- **通过 Go proxy 发布 hgo source（当前渠道）**：发布 module 必须符合 Go module/proxy 的 .mod、版本、路径/zip/checksum合同，含适配的go.mod及goxide.toml/hgo源码，消费方显式增强依赖边才编译。开发根可以未来无go.mod，但不能据此声称原生Go发布渠道也无需module元数据。可以由发布步骤从纯清单生成一致source发行目录；需要单独发布协议和验证，不偷偷写回根。
+git、path、go 互斥；version 当前只配合 go。Git/path 加 version 的 Cargo 发布回退不在本片内。多个 Git 选择器报冲突，没有优先级；rev 支持 commit hash/远端公开 ref，tag 与 branch 分别解析自己的 ref。普通构建沿用锁定 commit，不随移动 ref 更新。
 
-例子（路径是设计形状，非新增CLI）：
+Git/path 的 module 是项目身份；Go 来源由 go 给出 module，不重复 module 字段。package 是精确 import package，不是下载地址或仓库子目录；namespaces 显式映射其他包，没有 package 的 module 根只是分组，不自动导入整个 module。原生 .go 仍使用 Go import。
 
-| 场景 | 根/发行物 | target产物与限制 |
-| --- | --- | --- |
-| 纯 app（未来） | goxide.toml、建议goxide.lock、src/；TOML显式module | target/.../plan/go.mod及go.sum；target/.../units/.../module/go.mod及go.sum；统一选版后构建 |
-| 现有 Go app（现在） | go.mod、go.sum、goxide.toml、hgo.lock | 现有受管unit生成副本；根Go文件保持用户所有权 |
-| proxy上的 hgo source（现在） | zip中go.mod＋goxide.toml＋源码，proxy的.mod与源码一致 | hgo消费方在target生成Go；原生Go不自动转译.hgo，不承诺直接可用 |
-| 原生Go消费发行物 | 某固定feature配置的生成Go＋go.mod/go.sum及一致metadata | 普通Go可消费；不能再靠features重新配置已生成源码，不混装重复所有权源码 |
-| 只有TOML、无go.mod的远端仓库 | 未来可经显式Git checkout或本地path取得后合成module元数据 | 不能直接当Go proxy可发现module；本轮现有path/git同样仍要求go.mod |
+公开 std module 有 formatting，没有 fmt：Go 的 fmt 是标准库，不能当作该仓库中的独立项目。
 
-最小实施次序建议：先稳定本轮TOML schema与识别接口；后续确认显式模式及纯模式module/Go版本字段、锁名迁移；再做纯根到统一规划main module的适配，最后设计source/固定Go两种发布产物。不要把每unit各自选版作为简化方案，也不新增自制Go版本解析器。需新增测试：纯/混用同图等价、冲突诊断、根文件未写、锁迁移拒绝双锁、graph/feature A-B-A、Git/path纯来源与proxy需.mod的正反例。
+```toml
+[dependencies.formatting]
+git = "https://github.com/goxide-lang/std.git"
+rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
+module = "github.com/goxide-lang/std"
+package = "github.com/goxide-lang/std/formatting"
+```
 
-待用户决定仅两组：是否推进显式纯项目模式并采用上述module/Go版本权威规则；是否将增强锁正式更名goxide.lock并采用旧/双锁明确迁移诊断。本轮不冻结这些新增字段，只保持内部Manifest与人类文档结构分离，为后续扩展留出[package]位置。
+## monorepo 与发现
 
-## 实现与独立审查
+Git 的 subdir 只选仓库内有 goxide.toml 或 go.mod 的项目/module 根；省略选仓库根。它不选择同一 module 下的普通 package，不递归搜索或按 alias 猜目录，也不得逃出 checkout。path 已直接选根，不配 subdir。
 
-本分支已接入严格 TOML 解码、统一 Detect、所有活动来源/helper 的旧/双清单拒绝，并加入 ManifestProtocol 到计划、配置和脚本来源身份。独立审查发现库的 struct 解码大小写折叠；现用同一 TOML 库 AST 和结构体精确 tag 校验补齐，包含内联表/数组，不另写 TOML parser。独立反例与解析/迁移专项 race 已通过；生成脚本禁止输出新旧两种清单、helper bootstrap 脚本仍拒绝。完整回归结果以交付记录为准，不把文档检查等同于执行验证。
+可重放的 monorepo 示例使用本地 Git 夹具；其独立 Go module 位于 packages/lib，package 绑定对应该 module 的根包。Git 获取的 subdir 与包绑定仍分开，默认分支解析后锁定 commit：
 
-### 本轮验证记录
+```sh
+work="$(mktemp -d)"
+mkdir -p "$work/repo/packages/lib" "$work/app"
+cat > "$work/repo/packages/lib/go.mod" <<'MOD'
+module example.org/mono/lib
+go 1.27
+MOD
+cat > "$work/repo/packages/lib/lib.go" <<'GO'
+package lib
+func Value() string { return "monorepo" }
+GO
+git -C "$work/repo" init -q -b main
+git -C "$work/repo" add .
+git -C "$work/repo" -c user.name=Fixture -c user.email=fixture@example.invalid commit -qm fixture
+cat > "$work/app/goxide.toml" <<TOML
+[package]
+format = 2
+module = "example.org/mono/app"
+go = "1.27"
+[[bin]]
+name = "app"
+path = "main.gox"
+[dependencies]
+fmt = { go = "fmt" }
+lib = { git = "$work/repo", subdir = "packages/lib", module = "example.org/mono/lib", package = "example.org/mono/lib" }
+TOML
+cat > "$work/app/main.gox" <<'GOX'
+package main
+use fmt;
+use lib;
+func main() { fmt::Println(lib::Value()) }
+GOX
+(cd "$work/app" && goxide run && goxide run --offline --locked)
+```
 
-真实 Go 1.27.1；本地临时模块、fixture proxy 和本地 Git，无私人依赖/安装脚本。`go test -race -tags hgoweb -count=1 ./...` 完成全树：CLI 316.756s、acceptance 344.744s，其余包通过；其中 project 包唯一失败为 TOML 库升级后的错误文案断言（旧期待 cannot decode，实际 array table），修正测试后完整 `go test -race ./internal/project -count=1` 通过（1.030s），生产代码未因该断言调整。不把有此断言失败的原始全树命令描述为零退出。
+真实远端依赖使用 HTTPS；绝对本地 Git 路径用于上述夹具与定向验证。没有对旧 monorepo candidate 的历史 ABI 提供兼容。
 
-额外版本来源/feature/script专项race通过（114.436s）；解析/迁移专项race通过，独立大小写反例复核通过；脚本保留清单名和helper bootstrap专项通过。全树vet、文档检查、网站/WASM构建通过。公开project示例临时副本真实运行两个bin、example、关闭默认feature的locked离线切换，输出符合README。官网源文案已同步，未部署线上站点。
+build/run/test/transpile 无 INPUT 时，从 cwd 向上发现最近 goxide.toml；go.mod 不阻断外层项目/workspace。显式目录采用同一规则；显式文件保留单文件语义。没有清单时需显式指定 Go 目录或源码，不扫描目录猜 main。
 
-格式迁移会改变精确脚本来源身份；保留项目信任并不让旧第三方脚本授权自动匹配新来源。迁移后先查看 scripts plan，按既有授权流程审阅新 subject；不由工具自动授予权限。
+成员子目录选择最近成员，workspace 根用 default-members，`-p MODULE` 与 `--workspace` 显式改变选择。未列出的项目报非成员，不因目录位置补依赖。成员用 `workspace = true` 继承模板，只可追加 features 或设置 optional/default_features；模板 path 相对 workspace 根。版本与锁全 workspace 统一，未选成员 features 不自动加入本次编译。
 
-## Goxide 正式命名（2026-10-04）
+## 锁、缓存与输出
 
-以上历史记录保留当时名称；当前统一 Goxide / goxide / .gox / GOXIDE_*。旧输入明确拒绝，旧生成产物全部重新生成；enum schema 8、reference 3、use 2、std sum ABI 2。正式 module path 保持不变。迁移范围不包含 workspace vendor 拆出和官网部署。
+goxide.lock 在项目/workspace 根，应提交。Git 缓存位于受管 target/cache/git；Go 缓存继续用 GOMODCACHE/GOCACHE。项目根不生成 `.goxide`；缓存位置不写成可提交的 Git 来源身份。删除缓存后可联网重取已锁 commit；offline 缺缓存明确失败。
+
+`--target-dir` > GOXIDE_TARGET_DIR > target；相对路径以作者根为准。同一配置复用稳定 bundle 与二进制路径，更新变化字节、移除失效文件，保留相同文件的 mtime。临时生成视图结束后删除，不永久新增 run 目录。用户修改或未知文件阻止覆盖/清理，构建失败不发布新二进制。见 [target 布局](target-layout.md)。

@@ -40,7 +40,17 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		return fmt.Errorf("unknown command %q", req.Mode)
 	}
 	if req.Input == "" {
-		return errors.New("input is required")
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		req.Input, err = project.DiscoverProject(cwd)
+		if err != nil {
+			return err
+		}
+		if req.Input == "" {
+			return errors.New("no goxide.toml found from the current directory upward; specify a source file or Go module directory")
+		}
 	}
 	if req.Mode != "run" && len(req.ProgramArgs) != 0 {
 		return fmt.Errorf("program arguments require run")
@@ -60,6 +70,11 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	}
 	nativeGo := filepath.Ext(input) == ".go"
 	if info, statErr := os.Stat(input); statErr == nil && info.IsDir() {
+		if root, e := project.DiscoverProject(input); e != nil {
+			return e
+		} else if root != "" {
+			input = root
+		}
 		if *mapPath != "" || *expandedPath != "" {
 			return errors.New("directory mode writes per-file .go.map.json automatically; --source-map/--expanded are single-file flags")
 		}

@@ -12,9 +12,6 @@ func dependencyIdentifier(name string) bool {
 }
 
 func validateDependency(alias string, d Dependency) error {
-	if d.Source != "" && d.Source != "module" && !d.IsToolchain() {
-		return fmt.Errorf("dependency %s: unknown source %q; expected module or toolchain", alias, d.Source)
-	}
 	if d.Package != "" && !validPackagePath(d.Package) {
 		return fmt.Errorf("dependency %s: invalid exact package path %q", alias, d.Package)
 	}
@@ -23,7 +20,7 @@ func validateDependency(alias string, d Dependency) error {
 	}
 	if d.IsToolchain() {
 		if d.Module != "" || d.Version != "" || d.Path != "" || d.Git != "" || d.Rev != "" || d.Subdir != "" || d.Features != nil || d.DefaultFeatures != nil {
-			return fmt.Errorf("dependency %s: toolchain source accepts only package, namespaces and optional", alias)
+			return fmt.Errorf("dependency %s: Go standard library accepts only go and optional", alias)
 		}
 	} else if d.Module == "" {
 		return fmt.Errorf("dependency %s: module source requires module", alias)

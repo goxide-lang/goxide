@@ -125,7 +125,7 @@ func normalizedReplaces(root string, m ModFile) ([]ModReplace, error) {
 	}
 	return out, nil
 }
-func (g *Graph) readNode(root string, published bool) (*Node, error) {
+func (g *Graph) readNode(root string, published bool, checkout string) (*Node, error) {
 	present, e := Detect(root)
 	if e != nil {
 		return nil, e
@@ -136,7 +136,7 @@ func (g *Graph) readNode(root string, published bool) (*Node, error) {
 		if override, ok := g.overrides[root]; ok {
 			n.Manifest = override
 		} else {
-			n.Manifest, e = Read(root)
+			n.Manifest, e = readManifest(root, checkout)
 		}
 		manifestErr := e
 		if e != nil && n.Manifest.Module == "" {
@@ -266,7 +266,7 @@ func effective(s Selection) Selection {
 func (g *Graph) round(root string, requested []string, defaults bool, selected map[string]Selection) (*planningRound, error) {
 	r := &planningRound{nodes: map[string]*Node{}, local: map[string]string{}}
 	var e error
-	r.root, e = g.readNode(root, false)
+	r.root, e = g.readNode(root, false, "")
 	if e != nil {
 		return nil, e
 	}
@@ -354,8 +354,8 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					if e != nil {
 						return nil, e
 					}
-					boundary = filepath.Join(g.Cache, Digest([]string{d.Git, d.Rev, d.Subdir, d.Module}))
-					sourceID = Digest([]string{d.Git, d.Rev, d.Subdir, g.Lock.Git[filepath.Base(boundary)]})
+					boundary = filepath.Join(g.Cache, d.GitKey())
+					sourceID = Digest([]string{d.Git, d.gitRef(), d.Subdir, g.Lock.Git[filepath.Base(boundary)]})
 				} else {
 					dir = d.Path
 					if !filepath.IsAbs(dir) {
@@ -387,7 +387,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 				}
 				child, ok := r.nodes[d.Module]
 				if !ok {
-					child, e = g.readNode(dir, published)
+					child, e = g.readNode(dir, published, boundary)
 					if e != nil {
 						if child == nil {
 							return nil, e
@@ -412,18 +412,15 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					child.SourceID = sourceID
 					child.SelectedVersion = version
 					if boundary != "" {
-						mod, err := child.Mod, error(nil)
-						if err != nil {
-							return nil, err
-						}
+						mod := child.Mod
 						for _, rep := range mod.Replace {
 							if rep.New.Version == "" {
 								p := rep.New.Path
 								if !filepath.IsAbs(p) {
 									p = filepath.Join(dir, p)
 								}
-								p, err = filepath.EvalSymlinks(p)
-								if err != nil || !contained(boundary, p) {
+								resolved, err := filepath.EvalSymlinks(p)
+								if err != nil || !contained(boundary, resolved) {
 									return nil, fmt.Errorf("acquired dependency go.mod replace escapes checkout/source boundary: %s", rep.Old.Path)
 								}
 							}
@@ -440,7 +437,15 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					changed = true // Revisit children already traversed via a weaker source edge.
 				}
 				if sourceID == "" {
-					sourceID = Digest([]string{child.Module, child.Root})
+					if boundary != "" {
+						relative, err := filepath.Rel(boundary, child.Root)
+						if err != nil {
+							return nil, err
+						}
+						sourceID = Digest([]string{child.Module, g.Lock.Git[filepath.Base(boundary)], relative})
+					} else {
+						sourceID = Digest([]string{child.Module, child.Root})
+					}
 				}
 				if provenance[child.Module] == nil {
 					provenance[child.Module] = map[string]bool{}
@@ -489,14 +494,11 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		return nil, e
 	}
 	defer os.RemoveAll(work)
-	raw, e := r.root.ModBytes, error(nil)
-	if e != nil {
-		return nil, e
-	}
+	raw := r.root.ModBytes
 	if e = os.WriteFile(filepath.Join(work, "go.mod"), raw, 0644); e != nil {
 		return nil, e
 	}
-	if sums, e := []byte(g.planningSeed+g.Lock.PlanningSums), error(nil); len(sums) > 0 && e == nil {
+	if sums := []byte(g.planningSeed + g.Lock.PlanningSums); len(sums) > 0 {
 		if e = os.WriteFile(filepath.Join(work, "go.sum"), sums, 0644); e != nil {
 			return nil, e
 		}
@@ -571,7 +573,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			} else {
 				eff := effective(pin)
 				if eff.Version == "" {
-					node, err := g.readNode(eff.Path, false)
+					node, err := g.readNode(eff.Path, false, "")
 					if err != nil {
 						return nil, err
 					}
@@ -684,7 +686,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		if !yes {
 			continue
 		}
-		n, err := g.readNode(rep.New.Path, false)
+		n, err := g.readNode(rep.New.Path, false, "")
 		if err != nil {
 			return nil, err
 		}
@@ -994,7 +996,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 	}
 
 	var e error
-	initial, err := g.readNode(root, false)
+	initial, err := g.readNode(root, false, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1040,7 +1042,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			}
 			g.Root = r.root
 			g.Plan = next
-			g.PlanID = Digest([]any{ManifestProtocol, portableSelections(root, next)})
+			g.PlanID = Digest([]any{ManifestProtocol, g.portablePlan(root, next, r.nodes)})
 			state := map[string]int{}
 			var visit func(*Node) error
 			visit = func(n *Node) error {
@@ -1098,12 +1100,9 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			inputs := []lockNode{}
 			for _, module := range keys(r.nodes) {
 				n := r.nodes[module]
-				raw, e := n.ModBytes, error(nil)
-				if e != nil {
-					return nil, e
-				}
+				raw := n.ModBytes
 				idRoot := n.Root
-				if n == r.root || n.SelectedVersion != "" {
+				if n == r.root || n.SelectedVersion != "" || n.CheckoutRoot != "" {
 					idRoot = n.Module
 				}
 				inputs = append(inputs, lockNode{n.Module, idRoot, n.Manifest, string(raw), n.Sources})
@@ -1112,10 +1111,10 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			if g.Lock.Plans == nil {
 				g.Lock.Plans = map[string]map[string]Selection{}
 			}
-			if old, ok := g.Lock.Plans[key]; g.Locked && (!ok || Digest(old) != Digest(portableSelections(root, next))) {
+			if old, ok := g.Lock.Plans[key]; g.Locked && (!ok || Digest(old) != Digest(g.portablePlan(root, next, r.nodes))) {
 				return nil, fmt.Errorf("--locked: stable module plan missing or changed")
 			}
-			g.Lock.Plans[key] = portableSelections(root, next)
+			g.Lock.Plans[key] = g.portablePlan(root, next, r.nodes)
 			return g, nil
 		}
 		if states[state] {

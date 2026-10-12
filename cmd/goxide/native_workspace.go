@@ -177,31 +177,39 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 			if req.Mode == "run" && selected.kind == "lib" {
 				return fmt.Errorf("cannot run a library")
 			}
+			// Checksums may be completed by package loading; they are integrity records,
+			// not a different target configuration for the same selected sources.
+			selections := project.NativeSelectionIdentity(lock.NativeWorkspace.Modules)
 			platform := config["GOOS"] + "-" + config["GOARCH"]
-			spec := project.UnitSpec{Host: runtime.GOOS + "-" + runtime.GOARCH, Target: platform, Kind: selected.kind, Name: selected.target.Name, Config: project.Digest([]any{"native-workspace-v1", lock.NativeWorkspace, module, selected.target, selected.kind, featureIDs, req.Mode, projectCompilerID()})}
+			spec := project.UnitSpec{Host: runtime.GOOS + "-" + runtime.GOARCH, Target: platform, Kind: selected.kind, Name: selected.target.Name, Config: project.Digest([]any{"native-workspace-v1", lock.NativeWorkspace.Input, lock.NativeWorkspace.Members, lock.NativeWorkspace.LocalSources, selections, module, selected.target, selected.kind, featureIDs, req.Mode == "test", projectCompilerID()})}
 			unit, err := layout.Begin(spec)
 			if err != nil {
 				return err
 			}
-			dirs, err := project.NativeView(w, unit.Bundle, allowed, lock.NativeWorkspace)
+			bundle, err := os.MkdirTemp(unit.Intermediate, ".generation-")
 			if err != nil {
 				return err
 			}
-			path, err := lowerNativeView(context.Background(), w, g, dirs, unit.Bundle, selected.target, selected.kind, req.Mode == "test", layout, stderr)
+			defer os.RemoveAll(bundle)
+			dirs, err := project.NativeView(w, bundle, allowed, lock.NativeWorkspace)
+			if err != nil {
+				return err
+			}
+			path, err := lowerNativeView(context.Background(), w, g, dirs, bundle, selected.target, selected.kind, req.Mode == "test", layout, stderr)
 			if err != nil {
 				return err
 			}
 			if e = checkTarget(dirs[module], path); e != nil {
 				return e
 			}
-			rel, err := filepath.Rel(unit.Bundle, path)
+			rel, err := filepath.Rel(bundle, path)
 			if err != nil {
 				return err
 			}
 			pattern := "./" + filepath.ToSlash(rel)
 			// Every Go read and build sees this same owned work file. Metadata-only
 			// members cannot satisfy an undeclared member import, even in batch mode.
-			packages, err := nativePackages(req.GoTool, unit.Bundle, []string{pattern}, req.Offline, req.Mode == "test")
+			packages, err := nativePackages(req.GoTool, bundle, []string{pattern}, req.Offline, req.Mode == "test")
 			if err != nil {
 				return fmt.Errorf("explicit native graph for %s: %w", module, err)
 			}
@@ -213,13 +221,19 @@ func runNativeWorkspace(req CompileRequest, input string, w *project.Workspace, 
 				}
 			}
 			preflight := *lock.NativeWorkspace
-			if e = project.ReadNativeSelections(w, req.GoTool, unit.Bundle, &preflight, true); e != nil {
+			if e = project.ReadNativeSelections(w, req.GoTool, bundle, &preflight, true); e != nil {
 				return e
 			}
 			if req.Locked && project.Digest(preflight) != project.Digest(lock.NativeWorkspace) {
 				return fmt.Errorf("--locked: native workspace sums changed during preflight")
 			}
 			lock.NativeWorkspace = &preflight
+			if err = unit.PublishBundle(bundle); err != nil {
+				return err
+			}
+			if err = os.RemoveAll(bundle); err != nil {
+				return err
+			}
 			if req.Mode == "transpile" {
 				fmt.Fprintln(out, unit.Bundle)
 				continue

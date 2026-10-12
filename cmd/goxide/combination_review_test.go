@@ -43,9 +43,9 @@ func TestVersionFeaturesScriptTargetIntegration(t *testing.T) {
 	files["lib/lib.gox"] = "package lib\nuse gen;\nfunc Value()string{return gen::Value}\n"
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", files)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", files)
-	root := versionApp(t, `{"module":"example.org/goxidelib","version":"v1.0.0"}`)
+	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 	rootManifest := func(version string) string {
-		return manifestJSON(`{"version":1,"features":{"extra":["lib/extra"]},"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":{"module":"example.org/goxidelib","version":"` + version + `"}}}`)
+		return manifestJSON(`{"version":1,"features":{"extra":["lib/extra"]},"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":{"go":"example.org/goxidelib","version":"` + version + `"}}}`)
 	}
 	projectWrite(t, root, map[string]string{"goxide.toml": rootManifest("v1.0.0")})
 	scriptAction(t, root, "trust-project")

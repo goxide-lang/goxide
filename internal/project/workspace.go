@@ -69,9 +69,14 @@ func workspaceHeader(root string) (*WorkspaceConfig, error) {
 	if c.Format != 1 {
 		return nil, fmt.Errorf("unsupported workspace.format %d", c.Format)
 	}
-	if e := validate(Manifest{Version: 2, Module: "goxide-workspace.invalid/templates", GoVersion: "1.27", Dependencies: c.Dependencies}); e != nil {
+	deps, e := resolveAuthorDependencies(c.Dependencies)
+	if e != nil {
+		return nil, e
+	}
+	if e := validate(Manifest{Version: 2, Module: "goxide-workspace.invalid/templates", GoVersion: "1.27", Dependencies: deps}); e != nil {
 		return nil, fmt.Errorf("workspace templates: %w", e)
 	}
+	c.Dependencies = deps
 	for name, d := range c.Dependencies {
 		if d.Workspace || d.Optional {
 			return nil, fmt.Errorf("workspace dependency %s: templates cannot inherit or be optional", name)
@@ -84,7 +89,10 @@ func workspaceHeader(root string) (*WorkspaceConfig, error) {
 }
 
 // DiscoverWorkspace stops at the nearest workspace, including an unlisted package.
-func DiscoverWorkspace(root string) (*Workspace, error) {
+func DiscoverWorkspace(root string) (*Workspace, error) { return discoverWorkspace(root, "") }
+
+// Acquired sources may read their own workspace only within the verified checkout.
+func discoverWorkspace(root, checkout string) (*Workspace, error) {
 	root, e := filepath.Abs(root)
 	if e != nil {
 		return nil, e
@@ -95,16 +103,16 @@ func DiscoverWorkspace(root string) (*Workspace, error) {
 			return nil, e
 		}
 		if c != nil {
-			return loadWorkspace(dir, *c)
+			return loadWorkspace(dir, *c, checkout)
 		}
-		if filepath.Dir(dir) == dir {
+		if dir == checkout || filepath.Dir(dir) == dir {
 			break
 		}
 	}
 	return nil, nil
 }
 
-func loadWorkspace(root string, c WorkspaceConfig) (*Workspace, error) {
+func loadWorkspace(root string, c WorkspaceConfig, checkout string) (*Workspace, error) {
 	if e := NoSymlinks(root); e != nil {
 		return nil, e
 	}
@@ -189,7 +197,11 @@ func loadWorkspace(root string, c WorkspaceConfig) (*Workspace, error) {
 	}
 	for _, dir := range keys(dirs) {
 		if dir != root {
-			if e := RejectManagedOutput(dir); e != nil {
+			if checkout != "" {
+				if !contained(checkout, dir) {
+					return nil, fmt.Errorf("source workspace member escapes checkout: %s", dir)
+				}
+			} else if e := RejectManagedOutput(dir); e != nil {
 				return nil, e
 			}
 			for parent := dir; parent != root; parent = filepath.Dir(parent) {
@@ -300,9 +312,14 @@ func parseWorkspaceManifest(filename string, b []byte, w *Workspace) (Manifest, 
 				}
 			}
 			if base.Path != "" && !filepath.IsAbs(base.Path) {
-				base.Path = filepath.Join(w.Root, base.Path)
+				absolute := filepath.Join(w.Root, base.Path)
+				relative, err := filepath.Rel(filepath.Dir(filename), absolute)
+				if err != nil {
+					return Manifest{}, err
+				}
+				base.Path = relative
 			}
-			b, e := toml.Marshal(base)
+			b, e := toml.Marshal(authorDependencies(map[string]Dependency{alias: base})[alias])
 			if e != nil {
 				return Manifest{}, e
 			}

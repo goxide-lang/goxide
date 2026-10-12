@@ -93,15 +93,15 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 
 序列化派生归属 serde core：`use serde; #[derive(serde::Serialize, serde::Deserialize)]`。JSON 只实现数据格式；`serde::json::Serialize` 不是派生。显式 `use serde::Serialize;` 后可写 `#[derive(Serialize)]`，这里解析的是绑定身份，不是全局裸名白名单。
 
-## 可选项目配置
+## 默认项目模式
 
-Cargo 风格第一版通过 `goxide.toml` 增量启用默认/显式 feature、文件级 cfg、Go version/Git/path 依赖和命名 bin/example。Go 仍负责 module 解析；不声称完整 Cargo 兼容。见 [可运行项目示例](examples/project/README.md) 和 [RFC 0022：语法、命令、锁定与限制](docs/rfcs/0022-project-toolchain.md)。
+build/run/test/transpile 省略目录时，从 cwd 向上发现 `goxide.toml` 与 workspace，go.mod 不阻挡发现。Cargo 风格字段声明 Git/path/Go 依赖、features 和命名目标，schema 见 [清单文档](docs/design/toml-manifest.md)。Go 仍负责 module 解析；不声称完整 Cargo 兼容。见 [可运行项目示例](examples/project/README.md) 和 [RFC 0022：语法、命令、锁定与限制](docs/rfcs/0022-project-toolchain.md)。
 
 项目构建默认将产物保留在 `target/`：`goxide build --bin web ./app` 会打印二进制路径，`goxide transpile --bin web ./app` 会打印可独立 Go 构建的生成 module 路径。可用 `--target-dir` 或 `GOXIDE_TARGET_DIR` 配置；相对路径以项目根为准。见 [产物布局与安全边界](docs/design/target-layout.md)。
 
 作者 workspace 核心支持显式成员和 `{ workspace = true }` 依赖继承、全工作区统一版本与根锁、按所选成员合并 feature。用 `goxide build --workspace ROOT` 或 `goxide run -p MODULE --bin NAME ROOT` 选择；成员资格不自动提供依赖。见 [可运行 workspace 示例](examples/workspace/README.md) 与 [实现范围及限制](docs/rfcs/0026-workspaces.md#本次实现范围)。
 
-`version` 渠道现可直接取得带 `goxide.toml` 的源码并统一 features；Go 负责共享 MVS 与 sums，稳定后才生成/执行已授权脚本。仅原生 go.mod 不隐式激活 goxide feature；固定配置 Go 发行物不重配。见 [version 来源合同与验收](docs/design/version-source-plan.md)。
+`go = "模块路径"` 加 `version` 渠道可直接取得带 `goxide.toml` 的源码并统一 features；Go 负责共享 MVS 与 sums，稳定后才生成/执行已授权脚本。仅原生 go.mod 不隐式激活 goxide feature；固定配置 Go 发行物不重配。见 [version 来源合同与验收](docs/design/version-source-plan.md)。
 
 项目采用 [统一项目模型](docs/rfcs/0025-unified-project.md)：根以 `goxide.toml`（`package.format = 2`，显式 module/go）和 `goxide.lock` 为配置与锁定权威，`.go` / `.gox` 可共存。原生 require/replace/exclude 写入 TOML；Go 元数据仅生成到 target。普通 Go 工程可用 `goxide import-go --plan --bin app=cmd/app ROOT` 查看方案，再用 `--out NEWDIR --offline` 在新目录验证迁移，原工程保持不变。旧 JSON、format 1、双根配置和旧锁均明确拒绝；不自动删除或改名。 `import-go` 未指定输出时默认只读计划；原生 Go vendor 仅是迁入输入，验证后物化为显式本地模块，保留修改字节、资源和许可；Goxide 没有 vendor 构建模式。旧 vendor 清单/锁须从原工程显式重新迁入，详见 [供应源码迁入合同](docs/design/vendor-local-modules.md)。
 

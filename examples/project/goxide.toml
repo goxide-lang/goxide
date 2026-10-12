@@ -36,5 +36,4 @@ module = "github.com/goxide-lang/std"
 version = "v0.0.0-20261009104839-c02a09d8c417"
 
 [dependencies.fmt]
-source = "toolchain"
-package = "fmt"
+go = "fmt"

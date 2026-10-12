@@ -46,11 +46,12 @@ func TestManifestMigrationDependencySources(t *testing.T) {
 					migrationGit(t, dep, "add", ".")
 					migrationGit(t, dep, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "fixture")
 					d["git"] = dep
-					d["rev"] = "HEAD"
+					d["rev"] = migrationGit(t, dep, "rev-parse", "HEAD")
 				case "version":
 					proxy, _ := versionProxy(t)
 					publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", files)
-					d["version"] = "v1.0.0"
+					d["go"], d["version"] = "example.org/goxidelib", "v1.0.0"
+					delete(d, "module")
 				}
 				root := t.TempDir()
 				projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\n", "main.go": "package main\nfunc main(){}\n", "goxide.toml": projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.go"}}, "dependencies": map[string]any{"old": d}})})
@@ -80,12 +81,14 @@ func TestManifestMigrationHostHelper(t *testing.T) {
 	}
 }
 
-func migrationGit(t *testing.T, root string, args ...string) {
+func migrationGit(t *testing.T, root string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-c", "core.hooksPath=/dev/null"}, args...)...)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
-	if b, e := cmd.CombinedOutput(); e != nil {
+	b, e := cmd.CombinedOutput()
+	if e != nil {
 		t.Fatalf("git: %s %v", b, e)
 	}
+	return strings.TrimSpace(string(b))
 }

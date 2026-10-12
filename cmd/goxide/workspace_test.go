@@ -48,8 +48,8 @@ module="example.org/%s"
 go="1.27"
 [dependencies]
 common={workspace=true,features=[%q]}
-fmt={source="toolchain",package="fmt"}
-d={module="example.org/d",package="example.org/d",version=%q}
+fmt={go = "fmt"}
+d={go = "example.org/d", version = %q,package="example.org/d"}
 [[go.require]]
 module="example.org/d"
 version=%q
@@ -156,7 +156,7 @@ format=2
 module="example.org/%s"
 go="1.27"
 [dependencies]
-dep={module="example.org/%s",git=%q,rev="main"}
+dep={module="example.org/%s",git = %q, branch = "main"}
 [[bin]]
 name="app"
 path="main.go"

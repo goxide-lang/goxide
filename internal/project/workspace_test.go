@@ -25,7 +25,7 @@ members=["app"]
 [workspace.package]
 go="1.27"
 [workspace.dependencies]
-lib={module="example.org/lib",git="https://example.org/lib.git",rev="main",features=["json"],default_features=false}
+lib={module="example.org/lib",git = "https://example.org/lib.git", branch = "main",features=["json"],default_features=false}
 `)
 	wsWrite(t, root, "app/goxide.toml", `[package]
 format=2
@@ -67,7 +67,7 @@ format=2
 module="example.org/app"
 go="1.27"
 [dependencies]
-lib={module="example.org/lib",version="v1.2.0"}
+lib={go = "example.org/lib", version = "v1.2.0"}
 `)
 	m, e := Read(filepath.Join(root, "app"))
 	if e != nil {
@@ -136,10 +136,10 @@ func TestWorkspaceMembersShareLease(t *testing.T) {
 		other()
 		t.Fatal("second member bypassed workspace lease")
 	}
-	if _, e = os.Stat(filepath.Join(root, ".goxide", "build.lock")); e != nil {
+	if _, e = os.Stat(filepath.Join(root, "goxide.lock.guard")); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = os.Stat(filepath.Join(root, "a", ".goxide", "build.lock")); !os.IsNotExist(e) {
+	if _, e = os.Stat(filepath.Join(root, "a", "goxide.lock.guard")); !os.IsNotExist(e) {
 		t.Fatal("member acquired separate lease", e)
 	}
 	release()

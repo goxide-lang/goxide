@@ -1,6 +1,6 @@
 # 静态托管：组织根站构建与本地审计
 
-源码在goxide/website；goxide-lang.github.io只接收审计后的dist。当前Pages只读查询返回https://goxide-lang.github.io/，source path为 `/`。React Router使用根站路径，Vite base为 `/`，不是项目仓库子路径。实体index/rfc/playground/local.html共用页面壳，客户端导航不整页刷新；不存在的路径返回独立404。
+源码在goxide/website；goxide-lang.github.io只接收审计后的dist。当前Pages只读查询返回https://goxide-lang.github.io/，source path为 `/`。preact-iso Router使用根站路径，Vite base为 `/`，不是项目仓库子路径。实体index/rfc/playground/local.html共用页面壳，客户端导航不整页刷新；不存在的路径返回独立404。
 
 本任务不上传、部署或修改Pages配置/权限。以下仅做本地根站模拟，不代表新产物已经在GitHub Pages发布或通过平台端到端验证。
 

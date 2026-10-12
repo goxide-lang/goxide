@@ -25,7 +25,7 @@ race/vet，不重复全树已经覆盖的 `internal/typecheck`。生成产物保
 编译器固定对象/生产源码摘要不匹配必须失败，由功能改动同步审阅对应 pin，不能在 CI
 自动重写摘要使之通过。
 
-Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译器；web job显式安装Node 22，并用website/package-lock.json执行npm ci，供React/Vite/Monaco构建与worker检查使用。
+Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译器；web job显式安装Node 22，并用website/package-lock.json执行npm ci，供Preact/Vite/Monaco构建与worker检查使用。
 完整 Git 历史用于 catalog 与 review 产物合同。缓存按锁文件选取；先用仓外清单副本
 预热完整固定模块图并 `verify`，逐字节确认 `go.mod/go.sum` 未变，然后 `GOPROXY=off`。
 缓存仅加速，冷 cache、离线、校验和、权限/安全夹具仍由原测试自行构造，不改夹具环境。

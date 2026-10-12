@@ -1,14 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
+import { render } from "preact";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import {
-  BrowserRouter,
-  Link,
-  NavLink,
+  LocationProvider,
+  Router,
   Route,
-  Routes,
   useLocation,
-  useNavigationType,
-} from "react-router-dom";
+} from "preact-iso/router";
 import Playground from "./Playground";
 import FileView from "./FileView";
 import "./style.css";
@@ -39,12 +36,12 @@ function Home() {
         加上有限、可检查的语言能力，生成你能阅读、审查和继续使用的 Go 源码。
       </p>
       <div className="toolbar">
-        <Link className="button primary" to="/playground.html">
+        <a className="button primary" href="/playground.html">
           亲手试一段代码 →
-        </Link>
-        <Link className="button" to="/rfc.html">
+        </a>
+        <a className="button" href="/rfc.html">
           了解语言设计 →
-        </Link>
+        </a>
       </div>
       <p className="caption">
         语言名 Goxide · 命令 goxide · 源文件 .gox · 可执行子集，持续演进。
@@ -53,17 +50,17 @@ function Home() {
         <div>
           <h2>可审查的宏</h2>
           <p>有限捕获、重复与嵌套，明确求值与名字绑定边界。</p>
-          <Link to="/playground.html?example=macro">看声明宏 →</Link>
+          <a href="/playground.html?example=macro">看声明宏 →</a>
         </div>
         <div>
           <h2>enum 与 match</h2>
           <p>闭合状态、穷尽检查、guard 与有限表达式组合。</p>
-          <Link to="/playground.html?example=enum">看状态匹配 →</Link>
+          <a href="/playground.html?example=enum">看状态匹配 →</a>
         </div>
         <div>
           <h2>缺失与失败</h2>
           <p>Option/Result 与显式传播，Go 返回值的静态适配。</p>
-          <Link to="/playground.html?example=result">看错误传播 →</Link>
+          <a href="/playground.html?example=result">看错误传播 →</a>
         </div>
       </div>
       <h2>当前边界</h2>
@@ -84,9 +81,7 @@ function Home() {
 }
 function RFC({ manifest }) {
   const location = useLocation(),
-    itemId =
-      new URLSearchParams(location.search).get("feature") ||
-      manifest.catalog.items[0].id;
+    itemId = location.query.feature || manifest.catalog.items[0].id;
   const item = manifest.catalog.items.find((item) => item.id === itemId);
   return (
     <section>
@@ -98,14 +93,14 @@ function RFC({ manifest }) {
       <div className="rfc-browser">
         <nav id="rfc-list" aria-label="RFC 列表">
           {manifest.catalog.items.map((row) => (
-            <Link
+            <a
               key={row.id}
-              to={"/rfc.html?feature=" + encodeURIComponent(row.id)}
+              href={"/rfc.html?feature=" + encodeURIComponent(row.id)}
               aria-current={row.id === itemId ? "page" : undefined}
             >
               {row.rfcs.map((id) => "RFC " + id).join(" / ")} · {row.title}
               <small>{manifest.catalog.statusLabels[row.status]}</small>
-            </Link>
+            </a>
           ))}
         </nav>
         <article id="rfc-content">
@@ -147,9 +142,9 @@ function RFC({ manifest }) {
                 return (
                   <div key={item.id + "-" + id}>
                     <h3>{example.title}</h3>
-                    <Link to={"/playground.html?example=" + id}>
+                    <a href={"/playground.html?example=" + id}>
                       打开 Playground →
-                    </Link>
+                    </a>
                     <Readonly
                       label="RFC 示例"
                       files={[
@@ -241,14 +236,23 @@ function Local({ manifest }) {
     </section>
   );
 }
+function EmptyPage() {
+  return null;
+}
+function NotFound() {
+  return (
+    <section>
+      <h1>找不到此页面。</h1>
+    </section>
+  );
+}
 function Shell({ manifest }) {
   const location = useLocation(),
-    navigationType = useNavigationType(),
     routeScroll = useRef(new Map()),
-    visible = location.pathname === "/playground.html";
+    visible = location.path === "/playground.html";
   const [visited, setVisited] = useState(visible),
     main = useRef(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (visible) setVisited(true);
     const title =
       {
@@ -257,54 +261,62 @@ function Shell({ manifest }) {
         "/rfc.html": "RFC 特性",
         "/playground.html": "Playground",
         "/local.html": "本地使用",
-      }[location.pathname] || "找不到页面";
+      }[location.path] || "找不到页面";
     document.title = title + " · Goxide";
     main.current.focus({ preventScroll: true });
     window.scrollTo(
       0,
-      navigationType === "POP" ? routeScroll.current.get(location.key) || 0 : 0,
+      !location.wasPush ? routeScroll.current.get(location.url) || 0 : 0,
     );
-    const record = () => routeScroll.current.set(location.key, window.scrollY);
+    const record = () => routeScroll.current.set(location.url, window.scrollY);
     window.addEventListener("scroll", record, { passive: true });
     return () => window.removeEventListener("scroll", record);
-  }, [location.pathname, location.search, location.key, navigationType]);
+  }, [location.url]);
   return (
     <>
       <a className="skip" href="#main">
         跳到主内容
       </a>
       <header>
-        <Link className="brand" to="/">
+        <a className="brand" href="/">
           g <span>Goxide</span>
-        </Link>
+        </a>
         <nav aria-label="主导航">
-          <NavLink to="/rfc.html">RFC 特性</NavLink>
-          <NavLink to="/playground.html">Playground</NavLink>
-          <NavLink to="/local.html">本地使用</NavLink>
+          <a
+            href="/rfc.html"
+            aria-current={location.path === "/rfc.html" ? "page" : undefined}
+          >
+            RFC 特性
+          </a>
+          <a
+            href="/playground.html"
+            aria-current={visible ? "page" : undefined}
+          >
+            Playground
+          </a>
+          <a
+            href="/local.html"
+            aria-current={location.path === "/local.html" ? "page" : undefined}
+          >
+            本地使用
+          </a>
         </nav>
       </header>
       <main id="main" tabIndex={-1} ref={main}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/index.html" element={<Home />} />
-          <Route path="/rfc.html" element={<RFC manifest={manifest} />} />
-          <Route path="/local.html" element={<Local manifest={manifest} />} />
-          <Route path="/playground.html" element={null} />
-          <Route
-            path="*"
-            element={
-              <section>
-                <h1>找不到此页面。</h1>
-              </section>
-            }
-          />
-        </Routes>
+        <Router>
+          <Route path="/" component={Home} />
+          <Route path="/index.html" component={Home} />
+          <Route path="/rfc.html" component={RFC} manifest={manifest} />
+          <Route path="/local.html" component={Local} manifest={manifest} />
+          <Route path="/playground.html" component={EmptyPage} />
+          <NotFound default />
+        </Router>
         {(visited || visible) && (
           <Playground manifest={manifest} visible={visible} />
         )}
       </main>
       <footer>
-        <Link to="/">Goxide · goxide</Link>
+        <a href="/">Goxide · goxide</a>
         <span>
           MPL-2.0 · <a href="/GO-LICENSE.txt">Go runtime license</a> ·{" "}
           <a href="/THIRD-PARTY-LICENSES.txt">前端依赖许可</a>
@@ -365,8 +377,11 @@ function App() {
     </main>
   );
 }
-createRoot(document.getElementById("root")).render(
-  <BrowserRouter>
+// Only app routes are intercepted. Resource/license links retain normal navigation.
+const routeScope = /^\/(?:$|(?:index|rfc|playground|local)\.html(?:[?#]|$))/;
+render(
+  <LocationProvider scope={routeScope}>
     <App />
-  </BrowserRouter>,
+  </LocationProvider>,
+  document.getElementById("root"),
 );

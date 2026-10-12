@@ -42,7 +42,12 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  await view(page,'只读依赖').locator('.file-tabs [data-path]').nth(1).click();assert.match(await page.locator('#playground .provenance').first().textContent(),/SHA-256/);
  await page.click('[data-layout="source"]');await write(page,'package main\nfunc broken( {');await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
  assert.ok(await source.locator('.squiggly-error').count()>0,'compiler location markers');await page.click('[data-layout="result"]');assert.equal(await read(page,'生成结果'),'');
- await page.click('[data-layout="horizontal"]');await page.click('#reset');await done(page);assert.equal(await source.locator('.squiggly-error').count(),0);
+ const oldEditor=await source.locator('.monaco-editor').elementHandle();
+ await page.click('[data-layout="horizontal"]');await page.click('#reset');await done(page);
+ await source.getByRole('textbox').waitFor({state:'attached'});
+ assert.equal(await oldEditor.evaluate(element=>element.isConnected),false,'reset removes old Monaco editor');
+ assert.equal(await source.locator('.monaco-editor').count(),1,'one recreated source editor');
+ assert.equal(await source.locator('.squiggly-error').count(),0);
  await write(page,pkg.files[0].source+'\n// stop test\n');await page.click('#stop');assert.equal(await read(page,'生成结果'),'');await page.click('#compile');await done(page);
  // Recompilation keeps an existing generated path selected, including helper files.
  const resultPath=pkg.generatedFiles.at(-1).path;await view(page,'生成结果').locator(`.file-tabs [data-path="${resultPath}"]`).click();await write(page,pkg.files[0].source+'\n// path retained\n');await done(page);assert.equal(await view(page,'生成结果').locator('.file-tabs [aria-pressed=true]').getAttribute('data-path'),resultPath);
@@ -57,13 +62,18 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  await page.goto(base+'/rfc.html?feature=missing');await page.getByRole('alert').filter({hasText:'找不到此 RFC'}).waitFor();
  await page.goto(base+'/playground.html?example=missing');await page.getByRole('alert').filter({hasText:'找不到此示例'}).waitFor();
  await page.goto(base+'/playground.html?example=package_files');await done(page);
- await fs.mkdir(new URL('qa-artifacts/',import.meta.url),{recursive:true});await page.screenshot({path:new URL('qa-artifacts/react-monaco-desktop.png',import.meta.url).pathname});
+ await fs.mkdir(new URL('qa-artifacts/',import.meta.url),{recursive:true});await page.screenshot({path:new URL('qa-artifacts/preact-monaco-desktop.png',import.meta.url).pathname});
  await page.setViewportSize({width:390,height:844});for(const layout of ['source','result','horizontal','vertical']){await page.click(`[data-layout="${layout}"]`);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),layout+' reading width');}
- await page.click('[data-layout="horizontal"]');await page.screenshot({path:new URL('qa-artifacts/react-monaco-narrow.png',import.meta.url).pathname});
+ await page.click('[data-layout="horizontal"]');await page.screenshot({path:new URL('qa-artifacts/preact-monaco-narrow.png',import.meta.url).pathname});
  await page.setViewportSize({width:1440,height:1000});assert.equal(await page.locator('.dual-editor').evaluate(element=>getComputedStyle(element).gridTemplateColumns.split(' ').length),2);
  await source.getByRole('textbox').focus();await page.keyboard.press('Control+f');await source.locator('.find-widget.visible').waitFor();await page.keyboard.press('Escape');await source.getByRole('textbox').focus();await page.keyboard.press('Control+Space');await page.waitForFunction(()=>document.querySelector('.suggest-widget.visible'),null,{timeout:10000});await page.keyboard.press('Escape');
  assert.deepEqual(errors,[]);assert.ok(requests.every(request=>request.url().startsWith(base)&&request.method()==='GET'),'same-origin GET only');assert.ok(requests.some(request=>/editor.worker-.*\.js/.test(request.url())),'bundled Monaco worker');assert.ok(!requests.some(request=>request.url().includes('/goxide/assets/')),'organization root base');
  const unavailable=await context.newPage();await unavailable.route('**/examples.json',route=>route.fulfill({status:503,body:'unavailable'}));await unavailable.goto(base+'/');await unavailable.getByRole('alert').filter({hasText:'503'}).waitFor();await unavailable.close();
- const stale=await context.newPage();await stale.route('**/compiler.wasm*',route=>route.fulfill({contentType:'application/wasm',body:Buffer.from([0,97,115,109,1,0,0,0])}));await stale.goto(base+'/playground.html');await stale.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('完整性不匹配'));assert.equal(await read(stale,'生成结果'),'');await stale.close();
- console.log(JSON.stringify({url:base,compilerCommit:manifest.commit,websiteCommit:manifest.websiteCommit,wasmSha256:manifest.wasmSha256,examples:manifest.examples.length,packageGeneratedFiles:pkg.generatedFiles.length,rfcItems:manifest.catalog.items.length,monaco:true,modelsUndo:true,readonly:true,layouts:4,clientHistoryDraft:true,deepLinksReload:true,lazyEditor:true,rootSiteAssets:true,narrowReading:true,errors},null,2));
+ const stale=await context.newPage();await stale.route('**/compiler.wasm*',route=>route.fulfill({contentType:'application/wasm',body:Buffer.from([0,97,115,109,1,0,0,0])}));await stale.goto(base+'/playground.html');await stale.waitForFunction(()=>document.querySelector('#diagnostic')?.textContent.includes('完整性不匹配'));assert.equal(await read(stale,'生成结果'),'');await stale.close();
+ const editorFailure=await context.newPage();const loadErrors=[];editorFailure.on('pageerror',error=>loadErrors.push(error.message));
+ await editorFailure.route('**/assets/MonacoPane-*.js',route=>route.fulfill({status:503,contentType:'text/javascript',body:'unavailable'}));
+ await editorFailure.goto(base+'/playground.html');
+ await view(editorFailure,'源码').getByRole('alert').filter({hasText:'编辑器加载失败'}).waitFor();
+ assert.equal(await view(editorFailure,'源码').getByRole('textbox').count(),0);assert.deepEqual(loadErrors,[]);await editorFailure.close();
+ console.log(JSON.stringify({url:base,compilerCommit:manifest.commit,websiteCommit:manifest.websiteCommit,wasmSha256:manifest.wasmSha256,examples:manifest.examples.length,packageGeneratedFiles:pkg.generatedFiles.length,rfcItems:manifest.catalog.items.length,preact:true,monaco:true,modelsUndo:true,editorRecreated:true,lazyFailure:true,readonly:true,layouts:4,clientHistoryDraft:true,deepLinksReload:true,lazyEditor:true,rootSiteAssets:true,narrowReading:true,errors},null,2));
 }finally{await browser.close();}

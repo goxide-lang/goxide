@@ -34,7 +34,7 @@ for (const phase of ["loading", "busy"]) {
   const previous = FakeWorker.instances.at(-1);
   if (phase === "busy") previous.emit({ type: "ready", rootsSha256: "roots" });
   const id = previous.requests[0]?.id;
-  // The source event precedes React's effect. Neither ready nor result may send/revive old input.
+  // The source event precedes the component effect. Neither ready nor result may send/revive old input.
   service.invalidate();
   if (phase === "loading") {
     previous.emit({ type: "ready", rootsSha256: "roots" });
@@ -60,5 +60,5 @@ for (const phase of ["loading", "busy"]) {
   service.dispose();
 }
 console.log(
-  "compiler synchronous invalidation passed: loading/busy stale events before React effect",
+  "compiler synchronous invalidation passed: loading/busy stale events before component effects",
 );

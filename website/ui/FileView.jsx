@@ -1,5 +1,14 @@
-import { lazy, Suspense, useState } from "react";
-const MonacoPane = lazy(() => import("./MonacoPane.jsx"));
+import { useState, useLayoutEffect, useErrorBoundary } from "preact/hooks";
+import lazy, { ErrorBoundary } from "preact-iso/lazy";
+const MonacoPane = lazy(() =>
+  import("./MonacoPane.jsx").catch((error) => ({
+    // Resolve failed imports to an explicit fallback; native lazy only resumes fulfilled loads.
+    default: function EditorLoadFailure({ onReady }) {
+      useLayoutEffect(() => onReady(), []);
+      return <p role="alert">编辑器加载失败，请刷新重试：{String(error)}</p>;
+    },
+  })),
+);
 export default function FileView({
   label,
   files,
@@ -14,7 +23,9 @@ export default function FileView({
   children,
 }) {
   const [collapsed, setCollapsed] = useState(false),
-    [copied, setCopied] = useState("");
+    [copied, setCopied] = useState(""),
+    [editorReady, setEditorReady] = useState(false);
+  const [loadError] = useErrorBoundary();
   const current = files.find((file) => file.path === activePath);
   const groups = Map.groupBy(files, (file) =>
     file.path.includes("/")
@@ -106,17 +117,31 @@ export default function FileView({
           </div>
           {children}
           {files.length > 0 ? (
-            <Suspense fallback={<p className="loading">正在加载编辑器…</p>}>
-              <MonacoPane
-                files={files}
-                activePath={activePath}
-                readonly={readonly}
-                markers={markers}
-                onChange={readonly ? undefined : onChange}
-                onCompile={onCompile}
-                label={label + "编辑器"}
-              />
-            </Suspense>
+            <>
+              {!editorReady && !loadError && (
+                <p className="loading" role="status">
+                  正在加载编辑器…
+                </p>
+              )}
+              {loadError ? (
+                <p role="alert">
+                  编辑器加载失败，请刷新重试：{String(loadError)}
+                </p>
+              ) : (
+                <ErrorBoundary>
+                  <MonacoPane
+                    files={files}
+                    activePath={activePath}
+                    readonly={readonly}
+                    markers={markers}
+                    onChange={readonly ? undefined : onChange}
+                    onCompile={onCompile}
+                    label={label + "编辑器"}
+                    onReady={() => setEditorReady(true)}
+                  />
+                </ErrorBoundary>
+              )}
+            </>
           ) : (
             <p className="empty">{readonly ? "尚无转译结果" : "没有文件"}</p>
           )}

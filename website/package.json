@@ -7,15 +7,13 @@
     "test:compiler": "node qa.mjs"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "6.1.2",
     "playwright": "1.58.2",
     "vite": "8.3.4"
   },
   "dependencies": {
     "monaco-editor": "0.57.0",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "react-router-dom": "7.18.4"
+    "preact": "11.0.1",
+    "preact-iso": "2.12.2"
   },
   "type": "module"
 }

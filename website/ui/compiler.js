@@ -1,4 +1,4 @@
-// Keep the existing compiler protocol and watchdogs independent of React/editor state.
+// Keep the existing compiler protocol and watchdogs independent of the UI/editor state.
 export function compiler(manifest, report) {
   let worker = null,
     ready = false,

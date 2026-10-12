@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useLocation } from "preact-iso/router";
 import FileView from "./FileView";
 import { compiler, diagnostics } from "./compiler";
 export default function Playground({ manifest, visible }) {
@@ -24,15 +24,14 @@ export default function Playground({ manifest, visible }) {
     [generation, setGeneration] = useState(0);
   const service = useRef(null),
     filename = useRef(null),
-    location = useLocation(),
-    navigate = useNavigate();
+    location = useLocation();
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
-  useEffect(() => {
+  useLayoutEffect(() => {
     service.current = compiler(manifest, setResult);
     return () => service.current.dispose();
   }, [manifest]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     service.current.update({ files, packageMode });
   }, [files, packageMode]);
   function updateFiles(next) {
@@ -53,7 +52,7 @@ export default function Playground({ manifest, visible }) {
     setFileError("");
     setGeneration((value) => value + 1);
   }
-  const requested = new URLSearchParams(location.search).get("example");
+  const requested = location.query.example;
   useEffect(() => {
     if (visible && requested && requested !== selectedRef.current)
       choose(requested);
@@ -129,10 +128,10 @@ export default function Playground({ manifest, visible }) {
             value={selected}
             onChange={(event) => {
               choose(event.target.value);
-              navigate(
+              location.route(
                 "/playground.html?example=" +
                   encodeURIComponent(event.target.value),
-                { replace: true },
+                true,
               );
             }}
           >
@@ -161,7 +160,7 @@ export default function Playground({ manifest, visible }) {
             ref={filename}
             id="new-file-name"
             value={newName}
-            onChange={(event) => setNewName(event.target.value)}
+            onInput={(event) => setNewName(event.currentTarget.value)}
             placeholder="types.gox"
             maxLength={128}
           />

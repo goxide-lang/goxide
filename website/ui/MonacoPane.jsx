@@ -1,4 +1,4 @@
-import { useEffect, useRef, useId } from "react";
+import { useLayoutEffect, useRef, useId } from "preact/hooks";
 import * as monaco from "monaco-editor/editor/editor.api";
 import "monaco-editor/editor/contrib/find/browser/findController";
 import "monaco-editor/editor/contrib/suggest/browser/suggestController";
@@ -20,6 +20,7 @@ export default function MonacoPane({
   onChange,
   onCompile,
   label,
+  onReady,
 }) {
   const host = useRef(null),
     editor = useRef(null),
@@ -29,7 +30,7 @@ export default function MonacoPane({
     callbacks = useRef({ onChange, onCompile });
   const scope = useId();
   callbacks.current = { onChange, onCompile };
-  useEffect(() => {
+  useLayoutEffect(() => {
     const instance = monaco.editor.create(host.current, {
       model: null,
       automaticLayout: true,
@@ -41,6 +42,7 @@ export default function MonacoPane({
       ariaLabel: label,
     });
     editor.current = instance;
+    onReady?.();
     const change = instance.onDidChangeModelContent(() => {
       if (
         !switching.current &&
@@ -62,7 +64,7 @@ export default function MonacoPane({
       views.current.clear();
     };
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const instance = editor.current;
     switching.current = true;
     const previous = instance.getModel();

@@ -6,7 +6,7 @@
 
 本片在已有 Go module / 目录包模型上实现 `use` 与 `pub use` 的逐项、别名、glob 绑定。当前统一静态路径与依赖根语义见[路径合同](../design/static-paths.md)；仅支持目录内本地 `mod`，没有完整 `pub(scope)` 或普通声明的统一 `pub`。现有原生 Go 公开规则、`pub enum`、`pub macro_rules!` 保持各自既有语义。
 
-研究依据与未选方案见 [研究分支 RFC 0007](https://github.com/hxsf/goxide/blob/29d81ecf06d7a9cfb383aa1e264a7bcd31d1fb6b/docs/rfcs/research/0007-modules-and-reexports.md)。本篇的实现范围优先于研究草案中的“尚未实现”状态。包发布协议承接 [RFC 0001](0001-package-loading.md)，Go 消费者不自动获得增强检查的边界承接 [RFC 0015](0015-public-api.md)。
+研究依据与未选方案见 [研究分支 RFC 0007](https://github.com/goxide-lang/goxide/blob/29d81ecf06d7a9cfb383aa1e264a7bcd31d1fb6b/docs/rfcs/research/0007-modules-and-reexports.md)。本篇的实现范围优先于研究草案中的“尚未实现”状态。包发布协议承接 [RFC 0001](0001-package-loading.md)，Go 消费者不自动获得增强检查的边界承接 [RFC 0015](0015-public-api.md)。
 
 实现位置：`internal/frontend/use.go`、`use_artifact.go`，接入包收集与 DSL 降低后的绑定阶段。宏模块以原definition/scope绑定源图内别名，保留定义点卫生，并检查实际引入的internal运行时路径；不复制宏为facade新定义。
 

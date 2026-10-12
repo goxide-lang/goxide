@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-已确认（2026-10-04）。语言展示名 **Goxide**，命令、配置和仓库命名 **goxide**，源文件 **.gox**。基于 27d2e274 的 feat/goxide-naming 分阶段落实；最终阶段移除旧命令、后缀、环境变量与生成符号，不提供永久兼容。pre-1.0 允许破坏旧生成产物，但禁止静默读取错误缓存。hxsf/goxide 仓库地址及 github.com/goxide-lang/std、github.com/goxide-lang/serde 模块路径不变。
+已确认（2026-10-04）。语言展示名 **Goxide**，命令、配置和仓库命名 **goxide**，源文件 **.gox**。基于 27d2e274 的 feat/goxide-naming 分阶段落实；最终阶段移除旧命令、后缀、环境变量与生成符号，不提供永久兼容。pre-1.0 允许破坏旧生成产物，但禁止静默读取错误缓存。当时的 hxsf/goxide 仓库地址及 github.com/goxide-lang/std、github.com/goxide-lang/serde 模块路径不因命名迁移而变。此后仓库已转移到 goxide-lang/goxide；编译器 Go module 路径仍为 github.com/hxsf/goxide。
 
 ## 源级规则
 

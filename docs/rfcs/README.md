@@ -46,7 +46,7 @@
 | [0026 workspace](0026-workspaces.md) | Cargo风格成员/继承/锁与Go多模块 | 作者核心、根锁及受限go.work迁入已实现；vendor仅作输入转显式local模块；统一host resolver等扩展仍待设计/实现 |
 | [0027 正式命名](0027-goxide-naming.md) | Goxide / goxide / .gox / GOXIDE_* | 已完成命名与ABI迁移，旧输入/产物明确拒绝并重生成 |
 
-RFC 0024 use路径仍在[独立提案分支](https://github.com/hxsf/goxide/blob/5e4b118f25262d8022d1b8f72575d89d69f096aa/docs/rfcs/0024-use-paths.md)，未批准新路径语法；不表示mod/pub(scope)目标取消。
+RFC 0024 use路径仍在[独立提案分支](https://github.com/goxide-lang/goxide/blob/5e4b118f25262d8022d1b8f72575d89d69f096aa/docs/rfcs/0024-use-paths.md)，未批准新路径语法；不表示mod/pub(scope)目标取消。
 
 ## 范围与验证
 

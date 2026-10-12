@@ -5,7 +5,7 @@
 > 当前统一入口：[README](README.md)；最小试用见 [enum_trial](examples/enum_trial/README.md)。宏 + 独立 enum 历史基线 `55ef3b3020b3984a8ae360ca469fc13fee345bd2`。本文件保留阶段历史，当前范围以末尾交付清单及统一入口为准；2026-10-04 已增加文末 Go Result 适配宏。
 
 当前覆盖规则：D27 只保留封闭变体 enum；旧开放 raw/C enum 及其别名待决项撤回。数值/string 属于 serde 外部映射，未知 variant 报错，业务 validator 后置。历史阶段 raw 验收不再代表当前支持。RFC 0019/0020 已同步设计，尚不代表 trait/固有 impl 实现。
-更新：2026-10-01。暂名 hgo / Hyper Go，仓库为 `hxsf/goxide`。本文件记录实现进度和依赖顺序；设计确认状态以[决策登记](docs/design/decisions.md)为准。路线本身是暂定建议，不是交付日期承诺。
+更新：2026-10-01。暂名 hgo / Hyper Go，仓库为 `goxide-lang/goxide`（原 `hxsf/goxide`，已转移到独立组织）。本文件记录实现进度和依赖顺序；设计确认状态以[决策登记](docs/design/decisions.md)为准。路线本身是暂定建议，不是交付日期承诺。
 
 ## 1. 当前仓库实际具备什么
 
@@ -69,7 +69,7 @@ Option/Result 专用问号见 [RFC 0005](docs/rfcs/research/0005-option-result-q
 ## 4. 在另一台机器继续
 
 ```sh
-git clone git@github.com:hxsf/goxide.git hyper-go
+git clone git@github.com:goxide-lang/goxide.git hyper-go
 cd hyper-go
 git switch main
 python3 scripts/check_design.py --docs-only

@@ -31,7 +31,7 @@ FileView 仅需选择、编辑、新建、删除回调。文件 path 在集合�
 
 拟用实体 HTML 入口：`index.html`（介绍/边界）、`rfc.html?feature=<catalog id>`、`playground.html?example=<example id>`、`local.html`（本地使用/工程快照）。使用 catalog 的已有 id，RFC 编号在列表显示；不复制第二套状态来源。直接加载或刷新由对应 HTML 提供页面骨架，共享相对 JS/CSS/manifest，根路径和项目子路径都能使用，不依赖服务端 rewrite。
 
-少量 URL/History API 处理站内导航、pushState 和 popstate。同一文档中保持一个 Playground 状态/DOM，不因路由重新挂载或重置；切页保存/恢复页滚动，更新标题、当前导航和主内容焦点。RFC/示例参数通过已有 catalog/manifest 校验；相同示例不重置草稿，显式选择其他示例仍遵循当前重置语义。刷新保证回到正确页面；本片不承诺刷新或新标签保留未保存草稿，不增加持久存储/项目序列化机制。缺失页面仍走真实 404；不存在的 feature/example 显示明确未找到状态，不静默选择另一项。
+实体入口由构建从同一个 HTML 页面壳生成，URL 决定初始可见 section；不复制四套手写页面内容。站内只切已有 section，不 fetch HTML、不动态挂载框架。少量 URL/History API 处理站内导航、pushState 和 popstate。同一文档中保持一个 Playground 状态/DOM，不因路由重新挂载或重置；切页保存/恢复页滚动，更新标题、当前导航和主内容焦点。RFC/示例参数通过已有 catalog/manifest 校验；相同示例不重置草稿，显式选择其他示例仍遵循当前重置语义。刷新保证回到正确页面；本片不承诺刷新或新标签保留未保存草稿，不增加持久存储/项目序列化机制。缺失页面仍走真实 404；不存在的 feature/example 显示明确未找到状态，不静默选择另一项。
 
 RFC 页左侧窄列表（编号、名称、状态），右侧连续展示当前项的简介、设计/用法、边界和完整示例。复用 catalog 数据与安全 textContent/textarea 输出。代码文件统一 FileView，只读快照也使用 tabs，不以 card 网格或文件 details/accordion 组织主内容。手机尺寸将列表放上方，保持当前项可见和正常阅读顺序。RFC 链接与“打开 Playground”链接能直接访问、刷新及前后退。
 

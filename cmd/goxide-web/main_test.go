@@ -15,6 +15,9 @@ func TestEmbeddedAssetsAndBoundaries(t *testing.T) {
 		code         int
 		content      string
 	}{
+		{"GET", "/rfc.html?feature=traits", 200, "id=\"root\""},
+		{"GET", "/playground.html", 200, "id=\"root\""},
+		{"GET", "/local.html", 200, "id=\"root\""},
 		{"GET", "/", 200, "写得更明确"}, {"GET", "/compiler.wasm", 200, ""},
 		{"HEAD", "/wasm_exec.js", 200, ""}, {"GET", "/examples.json", 200, "compilerDigest"},
 		{"POST", "/", 405, ""}, {"GET", "/../go.mod", 404, ""},

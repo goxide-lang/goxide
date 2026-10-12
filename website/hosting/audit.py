@@ -4,8 +4,16 @@ import hashlib,json,pathlib,re
 if not __debug__:
  raise SystemExit('audit refuses Python optimization; checks must remain enabled')
 root=pathlib.Path(__file__).resolve().parents[1]/'dist'
-allowed={'index.html','404.html','style.css','app.js','worker.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt'}
-assert {p.name for p in root.iterdir()}==allowed,'publish directory differs from explicit allowlist'
+allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt'}
+frontend_record=json.loads((root/'frontend-assets.json').read_text())
+assert frontend_record['websiteCommit']==json.loads((root/'examples.json').read_text())['websiteCommit'], 'frontend/compiler website identities differ'
+frontend=frontend_record['assets']
+assert all(not p.is_symlink() for p in root.rglob('*')), 'publish symlink'
+assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_dir()}=={'assets'}, 'unexpected publish directory'
+assert all(re.fullmatch(r'assets/[A-Za-z0-9_.-]+\.(?:js|css|ttf)', name) for name in frontend), 'unexpected frontend asset path'
+assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()}==allowed|set(frontend),'publish directory differs from explicit allowlist'
+for name,digest in frontend.items():
+ assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest, 'frontend asset digest differs: '+name
 report=[]
 patterns={
  'local-path':rb'/(?:workspace|home|Users|tmp|usr/local/go|opt/codex)/',
@@ -14,12 +22,12 @@ patterns={
  'github-token':rb'(?:ghp_|github_pat_)[A-Za-z0-9_]{30,}',
  'aws-access-key':rb'AKIA[0-9A-Z]{16}',
 }
-for p in sorted(root.iterdir()):
+for p in sorted(p for p in root.rglob('*') if p.is_file()):
  assert p.is_file() and not p.is_symlink(),p.name
  b=p.read_bytes();assert len(b)<=25*1024*1024,f'{p.name}: exceeds CF 25 MiB'
  for label,pattern in patterns.items():
   assert not re.search(pattern,b),f'{p.name}: detected {label} (contents not printed)'
- report.append({'file':p.name,'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()})
+ report.append({'file':p.relative_to(root).as_posix(),'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()})
 # Decode WASM sections; custom debug/name sections are not needed for publication.
 b=(root/'compiler.wasm').read_bytes();assert b[:8]==b'\0asm\x01\0\0\0'
 def leb(i):

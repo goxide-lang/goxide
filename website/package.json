@@ -1,1 +1,21 @@
-{"name":"goxide-website-checks","private":true,"scripts":{"test":"node qa.mjs"},"devDependencies":{"playwright":"1.58.2"}}
+{
+  "name": "goxide-website-checks",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "test": "node catalog-qa.mjs",
+    "test:compiler": "node qa.mjs"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.1.2",
+    "playwright": "1.58.2",
+    "vite": "8.3.4"
+  },
+  "dependencies": {
+    "monaco-editor": "0.57.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router-dom": "7.18.4"
+  },
+  "type": "module"
+}

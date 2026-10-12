@@ -49,15 +49,23 @@ dependencies = dependency_sources(packages, export_records, goroot=goroot,
 for dependency in dependencies:
     dependency['staticPaths'] = [binding['path'] for binding in context['bindings'] if binding['package'] == dependency['package']]
 dist = ROOT/'website/dist'
-if dist.exists(): shutil.rmtree(dist)
-# Explicit publish allowlist: no source tree, RFCs, configs or accidental files.
-static_files = ['index.html', '404.html', 'style.css', 'app.js', 'worker.js', '_headers', '.nojekyll']
+# Vite produces the single client-route shell and lazy editor/worker assets.
+run('npm', 'run', 'build', '--prefix', str(ROOT/'website'))
+static_files = ['404.html', 'worker.js', '_headers', '.nojekyll']
 assert set(p.name for p in (ROOT/'website/static').iterdir()) == set(static_files), 'unexpected static input'
-dist.mkdir()
 for name in static_files:
     shutil.copyfile(ROOT/'website/static'/name, dist/name)
-index = (dist/'index.html').read_text().replace('src="app.js"', f'src="app.js?site={website_sha}"').replace('href="style.css"', f'href="style.css?site={website_sha}"')
-(dist/'index.html').write_text(index)
+index = (dist/'index.html').read_text()
+for page in ['rfc.html', 'playground.html', 'local.html']:
+    (dist/page).write_text(index)
+# Record the precise Vite output graph; audit rejects extras and byte changes.
+frontend_assets = {}
+for asset in sorted((dist/'assets').rglob('*')):
+    if asset.is_file():
+        assert re.fullmatch(r'[A-Za-z0-9_.-]+\.(?:js|css|ttf)', asset.name), 'unexpected frontend output'
+        frontend_assets[asset.relative_to(dist).as_posix()] = hashlib.sha256(asset.read_bytes()).hexdigest()
+(dist/'frontend-assets.json').write_text(json.dumps(dict(websiteCommit=website_sha, assets=frontend_assets), indent=2)+'\n')
+(dist/'THIRD-PARTY-LICENSES.txt').write_bytes(run('node', str(ROOT/'website/frontend-licenses.mjs')))
 (ROOT/'bin').mkdir(exist_ok=True)
 run(GO, 'build', '-o', str(ROOT/'bin/goxide'), './cmd/goxide')
 examples = []

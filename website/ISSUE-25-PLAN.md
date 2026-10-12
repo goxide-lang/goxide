@@ -35,3 +35,5 @@ RFC：左侧较窄编号/名称/状态列表，右侧连续简介、设计/用�
 先完成一个真实多文件编辑→转译例子，再复用到只读依赖/RFC/快照。Playwright在桌面Chromium且 `chromiumSandbox:true` 下检查：tree/tabs双新建、切文件编辑/undo/view state、readonly键盘输入、diagnostics/错误恢复/停止与过期响应、四种布局、客户端前后退草稿不丢、深链接/刷新/未知参数、Monaco按需加载与workers同源，实际根站assets路径。窄尺寸仅做阅读/排版回归，不据用户聊天设备设计两套编辑器。更新相关QA；使用真实WASM/CLI产物对照；定向build/HTTP/CI，不反复全套native。
 
 独立审核关注删减：没有双套UI或wrapper、重复file store、额外框架/语言服务、错误兼容路由或运行接口；检查model/worker生命周期、readonly写入边界、路由草稿与实际asset清单。完整项目示例未完成前保持Draft。
+
+配置参考：[Monaco官方ESM集成](https://github.com/microsoft/monaco-editor/blob/main/docs/integrate-esm.md)、[Vite官方Pages base规则](https://vite.dev/guide/static-deploy.html#github-pages)。本次只读Pages API已确认站点URL为https://goxide-lang.github.io/、source path为 `/`，未修改该配置。

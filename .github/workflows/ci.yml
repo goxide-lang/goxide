@@ -58,7 +58,7 @@ jobs:
           native = full or ci or any(
               p.endswith('.go') or p in ('go.mod', 'go.sum') or
               p.startswith(('examples/', 'tests/acceptance/')) for p in changed)
-          web = not has_base or ci or any(
+          web = os.environ['EVENT_NAME'] == 'push' or not has_base or ci or any(
               p in ('go.mod', 'go.sum') or p.startswith((
                   'website/', 'cmd/', 'internal/', 'runtime/', 'formatting/',
                   'examples/', 'docs/rfcs/',
@@ -68,7 +68,7 @@ jobs:
                   print(f'{name}={str(value).lower()}', file=out)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
               print(f'Mode: {"full" if full else "draft smoke"}; native={native}; web={web}.', file=out)
-              print('Browser QA is a tracked gap: see docs/ci.md.', file=out)
+              print('Website publication requires sandboxed UI/Worker acceptance and all CI gates.', file=out)
           PY
 
   checks:
@@ -103,6 +103,8 @@ jobs:
           echo 'GOPROXY=off' >> "$GITHUB_ENV"
       - name: Review artifact regression checks
         run: python3 -B scripts/check_review_artifacts_test.py
+      - name: Website publication safety regressions
+        run: python3 -B scripts/ci_publish_website_test.py
       - name: Draft documentation gate
         if: needs.scope.outputs.full != 'true'
         run: python3 -B scripts/check_design.py --docs-only
@@ -169,12 +171,33 @@ jobs:
         run: node website/compiler_test.mjs
       - name: Build matching CLI examples, exports and WASM offline
         run: python3 -B website/build.py
+      - name: Audit the static publication allowlist
+        run: python3 -B website/hosting/audit.py
       - name: Embedded HTTP server race gate
         run: python3 -B scripts/ci_go_test.py web-race -mod=readonly -race -vet=off -tags=goxideweb -count=1 -timeout=10m ./cmd/goxide-web
       - name: Embedded HTTP server vet gate
         run: go vet -mod=readonly -tags=goxideweb ./cmd/goxide-web
+      - name: Install the locked browser test library
+        run: >-
+          python3 -m pip install --require-hashes --only-binary=:all:
+          -r scripts/ci_browser_requirements.txt
+      - name: Validate the real page and Worker with Chromium sandbox enabled
+        run: >-
+          python3 -B scripts/ci_website_browser.py acceptance
+          --chromium "$(command -v google-chrome)"
+          --out "$RUNNER_TEMP/website-browser"
       - name: Ensure build did not change tracked inputs
         run: git diff --exit-code
+      - name: Retain the validated main artifact without rebuilding
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: goxide-site-${{ github.sha }}
+          path: website/dist/
+          include-hidden-files: true # .nojekyll is part of the explicit audit allowlist.
+          if-no-files-found: error
+          overwrite: true # Rerun this same SHA; artifacts from other runs are never selected.
+          retention-days: 7
 
   summary:
     name: CI summary
@@ -196,8 +219,7 @@ jobs:
             echo '| --- | --- |'
             echo "| Scope | $SCOPE |"
             echo "| Native / design (full=$FULL) | $CHECKS |"
-            echo "| WASM build / HTTP | $WEB |"
-            echo '| Browser UI / real Worker QA | Not run; tracked gap in docs/ci.md |'
+            echo "| WASM build / HTTP / sandboxed UI and real Worker | $WEB |"
           } >> "$GITHUB_STEP_SUMMARY"
           test "$SCOPE" = success
           test "$CHECKS" = success
@@ -206,3 +228,45 @@ jobs:
           else
             test "$WEB" = skipped
           fi
+
+  publish:
+    name: Publish current main website
+    needs: [summary, web]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'goxide-lang/goxide'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The target branch is shared by all main runs; an older run must never replace a newer one.
+    concurrency:
+      group: goxide-website-publication
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Download only this run's validated artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: goxide-site-${{ github.sha }}
+          path: website/dist/
+      - name: Publish to the existing Pages source branch
+        id: publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # This variable names an EXISTING authorized secret. No credential is assumed or created.
+          SITE_PUBLISH_TOKEN: ${{ secrets[vars.GOXIDE_SITE_PUBLISH_SECRET] }}
+        run: python3 -B scripts/ci_publish_website.py --dist website/dist
+      - name: Install the locked browser test library
+        if: steps.publication.outputs.status == 'published'
+        run: >-
+          python3 -m pip install --require-hashes --only-binary=:all:
+          -r scripts/ci_browser_requirements.txt
+      - name: Verify the actual public assets, page and Worker
+        if: steps.publication.outputs.status == 'published'
+        run: >-
+          python3 -B scripts/ci_website_browser.py live
+          --chromium "$(command -v google-chrome)"
+          --out "$RUNNER_TEMP/website-live"

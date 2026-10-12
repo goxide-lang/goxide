@@ -12,7 +12,7 @@ def build(ROOT, GO):
     z.writestr('example.org/version@'+v+'/go.mod',mod);z.writestr('example.org/version@'+v+'/version.go',code)
   (versions/'list').write_text('v1.0.0\nv1.1.0\n')
   for name,v in [('service','v1.0.0'),('worker','v1.1.0')]:
-   p=ws/'apps'/name/'goxide.toml';p.write_text(p.read_text()+f'\n[dependencies.version]\nmodule = "example.org/version"\npackage = "example.org/version"\nversion = "{v}"\n')
+   p=ws/'apps'/name/'goxide.toml';p.write_text(p.read_text()+f'\n[dependencies.version]\ngo = "example.org/version"\npackage = "example.org/version"\nversion = "{v}"\n')
    p=ws/'apps'/name/'web.gox';p.write_text('package main\nuse fmt;\nuse shared;\nuse version;\nfunc main(){fmt::Println(version::Value(), shared::Mode())}\n')
   env=dict(os.environ,GOTOOLCHAIN='local',GOWORK='off',GOPROXY=proxy.as_uri(),GOSUMDB='off',GOMODCACHE=str(cache))
   def clean(s):return s.replace(str(base)+'/', '').replace(str(base),'fixture')

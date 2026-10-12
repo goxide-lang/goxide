@@ -1,14 +1,14 @@
-# #25：React + Vite + Monaco 网站工作区方案
+# #25：Preact + Vite + Monaco 网站工作区方案
 
-关联 [#25](https://github.com/goxide-lang/goxide/issues/25)、[Draft PR #28](https://github.com/goxide-lang/goxide/pull/28)。起点 main `cf56a52c22acff7a1ab353f86515745b542d6abd`。本方案按用户最新选择替代原生 textarea 路线；先更新 issue / Draft 方案，再实现同一 PR。不合并、部署、release 或修改凭据。
+关联 [#25](https://github.com/goxide-lang/goxide/issues/25)、[Draft PR #28](https://github.com/goxide-lang/goxide/pull/28)。起点 main `cf56a52c22acff7a1ab353f86515745b542d6abd`。本方案按用户批准替换 React 版本；直接使用 Preact/hooks 与 preact-iso，不保留 React/ReactDOM 或 compat aliases；先更新 issue / Draft 方案，再实现同一 PR。不合并、部署、release 或修改凭据。
 
 ## 当前栈与技术选择
 
 原网站为静态 HTML/CSS/原生 JS，已有同包多文件、生成 Go 与依赖源码浏览、Worker WASM 转译及 revision/实例防迟到响应。源码仍在本仓 `website/`，`goxide-lang.github.io` 仅为部署产物仓。已读启动说明、相关 README、RFC0025/0026、#25/#23/#26；适用源码树没有 AGENTS.md / 仓内 SKILL.md。
 
-用户选择 React + Vite + Monaco Editor：面向桌面编程受众，保留熟悉的编辑快捷键与模型能力。React 负责 tree/tabs/布局与页面，React Router 负责客户端导航，Vite 负责模块、按需加载与 worker 打包，Monaco 负责编辑、逐文件 models、view state、undo 和 diagnostics markers。只接 Monaco 必要的编辑功能和 Go 基础着色，不引入整套 VSCode workbench、扩展宿主或未经实现的 Go/Goxide 语言服务。基础着色不等于语义补全。依赖固定在 npm lock，运行时资源同源，无 CDN。
+用户选择 Preact + Vite + Monaco Editor：面向桌面编程受众，保留熟悉的编辑快捷键与模型能力。Preact 负责 tree/tabs/布局与页面，preact-iso 负责客户端导航，Vite 负责模块、按需加载与 worker 打包，Monaco 负责编辑、逐文件 models、view state、undo 和 diagnostics markers。只接 Monaco 必要的编辑功能和 Go 基础着色，不引入整套 VSCode workbench、扩展宿主或未经实现的 Go/Goxide 语言服务。基础着色不等于语义补全。依赖固定在 npm lock，运行时资源同源，无 CDN。
 
-原生 textarea UI 不保留，也不引入 Vue / CodeMirror / 双套兼容 wrapper。已有文件模型、命名/数量/大小限制和 WASM 调度可复用；编辑器选择/撤销/光标交给 Monaco，不另造 IDE 状态系统。编辑器模块只在打开文件视图时加载，普通介绍页不下载 Monaco。
+原生 textarea UI 不保留，也不引入 Vue / CodeMirror / React 兼容层 / 双套 UI。已有文件模型、命名/数量/大小限制和 WASM 调度可复用；编辑器选择/撤销/光标交给 Monaco，不另造 IDE 状态系统。编辑器模块只在打开文件视图时加载，普通介绍页不下载 Monaco。
 
 ## 最小组件与行为
 
@@ -22,7 +22,7 @@
 
 ## 路由与内容
 
-采用 BrowserRouter 客户端路由：`/` 介绍、`/rfc.html?feature=<catalog id>`、`/playground.html?example=<id>`、`/local.html`。实体 HTML 仅由同一个 Vite 页面壳生成，供 GitHub Pages 直接打开/刷新；站内通过 Link / History 切换，不整页刷新。Playground 状态保存在页面顶层，离开再返回仍保留草稿与文件选择；显式选其他示例/重置可以重置该示例。不额外做草稿持久化、项目序列化或旧hash路由兼容层。
+采用 preact-iso LocationProvider / Router 客户端路由：`/` 介绍、`/rfc.html?feature=<catalog id>`、`/playground.html?example=<id>`、`/local.html`。实体 HTML 仅由同一个 Vite 页面壳生成，供 GitHub Pages 直接打开/刷新；站内通过原生链接与 preact-iso History 导航切换，不整页刷新。Playground 状态保存在页面顶层，离开再返回仍保留草稿与文件选择；显式选其他示例/重置可以重置该示例。不额外做草稿持久化、项目序列化或旧hash路由兼容层。
 
 托管目标是 `goxide-lang.github.io` 根站，Vite `base: '/'`，不是 `/goxide/` 项目子路径。验证真实根站路径及本地同布局模拟；不改 Pages 配置。404仍为真实独立页；未知 feature/example有可读错误，不静默选择另一条。
 
@@ -37,3 +37,5 @@ RFC：左侧较窄编号/名称/状态列表，右侧连续简介、设计/用�
 独立审核关注删减：没有双套UI或wrapper、重复file store、额外框架/语言服务、错误兼容路由或运行接口；检查model/worker生命周期、readonly写入边界、路由草稿与实际asset清单。完整项目示例未完成前保持Draft。
 
 配置参考：[Monaco官方ESM集成](https://github.com/microsoft/monaco-editor/blob/main/docs/integrate-esm.md)、[Vite官方Pages base规则](https://vite.dev/guide/static-deploy.html#github-pages)。本次只读Pages API已确认站点URL为https://goxide-lang.github.io/、source path为 `/`，未修改该配置。
+
+迁移验证沿用同一真实WASM/业务例子，检查前进后退、直接刷新、文件草稿/选中状态、lazy加载、Monaco重置/销毁重建、readonly与四布局。可比较同口径首页JS产物，不把整个产物算作框架本体；不做两套benchmark。#27的compiler inventory/pin由项目任务处理，本次不改，等其最终CI候选再stack和配套新schema完整示例。

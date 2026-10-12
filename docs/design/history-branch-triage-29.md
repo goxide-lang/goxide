@@ -79,3 +79,22 @@ git -C recovered.git push https://github.com/goxide-lang/goxide.git refs/heads/B
 ```
 
 BRANCH须替换为表中准确分支名；原始tip及完整对象均在bundle中，不依赖reflog、悬空SHA或长期backup分支。
+
+## 快照转为用途tag
+
+用户后续授权快照用archive/snapshot/checkpoint前缀；不为无价值重复补丁建tag。7个历史发布状态保存为snapshot/，T0独有性能/验证记录保存为checkpoint/。原分支已删除，无重建分支。
+
+仓库仅有CI，push过滤main；8个原tip无GitHub Actions工作流，仓库无Pages。检查现有tag后创建annotated tag，普通原子推送并读回peeled SHA全部一致；未创建release或部署。
+
+| 原分支 | 新tag | 原tip SHA |
+|---|---|---|
+| feat/site-cobra-cli-09f1eb2 | snapshot/site-cobra-cli-09f1eb2 | e21dfc8de42eacc1d6e2c4a1504cbc382a135250 |
+| feat/site-goxide-naming-d230647 | snapshot/site-goxide-naming-d230647 | 16cbda175f2b9bc12e92f58c2f667122827520ae |
+| feat/site-local-modules-f147455 | snapshot/site-local-modules-f147455 | 4152dbb9fe9ac865921d5b97e54d83099651af9d |
+| feat/site-source-selection-5d77782 | snapshot/site-source-selection-5d77782 | 6dc779a651af3eb34121f53637a55bfb6feee387 |
+| feat/site-unified-project-69c1ab0 | snapshot/site-unified-project-69c1ab0 | 02e003f74ea097db172c4c7920c67adb8c4b7f5f |
+| feat/site-workspace-2aa0d06 | snapshot/site-workspace-2aa0d06 | d76ceaabad43ae308c6d577e63281f666a61e26f |
+| feat/site-workspace-import-27d2e27 | snapshot/site-workspace-import-27d2e27 | 51405a6982e45167c732fb01906e2b666b39fcdd |
+| review/t0-realworld-20261004 | checkpoint/t0-realworld-20261004 | 01d53377777113321b315a35673f77735f372ad0 |
+
+其余12个已替代分支不逐个建tag；完整原始历史仍在已验证Library bundle，当前远端分支仍9个。

@@ -217,7 +217,7 @@ json=["dep:encoding"]
 		t.Fatalf("identical locked mappings: %v", err)
 	}
 	for _, changed := range []string{
-		strings.Replace(manifest, "package=\"fmt\"", "package=\"bytes\"", 1),
+		strings.Replace(manifest, "go = \"fmt\"", "go = \"bytes\"", 1),
 		strings.Replace(manifest, "json=\"encoding/json\"", "json=\"encoding/xml\"", 1),
 	} {
 		wsWrite(t, root, ManifestName, changed)

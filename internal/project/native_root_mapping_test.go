@@ -76,12 +76,12 @@ func TestNativeExternalRootDiagnostics(t *testing.T) {
 		{"different require module", func(_ *Workspace, m *Manifest) { m.Native.Require[0].Module = "example.org/other" }, "match this member's go.require"},
 		{"external path", func(_ *Workspace, m *Manifest) {
 			d := m.Dependencies["dep"]
-			d.Version, d.Path = "", "../local-modules/dep"
+			d.Go, d.Version, d.Path = "", "", "../local-modules/dep"
 			m.Dependencies["dep"] = d
 		}, "configure sources with go.replace"},
 		{"external git", func(_ *Workspace, m *Manifest) {
 			d := m.Dependencies["dep"]
-			d.Version, d.Git, d.Rev = "", "https://example.org/dep", "main"
+			d.Go, d.Version, d.Git, d.Rev = "", "", "https://example.org/dep", "main"
 			m.Dependencies["dep"] = d
 		}, "configure sources with go.replace"},
 		{"dependency feature", func(_ *Workspace, m *Manifest) {

@@ -226,7 +226,10 @@ function Local({ manifest }) {
             {project.note && <p>{project.note}</p>}
             {project.download && (
               <p>
-                <a href={"/" + project.download.path} download>
+                <a
+                  href={"/" + project.download.path}
+                  download={project.download.path}
+                >
                   下载完整工程 ZIP
                 </a>
               </p>

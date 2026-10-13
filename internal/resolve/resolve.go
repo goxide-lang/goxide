@@ -1,6 +1,5 @@
 // Package resolve 在只读 AST 上解析名字，并按文件、NodeID 保存语义旁表。
-// 所有作用域均以 (名字, Ident.Ctx) 为键；宏展开器可以在调用 Resolve 前
-// 注入带 SyntaxCtx 的标识符及文件内唯一的 NodeID，无需修改查找接口。
+// 所有作用域均以 (名字, Ident.Ctx) 为键；ResolveExpanded 接入宏卫生旁表。
 package resolve
 
 import (
@@ -8,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/syntax/ast"
 )
 
@@ -68,11 +68,13 @@ const (
 	FunctionScope
 	BlockScope
 	MemberScope
+	ContextScope
 )
 
 type Scope struct {
 	Kind     ScopeKind
 	Parent   *Scope
+	Caller   *Scope // ContextScope 的调用点词法作用域。
 	Bindings map[Key]*Symbol
 	Aliases  map[Key][]*Symbol
 	Globs    []*UseBinding
@@ -114,10 +116,25 @@ type Package struct {
 	Scope     *Scope
 }
 
+type Severity uint8
+
+const Error Severity = 0
+
+type Origin struct {
+	File  string
+	Span  ast.Span
+	Expn  ast.ExpnID
+	Stack []ast.ExpnID // 从最外层到当前展开。
+}
+
 type Diagnostic struct {
 	File          string
 	Span          ast.Span
 	Code, Message string
+	Severity      Severity
+	Origin        Origin
+	Definition    expand.Origin
+	Call          expand.Origin
 }
 
 func (d Diagnostic) Error() string {
@@ -128,6 +145,7 @@ type Result struct {
 	Packages    []*Package
 	Files       map[string]*File
 	Diagnostics []Diagnostic
+	Contexts    map[ast.SyntaxCtx]*Scope
 }
 
 // External 是调用方提供的公开成员；查找不到返回空切片，多项表示歧义。
@@ -147,6 +165,10 @@ type Importer interface {
 // Resolve 按目录和 package 子句分组输入。调用方提供选中的 .gox AST；
 // 返回值的每个文件旁表独立，输入树不会被修改。
 func Resolve(files map[string]*ast.File, importer Importer) *Result {
+	return resolveFiles(files, nil, importer)
+}
+
+func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importer) *Result {
 	out := &Result{Files: make(map[string]*File)}
 	names := make([]string, 0, len(files))
 	for name := range files {
@@ -178,12 +200,23 @@ func Resolve(files map[string]*ast.File, importer Importer) *Result {
 		p.Files = append(p.Files, f)
 		out.Files[name] = f
 	}
+	if hygiene != nil {
+		hygiene.init(out)
+	}
+	var resolvers []*resolver
 	for _, p := range out.Packages {
-		r := &resolver{result: out, pkg: p, importer: importer, useStates: make(map[*UseBinding]uint8), useNodes: make(map[*UseBinding]*ast.UseTree), useFiles: make(map[*UseBinding]*File), symbolUses: make(map[*Symbol]*UseBinding)}
+		r := &resolver{result: out, pkg: p, importer: importer, hygiene: hygiene, useStates: make(map[*UseBinding]uint8), useNodes: make(map[*UseBinding]*ast.UseTree), useFiles: make(map[*UseBinding]*File), symbolUses: make(map[*Symbol]*UseBinding)}
+		resolvers = append(resolvers, r)
 		r.collectPackage()
+	}
+	for _, r := range resolvers {
 		r.collectUses()
+	}
+	for _, r := range resolvers {
 		r.attachMembers()
-		for _, f := range p.Files {
+	}
+	for _, r := range resolvers {
+		for _, f := range r.pkg.Files {
 			r.file = f
 			r.validateIdents()
 			r.walkFile()
@@ -208,9 +241,15 @@ type resolver struct {
 	useNodes   map[*UseBinding]*ast.UseTree
 	useFiles   map[*UseBinding]*File
 	symbolUses map[*Symbol]*UseBinding
+	hygiene    *hygiene
 }
 
 func (r *resolver) ref(n ast.Node) Ref { return Ref{r.file.Name, n.ID()} }
 func (r *resolver) diag(n ast.Node, code, msg string) {
-	r.result.Diagnostics = append(r.result.Diagnostics, Diagnostic{File: r.file.Name, Span: n.Span(), Code: code, Message: msg})
+	d := Diagnostic{File: r.file.Name, Span: n.Span(), Code: code, Message: msg, Severity: Error,
+		Origin: Origin{File: r.file.Name, Span: n.Span()}}
+	if r.hygiene != nil {
+		r.hygiene.diagnostic(n, &d)
+	}
+	r.result.Diagnostics = append(r.result.Diagnostics, d)
 }

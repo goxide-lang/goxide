@@ -198,6 +198,14 @@ func (r *resolver) staticPath(scope *Scope, p *ast.Path) Resolution {
 }
 
 func (r *resolver) resolvePath(scope *Scope, p *ast.Path, static bool) Resolution {
+	return r.pathMode(scope, p, static, false)
+}
+
+func (r *resolver) macroPath(scope *Scope, p *ast.Path) Resolution {
+	return r.pathMode(scope, p, true, true)
+}
+
+func (r *resolver) pathMode(scope *Scope, p *ast.Path, static, macro bool) Resolution {
 	if p == nil || len(p.Segments) == 0 {
 		return Resolution{}
 	}
@@ -205,7 +213,12 @@ func (r *resolver) resolvePath(scope *Scope, p *ast.Path, static bool) Resolutio
 		r.diag(p.Segments[0].Name, "unsupported-root", "super:: paths are not yet supported")
 		return Resolution{}
 	}
-	res := r.ident(scope, p.Segments[0].Name, static)
+	name := p.Segments[0].Name
+	res := r.lookup(r.identScope(scope, name), key(name), static)
+	if macro && len(p.Segments) == 1 && res.Symbol == nil && !res.Deferred && len(res.Candidates) == 0 {
+		res = r.lookup(r.identScope(scope, name), key(name), false)
+	}
+	r.pathRecord(name, &res, macro)
 	for i, seg := range p.Segments {
 		if seg.Args != nil {
 			for _, arg := range seg.Args.Args {
@@ -219,10 +232,17 @@ func (r *resolver) resolvePath(scope *Scope, p *ast.Path, static bool) Resolutio
 			break
 		}
 		res = r.member(res, seg.Name)
-		r.record(seg.Name, res)
+		r.pathRecord(seg.Name, &res, macro)
 	}
 	r.file.References[p.ID()] = res
 	return res
+}
+
+func (r *resolver) pathRecord(n ast.Node, res *Resolution, macro bool) {
+	if macro && res.Symbol == nil && len(res.Candidates) == 0 {
+		res.Deferred = true
+	}
+	r.record(n, *res)
 }
 
 func (r *resolver) member(base Resolution, name *ast.Ident) Resolution {
@@ -232,13 +252,17 @@ func (r *resolver) member(base Resolution, name *ast.Ident) Resolution {
 	}
 	if base.Symbol != nil && base.Symbol.Members != nil {
 		s := base.Symbol.Members
-		if b := s.Bindings[key(name)]; b != nil {
+		k := key(name)
+		if s.Bindings[k] == nil && len(s.Aliases[k]) == 0 {
+			k = r.memberKey(name)
+		}
+		if b := s.Bindings[k]; b != nil {
 			if b.Kind == Field {
 				return Resolution{}
 			}
 			return Resolution{Symbol: b}
 		}
-		if a := s.Aliases[key(name)]; len(a) > 0 {
+		if a := s.Aliases[k]; len(a) > 0 {
 			return choices(a)
 		}
 		if len(base.Symbol.Target) == 0 && base.Symbol.Kind != Type && base.Symbol.Kind != TypeParam {
@@ -252,7 +276,7 @@ func (r *resolver) member(base Resolution, name *ast.Ident) Resolution {
 	if len(path) > 0 {
 		if r.importer != nil {
 			var choicesList []*Symbol
-			for _, e := range r.importer.Lookup(path, key(name)) {
+			for _, e := range r.importer.Lookup(path, r.memberKey(name)) {
 				choicesList = append(choicesList, externalSymbol(path, e))
 			}
 			if len(choicesList) > 0 {

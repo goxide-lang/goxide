@@ -423,7 +423,8 @@ func (r *resolver) boundPath(scope *Scope, segments []*ast.PathSegment) Resoluti
 	if len(segments) == 0 || segments[0].Name == nil {
 		return Resolution{}
 	}
-	res := r.lookup(scope, key(segments[0].Name), true)
+	name := segments[0].Name
+	res := r.lookup(r.identScope(scope, name), key(name), true)
 	if res.Symbol != nil && res.Symbol.AliasOf != nil {
 		res = Resolution{Symbol: res.Symbol.AliasOf}
 	}

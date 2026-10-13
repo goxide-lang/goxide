@@ -68,7 +68,7 @@ func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kin
 	if name == nil {
 		return nil
 	}
-	s := &Symbol{Name: key(name), Kind: kind, Decl: r.ref(name), GoName: name.Name}
+	s := &Symbol{Name: r.declarationKey(scope, name), Kind: kind, Decl: r.ref(name), GoName: name.Name}
 	r.file.Definitions[name.ID()] = s
 	r.file.Visibility[name.ID()] = Private
 	r.file.GoNames[name.ID()] = name.Name
@@ -77,6 +77,7 @@ func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kin
 	}
 	if old := scope.Bindings[s.Name]; old != nil {
 		r.diag(name, "duplicate", fmt.Sprintf("duplicate declaration of %q", name.Name))
+		r.introduce(scope, name, old)
 		return s
 	}
 	if scope.Kind == PackageScope && scope.Parent.Bindings[s.Name] != nil {
@@ -91,6 +92,7 @@ func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kin
 		}
 	}
 	scope.Bindings[s.Name] = s
+	r.introduce(scope, name, s)
 	return s
 }
 
@@ -109,6 +111,11 @@ func (r *resolver) lookup(scope *Scope, k Key, static bool) Resolution {
 			return choices(a)
 		}
 		globs = append(globs, s.Globs...)
+		if r.hygiene != nil {
+			if c, ok := r.hygiene.boundaries[s]; ok {
+				k.Ctx = c.Definition.Ctx
+			}
+		}
 	}
 	// File and package globs compete only after all explicit bindings.
 	var candidates []*Symbol
@@ -173,6 +180,7 @@ func (r *resolver) ident(scope *Scope, id *ast.Ident, static bool) Resolution {
 	if id == nil {
 		return Resolution{}
 	}
+	scope = r.identScope(scope, id)
 	res := r.lookup(scope, key(id), static)
 	r.record(id, res)
 	return res

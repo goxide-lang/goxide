@@ -14,12 +14,13 @@ func (r *resolver) walkFile() {
 }
 
 func (r *resolver) walkItem(scope *Scope, item ast.Item) {
+	r.enterExpansion(scope, item)
 	switch n := item.(type) {
 	case *ast.FuncDecl:
 		if n.Path != nil {
 			r.path(scope, n.Path)
 		}
-		fn := newScope(FunctionScope, scope)
+		fn := r.lexicalScope(FunctionScope, scope, n)
 		r.file.Scopes[n.ID()] = fn
 		r.receiverParams(fn, n.Recv)
 		r.generics(fn, n.Generics, n.Where)
@@ -30,9 +31,14 @@ func (r *resolver) walkItem(scope *Scope, item ast.Item) {
 		r.bindParams(fn, n.Params)
 		r.bindParams(fn, n.Results)
 		if self := r.lookup(scope, Key{Name: "Self"}, true).Symbol; self != nil && len(n.Recv) == 0 {
-			if fn.Bindings[Key{Name: "self"}] == nil {
-				fn.Bindings[Key{Name: "self"}] = &Symbol{Name: Key{Name: "self"}, Kind: Variable, Decl: r.ref(n)}
+			k := Key{Name: "self"}
+			if r.hygiene != nil && n.Name != nil {
+				k.Ctx = n.Name.Ctx
 			}
+			if fn.Bindings[k] == nil {
+				fn.Bindings[k] = &Symbol{Name: k, Kind: Variable, Decl: r.ref(n)}
+			}
+			r.contextAlias(fn, n, "self", fn.Bindings[k])
 		}
 		r.functionBody(fn, n.Body)
 	case *ast.TypeDecl:
@@ -44,7 +50,7 @@ func (r *resolver) walkItem(scope *Scope, item ast.Item) {
 			r.typeBody(scope, n, n.Generics, n.Where, n.Type)
 		}
 	case *ast.EnumDecl:
-		inner := newScope(BlockScope, scope)
+		inner := r.lexicalScope(BlockScope, scope, n)
 		r.generics(inner, n.Generics, n.Where)
 		for _, variant := range n.Variants {
 			for _, field := range variant.Fields {
@@ -53,14 +59,14 @@ func (r *resolver) walkItem(scope *Scope, item ast.Item) {
 			r.expr(inner, variant.Disc)
 		}
 	case *ast.TraitDecl:
-		inner := newScope(BlockScope, scope)
+		inner := r.lexicalScope(BlockScope, scope, n)
 		r.generics(inner, n.Generics, n.Where)
 		r.selfType(inner, n, r.file.Scopes[n.ID()])
 		for _, member := range n.Items {
 			r.walkItem(inner, member)
 		}
 	case *ast.ImplDecl:
-		inner := newScope(BlockScope, scope)
+		inner := r.lexicalScope(BlockScope, scope, n)
 		r.generics(inner, n.Generics, n.Where)
 		r.typ(inner, n.Trait)
 		r.typ(inner, n.Type)
@@ -87,17 +93,19 @@ func (r *resolver) walkItem(scope *Scope, item ast.Item) {
 			r.valueSpec(scope, spec)
 		}
 	case *ast.MacroItem:
-		r.staticPath(scope, n.Path)
+		r.macroPath(scope, n.Path)
 	case *ast.UseDecl, *ast.MacroRulesDecl, *ast.BadItem:
 	}
 }
 
 func (r *resolver) selfType(scope *Scope, owner ast.Node, members *Scope) {
-	scope.Bindings[Key{Name: "Self"}] = &Symbol{Name: Key{Name: "Self"}, Kind: Type, Decl: r.ref(owner), Members: members}
+	symbol := &Symbol{Name: Key{Name: "Self"}, Kind: Type, Decl: r.ref(owner), Members: members}
+	scope.Bindings[symbol.Name] = symbol
+	r.contextAlias(scope, owner, "Self", symbol)
 }
 
 func (r *resolver) typeBody(scope *Scope, node ast.Node, params *ast.GenericParams, where *ast.WhereClause, typ ast.Type) {
-	inner := newScope(BlockScope, scope)
+	inner := r.lexicalScope(BlockScope, scope, node)
 	if params != nil {
 		r.file.Scopes[params.ID()] = inner
 	}
@@ -186,6 +194,7 @@ func (r *resolver) valueSpec(scope *Scope, spec *ast.ValueSpec) {
 }
 
 func (r *resolver) typ(scope *Scope, typ ast.Type) {
+	r.enterExpansion(scope, typ)
 	switch n := typ.(type) {
 	case *ast.PathType:
 		r.file.References[n.ID()] = r.path(scope, n.Path)
@@ -204,7 +213,7 @@ func (r *resolver) typ(scope *Scope, typ ast.Type) {
 	case *ast.ChanType:
 		r.typ(scope, n.Elem)
 	case *ast.FuncType:
-		fn := newScope(FunctionScope, scope)
+		fn := r.lexicalScope(FunctionScope, scope, n)
 		r.file.Scopes[n.ID()] = fn
 		r.paramTypes(scope, n.Params)
 		r.paramTypes(scope, n.Results)
@@ -223,7 +232,7 @@ func (r *resolver) typ(scope *Scope, typ ast.Type) {
 		}
 		for _, method := range n.Methods {
 			r.typ(scope, method.Type)
-			fn := newScope(FunctionScope, scope)
+			fn := r.lexicalScope(FunctionScope, scope, method)
 			r.file.Scopes[method.ID()] = fn
 			r.paramTypes(scope, method.Params)
 			r.paramTypes(scope, method.Results)
@@ -261,7 +270,7 @@ func (r *resolver) typ(scope *Scope, typ ast.Type) {
 		r.typ(scope, n.Type)
 		r.file.References[n.ID()] = r.file.References[n.Type.ID()]
 	case *ast.MacroType:
-		r.file.References[n.ID()] = r.staticPath(scope, n.Path)
+		r.file.References[n.ID()] = r.macroPath(scope, n.Path)
 	case *ast.BadType:
 	}
 }
@@ -278,6 +287,7 @@ func (r *resolver) genericArgs(scope *Scope, args *ast.GenericArgs) {
 }
 
 func (r *resolver) expr(scope *Scope, expr ast.Expr) {
+	r.enterExpansion(scope, expr)
 	switch n := expr.(type) {
 	case *ast.Ident:
 		r.ident(scope, n, false)
@@ -334,7 +344,7 @@ func (r *resolver) expr(scope *Scope, expr ast.Expr) {
 		r.expr(scope, n.X)
 		r.expr(scope, n.Y)
 	case *ast.FuncLit:
-		fn := newScope(FunctionScope, scope)
+		fn := r.lexicalScope(FunctionScope, scope, n)
 		r.file.Scopes[n.ID()] = fn
 		r.paramTypes(scope, n.Params)
 		r.paramTypes(scope, n.Results)
@@ -348,7 +358,7 @@ func (r *resolver) expr(scope *Scope, expr ast.Expr) {
 	case *ast.MatchExpr:
 		r.expr(scope, n.X)
 		for _, arm := range n.Arms {
-			inner := newScope(BlockScope, scope)
+			inner := r.lexicalScope(BlockScope, scope, arm)
 			r.file.Scopes[arm.ID()] = inner
 			r.pattern(inner, arm.Pat)
 			r.expr(inner, arm.Guard)
@@ -362,7 +372,7 @@ func (r *resolver) expr(scope *Scope, expr ast.Expr) {
 	case *ast.UnsafeExpr:
 		r.expr(scope, n.X)
 	case *ast.MacroExpr:
-		r.file.References[n.ID()] = r.staticPath(scope, n.Path)
+		r.file.References[n.ID()] = r.macroPath(scope, n.Path)
 	case *ast.QualifiedSelectorExpr:
 		r.expr(scope, n.X)
 		r.typ(scope, n.Trait)
@@ -454,7 +464,7 @@ func (r *resolver) block(scope *Scope, block *ast.Block, child bool) {
 		return
 	}
 	if child {
-		scope = newScope(BlockScope, scope)
+		scope = r.lexicalScope(BlockScope, scope, block)
 	}
 	r.file.Scopes[block.ID()] = scope
 	for _, stmt := range block.List {
@@ -463,6 +473,7 @@ func (r *resolver) block(scope *Scope, block *ast.Block, child bool) {
 }
 
 func (r *resolver) stmt(scope *Scope, stmt ast.Stmt) {
+	r.enterExpansion(scope, stmt)
 	switch n := stmt.(type) {
 	case *ast.AssignStmt:
 		for _, expr := range n.Rhs {
@@ -591,7 +602,7 @@ func (r *resolver) stmt(scope *Scope, stmt ast.Stmt) {
 }
 
 func (r *resolver) statementScope(parent *Scope, node ast.Node) *Scope {
-	scope := newScope(BlockScope, parent)
+	scope := r.lexicalScope(BlockScope, parent, node)
 	r.file.Scopes[node.ID()] = scope
 	return scope
 }
@@ -687,7 +698,7 @@ func (r *resolver) localItem(scope *Scope, item ast.Item) {
 func (r *resolver) pattern(scope *Scope, pattern ast.Pat) {
 	switch n := pattern.(type) {
 	case *ast.BindPat:
-		res := r.lookup(scope.Parent, key(n.Name), false)
+		res := r.lookup(r.identScope(scope.Parent, n.Name), key(n.Name), false)
 		if !n.Ref && !n.Mut && n.Sub == nil && len(res.Candidates) > 1 {
 			r.record(n.Name, res)
 			r.file.References[n.ID()] = res
@@ -735,7 +746,7 @@ func patternConstant(symbol *Symbol) bool {
 func (r *resolver) orPattern(scope *Scope, pattern *ast.OrPat) {
 	var first map[Key]*Symbol
 	for _, alternative := range pattern.Alts {
-		inner := newScope(BlockScope, scope.Parent)
+		inner := r.lexicalScope(BlockScope, scope.Parent, alternative)
 		r.pattern(inner, alternative)
 		if first == nil {
 			first = inner.Bindings

@@ -430,6 +430,26 @@ internal/lower            AST → go/ast
 
 迁移期间旧管线冻结，只修阻塞性 bug，不加新特性。两套管线不在同一次编译里混用。
 
+### 8.1 管线接口
+
+各阶段的输入输出固定为下列形状；包之间只通过这些类型连接，不互相引用内部状态。
+
+```text
+parser.ParseFiles(paths)          → map[string]*ast.File, []parser.Diagnostic
+expand.Expand(files, resolver)    → expand.Result
+resolve.Resolve(files, expand)    → resolve.Result, []resolve.Diagnostic
+check.Check(files, resolve)       → check.Info, []check.Diagnostic
+lower.Lower(files, check)         → map[string][]byte   // 每个 .gox 对应一份 Go 源码
+```
+
+三条跨阶段的约定：
+
+1. **标识符身份**。`ast.SyntaxCtx` 是解析结果和查询结果两侧共用的键。展开器为模板绑定分配新的 `Ctx`，捕获片段保留调用点的 `Ctx`。`resolve` 的作用域表按 `(Name, Ctx)` 建键，不按拼写。
+2. **宏生成的声明**。进入调用方包的声明集合，其名字按调用点解析，`pub` 表示调用包的公开。`resolve` 必须把它们当普通声明处理，不区分来源。
+3. **诊断**。每个阶段返回自己的诊断列表，条目至少含 `Severity`、`Message`、`Span`（阶段输出的坐标系）和 `Origin`（可回溯到原始源文件与展开栈）。阶段之间不合并诊断，由调用方按 `Origin` 归并。
+
+宏调用的识别属于展开阶段：`resolve` 遇到未展开的 `MacroExpr` 应按普通路径处理，不报"未定义"。
+
 ## 9. 后续工作
 
 本文只覆盖重写前端的第一步。其余几项修改意见各自独立，另行处理：

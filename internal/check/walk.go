@@ -261,6 +261,10 @@ func (c *checker) bindExpr(e ast.Expr, t types.Type) {
 }
 
 func (c *checker) bindPattern(p ast.Pat, t types.Type) {
+	c.bindPatternReference(p, t, ValueRef)
+}
+
+func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 	switch p := p.(type) {
 	case *ast.BindPat:
 		if s := c.symbol(p.Name); s != nil && (s.Kind == resolve.Variant || s.Kind == resolve.Constant) {
@@ -269,9 +273,21 @@ func (c *checker) bindPattern(p ast.Pat, t types.Type) {
 			}
 			return
 		}
-		c.bindExpr(p.Name, t)
+		binding := mode
+		if p.Ref {
+			binding = ReadRef
+			if p.Mut {
+				binding = WriteRef
+			}
+		}
+		if binding != ValueRef {
+			c.out.RefBindings[p] = binding
+			c.bindExpr(p.Name, types.NewPointer(t))
+		} else {
+			c.bindExpr(p.Name, t)
+		}
 		if p.Sub != nil {
-			c.bindPattern(p.Sub, t)
+			c.bindPatternReference(p.Sub, t, mode)
 		}
 	case *ast.LitPat:
 		c.expr(p.Value, t)
@@ -284,7 +300,7 @@ func (c *checker) bindPattern(p ast.Pat, t types.Type) {
 				fields := enum.Fields(v)
 				for i, elt := range p.Elts {
 					if i < len(fields) {
-						c.bindPattern(elt, fields[i].Type)
+						c.bindPatternReference(elt, fields[i].Type, mode)
 					}
 				}
 			}
@@ -296,7 +312,7 @@ func (c *checker) bindPattern(p ast.Pat, t types.Type) {
 				for _, f := range p.Fields {
 					for _, field := range fields {
 						if field.Name == f.Name.Name {
-							c.bindPattern(f.Pat, field.Type)
+							c.bindPatternReference(f.Pat, field.Type, mode)
 						}
 					}
 				}
@@ -304,7 +320,7 @@ func (c *checker) bindPattern(p ast.Pat, t types.Type) {
 		}
 	case *ast.OrPat:
 		for _, alt := range p.Alts {
-			c.bindPattern(alt, t)
+			c.bindPatternReference(alt, t, mode)
 		}
 	}
 }

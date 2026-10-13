@@ -117,35 +117,36 @@ func guarded(ok bool, trace *[]string) sum.Result[string, string] {
 		switch goxidevariant12 := goxidematch11.(type) {
 		case *Enter:
 			_ = goxidevariant12
-			if goxidevariant12.Value ==
+			goxidePayload13 := goxidevariant12.Value
+			if goxidePayload13 ==
 				0 {
-				var goxideTry15 sum.Result[bool, string] = truth(trace)
-				var goxideOk16 bool
-				switch sum.TagResult(goxideTry15) {
+				var goxideTry16 sum.Result[bool, string] = truth(trace)
+				var goxideOk17 bool
+				switch sum.TagResult(goxideTry16) {
 				case 1:
-					goxideOk16 = sum.ValueOk(goxideTry15)
+					goxideOk17 = sum.ValueOk(goxideTry16)
 				case 2:
-					return sum.NewErr[string, string](sum.ValueErr(goxideTry15))
+					return sum.NewErr[string, string](sum.ValueErr(goxideTry16))
 				default:
 					panic("goxide: invalid Result at ?")
 				}
-				if goxideOk16 {
+				if goxideOk17 {
 
 					return sum.NewOk[string, string]("incorrect")
 				} else {
 					{
-						n := goxidevariant12.Value
-						var goxideTry13 sum.Result[int, string] = load(ok, trace)
-						var goxideOk14 int
-						switch sum.TagResult(goxideTry13) {
+						n := goxidePayload13
+						var goxideTry14 sum.Result[int, string] = load(ok, trace)
+						var goxideOk15 int
+						switch sum.TagResult(goxideTry14) {
 						case 1:
-							goxideOk14 = sum.ValueOk(goxideTry13)
+							goxideOk15 = sum.ValueOk(goxideTry14)
 						case 2:
-							return sum.NewErr[string, string](sum.ValueErr(goxideTry13))
+							return sum.NewErr[string, string](sum.ValueErr(goxideTry14))
 						default:
 							panic("goxide: invalid Result at ?")
 						}
-						if goxideOk14 ==
+						if goxideOk15 ==
 							n+3 {
 							return sum.NewOk[string, string]("guard")
 						} else {
@@ -155,18 +156,18 @@ func guarded(ok bool, trace *[]string) sum.Result[string, string] {
 				}
 			} else {
 				{
-					n := goxidevariant12.Value
-					var goxideTry13 sum.Result[int, string] = load(ok, trace)
-					var goxideOk14 int
-					switch sum.TagResult(goxideTry13) {
+					n := goxidePayload13
+					var goxideTry14 sum.Result[int, string] = load(ok, trace)
+					var goxideOk15 int
+					switch sum.TagResult(goxideTry14) {
 					case 1:
-						goxideOk14 = sum.ValueOk(goxideTry13)
+						goxideOk15 = sum.ValueOk(goxideTry14)
 					case 2:
-						return sum.NewErr[string, string](sum.ValueErr(goxideTry13))
+						return sum.NewErr[string, string](sum.ValueErr(goxideTry14))
 					default:
 						panic("goxide: invalid Result at ?")
 					}
-					if goxideOk14 ==
+					if goxideOk15 ==
 						n+3 {
 						return sum.NewOk[string, string]("guard")
 					} else {
@@ -191,55 +192,55 @@ func optional(ok bool) sum.Option[string] {
 }
 
 func length(ok bool) sum.Option[int] {
-	var goxideTry17 sum.Option[string] = optional(ok)
-	var goxideOk18 string
-	switch sum.TagOption(goxideTry17) {
+	var goxideTry18 sum.Option[string] = optional(ok)
+	var goxideOk19 string
+	switch sum.TagOption(goxideTry18) {
 	case 1:
-		goxideOk18 = sum.ValueSome(goxideTry17)
+		goxideOk19 = sum.ValueSome(goxideTry18)
 	case 0:
 		return sum.None[int]()
 	default:
 		panic("goxide: invalid Option at ?")
 	}
 
-	s := goxideOk18
+	s := goxideOk19
 	return sum.NewSome[int](len(s))
 }
 
 func optionInt(value sum.Option[int]) int {
 	{
-		var goxideMatch19 int
-		var goxidematch20 sum.Option[int] = value
-		switch goxidetag22 := sum.TagOption(goxidematch20); goxidetag22 {
+		var goxideMatch20 int
+		var goxidematch21 sum.Option[int] = value
+		switch goxidetag23 := sum.TagOption(goxidematch21); goxidetag23 {
 		case 1:
 
-			n := sum.ValueSome(goxidematch20)
-			goxideMatch19 = n
+			n := sum.ValueSome(goxidematch21)
+			goxideMatch20 = n
 		case 0:
-			goxideMatch19 = -1
+			goxideMatch20 = -1
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		return goxideMatch19
+		return goxideMatch20
 	}
 }
 
 func text(value sum.Result[string, string]) string {
 	{
-		var goxideMatch23 string
-		var goxidematch24 sum.Result[string, string] = value
-		switch goxidetag26 := sum.TagResult(goxidematch24); goxidetag26 {
+		var goxideMatch24 string
+		var goxidematch25 sum.Result[string, string] = value
+		switch goxidetag27 := sum.TagResult(goxidematch25); goxidetag27 {
 		case 1:
 
-			s := sum.ValueOk(goxidematch24)
-			goxideMatch23 = s
+			s := sum.ValueOk(goxidematch25)
+			goxideMatch24 = s
 		case 2:
-			e := sum.ValueErr(goxidematch24)
-			goxideMatch23 = e
+			e := sum.ValueErr(goxidematch25)
+			goxideMatch24 = e
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch23
+		return goxideMatch24
 	}
 }
 

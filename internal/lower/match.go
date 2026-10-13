@@ -16,6 +16,11 @@ type matchGroup struct {
 	arms    []*syntax.MatchArm
 }
 
+type matchPayload struct {
+	values []goast.Expr
+	refs   []goast.Expr
+}
+
 func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.Stmt {
 	e.matchDepth++
 	defer func() { e.matchDepth-- }()
@@ -24,7 +29,40 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.S
 		e.fail(n, "match 需要已知 enum 类型")
 		return nil
 	}
-	prefix, value := e.exprScoped(n.X)
+	var owner goast.Expr
+	var prefix []goast.Stmt
+	var value goast.Expr
+	if e.matchBorrows(n) {
+		place := n.X
+		for {
+			paren, ok := place.(*syntax.ParenExpr)
+			if !ok {
+				break
+			}
+			place = paren.X
+		}
+		if ref, ok := place.(*syntax.RefExpr); ok {
+			place = ref.X
+		}
+		old := e.pending
+		e.pending = nil
+		var address goast.Expr
+		if hasFlow(place) {
+			// lvalue keeps arrays and selectors in their original storage.
+			address = e.lvalue(place)
+		} else {
+			address = e.expr(place)
+		}
+		owner = e.fresh("Owner")
+		e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{owner}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{&goast.UnaryExpr{Op: gotoken.AND, X: address}}})
+		prefix, e.pending = e.pending, old
+		value = &goast.StarExpr{X: owner}
+	} else {
+		prefix, value = e.exprScoped(n.X)
+		if info.Reference != check.ValueRef {
+			value = &goast.StarExpr{X: value}
+		}
+	}
 	tmp := e.fresh("match")
 	prefix = append(prefix, &goast.DeclStmt{Decl: &goast.GenDecl{Tok: gotoken.VAR, Specs: []goast.Spec{
 		&goast.ValueSpec{Names: []*goast.Ident{tmp}, Type: e.instanceType(info.Enum), Values: []goast.Expr{value}},
@@ -71,21 +109,18 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.S
 	body := &goast.BlockStmt{}
 	for _, group := range groups {
 		clause := &goast.CaseClause{}
-		var payload goast.Expr = bound
 		if info.Enum.Enum.Builtin {
 			clause.List = []goast.Expr{integer(variantTag(group.variant.Name))}
-			if len(group.variant.Fields) > 0 {
-				payload = &goast.CallExpr{Fun: e.sumMember("Value" + group.variant.Name), Args: []goast.Expr{tmp}}
-			}
 		} else {
 			clause.List = []goast.Expr{&goast.StarExpr{X: e.variantType(info.Enum, group.variant)}}
 		}
-		clause.Body = e.matchArms(info.Enum, group.variant, payload, group.arms, target)
+		setup, payload := e.matchPayload(info.Enum, group, tmp, bound, owner)
+		clause.Body = append(setup, e.matchArms(info.Enum, group.variant, payload, group.arms, target)...)
 		body.List = append(body.List, clause)
 	}
 	otherwise := &goast.CaseClause{}
 	if len(defaults) > 0 {
-		otherwise.Body = e.matchArms(info.Enum, nil, tmp, defaults, target)
+		otherwise.Body = e.matchArms(info.Enum, nil, matchPayload{}, defaults, target)
 	} else {
 		otherwise.Body = []goast.Stmt{matchPanic("goxide: invalid enum " + info.Enum.Enum.Name)}
 	}
@@ -114,7 +149,95 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.S
 	return append(prefix, &goast.TypeSwitchStmt{Assign: &goast.AssignStmt{Lhs: []goast.Expr{bound}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{&goast.TypeAssertExpr{X: tmp}}}, Body: body})
 }
 
-func (e *emitter) matchArms(instance *check.Instance, variant *check.Variant, payload goast.Expr, arms []*syntax.MatchArm, target *goast.Ident) []goast.Stmt {
+func (e *emitter) matchBorrows(n *syntax.MatchExpr) bool {
+	borrows := false
+	for _, arm := range n.Arms {
+		syntax.Walk(arm.Pat, func(node syntax.Node) bool {
+			if binding, ok := node.(*syntax.BindPat); ok && e.info.RefBindings[binding] != check.ValueRef && binding.Name.Name != "_" {
+				borrows = true
+			}
+			return !borrows
+		})
+	}
+	return borrows
+}
+
+// Reference payloads come from the selected object or the original sum slot.
+// Value payloads used after a guard retain their value at match entry.
+func (e *emitter) matchPayload(instance *check.Instance, group *matchGroup, value, variant, owner goast.Expr) ([]goast.Stmt, matchPayload) {
+	count := len(group.variant.Fields)
+	payload := matchPayload{values: make([]goast.Expr, count), refs: make([]goast.Expr, count)}
+	read, borrow := make([]bool, count), make([]bool, count)
+	guarded := false
+	for _, arm := range group.arms {
+		guarded = guarded || arm.Guard != nil
+		e.eachMatchField(group.variant, arm.Pat, func(index int, pat syntax.Pat) {
+			if index >= count {
+				return
+			}
+			syntax.Walk(pat, func(node syntax.Node) bool {
+				switch n := node.(type) {
+				case *syntax.BindPat:
+					if n.Name.Name != "_" {
+						if e.info.RefBindings[n] != check.ValueRef {
+							borrow[index] = true
+						} else {
+							read[index] = true
+						}
+					}
+				case *syntax.LitPat, *syntax.PathPat:
+					read[index] = true
+				}
+				return true
+			})
+		})
+	}
+	var setup []goast.Stmt
+	for i, field := range group.variant.Fields {
+		var source goast.Expr
+		if instance.Enum.Builtin {
+			source = &goast.CallExpr{Fun: e.sumMember("Value" + group.variant.Name), Args: []goast.Expr{value}}
+		} else {
+			source = &goast.SelectorExpr{X: variant, Sel: goast.NewIdent(field.GoName)}
+		}
+		payload.values[i] = source
+		if read[i] && guarded && len(group.arms) > 1 && !instance.Enum.Builtin {
+			snapshot := e.fresh("Payload")
+			setup = append(setup, &goast.AssignStmt{Lhs: []goast.Expr{snapshot}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{source}})
+			payload.values[i] = snapshot
+		}
+		if borrow[i] {
+			var projection goast.Expr = &goast.UnaryExpr{Op: gotoken.AND, X: source}
+			if instance.Enum.Builtin {
+				projection = &goast.CallExpr{Fun: e.sumMember("Project" + group.variant.Name), Args: []goast.Expr{owner}}
+			}
+			ref := e.fresh("PayloadRef")
+			setup = append(setup, &goast.AssignStmt{Lhs: []goast.Expr{ref}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{projection}})
+			payload.refs[i] = ref
+		}
+	}
+	return setup, payload
+}
+
+func (e *emitter) eachMatchField(variant *check.Variant, pat syntax.Pat, visit func(int, syntax.Pat)) {
+	switch pat := pat.(type) {
+	case *syntax.TuplePat:
+		for i, field := range pat.Elts {
+			visit(i, field)
+		}
+	case *syntax.StructPat:
+		for _, field := range pat.Fields {
+			for i, decl := range variant.Fields {
+				if decl.Name == field.Name.Name {
+					visit(i, field.Pat)
+					break
+				}
+			}
+		}
+	}
+}
+
+func (e *emitter) matchArms(instance *check.Instance, variant *check.Variant, payload matchPayload, arms []*syntax.MatchArm, target *goast.Ident) []goast.Stmt {
 	if len(arms) == 0 {
 		return []goast.Stmt{matchPanic("goxide: non-exhaustive match " + instance.Enum.Name)}
 	}
@@ -170,21 +293,18 @@ func (e *emitter) matchArmBody(arm *syntax.MatchArm, target *goast.Ident) []goas
 	return append(prefix, &goast.AssignStmt{Lhs: []goast.Expr{goast.NewIdent("_")}, Tok: gotoken.ASSIGN, Rhs: []goast.Expr{value}})
 }
 
-func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant, payload goast.Expr, pat syntax.Pat) (goast.Expr, []goast.Expr, []goast.Expr) {
+func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant, payload matchPayload, pat syntax.Pat) (goast.Expr, []goast.Expr, []goast.Expr) {
 	var cond goast.Expr
 	var names, values []goast.Expr
-	field := func(index int) goast.Expr {
-		if instance.Enum.Builtin {
-			return payload
-		}
-		if index >= len(variant.Fields) {
+	field := func(index int) (goast.Expr, goast.Expr) {
+		if index >= len(payload.values) {
 			e.fail(pat, "变体模式载荷数量不匹配")
-			return goast.NewIdent("_")
+			return goast.NewIdent("_"), goast.NewIdent("_")
 		}
-		return &goast.SelectorExpr{X: payload, Sel: goast.NewIdent(variant.Fields[index].GoName)}
+		return payload.values[index], payload.refs[index]
 	}
-	var part func(syntax.Pat, goast.Expr)
-	part = func(p syntax.Pat, value goast.Expr) {
+	var part func(syntax.Pat, goast.Expr, goast.Expr)
+	part = func(p syntax.Pat, value, ref goast.Expr) {
 		switch p := p.(type) {
 		case *syntax.WildPat:
 		case *syntax.BindPat:
@@ -198,10 +318,14 @@ func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant,
 			}
 			if p.Name.Name != "_" {
 				names = append(names, e.ident(p.Name))
-				values = append(values, value)
+				bound := value
+				if e.info.RefBindings[p] != check.ValueRef {
+					bound = ref
+				}
+				values = append(values, bound)
 			}
 			if p.Sub != nil {
-				part(p.Sub, value)
+				part(p.Sub, value, ref)
 			}
 		case *syntax.LitPat:
 			cond = matchAnd(cond, &goast.BinaryExpr{X: value, Op: gotoken.EQL, Y: e.expr(p.Value)})
@@ -215,14 +339,16 @@ func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant,
 	case *syntax.PathPat, *syntax.BindPat:
 	case *syntax.TuplePat:
 		for i, p := range pat.Elts {
-			part(p, field(i))
+			value, ref := field(i)
+			part(p, value, ref)
 		}
 	case *syntax.StructPat:
 		for _, p := range pat.Fields {
 			found := false
 			for i, f := range variant.Fields {
 				if f.Name == p.Name.Name {
-					part(p.Pat, field(i))
+					value, ref := field(i)
+					part(p.Pat, value, ref)
 					found = true
 					break
 				}

@@ -30,9 +30,10 @@ goxideBreak1:
 			switch goxidevariant3 := goxidematch2.(type) {
 			case *Number:
 				_ = goxidevariant3
-				if n := goxidevariant3.Value; n == 1 {
+				goxidePayload4 := goxidevariant3.Value
+				if n := goxidePayload4; n == 1 {
 					continue
-				} else if n := goxidevariant3.Value; n == 3 {
+				} else if n := goxidePayload4; n == 3 {
 					break goxideBreak1
 				} else {
 					total++
@@ -50,18 +51,18 @@ goxideBreak1:
 
 func deferred(done *int) int {
 	{
-		var goxidematch4 State = &Number{Value: 4}
-		if goxidematch4 == nil {
+		var goxidematch5 State = &Number{Value: 4}
+		if goxidematch5 == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:332")
 		}
-		switch goxidevariant5 := goxidematch4.(type) {
+		switch goxidevariant6 := goxidematch5.(type) {
 		case *Number:
-			_ = goxidevariant5
-			n := goxidevariant5.Value
+			_ = goxidevariant6
+			n := goxidevariant6.Value
 			defer func() { *done = n }()
 			return n
 		default:
-			_ = goxidevariant5
+			_ = goxidevariant6
 			return 0
 		}
 	}

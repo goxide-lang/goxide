@@ -108,7 +108,7 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	case *syntax.ParenType:
 		return &goast.ParenExpr{Lparen: e.pos(n), X: e.typ(n.Type), Rparen: e.end(n) - 1}
 	case *syntax.RefType:
-		e.fail(n, "引用类型尚未降低")
+		return &goast.StarExpr{Star: e.pos(n), X: e.typ(n.Elem)}
 	case *syntax.SelfType:
 		e.fail(n, "Self 类型尚未降低")
 	case *syntax.MacroType:

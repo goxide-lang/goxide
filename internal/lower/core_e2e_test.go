@@ -119,7 +119,13 @@ func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, 
 	if !reflect.DeepEqual(output, again) {
 		t.Fatal("lowering identical checked inputs produced different bytes")
 	}
-	golden, err := os.ReadFile(filepath.Join(directory, "main.golden.go"))
+	goldenName := filepath.Join(directory, "main.golden.go")
+	if os.Getenv("GOXIDE_UPDATE_CORE_GOLDEN") == "1" {
+		if err := os.WriteFile(goldenName, output[name], 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	golden, err := os.ReadFile(goldenName)
 	if err != nil {
 		t.Fatal(err)
 	}

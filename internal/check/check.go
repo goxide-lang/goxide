@@ -28,6 +28,9 @@ const (
 	DeriveInvalid       = "derive-invalid"
 	VariantMismatch     = "match-variant"
 	EnumGoNameConflict  = "enum-go-name-conflict"
+	ReferencePermission = "reference-permission"
+	ReferenceAddress    = "reference-address"
+	ReferencePattern    = "reference-pattern"
 )
 
 type Diagnostic struct {
@@ -91,10 +94,19 @@ func (i *Instance) Fields(v *Variant) []Field {
 	return fields
 }
 
+type RefMode uint8
+
+const (
+	ValueRef RefMode = iota
+	ReadRef
+	WriteRef
+)
+
 type Match struct {
 	Enum      *Instance
 	Type      types.Type
 	Statement bool
+	Reference RefMode
 }
 
 type Constructor struct {
@@ -120,6 +132,7 @@ type Info struct {
 	PackagePaths map[string]string
 	Derives      map[*types.Named]*Derive
 	Equalities   map[*ast.CallExpr]types.Type
+	RefBindings  map[*ast.BindPat]RefMode
 	enums        map[*types.Named]*Enum
 }
 
@@ -164,6 +177,7 @@ func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports 
 
 func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer) (*Info, []Diagnostic) {
 	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
+	r.RefBindings = make(map[*ast.BindPat]RefMode)
 	if res == nil {
 		return r, nil
 	}
@@ -220,6 +234,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	for _, instance := range c.instances {
 		c.validateInstance(instance)
 	}
+	c.checkReferences()
 	sort.SliceStable(r.Diagnostics, func(i, j int) bool {
 		a, b := r.Diagnostics[i], r.Diagnostics[j]
 		if a.File != b.File {

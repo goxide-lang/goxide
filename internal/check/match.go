@@ -13,8 +13,16 @@ import (
 
 func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) types.Type {
 	t := c.expr(n.X, nil)
+	mode := ValueRef
+	if ref, ok := referenceScrutinee(n.X).(*ast.RefExpr); ok {
+		mode = ReadRef
+		if ref.Mut {
+			mode = WriteRef
+		}
+		t = c.out.Types[ref.X]
+	}
 	instance := c.out.EnumOf(t)
-	info := &Match{Enum: instance, Statement: statement}
+	info := &Match{Enum: instance, Statement: statement, Reference: mode}
 	c.out.Matches[n] = info
 	covered := map[string]bool{}
 	patterns := map[string][]ast.Pat{}
@@ -61,7 +69,7 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 				}
 			}
 		}
-		c.bindPattern(arm.Pat, t)
+		c.bindPatternReference(arm.Pat, t, mode)
 		c.expr(arm.Guard, types.Typ[types.Bool])
 		armType := c.expr(arm.Body, expected)
 		c.block(arm.Block)
@@ -91,6 +99,16 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 	}
 	info.Type = result
 	return result
+}
+
+func referenceScrutinee(e ast.Expr) ast.Expr {
+	for {
+		p, ok := e.(*ast.ParenExpr)
+		if !ok {
+			return e
+		}
+		e = p.X
+	}
 }
 
 func (c *checker) patternName(p ast.Pat) string {

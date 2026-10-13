@@ -78,10 +78,6 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	case *syntax.PathExpr:
 		return e.path(n.Path)
 	case *syntax.RefExpr:
-		if n.Mut {
-			e.fail(n, "可变引用尚未降低")
-			return nil
-		}
 		return &goast.UnaryExpr{OpPos: e.pos(n), Op: gotoken.AND, X: e.expr(n.X)}
 	case *syntax.TypeExpr:
 		return e.typ(n.Type)

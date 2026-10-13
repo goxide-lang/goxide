@@ -54,13 +54,14 @@ func describe(x State) string {
 			goxideMatch1 = "idle"
 		case *Number:
 			_ = goxidevariant3
-			if goxidevariant3.Value ==
+			goxidePayload4 := goxidevariant3.Value
+			if goxidePayload4 ==
 				0 {
 				goxideMatch1 = "zero"
-			} else if n := goxidevariant3.Value; n > 0 {
+			} else if n := goxidePayload4; n > 0 {
 				goxideMatch1 = fmt.Sprintf("positive:%d", n)
 			} else {
-				n := goxidevariant3.Value
+				n := goxidePayload4
 				goxideMatch1 = fmt.Sprintf("number:%d", n)
 			}
 		case *Pair:
@@ -90,25 +91,26 @@ func describe(x State) string {
 func ordered(next func() State, seen *[]int) int {
 	mark := func(n int, value bool) bool { *seen = append(*seen, n); return value }
 	{
-		var goxidematch4 State = next()
-		if goxidematch4 == nil {
+		var goxidematch5 State = next()
+		if goxidematch5 == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:656")
 		}
-		switch goxidevariant5 := goxidematch4.(type) {
+		switch goxidevariant6 := goxidematch5.(type) {
 		case *Number:
-			_ = goxidevariant5
-			if n := goxidevariant5.Value; mark(1, false) {
+			_ = goxidevariant6
+			goxidePayload7 := goxidevariant6.Value
+			if n := goxidePayload7; mark(1, false) {
 				return n
 			} else if mark(2, false) {
 				return -2
-			} else if n := goxidevariant5.Value; mark(3, true) {
+			} else if n := goxidePayload7; mark(3, true) {
 				return n
 			} else {
-				n := goxidevariant5.Value
+				n := goxidePayload7
 				return n + 100
 			}
 		default:
-			_ = goxidevariant5
+			_ = goxidevariant6
 			if mark(2, false) {
 				return -2
 			} else {
@@ -122,21 +124,22 @@ func ordered(next func() State, seen *[]int) int {
 
 func freshBinding(x State) int {
 	{
-		var goxidematch6 State = x
-		if goxidematch6 == nil {
+		var goxidematch8 State = x
+		if goxidematch8 == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:922")
 		}
-		switch goxidevariant7 := goxidematch6.(type) {
+		switch goxidevariant9 := goxidematch8.(type) {
 		case *Number:
-			_ = goxidevariant7
-			if n := goxidevariant7.Value; func() bool { n = 99; return false }() {
+			_ = goxidevariant9
+			goxidePayload10 := goxidevariant9.Value
+			if n := goxidePayload10; func() bool { n = 99; return false }() {
 				return n
 			} else {
-				n := goxidevariant7.Value
+				n := goxidePayload10
 				return n
 			}
 		default:
-			_ = goxidevariant7
+			_ = goxidevariant9
 			return -1
 		}
 	}
@@ -145,31 +148,31 @@ func freshBinding(x State) int {
 
 func nested(x State) int {
 	{
-		var goxidematch8 State = x
-		if goxidematch8 == nil {
+		var goxidematch11 State = x
+		if goxidematch11 == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:1102")
 		}
-		switch goxidevariant9 := goxidematch8.(type) {
+		switch goxidevariant12 := goxidematch11.(type) {
 		case *Number:
-			_ = goxidevariant9
-			n := goxidevariant9.Value
+			_ = goxidevariant12
+			n := goxidevariant12.Value
 			{
-				var goxidematch10 State = &Pair{V0: n, V1: "ok"}
-				if goxidematch10 == nil {
+				var goxidematch13 State = &Pair{V0: n, V1: "ok"}
+				if goxidematch13 == nil {
 					panic("goxide: match on nil State at corefixture/main.gox:1139")
 				}
-				switch goxidevariant11 := goxidematch10.(type) {
+				switch goxidevariant14 := goxidematch13.(type) {
 				case *Pair:
-					_ = goxidevariant11
-					value := goxidevariant11.V0
+					_ = goxidevariant14
+					value := goxidevariant14.V0
 					return value
 				default:
-					_ = goxidevariant11
+					_ = goxidevariant14
 					return -1
 				}
 			}
 		default:
-			_ = goxidevariant9
+			_ = goxidevariant12
 
 			return -1
 		}

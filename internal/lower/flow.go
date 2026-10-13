@@ -303,7 +303,11 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 	case *syntax.UnaryExpr:
 		children = []syntax.Expr{x.X}
 	case *syntax.RefExpr:
-		children = []syntax.Expr{x.X}
+		// Keep the original place while ? and match introduce statements.
+		if e.addressable(x.X) {
+			return &goast.UnaryExpr{Op: gotoken.AND, X: e.lvalue(x.X)}
+		}
+		return &goast.UnaryExpr{Op: gotoken.AND, X: e.expr(x.X)}
 	default:
 		return e.rawExpr(n)
 	}

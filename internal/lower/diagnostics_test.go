@@ -23,8 +23,6 @@ func TestUnsupportedFeaturesReturnLocatedDiagnosticsWithoutPartialOutput(t *test
 		{"macro_item", "missing!()", "宏"},
 		{"macro_type", "type Value = missing!()", "宏"},
 		{"macro_definition", "macro_rules! value { () => { 1 }; }", "宏"},
-		{"reference_type", "var value &int", "引用"},
-		{"mutable_reference", "func f() { value := 1; _ = &mut value }", "引用"},
 		{"trait", "trait Value { func Read() int }", "trait"},
 		{"impl", "type Value int; impl Value { func Read() int { return 1 } }", "impl"},
 		{"bar_closure", "var f = |x| x + 1", "闭包"},

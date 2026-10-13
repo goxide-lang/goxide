@@ -145,7 +145,7 @@
 
 已确认 **D28（最新用户反馈）**：struct 派生 Default 要求每个字段实现 Default，否则手写；enum 标记默认变体。后续用户确认：仅选中默认变体的 payload 字段需要 Default，非默认变体不要求；允许带 payload 的默认变体。手动 Default 采用 `impl Default for T { func default() T { ... } }`，不引入 static，首参数 self 区分实例成员与关联函数。Debug 必须清楚说明输出字段/payload内容与隐私、格式稳定性边界。
 
-已确认 **D29（2026-10-02 用户收口纠正）**：首版必须支持 `match mut& enum_value { Var1(mut& inner) => *inner += 1 }` 这样的原位可写 payload 借用；不能后置，不能指向副本，也不能通过隐藏共享指针改变既有 enum 值复制语义。具体表示选项须解释实际代码影响后收敛，D20 不变。
+已确认 **D29（2026-10-13 用户确认）**：首版支持 `match &mut enum_value { Var1(inner) => *inner += 1 }` 的原位可写 payload 借用，引用指向真实存储。用户 enum 采用密封接口与指针变体，普通复制共享变体对象；整体替换 enum 后，旧 payload 投影仍指向旧对象。Option/Result 在 P6 前保留既有内联槽表示。该确认取代此前要求用户 enum 独立值复制的约束；[引用合同](enum-payload-borrows.md)规定两类存储的实际行为。D20 不变。
 
 已确认 **D30（2026-10-02 用户收口纠正）**：goxide 跨 module 消费 goxide 库应恢复增强信息，普通 Go 消费生成库则不执行 goxide 静态增强检查，类似 TS/JS 消费边界。同模块联合验收不等于此能力已完成，也未获批准缩成同模块 MVP。
 

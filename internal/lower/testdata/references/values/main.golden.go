@@ -1,0 +1,62 @@
+package main
+
+import fmt "fmt"
+
+type Record struct {
+	Count   int
+	Fixed   [2]int
+	Items   []int
+	Pointer *int
+}
+type Saved struct {
+	Read  *int
+	Write *int
+}
+
+func (record *Record) Total() int { return record.Count + record.Fixed[0] + record.Items[0] }
+func (record *Record) Bump()      { record.Count++ }
+
+func makeCounter() *int {
+	value := 4
+	return &value
+}
+func increment(counter *int) { (*counter)++ }
+func read(counter *int) int  { return *counter }
+func native(counter *int)    { *counter += 2 }
+
+func main() {
+	counter := makeCounter()
+	shared := counter
+	increment(shared)
+	var view *int = &*counter
+	kept := Saved{Read: view, Write: counter}
+	views := []*int{kept.Read}
+	snapshot := read(view)
+	snapshot += 100
+	captured := func() { increment(kept.Write) }
+	captured()
+	native(counter)
+	fmt.Println(read(views[0]), snapshot, counter == shared)
+
+	pointee := 7
+	record := Record{Count: 1, Fixed: [2]int{2, 3}, Items: []int{4}, Pointer: &pointee}
+	var readonly *Record = &record
+	copy := *readonly
+	copy.Count = 10
+	copy.Fixed[0] = 20
+	copy.Items = []int{30}
+	copy.Items[0]++
+	fresh := 40
+	copy.Pointer = &fresh
+	(*copy.Pointer)++
+	local := readonly.Items
+	local = []int{60}
+	local[0]++
+	var writable *Record = &record
+	bump := writable.Bump
+	bump()
+	writable.Fixed[0]++
+	writable.Items[0]++
+	total := readonly.Total
+	fmt.Println(readonly.Count, readonly.Fixed[0], readonly.Items[0], pointee, copy.Count, copy.Fixed[0], copy.Items[0], fresh, local[0], total(), readonly.Total())
+}

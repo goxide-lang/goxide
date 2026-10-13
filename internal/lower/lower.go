@@ -156,21 +156,37 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 	if !needed {
 		return
 	}
-	// Generated types have no source location. Go's receiver validation still
-	// needs their names to belong to a file while resolving member objects.
-	var generatedTypeNames []*goast.Ident
+	// Go's receiver validation requires a file for both declared type names and
+	// instantiated receiver names. Give generated names temporary source positions.
+	var generatedTypePositions []*gotoken.Pos
 	for _, e := range emitters {
 		goast.Inspect(e.goFile, func(node goast.Node) bool {
 			if spec, ok := node.(*goast.TypeSpec); ok && !spec.Name.NamePos.IsValid() {
-				generatedTypeNames = append(generatedTypeNames, spec.Name)
+				generatedTypePositions = append(generatedTypePositions, &spec.Name.NamePos)
 				spec.Name.NamePos = e.goFile.Package
+			}
+			if method, ok := node.(*goast.FuncDecl); ok && method.Recv != nil {
+				goast.Inspect(method.Recv, func(node goast.Node) bool {
+					var position *gotoken.Pos
+					switch n := node.(type) {
+					case *goast.Ident:
+						position = &n.NamePos
+					case *goast.StarExpr:
+						position = &n.Star
+					}
+					if position != nil && !position.IsValid() {
+						generatedTypePositions = append(generatedTypePositions, position)
+						*position = e.goFile.Package
+					}
+					return true
+				})
 			}
 			return true
 		})
 	}
 	defer func() {
-		for _, name := range generatedTypeNames {
-			name.NamePos = gotoken.NoPos
+		for _, position := range generatedTypePositions {
+			*position = gotoken.NoPos
 		}
 	}()
 	var renamer memberRenamer

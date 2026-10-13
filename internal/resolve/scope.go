@@ -108,7 +108,7 @@ func (r *resolver) lookup(scope *Scope, k Key, static bool) Resolution {
 			return Resolution{Symbol: b}
 		}
 		if a := s.Aliases[k]; len(a) > 0 {
-			return choices(a)
+			return r.importTarget(choices(a))
 		}
 		globs = append(globs, s.Globs...)
 		if r.hygiene != nil {
@@ -150,6 +150,24 @@ func (r *resolver) lookup(scope *Scope, k Key, static bool) Resolution {
 		return Resolution{Path: deferred, Deferred: true}
 	}
 	return Resolution{}
+}
+
+func (r *resolver) importTarget(res Resolution) Resolution {
+	symbol := res.Symbol
+	if symbol == nil || symbol.AliasOf != nil || symbol.Kind != Import || len(symbol.Target) == 0 || r.importer == nil {
+		return res
+	}
+	target := symbol.Target
+	name := Key{Name: target[len(target)-1], Ctx: symbol.Name.Ctx}
+	var symbols []*Symbol
+	for _, external := range r.importer.Lookup(target[:len(target)-1], name) {
+		symbols = append(symbols, externalSymbol(target[:len(target)-1], external))
+	}
+	if len(symbols) > 0 {
+		return choices(symbols)
+	}
+	// An unresolved target may name a package, whose members resolve later.
+	return res
 }
 
 func choices(symbols []*Symbol) Resolution {

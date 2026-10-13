@@ -126,6 +126,7 @@ type File struct {
 	Items      []Item
 	Comments   []*CommentGroup
 	Directives []*Directive
+	LineStarts []uint32 // Source line byte offsets, for preserving comment placement.
 }
 type Ident struct {
 	Base

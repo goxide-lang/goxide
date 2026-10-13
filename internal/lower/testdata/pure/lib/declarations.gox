@@ -1,0 +1,52 @@
+package lib
+
+use fmt;
+use fmt as printing;
+use strings;
+
+// offset is shared by both source files.
+pub const offset = 2
+const (
+	first = iota
+	second
+)
+pub var seed = 1
+var left, right = 2, 3
+pub type number = int
+type localNumber int
+
+// widget retains its field documentation and tag.
+pub type widget struct {
+	Value int `json:"value"`
+	Note string
+}
+
+struct Private {
+	hidden int
+}
+
+type Base struct { Offset int }
+type Wrapper struct { Base }
+type PointerWrapper struct { *Base }
+type Valuer interface { Value() int }
+type EmbeddedInterface interface { Valuer }
+type Box[T any] struct { Value T }
+
+func (b Base) Value() int { return b.Offset }
+func (b Box[T]) Get() T { return b.Value }
+func choose[A, B any](a A, b B) (A, B) { return a, b }
+
+//goxide:lower-fixture
+pub func identity[T interface { ~int | ~int64 }](value T) T {
+	return value
+}
+
+pub func answer() int {
+	p := Private{hidden: 3}
+	var value number = offset + seed + p.hidden + second
+	var wrapped Valuer = Wrapper{Base: Base{Offset: int(value)}}
+	box := Box[int]{Value: wrapped.Value()}
+	_ = fmt::Sprintf("%d", box.Get())
+	_ = printing::Sprint(left, right)
+	return box.Get()
+}

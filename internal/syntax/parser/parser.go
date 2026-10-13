@@ -56,7 +56,12 @@ func newParser(src []byte) *parser {
 // ParseFile returns a recovered tree even when diagnostics contain errors.
 func ParseFile(filename string, src []byte) (*ast.File, []Diagnostic) {
 	p := newParser(src)
-	f := &ast.File{}
+	f := &ast.File{LineStarts: []uint32{0}}
+	for i, b := range src {
+		if b == '\n' && i+1 < len(src) {
+			f.LineStarts = append(f.LineStarts, uint32(i+1))
+		}
+	}
 	p.expect(token.PACKAGE)
 	f.Package = p.ident()
 	p.endStmt()

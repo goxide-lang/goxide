@@ -431,18 +431,7 @@ func (r *resolver) boundPath(scope *Scope, segments []*ast.PathSegment) Resoluti
 	for _, segment := range segments[1:] {
 		res = r.boundMember(res, segment.Name)
 	}
-	if res.Symbol != nil && res.Symbol.Kind == Import && len(res.Symbol.Target) > 0 && r.importer != nil {
-		target := res.Symbol.Target
-		name := Key{Name: target[len(target)-1], Ctx: res.Symbol.Name.Ctx}
-		var symbols []*Symbol
-		for _, external := range r.importer.Lookup(target[:len(target)-1], name) {
-			symbols = append(symbols, externalSymbol(target[:len(target)-1], external))
-		}
-		if len(symbols) > 0 {
-			return choices(symbols)
-		}
-	}
-	return res
+	return r.importTarget(res)
 }
 
 func (r *resolver) boundMember(base Resolution, name *ast.Ident) Resolution {

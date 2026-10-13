@@ -66,13 +66,31 @@ gofmt -l internal cmd
 
 退出：`examples/enum_borrows` 通过。
 
-## P4 trait、impl 与关联类型
+## P4 trait、impl 与关联类型（已完成）
 
-交付：非泛型 `trait`、本包具体类型的 `impl`、`T::method`、单约束泛型函数、关联类型、wrapper 与 marker、`declare impl` 的 Go 侧适配。
+交付：非泛型 `trait`、本包具体 struct/enum 的固有及 trait `impl`、`T::method`、单 trait 约束泛型函数、普通关联类型、wrapper/marker，以及 `declare impl` 的 Go 侧适配。struct 与 enum 使用同一套源级成员查询；新管线独立完成检查与降低。
 
-检查：`examples/static_protocol` 通过；生成的 wrapper 能被原生 Go 代码调用（互操作测试）。
+已确认合同：
 
-退出：静态协议示例通过，且生成产物可被普通 Go 消费。
+- 有体实现写 `impl Trait for T`，`Self` 始终为基础目标类型 T。实例首参数写 `self Self`、`self &Self` 或 `self &mut Self`；其他成员为关联函数，不引入 `static`。
+- 关联类型在 impl 中显式定义，使用 `Self::Item` / `T::Trait::Item` 投影；运行时 trait 值全部绑定，如 `Trait[Item = int]`。Go 侧只有普通类型参数和固定方法签名。
+- 静态调用和泛型实现证据使用 `std/typeinfo` 空 carrier。关联类型由 carrier 上仅用于类型推导的 witness 确定，Go 调用仍可写 `Make[User]()` / `Read[Box](x)`，不增加运行时字典参数。
+- enum 保持密封接口和指针变体。接口声明精确 Self 类型锚，各变体返回同一个空 carrier；锚与 witness 不在运行时调用。操作 enum 槽位的方法在 carrier 参数中使用 `*E`，不要求 `*E` 也有类型锚，不产生或读取旧 enum 元数据。
+- 实例业务只生成在选定 wrapper，target 为命名字段。固定包级工厂完成适配；As/For helper 只转发。enum 值视图保留 `e.AsNamed().Name()`；借用视图通过保存真实 owner 的 `ForE(&e).AsNamed()`，不复制 enum 后取临时地址。
+- `declare impl` 按真实 Go T / *T 方法集及代入关联类型后的签名验签。外部类型不注入方法或类型锚；P4 提供运行时适配，不要求外部原生类型直接参加 carrier 泛型。
+- nil 采用已有 Go / enum 规则，不新增统一非空工厂检查。引用权限属于类型检查；别名与逃逸风险分析仍不在 MVP。
+
+实施分工按文件归属并行：主代理统一 AST、解析结果、检查旁表与调用合同；检查器负责成员选择、关联类型和引用权限；降低器负责 carrier、wrapper、工厂和 Go 适配；端到端用例覆盖两类源类型和原生 Go 消费。集成后独立审阅，再一次完成阶段验收与原子提交。
+
+检查与退出条件：
+
+1. `examples/static_protocol` 由新管线生成并运行，输出保持 `Ada Ada`；具体与泛型静态调用选择同一显式实现。
+2. struct/enum 的固有成员、同名 trait、限定调用、方法值、`Self` 和关联类型均有行为正例与可证伪反例；泛型实参缺 impl、关联绑定冲突和权限提升在源级诊断。
+3. 值视图保留既有复制语义，借用视图保持原对象/enum owner 身份；适配与方法值接收者只求值一次，同一视图不重复包装。
+4. 原生 Go 实际调用公开静态入口、carrier 泛型、固定工厂及 As/For helper；declare 精确方法集、同名不同业务和不提升额外方法均经真实 build/run 验证。
+5. 同输入两次生成字节一致；完成工作区规定的 build/test/vet/格式检查、生成模块的 Go 验证及文档检查。
+
+范围边界：泛型 trait/impl、多 trait 约束、GAT、supertrait、默认关联类型、重叠实现和特化继续延期。跨包 Goxide 加载、导入合并与依赖信息恢复由 P5 接续；CLI 切换和旧管线删除仍在 P6。P4 不修改 `std` / `serde` checkout，不新增外部依赖。详细合同见[trait](design/traits.md)与[关联类型](design/associated-types.md)。
 
 ## P5 跨包与项目工具链（最小）
 

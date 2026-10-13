@@ -121,19 +121,25 @@ type Try struct {
 }
 
 type Info struct {
-	Resolve      *resolve.Result
-	Diagnostics  []Diagnostic
-	Types        map[ast.Expr]types.Type
-	Enums        map[*ast.EnumDecl]*Enum
-	Matches      map[*ast.MatchExpr]*Match
-	Tries        map[*ast.TryExpr]*Try
-	Constructors map[ast.Expr]*Constructor
-	Symbols      map[*resolve.Symbol]types.Type
-	PackagePaths map[string]string
-	Derives      map[*types.Named]*Derive
-	Equalities   map[*ast.CallExpr]types.Type
-	RefBindings  map[*ast.BindPat]RefMode
-	enums        map[*types.Named]*Enum
+	Resolve       *resolve.Result
+	Diagnostics   []Diagnostic
+	Types         map[ast.Expr]types.Type
+	Enums         map[*ast.EnumDecl]*Enum
+	Matches       map[*ast.MatchExpr]*Match
+	Tries         map[*ast.TryExpr]*Try
+	Constructors  map[ast.Expr]*Constructor
+	Symbols       map[*resolve.Symbol]types.Type
+	PackagePaths  map[string]string
+	Derives       map[*types.Named]*Derive
+	Equalities    map[*ast.CallExpr]types.Type
+	RefBindings   map[*ast.BindPat]RefMode
+	Traits        map[*ast.TraitDecl]*Trait
+	Impls         map[*ast.ImplDecl]*Impl
+	Members       map[ast.Expr]*MemberSelection
+	TraitViews    map[ast.Expr]*TraitView
+	TypeOverrides map[ast.Type]types.Type
+	GenericBounds map[*ast.FuncDecl][]*TraitBound
+	enums         map[*types.Named]*Enum
 }
 
 func (r *Info) EnumOf(t types.Type) *Instance {
@@ -178,10 +184,23 @@ func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports 
 func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer) (*Info, []Diagnostic) {
 	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
 	r.RefBindings = make(map[*ast.BindPat]RefMode)
+	r.Traits = make(map[*ast.TraitDecl]*Trait)
+	r.Impls = make(map[*ast.ImplDecl]*Impl)
+	r.Members = make(map[ast.Expr]*MemberSelection)
+	r.TraitViews = make(map[ast.Expr]*TraitView)
+	r.TypeOverrides = make(map[ast.Type]types.Type)
+	r.GenericBounds = make(map[*ast.FuncDecl][]*TraitBound)
 	if res == nil {
 		return r, nil
 	}
 	c := &checker{out: r, files: files, importer: imports, named: make(map[*resolve.Symbol]*types.Named), variants: make(map[*resolve.Symbol]*Constructor), builtins: make(map[string]*Enum), packages: make(map[*resolve.Package]*types.Package), imported: make(map[string]*types.Package), constants: make(map[*resolve.Symbol]constant.Value), declarations: make(map[*resolve.Symbol]*typeDeclaration)}
+	c.traits = make(map[*resolve.Symbol]*Trait)
+	c.memberSymbols = make(map[*resolve.Symbol]*Member)
+	c.bounds = make(map[*types.TypeParam]*TraitBound)
+	c.functionBounds = make(map[*types.Signature][]*TraitBound)
+	c.sourceTypes = make(map[*resolve.Symbol]permissionDeclaration)
+	c.sourceValues = make(map[*resolve.Symbol]sourceExpression)
+	c.referenceModes = make(map[*resolve.Symbol]RefMode)
 	c.builtinEnums()
 	r.PackagePaths = sourcePackagePaths(res)
 	for _, p := range res.Packages {
@@ -199,6 +218,8 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 			c.prepareGenerics(f.AST.Items)
 		}
 	}
+	c.prepareTraits()
+	c.prepareImpls()
 	for _, p := range res.Packages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
@@ -206,6 +227,9 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 			c.signatures(f.AST.Items)
 		}
 	}
+	c.finishImpls()
+	c.referenceHints = c.newPermissionChecker()
+	c.referenceHints.eachFile(func(items []ast.Item) { c.referenceHints.collect(items) })
 	c.enumNames()
 	c.collectDerives()
 	for _, ref := range helpers {
@@ -246,21 +270,34 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 }
 
 type checker struct {
-	out          *Info
-	files        map[string]*ast.File
-	file         *resolve.File
-	pkg          *types.Package
-	packages     map[*resolve.Package]*types.Package
-	named        map[*resolve.Symbol]*types.Named
-	variants     map[*resolve.Symbol]*Constructor
-	builtins     map[string]*Enum
-	imported     map[string]*types.Package
-	importer     types.Importer
-	returns      []types.Type
-	conversions  []*resolve.Symbol
-	constants    map[*resolve.Symbol]constant.Value
-	instances    []genericInstance
-	declarations map[*resolve.Symbol]*typeDeclaration
+	out             *Info
+	files           map[string]*ast.File
+	file            *resolve.File
+	pkg             *types.Package
+	packages        map[*resolve.Package]*types.Package
+	named           map[*resolve.Symbol]*types.Named
+	variants        map[*resolve.Symbol]*Constructor
+	builtins        map[string]*Enum
+	imported        map[string]*types.Package
+	importer        types.Importer
+	returns         []types.Type
+	conversions     []*resolve.Symbol
+	constants       map[*resolve.Symbol]constant.Value
+	instances       []genericInstance
+	declarations    map[*resolve.Symbol]*typeDeclaration
+	traits          map[*resolve.Symbol]*Trait
+	implOrder       []*Impl
+	memberSymbols   map[*resolve.Symbol]*Member
+	bounds          map[*types.TypeParam]*TraitBound
+	functionBounds  map[*types.Signature][]*TraitBound
+	currentImpl     *Impl
+	currentTrait    *Trait
+	currentSelf     types.Type
+	sourceTypes     map[*resolve.Symbol]permissionDeclaration
+	sourceValues    map[*resolve.Symbol]sourceExpression
+	referenceHints  *permissionChecker
+	referenceModes  map[*resolve.Symbol]RefMode
+	currentReceiver *resolve.Symbol
 }
 
 func (c *checker) diag(n ast.Node, code, message string) {

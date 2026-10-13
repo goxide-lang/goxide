@@ -83,13 +83,13 @@ type Box[T any] struct { value T }
 func (b Box[T]) Value() T { return b.value }
 trait Reader[T any] {
  type Item
- func read(x T) Self.Item { return Self::make(x) }
- func make(x T) Self.Item
+ func read(self &Self, x T) Self::Item { return Self::make(x) }
+ func make(x T) Self::Item
 }
 impl Reader[int] for Box[int] {
  type Item = int
- func read(x int) Self.Item { _ = self; return Self::make(x) }
- func make(x int) Self.Item { return x }
+ func read(self &Self, x int) Self::Item { _ = self; return Self::make(x) }
+ func make(x int) Self::Item { return x }
 }
 func identity[T any](value T) T where T: any { return value }
 `

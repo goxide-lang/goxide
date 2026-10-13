@@ -2,23 +2,23 @@
 
 ## 状态与范围
 
-已确认方向：类型关联函数定义在独立的 `impl T { ... }` 块中，用 `T::method(...)` 调用，转译为普通 Go 包级函数。impl 内支持 `Self` 和实例成员的 `self` 绑定及转译；直接书写的 Go 函数与方法保留原生 Go 语义。已确认成员均用 `func` 声明：首参数为 `self` 的是实例成员，否则是关联函数，零参数函数自然是关联函数，不引入 `static`。具体接收权限拼写、Go 导出名、重载与初始化细则仍为草案；当前实现子集见下文。
+已确认：类型关联函数定义在独立的 `impl T { ... }` 块中，用 `T::method(...)` 调用，转译为普通 Go 包级函数。Self 是基础目标 T；成员用 func 声明，首参数为 `self Self`、`self &Self` 或 `self &mut Self` 时为实例成员，其余为关联函数，不引入 static。P4 同时支持具体 struct/enum 的成员查询和单 trait 泛型调用，已在新管线完成。
 
-这里的“类函数”指无实例接收者的类型关联函数；构造函数是其中返回新值或句柄的一类。结构体声明只定义数据，增强成员写在 impl 块中。成员种类由首参数是否为 `self` 决定，不能根据函数体是否使用 self 来推断；接收者的类型及权限拼写仍按既有 self 规格另行收敛。
+这里的“类函数”指无实例接收者的类型关联函数；构造函数是其中返回新值或句柄的一类。struct/enum 声明定义数据，增强成员写在 impl 块中。成员种类由首参数是否为 self 决定，不能根据函数体是否使用 self 推断。
 
 `impl T { ... }` 定义固有成员；`impl Trait for T { ... }` 定义显式 trait 实现，后者的实例 wrapper、marker、As/For helper 继续按 [RFC 0019](0019-uniform-trait-wrappers.md)。这一区分约束函数与方法声明，不将 enum、match 等其他 goxide 语法限制在 impl 内。
 
-当前新增的[用户关联协议子集](../static-protocols.md)支持 `trait P { func Abc() Self }`、本包具体 struct/enum 的 `impl P for U`，以及 `U::Abc()` 和单协议约束的 `T::Abc()`。这组关联函数统一通过空 carrier 与 `std/typeinfo.Of` 降低；它不采用下面固有构造函数示例的候选 `NewT` 命名，也不代表通用 `impl T` 或实例 wrapper 已实现。
+trait 的无接收者关联函数如 `trait P { func Abc() Self }` 支持本包具体 struct/enum 的显式实现、`U::Abc()` 和单 trait 约束的 `T::Abc()`，通过空 carrier 与 `std/typeinfo.Of` 降低。关联类型由 carrier witness 推导，不增加运行时字典参数；普通 Go 调用保留 `Make[User]()`。固有关联函数仍生成普通包函数，不凭同名函数建立 trait impl。
 
 ## 源级规则
 
 1. 前端区分原生 Go 声明与 impl 成员。直接写 `func NewPoint(...) Point` 或 `func (p Point) M()` 时，保留 Go 的声明、接收者、名称和行为；不按函数名自动注册 `Point::new`，不自动改成 wrapper 方法。原生调用的权限边界仍见 [RFC 0006](0006-foreign-api.md)。
 2. 编译期按类型身份与关联函数名解析 `T::method`。impl 中的 `Self` 绑定到完整的实现目标类型：`impl Point` 中是 Point，泛型 `impl ... Pair[T]` 中是 Pair[T]，trait impl 中也不是生成的 wrapper 类型。`Self::method` 继续做成员解析，不能仅把字符 Self 替换成一个 Go 标识符。
-3. `self` 是实例成员的接收者绑定，其值/借用权限由成员声明决定；无接收者的关联函数没有隐式 self，也没有运行时“类对象”。Self/self 区分大小写，按语法树与符号身份处理；原生 Go 中显式声明的同名标识符仍是普通 Go 绑定。
+3. `self` 是实例成员的接收者绑定，值/读/写由 `self Self` / `self &Self` / `self &mut Self` 决定；无接收者的关联函数没有隐式 self，也没有运行时“类对象”。Self/self 区分大小写，按语法树与符号身份处理；原生 Go 中显式声明的同名标识符仍是普通 Go 绑定。
 4. 名称 new 不隐含分配、默认初始化、move 或析构；行为由函数体与签名定义。参数、返回值、泛型约束、可见性和 unsafe 仍使用普通函数规则。
 5. 返回 `Self` 是值，返回 `Arc[Self]` 是共享句柄，返回 `Result[Self,E]` 是显式可失败结果。它们分别按既有类型规则降低，不因名称叫 new 就统一改成 Go `*T` 或 `(T,error)`。
-6. 本篇的固有 impl 示例位于本地类型的定义包，生成函数也在该包；外部类型的关联声明另行设计。公开构造函数可用 Go 惯用名 `NewPoint`；其他关联函数可用 `PointOrigin`。这些是候选名称，编译器通过元数据查实际符号，不按名字猜测；发生导出碰撞必须诊断或显式命名，不能覆盖直接书写的 Go 声明。
-7. 建议首版不按参数或返回类型重载；不同构造方式使用 new、origin、from_text、with_capacity 等不同名字。关联函数只允许从类型名调用，避免擦掉实例表达式的副作用；实例成员仍通过实例调用。
+6. 固有 impl 位于本地类型定义包，生成函数也在该包；外部类型的固有关联声明另行设计。P4 采用 `new → NewT`，其他关联函数采用 `TMethod`；私有入口首字母小写，公开名由 pub 决定。struct 的固有实例成员生成普通 Go 方法，enum 的实例成员生成带显式 E / *E 参数的 `EMethod` 包函数。发生生成名碰撞时诊断，不覆盖原生声明。
+7. P4 不按参数或返回类型重载；不同构造方式使用 new、origin、from_text、with_capacity 等不同名字。关联函数只从类型名调用；实例成员通过实例调用。多个 trait 的同名静态成员不按返回期望或顺序猜选实现，无限定调用须诊断歧义。
 8. 构造函数显式执行。`var p Point`、数组零值或 `make` 不会隐式调用 new/Default；不允许零值的源类型继续接受初始化检查。
 
 ## 转译示例
@@ -168,11 +168,11 @@ func (p Point) LegacySum() int { return p.x + p.y }
 
 ### C07：impl 实例成员的 Self 与 self
 
-以下为 `impl Point` 的实例成员概念片段，采用只含 int 字段的可复制 Point 与值接收者来展示绑定；首参数 self 表明实例成员，注释占位并非可编译的接收者声明，不由此冻结接收类型或权限语法：
+以下为 `impl Point` 的实例成员片段，采用只含 int 字段的 Point 与值接收者展示绑定：
 
 ```goxide
 impl Point {
-    pub func translated(self /* 接收类型及权限待定 */, dx int, dy int) Self {
+    pub func translated(self Self, dx int, dy int) Self {
         return Self { x: self.x + dx, y: self.y + dy }
     }
 }
@@ -197,8 +197,8 @@ trait impl 的 Self 同样表示源实现目标；wrapper 内 `self.field` 访�
 以下原生 Go 片段单独作为一组示例，不在 impl 内：
 
 ```goxide
-type Self int
-func Echo(self Self) Self { return self }
+type r#Self int
+func Echo(self r#Self) r#Self { return self }
 ```
 
 生成 Go 保留普通类型名和参数名：
@@ -215,8 +215,8 @@ func Echo(self Self) Self { return self }
 | 编号 | 输入或错误降低 | 预期 |
 | --- | --- | --- |
 | C-N1 | 无接收者关联函数读取未声明的 self，期望隐式获得实例 | 源级拒绝 |
-| C-N2 | 同一类型定义两个同名 new，仅参数/返回类型不同 | 按首版不重载的候选规则拒绝 |
-| C-N3 | `make_point().new()` 被直接降低为 NewPoint，漏执行 make_point | 禁止这种改写；建议源级拒绝实例式调用 |
+| C-N2 | 同一类型定义两个同名 new，仅参数/返回类型不同 | P4 不重载，拒绝 |
+| C-N3 | `make_point().new()` 被直接降低为 NewPoint，漏执行 make_point | 拒绝实例式关联函数调用 |
 | C-N4 | `var p Point` 自动执行用户 new 或 Default | 错误降低；初始化检查不隐式增加业务副作用 |
 | C-N5 | 仅给普通 Go 构造函数换类型注解，就把可空返回变成非空 Arc | 必须有外部契约或真实检查，不能凭名字授权 |
 | C-N6 | 生成的 NewPoint 与已有包级函数同名 | 在导出规划时诊断，不能覆盖或不稳定地改名 |
@@ -237,9 +237,9 @@ trait 的 `Default.default() -> Self` 仍需选择显式 impl；具体实现可�
 
 ## 验收与未定项
 
-未来验收：C01 的两种构造、C02 的独立对象和共享句柄、C03 的明确类型实参、C04 的调用次数与效果、C05 的成功/失败保留、C06 的原生声明不变、C07 的 Self/self 绑定及接收者语义、C08 的普通同名符号不变，以及 C-N1–C-N10。这些通用固有关联函数与实例成员示例不作为当前实现验收。用户关联协议的真实源码与独立模块验收见[专项说明](../static-protocols.md)；下面保留既有手动 Default 入口的范围，不将其改写成新协议语法。
+P4 验收覆盖具体 struct/enum 的关联函数、函数值、原生声明边界、Self/self 绑定、读写权限、同名成员选择和冲突诊断。泛型 impl 与 Arc 构造仍按各自后续范围推进；P2 的具体 Default helper 不借本阶段改变。
 
-下一轮只需收敛：实例成员的接收类型及权限拼写；Go 公共名称是否采用 NewT/TMethod；固有关联函数与同名静态 trait 操作如何限定。impl 块承担增强成员定义、Self/self 按绑定转译、原生 Go 声明保留原语义，以及 `T::method` 与包级 Go 函数的直接对应均已确定。
+struct 与 enum 使用同一源级成员查询。接收者候选按已有引用规则构造，同一候选先查固有方法，再查唯一可见 trait；歧义用 `x.m::<Trait>` / `Trait::m(x)` 限定。enum 的固有实例操作降低为带显式 E / *E 参数的普通包函数，不能给接口 E 声明 Go receiver。trait 实例业务只在固定 wrapper，enum 值 As 由接口声明和各指针变体转发；借用视图用 ForE 保存真实 owner。
 
 ## 当前手动 Default 实现子集
 

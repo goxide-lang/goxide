@@ -1,5 +1,7 @@
 # 用户关联协议与泛型调用
 
+本页的 CLI 与产物记录沿旧管线；新管线 P4 的当前范围、接收权限和空 carrier 合同见 [trait](design/traits.md) 与[关联类型](design/associated-types.md)，CLI 切换在 P6。
+
 本片为用户定义协议提供无实例接收者的关联函数。协议成员用 `func` 声明，`impl` 显式给出实现，具体类型和受约束类型参数都使用 `::` 调用。
 
 ```goxide

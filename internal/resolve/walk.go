@@ -30,15 +30,11 @@ func (r *resolver) walkItem(scope *Scope, item ast.Item) {
 		r.bindParams(fn, n.Recv)
 		r.bindParams(fn, n.Params)
 		r.bindParams(fn, n.Results)
-		if self := r.lookup(scope, Key{Name: "Self"}, true).Symbol; self != nil && len(n.Recv) == 0 {
-			k := Key{Name: "self"}
-			if r.hygiene != nil && n.Name != nil {
-				k.Ctx = n.Name.Ctx
+		if self := r.lookup(scope, Key{Name: "Self"}, true).Symbol; self != nil && len(n.Recv) == 0 && len(n.Params) > 0 {
+			names := n.Params[0].Names
+			if len(names) == 1 && names[0].Name == "self" {
+				r.contextAlias(fn, n, "self", r.file.Definitions[names[0].ID()])
 			}
-			if fn.Bindings[k] == nil {
-				fn.Bindings[k] = &Symbol{Name: k, Kind: Variable, Decl: r.ref(n)}
-			}
-			r.contextAlias(fn, n, "self", fn.Bindings[k])
 		}
 		r.functionBody(fn, n.Body)
 	case *ast.TypeDecl:

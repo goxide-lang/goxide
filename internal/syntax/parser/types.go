@@ -117,6 +117,9 @@ func (p *parser) typeAtom() ast.Type {
 	}
 	for p.at(token.PERIOD) || p.at(token.DCOLON) {
 		dot := p.next().Kind == token.PERIOD
+		if _, self := t.(*ast.SelfType); dot && self {
+			p.error("associated types use :: instead of .")
+		}
 		item := p.ident()
 		var args *ast.GenericArgs
 		if p.at(token.LBRACK) {
@@ -130,7 +133,13 @@ func (p *parser) path() *ast.Path {
 	start := p.tok().Start
 	path := &ast.Path{}
 	for {
-		name := p.ident()
+		var name *ast.Ident
+		if len(path.Segments) == 0 && p.at(token.SELF) {
+			t := p.next()
+			name = &ast.Ident{Base: p.base(t.Start), Name: t.Text}
+		} else {
+			name = p.ident()
+		}
 		if len(path.Segments) == 0 && !name.Raw && name.Name == "super" && p.at(token.DCOLON) {
 			p.error("super:: paths are not supported yet")
 		}

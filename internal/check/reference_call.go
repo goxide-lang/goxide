@@ -9,6 +9,9 @@ import (
 
 func (p *permissionChecker) call(n *ast.CallExpr, want *permission) *permission {
 	q := p.fromGo(p.c.out.Types[n])
+	if view := p.c.out.TraitViews[n]; view != nil {
+		q = p.fromGo(view.SourceType)
+	}
 	if con := p.c.out.Constructors[n]; con != nil {
 		q = p.constructorType(n, con, want)
 		r := *q
@@ -147,7 +150,11 @@ func (p *permissionChecker) checkGenericCall(fun *permission, args []*permission
 	p.env, p.declared, p.results = clonePermissionEnv(p.globals), permissionEnv{}, q.results
 	p.observed, p.captured, p.effects = permissionEnv{}, nil, nil
 	p.instance = inst
-	p.bindParams(f.decl.Params, q.params)
+	params := q.params
+	if p.c.memberSymbols[p.c.symbol(f.decl.Name)] != nil && q.receiver != nil {
+		params = append([]*permission{q.receiver}, params...)
+	}
+	p.bindParams(f.decl.Params, params)
 	p.bindParams(f.decl.Results, q.results)
 	if q.receiver != nil {
 		p.bindParams(f.decl.Recv, []*permission{q.receiver})

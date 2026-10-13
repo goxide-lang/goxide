@@ -41,7 +41,10 @@ func (p *parser) patternAtom() ast.Pat {
 		}
 		p.error("expected numeric literal in pattern")
 		return &ast.BadPat{Base: p.base(start)}
-	case token.IDENT:
+	case token.IDENT, token.SELF:
+		if p.at(token.SELF) && p.peek(1).Kind != token.DCOLON {
+			p.error("Self pattern requires a variant path")
+		}
 		if !p.tok().Raw && p.tok().Text == "_" {
 			p.next()
 			return &ast.WildPat{Base: p.base(start)}

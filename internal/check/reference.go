@@ -78,13 +78,9 @@ type permissionClosure struct {
 }
 
 func (c *checker) checkReferences() {
-	p := &permissionChecker{c: c, env: permissionEnv{}, declared: permissionEnv{}, functions: map[*resolve.Symbol]*permissionFunction{}, named: map[*types.Named]permissionDeclaration{}, enumFiles: map[*Enum]*resolve.File{}, building: map[*resolve.Symbol]bool{}, observed: permissionEnv{}, initializers: map[*resolve.Symbol]*permissionInitializer{}}
-	for s, d := range c.declarations {
-		if n := c.named[s]; n != nil {
-			p.named[n.Origin()] = permissionDeclaration{d.file, d.node}
-		}
-	}
+	p := c.newPermissionChecker()
 	p.eachFile(func(items []ast.Item) { p.collect(items) })
+	p.checkImplSignatures()
 	p.activeCalls = map[*ast.FuncDecl]bool{}
 	p.activeClosures = map[*ast.FuncLit]bool{}
 	p.globals = p.env
@@ -92,6 +88,16 @@ func (c *checker) checkReferences() {
 	globals := p.env
 	p.globals = globals
 	p.eachFile(func(items []ast.Item) { p.checkItems(items, globals) })
+}
+
+func (c *checker) newPermissionChecker() *permissionChecker {
+	p := &permissionChecker{c: c, env: permissionEnv{}, declared: permissionEnv{}, functions: map[*resolve.Symbol]*permissionFunction{}, named: map[*types.Named]permissionDeclaration{}, enumFiles: map[*Enum]*resolve.File{}, building: map[*resolve.Symbol]bool{}, observed: permissionEnv{}, initializers: map[*resolve.Symbol]*permissionInitializer{}}
+	for s, d := range c.declarations {
+		if n := c.named[s]; n != nil {
+			p.named[n.Origin()] = permissionDeclaration{d.file, d.node}
+		}
+	}
+	return p
 }
 
 func (p *permissionChecker) eachFile(f func([]ast.Item)) {
@@ -110,6 +116,10 @@ func (p *permissionChecker) collect(items []ast.Item) {
 		case *ast.FuncDecl:
 			q := p.functionType(n.Params, n.Results)
 			q.typ = p.c.out.Symbols[p.c.symbol(n.Name)]
+			if m := p.c.memberSymbols[p.c.symbol(n.Name)]; m != nil && !m.Static && len(q.params) > 0 {
+				q.receiver = q.params[0]
+				q.params = q.params[1:]
+			}
 			if len(n.Recv) != 0 {
 				q.receiver = p.astType(n.Recv[0].Type, nil)
 			}
@@ -127,7 +137,12 @@ func (p *permissionChecker) collect(items []ast.Item) {
 		case *ast.DeclareDecl:
 			p.collect([]ast.Item{n.Decl})
 		case *ast.ImplDecl:
+			oldFile, oldPkg, oldImpl, oldTrait, oldSelf := p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
+			if impl := p.c.out.Impls[n]; impl != nil {
+				p.c.enterImpl(impl)
+			}
 			p.collect(n.Items)
+			p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = oldFile, oldPkg, oldImpl, oldTrait, oldSelf
 		}
 	}
 }
@@ -187,7 +202,11 @@ func (p *permissionChecker) checkItems(items []ast.Item, globals permissionEnv) 
 			p.closures = nil
 			f := p.functions[p.c.symbol(n.Name)]
 			p.results = f.typ.results
-			p.bindParams(n.Params, f.typ.params)
+			params := f.typ.params
+			if p.c.memberSymbols[p.c.symbol(n.Name)] != nil && f.typ.receiver != nil {
+				params = append([]*permission{f.typ.receiver}, params...)
+			}
+			p.bindParams(n.Params, params)
 			p.bindParams(n.Results, f.typ.results)
 			if f.typ.receiver != nil {
 				p.bindParams(n.Recv, []*permission{f.typ.receiver})
@@ -209,7 +228,12 @@ func (p *permissionChecker) checkItems(items []ast.Item, globals permissionEnv) 
 		case *ast.DeclareDecl:
 			p.checkItems([]ast.Item{n.Decl}, globals)
 		case *ast.ImplDecl:
+			oldFile, oldPkg, oldImpl, oldTrait, oldSelf := p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
+			if impl := p.c.out.Impls[n]; impl != nil {
+				p.c.enterImpl(impl)
+			}
 			p.checkItems(n.Items, globals)
+			p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = oldFile, oldPkg, oldImpl, oldTrait, oldSelf
 		}
 	}
 }
@@ -299,8 +323,28 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 	}
 	t := p.c.typ(node)
 	q := p.fromGo(t)
+	if tp, ok := t.(*types.TypeParam); ok && sub[tp] != nil {
+		return sub[tp]
+	}
 	switch n := node.(type) {
+	case *ast.ProjectionType:
+		if _, self := n.X.(*ast.SelfType); self && p.c.currentImpl != nil {
+			return p.implAssociated(p.c.currentImpl, n.Item.Name, sub)
+		}
 	case *ast.PathType:
+		if n.Path != nil && len(n.Path.Segments) >= 3 {
+			parts := n.Path.Segments
+			target, trait, _ := p.c.associatedPath(parts)
+			if tp, ok := target.(*types.TypeParam); ok {
+				if bound := p.c.bounds[tp]; bound != nil && trait == bound.Trait {
+					return p.boundAssociated(bound, parts[len(parts)-1].Name.Name, sub)
+				}
+			} else if trait != nil {
+				if impl := p.c.findImpl(target, trait); impl != nil {
+					return p.implAssociated(impl, parts[len(parts)-1].Name.Name, sub)
+				}
+			}
+		}
 		if tp, ok := t.(*types.TypeParam); ok && sub[tp] != nil {
 			return sub[tp]
 		}
@@ -308,8 +352,18 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 			seg := n.Path.Segments[len(n.Path.Segments)-1]
 			if seg.Args != nil {
 				q.args = nil
-				for _, a := range seg.Args.Args {
-					q.args = append(q.args, p.astType(a.Type, sub))
+				if trait := p.c.traitOf(t); trait != nil {
+					for _, assoc := range trait.Associated {
+						for _, a := range seg.Args.Args {
+							if a.Name != nil && a.Name.Name == assoc.Name {
+								q.args = append(q.args, p.astType(a.Type, sub))
+							}
+						}
+					}
+				} else {
+					for _, a := range seg.Args.Args {
+						q.args = append(q.args, p.astType(a.Type, sub))
+					}
 				}
 			}
 			s := p.c.symbol(seg.Name)
@@ -671,6 +725,14 @@ func (p *permissionChecker) compatible(got, want *permission, seen map[[2]types.
 		}
 	}
 	if got.typ != nil && want.typ != nil {
+		if p.c.traitOf(got.typ) != nil && types.Identical(got.typ, want.typ) {
+			for i, arg := range got.args {
+				if i < len(want.args) && !p.compatible(arg, want.args[i], seen) {
+					return false
+				}
+			}
+			return true
+		}
 		if _, ok := want.typ.Underlying().(*types.Interface); ok && p.c.out.EnumOf(want.typ) == nil {
 			return !p.restricted(got, map[types.Type]bool{})
 		}

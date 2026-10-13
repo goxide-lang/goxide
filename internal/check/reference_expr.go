@@ -52,10 +52,23 @@ func joinPermissionLocations(a, b *permission) []*permissionLocation {
 }
 
 func (p *permissionChecker) expr(node ast.Expr, want *permission) *permission {
+	if view := p.c.out.TraitViews[node]; view != nil {
+		return p.traitView(node, view)
+	}
+	if selected := p.c.out.Members[node]; selected != nil {
+		return p.traitMember(node, selected)
+	}
+	return p.rawExpr(node, want)
+}
+
+func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission {
 	if node == nil {
 		return nil
 	}
 	q := p.fromGo(p.c.out.Types[node])
+	if view := p.c.out.TraitViews[node]; view != nil {
+		q = p.fromGo(view.SourceType)
+	}
 	switch n := node.(type) {
 	case *ast.Ident, *ast.PathExpr:
 		s := p.c.symbol(node)

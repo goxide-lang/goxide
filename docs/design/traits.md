@@ -1,16 +1,15 @@
 # 显式 trait 与多接口实现
 
-状态：所有可形成运行时视图的显式 impl 统一生成独立 wrapper，业务方法与 marker 均位于 wrapper。declare 逐方法转发原生业务实现，有体 impl 执行用户方法体。固定包级工厂负责适配，便利方法只转发工厂；不修改原生类型。该 trait 后端尚未实现；其他已运行子集见实现记录。
+状态：P4 已在新管线完成。运行时 impl 统一生成独立 wrapper，实例业务方法与 marker 均位于 wrapper；静态操作和泛型证据使用空 carrier。declare 逐方法转发原生业务，有体 impl 执行用户方法体。固定包级工厂负责适配，便利入口只转发工厂，不修改外部原生类型。
 
 | 状态 | 范围 |
 | --- | --- |
-| 已确认 | D04–D07、R24：显式 trait、普通关联类型方向、统一 wrapper、保留 marker、固定工厂与期望类型适配。 |
-| 暂定 | T08、T09、T12、T17：声明合并、方法解析、便利入口编码和静态 Self 的降低。 |
-| 未定 | U03、U04：源级接收权限语法、泛型实现证据、完整静态成员与公开 ABI。 |
+| P4 | 非泛型 trait、本包具体 struct/enum 的 impl、三种 self 接收权限、普通关联类型、单 trait 泛型约束、空 carrier、运行时 wrapper 和 Go 适配。 |
+| 后续 | 泛型 trait/impl、多 trait 约束、supertrait、GAT、默认关联类型、特化与重叠实现。跨包 Goxide 加载及发布信息恢复由 P5 接续。 |
 
-状态编号见[决策登记](decisions.md)。本文 `*T` 示例只描述 Go 接收者身份，不额外引入通用 safe 指针；`&T`、`&mut T`、Arc 的接收权限与借用来源仍需在前端保持。见[源级权限约束](overview.md#35-源级权限与-go-表示必须分开)。
+状态编号见[决策登记](decisions.md)。有体实现写在基础类型 T 上，通过成员的 `self Self` / `self &Self` / `self &mut Self` 区分传值、只读和可写接收者。`declare impl` 的原生 T / *T 方法集按精确 Go 类型核对，不把原生指针视为获得引用权限。见[源级权限约束](overview.md#35-源级权限与-go-表示必须分开)。
 
-[RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)已按 D19 重写：接收类型选择仍待 U03，借用来源用于具体风险 warning，不将逃逸或未知摘要作为适配准入限制。
+[RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)已按 D19 重写：不将逃逸或未知摘要作为适配准入限制。
 
 诊断边界仍按 D19/D20：基础类型权限照常检查，别名/逃逸风险分析不属 MVP，不以未知效果或无法证明不逃逸普遍拒绝。
 
@@ -19,17 +18,19 @@
 | 概念 | goxide 含义 | Go 承载 |
 | --- | --- | --- |
 | 原始类型 | 数据、固有方法与类型身份 | 原始 named type |
-| trait | 必须显式采用的行为协议 | 元数据；满足运行时条件时有对应接口 |
+| trait | 必须显式采用的行为协议 | 编译期实现关系；满足运行时条件时有对应接口 |
 | `impl Trait for T` | 选定的 trait 实现关系与业务来源 | 对应 wrapper、marker 和固定工厂 |
 | `impl T` | 类型自有的关联函数与实例成员 | 关联函数降低为包级函数；实例成员按接收者规则降低 |
 | trait 视图 | 选择了特定 impl 的值 | 保存接收者的 wrapper，按需装入接口 |
 | Go interface | 结构式方法集合 | 原生 Go 接口，保留 Go 规则 |
 
-方法签名相同不自动创建 goxide impl。降低后的 trait 接口仍要求业务方法和 marker；marker 必须保留，但显式关系、权限与精确接收者身份由 goxide 元数据决定。
+方法签名相同不自动创建 goxide impl。降低后的 trait 接口仍要求业务方法和 marker；marker 必须保留，显式关系、权限与精确目标身份由源级解析与检查结果决定。
 
-此模型描述可形成运行时视图的实例方法。`Default.default() -> Self` 等静态操作仍按选定 impl 降低为普通函数，不能强行塞入运行时接口。见[静态 trait 操作](macros.md#55-静态-trait-操作与-go-运行时接口)。`impl A for T` 与 trait 继承是不同功能，supertrait 另行设计。
+此模型描述可形成运行时视图的实例方法。无 self 的 trait 操作按选定 impl 通过空 carrier 调用，不加入运行时接口；P2 的具体派生 helper 保持既有合同。`impl A for T` 与 trait 继承是不同功能，supertrait 另行设计。
 
-类型自有成员写在 `impl T { ... }` 中，`T::new(...)` 等无接收者关联函数见 [RFC 0020](../rfcs/0020-associated-functions.md)。它按类型查找函数，trait 静态操作则按显式 impl 选择实现；两者都可降低为包级函数，但前者不会自动创建 Default impl。impl 成员用 `func` 声明，首参数 self 标识实例成员，否则为关联函数，无需 static。手动 Default 的有限实现见该 RFC，完整静态 trait 后端仍未实现。
+例如同时具有 `func make() Self` 与 `func transform(self &Self) Self` 的 trait 可在具体类型和泛型约束下使用；裸 Self 结果使其不能成为 `var value Trait` 的运行时视图，不能因此拒绝整个 impl。
+
+类型自有成员写在 `impl T { ... }` 中，`T::new(...)` 等无接收者关联函数见 [RFC 0020](../rfcs/0020-associated-functions.md)。它按类型查找函数，trait 静态操作按显式 impl 选择实现；固有构造函数不会自动创建 Default impl。impl 成员用 `func` 声明，首参数 self 标识实例成员，否则为关联函数，无需 static。
 
 直接写出的 `func NewT(...) T` 和 `func (recv T) M(...)` 保留普通 Go 函数与方法语义，不自动成为 goxide impl，也不凭名字建立 `T::new` 绑定。impl 的 `Self` / `self` 支持按绑定解析；普通 Go 声明中的同名标识符仍按 Go 规则处理。
 
@@ -38,35 +39,37 @@
 ### 2.1 declare：采用已有业务方法
 
 ```goxide
-import native "example.org/native/buffer"
-import byteio "example.org/goxide/byteio"
-type Buffer = *native::Buffer
+use native;
+use byteio;
+type Buffer = native::Buffer
 
 declare impl byteio::Reader for Buffer;
 ```
 
-Buffer 是原生指针的别名，不创建新类型。编译器按精确的 `T` / `*T` 方法集验签，再在 impl 所在包生成 wrapper、逐项转发方法、marker 与包级工厂。缺业务方法是错误；原生类型不需要预先提供 marker、wrapper 或 As 方法。
+Buffer 是原生类型的别名，不创建新类型。假定 Reader 的接收者为 `self &Self`，代入 Self = native::Buffer 后核对精确 `*native.Buffer` 方法集，再在 impl 包生成 wrapper、转发、marker 和工厂。缺业务方法是错误；原生类型无需预备 marker、wrapper 或 As。
+
+declare 同样按结构替换 Self：`for *native::Buffer` 配 `self Self` 核对 `*native.Buffer`；若配 `self &Self` 则核对 `**native.Buffer`，不能自动消去引用层来凑方法集。只有代入后精确的接收者方法集通过，才能生成转发。
 
 declare 不是等待实现的前置声明。它采用原生方法的业务与可信调用契约，不凭签名证明不逃逸或只读；见[原生 API](foreign-api.md)。
 
 ### 2.2 有体 impl：执行用户方法体
 
 ```goxide
-pub trait ByteReader { read(p []byte) (int, error) }
-pub trait TextReader { read() string }
+pub trait ByteReader { func read(self &mut Self, p []byte) (int, error) }
+pub trait TextReader { func read(self &Self) string }
 pub struct Buffer { data []byte }
 
-impl ByteReader for *Buffer {
-    read(p []byte) (int, error) { return copy(p, self.data), nil }
+impl ByteReader for Buffer {
+    func read(self &mut Self, p []byte) (int, error) { return copy(p, self.data), nil }
 }
-impl TextReader for *Buffer {
-    read() string { return string(self.data) }
+impl TextReader for Buffer {
+    func read(self &Self) string { return string(self.data) }
 }
 ```
 
-有体 impl 完整提供业务方法，即使原生类型已有同名同签名方法，也执行所写方法体。需要复用时显式委托。`[]byte` 和 `*Buffer` 仅展示后端机制，不代表源级容器与权限语法已冻结。
+有体 impl 完整提供业务方法，即使原生类型已有同名同签名方法，也执行所写方法体。需要复用时显式委托。两个 impl 的基础目标均是 Buffer，接收者权限分别由 self 参数声明。
 
-规范实现键包含接收者、trait 身份和 trait 参数；关联类型是实现的输出。相容 declare 可以合并，有体实现保持唯一，矛盾契约不得覆盖。declare 与有体实现混合的具体声明语义仍待定；见 [RFC 0003](../rfcs/0003-declare-impl.md)。
+规范实现键包含基础目标与 trait 身份；P4 的 trait 不带位置参数，关联类型是实现的输出。相同目标不能以不同关联类型再实现同一 trait。相容 declare 可以合并，有体实现保持唯一，矛盾契约不得覆盖；同一键混合 declare 与有体实现时诊断，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
 
 ## 3. 统一 wrapper 的 Go 降低
 
@@ -106,11 +109,9 @@ type bufferByteReader struct { target *Buffer }
 type bufferTextReader struct { target *Buffer }
 
 func AsBufferByteReader(b *Buffer) ByteReader {
-    if b == nil { panic("goxide: nil Buffer") }
     return bufferByteReader{target: b}
 }
 func AsBufferTextReader(b *Buffer) TextReader {
-    if b == nil { panic("goxide: nil Buffer") }
     return bufferTextReader{target: b}
 }
 func (b *Buffer) AsByteReader() ByteReader { return AsBufferByteReader(b) }
@@ -119,11 +120,9 @@ func (b *Buffer) AsTextReader() TextReader { return AsBufferTextReader(b) }
 func (v bufferByteReader) GoxideTraitByteReader() {}
 func (v bufferTextReader) GoxideTraitTextReader() {}
 func (v bufferByteReader) Read(p []byte) (int, error) {
-    if v.target == nil { panic("goxide: invalid ByteReader view") }
     return copy(p, v.target.data), nil
 }
 func (v bufferTextReader) Read() string {
-    if v.target == nil { panic("goxide: invalid TextReader view") }
     return string(v.target.data)
 }
 ```
@@ -136,11 +135,21 @@ marker 使用导出的稳定符号，使其他包拥有的 wrapper 能实现 tra
 
 ## 4. 接收者、共享状态与 self
 
-`Self` 与 `self` 区分大小写：`Self` 表示 impl 的源级目标类型，包括其泛型实参，不是生成的 wrapper 类型；`self` 表示实例成员所绑定的接收者。无接收者关联函数可以使用 `Self`，不能因此获得 `self`。首参数 self 决定成员具有实例接收者；接收者类型与权限的具体拼写另行规定，不能根据函数体是否使用 self 来决定成员有没有接收者。
+`Self` 与 `self` 区分大小写：`impl Trait for T` 中 Self 是基础目标 T，enum 的 Self 是完整 enum 接口；不是 wrapper、carrier 或变体。首参数 `self Self` 为传值，`self &Self` 为只读引用，`self &mut Self` 为可写引用。impl 与 trait 的接收模式必须一致。无接收者关联函数可以使用 Self，但没有隐式 self；不能按函数体是否使用 self 推断成员种类。
 
-`impl Trait for *T` 的 wrapper 保存同一个 `*T`。不同视图可观察同一对象变化；对象指针身份保持不变，Go interface 动态类型则是 wrapper。反射与类型断言不能再假定看到原始 `*T`。
+完整运行时视图按该 trait 的实例方法选择捕获方式：
 
-`T` 与 `*T` 是不同实现键。不能为了通过方法集检查，给临时 T、map 元素偷偷复制取址；值接收者按其声明的值复制规则处理。先验原方法集，再生成转发，不能利用生成代码里局部字段可寻址的事实补齐缺失方法。
+| 实例接收者集合 | wrapper 的源级 target |
+| --- | --- |
+| 全部为 `self Self` | T 值副本 |
+| 全部为 `self &Self` | `&T` |
+| 包含 `self &mut Self`，或传值与借用成员混合 | `&mut T` |
+
+每个方法中的 self 仍按自身声明检查；可写 target 可收窄给只读方法。传值方法读取目标的值副本，沿用 P3 对共享字段的规则。传值与借用混合时要求可写 target，避免用只读浅副本执行可修改共享字段的值方法。
+
+借用 wrapper 保存同一对象或 enum owner 槽位；Go 表示为 `*T`，Go interface 动态类型为 wrapper。值类型按既有复制规则处理：enum 的副本共享变体对象，整体替换不会改写旧值视图。借用 enum 的 `*E` 则观察真实 owner 的整体替换。
+
+原生 declare 在代入 Self 与成员接收模式后，分别验证精确 T / *T 方法集。不能为了通过方法集检查给临时 T、map 元素偷偷复制取址，也不能利用生成代码里局部字段可寻址来补齐原生方法。
 
 例如仅有 `func (*Counter) Next()` 时，`struct{ target Counter }` 的值接收者转发可能在 Go 中编译，却每次修改 target 副本。这不能作为 Counter 实现该 trait 的依据。
 
@@ -161,7 +170,7 @@ b.read::<TextReader>()
 b.read::<byteio::Reader>(p)
 ```
 
-限定调用选择一个 trait。普通调用暂定固有方法优先；否则查询可见显式实现，候选唯一才能简写，多个候选要求限定。已经是 trait 视图的值调用该 trait 方法，不再按原对象的方法集选择。
+限定调用选择一个 trait；等价函数式写法为 `Trait::read(b, p)`。普通调用按已有引用与寻址规则构造接收者候选，在同一候选中先查固有方法，再查可见显式 trait 实现；多个 trait 候选须限定。不得把某个后续候选上的固有方法提前覆盖先前候选。struct 与 enum 使用同一源级成员表，不引入 Rust Deref trait 或所有权系统。已经是 trait 视图的值调用该 trait 方法，不再按原对象的方法集选择。
 
 新增 impl 可能使未限定的 goxide 调用歧义，但不得改变既有 wrapper 或工厂符号。Go API 稳定与源码调用永不歧义不是同一承诺。
 
@@ -169,14 +178,14 @@ b.read::<byteio::Reader>(p)
 
 前端先选择 impl，生成 `TraitView(value, implID)`，记录接收者、业务来源和固定工厂。declare 和有体 impl 都生成对应 wrapper；接收者表达式只求值一次。
 
-该转换保留源级类型和已知来源。真实接收类型/impl 不匹配仍 error；短引用视图的返回、存储或异步传递默认允许，只有锁协议离开或具体冲突链才 warning。raw Ptr 不因 marker 自动获得不同源类型；类型桥接与 D11 的接合见 U15。
+该转换保留源级类型和引用权限。真实接收类型/impl 不匹配仍 error；引用视图可以复制、返回和存储，不追加逃逸或独占检查。原生指针不因 marker 自动获得不同源类型。
 
 | 使用位置 | 转换规则 |
 | --- | --- |
 | 参数、赋值、返回的期望类型为已实现 trait | 调用选定包级工厂 |
 | `x := value`、目标为 any 或相同具体类型 | 保留原类型 |
 | 已具有相同 trait 与关联类型绑定的视图 | 复用已有视图，不递归包装 |
-| 泛型形参 T 受 trait 约束 | 保留 T，实现证据另行传递或选择 |
+| 泛型形参 T 受 trait 约束 | 保留 T，使用空 carrier 与关联类型 witness 选择实现 |
 | `[]T` 整体转 `[]Trait` | 不隐式逐元素转换 |
 | 字面量元素具有 trait 期望类型 | 可以按元素适配 |
 | TraitA 转 TraitB 或恢复原生 `*T` | 不隐式转换或 unwrap |
@@ -190,8 +199,11 @@ b.read::<byteio::Reader>(p)
 包级工厂是唯一适配语义入口，便利 API 只转发它：
 
 - 类型与 impl 同包，且属于 Go 允许定义方法的本地 named type，才可生成 `t.AsSized()` 一类方法。
+- 本包 enum 的值视图在 E 接口声明 As，由各指针变体一行转发固定工厂，保留 `e.AsSized()`；实例业务仍只在 wrapper。借用 enum 视图使用 `ForE(&e).AsSized()` 保存真实 owner。
 - 外部类型不能追加方法，使用 `adapters.ForBuffer(t).AsSized()`；ForBuffer 返回 impl 包拥有的命名适配器。
 - 两者都不根据调用位置重新选择实现，不在原类型添加 marker，也不匿名嵌入目标以提升其他方法。
+
+`For<Base>(*Base)` 统一保存 owner。值视图的 As 从 owner 读取值并调用固定工厂，借用视图把同一 owner 传给工厂。外部纯值类型可直接调用 `As<Type><Trait>(value)`，或用 `ForType(&value).AsTrait()`；不为 facade 临时复制目标再取址。
 
 同包只是必要条件：`type Ptr[T any] *T` 这样的具名指针类型不能在 Go 中作为方法接收者基类型，仍须使用包级工厂或自有 facade；不能为便利入口违反 Go 接收者规则。
 
@@ -203,11 +215,11 @@ b.read::<byteio::Reader>(p)
 
 符号身份至少包含定义包、接收者形式、trait 身份及参数；不依赖 import 别名、时间戳或每次构建变化的值。相容重复声明如何映射到固定生成归属，与声明合并和发布规则一并确定，不能按导入顺序选宿主。
 
-AsBufferByteReader、AsByteReader、ForBuffer 是短示例，正式编码尚待冻结。必须区分同名 trait、检测固有方法及生成名冲突，新增实现不能重命名旧入口。元数据恢复完整身份，不依赖拆分名称猜测语义。
+P4 的工厂采用 `As<Type><Trait>`，helper 采用 `As<Trait>` / `For<Type>`；marker 编码完整 trait 身份。carrier operation 始终有 trait 与成员身份确定的 canonical 名称；唯一静态成员可增加简短转发，保留 `typeinfo.Of[T]().Abc()`。多个 trait 具有同名静态成员时，只使用 canonical 入口，无限定源码调用报歧义，简短入口不猜选实现。生成名与用户声明冲突时诊断，不静默覆盖或重命名；新增实现不能改变旧工厂身份。
 
 ## 9. 非法状态与边界
 
-装有 nil target 的值 wrapper 进入接口后仍不等于 nil。是否拒绝由源级接收者和公开契约决定；本篇完整示例明确拒绝，不把 wrapper 构造等同于非空证明。
+装有 nil target 的值 wrapper 进入接口后仍不等于 nil。P4 保持已有 Go / enum 的 nil 规则，不额外生成一刀切非空工厂；原生方法自身的 nil 行为继续由原生实现决定，enum match 继续按 enum 规范检查。
 
 包含不可比较 T 的值 wrapper 可能使 Go 接口比较 panic；指针 wrapper 又可能让两次适配获得不同包装对象身份。公开的比较、nil、反射和分配行为须记录，保存原 target 不等于完全透明或零分配。
 
@@ -222,6 +234,6 @@ marker 即使被 Go 手写或嵌入提升，也不会创建新的 goxide impl。
 5. 适配只求值一次，保留借用范围，不隐式 unwrap，不产生递归 wrapper 链。
 6. 精确 T / *T 方法集、声明冲突、权限与函数值转换均有正反例。
 7. 通过 io.Copy 等原生调用检查没有提升额外方法，新增 impl 不改变既有工厂和视图身份。
-8. LSP 与编译器读取同一元数据，可导航到采用的 Go 方法或 goxide 方法体。
+8. struct 与 enum 共用成员选择；静态 carrier、关联类型 witness 和原生 Go 泛型调用保持精确 Self，不执行类型锚或 witness。
 
-现有 views Go 夹具验证完整示例的共享对象、自定义分派和 nil 工厂；不代表 goxide 前端或新 declare 工厂已经实现。
+跨包 Goxide 加载与后续 LSP 复用已选实现和来源信息，分别随 P5 和 MVP 工具链推进。P4 的阶段行为必须由新管线生成 Go 并真实运行验收。

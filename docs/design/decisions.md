@@ -12,7 +12,7 @@
 
 状态变化时更新本登记和对应专题。被替代的方案直接删除或标为历史，不留在正文里当规范读。新增语法用 RFC 说明源级语义、Go 降低、双向边界与适配成本。
 
-当前 trait 方向见 [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)：统一 wrapper、保留 marker、固定包级工厂及本地 As / 外部 ForT.As 便利 helper。用户已确认该方向，替代原始类型 marker 注入；具体 ABI 细节仍未冻结。类型关联函数由 impl 块定义，T::method → Go 包函数、Self/self 绑定及原生 Go 声明边界见 [RFC 0020](../rfcs/0020-associated-functions.md)。
+当前 P4 合同见 [trait](traits.md)、[关联类型](associated-types.md)及 D37：基础目标与三种 self 权限、统一 wrapper/marker、固定工厂、空 carrier 与关联类型 witness。struct/enum 共用成员查询；enum 值 As 与借用 owner 的 For 分别保留。类型关联函数和原生 Go 声明边界见 [RFC 0020](../rfcs/0020-associated-functions.md)。
 
 ## 2. 已确认的方向
 
@@ -23,7 +23,7 @@
 | D01 | 以转译器 + 转译前 linter 为架构，生成普通 Go，保留 Go 生态与运行时 | [总纲](overview.md)；不以独立所有权运行时或原生机器码后端替代 |
 | D02 | 所有新语法同时设计 Go 降低与双向互操作 | [总纲](overview.md)；不能只展示 goxide 写法 |
 | D03 | 改善安全性、显式实现与可读性、Go 包互操作是三项目标 | [符合程度](overview.md#21-三项目标的符合程度)；尚无完整安全性证明 |
-| D04 | 使用 trait 表达显式实现，保留 Go interface 的结构式语义；纳入普通关联类型方向 | [trait](traits.md)、[关联类型](associated-types.md)；泛型和投影细节暂定 |
+| D04 | 使用 trait 表达显式实现，保留 Go interface 的结构式语义；纳入普通关联类型 | [trait](traits.md)、[关联类型](associated-types.md)；P4 子集由 D37 收敛 |
 | D05 | `declare impl AorB::XXX for BBB::Type;` 可写在用户 C 包普通 .gox 内；无体采用原业务方法，通过 C 包 wrapper 显式转发并实现 marker | [Go 适配](go-interop.md)；原指针保持，接口动态类型是 wrapper，不向原始类型追加方法 |
 | D06 | 有体 impl 的实现函数直接定义在对应 wrapper；多个 impl 的同名方法允许不同签名或行为；保持稳定 As 入口 | [trait](traits.md)；不再在原类型生成改名业务方法 |
 | D07 | 根据使用处期望类型决定是否插入 trait 适配；保留值本身的类型 | [使用处转换](traits.md#6-期望类型驱动的转换)；泛型和容器细节暂定 |
@@ -43,9 +43,10 @@
 | R21 | match 按模式区分值复制、只读借用与可变借用 | [RFC 0009](../rfcs/0009-match.md)；具体语法、作用域与支持原位借用的 ABI 未定 |
 | R22 | 所有新特性和语法有独立 spec/RFC，以转译前后、双向调用和反例表达约束 | [RFC 清单](../rfcs/README.md)、[模板](../rfcs/TEMPLATE.md)；已写文档不代表已实现 |
 | R23 | goxide 源级使用变体枚举分派，不直接采用 Go 的 .(T)/.(type) 作为分派语法；增强保证由 goxide 工具链提供 | 后端和原生 Go 仍可使用 Go 类型检查/反射；普通 Go 调用者不获得 goxide 静态权限保证 |
-| R24 | 所有运行时 trait 视图统一 wrapper；trait 接口与 wrapper 保留 marker；固定包级函数适配；Go 使用本包 As 方法或外部 ForT.As helper | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；具体符号编码、权限、nil/比较与多包载体选择未定 |
-| R25 | 构造函数等类型关联函数定义在独立 impl T 块中，用 T::method 调用，降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；不将函数写入 struct 声明；func 首参数 self 区分实例成员，其余为关联函数，无 static；接收类型/权限、Go 名称与初始化细则仍待收敛 |
+| R24 | 所有运行时 trait 视图统一 wrapper；trait 接口与 wrapper 保留 marker；固定工厂及 As/For helper | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；P4 权限、enum helper 和 nil 规则由 D37 收敛，跨包载体加载由 P5 接续 |
+| R25 | 构造函数等关联函数定义在独立 impl T 中，T::method 降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；首参数 self 区分实例/关联成员，无 static；P4 采用 NewT/TMethod 并诊断名称冲突 |
 | R26 | impl 成员按 goxide 规则转译并支持 Self/self；直接书写的 Go 函数和方法保留原生 Go 语义 | [RFC 0020](../rfcs/0020-associated-functions.md)；Self 绑定源目标类型，self 仅绑定实例接收者；不全局替换同名 Go 标识符，不限制其他 goxide 特性只能位于 impl 内 |
+| D37 | P4：impl 以基础 T 为目标，self 使用 Self / &Self / &mut Self；关联投影为 Self::Item / T::Trait::Item，运行时值完整绑定；泛型关联类型经空 carrier witness 推导，Go 调用保留源类型实参数量 | [trait](traits.md)、[关联类型](associated-types.md)、[enum 类型锚](enum-representation.md#11-p4-的类型锚与实例适配)；struct/enum 统一查询，enum Self 为 E，类型锚/witness 不运行；值 As 转发与借用 ForE 保留身份；外部类型不注入 anchor，nil 沿用 Go/enum 规则 |
 
 已确认新增 **D19（2026-10-01）**：用户明确要求默认兼容 Go 式指针/别名；有具体风险依据先 warning，不以无法证明安全大面积拒绝。语法、类型、已确认不变量错误不降级；warning 与运行时 race 分开，不能宣称静态安全。该反馈否决 T01/T06 及前两轮严格默认，不撤销无关 D01–D18。
 
@@ -73,16 +74,16 @@
 | T06 | **默认阻断已否决**；来源追踪改为有依据的风险 warning | D19 与 RFC B01–B08：未知不拒绝也不刷警告；不宣称静态安全 |
 | T07（历史） | 原定义包隔离构建视图注入 marker / As | 已被 RFC 0019 的统一 wrapper 取代；旧夹具保留为历史机制，不作为当前实现要求 |
 | T08 | impl 按接收者、trait、参数规范化；冲突报错、显式导入元数据 | 跨包可见性、接收权限身份、版本和构建条件如何参与选择 |
-| T09 | 固有方法优先、唯一可见 trait 候选；稳定符号编码，限定调用 | 最终源码拼写、名称冲突策略和 ABI 编码未定；新增 impl 可能增加源码歧义 |
+| T09（P4 已收敛） | 按既有引用规则构造接收者候选，同一候选固有方法优先，再查唯一可见 trait | D37；歧义用 x.m::<Trait> / Trait::m(x) 限定，新增 impl 可能增加源码歧义 |
 | T10 | 宏模板自由名字按定义点绑定、捕获语法保留调用点来源 | 此处有意不同于 Rust mixed-site hygiene；宏匹配、阶段、缓存、预算及授权规则是候选设计 |
 | T11 | 字面量 `{}` / `{:?}` 对应 Display / Debug；打印失败 panic；固定字段式 derive 规则 | 格式子集、formatter、Default / Clone / Debug 精确协议及错误策略未冻结 |
-| T12 | Default / Clone 的静态 Self 操作选择具体 impl 并降低为普通 Go 函数 | 成员类别规则已确认；接收类型/权限与泛型实现证据未定；不能宣称所有 trait 均可作为 Go 运行时接口 |
+| T12（P4 子集已收敛） | 静态 Self 操作选择具体 impl，P4 使用空 carrier 及 witness；P2 派生 helper 保持既有合同 | D37；静态操作不塞入运行时接口，更宽派生和泛型 impl 另行推进 |
 | T13 | 用户建议 std 提供 Vec/借用视图和多种 Map；既有 Slice、ReadOutcome、copy/clone_with 为候选 | [Vec](../rfcs/0010-collections.md)、[Map](../rfcs/0017-maps.md)；赋值语义、元素借用、ABI、名称和具体后端未定 |
 | T14 | syntax 协议 + 普通 syn / quote 包可先于过程宏宿主提供 | 这是实现建议，不承诺首版交付；token 构造原语、卫生上下文和包版本尚未冻结 |
 | T15 | Go 启动前端 / LSP，独立 goxide AST 和语义 IR；复用 Go 包加载、输出和类型信息 | 自举阶段、复用边界、仓库布局和工具进程协议见[工具链草案](compiler-and-tooling.md) |
 | T16 | Unit 用 struct{}；第三方锁经普通 Lock/Unlock 原语接入 | 回调语法、没有结果的 return 插入、第三方适配构造器及来源检查 |
-| T17 | R24 已确认的 wrapper/marker/helper 方向下的具体工厂、便利名称和载体协议 | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；编码、冲突、共享适配包和权限细则仍需定稿 |
-| T18 | 实例接收类型/权限拼写、new → NewT、其他关联函数 → TMethod、首版不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；impl 块及 Self/self 支持、T::method 与 Go 包函数映射已确认，func 首参数 self 的分类规则已确认；具体接收类型/权限及导出规则未冻结 |
+| T17（P4 子集已收敛） | 固定工厂 `As<Type><Trait>`、`As<Trait>` / `For<Type>`、完整 trait 身份 marker 与名称冲突诊断 | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；跨包共享适配与发布信息由 P5 接续 |
+| T18（P4 已收敛） | self Self / &Self / &mut Self；new → NewT，其他关联函数 → TMethod，首版不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；pub 控制公开，私有入口首字母小写；enum 实例函数用显式 E / *E 参数 |
 
 ## 4. 未定与明确延期
 
@@ -92,8 +93,8 @@
 | --- | --- | --- |
 | U01 | 完整词法 / 语法、类型表示、包和符号身份；最终语言名称 | 解析器、诊断与稳定输出 |
 | U02 | 引用获取、保存/构造、字段及容器只读投影、输出槽位；持有类型必要性 | RFC 0003 §6.1–6.2 核对 D08/D11；内建容器写操作、浅复制元素引用及接口/any 断言须保留权限，类型表示尚未闭合。H 临时契约未批准且不是 MVP 前提；风险来源/别名分析另属 D20 长期工作 |
-| U03 | 源级 `&T` / `mut& T` / Arc 如何参与 impl 键与方法接收权限 | 早期 `*T` 示例仅为 Go 机制示意，不能成为第四种 safe 源级指针 |
-| U04 | 静态 trait 成员、裸 Self、泛型约束、关联类型投影和后端策略 | Default / Clone、迭代器；字典传递与专门化尚未选择 |
+| U03（P4 子集已收敛） | 基础目标上的 self 接收权限见 D37；Arc 等持有类型仍按专门设计推进 | 原生 *T 与源级引用不因 Go 表示相同而合并；declare 结构代入 Self 后验证精确方法集 |
+| U04（P4 子集已收敛） | 单 trait 约束、普通关联投影及 carrier witness 已选定；更宽泛型系统延期 | 静态成员和裸 Self 不因此成为任意动态接口；不加入运行时字典 |
 | U05 | 递归 Go 类型视图、嵌套 Ptr / slice / map、函数值和回调桥接 | 不能把单层 *T 转换实验外推成全 ABI 兼容 |
 | U06 | pub、公开字段、回调及共享对象的验证时机和错误接口 | Go 双向边界与输入有效性 |
 | U07 | 声明包命名、版本 / 构建条件锁定、raw 视图选择、依赖缓存与产物发布 | 另一台机器可复现相同语义与增强依赖 |
@@ -112,7 +113,7 @@
 
 ### 4.1 本轮候选细化
 
-[RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)与[业务场景](../rfcs/research/0001-usage-and-tradeoffs.md)已按 D19 重写：B01–B08 解释默认允许，W01–W06 要求具体风险链、修复建议与误报/漏报成本。前两轮“词法借用/唯一性证明作为默认准入”的推荐已被用户否决；U03 的 impl 权限形式仍未选择。Go 夹具仅验证机制，不是 goxide warning 实现。
+[RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)与[业务场景](../rfcs/research/0001-usage-and-tradeoffs.md)已按 D19 重写：B01–B08 解释默认允许，W01–W06 要求具体风险链、修复建议与误报/漏报成本。前两轮“词法借用/唯一性证明作为默认准入”的推荐已被用户否决；P4 的基础接收权限由 D37 收敛，风险分析仍不属 MVP。Go 夹具仅验证机制。
 
 ## 5. 已被替代或纠正的方案
 

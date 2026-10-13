@@ -105,7 +105,7 @@ func TestPatterns(t *testing.T) {
 }
 func TestTypesAndSignatures(t *testing.T) {
 	for _, src := range []string{
-		"int", "r#type", "pkg::T[A,B]", "Iterator[Item = int]", "Self.Item", "pkg.T",
+		"int", "r#type", "pkg::T[A,B]", "Iterator[Item = int]", "T::Iterator::Item", "pkg.T",
 		"&T", "&mut T", "*T", "[]T", "[3]int", "[...]int", "map[string][]int", "chan<- int", "<-chan int",
 		"func(x, y int, rest ...string) (where int, yield error)",
 		"struct { x, y int; pub z string `json:\"z\"`; *T; pkg.T }",

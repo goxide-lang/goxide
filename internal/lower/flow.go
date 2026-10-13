@@ -102,13 +102,14 @@ func (e *emitter) exprScoped(n syntax.Expr) ([]goast.Stmt, goast.Expr) {
 	return before, x
 }
 
-func (e *emitter) expr(n syntax.Expr) goast.Expr {
+func (e *emitter) expr(n syntax.Expr) (out goast.Expr) {
 	if n == nil {
 		return nil
 	}
 	if x := e.replacements[n]; x != nil {
 		return x
 	}
+	defer func() { out = e.traitView(n, out) }()
 	switch n := n.(type) {
 	case *syntax.MatchExpr:
 		info := e.info.Matches[n]
@@ -233,6 +234,11 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 		if result, ok := e.equalityCall(x); ok {
 			return result
 		}
+		if member := e.info.Members[x.Fun]; member != nil && member.MethodExpr {
+			if result, ok := e.memberCall(x); ok {
+				return result
+			}
+		}
 		children = append([]syntax.Expr{x.Fun}, x.Args...)
 	case *syntax.CompositeLit:
 		// Keys of struct literals are names, rather than evaluated expressions.
@@ -277,6 +283,8 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 	case *syntax.ParenExpr:
 		children = []syntax.Expr{x.X}
 	case *syntax.SelectorExpr:
+		children = []syntax.Expr{x.X}
+	case *syntax.QualifiedSelectorExpr:
 		children = []syntax.Expr{x.X}
 	case *syntax.IndexExpr:
 		base := e.expr(x.X)

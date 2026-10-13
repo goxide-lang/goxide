@@ -250,6 +250,10 @@ func (r *resolver) member(base Resolution, name *ast.Ident) Resolution {
 		base.Symbol = base.Symbol.AliasOf
 		base.Path = nil
 	}
+	if base.Deferred && base.Symbol != nil && (base.Symbol.Kind == Type || base.Symbol.Kind == TypeParam || base.Symbol.Kind == Enum) {
+		// Keep a type's qualified associated path for checking; it is not an import.
+		return Resolution{Symbol: base.Symbol, Path: append(append([]string{}, base.Path...), name.Name), Deferred: true}
+	}
 	if base.Symbol != nil && base.Symbol.Members != nil {
 		s := base.Symbol.Members
 		k := key(name)
@@ -265,7 +269,7 @@ func (r *resolver) member(base Resolution, name *ast.Ident) Resolution {
 		if a := s.Aliases[k]; len(a) > 0 {
 			return choices(a)
 		}
-		if len(base.Symbol.Target) == 0 && base.Symbol.Kind != Type && base.Symbol.Kind != TypeParam {
+		if len(base.Symbol.Target) == 0 && base.Symbol.Kind != Type && base.Symbol.Kind != TypeParam && base.Symbol.Kind != Enum {
 			return Resolution{}
 		}
 	}
@@ -282,12 +286,15 @@ func (r *resolver) member(base Resolution, name *ast.Ident) Resolution {
 			if len(choicesList) > 0 {
 				return choices(choicesList)
 			}
+			if base.Symbol != nil && (base.Symbol.Kind == Type || base.Symbol.Kind == Enum) {
+				return Resolution{Symbol: base.Symbol, Path: append(append([]string{}, path...), name.Name), Deferred: true}
+			}
 			return Resolution{}
 		}
 		return Resolution{Path: append(append([]string{}, path...), name.Name), Deferred: true}
 	}
-	// Associated items of type parameters and built-in types need type checking.
-	if base.Symbol != nil && (base.Symbol.Kind == TypeParam || base.Symbol.Kind == Type) {
+	// Source impl selection is shared by structs, enums and constrained parameters.
+	if base.Symbol != nil && (base.Symbol.Kind == TypeParam || base.Symbol.Kind == Type || base.Symbol.Kind == Enum) {
 		return Resolution{Symbol: base.Symbol, Path: []string{base.Symbol.Name.Name, name.Name}, Deferred: true}
 	}
 	return Resolution{}

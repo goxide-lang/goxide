@@ -19,14 +19,14 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 		if n.Mods.Unsafe || n.Mods.Async || n.Mods.Const {
 			e.fail(n, "函数修饰符尚未降低")
 		}
-		if n.Where != nil {
+		if n.Where != nil && len(e.info.GenericBounds[n]) == 0 {
 			e.fail(n.Where, "where 约束尚未降低")
 		}
 		if n.Path != nil {
 			e.fail(n.Path, "限定路径函数声明尚未降低")
 			return nil
 		}
-		typ := &goast.FuncType{Func: e.pos(n), TypeParams: e.generics(n.Generics), Params: e.params(n.Params)}
+		typ := &goast.FuncType{Func: e.pos(n), TypeParams: e.functionGenerics(n), Params: e.params(n.Params)}
 		if len(n.Results) != 0 {
 			typ.Results = e.params(n.Results)
 		}
@@ -55,13 +55,16 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 	case *syntax.EnumDecl:
 		e.fail(n, "enum 声明尚未降低")
 	case *syntax.TraitDecl:
-		e.fail(n, "trait 声明尚未降低")
+		return e.traitDecl(n)
 	case *syntax.ImplDecl:
-		if e.deriveImpl(n) {
+		if e.deriveImpl(n) || e.info.Impls[n] != nil {
 			return nil
 		}
 		e.fail(n, "impl 声明尚未降低")
 	case *syntax.DeclareDecl:
+		if impl, ok := n.Decl.(*syntax.ImplDecl); ok && e.info.Impls[impl] != nil {
+			return nil
+		}
 		e.fail(n, "declare 声明尚未降低")
 	case *syntax.MacroRulesDecl:
 		e.fail(n, "宏定义尚未降低")

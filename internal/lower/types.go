@@ -13,6 +13,9 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	if n == nil {
 		return nil
 	}
+	if t := e.info.TypeOverrides[n]; t != nil {
+		return e.goType(t)
+	}
 	switch n := n.(type) {
 	case *syntax.PathType:
 		if n.Path != nil && len(n.Path.Segments) > 0 {

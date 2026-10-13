@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | P2（已完成） | 宏在表达式/语句/类型/item 位置接入；`derive(Default, Clone, Debug, PartialEq, Eq)`；serde 派生登记 | [原始示例生成与运行](../internal/lower/p2_examples_test.go)；[派生行为与冲突](../internal/lower/derive_test.go)；[宏卫生](../internal/lower/macro_e2e_test.go)；重复生成字节一致 | 把派生做成通用泛型 trait；为 serde 顺手改 `serde` 仓库 |
 | P3（已完成） | `&T` / `&mut T`、读写权限、`ref` / `ref mut`、原位 payload 投影、`match &e` / `match &mut e` | [引用生成与运行](../internal/lower/reference_e2e_test.go)；[权限与寻址反例](../internal/lower/reference_diagnostics_test.go)；[控制流资格](../internal/check/reference_flow_test.go)；原生 Go vet/race test；重复生成字节一致 | 用户 enum 复制共享变体对象，旧投影保留旧对象；Option/Result 在 P6 前保留内联槽 |
-| P4 | 非泛型 trait、本包具体类型的 `impl`、`T::method`、单约束泛型、关联类型、wrapper 与 marker、`declare impl` | 静态协议示例通过；生成产物能被原生 Go 调用 | wrapper 的求值次数与身份被改变 |
+| P4（已完成） | 非泛型 trait、本包具体 struct/enum 的 `impl`、三种 self 接收权限、`T::method`、单 trait 泛型约束、关联类型 witness、wrapper/marker、`declare impl` | 新管线静态协议示例；struct/enum 共用成员查询；原生 Go 调用空 carrier 泛型及 As/For；重复生成一致 | 接收者求值与身份、引用权限、enum owner 或精确 Self 被改变 |
 | P5 | 多包目录、`use` 跨包、导入合并、最小 `goxide.toml` 与 `goxide.lock` | 多包端到端 build/run/test；拉真实依赖成功；lock 稳定 | 顺手复活 workspace / vendor / 迁入 |
 | P6 | CLI 三种输入模式改走新管线；删除旧管线八个包；网站用新编译器重建 | 全树 `go test`；`examples/enum_trial/try.sh`；网站构建与 `goxideweb` race/vet；两次运行输出字节一致 | 删多了（工具链模块要留）或删少了 |
 | P7 | 状态表取代免责式文档；删 `docs/reviews`、`tests/design`、`tests/research`、首尾追加日志、`ROADMAP.md`；CI 只留 `go test` / `go vet` / 阶段 e2e | 文档门禁通过；状态表每条有对应测试 | 把状态表写成第二份免责文档 |

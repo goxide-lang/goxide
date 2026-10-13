@@ -21,7 +21,12 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = instanceType(con.Enum)
 		}
 	case *ast.PathExpr:
-		if con := c.constructor(n.Path, c.symbol(n), expected); con != nil {
+		if selected := c.out.Members[n]; selected != nil && selected.MethodExpr {
+			t = selected.Signature
+		} else if selected := c.staticMember(n); selected != nil {
+			c.out.Members[n] = selected
+			t = selected.Signature
+		} else if con := c.constructor(n.Path, c.symbol(n), expected); con != nil {
 			c.out.Constructors[n] = con
 			t = instanceType(con.Enum)
 		} else {
@@ -43,6 +48,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	case *ast.ParenExpr:
 		t = c.expr(n.X, expected)
 	case *ast.CallExpr:
+		c.qualifiedCall(n)
 		if c.equalityCall(n) {
 			t = types.Typ[types.Bool]
 			break
@@ -54,7 +60,11 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = types.NewTuple()
 			break
 		}
-		fun := c.expr(n.Fun, expected)
+		funExpected := expected
+		if c.traitOf(expected) != nil {
+			funExpected = nil
+		}
+		fun := c.expr(n.Fun, funExpected)
 		if con := c.out.Constructors[n.Fun]; con != nil {
 			fields := con.Enum.Fields(con.Variant)
 			for i, a := range n.Args {
@@ -89,17 +99,15 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				infer(want, defaultType(got), sub)
 			}
 			if sig.TypeParams().Len() > 0 {
-				args := make([]types.Type, sig.TypeParams().Len())
+				args := make([]types.Type, c.sourceArity(sig))
 				complete := true
 				for i := range args {
 					args[i] = sub[sig.TypeParams().At(i)]
 					complete = complete && valid(args[i])
 				}
 				if complete {
-					if inst, err := types.Instantiate(nil, sig, args, true); err == nil {
-						sig = inst.(*types.Signature)
-					} else {
-						c.diag(n, GenericConstraint, err.Error())
+					if inst, ok := c.instantiateFunctionType(sig, args, n).(*types.Signature); ok {
+						sig = inst
 					}
 				}
 			}
@@ -179,6 +187,13 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		t = c.expr(n.Value, expected)
 	case *ast.SelectorExpr:
 		x := c.expr(n.X, nil)
+		if selected := c.instanceMember(n, n.X, x, n.Sel.Name, nil); selected != nil {
+			if selected.Member.Native == nil || selected.Impl != nil {
+				c.out.Members[n] = selected
+			}
+			t = selected.Signature
+			break
+		}
 		if valid(x) {
 			if obj, _, _ := types.LookupFieldOrMethod(x, true, c.pkg, n.Sel.Name); obj != nil {
 				t = obj.Type()
@@ -191,11 +206,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			for i, a := range n.Indices {
 				args[i] = c.exprType(a)
 			}
-			if inst, err := types.Instantiate(nil, sig, args, true); err == nil {
-				t = inst
-			} else {
-				c.diag(n, GenericConstraint, err.Error())
-			}
+			t = c.instantiateFunctionType(sig, args, n)
 		} else if named, ok := x.(*types.Named); ok && named.TypeParams().Len() > 0 && c.isTypeExpr(n.X) {
 			args := make([]types.Type, len(n.Indices))
 			for i, a := range n.Indices {
@@ -321,6 +332,18 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		t = c.expr(n.X, expected)
 	case *ast.TypeExpr:
 		t = c.typ(n.Type)
+	case *ast.QualifiedSelectorExpr:
+		x := c.expr(n.X, nil)
+		var trait *Trait
+		if path, ok := n.Trait.(*ast.PathType); ok && path.Path != nil && len(path.Path.Segments) > 0 {
+			trait = c.traitPath(path.Path.Segments)
+		}
+		if trait == nil {
+			c.diag(n, TraitInvalid, "qualified call requires a trait")
+		} else if selected := c.instanceMember(n, n.X, x, n.Sel.Name, trait); selected != nil {
+			c.out.Members[n] = selected
+			t = selected.Signature
+		}
 	}
 	if t == nil {
 		t = types.Typ[types.Invalid]
@@ -328,6 +351,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	if untyped(t) && valid(expected) && !types.IsInterface(expected) && types.AssignableTo(t, expected) {
 		t = expected
 	}
+	t = c.adaptTrait(node, t, expected)
 	c.out.Types[node] = t
 	return t
 }
@@ -362,8 +386,26 @@ func literalType(t types.Type, index int, name string) (types.Type, types.Type) 
 
 func (c *checker) constructor(path *ast.Path, s *resolve.Symbol, expected types.Type) *Constructor {
 	var base *Constructor
+	if path != nil && len(path.Segments) == 2 && path.Segments[0].Name.Name == "Self" {
+		target := c.currentSelf
+		if target == nil && s != nil {
+			for decl, impl := range c.out.Impls {
+				if s.Decl.File == impl.File && s.Decl.ID == decl.ID() {
+					target = impl.Target
+					break
+				}
+			}
+		}
+		if instance := c.out.EnumOf(target); instance != nil {
+			if variant := instance.Variant(path.Segments[len(path.Segments)-1].Name.Name); variant != nil {
+				base = &Constructor{Enum: instance, Variant: variant}
+			}
+		}
+	}
 	if s != nil {
-		base = c.variants[s]
+		if variant := c.variants[s]; variant != nil {
+			base = variant
+		}
 	}
 	if base == nil && s != nil && s.Kind == resolve.Variant && s.Decl.File == "" && len(s.Target) == 0 {
 		for _, e := range c.builtins {
@@ -428,6 +470,9 @@ func (c *checker) exprType(e ast.Expr) types.Type {
 }
 
 func (c *checker) isTypeExpr(e ast.Expr) bool {
+	if c.out.Members[e] != nil {
+		return false
+	}
 	switch n := e.(type) {
 	case *ast.TypeExpr:
 		return true

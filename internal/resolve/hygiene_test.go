@@ -217,7 +217,7 @@ func run() { _ = get!() }
 
 func TestResolveExpandedMethodsAttachToWrittenType(t *testing.T) {
 	for _, tc := range []struct{ name, declaration, method, receiver string }{
-		{"impl", "impl S { pub func build() { _ = self; _ = Self::build } }", "build", "self"},
+		{"impl", "impl S { pub func build(self Self) { _ = self; _ = Self::build } }", "build", "self"},
 		{"Go receiver", "func (s S) Build() { _ = s; _ = S::Build }", "Build", "s"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

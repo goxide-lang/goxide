@@ -37,6 +37,7 @@ func (e *emitter) enumDecl(n *syntax.EnumDecl) []goast.Decl {
 	if d := e.deriveFor(info.Type); d != nil && d.Requests["Error"] {
 		methods = append(methods, errorInterfaceMethods()...)
 	}
+	methods = append(methods, e.enumTraitMethods(info.Type)...)
 	decls := []goast.Decl{&goast.GenDecl{Tok: gotoken.TYPE, Specs: []goast.Spec{&goast.TypeSpec{
 		Name: goast.NewIdent(info.GoName), TypeParams: e.enumGenerics(n.Generics),
 		Type: &goast.InterfaceType{Methods: &goast.FieldList{List: methods}},
@@ -55,6 +56,7 @@ func (e *emitter) enumDecl(n *syntax.EnumDecl) []goast.Decl {
 			Recv: &goast.FieldList{List: []*goast.Field{{Type: recv}}},
 			Type: &goast.FuncType{Params: markerParams()}, Body: &goast.BlockStmt{},
 		})
+		decls = append(decls, e.enumTraitDeclarations(info.Type, recv)...)
 	}
 	return decls
 }

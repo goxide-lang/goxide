@@ -12,6 +12,14 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	if n == nil {
 		return nil
 	}
+	if call, ok := n.(*syntax.CallExpr); ok {
+		if result, handled := e.memberCall(call); handled {
+			return result
+		}
+	}
+	if member := e.info.Members[n]; member != nil {
+		return e.memberExpr(member)
+	}
 	if result, ok := e.enumConstruct(n); ok {
 		return result
 	}

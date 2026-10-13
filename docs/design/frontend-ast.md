@@ -217,7 +217,7 @@ type Variant struct {
 | `PointerType` | `*T` |
 | `SliceType` `ArrayType` `MapType` `ChanType` `FuncType` `StructType` `InterfaceType` | 与 Go 相同 |
 | `SelfType` | `Self` |
-| `ProjectionType` | `Self.Item`、`T::Item` |
+| `ProjectionType` | `Self::Item`、`T::Trait::Item`；外部投影必须限定 trait |
 | `ParenType` | `(T)` |
 | `MacroType` | 类型位置的 `name!(...)` |
 | `BadType` | — |
@@ -246,7 +246,7 @@ Go 的表达式节点全部保留：`Ident`、`BasicLit`、`CompositeLit`、`Key
 
 | 写法 | AST | 何时使用 |
 | --- | --- | --- |
-| `x.m(args)` | `CallExpr` 包 `SelectorExpr` | 默认写法。`x` 的类型上只有一个可见的 `m` 时直接可用 |
+| `x.m(args)` | `CallExpr` 包 `SelectorExpr` | 按已有引用规则构造接收者候选；同一候选先固有成员，再唯一可见 trait 成员 |
 | `x.m::<Trait>(args)` | `CallExpr` 包 `QualifiedSelectorExpr` | 多个 trait 提供同名方法时指明用哪一个 |
 | `Trait::m(x, args)` | `CallExpr` 包 `PathExpr` | 与上一种等价的函数式写法 |
 
@@ -258,7 +258,7 @@ type QualifiedSelectorExpr struct {
 }
 ```
 
-不带调用的 `x.m::<Trait>` 是方法值。同名方法有多个候选而用户写了 `x.m(args)` 时，类型检查报歧义并列出候选，建议改写成第二种。`::<` 只在选择器之后出现，泛型实参在其他位置一律用 `[T]`。
+不带调用的 `x.m::<Trait>` 是方法值，接收者在取值时求值一次。同一接收者候选有多个 trait 方法而用户写了 `x.m(args)` 时，类型检查报歧义并列出候选，建议改写成第二种。struct 与 enum 使用相同查询；不依赖生成 Go 的方法集决定源级成员。`::<` 只在选择器之后出现，泛型实参在其他位置一律用 `[T]`。
 
 闭包：`FuncLit` 同时表示 `func(a int) int { ... }` 和 `|a| a + 1`。
 
@@ -459,6 +459,16 @@ lower.Lower(files, check)         → map[string][]byte   // 每个 .gox 对应�
 P2 接通已有的具体手写 Default、PartialEq 和空 Eq impl。Default 按字段声明顺序构造，enum 只要求唯一默认变体的字段有 Default；Clone、Debug、PartialEq/Eq 按既定字段与容器规则处理。泛型派生、手写 Clone/Debug/serde 和完整 trait 后端不在此合同中新增语义。
 
 serde 的 Serialize/Deserialize 按实际 `use` 绑定的 canonical owner 分别登记，owner 为 `github.com/goxide-lang/serde`。新管线直接调用该模块的协议，JSON 格式实现仍由 serde 模块提供。现有退出示例依赖的打印、Error 派生与单步错误转换按其已确认合同接通；不读取旧管线的元数据，也不调用旧 lowering pass。
+
+### 8.3 P4 trait 与成员检查合同
+
+有体 `impl Trait for T` 的目标为本包具体非泛型 struct 或 enum；固有 `impl T` 使用同一类型身份。trait/impl 成员首参数为 `self` 时是实例成员，允许 `self Self`、`self &Self`、`self &mut Self`；其他成员为关联函数。`Self` 绑定源目标 T，引用是接收者类型的一部分，不把实现头改写成 `impl Trait for &T`。直接写出的 Go 函数和方法保留原生声明语义。
+
+解析与检查旁表保留基础目标、接收权限、固有/trait 身份、关联类型绑定及选定成员。源级 struct/enum、透明 alias 和类型参数都经同一个成员查询入口；普通 Go 方法仍按真实 Go 类型信息查找。后端消费已选调用，不再按生成名称或 Go 方法集重复选择实现。
+
+关联类型的声明与绑定用已有 `AssocTypeDecl` / `AssocTypeBinding` 节点；投影统一为 `Self::Item`、`T::Trait::Item`。`Trait[Item = int]` 是完整关联类型绑定，不是新的位置参数 impl。泛型函数限每个类型参数单 trait 约束，未绑定投影必须从该约束及 carrier witness 获得类型证据。
+
+静态调用降低为空 carrier 操作，关联类型 witness 只参与 Go 类型推导；不执行类型锚或 witness，不传运行时字典。enum 的精确 Self 是 enum 接口 E；其变体实现类型锚返回同一空 carrier，读写 owner 的操作把 `*E` 作为普通参数。运行时实例视图另按[trait 合同](traits.md)生成命名 target wrapper，不能把 carrier 当作目标值或运行时 trait wrapper。
 
 ## 9. 后续工作
 

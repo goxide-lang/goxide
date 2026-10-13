@@ -81,6 +81,8 @@ func (c *checker) collect(items []ast.Item) {
 			} else {
 				c.collectType(n.Name, n.Type, n.Alias)
 			}
+		case *ast.TraitDecl:
+			c.collectTrait(n)
 		case *ast.ModDecl:
 			c.collect(n.Items)
 		case *ast.DeclareDecl:
@@ -212,8 +214,9 @@ func (c *checker) signatures(items []ast.Item) {
 			}
 		case *ast.FuncDecl:
 			c.receiverParams(n.Recv)
-			params := c.params(n.Generics)
+			params := c.functionParams(n)
 			sig := types.NewSignatureType(nil, nil, params, c.tuple(n.Params), c.tuple(n.Results), len(n.Params) > 0 && n.Params[len(n.Params)-1].Variadic)
+			c.functionBounds[sig] = c.out.GenericBounds[n]
 			if s := c.symbol(n.Name); s != nil {
 				c.out.Symbols[s] = sig
 			}
@@ -323,6 +326,7 @@ func (c *checker) tuple(params []*ast.Param) *types.Tuple {
 			vars = append(vars, types.NewVar(0, c.pkg, name.Name, t))
 			if s := c.symbol(name); s != nil {
 				c.out.Symbols[s] = t
+				c.sourceTypes[s] = permissionDeclaration{c.file, p.Type}
 			}
 		}
 	}
@@ -332,6 +336,10 @@ func (c *checker) tuple(params []*ast.Param) *types.Tuple {
 func (c *checker) typ(node ast.Type) types.Type {
 	if node == nil {
 		return types.Typ[types.Invalid]
+	}
+	if t, ok := c.traitType(node); ok {
+		c.out.TypeOverrides[node] = t
+		return t
 	}
 	switch n := node.(type) {
 	case *ast.PathType:
@@ -432,9 +440,18 @@ func (c *checker) pathType(path *ast.Path) types.Type {
 		return types.Typ[types.Invalid]
 	}
 	last := path.Segments[len(path.Segments)-1]
-	t := c.symbolType(c.symbol(last.Name))
+	t := c.symbolType(c.sourcePathSymbol(path.Segments))
 	if !valid(t) {
 		t = c.importType(path)
+	}
+	if !valid(t) && len(path.Segments) > 1 {
+		res := c.file.References[path.ID()]
+		if res.Deferred && res.Symbol != nil {
+			switch res.Symbol.Kind {
+			case resolve.Type, resolve.TypeParam, resolve.Enum, resolve.Trait:
+				c.diag(path, TraitInvalid, "unknown associated type or member path")
+			}
+		}
 	}
 	if last.Args != nil {
 		t = c.instantiate(t, last.Args)
@@ -468,6 +485,9 @@ func (c *checker) instantiate(t types.Type, args *ast.GenericArgs) types.Type {
 	actual := make([]types.Type, 0, len(args.Args))
 	for _, a := range args.Args {
 		actual = append(actual, c.typ(a.Type))
+	}
+	if sig, ok := t.(*types.Signature); ok {
+		return c.instantiateFunctionType(sig, actual, args)
 	}
 	if !valid(t) {
 		return t
@@ -551,6 +571,10 @@ func substitute(t types.Type, sub map[*types.TypeParam]types.Type) types.Type {
 		return types.NewMap(substitute(t.Key(), sub), substitute(t.Elem(), sub))
 	case *types.Chan:
 		return types.NewChan(t.Dir(), substitute(t.Elem(), sub))
+	case *types.Signature:
+		return substituteSignature(t, sub)
+	case *types.Tuple:
+		return substituteTuple(t, sub)
 	case *types.Named:
 		if t.TypeArgs().Len() == 0 {
 			return t

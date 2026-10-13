@@ -59,6 +59,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 	}
 	sort.Strings(names)
 	hygienicNames := macroNames(info)
+	traits := prepareTraits(info)
 	fset := gotoken.NewFileSet()
 	var emitters []*emitter
 	memberSymbols := make(map[*resolve.Symbol]bool)
@@ -75,7 +76,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 	}
 	for _, name := range names {
 		tree := files[name]
-		e := &emitter{symbolNames: hygienicNames, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
+		e := &emitter{symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
 		if res != nil {
 			e.file = res.Files[name]
 		}
@@ -89,6 +90,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 		e.tokenFile = fset.AddFile(name, -1, int(tree.Span().End)+256)
 		e.base = gotoken.Pos(e.tokenFile.Base())
 		e.reserveNames()
+		e.reserveTraitNames()
 		e.validatePrintStatements()
 		f := &goast.File{Package: e.pos(tree.Package) - 8, Name: &goast.Ident{NamePos: e.pos(tree.Package), Name: tree.Package.Name}}
 		if f.Package < e.base {
@@ -106,6 +108,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 		f.Decls = append(f.Decls, e.deriveDeclarations()...)
 		f.Decls = append(f.Decls, e.errorDeclarations()...)
 		f.Decls = append(f.Decls, e.serdeDeclarations()...)
+		f.Decls = append(f.Decls, e.traitDeclarations()...)
 		if e.err != nil {
 			return nil, e.err
 		}
@@ -287,6 +290,7 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	traits        *traitProgram
 	symbolNames   map[*resolve.Symbol]string
 	matchDepth    int
 	breakTarget   *breakTarget

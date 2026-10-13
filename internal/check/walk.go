@@ -26,11 +26,16 @@ func (c *checker) item(item ast.Item) {
 	switch n := item.(type) {
 	case *ast.FuncDecl:
 		old := c.returns
+		oldReceiver := c.currentReceiver
+		if m := c.memberSymbols[c.symbol(n.Name)]; m != nil && !m.Static {
+			c.currentReceiver = c.symbol(n.Params[0].Names[0])
+		}
 		c.returns = tupleTypes(c.tuple(n.Results))
 		c.tuple(n.Params)
 		c.tuple(n.Recv)
 		c.block(n.Body)
 		c.returns = old
+		c.currentReceiver = oldReceiver
 	case *ast.VarDecl:
 		c.values(n.Specs)
 	case *ast.ConstDecl:
@@ -42,6 +47,10 @@ func (c *checker) item(item ast.Item) {
 	case *ast.DeclareDecl:
 		c.item(n.Decl)
 	case *ast.ImplDecl:
+		if impl := c.out.Impls[n]; impl != nil {
+			c.enterImpl(impl)
+			defer c.leaveImpl()
+		}
 		for _, i := range n.Items {
 			c.item(i)
 		}
@@ -73,6 +82,11 @@ func (c *checker) values(specs []*ast.ValueSpec) {
 			}
 			if sym := c.symbol(name); sym != nil {
 				c.out.Symbols[sym] = t
+				if s.Type != nil {
+					c.sourceTypes[sym] = permissionDeclaration{c.file, s.Type}
+				} else if i < len(s.Values) {
+					c.sourceValues[sym] = sourceExpression{c.file, s.Values[i]}
+				}
 				if sym.Kind == resolve.Constant && i < len(s.Values) {
 					c.constants[sym] = c.constant(s.Values[i])
 				}
@@ -108,6 +122,15 @@ func (c *checker) stmt(stmt ast.Stmt) {
 			want = defaultType(got)
 		}
 		c.bindPattern(n.Pat, want)
+		if bind, ok := n.Pat.(*ast.BindPat); ok {
+			if sym := c.symbol(bind.Name); sym != nil {
+				if n.Type != nil {
+					c.sourceTypes[sym] = permissionDeclaration{c.file, n.Type}
+				} else {
+					c.sourceValues[sym] = sourceExpression{c.file, n.Value}
+				}
+			}
+		}
 	case *ast.AssignStmt:
 		var values []types.Type
 		for i, r := range n.Rhs {
@@ -135,6 +158,9 @@ func (c *checker) stmt(stmt ast.Stmt) {
 						c.out.Symbols[sym] = defaultType(values[i])
 					}
 					c.out.Types[id] = c.out.Symbols[sym]
+					if i < len(n.Rhs) && c.sourceTypes[sym].node == nil {
+						c.sourceValues[sym] = sourceExpression{c.file, n.Rhs[i]}
+					}
 				}
 			} else {
 				c.expr(l, nil)
@@ -282,6 +308,7 @@ func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 		}
 		if binding != ValueRef {
 			c.out.RefBindings[p] = binding
+			c.referenceModes[c.symbol(p.Name)] = binding
 			c.bindExpr(p.Name, types.NewPointer(t))
 		} else {
 			c.bindExpr(p.Name, t)

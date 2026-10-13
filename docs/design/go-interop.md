@@ -1,14 +1,14 @@
 # Go 原生类型的显式适配
 
-状态：所有可形成运行时视图的显式 impl 统一使用 impl 包拥有的 wrapper，marker 保留在 wrapper 上。declare 逐方法转发原生业务，有体 impl 执行用户代码；固定包级工厂负责适配，便利 helper 只转发工厂。原生类型不追加方法，具体符号编码与接收权限语法尚未冻结，该 trait 后端尚未实现；其他已运行子集见实现记录。
+状态：P4 已在新管线完成。运行时 impl 统一使用声明包拥有的 wrapper，marker 保留在 wrapper 上。declare 转发原生业务，有体 impl 执行用户代码；固定工厂负责适配，As/For 只转发工厂。外部类型不追加方法或 carrier 类型锚。
 
 | 状态 | 范围 |
 | --- | --- |
 | 已确认 | D05、D06、R24：使用方声明、impl 包生成统一 wrapper、保留 marker、不要求原生包预备 As 或 wrapper。 |
-| 暂定 | T08、T17：声明合并、共享载体协议、工厂与便利入口编码、发布元数据。 |
-| 未定 | U03、U07：接收权限身份、跨包重复声明的稳定生成身份与缓存细节。 |
+| P4 | 结构化代入 Self、精确原生方法集、相同 declare 合并、名称冲突检查、固定工厂与保存 owner 的 For。 |
+| 后续 | P5 跨包 Goxide 加载与发布信息恢复；共享适配包、缓存和 LSP 另随相应阶段推进。 |
 
-状态编号见[决策登记](decisions.md)。`*native::T` 仅描述精确 Go 接收者身份，不能绕过 Ptr / 借用权限体系；见[源级权限约束](overview.md#35-源级权限与-go-表示必须分开)。其他 declare 形式见[原生 API](foreign-api.md)。
+状态编号见[决策登记](decisions.md)。Self 始终绑定完整声明目标，成员的 Self / &Self / &mut Self 按结构代入后核对 Go 方法集，不消去指针层或擦除权限。其他 declare 形式见[原生 API](foreign-api.md)。
 
 诊断边界仍按 D19/D20：基础类型权限照常检查，别名/逃逸风险分析不属 MVP，不以未知效果或无法证明不逃逸普遍拒绝。
 
@@ -16,8 +16,8 @@
 
 ```goxide
 package C
-import AorB "example.org/protocols"
-import BBB "example.org/native"
+use AorB;
+use BBB;
 
 declare impl AorB::XXX for BBB::Type;
 ```
@@ -41,14 +41,14 @@ func (b *Buffer) Read(p []byte) (int, error) {
 
 ```goxide
 package adapters
-import native "example.org/native/buffer"
-import byteio "example.org/goxide/byteio"
+use native;
+use byteio;
 
-type Buffer = *native::Buffer
+type Buffer = native::Buffer
 declare impl byteio::Reader for Buffer;
 ```
 
-别名不产生新类型。`for native::Buffer` 与 `for *native::Buffer` 的方法集分别检查，不通过自动取址补齐。尤其不能利用生成代码中的局部变量可寻址，把只存在于 `*T` 的方法视为 T 方法。[Go 方法集](https://go.dev/ref/spec#Method_sets)
+假定 Reader 声明 `func read(self &mut Self, p []byte) (int, error)`。别名不产生新类型，Self = native::Buffer，接收类型为 &mut native::Buffer，故验证精确 *native.Buffer 方法集。若声明目标是 *native::Buffer，self Self 才对应该方法集；self &Self 则得到 **native.Buffer，不得消层或自动取址补齐。[Go 方法集](https://go.dev/ref/spec#Method_sets)
 
 declare 表示完整采用已有业务与 trait 调用契约。缺 Read 是错误，原生类型缺 marker 或 As 不是错误；这些能力位于新生成的 wrapper 和工厂。签名兼容不证明不逃逸、只读或并发行为，声明作者仍负责可信的外部契约。
 
@@ -78,12 +78,11 @@ func (v bufferReader) Read(p []byte) (int, error) {
     return v.target.Read(p)
 }
 func AsBufferReader(b *bytes.Buffer) byteio.Reader {
-    if b == nil { panic("goxide: nil Buffer") }
     return bufferReader{target: b}
 }
 ```
 
-此例工厂采用非空接收者契约；其他接收者的检查由各自源级契约决定。marker 必须使用导出符号，让跨包 wrapper 可以实现接口；身份编码还需包含完整 trait 身份与必要实例信息。
+工厂不增加统一非空检查；原生方法的 nil 行为仍由该方法决定。marker 使用导出符号并编码完整 trait 身份，让跨包 wrapper 可以实现接口。
 
 保存的 target 仍是同一个 `*bytes.Buffer`，但接口动态类型是 adapters.bufferReader。修改共享对象可被其他合法视图观察到；反射、断言和比较不再与裸原生接口值相同。
 
@@ -106,7 +105,7 @@ func (a BufferAdapters) AsReader() byteio.Reader {
 
 例如 `adapters.ForBuffer(b).AsReader()`；对于名为 Sized 的 trait，同一规则可形成 `adapters.ForBuffer(b).AsSized()`。helper 不建立第二套实现选择或业务逻辑，所有校验与 wrapper 构造经固定工厂完成。
 
-只有类型与 impl 同包，且属于 Go 允许定义方法的本地 named type 时，才可生成 `t.AsSized()` 这类本地便利方法；它也只转发工厂。`type Ptr[T any] *T` 这类具名指针类型即使本地定义，也不能作为 Go 方法接收者基类型，仍使用包级工厂或自有 facade。泛型推导、公开命名、名字冲突及方法集影响需在正式 ABI 中规定，不以便利方法代替固定工厂身份。
+本地、可作为 Go receiver 的类型可以生成 As。enum 值视图在 E 接口声明 As，由指针变体一行转发同一工厂；借用 enum 保存 *E owner，使用 ForE。外部类型与具名指针类型使用包级工厂或 facade，不生成非法 receiver。`For<Base>(*Base)` 统一保存 owner，值视图从 *target 取值，借用视图保持 target；外部纯值适配可用工厂(value)或 ForT(&value)。
 
 ### 3.2 依赖方向与生成归属
 
@@ -131,9 +130,9 @@ wrapper 所在的 impl 包导入 trait 包和原生包，原生包不因适配�
 ## 5. 自定义 impl 与原生采用
 
 ```goxide
-import textio "example.org/goxide/textio"
+use textio;
 impl textio::Reader for Buffer {
-    read() string { return string(self.Data) }
+    func read(self &Self) string { return string(self.Data) }
 }
 ```
 
@@ -151,11 +150,13 @@ trait 视图不能为满足原生 `*T` 参数而隐式 unwrap；使用保留的�
 
 ## 6. 校验、来源与唯一性
 
-业务方法按 trait 规定的规范 Go 名称、签名和接收者方法集校验，不能隐式改参数、结果或关联类型。wrapper 和工厂接受普通 Go 类型检查，goxide 另外保存精确 impl 元数据；可借助 [go/types](https://pkg.go.dev/go/types) 和 [go/packages](https://pkg.go.dev/golang.org/x/tools/go/packages) 读取原生信息。
+业务方法按 trait 的规范 Go 名称、签名和代入 Self 后的精确接收者方法集校验，不能隐式改参数、结果或关联类型。wrapper 和工厂接受普通 Go 类型检查；新编译器用标准库 [go/types](https://pkg.go.dev/go/types) 及 Go 工具链提供的真实包信息验签，不添加外部依赖。
 
 外部类型与外部 trait 可在 C 组合声明，实现来源仍是 C，不把这条关系注册为 BBB 对所有项目公开的实现。元数据保留声明来源、接收权限、借用来源、关联类型、业务来源和稳定工厂身份。
 
-参与构建的有效集合按规范 `(接收者类型, trait, trait 参数)` 合并相容 declare；别名归一、同一绑定与契约幂等，并保留全部来源。单个生成身份只输出一份 marker / wrapper。两个有体实现或矛盾契约报冲突；declare 与有体实现混合的具体语义仍待定，不能静默替换。[RFC 0003](../rfcs/0003-declare-impl.md) 细化合并约束。
+参与构建的有效集合按规范目标与 trait 身份合并相同 declare；别名归一、同一绑定与契约幂等，并保留来源。单个生成身份只输出一份 marker/wrapper。两个有体实现、矛盾契约或混合 declare/有体实现均诊断。[RFC 0003](../rfcs/0003-declare-impl.md) 细化合并约束。
+
+外部原生类型不注入 `GoxideInternalTypeCarrierForSelf`。P4 的 declare 提供运行时视图和普通 Go 适配，不要求未改造的外部目标自动满足 carrier 泛型入口；本包生成类型的泛型证据按[关联类型合同](associated-types.md)处理。
 
 版本、replace、平台、tags 或声明集合改变时应重新校验。缓存需包含原生类型指纹、完整声明集合、生成规则和工具链配置，不能把某次构建的 wrapper 当成原生类型本来具有的方法。
 

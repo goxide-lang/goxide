@@ -30,6 +30,16 @@ func (*CC) isEE() {}
 - 空变体是零字段结构体；带载荷变体的字段按源码顺序命名（元组变体用 `Value`，多载荷用 `V0`、`V1`；结构变体用字段名转成的 Go 名）。
 - 不生成 tag 常量、不生成 `Validate*`、不生成 `Tag*` / `Value*` / `Project*` 辅助函数。旧管线为元数据与跨包 ABI 生成的这些入口在新管线里都不存在。
 
+### 1.1 P4 的类型锚与实例适配
+
+trait 成员查找以源级 enum E 为目标，与 struct 使用同一规则；`Self` 始终为 E，不是某个变体类型。静态协议需要时，E 接口增加 `GoxideInternalTypeCarrierForSelf(E) EOps` 类型锚签名，各 `*Variant` 实现返回同一个零字段 EOps。`std/typeinfo.Of[E]()` 仅取得该 carrier 的零值；类型锚和关联类型 witness 只用于 Go 类型推导，不运行，不构造 enum 值，也不读取旧 enum 元数据。
+
+carrier 的实例操作使用普通参数：按值接收 E，借用接收 `*E`，源级检查分别保存 `Self` / `&Self` / `&mut Self` 的资格。因此操作 enum owner 不需要为 `*E` 增加类型锚。
+
+运行时 trait 的业务体只在对应 wrapper 上。值视图的 Go 便利入口可以在 E 接口声明 `AsNamed() Named`，由每个变体用一行方法转发同一个固定工厂，保留 `e.AsNamed().Name()`；不为 E 声明非法的 Go 接收者方法，也不把业务实现复制到变体。借用视图须保存真实枚举槽位，使用 `ForE(&e).AsNamed()` 或固定工厂；变体方法不能把自己临时装入 E 再取址，冒充原 owner。外部包拥有的适配同样使用 facade。
+
+值视图保存的 E 副本继续共享原变体对象；引用视图保存 `*E`，可观察 owner 的整体替换。旧 payload 投影仍遵循 [P3 引用合同](enum-payload-borrows.md)，不会随 owner 替换而改指向。nil 规则仍由本规范规定，不因 trait 适配新增统一非空检查。
+
 ## 2. nil 策略
 
 **nil 接口不是合法值，任何情况下都不是。**
@@ -151,4 +161,4 @@ Go 1.27.1 / darwin-arm64，两个独立 module 的探针：
 | `case nil` 分支 | 合法 |
 | `v == nil` 判断 typed-nil 载荷 | 合法 |
 
-结论：闭合性与变体身份由 Go 类型系统提供，**跨包不需要任何元数据**。旧管线的 enum metadata（`internal/frontend/enum_artifact.go`、`enumMetadataVersion = 9`）与 `std/typeinfo` 的 carrier 机制在新管线里均不产生、不读取；其代码删除排在 P6。
+结论：闭合性与变体身份由 Go 类型系统提供，**不需要旧 enum 元数据**。新管线不产生或读取 `internal/frontend/enum_artifact.go` 的 enum metadata；其删除排在 P6。P4 的 `std/typeinfo` 空 carrier 服务静态 trait 调用和泛型类型推导，与 enum 的闭合性、变体分派及旧元数据无关。

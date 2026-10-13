@@ -1,0 +1,3 @@
+[roots.library]
+module = "macrofixture"
+package = "macrofixture/kit"

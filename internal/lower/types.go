@@ -8,7 +8,8 @@ import (
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
 
-func (e *emitter) typ(n syntax.Type) goast.Expr {
+func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
+	defer func() { e.macroLayout(n, out) }()
 	if n == nil {
 		return nil
 	}
@@ -53,9 +54,6 @@ func (e *emitter) typ(n syntax.Type) goast.Expr {
 	case *syntax.StructType:
 		fields := make([]*goast.Field, len(n.Fields))
 		for i, f := range n.Fields {
-			for _, attr := range f.Attrs {
-				e.fail(attr, "字段属性尚未降低")
-			}
 			field := &goast.Field{Type: e.typ(f.Type)}
 			if len(f.Names) == 0 {
 				e.embeddedType(f.Type, field.Type)

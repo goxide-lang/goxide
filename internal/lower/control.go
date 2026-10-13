@@ -14,6 +14,9 @@ func (e *emitter) statement(n syntax.Stmt) []goast.Stmt {
 	if n == nil {
 		return nil
 	}
+	if out, ok := e.printStatement(n); ok {
+		return out
+	}
 	old := e.pending
 	e.pending = nil
 	stmt := e.flowStmt(n)

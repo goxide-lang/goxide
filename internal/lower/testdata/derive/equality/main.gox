@@ -1,0 +1,41 @@
+package main
+
+use fmt;
+use math;
+
+type User struct { ID int; Text string }
+impl PartialEq for User { func equals(self User, other User) bool { return self.ID == other.ID } }
+impl Eq for User {}
+#[derive(PartialEq, Eq)]
+type Container struct { Users []User; Values map[string]int; Fixed [2]int; Choice Option[[]int] }
+#[derive(PartialEq)]
+type Number float64
+#[derive(PartialEq, Eq)]
+pub enum State { Empty, Person(User), Values([]int) }
+
+var order []string
+func left() State { order = append(order, "left"); return State::Empty }
+func right() State { order = append(order, "right"); return State::Person(User{ID: 3}) }
+func panics(f func()) (result bool) { defer func() { result = recover() != nil }(); f(); return false }
+
+func main() {
+    a := Container{Users: []User{User{ID: 1, Text: "a"}}, Values: map[string]int{"a": 0}, Choice: Option[[]int]::Some(nil)}
+    b := Container{Users: []User{User{ID: 1, Text: "b"}}, Values: map[string]int{"a": 0}, Choice: Option[[]int]::Some(nil)}
+    EqualsUser := func(a User, b User) bool { return false }
+    fmt::Println(a.equals(b), a.Users[0].equals(b.Users[0]), EqualsUser(a.Users[0], b.Users[0]))
+    b.Values = map[string]int{"b": 0}
+    fmt::Println(a.equals(b))
+    c := Container{}
+    d := Container{Users: []User{}}
+    fmt::Println(c.equals(c), c.equals(d))
+    d = Container{Choice: Option[[]int]::Some(nil)}
+    fmt::Println(c.equals(d))
+    c = Container{Choice: Option[[]int]::Some([]int{})}
+    fmt::Println(c.equals(d))
+    nan := Number(math::NaN())
+    fmt::Println(nan.equals(nan))
+    fmt::Println(left().equals(right()), order)
+    fmt::Println(State::Person(User{ID: 1}).equals(State::Person(User{ID: 1, Text: "other"})))
+    var invalid State
+    fmt::Println(panics(func() { _ = State::Empty.equals(invalid) }))
+}

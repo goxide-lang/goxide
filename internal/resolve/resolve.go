@@ -142,8 +142,11 @@ func (d Diagnostic) Error() string {
 }
 
 type Result struct {
+	Expansions  map[ast.ExpnID]expand.Expansion
 	Packages    []*Package
 	Files       map[string]*File
+	Derives     []Derive
+	Prints      map[*ast.CallExpr]bool
 	Diagnostics []Diagnostic
 	Contexts    map[ast.SyntaxCtx]*Scope
 	Origins     map[Ref]Origin
@@ -214,7 +217,23 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 		r.collectUses()
 	}
 	for _, r := range resolvers {
+		r.collectDerives()
+	}
+	for _, r := range resolvers {
 		r.attachMembers()
+	}
+	for _, entry := range out.Derives {
+		if entry.Impl != nil && entry.Helper != nil {
+			file := out.Files[entry.File]
+			for _, item := range entry.Impl.Items {
+				if fn, ok := item.(*ast.FuncDecl); ok {
+					if symbol := file.Definitions[fn.Name.ID()]; symbol != nil {
+						symbol.GoName = entry.Helper.GoName
+						file.GoNames[fn.Name.ID()] = symbol.GoName
+					}
+				}
+			}
+		}
 	}
 	for _, r := range resolvers {
 		for _, f := range r.pkg.Files {

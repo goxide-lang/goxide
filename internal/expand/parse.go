@@ -445,6 +445,10 @@ func (e *engine) materializeTree(tr *syntaxTree, expn ast.ExpnID) *ast.TokenTree
 				out.Tokens = append(out.Tokens, ast.TokenOrTree{Tree: e.materializeTree(t.Tree, expn)})
 			} else if t.Token != nil {
 				tok := *t.Token
+				if e.r.TokenContexts == nil {
+					e.r.TokenContexts = map[*token.Token]TokenContext{}
+				}
+				e.r.TokenContexts[&tok] = TokenContext{Ctx: t.Ctx, Scope: t.Scope, Origin: t.Origin}
 				out.Tokens = append(out.Tokens, ast.TokenOrTree{Token: &tok})
 			}
 		}

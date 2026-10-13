@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/hxsf/goxide/internal/syntax/token"
 )
 
 var baseType = reflect.TypeOf(ast.Base{})
@@ -31,6 +32,11 @@ func (e *engine) copyValue(v reflect.Value, expn ast.ExpnID) reflect.Value {
 		}
 		out := reflect.New(v.Type().Elem())
 		out.Elem().Set(e.copyValue(v.Elem(), expn))
+		if old, ok := v.Interface().(*token.Token); ok {
+			if context, ok := e.r.TokenContexts[old]; ok {
+				e.r.TokenContexts[out.Interface().(*token.Token)] = context
+			}
+		}
 		if old, ok := v.Interface().(ast.Node); ok {
 			n := out.Interface().(ast.Node)
 			if e.originals == nil {

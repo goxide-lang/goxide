@@ -2,7 +2,6 @@ package check
 
 import (
 	"fmt"
-	"go/importer"
 	"go/token"
 	"go/types"
 	"strconv"
@@ -361,6 +360,15 @@ func (c *checker) typ(node ast.Type) types.Type {
 		var fields []*types.Var
 		for _, f := range n.Fields {
 			t := c.typ(f.Type)
+			if len(f.Names) == 0 {
+				base := types.Unalias(t)
+				if pointer, ok := base.(*types.Pointer); ok {
+					base = types.Unalias(pointer.Elem())
+				}
+				if named, ok := base.(*types.Named); ok {
+					fields = append(fields, types.NewField(0, c.pkg, named.Obj().Name(), t, true))
+				}
+			}
 			for _, id := range f.Names {
 				fields = append(fields, types.NewField(0, c.pkg, id.Name, t, false))
 			}
@@ -514,7 +522,7 @@ func (c *checker) importType(path *ast.Path) types.Type {
 	p := c.imported[prefix]
 	if p == nil {
 		var err error
-		p, err = importer.Default().Import(prefix)
+		p, err = c.importer.Import(prefix)
 		if err != nil {
 			return types.Typ[types.Invalid]
 		}

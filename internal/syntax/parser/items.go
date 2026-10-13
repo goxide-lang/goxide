@@ -23,7 +23,7 @@ func (p *parser) parseItem(member, declare bool) ast.Item {
 	var n ast.Item
 	switch p.tok().Kind {
 	case token.FUNC:
-		n = p.function(ib, mods, declare)
+		n = p.function(ib, mods, declare, false)
 	case token.TYPE, token.STRUCT:
 		n = p.typeDecl(ib, member || declare)
 	case token.CONST, token.VAR:
@@ -131,14 +131,20 @@ func itemBase(n ast.Item) *ast.ItemBase {
 	panic("unknown item")
 }
 
-func (p *parser) function(ib ast.ItemBase, mods ast.FuncMods, declare bool) ast.Item {
+func (p *parser) function(ib ast.ItemBase, mods ast.FuncMods, declare, defaultMember bool) ast.Item {
 	p.expect(token.FUNC)
 	f := &ast.FuncDecl{ItemBase: ib, Mods: mods}
 	if p.at(token.LPAREN) {
 		f.Recv = p.params()
 	}
 	validName := p.at(token.IDENT)
-	f.Name = p.ident()
+	if defaultMember && len(f.Recv) == 0 && p.at(token.DEFAULT) {
+		t := p.next()
+		f.Name = &ast.Ident{Base: p.base(t.Start), Name: t.Text}
+		validName = true
+	} else {
+		f.Name = p.ident()
+	}
 	if declare && p.at(token.DCOLON) {
 		s := f.Name.Span().Start
 		path := &ast.Path{Segments: []*ast.PathSegment{{Base: p.base(s), Name: f.Name}}}
@@ -405,7 +411,7 @@ func (p *parser) trait(ib ast.ItemBase) ast.Item {
 			break
 		}
 		before := p.pos
-		x := p.member(true, true)
+		x := p.member(true, true, false)
 		if ti, ok := x.(ast.TraitItem); ok {
 			d.Items = append(d.Items, ti)
 		}
@@ -433,6 +439,10 @@ func (p *parser) impl(ib ast.ItemBase, declare bool) ast.Item {
 		return d
 	}
 	d.Items = []ast.Item{}
+	defaultImpl := false
+	if trait, ok := d.Trait.(*ast.PathType); ok && trait.Path != nil && len(trait.Path.Segments) == 1 {
+		defaultImpl = trait.Path.Segments[0].Name.Name == "Default"
+	}
 	p.expect(token.LBRACE)
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.semis()
@@ -440,14 +450,14 @@ func (p *parser) impl(ib ast.ItemBase, declare bool) ast.Item {
 			break
 		}
 		before := p.pos
-		d.Items = append(d.Items, p.member(d.Trait != nil, false))
+		d.Items = append(d.Items, p.member(d.Trait != nil, false, defaultImpl))
 		p.endStmt()
 		p.progress(before)
 	}
 	p.expect(token.RBRACE)
 	return d
 }
-func (p *parser) member(inherited, inTrait bool) ast.Item {
+func (p *parser) member(inherited, inTrait, defaultMember bool) ast.Item {
 	errors := p.errorCount()
 	s := p.tok().Start
 	attrs := p.attrs()
@@ -460,7 +470,7 @@ func (p *parser) member(inherited, inTrait bool) ast.Item {
 	var n ast.Item
 	switch p.tok().Kind {
 	case token.FUNC:
-		n = p.function(ib, mods, false)
+		n = p.function(ib, mods, false, defaultMember)
 	case token.TYPE:
 		n = p.typeDecl(ib, true)
 		if d, ok := n.(*ast.TypeDecl); ok && !inTrait && (d.Type == nil || !d.Alias) {

@@ -26,7 +26,7 @@
 
 | 阶段 | 交付 | 验收 | 关键风险 |
 | --- | --- | --- | --- |
-| P2 | 宏在表达式/语句/类型/item 位置接入；`derive(Default, Clone, Debug, PartialEq, Eq)`；serde 派生登记 | 宏与派生示例生成并运行；派生行为测试（零值、字段参与规则、与手写协议的冲突） | 把派生做成通用泛型 trait；为 serde 顺手改 `serde` 仓库 |
+| P2（已完成） | 宏在表达式/语句/类型/item 位置接入；`derive(Default, Clone, Debug, PartialEq, Eq)`；serde 派生登记 | [原始示例生成与运行](../internal/lower/p2_examples_test.go)；[派生行为与冲突](../internal/lower/derive_test.go)；[宏卫生](../internal/lower/macro_e2e_test.go)；重复生成字节一致 | 把派生做成通用泛型 trait；为 serde 顺手改 `serde` 仓库 |
 | P3 | `&T` / `&mut T`、取引用、`ref` / `ref mut` 模式、payload 原位投影 | 借用示例运行；投影指向同一槽位的身份测试；读写权限正反例 | 生成"看起来对但共享了错误槽位"的代码 |
 | P4 | 非泛型 trait、本包具体类型的 `impl`、`T::method`、单约束泛型、关联类型、wrapper 与 marker、`declare impl` | 静态协议示例通过；生成产物能被原生 Go 调用 | wrapper 的求值次数与身份被改变 |
 | P5 | 多包目录、`use` 跨包、导入合并、最小 `goxide.toml` 与 `goxide.lock` | 多包端到端 build/run/test；拉真实依赖成功；lock 稳定 | 顺手复活 workspace / vendor / 迁入 |

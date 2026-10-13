@@ -7,11 +7,15 @@ import (
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
 
-func (e *emitter) rawExpr(n syntax.Expr) goast.Expr {
+func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
+	defer func() { e.macroLayout(n, out) }()
 	if n == nil {
 		return nil
 	}
 	if result, ok := e.enumConstruct(n); ok {
+		return result
+	}
+	if result, ok := e.equalityCall(n); ok {
 		return result
 	}
 	switch n := n.(type) {

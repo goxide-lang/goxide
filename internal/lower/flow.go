@@ -230,6 +230,9 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 		}
 		children = []syntax.Expr{x.X, x.Y}
 	case *syntax.CallExpr:
+		if result, ok := e.equalityCall(x); ok {
+			return result
+		}
 		children = append([]syntax.Expr{x.Fun}, x.Args...)
 	case *syntax.CompositeLit:
 		// Keys of struct literals are names, rather than evaluated expressions.

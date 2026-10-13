@@ -34,6 +34,9 @@ func (e *emitter) reserveNames() {
 			for _, symbol := range f.Definitions {
 				if symbol.Kind != resolve.Import && symbol.Kind != resolve.Module {
 					e.reserved[symbol.GoName] = true
+					if mapped := e.symbolNames[symbol]; mapped != "" {
+						e.reserved[mapped] = true
+					}
 				}
 			}
 		}
@@ -77,6 +80,9 @@ func (e *emitter) reference(id *syntax.Ident) goast.Expr {
 		return nil
 	}
 	r := e.file.References[id.ID()]
+	if out, ok := e.macroReference(id, r.Symbol); ok {
+		return out
+	}
 	if r.Symbol != nil && r.Symbol.AliasOf != nil {
 		return &goast.Ident{NamePos: e.pos(id), Name: r.Symbol.AliasOf.GoName}
 	}

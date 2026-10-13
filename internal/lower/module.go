@@ -2,7 +2,6 @@ package lower
 
 import (
 	"fmt"
-	"go/importer"
 	"go/types"
 	"io/fs"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"github.com/hxsf/goxide/internal/check"
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/hxsf/goxide/internal/rootconfig"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/parser"
 )
@@ -65,6 +65,10 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 		ordered = append(ordered, name)
 	}
 	sort.Strings(ordered)
+	roots, err := rootconfig.Load(root)
+	if err != nil {
+		return "", err
+	}
 	files := make(map[string]*syntax.File, len(ordered))
 	keys := make(map[string]string, len(ordered))
 	for _, name := range ordered {
@@ -84,49 +88,36 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 				return "", &Diagnostic{File: key, Span: d.Span, Message: d.Message, Origin: resolve.Origin{File: key, Span: d.Span}}
 			}
 		}
+		applyModuleRoots(file, roots)
 		files[key] = file
 	}
 
 	packages := resolve.Resolve(files, nil)
-	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: importer.Default(), cache: map[string]*types.Package{}}
+	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: sourceModuleImporter(root), cache: map[string]*types.Package{}}
 	for _, pkg := range packages.Packages {
 		imports.local[filepath.ToSlash(pkg.Dir)] = pkg.Scope
 	}
-	resolved := resolve.Resolve(files, imports)
-	if len(resolved.Diagnostics) != 0 {
-		return "", resolved.Diagnostics[0]
-	}
-
-	expanded := &expand.Result{
-		Expansions:    map[syntax.ExpnID]expand.Expansion{},
-		Contexts:      map[syntax.SyntaxCtx]expand.Context{},
-		Origins:       map[syntax.Node]expand.Origin{},
-		Scopes:        map[*syntax.Ident]expand.Scope{},
-		Introductions: map[*syntax.Ident]expand.Key{},
-	}
+	var sourcePackages [][]*syntax.File
 	for _, pkg := range packages.Packages {
 		var source []*syntax.File
 		for _, file := range pkg.Files {
 			source = append(source, file.AST)
 		}
-		part, err := expand.Expand(source, nil)
-		if err != nil {
-			return "", err
-		}
-		expanded.Files = append(expanded.Files, part.Files...)
-		for node, origin := range part.Origins {
-			expanded.Origins[node] = origin
-		}
-		for id, scope := range part.Scopes {
-			expanded.Scopes[id] = scope
-		}
+		sourcePackages = append(sourcePackages, source)
 	}
-	resolved = resolve.ResolveExpanded(files, expanded, imports)
+	expanded, err := expand.ExpandPackages(sourcePackages, &moduleMacros{files: files, resolved: packages})
+	if err != nil {
+		return "", err
+	}
+	for _, pkg := range resolve.ResolveExpanded(files, expanded, nil).Packages {
+		imports.local[filepath.ToSlash(pkg.Dir)] = pkg.Scope
+	}
+	resolved := resolve.ResolveExpanded(files, expanded, imports)
 	expandedFiles := make(map[string]*syntax.File, len(resolved.Files))
 	for name, file := range resolved.Files {
 		expandedFiles[name] = file.AST
 	}
-	info, diagnostics := check.Check(expandedFiles, resolved)
+	info, diagnostics := check.CheckWithImporter(expandedFiles, resolved, imports.external)
 	if len(diagnostics) != 0 {
 		return "", diagnostics[0]
 	}
@@ -148,7 +139,27 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 			os.RemoveAll(dir)
 		}
 	}()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module "+strconv.Quote(modulePath)+"\n\ngo 1.27\n"), 0o644); err != nil {
+	module := []byte("module " + strconv.Quote(modulePath) + "\n\ngo 1.27\n")
+	if source, err := os.ReadFile(filepath.Join(root, "go.mod")); err == nil {
+		lines := strings.Split(string(source), "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(strings.TrimSpace(line), "module ") {
+				lines[i] = "module " + strconv.Quote(modulePath)
+				break
+			}
+		}
+		module = []byte(strings.Join(lines, "\n"))
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), module, 0o644); err != nil {
+		return "", err
+	}
+	if sum, err := os.ReadFile(filepath.Join(root, "go.sum")); err == nil {
+		if err := os.WriteFile(filepath.Join(dir, "go.sum"), sum, 0o644); err != nil {
+			return "", err
+		}
+	} else if !os.IsNotExist(err) {
 		return "", err
 	}
 	for _, name := range ordered {

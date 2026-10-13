@@ -64,7 +64,7 @@
 
 ### 3.3 保留字
 
-Go 的 25 个关键字不变。新增三层：
+Go 的 25 个关键字不变。唯一的成员名例外：`impl Default for T` 内允许直接写 `func default() T`；`default` 在包级函数、其他 impl、trait 或普通绑定位置仍须转义。新增三层：
 
 | 层 | 词 | 规则 |
 | --- | --- | --- |
@@ -138,7 +138,7 @@ type Ident struct {
 }
 ```
 
-名字解析按 `(Name, Ctx)` 比较，宏内部引入的局部名不会捕获调用点的同名变量。现有实现靠 `__goxide_*` 改名实现卫生，新前端不再改名。
+名字解析按 `(Name, Ctx)` 比较，宏内部引入的局部名不会捕获调用点的同名变量。新前端保留源码名字与符号身份；`lower` 在生成 Go 时只为发生捕获冲突的局部符号分配不同名字。
 
 ### 4.3 错误恢复
 
@@ -449,6 +449,16 @@ lower.Lower(files, check)         → map[string][]byte   // 每个 .gox 对应�
 3. **诊断**。每个阶段返回自己的诊断列表，条目至少含 `Severity`、`Message`、`Span`（阶段输出的坐标系）和 `Origin`（可回溯到原始源文件与展开栈）。阶段之间不合并诊断，由调用方按 `Origin` 归并。
 
 宏调用的识别属于展开阶段：`resolve` 遇到未展开的 `MacroExpr` 应按普通路径处理，不报"未定义"。
+
+### 8.2 P2 宏与具体派生接入合同
+
+宏在表达式、语句、类型、item 四种位置展开后进入同一条 `resolve → check → lower` 管线。多包展开保留完整的上下文、展开栈、来源与生成声明记录；生成的 Go 必须保留解析后的符号身份，调用点同名局部变量不能捕获定义点名字。
+
+派生沿用 [RFC 0013](../rfcs/0013-derive.md) 与 [相等性合同](../rfcs/research/enum-equality-proposed.md) 的具体类型规则：`DefaultT() T`、`CloneT(*T) T`、`DebugT(*T) string`、`EqualsT(T, T) bool`；`Eq` 只登记资格。`resolve` 收集显式派生与手写协议并声明对应 helper，`check` 绑定真实类型、检查签名与唯一性，`lower` 验证字段协议并生成普通 Go。普通同名函数不构成协议登记；透明 alias 使用同一类型身份，新 defined 类型不继承协议。
+
+P2 接通已有的具体手写 Default、PartialEq 和空 Eq impl。Default 按字段声明顺序构造，enum 只要求唯一默认变体的字段有 Default；Clone、Debug、PartialEq/Eq 按既定字段与容器规则处理。泛型派生、手写 Clone/Debug/serde 和完整 trait 后端不在此合同中新增语义。
+
+serde 的 Serialize/Deserialize 按实际 `use` 绑定的 canonical owner 分别登记，owner 为 `github.com/goxide-lang/serde`。新管线直接调用该模块的协议，JSON 格式实现仍由 serde 模块提供。现有退出示例依赖的打印、Error 派生与单步错误转换按其已确认合同接通；不读取旧管线的元数据，也不调用旧 lowering pass。
 
 ## 9. 后续工作
 

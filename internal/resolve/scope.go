@@ -33,6 +33,10 @@ func prelude() *Scope {
 		k := Key{Name: name}
 		s.Bindings[k] = &Symbol{Name: k, Kind: Type, GoName: name}
 	}
+	for _, name := range []string{"Default", "Clone", "Debug", "PartialEq", "Eq"} {
+		k := Key{Name: name}
+		s.Bindings[k] = &Symbol{Name: k, Kind: Trait, GoName: name}
+	}
 	for name, goName := range map[string]string{
 		"i8": "int8", "i16": "int16", "i32": "int32", "i64": "int64", "isize": "int",
 		"u8": "uint8", "u16": "uint16", "u32": "uint32", "u64": "uint64", "usize": "uint",
@@ -214,6 +218,22 @@ func (r *resolver) record(n ast.Node, res Resolution) {
 
 func (r *resolver) validateIdents() {
 	selfRoots := make(map[*ast.Ident]bool)
+	defaultMembers := make(map[*ast.Ident]bool)
+	for _, item := range r.file.AST.Items {
+		impl, ok := item.(*ast.ImplDecl)
+		if !ok {
+			continue
+		}
+		trait, ok := impl.Trait.(*ast.PathType)
+		if !ok || len(trait.Path.Segments) != 1 || trait.Path.Segments[0].Name.Name != "Default" {
+			continue
+		}
+		for _, item := range impl.Items {
+			if function, ok := item.(*ast.FuncDecl); ok && function.Name.Name == "default" {
+				defaultMembers[function.Name] = true
+			}
+		}
+	}
 	ast.Walk(r.file.AST, func(n ast.Node) bool {
 		switch n.(type) {
 		case *ast.BadItem, *ast.BadStmt, *ast.BadExpr, *ast.BadType, *ast.BadPat:
@@ -224,7 +244,7 @@ func (r *resolver) validateIdents() {
 		if p, ok := n.(*ast.Path); ok && len(p.Segments) > 1 && p.Segments[0].Name.Name == "Self" {
 			selfRoots[p.Segments[0].Name] = true
 		}
-		if id, ok := n.(*ast.Ident); ok && !id.Raw && !selfRoots[id] && token.IsHardReserved(id.Name) {
+		if id, ok := n.(*ast.Ident); ok && !id.Raw && !selfRoots[id] && !defaultMembers[id] && token.IsHardReserved(id.Name) {
 			r.diag(id, "reserved", fmt.Sprintf("reserved word %q requires r#", id.Name))
 		}
 		return true

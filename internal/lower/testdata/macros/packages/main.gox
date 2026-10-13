@@ -1,0 +1,11 @@
+package main
+use fmt;
+use library as macros;
+
+macros::generated!()
+macro_rules! local { ($value:expr) => { $value + 1 }; }
+func main() {
+    Output := func(int) int { return -1 }
+    offset := 4
+    fmt::Println(macros::twice!(7), macros::formatted!(8), generated(), macros::Own(), local!(1), Output(0))
+}

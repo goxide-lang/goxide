@@ -7,7 +7,8 @@ import (
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
 
-func (e *emitter) decl(n syntax.Item) goast.Decl {
+func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
+	defer func() { e.macroLayout(n, out) }()
 	if n == nil {
 		return nil
 	}
@@ -56,6 +57,9 @@ func (e *emitter) decl(n syntax.Item) goast.Decl {
 	case *syntax.TraitDecl:
 		e.fail(n, "trait 声明尚未降低")
 	case *syntax.ImplDecl:
+		if e.deriveImpl(n) {
+			return nil
+		}
 		e.fail(n, "impl 声明尚未降低")
 	case *syntax.DeclareDecl:
 		e.fail(n, "declare 声明尚未降低")

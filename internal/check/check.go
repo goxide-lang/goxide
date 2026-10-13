@@ -4,6 +4,7 @@ package check
 import (
 	"fmt"
 	"go/constant"
+	"go/importer"
 	"go/types"
 	"path/filepath"
 	"sort"
@@ -24,6 +25,7 @@ const (
 	ArmTypeMismatch     = "match-arm-type"
 	TryReturnType       = "try-return-type"
 	GenericConstraint   = "generic-constraint"
+	DeriveInvalid       = "derive-invalid"
 	VariantMismatch     = "match-variant"
 	EnumGoNameConflict  = "enum-go-name-conflict"
 )
@@ -116,6 +118,8 @@ type Info struct {
 	Constructors map[ast.Expr]*Constructor
 	Symbols      map[*resolve.Symbol]types.Type
 	PackagePaths map[string]string
+	Derives      map[*types.Named]*Derive
+	Equalities   map[*ast.CallExpr]types.Type
 	enums        map[*types.Named]*Enum
 }
 
@@ -150,11 +154,20 @@ func Check(files map[string]*ast.File, res *resolve.Result) (*Info, []Diagnostic
 
 // CheckWithConversions registers only the explicitly supplied one-step helpers.
 func CheckWithConversions(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref) (*Info, []Diagnostic) {
-	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum)}
+	return checkFiles(files, res, helpers, importer.Default())
+}
+
+// CheckWithImporter uses the source module's Go dependency graph for external types.
+func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports types.Importer) (*Info, []Diagnostic) {
+	return checkFiles(files, res, nil, imports)
+}
+
+func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer) (*Info, []Diagnostic) {
+	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
 	if res == nil {
 		return r, nil
 	}
-	c := &checker{out: r, files: files, named: make(map[*resolve.Symbol]*types.Named), variants: make(map[*resolve.Symbol]*Constructor), builtins: make(map[string]*Enum), packages: make(map[*resolve.Package]*types.Package), imported: make(map[string]*types.Package), constants: make(map[*resolve.Symbol]constant.Value), declarations: make(map[*resolve.Symbol]*typeDeclaration)}
+	c := &checker{out: r, files: files, importer: imports, named: make(map[*resolve.Symbol]*types.Named), variants: make(map[*resolve.Symbol]*Constructor), builtins: make(map[string]*Enum), packages: make(map[*resolve.Package]*types.Package), imported: make(map[string]*types.Package), constants: make(map[*resolve.Symbol]constant.Value), declarations: make(map[*resolve.Symbol]*typeDeclaration)}
 	c.builtinEnums()
 	r.PackagePaths = sourcePackagePaths(res)
 	for _, p := range res.Packages {
@@ -180,6 +193,7 @@ func CheckWithConversions(files map[string]*ast.File, res *resolve.Result, helpe
 		}
 	}
 	c.enumNames()
+	c.collectDerives()
 	for _, ref := range helpers {
 		if f := res.Files[ref.File]; f != nil {
 			if s := f.Definitions[ref.ID]; s != nil {
@@ -226,6 +240,7 @@ type checker struct {
 	variants     map[*resolve.Symbol]*Constructor
 	builtins     map[string]*Enum
 	imported     map[string]*types.Package
+	importer     types.Importer
 	returns      []types.Type
 	conversions  []*resolve.Symbol
 	constants    map[*resolve.Symbol]constant.Value

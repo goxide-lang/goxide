@@ -46,6 +46,14 @@ type Expansion struct {
 	Ctx        ast.SyntaxCtx
 }
 
+// TokenContext preserves lexical identity for names that remain in token trees,
+// such as protocol paths inside derive attributes.
+type TokenContext struct {
+	Ctx    ast.SyntaxCtx
+	Scope  Scope
+	Origin Origin
+}
+
 // Resolver supplies source macro definitions for qualified/imported paths.
 // A missing source module must return an error; nil only enables package macros.
 type Resolver interface {
@@ -53,11 +61,13 @@ type Resolver interface {
 }
 
 type Result struct {
-	Files      []*ast.File
-	Expansions map[ast.ExpnID]Expansion
-	Contexts   map[ast.SyntaxCtx]Context
-	Origins    map[ast.Node]Origin
-	Scopes     map[*ast.Ident]Scope
+	Prints        map[*ast.CallExpr]bool
+	Files         []*ast.File
+	Expansions    map[ast.ExpnID]Expansion
+	Contexts      map[ast.SyntaxCtx]Context
+	Origins       map[ast.Node]Origin
+	Scopes        map[*ast.Ident]Scope
+	TokenContexts map[*token.Token]TokenContext
 	// Introductions preserves the template key of a generated package binding.
 	// resolve registers that key as well as the identifier's caller key.
 	Introductions map[*ast.Ident]Key
@@ -114,41 +124,55 @@ type engine struct {
 // On failure Files is nil, while the tables retain the failing expansion stack.
 // Files must belong to one package. Pass nil for resolver for local source only.
 func Expand(files []*ast.File, resolver Resolver) (*Result, error) {
+	return ExpandPackages([][]*ast.File{files}, resolver)
+}
+
+// ExpandPackages keeps package definitions separate while assigning expansion
+// identities across the complete source graph.
+func ExpandPackages(packages [][]*ast.File, resolver Resolver) (*Result, error) {
 	e := &engine{r: &Result{Expansions: map[ast.ExpnID]Expansion{}, Contexts: map[ast.SyntaxCtx]Context{},
 		Origins: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}}, resolver: resolver,
 		defs: map[Key]definition{}, trees: map[*ast.TokenTree][]syntaxToken{}, localFiles: map[*ast.File]bool{}, captured: map[ast.Node]bool{}, lexical: map[ast.Node]Scope{}, originals: map[ast.Node]ast.Node{}}
-	for _, f := range files {
-		e.localFiles[f] = true
-		e.reserve(f)
-		for _, item := range f.Items {
-			if d, ok := item.(*ast.MacroRulesDecl); ok {
-				k := Key{d.Name.Name, d.Name.Ctx}
-				if old, exists := e.defs[k]; exists {
-					return e.r, &Diagnostic{Code: "definition", Message: "duplicate macro " + k.Name,
-						Definition: Origin{old.file, old.decl.Span()}, Call: Origin{f, d.Span()}}
-				}
-				e.defs[k] = definition{d, f}
-			}
+	for _, files := range packages {
+		for _, f := range files {
+			e.reserve(f)
 		}
 	}
 	var out []*ast.File
-	for _, f := range files {
-		n := e.copyNode(f, 0).(*ast.File)
-		var items []ast.Item
-		for i, original := range f.Items {
-			if _, ok := original.(*ast.MacroRulesDecl); ok {
-				continue
+	for _, files := range packages {
+		e.defs = map[Key]definition{}
+		e.localFiles = map[*ast.File]bool{}
+		for _, f := range files {
+			e.localFiles[f] = true
+			for _, item := range f.Items {
+				if d, ok := item.(*ast.MacroRulesDecl); ok {
+					k := Key{d.Name.Name, d.Name.Ctx}
+					if old, exists := e.defs[k]; exists {
+						return e.r, &Diagnostic{Code: "definition", Message: "duplicate macro " + k.Name,
+							Definition: Origin{old.file, old.decl.Span()}, Call: Origin{f, d.Span()}}
+					}
+					e.defs[k] = definition{d, f}
+				}
 			}
-			v, err := e.rewrite(reflect.ValueOf(n.Items[i]), f, 0)
-			if err != nil {
-				return e.r, err
-			}
-			items = append(items, v.Interface().(ast.Item))
 		}
-		n.Items = items
-		var id ast.NodeID
-		ast.Walk(n, func(n ast.Node) bool { id++; n.(interface{ SetID(ast.NodeID) }).SetID(id); return true })
-		out = append(out, n)
+		for _, f := range files {
+			n := e.copyNode(f, 0).(*ast.File)
+			var items []ast.Item
+			for i, original := range f.Items {
+				if _, ok := original.(*ast.MacroRulesDecl); ok {
+					continue
+				}
+				v, err := e.rewrite(reflect.ValueOf(n.Items[i]), f, 0)
+				if err != nil {
+					return e.r, err
+				}
+				items = append(items, v.Interface().(ast.Item))
+			}
+			n.Items = items
+			var id ast.NodeID
+			ast.Walk(n, func(n ast.Node) bool { id++; n.(interface{ SetID(ast.NodeID) }).SetID(id); return true })
+			out = append(out, n)
+		}
 	}
 	e.r.Files = out
 	return e.r, nil
@@ -212,6 +236,9 @@ func (e *engine) lookup(path *ast.Path, file *ast.File) (definition, error) {
 }
 
 func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fragmentKind, file *ast.File, parent ast.ExpnID) (ast.Node, error) {
+	if out, handled, err := e.builtin(n, path, args, kind, file, parent); handled {
+		return out, err
+	}
 	call, ok := e.r.Origins[n]
 	if !ok {
 		call = Origin{file, n.Span()}

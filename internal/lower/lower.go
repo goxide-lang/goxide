@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/check"
+	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/resolve"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/token"
@@ -26,15 +27,20 @@ type Severity uint8
 const Error Severity = 0
 
 type Diagnostic struct {
-	Severity Severity
-	File     string
-	Span     syntax.Span
-	Message  string
-	Origin   resolve.Origin
+	Definition, Call expand.Origin
+	Severity         Severity
+	File             string
+	Span             syntax.Span
+	Message          string
+	Origin           resolve.Origin
 }
 
 func (d *Diagnostic) Error() string {
-	return fmt.Sprintf("%s:%d:%d: %s", d.File, d.Span.Start, d.Span.End, d.Message)
+	message := fmt.Sprintf("%s:%d:%d: %s", d.File, d.Span.Start, d.Span.End, d.Message)
+	if d.Call.File != nil {
+		message += fmt.Sprintf(" (macro definition %d:%d, call %d:%d)", d.Definition.Span.Start, d.Definition.Span.End, d.Call.Span.Start, d.Call.Span.End)
+	}
+	return message
 }
 
 // Lower 的输出键沿用输入文件名；调用方写盘时将 .gox 后缀换成 .go。
@@ -52,6 +58,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	hygienicNames := macroNames(info)
 	fset := gotoken.NewFileSet()
 	var emitters []*emitter
 	memberSymbols := make(map[*resolve.Symbol]bool)
@@ -68,7 +75,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 	}
 	for _, name := range names {
 		tree := files[name]
-		e := &emitter{info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
+		e := &emitter{symbolNames: hygienicNames, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
 		if res != nil {
 			e.file = res.Files[name]
 		}
@@ -81,14 +88,8 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 		}
 		e.tokenFile = fset.AddFile(name, -1, int(tree.Span().End)+256)
 		e.base = gotoken.Pos(e.tokenFile.Base())
-		syntax.Walk(tree, func(n syntax.Node) bool {
-			if a, ok := n.(*syntax.Attr); ok {
-				e.fail(a, "属性与派生尚未降低")
-				return false
-			}
-			return true
-		})
 		e.reserveNames()
+		e.validatePrintStatements()
 		f := &goast.File{Package: e.pos(tree.Package) - 8, Name: &goast.Ident{NamePos: e.pos(tree.Package), Name: tree.Package.Name}}
 		if f.Package < e.base {
 			f.Package = e.base
@@ -102,12 +103,15 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 				f.Decls = append(f.Decls, decl)
 			}
 		}
+		f.Decls = append(f.Decls, e.deriveDeclarations()...)
+		f.Decls = append(f.Decls, e.errorDeclarations()...)
+		f.Decls = append(f.Decls, e.serdeDeclarations()...)
 		if e.err != nil {
 			return nil, e.err
 		}
 		for _, diagnostic := range res.Diagnostics {
 			if diagnostic.File == name && diagnostic.Severity == resolve.Error {
-				return nil, &Diagnostic{File: name, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin}
+				return nil, &Diagnostic{File: name, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
 			}
 		}
 		e.addImports(f)
@@ -152,6 +156,23 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 	if !needed {
 		return
 	}
+	// Generated types have no source location. Go's receiver validation still
+	// needs their names to belong to a file while resolving member objects.
+	var generatedTypeNames []*goast.Ident
+	for _, e := range emitters {
+		goast.Inspect(e.goFile, func(node goast.Node) bool {
+			if spec, ok := node.(*goast.TypeSpec); ok && !spec.Name.NamePos.IsValid() {
+				generatedTypeNames = append(generatedTypeNames, spec.Name)
+				spec.Name.NamePos = e.goFile.Package
+			}
+			return true
+		})
+	}
+	defer func() {
+		for _, name := range generatedTypeNames {
+			name.NamePos = gotoken.NoPos
+		}
+	}()
 	var renamer memberRenamer
 	loaded := map[string]*types.Package{}
 	loadedGroups := map[*emitter]*types.Package{}
@@ -250,6 +271,7 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	symbolNames   map[*resolve.Symbol]string
 	matchDepth    int
 	breakTarget   *breakTarget
 	info          *check.Info
@@ -279,6 +301,14 @@ func (e *emitter) fail(n syntax.Node, message string) {
 		span = n.Span()
 	}
 	e.err = &Diagnostic{File: e.name, Span: span, Message: message, Origin: resolve.Origin{File: e.name, Span: span}}
+	if e.result != nil && n != nil && !reflect.ValueOf(n).IsNil() {
+		if origin, ok := e.result.Origins[resolve.Ref{File: e.name, ID: n.ID()}]; ok {
+			e.err.Origin = origin
+			if expansion, ok := e.result.Expansions[origin.Expn]; ok {
+				e.err.Definition, e.err.Call = expansion.Definition, expansion.Call
+			}
+		}
+	}
 }
 func (e *emitter) pos(n syntax.Node) gotoken.Pos {
 	if n == nil || reflect.ValueOf(n).IsNil() {
@@ -303,6 +333,13 @@ func (e *emitter) ident(id *syntax.Ident) *goast.Ident {
 	} else if reference := e.file.References[id.ID()]; reference.Symbol != nil && reference.Symbol.GoName != "" {
 		name = reference.Symbol.GoName
 	} else if mapped := e.file.GoNames[id.ID()]; mapped != "" {
+		name = mapped
+	}
+	symbol := e.file.Definitions[id.ID()]
+	if symbol == nil {
+		symbol = e.file.References[id.ID()].Symbol
+	}
+	if mapped := e.symbolNames[symbol]; mapped != "" {
 		name = mapped
 	}
 	if !gotoken.IsIdentifier(name) {

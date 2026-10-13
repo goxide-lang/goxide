@@ -5,6 +5,7 @@ import (
 
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/hxsf/goxide/internal/syntax/token"
 )
 
 // ResolveExpanded 用 expanded.Files 替换 files 中对应的原始树后解析。
@@ -48,6 +49,10 @@ type hygiene struct {
 
 func (h *hygiene) init(result *Result) {
 	h.result = result
+	if len(h.expanded.Expansions) != 0 {
+		result.Expansions = h.expanded.Expansions
+	}
+	result.Prints = h.expanded.Prints
 	if len(h.expanded.Contexts) == 0 {
 		return
 	}
@@ -121,24 +126,38 @@ func (r *resolver) identScope(scope *Scope, id *ast.Ident) *Scope {
 		return scope
 	}
 	h := r.hygiene
-	e := h.expanded.Expansions[id.Expn]
-	if id.Expn != 0 && e.Ctx != id.Ctx {
-		for ctx := e.Ctx; ctx != 0; {
-			c, ok := h.expanded.Contexts[ctx]
+	return r.syntaxScope(scope, id.Ctx, id.Expn, h.expanded.Origins[id], h.expanded.Scopes[id])
+}
+
+func (r *resolver) tokenScope(scope *Scope, tok *token.Token, expn ast.ExpnID) (*Scope, ast.SyntaxCtx) {
+	if r.hygiene != nil {
+		if context, ok := r.hygiene.expanded.TokenContexts[tok]; ok {
+			return r.syntaxScope(scope, context.Ctx, expn, context.Origin, context.Scope), context.Ctx
+		}
+	}
+	return scope, 0
+}
+
+func (r *resolver) syntaxScope(scope *Scope, ctx ast.SyntaxCtx, expn ast.ExpnID, origin expand.Origin, target expand.Scope) *Scope {
+	h := r.hygiene
+	e := h.expanded.Expansions[expn]
+	if expn != 0 && e.Ctx != ctx {
+		for current := e.Ctx; current != 0; {
+			c, ok := h.expanded.Contexts[current]
 			if !ok {
 				break
 			}
-			if c.Caller.Ctx == id.Ctx {
-				anchor := h.result.Contexts[ctx].Caller
-				return h.captureScope(scope, h.callSites[c.Expn], anchor, h.expanded.Origins[id], id.Expn)
+			if c.Caller.Ctx == ctx {
+				anchor := h.result.Contexts[current].Caller
+				return h.captureScope(scope, h.callSites[c.Expn], anchor, origin, expn)
 			}
-			ctx = c.Caller.Ctx
+			current = c.Caller.Ctx
 		}
 	}
-	if h.result.Contexts[id.Ctx] != nil {
-		return h.view(scope, id.Ctx)
+	if h.result.Contexts[ctx] != nil {
+		return h.view(scope, ctx)
 	}
-	if target, ok := h.expanded.Scopes[id]; ok && h.names[target.File] != r.file.Name {
+	if target.File != nil && h.names[target.File] != r.file.Name {
 		return h.target(target)
 	}
 	return scope

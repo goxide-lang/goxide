@@ -1,0 +1,10 @@
+package kit
+use fmt as output;
+
+macro_rules! inner { ($value:expr) => { Output($value) }; }
+pub macro_rules! twice { ($value:expr) => { inner!($value) + $caller::offset }; }
+pub macro_rules! formatted { ($value:expr) => { output::Sprint($value) }; }
+pub macro_rules! generated { () => { pub func generated() int { return Output(3) } }; }
+macro_rules! local { () => { 5 }; }
+func Output(value int) int { return value * 2 }
+func Own() int { return local!() }

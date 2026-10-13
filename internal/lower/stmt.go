@@ -7,7 +7,8 @@ import (
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
 
-func (e *emitter) stmt(n syntax.Stmt) goast.Stmt {
+func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
+	defer func() { e.macroLayout(n, out) }()
 	if n == nil {
 		return nil
 	}

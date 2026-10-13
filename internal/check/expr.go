@@ -43,6 +43,17 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	case *ast.ParenExpr:
 		t = c.expr(n.X, expected)
 	case *ast.CallExpr:
+		if c.equalityCall(n) {
+			t = types.Typ[types.Bool]
+			break
+		}
+		if _, print := c.out.Resolve.Prints[n]; print {
+			for _, arg := range n.Args {
+				c.expr(arg, nil)
+			}
+			t = types.NewTuple()
+			break
+		}
 		fun := c.expr(n.Fun, expected)
 		if con := c.out.Constructors[n.Fun]; con != nil {
 			fields := con.Enum.Fields(con.Variant)
@@ -460,6 +471,17 @@ func infer(formal, actual types.Type, sub map[*types.TypeParam]types.Type) {
 	case *types.Pointer:
 		if a, ok := actual.(*types.Pointer); ok {
 			infer(f.Elem(), a.Elem(), sub)
+		}
+	case *types.Signature:
+		if a, ok := actual.Underlying().(*types.Signature); ok && f.Variadic() == a.Variadic() {
+			infer(f.Params(), a.Params(), sub)
+			infer(f.Results(), a.Results(), sub)
+		}
+	case *types.Tuple:
+		if a, ok := actual.(*types.Tuple); ok && f.Len() == a.Len() {
+			for i := 0; i < f.Len(); i++ {
+				infer(f.At(i).Type(), a.At(i).Type(), sub)
+			}
 		}
 	case *types.Named:
 		if a, ok := actual.(*types.Named); ok && a.Origin() == f.Origin() {

@@ -27,7 +27,6 @@ func TestUnsupportedFeaturesReturnLocatedDiagnosticsWithoutPartialOutput(t *test
 		{"mutable_reference", "func f() { value := 1; _ = &mut value }", "引用"},
 		{"trait", "trait Value { func Read() int }", "trait"},
 		{"impl", "type Value int; impl Value { func Read() int { return 1 } }", "impl"},
-		{"derive", "#[derive(Debug)] type Value int", "属性"},
 		{"bar_closure", "var f = |x| x + 1", "闭包"},
 		{"unsafe_function", "unsafe func f() {}", "修饰符"},
 		{"unsafe_expression", "func f() int { return 1 }; var value = unsafe f()", "unsafe"},

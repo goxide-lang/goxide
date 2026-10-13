@@ -1,0 +1,103 @@
+package main
+
+use fmt;
+
+func mark(name string, value int, trace *[]string) int {
+	*trace = append(*trace, name)
+	return value
+}
+
+func load(name string, value int, ok bool, trace *[]string) Result[int, string] {
+	*trace = append(*trace, name)
+	if !ok { return Result[int, string]::Err("stop") }
+	return Result[int, string]::Ok(value)
+}
+
+func mutate(values *[2]int, ok bool, trace *[]string) Result[int, string] {
+	values[1] = 99
+	return load("index", 1, ok, trace)
+}
+
+func readArray(ok bool, trace *[]string) Result[int, string] {
+	values := [2]int{10, 20}
+	return Result[int, string]::Ok(values[mutate(&values, ok, trace)?])
+}
+
+func sliceArray(ok bool, trace *[]string) Result[[]int, string] {
+	values := [3]int{1, 2, 3}
+	part := values[load("low", 1, ok, trace)?:]
+	part[0] = 9
+	return Result[[]int, string]::Ok([]int{values[1], part[0]})
+}
+
+func buildMap(keyOK, valueOK bool, trace *[]string) Result[map[int]int, string] {
+	value := map[int]int{
+		mark("k1", 1, trace): mark("v1", 10, trace),
+		load("k2", 2, keyOK, trace)?: load("v2", 20, valueOK, trace)?,
+		mark("k3", 3, trace): mark("v3", 30, trace),
+	}
+	return Result[map[int]int, string]::Ok(value)
+}
+
+type Record struct { Value int }
+
+func nilPlace(value *Record, ok bool, trace *[]string) Result[int, string] {
+	value.Value = load("rhs", 7, ok, trace)?
+	return Result[int, string]::Ok(value.Value)
+}
+
+func places() Option[int] {
+	values := [1]int{1}
+	ptr := &values[Option[int]::Some(0)?]
+	*ptr = 2
+	values[0] = Option[int]::Some(values[0] + 3)?
+	var (
+		first = Option[int]::Some(values[0])?
+		second = Option[int]::Some(first + 1)?
+	)
+	return Option[int]::Some(second)
+}
+
+func optionInt(value Option[int]) int {
+	return match value { Option::Some(n) => n, Option::None => -1 }
+}
+
+func text(value Result[int, string]) string {
+	return match value { Result::Ok(n) => fmt::Sprint(n), Result::Err(e) => e }
+}
+
+func sliceText(value Result[[]int, string]) string {
+	return match value { Result::Ok(items) => fmt::Sprint(items), Result::Err(e) => e }
+}
+
+func mapText(value Result[map[int]int, string]) string {
+	return match value { Result::Ok(items) => fmt::Sprint(len(items)), Result::Err(e) => e }
+}
+
+func main() {
+	for _, ok := range []bool{true, false} {
+		trace := []string{}
+		value := readArray(ok, &trace)
+		fmt::Println(text(value), trace)
+	}
+	for _, ok := range []bool{true, false} {
+		trace := []string{}
+		value := sliceArray(ok, &trace)
+		fmt::Println(sliceText(value), trace)
+	}
+	for _, mode := range [][2]bool{{false, true}, {true, false}, {true, true}} {
+		trace := []string{}
+		value := buildMap(mode[0], mode[1], &trace)
+		fmt::Println(mapText(value), trace)
+	}
+	for _, ok := range []bool{false, true} {
+		trace := []string{}
+		result := ""
+		func() {
+			defer func() { if recover() != nil { result = "panic" } }()
+			result = text(nilPlace(nil, ok, &trace))
+		}()
+		fmt::Println(result, trace)
+	}
+	fmt::Println(optionInt(places()))
+}

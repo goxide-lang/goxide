@@ -83,7 +83,7 @@ func TestPatterns(t *testing.T) {
 	cases := []struct{ src, want string }{
 		{"_", "*ast.WildPat"}, {"None", "*ast.BindPat"}, {"ref mut value", "*ast.BindPat"},
 		{"Result[T,E]::Ok(ref value)", "*ast.TuplePat"}, {"A | B", "*ast.OrPat"},
-		{"-1", "*ast.LitPat"}, {"true", "*ast.LitPat"}, {"E::Unit", "*ast.PathPat"},
+		{"-1", "*ast.LitPat"}, {"true", "*ast.LitPat"}, {"nil", "*ast.LitPat"}, {"E::Unit", "*ast.PathPat"},
 		{"r#match", "*ast.BindPat"},
 	}
 	for _, tc := range cases {

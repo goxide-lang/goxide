@@ -36,7 +36,7 @@ func main() {
 	if len(res.Diagnostics) != 0 {
 		t.Fatalf("resolve: %v", res.Diagnostics)
 	}
-	output, err := lower.Lower(files, res)
+	output, err := lower.Lower(files, checked(t, files, res))
 	if err != nil {
 		t.Fatal(err)
 	}

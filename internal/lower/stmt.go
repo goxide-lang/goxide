@@ -113,9 +113,7 @@ func (e *emitter) stmt(n syntax.Stmt) goast.Stmt {
 func (e *emitter) stmts(nodes []syntax.Stmt) []goast.Stmt {
 	var list []goast.Stmt
 	for _, node := range nodes {
-		if stmt := e.stmt(node); stmt != nil {
-			list = append(list, stmt)
-		}
+		list = append(list, e.statement(node)...)
 	}
 	return list
 }

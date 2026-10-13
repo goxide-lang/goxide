@@ -1,0 +1,44 @@
+package main
+
+use fmt;
+
+pub enum Box[T any] { Empty, Item(T) }
+pub enum parcel[T any] { packed(T), vacant }
+enum Secret { Hidden(int) }
+
+var global = Box[int]::Item(8)
+var globalText = match global { Box::Item(n) => fmt::Sprint(n), Box::Empty => "empty" }
+
+func reveal(x Secret) int {
+	return match x { Secret::Hidden(n) => n }
+}
+
+func parcelText(x parcel[string]) string {
+	return match x { parcel::packed(s) => s, parcel::vacant => "empty" }
+}
+
+func integer(x Box[int]) int {
+	return match x { Box::Item(n) => n, Box::Empty => -1 }
+}
+
+func text(x Box[string]) string {
+	return match x { Box::Item(s) => s, Box::Empty => "empty" }
+}
+
+func optionInt(x Option[int]) int {
+	return match x { Option::Some(n) => n, Option::None => -1 }
+}
+
+func optionText(x Option[string]) string {
+	return match x { Option::Some(s) => s, Option::None => "none" }
+}
+
+func presentNil(x Option[*int]) bool {
+	return match x { Option::Some(p) => p == nil, Option::None => false }
+}
+
+func main() {
+	global = Box[int]::Empty
+	global = Box[int]::Item(9)
+	fmt::Println(integer(Box[int]::Item(42)), text(Box[string]::Item("hello")), optionInt(Option[int]::Some(3)), optionText(Option[string]::Some("world")), presentNil(Option[*int]::Some(nil)), reveal(Secret::Hidden(7)), parcelText(parcel[string]::packed("mapped")), globalText, integer(global))
+}

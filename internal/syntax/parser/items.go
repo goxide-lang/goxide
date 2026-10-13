@@ -342,6 +342,9 @@ func (p *parser) enum(ib ast.ItemBase) ast.Item {
 				}
 			}
 			p.expect(token.RPAREN)
+		} else if p.at(token.LBRACE) {
+			v.Kind = ast.Struct
+			v.Fields = p.enumFields()
 		}
 		v.Base = p.base(s)
 		d.Variants = append(d.Variants, v)
@@ -358,6 +361,34 @@ func (p *parser) enum(ib ast.ItemBase) ast.Item {
 	}
 	p.expect(token.RBRACE)
 	return d
+}
+
+func (p *parser) enumFields() []*ast.Field {
+	p.expect(token.LBRACE)
+	var fields []*ast.Field
+	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.semis()
+		if p.at(token.RBRACE) {
+			break
+		}
+		before, start := p.pos, p.tok().Start
+		field := &ast.Field{Attrs: p.attrs()}
+		field.Names = []*ast.Ident{p.ident()}
+		for p.accept(token.COMMA) {
+			field.Names = append(field.Names, p.ident())
+		}
+		field.Type = p.typ()
+		field.Base = p.base(start)
+		fields = append(fields, field)
+		if !p.accept(token.COMMA) && !p.at(token.SEMICOLON) && !p.at(token.RBRACE) {
+			p.error("expected separator after enum field")
+			p.sync()
+		}
+		p.semis()
+		p.progress(before)
+	}
+	p.expect(token.RBRACE)
+	return fields
 }
 
 func (p *parser) trait(ib ast.ItemBase) ast.Item {

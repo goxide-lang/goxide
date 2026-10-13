@@ -19,9 +19,6 @@ func TestUnsupportedFeaturesReturnLocatedDiagnosticsWithoutPartialOutput(t *test
 	tests := []struct {
 		name, source, feature string
 	}{
-		{"enum", "enum Value { Empty, }", "enum"},
-		{"match", "func f(value int) int { return match value { _ => 1 } }", "match"},
-		{"propagation", "func f() int { return missing()? }", "?"},
 		{"macro_expression", "var value = missing!()", "宏"},
 		{"macro_item", "missing!()", "宏"},
 		{"macro_type", "type Value = missing!()", "宏"},
@@ -45,7 +42,7 @@ func TestUnsupportedFeaturesReturnLocatedDiagnosticsWithoutPartialOutput(t *test
 				"a-good.gox": "package p\nvar ordinary = 1\n",
 				"z-bad.gox":  source,
 			})
-			output, err := lower.Lower(files, resolve.Resolve(files, nil))
+			output, err := lower.Lower(files, checked(t, files, resolve.Resolve(files, nil)))
 			if err == nil {
 				t.Fatalf("unsupported %s produced Go: %s", test.name, output["z-bad.gox"])
 			}
@@ -75,7 +72,7 @@ func TestUnsupportedFeaturesReturnLocatedDiagnosticsWithoutPartialOutput(t *test
 func TestRawGoKeywordHasLocatedDiagnostic(t *testing.T) {
 	const source = "package p\nfunc f() { r#type := 1; _ = r#type }\n"
 	files := parseDiagnosticSources(t, map[string]string{"keyword.gox": source})
-	output, err := lower.Lower(files, resolve.Resolve(files, nil))
+	output, err := lower.Lower(files, checked(t, files, resolve.Resolve(files, nil)))
 	var diagnostic *lower.Diagnostic
 	if output != nil || !errors.As(err, &diagnostic) {
 		t.Fatalf("raw Go keyword was not rejected atomically: output=%v, error=%v", output, err)
@@ -96,7 +93,7 @@ use strings;
 func main() {}
 `
 	files := parseDiagnosticSources(t, map[string]string{"main.gox": source})
-	output, err := lower.Lower(files, resolve.Resolve(files, nil))
+	output, err := lower.Lower(files, checked(t, files, resolve.Resolve(files, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +126,7 @@ func main() {
 	if len(res.Diagnostics) != 0 {
 		t.Fatalf("resolve: %v", res.Diagnostics)
 	}
-	output, err := lower.Lower(files, res)
+	output, err := lower.Lower(files, checked(t, files, res))
 	if err != nil {
 		t.Fatal(err)
 	}

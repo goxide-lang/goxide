@@ -181,7 +181,6 @@ func TestReservedSyntaxRejected(t *testing.T) {
 		`package p; mod m {}`,
 		`package p; use a::{b,c}`,
 		`package p; use super::x`,
-		`package p; enum E { A { x int }, }`,
 		`package p; enum E { A = 1, }`,
 		`package p; #![cfg(x)] func f() {}`,
 		`package p; pub(scope) func f() {}`,

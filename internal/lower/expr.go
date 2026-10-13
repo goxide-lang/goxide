@@ -7,9 +7,12 @@ import (
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
 
-func (e *emitter) expr(n syntax.Expr) goast.Expr {
+func (e *emitter) rawExpr(n syntax.Expr) goast.Expr {
 	if n == nil {
 		return nil
+	}
+	if result, ok := e.enumConstruct(n); ok {
+		return result
 	}
 	switch n := n.(type) {
 	case *syntax.Ident:
@@ -21,7 +24,11 @@ func (e *emitter) expr(n syntax.Expr) goast.Expr {
 		if n.Type != nil {
 			brace = e.end(n.Type)
 		}
-		return &goast.CompositeLit{Type: e.typ(n.Type), Lbrace: brace, Elts: e.exprs(n.Elts), Rbrace: e.end(n) - 1}
+		elts := make([]goast.Expr, len(n.Elts))
+		for i, elt := range n.Elts {
+			elts[i] = e.expr(elt)
+		}
+		return &goast.CompositeLit{Type: e.typ(n.Type), Lbrace: brace, Elts: elts, Rbrace: e.end(n) - 1}
 	case *syntax.KeyValue:
 		return &goast.KeyValueExpr{Key: e.expr(n.Key), Colon: e.end(n.Key), Value: e.expr(n.Value)}
 	case *syntax.ParenExpr:
@@ -50,6 +57,9 @@ func (e *emitter) expr(n syntax.Expr) goast.Expr {
 	case *syntax.BinaryExpr:
 		return &goast.BinaryExpr{X: e.expr(n.X), OpPos: e.end(n.X), Op: tokenKind(n.Op), Y: e.expr(n.Y)}
 	case *syntax.FuncLit:
+		outerBreak := e.breakTarget
+		e.breakTarget = nil
+		defer func() { e.breakTarget = outerBreak }()
 		if n.Form != syntax.GoFunc || n.Mods.Unsafe || n.Mods.Async || n.Mods.Const || n.Expr != nil {
 			e.fail(n, "扩展闭包尚未降低")
 			return nil
@@ -92,12 +102,5 @@ func (e *emitter) expr(n syntax.Expr) goast.Expr {
 }
 
 func (e *emitter) exprs(nodes []syntax.Expr) []goast.Expr {
-	if len(nodes) == 0 {
-		return nil
-	}
-	result := make([]goast.Expr, len(nodes))
-	for i, n := range nodes {
-		result[i] = e.expr(n)
-	}
-	return result
+	return e.ordered(nodes)
 }

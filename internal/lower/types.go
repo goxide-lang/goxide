@@ -14,6 +14,12 @@ func (e *emitter) typ(n syntax.Type) goast.Expr {
 	}
 	switch n := n.(type) {
 	case *syntax.PathType:
+		if n.Path != nil && len(n.Path.Segments) > 0 {
+			id := n.Path.Segments[0].Name
+			if s := e.file.References[id.ID()].Symbol; s != nil && s.Decl.File == "" && (s.Name.Name == "Option" || s.Name.Name == "Result") {
+				return e.typeArgs(e.sumMember(s.Name.Name), n.Path.Segments[0].Args)
+			}
+		}
 		return e.path(n.Path)
 	case *syntax.PointerType:
 		return &goast.StarExpr{Star: e.pos(n), X: e.typ(n.Elem)}

@@ -146,6 +146,7 @@ type Result struct {
 	Files       map[string]*File
 	Diagnostics []Diagnostic
 	Contexts    map[ast.SyntaxCtx]*Scope
+	Origins     map[Ref]Origin
 }
 
 // External 是调用方提供的公开成员；查找不到返回空切片，多项表示歧义。
@@ -169,7 +170,7 @@ func Resolve(files map[string]*ast.File, importer Importer) *Result {
 }
 
 func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importer) *Result {
-	out := &Result{Files: make(map[string]*File)}
+	out := &Result{Files: make(map[string]*File), Origins: make(map[Ref]Origin)}
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
@@ -221,6 +222,16 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 			r.validateIdents()
 			r.walkFile()
 		}
+	}
+	for name, file := range out.Files {
+		ast.Walk(file.AST, func(node ast.Node) bool {
+			d := Diagnostic{File: name, Span: node.Span(), Origin: Origin{File: name, Span: node.Span()}}
+			if hygiene != nil {
+				hygiene.diagnostic(node, &d)
+			}
+			out.Origins[Ref{File: name, ID: node.ID()}] = d.Origin
+			return true
+		})
 	}
 	sort.SliceStable(out.Diagnostics, func(i, j int) bool {
 		a, b := out.Diagnostics[i], out.Diagnostics[j]

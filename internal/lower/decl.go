@@ -88,7 +88,21 @@ func (e *emitter) valueDecl(n syntax.Node, tok gotoken.Token, grouped bool, spec
 		decl.Lparen, decl.Rparen = e.pos(n)+gotoken.Pos(len(tok.String())), e.end(n)-1
 	}
 	for _, spec := range specs {
-		value := &goast.ValueSpec{Type: e.typ(spec.Type), Values: e.exprs(spec.Values)}
+		value := &goast.ValueSpec{Type: e.typ(spec.Type)}
+		for _, expr := range spec.Values {
+			before, lowered := e.exprScoped(expr)
+			if len(before) > 0 {
+				// A package initializer has no surrounding statement block.
+				before = append(before, &goast.ReturnStmt{Results: []goast.Expr{lowered}})
+				lowered = &goast.CallExpr{Fun: &goast.FuncLit{Type: &goast.FuncType{Params: &goast.FieldList{}, Results: &goast.FieldList{List: []*goast.Field{{Type: e.goType(e.info.Types[expr])}}}}, Body: &goast.BlockStmt{List: before}}}
+			}
+			value.Values = append(value.Values, lowered)
+		}
+		if value.Type == nil && len(spec.Values) == 1 && len(spec.Names) == 1 {
+			if instance := e.info.EnumOf(e.info.Types[spec.Values[0]]); instance != nil {
+				value.Type = e.instanceType(instance)
+			}
+		}
 		for _, name := range spec.Names {
 			value.Names = append(value.Names, e.ident(name))
 		}

@@ -46,7 +46,7 @@ func (p *parser) patternAtom() ast.Pat {
 			p.next()
 			return &ast.WildPat{Base: p.base(start)}
 		}
-		if !p.tok().Raw && (p.tok().Text == "true" || p.tok().Text == "false") {
+		if !p.tok().Raw && (p.tok().Text == "true" || p.tok().Text == "false" || p.tok().Text == "nil") {
 			v := p.ident()
 			return &ast.LitPat{Base: p.base(start), Value: v}
 		}
@@ -63,6 +63,41 @@ func (p *parser) patternAtom() ast.Pat {
 			p.expect(token.RPAREN)
 			t.Base = p.base(start)
 			return t
+		}
+		if p.accept(token.LBRACE) {
+			s := &ast.StructPat{Path: path}
+			for !p.at(token.RBRACE) && !p.at(token.EOF) {
+				p.semis()
+				if p.at(token.RBRACE) {
+					break
+				}
+				if p.accept(token.PERIOD) {
+					p.expect(token.PERIOD)
+					s.Rest = true
+					p.accept(token.COMMA)
+					p.semis()
+					break
+				}
+				before, fieldStart := p.pos, p.tok().Start
+				field := &ast.PatField{Name: p.ident()}
+				if p.accept(token.COLON) {
+					field.Pat = p.pattern()
+				} else {
+					name := *field.Name
+					name.Base = p.base(fieldStart)
+					field.Pat = &ast.BindPat{Base: p.base(fieldStart), Name: &name}
+				}
+				field.Base = p.base(fieldStart)
+				s.Fields = append(s.Fields, field)
+				if !p.accept(token.COMMA) {
+					break
+				}
+				p.progress(before)
+			}
+			p.semis()
+			p.expect(token.RBRACE)
+			s.Base = p.base(start)
+			return s
 		}
 		if len(path.Segments) == 1 && path.Segments[0].Args == nil {
 			return &ast.BindPat{Base: p.base(start), Name: path.Segments[0].Name}

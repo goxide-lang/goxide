@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/check"
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/resolve"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
@@ -92,10 +93,6 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 		imports.local[filepath.ToSlash(pkg.Dir)] = pkg.Scope
 	}
 	resolved := resolve.Resolve(files, imports)
-	// Expansion removes macro definitions, so validate the source subset first.
-	if _, err := Lower(files, resolved); err != nil {
-		return "", err
-	}
 	if len(resolved.Diagnostics) != 0 {
 		return "", resolved.Diagnostics[0]
 	}
@@ -129,7 +126,11 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 	for name, file := range resolved.Files {
 		expandedFiles[name] = file.AST
 	}
-	output, err := Lower(expandedFiles, resolved)
+	info, diagnostics := check.Check(expandedFiles, resolved)
+	if len(diagnostics) != 0 {
+		return "", diagnostics[0]
+	}
+	output, err := Lower(expandedFiles, info)
 	if err != nil {
 		return "", err
 	}
@@ -175,7 +176,18 @@ type moduleImporter struct {
 
 func (i *moduleImporter) Lookup(parts []string, name resolve.Key) []resolve.External {
 	packagePath := strings.Join(parts, "/")
-	if scope, ok := i.local[packagePath]; ok {
+	for split := len(parts); split > 0; split-- {
+		scope := i.local[strings.Join(parts[:split], "/")]
+		if scope == nil {
+			continue
+		}
+		for _, member := range parts[split:] {
+			symbol := scope.Bindings[resolve.Key{Name: member}]
+			if symbol == nil || symbol.Visibility != resolve.Public || symbol.Members == nil {
+				return nil
+			}
+			scope = symbol.Members
+		}
 		if symbol := scope.Bindings[name]; symbol != nil && symbol.Visibility == resolve.Public {
 			return []resolve.External{{Name: name, Kind: symbol.Kind, GoName: symbol.GoName, Visibility: resolve.Public}}
 		}

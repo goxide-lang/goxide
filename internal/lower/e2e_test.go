@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hxsf/goxide/internal/check"
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/resolve"
@@ -36,11 +37,11 @@ func TestPureGoEndToEnd(t *testing.T) {
 	if len(res.Diagnostics) != 0 {
 		t.Fatalf("resolve: %v", res.Diagnostics)
 	}
-	output, err := lower.Lower(files, res)
+	output, err := lower.Lower(files, checked(t, files, res))
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := lower.Lower(files, res)
+	again, err := lower.Lower(files, checked(t, files, res))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,4 +347,13 @@ func runGo(t *testing.T, directory string, args ...string) string {
 		t.Fatalf("go %s: %v", strings.Join(args, " "), err)
 	}
 	return string(output)
+}
+
+func checked(t *testing.T, files map[string]*ast.File, res *resolve.Result) *check.Info {
+	t.Helper()
+	info, diagnostics := check.Check(files, res)
+	if len(diagnostics) != 0 {
+		t.Fatalf("check: %v", diagnostics)
+	}
+	return info
 }

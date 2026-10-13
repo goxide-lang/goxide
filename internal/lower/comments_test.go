@@ -59,7 +59,7 @@ func main() { fmt::Println(output::Sprintf("%s", strings::Repeat("x", 2))) }
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			files := parseDiagnosticSources(t, map[string]string{"main.gox": test.source})
-			output, err := lower.Lower(files, resolve.Resolve(files, nil))
+			output, err := lower.Lower(files, checked(t, files, resolve.Resolve(files, nil)))
 			if err != nil {
 				t.Fatal(err)
 			}

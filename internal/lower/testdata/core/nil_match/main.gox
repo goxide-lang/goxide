@@ -1,0 +1,21 @@
+package main
+
+use fmt;
+use strings;
+
+pub enum State { Ready }
+
+func observe(value State, touched *bool) {
+	match value { _ => { *touched = true } }
+}
+
+func main() {
+	var value State
+	touched := false
+	message := ""
+	func() {
+		defer func() { message = fmt::Sprint(recover()) }()
+		observe(value, &touched)
+	}()
+	fmt::Println(strings::Contains(message, "match on nil State"), touched)
+}

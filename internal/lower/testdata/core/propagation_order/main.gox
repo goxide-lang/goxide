@@ -1,0 +1,38 @@
+package main
+
+use fmt;
+
+func load(ok bool, trace *[]string) Result[int, string] {
+	*trace = append(*trace, "load")
+	if !ok { return Result[int, string]::Err("failed") }
+	return Result[int, string]::Ok(4)
+}
+
+func mark(name string, trace *[]string) int {
+	*trace = append(*trace, name)
+	return 1
+}
+
+func callee(trace *[]string) func(int, int, int) int {
+	*trace = append(*trace, "callee")
+	return func(a, b, c int) int { *trace = append(*trace, "body"); return a + b + c }
+}
+
+func sequence(ok bool, trace *[]string) Result[string, string] {
+	defer func() { *trace = append(*trace, "cleanup") }()
+	n := callee(trace)(mark("first", trace), load(ok, trace)?, mark("last", trace))
+	defer func() { *trace = append(*trace, "late") }()
+	return Result[string, string]::Ok(fmt::Sprint(n))
+}
+
+func text(value Result[string, string]) string {
+	return match value { Result::Ok(s) => s, Result::Err(e) => e }
+}
+
+func main() {
+	for _, ok := range []bool{false, true} {
+		trace := []string{}
+		result := sequence(ok, &trace)
+		fmt::Println(text(result), trace)
+	}
+}

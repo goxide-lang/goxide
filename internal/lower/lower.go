@@ -1,4 +1,4 @@
-// Package lower 将已解析名字的纯 Go 子集转换为格式化的 Go 源码。
+// Package lower 将检查后的语法树转换为格式化的 Go 源码。
 package lower
 
 import (
@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/check"
 	"github.com/hxsf/goxide/internal/resolve"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/token"
@@ -37,8 +38,15 @@ func (d *Diagnostic) Error() string {
 }
 
 // Lower 的输出键沿用输入文件名；调用方写盘时将 .gox 后缀换成 .go。
-// files 和 res 必须描述同一批 AST。失败时返回 nil，不返回部分输出。
-func Lower(files map[string]*syntax.File, res *resolve.Result) (map[string][]byte, error) {
+// files 和 info 必须描述同一批 AST。失败时返回 nil，不返回部分输出。
+func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, error) {
+	var res *resolve.Result
+	if info != nil {
+		res = info.Resolve
+		if len(info.Diagnostics) > 0 {
+			return nil, info.Diagnostics[0]
+		}
+	}
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
@@ -60,7 +68,7 @@ func Lower(files map[string]*syntax.File, res *resolve.Result) (map[string][]byt
 	}
 	for _, name := range names {
 		tree := files[name]
-		e := &emitter{name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
+		e := &emitter{info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
 		if res != nil {
 			e.file = res.Files[name]
 		}
@@ -86,6 +94,10 @@ func Lower(files map[string]*syntax.File, res *resolve.Result) (map[string][]byt
 			f.Package = e.base
 		}
 		for _, item := range tree.Items {
+			if enum, ok := item.(*syntax.EnumDecl); ok {
+				f.Decls = append(f.Decls, e.enumDecl(enum)...)
+				continue
+			}
 			if decl := e.decl(item); decl != nil {
 				f.Decls = append(f.Decls, decl)
 			}
@@ -238,6 +250,12 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	matchDepth    int
+	breakTarget   *breakTarget
+	info          *check.Info
+	pending       []goast.Stmt
+	replacements  map[syntax.Expr]goast.Expr
+	tempIndex     int
 	base          gotoken.Pos
 	tokenFile     *gotoken.File
 	goFile        *goast.File

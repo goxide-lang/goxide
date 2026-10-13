@@ -1,0 +1,43 @@
+package main
+
+use fmt;
+
+type NilError struct{}
+func (*NilError) Error() string { panic("typed nil must not be formatted") }
+type Wrapped struct { Cause error }
+func (Wrapped) Error() string { return "wrapped" }
+
+var conversions int
+var assignableConversions int
+var continued bool
+
+func FromWrapped(err error) Wrapped { conversions++; return Wrapped{Cause: err} }
+func FromAssignable(err Wrapped) error { assignableConversions++; return err }
+
+func source() Result[int, error] {
+	var err *NilError
+	return Result[int, error]::Err(err)
+}
+
+func converted() Result[string, Wrapped] {
+	_ = source()?
+	continued = true
+	return Result[string, Wrapped]::Ok("incorrect")
+}
+
+func assigned() Result[int, error] {
+	_ = converted()?
+	continued = true
+	return Result[int, error]::Ok(0)
+}
+
+func readError(value Result[int, error]) error {
+	return match value { Result::Err(err) => err, Result::Ok(_) => nil }
+}
+
+func main() {
+	err := readError(assigned())
+	wrapper, ok := err.(Wrapped)
+	p, typed := wrapper.Cause.(*NilError)
+	fmt::Println(conversions, assignableConversions, ok, typed && p == nil && wrapper.Cause != nil, continued)
+}

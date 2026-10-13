@@ -424,8 +424,8 @@ internal/lower            AST → go/ast
 迁移顺序：
 
 1. `token`、`lexer`、`ast`、`parser`、`printer`。验收：仓库里现有的全部 `.gox` 文件（约 250 个）解析无错误节点，且 解析 → 打印 → 再解析 得到相同的树。这一步不依赖旧管线，可以立刻开始。现有文件里省略 `func` 的 trait 成员、依赖「大写即公开」的 `enum` / `trait` 需要先改写（补 `func`、补 `pub`）。
-2. `resolve`、`check`、`lower` 的纯 Go 子集：不含任何扩展语法的 `.gox` 能生成等价的 Go。
-3. 按特性接入：`use` 与路径 → enum / match / `?` → 宏 → 派生与 serde → 引用 → trait / impl。每个特性用 `.gox → .go` 的 golden 文件加运行结果验收。
+2. `lower` 的纯 Go 子集：不含任何扩展语法的 `.gox` 生成等价 Go，且生成的 Go 能编译运行。这一阶段**不做独立的 `check`**：纯 Go 子集的类型由 Go 编译器检查，独立类型检查随扩展特性（enum / match / `?` / 引用 / trait）一起落地，那时才有 Go 类型系统表达不了的东西要查。
+3. 按特性接入：`use` 与路径 → enum / match / `?` → 宏 → 派生与 serde → 引用 → trait / impl。每个特性用 `.gox → .go` 的 golden 文件加运行结果验收；`check` 随这些特性逐步建立。
 4. 新管线通过现有 `tests/acceptance` 和各示例后，CLI 一次性切换，删除 `internal/frontend` 及 `enums`、`matchexpr`、`propagate`、`refs`、`equality`、`protocols`、`printing`、`sourcemap` 等旧 pass。
 
 迁移期间旧管线冻结，只修阻塞性 bug，不加新特性。两套管线不在同一次编译里混用。

@@ -27,11 +27,19 @@ gofmt -l internal cmd
 
 交付：
 
-- enum 声明降低为闭合变体：标签加各变体独立内联槽，变体构造、载荷投影、零值语义。
+- enum 声明（含泛型参数与实例化）降低为闭合变体：标签加各变体独立内联槽，变体构造、载荷投影、零值语义。
+- 泛型：类型参数与实例化，`Option[T]` / `Result[T, E]` 作为泛型类型而非固定实例；实例化取真实类型实参。
 - match 编译：穷尽性、guard、`ref` / `ref mut` 绑定、表达式体与块体、作为终结语句（不再要求补 `return`）。
 - `?` 传播：返回到最近的函数边界，单步错误转换，失败后不执行后续实参。
-- `Option[T]` / `Result[T, E]` 作为已登记的具体实例。
-- 新阶段 `internal/check` 起步：穷尽性、非法值策略、不可达分支、`?` 的返回类型匹配。
+- 新阶段 `internal/check` 起步：穷尽性、非法值策略、不可达分支、`?` 的返回类型匹配、泛型实参的约束检查。
+
+分三个里程碑交付，各自验收，不一次交完：
+
+| 里程碑 | 内容 | 该里程碑的检查 |
+| --- | --- | --- |
+| M1 | 非泛型 enum、match、变体构造与投影 | golden + `go run` 输出比对 |
+| M2 | 泛型 enum 与 `Option` / `Result` 实例化 | 同一枚举的多个实例共存测试 |
+| M3 | `?` 传播与 `check` 的相应诊断 | 传播路径、部分成功、失败后不求值的运行测试 |
 
 检查：
 
@@ -41,7 +49,7 @@ gofmt -l internal cmd
 
 退出：现有 `tests/acceptance` 里 enum / match / `?` 的行为在新管线复现。
 
-不做：泛型 enum 的完整实例化、match 的复杂引用投影（留 P3）。
+不做：match 的复杂引用投影（留 P3）。
 
 ## P2 宏接入管线与派生
 
@@ -77,7 +85,7 @@ gofmt -l internal cmd
 
 检查：多包端到端 build/run/test；拉取真实依赖（`github.com/goxide-lang/serde` 等）构建成功；lock 稳定（同输入重复运行不变）。
 
-**明确砍掉**：workspace、`import-go`、vendor 迁入、构建脚本授权。现有实现与文档一并删除或归档，见"待你决定 1"。
+**不在本阶段**：workspace、`import-go`、vendor 迁入、构建脚本授权。它们是 MVP 的功能，实现仍保留在仓库里（旧模块不随 P6 删除），但要等 pre-MVP 之后另立阶段重启，见下"后续阶段（MVP）"。
 
 退出：一个多包项目端到端通过。
 
@@ -85,20 +93,39 @@ gofmt -l internal cmd
 
 交付：`cmd/goxide` 的三种输入模式（单文件、目录、项目）改走新管线；删除 `internal/frontend` 及 `enums`、`matchexpr`、`propagate`、`refs`、`equality`、`protocols`、`printing`、`sourcemap`；网站用新编译器重建。
 
+不删：`internal/project`、`internal/buildscript`、`internal/scripttrust` 等工具链模块。它们的 CLI 入口在切换时暂时摘掉，实现保留给 MVP 阶段重启，避免重写。
+
 检查：全树 `go test`；`examples/enum_trial/try.sh`；网站构建与带 `goxideweb` 的 race/vet；确定性（同一输入两次运行输出字节一致）。
 
 退出：旧管线代码从仓库消失，全部门禁绿。
 
 ## P7 pre-MVP 收口
 
-交付：一张状态表（特性 × 支持度）取代免责式说明；删除 `docs/reviews`、`tests/design`、`tests/research`、`IMPLEMENTATION.md` 的追加日志与 `ROADMAP.md`；CI 只保留 `go test` / `go vet` / 阶段端到端。
+交付：一张状态表（特性 × 支持度）取代免责式说明；删除 `docs/reviews`、`tests/design`、`tests/research`、`IMPLEMENTATION.md` 的追加日志与 `ROADMAP.md`（历史留在 git 里）；CI 只保留 `go test` / `go vet` / 阶段端到端。
 
 检查：文档门禁通过；状态表每个条目都有对应测试。
 
-退出：仓库里只剩下"现在支持什么"和它的测试。
+退出：仓库里只剩下"现在支持什么"和它的测试。pre-MVP 到此完成。
 
-## 待你决定
+## 后续阶段（MVP）
 
-1. **P5 砍掉的范围**：workspace、`import-go`、vendor、构建脚本授权是否直接删除，还是先归档到一个 `archive` 仓库。这四项合计约一万行实现与文档。
-2. **P7 的历史文档**：直接删（历史留在 git），还是先搬去 `archive` 仓库。
-3. **P1 的泛型范围**：先只做具体类型的 enum / Option / Result 实例（更快见到端到端），还是同时做泛型实例化。前者能把 P1 压到更短。
+pre-MVP 之后按下面的顺序重启被推迟的功能。这些不属本次规划，只记录顺序，细节另行设计。
+
+| 阶段 | 内容 |
+| --- | --- |
+| MVP-1 | workspace：成员、依赖继承、根锁、按成员合并 feature；重启 `internal/project` 的 workspace 部分 |
+| MVP-2 | `import-go`：把已有 Go 工程迁入统一项目模型；重接 `cmd/goxide` 的迁入入口 |
+| MVP-3 | vendor 迁入与供应来源选择；重启 `internal/project` 的 vendor 与来源部分 |
+| MVP-4 | 构建脚本授权：重启 `internal/buildscript` 与 `internal/scripttrust` 的 CLI 入口 |
+| MVP-5 | LSP：诊断、符号导航、悬停、补全，与编译器共用同一套查询结果 |
+| MVP-6 | safe std 首批入口、锁与集合类型 |
+
+顺序依据：workspace 与迁入都要求统一项目模型先稳定（P5 的最小 `goxide.toml` 是它的种子）；LSP 要求前面各阶段的语义表齐备。
+
+## 已定事项（2026-10-13）
+
+1. workspace、`import-go`、vendor、构建脚本授权是 MVP 功能，不删实现，P5 只摘入口，MVP 阶段重启。
+2. P7 的历史文档直接删除，不建 archive 仓库，历史留在 git。
+3. P1 做泛型，`Option[T]` / `Result[T, E]` 是泛型类型，分三个里程碑交付。
+4. `internal/check` 从 P1 开始建立，不早于语言核心，也不等到 P6。
+

@@ -432,6 +432,9 @@ func (c *checker) symbolType(s *resolve.Symbol) types.Type {
 			return obj.Type()
 		}
 	}
+	if len(s.Target) >= 2 {
+		return c.importedType(s.Target, s.GoName)
+	}
 	return types.Typ[types.Invalid]
 }
 
@@ -516,7 +519,7 @@ func (c *checker) instantiate(t types.Type, args *ast.GenericArgs) types.Type {
 }
 
 func (c *checker) importType(path *ast.Path) types.Type {
-	if path == nil || len(path.Segments) < 2 {
+	if path == nil || len(path.Segments) == 0 {
 		return types.Typ[types.Invalid]
 	}
 	res := c.file.References[path.ID()]
@@ -532,7 +535,20 @@ func (c *checker) importType(path *ast.Path) types.Type {
 	if len(parts) < 2 {
 		return types.Typ[types.Invalid]
 	}
-	name := parts[len(parts)-1]
+	name := ""
+	if res.Symbol != nil && res.Symbol.Kind != resolve.Import && res.Symbol.Kind != resolve.Module {
+		name = res.Symbol.GoName
+	}
+	return c.importedType(parts, name)
+}
+
+func (c *checker) importedType(parts []string, name string) types.Type {
+	if len(parts) < 2 {
+		return types.Typ[types.Invalid]
+	}
+	if name == "" {
+		name = parts[len(parts)-1]
+	}
 	prefix := strings.Join(parts[:len(parts)-1], "/")
 	if prefix == "std/sum" || prefix == "github.com/goxide-lang/std/sum" {
 		if e := c.builtins[name]; e != nil {

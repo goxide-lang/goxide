@@ -134,6 +134,15 @@ func (r *resolver) deriveDefinition(a *ast.Attr, path derivePath) (derives.Defin
 		return derives.Definition{}, false
 	}
 	canonical := append(append([]string{}, root.Symbol.Target...), parts[1:]...)
+	if imports, ok := r.importer.(interface {
+		CanonicalPath([]string) ([]string, bool)
+	}); ok {
+		var found bool
+		canonical, found = imports.CanonicalPath(canonical)
+		if !found {
+			return derives.Definition{}, false
+		}
+	}
 	if len(canonical) < 2 {
 		return derives.Definition{}, false
 	}

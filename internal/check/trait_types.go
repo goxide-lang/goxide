@@ -3,7 +3,6 @@ package check
 import (
 	"fmt"
 	"go/types"
-	"path/filepath"
 
 	"github.com/hxsf/goxide/internal/syntax/ast"
 )
@@ -186,12 +185,12 @@ func (c *checker) findImpl(target types.Type, trait *Trait) *Impl {
 func (c *checker) preferredImpls() []*Impl {
 	result := make([]*Impl, 0, len(c.implOrder))
 	for _, impl := range c.implOrder {
-		if filepath.ToSlash(filepath.Dir(impl.File)) == filepath.ToSlash(c.pkg.Path()) {
+		if c.sameSourcePackage(impl.File, c.file.Name) {
 			result = append(result, impl)
 		}
 	}
 	for _, impl := range c.implOrder {
-		if filepath.ToSlash(filepath.Dir(impl.File)) != filepath.ToSlash(c.pkg.Path()) {
+		if !c.sameSourcePackage(impl.File, c.file.Name) {
 			result = append(result, impl)
 		}
 	}

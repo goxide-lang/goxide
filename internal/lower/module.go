@@ -13,11 +13,186 @@ import (
 
 	"github.com/hxsf/goxide/internal/check"
 	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/resolve"
 	"github.com/hxsf/goxide/internal/rootconfig"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/parser"
 )
+
+// Module is a writable staging directory prepared by the caller. Path is its
+// canonical Go module path; Roots overrides its goxide.roots.toml when non-nil.
+type Module struct {
+	Path, Dir, GoTool string
+	Roots             paths.Roots
+}
+
+// CompileModules compiles the complete source graph in one pass. The first
+// module's go.mod supplies the selected Go dependency graph. On success each
+// .gox file is replaced by generated Go; native Go files and resources remain
+// unchanged. Callers discard the staging directories when compilation fails.
+func CompileModules(modules []Module) error {
+	if len(modules) == 0 {
+		return fmt.Errorf("at least one staging module is required")
+	}
+	files := map[string]*syntax.File{}
+	diskNames := map[string]string{}
+	owners := map[string]string{}
+	strictRoots := map[string]string{}
+	var requirements []rootRequirement
+	for _, module := range modules {
+		if module.Path == "" || module.Dir == "" {
+			return fmt.Errorf("module path and staging directory are required")
+		}
+		names, err := moduleSources(module.Dir)
+		if err != nil {
+			return err
+		}
+		roots := module.Roots
+		if roots == nil {
+			roots, err = rootconfig.Load(module.Dir)
+			if err != nil {
+				return err
+			}
+		}
+		for _, name := range names {
+			rel, err := filepath.Rel(module.Dir, name)
+			if err != nil {
+				return err
+			}
+			key := path.Join(module.Path, filepath.ToSlash(rel))
+			if _, exists := files[key]; exists {
+				return fmt.Errorf("duplicate source file %s", key)
+			}
+			target := strings.TrimSuffix(name, ".gox") + ".go"
+			if _, err := os.Stat(target); err == nil {
+				return fmt.Errorf("%s: generated Go would overwrite an existing file", key)
+			} else if !os.IsNotExist(err) {
+				return err
+			}
+			data, err := os.ReadFile(name)
+			if err != nil {
+				return err
+			}
+			file, diagnostics := parser.ParseFile(key, data)
+			for _, d := range diagnostics {
+				if d.Severity == parser.Error {
+					return &Diagnostic{File: key, Span: d.Span, Message: d.Message, Origin: resolve.Origin{File: key, Span: d.Span}}
+				}
+			}
+			requirements = append(requirements, applyModuleRoots(module.Path, key, file, roots)...)
+			files[key], diskNames[key] = file, name
+			owners[path.Dir(key)] = module.Path
+			if module.Roots != nil {
+				strictRoots[key] = module.Path
+			}
+		}
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	packages := resolve.Resolve(files, nil)
+	external := sourceModuleImporter(modules[0].Dir, modules[0].GoTool)
+	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: external, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: owners}
+	imports.SetSourcePackages(packages.Packages)
+	for _, requirement := range requirements {
+		if _, exists := imports.namespaces[requirement.target]; !exists {
+			imports.namespaces[requirement.target] = requirement
+		}
+	}
+	var sourcePackages [][]*syntax.File
+	for _, pkg := range packages.Packages {
+		var source []*syntax.File
+		for _, file := range pkg.Files {
+			source = append(source, file.AST)
+		}
+		sourcePackages = append(sourcePackages, source)
+	}
+	expanded, err := expand.ExpandPackages(sourcePackages, &moduleMacros{files: files, resolved: packages, imports: imports})
+	if imports.err != nil {
+		return imports.err
+	}
+	if err != nil {
+		return err
+	}
+	resolved := resolve.ResolveExpanded(files, expanded, imports)
+	if imports.err != nil {
+		return imports.err
+	}
+	if err := imports.finishUses(resolved, strictRoots); err != nil {
+		return err
+	}
+	if len(resolved.Diagnostics) != 0 {
+		return resolved.Diagnostics[0]
+	}
+	expandedFiles := make(map[string]*syntax.File, len(resolved.Files))
+	for name, file := range resolved.Files {
+		expandedFiles[name] = file.AST
+	}
+	info, diagnostics := check.CheckWithImporter(expandedFiles, resolved, external)
+	if len(diagnostics) != 0 {
+		return diagnostics[0]
+	}
+	output, err := Lower(expandedFiles, info)
+	if err != nil {
+		return err
+	}
+	if err := checkModuleCycles(modules, output, resolved, imports); err != nil {
+		return err
+	}
+	names := make([]string, 0, len(output))
+	for name := range output {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		target := strings.TrimSuffix(diskNames[name], ".gox") + ".go"
+		if err := os.WriteFile(target, output[name], 0o644); err != nil {
+			return err
+		}
+	}
+	for _, name := range names {
+		if err := os.Remove(diskNames[name]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func moduleSources(root string) ([]string, error) {
+	return moduleFiles(root, ".gox")
+}
+
+func moduleFiles(root, extension string) ([]string, error) {
+	var names []string
+	err := filepath.WalkDir(root, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if name == root {
+				return nil
+			}
+			base := entry.Name()
+			if base == "testdata" || base == "vendor" || strings.HasPrefix(base, ".") || strings.HasPrefix(base, "_") {
+				return filepath.SkipDir
+			}
+			for _, marker := range []string{"go.mod", "goxide.toml"} {
+				if _, err := os.Stat(filepath.Join(name, marker)); err == nil {
+					return filepath.SkipDir
+				} else if !os.IsNotExist(err) {
+					return err
+				}
+			}
+			return nil
+		}
+		if filepath.Ext(name) == extension && !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "_") {
+			names = append(names, name)
+		}
+		return nil
+	})
+	return names, err
+}
 
 // PrepareModule lowers all .gox files beneath sourceDirs into a temporary Go
 // module. Their paths are relative to the directories' common ancestor. The
@@ -45,16 +220,12 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 		} else {
 			root = commonDirectory(root, dir)
 		}
-		if err := filepath.WalkDir(dir, func(name string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !entry.IsDir() && filepath.Ext(name) == ".gox" {
-				names[name] = true
-			}
-			return nil
-		}); err != nil {
+		files, err := moduleSources(dir)
+		if err != nil {
 			return "", err
+		}
+		for _, name := range files {
+			names[name] = true
 		}
 	}
 	if len(names) == 0 {
@@ -65,70 +236,6 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 		ordered = append(ordered, name)
 	}
 	sort.Strings(ordered)
-	roots, err := rootconfig.Load(root)
-	if err != nil {
-		return "", err
-	}
-	files := make(map[string]*syntax.File, len(ordered))
-	keys := make(map[string]string, len(ordered))
-	for _, name := range ordered {
-		data, err := os.ReadFile(name)
-		if err != nil {
-			return "", err
-		}
-		rel, err := filepath.Rel(root, name)
-		if err != nil {
-			return "", err
-		}
-		key := path.Join(modulePath, filepath.ToSlash(rel))
-		keys[name] = key
-		file, diagnostics := parser.ParseFile(key, data)
-		for _, d := range diagnostics {
-			if d.Severity == parser.Error {
-				return "", &Diagnostic{File: key, Span: d.Span, Message: d.Message, Origin: resolve.Origin{File: key, Span: d.Span}}
-			}
-		}
-		applyModuleRoots(file, roots)
-		files[key] = file
-	}
-
-	packages := resolve.Resolve(files, nil)
-	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: sourceModuleImporter(root), cache: map[string]*types.Package{}}
-	for _, pkg := range packages.Packages {
-		imports.local[filepath.ToSlash(pkg.Dir)] = pkg.Scope
-	}
-	var sourcePackages [][]*syntax.File
-	for _, pkg := range packages.Packages {
-		var source []*syntax.File
-		for _, file := range pkg.Files {
-			source = append(source, file.AST)
-		}
-		sourcePackages = append(sourcePackages, source)
-	}
-	expanded, err := expand.ExpandPackages(sourcePackages, &moduleMacros{files: files, resolved: packages})
-	if err != nil {
-		return "", err
-	}
-	for _, pkg := range resolve.ResolveExpanded(files, expanded, nil).Packages {
-		imports.local[filepath.ToSlash(pkg.Dir)] = pkg.Scope
-	}
-	resolved := resolve.ResolveExpanded(files, expanded, imports)
-	expandedFiles := make(map[string]*syntax.File, len(resolved.Files))
-	for name, file := range resolved.Files {
-		expandedFiles[name] = file.AST
-	}
-	info, diagnostics := check.CheckWithImporter(expandedFiles, resolved, imports.external)
-	if len(diagnostics) != 0 {
-		return "", diagnostics[0]
-	}
-	output, err := Lower(expandedFiles, info)
-	if err != nil {
-		return "", err
-	}
-	if len(resolved.Diagnostics) != 0 {
-		return "", resolved.Diagnostics[0]
-	}
-
 	dir, err := os.MkdirTemp("", "goxide-lower-")
 	if err != nil {
 		return "", err
@@ -152,6 +259,13 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 	} else if !os.IsNotExist(err) {
 		return "", err
 	}
+	if roots, err := os.ReadFile(filepath.Join(root, rootconfig.Filename)); err == nil {
+		if err := os.WriteFile(filepath.Join(dir, rootconfig.Filename), roots, 0o644); err != nil {
+			return "", err
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), module, 0o644); err != nil {
 		return "", err
 	}
@@ -167,67 +281,21 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		target := filepath.Join(dir, strings.TrimSuffix(rel, ".gox")+".go")
+		target := filepath.Join(dir, rel)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(target, output[keys[name]], 0o644); err != nil {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
 			return "", err
 		}
 	}
+	if err := CompileModules([]Module{{Path: modulePath, Dir: dir}}); err != nil {
+		return "", err
+	}
 	complete = true
 	return dir, nil
-}
-
-type moduleImporter struct {
-	local    map[string]*resolve.Scope
-	external types.Importer
-	cache    map[string]*types.Package
-}
-
-func (i *moduleImporter) Lookup(parts []string, name resolve.Key) []resolve.External {
-	packagePath := strings.Join(parts, "/")
-	for split := len(parts); split > 0; split-- {
-		scope := i.local[strings.Join(parts[:split], "/")]
-		if scope == nil {
-			continue
-		}
-		for _, member := range parts[split:] {
-			symbol := scope.Bindings[resolve.Key{Name: member}]
-			if symbol == nil || symbol.Visibility != resolve.Public || symbol.Members == nil {
-				return nil
-			}
-			scope = symbol.Members
-		}
-		if symbol := scope.Bindings[name]; symbol != nil && symbol.Visibility == resolve.Public {
-			return []resolve.External{{Name: name, Kind: symbol.Kind, GoName: symbol.GoName, Visibility: resolve.Public}}
-		}
-		return nil
-	}
-	pkg, loaded := i.cache[packagePath]
-	if !loaded {
-		pkg, _ = i.external.Import(packagePath)
-		i.cache[packagePath] = pkg
-	}
-	if pkg == nil || name.Ctx != 0 {
-		return nil
-	}
-	object := pkg.Scope().Lookup(name.Name)
-	if object == nil || !object.Exported() {
-		return nil
-	}
-	var kind resolve.Kind
-	switch object.(type) {
-	case *types.Const:
-		kind = resolve.Constant
-	case *types.Var:
-		kind = resolve.Variable
-	case *types.Func:
-		kind = resolve.Function
-	case *types.TypeName:
-		kind = resolve.Type
-	default:
-		return nil
-	}
-	return []resolve.External{{Name: name, Kind: kind, GoName: object.Name(), Visibility: resolve.Public}}
 }

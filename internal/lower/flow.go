@@ -6,7 +6,6 @@ import (
 	goparser "go/parser"
 	gotoken "go/token"
 	"go/types"
-	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -32,7 +31,7 @@ func (e *emitter) goType(t types.Type) goast.Expr {
 		return goast.NewIdent("any")
 	}
 	name := types.TypeString(types.Default(t), func(p *types.Package) string {
-		if p.Path() == filepath.ToSlash(filepath.Dir(e.name)) {
+		if e.localTypePackage(p) {
 			return ""
 		}
 		path := p.Path()

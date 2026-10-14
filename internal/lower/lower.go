@@ -63,7 +63,13 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 	fset := gotoken.NewFileSet()
 	var emitters []*emitter
 	memberSymbols := make(map[*resolve.Symbol]bool)
+	externalTests := make(map[*resolve.Scope]bool)
 	if res != nil {
+		for _, pkg := range res.Packages {
+			if pkg.IsExternalTest() {
+				externalTests[pkg.Scope] = true
+			}
+		}
 		for _, f := range res.Files {
 			for _, scope := range f.Scopes {
 				if scope.Kind == resolve.MemberScope {
@@ -87,6 +93,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 			e.fail(tree, "缺少与输入 AST 对应的名字解析结果")
 			return nil, e.err
 		}
+		e.externalTest = externalTests[e.file.Scope.Parent]
 		e.tokenFile = fset.AddFile(name, -1, int(tree.Span().End)+256)
 		e.base = gotoken.Pos(e.tokenFile.Base())
 		e.reserveNames()
@@ -150,10 +157,15 @@ func (f goImporter) Import(path string) (*types.Package, error) { return f(path)
 
 func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 	groups := map[string][]*emitter{}
+	tests := map[*resolve.Scope][]*emitter{}
 	needed := false
 	for _, e := range emitters {
 		key := filepath.ToSlash(filepath.Dir(e.name))
-		groups[key] = append(groups[key], e)
+		if e.externalTest {
+			tests[e.file.Scope.Parent] = append(tests[e.file.Scope.Parent], e)
+		} else {
+			groups[key] = append(groups[key], e)
+		}
 		needed = needed || len(e.memberNames) > 0
 	}
 	if !needed {
@@ -197,8 +209,22 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 	loadedGroups := map[*emitter]*types.Package{}
 	loading := map[*emitter]bool{}
 	standard := importer.Default()
+	if emitters[0].info.GoImporter != nil {
+		standard = emitters[0].info.GoImporter
+	}
 	indexSourcePackages(groups, emitters, standard)
 	var load goImporter
+	rename := func(path string, group []*emitter) *types.Package {
+		var files []*goast.File
+		names := map[*goast.Ident]string{}
+		for _, e := range group {
+			files = append(files, e.goFile)
+			for id, name := range e.memberNames {
+				names[id] = name
+			}
+		}
+		return renamer.rename(path, fset, files, names, load)
+	}
 	load = func(path string) (*types.Package, error) {
 		if p := loaded[path]; p != nil {
 			return p, nil
@@ -215,22 +241,22 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 			return nil, fmt.Errorf("import cycle: %s", path)
 		}
 		loading[identity] = true
-		var files []*goast.File
-		names := map[*goast.Ident]string{}
-		for _, e := range group {
-			files = append(files, e.goFile)
-			for id, name := range e.memberNames {
-				names[id] = name
-			}
-		}
-		p := renamer.rename(path, fset, files, names, load)
+		p := rename(path, group)
 		loaded[path] = p
 		loadedGroups[identity] = p
 		loading[identity] = false
 		return p, nil
 	}
 	for _, e := range emitters {
-		_, _ = load(filepath.ToSlash(filepath.Dir(e.name)))
+		path := filepath.ToSlash(filepath.Dir(e.name))
+		if e.externalTest {
+			group := tests[e.file.Scope.Parent]
+			if group[0] == e {
+				rename(path, group)
+			}
+		} else {
+			_, _ = load(path)
+		}
 	}
 }
 
@@ -310,6 +336,16 @@ type emitter struct {
 	err           *Diagnostic
 	imports       map[string]*importUse
 	reserved      map[string]bool
+	externalTest  bool
+}
+
+func (e *emitter) samePackage(file string) bool {
+	other := e.result.Files[file]
+	return other != nil && other.Scope.Parent == e.file.Scope.Parent
+}
+
+func (e *emitter) localTypePackage(pkg *types.Package) bool {
+	return pkg != nil && pkg.Path() == filepath.ToSlash(filepath.Dir(e.name)) && pkg.Name() == e.tree.Package.Name
 }
 
 func (e *emitter) fail(n syntax.Node, message string) {

@@ -193,6 +193,15 @@ func (c *checker) sourcePathSymbol(parts []*ast.PathSegment) *resolve.Symbol {
 	if len(parts) == 0 {
 		return nil
 	}
+	lastName := parts[len(parts)-1].Name
+	// Reexports can change the visible name and package while retaining one
+	// source declaration. Prefer the resolver's canonical route for this path.
+	last := c.file.References[lastName.ID()]
+	if !last.Deferred && last.Symbol != nil && len(last.Symbol.Target) != 0 {
+		if symbol := c.localSymbol(last.Symbol.Target); symbol != nil {
+			return c.visibleSymbol(lastName, symbol)
+		}
+	}
 	id := parts[0].Name
 	symbol := c.symbol(id)
 	// Deferred associated projections record the type parameter for every
@@ -211,7 +220,7 @@ func (c *checker) sourcePathSymbol(parts []*ast.PathSegment) *resolve.Symbol {
 		for _, part := range parts[1:] {
 			target = append(target, part.Name.Name)
 		}
-		return c.localSymbol(target)
+		return c.visibleSymbol(lastName, c.localSymbol(target))
 	}
 	for _, part := range parts[1:] {
 		if symbol.Members == nil {
@@ -223,7 +232,7 @@ func (c *checker) sourcePathSymbol(parts []*ast.PathSegment) *resolve.Symbol {
 			return nil
 		}
 	}
-	return symbol
+	return c.visibleSymbol(lastName, symbol)
 }
 
 func (c *checker) eachTrait(f func(*Trait)) {
@@ -669,7 +678,7 @@ func (c *checker) finishImpls() {
 				}
 				if !compatible && (old.Declare || impl.Declare) {
 					c.diag(impl.Decl, TraitInvalid, "conflicting trait implementation")
-				} else if compatible && filepath.Dir(impl.File) == filepath.Dir(old.File) {
+				} else if compatible && c.sameSourcePackage(impl.File, old.File) {
 					impl.AliasOf = old
 					if old.AliasOf != nil {
 						impl.AliasOf = old.AliasOf

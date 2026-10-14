@@ -16,7 +16,7 @@ import (
 func TestSourcePackageEnumIdentity(t *testing.T) {
 	sources := map[string]string{
 		"fixture/lib/enum.gox":  `package lib;pub enum Box[T any] { Empty, Item(T) }`,
-		"fixture/lib/alias.gox": `package lib;type IntBox = Box[int];type Reordered[A,B any] = Result[B,A];func makeBox()IntBox{return Box[int]::Item(1)}`,
+		"fixture/lib/alias.gox": `package lib;type IntBox = Box[int];type Reordered[A,B any] = Result[B,A];pub func makeBox()IntBox{return Box[int]::Item(1)}`,
 		"fixture/main.gox":      `package main;use fixture::lib as lib;func f(x lib::Box[int],y lib::Reordered[string,int])int{return match x {lib::Box::Empty=>0,lib::Box::Item(n)=>n}};func g()int{return match lib::makeBox(){lib::Box::Item(n)=>n,lib::Box::Empty=>0}}`,
 	}
 	files := map[string]*ast.File{}

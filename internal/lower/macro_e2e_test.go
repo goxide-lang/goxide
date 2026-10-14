@@ -115,7 +115,7 @@ func TestMacroDeriveOwnerHygiene(t *testing.T) {
 	source := t.TempDir()
 	files := map[string]string{
 		"go.mod":            "module macroderive\n\ngo 1.27\n",
-		"goxide.roots.toml": "[roots.serde]\nmodule = \"github.com/goxide-lang/serde\"\npackage = \"github.com/goxide-lang/serde\"\n",
+		"goxide.roots.toml": "[roots.serde]\nmodule = \"github.com/goxide-lang/serde\"\npackage = \"github.com/goxide-lang/serde\"\n[roots.serde.namespaces]\njson = \"github.com/goxide-lang/serde/json\"\n",
 		"macros.gox": `package main
 use serde as owner;
 macro_rules! named { ($owner:ident, $name:ident) => { #[derive($owner::Serialize)] type $name struct { Value int } }; }

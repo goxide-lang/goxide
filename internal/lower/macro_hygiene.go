@@ -38,6 +38,10 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 	}
 	for _, pkg := range result.Packages {
 		fixed := map[*resolve.Symbol]bool{}
+		inPackage := func(name string) bool {
+			file := result.Files[name]
+			return file != nil && file.Scope.Parent == pkg.Scope
+		}
 		reserved := map[string]bool{}
 		relevant := map[string]bool{}
 		groups := map[string]map[*resolve.Symbol]bool{}
@@ -58,7 +62,7 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 			}
 		}
 		for _, request := range result.Derives {
-			if request.Helper != nil && filepath.Dir(request.File) == pkg.Dir {
+			if request.Helper != nil && inPackage(request.File) {
 				add(request.Helper)
 				relevant[request.Helper.GoName] = true
 			}
@@ -130,7 +134,7 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 				if !conflict {
 					continue
 				}
-				if !fixed[symbol] && symbol.Decl.File != "" && filepath.Dir(symbol.Decl.File) == pkg.Dir && symbol.Kind != resolve.Import && symbol.Kind != resolve.Module && symbol.Kind != resolve.Field {
+				if !fixed[symbol] && inPackage(symbol.Decl.File) && symbol.Kind != resolve.Import && symbol.Kind != resolve.Module && symbol.Kind != resolve.Field {
 					symbols = append(symbols, symbol)
 				}
 			}
@@ -160,8 +164,7 @@ func (e *emitter) macroReference(id *syntax.Ident, symbol *resolve.Symbol) (goas
 		symbol = symbol.AliasOf
 	}
 	definition := filepath.ToSlash(filepath.Dir(symbol.Decl.File))
-	caller := filepath.ToSlash(filepath.Dir(e.name))
-	if definition == caller {
+	if e.samePackage(symbol.Decl.File) {
 		return nil, false
 	}
 	if symbol.Visibility != resolve.Public {
@@ -261,7 +264,7 @@ func macroTypeNames(t types.Type, add func(string)) {
 func (e *emitter) manualEnumValidation(d *check.Derive, fn *syntax.FuncDecl) []goast.Stmt {
 	protected := map[string]bool{"nil": true, "panic": true}
 	for _, pkg := range e.result.Packages {
-		if pkg.Dir != filepath.Dir(e.name) {
+		if pkg.Scope != e.file.Scope.Parent {
 			continue
 		}
 		for _, scope := range []*resolve.Scope{pkg.Scope, pkg.Scope.Parent} {
@@ -273,7 +276,7 @@ func (e *emitter) manualEnumValidation(d *check.Derive, fn *syntax.FuncDecl) []g
 		}
 	}
 	for _, enum := range e.info.Enums {
-		if enum.Type.Obj().Pkg().Path() == filepath.ToSlash(filepath.Dir(e.name)) {
+		if e.localTypePackage(enum.Type.Obj().Pkg()) {
 			for _, variant := range enum.Variants {
 				protected[variant.GoName] = true
 			}

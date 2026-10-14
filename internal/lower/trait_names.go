@@ -195,17 +195,18 @@ func inherentName(member *check.Member) string {
 
 func (e *emitter) generatedName(name string, node syntax.Node) bool {
 	pkg := filepath.ToSlash(filepath.Dir(e.name))
-	claims := e.traits.claims[pkg]
+	identity := pkg + "\x00" + e.tree.Package.Name
+	claims := e.traits.claims[identity]
 	if claims == nil {
 		claims = map[string]syntax.Node{}
-		e.traits.claims[pkg] = claims
+		e.traits.claims[identity] = claims
 	}
 	if previous := claims[name]; previous != nil && previous != node {
 		e.fail(node, "生成的 Go 名字 "+name+" 与另一生成入口冲突")
 		return false
 	}
 	for _, source := range e.result.Packages {
-		if filepath.ToSlash(source.Dir) != pkg {
+		if filepath.ToSlash(source.Dir) != pkg || source.Name != e.tree.Package.Name {
 			continue
 		}
 		for _, symbol := range source.Scope.Bindings {
@@ -216,7 +217,7 @@ func (e *emitter) generatedName(name string, node syntax.Node) bool {
 		}
 	}
 	for _, enum := range e.info.Enums {
-		if enum.Type.Obj().Pkg() == nil || enum.Type.Obj().Pkg().Path() != pkg {
+		if !e.localTypePackage(enum.Type.Obj().Pkg()) {
 			continue
 		}
 		for _, variant := range enum.Variants {
@@ -268,7 +269,7 @@ func (e *emitter) generatedMember(target *types.Named, name string, impl *check.
 // Import aliases are chosen while emitting source bodies, before these helpers.
 func (e *emitter) reserveTraitNames() {
 	for _, impl := range e.traits.impls {
-		if filepath.Dir(impl.File) != filepath.Dir(e.name) {
+		if !e.samePackage(impl.File) {
 			continue
 		}
 		if impl.Trait == nil {
@@ -290,12 +291,12 @@ func (e *emitter) reserveTraitNames() {
 		}
 	}
 	for _, carrier := range e.traits.carriers {
-		if filepath.Dir(carrier.file) == filepath.Dir(e.name) {
+		if e.samePackage(carrier.file) {
 			e.reserved[carrier.name] = true
 		}
 	}
 	for _, facade := range e.traits.facades {
-		if filepath.Dir(facade.file) == filepath.Dir(e.name) {
+		if e.samePackage(facade.file) {
 			name := targetName(facade.impls[0])
 			e.reserved["goxideFor"+name], e.reserved["For"+name] = true, true
 		}
@@ -312,7 +313,7 @@ func (e *emitter) reserveTraitNames() {
 }
 
 func (e *emitter) sourceGlobal(file, name string) goast.Expr {
-	if filepath.Dir(file) == filepath.Dir(e.name) {
+	if e.samePackage(file) {
 		return goast.NewIdent(name)
 	}
 	pkg := filepath.ToSlash(filepath.Dir(file))

@@ -3,6 +3,7 @@ package resolve
 import (
 	"fmt"
 	"go/types"
+	"slices"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/syntax/ast"
@@ -179,7 +180,7 @@ func choices(symbols []*Symbol) Resolution {
 	for _, s := range symbols {
 		found := false
 		for _, prev := range unique {
-			if s == prev {
+			if s == prev || s.Kind == prev.Kind && len(s.Target) != 0 && slices.Equal(s.Target, prev.Target) {
 				found = true
 				break
 			}
@@ -195,7 +196,11 @@ func choices(symbols []*Symbol) Resolution {
 }
 
 func externalSymbol(path []string, e External) *Symbol {
-	return &Symbol{Name: e.Name, Kind: e.Kind, Visibility: e.Visibility, GoName: e.GoName, Target: append(append([]string{}, path...), e.Name.Name)}
+	target := e.Target
+	if len(target) == 0 {
+		target = append(append([]string{}, path...), e.Name.Name)
+	}
+	return &Symbol{Name: e.Name, Kind: e.Kind, Visibility: e.Visibility, GoName: e.GoName, Target: append([]string(nil), target...)}
 }
 
 func (r *resolver) ident(scope *Scope, id *ast.Ident, static bool) Resolution {

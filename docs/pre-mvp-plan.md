@@ -92,15 +92,27 @@ gofmt -l internal cmd
 
 范围边界：泛型 trait/impl、多 trait 约束、GAT、supertrait、默认关联类型、重叠实现和特化继续延期。跨包 Goxide 加载、导入合并与依赖信息恢复由 P5 接续；CLI 切换和旧管线删除仍在 P6。P4 不修改 `std` / `serde` checkout，不新增外部依赖。详细合同见[trait](design/traits.md)与[关联类型](design/associated-types.md)。
 
-## P5 跨包与项目工具链（最小）
+## P5 跨包与项目工具链（已完成）
 
-交付：多包目录解析、`use` 的跨包绑定、导入合并、最小 `goxide.toml`（`package`、依赖、`bin`）与 `goxide.lock`；第三方依赖经 Go 模块解析。
+交付：多包目录解析、`mod` 与 `use` 的跨包绑定、公开重导出、导入合并、最小 `goxide.toml`（`package`、依赖、`bin`）与 `goxide.lock`；第三方依赖经 Go 模块解析。新管线由生产项目入口组装，P6 再接入 CLI。
 
-检查：多包端到端 build/run/test；拉取真实依赖（`github.com/goxide-lang/serde` 等）构建成功；lock 稳定（同输入重复运行不变）。
+实施合同：
+
+- 复用 `internal/project` 的清单、Go 选版、锁与受管目录实现；不另建包管理器或锁格式。作者根只保存清单、源码和锁，Go 元数据与生成代码写入 target。
+- 所选 Goxide 模块按真实 module/package 身份联合经过新管线；跨包 enum、trait、宏和引用权限从源码恢复，不产生或读取旧前端 metadata。原生 Go 依赖使用真实 Go 类型信息。
+- `mod child` 只绑定选中的本地子包；依赖根和 `package.namespaces` 使用精确映射。`pub use` 保留 canonical 身份，函数和变量不生成转发包装；具体语义沿用[静态路径](design/static-paths.md)。
+- 原生 Go 文件、测试与资源保留，生成文件不覆盖独立手写实现；目录发现不跨嵌套 module，也不把受管 target、vendor、testdata 作为源码包递归编译。
+- 清单中的 bin 选择对应入口；依赖库沿用既有 lib 声明。保存选定版本和校验和；相同输入复用稳定产物，重复生成和锁文件字节一致，locked 模式拒绝改变依赖映射。
+
+检查与退出条件：
+
+1. 一个含多个包及本地 Goxide 依赖的项目真实 build/run/test，通过跨包 enum、trait、宏、公开重导出和原生 Go 消费验证。
+2. 获取清单声明的真实 `github.com/goxide-lang/serde` / `std` 依赖，生成程序执行序列化往返；独立手写 Go 与资源参与实际构建。
+3. 引用权限、私有成员、错误包来源、导入环和输出冲突给出可定位诊断；不靠放宽检查或静默丢弃文件通过验收。
+4. 同输入两次生成 Go 与 lock 字节一致；offline + locked 重放成功，变更清单后的 locked 构建失败且不破坏已有产物。
+5. 完成工作区规定的 build/test/vet/格式和文档检查。详见[最小项目合同](design/toml-manifest.md#p5-新管线入口)。
 
 **不在本阶段**：workspace、`import-go`、vendor 迁入、构建脚本授权。它们是 MVP 的功能，实现仍保留在仓库里（旧模块不随 P6 删除），但要等 pre-MVP 之后另立阶段重启，见下"后续阶段（MVP）"。
-
-退出：一个多包项目端到端通过。
 
 ## P6 CLI 切换与旧管线删除
 
@@ -137,7 +149,7 @@ pre-MVP 之后按下面的顺序重启被推迟的功能。这些不属本次规
 
 ## 已定事项（2026-10-13）
 
-1. workspace、`import-go`、vendor、构建脚本授权是 MVP 功能，不删实现，P5 只摘入口，MVP 阶段重启。
+1. workspace、`import-go`、vendor、构建脚本授权是 MVP 功能，不删实现，P6 切换时摘除入口，MVP 阶段重启。
 2. P7 的历史文档直接删除，不建 archive 仓库，历史留在 git。
 3. P1 做泛型，`Option[T]` / `Result[T, E]` 是泛型类型，一次交付。
 4. `internal/check` 从 P1 开始建立，不早于语言核心，也不等到 P6。

@@ -2,6 +2,16 @@
 
 当前作者清单与可提交的 `goxide.lock` 位于项目根；Go 元数据和生成源码只写入受管 target。依赖字段参考 [Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)，Go module 选版仍用 [Go MVS](https://go.dev/ref/mod#minimal-version-selection)。不读取旧 source 标签或嵌套来源表，不实现 registry。
 
+## P5 新管线入口
+
+状态：已完成。`internal/compile.PrepareProject` 接受单项目目录，使用既有清单、Go 依赖图和锁，选择 bin 后把所需模块交给 `parser → expand → resolve → check → lower`。返回稳定生成模块目录与 Go 入口包；调用者在该目录执行 Go build、run 或 test。CLI 三种输入模式在 P6 统一切换。
+
+本阶段使用 `package`、精确 namespace 映射、Go/path/Git 依赖及 bin；依赖库沿用 lib 路径。多包源和所选 Goxide 依赖联合检查，保留 enum、trait、宏和引用权限，不使用旧前端导出 metadata。原生 Go 源码、测试与资源参与生成模块；当前互操作支持 Goxide 跨包导入原生 Go，以及原生 Go 调用生成的公开 API。同包 Goxide 引用手写 Go 声明的桥接留待管线集成。清单作者根不生成 go.mod/go.sum。
+
+依赖版本和校验和由既有 Go planner 锁定，生成模块间使用 bundle 内的相对 replace；临时生成目录不进入锁或最终 Go 元数据。相同输入保持生成字节、产物路径和锁稳定，offline/locked 使用已有缓存与锁重放，清单依赖映射改变时 locked 拒绝更新。失败的源检查不发布新锁或覆盖已有 bundle。
+
+workspace、vendor 迁入、import-go、构建脚本及 feature 配置按后续 MVP 阶段接入新管线；下文保留这些工具链实现的既有字段合同。
+
 ## 最小项目与真实依赖
 
 新目录放两个文件即可运行；需 Go 1.27+，首次允许联网：

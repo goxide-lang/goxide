@@ -14,7 +14,7 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 	}
 	switch n := n.(type) {
 	case *syntax.UseDecl:
-		return nil
+		return e.useDecl(n)
 	case *syntax.FuncDecl:
 		if n.Mods.Unsafe || n.Mods.Async || n.Mods.Const {
 			e.fail(n, "函数修饰符尚未降低")
@@ -51,7 +51,9 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 	case *syntax.VarDecl:
 		return e.valueDecl(n, gotoken.VAR, n.Grouped, n.Specs)
 	case *syntax.ModDecl:
-		e.fail(n, "mod 声明尚未降低")
+		if e.info.Modules[n] == nil {
+			e.fail(n, "mod 声明尚未降低")
+		}
 	case *syntax.EnumDecl:
 		e.fail(n, "enum 声明尚未降低")
 	case *syntax.TraitDecl:

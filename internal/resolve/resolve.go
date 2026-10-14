@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/syntax/ast"
@@ -116,6 +117,20 @@ type Package struct {
 	Scope     *Scope
 }
 
+// IsExternalTest reports a separate Go test package, which shares a source
+// directory with the importable package but cannot itself be imported.
+func (p *Package) IsExternalTest() bool {
+	if !strings.HasSuffix(p.Name, "_test") || len(p.Files) == 0 {
+		return false
+	}
+	for _, file := range p.Files {
+		if !strings.HasSuffix(file.Name, "_test.gox") {
+			return false
+		}
+	}
+	return true
+}
+
 type Severity uint8
 
 const Error Severity = 0
@@ -158,6 +173,7 @@ type External struct {
 	Kind       Kind
 	GoName     string
 	Visibility Visibility
+	Target     []string // Canonical declaration or namespace path, including the original item name.
 }
 
 // Importer 只查询显式路径或 glob 成员，不加载文件或实现跨包解析。
@@ -212,6 +228,11 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 		r := &resolver{result: out, pkg: p, importer: importer, hygiene: hygiene, useStates: make(map[*UseBinding]uint8), useNodes: make(map[*UseBinding]*ast.UseTree), useFiles: make(map[*UseBinding]*File), symbolUses: make(map[*Symbol]*UseBinding)}
 		resolvers = append(resolvers, r)
 		r.collectPackage()
+	}
+	if sources, ok := importer.(interface{ SetSourcePackages([]*Package) }); ok {
+		// Share this pass's scopes before use and derive registration. Source
+		// imports then observe generated helpers as they are declared below.
+		sources.SetSourcePackages(out.Packages)
 	}
 	for _, r := range resolvers {
 		r.collectUses()

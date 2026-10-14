@@ -1,0 +1,8 @@
+package service
+
+use testing;
+
+func TestRead(t *testing::T) {
+    if Read() != 18 { t.Fatal("cross-package trait operation lost its owner") }
+    if JSON() != "{\"Value\":7}" { t.Fatal("serde dependency was not used") }
+}

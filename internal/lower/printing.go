@@ -5,7 +5,6 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"go/types"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -181,7 +180,7 @@ func (e *emitter) printFormat(t types.Type, value goast.Expr, debug bool) (goast
 	}
 	t = types.Unalias(t)
 	if named, ok := t.(*types.Named); ok {
-		if d := e.deriveFor(named); d != nil && debug && d.Requests["Debug"] && filepath.Dir(d.File) == filepath.Dir(e.name) {
+		if d := e.deriveFor(named); d != nil && debug && d.Requests["Debug"] && e.samePackage(d.File) {
 			return &goast.CallExpr{Fun: e.deriveHelper(d, "Debug"), Args: []goast.Expr{&goast.UnaryExpr{Op: gotoken.AND, X: value}}}, nil
 		}
 		return nil, fmt.Errorf("type %s has no explicit supported formatting protocol", t)

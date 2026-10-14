@@ -31,6 +31,7 @@ const (
 	ReferencePermission = "reference-permission"
 	ReferenceAddress    = "reference-address"
 	ReferencePattern    = "reference-pattern"
+	SourceVisibility    = "source-visibility"
 )
 
 type Diagnostic struct {
@@ -122,6 +123,7 @@ type Try struct {
 
 type Info struct {
 	Resolve       *resolve.Result
+	GoImporter    types.Importer
 	Diagnostics   []Diagnostic
 	Types         map[ast.Expr]types.Type
 	Enums         map[*ast.EnumDecl]*Enum
@@ -130,6 +132,7 @@ type Info struct {
 	Constructors  map[ast.Expr]*Constructor
 	Symbols       map[*resolve.Symbol]types.Type
 	PackagePaths  map[string]string
+	Modules       map[*ast.ModDecl]*resolve.Package
 	Derives       map[*types.Named]*Derive
 	Equalities    map[*ast.CallExpr]types.Type
 	RefBindings   map[*ast.BindPat]RefMode
@@ -183,6 +186,7 @@ func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports 
 
 func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer) (*Info, []Diagnostic) {
 	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
+	r.GoImporter = imports
 	r.RefBindings = make(map[*ast.BindPat]RefMode)
 	r.Traits = make(map[*ast.TraitDecl]*Trait)
 	r.Impls = make(map[*ast.ImplDecl]*Impl)
@@ -190,6 +194,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	r.TraitViews = make(map[ast.Expr]*TraitView)
 	r.TypeOverrides = make(map[ast.Type]types.Type)
 	r.GenericBounds = make(map[*ast.FuncDecl][]*TraitBound)
+	r.Modules = make(map[*ast.ModDecl]*resolve.Package)
 	if res == nil {
 		return r, nil
 	}
@@ -203,6 +208,8 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	c.referenceModes = make(map[*resolve.Symbol]RefMode)
 	c.builtinEnums()
 	r.PackagePaths = sourcePackagePaths(res)
+	c.checkImportedVisibility()
+	c.sourceModules()
 	for _, p := range res.Packages {
 		c.pkg = types.NewPackage(p.Dir, p.Name)
 		c.packages[p] = c.pkg
@@ -333,7 +340,36 @@ func (c *checker) symbol(n ast.Node) *resolve.Symbol {
 	if s == nil {
 		s = c.localSymbol(c.file.References[n.ID()].Path)
 	}
-	return s
+	return c.visibleSymbol(n, s)
+}
+
+func (c *checker) visibleSymbol(n ast.Node, s *resolve.Symbol) *resolve.Symbol {
+	if s == nil || s.Visibility != resolve.Private || s.Decl.File == "" || c.sameSourcePackage(s.Decl.File, c.file.Name) {
+		return s
+	}
+	// A macro may use its definition file's private import binding. The bound
+	// runtime declaration is checked after following its canonical target.
+	if file := c.out.Resolve.Files[s.Decl.File]; file != nil {
+		for _, use := range file.Uses {
+			if use.Symbol == s {
+				return s
+			}
+		}
+	}
+	// Direct definition-site helpers retain their definition/call diagnostic in
+	// lowering; imported paths in macro output still obey source visibility.
+	origin := c.out.Resolve.Origins[resolve.Ref{File: c.file.Name, ID: n.ID()}]
+	raw := c.file.References[n.ID()].Symbol
+	if origin.Expn != 0 && raw != nil && raw.Decl.File != "" && len(raw.Target) == 0 {
+		for raw.AliasOf != nil {
+			raw = raw.AliasOf
+		}
+		if raw == s {
+			return s
+		}
+	}
+	c.diag(n, SourceVisibility, fmt.Sprintf("private source item %q is not visible from this package", s.Name.Name))
+	return nil
 }
 
 func (c *checker) localSymbol(target []string) *resolve.Symbol {
@@ -343,6 +379,9 @@ func (c *checker) localSymbol(target []string) *resolve.Symbol {
 	joined := strings.Join(target, "/")
 	var found *resolve.Symbol
 	for _, p := range c.out.Resolve.Packages {
+		if p.IsExternalTest() {
+			continue
+		}
 		dir := filepath.ToSlash(p.Dir)
 		if !strings.HasPrefix(joined, dir+"/") {
 			dir = c.out.PackagePaths[dir]

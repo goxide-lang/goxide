@@ -42,7 +42,7 @@ func (e *emitter) deriveHelper(d *check.Derive, kind string) goast.Expr {
 	if mapped := e.symbolNames[helper]; mapped != "" {
 		name = mapped
 	}
-	if filepath.Dir(d.File) == filepath.Dir(e.name) {
+	if e.samePackage(d.File) {
 		return goast.NewIdent(name)
 	}
 	path := filepath.ToSlash(filepath.Dir(d.File))

@@ -80,7 +80,7 @@ func (r *resolver) collectUses() {
 			if !u.Public && len(r.pkg.Scope.Aliases[u.Name]) > 0 {
 				r.diag(name, "duplicate-use", fmt.Sprintf("duplicate use binding %q", name.Name))
 			}
-			if b := r.pkg.Scope.Bindings[u.Name]; b != nil {
+			if b := r.pkg.Scope.Bindings[u.Name]; b != nil && !(b.Kind == Module && len(u.Target) == 1 && u.Target[0] == b.Name.Name) {
 				r.diag(name, "use-conflict", fmt.Sprintf("use binding %q conflicts with a package declaration", name.Name))
 			} else if b := r.pkg.Scope.Parent.Bindings[u.Name]; b != nil && (u.Public || isStatic(b)) {
 				r.diag(name, "prelude-conflict", fmt.Sprintf("use binding %q conflicts with a preimported name", name.Name))
@@ -167,6 +167,9 @@ func (r *resolver) resolveUse(u *UseBinding) bool {
 		}
 	} else if b := r.pkg.Scope.Bindings[root]; b != nil && isStatic(b) {
 		local = b
+		if b.Kind == Module && len(b.Target) != 0 {
+			u.Target = append(append([]string{}, b.Target...), u.Target[1:]...)
+		}
 		if len(u.Target) == 1 && u.Symbol != nil {
 			u.Symbol.Members = b.Members
 		}
@@ -178,11 +181,21 @@ func (r *resolver) resolveUse(u *UseBinding) bool {
 			for _, seg := range t.Path.Segments[1:] {
 				res = r.member(res, seg.Name)
 			}
-			if !res.Deferred {
+			if res.Symbol != nil && len(res.Symbol.Target) != 0 {
+				u.Target = append([]string(nil), res.Symbol.Target...)
+				u.Symbol.Target = u.Target
+			} else if !res.Deferred {
 				u.Symbol.AliasOf = res.Symbol
 			}
 		} else if len(u.Target) == 1 {
 			u.Symbol.Kind = Module
+		}
+		if u.Symbol.AliasOf == nil {
+			resolved := r.importTarget(Resolution{Symbol: u.Symbol})
+			if resolved.Symbol != nil && resolved.Symbol != u.Symbol && len(resolved.Symbol.Target) != 0 {
+				u.Target = append([]string(nil), resolved.Symbol.Target...)
+				u.Symbol.Target = u.Target
+			}
 		}
 	}
 	r.useStates[u] = 2

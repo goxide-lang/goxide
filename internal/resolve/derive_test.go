@@ -20,3 +20,37 @@ func TestConcreteProtocolImplRejectsTypeArguments(t *testing.T) {
 		}
 	}
 }
+
+type deriveImports struct{ target []string }
+
+func (deriveImports) Lookup([]string, resolve.Key) []resolve.External { return nil }
+
+func (i deriveImports) CanonicalPath(parts []string) ([]string, bool) {
+	return i.target, strings.Join(parts, "/") == "routing/Serialize"
+}
+
+func TestDeriveNamespaceResolvesCanonicalOwner(t *testing.T) {
+	for _, source := range []string{
+		`use routing as wire;#[derive(wire::Serialize)]type Record struct{Value int}`,
+		`use routing::Serialize as Save;#[derive(Save)]type Record struct{Value int}`,
+	} {
+		for _, target := range [][]string{{"github.com", "goxide-lang", "serde", "Serialize"}, {"example.org", "pretend", "Serialize"}} {
+			files := parseFiles(t, map[string]string{"fixture/main.gox": "package main;" + source})
+			result := resolve.Resolve(files, deriveImports{target})
+			if target[0] == "github.com" {
+				noDiagnostics(t, result)
+				if len(result.Derives) != 1 || result.Derives[0].Owner != "github.com/goxide-lang/serde" || result.Derives[0].Name != "Serialize" {
+					t.Fatalf("canonical derive owner lost: %#v", result.Derives)
+				}
+			} else {
+				found := false
+				for _, diagnostic := range result.Diagnostics {
+					found = found || diagnostic.Code == "derive-owner"
+				}
+				if !found || len(result.Derives) != 0 {
+					t.Fatalf("foreign protocol accepted as serde: derives=%#v diagnostics=%v", result.Derives, result.Diagnostics)
+				}
+			}
+		}
+	}
+}

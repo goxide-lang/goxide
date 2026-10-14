@@ -4,7 +4,6 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"go/types"
-	"path/filepath"
 	"reflect"
 	"sort"
 
@@ -123,7 +122,7 @@ func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 	if impl.Trait.Runtime {
 		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", goast.NewIdent(e.traitWrapper(impl))), Type: &goast.FuncType{Params: &goast.FieldList{}}, Body: &goast.BlockStmt{}})
 		out = append(out, e.factoryDeclaration(impl))
-		local := impl.Base.Obj().Pkg() != nil && impl.Base.Obj().Pkg().Path() == filepath.ToSlash(filepath.Dir(e.name))
+		local := e.localTypePackage(impl.Base.Obj().Pkg())
 		if local && goMethodReceiver(impl.Base) {
 			e.generatedMember(impl.Base, traitAs(impl), impl)
 			out = append(out, e.asDeclaration(impl, captureType(impl), nil))

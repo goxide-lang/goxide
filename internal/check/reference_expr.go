@@ -315,7 +315,7 @@ func (p *permissionChecker) location(node ast.Expr) *permissionLocation {
 
 func (p *permissionChecker) locations(node ast.Expr) []*permissionLocation {
 	switch n := node.(type) {
-	case *ast.Ident:
+	case *ast.Ident, *ast.PathExpr:
 		return []*permissionLocation{{root: p.c.symbol(n)}}
 	case *ast.ParenExpr:
 		return p.locations(n.X)
@@ -349,7 +349,7 @@ func (p *permissionChecker) locations(node ast.Expr) []*permissionLocation {
 
 func (p *permissionChecker) place(node ast.Expr) (bool, bool) {
 	switch n := node.(type) {
-	case *ast.Ident:
+	case *ast.Ident, *ast.PathExpr:
 		s := p.c.symbol(n)
 		return s != nil && s.Kind != resolve.Constant && s.Kind != resolve.Function && s.Kind != resolve.Type && s.Kind != resolve.Variant, true
 	case *ast.ParenExpr:

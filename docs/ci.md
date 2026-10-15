@@ -6,25 +6,19 @@
 
 | 触发 / 层 | 检查范围 |
 | --- | --- |
-| 所有 PR、push main、手动触发 | 全树 race、独立 vet、Markdown 链接/锚点/围栏门禁 |
+| 所有 PR、push main、手动触发 | 全树 race、独立 vet、gofmt、Markdown 链接/锚点/围栏门禁、文档 Go 示例运行 |
 | 网站及依赖相关变更 | 网站工具回归、离线 CLI 示例/导出数据/WASM 构建、带 `goxideweb` 标签的 HTTP race/vet |
 | CI summary | 无路径过滤，始终汇总；失败、取消或应运行却跳过都不能报告成功 |
 
-PR 在 `opened`、`synchronize`、`reopened` 和 `ready_for_review` 时运行；同一 PR
+PR 在 `opened`、`synchronize`、`reopened`、`ready_for_review` 和 `converted_to_draft` 时运行；同一 PR
 的新运行取消旧运行。普通 feature push 不另触发，避免与 PR 双跑。手动触发是完整门禁。
 读取精确 head 对应 run 的状态/汇总，失败才读取对应 job 日志。最终 SHA 已绿后停止
 重复本地或远端验证；本地仅做实现所需的定向检查。
 
 网站选择包含 `website/`、`cmd/`、`internal/`、`go.mod/go.sum`、`examples/`、
-`docs/rfcs/` 和 CI 本身。生成产物保持被忽略，不上传或部署。编译器固定对象/生产
-源码摘要不匹配必须失败，由功能改动同步审阅对应 pin，不能在 CI 自动重写摘要使之通过。
-
-网站选择包含 `website/`、`cmd/`、`internal/`、`runtime/`、`formatting/`、
-`go.mod/go.sum`、`examples/`、`docs/rfcs/` 和 CI 本身。不只看页面目录。
-Draft 网站构建只在相关变化时运行，不执行全树原生测试。网站 job 仅追加 HTTP 包的
-race/vet，不重复全树已经覆盖的 `internal/typecheck`。生成产物保持被忽略，不上传或部署。
-编译器固定对象/生产源码摘要不匹配必须失败，由功能改动同步审阅对应 pin，不能在 CI
-自动重写摘要使之通过。
+`docs/rfcs/` 和 CI 本身。生成产物保持被忽略，不上传或部署。
+网站使用 `python3 -B website/build.py --worktree` 构建当前 checkout；CLI 示例、
+导出数据与 WASM 记录同一源码摘要，并在构建前后校验一致。网站 job 仅追加 HTTP 包的 race/vet。
 
 Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译器；web job显式安装Node 22，并用website/package-lock.json执行npm ci，供Preact/Vite/Monaco构建与worker检查使用。
 完整 Git 历史用于 catalog 快照。缓存按锁文件选取；先用仓外清单副本
@@ -39,9 +33,9 @@ Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译
 
 ## 浏览器 CI 跟踪缺口
 
-现有 `website/qa.mjs`、`website/catalog-qa.mjs` 使用 `--no-sandbox`，本 CI 不调用。
-后续浏览器接入必须去掉该参数，显式 `chromiumSandbox: true`，先在实际 runner 证明
-保留 sandbox 的 Chromium 可以启动，再运行 HTTP/真实 Worker/UI 的应用验收。
+现有 `website/qa.mjs`、`website/catalog-qa.mjs` 均显式设置 `chromiumSandbox: true`。
+CI 尚未调用浏览器验收；接入时先在实际 runner 确认保留 sandbox 的 Chromium 可以启动，
+再运行 HTTP/真实 Worker/UI 的应用验收。
 不得修改内核或浏览器安全设置来使测试通过。这里的 WASM 构建和 HTTP 通过不代表
 浏览器 QA 通过，也不替代该验收；汇总和 PR 持续显示此缺口。
 

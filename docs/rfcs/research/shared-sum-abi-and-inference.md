@@ -10,11 +10,11 @@ Option/Result 目前是前端内建家族，但其 Go 定义**每个使用包生
 
 关键源码：
 
-- [builtins.go](../../../internal/enums/builtins.go)：`Builtin` 指定本包 marker/case/constructor；`builtinDeclarations` 生成泛型接口、case、构造函数、形状检查与 Go 公开 aliases/wrappers；`builtinInstances` 另生成具体载荷 validator。
-- [enum_exports.go](../../../internal/frontend/enum_exports.go)：本包生成家族的 DefinitionPath 是生产者包路径。公开 Go case 如 `GoxideResultOk` 是本包 case 的透明 alias。
-- [enum_artifact.go](../../../internal/frontend/enum_artifact.go)：当前 schema 6 验证 canonical origin、私有 marker、phantom 类型参数、case/constructor 签名和具体实例 validator；validator 仍从家族定义包 `origin` 查找。
-- [imported_family.go](../../../internal/frontend/imported_family.go) 与 [lower.go](../../../internal/propagate/lower.go)：消费者按真实 Go 类型身份恢复家族，要求生产者匹配的具体 validator；不根据短名称认协议。
-- [question.go](../../../internal/propagate/question.go)：`?` 校验源实例、提取成功值，Err 使用目标家族 constructor 重建；可赋值优先，再唯一精确 From，不搜转换链。
+- [builtins.go](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/enums/builtins.go)：`Builtin` 指定本包 marker/case/constructor；`builtinDeclarations` 生成泛型接口、case、构造函数、形状检查与 Go 公开 aliases/wrappers；`builtinInstances` 另生成具体载荷 validator。
+- [enum_exports.go](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/frontend/enum_exports.go)：本包生成家族的 DefinitionPath 是生产者包路径。公开 Go case 如 `GoxideResultOk` 是本包 case 的透明 alias。
+- [enum_artifact.go](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/frontend/enum_artifact.go)：当前 schema 6 验证 canonical origin、私有 marker、phantom 类型参数、case/constructor 签名和具体实例 validator；validator 仍从家族定义包 `origin` 查找。
+- [imported_family.go](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/frontend/imported_family.go) 与 [lower.go](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/propagate/lower.go)：消费者按真实 Go 类型身份恢复家族，要求生产者匹配的具体 validator；不根据短名称认协议。
+- [question.go](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/propagate/question.go)：`?` 校验源实例、提取成功值，Err 使用目标家族 constructor 重建；可赋值优先，再唯一精确 From，不搜转换链。
 
 真实 goxide fixture：a、b 两包都返回 `Result[int,error]`。a 的 2 行源码生成 50 行 Go；b 经 `a.Make()?` 重建本包 Result，生成 98 行。数字只描述本 fixture，不是性能结论。生成片段为：
 

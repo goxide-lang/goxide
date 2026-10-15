@@ -199,7 +199,7 @@ func TestCLIProcessContract(t *testing.T) {
 		})
 	}
 	t.Run("scripts-action-named-directories", func(t *testing.T) {
-		t.Skip("MVP CLI build-script commands deferred by P6")
+		t.Skip("MVP-DEFERRED: MVP CLI build-script commands deferred by P6")
 		// The bare legacy form has no --go option. Put the actual toolchain
 		// ahead of any system command called go without creating a fake runner.
 		t.Setenv("PATH", filepath.Dir(goTool)+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -242,7 +242,7 @@ func TestCLIProcessContract(t *testing.T) {
 	})
 
 	t.Run("scripts-canonical-legacy-identity", func(t *testing.T) {
-		t.Skip("MVP CLI build-script commands deferred by P6")
+		t.Skip("MVP-DEFERRED: MVP CLI build-script commands deferred by P6")
 		d := t.TempDir()
 		projectRoot := filepath.Join(d, "project")
 		if err := os.Mkdir(projectRoot, 0700); err != nil {

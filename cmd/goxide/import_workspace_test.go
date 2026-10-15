@@ -32,7 +32,7 @@ func nativeWorkspaceFixture(t *testing.T) string {
 	return root
 }
 func TestNativeWorkspaceImportExplicitGraph(t *testing.T) {
-	t.Skip("MVP CLI import-go workspace graph and vendor deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph and vendor deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	want := nativeFixtureCommand(t, root, "run", "-buildvcs=false", "./app")
 	before := sourceHash(t, root)
@@ -67,7 +67,7 @@ func TestNativeWorkspaceImportExplicitGraph(t *testing.T) {
 	}
 }
 func TestNativeWorkspaceVendorColdOffline(t *testing.T) {
-	t.Skip("MVP CLI import-go workspace graph and vendor deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph and vendor deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	workspaceWrite(t, root, "dep/go.mod", "module example.org/dep\ngo 1.27\n")
 	workspaceWrite(t, root, "dep/dep.go", "package dep\nfunc Value()string{return \"upstream\"}\n")
@@ -123,7 +123,7 @@ func TestNativeWorkspaceVendorColdOffline(t *testing.T) {
 }
 
 func TestNativeWorkspaceReplaceScopeAndGraphGuard(t *testing.T) {
-	t.Skip("MVP CLI import-go workspace graph and vendor deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph and vendor deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	for _, name := range []string{"one", "two", "chosen"} {
 		workspaceWrite(t, root, name+"/go.mod", "module example.org/dep\ngo 1.27\n")
@@ -154,7 +154,7 @@ func TestNativeWorkspaceReplaceScopeAndGraphGuard(t *testing.T) {
 }
 
 func TestNativeWorkspaceImportVersionAndRejections(t *testing.T) {
-	t.Skip("MVP CLI import-go workspace graph and vendor deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph and vendor deferred by P6")
 	proxy, _ := versionProxy(t)
 	for _, v := range []string{"v1.0.0", "v1.1.0"} {
 		publishVersion(t, proxy, "example.org/d", v, map[string]string{"go.mod": "module example.org/d\ngo 1.27\n", "d.go": "package d\nfunc Value()string{return \"" + v + "\"}\n"})
@@ -188,7 +188,7 @@ func TestNativeWorkspaceImportVersionAndRejections(t *testing.T) {
 }
 
 func TestNativeWorkspaceVendorMissingPackagePreservesSource(t *testing.T) {
-	t.Skip("MVP CLI import-go workspace graph and vendor deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph and vendor deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	workspaceWrite(t, root, "dep/go.mod", "module example.org/dep\ngo 1.27\n")
 	workspaceWrite(t, root, "dep/dep.go", "package dep\nfunc Value()string{return \"dependency\"}\n")
@@ -217,7 +217,7 @@ func TestNativeWorkspaceVendorMissingPackagePreservesSource(t *testing.T) {
 }
 
 func TestSuppliedWorkspaceSelectedVersionsAndEmptyModule(t *testing.T) {
-	t.Skip("MVP CLI import-go workspace graph and vendor deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph and vendor deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	workspaceWrite(t, root, "d/go.mod", "module example.org/d\ngo 1.27\n")
 	workspaceWrite(t, root, "d/d.go", "package d\nconst Value=\"selected\"\n")

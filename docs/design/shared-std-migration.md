@@ -15,7 +15,7 @@
 
 serde 的明确坐标：core `github.com/goxide-lang/serde`；格式 `github.com/goxide-lang/serde/json`，源码可使用 `serdejson "github.com/goxide-lang/serde/json"` 避免与 Go encoding/json 混淆。唯一整合 owner 已统一迁移包路径、compiler import 与 field protocol identity。core 使用格式无关协议；现有 Option 缺失/null→None 独立于 Default，default/skip 才走 Default，保持不变。
 
-新环境已通过正常 Git 发布并核验 std `3f2204770fd3b09cf9f5a1d9228464b7f7c1bdcd`、serde `a1b791e96d660c6be620e110c566a9a171631b7e`。精确 pseudo-version 和 checksum 由 Go 实际解析；compiler 无 std/serde 本地 replace。next 保持空仓库。未创建 token、改变可见性、tag 或 release。详情见[整合记录](../reviews/public-library-migration-20261004.md)。
+新环境已通过正常 Git 发布并核验 std `3f2204770fd3b09cf9f5a1d9228464b7f7c1bdcd`、serde `a1b791e96d660c6be620e110c566a9a171631b7e`。精确 pseudo-version 和 checksum 由 Go 实际解析；compiler 无 std/serde 本地 replace。next 保持空仓库。未创建 token、改变可见性、tag 或 release。详情见[整合记录](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/public-library-migration-20261004.md)。
 
 现有 compiler 根 [LICENSE](../../LICENSE) 是 Mozilla Public License 2.0。迁出的已有代码保留现有许可文本及已有通知，不擅自改为 MIT/Apache 或添加另一许可证；候选库保留来源清单。公开交付仅包含用户要求的库源码、库测试、go.mod、必要说明和原许可，不包括私有 compiler 内容。若后续发现单独文件许可/来源不明，列出该文件再处理，不自行宣称已完成法律审查。
 

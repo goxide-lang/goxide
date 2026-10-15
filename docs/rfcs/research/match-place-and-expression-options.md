@@ -48,13 +48,13 @@ serde、Debug、Clone、Error 与 Default 必须迁移到 active-tag 分派；�
 - 存储尺寸是多个 payload 槽位之和，不是最大 payload 的大小；不要声称零体积成本或未经测量的零分配。
 - 旧借用跨 variant 替换建议采用独立槽的普通 Go 语义：`p=&e.A; e=NewB(...)` 后 p 指向清零的 A 槽，写 p 不修改活跃 B；再赋 A 时 p 观察该槽新值。因此 validator 不应要求非活跃槽永远为零。同型变体共用槽会产生另一种可观察别名行为，不应默认这样优化。
 
-[独立机制探针](../../../tests/research/match_lowering/place.go.fixture)已经 race 运行验证值复制/稳定槽/浅复制，但尚未证明编译器迁移完成。关键待选项是是否接受尚未冻结的生成 Go enum API/布局迁移；若坚持旧 interface API 和普通 Go copy 行为全部不变，目前没有已证明同时满足真实 payload 指针的简单安全方案。不能把复制写回或隐藏共享包装伪称为等价方案，也不能因此把原位借用悄悄后置。
+[独立机制探针](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/match_lowering/place.go.fixture)已经 race 运行验证值复制/稳定槽/浅复制，但尚未证明编译器迁移完成。关键待选项是是否接受尚未冻结的生成 Go enum API/布局迁移；若坚持旧 interface API 和普通 Go copy 行为全部不变，目前没有已证明同时满足真实 payload 指针的简单安全方案。不能把复制写回或隐藏共享包装伪称为等价方案，也不能因此把原位借用悄悄后置。
 
 ## typed IIFE 与原函数语句展开
 
 用户提出的 `func() T { match ...; return x }()` 对纯求值是有效候选。现有 explicit user IIFE 的 int/跨包具名值真实 goxide→Go race 已通过；新引用返回的 explicit IIFE 当前仍在 refs.Prepare 拒绝。自动包装尚未实现。
 
-[可复现机制实验](../../../tests/research/match_lowering/README.md)比较 int、具名 uint64、原生指针、参数、短路、索引赋值。Go 1.27.1 上所测小 IIFE 均内联、全部样本零分配；这否定“一有闭包必然分配”的预设，不证明任意 match 都同样优化。纯 Go tag switch 基准没有模拟全部 goxide enum 校验或引用权限。
+[可复现机制实验](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/match_lowering/README.md)比较 int、具名 uint64、原生指针、参数、短路、索引赋值。Go 1.27.1 上所测小 IIFE 均内联、全部样本零分配；这否定“一有闭包必然分配”的预设，不证明任意 match 都同样优化。纯 Go tag switch 基准没有模拟全部 goxide enum 校验或引用权限。
 
 IIFE 可以让 Go 自己管理原表达式的位置和许多上下文求值规则；不足是返回类型必须可表示，生成闭包必须通过权限检查，且不能改变语义调用帧。`?` 必须退出最近用户函数，编译器包装不算新用户函数；直接 recover 即使位于普通表达式 arm，也会因包装而失效。不能提前执行未选 arm 的 recover 来规避。当前 expression arm 只支持表达式，不能把任意 return/defer/break 语句块当成已经支持；statement match 保留外围控制流则是另一现有能力。
 

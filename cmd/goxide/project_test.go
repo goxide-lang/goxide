@@ -34,7 +34,7 @@ func projectRun(t *testing.T, root string, args ...string) (string, error) {
 }
 
 func TestProjectTargetsAndFeatures(t *testing.T) {
-	t.Skip("MVP CLI features, library and example targets deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/project\n\ngo 1.27\n",
@@ -126,7 +126,7 @@ format = 1
 		t.Fatalf("%s %v", b, e)
 	}
 	t.Run("library-target-diagnostic", func(t *testing.T) {
-		t.Skip("MVP CLI library targets deferred by P6")
+		t.Skip("MVP-DEFERRED: MVP CLI library targets deferred by P6")
 		if _, e := projectRun(t, root, "build", "--lib"); e == nil || !strings.Contains(e.Error(), "no lib") {
 			t.Fatal(e)
 		}
@@ -138,7 +138,7 @@ format = 1
 }
 
 func TestProjectLocalFeatureUnion(t *testing.T) {
-	t.Skip("MVP CLI features, library and example targets deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	base := t.TempDir()
 	root := filepath.Join(base, "root")
 	shared := filepath.Join(base, "shared")
@@ -368,7 +368,7 @@ version = 'v1.0.0'
 }
 
 func TestProjectSelectionAndOutputConflicts(t *testing.T) {
-	t.Skip("MVP CLI features, library and example targets deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/selection\n\ngo 1.27\n",
@@ -542,7 +542,7 @@ func TestProjectDependencyAndTargetDiagnostics(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Run("feature-gated-targets", func(t *testing.T) {
-		t.Skip("MVP CLI dependency features and example targets deferred by P6")
+		t.Skip("MVP-DEFERRED: MVP CLI dependency features and example targets deferred by P6")
 		base := t.TempDir()
 		root := filepath.Join(base, "root")
 		dep := filepath.Join(base, "dep")
@@ -601,7 +601,7 @@ format = 1
 }
 
 func TestProjectConditionalGoxideAcrossTargets(t *testing.T) {
-	t.Skip("MVP CLI features, library and example targets deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
 	// Inline enum discriminants use std/sum.Tag for type-name hygiene. This
 	// project selects that public dependency explicitly, including offline runs.

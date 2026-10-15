@@ -1,9 +1,0 @@
-{
-  "name": "example/result",
-  "baselineCommit": "fd8380c39876c96441857a737be8e32c322a0467",
-  "currentCommit": "e36d23dacee64d19b34aac639900c3f5c29e55c2",
-  "baselineGoSha256": "7a5c200400c281cdc831ba4f10a4e6c13d2b5fbfe0f709e26946a2cfcb9e6a65",
-  "currentGoSha256": "997219da341cb563a6952fe83a2b47d5453e2bf6f3af921a0d2930dfb77cf328",
-  "diff": "website-native/go-byte-diffs/example/result.diff",
-  "status": "blocked pending independent AST and runtime proof; not byte equal"
-}

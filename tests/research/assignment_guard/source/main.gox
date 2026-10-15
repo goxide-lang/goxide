@@ -1,3 +1,0 @@
-package main
-func unpack(v Result[int,error])(int,error){match v{Result[int,error]::Ok(n)=>{return n,nil},Result[int,error]::Err(e)=>{return 0,e},};panic("unreachable")}
-func main(){}

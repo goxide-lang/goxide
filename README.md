@@ -40,9 +40,9 @@ CLI 长选项使用 `--name`，短选项使用 `-h`、`-o`，拒绝旧式 `-go/-
 
 | 能力 | 已验收范围与入口 |
 | --- | --- |
-| 声明宏 | 有限捕获、重复、嵌套、定义点绑定；源码包 `pub macro_rules!` 与 qualified 调用；[准确边界](internal/macros/README.md) |
-| 闭合 enum 与 match | 名义身份、穷尽匹配、guard、非法值在使用点拒绝；有限表达式组合，包括命名单结果、静态已知方法/函数字段/返回函数/variadic/原生 Go 显式 generic 调用；[match 范围](internal/matchexpr/README.md) |
-| Option / Result | 已登记具体实例、match、有限 `?` 组合、Go cause 链、显式 `go_result!` / `go_result_keep!`；跨独立模块恢复及透明 alias；[验收](docs/t0-acceptance.md) |
+| 声明宏 | 有限捕获、重复、嵌套、定义点绑定；源码包 `pub macro_rules!` 与 qualified 调用；[准确边界](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/macros/README.md) |
+| 闭合 enum 与 match | 名义身份、穷尽匹配、guard、非法值在使用点拒绝；有限表达式组合，包括命名单结果、静态已知方法/函数字段/返回函数/variadic/原生 Go 显式 generic 调用；[match 范围](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/matchexpr/README.md) |
+| Option / Result | 已登记具体实例、match、有限 `?` 组合、Go cause 链、显式 `go_result!` / `go_result_keep!`；跨独立模块恢复及透明 alias；[验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/t0-acceptance.md) |
 | 显式协议 | Default、Clone、Debug、serde、PartialEq/Eq 的有限具体类型及跨包登记；已支持手写 Default 和具体 equality，不隐式赋予所有类型协议 |
 | 用户关联协议 | 非泛型 `trait`、本包具体 struct/enum 的显式 `impl`、`U::Abc()` 与单协议约束的 `T::Abc()`；[范围](docs/static-protocols.md)、[示例](examples/static_protocol/README.md) |
 | serde | core 协议 + 独立 JSON 实现；default/skip、具体 Option 缺失/null、闭合变体；[JSON 范围](docs/serde-json.md) |
@@ -54,7 +54,7 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 
 ## 已知失败与未完成边界
 
-完整差距、范围依据、依赖与验收见 [MVP 逐 RFC 台账](docs/mvp-gap-audit.md)。以下是工程边界，不自动等于获批延期；具体正反例与验证见 [A06 单文件外部恢复](docs/reviews/single-file-external-recovery-20261006.md)和 [A04 unary/composite 交付](docs/reviews/match-unary-composite-20261006.md)，历史验收保留在 [T0 清单](docs/t0-acceptance.md)。
+完整差距、范围依据、依赖与验收见 [MVP 逐 RFC 台账](docs/mvp-gap-audit.md)。以下是工程边界，不自动等于获批延期；具体正反例与验证见 [A06 单文件外部恢复](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/single-file-external-recovery-20261006.md)和 [A04 unary/composite 交付](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/match-unary-composite-20261006.md)，历史验收保留在 [T0 清单](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/t0-acceptance.md)。
 
 - **表达式和类型上下文**：单值 match 已接通 `+ - ! ^` 及普通 struct/slice/array/map 字面量组合；多结果 `return match`、引用/收发一元、复杂 postfix/receiver、控制头和 block-arm、完全不可命名的私有参数仍拒绝。用户泛型函数新增单个关联协议约束子集；泛型协议、泛型 impl 和多协议组合不由此成为已支持能力。
 - **模块与工具模式**：单文件恢复限配置已知、源可用、已有生成 Go 和合法 metadata 的依赖；不可导入的 internal-origin 增强操作、无源分发、预编译宏 ABI、`.gox` 测试文件与非宿主交叉构建仍有边界。单文件不隐选 TOML/workspace target/features；这些入口仍使用目录模式。切换 race/tags/平台不能直接复用另一视图的 metadata；[本试用的具体模式与已知拒绝](examples/enum_trial/README.md#运行与测试模式)。
@@ -78,12 +78,12 @@ Default 不改变 Go 零初始化；struct 要求全部字段满足 Default，en
 ## 验收与设计导航
 
 - [交付试用与逐条命令](examples/enum_trial/README.md)：本次新增示例的实际验证。
-- [T0 验收矩阵](docs/t0-acceptance.md)：真实 goxide→Go 与独立生成模块证据、已知失败及待决。
-- [实现历史](IMPLEMENTATION.md)、[Roadmap](ROADMAP.md)：按阶段保留历史；旧限制以最新验收覆盖，不能截取早期条目代表当前能力。
+- [T0 验收矩阵](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/t0-acceptance.md)：真实 goxide→Go 与独立生成模块证据、已知失败及待决。
+- [实现历史](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/IMPLEMENTATION.md)、[Roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)：按阶段保留历史；旧限制以最新验收覆盖，不能截取早期条目代表当前能力。
 - [逐特性 RFC](docs/rfcs/README.md)、[设计总纲](docs/design/overview.md)、[决策登记](docs/design/decisions.md)：区分已确认、暂定、未定。完整 trait 包装器/发布 ABI 等仍须按各自状态阅读。
 - [宏与派生设计](docs/design/macros.md)、[enum/match 设计](docs/design/enums-and-match.md)、[serde core 与格式](docs/rfcs/research/0006-serde-core-and-formats.md)。
 - [测试说明](tests/README.md)：`scripts/check_design.py` 验证文档中的 Go 机制，不能替代真实 goxide 编译执行。各轮全树 race/vet/设计检查与独立生成模块证据见验收矩阵。
-- [冻结 MVP 文档基线](docs/mvp-doc-baseline.md)：标签记录设计基线，不代表实现完成；本阶段不修改标签、不合并或发布。
+- [冻结 MVP 文档基线](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/mvp-doc-baseline.md)：标签记录设计基线，不代表实现完成；本阶段不修改标签、不合并或发布。
 
 ## 许可证
 
@@ -105,7 +105,7 @@ build/run/test/transpile 省略目录时，从 cwd 向上发现 `goxide.toml` �
 
 项目采用 [统一项目模型](docs/rfcs/0025-unified-project.md)：根以 `goxide.toml`（`package.format = 2`，显式 module/go）和 `goxide.lock` 为配置与锁定权威，`.go` / `.gox` 可共存。原生 require/replace/exclude 写入 TOML；Go 元数据仅生成到 target。普通 Go 工程可用 `goxide import-go --plan --bin app=cmd/app ROOT` 查看方案，再用 `--out NEWDIR --offline` 在新目录验证迁移，原工程保持不变。旧 JSON、format 1、双根配置和旧锁均明确拒绝；不自动删除或改名。 `import-go` 未指定输出时默认只读计划；原生 Go vendor 仅是迁入输入，验证后物化为显式本地模块，保留修改字节、资源和许可；Goxide 没有 vendor 构建模式。旧 vendor 清单/锁须从原工程显式重新迁入，详见 [供应源码迁入合同](docs/design/vendor-local-modules.md)。
 
-共享 sum 与 serde 已迁入独立 Go 模块：`github.com/goxide-lang/std/sum`、`github.com/goxide-lang/serde`、`github.com/goxide-lang/serde/json`。本 checkout 的 go.mod/go.sum 固定真实公开提交；不是未发布候选 replace。具体版本、发布白名单和整合验收见[迁移记录](docs/reviews/public-library-migration-20261004.md)。当前 enum metadata 为 9、sum ABI 为 3。旧 interface/case 产物须全部重新生成；不保留旧 case 类型或 marker 转发层。
+共享 sum 与 serde 已迁入独立 Go 模块：`github.com/goxide-lang/std/sum`、`github.com/goxide-lang/serde`、`github.com/goxide-lang/serde/json`。本 checkout 的 go.mod/go.sum 固定真实公开提交；不是未发布候选 replace。具体版本、发布白名单和整合验收见[迁移记录](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/public-library-migration-20261004.md)。当前 enum metadata 为 9、sum ABI 为 3。旧 interface/case 产物须全部重新生成；不保留旧 case 类型或 marker 转发层。
 
 格式化写入与赋值传播支持也由 `github.com/goxide-lang/std/formatting` 和
 `github.com/goxide-lang/std/runtime` 提供。旧 compiler 支持包已删除，项目须更新

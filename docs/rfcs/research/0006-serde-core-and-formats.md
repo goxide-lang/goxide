@@ -278,7 +278,7 @@ JSON Value 不能保存 YAML 任意键、tag/锚点身份或注释；跨格式�
 
 ## 实现分支进展（不冻结 ABI）
 
-具体类型的核心协议、JSON 后端与 derive 已形成实际 `.gox → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](../../../IMPLEMENTATION.md)。当前已接通有限封闭 enum 派生、字段 default/skip 的已登记 Default 调用及内建具体 Option serde；此结果不代表本 RFC 的泛型、全部 enum 表示、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。
+具体类型的核心协议、JSON 后端与 derive 已形成实际 `.gox → Go → 编译运行` 闭环。准确支持范围、未实现项和复现命令见[原型说明](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/IMPLEMENTATION.md)。当前已接通有限封闭 enum 派生、字段 default/skip 的已登记 Default 调用及内建具体 Option serde；此结果不代表本 RFC 的泛型、全部 enum 表示、YAML、Value 或完整 trait ABI 已完成；机制夹具与生成代码测试分开计量。
 
 
 ## Proposed 研究增补：显式字段适配器

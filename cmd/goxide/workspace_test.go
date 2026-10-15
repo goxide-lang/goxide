@@ -23,7 +23,7 @@ func workspaceWrite(t *testing.T, root, path, body string) {
 	}
 }
 func TestWorkspaceUnifiedVersionsSeparateFeatures(t *testing.T) {
-	t.Skip("MVP CLI workspace graph and package selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	proxy, cache := versionProxy(t)
 	for _, v := range []string{"v1.0.0", "v1.1.0"} {
 		publishVersion(t, proxy, "example.org/d", v, map[string]string{"go.mod": "module example.org/d\n\ngo 1.27\n", "d.go": fmt.Sprintf("package d\nfunc Version()string{return %q}\n", v)})
@@ -125,7 +125,7 @@ path="common.gox"
 }
 
 func TestWorkspaceCopiedGitLockIgnoresUnreachable(t *testing.T) {
-	t.Skip("MVP CLI workspace graph and package selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	root := t.TempDir()
 	repos := t.TempDir()
 	git := func(repo string, args ...string) string {
@@ -231,7 +231,7 @@ path="main.go"
 }
 
 func TestWorkspaceRootPackageManagedOutput(t *testing.T) {
-	t.Skip("MVP CLI workspace graph and package selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	root := t.TempDir()
 	workspaceWrite(t, root, "goxide.toml", `[workspace]
 format=1
@@ -254,7 +254,7 @@ path="main.go"
 }
 
 func TestWorkspaceNativeMembershipDoesNotReplace(t *testing.T) {
-	t.Skip("MVP CLI workspace graph and package selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	root := t.TempDir()
 	workspaceWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"app\",\"lib\"]\n")
 	workspaceWrite(t, root, "app/goxide.toml", "[package]\nformat=2\nmodule=\"example.org/app\"\ngo=\"1.27\"\n[[go.require]]\nmodule=\"example.org/lib\"\nversion=\"v1.0.0\"\n[[bin]]\nname=\"app\"\npath=\"main.go\"\n")
@@ -272,7 +272,7 @@ func TestWorkspaceNativeMembershipDoesNotReplace(t *testing.T) {
 }
 
 func TestWorkspaceIndirectPinnedOffline(t *testing.T) {
-	t.Skip("MVP CLI workspace graph and package selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	proxy, cache := versionProxy(t)
 	for _, v := range []string{"v1.0.0", "v1.1.0"} {
 		publishVersion(t, proxy, "example.org/d", v, map[string]string{"go.mod": "module example.org/d\n\ngo 1.27\n", "d.go": fmt.Sprintf("package d\nfunc Value()string{return %q}\n", v)})
@@ -300,7 +300,7 @@ func TestWorkspaceIndirectPinnedOffline(t *testing.T) {
 }
 
 func TestWorkspaceNativeEdgesCannotInjectSource(t *testing.T) {
-	t.Skip("MVP CLI workspace graph and package selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	proxy, _ := versionProxy(t)
 	for _, mod := range []string{"d", "e"} {
 		publishVersion(t, proxy, "example.org/"+mod, "v1.0.0", map[string]string{"go.mod": "module example.org/" + mod + "\ngo 1.27\n", mod + ".go": "package " + mod + "\nconst X=1\n"})
@@ -332,7 +332,7 @@ func TestWorkspaceNativeEdgesCannotInjectSource(t *testing.T) {
 }
 
 func TestWorkspaceNativeGoModTamper(t *testing.T) {
-	t.Skip("MVP CLI workspace graph and package selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	proxy, cache := versionProxy(t)
 	for _, mod := range []string{"d", "e"} {
 		publishVersion(t, proxy, "example.org/"+mod, "v1.0.0", map[string]string{"go.mod": "module example.org/" + mod + "\ngo 1.27\n", mod + ".go": "package " + mod + "\nconst X=1\n"})
@@ -357,7 +357,7 @@ func TestWorkspaceNativeGoModTamper(t *testing.T) {
 }
 
 func TestWorkspaceLegacyNativeSyntheticMod(t *testing.T) {
-	t.Skip("MVP CLI workspace graph and package selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/legacy", "v1.0.0", map[string]string{"legacy.go": "package legacy\nfunc Value()string{return \"legacy\"}\n"})
 	workspaceWrite(t, proxy, "example.org/legacy/@v/v1.0.0.mod", "module example.org/legacy\n")

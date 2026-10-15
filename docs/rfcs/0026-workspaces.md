@@ -17,7 +17,7 @@
 - 拆出项目可直接读取复制的 schema 3 根锁：只沿实际清单及已校验 Go `.mod` 的可达关系求解，忽略无关记录，核对来源/输入/版本/checksum；不复用旧 workspace 的无关 replace 政策。远端/Git 可在新缓存位置重建；path 不自动物化或改源。`--offline` 使用已缓存的可达已锁版本，不要求被升级低版本的缓存。
 - 根 target 所有权与成员 module/目标/feature/配置共同隔离；既有 normal/test metadata 拒绝机制与脚本 trust 保留。未选成员源码/脚本不编译或执行。host helper **沿用 RFC0023 的显式本地 Go 快照合同**；本片没有新增 workspace host 版本/feature resolver，也不声称跨脚本 helper 来源统一。
 
-可运行清单与命令见 [workspace 示例](../../examples/workspace/README.md)，实现证据见 [核心验收](../reviews/workspace-core-20261004.md)。原始研究记录仍是 19 项原生 Go 机制实验，不替代这些 goxide 测试。
+可运行清单与命令见 [workspace 示例](../../examples/workspace/README.md)，实现证据见 [核心验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/workspace-core-20261004.md)。原始研究记录仍是 19 项原生 Go 机制实验，不替代这些 goxide 测试。
 
 **增强作者核心模式限制**：不支持 `[workspace.go]` / root override / workspace vendor / go.work import（纯原生迁入模式见下一节）、`publish_version`、dev 表、profile、registry、target-specific features、互斥 feature、Cargo resolver 数字版本、批量 examples/all-targets、manifest-path/workspace-manifest/no-workspace 参数。未知配置字段严格拒绝。现有 host helper 不支持依赖模板继承，不以 workspace 成员资格扩展 host 权限。全 workspace 搬家时绝对本地路径身份需重新锁定；拆出 path 或仍保留继承语法的成员必须先显式物化配置，不能声称复制锁即自足。
 
@@ -25,7 +25,7 @@
 
 ### 第二阶段迁入实施合同
 
-基于 `2aa0d066` 的独立 `feat/workspace-import` 已实现纯原生 go.work / workspace vendor 迁入子集，接口、单配置分析边界、schema 4 锁与限制见 [迁入设计](../design/workspace-import.md)，实际测试见 [迁入验收](../reviews/workspace-import-20261004.md)。本次采用受管原生 go.work，显式依赖图与 Go 传输政策分开。后续衔接已允许成员渐进使用 .gox/features/明确授权脚本。最新合同将 vendor 限定为迁入输入，验证后物化普通本地模块；成员独立时显式物化路径并复制根锁，没有 vendor 拆出转换，见 [供应源码迁入设计](../design/vendor-local-modules.md)。这仍不代表全 RFC 完成。
+基于 `2aa0d066` 的独立 `feat/workspace-import` 已实现纯原生 go.work / workspace vendor 迁入子集，接口、单配置分析边界、schema 4 锁与限制见 [迁入设计](../design/workspace-import.md)，实际测试见 [迁入验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/workspace-import-20261004.md)。本次采用受管原生 go.work，显式依赖图与 Go 传输政策分开。后续衔接已允许成员渐进使用 .gox/features/明确授权脚本。最新合同将 vendor 限定为迁入输入，验证后物化普通本地模块；成员独立时显式物化路径并复制根锁，没有 vendor 拆出转换，见 [供应源码迁入设计](../design/vendor-local-modules.md)。这仍不代表全 RFC 完成。
 
 ### 官方事实与本篇选择
 
@@ -349,7 +349,7 @@ goxide 成员消费原生 Go module 仍通过 Go module 元数据/MVS；原生 G
 
 ### 实际证据（本轮已完成）
 
-[研究脚本](../../scripts/research/workspace_go_probe.py)仅生成临时原生 Go 模块，`GOPROXY=off GOSUMDB=off GOVCS=*:off GOTOOLCHAIN=local`，空 modulecache，所有依赖来自本地 fixture。没有私人第三方、安装脚本或 Rust工具链。记录及独立评审见 [研究验收](../reviews/workspace-rfc-20261004.md)。执行：
+[研究脚本](../../scripts/research/workspace_go_probe.py)仅生成临时原生 Go 模块，`GOPROXY=off GOSUMDB=off GOVCS=*:off GOTOOLCHAIN=local`，空 modulecache，所有依赖来自本地 fixture。没有私人第三方、安装脚本或 Rust工具链。记录及独立评审见 [研究验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/workspace-rfc-20261004.md)。执行：
 
 ```sh
 python3 scripts/research/workspace_go_probe.py --go /workspace/goxide-environment/go/bin/go

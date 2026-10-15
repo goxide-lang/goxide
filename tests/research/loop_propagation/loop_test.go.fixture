@@ -1,8 +1,0 @@
-package main
-import "testing"
-var loopSink Option[int]
-func TestEquivalence(t *testing.T){for _,fail:=range []int{-1,0,7,16}{a,b:=loopValue(propagatedLoop(16,fail)),loopValue(explicitLoop(16,fail));if a!=b{t.Fatal(fail,a,b)}}}
-func BenchmarkPropagatedSuccess(b *testing.B){for i:=0;i<b.N;i++{loopSink=propagatedLoop(16,-1)}}
-func BenchmarkExplicitSuccess(b *testing.B){for i:=0;i<b.N;i++{loopSink=explicitLoop(16,-1)}}
-func BenchmarkPropagatedFailure(b *testing.B){for i:=0;i<b.N;i++{loopSink=propagatedLoop(16,7)}}
-func BenchmarkExplicitFailure(b *testing.B){for i:=0;i<b.N;i++{loopSink=explicitLoop(16,7)}}

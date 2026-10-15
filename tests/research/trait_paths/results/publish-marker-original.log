@@ -1,2 +1,0 @@
-# example.org/adapter
-../adapter/adapter.go:4:39: cannot use s (variable of type *native.Source) as Trait value in return statement: *native.Source does not implement Trait (missing method Marker)

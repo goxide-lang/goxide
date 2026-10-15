@@ -1,9 +1,0 @@
-{
-  "head": "9ca38dc283ebd615498535de100057585b2492ac",
-  "branch": "feat/macro-allocation-builtins",
-  "files": {
-    "internal/macros/hygiene.go": "03f2c186efe0fc63132fda4563311946658e648d7bd32fdb5f9956de971d4dd4",
-    "internal/macros/allocation_types.go": "42de77da183f051c89dc63ff8caab7f22c0a1d6c43caba858715c957751658f8",
-    "tests/acceptance/macro_allocation_test.go": "51dccadc18f2f9928e15453a63057c9eeba3f30fdb4e8aeceb7a208e248f3cf8"
-  }
-}

@@ -23,7 +23,7 @@ func importCall(t *testing.T, root string, args ...string) (string, error) {
 }
 
 func TestImportGoPlanPublishMixedAndLocked(t *testing.T) {
-	t.Skip("MVP CLI import-go publication deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go publication deferred by P6")
 	t.Setenv("GOWORK", "off")
 	base := t.TempDir()
 	old := filepath.Join(base, "old")
@@ -70,7 +70,7 @@ func TestImportGoPlanPublishMixedAndLocked(t *testing.T) {
 }
 
 func TestImportGoFailuresLeaveOriginalAndOutput(t *testing.T) {
-	t.Skip("MVP CLI import-go publication deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go publication deferred by P6")
 	for _, kind := range []string{"unknown", "deprecated", "retract", "godebug", "tool", "workspace", "parent-module", "bad-marker", "compile", "existing-config"} {
 		t.Run(kind, func(t *testing.T) {
 			t.Setenv("GOWORK", "off")
@@ -122,7 +122,7 @@ func TestImportGoFailuresLeaveOriginalAndOutput(t *testing.T) {
 }
 
 func TestUnifiedLocalReplaceAndPureGit(t *testing.T) {
-	t.Skip("MVP CLI dependency default features deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI dependency default features deferred by P6")
 	for _, kind := range []string{"replace", "git", "path"} {
 		t.Run(kind, func(t *testing.T) {
 			base := t.TempDir()
@@ -161,7 +161,7 @@ func TestUnifiedLocalReplaceAndPureGit(t *testing.T) {
 }
 
 func TestImportGoChecksumsAndOffline(t *testing.T) {
-	t.Skip("MVP CLI import-go publication deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI import-go publication deferred by P6")
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/native", "v1.0.0", map[string]string{"go.mod": "module example.org/native\ngo 1.27\n", "native.go": "package native\nfunc Value()string{return \"native\"}\n"})
 	base := t.TempDir()

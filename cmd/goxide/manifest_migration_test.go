@@ -64,7 +64,7 @@ func TestManifestMigrationDependencySources(t *testing.T) {
 }
 
 func TestManifestMigrationHostHelper(t *testing.T) {
-	t.Skip("MVP CLI build-script host helpers deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI build-script host helpers deferred by P6")
 	for _, both := range []bool{false, true} {
 		t.Run(map[bool]string{false: "legacy", true: "both"}[both], func(t *testing.T) {
 			root := buildScriptFixture(t, false, true)

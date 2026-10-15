@@ -78,6 +78,6 @@ PATH="$(dirname "$GO_BIN"):$PATH" GOTOOLCHAIN=local GOWORK=off GOPROXY=off \
 
 - 生产代码候选 `55ef3b3…` 已通过全树 race（acceptance 282.018s）、vet、设计检查和独立审查；这是该 SHA 的既有证据，不因本次文档更新虚报一次新的全树运行。
 - 本例新增 [main_test.go](app/main_test.go) 通过真实生成模块 race/vet，覆盖正常/错误输入、None/null、Default、闭合变体和跨模块协议。当前模型模块没有自身测试文件，其代码由消费者执行测试覆盖。
-- [当前支持 / 已知失败 / 待决 / 后续指针](../../README.md) 是统一入口；[完整验收清单](../../docs/t0-acceptance.md) 保留证据与历史。
+- [当前支持 / 已知失败 / 待决 / 后续指针](../../README.md) 是统一入口；[完整验收清单](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/t0-acceptance.md) 保留证据与历史。
 
 仍需用户决定的最小事项：公开 enum 参数是否统一入口验证及非法值行为；blank/embedded 字段的派生/serde 规则；Proposed serde adapters 的入口和缺失策略。试用成功不代表这些已经定案。本阶段交付后暂停，不自动开始后续指针工作。

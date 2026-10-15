@@ -77,7 +77,7 @@ func runLayoutBinary(t *testing.T, path, want string) {
 	}
 }
 func TestProjectManagedLayoutEndToEnd(t *testing.T) {
-	t.Skip("MVP CLI layout across feature, library and example targets deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI layout across feature, library and example targets deferred by P6")
 	root, dep := layoutFixture(t, true)
 	build := func(args ...string) string {
 		t.Helper()

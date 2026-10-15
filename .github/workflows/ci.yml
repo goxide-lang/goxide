@@ -90,6 +90,13 @@ jobs:
           cmp go.mod "$module_prep_dir/go.mod"
           cmp go.sum "$module_prep_dir/go.sum"
           echo 'GOPROXY=off' >> "$GITHUB_ENV"
+      - name: Go formatting gate
+        run: |
+          unformatted="$(gofmt -l cmd internal tests)"
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
       - name: Native race gate
         run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -vet=off -count=1 -timeout=30m ./...
       - name: Native vet gate
@@ -142,7 +149,7 @@ jobs:
       - name: Compiler UI synchronous invalidation regressions
         run: node website/compiler_test.mjs
       - name: Build matching CLI examples, exports and WASM offline
-        run: python3 -B website/build.py
+        run: python3 -B website/build.py --worktree
       - name: Embedded HTTP server race gate
         run: python3 -B scripts/ci_go_test.py web-race -mod=readonly -race -vet=off -tags=goxideweb -count=1 -timeout=10m ./cmd/goxide-web
       - name: Embedded HTTP server vet gate
@@ -168,7 +175,7 @@ jobs:
             echo '| Layer | Result |'
             echo '| --- | --- |'
             echo "| Scope | $SCOPE |"
-            echo "| Native race / vet / docs | $CHECKS |"
+            echo "| Native race / vet / gofmt / docs | $CHECKS |"
             echo "| WASM build / HTTP | $WEB |"
             echo '| Browser UI / real Worker QA | Not run; tracked gap in docs/ci.md |'
           } >> "$GITHUB_STEP_SUMMARY"

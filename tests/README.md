@@ -56,7 +56,7 @@ Markdown 检查覆盖仓库 Markdown 文件的围栏闭合、行内本地链接�
 
 ## trait 双路径研究（D21/U16）
 
-独立入口见 [研究说明](research/trait_paths/README.md)，主设计检查不自动运行性能基准。该实验对照原生/值视图/指针视图/无额外布局视图/直接函数/类型化字典，复测 Go 可选协议、marker 提升和源码发布路径；保留五次短基准与编译器诊断。它不是 goxide 前端实现或真实业务性能结论。
+独立入口见 [研究说明](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/README.md)，主设计检查不自动运行性能基准。该实验对照原生/值视图/指针视图/无额外布局视图/直接函数/类型化字典，复测 Go 可选协议、marker 提升和源码发布路径；保留五次短基准与编译器诊断。它不是 goxide 前端实现或真实业务性能结论。
 
 专用问号候选新增 3 项 enum Go 机制测试，覆盖 typed-nil、传播/求值顺序/defer、闭包/Option 和部分成功，完整套件正向 Test 次数增至 41；未测试 goxide `?` 解析或静态诊断。
 

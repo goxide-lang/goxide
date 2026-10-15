@@ -164,7 +164,7 @@ Go 可调用公开生成函数，不能调用 `m!(...)`；宏规则供 goxide �
 
 模板可直接写 `len($x)` / `cap($x)`，无需 wrapper。定义端局部/函数绑定优先，变量、类型与 import 不能误当 builtin。编译器标记在 DSL 降低后恢复原生 Go 调用，保留常量上下文、数组/数组指针的不求值规则、实参次数与 `?` 所在 frame。调用端局部变量/常量与 import 按绑定改名；struct 字段键和 map 表达式键区分处理。
 
-[单元执行](../../internal/macros/builtins_test.go)与[真实生成模块验收](../../tests/acceptance/macro_builtins_test.go)覆盖嵌套/跨包宏、局部及 import 遮蔽、定义端同名声明、常量/数组、None/Some 传播次数，以及生成模块 race/vet。调用包级同名声明和实际覆盖调用点的局部 named type 目前明确诊断；无关作用域的类型名称保持不变。它们是工程边界，不自动视为获批延期。首片当时未开放其他 builtin（含 append/make/new）；后续 append/copy 增量见文末，不宣称完整 Rust 宏或全面卫生已完成。零值/公开入口契约未修改。
+[单元执行](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/macros/builtins_test.go)与[真实生成模块验收](../../tests/acceptance/macro_builtins_test.go)覆盖嵌套/跨包宏、局部及 import 遮蔽、定义端同名声明、常量/数组、None/Some 传播次数，以及生成模块 race/vet。调用包级同名声明和实际覆盖调用点的局部 named type 目前明确诊断；无关作用域的类型名称保持不变。它们是工程边界，不自动视为获批延期。首片当时未开放其他 builtin（含 append/make/new）；后续 append/copy 增量见文末，不宣称完整 Rust 宏或全面卫生已完成。零值/公开入口契约未修改。
 
 
 ## 显式 Go 返回值适配（2026-10-04）

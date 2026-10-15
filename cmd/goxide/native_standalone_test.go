@@ -11,7 +11,7 @@ import (
 )
 
 func TestNativeWorkspaceCopiedLockStandalone(t *testing.T) {
-	t.Skip("MVP CLI workspace import lock replay deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace import lock replay deferred by P6")
 	proxy, _ := versionProxy(t)
 	for _, v := range []string{"v1.0.0", "v1.1.0"} {
 		publishVersion(t, proxy, "example.org/d", v, map[string]string{"go.mod": "module example.org/d\ngo 1.27\n", "d.go": "package d\nconst Value=\"" + v + "\"\n"})
@@ -86,7 +86,7 @@ func TestNativeWorkspaceCopiedLockStandalone(t *testing.T) {
 }
 
 func TestNativeWorkspaceCopiedLockMaterializedMembers(t *testing.T) {
-	t.Skip("MVP CLI workspace import lock replay deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace import lock replay deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	dest := filepath.Join(t.TempDir(), "new")
 	if out, e := importCall(t, root, "--workspace", "--out", dest, "--offline"); e != nil {
@@ -144,7 +144,7 @@ func TestNativeWorkspaceCopiedLockMaterializedMembers(t *testing.T) {
 }
 
 func TestNativeWorkspaceSuppliedLocalStandalone(t *testing.T) {
-	t.Skip("MVP CLI workspace import lock replay deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace import lock replay deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	for _, name := range []string{"d", "e"} {
 		workspaceWrite(t, root, name+"/go.mod", "module example.org/"+name+"\ngo 1.27\n")
@@ -198,7 +198,7 @@ func TestNativeWorkspaceSuppliedLocalStandalone(t *testing.T) {
 }
 
 func TestNativeWorkspaceCopiedLockRejectsLostWorkOverride(t *testing.T) {
-	t.Skip("MVP CLI workspace import lock replay deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace import lock replay deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	for _, name := range []string{"member-source", "work-source"} {
 		workspaceWrite(t, root, name+"/go.mod", "module example.org/d\ngo 1.27\n")

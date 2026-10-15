@@ -1,4 +1,0 @@
-=== RUN   TestProbe
---- PASS: TestProbe (0.00s)
-PASS
-ok  	review.example/probe	1.378s

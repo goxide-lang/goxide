@@ -1,5 +1,0 @@
---- FAIL: TestSingleFileMacroImporter (0.07s)
-    hygiene_diagnostics_test.go:66: single-file importer ignored: <nil>
-FAIL
-FAIL	github.com/hxsf/goxide/internal/macros	0.072s
-FAIL

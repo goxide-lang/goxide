@@ -171,7 +171,7 @@ enum metadata **v3** 记录 Equality：真实目标身份、helper 与 Eq 标记
 
 [真实模块验收](../../tests/acceptance/equality_test.go)验证 NaN、变体/递归字段、array、上下文大整数、`?`、全局初始化、调用遮蔽、参数求值及左右非法值顺序、别名与普通 Go helper 消费。blank/embedded 字段的 struct 派生、builtin Option/Result 的条件泛型比较协议、slice/map 内容相等及 nil/空规则、pointer/chan/interface 自动协议、手写权限入口、Hash/HashMap 均未实现，不由本片自动延期。
 
-后续容器规则已由 [D33](../design/decisions.md) 确认：同类型 nil slice/map 与非 nil 空容器不相等，两个 nil 相等，两个非 nil 空容器按内容相等；Option.None/Some(nil)/Some(empty) 区分，serde 不变。固定长度 array 无 nil。对应 [纯 Go 契约探针](../../tests/design/enum/equality_contract_test.go)不冒充尚未实现的 goxide 容器派生；nil/空不再待决，map 键规则仍单列。
+后续容器规则已由 [D33](../design/decisions.md) 确认：同类型 nil slice/map 与非 nil 空容器不相等，两个 nil 相等，两个非 nil 空容器按内容相等；Option.None/Some(nil)/Some(empty) 区分，serde 不变。固定长度 array 无 nil。对应 [纯 Go 契约探针](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/design/enum/equality_contract_test.go)不冒充尚未实现的 goxide 容器派生；nil/空不再待决，map 键规则仍单列。
 
 ### 容器 PartialEq/Eq 派生（2026-10-03）
 
@@ -219,7 +219,7 @@ metadata v4 在已验证身份、helper 签名和 Eq 资格之外记录 PartialE
 接通配置已知的单文件 consumer；复用当前 schema 8、真实 canonical enum/family 身份
 及完整 artifact 校验链。不新定 enum 表示、公开入口验证、internal-origin relay 或
 private payload 的新发布协议。实际交付、正反例和准确 SHA 见
-[单文件外部恢复报告](../reviews/single-file-external-recovery-20261006.md)，不以合同本身作为测试证明。
+[单文件外部恢复报告](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/single-file-external-recovery-20261006.md)，不以合同本身作为测试证明。
 
 ## 具体 builtin sum 字段协议（2026-10-03）
 

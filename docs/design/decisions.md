@@ -2,7 +2,7 @@
 
 更新：2026-10-01。项目暂称 goxide / Goxide；远端仓库名 `goxide` 不代表已经决定改名。
 
-本文区分讨论中确认的方向、为使设计可评审而写出的候选规则，以及仍没有方案的部分。**“已确认”不表示“已实现”**；实现分支已有有限可运行原型，准确范围见[实现说明](../../IMPLEMENTATION.md)；完整 goxide 编译器、linter、LSP 与可发布基础包尚未完成。实现进度以 [roadmap](../../ROADMAP.md) 为准。
+本文区分讨论中确认的方向、为使设计可评审而写出的候选规则，以及仍没有方案的部分。**“已确认”不表示“已实现”**；实现分支已有有限可运行原型，准确范围见[实现说明](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/IMPLEMENTATION.md)；完整 goxide 编译器、linter、LSP 与可发布基础包尚未完成。实现进度以 [roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md) 为准。
 
 ## 1. 状态含义与维护规则
 
@@ -37,7 +37,7 @@
 | D15 | goxide 基础包提供现有 Go std 的 safe 视图与泛型 slice | [基础包](standard-library.md)；以 Go API 真实行为为依据，不以 Rust std 为规范 |
 | D16 | quote / syn 风格能力放在额外包 | [语法工具](syntax-tooling.md)；是否列入首个可用版本及协议仍暂定 |
 | D17 | 提供面向 goxide 的 LSP，未来考虑 goxide 自举 | [编译器与工具链](compiler-and-tooling.md)；启动语言、复用组件和阶段路线为暂定方案 |
-| D18 | 先完成设计；总纲和各专题分开，维护决策状态与路线，支持另一台机器继续 | [README](../../README.md)、[roadmap](../../ROADMAP.md)；本次修改不代表开始编译器实现 |
+| D18 | 先完成设计；总纲和各专题分开，维护决策状态与路线，支持另一台机器继续 | [README](../../README.md)、[roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)；本次修改不代表开始编译器实现 |
 | R19 | 发布完整 dist；同一 Go 模块携带 .go、.d.gox 与可选 .gox；Go 编译 .go，goxide 额外加载声明或源码 | [RFC 0001](../rfcs/0001-package-loading.md)；wrapper 与 marker 随 impl 包发布，无需外部方法注入 |
 | R20 | 相容 declare 可合并，有体实现保持唯一 | [RFC 0003](../rfcs/0003-declare-impl.md)；契约矛盾和原生采用/有体混合语义仍需明确 |
 | R21 | match 按模式区分值复制、只读借用与可变借用 | [RFC 0009](../rfcs/0009-match.md)；具体语法、作用域与支持原位借用的 ABI 未定 |
@@ -87,7 +87,7 @@
 
 ## 4. 未定与明确延期
 
-这些项有可能讨论过候选方案，但尚不能据此实现并宣称规范完成。处理次序见 [roadmap](../../ROADMAP.md)。
+这些项有可能讨论过候选方案，但尚不能据此实现并宣称规范完成。处理次序见 [roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)。
 
 | ID | 未闭合问题 | 影响 |
 | --- | --- | --- |
@@ -154,7 +154,7 @@
 
 已确认 **D32（2026-10-03 显式比较）**：enum 相等走显式 PartialEq/equals，Eq 依赖 PartialEq 并标记等价关系；允许显式 derive 自动生成。含不可比载荷的已知 enum 比较资格编译期判断，不以 Go interface 运行时 panic 充当策略。首片具体值参数、两实参求值后左/右验证沿既有机制实现；普通原生 Go 比较与当前 enum-nil 例外保持。Go comparable 不等于 Eq，Eq 不自动使类型成为 Go map key；不扩 full trait、HashMap 或指针拆分。具体实现与未完成边界见 [RFC](../rfcs/0008-enums.md#显式-partialeqeq-首片2026-10-03)。
 
-已确认 **D33（2026-10-03 容器 nil/空）**：同类型 nil slice 与非 nil 空 slice 不相等，nil map 与非 nil 空 map 不相等；两个 nil 相等，两个非 nil 空容器按内容相等。equals 先区分 nil，再比较内容，不做隐式 normalization。Option.None、Some(nil 载荷)、Some(非 nil 空载荷) 三者区分；serde null/[]/{}不因此改变。固定长度 Go array 没有 nil 状态。该语义已定，不再作为容器派生的待决项；map 键资格按后续 D34 有限实施，自定义相等和手写接口仍单列。[契约参考测试](../../tests/design/enum/equality_contract_test.go)仅为纯 Go 规则探针；实际容器实现证据另见 [本片验收](../t0-acceptance.md#容器-equality-派生2026-10-03)。
+已确认 **D33（2026-10-03 容器 nil/空）**：同类型 nil slice 与非 nil 空 slice 不相等，nil map 与非 nil 空 map 不相等；两个 nil 相等，两个非 nil 空容器按内容相等。equals 先区分 nil，再比较内容，不做隐式 normalization。Option.None、Some(nil 载荷)、Some(非 nil 空载荷) 三者区分；serde null/[]/{}不因此改变。固定长度 Go array 没有 nil 状态。该语义已定，不再作为容器派生的待决项；map 键资格按后续 D34 有限实施，自定义相等和手写接口仍单列。[契约参考测试](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/design/enum/equality_contract_test.go)仅为纯 Go 规则探针；实际容器实现证据另见 [本片验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/t0-acceptance.md#容器-equality-派生2026-10-03)。
 
 已确认 **D34（2026-10-03 容器比较派生）**：slice/map 按 D33 区分 nil/空并递归调用元素/值的 PartialEq/Eq 协议，不以 reflect.DeepEqual 替代。原生 map 首片仅接纳能证明原生查找与相等契约一致的稳定键，不能由 float NaN、自定义 equals 或 Go comparable 偷渡资格；不引入 HashMap。嵌套 struct/array/enum 与 Option 状态需要真实生成验收。手写比较入口可下一片，指针拆分/原位 borrow 不前置阻断本轮独立 enum 阶段。
 
@@ -167,7 +167,7 @@
 D36 补充（用户已授权，先规范后实现）：`go_result!(call)` / `go_result_keep!(call)` 按真实返回签名推导 T/E，保留具名 nilable 错误类型，按原类型 nil 判断；error 接口不动态猜 E，非 nilable struct 错误明确拒绝。显式 T 形式继续精确核对。完整黑白案例、typed 阶段/多文件/metadata 与网站验收见 [T/E 推导规范](../rfcs/research/0005-option-result-question.md#按静态返回签名推导-te已授权实施前规范)。
 
 
-已确认 **工具链 UT01（2026-10-04，独立于语言决策编号）**：迁入后的项目根只保留 `goxide.toml` / `goxide.lock` 为配置/锁权威；混合项目表示 `.go` / `.gox` 共存。显式module/Go/toolchain建议及原生require/replace/exclude写入TOML，真实Go负责选版/校验/构建；Go module元数据只在生成视图存在。原Go项目经只读plan、独立staging构建验证后产生新工程，不自动删除/移动/覆盖原文件。具体首片字段、锁与拒绝边界见 [RFC 0025](../rfcs/0025-unified-project.md)，features/多目标见 [RFC 0022](../rfcs/0022-project-toolchain.md)，授权脚本见 [RFC 0023](../rfcs/0023-build-scripts.md)。首片已提交，[集成回归与独立复审](../reviews/unified-project-20261004.md)已完成；确认方向不等于批准完整Cargo兼容。
+已确认 **工具链 UT01（2026-10-04，独立于语言决策编号）**：迁入后的项目根只保留 `goxide.toml` / `goxide.lock` 为配置/锁权威；混合项目表示 `.go` / `.gox` 共存。显式module/Go/toolchain建议及原生require/replace/exclude写入TOML，真实Go负责选版/校验/构建；Go module元数据只在生成视图存在。原Go项目经只读plan、独立staging构建验证后产生新工程，不自动删除/移动/覆盖原文件。具体首片字段、锁与拒绝边界见 [RFC 0025](../rfcs/0025-unified-project.md)，features/多目标见 [RFC 0022](../rfcs/0022-project-toolchain.md)，授权脚本见 [RFC 0023](../rfcs/0023-build-scripts.md)。首片已提交，[集成回归与独立复审](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/unified-project-20261004.md)已完成；确认方向不等于批准完整Cargo兼容。
 
 UT01 替代记录：早期 [TOML 设计](toml-manifest.md) 的长期根go.mod/go.sum兼容、hgo.lock名称和“纯TOML未来提案”标为superseded，原文仅留研究历史；Go proxy source发行物仍需一致传输元数据，不能把发布合同误当作者根双配置许可。
 

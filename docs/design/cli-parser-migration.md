@@ -5,7 +5,7 @@
 `-go/-offline` 等 Go 单短横长选项的兼容。这是 POSIX 风格短选项加 GNU 风格长选项
 的项目约定，不宣称 `--long` 是 POSIX 强制要求。历史只读审计基线为
 `69c1ab0d6769facd266886deec90337fe4b52498`，第2节与第8节历史探针仅描述该基线。
-实现和本地验证证据见[交付记录](../reviews/cobra-cli-20261004.md)。
+实现和本地验证证据见[交付记录](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/cobra-cli-20261004.md)。
 
 ## 1. 决策
 
@@ -36,7 +36,7 @@ pflag 的短选项及交错参数规则不同，不能仅换 import；其
 
 源码入口：[main.go](../../cmd/goxide/main.go)、
 [import_go.go](../../cmd/goxide/import_go.go)、[scripts.go](../../cmd/goxide/scripts.go)、
-[project.go](../../cmd/goxide/project.go)、[directory.go](../../cmd/goxide/directory.go)。
+[project.go](../../cmd/goxide/project.go)、[directory.go](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/cmd/goxide/directory.go)。
 
 - `main.go:24–29` 把任意返回错误打印到 stderr 并退出 1，包含 ErrHelp、参数错误、
   编译错误、子进程退出错误。没有稳定的 usage=2 分类，也未透传用户程序退出码。
@@ -345,4 +345,4 @@ Context/取消与 os.Stdin 转发保持。通用 FS/Runner/Context 接口注入�
 
 vendor 保留和一致性由已交付 vendor 服务负责，本轮未把它转换为伪造的完整本地模块。
 未实施 clap，也未 merge、tag 或部署网站。执行过的检查及其结果见
-[交付记录](../reviews/cobra-cli-20261004.md)。
+[交付记录](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/cobra-cli-20261004.md)。

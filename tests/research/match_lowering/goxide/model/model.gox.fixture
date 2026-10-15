@@ -1,3 +1,0 @@
-package model
-pub enum Mode{A,B}
-type Word uint64

@@ -189,7 +189,7 @@ func TestImportSourceSelectionInput(t *testing.T) {
 	}
 }
 func TestImportSourcesWorkspace(t *testing.T) {
-	t.Skip("MVP CLI workspace import and selection deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI workspace import and selection deferred by P6")
 	root, _, _ := sourceFixture(t, true, true)
 	base := filepath.Dir(root)
 	projectWrite(t, base, map[string]string{"go.work": "go 1.27\nuse ./old\n"})

@@ -109,7 +109,7 @@ func sourceHash(t *testing.T, root string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 func TestVersionSourceDefaultsAndReadonlyCache(t *testing.T) {
-	t.Skip("MVP CLI feature-selected dependency versions deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI feature-selected dependency versions deferred by P6")
 	proxy, cache := versionProxy(t)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", versionLibrary("v1"))
 	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
@@ -159,7 +159,7 @@ format = 1
 	}
 }
 func TestVersionSourceUnifiedMVSAndDiamond(t *testing.T) {
-	t.Skip("MVP CLI feature-selected dependency versions deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI feature-selected dependency versions deferred by P6")
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", versionLibrary("v1"))
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", versionLibrary("v2"))
@@ -200,7 +200,7 @@ func TestVersionSourceNativeAndMixedDiagnostics(t *testing.T) {
 	for _, kind := range []string{"native", "metadata", "same-name"} {
 		t.Run(kind, func(t *testing.T) {
 			if kind == "native" {
-				t.Skip("MVP CLI native dependency feature selection deferred by P6")
+				t.Skip("MVP-DEFERRED: MVP CLI native dependency feature selection deferred by P6")
 			}
 			proxy, _ := versionProxy(t)
 			files := versionLibrary("v1")
@@ -228,7 +228,7 @@ func TestVersionSourceNativeAndMixedDiagnostics(t *testing.T) {
 	}
 }
 func TestVersionSourceGraphChangeAndOscillation(t *testing.T) {
-	t.Skip("MVP CLI feature-selected dependency versions deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI feature-selected dependency versions deferred by P6")
 	for _, oscillates := range []bool{false, true} {
 		t.Run(fmt.Sprint(oscillates), func(t *testing.T) {
 			proxy, _ := versionProxy(t)
@@ -316,7 +316,7 @@ format = 1
 	}
 }
 func TestVersionSourceRootReplacement(t *testing.T) {
-	t.Skip("MVP CLI feature-selected dependency versions deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI feature-selected dependency versions deferred by P6")
 	versionProxy(t)
 	base := t.TempDir()
 	local := filepath.Join(base, "lib")
@@ -336,7 +336,7 @@ func TestVersionSourceRootReplacement(t *testing.T) {
 }
 
 func TestVersionSourceTargetABAAndGeneratedGo(t *testing.T) {
-	t.Skip("MVP CLI feature-selected dependency versions deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI feature-selected dependency versions deferred by P6")
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", versionLibrary("v1"))
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", versionLibrary("v2"))
@@ -387,7 +387,7 @@ func TestVersionSourceTargetABAAndGeneratedGo(t *testing.T) {
 	}
 }
 func TestVersionSourceScriptPermissionTracksSelectedVersion(t *testing.T) {
-	t.Skip("MVP CLI build-script permission by selected version deferred by P6")
+	t.Skip("MVP-DEFERRED: MVP CLI build-script permission by selected version deferred by P6")
 	proxy, cache := versionProxy(t)
 	fixture := buildScriptFixture(t, false, false)
 	raw, e := os.ReadFile(filepath.Join(fixture, "goxide.toml"))
@@ -525,7 +525,7 @@ func TestVersionSourceForkAndPathIdentity(t *testing.T) {
 		t.Fatal("renamed goxide source contract", err)
 	}
 	t.Run("feature-merge", func(t *testing.T) {
-		t.Skip("MVP CLI features merged across version and path sources deferred by P6")
+		t.Skip("MVP-DEFERRED: MVP CLI features merged across version and path sources deferred by P6")
 		local := t.TempDir()
 		projectWrite(t, local, versionLibrary("local"))
 		manifest := projectManifest(map[string]any{"version": 1, "bins": []map[string]string{{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"lib": map[string]any{"go": "example.org/goxidelib", "version": "v1.0.0", "default_features": false, "features": []string{"a"}}, "local": map[string]any{"module": "example.org/goxidelib", "path": local, "features": []string{"b"}}}})
@@ -612,7 +612,7 @@ func TestVersionSourceDormantAndFeatureErrors(t *testing.T) {
 	for _, kind := range []string{"optional", "unknown", "cycle", "path-escape", "missing-lib"} {
 		t.Run(kind, func(t *testing.T) {
 			if kind == "optional" || kind == "unknown" || kind == "cycle" {
-				t.Skip("MVP CLI optional dependencies and feature graphs deferred by P6")
+				t.Skip("MVP-DEFERRED: MVP CLI optional dependencies and feature graphs deferred by P6")
 			}
 			proxy, cache := versionProxy(t)
 			files := versionLibrary("v1")

@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -39,17 +37,13 @@ func TestNativeGoSingleFileCLI(t *testing.T) {
 			}
 			for _, mode := range []string{"transpile", "expand"} {
 				var out, diagnostic bytes.Buffer
-				mapFile := filepath.Join(t.TempDir(), "source.map.json")
-				if err := run([]string{mode, "--source-map", mapFile, input}, &out, &diagnostic); err != nil {
+				if err := run([]string{mode, input}, &out, &diagnostic); err != nil {
 					t.Fatalf("%s: %v: %s", mode, err, &diagnostic)
 				}
 				if out.String() != source {
 					t.Fatalf("native source changed: %q", out.String())
 				}
-				data, err := os.ReadFile(mapFile)
-				if err != nil || !json.Valid(data) || !bytes.Contains(data, []byte(`"Origin"`)) {
-					t.Fatalf("native source map: %v: %s", err, data)
-				}
+
 			}
 			var out, diagnostic bytes.Buffer
 			argv := []string{"run", "--go", tool, "--runtime", repo, input, "--"}

@@ -13,6 +13,8 @@ type permissionLocation struct {
 	fields []string
 }
 
+const permissionArrayElement = "[]"
+
 func samePermissionLocation(a, b *permissionLocation) bool {
 	if a == b {
 		return true
@@ -94,7 +96,25 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 		}
 		value := p.expr(n.X, nil)
 		addressable, writable := p.place(n.X)
-		if _, literal := n.X.(*ast.CompositeLit); literal && mode == ValueRef {
+		operand := n.X
+		for {
+			paren, ok := operand.(*ast.ParenExpr)
+			if !ok {
+				break
+			}
+			operand = paren.X
+		}
+		if !n.Mut {
+			if want == nil && !writable {
+				mode = ReadRef
+			}
+			if dereference, ok := operand.(*ast.StarExpr); ok {
+				if pointer := p.expr(dereference.X, nil); pointer != nil && pointer.ref != ValueRef {
+					mode = ReadRef
+				}
+			}
+		}
+		if _, literal := operand.(*ast.CompositeLit); literal && mode == ValueRef {
 			addressable = true
 		}
 		if !addressable {
@@ -117,15 +137,26 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 			q = p.readValue(q)
 		}
 	case *ast.SelectorExpr:
+		if n.Static {
+			if signature, ok := q.typ.(*types.Signature); ok && signature.Params().Len() > 0 {
+				object, _, _ := types.LookupFieldOrMethod(signature.Params().At(0).Type(), false, p.c.pkg, n.Sel.Name)
+				if method, ok := object.(*types.Func); ok {
+					return p.nativeMethodExpression(n, method, signature)
+				}
+			}
+			return q
+		}
 		x := p.expr(n.X, nil)
 		if x == nil {
 			break
 		}
+		var fieldPath []int
 		if x.typ != nil {
-			if obj, _, _ := types.LookupFieldOrMethod(x.typ, true, p.c.pkg, n.Sel.Name); obj != nil {
+			if obj, index, _ := types.LookupFieldOrMethod(x.typ, true, p.c.pkg, n.Sel.Name); obj != nil {
 				if method, ok := obj.(*types.Func); ok {
-					return p.method(n, x, method)
+					return p.method(n, x, method, index)
 				}
+				fieldPath = index
 			}
 		}
 		if pointerType(x) {
@@ -134,8 +165,21 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 				x = p.readValue(x)
 			}
 		}
-		if field := p.fields(x)[n.Sel.Name]; field != nil {
-			q = field
+		for _, index := range fieldPath {
+			if pointerType(x) {
+				pointer := x
+				x = p.deref(pointer)
+				if pointer.ref == ReadRef || pointer.shared {
+					x = p.readValue(x)
+				}
+			}
+			structure, ok := x.typ.Underlying().(*types.Struct)
+			if !ok || index >= structure.NumFields() {
+				break
+			}
+			if field := p.fields(x)[structure.Field(index).Name()]; field != nil {
+				x, q = field, field
+			}
 		}
 	case *ast.IndexExpr:
 		x := p.expr(n.X, nil)
@@ -170,7 +214,12 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 		if pointerType(x) {
 			q.elem = p.element(p.deref(x))
 		}
-		_, writable := p.place(n.X)
+		addressable, writable := p.place(n.X)
+		if x != nil && x.typ != nil {
+			if _, array := x.typ.Underlying().(*types.Array); array && !addressable {
+				p.c.diag(n.X, ReferenceAddress, "slicing an array requires an addressable storage location")
+			}
+		}
 		if !writable {
 			q.shared = true
 		}
@@ -211,7 +260,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 	case *ast.KeyValue:
 		return p.expr(n.Value, want)
 	case *ast.CallExpr:
-		return p.call(n, want)
+		return p.call(n, want, false)
 	case *ast.TypeAssertExpr:
 		x := p.expr(n.X, nil)
 		if n.Type != nil {
@@ -219,6 +268,9 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 			p.require(n, x, q)
 		}
 	case *ast.UnaryExpr:
+		if n.Op == token.ARROW {
+			p.synchronize()
+		}
 		x := p.expr(n.X, nil)
 		if n.Op == token.ARROW {
 			q = p.element(x)
@@ -289,7 +341,11 @@ func (p *permissionChecker) deref(q *permission) *permission {
 		}
 		if current := p.env[location.root]; current != nil {
 			for _, field := range location.fields {
-				current = p.fields(current)[field]
+				if field == permissionArrayElement {
+					current = p.element(current)
+				} else {
+					current = p.fields(current)[field]
+				}
 				if current == nil {
 					break
 				}
@@ -326,23 +382,66 @@ func (p *permissionChecker) locations(node ast.Expr) []*permissionLocation {
 			}
 			return []*permissionLocation{q.location}
 		}
-	case *ast.SelectorExpr:
-		var locations []*permissionLocation
-		if q := p.expr(n.X, nil); pointerType(q) {
-			locations = q.locations
+	case *ast.IndexExpr:
+		value := p.expr(n.X, nil)
+		if value == nil || value.typ == nil {
+			return nil
+		}
+		locations := p.locations(n.X)
+		if pointerType(value) {
+			locations = value.locations
 			if len(locations) == 0 {
-				locations = []*permissionLocation{q.location}
+				locations = []*permissionLocation{value.location}
 			}
-		} else {
-			locations = p.locations(n.X)
+			value = p.deref(value)
+		}
+		if _, array := value.typ.Underlying().(*types.Array); !array {
+			return nil
 		}
 		projected := make([]*permissionLocation, len(locations))
 		for i, location := range locations {
 			if location != nil {
-				projected[i] = &permissionLocation{root: location.root, fields: append(append([]string(nil), location.fields...), n.Sel.Name)}
+				projected[i] = &permissionLocation{root: location.root, fields: append(append([]string(nil), location.fields...), permissionArrayElement)}
 			}
 		}
 		return projected
+	case *ast.SelectorExpr:
+		value := p.expr(n.X, nil)
+		var locations []*permissionLocation
+		if pointerType(value) {
+			locations = value.locations
+			if len(locations) == 0 {
+				locations = []*permissionLocation{value.location}
+			}
+		} else {
+			locations = p.locations(n.X)
+		}
+		if value == nil || value.typ == nil {
+			return nil
+		}
+		_, indices, _ := types.LookupFieldOrMethod(value.typ, true, p.c.pkg, n.Sel.Name)
+		for _, index := range indices {
+			if pointerType(value) {
+				locations = value.locations
+				if len(locations) == 0 {
+					locations = []*permissionLocation{value.location}
+				}
+				value = p.deref(value)
+			}
+			structure, ok := value.typ.Underlying().(*types.Struct)
+			if !ok || index >= structure.NumFields() {
+				return nil
+			}
+			field := structure.Field(index).Name()
+			projected := make([]*permissionLocation, len(locations))
+			for i, location := range locations {
+				if location != nil {
+					projected[i] = &permissionLocation{root: location.root, fields: append(append([]string(nil), location.fields...), field)}
+				}
+			}
+			locations, value = projected, p.fields(value)[field]
+		}
+		return locations
 	}
 	return nil
 }
@@ -359,10 +458,24 @@ func (p *permissionChecker) place(node ast.Expr) (bool, bool) {
 		return pointerType(q), q == nil || (q.ref != ReadRef && !q.shared)
 	case *ast.SelectorExpr:
 		q := p.expr(n.X, nil)
-		if pointerType(q) {
-			return true, q.ref != ReadRef && !q.shared
+		addressable, writable := p.place(n.X)
+		if q == nil || q.typ == nil {
+			return addressable, writable
 		}
-		return p.place(n.X)
+		_, indices, _ := types.LookupFieldOrMethod(q.typ, true, p.c.pkg, n.Sel.Name)
+		for _, index := range indices {
+			if pointerType(q) {
+				addressable = true
+				writable = writable && q.ref != ReadRef && !q.shared
+				q = p.deref(q)
+			}
+			structure, ok := q.typ.Underlying().(*types.Struct)
+			if !ok || index >= structure.NumFields() {
+				break
+			}
+			q = p.fields(q)[structure.Field(index).Name()]
+		}
+		return addressable, writable
 	case *ast.IndexExpr:
 		q := p.expr(n.X, nil)
 		if q == nil || q.typ == nil {
@@ -472,37 +585,51 @@ func (p *permissionChecker) enumLiteral(n *ast.CompositeLit, con *Constructor, w
 	return q
 }
 
-func (p *permissionChecker) method(n *ast.SelectorExpr, receiver *permission, method *types.Func) *permission {
+func (p *permissionChecker) method(n *ast.SelectorExpr, receiver *permission, method *types.Func, indices []int) *permission {
 	q := p.fromGo(method.Type())
-	var fn *permissionFunction
-	for _, f := range p.functions {
-		if f.decl.Name.Name != n.Sel.Name || f.typ.receiver == nil {
-			continue
-		}
-		base := f.typ.receiver.typ
-		if pointerType(f.typ.receiver) {
-			base = p.element(f.typ.receiver).typ
-		}
-		actual := receiver.typ
+	locations := p.locations(n.X)
+	addressable, writable := p.place(n.X)
+	for _, index := range indices[:max(0, len(indices)-1)] {
 		if pointerType(receiver) {
-			actual = p.element(receiver).typ
+			addressable = true
+			pointer := receiver
+			locations = pointer.locations
+			if len(locations) == 0 {
+				locations = []*permissionLocation{pointer.location}
+			}
+			receiver = p.deref(pointer)
+			if pointer.ref == ReadRef || pointer.shared {
+				receiver, writable = p.readValue(receiver), false
+			}
 		}
-		a, aok := types.Unalias(actual).(*types.Named)
-		b, bok := types.Unalias(base).(*types.Named)
-		if aok && bok && a.Origin() == b.Origin() {
-			fn = f
+		structure, ok := receiver.typ.Underlying().(*types.Struct)
+		if !ok || index >= structure.NumFields() {
 			break
 		}
+		field := structure.Field(index).Name()
+		for i, location := range locations {
+			if location != nil {
+				locations[i] = &permissionLocation{root: location.root, fields: append(append([]string(nil), location.fields...), field)}
+			}
+		}
+		receiver = p.fields(receiver)[field]
 	}
+	expose := func(want *permission) {
+		p.exposures = append(p.exposures, permissionExposure{file: p.c.file, node: n, locations: locations, want: want})
+	}
+	fn := p.sourceMethod(method)
 	if fn != nil {
 		actual := receiver
 		if pointerType(fn.typ.receiver) && !pointerType(receiver) {
-			_, writable := p.place(n.X)
-			mode := WriteRef
+			if !addressable {
+				p.c.diag(n.X, ReferenceAddress, "pointer method requires an addressable receiver")
+			}
+			mode := fn.typ.receiver.ref
 			if !writable {
 				mode = ReadRef
 			}
 			actual = &permission{typ: types.NewPointer(receiver.typ), elem: receiver, ref: mode}
+			expose(fn.typ.receiver)
 		} else if !pointerType(fn.typ.receiver) && pointerType(receiver) {
 			actual = p.deref(receiver)
 			if receiver.ref == ReadRef || receiver.shared {
@@ -516,7 +643,17 @@ func (p *permissionChecker) method(n *ast.SelectorExpr, receiver *permission, me
 		p.checkGenericCall(q, q.params, sub)
 	} else if sig, ok := method.Type().(*types.Signature); ok && sig.Recv() != nil {
 		actual := receiver
-		if !pointerType(p.fromGo(sig.Recv().Type())) && pointerType(actual) {
+		if pointerType(p.fromGo(sig.Recv().Type())) && !pointerType(actual) {
+			if !addressable {
+				p.c.diag(n.X, ReferenceAddress, "pointer method requires an addressable receiver")
+			}
+			mode := ValueRef
+			if !writable {
+				mode = ReadRef
+			}
+			actual = &permission{typ: types.NewPointer(receiver.typ), elem: receiver, ref: mode}
+			expose(p.fromGo(sig.Recv().Type()))
+		} else if !pointerType(p.fromGo(sig.Recv().Type())) && pointerType(actual) {
 			actual = p.deref(actual)
 			if receiver.ref == ReadRef || receiver.shared {
 				actual = p.readValue(actual)
@@ -535,7 +672,9 @@ func (p *permissionChecker) checkClosure(n *ast.FuncLit, q *permission, record b
 	defer delete(p.activeClosures, n)
 	outer, declared, results := p.env, p.declared, p.results
 	captured, effects := p.captured, p.effects
+	asyncEffects := p.asyncEffects
 	p.captured, p.effects = clonePermissionEnv(outer), permissionEnv{}
+	p.asyncEffects = permissionEnv{}
 	if record {
 		p.closures = append(p.closures, permissionClosure{p.c.file, n, clonePermissionEnv(outer), q})
 	}
@@ -561,5 +700,12 @@ func (p *permissionChecker) checkClosure(n *ast.FuncLit, q *permission, record b
 	for s, value := range p.effects {
 		q.effects[s] = p.merge(q.effects[s], value)
 	}
+	if q.asyncEffects == nil {
+		q.asyncEffects = permissionEnv{}
+	}
+	for s, value := range p.asyncEffects {
+		q.asyncEffects[s] = p.merge(q.asyncEffects[s], value)
+	}
 	p.captured, p.effects = captured, effects
+	p.asyncEffects = asyncEffects
 }

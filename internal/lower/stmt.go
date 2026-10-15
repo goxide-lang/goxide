@@ -94,6 +94,9 @@ func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
 		if decl == nil {
 			return nil
 		}
+		if source, ok := n.Decl.(*syntax.TypeDecl); ok {
+			e.registerLocalTypes(source, decl.(*goast.GenDecl))
+		}
 		return &goast.DeclStmt{Decl: decl}
 	case *syntax.EmptyStmt:
 		return &goast.EmptyStmt{Semicolon: e.pos(n), Implicit: n.Implicit}

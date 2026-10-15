@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/hxsf/goxide/internal/resolve"
 	"github.com/hxsf/goxide/internal/syntax/ast"
 	syntaxparser "github.com/hxsf/goxide/internal/syntax/parser"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestCoreEnumMatch(t *testing.T) {
@@ -36,6 +36,104 @@ func TestCoreSumMatch(t *testing.T) {
 
 func TestCoreNilBeforeWildcard(t *testing.T) {
 	runCoreFixture(t, "nil_match", "true false\n", 1, 0)
+	t.Run("nested-dispatch", func(t *testing.T) {
+		const name = "nestedfixture/main.gox"
+		input := map[string]string{name: `package fixture
+pub enum Inner[T] { A, Item(T), Record { Value T } }
+pub enum Outer[T] { Wrap(Inner[T]), Pair(int, Inner[T]), Box(Option[Inner[T]]), Empty }
+func mark(touched *int) bool { *touched++; return true }
+func nested(value Outer[int], touched *int) int {
+    match value {
+        Outer::Wrap(Inner::Item(n)) if mark(touched) => { return n },
+        Outer::Wrap(Inner::Record { Value: n }) => { return n },
+        Outer::Wrap(p) => { _ = p; return 0 },
+        _ => { return -1 },
+    }
+}
+func short(value Outer[int]) int {
+    match value {
+        Outer::Pair(0, Inner::A) => { return 1 },
+        _ => { return 0 },
+    }
+}
+func boxed(value Outer[int], touched *int) int {
+    true := false
+    _ = true
+    match value {
+        Outer::Box(Option::Some(Inner::Item(n))) if mark(touched) => { return n },
+        _ => { return 0 },
+    }
+}
+func bind(value Outer[int], touched *int) Inner[int] {
+    match value {
+        Outer::Wrap(p) => { *touched++; return p },
+        _ => { return Inner::A },
+    }
+}
+func rematch(value Inner[int], touched *int) {
+    match value { _ => { *touched++ } }
+}
+`}
+		output, err := lowerDeriveSources(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		again, err := lowerDeriveSources(input)
+		if err != nil || !reflect.DeepEqual(output, again) {
+			t.Fatalf("repeated nested generation differs: %v", err)
+		}
+		const consumer = `package fixture
+import (
+    "fmt"
+    "strings"
+    "testing"
+    "github.com/goxide-lang/std/sum"
+)
+func TestDispatch(t *testing.T) {
+    rejects := func(run func(), touched *int) {
+        t.Helper()
+        message := ""
+        func() { defer func() { message = fmt.Sprint(recover()) }(); run() }()
+        if !strings.Contains(message, "match on nil Inner") || *touched != 0 {
+            t.Fatalf("nested panic=%q guard=%d", message, *touched)
+        }
+    }
+    for _, value := range []Inner[int]{nil, (*A[int])(nil), (*Item[int])(nil), (*Record[int])(nil)} {
+        touched := 0
+        outer := &Wrap[int]{Value: value}
+        rejects(func() { nested(outer, &touched) }, &touched)
+        if result := bind(outer, &touched); result != value || touched != 1 {
+            t.Fatalf("binding changed payload or ran dispatch: %v, %d", result, touched)
+        }
+        touched = 0
+        rejects(func() { rematch(value, &touched) }, &touched)
+        boxedValue := &Box[int]{Value: sum.NewSome[Inner[int]](value)}
+        rejects(func() { boxed(boxedValue, &touched) }, &touched)
+        if got := short(&Pair[int]{V0: 1, V1: value}); got != 0 {
+            t.Fatalf("unreached nested pattern returned %d", got)
+        }
+    }
+    touched := 0
+    if got := nested(&Wrap[int]{Value: &Item[int]{Value: 7}}, &touched); got != 7 || touched != 1 { t.Fatal(got, touched) }
+    if got := nested(&Wrap[int]{Value: &Record[int]{Value: 9}}, &touched); got != 9 || touched != 1 { t.Fatal(got, touched) }
+    if got := nested(&Wrap[int]{Value: &A[int]{}}, &touched); got != 0 || touched != 1 { t.Fatal(got, touched) }
+    if got := short(&Pair[int]{V1: &A[int]{}}); got != 1 { t.Fatal(got) }
+    if got := boxed(&Box[int]{Value: sum.NewSome[Inner[int]](&Item[int]{Value: 11})}, &touched); got != 11 || touched != 2 { t.Fatal(got, touched) }
+    if got := boxed(&Box[int]{Value: sum.None[Inner[int]]()}, &touched); got != 0 || touched != 2 { t.Fatal(got, touched) }
+}
+`
+		module := t.TempDir()
+		if err := testdeps.WriteFile(filepath.Join(module, "go.mod"), []byte("module nestedfixture\n\ngo 1.27\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		for file, contents := range map[string][]byte{"generated.go": output[name], "generated_test.go": []byte(consumer)} {
+			if err := os.WriteFile(filepath.Join(module, file), contents, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		runGo(t, module, "build", "./...")
+		runGo(t, module, "test", "-race", "-count=1", "./...")
+	})
 }
 
 func TestCoreMatchLoopAndDefer(t *testing.T) {
@@ -160,18 +258,14 @@ func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, 
 	if typeSwitches != wantTypeSwitches || tagSwitches != wantTagSwitches {
 		t.Fatalf("dispatch count: type switches %d (want %d), tag switches %d (want %d)", typeSwitches, wantTypeSwitches, tagSwitches, wantTagSwitches)
 	}
-	std, err := filepath.Abs(filepath.Join("..", "..", "..", "std"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	module := []byte("module corefixture\n\ngo 1.27\n\nrequire github.com/goxide-lang/std v0.0.0\nreplace github.com/goxide-lang/std => " + strconv.Quote(std) + "\n")
+	module := []byte("module corefixture\n\ngo 1.27\n")
 	generated, handwritten := t.TempDir(), t.TempDir()
 	equivalent, err := os.ReadFile(filepath.Join(directory, "equivalent.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for target, contents := range map[string][]byte{generated: output[name], handwritten: equivalent} {
-		if err := os.WriteFile(filepath.Join(target, "go.mod"), module, 0600); err != nil {
+		if err := testdeps.WriteFile(filepath.Join(target, "go.mod"), module, 0600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(target, "main.go"), contents, 0600); err != nil {

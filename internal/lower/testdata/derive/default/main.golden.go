@@ -47,39 +47,43 @@ func main() {
 	var state State = DefaultState()
 	fmt.Println(zero.First.Text == "", value.First.Text, value.Second.Number, calls)
 	{
-		var goxideValue1 func(a ...any) (n int, err error) = fmt.Println
-		var goxideMatch2 any
-		var goxidematch3 sum.Option[chan int] = value.Optional
-		switch goxidetag5 := sum.TagOption(goxidematch3); goxidetag5 {
+		var goxideMatch1 any
+		var goxidematch2 sum.Option[chan int] = value.Optional
+		switch goxidetag4 := sum.TagOption(goxidematch2); goxidetag4 {
 		case 0:
-			goxideMatch2 = "none"
+			goxideMatch1 = "none"
 		case 1:
-			goxideMatch2 = "some"
+			goxideMatch1 = "some"
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		goxideValue1(goxideMatch2)
+		fmt.Println(goxideMatch1)
 	}
 	{
-		var goxideValue6 func(a ...any) (n int, err error) = fmt.Println
-		var goxideMatch7 any
-		var goxidematch8 State = state
-		if goxidematch8 == nil {
+		var goxideMatch5 any
+		var goxidematch6 State = state
+		if goxidematch6 == nil {
 			panic("goxide: match on nil State at derivefixture/main.gox:647")
 		}
-		switch goxidevariant9 := goxidematch8.(type) {
+		switch goxidevariant7 := goxidematch6.(type) {
 		case *Ready:
-			_ = goxidevariant9
-			first, second := goxidevariant9.First, goxidevariant9.Second
-			goxideMatch7 = first.Text + fmt.Sprint(second.Number)
+			_ = goxidevariant7
+			if goxidevariant7 == nil {
+				panic("goxide: match on nil State at derivefixture/main.gox:647")
+			}
+			first, second := goxidevariant7.First, goxidevariant7.Second
+			goxideMatch5 = first.Text + fmt.Sprint(second.Number)
 		case *Unavailable:
-			_ = goxidevariant9
-			goxideMatch7 = "bad"
+			_ = goxidevariant7
+			if goxidevariant7 == nil {
+				panic("goxide: match on nil State at derivefixture/main.gox:647")
+			}
+			goxideMatch5 = "bad"
 		default:
-			_ = goxidevariant9
+			_ = goxidevariant7
 			panic("goxide: invalid enum State")
 		}
-		goxideValue6(goxideMatch7)
+		fmt.Println(goxideMatch5)
 	}
 }
 func DefaultRecord() Record {

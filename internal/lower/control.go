@@ -47,22 +47,39 @@ type breakTarget struct {
 	used  bool
 }
 
-func (e *emitter) withBreak(n syntax.Stmt, label string) goast.Stmt {
+func (e *emitter) withBreak(n syntax.Stmt, label *syntax.Ident) goast.Stmt {
 	old := e.breakTarget
 	target := &breakTarget{label: e.fresh("Break"), depth: e.matchDepth}
-	if label != "" {
-		target.label = goast.NewIdent(label)
-	}
 	e.breakTarget = target
+	pending := e.pending
+	e.pending = nil
 	var out goast.Stmt
 	switch n := n.(type) {
 	case *syntax.ForStmt:
 		if hasFlow(n.Init) || hasFlow(n.Cond) || hasFlow(n.Post) {
-			out = e.flowFor(n, label)
+			out = e.flowFor(n)
 		} else {
 			out = e.stmt(n)
 		}
+	case *syntax.RangeStmt:
+		if framed, ok := e.framedRange(n); ok {
+			out = framed
+			break
+		}
+		out = e.stmt(n)
+		if hasFlow(n.X) && e.info.Types[n.X] != nil {
+			if _, array := e.info.Types[n.X].Underlying().(*types.Array); array {
+				// Hoisting ? must not let Go skip a formerly evaluated array
+				// expression just because its length is now constant.
+				rangeStmt := out.(*goast.RangeStmt)
+				rangeStmt.X = e.spill(n.X, rangeStmt.X)
+			}
+		}
 	case *syntax.SwitchStmt:
+		if framed, ok := e.framedSwitch(n); ok {
+			out = framed
+			break
+		}
 		flow := hasFlow(n.Init) || hasFlow(n.Tag)
 		for _, c := range n.Cases {
 			for _, x := range c.List {
@@ -82,7 +99,27 @@ func (e *emitter) withBreak(n syntax.Stmt, label string) goast.Stmt {
 		out = e.stmt(n)
 	}
 	e.breakTarget = old
-	if target.used || label != "" {
+	if len(e.pending) > 0 {
+		out = &goast.BlockStmt{List: append(e.pending, out)}
+	}
+	e.pending = pending
+	if label != nil {
+		name := e.ident(label).Name
+		if _, block := out.(*goast.BlockStmt); !block {
+			target.label.Name = name
+		}
+		goast.Inspect(out, func(node goast.Node) bool {
+			if _, ok := node.(*goast.FuncLit); ok {
+				return false
+			}
+			if branch, ok := node.(*goast.BranchStmt); ok && branch.Label != nil && branch.Label.Name == name && (branch.Tok == gotoken.BREAK || branch.Tok == gotoken.CONTINUE) {
+				branch.Label = target.label
+				target.used = true
+			}
+			return true
+		})
+	}
+	if target.used {
 		if block, ok := out.(*goast.BlockStmt); ok && len(block.List) > 0 {
 			last := len(block.List) - 1
 			if _, labeled := block.List[last].(*goast.LabeledStmt); !labeled {
@@ -90,6 +127,21 @@ func (e *emitter) withBreak(n syntax.Stmt, label string) goast.Stmt {
 			}
 		} else {
 			out = &goast.LabeledStmt{Label: target.label, Stmt: out}
+		}
+	}
+	if label != nil {
+		used, jump := false, false
+		symbol := e.file.Definitions[label.ID()]
+		syntax.Walk(e.tree, func(node syntax.Node) bool {
+			if branch, ok := node.(*syntax.BranchStmt); ok && branch.Label != nil && symbol != nil && e.file.References[branch.Label.ID()].Symbol == symbol {
+				used = true
+				jump = jump || branch.Tok == token.GOTO
+			}
+			return true
+		})
+		if jump || !used {
+			// A goto re-enters the complete source statement, including its operands.
+			out = &goast.LabeledStmt{Label: e.ident(label), Stmt: out}
 		}
 	}
 	return out
@@ -156,7 +208,7 @@ func (e *emitter) flowStmt(n syntax.Stmt) goast.Stmt {
 			return &goast.BlockStmt{List: init}
 		}
 	case *syntax.ForStmt, *syntax.RangeStmt, *syntax.SelectStmt, *syntax.TypeSwitchStmt:
-		return e.withBreak(n, "")
+		return e.withBreak(n, nil)
 	case *syntax.BranchStmt:
 		if n.Tok == token.BREAK && n.Label == nil && e.breakTarget != nil && e.matchDepth > e.breakTarget.depth {
 			e.breakTarget.used = true
@@ -168,11 +220,11 @@ func (e *emitter) flowStmt(n syntax.Stmt) goast.Stmt {
 			return &goast.SendStmt{Chan: v[0], Value: v[1]}
 		}
 	case *syntax.SwitchStmt:
-		return e.withBreak(n, "")
+		return e.withBreak(n, nil)
 	case *syntax.LabeledStmt:
 		switch n.Stmt.(type) {
 		case *syntax.ForStmt, *syntax.RangeStmt, *syntax.SwitchStmt, *syntax.TypeSwitchStmt, *syntax.SelectStmt:
-			return e.withBreak(n.Stmt, e.ident(n.Label).Name)
+			return e.withBreak(n.Stmt, n.Label)
 		}
 
 	}
@@ -180,6 +232,9 @@ func (e *emitter) flowStmt(n syntax.Stmt) goast.Stmt {
 }
 
 func (e *emitter) assignment(n *syntax.AssignStmt) goast.Stmt {
+	if framed, ok := e.framedAssignment(n); ok {
+		return framed
+	}
 	flow := false
 	for _, x := range n.Lhs {
 		flow = flow || hasFlow(x)
@@ -229,7 +284,17 @@ func (e *emitter) lvalue(n syntax.Expr) goast.Expr {
 	case *syntax.ParenExpr:
 		return &goast.ParenExpr{X: e.lvalue(n.X)}
 	case *syntax.IndexExpr:
-		x := e.container(n.X, e.expr(n.X))
+		var x goast.Expr
+		if t := e.info.Types[n.X]; t != nil {
+			if _, array := t.Underlying().(*types.Array); array {
+				// An array is storage, not an operand value. Its final bounds and
+				// pointer checks belong to the assignment's write phase.
+				x = e.lvalue(n.X)
+			}
+		}
+		if x == nil {
+			x = e.spill(n.X, e.expr(n.X))
+		}
 		indices := e.ordered(n.Indices)
 		for i, id := range n.Indices {
 			indices[i] = e.spill(id, indices[i])
@@ -240,15 +305,7 @@ func (e *emitter) lvalue(n syntax.Expr) goast.Expr {
 	case *syntax.StarExpr:
 		return &goast.StarExpr{X: e.spill(n.X, e.expr(n.X))}
 	case *syntax.SelectorExpr:
-		base := e.expr(n.X)
-		if t := e.info.Types[n.X]; t != nil {
-			if _, pointer := t.Underlying().(*types.Pointer); pointer {
-				return &goast.SelectorExpr{X: e.spill(n.X, base), Sel: e.ident(n.Sel)}
-			}
-		}
-		id := e.fresh("Address")
-		e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{id}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{&goast.UnaryExpr{Op: gotoken.AND, X: base}}})
-		return &goast.SelectorExpr{X: id, Sel: e.ident(n.Sel)}
+		return e.selectorPlace(n)
 	}
 	x := e.expr(n)
 	id := e.fresh("Address")
@@ -256,19 +313,74 @@ func (e *emitter) lvalue(n syntax.Expr) goast.Expr {
 	return &goast.StarExpr{X: id}
 }
 
-func (e *emitter) flowFor(n *syntax.ForStmt, label string) goast.Stmt {
+func (e *emitter) selectorPlace(n *syntax.SelectorExpr) goast.Expr {
+	typ := e.info.Types[n.X]
+	var base goast.Expr
+	if typ != nil {
+		if _, pointer := typ.Underlying().(*types.Pointer); pointer {
+			base = e.spill(n.X, e.expr(n.X))
+		}
+	}
+	if base == nil {
+		base = e.lvalue(n.X)
+	}
+	if typ == nil {
+		return &goast.SelectorExpr{X: base, Sel: e.ident(n.Sel)}
+	}
+	owner := typ
+	if pointer, ok := owner.Underlying().(*types.Pointer); ok {
+		owner = pointer.Elem()
+	}
+	var pkg *types.Package
+	if named, ok := types.Unalias(owner).(*types.Named); ok {
+		pkg = named.Obj().Pkg()
+	} else if structure, ok := owner.Underlying().(*types.Struct); ok && structure.NumFields() > 0 {
+		pkg = structure.Field(0).Pkg()
+	}
+	_, indices, _ := types.LookupFieldOrMethod(typ, true, pkg, n.Sel.Name)
+	for _, index := range indices[:max(0, len(indices)-1)] {
+		if pointer, ok := typ.Underlying().(*types.Pointer); ok {
+			typ = pointer.Elem()
+		}
+		field := typ.Underlying().(*types.Struct).Field(index)
+		base = &goast.SelectorExpr{X: base, Sel: goast.NewIdent(field.Name())}
+		typ = field.Type()
+		if _, pointer := typ.Underlying().(*types.Pointer); pointer {
+			// Snapshot promoted pointer fields before the RHS can replace them.
+			id := e.fresh("Value")
+			e.pending = append(e.pending, varStmt(id, e.goType(typ), base))
+			base = id
+		}
+	}
+	return &goast.SelectorExpr{X: base, Sel: e.ident(n.Sel)}
+}
+
+func (e *emitter) flowFor(n *syntax.ForStmt) goast.Stmt {
 	init := e.statement(n.Init)
 	before, cond := e.exprScoped(n.Cond)
 	body := e.block(n.Body)
+	var loopInit goast.Stmt
+	if source, ok := n.Init.(*syntax.AssignStmt); ok && source.Tok == token.DEFINE {
+		if last, ok := init[len(init)-1].(*goast.AssignStmt); ok && last.Tok == gotoken.DEFINE {
+			loopInit, init = last, init[:len(init)-1]
+		} else {
+			// Keep the variables in a native for initializer so Go creates the
+			// next iteration's variables before executing its post statement.
+			var names []goast.Expr
+			for _, lhs := range source.Lhs {
+				if id, ok := lhs.(*syntax.Ident); ok && id.Name != "_" {
+					names = append(names, e.ident(id))
+				}
+			}
+			loopInit = &goast.AssignStmt{Lhs: names, Tok: gotoken.DEFINE, Rhs: names}
+		}
+	}
 	var post goast.Stmt
 	if hasFlow(n.Post) {
-		postLabel := e.fresh("Post")
-		used := rewriteContinue(body, postLabel, label, 0)
-		var postBody goast.Stmt = &goast.BlockStmt{List: e.statement(n.Post)}
-		if used {
-			postBody = &goast.LabeledStmt{Label: postLabel, Stmt: postBody}
-		}
-		body = &goast.BlockStmt{List: []goast.Stmt{body, postBody}}
+		first := e.fresh("First")
+		init = append(init, varStmt(first, goast.NewIdent("bool"), goast.NewIdent("true")))
+		postBody := &goast.IfStmt{Cond: first, Body: &goast.BlockStmt{List: []goast.Stmt{assign(first, goast.NewIdent("false"))}}, Else: &goast.BlockStmt{List: e.statement(n.Post)}}
+		before = append([]goast.Stmt{postBody}, before...)
 	} else {
 		post = e.stmt(n.Post)
 	}
@@ -276,38 +388,9 @@ func (e *emitter) flowFor(n *syntax.ForStmt, label string) goast.Stmt {
 		before = append(before, &goast.IfStmt{Cond: &goast.UnaryExpr{Op: gotoken.NOT, X: cond}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.BranchStmt{Tok: gotoken.BREAK}}}})
 	}
 	body.List = append(before, body.List...)
-	var loop goast.Stmt = &goast.ForStmt{Post: post, Body: body}
-	if label != "" {
-		loop = &goast.LabeledStmt{Label: goast.NewIdent(label), Stmt: loop}
-	}
+	var loop goast.Stmt = &goast.ForStmt{Init: loopInit, Post: post, Body: body}
 	init = append(init, loop)
 	return &goast.BlockStmt{List: init}
-}
-
-func rewriteContinue(n goast.Node, target *goast.Ident, label string, depth int) bool {
-	used := false
-	goast.Inspect(n, func(node goast.Node) bool {
-		if node == nil {
-			return false
-		}
-		if _, ok := node.(*goast.FuncLit); ok {
-			return false
-		}
-		if node != n {
-			switch node.(type) {
-			case *goast.ForStmt, *goast.RangeStmt:
-				used = rewriteContinue(node, target, label, depth+1) || used
-				return false
-			}
-		}
-		if b, ok := node.(*goast.BranchStmt); ok && b.Tok == gotoken.CONTINUE && (b.Label == nil && depth == 0 || b.Label != nil && b.Label.Name == label) {
-			b.Tok = gotoken.GOTO
-			b.Label = target
-			used = true
-		}
-		return true
-	})
-	return used
 }
 
 func (e *emitter) flowSwitch(n *syntax.SwitchStmt) goast.Stmt {
@@ -315,9 +398,18 @@ func (e *emitter) flowSwitch(n *syntax.SwitchStmt) goast.Stmt {
 	before, tag := e.exprScoped(n.Tag)
 	list = append(list, before...)
 	if tag != nil {
-		id := e.fresh("Switch")
-		list = append(list, varStmt(id, e.goType(e.info.Types[n.Tag]), tag))
-		tag = id
+		compared := false
+		for _, clause := range n.Cases {
+			compared = compared || len(clause.List) > 0
+		}
+		if compared {
+			id := e.fresh("Switch")
+			list = append(list, varStmt(id, e.goType(e.info.Types[n.Tag]), tag))
+			tag = id
+		} else {
+			list = append(list, assign(goast.NewIdent("_"), tag))
+			tag = nil
+		}
 	}
 	chosen := e.fresh("Case")
 	list = append(list, varStmt(chosen, goast.NewIdent("int"), &goast.UnaryExpr{Op: gotoken.SUB, X: &goast.BasicLit{Kind: gotoken.INT, Value: "1"}}))

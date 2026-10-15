@@ -143,6 +143,12 @@ func compileMatchTerms(tokens []ast.TokenOrTree, names map[string]bool) ([]match
 		if names[name] {
 			return fail(fmt.Sprintf("duplicate capture $%s", name))
 		}
+		if len(terms) > 0 {
+			previous := terms[len(terms)-1]
+			if previous.name != "" && previous.kind != identKind && previous.kind != ttKind {
+				return fail("ambiguous fragment boundary: " + string(previous.kind) + " capture requires a separator")
+			}
+		}
 		names[name] = true
 		terms = append(terms, matchTerm{name: name, kind: kind, span: span})
 	}

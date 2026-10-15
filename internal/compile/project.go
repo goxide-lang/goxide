@@ -11,17 +11,20 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/lower"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
 )
 
 type Options struct {
 	Bin, GoTool, TargetDir string
 	Offline, Locked        bool
+	Roots                  paths.Roots // Optional root-module namespace context for native directory inputs.
 }
 
 // Result names a stable generated Go module and its selected binary package.
 type Result struct {
 	Root, Entry string
+	SourceRoots []string // Original inputs, retained for caller output protection.
 }
 
 // PrepareProject generates a single manifest project and its source dependencies.
@@ -134,6 +137,9 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
+		if node == graph.Root && options.Roots != nil {
+			roots = options.Roots
+		}
 		generated[node.Module] = output
 		modules = append(modules, lower.Module{Path: node.Module, Dir: output, GoTool: tool, Roots: roots})
 	}
@@ -156,7 +162,11 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err := unit.PublishBundle(staged); err != nil {
 		return nil, err
 	}
-	return &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry}, nil
+	result := &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry}
+	for _, node := range graph.Nodes {
+		result.SourceRoots = append(result.SourceRoots, node.Root)
+	}
+	return result, nil
 }
 
 func singleProject(root string) error {

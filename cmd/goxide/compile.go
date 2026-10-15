@@ -2,22 +2,30 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hxsf/goxide/internal/naming"
+	"go/types"
 	"go/version"
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/check"
+	"github.com/hxsf/goxide/internal/compile"
+	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/lower"
+	"github.com/hxsf/goxide/internal/naming"
 	sourcepaths "github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
+	"github.com/hxsf/goxide/internal/resolve"
+	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/hxsf/goxide/internal/syntax/printer"
 	"github.com/hxsf/goxide/internal/typecheck"
 )
 
@@ -33,11 +41,65 @@ type CompileRequest struct {
 	ProgramArgs                                                     []string
 }
 
+type compiledFile struct {
+	Go, Expanded []byte
+}
+
+func compileSourceFile(filename string, source []byte, packagePath string, goImports types.Importer, roots sourcepaths.Roots) (compiledFile, error) {
+	if err := naming.Source(filename, source); err != nil {
+		return compiledFile{}, err
+	}
+	displayName := filename
+	filename = path.Join(packagePath, filepath.Base(filename))
+	file, diagnostics := parser.ParseFile(filename, source)
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Severity == parser.Error {
+			return compiledFile{}, typecheck.ParserError(displayName, source, diagnostic)
+		}
+	}
+	sources := map[string]typecheck.DiagnosticSource{filename: {Name: displayName, Text: source, AST: file}}
+	expanded, err := expand.Expand([]*syntax.File{file}, nil)
+	if err != nil {
+		return compiledFile{}, typecheck.SourceError(err, sources, expanded)
+	}
+	imports := typecheck.NewNamespaceImporter(goImports, roots)
+	resolved := resolve.ResolveExpanded(map[string]*syntax.File{filename: file}, expanded, imports)
+	if imports.Err() != nil {
+		return compiledFile{}, imports.Err()
+	}
+	resolvedFile := resolved.Files[filename]
+	if err := imports.CheckUses(resolvedFile); err != nil {
+		return compiledFile{}, typecheck.SourceError(err, sources, expanded)
+	}
+	if len(resolved.Diagnostics) != 0 {
+		return compiledFile{}, typecheck.SourceError(resolved.Diagnostics[0], sources, expanded)
+	}
+	files := map[string]*syntax.File{filename: resolvedFile.AST}
+	checked, problems := check.CheckWithImporter(files, resolved, goImports)
+	if len(problems) != 0 {
+		return compiledFile{}, typecheck.SourceError(problems[0], sources, expanded)
+	}
+	generated, err := lower.Lower(files, checked)
+	if err != nil {
+		return compiledFile{}, typecheck.SourceError(err, sources, expanded)
+	}
+	if err := typecheck.CheckPackage(packagePath, generated, goImports); err != nil {
+		return compiledFile{}, err
+	}
+	return compiledFile{Go: generated[filename], Expanded: []byte(printer.Source(resolvedFile.AST))}, nil
+}
+
 func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	switch req.Mode {
 	case "build", "run", "test", "transpile", "expand":
 	default:
 		return fmt.Errorf("unknown command %q", req.Mode)
+	}
+	if req.SourceMap != "" {
+		return errors.New("--source-map is not supported by the new compiler pipeline")
+	}
+	if req.Workspace || len(req.Packages) > 0 {
+		return errors.New("workspace selection is deferred until MVP")
 	}
 	if req.Input == "" {
 		cwd, err := os.Getwd()
@@ -76,18 +138,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			input = root
 		}
 		if *mapPath != "" || *expandedPath != "" {
-			return errors.New("directory mode writes per-file .go.map.json automatically; --source-map/--expanded are single-file flags")
-		}
-		if w, e := project.DiscoverWorkspace(input); e != nil {
-			return e
-		} else if w != nil {
-			if req.RootsFile != "" {
-				return fmt.Errorf("--roots cannot override a goxide workspace; declare roots in member dependencies")
-			}
-			return runWorkspace(req, input, w, out, stderr)
-		}
-		if req.Workspace || len(req.Packages) > 0 {
-			return fmt.Errorf("workspace selection requires a workspace manifest")
+			return errors.New("--expanded is a single-file flag")
 		}
 		if exists, e := project.Detect(input); e != nil {
 			return e
@@ -95,7 +146,17 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			if req.RootsFile != "" {
 				return fmt.Errorf("--roots cannot override goxide.toml dependency mappings")
 			}
-			return runProject(mode, input, *dest, *goTool, strings.FieldsFunc(*tags, func(r rune) bool { return r == ',' || r == ' ' }), projectFlags{targetDir: *targetDir, features: *features, bin: *bin, example: *example, noDefault: *noDefault, offline: *offline, locked: *locked, lib: *lib, programArgs: req.ProgramArgs}, out, stderr)
+			if *features != "" || *noDefault || *example != "" || *lib {
+				return errors.New("features, examples and library targets are deferred until MVP")
+			}
+			if *tags != "" {
+				return errors.New("--tags is not supported for manifest projects by the new compiler pipeline")
+			}
+			prepared, err := compile.PrepareProject(input, compile.Options{Bin: *bin, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked})
+			if err != nil {
+				return err
+			}
+			return runPreparedProject(req, prepared, input, out, stderr)
 		}
 		if *targetDir != "" || *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
 			return errors.New("project flags require goxide.toml in the input directory")
@@ -140,7 +201,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	var result frontend.Result
+	var result compiledFile
 	var configuredTool string
 	moduleRoot := ""
 	if owner != nil {
@@ -193,20 +254,19 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			result, err = compileNativeGoFile(input, src)
 		} else {
 			imp := typecheck.NewImporterWithModFile(context.Background(), input, nil, false, singleFileEnvironment(), owner.modFile)
-			result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{PackagePath: owner.packagePath, Importer: imp, Roots: roots})
+			result, err = compileSourceFile(input, src, owner.packagePath, imp, roots)
 		}
 	} else if nativeGo {
 		result, err = compileNativeGoFile(input, src)
 	} else {
-		result, err = frontend.CompileWithOptions(input, src, frontend.FileOptions{Roots: roots})
+		importContext := input
+		if *runtimeRoot != "" {
+			importContext = filepath.Join(*runtimeRoot, "go.mod")
+		}
+		result, err = compileSourceFile(input, src, "goxide/generated", typecheck.NewImporter(importContext), roots)
 	}
 	if err != nil {
 		return err
-	}
-	if *mapPath != "" {
-		if err := writeArtifact(*mapPath, input, result.SourceMap); err != nil {
-			return err
-		}
 	}
 	if *expandedPath != "" {
 		if err := writeArtifact(*expandedPath, input, result.Expanded); err != nil {
@@ -291,13 +351,9 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	cmd.Dir = tmp
 	cmd.Env = localEnv()
 	cmd.Stdout = out
-	var compilerErrors bytes.Buffer
-	cmd.Stderr = io.MultiWriter(stderr, &compilerErrors)
+	cmd.Stderr = stderr
 	cmd.Stdin = os.Stdin
 	if err = cmd.Run(); err != nil {
-		if result.Diagnostics != nil {
-			fmt.Fprint(stderr, result.Diagnostics.Diagnostics(result.Go, compilerErrors.String()))
-		}
 		return fmt.Errorf("generated Go %s: %w", mode, err)
 	}
 	return nil

@@ -16,7 +16,11 @@ func (e *emitter) equalityCall(node syntax.Expr) (goast.Expr, bool) {
 	sel := call.Fun.(*syntax.SelectorExpr)
 	args := e.ordered([]syntax.Expr{sel.X, call.Args[0]})
 	if d := e.deriveFor(t); d != nil && deriveHas(d, "PartialEq") {
-		return &goast.CallExpr{Fun: e.deriveHelper(d, "PartialEq"), Args: args}, true
+		helper := e.deriveHelper(d, "PartialEq")
+		if local, ok := helper.(*goast.Ident); ok {
+			helper = e.unshadowedFunction(local.Name)
+		}
+		return &goast.CallExpr{Fun: helper, Args: args}, true
 	}
 	left, right := e.fresh("Left"), e.fresh("Right")
 	expr := &goast.BinaryExpr{X: left, Op: gotoken.EQL, Y: right}

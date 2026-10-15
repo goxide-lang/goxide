@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestPrintFormattingAndMacroArguments(t *testing.T) {
@@ -52,7 +52,7 @@ func TestPrintRejectsInvalidFormatAndPlacement(t *testing.T) {
 		{"count", `println!("{}", 1, 2)`, "placeholders"},
 		{"stringer", `println!("{}", Value{})`, "formatting protocol"},
 		{"value", `_ = println!("x")`, "direct statement"},
-		{"defer", `defer println!("x")`, "requires a function call"},
+		{"defer", `defer println!("x")`, "requires a direct statement"},
 		{"initializer", `if println!("x"); true {}`, "direct statement"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

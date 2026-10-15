@@ -95,7 +95,9 @@ func (p *parser) stmt() ast.Stmt {
 	case token.GO, token.DEFER:
 		k := p.next().Kind
 		x := p.expr()
-		if _, ok := x.(*ast.CallExpr); !ok {
+		_, call := x.(*ast.CallExpr)
+		_, macro := x.(*ast.MacroExpr)
+		if !call && !macro {
 			p.error("go/defer requires a function call")
 			n = &ast.BadStmt{Text: "non-call go/defer"}
 		} else if k == token.GO {

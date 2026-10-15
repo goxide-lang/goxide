@@ -25,6 +25,8 @@ type permission struct {
 	function              *permissionFunction
 	closure               *ast.FuncLit
 	effects               permissionEnv
+	asyncEffects          permissionEnv
+	instantiated          bool
 }
 
 type permissionEnv map[*resolve.Symbol]*permission
@@ -68,6 +70,15 @@ type permissionChecker struct {
 	effects        permissionEnv
 	instance       map[*types.TypeParam]*permission
 	initializers   map[*resolve.Symbol]*permissionInitializer
+	exposures      []permissionExposure
+	asyncEffects   permissionEnv
+}
+
+type permissionExposure struct {
+	file      *resolve.File
+	node      ast.Node
+	locations []*permissionLocation
+	want      *permission
 }
 
 type permissionClosure struct {
@@ -200,6 +211,7 @@ func (p *permissionChecker) checkItems(items []ast.Item, globals permissionEnv) 
 			}
 			p.env, p.declared, p.observed = clonePermissionEnv(globals), permissionEnv{}, permissionEnv{}
 			p.closures = nil
+			p.exposures, p.asyncEffects = nil, permissionEnv{}
 			f := p.functions[p.c.symbol(n.Name)]
 			p.results = f.typ.results
 			params := f.typ.params
@@ -222,6 +234,25 @@ func (p *permissionChecker) checkItems(items []ast.Item, globals permissionEnv) 
 					p.env[s] = p.merge(q, p.observed[s])
 				}
 				p.checkClosure(closure.lit, closure.typ, false)
+			}
+			for _, exposure := range p.exposures {
+				p.c.file = exposure.file
+				for _, location := range exposure.locations {
+					if location == nil {
+						continue
+					}
+					value := p.observed[location.root]
+					for _, field := range location.fields {
+						if field == permissionArrayElement {
+							value = p.element(value)
+						} else {
+							value = p.fields(value)[field]
+						}
+					}
+					if value != nil {
+						p.require(exposure.node, &permission{typ: types.NewPointer(value.typ), elem: value}, exposure.want)
+					}
+				}
 			}
 		case *ast.ModDecl:
 			p.checkItems(n.Items, globals)
@@ -616,6 +647,7 @@ func (p *permissionChecker) merge(a, b *permission) *permission {
 		r.ref = WriteRef
 	}
 	r.shared = a.shared || b.shared
+	r.instantiated = a.instantiated || b.instantiated
 	r.elem, r.key = p.merge(a.elem, b.elem), p.merge(a.key, b.key)
 	r.receiver = p.merge(a.receiver, b.receiver)
 	r.effects = clonePermissionEnv(a.effects)
@@ -624,6 +656,13 @@ func (p *permissionChecker) merge(a, b *permission) *permission {
 	}
 	for s, q := range b.effects {
 		r.effects[s] = p.merge(r.effects[s], q)
+	}
+	r.asyncEffects = clonePermissionEnv(a.asyncEffects)
+	if r.asyncEffects == nil && len(b.asyncEffects) > 0 {
+		r.asyncEffects = permissionEnv{}
+	}
+	for s, q := range b.asyncEffects {
+		r.asyncEffects[s] = p.merge(r.asyncEffects[s], q)
 	}
 	if a.function != b.function {
 		r.function = nil
@@ -664,14 +703,19 @@ func (p *permissionChecker) equal(a, b *permission) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	if a.ref != b.ref || a.shared != b.shared || len(a.fields) != len(b.fields) || len(a.args) != len(b.args) || len(a.params) != len(b.params) || len(a.results) != len(b.results) {
+	if a.ref != b.ref || a.shared != b.shared || a.instantiated != b.instantiated || len(a.fields) != len(b.fields) || len(a.args) != len(b.args) || len(a.params) != len(b.params) || len(a.results) != len(b.results) {
 		return false
 	}
-	if a.function != b.function || a.closure != b.closure || len(a.effects) != len(b.effects) {
+	if a.function != b.function || a.closure != b.closure || len(a.effects) != len(b.effects) || len(a.asyncEffects) != len(b.asyncEffects) {
 		return false
 	}
 	for s, q := range a.effects {
 		if !p.equal(q, b.effects[s]) {
+			return false
+		}
+	}
+	for s, q := range a.asyncEffects {
+		if !p.equal(q, b.asyncEffects[s]) {
 			return false
 		}
 	}
@@ -718,6 +762,9 @@ func (p *permissionChecker) require(node ast.Node, got, want *permission) {
 func (p *permissionChecker) compatible(got, want *permission, seen map[[2]types.Type]bool) bool {
 	if got == nil || want == nil {
 		return true
+	}
+	if got.ref == WriteRef && want.ref == ValueRef {
+		return false
 	}
 	if (got.ref == ReadRef || got.shared) && want.ref != ReadRef && !want.shared {
 		if got.ref == ReadRef || p.indirect(got) {
@@ -803,7 +850,7 @@ func (p *permissionChecker) restricted(q *permission, seen map[types.Type]bool) 
 	if q == nil {
 		return false
 	}
-	if q.ref == ReadRef || q.shared {
+	if q.ref != ValueRef || q.shared {
 		return true
 	}
 	if permissionTypeSeen(seen, q.typ) {

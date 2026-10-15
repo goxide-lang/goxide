@@ -59,14 +59,14 @@ def evidence_bytes(data, entry):
                 git_blob != snapshot['gitBlob']):
             raise ValueError(f'evidence snapshot hash differs from reviewed source: {entry}')
         return content
-    # Always bind evidence to the actual published compiler, not a mutable worktree.
+    # Historical review evidence remains bound to its reviewed commit.
     return subprocess.check_output(['git','show',data['compilerCommit']+':'+entry],cwd=ROOT)
 
 def export(data, checks):
     out = {k:data[k] for k in ['schemaVersion','compilerCommit','reviewedAt','statusLabels','topics']}
     out['items'] = [{k:v for k,v in c.items() if k!='evidence'} for c in data['items']]
     out['checks'] = checks
-    out['rules'] = ['状态针对卡片写明的范围，不代表整篇 RFC 已完成。','只有通过真实 CLI 与浏览器对照的单文件例子提供 Playground 入口。','开发分支或任务进展独立标注，不会升级当前线上编译器状态。','提案语法、Go 机制探针和文档标题都不能单独作为实现证据。']
+    out['rules'] = ['状态针对卡片写明的范围，不代表整篇 RFC 已完成。','示例由清单记录的编译器重新生成并运行；历史证据基线与当前编译器来源分别标注。','只有通过真实 CLI 与浏览器对照的例子提供 Playground 入口。','MVP 暂停入口不发布运行快照；提案语法、Go 机制探针和文档标题不能单独作为实现证据。']
     return out
 
 def write_index(data):

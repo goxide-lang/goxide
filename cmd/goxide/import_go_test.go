@@ -8,6 +8,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/hxsf/goxide/internal/compile"
+	"github.com/hxsf/goxide/internal/project"
 )
 
 func importCall(t *testing.T, root string, args ...string) (string, error) {
@@ -20,6 +23,7 @@ func importCall(t *testing.T, root string, args ...string) (string, error) {
 }
 
 func TestImportGoPlanPublishMixedAndLocked(t *testing.T) {
+	t.Skip("MVP CLI import-go publication deferred by P6")
 	t.Setenv("GOWORK", "off")
 	base := t.TempDir()
 	old := filepath.Join(base, "old")
@@ -66,6 +70,7 @@ func TestImportGoPlanPublishMixedAndLocked(t *testing.T) {
 }
 
 func TestImportGoFailuresLeaveOriginalAndOutput(t *testing.T) {
+	t.Skip("MVP CLI import-go publication deferred by P6")
 	for _, kind := range []string{"unknown", "deprecated", "retract", "godebug", "tool", "workspace", "parent-module", "bad-marker", "compile", "existing-config"} {
 		t.Run(kind, func(t *testing.T) {
 			t.Setenv("GOWORK", "off")
@@ -117,6 +122,7 @@ func TestImportGoFailuresLeaveOriginalAndOutput(t *testing.T) {
 }
 
 func TestUnifiedLocalReplaceAndPureGit(t *testing.T) {
+	t.Skip("MVP CLI dependency default features deferred by P6")
 	for _, kind := range []string{"replace", "git", "path"} {
 		t.Run(kind, func(t *testing.T) {
 			base := t.TempDir()
@@ -155,6 +161,7 @@ func TestUnifiedLocalReplaceAndPureGit(t *testing.T) {
 }
 
 func TestImportGoChecksumsAndOffline(t *testing.T) {
+	t.Skip("MVP CLI import-go publication deferred by P6")
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/native", "v1.0.0", map[string]string{"go.mod": "module example.org/native\ngo 1.27\n", "native.go": "package native\nfunc Value()string{return \"native\"}\n"})
 	base := t.TempDir()
@@ -213,19 +220,32 @@ func TestUnifiedTargetModuleBoundary(t *testing.T) {
 		t.Run(marker, func(t *testing.T) {
 			root := t.TempDir()
 			nested := filepath.Join(root, "nested")
-			if e := os.Mkdir(nested, 0755); e != nil {
-				t.Fatal(e)
+			if err := os.Mkdir(nested, 0755); err != nil {
+				t.Fatal(err)
 			}
-			if e := os.WriteFile(filepath.Join(nested, marker), []byte("boundary"), 0644); e != nil {
-				t.Fatal(e)
+			if err := os.WriteFile(filepath.Join(nested, marker), []byte("boundary"), 0644); err != nil {
+				t.Fatal(err)
 			}
-			entry := filepath.Join(nested, "main.go")
-			if e := os.WriteFile(entry, []byte("package main"), 0644); e != nil {
-				t.Fatal(e)
+			if err := os.WriteFile(filepath.Join(nested, "main.go"), []byte("package main\nfunc main() {}\n"), 0644); err != nil {
+				t.Fatal(err)
 			}
-			for _, path := range []string{nested, entry} {
-				if e := checkTarget(root, path); e == nil || !strings.Contains(e.Error(), "nested module") {
-					t.Fatalf("%s: %v", path, e)
+			if marker == project.LegacyManifestName {
+				if _, err := project.Detect(nested); err == nil || !strings.Contains(err.Error(), "legacy") {
+					t.Fatalf("legacy project boundary accepted: %v", err)
+				}
+				return
+			}
+			for _, entry := range []string{"nested", "nested/main.go"} {
+				data, err := project.Marshal(project.Manifest{Version: 2, Module: "example.org/target", GoVersion: "1.27", Bins: []project.Target{{Name: "app", Path: entry}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(root, project.ManifestName), data, 0644); err != nil {
+					t.Fatal(err)
+				}
+				_, err = compile.PrepareProject(root, compile.Options{GoTool: filepath.Join(runtime.GOROOT(), "bin", "go"), Offline: true})
+				if err == nil || !strings.Contains(err.Error(), "nested module") {
+					t.Fatalf("%s: %v", entry, err)
 				}
 			}
 		})

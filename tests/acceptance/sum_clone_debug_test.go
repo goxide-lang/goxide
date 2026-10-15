@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -15,7 +14,7 @@ func TestSumCloneDebugLocalRace(t *testing.T) {
 type Item struct{Values []int}
 type Unused=[]int
 #[derive(Clone,Debug)]
-enum Payload{A,B([]int),}
+pub enum Payload{A,B([]int),}
 #[derive(Clone,Debug)]
 type Branches struct{V Option[Payload];R Result[int,Payload]}
 func Branch()Branches{return Branches{R:Result[int,Payload]::Ok(3)}}
@@ -79,10 +78,11 @@ type Secret=Option[secret]
 func Hidden()Secret{return Option[secret]::None}
 `)
 	packagesWrite(t, src, "relay/relay.go", `package relay
-import m "sums.example/lib/model"
-type Opt=m.Option[[]int]
-type Res=m.Result[[]int,map[string][]int]
-type Flip[A,B any]=m.Result[B,A]
+import __borrow_std "github.com/goxide-lang/std/sum"
+
+type Opt=__borrow_std.Option[[]int]
+type Res=__borrow_std.Result[[]int,map[string][]int]
+type Flip[A,B any]=__borrow_std.Result[B,A]
 `)
 	lib := filepath.Join(t.TempDir(), "lib")
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
@@ -118,14 +118,14 @@ type SecretHolder struct{V m::Secret}
 #[derive(Clone,Debug)]
 type Reverse struct{V r::Flip[map[string][]int,[]int]}
 #[derive(Clone,Debug)]
-type ItemHolder struct{V m::Option[m::Item]}
+type ItemHolder struct{V Option[m::Item]}
 #[derive(Clone,Debug)]
-type StateHolder struct{V m::Option[m::State]}
+type StateHolder struct{V Option[m::State]}
 `)
 	out := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, out, src)
 	repeat := filepath.Join(t.TempDir(), "repeat")
-	packagesCommand(t, root, cli, true, "transpile", "-o", repeat, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, repeat, src)
 	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -169,7 +169,7 @@ func TestRegisteredStates(t *testing.T){
 // Option's zero value is valid None. Invalid Result and nested enum values are
 // still constructible through the public typed ABI and must remain rejected.
 func TestInvalidCases(t *testing.T){
- nested:=StateHolder{V:__borrow_std.NewSome(m.State{})}
+ nested:=StateHolder{V:__borrow_std.NewSome[m.State](nil)}
  for name,f:=range map[string]func(){"result-clone":func(){_=CloneReply(&Reply{})},"result-debug":func(){_=DebugReply(&Reply{})},"nested-clone":func(){_=CloneStateHolder(&nested)},"nested-debug":func(){_=DebugStateHolder(&nested)}}{
   t.Run(name,func(t *testing.T){defer func(){if recover()==nil{t.Fatal("invalid value accepted")}}();f()})
  }
@@ -185,30 +185,10 @@ func TestGoHelpers(t *testing.T){v:=a.Holder{V:m.Some([]int{5})};c:=a.CloneHolde
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
-	assertLegacySumGoRejected(t, out, tool, map[string]legacySumGoCase{
-		"pointer-case":  {"package app\nimport m \"sums.example/lib/model\"\nvar _ m.Option[[]int]=(*m.GoxideOptionSome[[]int])(nil)\n", "undefined: m.GoxideOptionSome"},
-		"forged-option": {"package app\nimport m \"sums.example/lib/model\"\ntype forged struct{m.Option[[]int]}\nvar _ m.Option[[]int]=forged{}\n", "cannot use"},
+	assertNativeGoRejected(t, out, tool, map[string]nativeGoRejection{
+		"forged-option": {"package app\nimport __borrow_std \"github.com/goxide-lang/std/sum\"\ntype forged struct{__borrow_std.Option[[]int]}\nvar _ __borrow_std.Option[[]int]=forged{}\n", "cannot use"},
 	})
-	// The producer has no concrete validator for Option[string]. Same family is insufficient.
-	bad := t.TempDir()
-	packagesWrite(t, bad, "go.mod", mod("sums.example/bad", lib))
-	writeAcceptanceFixtureRoots(t, bad, "sums.example/lib", map[string]string{"model": "sums.example/lib/model"})
-	packagesWrite(t, bad, "bad.gox", "package bad\nuse model as m;\n#[derive(Clone)]\ntype W struct{V m::Option[string]}\n")
-	packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
-	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
-	saved, e := os.ReadFile(artifact)
-	if e != nil {
-		t.Fatal(e)
-	}
-	changed := strings.Replace(string(saved), `"Family": "Option"`, `"Family": "Other"`, 1)
-	if changed == string(saved) {
-		t.Fatal("no tamper")
-	}
-	packagesWrite(t, lib, "model/.goxide.enums.json", changed)
-	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "tampered"), appsrc)
-	if !strings.Contains(log, "aliases.go:") || !strings.Contains(log, "metadata") {
-		t.Fatal(log)
-	}
+
 }
 
 func TestSumProtocolsRejectMissingPayload(t *testing.T) {

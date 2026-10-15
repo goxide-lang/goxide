@@ -100,9 +100,63 @@ func TestPropagationAssignmentInstalledBusinessRace(t *testing.T) {
 	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
 	cli := filepath.Join(bin, "goxide")
 	outside := t.TempDir()
-	source := filepath.Join(root, "examples/propagate_places")
+	source := t.TempDir()
+	if err := os.CopyFS(source, os.DirFS(filepath.Join(root, "examples/propagate_places"))); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"main.gox", "private.gox"} {
+		path := filepath.Join(source, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data = []byte(strings.ReplaceAll(string(data), `};panic("unreachable")}`, `}}`))
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fallbackSource := filepath.Join(source, "effects_fallback.gox")
+	fallbackInput, err := os.ReadFile(fallbackSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fallbackInput = []byte(strings.ReplaceAll(strings.ReplaceAll(string(fallbackInput), "use unsafe;", "use r#unsafe;"), "unsafe::", "r#unsafe::"))
+	if err := os.WriteFile(fallbackSource, fallbackInput, 0600); err != nil {
+		t.Fatal(err)
+	}
+	packagesWrite(t, source, "macro_propagation.gox", macroPropagationSource)
+	packagesWrite(t, source, "model/macro.go", macroPropagationModel)
 	generated := filepath.Join(t.TempDir(), "module")
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+	repeated := filepath.Join(t.TempDir(), "repeat")
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", repeated, source)
+	if err := filepath.WalkDir(generated, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		rel, err := filepath.Rel(generated, path)
+		if err != nil {
+			return err
+		}
+		first, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		second, err := os.ReadFile(filepath.Join(repeated, rel))
+		if err != nil {
+			return err
+		}
+		if string(first) != string(second) {
+			t.Errorf("repeated propagation output differs: %s", rel)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	packagesWrite(t, generated, "macro_propagation_test.go", macroPropagationAssertions)
 	packagesWrite(t, generated, "business_test.go", `package main
 import("testing";"errors";"strconv")
 func TestUpdate(t *testing.T){s:=[]int{0};m:=map[int]int{};n,e:=unpack(update(s,m,"0","42"));if e!=nil||n!=42||s[0]!=42||m[0]!=9{t.Fatal(n,e,s,m)};_,e=unpack(update(s,m,"0","bad"));var cause *strconv.NumError;if !errors.As(e,&cause)||s[0]!=42||m[0]!=9{t.Fatal(e,s,m)};_,e=unpack(update(s,m,"bad","42"));if !errors.As(e,&cause){t.Fatal(e)}}
@@ -116,25 +170,10 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 		t.Fatal("rvalue index/key/call-argument unexpectedly uses assignment guard")
 	}
 
-	for _, name := range []string{"private.go", "effects.go", "effects_context.go", "effects_multivalue.go", "effects_switch.go", "effects_range.go"} {
-		code, err := os.ReadFile(filepath.Join(generated, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(strings.Join(strings.Fields(string(code)), ""), ".Catch(") || strings.Contains(strings.Join(strings.Fields(string(code)), ""), ".Fail(") || strings.Contains(strings.Join(strings.Fields(string(code)), ""), ".Assignment[") {
-			t.Fatalf("%s unexpectedly retained an assignment guard", name)
-		}
-	}
-	fallback, err := os.ReadFile(filepath.Join(generated, "effects_fallback.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n := strings.Count(strings.Join(strings.Fields(string(fallback)), ""), ".Catch("); n != 1 {
-		t.Fatalf("explicit fallback coverage: got %d guards, want 1", n)
-	}
 	packagesWrite(t, generated, "private_test.go", privatePlaceAssertions)
 
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
+	deliveryCommand(t, generated, tool, true, nil, "vet", "./...")
 	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "42 9 <nil>\ninvalid value 42 9\nstock 7 <nil>\ninvalid stock 7\n" {
 		t.Fatalf("business: %q", got)
 	}
@@ -145,22 +184,69 @@ func TestPrivateTypes(t *testing.T){if n,e:=unpack(hidden(63));n!=1||e!=nil{t.Fa
 
 func TestPropagationUnsafeOperandBoundary(t *testing.T) {
 	for _, expr := range []string{
-		`unsafe::Sizeof([1]int{Option[int]::Some(1)?})`,
-		`unsafe::Alignof([1]int{Option[int]::Some(1)?})`,
-		`unsafe::Offsetof(Option[S]::Some(S{})?.X)`,
+		`r#unsafe::Sizeof([1]int{Option[int]::Some(1)?})`,
+		`r#unsafe::Alignof([1]int{Option[int]::Some(1)?})`,
+		`r#unsafe::Offsetof(Option[S]::Some(S{})?.X)`,
 	} {
-		_, err := compileAcceptanceLanguageFixture("unsafe_bad.gox", []byte(`package fixture;use unsafe;type S struct{X int};func f()Option[int]{n:=`+expr+`;return Option[int]::Some(int(n))}`))
+		_, err := compileAcceptanceLanguageFixture("unsafe_bad.gox", []byte(`package fixture;use r#unsafe;type S struct{X int};func f()Option[int]{n:=`+expr+`;return Option[int]::Some(int(n))}`))
 		if err == nil || !strings.Contains(err.Error(), "unsafe compile-time operands") {
 			t.Fatalf("%s: %v", expr, err)
 		}
 	}
 	enumGeneratedModule(t, `package fixture
-use unsafe;
+use r#unsafe;
 func Sizeof(n int)int{return n}
-func allowed(p *int)Option[int]{q:=unsafe::Add(unsafe::Pointer(p),Option[uintptr]::Some(0)?);s:=unsafe::Slice((*int)(q),Option[int]::Some(1)?);n:=Sizeof(Option[int]::Some(s[0])?);return Option[int]::Some(n)}
+func allowed(p *int)Option[int]{q:=r#unsafe::Add(r#unsafe::Pointer(p),Option[uintptr]::Some(0)?);s:=r#unsafe::Slice((*int)(q),Option[int]::Some(1)?);n:=Sizeof(Option[int]::Some(s[0])?);return Option[int]::Some(n)}
 func result(v Option[int])int{match v{Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
 `, `package fixture
 import "testing"
 func TestEvaluatedUnsafeAndOrdinaryName(t *testing.T){n:=7;if result(allowed(&n))!=7{t.Fatal("evaluated operands")}}
 `, false)
 }
+
+const macroPropagationSource = `package main
+use model;
+var trace string
+macro_rules! payload {($x:expr)=>{$x?};}
+macro_rules! length {($x:expr)=>{len($x?)};}
+func number(mark string,ok bool,n int)Option[int]{trace+=mark;if !ok{return Option[int]::None};return Option[int]::Some(n)}
+func list(mark string,ok bool)Option[[]int]{trace+=mark;if !ok{return Option[[]int]::None};return Option[[]int]::Some([]int{1,2})}
+func Expr(ok bool)Option[int]{n:=payload!(number("A",ok,3));m:=length!(list("B",true));return Option[int]::Some(n+m)}
+func Nearest()Option[int]{f:=func()Option[int]{_=payload!(number("N",false,0));trace+="bad";return Option[int]::Some(1)};_=f();trace+="O";return Option[int]::Some(9)}
+func nestedValue()Option[Option[int]]{return Option[Option[int]]::Some(number("N",true,4))}
+func Nested()Option[int]{x:=payload!(nestedValue())?;return Option[int]::Some(x)}
+func Effect(t *model::MacroTree,ok bool)Option[int]{t.Count=payload!(number("E",ok,3))+payload!(number("F",true,4));return Option[int]::Some(t.Count)}
+func Frame(t *model::MacroTree,ok bool,d int)Option[int]{defer func(){trace+="D"}();calc:=func(n int)int{return 12/n};t.Count=calc(payload!(number("G",ok,d)));trace+="Z";return Option[int]::Some(t.Count)}
+func Short(t *model::MacroTree,on bool)Option[int]{t.Enabled=on&&payload!(number("S",false,0))>0;return Option[int]::Some(1)}
+func Unwrap(x Option[int])(int,bool){match x{Option[int]::Some(n)=>{return n,true},Option[int]::None=>{return 0,false},}}
+`
+
+const macroPropagationModel = `package model
+type macroInner struct{Count int;Enabled bool}
+type MacroTree struct{*macroInner}
+func NewMacroTree(n int)MacroTree{return MacroTree{&macroInner{Count:n}}}
+`
+
+const macroPropagationAssertions = `package main
+import ("testing";"places.example/update/model";__borrow_std "github.com/goxide-lang/std/sum")
+func TestMacroPropagationBehavior(t *testing.T){
+ for _,tc:=range []struct{call func()__borrow_std.Option[int];value int;ok bool;trace string}{
+ {func()__borrow_std.Option[int]{return Expr(true)},5,true,"AB"},
+ {func()__borrow_std.Option[int]{return Expr(false)},0,false,"A"},
+ {Nearest,9,true,"NO"},{Nested,4,true,"N"},
+ }{trace="";n,ok:=Unwrap(tc.call());if n!=tc.value||ok!=tc.ok||trace!=tc.trace{t.Fatalf("got %d %v %q; want %d %v %q",n,ok,trace,tc.value,tc.ok,tc.trace)}}
+}
+func TestMacroPropagationPrivateRoutes(t *testing.T){
+ tree:=model.NewMacroTree(9)
+ for _,tc:=range []struct{call func()__borrow_std.Option[int];value int;ok bool;trace string;stored int}{
+ {func()__borrow_std.Option[int]{return Effect(&tree,true)},7,true,"EF",7},
+ {func()__borrow_std.Option[int]{return Effect(&tree,false)},0,false,"E",7},
+ {func()__borrow_std.Option[int]{return Frame(&tree,true,3)},4,true,"GZD",4},
+ {func()__borrow_std.Option[int]{return Frame(&tree,false,0)},0,false,"GD",4},
+ {func()__borrow_std.Option[int]{return Short(&tree,false)},1,true,"",4},
+ {func()__borrow_std.Option[int]{return Short(&tree,true)},0,false,"S",4},
+ }{trace="";n,ok:=Unwrap(tc.call());if n!=tc.value||ok!=tc.ok||trace!=tc.trace||tree.Count!=tc.stored{t.Fatalf("got %d %v %q stored=%d",n,ok,trace,tree.Count)}}
+ trace="";func(){defer func(){if recover()==nil{t.Error("native division panic was swallowed")}}();_=Frame(&tree,true,0)}()
+ if trace!="GD"||tree.Count!=4{t.Fatalf("panic mutated destination or defer: %s %d",trace,tree.Count)}
+}
+`

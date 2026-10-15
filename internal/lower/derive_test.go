@@ -17,7 +17,7 @@ import (
 	"github.com/hxsf/goxide/internal/resolve"
 	"github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestDerivedDefaultCallsFieldProtocolsInOrder(t *testing.T) {

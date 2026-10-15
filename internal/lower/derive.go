@@ -334,6 +334,15 @@ func (e *emitter) deriveBody(d *check.Derive, kind string) (string, error) {
 }
 
 func (e *emitter) deriveValue(kind string, t types.Type, x string) (string, error) {
+	if kind == "Default" {
+		if _, alias := t.(*types.Alias); alias {
+			if instance := e.info.EnumOf(t); instance != nil && instance.Enum.Builtin && instance.Enum.Name == "Option" {
+				// None is Option's zero value; keep an exported alias so its
+				// private payload type does not leak into the consumer's Go.
+				return deriveExprText(e.goType(t)) + "{}", nil
+			}
+		}
+	}
 	t = types.Unalias(t)
 	if d := e.deriveFor(t); deriveHas(d, kind) {
 		helper := deriveExprText(e.deriveHelper(d, kind))

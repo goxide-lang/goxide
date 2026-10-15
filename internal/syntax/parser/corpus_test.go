@@ -20,7 +20,6 @@ import (
 // Only syntax rejected by the authoritative frontend specification belongs here.
 var corpusSkips = map[string]string{
 	"examples/propagate_places/effects_fallback.gox":                                                               "uses hard-reserved unsafe as an unescaped package/path identifier (§3.3)",
-	"examples/reexports/impl/macros.gox":                                                                           "package impl uses a hard-reserved word without r# (§3.3)",
 	"website/checks/catalog/use_path_proposal.gox":                                                                 "use requires an identifier path, not a quoted string (§5.1)",
 	"docs/reviews/match-unary-composite-evidence/testdata/acceptance/flows.gox":                                    "uses import, which .gox rejects (§5.1), and legacy dotted static paths in patterns (§5.7)",
 	"docs/reviews/match-unary-composite-evidence/testdata/review-core/publication-core/cases/scope/flow/probe.gox": "uses import, which .gox rejects (§5.1)",

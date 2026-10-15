@@ -7,7 +7,7 @@ import (
 	"github.com/hxsf/goxide/internal/syntax/ast"
 )
 
-func (p *permissionChecker) call(n *ast.CallExpr, want *permission) *permission {
+func (p *permissionChecker) call(n *ast.CallExpr, want *permission, asynchronous bool) *permission {
 	q := p.fromGo(p.c.out.Types[n])
 	if view := p.c.out.TraitViews[n]; view != nil {
 		q = p.fromGo(view.SourceType)
@@ -25,10 +25,29 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission) *permission 
 		}
 		return q
 	}
-	if _, print := p.c.out.Resolve.Prints[n]; print {
+	_, print := p.c.out.Resolve.Prints[n]
+	if print {
 		for _, arg := range n.Args {
 			p.expr(arg, nil)
 		}
+		return q
+	}
+	if adapter := p.c.out.GoResults[n]; adapter != nil {
+		actual := p.expr(adapter.Call, nil)
+		value, failure := p.fromGo(adapter.Value), actual
+		if !adapter.Unit && actual != nil && len(actual.results) == 2 {
+			value, failure = actual.results[0], actual.results[1]
+		}
+		if len(n.Args) == 2 {
+			p.require(n.Args[0], value, p.exprType(n.Args[0]))
+		}
+		payload := failure
+		if adapter.Keep {
+			payload = p.fromGo(adapter.Payload)
+			payload.fields = map[string]*permission{"Value": value, "Err": failure}
+		}
+		q.args = []*permission{value, payload}
+		q.fields = map[string]*permission{"Ok.0": value, "Err.0": payload}
 		return q
 	}
 	if result, handled := p.protocolCall(n, want); handled {
@@ -50,6 +69,9 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission) *permission 
 	if fun == nil {
 		return q
 	}
+	if fun.shared {
+		p.require(n.Fun, fun, p.fromGo(fun.typ))
+	}
 	sub := map[*types.TypeParam]*permission{}
 	args := make([]*permission, len(n.Args))
 	for i, arg := range n.Args {
@@ -59,7 +81,13 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission) *permission 
 	}
 	for i, arg := range n.Args {
 		formal := p.substitutePermission(p.callParam(fun, i, n.Ellipsis), sub)
-		p.require(arg, args[i], formal)
+		actual := args[i]
+		if p.nativeScalarArgument(fun, actual, formal) {
+			adapted := *actual
+			adapted.ref = ValueRef
+			actual = &adapted
+		}
+		p.require(arg, actual, formal)
 		if formal == nil && p.restricted(args[i], map[types.Type]bool{}) {
 			p.require(arg, args[i], p.fromGo(anyType))
 		}
@@ -69,8 +97,14 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission) *permission 
 		p.checkClosure(fun.closure, fun, false)
 	}
 	p.applyEffects(fun)
+	if asynchronous {
+		p.recordAsyncEffects(fun.effects)
+	}
 	for _, arg := range args {
 		p.applyEffects(arg)
+		if asynchronous && arg != nil {
+			p.recordAsyncEffects(arg.effects)
+		}
 	}
 	var results []*permission
 	for _, result := range fun.results {
@@ -85,6 +119,24 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission) *permission 
 	return q
 }
 
+func (p *permissionChecker) nativeScalarArgument(fun, actual, formal *permission) bool {
+	if actual == nil || formal == nil || actual.ref != WriteRef || actual.shared || formal.ref != ValueRef || fun.instantiated {
+		return false
+	}
+	if fun.function != nil && fun.function.decl.Generics != nil {
+		return false
+	}
+	if signature, ok := fun.typ.(*types.Signature); ok && signature.TypeParams().Len() != 0 {
+		return false
+	}
+	pointer, ok := formal.typ.Underlying().(*types.Pointer)
+	if !ok || !types.Identical(actual.typ, formal.typ) {
+		return false
+	}
+	_, scalar := pointer.Elem().Underlying().(*types.Basic)
+	return scalar
+}
+
 func (p *permissionChecker) applyEffects(q *permission) {
 	if q == nil {
 		return
@@ -92,12 +144,34 @@ func (p *permissionChecker) applyEffects(q *permission) {
 	for s, value := range q.effects {
 		p.setSymbol(s, p.merge(p.env[s], value))
 	}
+	p.recordAsyncEffects(q.asyncEffects)
+}
+
+func (p *permissionChecker) recordAsyncEffects(effects permissionEnv) {
+	if len(effects) == 0 {
+		return
+	}
+	if p.asyncEffects == nil {
+		p.asyncEffects = permissionEnv{}
+	}
+	for s, value := range effects {
+		p.asyncEffects[s] = p.merge(p.asyncEffects[s], value)
+	}
 }
 
 func (p *permissionChecker) checkGenericCall(fun *permission, args []*permission, sub map[*types.TypeParam]*permission) {
 	f := fun.function
 	if f == nil || f.decl.Body == nil || p.activeCalls[f.decl] {
 		return
+	}
+	if f.typ.receiver != nil && len(fun.params) == len(f.typ.params)+1 {
+		method := *fun
+		method.params = fun.params[1:]
+		method.receiver = p.substitutePermission(fun.receiver, sub)
+		fun = &method
+		if len(args) > 0 {
+			args = args[1:]
+		}
 	}
 	generic := f.decl.Generics != nil
 	if receiver := f.typ.receiver; receiver != nil {
@@ -131,11 +205,13 @@ func (p *permissionChecker) checkGenericCall(fun *permission, args []*permission
 	oldEnv, oldDeclared, oldResults := p.env, p.declared, p.results
 	oldObserved, oldCaptured, oldEffects := p.observed, p.captured, p.effects
 	oldInstance := p.instance
+	oldAsyncEffects := p.asyncEffects
 	defer func() {
 		p.c.file, p.c.pkg = oldFile, oldPkg
 		p.env, p.declared, p.results = oldEnv, oldDeclared, oldResults
 		p.observed, p.captured, p.effects = oldObserved, oldCaptured, oldEffects
 		p.instance = oldInstance
+		p.asyncEffects = oldAsyncEffects
 	}()
 	p.activeCalls[f.decl] = true
 	defer delete(p.activeCalls, f.decl)
@@ -149,6 +225,7 @@ func (p *permissionChecker) checkGenericCall(fun *permission, args []*permission
 	}
 	p.env, p.declared, p.results = clonePermissionEnv(p.globals), permissionEnv{}, q.results
 	p.observed, p.captured, p.effects = permissionEnv{}, nil, nil
+	p.asyncEffects = permissionEnv{}
 	p.instance = inst
 	params := q.params
 	if p.c.memberSymbols[p.c.symbol(f.decl.Name)] != nil && q.receiver != nil {
@@ -218,6 +295,7 @@ func (p *permissionChecker) instantiateFunction(fun *permission, args []ast.Expr
 	}
 	q := p.substitutePermission(fun, sub)
 	q.typ = t
+	q.instantiated = true
 	p.checkGenericCall(q, q.params, sub)
 	return q
 }

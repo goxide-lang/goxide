@@ -24,11 +24,17 @@ func main() {
 		switch goxidevariant3 := goxidematch2.(type) {
 		case *access.Named[int]:
 			_ = goxidevariant3
+			if goxidevariant3 == nil {
+				panic("goxide: match on nil Cargo at referencefixture/main.gox:322")
+			}
 			goxidePayloadRef4 := &goxidevariant3.Item
 			value := goxidePayloadRef4
 			*value += 1
 		case *access.Empty[int]:
 			_ = goxidevariant3
+			if goxidevariant3 == nil {
+				panic("goxide: match on nil Cargo at referencefixture/main.gox:322")
+			}
 		default:
 			_ = goxidevariant3
 			panic("goxide: invalid enum Cargo")
@@ -44,51 +50,74 @@ func main() {
 		switch goxidevariant7 := goxidematch6.(type) {
 		case *access.Named[string]:
 			_ = goxidevariant7
+			if goxidevariant7 == nil {
+				panic("goxide: match on nil Cargo at referencefixture/main.gox:503")
+			}
 			goxidePayloadRef8 := &goxidevariant7.Item
 			value := goxidePayloadRef8
 			*value = "changed"
 		case *access.Empty[string]:
 			_ = goxidevariant7
+			if goxidevariant7 == nil {
+				panic("goxide: match on nil Cargo at referencefixture/main.gox:503")
+			}
 		default:
 			_ = goxidevariant7
 			panic("goxide: invalid enum Cargo")
 		}
 	}
 	{
-		var goxideValue9 func(a ...any) (n int, err error) = fmt.Println
-		var goxideMatch10 any
-		goxideOwner11 := &number
-		var goxidematch12 access.Cargo[int] = *goxideOwner11
-		if goxidematch12 == nil {
+		var goxideMatch9 any
+		goxideOwner10 := &number
+		var goxidematch11 access.Cargo[int] = *goxideOwner10
+		if goxidematch11 == nil {
 			panic("goxide: match on nil Cargo at referencefixture/main.gox:652")
 		}
-		switch goxidevariant13 := goxidematch12.(type) {
+		switch goxidevariant12 := goxidematch11.(type) {
 		case *access.Named[int]:
-			_ = goxidevariant13
-			goxidePayloadRef14 := &goxidevariant13.Item
-			value := goxidePayloadRef14
-			goxideMatch10 = *value
+			_ = goxidevariant12
+			if goxidevariant12 == nil {
+				panic("goxide: match on nil Cargo at referencefixture/main.gox:652")
+			}
+			goxidePayloadRef13 := &goxidevariant12.Item
+			value := goxidePayloadRef13
+			goxideMatch9 = *value
+		case *access.Empty[int]:
+			_ = goxidevariant12
+			if goxidevariant12 == nil {
+				panic("goxide: match on nil Cargo at referencefixture/main.gox:652")
+			}
+			goxideMatch9 = 0
 		default:
-			_ = goxidevariant13
-			goxideMatch10 = 0
+			_ = goxidevariant12
+			goxideMatch9 = 0
 		}
-		var goxideValue15 any = goxideMatch10
-		var goxideMatch16 any
-		goxideOwner17 := &text
-		var goxidematch18 access.Cargo[string] = *goxideOwner17
-		if goxidematch18 == nil {
+		var goxideValue14 any = goxideMatch9
+		var goxideMatch15 any
+		goxideOwner16 := &text
+		var goxidematch17 access.Cargo[string] = *goxideOwner16
+		if goxidematch17 == nil {
 			panic("goxide: match on nil Cargo at referencefixture/main.gox:723")
 		}
-		switch goxidevariant19 := goxidematch18.(type) {
+		switch goxidevariant18 := goxidematch17.(type) {
 		case *access.Named[string]:
-			_ = goxidevariant19
-			goxidePayloadRef20 := &goxidevariant19.Item
-			value := goxidePayloadRef20
-			goxideMatch16 = *value
+			_ = goxidevariant18
+			if goxidevariant18 == nil {
+				panic("goxide: match on nil Cargo at referencefixture/main.gox:723")
+			}
+			goxidePayloadRef19 := &goxidevariant18.Item
+			value := goxidePayloadRef19
+			goxideMatch15 = *value
+		case *access.Empty[string]:
+			_ = goxidevariant18
+			if goxidevariant18 == nil {
+				panic("goxide: match on nil Cargo at referencefixture/main.gox:723")
+			}
+			goxideMatch15 = ""
 		default:
-			_ = goxidevariant19
-			goxideMatch16 = ""
+			_ = goxidevariant18
+			goxideMatch15 = ""
 		}
-		goxideValue9(goxideValue15, goxideMatch16)
+		fmt.Println(goxideValue14, goxideMatch15)
 	}
 }

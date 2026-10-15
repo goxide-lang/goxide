@@ -1,6 +1,7 @@
 package lower
 
 import (
+	"context"
 	"fmt"
 	"go/types"
 	"io/fs"
@@ -22,20 +23,26 @@ import (
 
 // Module is a writable staging directory prepared by the caller. Path is its
 // canonical Go module path; Roots overrides its goxide.roots.toml when non-nil.
+// Context and Environment control Go imports; nil values use the background
+// context and inherited environment. The first module supplies these options.
 type Module struct {
 	Path, Dir, GoTool string
 	Roots             paths.Roots
+	Context           context.Context
+	Environment       []string
 }
 
 // CompileModules compiles the complete source graph in one pass. The first
 // module's go.mod supplies the selected Go dependency graph. On success each
 // .gox file is replaced by generated Go; native Go files and resources remain
 // unchanged. Callers discard the staging directories when compilation fails.
-func CompileModules(modules []Module) error {
+func CompileModules(modules []Module) (err error) {
 	if len(modules) == 0 {
 		return fmt.Errorf("at least one staging module is required")
 	}
 	files := map[string]*syntax.File{}
+	var expanded *expand.Result
+	defer func() { err = FormatSourceDiagnostic(err, files, nil, expanded) }()
 	diskNames := map[string]string{}
 	owners := map[string]string{}
 	strictRoots := map[string]string{}
@@ -75,13 +82,14 @@ func CompileModules(modules []Module) error {
 				return err
 			}
 			file, diagnostics := parser.ParseFile(key, data)
+			files[key] = file // Retain line starts even when parsing fails.
 			for _, d := range diagnostics {
 				if d.Severity == parser.Error {
 					return &Diagnostic{File: key, Span: d.Span, Message: d.Message, Origin: resolve.Origin{File: key, Span: d.Span}}
 				}
 			}
 			requirements = append(requirements, applyModuleRoots(module.Path, key, file, roots)...)
-			files[key], diskNames[key] = file, name
+			diskNames[key] = name
 			owners[path.Dir(key)] = module.Path
 			if module.Roots != nil {
 				strictRoots[key] = module.Path
@@ -92,7 +100,23 @@ func CompileModules(modules []Module) error {
 		return nil
 	}
 	packages := resolve.Resolve(files, nil)
-	external := sourceModuleImporter(modules[0].Dir, modules[0].GoTool)
+	external := sourceModuleImporter(modules[0].Dir, modules[0].GoTool, modules[0].Context, modules[0].Environment)
+	native, err := nativeModuleFiles(modules, packages.Packages, external)
+	if err != nil {
+
+		return err
+	}
+	for name, file := range native {
+		files[name] = file
+		for _, module := range modules {
+			if strings.HasPrefix(name, module.Path+"/") && len(module.Path) > len(owners[path.Dir(name)]) {
+				owners[path.Dir(name)] = module.Path
+			}
+		}
+	}
+	if len(native) > 0 {
+		packages = resolve.Resolve(files, nil)
+	}
 	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: external, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: owners}
 	imports.SetSourcePackages(packages.Packages)
 	for _, requirement := range requirements {
@@ -108,11 +132,16 @@ func CompileModules(modules []Module) error {
 		}
 		sourcePackages = append(sourcePackages, source)
 	}
-	expanded, err := expand.ExpandPackages(sourcePackages, &moduleMacros{files: files, resolved: packages, imports: imports})
+	macros := &moduleMacros{files: files, resolved: packages, imports: imports}
+	if err := macros.checkCycles(); err != nil {
+		return err
+	}
+	expanded, err = expand.ExpandPackages(sourcePackages, macros)
 	if imports.err != nil {
 		return imports.err
 	}
 	if err != nil {
+
 		return err
 	}
 	resolved := resolve.ResolveExpanded(files, expanded, imports)
@@ -133,7 +162,11 @@ func CompileModules(modules []Module) error {
 	if len(diagnostics) != 0 {
 		return diagnostics[0]
 	}
-	output, err := Lower(expandedFiles, info)
+	lowerFiles := make(map[string]*syntax.File, len(diskNames))
+	for name := range diskNames {
+		lowerFiles[name] = expandedFiles[name]
+	}
+	output, err := Lower(lowerFiles, info)
 	if err != nil {
 		return err
 	}

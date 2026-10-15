@@ -56,6 +56,12 @@ func (e *engine) copyValue(v reflect.Value, expn ast.ExpnID) reflect.Value {
 			if origin, ok := e.r.Origins[old]; ok {
 				e.r.Origins[n] = origin
 			}
+			if capture, ok := e.r.Captures[old]; ok {
+				e.r.Captures[n] = capture
+			}
+			if call, ok := old.(*ast.CallExpr); ok && e.r.Allocations[call] {
+				e.r.Allocations[n.(*ast.CallExpr)] = true
+			}
 			if oldID, ok := old.(*ast.Ident); ok {
 				if scope, ok := e.r.Scopes[oldID]; ok {
 					e.r.Scopes[n.(*ast.Ident)] = scope

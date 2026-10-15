@@ -85,7 +85,7 @@ func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kin
 		r.introduce(scope, name, old)
 		return s
 	}
-	if scope.Kind == PackageScope && scope.Parent.Bindings[s.Name] != nil {
+	if preimport := scope.Parent; !r.file.AST.NativeGo && scope.Kind == PackageScope && kind != Function && preimport.Bindings[s.Name] != nil && preimport.Bindings[s.Name].Kind != Variant && name.Name != "true" && name.Name != "false" && name.Name != "comparable" {
 		r.diag(name, "prelude-conflict", fmt.Sprintf("package declaration %q conflicts with a preimported name", name.Name))
 	}
 	if kind == Type || kind == Enum || kind == Trait || kind == TypeParam {
@@ -104,6 +104,7 @@ func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kin
 func (r *resolver) lookup(scope *Scope, k Key, static bool) Resolution {
 	var globs []*UseBinding
 	var fallback *Symbol
+	var namespace Resolution
 	for s := scope; s != nil; s = s.Parent {
 		if s.Kind == PreludeScope {
 			fallback = s.Bindings[k]
@@ -113,7 +114,15 @@ func (r *resolver) lookup(scope *Scope, k Key, static bool) Resolution {
 			return Resolution{Symbol: b}
 		}
 		if a := s.Aliases[k]; len(a) > 0 {
-			return r.importTarget(choices(a))
+			resolved := r.importTarget(choices(a))
+			if static || resolved.Symbol == nil || resolved.Symbol.Kind != Module {
+				return resolved
+			}
+			// A namespace alias is selected with :: and does not shadow a
+			// value binding such as the allocation builtins make and new.
+			if namespace.Symbol == nil {
+				namespace = resolved
+			}
 		}
 		globs = append(globs, s.Globs...)
 		if r.hygiene != nil {
@@ -153,6 +162,9 @@ func (r *resolver) lookup(scope *Scope, k Key, static bool) Resolution {
 	}
 	if deferred != nil {
 		return Resolution{Path: deferred, Deferred: true}
+	}
+	if namespace.Symbol != nil {
+		return namespace // Preserve the namespace-as-value diagnostic.
 	}
 	return Resolution{}
 }

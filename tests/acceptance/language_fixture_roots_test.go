@@ -6,24 +6,24 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/rootconfig"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func acceptanceLanguageRoots() paths.Roots {
 	roots := acceptanceSerdeRoots()
 	for _, path := range []string{"bytes", "context", "errors", "io", "os", "reflect", "runtime", "strconv", "strings", "sync", "unsafe"} {
-		roots[path] = paths.Namespace{PackagePath: path}
+		roots[path] = paths.Namespace{PackagePath: path, Source: "toolchain"}
 	}
-	roots["atomic"] = paths.Namespace{PackagePath: "sync/atomic"}
-	roots["json"] = paths.Namespace{PackagePath: "encoding/json"}
-	roots["slog"] = paths.Namespace{PackagePath: "log/slog"}
+	roots["atomic"] = paths.Namespace{PackagePath: "sync/atomic", Source: "toolchain"}
+	roots["json"] = paths.Namespace{PackagePath: "encoding/json", Source: "toolchain"}
+	roots["slog"] = paths.Namespace{PackagePath: "log/slog", Source: "toolchain"}
 	return roots
 }
 
-func compileAcceptanceLanguageFixture(filename string, source []byte) (frontend.Result, error) {
-	return frontend.CompileWithOptions(filename, source, frontend.FileOptions{Roots: acceptanceLanguageRoots()})
+func compileAcceptanceLanguageFixture(filename string, source []byte) (testdeps.SourceResult, error) {
+	return testdeps.Source(filename, source, acceptanceLanguageRoots())
 }
 
 // Fixture declarations choose exact package roots and owners. This helper only

@@ -19,6 +19,12 @@ func observe(value State, touched *bool) {
 			panic("goxide: match on nil State at corefixture/main.gox:107")
 		}
 		switch goxidevariant2 := goxidematch1.(type) {
+		case *Ready:
+			_ = goxidevariant2
+			if goxidevariant2 == nil {
+				panic("goxide: match on nil State at corefixture/main.gox:107")
+			}
+			*touched = true
 		default:
 			_ = goxidevariant2
 			*touched = true

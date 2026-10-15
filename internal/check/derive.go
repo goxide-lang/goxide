@@ -3,6 +3,8 @@ package check
 import (
 	"fmt"
 	"go/types"
+	"sort"
+	"strings"
 
 	"github.com/hxsf/goxide/internal/derives"
 	"github.com/hxsf/goxide/internal/resolve"
@@ -103,6 +105,105 @@ func (c *checker) collectDerives() {
 		}
 	}
 	c.deriveAttributes()
+}
+
+// Default retains its conservative static recursion rule. Function references
+// count as dependencies even when passed through a local function value.
+func (c *checker) checkDefaultCycles() {
+	graph := map[*resolve.Symbol][]*resolve.Symbol{}
+	var roots []*Derive
+	for _, file := range c.out.Resolve.Files {
+		c.file = file
+		ast.Walk(file.AST, func(node ast.Node) bool {
+			fn, ok := node.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				return true
+			}
+			owner := c.symbol(fn.Name)
+			ast.Walk(fn.Body, func(node ast.Node) bool {
+				if symbol := c.symbol(node); symbol != nil && symbol.Kind == resolve.Function {
+					graph[owner] = append(graph[owner], symbol)
+				}
+				return true
+			})
+			return false
+		})
+	}
+	for _, derive := range c.out.Derives {
+		helper := derive.Helpers["Default"]
+		if helper == nil {
+			continue
+		}
+		roots = append(roots, derive)
+		if fn := derive.Manual["Default"]; fn != nil {
+			c.file = c.out.Resolve.Files[derive.ManualFiles["Default"]]
+			graph[helper] = append(graph[helper], c.symbol(fn.Name))
+			continue
+		}
+		var add func(types.Type)
+		add = func(typ types.Type) {
+			typ = types.Unalias(typ)
+			if named, ok := typ.(*types.Named); ok {
+				if child := c.out.Derives[named]; child != nil && child.Helpers["Default"] != nil {
+					graph[helper] = append(graph[helper], child.Helpers["Default"])
+				}
+				return
+			}
+			if record, ok := typ.(*types.Struct); ok {
+				for index := 0; index < record.NumFields(); index++ {
+					add(record.Field(index).Type())
+				}
+			}
+		}
+		if instance := c.out.EnumOf(derive.Type); instance != nil {
+			for _, variant := range instance.Enum.Variants {
+				for _, attr := range variant.Decl.Attrs {
+					if resolve.AttributeName(attr) == "default" {
+						for _, field := range instance.Fields(variant) {
+							add(field.Type)
+						}
+					}
+				}
+			}
+		} else {
+			add(derive.Type.Underlying())
+		}
+	}
+	sort.Slice(roots, func(i, j int) bool {
+		if roots[i].File != roots[j].File {
+			return roots[i].File < roots[j].File
+		}
+		return roots[i].Node.Span().Start < roots[j].Node.Span().Start
+	})
+	for _, root := range roots {
+		active, done := map[*resolve.Symbol]bool{}, map[*resolve.Symbol]bool{}
+		var stack []string
+		var visit func(*resolve.Symbol) bool
+		visit = func(symbol *resolve.Symbol) bool {
+			if symbol == nil || done[symbol] {
+				return false
+			}
+			if active[symbol] {
+				stack = append(stack, symbol.GoName)
+				return true
+			}
+			active[symbol] = true
+			stack = append(stack, symbol.GoName)
+			for _, next := range graph[symbol] {
+				if visit(next) {
+					return true
+				}
+			}
+			stack = stack[:len(stack)-1]
+			delete(active, symbol)
+			done[symbol] = true
+			return false
+		}
+		if visit(root.Helpers["Default"]) {
+			c.file = c.out.Resolve.Files[root.File]
+			c.diag(root.Node, DeriveInvalid, "recursive Default protocol dependency: "+strings.Join(stack, " -> ")+" (static recursion is unsupported)")
+		}
+	}
 }
 
 func (c *checker) protocolSignature(kind string, t types.Type) *types.Signature {

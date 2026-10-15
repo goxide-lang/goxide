@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestP4StaticProtocolExample(t *testing.T) {

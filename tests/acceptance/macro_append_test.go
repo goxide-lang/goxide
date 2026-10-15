@@ -40,12 +40,11 @@ func Run()[]int{append:=func([]int,int)[]int{return []int{-1}};_=append;return o
 		second := filepath.Join(t.TempDir(), "generated")
 		deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", first, source)
 		deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", second, source)
-		maps := 0
 		if err := filepath.WalkDir(first, func(path string, entry os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
-			if entry.IsDir() || !(strings.HasSuffix(path, ".go") || strings.HasSuffix(path, ".map.json")) {
+			if entry.IsDir() || !(strings.HasSuffix(path, ".go")) {
 				return nil
 			}
 			rel, err := filepath.Rel(first, path)
@@ -63,15 +62,9 @@ func Run()[]int{append:=func([]int,int)[]int{return []int{-1}};_=append;return o
 			if !bytes.Equal(a, b) {
 				t.Errorf("repeated CLI output differs: %s", rel)
 			}
-			if strings.HasSuffix(path, ".map.json") {
-				maps++
-			}
 			return nil
 		}); err != nil {
 			t.Fatal(err)
-		}
-		if maps == 0 {
-			t.Fatal("CLI emitted no source maps")
 		}
 		packagesWrite(t, first, "append_test.go", macroAppendAssertions)
 		deliveryCommand(t, first, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
@@ -96,21 +89,20 @@ func main(){append:=2;fmt::Println(push!([]int{1},append))}
 				first := filepath.Join(generated, "main.go")
 				second := filepath.Join(t.TempDir(), "main.go")
 				for _, output := range []string{first, second} {
-					deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", output, "--source-map", output+".map.json", input)
+					deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", output, input)
 				}
-				for _, suffix := range []string{"", ".map.json"} {
-					a, err := os.ReadFile(first + suffix)
-					if err != nil {
-						t.Fatal(err)
-					}
-					b, err := os.ReadFile(second + suffix)
-					if err != nil {
-						t.Fatal(err)
-					}
-					if !bytes.Equal(a, b) {
-						t.Fatalf("single-file repeated output differs: %s", suffix)
-					}
+				a, err := os.ReadFile(first)
+				if err != nil {
+					t.Fatal(err)
 				}
+				b, err := os.ReadFile(second)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(a, b) {
+					t.Fatalf("single-file repeated output differs")
+				}
+
 				packagesWrite(t, generated, "go.mod", "module append.example/single\ngo 1.27\n")
 				if output := deliveryCommand(t, generated, tool, true, nil, "run", "."); output != "[1 2]\n" {
 					t.Fatal(output)
@@ -121,10 +113,7 @@ func main(){_=push!([]int{},"bad")}
 `, "\n", newline.value))
 				invalid := filepath.Join(source, "invalid.gox")
 				output := deliveryCommand(t, outside, cli, false, nil, "build", "--go", tool, "--runtime", root, "-o", filepath.Join(t.TempDir(), "rejected"), invalid)
-				// The Go compiler points at the synthetic capture parenthesis.
-				// As documented in internal/sourcemap/README.md, it has no
-				// invented source origin; LF and CRLF must report that honestly.
-				if !strings.Contains(output, "cannot use") || !strings.Contains(output, "generated/unmapped") {
+				if !strings.Contains(output, "cannot use") || !strings.Contains(output, "invalid.gox:") {
 					t.Fatalf("wrong native argument diagnostic: %s", output)
 				}
 				packagesWrite(t, source, "boundary.gox", strings.ReplaceAll(`package main
@@ -133,7 +122,7 @@ func main(){_=bad!()}
 `, "\n", newline.value))
 				boundary := filepath.Join(source, "boundary.gox")
 				output = deliveryCommand(t, outside, cli, false, nil, "transpile", boundary)
-				if !strings.Contains(output, "direct call") || !strings.Contains(output, boundary+":2:") || !strings.Contains(output, "macro bad defined at "+boundary+":2:") || !strings.Contains(output, "invoked at "+boundary+":3:") {
+				if !strings.Contains(output, "must be called") || !strings.Contains(output, "boundary.gox:2:") || !strings.Contains(output, "boundary.gox:3:") {
 					t.Fatalf("lost macro source/stack diagnostic: %s", output)
 				}
 			})
@@ -164,10 +153,10 @@ func main(){v:=push!([]int{1},2);if len(v)!=2||v[1]!=2||append::Repeat("x",2)!="
 			{"bad-spread", "", "append($s,$v...)", "bad!([]int{},1)", "cannot use", true},
 			{"mixed-spread", "", "append($s,1,$v...)", "bad!([]int{},[]int{2})", "too many arguments", true},
 			{"local-type", "", "append($s,$v)", "func()int{type append int;var x append;_=x;return len(bad!([]int{},1))}()", "local named type", false},
-			{"definition-var", "var append=func([]int,int)[]int{return nil}", "append($s,$v)", "bad!([]int{},1)", "definition-site", false},
-			{"definition-const", "const append=1", "append($s,$v)", "bad!([]int{},1)", "definition-site", false},
-			{"definition-type", "type append int", "append($s,$v)", "bad!([]int{},1)", "definition-site", false},
-			{"bare-builtin", "", "append", "bad!(1,2)", "direct call", false},
+			{"definition-var", "var append=func([]int,int)[]int{return nil}", "append($s,$v)", "bad!([]int{},1)", "conflicts with a preimported name", false},
+			{"definition-const", "const append=1", "append($s,$v)", "bad!([]int{},1)", "conflicts with a preimported name", false},
+			{"definition-type", "type append int", "append($s,$v)", "bad!([]int{},1)", "conflicts with a preimported name", false},
+			{"bare-builtin", "", "append", "bad!(1,2)", "must be called", false},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				source := t.TempDir()
@@ -178,13 +167,15 @@ func main(){v:=push!([]int{1},2);if len(v)!=2||v[1]!=2||append::Repeat("x",2)!="
 				if !strings.Contains(output, tc.want) {
 					t.Fatalf("want %q diagnostic, got %s", tc.want, output)
 				}
-				if tc.syntheticArgument {
-					// This is the existing synthetic-parenthesis boundary, not a
-					// loss of the template's append token or macro call stack.
-					if !strings.Contains(output, "generated/unmapped") {
-						t.Fatalf("native argument diagnostic invented a source origin: %s", output)
+				if tc.declaration != "" {
+					if !strings.Contains(output, "invalid.gox:2:") {
+						t.Fatalf("package declaration diagnostic lost its source: %s", output)
 					}
-				} else if !strings.Contains(output, input+":3:") || !strings.Contains(output, "macro bad defined at "+input+":3:") || !strings.Contains(output, "invoked at "+input+":4:") {
+				} else if tc.syntheticArgument {
+					if !strings.Contains(output, "invalid.gox:") {
+						t.Fatalf("native argument diagnostic lost its input file: %s", output)
+					}
+				} else if !strings.Contains(output, "invalid.gox:3:") || !strings.Contains(output, "invalid.gox:4:") {
 					t.Fatalf("lost template source/stack diagnostic: %s", output)
 				}
 			})

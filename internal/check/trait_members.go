@@ -87,7 +87,7 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 		if !types.Identical(impl.Target, target) {
 			continue
 		}
-		if impl.Trait != nil && !c.traitVisible(impl.Trait) {
+		if impl.Trait != nil && impl.Trait.Type.Obj().Pkg() != c.pkg && (impl.Trait.Symbol == nil || impl.Trait.Symbol.Visibility != resolve.Public) {
 			continue
 		}
 		if m := memberNamed(impl.Methods, name, true); m != nil {
@@ -115,6 +115,18 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 		c.diag(n, TraitInvalid, "ambiguous static member; select a trait explicitly")
 	} else if private {
 		c.diag(n, TraitInvalid, "private inherent member is not visible from this package")
+	} else if valid(target) {
+		if object, _, _ := types.LookupFieldOrMethod(target, false, c.pkg, name); object != nil {
+			if function, ok := object.(*types.Func); ok {
+				signature := function.Type().(*types.Signature)
+				params := []*types.Var{types.NewVar(0, c.pkg, "", target)}
+				for i := 0; i < signature.Params().Len(); i++ {
+					params = append(params, types.NewVar(0, c.pkg, "", signature.Params().At(i).Type()))
+				}
+				method := types.NewSignatureType(nil, nil, nil, types.NewTuple(params...), signature.Results(), signature.Variadic())
+				return &MemberSelection{Member: &Member{Name: name, GoName: name, Signature: signature, Native: function}, MethodExpr: true, Signature: method}
+			}
+		}
 	}
 	return nil
 }

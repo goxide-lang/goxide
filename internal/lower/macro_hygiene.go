@@ -1,8 +1,10 @@
 package lower
 
 import (
+	"crypto/sha256"
 	"fmt"
 	goast "go/ast"
+	gotoken "go/token"
 	"go/types"
 	"path/filepath"
 	"reflect"
@@ -54,6 +56,15 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 				groups[symbol.GoName] = map[*resolve.Symbol]bool{}
 			}
 			groups[symbol.GoName][symbol] = true
+			if symbol.Decl.File == "" {
+				// A definition-package prelude is visible throughout the caller,
+				// even though its resolver scope belongs to another package.
+				scopes[symbol] = pkg.Scope.Parent
+				fixed[symbol] = true
+				if local := pkg.Scope.Parent.Bindings[resolve.Key{Name: symbol.Name.Name}]; local != nil {
+					groups[symbol.GoName][local] = true
+				}
+			}
 		}
 		prelude := func(name string) {
 			if symbol := pkg.Scope.Parent.Bindings[resolve.Key{Name: name}]; symbol != nil {
@@ -82,6 +93,14 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 				}
 			}
 			syntax.Walk(file.AST, func(node syntax.Node) bool {
+				switch node := node.(type) {
+				case *syntax.MatchExpr:
+					if match := info.Matches[node]; match != nil && match.Enum != nil {
+						prelude("panic")
+					}
+				case *syntax.TryExpr:
+					prelude("panic")
+				}
 				if call, ok := node.(*syntax.CallExpr); ok {
 					if typ := info.Equalities[call]; typ != nil {
 						if _, basic := types.Unalias(typ).(*types.Basic); basic {
@@ -122,6 +141,20 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 			if len(group) < 2 {
 				continue
 			}
+			preserveTypeName := false
+			for symbol := range group {
+				preserveTypeName = preserveTypeName || symbol.Kind == resolve.Type && symbol.Decl.File != "" && !fixed[symbol]
+			}
+			if preserveTypeName {
+				if _, basic := types.Universe.Lookup(name).(*types.TypeName); basic {
+					for symbol := range group {
+						if symbol.Decl.File == "" {
+							names[symbol] = "goxide" + strings.ToUpper(name[:1]) + name[1:]
+						}
+					}
+					continue
+				}
+			}
 			var symbols []*resolve.Symbol
 			for symbol := range group {
 				conflict := false
@@ -134,7 +167,7 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 				if !conflict {
 					continue
 				}
-				if !fixed[symbol] && inPackage(symbol.Decl.File) && symbol.Kind != resolve.Import && symbol.Kind != resolve.Module && symbol.Kind != resolve.Field {
+				if !fixed[symbol] && inPackage(symbol.Decl.File) && symbol.Kind != resolve.Type && symbol.Kind != resolve.Import && symbol.Kind != resolve.Module && symbol.Kind != resolve.Field {
 					symbols = append(symbols, symbol)
 				}
 			}
@@ -154,6 +187,149 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 		}
 	}
 	return names
+}
+
+func (e *emitter) checkMacroNames() {
+	called := map[syntax.NodeID]bool{}
+	var panicSite syntax.Node
+	syntax.Walk(e.tree, func(node syntax.Node) bool {
+		switch node := node.(type) {
+		case *syntax.MatchExpr:
+			if match := e.info.Matches[node]; match != nil && match.Enum != nil {
+				panicSite = node
+			}
+		case *syntax.TryExpr:
+			panicSite = node
+		}
+		if call, ok := node.(*syntax.CallExpr); ok {
+			fun := call.Fun
+			for {
+				paren, ok := fun.(*syntax.ParenExpr)
+				if !ok {
+					break
+				}
+				fun = paren.X
+			}
+			called[fun.ID()] = true
+		}
+		return true
+	})
+	if panicSite != nil {
+		for _, symbol := range e.file.Scope.Parent.Bindings {
+			if symbol.GoName == "panic" {
+				e.fail(panicSite, "enum dispatch requires the builtin panic; package declaration shadows panic")
+				return
+			}
+		}
+	}
+	syntax.Walk(e.tree, func(node syntax.Node) bool {
+		id, ok := node.(*syntax.Ident)
+		if !ok || id.Expn == 0 {
+			return true
+		}
+		symbol := e.file.References[id.ID()].Symbol
+		for symbol != nil && symbol.AliasOf != nil {
+			symbol = symbol.AliasOf
+		}
+		e.checkMacroName(id, symbol)
+		if symbol != nil && symbol.Decl.File == "" && symbol.Kind == resolve.Builtin && !called[id.ID()] {
+			if _, builtin := types.Universe.Lookup(symbol.Name.Name).(*types.Builtin); builtin {
+				e.fail(id, "builtin "+symbol.Name.Name+" must be called")
+			}
+		}
+		return true
+	})
+}
+
+func (e *emitter) checkMacroName(id *syntax.Ident, symbol *resolve.Symbol) {
+	if id.Expn == 0 || symbol == nil {
+		return
+	}
+	expansion := e.result.Expansions[id.Expn]
+	context := e.result.Contexts[expansion.Ctx]
+	if context == nil || id.Ctx != expansion.Ctx {
+		return
+	}
+	if symbol.Decl.File != "" {
+		if object := types.Universe.Lookup(symbol.Name.Name); object != nil && (symbol.Kind == resolve.Type || symbol.Kind == resolve.Constant) {
+			if source := e.result.Files[symbol.Decl.File]; source != nil && source.AST.NativeGo {
+				e.fail(id, "macro primitive conflicts with a definition-site declaration of "+symbol.Name.Name)
+			}
+		}
+		return
+	}
+	if symbol.Kind != resolve.Builtin && symbol.Kind != resolve.Type && symbol.Kind != resolve.Constant {
+		return
+	}
+	seen := map[*resolve.Scope]bool{}
+	for scope := context.Caller; scope != nil && !seen[scope]; {
+		seen[scope] = true
+		if scope.Kind == resolve.PreludeScope {
+			break
+		}
+		for _, local := range scope.Bindings {
+			if local.GoName != symbol.GoName || local.Decl.File == "" {
+				continue
+			}
+			if scope.Kind == resolve.PackageScope {
+				e.fail(id, "macro primitive conflicts with a caller package declaration of "+symbol.Name.Name)
+				return
+			}
+			if symbol.Kind == resolve.Builtin && local.Kind == resolve.Type {
+				e.fail(id, "macro builtin "+symbol.Name.Name+" is shadowed by a local named type")
+				return
+			}
+		}
+		if scope.Kind == resolve.ContextScope {
+			scope = scope.Caller
+		} else {
+			scope = scope.Parent
+		}
+	}
+}
+
+func (e *emitter) primitiveAlias(name string) *goast.Ident {
+	symbol := e.file.Scope.Parent.Parent.Bindings[resolve.Key{Name: name}]
+	if e.symbolNames[symbol] == "" {
+		return goast.NewIdent(name)
+	}
+	if e.primitiveAliases == nil {
+		e.primitiveAliases = map[string]*goast.Ident{}
+	}
+	if alias := e.primitiveAliases[name]; alias != nil {
+		return alias
+	}
+	hash := sha256.Sum256([]byte(e.name))
+	alias := e.fresh(fmt.Sprintf("%s%x_", strings.TrimPrefix(e.symbolNames[symbol], "goxide"), hash[:4]))
+	e.primitiveAliases[name] = alias
+	return alias
+}
+
+func (e *emitter) booleanShadowed(name string) bool {
+	for _, file := range e.result.Files {
+		if file.Scope.Parent != e.file.Scope.Parent {
+			continue
+		}
+		for _, symbol := range file.Definitions {
+			if symbol.GoName == name && e.symbolNames[symbol] == "" && symbol.Kind != resolve.Field {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (e *emitter) addPrimitiveAliases(file *goast.File) {
+	var names []string
+	for name := range e.primitiveAliases {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		file.Decls = append(file.Decls, &goast.GenDecl{Tok: gotoken.TYPE, Specs: []goast.Spec{
+			&goast.TypeSpec{Name: e.primitiveAliases[name], Assign: 1, Type: goast.NewIdent(name)},
+		}})
+	}
 }
 
 func (e *emitter) macroReference(id *syntax.Ident, symbol *resolve.Symbol) (goast.Expr, bool) {

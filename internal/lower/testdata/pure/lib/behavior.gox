@@ -133,7 +133,7 @@ pub func exercise() string {
 	default:
 		total += received
 	}
-	method := Base.Value
+	method := Base::Value
 	address := &widget{Value: 1}
 	flag := exists && len(table) == 0 || !exists
 	bits := (5 & 3) | (8 ^ 2) &^ 1

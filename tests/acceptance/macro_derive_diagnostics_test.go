@@ -24,9 +24,8 @@ macro_rules! noise {()=>{
 func Run(){noise!();noise!()}
 `
 	for _, tc := range []struct{ name, source, token, message string }{
-		{"derive", prefix + "#[derive(Unknown)]\ntype Item struct{N int}\n", "Unknown", "unbound derive Unknown"},
-		{"helper", prefix + "func CloneItem(){}\n#[derive(Clone)]\ntype Item struct{N int}\n", "type Item", "generated helper conflicts"},
-		{"macro", "package p\nuse fmt;\nmacro_rules! bad {()=>{\nfmt::Println(1)\n_=fmt::Println\n};}\nfunc Run(){bad!()}\n", "_=fmt::Println", "direct function calls"},
+		{"derive", prefix + "#[derive(Unknown)]\ntype Item struct{N int}\n", "#[derive(Unknown)]", "unknown derive or non-canonical owner: Unknown"},
+		{"helper", prefix + "func CloneItem(){}\n#[derive(Clone)]\ntype Item struct{N int}\n", "#[derive(Clone)]", "generated helper CloneItem conflicts with a package declaration"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, newline := range []string{"\n", "\r\n"} {
@@ -37,9 +36,6 @@ func Run(){noise!();noise!()}
 				packagesWrite(t, dir, "input.gox", source)
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", input)
 				start := strings.Index(source, tc.token)
-				if tc.name == "macro" {
-					start += len("_=fmt::")
-				}
 				line := strings.Count(source[:start], "\n") + 1
 				column := start - strings.LastIndex(source[:start], "\n")
 				want := fmt.Sprintf("%s:%d:%d:", input, line, column)
@@ -57,11 +53,12 @@ func Run(){noise!();noise!()}
 	packagesWrite(t, dir, "main.gox", `package main
 use fmt;
 macro_rules! twice {($x:expr)=>{$x+$x};}
+macro_rules! print_fn {()=>{fmt::Println};}
 #[derive(Clone,Debug)]
 type Item struct{Values []int}
 #[derive(Default)]
 type Settings struct{Count int}
-func main(){n:=0;next:=func()int{n++;return 21};v:=Item{Values:[]int{twice!(next())}};c:=CloneItem(&v);c.Values[0]++;fmt::Println(n,v.Values[0],c.Values[0],DefaultSettings().Count,DebugItem(&v))}
+func main(){n:=0;next:=func()int{n++;return 21};v:=Item{Values:[]int{twice!(next())}};c:=CloneItem(&v);c.Values[0]++;print:=print_fn!();print(n,v.Values[0],c.Values[0],DefaultSettings().Count,DebugItem(&v))}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, dir)

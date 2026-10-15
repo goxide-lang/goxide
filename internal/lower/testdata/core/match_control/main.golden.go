@@ -30,6 +30,9 @@ goxideBreak1:
 			switch goxidevariant3 := goxidematch2.(type) {
 			case *Number:
 				_ = goxidevariant3
+				if goxidevariant3 == nil {
+					panic("goxide: match on nil State at corefixture/main.gox:125")
+				}
 				goxidePayload4 := goxidevariant3.Value
 				if n := goxidePayload4; n == 1 {
 					continue
@@ -38,6 +41,12 @@ goxideBreak1:
 				} else {
 					total++
 				}
+			case *Idle:
+				_ = goxidevariant3
+				if goxidevariant3 == nil {
+					panic("goxide: match on nil State at corefixture/main.gox:125")
+				}
+				total++
 			default:
 				_ = goxidevariant3
 				total++
@@ -58,9 +67,18 @@ func deferred(done *int) int {
 		switch goxidevariant6 := goxidematch5.(type) {
 		case *Number:
 			_ = goxidevariant6
+			if goxidevariant6 == nil {
+				panic("goxide: match on nil State at corefixture/main.gox:332")
+			}
 			n := goxidevariant6.Value
 			defer func() { *done = n }()
 			return n
+		case *Idle:
+			_ = goxidevariant6
+			if goxidevariant6 == nil {
+				panic("goxide: match on nil State at corefixture/main.gox:332")
+			}
+			return 0
 		default:
 			_ = goxidevariant6
 			return 0

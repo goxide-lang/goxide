@@ -8,8 +8,9 @@ import (
 	"github.com/hxsf/goxide/internal/syntax/token"
 )
 
-// Limits are per Expand invocation, including intermediate nested expansions.
+// Limits cover the complete ExpandPackages call, including nested expansions.
 const (
+	MaxExpansions   = 4096
 	MaxOutputNodes  = 100_000
 	MaxOutputTokens = 100_000
 	MaxMatchSteps   = 1_000_000
@@ -54,6 +55,13 @@ type TokenContext struct {
 	Origin Origin
 }
 
+// Capture preserves the fragment boundary after AST substitution. Callers
+// that resolve an ambiguous type slot must not infer its category from text.
+type Capture struct {
+	Kind string
+	Use  Origin
+}
+
 // Resolver supplies source macro definitions for qualified/imported paths.
 // A missing source module must return an error; nil only enables package macros.
 type Resolver interface {
@@ -61,6 +69,9 @@ type Resolver interface {
 }
 
 type Result struct {
+	Allocations   map[*ast.CallExpr]bool
+	Captures      map[ast.Node]Capture
+	GoResults     map[*ast.CallExpr]bool
 	Prints        map[*ast.CallExpr]bool
 	Files         []*ast.File
 	Expansions    map[ast.ExpnID]Expansion
@@ -118,6 +129,7 @@ type engine struct {
 	trees                map[*ast.TokenTree][]syntaxToken
 	nextCtx              ast.SyntaxCtx
 	nodes, tokens, steps int
+	expansions           int
 }
 
 // Expand collects every file's definitions before expanding any invocation.
@@ -131,7 +143,7 @@ func Expand(files []*ast.File, resolver Resolver) (*Result, error) {
 // identities across the complete source graph.
 func ExpandPackages(packages [][]*ast.File, resolver Resolver) (*Result, error) {
 	e := &engine{r: &Result{Expansions: map[ast.ExpnID]Expansion{}, Contexts: map[ast.SyntaxCtx]Context{},
-		Origins: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}}, resolver: resolver,
+		Origins: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}}, resolver: resolver,
 		defs: map[Key]definition{}, trees: map[*ast.TokenTree][]syntaxToken{}, localFiles: map[*ast.File]bool{}, captured: map[ast.Node]bool{}, lexical: map[ast.Node]Scope{}, originals: map[ast.Node]ast.Node{}}
 	for _, files := range packages {
 		for _, f := range files {
@@ -147,6 +159,10 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver) (*Result, error) 
 			for _, item := range f.Items {
 				if d, ok := item.(*ast.MacroRulesDecl); ok {
 					k := Key{d.Name.Name, d.Name.Ctx}
+					if k.Name == "go_result" || k.Name == "go_result_keep" {
+						return e.r, &Diagnostic{Code: "definition", Message: "reserved built-in macro " + k.Name,
+							Definition: Origin{f, d.Span()}, Call: Origin{f, d.Span()}}
+					}
 					if old, exists := e.defs[k]; exists {
 						return e.r, &Diagnostic{Code: "definition", Message: "duplicate macro " + k.Name,
 							Definition: Origin{old.file, old.decl.Span()}, Call: Origin{f, d.Span()}}
@@ -206,6 +222,14 @@ func (e *engine) emit() error {
 	return nil
 }
 
+func (e *engine) expansionBudget(call, definition Origin, expn ast.ExpnID) error {
+	e.expansions++
+	if e.expansions > MaxExpansions {
+		return &Diagnostic{Code: "budget", Message: fmt.Sprintf("macro expansion count budget exceeded (%d)", MaxExpansions), Definition: definition, Call: call, Expn: expn}
+	}
+	return nil
+}
+
 func (e *engine) lookup(path *ast.Path, file *ast.File) (definition, error) {
 	id := path.Segments[0].Name
 	scope, ok := e.r.Scopes[id]
@@ -255,6 +279,9 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 		original = n
 	}
 	e.r.Expansions[id] = Expansion{Definition: Origin{d.file, d.decl.Span()}, Call: call, Original: original, Parent: parent, Stack: stack}
+	if err := e.expansionBudget(call, Origin{d.file, d.decl.Span()}, id); err != nil {
+		return nil, err
+	}
 	fail := func(code string, err error, span ast.Span) (ast.Node, error) {
 		return nil, &Diagnostic{Code: code, Message: err.Error(), Definition: Origin{d.file, span}, Call: call, Expn: id}
 	}

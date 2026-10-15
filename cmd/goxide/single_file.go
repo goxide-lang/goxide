@@ -12,8 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 // singleFileModule owns only configuration copies and one generated file. Its
@@ -202,7 +200,7 @@ func (m *singleFileModule) outputPath(path, kind string) (string, error) {
 	return path, nil
 }
 
-func (m *singleFileModule) run(req CompileRequest, result frontend.Result, tool string, out, stderr io.Writer) error {
+func (m *singleFileModule) run(req CompileRequest, result compiledFile, tool string, out, stderr io.Writer) error {
 	generated := filepath.Join(m.temporary, "selected.go")
 	if err := os.WriteFile(generated, result.Go, 0600); err != nil {
 		return err
@@ -242,20 +240,8 @@ func (m *singleFileModule) run(req CompileRequest, result frontend.Result, tool 
 	cmd := exec.Command(tool, argv...)
 	cmd.Dir, cmd.Env = filepath.Dir(m.input), singleFileEnvironment()
 	cmd.Stdout, cmd.Stdin = out, os.Stdin
-	var compilerErrors bytes.Buffer
-	cmd.Stderr = io.MultiWriter(stderr, &compilerErrors)
+	cmd.Stderr = stderr
 	if err = cmd.Run(); err != nil {
-		if result.Diagnostics != nil {
-			// The loader names the virtual file, while compile errors may name
-			// the overlay's backing file, relative to the command directory.
-			names := []string{virtual, filepath.Base(virtual), generated}
-			if relative, e := filepath.Rel(cmd.Dir, generated); e == nil {
-				names = append(names, relative)
-			}
-			for _, name := range names {
-				fmt.Fprint(stderr, result.Diagnostics.DiagnosticsFile(result.Go, compilerErrors.String(), name))
-			}
-		}
 		return fmt.Errorf("generated Go %s: %w", req.Mode, err)
 	}
 	return nil

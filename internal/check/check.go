@@ -28,6 +28,7 @@ const (
 	DeriveInvalid       = "derive-invalid"
 	VariantMismatch     = "match-variant"
 	EnumGoNameConflict  = "enum-go-name-conflict"
+	EnumNilLiteral      = "enum-nil-literal"
 	ReferencePermission = "reference-permission"
 	ReferenceAddress    = "reference-address"
 	ReferencePattern    = "reference-pattern"
@@ -122,6 +123,7 @@ type Try struct {
 }
 
 type Info struct {
+	GoResults     map[*ast.CallExpr]*GoResult
 	Resolve       *resolve.Result
 	GoImporter    types.Importer
 	Diagnostics   []Diagnostic
@@ -154,6 +156,14 @@ func (r *Info) EnumOf(t types.Type) *Instance {
 		return nil
 	}
 	e := r.enums[n.Origin()]
+	if e == nil && n.Obj().Pkg() != nil && n.Obj().Pkg().Path() == "github.com/goxide-lang/std/sum" {
+		for _, builtin := range r.enums {
+			if builtin.Builtin && builtin.Name == n.Obj().Name() && builtin.Type.TypeParams().Len() == n.Origin().TypeParams().Len() {
+				e = builtin
+				break
+			}
+		}
+	}
 	if e == nil {
 		return nil
 	}
@@ -187,6 +197,7 @@ func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports 
 func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer) (*Info, []Diagnostic) {
 	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
 	r.GoImporter = imports
+	r.GoResults = make(map[*ast.CallExpr]*GoResult)
 	r.RefBindings = make(map[*ast.BindPat]RefMode)
 	r.Traits = make(map[*ast.TraitDecl]*Trait)
 	r.Impls = make(map[*ast.ImplDecl]*Impl)
@@ -265,6 +276,8 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	for _, instance := range c.instances {
 		c.validateInstance(instance)
 	}
+	c.checkDefaultCycles()
+	c.checkEqualityComparisons()
 	c.checkReferences()
 	sort.SliceStable(r.Diagnostics, func(i, j int) bool {
 		a, b := r.Diagnostics[i], r.Diagnostics[j]

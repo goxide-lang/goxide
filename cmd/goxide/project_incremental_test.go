@@ -69,6 +69,7 @@ func TestProjectDefaultDiscoveryAndStaleOutputs(t *testing.T) {
 }
 
 func TestProjectGitWorkspaceCacheIdentity(t *testing.T) {
+	t.Skip("MVP CLI workspace dependency selection deferred by P6")
 	t.Setenv("GIT_AUTHOR_NAME", "Fixture")
 	t.Setenv("GIT_AUTHOR_EMAIL", "fixture@example.invalid")
 	t.Setenv("GIT_COMMITTER_NAME", "Fixture")

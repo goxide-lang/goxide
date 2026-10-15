@@ -232,6 +232,12 @@ func (p *parser) postfix(x ast.Expr) ast.Expr {
 			} else {
 				path := p.exprPath(x)
 				if path == nil {
+					if typ := p.exprType(x); typ != nil {
+						p.next()
+						name := p.ident()
+						x = &ast.SelectorExpr{Base: p.base(start), X: &ast.TypeExpr{Base: ast.Base{Loc: x.Span()}, Type: typ}, Sel: name, Static: true}
+						continue
+					}
 					p.error("static path requires a name or generic path")
 					return x
 				}

@@ -88,7 +88,10 @@ function RFC({ manifest }) {
       <p className="eyebrow">RFC 特性 · 当前编译器的公开摘要</p>
       <h1>从设计到今天能做什么。</h1>
       <p className="provenance">
-        {manifest.commit} · 复核 {manifest.catalog.reviewedAt}
+        {manifest.compilerSource.kind === "worktree"
+          ? `工作树 · 基线 ${manifest.compilerSource.baseCommit} · SHA-256 ${manifest.compilerSource.digest}`
+          : `编译器 ${manifest.compilerSource.commit}`}
+        {` · 历史证据基线 ${manifest.catalogCompilerCommit} · 复核 ${manifest.catalog.reviewedAt}`}
       </p>
       <div className="rfc-browser">
         <nav id="rfc-list" aria-label="RFC 列表">
@@ -196,10 +199,9 @@ function Local({ manifest }) {
         网站构建时由当前 CLI 转译并运行以下快照。它们不属于浏览器的可编辑输入。
       </p>
       <p>
-        完整工程采用 go/git/path 来源的新 goxide.toml
-        schema。下载包含清单、锁文件、全部源码与复现命令；首次构建可下载锁定的
-        Go 支持库，随后可 locked/offline
-        重放。构建脚本需要明确授权，本网站不会执行或授权它们。
+        工程使用 goxide.toml 声明包与依赖，goxide.lock 固定依赖版本。
+        当前支持多包程序、Go 与本地 path 依赖，以及 build、run、test。
+        workspace、import-go、vendor、feature 和构建脚本入口将在 MVP 阶段重新开放。
       </p>
       <div id="cli-example">
         {manifest.cliExamples.map((example) => (
@@ -348,9 +350,16 @@ function App() {
       });
       if (!response.ok) throw new Error("示例清单 HTTP " + response.status);
       const data = await response.json(),
-        context = data.dependencyContext;
+        context = data.dependencyContext,
+        source = data.compilerSource;
       if (
         !/^[a-f0-9]{64}$/.test(data.wasmSha256 || "") ||
+        !/^[a-f0-9]{64}$/.test(source?.digest || "") ||
+        !["commit", "worktree"].includes(source?.kind) ||
+        typeof source.dirty !== "boolean" ||
+        source.digest !== data.compilerDigest ||
+        (source.kind === "commit" ? source.commit : source.baseCommit) !== data.commit ||
+        !/^[a-f0-9]{40}$/.test(data.commit || "") ||
         !context?.source ||
         !context.sha256
       )
@@ -366,7 +375,7 @@ function App() {
       ).join("");
       if (
         hash !== context.sha256 ||
-        data.catalog.compilerCommit !== data.commit
+        data.catalog.compilerCommit !== data.catalogCompilerCommit
       )
         throw new Error("清单版本或项目依赖根不匹配");
       setManifest(data);

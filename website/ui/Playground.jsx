@@ -85,7 +85,7 @@ export default function Playground({ manifest, visible }) {
           (file) =>
             file.source
               .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, " ")
-              .match(/^\s*package\s+([\p{L}_][\p{L}\p{Nd}_]*)/mu)?.[1],
+              .match(/^\s*package\s+((?:r#)?[\p{L}_][\p{L}\p{Nd}_]*)/mu)?.[1],
         )
         .find(Boolean) || "main";
     updateFiles([
@@ -268,7 +268,9 @@ export default function Playground({ manifest, visible }) {
         onSelect={setDependencyPath}
       />
       <p className="provenance">
-        编译器 {manifest.commit} · {manifest.toolchain} ·{" "}
+        {manifest.compilerSource.kind === "worktree"
+          ? `工作树 · 基线 ${manifest.compilerSource.baseCommit} · SHA-256 ${manifest.compilerSource.digest}`
+          : `编译器 ${manifest.compilerSource.commit}`} · {manifest.toolchain} ·{" "}
         <a href="/examples.json">完整构建清单</a>
       </p>
     </section>

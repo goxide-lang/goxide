@@ -62,6 +62,7 @@ func applyModuleRoots(module, name string, file *syntax.File, roots paths.Roots)
 		for _, part := range strings.Split(target, "/") {
 			name := *segments[0].Name
 			name.Name = part
+			name.Raw = true // Routing components are module identity, not source identifiers.
 			segment := *segments[0]
 			segment.Name = &name
 			mapped = append(mapped, &segment)

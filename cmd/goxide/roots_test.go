@@ -25,28 +25,6 @@ func writeRootFixture(t *testing.T, root string, files map[string]string) {
 	}
 }
 
-func TestProjectDependencyRootActivation(t *testing.T) {
-	node := &project.Node{Root: t.TempDir(), HasManifest: true, Manifest: project.Manifest{Dependencies: map[string]project.Dependency{
-		"codec": {Module: "example.org/codec", Package: "example.org/codec/core", Namespaces: map[string]string{"json": "example.org/codec/json"}},
-		"text":  {Go: "fmt", Package: "fmt"},
-		"extra": {Module: "example.org/extra", Package: "example.org/extra", Optional: true},
-	}}, Requests: map[string]project.Request{"codec": {}, "text": {}}}
-	roots, err := projectRoots(node)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if roots["codec"].PackagePath != "example.org/codec/core" || roots["codec"].Children["json"].PackagePath != "example.org/codec/json" || roots["text"].Source != "toolchain" {
-		t.Fatalf("wrong active root mapping: %#v", roots)
-	}
-	if _, exists := roots["extra"]; exists {
-		t.Fatal("mapping activated optional dependency")
-	}
-	writeRootFixture(t, node.Root, map[string]string{rootconfig.Filename: "[roots.other]\nsource='toolchain'\npackage='os'\n"})
-	if _, err := projectRoots(node); err == nil || !strings.Contains(err.Error(), "goxide.toml") {
-		t.Fatalf("accepted two mapping authorities: %v", err)
-	}
-}
-
 const rootContextProgram = `package main
 use output;
 use dependency::leaf as api;
@@ -224,10 +202,6 @@ path="src/main.gox"
 		t.Fatal(err)
 	}
 	node := &project.Node{Root: root, Module: m.Module, HasManifest: true, Manifest: m, Requests: map[string]project.Request{"output": {}}}
-	roots, err := projectRoots(node)
-	if err != nil || roots["library"].ModulePath != m.Module || roots["library"].Source != "module" {
-		t.Fatalf("wrong local identity: %v %v", roots, err)
-	}
 	host, err := projectHostRoots(node)
 	if err != nil || len(host) != 1 || host["output"].Source != "toolchain" {
 		t.Fatalf("host inherited target roots: %v %v", host, err)

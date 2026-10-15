@@ -186,6 +186,14 @@ func (p *permissionChecker) loop(statement ast.Stmt, label *resolve.Symbol) {
 	case *ast.RangeStmt:
 		body, iterator = n.Body, n
 		source = p.expr(n.X, nil)
+		if source != nil && source.typ != nil {
+			switch source.typ.Underlying().(type) {
+			case *types.Signature:
+				p.applyEffects(source)
+			case *types.Chan:
+				p.synchronize()
+			}
+		}
 	case *ast.WhileStmt:
 		body, cond = n.Body, n.Cond
 	case *ast.LoopStmt:

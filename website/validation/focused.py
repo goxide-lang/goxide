@@ -20,7 +20,7 @@ import threading
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'website'))
-from build_support import dependency_context, verify_compiler_sources
+from build_support import dependency_context, verify_compiler_source
 
 
 def require(condition, message):
@@ -56,7 +56,11 @@ def compare_result(expected, actual):
 
 def load_cases(root, manifest, extra):
     catalog = json.loads((root / 'website/catalog-source.json').read_text())
-    require(catalog['compilerCommit'] == manifest['commit'] and catalog['compilerDigest'] == manifest['compilerDigest'], 'catalog compiler identity differs from manifest')
+    require(catalog['compilerCommit'] == manifest['catalogCompilerCommit'], 'catalog compiler identity differs from manifest')
+    source = manifest['compilerSource']
+    require(source['digest'] == manifest['compilerDigest'], 'compiler identity differs from manifest')
+    if source['kind'] == 'commit':
+        require(catalog['compilerCommit'] == source['commit'] and catalog['compilerDigest'] == source['digest'], 'catalog compiler identity differs from manifest')
     expected = {entry['id']: entry for entry in catalog['examples']}
     require(set(expected) == {path.stem for path in (root / 'website/examples').glob('*.gox')}, 'catalog example membership differs')
     require(len(manifest['examples']) == len(expected) and {entry['id'] for entry in manifest['examples']} == set(expected), 'manifest example membership differs')
@@ -153,18 +157,25 @@ def run(args, out, summary):
     context = dependency_context(root)
     require(context == manifest['dependencyContext'], 'explicit dependency context differs from manifest')
     roots_file = root / context['path']
-    verify_compiler_sources(root, manifest['commit'], manifest['compilerDigest'])
+    compiler_source = manifest['compilerSource']
+    require(compiler_source['kind'] == ('worktree' if args.worktree else 'commit'), 'compiler source kind does not match explicit --worktree selection')
+    require(manifest['compilerDigest'] == compiler_source['digest'], 'compiler source digest differs from manifest')
+    require(manifest['commit'] == compiler_source['baseCommit' if args.worktree else 'commit'], 'compiler base commit differs from manifest')
+    verify_compiler_source(root, compiler_source)
     require(digest(dist / 'compiler.wasm') == manifest['wasmSha256'], 'WASM manifest hash differs')
-    require(subprocess.check_output(['git', 'status', '--porcelain=v1', '--untracked-files=all'], cwd=root) == b'', 'focused acceptance requires a clean committed checkout')
+    source_status = subprocess.check_output(['git', 'status', '--porcelain=v1', '--untracked-files=all'], cwd=root)
+    if not args.worktree:
+        require(source_status == b'', 'focused acceptance requires a clean committed checkout')
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root).decode().strip()
     require(head == manifest['websiteCommit'], 'website assets were built from another commit')
     cli = root / 'bin/goxide'
     build_info = subprocess.check_output([go, 'version', '-m', cli], cwd=root, env=native_env).decode()
-    require('vcs.revision=' + head in build_info and 'vcs.modified=false' in build_info, 'CLI was not built from this clean commit')
+    modified = 'true' if source_status else 'false'
+    require('vcs.revision=' + head in build_info and 'vcs.modified=' + modified in build_info, 'CLI build identity differs from this checkout')
     cases = load_cases(root, manifest, args.cases)
     identity_paths = [cli, dist / 'compiler.wasm', dist / 'wasm_exec.js', dist / 'worker.js', dist / 'examples.json']
     before = {str(path): digest(path) for path in identity_paths}
-    summary.update(compilerCommit=manifest['commit'], compilerDigest=manifest['compilerDigest'], websiteCommit=head,
+    summary.update(compilerSource=compiler_source, catalogCompilerCommit=manifest['catalogCompilerCommit'], websiteCommit=head,
                    toolchain=subprocess.check_output([go, 'version'], env=native_env).decode().strip(),
                    node=subprocess.check_output([args.node, '--version']).decode().strip(),
                    artifacts=before, exportTarget=manifest['exportTarget'], publicLibraries=manifest['publicLibraries'],
@@ -224,9 +235,9 @@ def run(args, out, summary):
         except Exception as error:
             summary['httpWorker'] = dict(status='failed', failure=str(error), sandbox=True)
             raise
-    verify_compiler_sources(root, manifest['commit'], manifest['compilerDigest'])
+    verify_compiler_source(root, compiler_source)
     require(before == {str(path): digest(path) for path in identity_paths}, 'validated assets changed during run')
-    require(subprocess.check_output(['git', 'status', '--porcelain=v1', '--untracked-files=all'], cwd=root) == b'', 'source checkout changed during run')
+    require(subprocess.check_output(['git', 'status', '--porcelain=v1', '--untracked-files=all'], cwd=root) == source_status, 'source checkout changed during run')
     summary['passed'] = True
 
 
@@ -236,6 +247,7 @@ def main():
     parser.add_argument('--cases', type=Path, action='append', default=[])
     parser.add_argument('--go', default=os.environ.get('GO_BIN', 'go'))
     parser.add_argument('--node', default='node')
+    parser.add_argument('--worktree', action='store_true', help='validate an explicitly identified worktree build; pinned validation remains the default')
     parser.add_argument('--chromium', help='enable real HTTP Worker checks with this existing Chromium; its sandbox remains enabled')
     args = parser.parse_args()
     out = reserve_output(args.out, ROOT)

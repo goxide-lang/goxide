@@ -136,6 +136,12 @@ func (e *engine) parseFragment(kind fragmentKind, ts []syntaxToken) (*fragment, 
 }
 
 func (e *engine) parse(ts []syntaxToken, kind fragmentKind, expn ast.ExpnID, caller Scope) (ast.Node, error) {
+	if e.r.Captures == nil {
+		e.r.Captures = map[ast.Node]Capture{}
+	}
+	if e.r.Allocations == nil {
+		e.r.Allocations = map[*ast.CallExpr]bool{}
+	}
 	s := &skeleton{trees: map[uint32]*syntaxTree{}}
 	if kind == stmtKind {
 		s.text.WriteString("{ ")
@@ -231,6 +237,7 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 		}
 		span := n.Span()
 		if use, ok := s.ttRanges[span]; ok {
+			e.r.Captures[n] = Capture{Kind: string(ttKind), Use: use}
 			if _, isType := n.(ast.Type); typeSlot || isType {
 				return v, &parseError{code: "category", message: "template type slot requires type fragment, found tt", origin: use}
 			}
@@ -268,6 +275,14 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 			}
 		}
 		_, isType := n.(ast.Type)
+		if call, ok := n.(*ast.CallExpr); ok && expn != 0 && e.r.Captures[n].Kind == "" {
+			if id, ok := call.Fun.(*ast.Ident); ok && (id.Name == "make" || id.Name == "new") {
+				p := s.at(id.Span().Start)
+				if p.t.Fragment == nil && !p.tt && p.t.Ctx == e.r.Expansions[expn].Ctx {
+					e.r.Allocations[call] = true
+				}
+			}
+		}
 		if typeSlot || isType {
 			for _, p := range s.pieces {
 				if p.start >= span.Start && p.end <= span.End && p.tt {
@@ -361,11 +376,13 @@ func (e *engine) splice(slot ast.Node, f *fragment, typeSlot bool, use Origin, e
 	fail := func() (ast.Node, error) {
 		return nil, &parseError{code: "category", message: fmt.Sprintf("template %T slot cannot receive %s fragment", slot, f.Kind), origin: use}
 	}
-	if typeSlot && f.Kind != typeKind {
-		return fail()
+	_, typed := slot.(ast.Type)
+	if (typeSlot || typed) && f.Kind != typeKind {
+		return nil, &parseError{code: "category", message: "template type slot requires type fragment; captured types from " + string(f.Kind) + " fragments are not allowed", origin: use}
 	}
 	copy := func() ast.Node {
 		n := e.copyNode(f.Node, expn)
+		e.r.Captures[n] = Capture{Kind: string(f.Kind), Use: use}
 		if e.captured == nil {
 			e.captured = map[ast.Node]bool{}
 		}
@@ -404,6 +421,7 @@ func (e *engine) splice(slot ast.Node, f *fragment, typeSlot bool, use Origin, e
 			t := copy().(ast.Type)
 			n := &ast.TypeExpr{Base: ast.Base{Loc: t.Span(), Expn: expn}, Type: t}
 			e.r.Origins[n] = e.r.Origins[t]
+			e.r.Captures[n] = Capture{Kind: string(f.Kind), Use: use}
 			return n, nil
 		}
 		return fail()

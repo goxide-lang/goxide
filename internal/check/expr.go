@@ -1,6 +1,7 @@
 package check
 
 import (
+	"fmt"
 	"go/types"
 
 	"github.com/hxsf/goxide/internal/resolve"
@@ -16,6 +17,11 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	switch n := node.(type) {
 	case *ast.Ident:
 		t = c.symbolType(c.symbol(n))
+		if !c.file.AST.NativeGo && n.Name == "nil" && t == types.Typ[types.UntypedNil] {
+			if enum := c.out.EnumOf(expected); enum != nil {
+				c.diag(n, EnumNilLiteral, fmt.Sprintf("nil is not a valid value of enum %s", enum.Enum.Name))
+			}
+		}
 		if con := c.constructor(nil, c.symbol(n), expected); con != nil {
 			c.out.Constructors[n] = con
 			t = instanceType(con.Enum)
@@ -48,6 +54,14 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	case *ast.ParenExpr:
 		t = c.expr(n.X, expected)
 	case *ast.CallExpr:
+		if result, ok := c.unsafeCall(n); ok {
+			t = result
+			break
+		}
+		if keep, ok := c.out.Resolve.GoResults[n]; ok {
+			t = c.goResult(n, keep)
+			break
+		}
 		c.qualifiedCall(n)
 		if c.equalityCall(n) {
 			t = types.Typ[types.Bool]
@@ -78,7 +92,10 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = instanceType(con.Enum)
 		} else if c.isTypeExpr(n.Fun) {
 			for _, a := range n.Args {
-				c.expr(a, fun)
+				got := c.expr(a, fun)
+				if valid(got) && valid(fun) && !types.ConvertibleTo(got, fun) {
+					c.diag(a, "conversion", fmt.Sprintf("cannot convert %s to %s", got, fun))
+				}
 			}
 			t = fun
 		} else if sig, ok := fun.(*types.Signature); ok {
@@ -96,7 +113,9 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 					}
 				}
 				got := c.expr(a, want)
-				infer(want, defaultType(got), sub)
+				if got != types.Typ[types.UntypedNil] {
+					infer(want, defaultType(got), sub)
+				}
 			}
 			if sig.TypeParams().Len() > 0 {
 				args := make([]types.Type, c.sourceArity(sig))
@@ -108,6 +127,19 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				if complete {
 					if inst, ok := c.instantiateFunctionType(sig, args, n).(*types.Signature); ok {
 						sig = inst
+						for i, arg := range n.Args {
+							index := i
+							if sig.Variadic() && index >= sig.Params().Len() {
+								index = sig.Params().Len() - 1
+							}
+							if index >= 0 && index < sig.Params().Len() && c.nilLiteral(arg) {
+								want := sig.Params().At(index).Type()
+								if sig.Variadic() && index == sig.Params().Len()-1 && !n.Ellipsis {
+									want = want.(*types.Slice).Elem()
+								}
+								c.expr(arg, want)
+							}
+						}
 					}
 				}
 			}
@@ -115,6 +147,26 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		} else {
 			for _, a := range n.Args {
 				c.expr(a, nil)
+			}
+			if symbol := c.symbol(referenceScrutinee(n.Fun)); symbol != nil && symbol.Kind == resolve.Builtin {
+				switch symbol.Name.Name {
+				case "append":
+					if len(n.Args) == 0 {
+						c.diag(n, "builtin-call", "not enough arguments in call to append")
+					} else if slice, ok := c.out.Types[n.Args[0]].Underlying().(*types.Slice); ok && !n.Ellipsis {
+						for _, arg := range n.Args[1:] {
+							c.expr(arg, slice.Elem())
+						}
+					}
+				case "copy":
+					if n.Ellipsis {
+						c.diag(n, "builtin-call", "invalid use of ... with built-in copy")
+					} else if len(n.Args) < 2 {
+						c.diag(n, "builtin-call", "not enough arguments in call to copy")
+					} else if len(n.Args) > 2 {
+						c.diag(n, "builtin-call", "too many arguments in call to copy")
+					}
+				}
 			}
 			if name := calleeName(n.Fun); name != "" {
 				switch name {
@@ -187,6 +239,26 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		t = c.expr(n.Value, expected)
 	case *ast.SelectorExpr:
 		x := c.expr(n.X, nil)
+		if c.isTypeExpr(n.X) {
+			if !n.Static {
+				c.diag(n, "method-expression", "method expressions require a static :: selector")
+				break
+			}
+			if object, _, _ := types.LookupFieldOrMethod(x, false, c.pkg, n.Sel.Name); object != nil {
+				if function, ok := object.(*types.Func); ok {
+					signature := function.Type().(*types.Signature)
+					params := []*types.Var{types.NewVar(0, c.pkg, "", x)}
+					for i := 0; i < signature.Params().Len(); i++ {
+						params = append(params, types.NewVar(0, c.pkg, "", signature.Params().At(i).Type()))
+					}
+					t = types.NewSignatureType(nil, nil, nil, types.NewTuple(params...), signature.Results(), signature.Variadic())
+				}
+			}
+			if !valid(t) {
+				c.diag(n, "method-expression", "type does not have the selected method")
+			}
+			break
+		}
 		if selected := c.instanceMember(n, n.X, x, n.Sel.Name, nil); selected != nil {
 			if selected.Member.Native == nil || selected.Impl != nil {
 				c.out.Members[n] = selected
@@ -260,7 +332,9 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		c.expr(n.X, nil)
 		t = c.typ(n.Type)
 	case *ast.StarExpr:
-		if p, ok := c.expr(n.X, nil).Underlying().(*types.Pointer); ok {
+		if c.isTypeExpr(n.X) {
+			t = types.NewPointer(c.exprType(n.X))
+		} else if p, ok := c.expr(n.X, nil).Underlying().(*types.Pointer); ok {
 			t = p.Elem()
 		}
 	case *ast.UnaryExpr:
@@ -273,23 +347,26 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			if ch, ok := x.Underlying().(*types.Chan); ok {
 				t = ch.Elem()
 			}
-		case token.NOT:
-			t = types.Typ[types.Bool]
 		}
 	case *ast.BinaryExpr:
 		leftWant, rightWant := expected, expected
+		comparison := false
+		if !valid(expected) || types.IsInterface(expected) {
+			leftWant, rightWant = nil, nil
+		}
 		switch n.Op {
 		case token.EQL, token.NEQ, token.LSS, token.LEQ, token.GTR, token.GEQ:
 			leftWant, rightWant = nil, nil
+			comparison = true
 		case token.SHL, token.SHR:
 			rightWant = nil
 		}
 		x := c.expr(n.X, leftWant)
-		if rightWant == nil && n.Op != token.SHL && n.Op != token.SHR && valid(x) && !untyped(x) {
+		if rightWant == nil && n.Op != token.SHL && n.Op != token.SHR && valid(x) && !untyped(x) && (!comparison || !c.nilLiteral(n.Y)) {
 			rightWant = x
 		}
 		y := c.expr(n.Y, rightWant)
-		if untyped(x) && valid(y) && !untyped(y) && n.Op != token.SHL && n.Op != token.SHR {
+		if untyped(x) && valid(y) && !untyped(y) && n.Op != token.SHL && n.Op != token.SHR && (!comparison || !c.nilLiteral(n.X)) {
 			x = c.expr(n.X, y)
 		}
 		t = x
@@ -297,8 +374,8 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = y
 		}
 		switch n.Op {
-		case token.EQL, token.NEQ, token.LSS, token.LEQ, token.GTR, token.GEQ, token.LAND, token.LOR:
-			t = types.Typ[types.Bool]
+		case token.EQL, token.NEQ, token.LSS, token.LEQ, token.GTR, token.GEQ:
+			t = types.Typ[types.UntypedBool]
 		}
 	case *ast.FuncLit:
 		params, results := c.tuple(n.Params), c.tuple(n.Results)
@@ -356,6 +433,11 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	return t
 }
 
+func (c *checker) nilLiteral(e ast.Expr) bool {
+	id, ok := referenceScrutinee(e).(*ast.Ident)
+	return ok && id.Name == "nil" && c.symbolType(c.symbol(id)) == types.Typ[types.UntypedNil]
+}
+
 func literalType(t types.Type, index int, name string) (types.Type, types.Type) {
 	if !valid(t) {
 		return nil, nil
@@ -386,6 +468,7 @@ func literalType(t types.Type, index int, name string) (types.Type, types.Type) 
 
 func (c *checker) constructor(path *ast.Path, s *resolve.Symbol, expected types.Type) *Constructor {
 	var base *Constructor
+	var sourceType types.Type
 	if path != nil && len(path.Segments) == 2 && path.Segments[0].Name.Name == "Self" {
 		target := c.currentSelf
 		if target == nil && s != nil {
@@ -407,6 +490,15 @@ func (c *checker) constructor(path *ast.Path, s *resolve.Symbol, expected types.
 			base = variant
 		}
 	}
+	if path != nil && len(path.Segments) > 1 {
+		prefix := path.Segments[:len(path.Segments)-1]
+		sourceType = c.symbolType(c.sourcePathSymbol(prefix))
+		if instance := c.out.EnumOf(sourceType); base == nil && instance != nil {
+			if variant := instance.Variant(path.Segments[len(path.Segments)-1].Name.Name); variant != nil {
+				base = &Constructor{Enum: instance, Variant: variant}
+			}
+		}
+	}
 	if base == nil && s != nil && s.Kind == resolve.Variant && s.Decl.File == "" && len(s.Target) == 0 {
 		for _, e := range c.builtins {
 			i := c.out.EnumOf(e.Type)
@@ -419,14 +511,28 @@ func (c *checker) constructor(path *ast.Path, s *resolve.Symbol, expected types.
 	if base == nil {
 		return nil
 	}
+	if !c.enumAccessible(base.Enum) {
+		c.diag(path, VariantMismatch, "internal-origin alias cannot expose enum variants outside its internal package boundary")
+		return nil
+	}
 	instance := base.Enum
-	if want := c.out.EnumOf(expected); want != nil && want.Enum == instance.Enum {
+	if !valid(sourceType) {
+		sourceType = base.Enum.Enum.Type
+	}
+	inferArguments := false
+	switch source := sourceType.(type) {
+	case *types.Named:
+		inferArguments = source.TypeParams().Len() > 0 && source.TypeArgs().Len() == 0
+	case *types.Alias:
+		inferArguments = source.TypeParams().Len() > 0 && source.TypeArgs().Len() == 0
+	}
+	if want := c.out.EnumOf(expected); inferArguments && want != nil && want.Enum == instance.Enum {
 		instance = want
 	}
 	if path != nil {
 		for _, seg := range path.Segments {
 			if seg.Args != nil {
-				instance = c.out.EnumOf(c.instantiate(base.Enum.Enum.Type, seg.Args))
+				instance = c.out.EnumOf(c.instantiate(sourceType, seg.Args))
 				break
 			}
 		}
@@ -485,6 +591,8 @@ func (c *checker) isTypeExpr(e ast.Expr) bool {
 	case *ast.IndexExpr:
 		return c.isTypeExpr(n.X)
 	case *ast.ParenExpr:
+		return c.isTypeExpr(n.X)
+	case *ast.StarExpr:
 		return c.isTypeExpr(n.X)
 	}
 	return false

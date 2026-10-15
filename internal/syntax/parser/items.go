@@ -77,7 +77,7 @@ func (p *parser) parseItem(member, declare bool) ast.Item {
 			if m, ok := x.(*ast.MacroExpr); ok {
 				n = &ast.MacroItem{ItemBase: ib, Path: m.Path, Args: m.Args}
 			} else {
-				p.error("expected declaration")
+				p.diagnostics = append(p.diagnostics, Diagnostic{Severity: Error, Span: x.Span(), Message: "expected declaration"})
 				p.sync()
 				n = &ast.BadItem{ItemBase: ib, Text: "declaration"}
 			}

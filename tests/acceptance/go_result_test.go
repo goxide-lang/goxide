@@ -99,8 +99,8 @@ type typedError struct{}
 func(*typedError)Error()string{panic("Error must not run")}
 type typedReader struct{}
 func(typedReader)Read(p []byte)(int,error){var e *typedError;return 1,e}
-func okInt(t *testing.T,v Result[int,error],want int){t.Helper();if __borrow_std.TagResult(v)!=1||__borrow_std.ValueOk(v)!=want{t.Fatal(v)}}
-func TestParse(t *testing.T){okInt(t,Initial,42);okInt(t,Parse("42"),42);okInt(t,Hygienic(),11);okInt(t,FamilyShadow().(Result[int,error]),13);okInt(t,FamilyTypeShadow().(Result[int,error]),14);okInt(t,OrdinaryQuestion(),12);v:=__borrow_std.ValueErr(Parse("bad"));var n *strconv.NumError;if !errors.As(v,&n)||n.Num!="bad"{t.Fatal(v)};e:=__borrow_std.ValueErr(Convert("bad"));if !errors.As(e,&n){t.Fatal(e)};if x:=__borrow_std.ValueOk(ParseNext("9"));x!="10"{t.Fatal(x)};if ok := __borrow_std.TagResult(ParseNext("bad"))==2;!ok{t.Fatal("propagation")}}
+func okInt(t *testing.T,v __borrow_std.Result[int,error],want int){t.Helper();if __borrow_std.TagResult(v)!=1||__borrow_std.ValueOk(v)!=want{t.Fatal(v)}}
+func TestParse(t *testing.T){okInt(t,Initial,42);okInt(t,Parse("42"),42);okInt(t,Hygienic(),11);okInt(t,FamilyShadow().(__borrow_std.Result[int,error]),13);okInt(t,FamilyTypeShadow().(__borrow_std.Result[int,error]),14);okInt(t,OrdinaryQuestion(),12);v:=__borrow_std.ValueErr(Parse("bad"));var n *strconv.NumError;if !errors.As(v,&n)||n.Num!="bad"{t.Fatal(v)};e:=__borrow_std.ValueErr(Convert("bad"));if !errors.As(e,&n){t.Fatal(e)};if x:=__borrow_std.ValueOk(ParseNext("9"));x!="10"{t.Fatal(x)};if ok := __borrow_std.TagResult(ParseNext("bad"))==2;!ok{t.Fatal("propagation")}}
 func TestPartial(t *testing.T){r:=new(reader);b:=make([]byte,8);e:=__borrow_std.ValueErr(Read(r, b));if e.Value!=3||e.Err!=io.EOF||!errors.Is(e.Err,io.EOF)||r.calls!=1||string(b[:3])!="abc"{t.Fatal(e,r,b)};e=__borrow_std.ValueErr(ReadNext(r, b));if e.Value!=3||e.Err!=io.EOF||r.calls!=2{t.Fatal(e,r)};if e:=__borrow_std.ValueErr(Drop(r, b));e!=io.EOF{t.Fatal(e)};e=__borrow_std.ValueErr(Methods(r, b));if e.Value!=3||e.Err!=io.EOF{t.Fatal(e)};if _,ok:=any(e).(error);ok{t.Fatal("partial must not implement error")};e=__borrow_std.ValueErr(Read(typedReader{}, b));var typed *typedError;if e.Value!=1||e.Err==nil||!errors.As(e.Err,&typed)||typed!=nil{t.Fatal("typed nil")};if v:=__borrow_std.ValueErr(Drop(typedReader{}, b));v==nil||!errors.As(v,&typed){t.Fatal("typed nil ordinary")}}
 func TestUnitsAndTypes(t *testing.T){trace=nil;var ptr *typedError;var err error=ptr;if v:=__borrow_std.ValueErr(Unit(err));v!=err{t.Fatal("unit typed nil")};if v:=__borrow_std.ValueErr(KeepUnit(err));v.Err!=err{t.Fatal("keep unit typed nil")};if ok := __borrow_std.TagResult(KeepUnit(nil))==1;!ok{t.Fatal("keep unit success")};if ok := __borrow_std.TagResult(Unit(nil))==1;!ok{t.Fatal("unit")};if e:=__borrow_std.ValueErr(Unit(stop));e!=stop{t.Fatal(e)};if e:=__borrow_std.ValueErr(KeepUnit(stop));e.Err!=stop{t.Fatal(e)};if n:=__borrow_std.ValueOk(NativeAlias());n!=7{t.Fatal(n)};if n:=__borrow_std.ValueOk(MacroType());n!=7{t.Fatal(n)};okInt(t,NativeGeneric(),9);okInt(t,Variadic(),9)}
 func TestOrderAndFrames(t *testing.T){trace=nil;e:=__borrow_std.ValueErr(Factory());if e!=stop||!reflect.DeepEqual(trace,[]int{1,2,3}){t.Fatal(e,trace)};trace=nil;if ok := __borrow_std.TagResult(Nested(false))==2;!ok||!reflect.DeepEqual(trace,[]int{1,9}){t.Fatal(trace)};trace=nil;okInt(t,Nested(true),8);if !reflect.DeepEqual(trace,[]int{1,3,9}){t.Fatal(trace)};if Recover()!="boom"{t.Fatal("recover frame")};trace=nil;func(){defer func(){if recover()!=stop{t.Fatal("panic identity")}}();Panic()}();if !reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(trace)};trace=nil;Deferred();if !reflect.DeepEqual(trace,[]int{3,4}){t.Fatal("defer arguments",trace)};done:=make(chan int,1);Concurrent(done);if <-done!=1{t.Fatal("go arguments")};e2:=__borrow_std.ValueErr(MacroKeep());if e2.Value!=2||e2.Err!=stop{t.Fatal(e2)}}
@@ -174,7 +174,7 @@ use producer as p;
 use strconv;
 func Native()Result[p::Count,p::Partial]{return go_result_keep!(p::Count,p::Read())}
 func Forward()Result[string,p::Partial]{n:=p::Wrapped()?;return Result[string,p::Partial]::Ok(strconv::Itoa(n))}
-func Match()int{return match p::Wrapped(){p::Result[int,p::Partial]::Ok(n)=>n,p::Result[int,p::Partial]::Err(e)=>e.Value}}
+func Match()int{return match p::Wrapped(){Result[int,p::Partial]::Ok(n)=>n,Result[int,p::Partial]::Err(e)=>e.Value}}
 `)
 	consOut := filepath.Join(t.TempDir(), "consumer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", consOut, consumer)
@@ -193,7 +193,7 @@ use producer as p;
 func ImportedMacro(){_=p::retained!(p::Read())}
 `)
 	out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "negative"), consumer)
-	if !strings.Contains(out, "cross-package macros require a compiled source package") {
+	if !strings.Contains(out, "macro.gox:3:24:") || !strings.Contains(out, "macro retained requires source module adapter.example/producer") {
 		t.Fatal("expected existing precompiled macro boundary", out)
 	}
 }

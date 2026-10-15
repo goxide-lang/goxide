@@ -85,7 +85,12 @@ func compileTemplate(tokens []ast.TokenOrTree, caps captures, depth int) ([]temp
 			if err != nil {
 				return nil, err
 			}
-			names := templateCaptures(parts)
+			var names []string
+			for _, name := range templateCaptures(parts) {
+				if caps[name].Depth > depth {
+					names = append(names, name)
+				}
+			}
 			if len(names) == 0 {
 				return nil, templateProblem(span, "repetition-depth", "template repetition has no capture to determine its length")
 			}
@@ -136,7 +141,7 @@ func compileTemplate(tokens []ast.TokenOrTree, caps captures, depth int) ([]temp
 		if c == nil {
 			return nil, templateProblem(span, "template", "unknown capture $"+name)
 		}
-		if c.Depth != depth {
+		if c.Depth > depth {
 			return nil, templateProblem(span, "repetition-depth", fmt.Sprintf("capture $%s has repetition depth %d, template uses depth %d", name, c.Depth, depth))
 		}
 		out = append(out, templatePart{Capture: name, Span: span})
@@ -244,7 +249,7 @@ func (r *templateRenderer) render(parts []templatePart, indices []int) ([]syntax
 
 func (r *templateRenderer) captureAt(name string, indices []int) *capture {
 	c := r.caps[name]
-	for _, i := range indices {
+	for _, i := range indices[:min(len(indices), c.Depth)] {
 		c = c.Values[i]
 	}
 	return c

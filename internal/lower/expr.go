@@ -3,6 +3,7 @@ package lower
 import (
 	goast "go/ast"
 	gotoken "go/token"
+	"go/types"
 
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
@@ -13,6 +14,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		return nil
 	}
 	if call, ok := n.(*syntax.CallExpr); ok {
+		if adapter := e.info.GoResults[call]; adapter != nil {
+			return e.goResult(call, adapter)
+		}
 		if result, handled := e.memberCall(call); handled {
 			return result
 		}
@@ -39,8 +43,30 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		elts := make([]goast.Expr, len(n.Elts))
 		for i, elt := range n.Elts {
 			elts[i] = e.expr(elt)
+			if typ := e.info.Types[n]; typ != nil {
+				if _, record := typ.Underlying().(*types.Struct); record {
+					if field, ok := elt.(*syntax.KeyValue); ok {
+						if id, ok := field.Key.(*syntax.Ident); ok {
+							elts[i].(*goast.KeyValueExpr).Key = &goast.Ident{NamePos: e.pos(id), Name: id.Name}
+						}
+					}
+				}
+			}
 		}
-		return &goast.CompositeLit{Type: e.typ(n.Type), Lbrace: brace, Elts: elts, Rbrace: e.end(n) - 1}
+		typ := e.typ(n.Type)
+		pointer := false
+		if typ == nil && e.nameableType(e.info.Types[n]) {
+			checked := e.info.Types[n]
+			if p, ok := checked.(*types.Pointer); ok {
+				checked, pointer = p.Elem(), true
+			}
+			typ = e.goType(checked)
+		}
+		literal := &goast.CompositeLit{Type: typ, Lbrace: brace, Elts: elts, Rbrace: e.end(n) - 1}
+		if pointer {
+			return &goast.UnaryExpr{Op: gotoken.AND, X: literal}
+		}
+		return literal
 	case *syntax.KeyValue:
 		return &goast.KeyValueExpr{Key: e.expr(n.Key), Colon: e.end(n.Key), Value: e.expr(n.Value)}
 	case *syntax.ParenExpr:
@@ -82,7 +108,7 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		} else if n.Result != nil {
 			ft.Results = &goast.FieldList{List: []*goast.Field{{Type: e.typ(n.Result)}}}
 		}
-		return &goast.FuncLit{Type: ft, Body: e.block(n.Body)}
+		return &goast.FuncLit{Type: ft, Body: e.functionBody(ft, n.Body)}
 	case *syntax.PathExpr:
 		return e.path(n.Path)
 	case *syntax.RefExpr:

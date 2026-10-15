@@ -26,6 +26,13 @@ func (e *emitter) useDecl(decl *syntax.UseDecl) goast.Decl {
 	if kind != resolve.Type && kind != resolve.Enum && kind != resolve.Trait && kind != resolve.Constant {
 		return nil
 	}
+	if kind == resolve.Trait {
+		for _, trait := range e.info.Traits {
+			if trait.Type == typ && !trait.Runtime {
+				return nil
+			}
+		}
+	}
 	var target goast.Expr
 	owner := strings.Join(use.Target[:len(use.Target)-1], "/")
 	if use.Symbol.AliasOf != nil || owner == filepath.ToSlash(filepath.Dir(e.name)) && !e.externalTest {
@@ -39,13 +46,6 @@ func (e *emitter) useDecl(decl *syntax.UseDecl) goast.Decl {
 	if typ == nil {
 		e.fail(decl, "无法确定公开 use 的类型")
 		return nil
-	}
-	if kind == resolve.Trait {
-		for _, trait := range e.info.Traits {
-			if trait.Type == typ && !trait.Runtime {
-				return nil
-			}
-		}
 	}
 	spec := &goast.TypeSpec{Name: goast.NewIdent(use.Symbol.GoName), Assign: e.pos(decl) + 1, Type: target}
 	var params *types.TypeParamList

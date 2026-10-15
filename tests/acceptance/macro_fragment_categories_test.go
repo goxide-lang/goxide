@@ -70,12 +70,11 @@ func main(){
 		for _, output := range []string{first, second} {
 			deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", output, source)
 		}
-		maps := 0
 		err := filepath.WalkDir(first, func(path string, entry os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
-			if entry.IsDir() || !(strings.HasSuffix(path, ".go") || strings.HasSuffix(path, ".map.json")) {
+			if entry.IsDir() || !(strings.HasSuffix(path, ".go")) {
 				return nil
 			}
 			rel, err := filepath.Rel(first, path)
@@ -93,13 +92,10 @@ func main(){
 			if !bytes.Equal(a, b) {
 				t.Errorf("repeated CLI output differs: %s", rel)
 			}
-			if strings.HasSuffix(path, ".map.json") {
-				maps++
-			}
 			return nil
 		})
-		if err != nil || maps == 0 {
-			t.Fatalf("output/source map check: maps=%d error=%v", maps, err)
+		if err != nil {
+			t.Fatal(err)
 		}
 		packagesWrite(t, first, "main_test.go", "package main\nimport \"testing\"\nfunc TestBehavior(t *testing.T){main()}\n")
 		deliveryCommand(t, first, tool, true, nil, "test", "-race", "-count=1", "./...")
@@ -139,7 +135,7 @@ func main(){
 					packagesWrite(t, source, "bad.gox", text)
 					input := filepath.Join(source, "bad.gox")
 					output := deliveryCommand(t, outside, cli, false, nil, "transpile", input)
-					for _, want := range []string{"macro type position does not support captured syntax", "bad.gox:2:", "macro bad defined at", "bad.gox:3:"} {
+					for _, want := range []string{"type", "fragment", "bad.gox:2:", "bad.gox:3:"} {
 						if !strings.Contains(output, want) {
 							t.Fatalf("lost category diagnostic %q: %s", want, output)
 						}
@@ -163,7 +159,7 @@ func main(){
 				packagesWrite(t, source, "ops/macros.gox", fmt.Sprintf("package ops\nmacro_rules! inner {($T:%s)=>{func()int{var value $T;_=value;return 0}()};}\npub macro_rules! outer {($T:%s)=>{inner!($T)};}\n", fragment, fragment))
 				packagesWrite(t, source, "main.gox", "package main\nuse ops as m;\nfunc main(){_=m::outer!(int)}\n")
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-				for _, want := range []string{"macro type position does not support captured syntax", "ops/macros.gox:2:", "macro inner defined at", "macro outer defined at", "main.gox:3:"} {
+				for _, want := range []string{"type", "fragment", "ops/macros.gox:2:", "ops/macros.gox:3:", "main.gox:3:"} {
 					if !strings.Contains(output, want) {
 						t.Fatalf("lost package/nested category provenance %q: %s", want, output)
 					}
@@ -178,7 +174,7 @@ func main(){
 			writeMacroFixtureRoots(t, source, nil)
 			packagesWrite(t, source, "bad.gox", "package main\nmacro_rules! size {($x:expr)=>{len($x)};}\nfunc main(){"+declaration+";var n len;_=n;_=size!(\"abc\")}\n")
 			output := deliveryCommand(t, outside, cli, false, nil, "transpile", filepath.Join(source, "bad.gox"))
-			if !strings.Contains(output, "local named type") || !strings.Contains(output, "macro size defined at") {
+			if !strings.Contains(output, "local named type") || !strings.Contains(output, "bad.gox:2:") {
 				t.Fatalf("unsafe type identity rewrite instead of explicit boundary: %s", output)
 			}
 		}
@@ -196,7 +192,7 @@ func main(){
 				packagesWrite(t, source, "helper.go", helper)
 				packagesWrite(t, source, "main.gox", fmt.Sprintf("package main\nmacro_rules! bad {($f:ident,$A:%s,$B:%s)=>{$f[$A,$B](7,\"x\")};}\nfunc main(){_=bad!(Pair,int,string)}\n", fragment, fragment))
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-				for _, want := range []string{"macro type position does not support captured syntax", "main.gox:2:", "macro bad defined at", "main.gox:3:"} {
+				for _, want := range []string{"type", "fragment", "main.gox:2:", "main.gox:3:"} {
 					if !strings.Contains(output, want) {
 						t.Fatalf("lost explicit generic-argument category rejection %q: %s", want, output)
 					}

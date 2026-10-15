@@ -111,36 +111,46 @@ func nilPlace(value *Record, ok bool, trace *[]string) sum.Result[int, string] {
 
 func places() sum.Option[int] {
 	values := [1]int{1}
-	var goxideArray17 *[1]int = &values
-	var goxideTry18 sum.Option[int] = sum.NewSome[int](0)
-	var goxideOk19 int
-	switch sum.TagOption(goxideTry18) {
+	var goxideTry17 sum.Option[int] = sum.NewSome[int](0)
+	var goxideOk18 int
+	switch sum.TagOption(goxideTry17) {
 	case 1:
-		goxideOk19 = sum.ValueSome(goxideTry18)
+		goxideOk18 = sum.ValueSome(goxideTry17)
 	case 0:
 		return sum.None[int]()
 	default:
 		panic("goxide: invalid Option at ?")
 	}
-	var goxideValue20 int = goxideOk19
+	var goxideValue19 int = goxideOk18
 
-	ptr := &goxideArray17[goxideValue20]
+	ptr := &values[goxideValue19]
 	*ptr = 2
 	{
-		var goxideArray21 *[1]int = &values
-		var goxideTry22 sum.Option[int] = sum.NewSome[int](values[0] + 3)
-		var goxideOk23 int
-		switch sum.TagOption(goxideTry22) {
+		var goxideTry20 sum.Option[int] = sum.NewSome[int](values[0] + 3)
+		var goxideOk21 int
+		switch sum.TagOption(goxideTry20) {
 		case 1:
-			goxideOk23 = sum.ValueSome(goxideTry22)
+			goxideOk21 = sum.ValueSome(goxideTry20)
 		case 0:
 			return sum.None[int]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
-		goxideArray21[0] = goxideOk23
+
+		values[0] = goxideOk21
 	}
-	var goxideTry24 sum.Option[int] = sum.NewSome[int](values[0])
+	var goxideTry22 sum.Option[int] = sum.NewSome[int](values[0])
+	var goxideOk23 int
+	switch sum.TagOption(goxideTry22) {
+	case 1:
+		goxideOk23 = sum.ValueSome(goxideTry22)
+	case 0:
+		return sum.None[int]()
+	default:
+		panic("goxide: invalid Option at ?")
+	}
+	var first int = goxideOk23
+	var goxideTry24 sum.Option[int] = sum.NewSome[int](first + 1)
 	var goxideOk25 int
 	switch sum.TagOption(goxideTry24) {
 	case 1:
@@ -150,94 +160,83 @@ func places() sum.Option[int] {
 	default:
 		panic("goxide: invalid Option at ?")
 	}
-	var first int = goxideOk25
-	var goxideTry26 sum.Option[int] = sum.NewSome[int](first + 1)
-	var goxideOk27 int
-	switch sum.TagOption(goxideTry26) {
-	case 1:
-		goxideOk27 = sum.ValueSome(goxideTry26)
-	case 0:
-		return sum.None[int]()
-	default:
-		panic("goxide: invalid Option at ?")
-	}
-	var second int = goxideOk27
+	var second int = goxideOk25
 
 	return sum.NewSome[int](second)
 }
 
 func optionInt(value sum.Option[int]) int {
 	{
-		var goxideMatch28 int
-		var goxidematch29 sum.Option[int] = value
-		switch goxidetag31 := sum.TagOption(goxidematch29); goxidetag31 {
+		var goxideMatch26 int
+		var goxidematch27 sum.Option[int] = value
+		switch goxidetag29 := sum.TagOption(goxidematch27); goxidetag29 {
 		case 1:
 
-			n := sum.ValueSome(goxidematch29)
-			goxideMatch28 = n
+			n := sum.ValueSome(goxidematch27)
+			goxideMatch26 = n
 		case 0:
-			goxideMatch28 = -1
+			goxideMatch26 = -1
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		return goxideMatch28
+		return goxideMatch26
 	}
 }
 
 func text(value sum.Result[int, string]) string {
 	{
-		var goxideMatch32 string
-		var goxidematch33 sum.Result[int, string] = value
-		switch goxidetag35 := sum.TagResult(goxidematch33); goxidetag35 {
+		var goxideMatch30 string
+		var goxidematch31 sum.Result[int, string] = value
+		switch goxidetag33 := sum.TagResult(goxidematch31); goxidetag33 {
 		case 1:
 
-			n := sum.ValueOk(goxidematch33)
-			goxideMatch32 = fmt.Sprint(n)
+			n := sum.ValueOk(goxidematch31)
+			goxideMatch30 = fmt.Sprint(n)
 		case 2:
-			e := sum.ValueErr(goxidematch33)
-			goxideMatch32 = e
+			e := sum.ValueErr(goxidematch31)
+			goxideMatch30 = e
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch32
+		return goxideMatch30
 	}
 }
 
 func sliceText(value sum.Result[[]int, string]) string {
 	{
-		var goxideMatch36 string
-		var goxidematch37 sum.Result[[]int, string] = value
-		switch goxidetag39 := sum.TagResult(goxidematch37); goxidetag39 {
+		var goxideMatch34 string
+		var goxidematch35 sum.Result[[]int, string] = value
+		switch goxidetag37 := sum.TagResult(goxidematch35); goxidetag37 {
 		case 1:
 
-			items := sum.ValueOk(goxidematch37)
-			goxideMatch36 = fmt.Sprint(items)
+			items := sum.ValueOk(goxidematch35)
+			goxideMatch34 = fmt.Sprint(items)
 		case 2:
-			e := sum.ValueErr(goxidematch37)
-			goxideMatch36 = e
+			e := sum.ValueErr(goxidematch35)
+			goxideMatch34 = e
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch36
+		return goxideMatch34
 	}
 }
 
 func mapText(value sum.Result[map[int]int, string]) string {
 	{
-		var goxideMatch40 string
-		var goxidematch41 sum.Result[map[int]int, string] = value
-		switch goxidetag43 := sum.TagResult(goxidematch41); goxidetag43 {
+		var goxideMatch38 string
+		var goxidematch39 sum.Result[map[int]int, string] = value
+		switch goxidetag41 := sum.TagResult(goxidematch39); goxidetag41 {
 		case 1:
 
-			items := sum.ValueOk(goxidematch41)
-			goxideMatch40 = fmt.Sprint(len(items))
+			items := sum.ValueOk(goxidematch39)
+			goxideMatch38 = fmt.Sprint(len(items))
 		case 2:
-			e := sum.ValueErr(goxidematch41)
-			goxideMatch40 = e
+			e := sum.ValueErr(goxidematch39)
+			goxideMatch38 = e
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch40
+		return goxideMatch38
 	}
 }
 
@@ -252,7 +251,7 @@ func main() {
 		var value sum.Result[[]int, string] = sliceArray(ok, &trace)
 		fmt.Println(sliceText(value), trace)
 	}
-	for _, mode := range [][2]bool{{false, true}, {true, false}, {true, true}} {
+	for _, mode := range [][2]bool{[2]bool{false, true}, [2]bool{true, false}, [2]bool{true, true}} {
 		trace := []string{}
 		var value sum.Result[map[int]int, string] = buildMap(mode[0], mode[1], &trace)
 		fmt.Println(mapText(value), trace)

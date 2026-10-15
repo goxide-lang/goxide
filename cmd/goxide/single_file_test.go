@@ -142,11 +142,8 @@ func TestSingleFileModuleSiblingAndMissingDependency(t *testing.T) {
 	singleFileWrite(t, module, "sibling.go", "package main\nfunc sibling()int{return 19}\n")
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	var out, stderr bytes.Buffer
-	if err := run([]string{"run", "--go", tool, filepath.Join(module, "main.gox")}, &out, &stderr); err == nil || !strings.Contains(err.Error()+stderr.String(), "undefined: sibling") {
-		t.Fatalf("sibling supplied a single-file declaration: %v: %s", err, &stderr)
-	}
-	if !strings.Contains(stderr.String(), "goxide:") {
-		t.Fatalf("generated-file diagnostic was not mapped: %s", &stderr)
+	if err := run([]string{"run", "--go", tool, filepath.Join(module, "main.gox")}, &out, &stderr); err == nil || !strings.Contains(err.Error()+stderr.String(), "unresolved name") || !strings.Contains(err.Error()+stderr.String(), "main.gox:3:26:") {
+		t.Fatalf("sibling supplied a single-file declaration or source location was lost: %v: %s", err, &stderr)
 	}
 	out.Reset()
 	stderr.Reset()

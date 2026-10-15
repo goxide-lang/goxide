@@ -4,6 +4,7 @@ import (
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
+	"go/types"
 	"strconv"
 
 	"github.com/hxsf/goxide/internal/check"
@@ -17,6 +18,8 @@ type matchGroup struct {
 }
 
 type matchPayload struct {
+	value  goast.Expr
+	ref    goast.Expr
 	values []goast.Expr
 	refs   []goast.Expr
 }
@@ -76,7 +79,7 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.S
 	byName := make(map[string]*matchGroup)
 	var defaults []*syntax.MatchArm
 	for _, arm := range n.Arms {
-		if _, ok := arm.Pat.(*syntax.WildPat); ok {
+		if e.matchCatchAll(arm.Pat) {
 			defaults = append(defaults, arm)
 			continue
 		}
@@ -97,10 +100,18 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.S
 			groups = append(groups, group)
 		}
 	}
+	if !info.Enum.Enum.Builtin && len(defaults) > 0 {
+		// A wildcard covers every remaining variant, including typed nils that
+		// must be rejected before its guard or body runs.
+		for _, variant := range info.Enum.Enum.Variants {
+			if byName[variant.Name] == nil {
+				groups = append(groups, &matchGroup{variant: variant})
+			}
+		}
+	}
 	for _, group := range groups {
 		for _, arm := range n.Arms {
-			_, wild := arm.Pat.(*syntax.WildPat)
-			if wild || e.matchVariantName(arm.Pat) == group.variant.Name {
+			if e.matchCatchAll(arm.Pat) || e.matchVariantName(arm.Pat) == group.variant.Name {
 				group.arms = append(group.arms, arm)
 			}
 		}
@@ -115,12 +126,18 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.S
 			clause.List = []goast.Expr{&goast.StarExpr{X: e.variantType(info.Enum, group.variant)}}
 		}
 		setup, payload := e.matchPayload(info.Enum, group, tmp, bound, owner)
-		clause.Body = append(setup, e.matchArms(info.Enum, group.variant, payload, group.arms, target)...)
+		if !info.Enum.Enum.Builtin {
+			clause.Body = append(clause.Body, &goast.IfStmt{Cond: &goast.BinaryExpr{X: bound, Op: gotoken.EQL, Y: goast.NewIdent("nil")},
+				Body: &goast.BlockStmt{List: []goast.Stmt{matchPanic(fmt.Sprintf("goxide: match on nil %s at %s:%d", info.Enum.Enum.Name, e.name, n.Span().Start))}},
+			})
+		}
+		clause.Body = append(clause.Body, setup...)
+		clause.Body = append(clause.Body, e.matchArms(info.Enum, group.variant, payload, group.arms, target)...)
 		body.List = append(body.List, clause)
 	}
 	otherwise := &goast.CaseClause{}
 	if len(defaults) > 0 {
-		otherwise.Body = e.matchArms(info.Enum, nil, matchPayload{}, defaults, target)
+		otherwise.Body = e.matchArms(info.Enum, nil, matchPayload{value: tmp, ref: owner}, defaults, target)
 	} else {
 		otherwise.Body = []goast.Stmt{matchPanic("goxide: invalid enum " + info.Enum.Enum.Name)}
 	}
@@ -166,7 +183,7 @@ func (e *emitter) matchBorrows(n *syntax.MatchExpr) bool {
 // Value payloads used after a guard retain their value at match entry.
 func (e *emitter) matchPayload(instance *check.Instance, group *matchGroup, value, variant, owner goast.Expr) ([]goast.Stmt, matchPayload) {
 	count := len(group.variant.Fields)
-	payload := matchPayload{values: make([]goast.Expr, count), refs: make([]goast.Expr, count)}
+	payload := matchPayload{value: value, ref: owner, values: make([]goast.Expr, count), refs: make([]goast.Expr, count)}
 	read, borrow := make([]bool, count), make([]bool, count)
 	guarded := false
 	for _, arm := range group.arms {
@@ -227,11 +244,16 @@ func (e *emitter) eachMatchField(variant *check.Variant, pat syntax.Pat, visit f
 		}
 	case *syntax.StructPat:
 		for _, field := range pat.Fields {
+			found := false
 			for i, decl := range variant.Fields {
 				if decl.Name == field.Name.Name {
 					visit(i, field.Pat)
+					found = true
 					break
 				}
+			}
+			if !found {
+				e.fail(field, "未知的 enum 模式字段 "+field.Name.Name)
 			}
 		}
 	}
@@ -242,10 +264,48 @@ func (e *emitter) matchArms(instance *check.Instance, variant *check.Variant, pa
 		return []goast.Stmt{matchPanic("goxide: non-exhaustive match " + instance.Enum.Name)}
 	}
 	arm := arms[0]
-	cond, names, values := e.matchPattern(instance, variant, payload, arm.Pat)
+	patternPrefix, cond, names, values := e.matchPattern(instance, variant, payload, arm.Pat)
 	var bind *goast.AssignStmt
 	if len(names) > 0 {
 		bind = &goast.AssignStmt{Lhs: names, Tok: gotoken.DEFINE, Rhs: values}
+		bindings := map[string]*resolve.Symbol{}
+		syntax.Walk(arm.Pat, func(node syntax.Node) bool {
+			if binding, ok := node.(*syntax.BindPat); ok {
+				bindings[e.ident(binding.Name).Name] = e.file.Definitions[binding.Name.ID()]
+			}
+			return true
+		})
+		referenced := map[*resolve.Symbol]bool{}
+		visit := func(node syntax.Node) bool {
+			symbol := e.file.References[node.ID()].Symbol
+			for symbol != nil && symbol.AliasOf != nil {
+				symbol = symbol.AliasOf
+			}
+			if symbol != nil {
+				referenced[symbol] = true
+			}
+			return true
+		}
+		if arm.Body != nil {
+			syntax.Walk(arm.Body, visit)
+		}
+		if arm.Block != nil {
+			syntax.Walk(arm.Block, visit)
+		}
+		if arm.Guard != nil {
+			syntax.Walk(arm.Guard, visit)
+		}
+		unused := true
+		for index, name := range names {
+			if referenced[bindings[name.(*goast.Ident).Name]] {
+				unused = false
+			} else {
+				bind.Lhs[index] = goast.NewIdent("_")
+			}
+		}
+		if unused {
+			bind.Tok = gotoken.ASSIGN
+		}
 	}
 	body := e.matchArmBody(arm, target)
 	if cond == nil && arm.Guard == nil {
@@ -256,6 +316,18 @@ func (e *emitter) matchArms(instance *check.Instance, variant *check.Variant, pa
 	}
 	next := e.matchArms(instance, variant, payload, arms[1:], target)
 	guardPrefix, guard := e.exprScoped(arm.Guard)
+	if len(patternPrefix) > 0 {
+		// Nested payloads are only available after their variant test succeeds.
+		// Keep bindings and the user guard inside that successful branch.
+		inside := body
+		if guard != nil {
+			inside = append(guardPrefix, &goast.IfStmt{Cond: guard, Body: &goast.BlockStmt{List: body}, Else: matchElse(next)})
+		}
+		if bind != nil {
+			inside = append([]goast.Stmt{bind}, inside...)
+		}
+		return append(patternPrefix, &goast.IfStmt{Cond: cond, Body: &goast.BlockStmt{List: inside}, Else: matchElse(next)})
+	}
 	if len(guardPrefix) == 0 {
 		condition := matchAnd(cond, guard)
 		branch := &goast.IfStmt{Cond: condition, Body: &goast.BlockStmt{List: body}, Else: matchElse(next)}
@@ -293,18 +365,46 @@ func (e *emitter) matchArmBody(arm *syntax.MatchArm, target *goast.Ident) []goas
 	return append(prefix, &goast.AssignStmt{Lhs: []goast.Expr{goast.NewIdent("_")}, Tok: gotoken.ASSIGN, Rhs: []goast.Expr{value}})
 }
 
-func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant, payload matchPayload, pat syntax.Pat) (goast.Expr, []goast.Expr, []goast.Expr) {
+func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant, payload matchPayload, pat syntax.Pat) ([]goast.Stmt, goast.Expr, []goast.Expr, []goast.Expr) {
+	var prefix []goast.Stmt
 	var cond goast.Expr
 	var names, values []goast.Expr
-	field := func(index int) (goast.Expr, goast.Expr) {
-		if index >= len(payload.values) {
-			e.fail(pat, "变体模式载荷数量不匹配")
-			return goast.NewIdent("_"), goast.NewIdent("_")
-		}
-		return payload.values[index], payload.refs[index]
+	var part func(syntax.Pat, types.Type, goast.Expr, goast.Expr)
+	var fields func(*check.Instance, *check.Variant, matchPayload, syntax.Pat)
+	fields = func(instance *check.Instance, variant *check.Variant, payload matchPayload, pat syntax.Pat) {
+		decls := instance.Fields(variant)
+		e.eachMatchField(variant, pat, func(index int, child syntax.Pat) {
+			if index >= len(payload.values) || index >= len(decls) {
+				e.fail(child, "变体模式载荷数量不匹配")
+				return
+			}
+			part(child, decls[index].Type, payload.values[index], payload.refs[index])
+		})
 	}
-	var part func(syntax.Pat, goast.Expr, goast.Expr)
-	part = func(p syntax.Pat, value, ref goast.Expr) {
+	part = func(p syntax.Pat, typ types.Type, value, ref goast.Expr) {
+		if nested := e.info.EnumOf(typ); nested != nil {
+			if variant := nested.Variant(e.matchVariantName(p)); variant != nil {
+				selected, nestedValue := e.fresh("nested"), e.fresh("match")
+				var selectedType goast.Expr = e.goType(types.Typ[types.Int])
+				var selectedTest goast.Expr = &goast.BinaryExpr{X: selected, Op: gotoken.EQL, Y: integer(variantTag(variant.Name))}
+				if !nested.Enum.Builtin {
+					selectedType = &goast.StarExpr{X: e.variantType(nested, variant)}
+					selectedTest = &goast.BinaryExpr{X: selected, Op: gotoken.NEQ, Y: goast.NewIdent("nil")}
+				}
+				prefix = append(prefix, &goast.DeclStmt{Decl: &goast.GenDecl{Tok: gotoken.VAR, Specs: []goast.Spec{
+					&goast.ValueSpec{Names: []*goast.Ident{selected}, Type: selectedType},
+					&goast.ValueSpec{Names: []*goast.Ident{nestedValue}, Type: e.instanceType(nested)},
+				}}})
+				dispatch, payload := e.matchNested(nested, variant, value, nestedValue, selected, p)
+				if cond != nil {
+					dispatch = []goast.Stmt{&goast.IfStmt{Cond: cond, Body: &goast.BlockStmt{List: dispatch}}}
+				}
+				prefix = append(prefix, dispatch...)
+				cond = matchAnd(cond, selectedTest)
+				fields(nested, variant, payload, p)
+				return
+			}
+		}
 		switch p := p.(type) {
 		case *syntax.WildPat:
 		case *syntax.BindPat:
@@ -325,7 +425,7 @@ func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant,
 				values = append(values, bound)
 			}
 			if p.Sub != nil {
-				part(p.Sub, value, ref)
+				part(p.Sub, typ, value, ref)
 			}
 		case *syntax.LitPat:
 			cond = matchAnd(cond, &goast.BinaryExpr{X: value, Op: gotoken.EQL, Y: e.expr(p.Value)})
@@ -336,29 +436,70 @@ func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant,
 		}
 	}
 	switch pat := pat.(type) {
-	case *syntax.PathPat, *syntax.BindPat:
-	case *syntax.TuplePat:
-		for i, p := range pat.Elts {
-			value, ref := field(i)
-			part(p, value, ref)
+	case *syntax.PathPat:
+	case *syntax.BindPat:
+		if e.matchCatchAll(pat) {
+			part(pat, nil, payload.value, payload.ref)
 		}
-	case *syntax.StructPat:
-		for _, p := range pat.Fields {
-			found := false
-			for i, f := range variant.Fields {
-				if f.Name == p.Name.Name {
-					value, ref := field(i)
-					part(p.Pat, value, ref)
-					found = true
-					break
-				}
-			}
-			if !found {
-				e.fail(p, "未知的 enum 模式字段 "+p.Name.Name)
-			}
+	case *syntax.TuplePat, *syntax.StructPat:
+		fields(instance, variant, payload, pat)
+	}
+	return prefix, cond, names, values
+}
+
+func (e *emitter) matchNested(instance *check.Instance, selectedVariant *check.Variant, source goast.Expr, value, selected *goast.Ident, pat syntax.Pat) ([]goast.Stmt, matchPayload) {
+	bound := e.fresh("variant")
+	prefix := []goast.Stmt{&goast.AssignStmt{Lhs: []goast.Expr{value}, Tok: gotoken.ASSIGN, Rhs: []goast.Expr{source}}}
+	message := fmt.Sprintf("goxide: match on nil %s at %s:%d", instance.Enum.Name, e.name, pat.Span().Start)
+	if instance.Enum.Builtin {
+		prefix = append(prefix, &goast.AssignStmt{Lhs: []goast.Expr{selected}, Tok: gotoken.ASSIGN,
+			Rhs: []goast.Expr{&goast.CallExpr{Fun: e.sumMember("Tag" + instance.Enum.Name), Args: []goast.Expr{value}}},
+		})
+	} else {
+		prefix = append(prefix, &goast.IfStmt{Cond: &goast.BinaryExpr{X: value, Op: gotoken.EQL, Y: goast.NewIdent("nil")},
+			Body: &goast.BlockStmt{List: []goast.Stmt{matchPanic(message)}},
+		})
+	}
+	body := &goast.BlockStmt{}
+	for _, variant := range instance.Enum.Variants {
+		clause := &goast.CaseClause{}
+		if instance.Enum.Builtin {
+			clause.List = []goast.Expr{integer(variantTag(variant.Name))}
+		} else {
+			clause.List = []goast.Expr{&goast.StarExpr{X: e.variantType(instance, variant)}}
+			clause.Body = append(clause.Body, &goast.IfStmt{Cond: &goast.BinaryExpr{X: bound, Op: gotoken.EQL, Y: goast.NewIdent("nil")},
+				Body: &goast.BlockStmt{List: []goast.Stmt{matchPanic(message)}},
+			})
+		}
+		if variant == selectedVariant && !instance.Enum.Builtin {
+			clause.Body = append(clause.Body, &goast.AssignStmt{Lhs: []goast.Expr{selected}, Tok: gotoken.ASSIGN, Rhs: []goast.Expr{bound}})
+		}
+		body.List = append(body.List, clause)
+	}
+	body.List = append(body.List, &goast.CaseClause{Body: []goast.Stmt{matchPanic("goxide: invalid enum " + instance.Enum.Name)}})
+	if instance.Enum.Builtin {
+		prefix = append(prefix, &goast.SwitchStmt{Tag: selected, Body: body})
+	} else {
+		prefix = append(prefix, &goast.TypeSwitchStmt{Assign: &goast.AssignStmt{Lhs: []goast.Expr{bound}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{&goast.TypeAssertExpr{X: value}}}, Body: body})
+	}
+	payload := matchPayload{value: value, values: make([]goast.Expr, len(selectedVariant.Fields)), refs: make([]goast.Expr, len(selectedVariant.Fields))}
+	for index, field := range selectedVariant.Fields {
+		payload.values[index] = &goast.SelectorExpr{X: selected, Sel: goast.NewIdent(field.GoName)}
+		if instance.Enum.Builtin {
+			payload.values[index] = &goast.CallExpr{Fun: e.sumMember("Value" + selectedVariant.Name), Args: []goast.Expr{value}}
 		}
 	}
-	return cond, names, values
+	return prefix, payload
+}
+
+func (e *emitter) matchCatchAll(pat syntax.Pat) bool {
+	switch pat := pat.(type) {
+	case *syntax.WildPat:
+		return true
+	case *syntax.BindPat:
+		return pat.Sub == nil && e.matchVariantName(pat) == ""
+	}
+	return false
 }
 
 func matchPatternPath(p syntax.Pat) *syntax.Path {

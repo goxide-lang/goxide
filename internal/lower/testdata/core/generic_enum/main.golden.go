@@ -51,10 +51,16 @@ var globalText = func() string {
 	switch goxidevariant3 := goxidematch2.(type) {
 	case *Item[int]:
 		_ = goxidevariant3
+		if goxidevariant3 == nil {
+			panic("goxide: match on nil Box at corefixture/main.gox:185")
+		}
 		n := goxidevariant3.Value
 		goxideMatch1 = fmt.Sprint(n)
 	case *Empty[int]:
 		_ = goxidevariant3
+		if goxidevariant3 == nil {
+			panic("goxide: match on nil Box at corefixture/main.gox:185")
+		}
 		goxideMatch1 = "empty"
 	default:
 		_ = goxidevariant3
@@ -73,6 +79,9 @@ func reveal(x _Secret) int {
 		switch goxidevariant6 := goxidematch5.(type) {
 		case *_Hidden:
 			_ = goxidevariant6
+			if goxidevariant6 == nil {
+				panic("goxide: match on nil Secret at corefixture/main.gox:293")
+			}
 			n := goxidevariant6.Value
 			goxideMatch4 = n
 		default:
@@ -93,10 +102,16 @@ func parcelText(x Parcel[string]) string {
 		switch goxidevariant9 := goxidematch8.(type) {
 		case *Packed[string]:
 			_ = goxidevariant9
+			if goxidevariant9 == nil {
+				panic("goxide: match on nil parcel at corefixture/main.gox:382")
+			}
 			s := goxidevariant9.Value
 			goxideMatch7 = s
 		case *Vacant[string]:
 			_ = goxidevariant9
+			if goxidevariant9 == nil {
+				panic("goxide: match on nil parcel at corefixture/main.gox:382")
+			}
 			goxideMatch7 = "empty"
 		default:
 			_ = goxidevariant9
@@ -116,10 +131,16 @@ func integer(x Box[int]) int {
 		switch goxidevariant12 := goxidematch11.(type) {
 		case *Item[int]:
 			_ = goxidevariant12
+			if goxidevariant12 == nil {
+				panic("goxide: match on nil Box at corefixture/main.gox:486")
+			}
 			n := goxidevariant12.Value
 			goxideMatch10 = n
 		case *Empty[int]:
 			_ = goxidevariant12
+			if goxidevariant12 == nil {
+				panic("goxide: match on nil Box at corefixture/main.gox:486")
+			}
 			goxideMatch10 = -1
 		default:
 			_ = goxidevariant12
@@ -139,10 +160,16 @@ func text(x Box[string]) string {
 		switch goxidevariant15 := goxidematch14.(type) {
 		case *Item[string]:
 			_ = goxidevariant15
+			if goxidevariant15 == nil {
+				panic("goxide: match on nil Box at corefixture/main.gox:579")
+			}
 			s := goxidevariant15.Value
 			goxideMatch13 = s
 		case *Empty[string]:
 			_ = goxidevariant15
+			if goxidevariant15 == nil {
+				panic("goxide: match on nil Box at corefixture/main.gox:579")
+			}
 			goxideMatch13 = "empty"
 		default:
 			_ = goxidevariant15

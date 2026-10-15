@@ -1,15 +1,13 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/enums"
 )
 
 // enumGeneratedModule exercises the public frontend and instruments the generated
@@ -51,8 +49,8 @@ func enumGeneratedModule(t *testing.T, source, assertions string, wantFailure bo
 
 func TestEnumControlFlowRace(t *testing.T) {
 	enumGeneratedModule(t, `package fixture
-enum State { Idle, Number(int), Text(string), }
-enum Outer { Empty, Wrap(State), }
+pub enum State { Idle, Number(int), Text(string), }
+pub enum Outer { Empty, Wrap(State), }
 func makeNumber(n int) State {return State::Number(n)}
 func ordered(next func() State, seen *[]int) int {
  mark:=func(n int,b bool)bool{*seen=append(*seen,n);return b}
@@ -116,8 +114,8 @@ func TestNested(t *testing.T){if ordinary()!=9{t.Fatal("nested mismatch")};if n:
 
 func TestEnumInvalidBoundaryRace(t *testing.T) {
 	source := `package fixture
-enum State { Idle, Number(int), }
-enum Outer { Empty, Wrap(State), }
+pub enum State { Idle, Number(int), }
+pub enum Outer { Empty, Wrap(State), }
 func observe(x State, touched *bool) {
  match x {
   State::Idle if false => {*touched=true},
@@ -130,33 +128,54 @@ func observeNested(x Outer,touched *bool) {
   _ => {*touched=true},
  }
 }
-func invalidOuter()Outer{return Outer::Wrap(State{})}
-`
-	lowered, err := enums.Lower("enum_acceptance.gox", []byte(source))
-	if err != nil {
-		t.Fatal(err)
-	}
-	idle, wrap := false, false
-	for _, d := range lowered.Enums {
-		for _, v := range d.Variants {
-			if d.Name == "State" && v.Name == "Idle" {
-				idle = true
-			}
-			if d.Name == "Outer" && v.Name == "Wrap" {
-				wrap = true
-			}
-		}
-	}
-	if !idle || !wrap {
-		t.Fatal("missing public lowering metadata")
-	}
-	assertions := `package fixture
-import "testing"
-func TestInvalidBeforeWildcard(t *testing.T){
- values:=[]State{{}}
- for _,value:=range values{touched:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();observe(value,&touched)}();if !panicked||touched{t.Fatalf("invalid %T: panic=%t sideEffect=%t",value,panicked,touched)}}
+func markNested(seen *int)bool{*seen+=1;return true}
+func observePattern(x Outer,seen *int) {
+ match x {Outer::Wrap(State::Idle) if markNested(seen)=>{},_=>{},}
 }
-func TestNestedBeforeWildcard(t *testing.T){touched:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();observeNested(invalidOuter(),&touched)}();if !panicked||touched{t.Fatalf("nested invalid panic=%t sideEffect=%t",panicked,touched)}}
+func observePayloadPattern(x Outer,seen *int)int {
+ return match x {Outer::Wrap(State::Number(n)) if markNested(seen)=>n,_=>0,}
+}
+func bindOuter(x Outer,seen *int)State {
+ match x {Outer::Wrap(p)=>{*seen+=1;return p},Outer::Empty=>{return State::Idle},}
+}
+func bindBeforeNested(x Outer,seen *int)State {
+ match x {Outer::Wrap(p) if markNested(seen)=>{return p},Outer::Wrap(State::Idle)=>{return State::Idle},_=>{return State::Idle},}
+}
+func orderedPatterns(x Outer,first,inner *int) {
+ match x {Outer::Wrap(_) if func()bool{*first+=1;return false}()=>{},Outer::Wrap(State::Idle) if markNested(inner)=>{},_=>{},}
+}
+func dispatchState(x State,seen *int) {
+ match x {State::Idle if markNested(seen)=>{},_=>{*seen+=1},}
+}
+`
+	assertions := `package fixture
+import("testing";"fmt";"strings")
+func TestInvalidBeforeWildcard(t *testing.T){
+ values:=[]State{nil,(*Idle)(nil)}
+ for _,value:=range values{touched:=false;var failure any;func(){defer func(){failure=recover()}();observe(value,&touched)}();if !strings.Contains(fmt.Sprint(failure),"nil State")||touched{t.Fatalf("invalid %T: panic=%v sideEffect=%t",value,failure,touched)}}
+}
+func TestNestedBeforeWildcard(t *testing.T){
+ for _,inner:=range []State{nil,(*Idle)(nil),(*Number)(nil)}{
+  value:=&Wrap{Value:inner}
+  touched:=false;observeNested(value,&touched);if !touched{t.Fatal("outer wildcard did not execute")}
+  seen:=0;var failure any
+  func(){defer func(){failure=recover()}();observePattern(value,&seen)}()
+  if !strings.Contains(fmt.Sprint(failure),"nil State")||seen!=0{t.Fatalf("nested pattern panic=%v guard=%d",failure,seen)}
+  failure=nil;func(){defer func(){failure=recover()}();_=observePayloadPattern(value,&seen)}()
+  if !strings.Contains(fmt.Sprint(failure),"nil State")||seen!=0{t.Fatalf("nested payload pattern panic=%v guard=%d",failure,seen)}
+  bound:=bindOuter(value,&seen);if bound!=inner||seen!=1{t.Fatalf("binding changed payload or skipped arm: %T count=%d",bound,seen)}
+  seen=0;failure=nil
+  func(){defer func(){failure=recover()}();dispatchState(bound,&seen)}()
+  if !strings.Contains(fmt.Sprint(failure),"nil State")||seen!=0{t.Fatalf("bound payload dispatch panic=%v guard=%d",failure,seen)}
+  seen=0;if got:=bindBeforeNested(value,&seen);got!=inner||seen!=1{t.Fatal("later nested pattern changed earlier binding",seen)}
+  first,innerGuard:=0,0;failure=nil
+  func(){defer func(){failure=recover()}();orderedPatterns(value,&first,&innerGuard)}()
+  if !strings.Contains(fmt.Sprint(failure),"nil State")||first!=1||innerGuard!=0{t.Fatalf("ordered dispatch panic=%v first=%d inner=%d",failure,first,innerGuard)}
+ }
+ seen:=0;observePattern(&Wrap{Value:&Idle{}},&seen);if seen!=1{t.Fatal("valid nested pattern skipped guard",seen)}
+ seen=0;observePattern(&Wrap{Value:&Number{Value:3}},&seen);if seen!=0{t.Fatal("unmatched nested pattern evaluated guard",seen)}
+ seen=0;if got:=observePayloadPattern(&Wrap{Value:&Number{Value:3}},&seen);got!=3||seen!=1{t.Fatal("nested pattern lost payload or guard",got,seen)}
+}
 `
 	enumGeneratedModule(t, source, assertions, false)
 }
@@ -166,10 +185,7 @@ func TestEnumExplicitRejections(t *testing.T) {
 		"missing":              `enum E { A, B, }; func f(x E){match x {E::A=>{},}}`,
 		"guard not exhaustive": `enum E { A, B, }; func f(x E){match x {E::A if true=>{},E::B=>{},}}`,
 		"unreachable":          `enum E { A, B, }; func f(x E){match x {E::A=>{},E::A if true=>{},E::B=>{},}}`,
-		"generic":              `enum E[T] { A(T), }`,
-		"pointer payload":      `enum E { A(*int), }`,
-		"recursive":            `enum E { A(E), }`,
-		"nested pattern":       `enum E { A, }; enum F { B(E), }; func f(x F){match x {F::B(E::A)=>{},}}`,
+		"nested nonexhaustive": `enum E { A, C, }; enum F { B(E), }; func f(x F){match x {F::B(E::A)=>{},}}`,
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -183,16 +199,19 @@ func TestEnumExplicitRejections(t *testing.T) {
 }
 
 func TestEnumNominalIdentity(t *testing.T) {
-	enumGeneratedModule(t, `package fixture
-enum E { A, }
-enum F { A, }
-func wrong() E {return F::A}
-`, "package fixture\n", true)
+	_, err := compileAcceptanceLanguageFixture("nominal.gox", []byte(`package fixture
+pub enum E { EA }
+pub enum F { FA }
+func wrong() E { return F::FA }
+`))
+	if err == nil || !strings.Contains(err.Error(), "nominal.gox") || !strings.Contains(err.Error(), "cannot use") {
+		t.Fatalf("distinct enum identities accepted: %v", err)
+	}
 }
 
 func TestEnumGeneratedNameHygieneRace(t *testing.T) {
 	enumGeneratedModule(t, `package fixture
-enum Choice { Empty, Item(int), }
+pub enum Choice { Empty, Item(int), }
 func shadowFalse() int {
  false:=true;_ = false
  match Choice::Item(8) {
@@ -226,7 +245,7 @@ func TestGeneratedNamesCannotBeCaptured(t *testing.T){for name,run:=range map[st
 
 func TestEnumRejectsValidatorPanicShadow(t *testing.T) {
 	source := `package fixture
-enum Choice { Empty, Item(int), }
+pub enum Choice { Empty, Item(int), }
 func panic(v interface{}) {}
 func observe(x Choice,touched *bool) {
  match x {Choice::Empty if false=>{*touched=true},_=>{*touched=true},}

@@ -14,9 +14,10 @@ use errors;
 var nestedContinued bool
 func rows(v []Option[int])Result[[]Option[int],error]{return Result[[]Option[int],error]::Ok(v)}
 func rowCount(v []Option[int])Result[int,error]{r:=rows(v)?;nestedContinued=true;return Result[int,error]::Ok(len(r))}
-enum RowState{Ready,}
+pub enum RowState{Ready,}
 func stateRows(v []RowState)Result[[]RowState,error]{return Result[[]RowState,error]::Ok(v)}
 func stateRowCount(v []RowState)Result[int,error]{r:=stateRows(v)?;nestedContinued=true;return Result[int,error]::Ok(len(r))}
+func stateRowUse(v []RowState,seen *int)Result[int,error]{r:=stateRows(v)?;*seen+=1;match r[0]{RowState::Ready=>{*seen+=1},};return Result[int,error]::Ok(len(r))}
 func load(ok bool,trace *[]string) Result[int,error] {*trace=append(*trace,"load");if !ok{return Result[int,error]::Err(errors::New("failed"))};return Result[int,error]::Ok(4)}
 func mark(s string,trace *[]string) int {*trace=append(*trace,s);return 1}
 func combine(a,b,c int)int{return a+b+c}
@@ -31,11 +32,11 @@ func calleeSequence(ok bool,trace *[]string)Result[int,error]{n:=callee(trace)(m
 func conditional(choose bool,trace *[]string)Result[string,error]{if choose{_=load(false,trace)?}else{*trace=append(*trace,"else")};return Result[string,error]::Ok("continued")}
 func optional(ok bool) Option[string] {if !ok{return Option[string]::None};return Option[string]::Some("abc")}
 func optionalLength(ok bool) Option[int] {s:=optional(ok)?;return Option[int]::Some(len(s))}
-func optionInt(v Option[int])int{match v {Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
-func resultText(v Result[string,error])string{match v {Result[string,error]::Ok(s)=>{return s},Result[string,error]::Err(e)=>{return e.Error()},};panic("unreachable")}
+func optionInt(v Option[int])int{match v {Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},}}
+func resultText(v Result[string,error])string{match v {Result[string,error]::Ok(s)=>{return s},Result[string,error]::Err(e)=>{return e.Error()},}}
 func truth(ok bool,trace *[]string)Result[bool,error]{n:=load(ok,trace)?;return Result[bool,error]::Ok(n>0)}
 func shortCircuit(left bool,trace *[]string)Result[bool,error]{v:=left&&truth(false,trace)?;return Result[bool,error]::Ok(v)}
-func boolResult(v Result[bool,error])int{match v {Result[bool,error]::Ok(x)=>{if x{return 1};return 0},Result[bool,error]::Err(_)=>{return -1},};panic("unreachable")}
+func boolResult(v Result[bool,error])int{match v {Result[bool,error]::Ok(x)=>{if x{return 1};return 0},Result[bool,error]::Err(_)=>{return -1},}}
 func closure(trace *[]string)Result[string,error]{
  inner:=func()Result[int,error]{defer func(){*trace=append(*trace,"inner-cleanup")}();return Result[int,error]::Ok(load(false,trace)?)}
  _=inner();*trace=append(*trace,"outer-continued");return Result[string,error]::Ok("outer")
@@ -51,21 +52,22 @@ func explicitPartial()Result[ReadOutcome,error]{n,e:=nativePartial();return Resu
 func preservedPartial()Result[ReadOutcome,error]{value:=explicitPartial()?;return Result[ReadOutcome,error]::Ok(value)}
 func explicitFailure()Result[int,error]{n,e:=nativePartial();if e!=nil{return Result[int,error]::Err(e)};return Result[int,error]::Ok(n)}
 func preservedFailure()Result[string,error]{_=explicitFailure()?;return Result[string,error]::Ok("bad")}
-func readOutcome(v Result[ReadOutcome,error])ReadOutcome{match v {Result[ReadOutcome,error]::Ok(x)=>{return x},Result[ReadOutcome,error]::Err(_)=>{panic("bad")},};panic("unreachable")}
-func failure(v Result[string,error])error{match v {Result[string,error]::Ok(_)=>{return nil},Result[string,error]::Err(e)=>{return e},};panic("unreachable")}
+func readOutcome(v Result[ReadOutcome,error])ReadOutcome{match v {Result[ReadOutcome,error]::Ok(x)=>{return x},Result[ReadOutcome,error]::Err(_)=>{panic("bad")},}}
+func failure(v Result[string,error])error{match v {Result[string,error]::Ok(_)=>{return nil},Result[string,error]::Err(e)=>{return e},}}
 `
 
 const propagationAssertions = `package fixture
 import __borrow_std "github.com/goxide-lang/std/sum"
 
-import("testing";"reflect")
+import("testing";"fmt";"reflect";"strings")
 func TestNestedContainerPropagation(t *testing.T){
- for _,v:=range [][]Option[int]{nil,{}, {__borrow_std.None[int](),GoxideNewOptionSome[int](1)}}{nestedContinued=false;got:=__borrow_std.ValueOk(rowCount(v));if got!=len(v)||!nestedContinued{t.Fatal("container propagation")}}
- // Some/None are closed value constructors; preserve recursive validation
- // with a still-constructible invalid user enum inside a Result payload.
- nestedContinued=false
- defer func(){if recover()==nil||nestedContinued{t.Fatal("invalid inner value passed question boundary")}}()
- stateRowCount([]RowState{{}})
+ for _,v:=range [][]__borrow_std.Option[int]{nil,{}, {__borrow_std.None[int](),__borrow_std.NewSome[int](1)}}{nestedContinued=false;got:=__borrow_std.ValueOk(rowCount(v));if got!=len(v)||!nestedContinued{t.Fatal("container propagation")}}
+ // The Result boundary checks only Result; the Go-supplied element is checked
+ // when it becomes the value of a later match.
+ values:=[]RowState{nil};nestedContinued=false
+ if got:=__borrow_std.ValueOk(stateRowCount(values));got!=1||!nestedContinued{t.Fatal("container propagation inspected its payload",got,nestedContinued)}
+ seen:=0;defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"nil RowState")||seen!=1{t.Fatalf("element dispatch panic=%v continuation=%d",p,seen)}}()
+ stateRowUse(values,&seen)
 }
 func TestDifferentSuccessTypesAndOrder(t *testing.T){for _,ok:=range []bool{false,true}{trace:=[]string{};v:=sequence(ok,&trace);want:=[]string{"first","load","cleanup"};text:="failed";if ok{want=[]string{"first","load","last","late","cleanup"};text="six"};if resultText(v)!=text||!reflect.DeepEqual(trace,want){t.Fatalf("ok=%t text=%s trace=%v",ok,resultText(v),trace)}};if optionInt(optionalLength(true))!=3||optionInt(optionalLength(false))!=-1{t.Fatal("Option propagation")}}
 func TestCalleeBeforeArguments(t *testing.T){for _,ok:=range []bool{false,true}{trace:=[]string{};_=calleeSequence(ok,&trace);want:=[]string{"callee","first","load"};if ok{want=[]string{"callee","first","load","last","body"}};if !reflect.DeepEqual(trace,want){t.Fatalf("callee order ok=%t: %v",ok,trace)}}}
@@ -78,8 +80,6 @@ func TestInvalidResultIsNotBusinessFailure(t *testing.T){defer func(){if recover
 
 func TestPropagationExplicitRejections(t *testing.T) {
 	cases := map[string]string{
-		"goxide-holder-enum":     `enum E {A,};struct Holder { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
-		"go-holder-enum":         `enum E {A,};type Holder struct { Bad *E };func f(v Holder)Option[Holder]{return Option[Holder]::Some(v)}`,
 		"option-to-result":       `func f()Result[int,error]{x:=Option[int]::None?;return Result[int,error]::Ok(x)}`,
 		"result-to-option":       `func f()Option[int]{x:=Result[int,error]::Ok(1)?;return Option[int]::Some(x)}`,
 		"ordinary-closure":       `func f()Result[int,error]{x:=func()int{return Result[int,error]::Ok(1)?}();return Result[int,error]::Ok(x)}`,

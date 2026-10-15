@@ -13,8 +13,8 @@ export async function write(page, source) {
   await pane.getByRole("textbox").waitFor({ state: "attached" });
   await page.evaluate((text) => navigator.clipboard.writeText(text), source);
   await pane.getByRole("textbox").focus();
-  await page.keyboard.press("Control+A");
-  await page.keyboard.press("Control+V");
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("ControlOrMeta+V");
   await page.evaluate(
     () =>
       new Promise((resolve) =>

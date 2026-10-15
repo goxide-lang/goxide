@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/lower"
 )
 
 const owner = "goxide-build-script-cache-v1\n"
@@ -230,7 +230,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 		return fail, e
 	}
 	host := filepath.Join(scratch, "host")
-	if e = writeFiles(host, p.script); e != nil {
+	if e = writeHostFiles(host, p.script); e != nil {
 		return fail, e
 	}
 	mods := make([]string, 0, len(p.helpers))
@@ -241,7 +241,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 	paths := map[string]string{}
 	for i, mod := range mods {
 		paths[mod] = filepath.Join(scratch, "helper-"+strconv.Itoa(i))
-		if e = writeFiles(paths[mod], p.helpers[mod]); e != nil {
+		if e = writeHostFiles(paths[mod], p.helpers[mod]); e != nil {
 			return fail, e
 		}
 	}
@@ -301,42 +301,24 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 				continue
 			}
 			if hasGoxide(p.helpers[m]) {
-				dst := paths[m] + "-lowered"
-				if _, e = frontend.CompileModuleWithOptions(paths[m], dst, frontend.ModuleOptions{Environment: p.compileEnv(), Context: ctx, Roots: p.options.ToolchainRoots}); e != nil {
+				if e = lower.CompileModules([]lower.Module{{Path: m, Dir: paths[m], GoTool: p.options.GoTool, Roots: p.options.ToolchainRoots, Context: ctx, Environment: p.compileEnv()}}); e != nil {
 					return fail, fmt.Errorf("host helper %s: %w", m, e)
 				}
-				paths[m] = dst
 			}
 			delete(pending, m)
 			progress = true
-			// Rebase every remaining module after a lowered helper moves.
-			for _, n := range mods {
-				if pending[n] {
-					if e = os.WriteFile(filepath.Join(paths[n], "go.mod"), modFile(n), 0600); e != nil {
-						return fail, e
-					}
-				}
-			}
 		}
 		if !progress {
 			return fail, fmt.Errorf("host helper bootstrap/import cycle")
-		}
-	}
-	// Reconstruct all manifests again so cross-helper references point at final lowered paths.
-	for _, m := range mods {
-		if e = os.WriteFile(filepath.Join(paths[m], "go.mod"), modFile(m), 0600); e != nil {
-			return fail, e
 		}
 	}
 	if e = os.WriteFile(filepath.Join(host, "go.mod"), modFile("goxide.buildscript.local/host"), 0600); e != nil {
 		return fail, e
 	}
 	if hasGoxide(p.script) {
-		dst := filepath.Join(scratch, "lowered")
-		if _, e = frontend.CompileModuleWithOptions(host, dst, frontend.ModuleOptions{Environment: p.compileEnv(), Context: ctx, Roots: p.options.ToolchainRoots}); e != nil {
+		if e = lower.CompileModules([]lower.Module{{Path: "goxide.buildscript.local/host", Dir: host, GoTool: p.options.GoTool, Roots: p.options.ToolchainRoots, Context: ctx, Environment: p.compileEnv()}}); e != nil {
 			return fail, fmt.Errorf("host script lowering (only explicit toolchain roots are available): %w", e)
 		}
-		host = dst
 	}
 	exe := filepath.Join(scratch, "generator")
 	if runtime.GOOS == "windows" {

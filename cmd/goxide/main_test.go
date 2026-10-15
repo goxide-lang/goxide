@@ -35,7 +35,7 @@ func TestOutputProtection(t *testing.T) {
 	var out bytes.Buffer
 	target := filepath.Join(d, "result.go")
 	if err := run([]string{"transpile", "-o", target, "--source-map", target, src}, &out, &out); err == nil {
-		t.Fatal("colliding outputs accepted")
+		t.Fatal("removed source-map flag accepted")
 	}
 	got, _ := os.ReadFile(src)
 	if !bytes.Equal(got, original) {
@@ -49,20 +49,16 @@ func TestTranspileArtifacts(t *testing.T) {
 	d := t.TempDir()
 	src := filepath.Join(d, "input.gox")
 	out := filepath.Join(d, "out.go")
-	sm := filepath.Join(d, "map.json")
 	os.WriteFile(src, []byte("package sample\n#[derive(Debug)]\ntype Item struct { Name string }\n"), 0600)
 	var log bytes.Buffer
-	if err := run([]string{"transpile", "-o", out, "--source-map", sm, src}, &log, &log); err != nil {
+	if err := run([]string{"transpile", "-o", out, src}, &log, &log); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(out)
 	if err != nil || !bytes.Contains(b, []byte("DebugItem")) {
 		t.Fatalf("missing helper: %s %v", b, err)
 	}
-	b, err = os.ReadFile(sm)
-	if err != nil || !bytes.Contains(b, []byte("input.gox")) {
-		t.Fatalf("missing map: %s %v", b, err)
-	}
+
 }
 
 func TestBuildAndRunGenerated(t *testing.T) {

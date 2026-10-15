@@ -2,12 +2,11 @@ package acceptance_test
 
 import (
 	"github.com/hxsf/goxide/internal/rootconfig"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 func TestMacroPrimitivePackageCollisionsAreLocated(t *testing.T) {
@@ -32,7 +31,7 @@ func TestMacroPrimitivePackageCollisionsAreLocated(t *testing.T) {
 				want = "definition-site declaration"
 			}
 			packagesWrite(t, source, shadow, "package "+packageName+"\n"+tc.decl+"\n")
-			_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
+			err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil)
 			if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "macros.gox:2:") || !strings.Contains(err.Error(), "app.gox:3:") {
 				t.Fatalf("%s definition=%v: %v", tc.name, definition, err)
 			}
@@ -62,7 +61,7 @@ func Run()(int,bool,string,string){
 }
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
-	if _, err := frontend.CompileModule(source, generated); err != nil {
+	if err := testdeps.Module(source, generated, nil); err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, generated, "app_test.go", `package app

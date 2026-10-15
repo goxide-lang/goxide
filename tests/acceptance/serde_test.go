@@ -2,7 +2,7 @@ package acceptance_test
 
 import (
 	"context"
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,7 +44,6 @@ func TestUnsupportedSerdeIsDiagnosed(t *testing.T) {
 	cases := map[string]string{
 		"skip-wire-collision": "package fixture; use serde;\n#[derive(serde::Serialize, serde::Deserialize)]\ntype Collision struct {\n #[serde(skip, rename=\"same\")]\n Secret string\n #[serde(rename=\"same\")]\n Public string\n}",
 		"generic":             "package fixture; use serde;\n#[derive(serde::Serialize)]\ntype Generic[T any] struct { Value T }",
-		"public-enum":         "package fixture; use serde;\n#[derive(serde::Serialize)]\npub enum Choice { A, B }",
 		"external":            "package fixture; use serde;\nuse time;\n#[derive(serde::Serialize)]\ntype Event struct { At time::Time }",
 		"interface":           "package fixture; use serde;\n#[derive(serde::Deserialize)]\ntype Dynamic struct { Value any }",
 	}

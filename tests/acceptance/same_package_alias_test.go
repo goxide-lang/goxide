@@ -13,7 +13,7 @@ type Item struct{N int;Name string}
 #[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 pub enum E{
 #[default]
-Item(Item),
+Entry(Item),
 Empty,
 }
 impl Default for Item{func default()Item{return Item{N:7,Name:"local"}}}
@@ -34,7 +34,7 @@ func ShadowDefault()Item{DefaultItem:=func()Item{return Item{N:9}};return Defaul
 const samePackageAliasAssertions = `package fixture
 import("testing";"reflect";"strings";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestSamePackageAliasProtocols(t *testing.T){
- if ShadowDefault().N!=9{t.Fatal("local helper spelling rebound")};v:=DefaultWrap();if v.V.N!=7||v.V.Name!="local"{t.Fatal(v)};c:=CloneWrap(&v);if !Equal(v,c)||!strings.Contains(DebugWrap(&v),"E::Item(Item {"){t.Fatal(v,c)}
+ if ShadowDefault().N!=9{t.Fatal("local helper spelling rebound")};v:=DefaultWrap();if v.V.N!=7||v.V.Name!="local"{t.Fatal(v)};c:=CloneWrap(&v);if !Equal(v,c)||!strings.Contains(DebugWrap(&v),"E::Entry(Item {"){t.Fatal(v,c)}
  c.V.N=9;if Equal(v,c){t.Fatal("equality lost")};if reflect.TypeOf(v.V)!=reflect.TypeOf(Item{}){t.Fatal("identity changed")}
  b,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeWrap(s,&v)});w,e2:=serdejson.Unmarshal(b,DeserializeWrap);if e!=nil||e2!=nil||!Equal(v,w){t.Fatal(string(b),e,e2)}
  bag:=Bag{Items:[]Level{v.V},Index:map[string]Local{"x":v.V}};bc:=CloneBag(&bag);bc.Items[0].N=100;bc.Index["x"]=Local{};if bag.Items[0].N!=7||bag.Index["x"].N!=7{t.Fatal("alias clone")}

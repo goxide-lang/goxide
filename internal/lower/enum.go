@@ -38,7 +38,11 @@ func (e *emitter) enumDecl(n *syntax.EnumDecl) []goast.Decl {
 		methods = append(methods, errorInterfaceMethods()...)
 	}
 	methods = append(methods, e.enumTraitMethods(info.Type)...)
-	decls := []goast.Decl{&goast.GenDecl{Tok: gotoken.TYPE, Specs: []goast.Spec{&goast.TypeSpec{
+	position := gotoken.NoPos
+	if len(e.tree.Comments) > 0 {
+		position = e.pos(n)
+	}
+	decls := []goast.Decl{&goast.GenDecl{TokPos: position, Tok: gotoken.TYPE, Specs: []goast.Spec{&goast.TypeSpec{
 		Name: goast.NewIdent(info.GoName), TypeParams: e.enumGenerics(n.Generics),
 		Type: &goast.InterfaceType{Methods: &goast.FieldList{List: methods}},
 	}}}}
@@ -47,14 +51,14 @@ func (e *emitter) enumDecl(n *syntax.EnumDecl) []goast.Decl {
 		for _, f := range v.Fields {
 			fields = append(fields, &goast.Field{Names: []*goast.Ident{goast.NewIdent(f.GoName)}, Type: e.goType(f.Type)})
 		}
-		decls = append(decls, &goast.GenDecl{Tok: gotoken.TYPE, Specs: []goast.Spec{&goast.TypeSpec{
+		decls = append(decls, &goast.GenDecl{TokPos: position, Tok: gotoken.TYPE, Specs: []goast.Spec{&goast.TypeSpec{
 			Name: goast.NewIdent(v.GoName), TypeParams: e.enumGenerics(n.Generics),
 			Type: &goast.StructType{Fields: &goast.FieldList{List: fields}},
 		}}})
 		recv := &goast.StarExpr{X: enumIndices(goast.NewIdent(v.GoName), args)}
 		decls = append(decls, &goast.FuncDecl{Name: goast.NewIdent(marker),
 			Recv: &goast.FieldList{List: []*goast.Field{{Type: recv}}},
-			Type: &goast.FuncType{Params: markerParams()}, Body: &goast.BlockStmt{},
+			Type: &goast.FuncType{Func: position, Params: markerParams()}, Body: &goast.BlockStmt{},
 		})
 		decls = append(decls, e.enumTraitDeclarations(info.Type, recv)...)
 	}

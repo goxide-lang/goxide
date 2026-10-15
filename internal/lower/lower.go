@@ -99,6 +99,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 		e.reserveNames()
 		e.reserveTraitNames()
 		e.validatePrintStatements()
+		e.checkMacroNames()
 		f := &goast.File{Package: e.pos(tree.Package) - 8, Name: &goast.Ident{NamePos: e.pos(tree.Package), Name: tree.Package.Name}}
 		if f.Package < e.base {
 			f.Package = e.base
@@ -116,6 +117,8 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 		f.Decls = append(f.Decls, e.errorDeclarations()...)
 		f.Decls = append(f.Decls, e.serdeDeclarations()...)
 		f.Decls = append(f.Decls, e.traitDeclarations()...)
+		f.Decls = append(f.Decls, e.resultAdapters...)
+		f.Decls = append(f.Decls, e.flowHelpers...)
 		if e.err != nil {
 			return nil, e.err
 		}
@@ -125,7 +128,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 			}
 		}
 		e.addImports(f)
-		e.positions(f)
+		e.positions(f, fset)
 		e.goFile = f
 		emitters = append(emitters, e)
 	}
@@ -316,27 +319,38 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
-	traits        *traitProgram
-	symbolNames   map[*resolve.Symbol]string
-	matchDepth    int
-	breakTarget   *breakTarget
-	info          *check.Info
-	pending       []goast.Stmt
-	replacements  map[syntax.Expr]goast.Expr
-	tempIndex     int
-	base          gotoken.Pos
-	tokenFile     *gotoken.File
-	goFile        *goast.File
-	memberSymbols map[*resolve.Symbol]bool
-	memberNames   map[*goast.Ident]string
-	name          string
-	tree          *syntax.File
-	file          *resolve.File
-	result        *resolve.Result
-	err           *Diagnostic
-	imports       map[string]*importUse
-	reserved      map[string]bool
-	externalTest  bool
+	functionFrame      *functionFrame
+	assignmentGuard    *goast.Ident
+	shiftCount         *goast.Ident
+	resultAdapters     []goast.Decl
+	flowHelpers        []goast.Decl
+	zeroFunctions      map[int]*goast.Ident
+	zeroPointers       map[int]*goast.Ident
+	traits             *traitProgram
+	symbolNames        map[*resolve.Symbol]string
+	primitiveAliases   map[string]*goast.Ident
+	packageTypeAliases map[string]*goast.Ident
+	functionAliases    map[string]*goast.Ident
+	localTypes         map[types.Type]*localTypeName
+	matchDepth         int
+	breakTarget        *breakTarget
+	info               *check.Info
+	pending            []goast.Stmt
+	replacements       map[syntax.Expr]goast.Expr
+	tempIndex          int
+	base               gotoken.Pos
+	tokenFile          *gotoken.File
+	goFile             *goast.File
+	memberSymbols      map[*resolve.Symbol]bool
+	memberNames        map[*goast.Ident]string
+	name               string
+	tree               *syntax.File
+	file               *resolve.File
+	result             *resolve.Result
+	err                *Diagnostic
+	imports            map[string]*importUse
+	reserved           map[string]bool
+	externalTest       bool
 }
 
 func (e *emitter) samePackage(file string) bool {
@@ -419,19 +433,58 @@ func tokenKind(kind token.Kind) gotoken.Token {
 }
 
 // 使用源文件行表保留独立注释与行尾注释的相对位置。
-func (e *emitter) positions(f *goast.File) {
+func (e *emitter) positions(f *goast.File, fset *gotoken.FileSet) {
+	oldBase := e.base
+	var boundaries []int
+	spacing := 0
+	offset := func(source int) int {
+		return source + spacing*sort.SearchInts(boundaries, source+1)
+	}
+	if len(e.tree.Comments) > 0 {
+		// Generated statements may occupy more bytes than their source span.
+		// Reserve enough virtual offset space between source tokens so the Go
+		// printer cannot advance through a later comment while printing them.
+		var code bytes.Buffer
+		if err := format.Node(&code, fset, f); err == nil {
+			spacing = code.Len() + e.tokenFile.Size() + 1
+		}
+		for _, group := range e.tree.Comments {
+			for _, comment := range group.List {
+				boundaries = append(boundaries, int(comment.Span().Start))
+			}
+		}
+		sort.Ints(boundaries)
+		e.tokenFile = fset.AddFile(e.name, -1, offset(e.tokenFile.Size()))
+		e.base = gotoken.Pos(e.tokenFile.Base())
+		seen := map[goast.Node]bool{}
+		goast.Inspect(f, func(node goast.Node) bool {
+			if node == nil || seen[node] {
+				return false
+			}
+			seen[node] = true
+			value := reflect.ValueOf(node).Elem()
+			for i := 0; i < value.NumField(); i++ {
+				field := value.Field(i)
+				if field.Type() == reflect.TypeOf(gotoken.NoPos) && field.Int() >= int64(oldBase) {
+					field.SetInt(int64(e.base) + int64(offset(int(field.Int())-int(oldBase))))
+				}
+			}
+			return true
+		})
+	}
 	lines := []int{0}
 	if len(e.tree.LineStarts) > 0 {
 		lines = lines[:0]
-		for _, offset := range e.tree.LineStarts {
-			lines = append(lines, int(offset))
+		for _, source := range e.tree.LineStarts {
+			lines = append(lines, offset(int(source)))
 		}
+		lines[0] = 0
 	}
 	e.tokenFile.SetLines(lines)
 	for _, group := range e.tree.Comments {
 		cg := &goast.CommentGroup{}
 		for _, comment := range group.List {
-			cg.List = append(cg.List, &goast.Comment{Slash: e.pos(comment), Text: comment.Text})
+			cg.List = append(cg.List, &goast.Comment{Slash: e.base + gotoken.Pos(offset(int(comment.Span().Start))), Text: comment.Text})
 		}
 		f.Comments = append(f.Comments, cg)
 	}

@@ -47,7 +47,9 @@ class FocusedInputTests(unittest.TestCase):
         examples.mkdir(parents=True)
         (examples / 'one.gox').write_bytes(b'package main\r\n')
         (self.root / 'website/catalog-source.json').write_text(json.dumps(dict(compilerCommit='pin', compilerDigest='digest', examples=[dict(id='one', expectedStdout='one\n')])))
-        self.manifest = dict(commit='pin', compilerDigest='digest', examples=[dict(id='one', source='package main\r\n', stdout='one\n')])
+        self.manifest = dict(commit='pin', compilerDigest='digest', catalogCompilerCommit='pin',
+                             compilerSource=dict(kind='commit', commit='pin', digest='digest', dirty=False),
+                             examples=[dict(id='one', source='package main\r\n', stdout='one\n')])
 
     def test_catalog_and_manifest_sources_must_match_exactly(self):
         cases = focused.load_cases(self.root, self.manifest, [])

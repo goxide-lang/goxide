@@ -25,7 +25,7 @@ func main() {
         Counter::Empty => {},
     }
     *saved += 3
-    fmt::Println(read(counter), read(before)) // 5 1: the copy has independent storage.
+    fmt::Println(read(counter), read(before)) // 5 5: both values share the same variant object.
     match &counter {
         Counter::Count(value) => { fmt::Println(*value) },
         Counter::Empty => {},

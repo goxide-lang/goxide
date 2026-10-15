@@ -1,6 +1,7 @@
 package lower
 
 import (
+	"context"
 	"fmt"
 	"go/importer"
 	"go/token"
@@ -15,17 +16,22 @@ import (
 
 type moduleGoImporter struct {
 	root, tool string
+	context    context.Context
+	env        []string
 	exports    map[string]string
 	owners     map[string]string
 	standard   map[string]bool
 	gc         types.Importer
 }
 
-func sourceModuleImporter(root, tool string) *moduleGoImporter {
+func sourceModuleImporter(root, tool string, ctx context.Context, env []string) *moduleGoImporter {
 	if tool == "" {
 		tool = filepath.Join(runtime.GOROOT(), "bin", "go")
 	}
-	i := &moduleGoImporter{root: root, tool: tool, exports: map[string]string{}, owners: map[string]string{}, standard: map[string]bool{}}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	i := &moduleGoImporter{root: root, tool: tool, context: ctx, env: env, exports: map[string]string{}, owners: map[string]string{}, standard: map[string]bool{}}
 	i.gc = importer.ForCompiler(token.NewFileSet(), "gc", i.lookup)
 	return i
 }
@@ -64,9 +70,13 @@ func (i *moduleGoImporter) load(path string, exports bool) error {
 		args = append(args, "-find")
 	}
 	args = append(args, "-f", "{{.ImportPath}}\t{{.Export}}\t{{if .Module}}{{.Module.Path}}{{end}}\t{{.Standard}}", path)
-	command := exec.Command(i.tool, args...)
+	command := exec.CommandContext(i.context, i.tool, args...)
 	command.Dir = i.root
-	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOFLAGS=")
+	env := i.env
+	if env == nil {
+		env = os.Environ()
+	}
+	command.Env = append(append([]string(nil), env...), "GOWORK=off", "GOTOOLCHAIN=local", "GOFLAGS=")
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("load Go package %s: %w\n%s", path, err, output)

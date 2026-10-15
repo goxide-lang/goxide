@@ -1,10 +1,13 @@
 package check
 
 import (
+	"go/constant"
+	gotoken "go/token"
 	"go/types"
 
 	"github.com/hxsf/goxide/internal/resolve"
 	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/hxsf/goxide/internal/syntax/token"
 )
 
 func (c *checker) globals(items []ast.Item) {
@@ -111,6 +114,12 @@ func (c *checker) stmt(stmt ast.Stmt) {
 	case *ast.Block:
 		c.block(n)
 	case *ast.DeclStmt:
+		if decl, ok := n.Decl.(*ast.TypeDecl); ok {
+			items := []ast.Item{decl}
+			c.collect(items)
+			c.prepareGenerics(items)
+			c.signatures(items)
+		}
 		c.item(n.Decl)
 	case *ast.LetStmt:
 		var want types.Type
@@ -181,17 +190,30 @@ func (c *checker) stmt(stmt ast.Stmt) {
 			c.expr(v, want)
 		}
 	case *ast.IfStmt:
+		c.checkMatchHeader(n.Init, n.Cond)
 		c.stmt(n.Init)
 		c.expr(n.Cond, types.Typ[types.Bool])
 		c.block(n.Body)
 		c.stmt(n.Else)
 	case *ast.ForStmt:
+		c.checkMatchHeader(n.Init, n.Cond, n.Post)
 		c.stmt(n.Init)
 		c.expr(n.Cond, types.Typ[types.Bool])
 		c.block(n.Body)
 		c.stmt(n.Post)
 	case *ast.RangeStmt:
-		t := c.expr(n.X, nil)
+		c.checkMatchHeader(n.Key, n.Value, n.X)
+		c.checkRangePropagation(n.Key, "error propagation in a range assignment target is not supported")
+		c.checkRangePropagation(n.Value, "error propagation in a range assignment target is not supported")
+		var want types.Type
+		if n.Tok == token.ASSIGN && n.Key != nil {
+			if typ := c.expr(n.Key, nil); valid(typ) {
+				if integer, ok := typ.Underlying().(*types.Basic); ok && integer.Info()&types.IsInteger != 0 {
+					want = typ
+				}
+			}
+		}
+		t := c.expr(n.X, want)
 		key, value := types.Type(types.Typ[types.Int]), types.Type(types.Typ[types.Invalid])
 		if valid(t) {
 			switch x := t.Underlying().(type) {
@@ -206,24 +228,51 @@ func (c *checker) stmt(stmt ast.Stmt) {
 			case *types.Basic:
 				if x.Info()&types.IsString != 0 {
 					value = types.Typ[types.Rune]
+				} else if x.Info()&types.IsInteger != 0 {
+					key = defaultType(t)
 				}
+			case *types.Signature:
+				c.checkRangePropagation(n.X, "error propagation in a function iterator source is not supported")
 			}
 		}
-		c.bindExpr(n.Key, key)
-		c.bindExpr(n.Value, value)
+		if n.Tok == token.DEFINE {
+			c.bindExpr(n.Key, key)
+			c.bindExpr(n.Value, value)
+		} else {
+			c.expr(n.Value, value)
+		}
 		c.block(n.Body)
 	case *ast.SwitchStmt:
+		c.checkMatchHeader(n.Init, n.Tag)
 		c.stmt(n.Init)
-		c.expr(n.Tag, nil)
+		tag := c.expr(n.Tag, nil)
+		var constants []constant.Value
+		var constantTypes []types.Type
 		for _, cl := range n.Cases {
 			for _, e := range cl.List {
-				c.expr(e, nil)
+				want := tag
+				if c.nilLiteral(e) {
+					want = nil
+				}
+				typ := c.expr(e, want)
+				value := c.constant(e)
+				if n.Tag != nil && value.Kind() != constant.Unknown {
+					for index, previous := range constants {
+						if types.Identical(defaultType(typ), defaultType(constantTypes[index])) && constant.Compare(value, gotoken.EQL, previous) {
+							c.diag(e, "switch-duplicate-case", "duplicate case in switch")
+							break
+						}
+					}
+					constants = append(constants, value)
+					constantTypes = append(constantTypes, typ)
+				}
 			}
 			for _, s := range cl.Body {
 				c.stmt(s)
 			}
 		}
 	case *ast.TypeSwitchStmt:
+		c.checkMatchHeader(n.Init, n.Assign)
 		c.stmt(n.Init)
 		var subject types.Type
 		if a, ok := n.Assign.(*ast.AssignStmt); ok && len(a.Rhs) == 1 {
@@ -257,8 +306,12 @@ func (c *checker) stmt(stmt ast.Stmt) {
 			}
 		}
 	case *ast.SendStmt:
-		c.expr(n.Chan, nil)
-		c.expr(n.Value, nil)
+		channel := c.expr(n.Chan, nil)
+		var want types.Type
+		if channel, ok := channel.Underlying().(*types.Chan); ok {
+			want = channel.Elem()
+		}
+		c.expr(n.Value, want)
 	case *ast.IncDecStmt:
 		c.expr(n.X, nil)
 	case *ast.GoStmt:
@@ -270,9 +323,38 @@ func (c *checker) stmt(stmt ast.Stmt) {
 	case *ast.LoopStmt:
 		c.block(n.Body)
 	case *ast.WhileStmt:
+		c.checkMatchHeader(n.Cond)
 		c.expr(n.Cond, types.Typ[types.Bool])
 		c.block(n.Body)
 	}
+}
+
+func (c *checker) checkMatchHeader(nodes ...ast.Node) {
+	for _, node := range nodes {
+		ast.Walk(node, func(current ast.Node) bool {
+			switch current.(type) {
+			case *ast.FuncLit:
+				return false
+			case *ast.MatchExpr:
+				c.diag(current, "match-control-header", "match expressions in control headers are not supported")
+				return false
+			}
+			return true
+		})
+	}
+}
+
+func (c *checker) checkRangePropagation(node ast.Node, message string) {
+	ast.Walk(node, func(current ast.Node) bool {
+		switch current.(type) {
+		case *ast.FuncLit:
+			return false
+		case *ast.TryExpr:
+			c.diag(current, "try-range", message)
+			return false
+		}
+		return true
+	})
 }
 
 func (c *checker) bindExpr(e ast.Expr, t types.Type) {
@@ -291,6 +373,9 @@ func (c *checker) bindPattern(p ast.Pat, t types.Type) {
 }
 
 func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
+	if !c.patternMatches(p, t) {
+		return
+	}
 	switch p := p.(type) {
 	case *ast.BindPat:
 		if s := c.symbol(p.Name); s != nil && (s.Kind == resolve.Variant || s.Kind == resolve.Constant) {

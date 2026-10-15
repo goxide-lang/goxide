@@ -60,6 +60,9 @@ func (p *permissionChecker) traitView(node ast.Expr, view *TraitView) *permissio
 
 func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelection) *permission {
 	m := selection.Member
+	if m.Native != nil && m.Decl == nil {
+		return p.nativeMethodExpression(node, m.Native, selection.Signature)
+	}
 	oldFile, oldPkg, oldImpl, oldTrait, oldSelf := p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
 	defer func() {
 		p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = oldFile, oldPkg, oldImpl, oldTrait, oldSelf
@@ -143,6 +146,76 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 		q.receiver = p.adapt(actual, q.receiver)
 	}
 	return q
+}
+
+func (p *permissionChecker) nativeMethodExpression(node ast.Expr, method *types.Func, signature *types.Signature) *permission {
+	q := p.fromGo(signature)
+	fn := p.sourceMethod(method)
+	if fn == nil || signature.Params().Len() == 0 {
+		return q
+	}
+	target := p.fromGo(signature.Params().At(0).Type())
+	switch n := node.(type) {
+	case *ast.SelectorExpr:
+		target = p.exprType(n.X)
+	case *ast.PathExpr:
+		path := *n.Path
+		path.Segments = path.Segments[:len(path.Segments)-1]
+		target = p.astType(&ast.PathType{Base: n.Base, Path: &path}, nil)
+	}
+	receiver := target
+	_, indices, _ := types.LookupFieldOrMethod(target.typ, false, p.c.pkg, method.Name())
+	for _, index := range indices[:max(0, len(indices)-1)] {
+		if pointerType(receiver) {
+			receiver = p.deref(receiver)
+		}
+		structure, ok := receiver.typ.Underlying().(*types.Struct)
+		if !ok || index >= structure.NumFields() {
+			break
+		}
+		receiver = p.fields(receiver)[structure.Field(index).Name()]
+	}
+	if !pointerType(fn.typ.receiver) && pointerType(receiver) {
+		receiver = p.deref(receiver)
+	}
+	sub := map[*types.TypeParam]*permission{}
+	p.inferPermission(fn.typ.receiver, receiver, sub)
+	q = p.substitutePermission(fn.typ, sub)
+	q.typ = signature
+	if types.Identical(target.typ, q.receiver.typ) {
+		target = q.receiver
+	}
+	q.params = append([]*permission{target}, q.params...)
+	p.checkGenericCall(q, q.params, sub)
+	return q
+}
+
+func (p *permissionChecker) sourceMethod(method *types.Func) *permissionFunction {
+	signature, ok := method.Type().(*types.Signature)
+	if !ok || signature.Recv() == nil {
+		return nil
+	}
+	base := signature.Recv().Type()
+	if pointer, ok := base.(*types.Pointer); ok {
+		base = pointer.Elem()
+	}
+	actual, ok := types.Unalias(base).(*types.Named)
+	if !ok {
+		return nil
+	}
+	for _, fn := range p.functions {
+		if fn.decl.Name.Name != method.Name() || fn.typ.receiver == nil {
+			continue
+		}
+		receiver := fn.typ.receiver
+		if pointerType(receiver) {
+			receiver = p.element(receiver)
+		}
+		if named, ok := types.Unalias(receiver.typ).(*types.Named); ok && actual.Origin() == named.Origin() {
+			return fn
+		}
+	}
+	return nil
 }
 
 func (p *permissionChecker) implAssociated(impl *Impl, name string, sub map[*types.TypeParam]*permission) *permission {

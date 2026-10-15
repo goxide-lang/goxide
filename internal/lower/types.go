@@ -1,12 +1,129 @@
 package lower
 
 import (
+	"crypto/sha256"
+	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
+	"go/types"
+	"sort"
 
 	"github.com/hxsf/goxide/internal/resolve"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
+
+type localTypeName struct {
+	declaration *goast.GenDecl
+	name, alias *goast.Ident
+}
+
+func (e *emitter) registerLocalTypes(source *syntax.TypeDecl, declaration *goast.GenDecl) {
+	var names []*syntax.Ident
+	if source.Grouped {
+		for _, spec := range source.Specs {
+			names = append(names, spec.Name)
+		}
+	} else {
+		names = append(names, source.Name)
+	}
+	for _, name := range names {
+		typ := e.info.Symbols[e.file.Definitions[name.ID()]]
+		if named, ok := typ.(*types.Named); ok && named.TypeParams().Len() == 0 {
+			if e.localTypes == nil {
+				e.localTypes = map[types.Type]*localTypeName{}
+			}
+			e.localTypes[typ] = &localTypeName{declaration: declaration, name: e.ident(name)}
+		}
+	}
+}
+
+func (e *emitter) localTypeAlias(t types.Type) *goast.Ident {
+	local := e.localTypes[types.Unalias(t)]
+	if local == nil {
+		return nil
+	}
+	if local.alias == nil {
+		local.alias = e.fresh("Type")
+		local.declaration.Specs = append(local.declaration.Specs, &goast.TypeSpec{Name: local.alias, Assign: 1, Type: local.name})
+	}
+	return local.alias
+}
+
+func (e *emitter) packageTypeName(t *types.Named) *goast.Ident {
+	name := t.Obj().Name()
+	if t.TypeParams().Len() != 0 {
+		return goast.NewIdent(name)
+	}
+	shadowed := false
+	for _, symbol := range e.file.Definitions {
+		if symbol.GoName == name && (symbol.Kind != resolve.Type && symbol.Kind != resolve.Enum || e.info.Symbols[symbol] != t) && symbol.Kind != resolve.Field && e.symbolNames[symbol] == "" {
+			shadowed = true
+			break
+		}
+	}
+	if !shadowed {
+		return goast.NewIdent(name)
+	}
+	if e.packageTypeAliases == nil {
+		e.packageTypeAliases = map[string]*goast.Ident{}
+	}
+	if alias := e.packageTypeAliases[name]; alias != nil {
+		return alias
+	}
+	hash := sha256.Sum256([]byte(e.name))
+	alias := e.fresh(fmt.Sprintf("Type%x_", hash[:4]))
+	e.packageTypeAliases[name] = alias
+	return alias
+}
+
+func (e *emitter) addPackageTypeAliases(file *goast.File) {
+	var names []string
+	for name := range e.packageTypeAliases {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		file.Decls = append(file.Decls, &goast.GenDecl{Tok: gotoken.TYPE, Specs: []goast.Spec{
+			&goast.TypeSpec{Name: e.packageTypeAliases[name], Assign: 1, Type: goast.NewIdent(name)},
+		}})
+	}
+}
+
+func (e *emitter) unshadowedFunction(name string) *goast.Ident {
+	shadowed := false
+	for _, symbol := range e.file.Definitions {
+		if symbol.Kind == resolve.Type && symbol.GoName == name && e.symbolNames[symbol] == "" {
+			shadowed = true
+			break
+		}
+	}
+	if !shadowed {
+		return goast.NewIdent(name)
+	}
+	if e.functionAliases == nil {
+		e.functionAliases = map[string]*goast.Ident{}
+	}
+	if alias := e.functionAliases[name]; alias != nil {
+		return alias
+	}
+	hash := sha256.Sum256([]byte(e.name))
+	alias := e.fresh(fmt.Sprintf("Function%x_", hash[:4]))
+	e.functionAliases[name] = alias
+	return alias
+}
+
+func (e *emitter) addFunctionAliases(file *goast.File) {
+	var names []string
+	for name := range e.functionAliases {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		file.Decls = append(file.Decls, &goast.GenDecl{Tok: gotoken.VAR, Specs: []goast.Spec{
+			&goast.ValueSpec{Names: []*goast.Ident{e.functionAliases[name]}, Values: []goast.Expr{goast.NewIdent(name)}},
+		}})
+	}
+}
 
 func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	defer func() { e.macroLayout(n, out) }()

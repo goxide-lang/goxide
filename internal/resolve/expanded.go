@@ -29,7 +29,11 @@ func ResolveExpanded(files map[string]*ast.File, expanded *expand.Result, import
 			h.names[tree] = name
 		}
 	}
-	return resolveFiles(trees, h, importer)
+	result := resolveFiles(trees, h, importer)
+	if len(result.Diagnostics) == 0 {
+		h.validateAllocations()
+	}
+	return result
 }
 
 type contextView struct {
@@ -53,6 +57,7 @@ func (h *hygiene) init(result *Result) {
 		result.Expansions = h.expanded.Expansions
 	}
 	result.Prints = h.expanded.Prints
+	result.GoResults = h.expanded.GoResults
 	if len(h.expanded.Contexts) == 0 {
 		return
 	}

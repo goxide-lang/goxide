@@ -62,7 +62,7 @@ func checkModuleCycles(modules []Module, output map[string][]byte, resolved *res
 			}
 			span := syntax.Span{Start: uint32(fset.Position(spec.Pos()).Offset), End: uint32(fset.Position(spec.End()).Offset)}
 			edge := moduleImport{target: target, file: name, span: span, origin: resolve.Origin{File: name, Span: span}}
-			if source := resolved.Files[name]; source != nil {
+			if source := resolved.Files[name]; source != nil && !source.AST.NativeGo {
 				edge.span = source.AST.Package.Span()
 				edge.origin = resolve.Origin{File: name, Span: edge.span}
 				for _, use := range source.Uses {

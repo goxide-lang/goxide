@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
+	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/testdeps"
 	"github.com/hxsf/goxide/internal/typecheck"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestPackageFilesScopeHelpersAndNativeBuild(t *testing.T) {
@@ -22,17 +22,21 @@ use fmt as native;
 func Value() string { native := Item{N: 6}; return native::Sprint(add!(native.N), ":", label()) }
 `},
 		{"model.gox", `package p
+
+// The public dependency keeps its source comment after namespace resolution.
 use serde;
 #[derive(Clone,Debug,serde::Serialize)]
 type Item struct { N int }
 macro_rules! add { ($n:expr) => { $n + 1 }; }
 `},
 		{"label.gox", `package p
+
+// This alias has a different target from the main file's native alias.
 use strings as native;
 func label() string { return native::ToUpper("ok") }
 `},
 	}
-	options := frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
+	options := Options{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
 		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
 		"strings": {PackagePath: "strings", Source: "toolchain"},
 		"serde":   {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module"},
@@ -48,21 +52,18 @@ func label() string { return native::ToUpper("ok") }
 	var names []string
 	for _, file := range output {
 		names = append(names, file.Path)
-		if file.Path == "model.go" && strings.Contains(file.Source, "func CloneItem") {
-			t.Fatal("helper remains embedded in user file")
-		}
-		if file.Path == "goxide_helpers_model.go" && !strings.Contains(file.Source, "func CloneItem") {
-			t.Fatal("separate helper source incomplete")
+		if file.Path == "model.go" && !strings.Contains(file.Source, "func CloneItem") {
+			t.Fatal("derived clone source is missing")
 		}
 		if err := os.WriteFile(filepath.Join(dir, file.Path), []byte(file.Source), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if !reflect.DeepEqual(names, []string{"goxide_helpers_model.go", "goxide_project_config.go", "label.go", "main.go", "model.go"}) {
+	if !reflect.DeepEqual(names, []string{"label.go", "main.go", "model.go"}) {
 		t.Fatalf("outputs: %v", names)
 	}
 	// Directory CLI and in-memory WASM consume the same explicit context. Compare
-	// every generated Go byte, including configuration and helper file indices.
+	// every generated Go byte; declarations remain in their source files.
 	input := t.TempDir()
 	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module playground\ngo 1.27\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -72,18 +73,17 @@ func label() string { return native::ToUpper("ok") }
 			t.Fatal(err)
 		}
 	}
-	moduleOutput := filepath.Join(t.TempDir(), "module")
-	if _, err := frontend.CompileModuleWithOptions(input, moduleOutput, frontend.ModuleOptions{Roots: options.Roots}); err != nil {
+	if err := lower.CompileModules([]lower.Module{{Path: PackagePath, Dir: input, Roots: options.Roots}}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := os.ReadDir(moduleOutput)
+	entries, err := os.ReadDir(input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var moduleFiles []File
 	for _, entry := range entries {
 		if strings.HasSuffix(entry.Name(), ".go") {
-			data, err := os.ReadFile(filepath.Join(moduleOutput, entry.Name()))
+			data, err := os.ReadFile(filepath.Join(input, entry.Name()))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,7 +112,7 @@ func TestOutput(t *testing.T) {
 	// A failed edit cannot contaminate declarations or import bindings in the next call.
 	bad := append([]File(nil), files...)
 	bad[2].Source = "package p\nfunc label()string{return native::Sprint(\"bad\")}\n"
-	if _, err := CompilePackage(bad, options); err == nil || !strings.Contains(err.Error(), "label.gox") || !strings.Contains(err.Error(), "::") {
+	if _, err := CompilePackage(bad, options); err == nil || !strings.Contains(err.Error(), "label.gox") || !strings.Contains(err.Error(), "unresolved name") {
 		t.Fatalf("import leaked from sibling: %v", err)
 	}
 	again, err := CompilePackage(files, options)
@@ -142,7 +142,7 @@ func TestPackageRejectsInvalidCollections(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := CompilePackage(tc.files, frontend.PackageOptions{}); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := CompilePackage(tc.files, Options{}); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("expected %q: %v", tc.want, err)
 			}
 		})
@@ -150,12 +150,12 @@ func TestPackageRejectsInvalidCollections(t *testing.T) {
 }
 
 func TestPackageConflictsAndRecovery(t *testing.T) {
-	options := frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
+	options := Options{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
 		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
 		"strings": {PackagePath: "strings", Source: "toolchain"},
 	}}
 	cases := []struct{ name, first, second, want string }{
-		{"declaration", "func F(){}", "func F(){}", "redeclared"},
+		{"declaration", "func F(){}", "func F(){}", "duplicate declaration"},
 		{"macro", "macro_rules! item {()=>{1};}", "macro_rules! item {()=>{2};}", "duplicate macro"},
 		{"derive", "#[derive(Clone)]\ntype Item struct{N int}", "func CloneItem(){}", "CloneItem"},
 	}
@@ -176,23 +176,16 @@ func TestPackageBuiltinSumHelpersAreComplete(t *testing.T) {
 	files, err := CompilePackage([]File{
 		{"make.gox", "package p\nfunc Make()Option[int]{return Option::Some(7)}\n"},
 		{"read.gox", "package p\nfunc Read()int{return match Make(){Option::Some(n)=>n,Option::None=>0,}}\n"},
-	}, frontend.PackageOptions{Importer: typecheck.NewImporter("playground.gox")})
+	}, Options{Importer: typecheck.NewImporter("playground.gox")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var helpers, aliases int
 	for _, f := range files {
-		if strings.HasPrefix(f.Path, "goxide_helpers_") {
-			helpers++
-		}
-		if strings.Contains(f.Source, "type Option[") {
-			aliases++
-			if !strings.HasPrefix(f.Path, "goxide_helpers_") || !strings.Contains(f.Source, "= __goxide_enum_std.Option") {
-				t.Fatalf("shared std alias misplaced or inlined: %s", f.Path)
-			}
+		if !strings.Contains(f.Source, `"github.com/goxide-lang/std/sum"`) || strings.Contains(f.Source, "type Option[") {
+			t.Fatalf("sum types must use the shared std package directly: %s\n%s", f.Path, f.Source)
 		}
 	}
-	if helpers == 0 || aliases != 1 {
-		t.Fatalf("helpers=%d aliases=%d", helpers, aliases)
+	if len(files) != 2 || files[0].Path != "make.go" || files[1].Path != "read.go" {
+		t.Fatalf("unexpected sum output files: %v", files)
 	}
 }

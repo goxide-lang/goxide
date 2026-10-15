@@ -90,7 +90,7 @@ func closure(trace *[]string) sum.Result[string, string] {
 func deferred(ok bool, trace *[]string) sum.Result[string, string] {
 	defer func() { *trace = append(*trace, "cleanup") }()
 	{
-		var goxideValue8 func(n int) = func(n int) { *trace = append(*trace, "deferred") }
+		var goxideValue8 func(int) = func(n int) { *trace = append(*trace, "deferred") }
 		var goxideTry9 sum.Result[int, string] = load(ok, trace)
 		var goxideOk10 int
 		switch sum.TagResult(goxideTry9) {
@@ -117,6 +117,9 @@ func guarded(ok bool, trace *[]string) sum.Result[string, string] {
 		switch goxidevariant12 := goxidematch11.(type) {
 		case *Enter:
 			_ = goxidevariant12
+			if goxidevariant12 == nil {
+				panic("goxide: match on nil Gate at corefixture/main.gox:1197")
+			}
 			goxidePayload13 := goxidevariant12.Value
 			if goxidePayload13 ==
 				0 {
@@ -175,6 +178,12 @@ func guarded(ok bool, trace *[]string) sum.Result[string, string] {
 					}
 				}
 			}
+		case *Shut:
+			_ = goxidevariant12
+			if goxidevariant12 == nil {
+				panic("goxide: match on nil Gate at corefixture/main.gox:1197")
+			}
+			return sum.NewOk[string, string]("other")
 		default:
 			_ = goxidevariant12
 			return sum.NewOk[string, string]("other")

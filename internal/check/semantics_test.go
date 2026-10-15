@@ -99,6 +99,37 @@ func TestVariantIdentityAndInstanceDiagnostics(t *testing.T) {
 			t.Fatalf("variant identity: %v", ds)
 		}
 	}
+	for _, qualifier := range []string{"inner", "other"} {
+		source := `package main;use fixture::inner;use fixture::other;enum Outer{Wrap(inner::E)};func f(x Outer)int{return match x{Outer::Wrap(` + qualifier + `::E::A)=>1,Outer::Wrap(p)=>2}}`
+		files := map[string]*ast.File{}
+		for name, text := range map[string]string{
+			"fixture/inner/enum.gox": "package inner;pub enum E{A,B}",
+			"fixture/other/enum.gox": "package other;pub enum E{A,B}",
+			"fixture/main.gox":       source,
+		} {
+			file, ds := parser.ParseFile(name, []byte(text))
+			if len(ds) != 0 {
+				t.Fatal(ds)
+			}
+			files[name] = file
+		}
+		resolved := resolve.Resolve(files, nil)
+		if len(resolved.Diagnostics) != 0 {
+			t.Fatal(resolved.Diagnostics)
+		}
+		_, ds := check.Check(files, resolved)
+		if qualifier == "inner" {
+			if len(ds) != 0 {
+				t.Fatalf("matching nested package enum: %v", ds)
+			}
+			continue
+		}
+		start := strings.Index(source, "other::E::A")
+		want := ast.Span{Start: uint32(start), End: uint32(start + len("other::E::A"))}
+		if len(ds) != 1 || ds[0].Code != check.VariantMismatch || ds[0].File != "fixture/main.gox" || ds[0].Span != want {
+			t.Fatalf("nested package enum identity: %#v, want span %#v", ds, want)
+		}
+	}
 }
 
 func TestGenericEnumInstanceAssignability(t *testing.T) {

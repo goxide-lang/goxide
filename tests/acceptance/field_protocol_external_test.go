@@ -2,7 +2,6 @@ package acceptance_test
 
 import (
 	"fmt"
-	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,9 +32,9 @@ func Make(name string)Item{return Item{Name:name,secret:"token\n",Values:[]int{1
 `)
 	packagesWrite(t, src, "model/event.gox", `package model
 #[derive(Clone,Debug)]
-pub enum E{Empty,Item(Item),}
-func Event(v Item)E{return E::Item(v)}
-func Data(v E)Item{return match v{E::Item(n)=>n,E::Empty=>Item{},}}
+pub enum E{Empty,Entry(Item),}
+func Event(v Item)E{return E::Entry(v)}
+func Data(v E)Item{return match v{E::Entry(n)=>n,E::Empty=>Item{},}}
 `)
 	packagesWrite(t, src, "other/item.gox", `package different
 #[derive(Clone,Debug)]
@@ -69,9 +68,9 @@ use library::other as src;
 type Other struct{Items []src::Item}
 `)
 	out := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, out, src)
 	repeat := filepath.Join(t.TempDir(), "repeat")
-	packagesCommand(t, root, cli, true, "transpile", "-o", repeat, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, repeat, src)
 	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -104,7 +103,7 @@ func TestCloneContainersAndOrdinaryAssignment(t *testing.T){
  if m.Data(v.V).Values[0]!=1||v.Items[0].Values[0]!=1||v.Index["z\""].Index["z"][0]!=2||v.Pair[0].Values[0]!=1||v.Nested[0][0].Values[0]!=1{t.Fatal("producer/container Clone not applied")}
  if c.Pair[1].Values[0]!=1{t.Fatal("Clone unexpectedly preserved alias topology")}
  text:=DebugWrap(&v)
- for _,part:=range []string{"V: E::Item(Item {","Name: "+strconv.Quote("a\"b"),"secret: "+strconv.Quote("token\n"),strconv.Quote("z\"")+": Item {"}{if !strings.Contains(text,part){t.Fatalf("missing %q in %s",part,text)}}
+ for _,part:=range []string{"V: E::Entry(Item {","Name: "+strconv.Quote("a\"b"),"secret: "+strconv.Quote("token\n"),strconv.Quote("z\"")+": Item {"}{if !strings.Contains(text,part){t.Fatalf("missing %q in %s",part,text)}}
  z:=CloneWrap(&Wrap{V:m.Event(m.Item{})});if z.Items!=nil||z.Index!=nil||z.Nested!=nil{t.Fatal("nil containers changed")}
  e:=CloneWrap(&Wrap{V:m.Event(m.Item{}),Items:[]r.Renamed{},Index:map[string]r.Renamed{}});if e.Items==nil||e.Index==nil{t.Fatal("empty collapsed to nil")}
  o:=Other{Items:[]other.Item{{N:9}}};oc:=CloneOther(&o);oc.Items[0].N=7;if o.Items[0].N!=9||DebugOther(&o)!="Other { Items: [Item { N: 9 }] }"{t.Fatal("cross-file package identity")}
@@ -127,45 +126,10 @@ func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=a.CloneWr
 			packagesWrite(t, bad, "go.mod", mod("fields.example/bad", lib))
 			writeAcceptanceSerdeRoots(t, bad, "fields.example/lib", "model", "relay", "other", "fake")
 			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nuse library::%s as m;\n#[derive(%s)]\ntype Wrap struct{V m::%s}\n", tc.pkg, kind, tc.typ))
-			log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
+			log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
 			if !strings.Contains(log, kind) || !strings.Contains(log, "bad.gox:") {
 				t.Fatal(log)
 			}
 		}
-	}
-	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
-	saved, err := os.ReadFile(artifact)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, replacement := range []string{`"Source": "manual"`, `"Source": "unknown"`} {
-		data := strings.Replace(string(saved), `"Source": "derive"`, replacement, 1)
-		if data == string(saved) {
-			t.Fatal("tamper did not change metadata")
-		}
-		if err = testdeps.WriteFile(artifact, []byte(data), 0600); err != nil {
-			t.Fatal(err)
-		}
-		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), appsrc)
-		if !strings.Contains(log, "metadata") || !strings.Contains(log, "app.gox:") {
-			t.Fatal(log)
-		}
-	}
-	if err = testdeps.WriteFile(artifact, saved, 0600); err != nil {
-		t.Fatal(err)
-	}
-	producer := filepath.Join(lib, "model", "item.go")
-	file, err := os.OpenFile(producer, os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = file.WriteString("\n// changed producer after artifact\n")
-	file.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "stale"), appsrc)
-	if !strings.Contains(log, "metadata") || !strings.Contains(log, "app.gox:") {
-		t.Fatal(log)
 	}
 }

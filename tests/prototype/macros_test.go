@@ -13,18 +13,18 @@ macro_rules! once { ($value:expr) => {func() int { temporary := $value; return t
 macro_rules! exit { ($value:expr) => { return $value }; }
 macro_rules! cleanup { ($action:ident) => { defer $action() }; }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct Item { Name string }
+type Item struct { Name string }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct Batch { Items []Item; Lookup map[string]Item }
+type Batch struct { Items []Item; Lookup map[string]Item }
 #[derive(Error)]
 #[error("storage unavailable")]
-struct StorageError {
+type StorageError struct {
  #[from]
  Cause error
 }
 #[derive(Error)]
 #[error("order {ID}: {Reason}")]
-struct InvalidOrder { ID uint64; Reason string }
+type InvalidOrder struct { ID uint64; Reason string }
 func Exercise() (int,string) {
  temporary := 90
  count := 0
@@ -65,7 +65,7 @@ func TestIntegratedMacroAndErrorDiagnostics(t *testing.T) {
 	cases := []string{
 		`package fixture
 #[derive(Error)]
-struct Bad { Error string }
+type Bad struct { Error string }
 `,
 		`package fixture
 macro_rules! bad {($x:expr $y:expr)=>{$x};}
@@ -74,11 +74,11 @@ func f(){bad!(1 2)}
 		`package fixture
 #[derive(Error)]
 #[error("unknown {Missing}")]
-struct Bad { Code int }
+type Bad struct { Code int }
 `,
 		`package fixture
 #[derive(Error)]
-struct Bad {
+type Bad struct {
  #[from]
  Cause error
  Code int

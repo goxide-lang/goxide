@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/enums"
 	"strings"
 	"testing"
 )
@@ -11,7 +10,10 @@ func TestMatchExpressionBusinessRace(t *testing.T) {
 use serde;
 macro_rules! twice {($x:expr)=>{$x+$x};}
 #[derive(serde::Serialize, serde::Deserialize)]
-enum Response { Empty, Number(int), Text(string), }
+pub enum Response { Empty, Number(int), Text(string), }
+pub enum E { A, B }
+var value int = match E::A { E::A => 1, E::B => 2 }
+func originalTemporary(x E)int{__goxide_match_result_1:=9;return match x{E::A=>__goxide_match_result_1,E::B=>0}}
 func number(n int) Response {return Response::Number(n)}
 func business(next func()Response,trace *[]int) int {
  mark:=func(n int,b bool)bool{*trace=append(*trace,n);return b}
@@ -44,7 +46,7 @@ func outerClosure() int {
 	enumGeneratedModule(t, source, `package fixture
 import("testing";"reflect";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestScopeEffectsAndGuards(t *testing.T){calls:=0;trace:=[]int{};got:=business(func()Response{calls++;return number(4)},&trace);if got!=18||calls!=1||!reflect.DeepEqual(trace,[]int{1,2}){t.Fatalf("got %d calls %d trace %v",got,calls,trace)}}
-func TestReturnClosureAndHygiene(t *testing.T){done:=false;if returning(number(2),&done)!=3||!done{t.Fatal("defer or return changed")};if outerClosure()!=13||shadowBuiltins()!=7{t.Fatal("closure target or generated hygiene changed")}}
+func TestReturnClosureAndHygiene(t *testing.T){done:=false;if returning(number(2),&done)!=3||!done{t.Fatal("defer or return changed")};if outerClosure()!=13||shadowBuiltins()!=7||value!=1||originalTemporary(&A{})!=9||originalTemporary(&B{})!=0{t.Fatal("closure target or generated hygiene changed")}}
 func TestSerdeMacroMatchIntegration(t *testing.T){v:=number(11);data,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeResponse(s,&v)});if e!=nil{t.Fatal(e)};decoded,e:=serdejson.Unmarshal(data,DeserializeResponse);if e!=nil{t.Fatal(e)};done:=false;if returning(decoded,&done)!=12||!done{t.Fatal("integration changed value")}}
 `, false)
 }
@@ -59,14 +61,12 @@ func TestLiteral(t *testing.T){if raw()!="first\nsecond"{t.Fatalf("raw=%q",raw()
 
 func TestMatchExpressionUnsupportedContexts(t *testing.T) {
 	cases := map[string]string{
-		"mixed inferred var":  `func f(x E){var value = match x {E::A=>1,E::B=>"no",};_=value}`,
-		"nil inference":       `func f(x E){value := match x {E::A=>nil,E::B=>nil,};_=value}`,
-		"void return":         `func f(x E){return match x {E::A=>1,E::B=>2,}}`,
-		"multiple return":     `func f(x E)(int,int){return match x {E::A=>1,E::B=>2,}}`,
-		"package initializer": `var value int = match E::A {E::A=>1,E::B=>2,}`,
-		"missing arm":         `func f(x E)int{return match x {E::A=>1,}}`,
-		"unreachable arm":     `func f(x E)int{return match x {E::A=>1,E::A=>2,E::B=>3,}}`,
-		"reserved name":       `func f(x E)int{__goxide_match_result_1:=9;return match x {E::A=>__goxide_match_result_1,E::B=>0,}}`,
+		"mixed inferred var": `func f(x E){var value = match x {E::A=>1,E::B=>"no",};_=value}`,
+		"nil inference":      `func f(x E){value := match x {E::A=>nil,E::B=>nil,};_=value}`,
+		"void return":        `func f(x E){return match x {E::A=>1,E::B=>2,}}`,
+		"multiple return":    `func f(x E)(int,int){return match x {E::A=>1,E::B=>2,}}`,
+		"missing arm":        `func f(x E)int{return match x {E::A=>1,}}`,
+		"unreachable arm":    `func f(x E)int{return match x {E::A=>1,E::A=>2,E::B=>3,}}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -99,34 +99,14 @@ func cases() [6]int {
 }
 func typedResult(e error,seen *bool)int{return resultValue(Result[int,error]::Err(e),seen)}
 `
-	opt, err := enums.Builtin("Option", []string{"int"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := enums.Builtin("Result", []string{"int", "error"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	some, ok := false, false
-	for _, v := range opt.Variants {
-		if v.Name == "Some" {
-			some = v.Tag == 1
-		}
-	}
-	for _, v := range res.Variants {
-		if v.Name == "Ok" {
-			ok = v.Tag == 1
-		}
-	}
-	if !some || !ok {
-		t.Fatal("missing builtin active-variant metadata")
-	}
 	assertions := `package fixture
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import "testing"
 type typedError struct{}
 func(*typedError)Error()string{return "typed"}
 func TestBuiltinDistinctions(t *testing.T){if got:=cases();got!=([6]int{-1,4,-2,-1,7,1}){t.Fatalf("states=%v",got)};var typed *typedError;seen:=false;if typedResult(typed,&seen)!=-2||!seen{t.Fatal("typednil error payload collapsed")}}
-func TestInvalidBuiltinBeforeEffect(t *testing.T){for _,v:=range []Result[int,error]{{}}{seen:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();resultValue(v,&seen)}();if !panicked||seen{t.Fatalf("invalid %T panic=%t sideEffect=%t",v,panicked,seen)}}}
+func TestInvalidBuiltinBeforeEffect(t *testing.T){for _,v:=range []__borrow_std.Result[int,error]{{}}{seen:=false;panicked:=false;func(){defer func(){panicked=recover()!=nil}();resultValue(v,&seen)}();if !panicked||seen{t.Fatalf("invalid %T panic=%t sideEffect=%t",v,panicked,seen)}}}
 `
 	enumGeneratedModule(t, source, assertions, false)
 }

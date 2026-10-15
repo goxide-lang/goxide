@@ -49,7 +49,6 @@ func Run(input string, enabled bool) (Receipt,error) {
         Result[Receipt,Failure]::Ok(v) => { return v,nil },
         Result[Receipt,Failure]::Err(err) => { return Receipt{},err },
     }
-    return Receipt{},errors::New("unreachable result")
 }
 
 // These field protocols are registered by the separately generated model module.

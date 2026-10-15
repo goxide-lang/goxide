@@ -30,6 +30,75 @@ func (e *emitter) goType(t types.Type) goast.Expr {
 		e.fail(e.tree, "无法确定表达式类型")
 		return goast.NewIdent("any")
 	}
+	if local := e.localTypeAlias(t); local != nil {
+		return local
+	}
+	if alias := e.exportedTypeAlias(t); alias != nil {
+		return e.goType(alias)
+	}
+	if basic, ok := types.Unalias(types.Default(t)).(*types.Basic); ok {
+		if basic.Kind() == types.UnsafePointer {
+			return &goast.SelectorExpr{X: e.importName([]string{"unsafe"}, "unsafe", 0), Sel: goast.NewIdent("Pointer")}
+		}
+		return e.primitiveAlias(basic.Name())
+	}
+	switch t := t.(type) {
+	case *types.Pointer:
+		return &goast.StarExpr{X: e.goType(t.Elem())}
+	case *types.Slice:
+		return &goast.ArrayType{Elt: e.goType(t.Elem())}
+	case *types.Array:
+		return &goast.ArrayType{Len: &goast.BasicLit{Kind: gotoken.INT, Value: fmt.Sprint(t.Len())}, Elt: e.goType(t.Elem())}
+	case *types.Map:
+		return &goast.MapType{Key: e.goType(t.Key()), Value: e.goType(t.Elem())}
+	case *types.Chan:
+		dir := goast.SEND | goast.RECV
+		if t.Dir() == types.SendOnly {
+			dir = goast.SEND
+		} else if t.Dir() == types.RecvOnly {
+			dir = goast.RECV
+		}
+		return &goast.ChanType{Dir: dir, Value: e.goType(t.Elem())}
+	case *types.Signature:
+		fields := func(tuple *types.Tuple, variadic bool) *goast.FieldList {
+			list := &goast.FieldList{}
+			for index := 0; index < tuple.Len(); index++ {
+				typ := tuple.At(index).Type()
+				var field goast.Expr
+				if variadic && index == tuple.Len()-1 {
+					field = &goast.Ellipsis{Elt: e.goType(typ.(*types.Slice).Elem())}
+				} else {
+					field = e.goType(typ)
+				}
+				list.List = append(list.List, &goast.Field{Type: field})
+			}
+			return list
+		}
+		return &goast.FuncType{Params: fields(t.Params(), t.Variadic()), Results: fields(t.Results(), false)}
+	case *types.Named:
+		var name goast.Expr = goast.NewIdent(t.Obj().Name())
+		if e.localTypePackage(t.Obj().Pkg()) {
+			name = e.packageTypeName(t)
+		}
+		if pkg := t.Obj().Pkg(); pkg != nil && !e.localTypePackage(pkg) {
+			path := pkg.Path()
+			if mapped := e.info.PackagePaths[path]; mapped != "" {
+				path = mapped
+			}
+			name = &goast.SelectorExpr{X: e.importName(strings.Split(path, "/"), pkg.Name(), 0), Sel: goast.NewIdent(t.Obj().Name())}
+		}
+		if t.TypeArgs().Len() > 0 {
+			args := make([]goast.Expr, t.TypeArgs().Len())
+			for i := range args {
+				args[i] = e.goType(t.TypeArgs().At(i))
+			}
+			if len(args) == 1 {
+				return &goast.IndexExpr{X: name, Index: args[0]}
+			}
+			return &goast.IndexListExpr{X: name, Indices: args}
+		}
+		return name
+	}
 	name := types.TypeString(types.Default(t), func(p *types.Package) string {
 		if e.localTypePackage(p) {
 			return ""
@@ -109,6 +178,14 @@ func (e *emitter) expr(n syntax.Expr) (out goast.Expr) {
 		return x
 	}
 	defer func() { out = e.traitView(n, out) }()
+	if e.assignmentGuard != nil {
+		return e.assignmentExpr(n)
+	}
+	if call, ok := n.(*syntax.CallExpr); ok {
+		if adapter := e.info.GoResults[call]; adapter != nil {
+			return e.goResult(call, adapter)
+		}
+	}
 	switch n := n.(type) {
 	case *syntax.MatchExpr:
 		info := e.info.Matches[n]
@@ -153,10 +230,19 @@ func (e *emitter) constant(n syntax.Expr) bool {
 		return n.Op != token.ARROW && n.Op != token.AND && e.constant(n.X)
 	case *syntax.Ident:
 		s := e.file.References[n.ID()].Symbol
-		return n.Name == "nil" || s != nil && (s.Kind == resolve.Constant || s.Kind == resolve.Type || s.Kind == resolve.Builtin)
+		for s != nil && s.AliasOf != nil {
+			s = s.AliasOf
+		}
+		return s != nil && (s.Kind == resolve.Constant || s.Kind == resolve.Type || s.Kind == resolve.Builtin || s.Kind == resolve.Function || s.Decl.File == "" && s.Name.Name == "nil")
 	case *syntax.PathExpr:
 		s := e.file.References[n.Path.ID()].Symbol
-		return s != nil && (s.Kind == resolve.Constant || s.Kind == resolve.Type || s.Kind == resolve.Variant || s.Kind == resolve.Builtin)
+		if s == nil && len(n.Path.Segments) == 1 {
+			s = e.file.References[n.Path.Segments[0].Name.ID()].Symbol
+		}
+		for s != nil && s.AliasOf != nil {
+			s = s.AliasOf
+		}
+		return s != nil && (s.Kind == resolve.Constant || s.Kind == resolve.Type || s.Kind == resolve.Variant || s.Kind == resolve.Builtin || s.Kind == resolve.Function)
 	}
 	return false
 }
@@ -167,7 +253,7 @@ func (e *emitter) spill(n syntax.Expr, x goast.Expr) goast.Expr {
 	}
 	id := e.fresh("Value")
 	t := e.info.Types[n]
-	if t != nil && t != types.Typ[types.Invalid] {
+	if t != nil && t != types.Typ[types.Invalid] && e.nameableType(t) {
 		e.pending = append(e.pending, varStmt(id, e.goType(t), x))
 	} else {
 		e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{id}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{x}})
@@ -217,8 +303,7 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 	case *syntax.BinaryExpr:
 		if x.Op == token.LAND || x.Op == token.LOR {
 			left := e.expr(x.X)
-			out := e.fresh("Bool")
-			e.pending = append(e.pending, varStmt(out, e.goType(e.info.Types[n]), left))
+			out := e.logicalTemporary(x, left)
 			before, right := e.exprScoped(x.Y)
 			var cond goast.Expr = out
 			if x.Op == token.LOR {
@@ -226,11 +311,17 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 			}
 			before = append(before, assign(out, right))
 			e.pending = append(e.pending, &goast.IfStmt{Cond: cond, Body: &goast.BlockStmt{List: before}})
+			if e.untypedBoolean(x) {
+				return &goast.BinaryExpr{X: out, Op: gotoken.EQL, Y: &goast.BinaryExpr{X: integer(0), Op: gotoken.EQL, Y: integer(0)}}
+			}
 			return out
 		}
 		children = []syntax.Expr{x.X, x.Y}
 	case *syntax.CallExpr:
 		if result, ok := e.equalityCall(x); ok {
+			return result
+		}
+		if result, ok := e.flowNativeMethod(x); ok {
 			return result
 		}
 		if member := e.info.Members[x.Fun]; member != nil && member.MethodExpr {
@@ -239,6 +330,36 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 			}
 		}
 		children = append([]syntax.Expr{x.Fun}, x.Args...)
+		if len(x.Args) == 1 && hasFlow(x.Args[0]) {
+			fun := x.Fun
+			for {
+				paren, ok := fun.(*syntax.ParenExpr)
+				if !ok {
+					break
+				}
+				fun = paren.X
+			}
+			symbol := e.file.References[fun.ID()].Symbol
+			for symbol != nil && symbol.AliasOf != nil {
+				symbol = symbol.AliasOf
+			}
+			if symbol != nil && symbol.Kind == resolve.Builtin && (symbol.Name.Name == "len" || symbol.Name.Name == "cap") {
+				typ := e.info.Types[x.Args[0]]
+				if typ != nil {
+					typ = typ.Underlying()
+					if pointer, ok := typ.(*types.Pointer); ok {
+						typ = pointer.Elem().Underlying()
+					}
+					if _, array := typ.(*types.Array); array {
+						values := e.ordered(children)
+						// Removing a call while lowering ? must not make Go's
+						// array len/cap rule skip the remaining operand evaluation.
+						values[1] = e.spill(x.Args[0], values[1])
+						return e.withExprs(n, children, values)
+					}
+				}
+			}
+		}
 	case *syntax.CompositeLit:
 		// Keys of struct literals are names, rather than evaluated expressions.
 		var fields []syntax.Expr
@@ -272,6 +393,11 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 			} else {
 				v := e.expr(elt)
 				if i < last {
+					if literal, ok := elt.(*syntax.CompositeLit); ok && literal.Type == nil && !e.nameableType(e.info.Types[elt]) && x.Type != nil {
+						// The enclosing literal supplies a private element type that
+						// cannot be written in a standalone temporary declaration.
+						v = &goast.IndexExpr{X: &goast.CompositeLit{Type: e.typ(x.Type), Elts: []goast.Expr{v}}, Index: integer(0)}
+					}
 					v = e.spill(elt, v)
 				}
 				fields = append(fields, elt)

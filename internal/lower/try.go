@@ -17,6 +17,20 @@ func (e *emitter) tryExpr(n *syntax.TryExpr) goast.Expr {
 	value := e.expr(n.X)
 	input, output := e.fresh("Try"), e.fresh("Ok")
 	e.pending = append(e.pending, varStmt(input, e.instanceType(info.Input), value), varStmt(output, e.goType(info.Value), nil))
+	e.pending = append(e.pending, e.tryDispatch(n, input, output, func(value goast.Expr) goast.Stmt {
+		return &goast.ReturnStmt{Results: []goast.Expr{value}}
+	}))
+	return output
+}
+
+func (e *emitter) tryDispatch(n *syntax.TryExpr, input, output *goast.Ident, failed func(goast.Expr) goast.Stmt) goast.Stmt {
+	info := e.info.Tries[n]
+	for _, typ := range info.Input.Args {
+		if !e.nameableType(typ) {
+			e.fail(n, "? payload type is not nameable: "+typ.String())
+			return &goast.EmptyStmt{}
+		}
+	}
 	family := info.Input.Enum.Name
 	success, failure := "Some", "None"
 	successTag, failureTag := "1", "0"
@@ -39,13 +53,12 @@ func (e *emitter) tryExpr(n *syntax.TryExpr) goast.Expr {
 		args = []goast.Expr{errValue}
 	}
 	result := &goast.CallExpr{Fun: enumIndices(e.sumMember(constructor), e.enumArgs(info.Output)), Args: args}
-	e.pending = append(e.pending, &goast.SwitchStmt{
+	return &goast.SwitchStmt{
 		Tag: &goast.CallExpr{Fun: e.sumMember("Tag" + family), Args: []goast.Expr{input}},
 		Body: &goast.BlockStmt{List: []goast.Stmt{
 			&goast.CaseClause{List: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: successTag}}, Body: []goast.Stmt{assign(output, read)}},
-			&goast.CaseClause{List: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: failureTag}}, Body: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{result}}}},
+			&goast.CaseClause{List: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: failureTag}}, Body: []goast.Stmt{failed(result)}},
 			&goast.CaseClause{Body: []goast.Stmt{&goast.ExprStmt{X: &goast.CallExpr{Fun: goast.NewIdent("panic"), Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.STRING, Value: strconv.Quote("goxide: invalid " + family + " at ?")}}}}}},
 		}},
-	})
-	return output
+	}
 }

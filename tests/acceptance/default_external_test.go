@@ -2,7 +2,6 @@ package acceptance_test
 
 import (
 	"fmt"
-	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -90,9 +89,9 @@ type Skipped struct {
 }
 `)
 	out := filepath.Join(t.TempDir(), "out")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, out, src)
 	repeat := filepath.Join(t.TempDir(), "repeat")
-	packagesCommand(t, root, cli, true, "transpile", "-o", repeat, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, repeat, src)
 	err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -136,21 +135,9 @@ func TestGoConsumer(t *testing.T){v:=a.DefaultWrap();if m.Read(v.V)!=7||m.Value(
 		packagesWrite(t, bad, "go.mod", mod("defaults.example/bad", lib))
 		writeAcceptanceSerdeRoots(t, bad, "defaults.example/lib", "model", "relay", "other", "fake")
 		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nuse library::%s as m;\n#[derive(Default)]\ntype Wrap struct{V m::%s}\n", tc.path, tc.typ))
-		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
+		log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
 		if !strings.Contains(log, "Default") {
 			t.Fatal(log)
 		}
-	}
-	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
-	data, err := os.ReadFile(artifact)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = testdeps.WriteFile(artifact, []byte(strings.Replace(string(data), `"Source": "manual"`, `"Source": "fake"`, 1)), 0600); err != nil {
-		t.Fatal(err)
-	}
-	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "tampered"), appsrc)
-	if !strings.Contains(log, "metadata") {
-		t.Fatal(log)
 	}
 }

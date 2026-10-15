@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Rebuild every published example and the browser compiler from this checkout."""
-import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
-import catalog, project_snapshots, workspace_snapshots, workspace_import_snapshots, source_selection_snapshot, project_downloads
-from build_support import dependency_context, dependency_sources, go_license_path, standalone_playground, verify_compiler_sources
+import argparse, hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
+import catalog, project_snapshots, project_downloads
+from build_support import dependency_context, dependency_sources, go_license_path, standalone_playground, verify_compiler_sources, verify_compiler_source, worktree_compiler_source
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--worktree', action='store_true', help='build current compiler bytes and record their digest and base commit explicitly')
+args = parser.parse_args()
 GO = os.environ.get('GO_BIN', 'go')
 env = dict(os.environ, GOTOOLCHAIN='local', GOMAXPROCS='4', GOWORK='off', GOPROXY='off')
 def run(*args, **kwargs):
@@ -13,9 +16,15 @@ version = run(GO, 'version').decode().strip()
 run(GO, 'mod', 'verify')
 website_sha = run('git', 'rev-parse', 'HEAD').decode().strip()
 catalog_data = catalog.load()
-sha = catalog_data['compilerCommit']
 # Check both inventories before generating any website assets.
-compiler_digest = verify_compiler_sources(ROOT, sha, catalog_data['compilerDigest'])
+if args.worktree:
+    compiler_source = worktree_compiler_source(ROOT)
+    sha = compiler_source['baseCommit']
+    compiler_digest = compiler_source['digest']
+else:
+    sha = catalog_data['compilerCommit']
+    compiler_digest = verify_compiler_sources(ROOT, sha, catalog_data['compilerDigest'])
+    compiler_source = dict(kind='commit', commit=sha, digest=compiler_digest, dirty=False)
 goroot = run(GO, 'env', 'GOROOT').decode().strip()
 license_path = go_license_path(goroot)
 catalog.write_index(catalog_data)
@@ -79,7 +88,7 @@ for entry in catalog_data['examples']:
         if name in ['result','go_result','serde_option']:
             assert 'github.com/goxide-lang/std/sum' in generated
             families = re.findall(r'^type (?:Option|Result)\[[^\n]+', generated, re.MULTILINE)
-            assert families and all('= __goxide_enum_std.' in line for line in families), 'sum families must be aliases to shared std, not copied definitions'
+            assert all(re.search(r'= \w+\.(?:Option|Result)\[', line) for line in families), 'sum families must use shared std types, not copied definitions'
         stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, '--roots', str(roots_file), str(input_path)).decode()
     assert stdout == entry['expectedStdout'], f'{name}: runtime output changed'
     examples.append(dict(id=name, title=title, description=description, source=source.decode(), go=generated, stdout=stdout))
@@ -108,7 +117,7 @@ with tempfile.TemporaryDirectory(prefix='goxide-web-package-') as temporary:
     generated_files = [dict(path=path.name, source=path.read_bytes().decode())
                        for path in sorted(output.glob('*.go'))]
     assert {pathlib.Path(file['path']).with_suffix('.go').name for file in package_files} <= {file['path'] for file in generated_files}
-    assert any(file['path'].startswith('goxide_helpers_') and file['path'].endswith('.go') for file in generated_files), 'package example must expose real helper files'
+    assert all(file['source'].startswith('package main\n') for file in generated_files), 'package output must contain complete Go files'
     stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, '--roots', str(roots_file), str(project)).decode()
     assert stdout == '42 GOXIDE Item { Value: 21 }\nAda Ada\n', 'package example runtime output changed'
     package_examples = [dict(id='package_files', title='同包多文件：宏、派生与静态协议',
@@ -136,28 +145,9 @@ for name in sorted({n for c in catalog_data['items'] for n in c['checks']}):
     diagnostic = result.stderr.strip().replace(str(input_path), 'playground.gox')
     assert diagnostic and '/workspace/' not in diagnostic
     checks.append(dict(id=name, source=source.decode(), diagnostic=diagnostic))
-# A complete, deliberately public minimal feature/target project, run without scripts.
-with tempfile.TemporaryDirectory(prefix='goxide-catalog-features-') as temporary:
-    project = pathlib.Path(temporary)/'project'
-    shutil.copytree(ROOT/'website/cli-examples/features', project)
-    files = [dict(path=str(p.relative_to(project)), source=p.read_text()) for p in sorted(project.rglob('*')) if p.is_file()]
-    feature_runs = []
-    for flags, expected in [([], 'pretty: true\n'), (['--no-default-features'], 'pretty: false\n'), (['--locked','--offline'], 'pretty: true\n')]:
-        stdout = run(str(ROOT/'bin/goxide'), 'run', '--go', GO, '--bin', 'demo', *flags, str(project)).decode()
-        assert stdout == expected
-        feature_runs.append(dict(command='goxide run --bin demo '+(' '.join(flags)+' ' if flags else '')+'.', stdout=stdout))
-    assert not (project/'go.mod').exists() and not (project/'go.sum').exists()
-    assert list((project/'target').rglob('go.mod'))
-    files.append(dict(path='goxide.lock', source=(project/'goxide.lock').read_text()))
-    download = project_downloads.archive(dist, 'project-features.zip', files, feature_runs, GO, run, str(ROOT/'bin/goxide'))
-    generated = sorted({p.read_text() for p in (project/'target').rglob('*.go') if 'pretty:' in p.read_text()})
-    assert generated, 'feature target generated Go missing'
-    files.extend(dict(path=f'target 生成 Go {i+1}（只读）', source=go) for i,go in enumerate(generated))
-    feature_example = dict(id='features', title='feature 与 bin：完整最小工程', files=files, runs=feature_runs, download=download)
-targets_example = project_downloads.targets(ROOT, dist, GO, run)
-migration_example = project_snapshots.migration(ROOT, GO, run)
-vendor_example = project_snapshots.vendor(ROOT, GO, run)
 cli_options_example = project_snapshots.cli(ROOT, GO, run)
+minimal_example = project_downloads.minimal(ROOT, GO, run)
+reexports_download = project_downloads.reexports(ROOT, dist, GO, run, compiler_source)
 public_catalog = catalog.export(catalog_data, checks)
 eh = hashlib.sha256()
 for archive in sorted(exports.glob('*.a')):
@@ -173,25 +163,14 @@ for module in ['github.com/goxide-lang/std', 'github.com/goxide-lang/serde']:
     assert re.fullmatch('[0-9a-f]{40}', commit) and metadata.get('Sum') and metadata.get('GoModSum'), 'verified cached module origin is required'
     assert metadata['Path'] == module and metadata['Version'] == selected['Version']
     public_libraries.append(dict(module=module, commit=commit, version=selected['Version'], sum=metadata['Sum'], goModSum=metadata['GoModSum']))
-metadata_schema = int(re.search(r'const enumMetadataVersion = (\d+)', (ROOT/'internal/frontend/enum_artifact.go').read_text()).group(1))
-assert metadata_schema == 9
-def source_version(path, pattern):
-    return int(re.search(pattern, (ROOT/path).read_text()).group(1))
-abi_versions = dict(enum=metadata_schema, reference=source_version('internal/refs/metadata.go', r'const MetadataVersion = (\d+)'), use=source_version('internal/frontend/use_artifact.go', r'const useMetadataVersion = (\d+)'), sum=source_version('internal/enums/builtins.go', r'const SumABI = (\d+)'), protocol=source_version('internal/protocols/ir.go', r'const MetadataVersion = (\d+)'))
-assert abi_versions == dict(enum=9, reference=3, use=3, sum=3, protocol=1)
-std_abi = run(GO, 'doc', 'github.com/goxide-lang/std/sum.GoxideSumABI').decode()
-assert re.search(r'GoxideSumABI = 3\b', std_abi), std_abi
-typeinfo_abi = run(GO, 'doc', 'github.com/goxide-lang/std/typeinfo.GoxideTypeInfoABI').decode()
-assert re.search(r'GoxideTypeInfoABI = 1\b', typeinfo_abi), typeinfo_abi
-abi_versions['typeinfo'] = int(re.search(r'GoxideTypeInfoABI = (\d+)', typeinfo_abi).group(1))
-
-manifest = dict(abiVersions=abi_versions, metadataSchema=metadata_schema, publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=compiler_digest, exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
+manifest = dict(pipeline='parser-expand-resolve-check-lower', enumRepresentation='sealed-interface', compilerSource=compiler_source, catalogCompilerCommit=catalog_data['compilerCommit'], publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=compiler_digest, exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
                 dependencies=dependencies, dependencyContext=context, dependencySourceScope='fixed explicit project roots; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',
                 exportOrigins=origins, exportOriginsSha256=hashlib.sha256((exports/'origins.json').read_bytes()).hexdigest(),
                 importClosure=sorted(closure), maxSourceBytes=32768, maxFiles=16, compileTimeoutMs=10000,
-                examples=examples, packageExamples=package_examples, cliExamples=[cli_example], projectExamples=[feature_example,targets_example,migration_example,vendor_example,cli_options_example]+workspace_snapshots.build(ROOT, GO)+workspace_import_snapshots.build(ROOT, GO)+[source_selection_snapshot.build(ROOT, GO)])
+                examples=examples, packageExamples=package_examples, cliExamples=[cli_example], projectExamples=[minimal_example,reexports_download,cli_options_example])
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')
 subprocess.run([GO, 'build', *wasm_flags, '-o', str(dist/'compiler.wasm'), './cmd/goxide-playground'], env=wasm_env, check=True)
+verify_compiler_source(ROOT, compiler_source)
 manifest['wasmSha256'] = hashlib.sha256((dist/'compiler.wasm').read_bytes()).hexdigest()
 (dist/'examples.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n')
 shutil.copyfile(pathlib.Path(goroot)/'lib/wasm/wasm_exec.js', dist/'wasm_exec.js')
@@ -199,4 +178,4 @@ shutil.copyfile(license_path, dist/'GO-LICENSE.txt')
 embed = ROOT/'cmd/goxide-web/dist'
 if embed.exists(): shutil.rmtree(embed)
 shutil.copytree(dist, embed)
-print(json.dumps(dict(commit=sha, websiteCommit=website_sha, compilerDigest=compiler_digest, wasmBytes=(dist/'compiler.wasm').stat().st_size, examples=len(examples))))
+print(json.dumps(dict(compilerSource=compiler_source, websiteCommit=website_sha, wasmBytes=(dist/'compiler.wasm').stat().st_size, examples=len(examples))))

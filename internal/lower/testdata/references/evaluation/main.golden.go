@@ -41,283 +41,321 @@ func tryIndex(fail bool) sum.Result[int, string] {
 }
 func arrayProjection(fail bool) sum.Result[int, string] {
 	values := [1]int{1}
-	var goxideArray1 *[1]int = &values
-	var goxideTry2 sum.Result[int, string] = tryIndex(fail)
-	var goxideOk3 int
-	switch sum.TagResult(goxideTry2) {
+	var goxideTry1 sum.Result[int, string] = tryIndex(fail)
+	var goxideOk2 int
+	switch sum.TagResult(goxideTry1) {
 	case 1:
-		goxideOk3 = sum.ValueOk(goxideTry2)
+		goxideOk2 = sum.ValueOk(goxideTry1)
 	case 2:
-		return sum.NewErr[int, string](sum.ValueErr(goxideTry2))
+		return sum.NewErr[int, string](sum.ValueErr(goxideTry1))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
-	var goxideValue4 int = goxideOk3
+	var goxideValue3 int = goxideOk2
 
-	element := &goxideArray1[goxideValue4]
+	element := &values[goxideValue3]
 	*element += 4
 	choices := [1]_Counter{&_Count{Value: 2}}
 	{
-		var goxideArray5 *[1]_Counter = &choices
-		var goxideTry6 sum.Result[int, string] = tryIndex(false)
-		var goxideOk7 int
-		switch sum.TagResult(goxideTry6) {
+		var goxideTry4 sum.Result[int, string] = tryIndex(false)
+		var goxideOk5 int
+		switch sum.TagResult(goxideTry4) {
 		case 1:
-			goxideOk7 = sum.ValueOk(goxideTry6)
+			goxideOk5 = sum.ValueOk(goxideTry4)
 		case 2:
-			return sum.NewErr[int, string](sum.ValueErr(goxideTry6))
+			return sum.NewErr[int, string](sum.ValueErr(goxideTry4))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
-		var goxideValue8 int = goxideOk7
-		goxideOwner9 := &goxideArray5[goxideValue8]
-		var goxidematch10 _Counter = *goxideOwner9
-		if goxidematch10 == nil {
+		var goxideValue6 int = goxideOk5
+		goxideOwner7 := &choices[goxideValue6]
+		var goxidematch8 _Counter = *goxideOwner7
+		if goxidematch8 == nil {
 			panic("goxide: match on nil Counter at referencefixture/main.gox:850")
 		}
-		switch goxidevariant11 := goxidematch10.(type) {
+		switch goxidevariant9 := goxidematch8.(type) {
 		case *_Count:
-			_ = goxidevariant11
-			goxidePayloadRef12 := &goxidevariant11.Value
-
-			value := goxidePayloadRef12
+			_ = goxidevariant9
+			if goxidevariant9 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:850")
+			}
+			goxidePayloadRef10 := &goxidevariant9.Value
+			value := goxidePayloadRef10
 			*value += 3
 		case *_Empty:
-			_ = goxidevariant11
+			_ = goxidevariant9
+			if goxidevariant9 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:850")
+			}
 		default:
-			_ = goxidevariant11
+			_ = goxidevariant9
 			panic("goxide: invalid enum Counter")
 		}
 	}
-	var goxideMatch13 int
-	var goxidematch14 _Counter = choices[0]
-	if goxidematch14 == nil {
+	var goxideMatch11 int
+	var goxidematch12 _Counter = choices[0]
+	if goxidematch12 == nil {
 		panic("goxide: match on nil Counter at referencefixture/main.gox:990")
 	}
-	switch goxidevariant15 := goxidematch14.(type) {
+	switch goxidevariant13 := goxidematch12.(type) {
 	case *_Count:
-		_ = goxidevariant15
-		value := goxidevariant15.Value
-		goxideMatch13 = value
+		_ = goxidevariant13
+		if goxidevariant13 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:990")
+		}
+		value := goxidevariant13.Value
+		goxideMatch11 = value
+	case *_Empty:
+		_ = goxidevariant13
+		if goxidevariant13 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:990")
+		}
+		goxideMatch11 = 0
 	default:
-		_ = goxidevariant15
-		goxideMatch13 = 0
+		_ = goxidevariant13
+		goxideMatch11 = 0
 	}
-	current := goxideMatch13
+	current := goxideMatch11
 	return sum.NewOk[int, string](values[0] + current)
 }
 func controlled(fail bool) sum.Result[int, string] {
 	defer func() { trace += "done" }()
 	var counter _Counter = &_Count{Value: 0}
-goxideBreak16:
+goxideBreak14:
 	for i := 0; i < 3; i++ {
 		{
-			goxideOwner17 := &counter
-			var goxidematch18 _Counter = *goxideOwner17
-			if goxidematch18 == nil {
+			goxideOwner15 := &counter
+			var goxidematch16 _Counter = *goxideOwner15
+			if goxidematch16 == nil {
 				panic("goxide: match on nil Counter at referencefixture/main.gox:1260")
 			}
-			switch goxidevariant19 := goxidematch18.(type) {
+			switch goxidevariant17 := goxidematch16.(type) {
 			case *_Count:
-				_ = goxidevariant19
-				goxidePayloadRef20 := &goxidevariant19.Value
-				value := goxidePayloadRef20
+				_ = goxidevariant17
+				if goxidevariant17 == nil {
+					panic("goxide: match on nil Counter at referencefixture/main.gox:1260")
+				}
+				goxidePayloadRef18 := &goxidevariant17.Value
+				value := goxidePayloadRef18
 				if i == 0 {
 					*value += 1
 					continue
 				}
 				*value += 2
-				break goxideBreak16
+				break goxideBreak14
 			case *_Empty:
-				_ = goxidevariant19
+				_ = goxidevariant17
+				if goxidevariant17 == nil {
+					panic("goxide: match on nil Counter at referencefixture/main.gox:1260")
+				}
 			default:
-				_ = goxidevariant19
+				_ = goxidevariant17
 				panic("goxide: invalid enum Counter")
 			}
 		}
 
 		panic("match changed loop control")
 	}
-	var goxideMatch21 int
-	goxideOwner22 := &counter
-	var goxidematch23 _Counter = *goxideOwner22
-	if goxidematch23 == nil {
+	var goxideMatch19 int
+	goxideOwner20 := &counter
+	var goxidematch21 _Counter = *goxideOwner20
+	if goxidematch21 == nil {
 		panic("goxide: match on nil Counter at referencefixture/main.gox:1542")
 	}
-	switch goxidevariant24 := goxidematch23.(type) {
+	switch goxidevariant22 := goxidematch21.(type) {
 	case *_Count:
-		_ = goxidevariant24
-		goxidePayloadRef25 := &goxidevariant24.Value
+		_ = goxidevariant22
+		if goxidevariant22 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:1542")
+		}
+		goxidePayloadRef23 := &goxidevariant22.Value
 		{
-			value := goxidePayloadRef25
-			var goxideTry26 sum.Result[bool, string] = allowed(fail)
-			var goxideOk27 bool
-			switch sum.TagResult(goxideTry26) {
+			value := goxidePayloadRef23
+			var goxideTry24 sum.Result[bool, string] = allowed(fail)
+			var goxideOk25 bool
+			switch sum.TagResult(goxideTry24) {
 			case 1:
-				goxideOk27 = sum.ValueOk(goxideTry26)
+				goxideOk25 = sum.ValueOk(goxideTry24)
 			case 2:
-				return sum.NewErr[int, string](sum.ValueErr(goxideTry26))
+				return sum.NewErr[int, string](sum.ValueErr(goxideTry24))
 			default:
 				panic("goxide: invalid Result at ?")
 			}
-			if goxideOk27 {
-				goxideMatch21 = *value
+			if goxideOk25 {
+				goxideMatch19 = *value
 			} else {
-				goxideMatch21 = -1
+				goxideMatch19 = -1
 			}
 		}
 	case *_Empty:
-		_ = goxidevariant24
-		goxideMatch21 = -2
+		_ = goxidevariant22
+		if goxidevariant22 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:1542")
+		}
+		goxideMatch19 = -2
 	default:
-		_ = goxidevariant24
+		_ = goxidevariant22
 		panic("goxide: invalid enum Counter")
 	}
-	value := goxideMatch21
+	value := goxideMatch19
 
 	return sum.NewOk[int, string](value)
 }
 
 func main() {
 	var counter _Counter = &_Count{Value: 1}
-	var goxideMatch28 int
-	goxideOwner29 := &counter
-	var goxidematch30 _Counter = *goxideOwner29
-	if goxidematch30 == nil {
+	var goxideMatch26 int
+	goxideOwner27 := &counter
+	var goxidematch28 _Counter = *goxideOwner27
+	if goxidematch28 == nil {
 		panic("goxide: match on nil Counter at referencefixture/main.gox:1794")
 	}
-	switch goxidevariant31 := goxidematch30.(type) {
+	switch goxidevariant29 := goxidematch28.(type) {
 	case *_Count:
-		_ = goxidevariant31
-		goxidePayload32 := goxidevariant31.Value
-		goxidePayloadRef33 := &goxidevariant31.Value
-		if value := goxidePayloadRef33; alter(value) {
-			goxideMatch28 = -1
+		_ = goxidevariant29
+		if goxidevariant29 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:1794")
+		}
+		goxidePayload30 := goxidevariant29.Value
+		goxidePayloadRef31 := &goxidevariant29.Value
+		if value := goxidePayloadRef31; alter(value) {
+			goxideMatch26 = -1
 		} else {
-			value := goxidePayload32
-			goxideMatch28 = value
+			value := goxidePayload30
+			goxideMatch26 = value
 		}
 	case *_Empty:
-		_ = goxidevariant31
-		goxideMatch28 = 0
+		_ = goxidevariant29
+		if goxidevariant29 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:1794")
+		}
+		goxideMatch26 = 0
 	default:
-		_ = goxidevariant31
+		_ = goxidevariant29
 		panic("goxide: invalid enum Counter")
 	}
-	snapshot := goxideMatch28
-	var goxideMatch34 int
-	var goxidematch35 _Counter = counter
-	if goxidematch35 == nil {
+	snapshot := goxideMatch26
+	var goxideMatch32 int
+	var goxidematch33 _Counter = counter
+	if goxidematch33 == nil {
 		panic("goxide: match on nil Counter at referencefixture/main.gox:1961")
 	}
-	switch goxidevariant36 := goxidematch35.(type) {
+	switch goxidevariant34 := goxidematch33.(type) {
 	case *_Count:
-		_ = goxidevariant36
-		value := goxidevariant36.Value
-		goxideMatch34 = value
+		_ = goxidevariant34
+		if goxidevariant34 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:1961")
+		}
+		value := goxidevariant34.Value
+		goxideMatch32 = value
 	case *_Empty:
-		_ = goxidevariant36
-		goxideMatch34 = 0
+		_ = goxidevariant34
+		if goxidevariant34 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:1961")
+		}
+		goxideMatch32 = 0
 	default:
-		_ = goxidevariant36
+		_ = goxidevariant34
 		panic("goxide: invalid enum Counter")
 	}
-	current := goxideMatch34
+	current := goxideMatch32
 	fmt.Println(snapshot, current)
-	var goxideMatch37 int
-	goxideOwner38 := &owners()[index()]
-	var goxidematch39 _Counter = *goxideOwner38
-	if goxidematch39 == nil {
+	var goxideMatch35 int
+	goxideOwner36 := &owners()[index()]
+	var goxidematch37 _Counter = *goxideOwner36
+	if goxidematch37 == nil {
 		panic("goxide: match on nil Counter at referencefixture/main.gox:2083")
 	}
-	switch goxidevariant40 := goxidematch39.(type) {
+	switch goxidevariant38 := goxidematch37.(type) {
 	case *_Count:
-		_ = goxidevariant40
-		goxidePayloadRef41 := &goxidevariant40.Value
-		if value := goxidePayloadRef41; guard(value) {
-			goxideMatch37 = -1
+		_ = goxidevariant38
+		if goxidevariant38 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:2083")
+		}
+		goxidePayloadRef39 := &goxidevariant38.Value
+		if value := goxidePayloadRef39; guard(value) {
+			goxideMatch35 = -1
 		} else {
-			value := goxidePayloadRef41
-			goxideMatch37 = *value
+			value := goxidePayloadRef39
+			goxideMatch35 = *value
 		}
 	case *_Empty:
-		_ = goxidevariant40
-		goxideMatch37 = 0
+		_ = goxidevariant38
+		if goxidevariant38 == nil {
+			panic("goxide: match on nil Counter at referencefixture/main.gox:2083")
+		}
+		goxideMatch35 = 0
 	default:
-		_ = goxidevariant40
+		_ = goxidevariant38
 		panic("goxide: invalid enum Counter")
 	}
-	observed := goxideMatch37
+	observed := goxideMatch35
 
 	fmt.Println(observed, trace)
 	trace = ""
 	var success sum.Result[int, string] = controlled(false)
 	{
-		var goxideValue42 func(a ...any) (n int, err error) = fmt.Println
-		var goxideMatch43 any
-		var goxidematch44 sum.Result[int, string] = success
-		switch goxidetag46 := sum.TagResult(goxidematch44); goxidetag46 {
+		var goxideMatch40 any
+		var goxidematch41 sum.Result[int, string] = success
+		switch goxidetag43 := sum.TagResult(goxidematch41); goxidetag43 {
 		case 1:
 
-			value := sum.ValueOk(goxidematch44)
-			goxideMatch43 = value
+			value := sum.ValueOk(goxidematch41)
+			goxideMatch40 = value
 		case 2:
-			goxideMatch43 = -1
+			goxideMatch40 = -1
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		goxideValue42(goxideMatch43, trace)
+		fmt.Println(goxideMatch40, trace)
 	}
 	trace = ""
 	var failure sum.Result[int, string] = controlled(true)
 	{
-		var goxideValue47 func(a ...any) (n int, err error) = fmt.Println
-		var goxideMatch48 any
-		var goxidematch49 sum.Result[int, string] = failure
-		switch goxidetag51 := sum.TagResult(goxidematch49); goxidetag51 {
+		var goxideMatch44 any
+		var goxidematch45 sum.Result[int, string] = failure
+		switch goxidetag47 := sum.TagResult(goxidematch45); goxidetag47 {
 		case 1:
-			goxideMatch48 = "wrong"
+			goxideMatch44 = "wrong"
 		case 2:
-			err := sum.ValueErr(goxidematch49)
-			goxideMatch48 = err
+			err := sum.ValueErr(goxidematch45)
+			goxideMatch44 = err
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		goxideValue47(goxideMatch48, trace)
+		fmt.Println(goxideMatch44, trace)
 	}
 	trace = ""
 	var array sum.Result[int, string] = arrayProjection(false)
 	{
-		var goxideValue52 func(a ...any) (n int, err error) = fmt.Println
-		var goxideMatch53 any
-		var goxidematch54 sum.Result[int, string] = array
-		switch goxidetag56 := sum.TagResult(goxidematch54); goxidetag56 {
+		var goxideMatch48 any
+		var goxidematch49 sum.Result[int, string] = array
+		switch goxidetag51 := sum.TagResult(goxidematch49); goxidetag51 {
 		case 1:
 
-			value := sum.ValueOk(goxidematch54)
-			goxideMatch53 = value
+			value := sum.ValueOk(goxidematch49)
+			goxideMatch48 = value
 		case 2:
-			goxideMatch53 = -1
+			goxideMatch48 = -1
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		goxideValue52(goxideMatch53, trace)
+		fmt.Println(goxideMatch48, trace)
 	}
 	trace = ""
 	var stopped sum.Result[int, string] = arrayProjection(true)
 	{
-		var goxideValue57 func(a ...any) (n int, err error) = fmt.Println
-		var goxideMatch58 any
-		var goxidematch59 sum.Result[int, string] = stopped
-		switch goxidetag61 := sum.TagResult(goxidematch59); goxidetag61 {
+		var goxideMatch52 any
+		var goxidematch53 sum.Result[int, string] = stopped
+		switch goxidetag55 := sum.TagResult(goxidematch53); goxidetag55 {
 		case 1:
-			goxideMatch58 = "wrong"
+			goxideMatch52 = "wrong"
 		case 2:
-			err := sum.ValueErr(goxidematch59)
-			goxideMatch58 = err
+			err := sum.ValueErr(goxidematch53)
+			goxideMatch52 = err
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		goxideValue57(goxideMatch58, trace)
+		fmt.Println(goxideMatch52, trace)
 	}
 }

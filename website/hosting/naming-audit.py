@@ -2,8 +2,9 @@
 import pathlib,json,re
 root=pathlib.Path(__file__).resolve().parents[1]/'dist'
 m=json.loads((root/'examples.json').read_text())
-assert m['abiVersions']==dict(enum=9,reference=3,use=3,sum=3,protocol=1,typeinfo=1)
-assert m['metadataSchema']==9
+assert m['pipeline']=='parser-expand-resolve-check-lower'
+assert m['enumRepresentation']=='sealed-interface'
+assert 'abiVersions' not in m and 'metadataSchema' not in m
 std=next(x for x in m['publicLibraries'] if x['module']=='github.com/goxide-lang/std')
 assert std['commit']=='c02a09d8c417b35dc7e432fc484172fab6db6182' and std['version']=='v0.0.0-20261009104839-c02a09d8c417'
 legacy=re.compile(r'hgo|HGO|Hgo')
@@ -14,14 +15,14 @@ for card in m['catalog']['items']:
  assert not legacy.search(text),card['id']
 rest={k:v for k,v in m.items() if k!='catalog'}
 assert not legacy.search(json.dumps(rest,ensure_ascii=False)), 'legacy name in current examples/metadata'
-for p in root.iterdir():
- if p.name in ['compiler.wasm','examples.json']:continue
+for p in root.rglob('*'):
+ if not p.is_file() or p.name in ['compiler.wasm','examples.json'] or p.suffix in ['.zip','.ttf']:continue
  assert not legacy.search(p.read_text()),p.name
 assert 'self.goxideCompile' in (root/'worker.js').read_text()
-assert 'playground.gox' in (root/'index.html').read_text()
-# The binary must retain old marker/extension names to produce rejection diagnostics.
+assert any('playground.gox' in p.read_text() for p in (root/'assets').glob('*.js'))
+# The new pipeline does not consume or emit the old enum/reference/use metadata.
 b=(root/'compiler.wasm').read_bytes()
 assert b'hgoCompile' not in b and b'__hgo_' not in b
-known=[b'HgoEnumMetadata',b'HgoReferenceMetadata',b'HgoUseMetadata',b'HgoSumABI',b'hgo_project_config.go',b'legacy hgo directive',b'legacy .hgo source']
-for token in known:assert token in b,token
-print(json.dumps(dict(abi=m['abiVersions'],std=std['version'],currentText='new names only except two explicit rejection notes',wasm='new bridge; seven legacy rejection markers/diagnostics retained'),ensure_ascii=False))
+for token in [b'HgoEnumMetadata',b'HgoReferenceMetadata',b'HgoUseMetadata']:
+ assert token not in b,token
+print(json.dumps(dict(pipeline=m['pipeline'],std=std['version'],currentText='new names only except explicit rejection notes',wasm='new bridge; no old enum/reference/use metadata'),ensure_ascii=False))

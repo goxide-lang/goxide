@@ -173,7 +173,7 @@ func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {
 		return decl
 	}
 	decl.Type = &goast.FuncType{Params: e.params(m.Decl.Params[1:]), Results: e.params(m.Decl.Results)}
-	decl.Body = e.block(m.Decl.Body)
+	decl.Body = e.functionBody(decl.Type, m.Decl.Body)
 	self := e.ident(m.Decl.Params[0].Names[0])
 	selfSymbol := e.file.Definitions[m.Decl.Params[0].Names[0].ID()]
 	used := false
@@ -255,7 +255,7 @@ func (e *emitter) operationDeclaration(m *check.Member, carrier *traitCarrier) g
 	}
 	if m.Static {
 		decl.Type = &goast.FuncType{Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}
-		decl.Body = e.block(m.Decl.Body)
+		decl.Body = e.functionBody(decl.Type, m.Decl.Body)
 		return decl
 	}
 	ft, args := e.memberSignature(m.Signature)
@@ -278,7 +278,8 @@ func (e *emitter) operationDeclaration(m *check.Member, carrier *traitCarrier) g
 }
 
 func (e *emitter) inherentDeclaration(m *check.Member) goast.Decl {
-	decl := &goast.FuncDecl{Name: goast.NewIdent(inherentName(m)), Type: &goast.FuncType{Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}, Body: e.block(m.Decl.Body)}
+	decl := &goast.FuncDecl{Name: goast.NewIdent(inherentName(m)), Type: &goast.FuncType{Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}}
+	decl.Body = e.functionBody(decl.Type, m.Decl.Body)
 	if !m.Static && goMethodReceiver(m.Impl.Base) {
 		decl.Name = goast.NewIdent(m.GoName)
 		decl.Recv = e.params(m.Decl.Params[:1])

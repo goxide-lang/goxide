@@ -524,7 +524,7 @@ func (c *checker) importType(path *ast.Path) types.Type {
 	}
 	res := c.file.References[path.ID()]
 	parts := res.Path
-	if res.Symbol != nil && len(res.Symbol.Target) > 0 {
+	if !res.Deferred && res.Symbol != nil && len(res.Symbol.Target) > 0 {
 		parts = res.Symbol.Target
 	}
 	if len(parts) < 2 {

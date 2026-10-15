@@ -122,11 +122,13 @@ class CompilerIdentityTests(unittest.TestCase):
 
     def git(self, args, *, cwd):
         self.assertEqual(cwd, self.root)
-        if args == ['git', 'ls-tree', '-r', '--name-only', '-z', 'reviewed']:
+        if args == ['git', 'rev-parse', 'HEAD']:
+            return b'a' * 40 + b'\n'
+        if args[:-1] == ['git', 'ls-tree', '-r', '--name-only', '-z'] and args[-1] in ['reviewed', 'a' * 40]:
             return ('\0'.join([*self.files, 'internal/probe/probe_test.go', 'website/build.py']) + '\0').encode()
         self.assertEqual(args[:2], ['git', 'show'])
         pin, name = args[2].split(':', 1)
-        self.assertEqual(pin, 'reviewed')
+        self.assertIn(pin, ['reviewed', 'a' * 40])
         return self.files[name]
 
     def verify(self, digest=None):
@@ -164,6 +166,36 @@ class CompilerIdentityTests(unittest.TestCase):
         (self.root / build_support.DEPENDENCY_CONTEXT).write_text('[roots.undeclared]\n')
         with self.assertRaisesRegex(ValueError, 'compiler source differs'):
             self.verify()
+
+    def test_worktree_identity_distinguishes_source_bytes_from_base_commit(self):
+        before = build_support.worktree_compiler_source(self.root)
+        self.assertEqual(before, dict(kind='worktree', baseCommit='a' * 40,
+                                     digest=source_digest(self.files), dirty=False))
+        (self.root / 'internal/probe/probe_test.go').write_text('test changes only')
+        self.assertEqual(build_support.worktree_compiler_source(self.root), before)
+        (self.root / 'cmd/goxide/main.go').write_bytes(b'package changed\n')
+        after = build_support.worktree_compiler_source(self.root)
+        self.assertTrue(after['dirty'])
+        self.assertEqual(after['baseCommit'], before['baseCommit'])
+        self.assertNotEqual(after['digest'], before['digest'])
+        with self.assertRaisesRegex(ValueError, 'worktree changed'):
+            build_support.verify_compiler_source(self.root, before)
+        build_support.verify_compiler_source(self.root, after)
+
+    def test_worktree_inventory_records_added_and_removed_sources(self):
+        original = build_support.worktree_compiler_source(self.root)
+        added = self.root / 'internal/probe/added.go'
+        added.write_text('package probe\n')
+        changed = dict(self.files, **{'internal/probe/added.go': added.read_bytes()})
+        self.assertEqual(build_support.worktree_compiler_source(self.root)['digest'], source_digest(changed))
+        added.unlink()
+        (self.root / 'cmd/goxide/main.go').unlink()
+        del changed['internal/probe/added.go']
+        del changed['cmd/goxide/main.go']
+        current = build_support.worktree_compiler_source(self.root)
+        self.assertTrue(current['dirty'])
+        self.assertEqual(current['digest'], source_digest(changed))
+        self.assertNotEqual(current['digest'], original['digest'])
 
     def test_added_nested_production_package_is_not_outside_inventory(self):
         for name in ['internal/nested/extra.go', 'cmd/goxide/nested/extra.go', 'cmd/goxide-playground/nested/extra.go']:

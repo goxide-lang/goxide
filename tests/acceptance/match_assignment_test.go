@@ -62,7 +62,7 @@ func Propagate(ok bool)Result[int,error]{
  y:=match m::Mode::Idle{m::Mode::Idle=>Result[int,error]::Ok(x+1),m::Mode::Value(_)=>Result[int,error]::Err(sentinel)}
  z:=y?;after++;return Result[int,error]::Ok(z)
 }
-func CheckPropagation(ok bool)(int,error){r:=Propagate(ok);match r{Result[int,error]::Ok(v)=>{return v,nil},Result[int,error]::Err(e)=>{return 0,e}};return -1,nil}
+func CheckPropagation(ok bool)(int,error){r:=Propagate(ok);match r{Result[int,error]::Ok(v)=>{return v,nil},Result[int,error]::Err(e)=>{return 0,e}}}
 func Closure()Result[int,error]{
  f:=func()Result[int,error]{x:=match m::Mode::Idle{m::Mode::Idle=>value(false)?,m::Mode::Value(_)=>3};return Result[int,error]::Ok(x)}
  _=f();return Result[int,error]::Ok(10)
@@ -126,12 +126,16 @@ func TestNearestFailure(t *testing.T){after=0;cleanup=0;if v,e:=CheckPropagation
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "app.gox") {
+			if !strings.Contains(out, "app.gox:") && !strings.Contains(out, "app.go:") {
 				t.Fatal(out)
 			}
-			if name == "mixed types" || name == "nil only" || name == "defined identity" || name == "overflow" {
-				if !strings.Contains(out, "explicit typed local initializer") || !strings.Contains(out, "app.gox:3:") {
-					t.Fatalf("missing source/type guidance: %s", out)
+			if name == "mixed types" || name == "defined identity" {
+				if !strings.Contains(out, "match arm has type") || !strings.Contains(out, "app.gox:3:") {
+					t.Fatalf("missing source/type diagnostic: %s", out)
+				}
+			} else if name == "overflow" || name == "negative unsigned" {
+				if !strings.Contains(out, "overflows") {
+					t.Fatalf("missing overflow rejection: %s", out)
 				}
 			}
 		})

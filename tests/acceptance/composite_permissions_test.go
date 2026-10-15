@@ -3,8 +3,6 @@ package acceptance_test
 import (
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/refs"
 )
 
 // Independent acceptance: a copied value slot is writable, while the shared
@@ -133,7 +131,7 @@ func TestCompositePermissionGenericCheckerBoundary(t *testing.T) {
 		"boxed-value":      `type Box[T any]struct{Value T};func box[T any](x T)Box[T]{return Box[T]{Value:x}};func f(r &State)any{return box(*r)}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := refs.Lower("composite_generic.gox", []byte("package fixture\ntype State struct{Items []int;Pointer *int}\n"+body))
+			_, err := compileAcceptanceLanguageFixture("composite_generic.gox", []byte("package fixture\ntype State struct{Items []int;Pointer *int}\n"+body))
 			if err == nil || !strings.Contains(err.Error(), "composite_generic.gox") {
 				t.Fatalf("expected checker boundary rejection, got %v", err)
 			}

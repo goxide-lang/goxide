@@ -29,11 +29,17 @@ func project(counter *_Counter) *int {
 		switch goxidevariant3 := goxidematch2.(type) {
 		case *_Count:
 			_ = goxidevariant3
+			if goxidevariant3 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:111")
+			}
 			goxidePayloadRef4 := &goxidevariant3.Value
 			value := goxidePayloadRef4
 			return value
 		case *_Empty:
 			_ = goxidevariant3
+			if goxidevariant3 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:111")
+			}
 			panic("empty counter")
 		default:
 			_ = goxidevariant3
@@ -53,10 +59,16 @@ func read(counter _Counter) int {
 		switch goxidevariant7 := goxidematch6.(type) {
 		case *_Count:
 			_ = goxidevariant7
+			if goxidevariant7 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:323")
+			}
 			value := goxidevariant7.Value
 			goxideMatch5 = value
 		case *_Empty:
 			_ = goxidevariant7
+			if goxidevariant7 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:323")
+			}
 			goxideMatch5 = 0
 		default:
 			_ = goxidevariant7
@@ -151,11 +163,17 @@ func main() {
 		switch goxidevariant28 := goxidematch27.(type) {
 		case *_Count:
 			_ = goxidevariant28
+			if goxidevariant28 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:1200")
+			}
 			goxidePayloadRef29 := &goxidevariant28.Value
 			value := goxidePayloadRef29
 			*value += 1
 		case *_Empty:
 			_ = goxidevariant28
+			if goxidevariant28 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:1200")
+			}
 		default:
 			_ = goxidevariant28
 			panic("goxide: invalid enum Counter")
@@ -173,11 +191,17 @@ func main() {
 		switch goxidevariant32 := goxidematch31.(type) {
 		case *_Count:
 			_ = goxidevariant32
+			if goxidevariant32 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:1373")
+			}
 			goxidePayloadRef33 := &goxidevariant32.Value
 			value := goxidePayloadRef33
 			fmt.Println(*value)
 		case *_Empty:
 			_ = goxidevariant32
+			if goxidevariant32 == nil {
+				panic("goxide: match on nil Counter at referencefixture/main.gox:1373")
+			}
 		default:
 			_ = goxidevariant32
 			panic("goxide: invalid enum Counter")

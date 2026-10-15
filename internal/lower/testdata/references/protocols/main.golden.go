@@ -44,11 +44,17 @@ func main() {
 		switch goxidevariant2 := goxidematch1.(type) {
 		case *_Pair:
 			_ = goxidevariant2
+			if goxidevariant2 == nil {
+				panic("goxide: match on nil State at referencefixture/main.gox:650")
+			}
 			value := goxidevariant2.Value
 			value.Items[0] = 7
 			value.Counts["one"] = 6
 		case *_Empty:
 			_ = goxidevariant2
+			if goxidevariant2 == nil {
+				panic("goxide: match on nil State at referencefixture/main.gox:650")
+			}
 		default:
 			_ = goxidevariant2
 			panic("goxide: invalid enum State")

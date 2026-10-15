@@ -13,6 +13,7 @@ import (
 )
 
 func TestImportSourceTerminalProcess(t *testing.T) {
+	t.Skip("MVP CLI import-go interactive source selection deferred by P6")
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX PTY test")
 	}

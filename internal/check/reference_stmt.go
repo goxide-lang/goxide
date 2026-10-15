@@ -13,6 +13,9 @@ func (p *permissionChecker) values(specs []*ast.ValueSpec) {
 		var want *permission
 		if spec.Type != nil {
 			want = p.astType(spec.Type, nil)
+			if len(spec.Values) == 0 && want.ref != ValueRef {
+				p.c.diag(spec.Type, ReferencePermission, "reference variable requires an initializer")
+			}
 		}
 		var values []*permission
 		for _, value := range spec.Values {
@@ -52,9 +55,11 @@ func (p *permissionChecker) requireLocal(node ast.Node, got, want *permission) {
 	if got == nil || want == nil {
 		return
 	}
-	if _, iface := want.typ.Underlying().(*types.Interface); iface && p.c.out.EnumOf(want.typ) == nil {
-		p.require(node, got, want)
-		return
+	if want.typ != nil {
+		if _, iface := want.typ.Underlying().(*types.Interface); iface && p.c.out.EnumOf(want.typ) == nil {
+			p.require(node, got, want)
+			return
+		}
 	}
 	p.require(node, p.withoutShared(got), want)
 }
@@ -117,6 +122,9 @@ func (p *permissionChecker) simpleStmt(node ast.Stmt) bool {
 			if id, ok := lhs.(*ast.Ident); ok && id.Name == "_" {
 				continue
 			}
+			if !p.assignable(lhs) {
+				p.c.diag(lhs, ReferenceAddress, "assignment requires an addressable storage location or map index")
+			}
 			_, writable := p.place(lhs)
 			if !writable {
 				p.reportWrite(lhs)
@@ -142,6 +150,9 @@ func (p *permissionChecker) simpleStmt(node ast.Stmt) bool {
 		}
 	case *ast.IncDecStmt:
 		p.expr(n.X, nil)
+		if !p.assignable(n.X) {
+			p.c.diag(n.X, ReferenceAddress, "increment or decrement requires an addressable storage location or map index")
+		}
 		_, writable := p.place(n.X)
 		if !writable {
 			p.reportWrite(n.X)
@@ -174,6 +185,7 @@ func (p *permissionChecker) simpleStmt(node ast.Stmt) bool {
 		}
 		return false
 	case *ast.SendStmt:
+		p.synchronize()
 		channel := p.expr(n.Chan, nil)
 		got := p.expr(n.Value, p.element(channel))
 		p.require(n.Value, got, p.element(channel))
@@ -181,7 +193,11 @@ func (p *permissionChecker) simpleStmt(node ast.Stmt) bool {
 			p.reportWrite(n.Chan)
 		}
 	case *ast.GoStmt:
-		p.expr(n.Call, nil)
+		if call, ok := n.Call.(*ast.CallExpr); ok {
+			p.call(call, nil, true)
+		} else {
+			p.expr(n.Call, nil)
+		}
 	case *ast.DeferStmt:
 		p.expr(n.Call, nil)
 	}
@@ -204,8 +220,15 @@ func (p *permissionChecker) assignmentType(node ast.Expr) *permission {
 		if p.initializers[location.root] != nil {
 			q = p.globals[location.root]
 		}
+		if q == nil {
+			q = p.fromGo(p.c.out.Symbols[location.root])
+		}
 		for _, field := range location.fields {
-			q = p.fields(q)[field]
+			if field == permissionArrayElement {
+				q = p.element(q)
+			} else {
+				q = p.fields(q)[field]
+			}
 		}
 		return q
 	}
@@ -218,6 +241,9 @@ func (p *permissionChecker) assign(node ast.Expr, value *permission) {
 			p.setSymbol(location.root, value)
 			return
 		}
+		if !p.directValuePath(node) {
+			value = p.merge(p.expr(node, nil), value)
+		}
 		var update func(*permission, []string) *permission
 		update = func(q *permission, path []string) *permission {
 			if len(path) == 0 {
@@ -227,12 +253,65 @@ func (p *permissionChecker) assign(node ast.Expr, value *permission) {
 				return q
 			}
 			r := *q
-			r.fields = copyFields(q.fields)
-			r.fields[path[0]] = update(p.fields(q)[path[0]], path[1:])
+			if path[0] == permissionArrayElement {
+				r.elem = update(p.element(q), path[1:])
+			} else {
+				r.fields = copyFields(q.fields)
+				r.fields[path[0]] = update(p.fields(q)[path[0]], path[1:])
+			}
 			return &r
 		}
 		p.setSymbol(location.root, update(p.env[location.root], location.fields))
 	}
+}
+
+func (p *permissionChecker) directValuePath(node ast.Expr) bool {
+	switch node := node.(type) {
+	case *ast.Ident, *ast.PathExpr:
+		return true
+	case *ast.ParenExpr:
+		return p.directValuePath(node.X)
+	case *ast.SelectorExpr:
+		value := p.expr(node.X, nil)
+		if value == nil || value.typ == nil || !p.directValuePath(node.X) {
+			return false
+		}
+		_, indices, _ := types.LookupFieldOrMethod(value.typ, true, p.c.pkg, node.Sel.Name)
+		for _, index := range indices {
+			if pointerType(value) {
+				return false
+			}
+			structure, ok := value.typ.Underlying().(*types.Struct)
+			if !ok || index >= structure.NumFields() {
+				return false
+			}
+			value = p.fields(value)[structure.Field(index).Name()]
+		}
+		return true
+	}
+	return false
+}
+
+func (p *permissionChecker) synchronize() {
+	for symbol, value := range p.asyncEffects {
+		p.setSymbol(symbol, p.merge(p.env[symbol], value))
+	}
+}
+
+func (p *permissionChecker) assignable(node ast.Expr) bool {
+	if addressable, _ := p.place(node); addressable {
+		return true
+	}
+	if paren, ok := node.(*ast.ParenExpr); ok {
+		return p.assignable(paren.X)
+	}
+	if index, ok := node.(*ast.IndexExpr); ok {
+		if value := p.expr(index.X, nil); value != nil && value.typ != nil {
+			_, ok := value.typ.Underlying().(*types.Map)
+			return ok
+		}
+	}
+	return false
 }
 
 func (p *permissionChecker) rangeBind(n *ast.RangeStmt, source *permission) {
@@ -260,7 +339,11 @@ func (p *permissionChecker) rangeBind(n *ast.RangeStmt, source *permission) {
 			if !writable {
 				p.reportWrite(node)
 			}
-			p.require(node, q, p.assignmentType(node))
+			if location := p.location(node); location != nil && p.initializers[location.root] == nil {
+				p.requireLocal(node, q, p.assignmentType(node))
+			} else {
+				p.require(node, q, p.assignmentType(node))
+			}
 		}
 		p.assign(node, q)
 	}
@@ -305,6 +388,9 @@ func (p *permissionChecker) match(n *ast.MatchExpr, want *permission) *permissio
 	var exits []permissionEnv
 	for _, arm := range n.Arms {
 		name := p.c.patternName(arm.Pat)
+		if info.Enum == nil {
+			name = ""
+		}
 		var names []string
 		var inputs []permissionEnv
 		if p.c.wildcard(arm.Pat) {
@@ -324,12 +410,12 @@ func (p *permissionChecker) match(n *ast.MatchExpr, want *permission) *permissio
 		p.expr(arm.Guard, nil)
 		for _, variant := range names {
 			if arm.Guard != nil {
-				if p.c.irrefutable(arm.Pat) {
+				if p.c.irrefutable(arm.Pat, p.c.out.Types[owner]) {
 					pending[variant] = clonePermissionEnv(p.env)
 				} else {
 					pending[variant] = p.joinEnvs(pending[variant], p.env)
 				}
-			} else if p.c.irrefutable(arm.Pat) {
+			} else if p.c.irrefutable(arm.Pat, p.c.out.Types[owner]) {
 				pending[variant] = nil
 			}
 		}

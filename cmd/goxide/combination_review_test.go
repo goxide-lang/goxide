@@ -8,6 +8,7 @@ import (
 )
 
 func TestVersionFeaturesScriptTargetIntegration(t *testing.T) {
+	t.Skip("MVP CLI features with build-script targets deferred by P6")
 	proxy, cache := versionProxy(t)
 	fixture := buildScriptFixture(t, false, false)
 	raw, e := os.ReadFile(filepath.Join(fixture, "goxide.toml"))

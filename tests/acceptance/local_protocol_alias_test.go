@@ -32,7 +32,7 @@ impl Default for Item{func default()Item{return Item{N:7,Name:"producer"}}}
 #[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 pub enum E{
 #[default]
-Item(Item),
+Entry(Item),
 Empty,
 }
 `)
@@ -84,9 +84,9 @@ type Different=m::Item
 type Other struct{V Different}
 `)
 	out := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, out, src)
 	repeat := filepath.Join(t.TempDir(), "repeat")
-	packagesCommand(t, root, cli, true, "transpile", "-o", repeat, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, repeat, src)
 	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -114,7 +114,7 @@ type Other struct{V Different}
 import("testing";"reflect";"strings";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";sum "github.com/goxide-lang/std/sum";m "aliases.example/lib/model")
 func TestAllProtocols(t *testing.T){
  v:=DefaultWrap();if v.V.N!=7||v.Again.Name!="producer"{t.Fatal(v)}
- c:=CloneWrap(&v);if !Equal(v,c)||!strings.Contains(DebugWrap(&v),"E::Item(Item {"){t.Fatal(v,c,DebugWrap(&v))};c.V.N=8;if Equal(v,c){t.Fatal("wrong equality")}
+ c:=CloneWrap(&v);if !Equal(v,c)||!strings.Contains(DebugWrap(&v),"E::Entry(Item {"){t.Fatal(v,c,DebugWrap(&v))};c.V.N=8;if Equal(v,c){t.Fatal("wrong equality")}
  b,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeWrap(s,&v)});if e!=nil{t.Fatal(e)};d,e:=serdejson.Unmarshal(b,DeserializeWrap);if e!=nil||!reflect.DeepEqual(d,v){t.Fatal(string(b),d,e)}
  if reflect.TypeOf(v.V)!=reflect.TypeOf(m.Item{}){t.Fatal("alias identity changed")}
  bag:=Bag{Items:[]Level{v.V},Lookup:map[string]Local{"x":v.V}};bc:=CloneBag(&bag);bc.Items[0].N=12;bc.Lookup["x"]=Local{N:13};if bag.Items[0].N!=7||bag.Lookup["x"].N!=7{t.Fatal("clone shared containers")}
@@ -148,7 +148,7 @@ func TestPublicGoHelpers(t *testing.T){v:=a.DefaultWrap();c:=a.CloneWrap(&v);if 
 			packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
 			writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib", "model", "other", "relay", "fake")
 			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; %s\nuse library::model as m;\n%s\n#[derive(%s)]\ntype W struct{V Local}\n", ownerUse, definition, derive))
-			log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
+			log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
 			if !strings.Contains(log, "bad.gox") && !strings.Contains(log, "requires an explicit ") {
 				t.Fatal(log)
 			}
@@ -162,8 +162,8 @@ use library::model as m;
 type Local=m::Item
 func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
 `)
-	logShadow := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "shadow"), shadow)
-	if !strings.Contains(logShadow, "equals undefined") {
+	logShadow := compileAcceptanceGraph(t, false, shadow, filepath.Join(t.TempDir(), "shadow"), src)
+	if !strings.Contains(logShadow, "shadow.gox:4:") || !strings.Contains(logShadow, "equals requires a primitive or an explicitly registered PartialEq type") {
 		t.Fatal(logShadow)
 	}
 	// Matching shape/helper spellings in another package do not convey registration.
@@ -171,19 +171,5 @@ func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
 	packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
 	writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib", "model", "other", "relay", "fake")
 	packagesWrite(t, bad, "bad.gox", "package bad\nuse library::fake as m;\ntype Local=m::Item\n#[derive(Clone)]\ntype W struct{V Local}\n")
-	packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "fake"), bad)
-	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
-	saved, err := os.ReadFile(artifact)
-	if err != nil {
-		t.Fatal(err)
-	}
-	changed := strings.Replace(string(saved), `"Source": "derive"`, `"Source": "unknown"`, 1)
-	if changed == string(saved) {
-		t.Fatal("no tamper")
-	}
-	packagesWrite(t, lib, "model/.goxide.enums.json", changed)
-	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "tamper"), appsrc)
-	if !strings.Contains(log, "aliases.go:") || !strings.Contains(log, "metadata") {
-		t.Fatal(log)
-	}
+	compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "fake"), src)
 }

@@ -44,7 +44,7 @@ func TestSerdeDefaultsMissingProtocolDiagnostics(t *testing.T) {
 					"#[derive(serde::Deserialize)]\ntype Request struct {\n#[serde(" + attribute + ")]\nValue " + typ + "\n}\n"
 				filename := filepath.Join(t.TempDir(), "missing_protocol.gox")
 				_, err := compileAcceptanceSerdeFixture(filename, []byte(source))
-				wantLocation := "missing_protocol.gox:" + strconv.Itoa(strings.Count(source[:strings.Index(source, "Value ")], "\n")+1) + ":"
+				wantLocation := "missing_protocol.gox:" + strconv.Itoa(strings.Count(source[:strings.Index(source, "#[derive(serde::Deserialize)]")], "\n")+1) + ":"
 				if err == nil || !strings.Contains(strings.ToLower(err.Error()), "default") || !strings.Contains(err.Error(), wantLocation) {
 					t.Fatalf("want source-located missing Default diagnostic: %v", err)
 				}

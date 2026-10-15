@@ -30,7 +30,7 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 		if len(n.Results) != 0 {
 			typ.Results = e.params(n.Results)
 		}
-		decl := &goast.FuncDecl{Name: e.ident(n.Name), Type: typ, Body: e.block(n.Body)}
+		decl := &goast.FuncDecl{Name: e.ident(n.Name), Type: typ, Body: e.functionBody(typ, n.Body)}
 		if len(n.Recv) != 0 {
 			decl.Recv = e.params(n.Recv)
 		}

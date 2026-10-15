@@ -12,15 +12,15 @@ func TestEnumDeclarationSeparators(t *testing.T) {
 	// The formerly rejected expression match is now a real execution regression.
 	enumGeneratedModule(t, `package fixture
  type Record struct{N int}; const offset=2
- enum E { A, }; func expression(x E) int {return match x {E::A=>1,}}
- enum F { B(int), } /* separator comment */ ; enum G { C, }; // trailing comment
+ pub enum E { A, }; func expression(x E) int {return match x {E::A=>1,}}
+ pub enum F { B(int), } /* separator comment */ ; enum G { C, }; // trailing comment
  func statement(x F)int{match x{F::B(n)=>{return n+offset},};panic("unreachable")}
- enum H { D, } // inserted newline separator
+ pub enum H { D, } // inserted newline separator
  func newline()H{return H::D}
  func newlineValid()int{return match newline(){H::D=>1,}}
- enum Last { End, };`, `package fixture
+ pub enum Last { End, };`, `package fixture
  import "testing"
- func TestSeparators(t *testing.T){if expression(__goxide_enum_new_1_E_A())!=1||statement(__goxide_enum_new_1_F_B(3))!=5||newlineValid()!=1{t.Fatal("separator changed behavior")}}
+ func TestSeparators(t *testing.T){if expression(&A{})!=1||statement(&B{Value:3})!=5||newlineValid()!=1{t.Fatal("separator changed behavior")}}
  `, false)
 }
 

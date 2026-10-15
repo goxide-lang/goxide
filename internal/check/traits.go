@@ -204,6 +204,13 @@ func (c *checker) sourcePathSymbol(parts []*ast.PathSegment) *resolve.Symbol {
 	}
 	id := parts[0].Name
 	symbol := c.symbol(id)
+	// An embedded field identifier also names its type. Its declaration is the
+	// field, while the reference binds the type used by this path.
+	if definition := c.file.Definitions[id.ID()]; definition != nil && definition.Kind == resolve.Field {
+		if reference := c.file.References[id.ID()].Symbol; reference != nil {
+			symbol = reference
+		}
+	}
 	// Deferred associated projections record the type parameter for every
 	// segment. Resolve the selected trait prefix from its own lexical name.
 	if symbol == nil || symbol.Name.Name != id.Name {

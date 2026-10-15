@@ -115,6 +115,8 @@ source:
 		kind = resolve.Variable
 	case *types.Func:
 		kind = resolve.Function
+	case *types.Builtin:
+		kind = resolve.Builtin
 	case *types.TypeName:
 		kind = resolve.Type
 	default:
@@ -282,6 +284,11 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 						return fail(err.Error())
 					}
 				}
+			}
+			// Emission associates import documentation with this canonical path.
+			// Resolved symbols retain their namespace routing targets.
+			if requirement, ok := i.namespace(use.Target); ok && requirement.namespace.PackagePath != "" {
+				use.Target = strings.Split(requirement.namespace.PackagePath, "/")
 			}
 		}
 	}

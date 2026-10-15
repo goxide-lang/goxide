@@ -157,6 +157,7 @@ func (d Diagnostic) Error() string {
 }
 
 type Result struct {
+	GoResults   map[*ast.CallExpr]bool
 	Expansions  map[ast.ExpnID]expand.Expansion
 	Packages    []*Package
 	Files       map[string]*File

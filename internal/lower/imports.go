@@ -30,6 +30,9 @@ func (e *emitter) reserveNames() {
 		if !contains {
 			continue
 		}
+		for _, symbol := range pkg.Scope.Parent.Bindings {
+			e.reserved[symbol.GoName] = true
+		}
 		for _, f := range pkg.Files {
 			for _, symbol := range f.Definitions {
 				if symbol.Kind != resolve.Import && symbol.Kind != resolve.Module {
@@ -80,11 +83,35 @@ func (e *emitter) reference(id *syntax.Ident) goast.Expr {
 		return nil
 	}
 	r := e.file.References[id.ID()]
+	prelude := r.Symbol
+	for prelude != nil && prelude.AliasOf != nil {
+		prelude = prelude.AliasOf
+	}
+	if prelude != nil && prelude.Decl.File == "" {
+		if e.symbolNames[prelude] != "" && prelude.Kind == resolve.Type {
+			return e.primitiveAlias(prelude.Name.Name)
+		}
+		if id.Expn != 0 && (prelude.Name.Name == "true" || prelude.Name.Name == "false") && e.booleanShadowed(prelude.Name.Name) {
+			op := gotoken.EQL
+			if prelude.Name.Name == "false" {
+				op = gotoken.NEQ
+			}
+			return &goast.BinaryExpr{X: &goast.BasicLit{Kind: gotoken.INT, Value: "0"}, Op: op, Y: &goast.BasicLit{Kind: gotoken.INT, Value: "0"}}
+		}
+	}
 	if out, ok := e.macroReference(id, r.Symbol); ok {
 		return out
 	}
+	if id.Expn != 0 && prelude != nil && prelude.Kind == resolve.Function && e.samePackage(prelude.Decl.File) {
+		return e.unshadowedFunction(prelude.GoName)
+	}
 	if r.Symbol != nil && r.Symbol.AliasOf != nil {
-		return &goast.Ident{NamePos: e.pos(id), Name: r.Symbol.AliasOf.GoName}
+		symbol := r.Symbol.AliasOf
+		name := symbol.GoName
+		if mapped := e.symbolNames[symbol]; mapped != "" {
+			name = mapped
+		}
+		return &goast.Ident{NamePos: e.pos(id), Name: name}
 	}
 	if r.Symbol != nil && len(r.Symbol.Target) > 0 {
 		name := r.Symbol.GoName
@@ -130,6 +157,9 @@ func (e *emitter) path(p *syntax.Path) goast.Expr {
 }
 
 func (e *emitter) addImports(f *goast.File) {
+	e.addPrimitiveAliases(f)
+	e.addPackageTypeAliases(f)
+	e.addFunctionAliases(f)
 	// blank use 的目的就是包初始化，不能按普通未使用别名删除。
 	for _, u := range e.file.Uses {
 		if u.Blank {

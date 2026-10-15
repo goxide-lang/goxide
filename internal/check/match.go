@@ -22,35 +22,47 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 		t = c.out.Types[ref.X]
 	}
 	instance := c.out.EnumOf(t)
+	if instance != nil && !c.enumAccessible(instance) {
+		c.diag(n, VariantMismatch, "internal-origin alias cannot expose enum variants outside its internal package boundary")
+	}
 	info := &Match{Enum: instance, Statement: statement, Reference: mode}
 	c.out.Matches[n] = info
+	if instance == nil {
+		for _, arm := range n.Arms {
+			var variant ast.Pat
+			ast.Walk(arm.Pat, func(node ast.Node) bool {
+				switch pattern := node.(type) {
+				case *ast.TuplePat, *ast.StructPat:
+					variant = node.(ast.Pat)
+				case *ast.PathPat:
+					if symbol := c.symbol(pattern.Path); symbol == nil || symbol.Kind != resolve.Constant {
+						variant = pattern
+					}
+				case *ast.BindPat:
+					if symbol := c.symbol(pattern.Name); symbol != nil && symbol.Kind == resolve.Variant {
+						variant = pattern
+					}
+				}
+				return variant == nil
+			})
+			if variant != nil {
+				c.diag(variant, VariantMismatch, "enum variant pattern requires a Goxide enum value with source declarations")
+				delete(c.out.Matches, n)
+				return types.Typ[types.Invalid]
+			}
+		}
+	}
 	covered := map[string]bool{}
 	patterns := map[string][]ast.Pat{}
 	wild := false
 	var result types.Type
 	for _, arm := range n.Arms {
 		name := c.patternName(arm.Pat)
-		matchesEnum := true
-		if instance != nil && name != "" {
-			var path *ast.Path
-			switch p := arm.Pat.(type) {
-			case *ast.PathPat:
-				path = p.Path
-			case *ast.TuplePat:
-				path = p.Path
-			case *ast.StructPat:
-				path = p.Path
-			}
-			con := c.constructor(path, c.symbol(arm.Pat), t)
-			if con == nil || con.Enum.Enum != instance.Enum || !types.Identical(instanceType(con.Enum), t) {
-				matchesEnum = false
-				c.diag(arm.Pat, VariantMismatch, "pattern variant does not belong to the matched enum instance")
-			}
-		}
+		matchesEnum := c.patternMatches(arm.Pat, t)
 		unreachable := wild || covered[name]
 		if !unreachable {
 			for _, prior := range patterns[name] {
-				if c.subsumes(prior, arm.Pat) {
+				if c.subsumes(prior, arm.Pat, t) {
 					unreachable = true
 					break
 				}
@@ -64,8 +76,17 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 				wild = true
 			} else {
 				patterns[name] = append(patterns[name], arm.Pat)
-				if c.irrefutable(arm.Pat) {
+				if c.irrefutable(arm.Pat, t) {
 					covered[name] = true
+				} else if instance != nil {
+					if variant := instance.Variant(name); variant != nil {
+						fields := instance.Fields(variant)
+						var rows [][]ast.Pat
+						for _, pattern := range patterns[name] {
+							rows = append(rows, patternPayload(pattern, fields))
+						}
+						covered[name] = c.patternsCoverFields(rows, fields)
+					}
 				}
 			}
 		}
@@ -74,6 +95,12 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 		armType := c.expr(arm.Body, expected)
 		c.block(arm.Block)
 		if !statement && valid(armType) {
+			if armType == types.Typ[types.UntypedNil] && valid(expected) && !assignableArm(armType, expected) {
+				c.diag(arm.Body, ArmTypeMismatch, fmt.Sprintf("cannot use nil as %s in match arm", expected))
+			}
+			if valid(expected) && assignableArm(armType, expected) {
+				armType = expected
+			}
 			if result == nil {
 				result = armType
 			} else if !sameArmType(result, armType) {
@@ -94,11 +121,50 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 		result = types.Typ[types.Invalid]
 	} else if valid(expected) && assignableArm(result, expected) {
 		result = expected
-	} else {
-		result = defaultType(result)
 	}
-	info.Type = result
+	if c.out.EnumOf(result) != nil {
+		for _, arm := range n.Arms {
+			if c.nilLiteral(arm.Body) {
+				c.expr(arm.Body, result)
+			}
+		}
+	}
+	if result == types.Typ[types.UntypedNil] {
+		c.diag(n, ArmTypeMismatch, "cannot infer a match result type from untyped nil")
+	}
+	// Retain untyped arms until an enclosing binary expression or assignment
+	// supplies their context. Lowering still needs a concrete storage type.
+	info.Type = defaultType(result)
 	return result
+}
+
+func sameEnumInstance(left, right *Instance) bool {
+	if left.Enum != right.Enum || len(left.Args) != len(right.Args) {
+		return false
+	}
+	for index, arg := range left.Args {
+		if !types.Identical(arg, right.Args[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *checker) enumAccessible(instance *Instance) bool {
+	pkg := instance.Enum.Type.Obj().Pkg()
+	if pkg == nil {
+		return true
+	}
+	parts := strings.Split(pkg.Path(), "/")
+	for index, part := range parts {
+		if part == "internal" {
+			parent := strings.Join(parts[:index], "/")
+			if parent == "" || c.pkg.Path() != parent && !strings.HasPrefix(c.pkg.Path(), parent+"/") {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func referenceScrutinee(e ast.Expr) ast.Expr {
@@ -141,7 +207,46 @@ func (c *checker) wildcard(p ast.Pat) bool {
 	}
 	return false
 }
-func (c *checker) irrefutable(p ast.Pat) bool {
+
+func (c *checker) patternMatches(p ast.Pat, t types.Type) bool {
+	if c.patternName(p) == "" {
+		return true
+	}
+	var path *ast.Path
+	var symbol *resolve.Symbol
+	switch p := p.(type) {
+	case *ast.BindPat:
+		symbol = c.symbol(p.Name)
+	case *ast.PathPat:
+		path, symbol = p.Path, c.symbol(p.Path)
+	case *ast.TuplePat:
+		path, symbol = p.Path, c.symbol(p)
+	case *ast.StructPat:
+		path, symbol = p.Path, c.symbol(p)
+	}
+	if symbol != nil && symbol.Kind == resolve.Constant {
+		return true
+	}
+	instance := c.out.EnumOf(t)
+	con := c.constructor(path, symbol, t)
+	if instance != nil && con != nil && sameEnumInstance(con.Enum, instance) {
+		return true
+	}
+	c.diag(p, VariantMismatch, "pattern variant does not belong to the matched enum instance")
+	return false
+}
+
+func (c *checker) patternFields(p ast.Pat, t types.Type) []Field {
+	if enum := c.out.EnumOf(t); enum != nil {
+		if variant := enum.Variant(c.patternName(p)); variant != nil {
+			return enum.Fields(variant)
+		}
+	}
+	return nil
+}
+
+// irrefutable checks the payload after selecting this pattern's variant.
+func (c *checker) irrefutable(p ast.Pat, t types.Type) bool {
 	switch p := p.(type) {
 	case *ast.WildPat:
 		return true
@@ -152,17 +257,26 @@ func (c *checker) irrefutable(p ast.Pat) bool {
 		if s := c.symbol(p.Name); s != nil && s.Kind == resolve.Constant {
 			return false
 		}
-		return p.Sub == nil || c.irrefutable(p.Sub)
+		return p.Sub == nil || c.payloadIrrefutable(p.Sub, t)
 	case *ast.TuplePat:
-		for _, e := range p.Elts {
-			if !c.irrefutable(e) {
+		fields := c.patternFields(p, t)
+		for i, e := range p.Elts {
+			if i >= len(fields) || !c.payloadIrrefutable(e, fields[i].Type) {
 				return false
 			}
 		}
 		return true
 	case *ast.StructPat:
+		fields := c.patternFields(p, t)
 		for _, f := range p.Fields {
-			if !c.irrefutable(f.Pat) {
+			var typ types.Type
+			for _, field := range fields {
+				if field.Name == f.Name.Name {
+					typ = field.Type
+					break
+				}
+			}
+			if typ == nil || !c.payloadIrrefutable(f.Pat, typ) {
 				return false
 			}
 		}
@@ -171,14 +285,84 @@ func (c *checker) irrefutable(p ast.Pat) bool {
 	return false
 }
 
-func (c *checker) subsumes(a, b ast.Pat) bool {
+func (c *checker) payloadIrrefutable(p ast.Pat, t types.Type) bool {
+	if c.patternName(p) != "" {
+		if !c.patternMatches(p, t) {
+			return false
+		}
+		if enum := c.out.EnumOf(t); enum != nil && len(enum.Enum.Variants) != 1 {
+			return false
+		}
+	}
+	return c.irrefutable(p, t)
+}
+
+func patternPayload(p ast.Pat, fields []Field) []ast.Pat {
+	patterns := make([]ast.Pat, len(fields))
+	switch p := p.(type) {
+	case *ast.TuplePat:
+		copy(patterns, p.Elts)
+	case *ast.StructPat:
+		for _, pattern := range p.Fields {
+			for i, field := range fields {
+				if pattern.Name.Name == field.Name {
+					patterns[i] = pattern.Pat
+				}
+			}
+		}
+	}
+	return patterns
+}
+
+// Each row matches one arm's payload. Specialize enum columns by variant so
+// several nested arms can jointly cover a product of enum payloads.
+func (c *checker) patternsCoverFields(rows [][]ast.Pat, fields []Field) bool {
+	if len(rows) == 0 {
+		return false
+	}
+	if len(fields) == 0 {
+		return true
+	}
+	var unrestricted [][]ast.Pat
+	for _, row := range rows {
+		if row[0] == nil || c.payloadIrrefutable(row[0], fields[0].Type) {
+			unrestricted = append(unrestricted, row[1:])
+		}
+	}
+	if len(unrestricted) == len(rows) {
+		return c.patternsCoverFields(unrestricted, fields[1:])
+	}
+	enum := c.out.EnumOf(fields[0].Type)
+	if enum == nil {
+		return c.patternsCoverFields(unrestricted, fields[1:])
+	}
+	for _, variant := range enum.Enum.Variants {
+		payload := enum.Fields(variant)
+		var specialized [][]ast.Pat
+		for _, row := range rows {
+			pattern := row[0]
+			if bind, ok := pattern.(*ast.BindPat); ok && bind.Sub != nil {
+				pattern = bind.Sub
+			}
+			if pattern == nil || c.wildcard(pattern) || c.patternName(pattern) == variant.Name && c.patternMatches(pattern, fields[0].Type) {
+				specialized = append(specialized, append(patternPayload(pattern, payload), row[1:]...))
+			}
+		}
+		if !c.patternsCoverFields(specialized, append(payload, fields[1:]...)) {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *checker) subsumes(a, b ast.Pat, t types.Type) bool {
 	if c.wildcard(a) {
 		return true
 	}
 	if c.patternName(a) != c.patternName(b) {
 		return false
 	}
-	if c.irrefutable(a) {
+	if c.irrefutable(a, t) {
 		return true
 	}
 	switch a := a.(type) {
@@ -192,8 +376,9 @@ func (c *checker) subsumes(a, b ast.Pat) bool {
 		return c.patternConstant(a) == c.patternConstant(b) && c.patternConstant(a) != ""
 	case *ast.TuplePat:
 		if b, ok := b.(*ast.TuplePat); ok && len(a.Elts) == len(b.Elts) {
+			fields := c.patternFields(a, t)
 			for i := range a.Elts {
-				if !c.subsumes(a.Elts[i], b.Elts[i]) {
+				if i >= len(fields) || !c.subsumes(a.Elts[i], b.Elts[i], fields[i].Type) {
 					return false
 				}
 			}
@@ -201,10 +386,18 @@ func (c *checker) subsumes(a, b ast.Pat) bool {
 		}
 	case *ast.StructPat:
 		if b, ok := b.(*ast.StructPat); ok {
+			fields := c.patternFields(a, t)
 			for _, af := range a.Fields {
+				var typ types.Type
+				for _, field := range fields {
+					if field.Name == af.Name.Name {
+						typ = field.Type
+						break
+					}
+				}
 				found := false
 				for _, bf := range b.Fields {
-					if af.Name.Name == bf.Name.Name && c.subsumes(af.Pat, bf.Pat) {
+					if typ != nil && af.Name.Name == bf.Name.Name && c.subsumes(af.Pat, bf.Pat, typ) {
 						found = true
 					}
 				}
@@ -308,6 +501,9 @@ func (c *checker) try(n *ast.TryExpr) types.Type {
 		if !types.AssignableTo(info.Error, target) {
 			var found int
 			for _, helper := range c.conversions {
+				if !c.sameSourcePackage(helper.Decl.File, c.file.Name) {
+					continue
+				}
 				sig, ok := c.out.Symbols[helper].(*types.Signature)
 				if ok && sig.Params().Len() == 1 && sig.Results().Len() == 1 && types.Identical(sig.Params().At(0).Type(), info.Error) && types.Identical(sig.Results().At(0).Type(), target) {
 					info.Conversion = helper
@@ -319,6 +515,7 @@ func (c *checker) try(n *ast.TryExpr) types.Type {
 				if found > 1 {
 					reason = "ambiguous explicit one-step conversion"
 				}
+				reason += "; requires a unique explicit From in the current package"
 				c.diag(n, TryReturnType, strings.Join([]string{"cannot propagate", info.Error.String(), "to", target.String() + ":", reason}, " "))
 			}
 		}

@@ -1,9 +1,7 @@
 package acceptance_test
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -45,7 +43,6 @@ func Text()Result[string,error]{return Result[string,error]::Ok("ok")}
 func Pick(ok bool)Option[int]{if ok{return Option[int]::Some(5)};return Option[int]::None}
 func Words()Result[int,string]{return Result[int,string]::Err("bad")}
 pub enum E{Good,}
-func Nested()Result[E,error]{return Result[E,error]::Ok(E{})}
 func OptionalE()Option[E]{return Option[E]::Some(E::Good)}
 func String()Option[string]{return Option[string]::Some("word")}
 func Shape()Option[struct{T int;V int}]{return Option[struct{T int;V int}]::Some(struct{T int;V int}{T:2,V:3})}
@@ -58,17 +55,23 @@ pub enum RemoteError{
 }
 func Remote()Result[int,RemoteError]{return Result[int,RemoteError]::Ok(1)}
 `)
+	packagesWrite(t, src, "model/nil.go", `package model
+import "github.com/goxide-lang/std/sum"
+func Nested()sum.Result[E,error]{return sum.NewOk[E,error](nil)}
+`)
 	packagesWrite(t, src, "relay/relay.go", `package relay
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import m "sums.example/lib/model"
-type Maybe[T any]=m.Option[T]
-type Outcome[T,E any]=m.Result[T,E]
-type Swap[A,B any]=m.Result[B,A]
-type Fixed[T any]=m.Result[T,string]
-type Numeric[T ~int]=m.Option[T]
-type Wrap[T any]=m.Option[struct{T int;V T}]
-type Int=m.Option[int]
-type Private=m.Option[m.Exposed]
-type New m.Option[int]
+type Maybe[T any]=__borrow_std.Option[T]
+type Outcome[T,E any]=__borrow_std.Result[T,E]
+type Swap[A,B any]=__borrow_std.Result[B,A]
+type Fixed[T any]=__borrow_std.Result[T,string]
+type Numeric[T ~int]=__borrow_std.Option[T]
+type Wrap[T any]=__borrow_std.Option[struct{T int;V T}]
+type Int=__borrow_std.Option[int]
+type Private=__borrow_std.Option[m.Exposed]
+type New __borrow_std.Option[int]
 func Get()Int{return m.Pick(true)}
 `)
 	packagesWrite(t, src, "fake/fake.go", `package fake
@@ -93,10 +96,10 @@ pub enum LocalError{
  #[from]
  Cause(error),
 }
-func OptionFlow(ok bool)m::Option[int]{n:=m::Pick(ok)?;return m::Option[int]::Some(n+1)}
-func ResultFlow(kind int)m::Result[string,error]{n:=m::Load(kind)?;_=n;return m::Result[string,error]::Ok("done")}
+func OptionFlow(ok bool)Option[int]{n:=m::Pick(ok)?;return Option[int]::Some(n+1)}
+func ResultFlow(kind int)Result[string,error]{n:=m::Load(kind)?;_=n;return Result[string,error]::Ok("done")}
 func Wrapped(kind int)Result[int,LocalError]{n:=m::Load(kind)?;return Result[int,LocalError]::Ok(n)}
-func Match(v m::Option[int])int{return match v{m::Option[int]::Some(n)=>n,m::Option[int]::None=>0,}}
+func Match(v Option[int])int{return match v{Option[int]::Some(n)=>n,Option[int]::None=>0,}}
 func Alias()int{v:=r::Numeric[int]::Some(9);return match v{r::Int::Some(n)=>n,r::Maybe[int]::None=>0,}}
 func Reorder()int{v:=r::Swap[error,int]::Ok(10);return match v{r::Outcome[int,error]::Ok(n)=>n,r::Swap[error,int]::Err(_)=>0,}}
 func Fixed()int{v:=r::Fixed[int]::Ok(11);return match v{r::Fixed[int]::Ok(n)=>n,r::Fixed[int]::Err(_)=>0,}}
@@ -104,23 +107,31 @@ func Private()Option[int]{n:=m::Private()?;return Option[int]::Some(n.N)}
 func Shape()int{v:=r::Wrap[int]::Some(struct{T int;V int}{T:2,V:3});return match v{r::Wrap[int]::Some(n)=>n.T+n.V,r::Wrap[int]::None=>0,}}
 func PrivateMatch()int{return match m::Private(){r::Private::Some(n)=>n.N,r::Private::None=>0,}}
 func Forward(){_=m::Secret()}
-func Invalid(v m::Result[int,error],seen *bool)Result[int,error]{n:=v?;*seen=true;return Result[int,error]::Ok(n)}
+func Invalid(v Result[int,error],seen *bool)Result[int,error]{n:=v?;*seen=true;return Result[int,error]::Ok(n)}
 func Nested()Result[int,error]{_=m::Nested()?;return Result[int,error]::Ok(1)}
 func NestedNone()Option[int]{v:=m::OptionalNested()?;n:=v?;return Option[int]::Some(n)}
-func Guard(v m::Option[int],seen *bool)int{return match v{m::Option[int]::Some(n) if Mark(seen)=>n,_=>0,}}
-func GuardNested(v m::Option[m::E],seen *bool)int{return match v{m::Option[m::E]::Some(_) if Mark(seen)=>1,_=>0,}}
+func Guard(v Option[int],seen *bool)int{return match v{Option[int]::Some(n) if Mark(seen)=>n,_=>0,}}
+func MarkNested(seen *int)bool{*seen+=1;return true}
+func GuardNested(v Option[m::E],seen *int)int{return match v{Option[m::E]::Some(_) if MarkNested(seen)=>1,_=>0,}}
+func PatternNested(v Option[m::E],seen *int)int{return match v{Option[m::E]::Some(m::E::Good) if MarkNested(seen)=>1,_=>0,}}
+func BindNested(v Option[m::E],seen *int)m::E{match v{Option[m::E]::Some(p)=>{*seen+=1;return p},Option[m::E]::None=>{return m::E::Good},}}
+func DispatchNested(v m::E,seen *int){match v{m::E::Good if MarkNested(seen)=>{},_=>{},}}
 func Mark(seen *bool)bool{*seen=true;return true}
 func Shadow()Result[int,error]{input:=m::Load(0);m:=3;_=m;n:=input?;return Result[int,error]::Ok(n)}
-// A new concrete shared-family instance gets a local static validator.
-func NewInstance(v m::Option[bool])Option[bool]{n:=v?;return Option[bool]::Some(n)}
+// A new concrete shared-family instance retains its static sum identity.
+func NewInstance(v Option[bool])Option[bool]{n:=v?;return Option[bool]::Some(n)}
 func SumLarge(items []int)Result[int,error]{total:=0;for _,item:=range items{total+=m::LoadNumber(item)?};return Result[int,error]::Ok(total)}
 `)
 	out := filepath.Join(t.TempDir(), "out")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, app)
+	compileAcceptanceGraph(t, true, app, out, src)
 	// Compare before adding Go-only test files; no test source participates in artifacts.
 	compare := func(source, first string) {
 		second := filepath.Join(t.TempDir(), "repeat")
-		packagesCommand(t, root, cli, true, "transpile", "-o", second, source)
+		if source == src {
+			packagesCommand(t, root, cli, true, "transpile", "-o", second, src)
+		} else {
+			compileAcceptanceGraph(t, true, source, second, src)
+		}
 		err := filepath.WalkDir(first, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -159,17 +170,24 @@ func TestProducer(t *testing.T){for _,wire:=range []string{"{}",`+"`"+`{"Value":
 	packagesWrite(t, out, "app_test.go", `package app
 import __borrow_std "github.com/goxide-lang/std/sum"
 
-import("testing";"errors";m "sums.example/lib/model")
+import("testing";"errors";"fmt";"strings";m "sums.example/lib/model")
 func TestBusiness(t *testing.T){if Match(OptionFlow(true))!=6||Match(OptionFlow(false))!=0||Alias()!=9||Reorder()!=10||Fixed()!=11||PrivateMatch()!=7||Shape()!=5{t.Fatal("business")};if __borrow_std.ValueSome(Private())!=7{t.Fatal("private")};if __borrow_std.ValueOk(ResultFlow(0))!="done"{t.Fatal("result")};if !errors.Is(__borrow_std.ValueErr(ResultFlow(1)),m.Sentinel){t.Fatal("cause")};if e:=__borrow_std.ValueErr(ResultFlow(2));e==nil{t.Fatal("typed nil lost")};if !errors.Is(__borrow_std.ValueErr(Wrapped(1)),m.Sentinel){t.Fatal("from")};if __borrow_std.TagOption(NestedNone())!=0{t.Fatal("Some(None)")};_=Shadow()}
 func TestNewConcreteInstance(t *testing.T){
- if __borrow_std.TagOption(NewInstance(__borrow_std.None[bool]()))!=0||!__borrow_std.ValueSome(NewInstance(m.GoxideNewOptionSome(true))){t.Fatal("new concrete identity")}
+ if __borrow_std.TagOption(NewInstance(__borrow_std.None[bool]()))!=0||!__borrow_std.ValueSome(NewInstance(__borrow_std.NewSome(true))){t.Fatal("new concrete identity")}
 }
-// The typed Result zero value and a Some containing an invalid user enum are
-// still constructible; both must fail validation before subsequent effects.
+// The current sum is checked first; a Go-supplied nil user enum is checked only
+// when an explicit nested pattern or subsequent match dispatches that value.
 func TestInvalid(t *testing.T){
- func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid Result reached continuation")}}();Invalid(m.Result[int,error]{},&seen)}()
- func(){defer func(){if recover()==nil{t.Fatal("nested validation")}}();Nested()}()
- func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid nested Option reached guard")}}();GuardNested(__borrow_std.NewSome(m.E{}),&seen)}()
+ func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid Result reached continuation")}}();Invalid(__borrow_std.Result[int,error]{},&seen)}()
+ if got:=__borrow_std.ValueOk(Nested());got!=1{t.Fatal("Result propagation traversed its payload",got)}
+ for _,inner:=range []m.E{nil,(*m.Good)(nil)}{
+  input:=__borrow_std.NewSome[m.E](inner);seen:=0
+  if GuardNested(input,&seen)!=1||seen!=1{t.Fatal("binding-only Option match skipped guard",seen)}
+  seen=0;func(){defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"nil E")||seen!=0{t.Fatalf("nested pattern panic=%v guard=%d",p,seen)}}();PatternNested(input,&seen)}()
+  bound:=BindNested(input,&seen);if bound!=inner||seen!=1{t.Fatal("binding changed nil payload or skipped arm",seen)}
+  seen=0;func(){defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"nil E")||seen!=0{t.Fatalf("bound enum panic=%v guard=%d",p,seen)}}();DispatchNested(bound,&seen)}()
+ }
+ matched:=0;if PatternNested(__borrow_std.NewSome[m.E](&m.Good{}),&matched)!=1||matched!=1{t.Fatal("valid imported nested pattern",matched)}
  seen:=false;if Guard(__borrow_std.None[int](),&seen)!=0||seen{t.Fatal("None executed Some guard")}
 }
 `)
@@ -201,66 +219,32 @@ func TestImportedResultAllocations(t *testing.T){
 import __borrow_std "github.com/goxide-lang/std/sum"
 
 import("testing";m "sums.example/lib/model";r "sums.example/lib/relay")
-func TestGo(t *testing.T){var v r.Maybe[int]=m.GoxideNewOptionSome[int](4);if __borrow_std.ValueSome(v)!=4||__borrow_std.TagOption(m.GoxideNewOptionNone[int]())!=0{t.Fatal(v)};var p *m.Fault;v2:=m.GoxideNewResultErr[int,error](p);if __borrow_std.ValueErr(v2)==nil{t.Fatal("typednil")}}
+func TestGo(t *testing.T){var v r.Maybe[int]=__borrow_std.NewSome[int](4);if __borrow_std.ValueSome(v)!=4||__borrow_std.TagOption(__borrow_std.None[int]())!=0{t.Fatal(v)};var p *m.Fault;v2:=__borrow_std.NewErr[int,error](p);if __borrow_std.ValueErr(v2)==nil{t.Fatal("typednil")}}
 `)
 	for _, d := range []string{lib, out, plain} {
 		packagesCommand(t, d, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, d, tool, true, "vet", "./...")
 	}
-	assertLegacySumGoRejected(t, out, tool, map[string]legacySumGoCase{
-		"option-nil":          {"package app\nimport m \"sums.example/lib/model\"\nvar _ m.Option[int]=nil\n", "cannot use nil"},
-		"option-pointer-case": {"package app\nimport m \"sums.example/lib/model\"\nvar _ m.Option[bool]=(*m.GoxideOptionSome[bool])(nil)\n", "undefined: m.GoxideOptionSome"},
-		"result-pointer-case": {"package app\nimport m \"sums.example/lib/model\"\nvar _ m.Result[int,error]=(*m.GoxideResultOk[int,error])(nil)\n", "undefined: m.GoxideResultOk"},
-		"forged-result":       {"package app\nimport m \"sums.example/lib/model\"\ntype forged struct{m.Result[int,error]}\nvar _ m.Result[int,error]=forged{}\n", "cannot use"},
+	assertNativeGoRejected(t, out, tool, map[string]nativeGoRejection{
+		"option-nil":    {"package app\nimport __borrow_std \"github.com/goxide-lang/std/sum\"\nvar _ __borrow_std.Option[int]=nil\n", "cannot use nil"},
+		"forged-result": {"package app\nimport __borrow_std \"github.com/goxide-lang/std/sum\"\ntype forged struct{__borrow_std.Result[int,error]}\nvar _ __borrow_std.Result[int,error]=forged{}\n", "cannot use"},
 	})
 	for name, tc := range map[string]struct{ body, want string }{
-		"fake-family":                {`use library::fake as f;func Bad()Result[int,error]{n:=f::Get()?;return Result[int,error]::Ok(n)}`, "builtin nominal"},
+		"fake-family":                {`use library::fake as f;func Bad()Result[int,error]{n:=f::Get()?;return Result[int,error]::Ok(n)}`, "requires Option or Result"},
 		"private-unnameable":         {`use library::model as m;func Bad()Option[int]{n:=m::Secret()?;return Option[int]::Some(n.N)}`, "not nameable"},
-		"external-from-not-implicit": {`use library::model as m;func Bad()m::Result[int,m::RemoteError]{n:=m::Load(1)?;return m::GoxideNewResultOk[int,m::RemoteError](n)}`, "unique explicit From"},
-		"cross-family":               {`use library::model as m;func Bad()Option[int]{n:=m::Load(0)?;return Option[int]::Some(n)}`, "cannot propagate"},
-		"non-exhaustive":             {`use library::model as m;func Bad(v m::Option[int])int{return match v{m::Option[int]::Some(n)=>n,}}`, "non-exhaustive"},
+		"external-from-not-implicit": {`use library::model as m;func Bad()Result[int,m::RemoteError]{n:=m::Load(1)?;return Result[int,m::RemoteError]::Ok(n)}`, "unique explicit From"},
+		"cross-family":               {`use library::model as m;func Bad()Option[int]{n:=m::Load(0)?;return Option[int]::Some(n)}`, "return the same Option or Result family"},
+		"non-exhaustive":             {`use library::model as m;func Bad(v Option[int])int{return match v{Option[int]::Some(n)=>n,}}`, "does not cover Option::None"},
 		"constrained-alias-ctor":     {`use library::relay as r;func Bad(){_=r::Numeric[string]::Some("bad")}`, "does not satisfy"},
-		"constrained-alias-pattern":  {`use library::model as m; use library::relay as r;func Bad(v m::Option[string])int{return match v{r::Numeric[string]::Some(_)=>1,r::Numeric[string]::None=>0,}}`, "does not satisfy"},
-		"new-defined":                {`use library::relay as r;func Bad()r::New{return r::New::Some(1)}`, "has no field or method Some"},
+		"constrained-alias-pattern":  {`use library::model as m; use library::relay as r;func Bad(v Option[string])int{return match v{r::Numeric[string]::Some(_)=>1,r::Numeric[string]::None=>0,}}`, "does not satisfy"},
+		"new-defined":                {`use library::relay as r;func Bad()r::New{return r::New::Some(1)}`, "unknown associated type or member path"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := appFor("package app\n" + tc.body)
-			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), s)
+			msg := compileAcceptanceGraph(t, false, s, filepath.Join(t.TempDir(), "out"), src)
 			if !strings.Contains(msg, tc.want) || !strings.Contains(msg, "app.gox:") {
 				t.Fatal(msg)
 			}
 		})
 	}
-	meta := filepath.Join(lib, "model/.goxide.enums.json")
-	original, e := os.ReadFile(meta)
-	if e != nil {
-		t.Fatal(e)
-	}
-	t.Run("family-tamper", func(t *testing.T) {
-		var a map[string]any
-		if e := json.Unmarshal(original, &a); e != nil {
-			t.Fatal(e)
-		}
-		a["Metadata"].(map[string]any)["Families"].([]any)[0].(map[string]any)["Family"] = "Result"
-		b, _ := json.Marshal(a)
-		if e := testdeps.WriteFile(meta, b, 0600); e != nil {
-			t.Fatal(e)
-		}
-		defer testdeps.WriteFile(meta, original, 0600)
-		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), app)
-		if !strings.Contains(msg, "metadata") {
-			t.Fatal(msg)
-		}
-	})
-	t.Run("missing-and-native", func(t *testing.T) {
-		if e := os.Remove(meta); e != nil {
-			t.Fatal(e)
-		}
-		defer testdeps.WriteFile(meta, original, 0600)
-		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), app)
-		if !strings.Contains(msg, "metadata") {
-			t.Fatal(msg)
-		}
-		packagesCommand(t, plain, tool, true, "test", "-race", "-count=1", "./...")
-	})
 }

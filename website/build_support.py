@@ -167,6 +167,43 @@ def verify_compiler_sources(root, pin, expected_digest):
     return result
 
 
+def worktree_compiler_source(root):
+    """Identify the actual compiler bytes without assigning them to a commit."""
+    root = pathlib.Path(root)
+    base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root).decode().strip()
+    tree = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', '-z', base], cwd=root)
+    pinned = {name for name in tree.decode().split('\0') if name and is_compiler_source(name)}
+    current = {
+        path.relative_to(root).as_posix()
+        for pattern in ('internal/**/*.go', 'cmd/goxide/**/*.go', 'cmd/goxide-playground/**/*.go',
+                        'go.mod', 'go.sum', DEPENDENCY_CONTEXT)
+        for path in root.glob(pattern)
+        if path.is_file() and is_compiler_source(path.relative_to(root).as_posix())
+    }
+    digest = hashlib.sha256()
+    dirty = current != pinned
+    for name in sorted(current, key=pathlib.PurePosixPath):
+        actual = (root / name).read_bytes()
+        digest.update(name.encode())
+        digest.update(actual)
+        if name in pinned:
+            expected = subprocess.check_output(['git', 'show', f'{base}:{name}'], cwd=root)
+            dirty = dirty or actual != expected
+    return dict(kind='worktree', baseCommit=base, digest=digest.hexdigest(), dirty=dirty)
+
+
+def verify_compiler_source(root, source):
+    if source['kind'] == 'commit':
+        if set(source) != {'kind', 'commit', 'digest', 'dirty'} or source['dirty'] is not False:
+            raise ValueError('invalid committed compiler source identity')
+        verify_compiler_sources(root, source['commit'], source['digest'])
+    elif source['kind'] == 'worktree':
+        if worktree_compiler_source(root) != source:
+            raise ValueError('compiler worktree changed after its source identity was recorded')
+    else:
+        raise ValueError('unknown compiler source identity')
+
+
 def go_license_path(goroot):
     """Use only the selected Go distribution's standard or Homebrew layout."""
     root = pathlib.Path(goroot).resolve()

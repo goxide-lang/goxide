@@ -109,7 +109,6 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 	for _, action := range scriptActions {
 		scripts.AddCommand(scriptsCommand(action, out, stderr))
 	}
-	root.AddCommand(scripts)
 	req := ImportRequest{}
 	imp := cliCommand("import-go [flags] ROOT", "Plan or migrate a Go module into a new project")
 	f := imp.Flags()
@@ -133,7 +132,6 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		req.Interactive = term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
 		return executeImportGo(req, out, stderr)
 	}
-	root.AddCommand(imp)
 	help := cliCommand("help [COMMAND ...]", "Show command help")
 	help.RunE = func(_ *cobra.Command, args []string) error {
 		c := root

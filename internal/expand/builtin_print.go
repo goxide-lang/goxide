@@ -15,12 +15,18 @@ func (e *engine) builtin(n ast.Node, path *ast.Path, args *ast.TokenTree, kind f
 		return nil, false, nil
 	}
 	name := path.Segments[0].Name.Name
+	if name == "go_result" || name == "go_result_keep" {
+		return e.goResult(n, path, args, kind, file, parent)
+	}
 	if name != "print" && name != "println" {
 		return nil, false, nil
 	}
 	origin := e.r.Origins[n]
 	if origin.File == nil {
 		origin = Origin{file, n.Span()}
+	}
+	if err := e.expansionBudget(origin, origin, parent); err != nil {
+		return nil, true, err
 	}
 	fail := func(err error) (ast.Node, bool, error) {
 		return nil, true, &Diagnostic{Code: "format", Message: err.Error(), Call: origin, Definition: origin, Expn: parent}

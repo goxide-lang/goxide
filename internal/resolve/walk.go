@@ -292,7 +292,9 @@ func (r *resolver) expr(scope *Scope, expr ast.Expr) {
 		for _, elem := range n.Elts {
 			if kv, ok := elem.(*ast.KeyValue); ok && !r.indexKeys(r.file, n.Type, make(map[*Symbol]bool)) {
 				if name, ok := kv.Key.(*ast.Ident); ok {
-					r.file.References[name.ID()] = Resolution{Deferred: true}
+					candidate := r.lookup(r.identScope(scope, name), key(name), false)
+					candidate.Deferred = true
+					r.file.References[name.ID()] = candidate
 				} else {
 					r.expr(scope, kv.Key)
 				}
@@ -328,7 +330,9 @@ func (r *resolver) expr(scope *Scope, expr ast.Expr) {
 		r.expr(scope, n.X)
 		r.typ(scope, n.Type)
 	case *ast.CallExpr:
-		if _, print := r.result.Prints[n]; !print {
+		_, print := r.result.Prints[n]
+		_, adapter := r.result.GoResults[n]
+		if !print && !adapter {
 			r.expr(scope, n.Fun)
 		}
 		for _, arg := range n.Args {

@@ -410,10 +410,9 @@ func TestExpandFailuresHaveDefinitionCallAndNestedStack(t *testing.T) {
 
 func TestExpandOutputAndRecursionBudgets(t *testing.T) {
 	t.Run("output", func(t *testing.T) {
-		input := "1"
-		for range 16 {
-			input = "double!(" + input + ")"
-		}
+		// One expansion duplicates enough ordinary nodes to hit the output
+		// limit without first exhausting the independent expansion budget.
+		input := "double!([]int{" + strings.Repeat("0,", MaxOutputNodes/2) + "})"
 		f := expandFile(t, "output.gox", "macro_rules! double { ($x:expr) => { $x + $x }; }; var value = "+input)
 		r, err := Expand([]*ast.File{f}, nil)
 		var d *Diagnostic

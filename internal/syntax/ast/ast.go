@@ -121,6 +121,7 @@ const (
 
 type File struct {
 	Base
+	NativeGo   bool // Read-only Go declaration view; function bodies remain with the Go compiler.
 	Package    *Ident
 	Attrs      []*Attr
 	Items      []Item
@@ -440,8 +441,9 @@ type ParenExpr struct {
 }
 type SelectorExpr struct {
 	Base
-	X   Expr
-	Sel *Ident
+	X      Expr
+	Sel    *Ident
+	Static bool
 }
 type IndexExpr struct {
 	Base

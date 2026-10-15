@@ -50,6 +50,7 @@ func View(r &mut int)&mut int{return r}
 use api as a;
 use mid as m;
 func Run()int{n:=40;w:=&mut n;a::Inc(w);r:=m::View(&*w);a::Inc(w);if a::Read(r)!=42{panic("alias visibility")};*m::Edit(w)+=1;return n}
+func FunctionValue()int{n:=6;f:=a::Read;return f(&n)}
 func Deferred()int{n:=0;w:=&mut n;func(){defer a::Inc(w)}();return n}
 func Goroutine()int{n:=0;w:=&mut n;done:=make(chan bool);go func(){a::Inc(w);done<-true}();<-done;return n}
 func Native()int{n:=4;p:=&n;native(p);return n}
@@ -93,13 +94,9 @@ func Hygiene()int{n:=8;__goxide_permission_call_1:=func(p *int)int{return 0};_=_
 		if err != nil {
 			t.Fatal(err)
 		}
-		data, e := os.ReadFile(filepath.Join(generated, "mid/.goxide.refs.json"))
-		if e != nil || !strings.Contains(string(data), `"Permission": "read"`) {
-			t.Fatalf("metadata %s %v", data, e)
-		}
 		packagesWrite(t, generated, "app_test.go", `package app
 import "testing"
-func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native()!=5||Context()!=22||Deferred()!=1||Goroutine()!=1||ImportedHygiene()!="1"{t.Fatal("permissions changed identity or native semantics")}}
+func TestBusiness(t *testing.T){if Run()!=43||FunctionValue()!=6||GoRead()!=7||Hygiene()!=8||Native()!=5||Context()!=22||Deferred()!=1||Goroutine()!=1||ImportedHygiene()!="1"{t.Fatal("permissions changed identity or native semantics")}}
 `)
 		packagesCommand(t, generated, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, generated, tool, true, "vet", "./...")
@@ -110,89 +107,28 @@ func TestBusiness(t *testing.T){if Run()!=43||GoRead()!=7||Hygiene()!=8||Native(
 		"raw escape":       `n:=1;r:=m.View(&n);raw(r)`,
 		"interface escape": `n:=1;r:=m.View(&n);var erased any=r;_=erased`,
 		"closure escape":   `n:=1;r:=m.View(&n);f:=func()*int{return r};_=f`,
-		"function value":   `f:=a::Read;_=f`,
 		"wrong path":       `n:=1;r:=a.View(&n);other.View(r)`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
 			imports := ""
-			if strings.Contains(body, "a.") {
-				imports += "import a \"packages.example/app/api\"\n"
+			for alias, root := range map[string]string{"a": "api", "m": "mid", "other": "other"} {
+				if strings.Contains(body, alias+".") {
+					imports += "use " + root + " as " + alias + ";\n"
+				}
+				body = strings.ReplaceAll(body, alias+".", alias+"::")
 			}
-			if strings.Contains(body, "m.") {
-				imports += "import m \"packages.example/app/mid\"\n"
-			}
-			if strings.Contains(body, "other.") {
-				imports += "import other \"packages.example/app/other\"\n"
-			}
-			ext := "go"
-			if name == "function value" {
-				ext = "gox"
-				imports = "use api as a;\n"
-			}
+			ext := "gox"
 			source := makeSource("package app\n"+imports+"func bad(){"+body+"}\nfunc raw(p *int){}\n", ext)
 			generated := filepath.Join(t.TempDir(), "generated")
 			output := packagesCommand(t, root, cli, false, "transpile", "-o", generated, source)
 			if !strings.Contains(output, "app."+ext) {
 				t.Fatalf("source file lost: %s", output)
 			}
-			if name == "function value" && (!strings.Contains(output, "app.gox:3:") || strings.Contains(output, "generated/unmapped")) {
-				t.Fatalf("selector origin lost: %s", output)
-			}
 			if _, e := os.Stat(generated); !os.IsNotExist(e) {
 				t.Fatal("failed output not cleaned")
 			}
 		})
 	}
-	t.Run("single-file-boundaries", func(t *testing.T) {
-		source := makeSource("package app\nfunc Run(){}\n", "gox")
-		single := filepath.Join(t.TempDir(), "api.go")
-		packagesCommand(t, root, cli, true, "transpile", "-o", single, filepath.Join(source, "api/read.gox"))
-		data, e := os.ReadFile(single)
-		if e != nil || !strings.Contains(string(data), "GoxideReferenceMetadata") {
-			t.Fatalf("single export marker: %s %v", data, e)
-		}
-		copied := filepath.Join(t.TempDir(), "copied")
-		packagesWrite(t, copied, "go.mod", packagesModule())
-		writeAcceptanceFixtureRoots(t, copied, "packages.example/app", map[string]string{"api": "packages.example/app/api", "mid": "packages.example/app/mid", "other": "packages.example/app/other"})
-		packagesWrite(t, copied, "api/api.go", string(data))
-		consumer := "package app\nuse api as x;\nfunc Run(){n:=1;*x::View(&n)=7}\n"
-		packagesWrite(t, copied, "app.gox", consumer)
-		output := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), copied)
-		if !strings.Contains(output, "metadata missing") {
-			t.Fatal(output)
-		}
-		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "single.go"), filepath.Join(copied, "app.gox"))
-		if !strings.Contains(output, "metadata missing") || !strings.Contains(output, "app.gox:2:") {
-			t.Fatal(output)
-		}
-		generated := filepath.Join(t.TempDir(), "generated")
-		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
-		packagesWrite(t, generated, "consumer.gox", consumer)
-		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "single.go"), filepath.Join(generated, "consumer.gox"))
-		if !strings.Contains(output, "readonly") {
-			t.Fatal(output)
-		}
-	})
-	t.Run("missing-metadata-native-distinction", func(t *testing.T) {
-		source := filepath.Join(t.TempDir(), "source")
-		packagesWrite(t, source, "go.mod", packagesModule())
-		writeAcceptanceFixtureRoots(t, source, "packages.example/app", map[string]string{"api": "packages.example/app/api", "mid": "packages.example/app/mid", "other": "packages.example/app/other"})
-		packagesWrite(t, source, "api/api.go", `package api
-const GoxideReferenceMetadata="v1:missing"
-func View(p *int)*int{return p}
-`)
-		packagesWrite(t, source, "app.gox", "package app\nuse api as x;\nfunc Run(){n:=1;*x::View(&n)=2}\n")
-		output := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), source)
-		if !strings.Contains(output, "metadata missing") || !strings.Contains(output, "app.gox:2:") {
-			t.Fatal(output)
-		}
-		packagesWrite(t, source, "api/api.go", "package api\nconst GoxideReferenceMetadata=1\nfunc View(p *int)*int{return p}\n")
-		output = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), source)
-		if strings.Contains(output, "panic:") || !strings.Contains(output, "metadata missing") {
-			t.Fatal(output)
-		}
-		packagesWrite(t, source, "api/api.go", "package api\nfunc View(p *int)*int{return p}\n")
-		packagesCommand(t, root, cli, true, "transpile", "-o", filepath.Join(t.TempDir(), "out"), source)
-	})
+
 }

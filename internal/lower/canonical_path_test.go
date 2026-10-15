@@ -8,7 +8,7 @@ import (
 
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestDeriveCanonicalAliasesAndReexports(t *testing.T) {

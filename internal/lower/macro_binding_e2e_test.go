@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestNestedMacroLocalsKeepDistinctSlotsInSameBlock(t *testing.T) {

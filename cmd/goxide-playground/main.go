@@ -1,13 +1,12 @@
 //go:build js && wasm
 
-// goxide-playground exposes the real frontend inside a Web Worker.
+// goxide-playground exposes the compiler pipeline inside a Web Worker.
 package main
 
 import (
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/playground"
 	"github.com/hxsf/goxide/internal/rootconfig"
@@ -33,16 +32,13 @@ func compile(_ js.Value, args []js.Value) (result any) {
 	if len(source) > 32768 {
 		return map[string]any{"error": "source exceeds 32 KiB"}
 	}
-	r, err := frontend.CompileWithOptions("playground.gox", []byte(source), frontend.FileOptions{
-		Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox"),
+	output, err := playground.CompilePackage([]playground.File{{Path: "playground.gox", Source: source}}, playground.Options{
+		Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox"), PackagePath: "goxide/generated",
 	})
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
-	if len(r.Go) > 2*1024*1024 {
-		return map[string]any{"error": "generated output exceeds 2 MiB"}
-	}
-	return map[string]any{"go": string(r.Go)}
+	return map[string]any{"go": output[0].Source}
 }
 
 func compilePackage(_ js.Value, args []js.Value) (result any) {
@@ -68,7 +64,7 @@ func compilePackage(_ js.Value, args []js.Value) (result any) {
 	}
 	// On js/wasm this reads only the export archives embedded at website build
 	// time. Each request receives a fresh importer and no request-local state.
-	output, err := playground.CompilePackage(files, frontend.PackageOptions{
+	output, err := playground.CompilePackage(files, playground.Options{
 		Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox"),
 	})
 	if err != nil {

@@ -120,7 +120,15 @@ gofmt -l internal cmd
 
 不删：`internal/project`、`internal/buildscript`、`internal/scripttrust` 等工具链模块。它们的 CLI 入口在切换时暂时摘掉，实现保留给 MVP 阶段重启，避免重写。
 
-检查：全树 `go test`；`examples/enum_trial/try.sh`；网站构建与带 `goxideweb` 的 race/vet；确定性（同一输入两次运行输出字节一致）。
+项目编排收敛验收：
+
+- CLI 只调用一个项目入口。
+- 清单、依赖计划、锁、源码准备、生成模块物化各留一份实现。
+- `internal/lower` 只处理已准备好的模块。
+- 删除旧 `cmd/goxide` 的 `runProject` 编译分支，以及失去用途的重复辅助函数：`projectRoots`、`projectLayout` / `checkTarget`、`prepareProjectModule`、`projectUnitSpec`。
+- `internal/compile` 可保留为组合入口，但不得长期保留两套编排。
+
+检查：全树 `go test`；`examples/enum_trial/try.sh`；网站构建与带 `goxideweb` 的 race/vet；确定性（同一输入两次运行输出字节一致）；确认不存在两套项目编排，符合 `AGENTS.md` 禁止并行实现路径的要求。
 
 退出：旧管线代码从仓库消失，全部门禁绿。
 

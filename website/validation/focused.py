@@ -203,12 +203,13 @@ def run(args, out, summary):
                 source = source.replace('\n', '\r\n')
             input_path = folder / 'playground.gox'
             input_path.write_bytes(source.encode())
-            result = command([str(cli), 'transpile', '--roots', str(roots_file), str(input_path)], name)
+            generated_path = input_path.with_suffix('.go')
+            result = command([str(cli), 'transpile', '--roots', str(roots_file), '-o', str(generated_path), str(input_path)], name)
             observation = dict(id=name, sourceSha256=digest(input_path), exit=result.returncode)
             if result.returncode:
                 observation['error'] = result.stderr.decode().strip().replace(str(input_path), 'playground.gox')
             else:
-                observation['go'] = result.stdout.decode()
+                observation['go'] = generated_path.read_bytes().decode()
             cli_results.append(observation)
             save(out / 'cli-results.json', cli_results)
             if case.get('expect') == 'frontend-reject':

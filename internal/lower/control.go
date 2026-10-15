@@ -10,7 +10,8 @@ import (
 	"github.com/hxsf/goxide/internal/syntax/token"
 )
 
-func (e *emitter) statement(n syntax.Stmt) []goast.Stmt {
+func (e *emitter) statement(n syntax.Stmt) (output []goast.Stmt) {
+	defer func() { e.anchorStatements(output, n) }()
 	if n == nil {
 		return nil
 	}

@@ -84,7 +84,9 @@ for entry in catalog_data['examples']:
     source = path.read_bytes()
     # Match the owner-free browser input, rather than the repository's module.
     with standalone_playground(source) as input_path:
-        generated = run(str(ROOT/'bin/goxide'), 'transpile', '--roots', str(roots_file), str(input_path)).decode()
+        generated_path = input_path.with_suffix('.go')
+        run(str(ROOT/'bin/goxide'), 'transpile', '--roots', str(roots_file), '-o', str(generated_path), str(input_path))
+        generated = generated_path.read_text()
         if name in ['result','go_result','serde_option']:
             assert 'github.com/goxide-lang/std/sum' in generated
             families = re.findall(r'^type (?:Option|Result)\[[^\n]+', generated, re.MULTILINE)
@@ -140,7 +142,7 @@ for name in sorted({n for c in catalog_data['items'] for n in c['checks']}):
     path = ROOT/'website/checks/catalog'/f'{name}.gox'
     source = path.read_bytes()
     with standalone_playground(source) as input_path:
-        result = subprocess.run([str(ROOT/'bin/goxide'), 'transpile', '--roots', str(roots_file), str(input_path)], env=env, capture_output=True, text=True)
+        result = subprocess.run([str(ROOT/'bin/goxide'), 'transpile', '--roots', str(roots_file), '-o', str(input_path.with_suffix('.go')), str(input_path)], env=env, capture_output=True, text=True)
     assert result.returncode != 0, f'{name}: expected rejection'
     diagnostic = result.stderr.strip().replace(str(input_path), 'playground.gox')
     assert diagnostic and '/workspace/' not in diagnostic

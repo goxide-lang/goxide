@@ -28,9 +28,9 @@ func configureCLIHelp(root *cobra.Command) {
 			"  goxide test --go /absolute/path/to/go ./project\n  goxide test --offline --locked ./project",
 		},
 		"goxide transpile": {
-			"将源码转译为 Go 文件或模块",
-			"转译文件、目录或项目；省略输入时从当前目录向上发现项目。用 -o 指定生成文件或目录；--source-map 暂不支持。",
-			"  goxide transpile -o main.go main.gox\n  goxide transpile -o ./generated ./source",
+			"就地生成 Go；别名 gen 推荐用于 go generate",
+			"gen 是 transpile 的别名。默认将当前包或指定 .gox 写成同目录的 *_gox.go；只读加载同包手写 Go 声明，不编译或运行程序。\n推荐 //go:generate goxide gen .；用 -o - 将单个生成文件写到 stdout，用 -o PATH 保留显式文件或模块目录导出。\n原地和 stdout 输出包含生成标记与 //line 行指令；--source-map JSON 输出尚未实现。",
+			"  goxide gen .\n  goxide gen -o - order.gox\n  goxide transpile -o ./generated ./source",
 		},
 		"goxide expand": {
 			"查看单文件的宏展开结果",

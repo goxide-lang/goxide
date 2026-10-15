@@ -75,6 +75,13 @@ func main(){fmt::Printf("%d %q\n",dep::Value()+hidden::Value()+native::Value(),o
 `)
 	singleFileWrite(t, module, "cmd/app/poison.go", "package main\ninvalid sibling Go\n")
 	singleFileWrite(t, module, "cmd/app/poison.gox", "invalid sibling Goxide\n")
+	// Generation now reads sibling Go declarations. Its determinism check uses
+	// a separate package; run/build below still prove isolated file selection.
+	transpileSource, err := os.ReadFile(filepath.Join(module, "cmd/app/main.gox"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	singleFileWrite(t, module, "cmd/transpile/main.gox", string(transpileSource))
 	// A different cwd graph and ambient workspace must not supply dependencies.
 	cwd := filepath.Join(base, "unrelated")
 	singleFileWrite(t, cwd, "go.mod", "module example.org/unrelated\ngo 1.27\nrequire example.org/dep v0.0.0\nreplace example.org/dep => ./wrong\n")
@@ -89,7 +96,7 @@ func main(){fmt::Printf("%d %q\n",dep::Value()+hidden::Value()+native::Value(),o
 	var generated []byte
 	for i := 0; i < 2; i++ {
 		var out, stderr bytes.Buffer
-		if err := run([]string{"transpile", "--runtime", filepath.Join(base, "absent-runtime"), input}, &out, &stderr); err != nil {
+		if err := run([]string{"transpile", "-o", "-", "--runtime", filepath.Join(base, "absent-runtime"), filepath.Join(module, "cmd/transpile/main.gox")}, &out, &stderr); err != nil {
 			t.Fatalf("transpile: %v: %s", err, &stderr)
 		}
 		if i == 0 {

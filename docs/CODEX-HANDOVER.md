@@ -47,7 +47,7 @@ Goxide 是把 `.gox` 转译成普通 Go 的语言：卫生宏、闭合 enum 与 
 - **宏名字解析**：路径默认按**定义点**解析，`$caller::` 显式指调用点。这与 Rust 默认相反，理由是不想让调用点的同名项被静默绑定。改造方向时源级写法不变。
 - **`pub` 是唯一可见性标记**。Go 写法的声明暂时兼容"首字母大写即公开"（将来可关），新语法（`struct` 糖、`enum`、`trait`、`impl` 成员、`use`、`mod`、宏）只认 `pub`。
 - **`pub` 小写名只生成一个大写名**，不保留小写实现加大写包装。函数身份要唯一，不要包装帧。
-- **`std/sum` 在 P6 之前不动**。它同时服务旧管线；新管线用户 enum 走类型断言，Option/Result 走 `sum.Tag*`。P6 时统一成密封接口形状，那些 `Tag` / `Value` / `Project` / `Validate` 辅助函数随之删除。
+- **`std/sum` 保留当前 tagged struct 表示**。用户 enum 走类型断言，Option/Result 走 `sum.Tag*`，现有 `Tag` / `Value` / `Project` / `Validate` API 保留。密封接口统一安排在 MVP-6，与 safe std 一起验证变体携带完整泛型参数及公开 Go API 的变更。
 - **`Option[T]` 不做指针特化**。`T` 自身可空时无法区分 `None` 与 `Some(nil)`，代价不值得。
 
 ## 六、验收与提交

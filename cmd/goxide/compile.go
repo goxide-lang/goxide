@@ -106,12 +106,16 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		req.Input, err = project.DiscoverProject(cwd)
-		if err != nil {
-			return err
-		}
-		if req.Input == "" {
-			return errors.New("no goxide.toml found from the current directory upward; specify a source file or Go module directory")
+		if req.Mode == "transpile" && (req.Output == "" || req.Output == "-") {
+			req.Input = cwd
+		} else {
+			req.Input, err = project.DiscoverProject(cwd)
+			if err != nil {
+				return err
+			}
+			if req.Input == "" {
+				return errors.New("no goxide.toml found from the current directory upward; specify a source file or Go module directory")
+			}
 		}
 	}
 	if req.Mode != "run" && len(req.ProgramArgs) != 0 {
@@ -129,6 +133,18 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	input, err := filepath.Abs(req.Input)
 	if err != nil {
 		return err
+	}
+	if mode == "transpile" && (*dest == "" || *dest == "-") {
+		info, err := os.Stat(input)
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || filepath.Ext(input) == ".gox" {
+			return generatePackage(req, out)
+		}
+	}
+	if (mode == "transpile" || mode == "expand") && *dest == "-" {
+		*dest = ""
 	}
 	nativeGo := filepath.Ext(input) == ".go"
 	if info, statErr := os.Stat(input); statErr == nil && info.IsDir() {

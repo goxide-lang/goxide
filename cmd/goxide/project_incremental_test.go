@@ -23,15 +23,26 @@ func TestProjectDefaultDiscoveryAndStaleOutputs(t *testing.T) {
 	transpile := func(wantError string) string {
 		t.Helper()
 		var output, diagnostic bytes.Buffer
-		err := run([]string{"transpile", "--go", filepath.Join(runtime.GOROOT(), "bin", "go"), "--offline"}, &output, &diagnostic)
+		destination := filepath.Join(t.TempDir(), "export")
+		err := run([]string{"transpile", "-o", destination, "--go", filepath.Join(runtime.GOROOT(), "bin", "go"), "--offline"}, &output, &diagnostic)
 		if wantError != "" {
 			if err == nil || !strings.Contains(err.Error(), wantError) {
 				t.Fatalf("want %q: %v", wantError, err)
 			}
+			return ""
 		} else if err != nil {
 			t.Fatalf("%s: %v", &diagnostic, err)
 		}
-		return strings.TrimSpace(output.String())
+		if got, want := strings.TrimSpace(output.String()), filepath.Join(destination, "module"); got != want {
+			t.Fatalf("export path: got %q, want %q", got, want)
+		}
+		// Explicit export retains the managed project cache. Observe that cache,
+		// rather than each fresh export, when checking incremental generation.
+		generated, err := filepath.Glob(filepath.Join(root, "target", "units", "*", "*", "*", "*", "*", "bundle", "module"))
+		if err != nil || len(generated) != 1 {
+			t.Fatalf("managed module: %v %v", generated, err)
+		}
+		return generated[0]
 	}
 	generated := transpile("")
 	file := filepath.Join(generated, "src", "main.go")

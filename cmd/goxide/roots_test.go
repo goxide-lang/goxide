@@ -77,7 +77,7 @@ func TestCLIExplicitRootContexts(t *testing.T) {
 				t.Fatal(err)
 			}
 			var output bytes.Buffer
-			if err := run([]string{"transpile", "--roots", file, filepath.Join(app, "main.gox")}, &output, &output); err == nil {
+			if err := run([]string{"transpile", "-o", "-", "--roots", file, filepath.Join(app, "main.gox")}, &output, &output); err == nil {
 				t.Fatal("accepted a false package owner")
 			}
 		})
@@ -96,7 +96,7 @@ func TestCLIExplicitRootContexts(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", filepath.Join(app, "main.gox")}, &output, &output); err == nil {
+	if err := run([]string{"transpile", "-o", "-", filepath.Join(app, "main.gox")}, &output, &output); err == nil {
 		t.Fatal("unknown roots were inferred from module requirements")
 	}
 }
@@ -140,7 +140,7 @@ func TestCLIStandaloneRootContext(t *testing.T) {
 		rootconfig.Filename: "[roots.output]\nsource='toolchain'\npackage='fmt'\n",
 	})
 	var output bytes.Buffer
-	if err := run([]string{"transpile", filepath.Join(root, "main.gox")}, &output, &output); err != nil || !strings.Contains(output.String(), `"fmt"`) {
+	if err := run([]string{"transpile", "-o", "-", filepath.Join(root, "main.gox")}, &output, &output); err != nil || !strings.Contains(output.String(), `"fmt"`) {
 		t.Fatalf("standalone discovery: %v: %s", err, &output)
 	}
 	link := filepath.Join(t.TempDir(), "standalone-link.gox")
@@ -148,7 +148,7 @@ func TestCLIStandaloneRootContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", link}, &output, &output); err != nil {
+	if err := run([]string{"transpile", "-o", "-", link}, &output, &output); err != nil {
 		t.Fatalf("standalone context followed link directory instead of source: %v", err)
 	}
 	mapping := filepath.Join(root, "selected.toml")
@@ -156,18 +156,18 @@ func TestCLIStandaloneRootContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", "--roots", mapping, filepath.Join(root, "main.gox")}, &output, &output); err != nil {
+	if err := run([]string{"transpile", "-o", "-", "--roots", mapping, filepath.Join(root, "main.gox")}, &output, &output); err != nil {
 		t.Fatalf("standalone explicit context: %v: %s", err, &output)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", filepath.Join(root, "main.gox")}, &output, &output); err == nil {
+	if err := run([]string{"transpile", "-o", "-", filepath.Join(root, "main.gox")}, &output, &output); err == nil {
 		t.Fatal("standalone accepted an undeclared root")
 	}
 	if err := os.WriteFile(filepath.Join(root, "main.gox"), []byte("package main\nfunc main(){output::Println(42)}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", "--roots", mapping, filepath.Join(root, "main.gox")}, &output, &output); err == nil {
+	if err := run([]string{"transpile", "-o", "-", "--roots", mapping, filepath.Join(root, "main.gox")}, &output, &output); err == nil {
 		t.Fatal("declaring a root implicitly bound it in source")
 	}
 }

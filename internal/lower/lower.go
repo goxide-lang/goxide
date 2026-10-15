@@ -8,6 +8,7 @@ import (
 	"go/format"
 	"go/importer"
 	goparser "go/parser"
+	"go/printer"
 	gotoken "go/token"
 	"go/types"
 	"path/filepath"
@@ -46,6 +47,15 @@ func (d *Diagnostic) Error() string {
 // Lower 的输出键沿用输入文件名；调用方写盘时将 .gox 后缀换成 .go。
 // files 和 info 必须描述同一批 AST。失败时返回 nil，不返回部分输出。
 func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, error) {
+	return lower(files, info, emissionOptions{})
+}
+
+type emissionOptions struct {
+	lineDirectives bool
+	originals      map[string]*syntax.File
+}
+
+func lower(files map[string]*syntax.File, info *check.Info, options emissionOptions) (map[string][]byte, error) {
 	var res *resolve.Result
 	if info != nil {
 		res = info.Resolve
@@ -83,6 +93,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 	for _, name := range names {
 		tree := files[name]
 		e := &emitter{symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
+		e.lineDirectives, e.original = options.lineDirectives, options.originals[name]
 		if res != nil {
 			e.file = res.Files[name]
 		}
@@ -94,7 +105,11 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 			return nil, e.err
 		}
 		e.externalTest = externalTests[e.file.Scope.Parent]
-		e.tokenFile = fset.AddFile(name, -1, int(tree.Span().End)+256)
+		filename := name
+		if options.lineDirectives {
+			filename = filepath.Base(name)
+		}
+		e.tokenFile = fset.AddFile(filename, -1, int(tree.Span().End)+256)
 		e.base = gotoken.Pos(e.tokenFile.Base())
 		e.reserveNames()
 		e.reserveTraitNames()
@@ -129,6 +144,9 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 		}
 		e.addImports(f)
 		e.positions(f, fset)
+		if options.lineDirectives {
+			multilineSourceBodies(f, fset)
+		}
 		e.goFile = f
 		emitters = append(emitters, e)
 	}
@@ -136,7 +154,14 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 	out := make(map[string][]byte, len(files))
 	for _, e := range emitters {
 		var buf bytes.Buffer
-		if err := format.Node(&buf, fset, e.goFile); err != nil {
+		var err error
+		if options.lineDirectives {
+			config := printer.Config{Mode: printer.UseSpaces | printer.TabIndent | printer.SourcePos, Tabwidth: 8}
+			err = config.Fprint(&buf, fset, e.goFile)
+		} else {
+			err = format.Node(&buf, fset, e.goFile)
+		}
+		if err != nil {
 			e.fail(e.tree, "Go 输出格式化失败: "+err.Error())
 			return nil, e.err
 		}
@@ -351,6 +376,8 @@ type emitter struct {
 	imports            map[string]*importUse
 	reserved           map[string]bool
 	externalTest       bool
+	lineDirectives     bool
+	original           *syntax.File
 }
 
 func (e *emitter) samePackage(file string) bool {
@@ -384,13 +411,33 @@ func (e *emitter) pos(n syntax.Node) gotoken.Pos {
 	if n == nil || reflect.ValueOf(n).IsNil() {
 		return gotoken.NoPos
 	}
-	return gotoken.Pos(n.Span().Start) + e.base
+	return gotoken.Pos(e.sourceSpan(n).Start) + e.base
 }
 func (e *emitter) end(n syntax.Node) gotoken.Pos {
 	if n == nil || reflect.ValueOf(n).IsNil() {
 		return gotoken.NoPos
 	}
-	return gotoken.Pos(n.Span().End) + e.base
+	return gotoken.Pos(e.sourceSpan(n).End) + e.base
+}
+
+// Keep line attribution local to the generated file. Captured macro fragments
+// retain their caller origin; templates defined elsewhere use the nearest call
+// in this file rather than introducing a cross-file source mapping.
+func (e *emitter) sourceSpan(n syntax.Node) syntax.Span {
+	if e.lineDirectives && e.result != nil {
+		if origin, ok := e.result.Origins[resolve.Ref{File: e.name, ID: n.ID()}]; ok {
+			if origin.File == e.name {
+				return origin.Span
+			}
+			for index := len(origin.Stack) - 1; index >= 0; index-- {
+				call := e.result.Expansions[origin.Stack[index]].Call
+				if call.File == e.original {
+					return call.Span
+				}
+			}
+		}
+	}
+	return n.Span()
 }
 
 func (e *emitter) ident(id *syntax.Ident) *goast.Ident {
@@ -454,7 +501,7 @@ func (e *emitter) positions(f *goast.File, fset *gotoken.FileSet) {
 			}
 		}
 		sort.Ints(boundaries)
-		e.tokenFile = fset.AddFile(e.name, -1, offset(e.tokenFile.Size()))
+		e.tokenFile = fset.AddFile(e.tokenFile.Name(), -1, offset(e.tokenFile.Size()))
 		e.base = gotoken.Pos(e.tokenFile.Base())
 		seen := map[goast.Node]bool{}
 		goast.Inspect(f, func(node goast.Node) bool {

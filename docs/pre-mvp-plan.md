@@ -140,6 +140,14 @@ gofmt -l internal cmd
 
 退出：仓库里只剩下"现在支持什么"和它的测试。pre-MVP 到此完成。
 
+## P6.5a 已有 Go 项目试用入口
+
+交付：`gen` 作为 `transpile` 的别名，同包手写 Go 只读参与类型检查，`.gox` 原位生成带标记的 `_gox.go`；缺运行时依赖时给出 `go get` 命令，不自动改 `go.mod`。生成文件使用行级 `//line`，与 `go generate` 配合；使用方式见[用户指南](using-goxide-gen.md)。
+
+检查：真实 Go module 中的手写类型、函数与 enum/match 混合生成，执行 `go generate ./...`、`go build ./...`、`go run .`，再次生成保持字节一致；行映射、输出覆盖保护和依赖提示有对应测试。
+
+待办：网站用户指南页面从 `docs/using-goxide-gen.md` 单源生成。支持库的 tag 与编译器发布入口须对应已公开的依赖 pin。
+
 ## 后续阶段（MVP）
 
 pre-MVP 之后按下面的顺序重启被推迟的功能。这些不属本次规划，只记录顺序，细节另行设计。
@@ -150,10 +158,12 @@ pre-MVP 之后按下面的顺序重启被推迟的功能。这些不属本次规
 | MVP-2 | `import-go`：把已有 Go 工程迁入统一项目模型；重接 `cmd/goxide` 的迁入入口 |
 | MVP-3 | vendor 迁入与供应来源选择；重启 `internal/project` 的 vendor 与来源部分 |
 | MVP-4 | 构建脚本授权：重启 `internal/buildscript` 与 `internal/scripttrust` 的 CLI 入口 |
-| MVP-5 | LSP：诊断、符号导航、悬停、补全，与编译器共用同一套查询结果 |
-| MVP-6 | safe std 首批入口、锁与集合类型 |
+| MVP-5 | LSP：诊断、符号导航、悬停、补全，与编译器共用同一套查询结果；补充完整 source map、列级与跨文件映射 |
+| MVP-6 | safe std 首批入口、锁与集合类型；将 `std/sum` 的 Option/Result 从 tagged struct 统一为密封接口 |
 
 顺序依据：workspace 与迁入都要求统一项目模型先稳定（P5 的最小 `goxide.toml` 是它的种子）；LSP 要求前面各阶段的语义表齐备。
+
+`std/sum` 表示统一与 MVP-6 一起设计和验收：`Some[T]`、`Err[T, E]` 等变体必须携带 enum 的全部类型参数，且调整将改变公开 Go API。P6.5a 保持当前表示。
 
 ## 已定事项（2026-10-13）
 

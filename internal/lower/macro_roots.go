@@ -2,6 +2,7 @@ package lower
 
 import (
 	"fmt"
+	"go/types"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/paths"
@@ -16,12 +17,18 @@ type rootRequirement struct {
 	namespace paths.Namespace
 }
 
-func (r rootRequirement) check(owners map[string]string, external *moduleGoImporter) error {
+func (r rootRequirement) check(owners map[string]string, external types.Importer) error {
 	owner, local := owners[r.namespace.PackagePath]
 	standard := false
 	var err error
 	if !local {
-		owner, standard, err = external.PackageOrigin(r.namespace.PackagePath)
+		if source, ok := external.(interface {
+			PackageOrigin(string) (string, bool, error)
+		}); ok {
+			owner, standard, err = source.PackageOrigin(r.namespace.PackagePath)
+		} else {
+			err = fmt.Errorf("Go importer cannot verify package ownership")
+		}
 	}
 	if err == nil {
 		if r.namespace.Source == "toolchain" {

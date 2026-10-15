@@ -177,7 +177,20 @@ func (e *emitter) expr(n syntax.Expr) (out goast.Expr) {
 	if x := e.replacements[n]; x != nil {
 		return x
 	}
-	defer func() { out = e.traitView(n, out) }()
+	pendingStart := len(e.pending)
+	defer func() {
+		out = e.traitView(n, out)
+		if e.lineDirectives {
+			if id, ok := out.(*goast.Ident); ok && !id.NamePos.IsValid() {
+				copy := *id
+				out = &copy
+			}
+			e.anchor(out, n)
+			if pendingStart < len(e.pending) {
+				e.anchorStatements(e.pending[pendingStart:], n)
+			}
+		}
+	}()
 	if e.assignmentGuard != nil {
 		return e.assignmentExpr(n)
 	}

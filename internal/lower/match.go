@@ -24,7 +24,8 @@ type matchPayload struct {
 	refs   []goast.Expr
 }
 
-func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.Stmt {
+func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) (output []goast.Stmt) {
+	defer func() { e.anchorStatements(output, n) }()
 	e.matchDepth++
 	defer func() { e.matchDepth-- }()
 	info := e.info.Matches[n]
@@ -120,6 +121,9 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.S
 	body := &goast.BlockStmt{}
 	for _, group := range groups {
 		clause := &goast.CaseClause{}
+		if e.lineDirectives && len(group.arms) > 0 {
+			clause.Case = e.pos(group.arms[0])
+		}
 		if info.Enum.Enum.Builtin {
 			clause.List = []goast.Expr{integer(variantTag(group.variant.Name))}
 		} else {
@@ -133,6 +137,9 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) []goast.S
 		}
 		clause.Body = append(clause.Body, setup...)
 		clause.Body = append(clause.Body, e.matchArms(info.Enum, group.variant, payload, group.arms, target)...)
+		if len(group.arms) > 0 {
+			e.anchor(clause, group.arms[0])
+		}
 		body.List = append(body.List, clause)
 	}
 	otherwise := &goast.CaseClause{}
@@ -259,7 +266,12 @@ func (e *emitter) eachMatchField(variant *check.Variant, pat syntax.Pat, visit f
 	}
 }
 
-func (e *emitter) matchArms(instance *check.Instance, variant *check.Variant, payload matchPayload, arms []*syntax.MatchArm, target *goast.Ident) []goast.Stmt {
+func (e *emitter) matchArms(instance *check.Instance, variant *check.Variant, payload matchPayload, arms []*syntax.MatchArm, target *goast.Ident) (output []goast.Stmt) {
+	defer func() {
+		if len(arms) > 0 {
+			e.anchorStatements(output, arms[0])
+		}
+	}()
 	if len(arms) == 0 {
 		return []goast.Stmt{matchPanic("goxide: non-exhaustive match " + instance.Enum.Name)}
 	}
@@ -348,7 +360,8 @@ func (e *emitter) matchArms(instance *check.Instance, variant *check.Variant, pa
 	return []goast.Stmt{&goast.IfStmt{Cond: cond, Body: &goast.BlockStmt{List: inside}, Else: matchElse(next)}}
 }
 
-func (e *emitter) matchArmBody(arm *syntax.MatchArm, target *goast.Ident) []goast.Stmt {
+func (e *emitter) matchArmBody(arm *syntax.MatchArm, target *goast.Ident) (output []goast.Stmt) {
+	defer func() { e.anchorStatements(output, arm) }()
 	if arm.Block != nil {
 		return e.stmts(arm.Block.List)
 	}

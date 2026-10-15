@@ -69,6 +69,9 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		if mode == "run" {
 			c.Use = "run [flags] [INPUT] [-- PROGRAM_ARGS...]"
 		}
+		if mode == "transpile" {
+			c.Aliases = []string{"gen"}
+		}
 		f := c.Flags()
 		f.StringVarP(&req.Output, "o", "o", "", "output source/directory (transpile), expanded source (expand), or binary (build)")
 		f.StringVar(&req.SourceMap, "source-map", "", "write single-file source mapping JSON")
@@ -223,7 +226,7 @@ func usageError(c *cobra.Command, err error) error {
 
 func childCommand(c *cobra.Command, name string) *cobra.Command {
 	for _, child := range c.Commands() {
-		if child.Name() == name {
+		if child.Name() == name || child.HasAlias(name) {
 			return child
 		}
 	}

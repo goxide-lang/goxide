@@ -10,7 +10,12 @@ import (
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
 
-func (e *emitter) enumDecl(n *syntax.EnumDecl) []goast.Decl {
+func (e *emitter) enumDecl(n *syntax.EnumDecl) (decls []goast.Decl) {
+	defer func() {
+		for _, declaration := range decls {
+			e.anchor(declaration, n)
+		}
+	}()
 	info := e.info.Enums[n]
 	if info == nil {
 		e.fail(n, "缺少 enum 类型检查结果")
@@ -39,14 +44,18 @@ func (e *emitter) enumDecl(n *syntax.EnumDecl) []goast.Decl {
 	}
 	methods = append(methods, e.enumTraitMethods(info.Type)...)
 	position := gotoken.NoPos
-	if len(e.tree.Comments) > 0 {
+	if e.lineDirectives || len(e.tree.Comments) > 0 {
 		position = e.pos(n)
 	}
-	decls := []goast.Decl{&goast.GenDecl{TokPos: position, Tok: gotoken.TYPE, Specs: []goast.Spec{&goast.TypeSpec{
+	decls = []goast.Decl{&goast.GenDecl{TokPos: position, Tok: gotoken.TYPE, Specs: []goast.Spec{&goast.TypeSpec{
 		Name: goast.NewIdent(info.GoName), TypeParams: e.enumGenerics(n.Generics),
 		Type: &goast.InterfaceType{Methods: &goast.FieldList{List: methods}},
 	}}}}
 	for _, v := range info.Variants {
+		start := len(decls)
+		if e.lineDirectives {
+			position = e.pos(v.Decl)
+		}
 		var fields []*goast.Field
 		for _, f := range v.Fields {
 			fields = append(fields, &goast.Field{Names: []*goast.Ident{goast.NewIdent(f.GoName)}, Type: e.goType(f.Type)})
@@ -61,6 +70,9 @@ func (e *emitter) enumDecl(n *syntax.EnumDecl) []goast.Decl {
 			Type: &goast.FuncType{Func: position, Params: markerParams()}, Body: &goast.BlockStmt{},
 		})
 		decls = append(decls, e.enumTraitDeclarations(info.Type, recv)...)
+		for _, declaration := range decls[start:] {
+			e.anchor(declaration, v.Decl)
+		}
 	}
 	return decls
 }

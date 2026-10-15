@@ -187,9 +187,9 @@ func TestCLIProcessContract(t *testing.T) {
 		})
 	}
 	for _, args := range [][]string{
-		{"transpile", "--go", "-offline", "input.gox"},
-		{"transpile", "--offline=false", "--offline=false", "input.gox"},
-		{"transpile", "--", "-go"},
+		{"transpile", "-o", "-", "--go", "-offline", "input.gox"},
+		{"transpile", "-o", "-", "--offline=false", "--offline=false", "input.gox"},
+		{"transpile", "-o", "-", "--", "-go"},
 	} {
 		t.Run("accepted/"+strings.Join(args, "_"), func(t *testing.T) {
 			got := execute(t, fixture(t), args...)

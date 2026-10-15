@@ -37,7 +37,7 @@ func TestNativeGoSingleFileCLI(t *testing.T) {
 			}
 			for _, mode := range []string{"transpile", "expand"} {
 				var out, diagnostic bytes.Buffer
-				if err := run([]string{mode, input}, &out, &diagnostic); err != nil {
+				if err := run([]string{mode, "-o", "-", input}, &out, &diagnostic); err != nil {
 					t.Fatalf("%s: %v: %s", mode, err, &diagnostic)
 				}
 				if out.String() != source {

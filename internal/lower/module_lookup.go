@@ -13,7 +13,7 @@ import (
 
 type moduleImporter struct {
 	local      map[string]*resolve.Scope
-	external   *moduleGoImporter
+	external   types.Importer
 	cache      map[string]*types.Package
 	namespaces map[string]rootRequirement
 	owners     map[string]string
@@ -280,7 +280,7 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 					use.Target = strings.Split(requirement.namespace.PackagePath, "/")
 				}
 				if !i.SourcePackage(use.Target) {
-					if _, _, err := i.external.PackageOrigin(strings.Join(use.Target, "/")); err != nil {
+					if _, err := i.external.Import(strings.Join(use.Target, "/")); err != nil {
 						return fail(err.Error())
 					}
 				}

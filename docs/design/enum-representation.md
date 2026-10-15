@@ -143,9 +143,9 @@ match 的规则（单次分派、同变体 arm 按源码顺序、内层 if 链�
 
 ### 6.2 本阶段不改 std/sum 的原因
 
-`std/sum` 同时服务旧管线与新管线，而旧管线要到 P6 才删除。若现在把它改成密封接口形状，旧管线的生成代码与验收测试会一并失效，等于提前做 P6 的一部分。
+`std/sum` 当前保留 tagged struct 表示及 `Tag` / `Value` / `Project` / `Validate` API。表示统一在 [MVP-6](../pre-mvp-plan.md#后续阶段mvp) 与 safe std 一起设计和验收：`Some[T]`、`Err[T, E]` 等变体必须携带 enum 的全部类型参数，且变更会调整公开 Go API。
 
-因此分层推进：本阶段只让新管线支持"两类分派"，`std/sum` 的表示统一推迟到 P6（旧管线删除时）。届时 Option / Result 改为与用户 enum 相同的密封接口形状，`match` 的分派方式也随之统一，`TagOption` / `ValueSome` / `ProjectSome` / `ValidateOption` 等入口随之删除。
+在该阶段完成前，编译器继续使用上述两类分派；P6 删除旧管线及 P6.5a 的 `gen` 入口均不改变 `std/sum` 的公开表示。
 
 ### 6.3 `Option[T]` 的指针特化已取消
 

@@ -8,7 +8,7 @@ import (
 )
 
 func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
-	defer func() { e.macroLayout(n, out) }()
+	defer func() { e.macroLayout(n, out); e.anchor(out, n) }()
 	if n == nil {
 		return nil
 	}

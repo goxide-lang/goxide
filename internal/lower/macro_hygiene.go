@@ -356,7 +356,7 @@ func (e *emitter) macroReference(id *syntax.Ident, symbol *resolve.Symbol) (goas
 
 // Template offsets belong to their definition file, not the generated Go file.
 func (e *emitter) macroLayout(source syntax.Node, output goast.Node) {
-	if e.err != nil || source == nil || output == nil || e.result.Origins[resolve.Ref{File: e.name, ID: source.ID()}].Expn == 0 {
+	if e.lineDirectives || e.err != nil || source == nil || output == nil || e.result.Origins[resolve.Ref{File: e.name, ID: source.ID()}].Expn == 0 {
 		return
 	}
 	var ellipses []*goast.CallExpr

@@ -2,7 +2,7 @@
 
 工作在从最新 `main` 开出的短期分支，普通 push 后创建 Draft PR，正文关联 issue、
 准确源码/验证 SHA 和已知缺口。CI 配置的变更独立提交，不混入已验收功能分支。
-本流程不自动合并、发布、关闭 issue 或修改分支保护。
+普通 CI 不自动合并、发布、关闭 issue 或修改分支保护；发布由下述语义版本 tag 工作流单独触发。
 
 | 触发 / 层 | 检查范围 |
 | --- | --- |
@@ -42,5 +42,22 @@ CI 尚未调用浏览器验收；接入时先在实际 runner 确认保留 sandb
 
 A03 宏/Eq 组合的来源丢失由 [PR #10](https://github.com/goxide-lang/goxide/pull/10)
 修复，具体验收见 [issue #6](https://github.com/goxide-lang/goxide/issues/6)；这不代表全部
-A03 lowering 路径完成。工作流只有 `contents: read`，checkout 不保留凭据，
+A03 lowering 路径完成。普通 CI 工作流只有 `contents: read`，checkout 不保留凭据，
 不使用 `pull_request_target`、secrets 或发布服务。
+
+## Tag Release
+
+推送 `v` 前缀的 SemVer tag（如 `v0.0.1`）自动触发 `Release`；也可手动输入已存在的
+tag 重试未完成的发布。工作流始终解析 `refs/tags/<tag>` 并固定对应提交，所有平台使用
+准备阶段解析的同一 Go 补丁版本。`checks` 复用上述完整 CI 门禁，构建任务在五个原生 runner
+上分别生成 macOS / Linux amd64、arm64，以及 Windows amd64 的 CLI 包。
+
+归档包含可执行文件、许可证与安装说明；版本来自 tag，可用 `goxide --version` 查看。
+每个平台都解压归档后，真实执行快速开始多包项目的生成、运行、构建和 race 测试。
+CLI 要求本地 Go 版本与构建版本完全一致（包括补丁号）；`test` 另需 C 编译器。
+Windows arm64 暂未纳入发布矩阵，因为当前 Go race detector 不支持该目标。
+
+只有全部检查和平台任务成功后，发布任务才使用 `contents: write` 创建草稿、上传完整归档
+与 `checksums.txt`，最后公开 Release。已公开的资产不覆盖；失败时可重试尚未公开的草稿。
+`v0.*` 和带预发布标识的 tag 均标为 GitHub prerelease，且不设为 latest。
+pre-1.0 是实验阶段，语言、CLI、配置及生成代码仍可在 patch / minor 版本中发生破坏性变更。

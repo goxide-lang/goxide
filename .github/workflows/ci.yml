@@ -6,6 +6,14 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        type: string
+        required: true
+      go_version:
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -29,6 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Select the website job
@@ -69,6 +78,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -76,6 +86,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
+          go-version: ${{ inputs.go_version }}
           go-version-file: go.mod
           cache-dependency-path: go.sum
       - name: Prepare the pinned module graph
@@ -113,6 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -120,6 +132,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
+          go-version: ${{ inputs.go_version }}
           go-version-file: go.mod
           cache-dependency-path: go.sum
       - name: Prepare the pinned module graph

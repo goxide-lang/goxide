@@ -429,6 +429,8 @@ func (c *checker) patternConstant(p ast.Pat) string {
 
 func (c *checker) constant(e ast.Expr) constant.Value {
 	switch e := e.(type) {
+	case *ast.BoolLit:
+		return constant.MakeBool(e.Value)
 	case *ast.BasicLit:
 		for _, kind := range []gotoken.Token{gotoken.INT, gotoken.FLOAT, gotoken.IMAG, gotoken.CHAR, gotoken.STRING} {
 			if kind.String() == e.Kind.String() {

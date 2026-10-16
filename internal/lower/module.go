@@ -28,6 +28,7 @@ import (
 type Module struct {
 	Path, Dir, GoTool string
 	Roots             paths.Roots
+	Features          expand.Features
 	Context           context.Context
 	Environment       []string
 }
@@ -41,6 +42,8 @@ func CompileModules(modules []Module) (err error) {
 		return fmt.Errorf("at least one staging module is required")
 	}
 	files := map[string]*syntax.File{}
+	features := map[*syntax.File]expand.Features{}
+	rootConfigs := map[*syntax.File]moduleRootConfig{}
 	var expanded *expand.Result
 	defer func() { err = FormatSourceDiagnostic(err, files, nil, expanded) }()
 	diskNames := map[string]string{}
@@ -88,6 +91,11 @@ func CompileModules(modules []Module) (err error) {
 					return &Diagnostic{File: key, Span: d.Span, Message: d.Message, Origin: resolve.Origin{File: key, Span: d.Span}}
 				}
 			}
+			if _, err := expand.Configure(file, module.Features); err != nil {
+				return err
+			}
+			features[file] = module.Features
+			rootConfigs[file] = moduleRootConfig{module.Path, key, roots}
 			requirements = append(requirements, applyModuleRoots(module.Path, key, file, roots)...)
 			diskNames[key] = name
 			owners[path.Dir(key)] = module.Path
@@ -133,16 +141,21 @@ func CompileModules(modules []Module) (err error) {
 		sourcePackages = append(sourcePackages, source)
 	}
 	macros := &moduleMacros{files: files, resolved: packages, imports: imports}
-	if err := macros.checkCycles(); err != nil {
-		return err
+	expanded, err = expand.ExpandPackages(sourcePackages, macros, features)
+	if cycle := macros.checkCycles(expanded); cycle != nil {
+		return cycle
 	}
-	expanded, err = expand.ExpandPackages(sourcePackages, macros)
 	if imports.err != nil {
 		return imports.err
 	}
 	if err != nil {
 
 		return err
+	}
+	for _, requirement := range applyExpandedRoots(expanded, rootConfigs) {
+		if _, exists := imports.namespaces[requirement.target]; !exists {
+			imports.namespaces[requirement.target] = requirement
+		}
 	}
 	resolved := resolve.ResolveExpanded(files, expanded, imports)
 	if imports.err != nil {

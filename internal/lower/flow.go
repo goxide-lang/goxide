@@ -233,7 +233,7 @@ func assign(id goast.Expr, value goast.Expr) goast.Stmt {
 
 func (e *emitter) constant(n syntax.Expr) bool {
 	switch n := n.(type) {
-	case *syntax.BasicLit, *syntax.TypeExpr:
+	case *syntax.BasicLit, *syntax.BoolLit, *syntax.TypeExpr:
 		return true
 	case *syntax.ParenExpr:
 		return e.constant(n.X)

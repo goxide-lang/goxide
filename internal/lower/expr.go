@@ -35,6 +35,19 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		return e.reference(n)
 	case *syntax.BasicLit:
 		return &goast.BasicLit{ValuePos: e.pos(n), Kind: tokenKind(n.Kind), Value: n.Value}
+	case *syntax.BoolLit:
+		name := "false"
+		if n.Value {
+			name = "true"
+		}
+		if e.booleanShadowed(name) {
+			op := gotoken.NEQ
+			if n.Value {
+				op = gotoken.EQL
+			}
+			return &goast.BinaryExpr{X: &goast.BasicLit{ValuePos: e.pos(n), Kind: gotoken.INT, Value: "0"}, Op: op, Y: &goast.BasicLit{Kind: gotoken.INT, Value: "0"}}
+		}
+		return &goast.Ident{NamePos: e.pos(n), Name: name}
 	case *syntax.CompositeLit:
 		brace := e.pos(n)
 		if n.Type != nil {

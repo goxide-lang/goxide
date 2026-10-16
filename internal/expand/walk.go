@@ -113,6 +113,9 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 		if err != nil {
 			return v, err
 		}
+		if !x.IsValid() {
+			return x, nil
+		}
 		out := reflect.New(v.Type()).Elem()
 		out.Set(x)
 		return out, nil
@@ -124,6 +127,18 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 		switch n := v.Interface().(type) {
 		case *ast.TokenTree, *ast.Attr:
 			return v, nil
+		case *ast.UseDecl:
+			if n.Tree != nil && n.Tree.Path != nil && !n.Tree.Glob && len(n.Tree.Path.Segments) > 0 {
+				name := n.Tree.Alias
+				if name == nil {
+					name = n.Tree.Path.Segments[len(n.Tree.Path.Segments)-1].Name
+				}
+				if name.Name == "cfg" {
+					if _, err := e.lookup(n.Tree.Path, file); err == nil {
+						return v, e.selection(file).fail(n, "reserved built-in macro alias cfg")
+					}
+				}
+			}
 		case *ast.MacroRulesDecl:
 			return v, &Diagnostic{Code: "template", Message: "templates cannot generate macro definitions", Definition: e.r.Origins[n], Call: e.r.Expansions[parent].Call, Expn: parent}
 		case *ast.MacroExpr:
@@ -206,7 +221,9 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 			if err != nil {
 				return v, err
 			}
-			out = reflect.Append(out, x)
+			if x.IsValid() {
+				out = reflect.Append(out, x)
+			}
 		}
 		return out, nil
 	}

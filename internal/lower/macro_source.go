@@ -9,7 +9,6 @@ import (
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/resolve"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
 )
 
 type moduleMacros struct {
@@ -18,9 +17,9 @@ type moduleMacros struct {
 	imports  *moduleImporter
 }
 
-// Macro rules retain source dependencies even when no invocation emits a Go
-// import. Inspect fixed macro paths; captures and $caller paths are call-owned.
-func (m *moduleMacros) checkCycles() error {
+// Actual expansions retain source dependencies even when no Go import remains.
+// Calls inside items removed by cfg never enter this graph.
+func (m *moduleMacros) checkCycles(expanded *expand.Result) error {
 	var names []string
 	fileNames := make(map[*syntax.File]string, len(m.files))
 	for name, file := range m.files {
@@ -29,38 +28,19 @@ func (m *moduleMacros) checkCycles() error {
 	}
 	sort.Strings(names)
 	graph := map[string][]moduleImport{}
-	for _, name := range names {
-		file := m.files[name]
+	ids := make([]syntax.ExpnID, 0, len(expanded.Expansions))
+	for id := range expanded.Expansions {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	for _, id := range ids {
+		frame := expanded.Expansions[id]
+		name, target := fileNames[frame.Call.File], fileNames[frame.Definition.File]
 		owner := filepath.ToSlash(filepath.Dir(name))
-		if graph[owner] == nil {
-			graph[owner] = []moduleImport{}
-		}
-		for _, item := range file.Items {
-			decl, ok := item.(*syntax.MacroRulesDecl)
-			if !ok {
-				continue
-			}
-			for _, rule := range decl.Rules {
-				for _, call := range macroTemplatePaths(rule.Template, decl.Name.Ctx) {
-					if len(call.Segments) == 1 {
-						switch call.Segments[0].Name.Name {
-						case "print", "println", "go_result", "go_result_keep":
-							continue
-						}
-					}
-					previousError := m.imports.err
-					_, target, err := m.LookupMacro(call, expand.Scope{File: file, Ctx: decl.Name.Ctx})
-					m.imports.err = previousError
-					if err != nil || target == nil {
-						// Invalid or call-dependent paths are diagnosed if invoked.
-						continue
-					}
-					dependency := filepath.ToSlash(filepath.Dir(fileNames[target]))
-					if dependency != owner {
-						graph[owner] = append(graph[owner], moduleImport{target: dependency, file: name, span: call.Span(), origin: resolve.Origin{File: name, Span: call.Span()}})
-					}
-				}
-			}
+		dependency := filepath.ToSlash(filepath.Dir(target))
+		if owner != dependency {
+			origin := resolve.Origin{File: name, Span: frame.Call.Span, Expn: id, Stack: frame.Stack}
+			graph[owner] = append(graph[owner], moduleImport{target: dependency, file: name, span: frame.Call.Span, origin: origin})
 		}
 	}
 	states := map[string]uint8{}
@@ -97,41 +77,6 @@ func (m *moduleMacros) checkCycles() error {
 		}
 	}
 	return nil
-}
-
-func macroTemplatePaths(tree *syntax.TokenTree, ctx syntax.SyntaxCtx) []*syntax.Path {
-	var paths []*syntax.Path
-	for i, part := range tree.Tokens {
-		if part.Tree != nil {
-			paths = append(paths, macroTemplatePaths(part.Tree, ctx)...)
-			continue
-		}
-		if part.Token == nil || part.Token.Kind != token.IDENT {
-			continue
-		}
-		if i > 0 {
-			previous := tree.Tokens[i-1].Token
-			if previous != nil && (previous.Kind == token.DOLLAR || previous.Kind == token.DCOLON) {
-				continue
-			}
-		}
-		path := &syntax.Path{Base: syntax.Base{Loc: syntax.Span{Start: part.Token.Start, End: part.Token.End}}}
-		j := i
-		for {
-			name := tree.Tokens[j].Token
-			base := syntax.Base{Loc: syntax.Span{Start: name.Start, End: name.End}}
-			path.Segments = append(path.Segments, &syntax.PathSegment{Base: base, Name: &syntax.Ident{Base: base, Name: name.Text, Raw: name.Raw, Ctx: ctx}})
-			path.Loc.End = name.End
-			if j+2 >= len(tree.Tokens) || tree.Tokens[j+1].Token == nil || tree.Tokens[j+1].Token.Kind != token.DCOLON || tree.Tokens[j+2].Token == nil || tree.Tokens[j+2].Token.Kind != token.IDENT {
-				break
-			}
-			j += 2
-		}
-		if j+2 < len(tree.Tokens) && tree.Tokens[j+1].Token != nil && tree.Tokens[j+1].Token.Kind == token.NOT && tree.Tokens[j+2].Tree != nil {
-			paths = append(paths, path)
-		}
-	}
-	return paths
 }
 
 func (m *moduleMacros) LookupMacro(path *syntax.Path, scope expand.Scope) (*syntax.MacroRulesDecl, *syntax.File, error) {

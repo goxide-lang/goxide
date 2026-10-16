@@ -15,6 +15,9 @@ func (e *engine) builtin(n ast.Node, path *ast.Path, args *ast.TokenTree, kind f
 		return nil, false, nil
 	}
 	name := path.Segments[0].Name.Name
+	if name == "cfg" {
+		return e.cfg(n, args, kind, file, parent)
+	}
 	if name == "go_result" || name == "go_result_keep" {
 		return e.goResult(n, path, args, kind, file, parent)
 	}

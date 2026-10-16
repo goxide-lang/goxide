@@ -38,6 +38,8 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		} else {
 			t = c.pathType(n.Path)
 		}
+	case *ast.BoolLit:
+		t = types.Typ[types.UntypedBool]
 	case *ast.BasicLit:
 		switch n.Kind {
 		case token.INT:

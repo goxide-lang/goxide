@@ -69,16 +69,19 @@ type Resolver interface {
 }
 
 type Result struct {
-	Allocations   map[*ast.CallExpr]bool
-	Captures      map[ast.Node]Capture
-	GoResults     map[*ast.CallExpr]bool
-	Prints        map[*ast.CallExpr]bool
-	Files         []*ast.File
-	Expansions    map[ast.ExpnID]Expansion
-	Contexts      map[ast.SyntaxCtx]Context
-	Origins       map[ast.Node]Origin
-	Scopes        map[*ast.Ident]Scope
-	TokenContexts map[*token.Token]TokenContext
+	// UsesConfiguration includes evaluated source and macro-produced constructs,
+	// even when a false predicate removes the entire generated item.
+	UsesConfiguration bool
+	Allocations       map[*ast.CallExpr]bool
+	Captures          map[ast.Node]Capture
+	GoResults         map[*ast.CallExpr]bool
+	Prints            map[*ast.CallExpr]bool
+	Files             []*ast.File
+	Expansions        map[ast.ExpnID]Expansion
+	Contexts          map[ast.SyntaxCtx]Context
+	Origins           map[ast.Node]Origin
+	Scopes            map[*ast.Ident]Scope
+	TokenContexts     map[*token.Token]TokenContext
 	// Introductions preserves the template key of a generated package binding.
 	// resolve registers that key as well as the identifier's caller key.
 	Introductions map[*ast.Ident]Key
@@ -121,6 +124,7 @@ type definition struct {
 type engine struct {
 	r                    *Result
 	resolver             Resolver
+	features             map[*ast.File]Features
 	defs                 map[Key]definition
 	localFiles           map[*ast.File]bool
 	captured             map[ast.Node]bool
@@ -135,18 +139,26 @@ type engine struct {
 // Expand collects every file's definitions before expanding any invocation.
 // On failure Files is nil, while the tables retain the failing expansion stack.
 // Files must belong to one package. Pass nil for resolver for local source only.
-func Expand(files []*ast.File, resolver Resolver) (*Result, error) {
-	return ExpandPackages([][]*ast.File{files}, resolver)
+func Expand(files []*ast.File, resolver Resolver, configs ...map[*ast.File]Features) (*Result, error) {
+	return ExpandPackages([][]*ast.File{files}, resolver, configs...)
 }
 
 // ExpandPackages keeps package definitions separate while assigning expansion
 // identities across the complete source graph.
-func ExpandPackages(packages [][]*ast.File, resolver Resolver) (*Result, error) {
+func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*ast.File]Features) (*Result, error) {
 	e := &engine{r: &Result{Expansions: map[ast.ExpnID]Expansion{}, Contexts: map[ast.SyntaxCtx]Context{},
 		Origins: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}}, resolver: resolver,
 		defs: map[Key]definition{}, trees: map[*ast.TokenTree][]syntaxToken{}, localFiles: map[*ast.File]bool{}, captured: map[ast.Node]bool{}, lexical: map[ast.Node]Scope{}, originals: map[ast.Node]ast.Node{}}
+	if len(configs) > 0 {
+		e.features = configs[0]
+	}
 	for _, files := range packages {
 		for _, f := range files {
+			used, err := Configure(f, e.features[f])
+			e.r.UsesConfiguration = e.r.UsesConfiguration || used
+			if err != nil {
+				return e.r, err
+			}
 			e.reserve(f)
 		}
 	}
@@ -159,7 +171,7 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver) (*Result, error) 
 			for _, item := range f.Items {
 				if d, ok := item.(*ast.MacroRulesDecl); ok {
 					k := Key{d.Name.Name, d.Name.Ctx}
-					if k.Name == "go_result" || k.Name == "go_result_keep" {
+					if k.Name == "cfg" || k.Name == "go_result" || k.Name == "go_result_keep" {
 						return e.r, &Diagnostic{Code: "definition", Message: "reserved built-in macro " + k.Name,
 							Definition: Origin{f, d.Span()}, Call: Origin{f, d.Span()}}
 					}
@@ -182,7 +194,11 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver) (*Result, error) 
 				if err != nil {
 					return e.r, err
 				}
-				items = append(items, v.Interface().(ast.Item))
+				if v.IsValid() {
+					items = append(items, v.Interface().(ast.Item))
+				} else {
+					dropItemComments(n, n.Items[i])
+				}
 			}
 			n.Items = items
 			var id ast.NodeID
@@ -353,17 +369,31 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 		}
 		return fail(code, err, span)
 	}
-	if item, ok := out.(ast.Item); ok && !e.captured[out] {
-		destination := Scope{file, caller.Ctx}
-		// Package items escape all template marks to the source invocation.
-		for c, ok := e.r.Contexts[destination.Ctx]; ok; c, ok = e.r.Contexts[destination.Ctx] {
-			destination.Ctx = c.Caller.Ctx
+	if item, ok := out.(ast.Item); ok {
+		keep, err := e.selection(file).item(item)
+		if err != nil {
+			return nil, err
 		}
-		e.introduce(item, destination)
+		if !keep {
+			return nil, nil
+		}
+		if !e.captured[out] {
+			destination := Scope{file, caller.Ctx}
+			// Package items escape all template marks to the source invocation.
+			for c, ok := e.r.Contexts[destination.Ctx]; ok; c, ok = e.r.Contexts[destination.Ctx] {
+				destination.Ctx = c.Caller.Ctx
+			}
+			e.introduce(item, destination)
+		}
+	} else if err := e.selection(file).children(out); err != nil {
+		return nil, err
 	}
 	v, err := e.rewrite(reflect.ValueOf(out), file, id)
 	if err != nil {
 		return nil, err
+	}
+	if !v.IsValid() {
+		return nil, nil
 	}
 	return v.Interface().(ast.Node), nil
 }

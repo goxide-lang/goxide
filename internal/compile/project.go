@@ -8,8 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
@@ -18,7 +20,10 @@ import (
 type Options struct {
 	Bin, GoTool, TargetDir string
 	Offline, Locked        bool
-	Roots                  paths.Roots // Optional root-module namespace context for native directory inputs.
+	Features               []string
+	NoDefaultFeatures      bool
+	NativeFeatures         *expand.Features // Native directory inputs keep an open root feature set.
+	Roots                  paths.Roots      // Optional root-module namespace context for native directory inputs.
 }
 
 // Result names a stable generated Go module and its selected binary package.
@@ -51,10 +56,6 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err := supportedManifest(manifest); err != nil {
 		return nil, err
 	}
-	target, err := project.Select(manifest, options.Bin, "", nil)
-	if err != nil {
-		return nil, err
-	}
 	tool := options.GoTool
 	if tool == "" {
 		tool = filepath.Join(runtime.GOROOT(), "bin", "go")
@@ -68,11 +69,17 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		return nil, err
 	}
 	defer release()
-	graph, err := project.LoadWithTarget(root, tool, nil, false, options.Offline, options.Locked, options.TargetDir)
+	graph, err := project.LoadWithTarget(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, options.TargetDir)
 	if err != nil {
 		return nil, err
 	}
+	target, err := project.Select(manifest, options.Bin, "", graph.Root.Features)
+	if err != nil {
+		return nil, err
+	}
+	features := make(map[string]expand.Features, len(graph.Nodes))
 	for _, node := range graph.Nodes {
+		configuration := expand.Features{Enabled: node.Features}
 		if node.HasManifest {
 			if err := singleProject(node.Root); err != nil {
 				return nil, err
@@ -80,7 +87,15 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 			if err := supportedManifest(node.Manifest); err != nil {
 				return nil, fmt.Errorf("%s: %w", node.Module, err)
 			}
+			configuration.Declared = make(map[string]bool, len(node.Manifest.Features))
+			for name := range node.Manifest.Features {
+				configuration.Declared[name] = true
+			}
 		}
+		if node == graph.Root && options.NativeFeatures != nil {
+			configuration = *options.NativeFeatures
+		}
+		features[node.Module] = configuration
 	}
 	layout, err := project.OpenLayout(root, manifest.Module, options.TargetDir)
 	if err != nil {
@@ -93,7 +108,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 			return nil, fmt.Errorf("target directory overlaps source module %s", node.Module)
 		}
 	}
-	spec, err := unitSpec(graph, target, environment)
+	spec, err := unitSpec(graph, target, environment, features)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +156,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 			roots = options.Roots
 		}
 		generated[node.Module] = output
-		modules = append(modules, lower.Module{Path: node.Module, Dir: output, GoTool: tool, Roots: roots})
+		modules = append(modules, lower.Module{Path: node.Module, Dir: output, GoTool: tool, Roots: roots, Features: features[node.Module]})
 	}
 	if err := prepareModules(graph, generated); err != nil {
 		return nil, err
@@ -201,22 +216,13 @@ func supportedManifest(manifest project.Manifest) error {
 	if manifest.Vendor != nil {
 		return fmt.Errorf("vendor support resumes after pre-MVP")
 	}
-	if len(manifest.Features) != 0 || len(manifest.Examples) != 0 {
-		return fmt.Errorf("the pre-MVP project supports package, dependencies and bin targets without features or examples")
+	if len(manifest.Examples) != 0 {
+		return fmt.Errorf("example targets are not supported")
 	}
 	for _, alias := range project.Keys(manifest.Dependencies) {
 		dependency := manifest.Dependencies[alias]
-		if dependency.Workspace || dependency.Optional || len(dependency.Features) != 0 || dependency.DefaultFeatures != nil {
-			return fmt.Errorf("dependency %s: workspace and feature selection resume after pre-MVP", alias)
-		}
-	}
-	targets := append([]project.Target{}, manifest.Bins...)
-	if manifest.Lib != nil {
-		targets = append(targets, *manifest.Lib)
-	}
-	for _, target := range targets {
-		if len(target.RequiredFeatures) != 0 {
-			return fmt.Errorf("target %s: feature selection resumes after pre-MVP", target.Name)
+		if dependency.Workspace {
+			return fmt.Errorf("dependency %s: workspace selection resumes after pre-MVP", alias)
 		}
 	}
 	return nil
@@ -242,7 +248,7 @@ func goEnvironment(tool string) (map[string]string, error) {
 	return environment, nil
 }
 
-func unitSpec(graph *project.Graph, target project.Target, environment map[string]string) (project.UnitSpec, error) {
+func unitSpec(graph *project.Graph, target project.Target, environment map[string]string, features map[string]expand.Features) (project.UnitSpec, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return project.UnitSpec{}, err
@@ -254,11 +260,19 @@ func unitSpec(graph *project.Graph, target project.Target, environment map[strin
 	type source struct {
 		Module, Root, Mod string
 		Manifest          project.Manifest
+		Features          []string
 	}
 	var sources []source
 	for _, node := range graph.Nodes {
-		sources = append(sources, source{node.Module, node.Root, string(node.ModBytes), node.Manifest})
+		var enabled []string
+		for _, name := range project.Keys(features[node.Module].Enabled) {
+			if features[node.Module].Enabled[name] {
+				enabled = append(enabled, name)
+			}
+		}
+		sources = append(sources, source{node.Module, node.Root, string(node.ModBytes), node.Manifest, enabled})
 	}
+	sort.Slice(sources, func(i, j int) bool { return sources[i].Module < sources[j].Module })
 	config := project.Digest(struct {
 		Sources     []source
 		Target      project.Target

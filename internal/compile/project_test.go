@@ -83,9 +83,8 @@ func TestProjectRejectsDeferredCapabilities(t *testing.T) {
 		name, extra, want string
 	}{
 		{"workspace", "\n[workspace]\nformat=1\nmembers=[]\n", "workspace"},
-		{"features", "\n[features]\ndefault=[]\n", "features"},
 		{"build", "\n[build]\nentry='build.gox'\ninputs=['build.gox']\noutputs=['generated.go']\n", "build"},
-		{"optional", "\n[dependencies.optional]\ngo='bytes'\noptional=true\n", "feature"},
+		{"example", "\n[[example]]\nname='demo'\npath='app.gox'\n", "example"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := smallProject(t)

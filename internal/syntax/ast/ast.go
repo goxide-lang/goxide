@@ -426,6 +426,12 @@ type BasicLit struct {
 	Kind  token.Kind
 	Value string
 }
+
+// BoolLit is a compiler-produced boolean constant, independent of name lookup.
+type BoolLit struct {
+	Base
+	Value bool
+}
 type CompositeLit struct {
 	Base
 	Type Type
@@ -746,6 +752,7 @@ func (*ParenType) typeNode()             {}
 func (*MacroType) typeNode()             {}
 func (*BadType) typeNode()               {}
 func (*BasicLit) exprNode()              {}
+func (*BoolLit) exprNode()               {}
 func (*CompositeLit) exprNode()          {}
 func (*KeyValue) exprNode()              {}
 func (*ParenExpr) exprNode()             {}

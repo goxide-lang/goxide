@@ -607,6 +607,12 @@ func (p *printer) node(n ast.Node) {
 		p.s("/* bad type */ _")
 	case *ast.BasicLit:
 		p.s(n.Value)
+	case *ast.BoolLit:
+		if n.Value {
+			p.s("true")
+		} else {
+			p.s("false")
+		}
 	case *ast.CompositeLit:
 		p.node(n.Type)
 		p.s("{")

@@ -384,7 +384,7 @@ func (r *resolver) expr(scope *Scope, expr ast.Expr) {
 		r.expr(scope, n.X)
 	case *ast.TypeExpr:
 		r.typ(scope, n.Type)
-	case *ast.BasicLit, *ast.BadExpr:
+	case *ast.BasicLit, *ast.BoolLit, *ast.BadExpr:
 	}
 }
 

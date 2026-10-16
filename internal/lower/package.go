@@ -20,7 +20,9 @@ import (
 
 // PackageOptions controls generation for a package in an existing Go project.
 type PackageOptions struct {
-	LineDirectives bool
+	LineDirectives      bool
+	Features            expand.Features
+	RejectConfiguration bool // Partial in-place generation cannot switch package configuration.
 }
 
 // CompilePackage compiles caller-selected .gox and native .go files from one
@@ -35,6 +37,8 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 		goImports = importer.Default()
 	}
 	files := map[string]*syntax.File{}
+	features := map[*syntax.File]expand.Features{}
+	rootConfigs := map[*syntax.File]moduleRootConfig{}
 	displayNames := map[string]string{}
 	var expanded *expand.Result
 	defer func() { err = FormatSourceDiagnostic(err, files, displayNames, expanded) }()
@@ -61,6 +65,15 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 					return nil, &Diagnostic{File: key, Span: diagnostic.Span, Message: diagnostic.Message}
 				}
 			}
+			used, err := expand.Configure(file, options.Features)
+			if err != nil {
+				return nil, err
+			}
+			if used && options.RejectConfiguration {
+				return nil, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
+			}
+			features[file] = options.Features
+			rootConfigs[file] = moduleRootConfig{packagePath, key, roots}
 			for _, requirement := range applyModuleRoots(packagePath, key, file, roots) {
 				if _, exists := imports.namespaces[requirement.target]; !exists {
 					imports.namespaces[requirement.target] = requirement
@@ -95,15 +108,23 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 		groups = append(groups, group)
 	}
 	macros := &moduleMacros{files: files, resolved: packages, imports: imports}
-	if err := macros.checkCycles(); err != nil {
-		return nil, err
+	expanded, err = expand.ExpandPackages(groups, macros, features)
+	if cycle := macros.checkCycles(expanded); cycle != nil {
+		return nil, cycle
 	}
-	expanded, err = expand.ExpandPackages(groups, macros)
 	if imports.err != nil {
 		return nil, imports.err
 	}
 	if err != nil {
 		return nil, err
+	}
+	if expanded.UsesConfiguration && options.RejectConfiguration {
+		return nil, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
+	}
+	for _, requirement := range applyExpandedRoots(expanded, rootConfigs) {
+		if _, exists := imports.namespaces[requirement.target]; !exists {
+			imports.namespaces[requirement.target] = requirement
+		}
 	}
 	resolved := resolve.ResolveExpanded(files, expanded, imports)
 	if imports.err != nil {

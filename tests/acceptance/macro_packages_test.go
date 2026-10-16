@@ -118,6 +118,7 @@ func TestMacroPackagesDependencyCycle(t *testing.T) {
 	})
 	packagesWrite(t, source, "a/a.gox", "package a\nuse b;\npub macro_rules! value {()=>{b::value!()};}\n")
 	packagesWrite(t, source, "b/b.gox", "package b\nuse a;\npub macro_rules! value {()=>{a::value!()};}\n")
+	packagesWrite(t, source, "main.gox", "package main\nuse a;\nfunc main(){_=a::value!()}\n")
 	err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil)
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Fatalf("dependency cycle accepted: %v", err)

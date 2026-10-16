@@ -1,0 +1,83 @@
+package main
+
+use fmt;
+
+enum Counter { Count(int), Empty, }
+var trace string
+var storage = []Counter{Counter::Count(1)}
+
+func alter(value &mut int) bool { *value = 9; return false }
+func owners() []Counter { trace += "s"; return storage }
+func index() int { trace += "i"; return 0 }
+func guard(value &mut int) bool { trace += "g"; *value += 1; return false }
+func allowed(fail bool) Result[bool,string] {
+    if fail { return Result[bool,string]::Err("stop") }
+    return Result[bool,string]::Ok(true)
+}
+func tryIndex(fail bool) Result[int,string] {
+    trace += "x"
+    if fail { return Result[int,string]::Err("index") }
+    return Result[int,string]::Ok(0)
+}
+func arrayProjection(fail bool) Result[int,string] {
+    values := [1]int{1}
+    element := &mut values[tryIndex(fail)?]
+    *element += 4
+    choices := [1]Counter{Counter::Count(2)}
+    match &mut choices[tryIndex(false)?] {
+        Counter::Count(value) => { *value += 3 },
+        Counter::Empty => {},
+    }
+    current := match choices[0] { Counter::Count(value) => value, _ => 0 }
+    return Result[int,string]::Ok(values[0] + current)
+}
+func controlled(fail bool) Result[int,string] {
+    defer func() { trace += "done" }()
+    counter := Counter::Count(0)
+    for i:=0; i<3; i++ {
+        match &mut counter {
+            Counter::Count(value) => {
+                if i==0 { *value += 1; continue }
+                *value += 2
+                break
+            },
+            Counter::Empty => {},
+        }
+        panic("match changed loop control")
+    }
+    value := match &counter {
+        Counter::Count(value) if allowed(fail)? => *value,
+        Counter::Count(_) => -1,
+        Counter::Empty => -2,
+    }
+    return Result[int,string]::Ok(value)
+}
+
+func main() {
+    counter := Counter::Count(1)
+    snapshot := match counter {
+        Counter::Count(ref mut value) if alter(value) => -1,
+        Counter::Count(value) => value,
+        Counter::Empty => 0,
+    }
+    current := match counter { Counter::Count(value) => value, Counter::Empty => 0 }
+    fmt::Println(snapshot, current)
+    observed := match &mut owners()[index()] {
+        Counter::Count(value) if guard(value) => -1,
+        Counter::Count(value) => *value,
+        Counter::Empty => 0,
+    }
+    fmt::Println(observed, trace)
+    trace = ""
+    success := controlled(false)
+    fmt::Println(match success { Result::Ok(value) => value, Result::Err(_) => -1 }, trace)
+    trace = ""
+    failure := controlled(true)
+    fmt::Println(match failure { Result::Ok(_) => "wrong", Result::Err(err) => err }, trace)
+    trace = ""
+    array := arrayProjection(false)
+    fmt::Println(match array { Result::Ok(value) => value, Result::Err(_) => -1 }, trace)
+    trace = ""
+    stopped := arrayProjection(true)
+    fmt::Println(match stopped { Result::Ok(_) => "wrong", Result::Err(err) => err }, trace)
+}

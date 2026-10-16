@@ -2,6 +2,16 @@
 
 当前作者清单与可提交的 `goxide.lock` 位于项目根；Go 元数据和生成源码只写入受管 target。依赖字段参考 [Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)，Go module 选版仍用 [Go MVS](https://go.dev/ref/mod#minimal-version-selection)。不读取旧 source 标签或嵌套来源表，不实现 registry。
 
+## P5 新管线入口
+
+状态：已完成。`internal/compile.PrepareProject` 接受单项目目录，使用既有清单、Go 依赖图和锁，选择 bin 后把所需模块交给 `parser → expand → resolve → check → lower`。返回稳定生成模块目录与 Go 入口包；调用者在该目录执行 Go build、run 或 test。CLI 三种输入模式在 P6 统一切换。
+
+本阶段使用 `package`、精确 namespace 映射、Go/path/Git 依赖及 bin；依赖库沿用 lib 路径。多包源和所选 Goxide 依赖联合检查，保留 enum、trait、宏和引用权限，不使用旧前端导出 metadata。原生 Go 源码、测试与资源参与生成模块；当前互操作支持 Goxide 跨包导入原生 Go，以及原生 Go 调用生成的公开 API。同包 Goxide 引用手写 Go 声明的桥接留待管线集成。清单作者根不生成 go.mod/go.sum。
+
+依赖版本和校验和由既有 Go planner 锁定，生成模块间使用 bundle 内的相对 replace；临时生成目录不进入锁或最终 Go 元数据。相同输入保持生成字节、产物路径和锁稳定，offline/locked 使用已有缓存与锁重放，清单依赖映射改变时 locked 拒绝更新。失败的源检查不发布新锁或覆盖已有 bundle。
+
+feature 条件编译已接入：支持 cfg、cfg_attr 顶层条件属性及 cfg! 布尔查询；cfg! 不跳过 if 两支的检查。合同见 [RFC 0022](../rfcs/0022-project-toolchain.md)。workspace、vendor 迁入、import-go、构建脚本仍按后续 MVP 阶段接入；下文保留这些工具链实现的既有字段合同。
+
 ## 最小项目与真实依赖
 
 新目录放两个文件即可运行；需 Go 1.27+，首次允许联网：
@@ -54,6 +64,18 @@ goxide run --offline --locked   # clean dependency download
 | workspace | format=1、members、default-members、exclude、package、dependencies，以及已有原生迁入 go 政策，见 [workspace 合同](../rfcs/0026-workspaces.md) |
 
 未知字段、错误类型、非法 TOML 和大小写错误有文件/行/列诊断。来源语义错误指出依赖名。不提供旧 schema 兼容。
+
+## Feature 配置
+
+`[features]` 同时提供模块内查询的声明目录与展开图。根模块默认启用已声明的 default，再加入 CLI 的 `--features`；`--no-default-features` 只取消根默认请求。依赖通过 `features`、`default_features` 和 feature 边接收请求，同一 module/source 的请求取并集，任何一条边要求默认集合即保留。根 feature 不按同名隐式传播到依赖，各模块的包共享本模块最终集合。
+
+`dep:alias` 激活 optional 依赖，`alias/feature` 激活并转发，本地名称展开本模块 feature；不隐式创建 optional 同名 feature。请求及实际处理到的完整 cfg/cfg_attr/cfg! 谓词检查本模块声明，未知 feature 报错；外层 cfg 删除的子树、未选中的 cfg_attr 载荷不继续检查，普通 if 两支仍检查。`required_features` 在图求解后检查，不自动启用 feature。纯 Go 或固定生成 Go 依赖不能被请求重配 Goxide feature。
+
+源码条件选择不反向修改清单图；非 optional 依赖和 go.require 仍按声明处理。产物配置摘要纳入每个 module 排序后的实际 enabled 集，不能只用依赖计划身份区分生成物；同配置请求乱序或重复不影响输出。纯 cfg 变化且依赖计划不变时保持锁文件字节稳定，可 --locked 重放。目标/测试谓词使用未来编译上下文，不添加到 `[features]`；当前实现和验收进度仍见[状态表](../mvp-gap-audit.md)。
+
+## 编译环境与目标
+
+[RFC 0022 的统一条件配置](../rfcs/0022-project-toolchain.md#统一条件配置)仅让 feature 读取清单配置。target 由工作流与 --target 决定，env 直接查询一次捕获的原始进程环境；不增加 `[cfg]`、env 登记或 target 清单字段，也不提供 --cfg-env。实际 env 读取记录在编译结束后进入产物摘要，不进入依赖锁身份。
 
 ## 来源与包身份
 
@@ -122,7 +144,9 @@ GOX
 
 真实远端依赖使用 HTTPS；绝对本地 Git 路径用于上述夹具与定向验证。没有对旧 monorepo candidate 的历史 ABI 提供兼容。
 
-build/run/test/transpile 无 INPUT 时，从 cwd 向上发现最近 goxide.toml；go.mod 不阻断外层项目/workspace。显式目录采用同一规则；显式文件保留单文件语义。没有清单时需显式指定 Go 目录或源码，不扫描目录猜 main。
+build/run/test 及指定输出目录的 transpile 无 INPUT 时，从 cwd 向上发现最近 goxide.toml；go.mod 不阻断外层项目/workspace。显式目录采用同一规则；显式文件保留单文件语义。没有清单时需显式指定 Go 目录或源码，不扫描目录猜 main。
+
+默认原位 `gen` / `transpile` 按最近模块边界选择入口：遇到当前或上层 goxide.toml 时进入项目模式，先遇到 go.mod 时只生成当前 Go 包；嵌套原生模块不会被更外层 TOML 接管。
 
 成员子目录选择最近成员，workspace 根用 default-members，`-p MODULE` 与 `--workspace` 显式改变选择。未列出的项目报非成员，不因目录位置补依赖。成员用 `workspace = true` 继承模板，只可追加 features 或设置 optional/default_features；模板 path 相对 workspace 根。版本与锁全 workspace 统一，未选成员 features 不自动加入本次编译。
 

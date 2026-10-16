@@ -2,19 +2,17 @@
 
 更新：2026-10-01。项目暂称 goxide / Goxide；远端仓库名 `goxide` 不代表已经决定改名。
 
-本文区分讨论中确认的方向、为使设计可评审而写出的候选规则，以及仍没有方案的部分。**“已确认”不表示“已实现”**；实现分支已有有限可运行原型，准确范围见[实现说明](../../IMPLEMENTATION.md)；完整 goxide 编译器、linter、LSP 与可发布基础包尚未完成。实现进度以 [roadmap](../../ROADMAP.md) 为准。
+本文区分讨论中确认的方向、为使设计可评审而写出的候选规则，以及仍没有方案的部分。**“已确认”不表示“已实现”**；实现分支已有有限可运行原型，准确范围见[实现说明](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/IMPLEMENTATION.md)；完整 goxide 编译器、linter、LSP 与可发布基础包尚未完成。实现进度以 [roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md) 为准。
 
 ## 1. 状态含义与维护规则
 
 - **已确认**：用户明确提出或接受的约束，后续设计应遵守。确认功能方向不等于确认其全部语法、算法或 ABI。
-- **暂定**：已有可讨论的方案，包括代理提出的具体规则和 Go 降低示例；可以验证可行性，但不能因写入文档或 Go 测试通过就当作已获确认。
-- **未定**：尚未选定方案、缺少必要规则，或明确延期。记录阻塞的工作与下一步决策，不用默认值掩盖。
+- **暂定**：已有可讨论的方案，包括代理提出的具体规则和 Go 降低示例。
+- **未定**：尚未选定方案、缺少必要规则，或明确延期。
 
-各专题开头列出三类状态。除开头明确列出的已确认范围外，正文中的规则、示例和验收条件均按暂定设计理解；“必须”表示候选方案内部需满足的条件，不自动升级为已确认决策。可复现的 Go 行为属于技术证据，不能代替设计确认。
+状态变化时更新本登记和对应专题。被替代的方案直接删除或标为历史，不留在正文里当规范读。新增语法用 RFC 说明源级语义、Go 降低、双向边界与适配成本。
 
-后续改变状态时，同时更新本登记、对应专题和 roadmap；被替代的方案在第 5 节集中登记，专题若保留解释需明确标为历史，不混在当前规范中。新增语法一律用[独立 RFC](../rfcs/README.md)说明源级语义、Go 降低、Go 导入和导出、检查边界与适配成本，并用编号正反例作为约束。
-
-当前 trait 方向见 [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)：统一 wrapper、保留 marker、固定包级工厂及本地 As / 外部 ForT.As 便利 helper。用户已确认该方向，替代原始类型 marker 注入；具体 ABI 细节仍未冻结。类型关联函数由 impl 块定义，T::method → Go 包函数、Self/self 绑定及原生 Go 声明边界见 [RFC 0020](../rfcs/0020-associated-functions.md)。
+当前 P4 合同见 [trait](traits.md)、[关联类型](associated-types.md)及 D37：基础目标与三种 self 权限、统一 wrapper/marker、固定工厂、空 carrier 与关联类型 witness。struct/enum 共用成员查询；enum 值 As 与借用 owner 的 For 分别保留。类型关联函数和原生 Go 声明边界见 [RFC 0020](../rfcs/0020-associated-functions.md)。
 
 ## 2. 已确认的方向
 
@@ -25,7 +23,7 @@
 | D01 | 以转译器 + 转译前 linter 为架构，生成普通 Go，保留 Go 生态与运行时 | [总纲](overview.md)；不以独立所有权运行时或原生机器码后端替代 |
 | D02 | 所有新语法同时设计 Go 降低与双向互操作 | [总纲](overview.md)；不能只展示 goxide 写法 |
 | D03 | 改善安全性、显式实现与可读性、Go 包互操作是三项目标 | [符合程度](overview.md#21-三项目标的符合程度)；尚无完整安全性证明 |
-| D04 | 使用 trait 表达显式实现，保留 Go interface 的结构式语义；纳入普通关联类型方向 | [trait](traits.md)、[关联类型](associated-types.md)；泛型和投影细节暂定 |
+| D04 | 使用 trait 表达显式实现，保留 Go interface 的结构式语义；纳入普通关联类型 | [trait](traits.md)、[关联类型](associated-types.md)；P4 子集由 D37 收敛 |
 | D05 | `declare impl AorB::XXX for BBB::Type;` 可写在用户 C 包普通 .gox 内；无体采用原业务方法，通过 C 包 wrapper 显式转发并实现 marker | [Go 适配](go-interop.md)；原指针保持，接口动态类型是 wrapper，不向原始类型追加方法 |
 | D06 | 有体 impl 的实现函数直接定义在对应 wrapper；多个 impl 的同名方法允许不同签名或行为；保持稳定 As 入口 | [trait](traits.md)；不再在原类型生成改名业务方法 |
 | D07 | 根据使用处期望类型决定是否插入 trait 适配；保留值本身的类型 | [使用处转换](traits.md#6-期望类型驱动的转换)；泛型和容器细节暂定 |
@@ -39,15 +37,16 @@
 | D15 | goxide 基础包提供现有 Go std 的 safe 视图与泛型 slice | [基础包](standard-library.md)；以 Go API 真实行为为依据，不以 Rust std 为规范 |
 | D16 | quote / syn 风格能力放在额外包 | [语法工具](syntax-tooling.md)；是否列入首个可用版本及协议仍暂定 |
 | D17 | 提供面向 goxide 的 LSP，未来考虑 goxide 自举 | [编译器与工具链](compiler-and-tooling.md)；启动语言、复用组件和阶段路线为暂定方案 |
-| D18 | 先完成设计；总纲和各专题分开，维护决策状态与路线，支持另一台机器继续 | [README](../../README.md)、[roadmap](../../ROADMAP.md)；本次修改不代表开始编译器实现 |
+| D18 | 先完成设计；总纲和各专题分开，维护决策状态与路线，支持另一台机器继续 | [README](../../README.md)、[roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)；本次修改不代表开始编译器实现 |
 | R19 | 发布完整 dist；同一 Go 模块携带 .go、.d.gox 与可选 .gox；Go 编译 .go，goxide 额外加载声明或源码 | [RFC 0001](../rfcs/0001-package-loading.md)；wrapper 与 marker 随 impl 包发布，无需外部方法注入 |
 | R20 | 相容 declare 可合并，有体实现保持唯一 | [RFC 0003](../rfcs/0003-declare-impl.md)；契约矛盾和原生采用/有体混合语义仍需明确 |
 | R21 | match 按模式区分值复制、只读借用与可变借用 | [RFC 0009](../rfcs/0009-match.md)；具体语法、作用域与支持原位借用的 ABI 未定 |
 | R22 | 所有新特性和语法有独立 spec/RFC，以转译前后、双向调用和反例表达约束 | [RFC 清单](../rfcs/README.md)、[模板](../rfcs/TEMPLATE.md)；已写文档不代表已实现 |
 | R23 | goxide 源级使用变体枚举分派，不直接采用 Go 的 .(T)/.(type) 作为分派语法；增强保证由 goxide 工具链提供 | 后端和原生 Go 仍可使用 Go 类型检查/反射；普通 Go 调用者不获得 goxide 静态权限保证 |
-| R24 | 所有运行时 trait 视图统一 wrapper；trait 接口与 wrapper 保留 marker；固定包级函数适配；Go 使用本包 As 方法或外部 ForT.As helper | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；具体符号编码、权限、nil/比较与多包载体选择未定 |
-| R25 | 构造函数等类型关联函数定义在独立 impl T 块中，用 T::method 调用，降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；不将函数写入 struct 声明；func 首参数 self 区分实例成员，其余为关联函数，无 static；接收类型/权限、Go 名称与初始化细则仍待收敛 |
+| R24 | 所有运行时 trait 视图统一 wrapper；trait 接口与 wrapper 保留 marker；固定工厂及 As/For helper | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；P4 权限、enum helper 和 nil 规则由 D37 收敛，跨包载体加载由 P5 接续 |
+| R25 | 构造函数等关联函数定义在独立 impl T 中，T::method 降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；首参数 self 区分实例/关联成员，无 static；P4 采用 NewT/TMethod 并诊断名称冲突 |
 | R26 | impl 成员按 goxide 规则转译并支持 Self/self；直接书写的 Go 函数和方法保留原生 Go 语义 | [RFC 0020](../rfcs/0020-associated-functions.md)；Self 绑定源目标类型，self 仅绑定实例接收者；不全局替换同名 Go 标识符，不限制其他 goxide 特性只能位于 impl 内 |
+| D37 | P4：impl 以基础 T 为目标，self 使用 Self / &Self / &mut Self；关联投影为 Self::Item / T::Trait::Item，运行时值完整绑定；泛型关联类型经空 carrier witness 推导，Go 调用保留源类型实参数量 | [trait](traits.md)、[关联类型](associated-types.md)、[enum 类型锚](enum-representation.md#11-p4-的类型锚与实例适配)；struct/enum 统一查询，enum Self 为 E，类型锚/witness 不运行；值 As 转发与借用 ForE 保留身份；外部类型不注入 anchor，nil 沿用 Go/enum 规则 |
 
 已确认新增 **D19（2026-10-01）**：用户明确要求默认兼容 Go 式指针/别名；有具体风险依据先 warning，不以无法证明安全大面积拒绝。语法、类型、已确认不变量错误不降级；warning 与运行时 race 分开，不能宣称静态安全。该反馈否决 T01/T06 及前两轮严格默认，不撤销无关 D01–D18。
 
@@ -75,27 +74,27 @@
 | T06 | **默认阻断已否决**；来源追踪改为有依据的风险 warning | D19 与 RFC B01–B08：未知不拒绝也不刷警告；不宣称静态安全 |
 | T07（历史） | 原定义包隔离构建视图注入 marker / As | 已被 RFC 0019 的统一 wrapper 取代；旧夹具保留为历史机制，不作为当前实现要求 |
 | T08 | impl 按接收者、trait、参数规范化；冲突报错、显式导入元数据 | 跨包可见性、接收权限身份、版本和构建条件如何参与选择 |
-| T09 | 固有方法优先、唯一可见 trait 候选；稳定符号编码，限定调用 | 最终源码拼写、名称冲突策略和 ABI 编码未定；新增 impl 可能增加源码歧义 |
+| T09（P4 已收敛） | 按既有引用规则构造接收者候选，同一候选固有方法优先，再查唯一可见 trait | D37；歧义用 x.m::<Trait> / Trait::m(x) 限定，新增 impl 可能增加源码歧义 |
 | T10 | 宏模板自由名字按定义点绑定、捕获语法保留调用点来源 | 此处有意不同于 Rust mixed-site hygiene；宏匹配、阶段、缓存、预算及授权规则是候选设计 |
 | T11 | 字面量 `{}` / `{:?}` 对应 Display / Debug；打印失败 panic；固定字段式 derive 规则 | 格式子集、formatter、Default / Clone / Debug 精确协议及错误策略未冻结 |
-| T12 | Default / Clone 的静态 Self 操作选择具体 impl 并降低为普通 Go 函数 | 成员类别规则已确认；接收类型/权限与泛型实现证据未定；不能宣称所有 trait 均可作为 Go 运行时接口 |
+| T12（P4 子集已收敛） | 静态 Self 操作选择具体 impl，P4 使用空 carrier 及 witness；P2 派生 helper 保持既有合同 | D37；静态操作不塞入运行时接口，更宽派生和泛型 impl 另行推进 |
 | T13 | 用户建议 std 提供 Vec/借用视图和多种 Map；既有 Slice、ReadOutcome、copy/clone_with 为候选 | [Vec](../rfcs/0010-collections.md)、[Map](../rfcs/0017-maps.md)；赋值语义、元素借用、ABI、名称和具体后端未定 |
 | T14 | syntax 协议 + 普通 syn / quote 包可先于过程宏宿主提供 | 这是实现建议，不承诺首版交付；token 构造原语、卫生上下文和包版本尚未冻结 |
 | T15 | Go 启动前端 / LSP，独立 goxide AST 和语义 IR；复用 Go 包加载、输出和类型信息 | 自举阶段、复用边界、仓库布局和工具进程协议见[工具链草案](compiler-and-tooling.md) |
 | T16 | Unit 用 struct{}；第三方锁经普通 Lock/Unlock 原语接入 | 回调语法、没有结果的 return 插入、第三方适配构造器及来源检查 |
-| T17 | R24 已确认的 wrapper/marker/helper 方向下的具体工厂、便利名称和载体协议 | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；编码、冲突、共享适配包和权限细则仍需定稿 |
-| T18 | 实例接收类型/权限拼写、new → NewT、其他关联函数 → TMethod、首版不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；impl 块及 Self/self 支持、T::method 与 Go 包函数映射已确认，func 首参数 self 的分类规则已确认；具体接收类型/权限及导出规则未冻结 |
+| T17（P4 子集已收敛） | 固定工厂 `As<Type><Trait>`、`As<Trait>` / `For<Type>`、完整 trait 身份 marker 与名称冲突诊断 | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；跨包共享适配与发布信息由 P5 接续 |
+| T18（P4 已收敛） | self Self / &Self / &mut Self；new → NewT，其他关联函数 → TMethod，首版不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；pub 控制公开，私有入口首字母小写；enum 实例函数用显式 E / *E 参数 |
 
 ## 4. 未定与明确延期
 
-这些项有可能讨论过候选方案，但尚不能据此实现并宣称规范完成。处理次序见 [roadmap](../../ROADMAP.md)。
+这些项有可能讨论过候选方案，但尚不能据此实现并宣称规范完成。处理次序见 [roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)。
 
 | ID | 未闭合问题 | 影响 |
 | --- | --- | --- |
 | U01 | 完整词法 / 语法、类型表示、包和符号身份；最终语言名称 | 解析器、诊断与稳定输出 |
 | U02 | 引用获取、保存/构造、字段及容器只读投影、输出槽位；持有类型必要性 | RFC 0003 §6.1–6.2 核对 D08/D11；内建容器写操作、浅复制元素引用及接口/any 断言须保留权限，类型表示尚未闭合。H 临时契约未批准且不是 MVP 前提；风险来源/别名分析另属 D20 长期工作 |
-| U03 | 源级 `&T` / `mut& T` / Arc 如何参与 impl 键与方法接收权限 | 早期 `*T` 示例仅为 Go 机制示意，不能成为第四种 safe 源级指针 |
-| U04 | 静态 trait 成员、裸 Self、泛型约束、关联类型投影和后端策略 | Default / Clone、迭代器；字典传递与专门化尚未选择 |
+| U03（P4 子集已收敛） | 基础目标上的 self 接收权限见 D37；Arc 等持有类型仍按专门设计推进 | 原生 *T 与源级引用不因 Go 表示相同而合并；declare 结构代入 Self 后验证精确方法集 |
+| U04（P4 子集已收敛） | 单 trait 约束、普通关联投影及 carrier witness 已选定；更宽泛型系统延期 | 静态成员和裸 Self 不因此成为任意动态接口；不加入运行时字典 |
 | U05 | 递归 Go 类型视图、嵌套 Ptr / slice / map、函数值和回调桥接 | 不能把单层 *T 转换实验外推成全 ABI 兼容 |
 | U06 | pub、公开字段、回调及共享对象的验证时机和错误接口 | Go 双向边界与输入有效性 |
 | U07 | 声明包命名、版本 / 构建条件锁定、raw 视图选择、依赖缓存与产物发布 | 另一台机器可复现相同语义与增强依赖 |
@@ -114,7 +113,7 @@
 
 ### 4.1 本轮候选细化
 
-[RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)与[业务场景](../rfcs/research/0001-usage-and-tradeoffs.md)已按 D19 重写：B01–B08 解释默认允许，W01–W06 要求具体风险链、修复建议与误报/漏报成本。前两轮“词法借用/唯一性证明作为默认准入”的推荐已被用户否决；U03 的 impl 权限形式仍未选择。Go 夹具仅验证机制，不是 goxide warning 实现。
+[RFC 0001](../rfcs/research/0001-scoped-borrow-views.md)与[业务场景](../rfcs/research/0001-usage-and-tradeoffs.md)已按 D19 重写：B01–B08 解释默认允许，W01–W06 要求具体风险链、修复建议与误报/漏报成本。前两轮“词法借用/唯一性证明作为默认准入”的推荐已被用户否决；P4 的基础接收权限由 D37 收敛，风险分析仍不属 MVP。Go 夹具仅验证机制。
 
 ## 5. 已被替代或纠正的方案
 
@@ -147,7 +146,7 @@
 
 已确认 **D28（最新用户反馈）**：struct 派生 Default 要求每个字段实现 Default，否则手写；enum 标记默认变体。后续用户确认：仅选中默认变体的 payload 字段需要 Default，非默认变体不要求；允许带 payload 的默认变体。手动 Default 采用 `impl Default for T { func default() T { ... } }`，不引入 static，首参数 self 区分实例成员与关联函数。Debug 必须清楚说明输出字段/payload内容与隐私、格式稳定性边界。
 
-已确认 **D29（2026-10-02 用户收口纠正）**：首版必须支持 `match mut& enum_value { Var1(mut& inner) => *inner += 1 }` 这样的原位可写 payload 借用；不能后置，不能指向副本，也不能通过隐藏共享指针改变既有 enum 值复制语义。具体表示选项须解释实际代码影响后收敛，D20 不变。
+已确认 **D29（2026-10-13 用户确认）**：首版支持 `match &mut enum_value { Var1(inner) => *inner += 1 }` 的原位可写 payload 借用，引用指向真实存储。用户 enum 采用密封接口与指针变体，普通复制共享变体对象；整体替换 enum 后，旧 payload 投影仍指向旧对象。Option/Result 在 P6 前保留既有内联槽表示。该确认取代此前要求用户 enum 独立值复制的约束；[引用合同](enum-payload-borrows.md)规定两类存储的实际行为。D20 不变。
 
 已确认 **D30（2026-10-02 用户收口纠正）**：goxide 跨 module 消费 goxide 库应恢复增强信息，普通 Go 消费生成库则不执行 goxide 静态增强检查，类似 TS/JS 消费边界。同模块联合验收不等于此能力已完成，也未获批准缩成同模块 MVP。
 
@@ -155,7 +154,7 @@
 
 已确认 **D32（2026-10-03 显式比较）**：enum 相等走显式 PartialEq/equals，Eq 依赖 PartialEq 并标记等价关系；允许显式 derive 自动生成。含不可比载荷的已知 enum 比较资格编译期判断，不以 Go interface 运行时 panic 充当策略。首片具体值参数、两实参求值后左/右验证沿既有机制实现；普通原生 Go 比较与当前 enum-nil 例外保持。Go comparable 不等于 Eq，Eq 不自动使类型成为 Go map key；不扩 full trait、HashMap 或指针拆分。具体实现与未完成边界见 [RFC](../rfcs/0008-enums.md#显式-partialeqeq-首片2026-10-03)。
 
-已确认 **D33（2026-10-03 容器 nil/空）**：同类型 nil slice 与非 nil 空 slice 不相等，nil map 与非 nil 空 map 不相等；两个 nil 相等，两个非 nil 空容器按内容相等。equals 先区分 nil，再比较内容，不做隐式 normalization。Option.None、Some(nil 载荷)、Some(非 nil 空载荷) 三者区分；serde null/[]/{}不因此改变。固定长度 Go array 没有 nil 状态。该语义已定，不再作为容器派生的待决项；map 键资格按后续 D34 有限实施，自定义相等和手写接口仍单列。[契约参考测试](../../tests/design/enum/equality_contract_test.go)仅为纯 Go 规则探针；实际容器实现证据另见 [本片验收](../t0-acceptance.md#容器-equality-派生2026-10-03)。
+已确认 **D33（2026-10-03 容器 nil/空）**：同类型 nil slice 与非 nil 空 slice 不相等，nil map 与非 nil 空 map 不相等；两个 nil 相等，两个非 nil 空容器按内容相等。equals 先区分 nil，再比较内容，不做隐式 normalization。Option.None、Some(nil 载荷)、Some(非 nil 空载荷) 三者区分；serde null/[]/{}不因此改变。固定长度 Go array 没有 nil 状态。该语义已定，不再作为容器派生的待决项；map 键资格按后续 D34 有限实施，自定义相等和手写接口仍单列。[契约参考测试](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/design/enum/equality_contract_test.go)仅为纯 Go 规则探针；实际容器实现证据另见 [本片验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/t0-acceptance.md#容器-equality-派生2026-10-03)。
 
 已确认 **D34（2026-10-03 容器比较派生）**：slice/map 按 D33 区分 nil/空并递归调用元素/值的 PartialEq/Eq 协议，不以 reflect.DeepEqual 替代。原生 map 首片仅接纳能证明原生查找与相等契约一致的稳定键，不能由 float NaN、自定义 equals 或 Go comparable 偷渡资格；不引入 HashMap。嵌套 struct/array/enum 与 Option 状态需要真实生成验收。手写比较入口可下一片，指针拆分/原位 borrow 不前置阻断本轮独立 enum 阶段。
 
@@ -168,7 +167,7 @@
 D36 补充（用户已授权，先规范后实现）：`go_result!(call)` / `go_result_keep!(call)` 按真实返回签名推导 T/E，保留具名 nilable 错误类型，按原类型 nil 判断；error 接口不动态猜 E，非 nilable struct 错误明确拒绝。显式 T 形式继续精确核对。完整黑白案例、typed 阶段/多文件/metadata 与网站验收见 [T/E 推导规范](../rfcs/research/0005-option-result-question.md#按静态返回签名推导-te已授权实施前规范)。
 
 
-已确认 **工具链 UT01（2026-10-04，独立于语言决策编号）**：迁入后的项目根只保留 `goxide.toml` / `goxide.lock` 为配置/锁权威；混合项目表示 `.go` / `.gox` 共存。显式module/Go/toolchain建议及原生require/replace/exclude写入TOML，真实Go负责选版/校验/构建；Go module元数据只在生成视图存在。原Go项目经只读plan、独立staging构建验证后产生新工程，不自动删除/移动/覆盖原文件。具体首片字段、锁与拒绝边界见 [RFC 0025](../rfcs/0025-unified-project.md)，features/多目标见 [RFC 0022](../rfcs/0022-project-toolchain.md)，授权脚本见 [RFC 0023](../rfcs/0023-build-scripts.md)。首片已提交，[集成回归与独立复审](../reviews/unified-project-20261004.md)已完成；确认方向不等于批准完整Cargo兼容。
+已确认 **工具链 UT01（2026-10-04，独立于语言决策编号）**：迁入后的项目根只保留 `goxide.toml` / `goxide.lock` 为配置/锁权威；混合项目表示 `.go` / `.gox` 共存。显式module/Go/toolchain建议及原生require/replace/exclude写入TOML，真实Go负责选版/校验/构建；Go module元数据只在生成视图存在。原Go项目经只读plan、独立staging构建验证后产生新工程，不自动删除/移动/覆盖原文件。具体首片字段、锁与拒绝边界见 [RFC 0025](../rfcs/0025-unified-project.md)，features/多目标见 [RFC 0022](../rfcs/0022-project-toolchain.md)，授权脚本见 [RFC 0023](../rfcs/0023-build-scripts.md)。首片已提交，[集成回归与独立复审](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/unified-project-20261004.md)已完成；确认方向不等于批准完整Cargo兼容。
 
 UT01 替代记录：早期 [TOML 设计](toml-manifest.md) 的长期根go.mod/go.sum兼容、hgo.lock名称和“纯TOML未来提案”标为superseded，原文仅留研究历史；Go proxy source发行物仍需一致传输元数据，不能把发布合同误当作者根双配置许可。
 

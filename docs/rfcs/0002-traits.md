@@ -4,19 +4,19 @@
 
 - 已确认：显式实现、期望类型适配；运行时 trait 统一 wrapper 与固定包级工厂，Go 接口保留业务方法和导出 marker。
 - 已确认：类型与 impl 同包且满足 Go 方法接收者规则时生成 As 便利方法；其他类型使用含命名字段的 facade，两者都转发同一工厂。
-- 暂定：实例视图的方法解析与具体降低细节；下文实例 wrapper 示例仍是设计机制，不是完整 trait 编译器验收。
-- 未定：接收权限语法、泛型实现证据、正式符号编码及公开 ABI。
+- P4 已完成：有体 impl 以本包具体 struct/enum 为基础目标，实例参数为 `self Self` / `self &Self` / `self &mut Self`；统一源级成员查询、关联类型与空 carrier 泛型证据已接入新管线。
+- 后续：泛型 trait/impl、多 trait 约束及跨包 Goxide 加载；公开符号使用确定性命名并检查冲突。
 
-本篇主要约束 `impl Trait for T` 的实例方法。当前新增的用户关联协议子集见[用户说明](../static-protocols.md)：非泛型 `trait`、本包具体 struct/enum 的显式 `impl`、单协议泛型函数约束和 `U::Abc()` / `T::Abc()`，通过空 carrier 与普通 `std/typeinfo.Of` 降低。这不实现下文的运行时视图、实例方法自动适配或泛型 impl。既有业务派生继续按 [RFC 0013](0013-derive.md) 使用。
+本篇主要约束 `impl Trait for T` 的实例方法。P4 同时接入非泛型 trait、本包具体 struct/enum、单 trait 泛型函数及 `U::Abc()` / `T::Abc()`，沿用空 carrier 与 `std/typeinfo.Of`，并由 carrier witness 推导关联类型；见[当前合同](../design/traits.md)。既有业务派生继续按 [RFC 0013](0013-derive.md) 使用。
 类型自有的 `impl T { ... }` 见 [RFC 0020](0020-associated-functions.md)，不会自动建立 trait 实现关系。
 详细背景见[显式 trait](../design/traits.md)与[决策登记](../design/decisions.md)。
 下文 `*Value` 仅标识 Go 接收者身份，不引入 safe 指针语法。
-源级引用权限须与 [RFC 0005](0005-borrows.md) 接合；示例不替权限规则定稿。
+源级引用权限与 [RFC 0005](0005-borrows.md) 及 P3 合同一致；不增加独占或逃逸分析。
 
 ## 源级规则
 
 1. 方法名和签名相同不自动构成 goxide impl；必须具有显式实现元数据。
-2. 按规范化接收者、trait 身份和 trait 参数选择实现；有体实现须唯一。
+2. 按规范化基础目标与 trait 身份选择有体实现；P4 的 trait 不带位置参数，关联类型是实现输出。有体实现须唯一。
 3. 有体 impl 完整提供必需方法；与原生方法同名也使用 impl 内的方法体。
 4. 参数、赋值、返回的期望 trait 类型可触发适配；没有期望类型则保留具体类型。
 5. 一次适配只求值一次接收者表达式；不是整个程序只创建一次视图。
@@ -25,7 +25,7 @@
 8. 自定义 wrapper 保存原对象；其方法体内调用当前 trait 时不能绕回原生实现。
 9. wrapper 与工厂属于 impl 声明包 C，不必属于 trait 包；declare 转发原生方法，有体 impl 执行其方法体，marker 均由 wrapper 实现。
 10. goxide 适配使用固定工厂；Go 便利方法不另选 impl。只有类型与 impl 同包且满足 Go 方法接收者规则才生成 `t.AsTrait()`，其他类型使用 `adapters.ForT(t).AsTrait()`。
-11. impl 中 `Self` 绑定源级目标类型及其泛型实参，不绑定生成的 wrapper；`self` 绑定实例接收者。self 的字段访问保持原对象语义，当前 trait 方法调用保持选定的 impl。impl 的 func 首参数为 self 时是实例成员，否则为关联函数；没有接收者的成员不获得 self，不需要 static。具体接收类型与权限拼写仍未定。
+11. impl 中 `Self` 绑定基础目标 T，不绑定 wrapper、carrier 或 enum 变体；`self` 按 `Self` / `&Self` / `&mut Self` 参数绑定。字段访问保持原对象语义，当前 trait 方法调用保持选定 impl。func 首参数为 self 时是实例成员，否则为关联函数；没有接收者的成员不获得 self，不需要 static。
 12. 直接声明的 Go 包函数与接收者方法保留 Go 语义，不自动变为 impl。Self / self 的转译按已解析绑定进行；普通 Go 声明中的同名标识符不被全局替换。
 
 统一表示与便利入口详见 [RFC 0019](0019-uniform-trait-wrappers.md)。静态 trait 操作和泛型实现证据不强制生成实例 wrapper。
@@ -37,15 +37,15 @@
 goxide 机制片段；省略包及构造函数。两个 `*Value` 使用上述接收者身份记法。
 
 ```goxide
-pub trait IntValue { value() int }
-pub trait TextValue { value() string }
+pub trait IntValue { func value(self &Self) int }
+pub trait TextValue { func value(self &Self) string }
 pub struct Value { n int }
 
-impl IntValue for *Value {
-    value() int { return self.n }
+impl IntValue for Value {
+    func value(self &Self) int { return self.n }
 }
-impl TextValue for *Value {
-    value() string { return "custom" }
+impl TextValue for Value {
+    func value(self &Self) string { return "custom" }
 }
 ```
 
@@ -136,5 +136,6 @@ wrapper 转发原生方法及声明合并见 [RFC 0003](0003-declare-impl.md)。
 包级工厂与便利方法返回相同 wrapper 类型；外部 facade 的对应验收见 RFC 0003。
 上述 Go 包只验证后端机制，不能替代 goxide → Go 的端到端测试。
 
-尚须确定接收权限拼写、方法解析完整优先级、正式名称编码、泛型实现证据，
-以及哪些 trait 可以形成公开运行时视图；确定前不得宣称相应 ABI 已冻结。
+完整视图按实例 receiver 集合捕获目标：全值捕获 T，全只读借用捕获 `&T`，含可写或值/借用混合捕获 `&mut T`；各业务方法仍按自己的 self 声明检查。普通调用按已有引用规则构造候选，在同一候选内固有成员优先，trait 歧义须限定。struct 与 enum 使用相同查询。
+
+enum 值视图的 As 在接口声明、由指针变体转发固定工厂；借用 enum 使用保存真实 owner 的 ForE。外部原生类型不注入 carrier 类型锚，declare 的运行时适配与 carrier 泛型资格分别检查。nil 沿用 Go / enum 规则，不新增统一非空工厂。

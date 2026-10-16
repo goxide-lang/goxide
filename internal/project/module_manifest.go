@@ -45,7 +45,7 @@ type GoConfig struct {
 	Exclude []GoExclude `json:"exclude,omitempty" toml:"exclude,omitempty"`
 }
 
-func CheckAuthoring(root string) error {
+func CheckAuthoring(root string, environment ...[]string) error {
 	for _, name := range []string{"go.mod", "go.sum", "hgo.lock"} {
 		if _, e := os.Lstat(filepath.Join(root, name)); e == nil {
 			return fmt.Errorf("%s: goxide project cannot contain %s; use import-go staging migration and retain originals outside the migrated root", root, name)
@@ -53,10 +53,20 @@ func CheckAuthoring(root string) error {
 			return e
 		}
 	}
-	return CheckWorkspace(root)
+	return CheckWorkspace(root, environment...)
 }
-func CheckWorkspace(root string) error {
-	if v := os.Getenv("GOWORK"); v != "" && v != "off" {
+func CheckWorkspace(root string, environment ...[]string) error {
+	work := ""
+	if len(environment) == 0 {
+		work = os.Getenv("GOWORK")
+	} else {
+		for _, entry := range environment[0] {
+			if key, value, _ := strings.Cut(entry, "="); key == "GOWORK" {
+				work = value
+			}
+		}
+	}
+	if work != "" && work != "off" {
 		return fmt.Errorf("workspace migration unsupported: explicit GOWORK")
 	}
 	for dir := root; ; dir = filepath.Dir(dir) {
@@ -137,15 +147,21 @@ func ModuleText(m Manifest) ([]byte, error) {
 }
 
 // ImportMod uses Go's parser. Unsupported directives are never silently lost.
-func ImportMod(tool, root string) (Manifest, error)          { return importMod(tool, root, false) }
+func ImportMod(tool, root string, environment ...[]string) (Manifest, error) {
+	return importMod(tool, root, false, environment...)
+}
 func ImportWorkspaceMod(tool, root string) (Manifest, error) { return importMod(tool, root, true) }
-func importMod(tool, root string, debug bool) (Manifest, error) {
+func importMod(tool, root string, debug bool, environment ...[]string) (Manifest, error) {
 	var m Manifest
 	info, err := os.Lstat(filepath.Join(root, "go.mod"))
 	if err != nil || !info.Mode().IsRegular() {
 		return m, fmt.Errorf("import-go root must contain its own regular go.mod")
 	}
-	b, e := goCommand(tool, root, true, "mod", "edit", "-json")
+	var base []string
+	if len(environment) != 0 {
+		base = environment[0]
+	}
+	b, e := goCommand(tool, root, true, base, "mod", "edit", "-json")
 	if e != nil {
 		return m, e
 	}

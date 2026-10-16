@@ -130,9 +130,9 @@ func TestPathsAndNative(t *testing.T){if Left()!=10||Right()!=20||NativeRead()!=
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			source := sourceFor("package app\nimport a \"packages.example/app/model\"\nfunc bad(){"+body+"}\n", "go")
+			source := sourceFor("package app\nuse library::model as a;\nfunc bad(){"+strings.ReplaceAll(body, "a.", "a::")+"}\n", "gox")
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "app.go") {
+			if !strings.Contains(out, "app.gox:") && !strings.Contains(out, "app.go:") {
 				t.Fatal(out)
 			}
 		})
@@ -150,7 +150,7 @@ func TestPathsAndNative(t *testing.T){if Left()!=10||Right()!=20||NativeRead()!=
 			}
 			source := sourceFor("package app\n"+imports+body+"\n", "gox")
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "app.gox") {
+			if !strings.Contains(out, "app.gox:") && !strings.Contains(out, "app.go:") {
 				t.Fatal(out)
 			}
 		}

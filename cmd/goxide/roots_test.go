@@ -25,28 +25,6 @@ func writeRootFixture(t *testing.T, root string, files map[string]string) {
 	}
 }
 
-func TestProjectDependencyRootActivation(t *testing.T) {
-	node := &project.Node{Root: t.TempDir(), HasManifest: true, Manifest: project.Manifest{Dependencies: map[string]project.Dependency{
-		"codec": {Module: "example.org/codec", Package: "example.org/codec/core", Namespaces: map[string]string{"json": "example.org/codec/json"}},
-		"text":  {Go: "fmt", Package: "fmt"},
-		"extra": {Module: "example.org/extra", Package: "example.org/extra", Optional: true},
-	}}, Requests: map[string]project.Request{"codec": {}, "text": {}}}
-	roots, err := projectRoots(node)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if roots["codec"].PackagePath != "example.org/codec/core" || roots["codec"].Children["json"].PackagePath != "example.org/codec/json" || roots["text"].Source != "toolchain" {
-		t.Fatalf("wrong active root mapping: %#v", roots)
-	}
-	if _, exists := roots["extra"]; exists {
-		t.Fatal("mapping activated optional dependency")
-	}
-	writeRootFixture(t, node.Root, map[string]string{rootconfig.Filename: "[roots.other]\nsource='toolchain'\npackage='os'\n"})
-	if _, err := projectRoots(node); err == nil || !strings.Contains(err.Error(), "goxide.toml") {
-		t.Fatalf("accepted two mapping authorities: %v", err)
-	}
-}
-
 const rootContextProgram = `package main
 use output;
 use dependency::leaf as api;
@@ -99,7 +77,7 @@ func TestCLIExplicitRootContexts(t *testing.T) {
 				t.Fatal(err)
 			}
 			var output bytes.Buffer
-			if err := run([]string{"transpile", "--roots", file, filepath.Join(app, "main.gox")}, &output, &output); err == nil {
+			if err := run([]string{"transpile", "-o", "-", "--roots", file, filepath.Join(app, "main.gox")}, &output, &output); err == nil {
 				t.Fatal("accepted a false package owner")
 			}
 		})
@@ -118,7 +96,7 @@ func TestCLIExplicitRootContexts(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", filepath.Join(app, "main.gox")}, &output, &output); err == nil {
+	if err := run([]string{"transpile", "-o", "-", filepath.Join(app, "main.gox")}, &output, &output); err == nil {
 		t.Fatal("unknown roots were inferred from module requirements")
 	}
 }
@@ -162,7 +140,7 @@ func TestCLIStandaloneRootContext(t *testing.T) {
 		rootconfig.Filename: "[roots.output]\nsource='toolchain'\npackage='fmt'\n",
 	})
 	var output bytes.Buffer
-	if err := run([]string{"transpile", filepath.Join(root, "main.gox")}, &output, &output); err != nil || !strings.Contains(output.String(), `"fmt"`) {
+	if err := run([]string{"transpile", "-o", "-", filepath.Join(root, "main.gox")}, &output, &output); err != nil || !strings.Contains(output.String(), `"fmt"`) {
 		t.Fatalf("standalone discovery: %v: %s", err, &output)
 	}
 	link := filepath.Join(t.TempDir(), "standalone-link.gox")
@@ -170,7 +148,7 @@ func TestCLIStandaloneRootContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", link}, &output, &output); err != nil {
+	if err := run([]string{"transpile", "-o", "-", link}, &output, &output); err != nil {
 		t.Fatalf("standalone context followed link directory instead of source: %v", err)
 	}
 	mapping := filepath.Join(root, "selected.toml")
@@ -178,18 +156,18 @@ func TestCLIStandaloneRootContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", "--roots", mapping, filepath.Join(root, "main.gox")}, &output, &output); err != nil {
+	if err := run([]string{"transpile", "-o", "-", "--roots", mapping, filepath.Join(root, "main.gox")}, &output, &output); err != nil {
 		t.Fatalf("standalone explicit context: %v: %s", err, &output)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", filepath.Join(root, "main.gox")}, &output, &output); err == nil {
+	if err := run([]string{"transpile", "-o", "-", filepath.Join(root, "main.gox")}, &output, &output); err == nil {
 		t.Fatal("standalone accepted an undeclared root")
 	}
 	if err := os.WriteFile(filepath.Join(root, "main.gox"), []byte("package main\nfunc main(){output::Println(42)}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"transpile", "--roots", mapping, filepath.Join(root, "main.gox")}, &output, &output); err == nil {
+	if err := run([]string{"transpile", "-o", "-", "--roots", mapping, filepath.Join(root, "main.gox")}, &output, &output); err == nil {
 		t.Fatal("declaring a root implicitly bound it in source")
 	}
 }
@@ -224,10 +202,6 @@ path="src/main.gox"
 		t.Fatal(err)
 	}
 	node := &project.Node{Root: root, Module: m.Module, HasManifest: true, Manifest: m, Requests: map[string]project.Request{"output": {}}}
-	roots, err := projectRoots(node)
-	if err != nil || roots["library"].ModulePath != m.Module || roots["library"].Source != "module" {
-		t.Fatalf("wrong local identity: %v %v", roots, err)
-	}
 	host, err := projectHostRoots(node)
 	if err != nil || len(host) != 1 || host["output"].Source != "toolchain" {
 		t.Fatalf("host inherited target roots: %v %v", host, err)

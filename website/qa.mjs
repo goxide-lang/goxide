@@ -385,7 +385,7 @@ try {
   const source=await fs.readFile(new URL(`checks/${name}.gox`,import.meta.url),'utf8');
   const input=path.join(temp,'playground.gox');await fs.writeFile(input,source);
   let nativeGo, nativeError;
-  try { nativeGo=execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']}); }
+  try { execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile','-o',input+'.go',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']}); nativeGo=await fs.readFile(input+'.go','utf8'); }
   catch(e) {nativeError=String(e.stderr).trim().replaceAll(input,'playground.gox');}
   await writeSource(page,source);
   if(name.startsWith('reject_') && !nativeTypeReject[name]) {
@@ -429,7 +429,7 @@ try {
    let expected;
    for(let repeat=0;repeat<2;repeat++) {
     let diagnostic;
-    try {execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']});}
+    try {execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile','-o',input+'.go',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']});}
     catch(e) {diagnostic=String(e.stderr).trim().replaceAll(input,'playground.gox');}
     assert.ok(diagnostic,`${check.name}: CLI unexpectedly accepted input`);
     assertOriginDiagnostic(diagnostic,check,source);
@@ -494,7 +494,7 @@ try {
    let previous;
    for(let repeat=0;repeat<2;repeat++) {
     let go,diagnostic,exit=0;
-    try {go=execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']});}
+    try {execFileSync(process.env.GOXIDE_BIN || fileURLToPath(new URL('../bin/goxide',import.meta.url)),['transpile','-o',input+'.go',input],{encoding:'utf8',cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:['ignore','pipe','pipe']});go=await fs.readFile(input+'.go','utf8');}
     catch(e) {exit=e.status;go=String(e.stdout || '');diagnostic=String(e.stderr).trim().replaceAll(input,'playground.gox');}
     const observation={name:check.name,ending,repeat,expect:check.expect,exit,go,diagnostic};
     results.push(observation);await saveMatrix();

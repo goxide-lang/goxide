@@ -27,7 +27,7 @@
 
 ## 3. 可对照的 lowering，不把名字当成本保证
 
-共同工作负载是同一 `*Source` 的方法调用、读取和 io.Copy；方法体及底层对象不因方案改变。完整可执行源码见 [研究夹具](../../../tests/research/trait_paths/probe/paths.go)。以下是缩略的 Go 示意：
+共同工作负载是同一 `*Source` 的方法调用、读取和 io.Copy；方法体及底层对象不因方案改变。完整可执行源码见 [研究夹具](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/probe/paths.go)。以下是缩略的 Go 示意：
 
 ```go
 // 直接采用原方法：只有已选 impl 的语义确实如此才可以。
@@ -96,7 +96,7 @@ Value/Defined 与原 *Source 的 any 动态类型不同；两个指向同一 tar
 
 ## 5. 实验设计与复现
 
-执行 [run.py](../../../tests/research/trait_paths/run.py) 会复制 fixture 到临时模块，不修改依赖或仓库根 go.mod，不下载软件。Go 可执行文件必须明确指定；本环境默认 /usr/bin/go 不是 Go 编译器。
+执行 [run.py](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/run.py) 会复制 fixture 到临时模块，不修改依赖或仓库根 go.mod，不下载软件。Go 可执行文件必须明确指定；本环境默认 /usr/bin/go 不是 Go 编译器。
 
 ```sh
 python3 tests/research/trait_paths/run.py \
@@ -112,7 +112,7 @@ python3 tests/research/trait_paths/run.py \
 - Copy：相同 4096 字节和 io.Discard，复用 target、每轮重置；每轮包括适配。原生 WriterTo 路径可避免读取/复制，因此不能把全部时间差归因于 wrapper 分配。吞吐数字不是网络/磁盘吞吐。
 - Plain/enhanced：同一个 marker 夹具开关伴生方法；并复测错误链、HTTP、io.Copy、自定义 Read、身份/存储。
 
-原始结果及版本/命令/源码摘要保存在 [results](../../../tests/research/trait_paths/results/environment.json)，包括 [测试](../../../tests/research/trait_paths/results/plain.log)、[增强方法集](../../../tests/research/trait_paths/results/enhanced.log)、[基准](../../../tests/research/trait_paths/results/bench.log)、[编译器诊断](../../../tests/research/trait_paths/results/compiler.log)、[动态分派反汇编](../../../tests/research/trait_paths/results/dispatch.log)。单次机器的一组微基准只回答这些表示在这些形状下的成本，不推算真实业务百分比或宣称跨版本零成本。
+原始结果及版本/命令/源码摘要保存在 [results](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/results/environment.json)，包括 [测试](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/results/plain.log)、[增强方法集](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/results/enhanced.log)、[基准](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/results/bench.log)、[编译器诊断](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/results/compiler.log)、[动态分派反汇编](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/results/dispatch.log)。单次机器的一组微基准只回答这些表示在这些形状下的成本，不推算真实业务百分比或宣称跨版本零成本。
 
 
 ### 5.1 本轮结果（五次中位数）
@@ -139,7 +139,7 @@ python3 tests/research/trait_paths/run.py \
 
 补充字典反汇编时首次未指定可写 Go 缓存而失败，重设 GOCACHE 后成功；失败日志及修正命令均保留，不算语义失败。
 
-本例中 Apply 自身内联并未消除字典函数字段调用，局部固定字典和可替换全局字典约 2.6 ns；[字典反汇编](../../../tests/research/trait_paths/results/dictionary-dispatch.log)保留间接 CALL。不能从“类型化静态字典”名字推断与直接函数完全等价。亚纳秒局部小方法的排序在两轮中变化，受寄存器分配/噪声影响，不据此宣称某种表示普遍更快。
+本例中 Apply 自身内联并未消除字典函数字段调用，局部固定字典和可替换全局字典约 2.6 ns；[字典反汇编](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/results/dictionary-dispatch.log)保留间接 CALL。不能从“类型化静态字典”名字推断与直接函数完全等价。亚纳秒局部小方法的排序在两轮中变化，受寄存器分配/噪声影响，不据此宣称某种表示普遍更快。
 
 Copy 原生约 7.8 ns、Read-only 核心值视图约 69.3 ns、显式保留 WriterTo 的 Full 约 8.9 ns；这主要展示可选协议分派导致工作量不同。io.Discard 的快速路径甚至不需要复制 4 KiB，不能解释为真实 I/O 加速倍数。Full 与原生的微小差值也不能推广到业务。
 

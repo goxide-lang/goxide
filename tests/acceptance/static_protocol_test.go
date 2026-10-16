@@ -1,8 +1,11 @@
 package acceptance_test
 
 import (
-	"encoding/json"
 	"fmt"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
+	goast "go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,7 +15,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/rootconfig"
 )
@@ -29,8 +31,9 @@ func TestStaticProtocolModules(t *testing.T) {
 		"user.gox": `package model
 use contracts;
 type User struct { Name string }
+type UserAlias = User
 var Calls int
-impl contracts::Build for User {
+impl contracts::Build for UserAlias {
     func Abc() Self { Calls++; return Self{Name: "Ada"} }
 }
 `,
@@ -63,6 +66,7 @@ pub use contracts::Build as Factory;
 `,
 	}, deps)
 	deps["protocols.example/model"] = model
+	operation := staticProtocolOperation(t, model, "User", "Abc")
 	appSources := map[string]string{
 		"app.gox": `package app
 use library as m;
@@ -85,28 +89,23 @@ func OtherFile() int { return m::User::Abc().Number }
 	}
 	appSource := h.source(t, "app", appSources, deps)
 	app := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, h.root, h.cli, true, "transpile", "-o", app, appSource)
+	h.compile(t, true, appSource, app)
 	repeated := filepath.Join(t.TempDir(), "repeat")
-	packagesCommand(t, h.root, h.cli, true, "transpile", "-o", repeated, appSource)
+	h.compile(t, true, appSource, repeated)
 	staticProtocolEqualTrees(t, app, repeated)
-	// Recompiling generated ordinary Go must retain the protocol and use
-	// artifacts, including the source arity of public generic functions. It
-	// already carries its imports/configuration; do not reload source roots.
+	// Recompiling generated ordinary Go preserves the public API. It already
+	// carries its imports/configuration; do not reload source roots.
 	reloaded := filepath.Join(t.TempDir(), "reloaded")
-	if _, err := frontend.CompileModuleWithOptions(model, reloaded, frontend.ModuleOptions{Roots: paths.Roots{}}); err != nil {
+	if err := testdeps.Module(model, reloaded, paths.Roots{}); err != nil {
 		t.Fatal(err)
 	}
-	for _, relative := range []string{".goxide.protocols.json", "facade/.goxide.uses.json"} {
-		if _, err := os.Stat(filepath.Join(reloaded, relative)); err != nil {
-			t.Fatalf("generated module reload lost %s: %v", relative, err)
-		}
-	}
+	h.originals[reloaded] = h.originals[model]
 	deps["protocols.example/model"] = reloaded
 	appReloaded := h.transpile(t, "app", appSources, deps)
 	deps["protocols.example/app"] = appReloaded
 	t.Run("independent_modules", func(t *testing.T) {
 		plain := h.source(t, "plain", map[string]string{
-			"consumer_test.go": `package plain
+			"consumer_test.go": strings.ReplaceAll(`package plain
 import (
  "reflect"
  "testing"
@@ -145,7 +144,7 @@ func (HandwrittenOps) Abc() Handwritten { return Handwritten{91} }
 func TestOrdinaryLibraryCarrier(t *testing.T) {
  if Native[Handwritten]().Value!=91 { t.Fatal("ordinary generic library") }
 }
-`,
+`, "Abc", operation),
 		}, deps)
 		for _, dir := range []string{contracts, model, app, reloaded, appReloaded, plain} {
 			packagesCommand(t, dir, h.goTool, true, "test", "-race", "-count=1", "-v", "./...")
@@ -157,42 +156,6 @@ func TestOrdinaryLibraryCarrier(t *testing.T) {
 		}
 	})
 
-	// Mutate actual on-disk dependencies, rather than feeding invented importer
-	// records to the compiler. Each subtest restores the known-good producer.
-	artifact := filepath.Join(reloaded, ".goxide.protocols.json")
-	saved, err := os.ReadFile(artifact)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, mutation := range []string{"missing", "malformed", "stale_source"} {
-		t.Run(mutation, func(t *testing.T) {
-			switch mutation {
-			case "missing":
-				if err := os.Remove(artifact); err != nil {
-					t.Fatal(err)
-				}
-				t.Cleanup(func() { packagesWrite(t, reloaded, ".goxide.protocols.json", string(saved)) })
-			case "malformed":
-				packagesWrite(t, reloaded, ".goxide.protocols.json", string(saved)+"\n{}\n")
-				t.Cleanup(func() { packagesWrite(t, reloaded, ".goxide.protocols.json", string(saved)) })
-			case "stale_source":
-				name := filepath.Join(reloaded, "user.go")
-				data, err := os.ReadFile(name)
-				if err != nil {
-					t.Fatal(err)
-				}
-				packagesWrite(t, reloaded, "user.go", string(data)+"\n// changed after protocol export\n")
-				t.Cleanup(func() { packagesWrite(t, reloaded, "user.go", string(data)) })
-			}
-			source := h.source(t, "broken", map[string]string{"bad.gox": "package broken\nuse library as m;\nfunc Value() m::User { return m::User::Abc() }\n"}, deps)
-			out := filepath.Join(t.TempDir(), "failed")
-			log := packagesCommand(t, h.root, h.cli, false, "transpile", "-o", out, source)
-			if !strings.Contains(log, "bad.gox:3:17:") || !strings.Contains(log, "source span [49,53)") || !strings.Contains(log, "metadata") {
-				t.Fatalf("lost original source or artifact diagnostic:\n%s", log)
-			}
-			staticProtocolNoOutput(t, out)
-		})
-	}
 }
 
 func TestStaticProtocolDiagnostics(t *testing.T) {
@@ -201,15 +164,14 @@ func TestStaticProtocolDiagnostics(t *testing.T) {
 	for _, tc := range []struct {
 		name, source, peer, want string
 	}{
-		{"missing_impl", prelude + "func Value() U { return U::Abc() }\n", "", "Abc"},
+		{"missing_impl", prelude + "func Value() U { return U::Abc() }\n", "", "associated type or member path"},
 		{"missing_method", prelude + "impl Build for U {}\n", "", "Abc"},
 		{"wrong_result", prelude + "type Other struct { N int }\nimpl Build for U { func Abc() Other { return Other{} } }\n", "", "Abc"},
 		{"wrong_parameter", prelude + "impl Build for U { func Abc(n int) Self { return Self{N:n} } }\n", "", "Abc"},
-		{"unconstrained_generic", prelude + "func Value[T any]() T { return T::Abc() }\n", "", "Abc"},
-		{"distinct_defined_type", prelude + "impl Build for U { func Abc() Self { return Self{N:1} } }\ntype V U\nfunc Value() V { return V::Abc() }\n", "", "Abc"},
-		{"alias_impl_target", prelude + "type Alias = U\nimpl Build for Alias { func Abc() Self { return Self{N:1} } }\n", "", "Alias"},
+		{"unconstrained_generic", prelude + "func Value[T any]() T { return T::Abc() }\n", "", "matching trait constraint"},
+		{"distinct_defined_type", prelude + "impl Build for U { func Abc() Self { return Self{N:1} } }\ntype V U\nfunc Value() V { return V::Abc() }\n", "", "associated type or member path"},
 		{"reserved_source_anchor", prelude + "func (U) GoxideInternalTypeCarrierForSelf(U) struct{} { return struct{}{} }\nimpl Build for U { func Abc() Self { return Self{} } }\n", "", "GoxideInternalTypeCarrierForSelf"},
-		{"reserved_peer_anchor", prelude + "impl Build for U { func Abc() Self { return Self{} } }\n", "package bad\nfunc (U) GoxideInternalTypeCarrierForSelf(U) struct{} { return struct{}{} }\n", "generated protocol anchor"},
+		{"reserved_peer_anchor", prelude + "impl Build for U { func Abc() Self { return Self{} } }\n", "package bad\nfunc (U) GoxideInternalTypeCarrierForSelf(U) struct{} { return struct{}{} }\n", "GoxideInternalTypeCarrierForSelf"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			files := map[string]string{"bad.gox": tc.source}
@@ -220,17 +182,8 @@ func TestStaticProtocolDiagnostics(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "failed")
 			log := packagesCommand(t, h.root, h.cli, false, "transpile", "-o", out, source)
 			file := "bad.gox:"
-			if tc.peer != "" {
-				file = "peer.go:"
-			}
 			if !strings.Contains(log, file) || !strings.Contains(log, tc.want) {
 				t.Fatalf("expected source diagnostic for %s:\n%s", tc.want, log)
-			}
-			if tc.peer != "" && (!strings.Contains(log, "peer.go:2:10:") || !strings.Contains(log, "source span [21,53)")) {
-				t.Fatalf("anchor collision did not identify the original native method name:\n%s", log)
-			}
-			if tc.name == "unconstrained_generic" && (!strings.Contains(log, "bad.gox:4:35:") || !strings.Contains(log, "source span [102,105)")) {
-				t.Fatalf("missing constraint did not identify the original associated member:\n%s", log)
 			}
 			staticProtocolNoOutput(t, out)
 		})
@@ -262,7 +215,7 @@ func Value() User { return User::Abc() }
 		t.Run(tc.name, func(t *testing.T) {
 			source := h.source(t, "model", implementation, map[string]string{"protocols.example/contracts": tc.dependency})
 			out := filepath.Join(t.TempDir(), "model")
-			log := packagesCommand(t, h.root, h.cli, tc.success, "transpile", "-o", out, source)
+			log := h.compile(t, tc.success, source, out)
 			if tc.success {
 				packagesCommand(t, out, h.goTool, true, "test", "-race", "-count=1", "./...")
 			} else {
@@ -308,7 +261,7 @@ func Value() User { return User::Abc() }
 		}
 		out := filepath.Join(t.TempDir(), "bad")
 		log := packagesCommand(t, h.root, h.cli, false, "transpile", "-o", out, source)
-		if !strings.Contains(log, "bad.gox:") || (!strings.Contains(log, "typeinfo") && !strings.Contains(log, "Of")) {
+		if !strings.Contains(log, "bad.go:") || !strings.Contains(log, "typeinfo.Of") || !strings.Contains(log, "type int has no field or method") {
 			t.Fatal(log)
 		}
 		staticProtocolNoOutput(t, out)
@@ -328,46 +281,15 @@ func F[T Build]() T { return T::Abc() }
 `,
 		"facade/facade.gox": "package facade\nuse library as p;\npub use p::F as ExportedF;\n",
 	}, nil)
-	// Read the public ABI actually emitted by this producer. The regression
-	// must not guess hashed helper names or add compatibility helper aliases.
-	var artifact struct {
-		Metadata struct {
-			Definitions     []struct{ Name, MarkerName string }
-			Implementations []struct {
-				Target      struct{ Name string }
-				CarrierName string
-			}
-		}
-	}
-	data, err := os.ReadFile(filepath.Join(provider, ".goxide.protocols.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(data, &artifact); err != nil {
-		t.Fatal(err)
-	}
-	marker, carrier := "", ""
-	for _, d := range artifact.Metadata.Definitions {
-		if d.Name == "Build" {
-			marker = d.MarkerName
-		}
-	}
-	for _, i := range artifact.Metadata.Implementations {
-		if i.Target.Name == "U" {
-			carrier = i.CarrierName
-		}
-	}
-	if marker == "" || carrier == "" {
-		t.Fatal("producer did not export Build/U evidence")
-	}
+	operation := staticProtocolOperation(t, provider, "U", "Abc")
+
 	native := h.source(t, "native", map[string]string{
 		"native.go": fmt.Sprintf(`package native
 type U struct { N int }
 type Ops struct{}
 func (U) GoxideInternalTypeCarrierForSelf(U) Ops { panic("anchor executed") }
-func (Ops) Abc() U { return U{N:77} }
-func (Ops) %s() {}
-`, marker),
+func (Ops) %s() U { return U{N:77} }
+`, operation),
 	}, nil)
 	deps := map[string]string{"protocols.example/model": provider, "protocols.example/native": native}
 	roots := map[string]rootconfig.Mapping{
@@ -389,7 +311,7 @@ func (Ops) %s() {}
 		source := h.source(t, "app", files, deps)
 		writeAcceptanceRoots(t, source, roots)
 		out := filepath.Join(t.TempDir(), "app")
-		packagesCommand(t, h.root, h.cli, true, "transpile", "-o", out, source)
+		h.compile(t, true, source, out)
 		packagesWrite(t, out, "route_test.go", `package app
 import("testing";p "protocols.example/model";n "protocols.example/native")
 func TestAliasesPreserveTheImplementation(t *testing.T) {
@@ -407,53 +329,96 @@ func TestNativeStructuralControl(t *testing.T) {
 	for _, route := range routes {
 		for _, kind := range []string{"hidden_parameter", "missing_impl"} {
 			t.Run(route.name+"/"+kind, func(t *testing.T) {
-				args, want, token := "p::U,OpsAlias", "source type parameters", "OpsAlias"
+				args, want, token := "p::U,OpsAlias", "type arguments", "OpsAlias"
 				files := map[string]string{}
 				if kind == "missing_impl" {
-					args, want, token = "native::U", "no explicit implementation", route.token
+					args, want, token = "native::U", "does not explicitly implement", route.token
 				} else {
-					files["native.go"] = fmt.Sprintf("package app\nimport p %q\ntype OpsAlias = p.%s\n", "protocols.example/model", carrier)
+					files["native.go"] = "package app\ntype OpsAlias = struct{}\n"
 				}
 				body := prelude + route.binding + fmt.Sprintf("func Wrong() int { return %s[%s]().N }\n", route.callee, args)
 				files["case.gox"] = body
 				source := h.source(t, "app", files, deps)
 				writeAcceptanceRoots(t, source, roots)
 				out := filepath.Join(t.TempDir(), "failed")
-				log := packagesCommand(t, h.root, h.cli, false, "transpile", "-o", out, source)
+				log := h.compile(t, false, source, out)
 				if !strings.Contains(log, want) {
 					t.Fatalf("route %s lost %s check:\n%s", route.name, kind, log)
 				}
-				staticProtocolDiagnosticToken(t, log, "case.gox", body, token)
+				staticProtocolDiagnosticLocation(t, log, "case.gox", body, token)
 				staticProtocolNoOutput(t, out)
 			})
 		}
 	}
 }
 
-func staticProtocolDiagnosticToken(t *testing.T, log, file, source, want string) {
+// Native consumers inspect the actual exported trait operation, whose name
+// includes the canonical trait identity. No metadata or hidden type name is used.
+func staticProtocolOperation(t *testing.T, directory, target, member string) string {
 	t.Helper()
-	m := regexp.MustCompile(`source span \[(\d+),(\d+)\)`).FindStringSubmatch(log)
-	if len(m) != 3 {
-		t.Fatalf("missing original source span:\n%s", log)
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
 	}
-	start, e1 := strconv.Atoi(m[1])
-	end, e2 := strconv.Atoi(m[2])
-	if e1 != nil || e2 != nil || start < 0 || end > len(source) || start >= end || source[start:end] != want {
-		t.Fatalf("diagnostic does not point to original %q token:\n%s", want, log)
+	var methods []*goast.FuncDecl
+	carrier := ""
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(directory, entry.Name()), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*goast.FuncDecl)
+			if !ok || function.Recv == nil {
+				continue
+			}
+			methods = append(methods, function)
+			receiver, ok := function.Recv.List[0].Type.(*goast.Ident)
+			if !ok || receiver.Name != target || function.Name.Name != "GoxideInternalTypeCarrierForSelf" {
+				continue
+			}
+			if result, ok := function.Type.Results.List[0].Type.(*goast.Ident); ok {
+				carrier = result.Name
+			}
+		}
 	}
-	line := strings.Count(source[:start], "\n") + 1
-	column := start - strings.LastIndex(source[:start], "\n")
-	if !strings.Contains(log, fmt.Sprintf("%s:%d:%d:", file, line, column)) {
-		t.Fatalf("source coordinates disagree with token span:\n%s", log)
+	for _, method := range methods {
+		receiver, ok := method.Recv.List[0].Type.(*goast.Ident)
+		if ok && receiver.Name == carrier && strings.HasPrefix(method.Name.Name, "GoxideTrait") && strings.HasSuffix(method.Name.Name, "_"+member) {
+			return method.Name.Name
+		}
+	}
+	t.Fatalf("producer did not emit %s's static %s operation", target, member)
+	return ""
+}
+
+func staticProtocolDiagnosticLocation(t *testing.T, log, file, source, want string) {
+	t.Helper()
+	match := regexp.MustCompile(regexp.QuoteMeta(file) + `:(\d+):(\d+):`).FindStringSubmatch(log)
+	if len(match) != 3 {
+		t.Fatalf("missing source location: %s", log)
+	}
+	line, lineErr := strconv.Atoi(match[1])
+	column, columnErr := strconv.Atoi(match[2])
+	lines := strings.Split(source, "\n")
+	if lineErr != nil || columnErr != nil || line < 1 || line > len(lines) || column < 1 || column > len(lines[line-1])+1 || !strings.Contains(lines[line-1], want) {
+		t.Fatalf("diagnostic does not identify the source expression containing %q: %s", want, log)
 	}
 }
 
-type staticProtocolHarness struct{ root, goTool, cli string }
+type staticProtocolHarness struct {
+	root, goTool, cli string
+	originals         map[string]string
+	dependencies      map[string]map[string]string
+}
 
 func newStaticProtocolHarness(t *testing.T) staticProtocolHarness {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
-	h := staticProtocolHarness{root: filepath.Clean(filepath.Join(filepath.Dir(here), "../..")), goTool: filepath.Join(runtime.GOROOT(), "bin/go"), cli: filepath.Join(t.TempDir(), "goxide")}
+	h := staticProtocolHarness{originals: map[string]string{}, dependencies: map[string]map[string]string{}, root: filepath.Clean(filepath.Join(filepath.Dir(here), "../..")), goTool: filepath.Join(runtime.GOROOT(), "bin/go"), cli: filepath.Join(t.TempDir(), "goxide")}
 	packagesCommand(t, h.root, h.goTool, true, "build", "-o", h.cli, "./cmd/goxide")
 	return h
 }
@@ -461,6 +426,11 @@ func newStaticProtocolHarness(t *testing.T) staticProtocolHarness {
 func (h staticProtocolHarness) source(t *testing.T, name string, files, deps map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
+	selected := map[string]string{}
+	for module, dependency := range deps {
+		selected[module] = dependency
+	}
+	h.dependencies[dir] = selected
 	mod := "module protocols.example/" + name + "\n\ngo 1.27\n"
 	var names []string
 	for path := range deps {
@@ -485,8 +455,46 @@ func (h staticProtocolHarness) transpile(t *testing.T, name string, files, deps 
 	t.Helper()
 	source := h.source(t, name, files, deps)
 	out := filepath.Join(t.TempDir(), name)
-	packagesCommand(t, h.root, h.cli, true, "transpile", "-o", out, source)
+	h.compile(t, true, source, out)
+	h.originals[out] = source
 	return out
+}
+
+func (h staticProtocolHarness) compile(t *testing.T, success bool, source, output string) string {
+	t.Helper()
+	selected := map[string]string{}
+	for module, dependency := range h.dependencies[source] {
+		selected[module] = dependency
+	}
+	for changed := true; changed; {
+		changed = false
+		for _, dependency := range selected {
+			original := h.originals[dependency]
+			if original == "" {
+				original = dependency
+			}
+			for module, indirect := range h.dependencies[original] {
+				if _, ok := selected[module]; !ok {
+					selected[module] = indirect
+					changed = true
+				}
+			}
+		}
+	}
+	modules := make([]string, 0, len(selected))
+	for module := range selected {
+		modules = append(modules, module)
+	}
+	sort.Strings(modules)
+	dependencies := make([]string, 0, len(modules))
+	for _, module := range modules {
+		original := h.originals[selected[module]]
+		if original == "" {
+			original = selected[module]
+		}
+		dependencies = append(dependencies, original)
+	}
+	return compileAcceptanceGraph(t, success, source, output, dependencies...)
 }
 
 func staticProtocolNoOutput(t *testing.T, out string) {

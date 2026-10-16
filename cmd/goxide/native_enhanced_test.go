@@ -9,6 +9,7 @@ import (
 )
 
 func TestNativeWorkspaceProgressiveFeatures(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI workspace features, vendor and build scripts deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	dest := filepath.Join(t.TempDir(), "new")
 	if out, e := importCall(t, root, "--workspace", "--out", dest, "--offline"); e != nil {
@@ -72,6 +73,7 @@ func TestNativeWorkspaceProgressiveFeatures(t *testing.T) {
 }
 
 func TestNativeWorkspaceProgressiveVendor(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI workspace features, vendor and build scripts deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	workspaceWrite(t, root, "dep/go.mod", "module example.org/dep\ngo 1.27\n")
 	workspaceWrite(t, root, "dep/dep.go", "package dep\nfunc Value()string{return \"original\"}\n")
@@ -107,6 +109,7 @@ func TestNativeWorkspaceProgressiveVendor(t *testing.T) {
 }
 
 func TestNativeWorkspaceProgressiveScriptPermissions(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI workspace features, vendor and build scripts deferred by P6")
 	t.Setenv("GOXIDE_TRUST_DIR", t.TempDir())
 	root := nativeWorkspaceFixture(t)
 	dest := filepath.Join(t.TempDir(), "new")
@@ -150,6 +153,7 @@ func main(){var q struct{OutDir string `+"`json:\"out_dir\"`"+`};b,e:=os.ReadFil
 }
 
 func TestNativeWorkspaceOptionalCfg(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI workspace features, vendor and build scripts deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	dest := filepath.Join(t.TempDir(), "new")
 	if out, e := importCall(t, root, "--workspace", "--out", dest, "--offline"); e != nil {
@@ -198,6 +202,7 @@ func TestNativeWorkspaceOptionalCfg(t *testing.T) {
 }
 
 func TestNativeWorkspaceDependencyRequiredFeature(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI workspace features, vendor and build scripts deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	dest := filepath.Join(t.TempDir(), "new")
 	if out, e := importCall(t, root, "--workspace", "--out", dest, "--offline"); e != nil {

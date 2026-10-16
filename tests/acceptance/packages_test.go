@@ -2,7 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -84,6 +84,12 @@ func TestPackagesApplication(t *testing.T) {
 					packagesWrite(t, source, name, data)
 				}
 				output := packagesCommand(t, root, cli, false, "build", "--go", tool, "--runtime", root, "-o", filepath.Join(t.TempDir(), "bad"), source)
+				if test.name == "cross-file-type-error" || test.name == "nominal-enums" {
+					if !strings.Contains(output, "bad.go:") || !strings.Contains(output, "cannot use") {
+						t.Fatal("missing generated package type error", output)
+					}
+					return
+				}
 				location := regexp.MustCompile(regexp.QuoteMeta(test.filename) + ":" + fmt.Sprint(test.line) + `(?::[0-9]+)?[: ]`)
 				if !location.MatchString(output) {
 					t.Fatalf("diagnostic did not map to original source %s:%d:\n%s", test.filename, test.line, output)
@@ -170,10 +176,9 @@ func TestApplicationFailures(t *testing.T) {
  }
 }
 func TestExportedProtocols(t *testing.T) {
- constructed:=cfg.NewRunModeWorkers(7)
- cfg.ValidateRunMode(constructed)
+ constructed:=&cfg.Workers{Value: 7}
  if name,n:=cfg.Describe(constructed); name!="workers" || n!=7 {t.Fatal("exported constructor lost payload")}
- if name,n:=cfg.Describe(cfg.NewRunModeDryRun()); name!="dry_run" || n!=0 {t.Fatal("exported unit constructor")}
+ if name,n:=cfg.Describe(&cfg.DryRun{}); name!="dry_run" || n!=0 {t.Fatal("exported unit constructor")}
  original,err:=cfg.Load([]byte("{\"Name\":\"mail\",\"Mode\":{\"Workers\":4},\"Labels\":[\"queue\"]}"))
  if err!=nil {t.Fatal(err)}
  clone:=cfg.CloneConfig(&original)

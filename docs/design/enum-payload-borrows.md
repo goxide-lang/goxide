@@ -1,6 +1,6 @@
 # 原位 enum payload 与引用合同
 
-本合同记录 2026-10-09 的 pre-MVP 实施范围，对应 [#14](https://github.com/goxide-lang/goxide/issues/14)。用户要求先让 match enum 可用，本轮不增加生命周期、逃逸、借用冲突或跨变体失效检查；后续工作单独跟踪于 [#17](https://github.com/goxide-lang/goxide/issues/17)。已有的类型、读写权限和擦除检查保留。
+本合同规定新前端 P3 的引用、读写权限与原位 payload 投影。用户 enum 的存储遵循[密封接口表示](enum-representation.md)；复制共享变体对象、整体替换后旧投影仍指向旧对象的行为已于 2026-10-13 确认。生命周期、逃逸、独占和共享别名风险分析按 [D19/D20](decisions.md) 独立推进；当前检查源级类型与路径读写权限。
 
 ## 源码入口
 
@@ -41,42 +41,44 @@ func increment() int {
 
 ## 存储、复制和 guard
 
-用户 enum 和共享 Option/Result 均使用 tag 加各变体独立的、真实类型的内联槽。投影取得该槽的 Go 指针；不对类型断言副本取址，不在分支退出时写回，也不加入 generation wrapper。
+用户 enum 是密封接口，动态值为变体结构体指针。普通赋值复制接口值，两个值共享同一个变体对象。投影直接取得该对象字段的地址，例如 `&variant.Value`；字段写入对持有该对象的其他 enum 值可见。
 
-普通赋值浅复制整个 enum；复制前后已有引用仍指向原 enum。payload 内的 slice、map 和指针仍遵循 Go 浅复制语义，不承诺深复制。
+整体赋值只替换接收赋值的 enum 变量。已有 payload 引用继续指向旧变体对象，Go GC 保持该对象存活；新值使用同一变体或另一变体均遵循此规则。
 
-scrutinee 与索引、接收者等位置组成部分只求值一次。分派及值绑定使用入口快照；原位投影在执行 guard 前取得，后续同变体分支复用投影。guard 失败不撤销副作用。降低保留外围 return、break、continue、goto 与 defer 的控制流，不复制分支体。
+Option/Result 在 P6 前沿用 `std/sum` 的 tag 与独立内联槽。普通赋值复制槽位，投影取得原 owner 内槽位的地址。两类存储的区别如下：
 
-通过其他别名整体替换 enum 不被拒绝。旧引用指向固定槽，因此有下列直接的 Go 行为：
+| 操作 | 用户 enum | Option/Result |
+| --- | --- | --- |
+| 复制 enum 后经投影写入 | 共享变体对象，复制值可见 | 原 owner 槽位更新，复制值的槽位独立 |
+| 原变量整体换成同一变体的新值 | 旧投影仍访问旧对象 | 旧投影读取同一槽位中的新 payload |
+| 原变量整体换成另一变体 | 旧投影仍访问旧对象 | 旧槽被清零，旧投影仍访问该非活动槽 |
+| 再整体换回原变体 | 旧投影仍访问旧对象 | 旧投影读取原槽位中的新 payload |
 
-| 对持有 A payload 引用的原 enum 操作 | 旧引用观察 |
-| --- | --- |
-| 用新的 A 整体赋值 | 读取新的 A payload |
-| 从 A 整体替换成 B | A 槽被清零；旧引用仍可读写非活动 A 槽 |
-| 从 B 再整体替换回 A | 再次读取新的 A payload |
+scrutinee 与索引、接收者等位置组成部分只求值一次。分派使用入口 enum 值；普通 payload 绑定及常量模式使用首个 guard 前保存的 payload 值。引用绑定指向真实字段或槽位，在 guard 前取得，同变体后续 arm 复用该位置。guard 失败不撤销副作用。降低保留外围 return、break、continue、goto、defer 与 `?` 的控制流，不复制分支体。
 
-这些是当前存储行为，不是失效保护。活动变体的协议验证忽略非活动槽。原生 Go 对可比较 struct 的 `==` 会包含非活动槽；goxide 的显式 equality 协议只比较经验证的活动变体及 payload。
+payload 值的复制遵循 Go 浅复制规则：标量和 struct/array 的值部分独立，slice、map、指针及用户 enum 可共享对象。只读路径上的共享部分继续保留读权限；独立值部分可以修改。引用可复制、保存、返回和捕获，不能从只读路径取得可写引用，也不能通过普通指针、接口或容器擦除只读资格。局部变量或独立值字段替换成新存储后按新值检查，旧副本保留原资格。
+
+取引用要求真实可寻址位置；map 元素与不可寻址临时值不能通过隐式副本实现借用。引用重绑定只改变本地绑定，已有引用仍指向原存储。源级 `&T` 与 `&mut T` 的权限检查完成后均生成普通 Go `*T`。
 
 ## 生成 Go 与模块边界
 
-std/sum 的 `GoxideSumABI` 为 3；enum metadata 为 9。共享库只提供普通 Go 存储与操作，不导入 compiler、serde 或用户包。serde core 继续拥有 Serialize/Deserialize，JSON 只负责格式。
+用户 enum 的投影由变体字段直接表达，不生成 Tag、Value、Project helper 或 enum metadata。同一次源码构建中的引用签名按解析后的函数、类型与包身份传递权限。普通同名声明不能冒充已检查的引用入口。
+
+Option/Result 使用当前 `std/sum` 的既有入口：
 
 - `sum.NewSome`、`sum.None`、`sum.NewOk`、`sum.NewErr` 构造值。
 - `sum.TagOption` / `sum.TagResult` 读取 tag；`ValidateOption` / `ValidateResult` 独立验证合法 tag。
 - `sum.ValueSome` / `ValueOk` / `ValueErr` 返回活动 payload 的副本。
 - `sum.ProjectSome` / `ProjectOk` / `ProjectErr` 接收 enum 指针并返回真实槽指针，检查当前 tag 和 nil owner。
-- `pub enum` 的生成包导出对应的构造、Validate、Tag、Value 和 Project helper 及必要的 payload 类型别名；私有 enum 只生成内部 helper。metadata 绑定真实 owner、类型身份和签名。
 
 Tag 读取不承担验证，serde 因而可以按现有协议返回错误；match、传播和其他派生在读取 payload 前保持各自的验证次序。Option 零值是 None；Result 和用户 enum 的零值仍非法，使用点执行既有验证。None 与 Some(nil)、Some(empty) 保持不同。
 
-投影的源级引用权限通过编译器已验证的函数对象和 enum 身份登记；同名普通函数、变量或伪造 owner 不取得这种资格。只读引用不能提升为可写或擦除权限。原生 Go 直接消费真实指针时遵循 Go 类型规则，不执行 goxide 的只读检查。
-
-旧 `sum.Some/Ok/Err` case 类型、生成 `GoxideCase*` 及 `GoxideOptionSome/GoxideResultOk/GoxideResultErr` case API 已移除。旧 interface、marker 和 schema 产物必须全部重新生成，不提供兼容转发层。正常的类型别名、公开引用类型命名和保护类型绑定的卫生性别名继续保留。
+按 [D31](decisions.md)，可写引用可自然传给元素类型匹配的 Go 指针参数；只读引用不能借此升级写权限。原生 Go 直接消费生成函数时遵循 Go 类型规则，不执行 goxide 的只读检查。跨构建的增强信息恢复由项目工具链阶段衔接。
 
 ## 验证入口与范围
 
-[可运行示例](../../examples/enum_borrows/main.gox)演示返回引用、普通复制和默认绑定。在仓库根构建 CLI 后运行 `goxide run --go /absolute/go examples/enum_borrows/main.gox`，输出为 `5 1` 和 `5`。该示例已用 Go 1.27.1 执行；它不替代下列跨模块验收。
+[可运行示例](../../examples/enum_borrows/main.gox)演示返回引用、共享变体对象和默认引用绑定。新管线生成 Go 后运行，输出为 `5 5` 和 `5`。
 
-[实际 CLI 验收](../../tests/acceptance/enum_payload_borrow_test.go)覆盖原位修改、复制、保存/返回/捕获、求值次数、guard 与整体替换、共享 sum、跨模块协议恢复和普通 Go 消费，并对生成模块执行 race/vet。测试文件列出验收目标；某个提交是否通过以该提交的实际测试记录和 CI 为准。
+[新管线验收](../../internal/lower/reference_e2e_test.go)验证原位修改、引用复制与保存、返回与捕获、存储身份、单次求值、guard、整体替换和生成结果确定性，并真实构建运行生成的 Go。读写权限反例在生成 Go 前诊断。
 
-生命周期、独占、跨变体引用失效保护、完整 Rust 模式规则、泛型用户 enum 和完整 trait 不由本轮完成。未新增安全分析不取消已有权限错误，也不改变普通 Go 互操作。
+泛型用户 enum 的投影使用实例化后的真实字段类型。完整 Rust 模式规则与 trait 按各自阶段推进。

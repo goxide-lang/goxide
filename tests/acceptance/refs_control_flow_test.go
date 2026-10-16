@@ -124,7 +124,7 @@ func TestAddressIdentity(t *testing.T){if got:=Run(3,false);got!=39{t.Fatal(got)
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor("func Bad(r &model::State,n int,rmap &map[*int]int){" + strings.ReplaceAll(body, "range rmap", "range *rmap") + "}\n")
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "readonly") {
+			if !strings.Contains(out, "read-only") {
 				t.Fatalf("not a permission rejection: %s", out)
 			}
 		})

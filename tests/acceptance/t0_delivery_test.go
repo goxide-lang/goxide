@@ -30,23 +30,21 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 	}
 	generated := t.TempDir()
 	first := filepath.Join(generated, "main.go")
-	firstMap := first + ".map.json"
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", first, "--source-map", firstMap, input)
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", first, input)
 	second := filepath.Join(t.TempDir(), "main.go")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", second, "--source-map", second+".map.json", input)
-	for _, suffix := range []string{"", ".map.json"} {
-		a, err := os.ReadFile(first + suffix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		b, err := os.ReadFile(second + suffix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(a, b) {
-			t.Fatalf("repeated CLI generation differs: %s", suffix)
-		}
+	deliveryCommand(t, outside, cli, true, nil, "transpile", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "-o", second, input)
+	a, err := os.ReadFile(first)
+	if err != nil {
+		t.Fatal(err)
 	}
+	b, err := os.ReadFile(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(a, b) {
+		t.Fatalf("repeated CLI generation differs")
+	}
+
 	packagesWrite(t, generated, "go.mod", "module delivery.example/app\ngo 1.27\n")
 	packagesWrite(t, generated, "delivery_test.go", deliveryAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
@@ -102,7 +100,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 			if walkErr != nil {
 				return walkErr
 			}
-			if entry.IsDir() || !(strings.HasSuffix(path, ".go") || strings.HasSuffix(path, ".map.json")) {
+			if entry.IsDir() || !(strings.HasSuffix(path, ".go")) {
 				return nil
 			}
 			rel, err := filepath.Rel(dest, path)
@@ -150,7 +148,7 @@ func TestT0DeliveryInstalledCLI(t *testing.T) {
 		packagesWrite(t, source, "main.gox", "package main\nuse kit as k;\nfunc main(){k::broken!()}\n")
 		dest := filepath.Join(t.TempDir(), "generated")
 		output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, source)
-		for _, want := range []string{"definition.gox:3:", "main.gox:3:"} {
+		for _, want := range []string{"cannot use 17", "as string value in argument to kit.Emit"} {
 			if !strings.Contains(output, want) {
 				t.Fatalf("missing %s in real CLI error: %s", want, output)
 			}

@@ -1,5 +1,0 @@
-package app
-import m "iife.example/app/model"
-func Plain(e m.Mode)int{return func()int{match e{m.Mode::A=>{return 1},m.Mode::B=>{return 2}};return 0}()}
-func Named(e m.Mode)m.Word{return func()m.Word{match e{m.Mode::A=>{return 1<<63},m.Mode::B=>{return 7}};return 0}()}
-func Ref(e m.Mode,a &int,b &int)&int{return func() &int{match e{m.Mode::A=>{return a},m.Mode::B=>{return b}};return a}()}

@@ -1,8 +1,0 @@
-package main
-use model;
-func ContextBool(t *model::Tree,n int,r Result[int,error])Result[int,error]{t.Enabled=(n==0)&&model::Flag(r?==7);return r}
-func ExplicitBool(t *model::Tree,n int,r Result[int,error])Result[int,error]{if n!=0{t.Enabled=false;return r};match r{Result[int,error]::Ok(v)=>{t.Enabled=model::Flag(v==7)},Result[int,error]::Err(e)=>{return Result[int,error]::Err(e)},};return r}
-func ContextShift(t *model::Tree,n int,r Result[int,error])Result[int,error]{t.Wide,t.Count=1<<n,r?;return r}
-func ExplicitShift(t *model::Tree,n int,r Result[int,error])Result[int,error]{_=0<<n;match r{Result[int,error]::Ok(v)=>{t.Wide,t.Count=1<<n,v},Result[int,error]::Err(e)=>{return Result[int,error]::Err(e)},};return r}
-func ContextLen(t *model::Tree,r Result[int,error])Result[int,error]{t.Count=len([1]int{r?});return r}
-func ExplicitLen(t *model::Tree,r Result[int,error])Result[int,error]{match r{Result[int,error]::Ok(v)=>{t.Count=len([1]int{v})},Result[int,error]::Err(e)=>{return Result[int,error]::Err(e)},};return r}

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "compilerCommit": "690cd5178dc11a0089a41e9320ed1275778383e1",
-  "reviewedAt": "2026-10-12",
+  "reviewedAt": "2026-10-16",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
   },
@@ -9,7 +9,8 @@
     "proposal": "提案",
     "accepted": "已确认待实现",
     "partial": "部分实现",
-    "verified": "已实现并验证"
+    "verified": "已实现并验证",
+    "deferred": "MVP 阶段恢复"
   },
   "topics": {
     "language": "语法与控制流",
@@ -89,8 +90,8 @@
     {
       "id": "enum_borrows",
       "title": "enum 载荷原位借用",
-      "description": "保存可写载荷引用，普通 enum 复制保持独立槽。",
-      "expectedStdout": "5 1\n5\n"
+      "description": "保存可写载荷引用；enum 值的普通赋值共享变体对象。",
+      "expectedStdout": "5 5\n5\n"
     },
     {
       "id": "static_protocol",
@@ -109,9 +110,9 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "用有限模式匹配消除重复；expr、ident、tt 捕获在模板明确类型槽拒绝，完整捕获表达式保持调用点类型。",
+      "summary": "声明宏支持模式匹配、重复和嵌套，可在表达式、语句、类型与 item 位置展开。",
       "usage": "values!(next(), next(), 9) 构造列表，两个 next 各调用一次。twice 示例显式保存参数，避免重复求值。",
-      "limitation": "模板重复写两次表达式就可能求值两次；不是自动惰性或完整 hygiene。没有 type 片段；歧义转换/单实参泛型不在本轮类别判断范围。过程宏与外部预编译宏包未交付。",
+      "limitation": "模板中的路径默认按定义点解析，$caller:: 显式使用调用点；重复写两次捕获表达式仍可能求值两次。过程宏与外部预编译宏包尚未交付。",
       "examples": [
         "macro",
         "macro_repeat"
@@ -138,8 +139,8 @@
       "status": "partial",
       "support": "browser",
       "summary": "用具名变体表示状态与载荷，避免将任意整数当成有效状态。",
-      "usage": "State::Count(3) 与 State::Empty 具有同一个封闭名义类型。每个变体使用独立的内联载荷槽；普通赋值按 Go 的浅值复制规则复制它们。非法原生 Go 表示在已覆盖的使用点校验。",
-      "limitation": "直接递归值布局须通过指针或容器间接层打断；slice、map、pointer 等载荷仍保留普通 Go 浅复制语义。不支持开放 raw/C enum，也不承诺所有公开函数入口都校验完整对象图。用户泛型 enum 尚不可用。",
+      "usage": "用户 enum 生成密封 Go 接口，每个变体由一个指针结构体承载。普通赋值共享原变体对象；match 只分派一次，同一变体的 arm 按源码顺序选择。",
+      "limitation": "nil 接口不是合法 enum 值，match 分派前会 panic，_ 不兜 nil。引用视图保存 owner 槽位，已有 payload 投影继续指向取得时的变体字段。Option/Result 仍使用已发布 std/sum 的现有表示。",
       "examples": [
         "enum",
         "enum_borrows"
@@ -373,7 +374,7 @@
     },
     {
       "id": "projects",
-      "title": "feature、依赖来源与 targets",
+      "title": "多包、feature 与编译目标",
       "topic": "projects",
       "rfcs": [
         "0001",
@@ -382,9 +383,9 @@
       ],
       "status": "partial",
       "support": "cli",
-      "summary": "format 2 的 goxide.toml 统一 module、原生 Go 依赖政策、增强依赖、feature 与目标；goxide.lock 固定真实解析结果。",
-      "usage": "最小工程根只有 TOML 和源码：默认 pretty=true，关闭默认 feature 后 false。Go module 元数据只进入受管 target；锁记录真实选版和校验，不将历史 go.sum 当版本列表。 已有 go.mod 的 CLI 单文件按输入最近祖先 module 恢复已登记外部 enum/协议，在同一图中 build/run；只编译指定文件。",
-      "limitation": "TOML 作者根与 go.mod/go.sum 或旧 hgo.lock 并存会拒绝；无 TOML 的原生 Go 依赖仍受支持。offline 通常需要缓存，不冻结本地 path。原生 vendor 只作输入，物化普通本地模块；go.work 使用显式迁入模式，旧 format 不自动升级。 单文件不隐选 TOML/workspace target/features；不可导入的 internal-origin 增强操作仍拒绝，浏览器不解析任意 module。",
+      "summary": "goxide.toml 与稳定锁文件支持多包程序、公开 Go 依赖和本地 path 依赖；feature、target 与 env 汇入同一条件配置。",
+      "usage": "原生 Go 包用 goxide gen . 或 go generate 生成源码；TOML 工程用 --features 选择特性，build --target amd64-unknown-linux 交叉构建。goxide env --json 查看宿主、Go 环境与有效目标。#[cfg]、#[cfg_attr] 和 cfg! 可查询 feature、target_* 与 env。",
+      "limitation": "原生 gen 继承有效 Go 环境；工具链模式默认宿主并接受 --target。非宿主 run/test 提前拒绝。workspace、vendor、import-go 与构建脚本入口待 MVP 恢复；offline 需要已有依赖缓存。",
       "examples": [],
       "evidence": [
         "internal/project/manifest.go",
@@ -401,8 +402,8 @@
       "checks": [],
       "snippet": {
         "language": "TOML · 最小工程 goxide.toml",
-        "text": "[package]\nformat = 2\nmodule = \"example.org/catalog\"\ngo = \"1.27\"\n\n[features]\ndefault = [\"pretty\"]\npretty = []\n\n[[bin]]\nname = \"demo\"\npath = \"src/main.gox\"\n",
-        "note": "仅此清单是作者配置；实际 goxide.lock 与两种运行输出见工程快照。target 内生成 Go 元数据。"
+        "text": "[package]\nformat = 2\nmodule = \"example.org/catalog\"\ngo = \"1.27\"\n\n[[bin]]\nname = \"demo\"\npath = \"src\"\n\n[dependencies]\nfmt = { go = \"fmt\" }\n\n[features]\ndefault = []\nfast = []\n",
+        "note": "goxide build --features fast --target linux/amd64 选择特性和目标；源码可用 #[cfg(feature(\"fast\"))] 选择声明。env 无需清单登记，查询本次调用的原始环境。"
       }
     },
     {
@@ -412,23 +413,18 @@
       "rfcs": [
         "0025"
       ],
-      "status": "partial",
-      "support": "cli",
-      "summary": "import-go 先只读输出候选 TOML，再在全新目录 staging 构建显式目标，成功才发布目的工程。",
-      "usage": "下方最小例从 main.go/go.mod 生成 format 2 TOML 与 schema 2 锁，原文件哈希不变；新目录首次 offline+locked 运行得到同一输出。",
-      "limitation": "仅接受未迁入的普通 Go module，不自动升级旧 format/JSON/增强锁。不覆盖现有目录；go.work 需显式 --workspace；未支持指令拒绝。原生 module vendor 的受限迁入见独立条目。不执行用户程序、go generate 或脚本；示例运行是单独验证步骤。",
+      "status": "deferred",
+      "support": "unavailable",
+      "summary": "P6 已关闭此功能的 CLI 入口；实现保留，计划在 MVP 阶段继续。",
+      "usage": "当前编译器不提供此入口。请使用单文件、独立 Go module 目录或最小 goxide.toml 工程的 build、run、test。",
+      "limitation": "历史实现证据仅供追溯，不代表当前版本开放此功能；网站不再构建或发布对应运行快照。",
       "examples": [],
       "checks": [],
       "evidence": [
         "docs/rfcs/0025-unified-project.md",
         "cmd/goxide/import_go.go",
         "cmd/goxide/import_go_test.go"
-      ],
-      "snippet": {
-        "language": "CLI · 实际验证流程",
-        "text": "goxide import-go --plan --bin app=. old-project\ngoxide import-go --out new-project --bin app=. --offline old-project\ngoxide run --bin app --offline --locked new-project",
-        "note": "命令由本地构建过程执行并留下快照；浏览器不会执行迁移、构建或运行 Go。"
-      }
+      ]
     },
     {
       "id": "build-scripts",
@@ -437,11 +433,11 @@
       "rfcs": [
         "0023"
       ],
-      "status": "partial",
-      "support": "cli",
-      "summary": "已选 manifest 输入/输出与脚本身份参与可信构建、缓存和目标隔离。",
-      "usage": "已知构建脚本可以从 schema 生成 Go/数据；只有精确授权的脚本、helper、依赖和工具才可执行。",
-      "limitation": "这是非沙箱本机程序；offline 不禁止脚本联网。网页不运行脚本，也不请求用户给予构建权限。 TOML 与新锁不代替授权；生成前仍先检查图与配置。",
+      "status": "deferred",
+      "support": "unavailable",
+      "summary": "P6 已关闭此功能的 CLI 入口；实现保留，计划在 MVP 阶段继续。",
+      "usage": "当前编译器不提供此入口。请使用单文件、独立 Go module 目录或最小 goxide.toml 工程的 build、run、test。",
+      "limitation": "历史实现证据仅供追溯，不代表当前版本开放此功能；网站不再构建或发布对应运行快照。",
       "examples": [],
       "evidence": [
         "internal/scripttrust/store.go",
@@ -449,12 +445,7 @@
         "cmd/goxide/buildscript_test.go",
         "cmd/goxide/combination_review_test.go"
       ],
-      "checks": [],
-      "snippet": {
-        "language": "TOML · build 说明片段",
-        "text": "[build]\nentry = \"tools/build/main.gox\"\ninputs = [\"schema.txt\"]\noutputs = [\"gen/schema.go\", \"gen/data.txt\"]\ntimeout_seconds = 60",
-        "note": "选自已验证的 schema 生成工程；不是独立可运行工程。TOML/锁迁移不会授予脚本执行权。"
-      }
+      "checks": []
     },
     {
       "id": "readonly",
@@ -517,9 +508,9 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "显式 trait / impl 支持返回 Self 的关联函数；具体类型与协议约束泛型参数都可用静态路径调用。",
+      "summary": "trait / impl 支持静态方法、关联类型与约束；实例 wrapper 和类型 carrier 可由原生 Go 调用。",
       "usage": "用 trait Build 声明 Abc() Self，再为 User 编写 impl。User::Abc() 与 Make[T Build] 中的 T::Abc() 调用对应实现；同包多文件示例将协议和实现分开。",
-      "limitation": "当前是具有限定语法的静态协议切片，不包括关联类型、动态 trait 对象、declare impl、完整固有 impl 或完整 RFC 泛型能力。浏览器只编辑一个包，不加载任意跨模块协议产物。",
+      "limitation": "能力以已实现的静态协议与实例适配范围为准，不宣称完整 Rust trait 或动态对象系统。浏览器只编辑一个包，不加载任意跨模块协议产物。",
       "examples": [
         "static_protocol"
       ],
@@ -642,8 +633,8 @@
       "status": "partial",
       "support": "browser",
       "summary": "公开 std 提供共享 Option/Result 身份、格式化与运行时支持，以及静态协议的零值类型载体；serde core / JSON 独立分层。",
-      "usage": "生成 Go 导入 std/sum、std/formatting、std/runtime 或 std/typeinfo，不依赖编译器支持包。typeinfo::Of 提取零值载体，不构造目标 T 或运行锚点方法；具体载荷 validator 仍由编译器生成。JSON 使用独立 serde/json。",
-      "limitation": "enum schema 9 / reference 3 / use 3 / sum ABI 3 / protocol metadata 1 / typeinfo ABI 1 必须与配套 std 版本共同使用。旧 interface case API 已删除，旧产物须重生成。Option 零值为 None，Result 零值非法。固定版本不等于 v1 ABI 承诺。",
+      "usage": "生成 Go 导入 std/sum、std/formatting、std/runtime 或 std/typeinfo，不依赖编译器支持包。typeinfo::Of 提取零值载体，不构造目标 T 或运行锚点方法。JSON 使用独立 serde/json。",
+      "limitation": "网站使用清单记录的固定 std / serde 版本；固定版本不等于 v1 ABI 承诺。新管线不读取旧 enum、reference、use 或 protocol 元数据。用户 enum 使用密封接口；内建 Option 零值为 None，Result 零值非法。",
       "examples": [
         "result",
         "serde_option",
@@ -693,7 +684,7 @@
       ],
       "status": "partial",
       "support": "cli",
-      "summary": "Cobra 命令树提供中文 help、四种 shell completion 与 scripts 六个动作子命令。业务入口使用独立 typed request/service。",
+      "summary": "中文 help 和 shell completion 描述当前开放的命令；run 保留 -- 后的程序参数。",
       "usage": "长选项使用 --name，短选项使用 -x；选项放在输入之前。run INPUT -- ARGS 保留程序参数，其他命令不开放任意透传。 语言名Goxide，命令goxide，源码.gox，环境变量GOXIDE_*；旧.hgo/HGO_*输入拒绝。",
       "limitation": "拒绝旧 Go 风格 -go / -offline 并提示迁移；仅支持已定义的短选项组合，不承诺全部 POSIX 规则。help/completion 不运行构建、下载或脚本。",
       "examples": [],
@@ -705,8 +696,8 @@
       ],
       "snippet": {
         "language": "CLI · 本机使用",
-        "text": "goxide run --offline --locked project -- --name value\ngoxide scripts --help\ngoxide completion bash",
-        "note": "浏览器不执行 CLI；下方快照来自构建时真实验证。"
+        "text": "goxide run --offline --locked project -- --name value\ngoxide --help\ngoxide completion bash",
+        "note": "浏览器不执行 CLI；下方参数快照来自构建时真实验证。"
       }
     },
     {
@@ -716,11 +707,11 @@
       "rfcs": [
         "0025"
       ],
-      "status": "partial",
-      "support": "cli",
-      "summary": "vendor仅作Go迁移输入，没有长期vendor构建模式；默认将供应字节物化普通本地模块，也可明确选择有证据的精确Go module远端来源。",
-      "usage": "stdin/stderr都为TTY且无source参数时，一次展示模块清单；空行全部local，cancel/EOF取消。非TTY默认local且不读管道；重复--source MODULE=local|remote显式选择。差异逐文件列出，TTY需逐模块输入remote MODULE，非TTY需--accept-source-diff MODULE；原供应字节始终保留。",
-      "limitation": "remote仅限原清单证实的精确module path/version（含版本化replacement），local replacement不能确认remote。无Git推断、任意URL、新版本搜索或registry。verified subset只证明供应文件集合相同；unknown不可冒称全发行物等价。--offline禁止工具控制的网络，暖完整缓存可核验remote，缺缓存失败；不隔离用户脚本网络。plan不读取终端、不比对remote，常规build不询问。",
+      "status": "deferred",
+      "support": "unavailable",
+      "summary": "P6 已关闭此功能的 CLI 入口；实现保留，计划在 MVP 阶段继续。",
+      "usage": "当前编译器不提供此入口。请使用单文件、独立 Go module 目录或最小 goxide.toml 工程的 build、run、test。",
+      "limitation": "历史实现证据仅供追溯，不代表当前版本开放此功能；网站不再构建或发布对应运行快照。",
       "examples": [],
       "checks": [],
       "evidence": [
@@ -730,12 +721,7 @@
         "cmd/goxide/import_sources_process_test.go",
         "internal/project/supplied_sources.go",
         "docs/reviews/source-selection-20261005.md"
-      ],
-      "snippet": {
-        "language": "CLI · 本机使用",
-        "text": "goxide import-go --out new-project --bin app=. --offline --source example.org/d=remote --accept-source-diff example.org/d old-project\ngoxide run --bin app --offline --locked new-project",
-        "note": "示例候选来自原清单；offline remote要求完整缓存。下方真实CLI快照展示差异拒绝/确认和原字节保留；浏览器不执行迁入或网络请求。"
-      }
+      ]
     },
     {
       "id": "workspace",
@@ -744,11 +730,11 @@
       "rfcs": [
         "0026"
       ],
-      "status": "partial",
-      "support": "cli",
-      "summary": "作者 workspace 核心已实现：显式继承、全 workspace 统一版本与根唯一 schema 3 锁；仅所选成员及活动依赖参与编译。",
-      "usage": "成员须显式 package1 = { workspace = true } 才继承模板。全体成员政策参与版本求解，选中构建另合并 feature；--package 选择成员，--bin / --example 选择命名目标。复制根锁拆出可复用可达版本与 Git pin。",
-      "limitation": "成员/import 不自动建边或覆盖来源。复制锁不复制 path 源码，继承须物化；首次锁定可能取未选依赖元数据，不运行脚本。原生go.work迁入有独立schema4模式；统一host resolver、细粒度lock update、publish/registry尚未实现。批量构建不是事务性发布。",
+      "status": "deferred",
+      "support": "unavailable",
+      "summary": "P6 已关闭此功能的 CLI 入口；实现保留，计划在 MVP 阶段继续。",
+      "usage": "当前编译器不提供此入口。请使用单文件、独立 Go module 目录或最小 goxide.toml 工程的 build、run、test。",
+      "limitation": "历史实现证据仅供追溯，不代表当前版本开放此功能；网站不再构建或发布对应运行快照。",
       "examples": [],
       "checks": [],
       "evidence": [
@@ -756,12 +742,7 @@
         "docs/reviews/workspace-core-20261004.md",
         "cmd/goxide/workspace_test.go",
         "internal/project/workspace_test.go"
-      ],
-      "snippet": {
-        "language": "CLI · 多文件工程",
-        "text": "goxide run --package example.org/service --bin web workspace\ngoxide run --package example.org/service --example hello workspace\ngoxide build --workspace --offline --locked workspace",
-        "note": "下面的真实工程快照展示统一选版、feature恢复及复制根锁拆出；不能放进单文件Playground。"
-      }
+      ]
     },
     {
       "id": "workspace-import",
@@ -770,11 +751,11 @@
       "rfcs": [
         "0026"
       ],
-      "status": "partial",
-      "support": "cli",
-      "summary": "只读plan后向新目录迁入，保留成员go/require/replace/exclude/godebug与根work政策；真实Go包归属分析物化显式成员边，根schema4锁与作者模式schema3分开。",
-      "usage": "迁入后可逐步加入.gox、现有features与明确授权的scripts；未授权不执行，撤销后缓存也拒绝。成员拆出显式物化继承/path并复制根锁，只消费可达记录，恢复成员独立政策。 供应模块来源选择与单模块一致，显式 remote 按普通 Go replacement/锁验证。",
-      "limitation": "分析限迁入时平台、Go工具与C配置，换配置需重新分析。供应vendor保留字节/权限，不下载补包或重建；供应源码是普通本地模块，没有vendor构建/拆出模式，独立时物化路径并复制根锁。外部非成员replace不自动打包；不承诺全部workspace功能、统一host resolver或publish。",
+      "status": "deferred",
+      "support": "unavailable",
+      "summary": "P6 已关闭此功能的 CLI 入口；实现保留，计划在 MVP 阶段继续。",
+      "usage": "当前编译器不提供此入口。请使用单文件、独立 Go module 目录或最小 goxide.toml 工程的 build、run、test。",
+      "limitation": "历史实现证据仅供追溯，不代表当前版本开放此功能；网站不再构建或发布对应运行快照。",
       "examples": [],
       "checks": [],
       "evidence": [
@@ -783,12 +764,7 @@
         "cmd/goxide/native_enhanced_test.go",
         "cmd/goxide/native_standalone_test.go",
         "docs/reviews/vendor-local-modules-20261004.md"
-      ],
-      "snippet": {
-        "language": "CLI · 多文件迁入",
-        "text": "goxide import-go --workspace --plan --offline native\ngoxide import-go --workspace --out migrated --offline native\ngoxide run --package example.org/app --locked --offline migrated",
-        "note": "offline只使用本地材料和完整缓存，remote缺缓存失败；所有来源选择受同一规则约束。脚本仍需明确授权，网页不执行迁入。"
-      }
+      ]
     }
   ],
   "compilerDigest": "6598024b9eb11a9ee9a710307bc78ab2ff0f6f3400465f8df74f763133adef27",

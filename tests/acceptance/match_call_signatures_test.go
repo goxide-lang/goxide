@@ -70,6 +70,8 @@ func SpreadMatch(rest []int)bool{g:=func(xs ...int)bool{if len(xs)>0{xs[0]=9};re
 func WideSpread()m::Alias{g:=func(xs ...m::Alias)m::Alias{return xs[0]};return g(match E::A{E::A=>1<<63,E::B=>0})}
 func PrivateAlias()m::Alias{return m::Sink()(match E::A{E::A=>1<<63,E::B=>0})}
 func ExplicitGeneric()m::Alias{return m::Identity[m::Alias](match E::A{E::A=>1<<63,E::B=>0})}
+func Own[T any](v T)T{return v}
+func OwnGeneric()int{return Own[int](match E::A{E::A=>1,E::B=>0})}
 func LocalGeneric()uint64{return Generic[uint64](match E::A{E::A=>1<<63,E::B=>0})}
 func Shadow()uint64{type Count int;_ = Count(0);return Generic[uint64](match E::A{E::A=>1<<63,E::B=>0})}
 func RecoverField()(ok bool){defer func(){s:=struct{F func(any)}{F:func(v any){ok=v=="boom"}};s.F(match E::A{E::A=>recover(),E::B=>nil})}();panic("boom")}
@@ -113,7 +115,7 @@ func TestNativeTiming(t *testing.T){for i,pair:=range [][2]func(){
 // Assertions versus argument calls are not ordered by the Go spec. Check our
 // stable late-receiver rule separately, rather than pinning one optimizer trace.
 func TestReceiverAssertions(t *testing.T){for _,f:=range []func(){Assert,AssertPointer}{trace=nil;if !caught(f){t.Fatal("no assertion panic")};want(t,[]int{3})};for _,f:=range []func(){func(){var a any=0;_=a.(m.S).Value(mark(3))},func(){var a any;_=a.(*m.S).Value(mark(3))}}{trace=nil;if !caught(f){t.Fatal("native assertion did not panic")};if len(trace)>1||(len(trace)==1&&trace[0]!=3){t.Fatal(trace)};t.Log("native assertion trace (unspecified relative order):",trace)};trace=nil}
-func TestVariadicIdentity(t *testing.T){if StaticUsed()!=3||StaticVariadic()!=5||Variadic()!=5||!VariadicEmpty(){t.Fatal("variadic")};v:=[]int{4};if Spread(v)!=1||v[0]!=7{t.Fatal(v)};if !SpreadMatch(nil)||SpreadMatch([]int{})||SpreadMatch(v)||v[0]!=9{t.Fatal("slice identity")};if WideSpread()!=m.Alias(1)<<63||PrivateAlias()!=m.Alias(1)<<63||ExplicitGeneric()!=m.Alias(1)<<63||LocalGeneric()!=uint64(1)<<63||Shadow()!=uint64(1)<<63{t.Fatal("nominal/context")}}
+func TestVariadicIdentity(t *testing.T){if OwnGeneric()!=1||StaticUsed()!=3||StaticVariadic()!=5||Variadic()!=5||!VariadicEmpty(){t.Fatal("variadic")};v:=[]int{4};if Spread(v)!=1||v[0]!=7{t.Fatal(v)};if !SpreadMatch(nil)||SpreadMatch([]int{})||SpreadMatch(v)||v[0]!=9{t.Fatal("slice identity")};if WideSpread()!=m.Alias(1)<<63||PrivateAlias()!=m.Alias(1)<<63||ExplicitGeneric()!=m.Alias(1)<<63||LocalGeneric()!=uint64(1)<<63||Shadow()!=uint64(1)<<63{t.Fatal("nominal/context")}}
 func TestFailure(t *testing.T){trace=nil;if !IsErr(Failure()){t.Fatal("failure")};want(t,[]int{1,2,3,9})}
 var sink int
 func BenchmarkMethodMatch(b *testing.B){s:=m.S{};for i:=0;i<b.N;i++{sink=BenchMethod(&s)}}
@@ -133,7 +135,6 @@ func BenchmarkGenericGo(b *testing.B){for i:=0;i<b.N;i++{sink=m.Identity[int](1)
 		"legacy-method-expression-dot":   `func Bad()int{return (*m::S).Pointer(nil,match E::A{E::A=>1,E::B=>0})}`,
 		"static-type-namespace-conflict": `func Bad(){type m int;_ = m(0)}`,
 		"multiple":                       `func Bad()(a,b int){return match E::A{E::A=>1,E::B=>0}}`,
-		"goxide-generic-definition":      `func own[T any](v T)T{return v};func Bad()int{return own[int](match E::A{E::A=>1,E::B=>0})}`,
 		"unaddressable-array":            `func Bad()int{return m::Array()[0].Pointer(match E::A{E::A=>1,E::B=>0})}`,
 		"readonly-method":                `func Bad(r &m::S){(*r).Pointer(match E::A{E::A=>1,E::B=>0})}`,
 		"unaddressable":                  `func Bad()int{return m::Value().Pointer(match E::A{E::A=>1,E::B=>0})}`,
@@ -147,8 +148,8 @@ func BenchmarkGenericGo(b *testing.B){for i:=0;i<b.N;i++{sink=m.Identity[int](1)
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "app.gox:") {
-				t.Fatal("missing source diagnostic", out)
+			if !strings.Contains(out, "app.gox:") && !strings.Contains(out, "app.go:") {
+				t.Fatal("missing package diagnostic", out)
 			}
 		})
 	}

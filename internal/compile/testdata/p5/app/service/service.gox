@@ -1,0 +1,12 @@
+package service
+
+use kit;
+
+func Read() int {
+    value := kit::create()
+    kit::set(&mut value, 9)
+    var source kit::Source[Item = int] = value
+    return source.get() + kit::Read[kit::Choice](value)
+}
+
+func JSON() string { return kit::encode(7) }

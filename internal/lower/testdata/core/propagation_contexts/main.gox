@@ -1,0 +1,86 @@
+package main
+
+use fmt;
+
+pub enum Gate { Enter(int), Shut }
+
+func load(ok bool, trace *[]string) Result[int, string] {
+	*trace = append(*trace, "load")
+	if !ok { return Result[int, string]::Err("failed") }
+	return Result[int, string]::Ok(4)
+}
+
+func truth(trace *[]string) Result[bool, string] {
+	n := load(false, trace)?
+	return Result[bool, string]::Ok(n > 0)
+}
+
+func shortCircuit(left bool, trace *[]string) Result[string, string] {
+	value := left && truth(trace)?
+	return Result[string, string]::Ok(fmt::Sprint(value))
+}
+
+func closure(trace *[]string) Result[string, string] {
+	inner := func() Result[int, string] {
+		defer func() { *trace = append(*trace, "inner-cleanup") }()
+		return Result[int, string]::Ok(load(false, trace)?)
+	}
+	_ = inner()
+	*trace = append(*trace, "outer")
+	return Result[string, string]::Ok("outer")
+}
+
+func deferred(ok bool, trace *[]string) Result[string, string] {
+	defer func() { *trace = append(*trace, "cleanup") }()
+	defer func(n int) { *trace = append(*trace, "deferred") }(load(ok, trace)?)
+	return Result[string, string]::Ok("1")
+}
+
+func guarded(ok bool, trace *[]string) Result[string, string] {
+	defer func() { *trace = append(*trace, "guard-cleanup") }()
+	match Gate::Enter(1) {
+		Gate::Enter(0) if truth(trace)? => { return Result[string, string]::Ok("incorrect") },
+		Gate::Enter(n) if load(ok, trace)? == n + 3 => { return Result[string, string]::Ok("guard") },
+		_ => { return Result[string, string]::Ok("other") },
+	}
+}
+
+func optional(ok bool) Option[string] {
+	if !ok { return Option[string]::None }
+	return Option[string]::Some("abc")
+}
+
+func length(ok bool) Option[int] {
+	s := optional(ok)?
+	return Option[int]::Some(len(s))
+}
+
+func optionInt(value Option[int]) int {
+	return match value { Option::Some(n) => n, Option::None => -1 }
+}
+
+func text(value Result[string, string]) string {
+	return match value { Result::Ok(s) => s, Result::Err(e) => e }
+}
+
+func main() {
+	for _, left := range []bool{false, true} {
+		trace := []string{}
+		result := shortCircuit(left, &trace)
+		fmt::Println(text(result), trace)
+	}
+	trace := []string{}
+	result := closure(&trace)
+	fmt::Println(text(result), trace)
+	for _, ok := range []bool{false, true} {
+		trace := []string{}
+		result := deferred(ok, &trace)
+		fmt::Println(text(result), trace)
+	}
+	fmt::Println(optionInt(length(true)), optionInt(length(false)))
+	for _, ok := range []bool{false, true} {
+		trace := []string{}
+		result := guarded(ok, &trace)
+		fmt::Println(text(result), trace)
+	}
+}

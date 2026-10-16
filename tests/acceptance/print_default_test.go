@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestPrintDefaultBusinessRace(t *testing.T) {
@@ -110,10 +110,10 @@ func TestPrintDefaultExplicitRejections(t *testing.T) {
 }
 
 func TestPrintDefaultPackageScalarIdentity(t *testing.T) {
-	_, err := frontend.CompilePackage("printdefault.example/shadow", map[string][]byte{
+	_, _, err := testdeps.Package("printdefault.example/shadow", map[string][]byte{
 		"shadow.gox":   []byte("package shadow\ntype int string\n"),
 		"defaults.gox": []byte("package shadow\n#[derive(Default)]\ntype Value struct { N int }\n"),
-	}, nil)
+	}, nil, nil)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "shadow") {
 		t.Fatalf("package type named int acquired builtin Default: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestExplicitDefaultAndGoZero(t *testing.T){
  value:=DefaultSettings();if value.Name!=""||value.Limits.Retries!=0||value.Limits.Enabled||stateName(value.State)!="standby"{t.Fatalf("default: %#v",value)}
  if !hasNoOptionalValue(DefaultOptionalSettings()){t.Fatal("Option default must be None without T Default")};_=DefaultEmpty()
  if stateName(hygienicDefaults().State)!="standby"{t.Fatal("macro captured local Default helper")}
- var zero Settings;if zero.State!=(state{})||make([]Settings,1)[0].State!=(state{})||(map[string]Settings{})["missing"].State!=(state{}){t.Fatal("Default altered Go zero initialization")}
+ var zero Settings;if zero.State!=nil||make([]Settings,1)[0].State!=nil||(map[string]Settings{})["missing"].State!=nil{t.Fatal("Default altered Go zero initialization")}
  rejected:=false;func(){defer func(){rejected=recover()!=nil}();_=stateName(zero.State)}();if !rejected{t.Fatal("Default legalized raw zero enum")}
  decoded,err:=serdejson.Unmarshal([]byte("{}"),DeserializeWireDefault);if err!=nil||stateName(decoded.State)!="standby"{t.Fatal("serde(default) did not call selected Default",err)}
 }

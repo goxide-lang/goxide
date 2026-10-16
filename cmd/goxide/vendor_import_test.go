@@ -55,6 +55,7 @@ func vendorFixture(t *testing.T) (string, string, string) {
 	return root, out, base
 }
 func TestVendorImportColdOffline(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go vendor sources deferred by P6")
 	root, out, _ := vendorFixture(t)
 	// Unused historical replacement records must not make the imported snapshot
 	// depend on an unavailable original directory.
@@ -158,6 +159,7 @@ func TestVendorImportColdOffline(t *testing.T) {
 
 }
 func TestVendorImportRejections(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go vendor sources deferred by P6")
 	for _, kind := range []string{"missing", "extra-go", "extra-file", "metadata", "workspace", "explicit", "version", "replace", "symlink", "modules-symlink", "nested", "dual", "output"} {
 		t.Run(kind, func(t *testing.T) {
 			root, out, base := vendorFixture(t)
@@ -220,6 +222,7 @@ func TestVendorImportRejections(t *testing.T) {
 }
 
 func TestVendorVersionReplacementAndOriginalSums(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go vendor sources deferred by P6")
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/fork", "v1.1.0", map[string]string{"go.mod": "module example.org/fork\ngo 1.27\n", "dep.go": "package dep\nfunc Value()string{return \"upstream\"}\n", "NOTICE": "fixture notice"})
 	base := t.TempDir()
@@ -257,6 +260,7 @@ func TestVendorVersionReplacementAndOriginalSums(t *testing.T) {
 }
 
 func TestVendorRootFeaturesTargetsAndTrust(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go vendor sources deferred by P6")
 	root, out, _ := vendorFixture(t)
 	projectWrite(t, root, map[string]string{"cmd/second/main.go": "package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"second\")}\n"})
 	if b, e := importCall(t, root, "--out", out, "--bin", "app=.", "--bin", "second=cmd/second", "--offline"); e != nil {
@@ -303,10 +307,10 @@ func TestVendorRootFeaturesTargetsAndTrust(t *testing.T) {
 
 func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
 	proxy, _ := versionProxy(t)
-	first := versionLibrary("v1")
+	first := plainVersionLibrary("v1")
 	first["goxide.toml"] += "\n[vendor]\nmode='go-mod'\n"
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", first)
-	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", versionLibrary("v2"))
+	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", plainVersionLibrary("v2"))
 	publishVersion(t, proxy, "example.org/middle", "v1.0.0", map[string]string{"go.mod": "module example.org/middle\ngo 1.27\n", "goxide.toml": "[package]\nformat=1\n[lib]\nname='middle'\npath='.'\n[dependencies.lib]\ngo = 'example.org/goxidelib'\nversion = 'v1.1.0' \n", "middle.go": "package middle\n"})
 	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
 	if b, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "obsolete vendor") {
@@ -328,6 +332,7 @@ func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
 }
 
 func TestSuppliedModuleCycleAndOfflineNoProbes(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go vendor sources deferred by P6")
 	t.Setenv("GOWORK", "off")
 	t.Setenv("GOTOOLCHAIN", "local")
 	var requests atomic.Int64

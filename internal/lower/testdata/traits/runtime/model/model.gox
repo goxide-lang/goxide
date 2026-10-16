@@ -1,0 +1,124 @@
+package model
+
+use fmt;
+
+pub trait Score {
+    func score(self Self) int
+    func twice(self Self) int
+    func shadow(self Self) int
+    func sum(self Self, values ...int) int
+}
+
+pub trait OtherScore { func score(self Self) string }
+pub trait Inspect { func read(self &Self) int }
+pub trait Adjust {
+    func add(self &mut Self, amount int)
+    func read(self &Self) int
+}
+pub trait Mixed {
+    func read(self &Self) int
+    func overwrite(self Self, value int)
+}
+
+type Counter struct { Value int; Items []int }
+type Shadow struct {}
+impl Shadow { func score(self Self) int { return 6 } }
+
+impl Counter {
+    pub func new(value int) Self { return Self{Value: value, Items: []int{value}} }
+    pub func score(self Self) int { return -1 }
+}
+
+impl Score for Counter {
+    func score(self Self) int { return self.Value + 100 }
+    func twice(self Self) int { return self.score() + self.score() }
+    func shadow(self Self) int { return func(self Shadow) int { return self.score() }(Shadow{}) }
+    func sum(self Self, values ...int) int {
+        total := self.Value
+        for _, value := range values { total += value }
+        return total
+    }
+}
+impl OtherScore for Counter {
+    func score(self Self) string { return "trait" }
+}
+impl Inspect for Counter {
+    func read(self &Self) int { return self.Value }
+}
+impl Adjust for Counter {
+    func add(self &mut Self, amount int) { self.Value += amount }
+    func read(self &Self) int { return self.Value }
+}
+impl Mixed for Counter {
+    func read(self &Self) int { return self.Items[0] }
+    func overwrite(self Self, value int) { self.Items[0] = value }
+}
+
+pub trait BorrowChoice { func choose(self &Self) string }
+type Candidate struct {}
+impl Candidate { func choose(self Self) int { return 1 } }
+impl BorrowChoice for Candidate {
+    func choose(self &Self) string { return "borrow" }
+}
+func chooseBorrowed(value &Candidate) string { return value.choose() }
+
+pub trait Transform {
+    func make() Self
+    func transform(self &Self) Self
+}
+type Cell struct { Value int }
+impl Transform for Cell {
+    func make() Self { return Self{Value: 7} }
+    func transform(self &Self) Self { return Self{Value: self.Value + 1} }
+}
+func BuildTransformed[T Transform]() T {
+    value := T::make()
+    return value.transform()
+}
+
+func Selection() string {
+    value := Counter::new(2)
+    candidate := Candidate{}
+    return fmt::Sprintf("%d %d %s %d %d %d %s", value.score(), value.score::<Score>(), value.score::<OtherScore>(), Score::score(value), value.twice(), value.sum::<Score>(1, 2, 3), chooseBorrowed(&candidate))
+}
+
+var evaluations int
+func next() Counter { evaluations++; return Counter::new(evaluations) }
+func accept(value Score) int { return value.score() }
+func returnScore(value Counter) Score { return value }
+
+func Conversions() string {
+    evaluations = 0
+    var assigned Score = next()
+    var reused Score = assigned
+    var slot Score = reused
+    slot = next()
+    returned := returnScore(next())
+    elements := []Score{next(), next()}
+    accepted := accept(next())
+    return fmt::Sprintf("%d %d %d %d %d %d %d", evaluations, reused.score(), slot.score(), returned.score(), elements[0].score(), elements[1].score(), accepted)
+}
+
+func nextIndex() int { evaluations++; return 0 }
+func ReceiverOnce() int {
+    evaluations = 0
+    slots := []Counter{Counter::new(1)}
+    var view Adjust = &mut slots[nextIndex()]
+    view.add(2)
+    return evaluations * 100 + slots[0].Value
+}
+
+enum Dispatch { Ready, Skip }
+
+func QualifiedFlow() int {
+    value := Counter::new(1)
+    operation := value.add::<Adjust>;
+    Adjust::add(value, match Dispatch::Ready {
+        Dispatch::Ready => func() int { value = Counter::new(10); return 2 }(),
+        Dispatch::Skip => 0,
+    })
+    operation(3)
+    return value.Value
+}
+
+func ConcreteAny() any { return Counter::new(3) }

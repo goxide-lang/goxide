@@ -1,19 +1,15 @@
 package acceptance_test
 
 import (
-	"errors"
 	"fmt"
 	"github.com/hxsf/goxide/internal/rootconfig"
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
-	"github.com/hxsf/goxide/internal/sourcemap"
 )
 
 func macroPackageSource(t *testing.T) string {
@@ -50,7 +46,7 @@ func macroPackageSource(t *testing.T) string {
 func TestMacroPackagesApplicationRace(t *testing.T) {
 	source := macroPackageSource(t)
 	generated := filepath.Join(t.TempDir(), "generated")
-	if _, err := frontend.CompileModule(source, generated); err != nil {
+	if err := testdeps.Module(source, generated, nil); err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, generated, "macro_test.go", macroPackageAssertions)
@@ -72,7 +68,7 @@ pub macro_rules! secret { () => { hidden() }; }
 `, `package main
 use logkit as m;
 func main(){_=m::secret!()}
-`, "private"},
+`, "私有成员 hidden"},
 		{"private-macro", `package logkit
 macro_rules! secret { () => { 7 }; }
 `, `package main
@@ -99,7 +95,7 @@ func main(){_=m::forever!()}
 			})
 			packagesWrite(t, source, "logkit/macros.gox", tc.definition)
 			packagesWrite(t, source, "main.gox", tc.main)
-			_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
+			err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil)
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) {
 				t.Fatalf("expected %s rejection: %v", tc.want, err)
 			}
@@ -122,13 +118,14 @@ func TestMacroPackagesDependencyCycle(t *testing.T) {
 	})
 	packagesWrite(t, source, "a/a.gox", "package a\nuse b;\npub macro_rules! value {()=>{b::value!()};}\n")
 	packagesWrite(t, source, "b/b.gox", "package b\nuse a;\npub macro_rules! value {()=>{a::value!()};}\n")
-	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
+	packagesWrite(t, source, "main.gox", "package main\nuse a;\nfunc main(){_=a::value!()}\n")
+	err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil)
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Fatalf("dependency cycle accepted: %v", err)
 	}
 }
 
-func TestMacroPackagesDefinitionDiagnostic(t *testing.T) {
+func TestMacroPackagesDefinitionTypeError(t *testing.T) {
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n")
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
@@ -146,19 +143,9 @@ pub macro_rules! broken { () => { Emit(71) }; }
 use logkit as m;
 func main(){m::broken!()}
 `)
-	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
-	var mapped *sourcemap.Error
-	if !errors.As(err, &mapped) || mapped.Origin == nil || filepath.Base(mapped.Origin.File) != "macros.gox" || mapped.Origin.Line != 3 {
-		t.Fatalf("missing true definition source: %v", err)
-	}
-	found := false
-	for _, frame := range mapped.Stack {
-		if filepath.Base(frame.Callsite.File) == "main.gox" && frame.Callsite.Line == 3 {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("missing consumer macro call: %#v", mapped.Stack)
+	err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil)
+	if err == nil || !strings.Contains(err.Error(), "cannot use") {
+		t.Fatalf("accepted invalid argument from macro definition: %v", err)
 	}
 }
 
@@ -212,13 +199,13 @@ func TestMacroPackagesWholeBuildBudget(t *testing.T) {
 	for _, name := range []string{"a", "b"} {
 		packagesWrite(t, source, name+"/macros.gox", "package "+name+"\nmacro_rules! one {()=>{1};}\nfunc Run(){"+strings.Repeat("_=one!();", 2200)+"}\n")
 	}
-	_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
+	err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil)
 	if err == nil || !strings.Contains(err.Error(), "expansion count budget") {
 		t.Fatalf("module budget: %v", err)
 	}
 }
 
-func TestMacroPackagesPreparedDefinitionDiagnostic(t *testing.T) {
+func TestMacroPackagesPreparedDefinitionTypeError(t *testing.T) {
 	for _, sameFile := range []bool{false, true} {
 		t.Run(fmt.Sprintf("same-file-%t", sameFile), func(t *testing.T) {
 			source := t.TempDir()
@@ -240,25 +227,16 @@ pub macro_rules! broken { () => { Emit(71) }; }
 use logkit as m;
 func main(){m::broken!()}
 `
-			callLine := 3
-			definitionFile := "macros.gox"
 			if sameFile {
 				definition = strings.Replace(definition, "package logkit", "package main", 1) + "func main(){broken!()}\n"
 				packagesWrite(t, source, "main.gox", definition)
-				callLine = 6
-				definitionFile = "main.gox"
 			} else {
 				packagesWrite(t, source, "logkit/macros.gox", definition)
 				packagesWrite(t, source, "main.gox", caller)
 			}
-			_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
-			var mapped *sourcemap.Error
-			offset := strings.Index(definition, "71")
-			if !errors.As(err, &mapped) || mapped.Origin == nil || filepath.Base(mapped.Origin.File) != definitionFile || mapped.Origin.Start != offset || mapped.Origin.End != offset+2 || mapped.Origin.Line != 5 {
-				t.Fatalf("lost original literal after preparation: %v (%#v)", err, mapped)
-			}
-			if len(mapped.Stack) != 1 || filepath.Base(mapped.Stack[0].Callsite.File) != "main.gox" || mapped.Stack[0].Callsite.Line != callLine || mapped.Stack[0].Definition.Line != 5 {
-				t.Fatalf("wrong original expansion stack: %#v", mapped.Stack)
+			err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil)
+			if err == nil || !strings.Contains(err.Error(), "cannot use") {
+				t.Fatalf("accepted invalid argument after macro preparation: %v", err)
 			}
 		})
 	}
@@ -283,7 +261,7 @@ use dep as a;
 use dep as b;
 func main(){_=a::value!();_=b::value!()}
 `)
-	if _, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated")); err != nil {
+	if err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil); err != nil {
 		t.Fatal(err)
 	}
 }

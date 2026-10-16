@@ -56,7 +56,7 @@ func VerifySuppliedRemote(tool, root string, a *SuppliedModules, module string, 
 	if e = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module goxide.invalid/sourcecheck\ngo 1.27\n"), 0600); e != nil {
 		return s, e
 	}
-	data, e := goCommand(tool, dir, offline, "mod", "download", "-json", s.Module+"@"+s.Version)
+	data, e := goCommand(tool, dir, offline, nil, "mod", "download", "-json", s.Module+"@"+s.Version)
 	if e != nil {
 		return s, fmt.Errorf("remote source %s@%s (offline=%t): %w", s.Module, s.Version, offline, e)
 	}

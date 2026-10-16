@@ -253,5 +253,5 @@ fetch 与远端。无 Linux/托管 CI 证据不称通过，不 merge main/tag、
 实现沿用上述合同：CLI 按真实输入 owner 提供 importer/临时 modfile，frontend
 共享已登记能力恢复并保留单文件 finishing，refs/macro/sum 等阶段使用真实包身份。
 producer、file/directory consumer 与 Go consumer 的业务及拒绝矩阵见
-[2026-10-06 交付报告](../reviews/single-file-external-recovery-20261006.md)。报告分别记录
+[2026-10-06 交付报告](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/single-file-external-recovery-20261006.md)。报告分别记录
 编译器、网站/工具、独立审查和正式门槛；不把当前支持扩大到无源或不可达 internal origin。

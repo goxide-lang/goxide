@@ -1,3 +1,0 @@
-package probe
-pub enum E{A,B,}
-func Run()map[*func()int]int{return map[*func()int]int{(match E::A{E::A=>nativePointer(),E::B=>nil}):1}}

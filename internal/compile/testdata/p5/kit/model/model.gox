@@ -1,0 +1,43 @@
+package model
+
+use wire;
+use wire::json as json;
+use native;
+
+pub trait Source {
+    type Item
+    func get(self Self) Self::Item
+}
+
+pub enum Choice { value(int), empty }
+
+impl Source for Choice {
+    type Item = int
+    func get(self Self) Self::Item {
+        return match self { Self::value(n) => n, Self::empty => 0 }
+    }
+}
+
+pub func create() Choice { return Choice::value(3) }
+func Read[T Source](value T) T::Source::Item { return value.get() }
+pub func set(value &mut Choice, next int) { *value = Choice::value(next) }
+
+var Count = 4
+const Label = "shared"
+func ReadOnly() &int { return &Count }
+
+pub macro_rules! add_two { ($value:expr) => { AddTwo($value) }; }
+func AddTwo(value int) int { return value + 2 }
+
+#[derive(wire::Serialize, wire::Deserialize)]
+type Record struct { Value int }
+
+pub func encode(value int) string {
+    record := Record{Value: value}
+    data, err := json::Marshal(&record, SerializeRecord)
+    if err != nil { panic(err) }
+    decoded, err := json::Unmarshal(data, DeserializeRecord)
+    if err != nil || decoded.Value != value { panic("serde round trip") }
+    if native::Label() != "native\n" { panic("native resource") }
+    return string(data)
+}

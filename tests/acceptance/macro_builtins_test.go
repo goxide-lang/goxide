@@ -2,12 +2,11 @@ package acceptance_test
 
 import (
 	"github.com/hxsf/goxide/internal/rootconfig"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/frontend"
 )
 
 func TestMacroBuiltinsModuleRace(t *testing.T) {
@@ -46,7 +45,7 @@ func Run()(int,int,int){
 }
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
-	if _, err := frontend.CompileModule(source, generated); err != nil {
+	if err := testdeps.Module(source, generated, nil); err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, generated, "app_test.go", `package app
@@ -75,11 +74,11 @@ func TestMacroBuiltinInvalidCallsAndPackageShadow(t *testing.T) {
 		packagesWrite(t, source, "ops/macros.gox", "package ops\npub macro_rules! size {($x:expr)=>{len($x)};}\npub macro_rules! space {($x:expr)=>{cap($x)};}\n")
 		packagesWrite(t, source, "app.gox", "package app\nuse ops as m;\nfunc F(){_="+tc.body+"}\n")
 		packagesWrite(t, source, "shadow.go", "package app\n"+tc.decl+"\n")
-		_, err := frontend.CompileModule(source, filepath.Join(t.TempDir(), "generated"))
+		err := testdeps.Module(source, filepath.Join(t.TempDir(), "generated"), nil)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("%s %s: %v", tc.decl, tc.body, err)
 		}
-		if !strings.Contains(err.Error(), "app.gox") || (tc.decl != "" && !strings.Contains(err.Error(), "macros.gox")) {
+		if (!strings.Contains(err.Error(), "app.gox:") && !strings.Contains(err.Error(), "app.go:")) || (tc.decl != "" && !strings.Contains(err.Error(), "macros.gox:")) {
 			t.Fatalf("lost source diagnostic: %v", err)
 		}
 	}

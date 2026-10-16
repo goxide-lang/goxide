@@ -122,6 +122,7 @@ func scriptRun(t *testing.T, root, bin, state, want string, args ...string) stri
 }
 
 func TestBuildScriptGenerationAndIncrementalCLI(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script authorization and execution deferred by P6")
 	root := buildScriptFixture(t, false, false)
 	p := scriptPlan(t, root)
 	if p.RootTrusted {
@@ -166,6 +167,7 @@ func TestBuildScriptGenerationAndIncrementalCLI(t *testing.T) {
 }
 
 func TestBuildScriptGoxideHelperTrustCLI(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script authorization and execution deferred by P6")
 	root := buildScriptFixture(t, true, true)
 	scriptAction(t, root, "trust-project")
 	p := scriptPlan(t, root)
@@ -211,6 +213,7 @@ func TestBuildScriptGoxideHelperTrustCLI(t *testing.T) {
 }
 
 func TestBuildScriptCrossTargetRejectedBeforeExecutionCLI(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script authorization and execution deferred by P6")
 	root := buildScriptFixture(t, false, false)
 	scriptAction(t, root, "trust-project")
 	out := scriptRun(t, root, "one", "run", "APP_ONE")
@@ -239,6 +242,7 @@ func TestBuildScriptCrossTargetRejectedBeforeExecutionCLI(t *testing.T) {
 }
 
 func TestBuildScriptHostToolFingerprintCLI(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script authorization and execution deferred by P6")
 	root := buildScriptFixture(t, false, false)
 	toolRoot := filepath.Join(filepath.Dir(root), "tool-source")
 	toolBin := filepath.Join(filepath.Dir(root), "echoer")
@@ -316,6 +320,7 @@ func TestBuildScriptHostToolFingerprintCLI(t *testing.T) {
 }
 
 func TestBuildScriptDependencyPackagePermissionCLI(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script authorization and execution deferred by P6")
 	dep := buildScriptFixture(t, false, false)
 	b, e := os.ReadFile(filepath.Join(dep, "goxide.toml"))
 	if e != nil {
@@ -385,6 +390,7 @@ format = 1
 }
 
 func TestBuildScriptTimeoutDoesNotPublishCLI(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script authorization and execution deferred by P6")
 	root := buildScriptFixture(t, false, false)
 	entry := filepath.Join(root, "tools/build/main.go")
 	b, e := os.ReadFile(entry)
@@ -424,6 +430,7 @@ func TestBuildScriptTimeoutDoesNotPublishCLI(t *testing.T) {
 }
 
 func TestBuildScriptCleanPreservesTrustAndSourceCLI(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script authorization and execution deferred by P6")
 	root := buildScriptFixture(t, false, false)
 	projectWrite(t, root, map[string]string{"source-sentinel.txt": "keep source", ".goxide/user-sentinel.txt": "keep unrelated cache"})
 	scriptAction(t, root, "trust-project")

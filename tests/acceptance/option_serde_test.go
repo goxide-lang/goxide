@@ -9,19 +9,17 @@ import (
 	"testing"
 )
 
-type legacySumGoCase struct {
+type nativeGoRejection struct {
 	source string
 	want   string
 }
 
-// Closed typed sums make the former interface-shaped cases unassignable.
-// Keep those old construction attempts as real Go compile rejections instead
-// of restoring compatibility aliases or forging private tags with unsafe.
-func assertLegacySumGoRejected(t *testing.T, module, tool string, cases map[string]legacySumGoCase) {
+// Check the public Go representation through real native compilation.
+func assertNativeGoRejected(t *testing.T, module, tool string, cases map[string]nativeGoRejection) {
 	t.Helper()
 	for name, test := range cases {
-		t.Run("legacy-go-"+name, func(t *testing.T) {
-			const filename = "legacy_sum_rejected_test.go"
+		t.Run("native-go-"+name, func(t *testing.T) {
+			const filename = "native_rejected_test.go"
 			path := filepath.Join(module, filename)
 			packagesWrite(t, module, filename, test.source)
 			t.Cleanup(func() {
@@ -31,7 +29,7 @@ func assertLegacySumGoRejected(t *testing.T, module, tool string, cases map[stri
 			})
 			output := packagesCommand(t, module, tool, false, "test", "-run", "^$", ".")
 			if !strings.Contains(output, filename+":") || !strings.Contains(output, test.want) {
-				t.Fatalf("expected legacy source rejection %q: %s", test.want, output)
+				t.Fatalf("expected native source rejection %q: %s", test.want, output)
 			}
 		})
 	}
@@ -50,11 +48,9 @@ func TestOptionSerdeInstalledBusinessRace(t *testing.T) {
 	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
 	packagesWrite(t, generated, "business_test.go", optionSerdeAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-	assertLegacySumGoRejected(t, generated, tool, map[string]legacySumGoCase{
-		"nil-option":     {"package main\nvar _ Option[int]=nil\n", "cannot use nil"},
-		"typed-nil-case": {"package main\nvar _ Option[int]=(*__goxide_enum_case_Option_Some[int])(nil)\n", "undefined: __goxide_enum_case_Option_Some"},
-		"pointer-case":   {"package main\nvar _ Option[int]=&__goxide_enum_case_Option_Some[int]{Value:2}\n", "undefined: __goxide_enum_case_Option_Some"},
-		"forged-option":  {"package main\ntype forgedOption struct{Option[int]}\nvar _ Option[int]=forgedOption{}\n", "cannot use"},
+	assertNativeGoRejected(t, generated, tool, map[string]nativeGoRejection{
+		"nil-option":    {"package main\nimport s \"github.com/goxide-lang/std/sum\"\nvar _ s.Option[int]=nil\n", "cannot use nil"},
+		"forged-option": {"package main\nimport s \"github.com/goxide-lang/std/sum\"\ntype forgedOption struct{s.Option[int]}\nvar _ s.Option[int]=forgedOption{}\n", "cannot use"},
 	})
 	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "option 7 -1 4 0\n" {
 		t.Fatalf("CLI output: %q", got)
@@ -68,8 +64,6 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 		"channel-payload":                        "#[derive(serde::Serialize,serde::Deserialize)]\ntype Request struct { Value Option[chan int] }",
 		"missing-payload-serde":                  "type Settings struct { Port int }\n#[derive(serde::Serialize,serde::Deserialize)]\ntype Request struct { Value Option[Settings] }",
 		"default-cannot-mask-unsupported":        "#[derive(serde::Deserialize)]\ntype Request struct {\n#[serde(default)]\nValue Option[chan int]\n}",
-		"ordinary-enum-option-payload":           "#[derive(serde::Serialize,serde::Deserialize)]\nenum Event { Empty, Data(Option[int]), }",
-		"ordinary-enum-struct-option-payload":    "#[derive(serde::Serialize,serde::Deserialize)]\ntype Payload struct { Value Option[int] }\n#[derive(serde::Serialize,serde::Deserialize)]\nenum Event { Data(Payload), }",
 	} {
 		t.Run(name, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), name+".gox")
@@ -77,29 +71,29 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), filepath.Base(filename)+":") {
 				t.Fatalf("want located rejection, got %v", err)
 			}
-			want := "unsupported field type"
+			want := "has no registered serde codec"
 			if strings.Contains(name, "-only-payload-cannot-") {
-				want = "nested type lacks required derive"
+				want = "lacks registered Serialize"
+				if strings.Contains(name, "cannot-decode") {
+					want = "lacks registered Deserialize"
+				}
 			}
-			if strings.HasPrefix(name, "ordinary-enum-") {
-				want = "unsupported enum payload"
-			}
+
 			if !strings.Contains(err.Error(), want) {
 				t.Fatalf("want %q, got %v", want, err)
 			}
-			// Frontend codec diagnostics must retain the actual source field line.
-			if want == "unsupported field type" || want == "nested type lacks required derive" {
-				fieldLine := strings.Count(source[:strings.Index(source, "Value Option")], "\n") + 2
-				if !strings.Contains(err.Error(), filepath.Base(filename)+":"+strconv.Itoa(fieldLine)+":") {
-					t.Fatalf("lost field source line: %v", err)
-				}
+			// The derive request owns the codec diagnostic in the new frontend.
+			derive := strings.LastIndex(source, "#[derive(")
+			line := strings.Count(source[:derive], "\n") + 2
+			if !strings.Contains(err.Error(), filepath.Base(filename)+":"+strconv.Itoa(line)+":") {
+				t.Fatalf("lost derive source line: %v", err)
 			}
 		})
 	}
 }
 
 // These container payloads used to be rejected before serde lowering. Exercise
-// both actual codecs and the recursive match validator through the installed CLI.
+// actual codecs and enum checks at each dispatch through the installed CLI.
 func TestOptionSerdeNestedContainersRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
@@ -117,11 +111,9 @@ func Encode(v Request)([]byte,error){return serdejson::Encode(func(s serde::Seri
 var Entered int
 func ListLength(v Option[[]Option[int]])int{
  match v {Option[[]Option[int]]::Some(rows)=>{Entered++;return len(rows)},Option[[]Option[int]]::None=>{return -1}}
- return -2
 }
 func MapLength(v Option[map[string]Option[int]])int{
  match v {Option[map[string]Option[int]]::Some(rows)=>{Entered++;return len(rows)},Option[map[string]Option[int]]::None=>{return -1}}
- return -2
 }
 #[derive(serde::Serialize,serde::Deserialize)]
 pub enum State{Good,}
@@ -131,12 +123,11 @@ func GoodState()State{return State::Good}
 func EncodeState(v StateRequest)([]byte,error){return serdejson::Encode(func(s serde::Serializer)error{return SerializeStateRequest(s,&v)})}
 func StateListLength(v Option[[]State])int{
  match v{Option[[]State]::Some(rows)=>{Entered++;return len(rows)},Option[[]State]::None=>{return -1}}
- return -2
 }
 func StateMapLength(v Option[map[string]State])int{
  match v{Option[map[string]State]::Some(rows)=>{Entered++;return len(rows)},Option[map[string]State]::None=>{return -1}}
- return -2
 }
+func StateDispatch(value State,seen *int){match value{State::Good=>{*seen+=1},}}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
 	deliveryCommand(t, outside, filepath.Join(bin, "goxide"), true, nil, "transpile", "-o", generated, source)
@@ -148,7 +139,7 @@ func StateMapLength(v Option[map[string]State])int{
 const optionSerdeNestedAssertions = `package nested
 import __borrow_std "github.com/goxide-lang/std/sum"
 
-import("errors";"reflect";"testing";"github.com/goxide-lang/serde")
+import("errors";"fmt";"reflect";"strings";"testing";"github.com/goxide-lang/serde")
 func TestNestedRoundTrip(t *testing.T){
  for _,input:=range []string{"{}","{\"List\":null,\"Lookup\":null}"}{
   v,e:=Decode([]byte(input));if e!=nil||__borrow_std.TagOption(v.List)!=0||__borrow_std.TagOption(v.Lookup)!=0{t.Fatal(input,v,e)}
@@ -172,11 +163,13 @@ func TestNestedErrors(t *testing.T){
 func TestInvalidInnerValueBeforeArm(t *testing.T){
  // An invalid Option[int] is no longer constructible using its public API.
  // A zero user enum inside a valid Some remains a real nested invalid value.
- a:=__borrow_std.NewSome([]State{GoodState(),{}})
- b:=__borrow_std.NewSome(map[string]State{"bad":{}})
- for _,f:=range []func(){func(){StateListLength(a)},func(){StateMapLength(b)}}{
-  Entered=0;func(){defer func(){if recover()==nil{t.Fatal("invalid nested value accepted")}}();f()}()
-  if Entered!=0{t.Fatal("invalid nested value reached arm")}
+ a:=__borrow_std.NewSome([]State{GoodState(),nil})
+ b:=__borrow_std.NewSome(map[string]State{"bad":nil})
+ for _,tc:=range []struct{run func()int;want int}{{func()int{return StateListLength(a)},2},{func()int{return StateMapLength(b)},1}}{
+  Entered=0;if got:=tc.run();got!=tc.want||Entered!=1{t.Fatal("outer match inspected container elements",got,Entered)}
+ }
+ for _,value:=range []State{__borrow_std.ValueSome(a)[1],__borrow_std.ValueSome(b)["bad"]}{
+  seen:=0;func(){defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"nil State")||seen!=0{t.Fatalf("element dispatch panic=%v effect=%d",p,seen)}}();StateDispatch(value,&seen)}()
  }
  for _,tc:=range []struct{v StateRequest;path []serde.PathSegment}{
   {StateRequest{List:a},[]serde.PathSegment{{Kind:"Field",Name:"List"},{Kind:"Index",Index:1}}},
@@ -192,7 +185,7 @@ type InputPayload struct { Port int }
 #[derive(Default)]
 type RequiresDefault struct { Payload InputPayload }
 `))
-	if err == nil || !strings.Contains(err.Error(), "requires Default") {
+	if err == nil || !strings.Contains(err.Error(), "no explicit Default implementation") {
 		t.Fatalf("payload unexpectedly gained Default: %v", err)
 	}
 }
@@ -255,9 +248,9 @@ func TestNestedOptionIsLossyNotPatch(t *testing.T){
  back,err:=readRequest(string(wire));if err!=nil||__borrow_std.TagOption(back.Nested)!=0||__borrow_std.TagOption(back.Pointer)!=0||!strings.Contains(string(wire),"\"Nested\":null"){t.Fatalf("null collapse: %s %#v %v",wire,back,err)}
 }
 func TestInvalidNativeValuesReturnTypeWithoutPanic(t *testing.T){
- // The old dynamic Option cases now fail Go compilation. Some(Mode{}) still
+ // The old dynamic Option cases now fail Go compilation. Some(nil) still
  // contains an invalid value, and the codec must return its structured path.
- for _,bad:=range []Option[Mode]{__borrow_std.NewSome(Mode{})}{
+ for _,bad:=range []__borrow_std.Option[Mode]{__borrow_std.NewSome[Mode](nil)}{
   v,err:=readRequest("{"+required+"}");if err!=nil{t.Fatal(err)};v.State=bad
   _,err=writeRequest(v);var detail *serde.Error
   if !errors.As(err,&detail)||detail.Kind!=serde.Type||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Field",Name:"State"}}){t.Fatalf("invalid native value: %#v %v",detail,err)}

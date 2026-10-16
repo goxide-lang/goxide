@@ -1,1 +1,0 @@
-copy, stable slot, inactive write, shallow payload: ok

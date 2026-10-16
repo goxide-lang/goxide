@@ -4,7 +4,7 @@
 
 ## 历史与整合点
 
-- 研究分支 `research/build-gox-rfc`，提交 `4c54b12290fffd5d593e674a403306a60b3c9708`。完整 [最初RFC](https://github.com/hxsf/goxide/blob/4c54b12290fffd5d593e674a403306a60b3c9708/docs/rfcs/research/build-gox-proposed.md)、[Cargo差距对照](https://github.com/hxsf/goxide/blob/4c54b12290fffd5d593e674a403306a60b3c9708/docs/rfcs/research/build-gox-cargo-gap.md)、[可重复OS机制fixture](https://github.com/hxsf/goxide/tree/4c54b12290fffd5d593e674a403306a60b3c9708/tests/research/build_gox) 独立保留。研究基于最新 macro 分支，不是旧 main。
+- 研究分支 `research/build-gox-rfc`，提交 `4c54b12290fffd5d593e674a403306a60b3c9708`。完整 [最初RFC](https://github.com/goxide-lang/goxide/blob/4c54b12290fffd5d593e674a403306a60b3c9708/docs/rfcs/research/build-gox-proposed.md)、[Cargo差距对照](https://github.com/goxide-lang/goxide/blob/4c54b12290fffd5d593e674a403306a60b3c9708/docs/rfcs/research/build-gox-cargo-gap.md)、[可重复OS机制fixture](https://github.com/goxide-lang/goxide/tree/4c54b12290fffd5d593e674a403306a60b3c9708/tests/research/build_gox) 独立保留。研究基于最新 macro 分支，不是旧 main。
 - 用户确认后，runner 分支 `feat/build-script-generation`，提交 `94621c1`，基于项目工具链 `f1beade68ee6dd0899e4337423998392e3e320cc`。它单独保存了尚未迁移 target 的实现历史。
 - target 布局独立分支 `feat/target-layout`，提交 `8b7bd954149b5588ab21432cda824f112f121885`；与 runner 在同一项目基线上开发。
 - 最终整合分支 `feat/build-script-target-layout`。真实解决 CLI project 管线、frontend ModuleOptions 和 RFC 0022 冲突；没有覆盖 layout 所有权、lease、修改二进制拒覆盖、旧bundle保留或扫描隔离规则。未 merge 到公共分支，未打 tag。
@@ -34,7 +34,7 @@
 - [core tests](../../internal/buildscript/buildscript_test.go)：冻结字节/配置、内容/目录/env/tool键、真实Go/goxide helper、拒绝路径与链接、声明输出、失败/超时/缓存发布、授权回调、clean、host-only。
 - [CLI tests](../../cmd/goxide/buildscript_test.go)：schema/embed、两bin共享、feature变化、root/helper/tool/依赖包许可、撤销及更新、超时恢复、clean保留信任/源码。
 - [联合布局tests](../../cmd/goxide/buildscript_layout_test.go)：默认target可运行二进制、旧bundle独立重编、CLI/env优先级、跨bin缓存、指定布局clean、修改binary/陌生目录/symlink拒绝、nested target、helper信任位置。
-- [布局cache tests](../../internal/project/layout_scripts_test.go)、[信任store tests](../../internal/scripttrust/store_test.go)、[生成前端tests](../../internal/frontend/generated_module_test.go)。
+- [布局cache tests](../../internal/project/layout_scripts_test.go)、[信任store tests](../../internal/scripttrust/store_test.go)、[生成前端tests](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/frontend/generated_module_test.go)。
 
 ```sh
 export GO_BIN=/workspace/goxide-environment/go/bin/go

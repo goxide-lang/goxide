@@ -4,7 +4,7 @@
 
 交付边界（D20）：本文涉及的别名/借用风险 warning 是未来独立长期分析，不属于 MVP 验收；当前语言语法、类型、明确操作与真实 Go 行为照常设计。不得为未实现分析器强制复杂效果注解。
 
-状态：首版参考 Rust 的模式匹配声明宏，提供 `print!`、`println!` 等基础入口，以及 `#[derive(Default, Clone, Debug)]`。声明宏使用模式、模板与重复展开；派生和格式字符串检查由编译器内建实现，不执行用户编写的 AST 变换程序。用户过程宏后续再做。具体签名、包路径和展开协议仍为草案；实现分支已有有限声明宏及具体类型派生，见[准确边界](../../IMPLEMENTATION.md)；本篇完整协议及 linter 尚未全部实现。
+状态：首版参考 Rust 的模式匹配声明宏，提供 `print!`、`println!` 等基础入口，以及 `#[derive(Default, Clone, Debug)]`。声明宏使用模式、模板与重复展开；派生和格式字符串检查由编译器内建实现，不执行用户编写的 AST 变换程序。用户过程宏后续再做。具体签名、包路径和展开协议仍为草案；实现分支已有有限声明宏及具体类型派生，见[准确边界](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/IMPLEMENTATION.md)；本篇完整协议及 linter 尚未全部实现。
 
 | 状态 | 范围 |
 | --- | --- |
@@ -65,7 +65,7 @@
 
 ## 3. 函数式声明宏示例
 
-当前源码包采用 `pub macro_rules! name` 导出、`use root as alias;` 绑定、`alias::name!(...)` 调用。根及精确 Go 包映射由[依赖配置](dependency-roots.md)声明；宏与运行时项共用静态路径解析。运行时 helper 按 Go 导出约定写 `Emit` 等公开函数；私有 helper 跨包不可见，须由作者提供公开 helper。旧包点号调用与 `import macro` 不再支持；下文 `pub func` 等完整协议仍是草案。限定实现与来源/预算边界见[宏实现说明](../../internal/macros/README.md)。
+当前源码包采用 `pub macro_rules! name` 导出、`use root as alias;` 绑定、`alias::name!(...)` 调用。根及精确 Go 包映射由[依赖配置](dependency-roots.md)声明；宏与运行时项共用静态路径解析。运行时 helper 按 Go 导出约定写 `Emit` 等公开函数；私有 helper 跨包不可见，须由作者提供公开 helper。旧包点号调用与 `import macro` 不再支持；下文 `pub func` 等完整协议仍是草案。限定实现与来源/预算边界见[宏实现说明](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/macros/README.md)。
 
 以下使用类似 `macro_rules` 的草案形式，不是当前可运行的 goxide 程序。假设 `macrokit` 包提供一个普通、公开的运行时 helper：
 
@@ -156,7 +156,7 @@ goxide 也采用这层分工：声明宏处理空参数和普通参数列表；�
 
 实现基准 `47af69f` 已交付 `print!` / `println!`：第 3.2 节的固定占位符、参数先按序各求值一次后格式化、空输出/LF 与写错/短写保留 cause 的 panic 契约均有真实运行证据。后端使用具体 typed formatter，不以 Stringer/error/反射/any 兜底；同包可信 Debug 派生可用于 `{:?}`，不自动成为 Display。
 
-当前入口只接受直接语句位置，支持宏模板、显式参数闭包内的嵌套打印和参数中的 `?`；不支持 go/defer、值位置、initializer/post、导入 Debug 类型或用户格式协议。此范围不修改第 3.2 节的长期协议，也不声称完整 trait/格式生态。编译期仅使用可信来源，生成 I/O 代码仍可 unmapped，未实现运行时 panic 的 goxide 源码回映射。实现和独立生成模块 race 证据见 [实现记录](../../IMPLEMENTATION.md#print--default-最终验收)。
+当前入口只接受直接语句位置，支持宏模板、显式参数闭包内的嵌套打印和参数中的 `?`；不支持 go/defer、值位置、initializer/post、导入 Debug 类型或用户格式协议。此范围不修改第 3.2 节的长期协议，也不声称完整 trait/格式生态。编译期仅使用可信来源，生成 I/O 代码仍可 unmapped，未实现运行时 panic 的 goxide 源码回映射。实现和独立生成模块 race 证据见 [实现记录](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/IMPLEMENTATION.md#print--default-最终验收)。
 
 ## 4. 卫生是符号身份，不是随机改名
 

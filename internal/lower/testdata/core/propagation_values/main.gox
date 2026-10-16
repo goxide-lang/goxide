@@ -1,0 +1,59 @@
+package main
+
+use fmt;
+use strings;
+
+type NilError struct{}
+func (*NilError) Error() string { panic("typed nil error was formatted") }
+type ReadOutcome struct { N int; Err error }
+
+func nativePartial() (int, error) { var err *NilError; return 3, err }
+
+func explicitPartial() Result[ReadOutcome, error] {
+	n, err := nativePartial()
+	return Result[ReadOutcome, error]::Ok(ReadOutcome{N: n, Err: err})
+}
+
+func preservePartial() Result[ReadOutcome, error] {
+	value := explicitPartial()?
+	return Result[ReadOutcome, error]::Ok(value)
+}
+
+func sourceError() Result[int, *NilError] {
+	var err *NilError
+	return Result[int, *NilError]::Err(err)
+}
+
+func assignableError() Result[string, error] {
+	_ = sourceError()?
+	return Result[string, error]::Ok("incorrect")
+}
+
+func readOutcome(value Result[ReadOutcome, error]) ReadOutcome {
+	return match value { Result::Ok(out) => out, Result::Err(_) => ReadOutcome{} }
+}
+
+func readError(value Result[string, error]) error {
+	return match value { Result::Ok(_) => nil, Result::Err(err) => err }
+}
+
+func invalid() Result[int, error] { var value Result[int, error]; return value }
+func invalidPropagation(touched *bool) Result[string, error] {
+	_ = invalid()?
+	*touched = true
+	return Result[string, error]::Ok("incorrect")
+}
+
+func main() {
+	out := readOutcome(preservePartial())
+	p, ok := out.Err.(*NilError)
+	err := readError(assignableError())
+	q, converted := err.(*NilError)
+	message := ""
+	touched := false
+	func() {
+		defer func() { message = fmt::Sprint(recover()) }()
+		_ = invalidPropagation(&touched)
+	}()
+	fmt::Println(out.N, ok && p == nil && out.Err != nil, converted && q == nil && err != nil, strings::Contains(message, "Result"), !touched)
+}

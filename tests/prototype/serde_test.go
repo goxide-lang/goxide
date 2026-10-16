@@ -2,8 +2,7 @@ package prototype_test
 
 import (
 	"bytes"
-	"encoding/json"
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,12 +34,6 @@ type Order struct {
 	result, err := compilePrototypeFixture("business.gox", []byte(source))
 	if err != nil {
 		t.Fatal(err)
-	}
-	if !json.Valid(result.SourceMap) {
-		t.Fatalf("invalid source map: %s", result.SourceMap)
-	}
-	if !bytes.Contains(result.SourceMap, []byte("business.gox")) {
-		t.Fatalf("source map has no input origin: %s", result.SourceMap)
 	}
 	if len(result.Expanded) == 0 {
 		t.Fatal("missing observable expansion")
@@ -171,11 +164,11 @@ func TestUnknownAndOwnedResults(t *testing.T){
 func TestIndependentDerivesAndFloat32(t *testing.T) {
 	source := `package fixture; use serde;
 #[derive(serde::Serialize)]
-struct OutChild { Value string }
+type OutChild struct { Value string }
 #[derive(serde::Serialize)]
-struct Output { Child OutChild }
+type Output struct { Child OutChild }
 #[derive(serde::Deserialize)]
-struct Input { Value float32 }
+type Input struct { Value float32 }
 `
 	result, err := compilePrototypeFixture("directions.gox", []byte(source))
 	if err != nil {

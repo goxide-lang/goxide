@@ -1,10 +1,8 @@
 package acceptance_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/hxsf/goxide/internal/rootconfig"
-	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -115,9 +113,9 @@ func Again(p &int)&int{return r::View(p)}
 	packagesWrite(t, appSource, "extra.gox", "package app\nuse api as renamed;\nfunc Extra()int{n:=2;renamed::Inc(&mut n);return renamed::Read(&n)}\n")
 	packagesWrite(t, appSource, "client/client.gox", "package client\nuse app;\nfunc Read()int{n:=8;return *app::Again(&n)}\n")
 	app := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, root, cli, true, "transpile", "-o", app, appSource)
+	compileAcceptanceGraph(t, true, appSource, app, source)
 	appTwice := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, root, cli, true, "transpile", "-o", appTwice, appSource)
+	compileAcceptanceGraph(t, true, appSource, appTwice, source)
 	compare(app, appTwice)
 	packagesWrite(t, library, "api/api_test.go", `package api
 import "testing"
@@ -125,7 +123,7 @@ func TestNativeView(t *testing.T){n:=1;p:=View(&n);*p=4;if Read(&n)!=4{t.Fatal(n
 `)
 	packagesWrite(t, app, "app_test.go", `package app_test
 import("testing";a "consumer.example/app";c "consumer.example/app/client")
-func TestCrossModule(t *testing.T){if a.Run()!=11||a.Extra()!=3||c.Read()!=8{t.Fatal("identity/permission metadata")}}
+func TestCrossModule(t *testing.T){if a.Run()!=11||a.Extra()!=3||c.Read()!=8{t.Fatal("cross-module identity or reference behavior")}}
 `)
 	for _, dir := range []string{library, app} {
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
@@ -152,13 +150,13 @@ func TestGoIgnoresGoxidePermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.R
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := makeApp(bad)
-			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), dir)
-			if !strings.Contains(out, "readonly") && !strings.Contains(out, "reference") && !strings.Contains(out, "cannot use") {
+			out := compileAcceptanceGraph(t, false, dir, filepath.Join(t.TempDir(), "out"), source)
+			if !strings.Contains(out, "read-only") && !strings.Contains(out, "reference") && !strings.Contains(out, "cannot use") {
 				t.Fatal(out)
 			}
 		})
 	}
-	t.Run("single-file-permissions", func(t *testing.T) {
+	t.Run("single-file-api-and-source-permissions", func(t *testing.T) {
 		good := makeApp("func Read()int{return *r::Global()}")
 		out := filepath.Join(t.TempDir(), "read.go")
 		packagesCommand(t, root, cli, true, "transpile", "-o", out, filepath.Join(good, "app.gox"))
@@ -170,156 +168,9 @@ func TestGoIgnoresGoxidePermissions(t *testing.T){n:=1;p:=r.View(&n);*p=9;if r.R
 			t.Fatal("binding stub leaked")
 		}
 		bad := makeApp("func Bad(){p:=r::Global();*p=9}")
-		diagnostic := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad.go"), filepath.Join(bad, "app.gox"))
-		if !strings.Contains(diagnostic, "readonly") {
+		diagnostic := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), source)
+		if !strings.Contains(diagnostic, "read-only") {
 			t.Fatal(diagnostic)
 		}
 	})
-	valid := makeApp("func Read()int{n:=1;return r::Read(&n)}")
-	metaPath := filepath.Join(library, "relay/.goxide.refs.json")
-	original, e := os.ReadFile(metaPath)
-	if e != nil {
-		t.Fatal(e)
-	}
-	mutate := func(name, want string, change func(map[string]any)) {
-		t.Run(name, func(t *testing.T) {
-			var v map[string]any
-			if e := json.Unmarshal(original, &v); e != nil {
-				t.Fatal(e)
-			}
-			change(v)
-			data, _ := json.Marshal(v)
-			if e := testdeps.WriteFile(metaPath, data, 0600); e != nil {
-				t.Fatal(e)
-			}
-			defer testdeps.WriteFile(metaPath, original, 0600)
-			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-			if !strings.Contains(out, want) || !strings.Contains(out, "app.gox:2:") {
-				t.Fatal(out)
-			}
-		})
-	}
-	mutate("root-content", "package source closure or build configuration changed", func(v map[string]any) { v["Content"] = "stale" })
-	mutate("wrong-package", "package path mismatch", func(v map[string]any) { v["Path"] = "other.example/relay" })
-	mutate("format-version", "unsupported metadata version", func(v map[string]any) { v["ArtifactVersion"] = 99 })
-	mutate("schema-version", "unsupported metadata version", func(v map[string]any) { v["Version"] = 99 })
-	mutate("stale-permissions", "marker digest mismatch", func(v map[string]any) { v["Functions"] = map[string]any{} })
-	mutate("missing-dependency", "dependency set mismatch", func(v map[string]any) { delete(v, "Dependencies") })
-	mutate("missing-file-set", "source set mismatch", func(v map[string]any) { v["Files"] = map[string]any{} })
-	mutate("unknown-field", "invalid metadata JSON", func(v map[string]any) { v["Unexpected"] = 1 })
-	t.Run("missing-and-plain-go", func(t *testing.T) {
-		if e := os.Remove(metaPath); e != nil {
-			t.Fatal(e)
-		}
-		defer testdeps.WriteFile(metaPath, original, 0600)
-		out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(out, "metadata missing") {
-			t.Fatal(out)
-		}
-		packagesCommand(t, plain, tool, true, "test", "-race", "-count=1", "./...")
-	})
-	t.Run("stale-content", func(t *testing.T) {
-		path := filepath.Join(library, "api/api.go")
-		old, e := os.ReadFile(path)
-		if e != nil {
-			t.Fatal(e)
-		}
-		if e = testdeps.WriteFile(path, append(old, []byte("\n// stale body artifact\n")...), 0600); e != nil {
-			t.Fatal(e)
-		}
-		defer testdeps.WriteFile(path, old, 0600)
-		out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(out, "Go source content mismatch") || !strings.Contains(out, "dependency library.example/refs/api") {
-			t.Fatal(out)
-		}
-	})
-	t.Run("build-selection", func(t *testing.T) {
-		out := packagesCommand(t, root, cli, false, "transpile", "--tags", "extra", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(out, "source set mismatch") {
-			t.Fatal(out)
-		}
-	})
-	t.Run("dependency-permission-drift", func(t *testing.T) {
-		drift := filepath.Join(t.TempDir(), "library")
-		packagesCommand(t, root, cli, true, "transpile", "-o", drift, makeLibrary(false, true))
-		for _, name := range []string{"api.go", ".goxide.refs.json"} {
-			path := filepath.Join(library, "api", name)
-			old, e := os.ReadFile(path)
-			if e != nil {
-				t.Fatal(e)
-			}
-			defer testdeps.WriteFile(path, old, 0600)
-			next, e := os.ReadFile(filepath.Join(drift, "api", name))
-			if e != nil {
-				t.Fatal(e)
-			}
-			if e = testdeps.WriteFile(path, next, 0600); e != nil {
-				t.Fatal(e)
-			}
-		}
-		out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(out, "enhanced dependency marker changed") {
-			t.Fatal(out)
-		}
-	})
-	t.Run("named-aggregate-drift", func(t *testing.T) {
-		source := makeLibrary(false, false)
-		packagesWrite(t, source, "api/api.gox", strings.Replace(api, "struct{N int}", "struct{N int;Items []int}", 1))
-		drift := filepath.Join(t.TempDir(), "out")
-		packagesCommand(t, root, cli, true, "transpile", "-o", drift, source)
-		var before, after map[string]any
-		oldMeta, _ := os.ReadFile(filepath.Join(library, "api/.goxide.refs.json"))
-		newMeta, _ := os.ReadFile(filepath.Join(drift, "api/.goxide.refs.json"))
-		json.Unmarshal(oldMeta, &before)
-		json.Unmarshal(newMeta, &after)
-		oldFunctions, _ := json.Marshal(before["Functions"])
-		newFunctions, _ := json.Marshal(after["Functions"])
-		if string(oldFunctions) != string(newFunctions) {
-			t.Fatal("probe must preserve function permissions")
-		}
-		for _, name := range []string{"api.go", ".goxide.refs.json"} {
-			path := filepath.Join(library, "api", name)
-			old, e := os.ReadFile(path)
-			if e != nil {
-				t.Fatal(e)
-			}
-			defer testdeps.WriteFile(path, old, 0600)
-			next, e := os.ReadFile(filepath.Join(drift, "api", name))
-			if e != nil {
-				t.Fatal(e)
-			}
-			if e = testdeps.WriteFile(path, next, 0600); e != nil {
-				t.Fatal(e)
-			}
-		}
-		out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(out, "dependency source closure changed") {
-			t.Fatal(out)
-		}
-	})
-	t.Run("native-named-aggregate-drift", func(t *testing.T) {
-		source := t.TempDir()
-		packagesWrite(t, source, "go.mod", module("library.example/refs", ""))
-		writeRoots(source)
-		packagesWrite(t, source, "model/model.go", "package model\ntype Cell struct{N int}\nfunc Consume(c Cell){}\n")
-		packagesWrite(t, source, "relay/relay.gox", `package relay
-use model as n;
-func Touch(p &n::Cell){v:=*p;n::Consume(v)}
-`)
-		generated := filepath.Join(t.TempDir(), "library")
-		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
-		packagesWrite(t, generated, "model/model.go", "package model\ntype Cell struct{N int;Items []int}\nfunc Consume(c Cell){c.Items[0]=9}\n")
-		app := t.TempDir()
-		packagesWrite(t, app, "go.mod", module("consumer.example/app", generated))
-		writeRoots(app)
-		packagesWrite(t, app, "app.gox", `package app
-use model as n; use relay as r;
-func Run()int{c:=n::Cell{Items:[]int{1}};r::Touch(&c);return c.Items[0]}
-`)
-		out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), app)
-		if !strings.Contains(out, "dependency source closure changed: library.example/refs/model") {
-			t.Fatal(out)
-		}
-	})
-
 }

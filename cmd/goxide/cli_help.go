@@ -9,12 +9,12 @@ func configureCLIHelp(root *cobra.Command) {
 	texts := map[string]helpText{
 		"goxide": {
 			"将 Goxide 源码编译为普通 Go",
-			"编译、运行和测试 Goxide 源码，或迁移已有 Go 项目。\n长选项使用 --name，短选项使用 -x；所有选项放在输入路径之前。\n旧式 -go、-offline 等拼写不再接受，请改为 --go、--offline。",
-			"  goxide run --go /absolute/path/to/go main.gox\n  goxide help scripts\n  goxide completion bash",
+			"编译、运行和测试 Goxide 源码。\n长选项使用 --name，短选项使用 -x；所有选项放在输入路径之前。\n旧式 -go、-offline 等拼写不再接受，请改为 --go、--offline。",
+			"  goxide run --go /absolute/path/to/go main.gox\n  goxide help build\n  goxide completion bash",
 		},
 		"goxide build": {
 			"编译文件、目录或项目并保留构建产物",
-			"省略输入时，从当前目录向上发现 goxide.toml 与 workspace。项目构建会打印稳定的二进制路径；用 --bin、--example 或 --lib 选择项目目标。",
+			"省略输入时，从当前目录向上发现 goxide.toml。项目构建会打印稳定的二进制路径；用 --bin 选择项目二进制目标。缺省编译目标为宿主，可用 --target GOARCH-unknown-GOOS 跨目标构建。",
 			"  goxide build -o ./app main.gox\n  goxide build --bin app --offline ./project",
 		},
 		"goxide run": {
@@ -28,14 +28,19 @@ func configureCLIHelp(root *cobra.Command) {
 			"  goxide test --go /absolute/path/to/go ./project\n  goxide test --offline --locked ./project",
 		},
 		"goxide transpile": {
-			"将源码转译为 Go 文件或模块",
-			"转译文件、目录或项目；省略输入时从当前目录向上发现项目。单文件可用 --source-map 输出源码映射；目录输入可用 -o 指定生成目录。",
-			"  goxide transpile -o main.go --source-map main.map.json main.gox\n  goxide transpile -o ./generated ./source",
+			"就地生成 Go；别名 gen 推荐用于 go generate",
+			"gen 是 transpile 的别名。默认将当前包或指定 .gox 写成同目录的 *_gox.go；只读加载同包手写 Go 声明，不编译或运行程序。\n推荐 //go:generate goxide gen .；用 -o - 将单个生成文件写到 stdout，用 -o PATH 保留显式文件或模块目录导出。\n原地和 stdout 输出包含生成标记与 //line 行指令；--source-map JSON 输出尚未实现。",
+			"  goxide gen .\n  goxide gen -o - order.gox\n  goxide transpile -o ./generated ./source",
 		},
 		"goxide expand": {
 			"查看单文件的宏展开结果",
 			"展开单个 .gox 文件；此命令不接受目录或项目输入。用 -o 将结果写入文件。",
 			"  goxide expand main.gox\n  goxide expand -o expanded.go main.gox",
+		},
+		"goxide env": {
+			"查询宿主、Go 环境和 Goxide 编译目标",
+			"显示三种目标及所选 Go 工具链；--target 仅选择 Goxide 工具链目标。名称参数查询原始进程环境，--list 列出目标值域。该命令不执行源码或解析项目。",
+			"  goxide env --json --target linux/amd64\n  goxide env --list\n  goxide env --json GOOS APP_EDITION",
 		},
 		"goxide import-go": {
 			"查看 Go 模块迁移计划或迁移到新目录",
@@ -80,7 +85,7 @@ func configureCLIHelp(root *cobra.Command) {
 		"goxide help": {
 			"查看命令帮助",
 			"查看根命令或指定子命令的帮助，不调用业务服务。",
-			"  goxide help\n  goxide help scripts allow",
+			"  goxide help\n  goxide help build",
 		},
 		"goxide completion": {
 			"生成 shell 补全脚本",

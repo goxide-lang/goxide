@@ -69,6 +69,9 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		if mode == "run" {
 			c.Use = "run [flags] [INPUT] [-- PROGRAM_ARGS...]"
 		}
+		if mode == "transpile" {
+			c.Aliases = []string{"gen"}
+		}
 		f := c.Flags()
 		f.StringVarP(&req.Output, "o", "o", "", "output source/directory (transpile), expanded source (expand), or binary (build)")
 		f.StringVar(&req.SourceMap, "source-map", "", "write single-file source mapping JSON")
@@ -76,10 +79,11 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.StringVar(&req.Runtime, "runtime", "", "Go module root selecting pinned public std/serde dependencies (standalone single-file run/build only)")
 		f.StringVar(&req.RootsFile, "roots", "", "explicit dependency namespace mapping file (native Go module or standalone source)")
 		f.StringVar(&req.Tags, "tags", "", "Go build tags (directory mode; comma/space separated)")
-		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (Go 1.27+; unused for single-file transpile/expand)")
+		f.StringVar(&req.Target, "target", "", "compilation target: GOARCH-unknown-GOOS or GOOS/GOARCH (toolchain workflow only)")
+		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (must match the frontend toolchain; used by all compilation modes)")
 		f.StringArrayVarP(&req.Packages, "package", "p", nil, "select workspace member by module identity (repeatable)")
 		f.BoolVar(&req.Workspace, "workspace", false, "build all workspace members")
-		f.StringVar(&req.Features, "features", "", "project features (comma/space separated)")
+		f.StringVar(&req.Features, "features", "", "enabled features (comma/space separated)")
 		f.BoolVar(&req.NoDefaultFeatures, "no-default-features", false, "disable project default features")
 		f.StringVar(&req.Bin, "bin", "", "select project binary")
 		f.StringVar(&req.Example, "example", "", "select project example")
@@ -88,6 +92,8 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.BoolVar(&req.Offline, "offline", false, "use cached dependencies; does not sandbox scripts")
 		f.BoolVar(&req.Locked, "locked", false, "require unchanged goxide.lock")
 		c.RunE = func(c *cobra.Command, operands []string) error {
+			req.FeaturesSet = c.Flags().Changed("features")
+			req.TargetSet = c.Flags().Changed("target")
 			req.Input = ""
 			req.ProgramArgs = nil
 			if len(operands) > 0 {
@@ -105,11 +111,11 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		}
 		root.AddCommand(c)
 	}
+	root.AddCommand(envCommand(out))
 	scripts := scriptsCommand("", out, stderr)
 	for _, action := range scriptActions {
 		scripts.AddCommand(scriptsCommand(action, out, stderr))
 	}
-	root.AddCommand(scripts)
 	req := ImportRequest{}
 	imp := cliCommand("import-go [flags] ROOT", "Plan or migrate a Go module into a new project")
 	f := imp.Flags()
@@ -133,7 +139,6 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		req.Interactive = term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
 		return executeImportGo(req, out, stderr)
 	}
-	root.AddCommand(imp)
 	help := cliCommand("help [COMMAND ...]", "Show command help")
 	help.RunE = func(_ *cobra.Command, args []string) error {
 		c := root
@@ -225,7 +230,7 @@ func usageError(c *cobra.Command, err error) error {
 
 func childCommand(c *cobra.Command, name string) *cobra.Command {
 	for _, child := range c.Commands() {
-		if child.Name() == name {
+		if child.Name() == name || child.HasAlias(name) {
 			return child
 		}
 	}
@@ -278,7 +283,7 @@ func executeCLI(c *cobra.Command, args []string) error {
 var oldLongOptions = map[string]bool{
 	"go": true, "offline": true, "features": true, "source-map": true,
 	"expanded": true, "runtime": true, "roots": true, "tags": true, "no-default-features": true,
-	"bin": true, "example": true, "lib": true, "target-dir": true, "locked": true,
+	"bin": true, "example": true, "lib": true, "target-dir": true, "target": true, "json": true, "list": true, "locked": true,
 	"action": true, "subject": true, "plan": true, "out": true, "help": true,
 	"source": true, "accept-source-diff": true,
 	"package": true, "workspace": true, "member-bin": true, "member-lib": true,

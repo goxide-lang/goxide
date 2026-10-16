@@ -88,7 +88,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 		g.Lock.Sums = map[string]string{}
 	}
 	workspaceID := Digest([]any{w.Config, w.Members})
-	toolVersion, e := goCommand(tool, work, true, "env", "GOVERSION")
+	toolVersion, e := goCommand(tool, work, true, nil, "env", "GOVERSION")
 	if e != nil {
 		return nil, e
 	}

@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`690cd5178dc11a0089a41e9320ed1275778383e1`；证据复核日期：2026-10-12。
+编译器基线：`690cd5178dc11a0089a41e9320ed1275778383e1`；证据复核日期：2026-10-16。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -16,9 +16,9 @@
 | serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (3108bb35522c); `tests/acceptance/serde_defaults_test.go` (5293aed34336); `docs/serde-json.md` (27e4419ff1eb); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `internal/derives/registry.go` (0c476cb0dc51); `internal/frontend/derive_bindings_test.go` (d217bcbc18cd) |
 | Error 派生与错误链 | 0013, research/0005 | 部分实现 | browser | `internal/deriveextras/error.go` (c8d5b2761b2e); `tests/acceptance/serde_causes_test.go` (372778994a1a); `tests/acceptance/macros_test.go` (de90c1efd468) |
 | use / pub use 与 API 聚合 | 0021 | 部分实现 | cli | `cmd/goxide/directory.go` (b1ac56bc8e23); `tests/acceptance/qualified_packages_test.go` (0204440e9456); `examples/reexports/README.md` (67e1513bf1e1) |
-| feature、依赖来源与 targets | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (9ed79f0bf841); `internal/project/planner.go` (c7d0f82b61e7); `cmd/goxide/project_test.go` (d5d3daa81c2f); `cmd/goxide/version_test.go` (105e841b7207); `cmd/goxide/combination_review_test.go` (ea05991bc0cc); `docs/rfcs/0025-unified-project.md` (0747ad87b3a5); `cmd/goxide/import_go_test.go` (97b90f676f4f); `internal/frontend/single_file.go` (d6bf7ef13f1a); `cmd/goxide/single_file.go` (07ef14971334); `tests/acceptance/single_file_external_test.go` (e59741f19fc7) |
-| 从普通 Go 迁入：plan → 新目录 | 0025 | 部分实现 | cli | `docs/rfcs/0025-unified-project.md` (0747ad87b3a5); `cmd/goxide/import_go.go` (5f156b6e5432); `cmd/goxide/import_go_test.go` (97b90f676f4f) |
-| 宿主构建脚本与授权 | 0023 | 部分实现 | cli | `internal/scripttrust/store.go` (d521e32ece88); `cmd/goxide/scripts.go` (abc3ee116700); `cmd/goxide/buildscript_test.go` (2aee22398839); `cmd/goxide/combination_review_test.go` (ea05991bc0cc) |
+| 多包、feature 与编译目标 | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (9ed79f0bf841); `internal/project/planner.go` (c7d0f82b61e7); `cmd/goxide/project_test.go` (d5d3daa81c2f); `cmd/goxide/version_test.go` (105e841b7207); `cmd/goxide/combination_review_test.go` (ea05991bc0cc); `docs/rfcs/0025-unified-project.md` (0747ad87b3a5); `cmd/goxide/import_go_test.go` (97b90f676f4f); `internal/frontend/single_file.go` (d6bf7ef13f1a); `cmd/goxide/single_file.go` (07ef14971334); `tests/acceptance/single_file_external_test.go` (e59741f19fc7) |
+| 从普通 Go 迁入：plan → 新目录 | 0025 | MVP 阶段恢复 | unavailable | `docs/rfcs/0025-unified-project.md` (0747ad87b3a5); `cmd/goxide/import_go.go` (5f156b6e5432); `cmd/goxide/import_go_test.go` (97b90f676f4f) |
+| 宿主构建脚本与授权 | 0023 | MVP 阶段恢复 | unavailable | `internal/scripttrust/store.go` (d521e32ece88); `cmd/goxide/scripts.go` (abc3ee116700); `cmd/goxide/buildscript_test.go` (2aee22398839); `cmd/goxide/combination_review_test.go` (ea05991bc0cc) |
 | 只读路径与写引用 | 0005, 0006 | 部分实现 | browser | `internal/refs/lower.go` (06958945a842); `internal/refs/flow.go` (8a7482599404); `tests/acceptance/refs_test.go` (23bf6da5dac2); `tests/acceptance/composite_permissions_test.go` (88fe8991473a); `internal/frontend/enum_borrow_test.go` (917e7197dfd0); `internal/refs/projections_test.go` (715e190fee83) |
 | 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (6ae0fbfb0b96); `ROADMAP.md` (39ae0da9312a) |
 | 静态协议、关联函数与 impl | 0002, 0003, 0004, 0019, 0020 | 部分实现 | browser | `docs/static-protocols.md` (0dbe7c2670f4); `internal/protocols/lower.go` (2071b1816c0b); `internal/frontend/protocol_artifact.go` (28c369be0f8f); `tests/acceptance/static_protocol_test.go` (a37d8de92112) |
@@ -29,9 +29,9 @@
 | 分仓标准库与编译器支持 | 0008, 0016 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (fe6c342daf4a); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `docs/reviews/public-library-migration-20261004.md` (5c4089eda830); `internal/frontend/protocol_typeinfo.go` (bd9fef3cd59b) |
 | 上下文推导与生成 Go 可读性 | 0008, 0018 | 部分实现 | browser | `internal/frontend/shared_std_test.go` (fe6c342daf4a); `internal/frontend/readability_test.go` (4a76f296f046); `internal/enums/builtins_test.go` (56c0c64be628) |
 | CLI：明确的长短选项与参数边界 | 0022, 0023 | 部分实现 | cli | `docs/reviews/cobra-cli-20261004.md` (8ea6aedbfb22); `cmd/goxide/cli_process_test.go` (5e824179e254); `cmd/goxide/cli_dependency_graph_test.go` (739ed1a54f45) |
-| 供应模块：local 默认与显式 remote 选择 | 0025 | 部分实现 | cli | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/goxide/vendor_import_test.go` (e4aa062249a1); `cmd/goxide/import_sources_test.go` (e47dab18e690); `cmd/goxide/import_sources_process_test.go` (8c56c8aeb536); `internal/project/supplied_sources.go` (72144f6a51ac); `docs/reviews/source-selection-20261005.md` (10a95c11af1a) |
-| Workspace：作者核心与统一根锁 | 0026 | 部分实现 | cli | `docs/rfcs/0026-workspaces.md` (36f2d8f96252); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/goxide/workspace_test.go` (9d4c2aa90347); `internal/project/workspace_test.go` (ce7160b0b0e9) |
-| go.work 迁入与本地模块渐进增强 | 0026 | 部分实现 | cli | `docs/design/workspace-import.md` (d2357bd79f3c); `docs/reviews/workspace-import-20261004.md` (62a5cfb20f03); `cmd/goxide/native_enhanced_test.go` (517513c4bee9); `cmd/goxide/native_standalone_test.go` (afc6388b3197); `docs/reviews/vendor-local-modules-20261004.md` (8a12349f3d78) |
+| 供应模块：local 默认与显式 remote 选择 | 0025 | MVP 阶段恢复 | unavailable | `docs/reviews/vendor-import-20261004.md` (e34aa299b447); `cmd/goxide/vendor_import_test.go` (e4aa062249a1); `cmd/goxide/import_sources_test.go` (e47dab18e690); `cmd/goxide/import_sources_process_test.go` (8c56c8aeb536); `internal/project/supplied_sources.go` (72144f6a51ac); `docs/reviews/source-selection-20261005.md` (10a95c11af1a) |
+| Workspace：作者核心与统一根锁 | 0026 | MVP 阶段恢复 | unavailable | `docs/rfcs/0026-workspaces.md` (36f2d8f96252); `docs/reviews/workspace-core-20261004.md` (cd447ed4f6a6); `cmd/goxide/workspace_test.go` (9d4c2aa90347); `internal/project/workspace_test.go` (ce7160b0b0e9) |
+| go.work 迁入与本地模块渐进增强 | 0026 | MVP 阶段恢复 | unavailable | `docs/design/workspace-import.md` (d2357bd79f3c); `docs/reviews/workspace-import-20261004.md` (62a5cfb20f03); `cmd/goxide/native_enhanced_test.go` (517513c4bee9); `cmd/goxide/native_standalone_test.go` (afc6388b3197); `docs/reviews/vendor-local-modules-20261004.md` (8a12349f3d78) |
 
 开发快照：{"use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"}
 

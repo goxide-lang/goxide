@@ -1,0 +1,15 @@
+[package]
+format = 2
+module = "example.org/p5/kit"
+go = "1.27"
+
+[package.namespaces]
+native = "example.org/p5/kit/native"
+
+[lib]
+name = "kit"
+path = "."
+
+[dependencies]
+wire = { go = "github.com/goxide-lang/serde", version = "@SERDE_VERSION@", package = "github.com/goxide-lang/serde", namespaces = { json = "github.com/goxide-lang/serde/json" } }
+standard = { go = "github.com/goxide-lang/std", version = "@STD_VERSION@" }

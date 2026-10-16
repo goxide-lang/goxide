@@ -1,7 +1,7 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -151,7 +151,7 @@ func(*Other)Error()string{return "other"}
 			if err == nil || !strings.Contains(err.Error(), "rejected.gox:") {
 				t.Fatalf("expected located rejection; got %v", err)
 			}
-			if name == "no matching rule" && !strings.Contains(err.Error(), "rejected.gox:3:12:") {
+			if name == "no matching rule" && !strings.Contains(err.Error(), "called at rejected.gox:3:12") {
 				t.Fatalf("diagnostic lost invocation location: %v", err)
 			}
 			t.Log(err)

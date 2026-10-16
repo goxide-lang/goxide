@@ -1,8 +1,0 @@
-=== RUN   TestReviewEmptyOverlayDoesNotEraseEvidence
-=== RUN   TestReviewEmptyOverlayDoesNotEraseEvidence/empty
-=== RUN   TestReviewEmptyOverlayDoesNotEraseEvidence/reversed
---- PASS: TestReviewEmptyOverlayDoesNotEraseEvidence (0.00s)
-    --- PASS: TestReviewEmptyOverlayDoesNotEraseEvidence/empty (0.00s)
-    --- PASS: TestReviewEmptyOverlayDoesNotEraseEvidence/reversed (0.00s)
-PASS
-ok      review.example/sourcemap        1.889s

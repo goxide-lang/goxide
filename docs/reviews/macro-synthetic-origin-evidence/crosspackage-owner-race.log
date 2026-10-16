@@ -1,4 +1,0 @@
-=== RUN   TestMacroSyntheticCrossFileAndPackageFrames
---- PASS: TestMacroSyntheticCrossFileAndPackageFrames (0.03s)
-PASS
-ok      github.com/hxsf/goxide/internal/frontend        1.876s

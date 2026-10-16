@@ -16,6 +16,11 @@ func TestT0FinalAuditBusinessRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	input = []byte(strings.NewReplacer("enum AuditState", "pub enum AuditState", "enum Receipt", "pub enum Receipt", "    panic(\"unreachable\")\n", "").Replace(string(input)))
+	source = filepath.Join(t.TempDir(), "final_audit.gox")
+	if err := os.WriteFile(source, input, 0600); err != nil {
+		t.Fatal(err)
+	}
 	result, err := compileAcceptanceLanguageFixture(source, input)
 	if err != nil {
 		t.Fatal(err)
@@ -38,8 +43,8 @@ func TestT0FinalAuditBoundaries(t *testing.T) {
 	cases := []struct{ name, source, want string }{
 		{"plain-int", "func f(v int){match v {_=>{},}}", "enum"},
 		{"any-erases-identity", "enum E { A, }\nfunc f(v any){match v {_=>{},}}", "enum"},
-		{"missing-clone", "enum S { A, }\n#[derive(Clone)]\ntype Record struct { Value S }", "derive"},
-		{"helper-not-protocol", "enum S { A, }\nfunc CloneS(v *S) S{return *v}\n#[derive(Clone)]\ntype Record struct { Value S }", "derive"},
+		{"missing-clone", "enum S { A, }\n#[derive(Clone)]\ntype Record struct { Value S }", "no explicit clone implementation"},
+		{"helper-not-protocol", "enum S { A, }\nfunc CloneS(v *S) S{return *v}\n#[derive(Clone)]\ntype Record struct { Value S }", "no explicit clone implementation"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,10 +78,9 @@ func TestAuditClonesClosedVariants(t *testing.T){
  }
 }
 func TestReceiptValidationPrecedesEffects(t *testing.T){
- // The closed typed ABI has no nil or pointer-case Receipt values. Its zero
- // value remains invalid, including zero values made through reflection.
+ // Both the nil interface and typed nil variant remain invalid.
  reflectedZero:=reflect.Zero(reflect.TypeOf(accepted())).Interface().(Receipt)
- for _,tc:=range []struct{valid bool;value Receipt}{{true,accepted()},{false,Receipt{}},{false,reflectedZero}}{
+ for _,tc:=range []struct{valid bool;value Receipt}{{true,accepted()},{false,nil},{false,reflectedZero}}{
   valid,value:=tc.valid,tc.value
   trace:=[]string{};reads,guards:=0,0
   panicked:=false

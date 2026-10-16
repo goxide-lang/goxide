@@ -500,7 +500,7 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 		return e
 	}
 	var discard bytes.Buffer
-	if e = runNativeWorkspace(CompileRequest{Mode: "build", Workspace: true, GoTool: req.GoTool, Offline: req.Offline}, stage, w, &discard, stderr); e != nil {
+	if e = executeCompile(CompileRequest{Mode: "build", Input: stage, Workspace: true, GoTool: req.GoTool, Offline: req.Offline}, &discard, stderr); e != nil {
 		return fmt.Errorf("workspace migration validation failed; original unchanged: %w", e)
 	}
 	for _, name := range []string{"target", ".goxide"} {

@@ -1,3 +1,0 @@
-module example.org/native/buffer
-
-go 1.27

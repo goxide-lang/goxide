@@ -108,7 +108,7 @@ func TestManualProtocolDoesNotChangeGoZero(t *testing.T){
  defaultTrace=""
  var zero Service
  values:=[]Service{zero,make([]Service,1)[0],(map[string]Service{})["missing"]}
- for _,value:=range values{if value.First.Port!=0||value.First.Ready!=nil||value.Login.Name!=""||value.Mode!=(Mode{}){t.Fatalf("Go zero acquired Default: %#v",value)}}
+ for _,value:=range values{if value.First.Port!=0||value.First.Ready!=nil||value.Login.Name!=""||value.Mode!=nil{t.Fatalf("Go zero acquired Default: %#v",value)}}
  if defaultTrace!=""{t.Fatal("zero initialization called Default")}
 }
 `

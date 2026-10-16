@@ -1,0 +1,57 @@
+package main
+
+use fmt;
+
+pub enum State { Idle, Number(int), Pair(int, string), Record{x int, y int}, Text(string) }
+
+func describe(x State) string {
+	return match x {
+		State::Idle => "idle",
+		State::Number(0) => "zero",
+		State::Number(n) if n > 0 => fmt::Sprintf("positive:%d", n),
+		State::Number(n) => fmt::Sprintf("number:%d", n),
+		State::Pair(n, s) => fmt::Sprintf("pair:%d:%s", n, s),
+		State::Record{x: 1, y: n} => fmt::Sprintf("record:%d", n),
+		State::Record => "record",
+		State::Text(s) => "text:" + s,
+	}
+}
+
+func ordered(next func() State, seen *[]int) int {
+	mark := func(n int, value bool) bool { *seen = append(*seen, n); return value }
+	match next() {
+		State::Number(n) if mark(1, false) => { return n },
+		_ if mark(2, false) => { return -2 },
+		State::Number(n) if mark(3, true) => { return n },
+		State::Number(n) => { return n + 100 },
+		_ => { return -1 },
+	}
+}
+
+func freshBinding(x State) int {
+	match x {
+		State::Number(n) if func() bool { n = 99; return false }() => { return n },
+		State::Number(n) => { return n },
+		_ => { return -1 },
+	}
+}
+
+func nested(x State) int {
+	match x {
+		State::Number(n) => {
+			match State::Pair(n, "ok") {
+				State::Pair(value, _) => { return value },
+				_ => { return -1 },
+			}
+		},
+		_ => { return -1 },
+	}
+}
+
+func main() {
+	fmt::Println(describe(State::Idle), describe(State::Number(0)), describe(State::Number(3)), describe(State::Number(-2)), describe(State::Pair(4, "x")), describe(State::Record{x: 1, y: 7}), describe(State::Text("y")))
+	calls := 0
+	seen := []int{}
+	n := ordered(func() State { calls++; return State::Number(7) }, &seen)
+	fmt::Println(n, calls, seen, nested(State::Number(freshBinding(State::Number(9)))))
+}

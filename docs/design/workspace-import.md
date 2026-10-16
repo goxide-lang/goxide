@@ -1,6 +1,6 @@
 # 原生 go.work 与 workspace vendor 迁入合同
 
-状态：2026-10-04 第二阶段原生传输子集已实现，基于 `2aa0d066`。本文件先于生产实现落地；验收结果见 [迁入验收](../reviews/workspace-import-20261004.md)。保持原目录不变，仅在临时 staging 运行会写 Go 元数据的分析/构建命令，成功后发布新的输出目录。
+状态：2026-10-04 第二阶段原生传输子集已实现，基于 `2aa0d066`。本文件先于生产实现落地；验收结果见 [迁入验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/workspace-import-20261004.md)。保持原目录不变，仅在临时 staging 运行会写 Go 元数据的分析/构建命令，成功后发布新的输出目录。
 
 ## 接口与支持范围
 

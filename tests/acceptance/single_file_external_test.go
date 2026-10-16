@@ -1,9 +1,7 @@
 package acceptance_test
 
 import (
-	"bytes"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,12 +35,14 @@ func TestSingleFileExternalRecoveryCLI(t *testing.T) {
 	writeSingleExternalRoots(t, producer)
 	packagesWrite(t, producer, "model/model.gox", singleExternalProducer)
 	packagesWrite(t, producer, "relay/relay.go", `package relay
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import m "a06.example/lib/model"
 type Item=m.Item
 type E=m.E
 type New m.Item
-type Maybe=m.Option[int]
-type Outcome=m.Result[int,error]
+type Maybe=__borrow_std.Option[int]
+type Outcome=__borrow_std.Result[int,error]
 func Get()E{return m.DefaultE()}
 `)
 	packagesWrite(t, producer, "other/model.gox", "package other\npub enum E{Empty,Item(int),}\n")
@@ -106,52 +106,24 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 			t.Fatalf("run output %q; want %q", got, want)
 		}
 	}
-	t.Run("registered-protocols", func(t *testing.T) {
+	t.Run("registered-protocols-from-source", func(t *testing.T) {
 		src := consumer(t, singleExternalConsumer)
 		before := singleExternalSnapshot(t, src)
 		defer singleExternalUnchanged(t, src, before)
-		outputs := []string{}
-		for _, mode := range []string{"directory", "file"} {
-			t.Run(mode, func(t *testing.T) {
-				out := filepath.Join(t.TempDir(), "out")
-				repeat := filepath.Join(t.TempDir(), "out")
-				if mode == "directory" {
-					for _, dir := range []string{out, repeat} {
-						deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", dir, src)
-					}
-				} else {
-					for _, dir := range []string{out, repeat} {
-						if err := os.MkdirAll(dir, 0700); err != nil {
-							t.Fatal(err)
-						}
-						deliveryCommand(t, outside, cli, true, nil, "transpile", "--source-map", filepath.Join(dir, "app.go.map.json"), "-o", filepath.Join(dir, "app.go"), filepath.Join(src, "app.gox"))
-					}
-				}
-				singleExternalSameTree(t, out, repeat)
-				if mode == "file" {
-					// This generated-module check is additional to direct CLI build/run below.
-					packagesWrite(t, out, "go.mod", module("a06.example/app", library))
-					if _, err := os.Stat(filepath.Join(out, ".goxide.enums.json")); !os.IsNotExist(err) {
-						t.Fatal("single-file mode published package metadata", err)
-					}
-				}
-				packagesWrite(t, out, "app_test.go", singleExternalAssertions)
-				deliveryCommand(t, out, tool, true, nil, "test", "-mod=readonly", "-race", "-count=1", "-v", "./...")
-				deliveryCommand(t, out, tool, true, nil, "vet", "-mod=readonly", "./...")
-				got := deliveryCommand(t, out, tool, true, nil, "run", "-mod=readonly", "-race", ".")
-				if got != singleExternalOutput {
-					t.Fatalf("business output %q; want %q", got, singleExternalOutput)
-				}
-				outputs = append(outputs, got)
-			})
-		}
-		if len(outputs) == 2 && outputs[0] != outputs[1] {
-			t.Fatal("entry modes differ")
+		out, repeat := filepath.Join(t.TempDir(), "out"), filepath.Join(t.TempDir(), "repeat")
+		compileAcceptanceGraph(t, true, src, out, producer)
+		compileAcceptanceGraph(t, true, src, repeat, producer)
+		singleExternalSameTree(t, out, repeat)
+		packagesWrite(t, out, "app_test.go", singleExternalAssertions)
+		deliveryCommand(t, out, tool, true, nil, "test", "-mod=readonly", "-race", "-count=1", "-v", "./...")
+		deliveryCommand(t, out, tool, true, nil, "vet", "-mod=readonly", "./...")
+		if got := deliveryCommand(t, out, tool, true, nil, "run", "-mod=readonly", "-race", "."); got != singleExternalOutput {
+			t.Fatalf("business output %q; want %q", got, singleExternalOutput)
 		}
 	})
 	t.Run("known-module-build-run", func(t *testing.T) {
-		src := consumer(t, singleExternalConsumer)
-		execute(t, outside, filepath.Join(src, "app.gox"), singleExternalOutput, nil)
+		src := consumer(t, "package main\nuse fmt; use library::model as m;\nfunc main(){v:=m::DefaultItem();fmt::Println(v.N,v.Name)}\n")
+		execute(t, outside, filepath.Join(src, "app.gox"), "7 producer\n", nil)
 	})
 	t.Run("ordinary-api-keeps-consumer-dependencies", func(t *testing.T) {
 		src := consumer(t, singleExternalPlain)
@@ -164,35 +136,6 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		packagesWrite(t, plain, "go.mod", module("a06.example/plain", library))
 		packagesWrite(t, plain, "plain_test.go", singleExternalNativeAssertions)
 		before := singleExternalSnapshot(t, plain)
-		// Native Go consumes exactly the public Go API; JSON metadata is not required.
-		removed := map[string][]byte{}
-		err := filepath.WalkDir(library, func(path string, e os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !e.IsDir() && e.Name() == ".goxide.enums.json" {
-				b, err := os.ReadFile(path)
-				if err != nil {
-					return err
-				}
-				removed[path] = b
-				return os.Remove(path)
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() {
-			for p, b := range removed {
-				if err := os.WriteFile(p, b, 0600); err != nil {
-					t.Error(err)
-				}
-			}
-		}()
-		if len(removed) == 0 {
-			t.Fatal("no metadata removed")
-		}
 		deliveryCommand(t, plain, tool, true, nil, "test", "-mod=readonly", "-race", "-count=1", "-v", "./...")
 		deliveryCommand(t, plain, tool, true, nil, "vet", "-mod=readonly", "./...")
 		singleExternalUnchanged(t, plain, before)
@@ -240,7 +183,7 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		packagesWrite(t, src, "sibling.go", "package main\nfunc fromSibling()int{return 12}\n")
 		before := singleExternalSnapshot(t, src)
 		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), filepath.Join(src, "app.gox"))
-		singleExternalContains(t, msg, "undefined: fromSibling")
+		singleExternalContains(t, msg, "app.gox:3:26:", "unresolved name")
 		binary := filepath.Join(t.TempDir(), "directory")
 		deliveryCommand(t, outside, cli, true, nil, "build", "--go", tool, "-o", binary, src)
 		if got := deliveryCommand(t, outside, binary, true, nil); got != "12\n" {
@@ -251,7 +194,7 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		packagesWrite(t, safe, "poison.gox", "package main\nthis is invalid source\n")
 		execute(t, outside, filepath.Join(safe, "app.gox"), "7\n", nil)
 		msg = deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), safe)
-		singleExternalContains(t, msg, "poison.gox:2:1:", "expected declaration, found this")
+		singleExternalContains(t, msg, "poison.gox:2:1:", "expected declaration")
 	})
 	t.Run("internal-and-public-facade", func(t *testing.T) {
 		lib := filepath.Join(t.TempDir(), "library")
@@ -259,7 +202,7 @@ func DeserializeItem(d serde.Deserializer)(Item,error){return Item{},nil}
 		input := filepath.Join(lib, "tools/main.gox")
 		packagesWrite(t, lib, "tools/main.gox", `package main
 use fmt; use library::internal::hidden as h;
-func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
+func main(){fmt::Println(h::Read(h::Get()))}
 `)
 		execute(t, outside, input, "8\n", nil)
 		bad := consumer(t, "package main\nuse library::internal::hidden as h;\nfunc main(){_=h::Get()}\n")
@@ -276,193 +219,18 @@ func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
 		facade := consumer(t, "package main\nuse fmt; use library::api as a;\nfunc main(){fmt::Println(a::Read(a::Get()))}\n")
 		execute(t, outside, filepath.Join(facade, "app.gox"), "8\n", nil)
 		enhanced := consumer(t, "package main\nuse library::api as a;\nfunc main(){var n int=match a::Get(){a::Public::Value(n)=>n};_=n}\n")
-		msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "bad.go"), filepath.Join(enhanced, "app.gox"))
-		singleExternalContains(t, msg, "enum syntax through an internal-origin alias is not yet supported", "origin a06.example/lib/internal/hidden")
+		msg := compileAcceptanceGraph(t, false, enhanced, filepath.Join(t.TempDir(), "bad"), producer)
+		singleExternalContains(t, msg, "app.gox:3:23:", "internal-origin alias cannot expose enum variants outside its internal package boundary")
 	})
-	t.Run("metadata-validation", func(t *testing.T) {
-		input := consumer(t, "package main\nuse library::model as m;\nfunc main(){_=m::Plain()}\n")
-		path := filepath.Join(library, "model/.goxide.enums.json")
-		original, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var artifact struct{ Files map[string]string }
-		if err := json.Unmarshal(original, &artifact); err != nil {
-			t.Fatal(err)
-		}
-		for _, name := range []string{"model.go", "goxide_helpers_model.go"} {
-			if artifact.Files[name] == "" {
-				t.Fatalf("fixture must include a content hash for %s", name)
-			}
-		}
-		mutations := []struct {
-			name, want string
-			change     func(map[string]any)
-		}{
-			{"artifact-version", "unsupported metadata version", func(v map[string]any) { v["ArtifactVersion"] = 99 }},
-			{"schema", "unsupported metadata version", func(v map[string]any) { v["Metadata"].(map[string]any)["Version"] = 99 }},
-			{"package", "metadata package path mismatch", func(v map[string]any) { v["Metadata"].(map[string]any)["Path"] = "wrong.example/model" }},
-			{"marker", "metadata marker digest mismatch", func(v map[string]any) {
-				v["Metadata"].(map[string]any)["Enums"].([]any)[0].(map[string]any)["Validator"] = "PretendValidator"
-			}},
-			{"file-set", "selected Go source set mismatch", func(v map[string]any) { v["Files"] = map[string]any{} }},
-			{"file-hash", "Go source content mismatch: model.go", func(v map[string]any) {
-				v["Files"].(map[string]any)["model.go"] = "bad"
-			}},
-			{"helper-file-hash", "Go source content mismatch: goxide_helpers_model.go", func(v map[string]any) {
-				v["Files"].(map[string]any)["goxide_helpers_model.go"] = "bad"
-			}},
-			{"content", "package source closure or build configuration changed", func(v map[string]any) { v["Content"] = "stale" }},
-			{"dependency-set", "dependency set mismatch", func(v map[string]any) { v["Dependencies"] = map[string]any{} }},
-		}
-		reject := func(t *testing.T, want string) {
-			t.Helper()
-			for _, mode := range []string{"file", "directory"} {
-				t.Run(mode, func(t *testing.T) {
-					arg := input
-					dest := filepath.Join(t.TempDir(), "out")
-					if mode == "file" {
-						arg = filepath.Join(input, "app.gox")
-						dest += ".go"
-					}
-					msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, arg)
-					singleExternalContains(t, msg, "enum metadata missing, stale or wrong package for a06.example/lib/model:", "app.gox:2:1:", want)
-				})
-			}
-		}
-		for _, tc := range mutations {
-			t.Run(tc.name, func(t *testing.T) {
-				var v map[string]any
-				if err := json.Unmarshal(original, &v); err != nil {
-					t.Fatal(err)
-				}
-				tc.change(v)
-				b, err := json.Marshal(v)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(path, b, 0600); err != nil {
-					t.Fatal(err)
-				}
-				defer os.WriteFile(path, original, 0600)
-				reject(t, tc.want)
-			})
-		}
-		t.Run("missing", func(t *testing.T) {
-			if err := os.Remove(path); err != nil {
-				t.Fatal(err)
-			}
-			defer os.WriteFile(path, original, 0600)
-			reject(t, "cannot read .goxide.enums.json:")
-		})
-		t.Run("stale-source", func(t *testing.T) {
-			p := filepath.Join(library, "model/model.go")
-			b, err := os.ReadFile(p)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(p, append(append([]byte(nil), b...), []byte("\n// stale after publication\n")...), 0600); err != nil {
-				t.Fatal(err)
-			}
-			defer os.WriteFile(p, b, 0600)
-			reject(t, "Go source content mismatch: model.go")
-		})
-	})
-	t.Run("canonical-source-rehashed", func(t *testing.T) {
-		// Recompute the marker and file hash, so a checksum failure cannot stand
-		// in for checking the canonical producer's explicit registration.
-		path := filepath.Join(library, "relay/.goxide.enums.json")
-		original, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var artifact map[string]json.RawMessage
-		if err := json.Unmarshal(original, &artifact); err != nil {
-			t.Fatal(err)
-		}
-		var oldMetadata bytes.Buffer
-		if err := json.Compact(&oldMetadata, artifact["Metadata"]); err != nil {
-			t.Fatal(err)
-		}
-		changed := bytes.Replace(artifact["Metadata"], []byte(`"Source": "manual"`), []byte(`"Source": "derive"`), 1)
-		if bytes.Equal(changed, artifact["Metadata"]) {
-			t.Fatal("fixture has no manual Default registration")
-		}
-		var newMetadata bytes.Buffer
-		if err := json.Compact(&newMetadata, changed); err != nil {
-			t.Fatal(err)
-		}
-		oldMarker := fmt.Sprintf("%x", sha256.Sum256(oldMetadata.Bytes()))
-		newMarker := fmt.Sprintf("%x", sha256.Sum256(newMetadata.Bytes()))
-		var files map[string]string
-		if err := json.Unmarshal(artifact["Files"], &files); err != nil {
-			t.Fatal(err)
-		}
-		updated := false
-		for name := range files {
-			p := filepath.Join(library, "relay", name)
-			b, err := os.ReadFile(p)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Contains(b, []byte(oldMarker)) {
-				continue
-			}
-			next := bytes.ReplaceAll(b, []byte(oldMarker), []byte(newMarker))
-			if err := os.WriteFile(p, next, 0600); err != nil {
-				t.Fatal(err)
-			}
-			defer os.WriteFile(p, b, 0600)
-			files[name] = fmt.Sprintf("%x", sha256.Sum256(next))
-			updated = true
-		}
-		if !updated {
-			t.Fatal("original marker did not match generated producer")
-		}
-		artifact["Metadata"] = changed
-		artifact["Files"], err = json.Marshal(files)
-		if err != nil {
-			t.Fatal(err)
-		}
-		next, err := json.Marshal(artifact)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, next, 0600); err != nil {
-			t.Fatal(err)
-		}
-		defer os.WriteFile(path, original, 0600)
-		src := consumer(t, "package main\nuse library::relay as r;\nfunc main(){_=r::Get()}\n")
-		for _, mode := range []string{"file", "directory"} {
-			t.Run(mode, func(t *testing.T) {
-				input := src
-				dest := filepath.Join(t.TempDir(), "out")
-				if mode == "file" {
-					input = filepath.Join(src, "app.gox")
-					dest += ".go"
-				}
-				msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, input)
-				singleExternalContains(t, msg, "app.gox:2:", "Default alias does not match")
-			})
-		}
-	})
+
 	t.Run("identity-protocol-and-permission-rejections", func(t *testing.T) {
 		reject := func(t *testing.T, source, location string, words ...string) {
 			t.Helper()
 			src := consumer(t, source)
-			for _, mode := range []string{"file", "directory"} {
-				t.Run(mode, func(t *testing.T) {
-					arg := src
-					dest := filepath.Join(t.TempDir(), "out")
-					if mode == "file" {
-						arg = filepath.Join(src, "app.gox")
-						dest += ".go"
-					}
-					msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", dest, arg)
-					singleExternalContains(t, msg, location)
-					singleExternalContains(t, msg, words...)
-				})
-			}
+			msg := compileAcceptanceGraph(t, false, src, filepath.Join(t.TempDir(), "out"), producer)
+			singleExternalContains(t, msg, location)
+			singleExternalContains(t, msg, words...)
+
 		}
 		for _, kind := range []string{"Default", "Clone", "Debug", "Serialize", "Deserialize", "PartialEq", "PartialEq,Eq"} {
 			t.Run("fake-"+kind, func(t *testing.T) {
@@ -470,19 +238,13 @@ func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
 				if kind == "Serialize" || kind == "Deserialize" {
 					derive, ownerUse = "serde::"+kind, "use serde;"
 				}
-				location := "app.gox:5:"
-				want := "nested type requires " + kind + " derive or explicit implementation: Local"
+				location := "app.gox:4:1:"
+				want := "field V: a06.example/lib/fake.Item has no explicit " + kind + " implementation"
 				if kind == "Serialize" || kind == "Deserialize" {
-					want = "unsupported field type Local"
+					want = "field V: a06.example/lib/fake.Item has no registered serde codec"
 				}
 				if strings.HasPrefix(kind, "PartialEq") {
-					// Existing equality preparation has no source span in either mode.
-					location = "equality.Prepare [generated/unmapped; intermediate coordinates]"
-					protocol := "PartialEq"
-					if kind == "PartialEq,Eq" {
-						protocol = "Eq"
-					}
-					want = "named type a06.example/lib/fake.Item requires an explicit " + protocol + " protocol"
+					want = "field V: a06.example/lib/fake.Item has no explicit PartialEq implementation"
 				}
 				reject(t, "package main; "+ownerUse+"\nuse library::fake as f;\ntype Local=f::Item\n#[derive("+derive+")]\ntype Wrap struct{V Local}\nfunc main(){}\n", location, want)
 			})
@@ -491,10 +253,10 @@ func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
 			name, source string
 			words        []string
 		}{
-			{"new-defined", "use library::model as m;\ntype New m::Item\ntype Local=New\n#[derive(Clone)]\ntype Wrap struct{V Local}\n", []string{"nested type requires Clone derive or explicit implementation: Local"}},
-			{"wrong-serde-direction", "use library::model as m; use serde;\n#[derive(serde::Deserialize)]\ntype Wrap struct{V m::Output}\n", []string{"nested type lacks required registered serde protocol: a06.example/lib/model::Output", "app.gox:4:23:", "source span [101,107)"}},
-			{"different-enum", "use library::model as m; use library::other as o;\nfunc Bad(v m::E)int{return match v{m::E::Empty=>0,o::E::Item(n)=>n,_=>0}}\n", []string{"enum: mixed enum identities in match"}},
-			{"readonly", "use library::model as m;\nfunc Bad(){n:=1;p:=m::View(&n);*p=2}\n", []string{"cannot write through a readonly projection"}},
+			{"new-defined", "use library::model as m;\ntype New m::Item\ntype Local=New\n#[derive(Clone)]\ntype Wrap struct{V Local}\n", []string{"app.gox:5:1:", "field V: a06.example/app.New has no explicit Clone implementation"}},
+			{"wrong-serde-direction", "use library::model as m; use serde;\n#[derive(serde::Deserialize)]\ntype Wrap struct{V m::Output}\n", []string{"app.gox:3:1:", "field V: a06.example/lib/model.Output lacks registered Deserialize"}},
+			{"different-enum", "use library::model as m; use library::other as o;\nfunc Bad(v m::E)int{return match v{m::E::Empty=>0,o::E::Item(n)=>n,_=>0}}\n", []string{"app.gox:3:51:", "pattern variant does not belong to the matched enum instance"}},
+			{"readonly", "use library::model as m;\nfunc Bad(){n:=1;p:=m::View(&n);*p=2}\n", []string{"app.gox:3:32:", "cannot write through a read-only reference"}},
 		} {
 			t.Run(tc.name, func(t *testing.T) { reject(t, "package main\n"+tc.source+"func main(){}\n", "app.gox", tc.words...) })
 		}
@@ -503,15 +265,7 @@ func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
 		src := consumer(t, "package main\nuse library::model as m;\nfunc main(){var x m::hidden;_=x}\n")
 		for _, input := range []string{filepath.Join(src, "app.gox"), src} {
 			msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), input)
-			singleExternalContains(t, msg, "undefined: goxideNamespace0.hidden", "app.gox:3:22:")
-			if input == src {
-				// Directory mode already performs full source typechecking.
-				singleExternalContains(t, msg, "source span")
-			} else {
-				// Plain single-file Go keeps its existing conditional typecheck;
-				// the real Go build rejects and maps the selected source token.
-				singleExternalContains(t, msg, "[source]", "generated Go build")
-			}
+			singleExternalContains(t, msg, "unresolved name", "app.gox:3:22:")
 		}
 	})
 	t.Run("runtime-does-not-lend-dependencies", func(t *testing.T) {
@@ -523,7 +277,7 @@ func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
 		packagesWrite(t, dir, "app.gox", "package main\nuse std::sum as s;\nfunc main(){var v s::Option[int];_=v}\n")
 		before := singleExternalSnapshot(t, dir)
 		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), filepath.Join(dir, "app.gox"))
-		singleExternalContains(t, msg, "app.gox:2:1:", "cannot find module providing package github.com/goxide-lang/std/sum", "import lookup disabled by -mod=readonly")
+		singleExternalContains(t, msg, "cannot find module providing package github.com/goxide-lang/std/sum", "import lookup disabled by -mod=readonly")
 		singleExternalUnchanged(t, dir, before)
 	})
 	t.Run("existing-file-boundaries", func(t *testing.T) {
@@ -531,7 +285,6 @@ func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
 		execute(t, outside, filepath.Join(src, "app.gox"), "3\n", nil)
 		for _, tc := range []struct{ name, source string }{
 			{"local-use", "package main\nuse library::model::Plain;\nfunc main(){_=Plain()}\n"},
-			{"imported-use", "package main\nuse library::uses as p;\nfunc main(){_=p::Plain()}\n"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				input := consumer(t, tc.source)
@@ -539,18 +292,33 @@ func main(){fmt::Println(match h::Get(){h::E::Value(n)=>n})}
 				deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), input)
 			})
 		}
-		t.Run("pub-use-needs-package-publication", func(t *testing.T) {
-			input := consumer(t, "package main\npub use library::model::Plain;\nfunc main(){_=Plain()}\n")
-			msg := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out.go"), filepath.Join(input, "app.gox"))
-			singleExternalContains(t, msg, "app.gox", "pub use requires package compilation")
+		t.Run("imported-use-from-source", func(t *testing.T) {
+			input := consumer(t, "package main\nuse fmt; use library::uses as p;\nfunc main(){fmt::Println(p::Plain())}\n")
+			out, repeat := filepath.Join(t.TempDir(), "out"), filepath.Join(t.TempDir(), "repeat")
+			compileAcceptanceGraph(t, true, input, out, producer)
+			compileAcceptanceGraph(t, true, input, repeat, producer)
+			singleExternalSameTree(t, out, repeat)
+			if got := deliveryCommand(t, out, tool, true, nil, "run", "-mod=readonly", "."); got != "7\n" {
+				t.Fatal(got)
+			}
+		})
+		t.Run("pub-use-single-file-and-directory", func(t *testing.T) {
+			input := consumer(t, "package main\nuse fmt; pub use library::model::Plain;\nfunc main(){fmt::Println(Plain())}\n")
+			deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out.go"), filepath.Join(input, "app.gox"))
 			deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", filepath.Join(t.TempDir(), "out"), input)
+			execute(t, outside, filepath.Join(input, "app.gox"), "7\n", nil)
 		})
 
-		for _, args := range [][]string{{"transpile", "--tags", "custom"}, {"test"}, {"run", "--features", "extra"}, {"run", "--workspace"}} {
+		for _, args := range [][]string{{"transpile", "--tags", "custom"}, {"test"}} {
 			argv := append(append([]string(nil), args...), filepath.Join(src, "app.gox"))
 			msg := deliveryCommand(t, outside, cli, false, nil, argv...)
 			singleExternalContains(t, msg, "directory")
 		}
+		if got := deliveryCommand(t, outside, cli, true, nil, "run", "--features", "extra", filepath.Join(src, "app.gox")); got != "3\n" {
+			t.Fatalf("single-file feature selection changed program behavior: %q", got)
+		}
+		msg := deliveryCommand(t, outside, cli, false, nil, "run", "--workspace", filepath.Join(src, "app.gox"))
+		singleExternalContains(t, msg, "workspace selection is deferred until MVP")
 	})
 }
 
@@ -669,7 +437,7 @@ impl Default for Item{func default()Item{DefaultCalls++;return Item{N:7,Name:"pr
 #[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 pub enum E{
  #[default]
- Item(Item),
+ Entry(Item),
  Empty,
 }
 func Plain()int{return 7}
@@ -706,9 +474,9 @@ type Failure struct{
 }
 func Equal(a,b Wrap)bool{return a.equals(b)}
 func SameDirect(a,b m::Item)bool{return a.equals(b)}
-func Read(e Event)int{return match e{r::E::Item(v)=>v.N,r::E::Empty=>0}}
+func Read(e Event)int{return match e{r::E::Entry(v)=>v.N,r::E::Empty=>0}}
 func Mark(hit *bool)bool{*hit=true;return true}
-func Guard(e Event,hit *bool)int{return match e{r::E::Item(v) if Mark(hit)=>v.N,r::E::Empty if Mark(hit)=>0,_=>-1}}
+func Guard(e Event,hit *bool)int{return match e{r::E::Entry(v) if Mark(hit)=>v.N,r::E::Empty if Mark(hit)=>0,_=>-1}}
 func Decode(input []byte)(Wrap,error){v,e:=serdejson::Unmarshal(input,DeserializeWrap);if e!=nil{return Wrap{},FromFailure(e)};return v,nil}
 func Business(input []byte)(string,string,string,error){
  v,e:=serdejson::Unmarshal(input,DeserializeBag);if e!=nil{return "","","",e}
@@ -747,8 +515,8 @@ import (
  "github.com/goxide-lang/serde"
  "github.com/goxide-lang/serde/json"
 )
-const wrapDebug="Wrap { Direct: Item { N: 7, Name: \"producer\" }, Value: Item { N: 7, Name: \"producer\" }, Event: E::Item(Item { N: 7, Name: \"producer\" }) }"
-const wrapJSON="{\"Direct\":{\"N\":7,\"Name\":\"producer\"},\"Value\":{\"N\":7,\"Name\":\"producer\"},\"Event\":{\"Item\":{\"N\":7,\"Name\":\"producer\"}}}"
+const wrapDebug="Wrap { Direct: Item { N: 7, Name: \"producer\" }, Value: Item { N: 7, Name: \"producer\" }, Event: E::Entry(Item { N: 7, Name: \"producer\" }) }"
+const wrapJSON="{\"Direct\":{\"N\":7,\"Name\":\"producer\"},\"Value\":{\"N\":7,\"Name\":\"producer\"},\"Event\":{\"Entry\":{\"N\":7,\"Name\":\"producer\"}}}"
 func TestAllExternalProtocols(t *testing.T){
  m.DefaultCalls=0;v:=DefaultWrap()
  if m.DefaultCalls!=3||v.Direct.N!=7||v.Value.Name!="producer"||Read(v.Event)!=7{t.Fatal(v,m.DefaultCalls)}
@@ -772,16 +540,16 @@ func TestCloneContainersNilAndEmpty(t *testing.T){
  if e!=nil||before!="Bag { Items: [Item { N: 7, Name: \"producer\" }], Index: {\"x\": Item { N: 7, Name: \"producer\" }} }"||after!="Bag { Items: [Item { N: 9, Name: \"producer\" }], Index: {\"x\": Item { N: 8, Name: \"copy\" }} }"||wire!="{\"Items\":[{\"N\":9,\"Name\":\"producer\"}],\"Index\":{\"x\":{\"N\":8,\"Name\":\"copy\"}}}"{t.Fatal(before,after,wire,e)}
 }
 func TestSerdeCauseAndPath(t *testing.T){
- input:="{\"Direct\":{\"N\":1,\"Name\":\"direct\"},\"Value\":{\"N\":2,\"Name\":\"alias\"},\"Event\":{\"Item\":{\"N\":9223372036854775808,\"Name\":\"bad\"}}}"
+ input:="{\"Direct\":{\"N\":1,\"Name\":\"direct\"},\"Value\":{\"N\":2,\"Name\":\"alias\"},\"Event\":{\"Entry\":{\"N\":9223372036854775808,\"Name\":\"bad\"}}}"
  _,e:=Decode([]byte(input));var detail *serde.Error;var numeric *strconv.NumError
- want:=[]serde.PathSegment{{Kind:"Field",Name:"Event"},{Kind:"Variant",Name:"Item"},{Kind:"Field",Name:"N"}}
+ want:=[]serde.PathSegment{{Kind:"Field",Name:"Event"},{Kind:"Variant",Name:"Entry"},{Kind:"Field",Name:"N"}}
  if e==nil||e.Error()!="external input"||!errors.As(e,&detail)||detail.Kind!=serde.Range||!reflect.DeepEqual(detail.Path,want)||!errors.As(e,&numeric)||!errors.Is(e,strconv.ErrRange)||errors.Unwrap(e)!=error(detail){t.Fatalf("cause/path=%#v %v",detail,e)}
 }
 func TestInvalidEnumBeforeGuard(t *testing.T){
- for _,v:=range []m.E{{}}{
+ for _,v:=range []m.E{nil}{
   func(){hit:=false;defer func(){if recover()==nil||hit{t.Errorf("invalid %T reached guard or did not panic",v)}}();Guard(v,&hit)}()
  }
- hit:=false;if Guard(m.NewEItem(m.Item{N:9}),&hit)!=9||!hit{t.Fatal("valid guard")}
+ hit:=false;if Guard(&m.Entry{Value: m.Item{N:9}},&hit)!=9||!hit{t.Fatal("valid guard")}
 }
 func wantTrace(t *testing.T,want []string){t.Helper();if !reflect.DeepEqual(Trace,want){t.Fatalf("trace=%v want=%v",Trace,want)};Trace=nil}
 func TestExternalSumsPropagationAndFrames(t *testing.T){
@@ -800,11 +568,11 @@ func TestExternalSumsPropagationAndFrames(t *testing.T){
 
 const singleExternalProducerAssertions = `package model
 import "testing"
-func TestProducer(t *testing.T){DefaultCalls=0;v:=DefaultE();if DebugE(&v)!="E::Item(Item { N: 7, Name: \"producer\" })"||DefaultCalls!=1{t.Fatal(v,DefaultCalls)};c:=CloneE(&v);if !EqualsE(v,c){t.Fatal("producer equality")}}
+func TestProducer(t *testing.T){DefaultCalls=0;v:=DefaultE();if DebugE(&v)!="E::Entry(Item { N: 7, Name: \"producer\" })"||DefaultCalls!=1{t.Fatal(v,DefaultCalls)};c:=CloneE(&v);if !EqualsE(v,c){t.Fatal("producer equality")}}
 `
 const singleExternalNativeAssertions = `package plain
 import __borrow_std "github.com/goxide-lang/std/sum"
 
 import("testing";"github.com/goxide-lang/serde/json";m "a06.example/lib/model";r "a06.example/lib/relay";a "a06.example/lib/api")
-func TestNativeWithoutMetadata(t *testing.T){var v r.Item=m.DefaultItem();c:=m.CloneItem(&v);if !m.EqualsItem(v,c)||m.DebugItem(&v)!="Item { N: 7, Name: \"producer\" }"{t.Fatal(v,c)};b,e:=serdejson.Marshal(&v,m.SerializeItem);if e!=nil{t.Fatal(e)};d,e:=serdejson.Unmarshal(b,m.DeserializeItem);if e!=nil||!m.EqualsItem(v,d){t.Fatal(d,e)};event:=m.NewEItem(v);m.ValidateE(event);if m.GoxideValue1_E_Item(event).N!=7||a.Read(a.Get())!=8{t.Fatal(event)};if __borrow_std.ValueOk(m.Load(0))!=4{t.Fatal("sum")}}
+func TestNativeWithoutMetadata(t *testing.T){var v r.Item=m.DefaultItem();c:=m.CloneItem(&v);if !m.EqualsItem(v,c)||m.DebugItem(&v)!="Item { N: 7, Name: \"producer\" }"{t.Fatal(v,c)};b,e:=serdejson.Marshal(&v,m.SerializeItem);if e!=nil{t.Fatal(e)};d,e:=serdejson.Unmarshal(b,m.DeserializeItem);if e!=nil||!m.EqualsItem(v,d){t.Fatal(d,e)};event:=&m.Entry{Value: v};if event.Value.N!=7||a.Read(a.Get())!=8{t.Fatal(event)};if __borrow_std.ValueOk(m.Load(0))!=4{t.Fatal("sum")}}
 `

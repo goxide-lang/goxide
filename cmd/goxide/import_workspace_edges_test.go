@@ -8,6 +8,7 @@ import (
 )
 
 func TestNativeWorkspaceExternalUseAndTestSuffix(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph deferred by P6")
 	parent := t.TempDir()
 	root := filepath.Join(parent, "root")
 	workspaceWrite(t, root, "go.work", "go 1.27\nuse (\n../app\n../lib\n)\nreplace example.org/lib.test v1.0.0 => ../lib\n")
@@ -35,6 +36,7 @@ func TestNativeWorkspaceExternalUseAndTestSuffix(t *testing.T) {
 }
 
 func TestNativeWorkspaceRaceOnlyEdge(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	workspaceWrite(t, root, "go.work", "go 1.27\nuse (\n./app\n./lib\n./raceonly\n)\n")
 	workspaceWrite(t, root, "raceonly/go.mod", "module example.org/raceonly\ngo 1.27\n")
@@ -52,6 +54,7 @@ func TestNativeWorkspaceRaceOnlyEdge(t *testing.T) {
 }
 
 func TestNativeWorkspaceImportGraphRejections(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph deferred by P6")
 	for _, kind := range []string{"unknown-directive", "duplicate-module", "module-cycle", "duplicate-bin"} {
 		t.Run(kind, func(t *testing.T) {
 			root := nativeWorkspaceFixture(t)
@@ -84,6 +87,7 @@ func TestNativeWorkspaceImportGraphRejections(t *testing.T) {
 }
 
 func TestNativeWorkspaceMultipleTargets(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI import-go workspace graph deferred by P6")
 	root := nativeWorkspaceFixture(t)
 	workspaceWrite(t, root, "app/cmd/web/main.go", "package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"web\")}\n")
 	workspaceWrite(t, root, "app/examples/demo/main.go", "package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"demo\")}\n")

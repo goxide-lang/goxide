@@ -9,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/paths"
+	"github.com/hxsf/goxide/internal/typecheck"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestStandaloneSupportModule(t *testing.T) {
@@ -48,7 +49,8 @@ func TestStandaloneSupportModule(t *testing.T) {
 			t.Fatalf("non-support dependency leaked into generated module: %s", mod)
 		}
 	}
-	compiled, err := frontend.CompileWithOptions(filepath.Join(generated, "main.gox"), []byte(`package main
+	filename := filepath.Join(generated, "main.gox")
+	compiled, err := compileSourceFile(filename, []byte(`package main
 use runtime as rt;
 func fail()(result int){
  guard:=rt::Assignment[int]{}
@@ -57,7 +59,7 @@ func fail()(result int){
  return 0
 }
 func main(){println!("value={}",fail())}
-`), frontend.FileOptions{Roots: paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}}})
+`), "goxide/generated", typecheck.NewImporter(filename, typecheck.ImporterOptions{Config: testdeps.Configuration()}), paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}}, testdeps.Configuration())
 	if err != nil {
 		t.Fatal(err)
 	}

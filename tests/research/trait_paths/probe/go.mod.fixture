@@ -1,3 +1,0 @@
-module example.org/traitpaths
-
-go 1.27

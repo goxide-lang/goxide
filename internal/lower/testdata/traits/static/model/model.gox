@@ -1,0 +1,75 @@
+package model
+
+pub trait Build {
+    func make() Self
+}
+
+pub trait Source {
+    type Item
+    func get(self Self) Self::Item
+}
+
+pub trait Replace {
+    func set(self &mut Self, value int)
+}
+
+pub trait Rebuild {
+    func new() Self
+    func shifted(self &Self, amount int) Self
+}
+
+type User struct { Name string }
+
+impl Build for User {
+    func make() Self { return Self{Name: "Ada"} }
+}
+
+impl Source for User {
+    type Item = string
+    func get(self Self) Self::Item { return self.Name }
+}
+
+pub enum Choice { ready(int), empty }
+
+impl Build for Choice {
+    func make() Self { return Self::ready(37) }
+}
+
+impl Source for Choice {
+    type Item = int
+    func get(self Self) Self::Item {
+        return match self { Self::ready(value) => value, Self::empty => 0 }
+    }
+}
+
+impl Replace for Choice {
+    func set(self &mut Self, value int) { *self = Self::ready(value) }
+}
+
+impl Rebuild for Choice {
+    func new() Self { return Self::ready(7) }
+    func shifted(self &Self, amount int) Self {
+        return match *self {
+            Self::ready(value) => Self::ready(value + amount),
+            Self::empty => Self::ready(amount)
+        }
+    }
+}
+
+func Make[T Build]() T { return T::make() }
+func Read[T Source](value T) T::Source::Item { return value.get() }
+func ReadWhere[T](value T) T::Source::Item where T: Source { return value.get() }
+func ReadInt[T Source[Item = int]](value T) int { return value.get() }
+func ZeroItem[T Source]() T::Source::Item {
+    var value T::Source::Item
+    return value
+}
+func Set[T Replace](value &mut T, next int) { value.set(next) }
+func Renew[T Rebuild]() T { return T::new() }
+func Shift[T Rebuild](value &T, amount int) T { return value.shifted(amount) }
+
+func ThroughGoxide() string {
+    user := Make[User]()
+    var view Source[Item = string] = user
+    return view.get()
+}

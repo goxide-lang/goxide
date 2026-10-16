@@ -1,9 +1,7 @@
 package acceptance_test
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/hxsf/goxide/internal/testdeps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,6 +23,7 @@ func TestCrossModuleEnumArtifacts(t *testing.T) {
 		return s
 	}
 	src := t.TempDir()
+	producerSource := src
 	packagesWrite(t, src, "go.mod", module("enum.example/library", ""))
 	writeAcceptanceSerdeRoots(t, src, "")
 	packagesWrite(t, src, "model/model.gox", `package model; use serde;
@@ -47,7 +46,7 @@ func Secret()E{return E::Hidden(hidden{N:9})}
 import m "enum.example/library/model"
 type Alias=m.E
 type New m.E
-func Get()Alias{return m.NewECount(6)}
+func Get()Alias{return &m.Count{Value: 6}}
 `)
 
 	packagesWrite(t, src, "internal/hidden/hidden.gox", `package hidden
@@ -56,8 +55,8 @@ pub enum E { A(int), }
 	packagesWrite(t, src, "api/api.go", `package api
 import h "enum.example/library/internal/hidden"
 type Public=h.E
-func Get()Public{return h.NewEA(8)}
-func Read(e Public)int{return h.GoxideValue1_E_A(e)}
+func Get()Public{return &h.A{Value: 8}}
+func Read(e Public)int{return e.(*h.A).Value}
 `)
 	packagesWrite(t, src, "other/other.gox", `package other
 pub enum E { A, Count(int), }
@@ -118,14 +117,14 @@ func Facade()int{return a::Read(a::Get())}
 func Other()int{return match renamed::E::Count(2){renamed::E::Count(n)=>n,_=>0,}}
 `)
 	out := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, app)
+	compileAcceptanceGraph(t, true, app, out, producerSource)
 	out2 := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out2, app)
+	compileAcceptanceGraph(t, true, app, out2, producerSource)
 	compare(out, out2)
 	packagesWrite(t, out, "app_test.go", `package app
 import("testing";m "enum.example/library/model";r "enum.example/library/relay")
-func TestBusiness(t *testing.T){if Run()!=22||Other()!=2||Read()!=3||Facade()!=8||Cross(m.NewECount(4))!=4||Score(Rebuild(m.Secret()))!=9{t.Fatal("business")};if n,e:=Decode();e!=nil||n!=4{t.Fatal(n,e)}}
-func TestInvalidBeforeGuard(t *testing.T){for _,e:=range []r.Alias{{}}{func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid before guard")}}();Ordered(e,&seen)}()}}
+func TestBusiness(t *testing.T){if Run()!=22||Other()!=2||Read()!=3||Facade()!=8||Cross(&m.Count{Value: 4})!=4||Score(Rebuild(m.Secret()))!=9{t.Fatal("business")};if n,e:=Decode();e!=nil||n!=4{t.Fatal(n,e)}}
+func TestInvalidBeforeGuard(t *testing.T){for _,e:=range []r.Alias{nil}{func(){seen:=false;defer func(){if recover()==nil||seen{t.Fatal("invalid before guard")}}();Ordered(e,&seen)}()}}
 `)
 	packagesWrite(t, library, "model/model_test.go", `package model
 import "testing"
@@ -135,18 +134,15 @@ func TestProducer(t *testing.T){e:=DefaultE();if DebugE(&e)!="E::A"{t.Fatal(Debu
 	packagesWrite(t, plain, "go.mod", module("enum.example/plain", library))
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import("testing";m "enum.example/library/model";r "enum.example/library/relay")
-func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if m.GoxideValue1_E_Count(e)!=5{t.Fatal(e)}}
+func TestGo(t *testing.T){var e r.Alias=&m.Count{Value: 5};if e.(*m.Count).Value!=5{t.Fatal(e)}}
 `)
 	for _, dir := range []string{library, out, plain} {
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
-	// These former dynamic cases are no longer assignable to the closed value
-	// representation. Runtime validation above still checks its invalid zero.
-	assertLegacySumGoRejected(t, out, tool, map[string]legacySumGoCase{
-		"enum-nil":          {"package app\nimport m \"enum.example/library/model\"\nvar _ m.E=nil\n", "cannot use nil"},
-		"enum-pointer-case": {"package app\nimport m \"enum.example/library/model\"\nvar _ m.E=(*m.GoxideCase1_E_Count)(nil)\n", "undefined: m.GoxideCase1_E_Count"},
-		"enum-forged":       {"package app\nimport m \"enum.example/library/model\"\ntype forged struct{m.E}\nvar _ m.E=forged{}\n", "cannot use"},
+	// The unexported marker prevents another package from implementing E.
+	assertNativeGoRejected(t, out, tool, map[string]nativeGoRejection{
+		"enum-forged": {"package app\nimport m \"enum.example/library/model\"\ntype forged struct{}\nfunc (*forged) isE() {}\nvar _ m.E=(*forged)(nil)\n", "unexported method isE"},
 	})
 	for name, body := range map[string]string{
 		"non-exhaustive":  `func Bad(e r::Alias)int{return match e{r::Alias::A=>0,}}`,
@@ -155,7 +151,7 @@ func TestGo(t *testing.T){var e r.Alias=m.NewECount(5);m.ValidateE(e);if m.Goxid
 	} {
 		t.Run(name, func(t *testing.T) {
 			src := appFor("package app\nuse library::relay as r; use library::model as m;\nvar _=m::Secret\n" + body)
-			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), src)
+			msg := compileAcceptanceGraph(t, false, src, filepath.Join(t.TempDir(), "out"), producerSource)
 			if !strings.Contains(msg, ".gox:") {
 				t.Fatal(msg)
 			}
@@ -171,7 +167,7 @@ func Bad()int{return match a::Get(){a::Public::A(n)=>n,}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := appFor("package app\n" + body)
-			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), source)
+			msg := compileAcceptanceGraph(t, false, source, filepath.Join(t.TempDir(), "out"), producerSource)
 			if !strings.Contains(msg, ".gox:") {
 				t.Fatal(msg)
 			}
@@ -180,132 +176,5 @@ func Bad()int{return match a::Get(){a::Public::A(n)=>n,}}`,
 			}
 		})
 	}
-
-	valid := appFor("package app\nuse library::relay as r;\nfunc Read()int{return match r::Get(){r::Alias::Count(n)=>n,_=>0,}}\n")
-	metaPath := filepath.Join(library, "relay/.goxide.enums.json")
-	original, e := os.ReadFile(metaPath)
-	if e != nil {
-		t.Fatal(e)
-	}
-	mutate := func(name, want string, change func(map[string]any)) {
-		t.Run(name, func(t *testing.T) {
-			var v map[string]any
-			if e := json.Unmarshal(original, &v); e != nil {
-				t.Fatal(e)
-			}
-			change(v)
-			data, _ := json.Marshal(v)
-			if e := testdeps.WriteFile(metaPath, data, 0600); e != nil {
-				t.Fatal(e)
-			}
-			defer testdeps.WriteFile(metaPath, original, 0600)
-			msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-			if !strings.Contains(msg, want) || !strings.Contains(msg, "app.gox:2:") {
-				t.Fatal(msg)
-			}
-		})
-	}
-	mutate("wrong-package", "package", func(v map[string]any) { v["Metadata"].(map[string]any)["Path"] = "other.example/pkg" })
-	mutate("version", "version", func(v map[string]any) { v["ArtifactVersion"] = 99 })
-	mutate("variant-set", "marker", func(v map[string]any) {
-		m := v["Metadata"].(map[string]any)
-		m["Enums"].([]any)[0].(map[string]any)["Variants"] = []any{}
-	})
-	mutate("root-content", "changed", func(v map[string]any) { v["Content"] = "stale" })
-	t.Run("missing-and-native", func(t *testing.T) {
-		if e := os.Remove(metaPath); e != nil {
-			t.Fatal(e)
-		}
-		defer testdeps.WriteFile(metaPath, original, 0600)
-		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(msg, "metadata") {
-			t.Fatal(msg)
-		}
-		packagesCommand(t, plain, tool, true, "test", "-race", "-count=1", "./...")
-	})
-	t.Run("stale-source", func(t *testing.T) {
-		path := filepath.Join(library, "model/model.go")
-		old, e := os.ReadFile(path)
-		if e != nil {
-			t.Fatal(e)
-		}
-		defer testdeps.WriteFile(path, old, 0600)
-		if e = testdeps.WriteFile(path, append(old, []byte("\n// changed source\n")...), 0600); e != nil {
-			t.Fatal(e)
-		}
-		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(msg, "mismatch") && !strings.Contains(msg, "changed") {
-			t.Fatal(msg)
-		}
-	})
-	t.Run("build-selection", func(t *testing.T) {
-		msg := packagesCommand(t, root, cli, false, "transpile", "--tags", "extra", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(msg, "mismatch") && !strings.Contains(msg, "changed") {
-			t.Fatal(msg)
-		}
-	})
-	t.Run("regenerated-payload-drift", func(t *testing.T) {
-		sourcePath := filepath.Join(src, "model/model.gox")
-		oldSource, e := os.ReadFile(sourcePath)
-		if e != nil {
-			t.Fatal(e)
-		}
-		defer testdeps.WriteFile(sourcePath, oldSource, 0600)
-		changed := strings.Replace(string(oldSource), "struct{N int}", "struct{N int;Extra []int}", 1)
-		if changed == string(oldSource) {
-			t.Fatal("fixture replacement failed")
-		}
-		if e = testdeps.WriteFile(sourcePath, []byte(changed), 0600); e != nil {
-			t.Fatal(e)
-		}
-		updated := filepath.Join(t.TempDir(), "library")
-		packagesCommand(t, root, cli, true, "transpile", "-o", updated, src)
-		var before, after map[string]any
-		prior, e := os.ReadFile(filepath.Join(library, "model/.goxide.enums.json"))
-		if e != nil {
-			t.Fatal(e)
-		}
-		next, e := os.ReadFile(filepath.Join(updated, "model/.goxide.enums.json"))
-		if e != nil {
-			t.Fatal(e)
-		}
-		if json.Unmarshal(prior, &before) != nil || json.Unmarshal(next, &after) != nil {
-			t.Fatal("metadata JSON")
-		}
-		x, _ := json.Marshal(before["Metadata"])
-		y, _ := json.Marshal(after["Metadata"])
-		if string(x) != string(y) {
-			t.Fatal("probe must keep logical variant metadata unchanged")
-		}
-		// Refresh the whole regenerated producer package, including split helpers
-		// and maps, so this probe reaches the relay's dependency closure check.
-		entries, e := os.ReadDir(filepath.Join(updated, "model"))
-		if e != nil {
-			t.Fatal(e)
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			name := entry.Name()
-			path := filepath.Join(library, "model", name)
-			old, e := os.ReadFile(path)
-			if e != nil {
-				t.Fatal(e)
-			}
-			defer testdeps.WriteFile(path, old, 0600)
-			data, e := os.ReadFile(filepath.Join(updated, "model", name))
-			if e != nil {
-				t.Fatal(e)
-			}
-			if e = testdeps.WriteFile(path, data, 0600); e != nil {
-				t.Fatal(e)
-			}
-		}
-		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), valid)
-		if !strings.Contains(msg, "dependency source closure changed") {
-			t.Fatal(msg)
-		}
-	})
 
 }

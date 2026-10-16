@@ -4,24 +4,24 @@
 
 - 已确认：用户包可采用外部 Go 类型的已有方法；统一 wrapper 转发，固定包级工厂位于 impl 声明包 C。
 - 已确认：trait Go 接口包含业务方法与导出 marker，wrapper 实现 marker；Go 便利入口转发同一工厂。
-- 已确认：相容 declare 可合并；有业务方法体的 impl 须唯一。具体相容判定暂定，尚无 goxide 实现。
-- 未定：采用原生的 declare 与有体 impl 同时出现时的语义、正式符号编码及权限细节。
+- 已确认：同一原生绑定、关联类型和调用契约的 declare 可合并；有业务方法体的 impl 须唯一。P4 已在新管线完成。
+- P4：同一实现键混合 declare 与有体 impl 时诊断；不静默覆盖。泛型 impl 与跨包声明加载由后续阶段接续。
 
 本篇细化[声明合并规则](../design/go-interop.md#6-校验来源与唯一性)：
 不再仅因两个包独立写了相容 declare 就报重复定义。
-`*native::Buffer` 仅表示 Go 接收者身份，权限语法见 [RFC 0005](0005-borrows.md)。
+`*native::Buffer` 表示被采用的精确 Go 接收者身份；基础类型上的有体 impl 与三种 self 参数见 [trait 合同](../design/traits.md)。
 
 ## 源级规则
 
 1. declare、wrapper 与固定工厂属于声明包 C。C 正常依赖 trait 包 A、原类型包 B，不向外部包添加方法。
-2. 采用原生先验签，再在 wrapper 上生成业务转发和导出 marker；缺少业务方法仍是错误。
+2. 采用原生先验签，再在 wrapper 上生成业务转发和导出 marker；缺少业务方法仍是错误。Self 绑定完整声明目标，先代入成员接收类型再检查真实 Go 方法集；不自动消去指针/引用层。
 3. 按规范接收者、trait 身份及参数聚合声明；别名不产生新实现键。
 4. 相同原生业务绑定、关联类型和调用契约的声明可合并；保留每个来源。
 5. 不同但相容的声明怎样合并须有显式规则；不能靠导入先后来放宽权限或改变绑定。
 6. 同一生成包内按实现键去重；不同声明包的相容关系合并不使其 Go wrapper 变成同一动态类型。已发布工厂与载体归属固定，不随下游导入集合重新选择。
 7. 同一实现键的有体 impl 至多一个；多个有体实现即使文本相同也拒绝。
 8. 现有 declare impl 表示采用原生实现，不等同于任意有体实现的前置签名。
-   在混合语义定稿前，declare 与有体 impl 共现应诊断，不静默覆盖业务行为。
+   P4 中 declare 与有体 impl 共现时诊断，不静默覆盖业务行为。
 9. 工厂返回 trait 接口；外部类型的 `ForBuffer(b).AsReadValue()` facade 用命名字段保存 b，并转发同一工厂。
    类型与 impl 同包且满足 Go 方法接收者规则时才生成原类型的 As 便利方法；其他类型使用包级工厂或门面。统一方案见 [RFC 0019](0019-uniform-trait-wrappers.md)。
 
@@ -29,21 +29,21 @@
 
 ### D01：两个使用方合并相同采用声明
 
-以下 goxide 是三个包的机制片段；省略包布局，权限接收者语法尚待接合。
+以下 goxide 是三个包的机制片段，省略包布局。ReadValue 使用 self &Self，目标是 native::Buffer；代入后验证精确 *native.Buffer 方法集，wrapper 保存同一指针。
 
 ```goxide
 // 包 protocols
-pub trait ReadValue { read() int }
+pub trait ReadValue { func read(self &Self) int }
 
 // 包 client_a
-import protocols "example.org/protocols"
-import native "example.org/native"
-declare impl protocols::ReadValue for *native::Buffer;
+use protocols;
+use native;
+declare impl protocols::ReadValue for native::Buffer;
 
 // 包 client_b，独立声明相同关系
-import protocols "example.org/protocols"
-import native "example.org/native"
-declare impl protocols::ReadValue for *native::Buffer;
+use protocols;
+use native;
+declare impl protocols::ReadValue for native::Buffer;
 ```
 
 原生 Go 包已有业务实现；这是可独立编译的原生包。
@@ -113,7 +113,7 @@ consume(client_a.AsReadValueForBuffer(b))
 ## 拒绝与边界
 
 - D03：缺少 `Read()` 或返回类型不是 int，拒绝；declare 不隐式转换返回值。
-- D04：仅 `*Buffer` 有 Read，却对 `Buffer` 声明采用，拒绝；不偷偷取地址。
+- D04：trait 成员为 self Self 时，仅 *Buffer 有 Read，却对 Buffer 声明采用，拒绝；不偷偷取地址。self &Self 则验证代入后的精确 *Buffer 方法集。
 - D05：同一实现键的关联类型或调用契约冲突，拒绝，并列出声明来源。
 - D06：已有同名生成入口签名不兼容，拒绝；不能覆盖原有方法或随机改名。
 - D07：同一实现键有两个有体 impl，拒绝；混合 declare / 有体模式见第 8 条。
@@ -141,5 +141,4 @@ marker 必须导出，使 C 的 wrapper 可以实现 A 的接口；它不改变 
 新建纯 Go 主模块正常导入 dist；原依赖和标准库不需要添加方法或额外构建视图。
 
 以上为编译器验收约束，Go 机制示例本身不构成端到端实现。
-尚须定稿非完全相同契约的相容判定、declare 与有体共现的声明含义、
-泛型接收者、生成名称编码，以及声明元数据的版本和失效规则。
+P4 只合并相同原生绑定、完整关联类型及调用契约，不通过宽松合并改变权限。外部类型不注入 marker、As 或 carrier 类型锚；公开工厂和 facade 提供运行时适配，外部原生类型不会因此自动满足 carrier 泛型入口。nil 采用原生方法及现有 enum 契约，不添加统一非空检查。跨包 Goxide 加载与声明信息恢复在 P5 接续。

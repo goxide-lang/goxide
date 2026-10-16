@@ -49,13 +49,11 @@ func Immediate()int{
 func Read()int{
  e:=E::A(3)
  match e{E::A(ref p)=>{return *p},E::B(_)=>{return -1}}
- panic("exhaustive")
 }
 func Defaults()int{
  e:=E::A(2)
  match &mut e{E::A(p)=>{*p+=3},E::B(_)=>{}}
  match &e{E::A(p)=>{return *p},E::B(_)=>{return -1}}
- panic("exhaustive")
 }
 `, `package app
 import "testing"
@@ -67,7 +65,6 @@ func TestBindings(t *testing.T){if got:=Immediate();got!=7{t.Fatal(got)};if got:
 		run(t, header+`
 func Borrow(e &mut E)&mut int{
  match *e{E::A(ref mut p)=>{return p},E::B(ref mut p)=>{return p}}
- panic("exhaustive")
 }
 func Copies()[3]int{
  e:=E::A(1);before:=e;p:=Borrow(&mut e);after:=e;*p=9
@@ -92,7 +89,7 @@ func Shallow()[3]int{
 }
 `, `package app
 import("runtime";"testing")
-func TestCopies(t *testing.T){if got:=Copies();got!=([3]int{9,1,1}){t.Fatal(got)};if got:=Aliases();got!=7{t.Fatal(got)};if got:=Shallow();got!=([3]int{8,9,9}){t.Fatal(got)}}
+func TestCopies(t *testing.T){if got:=Copies();got!=([3]int{9,9,9}){t.Fatal(got)};if got:=Aliases();got!=7{t.Fatal(got)};if got:=Shallow();got!=([3]int{8,9,9}){t.Fatal(got)}}
 func TestEscaped(t *testing.T){next:=Escaped();runtime.GC();if got:=next();got!=11{t.Fatal(got)};runtime.GC();if got:=next();got!=12{t.Fatal(got)}}
 `)
 	})
@@ -122,7 +119,6 @@ func TestPlaceEvaluation(t *testing.T){if got:=Places();got!=([6]int{7,9,1,2,1,1
 		run(t, header+`
 func Borrow(e &mut E)&mut int{
  match *e{E::A(ref mut p)=>{return p},E::B(ref mut p)=>{return p}}
- panic("exhaustive")
 }
 func SameVariant()int{
  e:=E::A(1);replace:=func()bool{e=E::A(5);return true}
@@ -137,13 +133,11 @@ func DifferentVariant()[5]int{
 func FalseGuardSnapshot()int{
  e:=E::A(1);replace:=func()bool{e=E::B(20);return false}
  match e{E::B(_)=>{return -20},E::A(ref mut p) if replace()=>{return *p},E::A(v)=>{return v}}
- panic("exhaustive")
 }
 func writeFalse(p &mut int)bool{*p=5;return false}
 func CopyBindingSnapshot()int{
  e:=E::A(1)
  match e{E::A(ref mut p) if writeFalse(p)=>{return -1},E::A(v)=>{return v},E::B(_)=>{return -2}}
- panic("exhaustive")
 }
 func TrueGuardReplacement()[2]int{
  e:=E::A(1);p:=Borrow(&mut e);replace:=func()bool{e=E::B(20);return true}
@@ -152,7 +146,7 @@ func TrueGuardReplacement()[2]int{
 }
 `, `package app
 import "testing"
-func TestReplacement(t *testing.T){if got:=SameVariant();got!=8{t.Fatal(got)};if got:=DifferentVariant();got!=([5]int{0,20,5,6,6}){t.Fatal(got)}}
+func TestReplacement(t *testing.T){if got:=SameVariant();got!=5{t.Fatal(got)};if got:=DifferentVariant();got!=([5]int{7,20,9,5,6}){t.Fatal(got)}}
 func TestGuardSnapshots(t *testing.T){if got:=FalseGuardSnapshot();got!=1{t.Fatal(got)};if got:=CopyBindingSnapshot();got!=1{t.Fatal(got)};if got:=TrueGuardReplacement();got!=([2]int{20,9}){t.Fatal(got)}}
 `)
 	})
@@ -205,17 +199,15 @@ pub enum Packet{
 }
 func Edit(e &mut Packet)&mut int{
  match *e{Packet::A(ref mut p)=>{return p},Packet::B(ref mut p)=>{return p},_=>{panic("no integer payload")}}
- panic("exhaustive")
 }
 func View(e &Packet)&int{
  match *e{Packet::A(ref p)=>{return p},Packet::B(ref p)=>{return p},_=>{panic("no integer payload")}}
- panic("exhaustive")
 }
 `)
 		packagesWrite(t, producer, "relay/relay.go", `package relay
 import "borrow.example/library/model"
 type Alias=model.Packet
-func New()Alias{return model.NewPacketA(2)}
+func New()Alias{return &model.A{Value:2}}
 `)
 		library := filepath.Join(t.TempDir(), "library")
 		packagesCommand(t, root, cli, true, "transpile", "-o", library, producer)
@@ -234,10 +226,10 @@ func Cross()[5]int{
 }
 `)
 		generated := filepath.Join(t.TempDir(), "consumer")
-		packagesCommand(t, root, cli, true, "transpile", "-o", generated, consumer)
+		compileAcceptanceGraph(t, true, consumer, generated, producer)
 		packagesWrite(t, generated, "cross_test.go", `package app
 import "testing"
-func TestCrossPackageModule(t *testing.T){if got:=Cross();got!=([5]int{10,2,2,20,44}){t.Fatal(got)}}
+func TestCrossPackageModule(t *testing.T){if got:=Cross();got!=([5]int{10,44,44,20,44}){t.Fatal(got)}}
 `)
 		plain := t.TempDir()
 		packagesWrite(t, plain, "go.mod", module("borrow.example/plain", library))
@@ -251,33 +243,32 @@ import(
 )
 func encode(e m.Packet)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return m.SerializePacket(s,&e)})}
 func TestOriginalPayloadAddressAndReplacement(t *testing.T){
- e:=m.NewPacketA(3);p:=m.GoxideProject6_Packet_A(&e)
+ var e m.Packet=&m.A{Value:3};p:=&e.(*m.A).Value
  if p!=m.Edit(&e)||p!=m.View(&e){t.Fatal("cross-module reference is not original payload address")}
  before:=e;*p=7;after:=e
- if m.GoxideValue6_Packet_A(before)!=3||m.GoxideValue6_Packet_A(after)!=7||m.GoxideTag6_Packet(e)!=2{t.Fatal("native Go copies/tag")}
- e=m.NewPacketB(20);if *p!=0{t.Fatal("old A slot not cleared")};*p=99
- if m.GoxideValue6_Packet_B(e)!=20{t.Fatal("same-typed variant slots coalesced")}
- // Ordinary Go equality observes every field, including an inactive slot.
- // Goxide enum equality is a separate explicit protocol.
- if e==m.NewPacketB(20){t.Fatal("raw Go equality unexpectedly ignored inactive storage")}
- if !m.EqualsPacket(e,m.NewPacketB(20)){t.Fatal("derived equality observed inactive storage")}
- e=m.NewPacketA(5);if *p!=5||p!=m.GoxideProject6_Packet_A(&e){t.Fatal("old reference did not retain slot identity")}
- *p=8;if m.GoxideValue6_Packet_A(e)!=8{t.Fatal("old reference cannot write reactivated A")}
+ if before.(*m.A).Value!=7||after.(*m.A).Value!=7{t.Fatal("native Go copies must share the selected variant")}
+ e=&m.B{Value:20};if *p!=7{t.Fatal("owner replacement changed the detached variant")};*p=99
+ if e.(*m.B).Value!=20{t.Fatal("old projection changed the replacement variant")}
+ // Ordinary Go compares variant pointers; Goxide equality is an explicit protocol.
+ if e==(&m.B{Value:20}){t.Fatal("distinct variant objects compared equal in Go")}
+ if !m.EqualsPacket(e,&m.B{Value:20}){t.Fatal("derived equality used pointer identity")}
+ e=&m.A{Value:5};if *p!=99||p==&e.(*m.A).Value{t.Fatal("old reference followed owner replacement")}
+ *p=8;if e.(*m.A).Value!=5||before.(*m.A).Value!=8{t.Fatal("old reference lost its original variant")}
 }
-func TestDerivesIgnoreInactiveSlots(t *testing.T){
- e:=m.NewPacketA(1);p:=m.GoxideProject6_Packet_A(&e);e=m.NewPacketB(20);*p=99
- m.ValidatePacket(e);clone:=m.ClonePacket(&e)
- if m.GoxideTag6_Packet(clone)!=3||m.GoxideValue6_Packet_B(clone)!=20||m.DebugPacket(&e)!="Packet::B(20)"{t.Fatal("derive used inactive payload")}
+func TestDerivesIgnoreDetachedVariants(t *testing.T){
+ var e m.Packet=&m.A{Value:1};p:=&e.(*m.A).Value;e=&m.B{Value:20};*p=99
+ clone:=m.ClonePacket(&e)
+ if clone.(*m.B).Value!=20||m.DebugPacket(&e)!="Packet::B(20)"{t.Fatal("derive used detached payload")}
  data,err:=encode(e);if err!=nil||string(data)!="{\"B\":20}"{t.Fatalf("wire=%s err=%v",data,err)}
- decoded,err:=serdejson.Unmarshal(data,m.DeserializePacket);if err!=nil||m.GoxideValue6_Packet_B(decoded)!=20{t.Fatal(decoded,err)}
- empty:=m.DefaultPacket();if m.GoxideTag6_Packet(empty)!=1||m.DebugPacket(&empty)!="Packet::Empty"{t.Fatal("default")}
- nested:=m.NewPacketChild(m.NewInnerValue(12));data,err=encode(nested);if err!=nil{t.Fatal(err)}
- decoded,err=serdejson.Unmarshal(data,m.DeserializePacket);if err!=nil||m.GoxideValue5_Inner_Value(m.GoxideValue6_Packet_Child(decoded))!=12{t.Fatal(decoded,err)}
+ decoded,err:=serdejson.Unmarshal(data,m.DeserializePacket);if err!=nil||decoded.(*m.B).Value!=20{t.Fatal(decoded,err)}
+ empty:=m.DefaultPacket();if _,ok:=empty.(*m.Empty);!ok||m.DebugPacket(&empty)!="Packet::Empty"{t.Fatal("default")}
+ var nested m.Packet=&m.Child{Value:&m.Value{Value:12}};data,err=encode(nested);if err!=nil{t.Fatal(err)}
+ decoded,err=serdejson.Unmarshal(data,m.DeserializePacket);if err!=nil||decoded.(*m.Child).Value.(*m.Value).Value!=12{t.Fatal(decoded,err)}
 }
 func TestZeroAndInvalidNestedEnumRemainRejected(t *testing.T){
  var bad m.Packet
  if _,err:=encode(bad);err==nil{t.Fatal("serialized invalid zero enum")}
- for name,run:=range map[string]func(){"validate":func(){m.ValidatePacket(bad)},"clone":func(){_=m.ClonePacket(&bad)},"debug":func(){_=m.DebugPacket(&bad)},"nested":func(){m.ValidatePacket(m.NewPacketChild(m.Inner{}))}}{
+ for name,run:=range map[string]func(){"match":func(){m.View(&bad)},"clone":func(){_=m.ClonePacket(&bad)},"debug":func(){_=m.DebugPacket(&bad)},"nested":func(){var value m.Packet=&m.Child{Value:nil};_=m.DebugPacket(&value)}}{
   t.Run(name,func(t *testing.T){defer func(){if recover()==nil{t.Fatal("invalid enum accepted")}}();run()})
  }
 }
@@ -308,7 +299,7 @@ func TestNativeStdSlots(t *testing.T){
 			if !strings.Contains(out, fmt.Sprintf("app.gox:%d:", line)) {
 				t.Fatalf("missing original permission-error location: %s", out)
 			}
-			if !strings.Contains(out, "readonly") && !strings.Contains(out, "read-only") && !strings.Contains(out, "reference") {
+			if !strings.Contains(out, "read-only") && !strings.Contains(out, "read-only") && !strings.Contains(out, "reference") {
 				t.Fatalf("expected reference permission rejection: %s", out)
 			}
 		})

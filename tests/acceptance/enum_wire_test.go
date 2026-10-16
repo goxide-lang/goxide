@@ -69,8 +69,8 @@ import("errors";"reflect";"strings";"testing";"github.com/goxide-lang/serde";"gi
 func encodeTicket(v Ticket)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeTicket(s,&v)})}
 func TestKnownWireRoundTripAndNativeConstructors(t *testing.T){
  for _,tc:=range []struct{status Delivery;urgency Urgency;wire string}{
-  {NewDeliveryWaiting(),NewUrgencyNormal(),"{\"Delivery\":\"queued\",\"Urgency\":2,\"Note\":\"native\"}"},
-  {NewDeliveryDelivered(),NewUrgencyRush(),"{\"Delivery\":\"sent\",\"Urgency\":9,\"Note\":\"native\"}"},
+  {&Waiting{},&Normal{},"{\"Delivery\":\"queued\",\"Urgency\":2,\"Note\":\"native\"}"},
+  {&Delivered{},&Rush{},"{\"Delivery\":\"sent\",\"Urgency\":9,\"Note\":\"native\"}"},
  }{
   original:=Ticket{Delivery:tc.status,Urgency:tc.urgency,Note:"native"}
   data,err:=encodeTicket(original);if err!=nil||string(data)!=tc.wire{t.Fatalf("wire=%s err=%v",data,err)}
@@ -97,8 +97,8 @@ func TestUnknownWireFailsBeforeBusiness(t *testing.T){
 func TestDefaultAndDebugAreNotWireMapping(t *testing.T){
  v:=DefaultTicket()
  if Describe(v.Delivery)!="waiting"||IsRush(v.Urgency)||v.Note!=""{t.Fatalf("wrong explicit field defaults: %#v",v)}
- // Urgency's default is the second declaration; a zero tag is not a default constructor.
- var zero Ticket;if GoxideTag8_Delivery(zero.Delivery)!=0||GoxideTag7_Urgency(zero.Urgency)!=0{t.Fatal("Go zero changed")}
+ // Urgency's default is the second declaration; a nil enum is not a default value.
+ var zero Ticket;if zero.Delivery!=nil||zero.Urgency!=nil{t.Fatal("Go zero changed")}
  v.Note="private business text"
  debug:=DebugTicket(&v)
  for _,part:=range []string{"Waiting","Normal","private business text"}{if !strings.Contains(debug,part){t.Fatalf("debug omitted declared content %q: %s",part,debug)}}

@@ -1,0 +1,14 @@
+package main
+
+use fmt;
+use fmt::Println as output;
+use service;
+use effects as _;
+use kit;
+use kit::Counter as shared;
+
+func main() {
+    shared++
+    output(service::Read(), kit::add_two!(40), shared, &shared == &kit::Counter)
+    fmt::Println(service::JSON(), kit::Label)
+}

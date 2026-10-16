@@ -1,5 +1,0 @@
-package probe
-pub enum E{A,B}
-func choose(b bool)E{if b{return E::A};return E::B}
-type Row struct{F func()uint8;W uint64}
-func Run()Row{return Row{F:func()uint8{return +(match E::A{E::A=>255,E::B=>0})},W:match E::A{E::A=>1<<63,E::B=>0}}}

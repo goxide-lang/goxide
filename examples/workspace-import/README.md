@@ -45,7 +45,7 @@ goxide test -p example.org/app --bin app --locked --offline "$fixture/migrated"
 
 plan 会显示 `example.org/app -> example.org/lib (workspace=true)`。输出根清单使用显式成员与 path 模板，app 成员写 `workspace=true`；原来没有 require 的关系不再依赖 Go workspace 隐式补边。原 native 目录不改变。
 
-有 workspace vendor 的原工程使用同样命令，迁入不运行 `go work vendor`；供应文件与修改字节保留，缺包失败。更多政策、配置范围、外部 replace 和 schema4 限制见 [迁入合同](../../docs/design/workspace-import.md)；实际测试见 [验收](../../docs/reviews/workspace-import-20261004.md)。
+有 workspace vendor 的原工程使用同样命令，迁入不运行 `go work vendor`；供应文件与修改字节保留，缺包失败。更多政策、配置范围、外部 replace 和 schema4 限制见 [迁入合同](../../docs/design/workspace-import.md)；实际测试见 [验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/workspace-import-20261004.md)。
 
 
 ## 迁入后渐进增强

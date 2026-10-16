@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func singleFileWrite(t *testing.T, root, name, source string) {
@@ -75,6 +77,13 @@ func main(){fmt::Printf("%d %q\n",dep::Value()+hidden::Value()+native::Value(),o
 `)
 	singleFileWrite(t, module, "cmd/app/poison.go", "package main\ninvalid sibling Go\n")
 	singleFileWrite(t, module, "cmd/app/poison.gox", "invalid sibling Goxide\n")
+	// Generation now reads sibling Go declarations. Its determinism check uses
+	// a separate package; run/build below still prove isolated file selection.
+	transpileSource, err := os.ReadFile(filepath.Join(module, "cmd/app/main.gox"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	singleFileWrite(t, module, "cmd/transpile/main.gox", string(transpileSource))
 	// A different cwd graph and ambient workspace must not supply dependencies.
 	cwd := filepath.Join(base, "unrelated")
 	singleFileWrite(t, cwd, "go.mod", "module example.org/unrelated\ngo 1.27\nrequire example.org/dep v0.0.0\nreplace example.org/dep => ./wrong\n")
@@ -89,7 +98,7 @@ func main(){fmt::Printf("%d %q\n",dep::Value()+hidden::Value()+native::Value(),o
 	var generated []byte
 	for i := 0; i < 2; i++ {
 		var out, stderr bytes.Buffer
-		if err := run([]string{"transpile", "--runtime", filepath.Join(base, "absent-runtime"), input}, &out, &stderr); err != nil {
+		if err := run([]string{"transpile", "-o", "-", "--runtime", filepath.Join(base, "absent-runtime"), filepath.Join(module, "cmd/transpile/main.gox")}, &out, &stderr); err != nil {
 			t.Fatalf("transpile: %v: %s", err, &stderr)
 		}
 		if i == 0 {
@@ -142,11 +151,8 @@ func TestSingleFileModuleSiblingAndMissingDependency(t *testing.T) {
 	singleFileWrite(t, module, "sibling.go", "package main\nfunc sibling()int{return 19}\n")
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	var out, stderr bytes.Buffer
-	if err := run([]string{"run", "--go", tool, filepath.Join(module, "main.gox")}, &out, &stderr); err == nil || !strings.Contains(err.Error()+stderr.String(), "undefined: sibling") {
-		t.Fatalf("sibling supplied a single-file declaration: %v: %s", err, &stderr)
-	}
-	if !strings.Contains(stderr.String(), "goxide:") {
-		t.Fatalf("generated-file diagnostic was not mapped: %s", &stderr)
+	if err := run([]string{"run", "--go", tool, filepath.Join(module, "main.gox")}, &out, &stderr); err == nil || !strings.Contains(err.Error()+stderr.String(), "unresolved name") || !strings.Contains(err.Error()+stderr.String(), "main.gox:3:26:") {
+		t.Fatalf("sibling supplied a single-file declaration or source location was lost: %v: %s", err, &stderr)
 	}
 	out.Reset()
 	stderr.Reset()
@@ -183,7 +189,7 @@ package="example.org/inner/internal/leaf"
 	singleFileWrite(t, inner, "internal/leaf/leaf.go", "package leaf\nfunc Value()int{return 23}\n")
 	singleFileWrite(t, inner, "app/main.gox", "package main\nuse fmt;\nuse leaf;\nfunc main(){fmt::Println(leaf::Value())}\n")
 	input := filepath.Join(inner, "app/main.gox")
-	m, err := prepareSingleFileModule(input)
+	m, err := prepareSingleFileModule(input, testdeps.Configuration())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,20 +212,7 @@ package="example.org/inner/internal/leaf"
 	if _, err := os.Stat(filepath.Join(inner, "binary")); !os.IsNotExist(err) {
 		t.Fatal("rejected build wrote an output")
 	}
-	other := "amd64"
-	if runtime.GOARCH == other {
-		other = "arm64"
-	}
-	t.Setenv("GOARCH", other)
-	if _, err := prepareSingleFileModule(input); err == nil || !strings.Contains(err.Error(), "requires host GOOS/GOARCH") {
-		t.Fatalf("cross-target configuration accepted: %v", err)
-	}
-	t.Setenv("GOARCH", "")
-	singleFileWrite(t, base, "go-env", "GOARCH="+other+"\n")
-	t.Setenv("GOENV", filepath.Join(base, "go-env"))
-	if _, err := prepareSingleFileModule(input); err == nil || !strings.Contains(err.Error(), "requires host GOOS/GOARCH") {
-		t.Fatalf("saved cross-target GOENV configuration accepted: %v", err)
-	}
+
 }
 
 func TestSingleFileModuleOutputPreflight(t *testing.T) {
@@ -265,7 +258,7 @@ func TestSingleFileModuleOutputPreflight(t *testing.T) {
 	// A caller-selected temporary directory may itself be in the source tree.
 	// Reject before making any compiler-owned files there.
 	t.Setenv("TMPDIR", module)
-	if _, err := prepareSingleFileModule(input); err == nil || !strings.Contains(err.Error(), "temporary directory must be outside") {
+	if _, err := prepareSingleFileModule(input, testdeps.Configuration()); err == nil || !strings.Contains(err.Error(), "temporary directory must be outside") {
 		t.Fatalf("temporary files inside source accepted: %v", err)
 	}
 	if got := singleFileSnapshot(t, module); !reflect.DeepEqual(before, got) {

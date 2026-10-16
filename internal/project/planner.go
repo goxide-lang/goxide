@@ -57,10 +57,10 @@ type ModFile struct {
 	Exclude   []ModuleVersion
 }
 
-func goCommand(tool, dir string, offline bool, args ...string) ([]byte, error) {
+func goCommand(tool, dir string, offline bool, environment []string, args ...string) ([]byte, error) {
 	c := exec.Command(tool, args...)
 	c.Dir = dir
-	c.Env = GoEnv(offline)
+	c.Env = GoEnv(offline, environment)
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
 	b, e := c.Output()
@@ -69,13 +69,17 @@ func goCommand(tool, dir string, offline bool, args ...string) ([]byte, error) {
 	}
 	return b, nil
 }
-func ReadMod(tool, root string) (ModFile, error) {
+func ReadMod(tool, root string, environment ...[]string) (ModFile, error) {
 	var m ModFile
 	info, e := os.Lstat(filepath.Join(root, "go.mod"))
 	if e != nil || !info.Mode().IsRegular() {
 		return m, fmt.Errorf("module directory must contain its own regular go.mod: %s", root)
 	}
-	b, e := goCommand(tool, root, true, "mod", "edit", "-json")
+	var base []string
+	if len(environment) != 0 {
+		base = environment[0]
+	}
+	b, e := goCommand(tool, root, true, base, "mod", "edit", "-json")
 	if e != nil {
 		return m, e
 	}
@@ -143,7 +147,7 @@ func (g *Graph) readNode(root string, published bool, checkout string) (*Node, e
 			return nil, e
 		}
 		if !published {
-			if e = CheckAuthoring(root); e != nil {
+			if e = CheckAuthoring(root, g.Environment); e != nil {
 				return nil, e
 			}
 		}
@@ -160,15 +164,15 @@ func (g *Graph) readNode(root string, published bool, checkout string) (*Node, e
 		if e = os.WriteFile(filepath.Join(dir, "go.mod"), n.ModBytes, 0644); e != nil {
 			return nil, e
 		}
-		n.Mod, e = ReadMod(g.Tool, dir)
+		n.Mod, e = ReadMod(g.Tool, dir, g.Environment)
 		if e != nil {
 			return nil, e
 		}
 		if published {
-			if _, e := ImportMod(g.Tool, root); e != nil {
+			if _, e := ImportMod(g.Tool, root, g.Environment); e != nil {
 				return nil, fmt.Errorf("published Go transport metadata: %w", e)
 			}
-			transport, e := ReadMod(g.Tool, root)
+			transport, e := ReadMod(g.Tool, root, g.Environment)
 			if e != nil {
 				return nil, e
 			}
@@ -180,7 +184,7 @@ func (g *Graph) readNode(root string, published bool, checkout string) (*Node, e
 			return n, manifestErr
 		}
 	} else {
-		n.Mod, e = ReadMod(g.Tool, root)
+		n.Mod, e = ReadMod(g.Tool, root, g.Environment)
 		if e != nil {
 			return nil, e
 		}
@@ -503,7 +507,9 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			return nil, e
 		}
 	}
-	run := func(args ...string) ([]byte, error) { return goCommand(g.Tool, work, g.Offline, args...) }
+	run := func(args ...string) ([]byte, error) {
+		return goCommand(g.Tool, work, g.Offline, g.Environment, args...)
+	}
 	for _, req := range g.RootMod.Require {
 		if strings.HasPrefix(req.Path, plannerPrefix) {
 			return nil, fmt.Errorf("reserved planner module namespace: %s", req.Path)
@@ -609,7 +615,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 					if err = os.WriteFile(filepath.Join(metadata, "go.mod"), body, 0644); err != nil {
 						return nil, err
 					}
-					mod, err = ReadMod(g.Tool, metadata)
+					mod, err = ReadMod(g.Tool, metadata, g.Environment)
 					if err != nil {
 						return nil, err
 					}
@@ -762,7 +768,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		if e = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module "+path+"\n\ngo "+bridgeGo+"\n"), 0644); e != nil {
 			return nil, e
 		}
-		if _, e = goCommand(g.Tool, dir, g.Offline, "mod", "edit", "-require="+req.Module+"@"+req.Version); e != nil {
+		if _, e = goCommand(g.Tool, dir, g.Offline, g.Environment, "mod", "edit", "-require="+req.Module+"@"+req.Version); e != nil {
 			return nil, e
 		}
 		if _, e = run("mod", "edit", "-require="+path+"@v0.0.0", "-replace="+path+"="+dir); e != nil {

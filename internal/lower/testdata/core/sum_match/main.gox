@@ -1,0 +1,36 @@
+package main
+
+use fmt;
+use strings;
+
+func option(x Option[int]) int {
+	return match x {
+		Option::Some(0) => 0,
+		Option::Some(n) if n > 0 => n + 1,
+		Option::Some(n) => n,
+		Option::None => -1,
+	}
+}
+
+func result(x Result[int, string]) string {
+	return match x {
+		Result::Ok(0) => "0",
+		Result::Ok(n) => fmt::Sprint(n),
+		Result::Err(e) => e,
+	}
+}
+
+func invalid(x Result[int, string], touched *bool) {
+	match x { _ => { *touched = true } }
+}
+
+func main() {
+	touched := false
+	message := ""
+	func() {
+		defer func() { message = fmt::Sprint(recover()) }()
+		var value Result[int, string]
+		invalid(value, &touched)
+	}()
+	fmt::Println(option(Option[int]::None), option(Option[int]::Some(0)), option(Option[int]::Some(5)), option(Option[int]::Some(-2)), result(Result[int, string]::Ok(0)), result(Result[int, string]::Ok(8)), result(Result[int, string]::Err("bad")), strings::Contains(message, "Result") && !touched)
+}

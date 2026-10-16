@@ -90,7 +90,7 @@ func TestEvaluation(t *testing.T){x,n:=EvaluatedOnce();if x!=7||n!=1{t.Fatal(x,n
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "reference") && !strings.Contains(out, "readonly") && !strings.Contains(out, "cannot use") {
+			if !strings.Contains(out, "reference") && !strings.Contains(out, "read-only") && !strings.Contains(out, "cannot use") {
 				t.Fatal(out)
 			}
 		})

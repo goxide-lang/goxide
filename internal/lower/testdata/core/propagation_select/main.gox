@@ -1,0 +1,69 @@
+package main
+
+use fmt;
+
+func typed() Option[int] {
+	switch n := Option[int]::Some(7)?; value := Option[any]::Some(n)?.(type) {
+	case int:
+		return Option[int]::Some(value + n)
+	default:
+		return Option[int]::None
+	}
+}
+
+func send(ok bool, channel chan int, trace *[]string) Option[int] {
+	first := func() chan int { *trace = append(*trace, "channel"); return nil }
+	value := func() int { *trace = append(*trace, "value"); return 1 }
+	load := func() Option[int] {
+		*trace = append(*trace, "load")
+		if !ok { return Option[int]::None }
+		return Option[int]::Some(7)
+	}
+	select {
+	case first() <- value():
+		panic("disabled send")
+	case channel <- load()?:
+		return Option[int]::Some(<-channel)
+	}
+}
+
+func receive(channel chan int) Option[int] {
+	values := []int{0}
+	select {
+	case values[Option[int]::None?] = <-channel:
+		panic("failed receive target")
+	}
+	return Option[int]::Some(values[0])
+}
+
+func disabled(ready chan int) Option[int] {
+	var blocked chan int
+	values := []int{0}
+	select {
+	case values[Option[int]::None?] = <-blocked:
+		panic("disabled receive")
+	case value := <-ready:
+		return Option[int]::Some(value)
+	}
+}
+
+func optionInt(value Option[int]) int {
+	return match value { Option::Some(n) => n, Option::None => -1 }
+}
+
+func main() {
+	fmt::Println(optionInt(typed()))
+	for _, ok := range []bool{false, true} {
+		trace := []string{}
+		channel := make(chan int, 1)
+		value := send(ok, channel, &trace)
+		fmt::Println(optionInt(value), trace, len(channel))
+	}
+	channel := make(chan int, 1)
+	channel <- 7
+	value := receive(channel)
+	fmt::Println(optionInt(value), len(channel))
+	channel <- 9
+	value = disabled(channel)
+	fmt::Println(optionInt(value), len(channel))
+}

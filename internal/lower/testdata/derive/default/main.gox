@@ -1,0 +1,27 @@
+package main
+
+use fmt;
+
+type Label struct { Text string }
+type Step struct { Number int }
+var calls []string
+
+#[derive(Default)]
+type Record struct { First Label; Second Step; Optional Option[chan int] }
+
+enum Unusable { Busy(chan int) }
+#[derive(Default)]
+pub enum State {
+    #[default]
+    Ready { First Label, Second Step },
+    Unavailable(Unusable),
+}
+
+func main() {
+    zero := Record{}
+    value := DefaultRecord()
+    state := DefaultState()
+    fmt::Println(zero.First.Text == "", value.First.Text, value.Second.Number, calls)
+    fmt::Println(match value.Optional { Option::None => "none", Option::Some(_) => "some" })
+    fmt::Println(match state { State::Ready{First: first, Second: second} => first.Text + fmt::Sprint(second.Number), State::Unavailable(_) => "bad" })
+}

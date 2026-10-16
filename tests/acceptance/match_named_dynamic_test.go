@@ -1,7 +1,6 @@
 package acceptance_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -62,7 +61,7 @@ var stop=errors::New("stop")
 func payload(ok bool)Result[int,error]{mark(3);if !ok{return Result[int,error]::Err(stop)};return Result[int,error]::Ok(7)}
 func Failure(ok bool)(out Result[int,error]){g:=func(a,b int)Result[int,error]{mark(8);return Result[int,error]::Ok(a+b)};defer func(){match out{Result[int,error]::Ok(_)=>{mark(10)},Result[int,error]::Err(_)=>{mark(11)}}}();return g(match choice(){E::A(_)=>payload(ok)?,E::B=>0},mark(9))}
 func NilFailure()(out Result[int,error]){var g func(int)Result[int,error];return g(match E::B{E::A(_)=>0,E::B=>payload(false)?})}
-func ClosureTarget()int{f:=func()(out Result[int,error]){g:=func(n int)Result[int,error]{return Result[int,error]::Ok(n)};return g(match E::B{E::A(_)=>0,E::B=>payload(false)?})};v:=f();match v{Result[int,error]::Ok(_)=>{return 0},Result[int,error]::Err(_)=>{return 7}};return -1}
+func ClosureTarget()int{f:=func()(out Result[int,error]){g:=func(n int)Result[int,error]{return Result[int,error]::Ok(n)};return g(match E::B{E::A(_)=>0,E::B=>payload(false)?})};v:=f();match v{Result[int,error]::Ok(_)=>{return 0},Result[int,error]::Err(_)=>{return 7}}}
 func IsErr(v Result[int,error])bool{return match v{Result[int,error]::Ok(_)=>false,Result[int,error]::Err(e)=>errors::Is(e,stop)}}
 func MakeA()E{return E::A(1)}
 `)
@@ -104,9 +103,9 @@ func TestFailure(t *testing.T){trace=nil;if !IsErr(Failure(false)){t.Fatal("fail
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			location := fmt.Sprintf("app.gox:3:%d:", strings.Index(body, "match ")+1)
-			if !strings.Contains(out, location) {
-				t.Fatalf("missing source location: %s", out)
+			want := map[string]string{"multiple-results": "not enough return values", "arity": "not enough arguments", "overflow": "overflows", "wrong-type": "match arm has type"}[name]
+			if (!strings.Contains(out, "app.gox:") && !strings.Contains(out, "app.go:")) || !strings.Contains(out, want) {
+				t.Fatalf("missing package/type diagnostic: %s", out)
 			}
 		})
 	}

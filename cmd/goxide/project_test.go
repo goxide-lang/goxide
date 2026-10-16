@@ -34,6 +34,7 @@ func projectRun(t *testing.T, root string, args ...string) (string, error) {
 }
 
 func TestProjectTargetsAndFeatures(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/project\n\ngo 1.27\n",
@@ -124,16 +125,20 @@ format = 1
 	if b, e := projectRun(t, root, "run", "--offline"); e != nil {
 		t.Fatalf("%s %v", b, e)
 	}
-	if _, e := projectRun(t, root, "build", "--lib"); e == nil || !strings.Contains(e.Error(), "no lib") {
-		t.Fatal(e)
-	}
+	t.Run("library-target-diagnostic", func(t *testing.T) {
+		t.Skip("MVP-DEFERRED: MVP CLI library targets deferred by P6")
+		if _, e := projectRun(t, root, "build", "--lib"); e == nil || !strings.Contains(e.Error(), "no lib") {
+			t.Fatal(e)
+		}
+	})
 	projectWrite(t, root, map[string]string{"app.gox": "package main\nfunc main(){_ = missing}\n"})
-	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), filepath.Join(root, "app.gox")+":2:") {
+	if _, e := projectRun(t, root, "run", "--offline"); e == nil || (!strings.Contains(e.Error(), "app.gox:2:17:") || !strings.Contains(e.Error(), "unresolved name")) {
 		t.Fatalf("source location lost: %v", e)
 	}
 }
 
 func TestProjectLocalFeatureUnion(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	base := t.TempDir()
 	root := filepath.Join(base, "root")
 	shared := filepath.Join(base, "shared")
@@ -363,6 +368,7 @@ version = 'v1.0.0'
 }
 
 func TestProjectSelectionAndOutputConflicts(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/selection\n\ngo 1.27\n",
@@ -521,9 +527,26 @@ format = 1
 
 func TestProjectDependencyAndTargetDiagnostics(t *testing.T) {
 	base := t.TempDir()
-	root := filepath.Join(base, "root")
-	dep := filepath.Join(base, "dep")
-	projectWrite(t, dep, map[string]string{"go.mod": "module example.org/dep\n\ngo 1.27\n", "goxide.toml": `[features]
+	root, dep := filepath.Join(base, "root"), filepath.Join(base, "dep")
+	projectWrite(t, dep, map[string]string{"go.mod": "module example.org/dep\ngo 1.27\n", "lib.go": "package dep\n"})
+	manifest := func(module string) string {
+		return projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]any{"module": module, "path": "../dep"}}})
+	}
+	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\ngo 1.27\n", "goxide.toml": manifest("example.org/wrong"), "main.gox": "package main\nfunc main(){}\n"})
+	if _, err := projectRun(t, root, "run", "--offline"); err == nil || !strings.Contains(err.Error(), "module path mismatch") {
+		t.Fatal(err)
+	}
+	projectWrite(t, root, map[string]string{"goxide.toml": manifest("example.org/dep")})
+	projectWrite(t, dep, map[string]string{"goxide.toml": projectManifest(map[string]any{"version": 1, "lib": map[string]string{"name": "lib", "path": "."}, "dependencies": map[string]any{"root": map[string]any{"module": "example.org/root", "path": "../root"}}})})
+	if _, err := projectRun(t, root, "run", "--offline"); err == nil || !strings.Contains(err.Error(), "dependency cycle") {
+		t.Fatal(err)
+	}
+	t.Run("feature-gated-targets", func(t *testing.T) {
+		t.Skip("MVP-DEFERRED: MVP CLI dependency features and example targets deferred by P6")
+		base := t.TempDir()
+		root := filepath.Join(base, "root")
+		dep := filepath.Join(base, "dep")
+		projectWrite(t, dep, map[string]string{"go.mod": "module example.org/dep\n\ngo 1.27\n", "goxide.toml": `[features]
 on = []
 
 [lib]
@@ -534,29 +557,29 @@ required_features = ['on']
 [package]
 format = 1
 `, "lib.gox": "package dep\n"})
-	manifest := func(module string, features []string) string {
-		return projectManifest(map[string]any{"version": 1, "features": map[string][]string{"demo": {}}, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "examples": []any{map[string]any{"name": "demo", "path": "demo.gox", "required_features": []string{"demo"}}}, "dependencies": map[string]any{"dep": map[string]any{"module": module, "path": "../dep", "features": features}}})
-	}
-	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": manifest("example.org/wrong", nil), "main.gox": "package main\nfunc main(){}\n", "demo.gox": "package main\nfunc main(){}\n"})
-	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "module path mismatch") {
-		t.Fatal(e)
-	}
-	projectWrite(t, root, map[string]string{"goxide.toml": manifest("example.org/dep", []string{"unknown"})})
-	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "unknown feature") {
-		t.Fatal(e)
-	}
-	projectWrite(t, root, map[string]string{"goxide.toml": manifest("example.org/dep", nil)})
-	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "requires feature on") {
-		t.Fatal(e)
-	}
-	projectWrite(t, root, map[string]string{"goxide.toml": manifest("example.org/dep", []string{"on"})})
-	if _, e := projectRun(t, root, "run", "--example", "demo", "--offline"); e == nil || !strings.Contains(e.Error(), "requires feature demo") {
-		t.Fatal(e)
-	}
-	if b, e := projectRun(t, root, "run", "--example", "demo", "--features", "demo", "--offline"); e != nil {
-		t.Fatalf("%s %v", b, e)
-	}
-	projectWrite(t, dep, map[string]string{"goxide.toml": `[dependencies]
+		manifest := func(module string, features []string) string {
+			return projectManifest(map[string]any{"version": 1, "features": map[string][]string{"demo": {}}, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "examples": []any{map[string]any{"name": "demo", "path": "demo.gox", "required_features": []string{"demo"}}}, "dependencies": map[string]any{"dep": map[string]any{"module": module, "path": "../dep", "features": features}}})
+		}
+		projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": manifest("example.org/wrong", nil), "main.gox": "package main\nfunc main(){}\n", "demo.gox": "package main\nfunc main(){}\n"})
+		if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "module path mismatch") {
+			t.Fatal(e)
+		}
+		projectWrite(t, root, map[string]string{"goxide.toml": manifest("example.org/dep", []string{"unknown"})})
+		if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "unknown feature") {
+			t.Fatal(e)
+		}
+		projectWrite(t, root, map[string]string{"goxide.toml": manifest("example.org/dep", nil)})
+		if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "requires feature on") {
+			t.Fatal(e)
+		}
+		projectWrite(t, root, map[string]string{"goxide.toml": manifest("example.org/dep", []string{"on"})})
+		if _, e := projectRun(t, root, "run", "--example", "demo", "--offline"); e == nil || !strings.Contains(e.Error(), "requires feature demo") {
+			t.Fatal(e)
+		}
+		if b, e := projectRun(t, root, "run", "--example", "demo", "--features", "demo", "--offline"); e != nil {
+			t.Fatalf("%s %v", b, e)
+		}
+		projectWrite(t, dep, map[string]string{"goxide.toml": `[dependencies]
 [dependencies.root]
 module = 'example.org/root'
 path = '../root'
@@ -571,12 +594,14 @@ path = '.'
 [package]
 format = 1
 `})
-	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "dependency cycle") {
-		t.Fatal(e)
-	}
+		if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "dependency cycle") {
+			t.Fatal(e)
+		}
+	})
 }
 
 func TestProjectConditionalGoxideAcrossTargets(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
 	// Inline enum discriminants use std/sum.Tag for type-name hygiene. This
 	// project selects that public dependency explicitly, including offline runs.

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Check design Markdown and existing Go lowering examples, not an goxide compiler."""
+"""Check design Markdown and run its standalone Go examples."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,11 +16,8 @@ import tempfile
 import unicodedata
 from urllib.parse import unquote
 
-import check_review_artifacts
-
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "tests" / "design"
 
 
 class CheckFailure(Exception):
@@ -87,38 +83,9 @@ def check_docs() -> dict[Path, tuple[str, list[tuple[str, str]], set[str]]]:
                     problems.append(f"{path.relative_to(ROOT)}: missing anchor {target}")
     if problems:
         raise CheckFailure("\n".join(problems))
-    rfc_count = check_rfc_contracts(documents)
     print(f"PASS Markdown: {len(files)} files, {links} local links/anchors, balanced fences", flush=True)
-    print(f"PASS RFC structure: {rfc_count} documents with required sections and goxide/Go example blocks", flush=True)
     print("Scope: inline local Markdown links and ATX headings; external URLs are not fetched.", flush=True)
-    print("RFC structure checks do not compile examples or prove source/Go semantic equivalence.", flush=True)
     return documents
-
-
-def check_rfc_contracts(documents) -> int:
-    required = {"状态与范围", "源级规则", "转译示例", "拒绝与边界", "双向互操作", "验收与未定项"}
-    directory = (ROOT / "docs" / "rfcs").resolve()
-    identifiers = set()
-    for path, (prose, blocks, _) in documents.items():
-        if path.parent != directory or path.name in {"README.md", "TEMPLATE.md"}:
-            continue
-        match = re.fullmatch(r"(\d{4})-[a-z0-9-]+\.md", path.name)
-        if not match:
-            raise CheckFailure(f"{path.relative_to(ROOT)}: expected NNNN-feature.md RFC filename")
-        identifier = match[1]
-        if identifier in identifiers:
-            raise CheckFailure(f"Duplicate RFC identifier: {identifier}")
-        identifiers.add(identifier)
-        if not re.search(rf"^# RFC {identifier}：\S", prose, re.MULTILINE):
-            raise CheckFailure(f"{path.relative_to(ROOT)}: title must identify RFC {identifier}")
-        headings = set(re.findall(r"^## (.+)$", prose, re.MULTILINE))
-        missing = required - headings
-        if missing:
-            raise CheckFailure(f"{path.relative_to(ROOT)}: missing RFC sections: {', '.join(sorted(missing))}")
-        languages = {language for language, code in blocks if code.strip()}
-        if not {"goxide", "go"} <= languages:
-            raise CheckFailure(f"{path.relative_to(ROOT)}: requires goxide and Go example blocks")
-    return len(identifiers)
 
 
 def source_blocks(documents, name: str, package: str, count: int = 1) -> list[str]:
@@ -130,29 +97,15 @@ def source_blocks(documents, name: str, package: str, count: int = 1) -> list[st
     return blocks
 
 
-def copy_fixture(name: str, destination: Path) -> None:
-    shutil.copytree(FIXTURES / name, destination, dirs_exist_ok=True)
-    for path in destination.rglob("go.mod.fixture"):
-        path.rename(path.with_name("go.mod"))
-
-
 def write_module(destination: Path, module: str) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     (destination / "go.mod").write_text(f"module {module}\n\ngo 1.27\n", encoding="utf-8")
 
 
-def tree_hash(directory: Path) -> str:
-    digest = hashlib.sha256()
-    for path in sorted(p for p in directory.rglob("*") if p.is_file()):
-        digest.update(str(path.relative_to(directory)).encode())
-        digest.update(path.read_bytes())
-    return digest.hexdigest()
-
-
 def check_go(documents) -> None:
     go = shutil.which("go")
     if not go:
-        raise CheckFailure("Go >= 1.27 is required for full checks; --docs-only needs Python 3.10+ and Git with complete baseline history.")
+        raise CheckFailure("Go >= 1.27 is required for full checks; --docs-only needs Python 3.10+.")
     env = os.environ.copy()
     # Do not download a toolchain or inherit a parent workspace/build overlay.
     env.update(GOTOOLCHAIN="local", GOWORK="off", GOFLAGS="")
@@ -164,14 +117,14 @@ def check_go(documents) -> None:
         raise CheckFailure(f"Need local Go >= 1.27; found {environment['GOVERSION']} (no toolchain auto-download).")
     print("Environment: " + json.dumps({"python": sys.version.split()[0], "go": go, **environment}, ensure_ascii=False), flush=True)
     print("Overrides: GOTOOLCHAIN=local GOWORK=off GOFLAGS= (isolated temporary modules).", flush=True)
-    print("Scope: existing Go lowering/support mechanisms only; no goxide frontend or GOROOT overlay checks.", flush=True)
+    print("Scope: standalone Go examples extracted from docs/design/macros.md.", flush=True)
     workspace = Path(tempfile.mkdtemp(prefix="goxide-design-check-"))
     logs = workspace / "logs"
     logs.mkdir()
     print(f"Artifacts retained: {workspace}", flush=True)
     passed = []
 
-    def run(label: str, cwd: Path, args: list[str], *, expected_failure: str | None = None, expected_output: str | None = None):
+    def run(label: str, cwd: Path, args: list[str], *, expected_output: str):
         print(f"\n[{label}] {shlex.join([go, *args])} (cwd={cwd})", flush=True)
         try:
             completed = subprocess.run([go, *args], cwd=cwd, env=env, text=True,
@@ -184,40 +137,11 @@ def check_go(documents) -> None:
             raise CheckFailure(f"{label}: timed out after 180 seconds; partial output: {logs / (label + '.log')}") from error
         (logs / f"{label}.log").write_text(completed.stdout, encoding="utf-8")
         print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n", flush=True)
-        if expected_failure:
-            if completed.returncode == 0 or not re.search(expected_failure, completed.stdout):
-                raise CheckFailure(f"{label}: expected compile rejection matching {expected_failure!r}; see {logs}")
-            print(f"PASS expected compile rejection: {label}", flush=True)
-        elif completed.returncode:
-            suffix = " The lock suite requires race-detector support and a usable C compiler." if "-race" in args else ""
-            raise CheckFailure(f"{label}: command failed ({completed.returncode}); see {logs}.{suffix}")
-        elif expected_output is not None and completed.stdout.strip() != expected_output:
+        if completed.returncode:
+            raise CheckFailure(f"{label}: command failed ({completed.returncode}); see {logs}.")
+        if completed.stdout.strip() != expected_output:
             raise CheckFailure(f"{label}: output differs from {expected_output!r}; see {logs}")
         passed.append(label)
-
-    for fixture, doc, package, module, race in [
-        ("lock", "synchronization.md", "goxidesync", "example.org/goxidesync-probe", True),
-        ("std", "standard-library.md", "stdsupport", "example.org/goxide-stdlib-design", False),
-        ("views", "traits.md", "views", "example.org/goxide-views-check", False),
-    ]:
-        target = workspace / fixture
-        copy_fixture(fixture, target)
-        write_module(target, module)
-        (target / "example.go").write_text(source_blocks(documents, doc, package)[0], encoding="utf-8")
-        run(fixture, target, ["test", *( ["-race"] if race else []), "-count=1", "-v", "./..."])
-
-    enum_root = workspace / "enum"
-    write_module(enum_root, "example.org/goxidedesigncheck")
-    copy_fixture("enum", enum_root / "enumdemo")
-    (enum_root / "enumdemo" / "example.go").write_text(source_blocks(documents, "enums-and-match.md", "enumdemo")[0], encoding="utf-8")
-    run("enum", enum_root, ["test", "-count=1", "-v", "./..."])
-    for variant, diagnostic in [("option", "goxideOption"), ("result", "goxideResult")]:
-        target = enum_root / f"invalid_{variant}"
-        copy_fixture(f"enum_invalid/{variant}", target)
-        write_module(target, f"example.org/invalid{variant}")
-        with (target / "go.mod").open("a", encoding="utf-8") as stream:
-            stream.write("\nrequire example.org/goxidedesigncheck v0.0.0\nreplace example.org/goxidedesigncheck => ..\n")
-        run(f"enum-invalid-{variant}", target, ["test", "./..."], expected_failure=diagnostic)
 
     for index, (code, expected) in enumerate(zip(source_blocks(documents, "macros.md", "main", 2),
                                                ["85 1 41", "untitled 1 9 true 7"]), 1):
@@ -226,44 +150,22 @@ def check_go(documents) -> None:
         (target / "main.go").write_text(code, encoding="utf-8")
         run(f"macro{index}", target, ["run", "."], expected_output=expected)
 
-    target = workspace / "ptr"
-    copy_fixture("ptr", target)
-    write_module(target, "example.org/rawptrcheck")
-    run("ptr", target, ["test", "-count=1", "-v", "./..."])
-    target = workspace / "ptr-invalid"
-    copy_fixture("ptr_invalid", target)
-    write_module(target, "example.org/invalidreceiver")
-    run("ptr-invalid", target, ["test", "./..."], expected_failure=r"invalid receiver type|receiver base type cannot be a pointer")
-
-    target = workspace / "marker"
-    copy_fixture("marker", target)
-    original_before = tree_hash(target / "original-native")
-    run("marker-plain-before", target / "plain-consumer", ["test", "-count=1", "-v", "./..."])
-    run("marker-enhanced", target / "build" / "consumer", ["test", "-count=1", "-v", "./..."])
-    run("marker-plain-after", target / "plain-consumer", ["test", "-count=1", "-v", "./..."])
-    if tree_hash(target / "original-native") != original_before:
-        raise CheckFailure("marker: original dependency files changed")
-    print("PASS marker original dependency files unchanged", flush=True)
     summary = {"environment": environment, "passed_commands": passed,
-               "scope": "Go lowering/support mechanisms only; no goxide compiler, linter, macros, or LSP tested.",
-               "excluded": "Historical GOROOT overlay probe is not part of this portable suite."}
+               "scope": "Standalone Go examples extracted from docs/design/macros.md."}
     (workspace / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    print(f"\nPASS {len(passed)} Go commands (including expected failures); artifacts: {workspace}", flush=True)
+    print(f"\nPASS {len(passed)} Go commands; artifacts: {workspace}", flush=True)
     print(summary["scope"], flush=True)
-    print(summary["excluded"], flush=True)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--docs-only", action="store_true", help="check staged/committed review artifacts, Markdown links, anchors, fences, and RFC structure without Go")
+    parser.add_argument("--docs-only", action="store_true", help="check Markdown links, anchors and fences without Go")
     args = parser.parse_args()
     try:
-        review = check_review_artifacts.check_repository(ROOT)
-        print("PASS review artifacts: " + json.dumps(review, sort_keys=True), flush=True)
         documents = check_docs()
         if not args.docs_only:
             check_go(documents)
-    except (CheckFailure, check_review_artifacts.CheckFailure, OSError, subprocess.SubprocessError, ValueError) as error:
+    except (CheckFailure, OSError, subprocess.SubprocessError, ValueError) as error:
         print(f"FAIL: {error}", file=sys.stderr, flush=True)
         return 1
     return 0

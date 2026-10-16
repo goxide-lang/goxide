@@ -1,0 +1,10 @@
+package kit
+
+pub struct Store { pub value int }
+pub enum Cargo[T any] { Named { item T }, Empty, }
+
+pub func Read(store &Store) &int { return &store.value }
+pub func Edit(store &mut Store) &mut int { return &mut store.value }
+pub macro_rules! bump {
+    ($target:expr) => { { value := &mut $target; *value += 1 } };
+}

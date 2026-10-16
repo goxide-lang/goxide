@@ -1,0 +1,38 @@
+package main
+
+import fmt "fmt"
+
+type Record struct{ Items []int }
+
+func branch(value *Record, stop bool) int {
+	items := value.Items
+	if stop {
+		return 0
+	} else {
+		items = []int{1}
+	}
+	items[0]++
+	return items[0]
+}
+func loop(value *Record) int {
+	items := value.Items
+	for i := 0; i < 2; i++ {
+		items = []int{i}
+		items[0]++
+	}
+	return items[0]
+}
+func exposed(value *Record) int {
+	items := value.Items
+	read := func() int { return items[0] }
+	_ = &items
+	items = []int{10}
+	items[0]++
+	return read()
+}
+func main() {
+	record := Record{Items: []int{4}}
+	var readonly *Record = &record
+	fmt.Println(branch(readonly, true), branch(readonly, false), loop(readonly), exposed(readonly))
+	fmt.Println(record.Items[0])
+}

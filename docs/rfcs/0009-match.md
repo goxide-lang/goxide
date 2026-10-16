@@ -185,7 +185,7 @@ goxide 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开
 
 原始索引 assignment 交给 typed place：先依序保存 slice/map/pointer 边界和 index，array 保留原存储；RHS match/问号完成后才写入并执行 bounds/nil-map/nil-array 检查。类型见证只在编译期，不额外读取 `a[index()]`；RHS 重绑 slice/map 仍写旧容器，重绑 array 后仍写原变量存储。引用临时量复用既有逐文件可信登记，readonly 的写入/any 擦除继续拒绝。
 
-[真实多包验收](../../tests/acceptance/match_binary_index_test.go)含四项生成模块 race 测试、vet、两次确定性、七个负例；覆盖 typed peer/两侧 match/大整数、scope/goto、短路、一次求值、存储及 panic 时点、失败/defer/direct recover 与用户闭包边界。原先 operator、short-circuit、simple-index 三类拒绝用例迁入正例，不通过删除合法功能来收口。[优化构建实测](../../tests/research/match_lowering/README.md#production-binaryindex-preludes)比较真实 goxide 输出与显式 statement match，不能与早期纯 Go IIFE 探针混为实现证据。
+[真实多包验收](../../tests/acceptance/match_binary_index_test.go)含四项生成模块 race 测试、vet、两次确定性、七个负例；覆盖 typed peer/两侧 match/大整数、scope/goto、短路、一次求值、存储及 panic 时点、失败/defer/direct recover 与用户闭包边界。原先 operator、short-circuit、simple-index 三类拒绝用例迁入正例，不通过删除合法功能来收口。[优化构建实测](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/match_lowering/README.md#production-binaryindex-preludes)比较真实 goxide 输出与显式 statement match，不能与早期纯 Go IIFE 探针混为实现证据。
 
 本片采用 prelude 统一保留控制语义，不否定已有 IIFE 机制实验，也不宣称任意组合零成本。更复杂目标/控制头/字面量/动态调用/不可命名结果仍是工程账，未获自动延期；enum 表示迁移继续等用户选择。
 
@@ -337,7 +337,7 @@ composite 单值组合，类型来自真实字段/元素/map key/value；静态�
 黑例均有原生运行或真实拒绝证据。准确网站/工具 `0d814dd` 的独立干净检出完成
 完整 Mac race/vet/design、CLI/WASM 与浏览器七阶段，另有独立审查；
 计数、原红记录及生产 pin/工具/后续文档提交的区别见
-[交付报告](../reviews/match-unary-composite-20261006.md)。
+[交付报告](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/match-unary-composite-20261006.md)。
 
 本节不撤销合同中的剩余实现边界，尤其新的 postfix/receiver、go/defer/control 头、
 引用/收发 unary、多结果和 block arm。实际 defer 测试先求局部值再登记调用；

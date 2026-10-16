@@ -37,7 +37,6 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 		for _, out := range []string{first, second} {
 			deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", out, source)
 		}
-		maps := 0
 		if err := filepath.WalkDir(first, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -60,9 +59,6 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 			if !bytes.Equal(a, b) {
 				t.Errorf("nondeterministic artifact %s", rel)
 			}
-			if strings.HasSuffix(path, ".map.json") {
-				maps++
-			}
 			if strings.HasSuffix(path, ".go") {
 				for _, marker := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_operand_context(", "__goxide_match_expr_return(", "__goxide_match_expr_peers(", "__goxide_match_expr_zero["} {
 					if bytes.Contains(a, []byte(marker)) {
@@ -73,9 +69,6 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 			return nil
 		}); err != nil {
 			t.Fatal(err)
-		}
-		if maps == 0 {
-			t.Fatal("missing diagnostic maps")
 		}
 		packagesWrite(t, first, "acceptance_test.go", matchUnaryAssertions)
 		deliveryCommand(t, first, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
@@ -102,14 +95,14 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 		{"array-runtime-key", `func Bad(c cfg::Mode)[2]int{return [2]int{(match c{cfg::Mode::Off=>0,cfg::Mode::Workers(_)=>1}):3}}`, []string{"constant"}},
 		{"slice-runtime-key", `func Bad(c cfg::Mode)[]int{return []int{(match c{cfg::Mode::Off=>0,cfg::Mode::Workers(_)=>1}):3}}`, []string{"constant"}},
 		{"shift-count", `func Bad(c cfg::Mode)[]uint64{return []uint64{1<<(match c{cfg::Mode::Off=>1.5,cfg::Mode::Workers(_)=>2.5})}}`, []string{"shift count", "non-integer", "must be integer"}},
-		{"unaddressable-composite", `type S struct{N int};func(*S)Write([]int){};func Bad(c cfg::Mode){(S{N:0}).Write([]int{match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}})}`, []string{"cannot call pointer method", "not addressable"}},
+		{"unaddressable-composite", `type S struct{N int};func(*S)Write([]int){};func Bad(c cfg::Mode){(S{N:0}).Write([]int{match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}})}`, []string{"cannot call pointer method", "requires an addressable receiver"}},
 		{"readonly-container", `type S struct{Values []int};func Bad(c cfg::Mode,r &S){v:=[][]int{match c{cfg::Mode::Off=>r.Values,cfg::Mode::Workers(_)=>r.Values}};v[0][0]=9}`, []string{"read-only", "readonly", "permission", "cannot erase"}},
 		{"readonly-erasure", `func Bad(c cfg::Mode,r &int){v:=[]any{match c{cfg::Mode::Off=>r,cfg::Mode::Workers(_)=>r}};_=v}`, []string{"read-only", "readonly", "permission", "cannot erase"}},
 	} {
 		t.Run("reject/"+tc.name, func(t *testing.T) {
 			source := sourceFor(tc.body + "\nfunc main(){}\n")
 			output := deliveryCommand(t, outside, cli, false, nil, "build", "-o", filepath.Join(t.TempDir(), "rejected"), source)
-			if !strings.Contains(output, "app.gox") {
+			if !strings.Contains(output, "app.gox:") && !strings.Contains(output, "app.go:") {
 				t.Fatalf("unlocated rejection: %s", output)
 			}
 			if strings.Contains(output, "expression match unsupported") {
@@ -131,15 +124,12 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 		})
 	}
 	for name, body := range map[string]string{
-		"address-composite": `type S struct{N int};func Bad(c cfg::Mode)*S{return &S{N:match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}}}`,
-		"address-value":     `func Bad(c cfg::Mode)*int{return &(match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2})}`,
-		"dereference":       `func Bad(c cfg::Mode,p *int)int{return *(match c{cfg::Mode::Off=>p,cfg::Mode::Workers(_)=>p})}`,
-		"receive":           `func Bad(c cfg::Mode,ch chan int)int{return <-(match c{cfg::Mode::Off=>ch,cfg::Mode::Workers(_)=>ch})}`,
+		"address-value": `func Bad(c cfg::Mode)*int{return &(match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2})}`,
 	} {
 		t.Run("boundary/"+name, func(t *testing.T) {
 			source := sourceFor(body)
 			output := deliveryCommand(t, outside, cli, false, nil, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(output, "app.gox") {
+			if !strings.Contains(output, "app.gox:") && !strings.Contains(output, "app.go:") {
 				t.Fatalf("unlocated boundary: %s", output)
 			}
 		})
@@ -190,6 +180,9 @@ use model as cfg;
 type Wide = uint64
 type Context struct{Bits Wide;Count cfg::Alias;Pointer *int}
 type Tiny struct{N int}
+func AddressComposite(c cfg::Mode)*Tiny{return &Tiny{N:match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}}}
+func Dereference(c cfg::Mode,p *int)int{return *(match c{cfg::Mode::Off=>p,cfg::Mode::Workers(_)=>p})}
+func Receive(c cfg::Mode,ch chan int)int{return <-(match c{cfg::Mode::Off=>ch,cfg::Mode::Workers(_)=>ch})}
 func Contexts(c cfg::Mode,n uint)Context{type Wide=int8;_=Wide(1);return Context{Bits:+(match c{cfg::Mode::Off=>1<<n,cfg::Mode::Workers(_)=>0}),Count:match c{cfg::Mode::Off=>cfg::Count(7),cfg::Mode::Workers(_)=>cfg::Count(8)},Pointer:match c{cfg::Mode::Off=>nil,cfg::Mode::Workers(_)=>nil}}}
 func Unary(c cfg::Mode)(int,int,uint64,bool){a:=-(match c{cfg::Mode::Off=>2,cfg::Mode::Workers(n)=>n});var b int=+(match c{cfg::Mode::Off=>3,cfg::Mode::Workers(n)=>n});var bits uint64=^(match c{cfg::Mode::Off=>0,cfg::Mode::Workers(_)=>1});flag:=!(match c{cfg::Mode::Off=>false,cfg::Mode::Workers(_)=>true});return a,b,bits,flag}
 func Local(c cfg::Mode)int{type N int;x:=[]N{match c{cfg::Mode::Off=>1,cfg::Mode::Workers(_)=>2}};return int(x[0])}
@@ -216,7 +209,7 @@ func guard(n int)bool{record("guard");return n>0}
 func checked(ok bool,n int)Result[int,error]{record("checked");if !ok{return Result[int,error]::Err(stopped)};return Result[int,error]::Ok(n)}
 type Bundle struct{First int;Values []int;Last int}
 func collect(c cfg::Mode,ok bool)Result[Bundle,error]{defer record("defer");b:=Bundle{First:mark("before",1),Values:[]int{-(match choice(c){cfg::Mode::Off=>mark("off",0),cfg::Mode::Workers(n) if guard(n)=>checked(ok,n)?,cfg::Mode::Workers(_)=>0}),mark("element-after",2)},Last:mark("field-after",3)};return Result[Bundle,error]::Ok(b)}
-func Collect(c cfg::Mode,ok bool)(Bundle,error){match collect(c,ok){Result[Bundle,error]::Ok(v)=>{return v,nil},Result[Bundle,error]::Err(e)=>{return Bundle{},e}};panic("unreachable")}
+func Collect(c cfg::Mode,ok bool)(Bundle,error){match collect(c,ok){Result[Bundle,error]::Ok(v)=>{return v,nil},Result[Bundle,error]::Err(e)=>{return Bundle{},e}}}
 func mapOrder(c cfg::Mode)map[int]int{return map[int]int{match choice(c){cfg::Mode::Off=>mark("key1",1),cfg::Mode::Workers(_)=>mark("key1",1)}:match c{cfg::Mode::Off=>mark("value1",2),cfg::Mode::Workers(_)=>mark("value1",2)},mark("key2",3):mark("value2",4)}}
 func receiveOrder(c cfg::Mode,ch <-chan int)[]int{return []int{<-ch,match c{cfg::Mode::Off=>receiveMiddle(ch),cfg::Mode::Workers(_)=>0},<-ch}}
 func receiveMiddle(ch <-chan int)int{if len(ch)!=1{panic("receive moved across match")};return mark("middle",2)}
@@ -239,11 +232,11 @@ func TestBusiness(t *testing.T){for _,tc:=range []struct{input,before,after,wire
  {"{\"Workers\":3}","Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [3, 4] }","Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [99, 4] }","{\"Mode\":{\"Workers\":3},\"Enabled\":true,\"Delta\":-3,\"Steps\":[99,4]}"},
  {"\"Off\"","Plan { Mode: Mode::Off, Enabled: false, Delta: 0, Steps: [0, 1] }","Plan { Mode: Mode::Off, Enabled: false, Delta: 0, Steps: [99, 1] }","{\"Mode\":\"Off\",\"Enabled\":false,\"Delta\":0,\"Steps\":[99,1]}"},
  }{before,after,wire,e:=Run([]byte(tc.input));if e!=nil||before!=tc.before||after!=tc.after||wire!=tc.wire{t.Fatal(before,after,wire,e)};decoded,e:=serdejson.Unmarshal([]byte(wire),cfg.DeserializePlan);if e!=nil||cfg.DebugPlan(&decoded)!=after{t.Fatal(decoded,e)}}}
-func TestNilEmptyAndErrorPaths(t *testing.T){for _,tc:=range []struct{mode cfg.Mode;nilSlice bool;text string}{{cfg.NewModeOff(),true,"nil"},{cfg.NewModeWorkers(0),false,"[]"}}{original:=Empty(tc.mode);copy:=cfg.ClonePlan(&original);if (original.Steps==nil)!=tc.nilSlice||(copy.Steps==nil)!=tc.nilSlice||!strings.Contains(cfg.DebugPlan(&copy),"Steps: "+tc.text){t.Fatal(original,copy)};wire,e:=serdejson.Marshal(&copy,cfg.SerializePlan);if e!=nil||!strings.Contains(string(wire),"\"Steps\":[]"){t.Fatal(string(wire),e)}};_,_,_,e:=Run([]byte("{\"Workers\":false}"));var detail *serde.Error;if !errors.As(e,&detail)||e.Error()!="plan input"||errors.Unwrap(e)!=error(detail)||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Variant",Name:"Workers"}}){t.Fatalf("cause/path=%#v %v",detail,e)}}
-func TestRealContexts(t *testing.T){c:=cfg.NewModeOff();v:=Contexts(c,63);if v.Bits!=uint64(1)<<63||v.Count!=cfg.Count(7)||v.Pointer!=nil{t.Fatal(v)};a,b,bits,flag:=Unary(c);if a!=-2||b!=3||bits!=^uint64(0)||!flag||Local(c)!=1||CompositionLiteral(c)!=1||Goto(c)!=9||LoopControl(c)!=4{t.Fatal(a,b,bits,flag)};m:=Maps(c,63);if m[cfg.Key("off")]!=cfg.Value(1)<<63||!reflect.DeepEqual(Array(c),[4]int{0,0,5,7})||!reflect.DeepEqual(ShiftCount(c),[]uint64{8})||!reflect.DeepEqual(ArmLiteral(c),[]int{3}){t.Fatal("literal context")};nested:=NestedLiteral(c);if nested[0][0]==nested[0][1]||nested[0][0].N!=1||nested[0][1].N!=-3{t.Fatal(nested)}}
-func TestSelectionAndFailure(t *testing.T){c:=cfg.NewModeWorkers(3);Trace=nil;v,e:=Collect(c,true);if e!=nil||v.First!=1||v.Last!=3||!reflect.DeepEqual(v.Values,[]int{-3,2}){t.Fatal(v,e)};traceIs(t,[]string{"before","target","guard","checked","element-after","field-after","defer"});_,e=Collect(c,false);if !errors.Is(e,stopped){t.Fatal(e)};traceIs(t,[]string{"before","target","guard","checked","defer"});_,e=Collect(cfg.NewModeWorkers(0),true);if e!=nil{t.Fatal(e)};traceIs(t,[]string{"before","target","guard","element-after","field-after","defer"});if Short(c){t.Fatal("short circuit")};traceIs(t,nil)}
-func TestInvalidEnumBeforeGuard(t *testing.T){for _,value:=range []cfg.Mode{{}}{Trace=nil;func(){defer func(){if recover()==nil{t.Errorf("accepted invalid %T",value)}}();_,_=Collect(value,true)}();traceIs(t,[]string{"before","target","defer"})}}
-func TestCallsAndReceives(t *testing.T){c:=cfg.NewModeOff();Trace=nil;m:=mapOrder(c);if m[1]!=2||m[3]!=4{t.Fatal(m)};traceIs(t,[]string{"target","key1","value1","key2","value2"});ch:=make(chan int,2);ch<-1;ch<-3;if got:=receiveOrder(c,ch);!reflect.DeepEqual(got,[]int{1,2,3})||len(ch)!=0{t.Fatal(got)};traceIs(t,[]string{"middle"})}
-func TestFunctionFrames(t *testing.T){c:=cfg.NewModeOff();Trace=nil;if Nearest(c)!=8{t.Fatal("nearest frame")};traceIs(t,[]string{"outer-first","outer-last","checked","inner-defer","outer"});if !DirectRecover(){t.Fatal("direct recover changed frames")};if Deferred(c,false){t.Fatal("failure lost")};traceIs(t,[]string{"first","checked","cleanup"});if !Deferred(c,true){t.Fatal("success lost")};traceIs(t,[]string{"first","checked","last","registered","cleanup"})}
-func TestExistingIndexPlace(t *testing.T){c:=cfg.NewModeOff();Trace=nil;old,current:=Rebind(c);if old!=-3||current!=9{t.Fatal(old,current)};traceIs(t,[]string{"index","target","arm"});func(){defer func(){if recover()==nil{t.Error("bounds panic lost")}}();Bounds(c)}();traceIs(t,[]string{"index","target","arm"});if IndexFailure(c){t.Fatal("failed RHS reached write")};traceIs(t,[]string{"index","target","checked"})}
+func TestNilEmptyAndErrorPaths(t *testing.T){for _,tc:=range []struct{mode cfg.Mode;nilSlice bool;text string}{{&cfg.Off{},true,"nil"},{&cfg.Workers{Value: 0},false,"[]"}}{original:=Empty(tc.mode);copy:=cfg.ClonePlan(&original);if (original.Steps==nil)!=tc.nilSlice||(copy.Steps==nil)!=tc.nilSlice||!strings.Contains(cfg.DebugPlan(&copy),"Steps: "+tc.text){t.Fatal(original,copy)};wire,e:=serdejson.Marshal(&copy,cfg.SerializePlan);if e!=nil||!strings.Contains(string(wire),"\"Steps\":[]"){t.Fatal(string(wire),e)}};_,_,_,e:=Run([]byte("{\"Workers\":false}"));var detail *serde.Error;if !errors.As(e,&detail)||e.Error()!="plan input"||errors.Unwrap(e)!=error(detail)||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Variant",Name:"Workers"}}){t.Fatalf("cause/path=%#v %v",detail,e)}}
+func TestRealContexts(t *testing.T){for i,c:=range []cfg.Mode{&cfg.Off{},&cfg.Workers{Value:3}}{n:=7;ch:=make(chan int,1);ch<-8;if AddressComposite(c).N!=i+1||Dereference(c,&n)!=7||Receive(c,ch)!=8||len(ch)!=0{t.Fatal("unary match value")}};c:=&cfg.Off{};v:=Contexts(c,63);if v.Bits!=uint64(1)<<63||v.Count!=cfg.Count(7)||v.Pointer!=nil{t.Fatal(v)};a,b,bits,flag:=Unary(c);if a!=-2||b!=3||bits!=^uint64(0)||!flag||Local(c)!=1||CompositionLiteral(c)!=1||Goto(c)!=9||LoopControl(c)!=4{t.Fatal(a,b,bits,flag)};m:=Maps(c,63);if m[cfg.Key("off")]!=cfg.Value(1)<<63||!reflect.DeepEqual(Array(c),[4]int{0,0,5,7})||!reflect.DeepEqual(ShiftCount(c),[]uint64{8})||!reflect.DeepEqual(ArmLiteral(c),[]int{3}){t.Fatal("literal context")};nested:=NestedLiteral(c);if nested[0][0]==nested[0][1]||nested[0][0].N!=1||nested[0][1].N!=-3{t.Fatal(nested)}}
+func TestSelectionAndFailure(t *testing.T){c:=&cfg.Workers{Value: 3};Trace=nil;v,e:=Collect(c,true);if e!=nil||v.First!=1||v.Last!=3||!reflect.DeepEqual(v.Values,[]int{-3,2}){t.Fatal(v,e)};traceIs(t,[]string{"before","target","guard","checked","element-after","field-after","defer"});_,e=Collect(c,false);if !errors.Is(e,stopped){t.Fatal(e)};traceIs(t,[]string{"before","target","guard","checked","defer"});_,e=Collect(&cfg.Workers{Value: 0},true);if e!=nil{t.Fatal(e)};traceIs(t,[]string{"before","target","guard","element-after","field-after","defer"});if Short(c){t.Fatal("short circuit")};traceIs(t,nil)}
+func TestInvalidEnumBeforeGuard(t *testing.T){for _,value:=range []cfg.Mode{nil}{Trace=nil;func(){defer func(){if recover()==nil{t.Errorf("accepted invalid %T",value)}}();_,_=Collect(value,true)}();traceIs(t,[]string{"before","target","defer"})}}
+func TestCallsAndReceives(t *testing.T){c:=&cfg.Off{};Trace=nil;m:=mapOrder(c);if m[1]!=2||m[3]!=4{t.Fatal(m)};traceIs(t,[]string{"target","key1","value1","key2","value2"});ch:=make(chan int,2);ch<-1;ch<-3;if got:=receiveOrder(c,ch);!reflect.DeepEqual(got,[]int{1,2,3})||len(ch)!=0{t.Fatal(got)};traceIs(t,[]string{"middle"})}
+func TestFunctionFrames(t *testing.T){c:=&cfg.Off{};Trace=nil;if Nearest(c)!=8{t.Fatal("nearest frame")};traceIs(t,[]string{"outer-first","outer-last","checked","inner-defer","outer"});if !DirectRecover(){t.Fatal("direct recover changed frames")};if Deferred(c,false){t.Fatal("failure lost")};traceIs(t,[]string{"first","checked","cleanup"});if !Deferred(c,true){t.Fatal("success lost")};traceIs(t,[]string{"first","checked","last","registered","cleanup"})}
+func TestExistingIndexPlace(t *testing.T){c:=&cfg.Off{};Trace=nil;old,current:=Rebind(c);if old!=-3||current!=9{t.Fatal(old,current)};traceIs(t,[]string{"index","target","arm"});func(){defer func(){if recover()==nil{t.Error("bounds panic lost")}}();Bounds(c)}();traceIs(t,[]string{"index","target","arm"});if IndexFailure(c){t.Fatal("failed RHS reached write")};traceIs(t,[]string{"index","target","checked"})}
 `

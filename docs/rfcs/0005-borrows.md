@@ -142,7 +142,7 @@ Go 调生成函数时只看到 `*T`，普通 Go 调用方不获得 goxide 的静
 
 单文件产物的公开引用也生成 marker（内部路径 `goxide/generated`）；单文件消费者无论有无新引用语法都会检查导入 marker。跨构建没有可恢复权限注册表时，在导入位置明确报缺元数据；单文件 marker 只防止自动降级，不表示已实现外部依赖恢复。原始未检查 Go 调用者仍能写入普通 Go 指针，不存在运行时权限包装。
 
-[真实模块验收](../../tests/acceptance/reference_metadata_test.go)覆盖别名与空白重复导入、同名包路径、同名普通方法、类型私有性、多文件、返回转发、defer/goroutine、既有可写别名可见性、Go 消费者的写入/接口/指针/闭包擦除拒绝、单文件两方向缺失诊断、重复构建字节确定性及生成模块单独 race/vet。[元数据验证单测](../../internal/refs/metadata_test.go)覆盖版本、路径、摘要、完整签名和权限值。新导入/函数值错误有原始 source span；后端引用重建错误仍明确 `generated/unmapped`，未声称所有位置精确。
+[真实模块验收](../../tests/acceptance/reference_metadata_test.go)覆盖别名与空白重复导入、同名包路径、同名普通方法、类型私有性、多文件、返回转发、defer/goroutine、既有可写别名可见性、Go 消费者的写入/接口/指针/闭包擦除拒绝、单文件两方向缺失诊断、重复构建字节确定性及生成模块单独 race/vet。[元数据验证单测](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/refs/metadata_test.go)覆盖版本、路径、摘要、完整签名和权限值。新导入/函数值错误有原始 source span；后端引用重建错误仍明确 `generated/unmapped`，未声称所有位置精确。
 
 剩余工程缺口：复合/具名元素的公开引用、方法/泛型/引用容器/回调、named/multiple result、dot import、跨构建/外部源码依赖恢复，以及更完整的来源映射。这些不是新语言禁令或自动批准延期；完整外部 ABI 与 native bridge 的待决部分另行处理。
 

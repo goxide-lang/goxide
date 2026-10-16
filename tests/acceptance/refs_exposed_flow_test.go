@@ -63,7 +63,7 @@ func TestControlAndClosure(t *testing.T){v:=[]int{10};if Branch(&v,true)!=6||Bra
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor(capture + "\nfunc Bad(r &[]int,b bool){" + body + "}\n")
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "readonly") {
+			if !strings.Contains(out, "read-only") {
 				t.Fatal(out)
 			}
 		})

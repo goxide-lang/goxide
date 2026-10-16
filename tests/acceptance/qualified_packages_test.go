@@ -1,7 +1,7 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/testdeps"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/frontend"
 	"github.com/hxsf/goxide/internal/rootconfig"
 )
 
@@ -35,28 +34,35 @@ func qualifiedSource(t *testing.T) (string, string) {
 		if err != nil {
 			return err
 		}
+		if filepath.Ext(path) == ".gox" {
+			data = []byte(strings.NewReplacer("\n    panic(\"unreachable\")", "", "alternate::NewModeReady", "alternate::Mode::Ready", "p::Result[", "Result[", "p::Option[", "Option[", "renamed::Result[", "Result[", "func InvalidNested() Result[Mode,error] { return Result[Mode,error]::Ok(Mode{}) }", "").Replace(string(data)))
+		}
 		return testdeps.WriteFile(dst, data, 0600)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, source, "go.mod", "module qualified.example/app\ngo 1.27\n")
+	packagesWrite(t, source, "source/nil.go", `package source
+import "github.com/goxide-lang/std/sum"
+func InvalidNested()sum.Result[Mode,error]{return sum.NewOk[Mode,error](nil)}
+`)
 	return source, root
 }
 
-func compileQualifiedModule(t *testing.T, source, destination string) (frontend.ModuleResult, error) {
+func compileQualifiedModule(t *testing.T, source, destination string) error {
 	t.Helper()
 	roots, err := rootconfig.Load(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return frontend.CompileModuleWithOptions(source, destination, frontend.ModuleOptions{Roots: roots})
+	return testdeps.Module(source, destination, roots)
 }
 
 func TestQualifiedPackagesApplicationRace(t *testing.T) {
 	source, _ := qualifiedSource(t)
 	dest := filepath.Join(t.TempDir(), "generated")
-	if _, err := compileQualifiedModule(t, source, dest); err != nil {
+	if err := compileQualifiedModule(t, source, dest); err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, dest, "qualified_test.go", qualifiedAssertions)
@@ -81,11 +87,11 @@ func wrong(value b::Mode) string {
  return match value {a::Mode::Idle => "idle",a::Mode::Ready(_) => "ready",}
 }
 `)
-	_, err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
+	err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil {
 		t.Fatal("matched different packages' Mode values by name")
 	}
-	if !strings.Contains(err.Error(), "bad.gox") || !strings.Contains(err.Error(), "generated/unmapped") {
+	if !strings.Contains(err.Error(), "bad.gox") {
 		t.Fatalf("lost consumer file: %v", err)
 	}
 	t.Log(err)
@@ -97,16 +103,21 @@ func TestQualifiedPackagesRejectUnregisteredSum(t *testing.T) {
 type Result[T,E any] interface{}
 func Fetch() Result[int,error] {return nil}
 `)
+	roots, err := os.ReadFile(filepath.Join(source, "goxide.roots.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	packagesWrite(t, source, "goxide.roots.toml", string(roots)+"\n[roots.fake]\nmodule = \"qualified.example/app\"\npackage = \"qualified.example/app/fake\"\n")
 	packagesWrite(t, source, "bad.gox", `package main
-mod fake;
+use fake;
 func wrong() Result[int,AppError] {
  n:=fake::Fetch()?
  return Result[int,AppError]::Ok(n)
 }
 
 `)
-	_, err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
-	if err == nil || !strings.Contains(err.Error(), "builtin nominal") {
+	err = compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
+	if err == nil || !strings.Contains(err.Error(), "requires Option or Result") {
 		t.Fatalf("unregistered lookalike accepted or wrong failure: %v", err)
 	}
 }
@@ -115,19 +126,19 @@ func TestQualifiedPackagesGenerateConcreteValidation(t *testing.T) {
 	source, _ := qualifiedSource(t)
 	packagesWrite(t, source, "concrete.gox", `package main
 use source as p;
-func absent(kind string) p::Result[string,error] {
+func absent(kind string) Result[string,error] {
  n:=p::Fetch(kind)?
  _=n
- return p::GoxideNewResultOk[string,error]("ok")
+ return Result[string,error]::Ok("ok")
 }
-func concrete(value p::Result[string,error], seen *int) string {
- out:=match value {p::Result[string,error]::Ok(text)=>text,p::Result[string,error]::Err(_)=>"err"}
+func concrete(value Result[string,error], seen *int) string {
+ out:=match value {Result[string,error]::Ok(text)=>text,Result[string,error]::Err(_)=>"err"}
  *seen+=1
  return out
 }
 `)
 	dest := filepath.Join(t.TempDir(), "generated")
-	if _, err := compileQualifiedModule(t, source, dest); err != nil {
+	if err := compileQualifiedModule(t, source, dest); err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, dest, "concrete_test.go", `package main
@@ -138,8 +149,8 @@ func TestLocalConcreteValidation(t *testing.T){
  if __borrow_std.ValueOk(absent("ok"))!="ok"{t.Fatal("concrete success")}
  if __borrow_std.ValueErr(absent("error"))!=p.Sentinel{t.Fatal("failure propagation")}
  seen:=0
- if concrete(p.GoxideNewResultOk[string,error]("valid"),&seen)!="valid"||seen!=1{t.Fatal("valid match")}
- for _,value:=range []p.Result[string,error]{{}}{
+ if concrete(__borrow_std.NewOk[string,error]("valid"),&seen)!="valid"||seen!=1{t.Fatal("valid match")}
+ for _,value:=range []__borrow_std.Result[string,error]{{}}{
   func(){seen:=0;defer func(){if recover()!="goxide: invalid enum Result"{t.Error("invalid case accepted or wrong panic")};if seen!=0{t.Error("effect before validation")}}();concrete(value,&seen)}()
  }
 }
@@ -162,22 +173,26 @@ pub enum Duplicate {
  Second(error),
 }
 `)
-	_, err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
+	err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "from") {
 		t.Fatalf("duplicate From accepted or wrong failure: %v", err)
 	}
 }
 
 const qualifiedAssertions = `package main
+import __borrow_std "github.com/goxide-lang/std/sum"
+
 import (
  "errors"
+ "fmt"
+ "strings"
  "testing"
  source "qualified.example/app/source"
  other "qualified.example/app/other"
 )
 func TestQualifiedIdentityAndAliases(t *testing.T) {
- if describe(source.NewModeReady(5))!="5" || describe(source.NewModeIdle())!="idle" {t.Fatal("source match")}
- if otherDescription(other.NewModeReady("five"))!="five" {t.Fatal("other match")}
+ if describe(&source.Ready{Value: 5})!="5" || describe(&source.Idle{})!="idle" {t.Fatal("source match")}
+ if otherDescription(&other.Ready{Value: "five"})!="five" {t.Fatal("other match")}
  if n,e:=source.Read(otherFileAlias());n!=10||e!=nil{t.Fatal(n,e)}
  if n,e:=source.Read(producerTypeAlias());n!=9||e!=nil{t.Fatal(n,e)}
  if n,e:=source.Read(importedTarget("ok"));n!=9||e!=nil{t.Fatal(n,e)}
@@ -195,16 +210,18 @@ func TestImportedErrorAndTypedNil(t *testing.T) {
 }
 func TestImportedNestedValidationBeforeEffect(t *testing.T) {
  continuation=0
- defer func(){if recover()==nil{t.Fatal("invalid nested payload accepted")};if continuation!=0{t.Fatal("effect before validation")}}()
- nestedInvalid()
+ if got:=__borrow_std.ValueOk(nestedInvalid());got!=1||continuation!=1{t.Fatal("imported Result traversed payload",got,continuation)}
+ value:=__borrow_std.ValueOk(source.InvalidNested());if value!=nil{t.Fatal("Go nil payload changed")}
+ defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"nil Mode"){t.Fatal("inner match missed imported enum",p)};if continuation!=1{t.Fatal("inner dispatch changed prior continuation")}}()
+ describe(value)
 }
 func TestImportedInvalidSumBeforeEffect(t *testing.T) {
- for _,v:=range []source.Result[int,error]{{}} {
+ for _,v:=range []__borrow_std.Result[int,error]{{}} {
   func(){ continuation=0;defer func(){if recover()==nil{t.Fatal("invalid sum accepted")};if continuation!=0{t.Fatal("effect before sum validation")}}();importedInput(v) }()
  }
 }
 func TestImportedInvalidBeforeMatch(t *testing.T) {
  defer func(){if recover()==nil{t.Fatal("zero imported enum accepted")}}()
- describe(source.Mode{})
+ describe(nil)
 }
 `

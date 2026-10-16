@@ -1,0 +1,25 @@
+package main
+
+use fmt;
+use referencefixture::kit as access;
+
+func main() {
+    store := access::Store{value:10}
+    view := access::Read(&store)
+    writer := access::Edit(&mut store)
+    *writer += 1
+    access::bump!(store.value)
+    fmt::Println(*view, store.value)
+
+    number := access::Cargo[int]::Named{item:6}
+    match &mut number {
+        access::Cargo::Named{item: value} => { *value += 1 },
+        access::Cargo::Empty => {},
+    }
+    text := access::Cargo[string]::Named{item:"old"}
+    match text {
+        access::Cargo::Named{item: ref mut value} => { *value = "changed" },
+        access::Cargo::Empty => {},
+    }
+    fmt::Println(match &number { access::Cargo::Named{item: value} => *value, _ => 0 }, match &text { access::Cargo::Named{item: value} => *value, _ => "" })
+}

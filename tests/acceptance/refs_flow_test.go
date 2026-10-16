@@ -35,7 +35,7 @@ func TestReadonlyRebindingRetainsAliases(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := compileAcceptanceLanguageFixture("flow.gox", []byte("package fixture\ntype Node struct{P *int};type Cache struct{Items []int;Pointers []*int;Nodes []Node};func f(r &Cache,b bool){"+body+";_ = b}\n"))
-			if err == nil || !strings.Contains(err.Error(), "readonly") {
+			if err == nil || !strings.Contains(err.Error(), "read-only") {
 				t.Fatalf("bad rejection: %v", err)
 			}
 		})

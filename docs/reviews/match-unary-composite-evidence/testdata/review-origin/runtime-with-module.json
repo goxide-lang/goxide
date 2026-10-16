@@ -1,8 +1,0 @@
-{
-  "source": "package main\nenum E { A, B, }\nvar trace string\nfunc none()Option[int]{trace+=\"N\";return Option[int]::None}\nfunc outer(e E)Option[int]{\n inner:=func()Option[int]{\n  trace+=\"I\"\n  xs:=[]int{match e{E::A=>none()?,E::B=>2}}\n  trace+=\"bad\"\n  return Option[int]::Some(xs[0])\n }\n _=inner()\n trace+=\"O\"\n return Option[int]::Some(9)\n}\nfunc main(){\n got:=outer(E::A)\n match got {Option[int]::Some(n)=>{if n!=9{panic(\"outer value\")}},Option[int]::None=>{panic(\"wrong user frame\")},}\n if trace!=\"INO\"{panic(trace)}\n}\n",
-  "result": {
-    "exit": 1,
-    "stdout": "",
-    "stderr": "run/build requires --runtime pointing to the local goxide module\n"
-  }
-}

@@ -112,6 +112,11 @@ func TestCLIProcessContract(t *testing.T) {
 		{"completion-unknown-shell", []string{"completion", "nosuchshell"}},
 		{"no-implicit-trust-project", []string{"scripts", "trust-project"}},
 		{"completion-rejects-old-flags", []string{"__complete", "run", "-offline", ""}},
+		{"deferred-scripts-help", []string{"help", "scripts"}},
+		{"deferred-scripts-allow-help", []string{"scripts", "allow", "--help"}},
+		{"deferred-scripts-trust-help", []string{"scripts", "trust-project", "--help"}},
+		{"deferred-import-go-help", []string{"import-go", "--help"}},
+		{"deferred-scripts-completion", []string{"__complete", "scripts", "trust-project", ""}},
 	} {
 		t.Run("reject/"+tc.name, func(t *testing.T) {
 			d := fixture(t)
@@ -123,10 +128,9 @@ func TestCLIProcessContract(t *testing.T) {
 		})
 	}
 	for _, args := range [][]string{
-		{"--help"}, {"help", "scripts"}, {"build", "-h"}, {"build", "--help"},
+		{"--help"}, {"build", "-h"}, {"build", "--help"},
 		{"build", "-hooutput.go"}, {"build", "-ho", "output.go"},
-		{"scripts", "allow", "--help"}, {"scripts", "trust-project", "--help"},
-		{"import-go", "--help"}, {"completion", "bash"}, {"completion", "zsh"}, {"completion", "fish"}, {"completion", "powershell"},
+		{"completion", "bash"}, {"completion", "zsh"}, {"completion", "fish"}, {"completion", "powershell"},
 	} {
 		t.Run("help-or-completion/"+strings.Join(args, "_"), func(t *testing.T) {
 			d := fixture(t)
@@ -141,7 +145,7 @@ func TestCLIProcessContract(t *testing.T) {
 			assertNoArtifacts(t, d)
 		})
 	}
-	for _, args := range [][]string{{"__complete", "run", "--go", ""}, {"__complete", "scripts", "trust-project", ""}} {
+	for _, args := range [][]string{{"__complete", "run", "--go", ""}} {
 		t.Run("dynamic-completion/"+strings.Join(args, "_"), func(t *testing.T) {
 			d := fixture(t)
 			got := execute(t, d, args...)
@@ -166,7 +170,7 @@ func TestCLIProcessContract(t *testing.T) {
 	} {
 		t.Run("output/"+tc.name, func(t *testing.T) {
 			d := fixture(t)
-			args := append([]string{"transpile"}, tc.flags...)
+			args := append([]string{"transpile", "--go", goTool}, tc.flags...)
 			got := execute(t, d, append(args, "input.gox")...)
 			if got.code != 0 || got.stderr != "" {
 				t.Fatalf("output flags: %+v", got)
@@ -183,9 +187,8 @@ func TestCLIProcessContract(t *testing.T) {
 		})
 	}
 	for _, args := range [][]string{
-		{"transpile", "--go", "-offline", "input.gox"},
-		{"transpile", "--offline=false", "--offline=false", "input.gox"},
-		{"transpile", "--", "-go"},
+		{"transpile", "--go", goTool, "-o", "-", "--offline=false", "--offline=false", "input.gox"},
+		{"transpile", "--go", goTool, "-o", "-", "--", "-go"},
 	} {
 		t.Run("accepted/"+strings.Join(args, "_"), func(t *testing.T) {
 			got := execute(t, fixture(t), args...)
@@ -194,7 +197,16 @@ func TestCLIProcessContract(t *testing.T) {
 			}
 		})
 	}
+	t.Run("go-option-value-is-opaque", func(t *testing.T) {
+		d := fixture(t)
+		got := execute(t, d, "transpile", "-o", "-", "--go", "-offline", "input.gox")
+		if got.code != 1 || !strings.Contains(got.stderr, `Go tool "-offline"`) {
+			t.Fatalf("Go executable value was reinterpreted as a flag: %+v", got)
+		}
+		assertNoArtifacts(t, d)
+	})
 	t.Run("scripts-action-named-directories", func(t *testing.T) {
+		t.Skip("MVP-DEFERRED: MVP CLI build-script commands deferred by P6")
 		// The bare legacy form has no --go option. Put the actual toolchain
 		// ahead of any system command called go without creating a fake runner.
 		t.Setenv("PATH", filepath.Dir(goTool)+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -237,6 +249,7 @@ func TestCLIProcessContract(t *testing.T) {
 	})
 
 	t.Run("scripts-canonical-legacy-identity", func(t *testing.T) {
+		t.Skip("MVP-DEFERRED: MVP CLI build-script commands deferred by P6")
 		d := t.TempDir()
 		projectRoot := filepath.Join(d, "project")
 		if err := os.Mkdir(projectRoot, 0700); err != nil {

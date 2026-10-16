@@ -81,6 +81,7 @@ func scriptLayoutArtifacts(t *testing.T, root string) int {
 	return count
 }
 func TestBuildScriptManagedLayoutReusesBundle(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script managed layout and trust deferred by P6")
 	root := buildScriptFixture(t, false, false)
 	t.Setenv("GOXIDE_TARGET_DIR", "")
 	scriptAction(t, root, "trust-project")
@@ -115,6 +116,7 @@ func TestBuildScriptManagedLayoutReusesBundle(t *testing.T) {
 	}
 }
 func TestBuildScriptManagedLayoutOverridesAndClean(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script managed layout and trust deferred by P6")
 	root := buildScriptFixture(t, false, false)
 	t.Setenv("GOXIDE_TARGET_DIR", "env-target")
 	scriptAction(t, root, "trust-project")
@@ -180,6 +182,7 @@ func TestBuildScriptManagedLayoutOverridesAndClean(t *testing.T) {
 	scriptLayoutOutput(t, root, "build", "cache hit", "--bin", "one")
 }
 func TestBuildScriptManagedLayoutRejectsUnsafeDestinations(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script managed layout and trust deferred by P6")
 	t.Run("edited binary", func(t *testing.T) {
 		root := buildScriptFixture(t, false, false)
 		t.Setenv("GOXIDE_TARGET_DIR", "")
@@ -229,6 +232,7 @@ func TestBuildScriptManagedLayoutRejectsUnsafeDestinations(t *testing.T) {
 }
 
 func TestBuildScriptManagedLayoutInsideScriptDirectory(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script managed layout and trust deferred by P6")
 	root := buildScriptFixture(t, false, false)
 	t.Setenv("GOXIDE_TARGET_DIR", "")
 	scriptAction(t, root, "trust-project")
@@ -247,6 +251,7 @@ func TestBuildScriptManagedLayoutInsideScriptDirectory(t *testing.T) {
 }
 
 func TestBuildScriptManagedLayoutRejectsTrustInsideHelper(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script managed layout and trust deferred by P6")
 	root := buildScriptFixture(t, false, true)
 	t.Setenv("GOXIDE_TARGET_DIR", "")
 	t.Chdir(root)

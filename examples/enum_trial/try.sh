@@ -19,18 +19,79 @@ fi
 printf 'Source checkout: %s\n' "$(git -C "$repo" rev-parse HEAD)"
 "$go_tool" version
 
-# The model is one real Go module; app is a separate consumer module.
+# Compile both Goxide modules from source; the exported Go modules stay separate.
 "$go_tool" -C "$repo" build -o "$work/goxide" ./cmd/goxide
-"$work/goxide" transpile -o "$work/model" "$repo/examples/enum_trial/model"
-cp -R -- "$repo/examples/enum_trial/app" "$work/input"
-"$go_tool" -C "$work/input" mod edit \
-    "-replace=trial.example/model=$work/model"
-"$work/goxide" transpile -o "$work/app" "$work/input"
-for module in "$work/model" "$work/app"; do
+mkdir -p -- "$work/source"
+for module in model app; do
+    cp -R -- "$repo/examples/enum_trial/$module" "$work/source/$module"
+    rm -- "$work/source/$module/go.mod" "$work/source/$module/go.sum" "$work/source/$module/goxide.roots.toml"
+done
+
+write_pins() {
+    local source_module=$1 dependency pin
+    for dependency in github.com/goxide-lang/serde github.com/goxide-lang/std; do
+        pin=$("$go_tool" -C "$source_module" list -m -f '{{.Version}}' "$dependency")
+        printf '\n[[go.require]]\nmodule = "%s"\nversion = "%s"\n' "$dependency" "$pin"
+    done
+}
+serde_pin=$("$go_tool" -C "$repo/examples/enum_trial/model" list -m -f '{{.Version}}' github.com/goxide-lang/serde)
+cat > "$work/source/model/goxide.toml" <<EOF
+[package]
+format = 2
+module = "trial.example/model"
+go = "1.27"
+
+[lib]
+name = "config"
+path = "config"
+
+[dependencies.serde]
+go = "github.com/goxide-lang/serde"
+package = "github.com/goxide-lang/serde"
+version = "$serde_pin"
+
+[dependencies.serde.namespaces]
+json = "github.com/goxide-lang/serde/json"
+EOF
+write_pins "$repo/examples/enum_trial/model" >> "$work/source/model/goxide.toml"
+cat > "$work/source/app/goxide.toml" <<'EOF'
+[package]
+format = 2
+module = "trial.example/app"
+go = "1.27"
+
+[package.namespaces]
+logkit = "trial.example/app/logkit"
+
+[[bin]]
+name = "orders"
+path = "."
+
+[dependencies.config]
+path = "../model"
+module = "trial.example/model"
+package = "trial.example/model/config"
+
+[dependencies.errors]
+go = "errors"
+
+[dependencies.fmt]
+go = "fmt"
+
+[dependencies.os]
+go = "os"
+
+[dependencies.strconv]
+go = "strconv"
+EOF
+write_pins "$repo/examples/enum_trial/app" >> "$work/source/app/goxide.toml"
+app_module=$("$work/goxide" transpile --offline -o "$work/generated" "$work/source/app")
+model_module=$("$go_tool" -C "$app_module" list -m -f '{{.Dir}}' trial.example/model)
+for module in "$model_module" "$app_module"; do
     "$go_tool" -C "$module" test -race -count=1 -v ./...
     "$go_tool" -C "$module" vet ./...
 done
-"$go_tool" -C "$work/app" build -trimpath -buildvcs=false -o "$work/orders" .
+"$go_tool" -C "$app_module" build -trimpath -buildvcs=false -o "$work/orders" .
 "$work/orders"
 printf '\nArtifacts retained in: %s\n' "$work"
 printf 'Try another JSON input with: %s/orders '\''{"Name":"7","Retry":null}'\''\n' "$work"

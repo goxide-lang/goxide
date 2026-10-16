@@ -18,7 +18,11 @@ func TestManifestMigrationNeverFallsBack(t *testing.T) {
 			}
 			projectWrite(t, root, files)
 			for _, mode := range []string{"run", "build", "transpile", "test"} {
-				if b, e := projectRun(t, root, mode); e == nil || !strings.Contains(e.Error(), "hgo.json") {
+				args := []string{mode}
+				if mode == "transpile" {
+					args = append(args, "-o", filepath.Join(t.TempDir(), "export"))
+				}
+				if b, e := projectRun(t, root, args...); e == nil || !strings.Contains(e.Error(), "hgo.json") {
 					t.Fatalf("%s %s %v", mode, b, e)
 				}
 			}
@@ -64,6 +68,7 @@ func TestManifestMigrationDependencySources(t *testing.T) {
 }
 
 func TestManifestMigrationHostHelper(t *testing.T) {
+	t.Skip("MVP-DEFERRED: MVP CLI build-script host helpers deferred by P6")
 	for _, both := range []bool{false, true} {
 		t.Run(map[bool]string{false: "legacy", true: "both"}[both], func(t *testing.T) {
 			root := buildScriptFixture(t, false, true)

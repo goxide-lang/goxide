@@ -2,7 +2,7 @@
 
 > 历史仓内验证固定编译器源码为 `afa3f0a52b2d8206d75df38d10833e537ea7a0dd`，网站工具 HEAD 单独记录。
 > 原 97 fixture / 10 示例逐字节保留，A04 追加 8 fixture / 1 示例，A01 再追加 12 fixture（合计 117 / 11）；旧 33 组 AST 对照和 5 对原生程序独立保留。
-> 编译器 pin、网站工具提交与正式验收结果分别记录。网站工具 `35221fe9f5cb49b152ea5faad9529dbefa14cd69` 的七阶段已通过，见[本轮报告](../docs/reviews/macro-fragment-categories-20261007.md)；复现入口见[验证说明](validation/README.md)，未部署。
+> 编译器 pin、网站工具提交与正式验收结果分别记录。网站工具 `35221fe9f5cb49b152ea5faad9529dbefa14cd69` 的七阶段已通过，见[本轮报告](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/macro-fragment-categories-20261007.md)；复现入口见[验证说明](validation/README.md)，未部署。
 > A06 外部恢复由原生 CLI 验收；浏览器仍只加载随附 export data，样例 CLI 对照使用 module-free standalone 输入。
 > A01 增量检查明确类型槽拒绝与完整捕获表达式，CLI / 真实 Worker 各 48 次，另有 2 个原生输出预期；完整验收结果以本次报告为准。
 > 以下保留早期五例/旧模块集成记录，不代表当前实现或本片实际测试结果。
@@ -49,7 +49,7 @@ Go 1.27.1 / Linux amd64，Chromium + Playwright 1.58.2。受限环境必须设�
 
 `feat/vendor-local-modules` 的编译器核心为 `fceeb8669e738ebffc968b8bd948b2334fe627cb`，生产源 digest `c03e0b656ede234d0d11f2a8fbeb0a1204534594d70a69737b7d5781fb66b472`。当前 catalog、project/workspace snapshots 和首页文案已同步：原生 vendor 只作迁入输入，输出为普通本地模块；没有 Goxide vendor 构建或拆出模式。迁入先保留修改字节；local 默认的来源候选已显示，TTY/remote 切换尚未交付。
 
-owner 从此分支执行 `python3 website/build.py`，将同批生成的 CLI/WASM/JS/catalog 一并验证发布，不能拿旧 vendor 文案或快照配新 CLI。`--offline` 始终双横线，仅用本地材料/缓存，不探测远端。当前只进行了云端 loopback 构建和验证，没有部署、合 main、tag 或 release。详细证据见 [本地模块验收](../docs/reviews/vendor-local-modules-20261004.md)。
+owner 从此分支执行 `python3 website/build.py`，将同批生成的 CLI/WASM/JS/catalog 一并验证发布，不能拿旧 vendor 文案或快照配新 CLI。`--offline` 始终双横线，仅用本地材料/缓存，不探测远端。当前只进行了云端 loopback 构建和验证，没有部署、合 main、tag 或 release。详细证据见 [本地模块验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/vendor-local-modules-20261004.md)。
 
 ## 来源选择后续交付（2026-10-05，待 owner 同步）
 
@@ -57,4 +57,4 @@ owner 从此分支执行 `python3 website/build.py`，将同批生成的 CLI/WAS
 
 `--offline` 禁止工具控制的代理、sumdb、Git fetch 与工具链下载，remote 只可用完整缓存；缺缓存明确失败。plan 不读取终端、不执行 remote 比对，正常 build 不询问。owner 同步当前分支 catalog/快照/文案并重建，不把旧“TTY 待实现”边界带入新版本；本轮没有部署。
 
-来源选择完整验收与独立复审见 [2026-10-05 报告](../docs/reviews/source-selection-20261005.md)。
+来源选择完整验收与独立复审见 [2026-10-05 报告](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/source-selection-20261005.md)。

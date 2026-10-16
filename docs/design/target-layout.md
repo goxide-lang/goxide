@@ -31,6 +31,12 @@ host/target 为 GOOS-GOARCH；kind 为 lib/bin/example。config 包含整个已�
 
 本次继续明确拒绝非宿主 GOOS/GOARCH；只有路径分区并不解决前端跨平台类型尺寸问题。不可把目录字段视为已实现交叉编译。
 
+## 统一条件配置的接入设计
+
+统一配置与身份见 [RFC 0022](../rfcs/0022-project-toolchain.md#生成物与配置身份)。先在受管临时目录完成一次编译，取得动态宏展开中的完整 env 读取记录，再计算 UnitSpec.Config、选择目录并发布。摘要包括规范化目标、所选 Go 与有效后端设置、每模块 feature 声明/启用集合及实际读取键的 present/原值；键值无损编码，unset 不等于空串。未读取变量不因 env 功能影响摘要，工具链模式忽略的原始 GOOS/GOARCH 仅在源码查询后计入。
+
+Host 与 Target 分开保存，仍使用 GOOS-GOARCH 路径分区。目标两种拼写归一化后共享配置目录；目标和环境不写入依赖锁身份。原生生成及单文件模式不增加持久转译缓存。原值不落入 unit 标记；失败清理、租约和覆盖保护沿用现有流程。
+
 ## 构建与保留
 
 `goxide build --bin web ./app` 发布到受管 bin 并打印路径。`goxide transpile --bin web ./app` 打印稳定 bundle/module 路径。run/test 保持程序/测试输出。lib build 检查库，不发布可执行文件。显式 `-o` 必须是源码和任何受管目录之外的全新路径；transpile 支持创建缺少的父目录。

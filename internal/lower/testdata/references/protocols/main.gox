@@ -1,0 +1,28 @@
+package main
+
+use fmt;
+
+#[derive(Clone, Debug, PartialEq)]
+type Data struct { Items []int; Counts map[string]int }
+#[derive(Clone, Debug, PartialEq)]
+enum State { Pair(Data), Empty, }
+
+func main() {
+    data := Data{Items:[]int{1}, Counts:map[string]int{"one":2}}
+    var view &Data = &data
+    clone := CloneData(view)
+    clone.Items[0] = 9
+    clone.Counts["one"] = 8
+    fmt::Println((*view).equals(data), EqualsData(*view,data), data.Items[0], data.Counts["one"], clone.Items[0], clone.Counts["one"])
+    fmt::Println(DebugData(view))
+
+    state := State::Pair(data)
+    var stateView &State = &state
+    stateClone := CloneState(stateView)
+    match stateClone {
+        State::Pair(value) => { value.Items[0] = 7; value.Counts["one"] = 6 },
+        State::Empty => {},
+    }
+    fmt::Println((*stateView).equals(state), EqualsState(*stateView,state))
+    fmt::Println(DebugState(stateView), DebugState(&stateClone))
+}

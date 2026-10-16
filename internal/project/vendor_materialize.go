@@ -80,7 +80,7 @@ func MaterializeSupplied(tool, root, destination, goVersion string, snapshot *Ve
 			if snapshot.Mode == "go-work" {
 				data, e = NativeGo(tool, root, true, "list", "-mod=vendor", "-m", "-json", module)
 			} else {
-				data, e = goCommand(tool, root, true, "list", "-mod=vendor", "-m", "-json", module)
+				data, e = goCommand(tool, root, true, nil, "list", "-mod=vendor", "-m", "-json", module)
 			}
 			if e != nil {
 				return nil, e
@@ -110,7 +110,7 @@ func MaterializeSupplied(tool, root, destination, goVersion string, snapshot *Ve
 	}
 	a.Selected = modules
 	// Standard package identity must include non-host packages such as syscall/js.
-	goroot, e := goCommand(tool, root, true, "env", "GOROOT")
+	goroot, e := goCommand(tool, root, true, nil, "env", "GOROOT")
 	if e != nil {
 		return nil, e
 	}

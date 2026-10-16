@@ -118,7 +118,7 @@ Go 的 nil 与容器行为由各自类型定义；goxide 应逐类建立视图�
 5. 锁回调与外部声明维持明确的读写类型契约；来源/逃逸分析另属长期工作。`-race` 验证结果与静态检查结果分开报告。
 6. Box、不可复制约束、借用返回和别名算法在定稿前保留未定状态；未实现形式给出明确诊断。
 
-跨专题依赖见[设计总纲](overview.md)，实现阶段与未完成项见[路线图](../../ROADMAP.md)。
+跨专题依赖见[设计总纲](overview.md)，实现阶段与未完成项见[路线图](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)。
 
 用户已明确引用获取与原生桥接分层：持有可写 T 可用 `&mut value`；Boxed/Ref/Arc 须先经各自已有方法/协议取得内部引用，之后才讨论 Go 桥接。当前 Box 未定、Boxed 无定义、旧 Ref 已替代、Arc 取写引用方法未定；不虚构 as_mut/get_mut。完整四类链路与容器槽位区别见 [RFC 0002 §1.2](../rfcs/research/0002-native-pointer-bridge.md#12-先取得内部引用再讨论-go-桥接)。
 

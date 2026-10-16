@@ -36,8 +36,8 @@ type Input struct{N int}
 `)
 	packagesWrite(t, src, "model/event.gox", `package model; use serde;
 #[derive(serde::Serialize,serde::Deserialize)]
-pub enum E{Empty,Item(Item),}
-func Event(n int)E{return E::Item(Item{N:n,Name:"business"})}
+pub enum E{Empty,Entry(Item),}
+func Event(n int)E{return E::Entry(Item{N:n,Name:"business"})}
 `)
 	packagesWrite(t, src, "other/item.gox", `package different; use serde;
 #[derive(serde::Serialize,serde::Deserialize)]
@@ -80,9 +80,9 @@ type Out struct{V m::Output}
 type In struct{V m::Input}
 `)
 	out := filepath.Join(t.TempDir(), "app")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, out, src)
 	repeat := filepath.Join(t.TempDir(), "repeat")
-	packagesCommand(t, root, cli, true, "transpile", "-o", repeat, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, repeat, src)
 	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -125,37 +125,21 @@ func TestGoHelpers(t *testing.T){v:=a.Out{V:m.Output{N:9}};b,e:=serdejson.Encode
 		packagesWrite(t, bad, "go.mod", mod("wire.example/bad", lib))
 		writeAcceptanceSerdeRoots(t, bad, "wire.example/lib", "model", "other", "relay", "fake")
 		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; use serde;\nuse library::%s as m;\n#[derive(serde::%s)]\ntype Wrap struct{V m::%s}\n", tc.pkg, tc.kind, tc.typ))
-		log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "bad"), bad)
-		if !strings.Contains(log, "registered serde protocol") || !strings.Contains(log, "bad.gox:") {
+		log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
+		want := "registered serde codec"
+		if tc.pkg == "model" {
+			want = "lacks registered " + tc.kind
+		}
+		if !strings.Contains(log, want) || !strings.Contains(log, "bad.gox:3:1:") {
 			t.Fatal(log)
 		}
-	}
-	artifact := filepath.Join(lib, "model", ".goxide.enums.json")
-	saved, err := os.ReadFile(artifact)
-	if err != nil {
-		t.Fatal(err)
-	}
-	changed := strings.Replace(string(saved), `"Source": "derive"`, `"Source": "manual"`, 1)
-	if changed == string(saved) {
-		t.Fatal("tamper unchanged")
-	}
-	packagesWrite(t, lib, "model/.goxide.enums.json", changed)
-	log := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "tamper"), appsrc)
-	if !strings.Contains(log, ".gox:") || !strings.Contains(log, "metadata") {
-		t.Fatal(log)
-	}
-	packagesWrite(t, lib, "model/.goxide.enums.json", string(saved))
-	packagesWrite(t, lib, "model/stale.go", "package model\nvar Stale int\n")
-	log = packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "stale"), appsrc)
-	if !strings.Contains(log, ".gox:") || !strings.Contains(log, "metadata") {
-		t.Fatal(log)
 	}
 }
 
 const externalSerdeAssertions = `package app
 import __borrow_std "github.com/goxide-lang/std/sum"
 import("testing";"errors";"reflect";"strconv";"strings";"encoding/json";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";m "wire.example/lib/model";other "wire.example/lib/other")
-const valid="{\"V\":{\"Item\":{\"N\":7,\"Name\":\"business\"}},\"Items\":[],\"Index\":{},\"Pair\":[{\"N\":1,\"Name\":\"pair\"}],\"Maybe\":null}"
+const valid="{\"V\":{\"Entry\":{\"N\":7,\"Name\":\"business\"}},\"Items\":[],\"Index\":{},\"Pair\":[{\"N\":1,\"Name\":\"pair\"}],\"Maybe\":null}"
 func enc(v Wrap)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeWrap(s,&v)})}
 func detail(t *testing.T,e error,kind string,path []serde.PathSegment){t.Helper();var d *serde.Error;if !errors.As(e,&d)||d.Kind!=kind||!reflect.DeepEqual(d.Path,path){t.Fatalf("error %v %#v want %s %#v",e,d,kind,path)}}
 func TestExternalRoundTripAndOption(t *testing.T){
@@ -170,15 +154,15 @@ func TestExternalRoundTripAndOption(t *testing.T){
 }
 func TestExternalErrors(t *testing.T){
  _,e:=serdejson.Unmarshal([]byte(strings.Replace(valid,"\"N\":7","\"N\":9223372036854775808",1)),DeserializeWrap)
- detail(t,e,serde.Range,[]serde.PathSegment{{Kind:"Field",Name:"V"},{Kind:"Variant",Name:"Item"},{Kind:"Field",Name:"N"}})
+ detail(t,e,serde.Range,[]serde.PathSegment{{Kind:"Field",Name:"V"},{Kind:"Variant",Name:"Entry"},{Kind:"Field",Name:"N"}})
  var cause *strconv.NumError;if !errors.As(e,&cause)||!errors.Is(e,strconv.ErrRange){t.Fatal("cause lost",e)}
  _,e=serdejson.Unmarshal([]byte(strings.Replace(valid,"\"N\":7","\"N\":@",1)),DeserializeWrap)
- detail(t,e,serde.Syntax,[]serde.PathSegment{{Kind:"Field",Name:"V"},{Kind:"Variant",Name:"Item"},{Kind:"Field",Name:"N"}})
+ detail(t,e,serde.Syntax,[]serde.PathSegment{{Kind:"Field",Name:"V"},{Kind:"Variant",Name:"Entry"},{Kind:"Field",Name:"N"}})
  var syntax *json.SyntaxError;if !errors.As(e,&syntax)||syntax.Offset<=0{t.Fatal("syntax cause lost",e)}
- _,e=serdejson.Unmarshal([]byte(strings.Replace(valid,"\"Item\":","\"Unknown\":",1)),DeserializeWrap);detail(t,e,serde.UnknownVariant,[]serde.PathSegment{{Kind:"Field",Name:"V"}})
- _,e=serdejson.Unmarshal([]byte(strings.Replace(valid,"\"N\":7","\"extra\":0,\"N\":7",1)),DeserializeWrap);detail(t,e,"UnknownField",[]serde.PathSegment{{Kind:"Field",Name:"V"},{Kind:"Variant",Name:"Item"},{Kind:"Field",Name:"extra"}})
+ _,e=serdejson.Unmarshal([]byte(strings.Replace(valid,"\"Entry\":","\"Unknown\":",1)),DeserializeWrap);detail(t,e,serde.UnknownVariant,[]serde.PathSegment{{Kind:"Field",Name:"V"}})
+ _,e=serdejson.Unmarshal([]byte(strings.Replace(valid,"\"N\":7","\"extra\":0,\"N\":7",1)),DeserializeWrap);detail(t,e,"UnknownField",[]serde.PathSegment{{Kind:"Field",Name:"V"},{Kind:"Variant",Name:"Entry"},{Kind:"Field",Name:"extra"}})
  _,e=serdejson.Unmarshal([]byte(strings.TrimSuffix(valid,"}")+",\"extra\":{\"ignored\":[1,2]}}"),DeserializeWrap);if e!=nil{t.Fatal(e)}
  _,e=serdejson.Unmarshal([]byte(strings.TrimSuffix(valid,"}")+",\"extra\":"+strings.Repeat("[",serdejson.MaxDepth+2)+"0"+strings.Repeat("]",serdejson.MaxDepth+2)+"}"),DeserializeWrap);var d *serde.Error;if !errors.As(e,&d)||d.Kind!="Limit"{t.Fatal("skip budget lost",e)}
 }
-func TestExternalInvalidBoundary(t *testing.T){v,e:=serdejson.Unmarshal([]byte(valid),DeserializeWrap);if e!=nil{t.Fatal(e)};for _,x:=range []m.E{{}}{v.V=x;_,e:=enc(v);detail(t,e,serde.Type,[]serde.PathSegment{{Kind:"Field",Name:"V"}})}}
+func TestExternalInvalidBoundary(t *testing.T){v,e:=serdejson.Unmarshal([]byte(valid),DeserializeWrap);if e!=nil{t.Fatal(e)};for _,x:=range []m.E{nil}{v.V=x;_,e:=enc(v);detail(t,e,serde.Type,[]serde.PathSegment{{Kind:"Field",Name:"V"}})}}
 `

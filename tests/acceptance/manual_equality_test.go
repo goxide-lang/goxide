@@ -32,7 +32,7 @@ type Float float64
 type Catch struct{}
 type Counter int
 #[derive(PartialEq,Eq)]
-pub enum Leaf{Unit,}
+pub enum Leaf{LeafUnit,}
 pub enum Gate{Unit,Child(Leaf),}
 #[derive(PartialEq,Eq)]
 pub enum Event{User(Person),Closed,}
@@ -98,10 +98,14 @@ func Right(a m::Gate)m::Gate{Trace+="R";return a}
 func Ordered(a,b m::Gate)bool{return Left(a).equals(Right(b))}
 `)
 	out := filepath.Join(t.TempDir(), "out")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, appsrc)
+	compileAcceptanceGraph(t, true, appsrc, out, src)
 	for _, pair := range [][2]string{{src, lib}, {appsrc, out}} {
 		repeated := filepath.Join(t.TempDir(), "repeat")
-		packagesCommand(t, root, cli, true, "transpile", "-o", repeated, pair[0])
+		if pair[0] == src {
+			packagesCommand(t, root, cli, true, "transpile", "-o", repeated, src)
+		} else {
+			compileAcceptanceGraph(t, true, pair[0], repeated, src)
+		}
 		if err := filepath.WalkDir(pair[1], func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -132,20 +136,20 @@ func TestBusinessEquality(t *testing.T){
  a:=m.Person{ID:7,Name:"old"};b:=m.Person{ID:7,Name:"new"}
  m.PersonCalls=0
  if !m.Initial||!m.RecursiveInitial||!m.EqualsCounter(4,4)||m.EqualsCounter(4,3)||!People(a,b)||m.PersonCalls!=1{t.Fatal("manual person implementation")}
- x:=Bundle{a,m.NewEventUser(a),[]m.Person{a},map[string]m.Person{"a":a}}
- y:=Bundle{b,m.NewEventUser(b),[]m.Person{b},map[string]m.Person{"a":b}}
+ x:=Bundle{a,&m.User{Value: a},[]m.Person{a},map[string]m.Person{"a":a}}
+ y:=Bundle{b,&m.User{Value: b},[]m.Person{b},map[string]m.Person{"a":b}}
  m.PersonCalls=0;if !Same(x,y)||m.PersonCalls!=4{t.Fatal("derive skipped manual protocol",m.PersonCalls)}
  y.User.ID=8;if Same(x,y){t.Fatal("different IDs")}
  n:=math.NaN();if !FloatSame(m.Float(n),m.Float(n))||DefaultFloat(m.OrdinaryFloat{Value:n},m.OrdinaryFloat{Value:n}){t.Fatal("explicit NaN wrapper changed default floats")}
- if m.LocalTypeName()!="EqualsPerson"{t.Fatal("local type identity changed")}
+ if m.LocalTypeName()!="EqualsPerson"{t.Fatalf("local type identity changed: %q",m.LocalTypeName())}
  m.RecoverDirect();if m.Recovered!="manual-recover"{t.Fatal("manual body acquired another frame",m.Recovered)}
 }
 func TestManualEnumValidation(t *testing.T){
- for _,bad:=range []m.Gate{{}}{
-  for _,right:=range []bool{false,true}{func(){m.GateCalls=0;Trace="";defer func(){if recover()==nil||m.GateCalls!=0||Trace!="LR"{t.Fatal("manual enum boundary",m.GateCalls,Trace)}}();if right{Ordered(m.NewGateUnit(),bad)}else{Ordered(bad,m.NewGateUnit())}}()}
+ for _,bad:=range []m.Gate{nil}{
+  for _,right:=range []bool{false,true}{func(){m.GateCalls=0;Trace="";defer func(){if recover()==nil||m.GateCalls!=0||Trace!="LR"{t.Fatal("manual enum boundary",m.GateCalls,Trace)}}();if right{Ordered(&m.Unit{},bad)}else{Ordered(bad,&m.Unit{})}}()}
  }
- m.GateCalls=0;Trace="";if !Ordered(m.NewGateUnit(),m.NewGateChild(m.NewLeafUnit()))||m.GateCalls!=1||Trace!="LR"{t.Fatal("valid enum manual body")}
- func(){defer func(){p:=recover();if p==nil||!strings.Contains(fmt.Sprint(p),"Leaf"){t.Fatal("left validator must run first",p)}}();Ordered(m.NewGateChild(m.Leaf{}),m.Gate{})}()
+ m.GateCalls=0;Trace="";if !Ordered(&m.Unit{},&m.Child{Value: &m.LeafUnit{}})||m.GateCalls!=1||Trace!="LR"{t.Fatal("valid enum manual body")}
+ func(){defer func(){p:=recover();if p==nil||!strings.Contains(fmt.Sprint(p),"Leaf"){t.Fatal("left validator must run first",p)}}();Ordered(&m.Child{Value: nil},nil)}()
 }
 `)
 	packagesWrite(t, lib, "model/model_test.go", `package model
@@ -156,7 +160,7 @@ func TestNativeConsistentDerivedKeys(t *testing.T){if !EqualsIndex(Index{{ID:1}:
 	packagesWrite(t, plain, "go.mod", mod("manual.example/plain", lib))
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import("testing";m "manual.example/lib/model")
-func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name:"a"},m.Person{ID:1,Name:"b"}){t.Fatal("Go helper")};m.GateCalls=0;defer func(){if recover()==nil||m.GateCalls!=0{t.Fatal("Go helper bypassed enum validation")}}();m.EqualsGate(m.Gate{},m.NewGateUnit())}
+func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name:"a"},m.Person{ID:1,Name:"b"}){t.Fatal("Go helper")};m.GateCalls=0;defer func(){if recover()==nil||m.GateCalls!=0{t.Fatal("Go helper bypassed enum validation")}}();m.EqualsGate(nil,&m.Unit{})}
 `)
 	for _, dir := range []string{lib, out, plain} {
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
@@ -187,7 +191,7 @@ func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name
 			packagesWrite(t, bad, "go.mod", mod("manual.example/bad", lib))
 			writeAcceptanceRoots(t, bad, map[string]rootconfig.Mapping{"model": {Module: "manual.example/lib", Package: "manual.example/lib/model"}, "relay": {Module: "manual.example/lib", Package: "manual.example/lib/relay"}})
 			packagesWrite(t, bad, "bad.gox", "package bad\n"+code)
-			packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), bad)
+			compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "out"), src)
 		})
 	}
 	t.Run("duplicate-across-files", func(t *testing.T) {
@@ -198,7 +202,7 @@ func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name
 		for _, n := range []string{"a.gox", "b.gox"} {
 			packagesWrite(t, bad, n, "package bad\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}")
 		}
-		msg := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), bad)
+		msg := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "out"), src)
 		if !strings.Contains(msg, "duplicate") {
 			t.Fatal(msg)
 		}

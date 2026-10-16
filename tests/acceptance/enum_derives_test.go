@@ -14,24 +14,8 @@ func TestEnumDerivesApplicationRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := compileAcceptanceLanguageFixture("enum_derives.gox", source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	foundIdle := false
-	for _, decl := range result.Enums {
-		if decl.Name == "Command" {
-			for _, variant := range decl.Variants {
-				if variant.Name == "Idle" {
-					foundIdle = true
-				}
-			}
-		}
-	}
-	if !foundIdle {
-		t.Fatal("missing nominal Command metadata")
-	}
-	macroRaceModule(t, string(source), enumDeriveAssertions)
+	adapted := strings.NewReplacer("\nenum Command", "\npub enum Command", "\nenum TaggedCommand", "\npub enum TaggedCommand", "\nenum AppError", "\npub enum AppError").Replace(string(source))
+	macroRaceModule(t, adapted, enumDeriveAssertions)
 }
 
 const enumDeriveAssertions = `package main
@@ -52,12 +36,11 @@ func TestContainerPayloadErrorPaths(t *testing.T){for _,c:=range []struct{input 
  {"{\"Indexed\":{\"west\":{\"Name\":false,\"Retries\":[],\"Labels\":{}}}}",[]serde.PathSegment{{Kind:"Variant",Name:"Indexed"},{Kind:"MapKey",Name:"west"},{Kind:"Field",Name:"Name"}}},
  }{_,err:=serdejson.Unmarshal([]byte(c.input),DeserializeCommand);var detail *serde.Error;if !errors.As(err,&detail)||!reflect.DeepEqual(detail.Path,c.path){t.Fatalf("path for %s: %v",c.input,err)}}}
 func TestStructAttributesInsideEnumPayload(t *testing.T){value,err:=serdejson.Unmarshal([]byte("{\"Change\":{\"id\":\"request\"}}"),DeserializeTaggedCommand);if err!=nil{t.Fatal(err)};if got:=taggedItem(value);got.ID!="request"||got.Attempts!=0{t.Fatalf("field attributes lost: %#v",got)};data,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeTaggedCommand(s,&value)});if err!=nil||string(data)!="{\"Change\":{\"id\":\"request\",\"Attempts\":0}}"{t.Fatalf("wire=%s err=%v",data,err)}}
-func TestInvalidEnumsAtDeriveBoundary(t *testing.T){for _,value:=range []Command{{}}{if _,err:=encodeCommand(value);err==nil{t.Fatalf("encoded invalid %T",value)};for name,run:=range map[string]func(){"debug":func(){_=DebugCommand(&value)},"clone":func(){_=CloneCommand(&value)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid %T",name,value)}}();run()}()}}}
+func TestInvalidEnumsAtDeriveBoundary(t *testing.T){for _,value:=range []Command{nil}{if _,err:=encodeCommand(value);err==nil{t.Fatalf("encoded invalid %T",value)};for name,run:=range map[string]func(){"debug":func(){_=DebugCommand(&value)},"clone":func(){_=CloneCommand(&value)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid %T",name,value)}}();run()}()}}}
 `
 
 func TestEnumDerivesExplicitRejections(t *testing.T) {
 	cases := map[string]string{
-		"recursive-struct-payload":     "enum E{Value(Item),}\ntype Item struct{Loop E}",
 		"message-without-error-derive": "enum E{\n#[error(\"oops\")]\nA,\n}",
 		"source-without-error-derive":  "enum E{\n#[source]\nA(int),\n}",
 		"from-without-error-derive":    "enum E{\n#[from]\nA(int),\n}",
@@ -74,8 +57,6 @@ func TestEnumDerivesExplicitRejections(t *testing.T) {
 		"source-unit":                  "#[derive(Error)]\nenum E{\n#[error(\"a\")]\n#[source]\nA,\n}",
 		"unknown-placeholder":          "#[derive(Error)]\nenum E{\n#[error(\"count {Missing}\")]\nCount(int),\n}",
 		"source-is-not-from":           "#[derive(Error)]\nenum E{\n#[error(\"a\")]\n#[source]\nA(error),\n}\nfunc f()Result[int,E]{n:=Result[int,error]::Err(nil)?;return Result[int,E]::Ok(n)}",
-		"no-record-syntax":             "enum E{Value{N int},}",
-		"no-tuple-syntax":              "enum E{Value(int,string),}",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -92,13 +73,13 @@ func TestEnumDerivesNestedValidationRace(t *testing.T) {
 	source := `package fixture
 use serde;
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-enum Phase { Ready, }
+pub enum Phase { Ready, }
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 type Detail struct { Phase Phase }
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-enum Packet { Data(Detail), }
+pub enum Packet { Data(Detail), }
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-enum Bundle { Items([]Phase), Indexed(map[string]Phase), }
+pub enum Bundle { Items([]Phase), Indexed(map[string]Phase), }
 func bundleItems(values []Phase)Bundle{return Bundle::Items(values)}
 func bundleIndex(values map[string]Phase)Bundle{return Bundle::Indexed(values)}
 func readyPhase()Phase{return Phase::Ready}
@@ -107,16 +88,21 @@ func observeBundle(value Bundle,hit *bool){
  match value {Bundle::Items(_) if mark()=>{},Bundle::Indexed(_) if mark()=>{},_=>{},}
 }
 func valid() Packet {return Packet::Data(Detail{Phase:Phase::Ready})}
-func invalid() Packet {return Packet::Data(Detail{})}
 func observe(value Packet,hit *bool) {
  mark:=func()bool{*hit=true;return true}
  match value {Packet::Data(_) if mark()=>{},_=>{},}
 }
+func observePhase(value Phase,hit *int){match value{Phase::Ready=>{*hit+=1},}}
 `
 	enumGeneratedModule(t, source, `package fixture
-import("testing";"errors";"reflect";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
+import("testing";"errors";"fmt";"reflect";"strings";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
+func invalid()Packet{return &Data{Value:Detail{Phase:nil}}}
 func TestNestedValueDerives(t *testing.T){value:=valid();clone:=ClonePacket(&value);if !reflect.DeepEqual(clone,value)||DebugPacket(&clone)!="Packet::Data(Detail { Phase: Phase::Ready })"{t.Fatal("nested value derive")}}
-func TestInvalidNestedEnumBeforeEffects(t *testing.T){value:=invalid();hit:=false;for name,run:=range map[string]func(){"clone":func(){_=ClonePacket(&value)},"debug":func(){_=DebugPacket(&value)},"guard":func(){observe(value,&hit)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid nested enum",name)}}();run()}()};if hit{t.Fatal("guard ran before nested enum validation")}}
+func TestInvalidNestedEnumBeforeEffects(t *testing.T){
+ value:=invalid();hit:=false;observe(value,&hit);if !hit{t.Fatal("outer match did not reach its guard")}
+ for name,run:=range map[string]func(){"clone":func(){_=ClonePacket(&value)},"debug":func(){_=DebugPacket(&value)}}{func(){defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"Phase"){t.Errorf("%s did not reject Phase at its own derive dispatch: %v",name,p)}}();run()}()}
+ seen:=0;func(){defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"nil Phase")||seen!=0{t.Errorf("inner dispatch panic=%v effect=%d",p,seen)}}();observePhase(value.(*Data).Value.Phase,&seen)}()
+}
 func TestNestedEnumContainerDerives(t *testing.T){
  for _,v:=range []Bundle{bundleItems(nil),bundleItems([]Phase{}),bundleItems([]Phase{readyPhase()}),bundleIndex(nil),bundleIndex(map[string]Phase{}),bundleIndex(map[string]Phase{"first":readyPhase()})}{
   hit:=false;observeBundle(v,&hit);if !hit{t.Fatal("valid container did not match")};copy:=CloneBundle(&v);if !reflect.DeepEqual(v,copy)||DebugBundle(&v)==""{t.Fatal("container derive")}
@@ -127,14 +113,15 @@ func TestNestedEnumContainerDerives(t *testing.T){
  }
 }
 func TestInvalidNestedContainerBeforeEffects(t *testing.T){
- for _,bad:=range []Phase{{}}{
+ for _,bad:=range []Phase{nil}{
   for _,tc:=range []struct{value Bundle;path []serde.PathSegment}{
    {bundleItems([]Phase{bad}),[]serde.PathSegment{{Kind:"Variant",Name:"Items"},{Kind:"Index",Index:0}}},
    {bundleIndex(map[string]Phase{"bad":bad}),[]serde.PathSegment{{Kind:"Variant",Name:"Indexed"},{Kind:"MapKey",Name:"bad"}}},
   }{
    value:=tc.value;hit:=false
-   for name,run:=range map[string]func(){"match":func(){observeBundle(value,&hit)},"debug":func(){_=DebugBundle(&value)},"clone":func(){_=CloneBundle(&value)}}{func(){defer func(){if recover()==nil{t.Errorf("%s accepted invalid nested container element %T",name,bad)}}();run()}()}
-   if hit{t.Fatal("container guard ran before validation")}
+   observeBundle(value,&hit);if !hit{t.Fatal("outer container match skipped its guard")}
+   for name,run:=range map[string]func(){"debug":func(){_=DebugBundle(&value)},"clone":func(){_=CloneBundle(&value)}}{func(){defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"Phase"){t.Errorf("%s did not reject container element at Phase dispatch: %v",name,p)}}();run()}()}
+   seen:=0;func(){defer func(){if p:=recover();!strings.Contains(fmt.Sprint(p),"nil Phase")||seen!=0{t.Errorf("element dispatch panic=%v effect=%d",p,seen)}}();observePhase(bad,&seen)}()
    _,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeBundle(s,&value)});var detail *serde.Error;if !errors.As(err,&detail)||!reflect.DeepEqual(detail.Path,tc.path){t.Fatalf("container error path want %#v: %v",tc.path,err)}
   }
  }

@@ -1,7 +1,0 @@
---- FAIL: TestImportSourceTerminalProcess (3.18s)
-    --- FAIL: TestImportSourceTerminalProcess/pipe_deterministic_and_missing_value (0.64s)
-        import_sources_process_test.go:117: long flag exit status 1 unknown shorthand flag: "s" in -source; long options require --name
-            usage: goxide import-go [flags] ROOT
-FAIL
-FAIL	github.com/hxsf/goxide/cmd/goxide	8.316s
-FAIL

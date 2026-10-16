@@ -86,6 +86,4 @@ def cli(ROOT, GO, run):
             result=subprocess.run([str(ROOT/'bin/goxide'),'run',flag,str(p)],capture_output=True,text=True)
             assert result.returncode!=0 and '--'+flag[1:] in result.stderr
             runs.append(dict(command='goxide run '+flag+' args.go（预期失败）',stdout=result.stderr.replace(str(p),'args.go')))
-        helptext=run(str(ROOT/'bin/goxide'),'scripts','--help').decode()
-        runs.append(dict(command='goxide scripts --help',stdout=helptext))
         return dict(id='cli-options',title='CLI：run 参数原样透传与旧选项拒绝',files=[dict(path='args.go',source=p.read_text())],runs=runs)

@@ -2,12 +2,27 @@ package typecheck
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/hxsf/goxide/internal/config"
 )
 
+func testConfig(t *testing.T, captured []string) config.Config {
+	t.Helper()
+	if captured == nil {
+		captured = os.Environ()
+	}
+	environment, err := config.NewEnvironment(config.HostTarget(), captured)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return config.Config{Environment: environment, Reads: new(config.Reads)}
+}
+
 func TestLocalRuntimeAndStandardIdentity(t *testing.T) {
-	imp := NewImporter("input.gox")
+	imp := NewImporter("input.gox", ImporterOptions{Config: testConfig(t, nil)})
 	runtime, err := imp.Import("github.com/goxide-lang/serde")
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +61,7 @@ func TestImporterHonorsCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	start := time.Now()
-	imp := NewImporterWithContext(ctx, "input.gox", nil, false, nil)
+	imp := NewImporter("input.gox", ImporterOptions{Context: ctx, Config: testConfig(t, nil)})
 	if _, err := imp.Import("fmt"); err == nil {
 		t.Fatal("cancelled export query succeeded")
 	}

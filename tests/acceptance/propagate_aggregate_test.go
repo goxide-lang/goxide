@@ -102,12 +102,12 @@ func TestPropagationAggregateRejections(t *testing.T) {
 		"rvalue-array-method":       `type S struct{};func(*S)M()int{return 1};func f()Option[int]{n:=Option[[1]S]::Some([1]S{})?[Option[int]::Some(0)?].M();return Option[int]::Some(n)}`,
 		"address-of-query":          `func f()Option[int]{p:=&(Option[int]::Some(1)?);return Option[int]::Some(*p)}`,
 		"readonly-literal":          `type State struct{Items []int};func f(r &State)Option[int]{v:=[][]int{r.Items,[]int{Option[int]::Some(1)?}};return Option[int]::Some(len(v))}`,
-		"unsafe-unevaluated":        `func f()Option[int]{n:=unsafe::Sizeof([1]int{Option[int]::Some(1)?});return Option[int]::Some(int(n))}`,
+		"unsafe-unevaluated":        `func f()Option[int]{n:=r#unsafe::Sizeof([1]int{Option[int]::Some(1)?});return Option[int]::Some(int(n))}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			prefix := "package fixture\n"
 			if strings.HasPrefix(name, "unsafe-") {
-				prefix += "use unsafe;\n"
+				prefix += "use r#unsafe;\n"
 			}
 			_, err := compileAcceptanceLanguageFixture("aggregate_bad.gox", []byte(prefix+source))
 			if err == nil || !strings.Contains(err.Error(), "aggregate_bad.gox") {

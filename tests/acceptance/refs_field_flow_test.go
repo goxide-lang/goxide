@@ -128,7 +128,7 @@ func TestFieldControlFlow(t *testing.T){if Run(4,false)!=27||Run(4,true)!=17||Ru
 		t.Run(name, func(t *testing.T) {
 			source := sourceFor("func Bad(r &m::Pair,b bool){" + body + "}\n")
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "readonly") {
+			if !strings.Contains(out, "read-only") {
 				t.Fatalf("not a permission rejection: %s", out)
 			}
 		})
@@ -142,7 +142,7 @@ type Envelope struct{Local}
 func Bad(r &m::Pair){v:=Local{};` + call + `;v.Items=r.Left.Items;saved.Items[0]++}
 `)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "generated"), source)
-			if !strings.Contains(out, "readonly") {
+			if !strings.Contains(out, "read-only") {
 				t.Fatalf("not a permission rejection: %s", out)
 			}
 		})

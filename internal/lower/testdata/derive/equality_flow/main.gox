@@ -1,0 +1,32 @@
+package main
+
+use fmt;
+
+#[derive(PartialEq, Eq)]
+type Value int
+
+var order []string
+func left() Value { order = append(order, "left"); return Value(4) }
+func right(ok bool) Option[Value] {
+    order = append(order, "right")
+    if !ok { return Option[Value]::None }
+    return Option[Value]::Some(Value(4))
+}
+func compare(ok bool) Option[bool] {
+    return Option[bool]::Some(left().equals(right(ok)?))
+}
+func result(value Option[bool]) bool {
+    return match value { Option::Some(v) => v, Option::None => false }
+}
+func typed(value any) (bool, bool) { v, ok := value.(bool); return v, ok }
+func main() {
+    first := result(compare(true))
+    firstOrder := order
+    order = nil
+    second := result(compare(false))
+    bool := 7
+    defer (1).equals(1)
+    var scalar any = (1).equals(1)
+    value, ok := typed(scalar)
+    fmt::Println(first, firstOrder, second, order, value, ok, bool)
+}

@@ -89,6 +89,7 @@ type Graph struct {
 	Offline, Locked        bool
 	original               []byte
 	Tool                   string
+	Environment            []string
 	Plan                   map[string]Selection
 	PlanID                 string
 	RootMod                ModFile
@@ -102,7 +103,13 @@ func Digest(v any) string {
 func Load(root, tool string, requested []string, defaults, offline, locked bool) (*Graph, error) {
 	return LoadWithTarget(root, tool, requested, defaults, offline, locked, "")
 }
-func LoadWithTarget(root, tool string, requested []string, defaults, offline, locked bool, targetDir string) (*Graph, error) {
+func LoadWithTarget(root, tool string, requested []string, defaults, offline, locked bool, targetDir string, environment ...[]string) (*Graph, error) {
+	var captured []string
+	if len(environment) != 0 {
+		captured = append([]string{}, environment[0]...)
+	} else {
+		captured = os.Environ()
+	}
 	root, e := filepath.Abs(root)
 	if e != nil {
 		return nil, e
@@ -111,7 +118,7 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 	if e != nil {
 		return nil, e
 	}
-	if e = CheckAuthoring(root); e != nil {
+	if e = CheckAuthoring(root, captured); e != nil {
 		return nil, e
 	}
 	w, e := DiscoverWorkspace(root)
@@ -142,7 +149,7 @@ func LoadWithTarget(root, tool string, requested []string, defaults, offline, lo
 	}
 	defer os.RemoveAll(work)
 	defer layout.Close()
-	g := &Graph{WorkRoot: work, Tool: tool, Offline: offline, Locked: locked, Cache: filepath.Join(layout.Root, "cache", "git"), LockPath: filepath.Join(root, "goxide.lock"), Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}}}
+	g := &Graph{WorkRoot: work, Tool: tool, Environment: captured, Offline: offline, Locked: locked, Cache: filepath.Join(layout.Root, "cache", "git"), LockPath: filepath.Join(root, "goxide.lock"), Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}}}
 	b, e := os.ReadFile(g.LockPath)
 	if e == nil {
 		if e = json.Unmarshal(b, &g.Lock); e != nil {
@@ -187,9 +194,16 @@ func ModulePath(tool, root string) (string, error) {
 	m, e := ReadMod(tool, root)
 	return m.Module.Path, e
 }
-func GoEnv(offline bool) []string {
+func GoEnv(offline bool, environment ...[]string) []string {
+	var base []string
+	if len(environment) != 0 {
+		base = environment[0]
+	}
+	if base == nil {
+		base = os.Environ()
+	}
 	env := []string{}
-	for _, v := range os.Environ() {
+	for _, v := range base {
 		k, _, _ := strings.Cut(v, "=")
 		if k == "GOTOOLCHAIN" || k == "GOWORK" || k == "GOFLAGS" || (offline && (k == "GOPROXY" || k == "GOSUMDB" || k == "GONOPROXY" || k == "GOVCS")) {
 			continue

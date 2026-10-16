@@ -27,6 +27,7 @@ pub macro_rules! retain {($x:expr)=>{go_result_keep!($x)};}
 `)
 	packagesWrite(t, source, "native.go", `package app
 func Generic[T any](v T)(T,error){return v,nil}
+func invalid()([]Event,error){return []Event{nil},nil}
 `)
 	packagesWrite(t, source, "a.gox", `package app
 use io;
@@ -78,8 +79,8 @@ type ChanError chan int
 func(ChanError)Error()string{return "chan"}
 func Chan(v ChanError)Result[struct{},ChanError]{f:=func()ChanError{return v};return go_result!(f())}
 pub enum Event{A,B,}
-func invalid()([]Event,error){return []Event{{}},nil}
-func ValidateNested(){r:=go_result!(invalid());match r {_=>{panic("validator missed")},}}
+func BindNested(seen *int)Result[[]Event,error]{values:=go_result!(invalid())?;*seen+=1;return Result[[]Event,error]::Ok(values)}
+func ValidateNested(seen *int){r:=go_result!(invalid());match r {Result[[]Event,error]::Ok(values)=>{*seen+=1;match values[0]{_=>{*seen+=1},}},Result[[]Event,error]::Err(_)=>{panic("unexpected error")},}}
 `)
 	packagesWrite(t, source, "z.gox", `package app
 var InferredGlobal=go_result!(pointer(true))
@@ -96,12 +97,12 @@ var InferredGlobal=go_result!(pointer(true))
 	packagesWrite(t, generated, "inference_test.go", `package app
 import __borrow_std "github.com/goxide-lang/std/sum"
 
-import("testing";"errors";"io";"reflect";"strings")
+import("testing";"errors";"fmt";"io";"reflect";"strings")
 func TestPointerAndNamed(t *testing.T){if v:=__borrow_std.ValueOk(Pointer(true));v!=7{t.Fatal(v)};if e:=__borrow_std.ValueErr(Pointer(false));e!=sentinel{t.Fatal(e)};if e:=__borrow_std.ValueErr(Explicit(false));e!=sentinel{t.Fatal(e)};if ok := __borrow_std.TagResult(Named(0))==1;!ok{t.Fatal("named nil")};e:=__borrow_std.ValueErr(Named(1));var ptr *Failure;if e==nil||!errors.As(e,&ptr)||ptr!=nil{t.Fatal("interface typed nil")};if e:=__borrow_std.ValueErr(Named(2));e!=sentinel{t.Fatal(e)};if e:=__borrow_std.ValueErr(Erased());e==nil||!errors.As(e,&ptr){t.Fatal("erased")};if ok := __borrow_std.TagResult(Unit())==1;!ok{t.Fatal("unit")};if ok := __borrow_std.TagResult(UnitKeep())==1;!ok{t.Fatal("keep unit")};if v:=__borrow_std.ValueOk(Hygiene());v!=7{t.Fatal(v)}}
 func TestPreserve(t *testing.T){e:=__borrow_std.ValueErr(Retained(false));if e.Value!=4||e.Err!=sentinel{t.Fatal(e)};v:=__borrow_std.ValueErr(Propagate(false));if v!=e{t.Fatal(v)};boxed:=__borrow_std.ValueErr(BoxPartial()).(Partial);if boxed!=e{t.Fatal(boxed)};p:=__borrow_std.ValueErr(Reader());if p.Value!=3||!errors.Is(p.Err,io.ErrUnexpectedEOF){t.Fatal(p)}}
 func TestFrames(t *testing.T){trace=nil;if e:=__borrow_std.ValueErr(Nested(false));e!=sentinel||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(e,trace)};trace=nil;if n:=__borrow_std.ValueOk(Nested(true));n!=7||!reflect.DeepEqual(trace,[]int{3,9}){t.Fatal(n,trace)};trace=nil;if n:=__borrow_std.ValueOk(AnyOrder());n!=2||!reflect.DeepEqual(trace,[]int{1,2,3}){t.Fatal(n,trace)};if n:=__borrow_std.ValueOk(Variadic());n!=7{t.Fatal(n)};if Recover()!="boom"{t.Fatal("recover")};if n:=__borrow_std.ValueOk(Cross());n!=8{t.Fatal(n)};if n:=__borrow_std.ValueOk(NestedAdapter());n!=8{t.Fatal(n)};if n:=__borrow_std.ValueOk(Parse("9"));n!=9{t.Fatal(n)}}
 func TestNilable(t *testing.T){if ok := __borrow_std.TagResult(Slice(false))==1;!ok{t.Fatal("nil slice")};if e:=__borrow_std.ValueErr(Slice(true));e==nil||len(e)!=0{t.Fatal(e)};if ok := __borrow_std.TagResult(Map(nil))==1;!ok{t.Fatal("nil map")};if e:=__borrow_std.ValueErr(Map(MapError{}));e==nil{t.Fatal(e)};if ok := __borrow_std.TagResult(Func(nil))==1;!ok{t.Fatal("nil func")};if e:=__borrow_std.ValueErr(Func(func() {}));e==nil{t.Fatal("nonnull func")};if ok := __borrow_std.TagResult(Chan(nil))==1;!ok{t.Fatal("nil chan")};if e:=__borrow_std.ValueErr(Chan(make(ChanError)));e==nil{t.Fatal("nonnull chan")}}
-func TestNestedValidation(t *testing.T){defer func(){p:=recover();if p==nil||!strings.Contains(p.(string),"invalid enum"){t.Fatal(p)}}();ValidateNested()}
+func TestNestedValidation(t *testing.T){seen:=0;values:=__borrow_std.ValueOk(BindNested(&seen));if seen!=1||len(values)!=1||values[0]!=nil{t.Fatal("adapter changed Go payload or inspected its elements",seen,values)};seen=0;defer func(){p:=recover();if !strings.Contains(fmt.Sprint(p),"nil Event")||seen!=1{t.Fatalf("element dispatch panic=%v continuation=%d",p,seen)}}();ValidateNested(&seen)}
 `)
 	packagesCommand(t, generated, tool, true, "test", "-race", "-count=1", "-v", "./...")
 	packagesCommand(t, generated, tool, true, "vet", "./...")
@@ -128,7 +129,7 @@ func TestNestedValidation(t *testing.T){defer func(){p:=recover();if p==nil||!st
 		"arity":           {`func f()(int,int,error){return 1,2,nil};func Bad(){_=go_result!(f())}`, "wrap multiple values"},
 		"zero":            {`func f(){};func Bad(){_=go_result!(f())}`, "expected E"},
 		"not-call":        {`func Bad(e error){_=go_result!(e)}`, "operand must be a call"},
-		"partial-discard": {`func f()(int,error){return 1,nil};func Bad()Result[int,error]{n:=go_result_keep!(f())?;return Result[int,error]::Ok(n)}`, "unique explicit From"},
+		"partial-discard": {`func f()(int,error){return 1,nil};func Bad()Result[int,error]{n:=go_result_keep!(f())?;return Result[int,error]::Ok(n)}`, "no explicit one-step conversion"},
 		"from-chain": {`type E struct{};func(*E)Error()string{return "e"};func f()(int,*E){return 1,&E{}}
 #[derive(Error)]
 #[error("failure")]
@@ -136,7 +137,7 @@ type Failure struct{
 #[from]
 Cause error
 }
-func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok(n)}`, "unique explicit From"},
+func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok(n)}`, "no explicit one-step conversion"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -179,12 +180,12 @@ func TestGoResultInferenceModules(t *testing.T) {
  type inaccessibleError struct{}
  func(*inaccessibleError)Error()string{return "hidden"}
  func HiddenE()(int,*inaccessibleError){return 1,nil}
+ func InvalidEvents()([]Event,error){return []Event{nil},nil}
  `)
 	packagesWrite(t, producer, "adapter.gox", `package producer
  type Partial = struct{Value Count; Err *Error}
  func Wrapped(ok bool)Result[Count,Partial]{return go_result_keep!(Read(ok))}
  pub enum Event{Ready,Failed,}
- func InvalidEvents()([]Event,error){return []Event{{}},nil}
  `)
 	packagesWrite(t, producer, "other/event.gox", `package other
  pub enum Event{Other,Failed,}
@@ -204,12 +205,11 @@ func TestGoResultInferenceModules(t *testing.T) {
  func Native(ok bool)Result[p::Count,*p::Error]{return go_result!(p::Read(ok))}
  func Keep()Result[p::Count,p::Partial]{return go_result_keep!(p::Read(false))}
  func Forward()Result[string,p::Partial]{_=p::Wrapped(false)?;return Result[string,p::Partial]::Ok("unexpected")}
- func Match()int{return match p::Wrapped(false){p::Result[p::Count,p::Partial]::Ok(n)=>int(n),p::Result[p::Count,p::Partial]::Err(e)=>int(e.Value)}}
+ func Match()int{return match p::Wrapped(false){Result[p::Count,p::Partial]::Ok(n)=>int(n),Result[p::Count,p::Partial]::Err(e)=>int(e.Value)}}
  func Cross()Result[p::Count,*p::Error]{n:=Inferred?;return Result[p::Count,*p::Error]::Ok(n)}
- func localEvents()(Events,error){return Events{{}},nil}
- func NamedForeignInvalid(){r:=go_result!(localEvents());match r {_=>{panic("missed named foreign enum")},}}
- func ExplicitForeignInvalid(){r:=Result[Events,error]::Ok(Events{{}});match r {_=>{panic("missed explicit foreign enum")},}}
- func ForeignInvalid(){r:=go_result!(p::InvalidEvents());match r {_=>{panic("missed foreign enum")},}}
+ func NamedForeignInvalid(seen *int){r:=go_result!(localEvents());match r {Result[Events,error]::Ok(values)=>{*seen+=1;match values[0]{_=>{*seen+=1},}},Result[Events,error]::Err(_)=>{panic("unexpected error")},}}
+ func ExplicitForeignInvalid(seen *int){r:=Result[Events,error]::Ok(explicitEvents());match r {Result[Events,error]::Ok(values)=>{*seen+=1;match values[0]{_=>{*seen+=1},}},Result[Events,error]::Err(_)=>{panic("unexpected error")},}}
+ func ForeignInvalid(seen *int){r:=go_result!(p::InvalidEvents());match r {Result[[]p::Event,error]::Ok(values)=>{*seen+=1;match values[0]{_=>{*seen+=1},}},Result[[]p::Event,error]::Err(_)=>{panic("unexpected error")},}}
  `)
 	packagesWrite(t, consumer, "z.gox", `package consumer
  use producer as p;
@@ -226,20 +226,24 @@ func TestGoResultInferenceModules(t *testing.T) {
  func right()(Right,error){return m::Events()}
  `)
 	packagesWrite(t, consumer, "scope.gox", `package consumer
- func invalidLeft()(Left,error){return Left{{}},nil}
- func invalidRight()(Right,error){return Right{{}},nil}
- func LeftInvalid(){r:=go_result!(invalidLeft());match r {_=>{panic("missed left")},}}
- func RightInvalid(){r:=go_result!(invalidRight());match r {_=>{panic("missed right")},}}
+ func LeftInvalid(seen *int){r:=go_result!(invalidLeft());match r {Result[Left,error]::Ok(values)=>{*seen+=1;match values[0]{_=>{*seen+=1},}},Result[Left,error]::Err(_)=>{panic("unexpected error")},}}
+ func RightInvalid(seen *int){r:=go_result!(invalidRight());match r {Result[Right,error]::Ok(values)=>{*seen+=1;match values[0]{_=>{*seen+=1},}},Result[Right,error]::Err(_)=>{panic("unexpected error")},}}
  func RightValid(){r:=go_result!(right());match r {_=>{},}}
  `)
+	packagesWrite(t, consumer, "native.go", `package consumer
+func localEvents()(Events,error){return Events{nil},nil}
+func explicitEvents()Events{return Events{nil}}
+func invalidLeft()(Left,error){return Left{nil},nil}
+func invalidRight()(Right,error){return Right{nil},nil}
+`)
 	out := filepath.Join(t.TempDir(), "consumer")
-	packagesCommand(t, root, cli, true, "transpile", "-o", out, consumer)
+	compileAcceptanceGraph(t, true, consumer, out, producer)
 	packagesWrite(t, out, "consumer_test.go", `package consumer
 import __borrow_std "github.com/goxide-lang/std/sum"
 
- import("testing";"strings";p "inferred.example/producer")
+ import("testing";"fmt";"strings";p "inferred.example/producer")
  func TestIdentity(t *testing.T){if n:=__borrow_std.ValueOk(Native(true));n!=7{t.Fatal(n)};if e:=__borrow_std.ValueErr(Native(false));e!=p.Sentinel{t.Fatal(e)};a:=__borrow_std.ValueErr(Keep());b:=__borrow_std.ValueErr(Forward());if a.Value!=4||a.Err!=p.Sentinel||a!=b||Match()!=4{t.Fatal(a,b)};if n:=__borrow_std.ValueOk(Cross());n!=7{t.Fatal(n)}}
- func TestForeignPayload(t *testing.T){RightValid();for _, f:=range []func(){ForeignInvalid,NamedForeignInvalid,ExplicitForeignInvalid,LeftInvalid,RightInvalid}{func(){defer func(){p:=recover();if p==nil||!strings.Contains(p.(string),"invalid enum"){t.Fatal(p)}}();f()}()}}
+ func TestForeignPayload(t *testing.T){RightValid();for _, f:=range []func(*int){ForeignInvalid,NamedForeignInvalid,ExplicitForeignInvalid,LeftInvalid,RightInvalid}{seen:=0;func(){defer func(){p:=recover();if !strings.Contains(fmt.Sprint(p),"nil Event")||seen!=1{t.Fatalf("foreign element dispatch panic=%v outer arm=%d",p,seen)}}();f(&seen)}()}}
  `)
 	packagesCommand(t, prodOut, tool, true, "test", "-race", "-count=1", "./...")
 	packagesCommand(t, prodOut, tool, true, "vet", "./...")

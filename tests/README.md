@@ -11,12 +11,8 @@ python3 scripts/check_design.py
 
 示例命令以仓库根目录为当前目录。脚本自身根据文件位置定位仓库，不依赖当前目录；从其他目录调用时给出脚本的实际路径。
 
-文档检查需要 Python 3.10 或更新版本、Git 以及包含产物检查固定基线的完整仓库历史。
-检查包含暂存区和已提交历史中的 review 产物；缺少历史时明确失败，不自动 fetch。
-也可在提交前单独运行 `python3 -B scripts/check_review_artifacts.py`；`--commit REV`
-检查指定提交。原始日志、截图和大型运行记录留在仓外或被忽略的输出目录，不使用
-整目录 force-add。产物检查的回归测试为 `python3 -B scripts/check_review_artifacts_test.py`。
-规则作用于 `docs/reviews`：原始产物禁止新增；固定基线中的旧产物保持原样。
+文档检查需要 Python 3.10 或更新版本。原始日志、截图和大型运行记录一律留在仓外或
+被忽略的输出目录（见 `.gitignore`），不使用整目录 force-add。
 新增或修改的文本每文件不超过 64 KiB，每次提交或暂存变更合计不超过 256 KiB；
 JSON 只保留摘要，不嵌入原始日志。正常的 `scripts`、`tests` 源码与夹具不受此大小规则约束。
 完整检查还需要本地 Go 1.27 或更新版本，以及可运行 Go race detector 的平台和 C 编译器。
@@ -60,7 +56,7 @@ Markdown 检查覆盖仓库 Markdown 文件的围栏闭合、行内本地链接�
 
 ## trait 双路径研究（D21/U16）
 
-独立入口见 [研究说明](research/trait_paths/README.md)，主设计检查不自动运行性能基准。该实验对照原生/值视图/指针视图/无额外布局视图/直接函数/类型化字典，复测 Go 可选协议、marker 提升和源码发布路径；保留五次短基准与编译器诊断。它不是 goxide 前端实现或真实业务性能结论。
+独立入口见 [研究说明](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/research/trait_paths/README.md)，主设计检查不自动运行性能基准。该实验对照原生/值视图/指针视图/无额外布局视图/直接函数/类型化字典，复测 Go 可选协议、marker 提升和源码发布路径；保留五次短基准与编译器诊断。它不是 goxide 前端实现或真实业务性能结论。
 
 专用问号候选新增 3 项 enum Go 机制测试，覆盖 typed-nil、传播/求值顺序/defer、闭包/Option 和部分成功，完整套件正向 Test 次数增至 41；未测试 goxide `?` 解析或静态诊断。
 

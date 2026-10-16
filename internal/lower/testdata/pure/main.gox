@@ -1,0 +1,12 @@
+//go:build !goxide_excluded
+
+// Package main exercises lowering across a module.
+package main
+
+use fmt;
+use fixture::lib;
+
+func main() {
+	value := lib::widget{Value: lib::answer(), Note: "ok"}
+	fmt::Println(value.Value, value.Note, lib::identity[int](5), lib::exercise())
+}

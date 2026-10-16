@@ -1,4 +1,4 @@
-package impl
+package r#impl
 
 pub macro_rules! identity {
     ($value:expr) => { $value };

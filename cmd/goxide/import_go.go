@@ -225,22 +225,20 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 	if e = os.WriteFile(filepath.Join(stage, "goxide.lock"), b, 0644); e != nil {
 		return e
 	}
-	validate := func(flags projectFlags) error {
+	validate := func(bin string, lib bool) error {
 		var buildOut bytes.Buffer
-		flags.offline = req.Offline
-		flags.targetDir = "target"
-		if e := runProject("build", stage, "", req.GoTool, nil, flags, &buildOut, stderr); e != nil {
+		if e := executeCompile(CompileRequest{Mode: "build", Input: stage, GoTool: req.GoTool, Bin: bin, Lib: lib, Offline: req.Offline, TargetDir: "target"}, &buildOut, stderr); e != nil {
 			return fmt.Errorf("migration validation failed; original files unchanged: %w", e)
 		}
 		return nil
 	}
 	if m.Lib != nil {
-		if e = validate(projectFlags{lib: true}); e != nil {
+		if e = validate("", true); e != nil {
 			return e
 		}
 	} else {
 		for _, t := range m.Bins {
-			if e = validate(projectFlags{bin: t.Name}); e != nil {
+			if e = validate(t.Name, false); e != nil {
 				return e
 			}
 		}

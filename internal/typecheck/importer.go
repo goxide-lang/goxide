@@ -16,68 +16,55 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/hxsf/goxide/internal/config"
 )
 
-// NewImporter uses the source module when present, otherwise the working module.
-// It never downloads modules or switches toolchains. Each importer owns its cache.
-func NewImporter(filename string) types.Importer { return NewImporterWithTags(filename, nil) }
-
-// NewImporterWithTags uses the same explicit build tags as the module frontend.
-func NewImporterWithTags(filename string, tags []string) types.Importer {
-	return NewImporterWithBuild(filename, tags, false)
-}
-
-// NewImporterWithBuild keeps file selection and export instrumentation aligned.
-func NewImporterWithBuild(filename string, tags []string, race bool) types.Importer {
-	return NewImporterWithEnvironment(filename, tags, race, nil)
-}
-
-// NewImporterWithEnvironment scopes host-tool environment without process-global mutations.
-// Nil preserves the existing ambient target context.
-func NewImporterWithEnvironment(filename string, tags []string, race bool, environment []string) types.Importer {
-	return NewImporterWithContext(context.Background(), filename, tags, race, environment)
-}
-
-// NewImporterWithContext bounds export queries and fingerprint subprocesses by the caller.
-func NewImporterWithContext(parent context.Context, filename string, tags []string, race bool, environment []string) types.Importer {
-	return NewImporterWithWorkspace(parent, filename, tags, race, environment, "", "")
-}
-
-// NewImporterWithWorkspace accepts only an explicit planner-owned work file.
-// Ambient GOWORK remains ignored by the ordinary importer APIs.
-func NewImporterWithWorkspace(parent context.Context, filename string, tags []string, race bool, environment []string, workFile, moduleMode string) types.Importer {
-	return newImporter(parent, filename, tags, race, environment, workFile, moduleMode, "")
-}
-
-// NewImporterWithModFile queries the source module through a caller-owned copy
-// of its module file and checksums. The absolute modFile must retain the source
-// module's declarations. Graph updates are forbidden; any checksum writes stay
-// beside the copy rather than the source module.
-func NewImporterWithModFile(parent context.Context, filename string, tags []string, race bool, environment []string, modFile string) types.Importer {
-	if !filepath.IsAbs(modFile) {
-		return importerFailure{fmt.Errorf("importer module file must be an absolute path")}
-	}
-	return newImporter(parent, filename, tags, race, environment, "", "-mod=readonly", modFile)
+type ImporterOptions struct {
+	Config  config.Config
+	Context context.Context
+	Tags    []string
+	Race    bool
+	// ModFile is an absolute, caller-owned copy of the source module and sums.
+	// When supplied, graph updates are forbidden and sums stay beside that copy.
+	ModFile string
 }
 
 type importerFailure struct{ err error }
 
 func (i importerFailure) Import(string) (*types.Package, error) { return nil, i.err }
 
-func newImporter(parent context.Context, filename string, tags []string, race bool, environment []string, workFile, moduleMode, modFile string) types.Importer {
+// NewImporter uses the selected target and source module without downloading
+// dependencies or switching toolchains. Each importer owns its export cache.
+func NewImporter(filename string, options ImporterOptions) types.Importer {
+	if options.ModFile != "" && !filepath.IsAbs(options.ModFile) {
+		return importerFailure{fmt.Errorf("importer module file must be an absolute path")}
+	}
+	if options.Config.Environment == nil {
+		return importerFailure{fmt.Errorf("Go importer requires an explicit compilation environment")}
+	}
+	parent := options.Context
 	if parent == nil {
 		parent = context.Background()
 	}
-	if environment == nil {
-		environment = os.Environ()
-	}
-	environment = append([]string(nil), environment...)
 	if imp := platformImporter(); imp != nil {
 		return imp
+	}
+	environment := importerEnvironment(options.Config.Environment.ExecEnv())
+	tool := options.Config.Environment.GoTool
+	tags := append([]string(nil), options.Tags...)
+	sort.Strings(tags)
+	build, err := json.Marshal(struct {
+		Tool, Version string
+		Values        map[string]string
+		Tags          []string
+		Race          bool
+	}{tool, options.Config.Environment.GoVersion, options.Config.Environment.GoValues(), tags, options.Race})
+	if err != nil {
+		return importerFailure{err}
 	}
 	dir, _ := filepath.Abs(filepath.Dir(filename))
 	if root := moduleRoot(dir); root != "" {
@@ -96,20 +83,17 @@ func newImporter(parent context.Context, filename string, tags []string, race bo
 		defer cancel()
 		// Export loading is a deterministic type/source query, not binary stamping.
 		args := []string{"list", "-buildvcs=false", "-export", "-deps", "-json", "-tags=" + strings.Join(tags, ",")}
-		if race {
+		if options.Race {
 			args = append(args, "-race")
 		}
-		if moduleMode != "" {
-			args = append(args, moduleMode)
-		}
-		if modFile != "" {
-			args = append(args, "-modfile="+modFile)
+		if options.ModFile != "" {
+			args = append(args, "-mod=readonly", "-modfile="+options.ModFile)
 		}
 		args = append(args, "--", path)
-		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
+		cmd := exec.CommandContext(ctx, tool, args...)
 		cmd.Dir = dir
 		cmd.WaitDelay = time.Second
-		cmd.Env = importerEnvironment(environment, workFile)
+		cmd.Env = environment
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		data, err := cmd.Output()
@@ -151,10 +135,10 @@ func newImporter(parent context.Context, filename string, tags []string, race bo
 		}
 		return os.Open(file)
 	}
-	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, origins: origins, fingerprints: map[string]string{}, race: race, tags: append([]string(nil), tags...), environment: environment, context: parent}
+	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, origins: origins, fingerprints: map[string]string{}, build: fmt.Sprintf("%x", sha256.Sum256(build))}
 }
 
-func importerEnvironment(environment []string, workFile string) []string {
+func importerEnvironment(environment []string) []string {
 	var out []string
 	for _, v := range environment {
 		n, _, _ := strings.Cut(v, "=")
@@ -164,10 +148,7 @@ func importerEnvironment(environment []string, workFile string) []string {
 		}
 		out = append(out, v)
 	}
-	if workFile == "" {
-		workFile = "off"
-	}
-	return append(out, "GOTOOLCHAIN=local", "GOWORK="+workFile, "GOFLAGS=", "GOPROXY=off", "GOSUMDB=off", "GONOPROXY=none", "GOVCS=*:off")
+	return append(out, "GOTOOLCHAIN=local", "GOWORK=off", "GOFLAGS=", "GOPROXY=off", "GOSUMDB=off", "GONOPROXY=none", "GOVCS=*:off")
 }
 
 // PackageFiles exposes the exact source selection associated with offline export
@@ -188,10 +169,6 @@ type sourceImporter struct {
 	origins      map[string]packageOrigin
 	fingerprints map[string]string
 	build        string
-	race         bool
-	tags         []string
-	environment  []string
-	context      context.Context
 }
 
 // PackageOrigin reports the Go resolver's actual selected module. Namespace
@@ -233,7 +210,7 @@ func (i *sourceImporter) PackageFiles(path string) (string, []string, error) {
 // Paths are import-relative, so moving an identical local replacement is stable.
 func (i *sourceImporter) PackageFingerprint(path string) (string, error) {
 	if path == "unsafe" {
-		return runtime.Version() + ":unsafe", nil
+		return i.build + ":unsafe", nil
 	}
 	if v, ok := i.fingerprints[path]; ok {
 		return v, nil
@@ -242,22 +219,8 @@ func (i *sourceImporter) PackageFingerprint(path string) (string, error) {
 		return "", e
 	}
 	p := i.sources[path]
-	if i.build == "" {
-		ctx, cancel := context.WithTimeout(i.context, 30*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "env", "-json", "GOOS", "GOARCH", "CGO_ENABLED", "GOEXPERIMENT", "GOAMD64", "GO386", "GOARM", "GOARM64", "GOMIPS", "GOMIPS64", "GOPPC64", "GORISCV64", "GOWASM")
-		cmd.WaitDelay = time.Second
-		cmd.Env = importerEnvironment(i.environment, "")
-		b, e := cmd.Output()
-		if e != nil {
-			return "", e
-		}
-		tags := append([]string(nil), i.tags...)
-		sort.Strings(tags)
-		i.build = fmt.Sprintf("%s race=%t tags=%q", b, i.race, tags)
-	}
 	h := sha256.New()
-	fmt.Fprintf(h, "%q %q %q\n", runtime.Version(), path, i.build)
+	fmt.Fprintf(h, "%q %q\n", path, i.build)
 	names := append([]string(nil), p.inputs...)
 	sort.Strings(names)
 	for _, name := range names {
@@ -299,25 +262,28 @@ func moduleRoot(dir string) string {
 
 // Check verifies complete generated Go after semantic lowering, without ignoring
 // errors used temporarily by an earlier pass for type inference.
-func Check(filename string, source []byte, imp types.Importer) error {
-	return CheckPackage("goxide/generated", map[string][]byte{filename: source}, imp)
+func Check(filename string, source []byte, imp types.Importer, sizes types.Sizes) error {
+	return CheckPackage("goxide/generated", map[string][]byte{filename: source}, imp, sizes)
 }
 
 // CheckPackage checks independently parsed files in their real Go package.
 // File scopes (especially import names) remain separate. Callers select files
 // using their build configuration before passing them here.
-func CheckPackage(path string, sources map[string][]byte, imp types.Importer) error {
-	_, err := CheckPackageTypes(path, sources, imp)
+func CheckPackage(path string, sources map[string][]byte, imp types.Importer, sizes types.Sizes) error {
+	_, err := CheckPackageTypes(path, sources, imp, sizes)
 	return err
 }
 
 // CheckPackageTypes returns the checked identities for metadata export.
-func CheckPackageTypes(path string, sources map[string][]byte, imp types.Importer) (*types.Package, error) {
+func CheckPackageTypes(path string, sources map[string][]byte, imp types.Importer, sizes types.Sizes) (*types.Package, error) {
 	if path == "" {
 		return nil, fmt.Errorf("package import path is required")
 	}
 	if len(sources) == 0 {
 		return nil, fmt.Errorf("package %s has no source files", path)
+	}
+	if sizes == nil {
+		return nil, fmt.Errorf("Go type checking requires target sizes")
 	}
 	fs := token.NewFileSet()
 	names := make([]string, 0, len(sources))
@@ -333,6 +299,6 @@ func CheckPackageTypes(path string, sources map[string][]byte, imp types.Importe
 		}
 		files = append(files, file)
 	}
-	conf := types.Config{Importer: imp}
+	conf := types.Config{Importer: imp, Sizes: sizes}
 	return conf.Check(path, fs, files, nil)
 }

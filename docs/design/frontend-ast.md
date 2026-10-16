@@ -475,9 +475,9 @@ serde 的 Serialize/Deserialize 按实际 `use` 绑定的 canonical owner 分别
 
 ### 8.4 Feature 条件编译合同
 
-状态：已实现。源级语义与两种配置入口统一见 [RFC 0022](../rfcs/0022-project-toolchain.md)。cfg/cfg_attr 限完整顶层 item，cfg! 只作布尔常量查询，if 两支仍检查；手写和宏生成形式使用同一规则。当前支持 feature，target/test 等按 RFC 的接入条件后续实现。
+状态：已实现。源级语义与两种配置入口统一见 [RFC 0022](../rfcs/0022-project-toolchain.md)。cfg/cfg_attr 限完整顶层 item，cfg! 只作布尔常量查询，if 两支仍检查；手写和宏生成形式使用同一规则。共同配置支持 feature、五个 target 字段与 env；test 等其他谓词拒绝。
 
-配置是编译调用的显式输入：原生 Go 为当前包的 enabled 集，TOML 为各 module 的 declared/enabled 集。文件所属模块及已有宏 Origin/SyntaxCtx 决定配置构造的归属，不能把根项目的集合广播到依赖。初期使用具体数据与共同谓词处理函数；未来实际接入目标/测试上下文时再添加对应输入，不先建通用注册表。
+配置是编译调用的显式输入：feature 在原生 Go 中为当前包的 enabled 集，在 TOML 中为各 module 的 declared/enabled 集；目标和原始环境由整次编译共享。文件所属模块及已有宏 Origin/SyntaxCtx 决定 feature 配置构造的归属，不能把根项目的集合广播到依赖。使用具体配置数据与共同谓词处理函数，不建立通用注册表。
 
 逻辑处理顺序如下，描述阶段边界，不要求新增一套管线或这些名字的包：
 
@@ -495,9 +495,9 @@ serde 的 Serialize/Deserialize 按实际 `use` 绑定的 canonical owner 分别
 5. **布尔查询与来源**。cfg! 在展开阶段替换为不可被局部 true/false 绑定遮蔽的布尔常量，包括用户宏生成的 cfg!。它不删除 if 分支，初始化、作用域与控制流仍遵循普通语言规则。保留节点、cfg_attr 载荷与宏构造的源位置和各自来源；删除项附着的属性、注释与编译指令不能漂移到下一个声明。
 6. **检查保留程序**。名称、类型、引用权限、派生、trait 完整性与控制流检查消费同一份经条件属性处理的 AST，if 两支仍检查；既有支持位置之外的属性明确诊断。生成保持源行映射，同输入同配置字节一致。
 
-后续 target/env/cgo/race 与查询 CLI 的合同见 [RFC 0022 统一配置设计](../rfcs/0022-project-toolchain.md#扩展谓词与统一配置设计尚未实现)，尚未实现。文件筛选前集中解析所选 Go 的有效目标、实际构建选项、每模块 feature/env 登记和环境值，冻结为具体配置；Configure、宏输出选择、cfg!、类型尺寸、importer 与最终 Go 命令消费同一份快照，展开层不自行读取环境。env 的声明资格与 feature 一样按配置构造来源取所属模块，target 属于生成目标，test 属于编译单元。
+共同配置合同见 [RFC 0022](../rfcs/0022-project-toolchain.md#统一条件配置)。文件筛选前捕获原始环境，按工作流准备有效目标与执行环境；Configure、Expand、类型尺寸、importer 和 Go 子进程消费同一上下文。feature 仍按配置构造的来源模块取值，target/env 为整次编译共享。原始快照不可变，env 读取记录独立累积，覆盖动态宏输出；被删除子树和未选 cfg_attr 载荷不读取。
 
-原生 Go 的整包生成约束、重新生成和缓存身份必须随新谓词一起接入。test 需要普通/被测/外部测试变体及隔离 view 后单独开放；未知上下文不得默认 false。完整封闭参数表与非法值诊断也由同一配置定义提供给 `goxide env --list`，不建立第二套 CLI 值表。
+包内实际处理 target 查询后，全部生成文件合取精确目标约束。环境读取记录完整后才计算项目 UnitSpec。浏览器必须显式提供导出数据对应目标和空环境；缺失上下文报错。谓词值域与 `goxide env --list` 共享配置模块定义，不添加第二份 CLI 值表。
 
 ## 9. 后续工作
 

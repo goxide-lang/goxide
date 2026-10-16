@@ -191,7 +191,7 @@ func generatePackage(req CompileRequest, out io.Writer) error {
 			}
 			if runtimeImport.MatchString(path) {
 				if _, err := imports.Import(path); err != nil {
-					return fmt.Errorf("generated Go requires %s: %w\nadd the dependency with: go get %s", path, err, path)
+					return generationDependencyError(fmt.Errorf("generated Go requires %s: %w", path, err))
 				}
 			}
 		}
@@ -329,8 +329,14 @@ func checkGeneratedOutput(name string) error {
 var runtimeImport = regexp.MustCompile(`github\.com/goxide-lang/(?:std|serde)(?:/[A-Za-z0-9_]+)*`)
 
 func generationDependencyError(err error) error {
-	if path := runtimeImport.FindString(err.Error()); path != "" {
-		return fmt.Errorf("%w\nadd the dependency with: go get %s", err, path)
+	message := err.Error()
+	if !strings.Contains(message, "offline export data for ") {
+		return err
+	}
+	for _, path := range runtimeImport.FindAllString(message, -1) {
+		if strings.Contains(message, "cannot find module providing package "+path+":") || strings.Contains(message, "no required module provides package "+path+";") {
+			return fmt.Errorf("generated Go needs %s, which is not in this module\nadd it with: go get %s\n\n%w", path, path, err)
+		}
 	}
 	return err
 }

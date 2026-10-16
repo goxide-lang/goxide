@@ -4,28 +4,29 @@ import hashlib,json,pathlib,re,zipfile
 if not __debug__:
  raise SystemExit('audit refuses Python optimization; checks must remain enabled')
 root=pathlib.Path(__file__).resolve().parents[1]/'dist'
-allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt','project-reexports.zip'}
+allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt','project-reexports.zip','learn/index.html','docs/index.html','design/index.html','tutorial-go.zip','tutorial-mixed.zip','tutorial-gox.zip','tutorial-features.zip'}
 frontend_record=json.loads((root/'frontend-assets.json').read_text())
 assert frontend_record['websiteCommit']==json.loads((root/'examples.json').read_text())['websiteCommit'], 'frontend/compiler website identities differ'
 frontend=frontend_record['assets']
 assert all(not p.is_symlink() for p in root.rglob('*')), 'publish symlink'
-assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_dir()}=={'assets'}, 'unexpected publish directory'
+assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_dir()}=={'assets','learn','docs','design'}, 'unexpected publish directory'
 assert all(re.fullmatch(r'assets/[A-Za-z0-9_.-]+\.(?:js|css|ttf)', name) for name in frontend), 'unexpected frontend asset path'
 assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()}==allowed|set(frontend),'publish directory differs from explicit allowlist'
 for name,digest in frontend.items():
  assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest, 'frontend asset digest differs: '+name
 report=[]
 patterns={
- 'local-path':rb'/(?:workspace|home|Users|tmp|usr/local/go|opt/codex)/',
+ 'local-path':rb'(?:(?<![A-Za-z0-9._~:/-])|\\[nrt]|file://)/(?:workspace|home|Users|tmp|private/tmp|usr/local/go|opt/codex)/',
  'windows-user-path':rb'[A-Za-z]:\\+(?:Users|workspace|Go)\\+',
  'private-key':rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----',
  'github-token':rb'(?:ghp_|github_pat_)[A-Za-z0-9_]{30,}',
  'aws-access-key':rb'AKIA[0-9A-Z]{16}',
 }
-for project in json.loads((root/'examples.json').read_text())['projectExamples']:
+manifest=json.loads((root/'examples.json').read_text())
+for project in manifest['projectExamples'] + manifest['tutorials']['stages']:
  if 'download' not in project:continue
  download=project['download'];path=root/download['path']
- assert path.name == 'project-reexports.zip'
+ assert path.name in {'project-reexports.zip','tutorial-go.zip','tutorial-mixed.zip','tutorial-gox.zip','tutorial-features.zip'}
  assert hashlib.sha256(path.read_bytes()).hexdigest()==download['sha256'], 'project archive digest differs'
  with zipfile.ZipFile(path) as archive:
   assert archive.namelist()==download['files'], 'project archive inventory differs'

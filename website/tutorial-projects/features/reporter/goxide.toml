@@ -1,0 +1,15 @@
+[package]
+format = 2
+module = "example.org/reporter"
+go = "1.27"
+
+[lib]
+name = "reporter"
+path = "."
+
+[dependencies]
+fmt = { go = "fmt" }
+
+[features]
+default = []
+pretty = []

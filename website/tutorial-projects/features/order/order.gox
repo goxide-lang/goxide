@@ -1,0 +1,18 @@
+package order
+
+use fmt;
+
+pub enum Order {
+    Pending,
+    Paid(int),
+    Shipped(string),
+}
+
+func Describe(id int, order Order) string {
+    status := match order {
+        Order::Pending => "pending",
+        Order::Paid(amount) => fmt::Sprintf("paid %d", amount),
+        Order::Shipped(tracking) => "shipped " + tracking,
+    }
+    return fmt::Sprintf("order %d: %s", id, status)
+}

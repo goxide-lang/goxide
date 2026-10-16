@@ -6,79 +6,11 @@ import {
   Route,
   useLocation,
 } from "preact-iso/router";
-import Playground from "./Playground";
-import FileView from "./FileView";
+import Home from "./Home";
+import Learn from "./Learn";
+import Docs from "./Docs";
+import Readonly from "./Readonly";
 import "./style.css";
-function Readonly({ label, files }) {
-  const [active, setActive] = useState(files[0]?.path || "");
-  return (
-    <FileView
-      label={label}
-      files={files}
-      activePath={
-        files.some((file) => file.path === active) ? active : files[0]?.path
-      }
-      onSelect={setActive}
-    />
-  );
-}
-function Home() {
-  return (
-    <section>
-      <p className="eyebrow">GO 生态 · 显式语义 · 普通 GO 输出</p>
-      <h1>
-        写得更明确。
-        <br />
-        <em>仍然是 Go。</em>
-      </h1>
-      <p className="intro">
-        把重复交给宏，把状态交给 enum。Goxide 为熟悉的 Go
-        加上有限、可检查的语言能力，生成你能阅读、审查和继续使用的 Go 源码。
-      </p>
-      <div className="toolbar">
-        <a className="button primary" href="/playground.html">
-          亲手试一段代码 →
-        </a>
-        <a className="button" href="/rfc.html">
-          了解语言设计 →
-        </a>
-      </div>
-      <p className="caption">
-        语言名 Goxide · 命令 goxide · 源文件 .gox · 可执行子集，持续演进。
-      </p>
-      <div className="language-topics">
-        <div>
-          <h2>可审查的宏</h2>
-          <p>有限捕获、重复与嵌套，明确求值与名字绑定边界。</p>
-          <a href="/playground.html?example=macro">看声明宏 →</a>
-        </div>
-        <div>
-          <h2>enum 与 match</h2>
-          <p>闭合状态、穷尽检查、guard 与有限表达式组合。</p>
-          <a href="/playground.html?example=enum">看状态匹配 →</a>
-        </div>
-        <div>
-          <h2>缺失与失败</h2>
-          <p>Option/Result 与显式传播，Go 返回值的静态适配。</p>
-          <a href="/playground.html?example=result">看错误传播 →</a>
-        </div>
-      </div>
-      <h2>当前边界</h2>
-      <p>
-        用户泛型函数已支持单关联协议约束；泛型协议、泛型 impl、多协议组合、完整
-        trait、用户过程宏与 LSP 尚未交付。部分 match / ? 组合仍有限。
-      </p>
-      <p>
-        路径只读不等于全局不可变，可写引用不承诺独占；这里不宣称完整 Rust
-        借用安全或零分配。
-      </p>
-      <p>
-        浏览器仅转译一个用户包与固定随附依赖，不加载任意模块、不执行
-        Go。当前能力以实际编译器清单与 RFC 摘要为准。
-      </p>
-    </section>
-  );
-}
 function RFC({ manifest }) {
   const location = useLocation(),
     itemId = location.query.feature || manifest.catalog.items[0].id;
@@ -266,81 +198,87 @@ function NotFound() {
     </section>
   );
 }
+function PlaygroundLoader({ manifest, visible }) {
+  const [Page, setPage] = useState(null), [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    import("./Playground.jsx")
+      .then((module) => { if (active) setPage(() => module.default); })
+      .catch((error) => { if (active) setError(String(error)); });
+    return () => { active = false; };
+  }, []);
+  return Page ? <Page manifest={manifest} visible={visible} /> : visible ? (
+    <section className="playground-loading">
+      <h1>Playground</h1>
+      {error ? <p role="alert">Playground 加载失败，请刷新重试：{error}</p> : <p role="status">正在加载 Playground…</p>}
+    </section>
+  ) : null;
+}
 function Shell({ manifest }) {
   const location = useLocation(),
     routeScroll = useRef(new Map()),
     visible = location.path === "/playground.html";
-  const [visited, setVisited] = useState(visible),
-    main = useRef(null);
+  const [visited, setVisited] = useState(visible), main = useRef(null);
   useLayoutEffect(() => {
     if (visible) setVisited(true);
-    const title =
-      {
-        "/": "语言介绍",
-        "/index.html": "语言介绍",
-        "/rfc.html": "RFC 特性",
-        "/playground.html": "Playground",
-        "/local.html": "本地使用",
-      }[location.path] || "找不到页面";
+    const title = {
+      "/": "用 Goxide 表达业务，生成你熟悉的 Go",
+      "/index.html": "用 Goxide 表达业务，生成你熟悉的 Go",
+      "/learn": manifest.tutorials?.stages.find((stage) => stage.id === location.query.stage)?.title || "快速开始",
+      "/docs": (manifest.docs?.pages.find((page) => page.id === location.query.page)?.title || "文档") + " · 使用参考",
+      "/design": (manifest.design?.pages.find((page) => page.id === location.query.page)?.title || "总览") + " · 设计文档",
+      "/rfc.html": "RFC 特性",
+      "/playground.html": "Playground",
+      "/local.html": "本地使用",
+    }[location.path] || "找不到页面";
     document.title = title + " · Goxide";
     main.current.focus({ preventScroll: true });
-    window.scrollTo(
-      0,
-      !location.wasPush ? routeScroll.current.get(location.url) || 0 : 0,
-    );
+    window.scrollTo(0, !location.wasPush ? routeScroll.current.get(location.url) || 0 : 0);
+    const frame = requestAnimationFrame(() => {
+      if (window.location.hash) {
+        try { document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView(); } catch {}
+      }
+    });
     const record = () => routeScroll.current.set(location.url, window.scrollY);
     window.addEventListener("scroll", record, { passive: true });
-    return () => window.removeEventListener("scroll", record);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("scroll", record); };
   }, [location.url]);
   return (
     <>
-      <a className="skip" href="#main">
-        跳到主内容
-      </a>
-      <header>
-        <a className="brand" href="/">
-          g <span>Goxide</span>
-        </a>
+      <a className="skip" href="#main">跳到主内容</a>
+      <header className="site-header">
+        <a className="brand" href="/" aria-label="Goxide 首页"><span className="brand-mark" aria-hidden="true">g</span><span>Goxide</span></a>
         <nav aria-label="主导航">
-          <a
-            href="/rfc.html"
-            aria-current={location.path === "/rfc.html" ? "page" : undefined}
-          >
-            RFC 特性
-          </a>
-          <a
-            href="/playground.html"
-            aria-current={visible ? "page" : undefined}
-          >
-            Playground
-          </a>
-          <a
-            href="/local.html"
-            aria-current={location.path === "/local.html" ? "page" : undefined}
-          >
-            本地使用
-          </a>
+          <div className="primary-navigation">
+            <a href="/" aria-current={["/", "/index.html"].includes(location.path) ? "page" : undefined}>首页</a>
+            <a href="/learn/" aria-current={["/learn", "/local.html"].includes(location.path) ? "page" : undefined}>快速开始</a>
+            <a href="/docs/" title="使用参考" aria-current={location.path === "/docs" ? "page" : undefined}>文档</a>
+            <a href="/design/" aria-current={["/design", "/rfc.html"].includes(location.path) ? "page" : undefined}>设计文档</a>
+          </div>
+          <div className="secondary-navigation">
+            <a href="/playground.html" aria-current={visible ? "page" : undefined}>Playground <span aria-hidden="true">↗</span></a>
+            <a className="github-link" href="https://github.com/goxide-lang/goxide">GitHub <span aria-hidden="true">↗</span></a>
+          </div>
         </nav>
       </header>
       <main id="main" tabIndex={-1} ref={main}>
         <Router>
-          <Route path="/" component={Home} />
-          <Route path="/index.html" component={Home} />
+          <Route path="/" component={Home} manifest={manifest} />
+          <Route path="/index.html" component={Home} manifest={manifest} />
+          <Route path="/learn" component={Learn} manifest={manifest} />
+          <Route path="/docs" component={Docs} manifest={manifest} />
+          <Route path="/design" component={Docs} manifest={manifest} kind="design" />
           <Route path="/rfc.html" component={RFC} manifest={manifest} />
           <Route path="/local.html" component={Local} manifest={manifest} />
           <Route path="/playground.html" component={EmptyPage} />
           <NotFound default />
         </Router>
-        {(visited || visible) && (
-          <Playground manifest={manifest} visible={visible} />
-        )}
+        {(visited || visible) && <PlaygroundLoader manifest={manifest} visible={visible} />}
       </main>
-      <footer>
-        <a href="/">Goxide · goxide</a>
-        <span>
-          MPL-2.0 · <a href="/GO-LICENSE.txt">Go runtime license</a> ·{" "}
-          <a href="/THIRD-PARTY-LICENSES.txt">前端依赖许可</a>
-        </span>
+      <footer className="site-footer">
+        <div><a className="footer-brand" href="/">Goxide</a><p>写下业务意图，生成普通 Go。</p><small>pre-1.0 · 网站构建 {manifest.websiteCommit.slice(0, 7)}</small></div>
+        <nav aria-label="更多资源"><a href="/learn/">快速开始</a><a href="/docs/">使用参考</a><a href="/design/">设计文档</a><a href="/rfc.html" aria-current={location.path === "/rfc.html" ? "page" : undefined}>RFC 特性</a><a href="/local.html" aria-current={location.path === "/local.html" ? "page" : undefined}>本地使用</a></nav>
+        <div className="footer-licenses"><span>MPL-2.0</span><a href="/GO-LICENSE.txt">Go runtime license</a><a href="/THIRD-PARTY-LICENSES.txt">前端依赖许可</a></div>
       </footer>
     </>
   );
@@ -405,7 +343,7 @@ function App() {
   );
 }
 // Only app routes are intercepted. Resource/license links retain normal navigation.
-const routeScope = /^\/(?:$|(?:index|rfc|playground|local)\.html(?:[?#]|$))/;
+const routeScope = /^\/(?:$|(?:index|rfc|playground|local)\.html(?:[?#]|$)|(?:learn|docs|design)\/?(?:[?#]|$))/;
 render(
   <LocationProvider scope={routeScope}>
     <App />

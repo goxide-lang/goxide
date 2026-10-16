@@ -8,9 +8,9 @@ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/usr/
 try{
  const context=await browser.newContext({viewport:{width:1440,height:1000},permissions:['clipboard-read','clipboard-write'],reducedMotion:'reduce'});
  const page=await context.newPage(),errors=[],requests=[];
- async function nav(name){await page.getByRole('link',{name,exact:true}).click();const path={'RFC 特性':'/rfc.html','Playground':'/playground.html','本地使用':'/local.html'}[name];await page.waitForFunction(path=>document.querySelector('header nav a[aria-current="page"]')?.getAttribute('href')===path,path);}
+ async function nav(name){await page.getByRole('link',{name,exact:true}).first().click();const path={'RFC 特性':'/rfc.html','Playground':'/playground.html','本地使用':'/local.html'}[name];await page.waitForFunction(path=>location.pathname===path,path);}
 page.on('pageerror',error=>errors.push(error.message));context.on('request',request=>requests.push(request));
- await page.goto(base+'/');await page.getByRole('heading',{name:/写得更明确/}).waitFor();
+ await page.goto(base+'/');await page.getByRole('heading',{name:/用 Goxide 表达业务/}).waitFor();
  assert.ok(!requests.some(request=>/MonacoPane|editor.worker|compiler.wasm/.test(request.url())),'home does not load editors or compiler');
  await page.evaluate(()=>window.qaDocumentMarker='same document');
  await nav('Playground');await done(page);
@@ -63,7 +63,7 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  await nav('本地使用');await page.locator('#project-examples .file-view').first().waitFor();assert.ok(await page.locator('#project-examples .file-view').count()>0);assert.equal(await page.locator('#project-examples .new-file').count(),0);
  for(const project of manifest.projectExamples.filter(project=>project.download)){const link=page.locator(`#project-examples a[href="/${project.download.path}"]`);assert.equal(await link.getAttribute('download'),project.download.path);const response=await context.request.get(base+'/'+project.download.path);assert.equal(response.status(),200);const bytes=await response.body();assert.equal(bytes.subarray(0,2).toString(),'PK');assert.ok(project.download.files.includes('go.mod'));assert.ok(project.download.files.includes('go.sum'));assert.ok(project.download.files.includes('goxide.roots.toml'));assert.ok(project.download.files.includes('impl/impl.go'));assert.ok(project.download.files.some(path=>path.endsWith('.gox')));}
  assert.equal(await page.locator('#project-examples a[download]').count(),1);
- for(const route of ['/rfc.html?feature=traits','/playground.html?example=macro','/local.html','/']){assert.equal((await page.goto(base+route)).status(),200);await page.getByRole('navigation',{name:'主导航'}).waitFor();await page.reload();await page.getByRole('navigation',{name:'主导航'}).waitFor();}
+ for(const route of ['/learn/?stage=gox','/docs/?page=manifest','/design/?page=grammar','/rfc.html?feature=traits','/playground.html?example=macro','/local.html','/']){assert.equal((await page.goto(base+route)).status(),200);await page.getByRole('navigation',{name:'主导航'}).waitFor();await page.reload();await page.getByRole('navigation',{name:'主导航'}).waitFor();}
  await page.goto(base+'/rfc.html?feature=missing');await page.getByRole('alert').filter({hasText:'找不到此 RFC'}).waitFor();
  await page.goto(base+'/playground.html?example=missing');await page.getByRole('alert').filter({hasText:'找不到此示例'}).waitFor();
  await page.goto(base+'/playground.html?example=package_files');await done(page);

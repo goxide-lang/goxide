@@ -1,0 +1,29 @@
+package main
+
+use fmt;
+use order;
+
+#[cfg(feature("report"))]
+use reporter;
+
+#[cfg(feature("pretty"))]
+func display(line string) string { return "[orders] " + line }
+
+#[cfg(not(feature("pretty")))]
+func display(line string) string { return line }
+
+#[cfg(feature("report"))]
+func report() { fmt::Println("report:", reporter::Summary(3)) }
+
+#[cfg(not(feature("report")))]
+func report() {}
+
+func main() {
+    if cfg!(feature("trace")) {
+        fmt::Println("trace: 3 orders")
+    }
+    fmt::Println(display(order::Describe(1001, order::Order::Pending)))
+    fmt::Println(display(order::Describe(1002, order::Order::Paid(42))))
+    fmt::Println(display(order::Describe(1003, order::Order::Shipped("TRACK-7"))))
+    report()
+}

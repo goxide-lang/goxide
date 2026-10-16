@@ -136,7 +136,7 @@ host `.gox` 可以 import 已声明本地 Go helper，Go host 可以 import 已 
 复现使用 Go 1.27.1：
 
 ```sh
-GOCACHE=/workspace/goxide-environment/cache /workspace/goxide-environment/go/bin/go test -race ./internal/buildscript ./internal/scripttrust ./cmd/goxide ./internal/frontend ./internal/typecheck
+go test -race ./internal/buildscript ./internal/scripttrust ./cmd/goxide ./internal/frontend ./internal/typecheck
 python3 scripts/check_design.py --docs-only
 ```
 

@@ -1,0 +1,10 @@
+package main
+
+use fmt;
+use order;
+
+func main() {
+    fmt::Println(order::Describe(1001, order::Order::Pending))
+    fmt::Println(order::Describe(1002, order::Order::Paid(42)))
+    fmt::Println(order::Describe(1003, order::Order::Shipped("TRACK-7")))
+}

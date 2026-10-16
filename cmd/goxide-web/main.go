@@ -46,8 +46,16 @@ func handler() http.Handler {
 			return
 		}
 		name := strings.TrimPrefix(r.URL.Path, "/")
-		if name == "" {
-			name = "index.html"
+		if name == "learn" || name == "docs" || name == "design" {
+			location := r.URL.Path + "/"
+			if r.URL.RawQuery != "" {
+				location += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, location, http.StatusMovedPermanently)
+			return
+		}
+		if name == "" || name == "learn/" || name == "docs/" || name == "design/" {
+			name += "index.html"
 		}
 		if !fs.ValidPath(name) || strings.Contains(name, "\\") {
 			http.NotFound(w, r)

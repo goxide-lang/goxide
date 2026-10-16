@@ -1,0 +1,16 @@
+package main
+
+use testing;
+use order;
+
+func TestDescribe(t *testing::T) {
+    if got := order::Describe(7, order::Order::Pending); got != "order 7: pending" {
+        t.Fatal(got)
+    }
+    if got := order::Describe(7, order::Order::Paid(42)); got != "order 7: paid 42" {
+        t.Fatal(got)
+    }
+    if got := order::Describe(7, order::Order::Shipped("TRACK-7")); got != "order 7: shipped TRACK-7" {
+        t.Fatal(got)
+    }
+}

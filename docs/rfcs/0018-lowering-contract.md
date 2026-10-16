@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-已确认：每项语法需有独立 RFC 与转译对照；goxide 语义检查先于生成 Go。暂定：具体 IR 与检查算法；当前没有生成器。本文定义跨特性的评审方式，工程架构见[工具链专题](../design/compiler-and-tooling.md)。
+已确认：每项语法需有独立 RFC 与转译对照；Goxide 语义检查先于生成 Go。当前管线使用自有 AST、解析与检查结果，并降低为 `go/ast`；阶段输入输出与已验证示例见[编译与转译语义](../design/translation-semantics.md)。本文给出跨特性的对应条件，具体能力范围见[状态表](../mvp-gap-audit.md)。
 
 ## 源级规则
 
@@ -13,6 +13,38 @@
 impl 中的 `Self` 绑定源级目标类型及其泛型实参，`self` 绑定实例接收者；trait wrapper 是生成表示，不能替换源级 Self 身份。无接收者的关联函数没有 self。后端根据已解析绑定降低这些名字，普通 Go 声明中的同名标识符、字段名与字符串不参与文本替换。
 
 保证以合法 goxide 程序及声明的外部契约为前提。输出可以多出临时变量或检查，但不能改变规定的业务副作用；不以输出文本相同代替行为相同。
+
+### 形式化对应条件
+
+记 `P` 为源程序，`C` 为有效编译配置，`Γ` 为名字、类型和显式实现环境，`L(P, Γ, C)` 为 Go 输出。`ρ` 将合法源级值和存储位置映射到它们的 Go 表示；它通常不是类型名称的逐字替换。
+
+```text
+Parse(P) = A       Expand(A, C) = A′
+Resolve(A′) = Γ    Check(A′, Γ, C) = ok    A′ ∈ Dom(Lower)
+──────────────────────────────────────────  [LOW-DOMAIN]
+             L(P, Γ, C) = G
+
+源初态 σ 与 Go 初态 σ′ 满足 σ ~ρ σ′
+外部输入相同；并发执行使用对应的调度与外部契约
+──────────────────────────────────────────  [LOW-OBSERVATION]
+Obs(Eval_source(P, σ)) = Obs(Eval_go(G, σ′))
+```
+
+`Obs` 包括返回值（经 `ρ` 对应）、可观察调用与 I/O、对共享存储的读写及规定的正常/异常控制转移。上式是降低实现必须满足的契约，不是已经完成的全语言证明；语言未规定的并发次序也不会因转译获得额外保证。
+
+`Lower` 是偏函数：解析或源级检查接受的构造仍可能超出当前后端的定义域；生成 Go 的类型检查也可以拒绝错误的原生调用。只有整条管线成功时才有可交付的输出。
+
+对某个源级子表达式 `e`，对应的条件可以进一步拆开：
+
+```text
+count_source(e) = count_go(L(e))                    求值次数
+e₁ ≺source e₂  ⇒  L(e₁) ≺go L(e₂)                  规定的先后关系
+target_source(return/break/continue/defer) ~ρ target_go
+alias_source(p, q) ⇔ alias_go(ρ(p), ρ(q))           需保持的存储别名
+permission_source(e) 在 Check 中成立               不由 Go 指针类型补证
+```
+
+不变量按具体构造的源语义应用。例如值复制允许产生新存储，原位借用则要求映射后的投影仍指向同一槽位。生成局部临时变量只改变内部实现，不得改变上述可观察结果。
 
 ## 转译示例
 
@@ -35,7 +67,7 @@ makeValue 执行一次，工厂只适配该值。执行两次原语句仍各调�
 
 ### LOW-02：短路中的 match
 
-源级片段，hit/miss 都是 BoolResult 的无 payload 变体；具体 enum 表示未定：
+源级片段，假设已有 `pub enum BoolResult { Hit, Miss }`，`next` 返回该类型。当前表示见 [enum 规范](../design/enum-representation.md)：
 
 ```goxide
 ready && match next() {
@@ -44,16 +76,21 @@ ready && match next() {
 }
 ```
 
-以下 Go 函数体片段采用候选 tag 表示，`next`、`hit`、`miss` 由该候选表示定义：
+以下为 Go 函数体的示意降低，变体结构体由 enum 生成；实际临时变量名可以不同：
 
 ```go
 answer := false
 if ready {
     saved := next()
-    switch saved.tag {
-    case hit:
+    if saved == nil {
+        panic("goxide: nil BoolResult")
+    }
+    switch variant := saved.(type) {
+    case *Hit:
+        if variant == nil { panic("goxide: nil BoolResult") }
         answer = true
-    case miss:
+    case *Miss:
+        if variant == nil { panic("goxide: nil BoolResult") }
         answer = false
     default:
         panic("goxide: invalid BoolResult")
@@ -64,16 +101,20 @@ _ = answer
 
 ready 为 false 时 next 不执行；为 true 时仅执行一次。不能把 `saved := next()` 无条件提升到 if 前。
 
-### LOW-03：声明与产物往返
+### LOW-03：源码依赖与 Go 产物
 
 ```text
-goxide 源码 + 所选 Go/声明依赖
-    → 检查后的 IR
-    → Go 实现 + goxide 声明元数据
-    → 另一 goxide 包读取
+Goxide 源码 + 显式依赖根 + Go 类型信息
+    → 展开 AST + 解析/检查结果
+    → Go AST → Go 源文件
+    → 普通 Go 工具链和原生 Go 调用方
+
+跨包 Goxide 源码依赖
+    → 加载依赖源码与公开项
+    → 在调用方保留 canonical 名字/类型/实现身份
 ```
 
-回读须恢复相同的公开类型、impl、关联类型、unsafe、权限和 enum 身份。普通 Go 只读取 Go 实现；丢失元数据时不凭生成方法名猜回可信语义。
+当前用户 enum 不产生或读取旧式 enum 元数据。生成 Go 的密封接口和变体结构体提供原生 Go 可调用的表示；Goxide 自身的可见性、权限和实现身份由当前前端及包加载结果维护。后端形式不能自动补回缺失的源级语义。
 
 ## 拒绝与边界
 
@@ -96,7 +137,7 @@ Go → goxide：验证选定公开 ABI 能构建和调用，执行已规定的�
 
 验收由源级接受/拒绝、生成 Go 编译、行为观察和声明回读四部分组成。LOW-01 统计调用次数，LOW-02 统计短路路径，LOW-03 比较恢复的语义身份；不只做生成文本快照。
 
-宏展开可一对多，生成辅助代码可多对一对应源表达式。位置映射应关联原始调用、定义和生成位置，而非仅保存固定行号偏移。IR 字段、元数据格式、增量失效及测试运行器尚未实现。
+宏展开可一对多，生成辅助代码可多对一对应源表达式。位置映射应关联原始调用、定义和生成位置，而非仅保存固定行号偏移。当前 AST 与旁表契约见[转译语义](../design/translation-semantics.md)，位置映射与 LSP 的实现范围见[状态表](../mvp-gap-audit.md)。
 
 
 ## A03 合成错误点与宏展开栈（2026-10-06，实施合同）

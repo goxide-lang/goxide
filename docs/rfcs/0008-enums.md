@@ -1,15 +1,44 @@
 # RFC 0008：变体枚举、Option 与 Result
 
+## 当前规范与形式模型
+
+当前用户 enum 使用密封接口与每变体一个指针结构体，具体合同见[enum 表示](../design/enum-representation.md)。语法见[词法与语法](../design/language-grammar.md)，阶段输入输出、存储模型与真实 Go 对照见[转译语义](../design/translation-semantics.md)。以下模型优先于本文后面的历史候选布局。
+
+设 `Δ(E[α]).V = (U1, ..., Un)` 是变体字段声明，`θ = [α := T]` 为类型替换：
+
+```text
+Γ ⊢ ei : Si       Si 可赋值给 θ(Ui)       i = 1..n
+────────────────────────────────────────────────── [Enum-Construct]
+Γ ⊢ E[T]::V(e1, ..., en) : E[T]
+
+Identity(E[T]) = (定义包, enum 声明, T)
+⟦E[T]::V(values)⟧ = &V[T]{对应字段: values}
+```
+
+Go 输出中 `E[T]` 是含未导出标记方法的接口；`*V[T]` 实现该方法并携带 enum 的全部类型参数。普通赋值复制接口并共享变体对象；整体替换 owner 后，旧 payload 引用继续指向旧对象。
+
+```text
+ValidDispatchE(v) = 非 nil 接口 ∧ 动态类型为合法 *V ∧ 变体指针非 nil
+nil 字面量进入 enum 类型位置 → check 诊断
+运行时 nil 接口或 typed-nil 变体到达分派点 → panic，不能由 _ arm 捕获
+```
+
+合法性检查局限于正在分派的 enum；嵌套变体模式触发内层分派，单纯绑定 payload 不递归验证。当前 `Option` / `Result` 仍使用已发布 `std/sum` 的 tagged struct 与原位槽 API；`None` 和 `Some(nil)` 不同，Option 不做指针特化。两种实际表示及未来统一阶段见[能力状态表](../mvp-gap-audit.md)。
+
+## 历史方案与讨论
+
+以下保留早期设计的比较依据；其中值型 case、旧 metadata 和 ABI 候选不作为当前生成合同。
+
 2026-10-09 更新：本轮直接切换至内联独立 payload 槽、`ref` / `ref mut` 模式和 `&mut` 引用拼写，详见[当前原位 payload 合同](../design/enum-payload-borrows.md)。下文旧 interface/case、旧 Go case API 和布局待定的章节记录历史阶段，不是当前接口或兼容承诺；完整 Rust 模式规则不由本轮实现。
 
-## 状态与范围
+### 状态与范围
 
 变体枚举、Option / Result、名义类型身份是已确认目标；本分支已实现有限值型case子集；完整RFC尚未实现。
 源码拼写、泛型验证能力和 Go ABI 仍是草案。下文 interface 加值型 case 只是一种候选，不能据此排除借用模式。
 本篇约束枚举值的表示、初始化和转换；分支执行与借用绑定见 [RFC 0009](0009-match.md)。
 背景与已有 Go 机制实验见[枚举专题](../design/enums-and-match.md)。
 
-## 源级规则
+### 源级规则
 
 最新D27覆盖旧开放raw/C enum：只保留封闭变体。数值/string属于serde外部映射，未知输入返回UnknownVariant而非合法未知值；业务validator延期，不取消结构边界检查。具体属性与反例见[当前enum规则](../design/enums-and-match.md#01-封闭-enum-与外部映射)。
 
@@ -20,7 +49,7 @@
 - 普通赋值延续 Go 值复制方向，不自动执行 move 或递归深复制；含借用值仍受权限检查。
 - 首版候选以无 payload 或单 payload 变体为基础；复合数据可放入 struct，多字段语法另定。
 
-## 转译示例
+### 转译示例
 
 **E01：构造保留变体、payload 和全部类型参数。**
 
@@ -102,7 +131,7 @@ func Value(r Result[int, string]) int {
 
 这是候选 A 的标量验证示例，不能直接推广到任意泛型 T。校验不调用 marker 或其他用户方法。
 
-## 拒绝与边界
+### 拒绝与边界
 
 - 候选 A 中，Go 允许 `*Ok[int, string]` 满足接口；它仍不是规定的值型 case，应拒绝，包括 typed nil。
 - 嵌入合法 case 的其他 Go struct 不因继承 marker 而成为新变体；白名单核对实际动态类型。
@@ -110,7 +139,7 @@ func Value(r Result[int, string]) int {
 - 容器扩长、缺失查询、关闭 channel 及泛型零值不能暴露非法 Result；具体容器入口见 [RFC 0010](0010-collections.md)。
 - 验证共享容器只说明当次读取的值；共享写入、同步和借用仍需独立契约，不能靠一次扫描永久证明。
 
-## 双向互操作
+### 双向互操作
 
 goxide 导入带元数据的生成包，应恢复 enum 身份、变体与约束；普通 Go interface 不自动推断为封闭 enum。
 原生 `(T, error)` 改成 Result 需要实际桥接，并保留原 API 允许的“值和错误同时存在”信息；declare 擦除不能改变结果形状。
@@ -118,7 +147,7 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；goxide 不向第三
 需要公开的运行时校验随 dist 交付，其位置、失败方式及成本必须记录；不能承诺原始 Go 任意输入都满足 goxide 契约。
 最终表示须兼容 [RFC 0009](0009-match.md) 的三种绑定，导出 ABI 和内部布局是否分离尚未选择。
 
-## 验收与未定项
+### 验收与未定项
 
 当前真实验收：[enum_wire业务](../../examples/enum_wire/main.gox)与[独立测试](../../tests/acceptance/enum_wire_test.go)，包含安装CLI、Go双向调用、known往返、unknown错误先于业务。旧raw语法是前端拒绝例；数值映射不是任意Go强转。下列未实现的完整范围仍需独立验证。
 
@@ -129,13 +158,13 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；goxide 不向第三
 5. 未定：最终 ABI、递归验证、泛型验证证据、完整初始化算法及稳定导出符号。
 6. 不得先冻结值型 case，再把无法实现的原位借用默默降低成副本修改。
 
-### 独立 enum 稳定阶段与声明分隔符（2026-10-03）
+#### 独立 enum 稳定阶段与声明分隔符（2026-10-03）
 
 最新用户顺序为宏 → enum → 指针拆分。当前独立 enum 阶段保持 interface＋值型 case，不引入 Copy/move 或新借用模型；未来原位 payload 可写借用仍是演进目标，不再作为本阶段前置。既有引用功能保留。此调整不承诺 case 布局永久兼容，也不自动决定比较/map key 资格、非法零值或所有 Go 入口的校验政策。
 
 已修正 `enum E { A, }; func f...` 中显式声明分号残留、导致生成 Go 顶层空声明报错的问题。仅移除 enum 后紧随的显式分号，保留间隔注释和自动换行分隔；不改变 match 语义。原来把合法表达式 match 当负例的测试迁为实际执行正例，多文件/pub enum、混合普通声明、同线多 enum、注释、EOF 与真正语义错误见[回归验收](../../tests/acceptance/enum_separator_test.go)。
 
-### 跨 module 公开具体 enum 恢复（2026-10-03）
+#### 跨 module 公开具体 enum 恢复（2026-10-03）
 
 目录构建输出内部 `.goxide.enums.json`（当前 metadata schema 8 / artifact v1；旧命名产物需重新生成）和 `GoxideEnumMetadata` 常量。消费者在 enum 语法 lowering 之前恢复闭合变体集合，并检查真实 Go enum 类型、私有 marker、值型 case、构造器参数/返回和 validator 签名。元数据不保存 AST 或生产者私有载荷名；载荷类型由真实 case.Value 与构造器签名提供，所以私有类型的公开字段读取、转发和重构可继续推断。
 
@@ -147,7 +176,7 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；goxide 不向第三
 
 本片不迁移 interface＋值型 case，不引入 Copy/move，不改变比较/map key、非法零值或全公开入口的验证策略。元数据与具体 case 导出仍为内部/版本耦合协议，不承诺未来 payload 原位引用或 ABI 迁移无破坏。
 
-### 跨 module Option/Result 家族（2026-10-03）
+#### 跨 module Option/Result 家族（2026-10-03）
 
 内部 enum 协议升级为 **v2**（产物 envelope 仍 v1，旧协议需重新生成）。`Families` 来自实际 builtin registry，独立记录 canonical family、固定顺序的 Some/None 或 Ok/Err、公开 generic case/constructor 与生产者已生成的具体 instance validator。只出现 builtin 的包同样产生 marker/artifact。消费者检查真实 Go 泛型 origin、全部 phantom 参数、透明 alias、case/constructor 精确类型和 validator 参数身份；名称或接口形状不授权协议。
 
@@ -157,7 +186,7 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；goxide 不向第三
 
 [双模块执行验收](../../tests/acceptance/builtin_external_test.go)区分真实 goxide 构造/match/传播与第三个原生 Go 消费模块，检查 None、Some(None)、typed-nil、非法动态 case、嵌套非法载荷、别名约束与 metadata 缺失/篡改。serde 生产者 helper 的 Option 缺失/null 仍为 None，不依赖 Default。比较/零值/入口策略未在本片修改。
 
-### 显式 PartialEq/Eq 首片（2026-10-03）
+#### 显式 PartialEq/Eq 首片（2026-10-03）
 
 已接通具体 scalar、struct、array 和 enum 的 `#[derive(PartialEq)]` / `#[derive(PartialEq, Eq)]`，实例 `a.equals(b)` 静态调用已登记的 `EqualsT(a,b T) bool`。Eq 是依赖 PartialEq 的资格标记，不产生第二套方法；单独 derive Eq 在尚无 PartialEq 实现时拒绝。本片未实现手写协议或一般 trait 求解。
 
@@ -173,7 +202,7 @@ enum metadata **v3** 记录 Equality：真实目标身份、helper 与 Eq 标记
 
 后续容器规则已由 [D33](../design/decisions.md) 确认：同类型 nil slice/map 与非 nil 空容器不相等，两个 nil 相等，两个非 nil 空容器按内容相等；Option.None/Some(nil)/Some(empty) 区分，serde 不变。固定长度 array 无 nil。对应 [纯 Go 契约探针](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/tests/design/enum/equality_contract_test.go)不冒充尚未实现的 goxide 容器派生；nil/空不再待决，map 键规则仍单列。
 
-### 容器 PartialEq/Eq 派生（2026-10-03）
+#### 容器 PartialEq/Eq 派生（2026-10-03）
 
 按 D33/D34 扩展显式派生到 slice/map 及其有限嵌套：先区分 nil 与非 nil，再比较长度、元素或键对应的值。两个 nil 相等；非 nil 空值相等；nil 与非 nil 空值不相等。数组仍没有 nil。递归调用已登记元素/值协议，float/complex 仅允许 PartialEq，不使用 reflect.DeepEqual，也不按相同容器地址跳过内容（否则 NaN 语义会被改变）。map 查找必须同时检查键是否存在，缺失键不能与零值混淆。
 
@@ -183,7 +212,7 @@ struct 依字段顺序、slice/array 依索引短路；map 依 Go 未指定的�
 
 在派生字段/元素中，已登记的具体 Option/Result 实例按载荷资格条件比较，None、Some(nil)、Some(empty) 保持区分，Result 的非法 nil 仍拒绝；不改 serde 协议；validator 的有限容器投影也让此前拒绝的嵌套 Option 容器进入既有 serde 路径，旧负例迁为真实执行验收。直接匿名容器或 Option/Result 的 `.equals` 尚未新增独立入口。自递归容器可能构成运行时环，本片保留明确诊断，不擅定环等价关系或退回任意动态深比较。手写协议、指针拆分与原位 borrow 留后续独立阶段。
 
-### 手写具体 PartialEq/Eq（2026-10-03）
+#### 手写具体 PartialEq/Eq（2026-10-03）
 
 本片沿已批准的具体值参数 helper 路径支持手写比较，不等待 `&T`/`&mut T` 或一般 trait 求解。源级入口使用明确具体类型拼写；首参数必须名为 `self`，两个参数均为目标值类型，单个返回值为 builtin bool。没有 static，不增加隐式只读、独占或全局不可变保证；函数体按普通 Go 值参数和共享容器语义执行。`Self` 简写、泛型 impl、别名/外部目标和借用签名不在此具体入口内。
 
@@ -209,11 +238,11 @@ metadata v4 在已验证身份、helper 签名和 Eq 资格之外记录 PartialE
 
 内部协议 **v6** 新增显式 Clone/Debug 字段协议记录，复用 v5 的 typed identity、canonical alias 和内容/依赖验证；见[派生 RFC](0013-derive.md#跨包已登记-clonedebug-字段2026-10-03)。不改变闭合 enum 表示或公开边界契约。
 
-## 消费者透明 alias 与协议身份（2026-10-03）
+### 消费者透明 alias 与协议身份（2026-10-03）
 
 本地包级多级 Go `=` alias 可恢复外部 canonical 的已登记 Default/Clone/Debug/Serialize/Deserialize 与 PartialEq/Eq，包含 alias 在 native `.go` 中声明的场景。身份由 Go 类型系统 Unalias/Identical 核验，new defined 及同名局部类型不冒继承；metadata v6 的来源/签名/产物校验不变。实现与真实三模块证据见 RFC 0013 和 `tests/acceptance/local_protocol_alias_test.go`。此项不改变 enum 表示、合法值或公开函数入口验证契约。
 
-### A06 单文件外部恢复实施合同（2026-10-06）
+#### A06 单文件外部恢复实施合同（2026-10-06）
 
 本片按先提交的 [RFC0001 A06 合同](0001-package-loading.md#a06-已知-go-module-的单文件外部恢复2026-10-06实施前合同)
 接通配置已知的单文件 consumer；复用当前 schema 8、真实 canonical enum/family 身份
@@ -221,6 +250,6 @@ metadata v4 在已验证身份、helper 签名和 Eq 资格之外记录 PartialE
 private payload 的新发布协议。实际交付、正反例和准确 SHA 见
 [单文件外部恢复报告](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/single-file-external-recovery-20261006.md)，不以合同本身作为测试证明。
 
-## 具体 builtin sum 字段协议（2026-10-03）
+### 具体 builtin sum 字段协议（2026-10-03）
 
 已登记具体 Option/Result 的 Clone/Debug 字段组合已接通，依据现有 validator 参数的 Go 类型身份，不按 family 拼写推断。None 与 Some(nil/empty) 保持不同变体/载荷状态；Result 只运行活跃分支协议，非法动态 case 仍拒。Option Default 仅为 None，载荷 Default/可命名性不是前提；Result 不获得隐式默认值。跨文件及跨 module 实际验收见 RFC 0013 和 `tests/acceptance/sum_clone_debug_test.go`。不改变公开入口或指针阶段契约。

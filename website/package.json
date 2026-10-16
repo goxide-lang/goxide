@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "vite build",
-    "test": "node catalog-qa.mjs",
+    "test": "node redesign-qa.mjs && node catalog-qa.mjs",
     "test:compiler": "node qa.mjs"
   },
   "devDependencies": {

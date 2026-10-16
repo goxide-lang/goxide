@@ -29,7 +29,7 @@
 
 ### 官方事实与本篇选择
 
-查阅日期 **2026-10-04**；Cargo Book 为当天在线滚动版本，不声称固定 Cargo 版本。环境无 cargo/rustc，未执行 Rust 试验，也未安装。Go 机制实际使用 `/workspace/goxide-environment/go/bin/go`，输出 **go1.27.1 linux/amd64**；版本相关结论以此测试为界，未来工具链需重验。
+查阅日期 **2026-10-04**；Cargo Book 为当天在线滚动版本，不声称固定 Cargo 版本。环境无 cargo/rustc，未执行 Rust 试验，也未安装。Go 机制实际使用 `go`，输出 **go1.27.1 linux/amd64**；版本相关结论以此测试为界，未来工具链需重验。
 
 | 官方事实（资料） | 本篇提案，不能当作上游承诺 |
 | --- | --- |
@@ -352,7 +352,7 @@ goxide 成员消费原生 Go module 仍通过 Go module 元数据/MVS；原生 G
 [研究脚本](../../scripts/research/workspace_go_probe.py)仅生成临时原生 Go 模块，`GOPROXY=off GOSUMDB=off GOVCS=*:off GOTOOLCHAIN=local`，空 modulecache，所有依赖来自本地 fixture。没有私人第三方、安装脚本或 Rust工具链。记录及独立评审见 [研究验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/workspace-rfc-20261004.md)。执行：
 
 ```sh
-python3 scripts/research/workspace_go_probe.py --go /workspace/goxide-environment/go/bin/go
+python3 scripts/research/workspace_go_probe.py --go go
 python3 scripts/check_design.py --docs-only
 ```
 

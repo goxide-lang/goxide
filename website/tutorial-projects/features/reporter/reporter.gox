@@ -1,0 +1,9 @@
+package reporter
+
+use fmt;
+
+#[cfg(feature("pretty"))]
+func Summary(count int) string { return fmt::Sprintf("[%d orders]", count) }
+
+#[cfg(not(feature("pretty")))]
+func Summary(count int) string { return fmt::Sprintf("%d orders", count) }

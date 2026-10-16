@@ -1,0 +1,30 @@
+package main
+
+use testing;
+use order;
+
+#[cfg(feature("report"))]
+use reporter;
+
+func TestDescribe(t *testing::T) {
+    if got := order::Describe(7, order::Order::Pending); got != "order 7: pending" {
+        t.Fatal(got)
+    }
+    if got := order::Describe(7, order::Order::Paid(42)); got != "order 7: paid 42" {
+        t.Fatal(got)
+    }
+    if got := order::Describe(7, order::Order::Shipped("TRACK-7")); got != "order 7: shipped TRACK-7" {
+        t.Fatal(got)
+    }
+}
+
+func TestDisplay(t *testing::T) {
+    want := "order 7: pending"
+    if cfg!(feature("pretty")) { want = "[orders] " + want }
+    if got := display("order 7: pending"); got != want { t.Fatal(got) }
+}
+
+#[cfg(feature("report"))]
+func TestReport(t *testing::T) {
+    if got := reporter::Summary(3); got != "[3 orders]" { t.Fatal(got) }
+}

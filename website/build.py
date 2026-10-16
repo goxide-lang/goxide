@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild every published example and the browser compiler from this checkout."""
 import argparse, hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
-import catalog, project_snapshots, project_downloads
+import catalog, project_snapshots, project_downloads, tutorials, docs_content
 from build_support import dependency_context, dependency_sources, go_license_path, standalone_playground, verify_compiler_sources, verify_compiler_source, worktree_compiler_source
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
@@ -67,6 +67,9 @@ for name in static_files:
 index = (dist/'index.html').read_text()
 for page in ['rfc.html', 'playground.html', 'local.html']:
     (dist/page).write_text(index)
+for page in ['learn', 'docs', 'design']:
+    (dist/page).mkdir()
+    (dist/page/'index.html').write_text(index)
 # Record the precise Vite output graph; audit rejects extras and byte changes.
 frontend_assets = {}
 for asset in sorted((dist/'assets').rglob('*')):
@@ -151,6 +154,8 @@ cli_options_example = project_snapshots.cli(ROOT, GO, run)
 minimal_example = project_downloads.minimal(ROOT, GO, run)
 reexports_download = project_downloads.reexports(ROOT, dist, GO, run, compiler_source)
 public_catalog = catalog.export(catalog_data, checks)
+tutorial_content = tutorials.build(ROOT, dist, GO, run, compiler_source)
+documentation = docs_content.build(ROOT, GO, run)
 eh = hashlib.sha256()
 for archive in sorted(exports.glob('*.a')):
     eh.update(archive.name.encode()); eh.update(archive.read_bytes())
@@ -169,7 +174,8 @@ manifest = dict(pipeline='parser-expand-resolve-check-lower', enumRepresentation
                 dependencies=dependencies, dependencyContext=context, dependencySourceScope='fixed explicit project roots; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',
                 exportOrigins=origins, exportOriginsSha256=hashlib.sha256((exports/'origins.json').read_bytes()).hexdigest(),
                 importClosure=sorted(closure), maxSourceBytes=32768, maxFiles=16, compileTimeoutMs=10000,
-                examples=examples, packageExamples=package_examples, cliExamples=[cli_example], projectExamples=[minimal_example,reexports_download,cli_options_example])
+                examples=examples, packageExamples=package_examples, cliExamples=[cli_example], projectExamples=[minimal_example,reexports_download,cli_options_example],
+                tutorials=tutorial_content, docs=documentation, design=docs_content.build_design(ROOT))
 wasm_env = dict(env, GOOS='js', GOARCH='wasm', CGO_ENABLED='0')
 subprocess.run([GO, 'build', *wasm_flags, '-o', str(dist/'compiler.wasm'), './cmd/goxide-playground'], env=wasm_env, check=True)
 verify_compiler_source(ROOT, compiler_source)

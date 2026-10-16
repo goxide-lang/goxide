@@ -10,6 +10,27 @@
 
 依赖 schema 与项目发现以 [goxide.toml schema](../design/toml-manifest.md)为准：Go 来源显式写 `go` 加 `version`，Git 可省略 ref 并锁定默认分支，registry 未实现。TOML 作者项目采用[统一项目模型](0025-unified-project.md)，根不保留 go.mod/go.sum；原生 Go 项目继续以自身 go.mod 为依赖权威。下文的多目标、来源与发布合同按各自阶段接入。
 
+## 形式模型与阶段边界
+
+记配置为 `C = (F, T, E)`：`F(m)` 是模块 m 的最终 feature 集，T 是有效目标，E 是本次调用捕获的原始环境。语法见[词法与语法](../design/language-grammar.md)，阶段输入输出与完整规则见[转译语义](../design/translation-semantics.md)。
+
+```text
+⟦feature("x")⟧C,m = x ∈ F(m)
+⟦target_os("x")⟧C = (T.os = x)             其他 target 字段同理
+⟦env("k")⟧C       = k ∈ domain(E)
+⟦env("k", "v")⟧C = (k ∈ domain(E) 且 E[k] = "v")
+⟦all(Pi)⟧C = ∧i ⟦Pi⟧C    ⟦any(Pi)⟧C = ∨i ⟦Pi⟧C    ⟦not(P)⟧C = ¬⟦P⟧C
+
+SelectC(#[cfg(P)] item) = item 或 ε，取决于 P 的布尔值
+ExpandC(cfg!(P)) = 布尔常量；不删除外围 if 分支
+```
+
+每个当前处理到的完整谓词先校验，再求值。cfg_attr 的选中载荷递归规范化，多个有效 cfg 取 AND；未选载荷与删除项子树不进入后续处理。源码先完整解析，配置选择在首次名字/宏/import 收集前执行；宏输出重复“解析 → 选择 → 展开保留部分”，最后进入名字和类型检查。
+
+feature 图采用请求并集的最小不动点：根请求开始，反复加入本地 feature 展开、活动依赖边的转发与默认请求，直到不再变化。所有到同一 module/source 的请求合并，关闭一条边的 defaults 不能撤销另一条边。配置构造的来源模块决定 F(m)，T/E 为整次编译共享。
+
+生成身份包含实际读取的环境键及其存在性和值；读取记录在动态宏处理完成后收敛。配置变化影响生成缓存，依赖图不变时锁文件保持不变。工作流选择 T 的规则、原始环境与 Go 执行环境的区别见下文。
+
 ## 源级规则
 
 模块根目录显式放置 `goxide.toml`，`package.format = 2` 及显式 `package.module` / `package.go`，未知字段报错。依赖别名与 Go import 路径独立，import 仍写 module path。下例展示清单字段组合，包含后续开放的 example 目标；首批使用 package/dependencies/features/bin 和依赖的 lib：
@@ -418,10 +439,10 @@ goxide run --go /path/to/go --bin cli --features pretty ./app
 goxide run --bin cli --no-default-features --offline --locked ./app
 goxide build --bin web ./app
 goxide build --bin web --target-dir build-output ./app
-goxide build --bin web -o /tmp/app-web ./app
+goxide build --bin web -o ./app-web ./app
 goxide test --bin cli --features pretty --offline ./app
 goxide transpile --bin cli ./app
-goxide transpile --bin cli -o /tmp/app-generated ./app
+goxide transpile --bin cli -o ./app-generated ./app
 ```
 
 单个 bin 可省 --bin；多个 bin 必须显式选择。每次选择一个根目标及依赖闭包，活动 TOML 依赖沿用其 lib；无清单的原生 Go 依赖保持既有加载方式。后续开放 example/lib CLI 选择时，三种选择互斥、run 只接受可执行目标；required_features 继续只检查、不隐式开启 feature。

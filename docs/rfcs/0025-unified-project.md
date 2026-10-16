@@ -95,7 +95,7 @@ func main() { fmt.Println("mixed source, one manifest") }
 | 本地/Git依赖只有TOML | target规划代理元数据，不写原来源；边界/锁commit保持 |
 | 根同时TOML和go.mod/go.sum | 正常build拒绝；import-go首片只接受尚无TOML的原生Go输入，既有双配置须显式人工整理 |
 | 目的目录已有TOML/锁或任何内容 | 不覆盖；失败清理仅本次拥有的暂存目录 |
-| 未支持指令/workspace/工具链不满足 | 整体拒绝，源文件和已有输出不变 |
+| 未支持指令、workspace 或工具链不满足 | 整体拒绝，源文件和已有输出不变 |
 | go.sum存在旧未选版本 | 不把它当锁版本；实际Go MVS与校验结果决定 |
 | proxy source只有TOML、没有Go传输module元数据 | 不承诺可发现/go get；需专门生成source发行物 |
 | proxy传输go.mod与TOML module/约束冲突 | 拒绝，不能静默选择一方 |

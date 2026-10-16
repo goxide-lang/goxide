@@ -1,0 +1,22 @@
+[package]
+format = 2
+module = "example.org/orders"
+go = "1.27"
+
+[package.namespaces]
+order = "example.org/orders/order"
+
+[[bin]]
+name = "orders"
+path = "cmd/orders"
+
+[dependencies]
+fmt = { go = "fmt" }
+testing = { go = "testing" }
+reporter = { module = "example.org/reporter", package = "example.org/reporter", path = "reporter", optional = true, default_features = false }
+
+[features]
+default = ["pretty"]
+pretty = []
+trace = []
+report = ["dep:reporter", "reporter/pretty"]

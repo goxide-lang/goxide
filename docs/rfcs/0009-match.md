@@ -1,8 +1,38 @@
 # RFC 0009：模式匹配与按模式绑定
 
+## 当前规范与形式模型
+
+当前规则以[enum 表示与一次分派](../design/enum-representation.md)、[原位 payload 与引用](../design/enum-payload-borrows.md)为准；完整语法见[词法与语法](../design/language-grammar.md)，带真实 Go 对照的求值与存储模型见[转译语义](../design/translation-semantics.md)。
+
+设 arm 序列为 `A = [(pi, gi, bi)]`，无 guard 时 `gi = true`；先求值一次 scrutinee，再按源码顺序尝试当前变体适用的模式与 guard：
+
+```text
+⟨scrutinee, Σ0⟩ ⇓ ⟨v, Σ1⟩       ValidDispatch(v)
+Match(pi, v) 成功并建立局部绑定 Bi；求值 gi
+  false → 保留副作用，继续下一 arm
+  true  → 执行 bi，结束 match
+
+Cover(A) = 所有无 guard 模式覆盖值域的并集
+Exhaustive(E, A) ⇔ E 的合法值域 ⊆ Cover(A)
+```
+
+检查阶段拒绝非穷尽、不相容的 arm 结果类型和被前序无 guard 模式覆盖的不可达 arm。nil 不属于合法 enum 值域，在 guard 前的实际分派点 panic。降低为一次 type/tag switch，每个变体内部保持模式、通配 guard 和具体 guard 的源码次序。
+
+| 当前模式 | 绑定结果 |
+| --- | --- |
+| `V(x)` | payload 的浅复制；使用首个 guard 前的快照 |
+| `V(ref x)` / `V(ref mut x)` | 原 payload 的只读/可写引用 |
+| `match &e` / `match &mut e` 中的 `V(x)` | 普通绑定默认取得只读/可写引用 |
+
+引用必须指向真实可寻址字段或槽位；当前解析器不接受 `&pattern`，旧草案的 `V(&x)` 不能代替 `V(ref x)`。匹配中的外围 `return`、`break`、`continue`、`defer` 和 `?` 保留原控制流目标。实现覆盖范围见[能力状态表](../mvp-gap-audit.md)。
+
+## 历史方案与讨论
+
+以下保留早期模式和 ABI 讨论；其中 `Ok(&value)` 借用拼写、值型 case 以及“尚未冻结”的阶段描述由上述当前合同取代。
+
 2026-10-09 更新：本轮直接切换至内联独立 payload 槽、`ref` / `ref mut` 模式和 `&mut` 引用拼写，详见[当前原位 payload 合同](../design/enum-payload-borrows.md)。下文旧 interface/case、旧 Go case API 和布局待定的章节记录历史阶段，不是当前接口或兼容承诺；完整 Rust 模式规则不由本轮实现。
 
-## 状态与范围
+### 状态与范围
 
 变体分派与穷尽检查是已确认目标；用户已明确需要按 `Ok(value)`、`Ok(&value)`、`Ok(&mut value)` 区分复制和借用。
 具体借用模式、guard 规则及支持原位访问的 Go ABI 尚未冻结；已有有限值匹配前端不代表这些借用模式已实现。
@@ -12,7 +42,7 @@ D19/D20 边界：读写权限和已确认类型不变量照常检查；别名、
 本篇将旧草案“首版仅值绑定”的范围扩展为三种绑定的设计目标；不能把旧候选布局当成拒绝借用需求的理由。
 背景见[枚举专题](../design/enums-and-match.md)；枚举身份与构造见 [RFC 0008](0008-enums.md)。
 
-## 源级规则
+### 源级规则
 
 | 模式 | 绑定语义 | 对应约束 |
 | --- | --- | --- |
@@ -25,7 +55,7 @@ D19/D20 边界：读写权限和已确认类型不变量照常检查；别名、
 分支按源码顺序尝试，模式成功才建立绑定和执行 guard；guard 失败不撤销已经产生的副作用。
 无 guard 的分支才参与穷尽覆盖；不可达分支报错。`return`、`break`、`continue` 保留外围控制流目标。
 
-## 转译示例
+### 转译示例
 
 **M01：值绑定复制 payload，调用表达式只执行一次。**
 
@@ -110,7 +140,7 @@ println(boxed.(Ok[int, string]).Value) // 仍为 1，原 payload 未变。
 
 改成指针 case 可寻址，却会使普通接口赋值共享 case；临时副本再写回也需要独立证明 guard、panic、重入与退出时序。
 
-## 拒绝与边界
+### 拒绝与边界
 
 **M04：读借用写入由 goxide 拒绝，即使生成指针允许写。**
 
@@ -128,14 +158,14 @@ value := &r.OK
 临时表达式能否建立分支内借用、混合绑定与 guard 失败时的借用结束点，须另写正反例后冻结。
 展开不得提前执行短路右侧的 match，不得无条件套闭包而改变 return 或 defer 的作用域。
 
-## 双向互操作
+### 双向互操作
 
 goxide 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开放断言不意味着后端不能使用这些机制。
 纯 Go 调用方不会获得 goxide 的穷尽检查或读写权限诊断；输出指针的普通 Go 行为必须在公开契约中说明。
 原生返回值经合法 enum 视图进入 match，未经验证的非法动态类型不能被用户通配分支吞掉。
 枚举返回 Go 或跨生成包传递时，必须保持已选布局、复制语义和变体身份；装箱或桥接不得擦除读写资格。GC 保持可达对象存活，不据此宣称临时访问或不留存契约已获证明。
 
-## 验收与未定项
+### 验收与未定项
 
 1. M01 的 load_result 调用计数为一；M02 指向原 payload；M03 的修改在借用结束后可见。
 2. M04 在 goxide 阶段拒绝；Go 允许写指针不构成 goxide 正例。
@@ -143,7 +173,7 @@ goxide 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开
 4. 未定：最终表示、借用模式的返回签名覆盖、临时值寻址、guard 权限以及各布局的复制与分配成本；普通引用可保存/返回的方向不变。
 5. 为普通复制、保存和其他可写别名保留接受例；未来冲突风险 warning 单独验收，M04 的权限错误不降级。
 
-## 常用表达式组合实施切片（2026-10-02）
+### 常用表达式组合实施切片（2026-10-02）
 
 沿用[表达式上下文规则](../design/enums-and-match.md)的期望类型、顺序和非局部退出要求，本阶段没有增加模式语法。
 旧范围为显式类型局部变量的整个 initializer、一个非具名结果的整个 return。
@@ -155,7 +185,7 @@ goxide 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开
 
 尚未实现且不视为获批延期：任意运算符/短路/字面量内部、普通赋值、局部 `:= match` 推断、方法/动态/跨文件签名/泛型/variadic 参数、表达式块，以及此有限提取器不支持的复杂签名。tuple/record 模式没有扩大。常用组合阶段后先转向公开引用元数据；这些 match 长尾仍留在 T0 清单。
 
-## 普通赋值与局部结果推断切片（2026-10-02）
+### 普通赋值与局部结果推断切片（2026-10-02）
 
 新增单个既有局部标识符 `x = match ...`、`x := match ...` 和 `var x = match ...`；沿用已支持封闭 enum、guard 和模式，不增加 tuple/record/借用模式。复杂 LHS、多目标和控制头不在本片，必须明确诊断而不是错误地提前 scrutinee 或改变 LHS 求值顺序。
 
@@ -171,11 +201,11 @@ goxide 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开
 
 剩余：任意运算符/短路/字面量、复杂目标、动态/方法/其他参数调用、私有不可命名结果和更完整来源映射。这些是工程/表示范围账，不自动改成批准延期。下一先执行多包联合验收，用真实阻断而不是继续扩大模式系统决定收口。
 
-## 原位借用与表达式实现选择（2026-10-02）
+### 原位借用与表达式实现选择（2026-10-02）
 
 用户 D29 已明确 `match &mut enum_value` 的可写 payload 原位借用是首版必需，不再作为可后置候选。D30/D31 同时要求跨 module goxide 增强恢复和自然可写指针 Go 互操作。现有值型 case 不能借副本地址冒充原位；[有界实现评审](research/match-place-and-expression-options.md)给出 tag struct 候选、实际 Go API/比较/旧借用取舍，以及用户提出的 typed IIFE 机制实验。布局尚未冻结，当前前端尚不支持新借用语法；纯 Go 探针不算实现。普通复杂目标/嵌入表达式仍是工程欠账，不能因 IIFE 的复杂分支限制而拒绝评估纯分支，也不能让生成包装改变问号或 recover 的用户函数边界。
 
-## 二元表达式与简单索引目标（2026-10-02）
+### 二元表达式与简单索引目标（2026-10-02）
 
 生产前端现支持 `return 10 + match ...`，以及 `a[index()] = match ...`。二元算术、位运算/shift、比较和 &&/|| 可在单结果 return、局部初始化/赋值及已有静态调用/arm 子集中组合；索引目标首片为一个标识符加一个 subscript，接受 slice/map/array/*array。未增加模式、enum ABI、任意调用解析或原位借用语法。
 
@@ -189,7 +219,7 @@ goxide 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开
 
 本片采用 prelude 统一保留控制语义，不否定已有 IIFE 机制实验，也不宣称任意组合零成本。更复杂目标/控制头/字面量/动态调用/不可命名结果仍是工程账，未获自动延期；enum 表示迁移继续等用户选择。
 
-## 命名返回与静态类型已知的函数变量 match（2026-10-03）
+### 命名返回与静态类型已知的函数变量 match（2026-10-03）
 
 两个旧最小失败例现已接通：`func F(x E)(out int){return match x{E::A(n)=>n,E::B=>0}}` 与 `func F(x E,g func(int)int)int{return g(match x{E::A(n)=>n,E::B=>0})}`。命名单结果从真实用户函数签名获得类型，避免局部同名类型捕获。arm 先求值到私有 block 内的临时槽，普通 return 再写命名返回槽；defer 观察/修改最终槽，arm panic 不提前改槽，direct recover 保持用户帧，goto 不跨生成声明。
 
@@ -199,7 +229,7 @@ goxide 可以将 match 降低为 Go type switch 或 tag switch；禁止源级开
 
 该片之后的调用形状缺口已由下节统一签名组继续接通；多结果 `return match` 仍未实现，参数数量、溢出和不兼容类型仍正常拒绝。这些是当前实现边界，不自动批准延期。blank/embedded 字段、公开 enum 入口、Proposed adapters 不改，整体 MVP 未宣布完成。
 
-## 统一静态调用签名与 match 参数（2026-10-03）
+### 统一静态调用签名与 match 参数（2026-10-03）
 
 `tests/acceptance/match_call_signatures_test.go` 接通函数字段/直接方法 `s.F(M)`、返回的函数 `factory()(M)`、variadic `g(M)`/固定参数加 `g(prefix,M,rest...)`、展开参数本身为 `g(M...)`，以及原生 Go 声明的显式 `call[int](M)`（M 为完整 match 表达式）。同文件静态函数、跨文件/跨包函数、函数变量、方法表达式共用实际 Go 签名和参数身份；不再扫描同名函数或复制其参数类型拼写。variadic 普通尾项取元素类型，`...` 取 slice 类型，Go 自身仍执行展开/调用；禁止将额外 variadic 元素与 `rest...` 混合的非法 arity。`.gox` 用户泛型定义仍在 enum 前端明确拒绝，不能与原生 Go generic 调用支持混淆。
 
@@ -213,7 +243,7 @@ Go 规范 Order of evaluation 只规定调用、接收和逻辑运算等的相�
 
 仍明确未接通：多结果 `return match`；完全无可见类型拼写的私有调用参数（如 `m.Hidden()(match ...)`）；既有 unary/composite/block-arm 等非本组表达式上下文。非法 arity、常量溢出、不可寻址 pointer receiver 和权限擦除属于应拒绝输入，不算功能欠账。带编译器指令的本地函数保持既有明确诊断，不擅改调用的逃逸/活性约束。blank/embedded 字段、公开 enum 入口验证、serde adapters Proposed 均未在此决定。
 
-## Unary/composite 单值 match（2026-10-06，实施前合同）
+### Unary/composite 单值 match（2026-10-06，实施前合同）
 
 从 `2cd3b71e4cdeff0fe8ea9ae0a2f460ac52ee416d` 建立独立分支
 `feat/match-unary-composite`。本节先定义本批验收，实际实现与准确验证提交另记。
@@ -325,7 +355,7 @@ tuple/struct enum variant、原位 &mut 布局、blank/embedded、手写协议�
 和重复输出确定性。另有独立黑盒审查、准确源码完整 Mac race/vet/design、仓内 CLI/WASM
 网站全矩阵及新例。更新 compiler pin/digest 时与工具提交、最终文档提交分开记录。
 
-## Unary/composite 单值片交付（2026-10-06）
+### Unary/composite 单值片交付（2026-10-06）
 
 上述合同先提交为 `f1da21c`，最终生产实现为
 `f2d7a39c4b81a00fff191c89ac847b09af6a62e9`。已接通合同内标量 unary 和普通

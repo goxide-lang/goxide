@@ -144,7 +144,7 @@ source map在use移除及名称重写后继续回映原文件；生成alias文�
 
 ```sh
 go run ./cmd/goxide run --go /path/to/go examples/reexports
-go run ./cmd/goxide transpile -o /tmp/reexports-generated examples/reexports
+go run ./cmd/goxide transpile -o ./reexports-generated examples/reexports
 ```
 
 使用真实Go1.27+，输出目录必须不存在且位于源module外。没有新增manifest或网络依赖命令。
@@ -157,13 +157,13 @@ go run ./cmd/goxide transpile -o /tmp/reexports-generated examples/reexports
 
 本节为历史证据，旧语法与当时功能边界不作为当前入口合同；本次切换须以新提交的验证为准。
 
-执行环境为 Linux amd64、真实 Go 1.27.1（`/workspace/goxide-environment/go/bin/go`）。使用独立本地临时 module / replace fixture，`GOPROXY=off GOTOOLCHAIN=local GOWORK=off`，不需要网络依赖下载。
+执行环境为 Linux amd64、真实 Go 1.27.1（`go`）。使用独立本地临时 module / replace fixture，`GOPROXY=off GOTOOLCHAIN=local GOWORK=off`，不需要网络依赖下载。
 
 - `go test -race -tags goxideweb -count=1 ./...`：全树回归通过，包括 CLI、官网 embed 与验收集。
 - 最后收紧依赖泛型约束诊断并补充独立 module 的泛型 alias / 隐藏返回类型案例后，另跑 `go test -race ./internal/frontend` 通过（27.607s）。
 - `go vet -tags goxideweb ./...` 通过。
 - `python3 scripts/check_design.py`：70 Markdown、904 本地链接/锚点、21 RFC；13 条真实 Go 机制命令（含预期失败）通过。
-- `GO_BIN=/workspace/goxide-environment/go/bin/go python3 website/build.py` 通过，生成 WASM 和 5 个示例；单文件 Playground 明确不支持目录重导出，不宣称网页已支持该模式。
+- `GO_BIN=go python3 website/build.py` 通过，生成 WASM 和 5 个示例；单文件 Playground 明确不支持目录重导出，不宣称网页已支持该模式。
 - 本文 CLI 示例实际输出 `shared 2 2 true`、`42 2 7`。
 - 独立审查发现并推动修复局部 import 遮蔽、声明冲突、dot import 隐私绕过、生成产物 metadata 保留、泛型及私有结构类型身份、JSON 尾随对象校验问题；补充对应回归后审查结论无剩余阻断。
 

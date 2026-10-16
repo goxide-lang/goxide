@@ -11,7 +11,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
  def serve(self,body):
   path=urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
   name=path[1:] if path.startswith('/') else None
-  if name=='':name='index.html'
+  if name in ('learn', 'docs', 'design'):
+   query=urllib.parse.urlsplit(self.path).query
+   self.send_response(301);self.send_header('Location',path+'/' + ('?'+query if query else ''));self.send_header('Content-Length','0');self.end_headers();return
+  if name in ('', 'learn/', 'docs/', 'design/'):name+='index.html'
   valid=name is not None and '\\' not in name and '..' not in pathlib.PurePosixPath(name).parts and (root/name).is_file() and (root/name).resolve().is_relative_to(root.resolve())
   code=200 if valid else 404
   file=root/name if valid else root/'404.html'

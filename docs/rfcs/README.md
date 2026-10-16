@@ -40,7 +40,7 @@
 | [0019 统一 trait wrapper](0019-uniform-trait-wrappers.md) | 当前 trait 表示与 Go 便利入口 | marker、包级工厂、本地 As 与外部 ForT.As |
 | [0020 类型关联函数](0020-associated-functions.md) | impl 成员、T::method 与构造函数 | 原生 Go 声明边界、Self/self、Go 包函数与方法、泛型与初始化 |
 | [0021 use 与 pub use](0021-reexports.md) | 目录包公开API聚合 | canonical身份、变量存储、函数defer、合法Go路由与metadata |
-| [0022 feature 与项目工具链](0022-project-toolchain.md) | feature、cfg/cfg_attr/cfg!、依赖来源与目标 | 新管线已支持 feature：顶层条件属性先选择，cfg! 只查布尔值；原生 Go/TOML 配置隔离，target/test 后续接入 |
+| [0022 feature 与项目工具链](0022-project-toolchain.md) | feature、cfg/cfg_attr/cfg!、依赖来源与目标 | 新管线已支持 feature：顶层条件属性先选择，cfg! 只查布尔值；原生 Go/TOML 配置隔离；target/env 值域、统一快照、env CLI 与缓存已设计未实现，test 随测试 view 接入 |
 | [0023 宿主构建脚本](0023-build-scripts.md) | 显式生成、本地host依赖、信任与声明缓存 | 未授权拒绝、原子产物、无沙箱边界 |
 | [0025 统一项目与迁入](0025-unified-project.md) | TOML/lock唯一依赖权威、Go导入与target模块 | 无损指令子集、staging验证、source/Go发行边界 |
 | [0026 workspace](0026-workspaces.md) | Cargo风格成员/继承/锁与Go多模块 | 作者核心、根锁及受限go.work迁入已实现；vendor仅作输入转显式local模块；统一host resolver等扩展仍待设计/实现 |

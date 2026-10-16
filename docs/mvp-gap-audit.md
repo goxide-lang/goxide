@@ -18,6 +18,7 @@
 | 网站与浏览器转译 | 支持 | [website](../website/)：新编译器 WASM、示例目录、单包多文件编辑、CLI/WASM 生成结果一致；浏览器只转译 | [qa.mjs](../website/qa.mjs)、[catalog-qa.mjs](../website/catalog-qa.mjs)、[compiler_test.mjs](../website/compiler_test.mjs)、[package_test.go](../internal/playground/package_test.go) |
 | 网站 gen 用户指南 | 未做 | 从 [using-goxide-gen.md](using-goxide-gen.md) 单源生成精简页面，不维护第二份内容 | 无 |
 | feature 与 cfg/cfg_attr/cfg! | 支持 | [RFC 0022](rfcs/0022-project-toolchain.md)：原生 Go 显式包配置、TOML 每模块 feature 图、顶层条件属性与 cfg! 布尔查询，含宏产物；if 两支仍检查；当前仅 feature，target/test 等后续接入 | [配置语义](../internal/expand/config_test.go)、[跨模块生成](../internal/lower/cfg_e2e_test.go)、[项目与锁](../internal/compile/features_test.go)、[CLI 与 go generate](../cmd/goxide/features_test.go) |
+| target/env 等 cfg 谓词与环境查询 | 已设计，未实现 | [RFC 0022](rfcs/0022-project-toolchain.md#扩展谓词与统一配置设计尚未实现)：完整 target_os/arch/platform/endian/pointer_width 值表、compiler/cgo/race、显式 env 登记、`goxide env`、统一快照和缓存身份；保留 host-only，test 随测试 view 接入 | 实现时按 RFC 的 CFG-X01–X07 验收，当前无新谓词通过记录 |
 | workspace 与 example/lib 目标选择 | 未做 | 当前项目入口拒绝 workspace、`--example` 和 `--lib`；[MVP-1](pre-mvp-plan.md#后续阶段mvp)：成员、依赖继承、根锁，并在 feature 基础上按成员合并请求 | [project_test.go](../internal/compile/project_test.go)（workspace 拒绝入口） |
 | import-go | 未做 | CLI 入口已摘除；[MVP-2](pre-mvp-plan.md#后续阶段mvp) | [cli_process_test.go](../cmd/goxide/cli_process_test.go)（拒绝入口） |
 | vendor 与供应来源选择 | 未做 | 当前项目入口拒绝 vendor；[MVP-3](pre-mvp-plan.md#后续阶段mvp) | 无新管线验收测试 |

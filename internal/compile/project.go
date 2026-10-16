@@ -5,31 +5,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
 )
 
 type Options struct {
-	Bin, GoTool, TargetDir string
-	Offline, Locked        bool
-	Features               []string
-	NoDefaultFeatures      bool
-	NativeFeatures         *expand.Features // Native directory inputs keep an open root feature set.
-	Roots                  paths.Roots      // Optional root-module namespace context for native directory inputs.
+	Bin, GoTool, TargetDir, Target string
+	Offline, Locked                bool
+	Features                       []string
+	NoDefaultFeatures              bool
+	NativeFeatures                 *config.Features // Native directory inputs keep an open root feature set.
+	Roots                          paths.Roots      // Optional root-module namespace context for native directory inputs.
+	Config                         config.Config
+	Tags                           []string
+	Race                           bool
 }
 
 // Result names a stable generated Go module and its selected binary package.
 type Result struct {
 	Root, Entry string
 	SourceRoots []string // Original inputs, retained for caller output protection.
+	Config      config.Config
 }
 
 // PrepareProject generates a single manifest project and its source dependencies.
@@ -56,20 +58,34 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err := supportedManifest(manifest); err != nil {
 		return nil, err
 	}
-	tool := options.GoTool
-	if tool == "" {
-		tool = filepath.Join(runtime.GOROOT(), "bin", "go")
+	configuration := options.Config
+	if configuration.Environment == nil {
+		configuration.Environment, err = config.Prepare(options.GoTool, root, options.Target, false, os.Environ())
+		if err != nil {
+			return nil, err
+		}
 	}
-	environment, err := goEnvironment(tool)
-	if err != nil {
-		return nil, err
+	if configuration.Reads == nil {
+		configuration.Reads = &config.Reads{}
+	}
+	environment := configuration.Environment
+	tool := environment.GoTool
+	if work, _ := environment.LookupEnv("GOWORK"); work != "" && work != "off" {
+		return nil, fmt.Errorf("workspace migration unsupported: explicit GOWORK")
+	}
+	targetDir := options.TargetDir
+	if targetDir == "" {
+		targetDir, _ = environment.LookupEnv("GOXIDE_TARGET_DIR")
+	}
+	if targetDir == "" {
+		targetDir = "target"
 	}
 	release, err := project.LockProject(root)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-	graph, err := project.LoadWithTarget(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, options.TargetDir)
+	graph, err := project.LoadWithTarget(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.ExecEnv())
 	if err != nil {
 		return nil, err
 	}
@@ -77,9 +93,9 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	features := make(map[string]expand.Features, len(graph.Nodes))
+	features := make(map[string]config.Features, len(graph.Nodes))
 	for _, node := range graph.Nodes {
-		configuration := expand.Features{Enabled: node.Features}
+		selected := config.Features{Enabled: node.Features}
 		if node.HasManifest {
 			if err := singleProject(node.Root); err != nil {
 				return nil, err
@@ -87,17 +103,17 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 			if err := supportedManifest(node.Manifest); err != nil {
 				return nil, fmt.Errorf("%s: %w", node.Module, err)
 			}
-			configuration.Declared = make(map[string]bool, len(node.Manifest.Features))
+			selected.Declared = make(map[string]bool, len(node.Manifest.Features))
 			for name := range node.Manifest.Features {
-				configuration.Declared[name] = true
+				selected.Declared[name] = true
 			}
 		}
 		if node == graph.Root && options.NativeFeatures != nil {
-			configuration = *options.NativeFeatures
+			selected = *options.NativeFeatures
 		}
-		features[node.Module] = configuration
+		features[node.Module] = selected
 	}
-	layout, err := project.OpenLayout(root, manifest.Module, options.TargetDir)
+	layout, err := project.OpenLayout(root, manifest.Module, targetDir)
 	if err != nil {
 		return nil, err
 	}
@@ -108,15 +124,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 			return nil, fmt.Errorf("target directory overlaps source module %s", node.Module)
 		}
 	}
-	spec, err := unitSpec(graph, target, environment, features)
-	if err != nil {
-		return nil, err
-	}
-	unit, err := layout.Begin(spec)
-	if err != nil {
-		return nil, err
-	}
-	staged, err := os.MkdirTemp(unit.Intermediate, ".generation-")
+	staged, err := os.MkdirTemp(layout.Root, ".generation-")
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +164,9 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 			roots = options.Roots
 		}
 		generated[node.Module] = output
-		modules = append(modules, lower.Module{Path: node.Module, Dir: output, GoTool: tool, Roots: roots, Features: features[node.Module]})
+		moduleConfig := configuration
+		moduleConfig.Features = features[node.Module]
+		modules = append(modules, lower.Module{Path: node.Module, Dir: output, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race})
 	}
 	if err := prepareModules(graph, generated); err != nil {
 		return nil, err
@@ -164,12 +174,24 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err := lower.CompileModules(modules); err != nil {
 		return nil, err
 	}
-	name, err := goCommand(graph, generated[graph.Root.Module], "list", "-mod=readonly", "-f", "{{.Name}}", entry)
+	arguments := []string{"list", "-mod=readonly", "-tags=" + strings.Join(options.Tags, ","), "-f", "{{.Name}}"}
+	if options.Race {
+		arguments = append(arguments, "-race")
+	}
+	name, err := goCommand(graph, generated[graph.Root.Module], append(arguments, entry)...)
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(string(name)) != "main" {
 		return nil, fmt.Errorf("bin target %s must be package main", target.Name)
+	}
+	spec, err := unitSpec(graph, target, configuration, features, options.Tags, options.Race)
+	if err != nil {
+		return nil, err
+	}
+	unit, err := layout.Begin(spec)
+	if err != nil {
+		return nil, err
 	}
 	if err := graph.Save(); err != nil {
 		return nil, err
@@ -177,7 +199,8 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err := unit.PublishBundle(staged); err != nil {
 		return nil, err
 	}
-	result := &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry}
+	configuration.Features = features[graph.Root.Module]
+	result := &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry, Config: configuration}
 	for _, node := range graph.Nodes {
 		result.SourceRoots = append(result.SourceRoots, node.Root)
 	}
@@ -228,27 +251,7 @@ func supportedManifest(manifest project.Manifest) error {
 	return nil
 }
 
-func goEnvironment(tool string) (map[string]string, error) {
-	command := exec.Command(tool, "env", "-json", "GOVERSION", "GOOS", "GOARCH", "CGO_ENABLED", "GOEXPERIMENT", "GOAMD64", "GO386", "GOARM", "GOARM64", "GOMIPS", "GOMIPS64", "GOPPC64", "GORISCV64", "GOWASM", "CC", "CXX", "CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_FFLAGS", "CGO_LDFLAGS", "PKG_CONFIG")
-	command.Env = project.GoEnv(true)
-	data, err := command.Output()
-	if err != nil {
-		return nil, fmt.Errorf("read Go environment: %w", err)
-	}
-	var environment map[string]string
-	if err := json.Unmarshal(data, &environment); err != nil {
-		return nil, err
-	}
-	if environment["GOVERSION"] != runtime.Version() {
-		return nil, fmt.Errorf("Go tool %s differs from compiler importer %s", environment["GOVERSION"], runtime.Version())
-	}
-	if environment["GOOS"] != runtime.GOOS || environment["GOARCH"] != runtime.GOARCH {
-		return nil, fmt.Errorf("project compilation requires host GOOS/GOARCH")
-	}
-	return environment, nil
-}
-
-func unitSpec(graph *project.Graph, target project.Target, environment map[string]string, features map[string]expand.Features) (project.UnitSpec, error) {
+func unitSpec(graph *project.Graph, target project.Target, configuration config.Config, features map[string]config.Features, tags []string, race bool) (project.UnitSpec, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return project.UnitSpec{}, err
@@ -273,15 +276,30 @@ func unitSpec(graph *project.Graph, target project.Target, environment map[strin
 		sources = append(sources, source{node.Module, node.Root, string(node.ModBytes), node.Manifest, enabled})
 	}
 	sort.Slice(sources, func(i, j int) bool { return sources[i].Module < sources[j].Module })
-	config := project.Digest(struct {
+	buildTags := map[string]bool{}
+	for _, tag := range tags {
+		buildTags[tag] = true
+	}
+	environment := configuration.Environment
+	values := map[string][]byte{}
+	for key, value := range environment.GoValues() {
+		values[key] = []byte(value)
+	}
+	identity := project.Digest(struct {
 		Sources     []source
 		Target      project.Target
-		Environment map[string]string
+		Platform    config.Target
+		Environment map[string][]byte
+		EnvReads    []config.EnvInput
+		Tags        []string
+		Race        bool
+		GoTool      string
 		Compiler    string
 		Plan        string
-	}{sources, target, environment, project.Digest(compiler), graph.PlanID})
-	platform := runtime.GOOS + "-" + runtime.GOARCH
-	return project.UnitSpec{Host: platform, Target: platform, Kind: "bin", Name: target.Name, Config: config}, nil
+	}{sources, target, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, environment.GoTool, project.Digest(compiler), graph.PlanID})
+	host := environment.Host.OS + "-" + environment.Host.Arch
+	platform := environment.Target.OS + "-" + environment.Target.Arch
+	return project.UnitSpec{Host: host, Target: platform, Kind: "bin", Name: target.Name, Config: identity}, nil
 }
 
 func within(root, name string) bool {

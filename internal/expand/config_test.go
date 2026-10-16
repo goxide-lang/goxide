@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/printer"
 )
@@ -24,7 +25,7 @@ func TestConfigurationUsageSurvivesSelectionAndMacroExpansion(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			file := expandFile(t, "cfg.gox", test.source)
-			used, err := Configure(file, Features{})
+			used, err := Configure(file, config.Config{})
 			if err != nil || used != test.configured {
 				t.Fatalf("Configure used = %v, want %v; error = %v", used, test.configured, err)
 			}
@@ -42,7 +43,7 @@ func TestConfigurationUsageSurvivesSelectionAndMacroExpansion(t *testing.T) {
 }
 
 func TestConfigurationPredicates(t *testing.T) {
-	features := Features{Enabled: map[string]bool{"on": true}, Declared: map[string]bool{"on": true, "off": true}}
+	features := config.Config{Features: config.Features{Enabled: map[string]bool{"on": true}, Declared: map[string]bool{"on": true, "off": true}}}
 	for _, test := range []struct {
 		predicate string
 		want      bool
@@ -54,7 +55,7 @@ func TestConfigurationPredicates(t *testing.T) {
 	} {
 		t.Run(test.predicate, func(t *testing.T) {
 			file := expandFile(t, "cfg.gox", "var value = cfg!("+test.predicate+")")
-			out, err := Expand([]*ast.File{file}, nil, map[*ast.File]Features{file: features})
+			out, err := Expand([]*ast.File{file}, nil, map[*ast.File]config.Config{file: features})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -67,7 +68,7 @@ func TestConfigurationPredicates(t *testing.T) {
 
 func TestConfigurationValidatesUnusedEnabledNames(t *testing.T) {
 	file := expandFile(t, "cfg.gox", "var value = 1")
-	if _, err := Configure(file, Features{Enabled: map[string]bool{"bad/name": true}}); err == nil || !strings.Contains(err.Error(), "invalid feature name") {
+	if _, err := Configure(file, config.Config{Features: config.Features{Enabled: map[string]bool{"bad/name": true}}}); err == nil || !strings.Contains(err.Error(), "invalid feature name") {
 		t.Fatalf("unused invalid feature accepted: %v", err)
 	}
 }
@@ -84,13 +85,12 @@ func TestConfigurationPredicateDiagnostics(t *testing.T) {
 		{`cfg!(any(all(), unknown()))`, "unknown configuration predicate"},
 		{`cfg!(all(any(), feature("typo")))`, "unknown feature"},
 		{`cfg!(all(,))`, "empty argument"},
-		{`cfg!(target_os("linux"))`, "not supported"},
 		{`cfg!(test)`, "not supported"},
 		{`cfg![all()]`, "parenthesized arguments"},
 	} {
 		t.Run(test.source, func(t *testing.T) {
 			file := expandFile(t, "cfg.gox", "var value = "+test.source)
-			_, err := Expand([]*ast.File{file}, nil, map[*ast.File]Features{file: {Declared: map[string]bool{}}})
+			_, err := Expand([]*ast.File{file}, nil, map[*ast.File]config.Config{file: {Features: config.Features{Declared: map[string]bool{}}}})
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want %s", err, test.want)
 			}
@@ -134,7 +134,7 @@ func TestConfigurationValidatesAllActiveAttributes(t *testing.T) {
 		`#[cfg_attr(all(), cfg(any()))] #[cfg(feature("typo"))]`,
 	} {
 		file := expandFile(t, "cfg.gox", attributes+" struct Value { Field int }")
-		if _, err := Configure(file, Features{Declared: map[string]bool{}}); err == nil {
+		if _, err := Configure(file, config.Config{Features: config.Features{Declared: map[string]bool{}}}); err == nil {
 			t.Fatalf("accepted invalid current attributes %s", attributes)
 		}
 	}
@@ -163,7 +163,7 @@ func TestConfigurationRejectsNestedPositions(t *testing.T) {
 		`type ( #[cfg(all())] Value int )`,
 	} {
 		file := expandFile(t, "cfg.gox", source)
-		_, err := Configure(file, Features{})
+		_, err := Configure(file, config.Config{})
 		if err == nil || !strings.Contains(err.Error(), "complete top-level item") {
 			t.Errorf("%s: error = %v", source, err)
 		}
@@ -207,9 +207,9 @@ own_item!(defined)
 capture_item!(#[cfg(feature("local"))] var omitted = 1)
 attribute!(captured_attr, cfg(feature("local")))
 `)
-	features := map[*ast.File]Features{
-		definition: {Enabled: map[string]bool{"local": true}, Declared: map[string]bool{"local": true}},
-		caller:     {Declared: map[string]bool{"local": true}},
+	features := map[*ast.File]config.Config{
+		definition: {Features: config.Features{Enabled: map[string]bool{"local": true}, Declared: map[string]bool{"local": true}}},
+		caller:     {Features: config.Features{Declared: map[string]bool{"local": true}}},
 	}
 	result, err := Expand([]*ast.File{definition, caller}, nil, features)
 	if err != nil {
@@ -233,7 +233,7 @@ func gone() { /* disabled body */ }
 // Kept documents the retained item.
 func Kept() {}
 `)
-	if _, err := Configure(file, Features{}); err != nil {
+	if _, err := Configure(file, config.Config{}); err != nil {
 		t.Fatal(err)
 	}
 	if len(file.Directives) != 0 || len(file.Comments) != 1 || !strings.Contains(file.Comments[0].List[0].Text, "Kept") {

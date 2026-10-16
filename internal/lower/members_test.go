@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	gotoken "go/token"
 	"go/types"
+	"runtime"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ func f() int {
 }`)
 	names := memberTestNames(file, "A", map[string]string{"value": "Value", "next": "Next"})
 	var renamer memberRenamer
-	renamer.rename("p", fset, []*goast.File{file}, names, nil)
+	renamer.rename("p", fset, []*goast.File{file}, names, nil, types.SizesFor("gc", runtime.GOARCH))
 	memberTestCheck(t, "p", fset, file, nil)
 	selectors := map[string]int{}
 	keys := map[string]int{}
@@ -55,13 +56,13 @@ func New() *A { return &A{value: 1, child: &A{value: 2}} }
 func (a *A) next() *A { return a }
 `)
 	var renamer memberRenamer
-	pkg := renamer.rename("p", fset, []*goast.File{dependency}, memberTestNames(dependency, "A", map[string]string{"value": "Value", "child": "Child", "next": "Next"}), nil)
+	pkg := renamer.rename("p", fset, []*goast.File{dependency}, memberTestNames(dependency, "A", map[string]string{"value": "Value", "child": "Child", "next": "Next"}), nil, types.SizesFor("gc", runtime.GOARCH))
 	imports := memberTestImporter{"p": pkg}
 	caller := memberTestFile(t, fset, "q/q.go", `package q
 import "p"
 func f() int { return p.New().next().child.value + p.A{value: 3}.value }
 `)
-	renamer.rename("q", fset, []*goast.File{caller}, nil, imports)
+	renamer.rename("q", fset, []*goast.File{caller}, nil, imports, types.SizesFor("gc", runtime.GOARCH))
 	memberTestCheck(t, "p", fset, dependency, nil)
 	memberTestCheck(t, "q", fset, caller, imports)
 	goast.Inspect(caller, func(node goast.Node) bool {
@@ -89,7 +90,7 @@ func f(o Outer) int { return o.Private.N }
 		return true
 	})
 	var renamer memberRenamer
-	renamer.rename("p", fset, []*goast.File{file}, names, nil)
+	renamer.rename("p", fset, []*goast.File{file}, names, nil, types.SizesFor("gc", runtime.GOARCH))
 	memberTestCheck(t, "p", fset, file, nil)
 	goast.Inspect(file, func(node goast.Node) bool {
 		if id, ok := node.(*goast.Ident); ok && id.Name == "Private" {
@@ -140,7 +141,7 @@ func memberTestNames(file *goast.File, typeName string, mapped map[string]string
 
 func memberTestCheck(t *testing.T, name string, fset *gotoken.FileSet, file *goast.File, importer types.Importer) {
 	t.Helper()
-	config := types.Config{Importer: importer}
+	config := types.Config{Importer: importer, Sizes: types.SizesFor("gc", runtime.GOARCH)}
 	if _, err := config.Check(name, fset, []*goast.File{file}, nil); err != nil {
 		t.Fatal(err)
 	}

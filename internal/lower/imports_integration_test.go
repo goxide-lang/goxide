@@ -25,7 +25,7 @@ func main() {
 pub type item = int
 pub func answer() int { return 42 }
 `))
-	directory, err := lower.PrepareModule([]string{source}, "fixture")
+	directory, err := lower.PrepareModule([]string{source}, "fixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}

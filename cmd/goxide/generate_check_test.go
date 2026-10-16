@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"github.com/hxsf/goxide/internal/config"
 	"go/importer"
 	"os"
 	"os/exec"
@@ -71,7 +72,7 @@ func TestCheckGeneratedPackageRetainsLineDirectives(t *testing.T) {
 		source: []byte("source syntax must not be parsed as Go"),
 	}, map[string][]byte{
 		source: []byte("//line value.gox:1\npackage p\n//line value.gox:23\nfunc Value() int { return \"wrong\" }\n"),
-	}, importer.Default())
+	}, importer.Default(), config.Config{}.Sizes())
 	if err == nil || !strings.Contains(err.Error(), source+":23:") || !strings.Contains(err.Error(), "cannot use") {
 		t.Fatalf("generated Go diagnostic lost its source location: %v", err)
 	}

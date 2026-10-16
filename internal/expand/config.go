@@ -8,23 +8,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/token"
 )
 
-// Features belongs to the source module that owns a configuration construct.
-// A nil Declared set permits any valid name, as in a native Go module.
-type Features struct {
-	Enabled, Declared map[string]bool
-}
-
 // Configure selects complete source items before import or declaration discovery.
 // Parsing must already have succeeded, including the syntax of disabled items.
 // used records configuration attributes even when they remove their item.
-func Configure(file *ast.File, features Features) (used bool, err error) {
-	s := selection{file: file, features: func(*ast.File) Features { return features }, used: &used}
+func Configure(file *ast.File, configuration config.Config) (used bool, err error) {
+	s := selection{file: file, config: func(*ast.File) config.Config { return configuration }, used: &used}
 	var names []string
-	for name, enabled := range features.Enabled {
+	for name, enabled := range configuration.Features.Enabled {
 		if enabled {
 			names = append(names, name)
 		}
@@ -97,10 +92,10 @@ func dropItemComments(file *ast.File, item ast.Item) {
 }
 
 type selection struct {
-	file     *ast.File
-	features func(*ast.File) Features
-	engine   *engine
-	used     *bool
+	file   *ast.File
+	config func(*ast.File) config.Config
+	engine *engine
+	used   *bool
 }
 
 func (s selection) origin(n ast.Node) Origin {
@@ -211,7 +206,7 @@ func (s selection) attrs(attrs []*ast.Attr) ([]*ast.Attr, bool, error) {
 				payload = append(payload, a)
 			}
 		}
-		value, err := configPredicate(args[0], s.features(s.origin(attr).File))
+		value, err := s.predicate(args[0], s.origin(attr).File)
 		if err != nil {
 			return nil, false, s.fail(attr, err.Error())
 		}
@@ -254,13 +249,13 @@ func configArguments(tokens []ast.TokenOrTree) ([][]ast.TokenOrTree, error) {
 
 var featureName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
-func configPredicate(tokens []ast.TokenOrTree, features Features) (bool, error) {
+func configPredicate(tokens []ast.TokenOrTree, configuration config.Config, targetUsed func()) (bool, error) {
 	if len(tokens) == 0 || tokens[0].Token == nil || tokens[0].Token.Kind != token.IDENT {
 		return false, fmt.Errorf("expected a configuration predicate")
 	}
 	name := tokens[0].Token.Text
 	switch name {
-	case "feature", "all", "any", "not":
+	case "feature", "all", "any", "not", "env", "target_os", "target_arch", "target_platform", "target_endian", "target_pointer_width":
 	default:
 		if strings.HasPrefix(name, "target_") || name == "test" || name == "debug_assertions" || name == "cgo" {
 			return false, fmt.Errorf("configuration predicate %q is not supported", name)
@@ -282,17 +277,74 @@ func configPredicate(tokens []ast.TokenOrTree, features Features) (bool, error) 
 		if err != nil || !featureName.MatchString(value) {
 			return false, fmt.Errorf("invalid feature name %q", value)
 		}
-		if features.Declared != nil && !features.Declared[value] {
+		if configuration.Features.Declared != nil && !configuration.Features.Declared[value] {
 			return false, fmt.Errorf("unknown feature %q", value)
 		}
-		return features.Enabled[value], nil
+		return configuration.Features.Enabled[value], nil
+	}
+	if name == "env" || strings.HasPrefix(name, "target_") {
+		if name == "env" && (len(args) < 1 || len(args) > 2) {
+			return false, fmt.Errorf("env requires one or two string literals")
+		}
+		if name != "env" && len(args) != 1 {
+			return false, fmt.Errorf("%s requires exactly one string literal", name)
+		}
+		var values []string
+		for _, arg := range args {
+			if len(arg) != 1 || arg[0].Token == nil || arg[0].Token.Kind != token.STRING {
+				return false, fmt.Errorf("%s requires string literal arguments", name)
+			}
+			value, err := strconv.Unquote(arg[0].Token.Text)
+			if err != nil {
+				return false, fmt.Errorf("invalid %s string: %w", name, err)
+			}
+			values = append(values, value)
+		}
+		if name == "env" {
+			if values[0] == "" || strings.ContainsAny(values[0], "=\x00") {
+				return false, fmt.Errorf("env requires a nonempty environment key without '=' or NUL")
+			}
+			if configuration.Environment == nil {
+				return false, fmt.Errorf("env requires a prepared environment")
+			}
+			value, present := configuration.Environment.LookupEnv(values[0])
+			configuration.Reads.Record(configuration.Environment.EnvKey(values[0]), present, value)
+			return present && (len(values) == 1 || value == values[1]), nil
+		}
+		allowed := config.Values(name)
+		known := false
+		for _, value := range allowed {
+			known = known || value == values[0]
+		}
+		if !known {
+			return false, fmt.Errorf("unknown %s value %q; allowed values: %s", name, values[0], strings.Join(allowed, ", "))
+		}
+		if configuration.Environment == nil {
+			return false, fmt.Errorf("%s requires a prepared environment", name)
+		}
+		targetUsed()
+		target := configuration.Environment.Target
+		var value string
+		switch name {
+		case "target_os":
+			value = target.OS
+		case "target_arch":
+			value = target.Arch
+		case "target_platform":
+			value = target.Platform
+		case "target_endian":
+			value = target.Endian
+		case "target_pointer_width":
+			value = strconv.Itoa(target.PointerWidth)
+		}
+		return value == values[0], nil
 	}
 	if name == "not" && len(args) != 1 {
 		return false, fmt.Errorf("not requires exactly one predicate")
 	}
 	value := name == "all"
 	for _, arg := range args {
-		child, err := configPredicate(arg, features)
+		child, err := configPredicate(arg, configuration, targetUsed)
 		if err != nil {
 			return false, err
 		}
@@ -355,7 +407,19 @@ func (s selection) attribute(tokens []ast.TokenOrTree, parent *ast.Attr) (*ast.A
 }
 
 func (e *engine) selection(file *ast.File) selection {
-	return selection{file: file, engine: e, features: func(file *ast.File) Features { return e.features[file] }, used: &e.r.UsesConfiguration}
+	return selection{file: file, engine: e, config: func(file *ast.File) config.Config { return e.configs[file] }, used: &e.r.UsesConfiguration}
+}
+
+func (s selection) predicate(tokens []ast.TokenOrTree, owner *ast.File) (bool, error) {
+	configuration := s.config(owner)
+	destination := s.config(s.file)
+	configuration.Environment, configuration.Reads = destination.Environment, destination.Reads
+	return configPredicate(tokens, configuration, func() {
+		configuration.Reads.RecordTarget(s.file)
+		if s.engine != nil {
+			s.engine.r.TargetFiles[s.file] = true
+		}
+	})
 }
 
 func (e *engine) cfg(n ast.Node, args *ast.TokenTree, kind fragmentKind, file *ast.File, parent ast.ExpnID) (ast.Node, bool, error) {
@@ -375,7 +439,7 @@ func (e *engine) cfg(n ast.Node, args *ast.TokenTree, kind fragmentKind, file *a
 		return nil, true, s.fail(n, "cfg! requires exactly one predicate")
 	}
 	o := s.origin(n)
-	value, err := configPredicate(parts[0], s.features(o.File))
+	value, err := s.predicate(parts[0], o.File)
 	if err != nil {
 		return nil, true, s.fail(n, err.Error())
 	}

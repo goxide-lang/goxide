@@ -37,7 +37,7 @@ func main() {
 			t.Fatal(err)
 		}
 	}
-	output, err := lower.PrepareModule([]string{directory}, "referencefixture")
+	output, err := lower.PrepareModule([]string{directory}, "referencefixture", testConfig(t))
 	if output != "" {
 		t.Cleanup(func() { os.RemoveAll(output) })
 		t.Fatalf("rejected imported reference emitted module %s", output)

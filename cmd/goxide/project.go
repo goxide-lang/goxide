@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go/build"
 	"go/version"
 	"io"
 	"io/fs"
@@ -18,7 +17,7 @@ import (
 	"time"
 
 	"github.com/hxsf/goxide/internal/compile"
-	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/naming"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
@@ -88,7 +87,7 @@ func runPreparedProject(req CompileRequest, prepared *compile.Result, sourceRoot
 	binary := manifest
 	if req.Mode == "build" && !manifest {
 		listing := exec.Command(req.GoTool, "list", "-mod=readonly", "-tags="+strings.Join(tags, ","), "-f", "{{.Name}}", prepared.Entry)
-		listing.Dir, listing.Env = prepared.Root, localEnv()
+		listing.Dir, listing.Env = prepared.Root, localEnv(prepared.Config.Environment.ExecEnv())
 		name, err := listing.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("selected target package: %w: %s", err, bytes.TrimSpace(name))
@@ -148,7 +147,7 @@ func runPreparedProject(req CompileRequest, prepared *compile.Result, sourceRoot
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	command := exec.CommandContext(ctx, req.GoTool, argv...)
-	command.Dir, command.Env = prepared.Root, localEnv()
+	command.Dir, command.Env = prepared.Root, localEnv(prepared.Config.Environment.ExecEnv())
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, out, stderr
 	if err := command.Run(); err != nil {
 		return fmt.Errorf("generated project %s: %w", req.Mode, err)
@@ -178,7 +177,7 @@ func checkPreparedPackage(req CompileRequest, prepared *compile.Result, descenda
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	command := exec.CommandContext(ctx, req.GoTool, "list", "-export", "-mod=readonly", "-buildvcs=false", "-tags="+req.Tags, target)
-	command.Dir, command.Env = prepared.Root, localEnv()
+	command.Dir, command.Env = prepared.Root, localEnv(prepared.Config.Environment.ExecEnv())
 	if output, err := command.CombinedOutput(); err != nil {
 		return fmt.Errorf("generated package check: %w: %s", err, bytes.TrimSpace(output))
 	}
@@ -259,15 +258,12 @@ func packageOutput(name, sourceRoot, kind string, sourceRoots ...string) (string
 	return name, nil
 }
 
-func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []string, rootsFile string, out, stderr io.Writer) error {
+func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []string, rootsFile string, cfg config.Config, out, stderr io.Writer) error {
 	if mode == "expand" {
 		return fmt.Errorf("expand is a single-file command; use transpile for packages")
 	}
 	if mode == "transpile" && dest == "" {
 		return fmt.Errorf("directory transpile requires -o with a fresh output directory")
-	}
-	if err := checkDirectoryCompiler(goTool); err != nil {
-		return err
 	}
 	input, err := filepath.Abs(input)
 	if err != nil {
@@ -286,7 +282,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 			return err
 		}
 	}
-	manifest, err := project.ImportMod(goTool, root)
+	manifest, err := project.ImportMod(goTool, root, cfg.Environment.ExecEnv())
 	if err != nil {
 		return err
 	}
@@ -316,7 +312,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err := os.Mkdir(stage, 0700); err != nil {
 		return err
 	}
-	if err := copyDirectorySources(root, input, stage, manifest.Module, roots, tags, mode == "test"); err != nil {
+	if err := copyDirectorySources(root, input, stage, manifest.Module, roots, tags, mode == "test", cfg); err != nil {
 		return err
 	}
 	for _, name := range []string{"go.mod", "go.sum", rootconfig.Filename} {
@@ -339,7 +335,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err := os.WriteFile(filepath.Join(stage, project.ManifestName), data, 0600); err != nil {
 		return err
 	}
-	prepared, err := compile.PrepareProject(stage, compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: true, Roots: roots, NativeFeatures: &expand.Features{}})
+	prepared, err := compile.PrepareProject(stage, compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: true, Roots: roots, NativeFeatures: &cfg.Features, Config: cfg, Tags: tags, Race: mode == "test"})
 	if err != nil {
 		return err
 	}
@@ -372,7 +368,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 		if err != nil && !os.IsNotExist(err) {
 			return err
 		}
-		if err := exportDirectoryModule(goTool, prepared.Root, bundle, destination); err != nil {
+		if err := exportDirectoryModule(goTool, prepared.Root, bundle, destination, cfg.Environment.ExecEnv()); err != nil {
 			return err
 		}
 		if rootData != nil {
@@ -383,12 +379,8 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	return runPreparedProject(req, prepared, root, out, stderr)
 }
 
-func copyDirectorySources(root, input, stage, module string, roots paths.Roots, tags []string, race bool) error {
-	context := build.Default
-	context.BuildTags = append([]string{}, tags...)
-	if race {
-		context.BuildTags = append(context.BuildTags, "race")
-	}
+func copyDirectorySources(root, input, stage, module string, roots paths.Roots, tags []string, race bool, cfg config.Config) error {
+	context := cfg.Environment.Context(tags, race)
 	selected := []string{input}
 	var collect func(paths.Namespace)
 	collect = func(namespace paths.Namespace) {
@@ -473,20 +465,13 @@ func copyDirectorySources(root, input, stage, module string, roots paths.Roots, 
 			if !matches {
 				return nil
 			}
-			// This view contains one selected configuration; the importer has no tag option.
-			lines := strings.Split(string(data), "\n")
-			for i, line := range lines {
-				if strings.HasPrefix(line, "//go:build ") || strings.HasPrefix(line, "// +build ") {
-					lines[i] = ""
-				}
-			}
-			data = []byte(strings.Join(lines, "\n"))
+
 		}
 		return os.WriteFile(filepath.Join(stage, relative), data, info.Mode().Perm())
 	})
 }
 
-func exportDirectoryModule(tool, source, bundle, destination string) error {
+func exportDirectoryModule(tool, source, bundle, destination string, base []string) error {
 	if err := os.CopyFS(destination, os.DirFS(source)); err != nil {
 		return err
 	}
@@ -508,7 +493,7 @@ func exportDirectoryModule(tool, source, bundle, destination string) error {
 	}
 	for _, from := range project.Keys(modules) {
 		to := modules[from]
-		mod, err := project.ReadMod(tool, to)
+		mod, err := project.ReadMod(tool, to, base)
 		if err != nil {
 			return err
 		}
@@ -538,7 +523,7 @@ func exportDirectoryModule(tool, source, bundle, destination string) error {
 		}
 		if len(arguments) != 2 {
 			command := exec.Command(tool, arguments...)
-			command.Dir, command.Env = to, localEnv()
+			command.Dir, command.Env = to, localEnv(base)
 			if output, err := command.CombinedOutput(); err != nil {
 				return fmt.Errorf("export Go module: %w: %s", err, output)
 			}

@@ -155,7 +155,7 @@ eh = hashlib.sha256()
 for archive in sorted(exports.glob('*.a')):
     eh.update(archive.name.encode()); eh.update(archive.read_bytes())
 export_target = json.loads(run(GO, 'env', '-json', 'GOOS', 'GOARCH'))
-wasm_flags = ['-trimpath', '-buildvcs=false', '-ldflags=-s -w -buildid=']
+wasm_flags = ['-trimpath', '-buildvcs=false', f"-ldflags=-s -w -buildid= -X main.exportOS={export_target['GOOS']} -X main.exportArch={export_target['GOARCH']}"]
 public_libraries = []
 for module in ['github.com/goxide-lang/std', 'github.com/goxide-lang/serde']:
     selected = json.loads(run(GO, 'list', '-m', '-json', module))

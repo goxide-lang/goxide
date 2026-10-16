@@ -221,12 +221,14 @@ func TestProjectLayoutHostBoundaryAndUnknownTarget(t *testing.T) {
 	}
 	t.Setenv("GOOS", otherOS)
 	t.Setenv("CGO_ENABLED", "0")
-	if _, e := projectRun(t, root, "build", "--bin", "one", "--offline", "--target-dir", "cross-output"); e == nil || !strings.Contains(e.Error(), "requires host GOOS/GOARCH") {
-		t.Fatal(e)
+	output, e := projectRun(t, root, "build", "--bin", "one", "--offline", "--target-dir", "cross-output")
+	if e != nil {
+		t.Fatalf("toolchain default must ignore ambient GOOS: %v: %s", e, output)
 	}
-	if _, e := os.Stat(filepath.Join(root, "cross-output", "bin")); !os.IsNotExist(e) {
-		t.Fatal("cross build emitted a misleading host binary")
+	if _, e := os.Stat(strings.TrimSpace(output)); e != nil {
+		t.Fatalf("missing host binary: %v", e)
 	}
+
 }
 
 func TestProjectLayoutConfigurationAndGoCaches(t *testing.T) {

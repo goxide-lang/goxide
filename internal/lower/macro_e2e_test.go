@@ -24,12 +24,12 @@ func TestMacroSourcePackages(t *testing.T) {
 func runMacroFixture(t *testing.T, fixture, want string) {
 	t.Helper()
 	source := filepath.Join("testdata", "macros", fixture)
-	generated, err := lower.PrepareModule([]string{source}, "macrofixture")
+	generated, err := lower.PrepareModule([]string{source}, "macrofixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(generated) })
-	repeated, err := lower.PrepareModule([]string{source}, "macrofixture")
+	repeated, err := lower.PrepareModule([]string{source}, "macrofixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestMacroSourceVisibility(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			generated, err := lower.PrepareModule([]string{source}, "macrofixture")
+			generated, err := lower.PrepareModule([]string{source}, "macrofixture", testConfig(t))
 			if generated != "" {
 				os.RemoveAll(generated)
 				t.Fatalf("rejected macro produced output %s", generated)
@@ -151,7 +151,7 @@ func main() {
 	}
 	var generated []string
 	for range 2 {
-		module, err := lower.PrepareModule([]string{source}, "macroderive")
+		module, err := lower.PrepareModule([]string{source}, "macroderive", testConfig(t))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -177,7 +177,7 @@ func main() {
 	if err := os.WriteFile(filepath.Join(source, "main.gox"), []byte(invalid), 0600); err != nil {
 		t.Fatal(err)
 	}
-	module, err := lower.PrepareModule([]string{source}, "macroderive")
+	module, err := lower.PrepareModule([]string{source}, "macroderive", testConfig(t))
 	if module != "" {
 		os.RemoveAll(module)
 		t.Fatal("captured non-canonical owner produced Go output")

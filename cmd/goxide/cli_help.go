@@ -14,7 +14,7 @@ func configureCLIHelp(root *cobra.Command) {
 		},
 		"goxide build": {
 			"编译文件、目录或项目并保留构建产物",
-			"省略输入时，从当前目录向上发现 goxide.toml。项目构建会打印稳定的二进制路径；用 --bin 选择项目二进制目标。",
+			"省略输入时，从当前目录向上发现 goxide.toml。项目构建会打印稳定的二进制路径；用 --bin 选择项目二进制目标。缺省编译目标为宿主，可用 --target GOARCH-unknown-GOOS 跨目标构建。",
 			"  goxide build -o ./app main.gox\n  goxide build --bin app --offline ./project",
 		},
 		"goxide run": {
@@ -36,6 +36,11 @@ func configureCLIHelp(root *cobra.Command) {
 			"查看单文件的宏展开结果",
 			"展开单个 .gox 文件；此命令不接受目录或项目输入。用 -o 将结果写入文件。",
 			"  goxide expand main.gox\n  goxide expand -o expanded.go main.gox",
+		},
+		"goxide env": {
+			"查询宿主、Go 环境和 Goxide 编译目标",
+			"显示三种目标及所选 Go 工具链；--target 仅选择 Goxide 工具链目标。名称参数查询原始进程环境，--list 列出目标值域。该命令不执行源码或解析项目。",
+			"  goxide env --json --target linux/amd64\n  goxide env --list\n  goxide env --json GOOS APP_EDITION",
 		},
 		"goxide import-go": {
 			"查看 Go 模块迁移计划或迁移到新目录",

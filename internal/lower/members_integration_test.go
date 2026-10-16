@@ -65,7 +65,7 @@ func main() {
 			for name, contents := range test.files {
 				writeDiagnosticModuleFile(t, source, name, []byte(contents))
 			}
-			module, err := lower.PrepareModule([]string{source}, "members")
+			module, err := lower.PrepareModule([]string{source}, "members", testConfig(t))
 			if err != nil {
 				t.Fatal(err)
 			}

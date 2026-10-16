@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/lower"
 )
 
@@ -40,7 +40,7 @@ func main() {
 }
 `
 	for _, enabled := range []bool{false, true} {
-		options := lower.PackageOptions{Features: expand.Features{Enabled: map[string]bool{"active": enabled}, Declared: map[string]bool{"active": true}}}
+		options := lower.PackageOptions{Config: testConfig(t, config.Features{Enabled: map[string]bool{"active": enabled}, Declared: map[string]bool{"active": true}})}
 		inputs := map[string][]byte{"main.gox": []byte(source)}
 		output, err := lower.CompilePackage(inputs, "cfgfixture", nil, nil, options)
 		if err != nil {

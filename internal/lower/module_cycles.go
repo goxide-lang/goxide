@@ -3,7 +3,6 @@ package lower
 import (
 	"bytes"
 	"fmt"
-	"go/build"
 	goparser "go/parser"
 	gotoken "go/token"
 	"io"
@@ -33,7 +32,7 @@ func checkModuleCycles(modules []Module, output map[string][]byte, resolved *res
 		if strings.HasSuffix(name, "_test.gox") || strings.HasSuffix(name, "_test.go") {
 			return nil
 		}
-		context := build.Default
+		context := modules[0].Config.Environment.Context(modules[0].Tags, modules[0].Race)
 		context.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(data)), nil }
 		base := strings.TrimSuffix(path.Base(name), ".gox")
 		if !strings.HasSuffix(base, ".go") {
@@ -50,6 +49,13 @@ func checkModuleCycles(modules []Module, output map[string][]byte, resolved *res
 		file, err := goparser.ParseFile(fset, name, data, goparser.ImportsOnly)
 		if err != nil {
 			return err
+		}
+		if !context.CgoEnabled {
+			for _, spec := range file.Imports {
+				if imported, err := strconv.Unquote(spec.Path.Value); err == nil && imported == "C" {
+					return nil
+				}
+			}
 		}
 		owner := path.Dir(name)
 		if graph[owner] == nil {

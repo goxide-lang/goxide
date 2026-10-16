@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/token"
 )
@@ -72,16 +73,18 @@ type Result struct {
 	// UsesConfiguration includes evaluated source and macro-produced constructs,
 	// even when a false predicate removes the entire generated item.
 	UsesConfiguration bool
-	Allocations       map[*ast.CallExpr]bool
-	Captures          map[ast.Node]Capture
-	GoResults         map[*ast.CallExpr]bool
-	Prints            map[*ast.CallExpr]bool
-	Files             []*ast.File
-	Expansions        map[ast.ExpnID]Expansion
-	Contexts          map[ast.SyntaxCtx]Context
-	Origins           map[ast.Node]Origin
-	Scopes            map[*ast.Ident]Scope
-	TokenContexts     map[*token.Token]TokenContext
+	// TargetFiles contains original destination files, including removed items.
+	TargetFiles   map[*ast.File]bool
+	Allocations   map[*ast.CallExpr]bool
+	Captures      map[ast.Node]Capture
+	GoResults     map[*ast.CallExpr]bool
+	Prints        map[*ast.CallExpr]bool
+	Files         []*ast.File
+	Expansions    map[ast.ExpnID]Expansion
+	Contexts      map[ast.SyntaxCtx]Context
+	Origins       map[ast.Node]Origin
+	Scopes        map[*ast.Ident]Scope
+	TokenContexts map[*token.Token]TokenContext
 	// Introductions preserves the template key of a generated package binding.
 	// resolve registers that key as well as the identifier's caller key.
 	Introductions map[*ast.Ident]Key
@@ -124,7 +127,7 @@ type definition struct {
 type engine struct {
 	r                    *Result
 	resolver             Resolver
-	features             map[*ast.File]Features
+	configs              map[*ast.File]config.Config
 	defs                 map[Key]definition
 	localFiles           map[*ast.File]bool
 	captured             map[ast.Node]bool
@@ -139,23 +142,34 @@ type engine struct {
 // Expand collects every file's definitions before expanding any invocation.
 // On failure Files is nil, while the tables retain the failing expansion stack.
 // Files must belong to one package. Pass nil for resolver for local source only.
-func Expand(files []*ast.File, resolver Resolver, configs ...map[*ast.File]Features) (*Result, error) {
+func Expand(files []*ast.File, resolver Resolver, configs ...map[*ast.File]config.Config) (*Result, error) {
 	return ExpandPackages([][]*ast.File{files}, resolver, configs...)
 }
 
 // ExpandPackages keeps package definitions separate while assigning expansion
 // identities across the complete source graph.
-func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*ast.File]Features) (*Result, error) {
+func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*ast.File]config.Config) (*Result, error) {
 	e := &engine{r: &Result{Expansions: map[ast.ExpnID]Expansion{}, Contexts: map[ast.SyntaxCtx]Context{},
-		Origins: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}}, resolver: resolver,
+		Origins: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}, TargetFiles: map[*ast.File]bool{}}, resolver: resolver,
 		defs: map[Key]definition{}, trees: map[*ast.TokenTree][]syntaxToken{}, localFiles: map[*ast.File]bool{}, captured: map[ast.Node]bool{}, lexical: map[ast.Node]Scope{}, originals: map[ast.Node]ast.Node{}}
 	if len(configs) > 0 {
-		e.features = configs[0]
+		e.configs = configs[0]
+	}
+	if e.configs == nil {
+		e.configs = map[*ast.File]config.Config{}
 	}
 	for _, files := range packages {
 		for _, f := range files {
-			used, err := Configure(f, e.features[f])
+			configuration := e.configs[f]
+			if configuration.Reads == nil {
+				configuration.Reads = &config.Reads{}
+				e.configs[f] = configuration
+			}
+			used, err := Configure(f, configuration)
 			e.r.UsesConfiguration = e.r.UsesConfiguration || used
+			for _, targetFile := range configuration.Reads.TargetFiles() {
+				e.r.TargetFiles[targetFile] = true
+			}
 			if err != nil {
 				return e.r, err
 			}

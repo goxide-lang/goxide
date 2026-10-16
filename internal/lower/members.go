@@ -12,7 +12,7 @@ type memberRenamer struct {
 	sources map[types.Object]string
 }
 
-func (r *memberRenamer) rename(packagePath string, fset *gotoken.FileSet, files []*goast.File, names map[*goast.Ident]string, importer types.Importer) *types.Package {
+func (r *memberRenamer) rename(packagePath string, fset *gotoken.FileSet, files []*goast.File, names map[*goast.Ident]string, importer types.Importer, sizes types.Sizes) *types.Package {
 	if r.sources == nil {
 		r.sources = map[types.Object]string{}
 	}
@@ -37,7 +37,7 @@ func (r *memberRenamer) rename(packagePath string, fset *gotoken.FileSet, files 
 			Selections: map[*goast.SelectorExpr]*types.Selection{},
 			Types:      map[goast.Expr]types.TypeAndValue{},
 		}
-		config := types.Config{Importer: importer, Error: func(error) {}}
+		config := types.Config{Importer: importer, Sizes: sizes, Error: func(error) {}}
 		pkg, _ := config.Check(packagePath, fset, files, info)
 		desired := map[types.Object]string{}
 		sources := make(map[types.Object]string, len(r.sources)+len(names))

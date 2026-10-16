@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/check"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/resolve"
@@ -23,14 +24,15 @@ import (
 
 // Module is a writable staging directory prepared by the caller. Path is its
 // canonical Go module path; Roots overrides its goxide.roots.toml when non-nil.
-// Context and Environment control Go imports; nil values use the background
-// context and inherited environment. The first module supplies these options.
+// Config supplies the invocation's explicit environment and each module's
+// features. The first module supplies the Go import context and build flags.
 type Module struct {
-	Path, Dir, GoTool string
-	Roots             paths.Roots
-	Features          expand.Features
-	Context           context.Context
-	Environment       []string
+	Path, Dir string
+	Roots     paths.Roots
+	Config    config.Config
+	Context   context.Context
+	Tags      []string
+	Race      bool
 }
 
 // CompileModules compiles the complete source graph in one pass. The first
@@ -41,8 +43,20 @@ func CompileModules(modules []Module) (err error) {
 	if len(modules) == 0 {
 		return fmt.Errorf("at least one staging module is required")
 	}
+	reads := new(config.Reads)
+	for i := range modules {
+		if modules[i].Config.Environment == nil {
+			return fmt.Errorf("staging modules require an explicit compilation environment")
+		}
+		if modules[i].Config.Environment.Target != modules[0].Config.Environment.Target {
+			return fmt.Errorf("staging modules must use the same compilation target")
+		}
+		if modules[i].Config.Reads == nil {
+			modules[i].Config.Reads = reads
+		}
+	}
 	files := map[string]*syntax.File{}
-	features := map[*syntax.File]expand.Features{}
+	configs := map[*syntax.File]config.Config{}
 	rootConfigs := map[*syntax.File]moduleRootConfig{}
 	var expanded *expand.Result
 	defer func() { err = FormatSourceDiagnostic(err, files, nil, expanded) }()
@@ -66,6 +80,13 @@ func CompileModules(modules []Module) (err error) {
 			}
 		}
 		for _, name := range names {
+			matches, err := matchesModuleSource(name, module.Config.Environment.Context(module.Tags, module.Race))
+			if err != nil {
+				return err
+			}
+			if !matches {
+				continue
+			}
 			rel, err := filepath.Rel(module.Dir, name)
 			if err != nil {
 				return err
@@ -91,10 +112,10 @@ func CompileModules(modules []Module) (err error) {
 					return &Diagnostic{File: key, Span: d.Span, Message: d.Message, Origin: resolve.Origin{File: key, Span: d.Span}}
 				}
 			}
-			if _, err := expand.Configure(file, module.Features); err != nil {
+			if _, err := expand.Configure(file, module.Config); err != nil {
 				return err
 			}
-			features[file] = module.Features
+			configs[file] = module.Config
 			rootConfigs[file] = moduleRootConfig{module.Path, key, roots}
 			requirements = append(requirements, applyModuleRoots(module.Path, key, file, roots)...)
 			diskNames[key] = name
@@ -108,7 +129,7 @@ func CompileModules(modules []Module) (err error) {
 		return nil
 	}
 	packages := resolve.Resolve(files, nil)
-	external := sourceModuleImporter(modules[0].Dir, modules[0].GoTool, modules[0].Context, modules[0].Environment)
+	external := sourceModuleImporter(modules[0])
 	native, err := nativeModuleFiles(modules, packages.Packages, external)
 	if err != nil {
 
@@ -141,7 +162,7 @@ func CompileModules(modules []Module) (err error) {
 		sourcePackages = append(sourcePackages, source)
 	}
 	macros := &moduleMacros{files: files, resolved: packages, imports: imports}
-	expanded, err = expand.ExpandPackages(sourcePackages, macros, features)
+	expanded, err = expand.ExpandPackages(sourcePackages, macros, configs)
 	if cycle := macros.checkCycles(expanded); cycle != nil {
 		return cycle
 	}
@@ -171,7 +192,7 @@ func CompileModules(modules []Module) (err error) {
 	for name, file := range resolved.Files {
 		expandedFiles[name] = file.AST
 	}
-	info, diagnostics := check.CheckWithImporter(expandedFiles, resolved, external)
+	info, diagnostics := check.CheckWithImporter(expandedFiles, resolved, external, modules[0].Config.Sizes())
 	if len(diagnostics) != 0 {
 		return diagnostics[0]
 	}
@@ -182,6 +203,17 @@ func CompileModules(modules []Module) (err error) {
 	output, err := Lower(lowerFiles, info)
 	if err != nil {
 		return err
+	}
+	for _, module := range modules {
+		moduleFiles := map[string]*syntax.File{}
+		for name, file := range files {
+			if owners[path.Dir(name)] == module.Path {
+				moduleFiles[name] = file
+			}
+		}
+		if err := ApplyTargetConstraints(output, moduleFiles, module.Config); err != nil {
+			return err
+		}
 	}
 	if err := checkModuleCycles(modules, output, resolved, imports); err != nil {
 		return err
@@ -243,7 +275,7 @@ func moduleFiles(root, extension string) ([]string, error) {
 // PrepareModule lowers all .gox files beneath sourceDirs into a temporary Go
 // module. Their paths are relative to the directories' common ancestor. The
 // caller owns the returned directory and must remove it after use.
-func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
+func PrepareModule(sourceDirs []string, modulePath string, cfg config.Config) (string, error) {
 	if len(sourceDirs) == 0 || modulePath == "" {
 		return "", fmt.Errorf("source directories and module path are required")
 	}
@@ -339,7 +371,7 @@ func PrepareModule(sourceDirs []string, modulePath string) (string, error) {
 			return "", err
 		}
 	}
-	if err := CompileModules([]Module{{Path: modulePath, Dir: dir}}); err != nil {
+	if err := CompileModules([]Module{{Path: modulePath, Dir: dir, Config: cfg}}); err != nil {
 		return "", err
 	}
 	complete = true

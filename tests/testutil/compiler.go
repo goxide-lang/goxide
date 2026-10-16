@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/check"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
@@ -28,7 +29,7 @@ type SourceResult struct {
 }
 
 func Source(filename string, source []byte, roots paths.Roots) (SourceResult, error) {
-	generated, info, err := Package("fixture", map[string][]byte{filename: source}, typecheck.NewImporter(filename), roots)
+	generated, info, err := Package("fixture", map[string][]byte{filename: source}, typecheck.NewImporter(filename, typecheck.ImporterOptions{Config: Configuration()}), roots)
 	if err != nil {
 		return SourceResult{}, err
 	}
@@ -37,7 +38,7 @@ func Source(filename string, source []byte, roots paths.Roots) (SourceResult, er
 
 func Package(packagePath string, sources map[string][]byte, importer types.Importer, roots paths.Roots) (map[string][]byte, *check.Info, error) {
 	if importer == nil {
-		importer = typecheck.NewImporter("fixture.gox")
+		importer = typecheck.NewImporter("fixture.gox", typecheck.ImporterOptions{Config: Configuration()})
 	}
 	files := map[string]*syntax.File{}
 	origins := map[string]typecheck.DiagnosticSource{}
@@ -77,13 +78,13 @@ func Package(packagePath string, sources map[string][]byte, importer types.Impor
 		}
 		files[name] = file.AST
 	}
-	info, diagnostics := check.CheckWithImporter(files, resolved, importer)
+	info, diagnostics := check.CheckWithImporter(files, resolved, importer, config.Config{}.Sizes())
 	if len(diagnostics) != 0 {
 		return nil, nil, typecheck.SourceError(diagnostics[0], origins, expanded)
 	}
 	generated, err := lower.Lower(files, info)
 	if err == nil {
-		err = typecheck.CheckPackage(packagePath, generated, importer)
+		err = typecheck.CheckPackage(packagePath, generated, importer, config.Config{}.Sizes())
 	}
 	return generated, info, typecheck.SourceError(err, origins, expanded)
 }
@@ -131,7 +132,7 @@ func ModuleGraph(inputs ...ModuleInput) error {
 			}
 		}
 
-		modules = append(modules, lower.Module{Path: module, Dir: input.Destination, Roots: roots})
+		modules = append(modules, lower.Module{Path: module, Dir: input.Destination, Roots: roots, Config: Configuration()})
 	}
 	if err := lower.CompileModules(modules); err != nil {
 		return err
@@ -187,7 +188,7 @@ func checkGeneratedModule(module, destination string) error {
 		dirs = append(dirs, dir)
 	}
 	sort.Strings(dirs)
-	importer := typecheck.NewImporter(filepath.Join(destination, "fixture.go"))
+	importer := typecheck.NewImporter(filepath.Join(destination, "fixture.go"), typecheck.ImporterOptions{Config: Configuration()})
 	for _, dir := range dirs {
 		relative, err := filepath.Rel(destination, dir)
 		if err != nil {
@@ -197,9 +198,19 @@ func checkGeneratedModule(module, destination string) error {
 		if relative != "." {
 			packagePath += "/" + filepath.ToSlash(relative)
 		}
-		if err := typecheck.CheckPackage(packagePath, packages[dir], importer); err != nil {
+		if err := typecheck.CheckPackage(packagePath, packages[dir], importer, config.Config{}.Sizes()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Configuration supplies the same explicit host target to fixture importers and
+// module compilation. Tests selecting a different target construct it directly.
+func Configuration() config.Config {
+	env, err := config.Prepare("", "", "", false, os.Environ())
+	if err != nil {
+		panic(err)
+	}
+	return config.Config{Environment: env, Reads: &config.Reads{}}
 }

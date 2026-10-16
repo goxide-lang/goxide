@@ -54,7 +54,7 @@ func main(){
 		}},
 		"facade": {PackagePath: "fixture/facade", ModulePath: "fixture"},
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Roots: roots}}); err != nil {
+	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
 		t.Fatal(err)
 	}
 	generated, err := os.ReadFile(filepath.Join(directory, "facade/api.go"))

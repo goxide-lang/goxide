@@ -41,7 +41,7 @@ func prepareP2Example(t *testing.T, example, modulePath string) string {
 	source := filepath.Join("..", "..", "examples", example)
 	var modules []string
 	for range 2 {
-		module, err := lower.PrepareModule([]string{source}, modulePath)
+		module, err := lower.PrepareModule([]string{source}, modulePath, testConfig(t))
 		if err != nil {
 			t.Fatal(err)
 		}

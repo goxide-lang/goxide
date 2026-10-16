@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/hxsf/goxide/internal/check"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
@@ -33,6 +34,7 @@ type File struct {
 }
 
 type Options struct {
+	Config      config.Config
 	Roots       paths.Roots
 	Importer    types.Importer
 	PackagePath string
@@ -107,7 +109,20 @@ func CompilePackage(files []File, options Options) (output []File, err error) {
 	if options.Importer == nil {
 		return nil, fmt.Errorf("playground requires its bundled dependency importer")
 	}
-	expanded, err = expand.Expand(inputs, nil)
+	if options.Config.Environment == nil {
+		return nil, fmt.Errorf("playground requires an explicit export-data target and environment")
+	}
+	configs := make(map[*syntax.File]config.Config, len(inputs))
+	originalFiles := make(map[string]*syntax.File, len(trees))
+	for name, file := range trees {
+		originalFiles[name] = file
+	}
+	// Reads belong to this request even if the immutable environment is reused.
+	options.Config.Reads = &config.Reads{}
+	for _, file := range inputs {
+		configs[file] = options.Config
+	}
+	expanded, err = expand.Expand(inputs, nil, configs)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +142,7 @@ func CompilePackage(files []File, options Options) (output []File, err error) {
 		}
 		trees[logicalName] = file.AST
 	}
-	checked, diagnostics := check.CheckWithImporter(trees, resolved, options.Importer)
+	checked, diagnostics := check.CheckWithImporter(trees, resolved, options.Importer, options.Config.Sizes())
 	if len(diagnostics) != 0 {
 		return nil, diagnostics[0]
 	}
@@ -135,7 +150,10 @@ func CompilePackage(files []File, options Options) (output []File, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := typecheck.CheckPackage(packagePath, emitted, options.Importer); err != nil {
+	if err := typecheck.CheckPackage(packagePath, emitted, options.Importer, options.Config.Sizes()); err != nil {
+		return nil, err
+	}
+	if err := lower.ApplyTargetConstraints(emitted, originalFiles, options.Config); err != nil {
 		return nil, err
 	}
 	output = make([]File, 0, len(emitted))

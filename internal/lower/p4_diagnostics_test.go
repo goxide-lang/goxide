@@ -132,7 +132,7 @@ impl Data {
 					t.Fatal(err)
 				}
 			}
-			output, err := lower.PrepareModule([]string{directory}, "traitprivate")
+			output, err := lower.PrepareModule([]string{directory}, "traitprivate", testConfig(t))
 			if output != "" {
 				t.Cleanup(func() { os.RemoveAll(output) })
 				t.Fatalf("private member access emitted module %s", output)

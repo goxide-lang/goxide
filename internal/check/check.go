@@ -7,6 +7,7 @@ import (
 	"go/importer"
 	"go/types"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -126,6 +127,7 @@ type Info struct {
 	GoResults     map[*ast.CallExpr]*GoResult
 	Resolve       *resolve.Result
 	GoImporter    types.Importer
+	GoSizes       types.Sizes
 	Diagnostics   []Diagnostic
 	Types         map[ast.Expr]types.Type
 	Enums         map[*ast.EnumDecl]*Enum
@@ -186,17 +188,18 @@ func Check(files map[string]*ast.File, res *resolve.Result) (*Info, []Diagnostic
 
 // CheckWithConversions registers only the explicitly supplied one-step helpers.
 func CheckWithConversions(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref) (*Info, []Diagnostic) {
-	return checkFiles(files, res, helpers, importer.Default())
+	return checkFiles(files, res, helpers, importer.Default(), types.SizesFor("gc", runtime.GOARCH))
 }
 
 // CheckWithImporter uses the source module's Go dependency graph for external types.
-func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports types.Importer) (*Info, []Diagnostic) {
-	return checkFiles(files, res, nil, imports)
+func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports types.Importer, sizes types.Sizes) (*Info, []Diagnostic) {
+	return checkFiles(files, res, nil, imports, sizes)
 }
 
-func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer) (*Info, []Diagnostic) {
+func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer, sizes types.Sizes) (*Info, []Diagnostic) {
 	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
 	r.GoImporter = imports
+	r.GoSizes = sizes
 	r.GoResults = make(map[*ast.CallExpr]*GoResult)
 	r.RefBindings = make(map[*ast.BindPat]RefMode)
 	r.Traits = make(map[*ast.TraitDecl]*Trait)

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
 )
@@ -39,11 +39,11 @@ const HasJSON = cfg!(feature("json"))
 	const native = "package main\nimport \"fmt\"\nfunc main() { fmt.Println(Mode(), HasJSON, Count()) }\n"
 	for _, enabled := range []bool{false, true} {
 		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
-			features := expand.Features{Enabled: map[string]bool{"json": enabled}, Declared: map[string]bool{"json": true}}
+			features := config.Features{Enabled: map[string]bool{"json": enabled}, Declared: map[string]bool{"json": true}}
 			var previous map[string][]byte
 			for attempt := 0; attempt < 2; attempt++ {
 				sources := map[string][]byte{"main.gox": []byte(source), "optional.gox": []byte(optional), "native.go": []byte(native)}
-				output, err := lower.CompilePackage(sources, "cfgfixture", nil, paths.Roots{}, lower.PackageOptions{Features: features})
+				output, err := lower.CompilePackage(sources, "cfgfixture", nil, paths.Roots{}, lower.PackageOptions{Config: testConfig(t, features)})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -138,8 +138,8 @@ cfgkit::item!(#[cfg_attr(feature("side"), cfg(any()))] type CapturedHidden struc
 				writeDiagnosticModuleFile(t, app, "native.go", []byte(native))
 				writeDiagnosticModuleFile(t, kit, "macros.gox", []byte(definitions))
 				modules := []lower.Module{
-					{Path: "cfgapp", Dir: app, Features: expand.Features{Enabled: map[string]bool{"side": callerEnabled}, Declared: map[string]bool{"side": true}}},
-					{Path: "cfgkit", Dir: kit, Features: expand.Features{Enabled: map[string]bool{"side": !callerEnabled}, Declared: map[string]bool{"side": true}}},
+					{Path: "cfgapp", Dir: app, Config: testConfig(t, config.Features{Enabled: map[string]bool{"side": callerEnabled}, Declared: map[string]bool{"side": true}})},
+					{Path: "cfgkit", Dir: kit, Config: testConfig(t, config.Features{Enabled: map[string]bool{"side": !callerEnabled}, Declared: map[string]bool{"side": true}})},
 				}
 				if err := lower.CompileModules(modules); err != nil {
 					t.Fatal(err)
@@ -216,7 +216,7 @@ var Value = value!()`, `pub macro_rules! value { () => { a::value!() }; }`, true
 			} {
 				writeDiagnosticModuleFile(t, directory, name, []byte(source))
 			}
-			err := lower.CompileModules([]lower.Module{{Path: "cfgcycle", Dir: directory}})
+			err := lower.CompileModules([]lower.Module{{Path: "cfgcycle", Dir: directory, Config: testConfig(t)}})
 			if test.cycle {
 				if err == nil || !strings.Contains(err.Error(), "macro source dependency cycle: cfgcycle/a -> cfgcycle/b -> cfgcycle/a") {
 					t.Fatalf("active macro cycle was not diagnosed: %v", err)
@@ -254,7 +254,7 @@ pub macro_rules! hidden_use { () => { #[cfg(any())] use unavailable; }; }
 				writeDiagnosticModuleFile(t, directory, name, []byte(source))
 			}
 			roots := paths.Roots{"console": {PackagePath: "fmt", Source: "toolchain"}}
-			if err := lower.CompileModules([]lower.Module{{Path: "cfgimports", Dir: directory, Roots: roots, Features: expand.Features{Enabled: map[string]bool{"console": enabled}}}}); err != nil {
+			if err := lower.CompileModules([]lower.Module{{Path: "cfgimports", Dir: directory, Roots: roots, Config: testConfig(t, config.Features{Enabled: map[string]bool{"console": enabled}})}}); err != nil {
 				t.Fatal(err)
 			}
 			runGo(t, directory, "build", "./...")
@@ -279,7 +279,7 @@ func TestCFGRootMatchesModuleName(t *testing.T) {
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
 	roots := paths.Roots{"app": {PackagePath: "app/local", ModulePath: "app"}}
-	if err := lower.CompileModules([]lower.Module{{Path: "app", Dir: directory, Roots: roots}}); err != nil {
+	if err := lower.CompileModules([]lower.Module{{Path: "app", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
 		t.Fatal(err)
 	}
 	runGo(t, directory, "build", "./...")
@@ -313,11 +313,11 @@ pub macro_rules! captured_root { ($target:ident, $name:ident) => { #[cfg(all())]
 		writeDiagnosticModuleFile(t, kit, "local/value.gox", []byte("package local\npub func Value() int { return 22 }\n"))
 		writeDiagnosticModuleFile(t, kit, "macros.gox", []byte(definitions))
 		modules := []lower.Module{
-			{Path: "cfgapp", Dir: app, Roots: paths.Roots{
+			{Path: "cfgapp", Dir: app, Config: testConfig(t), Roots: paths.Roots{
 				"api":    {PackagePath: "cfgapp/local", ModulePath: "cfgapp"},
 				"cfgkit": {PackagePath: "cfgkit", ModulePath: "cfgkit"},
 			}},
-			{Path: "cfgkit", Dir: kit, Roots: paths.Roots{"api": {PackagePath: "cfgkit/local", ModulePath: "cfgkit"}}},
+			{Path: "cfgkit", Dir: kit, Config: testConfig(t), Roots: paths.Roots{"api": {PackagePath: "cfgkit/local", ModulePath: "cfgkit"}}},
 		}
 		if err := lower.CompileModules(modules); err != nil {
 			t.Fatal(err)
@@ -349,7 +349,7 @@ func TestCFGMacroImportDiagnosticOrigin(t *testing.T) {
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
 	roots := paths.Roots{"api": {PackagePath: "fmt", ModulePath: "wrong"}}
-	err := lower.CompileModules([]lower.Module{{Path: "cfgorigin", Dir: directory, Roots: roots}})
+	err := lower.CompileModules([]lower.Module{{Path: "cfgorigin", Dir: directory, Config: testConfig(t), Roots: roots}})
 	var diagnostic *lower.Diagnostic
 	if !errors.As(err, &diagnostic) || diagnostic.Origin.File != "cfgorigin/kit/macros.gox" || diagnostic.Origin.Expn == 0 || len(diagnostic.Origin.Stack) == 0 || !strings.Contains(err.Error(), "called at cfgorigin/main.gox:3:1") {
 		t.Fatalf("macro import error lost definition and call origins: %v", err)

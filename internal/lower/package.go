@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/hxsf/goxide/internal/check"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/resolve"
@@ -21,7 +22,7 @@ import (
 // PackageOptions controls generation for a package in an existing Go project.
 type PackageOptions struct {
 	LineDirectives      bool
-	Features            expand.Features
+	Config              config.Config
 	RejectConfiguration bool // Partial in-place generation cannot switch package configuration.
 }
 
@@ -36,8 +37,11 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	if goImports == nil {
 		goImports = importer.Default()
 	}
+	if options.Config.Reads == nil {
+		options.Config.Reads = new(config.Reads)
+	}
 	files := map[string]*syntax.File{}
-	features := map[*syntax.File]expand.Features{}
+	configs := map[*syntax.File]config.Config{}
 	rootConfigs := map[*syntax.File]moduleRootConfig{}
 	displayNames := map[string]string{}
 	var expanded *expand.Result
@@ -65,14 +69,14 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 					return nil, &Diagnostic{File: key, Span: diagnostic.Span, Message: diagnostic.Message}
 				}
 			}
-			used, err := expand.Configure(file, options.Features)
+			used, err := expand.Configure(file, options.Config)
 			if err != nil {
 				return nil, err
 			}
 			if used && options.RejectConfiguration {
 				return nil, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
 			}
-			features[file] = options.Features
+			configs[file] = options.Config
 			rootConfigs[file] = moduleRootConfig{packagePath, key, roots}
 			for _, requirement := range applyModuleRoots(packagePath, key, file, roots) {
 				if _, exists := imports.namespaces[requirement.target]; !exists {
@@ -108,7 +112,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 		groups = append(groups, group)
 	}
 	macros := &moduleMacros{files: files, resolved: packages, imports: imports}
-	expanded, err = expand.ExpandPackages(groups, macros, features)
+	expanded, err = expand.ExpandPackages(groups, macros, configs)
 	if cycle := macros.checkCycles(expanded); cycle != nil {
 		return nil, cycle
 	}
@@ -144,12 +148,15 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 			lowerFiles[name] = file.AST
 		}
 	}
-	checked, diagnostics := check.CheckWithImporter(expandedFiles, resolved, goImports)
+	checked, diagnostics := check.CheckWithImporter(expandedFiles, resolved, goImports, options.Config.Sizes())
 	if len(diagnostics) != 0 {
 		return nil, diagnostics[0]
 	}
 	generated, err := lower(lowerFiles, checked, emissionOptions{lineDirectives: options.LineDirectives, originals: files})
 	if err != nil {
+		return nil, err
+	}
+	if err := ApplyTargetConstraints(generated, files, options.Config); err != nil {
 		return nil, err
 	}
 	output = make(map[string][]byte, len(generated))

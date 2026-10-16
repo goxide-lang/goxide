@@ -26,12 +26,12 @@ func TestP4StaticProtocolExample(t *testing.T) {
 
 func TestP4CarrierAssociatedTypesAndNativeEnumViews(t *testing.T) {
 	fixture := filepath.Join("testdata", "traits", "static")
-	module, err := lower.PrepareModule([]string{fixture}, "traitfixture")
+	module, err := lower.PrepareModule([]string{fixture}, "traitfixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(module) })
-	again, err := lower.PrepareModule([]string{fixture}, "traitfixture")
+	again, err := lower.PrepareModule([]string{fixture}, "traitfixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}

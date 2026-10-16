@@ -13,13 +13,13 @@ import (
 func TestProjectDefaultDiscoveryAndStaleOutputs(t *testing.T) {
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
-		"goxide.toml":      "[package]\nformat=2\nmodule='example.org/incremental'\ngo='1.27'\n[[bin]]\nname='app'\npath='src'\n[dependencies]\nfmt={go='fmt'}\n",
-		"src/main.gox":     "package main\nuse fmt;\nfunc main(){fmt::Println(\"first\")}\n",
-		"src/obsolete.go":  "package main\nfunc obsolete(){}\n",
-		"native/go.mod":    "module example.org/nested-native\ngo 1.27\n",
-		"native/deep/note": "cwd below a native module must still find the outer project",
+		"goxide.toml":     "[package]\nformat=2\nmodule='example.org/incremental'\ngo='1.27'\n[[bin]]\nname='app'\npath='src'\n[dependencies]\nfmt={go='fmt'}\n",
+		"src/main.gox":    "package main\nuse fmt;\nfunc main(){fmt::Println(\"first\")}\n",
+		"src/obsolete.go": "package main\nfunc obsolete(){}\n",
+		"native/go.mod":   "module example.org/nested-native\ngo 1.27\n",
+		"src/deep/note":   "cwd below a project source directory finds the project",
 	})
-	t.Chdir(filepath.Join(root, "native", "deep"))
+	t.Chdir(filepath.Join(root, "src", "deep"))
 	transpile := func(wantError string) string {
 		t.Helper()
 		var output, diagnostic bytes.Buffer

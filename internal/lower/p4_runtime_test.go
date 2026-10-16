@@ -35,12 +35,12 @@ func TestP4DeclareNativeMethodsAndRestrictedWrapperMethodSet(t *testing.T) {
 func prepareP4RuntimeFixture(t *testing.T, fixtureName, modulePath string) string {
 	t.Helper()
 	fixture := filepath.Join("testdata", "traits", fixtureName)
-	module, err := lower.PrepareModule([]string{fixture}, modulePath)
+	module, err := lower.PrepareModule([]string{fixture}, modulePath, testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(module) })
-	again, err := lower.PrepareModule([]string{fixture}, modulePath)
+	again, err := lower.PrepareModule([]string{fixture}, modulePath, testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}

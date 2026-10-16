@@ -3,7 +3,6 @@ package lower
 import (
 	"fmt"
 	goast "go/ast"
-	"go/build"
 	goparser "go/parser"
 	gotoken "go/token"
 	"go/types"
@@ -45,12 +44,13 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 		}
 	}
 	for _, module := range modules {
+		context := module.Config.Environment.Context(module.Tags, module.Race)
 		files, err := moduleFiles(module.Dir, ".go")
 		if err != nil {
 			return nil, err
 		}
 		for _, filename := range files {
-			matches, err := build.Default.MatchFile(filepath.Dir(filename), filepath.Base(filename))
+			matches, err := context.MatchFile(filepath.Dir(filename), filepath.Base(filename))
 			if err != nil {
 				return nil, err
 			}
@@ -70,12 +70,17 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 				return nil, err
 			}
 			src := source{key: path.Join(module.Path, filepath.ToSlash(rel)), name: file.Name.Name, data: data}
+			cgo := false
 			for _, imported := range file.Imports {
 				value, err := strconv.Unquote(imported.Path.Value)
 				if err != nil {
 					return nil, err
 				}
+				cgo = cgo || value == "C"
 				src.imports = append(src.imports, value)
+			}
+			if cgo && !context.CgoEnabled {
+				continue
 			}
 			sources = append(sources, src)
 		}

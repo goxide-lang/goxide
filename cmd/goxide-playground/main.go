@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/playground"
 	"github.com/hxsf/goxide/internal/rootconfig"
@@ -18,6 +19,14 @@ import (
 var dependencyContext []byte
 
 var dependencyRoots paths.Roots
+
+// Set from the same Go environment used to produce the embedded export archives.
+var exportOS, exportArch string
+var compilationEnvironment *config.Environment
+
+func requestConfig() config.Config {
+	return config.Config{Environment: compilationEnvironment, Reads: &config.Reads{}}
+}
 
 func compile(_ js.Value, args []js.Value) (result any) {
 	defer func() {
@@ -33,7 +42,7 @@ func compile(_ js.Value, args []js.Value) (result any) {
 		return map[string]any{"error": "source exceeds 32 KiB"}
 	}
 	output, err := playground.CompilePackage([]playground.File{{Path: "playground.gox", Source: source}}, playground.Options{
-		Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox"), PackagePath: "goxide/generated",
+		Config: requestConfig(), Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: requestConfig()}), PackagePath: "goxide/generated",
 	})
 	if err != nil {
 		return map[string]any{"error": err.Error()}
@@ -65,7 +74,7 @@ func compilePackage(_ js.Value, args []js.Value) (result any) {
 	// On js/wasm this reads only the export archives embedded at website build
 	// time. Each request receives a fresh importer and no request-local state.
 	output, err := playground.CompilePackage(files, playground.Options{
-		Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox"),
+		Config: requestConfig(), Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: requestConfig()}),
 	})
 	if err != nil {
 		return map[string]any{"error": err.Error()}
@@ -79,6 +88,11 @@ func compilePackage(_ js.Value, args []js.Value) (result any) {
 
 func main() {
 	var err error
+	compilationEnvironment, err = config.NewEnvironment(config.Target{OS: exportOS, Arch: exportArch}, []string{})
+	if err != nil {
+		js.Global().Call("postMessage", map[string]any{"type": "fatal", "error": "missing or invalid export-data target: " + err.Error()})
+		return
+	}
 	dependencyRoots, err = rootconfig.Parse("goxide.roots.toml", dependencyContext)
 	if err != nil {
 		js.Global().Call("postMessage", map[string]any{"type": "fatal", "error": err.Error()})

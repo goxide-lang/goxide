@@ -127,7 +127,7 @@ func TestPureGoEndToEnd(t *testing.T) {
 		}
 	}
 
-	generated, err := lower.PrepareModule([]string{filepath.Join("testdata", "pure")}, "fixture")
+	generated, err := lower.PrepareModule([]string{filepath.Join("testdata", "pure")}, "fixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}

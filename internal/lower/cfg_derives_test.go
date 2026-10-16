@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
 	testdeps "github.com/hxsf/goxide/tests/testutil"
@@ -112,7 +112,7 @@ func compileCFGSupport(t *testing.T, source string, enabled bool) (string, error
 		ModulePath: "github.com/goxide-lang/serde", PackagePath: "github.com/goxide-lang/serde",
 		Children: map[string]paths.Namespace{"json": {PackagePath: "github.com/goxide-lang/serde/json"}},
 	}}
-	features := expand.Features{Enabled: map[string]bool{"derive": enabled}, Declared: map[string]bool{"derive": true}}
-	err := lower.CompileModules([]lower.Module{{Path: "cfgsupport", Dir: directory, Roots: roots, Features: features}})
+	features := config.Features{Enabled: map[string]bool{"derive": enabled}, Declared: map[string]bool{"derive": true}}
+	err := lower.CompileModules([]lower.Module{{Path: "cfgsupport", Dir: directory, Roots: roots, Config: testConfig(t, features)}})
 	return directory, err
 }

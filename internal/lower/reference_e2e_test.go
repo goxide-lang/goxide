@@ -47,12 +47,12 @@ func TestReferenceDerivedProtocolsReadAndCloneSharedStorage(t *testing.T) {
 func runReferenceFixture(t *testing.T, fixture, want string) {
 	t.Helper()
 	directory := filepath.Join("testdata", "references", fixture)
-	generated, err := lower.PrepareModule([]string{directory}, "referencefixture")
+	generated, err := lower.PrepareModule([]string{directory}, "referencefixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(generated) })
-	again, err := lower.PrepareModule([]string{directory}, "referencefixture")
+	again, err := lower.PrepareModule([]string{directory}, "referencefixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}

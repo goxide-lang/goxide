@@ -11,6 +11,7 @@ import (
 
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/typecheck"
+	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestStandaloneSupportModule(t *testing.T) {
@@ -58,7 +59,7 @@ func fail()(result int){
  return 0
 }
 func main(){println!("value={}",fail())}
-`), "goxide/generated", typecheck.NewImporter(filename), paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}}, nativeFeatures(""))
+`), "goxide/generated", typecheck.NewImporter(filename, typecheck.ImporterOptions{Config: testdeps.Configuration()}), paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}}, testdeps.Configuration())
 	if err != nil {
 		t.Fatal(err)
 	}

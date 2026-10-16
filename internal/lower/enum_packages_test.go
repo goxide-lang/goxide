@@ -47,7 +47,7 @@ pub func fromSource() int { return read(model::makeValue()) }
 			t.Fatal(err)
 		}
 	}
-	generated, err := lower.PrepareModule([]string{source}, "enumfixture")
+	generated, err := lower.PrepareModule([]string{source}, "enumfixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}

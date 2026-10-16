@@ -46,7 +46,8 @@ func TestImporterWithModFileUsesSourceGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	environment := append(os.Environ(), "GOFLAGS=-goxide-invalid-ambient-flag", "GOWORK="+filepath.Join(root, "missing.work"))
-	imp := NewImporterWithModFile(context.Background(), filepath.Join(consumer, "cmd", "input.gox"), nil, false, environment, modFile)
+	cfg := testConfig(t, environment)
+	imp := NewImporter(filepath.Join(consumer, "cmd", "input.gox"), ImporterOptions{Context: context.Background(), Config: cfg, ModFile: modFile})
 	native, err := imp.Import("importer.example/consumer/native")
 	if err != nil {
 		t.Fatal(err)
@@ -90,8 +91,9 @@ func TestImporterWithModFileUsesSourceGraph(t *testing.T) {
 		t.Fatalf("unstable cached fingerprint: %q (%v)", repeated, err)
 	}
 	// A fresh importer must resolve the same source closure without the first
-	// importer's in-memory cache or ambient GOFLAGS affecting its go env query.
-	fresh := NewImporterWithModFile(context.Background(), filepath.Join(consumer, "cmd", "input.gox"), nil, false, environment, modFile)
+	// importer's in-memory cache or changes to the ambient environment.
+	t.Setenv("GOARCH", "386")
+	fresh := NewImporter(filepath.Join(consumer, "cmd", "input.gox"), ImporterOptions{Context: context.Background(), Config: cfg, ModFile: modFile})
 	freshProvider := fresh.(interface{ PackageFingerprint(string) (string, error) })
 	if got, err := freshProvider.PackageFingerprint("importer.example/consumer/native"); err != nil || got != fingerprint {
 		t.Fatalf("fresh source fingerprint differs: %q (%v)", got, err)
@@ -111,10 +113,8 @@ func TestImporterWithModFileUsesSourceGraph(t *testing.T) {
 }
 
 func TestImporterWithModFileRequiresAbsolutePath(t *testing.T) {
-	for _, path := range []string{"", "relative.mod"} {
-		imp := NewImporterWithModFile(context.Background(), "input.gox", nil, false, nil, path)
-		if _, err := imp.Import("fmt"); err == nil || !strings.Contains(err.Error(), "absolute path") {
-			t.Fatalf("invalid module file %q was accepted: %v", path, err)
-		}
+	imp := NewImporter("input.gox", ImporterOptions{Config: testConfig(t, nil), ModFile: "relative.mod"})
+	if _, err := imp.Import("fmt"); err == nil || !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("relative module file was accepted: %v", err)
 	}
 }

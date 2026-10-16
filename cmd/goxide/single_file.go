@@ -9,9 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
+
+	"github.com/hxsf/goxide/internal/config"
 )
 
 // singleFileModule owns only configuration copies and one generated file. Its
@@ -19,13 +20,14 @@ import (
 type singleFileModule struct {
 	input, root, packagePath string
 	temporary, modFile       string
+	config                   config.Config
 }
 
 // Keep the execution environment aligned with the offline export importer,
 // including private-module settings that can otherwise bypass GOPROXY=off.
-func singleFileEnvironment() []string {
+func singleFileEnvironment(base ...[]string) []string {
 	environment := []string{}
-	for _, value := range localEnv() {
+	for _, value := range localEnv(base...) {
 		name, _, _ := strings.Cut(value, "=")
 		if name != "GONOPROXY" && name != "GOVCS" {
 			environment = append(environment, value)
@@ -34,7 +36,7 @@ func singleFileEnvironment() []string {
 	return append(environment, "GONOPROXY=none", "GOVCS=*:off")
 }
 
-func prepareSingleFileModule(input string) (_ *singleFileModule, err error) {
+func prepareSingleFileModule(input string, cfg config.Config) (_ *singleFileModule, err error) {
 	input, err = filepath.Abs(input)
 	if err != nil {
 		return nil, err
@@ -58,9 +60,6 @@ func prepareSingleFileModule(input string) (_ *singleFileModule, err error) {
 		}
 		root = parent
 	}
-	if err = checkSingleFileTarget(root); err != nil {
-		return nil, err
-	}
 	temporaryRoot, err := filepath.Abs(os.TempDir())
 	if err != nil {
 		return nil, err
@@ -81,7 +80,7 @@ func prepareSingleFileModule(input string) (_ *singleFileModule, err error) {
 			os.RemoveAll(dir)
 		}
 	}()
-	m := &singleFileModule{input: input, root: root, temporary: dir, modFile: filepath.Join(dir, "consumer.mod")}
+	m := &singleFileModule{input: input, root: root, temporary: dir, modFile: filepath.Join(dir, "consumer.mod"), config: cfg}
 	for _, item := range []struct{ source, destination string }{{"go.mod", "consumer.mod"}, {"go.sum", "consumer.sum"}} {
 		data, e := os.ReadFile(filepath.Join(root, item.source))
 		if item.source == "go.sum" && os.IsNotExist(e) {
@@ -98,8 +97,8 @@ func prepareSingleFileModule(input string) (_ *singleFileModule, err error) {
 	// original bytes. Relative replaces still belong to root, not temporary.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "mod", "edit", "-json", m.modFile)
-	cmd.Dir, cmd.Env = root, singleFileEnvironment()
+	cmd := exec.CommandContext(ctx, cfg.Environment.GoTool, "mod", "edit", "-json", m.modFile)
+	cmd.Dir, cmd.Env = root, singleFileEnvironment(cfg.Environment.ExecEnv())
 	data, err := cmd.Output()
 	if err != nil {
 		if failure, ok := err.(*exec.ExitError); ok {
@@ -126,27 +125,6 @@ func prepareSingleFileModule(input string) (_ *singleFileModule, err error) {
 }
 
 func (m *singleFileModule) close() { os.RemoveAll(m.temporary) }
-
-func checkSingleFileTarget(root string) error {
-	// Go's saved GOENV configuration also selects the target. Checking only
-	// process environment variables would miss it and use host go/types sizes.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "env", "-json", "GOOS", "GOARCH")
-	cmd.Dir, cmd.Env = root, singleFileEnvironment()
-	data, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("single-file Go target configuration: %w", err)
-	}
-	var target struct{ GOOS, GOARCH string }
-	if err := json.Unmarshal(data, &target); err != nil {
-		return err
-	}
-	if target.GOOS != runtime.GOOS || target.GOARCH != runtime.GOARCH {
-		return fmt.Errorf("configured single-file mode requires host GOOS/GOARCH (%s/%s); selected %s/%s; cross-target type sizes are unsupported", runtime.GOOS, runtime.GOARCH, target.GOOS, target.GOARCH)
-	}
-	return nil
-}
 
 func pathWithin(root, path string) bool {
 	rel, err := filepath.Rel(root, path)
@@ -238,7 +216,7 @@ func (m *singleFileModule) run(req CompileRequest, result compiledFile, tool str
 		argv = append(argv, req.ProgramArgs...)
 	}
 	cmd := exec.Command(tool, argv...)
-	cmd.Dir, cmd.Env = filepath.Dir(m.input), singleFileEnvironment()
+	cmd.Dir, cmd.Env = filepath.Dir(m.input), singleFileEnvironment(m.config.Environment.ExecEnv())
 	cmd.Stdout, cmd.Stdin = out, os.Stdin
 	cmd.Stderr = stderr
 	if err = cmd.Run(); err != nil {

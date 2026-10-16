@@ -179,7 +179,7 @@ func TestCompilePackageVetDiagnosticLine(t *testing.T) {
 			directory := t.TempDir()
 			name := filepath.Join(directory, "format.gox")
 			writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module fixture\n\ngo 1.27\n"))
-			output, err := lower.CompilePackage(map[string][]byte{name: []byte(test.source)}, "fixture", typecheck.NewImporter(name), paths.Roots{"fmt": {PackagePath: "fmt", Source: "toolchain"}}, lower.PackageOptions{LineDirectives: true})
+			output, err := lower.CompilePackage(map[string][]byte{name: []byte(test.source)}, "fixture", typecheck.NewImporter(name, typecheck.ImporterOptions{Config: testConfig(t)}), paths.Roots{"fmt": {PackagePath: "fmt", Source: "toolchain"}}, lower.PackageOptions{LineDirectives: true})
 			if err != nil {
 				t.Fatal(err)
 			}

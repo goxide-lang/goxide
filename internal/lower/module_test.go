@@ -36,7 +36,7 @@ func TestCompileModulesMappedBlankImports(t *testing.T) {
 		for name, source := range sources {
 			writeDiagnosticModuleFile(t, directory, name, []byte(source))
 		}
-		if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Roots: roots}}); err != nil {
+		if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
 			t.Fatal(err)
 		}
 		output, err := os.ReadFile(filepath.Join(directory, "main.go"))
@@ -93,7 +93,7 @@ func TestCompileModulesRejectInvalidRootsBeforeWriting(t *testing.T) {
 			writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module fixture\n\ngo 1.27\n"))
 			writeDiagnosticModuleFile(t, directory, "main.gox", []byte(source))
 			writeDiagnosticModuleFile(t, directory, "child/child.gox", []byte("package child\npub func Value() int { return 1 }\n"))
-			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Roots: test.roots}})
+			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: test.roots}})
 			var diagnostic *lower.Diagnostic
 			if !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message, test.want) || diagnostic.File != "fixture/main.gox" || diagnostic.Span.Start == 0 || diagnostic.Span.End > uint32(len(source)) {
 				t.Fatalf("missing located %q diagnostic: %v", test.want, err)
@@ -119,7 +119,7 @@ func TestCompileModulesPublicLocalTypeAlias(t *testing.T) {
 	} {
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Roots: paths.Roots{}}}); err != nil {
+	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := runGo(t, directory, "run", "."); got != "7 8\n" {
@@ -147,7 +147,7 @@ func TestCompileModulesChecksEmittedImportCycles(t *testing.T) {
 				bName, spanStart = "b/b.go", strings.Index(test.b, `_ "fixture/a"`)
 			}
 			writeDiagnosticModuleFile(t, directory, bName, []byte(test.b))
-			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory}})
+			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t)}})
 			if !test.cycle {
 				if err != nil {
 					t.Fatal(err)

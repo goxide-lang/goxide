@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/project"
 )
 
@@ -309,7 +309,7 @@ func TestProjectEmptyFeaturesRemainClosedAndNativeRootIsOpen(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "goxide.lock")); !os.IsNotExist(err) {
 		t.Fatalf("invalid cfg query published a lock: %v", err)
 	}
-	result, err := PrepareProject(root, Options{Offline: true, NativeFeatures: &expand.Features{}})
+	result, err := PrepareProject(root, Options{Offline: true, NativeFeatures: &config.Features{}})
 	if err != nil {
 		t.Fatal(err)
 	}

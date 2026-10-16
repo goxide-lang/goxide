@@ -79,7 +79,8 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.StringVar(&req.Runtime, "runtime", "", "Go module root selecting pinned public std/serde dependencies (standalone single-file run/build only)")
 		f.StringVar(&req.RootsFile, "roots", "", "explicit dependency namespace mapping file (native Go module or standalone source)")
 		f.StringVar(&req.Tags, "tags", "", "Go build tags (directory mode; comma/space separated)")
-		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (Go 1.27+; unused for single-file transpile/expand)")
+		f.StringVar(&req.Target, "target", "", "compilation target: GOARCH-unknown-GOOS or GOOS/GOARCH (toolchain workflow only)")
+		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (must match the frontend toolchain; used by all compilation modes)")
 		f.StringArrayVarP(&req.Packages, "package", "p", nil, "select workspace member by module identity (repeatable)")
 		f.BoolVar(&req.Workspace, "workspace", false, "build all workspace members")
 		f.StringVar(&req.Features, "features", "", "enabled features (comma/space separated)")
@@ -92,6 +93,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.BoolVar(&req.Locked, "locked", false, "require unchanged goxide.lock")
 		c.RunE = func(c *cobra.Command, operands []string) error {
 			req.FeaturesSet = c.Flags().Changed("features")
+			req.TargetSet = c.Flags().Changed("target")
 			req.Input = ""
 			req.ProgramArgs = nil
 			if len(operands) > 0 {
@@ -109,6 +111,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		}
 		root.AddCommand(c)
 	}
+	root.AddCommand(envCommand(out))
 	scripts := scriptsCommand("", out, stderr)
 	for _, action := range scriptActions {
 		scripts.AddCommand(scriptsCommand(action, out, stderr))
@@ -280,7 +283,7 @@ func executeCLI(c *cobra.Command, args []string) error {
 var oldLongOptions = map[string]bool{
 	"go": true, "offline": true, "features": true, "source-map": true,
 	"expanded": true, "runtime": true, "roots": true, "tags": true, "no-default-features": true,
-	"bin": true, "example": true, "lib": true, "target-dir": true, "locked": true,
+	"bin": true, "example": true, "lib": true, "target-dir": true, "target": true, "json": true, "list": true, "locked": true,
 	"action": true, "subject": true, "plan": true, "out": true, "help": true,
 	"source": true, "accept-source-diff": true,
 	"package": true, "workspace": true, "member-bin": true, "member-lib": true,

@@ -251,7 +251,7 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 				names[id] = name
 			}
 		}
-		return renamer.rename(path, fset, files, names, load)
+		return renamer.rename(path, fset, files, names, load, group[0].info.GoSizes)
 	}
 	load = func(path string) (*types.Package, error) {
 		if p := loaded[path]; p != nil {

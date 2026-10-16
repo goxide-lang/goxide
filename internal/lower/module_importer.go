@@ -9,8 +9,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -18,20 +16,21 @@ type moduleGoImporter struct {
 	root, tool string
 	context    context.Context
 	env        []string
+	tags       []string
+	race       bool
 	exports    map[string]string
 	owners     map[string]string
 	standard   map[string]bool
 	gc         types.Importer
 }
 
-func sourceModuleImporter(root, tool string, ctx context.Context, env []string) *moduleGoImporter {
-	if tool == "" {
-		tool = filepath.Join(runtime.GOROOT(), "bin", "go")
-	}
+func sourceModuleImporter(module Module) *moduleGoImporter {
+	ctx := module.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	i := &moduleGoImporter{root: root, tool: tool, context: ctx, env: env, exports: map[string]string{}, owners: map[string]string{}, standard: map[string]bool{}}
+	environment := module.Config.Environment
+	i := &moduleGoImporter{root: module.Dir, tool: environment.GoTool, context: ctx, env: environment.ExecEnv(), tags: append([]string(nil), module.Tags...), race: module.Race, exports: map[string]string{}, owners: map[string]string{}, standard: map[string]bool{}}
 	i.gc = importer.ForCompiler(token.NewFileSet(), "gc", i.lookup)
 	return i
 }
@@ -64,6 +63,12 @@ func (i *moduleGoImporter) lookup(path string) (io.ReadCloser, error) {
 
 func (i *moduleGoImporter) load(path string, exports bool) error {
 	args := []string{"list", "-mod=readonly"}
+	if len(i.tags) != 0 {
+		args = append(args, "-tags="+strings.Join(i.tags, ","))
+	}
+	if i.race {
+		args = append(args, "-race")
+	}
 	if exports {
 		args = append(args, "-export", "-deps")
 	} else {
@@ -72,11 +77,7 @@ func (i *moduleGoImporter) load(path string, exports bool) error {
 	args = append(args, "-f", "{{.ImportPath}}\t{{.Export}}\t{{if .Module}}{{.Module.Path}}{{end}}\t{{.Standard}}", path)
 	command := exec.CommandContext(i.context, i.tool, args...)
 	command.Dir = i.root
-	env := i.env
-	if env == nil {
-		env = os.Environ()
-	}
-	command.Env = append(append([]string(nil), env...), "GOWORK=off", "GOTOOLCHAIN=local", "GOFLAGS=")
+	command.Env = i.env
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("load Go package %s: %w\n%s", path, err, output)

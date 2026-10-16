@@ -81,7 +81,7 @@ json = "github.com/goxide-lang/serde/json"
 `), 0600); err != nil {
 		t.Fatal(err)
 	}
-	module, err := lower.PrepareModule([]string{dir}, "supportfixture")
+	module, err := lower.PrepareModule([]string{dir}, "supportfixture", testConfig(t))
 	if module != "" {
 		t.Cleanup(func() { os.RemoveAll(module) })
 	}

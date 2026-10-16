@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/hxsf/goxide/internal/expand"
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/syntax/ast"
 	"github.com/hxsf/goxide/internal/syntax/lexer"
 	"github.com/hxsf/goxide/internal/syntax/parser"
@@ -25,8 +25,8 @@ func featureNames(value string) []string {
 	return names
 }
 
-func nativeFeatures(value string) expand.Features {
-	features := expand.Features{Enabled: map[string]bool{}}
+func nativeFeatures(value string) config.Features {
+	features := config.Features{Enabled: map[string]bool{}}
 	for _, name := range featureNames(value) {
 		features.Enabled[name] = true
 	}

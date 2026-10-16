@@ -19,9 +19,9 @@ func publicSupportModule(path string) bool {
 // requested manifest. The compiler's own module and CLI dependencies are never
 // dependencies of generated programs. Configured source modules use their own
 // graph instead and do not call this standalone-only helper.
-func writeStandaloneSupportModule(tool, root, destination string) error {
+func writeStandaloneSupportModule(tool, root, destination string, base ...[]string) error {
 	inspect := exec.Command(tool, "mod", "edit", "-json")
-	inspect.Dir, inspect.Env = root, localEnv()
+	inspect.Dir, inspect.Env = root, localEnv(base...)
 	raw, err := inspect.Output()
 	if err != nil {
 		return fmt.Errorf("public support dependency manifest: %w", err)
@@ -67,7 +67,7 @@ func writeStandaloneSupportModule(tool, root, destination string) error {
 	}
 	editModule := func(args []string) error {
 		edit := exec.Command(tool, args...)
-		edit.Dir, edit.Env = destination, localEnv()
+		edit.Dir, edit.Env = destination, localEnv(base...)
 		if output, err := edit.CombinedOutput(); err != nil {
 			return fmt.Errorf("generated public support module: %w: %s", err, output)
 		}
@@ -97,7 +97,7 @@ func writeStandaloneSupportModule(tool, root, destination string) error {
 	var graph []graphModule
 	for {
 		list := exec.Command(tool, "list", "-mod=readonly", "-m", "-e", "-json", "all")
-		list.Dir, list.Env = destination, localEnv()
+		list.Dir, list.Env = destination, localEnv(base...)
 		var stderr bytes.Buffer
 		list.Stderr = &stderr
 		raw, err := list.Output()

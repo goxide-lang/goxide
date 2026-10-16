@@ -2,6 +2,8 @@ package typecheck
 
 import (
 	"go/importer"
+	"go/types"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -11,11 +13,11 @@ func TestCheckPackageFileScopesAndDeclarations(t *testing.T) {
 		"model.go": []byte("package model\nimport native \"strings\"\ntype Model struct { Name string }; func normalized(m Model) string { return native.ToUpper(m.Name) }"),
 		"use.go":   []byte("package model\nimport native \"strconv\"\nfunc Render(m Model) string { return normalized(m)+native.Itoa(1) }"),
 	}
-	if err := CheckPackage("example.org/app/model", files, importer.Default()); err != nil {
+	if err := CheckPackage("example.org/app/model", files, importer.Default(), types.SizesFor("gc", runtime.GOARCH)); err != nil {
 		t.Fatal(err)
 	}
 	files["use.go"] = []byte("package model\nfunc Render(m Model) string { return native.ToUpper(m.Name) }")
-	if err := CheckPackage("example.org/app/model", files, importer.Default()); err == nil || !strings.Contains(err.Error(), "use.go:2:") || !strings.Contains(err.Error(), "undefined: native") {
+	if err := CheckPackage("example.org/app/model", files, importer.Default(), types.SizesFor("gc", runtime.GOARCH)); err == nil || !strings.Contains(err.Error(), "use.go:2:") || !strings.Contains(err.Error(), "undefined: native") {
 		t.Fatalf("file import leaked or location lost: %v", err)
 	}
 }
@@ -27,16 +29,16 @@ func TestCheckPackageRejectsConflicts(t *testing.T) {
 		{"nominal", "package p\ntype Other int; var x Item = Other(1)", "cannot use"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := CheckPackage("example.org/p", map[string][]byte{"a.go": []byte("package p\ntype Item int"), "b.go": []byte(tc.other)}, importer.Default())
+			err := CheckPackage("example.org/p", map[string][]byte{"a.go": []byte("package p\ntype Item int"), "b.go": []byte(tc.other)}, importer.Default(), types.SizesFor("gc", runtime.GOARCH))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("wanted %q, got %v", tc.want, err)
 			}
 		})
 	}
-	if err := CheckPackage("", map[string][]byte{"a.go": []byte("package p")}, nil); err == nil {
+	if err := CheckPackage("", map[string][]byte{"a.go": []byte("package p")}, nil, types.SizesFor("gc", runtime.GOARCH)); err == nil {
 		t.Fatal("missing package identity accepted")
 	}
-	if err := CheckPackage("example.org/p", nil, nil); err == nil {
+	if err := CheckPackage("example.org/p", nil, nil, types.SizesFor("gc", runtime.GOARCH)); err == nil {
 		t.Fatal("empty package accepted")
 	}
 }

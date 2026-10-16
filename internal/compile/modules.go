@@ -151,7 +151,7 @@ func prepareModules(graph *project.Graph, generated map[string]string) error {
 func goCommand(graph *project.Graph, root string, args ...string) ([]byte, error) {
 	command := exec.Command(graph.Tool, args...)
 	command.Dir = root
-	command.Env = project.GoEnv(graph.Offline)
+	command.Env = project.GoEnv(graph.Offline, graph.Environment)
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
 	output, err := command.Output()

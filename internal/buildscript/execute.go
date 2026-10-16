@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/hxsf/goxide/internal/naming"
 	"io"
 	"os"
 	"os/exec"
@@ -16,7 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/lower"
+	"github.com/hxsf/goxide/internal/naming"
 )
 
 const owner = "goxide-build-script-cache-v1\n"
@@ -269,6 +270,11 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 			return fail, e
 		}
 	}
+	environment, e := config.Prepare(p.options.GoTool, scratch, "", false, p.compileEnv())
+	if e != nil {
+		return fail, e
+	}
+	configuration := config.Config{Environment: environment}
 	imports := map[string][]string{}
 	for _, m := range mods {
 		imports[m], e = hostImports(m, p.helpers[m], p.options.ToolchainRoots)
@@ -301,7 +307,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 				continue
 			}
 			if hasGoxide(p.helpers[m]) {
-				if e = lower.CompileModules([]lower.Module{{Path: m, Dir: paths[m], GoTool: p.options.GoTool, Roots: p.options.ToolchainRoots, Context: ctx, Environment: p.compileEnv()}}); e != nil {
+				if e = lower.CompileModules([]lower.Module{{Path: m, Dir: paths[m], Roots: p.options.ToolchainRoots, Context: ctx, Config: configuration}}); e != nil {
 					return fail, fmt.Errorf("host helper %s: %w", m, e)
 				}
 			}
@@ -316,7 +322,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 		return fail, e
 	}
 	if hasGoxide(p.script) {
-		if e = lower.CompileModules([]lower.Module{{Path: "goxide.buildscript.local/host", Dir: host, GoTool: p.options.GoTool, Roots: p.options.ToolchainRoots, Context: ctx, Environment: p.compileEnv()}}); e != nil {
+		if e = lower.CompileModules([]lower.Module{{Path: "goxide.buildscript.local/host", Dir: host, Roots: p.options.ToolchainRoots, Context: ctx, Config: configuration}}); e != nil {
 			return fail, fmt.Errorf("host script lowering (only explicit toolchain roots are available): %w", e)
 		}
 	}
@@ -324,7 +330,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 	if runtime.GOOS == "windows" {
 		exe += ".exe"
 	}
-	if e = p.run(ctx, host, p.compileEnv(), logger, p.options.GoTool, "build", "-mod=mod", "-buildvcs=false", "-o", exe, "."); e != nil {
+	if e = p.run(ctx, host, environment.ExecEnv(), logger, environment.GoTool, "build", "-mod=mod", "-buildvcs=false", "-o", exe, "."); e != nil {
 		return fail, e
 	}
 	source, out := filepath.Join(scratch, "inputs"), filepath.Join(scratch, "out")

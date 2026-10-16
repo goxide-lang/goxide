@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	goast "go/ast"
-	"go/build"
 	"go/build/constraint"
 	goparser "go/parser"
 	gotoken "go/token"
@@ -13,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,8 +67,7 @@ func generatePackage(req CompileRequest, out io.Writer) error {
 	}
 	files := map[string][]byte{}
 	var sources []string
-	buildContext := build.Default
-	buildContext.BuildTags = strings.FieldsFunc(req.Tags, func(r rune) bool { return r == ',' || r == ' ' })
+	buildContext := req.config.Environment.Context(strings.FieldsFunc(req.Tags, func(r rune) bool { return r == ',' || r == ' ' }), false)
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || strings.HasSuffix(name, "_test.go") || strings.HasSuffix(name, "_test.gox") {
@@ -102,6 +99,20 @@ func generatePackage(req CompileRequest, out io.Writer) error {
 		if !matches && filename != selected {
 			continue
 		}
+		if ext == ".go" && !buildContext.CgoEnabled {
+			file, err := goparser.ParseFile(gotoken.NewFileSet(), filename, data, goparser.ImportsOnly|goparser.SkipObjectResolution)
+			if err != nil {
+				return err
+			}
+			cgo := false
+			for _, imported := range file.Imports {
+				name, _ := strconv.Unquote(imported.Path.Value)
+				cgo = cgo || name == "C"
+			}
+			if cgo {
+				continue
+			}
+		}
 		if ext == ".gox" && selected != "" {
 			if req.Output != "-" && sourceUsesConfiguration(data) {
 				return fmt.Errorf("%s: conditional compilation requires whole-package generation; use gen with a directory input", filename)
@@ -131,7 +142,7 @@ func generatePackage(req CompileRequest, out io.Writer) error {
 			}
 		}
 	}
-	owner, err := prepareSingleFileModule(sources[0])
+	owner, err := prepareSingleFileModule(sources[0], req.config)
 	if err != nil {
 		return err
 	}
@@ -155,15 +166,15 @@ func generatePackage(req CompileRequest, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	imports := typecheck.NewImporterWithModFile(context.Background(), importSource, buildContext.BuildTags, false, singleFileEnvironment(), modFile)
-	generated, err := lower.CompilePackage(files, packagePath, imports, roots, lower.PackageOptions{LineDirectives: true, Features: nativeFeatures(req.Features), RejectConfiguration: selected != "" && req.Output != "-"})
+	imports := typecheck.NewImporter(importSource, typecheck.ImporterOptions{Config: req.config, Tags: buildContext.BuildTags, ModFile: modFile})
+	generated, err := lower.CompilePackage(files, packagePath, imports, roots, lower.PackageOptions{LineDirectives: true, Config: req.config, RejectConfiguration: selected != "" && req.Output != "-"})
 	if err != nil {
 		return generationDependencyError(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	targets := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "tool", "dist", "list")
-	targets.Env = singleFileEnvironment()
+	targets := exec.CommandContext(ctx, req.config.Environment.GoTool, "tool", "dist", "list")
+	targets.Env = singleFileEnvironment(req.config.Environment.ExecEnv())
 	targetList, err := targets.Output()
 	if err != nil {
 		return fmt.Errorf("read Go platform names: %w", err)
@@ -197,7 +208,7 @@ func generatePackage(req CompileRequest, out io.Writer) error {
 		}
 	}
 	if selected == "" {
-		if err := checkGeneratedPackage(packagePath, files, generated, imports); err != nil {
+		if err := checkGeneratedPackage(packagePath, files, generated, imports, req.config.Sizes()); err != nil {
 			return generationDependencyError(err)
 		}
 	}

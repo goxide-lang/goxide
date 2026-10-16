@@ -1,6 +1,7 @@
 package playground
 
 import (
+	"go/importer"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,11 +10,42 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hxsf/goxide/internal/config"
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/typecheck"
 	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
+
+func TestPackageUsesExplicitExportTargetAndEmptyEnvironment(t *testing.T) {
+	t.Setenv("GOARCH", "arm64")
+	environment, err := config.NewEnvironment(config.Target{OS: "linux", Arch: "386"}, []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := Options{Config: config.Config{Environment: environment}, Importer: importer.Default()}
+	files, err := CompilePackage([]File{{"main.gox", `package p
+const Is32 = cfg!(target_pointer_width("32"))
+const HasProcessArch = cfg!(env("GOARCH"))
+`}, {"other.gox", "package p\nconst Other = 1\n"}}, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 || !strings.Contains(files[0].Source, "Is32 = true") || !strings.Contains(files[0].Source, "HasProcessArch = false") {
+		t.Fatalf("wrong in-memory configuration: %v", files)
+	}
+	for _, file := range files {
+		if !strings.Contains(file.Source, "//go:build linux && !android && 386") {
+			t.Fatalf("missing package target guard: %s", file.Source)
+		}
+	}
+	if _, err := CompilePackage([]File{{"large.gox", "package p\nvar TooLarge int = 1 << 40\n"}}, options); err == nil || !strings.Contains(err.Error(), "overflow") {
+		t.Fatalf("32-bit type checking used host sizes: %v", err)
+	}
+	if _, err := CompilePackage([]File{{"missing.gox", "package p\n"}}, Options{Importer: importer.Default()}); err == nil || !strings.Contains(err.Error(), "explicit export-data target") {
+		t.Fatalf("missing browser target was guessed: %v", err)
+	}
+}
 
 func TestPackageFilesScopeHelpersAndNativeBuild(t *testing.T) {
 	files := []File{
@@ -36,7 +68,7 @@ use strings as native;
 func label() string { return native::ToUpper("ok") }
 `},
 	}
-	options := Options{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
+	options := Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()}), Roots: paths.Roots{
 		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
 		"strings": {PackagePath: "strings", Source: "toolchain"},
 		"serde":   {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module"},
@@ -73,7 +105,7 @@ func label() string { return native::ToUpper("ok") }
 			t.Fatal(err)
 		}
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: PackagePath, Dir: input, Roots: options.Roots}}); err != nil {
+	if err := lower.CompileModules([]lower.Module{{Path: PackagePath, Dir: input, Roots: options.Roots, Config: options.Config}}); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(input)
@@ -150,7 +182,7 @@ func TestPackageRejectsInvalidCollections(t *testing.T) {
 }
 
 func TestPackageConflictsAndRecovery(t *testing.T) {
-	options := Options{Importer: typecheck.NewImporter("playground.gox"), Roots: paths.Roots{
+	options := Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()}), Roots: paths.Roots{
 		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
 		"strings": {PackagePath: "strings", Source: "toolchain"},
 	}}
@@ -176,7 +208,7 @@ func TestPackageBuiltinSumHelpersAreComplete(t *testing.T) {
 	files, err := CompilePackage([]File{
 		{"make.gox", "package p\nfunc Make()Option[int]{return Option::Some(7)}\n"},
 		{"read.gox", "package p\nfunc Read()int{return match Make(){Option::Some(n)=>n,Option::None=>0,}}\n"},
-	}, Options{Importer: typecheck.NewImporter("playground.gox")})
+	}, Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()})})
 	if err != nil {
 		t.Fatal(err)
 	}

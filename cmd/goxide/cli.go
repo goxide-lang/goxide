@@ -6,11 +6,15 @@ import (
 	"golang.org/x/term"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
+
+// Release builds set version with -X main.version=<tag>.
+var version = "dev"
 
 // All Cobra/pflag dependencies live in this adapter. Services accept ordinary
 // request structs and return errors; only main decides the process exit status.
@@ -63,6 +67,18 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 	root.SetOut(out)
 	root.SetErr(stderr)
 	root.CompletionOptions.DisableDefaultCmd = true
+	var showVersion bool
+	root.Flags().BoolVar(&showVersion, "version", false, "print the Goxide and Go toolchain versions")
+	root.RunE = func(c *cobra.Command, args []string) error {
+		if !showVersion {
+			return fmt.Errorf("usage: %s; use --help", c.UseLine())
+		}
+		if len(args) != 0 {
+			return usageError(c, fmt.Errorf("--version accepts no operands"))
+		}
+		_, err := fmt.Fprintf(out, "goxide %s (%s)\n", version, runtime.Version())
+		return err
+	}
 	for _, mode := range []string{"build", "run", "test", "transpile", "expand"} {
 		req := CompileRequest{Mode: mode}
 		c := cliCommand(mode+" [flags] [INPUT]", "Compile "+mode+" input (defaults to the current project)")

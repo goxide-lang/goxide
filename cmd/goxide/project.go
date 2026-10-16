@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go/version"
+	goversion "go/version"
 	"io"
 	"io/fs"
 	"os"
@@ -559,7 +559,7 @@ func checkDirectoryCompiler(tool string) error {
 		return fmt.Errorf("Go compiler check: %w", err)
 	}
 	parts := strings.Fields(string(data))
-	if len(parts) < 3 || parts[0] != "go" || parts[1] != "version" || !version.IsValid(parts[2]) || version.Compare(parts[2], "go1.27") < 0 {
+	if len(parts) < 3 || parts[0] != "go" || parts[1] != "version" || !goversion.IsValid(parts[2]) || goversion.Compare(parts[2], "go1.27") < 0 {
 		return fmt.Errorf("not a supported Go compiler: %s", data)
 	}
 	if parts[2] != runtime.Version() {

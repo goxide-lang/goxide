@@ -10,7 +10,7 @@ func configureCLIHelp(root *cobra.Command) {
 		"goxide": {
 			"将 Goxide 源码编译为普通 Go",
 			"编译、运行和测试 Goxide 源码。\n长选项使用 --name，短选项使用 -x；所有选项放在输入路径之前。\n旧式 -go、-offline 等拼写不再接受，请改为 --go、--offline。",
-			"  goxide run --go /absolute/path/to/go main.gox\n  goxide help build\n  goxide completion bash",
+			"  goxide --version\n  goxide run --go /absolute/path/to/go main.gox\n  goxide help build\n  goxide completion bash",
 		},
 		"goxide build": {
 			"编译文件、目录或项目并保留构建产物",

@@ -112,7 +112,7 @@ type File struct {
 }
 
 type Package struct {
-	Dir, Name string
+	Dir, Name string // Dir uses slashes because it also identifies the Go package.
 	Files     []*File
 	Scope     *Scope
 }
@@ -207,7 +207,7 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 		if tree.Package != nil {
 			pn = tree.Package.Name
 		}
-		k := packageKey{filepath.Dir(name), pn}
+		k := packageKey{filepath.ToSlash(filepath.Dir(name)), pn}
 		p := packages[k]
 		if p == nil {
 			p = &Package{Dir: k.dir, Name: pn, Scope: newScope(PackageScope, prelude())}

@@ -2,6 +2,7 @@ package check_test
 
 import (
 	"go/types"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,6 +40,31 @@ func checkPackageSources(t *testing.T, sources map[string]string, imports resolv
 		t.Fatal(resolved.Diagnostics)
 	}
 	return check.Check(files, resolved)
+}
+
+func TestSourceEnumPackagePathUsesSlashes(t *testing.T) {
+	const filename = "example.org/orders/order/order.gox"
+	for _, test := range []struct{ name, filename string }{
+		{"logical", filename},
+		{"native", filepath.FromSlash(filename)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			info, diagnostics := checkPackageSources(t, map[string]string{
+				test.filename: "package order\npub enum Order { Pending, Paid(int) }\n",
+			}, nil)
+			if len(diagnostics) != 0 {
+				t.Fatal(diagnostics)
+			}
+			if len(info.Enums) != 1 {
+				t.Fatalf("checked enums = %d, want 1", len(info.Enums))
+			}
+			for _, enum := range info.Enums {
+				if got := enum.Type.Obj().Pkg().Path(); got != "example.org/orders/order" {
+					t.Fatalf("source type Go package path = %q; want slash-separated import path", got)
+				}
+			}
+		})
+	}
 }
 
 func TestNativeSingleItemImportsKeepTypes(t *testing.T) {

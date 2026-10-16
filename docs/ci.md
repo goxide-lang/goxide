@@ -22,7 +22,8 @@ PR 在 `opened`、`synchronize`、`reopened`、`ready_for_review` 和 `converted
 
 Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译器；web job显式安装Node 22，并用website/package-lock.json执行npm ci，供Preact/Vite/Monaco构建与worker检查使用。
 完整 Git 历史用于 catalog 快照。缓存按锁文件选取；先用仓外清单副本
-预热完整固定模块图并 `verify`，逐字节确认 `go.mod/go.sum` 未变，然后 `GOPROXY=off`。
+预热完整固定模块图并 `verify`，逐字节确认 `go.mod/go.sum` 未变。网站 job 随后设置 `GOPROXY=off`；
+原生检查保留 Go proxy 配置，供 P5 独立空模块缓存测试首次获取固定依赖，后续离线重跑由测试显式控制。
 缓存仅加速，冷 cache、离线、校验和、权限/安全夹具仍由原测试自行构造，不改夹具环境。
 全树测试移除外层 `GOWORK` 以保留 workspace 发现合同；其余脚本保留自身隔离规则。
 原生 `GOMAXPROCS=4`；若增加 Node 执行 Go WASM 的入口，仅该进程设为 1。

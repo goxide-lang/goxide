@@ -82,7 +82,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (Go 1.27+; unused for single-file transpile/expand)")
 		f.StringArrayVarP(&req.Packages, "package", "p", nil, "select workspace member by module identity (repeatable)")
 		f.BoolVar(&req.Workspace, "workspace", false, "build all workspace members")
-		f.StringVar(&req.Features, "features", "", "project features (comma/space separated)")
+		f.StringVar(&req.Features, "features", "", "enabled features (comma/space separated)")
 		f.BoolVar(&req.NoDefaultFeatures, "no-default-features", false, "disable project default features")
 		f.StringVar(&req.Bin, "bin", "", "select project binary")
 		f.StringVar(&req.Example, "example", "", "select project example")
@@ -91,6 +91,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.BoolVar(&req.Offline, "offline", false, "use cached dependencies; does not sandbox scripts")
 		f.BoolVar(&req.Locked, "locked", false, "require unchanged goxide.lock")
 		c.RunE = func(c *cobra.Command, operands []string) error {
+			req.FeaturesSet = c.Flags().Changed("features")
 			req.Input = ""
 			req.ProgramArgs = nil
 			if len(operands) > 0 {

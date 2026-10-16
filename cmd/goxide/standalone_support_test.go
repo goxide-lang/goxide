@@ -58,7 +58,7 @@ func fail()(result int){
  return 0
 }
 func main(){println!("value={}",fail())}
-`), "goxide/generated", typecheck.NewImporter(filename), paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}})
+`), "goxide/generated", typecheck.NewImporter(filename), paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}}, nativeFeatures(""))
 	if err != nil {
 		t.Fatal(err)
 	}

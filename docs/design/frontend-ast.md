@@ -85,9 +85,9 @@ Go 的 25 个关键字不变。唯一的成员名例外按语法判断：impl �
 | `in` | 宏匹配器内；预留给将来的 `for x in` |
 | `macro_rules` | 后面紧跟 `!` 时 |
 
-以下词**不是**关键字，按普通名字解析：
+以下词**不是**词法关键字；其中内建属性和宏按各自语法位置识别：
 
-- 属性名：`derive`、`cfg`、`default`、`serde` 等。
+- 属性名：`derive`、`cfg`、`cfg_attr`、`default`、`serde` 等。条件编译接入后，属性位置的 cfg/cfg_attr 与宏位置的 cfg! 使用内建规则，普通变量或函数名 cfg 不受影响。
 - 预导入名：`Option`、`Result`、`Some`、`None`、`Ok`、`Err`，以及 `i32` 这类基础类型别名。它们可以被遮蔽。
 - `yield`：Go 的 range-over-func 惯用它作参数名，不预留。
 
@@ -240,6 +240,7 @@ Go 的表达式节点全部保留：`Ident`、`BasicLit`、`CompositeLit`、`Key
 | `RefExpr` | `&x`、`&mut x` | Go 的取地址也用这个节点，`Mut` 为假 |
 | `UnsafeExpr` | `unsafe f(p)` | 前缀，作用于紧随的一元表达式 |
 | `MacroExpr` | `path!(...)`、`path![...]`、`path!{...}` | 参数是未解析的 `TokenTree` |
+| `BoolLit` | cfg! 的展开产物 | 无类型布尔常量，不参与 true/false 标识符查找；源码中的普通 true/false 名字规则不变 |
 | `QualifiedSelectorExpr` | `x.m::<Trait>` | 限定分派，见下 |
 | `AwaitExpr`† | — | 预留，形式未定 |
 | `BadExpr` | — | |
@@ -325,7 +326,7 @@ Go 的语句节点全部保留：赋值、短声明、自增自减、表达式�
 ```go
 type Attr struct {
     Inner bool         // #![...]
-    Path  *Path        // derive、serde、cfg、default ...
+    Path  *Path        // derive、serde、cfg、cfg_attr、default ...
     Args  *TokenTree   // 可为空；内容由属性自己的处理器解析
 }
 
@@ -343,7 +344,7 @@ type MacroRulesDecl struct {
 
 - 宏的参数和规则体在语法阶段只做括号配对，保存为 `TokenTree`。匹配器里的 `$x:expr`、重复 `$(...),*` 在宏展开阶段解析。
 - 展开时按片段类别调用解析器的对应入口（表达式、语句、类型、声明、模式），得到的 AST 节点带 `ExpnID` 和新的 `SyntaxCtx`。
-- 属性参数同样保存为 `TokenTree`。`derive` 和 `cfg` 由编译器内建处理器解析，其他属性名先解析路径再决定归属。
+- 属性参数同样保存为 `TokenTree`。`derive`、`cfg` 和 `cfg_attr` 由编译器内建处理器解析；条件属性先决定有效属性集合，保留的其他属性再解析路径和归属。具体配置语法见 [RFC 0022](../rfcs/0022-project-toolchain.md#谓词)，接入状态见[能力状态表](../mvp-gap-audit.md)。
 
 ### 5.7 路径
 
@@ -471,6 +472,30 @@ serde 的 Serialize/Deserialize 按实际 `use` 绑定的 canonical owner 分别
 关联类型的声明与绑定用已有 `AssocTypeDecl` / `AssocTypeBinding` 节点；投影统一为 `Self::Item`、`T::Trait::Item`。`Trait[Item = int]` 是完整关联类型绑定，不是新的位置参数 impl。泛型函数限每个类型参数单 trait 约束，未绑定投影必须从该约束及 carrier witness 获得类型证据。
 
 静态调用降低为空 carrier 操作，关联类型 witness 只参与 Go 类型推导；不执行类型锚或 witness，不传运行时字典。enum 的精确 Self 是 enum 接口 E；其变体实现类型锚返回同一空 carrier，读写 owner 的操作把 `*E` 作为普通参数。运行时实例视图另按[trait 合同](traits.md)生成命名 target wrapper，不能把 carrier 当作目标值或运行时 trait wrapper。
+
+### 8.4 Feature 条件编译合同
+
+状态：已实现。源级语义与两种配置入口统一见 [RFC 0022](../rfcs/0022-project-toolchain.md)。cfg/cfg_attr 限完整顶层 item，cfg! 只作布尔常量查询，if 两支仍检查；手写和宏生成形式使用同一规则。当前支持 feature，target/test 等按 RFC 的接入条件后续实现。
+
+配置是编译调用的显式输入：原生 Go 为当前包的 enabled 集，TOML 为各 module 的 declared/enabled 集。文件所属模块及已有宏 Origin/SyntaxCtx 决定配置构造的归属，不能把根项目的集合广播到依赖。初期使用具体数据与共同谓词处理函数；未来实际接入目标/测试上下文时再添加对应输入，不先建通用注册表。
+
+逻辑处理顺序如下，描述阶段边界，不要求新增一套管线或这些名字的包：
+
+```text
+选取输入文件 → ParseFile → 配置属性规范化与 item 选择
+→ 有效源码的依赖根/宏绑定 → 展开宏并解析输出片段
+→ 对每个输出片段再次处理条件属性，再递归展开保留部分；cfg! 求布尔值
+→ ResolveExpanded → Check（含派生与协议）→ Lower
+```
+
+1. **完整语法边界**。选中的源文件先完整解析，普通源码的语法错误不被 cfg 隐藏；TokenTree 保持原有边界，不为检查关闭区域而展开宏。被调用宏的输出先解析成完整片段，再选择其内部条件。
+2. **首次绑定之前选择**。在 `applyModuleRoots`、首次 `resolve.Resolve`、宏定义收集及源码 import 发现前处理原始 AST 中的 cfg/cfg_attr；单文件编译、整包编译、多模块编译共用此处理。不能等到最终 Check 才过滤，否则关闭 import、宏或重复声明已生效。
+3. **条件属性先于普通属性**。cfg_attr 按顺序插入选中的载荷，递归处理其中的 cfg_attr；有效 cfg 取 AND。当前项全部直接生效的条件校验后才确定存活，保留项才登记派生、协议或执行普通属性检查；删除项的内部节点不继续遍历。
+4. **宏边展开边选择**。展开当前调用所必需的模板并解析输出后，先处理其条件属性，再进入子宏。宏源依赖与循环检查仅基于属性选择后的有效部分，不能用 `macroTemplatePaths` 对全部原始模板的扫描提前加载 cfg 删除项中的宏。普通 if 两支中的宏均参与展开和依赖检查。
+5. **布尔查询与来源**。cfg! 在展开阶段替换为不可被局部 true/false 绑定遮蔽的布尔常量，包括用户宏生成的 cfg!。它不删除 if 分支，初始化、作用域与控制流仍遵循普通语言规则。保留节点、cfg_attr 载荷与宏构造的源位置和各自来源；删除项附着的属性、注释与编译指令不能漂移到下一个声明。
+6. **检查保留程序**。名称、类型、引用权限、派生、trait 完整性与控制流检查消费同一份经条件属性处理的 AST，if 两支仍检查；既有支持位置之外的属性明确诊断。生成保持源行映射，同输入同配置字节一致。
+
+`target_*`、test 等扩展将复用谓词结构与上述选择顺序，配置来源分别属于目标和编译单元。原生 Go 的生成约束、重新生成与测试文件分流必须与这些谓词一起实现，首批不能把未提供的上下文默认为 false。
 
 ## 9. 后续工作
 

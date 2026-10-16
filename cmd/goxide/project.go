@@ -18,11 +18,40 @@ import (
 	"time"
 
 	"github.com/hxsf/goxide/internal/compile"
+	"github.com/hxsf/goxide/internal/expand"
 	"github.com/hxsf/goxide/internal/naming"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
 	"github.com/hxsf/goxide/internal/rootconfig"
 )
+
+// Package generation belongs to the nearest module. A nested native Go module
+// must not be generated as part of an enclosing manifest project.
+func generationProject(directory string) (string, error) {
+	directory, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		return "", err
+	}
+	for {
+		found, err := project.Detect(directory)
+		if err != nil {
+			return "", err
+		}
+		if found {
+			return directory, nil
+		}
+		if _, err := os.Stat(filepath.Join(directory, "go.mod")); err == nil {
+			return "", nil
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			return "", nil
+		}
+		directory = parent
+	}
+}
 
 func runPreparedProject(req CompileRequest, prepared *compile.Result, sourceRoot string, out, stderr io.Writer) error {
 	if req.Mode == "expand" {
@@ -310,7 +339,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err := os.WriteFile(filepath.Join(stage, project.ManifestName), data, 0600); err != nil {
 		return err
 	}
-	prepared, err := compile.PrepareProject(stage, compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: true, Roots: roots})
+	prepared, err := compile.PrepareProject(stage, compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: true, Roots: roots, NativeFeatures: &expand.Features{}})
 	if err != nil {
 		return err
 	}

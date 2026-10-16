@@ -17,7 +17,8 @@
 | 已有 Go 项目原位生成 | 支持 | [gen 用户指南](using-goxide-gen.md)：`gen` 与 `transpile` 同义，目录整包或单 `.gox`；手写 Go 只读参与类型检查，输出 `_gox.go`；标准生成标记保护、缺依赖提示、`go generate` 与确定性输出 | [generate_test.go](../cmd/goxide/generate_test.go)、[package_test.go](../internal/lower/package_test.go) |
 | 网站与浏览器转译 | 支持 | [website](../website/)：新编译器 WASM、示例目录、单包多文件编辑、CLI/WASM 生成结果一致；浏览器只转译 | [qa.mjs](../website/qa.mjs)、[catalog-qa.mjs](../website/catalog-qa.mjs)、[compiler_test.mjs](../website/compiler_test.mjs)、[package_test.go](../internal/playground/package_test.go) |
 | 网站 gen 用户指南 | 未做 | 从 [using-goxide-gen.md](using-goxide-gen.md) 单源生成精简页面，不维护第二份内容 | 无 |
-| workspace、feature 与 example/lib 目标选择 | 未做 | 当前项目入口拒绝 workspace、feature、`--example` 和 `--lib`；[MVP-1](pre-mvp-plan.md#后续阶段mvp)：成员、依赖继承、根锁和按成员合并 feature | [project_test.go](../internal/compile/project_test.go)（workspace/feature 拒绝入口） |
+| feature 与 cfg/cfg_attr/cfg! | 支持 | [RFC 0022](rfcs/0022-project-toolchain.md)：原生 Go 显式包配置、TOML 每模块 feature 图、顶层条件属性与 cfg! 布尔查询，含宏产物；if 两支仍检查；当前仅 feature，target/test 等后续接入 | [配置语义](../internal/expand/config_test.go)、[跨模块生成](../internal/lower/cfg_e2e_test.go)、[项目与锁](../internal/compile/features_test.go)、[CLI 与 go generate](../cmd/goxide/features_test.go) |
+| workspace 与 example/lib 目标选择 | 未做 | 当前项目入口拒绝 workspace、`--example` 和 `--lib`；[MVP-1](pre-mvp-plan.md#后续阶段mvp)：成员、依赖继承、根锁，并在 feature 基础上按成员合并请求 | [project_test.go](../internal/compile/project_test.go)（workspace 拒绝入口） |
 | import-go | 未做 | CLI 入口已摘除；[MVP-2](pre-mvp-plan.md#后续阶段mvp) | [cli_process_test.go](../cmd/goxide/cli_process_test.go)（拒绝入口） |
 | vendor 与供应来源选择 | 未做 | 当前项目入口拒绝 vendor；[MVP-3](pre-mvp-plan.md#后续阶段mvp) | 无新管线验收测试 |
 | 构建脚本授权 | 未做 | 项目构建拒绝 build 配置，scripts CLI 入口已摘除；[MVP-4](pre-mvp-plan.md#后续阶段mvp) | [project_test.go](../internal/compile/project_test.go)、[cli_process_test.go](../cmd/goxide/cli_process_test.go)（拒绝入口） |

@@ -10,7 +10,7 @@
 
 依赖版本和校验和由既有 Go planner 锁定，生成模块间使用 bundle 内的相对 replace；临时生成目录不进入锁或最终 Go 元数据。相同输入保持生成字节、产物路径和锁稳定，offline/locked 使用已有缓存与锁重放，清单依赖映射改变时 locked 拒绝更新。失败的源检查不发布新锁或覆盖已有 bundle。
 
-workspace、vendor 迁入、import-go、构建脚本及 feature 配置按后续 MVP 阶段接入新管线；下文保留这些工具链实现的既有字段合同。
+feature 条件编译已接入：支持 cfg、cfg_attr 顶层条件属性及 cfg! 布尔查询；cfg! 不跳过 if 两支的检查。合同见 [RFC 0022](../rfcs/0022-project-toolchain.md)。workspace、vendor 迁入、import-go、构建脚本仍按后续 MVP 阶段接入；下文保留这些工具链实现的既有字段合同。
 
 ## 最小项目与真实依赖
 
@@ -64,6 +64,14 @@ goxide run --offline --locked   # clean dependency download
 | workspace | format=1、members、default-members、exclude、package、dependencies，以及已有原生迁入 go 政策，见 [workspace 合同](../rfcs/0026-workspaces.md) |
 
 未知字段、错误类型、非法 TOML 和大小写错误有文件/行/列诊断。来源语义错误指出依赖名。不提供旧 schema 兼容。
+
+## Feature 配置
+
+`[features]` 同时提供模块内查询的声明目录与展开图。根模块默认启用已声明的 default，再加入 CLI 的 `--features`；`--no-default-features` 只取消根默认请求。依赖通过 `features`、`default_features` 和 feature 边接收请求，同一 module/source 的请求取并集，任何一条边要求默认集合即保留。根 feature 不按同名隐式传播到依赖，各模块的包共享本模块最终集合。
+
+`dep:alias` 激活 optional 依赖，`alias/feature` 激活并转发，本地名称展开本模块 feature；不隐式创建 optional 同名 feature。请求及实际处理到的完整 cfg/cfg_attr/cfg! 谓词检查本模块声明，未知 feature 报错；外层 cfg 删除的子树、未选中的 cfg_attr 载荷不继续检查，普通 if 两支仍检查。`required_features` 在图求解后检查，不自动启用 feature。纯 Go 或固定生成 Go 依赖不能被请求重配 Goxide feature。
+
+源码条件选择不反向修改清单图；非 optional 依赖和 go.require 仍按声明处理。产物配置摘要纳入每个 module 排序后的实际 enabled 集，不能只用依赖计划身份区分生成物；同配置请求乱序或重复不影响输出。纯 cfg 变化且依赖计划不变时保持锁文件字节稳定，可 --locked 重放。目标/测试谓词使用未来编译上下文，不添加到 `[features]`；当前实现和验收进度仍见[状态表](../mvp-gap-audit.md)。
 
 ## 来源与包身份
 
@@ -132,7 +140,9 @@ GOX
 
 真实远端依赖使用 HTTPS；绝对本地 Git 路径用于上述夹具与定向验证。没有对旧 monorepo candidate 的历史 ABI 提供兼容。
 
-build/run/test/transpile 无 INPUT 时，从 cwd 向上发现最近 goxide.toml；go.mod 不阻断外层项目/workspace。显式目录采用同一规则；显式文件保留单文件语义。没有清单时需显式指定 Go 目录或源码，不扫描目录猜 main。
+build/run/test 及指定输出目录的 transpile 无 INPUT 时，从 cwd 向上发现最近 goxide.toml；go.mod 不阻断外层项目/workspace。显式目录采用同一规则；显式文件保留单文件语义。没有清单时需显式指定 Go 目录或源码，不扫描目录猜 main。
+
+默认原位 `gen` / `transpile` 按最近模块边界选择入口：遇到当前或上层 goxide.toml 时进入项目模式，先遇到 go.mod 时只生成当前 Go 包；嵌套原生模块不会被更外层 TOML 接管。
 
 成员子目录选择最近成员，workspace 根用 default-members，`-p MODULE` 与 `--workspace` 显式改变选择。未列出的项目报非成员，不因目录位置补依赖。成员用 `workspace = true` 继承模板，只可追加 features 或设置 optional/default_features；模板 path 相对 workspace 根。版本与锁全 workspace 统一，未选成员 features 不自动加入本次编译。
 

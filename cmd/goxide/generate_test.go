@@ -196,13 +196,13 @@ func TestGenerateMissingRuntimeDependency(t *testing.T) {
 	}
 }
 
-func TestGenerateDoesNotCompileOrRunNativeBodies(t *testing.T) {
+func TestGenerateSingleFileDoesNotCompileOrRunNativeBodies(t *testing.T) {
 	root := t.TempDir()
 	singleFileWrite(t, root, "go.mod", "module example.org/nocompile\ngo 1.27\n")
 	singleFileWrite(t, root, "native.go", "package p\nfunc init(){panic(\"must not run\")}\nfunc native()int{var n int = \"Go type error\";return n}\n")
 	singleFileWrite(t, root, "value.gox", "package p\nfunc Value()int{return native()}\n")
 	var output bytes.Buffer
-	if err := run([]string{"gen", "--go", filepath.Join(root, "missing-go"), root}, &output, &output); err != nil {
+	if err := run([]string{"gen", "--go", filepath.Join(root, "missing-go"), filepath.Join(root, "value.gox")}, &output, &output); err != nil {
 		t.Fatalf("generation compiled or ran the package: %v", err)
 	}
 	singleFileWrite(t, root, "native.go", "package p\ninvalid sibling Go\n")

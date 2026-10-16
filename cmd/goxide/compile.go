@@ -38,6 +38,7 @@ type CompileRequest struct {
 	RootsFile                                                       string
 	Features, Bin, Example, TargetDir                               string
 	NoDefaultFeatures, Lib, Offline, Locked                         bool
+	FeaturesSet                                                     bool
 	ProgramArgs                                                     []string
 }
 
@@ -45,7 +46,7 @@ type compiledFile struct {
 	Go, Expanded []byte
 }
 
-func compileSourceFile(filename string, source []byte, packagePath string, goImports types.Importer, roots sourcepaths.Roots) (compiledFile, error) {
+func compileSourceFile(filename string, source []byte, packagePath string, goImports types.Importer, roots sourcepaths.Roots, features expand.Features) (compiledFile, error) {
 	if err := naming.Source(filename, source); err != nil {
 		return compiledFile{}, err
 	}
@@ -58,7 +59,10 @@ func compileSourceFile(filename string, source []byte, packagePath string, goImp
 		}
 	}
 	sources := map[string]typecheck.DiagnosticSource{filename: {Name: displayName, Text: source, AST: file}}
-	expanded, err := expand.Expand([]*syntax.File{file}, nil)
+	if _, err := expand.Configure(file, features); err != nil {
+		return compiledFile{}, typecheck.SourceError(err, sources, nil)
+	}
+	expanded, err := expand.Expand([]*syntax.File{file}, nil, map[*syntax.File]expand.Features{file: features})
 	if err != nil {
 		return compiledFile{}, typecheck.SourceError(err, sources, expanded)
 	}
@@ -139,7 +143,16 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || filepath.Ext(input) == ".gox" {
+		if info.IsDir() {
+			root, err := generationProject(input)
+			if err != nil {
+				return err
+			}
+			if root == "" {
+				return generatePackage(req, out)
+			}
+			input = root
+		} else if filepath.Ext(input) == ".gox" {
 			return generatePackage(req, out)
 		}
 	}
@@ -162,13 +175,13 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			if req.RootsFile != "" {
 				return fmt.Errorf("--roots cannot override goxide.toml dependency mappings")
 			}
-			if *features != "" || *noDefault || *example != "" || *lib {
-				return errors.New("features, examples and library targets are deferred until MVP")
+			if *example != "" || *lib {
+				return errors.New("example and library targets are deferred until MVP")
 			}
 			if *tags != "" {
 				return errors.New("--tags is not supported for manifest projects by the new compiler pipeline")
 			}
-			prepared, err := compile.PrepareProject(input, compile.Options{Bin: *bin, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked})
+			prepared, err := compile.PrepareProject(input, compile.Options{Bin: *bin, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault})
 			if err != nil {
 				return err
 			}
@@ -182,8 +195,14 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if req.Workspace || len(req.Packages) > 0 {
 		return errors.New("workspace selection requires a directory")
 	}
-	if *targetDir != "" || *features != "" || *noDefault || *bin != "" || *example != "" || *lib || *offline || *locked {
+	if *noDefault {
+		return errors.New("--no-default-features requires goxide.toml")
+	}
+	if *targetDir != "" || *bin != "" || *example != "" || *lib || *offline || *locked {
 		return errors.New("project flags require a directory with goxide.toml")
+	}
+	if nativeGo && (req.FeaturesSet || *features != "") {
+		return errors.New("--features applies to Goxide source; native .go uses Go build selection")
 	}
 	if *tags != "" {
 		return errors.New("--tags requires directory mode")
@@ -270,7 +289,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			result, err = compileNativeGoFile(input, src)
 		} else {
 			imp := typecheck.NewImporterWithModFile(context.Background(), input, nil, false, singleFileEnvironment(), owner.modFile)
-			result, err = compileSourceFile(input, src, owner.packagePath, imp, roots)
+			result, err = compileSourceFile(input, src, owner.packagePath, imp, roots, nativeFeatures(*features))
 		}
 	} else if nativeGo {
 		result, err = compileNativeGoFile(input, src)
@@ -279,7 +298,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if *runtimeRoot != "" {
 			importContext = filepath.Join(*runtimeRoot, "go.mod")
 		}
-		result, err = compileSourceFile(input, src, "goxide/generated", typecheck.NewImporter(importContext), roots)
+		result, err = compileSourceFile(input, src, "goxide/generated", typecheck.NewImporter(importContext), roots, nativeFeatures(*features))
 	}
 	if err != nil {
 		return err

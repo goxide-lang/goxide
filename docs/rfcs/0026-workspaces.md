@@ -200,7 +200,7 @@ goxide import-go --workspace --out ./new --bin example.org/a=app:cmd/app ./old/g
 
 脚本执行在图冻结之后；生成文件或宏新增 import 也只能使用已声明活动图中的来源，缺边报 WS-UNDECLARED-GENERATED-EDGE，不能执行脚本后自动扩大依赖/信任闭包。模板未被继承、optional未启用和CLI未选无关成员都不构成额外来源。
 
-对同一固定活动图，features 单调并集；默认请求有一条开启即保留。在已有完整锁的本次构建中，仅由未激活可选增强边关联、且没有其他活动边请求的来源不下载、不读源码或执行脚本；初次/显式更新全图锁可按plan读取必要来源元数据，不得因此启用编译feature或脚本。全workspace的原生require参与不能被optional声明抹掉。当前成员自己的未知 feature/feature cycle 仍按 RFC0022 明确诊断。MVS 升级后重新验证最终选中版本的 features；不存在请求不能换低版本逃过 MVS。cfg 时序沿用 RFC0022，workspace 不新增声明级标注、不把 cfg! 普通 if 变成死分支免检；关闭文件仅既有词法/括号及 package/import 前缀检查，不宣称完整语法验证。
+对同一固定活动图，features 单调并集；默认请求有一条开启即保留。在已有完整锁的本次构建中，仅由未激活可选增强边关联、且没有其他活动边请求的来源不下载、不读源码或执行脚本；初次/显式更新全图锁可按plan读取必要来源元数据，不得因此启用编译feature或脚本。全workspace的原生require参与不能被optional声明抹掉。当前成员自己的未知 feature/feature cycle 仍按 RFC0022 明确诊断。MVS 升级后重新验证最终选中版本的 features；不存在请求不能换低版本逃过 MVS。条件编译统一遵循 [RFC 0022](0022-project-toolchain.md)：完整解析源码后由 cfg/cfg_attr 选择有效节点，再做宏、名称和类型检查；cfg! 仅产生布尔常量，if 两支仍检查。workspace 复用同一语义，其入口接入仍按独立阶段验收。
 
 host 构建脚本有独立 host 版本/feature 域，与 target 不合并；同一 helper 若被同次多个脚本共用，host 内并集，其角色键不同于 target。脚本接收所属 target 包的已冻结 features，但不能返写图。Go 包 DAG 仍须合法；host 指向 target 不能造成“先生成自身才能编译生成器”的循环。
 

@@ -309,10 +309,13 @@ func main(){fmt::Println(h::Read(h::Get()))}
 			execute(t, outside, filepath.Join(input, "app.gox"), "7\n", nil)
 		})
 
-		for _, args := range [][]string{{"transpile", "--tags", "custom"}, {"test"}, {"run", "--features", "extra"}} {
+		for _, args := range [][]string{{"transpile", "--tags", "custom"}, {"test"}} {
 			argv := append(append([]string(nil), args...), filepath.Join(src, "app.gox"))
 			msg := deliveryCommand(t, outside, cli, false, nil, argv...)
 			singleExternalContains(t, msg, "directory")
+		}
+		if got := deliveryCommand(t, outside, cli, true, nil, "run", "--features", "extra", filepath.Join(src, "app.gox")); got != "3\n" {
+			t.Fatalf("single-file feature selection changed program behavior: %q", got)
 		}
 		msg := deliveryCommand(t, outside, cli, false, nil, "run", "--workspace", filepath.Join(src, "app.gox"))
 		singleExternalContains(t, msg, "workspace selection is deferred until MVP")

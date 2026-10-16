@@ -200,8 +200,15 @@ function Local({ manifest }) {
       </p>
       <p>
         工程使用 goxide.toml 声明包与依赖，goxide.lock 固定依赖版本。
-        当前支持多包程序、Go 与本地 path 依赖，以及 build、run、test。
-        workspace、import-go、vendor、feature 和构建脚本入口将在 MVP 阶段重新开放。
+        当前支持多包程序、Go 与本地 path 依赖、feature 条件配置，以及 build、run、test。
+        workspace、import-go、vendor 和构建脚本入口将在 MVP 阶段重新开放。
+      </p>
+      <p>
+        已有 Go 包可用 <code>goxide gen .</code> 或 <code>go generate</code>
+        生成源码，目标跟随有效 Go 环境。工具链模式默认宿主，使用
+        <code> --target linux/amd64</code> 可跨目标生成或构建；run/test 仅接受宿主目标。
+        <code> goxide env --json</code> 可查看环境和目标，源码通过 cfg、cfg_attr
+        与 cfg! 查询 feature、target_* 和原始 env。
       </p>
       <div id="cli-example">
         {manifest.cliExamples.map((example) => (

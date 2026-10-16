@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "compilerCommit": "690cd5178dc11a0089a41e9320ed1275778383e1",
-  "reviewedAt": "2026-10-12",
+  "reviewedAt": "2026-10-16",
   "evidenceRefs": {
     "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
   },
@@ -374,7 +374,7 @@
     },
     {
       "id": "projects",
-      "title": "feature、依赖来源与 targets",
+      "title": "多包、feature 与编译目标",
       "topic": "projects",
       "rfcs": [
         "0001",
@@ -383,9 +383,9 @@
       ],
       "status": "partial",
       "support": "cli",
-      "summary": "最小 goxide.toml 与稳定锁文件支持多包程序、公开 Go 依赖和本地 path 依赖。",
-      "usage": "在含 goxide.toml 的目录执行 goxide build、goxide run 或 goxide test；跨包 use 共享导出定义与变量存储。",
-      "limitation": "当前仅开放 P5 最小工程范围；feature、workspace、vendor、import-go 和构建脚本入口暂未开放。offline 需要已存在的依赖缓存。",
+      "summary": "goxide.toml 与稳定锁文件支持多包程序、公开 Go 依赖和本地 path 依赖；feature、target 与 env 汇入同一条件配置。",
+      "usage": "原生 Go 包用 goxide gen . 或 go generate 生成源码；TOML 工程用 --features 选择特性，build --target amd64-unknown-linux 交叉构建。goxide env --json 查看宿主、Go 环境与有效目标。#[cfg]、#[cfg_attr] 和 cfg! 可查询 feature、target_* 与 env。",
+      "limitation": "原生 gen 继承有效 Go 环境；工具链模式默认宿主并接受 --target。非宿主 run/test 提前拒绝。workspace、vendor、import-go 与构建脚本入口待 MVP 恢复；offline 需要已有依赖缓存。",
       "examples": [],
       "evidence": [
         "internal/project/manifest.go",
@@ -402,8 +402,8 @@
       "checks": [],
       "snippet": {
         "language": "TOML · 最小工程 goxide.toml",
-        "text": "[package]\nformat = 2\nmodule = \"example.org/catalog\"\ngo = \"1.27\"\n\n[[bin]]\nname = \"demo\"\npath = \"src\"\n\n[dependencies]\nfmt = { go = \"fmt\" }\n",
-        "note": "目录中只有一个 bin 时可直接使用 goxide build、goxide run 和 goxide test。"
+        "text": "[package]\nformat = 2\nmodule = \"example.org/catalog\"\ngo = \"1.27\"\n\n[[bin]]\nname = \"demo\"\npath = \"src\"\n\n[dependencies]\nfmt = { go = \"fmt\" }\n\n[features]\ndefault = []\nfast = []\n",
+        "note": "goxide build --features fast --target linux/amd64 选择特性和目标；源码可用 #[cfg(feature(\"fast\"))] 选择声明。env 无需清单登记，查询本次调用的原始环境。"
       }
     },
     {

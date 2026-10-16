@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`690cd5178dc11a0089a41e9320ed1275778383e1`；证据复核日期：2026-10-12。
+编译器基线：`690cd5178dc11a0089a41e9320ed1275778383e1`；证据复核日期：2026-10-16。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -16,7 +16,7 @@
 | serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (3108bb35522c); `tests/acceptance/serde_defaults_test.go` (5293aed34336); `docs/serde-json.md` (27e4419ff1eb); `internal/frontend/serde_protocol_artifact_test.go` (8ffaeb8e65c5); `internal/derives/registry.go` (0c476cb0dc51); `internal/frontend/derive_bindings_test.go` (d217bcbc18cd) |
 | Error 派生与错误链 | 0013, research/0005 | 部分实现 | browser | `internal/deriveextras/error.go` (c8d5b2761b2e); `tests/acceptance/serde_causes_test.go` (372778994a1a); `tests/acceptance/macros_test.go` (de90c1efd468) |
 | use / pub use 与 API 聚合 | 0021 | 部分实现 | cli | `cmd/goxide/directory.go` (b1ac56bc8e23); `tests/acceptance/qualified_packages_test.go` (0204440e9456); `examples/reexports/README.md` (67e1513bf1e1) |
-| feature、依赖来源与 targets | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (9ed79f0bf841); `internal/project/planner.go` (c7d0f82b61e7); `cmd/goxide/project_test.go` (d5d3daa81c2f); `cmd/goxide/version_test.go` (105e841b7207); `cmd/goxide/combination_review_test.go` (ea05991bc0cc); `docs/rfcs/0025-unified-project.md` (0747ad87b3a5); `cmd/goxide/import_go_test.go` (97b90f676f4f); `internal/frontend/single_file.go` (d6bf7ef13f1a); `cmd/goxide/single_file.go` (07ef14971334); `tests/acceptance/single_file_external_test.go` (e59741f19fc7) |
+| 多包、feature 与编译目标 | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (9ed79f0bf841); `internal/project/planner.go` (c7d0f82b61e7); `cmd/goxide/project_test.go` (d5d3daa81c2f); `cmd/goxide/version_test.go` (105e841b7207); `cmd/goxide/combination_review_test.go` (ea05991bc0cc); `docs/rfcs/0025-unified-project.md` (0747ad87b3a5); `cmd/goxide/import_go_test.go` (97b90f676f4f); `internal/frontend/single_file.go` (d6bf7ef13f1a); `cmd/goxide/single_file.go` (07ef14971334); `tests/acceptance/single_file_external_test.go` (e59741f19fc7) |
 | 从普通 Go 迁入：plan → 新目录 | 0025 | MVP 阶段恢复 | unavailable | `docs/rfcs/0025-unified-project.md` (0747ad87b3a5); `cmd/goxide/import_go.go` (5f156b6e5432); `cmd/goxide/import_go_test.go` (97b90f676f4f) |
 | 宿主构建脚本与授权 | 0023 | MVP 阶段恢复 | unavailable | `internal/scripttrust/store.go` (d521e32ece88); `cmd/goxide/scripts.go` (abc3ee116700); `cmd/goxide/buildscript_test.go` (2aee22398839); `cmd/goxide/combination_review_test.go` (ea05991bc0cc) |
 | 只读路径与写引用 | 0005, 0006 | 部分实现 | browser | `internal/refs/lower.go` (06958945a842); `internal/refs/flow.go` (8a7482599404); `tests/acceptance/refs_test.go` (23bf6da5dac2); `tests/acceptance/composite_permissions_test.go` (88fe8991473a); `internal/frontend/enum_borrow_test.go` (917e7197dfd0); `internal/refs/projections_test.go` (715e190fee83) |

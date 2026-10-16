@@ -63,6 +63,7 @@ def build(root, dist, go, run, compiler_source):
     for name in ['GOOS', 'GOARCH', 'GOFLAGS', 'GOXIDE_TARGET_DIR']:
         env.pop(name, None)
     version = run(go, 'version').decode().strip()
+    go_version = run(go, 'env', 'GOVERSION').decode().strip()
     if compiler_source['kind'] == 'worktree':
         compiler = ('Compiler worktree based on ' + compiler_source['baseCommit']
                     + '; SHA-256 ' + compiler_source['digest'])
@@ -178,7 +179,8 @@ def build(root, dist, go, run, compiler_source):
                     assert invoke(unforwarded, [cli, 'run', '--go', go, '--offline', '--features=report', '.']) == PRETTY_OUTPUT + 'report: 3 orders\n'
 
             readme = ('# Orders tutorial: ' + stage_id + '\n\n' + description + '\n\n'
-                      + ('Use Go 1.27+.' if stage_id == 'go' else 'Use the matching goxide CLI and Go 1.27+.')
+                      + ('Use Go 1.27+.' if stage_id == 'go' else
+                         'Use the matching goxide CLI and ' + go_version + ' (exact version, including the patch).')
                       + ' Extract every file together.\n\n'
                       + compiler + '\n\nVerified toolchain: ' + version + '\n\n'
                       + '```sh\n' + '\n'.join(item['command'] for item in commands) + '\n```\n\n'

@@ -42,6 +42,29 @@ try {
   await page.goto(base + "/");
   await page.getByRole("heading", { level: 1, name: /用 Goxide 表达业务/ }).waitFor();
   assert.deepEqual(await page.locator(".primary-navigation a").allTextContents(), ["首页", "快速开始", "文档", "设计文档"]);
+  const releaseURL = "https://github.com/goxide-lang/goxide/releases/";
+  const cliDownload = page.locator(".hero-download").getByRole("link", { name: /下载 CLI v0\.0\.1 实验版/ });
+  assert.equal(await cliDownload.getAttribute("href"), "/docs/?page=install");
+  assert.match(await page.locator(".hero-download").textContent(), /Go 1\.27\.2/);
+  assert.match(await page.locator(".home-status").textContent(), /v0\.0\.1.*实验性预发布.*patch\/minor.*不兼容变更/s);
+  assert.equal(await page.locator(".site-footer").getByRole("link", { name: "CLI v0.0.1 · 实验性预发布", exact: true }).getAttribute("href"), "/docs/?page=install");
+  await cliDownload.click();
+  await page.waitForURL("**/docs/?page=install");
+  assert.equal(await page.locator(".docs-article h1").textContent(), "安装");
+  const downloadLinks = await page.locator('.markdown-content a[href*="/releases/download/v0.0.1/"]').evaluateAll((links) => links.map((link) => link.href));
+  assert.deepEqual(downloadLinks, [
+    "goxide_v0.0.1_darwin_amd64.tar.gz", "goxide_v0.0.1_darwin_arm64.tar.gz",
+    "goxide_v0.0.1_linux_amd64.tar.gz", "goxide_v0.0.1_linux_arm64.tar.gz",
+    "goxide_v0.0.1_windows_amd64.zip", "checksums.txt",
+  ].map((filename) => releaseURL + "download/v0.0.1/" + filename), "installation links match published release assets");
+  assert.equal(await page.locator(`.markdown-content a[href="${releaseURL}tag/v0.0.1"]`).count(), 1);
+  const installText = await page.locator(".markdown-content").textContent();
+  assert.match(installText, /实验性预发布.*patch.*minor.*不兼容变更/s);
+  assert.match(installText, /Go 1\.27\.2，补丁号也须一致/);
+  assert.match(installText, /goxide v0\.0\.1 \(go1\.27\.2\)/);
+  await screenshot("install-desktop");
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "首页", exact: true }).click();
+  await page.getByRole("heading", { level: 1, name: /用 Goxide 表达业务/ }).waitFor();
   const hero = page.locator(".hero-code");
   for (const [tab, files] of [["原生 Go", stage("go").files], ["Gox", stage("mixed").files], ["生成 Go", stage("mixed").generatedFiles]]) {
     await hero.getByRole("tab", { name: tab, exact: true }).click();
@@ -176,10 +199,18 @@ try {
 
   for (const width of [900, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const [route, name] of [["/", "home"], ["/learn/?stage=features", "learn"], ["/design/?page=overview", "design"], ["/docs/?page=manifest", "docs"]]) {
+    for (const [route, name] of [["/", "home"], ["/learn/?stage=features", "learn"], ["/design/?page=overview", "design"], ["/docs/?page=install", "install"], ["/docs/?page=manifest", "docs"]]) {
       await page.goto(base + route);
       await page.getByRole("navigation", { name: "主导航" }).waitFor();
       await readingWidth();
+      if (name === "install") {
+        const downloads = page.locator('.table-scroll a[href*="/releases/download/v0.0.1/"]');
+        assert.equal(await downloads.count(), 5);
+        assert.equal(await downloads.evaluateAll((links) => links.every((link) => {
+          const bounds = link.getBoundingClientRect(), table = link.closest(".table-scroll").getBoundingClientRect();
+          return bounds.left >= table.left && bounds.right <= table.right && bounds.right <= innerWidth;
+        })), true, "all platform downloads are visible without horizontal scrolling at " + width + "px");
+      }
       if (width === 390) await screenshot(name + "-mobile");
     }
     await page.getByRole("button", { name: /文档导航与搜索/ }).click();
@@ -228,7 +259,7 @@ try {
   assert.equal(await page.evaluate(() => window.redesignDocumentMarker), "same document");
   assert.deepEqual(errors, []);
   assert.ok(requests.every((request) => request.url.startsWith(base + "/") && request.method === "GET"), "same-origin GET requests only");
-  console.log(JSON.stringify({ url: base, stages: manifest.tutorials.stages.length, presets: stage("features").presets.length, docs: manifest.docs.pages.length, design: manifest.design.pages.length, sourceIncludesMetadata: true, codeSourceParity: true, formalExamples: true, rfcNavigation: true, downloads: true, localSearch: true, safeMarkdown: true, keyboardTabs: true, staticRoutesLazy: true, mobileWidths: [900, 390, 320], deepLinksReload: true, playgroundDraft: true, errors, screenshots: out }, null, 2));
+  console.log(JSON.stringify({ url: base, stages: manifest.tutorials.stages.length, presets: stage("features").presets.length, docs: manifest.docs.pages.length, design: manifest.design.pages.length, cliReleaseLinks: true, sourceIncludesMetadata: true, codeSourceParity: true, formalExamples: true, rfcNavigation: true, downloads: true, localSearch: true, safeMarkdown: true, keyboardTabs: true, staticRoutesLazy: true, mobileWidths: [900, 390, 320], deepLinksReload: true, playgroundDraft: true, errors, screenshots: out }, null, 2));
 } finally {
   await browser.close();
 }

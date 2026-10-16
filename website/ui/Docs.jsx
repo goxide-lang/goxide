@@ -42,7 +42,7 @@ export default function Docs({ manifest, kind = "docs" }) {
         </div>
       </aside>
       {!pages.length ? <p className="content-loading" role="status">正在载入{title}…</p> : !page ? <div className="missing-content" role="alert"><h1>找不到此文档。</h1><p>请从分类中选择页面，或搜索需要的内容。</p><a href={basePath}>打开{title}首页 →</a></div> : <>
-        <article className="docs-article">
+        <article className="docs-article" data-page={page.id}>
           <p className="eyebrow">{title} · {page.category}</p><h1>{page.title}</h1>
           {design && (page.category.replace(/\s/g, "") === "RFC设计" || page.id === "frontend") && <aside className="design-reading-note" aria-label="设计文档阅读说明">本页记录设计与历史方案。当前支持范围见<a href="/docs/?page=status">能力表</a>，现行形式规则见<a href="/design/?page=grammar">语法规范</a>与<a href="/design/?page=semantics">语义规范</a>。</aside>}
           {headings.length > 0 && <details className="inline-toc"><summary>本页目录</summary><TableOfContents headings={headings} /></details>}

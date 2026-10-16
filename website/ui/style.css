@@ -101,6 +101,8 @@ main > .home-page { padding-top: 44px; padding-bottom: 10px; }
 .hero-actions .button { padding: 12px 17px; }
 .hero-note { color: var(--muted); font-size: 11px; letter-spacing: .3px; }
 .hero-note code { font-size: 12px; }
+.hero-download { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 15px; color: var(--muted); font-size: 11px; margin: 12px 0 0; }
+.hero-download a { font-weight: 650; }
 .hero-code { overflow: hidden; border-radius: 12px; border: 1px solid #2b4c3a; box-shadow: 14px 17px 0 #e8eee0; background: var(--code); min-width: 0; }
 .code-window-title { display: flex; align-items: center; gap: 13px; padding: 14px 19px; color: #c1d2c4; font-size: 11px; border-bottom: 1px solid #315145; }
 .window-dots { color: #6c8b70; font-size: 9px; letter-spacing: 2px; }
@@ -257,6 +259,8 @@ main > .home-page { padding-top: 44px; padding-bottom: 10px; }
 .table-scroll th, .table-scroll td { padding: 11px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .table-scroll tr:last-child td { border-bottom: 0; }
 .table-scroll td { min-width: 100px; }
+.docs-article[data-page="install"] .table-scroll table { min-width: 0; }
+.docs-article[data-page="install"] .table-scroll td { min-width: 0; }
 .docs-toc > div { position: sticky; top: 116px; border-left: 1px solid var(--line); padding-left: 19px; max-height: calc(100vh - 150px); overflow-y: auto; }
 .docs-toc p { font-size: 10px; letter-spacing: 1px; color: var(--muted); margin-bottom: 12px; }
 .docs-toc nav, .inline-toc nav { display: flex; flex-direction: column; gap: 10px; }

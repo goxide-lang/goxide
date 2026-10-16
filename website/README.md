@@ -18,6 +18,10 @@
 
 要求 Go 1.27.x、Python 3.11+、Node 22.12+（或满足 Vite 要求的新版本）及完整 Go 模块缓存。npm 版本由锁文件固定，网站构建不联网下载 Go 依赖。
 
+发布网站时使用对应 CLI Release 的同一 Go 补丁版本；`v0.0.1` 使用 Go 1.27.2。
+可通过 `GO_BIN` 指定 Go 可执行文件，并将其目录置于本次构建的 `PATH` 前部。
+这样网页案例、下载项目、导出数据与 WASM 使用同一工具链。
+
 ```sh
 npm ci --prefix website
 GOTOOLCHAIN=local GOWORK=off go mod download all

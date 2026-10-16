@@ -13,8 +13,9 @@ def reexports(ROOT, dist, GO, run, compiler_source):
         compiler = 'Compiler worktree based on ' + compiler_source['baseCommit'] + '; SHA-256 ' + compiler_source['digest']
     else:
         compiler = 'Compiler: https://github.com/goxide-lang/goxide/tree/' + compiler_source['commit']
+    go_version = run(GO, 'env', 'GOVERSION').decode().strip()
     readme = ('# Reproduce the reexports directory example\n\n'
-              'Use the matching goxide CLI and Go 1.27+. Extract every file together. '
+              'Use the matching goxide CLI and ' + go_version + ' (exact version, including the patch). Extract every file together. '
               'The directory uses go.mod and goxide.roots.toml; no build scripts are required.\n\n'
               + compiler + '\n\n'
               + 'Verified toolchain: ' + run(GO, 'version').decode().strip() + '\n\n'

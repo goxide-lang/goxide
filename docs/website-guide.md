@@ -16,31 +16,55 @@ Goxide 为 Go 增加 enum、match、声明宏、派生和显式协议，生成�
 
 ## 安装
 
-当前从源码安装。准备 Go 1.27，先运行 `go version` 确认工具链，再执行：
+`v0.0.1` 是实验性预发布，尚非正式稳定发行。后续版本即使只增加 patch 或 minor，仍可能对语言、CLI、配置格式和生成代码作出不兼容变更。
+
+### 下载 CLI v0.0.1
+
+按运行 CLI 的机器选择平台与 CPU 架构。归档包含 Goxide 可执行文件、许可证和安装说明；Go 工具链需要单独安装。
+
+| 平台 | CPU 架构 | 下载 |
+| --- | --- | --- |
+| macOS | Intel（amd64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_darwin_amd64.tar.gz) |
+| macOS | Apple silicon（arm64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_darwin_arm64.tar.gz) |
+| Linux | x86-64（amd64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_linux_amd64.tar.gz) |
+| Linux | ARM64（arm64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_linux_arm64.tar.gz) |
+| Windows | x64（amd64） | [下载 zip](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_windows_amd64.zip) |
+
+[SHA-256 校验值](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/checksums.txt) · [v0.0.1 版本说明](https://github.com/goxide-lang/goxide/releases/tag/v0.0.1)
+
+下载后核对归档的 SHA-256。解压归档，将其中 `goxide`（Windows 为 `goxide.exe`）所在目录加入 `PATH`。
+
+### 配套 Go 与安装检查
+
+这五个平台的预编译 CLI 均使用 **Go 1.27.2** 构建，运行编译命令时必须使用 **Go 1.27.2，补丁号也须一致**。将 Go 加入 `PATH`；`--go` 可以指定其他位置的同版本 Go 可执行文件。CLI 不会自动下载或切换 Go 工具链。
 
 ```sh
-git clone https://github.com/goxide-lang/goxide.git
-cd goxide
-GOTOOLCHAIN=local GOWORK=off go install ./cmd/goxide
-```
-
-将 Go 安装可执行文件的目录加入 `PATH`：设置了 `GOBIN` 时使用该目录，否则使用 `go env GOPATH` 对应目录下的 `bin`。然后确认命令可用：
-
-```sh
-goxide --help
+go version
+goxide --version
 goxide env
 ```
 
-也可以在仓库中构建一个本地二进制：
+`go version` 的版本应为 `go1.27.2`；发布二进制的版本输出应为：
 
-```sh
-GOTOOLCHAIN=local GOWORK=off go build -o ./bin/goxide ./cmd/goxide
-./bin/goxide --help
+```text
+goxide v0.0.1 (go1.27.2)
 ```
 
-首个发行标签 `v0.0.1` 尚未发布，当前安装使用上面的源码命令。仓库位于 `goxide-lang/goxide`，Go module 路径仍为 `github.com/hxsf/goxide`。
+`goxide test` 使用 Go race detector，还需要启用 cgo 并安装该平台的 C 编译器。只运行浏览器 Playground 时，无需安装本地 CLI 或 Go。
 
-`--go` 可选择 Go 可执行文件；它的版本须与构建 Goxide 时使用的工具链一致。升级 Go 时，用同一工具链重新构建 Goxide。
+### 从标签源码安装
+
+也可以使用 Go 1.27.2 从同一标签构建。下面的环境变量写法适用于 macOS / Linux 终端：
+
+```sh
+git clone --branch v0.0.1 --depth 1 https://github.com/goxide-lang/goxide.git
+cd goxide
+GOTOOLCHAIN=local GOWORK=off go install -ldflags="-X main.version=v0.0.1" ./cmd/goxide
+```
+
+将 Go 安装可执行文件的目录加入 `PATH`：设置了 `GOBIN` 时使用该目录，否则使用 `go env GOPATH` 对应目录下的 `bin`。未传版本注入参数的普通源码构建显示 `goxide dev`，上述 `-ldflags` 将版本设为 `v0.0.1`。
+
+仓库位于 `goxide-lang/goxide`，Go module 路径仍为 `github.com/hxsf/goxide`。源码构建同样要求运行时所选 Go 与构建 CLI 的 Go 版本完全一致；更换 Go 版本后，须用新工具链重新构建 CLI。
 
 ## 第一个 Goxide 项目
 

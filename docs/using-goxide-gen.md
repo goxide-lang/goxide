@@ -4,7 +4,7 @@
 
 ## 五分钟上手
 
-准备 Go 1.27，在 Goxide 源码仓库根目录执行 `GOTOOLCHAIN=local go install ./cmd/goxide`，并将安装目录（默认 `go env GOPATH` 下的 `bin`）加入 `PATH`。以下用一个空目录演示；已有项目直接在目标包添加两个文件中的相应内容。
+按[安装说明](website-guide.md#安装)下载 CLI `v0.0.1` 或从标签源码安装，并准备完全匹配的 Go 1.27.2。将 `goxide` 与 Go 加入 `PATH`，用 `goxide --version` 确认输出 `goxide v0.0.1 (go1.27.2)`。这是实验性预发布，后续 patch/minor 更新仍可能包含不兼容变更。以下用一个空目录演示；已有项目直接在目标包添加两个文件中的相应内容。
 
 ```sh
 mkdir trygen

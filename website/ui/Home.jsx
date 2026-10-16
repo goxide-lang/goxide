@@ -54,6 +54,7 @@ export default function Home({ manifest }) {
             <a className="button" href="/learn/?stage=gox">创建 Goxide 项目 <span aria-hidden="true">→</span></a>
           </div>
           <p className="hero-note"><code>.gox</code> 编写 · <code>.go</code> 生成 · 熟悉的工具链</p>
+          <p className="hero-download"><a href="/docs/?page=install">下载 CLI v0.0.1 实验版 <span aria-hidden="true">→</span></a><span>配套 Go 1.27.2</span></p>
         </div>
         <Comparison stages={stages} />
       </div>
@@ -95,7 +96,7 @@ export default function Home({ manifest }) {
 
       <section className="try-banner"><div><p className="eyebrow">先试一段，再开始</p><h2>打开浏览器，看 Go 如何生成。</h2><p>真实编译器在本地浏览器中转译，源码留在你的设备上。</p></div><a className="button primary" href="/playground.html?example=enum">打开 Playground <span aria-hidden="true">↗</span></a></section>
 
-      <section className="home-status"><div><span className="status-pill">PRE-1.0 · 持续开发</span><h2>从当前能力开始。</h2><p>语言与工具链仍在演进。在使用参考中查用法与支持范围，在设计文档中了解语言规则和设计背景。</p></div><div><a href="/docs/?page=status">能力与状态 <span aria-hidden="true">→</span></a><a href="/design/">设计文档 <span aria-hidden="true">→</span></a><a href="https://github.com/goxide-lang/goxide">在 GitHub 查看源码 <span aria-hidden="true">↗</span></a></div></section>
+      <section className="home-status"><div><span className="status-pill">v0.0.1 · 实验性预发布</span><h2>从当前能力开始。</h2><p>尚非正式稳定发行。后续 patch/minor 更新仍可能对语言、CLI、配置格式和生成代码作出不兼容变更。使用参考记录当前用法与支持范围，设计文档解释语言规则与设计背景。</p></div><div><a href="https://github.com/goxide-lang/goxide/releases/tag/v0.0.1">v0.0.1 版本说明 <span aria-hidden="true">↗</span></a><a href="/docs/?page=status">能力与状态 <span aria-hidden="true">→</span></a><a href="/design/">设计文档 <span aria-hidden="true">→</span></a><a href="https://github.com/goxide-lang/goxide">在 GitHub 查看源码 <span aria-hidden="true">↗</span></a></div></section>
     </section>
   );
 }

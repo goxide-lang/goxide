@@ -1,12 +1,37 @@
 package lower
 
 import (
+	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"reflect"
+	"sort"
+
+	"github.com/hxsf/goxide/internal/resolve"
 
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
+
+func lineOf(file *syntax.File, offset uint32) int {
+	if file == nil {
+		return 1
+	}
+	return max(1, sort.Search(len(file.LineStarts), func(index int) bool {
+		return file.LineStarts[index] > offset
+	}))
+}
+
+func (e *emitter) sourceLocation(node syntax.Node) string {
+	name, file, offset := e.name, e.tree, node.Span().Start
+	if e.result != nil {
+		if origin, ok := e.result.Origins[resolve.Ref{File: e.name, ID: node.ID()}]; ok {
+			if source := e.result.Files[origin.File]; source != nil {
+				name, file, offset = origin.File, source.AST, origin.Span.Start
+			}
+		}
+	}
+	return fmt.Sprintf("%s:%d", name, lineOf(file, offset))
+}
 
 // Generated tokens have no source offsets of their own. Attribute them to the
 // construct that produced them while retaining positions on ordinary children.

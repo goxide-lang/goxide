@@ -99,7 +99,7 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) (output [
 	}
 	if !info.Enum.Enum.Builtin {
 		prefix = append(prefix, &goast.IfStmt{Cond: &goast.BinaryExpr{X: tmp, Op: gotoken.EQL, Y: goast.NewIdent("nil")},
-			Body: &goast.BlockStmt{List: []goast.Stmt{matchPanic(fmt.Sprintf("goxide: match on nil %s at %s:%d", info.Enum.Enum.Name, e.name, n.Span().Start))}},
+			Body: &goast.BlockStmt{List: []goast.Stmt{matchPanic(fmt.Sprintf("goxide: match on nil %s at %s", info.Enum.Enum.Name, e.sourceLocation(n)))}},
 		})
 	}
 	var groups []*matchGroup
@@ -158,7 +158,7 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) (output [
 		setup, payload := e.matchPayload(info.Enum, group, tmp, bound, owner)
 		if !info.Enum.Enum.Builtin {
 			clause.Body = append(clause.Body, &goast.IfStmt{Cond: &goast.BinaryExpr{X: bound, Op: gotoken.EQL, Y: goast.NewIdent("nil")},
-				Body: &goast.BlockStmt{List: []goast.Stmt{matchPanic(fmt.Sprintf("goxide: match on nil %s at %s:%d", info.Enum.Enum.Name, e.name, n.Span().Start))}},
+				Body: &goast.BlockStmt{List: []goast.Stmt{matchPanic(fmt.Sprintf("goxide: match on nil %s at %s", info.Enum.Enum.Name, e.sourceLocation(n)))}},
 			})
 		}
 		clause.Body = append(clause.Body, setup...)
@@ -488,7 +488,7 @@ func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant,
 func (e *emitter) matchNested(instance *check.Instance, selectedVariant *check.Variant, source goast.Expr, value, selected *goast.Ident, pat syntax.Pat) ([]goast.Stmt, matchPayload) {
 	bound := e.fresh("variant")
 	prefix := []goast.Stmt{&goast.AssignStmt{Lhs: []goast.Expr{value}, Tok: gotoken.ASSIGN, Rhs: []goast.Expr{source}}}
-	message := fmt.Sprintf("goxide: match on nil %s at %s:%d", instance.Enum.Name, e.name, pat.Span().Start)
+	message := fmt.Sprintf("goxide: match on nil %s at %s", instance.Enum.Name, e.sourceLocation(pat))
 	if instance.Enum.Builtin {
 		prefix = append(prefix, &goast.AssignStmt{Lhs: []goast.Expr{selected}, Tok: gotoken.ASSIGN,
 			Rhs: []goast.Expr{&goast.CallExpr{Fun: e.sumMember("Tag" + instance.Enum.Name), Args: []goast.Expr{value}}},

@@ -62,18 +62,18 @@ func main() {
 	{
 		var gxMatch5 any
 		if state == nil {
-			panic("goxide: match on nil State at derivefixture/main.gox:647")
+			panic("goxide: match on nil State at derivefixture/main.gox:26")
 		}
 		switch gxVar6 := state.(type) {
 		case *Ready:
 			if gxVar6 == nil {
-				panic("goxide: match on nil State at derivefixture/main.gox:647")
+				panic("goxide: match on nil State at derivefixture/main.gox:26")
 			}
 			first, second := gxVar6.First, gxVar6.Second
 			gxMatch5 = first.Text + fmt.Sprint(second.Number)
 		case *Unavailable:
 			if gxVar6 == nil {
-				panic("goxide: match on nil State at derivefixture/main.gox:647")
+				panic("goxide: match on nil State at derivefixture/main.gox:26")
 			}
 			gxMatch5 = "bad"
 		default:

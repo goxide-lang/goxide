@@ -112,12 +112,12 @@ func guarded(ok bool, trace *[]string) sum.Result[string, string] {
 	{
 		var gxMatch11 Gate = &Enter{Value: 1}
 		if gxMatch11 == nil {
-			panic("goxide: match on nil Gate at corefixture/main.gox:1197")
+			panic("goxide: match on nil Gate at corefixture/main.gox:41")
 		}
 		switch gxVar12 := gxMatch11.(type) {
 		case *Enter:
 			if gxVar12 == nil {
-				panic("goxide: match on nil Gate at corefixture/main.gox:1197")
+				panic("goxide: match on nil Gate at corefixture/main.gox:41")
 			}
 			gxPayload13 := gxVar12.Value
 			if gxPayload13 ==
@@ -179,7 +179,7 @@ func guarded(ok bool, trace *[]string) sum.Result[string, string] {
 			}
 		case *Shut:
 			if gxVar12 == nil {
-				panic("goxide: match on nil Gate at corefixture/main.gox:1197")
+				panic("goxide: match on nil Gate at corefixture/main.gox:41")
 			}
 			return sum.NewOk[string, string]("other")
 		default:

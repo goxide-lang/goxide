@@ -71,19 +71,19 @@ func arrayProjection(fail bool) sum.Result[int, string] {
 		gxOwner7 := &choices[gxValue6]
 		var gxMatch8 _Counter = *gxOwner7
 		if gxMatch8 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:850")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:27")
 		}
 		switch gxVar9 := gxMatch8.(type) {
 		case *_Count:
 			if gxVar9 == nil {
-				panic("goxide: match on nil Counter at referencefixture/main.gox:850")
+				panic("goxide: match on nil Counter at referencefixture/main.gox:27")
 			}
 			gxPayloadRef10 := &gxVar9.Value
 			value := gxPayloadRef10
 			*value += 3
 		case *_Empty:
 			if gxVar9 == nil {
-				panic("goxide: match on nil Counter at referencefixture/main.gox:850")
+				panic("goxide: match on nil Counter at referencefixture/main.gox:27")
 			}
 		default:
 			panic("goxide: invalid enum Counter")
@@ -92,18 +92,18 @@ func arrayProjection(fail bool) sum.Result[int, string] {
 	var gxMatch11 int
 	var gxMatch12 _Counter = choices[0]
 	if gxMatch12 == nil {
-		panic("goxide: match on nil Counter at referencefixture/main.gox:990")
+		panic("goxide: match on nil Counter at referencefixture/main.gox:31")
 	}
 	switch gxVar13 := gxMatch12.(type) {
 	case *_Count:
 		if gxVar13 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:990")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:31")
 		}
 		value := gxVar13.Value
 		gxMatch11 = value
 	case *_Empty:
 		if gxVar13 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:990")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:31")
 		}
 		gxMatch11 = 0
 	default:
@@ -121,12 +121,12 @@ gxBreak14:
 			gxOwner15 := &counter
 			var gxMatch16 _Counter = *gxOwner15
 			if gxMatch16 == nil {
-				panic("goxide: match on nil Counter at referencefixture/main.gox:1260")
+				panic("goxide: match on nil Counter at referencefixture/main.gox:38")
 			}
 			switch gxVar17 := gxMatch16.(type) {
 			case *_Count:
 				if gxVar17 == nil {
-					panic("goxide: match on nil Counter at referencefixture/main.gox:1260")
+					panic("goxide: match on nil Counter at referencefixture/main.gox:38")
 				}
 				gxPayloadRef18 := &gxVar17.Value
 				value := gxPayloadRef18
@@ -138,7 +138,7 @@ gxBreak14:
 				break gxBreak14
 			case *_Empty:
 				if gxVar17 == nil {
-					panic("goxide: match on nil Counter at referencefixture/main.gox:1260")
+					panic("goxide: match on nil Counter at referencefixture/main.gox:38")
 				}
 			default:
 				panic("goxide: invalid enum Counter")
@@ -151,12 +151,12 @@ gxBreak14:
 	gxOwner20 := &counter
 	var gxMatch21 _Counter = *gxOwner20
 	if gxMatch21 == nil {
-		panic("goxide: match on nil Counter at referencefixture/main.gox:1542")
+		panic("goxide: match on nil Counter at referencefixture/main.gox:48")
 	}
 	switch gxVar22 := gxMatch21.(type) {
 	case *_Count:
 		if gxVar22 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:1542")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:48")
 		}
 		gxPayloadRef23 := &gxVar22.Value
 		{
@@ -179,7 +179,7 @@ gxBreak14:
 		}
 	case *_Empty:
 		if gxVar22 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:1542")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:48")
 		}
 		gxMatch19 = -2
 	default:
@@ -196,12 +196,12 @@ func main() {
 	gxOwner27 := &counter
 	var gxMatch28 _Counter = *gxOwner27
 	if gxMatch28 == nil {
-		panic("goxide: match on nil Counter at referencefixture/main.gox:1794")
+		panic("goxide: match on nil Counter at referencefixture/main.gox:58")
 	}
 	switch gxVar29 := gxMatch28.(type) {
 	case *_Count:
 		if gxVar29 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:1794")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:58")
 		}
 		gxPayload30 := gxVar29.Value
 		gxPayloadRef31 := &gxVar29.Value
@@ -213,7 +213,7 @@ func main() {
 		}
 	case *_Empty:
 		if gxVar29 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:1794")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:58")
 		}
 		gxMatch26 = 0
 	default:
@@ -222,18 +222,18 @@ func main() {
 	snapshot := gxMatch26
 	var gxMatch32 int
 	if counter == nil {
-		panic("goxide: match on nil Counter at referencefixture/main.gox:1961")
+		panic("goxide: match on nil Counter at referencefixture/main.gox:63")
 	}
 	switch gxVar33 := counter.(type) {
 	case *_Count:
 		if gxVar33 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:1961")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:63")
 		}
 		value := gxVar33.Value
 		gxMatch32 = value
 	case *_Empty:
 		if gxVar33 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:1961")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:63")
 		}
 		gxMatch32 = 0
 	default:
@@ -245,12 +245,12 @@ func main() {
 	gxOwner35 := &owners()[index()]
 	var gxMatch36 _Counter = *gxOwner35
 	if gxMatch36 == nil {
-		panic("goxide: match on nil Counter at referencefixture/main.gox:2083")
+		panic("goxide: match on nil Counter at referencefixture/main.gox:65")
 	}
 	switch gxVar37 := gxMatch36.(type) {
 	case *_Count:
 		if gxVar37 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:2083")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:65")
 		}
 		gxPayloadRef38 := &gxVar37.Value
 		if value := gxPayloadRef38; guard(value) {
@@ -261,7 +261,7 @@ func main() {
 		}
 	case *_Empty:
 		if gxVar37 == nil {
-			panic("goxide: match on nil Counter at referencefixture/main.gox:2083")
+			panic("goxide: match on nil Counter at referencefixture/main.gox:65")
 		}
 		gxMatch34 = 0
 	default:

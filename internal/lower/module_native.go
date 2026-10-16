@@ -222,7 +222,8 @@ func nativeDeclarations(name string, data []byte, file *goast.File, set *gotoken
 	tree, diagnostics := parser.ParseFile(name, []byte(source.String()))
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Severity == parser.Error {
-			return nil, &Diagnostic{File: name, Span: diagnostic.Span, Message: "native Go declaration: " + diagnostic.Message, Origin: resolve.Origin{File: name, Span: diagnostic.Span}}
+			err := &Diagnostic{File: name, Span: diagnostic.Span, Message: "native Go declaration: " + diagnostic.Message, Origin: resolve.Origin{File: name, Span: diagnostic.Span}}
+			return nil, FormatSourceDiagnostic(err, map[string]*syntax.File{name: tree}, nil, nil)
 		}
 	}
 	tree.NativeGo = true

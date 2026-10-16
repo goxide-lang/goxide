@@ -45,17 +45,17 @@ func describe(x State) string {
 	{
 		var gxMatch1 string
 		if x == nil {
-			panic("goxide: match on nil State at corefixture/main.gox:157")
+			panic("goxide: match on nil State at corefixture/main.gox:8")
 		}
 		switch gxVar2 := x.(type) {
 		case *Idle:
 			if gxVar2 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:157")
+				panic("goxide: match on nil State at corefixture/main.gox:8")
 			}
 			gxMatch1 = "idle"
 		case *Number:
 			if gxVar2 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:157")
+				panic("goxide: match on nil State at corefixture/main.gox:8")
 			}
 			gxPayload3 := gxVar2.Value
 			if gxPayload3 ==
@@ -69,13 +69,13 @@ func describe(x State) string {
 			}
 		case *Pair:
 			if gxVar2 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:157")
+				panic("goxide: match on nil State at corefixture/main.gox:8")
 			}
 			n, s := gxVar2.V0, gxVar2.V1
 			gxMatch1 = fmt.Sprintf("pair:%d:%s", n, s)
 		case *Record:
 			if gxVar2 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:157")
+				panic("goxide: match on nil State at corefixture/main.gox:8")
 			}
 			if n := gxVar2.Y; gxVar2.X == 1 {
 				gxMatch1 = fmt.Sprintf("record:%d", n)
@@ -84,7 +84,7 @@ func describe(x State) string {
 			}
 		case *Text:
 			if gxVar2 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:157")
+				panic("goxide: match on nil State at corefixture/main.gox:8")
 			}
 			s := gxVar2.Value
 			gxMatch1 = "text:" + s
@@ -101,12 +101,12 @@ func ordered(next func() State, seen *[]int) int {
 	{
 		var gxMatch4 State = next()
 		if gxMatch4 == nil {
-			panic("goxide: match on nil State at corefixture/main.gox:656")
+			panic("goxide: match on nil State at corefixture/main.gox:22")
 		}
 		switch gxVar5 := gxMatch4.(type) {
 		case *Number:
 			if gxVar5 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:656")
+				panic("goxide: match on nil State at corefixture/main.gox:22")
 			}
 			gxPayload6 := gxVar5.Value
 			if n := gxPayload6; mark(1, false) {
@@ -121,7 +121,7 @@ func ordered(next func() State, seen *[]int) int {
 			}
 		case *Idle:
 			if gxVar5 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:656")
+				panic("goxide: match on nil State at corefixture/main.gox:22")
 			}
 			if mark(2, false) {
 				return -2
@@ -131,7 +131,7 @@ func ordered(next func() State, seen *[]int) int {
 			}
 		case *Pair:
 			if gxVar5 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:656")
+				panic("goxide: match on nil State at corefixture/main.gox:22")
 			}
 			if mark(2, false) {
 				return -2
@@ -141,7 +141,7 @@ func ordered(next func() State, seen *[]int) int {
 			}
 		case *Record:
 			if gxVar5 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:656")
+				panic("goxide: match on nil State at corefixture/main.gox:22")
 			}
 			if mark(2, false) {
 				return -2
@@ -151,7 +151,7 @@ func ordered(next func() State, seen *[]int) int {
 			}
 		case *Text:
 			if gxVar5 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:656")
+				panic("goxide: match on nil State at corefixture/main.gox:22")
 			}
 			if mark(2, false) {
 				return -2
@@ -174,12 +174,12 @@ func ordered(next func() State, seen *[]int) int {
 func freshBinding(x State) int {
 	{
 		if x == nil {
-			panic("goxide: match on nil State at corefixture/main.gox:922")
+			panic("goxide: match on nil State at corefixture/main.gox:32")
 		}
 		switch gxVar7 := x.(type) {
 		case *Number:
 			if gxVar7 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:922")
+				panic("goxide: match on nil State at corefixture/main.gox:32")
 			}
 			gxPayload8 := gxVar7.Value
 			if n := gxPayload8; func() bool { n = 99; return false }() {
@@ -190,22 +190,22 @@ func freshBinding(x State) int {
 			}
 		case *Idle:
 			if gxVar7 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:922")
+				panic("goxide: match on nil State at corefixture/main.gox:32")
 			}
 			return -1
 		case *Pair:
 			if gxVar7 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:922")
+				panic("goxide: match on nil State at corefixture/main.gox:32")
 			}
 			return -1
 		case *Record:
 			if gxVar7 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:922")
+				panic("goxide: match on nil State at corefixture/main.gox:32")
 			}
 			return -1
 		case *Text:
 			if gxVar7 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:922")
+				panic("goxide: match on nil State at corefixture/main.gox:32")
 			}
 			return -1
 		default:
@@ -218,44 +218,44 @@ func freshBinding(x State) int {
 func nested(x State) int {
 	{
 		if x == nil {
-			panic("goxide: match on nil State at corefixture/main.gox:1102")
+			panic("goxide: match on nil State at corefixture/main.gox:40")
 		}
 		switch gxVar9 := x.(type) {
 		case *Number:
 			if gxVar9 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:1102")
+				panic("goxide: match on nil State at corefixture/main.gox:40")
 			}
 			n := gxVar9.Value
 			{
 				var gxMatch10 State = &Pair{V0: n, V1: "ok"}
 				if gxMatch10 == nil {
-					panic("goxide: match on nil State at corefixture/main.gox:1139")
+					panic("goxide: match on nil State at corefixture/main.gox:42")
 				}
 				switch gxVar11 := gxMatch10.(type) {
 				case *Pair:
 					if gxVar11 == nil {
-						panic("goxide: match on nil State at corefixture/main.gox:1139")
+						panic("goxide: match on nil State at corefixture/main.gox:42")
 					}
 					value := gxVar11.V0
 					return value
 				case *Idle:
 					if gxVar11 == nil {
-						panic("goxide: match on nil State at corefixture/main.gox:1139")
+						panic("goxide: match on nil State at corefixture/main.gox:42")
 					}
 					return -1
 				case *Number:
 					if gxVar11 == nil {
-						panic("goxide: match on nil State at corefixture/main.gox:1139")
+						panic("goxide: match on nil State at corefixture/main.gox:42")
 					}
 					return -1
 				case *Record:
 					if gxVar11 == nil {
-						panic("goxide: match on nil State at corefixture/main.gox:1139")
+						panic("goxide: match on nil State at corefixture/main.gox:42")
 					}
 					return -1
 				case *Text:
 					if gxVar11 == nil {
-						panic("goxide: match on nil State at corefixture/main.gox:1139")
+						panic("goxide: match on nil State at corefixture/main.gox:42")
 					}
 					return -1
 				default:
@@ -264,23 +264,23 @@ func nested(x State) int {
 			}
 		case *Idle:
 			if gxVar9 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:1102")
+				panic("goxide: match on nil State at corefixture/main.gox:40")
 			}
 
 			return -1
 		case *Pair:
 			if gxVar9 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:1102")
+				panic("goxide: match on nil State at corefixture/main.gox:40")
 			}
 			return -1
 		case *Record:
 			if gxVar9 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:1102")
+				panic("goxide: match on nil State at corefixture/main.gox:40")
 			}
 			return -1
 		case *Text:
 			if gxVar9 == nil {
-				panic("goxide: match on nil State at corefixture/main.gox:1102")
+				panic("goxide: match on nil State at corefixture/main.gox:40")
 			}
 			return -1
 		default:

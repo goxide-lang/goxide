@@ -38,19 +38,19 @@ func main() {
 	var stateClone _State = CloneState(stateView)
 	{
 		if stateClone == nil {
-			panic("goxide: match on nil State at referencefixture/main.gox:650")
+			panic("goxide: match on nil State at referencefixture/main.gox:22")
 		}
 		switch gxVar1 := stateClone.(type) {
 		case *_Pair:
 			if gxVar1 == nil {
-				panic("goxide: match on nil State at referencefixture/main.gox:650")
+				panic("goxide: match on nil State at referencefixture/main.gox:22")
 			}
 			value := gxVar1.Value
 			value.Items[0] = 7
 			value.Counts["one"] = 6
 		case *_Empty:
 			if gxVar1 == nil {
-				panic("goxide: match on nil State at referencefixture/main.gox:650")
+				panic("goxide: match on nil State at referencefixture/main.gox:22")
 			}
 		default:
 			panic("goxide: invalid enum State")

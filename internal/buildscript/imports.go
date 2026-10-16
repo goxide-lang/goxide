@@ -2,7 +2,6 @@ package buildscript
 
 import (
 	"bytes"
-	"fmt"
 	"go/build"
 	"go/parser"
 	"go/token"
@@ -17,6 +16,7 @@ import (
 	"github.com/hxsf/goxide/internal/paths"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 	goxparser "github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/hxsf/goxide/internal/typecheck"
 )
 
 func hostSource(name string, source []byte) (bool, error) {
@@ -129,7 +129,7 @@ func hostGoxideImports(owner, name string, source []byte, roots paths.Roots, imp
 	file, diagnostics := goxparser.ParseFile(name, source)
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Severity == goxparser.Error {
-			return fmt.Errorf("%s: %w", name, diagnostic)
+			return typecheck.ParserError(name, source, diagnostic)
 		}
 	}
 	namespaces := paths.Roots{}

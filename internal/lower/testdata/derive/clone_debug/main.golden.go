@@ -62,22 +62,22 @@ func main() {
 	var cloned State = CloneState(&state)
 	{
 		if cloned == nil {
-			panic("goxide: match on nil State at derivefixture/main.gox:1152")
+			panic("goxide: match on nil State at derivefixture/main.gox:31")
 		}
 		switch gxVar1 := cloned.(type) {
 		case *Pair:
 			if gxVar1 == nil {
-				panic("goxide: match on nil State at derivefixture/main.gox:1152")
+				panic("goxide: match on nil State at derivefixture/main.gox:31")
 			}
 			nums := gxVar1.V1
 			nums[0] = 9
 		case *Empty:
 			if gxVar1 == nil {
-				panic("goxide: match on nil State at derivefixture/main.gox:1152")
+				panic("goxide: match on nil State at derivefixture/main.gox:31")
 			}
 		case *Named:
 			if gxVar1 == nil {
-				panic("goxide: match on nil State at derivefixture/main.gox:1152")
+				panic("goxide: match on nil State at derivefixture/main.gox:31")
 			}
 		default:
 		}

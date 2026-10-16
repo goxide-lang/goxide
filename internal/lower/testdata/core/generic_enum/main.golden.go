@@ -45,18 +45,18 @@ var global Box[int] = &Item[int]{Value: 8}
 var globalText = func() string {
 	var gxMatch1 string
 	if global == nil {
-		panic("goxide: match on nil Box at corefixture/main.gox:185")
+		panic("goxide: match on nil Box at corefixture/main.gox:10")
 	}
 	switch gxVar2 := global.(type) {
 	case *Item[int]:
 		if gxVar2 == nil {
-			panic("goxide: match on nil Box at corefixture/main.gox:185")
+			panic("goxide: match on nil Box at corefixture/main.gox:10")
 		}
 		n := gxVar2.Value
 		gxMatch1 = fmt.Sprint(n)
 	case *Empty[int]:
 		if gxVar2 == nil {
-			panic("goxide: match on nil Box at corefixture/main.gox:185")
+			panic("goxide: match on nil Box at corefixture/main.gox:10")
 		}
 		gxMatch1 = "empty"
 	default:
@@ -69,12 +69,12 @@ func reveal(x _Secret) int {
 	{
 		var gxMatch3 int
 		if x == nil {
-			panic("goxide: match on nil Secret at corefixture/main.gox:293")
+			panic("goxide: match on nil Secret at corefixture/main.gox:13")
 		}
 		switch gxVar4 := x.(type) {
 		case *_Hidden:
 			if gxVar4 == nil {
-				panic("goxide: match on nil Secret at corefixture/main.gox:293")
+				panic("goxide: match on nil Secret at corefixture/main.gox:13")
 			}
 			n := gxVar4.Value
 			gxMatch3 = n
@@ -89,18 +89,18 @@ func parcelText(x Parcel[string]) string {
 	{
 		var gxMatch5 string
 		if x == nil {
-			panic("goxide: match on nil parcel at corefixture/main.gox:382")
+			panic("goxide: match on nil parcel at corefixture/main.gox:17")
 		}
 		switch gxVar6 := x.(type) {
 		case *Packed[string]:
 			if gxVar6 == nil {
-				panic("goxide: match on nil parcel at corefixture/main.gox:382")
+				panic("goxide: match on nil parcel at corefixture/main.gox:17")
 			}
 			s := gxVar6.Value
 			gxMatch5 = s
 		case *Vacant[string]:
 			if gxVar6 == nil {
-				panic("goxide: match on nil parcel at corefixture/main.gox:382")
+				panic("goxide: match on nil parcel at corefixture/main.gox:17")
 			}
 			gxMatch5 = "empty"
 		default:
@@ -114,18 +114,18 @@ func integer(x Box[int]) int {
 	{
 		var gxMatch7 int
 		if x == nil {
-			panic("goxide: match on nil Box at corefixture/main.gox:486")
+			panic("goxide: match on nil Box at corefixture/main.gox:21")
 		}
 		switch gxVar8 := x.(type) {
 		case *Item[int]:
 			if gxVar8 == nil {
-				panic("goxide: match on nil Box at corefixture/main.gox:486")
+				panic("goxide: match on nil Box at corefixture/main.gox:21")
 			}
 			n := gxVar8.Value
 			gxMatch7 = n
 		case *Empty[int]:
 			if gxVar8 == nil {
-				panic("goxide: match on nil Box at corefixture/main.gox:486")
+				panic("goxide: match on nil Box at corefixture/main.gox:21")
 			}
 			gxMatch7 = -1
 		default:
@@ -139,18 +139,18 @@ func text(x Box[string]) string {
 	{
 		var gxMatch9 string
 		if x == nil {
-			panic("goxide: match on nil Box at corefixture/main.gox:579")
+			panic("goxide: match on nil Box at corefixture/main.gox:25")
 		}
 		switch gxVar10 := x.(type) {
 		case *Item[string]:
 			if gxVar10 == nil {
-				panic("goxide: match on nil Box at corefixture/main.gox:579")
+				panic("goxide: match on nil Box at corefixture/main.gox:25")
 			}
 			s := gxVar10.Value
 			gxMatch9 = s
 		case *Empty[string]:
 			if gxVar10 == nil {
-				panic("goxide: match on nil Box at corefixture/main.gox:579")
+				panic("goxide: match on nil Box at corefixture/main.gox:25")
 			}
 			gxMatch9 = "empty"
 		default:

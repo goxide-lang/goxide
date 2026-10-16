@@ -2,10 +2,10 @@
 
 Goxide 为 Go 项目提供 enum、match、声明宏、Option/Result、`?` 和显式派生，生成可直接交给 Go 工具链的源码。
 
-安装：准备 Go 1.27，在本仓库根目录运行（将 Go 的安装目录加入 `PATH`）：
+安装：准备 Go 1.27，并将 Go 的安装目录加入 `PATH`。首发版本 `v0.0.1` 发布后运行：
 
 ```sh
-GOTOOLCHAIN=local go install ./cmd/goxide
+GOTOOLCHAIN=local go install github.com/hxsf/goxide/cmd/goxide@v0.0.1
 ```
 
 在已有 Go 包中加入 `choice.gox`，`package` 与手写 Go 一致：

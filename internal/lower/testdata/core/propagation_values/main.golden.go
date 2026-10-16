@@ -21,18 +21,18 @@ func explicitPartial() sum.Result[ReadOutcome, error] {
 }
 
 func preservePartial() sum.Result[ReadOutcome, error] {
-	var goxideTry1 sum.Result[ReadOutcome, error] = explicitPartial()
-	var goxideOk2 ReadOutcome
-	switch sum.TagResult(goxideTry1) {
+	var gxTry1 sum.Result[ReadOutcome, error] = explicitPartial()
+	var gxOk2 ReadOutcome
+	switch sum.TagResult(gxTry1) {
 	case 1:
-		goxideOk2 = sum.ValueOk(goxideTry1)
+		gxOk2 = sum.ValueOk(gxTry1)
 	case 2:
-		return sum.NewErr[ReadOutcome, error](sum.ValueErr(goxideTry1))
+		return sum.NewErr[ReadOutcome, error](sum.ValueErr(gxTry1))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
 
-	value := goxideOk2
+	value := gxOk2
 	return sum.NewOk[ReadOutcome, error](value)
 }
 
@@ -43,72 +43,69 @@ func sourceError() sum.Result[int, *NilError] {
 
 func assignableError() sum.Result[string, error] {
 	{
-		var goxideTry3 sum.Result[int, *NilError] = sourceError()
-		var goxideOk4 int
-		switch sum.TagResult(goxideTry3) {
+		var gxTry3 sum.Result[int, *NilError] = sourceError()
+		var gxOk4 int
+		switch sum.TagResult(gxTry3) {
 		case 1:
-			goxideOk4 = sum.ValueOk(goxideTry3)
+			gxOk4 = sum.ValueOk(gxTry3)
 		case 2:
-			return sum.NewErr[string, error](sum.ValueErr(goxideTry3))
+			return sum.NewErr[string, error](sum.ValueErr(gxTry3))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
 
-		_ = goxideOk4
+		_ = gxOk4
 	}
 	return sum.NewOk[string, error]("incorrect")
 }
 
 func readOutcome(value sum.Result[ReadOutcome, error]) ReadOutcome {
 	{
-		var goxideMatch5 ReadOutcome
-		var goxidematch6 sum.Result[ReadOutcome, error] = value
-		switch goxidetag8 := sum.TagResult(goxidematch6); goxidetag8 {
+		var gxMatch5 ReadOutcome
+		switch gxTag7 := sum.TagResult(value); gxTag7 {
 		case 1:
-
-			out := sum.ValueOk(goxidematch6)
-			goxideMatch5 = out
+			out := sum.ValueOk(value)
+			gxMatch5 = out
 		case 2:
-			goxideMatch5 = ReadOutcome{}
+			gxMatch5 = ReadOutcome{}
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch5
+		return gxMatch5
 	}
 }
 
 func readError(value sum.Result[string, error]) error {
 	{
-		var goxideMatch9 error
-		var goxidematch10 sum.Result[string, error] = value
-		switch goxidetag12 := sum.TagResult(goxidematch10); goxidetag12 {
+		var gxMatch8 error
+		switch gxTag10 := sum.TagResult(value); gxTag10 {
 		case 1:
-			goxideMatch9 = nil
+			gxMatch8 = nil
 		case 2:
-			err := sum.ValueErr(goxidematch10)
-			goxideMatch9 = err
+			err := sum.ValueErr(value)
+			gxMatch8 = err
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch9
+		return gxMatch8
 	}
 }
 
 func invalid() sum.Result[int, error] { var value sum.Result[int, error]; return value }
 func invalidPropagation(touched *bool) sum.Result[string, error] {
 	{
-		var goxideTry13 sum.Result[int, error] = invalid()
-		var goxideOk14 int
-		switch sum.TagResult(goxideTry13) {
+		var gxTry11 sum.Result[int, error] = invalid()
+		var gxOk12 int
+		switch sum.TagResult(gxTry11) {
 		case 1:
-			goxideOk14 = sum.ValueOk(goxideTry13)
+			gxOk12 = sum.ValueOk(gxTry11)
 		case 2:
-			return sum.NewErr[string, error](sum.ValueErr(goxideTry13))
+			return sum.NewErr[string, error](sum.ValueErr(gxTry11))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
 
-		_ = goxideOk14
+		_ = gxOk12
 	}
 	*touched = true
 	return sum.NewOk[string, error]("incorrect")

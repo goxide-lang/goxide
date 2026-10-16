@@ -37,26 +37,22 @@ func main() {
 	var stateView *_State = &state
 	var stateClone _State = CloneState(stateView)
 	{
-		var goxidematch1 _State = stateClone
-		if goxidematch1 == nil {
+		if stateClone == nil {
 			panic("goxide: match on nil State at referencefixture/main.gox:650")
 		}
-		switch goxidevariant2 := goxidematch1.(type) {
+		switch gxVar1 := stateClone.(type) {
 		case *_Pair:
-			_ = goxidevariant2
-			if goxidevariant2 == nil {
+			if gxVar1 == nil {
 				panic("goxide: match on nil State at referencefixture/main.gox:650")
 			}
-			value := goxidevariant2.Value
+			value := gxVar1.Value
 			value.Items[0] = 7
 			value.Counts["one"] = 6
 		case *_Empty:
-			_ = goxidevariant2
-			if goxidevariant2 == nil {
+			if gxVar1 == nil {
 				panic("goxide: match on nil State at referencefixture/main.gox:650")
 			}
 		default:
-			_ = goxidevariant2
 			panic("goxide: invalid enum State")
 		}
 	}
@@ -64,159 +60,159 @@ func main() {
 	fmt.Println(EqualsState((*stateView), state), EqualsState(*stateView, state))
 	fmt.Println(DebugState(stateView), DebugState(&stateClone))
 }
-func CloneData(goxideValue3 *Data) Data {
-	return Data{Items: func(goxideSrc4 []int) []int {
-		if goxideSrc4 == nil {
+func CloneData(gxValue2 *Data) Data {
+	return Data{Items: func(gxSrc3 []int) []int {
+		if gxSrc3 == nil {
 			return nil
 		}
-		goxideOut6 := make([]int, len(goxideSrc4))
-		for goxideIndex5 := range goxideSrc4 {
-			goxideOut6[goxideIndex5] = goxideSrc4[goxideIndex5]
+		gxOut5 := make([]int, len(gxSrc3))
+		for gxIndex4 := range gxSrc3 {
+			gxOut5[gxIndex4] = gxSrc3[gxIndex4]
 		}
-		return goxideOut6
-	}((*goxideValue3).Items), Counts: func(goxideSrc7 map[string]int) map[string]int {
-		if goxideSrc7 == nil {
+		return gxOut5
+	}((*gxValue2).Items), Counts: func(gxSrc6 map[string]int) map[string]int {
+		if gxSrc6 == nil {
 			return nil
 		}
-		goxideOut10 := make(map[string]int, len(goxideSrc7))
-		for goxideKey8, goxideItem9 := range goxideSrc7 {
-			goxideOut10[goxideKey8] = goxideItem9
+		gxOut9 := make(map[string]int, len(gxSrc6))
+		for gxKey7, gxItem8 := range gxSrc6 {
+			gxOut9[gxKey7] = gxItem8
 		}
-		return goxideOut10
-	}((*goxideValue3).Counts)}
+		return gxOut9
+	}((*gxValue2).Counts)}
 }
-func DebugData(goxideValue11 *Data) string {
-	return "Data {" + " Items: " + func(goxideSrc12 []int) string {
-		if goxideSrc12 == nil {
+func DebugData(gxValue10 *Data) string {
+	return "Data {" + " Items: " + func(gxSrc11 []int) string {
+		if gxSrc11 == nil {
 			return "nil"
 		}
-		goxideOut14 := make([]string, len(goxideSrc12))
-		for goxideIndex13 := range goxideSrc12 {
-			goxideOut14[goxideIndex13] = strconv.FormatInt(int64(goxideSrc12[goxideIndex13]), 10)
+		gxOut13 := make([]string, len(gxSrc11))
+		for gxIndex12 := range gxSrc11 {
+			gxOut13[gxIndex12] = strconv.FormatInt(int64(gxSrc11[gxIndex12]), 10)
 		}
-		return "[" + strings.Join(goxideOut14, ", ") + "]"
-	}((*goxideValue11).Items) + ", Counts: " + func(goxideSrc15 map[string]int) string {
-		if goxideSrc15 == nil {
+		return "[" + strings.Join(gxOut13, ", ") + "]"
+	}((*gxValue10).Items) + ", Counts: " + func(gxSrc14 map[string]int) string {
+		if gxSrc14 == nil {
 			return "nil"
 		}
-		goxideKeys19 := make([]string, 0, len(goxideSrc15))
-		for goxideKey16 := range goxideSrc15 {
-			goxideKeys19 = append(goxideKeys19, goxideKey16)
+		gxKeys18 := make([]string, 0, len(gxSrc14))
+		for gxKey15 := range gxSrc14 {
+			gxKeys18 = append(gxKeys18, gxKey15)
 		}
-		sort.Strings(goxideKeys19)
-		goxideOut18 := make([]string, 0, len(goxideKeys19))
-		for _, goxideKey16 := range goxideKeys19 {
-			goxideItem17 := goxideSrc15[goxideKey16]
-			goxideOut18 = append(goxideOut18, strconv.Quote(goxideKey16)+": "+strconv.FormatInt(int64(goxideItem17), 10))
+		sort.Strings(gxKeys18)
+		gxOut17 := make([]string, 0, len(gxKeys18))
+		for _, gxKey15 := range gxKeys18 {
+			gxItem16 := gxSrc14[gxKey15]
+			gxOut17 = append(gxOut17, strconv.Quote(gxKey15)+": "+strconv.FormatInt(int64(gxItem16), 10))
 		}
-		return "{" + strings.Join(goxideOut18, ", ") + "}"
-	}((*goxideValue11).Counts) + " }"
+		return "{" + strings.Join(gxOut17, ", ") + "}"
+	}((*gxValue10).Counts) + " }"
 }
-func EqualsData(goxideValue20, goxideOther21 Data) bool {
-	return func(goxideLeft22, goxideRight23 []int) bool {
-		if (goxideLeft22 == nil) != (goxideRight23 == nil) || len(goxideLeft22) != len(goxideRight23) {
+func EqualsData(gxValue19, gxOther20 Data) bool {
+	return func(gxLeft21, gxRight22 []int) bool {
+		if (gxLeft21 == nil) != (gxRight22 == nil) || len(gxLeft21) != len(gxRight22) {
 			return 0 != 0
 		}
-		for goxideIndex24 := range goxideLeft22 {
-			if !(goxideLeft22[goxideIndex24] == goxideRight23[goxideIndex24]) {
+		for gxIndex23 := range gxLeft21 {
+			if !(gxLeft21[gxIndex23] == gxRight22[gxIndex23]) {
 				return 0 != 0
 			}
 		}
 		return 0 == 0
-	}((goxideValue20).Items, (goxideOther21).Items) && func(goxideLeft25, goxideRight26 map[string]int) bool {
-		if (goxideLeft25 == nil) != (goxideRight26 == nil) || len(goxideLeft25) != len(goxideRight26) {
+	}((gxValue19).Items, (gxOther20).Items) && func(gxLeft24, gxRight25 map[string]int) bool {
+		if (gxLeft24 == nil) != (gxRight25 == nil) || len(gxLeft24) != len(gxRight25) {
 			return 0 != 0
 		}
-		for goxideKey27, goxideItem28 := range goxideLeft25 {
-			goxideOther29, goxideFound30 := goxideRight26[goxideKey27]
-			if !goxideFound30 || !(goxideItem28 == goxideOther29) {
+		for gxKey26, gxItem27 := range gxLeft24 {
+			gxOther28, gxFound29 := gxRight25[gxKey26]
+			if !gxFound29 || !(gxItem27 == gxOther28) {
 				return 0 != 0
 			}
 		}
 		return 0 == 0
-	}((goxideValue20).Counts, (goxideOther21).Counts)
+	}((gxValue19).Counts, (gxOther20).Counts)
 }
-func CloneState(goxideValue31 *_State) _State {
-	return func(goxideEnum32 _State) _State {
-		switch goxideVariant33 := goxideEnum32.(type) {
+func CloneState(gxValue30 *_State) _State {
+	return func(gxEnum31 _State) _State {
+		switch gxVar32 := gxEnum31.(type) {
 		case *_Pair:
-			if goxideVariant33 == nil {
+			if gxVar32 == nil {
 				panic("goxide: invalid enum State")
 			}
-			return &_Pair{Value: CloneData(&(goxideVariant33.Value))}
+			return &_Pair{Value: CloneData(&(gxVar32.Value))}
 		case *_Empty:
-			if goxideVariant33 == nil {
+			if gxVar32 == nil {
 				panic("goxide: invalid enum State")
 			}
 			return &_Empty{}
 		default:
 			panic("goxide: invalid enum State")
 		}
-	}((*goxideValue31))
+	}((*gxValue30))
 }
-func DebugState(goxideValue34 *_State) string {
-	return func(goxideEnum35 _State) string {
-		switch goxideVariant36 := goxideEnum35.(type) {
+func DebugState(gxValue33 *_State) string {
+	return func(gxEnum34 _State) string {
+		switch gxVar35 := gxEnum34.(type) {
 		case *_Pair:
-			if goxideVariant36 == nil {
+			if gxVar35 == nil {
 				panic("goxide: invalid enum State")
 			}
-			return "State::Pair" + "(" + DebugData(&(goxideVariant36.Value)) + ")"
+			return "State::Pair" + "(" + DebugData(&(gxVar35.Value)) + ")"
 		case *_Empty:
-			if goxideVariant36 == nil {
+			if gxVar35 == nil {
 				panic("goxide: invalid enum State")
 			}
 			return "State::Empty"
 		default:
 			panic("goxide: invalid enum State")
 		}
-	}((*goxideValue34))
+	}((*gxValue33))
 }
-func EqualsState(goxideValue37, goxideOther38 _State) bool {
-	return func(goxideLeft39, goxideRight40 _State) bool {
-		switch goxideValidated44 := (goxideLeft39).(type) {
+func EqualsState(gxValue36, gxOther37 _State) bool {
+	return func(gxLeft38, gxRight39 _State) bool {
+		switch gxValidated43 := (gxLeft38).(type) {
 		case *_Pair:
-			if goxideValidated44 == nil {
+			if gxValidated43 == nil {
 				panic("goxide: invalid enum State")
 			}
 		case *_Empty:
-			if goxideValidated44 == nil {
+			if gxValidated43 == nil {
 				panic("goxide: invalid enum State")
 			}
 		default:
 			panic("goxide: invalid enum State")
 		}
-		switch goxideValidated47 := (goxideRight40).(type) {
+		switch gxValidated46 := (gxRight39).(type) {
 		case *_Pair:
-			if goxideValidated47 == nil {
+			if gxValidated46 == nil {
 				panic("goxide: invalid enum State")
 			}
 		case *_Empty:
-			if goxideValidated47 == nil {
+			if gxValidated46 == nil {
 				panic("goxide: invalid enum State")
 			}
 		default:
 			panic("goxide: invalid enum State")
 		}
-		switch goxideVariant41 := goxideLeft39.(type) {
+		switch gxVar40 := gxLeft38.(type) {
 		case *_Pair:
-			goxideOther42, goxideSame43 := goxideRight40.(*_Pair)
-			if !goxideSame43 {
+			gxOther41, gxSame42 := gxRight39.(*_Pair)
+			if !gxSame42 {
 				return 0 != 0
 			}
-			_ = goxideVariant41
-			_ = goxideOther42
-			return EqualsData(goxideVariant41.Value, goxideOther42.Value)
+			_ = gxVar40
+			_ = gxOther41
+			return EqualsData(gxVar40.Value, gxOther41.Value)
 		case *_Empty:
-			goxideOther42, goxideSame43 := goxideRight40.(*_Empty)
-			if !goxideSame43 {
+			gxOther41, gxSame42 := gxRight39.(*_Empty)
+			if !gxSame42 {
 				return 0 != 0
 			}
-			_ = goxideVariant41
-			_ = goxideOther42
+			_ = gxVar40
+			_ = gxOther41
 			return 0 == 0
 		default:
 			panic("goxide: invalid enum State")
 		}
-	}(goxideValue37, goxideOther38)
+	}(gxValue36, gxOther37)
 }

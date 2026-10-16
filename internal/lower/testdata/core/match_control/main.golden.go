@@ -20,35 +20,32 @@ func (*Number) isState() {
 
 func loopValue() int {
 	total := 0
-goxideBreak1:
+gxBreak1:
 	for i := 0; i < 5; i++ {
 		{
-			var goxidematch2 State = &Number{Value: i}
-			if goxidematch2 == nil {
+			var gxMatch2 State = &Number{Value: i}
+			if gxMatch2 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:125")
 			}
-			switch goxidevariant3 := goxidematch2.(type) {
+			switch gxVar3 := gxMatch2.(type) {
 			case *Number:
-				_ = goxidevariant3
-				if goxidevariant3 == nil {
+				if gxVar3 == nil {
 					panic("goxide: match on nil State at corefixture/main.gox:125")
 				}
-				goxidePayload4 := goxidevariant3.Value
-				if n := goxidePayload4; n == 1 {
+				gxPayload4 := gxVar3.Value
+				if n := gxPayload4; n == 1 {
 					continue
-				} else if n := goxidePayload4; n == 3 {
-					break goxideBreak1
+				} else if n := gxPayload4; n == 3 {
+					break gxBreak1
 				} else {
 					total++
 				}
 			case *Idle:
-				_ = goxidevariant3
-				if goxidevariant3 == nil {
+				if gxVar3 == nil {
 					panic("goxide: match on nil State at corefixture/main.gox:125")
 				}
 				total++
 			default:
-				_ = goxidevariant3
 				total++
 			}
 		}
@@ -60,27 +57,24 @@ goxideBreak1:
 
 func deferred(done *int) int {
 	{
-		var goxidematch5 State = &Number{Value: 4}
-		if goxidematch5 == nil {
+		var gxMatch5 State = &Number{Value: 4}
+		if gxMatch5 == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:332")
 		}
-		switch goxidevariant6 := goxidematch5.(type) {
+		switch gxVar6 := gxMatch5.(type) {
 		case *Number:
-			_ = goxidevariant6
-			if goxidevariant6 == nil {
+			if gxVar6 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:332")
 			}
-			n := goxidevariant6.Value
+			n := gxVar6.Value
 			defer func() { *done = n }()
 			return n
 		case *Idle:
-			_ = goxidevariant6
-			if goxidevariant6 == nil {
+			if gxVar6 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:332")
 			}
 			return 0
 		default:
-			_ = goxidevariant6
 			return 0
 		}
 	}

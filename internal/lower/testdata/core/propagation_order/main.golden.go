@@ -23,40 +23,38 @@ func callee(trace *[]string) func(int, int, int) int {
 
 func sequence(ok bool, trace *[]string) sum.Result[string, string] {
 	defer func() { *trace = append(*trace, "cleanup") }()
-	var goxideValue1 func(int, int, int) int = callee(trace)
-	var goxideValue2 int = mark("first", trace)
-	var goxideTry3 sum.Result[int, string] = load(ok, trace)
-	var goxideOk4 int
-	switch sum.TagResult(goxideTry3) {
+	var gxValue1 func(int, int, int) int = callee(trace)
+	var gxValue2 int = mark("first", trace)
+	var gxTry3 sum.Result[int, string] = load(ok, trace)
+	var gxOk4 int
+	switch sum.TagResult(gxTry3) {
 	case 1:
-		goxideOk4 = sum.ValueOk(goxideTry3)
+		gxOk4 = sum.ValueOk(gxTry3)
 	case 2:
-		return sum.NewErr[string, string](sum.ValueErr(goxideTry3))
+		return sum.NewErr[string, string](sum.ValueErr(gxTry3))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
 
-	n := goxideValue1(goxideValue2, goxideOk4, mark("last", trace))
+	n := gxValue1(gxValue2, gxOk4, mark("last", trace))
 	defer func() { *trace = append(*trace, "late") }()
 	return sum.NewOk[string, string](fmt.Sprint(n))
 }
 
 func text(value sum.Result[string, string]) string {
 	{
-		var goxideMatch5 string
-		var goxidematch6 sum.Result[string, string] = value
-		switch goxidetag8 := sum.TagResult(goxidematch6); goxidetag8 {
+		var gxMatch5 string
+		switch gxTag7 := sum.TagResult(value); gxTag7 {
 		case 1:
-
-			s := sum.ValueOk(goxidematch6)
-			goxideMatch5 = s
+			s := sum.ValueOk(value)
+			gxMatch5 = s
 		case 2:
-			e := sum.ValueErr(goxidematch6)
-			goxideMatch5 = e
+			e := sum.ValueErr(value)
+			gxMatch5 = e
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch5
+		return gxMatch5
 	}
 }
 

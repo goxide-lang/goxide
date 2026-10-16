@@ -67,10 +67,36 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) (output [
 			value = &goast.StarExpr{X: value}
 		}
 	}
-	tmp := e.fresh("match")
-	prefix = append(prefix, &goast.DeclStmt{Decl: &goast.GenDecl{Tok: gotoken.VAR, Specs: []goast.Spec{
-		&goast.ValueSpec{Names: []*goast.Ident{tmp}, Type: e.instanceType(info.Enum), Values: []goast.Expr{value}},
-	}}})
+	_, direct := n.X.(*syntax.Ident)
+	identifier, named := value.(*goast.Ident)
+	direct = direct && named
+	if direct {
+		// A type switch retains the selected variant even if a guard replaces
+		// the source variable. Sum accessors and whole-value bindings can read
+		// it again inside an arm, after guards or a shadowing pattern binding.
+		reread, guarded, shadowed := info.Enum.Enum.Builtin, false, false
+		for _, arm := range n.Arms {
+			guarded = guarded || arm.Guard != nil
+			if binding, ok := arm.Pat.(*syntax.BindPat); ok && e.matchCatchAll(binding) && binding.Name.Name != "_" {
+				reread = true
+			}
+			syntax.Walk(arm.Pat, func(node syntax.Node) bool {
+				if binding, ok := node.(*syntax.BindPat); ok && e.ident(binding.Name).Name == identifier.Name {
+					shadowed = true
+				}
+				return true
+			})
+		}
+		direct = !reread || !guarded && !shadowed
+	}
+	tmp := value
+	if !direct {
+		name := e.fresh("match")
+		prefix = append(prefix, &goast.DeclStmt{Decl: &goast.GenDecl{Tok: gotoken.VAR, Specs: []goast.Spec{
+			&goast.ValueSpec{Names: []*goast.Ident{name}, Type: e.instanceType(info.Enum), Values: []goast.Expr{value}},
+		}}})
+		tmp = name
+	}
 	if !info.Enum.Enum.Builtin {
 		prefix = append(prefix, &goast.IfStmt{Cond: &goast.BinaryExpr{X: tmp, Op: gotoken.EQL, Y: goast.NewIdent("nil")},
 			Body: &goast.BlockStmt{List: []goast.Stmt{matchPanic(fmt.Sprintf("goxide: match on nil %s at %s:%d", info.Enum.Enum.Name, e.name, n.Span().Start))}},
@@ -165,12 +191,11 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) (output [
 		})
 	}
 	body.List = append(body.List, otherwise)
-	// A unit-only match still needs a bound type switch for the same layout.
-	for _, clause := range body.List {
-		c := clause.(*goast.CaseClause)
-		c.Body = append([]goast.Stmt{&goast.AssignStmt{Lhs: []goast.Expr{goast.NewIdent("_")}, Tok: gotoken.ASSIGN, Rhs: []goast.Expr{bound}}}, c.Body...)
+	var dispatch goast.Stmt = &goast.ExprStmt{X: &goast.TypeAssertExpr{X: tmp}}
+	if len(groups) > 0 {
+		dispatch = &goast.AssignStmt{Lhs: []goast.Expr{bound}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{&goast.TypeAssertExpr{X: tmp}}}
 	}
-	return append(prefix, &goast.TypeSwitchStmt{Assign: &goast.AssignStmt{Lhs: []goast.Expr{bound}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{&goast.TypeAssertExpr{X: tmp}}}, Body: body})
+	return append(prefix, &goast.TypeSwitchStmt{Assign: dispatch, Body: body})
 }
 
 func (e *emitter) matchBorrows(n *syntax.MatchExpr) bool {

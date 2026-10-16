@@ -5,29 +5,29 @@ import fmt "fmt"
 
 func typed() sum.Option[int] {
 	{
-		var goxideTry2 sum.Option[int] = sum.NewSome[int](7)
-		var goxideOk3 int
-		switch sum.TagOption(goxideTry2) {
+		var gxTry2 sum.Option[int] = sum.NewSome[int](7)
+		var gxOk3 int
+		switch sum.TagOption(gxTry2) {
 		case 1:
-			goxideOk3 = sum.ValueSome(goxideTry2)
+			gxOk3 = sum.ValueSome(gxTry2)
 		case 0:
 			return sum.None[int]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
 
-		n := goxideOk3
-		var goxideTry4 sum.Option[any] = sum.NewSome[any](n)
-		var goxideOk5 any
-		switch sum.TagOption(goxideTry4) {
+		n := gxOk3
+		var gxTry4 sum.Option[any] = sum.NewSome[any](n)
+		var gxOk5 any
+		switch sum.TagOption(gxTry4) {
 		case 1:
-			goxideOk5 = sum.ValueSome(goxideTry4)
+			gxOk5 = sum.ValueSome(gxTry4)
 		case 0:
 			return sum.None[int]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
-		switch value := goxideOk5.(type) {
+		switch value := gxOk5.(type) {
 		case int:
 			return sum.NewSome[int](value + n)
 		default:
@@ -49,25 +49,25 @@ func send(ok bool, channel chan int, trace *[]string) sum.Option[int] {
 		return sum.NewSome[int](7)
 	}
 	{
-		var goxideValue7 chan int = first()
-		var goxideValue8 int = value()
-		var goxideValue9 chan int = channel
-		var goxideTry10 sum.Option[int] = load()
-		var goxideOk11 int
-		switch sum.TagOption(goxideTry10) {
+		var gxValue7 chan int = first()
+		var gxValue8 int = value()
+		var gxValue9 chan int = channel
+		var gxTry10 sum.Option[int] = load()
+		var gxOk11 int
+		switch sum.TagOption(gxTry10) {
 		case 1:
-			goxideOk11 = sum.ValueSome(goxideTry10)
+			gxOk11 = sum.ValueSome(gxTry10)
 		case 0:
 			return sum.None[int]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
-		var goxideValue12 int = goxideOk11
+		var gxValue12 int = gxOk11
 		select {
-		case goxideValue7 <- goxideValue8:
+		case gxValue7 <- gxValue8:
 
 			panic("disabled send")
-		case goxideValue9 <- goxideValue12:
+		case gxValue9 <- gxValue12:
 
 			return sum.NewSome[int](<-channel)
 		}
@@ -78,22 +78,22 @@ func send(ok bool, channel chan int, trace *[]string) sum.Option[int] {
 func receive(channel chan int) sum.Option[int] {
 	values := []int{0}
 	{
-		var goxideValue14 chan int = channel
+		var gxValue14 chan int = channel
 		select {
-		case goxideReceive15 := <-goxideValue14:
-			var goxideValue16 []int = values
-			var goxideTry17 sum.Option[int] = sum.None[int]()
-			var goxideOk18 int
-			switch sum.TagOption(goxideTry17) {
+		case gxReceive15 := <-gxValue14:
+			var gxValue16 []int = values
+			var gxTry17 sum.Option[int] = sum.None[int]()
+			var gxOk18 int
+			switch sum.TagOption(gxTry17) {
 			case 1:
-				goxideOk18 = sum.ValueSome(goxideTry17)
+				gxOk18 = sum.ValueSome(gxTry17)
 			case 0:
 				return sum.None[int]()
 			default:
 				panic("goxide: invalid Option at ?")
 			}
-			var goxideValue19 int = goxideOk18
-			goxideValue16[goxideValue19] = goxideReceive15
+			var gxValue19 int = gxOk18
+			gxValue16[gxValue19] = gxReceive15
 
 			panic("failed receive target")
 		}
@@ -106,26 +106,26 @@ func disabled(ready chan int) sum.Option[int] {
 	var blocked chan int
 	values := []int{0}
 	{
-		var goxideValue21 chan int = blocked
-		var goxideValue27 chan int = ready
+		var gxValue21 chan int = blocked
+		var gxValue27 chan int = ready
 		select {
-		case goxideReceive22 := <-goxideValue21:
-			var goxideValue23 []int = values
-			var goxideTry24 sum.Option[int] = sum.None[int]()
-			var goxideOk25 int
-			switch sum.TagOption(goxideTry24) {
+		case gxReceive22 := <-gxValue21:
+			var gxValue23 []int = values
+			var gxTry24 sum.Option[int] = sum.None[int]()
+			var gxOk25 int
+			switch sum.TagOption(gxTry24) {
 			case 1:
-				goxideOk25 = sum.ValueSome(goxideTry24)
+				gxOk25 = sum.ValueSome(gxTry24)
 			case 0:
 				return sum.None[int]()
 			default:
 				panic("goxide: invalid Option at ?")
 			}
-			var goxideValue26 int = goxideOk25
-			goxideValue23[goxideValue26] = goxideReceive22
+			var gxValue26 int = gxOk25
+			gxValue23[gxValue26] = gxReceive22
 
 			panic("disabled receive")
-		case value := <-goxideValue27:
+		case value := <-gxValue27:
 			return sum.NewSome[int](value)
 		}
 	}
@@ -134,19 +134,17 @@ func disabled(ready chan int) sum.Option[int] {
 
 func optionInt(value sum.Option[int]) int {
 	{
-		var goxideMatch28 int
-		var goxidematch29 sum.Option[int] = value
-		switch goxidetag31 := sum.TagOption(goxidematch29); goxidetag31 {
+		var gxMatch28 int
+		switch gxTag30 := sum.TagOption(value); gxTag30 {
 		case 1:
-
-			n := sum.ValueSome(goxidematch29)
-			goxideMatch28 = n
+			n := sum.ValueSome(value)
+			gxMatch28 = n
 		case 0:
-			goxideMatch28 = -1
+			gxMatch28 = -1
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		return goxideMatch28
+		return gxMatch28
 	}
 }
 

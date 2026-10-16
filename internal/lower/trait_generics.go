@@ -99,7 +99,7 @@ func (e *emitter) memberSignature(sig *types.Signature) (*goast.FuncType, []goas
 		p := sig.Params().At(index)
 		name := p.Name()
 		if name == "" || name == "_" || used[name] {
-			name = fmt.Sprintf("goxideArg%d", index)
+			name = fmt.Sprintf("gxArg%d", index)
 			for used[name] {
 				name += "_"
 			}

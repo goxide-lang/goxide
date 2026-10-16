@@ -15,9 +15,13 @@ import (
 )
 
 func (e *emitter) fresh(prefix string) *goast.Ident {
+	prefix = strings.ToUpper(prefix[:1]) + prefix[1:]
+	if prefix == "Variant" {
+		prefix = "Var"
+	}
 	for {
 		e.tempIndex++
-		name := fmt.Sprintf("goxide%s%d", prefix, e.tempIndex)
+		name := fmt.Sprintf("gx%s%d", prefix, e.tempIndex)
 		if !e.reserved[name] {
 			e.reserved[name] = true
 			return goast.NewIdent(name)

@@ -61,67 +61,62 @@ func main() {
 	var state State = &Pair{V0: Item{Text: "quoted"}, V1: []int{1, 2}}
 	var cloned State = CloneState(&state)
 	{
-		var goxidematch1 State = cloned
-		if goxidematch1 == nil {
+		if cloned == nil {
 			panic("goxide: match on nil State at derivefixture/main.gox:1152")
 		}
-		switch goxidevariant2 := goxidematch1.(type) {
+		switch gxVar1 := cloned.(type) {
 		case *Pair:
-			_ = goxidevariant2
-			if goxidevariant2 == nil {
+			if gxVar1 == nil {
 				panic("goxide: match on nil State at derivefixture/main.gox:1152")
 			}
-			nums := goxidevariant2.V1
+			nums := gxVar1.V1
 			nums[0] = 9
 		case *Empty:
-			_ = goxidevariant2
-			if goxidevariant2 == nil {
+			if gxVar1 == nil {
 				panic("goxide: match on nil State at derivefixture/main.gox:1152")
 			}
 		case *Named:
-			_ = goxidevariant2
-			if goxidevariant2 == nil {
+			if gxVar1 == nil {
 				panic("goxide: match on nil State at derivefixture/main.gox:1152")
 			}
 		default:
-			_ = goxidevariant2
 		}
 	}
 	fmt.Println(DebugState(&state), DebugState(&cloned))
 	absent := Record{Outcome: sum.NewOk[Item, []int](Item{})}
 	nilcopy := CloneRecord(&absent)
 	{
-		var goxideValue3 bool = nilcopy.Values == nil
-		var goxideValue4 bool = nilcopy.Table == nil
-		var goxideMatch5 any
-		var goxidematch6 sum.Option[[]Item] = nilcopy.Choice
-		switch goxidetag8 := sum.TagOption(goxidematch6); goxidetag8 {
+		var gxValue2 bool = nilcopy.Values == nil
+		var gxValue3 bool = nilcopy.Table == nil
+		var gxMatch4 any
+		var gxMatch5 sum.Option[[]Item] = nilcopy.Choice
+		switch gxTag7 := sum.TagOption(gxMatch5); gxTag7 {
 		case 0:
-			goxideMatch5 = "none"
+			gxMatch4 = "none"
 		case 1:
-			goxideMatch5 = "some"
+			gxMatch4 = "some"
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		fmt.Println(goxideValue3, goxideValue4, goxideMatch5)
+		fmt.Println(gxValue2, gxValue3, gxMatch4)
 	}
 	present := Record{Values: []Item{}, Table: map[string][]Item{}, Choice: sum.NewSome[[]Item](nil), Outcome: sum.NewOk[Item, []int](Item{})}
 	emptycopy := CloneRecord(&present)
 	{
-		var goxideValue9 bool = emptycopy.Values == nil
-		var goxideValue10 bool = emptycopy.Table == nil
-		var goxideMatch11 any
-		var goxidematch12 sum.Option[[]Item] = emptycopy.Choice
-		switch goxidetag14 := sum.TagOption(goxidematch12); goxidetag14 {
+		var gxValue8 bool = emptycopy.Values == nil
+		var gxValue9 bool = emptycopy.Table == nil
+		var gxMatch10 any
+		var gxMatch11 sum.Option[[]Item] = emptycopy.Choice
+		switch gxTag13 := sum.TagOption(gxMatch11); gxTag13 {
 		case 0:
-			goxideMatch11 = false
+			gxMatch10 = false
 		case 1:
-			v := sum.ValueSome(goxidematch12)
-			goxideMatch11 = v == nil
+			v := sum.ValueSome(gxMatch11)
+			gxMatch10 = v == nil
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		fmt.Println(goxideValue9, goxideValue10, goxideMatch11)
+		fmt.Println(gxValue8, gxValue9, gxMatch10)
 	}
 	private := Account{Id: 7, name: "hidden"}
 	fmt.Println(Debugaccount(&private))
@@ -131,238 +126,238 @@ func main() {
 	var named State = &Named{Name: "secret", Count: 2}
 	fmt.Println(DebugState(&empty), DebugState(&named))
 }
-func CloneItem(goxideValue15 *Item) Item {
-	return Item{Text: (*goxideValue15).Text}
+func CloneItem(gxValue14 *Item) Item {
+	return Item{Text: (*gxValue14).Text}
 }
-func DebugItem(goxideValue16 *Item) string {
-	return "Item {" + " Text: " + strconv.Quote((*goxideValue16).Text) + " }"
+func DebugItem(gxValue15 *Item) string {
+	return "Item {" + " Text: " + strconv.Quote((*gxValue15).Text) + " }"
 }
-func DebugGrouped(goxideValue17 *Grouped) string {
-	return "Grouped {" + " Value: " + strconv.FormatInt(int64((*goxideValue17).Value), 10) + " }"
+func DebugGrouped(gxValue16 *Grouped) string {
+	return "Grouped {" + " Value: " + strconv.FormatInt(int64((*gxValue16).Value), 10) + " }"
 }
-func CloneRecord(goxideValue18 *Record) Record {
-	return Record{Values: func(goxideSrc19 []Item) []Item {
-		if goxideSrc19 == nil {
+func CloneRecord(gxValue17 *Record) Record {
+	return Record{Values: func(gxSrc18 []Item) []Item {
+		if gxSrc18 == nil {
 			return nil
 		}
-		goxideOut21 := make([]Item, len(goxideSrc19))
-		for goxideIndex20 := range goxideSrc19 {
-			goxideOut21[goxideIndex20] = CloneItem(&(goxideSrc19[goxideIndex20]))
+		gxOut20 := make([]Item, len(gxSrc18))
+		for gxIndex19 := range gxSrc18 {
+			gxOut20[gxIndex19] = CloneItem(&(gxSrc18[gxIndex19]))
 		}
-		return goxideOut21
-	}((*goxideValue18).Values), Table: func(goxideSrc22 map[string][]Item) map[string][]Item {
-		if goxideSrc22 == nil {
+		return gxOut20
+	}((*gxValue17).Values), Table: func(gxSrc21 map[string][]Item) map[string][]Item {
+		if gxSrc21 == nil {
 			return nil
 		}
-		goxideOut25 := make(map[string][]Item, len(goxideSrc22))
-		for goxideKey23, goxideItem24 := range goxideSrc22 {
-			goxideOut25[goxideKey23] = func(goxideSrc26 []Item) []Item {
-				if goxideSrc26 == nil {
+		gxOut24 := make(map[string][]Item, len(gxSrc21))
+		for gxKey22, gxItem23 := range gxSrc21 {
+			gxOut24[gxKey22] = func(gxSrc25 []Item) []Item {
+				if gxSrc25 == nil {
 					return nil
 				}
-				goxideOut28 := make([]Item, len(goxideSrc26))
-				for goxideIndex27 := range goxideSrc26 {
-					goxideOut28[goxideIndex27] = CloneItem(&(goxideSrc26[goxideIndex27]))
+				gxOut27 := make([]Item, len(gxSrc25))
+				for gxIndex26 := range gxSrc25 {
+					gxOut27[gxIndex26] = CloneItem(&(gxSrc25[gxIndex26]))
 				}
-				return goxideOut28
-			}(goxideItem24)
+				return gxOut27
+			}(gxItem23)
 		}
-		return goxideOut25
-	}((*goxideValue18).Table), Fixed: func(goxideSrc29 [1]Alias) [1]Alias {
-		var goxideOut31 [1]Alias
-		for goxideIndex30 := range goxideSrc29 {
-			goxideOut31[goxideIndex30] = CloneItem(&(goxideSrc29[goxideIndex30]))
+		return gxOut24
+	}((*gxValue17).Table), Fixed: func(gxSrc28 [1]Alias) [1]Alias {
+		var gxOut30 [1]Alias
+		for gxIndex29 := range gxSrc28 {
+			gxOut30[gxIndex29] = CloneItem(&(gxSrc28[gxIndex29]))
 		}
-		return goxideOut31
-	}((*goxideValue18).Fixed), Choice: func(goxideEnum32 sum.Option[[]Item]) sum.Option[[]Item] {
-		switch sum.TagOption(goxideEnum32) {
+		return gxOut30
+	}((*gxValue17).Fixed), Choice: func(gxEnum31 sum.Option[[]Item]) sum.Option[[]Item] {
+		switch sum.TagOption(gxEnum31) {
 		case 0:
 			return sum.None[[]Item]()
 		case 1:
-			goxidePayload34 := sum.ValueSome(goxideEnum32)
-			return sum.NewSome[[]Item](func(goxideSrc35 []Item) []Item {
-				if goxideSrc35 == nil {
+			gxPayload33 := sum.ValueSome(gxEnum31)
+			return sum.NewSome[[]Item](func(gxSrc34 []Item) []Item {
+				if gxSrc34 == nil {
 					return nil
 				}
-				goxideOut37 := make([]Item, len(goxideSrc35))
-				for goxideIndex36 := range goxideSrc35 {
-					goxideOut37[goxideIndex36] = CloneItem(&(goxideSrc35[goxideIndex36]))
+				gxOut36 := make([]Item, len(gxSrc34))
+				for gxIndex35 := range gxSrc34 {
+					gxOut36[gxIndex35] = CloneItem(&(gxSrc34[gxIndex35]))
 				}
-				return goxideOut37
-			}(goxidePayload34))
+				return gxOut36
+			}(gxPayload33))
 		default:
 			panic("goxide: invalid enum Option")
 		}
-	}((*goxideValue18).Choice), Outcome: func(goxideEnum38 sum.Result[Item, []int]) sum.Result[Item, []int] {
-		switch sum.TagResult(goxideEnum38) {
+	}((*gxValue17).Choice), Outcome: func(gxEnum37 sum.Result[Item, []int]) sum.Result[Item, []int] {
+		switch sum.TagResult(gxEnum37) {
 		case 1:
-			goxidePayload40 := sum.ValueOk(goxideEnum38)
-			return sum.NewOk[Item, []int](CloneItem(&(goxidePayload40)))
+			gxPayload39 := sum.ValueOk(gxEnum37)
+			return sum.NewOk[Item, []int](CloneItem(&(gxPayload39)))
 		case 2:
-			goxidePayload41 := sum.ValueErr(goxideEnum38)
-			return sum.NewErr[Item, []int](func(goxideSrc42 []int) []int {
-				if goxideSrc42 == nil {
+			gxPayload40 := sum.ValueErr(gxEnum37)
+			return sum.NewErr[Item, []int](func(gxSrc41 []int) []int {
+				if gxSrc41 == nil {
 					return nil
 				}
-				goxideOut44 := make([]int, len(goxideSrc42))
-				for goxideIndex43 := range goxideSrc42 {
-					goxideOut44[goxideIndex43] = goxideSrc42[goxideIndex43]
+				gxOut43 := make([]int, len(gxSrc41))
+				for gxIndex42 := range gxSrc41 {
+					gxOut43[gxIndex42] = gxSrc41[gxIndex42]
 				}
-				return goxideOut44
-			}(goxidePayload41))
+				return gxOut43
+			}(gxPayload40))
 		default:
 			panic("goxide: invalid enum Result")
 		}
-	}((*goxideValue18).Outcome)}
+	}((*gxValue17).Outcome)}
 }
-func DebugRecord(goxideValue45 *Record) string {
-	return "Record {" + " Values: " + func(goxideSrc46 []Item) string {
-		if goxideSrc46 == nil {
+func DebugRecord(gxValue44 *Record) string {
+	return "Record {" + " Values: " + func(gxSrc45 []Item) string {
+		if gxSrc45 == nil {
 			return "nil"
 		}
-		goxideOut48 := make([]string, len(goxideSrc46))
-		for goxideIndex47 := range goxideSrc46 {
-			goxideOut48[goxideIndex47] = DebugItem(&(goxideSrc46[goxideIndex47]))
+		gxOut47 := make([]string, len(gxSrc45))
+		for gxIndex46 := range gxSrc45 {
+			gxOut47[gxIndex46] = DebugItem(&(gxSrc45[gxIndex46]))
 		}
-		return "[" + strings.Join(goxideOut48, ", ") + "]"
-	}((*goxideValue45).Values) + ", Table: " + func(goxideSrc49 map[string][]Item) string {
-		if goxideSrc49 == nil {
+		return "[" + strings.Join(gxOut47, ", ") + "]"
+	}((*gxValue44).Values) + ", Table: " + func(gxSrc48 map[string][]Item) string {
+		if gxSrc48 == nil {
 			return "nil"
 		}
-		goxideKeys56 := make([]string, 0, len(goxideSrc49))
-		for goxideKey50 := range goxideSrc49 {
-			goxideKeys56 = append(goxideKeys56, goxideKey50)
+		gxKeys55 := make([]string, 0, len(gxSrc48))
+		for gxKey49 := range gxSrc48 {
+			gxKeys55 = append(gxKeys55, gxKey49)
 		}
-		sort.Strings(goxideKeys56)
-		goxideOut52 := make([]string, 0, len(goxideKeys56))
-		for _, goxideKey50 := range goxideKeys56 {
-			goxideItem51 := goxideSrc49[goxideKey50]
-			goxideOut52 = append(goxideOut52, strconv.Quote(goxideKey50)+": "+func(goxideSrc53 []Item) string {
-				if goxideSrc53 == nil {
+		sort.Strings(gxKeys55)
+		gxOut51 := make([]string, 0, len(gxKeys55))
+		for _, gxKey49 := range gxKeys55 {
+			gxItem50 := gxSrc48[gxKey49]
+			gxOut51 = append(gxOut51, strconv.Quote(gxKey49)+": "+func(gxSrc52 []Item) string {
+				if gxSrc52 == nil {
 					return "nil"
 				}
-				goxideOut55 := make([]string, len(goxideSrc53))
-				for goxideIndex54 := range goxideSrc53 {
-					goxideOut55[goxideIndex54] = DebugItem(&(goxideSrc53[goxideIndex54]))
+				gxOut54 := make([]string, len(gxSrc52))
+				for gxIndex53 := range gxSrc52 {
+					gxOut54[gxIndex53] = DebugItem(&(gxSrc52[gxIndex53]))
 				}
-				return "[" + strings.Join(goxideOut55, ", ") + "]"
-			}(goxideItem51))
+				return "[" + strings.Join(gxOut54, ", ") + "]"
+			}(gxItem50))
 		}
-		return "{" + strings.Join(goxideOut52, ", ") + "}"
-	}((*goxideValue45).Table) + ", Fixed: " + func(goxideSrc57 [1]Alias) string {
-		goxideOut59 := make([]string, len(goxideSrc57))
-		for goxideIndex58 := range goxideSrc57 {
-			goxideOut59[goxideIndex58] = DebugItem(&(goxideSrc57[goxideIndex58]))
+		return "{" + strings.Join(gxOut51, ", ") + "}"
+	}((*gxValue44).Table) + ", Fixed: " + func(gxSrc56 [1]Alias) string {
+		gxOut58 := make([]string, len(gxSrc56))
+		for gxIndex57 := range gxSrc56 {
+			gxOut58[gxIndex57] = DebugItem(&(gxSrc56[gxIndex57]))
 		}
-		return "[" + strings.Join(goxideOut59, ", ") + "]"
-	}((*goxideValue45).Fixed) + ", Choice: " + func(goxideEnum60 sum.Option[[]Item]) string {
-		switch sum.TagOption(goxideEnum60) {
+		return "[" + strings.Join(gxOut58, ", ") + "]"
+	}((*gxValue44).Fixed) + ", Choice: " + func(gxEnum59 sum.Option[[]Item]) string {
+		switch sum.TagOption(gxEnum59) {
 		case 0:
 			return "Option::None"
 		case 1:
-			goxidePayload62 := sum.ValueSome(goxideEnum60)
-			return "Option::Some" + "(" + func(goxideSrc63 []Item) string {
-				if goxideSrc63 == nil {
+			gxPayload61 := sum.ValueSome(gxEnum59)
+			return "Option::Some" + "(" + func(gxSrc62 []Item) string {
+				if gxSrc62 == nil {
 					return "nil"
 				}
-				goxideOut65 := make([]string, len(goxideSrc63))
-				for goxideIndex64 := range goxideSrc63 {
-					goxideOut65[goxideIndex64] = DebugItem(&(goxideSrc63[goxideIndex64]))
+				gxOut64 := make([]string, len(gxSrc62))
+				for gxIndex63 := range gxSrc62 {
+					gxOut64[gxIndex63] = DebugItem(&(gxSrc62[gxIndex63]))
 				}
-				return "[" + strings.Join(goxideOut65, ", ") + "]"
-			}(goxidePayload62) + ")"
+				return "[" + strings.Join(gxOut64, ", ") + "]"
+			}(gxPayload61) + ")"
 		default:
 			panic("goxide: invalid enum Option")
 		}
-	}((*goxideValue45).Choice) + ", Outcome: " + func(goxideEnum66 sum.Result[Item, []int]) string {
-		switch sum.TagResult(goxideEnum66) {
+	}((*gxValue44).Choice) + ", Outcome: " + func(gxEnum65 sum.Result[Item, []int]) string {
+		switch sum.TagResult(gxEnum65) {
 		case 1:
-			goxidePayload68 := sum.ValueOk(goxideEnum66)
-			return "Result::Ok" + "(" + DebugItem(&(goxidePayload68)) + ")"
+			gxPayload67 := sum.ValueOk(gxEnum65)
+			return "Result::Ok" + "(" + DebugItem(&(gxPayload67)) + ")"
 		case 2:
-			goxidePayload69 := sum.ValueErr(goxideEnum66)
-			return "Result::Err" + "(" + func(goxideSrc70 []int) string {
-				if goxideSrc70 == nil {
+			gxPayload68 := sum.ValueErr(gxEnum65)
+			return "Result::Err" + "(" + func(gxSrc69 []int) string {
+				if gxSrc69 == nil {
 					return "nil"
 				}
-				goxideOut72 := make([]string, len(goxideSrc70))
-				for goxideIndex71 := range goxideSrc70 {
-					goxideOut72[goxideIndex71] = strconv.FormatInt(int64(goxideSrc70[goxideIndex71]), 10)
+				gxOut71 := make([]string, len(gxSrc69))
+				for gxIndex70 := range gxSrc69 {
+					gxOut71[gxIndex70] = strconv.FormatInt(int64(gxSrc69[gxIndex70]), 10)
 				}
-				return "[" + strings.Join(goxideOut72, ", ") + "]"
-			}(goxidePayload69) + ")"
+				return "[" + strings.Join(gxOut71, ", ") + "]"
+			}(gxPayload68) + ")"
 		default:
 			panic("goxide: invalid enum Result")
 		}
-	}((*goxideValue45).Outcome) + " }"
+	}((*gxValue44).Outcome) + " }"
 }
-func Cloneaccount(goxideValue73 *Account) Account {
-	return Account{Id: (*goxideValue73).Id, name: (*goxideValue73).name}
+func Cloneaccount(gxValue72 *Account) Account {
+	return Account{Id: (*gxValue72).Id, name: (*gxValue72).name}
 }
-func Debugaccount(goxideValue74 *Account) string {
-	return "account {" + " id: " + strconv.FormatInt(int64((*goxideValue74).Id), 10) + ", name: " + strconv.Quote((*goxideValue74).name) + " }"
+func Debugaccount(gxValue73 *Account) string {
+	return "account {" + " id: " + strconv.FormatInt(int64((*gxValue73).Id), 10) + ", name: " + strconv.Quote((*gxValue73).name) + " }"
 }
-func CloneState(goxideValue75 *State) State {
-	return func(goxideEnum76 State) State {
-		switch goxideVariant77 := goxideEnum76.(type) {
+func CloneState(gxValue74 *State) State {
+	return func(gxEnum75 State) State {
+		switch gxVar76 := gxEnum75.(type) {
 		case *Empty:
-			if goxideVariant77 == nil {
+			if gxVar76 == nil {
 				panic("goxide: invalid enum State")
 			}
 			return &Empty{}
 		case *Pair:
-			if goxideVariant77 == nil {
+			if gxVar76 == nil {
 				panic("goxide: invalid enum State")
 			}
-			return &Pair{V0: CloneItem(&(goxideVariant77.V0)), V1: func(goxideSrc78 []int) []int {
-				if goxideSrc78 == nil {
+			return &Pair{V0: CloneItem(&(gxVar76.V0)), V1: func(gxSrc77 []int) []int {
+				if gxSrc77 == nil {
 					return nil
 				}
-				goxideOut80 := make([]int, len(goxideSrc78))
-				for goxideIndex79 := range goxideSrc78 {
-					goxideOut80[goxideIndex79] = goxideSrc78[goxideIndex79]
+				gxOut79 := make([]int, len(gxSrc77))
+				for gxIndex78 := range gxSrc77 {
+					gxOut79[gxIndex78] = gxSrc77[gxIndex78]
 				}
-				return goxideOut80
-			}(goxideVariant77.V1)}
+				return gxOut79
+			}(gxVar76.V1)}
 		case *Named:
-			if goxideVariant77 == nil {
+			if gxVar76 == nil {
 				panic("goxide: invalid enum State")
 			}
-			return &Named{Name: goxideVariant77.Name, Count: goxideVariant77.Count}
+			return &Named{Name: gxVar76.Name, Count: gxVar76.Count}
 		default:
 			panic("goxide: invalid enum State")
 		}
-	}((*goxideValue75))
+	}((*gxValue74))
 }
-func DebugState(goxideValue81 *State) string {
-	return func(goxideEnum82 State) string {
-		switch goxideVariant83 := goxideEnum82.(type) {
+func DebugState(gxValue80 *State) string {
+	return func(gxEnum81 State) string {
+		switch gxVar82 := gxEnum81.(type) {
 		case *Empty:
-			if goxideVariant83 == nil {
+			if gxVar82 == nil {
 				panic("goxide: invalid enum State")
 			}
 			return "State::Empty"
 		case *Pair:
-			if goxideVariant83 == nil {
+			if gxVar82 == nil {
 				panic("goxide: invalid enum State")
 			}
-			return "State::Pair" + "(" + DebugItem(&(goxideVariant83.V0)) + ", " + func(goxideSrc84 []int) string {
-				if goxideSrc84 == nil {
+			return "State::Pair" + "(" + DebugItem(&(gxVar82.V0)) + ", " + func(gxSrc83 []int) string {
+				if gxSrc83 == nil {
 					return "nil"
 				}
-				goxideOut86 := make([]string, len(goxideSrc84))
-				for goxideIndex85 := range goxideSrc84 {
-					goxideOut86[goxideIndex85] = strconv.FormatInt(int64(goxideSrc84[goxideIndex85]), 10)
+				gxOut85 := make([]string, len(gxSrc83))
+				for gxIndex84 := range gxSrc83 {
+					gxOut85[gxIndex84] = strconv.FormatInt(int64(gxSrc83[gxIndex84]), 10)
 				}
-				return "[" + strings.Join(goxideOut86, ", ") + "]"
-			}(goxideVariant83.V1) + ")"
+				return "[" + strings.Join(gxOut85, ", ") + "]"
+			}(gxVar82.V1) + ")"
 		case *Named:
-			if goxideVariant83 == nil {
+			if gxVar82 == nil {
 				panic("goxide: invalid enum State")
 			}
-			return "State::Named" + " { " + "Name: " + strconv.Quote(goxideVariant83.Name) + ", " + "Count: " + strconv.FormatInt(int64(goxideVariant83.Count), 10) + " }"
+			return "State::Named" + " { " + "Name: " + strconv.Quote(gxVar82.Name) + ", " + "Count: " + strconv.FormatInt(int64(gxVar82.Count), 10) + " }"
 		default:
 			panic("goxide: invalid enum State")
 		}
-	}((*goxideValue81))
+	}((*gxValue80))
 }

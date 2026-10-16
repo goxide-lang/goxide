@@ -43,62 +43,55 @@ func (*Text) isState() {
 
 func describe(x State) string {
 	{
-		var goxideMatch1 string
-		var goxidematch2 State = x
-		if goxidematch2 == nil {
+		var gxMatch1 string
+		if x == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:157")
 		}
-		switch goxidevariant3 := goxidematch2.(type) {
+		switch gxVar2 := x.(type) {
 		case *Idle:
-			_ = goxidevariant3
-			if goxidevariant3 == nil {
+			if gxVar2 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:157")
 			}
-			goxideMatch1 = "idle"
+			gxMatch1 = "idle"
 		case *Number:
-			_ = goxidevariant3
-			if goxidevariant3 == nil {
+			if gxVar2 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:157")
 			}
-			goxidePayload4 := goxidevariant3.Value
-			if goxidePayload4 ==
+			gxPayload3 := gxVar2.Value
+			if gxPayload3 ==
 				0 {
-				goxideMatch1 = "zero"
-			} else if n := goxidePayload4; n > 0 {
-				goxideMatch1 = fmt.Sprintf("positive:%d", n)
+				gxMatch1 = "zero"
+			} else if n := gxPayload3; n > 0 {
+				gxMatch1 = fmt.Sprintf("positive:%d", n)
 			} else {
-				n := goxidePayload4
-				goxideMatch1 = fmt.Sprintf("number:%d", n)
+				n := gxPayload3
+				gxMatch1 = fmt.Sprintf("number:%d", n)
 			}
 		case *Pair:
-			_ = goxidevariant3
-			if goxidevariant3 == nil {
+			if gxVar2 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:157")
 			}
-			n, s := goxidevariant3.V0, goxidevariant3.V1
-			goxideMatch1 = fmt.Sprintf("pair:%d:%s", n, s)
+			n, s := gxVar2.V0, gxVar2.V1
+			gxMatch1 = fmt.Sprintf("pair:%d:%s", n, s)
 		case *Record:
-			_ = goxidevariant3
-			if goxidevariant3 == nil {
+			if gxVar2 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:157")
 			}
-			if n := goxidevariant3.Y; goxidevariant3.X == 1 {
-				goxideMatch1 = fmt.Sprintf("record:%d", n)
+			if n := gxVar2.Y; gxVar2.X == 1 {
+				gxMatch1 = fmt.Sprintf("record:%d", n)
 			} else {
-				goxideMatch1 = "record"
+				gxMatch1 = "record"
 			}
 		case *Text:
-			_ = goxidevariant3
-			if goxidevariant3 == nil {
+			if gxVar2 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:157")
 			}
-			s := goxidevariant3.Value
-			goxideMatch1 = "text:" + s
+			s := gxVar2.Value
+			gxMatch1 = "text:" + s
 		default:
-			_ = goxidevariant3
 			panic("goxide: invalid enum State")
 		}
-		return goxideMatch1
+		return gxMatch1
 	}
 
 }
@@ -106,30 +99,28 @@ func describe(x State) string {
 func ordered(next func() State, seen *[]int) int {
 	mark := func(n int, value bool) bool { *seen = append(*seen, n); return value }
 	{
-		var goxidematch5 State = next()
-		if goxidematch5 == nil {
+		var gxMatch4 State = next()
+		if gxMatch4 == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:656")
 		}
-		switch goxidevariant6 := goxidematch5.(type) {
+		switch gxVar5 := gxMatch4.(type) {
 		case *Number:
-			_ = goxidevariant6
-			if goxidevariant6 == nil {
+			if gxVar5 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:656")
 			}
-			goxidePayload7 := goxidevariant6.Value
-			if n := goxidePayload7; mark(1, false) {
+			gxPayload6 := gxVar5.Value
+			if n := gxPayload6; mark(1, false) {
 				return n
 			} else if mark(2, false) {
 				return -2
-			} else if n := goxidePayload7; mark(3, true) {
+			} else if n := gxPayload6; mark(3, true) {
 				return n
 			} else {
-				n := goxidePayload7
+				n := gxPayload6
 				return n + 100
 			}
 		case *Idle:
-			_ = goxidevariant6
-			if goxidevariant6 == nil {
+			if gxVar5 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:656")
 			}
 			if mark(2, false) {
@@ -139,8 +130,7 @@ func ordered(next func() State, seen *[]int) int {
 				return -1
 			}
 		case *Pair:
-			_ = goxidevariant6
-			if goxidevariant6 == nil {
+			if gxVar5 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:656")
 			}
 			if mark(2, false) {
@@ -150,8 +140,7 @@ func ordered(next func() State, seen *[]int) int {
 				return -1
 			}
 		case *Record:
-			_ = goxidevariant6
-			if goxidevariant6 == nil {
+			if gxVar5 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:656")
 			}
 			if mark(2, false) {
@@ -161,8 +150,7 @@ func ordered(next func() State, seen *[]int) int {
 				return -1
 			}
 		case *Text:
-			_ = goxidevariant6
-			if goxidevariant6 == nil {
+			if gxVar5 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:656")
 			}
 			if mark(2, false) {
@@ -172,7 +160,6 @@ func ordered(next func() State, seen *[]int) int {
 				return -1
 			}
 		default:
-			_ = goxidevariant6
 			if mark(2, false) {
 				return -2
 			} else {
@@ -186,49 +173,42 @@ func ordered(next func() State, seen *[]int) int {
 
 func freshBinding(x State) int {
 	{
-		var goxidematch8 State = x
-		if goxidematch8 == nil {
+		if x == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:922")
 		}
-		switch goxidevariant9 := goxidematch8.(type) {
+		switch gxVar7 := x.(type) {
 		case *Number:
-			_ = goxidevariant9
-			if goxidevariant9 == nil {
+			if gxVar7 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:922")
 			}
-			goxidePayload10 := goxidevariant9.Value
-			if n := goxidePayload10; func() bool { n = 99; return false }() {
+			gxPayload8 := gxVar7.Value
+			if n := gxPayload8; func() bool { n = 99; return false }() {
 				return n
 			} else {
-				n := goxidePayload10
+				n := gxPayload8
 				return n
 			}
 		case *Idle:
-			_ = goxidevariant9
-			if goxidevariant9 == nil {
+			if gxVar7 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:922")
 			}
 			return -1
 		case *Pair:
-			_ = goxidevariant9
-			if goxidevariant9 == nil {
+			if gxVar7 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:922")
 			}
 			return -1
 		case *Record:
-			_ = goxidevariant9
-			if goxidevariant9 == nil {
+			if gxVar7 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:922")
 			}
 			return -1
 		case *Text:
-			_ = goxidevariant9
-			if goxidevariant9 == nil {
+			if gxVar7 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:922")
 			}
 			return -1
 		default:
-			_ = goxidevariant9
 			return -1
 		}
 	}
@@ -237,86 +217,73 @@ func freshBinding(x State) int {
 
 func nested(x State) int {
 	{
-		var goxidematch11 State = x
-		if goxidematch11 == nil {
+		if x == nil {
 			panic("goxide: match on nil State at corefixture/main.gox:1102")
 		}
-		switch goxidevariant12 := goxidematch11.(type) {
+		switch gxVar9 := x.(type) {
 		case *Number:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar9 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:1102")
 			}
-			n := goxidevariant12.Value
+			n := gxVar9.Value
 			{
-				var goxidematch13 State = &Pair{V0: n, V1: "ok"}
-				if goxidematch13 == nil {
+				var gxMatch10 State = &Pair{V0: n, V1: "ok"}
+				if gxMatch10 == nil {
 					panic("goxide: match on nil State at corefixture/main.gox:1139")
 				}
-				switch goxidevariant14 := goxidematch13.(type) {
+				switch gxVar11 := gxMatch10.(type) {
 				case *Pair:
-					_ = goxidevariant14
-					if goxidevariant14 == nil {
+					if gxVar11 == nil {
 						panic("goxide: match on nil State at corefixture/main.gox:1139")
 					}
-					value := goxidevariant14.V0
+					value := gxVar11.V0
 					return value
 				case *Idle:
-					_ = goxidevariant14
-					if goxidevariant14 == nil {
+					if gxVar11 == nil {
 						panic("goxide: match on nil State at corefixture/main.gox:1139")
 					}
 					return -1
 				case *Number:
-					_ = goxidevariant14
-					if goxidevariant14 == nil {
+					if gxVar11 == nil {
 						panic("goxide: match on nil State at corefixture/main.gox:1139")
 					}
 					return -1
 				case *Record:
-					_ = goxidevariant14
-					if goxidevariant14 == nil {
+					if gxVar11 == nil {
 						panic("goxide: match on nil State at corefixture/main.gox:1139")
 					}
 					return -1
 				case *Text:
-					_ = goxidevariant14
-					if goxidevariant14 == nil {
+					if gxVar11 == nil {
 						panic("goxide: match on nil State at corefixture/main.gox:1139")
 					}
 					return -1
 				default:
-					_ = goxidevariant14
 					return -1
 				}
 			}
 		case *Idle:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar9 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:1102")
 			}
 
 			return -1
 		case *Pair:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar9 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:1102")
 			}
 			return -1
 		case *Record:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar9 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:1102")
 			}
 			return -1
 		case *Text:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar9 == nil {
 				panic("goxide: match on nil State at corefixture/main.gox:1102")
 			}
 			return -1
 		default:
-			_ = goxidevariant12
 			return -1
 		}
 	}

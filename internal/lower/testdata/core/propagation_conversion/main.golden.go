@@ -25,18 +25,18 @@ func source() sum.Result[int, error] {
 
 func converted() sum.Result[string, Wrapped] {
 	{
-		var goxideTry1 sum.Result[int, error] = source()
-		var goxideOk2 int
-		switch sum.TagResult(goxideTry1) {
+		var gxTry1 sum.Result[int, error] = source()
+		var gxOk2 int
+		switch sum.TagResult(gxTry1) {
 		case 1:
-			goxideOk2 = sum.ValueOk(goxideTry1)
+			gxOk2 = sum.ValueOk(gxTry1)
 		case 2:
-			return sum.NewErr[string, Wrapped](FromWrapped(sum.ValueErr(goxideTry1)))
+			return sum.NewErr[string, Wrapped](FromWrapped(sum.ValueErr(gxTry1)))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
 
-		_ = goxideOk2
+		_ = gxOk2
 	}
 	continued = true
 	return sum.NewOk[string, Wrapped]("incorrect")
@@ -44,18 +44,18 @@ func converted() sum.Result[string, Wrapped] {
 
 func assigned() sum.Result[int, error] {
 	{
-		var goxideTry3 sum.Result[string, Wrapped] = converted()
-		var goxideOk4 string
-		switch sum.TagResult(goxideTry3) {
+		var gxTry3 sum.Result[string, Wrapped] = converted()
+		var gxOk4 string
+		switch sum.TagResult(gxTry3) {
 		case 1:
-			goxideOk4 = sum.ValueOk(goxideTry3)
+			gxOk4 = sum.ValueOk(gxTry3)
 		case 2:
-			return sum.NewErr[int, error](sum.ValueErr(goxideTry3))
+			return sum.NewErr[int, error](sum.ValueErr(gxTry3))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
 
-		_ = goxideOk4
+		_ = gxOk4
 	}
 	continued = true
 	return sum.NewOk[int, error](0)
@@ -63,19 +63,17 @@ func assigned() sum.Result[int, error] {
 
 func readError(value sum.Result[int, error]) error {
 	{
-		var goxideMatch5 error
-		var goxidematch6 sum.Result[int, error] = value
-		switch goxidetag8 := sum.TagResult(goxidematch6); goxidetag8 {
+		var gxMatch5 error
+		switch gxTag7 := sum.TagResult(value); gxTag7 {
 		case 2:
-
-			err := sum.ValueErr(goxidematch6)
-			goxideMatch5 = err
+			err := sum.ValueErr(value)
+			gxMatch5 = err
 		case 1:
-			goxideMatch5 = nil
+			gxMatch5 = nil
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch5
+		return gxMatch5
 	}
 }
 

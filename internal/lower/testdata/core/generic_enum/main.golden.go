@@ -43,193 +43,168 @@ func (*_Hidden) isSecret() {
 
 var global Box[int] = &Item[int]{Value: 8}
 var globalText = func() string {
-	var goxideMatch1 string
-	var goxidematch2 Box[int] = global
-	if goxidematch2 == nil {
+	var gxMatch1 string
+	if global == nil {
 		panic("goxide: match on nil Box at corefixture/main.gox:185")
 	}
-	switch goxidevariant3 := goxidematch2.(type) {
+	switch gxVar2 := global.(type) {
 	case *Item[int]:
-		_ = goxidevariant3
-		if goxidevariant3 == nil {
+		if gxVar2 == nil {
 			panic("goxide: match on nil Box at corefixture/main.gox:185")
 		}
-		n := goxidevariant3.Value
-		goxideMatch1 = fmt.Sprint(n)
+		n := gxVar2.Value
+		gxMatch1 = fmt.Sprint(n)
 	case *Empty[int]:
-		_ = goxidevariant3
-		if goxidevariant3 == nil {
+		if gxVar2 == nil {
 			panic("goxide: match on nil Box at corefixture/main.gox:185")
 		}
-		goxideMatch1 = "empty"
+		gxMatch1 = "empty"
 	default:
-		_ = goxidevariant3
 		panic("goxide: invalid enum Box")
 	}
-	return goxideMatch1
+	return gxMatch1
 }()
 
 func reveal(x _Secret) int {
 	{
-		var goxideMatch4 int
-		var goxidematch5 _Secret = x
-		if goxidematch5 == nil {
+		var gxMatch3 int
+		if x == nil {
 			panic("goxide: match on nil Secret at corefixture/main.gox:293")
 		}
-		switch goxidevariant6 := goxidematch5.(type) {
+		switch gxVar4 := x.(type) {
 		case *_Hidden:
-			_ = goxidevariant6
-			if goxidevariant6 == nil {
+			if gxVar4 == nil {
 				panic("goxide: match on nil Secret at corefixture/main.gox:293")
 			}
-			n := goxidevariant6.Value
-			goxideMatch4 = n
+			n := gxVar4.Value
+			gxMatch3 = n
 		default:
-			_ = goxidevariant6
 			panic("goxide: invalid enum Secret")
 		}
-		return goxideMatch4
+		return gxMatch3
 	}
 }
 
 func parcelText(x Parcel[string]) string {
 	{
-		var goxideMatch7 string
-		var goxidematch8 Parcel[string] = x
-		if goxidematch8 == nil {
+		var gxMatch5 string
+		if x == nil {
 			panic("goxide: match on nil parcel at corefixture/main.gox:382")
 		}
-		switch goxidevariant9 := goxidematch8.(type) {
+		switch gxVar6 := x.(type) {
 		case *Packed[string]:
-			_ = goxidevariant9
-			if goxidevariant9 == nil {
+			if gxVar6 == nil {
 				panic("goxide: match on nil parcel at corefixture/main.gox:382")
 			}
-			s := goxidevariant9.Value
-			goxideMatch7 = s
+			s := gxVar6.Value
+			gxMatch5 = s
 		case *Vacant[string]:
-			_ = goxidevariant9
-			if goxidevariant9 == nil {
+			if gxVar6 == nil {
 				panic("goxide: match on nil parcel at corefixture/main.gox:382")
 			}
-			goxideMatch7 = "empty"
+			gxMatch5 = "empty"
 		default:
-			_ = goxidevariant9
 			panic("goxide: invalid enum parcel")
 		}
-		return goxideMatch7
+		return gxMatch5
 	}
 }
 
 func integer(x Box[int]) int {
 	{
-		var goxideMatch10 int
-		var goxidematch11 Box[int] = x
-		if goxidematch11 == nil {
+		var gxMatch7 int
+		if x == nil {
 			panic("goxide: match on nil Box at corefixture/main.gox:486")
 		}
-		switch goxidevariant12 := goxidematch11.(type) {
+		switch gxVar8 := x.(type) {
 		case *Item[int]:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar8 == nil {
 				panic("goxide: match on nil Box at corefixture/main.gox:486")
 			}
-			n := goxidevariant12.Value
-			goxideMatch10 = n
+			n := gxVar8.Value
+			gxMatch7 = n
 		case *Empty[int]:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar8 == nil {
 				panic("goxide: match on nil Box at corefixture/main.gox:486")
 			}
-			goxideMatch10 = -1
+			gxMatch7 = -1
 		default:
-			_ = goxidevariant12
 			panic("goxide: invalid enum Box")
 		}
-		return goxideMatch10
+		return gxMatch7
 	}
 }
 
 func text(x Box[string]) string {
 	{
-		var goxideMatch13 string
-		var goxidematch14 Box[string] = x
-		if goxidematch14 == nil {
+		var gxMatch9 string
+		if x == nil {
 			panic("goxide: match on nil Box at corefixture/main.gox:579")
 		}
-		switch goxidevariant15 := goxidematch14.(type) {
+		switch gxVar10 := x.(type) {
 		case *Item[string]:
-			_ = goxidevariant15
-			if goxidevariant15 == nil {
+			if gxVar10 == nil {
 				panic("goxide: match on nil Box at corefixture/main.gox:579")
 			}
-			s := goxidevariant15.Value
-			goxideMatch13 = s
+			s := gxVar10.Value
+			gxMatch9 = s
 		case *Empty[string]:
-			_ = goxidevariant15
-			if goxidevariant15 == nil {
+			if gxVar10 == nil {
 				panic("goxide: match on nil Box at corefixture/main.gox:579")
 			}
-			goxideMatch13 = "empty"
+			gxMatch9 = "empty"
 		default:
-			_ = goxidevariant15
 			panic("goxide: invalid enum Box")
 		}
-		return goxideMatch13
+		return gxMatch9
 	}
 }
 
 func optionInt(x sum.Option[int]) int {
 	{
-		var goxideMatch16 int
-		var goxidematch17 sum.Option[int] = x
-		switch goxidetag19 := sum.TagOption(goxidematch17); goxidetag19 {
+		var gxMatch11 int
+		switch gxTag13 := sum.TagOption(x); gxTag13 {
 		case 1:
-
-			n := sum.ValueSome(goxidematch17)
-			goxideMatch16 = n
+			n := sum.ValueSome(x)
+			gxMatch11 = n
 		case 0:
-			goxideMatch16 = -1
+			gxMatch11 = -1
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		return goxideMatch16
+		return gxMatch11
 	}
 }
 
 func optionText(x sum.Option[string]) string {
 	{
-		var goxideMatch20 string
-		var goxidematch21 sum.Option[string] = x
-		switch goxidetag23 := sum.TagOption(goxidematch21); goxidetag23 {
+		var gxMatch14 string
+		switch gxTag16 := sum.TagOption(x); gxTag16 {
 		case 1:
-
-			s := sum.ValueSome(goxidematch21)
-			goxideMatch20 = s
+			s := sum.ValueSome(x)
+			gxMatch14 = s
 		case 0:
-			goxideMatch20 = "none"
+			gxMatch14 = "none"
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		return goxideMatch20
+		return gxMatch14
 	}
 }
 
 func presentNil(x sum.Option[*int]) bool {
 	{
-		var goxideMatch24 bool
-		var goxidematch25 sum.Option[*int] = x
-		switch goxidetag27 := sum.TagOption(goxidematch25); goxidetag27 {
+		var gxMatch17 bool
+		switch gxTag19 := sum.TagOption(x); gxTag19 {
 		case 1:
-
-			p := sum.ValueSome(goxidematch25)
-			goxideMatch24 = p == nil
+			p := sum.ValueSome(x)
+			gxMatch17 = p == nil
 		case 0:
-			goxideMatch24 = false
+			gxMatch17 = false
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		return goxideMatch24
+		return gxMatch17
 	}
 }
 

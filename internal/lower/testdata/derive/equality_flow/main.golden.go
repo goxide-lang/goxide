@@ -18,37 +18,35 @@ func right(ok bool) sum.Option[Value] {
 }
 func compare(ok bool) sum.Option[bool] {
 	{
-		var goxideValue1 Value = left()
-		var goxideTry2 sum.Option[Value] = right(ok)
-		var goxideOk3 Value
-		switch sum.TagOption(goxideTry2) {
+		var gxValue1 Value = left()
+		var gxTry2 sum.Option[Value] = right(ok)
+		var gxOk3 Value
+		switch sum.TagOption(gxTry2) {
 		case 1:
-			goxideOk3 = sum.ValueSome(goxideTry2)
+			gxOk3 = sum.ValueSome(gxTry2)
 		case 0:
 			return sum.None[bool]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
 
-		return sum.NewSome[bool](EqualsValue(goxideValue1, goxideOk3))
+		return sum.NewSome[bool](EqualsValue(gxValue1, gxOk3))
 	}
 
 }
 func result(value sum.Option[bool]) bool {
 	{
-		var goxideMatch4 bool
-		var goxidematch5 sum.Option[bool] = value
-		switch goxidetag7 := sum.TagOption(goxidematch5); goxidetag7 {
+		var gxMatch4 bool
+		switch gxTag6 := sum.TagOption(value); gxTag6 {
 		case 1:
-
-			v := sum.ValueSome(goxidematch5)
-			goxideMatch4 = v
+			v := sum.ValueSome(value)
+			gxMatch4 = v
 		case 0:
-			goxideMatch4 = false
+			gxMatch4 = false
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		return goxideMatch4
+		return gxMatch4
 	}
 }
 func typed(value any) (bool, bool) { v, ok := value.(bool); return v, ok }
@@ -58,15 +56,15 @@ func main() {
 	order = nil
 	second := result(compare(false))
 	bool2 := 7
-	defer func(goxideLeft8, goxideRight9 int) bool {
-		return goxideLeft8 == goxideRight9
+	defer func(gxLeft7, gxRight8 int) bool {
+		return gxLeft7 == gxRight8
 	}((1), 1)
-	var scalar any = func(goxideLeft10, goxideRight11 int) bool {
-		return goxideLeft10 == goxideRight11
+	var scalar any = func(gxLeft9, gxRight10 int) bool {
+		return gxLeft9 == gxRight10
 	}((1), 1)
 	value, ok := typed(scalar)
 	fmt.Println(first, firstOrder, second, order, value, ok, bool2)
 }
-func EqualsValue(goxideValue12, goxideOther13 Value) bool {
-	return (goxideValue12 == goxideOther13)
+func EqualsValue(gxValue11, gxOther12 Value) bool {
+	return (gxValue11 == gxOther12)
 }

@@ -23,37 +23,37 @@ func next(i int, stop bool, trace *[]string) sum.Result[int, string] {
 func count(stop bool, trace *[]string) sum.Result[int, string] {
 	total := 0
 	{
-		var goxideFirst4 bool = true
+		var gxFirst4 bool = true
 		for i := 0; ; {
-			if goxideFirst4 {
-				goxideFirst4 = false
+			if gxFirst4 {
+				gxFirst4 = false
 			} else {
 				{
-					var goxideTry5 sum.Result[int, string] = next(i, stop, trace)
-					var goxideOk6 int
-					switch sum.TagResult(goxideTry5) {
+					var gxTry5 sum.Result[int, string] = next(i, stop, trace)
+					var gxOk6 int
+					switch sum.TagResult(gxTry5) {
 					case 1:
-						goxideOk6 = sum.ValueOk(goxideTry5)
+						gxOk6 = sum.ValueOk(gxTry5)
 					case 2:
-						return sum.NewErr[int, string](sum.ValueErr(goxideTry5))
+						return sum.NewErr[int, string](sum.ValueErr(gxTry5))
 					default:
 						panic("goxide: invalid Result at ?")
 					}
 
-					i = goxideOk6
+					i = gxOk6
 				}
 			}
-			var goxideTry2 sum.Result[bool, string] = less(i, trace)
-			var goxideOk3 bool
-			switch sum.TagResult(goxideTry2) {
+			var gxTry2 sum.Result[bool, string] = less(i, trace)
+			var gxOk3 bool
+			switch sum.TagResult(gxTry2) {
 			case 1:
-				goxideOk3 = sum.ValueOk(goxideTry2)
+				gxOk3 = sum.ValueOk(gxTry2)
 			case 2:
-				return sum.NewErr[int, string](sum.ValueErr(goxideTry2))
+				return sum.NewErr[int, string](sum.ValueErr(gxTry2))
 			default:
 				panic("goxide: invalid Result at ?")
 			}
-			if !goxideOk3 {
+			if !gxOk3 {
 				break
 			}
 
@@ -69,64 +69,64 @@ func count(stop bool, trace *[]string) sum.Result[int, string] {
 
 func selected(ok bool, trace *[]string) sum.Result[int, string] {
 	{
-		var goxideTry8 sum.Result[int, string] = load("tag", 2, true, trace)
-		var goxideOk9 int
-		switch sum.TagResult(goxideTry8) {
+		var gxTry8 sum.Result[int, string] = load("tag", 2, true, trace)
+		var gxOk9 int
+		switch sum.TagResult(gxTry8) {
 		case 1:
-			goxideOk9 = sum.ValueOk(goxideTry8)
+			gxOk9 = sum.ValueOk(gxTry8)
 		case 2:
-			return sum.NewErr[int, string](sum.ValueErr(goxideTry8))
+			return sum.NewErr[int, string](sum.ValueErr(gxTry8))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
-		var goxideSwitch10 int = goxideOk9
-		var goxideCase11 int = -1
-		if goxideCase11 < 0 {
-			var goxideTry12 sum.Result[int, string] = load("case1", 1, true, trace)
-			var goxideOk13 int
-			switch sum.TagResult(goxideTry12) {
+		var gxSwitch10 int = gxOk9
+		var gxCase11 int = -1
+		if gxCase11 < 0 {
+			var gxTry12 sum.Result[int, string] = load("case1", 1, true, trace)
+			var gxOk13 int
+			switch sum.TagResult(gxTry12) {
 			case 1:
-				goxideOk13 = sum.ValueOk(goxideTry12)
+				gxOk13 = sum.ValueOk(gxTry12)
 			case 2:
-				return sum.NewErr[int, string](sum.ValueErr(goxideTry12))
+				return sum.NewErr[int, string](sum.ValueErr(gxTry12))
 			default:
 				panic("goxide: invalid Result at ?")
 			}
-			if goxideSwitch10 == goxideOk13 {
-				goxideCase11 = 0
+			if gxSwitch10 == gxOk13 {
+				gxCase11 = 0
 			}
 		}
-		if goxideCase11 < 0 {
-			var goxideTry14 sum.Result[int, string] = load("case2", 2, ok, trace)
-			var goxideOk15 int
-			switch sum.TagResult(goxideTry14) {
+		if gxCase11 < 0 {
+			var gxTry14 sum.Result[int, string] = load("case2", 2, ok, trace)
+			var gxOk15 int
+			switch sum.TagResult(gxTry14) {
 			case 1:
-				goxideOk15 = sum.ValueOk(goxideTry14)
+				gxOk15 = sum.ValueOk(gxTry14)
 			case 2:
-				return sum.NewErr[int, string](sum.ValueErr(goxideTry14))
+				return sum.NewErr[int, string](sum.ValueErr(gxTry14))
 			default:
 				panic("goxide: invalid Result at ?")
 			}
-			if goxideSwitch10 == goxideOk15 {
-				goxideCase11 = 1
+			if gxSwitch10 == gxOk15 {
+				gxCase11 = 1
 			}
 		}
-		if goxideCase11 < 0 {
-			var goxideTry16 sum.Result[int, string] = load("case3", 3, true, trace)
-			var goxideOk17 int
-			switch sum.TagResult(goxideTry16) {
+		if gxCase11 < 0 {
+			var gxTry16 sum.Result[int, string] = load("case3", 3, true, trace)
+			var gxOk17 int
+			switch sum.TagResult(gxTry16) {
 			case 1:
-				goxideOk17 = sum.ValueOk(goxideTry16)
+				gxOk17 = sum.ValueOk(gxTry16)
 			case 2:
-				return sum.NewErr[int, string](sum.ValueErr(goxideTry16))
+				return sum.NewErr[int, string](sum.ValueErr(gxTry16))
 			default:
 				panic("goxide: invalid Result at ?")
 			}
-			if goxideSwitch10 == goxideOk17 {
-				goxideCase11 = 2
+			if gxSwitch10 == gxOk17 {
+				gxCase11 = 2
 			}
 		}
-		switch goxideCase11 {
+		switch gxCase11 {
 		case 0:
 
 			return sum.NewOk[int, string](10)
@@ -149,20 +149,20 @@ func index(trace *[]string) int { *trace = append(*trace, "lhs"); return 0 }
 
 func assignment(ok bool, values []int, out *int, trace *[]string) sum.Result[int, string] {
 	{
-		var goxideValue18 []int = values
-		var goxideValue19 int = index(trace)
-		var goxideValue20 *int = out
-		var goxideTry21 sum.Result[int, string] = load("rhs", 7, ok, trace)
-		var goxideOk22 int
-		switch sum.TagResult(goxideTry21) {
+		var gxValue18 []int = values
+		var gxValue19 int = index(trace)
+		var gxValue20 *int = out
+		var gxTry21 sum.Result[int, string] = load("rhs", 7, ok, trace)
+		var gxOk22 int
+		switch sum.TagResult(gxTry21) {
 		case 1:
-			goxideOk22 = sum.ValueOk(goxideTry21)
+			gxOk22 = sum.ValueOk(gxTry21)
 		case 2:
-			return sum.NewErr[int, string](sum.ValueErr(goxideTry21))
+			return sum.NewErr[int, string](sum.ValueErr(gxTry21))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
-		goxideValue18[goxideValue19], *goxideValue20 = 9, goxideOk22
+		gxValue18[gxValue19], *gxValue20 = 9, gxOk22
 	}
 	return sum.NewOk[int, string](*out)
 }
@@ -172,34 +172,34 @@ type Wide uint64
 func consume(value Wide, extra int) Wide { return value + Wide(extra) }
 func wideValue(trace *[]string) sum.Result[Wide, string] {
 	{
-		var goxideTry23 sum.Result[int, string] = load("wide", 7, true, trace)
-		var goxideOk24 int
-		switch sum.TagResult(goxideTry23) {
+		var gxTry23 sum.Result[int, string] = load("wide", 7, true, trace)
+		var gxOk24 int
+		switch sum.TagResult(gxTry23) {
 		case 1:
-			goxideOk24 = sum.ValueOk(goxideTry23)
+			gxOk24 = sum.ValueOk(gxTry23)
 		case 2:
-			return sum.NewErr[Wide, string](sum.ValueErr(goxideTry23))
+			return sum.NewErr[Wide, string](sum.ValueErr(gxTry23))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
 
-		return sum.NewOk[Wide, string](consume(1<<63, goxideOk24))
+		return sum.NewOk[Wide, string](consume(1<<63, gxOk24))
 	}
 }
 
 func bare(ok bool, trace *[]string) sum.Result[int, string] {
 	{
-		var goxideTry25 sum.Result[int, string] = load("bare", 1, ok, trace)
-		var goxideOk26 int
-		switch sum.TagResult(goxideTry25) {
+		var gxTry25 sum.Result[int, string] = load("bare", 1, ok, trace)
+		var gxOk26 int
+		switch sum.TagResult(gxTry25) {
 		case 1:
-			goxideOk26 = sum.ValueOk(goxideTry25)
+			gxOk26 = sum.ValueOk(gxTry25)
 		case 2:
-			return sum.NewErr[int, string](sum.ValueErr(goxideTry25))
+			return sum.NewErr[int, string](sum.ValueErr(gxTry25))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
-		_ = goxideOk26
+		_ = gxOk26
 	}
 
 	return sum.NewOk[int, string](1)
@@ -210,17 +210,17 @@ func forward(skip bool, trace *[]string) sum.Result[int, string] {
 		goto done
 	}
 	{
-		var goxideTry27 sum.Result[int, string] = load("goto", 1, true, trace)
-		var goxideOk28 int
-		switch sum.TagResult(goxideTry27) {
+		var gxTry27 sum.Result[int, string] = load("goto", 1, true, trace)
+		var gxOk28 int
+		switch sum.TagResult(gxTry27) {
 		case 1:
-			goxideOk28 = sum.ValueOk(goxideTry27)
+			gxOk28 = sum.ValueOk(gxTry27)
 		case 2:
-			return sum.NewErr[int, string](sum.ValueErr(goxideTry27))
+			return sum.NewErr[int, string](sum.ValueErr(gxTry27))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
-		_ = goxideOk28
+		_ = gxOk28
 	}
 
 done:
@@ -230,24 +230,24 @@ done:
 func noContinue(trace *[]string) sum.Result[int, string] {
 	total := 0
 	{
-		var goxideFirst30 bool = true
+		var gxFirst30 bool = true
 		for i := 0; ; {
-			if goxideFirst30 {
-				goxideFirst30 = false
+			if gxFirst30 {
+				gxFirst30 = false
 			} else {
 				{
-					var goxideTry31 sum.Result[int, string] = next(i, false, trace)
-					var goxideOk32 int
-					switch sum.TagResult(goxideTry31) {
+					var gxTry31 sum.Result[int, string] = next(i, false, trace)
+					var gxOk32 int
+					switch sum.TagResult(gxTry31) {
 					case 1:
-						goxideOk32 = sum.ValueOk(goxideTry31)
+						gxOk32 = sum.ValueOk(gxTry31)
 					case 2:
-						return sum.NewErr[int, string](sum.ValueErr(goxideTry31))
+						return sum.NewErr[int, string](sum.ValueErr(gxTry31))
 					default:
 						panic("goxide: invalid Result at ?")
 					}
 
-					i = goxideOk32
+					i = gxOk32
 				}
 			}
 			if !(i < 2) {
@@ -261,38 +261,34 @@ func noContinue(trace *[]string) sum.Result[int, string] {
 
 func text(value sum.Result[int, string]) string {
 	{
-		var goxideMatch33 string
-		var goxidematch34 sum.Result[int, string] = value
-		switch goxidetag36 := sum.TagResult(goxidematch34); goxidetag36 {
+		var gxMatch33 string
+		switch gxTag35 := sum.TagResult(value); gxTag35 {
 		case 1:
-
-			n := sum.ValueOk(goxidematch34)
-			goxideMatch33 = fmt.Sprint(n)
+			n := sum.ValueOk(value)
+			gxMatch33 = fmt.Sprint(n)
 		case 2:
-			e := sum.ValueErr(goxidematch34)
-			goxideMatch33 = e
+			e := sum.ValueErr(value)
+			gxMatch33 = e
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch33
+		return gxMatch33
 	}
 }
 func wideText(value sum.Result[Wide, string]) string {
 	{
-		var goxideMatch37 string
-		var goxidematch38 sum.Result[Wide, string] = value
-		switch goxidetag40 := sum.TagResult(goxidematch38); goxidetag40 {
+		var gxMatch36 string
+		switch gxTag38 := sum.TagResult(value); gxTag38 {
 		case 1:
-
-			n := sum.ValueOk(goxidematch38)
-			goxideMatch37 = fmt.Sprint(uint64(n))
+			n := sum.ValueOk(value)
+			gxMatch36 = fmt.Sprint(uint64(n))
 		case 2:
-			e := sum.ValueErr(goxidematch38)
-			goxideMatch37 = e
+			e := sum.ValueErr(value)
+			gxMatch36 = e
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return goxideMatch37
+		return gxMatch36
 	}
 }
 

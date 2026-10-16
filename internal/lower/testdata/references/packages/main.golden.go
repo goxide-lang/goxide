@@ -16,108 +16,96 @@ func main() {
 	fmt.Println(*view, store.Value)
 	var number access.Cargo[int] = &access.Named[int]{Item: 6}
 	{
-		goxideOwner1 := &number
-		var goxidematch2 access.Cargo[int] = *goxideOwner1
-		if goxidematch2 == nil {
+		gxOwner1 := &number
+		var gxMatch2 access.Cargo[int] = *gxOwner1
+		if gxMatch2 == nil {
 			panic("goxide: match on nil Cargo at referencefixture/main.gox:322")
 		}
-		switch goxidevariant3 := goxidematch2.(type) {
+		switch gxVar3 := gxMatch2.(type) {
 		case *access.Named[int]:
-			_ = goxidevariant3
-			if goxidevariant3 == nil {
+			if gxVar3 == nil {
 				panic("goxide: match on nil Cargo at referencefixture/main.gox:322")
 			}
-			goxidePayloadRef4 := &goxidevariant3.Item
-			value := goxidePayloadRef4
+			gxPayloadRef4 := &gxVar3.Item
+			value := gxPayloadRef4
 			*value += 1
 		case *access.Empty[int]:
-			_ = goxidevariant3
-			if goxidevariant3 == nil {
+			if gxVar3 == nil {
 				panic("goxide: match on nil Cargo at referencefixture/main.gox:322")
 			}
 		default:
-			_ = goxidevariant3
 			panic("goxide: invalid enum Cargo")
 		}
 	}
 	var text access.Cargo[string] = &access.Named[string]{Item: "old"}
 	{
-		goxideOwner5 := &text
-		var goxidematch6 access.Cargo[string] = *goxideOwner5
-		if goxidematch6 == nil {
+		gxOwner5 := &text
+		var gxMatch6 access.Cargo[string] = *gxOwner5
+		if gxMatch6 == nil {
 			panic("goxide: match on nil Cargo at referencefixture/main.gox:503")
 		}
-		switch goxidevariant7 := goxidematch6.(type) {
+		switch gxVar7 := gxMatch6.(type) {
 		case *access.Named[string]:
-			_ = goxidevariant7
-			if goxidevariant7 == nil {
+			if gxVar7 == nil {
 				panic("goxide: match on nil Cargo at referencefixture/main.gox:503")
 			}
-			goxidePayloadRef8 := &goxidevariant7.Item
-			value := goxidePayloadRef8
+			gxPayloadRef8 := &gxVar7.Item
+			value := gxPayloadRef8
 			*value = "changed"
 		case *access.Empty[string]:
-			_ = goxidevariant7
-			if goxidevariant7 == nil {
+			if gxVar7 == nil {
 				panic("goxide: match on nil Cargo at referencefixture/main.gox:503")
 			}
 		default:
-			_ = goxidevariant7
 			panic("goxide: invalid enum Cargo")
 		}
 	}
 	{
-		var goxideMatch9 any
-		goxideOwner10 := &number
-		var goxidematch11 access.Cargo[int] = *goxideOwner10
-		if goxidematch11 == nil {
+		var gxMatch9 any
+		gxOwner10 := &number
+		var gxMatch11 access.Cargo[int] = *gxOwner10
+		if gxMatch11 == nil {
 			panic("goxide: match on nil Cargo at referencefixture/main.gox:652")
 		}
-		switch goxidevariant12 := goxidematch11.(type) {
+		switch gxVar12 := gxMatch11.(type) {
 		case *access.Named[int]:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar12 == nil {
 				panic("goxide: match on nil Cargo at referencefixture/main.gox:652")
 			}
-			goxidePayloadRef13 := &goxidevariant12.Item
-			value := goxidePayloadRef13
-			goxideMatch9 = *value
+			gxPayloadRef13 := &gxVar12.Item
+			value := gxPayloadRef13
+			gxMatch9 = *value
 		case *access.Empty[int]:
-			_ = goxidevariant12
-			if goxidevariant12 == nil {
+			if gxVar12 == nil {
 				panic("goxide: match on nil Cargo at referencefixture/main.gox:652")
 			}
-			goxideMatch9 = 0
+			gxMatch9 = 0
 		default:
-			_ = goxidevariant12
-			goxideMatch9 = 0
+			gxMatch9 = 0
 		}
-		var goxideValue14 any = goxideMatch9
-		var goxideMatch15 any
-		goxideOwner16 := &text
-		var goxidematch17 access.Cargo[string] = *goxideOwner16
-		if goxidematch17 == nil {
+		var gxValue14 any = gxMatch9
+		var gxMatch15 any
+		gxOwner16 := &text
+		var gxMatch17 access.Cargo[string] = *gxOwner16
+		if gxMatch17 == nil {
 			panic("goxide: match on nil Cargo at referencefixture/main.gox:723")
 		}
-		switch goxidevariant18 := goxidematch17.(type) {
+		switch gxVar18 := gxMatch17.(type) {
 		case *access.Named[string]:
-			_ = goxidevariant18
-			if goxidevariant18 == nil {
+			if gxVar18 == nil {
 				panic("goxide: match on nil Cargo at referencefixture/main.gox:723")
 			}
-			goxidePayloadRef19 := &goxidevariant18.Item
-			value := goxidePayloadRef19
-			goxideMatch15 = *value
+			gxPayloadRef19 := &gxVar18.Item
+			value := gxPayloadRef19
+			gxMatch15 = *value
 		case *access.Empty[string]:
-			_ = goxidevariant18
-			if goxidevariant18 == nil {
+			if gxVar18 == nil {
 				panic("goxide: match on nil Cargo at referencefixture/main.gox:723")
 			}
-			goxideMatch15 = ""
+			gxMatch15 = ""
 		default:
-			_ = goxidevariant18
-			goxideMatch15 = ""
+			gxMatch15 = ""
 		}
-		fmt.Println(goxideValue14, goxideMatch15)
+		fmt.Println(gxValue14, gxMatch15)
 	}
 }

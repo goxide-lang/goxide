@@ -67,145 +67,145 @@ func main() {
 	fmt.Println(panics(func() { _ = EqualsState(&Empty{}, invalid) }))
 }
 func EqualsUser(self User, other User) bool { return self.ID == other.ID }
-func EqualsContainer(goxideValue1, goxideOther2 Container) bool {
-	return func(goxideLeft3, goxideRight4 []User) bool {
-		if (goxideLeft3 == nil) != (goxideRight4 == nil) || len(goxideLeft3) != len(goxideRight4) {
+func EqualsContainer(gxValue1, gxOther2 Container) bool {
+	return func(gxLeft3, gxRight4 []User) bool {
+		if (gxLeft3 == nil) != (gxRight4 == nil) || len(gxLeft3) != len(gxRight4) {
 			return 0 != 0
 		}
-		for goxideIndex5 := range goxideLeft3 {
-			if !(EqualsUser(goxideLeft3[goxideIndex5], goxideRight4[goxideIndex5])) {
+		for gxIndex5 := range gxLeft3 {
+			if !(EqualsUser(gxLeft3[gxIndex5], gxRight4[gxIndex5])) {
 				return 0 != 0
 			}
 		}
 		return 0 == 0
-	}((goxideValue1).Users, (goxideOther2).Users) && func(goxideLeft6, goxideRight7 map[string]int) bool {
-		if (goxideLeft6 == nil) != (goxideRight7 == nil) || len(goxideLeft6) != len(goxideRight7) {
+	}((gxValue1).Users, (gxOther2).Users) && func(gxLeft6, gxRight7 map[string]int) bool {
+		if (gxLeft6 == nil) != (gxRight7 == nil) || len(gxLeft6) != len(gxRight7) {
 			return 0 != 0
 		}
-		for goxideKey8, goxideItem9 := range goxideLeft6 {
-			goxideOther10, goxideFound11 := goxideRight7[goxideKey8]
-			if !goxideFound11 || !(goxideItem9 == goxideOther10) {
+		for gxKey8, gxItem9 := range gxLeft6 {
+			gxOther10, gxFound11 := gxRight7[gxKey8]
+			if !gxFound11 || !(gxItem9 == gxOther10) {
 				return 0 != 0
 			}
 		}
 		return 0 == 0
-	}((goxideValue1).Values, (goxideOther2).Values) && func(goxideLeft12, goxideRight13 [2]int) bool {
-		for goxideIndex14 := range goxideLeft12 {
-			if !(goxideLeft12[goxideIndex14] == goxideRight13[goxideIndex14]) {
+	}((gxValue1).Values, (gxOther2).Values) && func(gxLeft12, gxRight13 [2]int) bool {
+		for gxIndex14 := range gxLeft12 {
+			if !(gxLeft12[gxIndex14] == gxRight13[gxIndex14]) {
 				return 0 != 0
 			}
 		}
 		return 0 == 0
-	}((goxideValue1).Fixed, (goxideOther2).Fixed) && func(goxideLeft15, goxideRight16 sum.Option[[]int]) bool {
-		switch sum.TagOption(goxideLeft15) {
+	}((gxValue1).Fixed, (gxOther2).Fixed) && func(gxLeft15, gxRight16 sum.Option[[]int]) bool {
+		switch sum.TagOption(gxLeft15) {
 		case 0:
 		case 1:
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		switch sum.TagOption(goxideRight16) {
+		switch sum.TagOption(gxRight16) {
 		case 0:
 		case 1:
 		default:
 			panic("goxide: invalid enum Option")
 		}
-		if sum.TagOption(goxideLeft15) != sum.TagOption(goxideRight16) {
+		if sum.TagOption(gxLeft15) != sum.TagOption(gxRight16) {
 			return 0 != 0
 		}
-		switch sum.TagOption(goxideLeft15) {
+		switch sum.TagOption(gxLeft15) {
 		case 0:
 			return 0 == 0
 		case 1:
-			return func(goxideLeft24, goxideRight25 []int) bool {
-				if (goxideLeft24 == nil) != (goxideRight25 == nil) || len(goxideLeft24) != len(goxideRight25) {
+			return func(gxLeft24, gxRight25 []int) bool {
+				if (gxLeft24 == nil) != (gxRight25 == nil) || len(gxLeft24) != len(gxRight25) {
 					return 0 != 0
 				}
-				for goxideIndex26 := range goxideLeft24 {
-					if !(goxideLeft24[goxideIndex26] == goxideRight25[goxideIndex26]) {
+				for gxIndex26 := range gxLeft24 {
+					if !(gxLeft24[gxIndex26] == gxRight25[gxIndex26]) {
 						return 0 != 0
 					}
 				}
 				return 0 == 0
-			}(sum.ValueSome(goxideLeft15), sum.ValueSome(goxideRight16))
+			}(sum.ValueSome(gxLeft15), sum.ValueSome(gxRight16))
 		default:
 			panic("goxide: invalid enum Option")
 		}
-	}((goxideValue1).Choice, (goxideOther2).Choice)
+	}((gxValue1).Choice, (gxOther2).Choice)
 }
-func EqualsNumber(goxideValue27, goxideOther28 Number) bool {
-	return (goxideValue27 == goxideOther28)
+func EqualsNumber(gxValue27, gxOther28 Number) bool {
+	return (gxValue27 == gxOther28)
 }
-func EqualsState(goxideValue29, goxideOther30 State) bool {
-	return func(goxideLeft31, goxideRight32 State) bool {
-		switch goxideValidated36 := (goxideLeft31).(type) {
+func EqualsState(gxValue29, gxOther30 State) bool {
+	return func(gxLeft31, gxRight32 State) bool {
+		switch gxValidated36 := (gxLeft31).(type) {
 		case *Empty:
-			if goxideValidated36 == nil {
+			if gxValidated36 == nil {
 				panic("goxide: invalid enum State")
 			}
 		case *Person:
-			if goxideValidated36 == nil {
+			if gxValidated36 == nil {
 				panic("goxide: invalid enum State")
 			}
 		case *Values:
-			if goxideValidated36 == nil {
+			if gxValidated36 == nil {
 				panic("goxide: invalid enum State")
 			}
 		default:
 			panic("goxide: invalid enum State")
 		}
-		switch goxideValidated38 := (goxideRight32).(type) {
+		switch gxValidated38 := (gxRight32).(type) {
 		case *Empty:
-			if goxideValidated38 == nil {
+			if gxValidated38 == nil {
 				panic("goxide: invalid enum State")
 			}
 		case *Person:
-			if goxideValidated38 == nil {
+			if gxValidated38 == nil {
 				panic("goxide: invalid enum State")
 			}
 		case *Values:
-			if goxideValidated38 == nil {
+			if gxValidated38 == nil {
 				panic("goxide: invalid enum State")
 			}
 		default:
 			panic("goxide: invalid enum State")
 		}
-		switch goxideVariant33 := goxideLeft31.(type) {
+		switch gxVar33 := gxLeft31.(type) {
 		case *Empty:
-			goxideOther34, goxideSame35 := goxideRight32.(*Empty)
-			if !goxideSame35 {
+			gxOther34, gxSame35 := gxRight32.(*Empty)
+			if !gxSame35 {
 				return 0 != 0
 			}
-			_ = goxideVariant33
-			_ = goxideOther34
+			_ = gxVar33
+			_ = gxOther34
 			return 0 == 0
 		case *Person:
-			goxideOther34, goxideSame35 := goxideRight32.(*Person)
-			if !goxideSame35 {
+			gxOther34, gxSame35 := gxRight32.(*Person)
+			if !gxSame35 {
 				return 0 != 0
 			}
-			_ = goxideVariant33
-			_ = goxideOther34
-			return EqualsUser(goxideVariant33.Value, goxideOther34.Value)
+			_ = gxVar33
+			_ = gxOther34
+			return EqualsUser(gxVar33.Value, gxOther34.Value)
 		case *Values:
-			goxideOther34, goxideSame35 := goxideRight32.(*Values)
-			if !goxideSame35 {
+			gxOther34, gxSame35 := gxRight32.(*Values)
+			if !gxSame35 {
 				return 0 != 0
 			}
-			_ = goxideVariant33
-			_ = goxideOther34
-			return func(goxideLeft40, goxideRight41 []int) bool {
-				if (goxideLeft40 == nil) != (goxideRight41 == nil) || len(goxideLeft40) != len(goxideRight41) {
+			_ = gxVar33
+			_ = gxOther34
+			return func(gxLeft40, gxRight41 []int) bool {
+				if (gxLeft40 == nil) != (gxRight41 == nil) || len(gxLeft40) != len(gxRight41) {
 					return 0 != 0
 				}
-				for goxideIndex42 := range goxideLeft40 {
-					if !(goxideLeft40[goxideIndex42] == goxideRight41[goxideIndex42]) {
+				for gxIndex42 := range gxLeft40 {
+					if !(gxLeft40[gxIndex42] == gxRight41[gxIndex42]) {
 						return 0 != 0
 					}
 				}
 				return 0 == 0
-			}(goxideVariant33.Value, goxideOther34.Value)
+			}(gxVar33.Value, gxOther34.Value)
 		default:
 			panic("goxide: invalid enum State")
 		}
-	}(goxideValue29, goxideOther30)
+	}(gxValue29, gxOther30)
 }

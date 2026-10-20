@@ -49,8 +49,11 @@
 | [0026 workspace](0026-workspaces.md) | Cargo风格成员/继承/锁与Go多模块 | 作者核心、根锁及受限go.work迁入已实现；vendor仅作输入转显式local模块；统一host resolver等扩展仍待设计/实现 |
 | [0027 正式命名](0027-goxide-naming.md) | Goxide / goxide / .gox / GOXIDE_* | 已完成命名与ABI迁移，旧输入/产物明确拒绝并重生成 |
 | [0028 crate 与路径根](0028-crate-roots.md) | lib/bin/example、Go 混编、依赖别名与标准库 fallback | 已实现；各 target 独立 crate，删除全部 namespaces，保留 alias 根并按真实 Go 子路径解析 |
+| [0030 过程宏基础草案](0030-procedural-macros.md) | TokenStream、卫生、登记、依赖角色、WASI 宿主 | Draft；已进入设计阶段，尚未实现，宿主依赖与新增语义待确认 |
 
 RFC 0024 use路径仍在[独立提案分支](https://github.com/goxide-lang/goxide/blob/5e4b118f25262d8022d1b8f72575d89d69f096aa/docs/rfcs/0024-use-paths.md)，该历史提案未整体批准。当前 `crate::` 及根选择合同见 RFC 0028；其他未确认的路径语法不由此开放。
+
+RFC 0029 声明式 derive / attribute 原型与草案保留在本地 `draft-rfc/declarative-derive-attributes` 分支，暂不合并主线；RFC 0030 从主线独立设计，不以接受该提案为前提。
 
 ## 范围与验证
 

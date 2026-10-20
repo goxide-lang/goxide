@@ -33,7 +33,7 @@
 | D11 | 历史决定：使用 `unsafe <expr>`；拆分指针经 unsafe as_ptr / `Ptr[T]`、AsPtr。**普通可写引用到匹配 Go 指针调用已由 D31 纠正，不再要求冗余 AsPtr**；真正 unsafe 操作另保留 | [Ptr / AsPtr](foreign-api.md)；Go 候选表示 `type Ptr[T any] *T`，源级精确拼写未冻结 |
 | D12 | 变体枚举、Option / Result、模式匹配；接受 Go 调用方能构造非法值，不能假称阻止了 Go 零值 | [枚举与 match](enums-and-match.md)；边界策略和布局见暂定项 |
 | D13 | pub 标记公开边界的方向；需要处理 Go 调用生成 API 的情况 | [总纲](overview.md#34-go-边界与非法值)；完整可见性与检查入口未定 |
-| D14 | 卫生宏参考 Rust；先做模式 / 模板声明宏及内建派生，提供 print / println、Default / Clone / Debug；用户过程宏后续考虑 | [宏](macros.md)；纯的用户 Syntax→Syntax 编译期程序仍是过程宏 |
+| D14 | 卫生宏参考 Rust；先做模式 / 模板声明宏及内建派生，提供 print / println、Default / Clone / Debug；过程宏现已获准进入设计阶段 | [宏](macros.md)；[RFC 0030 草案](../rfcs/0030-procedural-macros.md)；纯的用户 Syntax→Syntax 编译期程序仍是过程宏 |
 | D15 | goxide 基础包提供现有 Go std 的 safe 视图与泛型 slice | [基础包](standard-library.md)；以 Go API 真实行为为依据，不以 Rust std 为规范 |
 | D16 | quote / syn 风格能力放在额外包 | [语法工具](syntax-tooling.md)；是否列入首个可用版本及协议仍暂定 |
 | D17 | 提供面向 goxide 的 LSP，未来考虑 goxide 自举 | [编译器与工具链](compiler-and-tooling.md)；启动语言、复用组件和阶段路线为暂定方案 |

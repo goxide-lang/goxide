@@ -4,7 +4,7 @@
 
 状态：**Draft，待评审，未实现**。用户已确认开始过程宏设计：从 `main` 建立 `feat/procedural-macros`，先确定本篇合同，再按实际消费者提取共享代码。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
 
-本篇提出一个可独立验收的过程宏基础：公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。下面的新增语法、SDK API、清单字段与宿主选择都是具体提案，接受本 RFC 后才作为实施依据。
+本篇提出一个可独立验收的过程宏基础：公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。用户已确认公共库采用独立 `github.com/goxide-lang/syntax` 仓库与 Go module，首批提供手写 Go 的 `token` 与 `proc_macro` 两包；本篇其余新增语法、SDK API、清单字段与宿主选择仍是具体提案，接受本 RFC 后才作为实施依据。
 
 本篇不迁移 Default、serde 或其他内建宏，不补泛型 impl，不提供类型反射或已解析 TypeShape 查询，不开放编译脚本，也不实现完整 syn/quote。普通 syn/quote 库可以建立在本协议上；它们解析语法、构造语法，不取得类型检查或权限证明。库派生迁移仍需另行验收普通 trait/impl、生成代码及跨仓库发布。
 
@@ -14,16 +14,23 @@
 
 ### 1. TokenStream 与 SDK
 
-TokenStream 是有序语法数据，不是源文本、编译器 AST 或 Go AST。首版 SDK 提议放在编译器现有 Go module 的公开 `proc_macro` 包，即 `github.com/hxsf/goxide/proc_macro`；不修改编译器 module 路径，不要求修改 `std` / `serde`。SDK 协议须与当前编译器匹配，发行时推荐使用同一版本；普通离线工具也可使用其中的 token 构造与遍历能力。本文用 `pm` 指这个包的显式导入别名。
+TokenStream 是有序语法数据，不是源文本、编译器 AST 或 Go AST。已确认的公共库组织为一个独立仓库与 Go module：`github.com/goxide-lang/syntax`。首批只实现以下两个普通 Go 包，均手写 Go，不依赖 Goxide 生成步骤：
 
-开发项目在过程宏清单中显式依赖相邻编译器 checkout：
+| 包 | 职责与依赖 |
+| --- | --- |
+| `github.com/goxide-lang/syntax/token` | 唯一公共 `token.TokenStream` 类型、token 数据、解析和构造原语；只依赖 Go 标准库 |
+| `github.com/goxide-lang/syntax/proc_macro` | 宏作者 SDK，包括 Context、Output、诊断和协议编解码；只依赖同 module 的 token 包与 Go 标准库 |
+
+普通离线工具可直接使用 token 包。SDK 使用同一个 `token.TokenStream`，不另设镜像类型；编译器内部 token/AST 与公共协议之间的转换桥、宏启动器和执行宿主留在编译器 internal 中。syntax 不反向依赖编译器，编译器的首批接入也不依赖 syn/quote。完整 syn/quote 后续作为同 module 的普通工具包分别实现，不列入首批基础。
+
+开发项目在过程宏清单中显式依赖相邻 syntax checkout：
 
 ```toml
-[dependencies.sdk]
-path = "../goxide"
+[dependencies.syntax]
+path = "../syntax"
 ```
 
-对应 `use sdk::proc_macro as pm`。发行项目将该项换为现有 `go = "github.com/hxsf/goxide"` 与实际公开的 `version`，不隐式注入依赖。正常 MVS/replace 完成后，构建器核对实际 SDK 协议内容与编译器构建时随附的协议内容是否一致；比较范围是 SDK 协议、token 词表及编解码合同，不是无关文档或整个仓库版本号。不同内容在构建宏前诊断，不静默覆盖选版结果，也不只凭 import path 或 SDK 自报标志认可。本地修改协议后须重建编译器；缓存产物绑定这份内容身份，不运行旧协议兼容分支。
+对应 `use syntax::token` 和 `use syntax::proc_macro as pm`，下文沿用这两个别名。发行项目将该项换为现有 `go = "github.com/goxide-lang/syntax"` 与该 module 实际公开的 `version`，不隐式注入依赖。syntax 与编译器独立发布，不要求仓库版本号相同。正常 MVS/replace 完成后，构建器核对实际 SDK 协议内容与编译器构建时随附的协议内容是否一致；比较范围是 SDK 协议、token 词表及编解码合同，不是无关文档或整个仓库版本号。不同内容在构建宏前诊断，不静默覆盖选版结果，也不只凭 import path 或 SDK 自报标志认可。本地修改协议后须重建编译器；缓存产物绑定这份内容身份，不运行旧协议兼容分支。
 
 SDK 内部表示不作为序列化协议直接导出，尤其不公开现有 `syntaxToken` 的 AST、文件指针或语义旁表。公共节点合同为：
 
@@ -43,7 +50,7 @@ SDK 内部表示不作为序列化协议直接导出，尤其不公开现有 `sy
 
 声明宏转交的捕获不能全部摊平成文本。Fragment 可以原样复制、插入或由 syn 作为相应语法节点观察；宿主验证其句柄及类别。修改片段内部必须显式构造新语法，新语法没有原片段的“已解析类别”证明。原样转交的 `expr` / `tt` 不能冒充 `type`，`item` 不能进入表达式槽；现有 builtin `new` / `make` 的类别检查在名字解析后继续执行。
 
-`ParseText(text, context)` 创建新语法和生成来源；`Display` 仅供展示，二者不是保留卫生的往返协议。普通 syn AST 不能通过一个字段把新数据声明为“已检查类型”“已授权引用”或“已验证 impl”。
+`token::ParseText(text, context)` 创建新语法和生成来源；`Display` 仅供展示，二者不是保留卫生的往返协议。普通 syn AST 不能通过一个字段把新数据声明为“已检查类型”“已授权引用”或“已验证 impl”。
 
 ### 2. 卫生、位置与可信来源
 
@@ -85,17 +92,20 @@ proc_macro = true
 
 显式依赖中的实际宏调用触发受限执行，不给每次展开增加人工信任确认。被 cfg 删除的调用不执行；普通导入语法工具包不登记或执行宏。该能力不复活构建脚本入口，不继承脚本的宿主权限。
 
-只登记根包中经 `cfg` 选择后存在的显式、非泛型 `pub func`。函数必须恰有一个登记属性，不能有 receiver，不能通过宏产物再登记入口。签名使用 SDK 的 canonical 类型，别名可经普通类型同一性验证：
+只登记根包中经 `cfg` 选择后存在的显式、非泛型 `pub func`。函数必须恰有一个登记属性，不能有 receiver，不能通过宏产物再登记入口。签名使用 token 与 SDK 的 canonical 类型，别名可经普通类型同一性验证：
 
 ```goxide
+use syntax::token;
+use syntax::proc_macro as pm;
+
 #[proc_macro]
-pub func answer(ctx pm::Context, input pm::TokenStream) pm::Output { ... }
+pub func answer(ctx pm::Context, input token::TokenStream) pm::Output { ... }
 
 #[proc_macro_attribute]
-pub func trace(ctx pm::Context, args pm::TokenStream, item pm::TokenStream) pm::Output { ... }
+pub func trace(ctx pm::Context, args token::TokenStream, item token::TokenStream) pm::Output { ... }
 
 #[proc_macro_derive(Describe, attributes(describe))]
-pub func deriveDescribe(ctx pm::Context, item pm::TokenStream) pm::Output { ... }
+pub func deriveDescribe(ctx pm::Context, item token::TokenStream) pm::Output { ... }
 ```
 
 `Output` 含输出 TokenStream 与有序诊断；任一 error 使本次展开失败。登记函数以外的辅助实现是普通编译期代码。`Context` 提供 DefSite、CallSite、位置、冻结 target/features 和 RuntimeRoot；首版没有 env 查询，也没有文件、网络、进程、类型查询或动态加载入口。SDK 可提供 `Success(tokens)`、`Failure(message, span)` 等普通构造函数，不用 panic 作为常规诊断通道。
@@ -255,7 +265,7 @@ NoError(D)   Admit(T, H, L) = J   Fit(K, p, J)
 
 ## 转译示例
 
-以下源级例子使用拟议 SDK，尚不能由当前编译器运行。`pm` 显式绑定 `github.com/hxsf/goxide/proc_macro`，`macros` 绑定相应过程宏 lib；完整项目验收还须提供这些依赖的真实版本与清单。Go 对照是完整目标程序，不包含宏执行器。
+以下源级例子使用拟议 SDK，尚不能由当前编译器运行。`token` 与 `pm` 分别显式绑定 `github.com/goxide-lang/syntax/token` 和 `github.com/goxide-lang/syntax/proc_macro`，`macros` 绑定相应过程宏 lib；完整项目验收还须提供这些依赖的真实版本与清单。Go 对照是完整目标程序，不包含宏执行器。
 
 ### PM-01：函数式恒等宏与运行时求值
 
@@ -263,10 +273,11 @@ NoError(D)   Admit(T, H, L) = J   Fit(K, p, J)
 
 ```goxide
 package identity_macros
-use sdk::proc_macro as pm;
+use syntax::token;
+use syntax::proc_macro as pm;
 
 #[proc_macro]
-pub func identity(ctx pm::Context, input pm::TokenStream) pm::Output {
+pub func identity(ctx pm::Context, input token::TokenStream) pm::Output {
     return pm::Success(input)
 }
 ```
@@ -309,17 +320,18 @@ func main() {
 
 ```goxide
 package answer_macros
-use sdk::proc_macro as pm;
+use syntax::token;
+use syntax::proc_macro as pm;
 
 #[proc_macro_attribute]
-pub func keep(ctx pm::Context, args pm::TokenStream, item pm::TokenStream) pm::Output {
+pub func keep(ctx pm::Context, args token::TokenStream, item token::TokenStream) pm::Output {
     if !args.IsEmpty() { return pm::Failure("keep takes no arguments", ctx.CallSpan()) }
     return pm::Success(item)
 }
 
 #[proc_macro_derive(Answer)]
-pub func deriveAnswer(ctx pm::Context, item pm::TokenStream) pm::Output {
-    return pm::FromParse(pm::ParseText("pub func Answer() int { return 42 }", ctx.DefSite()))
+pub func deriveAnswer(ctx pm::Context, item token::TokenStream) pm::Output {
+    return pm::FromParse(token::ParseText("pub func Answer() int { return 42 }", ctx.DefSite()))
 }
 ```
 
@@ -410,7 +422,7 @@ func TestAnswerAPI(t *testing.T) {
 | A4 | 定义点/显式调用点/嵌套词法调用点、局部同名、重复插值、生成声明归属及私有访问正反例 |
 | A5 | 修改显示 Span 不改变捕获内部变量、cfg、依赖根或权限；无效/陈旧句柄及伪造语义字段拒绝 |
 | A6 | RuntimeRoot 在 alias/replace/本项目 lib/完整根重导出下正确，缺根不注入依赖，运行库重导出无构建环 |
-| A7 | 宏/目标不同平台、feature 和依赖版本隔离；同逻辑 module 的不同计划不误判环；SDK 错版本/replace 拒绝；cold/warm、offline/locked 重放与内容失效 |
+| A7 | 宏/目标不同平台、feature 和依赖版本隔离；同逻辑 module 的不同计划不误判环；SDK 选版/replace 后协议内容不匹配拒绝，不要求 syntax 与编译器版本号相同；cold/warm、offline/locked 重放与内容失效 |
 | A8 | 正常 init 探测、随机分段读取、clock sleep、poll 顺序/EOF；init 中超限、memory/table 增长、累计超时、取消、递归、过量输出、非法 import、panic、响应后死循环及下一次编译恢复 |
 | A9 | CLI 与浏览器使用同一宏产物/请求，成功输出和确定错误一致；浏览器缺宏明确失败，异步界面可取消 |
 | A10 | 同输入两次生成 Go 字节一致；检查源码位置、可读性、无宏运行时泄漏；普通手写 Go 消费通过 |
@@ -422,10 +434,10 @@ func TestAnswerAPI(t *testing.T) {
 职责保持在三处：项目/编译编排准备来源、角色计划和宏产物；expand 负责名字选择、输入/输出、卫生、顺序与累计预算；宿主适配负责运行一个已准备的 WASM 请求。expand/lower 不自行启动 Go 工具链或下载依赖。CLI 与浏览器提供实际宿主实现后才按需要引入共同调用接口，前端继续使用一条展开与检查管线。
 
 1. 接受源级及宿主合同后，从 `main` 按实际调用需要提取源 token 留存、声明列表解析、片段/来源复制及输出位置校验，配独立回归。保留现有声明宏行为，不为提取而开放零/多 item 输出。
-2. 实现 SDK/宿主接收桥与最小真实过程宏消费，区分显示 Span 和可信来源；再接源码登记、角色构建图、WASI command、CLI 三类入口及 helper。
+2. 在独立 syntax module 实现手写 Go 的 token/SDK 两包，在编译器 internal 实现转换桥、启动器与宿主接收；以最小真实过程宏消费验证，区分显示 Span 和可信来源。再接源码登记、角色构建图、WASI command、CLI 三类入口及 helper；此批不实现 syn/quote。
 3. 接浏览器同产物执行、取消、预算及角色隔离验收，完成 A1–A10 后再提交基础能力为已实现。实现内部可按主题提交，基础能力验收不以模拟宿主替代。
 4. 声明式 Draft 分支以后再整理到共享基线上，仅保留其专用语法/匹配与差异；不把 RFC 0029 接受作为本篇前置条件。
-5. syn/quote 库、普通泛型 impl 和 Default/serde 迁移分别设计与验收，跨仓库改动另按授权执行。
+5. 同 syntax module 中的普通 syn/quote 包、普通泛型 impl 和 Default/serde 迁移分别设计与验收。若后续 `quote!` 使用过程宏实现，其独立宏源码项目依赖 token/builder 直接构造输出，不能调用尚在构建的自身宏；普通 syntax module 不反向依赖该宏项目。源码项目可同仓库，但不因此合并 module 或构建角色。后续 Goxide 自举、生成 Go 的发行方式及跨仓库改动另按授权确定。
 
 已存在的可提取候选是 Draft 原型中的 `ParseItems`、源 token 留存及 item/token 桥。当前 `Resolver.LookupMacro` 只返回 `MacroRulesDecl`，`invoke` 直接运行 matcher；接入真实过程宏时再拆开“调用形状”和“实现方式”，不先加没有消费者的多层后端框架。
 
@@ -434,7 +446,7 @@ func TestAnswerAPI(t *testing.T) {
 推荐接受上述具体方案，决策集中在：
 
 1. `[lib].proc_macro`、带 Context 的三个登记签名、单名字空间与 helper 作用域/顺序。
-2. 公共 SDK 随编译器 module 发行、Goxide token 单元及默认定义点卫生；显示 Span 与可信来源分离。
+2. 公共 token 与 SDK 的具体 API、Goxide token 单元及默认定义点卫生；显示 Span 与可信来源分离。独立 syntax 仓库/module 和首批手写 Go 两包的组织方式已确认，不在待确认范围内。
 3. 角色分开的宏构建计划及 `RuntimeRoot` 的显式可达性，不隐式拉入运行库。
 4. WASI command + 每次新实例、CLI 新增 wazero 依赖、浏览器相同产物及受限 profile。
 

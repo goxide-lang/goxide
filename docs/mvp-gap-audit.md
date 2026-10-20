@@ -5,7 +5,7 @@
 | 特性 | 状态 | 入口或示例 | 对应测试文件 |
 | --- | --- | --- | --- |
 | 声明宏 | 支持 | [四种位置与卫生示例](../internal/lower/testdata/macros/positions/)：表达式、语句、类型、item；定义点解析和 `$caller::`；[跨包宏](../examples/macro_packages/) | [macro_e2e_test.go](../internal/lower/macro_e2e_test.go)、[macro_binding_e2e_test.go](../internal/lower/macro_binding_e2e_test.go) |
-| 用户过程宏 | 设计中，未实现 | [RFC 0030 草案](rfcs/0030-procedural-macros.md)：TokenStream、卫生、登记与依赖角色、受限 WASI command；先评审合同再提取共用代码 | 尚无过程宏端到端测试；验收要求见 RFC |
+| 用户过程宏 | 设计中，未实现 | 已确认独立 syntax 仓库/module，首批手写 Go 的 token / proc_macro 两包；[RFC 0030 草案](rfcs/0030-procedural-macros.md) 的具体协议、卫生、登记、依赖角色与 WASI 宿主仍待评审 | 尚无过程宏端到端测试；验收要求见 RFC，syn/quote 不在首批实现范围 |
 | 用户 enum / match | 部分 | [enum 示例](../examples/enum_trial/)：密封接口、泛型、payload、单次分派、guard、nil 检查；控制头中的 match 未支持 | [core_e2e_test.go](../internal/lower/core_e2e_test.go)、[match_assignment_test.go](../tests/acceptance/match_assignment_test.go) |
 | Option / Result 与 `?` | 部分 | [传播示例](../examples/propagate_values/)：构造、match、提前返回及单步错误转换；range 赋值目标和函数迭代器源中的 `?` 未支持；`std/sum` 保持 tagged API，表示统一在 [MVP-6](pre-mvp-plan.md#后续阶段mvp) 与 safe std 一起完成 | [core_e2e_test.go](../internal/lower/core_e2e_test.go)、[propagate_loops_test.go](../tests/acceptance/propagate_loops_test.go)、[package_test.go](../internal/playground/package_test.go) |
 | 派生 | 支持 | [Default 示例](../examples/manual_default/)；`Default`、`Clone`、`Debug`、`PartialEq`、`Eq`、`Error`；字段协议、顺序和手写协议冲突检查 | [derive_test.go](../internal/lower/derive_test.go)、[error_test.go](../internal/lower/error_test.go) |

@@ -1,0 +1,386 @@
+{
+  "BenchmarkUnitConstruct/Numeric8": {
+    "ns/op": {
+      "median": 1.964,
+      "min": 1.957,
+      "max": 2.04
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 1.964,
+      "min": 1.957,
+      "max": 2.04
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitConstruct/Sealed": {
+    "ns/op": {
+      "median": 4.822,
+      "min": 4.392,
+      "max": 5.629
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 4.822,
+      "min": 4.392,
+      "max": 5.629
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitConstruct/SealedValue": {
+    "ns/op": {
+      "median": 4.391,
+      "min": 3.378,
+      "max": 5.075
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 4.391,
+      "min": 3.378,
+      "max": 5.075
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatch/Numeric8": {
+    "ns/op": {
+      "median": 4.785,
+      "min": 3.901,
+      "max": 5.46
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 4.785,
+      "min": 3.901,
+      "max": 5.46
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatch/Sealed": {
+    "ns/op": {
+      "median": 10.22,
+      "min": 9.656,
+      "max": 11.36
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 10.22,
+      "min": 9.656,
+      "max": 11.36
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatch/SealedValue": {
+    "ns/op": {
+      "median": 9.613,
+      "min": 9.426,
+      "max": 10.37
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 9.613,
+      "min": 9.426,
+      "max": 10.37
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitBatchBuild/Numeric8": {
+    "ns/op": {
+      "median": 3660.0,
+      "min": 3623.0,
+      "max": 3730.0
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 0.5106,
+      "min": 0.5054,
+      "max": 0.5204
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 8192.0,
+      "min": 8192.0,
+      "max": 8192.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  "BenchmarkUnitBatchBuild/Sealed": {
+    "ns/op": {
+      "median": 47545.0,
+      "min": 47122.0,
+      "max": 48400.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 6.633,
+      "min": 6.574,
+      "max": 6.752
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 114688.0,
+      "min": 114688.0,
+      "max": 114688.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  "BenchmarkUnitBatchBuild/SealedValue": {
+    "ns/op": {
+      "median": 40297.0,
+      "min": 38955.0,
+      "max": 41102.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 5.622,
+      "min": 5.435,
+      "max": 5.734
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 114688.0,
+      "min": 114688.0,
+      "max": 114688.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  "BenchmarkUnitTraversal/Numeric8": {
+    "ns/op": {
+      "median": 10765.0,
+      "min": 9975.0,
+      "max": 13720.0
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 1.502,
+      "min": 1.392,
+      "max": 1.914
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitTraversal/Sealed": {
+    "ns/op": {
+      "median": 58819.0,
+      "min": 57318.0,
+      "max": 59948.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 8.206,
+      "min": 7.996,
+      "max": 8.363
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitTraversal/SealedValue": {
+    "ns/op": {
+      "median": 50644.0,
+      "min": 49276.0,
+      "max": 51591.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 7.065,
+      "min": 6.874,
+      "max": 7.197
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  }
+}

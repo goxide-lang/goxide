@@ -1,0 +1,28 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-p=1",
+    "-cpu=1",
+    "-run",
+    "^$",
+    "-bench",
+    "^BenchmarkUnit/(Numeric8|Sealed|SealedValue)$",
+    "-benchmem",
+    "-benchtime=300ms",
+    "-count=7",
+    "./internal/enumbench"
+  ],
+  "environment": {
+    "GOTOOLCHAIN": "local",
+    "GOWORK": "off",
+    "TMPDIR": "/private/tmp",
+    "GOMAXPROCS": "1",
+    "GOGC": "100",
+    "GOMEMLIMIT": "off"
+  },
+  "go": "go version go1.27.1 darwin/arm64",
+  "cpu": "Apple M2",
+  "baseline_commit": "9aa3c44f84f4fcfa28366c15cd363ff70dbd0c19",
+  "benchmark_source_commit": "fc4408f"
+}

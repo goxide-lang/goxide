@@ -1,0 +1,30 @@
+2026-10-20T20:37:53.385460+08:00
+Benchmark environment: GOTOOLCHAIN=local GOWORK=off GOMAXPROCS=1 GOGC=100 GOMEMLIMIT=off TMPDIR=/private/tmp; normal optimized build, no race instrumentation.
+$ go version
+go version go1.27.1 darwin/arm64
+
+$ go env GOOS GOARCH GOARM64
+darwin
+arm64
+v8.0
+
+$ sysctl -n machdep.cpu.brand_string hw.memsize hw.physicalcpu hw.logicalcpu
+Apple M2
+17179869184
+8
+8
+
+$ sw_vers
+ProductName:		macOS
+ProductVersion:		27.0.1
+BuildVersion:		26A434
+
+$ git -C /Users/hxsf/workspace/self/goxide-lang/syntax rev-parse HEAD
+1b7ffb08c84163d091c0f247566e3ab5f0f87337
+
+$ git -C /Users/hxsf/workspace/self/goxide-lang/goxide rev-parse HEAD
+a18780ef9cb82a7a6248db605ba6a54bc54f2016
+
+Formal benchmark: go test -p=1 -cpu=1 -run ^$ -bench . -benchmem -benchtime=300ms -count=7 ./internal/enumbench ./internal/tokenbench
+
+Benchmark source commit after validation: 9aa3c44f84f4fcfa28366c15cd363ff70dbd0c19

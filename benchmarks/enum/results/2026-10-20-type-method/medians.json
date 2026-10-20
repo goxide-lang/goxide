@@ -1,0 +1,482 @@
+{
+  "BenchmarkUnitDispatchStrategy/Shuffled/Numeric8": {
+    "ns/op": {
+      "median": 10702.0,
+      "min": 10152.0,
+      "max": 13076.0
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 1.493,
+      "min": 1.416,
+      "max": 1.824
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Shuffled/TypeSwitchPointer": {
+    "ns/op": {
+      "median": 60347.0,
+      "min": 58213.0,
+      "max": 64339.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 8.419,
+      "min": 8.121,
+      "max": 8.976
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Shuffled/TypeSwitchValue": {
+    "ns/op": {
+      "median": 50460.0,
+      "min": 49846.0,
+      "max": 55395.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 7.04,
+      "min": 6.954,
+      "max": 7.728
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Shuffled/TypeMethodPointer": {
+    "ns/op": {
+      "median": 59452.0,
+      "min": 58819.0,
+      "max": 60528.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 8.294,
+      "min": 8.206,
+      "max": 8.444
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Shuffled/TypeMethodValue": {
+    "ns/op": {
+      "median": 59732.0,
+      "min": 58671.0,
+      "max": 60520.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 8.333,
+      "min": 8.185,
+      "max": 8.443
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Grouped/Numeric8": {
+    "ns/op": {
+      "median": 5638.0,
+      "min": 5631.0,
+      "max": 5744.0
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 0.7865,
+      "min": 0.7856,
+      "max": 0.8013
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Grouped/TypeSwitchPointer": {
+    "ns/op": {
+      "median": 14207.0,
+      "min": 14129.0,
+      "max": 14330.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 1.982,
+      "min": 1.971,
+      "max": 1.999
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Grouped/TypeSwitchValue": {
+    "ns/op": {
+      "median": 6077.0,
+      "min": 5958.0,
+      "max": 6105.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 0.8479,
+      "min": 0.8313,
+      "max": 0.8517
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Grouped/TypeMethodPointer": {
+    "ns/op": {
+      "median": 16056.0,
+      "min": 16025.0,
+      "max": 16105.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 2.24,
+      "min": 2.236,
+      "max": 2.247
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Grouped/TypeMethodValue": {
+    "ns/op": {
+      "median": 16067.0,
+      "min": 16038.0,
+      "max": 16251.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 2.241,
+      "min": 2.237,
+      "max": 2.267
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Single/Numeric8": {
+    "ns/op": {
+      "median": 4218.0,
+      "min": 4141.0,
+      "max": 4254.0
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 0.5884,
+      "min": 0.5777,
+      "max": 0.5934
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Single/TypeSwitchPointer": {
+    "ns/op": {
+      "median": 14074.0,
+      "min": 14014.0,
+      "max": 14103.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 1.963,
+      "min": 1.955,
+      "max": 1.968
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Single/TypeSwitchValue": {
+    "ns/op": {
+      "median": 6082.0,
+      "min": 6038.0,
+      "max": 6090.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 0.8485,
+      "min": 0.8424,
+      "max": 0.8496
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Single/TypeMethodPointer": {
+    "ns/op": {
+      "median": 14861.0,
+      "min": 14809.0,
+      "max": 15240.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 2.073,
+      "min": 2.066,
+      "max": 2.126
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "BenchmarkUnitDispatchStrategy/Single/TypeMethodValue": {
+    "ns/op": {
+      "median": 14821.0,
+      "min": 14796.0,
+      "max": 15025.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 2.068,
+      "min": 2.064,
+      "max": 2.096
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  }
+}

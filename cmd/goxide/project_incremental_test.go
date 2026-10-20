@@ -87,7 +87,7 @@ func TestProjectGitWorkspaceCacheIdentity(t *testing.T) {
 	t.Setenv("GIT_COMMITTER_EMAIL", "fixture@example.invalid")
 	repo, root := filepath.Join(t.TempDir(), "repo"), t.TempDir()
 	projectWrite(t, repo, map[string]string{
-		"goxide.toml":        "[workspace]\nmembers=['lib','helper']\n[workspace.dependencies.helper]\npath='helper'\nmodule='example.org/helper'\npackage='example.org/helper'\n",
+		"goxide.toml":        "[workspace]\nmembers=['lib','helper']\n[workspace.dependencies.helper]\npath='helper'\nmodule='example.org/helper'\n",
 		"lib/goxide.toml":    "[go_mod]\nmodule='example.org/lib'\ngo='1.27'\n[lib]\nname='lib'\npath='.'\n[dependencies.helper]\nworkspace=true\n",
 		"lib/lib.gox":        "package lib\nuse helper;\nfunc Value()int{return helper::Value()}\n",
 		"helper/goxide.toml": "[go_mod]\nmodule='example.org/helper'\ngo='1.27'\n[lib]\nname='helper'\npath='.'\n",
@@ -97,7 +97,7 @@ func TestProjectGitWorkspaceCacheIdentity(t *testing.T) {
 	fixtureGit(t, repo, "add", ".")
 	fixtureGit(t, repo, "commit", "-m", "workspace")
 	projectWrite(t, root, map[string]string{
-		"goxide.toml": fmt.Sprintf("[go_mod]\nmodule='example.org/app'\ngo='1.27'\n[[bin]]\nname='app'\npath='.'\n[dependencies]\nfmt={go='fmt'}\nlib={git=%q,subdir='lib',module='example.org/lib',package='example.org/lib'}\n", repo),
+		"goxide.toml": fmt.Sprintf("[go_mod]\nmodule='example.org/app'\ngo='1.27'\n[[bin]]\nname='app'\npath='.'\n[dependencies]\nfmt={go='fmt'}\nlib={git=%q,subdir='lib',module='example.org/lib'}\n", repo),
 		"main.gox":    "package main\nuse fmt;\nuse lib;\nfunc main(){fmt::Println(lib::Value())}\n",
 	})
 	if out, e := projectRun(t, root, "run"); e != nil || strings.TrimSpace(out) != "42" {

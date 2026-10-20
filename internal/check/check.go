@@ -348,7 +348,9 @@ func (c *checker) symbol(n ast.Node) *resolve.Symbol {
 	for s != nil && s.AliasOf != nil {
 		s = s.AliasOf
 	}
-	if s != nil && len(s.Target) > 0 {
+	// A namespace route can share its path with a private module declaration
+	// or a value. Neither replaces the namespace selected by the importer.
+	if s != nil && !c.namespaceSymbol(s) && len(s.Target) > 0 {
 		if local := c.localSymbol(s.Target); local != nil {
 			s = local
 		}
@@ -357,6 +359,25 @@ func (c *checker) symbol(n ast.Node) *resolve.Symbol {
 		s = c.localSymbol(c.file.References[n.ID()].Path)
 	}
 	return c.visibleSymbol(n, s)
+}
+
+func (c *checker) namespaceSymbol(symbol *resolve.Symbol) bool {
+	if symbol == nil {
+		return false
+	}
+	if symbol.Kind == resolve.Module {
+		return true
+	}
+	if symbol.Kind == resolve.Import {
+		if file := c.out.Resolve.Files[symbol.Decl.File]; file != nil {
+			for _, use := range file.Uses {
+				if use.Symbol == symbol && use.Resolved != nil && use.Resolved.Kind == resolve.Module {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (c *checker) visibleSymbol(n ast.Node, s *resolve.Symbol) *resolve.Symbol {

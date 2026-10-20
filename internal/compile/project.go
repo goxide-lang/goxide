@@ -164,9 +164,16 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 			roots = options.Roots
 		}
 		generated[node.Module] = output
+		rootPackage := ""
+		if node.Manifest.Lib != nil {
+			rootPackage, err = libraryPackage(node)
+			if err != nil {
+				return nil, err
+			}
+		}
 		moduleConfig := configuration
 		moduleConfig.Features = features[node.SourceKey]
-		modules = append(modules, lower.Module{Path: node.Module, Dir: output, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race})
+		modules = append(modules, lower.Module{Path: node.Module, Dir: output, RootPackage: rootPackage, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race})
 	}
 	if err := prepareModules(graph, generated); err != nil {
 		return nil, err

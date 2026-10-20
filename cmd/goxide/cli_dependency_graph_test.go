@@ -66,7 +66,6 @@ module = 'example.org/nativea'
 version = 'v1.0.0'
 
 [dependencies.nativea]
-package = 'example.org/nativea'
 go = 'example.org/nativea'
 version = 'v1.0.0'
 

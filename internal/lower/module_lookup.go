@@ -7,17 +7,22 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hxsf/goxide/internal/derives"
 	"github.com/hxsf/goxide/internal/resolve"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
 
 type moduleImporter struct {
-	local      map[string]*resolve.Scope
-	external   types.Importer
-	cache      map[string]*types.Package
-	namespaces map[string]rootRequirement
-	owners     map[string]string
-	err        error
+	local          map[string]*resolve.Scope
+	external       types.Importer
+	cache          map[string]*types.Package
+	namespaces     map[string]rootRequirement
+	owners         map[string]string
+	publicRoots    map[string]string
+	sourcePackages map[string]bool
+	macros         map[string]map[resolve.Key]*resolve.Symbol
+	rootAccesses   []rootRequirement
+	err            error
 }
 
 type moduleMember struct {
@@ -27,7 +32,30 @@ type moduleMember struct {
 
 func (i *moduleImporter) SetSourcePackages(packages []*resolve.Package) {
 	i.local = make(map[string]*resolve.Scope, len(packages))
+	first := i.macros == nil
+	if first {
+		i.macros = map[string]map[resolve.Key]*resolve.Symbol{}
+	}
 	for _, pkg := range packages {
+		key := pkg.Dir + "\x00" + pkg.Name
+		if first {
+			for name, symbol := range pkg.Scope.Bindings {
+				if symbol.Kind == resolve.Macro {
+					if i.macros[key] == nil {
+						i.macros[key] = map[resolve.Key]*resolve.Symbol{}
+					}
+					i.macros[key][name] = symbol
+				}
+			}
+		} else {
+			// Expansion removes macro declarations from the emitted AST, but
+			// uses still resolve their original identities and visibility.
+			for name, symbol := range i.macros[key] {
+				if pkg.Scope.Bindings[name] == nil {
+					pkg.Scope.Bindings[name] = symbol
+				}
+			}
+		}
 		if !pkg.IsExternalTest() {
 			i.local[filepath.ToSlash(pkg.Dir)] = pkg.Scope
 		}
@@ -55,21 +83,27 @@ func (i *moduleImporter) lookup(parts []string, name resolve.Key, visiting map[s
 	}
 	visiting[key] = true
 	defer delete(visiting, key)
-	if requirement, ok := i.namespace(parts); ok {
-		if _, child := requirement.namespace.Children[name.Name]; child && name.Ctx == 0 {
-			target := append(append([]string(nil), parts...), name.Name)
+	if name.Ctx == 0 {
+		target := append(append([]string(nil), parts...), name.Name)
+		if _, ok := i.namespace(target); ok {
+			// A mapped root is itself a namespace, just like an explicit child.
 			return []moduleMember{{External: resolve.External{Name: name, Kind: resolve.Module, Visibility: resolve.Public, Target: target}}}
 		}
+	}
+	if requirement, ok := i.namespace(parts); ok {
 		if requirement.namespace.PackagePath == "" {
 			return nil
 		}
-		if err := requirement.check(i.owners, i.external); err != nil {
+		if err := i.checkRootRequirement(requirement); err != nil {
 			if i.err == nil {
 				i.err = err
 			}
 			return nil
 		}
-		return i.lookup(strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)
+		return i.packageMembers(strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)
+	}
+	if members, found := i.sourceItemMembers(parts, name, visiting); found {
+		return members
 	}
 source:
 	for split := len(parts); split > 0; split-- {
@@ -98,6 +132,52 @@ source:
 			break source
 		}
 		return i.scopeMembers(scope, target, name, visiting)
+	}
+	return i.packageMembers(parts, name, visiting)
+}
+
+// Canonical item routes can share their spelling with physical packages.
+// Keep the item's scope; explicit namespaces enter through packageMembers.
+func (i *moduleImporter) sourceItemMembers(parts []string, name resolve.Key, visiting map[string]bool) ([]moduleMember, bool) {
+	for split := 1; split < len(parts); split++ {
+		scope := i.local[strings.Join(parts[:split], "/")]
+		if scope == nil {
+			continue
+		}
+		key := resolve.Key{Name: parts[split]}
+		if symbol := scope.Bindings[key]; symbol != nil && symbol.Kind != resolve.Module && symbol.Visibility != resolve.Public {
+			return nil, true
+		}
+		found := i.scopeMembers(scope, parts[:split], key, visiting)
+		if len(found) > 1 {
+			return found, true
+		}
+		if len(found) == 0 || found[0].Kind == resolve.Module || found[0].Kind == resolve.Import {
+			continue
+		}
+		entry := found[0]
+		for _, part := range parts[split+1:] {
+			if entry.symbol == nil || entry.symbol.Members == nil {
+				return nil, true
+			}
+			found = i.scopeMembers(entry.symbol.Members, entry.Target, resolve.Key{Name: part}, visiting)
+			if len(found) != 1 {
+				return found, true
+			}
+			entry = found[0]
+		}
+		if entry.symbol == nil || entry.symbol.Members == nil {
+			return nil, true
+		}
+		return i.scopeMembers(entry.symbol.Members, entry.Target, name, visiting), true
+	}
+	return nil, false
+}
+
+func (i *moduleImporter) packageMembers(parts []string, name resolve.Key, visiting map[string]bool) []moduleMember {
+	packagePath := strings.Join(parts, "/")
+	if scope := i.local[packagePath]; scope != nil {
+		return i.scopeMembers(scope, parts, name, visiting)
 	}
 	pkg := i.goPackage(packagePath)
 	if pkg == nil || name.Ctx != 0 {
@@ -157,7 +237,7 @@ func (i *moduleImporter) symbolMembers(symbol *resolve.Symbol, owner []string, n
 	if len(symbol.Target) > 0 {
 		target := symbol.Target
 		_, namespace := i.namespace(target)
-		if namespace || i.SourcePackage(target) {
+		if namespace {
 			return []moduleMember{{External: resolve.External{Name: name, Kind: resolve.Module, Visibility: resolve.Public, Target: target}, symbol: symbol}}
 		}
 		if len(target) > 1 {
@@ -169,7 +249,7 @@ func (i *moduleImporter) symbolMembers(symbol *resolve.Symbol, owner []string, n
 				return found
 			}
 		}
-		if i.goPackage(strings.Join(target, "/")) != nil {
+		if i.SourcePackage(target) || i.goPackage(strings.Join(target, "/")) != nil {
 			return []moduleMember{{External: resolve.External{Name: name, Kind: resolve.Module, Visibility: resolve.Public, Target: target}, symbol: symbol}}
 		}
 		return nil
@@ -269,12 +349,26 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 			if module := strict[name]; module != "" && !i.boundUse(file, use, decl, module) {
 				return fail(fmt.Sprintf("unknown dependency root %q", decl.Tree.Path.Segments[0].Name.Name))
 			}
+			if len(resolved.Diagnostics) == 0 && !use.Blank && !i.finishUseTarget(use) {
+				if i.err != nil {
+					return i.err
+				}
+				segments := decl.Tree.Path.Segments
+				return fail(fmt.Sprintf("use target %q is not a public item or namespace", segments[len(segments)-1].Name.Name))
+			}
+			if use.Glob && use.Resolved != nil {
+				switch use.Resolved.Kind {
+				case resolve.Variable, resolve.Constant, resolve.Function, resolve.Variant, resolve.Field, resolve.Label, resolve.Builtin, resolve.Macro:
+					segments := decl.Tree.Path.Segments
+					return fail(fmt.Sprintf("glob use target %q is not a namespace", segments[len(segments)-1].Name.Name))
+				}
+			}
 			if use.Blank {
 				if requirement, ok := i.namespace(use.Target); ok {
 					if requirement.namespace.PackagePath == "" {
 						return fail("blank use requires a concrete package, not a namespace group")
 					}
-					if err := requirement.check(i.owners, i.external); err != nil {
+					if err := i.checkRootRequirement(requirement); err != nil {
 						return err
 					}
 					use.Target = strings.Split(requirement.namespace.PackagePath, "/")
@@ -293,6 +387,37 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 		}
 	}
 	return nil
+}
+
+func (i *moduleImporter) finishUseTarget(use *resolve.UseBinding) bool {
+	if use.Resolved != nil || use.Symbol != nil && use.Symbol.AliasOf != nil {
+		return true
+	}
+	if _, ok := i.namespace(use.Target); ok {
+		return true
+	}
+	if len(use.Target) > 1 {
+		last := len(use.Target) - 1
+		members := i.Lookup(use.Target[:last], resolve.Key{Name: use.Target[last], Ctx: use.Name.Ctx})
+		if len(members) == 1 {
+			member := members[0]
+			use.Resolved = &resolve.Symbol{Name: member.Name, Kind: member.Kind, Visibility: member.Visibility, GoName: member.GoName, Target: member.Target}
+			use.Target = append([]string(nil), member.Target...)
+			if use.Symbol != nil {
+				use.Symbol.Target = use.Target
+			}
+			return true
+		}
+	}
+	if i.SourcePackage(use.Target) || i.goPackage(strings.Join(use.Target, "/")) != nil {
+		return true
+	}
+	// A derive registration is a compile-time use target without a Go object.
+	if canonical, ok := i.CanonicalPath(use.Target); ok {
+		_, registered := derives.Lookup(strings.Join(canonical[:len(canonical)-1], "/"), canonical[len(canonical)-1])
+		return registered
+	}
+	return false
 }
 
 func (i *moduleImporter) boundUse(file *resolve.File, use *resolve.UseBinding, decl *syntax.UseDecl, module string) bool {

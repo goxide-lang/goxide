@@ -1,6 +1,6 @@
 # 显式 workspace 示例
 
-根 `goxide.toml` 列出三个成员。只有两个应用的 `shared={workspace=true}` 建立依赖；成员资格不产生 `use` 绑定，也不覆盖同名远端依赖。共享模板的 `package` 明确指定 `shared` 的包入口；`fmt` 模板来自 Go toolchain，成员分别显式继承。根模板的 path 相对根清单，成员直接 path 相对成员清单。`[workspace.go_mod]` 提供成员显式继承的 Go 版本默认值，各成员的 `[go_mod]` 描述生成 Go module 的元数据。
+根 `goxide.toml` 列出三个成员。只有两个应用的 `shared={workspace=true}` 建立依赖；成员资格不产生 `use` 绑定，也不覆盖同名远端依赖。`shared` 库通过自己的 `[lib]` 声明入口；`fmt` 模板来自 Go toolchain，成员分别显式继承。根模板的 path 相对根清单，成员直接 path 相对成员清单。`[workspace.go_mod]` 提供成员显式继承的 Go 版本默认值，各成员的 `[go_mod]` 描述生成 Go module 的元数据。
 
 在仓库根运行，`goxide` 为本分支编译的 CLI，Go 需 1.27+：
 

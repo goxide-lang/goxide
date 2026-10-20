@@ -16,7 +16,7 @@
 | Go module | `go = "github.com/…"` 加 `version = "v…"`；路径不带协议，按 Go MVS 选版并锁定结果 |
 | Go 标准库 | `go = "fmt"`，没有 version，不下载；用所选 Go 工具链的真实包信息核验标准库归属 |
 
-公共字段保留现有 `module`、`package`、`namespaces`、`features`、`default_features`、`optional`。Git/path 从所选根的 goxide.toml 或 go.mod 读取生成 Go 所需的 module 路径，可选 `module` 只作一致性断言；Go 来源的身份由 `go` 给出，不重复填写 module。`package` 和 namespaces 是精确 import package 绑定；这里的 package 沿用 Goxide 包映射含义，不等于 Cargo 的发行 crate 名。未映射到 package 的依赖根只作显式 namespace 分组。标准库的 go 本身给出精确 package，无需再写 package；不接受 feature 请求。
+当前入口规则以 [schema](toml-manifest.md#来源与包身份) 为准：依赖项不接受 `package`。Git/path 从所选根的 goxide.toml 或 go.mod 读取生成 Go 所需的 module 路径，可选 `module` 只作一致性断言；Go module 来源的路径由 `go` 给出，不重复填写。alias 默认绑定标准库指定包、纯 Go module 根包或 Goxide 自己必需的 lib 入口。`namespaces` 保留为精确 Go 包映射与别名组织，不绕过 Goxide 公开边界；features/default_features/optional 沿用 feature 规则，标准库不接受 feature 请求。
 
 底层依赖图按来源身份建立节点，alias 只是各声明项目内的引用名。同来源节点接收的活动 feature 请求取并集，不同来源独立求解。path 使用规范来源目录，Git 使用规范仓库地址、锁定 commit 和 subdir，Go 版本来源使用逻辑 module path；实际生效的本地 replace 归一到 path。节点键与选中版本、校验和等内容身份分开，细节见[依赖根合同](dependency-roots.md)。`go_mod.module` 仅供 Go 投影使用，不作为 Goxide 节点去重键；来源收集之后、临时 Go module 和选版之前检查不同来源是否占用相同 module 路径，并明确报冲突。
 
@@ -27,21 +27,31 @@ Go module 是一起选版和分发的一组 packages，import package 是其中�
 ```toml
 [dependencies]
 fmt = { go = "fmt" }
-formatting = { go = "github.com/goxide-lang/std", version = "v0.0.0-20261009104839-c02a09d8c417", package = "github.com/goxide-lang/std/formatting" }
+
+[dependencies.standard]
+go = "github.com/goxide-lang/std"
+version = "v0.0.0-20261009104839-c02a09d8c417"
+
+[dependencies.standard.namespaces]
+formatting = "github.com/goxide-lang/std/formatting"
 ```
 
 同一真实 formatting 来源也可以写成下面的 Git 声明，与上方 Go module 声明二选一：
 
 ```toml
-[dependencies.formatting]
+[dependencies.standard]
 git = "https://github.com/goxide-lang/std.git"
 rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
-package = "github.com/goxide-lang/std/formatting"
+
+[dependencies.standard.namespaces]
+formatting = "github.com/goxide-lang/std/formatting"
 ```
+
+两种声明都以 `use standard::formatting;` 选择该 Go 子包。
 
 ## monorepo 与工作区规则
 
-`subdir` 只选择 Git 仓库内的项目/module 根，该目录必须有自己的 goxide.toml 或 go.mod；省略时选仓库根。不递归搜索，不按 alias 猜目录，不允许逃出 checkout。path 同样直接选根，不需要再加 subdir。项目内的包通过 package/namespaces 绑定，不能拿 subdir 选择同一 Go module 下的普通包目录。
+`subdir` 只选择 Git 仓库内的项目/module 根，该目录必须有自己的 goxide.toml 或 go.mod；省略时选仓库根。不递归搜索，不按 alias 猜目录，不允许逃出 checkout。path 同样直接选根，不需要再加 subdir。Go 子包通过 namespaces 映射，Goxide 公开子路径沿 pub mod/pub use；不能拿 subdir 选择同一 Go module 下的普通包目录。
 
 实际 monorepo 验收使用本地 Git 仓库，packages/lib 内的独立 module 通过 subdir 选择；完整可运行 recipe 见 [schema 文档](toml-manifest.md#monorepo-与发现)。原 shared_std_candidate 夹具包含历史 ABI，已确认当前编译器正确拒绝，不能作为新用户的可运行依赖示例。
 
@@ -55,13 +65,13 @@ package = "github.com/goxide-lang/std/formatting"
 
 复用稳定的 target 工作目录与最终输出路径，继续隔离目标、features、tags/race、编译器/工具链配置；每次不永久新增 run 目录。先生成完整新视图，再仅替换内容变化文件，并移除工具此前生成的失效文件；拒绝覆盖用户修改或删除陌生文件。保留现有必要所有权与互斥检查，不增加未来扩展注册表、wrapper 或通用缓存框架。
 
-编译前自动获取已声明且受支持的依赖、选版并校验 sums；Go 标准库不进入下载图。缺声明、缺 package、错误 module 身份、未实现 registry、离线缺缓存均给对应诊断，不让用户等 go build 提示手工 go get。构建不借下载执行依赖脚本；现有脚本授权不变。
+编译前自动获取已声明且受支持的依赖、选版并校验 sums；Go 标准库不进入下载图。缺声明、无效库入口、错误 module 身份、未实现 registry、离线缺缓存均给对应诊断，不让用户等 go build 提示手工 go get。构建不借下载执行依赖脚本；现有脚本授权不变。
 
 实施顺序：确认下列取舍 → 在关联 Draft PR 中实现最小真实首构建 → 少量定向回归（正常链路、来源冲突、发现边界、旧文件删除/用户编辑保护）→ 干净缓存首构建及 offline/locked 二次构建，核对目录、内容/mtime、锁与无 `.goxide` → 独立正确性及删减审核 → CI 最终全量，同一版本不重复全测。不提供旧 schema/API 兼容，不扩到 serde 或其他任务。
 
 ## 决定记录
 
-1. 已确认：采用 `go = "module-path"` 加 version，并用 `go = "fmt"` 表示免下载标准库；保留现有精确 package/namespaces 绑定。
+1. 已确认：采用 `go = "module-path"` 加 version，并用 `go = "fmt"` 表示免下载标准库；依赖 alias 使用默认库入口，namespaces 提供显式包映射，不接受 dependency.package。
 2. 已确认 Git 使用零或一个 rev/tag/branch，缺省使用默认分支并锁定 commit；rev 支持 commit hash/远端公开 ref，并且本片不支持 version 与 git/path 的发布组合。
 3. 本片按父任务明确范围采用显式项目根 subdir、不自动搜索；单一受管 target/cache 默认。
 

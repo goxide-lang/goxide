@@ -13,4 +13,4 @@ path = "cmd/app"
 [dependencies]
 fmt = { go = "fmt" }
 testing = { go = "testing" }
-kit = { path = "../kit", module = "example.org/p5/kit", package = "example.org/p5/kit" }
+kit = { path = "../kit", module = "example.org/p5/kit" }

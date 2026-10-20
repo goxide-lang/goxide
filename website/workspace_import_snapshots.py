@@ -47,7 +47,7 @@ def build(ROOT, GO):
    out=call(['run','--package','example.org/app','--locked','--offline',str(new)]);assert out==('modified vendor\n' if vendored else 'hello workspace\n');runs.append(dict(command='goxide run --package example.org/app --locked --offline migrated',stdout=out))
    (lib/'lib.go').unlink()
    if vendored:
-    with (lib/'goxide.toml').open('a') as config:config.write('\n[dependencies.dep]\ngo="example.org/dep"\npackage="example.org/dep"\nversion="v1.0.0"\n')
+    with (lib/'goxide.toml').open('a') as config:config.write('\n[dependencies.dep]\ngo="example.org/dep"\nversion="v1.0.0"\n')
     write(lib/'lib.gox','package lib\nuse dep;\nmacro_rules! suffix { () => { " enhanced" }; }\nfunc Value()string{return dep::Value()+suffix!()}\n')
     out=call(['run','--package','example.org/app','--offline',str(new)]);assert out=='modified vendor enhanced\n'
     runs.append(dict(command='替换 lib.go 为 lib.gox 并声明 dep 根后更新锁：goxide run --package example.org/app --offline migrated',stdout=out))

@@ -49,7 +49,6 @@ func resolveAuthorDependencies(author map[string]Dependency) (map[string]Depende
 				if strings.Contains(first, ".") {
 					return nil, fmt.Errorf("dependency %s: Go module %s requires version", alias, d.Go)
 				}
-				d.Package = d.Go
 			}
 		}
 		deps[alias] = d
@@ -66,9 +65,6 @@ func authorDependencies(deps map[string]Dependency) map[string]Dependency {
 	for alias, d := range deps {
 		if d.Go != "" {
 			d.Module = ""
-			if d.IsToolchain() {
-				d.Package = ""
-			}
 		}
 		author[alias] = d
 	}

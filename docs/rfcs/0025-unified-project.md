@@ -41,7 +41,7 @@ path = "cmd/app"
 
 本地作者工程一旦有 TOML，根 go.mod/go.sum 都报双配置迁移诊断。原生 Go 依赖无 TOML 时继续使用自己的 go.mod；带 TOML 的 path/Git 作者依赖从 TOML 合成 module 元数据，不能要求给 readonly checkout 写文件。代理下载的 source 发行物有传输用 go.mod：只有经 Go 校验的版本来源允许这一组合，且传输身份/feature无关原生Go约束须与 TOML 相符；该 go.mod 不是第二个作者配置来源。不能用 manifest 标记让任意本地根绕过双配置检查。
 
-源级 dependency alias 到精确 package/namespace 的映射、toolchain 来源、未迁入 Go module 的 `goxide.roots.toml` 及 `--roots` 作用域，见 [显式依赖根设计](../design/dependency-roots.md)。path/Git 的 module 从所选根清单读取，可选显式 module 只作一致性断言。映射参与清单与锁身份，不改变 Go 的 module 选版权威。
+源级 dependency alias 绑定默认库入口，依赖项不接受 package；path/Git 的 module 从所选根清单读取，可选显式 module 只作一致性断言。额外的 namespaces 精确映射、toolchain 来源、未迁入 Go module 的 `goxide.roots.toml` 及 `--roots` 作用域，见 [显式依赖根设计](../design/dependency-roots.md)。映射参与清单与锁身份，不改变 Go 的 module 选版权威。
 
 ### 无损迁入子集
 

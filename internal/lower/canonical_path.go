@@ -33,7 +33,7 @@ func (i *moduleImporter) canonicalPaths(parts []string, visiting map[string]bool
 			if requirement.namespace.PackagePath == "" {
 				return nil
 			}
-			if err := requirement.check(i.owners, i.external); err != nil {
+			if err := i.checkRootRequirement(requirement); err != nil {
 				if i.err == nil {
 					i.err = err
 				}

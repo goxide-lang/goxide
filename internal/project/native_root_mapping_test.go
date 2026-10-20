@@ -16,7 +16,6 @@ func nativeRootMappingFixture(t *testing.T) (*Workspace, Manifest) {
 [dependencies.dep]
 go = "example.org/dep"
 version = "v1.0.0"
-package="example.org/dep"
 optional=true
 [dependencies.fmt]
 go = "fmt"
@@ -112,7 +111,7 @@ func TestNativeExternalRootPreservesMemberEdges(t *testing.T) {
 	wsWrite(t, lib, "lib.go", "package lib\n")
 	w.Members[pathSource(lib).key()] = lib
 	w.Manifests[lib] = Manifest{Module: "example.org/lib", GoVersion: "1.27"}
-	m.Dependencies["member"] = Dependency{Path: "../lib", Package: "example.org/lib"}
+	m.Dependencies["member"] = Dependency{Path: "../lib"}
 	w.Manifests[filepath.Join(w.Root, "app")] = m
 	lock := Lock{NativeWorkspace: &NativeWorkspaceLock{Modules: map[string]Selection{"example.org/dep": {Path: "example.org/dep", Version: "v1.0.0"}}}}
 	graphs, err := NativeFeatureGraphs(w, []string{m.Module}, "unused-go-tool", map[string][]string{m.Module: {"with_dep"}}, false, lock)

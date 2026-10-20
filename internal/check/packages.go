@@ -42,6 +42,11 @@ func (c *checker) checkImportedVisibility() {
 			c.file = file
 			for _, use := range file.Uses {
 				symbol := c.localSymbol(use.Target)
+				// A public namespace route may share a canonical path with a
+				// private item. That item does not replace the selected namespace.
+				if use.Resolved != nil && use.Resolved.Kind == resolve.Module && use.Resolved.Visibility == resolve.Public {
+					continue
+				}
 				if symbol == nil || symbol.Visibility != resolve.Private || symbol.Decl.File == "" || c.sameSourcePackage(symbol.Decl.File, file.Name) {
 					continue
 				}

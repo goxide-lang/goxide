@@ -12,6 +12,7 @@ import (
 
 	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
+	"github.com/hxsf/goxide/internal/resolve"
 )
 
 func TestCompileModulesMappedBlankImports(t *testing.T) {
@@ -107,6 +108,92 @@ func TestCompileModulesRejectInvalidRootsBeforeWriting(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCompileModulesMappedNamespacesRequireStaticPaths(t *testing.T) {
+	for _, test := range []struct{ name, use, body, selector, receiver string }{
+		{"function", "use fmt;", `func main() { fmt.Println("wrong") }`, "fmt.Println", "fmt"},
+		{"type", "use bytes;", "var buffer bytes.Buffer\nfunc main() {}", "bytes.Buffer", "bytes"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			source := "package main\n" + test.use + "\n" + test.body + "\n"
+			writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module fixture\n\ngo 1.27\n"))
+			writeDiagnosticModuleFile(t, directory, "main.gox", []byte(source))
+			writeDiagnosticModuleFile(t, directory, "other.gox", []byte("package main\nfunc Other() {}\n"))
+			roots := paths.Roots{
+				"fmt":   {PackagePath: "fmt", Source: "toolchain"},
+				"bytes": {PackagePath: "bytes", Source: "toolchain"},
+			}
+			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}})
+			var diagnostic resolve.Diagnostic
+			start := uint32(strings.Index(source, test.selector))
+			if !errors.As(err, &diagnostic) || diagnostic.Code != "namespace-as-value" || diagnostic.File != "fixture/main.gox" || diagnostic.Span.Start != start || diagnostic.Span.End != start+uint32(len(test.receiver)) {
+				t.Fatalf("missing source namespace diagnostic: %v", err)
+			}
+			if !strings.Contains(err.Error(), "static :: path") || strings.Contains(err.Error(), "$goxide$roots") {
+				t.Fatalf("namespace diagnostic exposed routing or omitted the correction: %v", err)
+			}
+			for _, name := range []string{"main", "other"} {
+				if _, err := os.Stat(filepath.Join(directory, name+".gox")); err != nil {
+					t.Fatalf("failure removed source: %v", err)
+				}
+				if _, err := os.Stat(filepath.Join(directory, name+".go")); !os.IsNotExist(err) {
+					t.Fatalf("failure wrote generated Go: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestCompileModulesMappedNamespacesKeepValueBindings(t *testing.T) {
+	const source = `package main
+use fmt;
+use bytes;
+use fmt::Println as print;
+use api::console as output;
+func main() {
+    var buffer bytes::Buffer
+    buffer.WriteString("buffer")
+    fmt := struct { Text string }{Text: "local"}
+    fmt::Println("static", buffer.String())
+    print(fmt.Text)
+    output::Println("nested")
+}
+`
+	roots := paths.Roots{
+		"fmt":   {PackagePath: "fmt", Source: "toolchain"},
+		"bytes": {PackagePath: "bytes", Source: "toolchain"},
+		"api": {Children: map[string]paths.Namespace{
+			"console": {PackagePath: "fmt", Source: "toolchain"},
+		}},
+	}
+	var previous []byte
+	for attempt := 0; attempt < 2; attempt++ {
+		directory := t.TempDir()
+		writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module fixture\n\ngo 1.27\n"))
+		writeDiagnosticModuleFile(t, directory, "main.gox", []byte(source))
+		if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
+			t.Fatal(err)
+		}
+		output, err := os.ReadFile(filepath.Join(directory, "main.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(output), "$goxide$roots") {
+			t.Fatalf("namespace routing leaked into Go:\n%s", output)
+		}
+		if attempt != 0 && !bytes.Equal(previous, output) {
+			t.Fatalf("same input generated different Go:\n%s\n%s", previous, output)
+		}
+		previous = output
+		if attempt == 0 {
+			runGo(t, directory, "build", "./...")
+			if got := runGo(t, directory, "run", "."); got != "static buffer\nlocal\nnested\n" {
+				t.Fatalf("namespace and value output = %q", got)
+			}
+		}
 	}
 }
 

@@ -4,7 +4,7 @@
 
 ## 绑定与运算符
 
-外部根必须由 [依赖映射](dependency-roots.md)提供，再由源文件 `use` 选择。下例假定 `serde` 映射根包，并显式配置 `json` 子 namespace；package path 的目录关系不会自动提供该子项：
+外部根必须由 [依赖声明或显式根映射](dependency-roots.md)提供，再由源文件 `use` 选择。TOML 依赖默认使用标准库指定包、纯 Go module 根包或 Goxide 的 `[lib]` 入口；依赖项不写 `package`。下例假定 `serde` 绑定根包，并通过 `namespaces` 显式配置 Go 的 `json` 子包；package path 的目录关系不会自动提供该子项：
 
 ```goxide
 package model
@@ -33,9 +33,9 @@ func RoundTrip(value Message) (Message, error) {
 
 ## 本地模块与真实来源
 
-目录模式的 `mod child;` 声明当前包路径下、当前构建视图选中的本地子包，`pub mod child;` 可公开它。不能把外部依赖冒充为 `mod`，也不接受 `mod = go import`。单文件模式不选择其他源包，因此拒绝 `mod`；调用已生成或原生 Go 包可使用明确配置的 `use`。
+目录模式的 `mod child;` 声明当前包路径下、当前构建视图选中的本地子包，`pub mod child;` 可公开它。消费 Goxide 依赖时从库自己必需的 `[lib]` 入口开始，沿 `pub mod` / `pub use` 访问公开子路径；私有子包不能通过 `namespaces` 映射变成公开。不能把外部依赖冒充为 `mod`，也不接受 `mod = go import`。单文件模式不选择其他源包，因此拒绝 `mod`；调用已生成或原生 Go 包可使用明确配置的 `use`。
 
-`goxide.toml` 的 `namespaces` 可精确映射当前 module 的原生 Go 包。path/Git 的 module 身份从所选根清单读取，可选 `module` 只作一致性断言。外部 namespace 则记录其预期 module；实际加载通过 Go resolver 提供的 module 身份核对，不用字符串前缀替代证明。toolchain 根也须证明来自工具链。来源不同的包即使取得同一个 package path，也不能冒充 serde owner。
+`goxide.toml` 的 `namespaces` 可精确映射当前 module 的原生 Go 包，依赖的 `namespaces` 可映射其 Go 子包或组织别名；不自动扫描 Go 子目录。path/Git 的 module 身份从所选根清单读取，可选 `module` 只作一致性断言。实际加载通过 Go resolver 提供的 module 身份核对，不用字符串前缀替代证明，Go 的 `internal` 规则仍生效。toolchain 根也须证明来自工具链。来源不同的包即使取得同一个 package path，也不能冒充 serde owner。
 
 依赖发现先记录显式选择的包，再按已验证重导出的 namespace 选择实际叶子。本地叶子即使通过多层 facade 才可见，也须先完成编译；未使用的分组子项不产生构建边。循环仍按真实包图拒绝。
 

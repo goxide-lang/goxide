@@ -28,11 +28,14 @@ import (
 // features. The first module supplies the Go import context and build flags.
 type Module struct {
 	Path, Dir string
-	Roots     paths.Roots
-	Config    config.Config
-	Context   context.Context
-	Tags      []string
-	Race      bool
+	// RootPackage is the canonical library entry declared by a project manifest.
+	// An empty value leaves native Go package imports unrestricted.
+	RootPackage string
+	Roots       paths.Roots
+	Config      config.Config
+	Context     context.Context
+	Tags        []string
+	Race        bool
 }
 
 // CompileModules compiles the complete source graph in one pass. The first
@@ -146,7 +149,13 @@ func CompileModules(modules []Module) (err error) {
 	if len(native) > 0 {
 		packages = resolve.Resolve(files, nil)
 	}
-	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: external, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: owners}
+	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: external, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: owners, publicRoots: map[string]string{}, sourcePackages: map[string]bool{}}
+	for _, module := range modules {
+		imports.publicRoots[module.Path] = module.RootPackage
+	}
+	for name := range diskNames {
+		imports.sourcePackages[path.Dir(name)] = true
+	}
 	imports.SetSourcePackages(packages.Packages)
 	for _, requirement := range requirements {
 		if _, exists := imports.namespaces[requirement.target]; !exists {
@@ -182,11 +191,22 @@ func CompileModules(modules []Module) (err error) {
 	if imports.err != nil {
 		return imports.err
 	}
+	for _, file := range resolved.Files {
+		for _, use := range file.Uses {
+			if requirement, ok := imports.namespace(use.Target); ok {
+				imports.rootAccesses = append(imports.rootAccesses, requirement)
+				use.Resolved = &resolve.Symbol{Kind: resolve.Module, Visibility: resolve.Public, Target: use.Target}
+			}
+		}
+	}
 	if err := imports.finishUses(resolved, strictRoots); err != nil {
 		return err
 	}
 	if len(resolved.Diagnostics) != 0 {
 		return resolved.Diagnostics[0]
+	}
+	if err := imports.checkSourceRoots(resolved); err != nil {
+		return err
 	}
 	expandedFiles := make(map[string]*syntax.File, len(resolved.Files))
 	for name, file := range resolved.Files {

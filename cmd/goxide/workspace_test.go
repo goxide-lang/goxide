@@ -33,7 +33,7 @@ func TestWorkspaceUnifiedVersionsSeparateFeatures(t *testing.T) {
 members=["app","server","common"]
 default-members=["app"]
 [workspace.dependencies]
-common={module="example.org/common",package="example.org/common",path="common",default_features=false}
+common={module="example.org/common",path="common",default_features=false}
 `)
 	for _, m := range []string{"app", "server"} {
 		f := "json"
@@ -48,7 +48,7 @@ go="1.27"
 [dependencies]
 common={workspace=true,features=[%q]}
 fmt={go = "fmt"}
-d={go = "example.org/d", version = %q,package="example.org/d"}
+d={go = "example.org/d", version = %q}
 [[go.require]]
 module="example.org/d"
 version=%q

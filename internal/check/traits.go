@@ -197,6 +197,9 @@ func (c *checker) sourcePathSymbol(parts []*ast.PathSegment) *resolve.Symbol {
 	// Reexports can change the visible name and package while retaining one
 	// source declaration. Prefer the resolver's canonical route for this path.
 	last := c.file.References[lastName.ID()]
+	if c.namespaceSymbol(last.Symbol) {
+		return c.visibleSymbol(lastName, last.Symbol)
+	}
 	if !last.Deferred && last.Symbol != nil && len(last.Symbol.Target) != 0 {
 		if symbol := c.localSymbol(last.Symbol.Target); symbol != nil {
 			return c.visibleSymbol(lastName, symbol)

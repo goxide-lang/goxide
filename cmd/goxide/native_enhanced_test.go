@@ -94,7 +94,7 @@ func TestNativeWorkspaceProgressiveVendor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspaceWrite(t, lib, "goxide.toml", string(manifest)+"\n[dependencies.dep]\ngo = 'example.org/dep'\nversion = 'v1.0.0' \npackage='example.org/dep'\n")
+	workspaceWrite(t, lib, "goxide.toml", string(manifest)+"\n[dependencies.dep]\ngo = 'example.org/dep'\nversion = 'v1.0.0' \n")
 	if out, e := projectRun(t, dest, "run", "-p", "example.org/app", "--offline"); e != nil {
 		t.Fatalf("refresh explicit roots: %s %v", out, e)
 	}
@@ -172,9 +172,8 @@ func TestNativeWorkspaceOptionalCfg(t *testing.T) {
 	m = w.Manifests[app]
 	d := m.Dependencies["member1"]
 	d.Optional = true
-	d.Package = "example.org/lib"
 	m.Dependencies["member1"] = d
-	m.Dependencies["fmt"] = project.Dependency{Go: "fmt", Package: "fmt"}
+	m.Dependencies["fmt"] = project.Dependency{Go: "fmt"}
 	m.Features = map[string][]string{"default": {"use_lib"}, "use_lib": {"dep:member1"}, "never": {}}
 	b, e := project.Marshal(m)
 	if e != nil {

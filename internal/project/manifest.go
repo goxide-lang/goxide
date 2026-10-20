@@ -35,7 +35,6 @@ type Dependency struct {
 	Go              string            `json:"go,omitempty" toml:"go,omitempty"`
 	Registry        string            `json:"registry,omitempty" toml:"registry,omitempty"`
 	Module          string            `json:"module,omitempty" toml:"module,omitempty"`
-	Package         string            `json:"package,omitempty" toml:"package,omitempty"`
 	Namespaces      map[string]string `json:"namespaces,omitempty" toml:"namespaces,omitempty"`
 	Version         string            `json:"version,omitempty" toml:"version,omitempty"`
 	Path            string            `json:"path,omitempty" toml:"path,omitempty"`
@@ -50,8 +49,6 @@ type Dependency struct {
 }
 
 // IsToolchain identifies roots supplied by Go itself, outside the module graph.
-// Package and Namespaces declare exact packages; an absent Package is a group,
-// including for module dependencies. Module paths are never package defaults.
 func (d Dependency) IsToolchain() bool { return d.Go != "" && d.Version == "" }
 
 type Target struct {

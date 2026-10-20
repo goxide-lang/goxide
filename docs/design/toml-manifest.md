@@ -6,7 +6,7 @@
 
 状态：已完成。`internal/compile.PrepareProject` 接受单项目目录，使用既有清单、Go 依赖图和锁，选择 bin 后把所需模块交给 `parser → expand → resolve → check → lower`。返回稳定生成模块目录与 Go 入口包；调用者在该目录执行 Go build、run 或 test。CLI 三种输入模式在 P6 统一切换。
 
-本阶段使用项目 `[go_mod]`、精确 namespace 映射、Go/path/Git 依赖及 bin；依赖库沿用 lib 路径。多包源和所选 Goxide 依赖联合检查，保留 enum、trait、宏和引用权限，不使用旧前端导出 metadata。原生 Go 源码、测试与资源参与生成模块；当前互操作支持 Goxide 跨包导入原生 Go，以及原生 Go 调用生成的公开 API。同包 Goxide 引用手写 Go 声明的桥接留待管线集成。清单作者根不生成 go.mod/go.sum。
+本阶段使用项目 `[go_mod]`、namespace 映射、Go/path/Git 依赖及 bin；Goxide 依赖默认从库自己的 `[lib]` 入口访问。多包源和所选 Goxide 依赖联合检查，保留 enum、trait、宏和引用权限，不使用旧前端导出 metadata。原生 Go 源码、测试与资源参与生成模块；当前互操作支持 Goxide 跨包导入原生 Go，以及原生 Go 调用生成的公开 API。同包 Goxide 引用手写 Go 声明的桥接留待管线集成。清单作者根不生成 go.mod/go.sum。
 
 依赖版本和校验和由既有 Go planner 锁定，生成模块间使用 bundle 内的相对 replace；临时生成目录不进入锁或最终 Go 元数据。相同输入保持生成字节、产物路径和锁稳定，offline/locked 使用已有缓存与锁重放，清单依赖映射改变时 locked 拒绝更新。失败的源检查不发布新锁或覆盖已有 bundle。
 
@@ -28,7 +28,7 @@ path = "src"
 
 [dependencies]
 fmt = { go = "fmt" }
-errors = { go = "github.com/pkg/errors", version = "v0.9.1", package = "github.com/pkg/errors" }
+errors = { go = "github.com/pkg/errors", version = "v0.9.1" }
 ```
 
 ```goxide
@@ -53,7 +53,7 @@ goxide run --offline --locked   # clean dependency download
 | --- | --- |
 | go_mod | 生成 go.mod 的元数据：必填 module、go；可选 toolchain（建议版本，不自动下载） |
 | namespaces | 本项目的精确包映射；名称到 Go package 路径，不写在 go_mod 内 |
-| dependencies.alias | 下述来源加公共 module/package/namespaces、features、default_features、optional；alias 是 use 的根名 |
+| dependencies.alias | 按下述四类来源填写；alias 绑定默认库入口，namespaces 可增加精确包映射；Git/path 的 module 可选，仅作身份断言；不接受 package |
 | features | 名称到字符串数组；default 为默认集合，dep:alias 激活 optional，alias/feature 转发 feature |
 | lib | 至多一项 name、path，可加 required_features |
 | bin / example | 数组表，各项 name、path、可选 required_features；path 为项目内目录或单个 .gox/.go 入口 |
@@ -79,26 +79,72 @@ goxide run --offline --locked   # clean dependency download
 
 ## 来源与包身份
 
-| 来源 | 声明 |
-| --- | --- |
-| Go 标准库 | `fmt = { go = "fmt" }`；没有 version，不下载，不接收 features/default_features；真实加载时核验 Go 的 Standard 标志 |
-| Go module | `errors = { go = "github.com/pkg/errors", version = "v0.9.1", package = "github.com/pkg/errors" }`；go 是无协议 module path，version 是 Go 规范版本/pseudo-version；MVS 可选更高版本，lock 记录结果 |
-| Git | git 为 HTTPS 仓库 URL；可选零或一个 rev/tag/branch；缺省默认分支，完整 commit 写入 lock；可选 subdir |
-| 本地 | path 直接选项目根，相对声明所在清单；module 从根清单读取，可选显式 module 只作一致性断言；本地字节不冒充不可变远端 checksum |
-| registry | 单独 version，或 version 加 registry；明确报未实现，不猜 registry/Git URL |
+以下依赖配置可加入已有 `goxide.toml`。来源按获取方式分为 Go 标准库、Go module、本地 path、Git；`go`、`path`、`git` 互斥，`version` 当前只配合 Go module 来源。path 和 Git 都可以取得 Goxide 或纯 Go 源码。
 
-git、path、go 互斥；version 当前只配合 go。Git/path 加 version 的 Cargo 发布回退不在本片内。多个 Git 选择器报冲突，没有优先级；rev 支持 commit hash/远端公开 ref，tag 与 branch 分别解析自己的 ref。普通构建沿用锁定 commit，不随移动 ref 更新。
-
-Git/path 从所选根的 goxide.toml 或 go.mod 读取 module 身份，可选显式 module 只作一致性断言；Go 来源由 go 给出 module，不重复 module 字段。package 是精确 import package，不是下载地址或仓库子目录；namespaces 显式映射其他包，没有 package 的 module 根只是分组，不自动导入整个 module。原生 .go 仍使用 Go import。
-
-公开 std module 有 formatting，没有 fmt：Go 的 fmt 是标准库，不能当作该仓库中的独立项目。
+### Go 标准库
 
 ```toml
-[dependencies.formatting]
+[dependencies.fmt]
+go = "fmt"
+```
+
+```goxide
+use fmt;
+```
+
+必需 `go`，值为标准库的精确包路径；没有 `version`。alias 自动绑定该包，不写 `module`，不下载，不进入 module 选版图。可选 `optional`、`namespaces`，其中 namespace 的值也必须是标准库包。禁止 `features`、`default_features` 和 feature 转发；真实加载时核验 Go 的 `Standard` 标志。
+
+### Go module
+
+```toml
+[dependencies.errors]
+go = "github.com/pkg/errors"
+version = "v0.9.1"
+```
+
+```goxide
+use errors;
+```
+
+必需 `go`、`version`：`go` 是不带协议的 module path，`version` 是 Go 规范版本或 pseudo-version。MVS 可以选中更高版本，lock 记录实际结果。`go` 已提供 module 身份，禁止重复填写 `module`。
+
+可选 `namespaces`、`optional`、`features`、`default_features`。纯 Go module 的 alias 默认绑定模块根包；Goxide 源码依赖必须声明自身 `[lib]` 入口。feature 请求规则见[下文](#可选依赖与-feature-请求)。
+
+### 本地 path
+
+```toml
+[dependencies.kit]
+path = "../kit"
+```
+
+```goxide
+use kit;
+```
+
+必需 `path`，直接选择项目/module 根，相对声明所在清单解析。模块身份从该根的 `goxide.toml` 中 `go_mod.module` 或 `go.mod` 中 `module` 自动读取，不根据目录名或 alias 推断。
+
+可选 `module`、`namespaces`、`optional`、`features`、`default_features`。显式 `module = "example.org/kit"` 仅断言所读取的身份必须相等，不为依赖改名；不一致时报 module path mismatch。不接受 `version`、`subdir` 或 Git 选择器。本地字节不冒充不可变远端 checksum。
+
+### Git
+
+```toml
+[dependencies.standard]
 git = "https://github.com/goxide-lang/std.git"
 rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
-package = "github.com/goxide-lang/std/formatting"
+
+[dependencies.standard.namespaces]
+formatting = "github.com/goxide-lang/std/formatting"
 ```
+
+```goxide
+use standard::formatting;
+```
+
+必需 `git`，远端来源使用 HTTPS 仓库 URL。module 身份从所选项目根的 `goxide.toml` 或 `go.mod` 自动读取。可选 `module` 一致性断言、`rev`/`tag`/`branch` 中的一项，以及 `subdir`、`namespaces`、`optional`、`features`、`default_features`。
+
+多个 Git 选择器报冲突，没有优先级。`rev` 支持 commit hash 或远端公开 ref，`tag` 与 `branch` 分别解析自己的 ref。省略选择器时解析默认分支，完整 commit 写入 lock；普通构建沿用锁定 commit，不随移动 ref 更新。Git 不接受 `version`，没有 Cargo 风格的发布版本回退。
+
+`subdir` 只选择仓库内独立的项目/module 根，规则和完整 monorepo 示例见[下节](#monorepo-与发现)。上例中 `formatting` 是 std module 内的 Go 子包，使用 `namespaces` 映射；Go 的 `fmt` 应按标准库声明。
 
 ### module 身份与默认入口
 
@@ -110,11 +156,40 @@ path 和 Git 的来源身份与生成 Go 所需的 module 路径分开。取得�
 
 path 按规范目录归一，Git 按仓库地址、锁定 commit 和 subdir 归一，Go 版本来源按逻辑 module path 接收 MVS 请求；选中版本与校验和另属内容身份。具体的来源键、有效本地 replace 和锁中路径表示见[依赖根合同](dependency-roots.md)。
 
+依赖项的 `package` 已移除，填写时按未知字段拒绝。标准库 alias 的入口是 `go` 指定的包；纯 Go module 使用模块根包；Goxide 源码依赖必须声明 `[lib]`，缺少时拒绝。`[lib]` 是库作者定义的入口，不由消费者指定另一个包代替。Goxide 的公开子路径来自 `pub mod` / `pub use`，没有自动导出所有目录的规则。
+
+### namespaces 与公开子包
+
+纯 Go module 的子目录不自动变成 namespace。`namespaces` 保留为 Go 互操作与别名组织的精确包映射，例如：
+
+```toml
+[dependencies.formats]
+go = "github.com/goxide-lang/serde"
+version = "v0.0.0-20261009021520-f342a31e20d0"
+
+[dependencies.formats.namespaces]
+json = "github.com/goxide-lang/serde/json"
+```
+
+```goxide
+use formats::json;
+```
+
+`formats` 默认对应 serde 根包，`formats::json` 是配置的子包映射。映射值不是下载地址、仓库子目录或用于拼接的前缀。namespace 键逐段使用合法标识符，深路径用带引号的键，如 `"encoding::json"`；可见子项来自显式映射或 Goxide 库的公开声明，不自动扫描 Go 子目录，也不继承依赖项目自己的 namespace 配置。
+
+映射不授予 Goxide 私有包的访问权限。实际包必须属于依赖 module，不能只凭路径前缀证明归属，Go 的 `internal` 边界也保持有效。原生 `.go` 仍使用 Go import；详细绑定规则见[依赖根](dependency-roots.md)。
+
+### 可选依赖与 feature 请求
+
+四类来源均可设置 `optional = true`，缺省为 false；由 feature 请求激活，如 `dep:alias`，不会由 `use` 隐式开启。三类 module 来源另可设置 `features = ["名称"]` 和 `default_features`：前者向带 Goxide 源码清单的依赖请求 feature，后者缺省为 true，false 取消该依赖边的默认请求。纯 Go 或固定生成 Go 依赖没有可重配的 Goxide feature，不能向它转发 feature。完整展开规则见 [Feature 配置](#feature-配置)。
+
+registry 来源尚未实现。只写 `version`，或 `version` 加 `registry`，均明确报错；不会据此猜测 registry 或 Git URL。
+
 ## monorepo 与发现
 
 Git 的 subdir 只选仓库内有 goxide.toml 或 go.mod 的项目/module 根；省略选仓库根。它不选择同一 module 下的普通 package，不递归搜索或按 alias 猜目录，也不得逃出 checkout。path 已直接选根，不配 subdir。
 
-可重放的 monorepo 示例使用本地 Git 夹具；其独立 Go module 位于 packages/lib，package 绑定对应该 module 的根包。Git 的 subdir 选择模块根，module 身份从其中的 go.mod 读取；默认分支解析后锁定 commit：
+可重放的 monorepo 示例使用本地 Git 夹具；其独立 Go module 位于 packages/lib，依赖 alias 默认绑定该 module 的根包。Git 的 subdir 选择模块根，module 身份从其中的 go.mod 读取；默认分支解析后锁定 commit：
 
 ```sh
 work="$(mktemp -d)"
@@ -139,7 +214,7 @@ name = "app"
 path = "main.gox"
 [dependencies]
 fmt = { go = "fmt" }
-lib = { git = "$work/repo", subdir = "packages/lib", package = "example.org/mono/lib" }
+lib = { git = "$work/repo", subdir = "packages/lib" }
 TOML
 cat > "$work/app/main.gox" <<'GOX'
 package main

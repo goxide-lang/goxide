@@ -129,9 +129,8 @@ func fixtureManifest(t *testing.T, text, mod string) string {
 	return fixtureNamespaceManifest(t, string(b))
 }
 
-// These version/layout fixtures consistently expose each declared dependency's
-// root Go package, plus this module's library and generated gen package. Write
-// those choices explicitly into the fixture manifest; source syntax is never
+// These version/layout fixtures expose this module's library and generated gen
+// package. Dependency roots come from their sources; source syntax is never
 // rewritten or accepted by this helper.
 func fixtureNamespaceManifest(t *testing.T, text string) string {
 	t.Helper()
@@ -151,21 +150,6 @@ func fixtureNamespaceManifest(t *testing.T, text string) string {
 	if deps == nil {
 		deps = map[string]any{}
 		doc["dependencies"] = deps
-	}
-	for _, raw := range deps {
-		dep, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		module, _ := dep["module"].(string)
-		if goSource, ok := dep["go"].(string); ok && dep["version"] != nil {
-			module = goSource
-		}
-		if module != "" {
-			if _, exists := dep["package"]; !exists {
-				dep["package"] = module
-			}
-		}
 	}
 	for alias, path := range map[string]string{"fmt": "fmt", "json": "encoding/json", "os": "os", "filepath": "path/filepath", "strings": "strings"} {
 		if _, exists := deps[alias]; !exists {

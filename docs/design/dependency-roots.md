@@ -2,7 +2,7 @@
 
 `.gox` 通过 `use` 绑定静态路径，使用 `::` 访问 namespace、类型和关联项。依赖清单负责声明可用根；声明不会自动建立源文件绑定。原生 `.go` 文件继续使用 Go 的 import 和 selector。
 
-模块选版与源名字映射是两个输入。Go resolver 继续选择 module 版本、replace、校验和与工具链；根映射只将源代码中的 alias 绑定到精确 package 和显式子 namespace。module path 不自动成为可导入 package，目录也不自动成为导出 namespace。
+Go resolver 负责 module 版本、replace、校验和与工具链。活动依赖的 alias 绑定默认库入口：标准库为 `go` 指定的包，纯 Go module 为模块根包，Goxide 源码模块为自身必需的 `[lib]` 入口。公开子路径来自 Goxide 的 `pub mod` / `pub use`，或消费方明确声明的 Go 包映射；目录不会自动成为导出 namespace。
 
 依赖图按来源身份建立节点。alias 是声明它的项目内的引用名，不决定节点身份；指向同一来源节点的活动边合并 feature 请求，不同来源保留独立节点。`go_mod.module` 只描述生成 Go module 时使用的路径，不参与 Goxide 来源节点的合并。生成 Go 前检查最终投影：不同来源若占用相同 Go module 路径，给出冲突诊断，不因 alias 不同而生成重复的 Go 类型身份。
 
@@ -20,13 +20,12 @@ Go 来源经实际生效的显式本地 `replace` 指向某目录时，按该有
 
 ## goxide.toml 项目
 
-依赖来源由 Cargo 风格字段声明，`package` 与 `namespaces` 只描述精确导入绑定。完整 schema 见 [清单说明](toml-manifest.md)：
+依赖来源由 `go`、`path` 或 `git` 声明，依赖项的 `package` 字段已移除，填写时按未知字段拒绝。默认入口之外，`namespaces` 可提供精确 Go 包映射。完整 schema 见 [清单说明](toml-manifest.md)：
 
 ```toml
 [dependencies.wire]
 go = "github.com/goxide-lang/serde"
 version = "v0.0.0-20261009021520-f342a31e20d0"
-package = "github.com/goxide-lang/serde"
 
 [dependencies.wire.namespaces]
 json = "github.com/goxide-lang/serde/json"
@@ -44,7 +43,7 @@ runtime = "github.com/goxide-lang/std/runtime"
 go = "fmt"
 ```
 
-`wire`、Go 包的声明名和 package path 可以不同。`standard` 没有 `package`，因此是纯分组；只有显式映射的子 namespace 可用。较深路径使用带引号的键，例如 `"formats::binary" = "example.org/codec/binary"`。所有 alias 和 namespace 段必须是合法的源标识符。
+`wire`、Go 包的声明名和 package path 可以不同；此处 `wire` 默认绑定 serde 根包，`wire::json` 绑定 JSON 包。`standard::sum` 等 Go 子包来自显式映射；模块根没有可导入的 Go 包时，不能直接访问根包成员。较深路径使用带引号的键，例如 `"encoding::json" = "github.com/goxide-lang/serde/json"` 可为 `wire::encoding::json` 提供同一包。所有 alias 和 namespace 段必须是合法的源标识符。
 
 ```goxide
 package main
@@ -59,11 +58,11 @@ func main() { output::Println("explicit dependencies") }
 
 `git`、`path`、`go` 是互斥获取字段，`version` 配合 Go module；单独 version 的 registry 来源尚未实现。`go = "fmt"` 表示真实 Go 标准库，无 module/version 或下载，不接收 features/default_features。optional 仍由正常 feature 规则控制；内部加载校验 Standard，不用包名猜归属。
 
-path/Git 从所选项目根的 `goxide.toml` 中 `go_mod.module` 或 `go.mod` 中 `module` 读取 Go 投影路径，显式 `module` 可选且只作一致性断言。Git 的 `subdir` 仍选择含自身清单的项目/module 根，不选择普通子包。
+path/Git 从所选项目根的 `goxide.toml` 中 `go_mod.module` 或 `go.mod` 中 `module` 读取 Go 投影路径，显式 `module` 可选且只作一致性断言。Git 的 `subdir` 仍选择含自身清单的项目/module 根，不选择普通子包。库作者的 `[lib]` 决定 Goxide 公开根；消费方不重复指定入口，也不能用 namespace 映射访问 Goxide 私有包。纯 Go 子包使用 `namespaces` 映射，不自动拼接或扫描 Go 子目录。
 
 可选 module 依赖同样先经过 feature 解析；只有活动 dependency 构成根上下文。访问未激活根报错，不由 `use` 启用依赖。工具链依赖保留活动请求以提供根，但不参与下载、MVS 或增强模块构建。
 
-workspace 的 `[workspace.dependencies.alias]` 是模板。成员以 `workspace = true` 显式继承来源字段、可选 module 断言、package 与 namespaces，不能在继承项上改写这些字段；需要另一映射时声明完整 dependency。模板不自动导入，也不自动激活成员依赖。
+workspace 的 `[workspace.dependencies.alias]` 是模板。成员以 `workspace = true` 显式继承来源字段、可选 module 断言与 namespaces，不能在继承项上改写这些字段；需要另一映射时声明完整 dependency。模板不自动导入，也不自动激活成员依赖。
 
 原生 workspace 迁入模式保留已有 Go policy。对外部 Go 包增加源根时，dependency 的 `go`/`version` 必须精确匹配该成员的 `go.require`，包映射不能引入另一选版要求。实际 MVS 仍可选中更高版本；本地供应源继续由 `go.replace` 指定。此类根只增加活动 Requests，不进入增强成员的 Sources/Children，也不接受 feature 转发。optional 控制根可见性，不删除既有 Go require。原生 workspace 成员之间仍使用显式 member path。
 
@@ -99,7 +98,7 @@ package = "example.org/codec/core"
 json = "example.org/codec/json"
 ```
 
-不允许在此文件写 version/path/git 等来源配置。键名区分大小写，未知字段与错误类型直接报错。只有 root 和 namespace 名是用户定义字段。
+`goxide.roots.toml` 是独立的显式根映射输入，其 `package` 字段保留，用于指定根绑定的精确包；它与已删除的 `dependencies.alias.package` 不同。不允许在此文件写 version/path/git 等来源配置。键名区分大小写，未知字段与错误类型直接报错。只有 root 和 namespace 名是用户定义字段。
 
 ```sh
 goxide run --go "$GO_BIN" ./app
@@ -115,11 +114,11 @@ goxide transpile --roots ./chosen-roots.toml ./app/main.gox
 
 ## 包身份、加载与锁
 
-实际使用某个包时，frontend 检查所加载 package 的精确 path，并通过 Go 返回的 `Module.Path` 或 `Standard` 核验其 module/toolchain 来源。用相同前缀的嵌套 module 冒充父 module、把普通模块伪装成 toolchain、错误 package owner 都不能通过。没有按最长可导入前缀搜索的路径回退。
+实际使用某个包时，frontend 检查所加载 package 的精确 path，并通过 Go 返回的 `Module.Path` 或 `Standard` 核验其 module/toolchain 来源。用相同前缀的嵌套 module 冒充父 module、把普通模块伪装成 toolchain、错误 package owner 都不能通过。Go 的 `internal` 限制和 Goxide 的公开边界均须满足；显式映射不绕过这些边界。没有按最长可导入前缀搜索的路径回退。
 
 映射本身不加载包。未用到的 namespace 可以指向当前未加载的包；group 不递归导入所有子包。根在源文件经过 `use` 才能访问；原生 Go 包的声明名不能改变 alias 的含义。
 
-来源字段、可选 module 断言、package 与 namespaces 作为 manifest 的组成部分进入 project、workspace、lock 和来源摘要。`--locked` 拒绝改变映射后复用旧计划。原生 Go module 的显式根上下文进入 frontend 配置指纹；不同映射不能复用相同编译身份。
+来源字段、可选 module 断言与 namespaces 作为 manifest 的组成部分进入 project、workspace、lock 和来源摘要；读取到的 module 身份与库入口用于构建相应根上下文。`--locked` 拒绝改变映射后复用旧计划。原生 Go module 的显式根上下文进入 frontend 配置指纹；不同映射不能复用相同编译身份。
 
 共享解析器是 `internal/rootconfig`。CLI、直接调用 module frontend 的库用户和 Playground 都构造同一 `paths.Roots`；Playground 的根清单是显式应用输入，不是源语言内置包名白名单。
 

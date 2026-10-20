@@ -12,7 +12,7 @@ path = "cmd/orders"
 [dependencies]
 fmt = { go = "fmt" }
 testing = { go = "testing" }
-reporter = { module = "example.org/reporter", package = "example.org/reporter", path = "reporter", optional = true, default_features = false }
+reporter = { module = "example.org/reporter", path = "reporter", optional = true, default_features = false }
 
 [features]
 default = ["pretty"]

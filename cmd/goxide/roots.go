@@ -24,7 +24,7 @@ func projectHostRoots(node *project.Node) (paths.Roots, error) {
 	for alias := range node.Requests {
 		dependency := node.Manifest.Dependencies[alias]
 		if dependency.IsToolchain() {
-			mappings[alias] = rootconfig.Mapping{Package: dependency.Package, Source: "toolchain", Namespaces: dependency.Namespaces}
+			mappings[alias] = rootconfig.Mapping{Package: dependency.Go, Source: "toolchain", Namespaces: dependency.Namespaces}
 		}
 	}
 	return rootconfig.Build(mappings)

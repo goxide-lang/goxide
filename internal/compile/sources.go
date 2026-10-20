@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/hxsf/goxide/internal/paths"
@@ -27,10 +28,18 @@ func moduleRoots(node *project.Node) (paths.Roots, error) {
 			dependency = resolved
 		}
 		source := "module"
+		packagePath := dependency.Module
 		if dependency.IsToolchain() {
 			source = "toolchain"
+			packagePath = dependency.Go
+		} else if child := node.Children[alias]; child != nil {
+			var err error
+			packagePath, err = libraryPackage(child)
+			if err != nil {
+				return nil, err
+			}
 		}
-		mappings[alias] = rootconfig.Mapping{Module: dependency.Module, Package: dependency.Package, Source: source, Namespaces: dependency.Namespaces}
+		mappings[alias] = rootconfig.Mapping{Module: dependency.Module, Package: packagePath, Source: source, Namespaces: dependency.Namespaces}
 	}
 	roots, err := rootconfig.Build(mappings)
 	if err != nil {
@@ -45,6 +54,19 @@ func moduleRoots(node *project.Node) (paths.Roots, error) {
 		roots[name] = namespace
 	}
 	return roots, nil
+}
+
+func libraryPackage(node *project.Node) (string, error) {
+	if library := node.Manifest.Lib; library != nil {
+		info, err := targetInfo(node.Root, library.Path)
+		if err != nil {
+			return "", err
+		}
+		if info.IsDir() {
+			return path.Join(node.Module, filepath.ToSlash(library.Path)), nil
+		}
+	}
+	return node.Module, nil
 }
 
 func stageSources(node *project.Node, selected project.Target, kind, output string) (string, error) {

@@ -350,9 +350,7 @@ name = 'app'
 path = 'main.gox'
 
 [go_mod]
-
 [dependencies.native]
-package = 'example.org/native'
 go = 'example.org/native'
 version = 'v1.0.0'
 `, "main.gox": "package main\nuse fmt;\nuse native as n;\nfunc main(){fmt::Println(n::Value())}\n"})
@@ -487,9 +485,7 @@ name = 'lib'
 path = '.'
 
 [go_mod]
-
 [dependencies.native]
-package = 'example.org/native'
 go = 'example.org/native'
 version = 'v1.0.0'
 `, "lib.gox": "package dep\nuse native as n;\nfunc Value()int{return n::Value()}\n"})

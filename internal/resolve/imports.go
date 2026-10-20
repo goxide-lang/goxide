@@ -160,6 +160,9 @@ func (r *resolver) resolveUse(u *UseBinding) bool {
 			r.useStates[u] = 3
 			return false
 		}
+		if other != nil && len(t.Path.Segments) == 1 {
+			u.Resolved = other.Resolved
+		}
 		u.Target = append(append([]string{}, res.Symbol.Target...), u.Target[1:]...)
 		local = res.Symbol.AliasOf
 		if u.Symbol != nil {
@@ -174,25 +177,26 @@ func (r *resolver) resolveUse(u *UseBinding) bool {
 			u.Symbol.Members = b.Members
 		}
 	}
+	if local != nil {
+		res := Resolution{Symbol: local}
+		for _, seg := range t.Path.Segments[1:] {
+			res = r.member(res, seg.Name)
+		}
+		u.Resolved = res.Symbol
+		if res.Symbol != nil && len(res.Symbol.Target) != 0 {
+			u.Target = append([]string(nil), res.Symbol.Target...)
+		} else if !res.Deferred && u.Symbol != nil {
+			u.Symbol.AliasOf = res.Symbol
+		}
+	} else if u.Symbol != nil && len(u.Target) == 1 {
+		u.Symbol.Kind = Module
+	}
 	if u.Symbol != nil {
 		u.Symbol.Target = u.Target
-		if local != nil {
-			res := Resolution{Symbol: local}
-			for _, seg := range t.Path.Segments[1:] {
-				res = r.member(res, seg.Name)
-			}
-			if res.Symbol != nil && len(res.Symbol.Target) != 0 {
-				u.Target = append([]string(nil), res.Symbol.Target...)
-				u.Symbol.Target = u.Target
-			} else if !res.Deferred {
-				u.Symbol.AliasOf = res.Symbol
-			}
-		} else if len(u.Target) == 1 {
-			u.Symbol.Kind = Module
-		}
 		if u.Symbol.AliasOf == nil {
 			resolved := r.importTarget(Resolution{Symbol: u.Symbol})
 			if resolved.Symbol != nil && resolved.Symbol != u.Symbol && len(resolved.Symbol.Target) != 0 {
+				u.Resolved = resolved.Symbol
 				u.Target = append([]string(nil), resolved.Symbol.Target...)
 				u.Symbol.Target = u.Target
 			}
@@ -262,6 +266,9 @@ func (r *resolver) member(base Resolution, name *ast.Ident) Resolution {
 	if base.Symbol != nil && base.Symbol.AliasOf != nil {
 		base.Symbol = base.Symbol.AliasOf
 		base.Path = nil
+	}
+	if base.Symbol != nil && !isStatic(base.Symbol) {
+		return Resolution{}
 	}
 	if base.Deferred && base.Symbol != nil && (base.Symbol.Kind == Type || base.Symbol.Kind == TypeParam || base.Symbol.Kind == Enum) {
 		// Keep a type's qualified associated path for checking; it is not an import.

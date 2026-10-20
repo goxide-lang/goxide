@@ -167,26 +167,11 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 
 当前项目命令选择 `[[bin]]`；只有一个 bin 时可省略 `--bin`。`[lib]` 用于该项目作为依赖时的库入口，独立 `--lib`、example 与 workspace 目标选择尚未开放。`required_features` 检查已经启用的集合，不会自动开启 feature。
 
-### 依赖
+### 依赖类型
 
-每项写成 `[dependencies.alias]` 或 `[dependencies]` 下的内联表。来源字段选择 `go`、`path`、`git` 中的一种。
+按获取方式选择 Go 标准库、已发布的 Go module、本地 path 或 Git 仓库。每项写成 `[dependencies.alias]` 或 `[dependencies]` 下的内联表，四类完整配置、必需与可选字段、`use` 写法见[依赖与命名空间](#依赖与命名空间)。
 
-| 字段 | 用法 |
-| --- | --- |
-| `go` | Go 标准库包路径，或带 `version` 的 Go module 路径 |
-| `version` | 与 Go module 来源配套的精确版本或 pseudo-version；Go MVS 可以选中更高版本 |
-| `path` | 本地项目或模块根，相对当前清单；从源码清单读取 module，可选 `module` 断言 |
-| `git` | HTTPS Git 仓库地址；从所选源码根读取 module，可选 `module` 断言 |
-| `module` | Git/path 来源的可选身份断言；Go 来源由 `go` 指定，不重复填写 |
-| `rev`、`tag`、`branch` | Git 来源最多选择一项；不指定时选择默认分支并锁定 commit |
-| `subdir` | Git 仓库内的项目/module 根目录；不用于选择普通子包 |
-| `package` | alias 本身绑定的精确 Go package 路径；省略时 alias 只作 namespace 分组 |
-| `namespaces` | 相对 alias 的名称到精确 Go package 路径的映射 |
-| `optional` | 是否由 feature 激活，缺省为 false |
-| `features` | 向带 Goxide 清单的源码依赖请求 feature 列表 |
-| `default_features` | 是否请求依赖的默认集合，缺省为 true |
-
-标准库来源例如 `{ go = "fmt" }`，无需 module 或 version，也不接受 feature 请求。registry 来源、workspace 继承、vendor 与 `[build]` 配置尚未开放。详细用法见[依赖与命名空间](#依赖与命名空间)。
+registry 来源、workspace 继承、vendor 与 `[build]` 配置尚未开放。
 
 ### Go 模块政策
 
@@ -204,14 +189,94 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 
 ## 依赖与命名空间
 
-依赖的获取位置、module 身份与源码中的名字分别声明。下面是已有清单中的依赖示例：
+依赖按获取方式分为四类。下面的配置可加入已有 `goxide.toml`；项目骨架见[第一个 Goxide 项目](#第一个-goxide-项目)。每项依赖只能选择 `go`、`path`、`git` 中的一种，`version` 只与 Go module 来源配套。
+
+### Go 标准库
+
+直接用 Go 工具链中的包，例如 `fmt`：
 
 ```toml
 [dependencies]
 fmt = { go = "fmt" }
-errors = { go = "github.com/pkg/errors", version = "v0.9.1", package = "github.com/pkg/errors" }
-kit = { path = "../kit", package = "example.org/kit" }
+```
 
+```gox
+use fmt;
+```
+
+必需字段只有 `go`，值是标准库包的完整路径，例如 `fmt` 或 `encoding/json`。alias 自动绑定这个包，不写 `module` 或 `version`，也不下载依赖。可选 `optional` 和 `namespaces`；namespace 映射同样必须指向标准库。标准库不接受 `features`、`default_features` 或 feature 转发请求。
+
+### 已发布的 Go module
+
+按 module 路径和 module 版本获取依赖：
+
+```toml
+[dependencies.errors]
+go = "github.com/pkg/errors"
+version = "v0.9.1"
+```
+
+```gox
+use errors;
+```
+
+必需 `go`、`version`。`go` 是不带 `https://` 的 module 路径，`version` 是 Go module 的版本号或 pseudo-version；Go MVS 可能选中更高版本，最终结果写入锁。`go` 已给出 module 身份，不能再写 `module`。
+
+可选 `namespaces`、`optional`、`features`、`default_features`。纯 Go module 的 alias 默认绑定模块根包，所以示例可直接调用 `errors::New(...)`。Goxide 源码依赖必须由库自己声明 `[lib]` 入口。子包和 feature 选项的用法见下文。
+
+### 本地 path 依赖
+
+引用相邻的 Goxide 项目或 Go module：
+
+```toml
+[dependencies.kit]
+path = "../kit"
+```
+
+```gox
+use kit;
+```
+
+必需字段只有 `path`，指向项目/module 根，相对声明所在的 `goxide.toml` 解析。编译器从该目录的 `goxide.toml` 中读取 `go_mod.module`，或从 `go.mod` 中读取 `module`，不用在依赖项中重复填写。
+
+可选 `module`、`namespaces`、`optional`、`features`、`default_features`。例如额外写 `module = "example.org/kit"` 表示核对所取得模块的身份，不会替源码改名；不匹配时报错。`path` 已直接选择根，不配 `subdir`；也不配 `version` 或 Git 选择器。
+
+### Git 依赖
+
+从 Git 仓库取得 Goxide 项目或 Go module，例如固定到一个 commit 的 formatting 包：
+
+```toml
+[dependencies.standard]
+git = "https://github.com/goxide-lang/std.git"
+rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
+
+[dependencies.standard.namespaces]
+formatting = "github.com/goxide-lang/std/formatting"
+```
+
+```gox
+use standard::formatting;
+```
+
+必需字段只有 `git`，远端仓库用 HTTPS URL。module 身份从所选项目根的 `goxide.toml` 或 `go.mod` 读取；可选 `module` 字段仅作一致性断言。
+
+还可选 `rev`、`tag`、`branch` 中的一个，以及 `subdir`、`namespaces`、`optional`、`features`、`default_features`。不指定选择器时从默认分支解析；首次解析把完整 commit 写入锁，普通构建继续使用该 commit。Git 来源不写 `version`。
+
+`subdir = "packages/kit"` 用于仓库中的独立 module 或 Goxide 项目根，那里必须有自己的 `goxide.toml` 或 `go.mod`。它不会搜索普通子包，也不能逃出仓库。上例的 formatting 是 std module 中的 Go 子包，所以用 `namespaces` 映射，不写成 `subdir`。
+
+### module 身份与库入口
+
+来源身份、Go module 路径和库入口各有用途。依赖图按来源身份建立节点，同来源节点的 feature 请求取并集，不同来源保持独立。`go_mod.module` 是生成 Go 时的元数据，用于 Go `require` / `replace` 和包归属核验；生成前会检查不同来源是否占用相同 Go module 路径，冲突时给出诊断。path/Git 自动读取源码清单中的 module 路径，只有需要额外核对时才填写 `module`。Go module 来源的 `go` 已经提供该路径，标准库则不属于 module。
+
+`use` 使用本项目声明的依赖别名，例如 `[dependencies.kit]` 对应 `use kit;`，不要求与依赖的 `go_mod.module` 同名。别名只在声明它的项目内生效；多个别名可以引用同一来源节点。
+
+依赖项的 `package` 字段已移除，填写时按未知字段拒绝。alias 的入口按所取得的模块确定：标准库使用 `go` 指定的包，纯 Go module 使用模块根包，Goxide 源码依赖必须声明 `[lib]`，使用库自己的这个入口。Goxide 库通过 `pub mod` 和 `pub use` 提供公开子路径；消费方不能通过依赖配置访问它的私有包。
+
+### 一个依赖映射多个包
+
+纯 Go module 的子目录不会自动变成 namespace。需要子包时，用 `namespaces` 为 alias 下的名字逐项绑定精确 Go package 路径。例如 serde 的 JSON 子包：
+
+```toml
 [dependencies.formats]
 go = "github.com/goxide-lang/serde"
 version = "v0.0.0-20261009021520-f342a31e20d0"
@@ -220,22 +285,15 @@ version = "v0.0.0-20261009021520-f342a31e20d0"
 json = "github.com/goxide-lang/serde/json"
 ```
 
-在 `.gox` 中，通过对应名字使用这些包：
-
 ```gox
-use fmt;
-use errors;
-use kit;
 use formats::json;
 ```
 
-`formats` 没有 `package`，因此只是分组；`formats::json` 显式绑定到 JSON 包。编译器不会把 namespace 自动拼接成 Go import，也不会根据目录名猜包。手写 `.go` 仍使用普通 Go import。
+`formats` 默认对应 serde 根包，`formats::json` 是这里显式配置的 JSON 包入口。较深路径使用带引号的键，例如 `"encoding::json" = "github.com/goxide-lang/serde/json"`，对应 `formats::encoding::json`；namespace 名不必与目录同形。
 
-### module 身份与库入口
+这些映射用于 Go 互操作和别名组织，不会自动拼接 Go import、扫描目录或继承依赖项目自己的 namespace 配置，也不能绕过 Goxide 的公开边界。实际加载的包必须属于依赖 module，并遵守 Go 的 `internal` 规则。手写 `.go` 仍使用普通 Go import。
 
-来源身份、Go module 路径和库入口各有用途。依赖图按来源身份建立节点，同来源节点的 feature 请求取并集，不同来源保持独立。`go_mod.module` 是生成 Go 时的元数据，用于 Go `require` / `replace` 和包归属核验；生成前会检查不同来源是否占用相同 Go module 路径，冲突时给出诊断。path/Git 自动读取源码清单中的 module 路径，只有需要额外核对时才填写 `module`。Go module 来源的 `go` 已经提供该路径，标准库则不属于 module。
-
-`use` 使用本项目声明的依赖别名，例如 `[dependencies.kit]` 对应 `use kit;`，不要求与依赖的 `go_mod.module` 同名。别名只在声明它的项目内生效；多个别名可以引用同一来源节点。
+四类来源均可设置 `optional = true`，通过 feature 请求激活，例如 `[features]` 中的 `dep:alias`；缺省为 false，单独写 `use` 不会激活它。三类 module 来源另可设置 `features = ["名称"]` 和 `default_features`：前者向带 Goxide 源码清单的依赖请求 feature，后者缺省为 true，false 取消该依赖边的默认请求。纯 Go 依赖没有可重配的 Goxide feature。完整规则见 [Feature](#feature)。
 
 ### 本项目的多个包
 
@@ -247,18 +305,7 @@ service = "example.org/app/service"
 
 源码使用 `use service;` 或 `use formats::binary;`。这些映射只指向本项目的包，首段名称不能与依赖 alias 重复。每个文件保留自己的 `use` 作用域；公开重导出使用 `pub use`，见[重导出规则](rfcs/0021-reexports.md)。
 
-### Git 与仓库子目录
-
-```toml
-[dependencies.formatting]
-git = "https://github.com/goxide-lang/std.git"
-rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
-package = "github.com/goxide-lang/std/formatting"
-```
-
-`rev`、`tag`、`branch` 最多指定一个。首次解析将完整 commit 写入锁，普通构建继续使用该 commit。`subdir = "packages/kit"` 用于仓库中的独立 module 或 Goxide 项目根；它不会搜索普通 package，也不能逃出仓库。path 来源直接指向项目根，不再使用 subdir。
-
-使用当前编译器配套的 std/serde 版本。已有 Go 项目缺少支持库时，按 `gen` 诊断给出的固定版本命令补齐；TOML 项目将所需依赖写入清单。来源与绑定的完整规则见[依赖根](design/dependency-roots.md)。
+registry 来源尚未实现，不能只写 `version` 或加 `registry` 来取得依赖。使用当前编译器配套的 std/serde 版本；std 提供 `formatting` 包，Go 的 `fmt` 则按标准库依赖声明。已有 Go 项目缺少支持库时，按 `gen` 诊断给出的固定版本命令补齐；TOML 项目将所需依赖写入清单。来源与绑定的完整规则见[依赖根](design/dependency-roots.md)。
 
 ## 锁文件与缓存
 
@@ -316,7 +363,6 @@ goxide run --features=pretty,trace
 ```toml
 [dependencies.codec]
 path = "../codec"
-package = "example.org/codec"
 optional = true
 default_features = false
 features = ["compact"]

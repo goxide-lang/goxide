@@ -26,8 +26,8 @@ name = "app"
 path = "cmd/app"
 [dependencies]
 fmt = { go = "fmt" }
-left = { package = "example.org/features/left", path = "../left" }
-right = { package = "example.org/features/right", path = "../right" }
+left = { path = "../left" }
+right = { path = "../right" }
 [features]
 default = ["shared"]
 shared = []
@@ -61,7 +61,7 @@ go = "1.27"
 name = "left"
 path = "."
 [dependencies]
-base = { module = "example.org/features/base", package = "example.org/features/base", path = "../base", default_features = false, features = ["left"] }
+base = { module = "example.org/features/base", path = "../base", default_features = false, features = ["left"] }
 `,
 		"right/goxide.toml": `[go_mod]
 module = "example.org/features/right"
@@ -70,7 +70,7 @@ go = "1.27"
 name = "right"
 path = "."
 [dependencies]
-base = { module = "example.org/features/base", package = "example.org/features/base", path = "../base", features = ["right"] }
+base = { module = "example.org/features/base", path = "../base", features = ["right"] }
 `,
 		"left/value.gox":  "package left\nuse base;\nfunc Value()string{return base::Value()}\nfunc Shared()bool{return base::Shared}\n",
 		"right/value.gox": "package right\nuse base;\nfunc Value()string{return base::Value()}\n",
@@ -177,7 +177,7 @@ name = "app"
 path = "."
 [dependencies]
 fmt = { go = "fmt" }
-optional = { module = "example.org/optional/lib", package = "example.org/optional/lib", path = "../optional", optional = true, default_features = false }
+optional = { module = "example.org/optional/lib", path = "../optional", optional = true, default_features = false }
 [features]
 network = ["dep:optional", "optional/wire"]
 only_dep = ["dep:optional"]

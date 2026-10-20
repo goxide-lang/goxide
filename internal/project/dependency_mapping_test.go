@@ -17,7 +17,6 @@ fast-mode = []
 [dependencies.serde]
 go = "github.com/goxide-lang/serde"
 version = "v1.0.0"
-package = "github.com/goxide-lang/serde"
 [dependencies.serde.namespaces]
 json = "github.com/goxide-lang/serde/json"
 "formats::custom" = "example.org/explicit/format"
@@ -33,13 +32,10 @@ go = "encoding/json"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Dependencies["std"].Package != "" {
-		t.Fatal("module identity became an implicit package mapping")
-	}
-	if d := m.Dependencies["serde"]; d.Package != "github.com/goxide-lang/serde" || d.Namespaces["formats::custom"] != "example.org/explicit/format" {
+	if d := m.Dependencies["serde"]; d.Module != "github.com/goxide-lang/serde" || d.Namespaces["formats::custom"] != "example.org/explicit/format" {
 		t.Fatalf("lost exact mappings: %+v", d)
 	}
-	if d := m.Dependencies["_json"]; !d.IsToolchain() || d.Module != "" || d.Package != "encoding/json" {
+	if d := m.Dependencies["_json"]; !d.IsToolchain() || d.Module != "" || d.Go != "encoding/json" {
 		t.Fatalf("toolchain became a module: %+v", d)
 	}
 	data, err := Marshal(m)
@@ -115,7 +111,6 @@ optional = true
 [dependencies.missing]
 module = "example.org/missing"
 path = "does-not-exist"
-package = "example.org/missing"
 namespaces = { nested = "example.org/missing/nested" }
 optional = true
 [features]
@@ -145,7 +140,7 @@ missing = ["dep:missing"]
 }
 
 func TestDependencyMappingWorkspaceInheritance(t *testing.T) {
-	for _, override := range []string{"", "package='other'", "namespaces={other='other'}", "go = 'fmt'"} {
+	for _, override := range []string{"", "module='example.org/other'", "namespaces={other='other'}", "go = 'fmt'"} {
 		t.Run(override, func(t *testing.T) {
 			root := t.TempDir()
 			wsWrite(t, root, ManifestName, `[workspace]
@@ -153,7 +148,6 @@ members=["app"]
 [workspace.dependencies.serde]
 go = "example.org/serde"
 version = "v1.0.0"
-package="example.org/serde"
 namespaces={json="example.org/serde/json", "formats::custom"="example.org/serde/custom"}
 [workspace.dependencies.json]
 go = "encoding/json"
@@ -169,10 +163,10 @@ go = "encoding/json"
 			if err != nil {
 				t.Fatal(err)
 			}
-			if d := m.Dependencies["serde"]; d.Package != "example.org/serde" || d.Namespaces["formats::custom"] != "example.org/serde/custom" {
+			if d := m.Dependencies["serde"]; d.Module != "example.org/serde" || d.Namespaces["formats::custom"] != "example.org/serde/custom" {
 				t.Fatalf("workspace lost mappings: %+v", d)
 			}
-			if d := m.Dependencies["json"]; !d.IsToolchain() || !d.Optional || d.Package != "encoding/json" {
+			if d := m.Dependencies["json"]; !d.IsToolchain() || !d.Optional || d.Go != "encoding/json" {
 				t.Fatalf("workspace lost toolchain/optional: %+v", d)
 			}
 			_, deps, err := Resolve(m, nil, false)
@@ -195,7 +189,6 @@ go = 'encoding/json'
 [dependencies.missing]
 module="example.org/missing"
 path="does-not-exist"
-package="example.org/missing"
 optional=true
 [features]
 json=["dep:encoding"]

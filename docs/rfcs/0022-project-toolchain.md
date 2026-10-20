@@ -381,7 +381,7 @@ func DefaultCounter() Counter { return Counter{Value: 0} }
 
 ### 依赖、锁定与生成 Go
 
-依赖来源采用当前 schema；Go module 来源写 go/version，Git/path 从所选根清单读取 module 身份，可选 module 字段只作一致性断言：
+依赖来源采用当前 schema；Go module 来源写 go/version，Git/path 从所选根清单读取 module 身份，可选 module 字段只作一致性断言。依赖项不接受 package，alias 默认绑定库入口：
 
 ```toml
 [dependencies.text]
@@ -400,7 +400,7 @@ features = ["fast"]
 
 上面仅展示格式，不是测试访问的服务。版本解析、MVS、module 缓存、校验和全部调用真实 Go 工具。TOML 内保留原生 require 与本地 replace 语义。增强依赖与 go.require 的版本请求共同交 Go MVS 选择，不因两个最低版本不同就拒绝；显式本地/Git 来源不能覆盖根 TOML 已有的不一致 go.replace。根 replace/exclude 为全局权威，不提升依赖自己的策略。源 go.mod/go.sum 不改写，修改限于生成副本。
 
-path/git 入口（Git 含 subdir 后）可以是纯 TOML 作者模块，或者自带普通 go.mod 的原生 Go 模块；不借用父目录配置。module 身份来自该根的清单，显式断言必须相等。TOML 模块只在受管目录合成 Go 元数据。
+path/git 入口（Git 含 subdir 后）可以是纯 TOML 作者模块，或者自带普通 go.mod 的原生 Go 模块；不借用父目录配置。module 身份来自该根的清单，显式断言必须相等。TOML 模块只在受管目录合成 Go 元数据。Goxide 依赖必须声明自身 lib 入口；纯 Go module 默认使用模块根包，Go 子包通过 namespaces 精确映射。
 
 本地 path 相对声明它的 manifest，而非 cwd；不递归发现相邻模块。Git 的 rev/tag/branch 选择器可省略，此时选默认分支；首次解析后在 goxide.lock 锁定精确 commit，之后移动 ref 不改变锁。Git subdir 必须在 checkout 内并含自身的 goxide.toml 或 go.mod，不选择普通子包。不同来源节点占用同一 Go module 路径时，在 Go 投影前按 [schema](../design/toml-manifest.md#来源与包身份)诊断。
 

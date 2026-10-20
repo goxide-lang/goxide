@@ -12,9 +12,6 @@ func dependencyIdentifier(name string) bool {
 }
 
 func validateDependency(alias string, d Dependency) error {
-	if d.Package != "" && !validPackagePath(d.Package) {
-		return fmt.Errorf("dependency %s: invalid exact package path %q", alias, d.Package)
-	}
 	if err := validateNamespaceMappings("dependency "+alias, d.Namespaces); err != nil {
 		return err
 	}

@@ -97,6 +97,7 @@ type UseBinding struct {
 	Target              []string
 	Glob, Blank, Public bool
 	Symbol              *Symbol
+	Resolved            *Symbol // Export selected by the use, before its route becomes a canonical target.
 }
 
 type File struct {

@@ -6,20 +6,20 @@
 
 承接 [0022 项目工具链](0022-project-toolchain.md)、[0023 构建脚本](0023-build-scripts.md)、[0025 单一项目清单](0025-unified-project.md)。继续以 `goxide.toml` / `goxide.lock` 为作者配置权威，根不并存 go.mod/go.sum/go.work/go.work.sum。原生 Go 负责 module path、版本、MVS、checksum 和编译；生成 Go 配置只在受管 target。目标是组织多包开发与独立发布，不引入 Rust resolver、所有权、Copy、enum ABI 或新借用语义。
 
-依赖来源字段的现行语法以 [TOML schema](../design/toml-manifest.md) 为准；下文的候选扩展不改变已实现的互斥来源规则。
+依赖来源字段的现行语法以 [TOML schema](../design/toml-manifest.md) 为准；下文的候选扩展不改变已实现的互斥来源规则。来源图按[依赖根合同](../design/dependency-roots.md)使用 SourceKey：成员身份和 feature 传播与 Go module 投影分开，Go 路径只在投影及现有 CLI 选择器中使用。
 
 ### 本次实现范围
 
-- 根 `[workspace]`，虚拟根/根包、显式 `members`、单段 glob、`exclude`、`default-members`；成员使用当前 goxide.toml 字段。拒绝重复 module、嵌套 workspace、成员锁、symlink/受管输出成员；外部成员须显式路径，由根 INPUT 选择。
-- `[workspace.dependencies]` 仅模板；成员须 `{workspace=true}`，可加 feature 请求、设置 default_features/optional；不写该标记就不继承。`go_mod.go.workspace=true` / toolchain 同理。显式 Go module/Git/path 来源继续有效，不自动改为成员 path；显式来源冲突报错。原生 require 与成员 path 共存须显式未限定版本的本地 replace。
-- `goxide build|test|transpile --workspace ROOT`；重复 `-p/--package MODULE`；run、显式 bin/example/lib 和 -o 必须只选择一个成员。默认多成员构建其 lib/bins，未满足 required_features 的默认目标跳过并说明；examples 仅显式选择。多成员 feature 使用 `MODULE/FEATURE`。CLI 保留 POSIX 风格，flags 在 INPUT 前。
+- 根 `[workspace]`，虚拟根/根包、显式 `members`、单段 glob、`exclude`、`default-members`；成员使用当前 goxide.toml 字段，按规范来源目录建立节点。拒绝嵌套 workspace、成员锁、symlink/受管输出成员；外部成员须显式路径，由根 INPUT 选择。不同来源声明相同 Go module 时保留独立节点，在 Go 投影前诊断。
+- `[workspace.dependencies]` 仅模板；成员须 `{workspace=true}`，可加 feature 请求、设置 default_features/optional；不写该标记就不继承。`go_mod.go.workspace=true` / toolchain 同理。显式 Go module/Git/path 来源继续有效，不自动改为成员 path。原生 require 与成员 path 只有经实际生效的显式本地 replace 指向同目录时才合并；命中的精确版本 replace 同样适用。
+- `goxide build|test|transpile --workspace ROOT`；重复 `-p/--package MODULE`；module 名是现有 CLI 选择器，必须唯一匹配成员，多个来源同名时报歧义。选择结果、default-members 与 feature 传播内部使用 SourceKey。run、显式 bin/example/lib 和 -o 必须只选择一个成员。默认多成员构建其 lib/bins，未满足 required_features 的默认目标跳过并说明；examples 仅显式选择。多成员 feature 使用 `MODULE/FEATURE`。CLI 保留 POSIX 风格，flags 在 INPUT 前。
 - 根 schema 3 lock 保存统一 Go MVS 版本、有效政策、来源身份和校验和；schema 2 单项目继续支持，不自动迁移为 workspace。全体成员的声明 feature 闭包只用于版本求解；本次构建的 features 另按所选根/活动依赖固定点合并。根写锁串行化更新，不运行求解阶段脚本。Git 保持已锁 commit，已有 Unified 锁缺可达 pin 时即使未传 --locked 也拒绝移动分支解析。
 - 拆出项目可直接读取复制的 schema 3 根锁：只沿实际清单及已校验 Go `.mod` 的可达关系求解，忽略无关记录，核对来源/输入/版本/checksum；不复用旧 workspace 的无关 replace 政策。远端/Git 可在新缓存位置重建；path 不自动物化或改源。`--offline` 使用已缓存的可达已锁版本，不要求被升级低版本的缓存。
 - 根 target 所有权与成员 module/目标/feature/配置共同隔离；既有 normal/test metadata 拒绝机制与脚本 trust 保留。未选成员源码/脚本不编译或执行。host helper **沿用 RFC0023 的显式本地 Go 快照合同**；本片没有新增 workspace host 版本/feature resolver，也不声称跨脚本 helper 来源统一。
 
 可运行清单与命令见 [workspace 示例](../../examples/workspace/README.md)，实现证据见 [核心验收](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/workspace-core-20261004.md)。原始研究记录仍是 19 项原生 Go 机制实验，不替代这些 goxide 测试。
 
-**增强作者核心模式限制**：不支持 `[workspace.go]` / root override / workspace vendor / go.work import（纯原生迁入模式见下一节）、`publish_version`、dev 表、profile、registry、target-specific features、互斥 feature、Cargo resolver 数字版本、批量 examples/all-targets、manifest-path/workspace-manifest/no-workspace 参数。未知配置字段严格拒绝。现有 host helper 不支持依赖模板继承，不以 workspace 成员资格扩展 host 权限。全 workspace 搬家时绝对本地路径身份需重新锁定；拆出 path 或仍保留继承语法的成员必须先显式物化配置，不能声称复制锁即自足。
+**增强作者核心模式限制**：不支持 `[workspace.go]` / root override / workspace vendor / go.work import（纯原生迁入模式见下一节）、`publish_version`、dev 表、profile、registry、target-specific features、互斥 feature、Cargo resolver 数字版本、批量 examples/all-targets、manifest-path/workspace-manifest/no-workspace 参数。未知配置字段严格拒绝。现有 host helper 不支持依赖模板继承，不以 workspace 成员资格扩展 host 权限。锁中本地来源键相对 owner 根表示，但现有 workspace 成员摘要和本地 Go replace 政策仍可能绑定原绝对位置，不承诺任意工作区整体搬移后可直接 locked 重放。拆出 path 或仍保留继承语法的成员必须先显式物化配置，不能声称复制锁即自足。
 
 普通构建在成员清单/根政策改变时重新求解统一版本，保留已有 Git pin；--locked 明确拒绝变化。可达非成员 path 依赖政策变更、schema 2→3 转换、路径改源需要显式重建锁；当前没有细粒度 update 命令。需备份旧锁后移走并重新构建，新锁会重新解析 Git rev，必须审查新旧 commit；不能把该流程当作锁定构建。编译前沿现有脚本合同检查每个所选图，批量任务可能已有前序成员成功后才遇到后序构建失败；不是整个批次的事务性发布。
 
@@ -60,7 +60,6 @@ exclude = ["apps/scratch"]
 go = "1.27"
 
 [workspace.dependencies.shared]
-module = "example.org/shared"
 path = "libs/shared"     # 继承源的路径相对 workspace 根
 publish_version = "v1.2.0" # 候选：发行时的 Go require 最低版本，不是当前 path 的锁版本
 features = []
@@ -69,15 +68,15 @@ default_features = false
 
 根同时有 `[go_mod]` 时是根包，自动纳入成员。虚拟根无 go_mod/namespaces/lib/bin/build/features/go/vendor 这些包级表；根包有自己独立的配置，不能把根包 dependencies 当成全部成员依赖。root 的 go 政策和 workspace.go 政策也必须分开。
 
-成员是**一个作者包对应一个逻辑 Go module**，可含多个 Go packages、一个 lib、多 bin/examples。module path 是包身份；不把每个 bin 变成新 module。列表项指向清单目录，不是递归扫描源码。推荐首片即支持路径段内 `*`、`?`（不跨 `/`），拒绝 `**`；展开按规范相对路径排序，exclude 后必须非空。default-members 必须是最终成员的显式路径集合，不再展开 glob；缺省时有根包选根包，虚拟根选全部。
+成员是**一个来源项目投影为一个 Go module**，可含多个 Go packages、一个 lib、多 bin/examples。成员来源键使用规范目录，`go_mod.module` 描述其 Go 投影路径；不把每个 bin 变成新 module。列表项指向清单目录，不是递归扫描源码。推荐首片即支持路径段内 `*`、`?`（不跨 `/`），拒绝 `**`；展开按规范相对路径排序，exclude 后必须非空。default-members 必须是最终成员的显式路径集合，不再展开 glob，内部解析为来源键；缺省时有根包选根包，虚拟根选全部。
 
-所有相对路径相对于**声明所在清单**。path 规范化、大小写/真实路径别名和重复 module 检查先于写入；同一目录多种拼写去重并报告来源，两个不同目录同一 module 身份报错。glob 不穿越符号链接、隐藏控制目录、`.git`、`target` 或声明的 target-dir，不扫描任意目录；显式 symlink/逃逸路径拒绝并展示规范目标。显式 `../repo` 外部成员可以支持，但必须完整列举，不能用父目录 glob；授权边界只扩到该成员，不到整个父目录。target 永远不得包含/成为任何成员或其祖先。
+所有相对路径相对于**声明所在清单**。path 规范化与目录边界检查先于写入；同一规范目录的不同拼写去重，两个不同目录是独立来源节点，即使它们声明相同 Go module。后者由 CLI 唯一成员选择或 Go 投影检查报告歧义/冲突，不在来源发现时合并。glob 不穿越符号链接、隐藏控制目录、`.git`、`target` 或声明的 target-dir，不扫描任意目录；显式 symlink/逃逸路径拒绝并展示规范目标。显式 `../repo` 外部成员可以支持，但必须完整列举，不能用父目录 glob；授权边界只扩到该成员，不到整个父目录。target 永远不得包含/成为任何成员或其祖先。
 
 推荐首片支持外部显式成员，便于多个独立仓库共同开发；可先只实现同父目录 checkout 布局，但不能将多仓库模式标作永久不支持。工作区根不能成为自己的外部成员，单次命令只能绑定一个活动根；两个独立 workspace 可以并发只读使用同一外部成员，各自持有自己的锁/target，不争夺成员源码所有权。嵌套 `[workspace]` 是发现边界：外层 glob 不跨越，显式纳入报 WS-NESTED，须排除或重组。
 
 从目录入口向上找最近 TOML 包/工作区；遇到最近 workspace 就停止，不跳过它找更远父根。只有该根列举该包才加入；未列入则报 WS-NOT-MEMBER，并给出加入/exclude/独立模式建议，不悄悄使用父锁。外部成员从根命令可选；从外部成员目录调用不会遍历兄弟目录找工作区，需 `--workspace-manifest /dev/goxide.toml`。显式 `--workspace-manifest` 必须验证成员资格。
 
-推荐 `--no-workspace` 显式独立运行、关闭父发现；只用拆出后的独立清单/复制的根锁/新target，未展开的继承字段报错，不偷偷读父根。仓库移出后同样如此。发现阶段只核查全局路径/清单存在/可读取身份；未选成员的源码编译错误和脚本不进入本次构建；其清单身份、依赖/feature声明和Go最低要求仍参加全workspace图验证，坏清单/政策可以阻断锁解析，不能承诺只选A就忽略B的依赖政策。无法读取 TOML 或 module 身份、重复身份属全局目录损坏，仍阻断并注明不是该成员源码编译错误。提供后续 `workspace check` 全成员清单验证入口，不默认执行源码/脚本。
+推荐 `--no-workspace` 显式独立运行、关闭父发现；只用拆出后的独立清单/复制的根锁/新target，未展开的继承字段报错，不偷偷读父根。仓库移出后同样如此。发现阶段只核查全局路径、清单与必要 Go 投影元数据；未选成员的源码编译错误和脚本不进入本次构建。各成员的依赖/feature 声明和 Go 最低要求仍参加全 workspace 图验证，坏清单或政策可以阻断锁解析，不能承诺只选 A 就忽略 B 的依赖政策。无法读取 TOML 或缺少必需元数据仍在发现阶段报错；不同来源的 Go module 路径冲突在投影阶段报错，均注明不是该成员源码编译错误。提供后续 `workspace check` 全成员清单验证入口，不默认执行源码/脚本。
 
 ### WS-02：显式继承与本地成员依赖
 
@@ -105,7 +104,7 @@ name = "hello"
 path = "examples/hello"
 ```
 
-workspace.dependencies 是模板库，**不注入依赖边**。成员按 alias 显式 `workspace=true` 才继承。go/module/path/git/rev/tag/branch/subdir/version/publish_version 从模板一次性取得，成员不得同时重新指定来源；features 按集合相加；optional 只在成员声明，根模板禁止 optional；default_features 以成员显式值覆盖模板缺省，但任何其他活动依赖边仍可启用默认请求。本篇新增的键沿用现有 TOML `default_features` 拼写；CLI 使用 `--no-default-features`。`[workspace.go_mod]` 只提供 go、toolchain 默认值，成员在 `[go_mod]` 内显式写 `字段.workspace=true` 才继承；成员自己的 module 路径不继承。version/license/readme 等属于另外的发布元数据合同，不写入 go_mod，也不假定 Cargo 字段已被本仓库实现。
+workspace.dependencies 是模板库，**不注入依赖边**。成员按 alias 显式 `workspace=true` 才继承。go/path/git/rev/tag/branch/subdir/version/publish_version、可选 module 断言、package 与 namespaces 从模板一次性取得，成员不得同时重新指定来源或映射；path/Git 的真实 module 身份仍从所选源码清单读取。features 按集合相加；optional 只在成员声明，根模板禁止 optional；default_features 以成员显式值覆盖模板缺省，但任何其他活动依赖边仍可启用默认请求。本篇新增的键沿用现有 TOML `default_features` 拼写；CLI 使用 `--no-default-features`。`[workspace.go_mod]` 只提供 go、toolchain 默认值，成员在 `[go_mod]` 内显式写 `字段.workspace=true` 才继承；成员自己的 module 路径不继承。version/license/readme 等属于另外的发布元数据合同，不写入 go_mod，也不假定 Cargo 字段已被本仓库实现。
 
 加入成员不等于依赖该成员，源码 import 也不能创建清单依赖或启用模板。只有显式继承模板中的 path、成员自己声明的本地 path，或明确的 override/replace 条目才能把来源切到本地成员；version、Git、path 和原生 go.require 不因另一个目录被列为 member 就自动改指该目录。`workspace=true` 若继承的是 version/Git，仍消费该远端来源；它不是“自动找同名本地包”开关。未来若需要 Cargo 式 workspace patch，必须另提明确条目与优先级，不能默认启用。
 
@@ -135,7 +134,9 @@ package1 = {} # WS-INHERIT-EXPLICIT：不完整独立声明
 
 path + publish_version 是**新语法**，区别于现有 version/path/git 互斥来源；不放宽 version 到 Rust 的 ^/~ 范围。Go `/vN`、pseudo-version 和 MVS 仍由真实 Go 校验。Git 锁定 commit+subdir；branch/tag 可移动但已有锁不重新漂移；URL 是 argv 数据，不经 shell，不保存凭据，不触发安装脚本。
 
-来源冲突按“解析角色 + module path”识别。两个活动边若要求不同 path/Git commit 或成员路径不匹配，报 WS-SOURCE-CONFLICT，列出边与清单位置；两个版本要求交 MVS，不当成来源冲突。成员身份不能裁决来源冲突或覆盖普通版本边。若workspace全图同时包含本地成员B的根身份，而A仍显式依赖同module的远端版本，不能暗取本地B：统一域报WS-SOURCE-CONFLICT，须显式统一来源或拆成独立workspace；仅切换构建命令不能绕过全图冲突。workspace 根可用下述 Go replace 明确裁决，结果出现在 plan/lock；别名不能制造两份同 import path 的类型。
+每个解析角色内按 SourceKey 收集来源：path 与成员使用规范目录，Git 使用规范仓库地址、锁定 commit 和 subdir，Go 版本来源使用逻辑 module path。不同 alias 到同来源的请求合并 feature；不同 path/Git commit 保留独立节点。Go 版本来源的不同最低版本请求交 MVS，不创建多个版本节点；实际生效的本地 replace 可将其归一到 path。
+
+来源收集完成后，在写临时 go.mod 和 Go 选版前建立 module path 到来源节点的唯一投影。不同来源占用同一路径时报来源投影冲突并列出边与清单位置，不能用成员资格、遍历次序或 alias 覆盖。workspace 全图同时包含本地成员 B 和 A 声明的同 module 远端版本时，必须有实际生效的显式本地 replace 才能按相同来源合并，否则在 Go 投影前拒绝；仅切换选中成员不能绕过全图投影。下述 workspace 根 Go replace 仍属其各自适用模式的政策，结果须进入 plan/lock。
 
 ### 依赖来源：Git URL 优先，别名不是 registry 名字
 
@@ -155,7 +156,7 @@ package1只是清单本地别名，不从它推导registry包名、module path�
 
 ### WS-03：CLI 与目标选择
 
-候选命令，需和独立 Cobra/POSIX 迁移统一；本分支未实现这些新 flag。保留现有 `--go`，不用 `-go`。`-h` 帮助、`-o` 输出符合 CLI 项目约定。为避免 module path 中 `/` 歧义，`--package` 使用完整 module 身份；将来可给唯一短名，歧义必须列候选。
+候选命令，需和独立 Cobra/POSIX 迁移统一；本分支未实现这些新 flag。保留现有 `--go`，不用 `-go`。`-h` 帮助、`-o` 输出符合 CLI 项目约定。现有 `--package` 继续使用完整 Go module 名作为唯一成员选择器，不把它当作来源节点身份；多来源同名时列出候选并报歧义。选择成功后内部使用成员 SourceKey。
 
 ```sh
 goxide build --workspace-manifest ./goxide.toml --package example.org/service --bin web
@@ -173,7 +174,7 @@ goxide import-go --workspace --out ./new --bin example.org/a=app:cmd/app ./old/g
 
 单成员现有 bin/lib/example 规则不变；`run` 必须恰好一个成员、一个可执行目标。多成员批量 build/test 推荐默认每成员 lib（若有）和所有未缺 required_features 的 bins；缺 feature 的目标输出 skip 原因，显式选中的目标缺 feature 则失败，不自动开启。examples 默认不构建；批量 `--examples` 显式包含，`--all-targets` 包括 lib/bin/examples/tests，需单独计划 dev 闭包。多成员命令中的 `--bin/--example/--lib` 首片拒绝歧义并建议逐成员选择，不把同名 web 广播到多个模块。跨成员 bin 同名合法，成员内同类目标重复名拒绝。多产物 `-o FILE` 报错，使用布局输出/显式输出目录协议。
 
-`--features module/feature` 以最后 `/` 分隔已知成员 module 和 feature；多成员时禁止未限定的 feature。只允许给选中根发请求（传递依赖经清单边请求），--no-default-features 关闭这些根的默认请求，不抹去传递边。单成员保留未限定 feature 简写。required_features 检查与 cfg 仍属包自己的 feature 集合。
+`--features module/feature` 以最后 `/` 分隔成员选择器和 feature；该 module 名须唯一定位已选成员，多成员时禁止未限定的 feature。请求解析后按成员 SourceKey 传播，只允许给选中根发请求（传递依赖经清单边请求），--no-default-features 关闭这些根的默认请求，不抹去传递边。单成员保留未限定 feature 简写。required_features 检查与 cfg 仍属来源节点自己的 feature 集合。
 
 ### WS-04：解析范围、feature 和角色
 
@@ -187,7 +188,7 @@ goxide import-go --workspace --out ./new --bin example.org/a=app:cmd/app ./old/g
 
 这和“common或它的外部依赖选哪个版本”是两件事。**现已确认：整个workspace统一解析版本并使用根锁，命令仅构建选中成员及其显式活动依赖，未选中成员feature不自动带入。** 不再提供旧草稿selected/all-members两套模式，也不为go.work迁入另选版本策略。
 
-例如app对D的原生Go最低要求为v1.0.0，server为v1.1.0：统一Go MVS结果为v1.1.0，只构建app也使用这个版本。但如果app请求common/json，server请求common/yaml，app单独构建只启用json；一起构建才合并json+yaml。Git同module不同commit是来源冲突，不按“更新commit”自动择一，不借全workspace模型恢复隐式本地覆盖。
+例如 app 对 D 的原生 Go 最低要求为 v1.0.0，server 为 v1.1.0：统一 Go MVS 结果为 v1.1.0，只构建 app 也使用这个版本。但如果 app 与 server 指向同一 common 来源节点，分别请求 json 和 yaml，app 单独构建只启用 json，一起构建才合并 json+yaml。Git 的不同 commit 属于不同来源节点；相同 commit/subdir 的不同 ref 可以合并。不同来源投影到同一 Go module 时拒绝，不按“更新 commit”自动择一，不借 workspace 成员恢复隐式本地覆盖。
 
 锁解析图与实际编译图分开：前者覆盖全部成员声明的依赖/来源和版本政策；后者从命令选中根沿显式活动边形成。锁条目不产生依赖或feature请求。初次/显式更新全图锁可能需要其他成员的来源元数据；必须在plan列出，不能声称从不访问未构建成员信息。已有有效锁构建app只获取实际可达源码，不为server无关锁项下载字节、编译或执行脚本。声明的可选依赖参与锁定所需信息如何读取/存储须在锁协议中明确，但锁求解不能把其feature请求注入编译图；所选配置缺少完整锁记录时失败并要求显式补锁，不能静默改版本。单项目既有optional延迟规则不因本RFC自动改写。
 
@@ -212,9 +213,9 @@ dev-dependencies 属候选后续能力：只加入所选成员 test/examples 所
 
 **已确认：workspace 只保留根 `goxide.lock`，成员不保留独立锁。** 旧草稿“成员锁保留但不采用”撤回。加入已有独立工程时，计划须显示其旧锁如何核验后并入根锁；不同Git pin/来源不能按顺序覆盖。正常工作区构建发现成员锁报 WS-MEMBER-LOCK，要求显式整理，不能静默忽略。迁入仍只写新目录，不因这一规则自动删除用户旧工程的锁。
 
-根锁格式需支持不可变来源记录（Git URL+commit+subdir+module、Go version/checksum、vendor内容）和可达关系，工作区/构建计划仅是上下文索引，不能把所有记录绑死到原根绝对路径。schema 3仍为候选；schema 2须显式核验转换，不猜升级。根锁可记录未被当前命令使用的来源；**锁中有记录不等于清单有依赖**。本轮已另外确认全workspace统一选版；锁内可保留历史/角色记录，但不能以按命令存独立版本计划的方式恢复旧selected解析策略。
+根锁保存来源键、取得内容与可达关系，三者不能混为一项：Git 来源键为规范 URL+commit+subdir，Go 版本来源键为逻辑 module path，实际 version/checksum 等进入内容记录；本地来源键相对 owner 根表示，允许 `../`。Go 投影的 module 路径单独保存，不把 Git 缓存目录或 Go 下载目录当作身份。workspace 根使用 schema 3，单项目 schema 2 与原生迁入 schema 4 的适用范围保持各自协议，不猜转换。根锁可记录未被当前命令使用的来源；**锁中有记录不等于清单有依赖**。全 workspace 仍统一选版，不能以按命令存独立版本计划的方式恢复旧 selected 解析策略。
 
-**已确认：拆出成员可以直接复制根锁到新独立项目。** 新清单先显式物化 `workspace=true` 继承，保留实际module身份和来源。加载复制锁时从新清单的显式活动边取可达记录；其余条目可留存并忽略，不激活依赖、不执行脚本、不下载或校验那些无关来源的字节。仍要验证锁文件自身格式/结构合法，不把可达缺项当无关项忽略。可达集合须完整，包括固定Git commit、subdir、module身份、版本/校验、必要传递关系及有效政策；来源冲突、缺项、校验不符明确失败，不偷偷重新解析branch/tag或升级版本。格式须容许验证并重绑定独立根上下文，而非仅因绝对路径/根成员列表不同便否定所有已锁来源；这是锁协议待实现的必需验收，不声称当前schema 2已经支持。
+**已确认：拆出成员可以直接复制根锁到新独立项目。** 新清单先显式物化 `workspace=true` 继承，保留实际module身份和来源。加载复制锁时从新清单的显式活动边取可达记录；其余条目可留存并忽略，不激活依赖、不执行脚本、不下载或校验那些无关来源的字节。仍要验证锁文件自身格式/结构合法，不把可达缺项当无关项忽略。可达集合须完整，包括固定Git commit、subdir、module身份、版本/校验、必要传递关系及有效政策；来源冲突、缺项、校验不符明确失败，不偷偷重新解析branch/tag或升级版本。当前 schema 3 通过一致且唯一的根输入记录核对拆出项目并重绑定根上下文，原生迁入 schema 4 使用成员输入记录核对显式物化后的配置；两者保留复制锁中的无关记录，不转换为 schema 2。
 
 复制锁不复制源码：workspace本地path边必须显式保留可用路径、复制相应源码后改为新相对path，或明确转换为Git/原生Go版本来源；不能猜新来源。改来源若无对应已核验锁记录，报需显式更新锁；即使新Git碰巧是本地目录的远端，也不能假定内容等价。新清单和所用锁记录能保留一致来源时，拆出应支持首次 `--locked`；`--offline --locked` 另需所有可达源码字节已在本地。根策略变化需验证现有可达图是否满足新上下文，不能为了更低约束静默降版或重新MVS；不满足时给出需显式重锁的差异。
 
@@ -305,7 +306,7 @@ default-members = ["goxide"]
 | 再 build A --locked | 同第一次输入 | 使用统一D v1.1.0及A的normal配置，不继承测试/yaml |
 | 黑例：build A沿用旧v1.0.0或带入yaml | B已使全图要求v1.1.0，但B不是本次构建根 | 拒绝过期/不一致锁与错误配置缓存；不能以命令只选A为由降版或启用B的feature |
 
-Go 试验确证上表**原生版本机制**，没有实现 feature 行为；没有 Cargo 测试。互斥 features、高级 target-specific dependency/多 resolver 版本仍不承诺。同一workspace同角色如果显式要求同module的不同Git commit，统一解析报冲突；只改变命令选中根不能消除冲突，需显式统一来源或拆成独立项目；Go 一个程序不能装两份同 import path 来绕过。
+Go 试验确证上表**原生版本机制**，没有实现 feature 行为；没有 Cargo 测试。互斥 features、高级 target-specific dependency/多 resolver 版本仍不承诺。同一 workspace、同一角色若要求不同 Git commit，先保留独立来源节点；它们占用相同 Go module 路径时，在统一 Go 投影前报冲突。只改变命令选中根不能消除全图投影冲突，需显式统一来源或拆成独立项目；Go 一个程序不能装两份同 import path 来绕过。
 
 ## 拒绝与边界
 
@@ -313,13 +314,13 @@ Go 试验确证上表**原生版本机制**，没有实现 feature 行为；没�
 
 | 编号 | 白例与预期 | 黑例与诊断/拒绝层 |
 | --- | --- | --- |
-| W01 身份 | 同一路径 ./lib 与 libs/../lib 规范去重 | 不同目录同 module：发现期 WS-DUPLICATE-MODULE，列两路径 |
+| W01 身份 | 同一路径 ./lib 与 libs/../lib 规范去重；相同 Git commit/subdir 的不同 ref 合并 | 不同目录同 Go module：来源节点独立，CLI 选择时报歧义或 Go 投影前报冲突，列两来源 |
 | W02 根/锁 | 所有成员仅用根锁；拆出复制根锁后独立运行 | 存在成员锁：WS-MEMBER-LOCK；嵌套活动根冲突：WS-ROOT；继承未物化：WS-INHERIT-ROOT |
 | W03 feature | A单独json，A+B并集，A/B/A可复用 | B的yaml泄漏A、normal读test metadata：配置验证拒绝，不能容忍缓存命中 |
 | W04 optional | 已有完整锁时未激活Git依赖不fetch/执行；创建或更新锁可按plan读取必要元数据，不启用编译feature | 未知feature/环：图期带完整路径；活动缺离线源码明确 cache miss |
 | W05 工具链 | 不同成员go按全图要求核验最低版本，建议更高仍local | B未来go要求参与全图政策，须拒绝不满足最低并指B；只选A不能绕过 |
 | W06 replace | 相同政策合并，显式work replace裁决冲突 | 无根裁决两成员不同replace：Go政策预检失败；不得顺序胜出 |
-| W07 未选成员 | B未被A构建触达且源码/脚本有错，A不编译或执行B；但全图feature声明/政策错误仍阻断锁解析 | B清单无法解析/无module、重复身份：发现期错误；--workspace显式选B则其语义错误生效 |
+| W07 未选成员 | B未被A构建触达且源码/脚本有错，A不编译或执行B；但全图feature声明/政策错误仍阻断锁解析 | B清单无法解析/缺必需 Go 元数据：发现期错误；重复 Go module：投影前错误；--workspace显式选B则其语义错误生效 |
 | W08 路径 | 段内glob排序，exclude scratch，显式../std | symlink、**、穿越target、嵌套root：WS-PATH，开始下载/写入前失败 |
 | W09 脚本 | 活动A脚本独立授权，未触达B不运行 | 锁/成员隐式授权、撤销后缓存复用：trust拒绝；没有结果也不运行安装脚本 |
 | W10 并发 | A/B并发维护同一全workspace版本结果，保留双方合法记录更新/配置索引；重名web独立输出 | 外owner target、同输出争抢、clean活跃unit：owner/lock拒绝，旧完整结果不丢 |

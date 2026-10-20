@@ -111,7 +111,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		if node == graph.Root && options.NativeFeatures != nil {
 			selected = *options.NativeFeatures
 		}
-		features[node.Module] = selected
+		features[node.SourceKey] = selected
 	}
 	layout, err := project.OpenLayout(root, manifest.Module, targetDir)
 	if err != nil {
@@ -165,7 +165,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		}
 		generated[node.Module] = output
 		moduleConfig := configuration
-		moduleConfig.Features = features[node.Module]
+		moduleConfig.Features = features[node.SourceKey]
 		modules = append(modules, lower.Module{Path: node.Module, Dir: output, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race})
 	}
 	if err := prepareModules(graph, generated); err != nil {
@@ -199,7 +199,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err := unit.PublishBundle(staged); err != nil {
 		return nil, err
 	}
-	configuration.Features = features[graph.Root.Module]
+	configuration.Features = features[graph.Root.SourceKey]
 	result := &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry, Config: configuration}
 	for _, node := range graph.Nodes {
 		result.SourceRoots = append(result.SourceRoots, node.Root)
@@ -265,8 +265,8 @@ func unitSpec(graph *project.Graph, target project.Target, configuration config.
 	var sources []source
 	for _, node := range graph.Nodes {
 		var enabled []string
-		for _, name := range project.Keys(features[node.Module].Enabled) {
-			if features[node.Module].Enabled[name] {
+		for _, name := range project.Keys(features[node.SourceKey].Enabled) {
+			if features[node.SourceKey].Enabled[name] {
 				enabled = append(enabled, name)
 			}
 		}

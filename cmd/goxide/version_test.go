@@ -733,7 +733,7 @@ func TestVersionSourceLateGitBoundary(t *testing.T) {
 	if _, e := project.Load(root, tool, nil, true, false, false); e == nil || !strings.Contains(e.Error(), "escapes checkout/acquired") {
 		t.Fatal(e)
 	}
-	cached := filepath.Join(root, "target", "cache", "git", project.Digest([]string{repo, rev, "", "example.org/a"}))
+	cached := filepath.Join(root, "target", "cache", "git", (project.Dependency{Git: repo, Rev: rev}).GitKey())
 	projectWrite(t, bdir, map[string]string{"go.mod": "module example.org/b\n\ngo 1.27\n", "lib.go": "package b\n", "goxide.toml": manifest(map[string]any{"z": map[string]string{"module": "example.org/z", "path": zdir}})})
 	projectWrite(t, zdir, map[string]string{"go.mod": "module example.org/z\n\ngo 1.27\n", "lib.go": "package z\n", "goxide.toml": manifest(map[string]any{"a": gitdep})})
 	// a/c were already traversed as path nodes before z supplies the stronger

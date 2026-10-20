@@ -201,7 +201,7 @@ func ManagedSourceDirectory(path, sourceRoot, module string) (bool, error) {
 		if e != nil {
 			return false, e
 		}
-		if w != nil && w.Members[module] == sourceRoot {
+		if w != nil && w.Members[pathSource(sourceRoot).key()] == sourceRoot {
 			expected = layoutOwner{1, w.Root, WorkspaceOwner, path}
 		}
 	}

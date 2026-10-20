@@ -175,9 +175,9 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 | --- | --- |
 | `go` | Go 标准库包路径，或带 `version` 的 Go module 路径 |
 | `version` | 与 Go module 来源配套的精确版本或 pseudo-version；Go MVS 可以选中更高版本 |
-| `path` | 本地项目或模块根，相对当前清单；同时声明 `module` |
-| `git` | HTTPS Git 仓库地址；同时声明 `module` |
-| `module` | Git/path 来源的 module 身份；Go 来源由 `go` 指定，不重复填写 |
+| `path` | 本地项目或模块根，相对当前清单；从源码清单读取 module，可选 `module` 断言 |
+| `git` | HTTPS Git 仓库地址；从所选源码根读取 module，可选 `module` 断言 |
+| `module` | Git/path 来源的可选身份断言；Go 来源由 `go` 指定，不重复填写 |
 | `rev`、`tag`、`branch` | Git 来源最多选择一项；不指定时选择默认分支并锁定 commit |
 | `subdir` | Git 仓库内的项目/module 根目录；不用于选择普通子包 |
 | `package` | alias 本身绑定的精确 Go package 路径；省略时 alias 只作 namespace 分组 |
@@ -210,7 +210,7 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 [dependencies]
 fmt = { go = "fmt" }
 errors = { go = "github.com/pkg/errors", version = "v0.9.1", package = "github.com/pkg/errors" }
-kit = { path = "../kit", module = "example.org/kit", package = "example.org/kit" }
+kit = { path = "../kit", package = "example.org/kit" }
 
 [dependencies.formats]
 go = "github.com/goxide-lang/serde"
@@ -231,6 +231,12 @@ use formats::json;
 
 `formats` 没有 `package`，因此只是分组；`formats::json` 显式绑定到 JSON 包。编译器不会把 namespace 自动拼接成 Go import，也不会根据目录名猜包。手写 `.go` 仍使用普通 Go import。
 
+### module 身份与库入口
+
+来源身份、Go module 路径和库入口各有用途。依赖图按来源身份建立节点，同来源节点的 feature 请求取并集，不同来源保持独立。`go_mod.module` 是生成 Go 时的元数据，用于 Go `require` / `replace` 和包归属核验；生成前会检查不同来源是否占用相同 Go module 路径，冲突时给出诊断。path/Git 自动读取源码清单中的 module 路径，只有需要额外核对时才填写 `module`。Go module 来源的 `go` 已经提供该路径，标准库则不属于 module。
+
+`use` 使用本项目声明的依赖别名，例如 `[dependencies.kit]` 对应 `use kit;`，不要求与依赖的 `go_mod.module` 同名。别名只在声明它的项目内生效；多个别名可以引用同一来源节点。
+
 ### 本项目的多个包
 
 ```toml
@@ -247,7 +253,6 @@ service = "example.org/app/service"
 [dependencies.formatting]
 git = "https://github.com/goxide-lang/std.git"
 rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
-module = "github.com/goxide-lang/std"
 package = "github.com/goxide-lang/std/formatting"
 ```
 
@@ -302,7 +307,7 @@ goxide run --no-default-features --features=trace
 goxide run --features=pretty,trace
 ```
 
-`--no-default-features` 取消根的默认请求，显式请求仍生效。每个 module 有自己的集合，根项目的同名 feature 不会自动传给依赖。同一依赖收到的请求取并集；一条依赖边关闭默认集合，不能撤销另一条边对默认集合的请求。
+`--no-default-features` 取消根的默认请求，显式请求仍生效。每个来源节点有自己的集合，根项目的同名 feature 不会自动传给依赖。指向同一来源节点的依赖请求取并集；一条依赖边关闭默认集合，不能撤销另一条边对默认集合的请求。
 
 ### 可选依赖与转发
 
@@ -311,7 +316,6 @@ goxide run --features=pretty,trace
 ```toml
 [dependencies.codec]
 path = "../codec"
-module = "example.org/codec"
 package = "example.org/codec"
 optional = true
 default_features = false

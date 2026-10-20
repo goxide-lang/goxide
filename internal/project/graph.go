@@ -62,13 +62,15 @@ type Node struct {
 	Root, Module    string
 	HasManifest     bool
 	CheckoutRoot    string
+	SourceKey       string
 	SourceID        string
+	source          sourceIdentity
 	SelectedVersion string
 	Manifest        Manifest
 	Features        map[string]bool
 	Requests        map[string]Request
 	Children        map[string]*Node
-	Sources         map[string]Dependency
+	Sources         map[string]Dependency // Active module sources with resolved Module identities.
 }
 type Graph struct {
 	nativeStandalone       bool
@@ -79,6 +81,7 @@ type Graph struct {
 	forced                 map[string]Selection
 	workspace              *Workspace
 	ownerRoot, ownerModule string
+	rootInputKey           string
 	planningSeed           string
 	planningVerified       map[string]bool
 	WorkRoot               string

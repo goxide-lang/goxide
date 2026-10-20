@@ -26,8 +26,8 @@ name = "app"
 path = "cmd/app"
 [dependencies]
 fmt = { go = "fmt" }
-left = { module = "example.org/features/left", package = "example.org/features/left", path = "../left" }
-right = { module = "example.org/features/right", package = "example.org/features/right", path = "../right" }
+left = { package = "example.org/features/left", path = "../left" }
+right = { package = "example.org/features/right", path = "../right" }
 [features]
 default = ["shared"]
 shared = []

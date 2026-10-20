@@ -99,7 +99,8 @@ func (g *Graph) bindNativeLocal(module string, pin Selection, replacements []Mod
 // not the target directory chosen to materialize their checkout.
 func (g *Graph) portablePlan(root string, selections map[string]Selection, nodes map[string]*Node) map[string]Selection {
 	out := portableSelections(root, selections)
-	for module, n := range nodes {
+	for _, n := range nodes {
+		module := n.Module
 		if n.CheckoutRoot == "" || !contained(g.Cache, n.CheckoutRoot) {
 			continue
 		}

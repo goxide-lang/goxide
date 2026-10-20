@@ -35,7 +35,7 @@ func RoundTrip(value Message) (Message, error) {
 
 目录模式的 `mod child;` 声明当前包路径下、当前构建视图选中的本地子包，`pub mod child;` 可公开它。不能把外部依赖冒充为 `mod`，也不接受 `mod = go import`。单文件模式不选择其他源包，因此拒绝 `mod`；调用已生成或原生 Go 包可使用明确配置的 `use`。
 
-`goxide.toml` 的 `namespaces` 可精确映射当前 module 的原生 Go 包。外部 namespace 则记录其预期 module；实际加载通过 Go resolver 提供的 module 身份核对，不用字符串前缀替代证明。toolchain 根也须证明来自工具链。来源不同的包即使取得同一个 package path，也不能冒充 serde owner。
+`goxide.toml` 的 `namespaces` 可精确映射当前 module 的原生 Go 包。path/Git 的 module 身份从所选根清单读取，可选 `module` 只作一致性断言。外部 namespace 则记录其预期 module；实际加载通过 Go resolver 提供的 module 身份核对，不用字符串前缀替代证明。toolchain 根也须证明来自工具链。来源不同的包即使取得同一个 package path，也不能冒充 serde owner。
 
 依赖发现先记录显式选择的包，再按已验证重导出的 namespace 选择实际叶子。本地叶子即使通过多层 facade 才可见，也须先完成编译；未使用的分组子项不产生构建边。循环仍按真实包图拒绝。
 

@@ -16,7 +16,7 @@ features = ["fast"]
 default_features = false
 ```
 
-version 仍使用 Go 可接受的规范版本/伪版本。Go 自行处理 module path、MVS、proxy、zip 与 sums。goxide 不实现第二套版本比较器，不把版本请求当作精确最终版本。不同到达边的版本要求共同参加 Go MVS；对同一实际源码身份的活动 manifest features/default 请求取并集。根 TOML go.require 已要求 同库时，manifest 的 default_features:false 仍有效；Go require 不构成第二条默认 feature 请求。
+version 仍使用 Go 可接受的规范版本/伪版本。Go 自行处理 module path、MVS、proxy、zip 与 sums。goxide 不实现第二套版本比较器，不把版本请求当作精确最终版本。不同到达边的版本要求共同参加 Go MVS；对同一来源节点的活动 manifest features/default 请求取并集。根 TOML go.require 已要求同库时，manifest 的 default_features:false 仍有效；Go require 不构成第二条默认 feature 请求。
 
 Go module zip 可以携带 goxide.toml/.gox；嵌套模块、vendor、链接等受 Go zip 规则限制，不能假设发布目录等于工作树。[Go module zip 规则](https://go.dev/ref/mod#zip-files) 与 [go mod download 的 JSON 输出](https://go.dev/ref/mod#go-mod-download) 为机制来源。实现使用实际返回的 Dir、Version、Sum、GoModSum，不按缓存路径命名猜测身份。
 
@@ -29,7 +29,7 @@ Go module zip 可以携带 goxide.toml/.gox；嵌套模块、vendor、链接等�
 
 1. 根项目身份、锁、Go module 文件读取后，在独立短期规划目录工作；不修改用户 go.mod/go.sum 或下载后的 module Dir。
 2. 每轮从根重建当前可达的 goxide/Go 依赖边与 feature 请求。只激活本轮 manifest 的 optional 边；原始 go.mod require 仍属于 Go 图。上轮消失的 goxide manifest、边、feature 请求不得残留。此处只重建 goxide 额外边；Go 原生图中的非最终版本 requirements 也可能影响 MVS，完整 Go 图必须交由 Go 保留和解析，不能自行按最终版本裁剪。
-3. 原生 Go require 与激活 goxide manifest 的版本要求进入同一个 Go main-module 规划图。活动约束先作为 main module 根要求；只含 go.mod 的私有桥接模块保留多个最低版本请求，让真实 Go MVS 合并。桥继承根的 Go directive，不用旧 go 1.16 强迫新项目展开未裁剪图；桥接模块不会进入输出 Go 模块或用户锁身份；goxide-planner.invalid/ 是内部保留 module namespace，真实根/传递依赖引用会明确拒绝以防碰撞。path/git 用规范化源码替换，根 TOML 原生 Go 政策 replace/exclude 为全局权威。冲突的显式 goxide path/git 与根 replace 必须报错，不能静默覆盖；依赖自己的 replace/exclude 不提升为根规则。
+3. 来源收集后先建立 module path 到来源节点的 Go 投影索引；不同来源占用同一路径时，在写临时 go.mod 和调用 Go 之前报冲突。原生 Go require 与激活 goxide manifest 的版本要求再进入同一个 Go main-module 规划图。活动约束先作为 main module 根要求；只含 go.mod 的私有桥接模块保留多个最低版本请求，让真实 Go MVS 合并。桥继承根的 Go directive，不用旧 go 1.16 强迫新项目展开未裁剪图；桥接模块不会进入输出 Go 模块或用户锁身份；goxide-planner.invalid/ 是内部保留 module namespace，真实根/传递依赖引用会明确拒绝以防碰撞。path/git 用规范化源码替换，根 TOML 原生 Go 政策 replace/exclude 为全局权威。冲突的显式 goxide path/git 与根 replace 必须报错，不能静默覆盖；依赖自己的 replace/exclude 不提升为根规则。
 4. 用 `go list -m -json all` 得到实际选版，再用 Go 下载选中源码。对于活动 goxide.toml 依赖边读取当前版本的 goxide.toml 并重新计算请求。明确分开 SelectedModules（Go 选版/锁）与 BuildNodes（增强编译/脚本许可）：只有活动 manifest 边提升为 goxide 构建节点，沿用 path/git 的显式规则；仅原生 go.mod require（包括 indirect）不产生 goxide defaults 请求，也不会自动准备 lib 或脚本。消费 source-only goxide 库必须加显式 goxide.toml 依赖边；仅原生图的固定配置 Go 产物正常消费。桥接和计划注入的 require 同样不产生 feature 请求。
 5. 选中版本/来源、可达边、features 都不再变化才稳定。版本变化可删掉旧依赖，因此不能只做不断加边的闭包。重复的非相邻状态诊断振荡；设有限轮数上限，超限拒绝。中间版本的未知 feature、缺少 lib 等错误在最终稳定视图确认；不得先编译临时版本。最终增强构建依赖环明确拒绝。
 6. 稳定后生成依赖顺序，并把同一个选版/替换计划应用到每个独立生成 module。Go 重新列出的实际 build list 必须与计划一致，不一致拒绝；不能继续依赖原先“各节点独立选版后恰好相等”的做法。CLI 对全图只含 go.mod/go.sum 的影子模块先应用政策并核对；全部通过后才运行脚本、类型检查、宏展开和输出，实际生成副本再核对一次。bundle/main-anchor 只含根 TOML 原生 Go 政策，允许原生模块级回边；不提供根包源码，实际包循环不会因此成为支持能力。
@@ -38,11 +38,13 @@ Go module zip 可以携带 goxide.toml/.gox；嵌套模块、vendor、链接等�
 
 ## 身份、边界与锁
 
-逻辑身份是 module path，来源身份包含选中版本、替换后实际 path/version、Go sums 或显式本地/git 身份。同一 module 只能有一种最终来源；经根不带版本限定的本地 replace 到同一规范目录的 version 与 path 可统一；没有该显式根规则时不能用 path 静默覆盖 version 来源。goxide 源码的 go.mod 声明必须仍等于消费逻辑 module path；替换为改名 fork 时不自动改写源码自导入或增强身份，声明不一致明确拒绝。纯 Go 保持 Go 原有替换规则。不同目录或替换来源冲突拒绝。
+依赖图的逻辑身份是来源节点键 `SourceKey`，并非统一使用 module path。path、根项目和 workspace 成员按规范目录建立节点；Git 按规范仓库地址、锁定 commit 和 subdir 建立节点，ref 不参与去重；Go 版本来源按逻辑 module path 建立节点，让不同最低版本请求交给 MVS。实际生效的显式本地 replace 归一到有效 path，与同目录的 path 请求合并。alias 是声明项目内的边名称，不进入节点键。完整合同见[依赖根](dependency-roots.md)。
+
+`SourceID` 另记录取得内容的身份，包括选中版本、替换后实际 path/version、Go sums 等；Go 版本升级不创建另一个逻辑来源节点，但会改变内容与配置身份并重新求解有效依赖。不同 path 或 Git commit 即使声明相同 `go_mod.module`，仍先形成独立来源节点；Go 投影前拒绝它们占用同一 module 路径，不以遍历次序、alias 或成员资格覆盖来源。goxide 源码的传输 go.mod 声明仍须匹配消费的 Go module 路径；不自动改写改名 fork 的源码自导入。纯 Go 保持 Go 原有替换规则。
 
 version 下载 Dir 只读：转译、config、metadata、生成脚本输出和 go.mod 编辑一律在 target bundle 副本。下载内容的路径依赖/host helper/tool 不得逃出所取得模块边界；zip 不含的嵌套模块不能通过缓存相邻目录补齐。拒绝 symlink/伪造 manifest/go.mod，读取 manifest/编译/执行前运行 go mod verify，覆盖已取得的解压源码；goxide zip 中的 go.mod 还必须逐字节等于代理 .mod 元数据，防止规划和编译读取不同依赖政策。download JSON 的 Sum 不能证明现存 Dir 未被修改，也不以只读 mode 位代替内容验证。
 
-goxide.lock 增量保存每个准确根配置的稳定模块计划和下载身份/sums；稳定状态与锁身份不包含随机规划目录、桥接模块或生成 bundle 路径。已有 Git/sums 项继续保留。`--locked` 比较最终实际计划，缺项或选版/sums 变化拒绝；`--offline` 只用 Go/Git 暖缓存，冷缓存清楚失败。锁不冻结用户 path 内容。未激活 optional 来源不为它单独请求、下载或授权；若同模块被 go.mod 引入则仍是 Go 显式依赖。
+goxide.lock 增量保存每个准确根配置的稳定模块计划和下载身份/sums；稳定状态与锁身份不包含随机规划目录、桥接模块或生成 bundle 路径。本地来源键写成相对锁 owner 根的路径，允许 `../`；Git 键不含缓存位置，Go 键不含下载目录。已有 Git/sums 项继续保留。`--locked` 比较最终实际计划，缺项或选版/sums 变化拒绝；`--offline` 只用 Go/Git 暖缓存，冷缓存清楚失败。锁不冻结用户 path 内容。未激活 optional 来源不为它单独请求、下载或授权；若同模块被 go.mod 引入则仍是 Go 显式依赖。
 
 target config、前端配置标记/metadata、脚本 SourceID/缓存/非根执行闭包许可都包含稳定选版来源身份。升级版本即使脚本字节不变也需新的依赖执行许可。全图稳定并检查所有许可后才执行；不能通过解析临时版本或旧 cache hit 绕过 RFC 0023。脚本不能反向改动 feature 或选版图。
 
@@ -54,7 +56,7 @@ target config、前端配置标记/metadata、脚本 SourceID/缓存/非根执�
 | VS-02 | 两条活动 manifest 边请求同库 a/b，最终并集且任一边要求 defaults 即生效；go.mod 同库 require 不撤销 false | 未知 feature、feature 环、最终 goxide 构建环 |
 | VS-03 | 根请求 v1.0，原生 Go 依赖要求 v1.1，所有 goxide 节点统一使用 v1.1 | 生成节点实际 build list 与规划不同 |
 | VS-04 | v1.1 manifest 更换依赖，只保留当前边并重新选版 | A@1→B，B原生require A@2，A@2不再依赖B导致反复切换：振荡诊断 |
-| VS-05 | 根 replace 到本地 goxide，version/path 同源请求并集 | 同 module 不同 path/git、下载模块 path/host helper 越界 |
+| VS-05 | 有效本地 replace 与 path 归一，同源请求并集；相同 Git commit/subdir 的不同 ref 合并 | 不同 path/Git 节点占同一 Go module 路径：Go 投影前拒绝；下载模块 path/host helper 越界 |
 | VS-06 | 暖缓存 offline+locked 重复、A/B/A target/config 切换 | 冷缓存、缺计划锁、sum 或版本变化；Go cache 污染 |
 | VS-07 | .gox 与不同名手写 .go 库、lib 闭包保持 | 同名双源/增强 metadata 混装；仅生成 Go 不能重配 |
 | VS-08 | 已许可本地 fixture 脚本在稳定版本生成源码；repeat 可命中 | 未许可/升级版本/撤销，先拒绝再执行；临时选版脚本绝不运行 |

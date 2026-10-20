@@ -14,11 +14,22 @@ import (
 func nodeInput(n *Node) string { return Digest([]any{n.Manifest, string(n.ModBytes)}) }
 func (g *Graph) validateUnified() error {
 	u := g.Lock.Unified
+	owner := g.ownerRoot
+	if owner == "" {
+		owner = g.Root.Root
+	}
 	for _, n := range g.Nodes {
-		if !g.nativeStandalone && n != g.Root && u.Sources[n.Module] != n.SourceID {
+		if !g.nativeStandalone && n != g.Root && u.Sources[n.lockSourceKey(owner)] != n.SourceID {
 			return fmt.Errorf("unified lock source identity changed for %s", n.Module)
 		}
-		if want, ok := u.Inputs[n.Module]; !ok || want != g.input(n) {
+		inputKey := n.lockSourceKey(owner)
+		if n == g.Root && g.rootInputKey != "" {
+			inputKey = g.rootInputKey
+		}
+		if g.nativeStandalone {
+			inputKey = n.Module
+		}
+		if want, ok := u.Inputs[inputKey]; !ok || want != g.input(n) {
 			return fmt.Errorf("unified lock missing or changed reachable input %s; explicitly update lock", n.Module)
 		}
 	}
@@ -110,7 +121,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 			if e != nil {
 				return nil, e
 			}
-			if g.Lock.Unified.Inputs[n.Module] != nodeInput(n) {
+			if g.Lock.Unified.Inputs[n.lockSourceKey(w.Root)] != nodeInput(n) {
 				if locked {
 					return nil, fmt.Errorf("--locked: workspace member policy changed: %s", n.Module)
 				}
@@ -124,13 +135,13 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 	synthetic := Manifest{Module: "goxide-workspace.invalid/root", GoVersion: "1.27", Dependencies: map[string]Dependency{}}
 	seenReplace := map[string]GoReplace{}
 	seenExclude := map[string]bool{}
-	for i, module := range keys(w.Members) {
-		dir := w.Members[module]
+	for i, key := range keys(w.Members) {
+		dir := w.Members[key]
 		m := w.Manifests[dir]
 		if version.Compare("go"+m.GoVersion, "go"+synthetic.GoVersion) > 0 {
 			synthetic.GoVersion = m.GoVersion
 		}
-		synthetic.Dependencies[fmt.Sprintf("member%d", i)] = Dependency{Module: module, Path: dir, Features: keys(m.Features)}
+		synthetic.Dependencies[fmt.Sprintf("member%d", i)] = Dependency{Path: dir, Features: keys(m.Features)}
 		for _, rep := range m.Native.Replace {
 			if rep.Path != "" && !filepath.IsAbs(rep.Path) {
 				rep.Path = filepath.Join(dir, rep.Path)
@@ -184,7 +195,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 		}
 		nodes := map[string]*Node{}
 		for _, n := range g.Nodes {
-			nodes[n.Module] = n
+			nodes[n.SourceKey] = n
 		}
 		u := &UnifiedLock{GitPins: map[string]string{}, MinimumGo: g.RootMod.Go, Workspace: workspaceID, Sources: map[string]string{}, Policy: g.RootMod, Inputs: map[string]string{}, Modules: g.portablePlan(w.Root, g.Plan, nodes)}
 		for _, n := range g.Nodes {
@@ -195,8 +206,8 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 				}
 			}
 			if n.Root != synthRoot {
-				u.Inputs[n.Module] = nodeInput(n)
-				u.Sources[n.Module] = n.SourceID
+				u.Inputs[n.lockSourceKey(g.ownerRoot)] = nodeInput(n)
+				u.Sources[n.lockSourceKey(g.ownerRoot)] = n.SourceID
 			}
 		}
 		for _, selection := range g.Plan {
@@ -258,8 +269,9 @@ func LoadWorkspaceGraphs(w *Workspace, members []string, tool string, requested 
 	for iteration := 0; iteration < 64; iteration++ {
 		next := map[string]Request{}
 		graphs := []*Graph{}
-		for _, module := range members {
-			g, e := loadWorkspaceGraph(w, w.Members[module], tool, requested[module], defaults, offline, locked, targetDir, overrides)
+		for _, key := range members {
+			dir := w.Members[key]
+			g, e := loadWorkspaceGraph(w, dir, tool, requested[w.Manifests[dir].Module], defaults, offline, locked, targetDir, overrides)
 			if e != nil {
 				return nil, e
 			}
@@ -268,7 +280,7 @@ func LoadWorkspaceGraphs(w *Workspace, members []string, tool string, requested 
 			}
 			graphs = append(graphs, g)
 			for _, n := range g.Nodes {
-				next[n.Module] = unionRequest(next[n.Module], Request{Features: keys(n.Features)})
+				next[n.SourceKey] = unionRequest(next[n.SourceKey], Request{Features: keys(n.Features)})
 			}
 		}
 		if Digest(next) == Digest(overrides) {

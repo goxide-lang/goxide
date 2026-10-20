@@ -12,7 +12,7 @@
 
 ## 形式模型与阶段边界
 
-记配置为 `C = (F, T, E)`：`F(m)` 是模块 m 的最终 feature 集，T 是有效目标，E 是本次调用捕获的原始环境。语法见[词法与语法](../design/language-grammar.md)，阶段输入输出与完整规则见[转译语义](../design/translation-semantics.md)。
+记配置为 `C = (F, T, E)`：`F(m)` 是来源节点 m 的最终 feature 集，T 是有效目标，E 是本次调用捕获的原始环境。语法见[词法与语法](../design/language-grammar.md)，阶段输入输出与完整规则见[转译语义](../design/translation-semantics.md)。
 
 ```text
 ⟦feature("x")⟧C,m = x ∈ F(m)
@@ -27,7 +27,7 @@ ExpandC(cfg!(P)) = 布尔常量；不删除外围 if 分支
 
 每个当前处理到的完整谓词先校验，再求值。cfg_attr 的选中载荷递归规范化，多个有效 cfg 取 AND；未选载荷与删除项子树不进入后续处理。源码先完整解析，配置选择在首次名字/宏/import 收集前执行；宏输出重复“解析 → 选择 → 展开保留部分”，最后进入名字和类型检查。
 
-feature 图采用请求并集的最小不动点：根请求开始，反复加入本地 feature 展开、活动依赖边的转发与默认请求，直到不再变化。所有到同一 module/source 的请求合并，关闭一条边的 defaults 不能撤销另一条边。配置构造的来源模块决定 F(m)，T/E 为整次编译共享。
+feature 图采用请求并集的最小不动点：根请求开始，反复加入本地 feature 展开、活动依赖边的转发与默认请求，直到不再变化。所有到同一来源节点的请求合并，关闭一条边的 defaults 不能撤销另一条边。配置构造的来源节点决定 F(m)，T/E 为整次编译共享。
 
 生成身份包含实际读取的环境键及其存在性和值；读取记录在动态宏处理完成后收敛。配置变化影响生成缓存，依赖图不变时锁文件保持不变。工作流选择 T 的规则、原始环境与 Go 执行环境的区别见下文。
 
@@ -51,7 +51,6 @@ path = 'src/web.gox'
 [dependencies]
 [dependencies.client]
 default_features = false
-module = 'example.org/client'
 optional = true
 path = '../client'
 
@@ -94,7 +93,7 @@ feature 名沿用清单的名称规则、区分大小写。`--features` 沿用�
 feature 的数组元素支持：本模块 feature 名、`dep:alias`（只激活 optional 依赖）、`alias/feature`（激活依赖并转发 feature）。依赖还可声明 `features: ["x"]` 和 `default_features: false`。
 
 - 默认启用已声明的 `default`；`--no-default-features` 仅关闭根模块的默认请求，不能撤销其他显式请求。
-- 所有到同一 module/source 的请求取并集；任一边要求默认 feature，就启用其默认 feature。不能以一条边的 false 撤销另一条边的 true。
+- 所有到同一来源节点的请求取并集；任一边要求默认 feature，就启用其默认 feature。不能以一条边的 false 撤销另一条边的 true。
 - 未知本地 feature、未知依赖、feature 循环、模块依赖循环诊断；所有本地 feature 边即使未启用也检查。转发到依赖的 feature 名在依赖被激活读取后检查，未激活 optional 来源不下载。
 - 不隐式生成与 optional 依赖同名的 feature。version/path/git 是获取渠道；活动 manifest 边取得 goxide.toml 源码后使用相同 feature/default/optional/lib 规则。没有 goxide.toml 的纯 Go 或固定配置生成 Go 不接受显式 goxide feature 请求。仅 go.mod require/indirect 参与 Go 选版，不隐式开启 goxide defaults 或执行脚本。
 - TOML go.require 不因 goxide optional 关闭而被删除；显式 Go 依赖仍由 Go 解析。
@@ -382,7 +381,7 @@ func DefaultCounter() Counter { return Counter{Value: 0} }
 
 ### 依赖、锁定与生成 Go
 
-依赖来源采用当前 schema；Go 来源写 go，Git/path 来源写 module：
+依赖来源采用当前 schema；Go module 来源写 go/version，Git/path 从所选根清单读取 module 身份，可选 module 字段只作一致性断言：
 
 ```toml
 [dependencies.text]
@@ -390,22 +389,20 @@ go = "golang.org/x/text"
 version = "v0.28.0"
 
 [dependencies.remote]
-module = "example.org/lib"
 git = "https://example.org/lib.git"
 rev = "release-1"
 subdir = "library"
 
 [dependencies.local]
-module = "example.org/local"
 path = "../local"
 features = ["fast"]
 ```
 
 上面仅展示格式，不是测试访问的服务。版本解析、MVS、module 缓存、校验和全部调用真实 Go 工具。TOML 内保留原生 require 与本地 replace 语义。增强依赖与 go.require 的版本请求共同交 Go MVS 选择，不因两个最低版本不同就拒绝；显式本地/Git 来源不能覆盖根 TOML 已有的不一致 go.replace。根 replace/exclude 为全局权威，不提升依赖自己的策略。源 go.mod/go.sum 不改写，修改限于生成副本。
 
-path/git 入口（Git 含 subdir 后）可以是纯 TOML 作者模块，或者自带普通 go.mod 的原生 Go 模块；不借用父目录配置。TOML 模块只在受管目录合成 Go 元数据，module 必须匹配逻辑身份。
+path/git 入口（Git 含 subdir 后）可以是纯 TOML 作者模块，或者自带普通 go.mod 的原生 Go 模块；不借用父目录配置。module 身份来自该根的清单，显式断言必须相等。TOML 模块只在受管目录合成 Go 元数据。
 
-本地 path 相对声明它的 manifest，而非 cwd；不递归发现相邻模块。Git 的 rev/tag/branch 选择器可省略，此时选默认分支；首次解析后在 goxide.lock 锁定精确 commit，之后移动 ref 不改变锁。Git subdir 必须在 checkout 内，实际 module path 必须一致。同一 module path 的来源冲突按 [schema](../design/toml-manifest.md#来源与包身份)处理。
+本地 path 相对声明它的 manifest，而非 cwd；不递归发现相邻模块。Git 的 rev/tag/branch 选择器可省略，此时选默认分支；首次解析后在 goxide.lock 锁定精确 commit，之后移动 ref 不改变锁。Git subdir 必须在 checkout 内并含自身的 goxide.toml 或 go.mod，不选择普通子包。不同来源节点占用同一 Go module 路径时，在 Go 投影前按 [schema](../design/toml-manifest.md#来源与包身份)诊断。
 
 Git 接受无凭据的 HTTPS URL，另支持绝对本地路径/file URL 用于本地仓库；禁止 URL userinfo/query、SSH 和 ext。命令通过独立 argv 调用，不经 shell，不运行安装脚本/子模块/生成脚本，禁用 hooks、credential helper、askpass、fsmonitor 与外部协议。Git 来源的 path 后代和本地 go.mod replace 不得逃出 checkout。缓存 checkout 必须与锁定 commit 一致且无修改、未跟踪或 ignored 文件；拒绝缓存目录 symlink。
 
@@ -495,6 +492,6 @@ feature 仍为可累加请求；互斥 feature 约束、target-specific 依赖�
 
 通过 Go 版本来源取得的 Goxide 源码，在 feature 接入后使用同一模块请求规则；无 goxide.toml 的固定 Go 发行物不重配 features。下载校验与传输用 go.mod 的一致性仍按[版本来源合同](../design/version-source-plan.md)执行，条件选择只改生成副本，不写下载缓存。
 
-增强源码的 go.mod 声明仍须匹配消费逻辑 module；不自动重写改名 fork 的源码自导入身份。纯 Go fork 替换继续采用 Go 规则。version/path 同 module 只有根不带版本限定的本地 replace 明确指向同目录时统一；否则来源冲突拒绝。下载模块的 path/host helper/tools 不能越出取得的模块边界。`goxide-planner.invalid/` 为内部保留 module namespace，真实依赖引用会拒绝。
+增强源码的传输 go.mod 声明仍须匹配消费的 Go module 路径；不自动重写改名 fork 的源码自导入身份。纯 Go fork 替换继续采用 Go 规则。Go 版本来源经实际生效的显式本地 replace 指向同目录时，与 path 归一为同一来源节点；其他不同来源保持独立，投影到相同 Go module 路径时拒绝。下载模块的 path/host helper/tools 不能越出取得的模块边界。`goxide-planner.invalid/` 为内部保留 module namespace，真实依赖引用会拒绝。
 
 构建顺序仍是增强 module 级 DAG，不实现跨 module 的包级交错排序。main-anchor 只保证原生 module 图回边的政策解析；依赖不能通过它导入尚未生成的根包，即使某个包级图本身无环也不在本阶段支持范围内。

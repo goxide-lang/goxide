@@ -240,7 +240,7 @@ json=["dep:json"]
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := &Workspace{Root: root, Members: map[string]string{m.Module: root}, Manifests: map[string]Manifest{root: m}}
+	w := &Workspace{Root: root, Members: map[string]string{pathSource(root).key(): root}, Manifests: map[string]Manifest{root: m}}
 	closure, err := NativeClosure(w, m.Module)
 	if err != nil || !reflect.DeepEqual(closure, map[string]bool{m.Module: true}) {
 		t.Fatalf("toolchain entered native member closure: %+v, %v", closure, err)

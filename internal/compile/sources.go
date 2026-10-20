@@ -23,6 +23,9 @@ func moduleRoots(node *project.Node) (paths.Roots, error) {
 	mappings := map[string]rootconfig.Mapping{}
 	for alias := range node.Requests {
 		dependency := node.Manifest.Dependencies[alias]
+		if resolved, ok := node.Sources[alias]; ok {
+			dependency = resolved
+		}
 		source := "module"
 		if dependency.IsToolchain() {
 			source = "toolchain"

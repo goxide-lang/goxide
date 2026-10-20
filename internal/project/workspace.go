@@ -18,7 +18,7 @@ const WorkspaceOwner = "<workspace>"
 type Workspace struct {
 	Root      string
 	Config    WorkspaceConfig
-	Members   map[string]string // module identity -> canonical directory
+	Members   map[string]string // source identity -> canonical directory
 	Manifests map[string]Manifest
 	Defaults  []string
 }
@@ -223,10 +223,7 @@ func loadWorkspace(root string, c WorkspaceConfig, checkout string) (*Workspace,
 		if e != nil {
 			return nil, e
 		}
-		if old, ok := w.Members[m.Module]; ok {
-			return nil, fmt.Errorf("duplicate workspace module %s: %s and %s", m.Module, old, dir)
-		}
-		w.Members[m.Module] = dir
+		w.Members[pathSource(dir).key()] = dir
 		w.Manifests[dir] = m
 	}
 	if len(w.Members) == 0 {
@@ -234,20 +231,15 @@ func loadWorkspace(root string, c WorkspaceConfig, checkout string) (*Workspace,
 	}
 	for _, p := range c.Defaults {
 		dir := filepath.Clean(filepath.Join(root, p))
-		found := ""
-		for mod, d := range w.Members {
-			if d == dir {
-				found = mod
-			}
-		}
-		if found == "" {
+		key := pathSource(dir).key()
+		if _, ok := w.Members[key]; !ok {
 			return nil, fmt.Errorf("default member is not a member: %s", p)
 		}
-		w.Defaults = append(w.Defaults, found)
+		w.Defaults = append(w.Defaults, key)
 	}
 	if len(c.Defaults) == 0 {
 		if rootModule {
-			w.Defaults = []string{w.Manifests[root].Module}
+			w.Defaults = []string{pathSource(root).key()}
 		} else {
 			w.Defaults = keys(w.Members)
 		}
@@ -355,18 +347,42 @@ func (w *Workspace) Select(input string, packages []string, all bool) ([]string,
 		return keys(w.Members), nil
 	}
 	if len(packages) == 0 {
-		if m, ok := w.Manifests[input]; ok && input != w.Root {
-			packages = []string{m.Module}
-		} else {
-			packages = w.Defaults
+		if _, ok := w.Manifests[input]; ok && input != w.Root {
+			return []string{pathSource(input).key()}, nil
 		}
+		return append([]string(nil), w.Defaults...), nil
 	}
 	seen := map[string]bool{}
 	for _, p := range packages {
-		if _, ok := w.Members[p]; !ok {
+		found := ""
+		for _, key := range keys(w.Members) {
+			if w.Manifests[w.Members[key]].Module != p {
+				continue
+			}
+			if found != "" {
+				return nil, fmt.Errorf("ambiguous workspace package %s: %s and %s", p, w.Members[found], w.Members[key])
+			}
+			found = key
+		}
+		if found == "" {
 			return nil, fmt.Errorf("unknown workspace package %s", p)
 		}
-		seen[p] = true
+		seen[found] = true
 	}
 	return keys(seen), nil
+}
+
+// GoModules projects discovered source members into the generated Go workspace.
+// Discovery itself permits separate sources to declare the same Go module.
+func (w *Workspace) GoModules() (map[string]string, error) {
+	modules := map[string]string{}
+	for _, key := range keys(w.Members) {
+		dir := w.Members[key]
+		module := w.Manifests[dir].Module
+		if prior, ok := modules[module]; ok && prior != dir {
+			return nil, fmt.Errorf("Go module projection conflict for %s: %s and %s", module, prior, dir)
+		}
+		modules[module] = dir
+	}
+	return modules, nil
 }

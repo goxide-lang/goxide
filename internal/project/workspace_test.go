@@ -80,7 +80,6 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 	for _, tc := range []struct{ name, root, member, extra, want string }{
 		{"case", "[workspace]\nMembers=[\"app\"]\n", "", "", "unknown"},
 		{"feature type", "[workspace]\nmembers=[\"app\"]\n[workspace.dependencies]\nd={module=\"example.org/d\",path=\"d\"}\n", "[dependencies]\nd={workspace=true,features=\"oops\"}\n", "", "features"},
-		{"duplicate", "[workspace]\nmembers=[\"app\",\"other\"]\n", "", "other", "duplicate workspace module"},
 		{"nested", "[workspace]\nmembers=[\"nested/app\"]\n", "", "nested", "another workspace"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,9 +87,6 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 			wsWrite(t, root, "goxide.toml", tc.root)
 			manifest := "[go_mod]\nmodule=\"example.org/app\"\ngo=\"1.27\"\n" + tc.member
 			wsWrite(t, root, "app/goxide.toml", manifest)
-			if tc.extra == "other" {
-				wsWrite(t, root, "other/goxide.toml", manifest)
-			}
 			if tc.extra == "nested" {
 				wsWrite(t, root, "nested/goxide.toml", "[workspace]\nmembers=[\"app\"]\n")
 				wsWrite(t, root, "nested/app/goxide.toml", manifest)
@@ -158,5 +154,30 @@ func TestWorkspaceOwnerCannotCollideWithModule(t *testing.T) {
 	if other, e := OpenLayout(root, WorkspaceOwner, ""); e == nil {
 		other.Close()
 		t.Fatal("workspace reused standalone module owner")
+	}
+}
+
+func TestWorkspaceSourceIdentityPrecedesGoProjection(t *testing.T) {
+	root := t.TempDir()
+	wsWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"app\",\"other\"]\n")
+	for _, dir := range []string{"app", "other"} {
+		wsWrite(t, root, dir+"/goxide.toml", "[go_mod]\nmodule=\"example.org/shared\"\ngo=\"1.27\"\n")
+	}
+	w, err := DiscoverWorkspace(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Members) != 2 || len(w.Defaults) != 2 {
+		t.Fatalf("distinct source members were merged: %#v", w)
+	}
+	selected, err := w.Select(filepath.Join(root, "app"), nil, false)
+	if err != nil || len(selected) != 1 || w.Members[selected[0]] != filepath.Join(root, "app") {
+		t.Fatalf("source selection = %v, %v", selected, err)
+	}
+	if _, err = w.Select(root, []string{"example.org/shared"}, false); err == nil || !strings.Contains(err.Error(), "ambiguous workspace package") {
+		t.Fatalf("expected ambiguous module selector, got %v", err)
+	}
+	if _, err = w.GoModules(); err == nil || !strings.Contains(err.Error(), "Go module projection conflict") {
+		t.Fatalf("expected Go projection conflict, got %v", err)
 	}
 }

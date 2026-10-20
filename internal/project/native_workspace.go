@@ -120,16 +120,47 @@ func NativeInput(w *Workspace) (string, error) {
 		return "", e
 	}
 	members := map[string]string{}
-	for module, dir := range w.Members {
+	for _, dir := range w.Members {
 		b, e := os.ReadFile(filepath.Join(dir, ManifestName))
 		if e != nil {
 			return "", e
 		}
-		members[module] = string(b)
+		relative, e := filepath.Rel(w.Root, dir)
+		if e != nil {
+			return "", e
+		}
+		members[filepath.ToSlash(relative)] = string(b)
 	}
 	return Digest([]any{root, members}), nil
 }
+
+func (w *Workspace) memberDependency(root, alias string, d Dependency) (Dependency, error) {
+	if d.Path == "" {
+		return d, nil
+	}
+	dir := d.Path
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(root, dir)
+	}
+	for _, member := range w.Members {
+		if member != filepath.Clean(dir) {
+			continue
+		}
+		module := w.Manifests[member].Module
+		if d.Module != "" && d.Module != module {
+			return d, fmt.Errorf("dependency %s module path mismatch: want %s, got %s", alias, d.Module, module)
+		}
+		d.Module = module
+		break
+	}
+	return d, nil
+}
+
 func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
+	members, e := w.GoModules()
+	if e != nil {
+		return nil, e
+	}
 	allowed := map[string]bool{}
 	state := map[string]int{}
 	var visit func(string) error
@@ -141,7 +172,7 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 			return nil
 		}
 		state[module] = 1
-		dir, ok := w.Members[module]
+		dir, ok := members[module]
 		if !ok {
 			return fmt.Errorf("unknown native workspace member %s", module)
 		}
@@ -150,7 +181,11 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 			if d.IsToolchain() {
 				continue
 			}
-			if _, member := w.Members[d.Module]; !member {
+			d, err := w.memberDependency(dir, alias, d)
+			if err != nil {
+				return err
+			}
+			if _, member := members[d.Module]; !member {
 				if e := validateNativeExternalDependency(m, alias, d); e != nil {
 					return e
 				}
@@ -163,7 +198,7 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 			if !filepath.IsAbs(path) {
 				path = filepath.Join(dir, path)
 			}
-			if w.Members[d.Module] != filepath.Clean(path) {
+			if members[d.Module] != filepath.Clean(path) {
 				return fmt.Errorf("native workspace dependency %s must name its explicit member path", alias)
 			}
 			if e := visit(d.Module); e != nil {
@@ -177,8 +212,11 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 			return e
 		}
 		for alias, request := range requests {
-			d := m.Dependencies[alias]
-			if _, member := w.Members[d.Module]; !member && !d.IsToolchain() && len(request.Features) != 0 {
+			d, err := w.memberDependency(dir, alias, m.Dependencies[alias])
+			if err != nil {
+				return err
+			}
+			if _, member := members[d.Module]; !member && !d.IsToolchain() && len(request.Features) != 0 {
 				return fmt.Errorf("native workspace dependency %s: external Go artifacts cannot receive feature requests", alias)
 			}
 		}
@@ -186,7 +224,7 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 		state[module] = 2
 		return nil
 	}
-	e := visit(module)
+	e = visit(module)
 	return allowed, e
 }
 
@@ -347,13 +385,17 @@ func WorkText(p *NativeWorkspaceConfig, members []string, root string) ([]byte, 
 // NativeView preserves every member policy, but includes source only for the
 // explicit build closure. Go use must never supply code from an unselected edge.
 func NativeView(w *Workspace, dst string, source map[string]bool, lock *NativeWorkspaceLock) (map[string]string, error) {
+	members, e := w.GoModules()
+	if e != nil {
+		return nil, e
+	}
 	if e := os.MkdirAll(dst, 0755); e != nil {
 		return nil, e
 	}
 	dirs := map[string]string{}
 	uses := []string{}
-	for _, module := range keys(w.Members) {
-		src := w.Members[module]
+	for _, module := range keys(members) {
+		src := members[module]
 		rel, e := filepath.Rel(w.Root, src)
 		if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return nil, fmt.Errorf("native workspace author members must be inside root")
@@ -396,6 +438,10 @@ func NativeView(w *Workspace, dst string, source map[string]bool, lock *NativeWo
 	return dirs, nil
 }
 func ReadNativeSelections(w *Workspace, tool, view string, lock *NativeWorkspaceLock, offline bool) error {
+	members, e := w.GoModules()
+	if e != nil {
+		return e
+	}
 	lock.Modules = map[string]Selection{}
 	{
 		b, e := NativeGo(tool, view, offline, "list", "-mod=readonly", "-m", "-json", "all")
@@ -412,7 +458,7 @@ func ReadNativeSelections(w *Workspace, tool, view string, lock *NativeWorkspace
 			if e != nil {
 				return e
 			}
-			if _, member := w.Members[s.Path]; !member {
+			if _, member := members[s.Path]; !member {
 				lock.Modules[s.Path] = s
 			}
 		}
@@ -420,18 +466,24 @@ func ReadNativeSelections(w *Workspace, tool, view string, lock *NativeWorkspace
 			return e
 		}
 	}
-	CaptureNativeMembers(w, lock)
+	if e := CaptureNativeMembers(w, lock); e != nil {
+		return e
+	}
 	if e := captureNativeLocals(w, lock); e != nil {
 		return e
 	}
 	return CaptureNativeSums(w, view, lock)
 }
 func CaptureNativeSums(w *Workspace, view string, lock *NativeWorkspaceLock) error {
+	members, e := w.GoModules()
+	if e != nil {
+		return e
+	}
 	if e := CheckNativePolicies(w, view); e != nil {
 		return e
 	}
 	lock.Sums = map[string]string{}
-	for module, dir := range w.Members {
+	for module, dir := range members {
 		rel, _ := filepath.Rel(w.Root, dir)
 		b, e := os.ReadFile(filepath.Join(view, rel, "go.sum"))
 		if e != nil && !os.IsNotExist(e) {
@@ -448,6 +500,10 @@ func CaptureNativeSums(w *Workspace, view string, lock *NativeWorkspaceLock) err
 }
 
 func nativeModuleText(w *Workspace, src, view string) ([]byte, error) {
+	members, e := w.GoModules()
+	if e != nil {
+		return nil, e
+	}
 	m := w.Manifests[src]
 	m.Native.Replace = append([]GoReplace(nil), m.Native.Replace...)
 	{
@@ -456,7 +512,7 @@ func nativeModuleText(w *Workspace, src, view string) ([]byte, error) {
 			if r.Path != "" && !filepath.IsAbs(r.Path) {
 				r.Path = filepath.Join(src, r.Path)
 			}
-			if w.Members[r.Module] == filepath.Clean(r.Path) {
+			if members[r.Module] == filepath.Clean(r.Path) {
 				rel, e := filepath.Rel(w.Root, r.Path)
 				if e != nil {
 					return nil, e
@@ -475,6 +531,10 @@ func nativeModuleText(w *Workspace, src, view string) ([]byte, error) {
 
 // A Go analysis operation may add sums, but may never rewrite author policy.
 func CheckNativePolicies(w *Workspace, view string) error {
+	members, e := w.GoModules()
+	if e != nil {
+		return e
+	}
 	uses := []string{}
 	check := func(path string, want []byte) error {
 		b, e := os.ReadFile(path)
@@ -486,8 +546,8 @@ func CheckNativePolicies(w *Workspace, view string) error {
 		}
 		return nil
 	}
-	for _, module := range keys(w.Members) {
-		src := w.Members[module]
+	for _, module := range keys(members) {
+		src := members[module]
 		rel, e := filepath.Rel(w.Root, src)
 		if e != nil {
 			return e
@@ -511,6 +571,10 @@ func CheckNativePolicies(w *Workspace, view string) error {
 // A local replacement of a use member follows that member into the generated
 // view. Nonmember replacements retain their explicit external author path.
 func nativeWorkText(w *Workspace, uses []string, view string) ([]byte, error) {
+	members, e := w.GoModules()
+	if e != nil {
+		return nil, e
+	}
 	policy := *w.Config.Go
 	policy.Replace = append([]GoReplace(nil), policy.Replace...)
 	{
@@ -523,7 +587,7 @@ func nativeWorkText(w *Workspace, uses []string, view string) ([]byte, error) {
 			if !filepath.IsAbs(absolute) {
 				absolute = filepath.Join(w.Root, absolute)
 			}
-			if w.Members[r.Module] == filepath.Clean(absolute) {
+			if members[r.Module] == filepath.Clean(absolute) {
 				rel, e := filepath.Rel(w.Root, absolute)
 				if e != nil {
 					return nil, e

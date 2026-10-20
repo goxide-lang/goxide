@@ -32,7 +32,7 @@ with_dep=["dep:dep"]
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := &Workspace{Root: root, Config: WorkspaceConfig{Go: &NativeWorkspaceConfig{Version: "1.27"}}, Members: map[string]string{m.Module: app}, Manifests: map[string]Manifest{app: m}}
+	w := &Workspace{Root: root, Config: WorkspaceConfig{Go: &NativeWorkspaceConfig{Version: "1.27"}}, Members: map[string]string{pathSource(app).key(): app}, Manifests: map[string]Manifest{app: m}}
 	return w, m
 }
 
@@ -90,12 +90,15 @@ func TestNativeExternalRootDiagnostics(t *testing.T) {
 			m.Dependencies["dep"] = d
 		}, "cannot receive feature requests"},
 		{"dormant forwarded feature", func(_ *Workspace, m *Manifest) { m.Features["never"] = []string{"dep/enhanced"} }, "cannot receive feature requests"},
-		{"member version", func(w *Workspace, m *Manifest) { w.Members["example.org/dep"] = filepath.Join(w.Root, "dep") }, "explicit member path"},
+		{"member version", func(w *Workspace, m *Manifest) {
+			w.Members[pathSource(filepath.Join(w.Root, "dep")).key()] = filepath.Join(w.Root, "dep")
+			w.Manifests[filepath.Join(w.Root, "dep")] = Manifest{Module: "example.org/dep"}
+		}, "explicit member path"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w, m := nativeRootMappingFixture(t)
 			tc.edit(w, &m)
-			w.Manifests[w.Members[m.Module]] = m
+			w.Manifests[filepath.Join(w.Root, "app")] = m
 			if _, err := NativeClosure(w, m.Module); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want %q, got %v", tc.want, err)
 			}
@@ -107,10 +110,10 @@ func TestNativeExternalRootPreservesMemberEdges(t *testing.T) {
 	w, m := nativeRootMappingFixture(t)
 	lib := filepath.Join(w.Root, "lib")
 	wsWrite(t, lib, "lib.go", "package lib\n")
-	w.Members["example.org/lib"] = lib
+	w.Members[pathSource(lib).key()] = lib
 	w.Manifests[lib] = Manifest{Module: "example.org/lib", GoVersion: "1.27"}
-	m.Dependencies["member"] = Dependency{Module: "example.org/lib", Path: "../lib", Package: "example.org/lib"}
-	w.Manifests[w.Members[m.Module]] = m
+	m.Dependencies["member"] = Dependency{Path: "../lib", Package: "example.org/lib"}
+	w.Manifests[filepath.Join(w.Root, "app")] = m
 	lock := Lock{NativeWorkspace: &NativeWorkspaceLock{Modules: map[string]Selection{"example.org/dep": {Path: "example.org/dep", Version: "v1.0.0"}}}}
 	graphs, err := NativeFeatureGraphs(w, []string{m.Module}, "unused-go-tool", map[string][]string{m.Module: {"with_dep"}}, false, lock)
 	if err != nil {

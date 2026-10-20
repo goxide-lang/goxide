@@ -10,10 +10,11 @@ import (
 // workspace-wide input digest. Local member locations may be explicitly moved;
 // their own records and the module path are checked when they become reachable.
 type NativeMemberRecord struct {
-	Input string `json:"input"`
+	Input        string            `json:"input"`
+	Dependencies map[string]string `json:"dependencies,omitempty"`
 }
 
-func nativeMemberInput(m Manifest, root string, locations map[string]string, localModules map[string]bool) string {
+func nativeMemberInput(m Manifest, root string, locations map[string]string, localModules map[string]bool, dependencies map[string]string) string {
 	b, _ := json.Marshal(m)
 	var normalized Manifest
 	_ = json.Unmarshal(b, &normalized)
@@ -22,6 +23,9 @@ func nativeMemberInput(m Manifest, root string, locations map[string]string, loc
 		if d.IsToolchain() || d.Path == "" {
 			continue
 		}
+		if d.Module == "" {
+			d.Module = dependencies[alias]
+		}
 		path := d.Path
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(root, path)
@@ -29,8 +33,8 @@ func nativeMemberInput(m Manifest, root string, locations map[string]string, loc
 		if locations[d.Module] == filepath.Clean(path) {
 			direct[d.Module] = filepath.Clean(path)
 			d.Path = "member:" + d.Module
-			normalized.Dependencies[alias] = d
 		}
+		normalized.Dependencies[alias] = d
 	}
 	normalized.Native.Replace = nil
 	for _, r := range m.Native.Replace {
@@ -51,11 +55,15 @@ func nativeMemberInput(m Manifest, root string, locations map[string]string, loc
 	}
 	return Digest(normalized)
 }
-func CaptureNativeMembers(w *Workspace, lock *NativeWorkspaceLock) {
+func CaptureNativeMembers(w *Workspace, lock *NativeWorkspaceLock) error {
+	members, e := w.GoModules()
+	if e != nil {
+		return e
+	}
 	lock.Members = map[string]NativeMemberRecord{}
 	locations := map[string]string{}
 	localModules := map[string]bool{}
-	for module, root := range w.Members {
+	for module, root := range members {
 		locations[module] = root
 	}
 	for module, pin := range lock.Modules {
@@ -64,18 +72,37 @@ func CaptureNativeMembers(w *Workspace, lock *NativeWorkspaceLock) {
 			localModules[module] = true
 		}
 	}
-	for module, root := range w.Members {
-		lock.Members[module] = NativeMemberRecord{Input: nativeMemberInput(w.Manifests[root], root, locations, localModules)}
+	for module, root := range members {
+		m := w.Manifests[root]
+		dependencies := map[string]string{}
+		for alias, d := range m.Dependencies {
+			if d.Path == "" {
+				continue
+			}
+			resolved, err := w.memberDependency(root, alias, d)
+			if err != nil {
+				return err
+			}
+			if _, member := members[resolved.Module]; member {
+				dependencies[alias] = resolved.Module
+			}
+		}
+		lock.Members[module] = NativeMemberRecord{Input: nativeMemberInput(m, root, locations, localModules, dependencies), Dependencies: dependencies}
 	}
+	return nil
 }
 func (g *Graph) input(n *Node) string {
 	if !g.nativeStandalone {
 		return nodeInput(n)
 	}
 	locations := map[string]string{n.Module: n.Root}
-	for _, d := range n.Manifest.Dependencies {
+	dependencies := g.Lock.NativeWorkspace.Members[n.Module].Dependencies
+	for alias, d := range n.Manifest.Dependencies {
 		if d.IsToolchain() {
 			continue
+		}
+		if d.Module == "" {
+			d.Module = dependencies[alias]
 		}
 		if _, known := g.Lock.NativeWorkspace.Members[d.Module]; !known || d.Path == "" {
 			continue
@@ -111,7 +138,7 @@ func (g *Graph) input(n *Node) string {
 			locations[module] = p
 		}
 	}
-	return nativeMemberInput(n.Manifest, n.Root, locations, localModules)
+	return nativeMemberInput(n.Manifest, n.Root, locations, localModules, dependencies)
 }
 func (g *Graph) prepareNativeStandalone() error {
 	n := g.Lock.NativeWorkspace

@@ -134,7 +134,8 @@ func (g *Graph) readNode(root string, published bool, checkout string) (*Node, e
 	if e != nil {
 		return nil, e
 	}
-	n := &Node{Root: root, Manifest: Manifest{}, Children: map[string]*Node{}, Sources: map[string]Dependency{}}
+	n := &Node{Root: root, Children: map[string]*Node{}, Sources: map[string]Dependency{}}
+	n.setSource(pathSource(root))
 	if present {
 		n.HasManifest = true
 		if override, ok := g.overrides[root]; ok {
@@ -246,8 +247,10 @@ type requirement struct{ Module, Version string }
 type planningRound struct {
 	root         *Node
 	nodes        map[string]*Node
+	selected     map[string]Selection
 	requirements []requirement
 	local        map[string]string
+	versioned    map[string]bool
 	errors       []error
 }
 
@@ -268,21 +271,47 @@ func effective(s Selection) Selection {
 	return s
 }
 func (g *Graph) round(root string, requested []string, defaults bool, selected map[string]Selection) (*planningRound, error) {
-	r := &planningRound{nodes: map[string]*Node{}, local: map[string]string{}}
+	r := &planningRound{nodes: map[string]*Node{}, selected: selected}
 	var e error
 	r.root, e = g.readNode(root, false, "")
 	if e != nil {
 		return nil, e
 	}
-	r.nodes[r.root.Module] = r.root
-	reqs := map[string]Request{r.root.Module: {Features: requested, Defaults: defaults}}
+	owner := root
+	if g.ownerRoot != "" {
+		owner = g.ownerRoot
+	}
+	g.rootInputKey = r.root.lockSourceKey(owner)
+	if g.Lock.Unified != nil && g.workspace == nil && !g.nativeStandalone {
+		input := g.input(r.root)
+		if g.Lock.Unified.Inputs[g.rootInputKey] != input {
+			found := ""
+			for key, value := range g.Lock.Unified.Inputs {
+				if value != input {
+					continue
+				}
+				if found != "" {
+					return nil, fmt.Errorf("copied unified lock has ambiguous root input for %s", r.root.Module)
+				}
+				found = key
+			}
+			if found != "" {
+				g.rootInputKey = found
+			}
+		}
+	}
+	r.nodes[r.root.SourceKey] = r.root
+	reqs := map[string]Request{r.root.SourceKey: {Features: requested, Defaults: defaults}}
 	deferred := map[string]error{}
-	provenance := map[string]map[string]bool{}
+	recordSource := func(n *Node) {
+		n.SourceID = Digest([]string{n.lockSourceKey(owner), n.source.Content})
+	}
+	recordSource(r.root)
 	for changed := true; changed; {
 		changed = false
-		for _, module := range keys(r.nodes) {
-			n := r.nodes[module]
-			req := unionRequest(reqs[module], g.featureOverrides[module])
+		for _, key := range keys(r.nodes) {
+			n := r.nodes[key]
+			req := unionRequest(reqs[key], g.featureOverrides[key])
 			if g.allFeatures {
 				req.Features = keys(n.Manifest.Features)
 				req.Defaults = true
@@ -292,7 +321,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 				if n == r.root {
 					return nil, e
 				}
-				deferred[module] = e
+				deferred[key] = e
 				known := []string{}
 				for _, f := range req.Features {
 					if _, ok := n.Manifest.Features[f]; ok {
@@ -307,32 +336,27 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 			n.Features = features
 			n.Requests = deps
 			if g.Lock.Unified != nil && !g.unifiedPlanning {
-				if g.Lock.Unified.Inputs[n.Module] != g.input(n) {
-					return nil, fmt.Errorf("unified lock missing or changed reachable input %s; explicitly update lock", n.Module)
+				inputKey := n.lockSourceKey(owner)
+				if n == r.root {
+					inputKey = g.rootInputKey
 				}
-				for _, req := range n.Mod.Require {
-					if _, ok := g.Lock.Unified.Modules[req.Path]; !ok {
-						return nil, fmt.Errorf("unified lock missing reachable module %s", req.Path)
-					}
+				if g.nativeStandalone {
+					inputKey = n.Module
+				}
+				if g.Lock.Unified.Inputs[inputKey] != g.input(n) {
+					return nil, fmt.Errorf("unified lock missing or changed reachable input %s; explicitly update lock", n.Module)
 				}
 			}
 			for _, alias := range keys(deps) {
 				d := n.Manifest.Dependencies[alias]
 				if d.IsToolchain() {
-					continue // Available in Requests, never a Go module requirement.
+					continue
 				}
-				if g.Lock.Unified != nil && !g.unifiedPlanning {
-					if _, ok := g.Lock.Unified.Modules[d.Module]; !ok {
-						return nil, fmt.Errorf("unified lock missing reachable module %s", d.Module)
-					}
-				}
-				if strings.HasPrefix(d.Module, plannerPrefix) {
-					return nil, fmt.Errorf("reserved planner module namespace: %s", d.Module)
-				}
-				n.Sources[alias] = d
-				dir, boundary, sourceID, version := "", n.CheckoutRoot, "", ""
+				dir, boundary, version := "", n.CheckoutRoot, ""
+				source := sourceIdentity{}
 				published := false
 				if d.Version != "" {
+					n.Sources[alias] = d
 					s, ok := selected[d.Module]
 					if !ok {
 						continue
@@ -340,10 +364,10 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					eff := effective(s)
 					dir = eff.Dir
 					version = s.Version
-					sourceID = Digest(s)
 					if dir == "" {
 						return nil, fmt.Errorf("selected source directory missing: %s", d.Module)
 					}
+					source = selectedSource(d.Module, s)
 					if eff.Version != "" {
 						boundary = dir
 						published = true
@@ -356,7 +380,10 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 						return nil, e
 					}
 					boundary = filepath.Join(g.Cache, d.GitKey())
-					sourceID = Digest([]string{d.Git, d.gitRef(), d.Subdir, g.Lock.Git[filepath.Base(boundary)]})
+					source, e = gitIdentity(d.Git, g.Lock.Git[d.GitKey()], d.Subdir)
+					if e != nil {
+						return nil, e
+					}
 				} else {
 					dir = d.Path
 					if !filepath.IsAbs(dir) {
@@ -369,52 +396,52 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					if e != nil {
 						return nil, e
 					}
+					source = pathSource(dir)
+					if boundary != "" {
+						relative, err := filepath.Rel(boundary, dir)
+						if err != nil {
+							return nil, err
+						}
+						source = n.source
+						source.Subdir = filepath.ToSlash(relative)
+						if source.Subdir == "." {
+							source.Subdir = ""
+						}
+					}
 				}
 				if boundary != "" && !contained(boundary, dir) {
 					return nil, fmt.Errorf("dependency path escapes checkout/acquired source boundary: %s", alias)
 				}
-				if prior, ok := r.nodes[d.Module]; ok && prior.Root != dir {
-					return nil, fmt.Errorf("conflicting sources for module %s", d.Module)
-				}
+				key := source.key()
 				if d.Version != "" {
 					if present, err := Detect(dir); err != nil {
 						return nil, err
 					} else if !present {
 						if len(deps[alias].Features) > 0 {
-							deferred[d.Module] = fmt.Errorf("version dependency %s has no goxide source manifest; fixed Go artifacts cannot receive goxide features", alias)
+							deferred[key] = fmt.Errorf("version dependency %s has no goxide source manifest; fixed Go artifacts cannot receive goxide features", alias)
 						}
 						continue
 					}
 				}
-				child, ok := r.nodes[d.Module]
-				if !ok {
+				child := r.nodes[key]
+				if child == nil {
 					child, e = g.readNode(dir, published, boundary)
 					if e != nil {
 						if child == nil {
 							return nil, e
 						}
-						deferred[d.Module] = e
+						deferred[key] = e
 					}
-					if d.Version != "" && !child.HasManifest {
-						if len(deps[alias].Features) > 0 {
-							deferred[d.Module] = fmt.Errorf("version dependency %s has no goxide source manifest; fixed Go artifacts cannot receive goxide features", alias)
-						}
-						continue
-					}
-					if child.Module != d.Module {
-						return nil, fmt.Errorf("dependency %s module path mismatch: want %s, got %s", alias, d.Module, child.Module)
-					}
+					child.setSource(source)
+					child.CheckoutRoot = boundary
+					child.SelectedVersion = version
 					if published {
 						if e = validatePublished(dir); e != nil {
-							deferred[d.Module] = e
+							deferred[key] = e
 						}
 					}
-					child.CheckoutRoot = boundary
-					child.SourceID = sourceID
-					child.SelectedVersion = version
 					if boundary != "" {
-						mod := child.Mod
-						for _, rep := range mod.Replace {
+						for _, rep := range child.Mod.Replace {
 							if rep.New.Version == "" {
 								p := rep.New.Path
 								if !filepath.IsAbs(p) {
@@ -427,69 +454,129 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 							}
 						}
 					}
-					r.nodes[d.Module] = child
+					r.nodes[key] = child
 					changed = true
 				}
+				if d.Module != "" && child.Module != d.Module {
+					return nil, fmt.Errorf("dependency %s module path mismatch: want %s, got %s", alias, d.Module, child.Module)
+				}
+				if g.nativeStandalone {
+					if expected := g.Lock.NativeWorkspace.Members[n.Module].Dependencies[alias]; expected != "" && expected != child.Module {
+						return nil, fmt.Errorf("copied native lock dependency %s module changed: want %s, got %s", alias, expected, child.Module)
+					}
+				}
+				d.Module = child.Module
+				n.Sources[alias] = d
 				if version != "" {
 					child.SelectedVersion = version
 				}
-				if boundary != "" && boundary != child.CheckoutRoot && (child.CheckoutRoot == "" || contained(child.CheckoutRoot, boundary)) {
-					child.CheckoutRoot = boundary
-					changed = true // Revisit children already traversed via a weaker source edge.
-				}
-				if sourceID == "" {
-					if boundary != "" {
-						relative, err := filepath.Rel(boundary, child.Root)
-						if err != nil {
-							return nil, err
-						}
-						sourceID = Digest([]string{child.Module, g.Lock.Git[filepath.Base(boundary)], relative})
-					} else {
-						sourceID = Digest([]string{child.Module, child.Root})
-					}
-				}
-				if provenance[child.Module] == nil {
-					provenance[child.Module] = map[string]bool{}
-				}
-				provenance[child.Module][sourceID] = true
-				child.SourceID = Digest(keys(provenance[child.Module]))
+				recordSource(child)
 				n.Children[alias] = child
-				prior := reqs[d.Module]
+				prior := reqs[key]
 				next := unionRequest(prior, deps[alias])
 				if !reflect.DeepEqual(prior, next) {
-					reqs[d.Module] = next
+					reqs[key] = next
 					changed = true
 				}
 			}
 		}
 	}
-	for _, module := range keys(r.nodes) {
-		n := r.nodes[module]
-		for _, alias := range keys(n.Sources) {
-			d := n.Sources[alias]
-			v := d.Version
-			if v == "" {
-				v = Placeholder(d.Module)
-				child := n.Children[alias]
-				if child != nil {
-					if old, ok := r.local[d.Module]; ok && old != child.Root {
-						return nil, fmt.Errorf("conflicting sources for module %s", d.Module)
-					}
-					r.local[d.Module] = child.Root
+	for _, key := range keys(deferred) {
+		label := key
+		if node := r.nodes[key]; node != nil {
+			label = fmt.Sprintf("Go module %s (source %s)", node.Module, node.source.description())
+		} else {
+			for _, module := range keys(selected) {
+				source := selectedSource(module, selected[module])
+				if source.key() == key {
+					label = fmt.Sprintf("Go module %s (source %s)", module, source.description())
+					break
 				}
 			}
-			r.requirements = append(r.requirements, requirement{d.Module, v})
 		}
-	}
-	for _, module := range keys(deferred) {
-		r.errors = append(r.errors, fmt.Errorf("%s: %w", module, deferred[module]))
+		r.errors = append(r.errors, fmt.Errorf("%s: %w", label, deferred[key]))
 	}
 	return r, nil
+}
+
+// Go metadata becomes a unique module index only when constructing its projection.
+func (g *Graph) projectRound(r *planningRound) (map[string]*Node, error) {
+	modules := map[string]*Node{}
+	r.local = map[string]string{}
+	r.versioned = map[string]bool{}
+	r.requirements = nil
+	localRequirements := []requirement{}
+	checkModule := func(module string) error {
+		if strings.HasPrefix(module, plannerPrefix) {
+			return fmt.Errorf("reserved planner module namespace: %s", module)
+		}
+		if g.Lock.Unified != nil && !g.unifiedPlanning && module != r.root.Module {
+			if _, ok := g.Lock.Unified.Modules[module]; !ok {
+				return fmt.Errorf("unified lock missing reachable module %s", module)
+			}
+		}
+		return nil
+	}
+	for _, key := range keys(r.nodes) {
+		n := r.nodes[key]
+		if err := checkModule(n.Module); err != nil {
+			return nil, err
+		}
+		if prior := modules[n.Module]; prior != nil && prior.SourceKey != n.SourceKey {
+			return nil, fmt.Errorf("Go module projection has conflicting sources for module %s: %s and %s", n.Module, prior.source.description(), n.source.description())
+		}
+		modules[n.Module] = n
+		for _, req := range n.Mod.Require {
+			r.versioned[req.Path] = true
+			if err := checkModule(req.Path); err != nil {
+				return nil, err
+			}
+		}
+		for _, alias := range keys(n.Sources) {
+			d := n.Sources[alias]
+			if err := checkModule(d.Module); err != nil {
+				return nil, err
+			}
+			v := d.Version
+			if v != "" {
+				r.versioned[d.Module] = true
+			}
+			if v == "" {
+				v = Placeholder(d.Module)
+				if child := n.Children[alias]; child != nil {
+					r.local[d.Module] = child.Root
+				}
+				localRequirements = append(localRequirements, requirement{d.Module, v})
+			} else {
+				r.requirements = append(r.requirements, requirement{d.Module, v})
+			}
+		}
+	}
+	for _, req := range localRequirements {
+		if !r.versioned[req.Module] {
+			r.requirements = append(r.requirements, req)
+		}
+	}
+	for _, module := range keys(r.versioned) {
+		selected, ok := r.selected[module]
+		if !ok {
+			continue
+		}
+		source := selectedSource(module, selected)
+		if node := modules[module]; node != nil && node.SourceKey != source.key() {
+			return nil, fmt.Errorf("Go module projection has conflicting sources for module %s: %s and %s", module, node.source.description(), source.description())
+		}
+	}
+	return modules, nil
 }
 
 // solve delegates the complete version ordering and module graph to Go. Private
 // local go.mod-only bridges preserve multiple constraints for one module path.
 func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, error) {
+	modules, e := g.projectRound(r)
+	if e != nil {
+		return nil, e
+	}
 	work, e := os.MkdirTemp(g.WorkRoot, "solve-")
 	if e != nil {
 		return nil, e
@@ -571,7 +658,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 				}
 			}
 			var mod ModFile
-			if node := r.nodes[module]; node != nil {
+			if node := modules[module]; node != nil {
 				mod = node.Mod
 			} else {
 				eff := effective(pin)
@@ -580,7 +667,15 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 					if err != nil {
 						return nil, err
 					}
-					if want, exists := g.Lock.Unified.Inputs[module]; exists && want != g.input(node) {
+					owner := root
+					if g.ownerRoot != "" {
+						owner = g.ownerRoot
+					}
+					inputKey := node.lockSourceKey(owner)
+					if g.nativeStandalone {
+						inputKey = module
+					}
+					if want, exists := g.Lock.Unified.Inputs[inputKey]; exists && want != g.input(node) {
 						return nil, fmt.Errorf("unified lock changed reachable input %s", module)
 					}
 					mod = node.Mod
@@ -642,31 +737,10 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 	}
 	for _, module := range keys(r.local) {
 		dir := r.local[module]
-		hasVersion := false
-		for _, node := range r.nodes {
-			if g.unifiedPlanning {
-				for _, req := range node.Mod.Require {
-					if req.Path == module {
-						hasVersion = true
-					}
-				}
-			}
-			for _, dep := range node.Sources {
-				if dep.Module == module && dep.Version != "" {
-					hasVersion = true
-				}
-			}
-		}
-		if hasVersion {
-			matched := false
-			for _, rep := range replacements {
-				if rep.Old.Path == module && rep.Old.Version == "" && rep.New.Version == "" && rep.New.Path == dir {
-					matched = true
-				}
-			}
-			if !matched {
-				return nil, fmt.Errorf("conflicting version/path sources for module %s; use an unversioned root local replace to unify", module)
-			}
+		if r.versioned[module] {
+			// Native selection determines whether an explicit local replacement is
+			// effective. Do not synthesize a wildcard that could override its version.
+			continue
 		}
 		for _, rep := range replacements {
 			if rep.Old.Path == module && (rep.New.Version != "" || rep.New.Path != dir) {
@@ -708,7 +782,10 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		args = append(args, "-replace="+old+"="+shadow)
 	}
 	for module, dir := range r.local {
-		n := r.nodes[module]
+		if r.versioned[module] {
+			continue
+		}
+		n := modules[module]
 		if n == nil || !n.HasManifest {
 			continue
 		}
@@ -847,14 +924,14 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		child, _, _ := strings.Cut(fields[1], "@")
 		if g.unifiedPlanning && parent != r.root.Module && !bridges[parent] {
 			if dir, local := r.local[child]; local {
-				matched := false
-				for _, rep := range replacements {
-					if rep.Old.Path == child && rep.Old.Version == "" && rep.New.Version == "" && rep.New.Path == dir {
-						matched = true
-					}
+				selection, exists := selected[child]
+				eff := effective(selection)
+				location := eff.Dir
+				if original, ok := shadows[location]; ok {
+					location = original
 				}
-				if !matched {
-					return nil, fmt.Errorf("native module %s requires %s by version; workspace membership cannot replace it; declare an explicit root local replace", parent, child)
+				if !exists || eff.Version != "" || location != dir {
+					return nil, fmt.Errorf("native module %s requires %s by version; workspace membership cannot replace it; declare an effective root local replace", parent, child)
 				}
 			}
 		}
@@ -1026,14 +1103,14 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 		// Identity excludes cache/temporary directories; nodes/edges/features include
 		// only this round's root-reachable manifest closure, never accumulated history.
 		type stateNode struct {
-			Module, Source string
-			Features       []string
-			Sources        map[string]Dependency
+			SourceKey, Module, Source string
+			Features                  []string
+			Sources                   map[string]Dependency
 		}
 		view := []stateNode{}
-		for _, module := range keys(r.nodes) {
-			n := r.nodes[module]
-			view = append(view, stateNode{module, n.SourceID, keys(n.Features), n.Sources})
+		for _, key := range keys(r.nodes) {
+			n := r.nodes[key]
+			view = append(view, stateNode{n.SourceKey, n.Module, n.SourceID, keys(n.Features), n.Sources})
 		}
 		state := Digest(struct {
 			Modules map[string]Selection
@@ -1049,19 +1126,19 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			state := map[string]int{}
 			var visit func(*Node) error
 			visit = func(n *Node) error {
-				if state[n.Module] == 1 {
+				if state[n.SourceKey] == 1 {
 					return fmt.Errorf("dependency cycle at %s", n.Module)
 				}
-				if state[n.Module] == 2 {
+				if state[n.SourceKey] == 2 {
 					return nil
 				}
-				state[n.Module] = 1
+				state[n.SourceKey] = 1
 				for _, alias := range keys(n.Children) {
 					if e := visit(n.Children[alias]); e != nil {
 						return e
 					}
 				}
-				state[n.Module] = 2
+				state[n.SourceKey] = 2
 				g.Nodes = append(g.Nodes, n)
 				return nil
 			}
@@ -1095,21 +1172,20 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			// This key captures source declarations and active dependency constraints.
 			// Feature-only cfg changes with an identical module plan may reuse the lock.
 			type lockNode struct {
-				Module, Root string
-				Manifest     Manifest
-				Mod          string
-				Sources      map[string]Dependency
+				SourceKey, Module string
+				Manifest          Manifest
+				Mod               string
+				Sources           map[string]Dependency
+			}
+			owner := root
+			if g.ownerRoot != "" {
+				owner = g.ownerRoot
 			}
 			inputs := []lockNode{}
-			for _, module := range keys(r.nodes) {
-				n := r.nodes[module]
-				raw := n.ModBytes
-				idRoot := n.Root
-				if n == r.root || n.SelectedVersion != "" || n.CheckoutRoot != "" {
-					idRoot = n.Module
-				}
-				inputs = append(inputs, lockNode{n.Module, idRoot, n.Manifest, string(raw), n.Sources})
+			for _, n := range r.nodes {
+				inputs = append(inputs, lockNode{n.lockSourceKey(owner), n.Module, n.Manifest, string(n.ModBytes), n.Sources})
 			}
+			sort.Slice(inputs, func(i, j int) bool { return inputs[i].SourceKey < inputs[j].SourceKey })
 			key := Digest(inputs)
 			if g.Lock.Plans == nil {
 				g.Lock.Plans = map[string]map[string]Selection{}

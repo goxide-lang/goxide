@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// Normalize Go source identities once at the authoring boundary. The existing
-// module planner consumes Module/Package; the TOML keeps acquisition separate.
+// Go module paths describe the native version request, independently of the
+// effective source identity assigned after acquisition.
 func resolveAuthorDependencies(author map[string]Dependency) (map[string]Dependency, error) {
 	if author == nil {
 		return nil, nil
@@ -89,5 +89,5 @@ func (d Dependency) gitRef() string {
 }
 
 func (d Dependency) GitKey() string {
-	return Digest([]string{d.Git, d.gitRef(), d.Subdir, d.Module})
+	return Digest([]string{d.Git, d.gitRef(), d.Subdir})
 }

@@ -22,8 +22,8 @@ func validateDependency(alias string, d Dependency) error {
 		if d.Module != "" || d.Version != "" || d.Path != "" || d.Git != "" || d.Rev != "" || d.Subdir != "" || d.Features != nil || d.DefaultFeatures != nil {
 			return fmt.Errorf("dependency %s: Go standard library accepts only go and optional", alias)
 		}
-	} else if d.Module == "" {
-		return fmt.Errorf("dependency %s: module source requires module", alias)
+	} else if d.Module != "" && !validPackagePath(d.Module) {
+		return fmt.Errorf("dependency %s: invalid module path %q", alias, d.Module)
 	}
 	return nil
 }

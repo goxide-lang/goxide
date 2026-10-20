@@ -37,11 +37,11 @@ name = "app"
 path = "cmd/app"
 ```
 
-作者清单要求显式 go_mod.module/go，直接按当前字段校验，不从旁边 go.mod 补充配置。`[features]`、`[dependencies.alias]`、lib/bin/example/build 保持上一版语义；go.require 是原生 Go 最低版本约束，dependencies 是增强依赖请求，两者均在同一 TOML 内交真实 Go 统一选版。相同 module 的多个要求取 MVS，不按 alias 分裂类型身份。replace/exclude 是根政策，不提升依赖自己的政策。保留indirect标记和原require集合，不将间接依赖误作 goxide feature 请求。
+作者清单要求显式 go_mod.module/go，直接按当前字段校验，不从旁边 go.mod 补充配置。`[features]`、`[dependencies.alias]`、lib/bin/example/build 分别声明 feature、依赖与目标；go.require 是原生 Go 最低版本约束，dependencies 是增强依赖请求。增强图按来源节点合并 feature；原生 require 与 Go 版本来源对同一 module 的版本要求交真实 Go MVS。不同 path/Git 来源保持独立，在生成 Go 投影前检查 module 路径冲突，不按 alias 分裂 Go 类型身份。replace/exclude 是根政策，不提升依赖自己的政策。保留 indirect 标记和原 require 集合，不将间接依赖误作 goxide feature 请求。
 
 本地作者工程一旦有 TOML，根 go.mod/go.sum 都报双配置迁移诊断。原生 Go 依赖无 TOML 时继续使用自己的 go.mod；带 TOML 的 path/Git 作者依赖从 TOML 合成 module 元数据，不能要求给 readonly checkout 写文件。代理下载的 source 发行物有传输用 go.mod：只有经 Go 校验的版本来源允许这一组合，且传输身份/feature无关原生Go约束须与 TOML 相符；该 go.mod 不是第二个作者配置来源。不能用 manifest 标记让任意本地根绕过双配置检查。
 
-源级 dependency alias 到精确 package/namespace 的映射、toolchain 来源、未迁入 Go module 的 `goxide.roots.toml` 及 `--roots` 作用域，见 [显式依赖根设计](../design/dependency-roots.md)。映射参与清单与锁身份，不改变 Go 的 module 选版权威。
+源级 dependency alias 到精确 package/namespace 的映射、toolchain 来源、未迁入 Go module 的 `goxide.roots.toml` 及 `--roots` 作用域，见 [显式依赖根设计](../design/dependency-roots.md)。path/Git 的 module 从所选根清单读取，可选显式 module 只作一致性断言。映射参与清单与锁身份，不改变 Go 的 module 选版权威。
 
 ### 无损迁入子集
 

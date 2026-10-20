@@ -26,29 +26,38 @@ func NativeSelectionIdentity(selections map[string]Selection) map[string]Selecti
 // NativeFeatureGraphs uses the same additive Resolve semantics as the author
 // graph, while leaving all Go version/replacement policy in the native view.
 func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested map[string][]string, defaults bool, lock Lock) (map[string]*Graph, error) {
-	for module := range w.Members {
+	modules, err := w.GoModules()
+	if err != nil {
+		return nil, err
+	}
+	for module := range modules {
 		if _, e := NativeClosure(w, module); e != nil {
 			return nil, e
 		}
 	}
 	requests := map[string]Request{}
 	for _, module := range roots {
-		requests[module] = Request{Features: requested[module], Defaults: defaults}
+		if _, ok := modules[module]; !ok {
+			return nil, fmt.Errorf("unknown native workspace member %s", module)
+		}
+		requests[pathSource(modules[module]).key()] = Request{Features: requested[module], Defaults: defaults}
 	}
 	nodes := map[string]*Node{}
 	for {
 		changed := false
-		for _, module := range keys(requests) {
-			r := requests[module]
-			m := w.Manifests[w.Members[module]]
+		for _, key := range keys(requests) {
+			r := requests[key]
+			root := w.Members[key]
+			m := w.Manifests[root]
 			features, deps, e := Resolve(m, r.Features, r.Defaults)
 			if e != nil {
-				return nil, fmt.Errorf("member %s: %w", module, e)
+				return nil, fmt.Errorf("member %s: %w", root, e)
 			}
-			n := nodes[module]
+			n := nodes[key]
 			if n == nil {
-				n = &Node{Root: w.Members[module], Module: module, Manifest: m, HasManifest: true, SourceID: Digest(m)}
-				nodes[module] = n
+				n = &Node{Root: root, Module: m.Module, Manifest: m, HasManifest: true, SourceID: Digest(m)}
+				n.setSource(pathSource(root))
+				nodes[key] = n
 			}
 			n.Features, n.Requests, n.Children, n.Sources = features, deps, map[string]*Node{}, map[string]Dependency{}
 			n.ModBytes, e = ModuleText(m)
@@ -56,18 +65,22 @@ func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested ma
 				return nil, e
 			}
 			for alias, r := range deps {
-				d := m.Dependencies[alias]
+				d, e := w.memberDependency(n.Root, alias, m.Dependencies[alias])
+				if e != nil {
+					return nil, e
+				}
 				if d.IsToolchain() {
 					continue
 				}
-				if _, member := w.Members[d.Module]; !member {
+				if _, member := modules[d.Module]; !member {
 					if _, selected := lock.NativeWorkspace.Modules[d.Module]; !selected {
 						return nil, fmt.Errorf("native workspace dependency %s: selected native module %s is missing", alias, d.Module)
 					}
 					continue // Requests exposes the root; Go owns its fixed artifact.
 				}
 				n.Sources[alias] = d
-				old, exists := requests[d.Module]
+				childKey := pathSource(modules[d.Module]).key()
+				old, exists := requests[childKey]
 				merged := map[string]bool{}
 				for _, f := range old.Features {
 					merged[f] = true
@@ -77,7 +90,7 @@ func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested ma
 				}
 				next := Request{Features: keys(merged), Defaults: old.Defaults || r.Defaults}
 				if !exists || Digest(next) != Digest(old) {
-					requests[d.Module] = next
+					requests[childKey] = next
 					changed = true
 				}
 			}
@@ -88,19 +101,19 @@ func NativeFeatureGraphs(w *Workspace, roots []string, tool string, requested ma
 	}
 	for _, n := range nodes {
 		for alias, dependency := range n.Sources {
-			n.Children[alias] = nodes[dependency.Module]
+			n.Children[alias] = nodes[pathSource(modules[dependency.Module]).key()]
 		}
 	}
 	graphs := map[string]*Graph{}
 	for _, module := range roots {
-		g := &Graph{Root: nodes[module], Tool: tool, Lock: lock, LockPath: filepath.Join(w.Root, "goxide.lock"), ownerRoot: w.Root, ownerModule: WorkspaceOwner, Plan: lock.NativeWorkspace.Modules, PlanID: Digest([]any{lock.NativeWorkspace.Input, NativeSelectionIdentity(lock.NativeWorkspace.Modules)}), workspace: w}
+		g := &Graph{Root: nodes[pathSource(modules[module]).key()], Tool: tool, Lock: lock, LockPath: filepath.Join(w.Root, "goxide.lock"), ownerRoot: w.Root, ownerModule: WorkspaceOwner, Plan: lock.NativeWorkspace.Modules, PlanID: Digest([]any{lock.NativeWorkspace.Input, NativeSelectionIdentity(lock.NativeWorkspace.Modules)}), workspace: w}
 		seen := map[string]bool{}
 		var visit func(*Node)
 		visit = func(n *Node) {
-			if seen[n.Module] {
+			if seen[n.SourceKey] {
 				return
 			}
-			seen[n.Module] = true
+			seen[n.SourceKey] = true
 			for _, alias := range keys(n.Children) {
 				visit(n.Children[alias])
 			}

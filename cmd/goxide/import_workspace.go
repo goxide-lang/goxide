@@ -462,9 +462,13 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 		return e
 	}
 	if req.Plan {
+		members, err := w.GoModules()
+		if err != nil {
+			return err
+		}
 		fmt.Fprintln(out, "# Plan only: original files unchanged; native workspace, bounded Go configuration; no install scripts.")
 		for _, module := range project.Keys(manifests) {
-			fmt.Fprintf(out, "# member %s: %s -> %s\n", module, source[module], strings.TrimPrefix(w.Members[module], stage+string(filepath.Separator)))
+			fmt.Fprintf(out, "# member %s: %s -> %s\n", module, source[module], strings.TrimPrefix(members[module], stage+string(filepath.Separator)))
 			for _, child := range project.Keys(edges[module]) {
 				fmt.Fprintf(out, "# explicit dependency %s -> %s (workspace=true)\n", module, child)
 			}

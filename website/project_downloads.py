@@ -78,4 +78,4 @@ def minimal(ROOT, GO, run):
         assert lock.read_bytes() == locked, 'project test changed its lock'
     return dict(id='minimal-project', title='多包、path 依赖与公开 Go 依赖',
                 files=files, runs=runs,
-                note='复用已验收的 P5 工程，展示 app、kit、清单和源码。构建时真实执行 build、run、test，并确认同一目录内锁文件字节不变；当前锁含本地绝对路径，因此此快照不提供可迁移的工程 ZIP。')
+                note='复用已验收的 P5 工程，展示 app、kit、清单和源码。构建时真实执行 build、run、test，并确认重复构建和运行时锁文件字节不变；此快照展示文件与运行结果，不提供工程 ZIP。')

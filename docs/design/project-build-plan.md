@@ -16,9 +16,11 @@
 | Go module | `go = "github.com/…"` 加 `version = "v…"`；路径不带协议，按 Go MVS 选版并锁定结果 |
 | Go 标准库 | `go = "fmt"`，没有 version，不下载；用所选 Go 工具链的真实包信息核验标准库归属 |
 
-公共字段保留现有 `module`、`package`、`namespaces`、`features`、`default_features`、`optional`。Git/path 的 `module` 是选中项目的身份；Go 来源的身份由 `go` 给出，不重复填写 module。`package` 和 namespaces 是精确 import package 绑定；这里的 package 沿用 Goxide 包映射含义，不等于 Cargo 的发行 crate 名。未映射到 package 的依赖根只作显式 namespace 分组。标准库的 go 本身给出精确 package，无需再写 package；不接受 feature 请求。
+公共字段保留现有 `module`、`package`、`namespaces`、`features`、`default_features`、`optional`。Git/path 从所选根的 goxide.toml 或 go.mod 读取生成 Go 所需的 module 路径，可选 `module` 只作一致性断言；Go 来源的身份由 `go` 给出，不重复填写 module。`package` 和 namespaces 是精确 import package 绑定；这里的 package 沿用 Goxide 包映射含义，不等于 Cargo 的发行 crate 名。未映射到 package 的依赖根只作显式 namespace 分组。标准库的 go 本身给出精确 package，无需再写 package；不接受 feature 请求。
 
-Go module 是一起选版和分发的一组 packages，import package 是其中一个包，见 [Go 官方模块说明](https://go.dev/ref/mod#module-path)。Go 版本只接受规范版本或 pseudo-version，本片不实现 Cargo SemVer 范围。Git 的 rev 建议支持 commit hash 或远端公开 ref，tag/branch 分别按对应 ref 解析；多个选择器报错，没有隐含优先级。没有选择器时按 Cargo 使用仓库默认分支。首次解析后把完整 commit 写入 lock，普通二次构建不重新解析移动的默认分支、branch 或 tag。
+底层依赖图按来源身份建立节点，alias 只是各声明项目内的引用名。同来源节点接收的活动 feature 请求取并集，不同来源独立求解。path 使用规范来源目录，Git 使用规范仓库地址、锁定 commit 和 subdir，Go 版本来源使用逻辑 module path；实际生效的本地 replace 归一到 path。节点键与选中版本、校验和等内容身份分开，细节见[依赖根合同](dependency-roots.md)。`go_mod.module` 仅供 Go 投影使用，不作为 Goxide 节点去重键；来源收集之后、临时 Go module 和选版之前检查不同来源是否占用相同 module 路径，并明确报冲突。
+
+Go module 是一起选版和分发的一组 packages，import package 是其中一个包，见 [Go 官方模块说明](https://go.dev/ref/mod#module-path)。Go module 版本只接受规范版本或 pseudo-version，本片不实现 Cargo SemVer 范围。Git 的 rev 建议支持 commit hash 或远端公开 ref，tag/branch 分别按对应 ref 解析；多个选择器报错，没有隐含优先级。没有选择器时按 Cargo 使用仓库默认分支。首次解析后把完整 commit 写入 lock，普通二次构建不重新解析移动的默认分支、branch 或 tag。
 
 真实来源例：本仓库 main 的 go.mod 已固定下述 std 版本，该提交有 `formatting` 包，没有 `fmt`。源码路径与版本已核对；Go module 与 Git 来源均已完成真实首构建和锁定二次构建。
 
@@ -34,7 +36,6 @@ formatting = { go = "github.com/goxide-lang/std", version = "v0.0.0-202610091048
 [dependencies.formatting]
 git = "https://github.com/goxide-lang/std.git"
 rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
-module = "github.com/goxide-lang/std"
 package = "github.com/goxide-lang/std/formatting"
 ```
 

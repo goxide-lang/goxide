@@ -31,7 +31,7 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 		return err
 	}
 	name, span, message := "", syntax.Span{}, ""
-	var definition, call expand.Origin
+	var definition, call, display expand.Origin
 	var expn syntax.ExpnID
 	var expansion *expand.Diagnostic
 	var resolved resolve.Diagnostic
@@ -40,6 +40,7 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 	switch {
 	case errors.As(err, &expansion):
 		message, definition, call = expansion.Message, expansion.Definition, expansion.Call
+		display = expansion.Location
 		expn = expansion.Expn
 	case errors.As(err, &resolved):
 		name, span, message = resolved.File, resolved.Span, resolved.Message
@@ -72,6 +73,9 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 	fileNames := make(map[*syntax.File]string, len(files))
 	for _, key := range keys {
 		fileNames[files[key]] = key
+	}
+	if displayName, ok := fileNames[display.File]; ok {
+		name, span = displayName, display.Span
 	}
 	position := func(name string, span syntax.Span) string {
 		file := files[name]

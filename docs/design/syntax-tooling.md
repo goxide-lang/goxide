@@ -1,12 +1,13 @@
 # 额外语法工具包：syntax、quote 与 syn
 
-状态：独立 `github.com/goxide-lang/syntax` module 首批已实现手写 Go 的 `token` 和 `proc_macro` 两包，包含词法树、调用内引用表、冻结 Context、Output、静态分派及 JSON 编解码。syn/quote 后续作为同 module 的普通工具包实现；此批不实现它们，也不采用 Goxide 自举生成发行代码。[RFC 0030](../rfcs/0030-procedural-macros.md) 的编译器转换桥、源码登记、依赖角色与受限宿主尚未接入。
+状态：独立 `github.com/goxide-lang/syntax` module 首批已实现手写 Go 的 `token` 和 `proc_macro` 两包，包含词法树、调用内引用表、冻结 Context、Output、静态分派及 JSON 编解码。syn/quote 后续作为同 module 的普通工具包实现；此批不实现它们，也不采用 Goxide 自举生成发行代码。[RFC 0030](../rfcs/0030-procedural-macros.md) 的函数式调用转换桥已完成本地联调；源码登记、依赖角色与受限宿主继续按该篇推进。
 
 | 状态 | 范围 |
 | --- | --- |
 | 已确认 | D16：独立 syntax 仓库/module；token 是唯一公共 TokenStream 类型所在包；proc_macro 是依赖 token 的 SDK；首批两包手写 Go。 |
 | 暂定 | T14：后续 syn/quote 的 AST、ToTokens、模板插值与具体 API；如以过程宏实现 quote!，另设宏源码项目。 |
-| 未定 | U11：RFC 0030 的编译器转换桥、实际 SDK 协议内容匹配与受限过程宏宿主待接入验收。 |
+| 已实现 | 内部 token 直接解析、函数式调用的冻结引用桥、诊断位置与语义来源分离；SDK command 输出重新经过 resolve/check/lower。 |
+| 未定 | U11：RFC 0030 的源级登记、实际 SDK 协议内容匹配与受限过程宏宿主待接入验收。 |
 
 状态编号见[决策登记](decisions.md)。Rust 只用于参考语法工具与过程宏的分层，safe 标准库另以 [Go std](standard-library.md) 为基础设计。
 
@@ -27,6 +28,8 @@
 ## 2. 发布与使用
 
 syntax 是一个 Go module，token、proc_macro 及后续普通 syn/quote 包随该 module 发布。它与编译器独立选版、发布，不要求双方版本号相同；公共协议兼容性按 RFC 0030 拟议的实际协议内容核验，不仅比较 import path、自报标志或版本字符串，也不提供旧协议兼容分支。
+
+当前编译器通过 `go.mod` 的 `replace github.com/goxide-lang/syntax => ../syntax` 使用相邻 checkout，本地联调保留两仓库的目录关系。syntax 发布后固定实际公开的版本并移除该替换。
 
 开发中的 Goxide 宏项目显式声明 `[dependencies.syntax] path = "../syntax"`；发行时改用 `go = "github.com/goxide-lang/syntax"` 和实际公开的版本。示例导入为：
 
@@ -53,16 +56,16 @@ Rust 的 quote、syn 与 proc_macro2 展示了工具可在编译器外运行的�
 
 | 信息 | 用途与限制 |
 | --- | --- |
-| 诊断 span | 定位与展示；修改它不改变名字绑定、依赖归属或权限 |
+| 诊断 span | 把生成语法关联到输入、调用或定义的源码位置；不改变原源码、名字绑定、依赖归属或权限 |
 | 不透明绑定上下文 | 保留定义点、调用点及输入名字的卫生身份；不能由整数、字符串或文件路径伪造 |
 | 可信来源与片段身份 | 由宿主签发和校验；不能从外部布尔字段恢复类型、借用或授权证明 |
 
-公共 API 可以保留和转交已有片段携带的不透明上下文。普通 Go 调用方、反序列化数据和缓存对象同样需要协议验证；验过 Go 方法集不代表上下文真实。绑定和来源不能由文本显示往返恢复，修改诊断 span 也不能恢复它们。具体默认定义点与显式调用点规则见 [RFC 0030](../rfcs/0030-procedural-macros.md) 和[卫生宏设计](macros.md)。
+公共 API 可以保留和转交已有片段携带的不透明上下文。普通 Go 调用方、反序列化数据和缓存对象同样需要协议验证；验过 Go 方法集不代表上下文真实。绑定和来源不能由文本显示往返恢复，指定诊断 span 也不能恢复它们。具体默认定义点与显式调用点规则见 [RFC 0030](../rfcs/0030-procedural-macros.md) 和[卫生宏设计](macros.md)。
 
 普通工具可以显式执行“解析 → 修改 → 构造 → 输出文件”，再单独运行下一次编译。文件 I/O 由工具自身显式调用，语法包不会扫描目录、下载依赖或改写使用方源码；这也不隐含自动构建钩子。重新编译生成的文本时按普通源码解析，不承诺保留卫生身份或已经过期的语义证明。
 
 ## 5. 验收边界
 
-首批库测试已覆盖词法与分组、显式/隐式分号、Fragment 视图与原引用分离、冻结上下文、JSON 拒绝/预算以及静态三类 handler；独立 Go command 的输出经过真实 Go build/run/test。编译器接入仍需与真实 Goxide 过程宏消费者一起验证公共类型同一性、协议内容匹配及卫生来源。转换桥不能经打印文本丢失输入身份；来自 SDK 的输出仍重新进入普通名字、类型与权限检查。CLI/浏览器宿主的执行、预算、依赖角色及端到端验收见 RFC 0030，不以普通 SDK 测试替代。
+首批库测试已覆盖词法与分组、显式/隐式分号、Fragment 视图与原引用分离、冻结上下文、JSON 拒绝/预算以及静态三类 handler；独立 Go command 的输出经过真实 Go build/run/test。编译器转换桥直接传递词法 token，保留 raw、复合标点和隐式分号；原输入及 Fragment 按请求内引用恢复，诊断位置单独映射。同一片段的重复输出生成独立 AST。当前联调用显式 Go SDK command 处理捕获表达式，输出重新经过 resolve/check/lower，生成程序完成 build/run/test，并检查重复生成的字节一致性。源码登记、三类入口接线、公共类型同一性、协议内容匹配、RuntimeRoot 供应和 CLI/浏览器受限宿主仍按 RFC 0030 验收。
 
 后续 syn/quote 分别验证语法解析与重建、字符串和代码插值的区别、错误定位、同一片段的重复使用，以及普通运行时与编译期执行的区分。若引入 quote! 宏项目，还须验证其无环构建和独立消费者。内建 Default/Clone/Debug、库派生迁移与泛型 impl 不因公共语法包落地而自动完成，分别按其合同验收。

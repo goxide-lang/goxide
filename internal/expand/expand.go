@@ -51,9 +51,10 @@ type Expansion struct {
 // TokenContext preserves lexical identity for names that remain in token trees,
 // such as protocol paths inside derive attributes.
 type TokenContext struct {
-	Ctx    ast.SyntaxCtx
-	Scope  Scope
-	Origin Origin
+	Ctx      ast.SyntaxCtx
+	Scope    Scope
+	Origin   Origin
+	Location Origin
 }
 
 // Capture preserves the fragment boundary after AST substitution. Callers
@@ -82,10 +83,13 @@ type Result struct {
 	Files       []*ast.File
 	// PartialFiles holds completed items when expansion fails. Source loaders
 	// may discover generated modules here without replacing diagnostic inputs.
-	PartialFiles  []*ast.File
-	Expansions    map[ast.ExpnID]Expansion
-	Contexts      map[ast.SyntaxCtx]Context
-	Origins       map[ast.Node]Origin
+	PartialFiles []*ast.File
+	Expansions   map[ast.ExpnID]Expansion
+	Contexts     map[ast.SyntaxCtx]Context
+	Origins      map[ast.Node]Origin
+	// Locations overrides diagnostic positions without changing semantic origins.
+	// Missing entries fall back to Origins.
+	Locations     map[ast.Node]Origin
 	Scopes        map[*ast.Ident]Scope
 	TokenContexts map[*token.Token]TokenContext
 	// Introductions preserves the template key of a generated package binding.
@@ -95,6 +99,7 @@ type Result struct {
 
 type Diagnostic struct {
 	Code, Message    string
+	Location         Origin
 	Definition, Call Origin
 	Expn             ast.ExpnID
 }
@@ -109,14 +114,18 @@ type syntaxToken struct {
 	Tree     *syntaxTree
 	Fragment *fragment
 	Origin   Origin
+	Location Origin
 	Ctx      ast.SyntaxCtx
 	Scope    Scope
 	Lexical  Scope
 }
 type syntaxTree struct {
-	Delim  ast.Delim
-	Tokens []syntaxToken
-	Origin Origin
+	Delim    ast.Delim
+	Tokens   []syntaxToken
+	Origin   Origin
+	Location Origin
+	Open     Origin
+	Close    Origin
 }
 type fragment struct {
 	Kind   fragmentKind
@@ -153,7 +162,7 @@ func Expand(files []*ast.File, resolver Resolver, configs ...map[*ast.File]confi
 // identities across the complete source graph.
 func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*ast.File]config.Config) (*Result, error) {
 	e := &engine{r: &Result{Expansions: map[ast.ExpnID]Expansion{}, Contexts: map[ast.SyntaxCtx]Context{},
-		Origins: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}, TargetFiles: map[*ast.File]bool{}}, resolver: resolver,
+		Origins: map[ast.Node]Origin{}, Locations: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}, TargetFiles: map[*ast.File]bool{}}, resolver: resolver,
 		defs: map[Key]definition{}, trees: map[*ast.TokenTree][]syntaxToken{}, localFiles: map[*ast.File]bool{}, captured: map[ast.Node]bool{}, lexical: map[ast.Node]Scope{}, originals: map[ast.Node]ast.Node{}}
 	if len(configs) > 0 {
 		e.configs = configs[0]
@@ -190,11 +199,11 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*a
 					k := Key{d.Name.Name, d.Name.Ctx}
 					if k.Name == "cfg" || k.Name == "go_result" || k.Name == "go_result_keep" {
 						return e.r, &Diagnostic{Code: "definition", Message: "reserved built-in macro " + k.Name,
-							Definition: Origin{f, d.Span()}, Call: Origin{f, d.Span()}}
+							Location: Origin{f, d.Span()}, Definition: Origin{f, d.Span()}, Call: Origin{f, d.Span()}}
 					}
 					if old, exists := e.defs[k]; exists {
 						return e.r, &Diagnostic{Code: "definition", Message: "duplicate macro " + k.Name,
-							Definition: Origin{old.file, old.decl.Span()}, Call: Origin{f, d.Span()}}
+							Location: Origin{f, d.Span()}, Definition: Origin{old.file, old.decl.Span()}, Call: Origin{f, d.Span()}}
 					}
 					e.defs[k] = definition{d, f}
 				}
@@ -245,6 +254,13 @@ func (e *engine) reserve(f *ast.File) {
 	})
 }
 
+func (e *engine) location(n ast.Node) Origin {
+	if location := e.r.Locations[n]; location != (Origin{}) {
+		return location
+	}
+	return e.r.Origins[n]
+}
+
 func (e *engine) tick() error {
 	e.steps++
 	if e.steps > MaxMatchSteps {
@@ -263,7 +279,7 @@ func (e *engine) emit() error {
 func (e *engine) expansionBudget(call, definition Origin, expn ast.ExpnID) error {
 	e.expansions++
 	if e.expansions > MaxExpansions {
-		return &Diagnostic{Code: "budget", Message: fmt.Sprintf("macro expansion count budget exceeded (%d)", MaxExpansions), Definition: definition, Call: call, Expn: expn}
+		return &Diagnostic{Code: "budget", Message: fmt.Sprintf("macro expansion count budget exceeded (%d)", MaxExpansions), Location: call, Definition: definition, Call: call, Expn: expn}
 	}
 	return nil
 }
@@ -305,9 +321,13 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 	if !ok {
 		call = Origin{file, n.Span()}
 	}
+	location := e.location(n)
+	if location == (Origin{}) {
+		location = call
+	}
 	d, err := e.lookup(path, file)
 	if err != nil {
-		return nil, &Diagnostic{Code: "macro", Message: err.Error(), Call: call, Definition: call, Expn: parent}
+		return nil, &Diagnostic{Code: "macro", Message: err.Error(), Location: location, Call: call, Definition: call, Expn: parent}
 	}
 	id := ast.ExpnID(len(e.r.Expansions) + 1)
 	stack := append([]ast.ExpnID(nil), e.r.Expansions[parent].Stack...)
@@ -318,10 +338,11 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 	}
 	e.r.Expansions[id] = Expansion{Definition: Origin{d.file, d.decl.Span()}, Call: call, Original: original, Parent: parent, Stack: stack}
 	if err := e.expansionBudget(call, Origin{d.file, d.decl.Span()}, id); err != nil {
+		err.(*Diagnostic).Location = location
 		return nil, err
 	}
 	fail := func(code string, err error, span ast.Span) (ast.Node, error) {
-		return nil, &Diagnostic{Code: code, Message: err.Error(), Definition: Origin{d.file, span}, Call: call, Expn: id}
+		return nil, &Diagnostic{Code: code, Message: err.Error(), Location: Origin{d.file, span}, Definition: Origin{d.file, span}, Call: call, Expn: id}
 	}
 	if len(stack) > MaxDepth {
 		return fail("budget", fmt.Errorf("macro depth budget exceeded (%d)", MaxDepth), d.decl.Span())
@@ -383,13 +404,17 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 	out, err := e.parse(ts, kind, id, caller)
 	if err != nil {
 		code, span := "template", rule.Template.Span()
+		location := Origin{d.file, span}
 		if pe, ok := err.(*parseError); ok {
 			code = pe.code
-			if pe.origin.File != nil {
-				span = pe.origin.Span
+			if pe.origin != (Origin{}) {
+				location = pe.origin
+				if pe.origin.File == d.file {
+					span = pe.origin.Span
+				}
 			}
 		}
-		return fail(code, err, span)
+		return nil, &Diagnostic{Code: code, Message: err.Error(), Location: location, Definition: Origin{d.file, span}, Call: call, Expn: id}
 	}
 	if item, ok := out.(ast.Item); ok {
 		keep, err := e.selection(file).item(item)
@@ -427,9 +452,32 @@ func (e *engine) treeInput(tree *ast.TokenTree, file *ast.File, ctx ast.SyntaxCt
 	var out []syntaxToken
 	for _, v := range tree.Tokens {
 		if v.Token != nil {
-			out = append(out, syntaxToken{Token: v.Token, Origin: Origin{file, ast.Span{Start: v.Token.Start, End: v.Token.End}}, Ctx: ctx, Scope: Scope{file, ctx}, Lexical: Scope{file, ctx}})
+			t := syntaxToken{Token: v.Token, Origin: Origin{file, ast.Span{Start: v.Token.Start, End: v.Token.End}}, Ctx: ctx, Scope: Scope{file, ctx}, Lexical: Scope{file, ctx}}
+			if context, ok := e.r.TokenContexts[v.Token]; ok {
+				t.Origin, t.Location, t.Ctx, t.Scope = context.Origin, context.Location, context.Ctx, context.Scope
+			}
+			if t.Location == (Origin{}) {
+				t.Location = t.Origin
+			}
+			out = append(out, t)
 		} else if v.Tree != nil {
-			out = append(out, syntaxToken{Tree: &syntaxTree{Delim: v.Tree.Delim, Tokens: e.treeInput(v.Tree, file, ctx), Origin: Origin{file, v.Tree.Span()}}, Origin: Origin{file, v.Tree.Span()}, Ctx: ctx})
+			origin, ok := e.r.Origins[v.Tree]
+			if !ok {
+				origin = Origin{file, v.Tree.Span()}
+			}
+			location := e.location(v.Tree)
+			if location == (Origin{}) {
+				location = origin
+			}
+			open, close := location, location
+			if v.Tree.Delim != ast.NoDelim && location.Span.End > location.Span.Start {
+				open.Span.End = open.Span.Start + 1
+				close.Span.Start = close.Span.End - 1
+			}
+			out = append(out, syntaxToken{Tree: &syntaxTree{
+				Delim: v.Tree.Delim, Tokens: e.treeInput(v.Tree, file, ctx),
+				Origin: origin, Location: location, Open: open, Close: close,
+			}, Origin: origin, Location: location, Ctx: ctx})
 		}
 	}
 	return out

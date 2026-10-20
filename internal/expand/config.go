@@ -107,13 +107,22 @@ func (s selection) origin(n ast.Node) Origin {
 	return Origin{s.file, n.Span()}
 }
 
+func (s selection) location(n ast.Node) Origin {
+	if s.engine != nil {
+		if location := s.engine.location(n); location != (Origin{}) {
+			return location
+		}
+	}
+	return s.origin(n)
+}
+
 func (s selection) fail(n ast.Node, message string) error {
 	o := s.origin(n)
 	call := o
 	if s.engine != nil && nodeExpn(n) != 0 {
 		call = s.engine.r.Expansions[nodeExpn(n)].Call
 	}
-	return &Diagnostic{Code: "cfg", Message: message, Definition: o, Call: call, Expn: nodeExpn(n)}
+	return &Diagnostic{Code: "cfg", Message: message, Location: s.location(n), Definition: o, Call: call, Expn: nodeExpn(n)}
 }
 
 func configName(a *ast.Attr) string {
@@ -368,10 +377,15 @@ func (s selection) attribute(tokens []ast.TokenOrTree, parent *ast.Attr) (*ast.A
 		}
 		tok := tokens[i].Token
 		o := Origin{s.origin(parent).File, ast.Span{Start: tok.Start, End: tok.End}}
+		location := o
 		ctx := ast.SyntaxCtx(0)
 		if s.engine != nil {
 			if meta, ok := s.engine.r.TokenContexts[tok]; ok {
 				o, ctx = meta.Origin, meta.Ctx
+				location = meta.Location
+				if location == (Origin{}) {
+					location = o
+				}
 			}
 		}
 		id := &ast.Ident{Base: ast.Base{Loc: o.Span, Expn: parent.Expn}, Name: tok.Text, Raw: tok.Raw, Ctx: ctx}
@@ -381,10 +395,12 @@ func (s selection) attribute(tokens []ast.TokenOrTree, parent *ast.Attr) (*ast.A
 			a.Base.Loc, a.Path.Base = o.Span, id.Base
 			if s.engine != nil {
 				s.engine.r.Origins[a], s.engine.r.Origins[a.Path] = o, o
+				s.engine.r.Locations[a], s.engine.r.Locations[a.Path] = location, location
 			}
 		}
 		if s.engine != nil {
 			s.engine.r.Origins[id], s.engine.r.Origins[seg] = o, o
+			s.engine.r.Locations[id], s.engine.r.Locations[seg] = location, location
 			if meta, ok := s.engine.r.TokenContexts[tok]; ok {
 				s.engine.r.Scopes[id] = meta.Scope
 			}
@@ -399,6 +415,9 @@ func (s selection) attribute(tokens []ast.TokenOrTree, parent *ast.Attr) (*ast.A
 			a.Args = rest[0].Tree
 		} else if len(rest) == 2 && rest[0].Token != nil && rest[0].Token.Kind == token.ASSIGN && rest[1].Token != nil && rest[1].Token.Kind.IsLiteral() {
 			a.Args = &ast.TokenTree{Base: a.Base, Delim: ast.NoDelim, Tokens: rest}
+			if s.engine != nil {
+				s.engine.r.Locations[a.Args] = s.engine.r.Locations[a]
+			}
 		} else if len(rest) != 0 {
 			return nil, s.fail(parent, "malformed attribute in cfg_attr attribute list")
 		}
@@ -448,5 +467,6 @@ func (e *engine) cfg(n ast.Node, args *ast.TokenTree, kind fragmentKind, file *a
 	}
 	out := &ast.BoolLit{Base: ast.Base{Loc: n.Span(), Expn: parent}, Value: value}
 	e.r.Origins[out] = o
+	e.r.Locations[out] = s.location(n)
 	return out, true, nil
 }

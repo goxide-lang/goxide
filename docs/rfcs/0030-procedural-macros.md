@@ -2,9 +2,9 @@
 
 ## 状态与范围
 
-状态：**Draft；独立 token/SDK 首批已实现，编译器与宿主未接入**。用户已确认按本篇推进 syntax 仓库首批的 `token` 与 `proc_macro`，先不实现 syn/quote。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
+状态：**Draft；独立 token/SDK 和函数式调用转换桥已实现，源级登记与受限宿主待接入**。用户已确认按本篇推进 syntax 仓库首批的 `token` 与 `proc_macro`，先不实现 syn/quote。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
 
-本篇提出一个可独立验收的过程宏基础：公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。独立 `github.com/goxide-lang/syntax` module 已提供手写 Go 的 token 树/词法、调用内引用表、Context/Output、静态入口分派与严格 JSON 编解码。新增源级登记、清单字段、角色构建及受限宿主仍是待接入提案；普通 SDK 验证不代表下述 A1–A10 已完成。
+本篇提出一个可独立验收的过程宏基础：公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。独立 `github.com/goxide-lang/syntax` module 已提供手写 Go 的 token 树/词法、调用内引用表、Context/Output、静态入口分派与严格 JSON 编解码。编译器已通过内部 token 入口与请求内引用表桥接函数式输出，并把诊断位置与可信来源分开；显式 SDK command 的输出已通过 resolve/check/lower 和生成程序 build/run/test。本地依赖采用相邻 syntax checkout。源级登记、清单字段、角色构建、RuntimeRoot 供应及受限宿主继续按下述 A1–A10 接入验收。
 
 本篇不迁移 Default、serde 或其他内建宏，不补泛型 impl，不提供类型反射或已解析 TypeShape 查询，不开放编译脚本，也不实现完整 syn/quote。普通 syn/quote 库可以建立在本协议上；它们解析语法、构造语法，不取得类型检查或权限证明。库派生迁移仍需另行验收普通 trait/impl、生成代码及跨仓库发布。
 
@@ -44,7 +44,7 @@ SDK 内部表示不作为序列化协议直接导出，尤其不公开现有 `sy
 | Group | `()`、`[]`、`{}`，各自的边界位置及子流；根流没有外层分隔符 |
 | Fragment | 宿主签发的片段引用、语法类别及可观察的语法视图；实际 AST 与可信来源留在宿主 |
 
-输出不得含 EOF、非法 token、未知节点种类、失配分组或类别与拼写冲突的 token。`r#` 不是名称正文的一部分。文本解析走同一 Goxide lexer，包括自动分号；builder 生成的分号默认显式。宿主接收结构化输出时直接保留分号种类，不能打印成文本后再推断换行。当前 parser 尚无公共 TokenStream 入口，内部 token 解析接入是实施工作之一。
+输出不得含 EOF、非法 token、未知节点种类、失配分组或类别与拼写冲突的 token。`r#` 不是名称正文的一部分。文本解析走同一 Goxide lexer，包括自动分号；builder 生成的分号默认显式。宿主接收结构化输出时直接保留分号种类，不能打印成文本后再推断换行。编译器 parser 已提供内部词法 token 的表达式、类型、语句和单项声明入口，展开器直接使用这些入口；公共 TokenStream 由转换桥映射为内部 token。
 
 普通注释及空白不属于首版公共 TokenStream，文本显示不承诺格式或注释往返。原类型保留的 derive 不删除其原注释；attribute 重写项的注释转交按保留原项引用处理，重新构造整项不自动继承注释。编译器指令不会仅因以注释表示而成为宏输出能力；首版协议不承载新的 Go 编译指令。文档属性的独立 API 不在本篇加入。
 
@@ -65,7 +65,7 @@ SDK 内部表示不作为序列化协议直接导出，尤其不公开现有 `sy
 | Provenance | 原样引用输入 token/fragment；新建节点标为本次生成 | 不能上传文件路径、整数或 AST 冒充可信源码 |
 | Fragment 身份 | 保留、复制及观察原片段 | 不能改变原片段类别或语义检查状态 |
 
-公共 Span 与当前内部 `Origin` 不是同一个值。当前名字恢复还使用 Origin 的文件与范围判断捕获内部作用域，配置及依赖根也使用词法来源。因此 `WithSpan` 只能修改诊断位置，实现必须把显示位置与可信来源分开，不能覆盖现有 Origin 后继续信任它。
+公共 Span 与当前内部 `Origin` 不是同一个值。当前名字恢复还使用 Origin 的文件与范围判断捕获内部作用域，配置及依赖根也使用词法来源。因此 `WithSpan` 返回一个指定了诊断位置的新值，把输出语法关联到对应源码位置，原 token 和原源码不变。实现必须把显示位置与可信来源分开，不能覆盖现有 Origin 后继续信任它。
 
 新建自由名字默认使用当前宏定义包的 DefSite。CallSite 指本次宏调用的词法位置，嵌套时不固定为最外层用户文件。输入插值保留自身绑定和来源；每次复制产生独立语法实例。新建局部绑定每次展开取得新身份；生成包级声明归输出所在包，并保留生成代码内部引用所需的绑定关系。公开声明重名仍报普通冲突。
 
@@ -422,7 +422,7 @@ func TestAnswerAPI(t *testing.T) {
 | A2 | 三类入口、别名、重导出、错误入口、helper 共享/归属/残留、属性顺序、共同 derive 输入、单槽/成员约束 |
 | A3 | raw ident、复合标点、负数、显式/隐式分号、分组与 Fragment 跨声明/过程宏往返；不得破坏现有类别反例 |
 | A4 | 定义点/显式调用点/嵌套词法调用点、局部同名、重复插值、生成声明归属及私有访问正反例 |
-| A5 | 修改显示 Span 不改变捕获内部变量、cfg、依赖根或权限；无效/陈旧句柄及伪造语义字段拒绝 |
+| A5 | 为输出关联显示 Span 不改变捕获内部变量、cfg、依赖根或权限；无效/陈旧句柄及伪造语义字段拒绝 |
 | A6 | RuntimeRoot 在 alias/replace/本项目 lib/完整根重导出下正确，缺根不注入依赖，运行库重导出无构建环 |
 | A7 | 宏/目标不同平台、feature 和依赖版本隔离；同逻辑 module 的不同计划不误判环；SDK 选版/replace 后协议内容不匹配拒绝，不要求 syntax 与编译器版本号相同；cold/warm、offline/locked 重放与内容失效 |
 | A8 | 正常 init 探测、随机分段读取、clock sleep、poll 顺序/EOF；init 中超限、memory/table 增长、累计超时、取消、递归、过量输出、非法 import、panic、响应后死循环及下一次编译恢复 |

@@ -56,6 +56,9 @@ func (e *engine) copyValue(v reflect.Value, expn ast.ExpnID) reflect.Value {
 			if origin, ok := e.r.Origins[old]; ok {
 				e.r.Origins[n] = origin
 			}
+			if location, ok := e.r.Locations[old]; ok {
+				e.r.Locations[n] = location
+			}
 			if capture, ok := e.r.Captures[old]; ok {
 				e.r.Captures[n] = capture
 			}
@@ -140,7 +143,7 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 				}
 			}
 		case *ast.MacroRulesDecl:
-			return v, &Diagnostic{Code: "template", Message: "templates cannot generate macro definitions", Definition: e.r.Origins[n], Call: e.r.Expansions[parent].Call, Expn: parent}
+			return v, &Diagnostic{Code: "template", Message: "templates cannot generate macro definitions", Location: e.location(n), Definition: e.r.Origins[n], Call: e.r.Expansions[parent].Call, Expn: parent}
 		case *ast.MacroExpr:
 			path, args, kind = n.Path, n.Args, exprKind
 		case *ast.MacroType:
@@ -155,7 +158,7 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 				}
 				list := x.(*ast.Block).List
 				if len(list) != 1 {
-					return v, &Diagnostic{Code: "template", Message: "this statement slot requires exactly one statement", Definition: e.r.Origins[x], Call: e.r.Origins[m], Expn: nodeExpn(x)}
+					return v, &Diagnostic{Code: "template", Message: "this statement slot requires exactly one statement", Location: e.location(x), Definition: e.r.Origins[x], Call: e.r.Origins[m], Expn: nodeExpn(x)}
 				}
 				return reflect.ValueOf(list[0]), nil
 			}
@@ -183,7 +186,7 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 			if _, ok := call.(*ast.CallExpr); !ok {
 				n := v.Interface().(ast.Node)
 				id := nodeExpn(n)
-				return v, &Diagnostic{Code: "category", Message: "go/defer requires a call expression", Definition: e.r.Origins[n], Call: e.r.Expansions[id].Call, Expn: id}
+				return v, &Diagnostic{Code: "category", Message: "go/defer requires a call expression", Location: e.location(n), Definition: e.r.Origins[n], Call: e.r.Expansions[id].Call, Expn: id}
 			}
 		}
 		return v, nil

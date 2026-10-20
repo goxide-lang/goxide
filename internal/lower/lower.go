@@ -150,6 +150,15 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		e.goFile = f
 		emitters = append(emitters, e)
 	}
+	// A diagnostic may be displayed in a macro definition or another input
+	// file that is not among the emitted files.
+	if res != nil {
+		for _, diagnostic := range res.Diagnostics {
+			if diagnostic.Severity == resolve.Error {
+				return nil, &Diagnostic{File: diagnostic.File, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
+			}
+		}
+	}
 	bindMembers(fset, emitters)
 	out := make(map[string][]byte, len(files))
 	for _, e := range emitters {
@@ -401,6 +410,9 @@ func (e *emitter) fail(n syntax.Node, message string) {
 	if e.result != nil && n != nil && !reflect.ValueOf(n).IsNil() {
 		if origin, ok := e.result.Origins[resolve.Ref{File: e.name, ID: n.ID()}]; ok {
 			e.err.Origin = origin
+			if origin.File != "" {
+				e.err.File, e.err.Span = origin.File, origin.Span
+			}
 			if expansion, ok := e.result.Expansions[origin.Expn]; ok {
 				e.err.Definition, e.err.Call = expansion.Definition, expansion.Call
 			}

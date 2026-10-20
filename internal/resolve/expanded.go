@@ -282,6 +282,11 @@ func (h *hygiene) diagnostic(n ast.Node, d *Diagnostic) {
 			d.Definition = origin
 		}
 	}
+	if location, ok := h.expanded.Locations[n]; ok {
+		if name, ok := h.names[location.File]; ok {
+			d.File, d.Span = name, location.Span
+		}
+	}
 	d.Origin = Origin{File: d.File, Span: d.Span, Expn: id}
 	if e, ok := h.expanded.Expansions[d.Origin.Expn]; ok {
 		d.Call = e.Call

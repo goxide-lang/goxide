@@ -89,7 +89,10 @@ func ParseFile(filename string, src []byte) (*ast.File, []Diagnostic) {
 }
 
 func ParseExpr(src []byte) (ast.Expr, []Diagnostic) {
-	p := newParser(src)
+	return parseExpr(newParser(src))
+}
+
+func parseExpr(p *parser) (ast.Expr, []Diagnostic) {
 	n := p.expr()
 	p.finish()
 	if p.errorCount() > 0 && !hasBad(n) {
@@ -99,7 +102,10 @@ func ParseExpr(src []byte) (ast.Expr, []Diagnostic) {
 	return n, p.diagnostics
 }
 func ParseType(src []byte) (ast.Type, []Diagnostic) {
-	p := newParser(src)
+	return parseType(newParser(src))
+}
+
+func parseType(p *parser) (ast.Type, []Diagnostic) {
 	n := p.typ()
 	p.finish()
 	if p.errorCount() > 0 && !hasBad(n) {
@@ -119,7 +125,10 @@ func ParsePattern(src []byte) (ast.Pat, []Diagnostic) {
 	return n, p.diagnostics
 }
 func ParseStmt(src []byte) (ast.Stmt, []Diagnostic) {
-	p := newParser(src)
+	return parseStmt(newParser(src))
+}
+
+func parseStmt(p *parser) (ast.Stmt, []Diagnostic) {
 	n := p.stmt()
 	p.finish()
 	if p.errorCount() > 0 && !hasBad(n) {
@@ -129,7 +138,10 @@ func ParseStmt(src []byte) (ast.Stmt, []Diagnostic) {
 	return n, p.diagnostics
 }
 func ParseItem(src []byte) (ast.Item, []Diagnostic) {
-	p := newParser(src)
+	return parseItem(newParser(src))
+}
+
+func parseItem(p *parser) (ast.Item, []Diagnostic) {
 	n := p.item()
 	p.finish()
 	if p.errorCount() > 0 && !hasBad(n) {

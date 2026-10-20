@@ -167,7 +167,9 @@ type Result struct {
 	Prints      map[*ast.CallExpr]bool
 	Diagnostics []Diagnostic
 	Contexts    map[ast.SyntaxCtx]*Scope
-	Origins     map[Ref]Origin
+	// Origins contains diagnostic locations and expansion stacks. Lexical
+	// provenance remains in expand.Result.Origins and is not changed by spans.
+	Origins map[Ref]Origin
 }
 
 // External 是调用方提供的公开成员；查找不到返回空切片，多项表示歧义。

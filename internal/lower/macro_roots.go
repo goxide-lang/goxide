@@ -184,8 +184,10 @@ func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]module
 		}
 	}
 	packages := make(map[*syntax.File]string, len(files))
+	fileNames := make(map[*syntax.File]string, len(files))
 	for name, file := range files {
 		packages[file] = path.Dir(name) + "\x00" + file.Package.Name
+		fileNames[file] = name
 	}
 	bindings := expand.NewStaticBindings(expanded, func(file *syntax.File) string { return packages[file] })
 	var requirements []rootRequirement
@@ -210,6 +212,11 @@ func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]module
 			}
 			config.bindings, config.uses = nil, nil // Recomputed from the expanded scopes above.
 			if requirement, ok := applyUseRoot(config, use, expanded); ok {
+				if location, ok := expanded.Locations[use]; ok {
+					if name, ok := fileNames[location.File]; ok {
+						requirement.origin.File, requirement.origin.Span = name, location.Span
+					}
+				}
 				requirements = append(requirements, requirement)
 			}
 		}
@@ -257,6 +264,9 @@ func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand
 	copyOrigin := func(from, to syntax.Node) {
 		if expanded != nil {
 			expanded.Origins[to] = expanded.Origins[from]
+			if location, ok := expanded.Locations[from]; ok {
+				expanded.Locations[to] = location
+			}
 			if id, ok := from.(*syntax.Ident); ok {
 				expanded.Scopes[to.(*syntax.Ident)] = expanded.Scopes[id]
 			}

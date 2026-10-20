@@ -187,7 +187,7 @@ formatter = '/tools/formatter'
 	if len(m.Bins) != 1 || len(m.Examples) != 1 || m.Lib.Path != "src/lib.gox" || m.Build.TimeoutSeconds != 5 || m.Dependencies["some_lib"].Version != "v2.1.0" {
 		t.Fatal(m)
 	}
-	doc := manifestDocument{Namespaces: m.PackageNamespaces, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	doc := manifestDocument{Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
 	doc.GoMod = GoModConfig{Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain}
 	b, e := toml.Marshal(doc)
 	if e != nil {

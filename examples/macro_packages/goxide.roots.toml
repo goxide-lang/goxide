@@ -22,9 +22,6 @@ package = "macros.example/app/other"
 module = "github.com/goxide-lang/serde"
 package = "github.com/goxide-lang/serde"
 
-[roots.serde.namespaces]
-"json" = "github.com/goxide-lang/serde/json"
-
 [roots.slog]
 source = "toolchain"
 package = "log/slog"

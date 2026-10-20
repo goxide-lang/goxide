@@ -7,6 +7,39 @@ import (
 	"github.com/hxsf/goxide/internal/syntax/ast"
 )
 
+func TestTypeCarrierAnchorReservedInSourceAndMixedPackages(t *testing.T) {
+	for _, tc := range []struct {
+		name, declaration string
+		native, mixed     bool
+		want              int
+	}{
+		{"source", "func GoxideInternalTypeCarrierForSelf() {}", false, false, 1},
+		{"method", "type T struct{}; func (t T) GoxideInternalTypeCarrierForSelf() {}", false, false, 1},
+		{"mixed", "func GoxideInternalTypeCarrierForSelf() {}", true, true, 1},
+		{"independent-go", "func GoxideInternalTypeCarrierForSelf() {}", true, false, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			files := parseFiles(t, map[string]string{"p/anchor.gox": "package p; " + tc.declaration})
+			files["p/anchor.gox"].NativeGo = tc.native
+			if tc.mixed {
+				for name, file := range parseFiles(t, map[string]string{"p/source.gox": "package p; func Run() {}"}) {
+					files[name] = file
+				}
+			}
+			result := resolve.Resolve(files, nil)
+			count := 0
+			for _, diagnostic := range result.Diagnostics {
+				if diagnostic.Code == "reserved" {
+					count++
+				}
+			}
+			if count != tc.want || len(result.Diagnostics) != tc.want {
+				t.Fatalf("reserved diagnostics = %v, want %d", result.Diagnostics, tc.want)
+			}
+		})
+	}
+}
+
 func TestReceiverAndImplMembersAcrossFiles(t *testing.T) {
 	sources := map[string]string{
 		"a.gox": `package p

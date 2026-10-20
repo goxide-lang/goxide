@@ -320,7 +320,7 @@ func TestCLIProcessContract(t *testing.T) {
 				files["go.mod"] = "module example.org/cliargv\ngo 1.27\n"
 				files["goxide.roots.toml"] = fixtureToolchainRoots
 			} else {
-				files["goxide.toml"] = fixtureNamespaceManifest(t, "[go_mod]\nmodule='example.org/cliargv'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n")
+				files["goxide.toml"] = fixtureDependencyManifest(t, "[go_mod]\nmodule='example.org/cliargv'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n")
 			}
 			for name, content := range files {
 				if err := os.WriteFile(filepath.Join(d, name), []byte(content), 0600); err != nil {

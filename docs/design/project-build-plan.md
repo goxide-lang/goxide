@@ -16,7 +16,7 @@
 | Go module | `go = "github.com/…"` 加 `version = "v…"`；路径不带协议，按 Go MVS 选版并锁定结果 |
 | Go 标准库 | `go = "fmt"`，没有 version，不下载；用所选 Go 工具链的真实包信息核验标准库归属 |
 
-当前入口规则以 [schema](toml-manifest.md#来源与包身份) 为准：依赖项不接受 `package`。Git/path 从所选根的 goxide.toml 或 go.mod 读取生成 Go 所需的 module 路径，可选 `module` 只作一致性断言；Go module 来源的路径由 `go` 给出，不重复填写。alias 默认绑定标准库指定包、纯 Go module 根包或 Goxide 自己必需的 lib 入口。`namespaces` 保留为精确 Go 包映射与别名组织，不绕过 Goxide 公开边界；features/default_features/optional 沿用 feature 规则，标准库不接受 feature 请求。
+当前入口规则以 [schema](toml-manifest.md#来源与包身份) 为准：依赖项不接受 `package`。Git/path 从所选根的 goxide.toml 或 go.mod 读取生成 Go 所需的 module 路径，可选 `module` 只作一致性断言；Go module 来源的路径由 `go` 给出，不重复填写。alias 默认绑定标准库指定包、纯 Go module 根路径或 Goxide 自己必需的 lib 入口。RFC 0028 已删除全部 `namespaces` 字段，纯 Go 子包按 alias 下的真实路径解析并核验来源，Goxide 仍沿公开模块树；features/default_features/optional 沿用 feature 规则，标准库不接受 feature 请求。
 
 底层依赖图按来源身份建立节点，alias 只是各声明项目内的引用名。同来源节点接收的活动 feature 请求取并集，不同来源独立求解。path 使用规范来源目录，Git 使用规范仓库地址、锁定 commit 和 subdir，Go 版本来源使用逻辑 module path；实际生效的本地 replace 归一到 path。节点键与选中版本、校验和等内容身份分开，细节见[依赖根合同](dependency-roots.md)。`go_mod.module` 仅供 Go 投影使用，不作为 Goxide 节点去重键；来源收集之后、临时 Go module 和选版之前检查不同来源是否占用相同 module 路径，并明确报冲突。
 
@@ -31,9 +31,6 @@ fmt = { go = "fmt" }
 [dependencies.standard]
 go = "github.com/goxide-lang/std"
 version = "v0.0.0-20261009104839-c02a09d8c417"
-
-[dependencies.standard.namespaces]
-formatting = "github.com/goxide-lang/std/formatting"
 ```
 
 同一真实 formatting 来源也可以写成下面的 Git 声明，与上方 Go module 声明二选一：
@@ -42,16 +39,13 @@ formatting = "github.com/goxide-lang/std/formatting"
 [dependencies.standard]
 git = "https://github.com/goxide-lang/std.git"
 rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
-
-[dependencies.standard.namespaces]
-formatting = "github.com/goxide-lang/std/formatting"
 ```
 
 两种声明都以 `use standard::formatting;` 选择该 Go 子包。
 
 ## monorepo 与工作区规则
 
-`subdir` 只选择 Git 仓库内的项目/module 根，该目录必须有自己的 goxide.toml 或 go.mod；省略时选仓库根。不递归搜索，不按 alias 猜目录，不允许逃出 checkout。path 同样直接选根，不需要再加 subdir。Go 子包通过 namespaces 映射，Goxide 公开子路径沿 pub mod/pub use；不能拿 subdir 选择同一 Go module 下的普通包目录。
+`subdir` 只选择 Git 仓库内的项目/module 根，该目录必须有自己的 goxide.toml 或 go.mod；省略时选仓库根。不递归搜索，不按 alias 猜目录，不允许逃出 checkout。path 同样直接选根，不需要再加 subdir。Go 子包按 `use alias::真实子路径` 解析并核验实际 module owner，Goxide 公开子路径沿 pub mod/pub use；不能拿 subdir 选择同一 Go module 下的普通包目录。
 
 实际 monorepo 验收使用本地 Git 仓库，packages/lib 内的独立 module 通过 subdir 选择；完整可运行 recipe 见 [schema 文档](toml-manifest.md#monorepo-与发现)。原 shared_std_candidate 夹具包含历史 ABI，已确认当前编译器正确拒绝，不能作为新用户的可运行依赖示例。
 
@@ -71,7 +65,7 @@ formatting = "github.com/goxide-lang/std/formatting"
 
 ## 决定记录
 
-1. 已确认：采用 `go = "module-path"` 加 version，并用 `go = "fmt"` 表示免下载标准库；依赖 alias 使用默认库入口，namespaces 提供显式包映射，不接受 dependency.package。
+1. 已确认：采用 `go = "module-path"` 加 version，并用 `go = "fmt"` 表示免下载标准库；依赖 alias 选择来源根，纯 Go 子包自动按真实路径解析，Goxide 使用自身 lib 公开入口，不接受 dependency.package 或 namespaces。
 2. 已确认 Git 使用零或一个 rev/tag/branch，缺省使用默认分支并锁定 commit；rev 支持 commit hash/远端公开 ref，并且本片不支持 version 与 git/path 的发布组合。
 3. 本片按父任务明确范围采用显式项目根 subdir、不自动搜索；单一受管 target/cache 默认。
 

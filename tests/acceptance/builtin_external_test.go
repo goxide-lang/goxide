@@ -25,6 +25,7 @@ func TestCrossModuleBuiltinArtifacts(t *testing.T) {
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", module("sums.example/lib", ""))
 	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod relay;\npub mod fake;\n")
 	packagesWrite(t, src, "model/model.gox", `package model; use serde;
 use errors;
 var Sentinel=errors::New("failed")
@@ -83,7 +84,7 @@ func Get()Result[int,error]{return nil}
 	appFor := func(source string) string {
 		d := t.TempDir()
 		packagesWrite(t, d, "go.mod", module("sums.example/app", lib))
-		writeAcceptanceSerdeRoots(t, d, "sums.example/lib", "model", "relay", "fake")
+		writeAcceptanceSerdeRoots(t, d, "sums.example/lib")
 		// A final source newline is optional, including before imported preludes.
 		packagesWrite(t, d, "app.gox", strings.TrimRight(source, "\n"))
 		return d

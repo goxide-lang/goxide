@@ -74,6 +74,17 @@ func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kin
 		return nil
 	}
 	s := &Symbol{Name: r.declarationKey(scope, name), Kind: kind, Decl: r.ref(name), GoName: name.Name}
+	if !r.file.AST.NativeGo && name.Name == "crate" && isStatic(s) {
+		r.diag(name, "reserved-root", "crate is a reserved static path root")
+	}
+	if name.Name == "GoxideInternalTypeCarrierForSelf" && (scope.Kind == PackageScope || scope.Kind == MemberScope) {
+		for _, file := range r.pkg.Files {
+			if !file.AST.NativeGo {
+				r.diag(name, "reserved", "GoxideInternalTypeCarrierForSelf is a reserved type carrier anchor")
+				break
+			}
+		}
+	}
 	r.file.Definitions[name.ID()] = s
 	r.file.Visibility[name.ID()] = Private
 	r.file.GoNames[name.ID()] = name.Name

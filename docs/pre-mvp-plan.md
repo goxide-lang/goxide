@@ -100,7 +100,7 @@ gofmt -l internal cmd
 
 - 复用 `internal/project` 的清单、Go 选版、锁与受管目录实现；不另建包管理器或锁格式。作者根只保存清单、源码和锁，Go 元数据与生成代码写入 target。
 - 所选 Goxide 模块按真实 module/package 身份联合经过新管线；跨包 enum、trait、宏和引用权限从源码恢复，不产生或读取旧前端 metadata。原生 Go 依赖使用真实 Go 类型信息。
-- `mod child` 只绑定选中的本地子包；依赖根使用默认库入口，公开子路径沿 `pub mod` / `pub use`，Go 互操作可用 `namespaces` 精确映射。`namespaces` 仍映射本模块的包。`pub use` 保留 canonical 身份，函数和变量不生成转发包装；具体语义沿用[静态路径](design/static-paths.md)。
+- `mod child` 只绑定选中的本地子包；依赖根使用默认库入口，公开子路径沿 `pub mod` / `pub use`，根与子包合同由 RFC 0028 规定：删除全部 namespaces，本地经 crate/lib，外部纯 Go 子包经 alias 下的真实路径；Goxide 来源仍沿公开模块树。`pub use` 保留 canonical 身份，函数和变量不生成转发包装；具体语义沿用[静态路径](design/static-paths.md)。
 - 原生 Go 文件、测试与资源保留，生成文件不覆盖独立手写实现；目录发现不跨嵌套 module，也不把受管 target、vendor、testdata 作为源码包递归编译。
 - 清单中的 bin 选择对应入口；依赖库沿用既有 lib 声明。保存选定版本和校验和；相同输入复用稳定产物，重复生成和锁文件字节一致，locked 模式拒绝改变依赖映射。
 

@@ -2,13 +2,15 @@
 
 当前作者清单与可提交的 `goxide.lock` 位于项目根；Go 元数据和生成源码只写入受管 target。依赖字段参考 [Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)，Go module 选版仍用 [Go MVS](https://go.dev/ref/mod#minimal-version-selection)。不读取旧 source 标签或嵌套来源表，不实现 registry。
 
+[RFC 0028](../rfcs/0028-crate-roots.md) 的根解析已接通，全部 `namespaces` 字段已删除；当前支持范围及对应测试见[状态表](../mvp-gap-audit.md)。
+
 ## P5 新管线入口
 
 状态：已完成。`internal/compile.PrepareProject` 接受单项目目录，使用既有清单、Go 依赖图和锁，选择 bin 后把所需模块交给 `parser → expand → resolve → check → lower`。返回稳定生成模块目录与 Go 入口包；调用者在该目录执行 Go build、run 或 test。CLI 三种输入模式在 P6 统一切换。
 
-本阶段使用项目 `[go_mod]`、namespace 映射、Go/path/Git 依赖及 bin；Goxide 依赖默认从库自己的 `[lib]` 入口访问。多包源和所选 Goxide 依赖联合检查，保留 enum、trait、宏和引用权限，不使用旧前端导出 metadata。原生 Go 源码、测试与资源参与生成模块；当前互操作支持 Goxide 跨包导入原生 Go，以及原生 Go 调用生成的公开 API。同包 Goxide 引用手写 Go 声明的桥接留待管线集成。清单作者根不生成 go.mod/go.sum。
+当前使用项目 `[go_mod]`、Go/path/Git 依赖及 lib/bin/example；Goxide 依赖默认从库自己的 `[lib]` 入口访问。多包源和所选 Goxide 依赖联合检查，保留 enum、trait、宏和引用权限，不使用旧前端导出 metadata。原生 Go 源码、测试与资源参与生成模块。crate、自动库根、同包混编与纯 Go 子包解析按 RFC 0028 接通；清单作者根不生成 go.mod/go.sum。
 
-依赖版本和校验和由既有 Go planner 锁定，生成模块间使用 bundle 内的相对 replace；临时生成目录不进入锁或最终 Go 元数据。相同输入保持生成字节、产物路径和锁稳定，offline/locked 使用已有缓存与锁重放，清单依赖映射改变时 locked 拒绝更新。失败的源检查不发布新锁或覆盖已有 bundle。
+依赖版本和校验和由既有 Go planner 锁定，生成模块间使用 bundle 内的相对 replace；临时生成目录不进入锁或最终 Go 元数据。相同输入保持生成字节、产物路径和锁稳定，offline/locked 使用已有缓存与锁重放，清单依赖声明改变时 locked 拒绝更新。失败的源检查不发布新锁或覆盖已有 bundle。
 
 feature 条件编译已接入：支持 cfg、cfg_attr 顶层条件属性及 cfg! 布尔查询；cfg! 不跳过 if 两支的检查。合同见 [RFC 0022](../rfcs/0022-project-toolchain.md)。workspace、vendor 迁入、import-go、构建脚本仍按后续 MVP 阶段接入；下文保留这些工具链实现的既有字段合同。
 
@@ -52,10 +54,9 @@ goxide run --offline --locked   # clean dependency download
 | 表 | 字段与含义 |
 | --- | --- |
 | go_mod | 生成 go.mod 的元数据：必填 module、go；可选 toolchain（建议版本，不自动下载） |
-| namespaces | 本项目的精确包映射；名称到 Go package 路径，不写在 go_mod 内 |
-| dependencies.alias | 按下述四类来源填写；alias 绑定默认库入口，namespaces 可增加精确包映射；Git/path 的 module 可选，仅作身份断言；不接受 package |
+| dependencies.alias | 按下述四类来源填写；alias 选择来源根，纯 Go 子包通过真实子路径解析；Git/path 的 module 可选，仅作身份断言；不接受 package 或 namespaces |
 | features | 名称到字符串数组；default 为默认集合，dep:alias 激活 optional，alias/feature 转发 feature |
-| lib | 至多一项 name、path，可加 required_features |
+| lib | 至多一项 name、path，可加 required_features；name 是自动库根，必须是合法源标识符，不能为 crate 或与依赖 alias 冲突 |
 | bin / example | 数组表，各项 name、path、可选 required_features；path 为项目内目录或单个 .gox/.go 入口 |
 | go.require | 数组表 module、version、可选 indirect；生成原生 Go require，供已有 Go 政策和编译器支持库依赖使用 |
 | go.replace | 数组表 module、可选 version，以及 path 或 with+with_version；保留 Go replacement 语义 |
@@ -63,7 +64,7 @@ goxide run --offline --locked   # clean dependency download
 | build | entry、inputs、outputs、env、timeout_seconds、dependencies、tools，见 [脚本合同](../rfcs/0023-build-scripts.md)；下载不授权执行脚本 |
 | workspace | members、default-members、exclude、go_mod、dependencies，以及已有原生迁入 go 政策，见 [workspace 合同](../rfcs/0026-workspaces.md) |
 
-作者清单不声明格式版本，直接按当前字段校验。`[go_mod]` 仅描述生成 Go module 的元数据；语言中的 `use` 绑定来自依赖 alias 或顶层 `[namespaces]`，不以 `go_mod.module` 作为源码导入名。未知字段、错误类型、非法 TOML 和大小写错误有文件/行/列诊断。来源语义错误指出依赖名。
+作者清单不声明格式版本，直接按当前字段校验。`[go_mod]` 仅描述生成 Go module 的元数据；语言中的 `use` 绑定来自当前 crate、自动库根、依赖 alias 或未占名的标准库根，不以 `go_mod.module` 作为源码导入名。顶层、依赖和 workspace 模板均不接受 `namespaces`。未知字段、错误类型、非法 TOML 和大小写错误有文件/行/列诊断。来源语义错误指出依赖名。
 
 ## Feature 配置
 
@@ -92,7 +93,7 @@ go = "fmt"
 use fmt;
 ```
 
-必需 `go`，值为标准库的精确包路径；没有 `version`。alias 自动绑定该包，不写 `module`，不下载，不进入 module 选版图。可选 `optional`、`namespaces`，其中 namespace 的值也必须是标准库包。禁止 `features`、`default_features` 和 feature 转发；真实加载时核验 Go 的 `Standard` 标志。
+显式标准库根必需 `go`，值为标准库的精确包路径；没有 `version`。alias 绑定该包，不写 `module`，不下载，不进入 module 选版图。可选 `optional`；禁止 `features`、`default_features` 和 feature 转发；真实加载时核验 Go 的 `Standard` 标志。没有同名显式根时，`use fmt;`、`use encoding::json;` 可由标准库 fallback 提供，因而无需同名依赖声明；显式改名、覆盖和 optional 继续占名，未激活时不 fallback。
 
 ### Go module
 
@@ -106,9 +107,9 @@ version = "v0.9.1"
 use errors;
 ```
 
-必需 `go`、`version`：`go` 是不带协议的 module path，`version` 是 Go 规范版本或 pseudo-version。MVS 可以选中更高版本，lock 记录实际结果。`go` 已提供 module 身份，禁止重复填写 `module`。
+必需 `go`、`version`：`go` 是不带协议的 module path，不能用同一 module 的普通 package path 代替；`version` 是 Go 规范版本或 pseudo-version。MVS 可以选中更高版本，lock 记录实际结果。`go` 已提供 module 身份，禁止重复填写 `module`。
 
-可选 `namespaces`、`optional`、`features`、`default_features`。纯 Go module 的 alias 默认绑定模块根包；Goxide 源码依赖必须声明自身 `[lib]` 入口。feature 请求规则见[下文](#可选依赖与-feature-请求)。
+可选 `optional`、`features`、`default_features`。纯 Go module 的 alias 选择模块根路径，子包通过 `use alias::真实子路径` 解析；根目录没有 package 时仍可使用真实子包。Goxide 源码依赖必须声明自身 `[lib]` 入口。feature 请求规则见[下文](#可选依赖与-feature-请求)。
 
 ### 本地 path
 
@@ -123,7 +124,7 @@ use kit;
 
 必需 `path`，直接选择项目/module 根，相对声明所在清单解析。模块身份从该根的 `goxide.toml` 中 `go_mod.module` 或 `go.mod` 中 `module` 自动读取，不根据目录名或 alias 推断。
 
-可选 `module`、`namespaces`、`optional`、`features`、`default_features`。显式 `module = "example.org/kit"` 仅断言所读取的身份必须相等，不为依赖改名；不一致时报 module path mismatch。不接受 `version`、`subdir` 或 Git 选择器。本地字节不冒充不可变远端 checksum。
+可选 `module`、`optional`、`features`、`default_features`。显式 `module = "example.org/kit"` 仅断言所读取的身份必须相等，不为依赖改名；不一致时报 module path mismatch。不接受 `version`、`subdir` 或 Git 选择器。本地字节不冒充不可变远端 checksum。
 
 ### Git
 
@@ -132,19 +133,17 @@ use kit;
 git = "https://github.com/goxide-lang/std.git"
 rev = "c02a09d8c417b35dc7e432fc484172fab6db6182"
 
-[dependencies.standard.namespaces]
-formatting = "github.com/goxide-lang/std/formatting"
 ```
 
 ```goxide
 use standard::formatting;
 ```
 
-必需 `git`，远端来源使用 HTTPS 仓库 URL。module 身份从所选项目根的 `goxide.toml` 或 `go.mod` 自动读取。可选 `module` 一致性断言、`rev`/`tag`/`branch` 中的一项，以及 `subdir`、`namespaces`、`optional`、`features`、`default_features`。
+必需 `git`，远端来源使用 HTTPS 仓库 URL。module 身份从所选项目根的 `goxide.toml` 或 `go.mod` 自动读取。可选 `module` 一致性断言、`rev`/`tag`/`branch` 中的一项，以及 `subdir`、`optional`、`features`、`default_features`。
 
 多个 Git 选择器报冲突，没有优先级。`rev` 支持 commit hash 或远端公开 ref，`tag` 与 `branch` 分别解析自己的 ref。省略选择器时解析默认分支，完整 commit 写入 lock；普通构建沿用锁定 commit，不随移动 ref 更新。Git 不接受 `version`，没有 Cargo 风格的发布版本回退。
 
-`subdir` 只选择仓库内独立的项目/module 根，规则和完整 monorepo 示例见[下节](#monorepo-与发现)。上例中 `formatting` 是 std module 内的 Go 子包，使用 `namespaces` 映射；Go 的 `fmt` 应按标准库声明。
+`subdir` 只选择仓库内独立的项目/module 根，规则和完整 monorepo 示例见[下节](#monorepo-与发现)。上例的 `use standard::formatting;` 直接选择 std module 内的真实 Go 子包；`subdir` 不能用来指定该子包。
 
 ### module 身份与默认入口
 
@@ -156,28 +155,26 @@ path 和 Git 的来源身份与生成 Go 所需的 module 路径分开。取得�
 
 path 按规范目录归一，Git 按仓库地址、锁定 commit 和 subdir 归一，Go 版本来源按逻辑 module path 接收 MVS 请求；选中版本与校验和另属内容身份。具体的来源键、有效本地 replace 和锁中路径表示见[依赖根合同](dependency-roots.md)。
 
-依赖项的 `package` 已移除，填写时按未知字段拒绝。标准库 alias 的入口是 `go` 指定的包；纯 Go module 使用模块根包；Goxide 源码依赖必须声明 `[lib]`，缺少时拒绝。`[lib]` 是库作者定义的入口，不由消费者指定另一个包代替。Goxide 的公开子路径来自 `pub mod` / `pub use`，没有自动导出所有目录的规则。
+依赖项不接受 `package` 或 `namespaces`。标准库 alias 的入口是 `go` 指定的包；纯 Go module 使用模块根路径并按需查询真实子包与成员；Goxide 源码依赖必须声明 `[lib]`，缺少时拒绝。`[lib]` 是库作者定义的入口，不由消费者指定另一个包代替。Goxide 的公开子路径来自 `pub mod` / `pub use`，不能通过物理 Go 目录绕开。
 
-### namespaces 与公开子包
+### Go 子包与公开路径
 
-纯 Go module 的子目录不自动变成 namespace。`namespaces` 保留为 Go 互操作与别名组织的精确包映射，例如：
+清单声明 module 来源与 alias，源码选择其中的真实 Go 子包，例如：
 
 ```toml
 [dependencies.formats]
 go = "github.com/goxide-lang/serde"
 version = "v0.0.0-20261009021520-f342a31e20d0"
 
-[dependencies.formats.namespaces]
-json = "github.com/goxide-lang/serde/json"
 ```
 
 ```goxide
 use formats::json;
 ```
 
-`formats` 默认对应 serde 根包，`formats::json` 是配置的子包映射。映射值不是下载地址、仓库子目录或用于拼接的前缀。namespace 键逐段使用合法标识符，深路径用带引号的键，如 `"encoding::json"`；可见子项来自显式映射或 Goxide 库的公开声明，不自动扫描 Go 子目录，也不继承依赖项目自己的 namespace 配置。
+`formats` 选择 serde module，`formats::json` 查询真实的 `github.com/goxide-lang/serde/json` 包，不需要登记映射。每段使用合法源标识符；子包与导出成员同名时报歧义。module 根或中间目录没有包时可以继续寻址，最终目标必须是可导入的真实包；未使用的子包不被递归导入。
 
-映射不授予 Goxide 私有包的访问权限。实际包必须属于依赖 module，不能只凭路径前缀证明归属，Go 的 `internal` 边界也保持有效。原生 `.go` 仍使用 Go import；详细绑定规则见[依赖根](dependency-roots.md)。
+实际包必须属于选定的依赖 module，不能只凭路径前缀证明归属或跨入嵌套 module；Go 的 `internal` 边界保持有效。Goxide 来源始终沿库的公开模块树解析，不因底层 Go 目录存在而放行私有包。原生 `.go` 仍使用 Go import；详细绑定规则见[依赖根](dependency-roots.md)。
 
 ### 可选依赖与 feature 请求
 

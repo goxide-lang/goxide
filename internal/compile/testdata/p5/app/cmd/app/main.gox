@@ -2,8 +2,8 @@ package main
 
 use fmt;
 use fmt::Println as output;
-use service;
-use effects as _;
+use appcore::service;
+use appcore::effects as _;
 use kit;
 use kit::Counter as shared;
 

@@ -1,6 +1,6 @@
 # 显式项目目标
 
-这个纯 TOML 项目含一个 lib、同一 src 目录中的两个 main，以及一个 example。`[namespaces]` 把 `greeting` 映射到本模块的库包；`fmt = { go = "fmt" }` 声明免下载的 Go 标准库包。各源文件再通过 `use` 绑定名称，使用 `::` 访问包成员。
+这个纯 TOML 项目含一个 lib、同一 src 目录中的两个 main，以及一个 example。`[lib].name = "greeting"` 自动提供库入口，bin/example 通过 `use greeting;` 使用库的公开 API；`use fmt;` 由标准库 fallback 提供。每个 target 有自己的 `crate::` 根，使用 `::` 访问包成员。
 在仓库根构建 CLI 后运行；把 GO_BIN 设为真实 Go 1.27+ 路径：
 
 ```sh

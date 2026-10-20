@@ -2,7 +2,7 @@ package model
 
 use wire;
 use wire::json as json;
-use native;
+use crate::native;
 
 pub trait Source {
     type Item

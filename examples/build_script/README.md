@@ -1,8 +1,10 @@
 # 构建脚本：生成 Go 代码和嵌入资源
 
-此例只使用标准库，没有第三方工具或 host helper。`tools/build/build.gox` 读取 manifest 显式声明的 `schema.txt`，在 runner 提供的输出目录生成 `gen/schema.go` 和 `gen/data.txt`。应用通过 `[namespaces]` 中的 `gen` 精确映射和 `use gen;` 使用生成包；该包用 `go:embed` 嵌入资源。源码目录不会出现 `gen/`。
+此例只使用标准库，没有第三方工具或 host helper。`tools/build/build.gox` 读取 manifest 显式声明的 `schema.txt`，在 runner 提供的输出目录生成 `cmd/app/gen/schema.go` 和 `cmd/app/gen/data.txt`。应用通过 `mod gen;` 和 `use crate::gen;` 使用自己 target 内的生成包；该包用 `go:embed` 嵌入资源。输出只进入受管产物，不写回源码。
 
-清单为生成器使用的 `json`、`fmt`、`os`、`filepath`、`strings` 明确声明 toolchain 根。host lowering 只接收这些工具链映射，目标的 `gen` 映射不会进入 host；源码使用 `::` 访问包成员。
+清单为生成器使用的 `json`、`fmt`、`os`、`filepath`、`strings` 明确声明 toolchain 根。host lowering 只接收自己的工具链根，目标的 `crate` 与生成包不会进入 host；源码使用 `::` 访问包成员。
+
+此例保留构建脚本阶段的使用流程；当前 CLI 尚未重启 `scripts` 和自动脚本执行，以下命令在对应阶段开放后使用。
 
 需要 Go 1.27+ 和本分支的 `goxide`。可在仓库根目录执行 `go build -o /tmp/goxide-build-script-demo ./cmd/goxide`，然后将下列命令的 `goxide` 换成 `/tmp/goxide-build-script-demo`。所有选项都放在项目路径之前。离线首次运行前，请在编译器仓库根用同一真实 Go 执行 `go mod download github.com/goxide-lang/std github.com/goxide-lang/serde`，预热本例锁定的公开支持库；冷缓存不会被 `--offline` 自动补齐。
 

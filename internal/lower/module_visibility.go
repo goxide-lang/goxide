@@ -2,6 +2,7 @@ package lower
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -9,6 +10,16 @@ import (
 )
 
 func (i *moduleImporter) checkRootRequirement(requirement rootRequirement) error {
+	parts := strings.Split(requirement.namespace.PackagePath, "/")
+	for n, part := range parts {
+		if part == "internal" {
+			parent := strings.Join(parts[:n], "/")
+			caller := path.Dir(requirement.origin.File)
+			if parent == "" || caller != parent && !strings.HasPrefix(caller, parent+"/") {
+				return &Diagnostic{File: requirement.origin.File, Span: requirement.origin.Span, Message: fmt.Sprintf("use of internal package %s is not allowed from %s", requirement.namespace.PackagePath, caller), Origin: requirement.origin}
+			}
+		}
+	}
 	if err := requirement.check(i.owners, i.external); err != nil {
 		return err
 	}
@@ -49,6 +60,12 @@ func (i *moduleImporter) checkSourceRoots(resolved *resolve.Result) error {
 			continue
 		}
 		caller, _, _ := strings.Cut(requirement.target, "/$goxide$roots/")
+		if i.crates != nil {
+			from, to := i.crates.owners[path.Dir(requirement.origin.File)], i.crates.owners[target]
+			if from != nil && to != nil && from.Root == to.Root {
+				continue
+			}
+		}
 		if caller == owner || public[target] {
 			continue
 		}
@@ -58,6 +75,46 @@ func (i *moduleImporter) checkSourceRoots(resolved *resolve.Result) error {
 		}
 		return &Diagnostic{File: requirement.origin.File, Span: requirement.origin.Span,
 			Message: fmt.Sprintf("source package %q is not publicly reachable from library entry %q", target, root), Origin: requirement.origin}
+	}
+	return nil
+}
+
+func (i *moduleImporter) checkCrateImports(resolved *resolve.Result) error {
+	if i.crates == nil {
+		return nil
+	}
+	imports := map[*resolve.Symbol]*resolve.Symbol{}
+	for _, file := range resolved.Files {
+		for _, use := range file.Uses {
+			if use.Symbol != nil && use.Resolved != nil {
+				imports[use.Symbol] = use.Resolved
+			}
+		}
+	}
+	check := func(from, target, file string) error {
+		if i.crates.owners[target] == nil {
+			return nil
+		}
+		caller, owner := i.crates.owners[from], i.crates.owners[target]
+		if caller != nil && caller.Root == owner.Root {
+			return nil
+		}
+		if !owner.Library || !i.publicPackage(owner.Root, target, imports) {
+			return fmt.Errorf("%s: package %q is not publicly reachable from a library entry (crate %s)", file, target, owner.Root)
+		}
+		return nil
+	}
+	for _, edge := range i.crates.edges {
+		if i.crates.owners[edge.to] == nil {
+			for _, module := range i.crates.modules {
+				if len(module.Crates) != 0 && i.crates.moduleOwner(edge.to) == module.Path {
+					return fmt.Errorf("%s: native Go import %q is outside the selected crate graph", edge.file, edge.to)
+				}
+			}
+		}
+		if err := check(edge.from, edge.to, edge.file); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -122,13 +179,6 @@ func (i *moduleImporter) publicPackage(root, target string, imports map[*resolve
 					next := append(strings.Split(requirement.namespace.PackagePath, "/"), parts[split:]...)
 					if visitNamespace(next, exported) {
 						return true
-					}
-				}
-				if split == len(parts) {
-					for child := range requirement.namespace.Children {
-						if visitNamespace(append(append([]string(nil), parts...), child), true) {
-							return true
-						}
 					}
 				}
 				return false

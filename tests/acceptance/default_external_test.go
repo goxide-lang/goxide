@@ -25,6 +25,7 @@ func TestExternalDefaultModules(t *testing.T) {
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("defaults.example/lib", ""))
 	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
 	packagesWrite(t, src, "model/types.gox", `package model
 type Manual struct{value int}
 var Calls int
@@ -58,7 +59,7 @@ func DefaultValue()Value{return Value{N:99}}
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("defaults.example/app", lib))
-	writeAcceptanceSerdeRoots(t, appsrc, "defaults.example/lib", "model", "relay", "other", "fake")
+	writeAcceptanceSerdeRoots(t, appsrc, "defaults.example/lib")
 	packagesWrite(t, appsrc, "app.gox", `package app
 use library::relay as out; use library::model as m;
 #[derive(Default)]
@@ -133,7 +134,7 @@ func TestGoConsumer(t *testing.T){v:=a.DefaultWrap();if m.Read(v.V)!=7||m.Value(
 	for _, tc := range []struct{ path, typ string }{{"fake", "Value"}, {"relay", "New"}} {
 		bad := t.TempDir()
 		packagesWrite(t, bad, "go.mod", mod("defaults.example/bad", lib))
-		writeAcceptanceSerdeRoots(t, bad, "defaults.example/lib", "model", "relay", "other", "fake")
+		writeAcceptanceSerdeRoots(t, bad, "defaults.example/lib")
 		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nuse library::%s as m;\n#[derive(Default)]\ntype Wrap struct{V m::%s}\n", tc.path, tc.typ))
 		log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
 		if !strings.Contains(log, "Default") {

@@ -122,7 +122,7 @@ func TestNativeWorkspaceProgressiveScriptPermissions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	workspaceWrite(t, lib, "goxide.toml", string(b)+"\n[namespaces]\ngen='example.org/lib/gen'\n[build]\nentry='tools/build/main.go'\noutputs=['gen/data.go']\n")
+	workspaceWrite(t, lib, "goxide.toml", string(b)+"\n[build]\nentry='tools/build/main.go'\noutputs=['gen/data.go']\n")
 	workspaceWrite(t, lib, "tools/build/main.go", `package main
 import("encoding/json";"fmt";"os";"path/filepath")
 func main(){var q struct{OutDir string `+"`json:\"out_dir\"`"+`};b,e:=os.ReadFile(os.Args[1]);if e!=nil{panic(e)};if e=json.Unmarshal(b,&q);e!=nil{panic(e)};if e=os.MkdirAll(filepath.Join(q.OutDir,"gen"),0755);e!=nil{panic(e)};if e=os.WriteFile(filepath.Join(q.OutDir,"gen/data.go"),[]byte("package gen\nconst Value=\"script-output\"\n"),0644);e!=nil{panic(e)};fmt.Println("NATIVE_SCRIPT_EXECUTED")}

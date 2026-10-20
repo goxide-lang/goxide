@@ -8,33 +8,16 @@ import (
 )
 
 func dependencyIdentifier(name string) bool {
-	return paths.ValidIdentifier(name)
+	return name != "crate" && paths.ValidIdentifier(name)
 }
 
 func validateDependency(alias string, d Dependency) error {
-	if err := validateNamespaceMappings("dependency "+alias, d.Namespaces); err != nil {
-		return err
-	}
 	if d.IsToolchain() {
 		if d.Module != "" || d.Version != "" || d.Path != "" || d.Git != "" || d.Rev != "" || d.Subdir != "" || d.Features != nil || d.DefaultFeatures != nil {
 			return fmt.Errorf("dependency %s: Go standard library accepts only go and optional", alias)
 		}
 	} else if d.Module != "" && !validPackagePath(d.Module) {
 		return fmt.Errorf("dependency %s: invalid module path %q", alias, d.Module)
-	}
-	return nil
-}
-
-func validateNamespaceMappings(owner string, mappings map[string]string) error {
-	for _, key := range keys(mappings) {
-		for _, part := range strings.Split(key, "::") {
-			if !dependencyIdentifier(part) {
-				return fmt.Errorf("%s: invalid namespace path %q; expected identifiers separated by ::", owner, key)
-			}
-		}
-		if !validPackagePath(mappings[key]) {
-			return fmt.Errorf("%s namespace %s: invalid exact package path %q", owner, key, mappings[key])
-		}
 	}
 	return nil
 }

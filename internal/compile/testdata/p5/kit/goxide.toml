@@ -2,13 +2,10 @@
 module = "example.org/p5/kit"
 go = "1.27"
 
-[namespaces]
-native = "example.org/p5/kit/native"
-
 [lib]
 name = "kit"
 path = "."
 
 [dependencies]
-wire = { go = "github.com/goxide-lang/serde", version = "@SERDE_VERSION@", namespaces = { json = "github.com/goxide-lang/serde/json" } }
+wire = { go = "github.com/goxide-lang/serde", version = "@SERDE_VERSION@" }
 standard = { go = "github.com/goxide-lang/std", version = "@STD_VERSION@" }

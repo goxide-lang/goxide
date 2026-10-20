@@ -1,5 +1,4 @@
-// Package paths represents source static paths and explicit dependency namespaces.
-// Namespace membership comes from a manifest/export table, never directory search.
+// Package paths represents source static paths and dependency namespaces.
 package paths
 
 import (
@@ -15,10 +14,13 @@ type UnboundError struct{ Name string }
 func (e *UnboundError) Error() string { return "unknown static path binding " + e.Name }
 
 type Namespace struct {
-	PackagePath string               `json:"package,omitempty"`
-	ModulePath  string               `json:"module,omitempty"`
-	Source      string               `json:"source,omitempty"`
-	Children    map[string]Namespace `json:"children,omitempty"`
+	// GoPrefix enables discovery within a selected Go module or toolchain tree.
+	// Source-language crates leave it empty and expose only declared children.
+	GoPrefix    string `json:"goPrefix,omitempty"`
+	Unavailable string `json:"unavailable,omitempty"`
+	PackagePath string `json:"package,omitempty"`
+	ModulePath  string `json:"module,omitempty"`
+	Source      string `json:"source,omitempty"`
 }
 
 type Binding struct {

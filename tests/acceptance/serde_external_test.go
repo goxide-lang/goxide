@@ -25,6 +25,7 @@ func TestExternalSerdeModules(t *testing.T) {
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("wire.example/lib", ""))
 	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
 	packagesWrite(t, src, "model/item.gox", `package model; use serde;
 #[derive(serde::Serialize,serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -59,7 +60,7 @@ func DeserializeItem(d serde.Deserializer)(Item,error){n,e:=serde.ReadInt64(d);r
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("wire.example/app", lib))
-	writeAcceptanceSerdeRoots(t, appsrc, "wire.example/lib", "model", "other", "relay", "fake")
+	writeAcceptanceSerdeRoots(t, appsrc, "wire.example/lib")
 	packagesWrite(t, appsrc, "app.gox", `package app; use serde;
 use library::relay as v;
 #[derive(serde::Serialize,serde::Deserialize)]
@@ -123,7 +124,7 @@ func TestGoHelpers(t *testing.T){v:=a.Out{V:m.Output{N:9}};b,e:=serdejson.Encode
 	for _, tc := range []struct{ kind, pkg, typ string }{{"Serialize", "fake", "Item"}, {"Deserialize", "fake", "Item"}, {"Serialize", "relay", "New"}, {"Deserialize", "relay", "New"}, {"Serialize", "model", "Input"}, {"Deserialize", "model", "Output"}} {
 		bad := t.TempDir()
 		packagesWrite(t, bad, "go.mod", mod("wire.example/bad", lib))
-		writeAcceptanceSerdeRoots(t, bad, "wire.example/lib", "model", "other", "relay", "fake")
+		writeAcceptanceSerdeRoots(t, bad, "wire.example/lib")
 		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; use serde;\nuse library::%s as m;\n#[derive(serde::%s)]\ntype Wrap struct{V m::%s}\n", tc.pkg, tc.kind, tc.typ))
 		log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
 		want := "registered serde codec"

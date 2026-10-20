@@ -46,17 +46,6 @@ func writeAcceptanceRoots(t *testing.T, dir string, roots map[string]rootconfig.
 			fmt.Fprintf(&text, "module = %q\n", root.Module)
 		}
 		fmt.Fprintf(&text, "package = %q\n", root.Package)
-		if len(root.Namespaces) != 0 {
-			fmt.Fprintf(&text, "[roots.%s.namespaces]\n", name)
-			var children []string
-			for child := range root.Namespaces {
-				children = append(children, child)
-			}
-			sort.Strings(children)
-			for _, child := range children {
-				fmt.Fprintf(&text, "%q = %q\n", child, root.Namespaces[child])
-			}
-		}
 	}
 	packagesWrite(t, dir, "goxide.roots.toml", text.String())
 }
@@ -66,7 +55,7 @@ func writeAcceptanceRoots(t *testing.T, dir string, roots map[string]rootconfig.
 func writeAcceptanceFixtureRoots(t *testing.T, dir, module string, packages map[string]string) {
 	t.Helper()
 	roots := map[string]rootconfig.Mapping{
-		"serde": {Module: "github.com/goxide-lang/serde", Package: "github.com/goxide-lang/serde", Namespaces: map[string]string{"json": "github.com/goxide-lang/serde/json"}},
+		"serde": {Module: "github.com/goxide-lang/serde", Package: "github.com/goxide-lang/serde"},
 	}
 	for _, path := range []string{"bytes", "context", "errors", "fmt", "io", "os", "reflect", "runtime", "strconv", "strings", "sync", "time", "unsafe"} {
 		roots[path] = rootconfig.Mapping{Source: "toolchain", Package: path}

@@ -356,7 +356,7 @@
       "support": "cli",
       "summary": "从显式项目依赖根 use 包或公开项；pub use 重导出公开项，保留变量存储与宏定义点。",
       "usage": "公开工程快照中 Counter 与 impl::Count 指向同一存储；源图宏通过 facade 使用。",
-      "limitation": "跨包源码图与外部宏需要 CLI 工程；Playground 只接受固定依赖上下文和一个用户包，未声明根会拒绝。",
+      "limitation": "跨包源码图与外部宏需要 CLI 工程；Playground 只接受固定依赖上下文和一个用户包，既非显式根也非标准库的名字会拒绝。",
       "examples": [],
       "evidence": [
         "cmd/goxide/directory.go",
@@ -598,9 +598,9 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "use 从项目显式声明的依赖根选择包或公开项；静态包、类型、宏和派生路径使用 ::，值成员使用 .。",
-      "usage": "use serde::json as json; 绑定明确命名空间，json::Marshal 调用包项；item.Value 访问值字段。Playground 展示并验证同一 CLI/WASM 依赖根配置。",
-      "limitation": "不接受 .gox 的旧 import、包成员点号或字符串 use 路径；不会猜测模块根或扫描目录。依赖映射不下载模块、激活 feature 或授权脚本。",
+      "summary": "静态路径从当前 crate、lib、依赖 alias 或未占名的标准库根选择包或公开项；包、类型、宏和派生使用 ::，值成员使用 .。",
+      "usage": "use serde::json as json; 绑定 serde 来源中的真实 Go 子包，json::Marshal 调用包项；item.Value 访问值字段。Playground 使用与 CLI 一致的根声明和标准库快照。",
+      "limitation": "不接受 .gox 的旧 import、包成员点号或字符串 use 路径；未声明的外部 module 不自动取得，真实 Go 子包须属于选定来源。根解析不代替版本求解、feature 激活或脚本授权。",
       "examples": [
         "derive",
         "serde_option"
@@ -620,7 +620,7 @@
         "text": "use fmt;\nuse serde;\nuse serde::json as json;\n#[derive(serde::Serialize, serde::Deserialize)]\ntype Item struct { Value int }",
         "note": "Playground 的固定项目声明在下方依赖源码视图展示。包静态路径与值成员使用不同分隔符。"
       },
-      "development": "本轮实现显式项目依赖根、use 绑定与 :: 静态路径；支持范围以当前源码、CLI/WASM 定向验收和下方限制为准。"
+      "development": "当前支持 crate/lib、依赖 alias、真实 Go 子包和标准库 fallback；Playground 限一个用户包，支持范围以当前源码、CLI/WASM 定向验收和下方限制为准。"
     },
     {
       "id": "shared-std",

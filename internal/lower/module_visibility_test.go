@@ -17,17 +17,15 @@ import (
 func TestCompileModulesRejectMappedPrivatePackages(t *testing.T) {
 	for _, test := range []struct {
 		name, declaration, target, use string
-		group                          bool
 	}{
-		{"private-module", "mod hidden;", "hidden", "use api; func main(){_=api::Value()}", false},
-		{"undeclared-directory", "", "hidden", "use api; func main(){_=api::Value()}", false},
-		{"private-parent-public-leaf", "mod hidden;", "hidden/leaf", "use api; func main(){_=api::Value()}", false},
-		{"member-reexport", "mod hidden; pub use hidden::Value;", "hidden", "use api; func main(){_=api::Value()}", false},
-		{"glob-does-not-export-package", "mod hidden; pub use hidden::*;", "hidden", "use api; func main(){_=api::Value()}", false},
-		{"unused-namespace", "", "hidden", "use api; func main(){}", false},
-		{"blank-namespace", "", "hidden", "use api as _; func main(){}", false},
-		{"glob-namespace", "", "hidden", "use api::*; func main(){_=Value()}", false},
-		{"nested-mapping", "mod hidden;", "hidden/leaf", "use group::api; func main(){_=api::Value()}", true},
+		{"private-module", "mod hidden;", "hidden", "use api; func main(){_=api::Value()}"},
+		{"undeclared-directory", "", "hidden", "use api; func main(){_=api::Value()}"},
+		{"private-parent-public-leaf", "mod hidden;", "hidden/leaf", "use api; func main(){_=api::Value()}"},
+		{"member-reexport", "mod hidden; pub use hidden::Value;", "hidden", "use api; func main(){_=api::Value()}"},
+		{"glob-does-not-export-package", "mod hidden; pub use hidden::*;", "hidden", "use api; func main(){_=api::Value()}"},
+		{"unused-namespace", "", "hidden", "use api; func main(){}"},
+		{"blank-namespace", "", "hidden", "use api as _; func main(){}"},
+		{"glob-namespace", "", "hidden", "use api::*; func main(){_=Value()}"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -40,9 +38,6 @@ func TestCompileModulesRejectMappedPrivatePackages(t *testing.T) {
 			writeDiagnosticModuleFile(t, lib, "hidden/value.gox", []byte("package hidden\npub mod leaf;\npub func Value() int { return 9 }\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/leaf/value.gox", []byte("package leaf\npub func Value() int { return 11 }\n"))
 			roots := paths.Roots{"api": {PackagePath: "zlib/" + test.target, ModulePath: "zlib"}}
-			if test.group {
-				roots = paths.Roots{"group": {Children: map[string]paths.Namespace{"api": roots["api"]}}}
-			}
 			err := lower.CompileModules([]lower.Module{
 				{Path: "app", Dir: app, Roots: roots, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{}, Config: testConfig(t)},
@@ -111,17 +106,17 @@ func TestCompileModulesPublicPackageRoutes(t *testing.T) {
 	}
 }
 
-func TestCompileModulesPublicReachabilityKeepsUnusedNamespacesLazy(t *testing.T) {
+func TestCompileModulesPublicReachabilityKeepsUnusedRootsLazy(t *testing.T) {
 	root := t.TempDir()
 	app, lib := filepath.Join(root, "app"), filepath.Join(root, "lib")
 	writeDiagnosticModuleFile(t, app, "go.mod", []byte("module app\n\ngo 1.27\nrequire zlib v0.0.0\nreplace zlib => ../lib\n"))
 	writeDiagnosticModuleFile(t, app, "main.gox", []byte("package main\nuse api;func main(){_=api::Value()}\n"))
 	writeDiagnosticModuleFile(t, lib, "go.mod", []byte("module zlib\n\ngo 1.27\n"))
-	writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\npub mod visible;\npub use unused;\n"))
+	writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\npub mod visible;\n"))
 	writeDiagnosticModuleFile(t, lib, "visible/value.gox", []byte("package visible\npub func Value() int{return 1}\n"))
 	if err := lower.CompileModules([]lower.Module{
 		{Path: "app", Dir: app, Roots: paths.Roots{"api": {PackagePath: "zlib/visible", ModulePath: "zlib"}}, Config: testConfig(t)},
-		{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"unused": {Children: map[string]paths.Namespace{"missing": {PackagePath: "unavailable.invalid/missing", ModulePath: "unavailable.invalid/missing"}}}}, Config: testConfig(t)},
+		{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"unused": {GoPrefix: "unavailable.invalid/missing", ModulePath: "unavailable.invalid/missing", Source: "module"}}, Config: testConfig(t)},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +370,7 @@ func TestCompileModulesNativePackagePublicRoutes(t *testing.T) {
 func TestCompileModulesDeriveCannotSelectPrivateMappedNamespace(t *testing.T) {
 	root := t.TempDir()
 	app, lib := filepath.Join(root, "app"), filepath.Join(root, "lib")
-	writeDiagnosticModuleFile(t, app, "main.gox", []byte("package main\nuse group;\n#[derive(group::hidden::Serialize)]\ntype Record struct{Value int}\nfunc main(){}\n"))
+	writeDiagnosticModuleFile(t, app, "main.gox", []byte("package main\nuse hidden;\n#[derive(hidden::Serialize)]\ntype Record struct{Value int}\nfunc main(){}\n"))
 	writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\nmod hidden;\n"))
 	writeDiagnosticModuleFile(t, lib, "hidden/codecs.gox", []byte("package hidden\npub use wire::Serialize;\n"))
 	for directory, module := range map[string]string{app: "module app\n\ngo 1.27\nrequire zlib v0.0.0\nreplace zlib => ../lib\n", lib: "module zlib\n\ngo 1.27\n"} {
@@ -384,7 +379,7 @@ func TestCompileModulesDeriveCannotSelectPrivateMappedNamespace(t *testing.T) {
 		}
 	}
 	err := lower.CompileModules([]lower.Module{
-		{Path: "app", Dir: app, Roots: paths.Roots{"group": {Children: map[string]paths.Namespace{"hidden": {PackagePath: "zlib/hidden", ModulePath: "zlib"}}}}, Config: testConfig(t)},
+		{Path: "app", Dir: app, Roots: paths.Roots{"hidden": {PackagePath: "zlib/hidden", ModulePath: "zlib"}}, Config: testConfig(t)},
 		{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"wire": {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde"}}, Config: testConfig(t)},
 	})
 	var diagnostic *lower.Diagnostic

@@ -135,7 +135,55 @@ func NewImporter(filename string, options ImporterOptions) types.Importer {
 		}
 		return os.Open(file)
 	}
-	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, origins: origins, fingerprints: map[string]string{}, build: fmt.Sprintf("%x", sha256.Sum256(build))}
+	index := func(source, module string) ([]string, error) {
+		pattern := module + "/..."
+		if source == "toolchain" {
+			pattern = "std"
+		} else if source != "module" || module == "" {
+			return nil, fmt.Errorf("cannot enumerate Go packages for source %q and module %q", source, module)
+		}
+		ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+		defer cancel()
+		args := []string{"list", "-buildvcs=false", "-e", "-find", "-json", "-tags=" + strings.Join(tags, ",")}
+		if options.Race {
+			args = append(args, "-race")
+		}
+		if options.ModFile != "" {
+			args = append(args, "-mod=readonly", "-modfile="+options.ModFile)
+		}
+		cmd := exec.CommandContext(ctx, tool, append(args, "--", pattern)...)
+		cmd.Dir, cmd.Env, cmd.WaitDelay = dir, environment, time.Second
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		data, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("offline package index for %s: %w: %s", pattern, err, strings.TrimSpace(stderr.String()))
+		}
+		var packages []string
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		for {
+			var p struct {
+				ImportPath, Name string
+				Standard         bool
+				Module           *struct{ Path string }
+			}
+			if err := decoder.Decode(&p); err == io.EOF {
+				break
+			} else if err != nil {
+				return nil, err
+			}
+			selected := p.Standard && source == "toolchain"
+			if source == "module" {
+				selected = !p.Standard && p.Module != nil && p.Module.Path == module
+			}
+			if selected && p.Name != "" {
+				packages = append(packages, p.ImportPath)
+			}
+		}
+		sort.Strings(packages)
+		return packages, nil
+	}
+	return &sourceImporter{Importer: importer.ForCompiler(token.NewFileSet(), "gc", lookup), sources: sources, origins: origins, fingerprints: map[string]string{}, build: fmt.Sprintf("%x", sha256.Sum256(build)), index: index, indices: map[string]packageIndex{}}
 }
 
 func importerEnvironment(environment []string) []string {
@@ -169,6 +217,25 @@ type sourceImporter struct {
 	origins      map[string]packageOrigin
 	fingerprints map[string]string
 	build        string
+	index        func(source, module string) ([]string, error)
+	indices      map[string]packageIndex
+}
+
+type packageIndex struct {
+	paths []string
+	err   error
+}
+
+// PackageIndex contains only packages selected from this exact module or Go
+// distribution. Nested modules and unrelated transitive dependencies are absent.
+func (i *sourceImporter) PackageIndex(source, module string) ([]string, error) {
+	key := source + "\x00" + module
+	result, ok := i.indices[key]
+	if !ok {
+		result.paths, result.err = i.index(source, module)
+		i.indices[key] = result
+	}
+	return append([]string(nil), result.paths...), result.err
 }
 
 // PackageOrigin reports the Go resolver's actual selected module. Namespace

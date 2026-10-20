@@ -18,34 +18,32 @@ import (
 const ManifestName = "goxide.toml"
 
 type Manifest struct {
-	Module            string                `json:"module"`
-	GoVersion         string                `json:"go"`
-	Toolchain         string                `json:"toolchain,omitempty"`
-	PackageNamespaces map[string]string     `json:"package_namespaces,omitempty"`
-	Native            GoConfig              `json:"native,omitempty"`
-	Build             *buildconfig.Config   `json:"build,omitempty" toml:"build,omitempty"`
-	Features          map[string][]string   `json:"features,omitempty" toml:"features,omitempty"`
-	Dependencies      map[string]Dependency `json:"dependencies,omitempty" toml:"dependencies,omitempty"`
-	Lib               *Target               `json:"lib,omitempty" toml:"lib,omitempty"`
-	Bins              []Target              `json:"bins,omitempty" toml:"bin,omitempty"`
-	Examples          []Target              `json:"examples,omitempty" toml:"example,omitempty"`
+	Module       string                `json:"module"`
+	GoVersion    string                `json:"go"`
+	Toolchain    string                `json:"toolchain,omitempty"`
+	Native       GoConfig              `json:"native,omitempty"`
+	Build        *buildconfig.Config   `json:"build,omitempty" toml:"build,omitempty"`
+	Features     map[string][]string   `json:"features,omitempty" toml:"features,omitempty"`
+	Dependencies map[string]Dependency `json:"dependencies,omitempty" toml:"dependencies,omitempty"`
+	Lib          *Target               `json:"lib,omitempty" toml:"lib,omitempty"`
+	Bins         []Target              `json:"bins,omitempty" toml:"bin,omitempty"`
+	Examples     []Target              `json:"examples,omitempty" toml:"example,omitempty"`
 }
 type Dependency struct {
-	Workspace       bool              `json:"workspace,omitempty" toml:"workspace,omitempty"`
-	Go              string            `json:"go,omitempty" toml:"go,omitempty"`
-	Registry        string            `json:"registry,omitempty" toml:"registry,omitempty"`
-	Module          string            `json:"module,omitempty" toml:"module,omitempty"`
-	Namespaces      map[string]string `json:"namespaces,omitempty" toml:"namespaces,omitempty"`
-	Version         string            `json:"version,omitempty" toml:"version,omitempty"`
-	Path            string            `json:"path,omitempty" toml:"path,omitempty"`
-	Git             string            `json:"git,omitempty" toml:"git,omitempty"`
-	Rev             string            `json:"rev,omitempty" toml:"rev,omitempty"`
-	Tag             string            `json:"tag,omitempty" toml:"tag,omitempty"`
-	Branch          string            `json:"branch,omitempty" toml:"branch,omitempty"`
-	Subdir          string            `json:"subdir,omitempty" toml:"subdir,omitempty"`
-	Optional        bool              `json:"optional,omitempty" toml:"optional,omitempty"`
-	Features        []string          `json:"features,omitempty" toml:"features,omitempty"`
-	DefaultFeatures *bool             `json:"default_features,omitempty" toml:"default_features,omitempty"`
+	Workspace       bool     `json:"workspace,omitempty" toml:"workspace,omitempty"`
+	Go              string   `json:"go,omitempty" toml:"go,omitempty"`
+	Registry        string   `json:"registry,omitempty" toml:"registry,omitempty"`
+	Module          string   `json:"module,omitempty" toml:"module,omitempty"`
+	Version         string   `json:"version,omitempty" toml:"version,omitempty"`
+	Path            string   `json:"path,omitempty" toml:"path,omitempty"`
+	Git             string   `json:"git,omitempty" toml:"git,omitempty"`
+	Rev             string   `json:"rev,omitempty" toml:"rev,omitempty"`
+	Tag             string   `json:"tag,omitempty" toml:"tag,omitempty"`
+	Branch          string   `json:"branch,omitempty" toml:"branch,omitempty"`
+	Subdir          string   `json:"subdir,omitempty" toml:"subdir,omitempty"`
+	Optional        bool     `json:"optional,omitempty" toml:"optional,omitempty"`
+	Features        []string `json:"features,omitempty" toml:"features,omitempty"`
+	DefaultFeatures *bool    `json:"default_features,omitempty" toml:"default_features,omitempty"`
 }
 
 // IsToolchain identifies roots supplied by Go itself, outside the module graph.
@@ -101,7 +99,6 @@ func Detect(root string) (bool, error) {
 type manifestDocument struct {
 	Workspace    *WorkspaceConfig      `toml:"workspace,omitempty"`
 	GoMod        GoModConfig           `toml:"go_mod"`
-	Namespaces   map[string]string     `toml:"namespaces,omitempty"`
 	Native       GoConfig              `toml:"go,omitempty"`
 	Build        *buildconfig.Config   `toml:"build,omitempty"`
 	Features     map[string][]string   `toml:"features,omitempty"`
@@ -149,7 +146,7 @@ func Parse(filename string, b []byte) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, fmt.Errorf("%s:1:1: %w", filename, err)
 	}
-	m := Manifest{Module: d.GoMod.Module, GoVersion: d.GoMod.Go, Toolchain: d.GoMod.Toolchain, PackageNamespaces: d.Namespaces, Native: d.Native, Build: d.Build, Features: d.Features, Dependencies: deps, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
+	m := Manifest{Module: d.GoMod.Module, GoVersion: d.GoMod.Go, Toolchain: d.GoMod.Toolchain, Native: d.Native, Build: d.Build, Features: d.Features, Dependencies: deps, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validate(m); err != nil {
 		return m, fmt.Errorf("%s:1:1: %w", filename, err)
 	}
@@ -159,15 +156,6 @@ func Parse(filename string, b []byte) (Manifest, error) {
 func validate(m Manifest) error {
 	if _, err := ModuleText(m); err != nil {
 		return err
-	}
-	if err := validateNamespaceMappings("local", m.PackageNamespaces); err != nil {
-		return err
-	}
-	for _, namespace := range keys(m.PackageNamespaces) {
-		root, _, _ := strings.Cut(namespace, "::")
-		if _, exists := m.Dependencies[root]; exists {
-			return fmt.Errorf("namespace %s: root %s conflicts with dependency alias", namespace, root)
-		}
 	}
 	for k, d := range m.Dependencies {
 		if d.Workspace {
@@ -205,12 +193,18 @@ func validate(m Manifest) error {
 	}
 	targets := [][]Target{m.Bins, m.Examples}
 	if m.Lib != nil {
+		if !dependencyIdentifier(m.Lib.Name) {
+			return fmt.Errorf("invalid library namespace %q", m.Lib.Name)
+		}
+		if _, exists := m.Dependencies[m.Lib.Name]; exists {
+			return fmt.Errorf("library namespace %q conflicts with dependency alias", m.Lib.Name)
+		}
 		targets = append(targets, []Target{*m.Lib})
 	}
-	for _, ts := range targets {
+	for group, ts := range targets {
 		seen := map[string]bool{}
 		for _, t := range ts {
-			if !ident.MatchString(t.Name) || seen[t.Name] {
+			if group < 2 && !ident.MatchString(t.Name) || seen[t.Name] {
 				return fmt.Errorf("invalid or duplicate target name %q", t.Name)
 			}
 			seen[t.Name] = true
@@ -328,12 +322,17 @@ func Resolve(m Manifest, requested []string, defaults bool) (map[string]bool, ma
 	}
 	return enabled, deps, nil
 }
-func Select(m Manifest, bin, example string, features map[string]bool) (Target, error) {
-	if bin != "" && example != "" {
-		return Target{}, fmt.Errorf("--bin and --example are mutually exclusive")
+func Select(m Manifest, bin, example string, lib bool, features map[string]bool) (Target, error) {
+	if bin != "" && example != "" || lib && (bin != "" || example != "") {
+		return Target{}, fmt.Errorf("--bin, --example and --lib are mutually exclusive")
 	}
 	ts, name := m.Bins, bin
-	if example != "" {
+	if lib {
+		if m.Lib == nil {
+			return Target{}, fmt.Errorf("project has no lib")
+		}
+		ts, name = []Target{*m.Lib}, m.Lib.Name
+	} else if example != "" {
 		ts, name = m.Examples, example
 	}
 	if name == "" {
@@ -360,6 +359,6 @@ func Select(m Manifest, bin, example string, features map[string]bool) (Target, 
 
 // Marshal emits the authoring schema, not the internal JSON identity representation.
 func Marshal(m Manifest) ([]byte, error) {
-	d := manifestDocument{GoMod: GoModConfig{Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain}, Namespaces: m.PackageNamespaces, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	d := manifestDocument{GoMod: GoModConfig{Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
 	return toml.Marshal(d)
 }

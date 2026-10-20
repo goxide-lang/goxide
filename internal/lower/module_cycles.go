@@ -28,6 +28,12 @@ type moduleImport struct {
 // create a Go dependency. Native Go files contribute edges without being edited.
 func checkModuleCycles(modules []Module, output map[string][]byte, resolved *resolve.Result, imports *moduleImporter) error {
 	graph := map[string][]moduleImport{}
+	packageNames := map[string]string{}
+	for _, pkg := range resolved.Packages {
+		if !pkg.IsExternalTest() {
+			packageNames[pkg.Dir] = pkg.Name
+		}
+	}
 	add := func(name string, data []byte) error {
 		if strings.HasSuffix(name, "_test.gox") || strings.HasSuffix(name, "_test.go") {
 			return nil
@@ -89,6 +95,9 @@ func checkModuleCycles(modules []Module, output map[string][]byte, resolved *res
 				}
 			}
 			graph[owner] = append(graph[owner], edge)
+			if packageNames[target] == "main" {
+				return &Diagnostic{File: edge.file, Span: edge.span, Origin: edge.origin, Message: fmt.Sprintf("package main %s cannot be imported", target)}
+			}
 		}
 		return nil
 	}
@@ -108,15 +117,19 @@ func checkModuleCycles(modules []Module, output map[string][]byte, resolved *res
 			return err
 		}
 		for _, name := range names {
-			data, err := os.ReadFile(name)
-			if err != nil {
-				return err
-			}
 			rel, err := filepath.Rel(module.Dir, name)
 			if err != nil {
 				return err
 			}
-			if err := add(path.Join(module.Path, filepath.ToSlash(rel)), data); err != nil {
+			key := path.Join(module.Path, filepath.ToSlash(rel))
+			if imports.crates != nil && !imports.crates.selected(module, path.Dir(key)) {
+				continue
+			}
+			data, err := os.ReadFile(name)
+			if err != nil {
+				return err
+			}
+			if err := add(key, data); err != nil {
 				return err
 			}
 		}

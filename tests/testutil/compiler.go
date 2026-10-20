@@ -65,6 +65,7 @@ func Package(packagePath string, sources map[string][]byte, importer types.Impor
 		return nil, nil, typecheck.SourceError(err, origins, expanded)
 	}
 	namespaces := typecheck.NewNamespaceImporter(importer, roots)
+	namespaces.Prepare(expanded)
 	resolved := resolve.ResolveExpanded(files, expanded, namespaces)
 	if namespaces.Err() != nil {
 		return nil, nil, namespaces.Err()

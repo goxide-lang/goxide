@@ -2,27 +2,27 @@
 
 本例从 [t0_joint](../t0_joint/) 的订单、配置和条件日志宏缩减而来：JSON 输入 → 闭合 enum/match → Result `?`/错误链 → 回执。移除了 Budget/读写引用部分，不使用 `&T`、`&mut` 等新指针语法；helper 调用中的 `&value` 是普通 Go 取址。
 
-**生产代码候选：`55ef3b3020b3984a8ae360ca469fc13fee345bd2`。** 本次交付只增补示例和文档，不改变编译器/运行时语义。已实跑 Go **1.27.1 linux/amd64**（race detector 可用）；脚本要求真实 Go 1.27.x，不自动下载工具链。实际 checkout SHA 会由脚本打印。目录/多模块实现是有限子集，不代表整个 MVP 完成。
+脚本要求真实 Go 1.27.x，不自动下载工具链。它在独立输出目录中复制示例，按 TOML 项目和路径依赖联合编译，再分别构建、测试两个生成的 Go module；源码目录保持不变。
 
 ## 一次跑通
 
 从仓库根目录执行。其他机器请把 `GO_BIN` 改为安装的真实编译器路径；不要仅凭程序名判断，某些环境的 `/usr/bin/go` 是同名游戏。
 
 ```sh
-export GO_BIN=/workspace/goxide-environment/go/bin/go
+export GO_BIN="$(command -v go)"
 "$GO_BIN" mod download # 先取得仓库固定的公开 std/serde 与工具链依赖。
 work="$(mktemp -d)"
 bash examples/enum_trial/try.sh "$work"
 ```
 
-[try.sh](try.sh) 是完整、已实跑的构建说明。它依次：
+[try.sh](try.sh) 执行完整构建流程：
 
 1. 用 `go build -o "$work/goxide" ./cmd/goxide` 构建 CLI。
-2. 转译独立的 [model 模块](model/go.mod)，保存生成 Go 和协议 metadata。
-3. 复制 [app 模块](app/go.mod) 到临时输入目录，将其 `replace` 指向**已生成的 model**，再转译消费者。不会修改仓库的 go.mod。
+2. 把 [model](model/) 和 [app](app/) 复制到临时输入目录，写入 TOML 清单；model 声明 `config` 库，app 声明到 model 的 path 依赖。
+3. 联合转译 app 与 model 源码，生成两个独立 Go module，通过受管相对 `replace` 关联。
 4. 在两个生成模块执行 `go test -race -count=1 -v ./...`、`go vet ./...`，构建并运行 `orders`。
 
-产物保留在 `$work`；重复尝试请使用新的空目录。生成模块通过固定版本依赖公开 std/serde，formatting/runtime helper 也来自 std；生成物不依赖编译器模块。两个模块分别使用 `goxide.roots.toml` 声明确切包映射，源文件用 `use` 选名及 `::` 静态路径。宏在 app 自己的源码包 [logkit](app/logkit/events.gox) 中导入；此例不声称跨独立模块的预编译宏 ABI 已实现。
+产物保留在 `$work`；重复尝试请使用新的空目录。生成模块通过固定版本依赖公开 std/serde，formatting/runtime helper 也来自 std；生成物不依赖编译器模块。原生 Go 示例目录保留 `goxide.roots.toml` 根声明；脚本中的 TOML 项目通过依赖 alias 访问 model 的库入口，并直接用 `serde::json` 选择真实 Go 子包。app 通过 `mod logkit;` 绑定自身的 [日志宏包](app/logkit/events.gox)，不需要逐包映射。
 
 默认输出：
 
@@ -39,7 +39,7 @@ clone source=[1] copy=[9] equals=false
 
 ## 输入正常与错误路径
 
-以下命令均已对上面的实际二进制执行：
+可对生成的二进制检查以下正常与错误输入：
 
 ```sh
 "$work/orders" '{"Name":"7","Retry":null}'
@@ -63,21 +63,8 @@ clone source=[1] copy=[9] equals=false
 
 普通 Option 的缺失/null→None 属于 serde 协议，与 Default 独立。Settings 的 `#[serde(default)]` 才调用其手写 Default；Secret 的 `#[serde(skip)]` 走已登记 Default。Name 是必需字段，enum 未知变体拒绝，不是开放数字枚举。
 
-## 运行与测试模式
+## 测试范围
 
-上述脚本已经实跑：双模块目录转译、生成 Go 的普通 build/运行、两个生成模块的 race/vet。也单独实跑了以下目录 `goxide run`：
+脚本在两个生成模块执行真实 `go test -race` 与 `go vet`，并构建运行 app。[main_test.go](app/main_test.go) 覆盖正常与错误输入、错误链、闭合变体、None/null、Default 和跨模块协议。model 当前没有独立测试文件，其代码由消费者测试覆盖。
 
-```sh
-PATH="$(dirname "$GO_BIN"):$PATH" GOTOOLCHAIN=local GOWORK=off GOPROXY=off \
-    "$work/goxide" run "$work/input"
-```
-
-此试用的测试入口是脚本中的**生成 Go 模块测试**。直接对普通模式生成的 model 再执行 `goxide test "$work/input"` 已知会因 race 源码视图不同而拒绝 metadata（实测 `dependency source closure changed: github.com/goxide-lang/serde`）。不要把生成 Go 的 `go test -race` 与重新按 race 视图加载源码的 `goxide test` 混为一个模式，也不要绕过 metadata 检查。切换 build tags/race/平台需一致地重新生成依赖；本例不额外扩展该流程。
-
-## 范围和证据
-
-- 生产代码候选 `55ef3b3…` 已通过全树 race（acceptance 282.018s）、vet、设计检查和独立审查；这是该 SHA 的既有证据，不因本次文档更新虚报一次新的全树运行。
-- 本例新增 [main_test.go](app/main_test.go) 通过真实生成模块 race/vet，覆盖正常/错误输入、None/null、Default、闭合变体和跨模块协议。当前模型模块没有自身测试文件，其代码由消费者执行测试覆盖。
-- [当前支持 / 已知失败 / 待决 / 后续指针](../../README.md) 是统一入口；[完整验收清单](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/t0-acceptance.md) 保留证据与历史。
-
-仍需用户决定的最小事项：公开 enum 参数是否统一入口验证及非法值行为；blank/embedded 字段的派生/serde 规则；Proposed serde adapters 的入口和缺失策略。试用成功不代表这些已经定案。本阶段交付后暂停，不自动开始后续指针工作。
+源级路径和公开边界见 [RFC 0028](../../docs/rfcs/0028-crate-roots.md)，其他能力范围见[状态表](../../docs/mvp-gap-audit.md)。

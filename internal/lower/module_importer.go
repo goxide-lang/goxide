@@ -1,7 +1,9 @@
 package lower
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"go/importer"
 	"go/token"
@@ -9,19 +11,82 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
 type moduleGoImporter struct {
-	root, tool string
-	context    context.Context
-	env        []string
-	tags       []string
-	race       bool
-	exports    map[string]string
-	owners     map[string]string
-	standard   map[string]bool
-	gc         types.Importer
+	root, tool  string
+	context     context.Context
+	env         []string
+	tags        []string
+	race        bool
+	exports     map[string]string
+	owners      map[string]string
+	standard    map[string]bool
+	gc          types.Importer
+	indices     map[string][]string
+	indexErrors map[string]error
+}
+
+func (i *moduleGoImporter) PackageIndex(source, module string) ([]string, error) {
+	key := source + "\x00" + module
+	if i.indices == nil {
+		i.indices, i.indexErrors = map[string][]string{}, map[string]error{}
+	}
+	if result, ok := i.indices[key]; ok {
+		return result, i.indexErrors[key]
+	}
+	pattern := module + "/..."
+	if source == "toolchain" {
+		pattern = "std"
+	}
+	args := []string{"list", "-mod=readonly", "-e", "-find", "-json"}
+	if len(i.tags) != 0 {
+		args = append(args, "-tags="+strings.Join(i.tags, ","))
+	}
+	if i.race {
+		args = append(args, "-race")
+	}
+	args = append(args, pattern)
+	command := exec.CommandContext(i.context, i.tool, args...)
+	command.Dir, command.Env = i.root, i.env
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	output, err := command.Output()
+	if err != nil {
+		err = fmt.Errorf("index Go packages %s: %w\n%s", pattern, err, stderr.String())
+		i.indices[key], i.indexErrors[key] = nil, err
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(output))
+	var result []string
+	for decoder.More() {
+		var pkg struct {
+			ImportPath, Name string
+			Standard         bool
+			Module           *struct{ Path string }
+		}
+		if err := decoder.Decode(&pkg); err != nil {
+			i.indices[key], i.indexErrors[key] = nil, err
+			return nil, err
+		}
+		owner := ""
+		if pkg.Module != nil {
+			owner = pkg.Module.Path
+		}
+		if pkg.Name != "" && ((source == "toolchain" && pkg.Standard) || (source != "toolchain" && !pkg.Standard && owner == module)) {
+			result = append(result, pkg.ImportPath)
+			i.owners[pkg.ImportPath], i.standard[pkg.ImportPath] = owner, pkg.Standard
+		}
+	}
+	if source == "toolchain" {
+		result = append(result, "unsafe")
+		i.owners["unsafe"], i.standard["unsafe"] = "", true
+	}
+	sort.Strings(result)
+	i.indices[key] = result
+	return result, nil
 }
 
 func sourceModuleImporter(module Module) *moduleGoImporter {

@@ -3,6 +3,8 @@ package lower
 import (
 	"fmt"
 	"go/types"
+	"path"
+	"sort"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/expand"
@@ -20,9 +22,15 @@ type rootRequirement struct {
 type moduleRootConfig struct {
 	module, name string
 	roots        paths.Roots
+	goRoots      *paths.GoNamespaces
+	bindings     map[string]bool
+	uses         map[string][]*syntax.UseDecl
 }
 
 func (r rootRequirement) check(owners map[string]string, external types.Importer) error {
+	if r.namespace.Unavailable != "" {
+		return &Diagnostic{File: r.origin.File, Span: r.origin.Span, Message: r.namespace.Unavailable, Origin: r.origin}
+	}
 	owner, local := owners[r.namespace.PackagePath]
 	standard := false
 	var err error
@@ -50,14 +58,103 @@ func (r rootRequirement) check(owners map[string]string, external types.Importer
 	return nil
 }
 
-func applyModuleRoots(module, name string, file *syntax.File, roots paths.Roots) []rootRequirement {
+func addCrateUse(file *syntax.File) {
+	id := &syntax.Ident{Name: "crate"}
+	file.Items = append(file.Items, &syntax.UseDecl{Tree: &syntax.UseTree{
+		Path: &syntax.Path{Segments: []*syntax.PathSegment{{Name: id}}},
+	}})
+}
+
+func prepareSourceRoots(files map[string]*syntax.File, configs map[*syntax.File]moduleRootConfig, external types.Importer) []rootRequirement {
+	modules := map[string]map[string]bool{}
+	var names []string
+	for name, file := range files {
+		names = append(names, name)
+		pkg := path.Dir(name)
+		if modules[pkg] == nil {
+			modules[pkg] = map[string]bool{}
+		}
+		for _, item := range file.Items {
+			collectRootDeclarations(item, modules[pkg])
+		}
+	}
+	sort.Strings(names)
+	var requirements []rootRequirement
+	for _, name := range names {
+		file := files[name]
+		config, ok := configs[file]
+		if !ok {
+			continue
+		}
+		if _, ok := external.(interface {
+			PackageIndex(string, string) ([]string, error)
+		}); ok {
+			config.goRoots = paths.NewGoNamespaces(external)
+		}
+		roots := make(paths.Roots, len(config.roots))
+		for name, root := range config.roots {
+			if modules[root.PackagePath] != nil {
+				root.GoPrefix = ""
+			}
+			roots[name] = root
+		}
+		config.roots = roots
+		config.bindings = map[string]bool{}
+		config.uses = map[string][]*syntax.UseDecl{}
+		for name := range modules[path.Dir(name)] {
+			config.bindings[name] = true
+		}
+		for _, item := range file.Items {
+			if use, ok := item.(*syntax.UseDecl); ok && use.Tree != nil && use.Tree.Path != nil && len(use.Tree.Path.Segments) != 0 && !use.Tree.Glob {
+				segments := use.Tree.Path.Segments
+				name := segments[len(segments)-1].Name.Name
+				if use.Tree.Alias != nil {
+					name = use.Tree.Alias.Name
+				}
+				if name != "_" {
+					config.uses[name] = append(config.uses[name], use)
+				}
+			}
+		}
+		configs[file] = config
+		requirements = append(requirements, applyModuleRoots(config, file)...)
+	}
+	return requirements
+}
+
+func collectRootDeclarations(item syntax.Item, names map[string]bool) {
+	add := func(name *syntax.Ident) {
+		if name != nil {
+			names[name.Name] = true
+		}
+	}
+	switch item := item.(type) {
+	case *syntax.TypeDecl:
+		add(item.Name)
+		for _, spec := range item.Specs {
+			add(spec.Name)
+		}
+	case *syntax.EnumDecl:
+		add(item.Name)
+	case *syntax.TraitDecl:
+		add(item.Name)
+	case *syntax.ModDecl:
+		add(item.Name)
+	case *syntax.MacroRulesDecl:
+		add(item.Name)
+	case *syntax.DeclareDecl:
+		collectRootDeclarations(item.Decl, names)
+	}
+}
+
+func applyModuleRoots(config moduleRootConfig, file *syntax.File) []rootRequirement {
 	var requirements []rootRequirement
 	for _, item := range file.Items {
 		use, ok := item.(*syntax.UseDecl)
 		if !ok {
 			continue
 		}
-		if requirement, ok := applyUseRoot(moduleRootConfig{module, name, roots}, use, nil); ok {
+		if requirement, ok := applyUseRoot(config, use, nil); ok {
 			requirements = append(requirements, requirement)
 		}
 	}
@@ -69,10 +166,30 @@ func applyModuleRoots(module, name string, file *syntax.File, roots paths.Roots)
 // Retained macro output can introduce uses that were absent from the source
 // import pass. Roots follow the path's lexical scope, including captures and
 // explicit $caller paths; diagnostics retain the use construct's origin.
-func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]moduleRootConfig) []rootRequirement {
+func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]moduleRootConfig, files map[string]*syntax.File) []rootRequirement {
+	// The first pass only makes source macros available. Expansion can add
+	// declarations and aliases that take precedence over those tentative roots.
+	for _, file := range expanded.Files {
+		for _, item := range file.Items {
+			use, ok := item.(*syntax.UseDecl)
+			if !ok || use.Tree == nil || use.Tree.Path == nil {
+				continue
+			}
+			for index, segment := range use.Tree.Path.Segments {
+				if segment.Name.Name == "$goxide$roots" {
+					use.Tree.Path.Segments = use.Tree.Path.Segments[index+1:]
+					break
+				}
+			}
+		}
+	}
+	packages := make(map[*syntax.File]string, len(files))
+	for name, file := range files {
+		packages[file] = path.Dir(name) + "\x00" + file.Package.Name
+	}
+	bindings := expand.NewStaticBindings(expanded, func(file *syntax.File) string { return packages[file] })
 	var requirements []rootRequirement
 	for _, file := range expanded.Files {
-		changed := false
 		for _, item := range file.Items {
 			use, ok := item.(*syntax.UseDecl)
 			if !ok {
@@ -84,19 +201,20 @@ func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]module
 			}
 			if use.Tree != nil && use.Tree.Path != nil && len(use.Tree.Path.Segments) != 0 {
 				root := use.Tree.Path.Segments[0].Name
+				if root.Name != "crate" && bindings.Bound(file, use) {
+					continue
+				}
 				if owner, ok := configs[expanded.Scopes[root].File]; ok {
-					config.module, config.roots = owner.module, owner.roots
+					config.module, config.roots, config.goRoots, config.bindings, config.uses = owner.module, owner.roots, owner.goRoots, owner.bindings, owner.uses
 				}
 			}
+			config.bindings, config.uses = nil, nil // Recomputed from the expanded scopes above.
 			if requirement, ok := applyUseRoot(config, use, expanded); ok {
 				requirements = append(requirements, requirement)
-				changed = true
 			}
 		}
-		if changed {
-			var id syntax.NodeID
-			syntax.Walk(file, func(node syntax.Node) bool { id++; node.(interface{ SetID(syntax.NodeID) }).SetID(id); return true })
-		}
+		var id syntax.NodeID
+		syntax.Walk(file, func(node syntax.Node) bool { id++; node.(interface{ SetID(syntax.NodeID) }).SetID(id); return true })
 	}
 	return requirements
 }
@@ -111,7 +229,28 @@ func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand
 			return rootRequirement{}, false // Already mapped before macro expansion.
 		}
 	}
+	if segments[0].Name.Name != "crate" && config.bindings[segments[0].Name.Name] {
+		return rootRequirement{}, false
+	}
+	if segments[0].Name.Name != "crate" {
+		for _, binding := range config.uses[segments[0].Name.Name] {
+			same := binding == use
+			if expanded != nil && use.Expn == 0 {
+				same = expanded.Origins[use].Span == binding.Span()
+			}
+			if !same {
+				return rootRequirement{}, false
+			}
+		}
+	}
 	namespace, ok := config.roots[segments[0].Name.Name]
+	if !ok && config.goRoots != nil {
+		var err error
+		namespace, ok, err = config.goRoots.Root(segments[0].Name.Name)
+		if err != nil {
+			namespace, ok = paths.Namespace{Unavailable: err.Error()}, true
+		}
+	}
 	if !ok {
 		return rootRequirement{}, false
 	}

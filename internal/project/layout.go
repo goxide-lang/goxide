@@ -251,13 +251,20 @@ func (l *Layout) ownedDirectory(path string, spec UnitSpec) error {
 	return nil
 }
 func (l *Layout) Begin(spec UnitSpec) (*Unit, error) {
-	for _, s := range []string{spec.Host, spec.Target, spec.Kind, spec.Name, spec.Config} {
+	for _, s := range []string{spec.Host, spec.Target, spec.Kind, spec.Config} {
 		if !ident.MatchString(s) {
 			return nil, fmt.Errorf("invalid target layout component %q", s)
 		}
 	}
 	if spec.Kind != "bin" && spec.Kind != "example" && spec.Kind != "lib" {
 		return nil, fmt.Errorf("invalid target kind")
+	}
+	validName := ident.MatchString(spec.Name)
+	if spec.Kind == "lib" {
+		validName = validName || dependencyIdentifier(spec.Name)
+	}
+	if !validName {
+		return nil, fmt.Errorf("invalid target layout component %q", spec.Name)
 	}
 	rel := filepath.Join(spec.Host, spec.Target, spec.Kind, spec.Name, spec.Config)
 	dir := filepath.Join(l.Root, "units", rel)

@@ -26,6 +26,7 @@ func TestCrossModuleEnumArtifacts(t *testing.T) {
 	producerSource := src
 	packagesWrite(t, src, "go.mod", module("enum.example/library", ""))
 	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod relay;\npub mod other;\npub mod api;\n")
 	packagesWrite(t, src, "model/model.gox", `package model; use serde;
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]
 type hidden struct{N int}
@@ -96,7 +97,7 @@ pub enum E { A, Count(int), }
 	appFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", module("enum.example/app", library))
-		writeAcceptanceSerdeRoots(t, dir, "enum.example/library", "model", "relay", "other", "api")
+		writeAcceptanceSerdeRoots(t, dir, "enum.example/library")
 		packagesWrite(t, dir, "app.gox", body)
 		return dir
 	}

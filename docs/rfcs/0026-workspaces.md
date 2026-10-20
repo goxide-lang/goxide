@@ -66,7 +66,7 @@ features = []
 default_features = false
 ```
 
-根同时有 `[go_mod]` 时是根包，自动纳入成员。虚拟根无 go_mod/namespaces/lib/bin/build/features/go/vendor 这些包级表；根包有自己独立的配置，不能把根包 dependencies 当成全部成员依赖。root 的 go 政策和 workspace.go 政策也必须分开。
+根同时有 `[go_mod]` 时是根包，自动纳入成员。虚拟根无 go_mod/lib/bin/build/features/go/vendor 这些包级表；根包有自己独立的配置，不能把根包 dependencies 当成全部成员依赖。root 的 go 政策和 workspace.go 政策也必须分开。
 
 成员是**一个来源项目投影为一个 Go module**，可含多个 Go packages、一个 lib、多 bin/examples。成员来源键使用规范目录，`go_mod.module` 描述其 Go 投影路径；不把每个 bin 变成新 module。列表项指向清单目录，不是递归扫描源码。推荐首片即支持路径段内 `*`、`?`（不跨 `/`），拒绝 `**`；展开按规范相对路径排序，exclude 后必须非空。default-members 必须是最终成员的显式路径集合，不再展开 glob，内部解析为来源键；缺省时有根包选根包，虚拟根选全部。
 
@@ -104,7 +104,7 @@ name = "hello"
 path = "examples/hello"
 ```
 
-workspace.dependencies 是模板库，**不注入依赖边**。成员按 alias 显式 `workspace=true` 才继承。go/path/git/rev/tag/branch/subdir/version/publish_version、可选 module 断言与 namespaces 从模板一次性取得，成员不得同时重新指定来源或映射；path/Git 的真实 module 身份仍从所选源码清单读取，不接受 dependency.package。features 按集合相加；optional 只在成员声明，根模板禁止 optional；default_features 以成员显式值覆盖模板缺省，但任何其他活动依赖边仍可启用默认请求。本篇新增的键沿用现有 TOML `default_features` 拼写；CLI 使用 `--no-default-features`。`[workspace.go_mod]` 只提供 go、toolchain 默认值，成员在 `[go_mod]` 内显式写 `字段.workspace=true` 才继承；成员自己的 module 路径不继承。version/license/readme 等属于另外的发布元数据合同，不写入 go_mod，也不假定 Cargo 字段已被本仓库实现。
+workspace.dependencies 是模板库，**不注入依赖边**。成员按 alias 显式 `workspace=true` 才继承。go/path/git/rev/tag/branch/subdir/version/publish_version、可选 module 断言从模板一次性取得，成员不得同时重新指定来源；全部 namespaces 子包映射字段按 RFC 0028 删除，纯 Go 子包从所选来源按真实路径解析；path/Git 的真实 module 身份仍从所选源码清单读取，不接受 dependency.package。features 按集合相加；optional 只在成员声明，根模板禁止 optional；default_features 以成员显式值覆盖模板缺省，但任何其他活动依赖边仍可启用默认请求。本篇新增的键沿用现有 TOML `default_features` 拼写；CLI 使用 `--no-default-features`。`[workspace.go_mod]` 只提供 go、toolchain 默认值，成员在 `[go_mod]` 内显式写 `字段.workspace=true` 才继承；成员自己的 module 路径不继承。version/license/readme 等属于另外的发布元数据合同，不写入 go_mod，也不假定 Cargo 字段已被本仓库实现。
 
 加入成员不等于依赖该成员，源码 import 也不能创建清单依赖或启用模板。只有显式继承模板中的 path、成员自己声明的本地 path，或明确的 override/replace 条目才能把来源切到本地成员；version、Git、path 和原生 go.require 不因另一个目录被列为 member 就自动改指该目录。`workspace=true` 若继承的是 version/Git，仍消费该远端来源；它不是“自动找同名本地包”开关。未来若需要 Cargo 式 workspace patch，必须另提明确条目与优先级，不能默认启用。
 

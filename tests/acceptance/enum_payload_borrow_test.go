@@ -185,6 +185,7 @@ func TestStdPayloads(t *testing.T){if got:=Builtins();got!=([4]int{6,5,8,3}){t.F
 		producer := t.TempDir()
 		packagesWrite(t, producer, "go.mod", module("borrow.example/library", ""))
 		writeAcceptanceSerdeRoots(t, producer, "")
+		packagesWrite(t, producer, "lib.gox", "package library\npub mod model;\npub mod relay;\n")
 		packagesWrite(t, producer, "model/model.gox", `package model
 use serde;
 #[derive(Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]
@@ -213,7 +214,7 @@ func New()Alias{return &model.A{Value:2}}
 		packagesCommand(t, root, cli, true, "transpile", "-o", library, producer)
 		consumer := t.TempDir()
 		packagesWrite(t, consumer, "go.mod", module("borrow.example/app", library))
-		writeAcceptanceSerdeRoots(t, consumer, "borrow.example/library", "model", "relay")
+		writeAcceptanceSerdeRoots(t, consumer, "borrow.example/library")
 		packagesWrite(t, consumer, "app.gox", `package app
 use library::model as m;
 use library::relay as r;

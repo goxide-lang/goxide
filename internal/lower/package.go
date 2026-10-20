@@ -77,12 +77,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 				return nil, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
 			}
 			configs[file] = options.Config
-			rootConfigs[file] = moduleRootConfig{packagePath, key, roots}
-			for _, requirement := range applyModuleRoots(packagePath, key, file, roots) {
-				if _, exists := imports.namespaces[requirement.target]; !exists {
-					imports.namespaces[requirement.target] = requirement
-				}
-			}
+			rootConfigs[file] = moduleRootConfig{module: packagePath, name: key, roots: roots}
 			if roots != nil {
 				strict[key] = packagePath
 			}
@@ -99,6 +94,11 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 			files[key] = tree
 		default:
 			return nil, fmt.Errorf("%s: expected .gox or .go source", name)
+		}
+	}
+	for _, requirement := range prepareSourceRoots(files, rootConfigs, goImports) {
+		if _, exists := imports.namespaces[requirement.target]; !exists {
+			imports.namespaces[requirement.target] = requirement
 		}
 	}
 	packages := resolve.Resolve(files, nil)
@@ -125,7 +125,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	if expanded.UsesConfiguration && options.RejectConfiguration {
 		return nil, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
 	}
-	for _, requirement := range applyExpandedRoots(expanded, rootConfigs) {
+	for _, requirement := range applyExpandedRoots(expanded, rootConfigs, files) {
 		if _, exists := imports.namespaces[requirement.target]; !exists {
 			imports.namespaces[requirement.target] = requirement
 		}

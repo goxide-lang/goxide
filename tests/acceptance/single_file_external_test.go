@@ -33,6 +33,8 @@ func TestSingleFileExternalRecoveryCLI(t *testing.T) {
 	}
 	packagesWrite(t, producer, "go.mod", module("a06.example/lib", ""))
 	writeSingleExternalRoots(t, producer)
+	packagesWrite(t, producer, "lib.gox", "package library\npub mod model;\npub mod relay;\npub mod other;\npub mod fake;\npub mod api;\npub mod uses;\npub mod internal;\n")
+	packagesWrite(t, producer, "internal/lib.gox", "package internal\npub mod hidden;\n")
 	packagesWrite(t, producer, "model/model.gox", singleExternalProducer)
 	packagesWrite(t, producer, "relay/relay.go", `package relay
 import __borrow_std "github.com/goxide-lang/std/sum"
@@ -276,8 +278,12 @@ func main(){fmt::Println(h::Read(h::Get()))}
 		writeSingleExternalRoots(t, dir)
 		packagesWrite(t, dir, "app.gox", "package main\nuse std::sum as s;\nfunc main(){var v s::Option[int];_=v}\n")
 		before := singleExternalSnapshot(t, dir)
-		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), filepath.Join(dir, "app.gox"))
-		singleExternalContains(t, msg, "cannot find module providing package github.com/goxide-lang/std/sum", "import lookup disabled by -mod=readonly")
+		output := filepath.Join(t.TempDir(), "bad")
+		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", output, filepath.Join(dir, "app.gox"))
+		singleExternalContains(t, msg, `dependency root "std" has no packages in selected source "github.com/goxide-lang/std"`)
+		if _, err := os.Stat(output); !os.IsNotExist(err) {
+			t.Fatalf("failed dependency selection wrote output: %v", err)
+		}
 		singleExternalUnchanged(t, dir, before)
 	})
 	t.Run("existing-file-boundaries", func(t *testing.T) {
@@ -327,18 +333,9 @@ func writeSingleExternalRoots(t *testing.T, dir string) {
 	packagesWrite(t, dir, "goxide.roots.toml", `[roots.serde]
 module = "github.com/goxide-lang/serde"
 package = "github.com/goxide-lang/serde"
-[roots.serde.namespaces]
-json = "github.com/goxide-lang/serde/json"
 [roots.library]
 module = "a06.example/lib"
-[roots.library.namespaces]
-model = "a06.example/lib/model"
-relay = "a06.example/lib/relay"
-other = "a06.example/lib/other"
-fake = "a06.example/lib/fake"
-api = "a06.example/lib/api"
-uses = "a06.example/lib/uses"
-"internal::hidden" = "a06.example/lib/internal/hidden"
+package = "a06.example/lib"
 [roots.fmt]
 source = "toolchain"
 package = "fmt"
@@ -347,8 +344,6 @@ source = "toolchain"
 package = "errors"
 [roots.std]
 module = "github.com/goxide-lang/std"
-[roots.std.namespaces]
-sum = "github.com/goxide-lang/std/sum"
 `)
 }
 

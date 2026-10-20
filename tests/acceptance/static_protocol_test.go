@@ -28,6 +28,7 @@ func TestStaticProtocolModules(t *testing.T) {
 	}, nil)
 	deps := map[string]string{"protocols.example/contracts": contracts}
 	model := h.transpile(t, "model", map[string]string{
+		"modules.gox": "package model\npub mod other;\npub mod facade;\n",
 		"user.gox": `package model
 use contracts;
 type User struct { Name string }
@@ -182,6 +183,9 @@ func TestStaticProtocolDiagnostics(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "failed")
 			log := packagesCommand(t, h.root, h.cli, false, "transpile", "-o", out, source)
 			file := "bad.gox:"
+			if tc.peer != "" {
+				file = "peer.go:"
+			}
 			if !strings.Contains(log, file) || !strings.Contains(log, tc.want) {
 				t.Fatalf("expected source diagnostic for %s:\n%s", tc.want, log)
 			}
@@ -273,6 +277,7 @@ func Value() User { return User::Abc() }
 func TestStaticProtocolFunctionAliases(t *testing.T) {
 	h := newStaticProtocolHarness(t)
 	provider := h.transpile(t, "model", map[string]string{
+		"modules.gox": "package model\npub mod facade;\n",
 		"model.gox": `package model
 pub trait Build { func Abc() Self }
 type U struct { N int }
@@ -293,7 +298,7 @@ func (Ops) %s() U { return U{N:77} }
 	}, nil)
 	deps := map[string]string{"protocols.example/model": provider, "protocols.example/native": native}
 	roots := map[string]rootconfig.Mapping{
-		"library": {Module: "protocols.example/model", Package: "protocols.example/model", Namespaces: map[string]string{"facade": "protocols.example/model/facade"}},
+		"library": {Module: "protocols.example/model", Package: "protocols.example/model"},
 		"native":  {Module: "protocols.example/native", Package: "protocols.example/native"},
 	}
 	const prelude = "package app\nuse library as p;\nuse library::facade as f;\nuse native;\n"
@@ -443,7 +448,7 @@ func (h staticProtocolHarness) source(t *testing.T, name string, files, deps map
 	packagesWrite(t, dir, "go.mod", mod)
 	writeAcceptanceRoots(t, dir, map[string]rootconfig.Mapping{
 		"contracts": {Module: "protocols.example/contracts", Package: "protocols.example/contracts"},
-		"library":   {Module: "protocols.example/model", Package: "protocols.example/model", Namespaces: map[string]string{"other": "protocols.example/model/other", "facade": "protocols.example/model/facade"}},
+		"library":   {Module: "protocols.example/model", Package: "protocols.example/model"},
 	})
 	for name, data := range files {
 		packagesWrite(t, dir, name, data)

@@ -19,17 +19,15 @@ func TestCompileModulesMappedBlankImports(t *testing.T) {
 	const native = "package effects\nimport \"fmt\"\nfunc init() { fmt.Println(\"initialized\") }\n"
 	sources := map[string]string{
 		"go.mod":                "module fixture\n\ngo 1.27\n",
-		"main.gox":              "package main\nuse api::effects as _;\nuse api::effects as effects;\nuse console;\nfunc main() { console::Println(effects::Value()) }\n",
+		"main.gox":              "package main\nuse api as _;\nuse api as effects;\nuse console;\nfunc main() { console::Println(effects::Value()) }\n",
 		"effects/source.gox":    "package effects\npub func Value() int { return 9 }\n",
 		"effects/native.go":     native,
 		"effects/value_test.go": "package effects_test\nimport (\"testing\"; \"fixture/effects\")\nfunc TestValue(t *testing.T) { if effects.Value() != 9 { t.Fatal(\"wrong value\") } }\n",
 	}
 	roots := paths.Roots{
 		"console": {PackagePath: "fmt", Source: "toolchain"},
-		"api": {Children: map[string]paths.Namespace{
-			"effects": {PackagePath: "fixture/effects", ModulePath: "fixture"},
-			"unused":  {PackagePath: "unavailable.invalid/dependency", ModulePath: "unavailable.invalid/dependency"},
-		}},
+		"api":     {PackagePath: "fixture/effects", ModulePath: "fixture"},
+		"unused":  {GoPrefix: "unavailable.invalid/dependency", ModulePath: "unavailable.invalid/dependency", Source: "module"},
 	}
 	var previous []byte
 	for attempt := 0; attempt < 2; attempt++ {
@@ -83,8 +81,8 @@ func TestCompileModulesRejectInvalidRootsBeforeWriting(t *testing.T) {
 		name, use, want string
 		roots           paths.Roots
 	}{
-		{"unknown-root", "use fmt;", "unknown dependency root", paths.Roots{}},
-		{"blank-group", "use api as _;", "concrete package", paths.Roots{"api": {Children: map[string]paths.Namespace{"fmt": {PackagePath: "fmt", Source: "toolchain"}}}}},
+		{"unknown-root", "use nonexistent_root;", "unknown dependency root", paths.Roots{}},
+		{"blank-group", "use api as _;", "concrete package", paths.Roots{"api": {GoPrefix: "archive", Source: "toolchain"}}},
 		{"blank-wrong-owner", "use api as _;", "belongs to module", paths.Roots{"api": {PackagePath: "fixture/child", ModulePath: "another"}}},
 		{"blank-false-toolchain", "use api as _;", "not supplied by the Go toolchain", paths.Roots{"api": {PackagePath: "fixture/child", Source: "toolchain"}}},
 	} {
@@ -152,7 +150,7 @@ func TestCompileModulesMappedNamespacesKeepValueBindings(t *testing.T) {
 use fmt;
 use bytes;
 use fmt::Println as print;
-use api::console as output;
+use api as output;
 func main() {
     var buffer bytes::Buffer
     buffer.WriteString("buffer")
@@ -165,9 +163,7 @@ func main() {
 	roots := paths.Roots{
 		"fmt":   {PackagePath: "fmt", Source: "toolchain"},
 		"bytes": {PackagePath: "bytes", Source: "toolchain"},
-		"api": {Children: map[string]paths.Namespace{
-			"console": {PackagePath: "fmt", Source: "toolchain"},
-		}},
+		"api":   {PackagePath: "fmt", Source: "toolchain"},
 	}
 	var previous []byte
 	for attempt := 0; attempt < 2; attempt++ {

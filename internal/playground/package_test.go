@@ -47,6 +47,127 @@ const HasProcessArch = cfg!(env("GOARCH"))
 	}
 }
 
+func TestPackageImplicitToolchainTrees(t *testing.T) {
+	files := []File{{"main.gox", `package main
+use encoding::json;
+use encoding::BinaryMarshaler;
+use archive::tar;
+use r#go::ast;
+use fmt;
+func marker(value BinaryMarshaler) {}
+func main() {
+    value, _ := json::Marshal(map[string]int{"answer": 42})
+    header := tar::Header{Name: "entry"}
+    _ = ast::File{}
+    fmt::Println(string(value), header.Name)
+}
+`}}
+	options := Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()})}
+	output, err := CompilePackage(files, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := CompilePackage(files, options)
+	if err != nil || !reflect.DeepEqual(output, repeated) {
+		t.Fatalf("toolchain package generation is unstable: %v", err)
+	}
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "go.mod"), []byte("module playground\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range output {
+		if err := os.WriteFile(filepath.Join(directory, file.Path), []byte(file.Source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	command := exec.Command("go", "run", ".")
+	command.Dir = directory
+	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
+	stdout, err := command.CombinedOutput()
+	if err != nil || string(stdout) != "{\"answer\":42} entry\n" {
+		t.Fatalf("generated toolchain program: %s (%v)", stdout, err)
+	}
+}
+
+func TestPackageAliasMemberKeepsSelectedOrigin(t *testing.T) {
+	options := Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()}), Roots: paths.Roots{
+		"fmt":       {Unavailable: "optional dependency fmt is inactive"},
+		"actualfmt": {Source: "toolchain", PackagePath: "fmt"},
+	}}
+	files := []File{{"main.gox", "package main\nuse actualfmt::Println;\nfunc main() { Println(42) }\n"}}
+	output, err := CompilePackage(files, options)
+	if err != nil || len(output) != 1 || !strings.Contains(output[0].Source, `"fmt"`) {
+		t.Fatalf("canonical member rebound to an inactive source root: %v, %v", output, err)
+	}
+	_, err = CompilePackage([]File{{"main.gox", `package main
+macro_rules! generated { () => { use strings as fmt; }; }
+generated!()
+use fmt::Println;
+func main() { Println(42) }
+`}}, options)
+	if err == nil || !strings.Contains(err.Error(), "optional dependency fmt is inactive") {
+		t.Fatalf("hygienic alias bypassed an inactive source root: %v", err)
+	}
+}
+
+func TestPackageUseRootsFollowAliasesAndMacroScopes(t *testing.T) {
+	tests := map[string][]File{
+		"declaration-shadows-standard-root": {{"main.gox", `package main
+enum fmt { Unit }
+use fmt::Unit;
+func main() { _ = Unit }
+`}},
+		"hygienic-alias-does-not-shadow-root": {{"main.gox", `package main
+macro_rules! generated { () => { use strings as actualfmt; }; }
+generated!()
+use actualfmt::Println;
+func main() { Println(42) }
+`}},
+		"alias-shadows-standard-root": {{"main.gox", `package main
+use encoding::json as encoding;
+use encoding::Marshal;
+func main() { _, _ = Marshal(42) }
+`}},
+		"macro-definition-file": {
+			{"helpers.gox", `package main
+use actualfmt as output;
+macro_rules! generated { ($name:ident) => {
+    use output::Println as $name;
+}; }
+`},
+			{"main.gox", `package main
+use strings as output;
+generated!(print)
+func main() { print(42); _ = output::ToUpper("ok") }
+`},
+		},
+	}
+	for name, files := range tests {
+		t.Run(name, func(t *testing.T) {
+			options := Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()}), Roots: paths.Roots{
+				"actualfmt": {Source: "toolchain", PackagePath: "fmt"},
+			}}
+			if _, err := CompilePackage(files, options); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestPackageRejectsMissingUseTargets(t *testing.T) {
+	for _, target := range []string{"encoding::missing", "encoding::json::missing", "encoding::missing::*", "std::missing"} {
+		t.Run(target, func(t *testing.T) {
+			options := Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()}), Roots: paths.Roots{
+				"std": {Source: "module", ModulePath: "github.com/goxide-lang/std", GoPrefix: "github.com/goxide-lang/std"},
+			}}
+			_, err := CompilePackage([]File{{"main.gox", "package main\nuse " + target + ";\nfunc main() {}\n"}}, options)
+			if err == nil || !strings.Contains(err.Error(), `use target "missing" is not a public item or namespace`) {
+				t.Fatalf("missing use target was accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestPackageFilesScopeHelpersAndNativeBuild(t *testing.T) {
 	files := []File{
 		{"main.gox", `package p

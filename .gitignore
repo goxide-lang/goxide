@@ -2,6 +2,7 @@
 *.test
 
 /internal/typecheck/browserexports/*.a
+/internal/typecheck/browserexports/*.a.gz
 /internal/typecheck/browserexports/origins.json
 /cmd/goxide-web/dist/
 /bin/

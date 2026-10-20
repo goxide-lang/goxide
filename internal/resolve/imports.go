@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/hxsf/goxide/internal/syntax/ast"
 )
@@ -26,6 +27,9 @@ func (r *resolver) collectUses() {
 			if name != nil {
 				u.Name = key(name)
 				u.Blank = name.Name == "_"
+				if !f.AST.NativeGo && name.Name == "crate" && name.Span().End != 0 {
+					r.diag(name, "reserved-root", "crate is a reserved static path root")
+				}
 			}
 			f.Uses = append(f.Uses, u)
 			r.useNodes[u], r.useFiles[u] = t, f
@@ -55,6 +59,7 @@ func (r *resolver) collectUses() {
 				f.GoNames[d.ID()], f.GoNames[name.ID()] = mapped, mapped
 			}
 			r.symbolUses[u.Symbol] = u
+			r.useOwners[u.Symbol] = r
 			f.Definitions[d.ID()], f.Definitions[name.ID()] = u.Symbol, u.Symbol
 			f.Visibility[name.ID()] = vis
 			if u.Blank {
@@ -77,11 +82,25 @@ func (r *resolver) collectUses() {
 			if name == nil {
 				name = t.Path.Segments[len(t.Path.Segments)-1].Name
 			}
+			if name.Name == "crate" && name.Span().End == 0 {
+				continue
+			}
 			if !u.Public && len(r.pkg.Scope.Aliases[u.Name]) > 0 {
 				r.diag(name, "duplicate-use", fmt.Sprintf("duplicate use binding %q", name.Name))
 			}
-			if b := r.pkg.Scope.Bindings[u.Name]; b != nil && !(b.Kind == Module && len(u.Target) == 1 && u.Target[0] == b.Name.Name) {
-				r.diag(name, "use-conflict", fmt.Sprintf("use binding %q conflicts with a package declaration", name.Name))
+			if b := r.pkg.Scope.Bindings[u.Name]; b != nil {
+				same := b.Kind == Module && (f.AST.NativeGo || len(u.Target) == 1 && u.Target[0] == b.Name.Name)
+				if !same && b.Kind == Module && r.importer != nil && len(u.Target) > 1 {
+					last := len(u.Target) - 1
+					for _, member := range r.importer.Lookup(u.Target[:last], Key{Name: u.Target[last]}) {
+						if member.Kind == Module && slices.Equal(member.Target, b.Target) {
+							same = true
+						}
+					}
+				}
+				if !same {
+					r.diag(name, "use-conflict", fmt.Sprintf("use binding %q conflicts with a package declaration", name.Name))
+				}
 			} else if b := r.pkg.Scope.Parent.Bindings[u.Name]; b != nil && (u.Public || isStatic(b)) {
 				r.diag(name, "prelude-conflict", fmt.Sprintf("use binding %q conflicts with a preimported name", name.Name))
 			}
@@ -104,7 +123,11 @@ func (r *resolver) collectUses() {
 			}
 		}
 	}
+}
+
+func (r *resolver) resolveUses() {
 	for _, f := range r.pkg.Files {
+		r.file = f
 		for _, u := range f.Uses {
 			r.resolveUse(u)
 		}
@@ -132,19 +155,40 @@ func (r *resolver) resolveUse(u *UseBinding) bool {
 		return false
 	}
 	f := r.useFiles[u]
+	previous := r.file
+	r.file = f
+	defer func() { r.file = previous }()
 	root := key(t.Path.Segments[0].Name)
 	var local *Symbol
 	var aliases []*Symbol
-	for s := f.Scope; s != nil; s = s.Parent {
+	for s := r.identScope(f.Scope, t.Path.Segments[0].Name); s != nil; s = s.Parent {
 		if len(s.Aliases[root]) > 0 {
 			aliases = s.Aliases[root]
 			break
+		}
+		if r.hygiene != nil {
+			if context, ok := r.hygiene.boundaries[s]; ok {
+				root.Ctx = context.Definition.Ctx
+			}
+		}
+	}
+	root = key(t.Path.Segments[0].Name)
+	for s := r.identScope(f.Scope, t.Path.Segments[0].Name); s != nil; s = s.Parent {
+		if symbol := s.Bindings[root]; symbol != nil && isStatic(symbol) {
+			local = symbol
+			break
+		}
+		if r.hygiene != nil {
+			if context, ok := r.hygiene.boundaries[s]; ok {
+				root.Ctx = context.Definition.Ctx
+			}
 		}
 	}
 	// A self-named import is the external root, not an alias edge.
 	if len(aliases) == 1 && aliases[0] == u.Symbol {
 		aliases = nil
 	}
+	u.BoundRoot = len(aliases) != 0 || local != nil
 	if len(aliases) > 0 {
 		res := choices(aliases)
 		if res.Symbol == nil {
@@ -155,8 +199,12 @@ func (r *resolver) resolveUse(u *UseBinding) bool {
 			r.useStates[u] = 3
 			return false
 		}
-		other := r.symbolUses[res.Symbol]
-		if other != nil && !r.resolveUse(other) {
+		owner := r.useOwners[res.Symbol]
+		var other *UseBinding
+		if owner != nil {
+			other = owner.symbolUses[res.Symbol]
+		}
+		if other != nil && !owner.resolveUse(other) {
 			r.useStates[u] = 3
 			return false
 		}
@@ -168,7 +216,7 @@ func (r *resolver) resolveUse(u *UseBinding) bool {
 		if u.Symbol != nil {
 			u.Symbol.Members = res.Symbol.Members
 		}
-	} else if b := r.pkg.Scope.Bindings[root]; b != nil && isStatic(b) {
+	} else if b := local; b != nil {
 		local = b
 		if b.Kind == Module && len(b.Target) != 0 {
 			u.Target = append(append([]string{}, b.Target...), u.Target[1:]...)

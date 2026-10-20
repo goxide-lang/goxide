@@ -84,7 +84,6 @@ func TestProjectRejectsDeferredCapabilities(t *testing.T) {
 	}{
 		{"workspace", "\n[workspace]\nmembers=[]\n", "workspace"},
 		{"build", "\n[build]\nentry='build.gox'\ninputs=['build.gox']\noutputs=['generated.go']\n", "build"},
-		{"example", "\n[[example]]\nname='demo'\npath='app.gox'\n", "example"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := smallProject(t)
@@ -131,17 +130,8 @@ func TestChangingTargetDirectoryKeepsLock(t *testing.T) {
 
 func TestOrdinaryTargetDirectoryIsSource(t *testing.T) {
 	root := smallProject(t)
-	name := filepath.Join(root, project.ManifestName)
-	manifest, err := os.ReadFile(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifest = append(manifest, "\n[namespaces]\nhelper='example.org/small/target'\n"...)
-	if err := os.WriteFile(name, manifest, 0o600); err != nil {
-		t.Fatal(err)
-	}
 	writeProjectFile(t, root, "target/value.gox", "package helper\nfunc Value() string { return \"ordinary target\" }\n")
-	writeProjectFile(t, root, "app.gox", "package main\nuse fmt;\nuse helper;\nfunc main() { fmt::Println(helper::Value()) }\n")
+	writeProjectFile(t, root, "app.gox", "package main\nmod target;\nuse crate::target as helper;\nuse fmt;\nfunc main() { fmt::Println(helper::Value()) }\n")
 	result, err := PrepareProject(root, Options{Offline: true, TargetDir: "build-output"})
 	if err != nil {
 		t.Fatal(err)
@@ -158,8 +148,9 @@ func TestExternalTestPackageKeepsImportedIdentity(t *testing.T) {
 	writeProjectFile(t, root, project.ManifestName, `[go_mod]
 module = "example.org/testpkg"
 go = "1.27"
-[namespaces]
-lib = "example.org/testpkg/lib"
+[lib]
+name = "lib"
+path = "lib"
 [[bin]]
 name = "app"
 path = "cmd/app"
@@ -170,7 +161,7 @@ testing = { go = "testing" }
 	writeProjectFile(t, root, "lib/api.gox", "package lib\ntype Number struct { Value int }\nfunc Value() int { return 42 }\n")
 	writeProjectFile(t, root, "lib/api_test.gox", `package lib_test
 use testing;
-use lib;
+use crate as lib;
 func TestValue(t *testing::T) {
 	var value lib::Number = lib::Number{Value: lib::Value()}
 	if value.Value != 42 { t.Fatal("wrong value") }

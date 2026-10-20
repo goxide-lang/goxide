@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Rebuild every published example and the browser compiler from this checkout."""
-import argparse, hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
+import argparse, gzip, hashlib, json, os, pathlib, re, shutil, subprocess, tempfile
 import catalog, project_snapshots, project_downloads, tutorials, docs_content
-from build_support import dependency_context, dependency_sources, go_license_path, standalone_playground, verify_compiler_sources, verify_compiler_source, worktree_compiler_source
+from build_support import dependency_context, dependency_source_packages, dependency_sources, go_license_path, standalone_playground, verify_compiler_sources, verify_compiler_source, worktree_compiler_source
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 os.chdir(ROOT)
 parser = argparse.ArgumentParser(description=__doc__)
@@ -30,33 +30,31 @@ license_path = go_license_path(goroot)
 catalog.write_index(catalog_data)
 context = dependency_context(ROOT)
 roots_file = ROOT / context['path']
-packages = list(dict.fromkeys(binding['package'] for binding in context['bindings']))
+patterns = ['std', *sorted({root['module'] + '/...' for root in context['roots'].values() if root['source'] == 'module'})]
 exports = ROOT/'internal/typecheck/browserexports'
 exports.mkdir(exist_ok=True)
-for old in exports.glob('*.a'): old.unlink()
+for old in exports.glob('*.a.gz'): old.unlink()
 # Use native export archives as compiler metadata, never execute user Go.
-raw = run(GO, 'list', '-trimpath', '-export', '-deps', '-json', *packages).decode()
+raw = run(GO, 'list', '-trimpath', '-export', '-deps', '-json', *patterns).decode()
 decoder = json.JSONDecoder(); closure = []; export_records = []
-origins = {}
+origins = {'unsafe': dict(module='', standard=True, exportSha256='')}
 while raw.strip():
     p, end = decoder.raw_decode(raw.lstrip()); raw = raw.lstrip()[end:]
     export_records.append(p)
     if p.get('Export'):
         data = run(GO, 'tool', 'pack', 'p', p['Export'], '__.PKGDEF')
         header = f"{'__.PKGDEF':<16}{0:<12}{0:<6}{0:<6}{'644':<8}{len(data):<10}`\n".encode()
-        (exports/(p['ImportPath'].replace('/', '_')+'.a')).write_bytes(b'!<arch>\n' + header + data + (b'\n' if len(data)%2 else b''))
+        archive = b'!<arch>\n' + header + data + (b'\n' if len(data)%2 else b'')
+        (exports/(p['ImportPath'].replace('/', '_')+'.a.gz')).write_bytes(gzip.compress(archive, mtime=0))
         origins[p['ImportPath']] = dict(module=p.get('Module', {}).get('Path', ''), standard=bool(p.get('Standard')),
-            exportSha256=hashlib.sha256((exports/(p['ImportPath'].replace('/', '_')+'.a')).read_bytes()).hexdigest())
+            exportSha256=hashlib.sha256(archive).hexdigest())
         closure.append(p['ImportPath'])
 (exports/'origins.json').write_text(json.dumps(origins, sort_keys=True, indent=2)+'\n')
+context = dependency_context(ROOT, origins)
+packages = sorted({binding['package'] for binding in context['bindings'] if origins[binding['package']]['exportSha256']})
 for binding in context['bindings']:
     origin = origins[binding['package']]
     assert origin['standard'] == (binding['source'] == 'toolchain') and origin['module'] == binding['module'], 'explicit root differs from actual Go package owner: ' + binding['path']
-dependencies = dependency_sources(packages, export_records, goroot=goroot,
-                                  toolchain_version=run(GO, 'env', 'GOVERSION').decode().strip(),
-                                  exports=exports)
-for dependency in dependencies:
-    dependency['staticPaths'] = [binding['path'] for binding in context['bindings'] if binding['package'] == dependency['package']]
 dist = ROOT/'website/dist'
 # Vite produces the single client-route shell and lazy editor/worker assets.
 run('npm', 'run', 'build', '--prefix', str(ROOT/'website'))
@@ -139,6 +137,16 @@ with tempfile.TemporaryDirectory(prefix='goxide-web-reexports-') as temporary:
                     go=(output/p.relative_to(project).with_suffix('.go')).read_text())
                for p in sorted(project.rglob('*.gox'))],
         stdout=run(str(ROOT/'bin/goxide'), 'run', '--go', GO, str(project)).decode())
+source_packages = dependency_source_packages(context, [
+    *[example['go'] for example in examples],
+    *[file['source'] for example in package_examples for file in example['generatedFiles']],
+    *[file['go'] for file in cli_example['files']],
+])
+dependencies = dependency_sources(sorted(set(packages) & set(source_packages)), export_records, goroot=goroot,
+                                  toolchain_version=run(GO, 'env', 'GOVERSION').decode().strip(),
+                                  exports=exports)
+for dependency in dependencies:
+    dependency['staticPaths'] = [binding['path'] for binding in context['bindings'] if binding['package'] == dependency['package']]
 # Negative examples are genuine CLI rejections; only sanitized diagnostics are public.
 checks = []
 for name in sorted({n for c in catalog_data['items'] for n in c['checks']}):
@@ -157,7 +165,7 @@ public_catalog = catalog.export(catalog_data, checks)
 tutorial_content = tutorials.build(ROOT, dist, GO, run, compiler_source)
 documentation = docs_content.build(ROOT, GO, run)
 eh = hashlib.sha256()
-for archive in sorted(exports.glob('*.a')):
+for archive in sorted(exports.glob('*.a.gz')):
     eh.update(archive.name.encode()); eh.update(archive.read_bytes())
 export_target = json.loads(run(GO, 'env', '-json', 'GOOS', 'GOARCH'))
 wasm_flags = ['-trimpath', '-buildvcs=false', f"-ldflags=-s -w -buildid= -X main.exportOS={export_target['GOOS']} -X main.exportArch={export_target['GOARCH']}"]
@@ -171,7 +179,7 @@ for module in ['github.com/goxide-lang/std', 'github.com/goxide-lang/serde']:
     assert metadata['Path'] == module and metadata['Version'] == selected['Version']
     public_libraries.append(dict(module=module, commit=commit, version=selected['Version'], sum=metadata['Sum'], goModSum=metadata['GoModSum']))
 manifest = dict(pipeline='parser-expand-resolve-check-lower', enumRepresentation='sealed-interface', compilerSource=compiler_source, catalogCompilerCommit=catalog_data['compilerCommit'], publicLibraries=public_libraries, wasmBuildFlags=wasm_flags, exportTrimpath=True, commit=sha, websiteCommit=website_sha, catalog=public_catalog, compilerDigest=compiler_digest, exportsDigest=eh.hexdigest(), exportTarget=export_target, toolchain=version, packages=packages,
-                dependencies=dependencies, dependencyContext=context, dependencySourceScope='fixed explicit project roots; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',
+                dependencies=dependencies, dependencyContext=context, dependencySourceScope='declared Go module trees and direct imports of published examples; complete native-selected GoFiles/CgoFiles; paths relative to named module or Go distribution',
                 exportOrigins=origins, exportOriginsSha256=hashlib.sha256((exports/'origins.json').read_bytes()).hexdigest(),
                 importClosure=sorted(closure), maxSourceBytes=32768, maxFiles=16, compileTimeoutMs=10000,
                 examples=examples, packageExamples=package_examples, cliExamples=[cli_example], projectExamples=[minimal_example,reexports_download,cli_options_example],

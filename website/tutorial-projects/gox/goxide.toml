@@ -2,16 +2,13 @@
 module = "example.org/orders"
 go = "1.27"
 
-[namespaces]
-order = "example.org/orders/order"
+[lib]
+name = "order"
+path = "order"
 
 [[bin]]
 name = "orders"
 path = "cmd/orders"
-
-[dependencies]
-fmt = { go = "fmt" }
-testing = { go = "testing" }
 
 [features]
 default = []

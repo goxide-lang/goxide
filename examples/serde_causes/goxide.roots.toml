@@ -14,9 +14,6 @@ package = "os"
 module = "github.com/goxide-lang/serde"
 package = "github.com/goxide-lang/serde"
 
-[roots.serde.namespaces]
-"json" = "github.com/goxide-lang/serde/json"
-
 [roots.strconv]
 source = "toolchain"
 package = "strconv"

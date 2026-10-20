@@ -1,7 +1,8 @@
 package main
 
 use fmt;
-use gen;
+mod gen;
+use crate::gen;
 
 func main() {
 	fmt::Println("schema:", gen::Schema)

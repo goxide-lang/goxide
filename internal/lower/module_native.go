@@ -22,7 +22,7 @@ import (
 // Native signatures participate in the same resolution and type checking as
 // Goxide declarations, so aliases and methods retain their package identity.
 // These read-only declaration trees are never lowered or written back to disk.
-func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer types.Importer) (map[string]*syntax.File, error) {
+func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer types.Importer, crates *crateGraph) (map[string]*syntax.File, error) {
 	type source struct {
 		key, name string
 		data      []byte
@@ -42,6 +42,18 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 		if !pkg.IsExternalTest() {
 			names[packagePath] = pkg.Name
 		}
+		for _, file := range pkg.Files {
+			syntax.Walk(file.AST, func(node syntax.Node) bool {
+				if mod, ok := node.(*syntax.ModDecl); ok && !mod.Inline {
+					target := path.Join(packagePath, mod.Name.Name)
+					if crates != nil && crates.bases[packagePath] != "" {
+						target = path.Join(crates.bases[packagePath], mod.Name.Name)
+					}
+					selected[target] = true
+				}
+				return true
+			})
+		}
 	}
 	for _, module := range modules {
 		context := module.Config.Environment.Context(module.Tags, module.Race)
@@ -50,6 +62,14 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 			return nil, err
 		}
 		for _, filename := range files {
+			rel, err := filepath.Rel(module.Dir, filename)
+			if err != nil {
+				return nil, err
+			}
+			key := path.Join(module.Path, filepath.ToSlash(rel))
+			if crates != nil && !crates.selected(module, path.Dir(key)) {
+				continue
+			}
 			matches, err := context.MatchFile(filepath.Dir(filename), filepath.Base(filename))
 			if err != nil {
 				return nil, err
@@ -65,11 +85,7 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 			if err != nil {
 				return nil, err
 			}
-			rel, err := filepath.Rel(module.Dir, filename)
-			if err != nil {
-				return nil, err
-			}
-			src := source{key: path.Join(module.Path, filepath.ToSlash(rel)), name: file.Name.Name, data: data}
+			src := source{key: key, name: file.Name.Name, data: data}
 			cgo := false
 			for _, imported := range file.Imports {
 				value, err := strconv.Unquote(imported.Path.Value)
@@ -83,6 +99,17 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 				continue
 			}
 			sources = append(sources, src)
+			if selected[path.Dir(key)] || crates != nil && crates.owners[path.Dir(key)] != nil {
+				pkg := path.Dir(key)
+				selected[pkg] = true
+				if packageNames[pkg] == nil {
+					packageNames[pkg] = map[string]bool{}
+				}
+				packageNames[pkg][src.name] = true
+				if !strings.HasSuffix(src.name, "_test") {
+					names[pkg] = src.name
+				}
+			}
 		}
 	}
 	// Go-only relay packages that refer to source types must join the same

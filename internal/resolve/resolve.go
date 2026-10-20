@@ -96,6 +96,7 @@ type UseBinding struct {
 	Name                Key
 	Target              []string
 	Glob, Blank, Public bool
+	BoundRoot           bool // The source root resolved to an explicit lexical binding.
 	Symbol              *Symbol
 	Resolved            *Symbol // Export selected by the use, before its route becomes a canonical target.
 }
@@ -125,7 +126,7 @@ func (p *Package) IsExternalTest() bool {
 		return false
 	}
 	for _, file := range p.Files {
-		if !strings.HasSuffix(file.Name, "_test.gox") {
+		if !strings.HasSuffix(file.Name, "_test.gox") && !(file.AST.NativeGo && strings.HasSuffix(file.Name, "_test.go")) {
 			return false
 		}
 	}
@@ -226,8 +227,9 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 		hygiene.init(out)
 	}
 	var resolvers []*resolver
+	useOwners := map[*Symbol]*resolver{}
 	for _, p := range out.Packages {
-		r := &resolver{result: out, pkg: p, importer: importer, hygiene: hygiene, useStates: make(map[*UseBinding]uint8), useNodes: make(map[*UseBinding]*ast.UseTree), useFiles: make(map[*UseBinding]*File), symbolUses: make(map[*Symbol]*UseBinding)}
+		r := &resolver{result: out, pkg: p, importer: importer, hygiene: hygiene, useStates: make(map[*UseBinding]uint8), useNodes: make(map[*UseBinding]*ast.UseTree), useFiles: make(map[*UseBinding]*File), symbolUses: make(map[*Symbol]*UseBinding), useOwners: useOwners}
 		resolvers = append(resolvers, r)
 		r.collectPackage()
 	}
@@ -238,6 +240,9 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 	}
 	for _, r := range resolvers {
 		r.collectUses()
+	}
+	for _, r := range resolvers {
+		r.resolveUses()
 	}
 	for _, r := range resolvers {
 		r.collectDerives()
@@ -294,6 +299,7 @@ type resolver struct {
 	useNodes   map[*UseBinding]*ast.UseTree
 	useFiles   map[*UseBinding]*File
 	symbolUses map[*Symbol]*UseBinding
+	useOwners  map[*Symbol]*resolver
 	hygiene    *hygiene
 }
 

@@ -85,7 +85,7 @@ func fixtureAuthoring(t *testing.T, root string, files map[string]string) {
 	}
 	if mod == "" {
 		if has {
-			files["goxide.toml"] = fixtureNamespaceManifest(t, text)
+			files["goxide.toml"] = fixtureDependencyManifest(t, text)
 		}
 		return
 	}
@@ -126,13 +126,11 @@ func fixtureManifest(t *testing.T, text, mod string) string {
 	if e != nil {
 		t.Fatal(e)
 	}
-	return fixtureNamespaceManifest(t, string(b))
+	return fixtureDependencyManifest(t, string(b))
 }
 
-// These version/layout fixtures expose this module's library and generated gen
-// package. Dependency roots come from their sources; source syntax is never
-// rewritten or accepted by this helper.
-func fixtureNamespaceManifest(t *testing.T, text string) string {
+// Keep explicit short aliases used by the CLI fixtures.
+func fixtureDependencyManifest(t *testing.T, text string) string {
 	t.Helper()
 	var doc map[string]any
 	if err := toml.Unmarshal([]byte(text), &doc); err != nil {
@@ -156,16 +154,6 @@ func fixtureNamespaceManifest(t *testing.T, text string) string {
 			deps[alias] = map[string]any{"go": path}
 		}
 	}
-	namespaces, _ := doc["namespaces"].(map[string]any)
-	if namespaces == nil {
-		namespaces = map[string]any{}
-		doc["namespaces"] = namespaces
-	}
-	for alias, path := range map[string]string{module[strings.LastIndex(module, "/")+1:]: module, "gen": module + "/gen"} {
-		if _, collision := deps[alias]; !collision {
-			namespaces[alias] = path
-		}
-	}
 	data, err := toml.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)
@@ -186,8 +174,6 @@ package="os"
 const fixtureSerdeRoots = `[roots.serde]
 module="github.com/goxide-lang/serde"
 package="github.com/goxide-lang/serde"
-[roots.serde.namespaces]
-json="github.com/goxide-lang/serde/json"
 `
 
 func fixtureRootsFile(t *testing.T, root, extra string) {

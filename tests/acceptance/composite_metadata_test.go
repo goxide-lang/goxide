@@ -32,7 +32,8 @@ func TestCompositeReferenceMetadataModules(t *testing.T) {
 	sourceFor := func(body, ext string) string {
 		dir := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, dir, "go.mod", packagesModule())
-		writeAcceptanceSerdeRoots(t, dir, "packages.example/app", "model", "mid", "other")
+		writeAcceptanceSerdeRoots(t, dir, "packages.example/app")
+		packagesWrite(t, dir, "modules.gox", "package app\npub mod model;\npub mod mid;\npub mod other;\n")
 		packagesWrite(t, dir, "model/model.gox", compositeMetadataAPI)
 		packagesWrite(t, dir, "model/again.gox", "package model\nfunc Again(r &State)&State{return View(r)}\n")
 		packagesWrite(t, dir, "mid/mid.gox", `package mid
@@ -141,7 +142,7 @@ func TestPathsAndNative(t *testing.T){if Left()!=10||Right()!=20||NativeRead()!=
 		for _, body := range []string{
 			`func bad(){s:=a::State{};r:=a::View(&s);a::Edit(r)}`,
 			`func bad(){s:=a::State{};r:=a::View(&s);_=&mut *r}`,
-			`type Other a::State;func bad(r &a::State)&Other{return r}`,
+			`type Distinct a::State;func bad(r &a::State)&Distinct{return r}`,
 			`func bad(){s:=a::State{};r:=a::View(&s);other::View(r)}`,
 		} {
 			imports := "use library::model as a;\n"

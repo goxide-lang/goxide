@@ -27,7 +27,7 @@ func writeRootFixture(t *testing.T, root string, files map[string]string) {
 
 const rootContextProgram = `package main
 use output;
-use dependency::leaf as api;
+use dependency::implementation as api;
 func main(){output::Println(api::Value())}
 `
 
@@ -36,12 +36,44 @@ source = "toolchain"
 package = "fmt"
 [roots.dependency]
 module = "example.org/dependency"
-[roots.dependency.namespaces]
-leaf = "example.org/dependency/implementation"
+package = "example.org/dependency"
 [roots.unused]
 module = "example.org/not-selected"
 package = "example.org/not-selected/missing"
 `
+
+func TestCLIRejectsReservedCrateRoot(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		name := "discovered"
+		if explicit {
+			name = "explicit"
+		}
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			mapping := rootconfig.Filename
+			if explicit {
+				mapping = "selected.toml"
+			}
+			writeRootFixture(t, root, map[string]string{
+				"go.mod":   "module example.org/app\ngo 1.27\n",
+				"main.gox": "package main\nuse crate as output;\nfunc main(){output::Println(42)}\n",
+				mapping:    "[roots.crate]\nsource='toolchain'\npackage='fmt'\n",
+			})
+			args := []string{"transpile"}
+			if explicit {
+				args = append(args, "--roots", filepath.Join(root, mapping))
+			}
+			args = append(args, filepath.Join(root, "main.gox"))
+			var output bytes.Buffer
+			if err := run(args, &output, &output); err == nil || !strings.Contains(err.Error(), `invalid dependency root "crate"`) {
+				t.Fatalf("reserved root: %v: %s", err, &output)
+			}
+			if _, err := os.Stat(filepath.Join(root, "main_gox.go")); !os.IsNotExist(err) {
+				t.Fatalf("invalid roots produced output: %v", err)
+			}
+		})
+	}
+}
 
 func TestCLIExplicitRootContexts(t *testing.T) {
 	root := t.TempDir()
@@ -85,7 +117,7 @@ func TestCLIExplicitRootContexts(t *testing.T) {
 	// An explicit file is the only mapping source when selected, even if the
 	// source module has its own mapping with the same aliases.
 	override := filepath.Join(root, "override.toml")
-	if err := os.WriteFile(override, []byte(strings.ReplaceAll(rootContextMapping, "example.org/dependency/implementation", "example.org/dependency/missing")), 0600); err != nil {
+	if err := os.WriteFile(override, []byte(strings.ReplaceAll(rootContextMapping, `package = "example.org/dependency"`, `package = "example.org/dependency/missing"`)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
@@ -119,8 +151,6 @@ go = "fmt"
 [dependencies.dependency]
 module = "example.org/dependency"
 path = "../dep"
-[dependencies.dependency.namespaces]
-leaf = "example.org/dependency/implementation"
 [[bin]]
 name = "app"
 path = "."
@@ -179,8 +209,6 @@ func TestCLICurrentModulePackageContext(t *testing.T) {
 		"goxide.toml": `[go_mod]
 module="example.org/app"
 go="1.27"
-[namespaces]
-library="example.org/app"
 [dependencies.output]
 go = "fmt"
 [lib]

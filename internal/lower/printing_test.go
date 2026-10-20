@@ -76,8 +76,6 @@ func supportModule(t *testing.T, source string) (string, error) {
 	if err := os.WriteFile(filepath.Join(dir, "goxide.roots.toml"), []byte(`[roots.serde]
 module = "github.com/goxide-lang/serde"
 package = "github.com/goxide-lang/serde"
-[roots.serde.namespaces]
-json = "github.com/goxide-lang/serde/json"
 `), 0600); err != nil {
 		t.Fatal(err)
 	}

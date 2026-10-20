@@ -10,21 +10,16 @@ import (
 
 const mappingHeader = "[go_mod]\nmodule='example.org/app'\ngo='1.27'\n"
 
-func TestDependencyMappingSchema(t *testing.T) {
+func TestDependencyRootsSchema(t *testing.T) {
 	text := mappingHeader + `
 [features]
 fast-mode = []
 [dependencies.serde]
 go = "github.com/goxide-lang/serde"
 version = "v1.0.0"
-[dependencies.serde.namespaces]
-json = "github.com/goxide-lang/serde/json"
-"formats::custom" = "example.org/explicit/format"
 [dependencies.std]
 module = "github.com/goxide-lang/std"
 path = "../std"
-[dependencies.std.namespaces]
-sum = "github.com/goxide-lang/std/sum"
 [dependencies._json]
 go = "encoding/json"
 `
@@ -32,8 +27,8 @@ go = "encoding/json"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := m.Dependencies["serde"]; d.Module != "github.com/goxide-lang/serde" || d.Namespaces["formats::custom"] != "example.org/explicit/format" {
-		t.Fatalf("lost exact mappings: %+v", d)
+	if d := m.Dependencies["serde"]; d.Module != "github.com/goxide-lang/serde" || d.Go != "github.com/goxide-lang/serde" {
+		t.Fatalf("lost dependency source: %+v", d)
 	}
 	if d := m.Dependencies["_json"]; !d.IsToolchain() || d.Module != "" || d.Go != "encoding/json" {
 		t.Fatalf("toolchain became a module: %+v", d)
@@ -47,12 +42,7 @@ go = "encoding/json"
 		t.Fatalf("mapping roundtrip: %s\n%+v, %v", data, again, err)
 	}
 	before := Digest(m)
-	d := again.Dependencies["serde"]
-	d.Namespaces["json"] = "example.org/changed"
-	if Digest(again) == before {
-		t.Fatal("namespace mapping missing from manifest identity")
-	}
-	d = m.Dependencies["std"]
+	d := m.Dependencies["std"]
 	d.Path = "../different-std"
 	m.Dependencies["std"] = d
 	if Digest(m) == before {
@@ -60,23 +50,19 @@ go = "encoding/json"
 	}
 }
 
-func TestDependencyMappingDiagnostics(t *testing.T) {
+func TestDependencyRootsDiagnostics(t *testing.T) {
 	for _, tc := range []struct{ name, body, want string }{
 		{"root hyphen", "[dependencies.bad-name]\nmodule='example.org/a'\npath='a'", "invalid dependencies name"},
 		{"root digit", "[dependencies.1name]\nmodule='example.org/a'\npath='a'", "invalid dependencies name"},
 		{"root blank", "[dependencies._]\nmodule='example.org/a'\npath='a'", "invalid dependencies name"},
 		{"root keyword", "[dependencies.type]\nmodule='example.org/a'\npath='a'", "invalid dependencies name"},
 		{"root source keyword", "[dependencies.use]\nmodule='example.org/a'\npath='a'", "invalid dependencies name"},
-		{"namespace hyphen", "[dependencies.a]\nmodule='example.org/a'\npath='a'\nnamespaces={'bad-name'='example.org/a/b'}", "invalid namespace path"},
-		{"namespace dot", "[dependencies.a]\nmodule='example.org/a'\npath='a'\nnamespaces={'a.b'='example.org/a/b'}", "invalid namespace path"},
-		{"namespace empty segment", "[dependencies.a]\nmodule='example.org/a'\npath='a'\nnamespaces={'a::::b'='example.org/a/b'}", "invalid namespace path"},
-		{"namespace blank", "[dependencies.a]\nmodule='example.org/a'\npath='a'\nnamespaces={'a::_'='example.org/a/b'}", "invalid namespace path"},
+		{"root crate", "[dependencies.crate]\ngo='fmt'", "invalid dependencies name"},
 		{"package url", "[dependencies.a]\ngo = 'https://example.org/a' ", "path without protocol"},
 		{"package relative", "[dependencies.a]\ngo = '../fmt' ", "path without protocol"},
 		{"package normalized", "[dependencies.a]\ngo = 'encoding/../fmt' ", "path without protocol"},
 		{"package trailing slash", "[dependencies.a]\ngo = 'fmt/' ", "path without protocol"},
 		{"package empty segment", "[dependencies.a]\ngo = 'encoding//json' ", "path without protocol"},
-		{"namespace package empty", "[dependencies.a]\nnamespaces={b=''}\ngo = 'encoding/json'\n", "invalid exact package path"},
 		{"old source selector", "[dependencies.a]\nsource='toolchain'\npackage='fmt'", "unknown field"},
 		{"conflicting sources", "[dependencies.a]\nmodule='example.org/a'\ngit='https://example.org/a'\npath='../a'", "exactly one"},
 		{"conflicting refs", "[dependencies.a]\nmodule='example.org/a'\ngit='https://example.org/a'\nrev='deadbeef'\nbranch='main'", "at most one"},
@@ -101,7 +87,7 @@ func TestDependencyMappingDiagnostics(t *testing.T) {
 	}
 }
 
-func TestDependencyMappingOptionalActivation(t *testing.T) {
+func TestDependencyRootsOptionalActivation(t *testing.T) {
 	m, err := Parse("roots.toml", []byte(mappingHeader+`
 [dependencies.fmt]
 go = "fmt"
@@ -111,7 +97,6 @@ optional = true
 [dependencies.missing]
 module = "example.org/missing"
 path = "does-not-exist"
-namespaces = { nested = "example.org/missing/nested" }
 optional = true
 [features]
 json = ["dep:json"]
@@ -139,8 +124,8 @@ missing = ["dep:missing"]
 	}
 }
 
-func TestDependencyMappingWorkspaceInheritance(t *testing.T) {
-	for _, override := range []string{"", "module='example.org/other'", "namespaces={other='other'}", "go = 'fmt'"} {
+func TestDependencyRootsWorkspaceInheritance(t *testing.T) {
+	for _, override := range []string{"", "module='example.org/other'", "go = 'fmt'"} {
 		t.Run(override, func(t *testing.T) {
 			root := t.TempDir()
 			wsWrite(t, root, ManifestName, `[workspace]
@@ -148,7 +133,6 @@ members=["app"]
 [workspace.dependencies.serde]
 go = "example.org/serde"
 version = "v1.0.0"
-namespaces={json="example.org/serde/json", "formats::custom"="example.org/serde/custom"}
 [workspace.dependencies.json]
 go = "encoding/json"
 `)
@@ -163,7 +147,7 @@ go = "encoding/json"
 			if err != nil {
 				t.Fatal(err)
 			}
-			if d := m.Dependencies["serde"]; d.Module != "example.org/serde" || d.Namespaces["formats::custom"] != "example.org/serde/custom" {
+			if d := m.Dependencies["serde"]; d.Module != "example.org/serde" || d.Version != "v1.0.0" {
 				t.Fatalf("workspace lost mappings: %+v", d)
 			}
 			if d := m.Dependencies["json"]; !d.IsToolchain() || !d.Optional || d.Go != "encoding/json" {
@@ -183,7 +167,6 @@ func TestToolchainModulePlan(t *testing.T) {
 [dependencies.fmt]
 go = "fmt"
 [dependencies.encoding]
-namespaces={json="encoding/json"}
 optional=true
 go = 'encoding/json'
 [dependencies.missing]
@@ -210,7 +193,7 @@ json=["dep:encoding"]
 	}
 	for _, changed := range []string{
 		strings.Replace(manifest, "go = \"fmt\"", "go = \"bytes\"", 1),
-		strings.Replace(manifest, "json=\"encoding/json\"", "json=\"encoding/xml\"", 1),
+		strings.Replace(manifest, "go = 'encoding/json'", "go = 'encoding/xml'", 1),
 	} {
 		wsWrite(t, root, ManifestName, changed)
 		if _, err := Load(root, tool, []string{"json"}, false, true, true); err == nil || !strings.Contains(err.Error(), "--locked") {
@@ -259,7 +242,6 @@ members=["app"]
 [workspace.dependencies.fmt]
 go = "fmt"
 [workspace.dependencies.encoding]
-namespaces={json="encoding/json"}
 go = 'encoding/json'
 `)
 	wsWrite(t, root, "app/"+ManifestName, mappingHeader+`

@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/hxsf/goxide/internal/lower"
 	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/project"
 	"github.com/hxsf/goxide/internal/rootconfig"
@@ -17,7 +18,7 @@ func moduleRoots(node *project.Node) (paths.Roots, error) {
 		return rootconfig.Load(node.Root)
 	}
 	if _, err := os.Stat(filepath.Join(node.Root, rootconfig.Filename)); err == nil {
-		return nil, fmt.Errorf("%s: declare namespaces in goxide.toml instead of %s", node.Root, rootconfig.Filename)
+		return nil, fmt.Errorf("%s: declare dependencies in goxide.toml instead of %s", node.Root, rootconfig.Filename)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -39,21 +40,78 @@ func moduleRoots(node *project.Node) (paths.Roots, error) {
 				return nil, err
 			}
 		}
-		mappings[alias] = rootconfig.Mapping{Module: dependency.Module, Package: packagePath, Source: source, Namespaces: dependency.Namespaces}
+		mappings[alias] = rootconfig.Mapping{Module: dependency.Module, Package: packagePath, Source: source}
 	}
 	roots, err := rootconfig.Build(mappings)
 	if err != nil {
 		return nil, err
 	}
-	local, err := rootconfig.Build(map[string]rootconfig.Mapping{"local": {Module: node.Module, Namespaces: node.Manifest.PackageNamespaces}})
-	if err != nil {
-		return nil, err
+	for alias, child := range node.Children {
+		if child.HasManifest {
+			root := roots[alias]
+			root.GoPrefix = ""
+			roots[alias] = root
+		}
 	}
-	for name, namespace := range local["local"].Children {
-		// Manifest validation has already rejected dependency-root collisions.
-		roots[name] = namespace
+	for alias := range node.Manifest.Dependencies {
+		if _, active := node.Requests[alias]; !active {
+			roots[alias] = paths.Namespace{Unavailable: fmt.Sprintf("dependency root %q is not activated", alias)}
+		}
 	}
 	return roots, nil
+}
+
+func targetUnavailable(target project.Target, features map[string]bool) string {
+	for _, feature := range target.RequiredFeatures {
+		if !features[feature] {
+			return fmt.Sprintf("target %s requires feature %s", target.Name, feature)
+		}
+	}
+	return ""
+}
+
+func targetCrates(node *project.Node, selected project.Target, kind string) ([]lower.Crate, []lower.TargetBoundary, error) {
+	var crates []lower.Crate
+	var boundaries []lower.TargetBoundary
+	packageRoots := map[string]string{}
+	groups := []struct {
+		kind    string
+		targets []project.Target
+	}{{"bin", node.Manifest.Bins}, {"example", node.Manifest.Examples}}
+	if node.Manifest.Lib != nil {
+		groups = append(groups, struct {
+			kind    string
+			targets []project.Target
+		}{"lib", []project.Target{*node.Manifest.Lib}})
+	}
+	for _, group := range groups {
+		for _, target := range group.targets {
+			info, err := targetInfo(node.Root, target.Path)
+			if err != nil {
+				return nil, nil, fmt.Errorf("target %s: %w", target.Name, err)
+			}
+			source := path.Join(node.Module, filepath.ToSlash(target.Path))
+			boundaries = append(boundaries, lower.TargetBoundary{Path: source, File: !info.IsDir()})
+			crate := lower.Crate{Name: target.Name, Root: source, SourceDir: source, Library: group.kind == "lib", Unavailable: targetUnavailable(target, node.Features)}
+			if !info.IsDir() {
+				crate.SourceDir = path.Dir(source)
+				crate.Root = path.Join(node.Module, "goxide_targets", group.kind, target.Name)
+				if crate.Library {
+					crate.Root = node.Module
+				}
+			}
+			label := fmt.Sprintf("%s target %s", group.kind, target.Name)
+			if previous, exists := packageRoots[crate.Root]; exists {
+				return nil, nil, fmt.Errorf("%s and %s select the same package %s", previous, label, crate.Root)
+			}
+			packageRoots[crate.Root] = label
+			if group.kind != "lib" && (group.kind != kind || target.Name != selected.Name) {
+				continue
+			}
+			crates = append(crates, crate)
+		}
+	}
+	return crates, boundaries, nil
 }
 
 func libraryPackage(node *project.Node) (string, error) {
@@ -72,7 +130,8 @@ func libraryPackage(node *project.Node) (string, error) {
 func stageSources(node *project.Node, selected project.Target, kind, output string) (string, error) {
 	files := map[string]string{}
 	excluded := map[string]bool{}
-	for _, target := range node.Manifest.Bins {
+	targets := append(append([]project.Target(nil), node.Manifest.Bins...), node.Manifest.Examples...)
+	for _, target := range targets {
 		info, err := targetInfo(node.Root, target.Path)
 		if err != nil {
 			return "", fmt.Errorf("target %s: %w", target.Name, err)
@@ -91,8 +150,16 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 		if err != nil {
 			return "", err
 		}
-		if !info.IsDir() {
-			files[filepath.Clean(library.Path)] = filepath.Base(library.Path)
+		if targetUnavailable(*library, node.Features) == "" {
+			if !info.IsDir() {
+				files[filepath.Clean(library.Path)] = filepath.Base(library.Path)
+			}
+		} else if info.IsDir() {
+			if name := filepath.Clean(library.Path); name != "." {
+				excluded[name] = true
+			}
+		} else {
+			files[filepath.Clean(library.Path)] = ""
 		}
 	}
 	info, err := targetInfo(node.Root, selected.Path)
@@ -108,6 +175,19 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 			entry = "."
 		}
 		files[filepath.Clean(selected.Path)] = filepath.Join(entry, filepath.Base(selected.Path))
+	}
+	// Keep ancestor directories traversable when they contain the selected
+	// target or a library entry; crate ownership selects packages afterwards.
+	included := []string{selected.Path}
+	if library := node.Manifest.Lib; library != nil && targetUnavailable(*library, node.Features) == "" {
+		included = append(included, library.Path)
+	}
+	for directory := range excluded {
+		for _, target := range included {
+			if within(filepath.Join(node.Root, directory), filepath.Join(node.Root, target)) {
+				delete(excluded, directory)
+			}
+		}
 	}
 	if _, err := os.Lstat(filepath.Join(node.Root, "goxide_targets")); err == nil {
 		return "", fmt.Errorf("%s: goxide_targets is reserved for generated entries", node.Module)

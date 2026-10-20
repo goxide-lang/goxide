@@ -74,12 +74,15 @@ type Result struct {
 	// even when a false predicate removes the entire generated item.
 	UsesConfiguration bool
 	// TargetFiles contains original destination files, including removed items.
-	TargetFiles   map[*ast.File]bool
-	Allocations   map[*ast.CallExpr]bool
-	Captures      map[ast.Node]Capture
-	GoResults     map[*ast.CallExpr]bool
-	Prints        map[*ast.CallExpr]bool
-	Files         []*ast.File
+	TargetFiles map[*ast.File]bool
+	Allocations map[*ast.CallExpr]bool
+	Captures    map[ast.Node]Capture
+	GoResults   map[*ast.CallExpr]bool
+	Prints      map[*ast.CallExpr]bool
+	Files       []*ast.File
+	// PartialFiles holds completed items when expansion fails. Source loaders
+	// may discover generated modules here without replacing diagnostic inputs.
+	PartialFiles  []*ast.File
 	Expansions    map[ast.ExpnID]Expansion
 	Contexts      map[ast.SyntaxCtx]Context
 	Origins       map[ast.Node]Origin
@@ -206,6 +209,11 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*a
 				}
 				v, err := e.rewrite(reflect.ValueOf(n.Items[i]), f, 0)
 				if err != nil {
+					// A module emitted by an earlier item may supply the
+					// source macro now being requested. Whole-module callers
+					// can grow their source graph and repeat expansion.
+					n.Items = items
+					e.r.PartialFiles = append(out, n)
 					return e.r, err
 				}
 				if v.IsValid() {

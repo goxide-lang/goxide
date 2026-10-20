@@ -96,7 +96,7 @@ func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
 	}
 
 	manifest := filepath.Join(app, "goxide.toml")
-	changed := bytes.Replace(p5Read(t, manifest), []byte(`service = "example.org/p5/app/service"`), []byte(`service = "example.org/p5/app/other"`), 1)
+	changed := bytes.Replace(p5Read(t, manifest), []byte(`fmt = { go = "fmt" }`), []byte(`fmt = { go = "bytes" }`), 1)
 	if err := os.WriteFile(manifest, changed, 0o600); err != nil {
 		t.Fatal(err)
 	}

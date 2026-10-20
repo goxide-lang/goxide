@@ -3,11 +3,13 @@ package lower
 import (
 	"fmt"
 	"go/types"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/hxsf/goxide/internal/derives"
+	"github.com/hxsf/goxide/internal/paths"
 	"github.com/hxsf/goxide/internal/resolve"
 	syntax "github.com/hxsf/goxide/internal/syntax/ast"
 )
@@ -22,6 +24,7 @@ type moduleImporter struct {
 	sourcePackages map[string]bool
 	macros         map[string]map[resolve.Key]*resolve.Symbol
 	rootAccesses   []rootRequirement
+	crates         *crateGraph
 	err            error
 }
 
@@ -66,6 +69,13 @@ func (i *moduleImporter) SourcePackage(parts []string) bool {
 	return i.local[strings.Join(parts, "/")] != nil
 }
 
+func (i *moduleImporter) ModulePath(pkg, child string) []string {
+	if i.crates != nil {
+		return i.crates.ModulePath(pkg, child)
+	}
+	return strings.Split(pkg+"/"+child, "/")
+}
+
 func (i *moduleImporter) Lookup(parts []string, name resolve.Key) []resolve.External {
 	members := i.lookup(parts, name, map[string]bool{})
 	var out []resolve.External
@@ -91,6 +101,10 @@ func (i *moduleImporter) lookup(parts []string, name resolve.Key, visiting map[s
 		}
 	}
 	if requirement, ok := i.namespace(parts); ok {
+		if requirement.namespace.Unavailable != "" {
+			i.err = &Diagnostic{File: requirement.origin.File, Span: requirement.origin.Span, Message: requirement.namespace.Unavailable, Origin: requirement.origin}
+			return nil
+		}
 		if requirement.namespace.PackagePath == "" {
 			return nil
 		}
@@ -100,7 +114,31 @@ func (i *moduleImporter) lookup(parts []string, name resolve.Key, visiting map[s
 			}
 			return nil
 		}
+		if path.Dir(requirement.origin.File) == requirement.namespace.PackagePath {
+			if scope := i.local[requirement.namespace.PackagePath]; scope != nil {
+				if symbol := scope.Bindings[name]; symbol != nil {
+					return i.symbolMembers(symbol, strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)
+				}
+			}
+		}
 		return i.packageMembers(strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)
+	}
+	// A source root follows declared module/item edges one segment at a time.
+	// Appending physical directories here would expose private or undeclared
+	// packages, and would lose aliases in multi-segment macro paths.
+	for split := len(parts) - 1; split > 0; split-- {
+		if _, ok := i.namespace(parts[:split]); !ok {
+			continue
+		}
+		target := parts[:split]
+		for _, segment := range parts[split:] {
+			members := i.lookup(target, resolve.Key{Name: segment}, visiting)
+			if len(members) != 1 {
+				return nil
+			}
+			target = members[0].Target
+		}
+		return i.lookup(target, name, visiting)
 	}
 	if members, found := i.sourceItemMembers(parts, name, visiting); found {
 		return members
@@ -296,17 +334,18 @@ func (i *moduleImporter) namespace(parts []string) (rootRequirement, bool) {
 		if !ok {
 			continue
 		}
-		for _, name := range parts[split:] {
-			child, ok := requirement.namespace.Children[name]
-			if !ok {
-				return rootRequirement{}, false
-			}
-			if child.ModulePath == "" && child.Source == "" {
-				child.ModulePath, child.Source = requirement.namespace.ModulePath, requirement.namespace.Source
-			}
-			requirement.namespace = child
+		namespace, found, err := paths.NewGoNamespaces(i.external).Resolve(requirement.namespace, parts[split:])
+		if err == nil && !found && split == len(parts) && requirement.namespace.PackagePath != "" {
+			err = requirement.check(i.owners, i.external)
 		}
-		return requirement, true
+		if err != nil {
+			if i.err == nil {
+				i.err = &Diagnostic{File: requirement.origin.File, Span: requirement.origin.Span, Message: err.Error(), Origin: requirement.origin}
+			}
+			return rootRequirement{}, false
+		}
+		requirement.namespace = namespace
+		return requirement, found
 	}
 	return rootRequirement{}, false
 }
@@ -346,7 +385,17 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 			fail := func(message string) error {
 				return &Diagnostic{File: name, Span: decl.Span(), Message: message, Origin: resolved.Origins[use.Decl]}
 			}
-			if module := strict[name]; module != "" && !i.boundUse(file, use, decl, module) {
+			if requirement, ok := i.namespace(use.Target); ok {
+				if requirement.namespace.PackagePath != "" || requirement.namespace.Unavailable != "" {
+					if err := i.checkRootRequirement(requirement); err != nil {
+						return err
+					}
+				}
+			}
+			if i.err != nil {
+				return i.err
+			}
+			if module := strict[name]; module != "" && !i.boundUse(use, decl, module) {
 				return fail(fmt.Sprintf("unknown dependency root %q", decl.Tree.Path.Segments[0].Name.Name))
 			}
 			if len(resolved.Diagnostics) == 0 && !use.Blank && !i.finishUseTarget(use) {
@@ -420,22 +469,13 @@ func (i *moduleImporter) finishUseTarget(use *resolve.UseBinding) bool {
 	return false
 }
 
-func (i *moduleImporter) boundUse(file *resolve.File, use *resolve.UseBinding, decl *syntax.UseDecl, module string) bool {
+func (i *moduleImporter) boundUse(use *resolve.UseBinding, decl *syntax.UseDecl, module string) bool {
+	if use.BoundRoot {
+		return true
+	}
 	for _, segment := range decl.Tree.Path.Segments {
 		if segment.Name.Name == "$goxide$roots" {
 			return true
-		}
-	}
-	root := decl.Tree.Path.Segments[0].Name
-	key := resolve.Key{Name: root.Name, Ctx: root.Ctx}
-	for scope := file.Scope; scope != nil && scope.Kind != resolve.PreludeScope; scope = scope.Parent {
-		if symbol := scope.Bindings[key]; symbol != nil {
-			return true
-		}
-		for _, alias := range scope.Aliases[key] {
-			if alias != use.Symbol {
-				return true
-			}
 		}
 	}
 	for split := len(use.Target); split > 0; split-- {

@@ -31,6 +31,8 @@ type Module struct {
 	// RootPackage is the canonical library entry declared by a project manifest.
 	// An empty value leaves native Go package imports unrestricted.
 	RootPackage string
+	Crates      []Crate
+	Targets     []TargetBoundary
 	Roots       paths.Roots
 	Config      config.Config
 	Context     context.Context
@@ -38,11 +40,29 @@ type Module struct {
 	Race        bool
 }
 
+// Crate describes an authored target without changing its Go package identity.
+// SourceDir retains the canonical source package path before file projection.
+type Crate struct {
+	Name, Root, SourceDir string
+	Library               bool
+	Unavailable           string
+}
+
+// TargetBoundary records authored entries, including targets not being built.
+type TargetBoundary struct {
+	Path string
+	File bool
+}
+
 // CompileModules compiles the complete source graph in one pass. The first
 // module's go.mod supplies the selected Go dependency graph. On success each
 // .gox file is replaced by generated Go; native Go files and resources remain
 // unchanged. Callers discard the staging directories when compilation fails.
 func CompileModules(modules []Module) (err error) {
+	return compileModules(modules, map[string][]crateModule{})
+}
+
+func compileModules(modules []Module, extra map[string][]crateModule) (err error) {
 	if len(modules) == 0 {
 		return fmt.Errorf("at least one staging module is required")
 	}
@@ -57,6 +77,10 @@ func CompileModules(modules []Module) (err error) {
 		if modules[i].Config.Reads == nil {
 			modules[i].Config.Reads = reads
 		}
+	}
+	crates, err := selectCrates(modules, extra)
+	if err != nil {
+		return err
 	}
 	files := map[string]*syntax.File{}
 	configs := map[*syntax.File]config.Config{}
@@ -95,6 +119,9 @@ func CompileModules(modules []Module) (err error) {
 				return err
 			}
 			key := path.Join(module.Path, filepath.ToSlash(rel))
+			if !crates.selected(module, path.Dir(key)) {
+				continue
+			}
 			if _, exists := files[key]; exists {
 				return fmt.Errorf("duplicate source file %s", key)
 			}
@@ -119,8 +146,11 @@ func CompileModules(modules []Module) (err error) {
 				return err
 			}
 			configs[file] = module.Config
-			rootConfigs[file] = moduleRootConfig{module.Path, key, roots}
-			requirements = append(requirements, applyModuleRoots(module.Path, key, file, roots)...)
+			fileRoots, route := crates.roots(module, path.Dir(key), roots)
+			rootConfigs[file] = moduleRootConfig{module: route, name: key, roots: fileRoots}
+			if fileRoots["crate"].PackagePath != "" {
+				addCrateUse(file)
+			}
 			diskNames[key] = name
 			owners[path.Dir(key)] = module.Path
 			if module.Roots != nil {
@@ -128,14 +158,14 @@ func CompileModules(modules []Module) (err error) {
 			}
 		}
 	}
-	if len(files) == 0 {
-		return nil
+	if len(files) == 0 && len(crates.owners) == 0 {
+		return crates.prune()
 	}
-	packages := resolve.Resolve(files, nil)
 	external := sourceModuleImporter(modules[0])
-	native, err := nativeModuleFiles(modules, packages.Packages, external)
+	requirements = prepareSourceRoots(files, rootConfigs, external)
+	packages := resolve.Resolve(crates.preliminaryFiles(files, extra), crates)
+	native, err := nativeModuleFiles(modules, packages.Packages, external, crates)
 	if err != nil {
-
 		return err
 	}
 	for name, file := range native {
@@ -147,9 +177,9 @@ func CompileModules(modules []Module) (err error) {
 		}
 	}
 	if len(native) > 0 {
-		packages = resolve.Resolve(files, nil)
+		packages = resolve.Resolve(crates.preliminaryFiles(files, extra), crates)
 	}
-	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: external, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: owners, publicRoots: map[string]string{}, sourcePackages: map[string]bool{}}
+	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: external, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: owners, publicRoots: map[string]string{}, sourcePackages: map[string]bool{}, crates: crates}
 	for _, module := range modules {
 		imports.publicRoots[module.Path] = module.RootPackage
 	}
@@ -166,12 +196,15 @@ func CompileModules(modules []Module) (err error) {
 	for _, pkg := range packages.Packages {
 		var source []*syntax.File
 		for _, file := range pkg.Files {
-			source = append(source, file.AST)
+			source = append(source, files[file.Name])
 		}
 		sourcePackages = append(sourcePackages, source)
 	}
 	macros := &moduleMacros{files: files, resolved: packages, imports: imports}
 	expanded, err = expand.ExpandPackages(sourcePackages, macros, configs)
+	if crates.expandedModules(expanded, rootConfigs, extra) {
+		return compileModules(modules, extra)
+	}
 	if cycle := macros.checkCycles(expanded); cycle != nil {
 		return cycle
 	}
@@ -179,10 +212,9 @@ func CompileModules(modules []Module) (err error) {
 		return imports.err
 	}
 	if err != nil {
-
 		return err
 	}
-	for _, requirement := range applyExpandedRoots(expanded, rootConfigs) {
+	for _, requirement := range applyExpandedRoots(expanded, rootConfigs, files) {
 		if _, exists := imports.namespaces[requirement.target]; !exists {
 			imports.namespaces[requirement.target] = requirement
 		}
@@ -206,6 +238,9 @@ func CompileModules(modules []Module) (err error) {
 		return resolved.Diagnostics[0]
 	}
 	if err := imports.checkSourceRoots(resolved); err != nil {
+		return err
+	}
+	if err := imports.checkCrateImports(resolved); err != nil {
 		return err
 	}
 	expandedFiles := make(map[string]*syntax.File, len(resolved.Files))
@@ -236,6 +271,9 @@ func CompileModules(modules []Module) (err error) {
 		}
 	}
 	if err := checkModuleCycles(modules, output, resolved, imports); err != nil {
+		return err
+	}
+	if err := crates.prune(); err != nil {
 		return err
 	}
 	names := make([]string, 0, len(output))

@@ -49,9 +49,7 @@ func main(){
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
 	roots := paths.Roots{
-		"wire": {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Children: map[string]paths.Namespace{
-			"json": {PackagePath: "github.com/goxide-lang/serde/json"},
-		}},
+		"wire":   {ModulePath: "github.com/goxide-lang/serde", Source: "module", GoPrefix: "github.com/goxide-lang/serde"},
 		"facade": {PackagePath: "fixture/facade", ModulePath: "fixture"},
 	}
 	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {

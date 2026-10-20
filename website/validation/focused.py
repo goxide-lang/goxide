@@ -154,7 +154,7 @@ def run(args, out, summary):
     go = args.go
     native_env = dict(os.environ, GOMAXPROCS='4', GOWORK='off', GOPROXY='off', GOTOOLCHAIN='local')
     manifest = json.loads((dist / 'examples.json').read_text())
-    context = dependency_context(root)
+    context = dependency_context(root, manifest['exportOrigins'])
     require(context == manifest['dependencyContext'], 'explicit dependency context differs from manifest')
     roots_file = root / context['path']
     compiler_source = manifest['compilerSource']

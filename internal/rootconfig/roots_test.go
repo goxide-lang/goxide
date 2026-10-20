@@ -7,18 +7,13 @@ import (
 	"testing"
 )
 
-func TestExplicitRootNamespaces(t *testing.T) {
+func TestRootPackageTrees(t *testing.T) {
 	roots, err := Parse("roots.toml", []byte(`
 [roots.wire]
 module = "example.org/codec"
 package = "example.org/codec/core"
-[roots.wire.namespaces]
-json = "example.org/codec/json"
-"formats::binary" = "example.org/codec/binary"
 [roots.standard]
 module = "github.com/goxide-lang/std"
-[roots.standard.namespaces]
-sum = "github.com/goxide-lang/std/sum"
 [roots.text]
 source = "toolchain"
 package = "fmt"
@@ -27,15 +22,11 @@ package = "fmt"
 		t.Fatal(err)
 	}
 	wire := roots["wire"]
-	if wire.PackagePath != "example.org/codec/core" || wire.ModulePath != "example.org/codec" || wire.Source != "module" || wire.Children["json"].PackagePath != "example.org/codec/json" {
-		t.Fatalf("exact mapping lost: %#v", wire)
+	if wire.PackagePath != "example.org/codec/core" || wire.GoPrefix != wire.PackagePath || wire.ModulePath != "example.org/codec" || wire.Source != "module" {
+		t.Fatalf("package tree binding lost: %#v", wire)
 	}
-	formats := wire.Children["formats"]
-	if formats.PackagePath != "" || formats.ModulePath != wire.ModulePath || formats.Children["binary"].PackagePath != "example.org/codec/binary" {
-		t.Fatalf("namespace grouping lost: %#v", formats)
-	}
-	if roots["standard"].PackagePath != "" || roots["text"].ModulePath != "" || roots["text"].Source != "toolchain" {
-		t.Fatalf("group root or toolchain owner inferred incorrectly: %#v", roots)
+	if roots["standard"].GoPrefix != "github.com/goxide-lang/std" || roots["text"].ModulePath != "" || roots["text"].Source != "toolchain" {
+		t.Fatalf("module or toolchain tree lost: %#v", roots)
 	}
 }
 
@@ -47,14 +38,11 @@ func TestRootConfigRejectsImplicitSources(t *testing.T) {
 		"upper-field":            "[roots.fmt]\nSource='toolchain'\npackage='fmt'",
 		"toolchain-module":       "[roots.fmt]\nsource='toolchain'\nmodule='fmt'\npackage='fmt'",
 		"root-not-identifier":    "[roots.bad-name]\nmodule='example.org/dep'",
-		"empty-segment":          "[roots.dep]\nmodule='example.org/dep'\n[roots.dep.namespaces]\n'a::::b'='example.org/dep/a/b'",
-		"go-selector-key":        "[roots.dep]\nmodule='example.org/dep'\n[roots.dep.namespaces]\n'a.b'='example.org/dep/a/b'",
-		"empty-package":          "[roots.dep]\nmodule='example.org/dep'\n[roots.dep.namespaces]\na=''",
 		"version-selection":      "[roots.dep]\nmodule='example.org/dep'\nversion='v1.2.3'",
 		"unknown-source":         "[roots.dep]\nsource='directory'\nmodule='example.org/dep'",
 		"relative-package":       "[roots.dep]\nmodule='example.org/dep'\npackage='./dep'",
 		"reserved-root":          "[roots.use]\nmodule='example.org/dep'",
-		"reserved-namespace":     "[roots.dep]\nmodule='example.org/dep'\n[roots.dep.namespaces]\nmatch='example.org/dep/match'",
+		"crate-root":             "[roots.crate]\nsource='toolchain'\npackage='fmt'",
 		"invalid-package":        "[roots.dep]\nmodule='example.org/dep'\npackage='example.org/dep/☃'",
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -123,8 +123,9 @@ func hostImports(owner string, files map[string][]byte, roots paths.Roots) ([]st
 	return result, nil
 }
 
-// Dependency discovery only follows declared namespaces. Binding diagnostics
-// and member visibility are checked by CompileModules after helpers are ready.
+// Helper dependency discovery needs the owning source root, not individual Go
+// subpackages. CompileModules checks full paths and members once helpers exist;
+// standard-library fallback cannot add a helper dependency.
 func hostGoxideImports(owner, name string, source []byte, roots paths.Roots, imports map[string]bool) error {
 	file, diagnostics := goxparser.ParseFile(name, source)
 	for _, diagnostic := range diagnostics {
@@ -156,13 +157,6 @@ func hostGoxideImports(owner, name string, source []byte, roots paths.Roots, imp
 		node, ok := namespaces[path.Segments[0].Name.Name]
 		if !ok {
 			return paths.Namespace{}, false
-		}
-		for _, segment := range path.Segments[1:] {
-			child, ok := node.Children[segment.Name.Name]
-			if !ok {
-				break
-			}
-			node = child
 		}
 		return node, true
 	}

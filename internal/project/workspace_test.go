@@ -80,6 +80,7 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 	for _, tc := range []struct{ name, root, member, extra, want string }{
 		{"case", "[workspace]\nMembers=[\"app\"]\n", "", "", "unknown"},
 		{"feature type", "[workspace]\nmembers=[\"app\"]\n[workspace.dependencies]\nd={module=\"example.org/d\",path=\"d\"}\n", "[dependencies]\nd={workspace=true,features=\"oops\"}\n", "", "features"},
+		{"crate root", "[workspace]\nmembers=[\"app\"]\n[workspace.dependencies.crate]\ngo='fmt'\n", "", "", "invalid dependency \"crate\""},
 		{"nested", "[workspace]\nmembers=[\"nested/app\"]\n", "", "nested", "another workspace"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

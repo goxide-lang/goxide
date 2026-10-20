@@ -46,20 +46,13 @@ path = "config"
 
 [dependencies.serde]
 go = "github.com/goxide-lang/serde"
-package = "github.com/goxide-lang/serde"
 version = "$serde_pin"
-
-[dependencies.serde.namespaces]
-json = "github.com/goxide-lang/serde/json"
 EOF
 write_pins "$repo/examples/enum_trial/model" >> "$work/source/model/goxide.toml"
 cat > "$work/source/app/goxide.toml" <<'EOF'
 [go_mod]
 module = "trial.example/app"
 go = "1.27"
-
-[namespaces]
-logkit = "trial.example/app/logkit"
 
 [[bin]]
 name = "orders"
@@ -68,7 +61,6 @@ path = "."
 [dependencies.config]
 path = "../model"
 module = "trial.example/model"
-package = "trial.example/model/config"
 
 [dependencies.errors]
 go = "errors"

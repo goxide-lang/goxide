@@ -2,9 +2,6 @@
 module = "example.org/goxide-project"
 go = "1.27"
 
-[namespaces]
-greeting = "example.org/goxide-project"
-
 [[bin]]
 name = 'hello'
 path = 'src/main.gox'
@@ -33,6 +30,3 @@ version = "v0.0.0-20261009021520-f342a31e20d0"
 [[go.require]]
 module = "github.com/goxide-lang/std"
 version = "v0.0.0-20261009104839-c02a09d8c417"
-
-[dependencies.fmt]
-go = "fmt"

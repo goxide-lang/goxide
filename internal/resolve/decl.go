@@ -82,6 +82,9 @@ func (r *resolver) declareItemWith(scope *Scope, item ast.Item, inherited *Visib
 		if !item.Inline {
 			if sym != nil {
 				sym.Target = strings.Split(path.Join(filepath.ToSlash(r.pkg.Dir), item.Name.Name), "/")
+				if source, ok := r.importer.(interface{ ModulePath(string, string) []string }); ok {
+					sym.Target = source.ModulePath(filepath.ToSlash(r.pkg.Dir), item.Name.Name)
+				}
 				if source, ok := r.importer.(interface{ SourcePackage([]string) bool }); ok && !source.SourcePackage(sym.Target) {
 					r.diag(item.Name, "module-source", "mod must name a selected local source package")
 				}

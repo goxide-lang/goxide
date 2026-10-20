@@ -44,7 +44,7 @@ var sourceName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*\.gox$`)
 
 // CompilePackage compiles one user package without reading a filesystem or
 // selecting dependency versions. The caller supplies the fixed build's importer
-// and explicit namespace roots.
+// and declared roots plus the selected toolchain's package trees.
 func CompilePackage(files []File, options Options) (output []File, err error) {
 	diagnosticSources := make(map[string]typecheck.DiagnosticSource, len(files))
 	var expanded *expand.Result
@@ -127,6 +127,7 @@ func CompilePackage(files []File, options Options) (output []File, err error) {
 		return nil, err
 	}
 	imports := typecheck.NewNamespaceImporter(options.Importer, options.Roots)
+	imports.Prepare(expanded)
 	resolved := resolve.ResolveExpanded(trees, expanded, imports)
 	if err := imports.Err(); err != nil {
 		return nil, err

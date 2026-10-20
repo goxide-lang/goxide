@@ -84,7 +84,7 @@ func runPreparedProject(req CompileRequest, prepared *compile.Result, sourceRoot
 	}
 
 	tags := strings.FieldsFunc(req.Tags, func(r rune) bool { return r == ',' || r == ' ' })
-	binary := manifest
+	binary := manifest && prepared.Kind != "lib"
 	if req.Mode == "build" && !manifest {
 		listing := exec.Command(req.GoTool, "list", "-mod=readonly", "-tags="+strings.Join(tags, ","), "-f", "{{.Name}}", prepared.Entry)
 		listing.Dir, listing.Env = prepared.Root, localEnv(prepared.Config.Environment.ExecEnv())
@@ -382,17 +382,10 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 func copyDirectorySources(root, input, stage, module string, roots paths.Roots, tags []string, race bool, cfg config.Config) error {
 	context := cfg.Environment.Context(tags, race)
 	selected := []string{input}
-	var collect func(paths.Namespace)
-	collect = func(namespace paths.Namespace) {
+	for _, namespace := range roots {
 		if namespace.ModulePath == module && namespace.PackagePath != "" {
 			selected = append(selected, filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(strings.TrimPrefix(namespace.PackagePath, module), "/"))))
 		}
-		for _, child := range namespace.Children {
-			collect(child)
-		}
-	}
-	for _, namespace := range roots {
-		collect(namespace)
 	}
 	return filepath.WalkDir(root, func(name string, item fs.DirEntry, err error) error {
 		if err != nil || name == root {

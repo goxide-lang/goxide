@@ -66,6 +66,7 @@ func compileSourceFile(filename string, source []byte, packagePath string, goImp
 		return compiledFile{}, typecheck.SourceError(err, sources, expanded)
 	}
 	imports := typecheck.NewNamespaceImporter(goImports, roots)
+	imports.Prepare(expanded)
 	resolved := resolve.ResolveExpanded(map[string]*syntax.File{filename: file}, expanded, imports)
 	if imports.Err() != nil {
 		return compiledFile{}, imports.Err()
@@ -186,15 +187,15 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			return e
 		} else if exists {
 			if req.RootsFile != "" {
-				return fmt.Errorf("--roots cannot override goxide.toml dependency mappings")
+				return fmt.Errorf("--roots cannot override goxide.toml dependency declarations")
 			}
-			if *example != "" || *lib {
-				return errors.New("example and library targets are deferred until MVP")
+			if *lib && mode == "run" {
+				return errors.New("library targets cannot be run")
 			}
 			if *tags != "" {
 				return errors.New("--tags is not supported for manifest projects by the new compiler pipeline")
 			}
-			prepared, err := compile.PrepareProject(input, compile.Options{Bin: *bin, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, Config: req.config, Race: mode == "test"})
+			prepared, err := compile.PrepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, Config: req.config, Race: mode == "test"})
 			if err != nil {
 				return err
 			}

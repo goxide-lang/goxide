@@ -129,7 +129,7 @@ func validateDependencyFields(filename string, data []byte) error {
 			}
 			for _, key := range keys(d) {
 				switch key {
-				case "go", "namespaces", "optional":
+				case "go", "optional":
 				default:
 					return fmt.Errorf("%s: dependency %s: Go standard library source cannot declare %s", filename, alias, key)
 				}

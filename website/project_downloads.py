@@ -45,7 +45,7 @@ def reexports(ROOT, dist, GO, run, compiler_source):
                     files=[file['path'] for file in files])
     return dict(id='reexports-download', title='目录项目：完整源码下载', files=files,
                 runs=[dict(command='goxide run .', stdout=stdout)], download=download,
-                note='包含同一目录项目的 Go 模块配置、显式根映射、Goxide 与 Go 源码。网站构建会解压实际 ZIP，在新目录执行 build、run，并核对依赖配置保持不变。')
+                note='包含同一目录项目的 Go 模块配置、显式 alias 根声明、Goxide 与 Go 源码。网站构建会解压实际 ZIP，在新目录执行 build、run，并核对依赖配置保持不变。')
 
 
 def minimal(ROOT, GO, run):

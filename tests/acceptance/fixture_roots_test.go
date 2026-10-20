@@ -15,11 +15,9 @@ import (
 // neither this context nor the CLI helper rewrites source syntax or derive names.
 func acceptanceSerdeRoots() paths.Roots {
 	return paths.Roots{
-		"serde": {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module", Children: map[string]paths.Namespace{
-			"json": {PackagePath: "github.com/goxide-lang/serde/json", ModulePath: "github.com/goxide-lang/serde", Source: "module"},
-		}},
-		"fmt":  {PackagePath: "fmt", Source: "toolchain"},
-		"time": {PackagePath: "time", Source: "toolchain"},
+		"serde": {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module", GoPrefix: "github.com/goxide-lang/serde"},
+		"fmt":   {PackagePath: "fmt", Source: "toolchain"},
+		"time":  {PackagePath: "time", Source: "toolchain"},
 	}
 }
 
@@ -27,23 +25,18 @@ func compileAcceptanceSerdeFixture(filename string, source []byte) (testdeps.Sou
 	return testdeps.Source(filename, source, acceptanceSerdeRoots())
 }
 
-func writeAcceptanceSerdeRoots(t *testing.T, dir, libraryModule string, namespaces ...string) {
+func writeAcceptanceSerdeRoots(t *testing.T, dir, libraryModule string) {
 	t.Helper()
 	var data strings.Builder
 	data.WriteString(`[roots.serde]
 module = "github.com/goxide-lang/serde"
 package = "github.com/goxide-lang/serde"
-[roots.serde.namespaces]
-json = "github.com/goxide-lang/serde/json"
 [roots.errors]
 source = "toolchain"
 package = "errors"
 `)
 	if libraryModule != "" {
-		fmt.Fprintf(&data, "[roots.library]\nmodule = %q\n[roots.library.namespaces]\n", libraryModule)
-		for _, namespace := range namespaces {
-			fmt.Fprintf(&data, "%q = %q\n", namespace, libraryModule+"/"+namespace)
-		}
+		fmt.Fprintf(&data, "[roots.library]\nmodule = %q\npackage = %q\n", libraryModule, libraryModule)
 	}
 	packagesWrite(t, dir, "goxide.roots.toml", data.String())
 }

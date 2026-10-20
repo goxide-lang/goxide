@@ -1,7 +1,9 @@
 """Build identity, toolchain checks and isolated browser-source helpers."""
 from contextlib import contextmanager
+import gzip
 import hashlib
 import pathlib
+import re
 import subprocess
 import tempfile
 import tomllib
@@ -10,19 +12,44 @@ import tomllib
 DEPENDENCY_CONTEXT = 'cmd/goxide-playground/goxide.roots.toml'
 
 
-def dependency_context(root):
-    """Publish the project's explicit declarations, never infer source roots."""
+def dependency_context(root, origins=None):
+    """Bind configured Go trees and toolchain packages from verified origins."""
     content = (pathlib.Path(root) / DEPENDENCY_CONTEXT).read_bytes()
-    roots = tomllib.loads(content.decode('utf-8'))['roots']
+    declarations = tomllib.loads(content.decode('utf-8'))['roots']
+    roots = {name: dict(module=value.get('module', ''), source=value.get('source', 'module'),
+                        prefix=value.get('package') or value.get('module', ''))
+             for name, value in declarations.items()}
     bindings = []
-    for name, declaration in roots.items():
-        common = dict(module=declaration.get('module', ''), source=declaration.get('source', 'module'))
-        if declaration.get('package'):
-            bindings.append(dict(path=name, package=declaration['package'], **common))
-        for namespace, package in declaration.get('namespaces', {}).items():
-            bindings.append(dict(path=name + '::' + namespace, package=package, **common))
+    for package, origin in sorted((origins or {}).items()):
+        segments = package.split('/')
+        if 'internal' in segments or 'vendor' in segments:
+            continue
+        if origin['standard'] and segments[0] not in roots:
+            if all(segment.isidentifier() for segment in segments):
+                bindings.append(dict(path='::'.join(segments), package=package, module='', source='toolchain'))
+        for name, declaration in sorted(roots.items()):
+            prefix = declaration['prefix']
+            if package != prefix and not package.startswith(prefix + '/'):
+                continue
+            if origin['standard'] != (declaration['source'] == 'toolchain') or origin['module'] != declaration['module']:
+                continue
+            suffix = package[len(prefix):].strip('/').split('/') if package != prefix else []
+            if all(segment.isidentifier() for segment in suffix):
+                bindings.append(dict(path='::'.join([name, *suffix]), package=package,
+                                     module=declaration['module'], source=declaration['source']))
+    bindings.sort(key=lambda binding: binding['path'])
     return dict(path=DEPENDENCY_CONTEXT, source=content.decode('utf-8'),
-                sha256=hashlib.sha256(content).hexdigest(), bindings=bindings)
+                sha256=hashlib.sha256(content).hexdigest(), roots=roots, bindings=bindings)
+
+
+def dependency_source_packages(context, generated):
+    """Keep source browsing focused on declared modules and example imports."""
+    selected = {binding['package'] for binding in context['bindings'] if binding['source'] == 'module'}
+    for source in generated:
+        # These inputs are generated, gofmt-formatted Go files.
+        for statement in re.finditer(r'^import (?:\(([\s\S]*?)^\)|([^\n]*))', source, re.MULTILINE):
+            selected.update(re.findall(r'"([^"\n]+)"', statement[1] or statement[2]))
+    return sorted(selected & {binding['package'] for binding in context['bindings']})
 
 
 def dependency_sources(packages, records, *, goroot, toolchain_version, exports):
@@ -89,10 +116,10 @@ def dependency_sources(packages, records, *, goroot, toolchain_version, exports)
             raise ValueError(f'dependency has an invalid selected Go file inventory: {package}')
         files = [source_file(base, (directory.relative_to(base) / name).as_posix(), prefix)
                  for name in sorted(names)]
-        archive = exports / (package.replace('/', '_') + '.a')
+        archive = exports / (package.replace('/', '_') + '.a.gz')
         dependencies.append(dict(package=package, version=version, source=origin,
                                  files=files, licenses=licenses,
-                                 exportSha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+                                 exportSha256=hashlib.sha256(gzip.decompress(archive.read_bytes())).hexdigest(),
                                  **identity))
     return dependencies
 

@@ -234,6 +234,8 @@ ModuleDecl = "mod" Identifier ;
 
 `use fmt;`、`use encoding::json;`、`use source::Thing as Alias;`、`use source::*;` 均有文法入口；`as _` 用于副作用导入。路径各段不能写类型实参。分组 `use a::{b, c}`、根 `super::` 和内联 `mod child { ... }` 当前在解析阶段拒绝。外部 `mod child;` 由包加载器关联真实子包；单独解析一份文件不会凭空建立该包。
 
+`use crate::child;` 使用同一条路径文法，`crate` 的所属 target 含义在包加载与名字绑定时确定。自动库名、依赖 alias、标准库 fallback 与真实 Go 子包解析遵循 [RFC 0028](../rfcs/0028-crate-roots.md)；文法不直接决定依赖来源或包可见性。
+
 ### 6.1 普通类型与值声明
 
 ```text

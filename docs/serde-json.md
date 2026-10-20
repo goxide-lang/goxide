@@ -1,6 +1,6 @@
 # JSON protocol backend prototype
 
-The derive owner is the root `github.com/goxide-lang/serde` package. In `.gox`, bind it with `use serde;` and write `#[derive(serde::Serialize, serde::Deserialize)]`. The `serde::json` namespace is a format adapter, not a derive owner. Explicit item imports or aliases retain their canonical owner; unbound `Serialize` / `Deserialize` are rejected. Configure the namespace tree in the [dependency roots](design/dependency-roots.md); the [static path contract](design/static-paths.md) applies to both CLI and Playground.
+The derive owner is the root `github.com/goxide-lang/serde` package. In `.gox`, bind it with `use serde;` and write `#[derive(serde::Serialize, serde::Deserialize)]`. The `serde::json` namespace is a format adapter, not a derive owner. Explicit item imports or aliases retain their canonical owner; unbound `Serialize` / `Deserialize` are rejected. Declare the dependency alias root in the [dependency roots](design/dependency-roots.md); `serde::json` resolves the real Go subpackage within that source, and the [static path contract](design/static-paths.md) applies to both CLI and Playground.
 
 `Encode(serde.WriteValue)` / `Decode([]byte, serde.ReadValue)` run the format-independent serde protocols. `Marshal[T]` / `Unmarshal[T]` accept concrete encode/decode helpers. There is no reflection fallback for application structs and no mandatory core Value tree. The decoder advances `encoding/json.Decoder.Token` with `UseNumber`; byte input and output are buffered, not a streaming I/O API.
 

@@ -19,8 +19,6 @@ func TestProjectFeaturesBuildRunTestAndStableLock(t *testing.T) {
 		"app/goxide.toml": `[go_mod]
 module = "example.org/features/app"
 go = "1.27"
-[namespaces]
-sub = "example.org/features/app/sub"
 [[bin]]
 name = "app"
 path = "cmd/app"
@@ -34,6 +32,7 @@ shared = []
 extra = []
 `,
 		"app/cmd/app/main.gox": `package main
+mod sub;
 use fmt;
 use sub;
 use left;
@@ -42,11 +41,11 @@ const RootDefault = cfg!(feature("default"))
 const RootShared = cfg!(feature("shared"))
 func main() { fmt::Println(RootDefault, RootShared, sub::Shared(), left::Shared(), left::Value(), right::Value()) }
 `,
-		"app/sub/value.gox": "package sub\nfunc Shared() bool { return cfg!(feature(\"shared\")) }\n",
+		"app/cmd/app/sub/value.gox": "package sub\nfunc Shared() bool { return cfg!(feature(\"shared\")) }\n",
 		"app/cmd/app/main_test.go": `package main
 import (
     "testing"
-    "example.org/features/app/sub"
+    "example.org/features/app/cmd/app/sub"
     "example.org/features/left"
     "example.org/features/right"
 )

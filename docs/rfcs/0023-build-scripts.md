@@ -12,6 +12,8 @@
 
 ### 显式声明
 
+生成包按 [RFC 0028](0028-crate-roots.md) 归属 target 或共享 lib 的模块树；下例采用现行 crate 边界，输出属于 `cmd/app`。host helper 的依赖和授权上下文继续独立。
+
 ```toml
 [go_mod]
 module = "example.org/app"
@@ -25,7 +27,7 @@ path = 'cmd/app'
 entry = 'tools/build/main.gox'
 env = ['SCHEMA_MODE']
 inputs = ['schema.txt', 'templates']
-outputs = ['gen/schema.go', 'gen/data.txt']
+outputs = ['cmd/app/gen/schema.gox', 'cmd/app/gen/data.txt']
 timeout_seconds = 60
 
 [build.dependencies]
@@ -82,7 +84,7 @@ goxide scripts clean ./app
 
 ## 转译示例
 
-BS-01 白例：schema 输入显式声明，已批准根项目；host 生成器读取 request.SourceDir 下 schema.txt，在 request.OutDir 生成模块相对 `gen/schema.gox`，其内容为：
+BS-01 白例：schema 输入显式声明，已批准根项目；host 生成器读取 request.SourceDir 下 schema.txt，在 request.OutDir 生成模块相对 `cmd/app/gen/schema.gox` 及声明的 data.txt，源码内容为：
 
 ```goxide
 package gen
@@ -96,7 +98,7 @@ package gen
 func Version() int { return 42 }
 ```
 
-消费包 import `example.org/app/gen`，无需把生成文件写回源码。generated `.go` 和资源可使用正常 `go:embed`；文件入口映射仍遵循 RFC 0022，不自动移动同目录资源。完整可运行生成器见 [试用示例](../../examples/build_script/README.md)，自动验收见 [端到端测试](../../cmd/goxide/buildscript_test.go)。
+消费端 `cmd/app/main.gox` 声明 `mod gen;` 并写 `use crate::gen;`，生成 Go import `example.org/app/cmd/app/gen`，无需把生成文件写回源码。多个 target 共用的生成包归入 lib，经库公开入口消费。generated `.go` 和资源可使用正常 `go:embed`；文件入口映射仍遵循 RFC 0022，不自动移动同目录资源。已有脚本机制的[试用示例](../../examples/build_script/README.md)和[端到端测试](../../cmd/goxide/buildscript_test.go)保留；本例新增的 crate 归属由 RFC 0028 的行为验收覆盖。
 
 BS-01 黑例：未信任根项目，输入完全相同，构建在任何 host 编译/执行前返回 `B-TRUST-ROOT`；不会因仅需 transpile 而绕过。trust-project 后再走以上顺序。
 

@@ -1,5 +1,6 @@
 """Small identity regressions; no compiler build, dependency install or network."""
 import copy
+import gzip
 import hashlib
 import pathlib
 import tempfile
@@ -209,17 +210,33 @@ class CompilerIdentityTests(unittest.TestCase):
 
 
 class DependencyContextTests(unittest.TestCase):
-    def test_groups_do_not_infer_packages_and_published_bytes_are_exact(self):
+    def test_source_browser_excludes_unused_toolchain_packages(self):
+        context = dict(bindings=[
+            dict(package='fmt', source='toolchain'),
+            dict(package='encoding/json', source='toolchain'),
+            dict(package='time/tzdata', source='toolchain'),
+            dict(package='example.org/std/runtime', source='module'),
+        ])
+        generated = ['package main\nimport (\n\tf "fmt"\n\t"outside.example/library"\n)\nconst unused = "time/tzdata"\n',
+                     'package main\nimport j "encoding/json"\n']
+        self.assertEqual(build_support.dependency_source_packages(context, generated),
+                         ['encoding/json', 'example.org/std/runtime', 'fmt'])
+
+    def test_package_trees_use_exact_owners_and_published_bytes_are_exact(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             path = root / build_support.DEPENDENCY_CONTEXT
             path.parent.mkdir(parents=True)
-            source = b'[roots.std]\nmodule="example.org/std"\nnamespaces={value="example.org/std/value"}\n'
+            source = b'[roots.std]\nmodule="example.org/std"\n'
             path.write_bytes(source)
-            context = build_support.dependency_context(root)
+            context = build_support.dependency_context(root, {
+                'example.org/std/value': dict(module='example.org/std', standard=False),
+                'example.org/std/hidden/value': dict(module='example.org/std/hidden', standard=False),
+                'encoding/json': dict(module='', standard=True),
+            })
             self.assertEqual(context['source'].encode(), source)
             self.assertEqual(context['sha256'], hashlib.sha256(source).hexdigest())
-            self.assertEqual(context['bindings'], [dict(path='std::value', package='example.org/std/value', module='example.org/std', source='module')])
+            self.assertEqual(context['bindings'], [dict(path='encoding::json', package='encoding/json', module='', source='toolchain'), dict(path='std::value', package='example.org/std/value', module='example.org/std', source='module')])
 
 
 class LicenseTests(unittest.TestCase):
@@ -271,8 +288,8 @@ class DependencySourcesTests(unittest.TestCase):
         (directory / 'source.go').write_bytes(content)
         (directory / 'source_test.go').write_text('must not publish tests')
         (directory / 'inactive.go').write_text('must not publish another target')
-        archive = path.replace('/', '_') + '.a'
-        (self.exports / archive).write_bytes(b'exact native export archive for ' + path.encode())
+        archive = path.replace('/', '_') + '.a.gz'
+        (self.exports / archive).write_bytes(gzip.compress(b'exact native export archive for ' + path.encode(), mtime=0))
         record = dict(ImportPath=path, Dir=str(directory), Export='/unused/native-export.a',
                       GoFiles=['source.go'], TestGoFiles=['source_test.go'],
                       IgnoredGoFiles=['inactive.go'], **identity)
@@ -304,8 +321,7 @@ class DependencySourcesTests(unittest.TestCase):
         for file, expected in zip(dependency['files'], [cgo, content]):
             self.assertEqual(file['source'].encode(), expected)
             self.assertEqual(file['sha256'], hashlib.sha256(expected).hexdigest())
-        archive = self.exports / 'example.org_library_value.a'
-        self.assertEqual(dependency['exportSha256'], hashlib.sha256(archive.read_bytes()).hexdigest())
+        self.assertEqual(dependency['exportSha256'], hashlib.sha256(b'exact native export archive for example.org/library/value').hexdigest())
         self.assertEqual(dependency['licenses'][0]['path'], 'example.org/library/LICENSE')
 
     def test_toolchain_sources_have_their_actual_identity(self):

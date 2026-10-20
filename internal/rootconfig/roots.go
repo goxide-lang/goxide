@@ -16,14 +16,11 @@ import (
 
 const Filename = "goxide.roots.toml"
 
-// Mapping declares exact packages belonging to one selected module or the Go
-// toolchain. A missing Package is a grouping namespace, never a module-path
-// shorthand. Namespace keys are explicit ::-separated identifier segments.
+// Mapping binds a source root to a selected Go module or toolchain package tree.
 type Mapping struct {
-	Module     string            `toml:"module,omitempty" json:"module,omitempty"`
-	Package    string            `toml:"package,omitempty" json:"package,omitempty"`
-	Source     string            `toml:"source,omitempty" json:"source,omitempty"`
-	Namespaces map[string]string `toml:"namespaces,omitempty" json:"namespaces,omitempty"`
+	Module  string `toml:"module,omitempty" json:"module,omitempty"`
+	Package string `toml:"package,omitempty" json:"package,omitempty"`
+	Source  string `toml:"source,omitempty" json:"source,omitempty"`
 }
 
 func Parse(filename string, data []byte) (paths.Roots, error) {
@@ -49,7 +46,7 @@ func Parse(filename string, data []byte) (paths.Roots, error) {
 		fields, _ := declarations[alias].(map[string]any)
 		for _, key := range sortedKeys(fields) {
 			switch key {
-			case "module", "package", "source", "namespaces":
+			case "module", "package", "source":
 			default:
 				return nil, fmt.Errorf("%s: root %s: unknown field %q (keys are case-sensitive)", filename, alias, key)
 			}
@@ -69,7 +66,7 @@ func Build(mappings map[string]Mapping) (paths.Roots, error) {
 	roots := paths.Roots{}
 	for _, name := range sortedKeys(mappings) {
 		mapping := mappings[name]
-		if !identifier(name) {
+		if name == "crate" || !identifier(name) {
 			return nil, fmt.Errorf("invalid dependency root %q", name)
 		}
 		source := mapping.Source
@@ -91,38 +88,17 @@ func Build(mappings map[string]Mapping) (paths.Roots, error) {
 		if mapping.Package != "" && !packagePath(mapping.Package) {
 			return nil, fmt.Errorf("root %s: invalid exact package path %q", name, mapping.Package)
 		}
-		namespace := paths.Namespace{PackagePath: mapping.Package, ModulePath: mapping.Module, Source: source, Children: map[string]paths.Namespace{}}
-		for _, key := range sortedKeys(mapping.Namespaces) {
-			segments := strings.Split(key, "::")
-			for _, segment := range segments {
-				if !identifier(segment) {
-					return nil, fmt.Errorf("root %s: invalid namespace path %q", name, key)
-				}
-			}
-			if !packagePath(mapping.Namespaces[key]) {
-				return nil, fmt.Errorf("root %s: namespace %s requires an exact package path", name, key)
-			}
-			namespace = insert(namespace, segments, mapping.Namespaces[key])
+		prefix := mapping.Package
+		if prefix == "" {
+			prefix = mapping.Module
 		}
+		if prefix == "" {
+			return nil, fmt.Errorf("root %s: toolchain source requires a package prefix", name)
+		}
+		namespace := paths.Namespace{PackagePath: mapping.Package, ModulePath: mapping.Module, Source: source, GoPrefix: prefix}
 		roots[name] = namespace
 	}
 	return roots, nil
-}
-
-func insert(parent paths.Namespace, segments []string, packageName string) paths.Namespace {
-	if len(segments) == 0 {
-		parent.PackagePath = packageName
-		return parent
-	}
-	if parent.Children == nil {
-		parent.Children = map[string]paths.Namespace{}
-	}
-	child, ok := parent.Children[segments[0]]
-	if !ok {
-		child = paths.Namespace{ModulePath: parent.ModulePath, Source: parent.Source}
-	}
-	parent.Children[segments[0]] = insert(child, segments[1:], packageName)
-	return parent
 }
 
 func identifier(name string) bool { return paths.ValidIdentifier(name) }

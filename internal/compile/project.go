@@ -16,20 +16,22 @@ import (
 )
 
 type Options struct {
-	Bin, GoTool, TargetDir, Target string
-	Offline, Locked                bool
-	Features                       []string
-	NoDefaultFeatures              bool
-	NativeFeatures                 *config.Features // Native directory inputs keep an open root feature set.
-	Roots                          paths.Roots      // Optional root-module namespace context for native directory inputs.
-	Config                         config.Config
-	Tags                           []string
-	Race                           bool
+	Bin, Example, GoTool, TargetDir, Target string
+	Lib                                     bool
+	Offline, Locked                         bool
+	Features                                []string
+	NoDefaultFeatures                       bool
+	NativeFeatures                          *config.Features // Native directory inputs keep an open root feature set.
+	Roots                                   paths.Roots      // Optional root-module namespace context for native directory inputs.
+	Config                                  config.Config
+	Tags                                    []string
+	Race                                    bool
 }
 
-// Result names a stable generated Go module and its selected binary package.
+// Result names a stable generated Go module and its selected target package.
 type Result struct {
 	Root, Entry string
+	Kind        string
 	SourceRoots []string // Original inputs, retained for caller output protection.
 	Config      config.Config
 }
@@ -89,9 +91,15 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	target, err := project.Select(manifest, options.Bin, "", graph.Root.Features)
+	target, err := project.Select(manifest, options.Bin, options.Example, options.Lib, graph.Root.Features)
 	if err != nil {
 		return nil, err
+	}
+	kind := "bin"
+	if options.Lib {
+		kind = "lib"
+	} else if options.Example != "" {
+		kind = "example"
 	}
 	features := make(map[string]config.Features, len(graph.Nodes))
 	for _, node := range graph.Nodes {
@@ -139,14 +147,14 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		}
 		output := filepath.Join(staged, "deps", project.Digest(node.Module)[:16])
 		selected := project.Target{Name: "native", Path: "."}
-		kind := "lib"
+		targetKind := "lib"
 		if node == graph.Root {
 			output = filepath.Join(staged, "module")
-			selected, kind = target, "bin"
+			selected, targetKind = target, kind
 		} else if node.Manifest.Lib != nil {
 			selected = *node.Manifest.Lib
 		}
-		packagePath, err := stageSources(node, selected, kind, output)
+		packagePath, err := stageSources(node, selected, targetKind, output)
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +181,14 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		}
 		moduleConfig := configuration
 		moduleConfig.Features = features[node.SourceKey]
-		modules = append(modules, lower.Module{Path: node.Module, Dir: output, RootPackage: rootPackage, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race})
+		module := lower.Module{Path: node.Module, Dir: output, RootPackage: rootPackage, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race}
+		if node.HasManifest && !(node == graph.Root && options.NativeFeatures != nil) {
+			module.Crates, module.Targets, err = targetCrates(node, selected, targetKind)
+			if err != nil {
+				return nil, err
+			}
+		}
+		modules = append(modules, module)
 	}
 	if err := prepareModules(graph, generated); err != nil {
 		return nil, err
@@ -189,10 +204,13 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(string(name)) != "main" {
-		return nil, fmt.Errorf("bin target %s must be package main", target.Name)
+	if main := strings.TrimSpace(string(name)) == "main"; kind == "lib" && main || kind != "lib" && !main {
+		if kind == "lib" {
+			return nil, fmt.Errorf("lib target %s must be an importable package, not package main", target.Name)
+		}
+		return nil, fmt.Errorf("%s target %s must be package main", kind, target.Name)
 	}
-	spec, err := unitSpec(graph, target, configuration, features, options.Tags, options.Race)
+	spec, err := unitSpec(graph, target, kind, configuration, features, options.Tags, options.Race)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +225,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		return nil, err
 	}
 	configuration.Features = features[graph.Root.SourceKey]
-	result := &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry, Config: configuration}
+	result := &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry, Kind: kind, Config: configuration}
 	for _, node := range graph.Nodes {
 		result.SourceRoots = append(result.SourceRoots, node.Root)
 	}
@@ -243,9 +261,6 @@ func supportedManifest(manifest project.Manifest) error {
 	if manifest.Build != nil {
 		return fmt.Errorf("build scripts resume after pre-MVP")
 	}
-	if len(manifest.Examples) != 0 {
-		return fmt.Errorf("example targets are not supported")
-	}
 	for _, alias := range project.Keys(manifest.Dependencies) {
 		dependency := manifest.Dependencies[alias]
 		if dependency.Workspace {
@@ -255,7 +270,7 @@ func supportedManifest(manifest project.Manifest) error {
 	return nil
 }
 
-func unitSpec(graph *project.Graph, target project.Target, configuration config.Config, features map[string]config.Features, tags []string, race bool) (project.UnitSpec, error) {
+func unitSpec(graph *project.Graph, target project.Target, kind string, configuration config.Config, features map[string]config.Features, tags []string, race bool) (project.UnitSpec, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return project.UnitSpec{}, err
@@ -303,7 +318,7 @@ func unitSpec(graph *project.Graph, target project.Target, configuration config.
 	}{sources, target, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, environment.GoTool, project.Digest(compiler), graph.PlanID})
 	host := environment.Host.OS + "-" + environment.Host.Arch
 	platform := environment.Target.OS + "-" + environment.Target.Arch
-	return project.UnitSpec{Host: host, Target: platform, Kind: "bin", Name: target.Name, Config: identity}, nil
+	return project.UnitSpec{Host: host, Target: platform, Kind: kind, Name: target.Name, Config: identity}, nil
 }
 
 func within(root, name string) bool {

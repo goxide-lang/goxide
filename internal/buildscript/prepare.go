@@ -155,20 +155,10 @@ func Prepare(o Options) (*Plan, error) {
 	if o.ToolchainRoots == nil {
 		o.ToolchainRoots = paths.Roots{}
 	}
-	var validateRoots func(map[string]paths.Namespace) error
-	validateRoots = func(roots map[string]paths.Namespace) error {
-		for alias, root := range roots {
-			if root.Source != "toolchain" || root.ModulePath != "" {
-				return fmt.Errorf("host root %s: only explicit toolchain roots are supported; target module mappings do not authorize host imports", alias)
-			}
-			if err := validateRoots(root.Children); err != nil {
-				return err
-			}
+	for alias, root := range o.ToolchainRoots {
+		if root.Source != "toolchain" || root.ModulePath != "" {
+			return nil, fmt.Errorf("host root %s: only explicit toolchain roots are supported; target module mappings do not authorize host imports", alias)
 		}
-		return nil
-	}
-	if err := validateRoots(o.ToolchainRoots); err != nil {
-		return nil, err
 	}
 	var err error
 	o.ProjectRoot, err = filepath.Abs(o.ProjectRoot)

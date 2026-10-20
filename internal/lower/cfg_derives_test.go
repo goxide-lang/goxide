@@ -109,8 +109,7 @@ func compileCFGSupport(t *testing.T, source string, enabled bool) (string, error
 	}
 	writeDiagnosticModuleFile(t, directory, "main.gox", []byte(source))
 	roots := paths.Roots{"serde": {
-		ModulePath: "github.com/goxide-lang/serde", PackagePath: "github.com/goxide-lang/serde",
-		Children: map[string]paths.Namespace{"json": {PackagePath: "github.com/goxide-lang/serde/json"}},
+		ModulePath: "github.com/goxide-lang/serde", Source: "module", GoPrefix: "github.com/goxide-lang/serde",
 	}}
 	features := config.Features{Enabled: map[string]bool{"derive": enabled}, Declared: map[string]bool{"derive": true}}
 	err := lower.CompileModules([]lower.Module{{Path: "cfgsupport", Dir: directory, Roots: roots, Config: testConfig(t, features)}})

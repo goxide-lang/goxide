@@ -25,6 +25,7 @@ func TestLocalProtocolAliasModules(t *testing.T) {
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", mod("aliases.example/lib", ""))
 	writeAcceptanceSerdeRoots(t, src, "")
+	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
 	packagesWrite(t, src, "model/item.gox", `package model; use serde;
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
 type Item struct{N int;Name string}
@@ -56,7 +57,7 @@ func EqualsItem(a,b Item)bool{return true}
 	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
 	appsrc := t.TempDir()
 	packagesWrite(t, appsrc, "go.mod", mod("aliases.example/app", lib))
-	writeAcceptanceSerdeRoots(t, appsrc, "aliases.example/lib", "model", "other", "relay", "fake")
+	writeAcceptanceSerdeRoots(t, appsrc, "aliases.example/lib")
 	// Both canonical imports exist only in native Go: no goxide selector is available.
 	packagesWrite(t, appsrc, "aliases.go", `package app
 import m "aliases.example/lib/relay"
@@ -146,7 +147,7 @@ func TestPublicGoHelpers(t *testing.T){v:=a.DefaultWrap();c:=a.CloneWrap(&v);if 
 		for _, definition := range []string{"type Local m::Item", "type Fresh m::Item;type Local=Fresh"} {
 			bad := t.TempDir()
 			packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
-			writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib", "model", "other", "relay", "fake")
+			writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib")
 			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; %s\nuse library::model as m;\n%s\n#[derive(%s)]\ntype W struct{V Local}\n", ownerUse, definition, derive))
 			log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
 			if !strings.Contains(log, "bad.gox") && !strings.Contains(log, "requires an explicit ") {
@@ -156,7 +157,7 @@ func TestPublicGoHelpers(t *testing.T){v:=a.DefaultWrap();c:=a.CloneWrap(&v);if 
 	}
 	shadow := t.TempDir()
 	packagesWrite(t, shadow, "go.mod", mod("aliases.example/shadow", lib))
-	writeAcceptanceSerdeRoots(t, shadow, "aliases.example/lib", "model")
+	writeAcceptanceSerdeRoots(t, shadow, "aliases.example/lib")
 	packagesWrite(t, shadow, "shadow.gox", `package shadow
 use library::model as m;
 type Local=m::Item
@@ -169,7 +170,7 @@ func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
 	// Matching shape/helper spellings in another package do not convey registration.
 	bad := t.TempDir()
 	packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
-	writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib", "model", "other", "relay", "fake")
+	writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib")
 	packagesWrite(t, bad, "bad.gox", "package bad\nuse library::fake as m;\ntype Local=m::Item\n#[derive(Clone)]\ntype W struct{V Local}\n")
 	compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "fake"), src)
 }

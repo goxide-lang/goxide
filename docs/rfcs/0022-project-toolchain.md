@@ -4,7 +4,7 @@
 
 已实现：feature、`#[cfg(...)]`、`#[cfg_attr(...)]` 与 `cfg!(...)` 接入新管线。条件属性在名字和类型检查前选择有效 item；cfg! 只产生布尔常量，if 两支按普通语言规则检查。条件配置覆盖 feature、五个 target 字段和原始 env，同时覆盖原生 Go 的 `go generate` 和单项目 `goxide.toml`；当前入口和测试见[能力状态表](../mvp-gap-audit.md)。
 
-首批支持完整顶层 item、条件属性和布尔查询，包括宏生成的这些形式。字段、变体、成员等内部节点后续接入。工作流目标、环境快照与查询入口见下文。workspace、example/lib 的 CLI 目标选择、构建脚本与跨目标执行不随本轮开放。
+首批支持完整顶层 item、条件属性和布尔查询，包括宏生成的这些形式。字段、变体、成员等内部节点后续接入。工作流目标、环境快照与查询入口见下文。lib/bin/example 的 CLI 目标选择已随 [RFC 0028](0028-crate-roots.md) 接入；workspace、构建脚本与跨目标执行仍未开放。
 
 前端接入以[新前端合同](../design/frontend-ast.md#84-feature-条件编译合同)为准，使用 AST 和宏来源信息。项目模式复用 `internal/project` 的 feature 图，将每模块结果传入 `internal/compile` 与新前端；原生 Go 模式直接传入当前包的显式 feature 集。旧 `//goxide:cfg` 注释不作为配置入口，不保留文本预处理和旧 metadata 机制。
 
@@ -33,7 +33,7 @@ feature 图采用请求并集的最小不动点：根请求开始，反复加入
 
 ## 源级规则
 
-模块根目录显式放置 `goxide.toml`，声明生成 Go module 所需的 `go_mod.module` / `go_mod.go`，未知字段报错。Goxide 的 `use` 使用依赖别名；手写 Go 的 import 仍写 Go package 路径。下例展示清单字段组合，包含后续开放的 example 目标；首批使用 go_mod/dependencies/features/bin 和依赖的 lib：
+模块根目录显式放置 `goxide.toml`，声明生成 Go module 所需的 `go_mod.module` / `go_mod.go`，未知字段报错。Goxide 的 `use` 使用依赖别名；手写 Go 的 import 仍写 Go package 路径。下例展示当前支持的 go_mod/dependencies/features/lib/bin/example 清单字段组合：
 
 ```toml
 [go_mod]
@@ -71,6 +71,8 @@ path = 'src/lib.gox'
 
 `[lib]` 为零或一个表；`[[bin]]` / `[[example]]` 是显式数组表，不自动扫描约定目录、父目录或相邻项目。每个类别内名称唯一；bin 和 example 可以同名，因为选择 flag 不同。目标 path 必须是模块内目录或 `.gox` / `.go` 文件，不能越过嵌套 `goxide.toml` 或 `go.mod`。未注册 helper 仍按 Go 目录包处理，不能隐式混合多个 main。
 
+目标边界采用 [RFC 0028](0028-crate-roots.md) 的实施合同：每个 lib/bin/example 有独立 `crate::`；bin/example 经 `[lib].name` 使用本项目库的公开 API。原生 Go helper 按所属 target 的包图纳入，同 module 不授予跨 target 私有访问；库名须是合法源标识符并避免保留根和依赖 alias 冲突。
+
 文件入口会显式映射：lib 文件到生成 module 根（包名由源文件决定）；bin/example 到 `goxide_targets/<类别>/<名称>/`。因此同一 src 目录中的多个 main 文件可以分别选择，并通过原 module path 导入 lib。目录入口保持相对目录包路径。文件入口只搬移该文件，不搬移同目录 helper 或相对 `go:embed` 资源；含这些内容的 CLI/web 应选择目录入口。所有目标入口从普通目录源中排除，只恢复选中入口和 lib；最终生成 Go 路径冲突拒绝，不覆盖文件。`goxide_targets` 为目标映射目录。
 
 ### 两种配置来源
@@ -98,7 +100,7 @@ feature 的数组元素支持：本模块 feature 名、`dep:alias`（只激活 
 - 不隐式生成与 optional 依赖同名的 feature。version/path/git 是获取渠道；活动 manifest 边取得 goxide.toml 源码后使用相同 feature/default/optional/lib 规则。没有 goxide.toml 的纯 Go 或固定配置生成 Go 不接受显式 goxide feature 请求。仅 go.mod require/indirect 参与 Go 选版，不隐式开启 goxide defaults 或执行脚本。
 - TOML go.require 不因 goxide optional 关闭而被删除；显式 Go 依赖仍由 Go 解析。
 
-每个 module 在一次构建中只有一份最终 feature 集，其包共享该集合。`required_features` 在图求解后检查最终集合，不隐式开启 feature；首批接通现有 bin 与依赖 lib 的该检查，不扩大目标选择入口。删除条件 `use` / import 只影响源码包绑定，不反向删除清单里的非 optional 依赖；避免取得依赖必须使用未激活的 optional 边。
+每个 module 在一次构建中只有一份最终 feature 集，其包共享该集合。`required_features` 在图求解后检查最终集合，不隐式开启 feature；选中的 lib/bin/example 及依赖 lib 均执行该检查。删除条件 `use` / import 只影响源码包绑定，不反向删除清单里的非 optional 依赖；避免取得依赖必须使用未激活的 optional 边。
 
 ### 谓词
 
@@ -400,7 +402,7 @@ features = ["fast"]
 
 上面仅展示格式，不是测试访问的服务。版本解析、MVS、module 缓存、校验和全部调用真实 Go 工具。TOML 内保留原生 require 与本地 replace 语义。增强依赖与 go.require 的版本请求共同交 Go MVS 选择，不因两个最低版本不同就拒绝；显式本地/Git 来源不能覆盖根 TOML 已有的不一致 go.replace。根 replace/exclude 为全局权威，不提升依赖自己的策略。源 go.mod/go.sum 不改写，修改限于生成副本。
 
-path/git 入口（Git 含 subdir 后）可以是纯 TOML 作者模块，或者自带普通 go.mod 的原生 Go 模块；不借用父目录配置。module 身份来自该根的清单，显式断言必须相等。TOML 模块只在受管目录合成 Go 元数据。Goxide 依赖必须声明自身 lib 入口；纯 Go module 默认使用模块根包，Go 子包通过 namespaces 精确映射。
+path/git 入口（Git 含 subdir 后）可以是纯 TOML 作者模块，或者自带普通 go.mod 的原生 Go 模块；不借用父目录配置。module 身份来自该根的清单，显式断言必须相等。TOML 模块只在受管目录合成 Go 元数据。Goxide 依赖必须声明自身 lib 入口；纯 Go module 默认使用模块根路径，Go 子包按 `use alias::真实子路径` 查询并核验 module owner；不再配置逐包映射。
 
 本地 path 相对声明它的 manifest，而非 cwd；不递归发现相邻模块。Git 的 rev/tag/branch 选择器可省略，此时选默认分支；首次解析后在 goxide.lock 锁定精确 commit，之后移动 ref 不改变锁。Git subdir 必须在 checkout 内并含自身的 goxide.toml 或 go.mod，不选择普通子包。不同来源节点占用同一 Go module 路径时，在 Go 投影前按 [schema](../design/toml-manifest.md#来源与包身份)诊断。
 
@@ -428,7 +430,7 @@ TOML 模式生成 module 和所需 deps 副本，使用现有受管 target 布�
 
 启用配置后执行 go generate、go build、go test；切换配置要修改或重新执行生成命令。Goxide 可调用所选 Go 文件中的声明；Go 直接调用本次生成的 API，例如 CFG-01 的 Encode 和 HasJSON。被 cfg 删除的公开 API 同样不对 Go 消费者存在，手写 Go 的无条件调用应正常报错。
 
-以下是 TOML 用法，目标选择限当前 bin 入口。所有 flag 在输入目录之前，真实 Go 需 1.27+：
+以下是 TOML 用法，项目命令可选择 lib/bin/example。所有 flag 在输入目录之前，真实 Go 需 1.27+：
 
 ```sh
 goxide run --go /path/to/go --bin cli --features pretty ./app
@@ -441,9 +443,9 @@ goxide transpile --bin cli ./app
 goxide transpile --bin cli -o ./app-generated ./app
 ```
 
-单个 bin 可省 --bin；多个 bin 必须显式选择。每次选择一个根目标及依赖闭包，活动 TOML 依赖沿用其 lib；无清单的原生 Go 依赖保持既有加载方式。后续开放 example/lib CLI 选择时，三种选择互斥、run 只接受可执行目标；required_features 继续只检查、不隐式开启 feature。
+单个 bin 可省 --bin；多个 bin 必须显式选择。每次选择一个根目标及依赖闭包，活动 TOML 依赖沿用其 lib；无清单的原生 Go 依赖保持既有加载方式。`--bin`、`--example` 与 `--lib` 三种选择互斥，run 只接受 bin/example；required_features 继续只检查、不隐式开启 feature。
 
-TOML 模式保留现有 target 输出、目录所有权及覆盖保护，生成诊断保留源位置；原生 Go 原位输出规则见 [gen 指南](../using-goxide-gen.md)。本次只把 feature 接入配置身份与源码选择，不扩大 source map、参数透传或目标选择接口。
+TOML 模式保留现有 target 输出、目录所有权及覆盖保护，生成诊断保留源位置；原生 Go 原位输出规则见 [gen 指南](../using-goxide-gen.md)。feature 参与配置身份与源码选择，不隐式改变目标；目标操作按 RFC 0028，source map 与参数透传保持各自边界。
 
 普通构建与测试沿用各入口的现有文件选择；原生 `_test.go` 正常参与测试，不提供 test 谓词。Go 消费者使用当前配置的普通 Go API，不需要 feature 求值器。
 

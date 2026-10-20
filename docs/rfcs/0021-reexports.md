@@ -24,8 +24,8 @@ pub use source::Item as Record;     // 对 goxide 消费者公开
 pub use source::*;                  // 枚举来源的有效公开表
 ```
 
-- `source` 来自显式依赖根，或本文件 `use` / 包级 `pub use` 绑定；不猜目录相对路径。
-- 私有 use 是文件作用域；pub use 是包公开绑定。namespace、逐项别名、glob 和明确配置的嵌套 namespace 均支持，函数体内 use 与分组列表语法未实现。
+- `source` 来自显式依赖根或已有静态绑定（`mod`、本文件 `use`、包级 `pub use`）；[RFC 0028](0028-crate-roots.md) 规定 `crate::`、自动库名与标准库 fallback。目录存在本身不建立公开入口。
+- 私有 use 是文件作用域；pub use 是包公开绑定。namespace、逐项别名、glob、公开模块路径及纯 Go 真实子路径均支持，函数体内 use 与分组列表语法未实现。
 - 包、类型、宏和派生路径统一使用 `::`，值字段与接收者方法使用 `.`。普通函数项可裸名调用；`api::Add(...)` 为包限定调用。
 - 不同声明/类型占同名均诊断；显式项不覆盖 glob，声明顺序不决定结果。生成名字避开所有源文件的声明。
 - 私有项不生成可供 sibling 源文件偷用的 Go alias；公开类型/常量输出真实 Go alias。普通 Go 只见实际声明，不自动获得增强语言的虚拟入口。

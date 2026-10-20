@@ -93,7 +93,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.StringVar(&req.SourceMap, "source-map", "", "write single-file source mapping JSON")
 		f.StringVar(&req.Expanded, "expanded", "", "write single-file expanded Go source")
 		f.StringVar(&req.Runtime, "runtime", "", "Go module root selecting pinned public std/serde dependencies (standalone single-file run/build only)")
-		f.StringVar(&req.RootsFile, "roots", "", "explicit dependency namespace mapping file (native Go module or standalone source)")
+		f.StringVar(&req.RootsFile, "roots", "", "explicit dependency root declarations file (native Go module or standalone source)")
 		f.StringVar(&req.Tags, "tags", "", "Go build tags (directory mode; comma/space separated)")
 		f.StringVar(&req.Target, "target", "", "compilation target: GOARCH-unknown-GOOS or GOOS/GOARCH (toolchain workflow only)")
 		f.StringVar(&req.GoTool, "go", "go", "Go compiler executable (must match the frontend toolchain; used by all compilation modes)")

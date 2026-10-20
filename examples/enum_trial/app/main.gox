@@ -1,5 +1,7 @@
 package main
 
+mod logkit;
+
 use errors;
 use fmt;
 use os;

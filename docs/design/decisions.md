@@ -169,7 +169,7 @@ D36 补充（用户已授权，先规范后实现）：`go_result!(call)` / `go_
 
 已确认 **工具链 UT01（2026-10-04，独立于语言决策编号）**：迁入后的项目根只保留 `goxide.toml` / `goxide.lock` 为配置/锁权威；混合项目表示 `.go` / `.gox` 共存。显式module/Go/toolchain建议及原生require/replace/exclude写入TOML，真实Go负责选版/校验/构建；Go module元数据只在生成视图存在。原Go项目经只读plan、独立staging构建验证后产生新工程，不自动删除/移动/覆盖原文件。具体首片字段、锁与拒绝边界见 [RFC 0025](../rfcs/0025-unified-project.md)，features/多目标见 [RFC 0022](../rfcs/0022-project-toolchain.md)，授权脚本见 [RFC 0023](../rfcs/0023-build-scripts.md)。首片已提交，[集成回归与独立复审](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/unified-project-20261004.md)已完成；确认方向不等于批准完整Cargo兼容。
 
-UT01 替代记录：早期 [TOML 设计](toml-manifest.md) 的长期根go.mod/go.sum兼容、hgo.lock名称和“纯TOML未来提案”标为superseded，原文仅留研究历史；Go proxy source发行物仍需一致传输元数据，不能把发布合同误当作者根双配置许可。
+UT01 替代记录：早期 [TOML 设计](toml-manifest.md) 的长期根go.mod/go.sum兼容和“纯TOML未来提案”标为superseded，原文仅留研究历史；Go proxy source发行物仍需一致传输元数据，不能把发布合同误当作者根双配置许可。
 
 
 UT01 后续用户要求（2026-10-04）：自动迁移包括已有 vendor，不能以远端重新解析覆盖本地修改。按 [供应源码迁入合同](vendor-local-modules.md) 验证后物化普通本地模块；Goxide 不保留 vendor 模式、内容锁或独立拆出协议。原 modules.txt/版本/replace 仅作 provenance，go.sum 不证明修改字节。默认 local，模块级来源候选与交互另步交付；原工程保留，网站由 owner 同步。

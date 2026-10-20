@@ -9,7 +9,7 @@
 - CLI 为 goxide；源文件 main.gox，规范构建入口 build.gox。普通 Go 源仍支持 .go。
 - 旧 .hgo 输入必须改名；目录混合新旧后缀、同名 main.gox/main.hgo 均拒绝，先诊断再生成，不覆盖。
 - GOXIDE_TARGET_DIR、GOXIDE_TRUST_DIR 取代旧环境变量。CLI flag 优先于新环境变量；设置任何已移除 HGO_* 变量均明确拒绝，即便同时有新变量或 flag，避免迁移时悄悄忽略。
-- goxide.toml/goxide.lock 的既定配置及锁格式不因品牌迁移改变。hgo.json/hgo.lock 仅用于旧格式拒绝与迁移说明，不能直接改名冒充新格式。
+- 作者配置与锁分别使用 goxide.toml、goxide.lock；作者清单直接按当前字段校验。
 - 生成公开前缀 Goxide、内部前缀 __goxide；metadata marker、sidecar、缓存目录同步改名并升级 ABI/schema。删除旧受管 target 后重建；所有生产者、消费者和 std 依赖必须同步重新生成，不能只替换生成 Go 文本。
 
 ## 转译示例

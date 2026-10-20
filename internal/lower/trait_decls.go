@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/hxsf/goxide/internal/check"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (e *emitter) traitDecl(n *syntax.TraitDecl) goast.Decl {

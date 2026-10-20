@@ -6,8 +6,8 @@ import (
 	"go/types"
 	"strconv"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (e *emitter) statement(n syntax.Stmt) (output []goast.Stmt) {

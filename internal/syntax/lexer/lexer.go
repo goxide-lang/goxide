@@ -7,7 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 type Diagnostic struct {

@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 // Native signatures participate in the same resolution and type checking as

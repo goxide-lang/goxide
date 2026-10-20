@@ -2,7 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 	"io/fs"
 	"os"
 	"os/exec"

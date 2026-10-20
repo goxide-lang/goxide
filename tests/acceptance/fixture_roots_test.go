@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/paths"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/paths"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 // These roots are explicit fixture data. Source files still declare every use;

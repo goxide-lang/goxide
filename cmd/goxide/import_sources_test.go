@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 func sourceFixture(t *testing.T, fork, modified bool) (string, string, string) {

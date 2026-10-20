@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/buildconfig"
+	"github.com/goxide-lang/goxide/internal/buildconfig"
 	"github.com/pelletier/go-toml/v2"
 )
 

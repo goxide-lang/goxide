@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/naming"
 )
 
 const owner = "goxide-build-script-cache-v1\n"

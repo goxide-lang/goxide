@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 type printPart struct {

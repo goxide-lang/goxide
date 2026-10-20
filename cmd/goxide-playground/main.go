@@ -7,11 +7,11 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/playground"
-	"github.com/hxsf/goxide/internal/rootconfig"
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/playground"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 	"syscall/js"
 )
 

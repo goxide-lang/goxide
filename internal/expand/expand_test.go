@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/syntax/printer"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/printer"
 )
 
 func expandFile(t *testing.T, name, source string) *ast.File {

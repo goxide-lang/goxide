@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 func vendorGo(t *testing.T, root string, args ...string) string {

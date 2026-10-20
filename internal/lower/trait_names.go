@@ -11,9 +11,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 const typeCarrierAnchor = "GoxideInternalTypeCarrierForSelf"

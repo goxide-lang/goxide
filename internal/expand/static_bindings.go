@@ -1,6 +1,6 @@
 package expand
 
-import ast "github.com/hxsf/goxide/internal/syntax/ast"
+import ast "github.com/goxide-lang/goxide/internal/syntax/ast"
 
 // StaticBindings identifies explicit source bindings before dependency roots are
 // routed. packageOf receives original files, including macro definition files.

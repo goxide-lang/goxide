@@ -5,7 +5,7 @@ import (
 	gotoken "go/token"
 	"strconv"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (e *emitter) tryExpr(n *syntax.TryExpr) goast.Expr {

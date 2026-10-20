@@ -2,7 +2,7 @@
 package ast
 
 import (
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 	"reflect"
 )
 

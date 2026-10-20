@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/resolve"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestCompileModulesRejectMappedPrivatePackages(t *testing.T) {

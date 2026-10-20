@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/typecheck"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/typecheck"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestPackageUsesExplicitExportTargetAndEmptyEnvironment(t *testing.T) {

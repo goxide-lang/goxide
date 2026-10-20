@@ -1,8 +1,8 @@
 package prototype_test
 
 import (
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/tests/testutil"
 )
 
 // Prototype sources receive this explicit test graph. The source itself must

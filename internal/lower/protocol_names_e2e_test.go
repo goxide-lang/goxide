@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestRawDefaultMemberMatchesBareDefault(t *testing.T) {

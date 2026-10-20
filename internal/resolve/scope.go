@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func key(id *ast.Ident) Key { return Key{id.Name, id.Ctx} }

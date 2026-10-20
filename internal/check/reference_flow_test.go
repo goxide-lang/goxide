@@ -3,7 +3,7 @@ package check_test
 import (
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/check"
 )
 
 func TestReferenceControlFlowPreservesReachablePermissions(t *testing.T) {

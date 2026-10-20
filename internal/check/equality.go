@@ -3,7 +3,7 @@ package check
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (c *checker) equalityCall(call *ast.CallExpr) bool {

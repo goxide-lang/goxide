@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/lexer"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/lexer"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 type Severity uint8

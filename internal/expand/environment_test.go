@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func environmentConfig(t *testing.T, target string, values ...string) config.Config {

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/syntax/printer"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/printer"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 // Only syntax rejected by the authoritative frontend specification belongs here.

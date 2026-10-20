@@ -3,7 +3,7 @@ package lower
 import (
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
 // CanonicalPath follows namespaces and source reexports for a compiler

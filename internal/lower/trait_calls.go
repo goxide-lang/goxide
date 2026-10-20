@@ -5,8 +5,8 @@ import (
 	gotoken "go/token"
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/check"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func adjustReceiver(value goast.Expr, address, dereference bool) goast.Expr {

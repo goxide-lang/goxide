@@ -6,8 +6,8 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 
-	"github.com/hxsf/goxide/internal/check"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (e *emitter) goResult(call *syntax.CallExpr, adapter *check.GoResult) goast.Expr {

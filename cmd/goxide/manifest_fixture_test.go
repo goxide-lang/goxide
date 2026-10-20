@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 	"github.com/pelletier/go-toml/v2"
 	"os"
 	"os/exec"

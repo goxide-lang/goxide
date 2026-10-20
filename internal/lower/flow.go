@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (e *emitter) fresh(prefix string) *goast.Ident {

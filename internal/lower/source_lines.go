@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/resolve"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func lineOf(file *syntax.File, offset uint32) int {

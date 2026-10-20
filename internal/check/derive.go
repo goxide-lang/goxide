@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/derives"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/derives"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type Derive struct {

@@ -12,11 +12,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/naming"
-	"github.com/hxsf/goxide/internal/paths"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	goxparser "github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/paths"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	goxparser "github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 func hostSource(name string, source []byte) (bool, error) {

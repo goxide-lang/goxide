@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
 func TestToolchainPackageTreesAndMembers(t *testing.T) {

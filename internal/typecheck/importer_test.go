@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hxsf/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/config"
 )
 
 func testConfig(t *testing.T, captured []string) config.Config {

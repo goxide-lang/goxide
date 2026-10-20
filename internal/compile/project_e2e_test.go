@@ -16,9 +16,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/compile"
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/compile"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {

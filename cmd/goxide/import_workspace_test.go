@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 	"os"
 	"os/exec"
 	"path/filepath"

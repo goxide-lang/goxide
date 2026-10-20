@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/hxsf/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/spf13/cobra"
 )
 

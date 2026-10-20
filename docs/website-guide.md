@@ -64,7 +64,7 @@ GOTOOLCHAIN=local GOWORK=off go install -ldflags="-X main.version=v0.0.1" ./cmd/
 
 将 Go 安装可执行文件的目录加入 `PATH`：设置了 `GOBIN` 时使用该目录，否则使用 `go env GOPATH` 对应目录下的 `bin`。未传版本注入参数的普通源码构建显示 `goxide dev`，上述 `-ldflags` 将版本设为 `v0.0.1`。
 
-仓库位于 `goxide-lang/goxide`，Go module 路径仍为 `github.com/hxsf/goxide`。源码构建同样要求运行时所选 Go 与构建 CLI 的 Go 版本完全一致；更换 Go 版本后，须用新工具链重新构建 CLI。
+仓库位于 `goxide-lang/goxide`，当前开发源码的 Go module 路径为 `github.com/goxide-lang/goxide`；既有标签以对应的 `go.mod` 为准。源码构建同样要求运行时所选 Go 与构建 CLI 的 Go 版本完全一致；更换 Go 版本后，须用新工具链重新构建 CLI。
 
 ## 第一个 Goxide 项目
 

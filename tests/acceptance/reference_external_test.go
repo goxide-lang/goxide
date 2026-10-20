@@ -2,7 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -129,7 +129,7 @@ func TestCrossModule(t *testing.T){if a.Run()!=11||a.Extra()!=3||c.Read()!=8{t.F
 		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 		graph := packagesCommand(t, dir, tool, true, "list", "-mod=readonly", "-m", "all")
-		if strings.Contains(graph, "github.com/hxsf/goxide") {
+		if strings.Contains(graph, "github.com/goxide-lang/goxide") {
 			t.Fatalf("generated reference module depends on compiler: %s", graph)
 		}
 	}

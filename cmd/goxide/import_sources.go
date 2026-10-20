@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 // chooseImportSources is import-only. A reader is injected for deterministic

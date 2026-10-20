@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 func TestSourceDiagnosticPositions(t *testing.T) {

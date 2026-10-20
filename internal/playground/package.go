@@ -9,15 +9,15 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 const (

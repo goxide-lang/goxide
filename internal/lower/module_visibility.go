@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
 func (i *moduleImporter) checkRootRequirement(requirement rootRequirement) error {

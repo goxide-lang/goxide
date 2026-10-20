@@ -1,7 +1,7 @@
 package acceptance_test
 
 import (
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"

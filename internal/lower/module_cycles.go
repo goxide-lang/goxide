@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type moduleImport struct {

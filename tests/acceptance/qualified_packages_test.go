@@ -1,7 +1,7 @@
 package acceptance_test
 
 import (
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 func qualifiedSource(t *testing.T) (string, string) {

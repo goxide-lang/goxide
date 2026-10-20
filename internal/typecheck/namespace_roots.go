@@ -1,8 +1,8 @@
 package typecheck
 
 import (
-	"github.com/hxsf/goxide/internal/expand"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/expand"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 const namespaceRootPrefix = "$goxide$roots"

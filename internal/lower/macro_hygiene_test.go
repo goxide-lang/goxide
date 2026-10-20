@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestManualEnumValidatorDoesNotCaptureParameters(t *testing.T) {

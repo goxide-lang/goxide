@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 // A nil Declared set permits any valid feature name, as in a native Go module.

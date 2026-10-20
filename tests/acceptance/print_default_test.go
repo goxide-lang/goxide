@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestPrintDefaultBusinessRace(t *testing.T) {
@@ -30,7 +30,7 @@ func TestPrintDefaultBusinessRace(t *testing.T) {
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
 	for _, args := range [][]string{{"list", "-mod=readonly", "-m", "all"}, {"list", "-buildvcs=false", "-mod=readonly", "-deps", "./..."}} {
 		graph := deliveryCommand(t, generated, tool, true, nil, args...)
-		if strings.Contains(graph, "github.com/hxsf/goxide") {
+		if strings.Contains(graph, "github.com/goxide-lang/goxide") {
 			t.Fatalf("generated program depends on compiler: %s", graph)
 		}
 	}

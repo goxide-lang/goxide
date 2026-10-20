@@ -3,7 +3,7 @@ package buildscript
 import (
 	"testing"
 
-	"github.com/hxsf/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/paths"
 )
 
 func TestHostImportDiagnosticUsesSourceLine(t *testing.T) {

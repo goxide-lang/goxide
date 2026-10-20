@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func requireClean(t *testing.T, diagnostics []Diagnostic) {

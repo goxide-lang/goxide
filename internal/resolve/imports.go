@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (r *resolver) collectUses() {

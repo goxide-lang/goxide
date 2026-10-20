@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/lower"
 )
 
 func TestP4RuntimeViewsAndQualifiedMethods(t *testing.T) {

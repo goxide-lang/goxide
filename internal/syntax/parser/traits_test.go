@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 func TestTraitReceiverAndAssociatedTypeSyntax(t *testing.T) {

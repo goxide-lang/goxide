@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/lower"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestPrintFormattingAndMacroArguments(t *testing.T) {

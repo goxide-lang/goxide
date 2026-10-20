@@ -4,7 +4,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (e *emitter) equalityCall(node syntax.Expr) (goast.Expr, bool) {

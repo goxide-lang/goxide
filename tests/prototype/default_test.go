@@ -1,7 +1,7 @@
 package prototype_test
 
 import (
-	"github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/tests/testutil"
 	"strings"
 	"testing"
 )

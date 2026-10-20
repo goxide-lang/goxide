@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 // Configure selects complete source items before import or declaration discovery.

@@ -2,7 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 	goast "go/ast"
 	"go/parser"
 	"go/token"
@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 // These fixtures use the CLI and independently build its output. In particular,

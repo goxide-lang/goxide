@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/project"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 func writeRootFixture(t *testing.T, root string, files map[string]string) {

@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"github.com/hxsf/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/config"
 	"go/importer"
 	"os"
 	"os/exec"

@@ -3,7 +3,7 @@ package acceptance_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"

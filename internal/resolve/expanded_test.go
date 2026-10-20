@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type sourceMacroResolver map[string]*ast.File

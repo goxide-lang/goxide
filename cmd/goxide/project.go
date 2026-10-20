@@ -16,12 +16,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hxsf/goxide/internal/compile"
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/naming"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/project"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/compile"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 // Package generation belongs to the nearest module. A nested native Go module

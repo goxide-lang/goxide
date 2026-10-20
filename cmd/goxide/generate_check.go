@@ -4,7 +4,7 @@ import (
 	"go/types"
 	"path/filepath"
 
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 // Check the complete selected Go package before any generated file is

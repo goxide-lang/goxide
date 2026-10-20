@@ -4,8 +4,8 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (e *emitter) flowTypeSwitch(n *syntax.TypeSwitchStmt) goast.Stmt {

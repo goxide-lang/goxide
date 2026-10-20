@@ -4,7 +4,7 @@ import (
 	goast "go/ast"
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/check"
 )
 
 func (e *emitter) enumTraitMethods(target *types.Named) []*goast.Field {

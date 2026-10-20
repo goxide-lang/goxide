@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func TestManualProtocolSignatureDiagnostics(t *testing.T) {

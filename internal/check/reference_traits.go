@@ -3,7 +3,7 @@ package check
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (p *permissionChecker) adjustedReceiver(node ast.Expr, q *permission, address, deref bool, mode RefMode) *permission {

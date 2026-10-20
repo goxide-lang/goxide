@@ -3,8 +3,8 @@
 package buildscript
 
 import (
-	"github.com/hxsf/goxide/internal/buildconfig"
-	"github.com/hxsf/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/buildconfig"
+	"github.com/goxide-lang/goxide/internal/paths"
 )
 
 // Config is the shared manifest contract; this alias preserves runner callers.

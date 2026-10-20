@@ -3,9 +3,9 @@ package check
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 type permissionLocation struct {

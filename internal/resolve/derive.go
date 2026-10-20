@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/derives"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/derives"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 // Derive records explicit protocol identity before helper references are walked.

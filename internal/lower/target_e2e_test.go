@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 func targetConfig(t *testing.T, target string) config.Config {

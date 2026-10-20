@@ -3,8 +3,8 @@ package resolve
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 // Parsing cannot distinguish builtin new/make from a same-named function.

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/printer"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/printer"
 )
 
 func TestConfigurationUsageSurvivesSelectionAndMacroExpansion(t *testing.T) {

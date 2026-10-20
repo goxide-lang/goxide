@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/config"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/config"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 // Goxide sources obey the same filename and header selection as their Go output.

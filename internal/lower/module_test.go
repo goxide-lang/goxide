@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
 func TestCompileModulesMappedBlankImports(t *testing.T) {

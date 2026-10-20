@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hxsf/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/config"
 )
 
 type ImporterOptions struct {

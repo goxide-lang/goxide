@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/lower"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/lower"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 // DiagnosticSource associates a logical compiler key with the original input.

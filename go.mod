@@ -1,4 +1,4 @@
-module github.com/hxsf/goxide
+module github.com/goxide-lang/goxide
 
 go 1.27
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 func workspaceWrite(t *testing.T, root, path, body string) {

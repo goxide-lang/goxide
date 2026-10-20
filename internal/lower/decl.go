@@ -4,7 +4,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (e *emitter) decl(n syntax.Item) (out goast.Decl) {

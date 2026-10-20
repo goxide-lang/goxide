@@ -149,7 +149,7 @@ func prepareScriptPlans(g *project.Graph, tool, compiler string, tags []string, 
 		if e != nil {
 			return nil, e
 		}
-		plan, e := buildscript.Prepare(buildscript.Options{ProjectRoot: g.Root.Root, PackageRoot: n.Root, Module: n.Module, SourceID: project.Digest([]string{n.Module, n.Root, n.CheckoutRoot, commit, project.ManifestProtocol + ":" + n.SourceID, g.PlanID}), GoTool: tool, CompilerID: compiler, Root: n == g.Root, Boundary: n.CheckoutRoot, ArtifactRoot: project.ScriptCachePath(layoutRoot, runtime.GOOS+"-"+runtime.GOARCH, runtime.GOOS+"-"+runtime.GOARCH, n.Root, n.Module), Config: *n.Manifest.Build, ToolchainRoots: roots, Features: project.Keys(n.Features), Tags: tags, Race: race})
+		plan, e := buildscript.Prepare(buildscript.Options{ProjectRoot: g.Root.Root, PackageRoot: n.Root, Module: n.Module, SourceID: project.Digest([]string{n.Module, n.Root, n.CheckoutRoot, commit, n.SourceID, g.PlanID}), GoTool: tool, CompilerID: compiler, Root: n == g.Root, Boundary: n.CheckoutRoot, ArtifactRoot: project.ScriptCachePath(layoutRoot, runtime.GOOS+"-"+runtime.GOARCH, runtime.GOOS+"-"+runtime.GOARCH, n.Root, n.Module), Config: *n.Manifest.Build, ToolchainRoots: roots, Features: project.Keys(n.Features), Tags: tags, Race: race})
 		if e != nil {
 			return nil, fmt.Errorf("build script %s: %w", n.Module, e)
 		}

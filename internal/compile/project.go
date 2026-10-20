@@ -236,9 +236,6 @@ func supportedManifest(manifest project.Manifest) error {
 	if manifest.Build != nil {
 		return fmt.Errorf("build scripts resume after pre-MVP")
 	}
-	if manifest.Vendor != nil {
-		return fmt.Errorf("vendor support resumes after pre-MVP")
-	}
 	if len(manifest.Examples) != 0 {
 		return fmt.Errorf("example targets are not supported")
 	}

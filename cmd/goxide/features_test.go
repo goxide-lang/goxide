@@ -173,8 +173,7 @@ func main() { fmt::Println(Value(), cfg!(feature("json"))) }
 func TestManifestFeatureCLI(t *testing.T) {
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
-		"goxide.toml": `[package]
-format = 2
+		"goxide.toml": `[go_mod]
 module = "example.org/cfgcli"
 go = "1.27"
 [[bin]]
@@ -266,7 +265,7 @@ func TestFeaturePartialGenerationSourceGuard(t *testing.T) {
 func TestGenerateNestedNativeModuleKeepsItsBoundary(t *testing.T) {
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
-		"goxide.toml":          "[package]\nformat = 2\nmodule = \"example.org/outer\"\ngo = \"1.27\"\n[[bin]]\nname = \"app\"\npath = \"src\"\n",
+		"goxide.toml":          "[go_mod]\nmodule = \"example.org/outer\"\ngo = \"1.27\"\n[[bin]]\nname = \"app\"\npath = \"src\"\n",
 		"src/main.gox":         "package main\nfunc main() {}\n",
 		"native/go.mod":        "module example.org/native\n\ngo 1.27\n",
 		"native/pkg/value.gox": "package value\nfunc Value() bool { return cfg!(feature(\"local\")) }\n",
@@ -291,7 +290,7 @@ func TestGenerateNestedNativeModuleKeepsItsBoundary(t *testing.T) {
 func TestGenerateSymlinkKeepsNativeModuleBoundary(t *testing.T) {
 	outer, native := t.TempDir(), t.TempDir()
 	projectWrite(t, outer, map[string]string{
-		"goxide.toml":  "[package]\nformat = 2\nmodule = \"example.org/outer\"\ngo = \"1.27\"\n[[bin]]\nname = \"app\"\npath = \"src\"\n",
+		"goxide.toml":  "[go_mod]\nmodule = \"example.org/outer\"\ngo = \"1.27\"\n[[bin]]\nname = \"app\"\npath = \"src\"\n",
 		"src/main.gox": "package main\nfunc main() {}\n",
 	})
 	singleFileWrite(t, native, "go.mod", "module example.org/native\n\ngo 1.27\n")

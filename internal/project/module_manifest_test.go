@@ -13,7 +13,7 @@ func TestPublishedTransportPolicy(t *testing.T) {
 	for _, kind := range []string{"permuted", "conflict", "unsupported"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
-			manifest := "[package]\nformat=2\nmodule='example.org/lib'\ngo='1.27'\n[[go.require]]\nmodule='example.org/a'\nversion='v1.0.0'\n[[go.require]]\nmodule='example.org/b'\nversion='v1.0.0'\nindirect=true\n"
+			manifest := "[go_mod]\nmodule='example.org/lib'\ngo='1.27'\n[[go.require]]\nmodule='example.org/a'\nversion='v1.0.0'\n[[go.require]]\nmodule='example.org/b'\nversion='v1.0.0'\nindirect=true\n"
 			mod := "module example.org/lib\ngo 1.27\nrequire example.org/b v1.0.0 // indirect\nrequire example.org/a v1.0.0\n"
 			if kind == "conflict" {
 				mod = strings.Replace(mod, "example.org/a v1.0.0", "example.org/a v1.1.0", 1)

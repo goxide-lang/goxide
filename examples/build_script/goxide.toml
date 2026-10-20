@@ -1,9 +1,8 @@
-[package]
-format = 2
+[go_mod]
 module = "example.org/buildscript"
 go = "1.27"
 
-[package.namespaces]
+[namespaces]
 gen = "example.org/buildscript/gen"
 
 [[bin]]

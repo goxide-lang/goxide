@@ -99,7 +99,8 @@ func TestNativeWorkspaceCopiedLockMaterializedMembers(t *testing.T) {
 	split := t.TempDir()
 	app := filepath.Join(split, "app")
 	lib := filepath.Join(split, "lib")
-	for module, old := range w.Members {
+	for _, old := range w.Members {
+		module := w.Manifests[old].Module
 		m := w.Manifests[old]
 		to := lib
 		if module == "example.org/app" {

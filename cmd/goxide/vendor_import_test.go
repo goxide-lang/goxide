@@ -305,16 +305,16 @@ func TestVendorRootFeaturesTargetsAndTrust(t *testing.T) {
 	}
 }
 
-func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
+func TestSourceDependencyDiagnosticAfterStabilization(t *testing.T) {
 	proxy, _ := versionProxy(t)
 	first := plainVersionLibrary("v1")
-	first["goxide.toml"] += "\n[vendor]\nmode='go-mod'\n"
+	first["goxide.toml"] = "[go_mod]\n"
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", first)
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", plainVersionLibrary("v2"))
-	publishVersion(t, proxy, "example.org/middle", "v1.0.0", map[string]string{"go.mod": "module example.org/middle\ngo 1.27\n", "goxide.toml": "[package]\nformat=1\n[lib]\nname='middle'\npath='.'\n[dependencies.lib]\ngo = 'example.org/goxidelib'\nversion = 'v1.1.0' \n", "middle.go": "package middle\n"})
+	publishVersion(t, proxy, "example.org/middle", "v1.0.0", map[string]string{"go.mod": "module example.org/middle\ngo 1.27\n", "goxide.toml": "[go_mod]\n[lib]\nname='middle'\npath='.'\n[dependencies.lib]\ngo = 'example.org/goxidelib'\nversion = 'v1.1.0' \n", "middle.go": "package middle\n"})
 	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0"}`)
-	if b, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "obsolete vendor") {
-		t.Fatalf("stable unsupported vendor: %s %v", b, e)
+	if b, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "must declare lib") {
+		t.Fatalf("stable missing library: %s %v", b, e)
 	}
 	m, e := project.Read(root)
 	if e != nil {
@@ -327,7 +327,7 @@ func TestVendorDependencyDiagnosticAfterStabilization(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(root, project.ManifestName), b, 0644)
 	if b, e := projectRun(t, root, "run"); e != nil || !strings.Contains(b, "v2") {
-		t.Fatalf("transient vendor rejected: %s %v", b, e)
+		t.Fatalf("superseded library source rejected: %s %v", b, e)
 	}
 }
 

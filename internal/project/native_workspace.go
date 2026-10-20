@@ -146,9 +146,6 @@ func NativeClosure(w *Workspace, module string) (map[string]bool, error) {
 			return fmt.Errorf("unknown native workspace member %s", module)
 		}
 		m := w.Manifests[dir]
-		if m.Vendor != nil {
-			return fmt.Errorf("native workspace rejects member vendor: %s", module)
-		}
 		for alias, d := range m.Dependencies {
 			if d.IsToolchain() {
 				continue
@@ -285,7 +282,7 @@ func CopyNativeSource(src, dst string, workRoot ...string) error {
 		case "go.mod", "go.sum", "go.work", "go.work.sum", ManifestName, "goxide.lock":
 			return nil
 		}
-		if d.Name() == LegacyManifestName || w == nil && strings.HasSuffix(d.Name(), ".gox") {
+		if w == nil && strings.HasSuffix(d.Name(), ".gox") {
 			return fmt.Errorf("native workspace does not support enhanced source: %s", path)
 		}
 		info, e := d.Info()

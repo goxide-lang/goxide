@@ -44,9 +44,9 @@ def build(ROOT, GO):
   for name in ['used','unused']:
    repo=repos/name;repo.mkdir();(repo/'go.mod').write_text(f'module example.org/{name}\n\ngo 1.27\n');(repo/'lib.go').write_text(f'package {name}\nfunc Value() string {{return "one"}}\n');git(repo,'init','-b','main');git(repo,'add','.');git(repo,'commit','-m','one')
   pinned=git(repos/'used','rev-parse','HEAD')
-  root=base/'git-workspace';root.mkdir();(root/'goxide.toml').write_text('[workspace]\nformat=1\nmembers=["app","server"]\ndefault-members=["app"]\n')
+  root=base/'git-workspace';root.mkdir();(root/'goxide.toml').write_text('[workspace]\nmembers=["app","server"]\ndefault-members=["app"]\n')
   for name,dep in [('app','used'),('server','unused')]:
-   p=root/name;p.mkdir();(p/'goxide.toml').write_text(f'[package]\nformat=2\nmodule="example.org/{name}"\ngo="1.27"\n[dependencies]\ndep={{module="example.org/{dep}",git="{repos/dep}",rev="main"}}\n[[bin]]\nname="app"\npath="main.go"\n');(p/'main.go').write_text(f'package main\nimport("fmt";d "example.org/{dep}")\nfunc main(){{fmt.Println(d.Value())}}\n')
+   p=root/name;p.mkdir();(p/'goxide.toml').write_text(f'[go_mod]\nmodule="example.org/{name}"\ngo="1.27"\n[dependencies]\ndep={{module="example.org/{dep}",git="{repos/dep}",rev="main"}}\n[[bin]]\nname="app"\npath="main.go"\n');(p/'main.go').write_text(f'package main\nimport("fmt";d "example.org/{dep}")\nfunc main(){{fmt.Println(d.Value())}}\n')
   out=call('run','--package','example.org/app',str(root));assert out=='one\n'
   locked=(root/'goxide.lock').read_bytes();(repos/'used/lib.go').write_text('package used\nfunc Value() string {return "two"}\n');git(repos/'used','add','.');git(repos/'used','commit','-m','two');moved=git(repos/'used','rev-parse','HEAD');assert pinned!=moved
   shutil.rmtree(repos/'unused');split=base/'standalone';split.mkdir()

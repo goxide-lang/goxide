@@ -13,8 +13,7 @@
 ### 唯一权威与字段
 
 ```toml
-[package]
-format = 2
+[go_mod]
 module = "example.org/app"
 go = "1.27"
 # toolchain = "go1.27.1" # 保留 Go 建议版本；本工具仍 GOTOOLCHAIN=local
@@ -38,7 +37,7 @@ name = "app"
 path = "cmd/app"
 ```
 
-format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取旁边 go.mod。`[features]`、`[dependencies.alias]`、lib/bin/example/build 保持上一版语义；go.require 是原生 Go 最低版本约束，dependencies 是增强依赖请求，两者均在同一 TOML 内交真实 Go 统一选版。相同 module 的多个要求取 MVS，不按 alias 分裂类型身份。replace/exclude 是根政策，不提升依赖自己的政策。保留indirect标记和原require集合，不将间接依赖误作 goxide feature 请求。
+作者清单要求显式 go_mod.module/go，直接按当前字段校验，不从旁边 go.mod 补充配置。`[features]`、`[dependencies.alias]`、lib/bin/example/build 保持上一版语义；go.require 是原生 Go 最低版本约束，dependencies 是增强依赖请求，两者均在同一 TOML 内交真实 Go 统一选版。相同 module 的多个要求取 MVS，不按 alias 分裂类型身份。replace/exclude 是根政策，不提升依赖自己的政策。保留indirect标记和原require集合，不将间接依赖误作 goxide feature 请求。
 
 本地作者工程一旦有 TOML，根 go.mod/go.sum 都报双配置迁移诊断。原生 Go 依赖无 TOML 时继续使用自己的 go.mod；带 TOML 的 path/Git 作者依赖从 TOML 合成 module 元数据，不能要求给 readonly checkout 写文件。代理下载的 source 发行物有传输用 go.mod：只有经 Go 校验的版本来源允许这一组合，且传输身份/feature无关原生Go约束须与 TOML 相符；该 go.mod 不是第二个作者配置来源。不能用 manifest 标记让任意本地根绕过双配置检查。
 
@@ -50,8 +49,8 @@ format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取�
 
 | go.mod 指令 | 首片行为 |
 | --- | --- |
-| module、go | 映射 package.module/go，交真实 Go 验证；缺少 go 明确要求补充，不擅自选新语言版本 |
-| toolchain | 保留 package.toolchain；GOTOOLCHAIN=local，不擅自下载工具链；Go语言最低版本不可满足时明确失败；toolchain只是建议，不将更高建议擅自变成硬要求 |
+| module、go | 映射 go_mod.module/go，交真实 Go 验证；缺少 go 明确要求补充，不擅自选新语言版本 |
+| toolchain | 保留 go_mod.toolchain；GOTOOLCHAIN=local，不擅自下载工具链；Go语言最低版本不可满足时明确失败；toolchain只是建议，不将更高建议擅自变成硬要求 |
 | require（含 indirect） | 映射 go.require 数组，保留 direct/indirect |
 | replace 本地/版本，含 Old 精确版本限定 | 映射 go.replace；迁移 staging 保持指向同一真实本地目录，首片序列化为规范绝对路径，不改原指向 |
 | exclude | 映射 go.exclude |
@@ -62,7 +61,7 @@ format 2 要求显式 module/go；format 1 清单需显式迁移，不能暗取�
 
 ### 锁与目录
 
-`goxide.lock` schema 2 保存实际选版计划、module/sums、Git commit、来源/config摘要及生成 Go 所需校验信息。迁移来源的摘要用于解释 provenance，不把所有历史 go.sum 行当已选择版本。初次生成须实际求解验证；--locked 禁止改变，--offline 只读已缓存来源。旧 hgo.lock 或双锁明确迁移错误，不自动改名，更不能丢旧锁后偷偷重新选 Git branch。旧锁迁移尚无安全可验证路径时要求先保存原工程，在新 staging 重新审阅解析结果。
+`goxide.lock` schema 2 保存实际选版计划、module/sums、Git commit、来源/config摘要及生成 Go 所需校验信息。迁移来源的摘要用于解释 provenance，不把所有历史 go.sum 行当已选择版本。初次生成须实际求解验证；--locked 禁止改变，--offline 只读已缓存来源。
 
 生成 go.mod/go.sum 只放受管 target 的规划/单元目录，临时 staging 验证中的 Go 元数据也不回写作者根。所有 unit 使用稳定的统一选版图和 feature 并集；bin/example/config 仅隔离 artifact，不给同一 Go package 复制新身份。target、内部迁移暂存/备份目录从源扫描排除；不默认排除任意名为 backup 的用户源码，工具采用明确保留的隐藏目录名。
 

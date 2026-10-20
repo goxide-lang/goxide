@@ -1,9 +1,8 @@
-[package]
-format = 2
+[go_mod]
 module = "example.org/goxide-project"
 go = "1.27"
 
-[package.namespaces]
+[namespaces]
 greeting = "example.org/goxide-project"
 
 [[bin]]

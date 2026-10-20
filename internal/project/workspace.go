@@ -24,16 +24,14 @@ type Workspace struct {
 }
 type WorkspaceConfig struct {
 	Go           *NativeWorkspaceConfig `toml:"go,omitempty"`
-	Vendor       *VendorConfig          `toml:"vendor,omitempty"`
-	Format       int                    `toml:"format"`
 	Members      []string               `toml:"members"`
 	Defaults     []string               `toml:"default-members,omitempty"`
 	Exclude      []string               `toml:"exclude,omitempty"`
 	Dependencies map[string]Dependency  `toml:"dependencies,omitempty"`
-	Package      struct {
+	GoMod        struct {
 		Go        string `toml:"go,omitempty"`
 		Toolchain string `toml:"toolchain,omitempty"`
-	} `toml:"package,omitempty"`
+	} `toml:"go_mod,omitempty"`
 }
 
 func workspaceHeader(root string) (*WorkspaceConfig, error) {
@@ -63,17 +61,11 @@ func workspaceHeader(root string) (*WorkspaceConfig, error) {
 	if e = toml.NewDecoder(bytes.NewReader(b)).DisallowUnknownFields().Decode(&c); e != nil {
 		return nil, fmt.Errorf("workspace: %w", e)
 	}
-	if c.Vendor != nil {
-		return nil, fmt.Errorf("obsolete workspace vendor configuration: explicitly re-import original Go input as local modules")
-	}
-	if c.Format != 1 {
-		return nil, fmt.Errorf("unsupported workspace.format %d", c.Format)
-	}
 	deps, e := resolveAuthorDependencies(c.Dependencies)
 	if e != nil {
 		return nil, e
 	}
-	if e := validate(Manifest{Version: 2, Module: "goxide-workspace.invalid/templates", GoVersion: "1.27", Dependencies: deps}); e != nil {
+	if e := validate(Manifest{Module: "goxide-workspace.invalid/templates", GoVersion: "1.27", Dependencies: deps}); e != nil {
 		return nil, fmt.Errorf("workspace templates: %w", e)
 	}
 	c.Dependencies = deps
@@ -82,7 +74,7 @@ func workspaceHeader(root string) (*WorkspaceConfig, error) {
 			return nil, fmt.Errorf("workspace dependency %s: templates cannot inherit or be optional", name)
 		}
 	}
-	if _, ok := doc["package"]; !ok && len(doc) != 1 {
+	if _, ok := doc["go_mod"]; !ok && len(doc) != 1 {
 		return nil, fmt.Errorf("virtual workspace accepts only [workspace]")
 	}
 	return &c, nil
@@ -191,8 +183,8 @@ func loadWorkspace(root string, c WorkspaceConfig, checkout string) (*Workspace,
 	if e = toml.Unmarshal(b, &raw); e != nil {
 		return nil, e
 	}
-	_, rootPackage := raw["package"]
-	if rootPackage {
+	_, rootModule := raw["go_mod"]
+	if rootModule {
 		dirs[root] = true
 	}
 	for _, dir := range keys(dirs) {
@@ -231,9 +223,6 @@ func loadWorkspace(root string, c WorkspaceConfig, checkout string) (*Workspace,
 		if e != nil {
 			return nil, e
 		}
-		if m.Vendor != nil {
-			return nil, fmt.Errorf("workspace vendor is not supported; use standalone vendor project")
-		}
 		if old, ok := w.Members[m.Module]; ok {
 			return nil, fmt.Errorf("duplicate workspace module %s: %s and %s", m.Module, old, dir)
 		}
@@ -257,7 +246,7 @@ func loadWorkspace(root string, c WorkspaceConfig, checkout string) (*Workspace,
 		w.Defaults = append(w.Defaults, found)
 	}
 	if len(c.Defaults) == 0 {
-		if rootPackage {
+		if rootModule {
 			w.Defaults = []string{w.Manifests[root].Module}
 		} else {
 			w.Defaults = keys(w.Members)
@@ -276,20 +265,20 @@ func parseWorkspaceManifest(filename string, b []byte, w *Workspace) (Manifest, 
 		return Manifest{}, e
 	}
 	delete(raw, "workspace")
-	if pkg, ok := raw["package"].(map[string]any); ok {
+	if mod, ok := raw["go_mod"].(map[string]any); ok {
 		for _, key := range []string{"go", "toolchain"} {
-			if v, ok := pkg[key].(map[string]any); ok {
+			if v, ok := mod[key].(map[string]any); ok {
 				if len(v) != 1 || v["workspace"] != true {
-					return Manifest{}, fmt.Errorf("%s: invalid package.%s inheritance", filename, key)
+					return Manifest{}, fmt.Errorf("%s: invalid go_mod.%s inheritance", filename, key)
 				}
-				value := w.Config.Package.Go
+				value := w.Config.GoMod.Go
 				if key == "toolchain" {
-					value = w.Config.Package.Toolchain
+					value = w.Config.GoMod.Toolchain
 				}
 				if value == "" {
-					return Manifest{}, fmt.Errorf("workspace.package.%s is not defined", key)
+					return Manifest{}, fmt.Errorf("workspace.go_mod.%s is not defined", key)
 				}
-				pkg[key] = value
+				mod[key] = value
 			}
 		}
 	}

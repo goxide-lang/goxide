@@ -402,7 +402,7 @@
       "checks": [],
       "snippet": {
         "language": "TOML · 最小工程 goxide.toml",
-        "text": "[package]\nformat = 2\nmodule = \"example.org/catalog\"\ngo = \"1.27\"\n\n[[bin]]\nname = \"demo\"\npath = \"src\"\n\n[dependencies]\nfmt = { go = \"fmt\" }\n\n[features]\ndefault = []\nfast = []\n",
+        "text": "[go_mod]\nmodule = \"example.org/catalog\"\ngo = \"1.27\"\n\n[[bin]]\nname = \"demo\"\npath = \"src\"\n\n[dependencies]\nfmt = { go = \"fmt\" }\n\n[features]\ndefault = []\nfast = []\n",
         "note": "goxide build --features fast --target linux/amd64 选择特性和目标；源码可用 #[cfg(feature(\"fast\"))] 选择声明。env 无需清单登记，查询本次调用的原始环境。"
       }
     },

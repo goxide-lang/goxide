@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const mappingHeader = "[package]\nformat=2\nmodule='example.org/app'\ngo='1.27'\n"
+const mappingHeader = "[go_mod]\nmodule='example.org/app'\ngo='1.27'\n"
 
 func TestDependencyMappingSchema(t *testing.T) {
 	text := mappingHeader + `
@@ -149,7 +149,6 @@ func TestDependencyMappingWorkspaceInheritance(t *testing.T) {
 		t.Run(override, func(t *testing.T) {
 			root := t.TempDir()
 			wsWrite(t, root, ManifestName, `[workspace]
-format=1
 members=["app"]
 [workspace.dependencies.serde]
 go = "example.org/serde"
@@ -263,7 +262,6 @@ json=["dep:json"]
 func TestToolchainWorkspacePlan(t *testing.T) {
 	root := t.TempDir()
 	wsWrite(t, root, ManifestName, `[workspace]
-format=1
 members=["app"]
 [workspace.dependencies.fmt]
 go = "fmt"

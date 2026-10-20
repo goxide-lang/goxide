@@ -58,8 +58,7 @@ pretty = []
 name = 'app'
 path = 'src/lib.gox'
 
-[package]
-format = 1
+[go_mod]
 `,
 		"src/lib.gox":       "package app\nfunc Value()int{return 42}\n",
 		"src/one.gox":       "package main\nuse fmt;\nuse project as a;\nfunc main(){fmt::Println(\"one\",a::Value(),cfg!(feature(\"pretty\")))}\n",
@@ -119,8 +118,7 @@ func TestProjectNoLibAndDiagnostics(t *testing.T) {
 name = 'main'
 path = 'app.gox'
 
-[package]
-format = 1
+[go_mod]
 `, "app.gox": "package main\nfunc main(){}\n"})
 	if b, e := projectRun(t, root, "run", "--offline"); e != nil {
 		t.Fatalf("%s %v", b, e)
@@ -154,8 +152,7 @@ default = ['d']
 name = 'shared'
 path = 'lib.gox'
 
-[package]
-format = 1
+[go_mod]
 `,
 		"lib.gox": "package shared\nfunc Flags()string{s:=\"\";if cfg!(feature(\"a\")){s+=\"a\"};if cfg!(feature(\"b\")){s+=\"b\"};if cfg!(feature(\"d\")){s+=\"d\"};return s}\n",
 	})
@@ -166,7 +163,7 @@ format = 1
 		}
 		projectWrite(t, filepath.Join(base, name), map[string]string{
 			"go.mod":      "module example.org/" + name + "\n\ngo 1.27\n",
-			"goxide.toml": manifestJSON(`{"version":1,"lib":{"name":"lib","path":"lib.gox"},"dependencies":{"shared":{"module":"example.org/shared","path":"../shared","default_features":false,"features":["` + feature + `"]}}}`),
+			"goxide.toml": manifestJSON(`{"lib":{"name":"lib","path":"lib.gox"},"dependencies":{"shared":{"module":"example.org/shared","path":"../shared","default_features":false,"features":["` + feature + `"]}}}`),
 			"lib.gox":     "package " + name + "\nuse shared as s;\nfunc Flags()string{return s::Flags()}\n",
 		})
 	}
@@ -193,8 +190,7 @@ path = '../right'
 [features]
 missing = ['dep:optional']
 
-[package]
-format = 1
+[go_mod]
 `,
 		"main.gox":     "package main\nuse fmt;\nuse left as l;\nuse right as r;\nfunc main(){fmt::Println(l::Flags(),r::Flags())}\n",
 		"disabled.gox": "//goxide:cfg feature(\"missing\")\npackage main\nuse missing_dependency;\nfunc Never()Unknown{return nonexistent()}\n",
@@ -236,7 +232,7 @@ func TestProjectGitRevisionLock(t *testing.T) {
 		if rev != "" {
 			dep["rev"] = rev
 		}
-		return projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": dep}})
+		return projectManifest(map[string]any{"bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": dep}})
 	}
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": manifest(""), "main.gox": "package main\nuse fmt;\nuse dep as d;\nfunc main(){fmt::Println(d::Value())}\n"})
 	if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "not cached") {
@@ -325,8 +321,7 @@ path = 'main.gox'
 go = 'example.org/native'
 version = 'v1.0.0'
 
-[package]
-format = 1
+[go_mod]
 `,
 		"main.gox": "package main\nuse fmt;\nuse native as n;\nfunc main(){fmt::Println(n::Value())}\n",
 	})
@@ -354,8 +349,7 @@ format = 1
 name = 'app'
 path = 'main.gox'
 
-[package]
-format = 1
+[go_mod]
 
 [dependencies.native]
 package = 'example.org/native'
@@ -379,8 +373,7 @@ extra = []
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `,
 		"lib.gox":           "package lib\nfunc Value()int{return 3}\n",
 		"off.gox":           "//goxide:cfg feature(\"extra\")\npackage lib\nuse no;\nfunc Missing()Unknown{return nope()}\n",
@@ -405,8 +398,7 @@ extra = []
 name = 'lib'
 path = 'src/lib.gox'
 
-[package]
-format = 1
+[go_mod]
 `, "src/lib.gox": "package lib\nfunc X(){}\n", "lib.go": "package lib\nfunc Existing(){}\n"})
 	if _, e := projectRun(t, root, "build", "--lib", "--offline"); e == nil || !strings.Contains(e.Error(), "filename conflicts") {
 		t.Fatalf("output collision: %v", e)
@@ -429,8 +421,7 @@ path = '../real'
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `, "lib.gox": "package dep\nuse shared as s;\nfunc Value()int{return s::Value()}\n"})
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/root\n\ngo 1.27\nreplace example.org/shared => ../override\n", "goxide.toml": `[[bin]]
@@ -442,8 +433,7 @@ path = 'main.gox'
 module = 'example.org/dep'
 path = '../dep'
 
-[package]
-format = 1
+[go_mod]
 `, "main.gox": "package main\nuse dep as d;\nfunc main(){_=d::Value()}\n"})
 	if _, e := projectRun(t, root, "build", "--offline", "-o", filepath.Join(base, "app")); e == nil || !strings.Contains(e.Error(), "conflicts with go.mod replace") {
 		t.Fatal(e)
@@ -471,7 +461,7 @@ func TestProjectGitCheckoutBoundaries(t *testing.T) {
 	git("init", "-b", "main")
 	for _, kind := range []string{"manifest", "gomod"} {
 		if kind == "manifest" {
-			projectWrite(t, repo, map[string]string{"goxide.toml": projectManifest(map[string]any{"version": 1, "lib": map[string]string{"name": "lib", "path": "."}, "dependencies": map[string]any{"outside": map[string]string{"module": "example.org/outside", "path": outside}}})})
+			projectWrite(t, repo, map[string]string{"goxide.toml": projectManifest(map[string]any{"lib": map[string]string{"name": "lib", "path": "."}, "dependencies": map[string]any{"outside": map[string]string{"module": "example.org/outside", "path": outside}}})})
 		} else {
 			os.Remove(filepath.Join(repo, "goxide.toml"))
 			projectWrite(t, repo, map[string]string{"go.mod": "module example.org/gitdep\n\ngo 1.27\nrequire example.org/outside v0.0.0\nreplace example.org/outside => " + outside + "\n"})
@@ -479,7 +469,7 @@ func TestProjectGitCheckoutBoundaries(t *testing.T) {
 		git("add", ".")
 		git("commit", "-m", kind)
 		rev := git("rev-parse", "HEAD")
-		projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]any{"module": "example.org/gitdep", "git": repo, "rev": rev}}}), "main.gox": "package main\nfunc main(){}\n"})
+		projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": projectManifest(map[string]any{"bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]any{"module": "example.org/gitdep", "git": repo, "rev": rev}}}), "main.gox": "package main\nfunc main(){}\n"})
 		if _, e := projectRun(t, root, "run"); e == nil || !strings.Contains(e.Error(), "escapes checkout") {
 			t.Fatalf("%s: %v", kind, e)
 		}
@@ -496,8 +486,7 @@ func TestProjectNativeBuildListConsistency(t *testing.T) {
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 
 [dependencies.native]
 package = 'example.org/native'
@@ -513,8 +502,7 @@ path = 'main.gox'
 module = 'example.org/dep'
 path = '../dep'
 
-[package]
-format = 1
+[go_mod]
 `, "main.gox": "package main\nuse dep as d;\nfunc main(){_=d::Value()}\n"})
 	if b, e := projectRun(t, root, "run", "--offline"); e != nil {
 		t.Fatalf("shared plan should align native selections: %s %v", b, e)
@@ -530,14 +518,14 @@ func TestProjectDependencyAndTargetDiagnostics(t *testing.T) {
 	root, dep := filepath.Join(base, "root"), filepath.Join(base, "dep")
 	projectWrite(t, dep, map[string]string{"go.mod": "module example.org/dep\ngo 1.27\n", "lib.go": "package dep\n"})
 	manifest := func(module string) string {
-		return projectManifest(map[string]any{"version": 1, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]any{"module": module, "path": "../dep"}}})
+		return projectManifest(map[string]any{"bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"dep": map[string]any{"module": module, "path": "../dep"}}})
 	}
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\ngo 1.27\n", "goxide.toml": manifest("example.org/wrong"), "main.gox": "package main\nfunc main(){}\n"})
 	if _, err := projectRun(t, root, "run", "--offline"); err == nil || !strings.Contains(err.Error(), "module path mismatch") {
 		t.Fatal(err)
 	}
 	projectWrite(t, root, map[string]string{"goxide.toml": manifest("example.org/dep")})
-	projectWrite(t, dep, map[string]string{"goxide.toml": projectManifest(map[string]any{"version": 1, "lib": map[string]string{"name": "lib", "path": "."}, "dependencies": map[string]any{"root": map[string]any{"module": "example.org/root", "path": "../root"}}})})
+	projectWrite(t, dep, map[string]string{"goxide.toml": projectManifest(map[string]any{"lib": map[string]string{"name": "lib", "path": "."}, "dependencies": map[string]any{"root": map[string]any{"module": "example.org/root", "path": "../root"}}})})
 	if _, err := projectRun(t, root, "run", "--offline"); err == nil || !strings.Contains(err.Error(), "dependency cycle") {
 		t.Fatal(err)
 	}
@@ -554,11 +542,10 @@ name = 'lib'
 path = '.'
 required_features = ['on']
 
-[package]
-format = 1
+[go_mod]
 `, "lib.gox": "package dep\n"})
 		manifest := func(module string, features []string) string {
-			return projectManifest(map[string]any{"version": 1, "features": map[string][]string{"demo": {}}, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "examples": []any{map[string]any{"name": "demo", "path": "demo.gox", "required_features": []string{"demo"}}}, "dependencies": map[string]any{"dep": map[string]any{"module": module, "path": "../dep", "features": features}}})
+			return projectManifest(map[string]any{"features": map[string][]string{"demo": {}}, "bins": []any{map[string]string{"name": "app", "path": "main.gox"}}, "examples": []any{map[string]any{"name": "demo", "path": "demo.gox", "required_features": []string{"demo"}}}, "dependencies": map[string]any{"dep": map[string]any{"module": module, "path": "../dep", "features": features}}})
 		}
 		projectWrite(t, root, map[string]string{"go.mod": "module example.org/root\n\ngo 1.27\n", "goxide.toml": manifest("example.org/wrong", nil), "main.gox": "package main\nfunc main(){}\n", "demo.gox": "package main\nfunc main(){}\n"})
 		if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "module path mismatch") {
@@ -591,8 +578,7 @@ on = []
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `})
 		if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "dependency cycle") {
 			t.Fatal(e)
@@ -628,8 +614,7 @@ never = []
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `,
 		"enabled.gox": `//goxide:cfg feature("extra")
 package lib
@@ -693,8 +678,7 @@ path = 'main.gox'
 module = 'example.org/dep'
 path = '../dep/sub'
 
-[package]
-format = 1
+[go_mod]
 `, "main.gox": "package main\nuse dep as d;\nfunc main(){_=d::Value()}\n"})
 	if b, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "own regular go.mod") {
 		t.Fatalf("parent module silently adopted: %s %v", b, e)

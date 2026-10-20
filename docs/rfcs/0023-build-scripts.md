@@ -4,7 +4,7 @@
 
 用户已确认第一阶段：代码/资源生成、本地 host 工具与依赖、声明输入增量缓存；根项目一次信任，第三方执行闭包单独精确许可；native linking 后置。本分支实现该子集。规范入口名为 `build.gox`；显式 entry 仍支持 `.go` / `.gox`，旧 `.hgo` 已移除（RFC 0027）。
 
-本 RFC 接续 [项目工具链](0022-project-toolchain.md)。作者根采用 [RFC 0025 统一模型](0025-unified-project.md)：format 2 的 goxide.toml 与 schema 2 的 goxide.lock，混合仅指 .go/.gox 源码，不要求根 go.mod/go.sum。研究历史保留于 `research/build-gox-rfc` 分支：`4c54b12290fffd5d593e674a403306a60b3c9708` 包含最初 RFC、官方 Cargo 差距对照、独立审阅与可复现 Go/OS fixture。旧研究中的严格 hermetic/sandbox 门槛与逐 target 运行属于旧候选；以本篇已确认的本地 declared-input 模式为准。
+本 RFC 接续 [项目工具链](0022-project-toolchain.md)。作者根采用 [RFC 0025 统一模型](0025-unified-project.md)：goxide.toml 与 schema 2 的 goxide.lock，混合仅指 .go/.gox 源码，不要求根 go.mod/go.sum。研究历史保留于 `research/build-gox-rfc` 分支：`4c54b12290fffd5d593e674a403306a60b3c9708` 包含最初 RFC、官方 Cargo 差距对照、独立审阅与可复现 Go/OS fixture。旧研究中的严格 hermetic/sandbox 门槛与逐 target 运行属于旧候选；以本篇已确认的本地 declared-input 模式为准。
 
 这不是 sandbox。普通 Go 可执行文件可以访问当前用户能访问的文件、网络、凭据和进程；快照、路径检查、清理范围和许可用于控制工具自身行为，不构成对恶意脚本的 OS 隔离。第一次需要许可时失败并给出诊断，不默认执行依赖脚本，也不隐式交互批准。
 
@@ -13,8 +13,7 @@
 ### 显式声明
 
 ```toml
-[package]
-format = 2
+[go_mod]
 module = "example.org/app"
 go = "1.27"
 
@@ -36,7 +35,7 @@ timeout_seconds = 60
 formatter = 'tools/bin/formatter'
 ```
 
-`[build]` 缺省为关闭；TOML 没有 null，false 也不属于该表类型。入口必须在独立子目录，整个目录构成 host 包快照，不能包含 go.mod/goxide.toml/hgo.json。该目录不再作为 target 源包参与扫描。不能隐式寻找 build.rs、build.gox、Go generate 注释或依赖安装命令。
+`[build]` 缺省为关闭；TOML 没有 null，false 也不属于该表类型。入口必须在独立子目录，整个目录构成 host 包快照，不能包含 go.mod/goxide.toml。该目录不再作为 target 源包参与扫描。不能隐式寻找 build.rs、build.gox、Go generate 注释或依赖安装命令。
 
 inputs 为包内明确的文件或递归目录，不支持 glob；目录成员和空目录均进入缓存身份。文件内容变更而 mtime 相同仍失效。路径必须规范相对路径；拒绝 `..`、链接、特殊文件、可检测的硬链接、保留目录。输出必须枚举具体文件，不能覆盖源码、manifest、lock、Go module 文件、配置/metadata/source-map 保留名称；缺少或多出文件均失败。每文件最大 32 MiB，快照闭包最大 128 MiB/10000 项；不是无限制资源配额或 OS 内存隔离。
 

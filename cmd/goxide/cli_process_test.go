@@ -217,7 +217,7 @@ func TestCLIProcessContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			for file, content := range map[string]string{
-				"goxide.toml": "[package]\nformat=2\nmodule='example.org/routefixture'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n",
+				"goxide.toml": "[go_mod]\nmodule='example.org/routefixture'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n",
 				"main.gox":    "package main\nfunc main(){}\n",
 			} {
 				if err := os.WriteFile(filepath.Join(root, file), []byte(content), 0600); err != nil {
@@ -256,7 +256,7 @@ func TestCLIProcessContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		for name, content := range map[string]string{
-			"goxide.toml": "[package]\nformat=2\nmodule='example.org/scriptcli'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n",
+			"goxide.toml": "[go_mod]\nmodule='example.org/scriptcli'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n",
 			"main.gox":    "package main\nfunc main(){}\n",
 		} {
 			if err := os.WriteFile(filepath.Join(projectRoot, name), []byte(content), 0600); err != nil {
@@ -320,7 +320,7 @@ func TestCLIProcessContract(t *testing.T) {
 				files["go.mod"] = "module example.org/cliargv\ngo 1.27\n"
 				files["goxide.roots.toml"] = fixtureToolchainRoots
 			} else {
-				files["goxide.toml"] = fixtureNamespaceManifest(t, "[package]\nformat=2\nmodule='example.org/cliargv'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n")
+				files["goxide.toml"] = fixtureNamespaceManifest(t, "[go_mod]\nmodule='example.org/cliargv'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n")
 			}
 			for name, content := range files {
 				if err := os.WriteFile(filepath.Join(d, name), []byte(content), 0600); err != nil {

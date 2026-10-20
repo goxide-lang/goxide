@@ -1,9 +1,8 @@
-[package]
-format = 2
+[go_mod]
 module = "example.org/orders"
 go = "1.27"
 
-[package.namespaces]
+[namespaces]
 order = "example.org/orders/order"
 
 [[bin]]

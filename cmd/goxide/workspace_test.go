@@ -30,7 +30,6 @@ func TestWorkspaceUnifiedVersionsSeparateFeatures(t *testing.T) {
 	}
 	root := t.TempDir()
 	workspaceWrite(t, root, "goxide.toml", `[workspace]
-format=1
 members=["app","server","common"]
 default-members=["app"]
 [workspace.dependencies]
@@ -43,8 +42,7 @@ common={module="example.org/common",package="example.org/common",path="common",d
 			f = "yaml"
 			v = "v1.1.0"
 		}
-		workspaceWrite(t, root, m+"/goxide.toml", fmt.Sprintf(`[package]
-format=2
+		workspaceWrite(t, root, m+"/goxide.toml", fmt.Sprintf(`[go_mod]
 module="example.org/%s"
 go="1.27"
 [dependencies]
@@ -60,8 +58,7 @@ path="main.gox"
 `, m, f, v, v, m))
 		workspaceWrite(t, root, m+"/main.gox", "package main\nuse fmt;\nuse common;\nuse d;\nfunc main(){fmt::Println(d::Version(),common::Flags())}\n")
 	}
-	workspaceWrite(t, root, "common/goxide.toml", `[package]
-format=2
+	workspaceWrite(t, root, "common/goxide.toml", `[go_mod]
 module="example.org/common"
 go="1.27"
 [features]
@@ -148,13 +145,11 @@ func TestWorkspaceCopiedGitLockIgnoresUnreachable(t *testing.T) {
 		git(repo, "commit", "-m", "one")
 	}
 	workspaceWrite(t, root, "goxide.toml", `[workspace]
-format=1
 members=["app","server"]
 default-members=["app"]
 `)
 	manifest := func(name, dep string) string {
-		return fmt.Sprintf(`[package]
-format=2
+		return fmt.Sprintf(`[go_mod]
 module="example.org/%s"
 go="1.27"
 [dependencies]
@@ -234,10 +229,8 @@ func TestWorkspaceRootPackageManagedOutput(t *testing.T) {
 	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	root := t.TempDir()
 	workspaceWrite(t, root, "goxide.toml", `[workspace]
-format=1
 members=[]
-[package]
-format=2
+[go_mod]
 module="example.org/root"
 go="1.27"
 [[bin]]
@@ -256,10 +249,10 @@ path="main.go"
 func TestWorkspaceNativeMembershipDoesNotReplace(t *testing.T) {
 	t.Skip("MVP-DEFERRED: MVP CLI workspace graph and package selection deferred by P6")
 	root := t.TempDir()
-	workspaceWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"app\",\"lib\"]\n")
-	workspaceWrite(t, root, "app/goxide.toml", "[package]\nformat=2\nmodule=\"example.org/app\"\ngo=\"1.27\"\n[[go.require]]\nmodule=\"example.org/lib\"\nversion=\"v1.0.0\"\n[[bin]]\nname=\"app\"\npath=\"main.go\"\n")
+	workspaceWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"app\",\"lib\"]\n")
+	workspaceWrite(t, root, "app/goxide.toml", "[go_mod]\nmodule=\"example.org/app\"\ngo=\"1.27\"\n[[go.require]]\nmodule=\"example.org/lib\"\nversion=\"v1.0.0\"\n[[bin]]\nname=\"app\"\npath=\"main.go\"\n")
 	workspaceWrite(t, root, "app/main.go", "package main\nfunc main(){}\n")
-	workspaceWrite(t, root, "lib/goxide.toml", "[package]\nformat=2\nmodule=\"example.org/lib\"\ngo=\"1.27\"\n[lib]\nname=\"lib\"\npath=\"lib.go\"\n")
+	workspaceWrite(t, root, "lib/goxide.toml", "[go_mod]\nmodule=\"example.org/lib\"\ngo=\"1.27\"\n[lib]\nname=\"lib\"\npath=\"lib.go\"\n")
 	workspaceWrite(t, root, "lib/lib.go", "package lib\n")
 	if _, e := projectRun(t, root, "build", "--package", "example.org/app", "--offline"); e == nil || !strings.Contains(e.Error(), "conflicting version/path sources") {
 		t.Fatal(e)
@@ -279,13 +272,13 @@ func TestWorkspaceIndirectPinnedOffline(t *testing.T) {
 	}
 	publishVersion(t, proxy, "example.org/e", "v1.0.0", map[string]string{"go.mod": "module example.org/e\n\ngo 1.27\nrequire example.org/d v1.0.0\n", "e.go": "package e\nimport \"example.org/d\"\nfunc Value()string{return d.Value()}\n"})
 	root := t.TempDir()
-	workspaceWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"app\",\"server\"]\ndefault-members=[\"app\"]\n")
+	workspaceWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"app\",\"server\"]\ndefault-members=[\"app\"]\n")
 	for _, name := range []string{"app", "server"} {
 		dep, v := "example.org/e", "v1.0.0"
 		if name == "server" {
 			dep, v = "example.org/d", "v1.1.0"
 		}
-		workspaceWrite(t, root, name+"/goxide.toml", fmt.Sprintf("[package]\nformat=2\nmodule=\"example.org/%s\"\ngo=\"1.27\"\n[[go.require]]\nmodule=%q\nversion=%q\n[[bin]]\nname=\"app\"\npath=\"main.go\"\n", name, dep, v))
+		workspaceWrite(t, root, name+"/goxide.toml", fmt.Sprintf("[go_mod]\nmodule=\"example.org/%s\"\ngo=\"1.27\"\n[[go.require]]\nmodule=%q\nversion=%q\n[[bin]]\nname=\"app\"\npath=\"main.go\"\n", name, dep, v))
 		workspaceWrite(t, root, name+"/main.go", "package main\nimport(\"fmt\";d "+fmt.Sprintf("%q", dep)+")\nfunc main(){fmt.Println(d.Value())}\n")
 	}
 	if out, e := projectRun(t, root, "run"); e != nil || !strings.Contains(out, "v1.1.0") {
@@ -306,10 +299,10 @@ func TestWorkspaceNativeEdgesCannotInjectSource(t *testing.T) {
 		publishVersion(t, proxy, "example.org/"+mod, "v1.0.0", map[string]string{"go.mod": "module example.org/" + mod + "\ngo 1.27\n", mod + ".go": "package " + mod + "\nconst X=1\n"})
 	}
 	root := t.TempDir()
-	workspaceWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=['app','server']\n")
+	workspaceWrite(t, root, "goxide.toml", "[workspace]\nmembers=['app','server']\n")
 	for _, pair := range [][2]string{{"app", "d"}, {"server", "e"}} {
 		m, d := pair[0], pair[1]
-		workspaceWrite(t, root, m+"/goxide.toml", fmt.Sprintf("[package]\nformat=2\nmodule='example.org/%s'\ngo='1.27'\n[[go.require]]\nmodule='example.org/%s'\nversion='v1.0.0'\n[[bin]]\nname='%s'\npath='main.go'\n", m, d, m))
+		workspaceWrite(t, root, m+"/goxide.toml", fmt.Sprintf("[go_mod]\nmodule='example.org/%s'\ngo='1.27'\n[[go.require]]\nmodule='example.org/%s'\nversion='v1.0.0'\n[[bin]]\nname='%s'\npath='main.go'\n", m, d, m))
 		workspaceWrite(t, root, m+"/main.go", "package main\nimport(\"fmt\";\"example.org/"+d+"\")\nfunc main(){fmt.Println("+d+".X)}\n")
 	}
 	if b, e := projectRun(t, root, "run", "--package", "example.org/app"); e != nil {
@@ -338,10 +331,10 @@ func TestWorkspaceNativeGoModTamper(t *testing.T) {
 		publishVersion(t, proxy, "example.org/"+mod, "v1.0.0", map[string]string{"go.mod": "module example.org/" + mod + "\ngo 1.27\n", mod + ".go": "package " + mod + "\nconst X=1\n"})
 	}
 	root := t.TempDir()
-	workspaceWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=['app','server']\n")
+	workspaceWrite(t, root, "goxide.toml", "[workspace]\nmembers=['app','server']\n")
 	for _, pair := range [][2]string{{"app", "d"}, {"server", "e"}} {
 		m, d := pair[0], pair[1]
-		workspaceWrite(t, root, m+"/goxide.toml", fmt.Sprintf("[package]\nformat=2\nmodule='example.org/%s'\ngo='1.27'\n[[go.require]]\nmodule='example.org/%s'\nversion='v1.0.0'\n[[bin]]\nname='%s'\npath='main.go'\n", m, d, m))
+		workspaceWrite(t, root, m+"/goxide.toml", fmt.Sprintf("[go_mod]\nmodule='example.org/%s'\ngo='1.27'\n[[go.require]]\nmodule='example.org/%s'\nversion='v1.0.0'\n[[bin]]\nname='%s'\npath='main.go'\n", m, d, m))
 		workspaceWrite(t, root, m+"/main.go", "package main\nimport(\"fmt\";\"example.org/"+d+"\")\nfunc main(){fmt.Println("+d+".X)}\n")
 	}
 	if b, e := projectRun(t, root, "run", "--package", "example.org/app"); e != nil {
@@ -362,8 +355,8 @@ func TestWorkspaceLegacyNativeSyntheticMod(t *testing.T) {
 	publishVersion(t, proxy, "example.org/legacy", "v1.0.0", map[string]string{"legacy.go": "package legacy\nfunc Value()string{return \"legacy\"}\n"})
 	workspaceWrite(t, proxy, "example.org/legacy/@v/v1.0.0.mod", "module example.org/legacy\n")
 	root := t.TempDir()
-	workspaceWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"app\"]\n")
-	workspaceWrite(t, root, "app/goxide.toml", "[package]\nformat=2\nmodule=\"example.org/app\"\ngo=\"1.27\"\n[[go.require]]\nmodule=\"example.org/legacy\"\nversion=\"v1.0.0\"\n[[bin]]\nname=\"app\"\npath=\"main.go\"\n")
+	workspaceWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"app\"]\n")
+	workspaceWrite(t, root, "app/goxide.toml", "[go_mod]\nmodule=\"example.org/app\"\ngo=\"1.27\"\n[[go.require]]\nmodule=\"example.org/legacy\"\nversion=\"v1.0.0\"\n[[bin]]\nname=\"app\"\npath=\"main.go\"\n")
 	workspaceWrite(t, root, "app/main.go", "package main\nimport(\"fmt\";\"example.org/legacy\")\nfunc main(){fmt.Println(legacy.Value())}\n")
 	for _, args := range [][]string{{"run"}, {"run", "--offline", "--locked"}} {
 		if out, e := projectRun(t, root, args...); e != nil || !strings.Contains(out, "legacy") {

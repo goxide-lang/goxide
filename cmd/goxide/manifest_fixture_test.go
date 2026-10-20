@@ -5,6 +5,7 @@ import (
 	"github.com/hxsf/goxide/internal/project"
 	"github.com/pelletier/go-toml/v2"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -23,12 +24,6 @@ func manifestJSON(s string) string {
 	var m map[string]any
 	if e := json.Unmarshal([]byte(s), &m); e != nil {
 		panic(e)
-	}
-	if v, ok := m["version"]; ok {
-		if _, ok := m["package"]; !ok {
-			m["package"] = map[string]any{"format": int(v.(float64))}
-		}
-		delete(m, "version")
 	}
 	for a, b := range map[string]string{"bins": "bin", "examples": "example"} {
 		if v, ok := m[a]; ok {
@@ -51,10 +46,6 @@ func decodeManifestFixture(b []byte, m *map[string]any) error {
 	if e := toml.Unmarshal(b, m); e != nil {
 		return e
 	}
-	if p, ok := (*m)["package"].(map[string]any); ok {
-		(*m)["version"] = p["format"]
-		// Keep module/go identity when editing this fixture.
-	}
 	for a, b := range map[string]string{"bin": "bins", "example": "examples"} {
 		if v, ok := (*m)[a]; ok {
 			(*m)[b] = v
@@ -64,8 +55,8 @@ func decodeManifestFixture(b []byte, m *map[string]any) error {
 	return nil
 }
 
-// Legacy fixture vocabulary is adapted at the test boundary; disk projects use
-// format 2 exclusively. Native-only projects and version transport go.mod remain.
+// Fixture builders combine native module identity with the project fields.
+// Native-only projects and published Go transport metadata keep their go.mod.
 func fixtureAuthoring(t *testing.T, root string, files map[string]string) {
 	t.Helper()
 	text, has := files["goxide.toml"]
@@ -125,12 +116,7 @@ func fixtureManifest(t *testing.T, text, mod string) string {
 	if e = toml.Unmarshal([]byte(text), &mapdata); e != nil {
 		t.Fatal(e)
 	}
-	if original, ok := mapdata["package"].(map[string]any); ok {
-		if namespaces, ok := original["namespaces"]; ok {
-			identity["package"].(map[string]any)["namespaces"] = namespaces
-		}
-	}
-	mapdata["package"] = identity["package"]
+	mapdata["go_mod"] = identity["go_mod"]
 	if v, ok := identity["go"]; ok {
 		mapdata["go"] = v
 	} else {
@@ -153,11 +139,11 @@ func fixtureNamespaceManifest(t *testing.T, text string) string {
 	if err := toml.Unmarshal([]byte(text), &doc); err != nil {
 		t.Fatal(err)
 	}
-	pkg, _ := doc["package"].(map[string]any)
-	if pkg == nil {
+	goMod, _ := doc["go_mod"].(map[string]any)
+	if goMod == nil {
 		return text
 	}
-	module, _ := pkg["module"].(string)
+	module, _ := goMod["module"].(string)
 	if module == "" {
 		return text
 	}
@@ -186,10 +172,10 @@ func fixtureNamespaceManifest(t *testing.T, text string) string {
 			deps[alias] = map[string]any{"go": path}
 		}
 	}
-	namespaces, _ := pkg["namespaces"].(map[string]any)
+	namespaces, _ := doc["namespaces"].(map[string]any)
 	if namespaces == nil {
 		namespaces = map[string]any{}
-		pkg["namespaces"] = namespaces
+		doc["namespaces"] = namespaces
 	}
 	for alias, path := range map[string]string{module[strings.LastIndex(module, "/")+1:]: module, "gen": module + "/gen"} {
 		if _, collision := deps[alias]; !collision {
@@ -225,4 +211,16 @@ func fixtureRootsFile(t *testing.T, root, extra string) {
 	if err := os.WriteFile(filepath.Join(root, "goxide.roots.toml"), []byte(fixtureToolchainRoots+extra), 0600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func fixtureGit(t *testing.T, root string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "core.hooksPath=/dev/null"}, args...)...)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	b, e := cmd.CombinedOutput()
+	if e != nil {
+		t.Fatalf("git: %s %v", b, e)
+	}
+	return strings.TrimSpace(string(b))
 }

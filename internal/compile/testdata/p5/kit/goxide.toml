@@ -1,9 +1,8 @@
-[package]
-format = 2
+[go_mod]
 module = "example.org/p5/kit"
 go = "1.27"
 
-[package.namespaces]
+[namespaces]
 native = "example.org/p5/kit/native"
 
 [lib]

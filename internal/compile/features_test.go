@@ -16,11 +16,10 @@ import (
 
 func TestProjectFeaturesBuildRunTestAndStableLock(t *testing.T) {
 	root := featureProject(t, map[string]string{
-		"app/goxide.toml": `[package]
-format = 2
+		"app/goxide.toml": `[go_mod]
 module = "example.org/features/app"
 go = "1.27"
-[package.namespaces]
+[namespaces]
 sub = "example.org/features/app/sub"
 [[bin]]
 name = "app"
@@ -55,8 +54,7 @@ func TestFeatures(t *testing.T) {
     if sub.Shared() != RootShared || left.Shared() || left.Value() != "union" || right.Value() != "union" { t.Fatal("incorrect module feature scope or union") }
 }
 `,
-		"left/goxide.toml": `[package]
-format = 2
+		"left/goxide.toml": `[go_mod]
 module = "example.org/features/left"
 go = "1.27"
 [lib]
@@ -65,8 +63,7 @@ path = "."
 [dependencies]
 base = { module = "example.org/features/base", package = "example.org/features/base", path = "../base", default_features = false, features = ["left"] }
 `,
-		"right/goxide.toml": `[package]
-format = 2
+		"right/goxide.toml": `[go_mod]
 module = "example.org/features/right"
 go = "1.27"
 [lib]
@@ -77,8 +74,7 @@ base = { module = "example.org/features/base", package = "example.org/features/b
 `,
 		"left/value.gox":  "package left\nuse base;\nfunc Value()string{return base::Value()}\nfunc Shared()bool{return base::Shared}\n",
 		"right/value.gox": "package right\nuse base;\nfunc Value()string{return base::Value()}\n",
-		"base/goxide.toml": `[package]
-format = 2
+		"base/goxide.toml": `[go_mod]
 module = "example.org/features/base"
 go = "1.27"
 [lib]
@@ -173,8 +169,7 @@ func TestUnion(t *testing.T) {
 
 func TestProjectOptionalFeaturesAndRequiredLibrary(t *testing.T) {
 	root := featureProject(t, map[string]string{
-		"app/goxide.toml": `[package]
-format = 2
+		"app/goxide.toml": `[go_mod]
 module = "example.org/optional/app"
 go = "1.27"
 [[bin]]
@@ -213,8 +208,7 @@ func main() { fmt::Println(value()) }
 		t.Fatal(err)
 	}
 	before := projectSnapshot(t, filepath.Dir(off.Root))
-	writeProjectFile(t, root, "optional/goxide.toml", `[package]
-format = 2
+	writeProjectFile(t, root, "optional/goxide.toml", `[go_mod]
 module = "example.org/optional/lib"
 go = "1.27"
 [lib]
@@ -261,8 +255,7 @@ wire = []
 
 func TestProjectRequiredBinaryUsesResolvedFeatures(t *testing.T) {
 	root := smallProject(t)
-	writeProjectFile(t, root, project.ManifestName, `[package]
-format = 2
+	writeProjectFile(t, root, project.ManifestName, `[go_mod]
 module = "example.org/small"
 go = "1.27"
 [[bin]]
@@ -320,8 +313,7 @@ func TestProjectEmptyFeaturesRemainClosedAndNativeRootIsOpen(t *testing.T) {
 
 func TestProjectPlainGoDependencyRejectsFeatureRequests(t *testing.T) {
 	root := featureProject(t, map[string]string{
-		"app/goxide.toml": `[package]
-format = 2
+		"app/goxide.toml": `[go_mod]
 module = "example.org/plain/app"
 go = "1.27"
 [[bin]]

@@ -82,7 +82,7 @@ func TestProjectRejectsDeferredCapabilities(t *testing.T) {
 	for _, test := range []struct {
 		name, extra, want string
 	}{
-		{"workspace", "\n[workspace]\nformat=1\nmembers=[]\n", "workspace"},
+		{"workspace", "\n[workspace]\nmembers=[]\n", "workspace"},
 		{"build", "\n[build]\nentry='build.gox'\ninputs=['build.gox']\noutputs=['generated.go']\n", "build"},
 		{"example", "\n[[example]]\nname='demo'\npath='app.gox'\n", "example"},
 	} {
@@ -136,7 +136,7 @@ func TestOrdinaryTargetDirectoryIsSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest = append(manifest, "\n[package.namespaces]\nhelper='example.org/small/target'\n"...)
+	manifest = append(manifest, "\n[namespaces]\nhelper='example.org/small/target'\n"...)
 	if err := os.WriteFile(name, manifest, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -155,11 +155,10 @@ func TestOrdinaryTargetDirectoryIsSource(t *testing.T) {
 
 func TestExternalTestPackageKeepsImportedIdentity(t *testing.T) {
 	root := t.TempDir()
-	writeProjectFile(t, root, project.ManifestName, `[package]
-format = 2
+	writeProjectFile(t, root, project.ManifestName, `[go_mod]
 module = "example.org/testpkg"
 go = "1.27"
-[package.namespaces]
+[namespaces]
 lib = "example.org/testpkg/lib"
 [[bin]]
 name = "app"
@@ -191,7 +190,7 @@ func TestValue(t *testing::T) {
 func smallProject(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	writeProjectFile(t, root, project.ManifestName, "[package]\nformat=2\nmodule='example.org/small'\ngo='1.27'\n[[bin]]\nname='app'\npath='app.gox'\n[dependencies]\nfmt={go='fmt'}\n")
+	writeProjectFile(t, root, project.ManifestName, "[go_mod]\nmodule='example.org/small'\ngo='1.27'\n[[bin]]\nname='app'\npath='app.gox'\n[dependencies]\nfmt={go='fmt'}\n")
 	writeProjectFile(t, root, "app.gox", "package main\nuse fmt;\nfunc main() { fmt::Println(\"file target\") }\n")
 	return root
 }

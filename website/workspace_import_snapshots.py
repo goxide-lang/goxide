@@ -41,7 +41,7 @@ def build(ROOT, GO):
    imported=call(['import-go','--workspace','--out',str(new),'--offline',str(old)]);assert original()==before
    lock=json.loads((new/'goxide.lock').read_text());assert lock['version']==4
    assert not (new/'go.work').exists()
-   app=new/'members/m0';lib=new/'members/m1';assert tomllib.loads((app/'goxide.toml').read_text())['package']['module']=='example.org/app'
+   app=new/'members/m0';lib=new/'members/m1';assert tomllib.loads((app/'goxide.toml').read_text())['go_mod']['module']=='example.org/app'
    files += [dict(path='migrated/'+n,source=clean((new/n).read_text())) for n in ['goxide.toml','members/m0/goxide.toml','members/m1/goxide.toml']]
    runs=[dict(command='goxide import-go --workspace --plan --offline native',stdout=plan),dict(command='goxide import-go --workspace --out migrated --offline native',stdout=imported)]
    out=call(['run','--package','example.org/app','--locked','--offline',str(new)]);assert out==('modified vendor\n' if vendored else 'hello workspace\n');runs.append(dict(command='goxide run --package example.org/app --locked --offline migrated',stdout=out))

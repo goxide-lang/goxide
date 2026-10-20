@@ -95,8 +95,7 @@ func main() { fmt::Println(Present) }
 
 func TestProjectTargetSelectsSourcesAndBuildsRequestedMachine(t *testing.T) {
 	root := featureProject(t, map[string]string{
-		"goxide.toml": `[package]
-format = 2
+		"goxide.toml": `[go_mod]
 module = "example.org/target"
 go = "1.27"
 [[bin]]

@@ -71,18 +71,17 @@ default = ['d']
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `, "lib.gox": "package lib\nuse fmt;\nfunc Value()string{return fmt::Sprint(\"" + version + " \",cfg!(feature(\"d\")),\" \",cfg!(feature(\"a\")),\" \",cfg!(feature(\"b\")))}\n"}
 }
 func plainVersionLibrary(version string) map[string]string {
-	return map[string]string{"go.mod": "module example.org/goxidelib\ngo 1.27\n", "goxide.toml": "[package]\nformat=1\n[lib]\nname='lib'\npath='.'\n", "lib.gox": "package lib\nfunc Value()string{return " + strconv.Quote(version) + "}\n"}
+	return map[string]string{"go.mod": "module example.org/goxidelib\ngo 1.27\n", "goxide.toml": "[go_mod]\n[lib]\nname='lib'\npath='.'\n", "lib.gox": "package lib\nfunc Value()string{return " + strconv.Quote(version) + "}\n"}
 }
 
 func versionApp(t *testing.T, dependency string) string {
 	t.Helper()
 	root := t.TempDir()
-	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"version":1,"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":` + dependency + `}}`), "main.gox": "package main\nuse fmt;\nuse lib as l;\nfunc main(){fmt::Println(l::Value())}\n"})
+	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":` + dependency + `}}`), "main.gox": "package main\nuse fmt;\nuse lib as l;\nfunc main(){fmt::Println(l::Value())}\n"})
 	return root
 }
 func sourceHash(t *testing.T, root string) string {
@@ -137,8 +136,7 @@ features = ['a']
 go = 'example.org/goxidelib'
 version = 'v1.0.0'
 
-[package]
-format = 1
+[go_mod]
 `})
 	if b, e = projectRun(t, root, "run", "--offline"); e != nil || strings.TrimSpace(b) != "v1 false true false" {
 		t.Fatalf("%s %v", b, e)
@@ -171,7 +169,7 @@ func TestVersionSourceUnifiedMVSAndDiamond(t *testing.T) {
 		if name == "right" {
 			f = "b"
 		}
-		projectWrite(t, filepath.Join(base, name), map[string]string{"go.mod": "module example.org/" + name + "\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"version":1,"lib":{"name":"lib","path":"."},"dependencies":{"lib":{"go":"example.org/goxidelib","version":"v1.0.0","default_features":false,"features":["` + f + `"]}}}`), "lib.gox": "package lib\nuse lib as l;\nfunc Value()string{return l::Value()}\n"})
+		projectWrite(t, filepath.Join(base, name), map[string]string{"go.mod": "module example.org/" + name + "\n\ngo 1.27\n", "goxide.toml": manifestJSON(`{"lib":{"name":"lib","path":"."},"dependencies":{"lib":{"go":"example.org/goxidelib","version":"v1.0.0","default_features":false,"features":["` + f + `"]}}}`), "lib.gox": "package lib\nuse lib as l;\nfunc Value()string{return l::Value()}\n"})
 	}
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\nrequire example.org/native v1.0.0\n", "goxide.toml": `[[bin]]
 name = 'app'
@@ -186,8 +184,7 @@ path = '../left'
 module = 'example.org/right'
 path = '../right'
 
-[package]
-format = 1
+[go_mod]
 `, "main.gox": "package main\nuse fmt;\nuse left as l;\nuse right as r;\nfunc main(){fmt::Println(l::Value(),r::Value())}\n"})
 	if b, e := projectRun(t, root, "run"); e != nil || strings.TrimSpace(b) != "v2 false true true v2 false true true" {
 		t.Fatalf("%s %v", b, e)
@@ -242,8 +239,7 @@ version = 'v1.0.0'
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `
 			first["lib.gox"] = "package lib\nfunc Value()string{return \"old\"}\n"
 			second := versionLibrary("v2")
@@ -263,8 +259,7 @@ default = ['d']
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `
 				publishVersion(t, proxy, "example.org/newbridge", "v1.0.0", map[string]string{"go.mod": "module example.org/newbridge\n\ngo 1.27\nrequire example.org/goxidelib v1.1.0\n", "lib.go": "package newbridge\n"})
 			}
@@ -300,16 +295,14 @@ func TestVersionSourceUnusedNativeDoesNotActivateScript(t *testing.T) {
 	publishVersion(t, proxy, "example.org/unused", "v1.0.0", map[string]string{"go.mod": "module example.org/unused\n\ngo 1.27\n", "goxide.toml": `[build]
 entry = 'missing/script.go'
 
-[package]
-format = 1
+[go_mod]
 `, "lib.go": "package unused\n"})
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\nrequire example.org/unused v1.0.0 // indirect\n", "goxide.toml": `[[bin]]
 name = 'app'
 path = 'main.gox'
 
-[package]
-format = 1
+[go_mod]
 `, "main.gox": "package main\nfunc main(){}\n"})
 	if b, e := projectRun(t, root, "run"); e != nil {
 		t.Fatalf("unused module activated: %s %v", b, e)
@@ -342,7 +335,7 @@ func TestVersionSourceTargetABAAndGeneratedGo(t *testing.T) {
 	publishVersion(t, proxy, "example.org/goxidelib", "v1.1.0", versionLibrary("v2"))
 	root := versionApp(t, `{"go":"example.org/goxidelib","version":"v1.0.0","default_features":false}`)
 	manifest := func(version string) string {
-		return manifestJSON(`{"version":1,"features":{"a":["lib/a"]},"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":{"go":"example.org/goxidelib","version":"` + version + `","default_features":false}}}`)
+		return manifestJSON(`{"features":{"a":["lib/a"]},"bins":[{"name":"app","path":"main.gox"}],"dependencies":{"lib":{"go":"example.org/goxidelib","version":"` + version + `","default_features":false}}}`)
 	}
 	projectWrite(t, root, map[string]string{"goxide.toml": manifest("v1.0.0")})
 	build := func(args ...string) string {
@@ -455,8 +448,7 @@ path = 'main.gox'
 go = 'example.org/goxidelib'
 version = 'v1.1.0'
 
-[package]
-format = 1
+[go_mod]
 `
 	projectWrite(t, root, map[string]string{"goxide.toml": manifest})
 	changed := scriptPlan(t, root)
@@ -502,8 +494,7 @@ path = 'main.go'
 module = 'example.org/native'
 path = '../dep'
 
-[package]
-format = 1
+[go_mod]
 `, "main.go": "package main\nimport \"fmt\"\nimport n \"example.org/native\"\nfunc main(){fmt.Println(n.Value())}\n"})
 	if b, e := projectRun(t, app, "run", "--offline"); e != nil || strings.TrimSpace(b) != "42" {
 		t.Fatalf("native module backedge: %s %v", b, e)
@@ -528,7 +519,7 @@ func TestVersionSourceForkAndPathIdentity(t *testing.T) {
 		t.Skip("MVP-DEFERRED: MVP CLI features merged across version and path sources deferred by P6")
 		local := t.TempDir()
 		projectWrite(t, local, versionLibrary("local"))
-		manifest := projectManifest(map[string]any{"version": 1, "bins": []map[string]string{{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"lib": map[string]any{"go": "example.org/goxidelib", "version": "v1.0.0", "default_features": false, "features": []string{"a"}}, "local": map[string]any{"module": "example.org/goxidelib", "path": local, "features": []string{"b"}}}})
+		manifest := projectManifest(map[string]any{"bins": []map[string]string{{"name": "app", "path": "main.gox"}}, "dependencies": map[string]any{"lib": map[string]any{"go": "example.org/goxidelib", "version": "v1.0.0", "default_features": false, "features": []string{"a"}}, "local": map[string]any{"module": "example.org/goxidelib", "path": local, "features": []string{"b"}}}})
 		projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\n\ngo 1.27\n", "goxide.toml": manifest})
 		if _, e := projectRun(t, root, "run", "--offline"); e == nil || !strings.Contains(e.Error(), "conflicting version/path") {
 			t.Fatal(e)
@@ -561,8 +552,7 @@ version = 'v1.0.0'
 go = 'example.org/goxidelib'
 version = 'v1.1.0'
 
-[package]
-format = 1
+[go_mod]
 `, "main.gox": "package main\nuse fmt;\nuse a as l;\nfunc main(){fmt::Println(l::Value())}\n"})
 	g, e := project.Load(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, true, false, false)
 	if e != nil {
@@ -636,8 +626,7 @@ default = ['d']
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `
 			case "missing-lib":
 				files["goxide.toml"] = `[features]
@@ -646,8 +635,7 @@ b = []
 d = []
 default = ['d']
 
-[package]
-format = 1
+[go_mod]
 `
 				want = "must declare lib"
 			case "unknown":
@@ -662,14 +650,13 @@ b = ['a']
 name = 'lib'
 path = '.'
 
-[package]
-format = 1
+[go_mod]
 `
 				want = "feature cycle"
 			case "path-escape":
 				outside := t.TempDir()
 				projectWrite(t, outside, map[string]string{"go.mod": "module example.org/outside\n\ngo 1.27\n", "lib.go": "package outside\n"})
-				files["goxide.toml"] = projectManifest(map[string]any{"version": 1, "lib": map[string]string{"name": "lib", "path": "."}, "dependencies": map[string]any{"outside": map[string]string{"module": "example.org/outside", "path": outside}}})
+				files["goxide.toml"] = projectManifest(map[string]any{"lib": map[string]string{"name": "lib", "path": "."}, "dependencies": map[string]any{"outside": map[string]string{"module": "example.org/outside", "path": outside}}})
 				want = "escapes checkout/acquired"
 			}
 			publishVersion(t, proxy, "example.org/goxidelib", "v1.0.0", files)
@@ -706,8 +693,7 @@ path = 'main.go'
 module = 'gopkg.in/goxidefixture.v2'
 path = '../dep'
 
-[package]
-format = 1
+[go_mod]
 `, "main.go": "package main\nimport \"fmt\"\nimport l \"gopkg.in/goxidefixture.v2\"\nfunc main(){fmt.Println(l.Value())}\n"})
 	if b, e := projectRun(t, root, "run", "--offline"); e != nil || strings.TrimSpace(b) != "2" {
 		t.Fatalf("Go module major path: %s %v", b, e)
@@ -722,7 +708,7 @@ func TestVersionSourceLateGitBoundary(t *testing.T) {
 	bdir := filepath.Join(base, "b")
 	zdir := filepath.Join(base, "z")
 	manifest := func(deps map[string]any) string {
-		return projectManifest(map[string]any{"version": 1, "lib": map[string]string{"name": "lib", "path": "."}, "dependencies": deps})
+		return projectManifest(map[string]any{"lib": map[string]string{"name": "lib", "path": "."}, "dependencies": deps})
 	}
 	projectWrite(t, outside, map[string]string{"go.mod": "module example.org/c\n\ngo 1.27\n", "lib.go": "package c\n"})
 	projectWrite(t, repo, map[string]string{"go.mod": "module example.org/a\n\ngo 1.27\n", "lib.go": "package a\n", "goxide.toml": manifest(map[string]any{"outside": map[string]string{"module": "example.org/c", "path": outside}})})

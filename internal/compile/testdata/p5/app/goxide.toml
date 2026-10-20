@@ -1,9 +1,8 @@
-[package]
-format = 2
+[go_mod]
 module = "example.org/p5/app"
 go = "1.27"
 
-[package.namespaces]
+[namespaces]
 service = "example.org/p5/app/service"
 effects = "example.org/p5/app/effects"
 

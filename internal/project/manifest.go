@@ -16,17 +16,13 @@ import (
 )
 
 const ManifestName = "goxide.toml"
-const LegacyManifestName = "hgo.json"
-const ManifestProtocol = "goxide-unified-v2"
 
 type Manifest struct {
-	Vendor            *VendorConfig         `json:"vendor,omitempty" toml:"vendor,omitempty"`
 	Module            string                `json:"module"`
 	GoVersion         string                `json:"go"`
 	Toolchain         string                `json:"toolchain,omitempty"`
 	PackageNamespaces map[string]string     `json:"package_namespaces,omitempty"`
 	Native            GoConfig              `json:"native,omitempty"`
-	Version           int                   `json:"version" toml:"-"`
 	Build             *buildconfig.Config   `json:"build,omitempty" toml:"build,omitempty"`
 	Features          map[string][]string   `json:"features,omitempty" toml:"features,omitempty"`
 	Dependencies      map[string]Dependency `json:"dependencies,omitempty" toml:"dependencies,omitempty"`
@@ -89,21 +85,11 @@ func DiscoverProject(dir string) (string, error) {
 	}
 }
 
-// Detect rejects ambiguous/legacy projects before any native Go fallback.
+// Detect reports a regular author manifest before native Go fallback.
 func Detect(root string) (bool, error) {
 	info, err := os.Lstat(filepath.Join(root, ManifestName))
 	if err != nil && !os.IsNotExist(err) {
 		return false, err
-	}
-	old, oldErr := os.Lstat(filepath.Join(root, LegacyManifestName))
-	if oldErr != nil && !os.IsNotExist(oldErr) {
-		return false, oldErr
-	}
-	if old != nil {
-		if info != nil {
-			return false, fmt.Errorf("%s: both goxide.toml and hgo.json exist; migrate and move the old hgo.json out of the project root", root)
-		}
-		return false, fmt.Errorf("%s: legacy hgo.json is unsupported; migrate its contents to goxide.toml (version -> package.format, bins -> bin, examples -> example); renaming alone is insufficient", root)
 	}
 	if info == nil {
 		return false, nil
@@ -117,8 +103,8 @@ func Detect(root string) (bool, error) {
 // manifestDocument deliberately separates the human format from internal identities.
 type manifestDocument struct {
 	Workspace    *WorkspaceConfig      `toml:"workspace,omitempty"`
-	Vendor       *VendorConfig         `toml:"vendor,omitempty"`
-	Package      PackageConfig         `toml:"package"`
+	GoMod        GoModConfig           `toml:"go_mod"`
+	Namespaces   map[string]string     `toml:"namespaces,omitempty"`
 	Native       GoConfig              `toml:"go,omitempty"`
 	Build        *buildconfig.Config   `toml:"build,omitempty"`
 	Features     map[string][]string   `toml:"features,omitempty"`
@@ -166,7 +152,7 @@ func Parse(filename string, b []byte) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, fmt.Errorf("%s:1:1: %w", filename, err)
 	}
-	m := Manifest{Vendor: d.Vendor, Module: d.Package.Module, GoVersion: d.Package.Go, Toolchain: d.Package.Toolchain, PackageNamespaces: d.Package.Namespaces, Native: d.Native, Version: d.Package.Format, Build: d.Build, Features: d.Features, Dependencies: deps, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
+	m := Manifest{Module: d.GoMod.Module, GoVersion: d.GoMod.Go, Toolchain: d.GoMod.Toolchain, PackageNamespaces: d.Namespaces, Native: d.Native, Build: d.Build, Features: d.Features, Dependencies: deps, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validate(m); err != nil {
 		return m, fmt.Errorf("%s:1:1: %w", filename, err)
 	}
@@ -174,22 +160,16 @@ func Parse(filename string, b []byte) (Manifest, error) {
 }
 
 func validate(m Manifest) error {
-	if m.Vendor != nil {
-		return fmt.Errorf("obsolete vendor configuration: explicitly re-import the original Go input as local modules")
-	}
-	if m.Version != 2 {
-		return fmt.Errorf("unsupported goxide.toml package.format %d; migrate to format 2 with explicit package.module/go", m.Version)
-	}
 	if _, err := ModuleText(m); err != nil {
 		return err
 	}
-	if err := validateNamespaceMappings("package", m.PackageNamespaces); err != nil {
+	if err := validateNamespaceMappings("local", m.PackageNamespaces); err != nil {
 		return err
 	}
 	for _, namespace := range keys(m.PackageNamespaces) {
 		root, _, _ := strings.Cut(namespace, "::")
 		if _, exists := m.Dependencies[root]; exists {
-			return fmt.Errorf("package namespace %s: root %s conflicts with dependency alias", namespace, root)
+			return fmt.Errorf("namespace %s: root %s conflicts with dependency alias", namespace, root)
 		}
 	}
 	for k, d := range m.Dependencies {
@@ -383,6 +363,6 @@ func Select(m Manifest, bin, example string, features map[string]bool) (Target, 
 
 // Marshal emits the authoring schema, not the internal JSON identity representation.
 func Marshal(m Manifest) ([]byte, error) {
-	d := manifestDocument{Vendor: m.Vendor, Package: PackageConfig{Format: m.Version, Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain, Namespaces: m.PackageNamespaces}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	d := manifestDocument{GoMod: GoModConfig{Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain}, Namespaces: m.PackageNamespaces, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
 	return toml.Marshal(d)
 }

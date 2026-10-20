@@ -1,11 +1,12 @@
 package project
 
 import (
-	"github.com/pelletier/go-toml/v2"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 func TestFeatureGraphDiagnostics(t *testing.T) {
@@ -14,26 +15,30 @@ func TestFeatureGraphDiagnostics(t *testing.T) {
 a = ['b']
 b = ['a']
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "cycle"},
 		{`[features]
 a = ['unknown']
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "unknown feature"},
 		{`[features]
 a = ['dep:missing']
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "optional dependency"},
 		{`[features]
 a = ['missing/x']
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "unknown dependency"},
 		{`[[bin]]
 name = 'same'
@@ -43,15 +48,17 @@ path = 'a.gox'
 name = 'same'
 path = 'b.gox'
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "duplicate target"},
 		{`[[bin]]
 name = 'bad'
 path = '../outside'
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "stay inside"},
 		{`[[lib]]
 name = 'a'
@@ -61,8 +68,9 @@ path = 'a'
 name = 'b'
 path = 'b'
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "array table"},
 		{`[dependencies]
 [dependencies.x]
@@ -70,8 +78,9 @@ path = 'x'
 go = 'example.org/x'
 version = 'v1.0.0'
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "exactly one"},
 		{`[dependencies]
 [dependencies.x]
@@ -80,8 +89,9 @@ branch = 'main'
 subdir = '../x'
 module = 'example.org/x'
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "subdir"},
 		{`[[bin]]
 name = 'app'
@@ -91,12 +101,13 @@ required_features = ['unknown']
 [features]
 x = []
 
-[package]
-format = 1
+[go_mod]
+module = 'example.org/fixture'
+go = '1.27'
 `, "unknown required feature"},
 	} {
 		root := t.TempDir()
-		if e := os.WriteFile(filepath.Join(root, ManifestName), []byte(strings.ReplaceAll(tc.src, "[package]\nformat = 1", "[package]\nformat = 2\nmodule = 'example.org/fixture'\ngo = '1.27'")), 0644); e != nil {
+		if e := os.WriteFile(filepath.Join(root, ManifestName), []byte(tc.src), 0644); e != nil {
 			t.Fatal(e)
 		}
 		_, e := Read(root)
@@ -129,10 +140,9 @@ func TestGitURLAndLockBoundaries(t *testing.T) {
 	}
 }
 
-func TestTOMLFormatAndDiagnostics(t *testing.T) {
+func TestManifestTOMLAndDiagnostics(t *testing.T) {
 	const valid = `# human comments are not configuration
-[package]
-format = 2
+[go_mod]
 module = "example.org/fixture"
 go = "1.27"
 [features]
@@ -174,11 +184,11 @@ formatter = '/tools/formatter'
 	if e != nil || !enabled["fast"] || deps["some_lib"].Defaults {
 		t.Fatalf("%v %v %v", enabled, deps, e)
 	}
-	if m.Version != 2 || len(m.Bins) != 1 || len(m.Examples) != 1 || m.Lib.Path != "src/lib.gox" || m.Build.TimeoutSeconds != 5 || m.Dependencies["some_lib"].Version != "v2.1.0" {
+	if len(m.Bins) != 1 || len(m.Examples) != 1 || m.Lib.Path != "src/lib.gox" || m.Build.TimeoutSeconds != 5 || m.Dependencies["some_lib"].Version != "v2.1.0" {
 		t.Fatal(m)
 	}
-	doc := manifestDocument{Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
-	doc.Package = PackageConfig{Format: m.Version, Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain, Namespaces: m.PackageNamespaces}
+	doc := manifestDocument{Namespaces: m.PackageNamespaces, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	doc.GoMod = GoModConfig{Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain}
 	b, e := toml.Marshal(doc)
 	if e != nil {
 		t.Fatal(e)
@@ -188,20 +198,18 @@ formatter = '/tools/formatter'
 		t.Fatalf("roundtrip %s %v", b, e)
 	}
 	for _, tc := range []struct{ name, src, want string }{
-		{"case root", "[Package]\nformat=1", "case-sensitive"},
-		{"case field", "[package]\nFormat=1", "case-sensitive"},
-		{"case dependency", "[package]\nformat=1\n[dependencies.x]\nModule='example.org/x'\npath='.'", "case-sensitive"},
-		{"case inline array", "bin=[{Name='x',path='.'}]\n[package]\nformat=1", "case-sensitive"},
-		{"empty unknown table", "[wat]\n[package]\nformat=1", "unknown"},
-		{"unknown", "[package]\nformat=1\nmagic=2\n", "fixture.toml:3:1: unknown"},
-		{"unknown table", "[package]\nformat=1\n[wat]\nx=1", "fixture.toml:3:"},
-		{"duplicate", "[package]\nformat=1\nformat=1", "fixture.toml:3:"},
-		{"type", "[package]\nformat='1'", "fixture.toml:2:"},
-		{"bad table name", "[package]\nformat=1\n[dependencies.'bad/name']\nmodule='example.org/x'\npath='.'", "fixture.toml:3:"},
-		{"inline bad name", "[package]\nformat=1\n[features]\n'bad/name'=[]", "fixture.toml:4:"},
-		{"malformed", "[package\nformat=1", "fixture.toml:1:"},
-		{"renamed JSON", `{"version":1}`, "fixture.toml:1:"},
-		{"wrong bins", "[package]\nformat=1\n[[bins]]\nname='x'\npath='.'", "unknown"},
+		{"case root", "[Go_Mod]\nmodule='example.org/x'", "case-sensitive"},
+		{"case field", "[go_mod]\nModule='example.org/x'", "case-sensitive"},
+		{"case dependency", "[go_mod]\n[dependencies.x]\nModule='example.org/x'\npath='.'", "case-sensitive"},
+		{"case inline array", "bin=[{Name='x',path='.'}]\n[go_mod]", "case-sensitive"},
+		{"empty unknown table", "[wat]\n[go_mod]", "unknown"},
+		{"unknown", "[go_mod]\nmodule='example.org/x'\nmagic=2\n", "fixture.toml:3:1: unknown"},
+		{"unknown table", "[go_mod]\nmodule='example.org/x'\n[wat]\nx=1", "fixture.toml:3:"},
+		{"duplicate", "[go_mod]\nmodule='example.org/x'\nmodule='example.org/y'", "fixture.toml:3:"},
+		{"type", "[go_mod]\nmodule=1", "fixture.toml:2:"},
+		{"bad table name", "[go_mod]\nmodule='example.org/x'\n[dependencies.'bad/name']\npath='.'", "fixture.toml:3:"},
+		{"inline bad name", "[go_mod]\nmodule='example.org/x'\n[features]\n'bad/name'=[]", "fixture.toml:4:"},
+		{"malformed", "[go_mod\nmodule='example.org/x'", "fixture.toml:1:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, e := Parse("fixture.toml", []byte(tc.src))
@@ -212,27 +220,24 @@ formatter = '/tools/formatter'
 	}
 }
 
-func TestManifestDetectionMigration(t *testing.T) {
+func TestManifestDetection(t *testing.T) {
 	root := t.TempDir()
 	if yes, e := Detect(root); yes || e != nil {
 		t.Fatalf("%v %v", yes, e)
 	}
-	old := filepath.Join(root, LegacyManifestName)
 	current := filepath.Join(root, ManifestName)
-	os.WriteFile(old, []byte(`{"version":1}`), 0644)
-	if _, e := Detect(root); e == nil || !strings.Contains(e.Error(), "legacy hgo.json") {
+	if e := os.WriteFile(current, []byte("[go_mod]\nmodule='example.org/app'\ngo='1.27'\n"), 0644); e != nil {
 		t.Fatal(e)
 	}
-	os.WriteFile(current, []byte("[package]\nformat=1\n"), 0644)
-	if _, e := Read(root); e == nil || !strings.Contains(e.Error(), "both") {
-		t.Fatal(e)
-	}
-	os.Remove(old)
 	if yes, e := Detect(root); !yes || e != nil {
 		t.Fatalf("%v %v", yes, e)
 	}
-	os.Remove(current)
-	os.Symlink(old, current)
+	if e := os.Remove(current); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Symlink(filepath.Join(root, "missing.toml"), current); e != nil {
+		t.Fatal(e)
+	}
 	if _, e := Detect(root); e == nil || !strings.Contains(e.Error(), "regular file") {
 		t.Fatal(e)
 	}

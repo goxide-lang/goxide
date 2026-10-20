@@ -42,7 +42,7 @@ func executeImportGo(req ImportRequest, out, stderr io.Writer) error {
 	if e = project.CheckWorkspace(root); e != nil {
 		return e
 	}
-	for _, name := range []string{project.ManifestName, project.LegacyManifestName, "goxide.lock", "hgo.lock"} {
+	for _, name := range []string{project.ManifestName, "goxide.lock"} {
 		if _, e := os.Lstat(filepath.Join(root, name)); e == nil {
 			return fmt.Errorf("import-go refuses existing %s; preserve and explicitly migrate that configuration first", name)
 		} else if !os.IsNotExist(e) {

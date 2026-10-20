@@ -399,7 +399,7 @@ func TestOutputSnapshotNeverSkipsManagedMarkers(t *testing.T) {
 }
 
 func TestTOMLManifestReservedAndHelperBootstrap(t *testing.T) {
-	for _, name := range []string{"goxide.toml", "hgo.json"} {
+	for _, name := range []string{"goxide.toml"} {
 		t.Run(name, func(t *testing.T) {
 			o := fixture(t)
 			o.Config.Outputs = []string{name}
@@ -412,7 +412,7 @@ func TestTOMLManifestReservedAndHelperBootstrap(t *testing.T) {
 	helper := t.TempDir()
 	put(t, helper, "go.mod", "module example.test/helper\n\ngo 1.27\n")
 	os.Remove(filepath.Join(helper, "go.mod"))
-	put(t, helper, "goxide.toml", "[package]\nformat=2\nmodule='example.test/helper'\ngo='1.27'\n[build]\nentry='tools/build.go'\n")
+	put(t, helper, "goxide.toml", "[go_mod]\nmodule='example.test/helper'\ngo='1.27'\n[build]\nentry='tools/build.go'\n")
 	o.Config.Dependencies = map[string]string{"example.test/helper": helper}
 	if _, e := Prepare(o); e == nil || !strings.Contains(e.Error(), "bootstrap scripts unsupported") {
 		t.Fatal(e)
@@ -420,7 +420,7 @@ func TestTOMLManifestReservedAndHelperBootstrap(t *testing.T) {
 }
 
 func TestNestedPureManifestHelperRejected(t *testing.T) {
-	for _, name := range []string{"goxide.toml", "hgo.json"} {
+	for _, name := range []string{"goxide.toml"} {
 		files := map[string][]byte{"go.mod": []byte("module example.org/helper\ngo 1.27\n"), "nested/" + name: []byte("boundary")}
 		if err := validateModule("example.org/helper", files, nil); err == nil {
 			t.Fatal("accepted nested helper", name)

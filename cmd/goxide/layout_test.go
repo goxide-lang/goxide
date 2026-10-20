@@ -49,8 +49,7 @@ extra = []
 name = 'lib'
 path = 'src/lib.gox'
 
-[package]
-format = 1
+[go_mod]
 `,
 		"src/lib.gox":         "package lib\nuse dep as d;\nfunc Value()string{if cfg!(feature(\"extra\")){return \"on \"+d::Value()};return \"off \"+d::Value()}\n",
 		"src/one.gox":         "package main\nuse fmt;\nuse layout as l;\nfunc main(){fmt::Println(l::Value())}\n",
@@ -60,7 +59,7 @@ format = 1
 		"cmd/web/message.txt": "embedded asset",
 	}
 	if !features {
-		files["goxide.toml"] = "[package]\nformat=1\n[[bin]]\nname='one'\npath='src/one.gox'\n[[bin]]\nname='two'\npath='src/two.gox'\n[[bin]]\nname='web'\npath='cmd/web'\n[dependencies.dep]\nmodule='example.org/layoutdep'\npath='../dep'\n"
+		files["goxide.toml"] = "[go_mod]\n[[bin]]\nname='one'\npath='src/one.gox'\n[[bin]]\nname='two'\npath='src/two.gox'\n[[bin]]\nname='web'\npath='cmd/web'\n[dependencies.dep]\nmodule='example.org/layoutdep'\npath='../dep'\n"
 		files["src/one.gox"] = "package main\nuse fmt;use dep as d;\nfunc main(){fmt::Println(d::Value())}\n"
 		delete(files, "src/lib.gox")
 		delete(files, "examples/demo.gox")
@@ -235,7 +234,7 @@ func TestProjectLayoutConfigurationAndGoCaches(t *testing.T) {
 	t.Setenv("CGO_CFLAGS", "-O2")
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
-		"goxide.toml": "[package]\nformat = 2\nmodule = 'example.org/cache'\ngo = '1.27'\n[[bin]]\nname = 'app'\npath = '.'\n",
+		"goxide.toml": "[go_mod]\nmodule = 'example.org/cache'\ngo = '1.27'\n[[bin]]\nname = 'app'\npath = '.'\n",
 		"main.gox":    "package main\nfunc main() {}\n",
 	})
 	prepare := func() string {

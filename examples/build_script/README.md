@@ -1,6 +1,6 @@
 # 构建脚本：生成 Go 代码和嵌入资源
 
-此例只使用标准库，没有第三方工具或 host helper。`tools/build/build.gox` 读取 manifest 显式声明的 `schema.txt`，在 runner 提供的输出目录生成 `gen/schema.go` 和 `gen/data.txt`。应用通过 `[package.namespaces]` 中的 `gen` 精确映射和 `use gen;` 使用生成包；该包用 `go:embed` 嵌入资源。源码目录不会出现 `gen/`。
+此例只使用标准库，没有第三方工具或 host helper。`tools/build/build.gox` 读取 manifest 显式声明的 `schema.txt`，在 runner 提供的输出目录生成 `gen/schema.go` 和 `gen/data.txt`。应用通过 `[namespaces]` 中的 `gen` 精确映射和 `use gen;` 使用生成包；该包用 `go:embed` 嵌入资源。源码目录不会出现 `gen/`。
 
 清单为生成器使用的 `json`、`fmt`、`os`、`filepath`、`strings` 明确声明 toolchain 根。host lowering 只接收这些工具链映射，目标的 `gen` 映射不会进入 host；源码使用 `::` 访问包成员。
 

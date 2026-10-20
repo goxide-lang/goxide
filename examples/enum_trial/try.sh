@@ -36,8 +36,7 @@ write_pins() {
 }
 serde_pin=$("$go_tool" -C "$repo/examples/enum_trial/model" list -m -f '{{.Version}}' github.com/goxide-lang/serde)
 cat > "$work/source/model/goxide.toml" <<EOF
-[package]
-format = 2
+[go_mod]
 module = "trial.example/model"
 go = "1.27"
 
@@ -55,12 +54,11 @@ json = "github.com/goxide-lang/serde/json"
 EOF
 write_pins "$repo/examples/enum_trial/model" >> "$work/source/model/goxide.toml"
 cat > "$work/source/app/goxide.toml" <<'EOF'
-[package]
-format = 2
+[go_mod]
 module = "trial.example/app"
 go = "1.27"
 
-[package.namespaces]
+[namespaces]
 logkit = "trial.example/app/logkit"
 
 [[bin]]

@@ -1,5 +1,4 @@
-[package]
-format = 2
+[go_mod]
 module = "example.org/shared"
 go.workspace = true
 

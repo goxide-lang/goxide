@@ -94,13 +94,13 @@ gofmt -l internal cmd
 
 ## P5 跨包与项目工具链（已完成）
 
-交付：多包目录解析、`mod` 与 `use` 的跨包绑定、公开重导出、导入合并、最小 `goxide.toml`（`package`、依赖、`bin`）与 `goxide.lock`；第三方依赖经 Go 模块解析。新管线由生产项目入口组装，P6 再接入 CLI。
+交付：多包目录解析、`mod` 与 `use` 的跨包绑定、公开重导出、导入合并、最小 `goxide.toml`（`go_mod`、依赖、`bin`）与 `goxide.lock`；第三方依赖经 Go 模块解析。新管线由生产项目入口组装，P6 再接入 CLI。
 
 实施合同：
 
 - 复用 `internal/project` 的清单、Go 选版、锁与受管目录实现；不另建包管理器或锁格式。作者根只保存清单、源码和锁，Go 元数据与生成代码写入 target。
 - 所选 Goxide 模块按真实 module/package 身份联合经过新管线；跨包 enum、trait、宏和引用权限从源码恢复，不产生或读取旧前端 metadata。原生 Go 依赖使用真实 Go 类型信息。
-- `mod child` 只绑定选中的本地子包；依赖根和 `package.namespaces` 使用精确映射。`pub use` 保留 canonical 身份，函数和变量不生成转发包装；具体语义沿用[静态路径](design/static-paths.md)。
+- `mod child` 只绑定选中的本地子包；依赖根和 `namespaces` 使用精确映射。`pub use` 保留 canonical 身份，函数和变量不生成转发包装；具体语义沿用[静态路径](design/static-paths.md)。
 - 原生 Go 文件、测试与资源保留，生成文件不覆盖独立手写实现；目录发现不跨嵌套 module，也不把受管 target、vendor、testdata 作为源码包递归编译。
 - 清单中的 bin 选择对应入口；依赖库沿用既有 lib 声明。保存选定版本和校验和；相同输入复用稳定产物，重复生成和锁文件字节一致，locked 模式拒绝改变依赖映射。
 

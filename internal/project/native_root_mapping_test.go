@@ -108,7 +108,7 @@ func TestNativeExternalRootPreservesMemberEdges(t *testing.T) {
 	lib := filepath.Join(w.Root, "lib")
 	wsWrite(t, lib, "lib.go", "package lib\n")
 	w.Members["example.org/lib"] = lib
-	w.Manifests[lib] = Manifest{Version: 2, Module: "example.org/lib", GoVersion: "1.27"}
+	w.Manifests[lib] = Manifest{Module: "example.org/lib", GoVersion: "1.27"}
 	m.Dependencies["member"] = Dependency{Module: "example.org/lib", Path: "../lib", Package: "example.org/lib"}
 	w.Manifests[w.Members[m.Module]] = m
 	lock := Lock{NativeWorkspace: &NativeWorkspaceLock{Modules: map[string]Selection{"example.org/dep": {Path: "example.org/dep", Version: "v1.0.0"}}}}
@@ -124,7 +124,7 @@ func TestNativeExternalRootPreservesMemberEdges(t *testing.T) {
 
 func TestNativeExternalRootOfflineLocalReplacement(t *testing.T) {
 	w, m := nativeRootMappingFixture(t)
-	wsWrite(t, w.Root, ManifestName, "[workspace]\nformat=1\nmembers=['app']\n[workspace.go]\ngo='1.27'\nconfiguration={}\n")
+	wsWrite(t, w.Root, ManifestName, "[workspace]\nmembers=['app']\n[workspace.go]\ngo='1.27'\nconfiguration={}\n")
 	data, err := Marshal(m)
 	if err != nil {
 		t.Fatal(err)

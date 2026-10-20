@@ -32,13 +32,12 @@ func buildScriptFixture(t *testing.T, goxide bool, helper bool) string {
 name = 'helper'
 path = 'lib.gox'
 
-[package]
-format = 1
+[go_mod]
 `,
 			"lib.gox": "package helper\nfunc Value()string{return \"helper-one\"}\n",
 		})
 	}
-	manifest := map[string]any{"version": 1, "build": build, "features": map[string]any{"extra": []string{}}, "bins": []any{map[string]string{"name": "one", "path": "cmd/one"}, map[string]string{"name": "two", "path": "cmd/two"}}}
+	manifest := map[string]any{"build": build, "features": map[string]any{"extra": []string{}}, "bins": []any{map[string]string{"name": "one", "path": "cmd/one"}, map[string]string{"name": "two", "path": "cmd/two"}}}
 	generator := fmt.Sprintf(`package main
 import("encoding/json";"fmt";"os";"path/filepath";"strings"; %s)
 func main(){
@@ -349,8 +348,7 @@ path = 'main.gox'
 module = 'example.org/depscript'
 path = '../root'
 
-[package]
-format = 1
+[go_mod]
 `,
 		"main.gox": "package main\nuse fmt;\nuse generator as d;\nfunc main(){fmt::Println(\"DEPENDENT_APP\",d::Value())}\n",
 	})

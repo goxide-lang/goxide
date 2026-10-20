@@ -6,7 +6,7 @@
 
 状态：已完成。`internal/compile.PrepareProject` 接受单项目目录，使用既有清单、Go 依赖图和锁，选择 bin 后把所需模块交给 `parser → expand → resolve → check → lower`。返回稳定生成模块目录与 Go 入口包；调用者在该目录执行 Go build、run 或 test。CLI 三种输入模式在 P6 统一切换。
 
-本阶段使用 `package`、精确 namespace 映射、Go/path/Git 依赖及 bin；依赖库沿用 lib 路径。多包源和所选 Goxide 依赖联合检查，保留 enum、trait、宏和引用权限，不使用旧前端导出 metadata。原生 Go 源码、测试与资源参与生成模块；当前互操作支持 Goxide 跨包导入原生 Go，以及原生 Go 调用生成的公开 API。同包 Goxide 引用手写 Go 声明的桥接留待管线集成。清单作者根不生成 go.mod/go.sum。
+本阶段使用项目 `[go_mod]`、精确 namespace 映射、Go/path/Git 依赖及 bin；依赖库沿用 lib 路径。多包源和所选 Goxide 依赖联合检查，保留 enum、trait、宏和引用权限，不使用旧前端导出 metadata。原生 Go 源码、测试与资源参与生成模块；当前互操作支持 Goxide 跨包导入原生 Go，以及原生 Go 调用生成的公开 API。同包 Goxide 引用手写 Go 声明的桥接留待管线集成。清单作者根不生成 go.mod/go.sum。
 
 依赖版本和校验和由既有 Go planner 锁定，生成模块间使用 bundle 内的相对 replace；临时生成目录不进入锁或最终 Go 元数据。相同输入保持生成字节、产物路径和锁稳定，offline/locked 使用已有缓存与锁重放，清单依赖映射改变时 locked 拒绝更新。失败的源检查不发布新锁或覆盖已有 bundle。
 
@@ -18,8 +18,7 @@ feature 条件编译已接入：支持 cfg、cfg_attr 顶层条件属性及 cfg!
 
 ```toml
 # goxide.toml
-[package]
-format = 2
+[go_mod]
 module = "example.org/hello"
 go = "1.27"
 
@@ -52,7 +51,8 @@ goxide run --offline --locked   # clean dependency download
 
 | 表 | 字段与含义 |
 | --- | --- |
-| package | 必填 format=2、module、go；可选 toolchain（建议版本，不自动下载）、namespaces（本项目精确包映射） |
+| go_mod | 生成 go.mod 的元数据：必填 module、go；可选 toolchain（建议版本，不自动下载） |
+| namespaces | 本项目的精确包映射；名称到 Go package 路径，不写在 go_mod 内 |
 | dependencies.alias | 下述来源加公共 module/package/namespaces、features、default_features、optional；alias 是 use 的根名 |
 | features | 名称到字符串数组；default 为默认集合，dep:alias 激活 optional，alias/feature 转发 feature |
 | lib | 至多一项 name、path，可加 required_features |
@@ -61,9 +61,9 @@ goxide run --offline --locked   # clean dependency download
 | go.replace | 数组表 module、可选 version，以及 path 或 with+with_version；保留 Go replacement 语义 |
 | go.exclude / go.godebug | 数组表 module+version，或 key+value；沿用当前受支持的 Go 政策 |
 | build | entry、inputs、outputs、env、timeout_seconds、dependencies、tools，见 [脚本合同](../rfcs/0023-build-scripts.md)；下载不授权执行脚本 |
-| workspace | format=1、members、default-members、exclude、package、dependencies，以及已有原生迁入 go 政策，见 [workspace 合同](../rfcs/0026-workspaces.md) |
+| workspace | members、default-members、exclude、go_mod、dependencies，以及已有原生迁入 go 政策，见 [workspace 合同](../rfcs/0026-workspaces.md) |
 
-未知字段、错误类型、非法 TOML 和大小写错误有文件/行/列诊断。来源语义错误指出依赖名。不提供旧 schema 兼容。
+作者清单不声明格式版本，直接按当前字段校验。`[go_mod]` 仅描述生成 Go module 的元数据；语言中的 `use` 绑定来自依赖 alias 或顶层 `[namespaces]`，不以 `go_mod.module` 作为源码导入名。未知字段、错误类型、非法 TOML 和大小写错误有文件/行/列诊断。来源语义错误指出依赖名。
 
 ## Feature 配置
 
@@ -122,8 +122,7 @@ git -C "$work/repo" init -q -b main
 git -C "$work/repo" add .
 git -C "$work/repo" -c user.name=Fixture -c user.email=fixture@example.invalid commit -qm fixture
 cat > "$work/app/goxide.toml" <<TOML
-[package]
-format = 2
+[go_mod]
 module = "example.org/mono/app"
 go = "1.27"
 [[bin]]

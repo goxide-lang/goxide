@@ -1,9 +1,8 @@
 [workspace]
-format = 1
 members = ["apps/service", "apps/worker", "libs/shared"]
 default-members = ["apps/service"]
 
-[workspace.package]
+[workspace.go_mod]
 go = "1.27"
 
 [workspace.dependencies]

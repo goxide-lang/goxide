@@ -33,11 +33,10 @@ feature 图采用请求并集的最小不动点：根请求开始，反复加入
 
 ## 源级规则
 
-模块根目录显式放置 `goxide.toml`，`package.format = 2` 及显式 `package.module` / `package.go`，未知字段报错。依赖别名与 Go import 路径独立，import 仍写 module path。下例展示清单字段组合，包含后续开放的 example 目标；首批使用 package/dependencies/features/bin 和依赖的 lib：
+模块根目录显式放置 `goxide.toml`，声明生成 Go module 所需的 `go_mod.module` / `go_mod.go`，未知字段报错。Goxide 的 `use` 使用依赖别名；手写 Go 的 import 仍写 Go package 路径。下例展示清单字段组合，包含后续开放的 example 目标；首批使用 go_mod/dependencies/features/bin 和依赖的 lib：
 
 ```toml
-[package]
-format = 2
+[go_mod]
 module = "example.org/app"
 go = "1.27"
 

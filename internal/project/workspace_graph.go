@@ -121,7 +121,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 	if !fresh && version.Compare(strings.TrimSpace(string(toolVersion)), "go"+g.Lock.Unified.MinimumGo) < 0 {
 		return nil, fmt.Errorf("workspace lock requires Go >= %s", g.Lock.Unified.MinimumGo)
 	}
-	synthetic := Manifest{Version: 2, Module: "goxide-workspace.invalid/root", GoVersion: "1.27", Dependencies: map[string]Dependency{}}
+	synthetic := Manifest{Module: "goxide-workspace.invalid/root", GoVersion: "1.27", Dependencies: map[string]Dependency{}}
 	seenReplace := map[string]GoReplace{}
 	seenExclude := map[string]bool{}
 	for i, module := range keys(w.Members) {
@@ -173,7 +173,7 @@ func loadWorkspaceGraph(w *Workspace, root, tool string, requested []string, def
 		if e = os.Mkdir(synthRoot, 0755); e != nil {
 			return nil, e
 		}
-		if e = os.WriteFile(filepath.Join(synthRoot, ManifestName), []byte("[package]\nformat=2\nmodule=\"goxide-workspace.invalid/root\"\ngo=\"1.27\"\n"), 0644); e != nil {
+		if e = os.WriteFile(filepath.Join(synthRoot, ManifestName), []byte("[go_mod]\nmodule=\"goxide-workspace.invalid/root\"\ngo=\"1.27\"\n"), 0644); e != nil {
 			return nil, e
 		}
 		g.overrides[synthRoot] = synthetic

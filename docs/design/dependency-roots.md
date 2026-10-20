@@ -56,13 +56,13 @@ workspace 的 `[workspace.dependencies.alias]` 是模板。成员以 `workspace 
 库目标、二进制目标和生成包可能属于同一 module 的不同 Go packages。它们使用作者清单内的明确映射，不为自己建立 dependency：
 
 ```toml
-[package.namespaces]
+[namespaces]
 greeting = "example.org/app"
 generated = "example.org/app/gen"
 "formats::binary" = "example.org/app/formats/binary"
 ```
 
-源码以 `use greeting;`、`use generated;` 或 `use formats::binary;` 建立绑定。映射的预期 ModulePath 固定为当前 `package.module`，实际加载仍须证明包归属；不能借本地入口映射其他 module。键的首段与任意 dependency alias 冲突时拒绝，包括未激活的 optional dependency。此表只属于当前包，不从 workspace 根继承，不增加下载或 feature 边。
+源码以 `use greeting;`、`use generated;` 或 `use formats::binary;` 建立绑定。映射的预期 ModulePath 固定为当前 `go_mod.module`，实际加载仍须证明包归属；不能借本地入口映射其他 module。键的首段与任意 dependency alias 冲突时拒绝，包括未激活的 optional dependency。此表只属于当前包，不从 workspace 根继承，不增加下载或 feature 边。
 
 这是精确 Go package 互操作入口；本地模块的 `mod child;` 声明仍独立存在。没有自动扫描整个 module 并导出全部目录的 `crate` 树，也没有隐式 self dependency。
 
@@ -109,6 +109,6 @@ goxide transpile --roots ./chosen-roots.toml ./app/main.gox
 
 ## Host 构建脚本
 
-`.gox` 构建脚本与 host helper 的 lowering 只接收作者当前活动的 toolchain roots，沿用 `use` / `::` 语法。目标的 module dependency 和 `package.namespaces` 不透传到 host；这不会授予 target 依赖作为 host helper 执行的权限。工具链根映射进入脚本冻结输入、缓存及精确授权 subject 的身份。
+`.gox` 构建脚本与 host helper 的 lowering 只接收作者当前活动的 toolchain roots，沿用 `use` / `::` 语法。目标的 module dependency 和 `namespaces` 不透传到 host；这不会授予 target 依赖作为 host helper 执行的权限。工具链根映射进入脚本冻结输入、缓存及精确授权 subject 的身份。
 
 原生 `.go` host 脚本继续通过现有 `build.dependencies` 显式 helper 快照使用 Go import。`.gox` host 源对 module 根的 `use` 需要未来独立 host namespace 输入；当前给出缺失根诊断，不从 target dependency 或 module path 猜 alias。工具链根之外的 host 映射在 runner API 也明确拒绝。

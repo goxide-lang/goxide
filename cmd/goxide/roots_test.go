@@ -111,8 +111,7 @@ func TestCLIProjectRootContexts(t *testing.T) {
 	})
 	writeRootFixture(t, app, map[string]string{
 		"main.gox": rootContextProgram,
-		"goxide.toml": `[package]
-format = 2
+		"goxide.toml": `[go_mod]
 module = "example.org/app"
 go = "1.27"
 [dependencies.output]
@@ -177,11 +176,10 @@ func TestCLICurrentModulePackageContext(t *testing.T) {
 	writeRootFixture(t, root, map[string]string{
 		"src/lib.gox":  "package library\nfunc Value()int{return 43}\n",
 		"src/main.gox": "package main\nuse output;\nuse library;\nfunc main(){output::Println(library::Value())}\n",
-		"goxide.toml": `[package]
-format=2
+		"goxide.toml": `[go_mod]
 module="example.org/app"
 go="1.27"
-[package.namespaces]
+[namespaces]
 library="example.org/app"
 [dependencies.output]
 go = "fmt"

@@ -1,5 +1,4 @@
-[package]
-format = 2
+[go_mod]
 module = "example.org/reporter"
 go = "1.27"
 

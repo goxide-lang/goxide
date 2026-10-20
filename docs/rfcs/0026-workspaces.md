@@ -10,8 +10,8 @@
 
 ### 本次实现范围
 
-- 根 `[workspace] format=1`，虚拟根/根包、显式 `members`、单段 glob、`exclude`、`default-members`；成员为 format 2 TOML。拒绝重复 module、嵌套 workspace、成员锁、symlink/受管输出成员；外部成员须显式路径，由根 INPUT 选择。
-- `[workspace.dependencies]` 仅模板；成员须 `{workspace=true}`，可加 feature 请求、设置 default_features/optional；不写该标记就不继承。`package.go.workspace=true` / toolchain 同理。显式 Go module/Git/path 来源继续有效，不自动改为成员 path；显式来源冲突报错。原生 require 与成员 path 共存须显式未限定版本的本地 replace。
+- 根 `[workspace]`，虚拟根/根包、显式 `members`、单段 glob、`exclude`、`default-members`；成员使用当前 goxide.toml 字段。拒绝重复 module、嵌套 workspace、成员锁、symlink/受管输出成员；外部成员须显式路径，由根 INPUT 选择。
+- `[workspace.dependencies]` 仅模板；成员须 `{workspace=true}`，可加 feature 请求、设置 default_features/optional；不写该标记就不继承。`go_mod.go.workspace=true` / toolchain 同理。显式 Go module/Git/path 来源继续有效，不自动改为成员 path；显式来源冲突报错。原生 require 与成员 path 共存须显式未限定版本的本地 replace。
 - `goxide build|test|transpile --workspace ROOT`；重复 `-p/--package MODULE`；run、显式 bin/example/lib 和 -o 必须只选择一个成员。默认多成员构建其 lib/bins，未满足 required_features 的默认目标跳过并说明；examples 仅显式选择。多成员 feature 使用 `MODULE/FEATURE`。CLI 保留 POSIX 风格，flags 在 INPUT 前。
 - 根 schema 3 lock 保存统一 Go MVS 版本、有效政策、来源身份和校验和；schema 2 单项目继续支持，不自动迁移为 workspace。全体成员的声明 feature 闭包只用于版本求解；本次构建的 features 另按所选根/活动依赖固定点合并。根写锁串行化更新，不运行求解阶段脚本。Git 保持已锁 commit，已有 Unified 锁缺可达 pin 时即使未传 --locked 也拒绝移动分支解析。
 - 拆出项目可直接读取复制的 schema 3 根锁：只沿实际清单及已校验 Go `.mod` 的可达关系求解，忽略无关记录，核对来源/输入/版本/checksum；不复用旧 workspace 的无关 replace 政策。远端/Git 可在新缓存位置重建；path 不自动物化或改源。`--offline` 使用已缓存的可达已锁版本，不要求被升级低版本的缓存。
@@ -44,20 +44,19 @@
 
 ## 源级规则
 
-除上节列明的实现子集外，以下语法、CLI、诊断名仍为**候选合同**。现有清单继续 format=2；新增 workspace 协议使用自身 format，旧工具遇到未知表必须拒绝，不能静默忽略。最终兼容门控需在实现时先通过黑例。
+除上节列明的实现子集外，以下语法、CLI、诊断名仍为**候选合同**。go_mod 与 workspace 均不声明格式版本；清单直接按当前字段校验，未知表或字段报错。
 
 ### WS-01：根、成员与发现
 
 ```toml
-# dev/goxide.toml：虚拟根；没有 [package]
+# dev/goxide.toml：虚拟根；没有 [go_mod]
 [workspace]
-format = 1
 members = ["apps/*", "libs/shared"]
 default-members = ["apps/service"]
 exclude = ["apps/scratch"]
 # 全workspace统一版本解析；没有selected/all-members模式开关
 
-[workspace.package]
+[workspace.go_mod]
 go = "1.27"
 
 [workspace.dependencies.shared]
@@ -68,7 +67,7 @@ features = []
 default_features = false
 ```
 
-根同时有 `[package]` 时是根包，自动纳入成员。虚拟根无 package/lib/bin/build/features/go/vendor 这些包级表；根包有自己独立的包表，不能把根包 dependencies 当成全部成员依赖。root 的 go 政策和 workspace.go 政策也必须分开。
+根同时有 `[go_mod]` 时是根包，自动纳入成员。虚拟根无 go_mod/namespaces/lib/bin/build/features/go/vendor 这些包级表；根包有自己独立的配置，不能把根包 dependencies 当成全部成员依赖。root 的 go 政策和 workspace.go 政策也必须分开。
 
 成员是**一个作者包对应一个逻辑 Go module**，可含多个 Go packages、一个 lib、多 bin/examples。module path 是包身份；不把每个 bin 变成新 module。列表项指向清单目录，不是递归扫描源码。推荐首片即支持路径段内 `*`、`?`（不跨 `/`），拒绝 `**`；展开按规范相对路径排序，exclude 后必须非空。default-members 必须是最终成员的显式路径集合，不再展开 glob；缺省时有根包选根包，虚拟根选全部。
 
@@ -76,7 +75,7 @@ default_features = false
 
 推荐首片支持外部显式成员，便于多个独立仓库共同开发；可先只实现同父目录 checkout 布局，但不能将多仓库模式标作永久不支持。工作区根不能成为自己的外部成员，单次命令只能绑定一个活动根；两个独立 workspace 可以并发只读使用同一外部成员，各自持有自己的锁/target，不争夺成员源码所有权。嵌套 `[workspace]` 是发现边界：外层 glob 不跨越，显式纳入报 WS-NESTED，须排除或重组。
 
-从目录入口向上找最近 TOML 包/工作区；遇到最近 workspace 就停止，不跳过它找更远父根。只有该根列举该包才加入；未列入则报 WS-NOT-MEMBER，并给出加入/exclude/独立模式建议，不悄悄使用父锁。外部成员从根命令可选；从外部成员目录调用不会遍历兄弟目录找工作区，需 `--workspace-manifest /dev/goxide.toml`，可选的 `package.workspace` 便捷指针留后续。显式 `--workspace-manifest` 必须验证成员资格。
+从目录入口向上找最近 TOML 包/工作区；遇到最近 workspace 就停止，不跳过它找更远父根。只有该根列举该包才加入；未列入则报 WS-NOT-MEMBER，并给出加入/exclude/独立模式建议，不悄悄使用父锁。外部成员从根命令可选；从外部成员目录调用不会遍历兄弟目录找工作区，需 `--workspace-manifest /dev/goxide.toml`。显式 `--workspace-manifest` 必须验证成员资格。
 
 推荐 `--no-workspace` 显式独立运行、关闭父发现；只用拆出后的独立清单/复制的根锁/新target，未展开的继承字段报错，不偷偷读父根。仓库移出后同样如此。发现阶段只核查全局路径/清单存在/可读取身份；未选成员的源码编译错误和脚本不进入本次构建；其清单身份、依赖/feature声明和Go最低要求仍参加全workspace图验证，坏清单/政策可以阻断锁解析，不能承诺只选A就忽略B的依赖政策。无法读取 TOML 或 module 身份、重复身份属全局目录损坏，仍阻断并注明不是该成员源码编译错误。提供后续 `workspace check` 全成员清单验证入口，不默认执行源码/脚本。
 
@@ -84,8 +83,7 @@ default_features = false
 
 ```toml
 # apps/service/goxide.toml：候选继承语法
-[package]
-format = 2
+[go_mod]
 module = "example.org/service"
 go.workspace = true
 
@@ -107,7 +105,7 @@ name = "hello"
 path = "examples/hello"
 ```
 
-workspace.dependencies 是模板库，**不注入依赖边**。成员按 alias 显式 `workspace=true` 才继承。go/module/path/git/rev/tag/branch/subdir/version/publish_version 从模板一次性取得，成员不得同时重新指定来源；features 按集合相加；optional 只在成员声明，根模板禁止 optional；default_features 以成员显式值覆盖模板缺省，但任何其他活动依赖边仍可启用默认请求。本篇新增的键沿用现有 TOML `default_features` 拼写；CLI 使用 `--no-default-features`。共享 package 字段首片只允许 go、toolchain 显式 `字段.workspace=true`；module 身份不继承。version/license/readme 等先有独立发布元数据合同再扩展，不假定 Cargo 字段已被本仓库实现。
+workspace.dependencies 是模板库，**不注入依赖边**。成员按 alias 显式 `workspace=true` 才继承。go/module/path/git/rev/tag/branch/subdir/version/publish_version 从模板一次性取得，成员不得同时重新指定来源；features 按集合相加；optional 只在成员声明，根模板禁止 optional；default_features 以成员显式值覆盖模板缺省，但任何其他活动依赖边仍可启用默认请求。本篇新增的键沿用现有 TOML `default_features` 拼写；CLI 使用 `--no-default-features`。`[workspace.go_mod]` 只提供 go、toolchain 默认值，成员在 `[go_mod]` 内显式写 `字段.workspace=true` 才继承；成员自己的 module 路径不继承。version/license/readme 等属于另外的发布元数据合同，不写入 go_mod，也不假定 Cargo 字段已被本仓库实现。
 
 加入成员不等于依赖该成员，源码 import 也不能创建清单依赖或启用模板。只有显式继承模板中的 path、成员自己声明的本地 path，或明确的 override/replace 条目才能把来源切到本地成员；version、Git、path 和原生 go.require 不因另一个目录被列为 member 就自动改指该目录。`workspace=true` 若继承的是 version/Git，仍消费该远端来源；它不是“自动找同名本地包”开关。未来若需要 Cargo 式 workspace patch，必须另提明确条目与优先级，不能默认启用。
 
@@ -288,7 +286,6 @@ func main() { fmt.Println(shared.Message()) }
 ```toml
 # dev/goxide.toml；四个目录可各自是 Git checkout，无需改成单仓库
 [workspace]
-format = 1
 members = ["goxide", "std", "serde", "next"]
 default-members = ["goxide"]
 # 全workspace统一版本解析

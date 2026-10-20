@@ -11,9 +11,6 @@ import (
 	"strings"
 )
 
-type VendorConfig struct {
-	Mode string `json:"mode" toml:"mode"`
-}
 type VendorModule struct {
 	Path           string   `json:"path"`
 	Version        string   `json:"version,omitempty"`
@@ -213,7 +210,7 @@ func inspectVendor(root string, m Manifest, mode, policy string) (*VendorSnapsho
 		}
 		name := path.Base(rel)
 		parent := path.Dir(rel)
-		if name == "go.mod" || name == "go.sum" || name == ManifestName || name == LegacyManifestName || name == "goxide.lock" || strings.HasSuffix(name, ".gox") {
+		if name == "go.mod" || name == "go.sum" || name == ManifestName || name == "goxide.lock" || strings.HasSuffix(name, ".gox") {
 			return fmt.Errorf("vendor: nested module/enhanced source unsupported: %s", rel)
 		}
 		owned := rel == "modules.txt"

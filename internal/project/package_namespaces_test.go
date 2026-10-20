@@ -10,7 +10,7 @@ import (
 
 func TestPackageNamespacesSchema(t *testing.T) {
 	m, err := Parse("self.toml", []byte(mappingHeader+`
-[package.namespaces]
+[namespaces]
 models="example.org/app/models"
 "generated::schema"="example.org/app/gen/schema"
 `))
@@ -41,17 +41,17 @@ models="example.org/app/models"
 
 func TestPackageNamespacesDiagnostics(t *testing.T) {
 	for _, tc := range []struct{ name, body, want string }{
-		{"hyphen", "[package.namespaces]\n'bad-name'='example.org/app/models'", "invalid namespace path"},
-		{"blank", "[package.namespaces]\n_='example.org/app/models'", "invalid namespace path"},
-		{"keyword", "[package.namespaces]\n'models::use'='example.org/app/models'", "invalid namespace path"},
-		{"dot", "[package.namespaces]\n'models.item'='example.org/app/models'", "invalid namespace path"},
-		{"empty segment", "[package.namespaces]\n'models::::item'='example.org/app/models'", "invalid namespace path"},
-		{"empty package", "[package.namespaces]\nmodels=''", "invalid exact package path"},
-		{"relative package", "[package.namespaces]\nmodels='./models'", "invalid exact package path"},
-		{"bad case", "[package.Namespaces]\nmodels='example.org/app/models'", "case-sensitive"},
-		{"dependency collision", "[package.namespaces]\nmodels='example.org/app/models'\n[dependencies.models]\ngo = 'example.org/models'\nversion = 'v1.0.0' ", "conflicts with dependency alias"},
-		{"nested optional collision", "[package.namespaces]\n'models::item'='example.org/app/models/item'\n[dependencies.models]\ngo = 'example.org/models'\nversion = 'v1.0.0' \noptional=true", "conflicts with dependency alias"},
-		{"toolchain collision", "[package.namespaces]\nfmt='example.org/app/fmt'\n[dependencies.fmt]\ngo = 'fmt' ", "conflicts with dependency alias"},
+		{"hyphen", "[namespaces]\n'bad-name'='example.org/app/models'", "invalid namespace path"},
+		{"blank", "[namespaces]\n_='example.org/app/models'", "invalid namespace path"},
+		{"keyword", "[namespaces]\n'models::use'='example.org/app/models'", "invalid namespace path"},
+		{"dot", "[namespaces]\n'models.item'='example.org/app/models'", "invalid namespace path"},
+		{"empty segment", "[namespaces]\n'models::::item'='example.org/app/models'", "invalid namespace path"},
+		{"empty package", "[namespaces]\nmodels=''", "invalid exact package path"},
+		{"relative package", "[namespaces]\nmodels='./models'", "invalid exact package path"},
+		{"bad case", "[Namespaces]\nmodels='example.org/app/models'", "case-sensitive"},
+		{"dependency collision", "[namespaces]\nmodels='example.org/app/models'\n[dependencies.models]\ngo = 'example.org/models'\nversion = 'v1.0.0' ", "conflicts with dependency alias"},
+		{"nested optional collision", "[namespaces]\n'models::item'='example.org/app/models/item'\n[dependencies.models]\ngo = 'example.org/models'\nversion = 'v1.0.0' \noptional=true", "conflicts with dependency alias"},
+		{"toolchain collision", "[namespaces]\nfmt='example.org/app/fmt'\n[dependencies.fmt]\ngo = 'fmt' ", "conflicts with dependency alias"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse("self.toml", []byte(mappingHeader+tc.body))
@@ -64,17 +64,15 @@ func TestPackageNamespacesDiagnostics(t *testing.T) {
 
 func TestPackageNamespacesWorkspaceIsolation(t *testing.T) {
 	root := t.TempDir()
-	wsWrite(t, root, ManifestName, `[package]
-format=2
+	wsWrite(t, root, ManifestName, `[go_mod]
 module="example.org/root"
 go="1.27"
-[package.namespaces]
+[namespaces]
 root_only="example.org/root/internalpkg"
 [workspace]
-format=1
 members=["app", "other"]
 `)
-	wsWrite(t, root, "app/"+ManifestName, mappingHeader+"[package.namespaces]\nmodels='example.org/app/models'\n")
+	wsWrite(t, root, "app/"+ManifestName, mappingHeader+"[namespaces]\nmodels='example.org/app/models'\n")
 	wsWrite(t, root, "other/"+ManifestName, strings.Replace(mappingHeader, "example.org/app", "example.org/other", 1))
 	w, err := DiscoverWorkspace(root)
 	if err != nil {
@@ -83,7 +81,7 @@ members=["app", "other"]
 	if len(w.Manifests[root].PackageNamespaces) != 1 || !reflect.DeepEqual(w.Manifests[filepath.Join(root, "app")].PackageNamespaces, map[string]string{"models": "example.org/app/models"}) || len(w.Manifests[filepath.Join(root, "other")].PackageNamespaces) != 0 {
 		t.Fatalf("workspace inherited another package's namespaces: %+v", w.Manifests)
 	}
-	wsWrite(t, root, ManifestName, "[workspace]\nformat=1\nmembers=['app']\n[workspace.package.namespaces]\nmodels='example.org/root/models'\n")
+	wsWrite(t, root, ManifestName, "[workspace]\nmembers=['app']\n[workspace.namespaces]\nmodels='example.org/root/models'\n")
 	if _, err := DiscoverWorkspace(root); err == nil || !strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("workspace-level namespace inheritance accepted: %v", err)
 	}
@@ -91,7 +89,7 @@ members=["app", "other"]
 
 func TestPackageNamespacesLockedPlan(t *testing.T) {
 	root := t.TempDir()
-	manifest := mappingHeader + "[package.namespaces]\nmodels='example.org/app/models'\n"
+	manifest := mappingHeader + "[namespaces]\nmodels='example.org/app/models'\n"
 	wsWrite(t, root, ManifestName, manifest)
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	g, err := Load(root, tool, nil, false, true, false)

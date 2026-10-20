@@ -20,17 +20,17 @@ func wsWrite(t *testing.T, root, path, body string) {
 func TestWorkspaceExplicitInheritance(t *testing.T) {
 	root := t.TempDir()
 	wsWrite(t, root, "goxide.toml", `[workspace]
-format=1
 members=["app"]
-[workspace.package]
+[workspace.go_mod]
 go="1.27"
+toolchain="go1.27.0"
 [workspace.dependencies]
 lib={module="example.org/lib",git = "https://example.org/lib.git", branch = "main",features=["json"],default_features=false}
 `)
-	wsWrite(t, root, "app/goxide.toml", `[package]
-format=2
+	wsWrite(t, root, "app/goxide.toml", `[go_mod]
 module="example.org/app"
 go.workspace=true
+toolchain.workspace=true
 [dependencies]
 lib={workspace=true,features=["extra"]}
 `)
@@ -46,7 +46,7 @@ lib={workspace=true,features=["extra"]}
 	if d.Workspace || d.Git != "https://example.org/lib.git" || len(d.Features) != 2 || d.DefaultFeatures == nil || *d.DefaultFeatures {
 		t.Fatalf("bad inheritance: %#v", d)
 	}
-	if w.Root != root || m.GoVersion != "1.27" {
+	if w.Root != root || m.GoVersion != "1.27" || m.Toolchain != "go1.27.0" {
 		t.Fatal(w, m)
 	}
 	wsWrite(t, root, "app/goxide.lock", "{}")
@@ -57,13 +57,11 @@ lib={workspace=true,features=["extra"]}
 func TestWorkspaceNoImplicitInheritance(t *testing.T) {
 	root := t.TempDir()
 	wsWrite(t, root, "goxide.toml", `[workspace]
-format=1
 members=["app"]
 [workspace.dependencies]
 lib={module="example.org/lib",path="lib"}
 `)
-	wsWrite(t, root, "app/goxide.toml", `[package]
-format=2
+	wsWrite(t, root, "app/goxide.toml", `[go_mod]
 module="example.org/app"
 go="1.27"
 [dependencies]
@@ -80,21 +78,21 @@ lib={go = "example.org/lib", version = "v1.2.0"}
 
 func TestWorkspaceStrictBoundaries(t *testing.T) {
 	for _, tc := range []struct{ name, root, member, extra, want string }{
-		{"case", "[workspace]\nFormat=1\nmembers=[\"app\"]\n", "", "", "unknown"},
-		{"feature type", "[workspace]\nformat=1\nmembers=[\"app\"]\n[workspace.dependencies]\nd={module=\"example.org/d\",path=\"d\"}\n", "[dependencies]\nd={workspace=true,features=\"oops\"}\n", "", "features"},
-		{"duplicate", "[workspace]\nformat=1\nmembers=[\"app\",\"other\"]\n", "", "other", "duplicate workspace module"},
-		{"nested", "[workspace]\nformat=1\nmembers=[\"nested/app\"]\n", "", "nested", "another workspace"},
+		{"case", "[workspace]\nMembers=[\"app\"]\n", "", "", "unknown"},
+		{"feature type", "[workspace]\nmembers=[\"app\"]\n[workspace.dependencies]\nd={module=\"example.org/d\",path=\"d\"}\n", "[dependencies]\nd={workspace=true,features=\"oops\"}\n", "", "features"},
+		{"duplicate", "[workspace]\nmembers=[\"app\",\"other\"]\n", "", "other", "duplicate workspace module"},
+		{"nested", "[workspace]\nmembers=[\"nested/app\"]\n", "", "nested", "another workspace"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			wsWrite(t, root, "goxide.toml", tc.root)
-			manifest := "[package]\nformat=2\nmodule=\"example.org/app\"\ngo=\"1.27\"\n" + tc.member
+			manifest := "[go_mod]\nmodule=\"example.org/app\"\ngo=\"1.27\"\n" + tc.member
 			wsWrite(t, root, "app/goxide.toml", manifest)
 			if tc.extra == "other" {
 				wsWrite(t, root, "other/goxide.toml", manifest)
 			}
 			if tc.extra == "nested" {
-				wsWrite(t, root, "nested/goxide.toml", "[workspace]\nformat=1\nmembers=[\"app\"]\n")
+				wsWrite(t, root, "nested/goxide.toml", "[workspace]\nmembers=[\"app\"]\n")
 				wsWrite(t, root, "nested/app/goxide.toml", manifest)
 			}
 			if _, e := DiscoverWorkspace(root); e == nil || !strings.Contains(strings.ToLower(e.Error()), tc.want) {
@@ -103,8 +101,8 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 		})
 	}
 	root := t.TempDir()
-	wsWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"app\"]\n")
-	wsWrite(t, root, "app/goxide.toml", "[package]\nformat=2\nmodule=\"example.org/app\"\ngo=\"1.27\"\n")
+	wsWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"app\"]\n")
+	wsWrite(t, root, "app/goxide.toml", "[go_mod]\nmodule=\"example.org/app\"\ngo=\"1.27\"\n")
 	w, e := DiscoverWorkspace(root)
 	if e != nil {
 		t.Fatal(e)
@@ -112,7 +110,7 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 	if _, e = w.Select(filepath.Join(root, "unlisted"), nil, false); e == nil || !strings.Contains(e.Error(), "WS-NOT-MEMBER") {
 		t.Fatal(e)
 	}
-	wsWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"link/*\"]\n")
+	wsWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"link/*\"]\n")
 	if e = os.Symlink(filepath.Join(root, "app"), filepath.Join(root, "link")); e != nil {
 		t.Fatal(e)
 	}
@@ -123,9 +121,9 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 
 func TestWorkspaceMembersShareLease(t *testing.T) {
 	root := t.TempDir()
-	wsWrite(t, root, "goxide.toml", "[workspace]\nformat=1\nmembers=[\"a\",\"b\"]\n")
+	wsWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"a\",\"b\"]\n")
 	for _, name := range []string{"a", "b"} {
-		wsWrite(t, root, name+"/goxide.toml", "[package]\nformat=2\nmodule=\"example.org/"+name+"\"\ngo=\"1.27\"\n")
+		wsWrite(t, root, name+"/goxide.toml", "[go_mod]\nmodule=\"example.org/"+name+"\"\ngo=\"1.27\"\n")
 	}
 	release, e := LockProject(filepath.Join(root, "a"))
 	if e != nil {

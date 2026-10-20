@@ -98,7 +98,7 @@ func writeWorkspaceCandidate(root string, c project.WorkspaceConfig, manifests m
 	return nil
 }
 func rejectImportConfig(root string) error {
-	for _, name := range []string{project.ManifestName, project.LegacyManifestName, "goxide.lock", "hgo.lock"} {
+	for _, name := range []string{project.ManifestName, "goxide.lock"} {
 		if _, e := os.Lstat(filepath.Join(root, name)); e == nil {
 			return fmt.Errorf("workspace import refuses existing %s at %s", name, root)
 		} else if !os.IsNotExist(e) {
@@ -202,7 +202,7 @@ func executeImportWorkspace(req ImportRequest, out, stderr io.Writer) error {
 		return e
 	}
 	defer os.RemoveAll(stage)
-	c := project.WorkspaceConfig{Format: 1, Go: policy}
+	c := project.WorkspaceConfig{Go: policy}
 	seed := &project.NativeWorkspaceLock{Sums: map[string]string{}}
 	readOptional := func(path string) (string, error) {
 		b, e := os.ReadFile(path)

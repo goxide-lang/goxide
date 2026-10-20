@@ -11,12 +11,10 @@ import (
 	"strings"
 )
 
-type PackageConfig struct {
-	Format     int               `toml:"format"`
-	Module     string            `toml:"module"`
-	Go         string            `toml:"go"`
-	Toolchain  string            `toml:"toolchain,omitempty"`
-	Namespaces map[string]string `toml:"namespaces,omitempty"`
+type GoModConfig struct {
+	Module    string `toml:"module"`
+	Go        string `toml:"go"`
+	Toolchain string `toml:"toolchain,omitempty"`
 }
 type GoRequire struct {
 	Module   string `json:"module" toml:"module"`
@@ -46,7 +44,7 @@ type GoConfig struct {
 }
 
 func CheckAuthoring(root string, environment ...[]string) error {
-	for _, name := range []string{"go.mod", "go.sum", "hgo.lock"} {
+	for _, name := range []string{"go.mod", "go.sum"} {
 		if _, e := os.Lstat(filepath.Join(root, name)); e == nil {
 			return fmt.Errorf("%s: goxide project cannot contain %s; use import-go staging migration and retain originals outside the migrated root", root, name)
 		} else if !os.IsNotExist(e) {
@@ -85,7 +83,7 @@ func CheckWorkspace(root string, environment ...[]string) error {
 // ModuleText serializes only the accepted mapping; Go validates the result.
 func ModuleText(m Manifest) ([]byte, error) {
 	if m.Module == "" || m.GoVersion == "" {
-		return nil, fmt.Errorf("package.module and package.go are required")
+		return nil, fmt.Errorf("go_mod.module and go_mod.go are required")
 	}
 	safe := func(s string) bool { return !strings.ContainsAny(s, "\x00\r\n") }
 	var b strings.Builder
@@ -195,7 +193,6 @@ func importMod(tool, root string, debug bool, environment ...[]string) (Manifest
 	if mod.Module.Deprecated != "" {
 		return m, fmt.Errorf("go.mod module deprecation unsupported by import-go; original files unchanged")
 	}
-	m.Version = 2
 	m.Module = mod.Module.Path
 	m.GoVersion = mod.Go
 	m.Toolchain = mod.Toolchain

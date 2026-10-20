@@ -57,8 +57,7 @@ func TestCLINativePromotedLegacyGraphOffline(t *testing.T) {
 	t.Setenv("GOPROXY", "off")
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
-		"goxide.toml": `[package]
-format = 2
+		"goxide.toml": `[go_mod]
 module = 'example.org/promotedapp'
 go = '1.27'
 

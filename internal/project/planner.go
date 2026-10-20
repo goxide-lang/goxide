@@ -134,7 +134,7 @@ func (g *Graph) readNode(root string, published bool, checkout string) (*Node, e
 	if e != nil {
 		return nil, e
 	}
-	n := &Node{Root: root, Manifest: Manifest{Version: 2}, Children: map[string]*Node{}, Sources: map[string]Dependency{}}
+	n := &Node{Root: root, Manifest: Manifest{}, Children: map[string]*Node{}, Sources: map[string]Dependency{}}
 	if present {
 		n.HasManifest = true
 		if override, ok := g.overrides[root]; ok {
@@ -283,9 +283,6 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 		for _, module := range keys(r.nodes) {
 			n := r.nodes[module]
 			req := unionRequest(reqs[module], g.featureOverrides[module])
-			if n != r.root && n.Manifest.Vendor != nil {
-				deferred[module] = fmt.Errorf("obsolete vendor configuration in %s: explicitly re-import original Go input as local modules", n.Module)
-			}
 			if g.allFeatures {
 				req.Features = keys(n.Manifest.Features)
 				req.Defaults = true
@@ -1048,7 +1045,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 			}
 			g.Root = r.root
 			g.Plan = next
-			g.PlanID = Digest([]any{ManifestProtocol, g.portablePlan(root, next, r.nodes)})
+			g.PlanID = Digest(g.portablePlan(root, next, r.nodes))
 			state := map[string]int{}
 			var visit func(*Node) error
 			visit = func(n *Node) error {
@@ -1113,7 +1110,7 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 				}
 				inputs = append(inputs, lockNode{n.Module, idRoot, n.Manifest, string(raw), n.Sources})
 			}
-			key := Digest([]any{ManifestProtocol, inputs})
+			key := Digest(inputs)
 			if g.Lock.Plans == nil {
 				g.Lock.Plans = map[string]map[string]Selection{}
 			}

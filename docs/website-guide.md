@@ -73,8 +73,7 @@ GOTOOLCHAIN=local GOWORK=off go install -ldflags="-X main.version=v0.0.1" ./cmd/
 ### goxide.toml
 
 ```toml
-[package]
-format = 2
+[go_mod]
 module = "example.org/hello"
 go = "1.27"
 
@@ -127,7 +126,7 @@ goxide run --offline --locked     # 使用已有依赖与锁重跑
 
 提交源码、`goxide.toml` 和生成的 `goxide.lock`。将 `target/` 加入项目的 `.gitignore`。项目根无需创建 `go.mod` 或运行 `go get`；Go 依赖通过清单声明。
 
-项目可以包含多个包，用 `[package.namespaces]` 建立本项目的包名映射，再通过 `use` 引用。多个可执行目标分别写 `[[bin]]`，执行时用 `--bin NAME` 选择。继续阅读[清单字段](#清单字段)与[依赖和命名空间](#依赖与命名空间)，或打开[纯 Goxide 快速开始](https://goxide-lang.github.io/learn/?stage=gox)。
+项目可以包含多个包，用 `[namespaces]` 建立本项目的包名映射，再通过 `use` 引用。多个可执行目标分别写 `[[bin]]`，执行时用 `--bin NAME` 选择。继续阅读[清单字段](#清单字段)与[依赖和命名空间](#依赖与命名空间)，或打开[纯 Goxide 快速开始](https://goxide-lang.github.io/learn/?stage=gox)。
 
 ## 语言速览
 
@@ -157,12 +156,14 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 
 | 表 | 字段 | 含义 |
 | --- | --- | --- |
-| `[package]` | `format`、`module`、`go` | 必填；当前 `format = 2`，`module` 是项目的 Go module 身份，`go` 是 Go 版本要求 |
-| `[package]` | `toolchain` | 可选的 Go toolchain 声明；当前 CLI 使用本机匹配的 Go，不自动下载工具链 |
-| `[package.namespaces]` | `名称 = "精确包路径"` | 将本项目的包绑定到 `use` 名称；支持带引号的 `"group::name"` 键 |
+| `[go_mod]` | `module`、`go` | 必填；用于生成 `go.mod`，分别指定 Go module 路径与 Go 版本要求 |
+| `[go_mod]` | `toolchain` | 可选的 Go toolchain 声明；当前 CLI 使用本机匹配的 Go，不自动下载工具链 |
+| `[namespaces]` | `名称 = "精确包路径"` | 将本项目的包绑定到 `use` 名称；支持带引号的 `"group::name"` 键 |
 | `[[bin]]` | `name`、`path`、`required_features` | 可执行目标名、项目内目录或 `.gox` / `.go` 入口；最后一项为可选 feature 列表 |
 | `[lib]` | `name`、`path`、`required_features` | 供其他项目使用的依赖库入口；最多一项 |
 | `[features]` | `名称 = ["请求", ...]` | 模块的 feature 声明与展开关系；`default` 定义默认请求 |
+
+`[go_mod]` 只保存生成 `go.mod` 所需的元数据。源码中的 `use` 名称来自依赖别名或顶层 `[namespaces]`，不由 `go_mod.module` 命名。
 
 当前项目命令选择 `[[bin]]`；只有一个 bin 时可省略 `--bin`。`[lib]` 用于该项目作为依赖时的库入口，独立 `--lib`、example 与 workspace 目标选择尚未开放。`required_features` 检查已经启用的集合，不会自动开启 feature。
 
@@ -233,7 +234,7 @@ use formats::json;
 ### 本项目的多个包
 
 ```toml
-[package.namespaces]
+[namespaces]
 service = "example.org/app/service"
 "formats::binary" = "example.org/app/internal/binary"
 ```

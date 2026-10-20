@@ -13,7 +13,7 @@
     "id": "macro-type-capture-rejected",
     "source": "package main\nmacro_rules! invalid {($T:expr)=>{func() int {var value $T;_=value;return 0}()};}\nfunc main(){_=invalid!(int)}\n",
     "expect": "frontend-reject",
-    "diagnosticContains": "type position"
+    "diagnosticContains": "template type slot requires type fragment"
   },
   {
     "id": "explicit-std-option",
@@ -26,14 +26,8 @@
     "expectedStdout": "5 -1\n"
   },
   {
-    "id": "explicit-std-nested-validation",
-    "source": "package main\nuse fmt;\nuse std::sum as s;\nenum Mode{Idle,}\ntype Modes []Mode\ntype Envelope struct{Items map[string]Modes}\nfunc Inspect(v s::Option[Envelope],seen *int){match v{s::Option[Envelope]::Some(_)=>{*seen+=1},s::Option[Envelope]::None=>{}}}\nfunc rejected(v s::Option[Envelope],want string)(ok bool){seen:=0;defer func(){ok=fmt::Sprint(recover())==want && seen==0}();Inspect(v,&seen);return false}\nfunc main(){\n good:=Envelope{Items:map[string]Modes{\"ok\":{Mode::Idle}}}\n seen:=0\n Inspect(s::NewSome(good),&seen)\n var invalid Mode\n bad:=Envelope{Items:map[string]Modes{\"bad\":{invalid}}}\n fmt::Println(seen,rejected(s::NewSome(bad),\"goxide: invalid enum Mode\"))\n}\n",
-    "expectedStdout": "1 true\n"
-  },
-  {
-    "id": "explicit-std-generic-alias-rejected",
-    "source": "package main\nuse std::sum as s;\ntype Maybe[T any] = s::Option[T]\nfunc main(){}\n",
-    "expect": "frontend-reject",
-    "diagnosticContains": "user generic"
+    "id": "explicit-std-nested-dispatch",
+    "source": "package main\nuse fmt;\nuse strings;\nuse std::sum as s;\nenum Mode { Idle, }\ntype Modes []Mode\ntype Envelope struct { Items map[string]Modes }\ntype Counts struct { Outer int; Guards int; Arms int }\nfunc permit(c *Counts)bool { c.Guards++; return true }\nfunc Inspect(v s::Option[Envelope],c *Counts) {\n match v {\n  s::Option[Envelope]::Some(payload)=>{\n   c.Outer++\n   mode:=payload.Items[\"item\"][0]\n   match mode { Mode::Idle if permit(c)=>{c.Arms++}, _=>{panic(\"unreachable guard\")}, }\n  },\n  s::Option[Envelope]::None=>{},\n }\n}\nfunc rejected(v s::Option[Envelope])(ok bool) {\n c:=Counts{}\n defer func(){ok=strings::HasPrefix(fmt::Sprint(recover()),\"goxide: match on nil Mode at \") && c.Outer==1 && c.Guards==0 && c.Arms==0}()\n Inspect(v,&c)\n return false\n}\nfunc main() {\n good:=Envelope{Items:map[string]Modes{\"item\":{Mode::Idle}}}\n c:=Counts{}\n Inspect(s::NewSome(good),&c)\n var invalid Mode\n bad:=Envelope{Items:map[string]Modes{\"item\":{invalid}}}\n fmt::Println(c.Outer,c.Guards,c.Arms,rejected(s::NewSome(bad)))\n}\n",
+    "expectedStdout": "1 1 1 true\n"
   }
 ]

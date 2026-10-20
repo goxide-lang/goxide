@@ -70,13 +70,15 @@ serde owner aliases, direct derive aliases, static namespaces alongside same-nam
 local values, and rejects old imports/package
 dots, bare derives, wrong owners and missing roots. Every CLI command receives
 the exact roots TOML embedded into WASM; readiness verifies its SHA-256.
-`--cases website/validation/enum-borrows-cases.json` checks fixed payload slots after
-whole-enum replacement, invalid zero Result rejection before user effects, and
+`--cases website/validation/enum-borrows-cases.json` checks retained user-enum payload objects and fixed Result slots after
+whole-value replacement, invalid zero Result rejection before user effects, and
 readonly payload write rejection. The catalog also includes a returned payload
 reference and an independent ordinary enum copy.
 `--cases website/validation/static-protocol-cases.json` checks concrete aliases,
-forwarding protocol-constrained generic calls, the public std/typeinfo carrier,
-and missing-member / reserved-anchor rejections. The five-file package fixture
+forwarding protocol-constrained generic calls, source-level static calls,
+and missing-member / reserved-anchor rejections. The native Go `typeinfo.Of` carrier
+ABI is covered by `tests/acceptance/static_protocol_test.go`; Goxide source uses
+`User::Abc()`. The five-file package fixture
 separates the trait, implementation and call sites in one user package. This does
 not demonstrate arbitrary browser loading of external protocol artifacts.
 This gate does not claim full browser UI QA, historical AST equivalence, native

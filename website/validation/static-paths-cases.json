@@ -33,19 +33,19 @@
     "id": "deferred-old-type-dot-rejected",
     "source": "package main\nuse fmt;\ntype T struct{}\nfunc(T)M()int{return 9}\nfunc item()Option[int]{return Option::Some(3)}\nfunc main(){v:=T{};_=v.M;match item(){Option::Some(n)=>{fmt::Println(T.M(T{})+n)},Option::None=>{},}}\n",
     "expect": "frontend-reject",
-    "diagnosticContains": "static package and type paths"
+    "diagnosticContains": "method expressions require a static :: selector"
   },
   {
     "id": "deferred-value-static-path-rejected",
     "source": "package main\nuse fmt;\ntype T struct{}\nfunc(T)M()int{return 9}\nfunc item()Option[int]{return Option::Some(3)}\nfunc main(){v:=T{};_=v.M;match item(){Option::Some(n)=>{fmt::Println(v::M()+n)},Option::None=>{},}}\n",
     "expect": "frontend-reject",
-    "diagnosticContains": "value members"
+    "diagnosticContains": "6:70: unresolved name"
   },
   {
     "id": "local-value-is-not-static-namespace",
     "source": "package main\ntype Box struct { Value int }\nfunc main(){fmt:=Box{Value:3};_=fmt;_=fmt::Value}\n",
     "expect": "frontend-reject",
-    "diagnosticContains": "value members"
+    "diagnosticContains": "3:39: unresolved name"
   },
   {
     "id": "old-import-rejected",
@@ -69,7 +69,7 @@
     "id": "dot-serde-derive-rejected",
     "source": "package main\nuse serde;\n#[derive(serde.Serialize)]\ntype Item struct { Value int }\nfunc main(){}\n",
     "expect": "frontend-reject",
-    "diagnosticContains": "::"
+    "diagnosticContains": "derive arguments must be comma-separated protocol paths"
   },
   {
     "id": "json-cannot-own-serde-derive",

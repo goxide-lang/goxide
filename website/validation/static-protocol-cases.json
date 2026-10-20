@@ -5,20 +5,20 @@
     "expectedStdout": "Ada Ada\n"
   },
   {
-    "id": "protocol-public-typeinfo",
-    "source": "package main\nuse fmt;\nuse std::typeinfo as typeinfo;\ntrait Build {func Abc() Self}\ntype User struct{Name string}\nimpl Build for User {func Abc()Self{return Self{Name:\"Ada\"}}}\nfunc main(){fmt::Println(typeinfo::Of[User]().Abc().Name)}\n",
+    "id": "protocol-source-static-call",
+    "source": "package main\nuse fmt;\ntrait Build {func Abc() Self}\ntype User struct{Name string}\nimpl Build for User {func Abc()Self{return Self{Name:\"Ada\"}}}\nfunc main(){fmt::Println(User::Abc().Name)}\n",
     "expectedStdout": "Ada\n"
   },
   {
     "id": "protocol-missing-member",
     "source": "package main\ntrait Build {func Abc() Self}\ntype User struct{}\nimpl Build for User {}\nfunc main(){}\n",
     "expect": "frontend-reject",
-    "diagnosticContains": "is missing member Abc"
+    "diagnosticContains": "missing trait member Abc"
   },
   {
     "id": "protocol-reserved-anchor",
     "source": "package main\nfunc GoxideInternalTypeCarrierForSelf(){}\nfunc main(){}\n",
     "expect": "frontend-reject",
-    "diagnosticContains": "reserved protocol identifier GoxideInternalTypeCarrierForSelf"
+    "diagnosticContains": "2:6: GoxideInternalTypeCarrierForSelf is a reserved type carrier anchor"
   }
 ]

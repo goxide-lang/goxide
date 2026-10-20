@@ -342,3 +342,70 @@ func TestPackageBuiltinSumHelpersAreComplete(t *testing.T) {
 		t.Fatalf("unexpected sum output files: %v", files)
 	}
 }
+
+func TestPackageCanonicalSumConstructors(t *testing.T) {
+	files := []File{{"main.gox", `package main
+use fmt;
+use std::sum as s;
+use std::sum::Option as Maybe;
+type LocalOption[T any] = Maybe[T]
+func readOption(value s::Option[int])int {
+    return match value {s::Option[int]::Some(n)=>n,s::Option[int]::None=>0}
+}
+func readMaybe(value Maybe[int])int {
+    return match value {Maybe[int]::Some(n)=>n,Maybe[int]::None=>0}
+}
+func readLocal(value LocalOption[int])int {
+    return match value {LocalOption[int]::Some(n)=>n,LocalOption[int]::None=>0}
+}
+func next(value s::Result[int,error])s::Result[int,error] {
+    n := value?
+    return s::Result[int,error]::Ok(n+1)
+}
+func readResult(value s::Result[int,error])int {
+    return match value {s::Result[int,error]::Ok(n)=>n,s::Result[int,error]::Err(_)=>-1}
+}
+func main() {
+    fmt::Println(readOption(s::Option[int]::Some(7)),readOption(s::Option[int]::None),
+        readOption(s::NewSome(8)),readMaybe(Maybe[int]::Some(9)),readMaybe(Maybe[int]::None),
+        readLocal(LocalOption[int]::Some(10)),readLocal(LocalOption[int]::None))
+    fmt::Println(readResult(next(s::Result[int,error]::Ok(4))),
+        readResult(next(s::Result[int,error]::Err(fmt::Errorf("bad")))),
+        readResult(next(s::NewOk[int,error](5))),
+        readResult(next(s::NewErr[int,error](fmt::Errorf("bad")))))
+}
+`}}
+	options := Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()}), Roots: paths.Roots{
+		"std": {Source: "module", ModulePath: "github.com/goxide-lang/std", GoPrefix: "github.com/goxide-lang/std"},
+	}}
+	output, err := CompilePackage(files, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := CompilePackage(files, options)
+	if err != nil || !reflect.DeepEqual(output, repeated) {
+		t.Fatalf("canonical sum generation is unstable: %v", err)
+	}
+	directory := t.TempDir()
+	if err := testdeps.WriteFile(filepath.Join(directory, "go.mod"), []byte("module playground\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range output {
+		if err := os.WriteFile(filepath.Join(directory, file.Path), []byte(file.Source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "run", "-mod=readonly", ".")
+	command.Dir = directory
+	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
+	stdout, err := command.CombinedOutput()
+	if err != nil || string(stdout) != "7 0 8 9 0 10 0\n5 -1 6 -1\n" {
+		t.Fatalf("generated canonical sum program: %s (%v)", stdout, err)
+	}
+	for _, prefix := range []string{"s::Option[int]", "Maybe[int]"} {
+		_, err := CompilePackage([]File{{"invalid.gox", "package main\nuse std::sum as s;\nuse std::sum::Option as Maybe;\nfunc main(){_=" + prefix + "::Missing::Some(1)}\n"}}, options)
+		if err == nil || !strings.Contains(err.Error(), "unknown associated type or member path") {
+			t.Fatalf("deferred associated path %s was accepted as an enum constructor: %v", prefix, err)
+		}
+	}
+}

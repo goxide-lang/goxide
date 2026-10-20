@@ -495,6 +495,12 @@ func (c *checker) constructor(path *ast.Path, s *resolve.Symbol, expected types.
 	if path != nil && len(path.Segments) > 1 {
 		prefix := path.Segments[:len(path.Segments)-1]
 		sourceType = c.symbolType(c.sourcePathSymbol(prefix))
+		if !valid(sourceType) {
+			resolved := c.file.References[prefix[len(prefix)-1].Name.ID()]
+			if !resolved.Deferred && resolved.Symbol != nil && (resolved.Symbol.Kind == resolve.Type || resolved.Symbol.Kind == resolve.Enum) {
+				sourceType = c.symbolType(resolved.Symbol)
+			}
+		}
 		if instance := c.out.EnumOf(sourceType); base == nil && instance != nil {
 			if variant := instance.Variant(path.Segments[len(path.Segments)-1].Name.Name); variant != nil {
 				base = &Constructor{Enum: instance, Variant: variant}

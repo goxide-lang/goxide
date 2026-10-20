@@ -1,12 +1,12 @@
 # 额外语法工具包：syntax、quote 与 syn
 
-状态：公共语法库采用独立 `github.com/goxide-lang/syntax` 仓库与 Go module，首批提供手写 Go 的 `token` 和 `proc_macro` 两包。syn/quote 后续作为同 module 的普通工具包实现；此批不实现它们，也不采用 Goxide 自举生成发行代码。包组织已经确认，具体 TokenStream、卫生、登记与执行合同仍在 [RFC 0030](../rfcs/0030-procedural-macros.md) 中评审，公共库与宿主均未实现。
+状态：独立 `github.com/goxide-lang/syntax` module 首批已实现手写 Go 的 `token` 和 `proc_macro` 两包，包含词法树、调用内引用表、冻结 Context、Output、静态分派及 JSON 编解码。syn/quote 后续作为同 module 的普通工具包实现；此批不实现它们，也不采用 Goxide 自举生成发行代码。[RFC 0030](../rfcs/0030-procedural-macros.md) 的编译器转换桥、源码登记、依赖角色与受限宿主尚未接入。
 
 | 状态 | 范围 |
 | --- | --- |
 | 已确认 | D16：独立 syntax 仓库/module；token 是唯一公共 TokenStream 类型所在包；proc_macro 是依赖 token 的 SDK；首批两包手写 Go。 |
 | 暂定 | T14：后续 syn/quote 的 AST、ToTokens、模板插值与具体 API；如以过程宏实现 quote!，另设宏源码项目。 |
-| 未定 | U11：RFC 0030 的公共协议、受控上下文与过程宏宿主提案待接受。 |
+| 未定 | U11：RFC 0030 的编译器转换桥、实际 SDK 协议内容匹配与受限过程宏宿主待接入验收。 |
 
 状态编号见[决策登记](decisions.md)。Rust 只用于参考语法工具与过程宏的分层，safe 标准库另以 [Go std](standard-library.md) 为基础设计。
 
@@ -63,6 +63,6 @@ Rust 的 quote、syn 与 proc_macro2 展示了工具可在编译器外运行的�
 
 ## 5. 验收边界
 
-首批 token/SDK 验收应与真实过程宏消费者一起覆盖公共类型同一性、词法与分组、显式/隐式分号、Fragment、协议内容匹配及卫生来源验证。转换桥不能经打印文本丢失输入身份；来自 SDK 的输出仍重新进入普通名字、类型与权限检查。CLI/浏览器宿主的执行、预算、依赖角色及端到端验收见 RFC 0030，不以普通 token builder 测试替代。
+首批库测试已覆盖词法与分组、显式/隐式分号、Fragment 视图与原引用分离、冻结上下文、JSON 拒绝/预算以及静态三类 handler；独立 Go command 的输出经过真实 Go build/run/test。编译器接入仍需与真实 Goxide 过程宏消费者一起验证公共类型同一性、协议内容匹配及卫生来源。转换桥不能经打印文本丢失输入身份；来自 SDK 的输出仍重新进入普通名字、类型与权限检查。CLI/浏览器宿主的执行、预算、依赖角色及端到端验收见 RFC 0030，不以普通 SDK 测试替代。
 
 后续 syn/quote 分别验证语法解析与重建、字符串和代码插值的区别、错误定位、同一片段的重复使用，以及普通运行时与编译期执行的区分。若引入 quote! 宏项目，还须验证其无环构建和独立消费者。内建 Default/Clone/Debug、库派生迁移与泛型 impl 不因公共语法包落地而自动完成，分别按其合同验收。

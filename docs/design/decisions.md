@@ -33,9 +33,9 @@
 | D11 | 历史决定：使用 `unsafe <expr>`；拆分指针经 unsafe as_ptr / `Ptr[T]`、AsPtr。**普通可写引用到匹配 Go 指针调用已由 D31 纠正，不再要求冗余 AsPtr**；真正 unsafe 操作另保留 | [Ptr / AsPtr](foreign-api.md)；Go 候选表示 `type Ptr[T any] *T`，源级精确拼写未冻结 |
 | D12 | 变体枚举、Option / Result、模式匹配；接受 Go 调用方能构造非法值，不能假称阻止了 Go 零值 | [枚举与 match](enums-and-match.md)；边界策略和布局见暂定项 |
 | D13 | pub 标记公开边界的方向；需要处理 Go 调用生成 API 的情况 | [总纲](overview.md#34-go-边界与非法值)；完整可见性与检查入口未定 |
-| D14 | 卫生宏参考 Rust；先做模式 / 模板声明宏及内建派生，提供 print / println、Default / Clone / Debug；过程宏现已获准进入设计阶段 | [宏](macros.md)；[RFC 0030 草案](../rfcs/0030-procedural-macros.md)；纯的用户 Syntax→Syntax 编译期程序仍是过程宏 |
+| D14 | 卫生宏参考 Rust；先做模式 / 模板声明宏及内建派生，提供 print / println、Default / Clone / Debug；过程宏的独立 token/SDK 首批已获准实施 | [宏](macros.md)；[RFC 0030 草案](../rfcs/0030-procedural-macros.md)；纯的用户 Syntax→Syntax 编译期程序仍是过程宏 |
 | D15 | goxide 基础包提供现有 Go std 的 safe 视图与泛型 slice | [基础包](standard-library.md)；以 Go API 真实行为为依据，不以 Rust std 为规范 |
-| D16 | 公共语法库采用独立 `github.com/goxide-lang/syntax` 仓库与 Go module；首批手写 Go 的 token / proc_macro 两包，后续 syn / quote 为同 module 的普通工具包 | [语法工具](syntax-tooling.md)；token 是唯一公共 TokenStream 类型所在包，SDK 只依赖 token 与 Go 标准库，宿主与转换桥留在编译器 internal；具体协议仍待 RFC 0030 接受 |
+| D16 | 公共语法库采用独立 `github.com/goxide-lang/syntax` 仓库与 Go module；首批手写 Go 的 token / proc_macro 两包，后续 syn / quote 为同 module 的普通工具包 | [语法工具](syntax-tooling.md)；token 是唯一公共 TokenStream 类型所在包，SDK 只依赖 token 与 Go 标准库；首批库已按 RFC 0030 实现，宿主与转换桥留待编译器 internal 接入 |
 | D17 | 提供面向 goxide 的 LSP，未来考虑 goxide 自举 | [编译器与工具链](compiler-and-tooling.md)；启动语言、复用组件和阶段路线为暂定方案 |
 | D18 | 先完成设计；总纲和各专题分开，维护决策状态与路线，支持另一台机器继续 | [README](../../README.md)、[roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)；本次修改不代表开始编译器实现 |
 | R19 | 发布完整 dist；同一 Go 模块携带 .go、.d.gox 与可选 .gox；Go 编译 .go，goxide 额外加载声明或源码 | [RFC 0001](../rfcs/0001-package-loading.md)；wrapper 与 marker 随 impl 包发布，无需外部方法注入 |
@@ -101,7 +101,7 @@
 | U08 | 支持值复制/原位借用的 enum 最终 ABI、循环对象图校验与容器初始化算法 | 借用必须指向原 payload；严格值不变量、性能和互操作成本 |
 | U09 | 宏匹配器完整语法、formatter 协议、静态派生协议、卫生与源码追踪协议 | 首版宏可用性；用户过程宏及可编程 derive 明确延期 |
 | U10 | safe Go std 包路径、逐入口契约、Slice ABI / Clone 策略、首批覆盖范围 | 不能宣称整个 Go std 已 safe |
-| U11 | 公共语法包具体协议、受控 token 构造、协议内容匹配与过程宏宿主能力 | 包组织按 D16；[RFC 0030 草案](../rfcs/0030-procedural-macros.md) 仍待接受，普通语法工具与编译期扩展分别验收 |
+| U11 | 编译器转换桥、实际 SDK 协议内容匹配与受限过程宏宿主能力 | 公共 token/SDK 按 D16 和 [RFC 0030 草案](../rfcs/0030-procedural-macros.md) 首批实现；普通库边界与完整编译期扩展分别验收 |
 | U12 | 增量查询、完整 LSP、构建驱动、自举一致性验收 | 尚未实现；保持 Go seed 的方案为暂定 |
 | U13 | supertrait、GAT、特化、锁块语法 | 延期 / 另行设计；借用 match 已由 D21 纳入目标，具体实现见 U02/U08 |
 | U14 | Rust / LLVM 到 Go 汇编的受限计算内核路线 | 不作为首版主后端；ABI / GC / 栈约定等尚未解决 |

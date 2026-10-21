@@ -18,6 +18,15 @@ func (c *checker) equalityCall(call *ast.CallExpr) bool {
 	if member, _, _ := types.LookupFieldOrMethod(t, true, c.pkg, "equals"); member != nil {
 		return false
 	}
+	// Explicit source members have the same priority as ordinary calls. The
+	// fixed primitive/derive equality path is only a fallback without a member.
+	before := len(c.out.Diagnostics)
+	if c.instanceMember(selector, selector.X, t, selector.Sel.Name, nil) != nil {
+		return false
+	}
+	if len(c.out.Diagnostics) != before {
+		return true // Preserve an ambiguity or visibility error instead of falling back.
+	}
 	t = types.Unalias(defaultType(t))
 	eligible := false
 	if basic, ok := t.(*types.Basic); ok {

@@ -215,6 +215,8 @@ func (c *checker) signatures(items []ast.Item) {
 		case *ast.FuncDecl:
 			c.receiverParams(n.Recv)
 			params := c.functionParams(n)
+			oldBounds := c.activeBounds
+			c.activeBounds = c.out.GenericBounds[n]
 			sig := types.NewSignatureType(nil, nil, params, c.tuple(n.Params), c.tuple(n.Results), len(n.Params) > 0 && n.Params[len(n.Params)-1].Variadic)
 			c.functionBounds[sig] = c.out.GenericBounds[n]
 			if s := c.symbol(n.Name); s != nil {
@@ -231,6 +233,7 @@ func (c *checker) signatures(items []ast.Item) {
 					named.Origin().AddMethod(types.NewFunc(0, c.pkg, n.Name.Name, method))
 				}
 			}
+			c.activeBounds = oldBounds
 		case *ast.ModDecl:
 			c.signatures(n.Items)
 		case *ast.DeclareDecl:
@@ -333,12 +336,19 @@ func (c *checker) tuple(params []*ast.Param) *types.Tuple {
 	return types.NewTuple(vars...)
 }
 
-func (c *checker) typ(node ast.Type) types.Type {
+func (c *checker) typ(node ast.Type) (result types.Type) {
 	if node == nil {
 		return types.Typ[types.Invalid]
 	}
+	defer func() {
+		if c.currentImpl == nil || c.currentImpl.Template == nil {
+			c.out.typeNodes[node] = result
+		}
+	}()
 	if t, ok := c.traitType(node); ok {
-		c.out.TypeOverrides[node] = t
+		if c.currentImpl == nil || c.currentImpl.Template == nil {
+			c.out.TypeOverrides[node] = t
+		}
 		return t
 	}
 	switch n := node.(type) {
@@ -572,6 +582,8 @@ func (c *checker) importedType(parts []string, name string) types.Type {
 
 func substitute(t types.Type, sub map[*types.TypeParam]types.Type) types.Type {
 	switch t := t.(type) {
+	case *types.Alias:
+		return substitute(types.Unalias(t), sub)
 	case *types.TypeParam:
 		if a := sub[t]; a != nil {
 			return a
@@ -613,6 +625,8 @@ func substitute(t types.Type, sub map[*types.TypeParam]types.Type) types.Type {
 			tags = append(tags, t.Tag(i))
 		}
 		return types.NewStruct(fields, tags)
+	case *types.Interface, *types.Union:
+		return newBodyTypes(sub).typ(t)
 	}
 	return t
 }

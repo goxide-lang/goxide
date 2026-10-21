@@ -15,15 +15,16 @@ const TraitInvalid = "trait-invalid"
 
 // Trait and Impl describe source identities; Go method sets do not establish an impl.
 type Trait struct {
-	Decl       *ast.TraitDecl
-	File       string
-	Symbol     *resolve.Symbol
-	Type       *types.Named
-	Self       *types.TypeParam
-	Associated []*AssociatedType
-	Methods    []*Member
-	Runtime    bool
-	Marker     string
+	Decl         *ast.TraitDecl
+	File         string
+	Symbol       *resolve.Symbol
+	Type         *types.Named
+	Self         *types.TypeParam
+	Associated   []*AssociatedType
+	Methods      []*Member
+	Runtime      bool
+	Marker       string
+	Requirements []*TraitBound
 }
 
 type AssociatedType struct {
@@ -33,18 +34,25 @@ type AssociatedType struct {
 }
 
 type Impl struct {
-	Decl            *ast.ImplDecl
-	File            string
-	Target          types.Type
-	Base            *types.Named
-	Trait           *Trait
-	Associated      map[string]types.Type
-	AssociatedNodes map[string]ast.Type
-	Methods         []*Member
-	Declare         bool
-	Capture         RefMode
-	AliasOf         *Impl
-	associatedState map[string]uint8
+	Decl                *ast.ImplDecl
+	File                string
+	Target              types.Type
+	Base                *types.Named
+	Trait               *Trait
+	Associated          map[string]types.Type
+	AssociatedNodes     map[string]ast.Type
+	Methods             []*Member
+	Declare             bool
+	Capture             RefMode
+	AliasOf             *Impl
+	Owner               *types.Package
+	TypeParams          []*types.TypeParam
+	TypeArgs            []types.Type
+	Template            *Impl
+	Requirements        []*TraitBound
+	RequirementEvidence []Evidence
+	Substitution        map[*types.TypeParam]types.Type
+	associatedState     map[string]uint8
 }
 
 type Member struct {
@@ -81,10 +89,29 @@ type TraitView struct {
 type TraitBound struct {
 	File            string
 	Param           *types.TypeParam
+	Target          types.Type
 	Trait           *Trait
 	Associated      map[string]types.Type
 	Projected       []*types.TypeParam
 	AssociatedNodes map[string]ast.Type
+	substitution    map[*types.TypeParam]types.Type
+}
+
+// Evidence records the selected source implementation or an in-scope premise.
+// It never derives source protocol membership from a Go method set.
+type Evidence struct {
+	Bound *TraitBound
+	Impl  *Impl
+}
+
+type FunctionInstance struct {
+	Signature    *types.Signature
+	TypeArgs     []types.Type
+	Evidence     []Evidence
+	Decl         *ast.FuncDecl
+	File         string
+	Substitution map[*types.TypeParam]types.Type
+	Body         *BodyInstance
 }
 
 func (c *checker) collectTrait(n *ast.TraitDecl) {
@@ -263,7 +290,7 @@ func (c *checker) eachTrait(f func(*Trait)) {
 
 func (c *checker) prepareTraits() {
 	c.eachTrait(func(t *Trait) {
-		if t.Decl.Generics != nil || t.Decl.Where != nil {
+		if t.Decl.Generics != nil {
 			c.diag(t.Decl, TraitInvalid, "traits must be non-generic")
 		}
 		for _, item := range t.Decl.Items {
@@ -282,6 +309,17 @@ func (c *checker) prepareTraits() {
 		}
 		t.Type.SetTypeParams(params)
 	})
+	c.eachTrait(func(t *Trait) {
+		c.currentTrait, c.currentSelf = t, t.Self
+		t.Requirements = c.sourceRequirements(nil, t.Decl.Where, nil, map[string]bool{}, t.Decl)
+		for _, requirement := range t.Requirements {
+			if requirement.Target != t.Self {
+				c.diag(t.Decl, TraitInvalid, "trait prerequisites must constrain Self")
+			}
+		}
+		c.currentTrait, c.currentSelf = nil, nil
+	})
+	c.checkTraitPrerequisiteCycles()
 	c.eachTrait(func(t *Trait) {
 		c.currentTrait, c.currentSelf = t, t.Self
 		var methods []*types.Func
@@ -433,28 +471,25 @@ func (c *checker) prepareImpls() {
 				if builtin {
 					continue
 				}
-				if n.Generics != nil || n.Where != nil {
-					c.diag(n, TraitInvalid, "impl requires a concrete non-generic target")
+				if declare && (n.Generics != nil || n.Where != nil) {
+					c.diag(n, TraitInvalid, "declare impl requires a concrete non-generic target")
 					continue
 				}
-				target := c.typ(n.Type)
-				base := types.Unalias(target)
-				if p, ok := base.(*types.Pointer); ok {
-					base = types.Unalias(p.Elem())
-					if !declare {
-						c.diag(n.Type, TraitInvalid, "body impl targets the base type; declare receiver permission on self")
+				params := c.genericParameters(n.Generics)
+				requirements := c.sourceRequirements(n.Generics, nil, params, map[string]bool{}, n)
+				target := types.Unalias(c.typ(n.Type))
+				if !valid(target) {
+					continue
+				}
+				if _, bare := target.(*types.TypeParam); bare {
+					c.diag(n.Type, TraitInvalid, "impl target cannot be a bare type parameter")
+					continue
+				}
+				for _, param := range params {
+					if !containsType(target, param) {
+						c.diag(n, TraitInvalid, "impl type parameter must occur in its target: "+param.Obj().Name())
 					}
 				}
-				named, ok := base.(*types.Named)
-				if !ok || named.TypeParams().Len() != 0 {
-					c.diag(n.Type, TraitInvalid, "impl requires a concrete named type")
-					continue
-				}
-				if !declare && named.Obj().Pkg() != c.pkg {
-					c.diag(n.Type, TraitInvalid, "body impl requires a local defined type")
-					continue
-				}
-				target = types.Unalias(target)
 				var trait *Trait
 				if n.Trait != nil {
 					if path, ok := n.Trait.(*ast.PathType); ok && len(path.Path.Segments) > 0 {
@@ -465,7 +500,26 @@ func (c *checker) prepareImpls() {
 						continue
 					}
 				}
-				impl := &Impl{Decl: n, File: file.Name, Target: target, Base: named.Origin(), Trait: trait, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedState: map[string]uint8{}, Declare: declare}
+				named, _ := target.(*types.Named)
+				localTarget := named != nil && named.Obj().Pkg() == c.pkg
+				if declare {
+					base := target
+					if pointer, ok := base.(*types.Pointer); ok {
+						base = types.Unalias(pointer.Elem())
+					}
+					named, _ = base.(*types.Named)
+					if named == nil || named.TypeArgs().Len() != 0 || named.TypeParams().Len() != 0 {
+						c.diag(n.Type, TraitInvalid, "declare impl requires a concrete named type")
+						continue
+					}
+				} else if !localTarget && (trait == nil || trait.Type.Obj().Pkg() != c.pkg) {
+					c.diag(n.Type, TraitInvalid, "body impl requires the trait or outer named target to belong to this package")
+					continue
+				}
+				if named != nil {
+					named = named.Origin()
+				}
+				impl := &Impl{Decl: n, File: file.Name, Target: target, Base: named, Owner: c.pkg, Trait: trait, TypeParams: params, Requirements: requirements, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedState: map[string]uint8{}, Declare: declare}
 				c.out.Impls[n] = impl
 				c.implOrder = append(c.implOrder, impl)
 			}
@@ -478,8 +532,8 @@ func (c *checker) prepareImpls() {
 				if old == impl {
 					break
 				}
-				if old.Trait == impl.Trait && types.Identical(old.Target, impl.Target) && !old.Declare && !impl.Declare {
-					c.diag(impl.Decl, TraitInvalid, "duplicate trait implementation")
+				if old.Trait == impl.Trait && implTargetsOverlap(old.Target, impl.Target, old.TypeParams, impl.TypeParams) && !old.Declare && !impl.Declare {
+					c.diag(impl.Decl, TraitInvalid, "duplicate trait implementation: overlapping target patterns")
 				}
 			}
 		}
@@ -510,6 +564,19 @@ func (c *checker) prepareImpls() {
 				c.registerAssociated(impl, n.Name.Name, n.Type, n)
 			}
 		}
+		used := map[string]bool{}
+		for _, param := range impl.TypeParams {
+			used[param.Obj().Name()] = true
+		}
+		for _, requirement := range impl.Requirements {
+			for _, param := range requirement.Projected {
+				used[param.Obj().Name()] = true
+			}
+		}
+		for _, requirement := range c.sourceRequirements(nil, impl.Decl.Where, nil, used, impl.Decl) {
+			c.addBound(&impl.Requirements, requirement, impl.Decl)
+		}
+		impl.Requirements = c.inheritedBounds(impl.Requirements, impl.Decl)
 		if impl.Trait != nil {
 			for _, a := range impl.Trait.Associated {
 				if impl.AssociatedNodes[a.Name] == nil {
@@ -518,6 +585,16 @@ func (c *checker) prepareImpls() {
 					c.resolveAssociated(impl, a.Name, impl.Decl)
 				}
 			}
+		}
+		if impl.Trait != nil {
+			sub := map[*types.TypeParam]types.Type{impl.Trait.Self: impl.Target}
+			for _, a := range impl.Trait.Associated {
+				sub[a.Param] = impl.Associated[a.Name]
+			}
+			for _, requirement := range impl.Trait.Requirements {
+				c.addBound(&impl.Requirements, freshRequirement(requirement, sub, used, c.pkg), impl.Decl)
+			}
+			impl.Requirements = c.inheritedBounds(impl.Requirements, impl.Decl)
 		}
 		for _, item := range impl.Decl.Items {
 			if n, ok := item.(*ast.TypeDecl); ok {
@@ -570,7 +647,7 @@ func (c *checker) resolveAssociated(impl *Impl, name string, node ast.Node) type
 func (c *checker) enterImpl(i *Impl) {
 	c.currentImpl, c.currentTrait, c.currentSelf = i, i.Trait, i.Target
 	c.file = c.out.Resolve.Files[i.File]
-	c.pkg = i.Base.Obj().Pkg()
+	c.pkg = i.Owner
 	// The declaration package owns foreign adapters.
 	for _, p := range c.out.Resolve.Packages {
 		for _, f := range p.Files {
@@ -681,7 +758,7 @@ func (c *checker) finishImpls() {
 			if old == impl {
 				break
 			}
-			if old.Trait == impl.Trait && impl.Trait != nil && types.Identical(old.Target, impl.Target) {
+			if old.Trait == impl.Trait && impl.Trait != nil && implTargetsOverlap(old.Target, impl.Target, old.TypeParams, impl.TypeParams) {
 				compatible := old.Declare && impl.Declare
 				for _, a := range impl.Trait.Associated {
 					compatible = compatible && types.Identical(old.Associated[a.Name], impl.Associated[a.Name])

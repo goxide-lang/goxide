@@ -79,6 +79,19 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 			return value
 		}
 		if f := p.functions[s]; f != nil {
+			if path, ok := n.(*ast.PathExpr); ok && path.Path != nil && len(path.Path.Segments) != 0 {
+				if args := path.Path.Segments[len(path.Path.Segments)-1].Args; args != nil {
+					if sig, ok := f.typ.typ.(*types.Signature); ok {
+						sub := map[*types.TypeParam]*permission{}
+						for i, arg := range args.Args {
+							if i < sig.TypeParams().Len() {
+								sub[sig.TypeParams().At(i)] = p.astType(arg.Type, nil)
+							}
+						}
+						return p.instantiatedFunction(f.typ, q.typ, args, sub)
+					}
+				}
+			}
 			return f.typ
 		}
 		if con := p.c.out.Constructors[node]; con != nil {
@@ -184,7 +197,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 	case *ast.IndexExpr:
 		x := p.expr(n.X, nil)
 		if x != nil && (len(x.params) != 0 || signatureType(x)) {
-			return p.instantiateFunction(x, n.Indices, q.typ)
+			return p.instantiateFunction(x, n.Indices, q.typ, n)
 		}
 		for _, index := range n.Indices {
 			p.expr(index, nil)

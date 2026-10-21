@@ -101,11 +101,9 @@ func (c *checker) checkProjectionBindings(target types.Type, trait *Trait, args 
 	var bindings map[string]types.Type
 	var bound *TraitBound
 	var impl *Impl
-	if param, ok := target.(*types.TypeParam); ok {
-		bound = c.bounds[param]
-		if bound != nil && bound.Trait == trait {
-			bindings = bound.Associated
-		}
+	bound = c.boundFor(target, trait)
+	if bound != nil {
+		bindings = bound.Associated
 	} else {
 		impl = c.findImpl(target, trait)
 		if impl != nil {
@@ -155,11 +153,9 @@ func (c *checker) selfAssociated(name string, node ast.Node) types.Type {
 }
 
 func (c *checker) projectAssociated(target types.Type, trait *Trait, name string, node ast.Node) types.Type {
-	if param, ok := target.(*types.TypeParam); ok {
-		if bound := c.bounds[param]; bound != nil && bound.Trait == trait {
-			if t := bound.Associated[name]; t != nil {
-				return t
-			}
+	if bound := c.boundFor(target, trait); bound != nil {
+		if t := bound.Associated[name]; t != nil {
+			return t
 		}
 	} else if impl := c.findImpl(target, trait); impl != nil {
 		if t := impl.Associated[name]; t != nil {
@@ -171,15 +167,7 @@ func (c *checker) projectAssociated(target types.Type, trait *Trait, name string
 }
 
 func (c *checker) findImpl(target types.Type, trait *Trait) *Impl {
-	if target == nil {
-		return nil
-	}
-	for _, impl := range c.preferredImpls() {
-		if impl.Trait == trait && types.Identical(types.Unalias(target), types.Unalias(impl.Target)) {
-			return impl
-		}
-	}
-	return nil
+	return c.prove(target, trait).Impl
 }
 
 func (c *checker) preferredImpls() []*Impl {
@@ -198,10 +186,7 @@ func (c *checker) preferredImpls() []*Impl {
 }
 
 func (c *checker) functionParams(fn *ast.FuncDecl) []*types.TypeParam {
-	if fn.Generics == nil {
-		return nil
-	}
-	var result []*types.TypeParam
+	result := c.genericParameters(fn.Generics)
 	used := map[string]bool{}
 	ast.Walk(fn, func(node ast.Node) bool {
 		if id, ok := node.(*ast.Ident); ok {
@@ -209,85 +194,15 @@ func (c *checker) functionParams(fn *ast.FuncDecl) []*types.TypeParam {
 		}
 		return true
 	})
-	for _, p := range fn.Generics.Params {
-		for _, id := range p.Names {
-			param := types.NewTypeParam(types.NewTypeName(0, c.pkg, id.Name, nil), anyType)
-			result = append(result, param)
-			c.out.Symbols[c.symbol(id)] = param
-			used[id.Name] = true
-		}
+	bounds := c.sourceRequirements(fn.Generics, fn.Where, result, used, fn)
+	bounds = c.inheritedBounds(bounds, fn)
+	if len(bounds) != 0 {
+		c.out.GenericBounds[fn] = bounds
 	}
-	index := 0
-	for _, p := range fn.Generics.Params {
-		for range p.Names {
-			param := result[index]
-			index++
-			if p.Constraint == nil {
-				continue
-			}
-			if !c.addTraitBound(fn, param, p.Constraint, used) {
-				param.SetConstraint(c.typ(p.Constraint))
-			}
-		}
-	}
-	if fn.Where != nil {
-		for _, pred := range fn.Where.Predicates {
-			param, ok := c.typ(pred.Type).(*types.TypeParam)
-			if !ok || len(pred.Bounds) != 1 {
-				c.diag(pred, TraitInvalid, "where requires one constraint on a function type parameter")
-				continue
-			}
-			if c.bounds[param] != nil {
-				c.diag(pred, TraitInvalid, "a type parameter may have only one trait constraint")
-				continue
-			}
-			if !c.addTraitBound(fn, param, pred.Bounds[0], used) {
-				param.SetConstraint(c.typ(pred.Bounds[0]))
-			}
-		}
-	}
-	for _, bound := range c.out.GenericBounds[fn] {
+	for _, bound := range bounds {
 		result = append(result, bound.Projected...)
 	}
 	return result
-}
-
-func (c *checker) addTraitBound(fn *ast.FuncDecl, param *types.TypeParam, node ast.Type, used map[string]bool) bool {
-	path, ok := node.(*ast.PathType)
-	if !ok || path.Path == nil || len(path.Path.Segments) == 0 {
-		return false
-	}
-	last := path.Path.Segments[len(path.Path.Segments)-1]
-	trait := c.traitPath(path.Path.Segments)
-	if trait == nil {
-		return false
-	}
-	bound := &TraitBound{File: c.file.Name, Param: param, Trait: trait, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}}
-	c.readAssociated(last.Args, trait, bound.Associated, node)
-	if last.Args != nil {
-		for _, a := range last.Args.Args {
-			if a.Name != nil {
-				bound.AssociatedNodes[a.Name.Name] = a.Type
-			}
-		}
-	}
-	for _, a := range trait.Associated {
-		if bound.Associated[a.Name] != nil {
-			continue
-		}
-		base := "Goxide" + param.Obj().Name() + a.Name
-		name := base
-		for index := 2; used[name]; index++ {
-			name = fmt.Sprintf("%s%d", base, index)
-		}
-		used[name] = true
-		projected := types.NewTypeParam(types.NewTypeName(0, c.pkg, name, nil), anyType)
-		bound.Associated[a.Name] = projected
-		bound.Projected = append(bound.Projected, projected)
-	}
-	c.bounds[param] = bound
-	c.out.GenericBounds[fn] = append(c.out.GenericBounds[fn], bound)
-	return true
 }
 
 func (c *checker) sourceArity(sig *types.Signature) int {
@@ -304,53 +219,35 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 		return types.Typ[types.Invalid]
 	}
 	actual := append([]types.Type(nil), args...)
+	sub := map[*types.TypeParam]types.Type{}
+	for i, arg := range args {
+		sub[sig.TypeParams().At(i)] = arg
+	}
+	instance := &FunctionInstance{Signature: sig, TypeArgs: append([]types.Type(nil), args...)}
 	for _, bound := range c.functionBounds[sig] {
-		var target types.Type
-		for i, arg := range args {
-			if sig.TypeParams().At(i) == bound.Param {
-				target = arg
-				break
+		target := substitute(bound.Target, sub)
+		witness := c.prove(target, bound.Trait)
+		instance.Evidence = append(instance.Evidence, witness)
+		bindings := evidenceAssociated(witness)
+		if witness.Impl == nil && witness.Bound == nil {
+			message := "type does not explicitly implement " + bound.Trait.Symbol.Name.Name
+			if c.proofFailure != "" {
+				message += ": " + c.proofFailure
 			}
-		}
-		bindings := map[string]types.Type{}
-		var sourceImpl *Impl
-		var sourceBound *TraitBound
-		if tp, ok := target.(*types.TypeParam); ok {
-			if other := c.bounds[tp]; other != nil && other.Trait == bound.Trait {
-				bindings = other.Associated
-				sourceBound = other
-			}
-		} else if impl := c.findImpl(target, bound.Trait); impl != nil {
-			sourceImpl = impl
-			local := false
-			for _, n := range c.named {
-				local = local || n == impl.Base
-			}
-			switch impl.Base.Underlying().(type) {
-			case *types.Pointer:
-				local = false
-			case *types.Interface:
-				local = local && c.out.EnumOf(impl.Base) != nil
-			}
-			if !local || !types.Identical(impl.Target, impl.Base) {
-				c.diag(node, GenericConstraint, "foreign or pointer implementation has no local static carrier")
-			} else {
-				bindings = impl.Associated
-			}
-		} else {
-			c.diag(node, GenericConstraint, "type does not explicitly implement "+bound.Trait.Symbol.Name.Name)
+			c.diag(node, GenericConstraint, message)
 		}
 		for _, a := range bound.Trait.Associated {
 			got := bindings[a.Name]
 			if got == nil {
 				got = types.Typ[types.Invalid]
 			}
-			want := bound.Associated[a.Name]
+			want := substitute(bound.Associated[a.Name], sub)
 			projected := false
 			for _, p := range bound.Projected {
-				if want == p {
+				if bound.Associated[a.Name] == p {
 					projected = true
 					actual = append(actual, got)
+					sub[p] = got
 					break
 				}
 			}
@@ -359,17 +256,24 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 			} else if !projected && c.referenceHints != nil {
 				p := c.referenceHints
 				var source *permission
-				if sourceImpl != nil {
-					source = p.implAssociated(sourceImpl, a.Name, nil)
-				} else if sourceBound != nil {
-					source = p.boundAssociated(sourceBound, a.Name, nil)
+				if witness.Impl != nil {
+					source = p.implAssociated(witness.Impl, a.Name, nil)
 				}
-				if source != nil && !p.sameSourcePermissions(source, p.boundAssociated(bound, a.Name, nil), map[[2]types.Type]bool{}) {
+				if witness.Bound != nil {
+					source = p.boundAssociated(witness.Bound, a.Name, nil)
+				}
+				permissions := map[*types.TypeParam]*permission{}
+				for param, typ := range sub {
+					permissions[param] = p.fromGo(typ)
+				}
+				if source != nil && !p.sameSourcePermissions(source, p.boundAssociated(bound, a.Name, permissions), map[[2]types.Type]bool{}) {
 					c.diag(node, GenericConstraint, "associated reference permissions do not satisfy constraint: "+a.Name)
 				}
 			}
 		}
 	}
+	instance.Substitution = sub
+	c.out.FunctionInstances[node] = instance
 	t, err := types.Instantiate(nil, sig, actual, true)
 	if err != nil {
 		c.diag(node, GenericConstraint, err.Error())

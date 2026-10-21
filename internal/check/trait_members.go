@@ -8,7 +8,7 @@ import (
 )
 
 func (b *TraitBound) MethodSignature(m *Member) *types.Signature {
-	sub := map[*types.TypeParam]types.Type{b.Trait.Self: b.Param}
+	sub := map[*types.TypeParam]types.Type{b.Trait.Self: b.Target}
 	for _, a := range b.Trait.Associated {
 		sub[a.Param] = b.Associated[a.Name]
 	}
@@ -46,7 +46,7 @@ func memberNamed(methods []*Member, name string, static bool) *Member {
 }
 
 func (c *checker) memberAccessible(m *Member) bool {
-	return m.Impl == nil || m.Impl.Trait != nil || m.Impl.Base.Obj().Pkg() == c.pkg || m.Symbol != nil && m.Symbol.Visibility == resolve.Public
+	return m.Impl == nil || m.Impl.Trait != nil || m.Impl.Owner == c.pkg || m.Symbol != nil && m.Symbol.Visibility == resolve.Public
 }
 
 func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
@@ -60,31 +60,27 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 	if len(parts) == 2 && root.Name.Name == "Self" && c.currentSelf != nil {
 		target = c.currentSelf
 	}
-	if root.Args != nil {
-		target = c.instantiate(target, root.Args)
+	if args := parts[len(parts)-2].Args; args != nil {
+		target = c.instantiate(target, args)
 	}
 	if len(parts) == 2 && c.currentImpl != nil && root.Name.Name == "Self" {
 		if m := memberNamed(c.currentImpl.Methods, name, true); m != nil {
 			return &MemberSelection{Member: m, Impl: c.currentImpl, Signature: m.Signature}
 		}
 	}
-	if param, ok := target.(*types.TypeParam); ok {
-		if bound := c.bounds[param]; bound != nil {
-			if m := memberNamed(bound.Trait.Methods, name, true); m != nil {
-				return &MemberSelection{Member: m, Bound: bound, Signature: bound.MethodSignature(m)}
-			}
+	var candidates []*MemberSelection
+	for _, bound := range c.boundsFor(target) {
+		if member := memberNamed(bound.Trait.Methods, name, true); member != nil {
+			candidates = append(candidates, &MemberSelection{Member: member, Bound: bound, Signature: bound.MethodSignature(member)})
 		}
-		c.diag(n, TraitInvalid, "static member requires a matching trait constraint")
-		return nil
 	}
-	// A resolved inherent member is already unambiguous.
-	if m := c.memberSymbols[c.symbol(n)]; m != nil && m.Static && c.memberAccessible(m) {
-		return &MemberSelection{Member: m, Impl: m.Impl, Signature: m.Signature}
-	}
-	var candidates []*Member
 	private := false
-	for _, impl := range c.preferredImpls() {
-		if !types.Identical(impl.Target, target) {
+	for _, template := range c.preferredImpls() {
+		if memberNamed(template.Methods, name, true) == nil {
+			continue
+		}
+		impl := c.matchImpl(template, target)
+		if impl == nil {
 			continue
 		}
 		if impl.Trait != nil && impl.Trait.Type.Obj().Pkg() != c.pkg && (impl.Trait.Symbol == nil || impl.Trait.Symbol.Visibility != resolve.Public) {
@@ -100,16 +96,15 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 			}
 			duplicate := false
 			for _, old := range candidates {
-				duplicate = duplicate || old.Impl.Trait == impl.Trait
+				duplicate = duplicate || old.Member.Trait == impl.Trait
 			}
 			if !duplicate {
-				candidates = append(candidates, m)
+				candidates = append(candidates, &MemberSelection{Member: m, Impl: impl, Signature: m.Signature})
 			}
 		}
 	}
 	if len(candidates) == 1 {
-		m := candidates[0]
-		return &MemberSelection{Member: m, Impl: m.Impl, Signature: m.Signature}
+		return candidates[0]
 	}
 	if len(candidates) > 1 {
 		c.diag(n, TraitInvalid, "ambiguous static member; select a trait explicitly")
@@ -155,22 +150,8 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 		return &MemberSelection{Member: m, Receiver: receiver, Signature: substituteSignature(m.Signature, sub)}
 	}
 	base := types.Unalias(target)
-	_, pointer := base.(*types.Pointer)
 	if p, ok := base.(*types.Pointer); ok {
 		base = types.Unalias(p.Elem())
-	}
-	if tp, ok := base.(*types.TypeParam); ok {
-		bound := c.bounds[tp]
-		if bound == nil || qualified != nil && qualified != bound.Trait {
-			c.diag(node, TraitInvalid, "instance member requires a matching trait constraint")
-			return nil
-		}
-		m := memberNamed(bound.Trait.Methods, name, false)
-		if m == nil {
-			c.diag(node, TraitInvalid, "unknown constrained member "+name)
-			return nil
-		}
-		return &MemberSelection{Member: m, Bound: bound, Receiver: receiver, Address: m.Receiver != ValueRef && !pointer, Deref: m.Receiver == ValueRef && pointer, Signature: bound.MethodSignature(m)}
 	}
 	// Within an impl, self calls retain that implementation even if a native
 	// method or another trait has the same spelling.
@@ -181,16 +162,41 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 	}
 	private := false
 	for _, mode := range c.receiverModes(receiver, target) {
-		var candidates []*Member
-		for _, impl := range c.preferredImpls() {
-			if qualified != nil && impl.Trait != qualified {
+		var candidates []*MemberSelection
+		for _, candidate := range []types.Type{target, base} {
+			for _, bound := range c.boundsFor(candidate) {
+				if qualified != nil && bound.Trait != qualified {
+					continue
+				}
+				member := memberNamed(bound.Trait.Methods, name, false)
+				if member == nil || member.Receiver != mode {
+					continue
+				}
+				duplicate := false
+				for _, old := range candidates {
+					duplicate = duplicate || old.Bound == bound
+				}
+				if !duplicate {
+					candidates = append(candidates, c.selectBound(member, bound, receiver, target))
+				}
+			}
+		}
+		for _, template := range c.preferredImpls() {
+			member := memberNamed(template.Methods, name, false)
+			if member == nil || member.Receiver != mode {
 				continue
 			}
-			if impl.Trait != nil && qualified == nil && !c.traitVisible(impl.Trait) {
+			if qualified != nil && template.Trait != qualified {
 				continue
 			}
-			matches := types.Identical(impl.Target, target) || types.Identical(impl.Target, base)
-			if !matches {
+			if template.Trait != nil && qualified == nil && !c.traitVisible(template.Trait) {
+				continue
+			}
+			impl := c.matchImpl(template, target)
+			if impl == nil && !types.Identical(target, base) {
+				impl = c.matchImpl(template, base)
+			}
+			if impl == nil {
 				continue
 			}
 			m := memberNamed(impl.Methods, name, false)
@@ -206,10 +212,16 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 			}
 			duplicate := false
 			for _, old := range candidates {
-				duplicate = duplicate || old.Impl.Trait == impl.Trait && types.Identical(old.Impl.Target, impl.Target)
+				var oldTarget types.Type
+				if old.Impl != nil {
+					oldTarget = old.Impl.Target
+				} else {
+					oldTarget = old.Bound.Target
+				}
+				duplicate = duplicate || old.Member.Trait == impl.Trait && types.Identical(oldTarget, impl.Target)
 			}
 			if !duplicate {
-				candidates = append(candidates, m)
+				candidates = append(candidates, c.selectReceiver(m, receiver, target))
 			}
 		}
 		if qualified == nil {
@@ -231,7 +243,7 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 			}
 		}
 		if len(candidates) == 1 {
-			return c.selectReceiver(candidates[0], receiver, target)
+			return candidates[0]
 		}
 		if len(candidates) > 1 {
 			c.diag(node, TraitInvalid, "ambiguous trait method; use a qualified call")
@@ -244,6 +256,23 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 		c.diag(node, TraitInvalid, "private inherent member is not visible from this package")
 	}
 	return nil
+}
+
+func (c *checker) selectBound(member *Member, bound *TraitBound, receiver ast.Expr, actual types.Type) *MemberSelection {
+	want := bound.Target
+	if member.Receiver != ValueRef {
+		want = types.NewPointer(want)
+	}
+	selection := &MemberSelection{Member: member, Bound: bound, Receiver: receiver, Signature: bound.MethodSignature(member)}
+	if !types.Identical(actual, want) {
+		if p, ok := want.(*types.Pointer); ok && types.Identical(actual, p.Elem()) {
+			selection.Address = true
+		}
+		if p, ok := actual.(*types.Pointer); ok && types.Identical(p.Elem(), want) {
+			selection.Deref = true
+		}
+	}
+	return selection
 }
 
 func (c *checker) selectReceiver(m *Member, expr ast.Expr, actual types.Type) *MemberSelection {

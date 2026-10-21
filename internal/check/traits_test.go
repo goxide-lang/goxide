@@ -218,8 +218,6 @@ func TestTraitRejectsMissingAndAmbiguousImplementations(t *testing.T) {
 		{"body", `trait P{func get(self Self)int};type S struct{};impl P for S{func get(self Self)int}`, "impl member requires a body"},
 		{"associated-cycle", `trait P{type A;type B;func get(self Self)Self::A};type S struct{};impl P for S{type A=Self::B;type B=Self::A;func get(self Self)Self::A{return 1}}`, "cyclic associated type"},
 		{"associated-constraint-permission", `type D struct{N int};trait P{type Item;func get(self Self)Self::Item};type S struct{p &D};impl P for S{type Item=&D;func get(self Self)Self::Item{return self.p}};func mutate[T P[Item=&mut D]](x T){x.get().N=1};func f(s S){mutate(s)}`, "associated reference permissions do not satisfy"},
-		{"pointer-carrier", `type D struct{};type Ptr *D;trait P{func get(self Self)int};impl P for Ptr{func get(self Self)int{return 1}};func read[T P](x T)int{return x.get()};func f(x Ptr)int{return read(x)}`, "no local static carrier"},
-		{"interface-carrier", `type I interface{};trait P{func get(self Self)int};impl P for I{func get(self Self)int{return 1}};func read[T P](x T)int{return x.get()};func f(x I)int{return read(x)}`, "no local static carrier"},
 		{"projection-binding", `trait P{type Item;func get(self Self)Self::Item};func read[T P[Item=int]](x T)T::P[Item=string]::Item{return x.get()}`, "projection binding conflicts"},
 		{"unknown-type-member", `enum E{A};func read(x E::Missing)int{return 0}`, "unknown associated type or member path"},
 		{"unknown-expression-member", `enum E{A};func read()int{return E::Missing()}`, "unknown associated type or member path"},
@@ -234,6 +232,27 @@ func TestTraitRejectsMissingAndAmbiguousImplementations(t *testing.T) {
 			}
 			t.Fatalf("wanted %s, got %v", tc.want, ds)
 		})
+	}
+}
+
+func TestTraitEvidenceDoesNotRequireTargetCarrier(t *testing.T) {
+	for _, source := range []string{
+		`type D struct{}; type Target *D`,
+		`type Target interface{}`,
+	} {
+		files, res := parse(t, "package p;"+source+`;trait P{func get(self Self)int};impl P for Target{func get(self Self)int{return 1}};func read[T P](x T)int{return x.get()};func f(x Target)int{return read(x)}`)
+		info, diagnostics := check.Check(files, res)
+		if len(diagnostics) != 0 {
+			t.Fatal(diagnostics)
+		}
+		if len(info.FunctionInstances) != 1 {
+			t.Fatalf("missing inferred call evidence: %v", info.FunctionInstances)
+		}
+		for _, instance := range info.FunctionInstances {
+			if len(instance.Evidence) != 1 || instance.Evidence[0].Impl == nil {
+				t.Fatalf("missing implementation: %+v", instance)
+			}
+		}
 	}
 }
 

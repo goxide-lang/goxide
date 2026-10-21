@@ -125,6 +125,8 @@ func (p *permissionChecker) collect(items []ast.Item) {
 	for _, item := range items {
 		switch n := item.(type) {
 		case *ast.FuncDecl:
+			oldBounds := p.c.activeBounds
+			p.c.activeBounds = p.c.out.GenericBounds[n]
 			q := p.functionType(n.Params, n.Results)
 			q.typ = p.c.out.Symbols[p.c.symbol(n.Name)]
 			if m := p.c.memberSymbols[p.c.symbol(n.Name)]; m != nil && !m.Static && len(q.params) > 0 {
@@ -137,6 +139,7 @@ func (p *permissionChecker) collect(items []ast.Item) {
 			f := &permissionFunction{p.c.file, n, q}
 			p.functions[p.c.symbol(n.Name)] = f
 			q.function = f
+			p.c.activeBounds = oldBounds
 		case *ast.EnumDecl:
 			p.enumFiles[p.c.out.Enums[n]] = p.c.file
 		case *ast.VarDecl:
@@ -209,6 +212,8 @@ func (p *permissionChecker) checkItems(items []ast.Item, globals permissionEnv) 
 			if n.Body == nil {
 				continue
 			}
+			oldBounds := p.c.activeBounds
+			p.c.activeBounds = p.c.out.GenericBounds[n]
 			p.env, p.declared, p.observed = clonePermissionEnv(globals), permissionEnv{}, permissionEnv{}
 			p.closures = nil
 			p.exposures, p.asyncEffects = nil, permissionEnv{}
@@ -254,6 +259,7 @@ func (p *permissionChecker) checkItems(items []ast.Item, globals permissionEnv) 
 					}
 				}
 			}
+			p.c.activeBounds = oldBounds
 		case *ast.ModDecl:
 			p.checkItems(n.Items, globals)
 		case *ast.DeclareDecl:
@@ -366,10 +372,8 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 		if n.Path != nil && len(n.Path.Segments) >= 3 {
 			parts := n.Path.Segments
 			target, trait, _ := p.c.associatedPath(parts)
-			if tp, ok := target.(*types.TypeParam); ok {
-				if bound := p.c.bounds[tp]; bound != nil && trait == bound.Trait {
-					return p.boundAssociated(bound, parts[len(parts)-1].Name.Name, sub)
-				}
+			if bound := p.c.boundFor(target, trait); bound != nil {
+				return p.boundAssociated(bound, parts[len(parts)-1].Name.Name, sub)
 			} else if trait != nil {
 				if impl := p.c.findImpl(target, trait); impl != nil {
 					return p.implAssociated(impl, parts[len(parts)-1].Name.Name, sub)

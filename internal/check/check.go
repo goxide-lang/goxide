@@ -124,29 +124,33 @@ type Try struct {
 }
 
 type Info struct {
-	GoResults     map[*ast.CallExpr]*GoResult
-	Resolve       *resolve.Result
-	GoImporter    types.Importer
-	GoSizes       types.Sizes
-	Diagnostics   []Diagnostic
-	Types         map[ast.Expr]types.Type
-	Enums         map[*ast.EnumDecl]*Enum
-	Matches       map[*ast.MatchExpr]*Match
-	Tries         map[*ast.TryExpr]*Try
-	Constructors  map[ast.Expr]*Constructor
-	Symbols       map[*resolve.Symbol]types.Type
-	PackagePaths  map[string]string
-	Modules       map[*ast.ModDecl]*resolve.Package
-	Derives       map[*types.Named]*Derive
-	Equalities    map[*ast.CallExpr]types.Type
-	RefBindings   map[*ast.BindPat]RefMode
-	Traits        map[*ast.TraitDecl]*Trait
-	Impls         map[*ast.ImplDecl]*Impl
-	Members       map[ast.Expr]*MemberSelection
-	TraitViews    map[ast.Expr]*TraitView
-	TypeOverrides map[ast.Type]types.Type
-	GenericBounds map[*ast.FuncDecl][]*TraitBound
-	enums         map[*types.Named]*Enum
+	GoResults         map[*ast.CallExpr]*GoResult
+	Resolve           *resolve.Result
+	GoImporter        types.Importer
+	GoSizes           types.Sizes
+	Diagnostics       []Diagnostic
+	Types             map[ast.Expr]types.Type
+	Enums             map[*ast.EnumDecl]*Enum
+	Matches           map[*ast.MatchExpr]*Match
+	Tries             map[*ast.TryExpr]*Try
+	Constructors      map[ast.Expr]*Constructor
+	Symbols           map[*resolve.Symbol]types.Type
+	PackagePaths      map[string]string
+	Modules           map[*ast.ModDecl]*resolve.Package
+	Derives           map[*types.Named]*Derive
+	Equalities        map[*ast.CallExpr]types.Type
+	RefBindings       map[*ast.BindPat]RefMode
+	Traits            map[*ast.TraitDecl]*Trait
+	Impls             map[*ast.ImplDecl]*Impl
+	ImplInstances     []*Impl
+	Members           map[ast.Expr]*MemberSelection
+	TraitViews        map[ast.Expr]*TraitView
+	TypeOverrides     map[ast.Type]types.Type
+	GenericBounds     map[*ast.FuncDecl][]*TraitBound
+	FunctionInstances map[ast.Node]*FunctionInstance
+	Demands           *DemandPlan
+	enums             map[*types.Named]*Enum
+	typeNodes         map[ast.Type]types.Type
 }
 
 func (r *Info) EnumOf(t types.Type) *Instance {
@@ -200,6 +204,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
 	r.GoImporter = imports
 	r.GoSizes = sizes
+	r.typeNodes = make(map[ast.Type]types.Type)
 	r.GoResults = make(map[*ast.CallExpr]*GoResult)
 	r.RefBindings = make(map[*ast.BindPat]RefMode)
 	r.Traits = make(map[*ast.TraitDecl]*Trait)
@@ -208,6 +213,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	r.TraitViews = make(map[ast.Expr]*TraitView)
 	r.TypeOverrides = make(map[ast.Type]types.Type)
 	r.GenericBounds = make(map[*ast.FuncDecl][]*TraitBound)
+	r.FunctionInstances = make(map[ast.Node]*FunctionInstance)
 	r.Modules = make(map[*ast.ModDecl]*resolve.Package)
 	if res == nil {
 		return r, nil
@@ -215,7 +221,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	c := &checker{out: r, files: files, importer: imports, named: make(map[*resolve.Symbol]*types.Named), variants: make(map[*resolve.Symbol]*Constructor), builtins: make(map[string]*Enum), packages: make(map[*resolve.Package]*types.Package), imported: make(map[string]*types.Package), constants: make(map[*resolve.Symbol]constant.Value), declarations: make(map[*resolve.Symbol]*typeDeclaration)}
 	c.traits = make(map[*resolve.Symbol]*Trait)
 	c.memberSymbols = make(map[*resolve.Symbol]*Member)
-	c.bounds = make(map[*types.TypeParam]*TraitBound)
+	c.bounds = make(map[*types.TypeParam][]*TraitBound)
 	c.functionBounds = make(map[*types.Signature][]*TraitBound)
 	c.sourceTypes = make(map[*resolve.Symbol]permissionDeclaration)
 	c.sourceValues = make(map[*resolve.Symbol]sourceExpression)
@@ -249,6 +255,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 		}
 	}
 	c.finishImpls()
+	c.validateConcreteImpls()
 	c.referenceHints = c.newPermissionChecker()
 	c.referenceHints.eachFile(func(items []ast.Item) { c.referenceHints.collect(items) })
 	c.enumNames()
@@ -282,6 +289,9 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	c.checkDefaultCycles()
 	c.checkEqualityComparisons()
 	c.checkReferences()
+	if len(r.Diagnostics) == 0 {
+		c.collectDemands()
+	}
 	sort.SliceStable(r.Diagnostics, func(i, j int) bool {
 		a, b := r.Diagnostics[i], r.Diagnostics[j]
 		if a.File != b.File {
@@ -311,7 +321,10 @@ type checker struct {
 	traits          map[*resolve.Symbol]*Trait
 	implOrder       []*Impl
 	memberSymbols   map[*resolve.Symbol]*Member
-	bounds          map[*types.TypeParam]*TraitBound
+	bounds          map[*types.TypeParam][]*TraitBound
+	activeBounds    []*TraitBound
+	proofStack      []proofObligation
+	proofFailure    string
 	functionBounds  map[*types.Signature][]*TraitBound
 	currentImpl     *Impl
 	currentTrait    *Trait

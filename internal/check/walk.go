@@ -29,6 +29,8 @@ func (c *checker) item(item ast.Item) {
 	switch n := item.(type) {
 	case *ast.FuncDecl:
 		old := c.returns
+		oldBounds := c.activeBounds
+		c.activeBounds = c.out.GenericBounds[n]
 		oldReceiver := c.currentReceiver
 		if m := c.memberSymbols[c.symbol(n.Name)]; m != nil && !m.Static {
 			c.currentReceiver = c.symbol(n.Params[0].Names[0])
@@ -39,6 +41,7 @@ func (c *checker) item(item ast.Item) {
 		c.block(n.Body)
 		c.returns = old
 		c.currentReceiver = oldReceiver
+		c.activeBounds = oldBounds
 	case *ast.VarDecl:
 		c.values(n.Specs)
 	case *ast.ConstDecl:

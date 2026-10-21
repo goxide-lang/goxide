@@ -232,6 +232,8 @@ func CloneRecord(value *Record) Record {
 
 这些要求需逐项迁移验收，不因泛型 impl 可以表达某个签名就认为业务等价。原生 map 键资格等额外能力若需证明，应由普通库协议及约束表达；手写 Eq 不自动取得该资格，浮点等类型也不能因 Go comparable 就被授予 Eq。不能在 checker 中按 Default、Clone 或 serde 名字偷偷补实现。
 
+**PartialEq 的 enum 深层校验仍是迁移缺口。** 现有 enum 相等入口在比较变体或执行手写相等方法前，先校验左操作数、再校验右操作数的有效载荷；校验会穿过结构体字段、数组、slice 和 map 的值，即使载荷类型有手写 PartialEq。普通结构体和容器的相等比较则仍按访问顺序短路。`enum_valid` 只检查外层，不能代替这个既有合同。例如外层 enum 的有效变体携带一个结构体，结构体中未初始化的内层 enum 仍须导致 panic，即使另一操作数属于不同外层变体，且载荷的手写相等方法不会被调用。`tests/acceptance/equality_test.go` 与 `manual_equality_test.go` 保留这些行为验收；当前普通库证明尚未提供等价的通用表达方式，不得据此移除该校验或偷偷增加字段协议要求。所需通用能力或行为调整须另行确认。
+
 普通库迁移基础已有真实 WASI 验证：`internal/compile/protocol_migration_test.go` 的宏从公共 syn 读取字段，生成五种 `Library*` 普通协议实现，覆盖默认值顺序、私有字段、slice/array 复制、调试输出和手写字段相等协议；Go 消费者实际 build/run/test，锁定重放保持字节一致。`internal/compile/serde_protocol_migration_test.go` 验证普通 Serialize/Deserialize 协议与现有公开 serde API 的接线、条件容器、读写方向独立、Option alias 与指针的缺失区别、显式 null、default/skip 顺序及 enum 错误路径。`attribute_protocol_migration_test.go` 覆盖 attribute 产出的条件 impl，`print_protocol_migration_test.go` 覆盖格式解析、普通 Display/Debug 调用、求值顺序和调用帧。它们使用普通宏与协议入口；std/serde 正式迁移发布及完整业务等价验收仍待完成。Default 专用调用图检查与 Eq 派生资格仍按上面的暂缓决定处理；旧入口的移除须随对应库的正式迁移验收进行。
 
 ## 双向互操作

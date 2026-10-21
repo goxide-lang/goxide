@@ -1,0 +1,13 @@
+package macros
+use syntax::token;
+use syntax::proc_macro as pm;
+#[proc_macro_derive(LibraryDefault)]
+pub func deriveDefault(ctx pm::Context,input token::TokenStream) pm::Output { return derive(ctx,input,"Default") }
+#[proc_macro_derive(LibraryClone)]
+pub func deriveClone(ctx pm::Context,input token::TokenStream) pm::Output { return derive(ctx,input,"Clone") }
+#[proc_macro_derive(LibraryDebug)]
+pub func deriveDebug(ctx pm::Context,input token::TokenStream) pm::Output { return derive(ctx,input,"Debug") }
+#[proc_macro_derive(LibraryPartialEq)]
+pub func derivePartialEq(ctx pm::Context,input token::TokenStream) pm::Output { return derive(ctx,input,"PartialEq") }
+#[proc_macro_derive(LibraryEq)]
+pub func deriveEq(ctx pm::Context,input token::TokenStream) pm::Output { return derive(ctx,input,"Eq") }

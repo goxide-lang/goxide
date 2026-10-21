@@ -1,0 +1,35 @@
+package protocol
+use strconv;
+pub trait LibraryDefault { func r#default() Self }
+pub trait LibraryClone { func clone(self &Self) Self }
+pub trait LibraryDebug { func debug(self &Self) string }
+pub trait LibraryPartialEq { func equals(self Self,other Self) bool }
+pub trait LibraryEq where Self: LibraryPartialEq {}
+pub func Make[T LibraryDefault]() T { return T::r#default() }
+pub func Equal[T LibraryPartialEq](left,right T) bool { return left.equals(right) }
+pub func RequireEq[T LibraryEq](left,right T) bool { return left.equals(right) }
+impl LibraryDefault for int { func r#default() Self { return 0 } }
+impl LibraryClone for int { func clone(self &Self) Self { return *self } }
+impl LibraryDebug for int { func debug(self &Self) string { return strconv::Itoa(*self) } }
+impl LibraryPartialEq for int { func equals(self Self,other Self) bool { return self==other } }
+impl LibraryEq for int {}
+impl[T LibraryClone] LibraryClone for []T {
+ func clone(self &Self) Self { if *self==nil { return nil }; result:=make([]T,len(*self));for i:=range *self { result[i]=LibraryClone::clone(&(*self)[i]) };return result }
+}
+impl[T LibraryClone,const N int] LibraryClone for [N]T {
+ func clone(self &Self) Self { var result [N]T;for i:=range *self { result[i]=LibraryClone::clone(&(*self)[i]) };return result }
+}
+impl[T LibraryDebug] LibraryDebug for []T {
+ func debug(self &Self) string { if *self==nil {return "nil"};result:="[";for i:=range *self {if i!=0 {result+=", "};result+=LibraryDebug::debug(&(*self)[i])};return result+"]" }
+}
+impl[T LibraryDebug,const N int] LibraryDebug for [N]T {
+ func debug(self &Self) string { result:="[";for i:=range *self {if i!=0 {result+=", "};result+=LibraryDebug::debug(&(*self)[i])};return result+"]" }
+}
+impl[T LibraryPartialEq] LibraryPartialEq for []T {
+ func equals(self Self,other Self) bool { if (self==nil)!=(other==nil)||len(self)!=len(other) {return false};for i:=range self {if !LibraryPartialEq::equals(self[i],other[i]) {return false}};return true }
+}
+impl[T LibraryPartialEq,const N int] LibraryPartialEq for [N]T {
+ func equals(self Self,other Self) bool {for i:=range self {if !LibraryPartialEq::equals(self[i],other[i]) {return false}};return true }
+}
+impl[T LibraryEq] LibraryEq for []T {}
+impl[T LibraryEq,const N int] LibraryEq for [N]T {}

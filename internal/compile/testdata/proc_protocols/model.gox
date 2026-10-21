@@ -1,0 +1,43 @@
+package model
+use macros;
+use api;
+use api::LibraryPartialEq;
+use strconv;
+use fmt;
+var defaults int
+type secret int
+impl api::LibraryDefault for secret { func r#default() Self { defaults++;return secret(defaults) } }
+impl api::LibraryClone for secret { func clone(self &Self) Self {return *self} }
+impl api::LibraryDebug for secret { func debug(self &Self) string {return strconv::Itoa(int(*self))} }
+impl api::LibraryPartialEq for secret { func equals(self Self,other Self) bool {return int(self)%10==int(other)%10} }
+impl api::LibraryEq for secret {}
+#[derive(macros::LibraryDefault,macros::LibraryClone,macros::LibraryDebug,macros::LibraryPartialEq,macros::LibraryEq)]
+pub struct Record { first,second secret }
+#[derive(macros::LibraryClone,macros::LibraryDebug,macros::LibraryPartialEq,macros::LibraryEq)]
+pub struct Containers { values []int; fixed [2]int }
+pub func Evaluate() string {
+ record:=api::Make[Record]()
+ copied:=api::LibraryClone::clone(&record)
+ if defaults!=2 || record.first!=1 || record.second!=2 {panic("default order")}
+ if !record.equals(copied) || !api::RequireEq(record,copied) {panic("record equality")}
+ shifted:=copied
+ shifted.first+=10
+ if !api::RequireEq(record,shifted) {panic("field equality protocol was bypassed")}
+ shifted.second++
+ if record.equals(shifted) {panic("second field did not participate in equality")}
+ original:=Containers{values:[]int{1,2},fixed:[2]int{3,4}}
+ cloned:=api::LibraryClone::clone(&original)
+ cloned.values[0]=9
+ if original.equals(cloned) {panic("slice field did not participate in equality")}
+ onlyFixed:=original
+ onlyFixed.fixed[1]=9
+ if original.equals(onlyFixed) {panic("array field did not participate in equality")}
+ cloned.fixed[0]=8
+ if original.values[0]!=1 || original.fixed[0]!=3 || original.equals(cloned) {panic("clone storage")}
+ var nilValues []int
+ emptyValues:=make([]int,0)
+ nilCopy:=api::LibraryClone::clone(&nilValues)
+ emptyCopy:=api::LibraryClone::clone(&emptyValues)
+ if nilCopy!=nil || emptyCopy==nil || api::Equal(nilValues,emptyValues) {panic("nil/empty")}
+ return fmt::Sprintf("%s | %s | %t %t",api::LibraryDebug::debug(&record),api::LibraryDebug::debug(&cloned),api::RequireEq(original,original),api::Equal(nilValues,nilCopy))
+}

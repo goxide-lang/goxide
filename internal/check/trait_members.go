@@ -122,6 +122,9 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 				return &MemberSelection{Member: &Member{Name: name, GoName: name, Signature: signature, Native: function}, MethodExpr: true, Signature: method}
 			}
 		}
+		if _, parameter := target.(*types.TypeParam); parameter {
+			c.diag(n, TraitInvalid, "static member requires a matching trait constraint")
+		}
 	}
 	return nil
 }

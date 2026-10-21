@@ -52,6 +52,16 @@ func (e *emitter) operationFunction(selection *check.MemberSelection) goast.Expr
 	if m.Trait == nil {
 		return enumIndices(e.sourceGlobal(m.File, e.inherentName(m)), e.implTypeArgs(selection.Impl))
 	}
+	var target types.Type
+	if selection.Bound != nil && selection.Bound.Param != nil {
+		target = traitBoundTarget(selection.Bound)
+	} else if selection.Impl != nil && carrierTarget(e.info, implTemplate(selection.Impl)) && e.nameableType(selection.Impl.Target) {
+		target = selection.Impl.Target
+	}
+	if target != nil {
+		carrier := &goast.CallExpr{Fun: enumIndices(e.typeinfo("Of"), []goast.Expr{e.goType(target)})}
+		return &goast.SelectorExpr{X: carrier, Sel: goast.NewIdent(traitOperation(m))}
+	}
 	ops := e.evidenceType(check.Evidence{Bound: selection.Bound, Impl: selection.Impl})
 	return &goast.SelectorExpr{X: &goast.CompositeLit{Type: ops}, Sel: goast.NewIdent(traitOperation(m))}
 }

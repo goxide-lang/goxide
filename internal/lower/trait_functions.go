@@ -66,20 +66,44 @@ func (e *emitter) traitFunctionInstance(node syntax.Node) (goast.Expr, bool) {
 	if function == nil {
 		return nil, false
 	}
-	if selected := e.traits.instances[instanceFunctionKey(e.info, function, instance)]; selected != nil {
-		return e.sourceGlobal(selected.body.File, selected.name), true
-	}
-	if e.boundCallbacks == nil && e.instanceBody == nil && e.traits.legacyFunctions[function.decl] {
+	if e.carrierFunctionInstance(function, instance) {
 		var args []goast.Expr
 		for _, typ := range instance.TypeArgs {
 			args = append(args, e.goType(typ))
 		}
 		return enumIndices(e.sourceGlobal(function.symbol.Decl.File, function.symbol.GoName), args), true
 	}
+	if selected := e.traits.instances[instanceFunctionKey(e.info, function, instance)]; selected != nil {
+		return e.sourceGlobal(selected.body.File, selected.name), true
+	}
 	if !e.traits.templateFunctions[function.decl] {
 		return nil, false
 	}
 	return e.templateFunctionInstance(instance, function), true
+}
+
+// Prefer the stable Go entry when its inferred carriers can express this call.
+// A concrete demand must not make a consumer depend on a specialization absent
+// from a separately compiled dependency.
+func (e *emitter) carrierFunctionInstance(function *traitFunction, instance *check.FunctionInstance) bool {
+	if e.boundCallbacks != nil || !e.traits.legacyFunctions[function.decl] {
+		return false
+	}
+	for _, argument := range instance.TypeArgs {
+		if !e.nameableType(argument) {
+			return false
+		}
+	}
+	for _, witness := range instance.Evidence {
+		if witness.Bound != nil {
+			if witness.Bound.Param == nil {
+				return false
+			}
+		} else if witness.Impl == nil || !carrierTarget(e.info, implTemplate(witness.Impl)) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *traitProgram) prepareFunctionEntries(info *check.Info) {

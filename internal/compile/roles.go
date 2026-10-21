@@ -62,6 +62,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 		if err != nil {
 			return nil, err
 		}
+		stage.modules[0].OnProcDiagnostic = options.OnProcDiagnostic
 		stages[graph] = stage
 		if err := prepareModules(graph, stage.generated); err != nil {
 			return nil, err
@@ -147,7 +148,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 			if err != nil {
 				return nil, err
 			}
-			spec.Config = project.Digest([]string{spec.Config, stage.sdk, content})
+			spec.Config = project.Digest([]string{spec.Config, stage.sdk, procmacro.ProfileID, content})
 		}
 		stage.unit, err = layout.Begin(spec)
 		if err != nil {
@@ -324,6 +325,13 @@ func (stage *stagedRole) buildProcMacro(run func([]byte, pm.Request) ([]byte, er
 	}
 	stage.wasm, err = os.ReadFile(artifact)
 	if err != nil {
+		return err
+	}
+	stage.wasm, err = procmacro.PrepareWASM(stage.wasm)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(artifact, stage.wasm, 0o644); err != nil {
 		return err
 	}
 	library.Run = func(request pm.Request) ([]byte, error) {

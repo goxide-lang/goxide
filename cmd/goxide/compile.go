@@ -195,7 +195,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			if *tags != "" {
 				return errors.New("--tags is not supported for manifest projects by the new compiler pipeline")
 			}
-			prepared, err := compile.PrepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, Config: req.config, Race: mode == "test"})
+			prepared, err := prepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, Config: req.config, Race: mode == "test"}, stderr)
 			if err != nil {
 				return err
 			}

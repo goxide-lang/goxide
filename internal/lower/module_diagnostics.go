@@ -14,12 +14,25 @@ import (
 )
 
 type moduleDiagnostic struct {
-	message string
-	cause   error
+	location string
+	message  string
+	notes    string
+	cause    error
 }
 
-func (e *moduleDiagnostic) Error() string { return e.message }
+func (e *moduleDiagnostic) Error() string { return e.location + ": " + e.message + e.notes }
 func (e *moduleDiagnostic) Unwrap() error { return e.cause }
+
+// SummarizeProcDiagnostics retains the source location and expansion trace after
+// a caller has already displayed every procedural diagnostic in source order.
+func SummarizeProcDiagnostics(err error) error {
+	var formatted *moduleDiagnostic
+	var expansion *expand.Diagnostic
+	if !errors.As(err, &formatted) || !errors.As(err, &expansion) {
+		return err
+	}
+	return &moduleDiagnostic{location: formatted.location, message: "procedural macro expansion failed", notes: formatted.notes, cause: err}
+}
 
 func reportProcDiagnostics(report func(string, expand.ProcDiagnostic), files map[string]*syntax.File, displayNames map[string]string, expanded *expand.Result) {
 	if report == nil || expanded == nil || len(expanded.ProcDiagnostics) == 0 {
@@ -153,8 +166,9 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 			notes = append(notes, "macro definition "+defined+"; call "+called)
 		}
 	}
+	trace := ""
 	if len(notes) != 0 {
-		message += "\n  " + strings.Join(notes, "\n  ")
+		trace = "\n  " + strings.Join(notes, "\n  ")
 	}
-	return &moduleDiagnostic{message: location + ": " + message, cause: err}
+	return &moduleDiagnostic{location: location, message: message, notes: trace, cause: err}
 }

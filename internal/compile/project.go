@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/project"
 	pm "github.com/goxide-lang/syntax/proc_macro"
@@ -28,7 +29,8 @@ type Options struct {
 	Race                                    bool
 	// RunProcMacro executes a prepared WASM command. A nil callback leaves
 	// actual expansion unavailable until a restricted host is supplied.
-	RunProcMacro func(wasm []byte, request pm.Request) ([]byte, error)
+	RunProcMacro     func(wasm []byte, request pm.Request) ([]byte, error)
+	OnProcDiagnostic func(filename string, diagnostic expand.ProcDiagnostic)
 }
 
 // Result names a stable generated Go module and its selected target package.

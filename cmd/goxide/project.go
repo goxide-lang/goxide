@@ -361,7 +361,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err := os.WriteFile(filepath.Join(stage, project.ManifestName), data, 0600); err != nil {
 		return err
 	}
-	prepared, err := compile.PrepareProject(stage, compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: true, Roots: roots, NativeFeatures: &cfg.Features, Config: cfg, Tags: tags, Race: mode == "test"})
+	prepared, err := prepareProject(stage, compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: true, Roots: roots, NativeFeatures: &cfg.Features, Config: cfg, Tags: tags, Race: mode == "test"}, stderr)
 	if err != nil {
 		return err
 	}

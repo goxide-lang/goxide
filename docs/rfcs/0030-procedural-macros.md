@@ -2,9 +2,9 @@
 
 ## 状态与范围
 
-状态：**Draft；独立 token/SDK、源码登记、三类调用、角色构建与 RuntimeRoot 已实现，本地联调；CLI/浏览器受限宿主待接入**。用户已确认按本篇推进 syntax 仓库首批的 `token` 与 `proc_macro`，先不实现 syn/quote。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
+状态：**Draft；独立 token/SDK、源码登记、三类调用、角色构建、RuntimeRoot 与项目 CLI 受限宿主已实现，本地联调；浏览器宿主及原生单文件来源接入待完成**。syntax 仓库首批为 `token` 与 `proc_macro`；普通解析库与派生迁移另行推进。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
 
-本篇提出一个可独立验收的过程宏基础：公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。独立 `github.com/goxide-lang/syntax` module 已提供手写 Go 的 token 树/词法、调用内引用表、Context/Output、静态入口分派与严格 JSON 编解码。编译器已实现 `[lib].proc_macro` 清单字段、cfg 后源码登记、canonical SDK 签名校验，以及函数式、attribute、derive 的调用接线和 helper 归属。内部编译入口将已检查宏库投影为仅含登记宏的消费视图，支持别名与重导出；调用使用请求内引用表，并把诊断位置与可信来源分开。项目编排已按独立角色准备依赖、锁、特征与 staging，构建 Go WASI command；输出所属 crate 的 RuntimeRoot 经显式来源绑定。真实 Goxide 宏源码经测试 WASI 运行器展开后，目标程序 build/run/test 与离线锁定重放通过。本地依赖采用相邻 syntax checkout。CLI 的 proc-macro lib 可生成 WASM；实际展开仍须提供受限宿主，CLI/浏览器执行与资源限制继续按 A1–A10 接入。
+本篇提出一个可独立验收的过程宏基础：公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。独立 `github.com/goxide-lang/syntax` module 已提供手写 Go 的 token 树/词法、调用内引用表、Context/Output、静态入口分派与严格 JSON 编解码。编译器已实现 `[lib].proc_macro` 清单字段、cfg 后源码登记、canonical SDK 签名校验，以及函数式、attribute、derive 的调用接线和 helper 归属。内部编译入口将已检查宏库投影为仅含登记宏的消费视图，支持别名与重导出；调用使用请求内引用表，并把诊断位置与可信来源分开。项目编排按独立角色准备依赖、锁、特征与 staging，构建受限的 Go WASI command；输出所属 crate 的 RuntimeRoot 经显式来源绑定。项目 CLI 使用进程内 wazero 宿主，真实 Goxide 宏展开后，目标程序 build/run/test 与离线锁定重放通过。本地依赖采用相邻 syntax checkout。固定 profile、资源限额及取消已有宿主检查；浏览器与原生单文件来源仍按 A1–A10 接入。
 
 本篇不迁移 Default、serde 或其他内建宏，不补泛型 impl，不提供类型反射或已解析 TypeShape 查询，不开放编译脚本，也不实现完整 syn/quote。普通 syn/quote 库可以建立在本协议上；它们解析语法、构造语法，不取得类型检查或权限证明。库派生迁移仍需另行验收普通 trait/impl、生成代码及跨仓库发布。
 
@@ -193,7 +193,7 @@ RuntimeRoot(logicalModulePath) -> 已绑定的 Path，或带调用位置的错�
 
 **建议选择 WASI command 模式，每次调用创建全新实例。** 将宏库及 SDK 降低成普通 Go，由工具链生成专用 launcher，使用 `GOOS=wasip1 GOARCH=wasm GOTOOLCHAIN=local GOWORK=off go build -trimpath -buildvcs=false` 生成 command 模块。launcher 从固定登记表选择函数；宏作者不手写 main、WASI 导出或内存指针协议。构建产物使用虚拟源码身份，宿主保留实际位置映射，不把本地绝对路径作为宏的输入能力。
 
-CLI 建议采用 wazero；这是需要单独确认的新 Go 依赖。浏览器运行同一 WASM 字节，在独立 Worker 中提供相同的受限 WASI profile。两侧共用请求、响应及宿主验证；不另建 js/wasm 宏发行物。Go 已提供 WASI command 构建，也支持 reactor，但首版不需要长期实例、export 指针调用或跨调用状态。[Go WASI](https://go.dev/blog/wasi)、[Go WASM exports](https://go.dev/blog/wasmexport)
+CLI 已采用经用户确认的 wazero v1.12.0 及其 `golang.org/x/sys` v0.44.0 依赖。宿主在编译器进程内执行，stdin/stdout 是内存缓冲，无须另起宏进程。浏览器计划运行同一 WASM 字节，在独立 Worker 中提供相同的受限 WASI profile。两侧共用请求、响应及宿主验证；不另建 js/wasm 宏发行物。Go 已提供 WASI command 构建，也支持 reactor，但首版不需要长期实例、export 指针调用或跨调用状态。[Go WASI](https://go.dev/blog/wasi)、[Go WASM exports](https://go.dev/blog/wasmexport)
 
 每个实例的 stdin 是一个 UTF-8 JSON 请求后接 EOF，stdout 必须恰好是一个 JSON 响应后接 EOF；协议之外的输出失败。stderr 是有上限的失败辅助信息，不作为成功诊断 API。JSON 解码拒绝重复键、未知字段、超深对象及越界引用，不把宽松解析差异带到浏览器。
 
@@ -230,8 +230,8 @@ Go 运行时会进行这些调用，不能简单缺省 clock/random/poll，也�
 
 | 资源 | 上限与处理 |
 | --- | --- |
-| 每次调用 | 5 秒真实墙钟，从启动实例到完整退出，包含运行时和包 init；取消立即关闭实例/终止 Worker |
-| 整个编译请求 | 累计宏执行时间 60 秒，包括构建上游宏时的展开；不包括 Go 工具链编译时间 |
+| 每次调用 | 5 秒真实墙钟，从请求验证、引擎编译到完整退出和响应验证，包含运行时和包 init；取消关闭实例/终止 Worker |
+| 整个编译请求 | 累计宏调用时间 60 秒，包括构建上游宏时的展开及引擎编译；不包括 Go 工具链编译时间 |
 | 线性内存 | 256 MiB，即 4096 个 64 KiB page |
 | WASM 字节 | 64 MiB，实例化前检查 |
 | 函数表 | 一个模块内部 funcref table，initial 不超过 65,536；maximum 固定为 initial |
@@ -244,7 +244,7 @@ Go 运行时会进行这些调用，不能简单缺省 clock/random/poll，也�
 
 256 MiB 指 guest 线性内存，不是整个 CLI 进程或浏览器的总内存。编译代码、JS 对象和宿主 token 表仍需要字节/节点/实例数限额。上述容量需用完整 SDK 产物验收，不能在未实现验证器时宣称已完成隔离。
 
-全新实例避免跨调用全局状态；实例中的 `init` 仍执行并受相同限制。只缓存编译好的宏产物，首版不缓存展开结果。产物键包含完整源码/依赖闭包、feature、构建配置、编译器/SDK/Go 工具链及 WASI profile；本地路径依赖按实际内容失效。
+全新实例避免跨调用全局状态；实例中的 `init` 仍执行并受相同限制。只缓存编译好的宏产物，首版不缓存展开结果。产物键包含完整源码/依赖闭包、feature、构建配置、编译器/SDK/Go 工具链及 WASI profile；本地路径依赖按实际内容失效。一次编译请求中的引擎编译缓存按受限 WASM 内容标识复用，以原始 WASM 字节合计 64 MiB 为容量，按进入顺序淘汰并释放编译模块；此容量不等于本机代码的实际内存大小。
 
 固定宿主输入不保证任意宏程序天然确定。宏作者不得依赖 Go map 遍历等未指定顺序；需要排序后输出。同输入、相同宏产物和配置应产生相同语法/诊断，验收覆盖冷/热缓存及两宿主结果。超时是运行条件，不承诺两台机器在边界耗时上作同样决定。[Go map iteration](https://go.dev/ref/spec#For_range)
 
@@ -269,7 +269,7 @@ NoError(D)   Admit(T, H, L) = J   Fit(K, p, J)
 
 ## 转译示例
 
-PM-01/02 的源码登记与三类调用已联调，项目编排可构建 WASI 宏产物；CLI 的受限执行仍待接入。`token` 与 `pm` 分别显式绑定 `github.com/goxide-lang/syntax/token` 和 `github.com/goxide-lang/syntax/proc_macro`，`macros` 绑定相应过程宏 lib；完整项目验收还须提供这些依赖的真实版本与清单。Go 对照是完整目标程序，不包含宏执行器。
+PM-01/02 的源码登记与三类调用已联调，项目编排可构建 WASI 宏产物并通过 CLI 受限宿主执行。`token` 与 `pm` 分别显式绑定 `github.com/goxide-lang/syntax/token` 和 `github.com/goxide-lang/syntax/proc_macro`，`macros` 绑定相应过程宏 lib；完整项目须提供这些依赖的真实版本与清单。Go 对照是完整目标程序，不包含宏执行器。
 
 ### PM-01：函数式恒等宏与运行时求值
 
@@ -431,14 +431,14 @@ func TestAnswerAPI(t *testing.T) {
 | A9 | CLI 与浏览器使用同一宏产物/请求，成功输出和确定错误一致；浏览器缺宏明确失败，异步界面可取消 |
 | A10 | 同输入两次生成 Go 字节一致；检查源码位置、可读性、无宏运行时泄漏；普通手写 Go 消费通过 |
 
-A1–A10 尚未全量完成。已覆盖源码登记与验签、三类入口和输出位置、属性/derive 顺序、helper 共同消费者、别名与重导出、片段与卫生、诊断位置、真实 Goxide 宏源码到测试 SDK command，再到目标 Go build/run/test 和重复生成一致。角色计划与锁、SDK 协议内容匹配、RuntimeRoot 和真实 WASI 产物已接线，测试运行器覆盖上游宏构建、目标/宏配置隔离、运行库重导出与离线锁定重放。固定 WASI profile、资源上限、取消及 CLI/浏览器宿主继续实施。syntax 仓库保留词法/结构、冻结上下文、JSON 拒绝/预算和静态分派测试。
+A1–A10 尚未全量完成。已覆盖源码登记与验签、三类入口和输出位置、属性/derive 顺序、helper 共同消费者、别名与重导出、片段与卫生、诊断位置、真实 Goxide 宏源码经 WASI 宿主到目标 Go build/run/test 和重复生成一致。角色计划与锁、SDK 协议内容匹配、RuntimeRoot、上游宏构建、目标/宏配置隔离、运行库重导出与离线锁定重放已有验收。CLI 项目入口及固定 WASI profile 已接线；宿主检查覆盖真实 SDK init、虚拟输入、取消、超时、输出/内存/table 上限、非法 import 和失败恢复。浏览器同产物执行、两宿主一致性及原生单文件来源仍待完成。syntax 仓库保留词法/结构、冻结上下文、JSON 拒绝/预算和静态分派测试。
 
 ### 实施顺序与共享代码边界
 
 职责保持在三处：项目/编译编排准备来源、角色计划和宏产物；expand 负责名字选择、输入/输出、卫生、顺序与累计预算；宿主适配负责运行一个已准备的 WASM 请求。expand/lower 不自行启动 Go 工具链或下载依赖。CLI 与浏览器提供实际宿主实现后才按需要引入共同调用接口，前端继续使用一条展开与检查管线。
 
 1. 接受源级及宿主合同后，从 `main` 按实际调用需要提取源 token 留存、声明列表解析、片段/来源复制及输出位置校验，配独立回归。保留现有声明宏行为，不为提取而开放零/多 item 输出。
-2. 独立 syntax module 的手写 Go token/SDK、编译器转换桥、源码登记、三类调用、helper、角色构建图、WASI command 启动器与 RuntimeRoot 已完成本地联调。继续实现受限宿主并接入项目 CLI；此批不实现 syn/quote。
+2. 独立 syntax module 的手写 Go token/SDK、编译器转换桥、源码登记、三类调用、helper、角色构建图、WASI command 启动器、RuntimeRoot 与项目 CLI 受限宿主已完成本地联调。
 3. 接浏览器同产物执行、取消、预算及角色隔离验收，完成 A1–A10 后再提交基础能力为已实现。实现内部可按主题提交，基础能力验收不以模拟宿主替代。
 4. 声明式 Draft 分支以后再整理到共享基线上，仅保留其专用语法/匹配与差异；不把 RFC 0029 接受作为本篇前置条件。
 5. 同 syntax module 中的普通 syn/quote 包、普通泛型 impl 和 Default/serde 迁移分别设计与验收。若后续 `quote!` 使用过程宏实现，其独立宏源码项目依赖 token/builder 直接构造输出，不能调用尚在构建的自身宏；普通 syntax module 不反向依赖该宏项目。源码项目可同仓库，但不因此合并 module 或构建角色。后续 Goxide 自举、生成 Go 的发行方式及跨仓库改动另按授权确定。
@@ -454,4 +454,4 @@ A1–A10 尚未全量完成。已覆盖源码登记与验签、三类入口和�
 3. 角色分开的宏构建计划及 `RuntimeRoot` 的显式可达性，不隐式拉入运行库。
 4. WASI command + 每次新实例、CLI 新增 wazero 依赖、浏览器相同产物及受限 profile。
 
-上限数值与上述固定 WASI profile 须用真实 SDK 和受限宿主共同验收；若容量需要调整，更新本篇及共同测试，不能隐式扩大宿主能力。未经上述依赖确认，不将 wazero 写入 go.mod。编译器仍按实际过程宏消费者提取共享代码。
+上限数值与上述固定 WASI profile 须用真实 SDK 和两侧受限宿主共同验收；若容量需要调整，更新本篇及共同测试，不能隐式扩大宿主能力。CLI 依赖已获确认，编译器仍按实际过程宏消费者提取共享代码。

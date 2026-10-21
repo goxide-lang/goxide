@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/project"
@@ -38,47 +37,18 @@ func compilerSDKForTest(t *testing.T) string {
 	return strings.TrimSpace(string(output))
 }
 
-// Node is only a test transport for trusted fixtures. Production expansion must
-// supply the separately implemented restricted WASI host from RFC 0030.
 func testWASI(t *testing.T, inspect func(pm.Request)) func([]byte, pm.Request) ([]byte, error) {
 	t.Helper()
-	node, err := exec.LookPath("node")
+	host, err := procmacro.NewWASIHost(context.Background())
 	if err != nil {
-		t.Skip("Node.js is required to execute the WASI fixture")
+		t.Fatal(err)
 	}
-	directory := t.TempDir()
-	script := filepath.Join(directory, "run.mjs")
-	writeProjectFile(t, directory, "run.mjs", `import { readFile } from 'node:fs/promises';
-import { WASI } from 'node:wasi';
-const wasi = new WASI({version:'preview1', args:['goxide-proc-macro'], env:{}, preopens:{}, returnOnExit:true});
-const module = await WebAssembly.compile(await readFile(process.argv[2]));
-const instance = await WebAssembly.instantiate(module, wasi.getImportObject());
-process.exitCode = wasi.start(instance);
-`)
+	t.Cleanup(func() { _ = host.Close() })
 	return func(wasm []byte, request pm.Request) ([]byte, error) {
-		if len(wasm) < 8 || !bytes.Equal(wasm[:8], []byte{'\x00', 'a', 's', 'm', 1, 0, 0, 0}) {
-			return nil, fmt.Errorf("macro artifact is not a WASM module")
-		}
 		if inspect != nil {
 			inspect(request)
 		}
-		artifact := filepath.Join(directory, "macro.wasm")
-		if err := os.WriteFile(artifact, wasm, 0o600); err != nil {
-			return nil, err
-		}
-		var input, stderr bytes.Buffer
-		if err := pm.WriteRequest(&input, request); err != nil {
-			return nil, err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		command := exec.CommandContext(ctx, node, "--no-warnings", script, artifact)
-		command.Dir, command.Stdin, command.Stderr = directory, &input, &stderr
-		output, err := command.Output()
-		if err != nil {
-			return nil, fmt.Errorf("test WASI command: %w: %s", err, stderr.String())
-		}
-		return output, nil
+		return host.Run(wasm, request)
 	}
 }
 

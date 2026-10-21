@@ -18,9 +18,10 @@ import (
 func main() {
 	output := flag.String("o", "goxide", "output binary")
 	ldflags := flag.String("ldflags", "", "additional Go linker flags")
+	packageName := flag.String("package", "./cmd/goxide", "compiler or internal build-tool package")
 	flag.Parse()
 	if flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./scripts/build.go [-o binary] [-ldflags flags]")
+		fmt.Fprintln(os.Stderr, "usage: go run ./scripts/build.go [-o binary] [-ldflags flags] [-package package]")
 		os.Exit(2)
 	}
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
@@ -30,7 +31,7 @@ func main() {
 		fail(err)
 	}
 	flags := *ldflags + " -X github.com/goxide-lang/goxide/internal/procmacro.CompilerSDKIdentity=" + identity
-	command := exec.Command(tool, "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags="+flags, "-o", *output, "./cmd/goxide")
+	command := exec.Command(tool, "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags="+flags, "-o", *output, *packageName)
 	command.Env = env
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr

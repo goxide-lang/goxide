@@ -25,7 +25,7 @@ globalThis.postMessage = message => {
   await Promise.race([ready, new Promise((_, reject) => setTimeout(() => reject(Error('WASM readiness timeout')), 30000))]);
   const outputs = [];
   for (const input of JSON.parse(fs.readFileSync(inputsFile, 'utf8'))) {
-    const result = globalThis.goxideCompile(input.source);
+    const result = await globalThis.goxideCompile(input.source);
     assert.equal(typeof result, 'object');
     assert.ok(('go' in result) !== ('error' in result));
     outputs.push({id: input.id, ...result});

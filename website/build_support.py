@@ -10,6 +10,7 @@ import tomllib
 
 
 DEPENDENCY_CONTEXT = 'cmd/goxide-playground/goxide.roots.toml'
+MACRO_BUNDLE = 'cmd/goxide-playground/proc_bundle.json'
 
 
 def dependency_context(root, origins=None):
@@ -149,7 +150,7 @@ def standalone_playground(source):
 
 def is_compiler_source(name):
     path = pathlib.PurePosixPath(name)
-    if name in {"go.mod", "go.sum", DEPENDENCY_CONTEXT}:
+    if name in {"go.mod", "go.sum", DEPENDENCY_CONTEXT, MACRO_BUNDLE}:
         return True
     if path.suffix != ".go" or path.name.endswith("_test.go"):
         return False
@@ -173,7 +174,7 @@ def verify_compiler_sources(root, pin, expected_digest):
     current = {
         path.relative_to(root).as_posix()
         for pattern in ("internal/**/*.go", "cmd/goxide/**/*.go", "cmd/goxide-playground/**/*.go",
-                        "go.mod", "go.sum", DEPENDENCY_CONTEXT)
+                        "go.mod", "go.sum", DEPENDENCY_CONTEXT, MACRO_BUNDLE)
         for path in root.glob(pattern)
         if path.is_file() and is_compiler_source(path.relative_to(root).as_posix())
     }
@@ -203,7 +204,7 @@ def worktree_compiler_source(root):
     current = {
         path.relative_to(root).as_posix()
         for pattern in ('internal/**/*.go', 'cmd/goxide/**/*.go', 'cmd/goxide-playground/**/*.go',
-                        'go.mod', 'go.sum', DEPENDENCY_CONTEXT)
+                        'go.mod', 'go.sum', DEPENDENCY_CONTEXT, MACRO_BUNDLE)
         for path in root.glob(pattern)
         if path.is_file() and is_compiler_source(path.relative_to(root).as_posix())
     }

@@ -58,7 +58,7 @@ for binding in context['bindings']:
 dist = ROOT/'website/dist'
 # Vite produces the single client-route shell and lazy editor/worker assets.
 run('npm', 'run', 'build', '--prefix', str(ROOT/'website'))
-static_files = ['404.html', 'worker.js', '_headers', '.nojekyll']
+static_files = ['404.html', 'worker.js', 'proc-macro-worker.js', 'proc-macro-wasi.js', '_headers', '.nojekyll']
 assert set(p.name for p in (ROOT/'website/static').iterdir()) == set(static_files), 'unexpected static input'
 for name in static_files:
     shutil.copyfile(ROOT/'website/static'/name, dist/name)

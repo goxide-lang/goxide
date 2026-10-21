@@ -9,13 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
-	"github.com/goxide-lang/goxide/internal/resolve"
-	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/parser"
 	"github.com/goxide-lang/goxide/internal/typecheck"
 )
@@ -34,10 +31,14 @@ type File struct {
 }
 
 type Options struct {
-	Config      config.Config
-	Roots       paths.Roots
-	Importer    types.Importer
-	PackagePath string
+	Config           config.Config
+	Roots            paths.Roots
+	Importer         types.Importer
+	PackagePath      string
+	ProcLibraries    []*lower.ProcLibrary
+	RuntimeRoots     []lower.RuntimeRoot
+	SourcePackages   []lower.SourcePackage
+	OnProcDiagnostic func(filename string, diagnostic expand.ProcDiagnostic)
 }
 
 var sourceName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*\.gox$`)
@@ -47,13 +48,12 @@ var sourceName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*\.gox$`)
 // and declared roots plus the selected toolchain's package trees.
 func CompilePackage(files []File, options Options) (output []File, err error) {
 	diagnosticSources := make(map[string]typecheck.DiagnosticSource, len(files))
-	var expanded *expand.Result
 	defer func() {
 		if r := recover(); r != nil {
 			output = nil
 			err = fmt.Errorf("compiler panic: %v", r)
 		}
-		err = typecheck.SourceError(err, diagnosticSources, expanded)
+		err = typecheck.SourceError(err, diagnosticSources, nil)
 	}()
 	if len(files) == 0 || len(files) > MaxFiles {
 		return nil, fmt.Errorf("expected 1 to %d source files", MaxFiles)
@@ -87,8 +87,6 @@ func CompilePackage(files []File, options Options) (output []File, err error) {
 		ordered = append(ordered, name)
 	}
 	sort.Strings(ordered)
-	trees := make(map[string]*syntax.File, len(sources))
-	var inputs []*syntax.File
 	packageName := ""
 	for _, name := range ordered {
 		logicalName := path.Join(packagePath, name)
@@ -103,8 +101,6 @@ func CompilePackage(files []File, options Options) (output []File, err error) {
 			return nil, fmt.Errorf("%s: all source files must belong to package %s (found %s)", name, packageName, file.Package.Name)
 		}
 		packageName = file.Package.Name
-		trees[logicalName] = file
-		inputs = append(inputs, file)
 	}
 	if options.Importer == nil {
 		return nil, fmt.Errorf("playground requires its bundled dependency importer")
@@ -112,49 +108,16 @@ func CompilePackage(files []File, options Options) (output []File, err error) {
 	if options.Config.Environment == nil {
 		return nil, fmt.Errorf("playground requires an explicit export-data target and environment")
 	}
-	configs := make(map[*syntax.File]config.Config, len(inputs))
-	originalFiles := make(map[string]*syntax.File, len(trees))
-	for name, file := range trees {
-		originalFiles[name] = file
-	}
 	// Reads belong to this request even if the immutable environment is reused.
 	options.Config.Reads = &config.Reads{}
-	for _, file := range inputs {
-		configs[file] = options.Config
-	}
-	expanded, err = expand.Expand(inputs, nil, configs)
-	if err != nil {
-		return nil, err
-	}
-	imports := typecheck.NewNamespaceImporter(options.Importer, options.Roots)
-	imports.Prepare(expanded)
-	resolved := resolve.ResolveExpanded(trees, expanded, imports)
-	if err := imports.Err(); err != nil {
-		return nil, err
-	}
-	if len(resolved.Diagnostics) != 0 {
-		return nil, resolved.Diagnostics[0]
-	}
-	for _, name := range ordered {
-		logicalName := path.Join(packagePath, name)
-		file := resolved.Files[logicalName]
-		if err := imports.CheckUses(file); err != nil {
-			return nil, err
-		}
-		trees[logicalName] = file.AST
-	}
-	checked, diagnostics := check.CheckWithImporter(trees, resolved, options.Importer, options.Config.Sizes())
-	if len(diagnostics) != 0 {
-		return nil, diagnostics[0]
-	}
-	emitted, err := lower.Lower(trees, checked)
+	emitted, err := lower.CompilePackage(sources, packagePath, options.Importer, options.Roots, lower.PackageOptions{
+		Config: options.Config, ProcLibraries: options.ProcLibraries, RuntimeRoots: options.RuntimeRoots,
+		SourcePackages: options.SourcePackages, OnProcDiagnostic: options.OnProcDiagnostic,
+	})
 	if err != nil {
 		return nil, err
 	}
 	if err := typecheck.CheckPackage(packagePath, emitted, options.Importer, options.Config.Sizes()); err != nil {
-		return nil, err
-	}
-	if err := lower.ApplyTargetConstraints(emitted, originalFiles, options.Config); err != nil {
 		return nil, err
 	}
 	output = make([]File, 0, len(emitted))

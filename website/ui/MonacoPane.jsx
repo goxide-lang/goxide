@@ -102,7 +102,12 @@ export default function MonacoPane({
           .filter((marker) => marker.path === file.path)
           .map(({ path, ...marker }) => ({
             ...marker,
-            severity: monaco.MarkerSeverity.Error,
+            severity:
+              marker.severity === "warning"
+                ? monaco.MarkerSeverity.Warning
+                : marker.severity === "note"
+                  ? monaco.MarkerSeverity.Info
+                  : monaco.MarkerSeverity.Error,
           })),
       );
     }

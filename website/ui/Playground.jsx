@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useLocation } from "preact-iso/router";
 import FileView from "./FileView";
-import { compiler, diagnostics } from "./compiler";
+import { compiler, compileTimeoutMs, diagnostics } from "./compiler";
 export default function Playground({ manifest, visible }) {
   const examples = [...manifest.examples, ...(manifest.packageExamples || [])];
   const first = examples[0];
@@ -96,6 +96,7 @@ export default function Playground({ manifest, visible }) {
     setPackage(true);
     setNewName("");
   }
+  const diagnosticText = [result.messages, result.error].filter(Boolean).join("\n");
   const outputPath = result.files.some((file) => file.path === generated)
     ? generated
     : result.files[0]?.path || "";
@@ -222,7 +223,7 @@ export default function Playground({ manifest, visible }) {
               )
             }
             onCompile={() => service.current.compile()}
-            markers={diagnostics(result.error, files)}
+            markers={diagnostics(diagnosticText, files)}
           />
         </div>
         <div className="result-panel">
@@ -242,13 +243,13 @@ export default function Playground({ manifest, visible }) {
       >
         {result.status}
       </p>
-      <pre id="diagnostic" tabIndex={0} hidden={!result.error}>
-        {result.error || ""}
+      <pre id="diagnostic" tabIndex={0} hidden={!diagnosticText}>
+        {diagnosticText}
       </pre>
       <p className="caption">
         Ctrl / ⌘ Enter 转译；Monaco 提供编辑、撤销和查找。这里仅提供 Go
         基础着色与 WASM 诊断，不具备完整 Go/Goxide
-        语言服务。单次转译10秒，最多一个编译器Worker。Tab按编辑器默认方式缩进；Ctrl
+        语言服务。单次转译{compileTimeoutMs(manifest) / 1000}秒，最多一个编译器Worker。Tab按编辑器默认方式缩进；Ctrl
         M（macOS为Ctrl Shift M）切换Tab导航。
       </p>
       <h2>依赖源码（只读）</h2>

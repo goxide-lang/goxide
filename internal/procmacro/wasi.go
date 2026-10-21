@@ -6,22 +6,15 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	pm "github.com/goxide-lang/syntax/proc_macro"
-	"github.com/goxide-lang/syntax/token"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/sys"
-)
-
-const (
-	MaxInvocationTime  = 5 * time.Second
-	MaxCompilationTime = 60 * time.Second
 )
 
 // WASIHost owns the macro execution budget for one compiler request. Every Run
@@ -175,33 +168,8 @@ func (host *WASIHost) Run(wasm []byte, request pm.Request) (response []byte, res
 		}
 	}
 	response = state.stdout.Bytes()
-	_, err = pm.ReadResponse(bytes.NewReader(response), request)
-	var diagnostic *pm.DiagnosticError
-	if err != nil && !errors.As(err, &diagnostic) {
-		return nil, state.executionError(fmt.Errorf("procedural macro response: %w", err))
-	}
-	// Count the same canonical diagnostic JSON as the SDK. Raw response length
-	// alone differs when strings are escaped or objects contain whitespace.
-	var envelope struct {
-		Diagnostics []struct {
-			Severity pm.Severity     `json:"severity"`
-			Message  string          `json:"message"`
-			Span     *token.WireSpan `json:"span,omitempty"`
-		} `json:"diagnostics"`
-	}
-	if err := json.Unmarshal(response, &envelope); err != nil {
-		return nil, fmt.Errorf("procedural macro diagnostics: %w", err)
-	}
-	diagnosticBytes := 0
-	if len(envelope.Diagnostics) != 0 {
-		encoded, err := json.Marshal(envelope.Diagnostics)
-		if err != nil {
-			return nil, err
-		}
-		diagnosticBytes = len(encoded)
-	}
-	if diagnosticBytes > pm.MaxDiagnosticBytes-state.stderr.Len() {
-		return nil, fmt.Errorf("procedural macro diagnostics and stderr exceed %d bytes", pm.MaxDiagnosticBytes)
+	if err := ValidateResponse(request, response, state.stderr.Len()); err != nil {
+		return nil, state.executionError(err)
 	}
 	return append([]byte(nil), response...), nil
 }

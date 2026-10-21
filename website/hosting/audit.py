@@ -4,7 +4,7 @@ import hashlib,json,pathlib,re,zipfile
 if not __debug__:
  raise SystemExit('audit refuses Python optimization; checks must remain enabled')
 root=pathlib.Path(__file__).resolve().parents[1]/'dist'
-allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt','project-reexports.zip','learn/index.html','docs/index.html','design/index.html','tutorial-go.zip','tutorial-mixed.zip','tutorial-gox.zip','tutorial-features.zip'}
+allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','proc-macro-worker.js','proc-macro-wasi.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt','project-reexports.zip','learn/index.html','docs/index.html','design/index.html','tutorial-go.zip','tutorial-mixed.zip','tutorial-gox.zip','tutorial-features.zip'}
 frontend_record=json.loads((root/'frontend-assets.json').read_text())
 assert frontend_record['websiteCommit']==json.loads((root/'examples.json').read_text())['websiteCommit'], 'frontend/compiler website identities differ'
 frontend=frontend_record['assets']

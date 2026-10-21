@@ -200,7 +200,6 @@ func TestExpandTypeFragmentsAndExpressionBoundaries(t *testing.T) {
 		{"expression-parameter", `macro_rules! bad { ($T:expr) => { func(v $T) {} }; }; var x = bad!(int)`},
 		{"identifier-slice", `macro_rules! bad { ($T:ident) => { []$T }; }; type X = bad!(int)`},
 		{"token-tree-field", `macro_rules! bad { ($T:tt) => { struct { value $T } }; }; type X = bad!(int)`},
-		{"expression-generic", `macro_rules! bad { ($T:expr) => { pair[$T, int] }; }; var x = bad!(int)`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			f := expandFile(t, tt.name+".gox", tt.source)
@@ -211,6 +210,33 @@ func TestExpandTypeFragmentsAndExpressionBoundaries(t *testing.T) {
 			}
 		})
 	}
+	t.Run("expression-generic", func(t *testing.T) {
+		const source = `macro_rules! bad { ($T:expr) => { pair[$T, int] }; }; var x = bad!(int)`
+		file := expandFile(t, "expression-generic.gox", source)
+		result := expandFiles(t, file)
+		index, ok := expandValue(t, result.Files[0], "x").(*ast.IndexExpr)
+		if !ok || len(index.Indices) != 2 {
+			t.Fatalf("generic arguments changed shape: %#v", index)
+		}
+		captured, ok := index.Indices[0].(*ast.Ident)
+		if !ok || captured.Name != "int" || captured.Ctx != 0 {
+			t.Fatalf("expression capture changed identity: %#v", index.Indices[0])
+		}
+		start := uint32(len("package p\n") + strings.Index(source, "pair[$T") + len("pair["))
+		want := Capture{Kind: "expr", Use: Origin{File: file, Span: ast.Span{Start: start, End: start + 2}}}
+		if got := result.Captures[captured]; got != want || len(result.Captures) != 1 {
+			t.Fatalf("ambiguous generic slot lost expr provenance: got %#v, want %#v; captures = %d", got, want, len(result.Captures))
+		}
+		fixed, ok := index.Indices[1].(*ast.Ident)
+		if !ok || fixed.Name != "int" || fixed.Ctx == 0 {
+			t.Fatalf("fixed type argument changed identity: %#v", index.Indices[1])
+		}
+		if _, captured := result.Captures[fixed]; captured {
+			t.Fatal("fixed type argument acquired fragment provenance")
+		}
+		// TestMacroGenericTypeCaptureCategories rejects this function value once
+		// the checker knows that pair's first parameter is a type rather than const.
+	})
 }
 
 func TestExpandItemsJoinCallerDeclarations(t *testing.T) {

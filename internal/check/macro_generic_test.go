@@ -18,6 +18,7 @@ func TestMacroGenericTypeCaptureCategories(t *testing.T) {
 		for _, test := range []struct{ name, template, input string }{
 			{"single", "One[$T](0)", "int"},
 			{"multiple", "Pair[$T,string](0, \"\")", "int"},
+			{"function value", "pair[$T, int]", "int"},
 			{"parenthesized", "Pair[($T),string](0, \"\")", "int"},
 			{"pointer", "Pair[*$T,string](nil, \"\")", "int"},
 			{"reference", "Pair[&$T,string](nil, \"\")", "int"},
@@ -33,6 +34,7 @@ type Ints []int
 enum Choice[T any] { Some(T) }
 func One[T any](value T) T { return value }
 func Pair[A any,B any](a A,b B) A { return a }
+func pair[A any,B any](a A,b B) A { return a }
 macro_rules! call { ($T:%s) => { %s }; }
 func f() { _ = call!(%s) }
 `, kind, test.template, test.input)

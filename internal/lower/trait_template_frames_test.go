@@ -39,6 +39,9 @@ func main() { values := []int{1}; Crash[[]int](&values) }
 		t.Fatal(err)
 	}
 	data := output["review.gox"]
+	if !bytes.Contains(data, []byte("// Keep the failure next to the business body.")) {
+		t.Fatalf("generated output lost the business comment:\n%s", data)
+	}
 	fs := gotoken.NewFileSet()
 	file, err := goparser.ParseFile(fs, "review.go", data, goparser.ParseComments)
 	if err != nil {

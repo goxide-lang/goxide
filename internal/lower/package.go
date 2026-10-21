@@ -110,6 +110,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 				return nil, nativeErr
 			}
 			files[key] = tree
+			configs[tree] = options.Config
 			for _, imported := range file.Imports {
 				target, err := strconv.Unquote(imported.Path.Value)
 				if err != nil {
@@ -210,7 +211,11 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 			lowerFiles[name] = file.AST
 		}
 	}
-	checked, diagnostics := check.CheckWithImporter(expandedFiles, resolved, goImports, options.Config.Sizes())
+	configByFile := make(map[string]config.Config, len(files))
+	for name, original := range files {
+		configByFile[name] = configs[original]
+	}
+	checked, diagnostics := check.CheckWithOptions(expandedFiles, resolved, check.Options{Importer: goImports, Sizes: options.Config.Sizes(), ConfigByFile: configByFile})
 	if len(diagnostics) != 0 {
 		return nil, diagnostics[0]
 	}

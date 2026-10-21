@@ -369,7 +369,7 @@ func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
 	}
 	for _, p := range template.TypeParams {
 		constraint, ok := substitute(p.Constraint(), sub).Underlying().(*types.Interface)
-		if ok && !types.Satisfies(sub[p], constraint) {
+		if ok && !c.satisfiesGo(sub[p], constraint) {
 			return nil
 		}
 	}

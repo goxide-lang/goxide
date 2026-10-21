@@ -37,6 +37,7 @@ type ProcLibrarySnapshot struct {
 	Sources      map[string][]byte    `json:"sources"`
 	Roots        paths.Roots          `json:"roots"`
 	Features     config.Features      `json:"features"`
+	GoSugar      *bool                `json:"go_sugar,omitempty"`
 	Target       config.Target        `json:"target"`
 	Entries      []ProcSnapshotEntry  `json:"entries"`
 	GoTrees      []ProcSnapshotGoTree `json:"go_trees,omitempty"`
@@ -69,10 +70,11 @@ func SnapshotProcLibrary(library *ProcLibrary) (ProcLibrarySnapshot, error) {
 	if library == nil || library.sources == nil || library.config.Environment == nil || library.GoNames == nil {
 		return ProcLibrarySnapshot{}, fmt.Errorf("procedural snapshot requires a checked library with an explicit target")
 	}
+	goSugar := library.config.GoSugarEnabled()
 	snapshot := ProcLibrarySnapshot{
 		PackagePath: library.PackagePath, ModulePath: library.modulePath, CompiledPath: library.compiledPath,
 		Sources: map[string][]byte{}, Roots: maps.Clone(library.roots), Features: cloneProcFeatures(library.config.Features),
-		Target: library.config.Environment.Target,
+		Target: library.config.Environment.Target, GoSugar: &goSugar,
 	}
 	for source, contents := range library.sources {
 		if filepath.Ext(source) != ".gox" {
@@ -157,7 +159,8 @@ func LoadProcLibrarySnapshot(snapshot ProcLibrarySnapshot, importer types.Import
 	if environment.Target != snapshot.Target {
 		return nil, fmt.Errorf("procedural snapshot target is inconsistent")
 	}
-	configuration := config.Config{Features: cloneProcFeatures(snapshot.Features), Environment: environment, Reads: &config.Reads{}}
+	goSugar := (config.Config{GoSugar: snapshot.GoSugar}).GoSugarEnabled()
+	configuration := config.Config{Features: cloneProcFeatures(snapshot.Features), GoSugar: &goSugar, Environment: environment, Reads: &config.Reads{}}
 	entries, entryFiles, err := snapshot.parse(configuration)
 	if err != nil {
 		return nil, err

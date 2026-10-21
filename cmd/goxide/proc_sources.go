@@ -47,7 +47,7 @@ func nativeSourceDependencies(root, modFile string, roots paths.Roots, cfg confi
 	if err := json.Unmarshal(data, &mod); err != nil {
 		return project.Manifest{}, nil, nil, err
 	}
-	manifest := project.Manifest{Module: mod.Module.Path, GoVersion: mod.Go, Toolchain: mod.Toolchain, Dependencies: map[string]project.Dependency{}}
+	manifest := project.Manifest{Module: mod.Module.Path, GoVersion: mod.Go, Toolchain: mod.Toolchain, Codegen: project.CodegenConfig{GoSugar: cfg.GoSugar}, Dependencies: map[string]project.Dependency{}}
 	manifest.Native.Godebug = mod.Godebug
 	required := map[string]string{}
 	for _, item := range mod.Require {

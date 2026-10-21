@@ -251,6 +251,10 @@ func (d *demandCollector) pendingSelection(selection *MemberSelection) bool {
 }
 
 func (d *demandCollector) roots() {
+	sugar := map[*Impl]bool{}
+	for _, member := range d.c.out.Sugar {
+		sugar[implDeclaration(member.Impl)] = true
+	}
 	for _, impl := range d.c.implOrder {
 		if impl.AliasOf != nil {
 			continue
@@ -260,7 +264,7 @@ func (d *demandCollector) roots() {
 			if resolved := d.c.matchImpl(impl, impl.Target); resolved != nil {
 				d.impl(resolved, impl.Decl)
 			}
-		} else if impl.Trait == nil && !d.plan.ImplTemplates[impl] {
+		} else if (impl.Trait == nil || sugar[impl]) && !d.plan.ImplTemplates[impl] {
 			d.genericImpl(impl)
 		}
 	}

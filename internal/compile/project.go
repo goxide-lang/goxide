@@ -23,6 +23,7 @@ type Options struct {
 	Offline, Locked                         bool
 	Features                                []string
 	NoDefaultFeatures                       bool
+	GoSugar                                 *bool            // Overrides only the selected entry module.
 	NativeFeatures                          *config.Features // Native directory inputs keep an open root feature set.
 	Roots                                   paths.Roots      // Optional root-module namespace context for native directory inputs.
 	Config                                  config.Config
@@ -176,7 +177,7 @@ func supportedManifest(manifest project.Manifest) error {
 	return nil
 }
 
-func unitSpec(graph *project.Graph, target project.Target, kind string, configuration config.Config, features map[string]config.Features, tags []string, race bool) (project.UnitSpec, error) {
+func unitSpec(graph *project.Graph, target project.Target, kind string, configuration config.Config, features map[string]config.Features, sugar map[string]bool, tags []string, race bool) (project.UnitSpec, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return project.UnitSpec{}, err
@@ -189,6 +190,7 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 		Module, Root, Mod string
 		Manifest          project.Manifest
 		Features          []string
+		GoSugar           bool
 	}
 	var sources []source
 	for _, node := range graph.Nodes {
@@ -198,7 +200,7 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 				enabled = append(enabled, name)
 			}
 		}
-		sources = append(sources, source{node.Module, node.Root, string(node.ModBytes), node.Manifest, enabled})
+		sources = append(sources, source{node.Module, node.Root, string(node.ModBytes), node.Manifest, enabled, sugar[node.SourceKey]})
 	}
 	sort.Slice(sources, func(i, j int) bool { return sources[i].Module < sources[j].Module })
 	buildTags := map[string]bool{}

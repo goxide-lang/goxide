@@ -95,10 +95,10 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 		armType := c.expr(arm.Body, expected)
 		c.block(arm.Block)
 		if !statement && valid(armType) {
-			if armType == types.Typ[types.UntypedNil] && valid(expected) && !assignableArm(armType, expected) {
+			if armType == types.Typ[types.UntypedNil] && valid(expected) && !c.assignableGo(armType, expected) {
 				c.diag(arm.Body, ArmTypeMismatch, fmt.Sprintf("cannot use nil as %s in match arm", expected))
 			}
-			if valid(expected) && assignableArm(armType, expected) {
+			if valid(expected) && (c.assignableGo(armType, expected) || untyped(armType) && types.Identical(defaultType(armType), expected)) {
 				armType = expected
 			}
 			if result == nil {
@@ -119,7 +119,7 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 	}
 	if statement || result == nil {
 		result = types.Typ[types.Invalid]
-	} else if valid(expected) && assignableArm(result, expected) {
+	} else if valid(expected) && (c.assignableGo(result, expected) || untyped(result) && types.Identical(defaultType(result), expected)) {
 		result = expected
 	}
 	if c.out.EnumOf(result) != nil {
@@ -500,7 +500,7 @@ func (c *checker) try(n *ast.TryExpr) types.Type {
 	if input.Enum.Name == "Result" && len(input.Args) > 1 && len(info.Output.Args) > 1 {
 		info.Error = input.Args[1]
 		target := info.Output.Args[1]
-		if !types.AssignableTo(info.Error, target) {
+		if !c.assignableGo(info.Error, target) {
 			var found int
 			for _, helper := range c.conversions {
 				if !c.sameSourcePackage(helper.Decl.File, c.file.Name) {

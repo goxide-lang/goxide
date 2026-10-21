@@ -43,6 +43,8 @@ func CompileProcLibrary(sources map[string][]byte, packagePath string, goImports
 	library := &ProcLibrary{PackagePath: packagePath, modulePath: packagePath, compiledPath: packagePath, GoNames: map[string]string{}, roots: maps.Clone(roots), config: options.Config}
 	library.config.Features.Enabled = maps.Clone(options.Config.Features.Enabled)
 	library.config.Features.Declared = maps.Clone(options.Config.Features.Declared)
+	goSugar := options.Config.GoSugarEnabled()
+	library.config.GoSugar = &goSugar
 	if environment := options.Config.Environment; environment != nil {
 		copy := *environment
 		copy.SupportedTargets = append([]config.Target(nil), environment.SupportedTargets...)

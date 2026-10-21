@@ -69,6 +69,30 @@ func TestProcLibrarySnapshotRoundTrip(t *testing.T) {
 	}
 }
 
+func TestProcLibrarySnapshotFreezesGoSugar(t *testing.T) {
+	enabled := false
+	cfg := testConfig(t)
+	cfg.GoSugar = &enabled
+	_, library, err := lower.CompileProcLibrary(map[string][]byte{"macros.gox": []byte(procFixtureSource)}, procFixturePackage, procFixtureSDK(t), procFixtureRoots(), lower.PackageOptions{Config: cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled = true
+	snapshot, err := lower.SnapshotProcLibrary(library)
+	if err != nil || snapshot.GoSugar == nil || *snapshot.GoSugar {
+		t.Fatalf("producer configuration was not frozen: %v, %v", snapshot.GoSugar, err)
+	}
+	loaded, err := lower.LoadProcLibrarySnapshot(snapshot, &noSnapshotImports{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	*snapshot.GoSugar = true
+	again, err := lower.SnapshotProcLibrary(loaded)
+	if err != nil || again.GoSugar == nil || *again.GoSugar {
+		t.Fatalf("loaded configuration aliases snapshot: %v, %v", again.GoSugar, err)
+	}
+}
+
 func TestProcLibrarySnapshotRejectsInconsistentMetadata(t *testing.T) {
 	_, producer, _ := compileProcFixture(t, procFixtureSource)
 	tests := map[string]func(*lower.ProcLibrarySnapshot){

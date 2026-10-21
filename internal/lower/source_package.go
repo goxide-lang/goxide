@@ -33,6 +33,7 @@ type SourcePackage struct {
 	Sources              map[string][]byte `json:"sources"`
 	Roots                paths.Roots       `json:"roots"`
 	Features             config.Features   `json:"features"`
+	GoSugar              *bool             `json:"go_sugar,omitempty"`
 	Target               config.Target     `json:"target"`
 	RuntimeRoots         []RuntimeRoot     `json:"runtime_roots,omitempty"`
 	EnvironmentDependent bool              `json:"environment_dependent,omitempty"`
@@ -99,7 +100,8 @@ func snapshotSourcePackages(modules []Module, crates *crateGraph, originals map[
 					if configuration, ok := configurations[originals[key]]; ok {
 						roots = configuration.roots
 					}
-					pkg = &SourcePackage{PackagePath: packagePath, ModulePath: module.Path, RootPackage: module.RootPackage, SourceDir: crates.bases[packagePath], Sources: map[string][]byte{}, Roots: maps.Clone(roots), Features: cloneProcFeatures(module.Config.Features), Target: module.Config.Environment.Target, RuntimeRoots: append([]RuntimeRoot(nil), module.RuntimeRoots...)}
+					goSugar := module.Config.GoSugarEnabled()
+					pkg = &SourcePackage{PackagePath: packagePath, ModulePath: module.Path, RootPackage: module.RootPackage, SourceDir: crates.bases[packagePath], Sources: map[string][]byte{}, Roots: maps.Clone(roots), Features: cloneProcFeatures(module.Config.Features), GoSugar: &goSugar, Target: module.Config.Environment.Target, RuntimeRoots: append([]RuntimeRoot(nil), module.RuntimeRoots...)}
 					pkg.EnvironmentDependent = module.Config.Reads != nil && len(module.Config.Reads.Inputs()) != 0
 					packages[packagePath] = pkg
 				}
@@ -161,7 +163,8 @@ func prepareSourcePackages(packages []SourcePackage, files map[string]*syntax.Fi
 		if err != nil {
 			return err
 		}
-		configuration := config.Config{Features: cloneProcFeatures(pkg.Features), Environment: environment, Reads: &config.Reads{}}
+		goSugar := (config.Config{GoSugar: pkg.GoSugar}).GoSugarEnabled()
+		configuration := config.Config{Features: cloneProcFeatures(pkg.Features), GoSugar: &goSugar, Environment: environment, Reads: &config.Reads{}}
 		var names []string
 		for name := range pkg.Sources {
 			names = append(names, name)

@@ -38,6 +38,7 @@ type CompileRequest struct {
 	config                                                          config.Config
 	NoDefaultFeatures, Lib, Offline, Locked                         bool
 	FeaturesSet, TargetSet                                          bool
+	GoSugar                                                         *bool
 	ProgramArgs                                                     []string
 }
 
@@ -79,7 +80,7 @@ func compileSourceFile(filename string, source []byte, packagePath string, goImp
 		return compiledFile{}, typecheck.SourceError(resolved.Diagnostics[0], sources, expanded)
 	}
 	files := map[string]*syntax.File{filename: resolvedFile.AST}
-	checked, problems := check.CheckWithImporter(files, resolved, goImports, cfg.Sizes())
+	checked, problems := check.CheckWithOptions(files, resolved, check.Options{Importer: goImports, Sizes: cfg.Sizes(), ConfigByFile: map[string]config.Config{filename: cfg}})
 	if len(problems) != 0 {
 		return compiledFile{}, typecheck.SourceError(problems[0], sources, expanded)
 	}
@@ -164,7 +165,14 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	req.config = config.Config{Features: nativeFeatures(req.Features), Environment: environment, Reads: &config.Reads{}}
+	codegen, err := project.ModuleCodegen(environmentDir)
+	if err != nil {
+		return err
+	}
+	if req.GoSugar != nil {
+		codegen.GoSugar = req.GoSugar
+	}
+	req.config = config.Config{Features: nativeFeatures(req.Features), GoSugar: codegen.GoSugar, Environment: environment, Reads: &config.Reads{}}
 	req.GoTool = environment.GoTool
 	if (mode == "run" || mode == "test") && environment.Target != environment.Host {
 		return fmt.Errorf("%s requires the host target %s; selected %s", mode, environment.Host, environment.Target)
@@ -195,7 +203,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			if *tags != "" {
 				return errors.New("--tags is not supported for manifest projects by the new compiler pipeline")
 			}
-			prepared, err := prepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, Config: req.config, Race: mode == "test"}, stderr)
+			prepared, err := prepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, GoSugar: req.GoSugar, Config: req.config, Race: mode == "test"}, stderr)
 			if err != nil {
 				return err
 			}

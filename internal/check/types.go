@@ -480,7 +480,7 @@ type genericInstance struct {
 }
 
 func (c *checker) validateInstance(i genericInstance) {
-	_, err := types.Instantiate(nil, i.typ, i.actual, true)
+	_, err := c.instantiateGo(i.typ, i.actual)
 	if err == nil {
 		return
 	}

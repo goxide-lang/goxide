@@ -312,6 +312,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err != nil {
 		return err
 	}
+	manifest.Codegen.GoSugar = cfg.GoSugar
 	for i := range manifest.Native.Replace {
 		replacement := &manifest.Native.Replace[i]
 		if replacement.Path != "" && !filepath.IsAbs(replacement.Path) {
@@ -479,6 +480,18 @@ func copyDirectorySources(root, input, stage, module string, roots paths.Roots, 
 		data, err := os.ReadFile(name)
 		if err != nil {
 			return err
+		}
+		if !resource && strings.HasSuffix(name, "_gox.go") && generatedGo(name, data) {
+			source := strings.TrimSuffix(name, "_gox.go") + ".gox"
+			if sourceInfo, err := os.Stat(source); err == nil && sourceInfo.Mode().IsRegular() {
+				for _, directory := range selected {
+					if within(directory, source) {
+						return nil // The selected source is regenerated with this invocation's policy.
+					}
+				}
+			} else if err != nil && !os.IsNotExist(err) {
+				return err
+			}
 		}
 		if !resource && (extension == ".go" || extension == ".gox") {
 			context.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(data)), nil }

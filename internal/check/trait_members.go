@@ -225,7 +225,7 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 			}
 		}
 		if qualified == nil {
-			if obj, _, _ := types.LookupFieldOrMethod(target, true, c.pkg, name); obj != nil {
+			if obj := c.lookupGoMember(target, true, name); obj != nil {
 				if fn, ok := obj.(*types.Func); ok {
 					sig := fn.Type().(*types.Signature)
 					nativeMode := ValueRef

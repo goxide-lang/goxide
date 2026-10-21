@@ -266,8 +266,9 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	for name, file := range native {
 		files[name] = file
 		for _, module := range modules {
-			if strings.HasPrefix(name, module.Path+"/") && len(module.Path) > len(owners[path.Dir(name)]) {
+			if strings.HasPrefix(name, module.Path+"/") && len(module.Path) >= len(owners[path.Dir(name)]) {
 				owners[path.Dir(name)] = module.Path
+				configs[file] = module.Config
 			}
 		}
 	}
@@ -351,7 +352,11 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	for name, file := range resolved.Files {
 		expandedFiles[name] = file.AST
 	}
-	info, diagnostics := check.CheckWithImporter(expandedFiles, resolved, external, modules[0].Config.Sizes())
+	configByFile := make(map[string]config.Config, len(files))
+	for name, original := range files {
+		configByFile[name] = configs[original]
+	}
+	info, diagnostics := check.CheckWithOptions(expandedFiles, resolved, check.Options{Importer: external, Sizes: modules[0].Config.Sizes(), ConfigByFile: configByFile})
 	if len(diagnostics) != 0 {
 		return diagnostics[0]
 	}

@@ -246,7 +246,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				c.diag(n, "method-expression", "method expressions require a static :: selector")
 				break
 			}
-			if object, _, _ := types.LookupFieldOrMethod(x, false, c.pkg, n.Sel.Name); object != nil {
+			if object := c.lookupGoMember(x, false, n.Sel.Name); object != nil {
 				if function, ok := object.(*types.Func); ok {
 					signature := function.Type().(*types.Signature)
 					params := []*types.Var{types.NewVar(0, c.pkg, "", x)}
@@ -269,7 +269,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			break
 		}
 		if valid(x) {
-			if obj, _, _ := types.LookupFieldOrMethod(x, true, c.pkg, n.Sel.Name); obj != nil {
+			if obj := c.lookupGoMember(x, true, n.Sel.Name); obj != nil {
 				t = obj.Type()
 			}
 		}
@@ -286,7 +286,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			for i, a := range n.Indices {
 				args[i] = c.exprType(a)
 			}
-			if inst, err := types.Instantiate(nil, named, args, true); err == nil {
+			if inst, err := c.instantiateGo(named, args); err == nil {
 				t = inst
 			} else {
 				c.diag(n, GenericConstraint, err.Error())

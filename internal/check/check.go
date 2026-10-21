@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
@@ -149,6 +150,8 @@ type Info struct {
 	GenericBounds     map[*ast.FuncDecl][]*TraitBound
 	FunctionInstances map[ast.Node]*FunctionInstance
 	Demands           *DemandPlan
+	ConfigByFile      map[string]config.Config
+	Sugar             []*SugarMember
 	enums             map[*types.Named]*Enum
 	typeNodes         map[ast.Type]types.Type
 }
@@ -192,18 +195,38 @@ func Check(files map[string]*ast.File, res *resolve.Result) (*Info, []Diagnostic
 
 // CheckWithConversions registers only the explicitly supplied one-step helpers.
 func CheckWithConversions(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref) (*Info, []Diagnostic) {
-	return checkFiles(files, res, helpers, importer.Default(), types.SizesFor("gc", runtime.GOARCH))
+	return checkFiles(files, res, helpers, Options{})
 }
 
 // CheckWithImporter uses the source module's Go dependency graph for external types.
 func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports types.Importer, sizes types.Sizes) (*Info, []Diagnostic) {
-	return checkFiles(files, res, nil, imports, sizes)
+	return CheckWithOptions(files, res, Options{Importer: imports, Sizes: sizes})
 }
 
-func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer, sizes types.Sizes) (*Info, []Diagnostic) {
+// Options describes the selected source graph. Configuration follows the file's
+// owning distribution module, including declarations produced by macros.
+type Options struct {
+	Importer     types.Importer
+	Sizes        types.Sizes
+	ConfigByFile map[string]config.Config
+}
+
+func CheckWithOptions(files map[string]*ast.File, res *resolve.Result, options Options) (*Info, []Diagnostic) {
+	return checkFiles(files, res, nil, options)
+}
+
+func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, options Options) (*Info, []Diagnostic) {
+	imports, sizes := options.Importer, options.Sizes
+	if imports == nil {
+		imports = importer.Default()
+	}
+	if sizes == nil {
+		sizes = types.SizesFor("gc", runtime.GOARCH)
+	}
 	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
 	r.GoImporter = imports
 	r.GoSizes = sizes
+	r.ConfigByFile = options.ConfigByFile
 	r.typeNodes = make(map[ast.Type]types.Type)
 	r.GoResults = make(map[*ast.CallExpr]*GoResult)
 	r.RefBindings = make(map[*ast.BindPat]RefMode)
@@ -260,6 +283,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	c.referenceHints.eachFile(func(items []ast.Item) { c.referenceHints.collect(items) })
 	c.enumNames()
 	c.collectDerives()
+	c.prepareGoSugar()
 	for _, ref := range helpers {
 		if f := res.Files[ref.File]; f != nil {
 			if s := f.Definitions[ref.ID]; s != nil {
@@ -334,6 +358,7 @@ type checker struct {
 	referenceHints  *permissionChecker
 	referenceModes  map[*resolve.Symbol]RefMode
 	currentReceiver *resolve.Symbol
+	goInterop       *goInterop
 }
 
 func (c *checker) diag(n ast.Node, code, message string) {

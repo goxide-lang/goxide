@@ -52,7 +52,7 @@ func (c *checker) goResult(call *ast.CallExpr, keep bool) types.Type {
 		value = results[0]
 	}
 	failure := results[len(results)-1]
-	if !types.Implements(failure, types.Universe.Lookup("error").Type().Underlying().(*types.Interface)) {
+	if !c.satisfiesGo(failure, types.Universe.Lookup("error").Type().Underlying().(*types.Interface)) {
 		return fail("last result E must implement the predeclared error interface")
 	}
 	switch failure.Underlying().(type) {

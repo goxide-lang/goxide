@@ -152,7 +152,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 	case *ast.SelectorExpr:
 		if n.Static {
 			if signature, ok := q.typ.(*types.Signature); ok && signature.Params().Len() > 0 {
-				object, _, _ := types.LookupFieldOrMethod(signature.Params().At(0).Type(), false, p.c.pkg, n.Sel.Name)
+				object, _ := p.c.lookupGoInteropMember(signature.Params().At(0).Type(), false, n.Sel.Name)
 				if method, ok := object.(*types.Func); ok {
 					return p.nativeMethodExpression(n, method, signature)
 				}
@@ -165,7 +165,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 		}
 		var fieldPath []int
 		if x.typ != nil {
-			if obj, index, _ := types.LookupFieldOrMethod(x.typ, true, p.c.pkg, n.Sel.Name); obj != nil {
+			if obj, index := p.c.lookupGoInteropMember(x.typ, true, n.Sel.Name); obj != nil {
 				if method, ok := obj.(*types.Func); ok {
 					return p.method(n, x, method, index)
 				}

@@ -81,6 +81,7 @@ func (e *emitter) traitDeclarations() []goast.Decl {
 	for _, facade := range facades {
 		out = append(out, e.facadeDeclarations(facade)...)
 	}
+	out = append(out, e.sugarDeclarations()...)
 	for _, decl := range out {
 		clearTraitPositions(decl)
 	}

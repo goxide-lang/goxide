@@ -81,6 +81,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 	}
 	for _, mode := range []string{"build", "run", "test", "transpile", "expand"} {
 		req := CompileRequest{Mode: mode}
+		var goSugar, noGoSugar bool
 		c := cliCommand(mode+" [flags] [INPUT]", "Compile "+mode+" input (defaults to the current project)")
 		if mode == "run" {
 			c.Use = "run [flags] [INPUT] [-- PROGRAM_ARGS...]"
@@ -101,6 +102,8 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.BoolVar(&req.Workspace, "workspace", false, "build all workspace members")
 		f.StringVar(&req.Features, "features", "", "enabled features (comma/space separated)")
 		f.BoolVar(&req.NoDefaultFeatures, "no-default-features", false, "disable project default features")
+		f.BoolVar(&goSugar, "go-sugar", false, "generate Go trait member conveniences for the selected module")
+		f.BoolVar(&noGoSugar, "no-go-sugar", false, "omit Go trait member conveniences for the selected module")
 		f.StringVar(&req.Bin, "bin", "", "select project binary")
 		f.StringVar(&req.Example, "example", "", "select project example")
 		f.BoolVar(&req.Lib, "lib", false, "select project library")
@@ -108,6 +111,17 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		f.BoolVar(&req.Offline, "offline", false, "use cached dependencies; does not sandbox scripts")
 		f.BoolVar(&req.Locked, "locked", false, "require unchanged goxide.lock")
 		c.RunE = func(c *cobra.Command, operands []string) error {
+			req.GoSugar = nil
+			if c.Flags().Changed("go-sugar") && c.Flags().Changed("no-go-sugar") {
+				return usageError(c, fmt.Errorf("--go-sugar and --no-go-sugar are mutually exclusive"))
+			}
+			if c.Flags().Changed("go-sugar") {
+				value := goSugar
+				req.GoSugar = &value
+			} else if c.Flags().Changed("no-go-sugar") {
+				value := !noGoSugar
+				req.GoSugar = &value
+			}
 			req.FeaturesSet = c.Flags().Changed("features")
 			req.TargetSet = c.Flags().Changed("target")
 			req.Input = ""

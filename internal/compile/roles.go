@@ -25,6 +25,7 @@ type stagedRole struct {
 	kind       string
 	config     config.Config
 	features   map[string]config.Features
+	sugar      map[string]bool
 	modules    []lower.Module
 	generated  map[string]string
 	library    *lower.ProcLibrary
@@ -59,7 +60,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 			}
 			cfg.Reads = new(config.Reads)
 		}
-		stage, err := stageRole(graph, selected, targetKind, cfg, options, staged)
+		stage, err := stageRole(graph, selected, targetKind, cfg, options, plans.Target.Root.SourceKey, staged)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +160,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 		if graph.Role == "proc-macro" {
 			tags, race = nil, false
 		}
-		spec, err := unitSpec(graph, stage.target, stage.kind, stage.config, stage.features, tags, race)
+		spec, err := unitSpec(graph, stage.target, stage.kind, stage.config, stage.features, stage.sugar, tags, race)
 		if err != nil {
 			return nil, err
 		}
@@ -186,6 +187,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 	}
 	final := stages[plans.Target]
 	final.config.Features = final.features[plans.Target.Root.SourceKey]
+	final.config.GoSugar = final.modules[0].Config.GoSugar
 	result := &Result{Root: filepath.Join(final.unit.Bundle, "module"), Entry: final.entry, Kind: final.kind, Config: final.config}
 	if len(final.wasm) != 0 {
 		result.ProcMacro = filepath.Join(final.unit.Bundle, "macro.wasm")
@@ -202,8 +204,8 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 	return result, nil
 }
 
-func stageRole(graph *project.Graph, target project.Target, kind string, configuration config.Config, options Options, staged string) (*stagedRole, error) {
-	stage := &stagedRole{graph: graph, dir: staged, target: target, kind: kind, config: configuration, features: map[string]config.Features{}, generated: map[string]string{}}
+func stageRole(graph *project.Graph, target project.Target, kind string, configuration config.Config, options Options, selectedSource, staged string) (*stagedRole, error) {
+	stage := &stagedRole{graph: graph, dir: staged, target: target, kind: kind, config: configuration, features: map[string]config.Features{}, sugar: map[string]bool{}, generated: map[string]string{}}
 	ordered := append([]*project.Node{graph.Root}, graph.Nodes...)
 	for _, node := range ordered {
 		if stage.generated[node.Module] != "" {
@@ -263,6 +265,18 @@ func stageRole(graph *project.Graph, target project.Target, kind string, configu
 		}
 		moduleConfig := configuration
 		moduleConfig.Features = features
+		moduleConfig.GoSugar = node.Manifest.Codegen.GoSugar
+		if !node.HasManifest {
+			codegen, err := project.ReadCodegen(node.Root)
+			if err != nil {
+				return nil, err
+			}
+			moduleConfig.GoSugar = codegen.GoSugar
+		}
+		if node.SourceKey == selectedSource && options.GoSugar != nil {
+			moduleConfig.GoSugar = options.GoSugar
+		}
+		stage.sugar[node.SourceKey] = moduleConfig.GoSugarEnabled()
 		module := lower.Module{Path: node.Module, Dir: output, RootPackage: rootPackage, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race}
 		if graph.Role == "proc-macro" {
 			module.Tags, module.Race = nil, false

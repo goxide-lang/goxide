@@ -22,6 +22,7 @@ type Manifest struct {
 	GoVersion    string                `json:"go"`
 	Toolchain    string                `json:"toolchain,omitempty"`
 	Native       GoConfig              `json:"native,omitempty"`
+	Codegen      CodegenConfig         `json:"-"`
 	Build        *buildconfig.Config   `json:"build,omitempty" toml:"build,omitempty"`
 	Features     map[string][]string   `json:"features,omitempty" toml:"features,omitempty"`
 	Dependencies map[string]Dependency `json:"dependencies,omitempty" toml:"dependencies,omitempty"`
@@ -81,19 +82,10 @@ func DiscoverProject(dir string) (string, error) {
 	}
 }
 
-// Detect reports a regular author manifest before native Go fallback.
+// Detect distinguishes author manifests from native modules' codegen settings.
 func Detect(root string) (bool, error) {
-	info, err := os.Lstat(filepath.Join(root, ManifestName))
-	if err != nil && !os.IsNotExist(err) {
-		return false, err
-	}
-	if info == nil {
-		return false, nil
-	}
-	if !info.Mode().IsRegular() {
-		return false, fmt.Errorf("%s: manifest must be a regular file", filepath.Join(root, ManifestName))
-	}
-	return true, nil
+	_, author, err := readCodegen(root)
+	return author, err
 }
 
 // manifestDocument deliberately separates the human format from internal identities.
@@ -101,6 +93,7 @@ type manifestDocument struct {
 	Workspace    *WorkspaceConfig      `toml:"workspace,omitempty"`
 	GoMod        GoModConfig           `toml:"go_mod"`
 	Native       GoConfig              `toml:"go,omitempty"`
+	Codegen      CodegenConfig         `toml:"codegen,omitempty"`
 	Build        *buildconfig.Config   `toml:"build,omitempty"`
 	Features     map[string][]string   `toml:"features,omitempty"`
 	Dependencies map[string]Dependency `toml:"dependencies,omitempty"`
@@ -147,7 +140,7 @@ func Parse(filename string, b []byte) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, fmt.Errorf("%s:1:1: %w", filename, err)
 	}
-	m := Manifest{Module: d.GoMod.Module, GoVersion: d.GoMod.Go, Toolchain: d.GoMod.Toolchain, Native: d.Native, Build: d.Build, Features: d.Features, Dependencies: deps, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
+	m := Manifest{Module: d.GoMod.Module, GoVersion: d.GoMod.Go, Toolchain: d.GoMod.Toolchain, Native: d.Native, Codegen: d.Codegen, Build: d.Build, Features: d.Features, Dependencies: deps, Lib: d.Lib, Bins: d.Bins, Examples: d.Examples}
 	if err := validate(m); err != nil {
 		return m, fmt.Errorf("%s:1:1: %w", filename, err)
 	}
@@ -363,6 +356,6 @@ func Select(m Manifest, bin, example string, lib bool, features map[string]bool)
 
 // Marshal emits the authoring schema, not the internal JSON identity representation.
 func Marshal(m Manifest) ([]byte, error) {
-	d := manifestDocument{GoMod: GoModConfig{Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain}, Native: m.Native, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
+	d := manifestDocument{GoMod: GoModConfig{Module: m.Module, Go: m.GoVersion, Toolchain: m.Toolchain}, Native: m.Native, Codegen: m.Codegen, Build: m.Build, Features: m.Features, Dependencies: authorDependencies(m.Dependencies), Lib: m.Lib, Bins: m.Bins, Examples: m.Examples}
 	return toml.Marshal(d)
 }

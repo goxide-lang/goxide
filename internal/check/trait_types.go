@@ -274,7 +274,7 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 	}
 	instance.Substitution = sub
 	c.out.FunctionInstances[node] = instance
-	t, err := types.Instantiate(nil, sig, actual, true)
+	t, err := c.instantiateGo(sig, actual)
 	if err != nil {
 		c.diag(node, GenericConstraint, err.Error())
 		return types.Typ[types.Invalid]

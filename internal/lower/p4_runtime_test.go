@@ -35,12 +35,19 @@ func TestP4DeclareNativeMethodsAndRestrictedWrapperMethodSet(t *testing.T) {
 func prepareP4RuntimeFixture(t *testing.T, fixtureName, modulePath string) string {
 	t.Helper()
 	fixture := filepath.Join("testdata", "traits", fixtureName)
-	module, err := lower.PrepareModule([]string{fixture}, modulePath, testConfig(t))
+	configuration := testConfig(t)
+	if fixtureName == "runtime" {
+		// This fixture deliberately gives several traits the same Read method.
+		// It exercises qualified views, with short Go member sugar disabled.
+		disabled := false
+		configuration.GoSugar = &disabled
+	}
+	module, err := lower.PrepareModule([]string{fixture}, modulePath, configuration)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(module) })
-	again, err := lower.PrepareModule([]string{fixture}, modulePath, testConfig(t))
+	again, err := lower.PrepareModule([]string{fixture}, modulePath, configuration)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -152,10 +152,7 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 		}
 		return &MemberSelection{Member: m, Receiver: receiver, Signature: substituteSignature(m.Signature, sub, c.out)}
 	}
-	base := types.Unalias(target)
-	if p, ok := base.(*types.Pointer); ok {
-		base = types.Unalias(p.Elem())
-	}
+	lookupTarget, base := c.receiverTargets(receiver, target)
 	// Within an impl, self calls retain that implementation even if a native
 	// method or another trait has the same spelling.
 	if c.symbol(receiver) != nil && c.symbol(receiver) == c.currentReceiver && c.currentImpl != nil && (qualified == nil || qualified == c.currentImpl.Trait) {
@@ -166,7 +163,7 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 	private := false
 	for _, mode := range c.receiverModes(receiver, target) {
 		var candidates []*MemberSelection
-		for _, candidate := range []types.Type{target, base} {
+		for _, candidate := range []types.Type{lookupTarget, base} {
 			for _, bound := range c.boundsFor(candidate) {
 				if qualified != nil && bound.Trait != qualified {
 					continue
@@ -195,8 +192,8 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 			if template.Trait != nil && qualified == nil && !c.traitVisible(template.Trait) {
 				continue
 			}
-			impl := c.matchImpl(template, target)
-			if impl == nil && !types.Identical(target, base) {
+			impl := c.matchImpl(template, lookupTarget)
+			if impl == nil && !types.Identical(lookupTarget, base) {
 				impl = c.matchImpl(template, base)
 			}
 			if impl == nil {
@@ -349,11 +346,8 @@ func (c *checker) adaptTrait(node ast.Expr, actual, expected types.Type) types.T
 		return actual
 	}
 	var impl *Impl
-	base := types.Unalias(actual)
-	if p, ok := base.(*types.Pointer); ok {
-		base = types.Unalias(p.Elem())
-	}
-	impl = c.findImpl(actual, trait)
+	lookupTarget, base := c.receiverTargets(node, actual)
+	impl = c.findImpl(lookupTarget, trait)
 	if impl == nil {
 		impl = c.findImpl(base, trait)
 	}

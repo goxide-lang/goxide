@@ -226,7 +226,8 @@ func (h *hygiene) captureScope(scope, stop, anchor *Scope, origin expand.Origin,
 		return parent
 	}
 	for _, id := range h.expanded.Expansions[expn].Stack {
-		if containsOrigin(h.expanded.Expansions[id].Call, owner) {
+		expansion := h.expanded.Expansions[id]
+		if containsOrigin(expansion.Call, owner) || (expansion.Input.File != nil && containsOrigin(expansion.Input, owner)) {
 			return &Scope{Kind: scope.Kind, Parent: parent, Bindings: scope.Bindings, Aliases: scope.Aliases, Labels: scope.Labels, Globs: scope.Globs}
 		}
 	}

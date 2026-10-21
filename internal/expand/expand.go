@@ -51,6 +51,7 @@ type RuntimeRoot struct {
 type Expansion struct {
 	Definition Origin
 	Call       Origin
+	Input      Origin // Complete attribute input, distinct from the diagnostic call range.
 	Original   ast.Node
 	Parent     ast.ExpnID
 	Stack      []ast.ExpnID // outermost first, including this expansion

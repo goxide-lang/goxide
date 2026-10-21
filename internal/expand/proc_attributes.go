@@ -136,6 +136,12 @@ func (e *engine) rewriteItem(item ast.Item, file *ast.File, parent ast.ExpnID, s
 		if err != nil {
 			return nil, err
 		}
+		entry := e.r.Expansions[expn]
+		entry.Input = e.r.Origins[item]
+		if entry.Input.File == nil {
+			entry.Input = Origin{file, item.Span()}
+		}
+		e.r.Expansions[expn] = entry
 		return e.prepareItems(output, file, expn, slot)
 	}
 	// An attribute may delete a declaration with an unresolved derive, so this

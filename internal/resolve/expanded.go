@@ -41,6 +41,11 @@ type contextView struct {
 	ctx     ast.SyntaxCtx
 }
 
+type genericOrigin struct {
+	origin expand.Origin
+	ctx    ast.SyntaxCtx
+}
+
 type hygiene struct {
 	expanded      *expand.Result
 	names         map[*ast.File]string
@@ -49,7 +54,7 @@ type hygiene struct {
 	boundaries    map[*Scope]expand.Context
 	callSites     map[ast.ExpnID]*Scope
 	owners        map[*Scope]ast.Node
-	genericOwners map[expand.Origin]expand.Origin
+	genericOwners map[genericOrigin]expand.Origin
 }
 
 func (h *hygiene) init(result *Result) {
@@ -285,37 +290,60 @@ func (h *hygiene) sourceGenericOwner(name *ast.Ident) expand.Origin {
 	if origin.File == nil {
 		return expand.Origin{}
 	}
-	if owner, ok := h.genericOwners[origin]; ok {
+	key := genericOrigin{origin: origin, ctx: name.Ctx}
+	if owner, ok := h.genericOwners[key]; ok {
 		return owner
 	}
 	var owner expand.Origin
-	ast.Walk(origin.File, func(node ast.Node) bool {
-		var params *ast.GenericParams
-		switch node := node.(type) {
-		case *ast.TypeDecl:
-			params = node.Generics
-		case *ast.TypeSpec:
-			params = node.Generics
-		case *ast.EnumDecl:
-			params = node.Generics
-		}
-		if params == nil {
-			return true
-		}
-		for _, group := range params.Params {
-			for _, parameter := range group.Names {
-				if containsOrigin(expand.Origin{File: origin.File, Span: parameter.Span()}, origin) {
-					owner = expand.Origin{File: origin.File, Span: node.Span()}
-					return false
+	scan := func(file *ast.File, expanded bool) {
+		ast.Walk(file, func(node ast.Node) bool {
+			if owner.File != nil {
+				return false
+			}
+			var params *ast.GenericParams
+			switch node := node.(type) {
+			case *ast.TypeDecl:
+				params = node.Generics
+			case *ast.TypeSpec:
+				params = node.Generics
+			case *ast.EnumDecl:
+				params = node.Generics
+			}
+			if params == nil {
+				return true
+			}
+			for _, group := range params.Params {
+				for _, parameter := range group.Names {
+					parameterOrigin := expand.Origin{File: file, Span: parameter.Span()}
+					declarationOrigin := expand.Origin{File: file, Span: node.Span()}
+					if expanded {
+						if parameter.Ctx != name.Ctx {
+							continue
+						}
+						parameterOrigin, declarationOrigin = h.expanded.Origins[parameter], h.expanded.Origins[node]
+					}
+					if containsOrigin(parameterOrigin, origin) && containsOrigin(declarationOrigin, parameterOrigin) {
+						owner = declarationOrigin
+						return false
+					}
 				}
 			}
-		}
-		return true
-	})
-	if h.genericOwners == nil {
-		h.genericOwners = map[expand.Origin]expand.Origin{}
+			return true
+		})
 	}
-	h.genericOwners[origin] = owner
+	scan(origin.File, false)
+	// Declarative macros keep the source declaration in the expanded tree;
+	// its original file contains only the macro token tree.
+	if owner.File == nil {
+		for _, file := range h.expanded.Files {
+			scan(file, true)
+		}
+	}
+
+	if h.genericOwners == nil {
+		h.genericOwners = map[genericOrigin]expand.Origin{}
+	}
+	h.genericOwners[key] = owner
 	return owner
 }
 

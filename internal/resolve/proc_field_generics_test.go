@@ -15,30 +15,49 @@ import (
 )
 
 func TestProceduralDeriveCapturedFieldTypesKeepOwnBindings(t *testing.T) {
+	structSource := "#[derive(Generate)] pub struct Parcel[T any] { pub Values []T; pub Pair [2]T }"
+	enumSource := "#[derive(Generate)] pub enum Parcel[T any] { Values([]T), Pair([2]T) }"
+	for _, test := range []struct {
+		name, source string
+		bindings     int
+	}{
+		{"source_struct", structSource, 3},
+		{"source_enum", enumSource, 3},
+		{"declarative_struct", "macro_rules! generate { () => {" + structSource + "}; }\ngenerate!()", 3},
+		{"declarative_enum", "macro_rules! generate { () => {" + enumSource + "}; }\ngenerate!()", 3},
+		{"repeated_declarative", `macro_rules! generate { ($name:ident) => {
+            #[derive(Generate)] pub struct $name[T any] { pub Values []T; pub Pair [2]T }
+        }; }
+        generate!(Parcel)
+        generate!(Other)`, 6},
+	} {
+		t.Run(test.name, func(t *testing.T) { checkProceduralCapturedFieldTypes(t, test.source, test.bindings) })
+	}
+}
+
+func checkProceduralCapturedFieldTypes(t *testing.T, source string, wantBindings int) {
 	files := parseFiles(t, map[string]string{
 		"macros/definition.gox": "package macros\ntype T int; pub func Generate() {}\n",
-		"model/model.gox": `package model
-#[derive(Generate)]
-pub struct Parcel[T any] { pub Values []T; pub Pair [2]T }
-`,
+		"model/model.gox":       "package model\n" + source + "\n",
 	})
 	definition := files["macros/definition.gox"]
 	entry := pm.Entry{Name: "Generate", Derive: func(ctx pm.Context, item public.TokenStream) pm.Output {
-		var name, generics public.Token
-		for _, node := range item.Tokens() {
-			if node.Text() == "Parcel" {
-				name = node
-			}
-			if node.Kind() == public.GroupKind && node.Delimiter() == public.Bracket {
-				generics = node
-			}
-		}
-		parameter := generics.Children().Tokens()[0]
 		parsed, err := syn.Parse(item)
 		if err != nil {
 			t.Fatal(err)
 		}
+		// Rebuild the parsed name as syntax, retaining its binding context.
+		// An opaque ident fragment cannot fill a whole type slot.
+		name, err := public.NewIdent(parsed.Name().Text(), parsed.Name().Raw(), parsed.Name().Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		generics := parsed.Generics().Tokens()[0]
+		parameter := generics.Children().Tokens()[0]
 		fields, _ := parsed.Type().StructFields()
+		for _, variant := range parsed.Variants() {
+			fields = append(fields, variant.Fields()...)
+		}
 		text := func(source string) public.TokenStream {
 			stream, err := public.ParseText(source, ctx.DefSite())
 			if err != nil {
@@ -102,6 +121,8 @@ pub struct Parcel[T any] { pub Values []T; pub Pair [2]T }
 			generic = item.Generics
 		case *ast.ImplDecl:
 			generic = item.Generics
+		case *ast.EnumDecl:
+			generic = item.Generics
 		}
 		if generic == nil {
 			continue
@@ -124,7 +145,7 @@ pub struct Parcel[T any] { pub Values []T; pub Pair [2]T }
 			return true
 		})
 	}
-	if len(seen) != 3 {
-		t.Fatalf("original and two derived parameter bindings = %d", len(seen))
+	if len(seen) != wantBindings {
+		t.Fatalf("original and derived parameter bindings = %d, want %d", len(seen), wantBindings)
 	}
 }

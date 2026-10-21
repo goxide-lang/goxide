@@ -163,9 +163,11 @@ type Ident struct {
 | `Attrs []*Attr` | 所有声明、字段、变体、参数、match 分支、语句 | 声明 / 字段 / 变体上已使用 | 语句级 `cfg`、分析器提示 |
 | `Vis Visibility` | 所有声明、`use`、字段、impl 成员 | 未标注、`pub` | `pub(scope)` |
 | `Mods FuncMods` | 函数、闭包、trait / impl 成员 | `Unsafe` | `Async`、`Const` |
-| `Generics *GenericParams` 与 `Where *WhereClause` | 函数、类型、enum、trait、impl | 单约束泛型函数 | 泛型 trait、泛型 impl、多约束 |
+| `Generics *GenericParams` 与 `Where *WhereClause` | 函数、类型、enum、trait、impl | 普通 Go 泛型、条件 impl、多 trait 约束、函数/impl 的最小数组长度参数 | 泛型 trait、GAT、默认方法 |
 | `Mut bool` | 引用类型、引用表达式、绑定模式 | 已使用 | `let mut` |
 | `Root PathRoot` | 路径 | 无根 | `super::` |
+
+`GenericParam.Const` 区分 `const N int` 与类型形参。`GenericArg.Type` 和 `GenericArg.Value` 互斥；裸名字保持语法歧义，由 checker 按已解析形参种类解释。混合泛型实参中的宏捕获保留 `Captures` 身份，类型槽在形参确定后仍拒绝 `expr` / `ident` / `tt` 冒充类型。长度参数语义与生成边界见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#4-最小数组长度参数)。
 
 ## 5. 节点目录
 
@@ -466,15 +468,15 @@ P2 接通已有的具体手写 Default、PartialEq 和空 Eq impl。Default 按�
 
 serde 的 Serialize/Deserialize 按实际 `use` 绑定的 canonical owner 分别登记，owner 为 `github.com/goxide-lang/serde`。新管线直接调用该模块的协议，JSON 格式实现仍由 serde 模块提供。现有退出示例依赖的打印、Error 派生与单步错误转换按其已确认合同接通；不读取旧管线的元数据，也不调用旧 lowering pass。
 
-### 8.3 P4 trait 与成员检查合同
+### 8.3 trait 与成员检查合同
 
-有体 `impl Trait for T` 的目标为本包具体非泛型 struct 或 enum；固有 `impl T` 使用同一类型身份。trait/impl 成员首参数为 `self` 时是实例成员，允许 `self Self`、`self &Self`、`self &mut Self`；其他成员为关联函数。`Self` 绑定源目标 T，引用是接收者类型的一部分，不把实现头改写成 `impl Trait for &T`。直接写出的 Go 函数和方法保留原生声明语义。
+P4 的有体 `impl Trait for T` 从本包具体 struct 或 enum 起步；当前泛型、容器、归属和条件规则统一见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md)。固有 `impl T` 使用同一类型身份。trait/impl 成员首参数为 `self` 时是实例成员，允许 `self Self`、`self &Self`、`self &mut Self`；其他成员为关联函数。`Self` 绑定源目标 T，引用是接收者类型的一部分，不把实现头改写成 `impl Trait for &T`。直接写出的 Go 函数和方法保留原生声明语义。
 
 解析与检查旁表保留基础目标、接收权限、固有/trait 身份、关联类型绑定及选定成员。源级 struct/enum、透明 alias 和类型参数都经同一个成员查询入口；普通 Go 方法仍按真实 Go 类型信息查找。后端消费已选调用，不再按生成名称或 Go 方法集重复选择实现。
 
-关联类型的声明与绑定用已有 `AssocTypeDecl` / `AssocTypeBinding` 节点；投影统一为 `Self::Item`、`T::Trait::Item`。`Trait[Item = int]` 是完整关联类型绑定，不是新的位置参数 impl。泛型函数限每个类型参数单 trait 约束，未绑定投影必须从该约束及 carrier witness 获得类型证据。
+关联类型的声明与绑定用已有 `AssocTypeDecl` / `AssocTypeBinding` 节点；投影统一为 `Self::Item`、`T::Trait::Item`。`Trait[Item = int]` 是完整关联类型绑定，不是新的位置参数 impl。泛型函数可组合多个 trait 约束及 where 前提；未绑定投影按所属 trait 从已选静态证据取得类型。
 
-静态调用降低为空 carrier 操作，关联类型 witness 只参与 Go 类型推导；不执行类型锚或 witness，不传运行时字典。enum 的精确 Self 是 enum 接口 E；其变体实现类型锚返回同一空 carrier，读写 owner 的操作把 `*E` 作为普通参数。运行时实例视图另按[trait 合同](traits.md)生成命名 target wrapper，不能把 carrier 当作目标值或运行时 trait wrapper。
+具体实现保留既有空 carrier 入口；条件请求按实际需求生成普通 Go 函数，不能直接静态展开的泛型部分在定义包传入精确签名的操作函数。关联类型 witness 只参与 Go 类型推导；不执行类型锚或 witness，不传运行时字典。enum 的精确 Self 是 enum 接口 E；其变体实现类型锚返回同一空 carrier，读写 owner 的操作把 `*E` 作为普通参数。运行时实例视图另按[trait 合同](traits.md)生成命名 target wrapper，不能把 carrier 当作目标值或运行时 trait wrapper。
 
 ### 8.4 Feature 条件编译合同
 

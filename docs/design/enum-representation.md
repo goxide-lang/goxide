@@ -59,7 +59,7 @@ if v == nil { panic("goxide: match on nil EE") }
 
 ### 2.1 显式外层有效性检查
 
-`enum_valid(value)` 已确认，待实现。它沿普通内建的解析和遮蔽规则，接收具体 enum 或已知 enum 泛型实例（含透明 alias），将实参求值一次并返回 bool。任意 `T any`、普通接口和指针都不是该内建的输入；检查 enum 指针时由调用方显式处理 nil 后解引用。
+`enum_valid(value)` 已实现。它沿普通内建的解析和遮蔽规则，接收具体 enum 或已知 enum 泛型实例（含透明 alias），将实参求值一次并返回 bool。任意 `T any`、普通接口和指针都不是该内建的输入；检查 enum 指针时由调用方显式处理 nil 后解引用。
 
 当前值属于本 enum 的一个变体且外层存储有效时返回 true；nil 接口、typed-nil 变体、未知外层变体，以及空 enum 的任何值返回 false。检查不遍历 payload、不执行用户方法，也不使用反射或 recover。Option/Result 按其实际表示检查外层；None 和 Some(nil) 都是有效外层值。
 

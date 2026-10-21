@@ -19,7 +19,7 @@
 | 数组长度参数 | `const N int` 仅匹配固定数组长度、接受显式非负整数常量和原样转传；不开放长度表达式求解或 const 泛型具名类型 |
 | enum 外层检查 | `enum_valid(value)` 单次求值并返回外层变体是否合法；payload 与普通 match 的检查规则不变 |
 
-最小数组长度参数与显式 enum 可失败检查已确认，待实现。Default 的函数调用图递归限制和 Eq 派生的现有资格规则保持不变；下文关于放宽这两项的候选暂不实施。`no_mangle` 不属于本篇或本次实现。
+最小数组长度参数与显式 enum 可失败检查已实现。Default 的函数调用图递归限制和 Eq 派生的现有资格规则保持不变；下文关于放宽这两项的候选暂不实施。`no_mangle` 不属于本篇或本次实现。
 
 [已确认决策](../design/decisions.md) D05 的外部原生采用、D19/D20 的权限边界、运行时 wrapper 和 enum 表示继续适用。此稿不增加 move、独占分析、动态字典、反射兜底或每种 derive 的编译器 hook。用户在泛型类型上使用 derive 可继续由宏明确拒绝；但库的泛型 impl 必须能为具体业务类型的泛型字段提供协议。
 
@@ -116,7 +116,7 @@ match(norm(target(I)), norm(τ)) = θ，I 是唯一匹配实现
 
 ### 4. 最小数组长度参数
 
-本节已确认，待实现。`const N int` 首批只服务固定长度数组和原样转传的长度参数：N 从实际 `[n]T` 的长度匹配，也可由显式非负整数常量提供。首批不接受负长度、非常量、`[N+1]` 模式求解、改变 N 的递归实例化或任意类型的 const 参数；不开放 const 泛型具名类型。
+本节已实现。`const N int` 首批只服务固定长度数组和原样转传的长度参数：N 从实际 `[n]T` 的长度匹配，也可由显式非负整数常量提供。首批不接受负长度、非常量、`[N+1]` 模式求解、改变 N 的递归实例化或任意类型的 const 参数；不开放 const 泛型具名类型，也不将 `[N]T` 扩展为 Go 类型集合约束。显式值可使用整数常量表达式与导入的 Go 整数常量；当前不将 `len` 等内建调用作为常量参数求值。
 
 沿用第 3 节的需求闭包，为需要的具体长度生成普通 Go 声明。元素类型能继续保留 Go 泛型时不额外展开；不能以每种数组长度一个编译器协议 hook 代替普通模板。原生 Go 通过已有具体入口使用结果，新的长度由 Goxide 源请求引出。
 
@@ -124,7 +124,7 @@ match(norm(target(I)), norm(τ)) = θ，I 是唯一匹配实现
 
 仅有 Serialize/Deserialize 方法签名还不足以保持现有行为。本节包含已确认的通用 enum 检查，以及迁移前必须落实的普通库协议；不把字段分派搬成编译器隐式 hook。
 
-**显式 enum 检查已确认，待实现。** 内建调用 `enum_valid(value)` 沿普通内建的解析和遮蔽规则。输入的静态类型须为具体 enum 或已知 enum 的泛型实例，透明 alias 同样适用；不接受任意 `T any`、接口或自动解引用的指针。参数只求值一次，结果为 bool：外层值属于本 enum 声明的一个变体且变体存储有效时为 true；nil 接口、typed-nil 变体、未知外层变体以及空 enum 的任何值为 false。该检查不遍历 payload，不执行用户方法，不使用反射或 recover；原生 Go 可传入的边界值也按同一规则处理。
+**显式 enum 检查已实现。** 内建调用 `enum_valid(value)` 沿普通内建的解析和遮蔽规则。输入的静态类型须为具体 enum 或已知 enum 的泛型实例，透明 alias 同样适用；不接受任意 `T any`、接口或自动解引用的指针。参数只求值一次，结果为 bool：外层值属于本 enum 声明的一个变体且变体存储有效时为 true；nil 接口、typed-nil 变体、未知外层变体以及空 enum 的任何值为 false。该检查不遍历 payload，不执行用户方法，不使用反射或 recover；原生 Go 可传入的边界值也按同一规则处理。
 
 Option/Result 按各自现有表示检查外层变体；None 是有效值，Some(nil) 的外层也有效，载荷为 nil 不在此处递归检查。普通 `match` 保留现有分派前的 nil panic，`_` 不接收非法值；显式检查不构成永久有效性证明，后续 match 仍执行自己的检查。serde 宏可先检查普通指针参数是否为 nil，再对解引用后的 enum 调用此操作，返回现有 Type error 后才进入 match。表示与检查规则统一见 [enum 合同](../design/enum-representation.md#21-显式外层有效性检查)；普通可命名输入在调用处生成检查。跨包私有 enum、私有变体或私有类型实参无法在调用处命名时，允许按需在 enum 定义包生成编译器内部检查函数，并由 Go 推导类型实参；该函数不增加 Goxide 公开 API，不暴露私有变体名，也不改变单次求值和无用户方法调用的规则。
 
@@ -228,9 +228,11 @@ func CloneRecord(value *Record) Record {
 | GP-14 | 只有 Serialize 的字段用于 Deserialize，或反向使用 | 两种协议独立，不能以一个共同 Codec 约束暗中补足或额外要求另一方向 |
 | GP-15 | `type Score int` 没有显式协议，却因 int 的 impl 请求其协议 | defined 身份独立；透明 alias 对照用例应成功 |
 
-库实现继续承担既有行为：Default 按字段顺序调用业务默认，enum 只要求默认变体 payload；Option 默认 None 不要求元素 Default，Result 不自动取得 Default；容器 Clone 说明存储和元素复制，不能改用赋值兜底；Debug 保持字段/变体名、数据及字符串引号，map 输出的排序等行为由库实现；serde 保持方向独立、缺失/default/skip、错误与范围检查、nil/空和 Option 规则。enum 的检查和变体身份属于通用 enum 合同，显式可失败检查按第 5 节提议，宏不能绕过普通 match 的检查。
+库实现继续承担既有行为：Default 按字段顺序调用业务默认，enum 只要求默认变体 payload；Option 默认 None 不要求元素 Default，Result 不自动取得 Default；容器 Clone 说明存储和元素复制，不能改用赋值兜底；Debug 保持字段/变体名、数据及字符串引号，map 输出的排序等行为由库实现；serde 保持方向独立、缺失/default/skip、错误与范围检查、nil/空和 Option 规则。enum 的检查和变体身份属于通用 enum 合同，显式可失败检查按第 5 节实现，宏不能绕过普通 match 的检查。
 
 这些要求需逐项迁移验收，不因泛型 impl 可以表达某个签名就认为业务等价。原生 map 键资格等额外能力若需证明，应由普通库协议及约束表达；手写 Eq 不自动取得该资格，浮点等类型也不能因 Go comparable 就被授予 Eq。不能在 checker 中按 Default、Clone 或 serde 名字偷偷补实现。
+
+普通库迁移基础已有真实 WASI 验证：`internal/compile/protocol_migration_test.go` 的宏从公共 syn 读取字段，生成五种 `Library*` 普通协议实现，覆盖默认值顺序、私有字段、slice/array 复制、调试输出和手写字段相等协议；Go 消费者实际 build/run/test，锁定重放保持字节一致。`internal/compile/serde_protocol_migration_test.go` 验证普通 Serialize/Deserialize 协议与现有公开 serde API 的接线、条件容器、Option alias 缺失语义和 enum 错误路径。它们不进入内建派生登记，也不等于 std/serde 已迁移发布或全部业务等价验收完成。Default 专用调用图检查与 Eq 派生资格仍按上面的暂缓决定处理；旧入口的移除须随对应库的正式迁移验收进行。
 
 ## 双向互操作
 
@@ -256,4 +258,4 @@ Go 调用已生成的具体业务入口、具体 impl 的完整协议入口以�
 8. Serialize/Deserialize 需求独立，保留 Option alias 缺失、pointer 缺失、present 错误、default/skip 顺序及 enum 错误行为；不按 derive 名称补隐式能力。
 9. 惰性属性遵循消费者生命周期，attribute 替换负责转交、derive 保留原项；未知属性仍拒绝，不实现 `no_mangle`。
 
-最小数组长度与 enum 显式检查已确认，按上述最小范围实施；Default 既有递归规则调整和 Eq marker 候选暂缓。跨仓库写入与发布遵循对应授权。阶段状态记录在状态表，不把机制原型或未执行的迁移验收记为完成。
+最小数组长度与 enum 显式检查已按上述最小范围实现；Default 既有递归规则调整和 Eq marker 候选暂缓。跨仓库写入与发布遵循对应授权。阶段状态记录在状态表，不把机制原型或未执行的迁移验收记为完成。

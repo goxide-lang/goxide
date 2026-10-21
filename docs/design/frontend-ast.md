@@ -347,6 +347,7 @@ type MacroRulesDecl struct {
 - 宏的参数和规则体在语法阶段只做括号配对，保存为 `TokenTree`。匹配器里的 `$x:expr`、重复 `$(...),*` 在宏展开阶段解析。
 - 展开时按片段类别调用解析器的对应入口（表达式、语句、类型、声明、模式），得到的 AST 节点带 `ExpnID` 和新的 `SyntaxCtx`。
 - 属性参数同样保存为 `TokenTree`。`derive`、`cfg` 和 `cfg_attr` 由编译器内建处理器解析；条件属性先决定有效属性集合，保留的其他属性再解析路径和归属。具体配置语法见 [RFC 0022](../rfcs/0022-project-toolchain.md#谓词)，接入状态见[能力状态表](../mvp-gap-audit.md)。
+- 已确认的[惰性属性保留与消费合同](../rfcs/0030-procedural-macros.md#惰性属性的保留与消费)区分宏请求、derive helper 与编译器声明属性。编译器惰性属性随声明保留到对应语义阶段；整体替换声明的宏负责在输出中转交属性，未知属性仍诊断。Go 成员 sugar 使用模块配置，不添加逐 impl 属性。
 
 ### 5.7 路径
 

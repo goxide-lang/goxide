@@ -47,6 +47,7 @@
 | R25 | 构造函数等关联函数定义在独立 impl T 中，T::method 降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；首参数 self 区分实例/关联成员，无 static；P4 采用 NewT/TMethod 并诊断名称冲突 |
 | R26 | impl 成员按 goxide 规则转译并支持 Self/self；直接书写的 Go 函数和方法保留原生 Go 语义 | [RFC 0020](../rfcs/0020-associated-functions.md)；Self 绑定源目标类型，self 仅绑定实例接收者；不全局替换同名 Go 标识符，不限制其他 goxide 特性只能位于 impl 内 |
 | D37 | P4：impl 以基础 T 为目标，self 使用 Self / &Self / &mut Self；关联投影为 Self::Item / T::Trait::Item，运行时值完整绑定；泛型关联类型经空 carrier witness 推导，Go 调用保留源类型实参数量 | [trait](traits.md)、[关联类型](associated-types.md)、[enum 类型锚](enum-representation.md#11-p4-的类型锚与实例适配)；struct/enum 统一查询，enum Self 为 E，类型锚/witness 不运行；值 As 转发与借用 ForE 保留身份；外部类型不注入 anchor，nil 沿用 Go/enum 规则 |
+| D38 | 条件 impl 按当前转译范围的实际请求实例化；具体 impl 直接生成，普通 Go 泛型保留；Go 通过明确普通函数入口使用条件能力，不提供 Ops 或实例哈希名 | [RFC 0031](../rfcs/0031-generic-protocol-impls.md)；模块 sugar 默认开启，CLI 仅覆盖入口模块，见 [trait](traits.md#go-成员-sugar) 和 [配置](toml-manifest.md#go-成员-sugar-配置) |
 
 已确认新增 **D19（2026-10-01）**：用户明确要求默认兼容 Go 式指针/别名；有具体风险依据先 warning，不以无法证明安全大面积拒绝。语法、类型、已确认不变量错误不降级；warning 与运行时 race 分开，不能宣称静态安全。该反馈否决 T01/T06 及前两轮严格默认，不撤销无关 D01–D18。
 

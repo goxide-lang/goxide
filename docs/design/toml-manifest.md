@@ -66,6 +66,23 @@ goxide run --offline --locked   # clean dependency download
 
 作者清单不声明格式版本，直接按当前字段校验。`[go_mod]` 仅描述生成 Go module 的元数据；语言中的 `use` 绑定来自当前 crate、自动库根、依赖 alias 或未占名的标准库根，不以 `go_mod.module` 作为源码导入名。顶层、依赖和 workspace 模板均不接受 `namespaces`。未知字段、错误类型、非法 TOML 和大小写错误有文件/行/列诊断。来源语义错误指出依赖名。
 
+## Go 成员 sugar 配置
+
+状态：**设计已确认，待实现**。`codegen.go_sugar` 控制 [trait 实例成员的 Go sugar](traits.md#go-成员-sugar)，类型为布尔值，省略时为 `true`：
+
+```toml
+[codegen]
+go_sugar = true
+```
+
+CLI 使用 `--go-sugar` / `--no-go-sugar`；同次请求同时给出两者时报错。有效值按 **显式 CLI > 本模块 TOML > true** 取值，`gen/transpile/build/run/test` 一致。它是生成 Go API 的策略，不作为 feature 或宏查询条件，不改变宏输入和展开产物。
+
+配置单位是独立分发模块，模块内所有包及 lib/bin/example 共用。CLI 只覆盖本次选为入口的模块；workspace 批量命令只覆盖选中成员，不传播到仅作为依赖加载的模块。各依赖从自己的清单读取，未配置则开启；同一来源节点只采用一个有效值，不按依赖边取并集。已发布的纯 Go/dist 直接使用其现有方法集合。若某模块同时是选中成员和另一成员的依赖，本次共用该选中模块的生成结果，不再构造第二份方法集合。
+
+原生 Go 混写项目可在 `go.mod` 所在目录放置仅含 `[codegen]` 的 `goxide.toml`，读取该模块的生成策略，继续原位生成 `_gox.go` 并由 Go 管理 `go.mod/go.sum`。这类配置不成为 Goxide 项目或 workspace 清单；完整作者清单仍遵循 `[go_mod]` / `[workspace]` 的入口规则。配置查找止于所属模块边界，不使用更外层模块的 sugar 值。无模块的单文件使用 CLI 或默认值。
+
+每个模块的最终有效值纳入既有生成配置摘要，以区分不同 Go 方法集合；它不改变依赖来源、选版或锁文件身份。切换开关按原有生成文件所有权规则更新产物。验收覆盖默认开启、TOML 关闭、CLI 双向覆盖、根模块开关不影响依赖、混写原位生成、命令间一致性和缓存切换。
+
 ## Feature 配置
 
 `[features]` 同时提供模块内查询的声明目录与展开图。根模块默认启用已声明的 default，再加入 CLI 的 `--features`；`--no-default-features` 只取消根默认请求。依赖通过 `features`、`default_features` 和 feature 边接收请求，同一来源节点的请求取并集，任何一条边要求默认集合即保留。根 feature 不按同名隐式传播到依赖，各来源节点内的包共享本节点最终集合。
@@ -227,6 +244,8 @@ GOX
 build/run/test 及指定输出目录的 transpile 无 INPUT 时，从 cwd 向上发现最近 goxide.toml；go.mod 不阻断外层项目/workspace。显式目录采用同一规则；显式文件保留单文件语义。没有清单时需显式指定 Go 目录或源码，不扫描目录猜 main。
 
 默认原位 `gen` / `transpile` 按最近模块边界选择入口：遇到当前或上层 goxide.toml 时进入项目模式，先遇到 go.mod 时只生成当前 Go 包；嵌套原生模块不会被更外层 TOML 接管。
+
+上述为当前入口行为；已确认的 [sugar 配置](#go-成员-sugar-配置)落地时，仅含 `[codegen]` 的原生 Go 模块配置须保持原位模式。
 
 成员子目录选择最近成员，workspace 根用 default-members，`-p MODULE` 与 `--workspace` 显式改变选择。未列出的项目报非成员，不因目录位置补依赖。成员用 `workspace = true` 继承模板，只可追加 features 或设置 optional/default_features；模板 path 相对 workspace 根。版本与锁全 workspace 统一，未选成员 features 不自动加入本次编译。
 

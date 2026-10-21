@@ -5,7 +5,9 @@
 | 状态 | 范围 |
 | --- | --- |
 | P4 | 非泛型 trait、本包具体 struct/enum 的 impl、三种 self 接收权限、普通关联类型、单 trait 泛型约束、空 carrier、运行时 wrapper 和 Go 适配。 |
-| 后续 | 泛型 trait/impl、多 trait 约束、supertrait、GAT、默认关联类型、特化与重叠实现。跨包 Goxide 加载及发布信息恢复由 P5 接续。 |
+| 已确认，待实现 | [Go 成员 sugar](#go-成员-sugar)：按独立分发模块配置，默认开启；所有 impl 使用相同生成规则。 |
+| 已确认，实施中 | [条件 impl 与按需实例化](../rfcs/0031-generic-protocol-impls.md)：多约束、具体 impl 直接生成、条件实例由 Goxide 实际请求引出；Go 使用明确普通入口。 |
+| 后续 | 泛型 trait、GAT、默认关联类型、默认方法和特化。 |
 
 状态编号见[决策登记](decisions.md)。有体实现写在基础类型 T 上，通过成员的 `self Self` / `self &Self` / `self &mut Self` 区分传值、只读和可写接收者。`declare impl` 的原生 T / *T 方法集按精确 Go 类型核对，不把原生指针视为获得引用权限。见[源级权限约束](overview.md#35-源级权限与-go-表示必须分开)。
 
@@ -89,7 +91,7 @@ func AsNativeBufferByteReader(b *native.Buffer) ByteReader {
 
 Go 不允许给外部类型追加方法，但允许 impl 包给自己的 wrapper 定义方法。原生包不增加 marker 或 As；非空与权限检查按选定接收者契约实施，上述短片段不自称建立了安全证明。
 
-下面是可独立编译的有体 impl 示例。包级工厂是固定入口；本地 Buffer 与 impl 同包，所以可附加只转发工厂的便利方法。现有 Go 夹具继续使用这些便利方法。
+下面是关闭 [Go 成员 sugar](#go-成员-sugar)时的有体 impl 表示，也是现有 Go 夹具使用的表示。包级工厂是固定入口；本地 Buffer 与 impl 同包，所以可附加只转发工厂的便利方法。
 
 ```go
 package views
@@ -216,6 +218,29 @@ b.read::<byteio::Reader>(p)
 符号身份至少包含定义包、接收者形式、trait 身份及参数；不依赖 import 别名、时间戳或每次构建变化的值。相容重复声明如何映射到固定生成归属，与声明合并和发布规则一并确定，不能按导入顺序选宿主。
 
 P4 的工厂采用 `As<Type><Trait>`，helper 采用 `As<Trait>` / `For<Type>`；marker 编码完整 trait 身份。carrier operation 始终有 trait 与成员身份确定的 canonical 名称；唯一静态成员可增加简短转发，保留 `typeinfo.Of[T]().Abc()`。多个 trait 具有同名静态成员时，只使用 canonical 入口，无限定源码调用报歧义，简短入口不猜选实现。生成名与用户声明冲突时诊断，不静默覆盖或重命名；新增实现不能改变旧工厂身份。
+
+### 条件实现与 Go 泛型边界
+
+设计已确认，实施中，完整规则见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#3-转译范围需求闭包与-go-入口)。具体 impl 在前提检查通过后直接生成；带待定协议条件的模板按当前转译范围的实际请求递归实例化。普通 Go 能直接表达的泛型继续保留，`Box[T any]` 不因 `impl[T Default] Default for Box[T]` 收紧 T。
+
+Go 使用者通过 Goxide 明确导出的普通函数使用条件能力，例如 `EncodeRoot` / `DecodeRoot` 或 `DefaultUserBox`。这些入口确定目标类型及所需条件；Go 调用者不传 Ops、不引用实例哈希名。现有具体协议入口仍完整保留。实例化的 `Box[User]` 不单独获得 Go 专属 receiver 方法；sugar 仍遵循下节的本地目标与接收者规则。
+
+### Go 成员 sugar
+
+状态：**设计已确认，待实现**。sugar 是供 Go 调用者使用的 trait 实例成员转发，例如 `c.Debug()` 转到已选定的 Debug 实现。业务仍由该 impl 的 wrapper 或静态证据入口承载；可用 As 视图时，转发形如 `c.AsDebug().Debug()`。接收权限、参数和结果沿用原成员，借用必须保留真实对象或 enum owner，不为生成短方法复制取址。
+
+是否生成 sugar 由独立分发模块的作者选择，默认开启，适用于同模块 `.gox` / `.go` 混写和生成 Go dist 发布。模块内各包、lib/bin/example 使用同一有效值，`gen/transpile/build/run/test` 使用同一默认与优先级；清单、CLI 和依赖边界见 [sugar 配置](toml-manifest.md#go-成员-sugar-配置)。关闭时仍生成协议要求的 wrapper、marker、固定工厂、As/For 和 carrier，保留用户自己声明的固有方法。
+
+宏只生成普通 `.gox` 声明；derive 生成的 trait impl 与手写、声明宏、attribute 宏产出的 impl 一起进入普通解析与检查。全部 impl 收集并确定成员后，按所属分发模块的有效配置确定 sugar 签名，再由后端生成转发。签名参与 Go 互操作的方法集、接口及泛型约束检查；Goxide 自身的成员解析仍使用原固有成员及显式 impl，不把自动 sugar 登记为新的固有方法。无需 `derive_sugar` / `derive_nosugar`、逐 impl 的 sugar 属性、宏来源策略表或宏 SDK 配置字段；编译器惰性属性另按 [RFC 0030](../rfcs/0030-procedural-macros.md#惰性属性的保留与消费)处理。
+
+生成与冲突规则：
+
+- 只在 Go 允许追加方法的本地目标上生成直接成员；类型与 impl 须在同一 Go 包。外部类型及不能作为 Go receiver 的目标继续使用既有工厂或 facade，模块开关不授权改写其他包。
+- 先按最终 Go 成员名检查已有显式固有方法或手写 Go 方法；这些名字由作者拥有，排除其同名 sugar 候选。作者可在固有方法中用 `Trait::method(self, ...)` 限定转发，固定 Go 的短入口；其他实现仍可从各自视图调用。
+- 对剩余名字检查公开名映射后的冲突。单一候选生成转发；多个 trait 的同名候选报错，列出候选实现；字段、固定工厂便利方法等不能容纳该生成成员的名称冲突也诊断。不得按声明顺序挑选、自动改名或因新增 impl 静默撤掉旧短方法。
+- sugar 只增加 Go 直接成员，不把原类型标记为 trait wrapper，也不改变源级显式实现、权限与限定调用规则。模块作者修改开关会改变生成 Go 的方法集合，发布时按公开 API 变更处理。
+
+验收需覆盖混写 Go 直接调用、独立 Go 消费 dist、开关关闭后完整协议入口仍可调用、手写与宏生成 impl 一致、重名诊断与显式转发选择、接收者身份，以及同配置两次生成字节一致。模块间配置隔离按清单合同验收。
 
 ## 9. 非法状态与边界
 

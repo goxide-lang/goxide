@@ -232,7 +232,7 @@ func CloneRecord(value *Record) Record {
 
 这些要求需逐项迁移验收，不因泛型 impl 可以表达某个签名就认为业务等价。原生 map 键资格等额外能力若需证明，应由普通库协议及约束表达；手写 Eq 不自动取得该资格，浮点等类型也不能因 Go comparable 就被授予 Eq。不能在 checker 中按 Default、Clone 或 serde 名字偷偷补实现。
 
-普通库迁移基础已有真实 WASI 验证：`internal/compile/protocol_migration_test.go` 的宏从公共 syn 读取字段，生成五种 `Library*` 普通协议实现，覆盖默认值顺序、私有字段、slice/array 复制、调试输出和手写字段相等协议；Go 消费者实际 build/run/test，锁定重放保持字节一致。`internal/compile/serde_protocol_migration_test.go` 验证普通 Serialize/Deserialize 协议与现有公开 serde API 的接线、条件容器、Option alias 缺失语义和 enum 错误路径。它们不进入内建派生登记，也不等于 std/serde 已迁移发布或全部业务等价验收完成。Default 专用调用图检查与 Eq 派生资格仍按上面的暂缓决定处理；旧入口的移除须随对应库的正式迁移验收进行。
+普通库迁移基础已有真实 WASI 验证：`internal/compile/protocol_migration_test.go` 的宏从公共 syn 读取字段，生成五种 `Library*` 普通协议实现，覆盖默认值顺序、私有字段、slice/array 复制、调试输出和手写字段相等协议；Go 消费者实际 build/run/test，锁定重放保持字节一致。`internal/compile/serde_protocol_migration_test.go` 验证普通 Serialize/Deserialize 协议与现有公开 serde API 的接线、条件容器、读写方向独立、Option alias 与指针的缺失区别、显式 null、default/skip 顺序及 enum 错误路径。`attribute_protocol_migration_test.go` 覆盖 attribute 产出的条件 impl，`print_protocol_migration_test.go` 覆盖格式解析、普通 Display/Debug 调用、求值顺序和调用帧。它们使用普通宏与协议入口；std/serde 正式迁移发布及完整业务等价验收仍待完成。Default 专用调用图检查与 Eq 派生资格仍按上面的暂缓决定处理；旧入口的移除须随对应库的正式迁移验收进行。
 
 ## 双向互操作
 

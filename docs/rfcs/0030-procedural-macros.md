@@ -8,7 +8,7 @@
 
 本篇不迁移 Default、serde 或其他内建宏，不补泛型 impl，不提供类型反射或已解析 TypeShape 查询，不开放编译脚本，也不实现完整 syn/quote。普通 syn/quote 库可以建立在本协议上；它们解析语法、构造语法，不取得类型检查或权限证明。库派生迁移仍需另行验收普通 trait/impl、生成代码及跨仓库发布。
 
-公共 syn 及普通库协议的验证包括 `internal/compile/syn_test.go` 的具体字段派生、`syn_generic_test.go` 的条件泛型派生、`const_macro_test.go` 的数组长度模板，以及 `protocol_migration_test.go` / `serde_protocol_migration_test.go` 的基础协议和序列化迁移证明。宏读取实际字段，通过 RuntimeRoot 输出普通 trait impl；真实 WASI、目标 Go 构建运行及锁定重放验证其行为。这些验收使用新普通协议名称，不进入内建派生登记；std/serde 的正式迁移、发布和完整业务兼容验收尚未执行，暂缓的 Default/Eq 规则见 [RFC 0031](0031-generic-protocol-impls.md)。
+公共 syn 及普通库协议的验证包括 `internal/compile/syn_test.go` 的具体字段派生、`syn_generic_test.go` 的条件泛型派生、`attribute_protocol_migration_test.go` 的 attribute 条件 impl、`const_macro_test.go` 的数组长度模板，以及 `protocol_migration_test.go` / `serde_protocol_migration_test.go` 的基础协议和序列化迁移证明。`print_protocol_migration_test.go` 验证普通过程宏解析格式字面量、先依序求值全部实参，再调用 Display/Debug 协议与公开 formatting 库；覆盖原调用帧、错误及锁定重放。派生宏读取实际字段，通过 RuntimeRoot 输出普通 trait impl；真实 WASI、目标 Go 构建运行及锁定重放验证其行为。这些验收使用新普通协议名称，不进入内建派生登记；std/serde 的正式迁移、发布和完整业务兼容验收尚未执行，暂缓的 Default/Eq 规则见 [RFC 0031](0031-generic-protocol-impls.md)。
 
 关联：[声明宏合同](0011-macros.md)、[内建派生](0013-derive.md)、[crate 与依赖根](0028-crate-roots.md)、[语法工具设计](../design/syntax-tooling.md)、[能力状态表](../mvp-gap-audit.md)。Rust 的三个过程宏入口提供对照；Goxide 保持既定的定义点卫生，不采用 Rust 过程宏的默认非卫生行为。[Rust Reference](https://doc.rust-lang.org/reference/procedural-macros.html)
 

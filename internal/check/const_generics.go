@@ -313,6 +313,9 @@ func (c *checker) integerConstant(node ast.Expr) (result constant.Value) {
 			return c.integerConstant(source.node)
 		}
 	}
+	if value := c.importedIntegerConstant(node); value != nil {
+		return value
+	}
 	if paren, ok := node.(*ast.ParenExpr); ok {
 		return c.integerConstant(paren.X)
 	}
@@ -565,4 +568,33 @@ func (c *checker) inferredArrayLiteral(array *ast.ArrayType, elements []ast.Expr
 	result := types.NewArray(c.typ(array.Elem), length)
 	c.out.typeNodes[array] = result
 	return result
+}
+
+// Imported Go constants already carry their exact value in go/types.
+func (c *checker) importedIntegerConstant(node ast.Expr) constant.Value {
+	var reference resolve.Resolution
+	switch expression := node.(type) {
+	case *ast.PathExpr:
+		reference = c.file.References[expression.Path.ID()]
+	case *ast.Ident:
+		reference = c.file.References[expression.ID()]
+	default:
+		return nil
+	}
+	parts, name := reference.Path, ""
+	if symbol := reference.Symbol; symbol != nil && symbol.Kind != resolve.Import && symbol.Kind != resolve.Module {
+		if len(symbol.Target) > 0 {
+			parts = symbol.Target
+		}
+		name = symbol.GoName
+	}
+	object, ok := c.importedObject(parts, name).(*types.Const)
+	if !ok {
+		return nil
+	}
+	basic, ok := types.Unalias(object.Type()).Underlying().(*types.Basic)
+	if !ok || basic.Info()&types.IsInteger == 0 {
+		return constant.MakeUnknown()
+	}
+	return object.Val()
 }

@@ -591,19 +591,30 @@ func (c *checker) importedType(parts []string, name string) types.Type {
 			return e.Type
 		}
 	}
+	if obj := c.importedObject(parts, name); obj != nil {
+		return obj.Type()
+	}
+	return types.Typ[types.Invalid]
+}
+
+func (c *checker) importedObject(parts []string, name string) types.Object {
+	if len(parts) < 2 {
+		return nil
+	}
+	if name == "" {
+		name = parts[len(parts)-1]
+	}
+	prefix := strings.Join(parts[:len(parts)-1], "/")
 	p := c.imported[prefix]
 	if p == nil {
 		var err error
 		p, err = c.importer.Import(prefix)
 		if err != nil {
-			return types.Typ[types.Invalid]
+			return nil
 		}
 		c.imported[prefix] = p
 	}
-	if obj := p.Scope().Lookup(name); obj != nil {
-		return obj.Type()
-	}
-	return types.Typ[types.Invalid]
+	return p.Scope().Lookup(name)
 }
 
 func substitute(t types.Type, sub map[*types.TypeParam]types.Type, infos ...*Info) types.Type {

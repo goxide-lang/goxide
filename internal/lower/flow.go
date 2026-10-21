@@ -30,6 +30,11 @@ func (e *emitter) fresh(prefix string) *goast.Ident {
 }
 
 func (e *emitter) goType(t types.Type) goast.Expr {
+	for actual, name := range e.inferenceTypes {
+		if types.Identical(actual, t) {
+			return goast.NewIdent(name.Name)
+		}
+	}
 	if t == nil || t == types.Typ[types.Invalid] {
 		e.fail(e.tree, "无法确定表达式类型")
 		return goast.NewIdent("any")

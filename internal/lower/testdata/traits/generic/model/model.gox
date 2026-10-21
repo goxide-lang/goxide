@@ -1,0 +1,16 @@
+package model
+
+use genericfixture::protocols;
+
+pub struct Box[T any] { pub Value T }
+
+impl[T any] Box[T] {
+    pub func new(value T) Self { return Self{Value: value} }
+    pub func get(self Self) T { return self.Value }
+}
+
+impl[T any] protocols::Copy for Box[T] where T: protocols::Copy {
+    func copy(self &Self) Self {
+        return Self{Value: protocols::Copy::copy(&self.Value)}
+    }
+}

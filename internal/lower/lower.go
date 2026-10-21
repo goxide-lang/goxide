@@ -70,6 +70,9 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	sort.Strings(names)
 	hygienicNames := macroNames(info)
 	traits := prepareTraits(info)
+	if info != nil && info.Demands != nil && info.Demands.Info != nil {
+		info = info.Demands.Info
+	}
 	fset := gotoken.NewFileSet()
 	var emitters []*emitter
 	memberSymbols := make(map[*resolve.Symbol]bool)
@@ -127,6 +130,9 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			if decl := e.decl(item); decl != nil {
 				f.Decls = append(f.Decls, decl)
 			}
+			f.Decls = append(f.Decls, e.traitTemplateDeclarations(item)...)
+			f.Decls = append(f.Decls, e.itemExtras...)
+			e.itemExtras = nil
 		}
 		f.Decls = append(f.Decls, e.deriveDeclarations()...)
 		f.Decls = append(f.Decls, e.errorDeclarations()...)
@@ -353,6 +359,7 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	inferenceTypes     map[types.Type]*goast.Ident
 	functionFrame      *functionFrame
 	assignmentGuard    *goast.Ident
 	shiftCount         *goast.Ident
@@ -361,6 +368,11 @@ type emitter struct {
 	zeroFunctions      map[int]*goast.Ident
 	zeroPointers       map[int]*goast.Ident
 	traits             *traitProgram
+	evidenceNames      map[*check.TraitBound]string
+	boundCallbacks     map[*check.TraitBound]map[string]goast.Expr
+	callbackReceiver   string
+	instanceBody       *check.BodyInstance
+	itemExtras         []goast.Decl
 	symbolNames        map[*resolve.Symbol]string
 	primitiveAliases   map[string]*goast.Ident
 	packageTypeAliases map[string]*goast.Ident

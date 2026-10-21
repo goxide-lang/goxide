@@ -314,6 +314,9 @@ func (e *emitter) typeArgs(x goast.Expr, args *syntax.GenericArgs) goast.Expr {
 	if args == nil {
 		return x
 	}
+	if function, handled := e.traitFunctionInstance(args); handled {
+		return function
+	}
 	indices := make([]goast.Expr, len(args.Args))
 	for i, a := range args.Args {
 		if a.Name != nil {

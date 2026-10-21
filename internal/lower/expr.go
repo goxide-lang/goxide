@@ -20,6 +20,19 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		if result, handled := e.memberCall(call); handled {
 			return result
 		}
+		if inferred, handled := e.inferredFunctionCall(call); handled {
+			return inferred
+		}
+		if function, handled := e.traitFunctionInstance(call); handled {
+			result := &goast.CallExpr{Fun: function, Args: e.exprs(call.Args)}
+			if call.Ellipsis {
+				result.Ellipsis = 1
+			}
+			return result
+		}
+	}
+	if function, handled := e.traitFunctionInstance(n); handled {
+		return function
 	}
 	if member := e.info.Members[n]; member != nil {
 		return e.memberExpr(member)

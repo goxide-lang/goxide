@@ -45,12 +45,21 @@ func (e *emitter) traitDeclarations() []goast.Decl {
 			continue
 		}
 		if impl.Trait == nil {
+			if parameterizedImpl(impl) && len(impl.Requirements) != 0 || e.info.Demands != nil && e.info.Demands.ImplTemplates[impl] {
+				continue
+			}
 			for _, m := range impl.Methods {
 				out = append(out, e.inherentDeclaration(m))
 			}
 			continue
 		}
-		out = append(out, e.implDeclarations(impl)...)
+		if parameterizedImpl(impl) {
+			if impl.Trait.Runtime {
+				out = append(out, e.templateRuntimeDeclarations(impl)...)
+			}
+		} else {
+			out = append(out, e.implDeclarations(impl)...)
+		}
 	}
 	var carriers []*traitCarrier
 	for _, carrier := range e.traits.carriers {
@@ -105,6 +114,7 @@ func clearTraitPositions(node goast.Node) {
 
 func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 	var out []goast.Decl
+	parameters := e.implGenerics(impl)
 	instances := false
 	for _, m := range impl.Methods {
 		instances = instances || !m.Static
@@ -112,7 +122,7 @@ func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 	if instances || impl.Trait.Runtime {
 		name := e.traitWrapper(impl)
 		e.generatedName(name, impl.Decl)
-		out = append(out, typeDeclaration(name, &goast.StructType{Fields: receiverField("target", e.goType(captureType(impl)))}))
+		out = append(out, genericTypeDeclaration(name, parameters, &goast.StructType{Fields: receiverField("target", e.goType(captureType(impl)))}))
 		for _, m := range impl.Methods {
 			if !m.Static {
 				out = append(out, e.wrapperMethod(m))
@@ -120,21 +130,58 @@ func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 		}
 	}
 	if impl.Trait.Runtime {
-		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", goast.NewIdent(e.traitWrapper(impl))), Type: &goast.FuncType{Params: &goast.FieldList{}}, Body: &goast.BlockStmt{}})
+		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", e.implWrapperType(impl)), Type: &goast.FuncType{Params: &goast.FieldList{}}, Body: &goast.BlockStmt{}})
 		out = append(out, e.factoryDeclaration(impl))
-		local := e.localTypePackage(impl.Base.Obj().Pkg())
-		if local && goMethodReceiver(impl.Base) {
+		local := impl.Base != nil && e.localTypePackage(impl.Base.Obj().Pkg())
+		if local && nativeInherentImpl(impl) {
 			e.generatedMember(impl.Base, traitAs(impl), impl)
 			out = append(out, e.asDeclaration(impl, captureType(impl), nil))
 		}
 	}
+	if !carrierTarget(e.info, impl) {
+		out = append(out, e.implOpsDeclarations(impl)...)
+	}
 	for _, m := range impl.Methods {
 		carrier := e.traits.carriers[impl.Base]
 		if carrier == nil || !carrierTarget(e.info, impl) {
-			out = append(out, e.operationDeclaration(m, nil))
+			// Existing non-carrier impls retain their exported free operation.
+			if !parameterizedImpl(impl) && impl.Base != nil && impl.Base.TypeParams().Len() == 0 && impl.Base.TypeArgs().Len() == 0 {
+				out = append(out, e.operationDeclaration(m, nil))
+			}
 		} else if carrier.file != e.name {
 			out = append(out, e.operationDeclaration(m, carrier))
 		}
+	}
+	return out
+}
+
+func (e *emitter) implOpsDeclarations(impl *check.Impl) []goast.Decl {
+	name := e.implOpsName(impl)
+	e.generatedName(name, impl.Decl)
+	out := []goast.Decl{genericTypeDeclaration(name, e.implGenerics(impl), &goast.StructType{Fields: &goast.FieldList{}})}
+	for _, associated := range impl.Trait.Associated {
+		result := e.goType(impl.Associated[associated.Name])
+		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(traitWitness(impl.Trait, associated.Name)), Recv: receiverField("", e.implOpsType(impl)), Type: resultFunc(result), Body: &goast.BlockStmt{List: []goast.Stmt{varStmt(goast.NewIdent("value"), result, nil), &goast.ReturnStmt{Results: []goast.Expr{goast.NewIdent("value")}}}}})
+	}
+	legacyFree := !parameterizedImpl(impl) && impl.Base != nil && impl.Base.TypeParams().Len() == 0 && impl.Base.TypeArgs().Len() == 0
+	for _, member := range impl.Methods {
+		var declaration *goast.FuncDecl
+		if legacyFree {
+			ft, args := e.memberSignature(member.Signature)
+			if !member.Static {
+				receiver := impl.Target
+				if member.Receiver != check.ValueRef {
+					receiver = types.NewPointer(receiver)
+				}
+				ft.Params.List = append([]*goast.Field{{Names: []*goast.Ident{goast.NewIdent("self")}, Type: e.goType(receiver)}}, ft.Params.List...)
+				args = append([]goast.Expr{goast.NewIdent("self")}, args...)
+			}
+			declaration = &goast.FuncDecl{Name: goast.NewIdent(traitOperation(member)), Type: ft, Body: forwardBody(e.sourceGlobal(impl.File, e.traitFreeOperation(member)), args, member.Signature)}
+		} else {
+			declaration = e.operationDeclaration(member, &traitCarrier{name: name}).(*goast.FuncDecl)
+		}
+		declaration.Recv = receiverField("", e.implOpsType(impl))
+		out = append(out, declaration)
 	}
 	return out
 }
@@ -155,6 +202,8 @@ func (e *emitter) traitViewType(impl *check.Impl) goast.Expr {
 }
 
 func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {
+	restore := e.memberBodyInfo(m)
+	defer restore()
 	impl := m.Impl
 	var nativeType *goast.FuncType
 	var nativeArgs []goast.Expr
@@ -162,7 +211,12 @@ func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {
 		nativeType, nativeArgs = e.memberSignature(m.Signature)
 	}
 	view := e.fresh("View").Name
-	decl := &goast.FuncDecl{Name: goast.NewIdent(m.GoName), Recv: receiverField(view, goast.NewIdent(e.traitWrapper(impl)))}
+	previousReceiver := e.callbackReceiver
+	if parameterizedImpl(impl) {
+		e.callbackReceiver = view
+	}
+	defer func() { e.callbackReceiver = previousReceiver }()
+	decl := &goast.FuncDecl{Name: goast.NewIdent(m.GoName), Recv: receiverField(view, e.implWrapperType(impl))}
 	var target goast.Expr = &goast.SelectorExpr{X: goast.NewIdent(view), Sel: goast.NewIdent("target")}
 	if m.Receiver == check.ValueRef && impl.Capture != check.ValueRef {
 		target = &goast.StarExpr{X: target}
@@ -190,9 +244,9 @@ func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {
 }
 
 func (e *emitter) factoryDeclaration(impl *check.Impl) goast.Decl {
-	name := traitFactory(impl)
+	name := e.traitFactoryName(impl)
 	e.generatedName(name, impl.Decl)
-	return &goast.FuncDecl{Name: goast.NewIdent(name), Type: &goast.FuncType{Params: receiverField("target", e.goType(captureType(impl))), Results: &goast.FieldList{List: []*goast.Field{{Type: e.traitViewType(impl)}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CompositeLit{Type: goast.NewIdent(e.traitWrapper(impl)), Elts: []goast.Expr{&goast.KeyValueExpr{Key: goast.NewIdent("target"), Value: goast.NewIdent("target")}}}}}}}}
+	return &goast.FuncDecl{Name: goast.NewIdent(name), Type: &goast.FuncType{TypeParams: e.implGenerics(impl), Params: receiverField("target", e.goType(captureType(impl))), Results: &goast.FieldList{List: []*goast.Field{{Type: e.traitViewType(impl)}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CompositeLit{Type: e.implWrapperType(impl), Elts: []goast.Expr{&goast.KeyValueExpr{Key: goast.NewIdent("target"), Value: goast.NewIdent("target")}}}}}}}}
 }
 
 // A nil expression means the named receiver itself is the factory argument.
@@ -200,13 +254,16 @@ func (e *emitter) asDeclaration(impl *check.Impl, receiver types.Type, argument 
 	if argument == nil {
 		argument = goast.NewIdent("target")
 	}
-	return &goast.FuncDecl{Name: goast.NewIdent(traitAs(impl)), Recv: receiverField("target", e.goType(receiver)), Type: resultFunc(e.traitViewType(impl)), Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: e.sourceGlobal(impl.File, traitFactory(impl)), Args: []goast.Expr{argument}}}}}}}
+	return &goast.FuncDecl{Name: goast.NewIdent(traitAs(impl)), Recv: receiverField("target", e.goType(receiver)), Type: resultFunc(e.traitViewType(impl)), Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: e.implFactory(impl), Args: []goast.Expr{argument}}}}}}}
 }
 
 func (e *emitter) carrierDeclarations(carrier *traitCarrier) []goast.Decl {
 	owner := carrier.impls[0].Decl
 	e.generatedName(carrier.name, owner)
 	var out = []goast.Decl{typeDeclaration(carrier.name, &goast.StructType{Fields: &goast.FieldList{}})}
+	publicName := carrierExportedName(carrier)
+	e.generatedName(publicName, owner)
+	out = append(out, &goast.GenDecl{Tok: gotoken.TYPE, Specs: []goast.Spec{&goast.TypeSpec{Name: goast.NewIdent(publicName), Assign: 1, Type: goast.NewIdent(carrier.name)}}})
 	if e.info.EnumOf(carrier.typ) == nil {
 		e.generatedMember(carrier.typ, typeCarrierAnchor, carrier.impls[0])
 		out = append(out, e.carrierAnchor(carrier, e.goType(carrier.typ)))
@@ -244,6 +301,8 @@ func (e *emitter) carrierAnchor(carrier *traitCarrier, receiver goast.Expr) *goa
 }
 
 func (e *emitter) operationDeclaration(m *check.Member, carrier *traitCarrier) goast.Decl {
+	restore := e.memberBodyInfo(m)
+	defer restore()
 	name := traitOperation(m)
 	decl := &goast.FuncDecl{Name: goast.NewIdent(name)}
 	if carrier == nil {
@@ -268,9 +327,9 @@ func (e *emitter) operationDeclaration(m *check.Member, carrier *traitCarrier) g
 	if m.Receiver == check.ValueRef && m.Impl.Capture != check.ValueRef {
 		target = &goast.UnaryExpr{Op: gotoken.AND, X: target}
 	}
-	var wrapper goast.Expr = &goast.CompositeLit{Type: goast.NewIdent(e.traitWrapper(m.Impl)), Elts: []goast.Expr{&goast.KeyValueExpr{Key: goast.NewIdent("target"), Value: target}}}
+	var wrapper goast.Expr = &goast.CompositeLit{Type: e.implWrapperType(m.Impl), Elts: []goast.Expr{&goast.KeyValueExpr{Key: goast.NewIdent("target"), Value: target}}}
 	if m.Impl.Trait.Runtime {
-		wrapper = &goast.CallExpr{Fun: e.sourceGlobal(m.Impl.File, traitFactory(m.Impl)), Args: []goast.Expr{target}}
+		wrapper = &goast.CallExpr{Fun: e.implFactory(m.Impl), Args: []goast.Expr{target}}
 	}
 	decl.Type = ft
 	decl.Body = forwardBody(&goast.SelectorExpr{X: wrapper, Sel: goast.NewIdent(m.GoName)}, args, m.Signature)
@@ -278,12 +337,16 @@ func (e *emitter) operationDeclaration(m *check.Member, carrier *traitCarrier) g
 }
 
 func (e *emitter) inherentDeclaration(m *check.Member) goast.Decl {
-	decl := &goast.FuncDecl{Name: goast.NewIdent(inherentName(m)), Type: &goast.FuncType{Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}}
+	restore := e.memberBodyInfo(m)
+	defer restore()
+	parameters := e.implGenerics(m.Impl)
+	decl := &goast.FuncDecl{Name: goast.NewIdent(e.inherentName(m)), Type: &goast.FuncType{TypeParams: parameters, Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}}
 	decl.Body = e.functionBody(decl.Type, m.Decl.Body)
-	if !m.Static && goMethodReceiver(m.Impl.Base) {
+	if !m.Static && nativeInherentImpl(m.Impl) {
 		decl.Name = goast.NewIdent(m.GoName)
 		decl.Recv = e.params(m.Decl.Params[:1])
 		decl.Type.Params = e.params(m.Decl.Params[1:])
+		decl.Type.TypeParams = nil
 	} else {
 		e.generatedName(decl.Name.Name, m.Decl)
 	}
@@ -311,7 +374,7 @@ func (e *emitter) facadeDeclarations(facade *traitFacade) []goast.Decl {
 			// The full Self of `declare impl ... for *T` remains *T.
 			arg = &goast.UnaryExpr{Op: gotoken.AND, X: arg}
 		}
-		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(traitAs(impl)), Recv: receiverField("view", goast.NewIdent(name)), Type: resultFunc(e.traitViewType(impl)), Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: e.sourceGlobal(impl.File, traitFactory(impl)), Args: []goast.Expr{arg}}}}}}})
+		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(traitAs(impl)), Recv: receiverField("view", goast.NewIdent(name)), Type: resultFunc(e.traitViewType(impl)), Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: e.implFactory(impl), Args: []goast.Expr{arg}}}}}}})
 	}
 	return out
 }

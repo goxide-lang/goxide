@@ -26,7 +26,6 @@ func TestUnsupportedFeaturesReturnLocatedDiagnosticsWithoutPartialOutput(t *test
 		{"bar_closure", "var f = |x| x + 1", "闭包"},
 		{"unsafe_function", "unsafe func f() {}", "修饰符"},
 		{"unsafe_expression", "func f() int { return 1 }; var value = unsafe f()", "unsafe"},
-		{"where", "func f[T any](value T) T where T: any { return value }", "where"},
 		{"module", "mod child;", "mod"},
 		{"declare", "declare func f() int", "declare"},
 	}

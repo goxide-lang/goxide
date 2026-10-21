@@ -28,35 +28,42 @@ func (e *emitter) traitView(n syntax.Expr, value goast.Expr) goast.Expr {
 		value = e.expr(view.Receiver)
 	}
 	value = adjustReceiver(value, view.Address, view.Deref)
-	return &goast.CallExpr{Fun: e.sourceGlobal(view.Impl.File, traitFactory(view.Impl)), Args: []goast.Expr{value}}
+	if inferred, ok := e.inferredTraitView(view, value); ok {
+		return inferred
+	}
+	return &goast.CallExpr{Fun: e.implFactory(view.Impl), Args: []goast.Expr{value}}
 }
 
 func (e *emitter) operationFunction(selection *check.MemberSelection) goast.Expr {
 	m := selection.Member
-	if m.Trait == nil {
-		return e.sourceGlobal(m.File, inherentName(m))
-	}
-	var target types.Type
 	if selection.Bound != nil {
-		target = selection.Bound.Param
-	} else if selection.Impl != nil && carrierTarget(e.info, selection.Impl) {
-		target = selection.Impl.Target
+		if callback := e.callbackOperation(selection.Bound, m); callback != nil {
+			return callback
+		}
 	}
-	if target == nil {
-		return e.sourceGlobal(m.File, e.traitFreeOperation(m))
+	if selection.Impl != nil && selection.Impl.Template != nil {
+		if instance := e.traits.instances[instanceImplKey(e.info, selection.Impl, m.Name)]; instance != nil {
+			return e.sourceGlobal(instance.body.File, instance.name)
+		}
 	}
-	carrier := &goast.CallExpr{Fun: enumIndices(e.typeinfo("Of"), []goast.Expr{e.goType(target)})}
-	return &goast.SelectorExpr{X: carrier, Sel: goast.NewIdent(traitOperation(m))}
+	if selection.Impl != nil && parameterizedImpl(implTemplate(selection.Impl)) && (m.Trait != nil || len(implTemplate(selection.Impl).Requirements) != 0) {
+		return e.templateOperation(selection)
+	}
+	if m.Trait == nil {
+		return enumIndices(e.sourceGlobal(m.File, e.inherentName(m)), e.implTypeArgs(selection.Impl))
+	}
+	ops := e.evidenceType(check.Evidence{Bound: selection.Bound, Impl: selection.Impl})
+	return &goast.SelectorExpr{X: &goast.CompositeLit{Type: ops}, Sel: goast.NewIdent(traitOperation(m))}
 }
 
 func nativeMember(selection *check.MemberSelection) bool {
-	return selection.Impl == nil && selection.Bound == nil || selection.Member.Trait == nil && !selection.Member.Static && goMethodReceiver(selection.Impl.Base)
+	return selection.Impl == nil && selection.Bound == nil || selection.Member.Trait == nil && !selection.Member.Static && nativeInherentImpl(selection.Impl)
 }
 
 func (e *emitter) memberReceiverType(selection *check.MemberSelection) types.Type {
 	var target types.Type
 	if selection.Bound != nil {
-		target = selection.Bound.Param
+		target = traitBoundTarget(selection.Bound)
 	} else if selection.Impl != nil {
 		target = selection.Impl.Target
 	} else {
@@ -80,6 +87,9 @@ func (e *emitter) memberExpr(selection *check.MemberSelection) goast.Expr {
 	if nativeMember(selection) {
 		return &goast.SelectorExpr{X: receiver, Sel: goast.NewIdent(m.GoName)}
 	}
+	if inferred, ok := e.inferredMemberValue(selection, receiver); ok {
+		return inferred
+	}
 	// Capture a method value's receiver now, including value-copy semantics.
 	ft, args := e.memberSignature(selection.Signature)
 	captured := e.fresh("Receiver")
@@ -98,7 +108,7 @@ func (e *emitter) memberCall(call *syntax.CallExpr) (goast.Expr, bool) {
 	var fun goast.Expr
 	var args []goast.Expr
 	if m.Static {
-		fun, args = e.operationFunction(selection), e.exprs(call.Args)
+		args = e.exprs(call.Args)
 	} else {
 		receiver := selection.Receiver
 		ordinary := call.Args
@@ -126,9 +136,14 @@ func (e *emitter) memberCall(call *syntax.CallExpr) (goast.Expr, bool) {
 		if nativeMember(selection) {
 			fun = &goast.SelectorExpr{X: x, Sel: goast.NewIdent(m.GoName)}
 		} else {
-			fun = e.operationFunction(selection)
 			args = append([]goast.Expr{x}, args...)
 		}
+	}
+	if !nativeMember(selection) {
+		if inferred, ok := e.inferredOperationCall(selection, args, call.Ellipsis); ok {
+			return inferred, true
+		}
+		fun = e.operationFunction(selection)
 	}
 	result := &goast.CallExpr{Fun: fun, Args: args}
 	if call.Ellipsis {

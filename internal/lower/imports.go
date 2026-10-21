@@ -90,6 +90,11 @@ func (e *emitter) reference(id *syntax.Ident) goast.Expr {
 		return nil
 	}
 	r := e.file.References[id.ID()]
+	if e.instanceBody != nil && r.Symbol != nil && r.Symbol.Kind == resolve.TypeParam {
+		if typ := e.info.Symbols[r.Symbol]; typ != nil {
+			return e.goType(typ)
+		}
+	}
 	prelude := r.Symbol
 	for prelude != nil && prelude.AliasOf != nil {
 		prelude = prelude.AliasOf

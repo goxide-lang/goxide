@@ -1,0 +1,35 @@
+package main
+
+use fmt;
+use genericfixture::protocols;
+use genericfixture::model;
+
+struct Label { Values []int }
+var copies int
+impl protocols::Copy for Label {
+    func copy(self &Self) Self {
+        copies++
+        values := make([]int, len(self.Values))
+        copy(values, self.Values)
+        return Self{Values: values}
+    }
+}
+
+func main() {
+    original := model::Box[[]Label]::new([]Label{{Values: []int{1}}, {Values: []int{2}}})
+    copier := protocols::CopyValue[model::Box[[]Label]]
+    cloned := copier(&original)
+    original.Value[0].Values[0] = 9
+    fmt::Println(cloned.Value[0].Values[0], original.Value[0].Values[0], copies)
+    twice := protocols::Twice(&original)
+    fmt::Println(twice.Value[1].Values[0], copies)
+    table := map[string]int{"answer": 42}
+    tableCopy := protocols::CopyValue(&table)
+    table["answer"] = 7
+    fmt::Println(tableCopy["answer"], table["answer"])
+    var absent []int
+    empty := []int{}
+    fmt::Println(protocols::CopyValue(&absent) == nil, protocols::CopyValue(&empty) == nil)
+    box := model::Box[int]::new(42)
+    fmt::Println(box.get())
+}

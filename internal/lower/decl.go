@@ -3,6 +3,7 @@ package lower
 import (
 	goast "go/ast"
 	gotoken "go/token"
+	"go/types"
 
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
@@ -16,17 +17,39 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 	case *syntax.UseDecl:
 		return e.useDecl(n)
 	case *syntax.FuncDecl:
+		ordinary := false
+		if e.info.Demands != nil && !e.info.Demands.FunctionTemplates[n] {
+			ordinary = true
+			for _, body := range e.info.Demands.Bodies[n] {
+				if body.Function == nil && body.Impl == nil && body.Info != nil {
+					previousInfo, previousBody := e.info, e.instanceBody
+					e.info, e.instanceBody = body.Info, body
+					defer func() { e.info, e.instanceBody = previousInfo, previousBody }()
+					break
+				}
+			}
+		}
 		if n.Mods.Unsafe || n.Mods.Async || n.Mods.Const {
 			e.fail(n, "函数修饰符尚未降低")
-		}
-		if n.Where != nil && len(e.info.GenericBounds[n]) == 0 {
-			e.fail(n.Where, "where 约束尚未降低")
 		}
 		if n.Path != nil {
 			e.fail(n.Path, "限定路径函数声明尚未降低")
 			return nil
 		}
-		typ := &goast.FuncType{Func: e.pos(n), TypeParams: e.functionGenerics(n), Params: e.params(n.Params)}
+		signature, _ := e.info.Symbols[e.file.Definitions[n.Name.ID()]].(*types.Signature)
+		if function := e.traits.functions[signature]; function != nil && e.traits.templateFunctions[n] {
+			if e.traits.helperFunctions[n] {
+				e.itemExtras = append(e.itemExtras, e.templateFunctionDeclaration(function)...)
+			}
+			e.itemExtras = append(e.itemExtras, e.instanceDeclarations(n)...)
+		}
+		if !ordinary && e.info.Demands != nil && e.info.Demands.FunctionTemplates[n] {
+			if e.traits.legacyFunctions[n] {
+				return e.traitFunctionDeclaration(n)
+			}
+			return nil
+		}
+		typ := &goast.FuncType{Func: e.pos(n), TypeParams: e.functionTypeParameters(n), Params: e.params(n.Params)}
 		if len(n.Results) != 0 {
 			typ.Results = e.params(n.Results)
 		}

@@ -1,0 +1,31 @@
+package protocols
+
+pub trait Copy { func copy(self &Self) Self }
+
+impl Copy for int {
+    func copy(self &Self) Self { return *self }
+}
+
+impl[T Copy] Copy for []T {
+    func copy(self &Self) Self {
+        if *self == nil { return nil }
+        result := make([]T, len(*self))
+        for i := range *self { result[i] = Copy::copy(&(*self)[i]) }
+        return result
+    }
+}
+
+impl[K comparable, V Copy] Copy for map[K]V {
+    func copy(self &Self) Self {
+        if *self == nil { return nil }
+        result := make(map[K]V, len(*self))
+        for key, value := range *self { result[key] = Copy::copy(&value) }
+        return result
+    }
+}
+
+pub func CopyValue[T Copy](value &T) T { return Copy::copy(value) }
+pub func Twice[T Copy](value &T) T {
+    first := CopyValue[T](value)
+    return CopyValue(&first)
+}

@@ -15,6 +15,17 @@ import (
 )
 
 func prepareProject(directory string, options compile.Options, stderr io.Writer) (*compile.Result, error) {
+	var result *compile.Result
+	err := withProcHost(stderr, func(run func([]byte, pm.Request) ([]byte, error), diagnostic func(string, expand.ProcDiagnostic)) error {
+		options.RunProcMacro, options.OnProcDiagnostic = run, diagnostic
+		var err error
+		result, err = compile.PrepareProject(directory, options)
+		return err
+	})
+	return result, err
+}
+
+func withProcHost(stderr io.Writer, work func(func([]byte, pm.Request) ([]byte, error), func(string, expand.ProcDiagnostic)) error) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var host *procmacro.WASIHost
@@ -23,7 +34,7 @@ func prepareProject(directory string, options compile.Options, stderr io.Writer)
 			_ = host.Close()
 		}
 	}()
-	options.RunProcMacro = func(wasm []byte, request pm.Request) ([]byte, error) {
+	run := func(wasm []byte, request pm.Request) ([]byte, error) {
 		// Only intercept interrupts while a cancellable guest is active. Other
 		// preparation steps retain the CLI's normal interrupt behavior.
 		callCtx, stop := signal.NotifyContext(ctx, os.Interrupt)
@@ -42,7 +53,7 @@ func prepareProject(directory string, options compile.Options, stderr io.Writer)
 		return host.Run(wasm, request)
 	}
 	reportedErrors := false
-	options.OnProcDiagnostic = func(filename string, diagnostic expand.ProcDiagnostic) {
+	diagnostic := func(filename string, diagnostic expand.ProcDiagnostic) {
 		if diagnostic.Severity == pm.Error {
 			reportedErrors = true
 		}
@@ -59,9 +70,9 @@ func prepareProject(directory string, options compile.Options, stderr io.Writer)
 		}
 		fmt.Fprintf(stderr, "%s: %s: %s\n", filename, diagnostic.Severity, diagnostic.Message)
 	}
-	result, err := compile.PrepareProject(directory, options)
+	err := work(run, diagnostic)
 	if reportedErrors {
 		err = lower.SummarizeProcDiagnostics(err)
 	}
-	return result, err
+	return err
 }

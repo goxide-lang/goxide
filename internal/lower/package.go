@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/config"
@@ -18,6 +19,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/printer"
 )
 
 // PackageOptions controls generation for a package in an existing Go project.
@@ -27,6 +29,9 @@ type PackageOptions struct {
 	RejectConfiguration bool // Partial in-place generation cannot switch package configuration.
 	ProcLibraries       []*ProcLibrary
 	RuntimeRoots        []RuntimeRoot
+	SourcePackages      []SourcePackage
+	// Expanded, when supplied, receives resolved source for the original inputs.
+	Expanded map[string][]byte
 	// OnProcDiagnostic receives every procedural diagnostic in expansion order,
 	// including warnings, notes, and errors when compilation fails.
 	// Filename is the original input key, or a canonical source key for a
@@ -65,6 +70,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	sort.Strings(names)
 	imports := &moduleImporter{external: goImports, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: map[string]string{packagePath: packagePath}}
 	strict := map[string]string{}
+	var nativeEdges []nativeCrateImport
 	for _, name := range names {
 		key := path.Join(packagePath, filepath.Base(name))
 		if displayNames[key] != "" {
@@ -104,9 +110,22 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 				return nil, nativeErr
 			}
 			files[key] = tree
+			for _, imported := range file.Imports {
+				target, err := strconv.Unquote(imported.Path.Value)
+				if err != nil {
+					return nil, err
+				}
+				nativeEdges = append(nativeEdges, nativeCrateImport{packagePath, target, key})
+			}
 		default:
 			return nil, fmt.Errorf("%s: expected .gox or .go source", name)
 		}
+	}
+	if err := prepareSourcePackages(options.SourcePackages, files, configs, rootConfigs, imports, goImports); err != nil {
+		return nil, err
+	}
+	if imports.crates != nil {
+		imports.crates.edges = append(imports.crates.edges, nativeEdges...)
 	}
 	entries, err := procmacro.Collect(files, packagePath, options.procLibrary != nil)
 	if err != nil {
@@ -133,7 +152,11 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 			imports.namespaces[requirement.target] = requirement
 		}
 	}
-	packages := resolve.Resolve(files, nil)
+	var sourcePaths resolve.Importer
+	if imports.crates != nil {
+		sourcePaths = imports.crates
+	}
+	packages := resolve.Resolve(files, sourcePaths)
 	imports.SetSourcePackages(packages.Packages)
 	var groups [][]*syntax.File
 	for _, pkg := range packages.Packages {
@@ -173,6 +196,12 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	if len(resolved.Diagnostics) != 0 {
 		return nil, resolved.Diagnostics[0]
 	}
+	if err := imports.checkSourceRoots(resolved); err != nil {
+		return nil, err
+	}
+	if err := imports.checkCrateImports(resolved); err != nil {
+		return nil, err
+	}
 	expandedFiles := make(map[string]*syntax.File, len(files))
 	lowerFiles := map[string]*syntax.File{}
 	for name, file := range resolved.Files {
@@ -200,6 +229,9 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	output = make(map[string][]byte, len(generated))
 	for name, data := range generated {
 		output[displayNames[name]] = data
+		if options.Expanded != nil {
+			options.Expanded[displayNames[name]] = []byte(printer.Source(resolved.Files[name].AST))
+		}
 	}
 	return output, nil
 }

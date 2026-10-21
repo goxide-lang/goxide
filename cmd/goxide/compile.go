@@ -170,7 +170,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		return fmt.Errorf("%s requires the host target %s; selected %s", mode, environment.Host, environment.Target)
 	}
 	if nativeGeneration && (*dest == "" || *dest == "-") && (info.IsDir() || filepath.Ext(input) == ".gox") {
-		return generatePackage(req, out)
+		return generatePackage(req, out, stderr)
 	}
 	if (mode == "transpile" || mode == "expand") && *dest == "-" {
 		*dest = ""
@@ -291,8 +291,20 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if nativeGo {
 			result, err = compileNativeGoFile(input, src)
 		} else {
-			imp := typecheck.NewImporter(input, typecheck.ImporterOptions{Config: req.config, ModFile: owner.modFile})
-			result, err = compileSourceFile(input, src, owner.packagePath, imp, roots, req.config)
+			expanded := map[string][]byte{}
+			newImporter := func() types.Importer {
+				return typecheck.NewImporter(input, typecheck.ImporterOptions{Config: req.config, ModFile: owner.modFile})
+			}
+			var generated map[string][]byte
+			generated, err = compileNativePackage(owner, roots, req.config, nil, stderr, map[string][]byte{input: src}, newImporter, lower.PackageOptions{Config: req.config, Expanded: expanded})
+			if err == nil && generated == nil {
+				result, err = compileSourceFile(input, src, owner.packagePath, newImporter(), roots, req.config)
+			} else {
+				if err == nil {
+					err = typecheck.CheckPackage(owner.packagePath, generated, newImporter(), req.config.Sizes())
+				}
+				result = compiledFile{Go: generated[input], Expanded: expanded[input]}
+			}
 		}
 	} else if nativeGo {
 		result, err = compileNativeGoFile(input, src)

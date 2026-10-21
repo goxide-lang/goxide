@@ -170,7 +170,7 @@ func (s selection) children(n ast.Node) error {
 			return false
 		case *ast.Attr:
 			if configName(child) != "" {
-				*s.used = true
+				s.usedConfiguration()
 				err = s.fail(child, "configuration attributes require a complete top-level item")
 			}
 			return false
@@ -189,7 +189,7 @@ func (s selection) attrs(attrs []*ast.Attr) ([]*ast.Attr, bool, error) {
 			out = append(out, attr)
 			continue
 		}
-		*s.used = true
+		s.usedConfiguration()
 		if attr.Inner || attr.Args == nil || attr.Args.Delim != ast.Paren {
 			return nil, false, s.fail(attr, name+" requires parenthesized arguments")
 		}
@@ -429,6 +429,21 @@ func (e *engine) selection(file *ast.File) selection {
 	return selection{file: file, engine: e, config: func(file *ast.File) config.Config { return e.configs[file] }, used: &e.r.UsesConfiguration}
 }
 
+func (s selection) usedConfiguration() {
+	*s.used = true
+	if s.engine != nil {
+		s.engine.recordConfiguration(s.file)
+	}
+}
+
+func (e *engine) recordConfiguration(file *ast.File) {
+	e.r.UsesConfiguration = true
+	if e.r.ConfigurationFiles == nil {
+		e.r.ConfigurationFiles = map[*ast.File]bool{}
+	}
+	e.r.ConfigurationFiles[file] = true
+}
+
 func (s selection) predicate(tokens []ast.TokenOrTree, owner *ast.File) (bool, error) {
 	configuration := s.config(owner)
 	destination := s.config(s.file)
@@ -442,7 +457,7 @@ func (s selection) predicate(tokens []ast.TokenOrTree, owner *ast.File) (bool, e
 }
 
 func (e *engine) cfg(n ast.Node, args *ast.TokenTree, kind fragmentKind, file *ast.File, parent ast.ExpnID) (ast.Node, bool, error) {
-	e.r.UsesConfiguration = true
+	e.recordConfiguration(file)
 	s := e.selection(file)
 	if kind != exprKind {
 		return nil, true, s.fail(n, "cfg! requires an expression position")

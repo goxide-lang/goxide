@@ -21,6 +21,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/rootconfig"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/printer"
 )
 
 // Module is a writable staging directory prepared by the caller. Path is its
@@ -46,7 +47,20 @@ type Module struct {
 	// module discovery finishes; intermediate discovery passes are not reported.
 	// Filename is the canonical source key, including the owning package path.
 	OnProcDiagnostic func(filename string, diagnostic expand.ProcDiagnostic)
+	// OnSourcePackages receives the final selected ordinary dependency sources,
+	// excluding the first module, before they are replaced by generated Go.
+	OnSourcePackages func([]SourcePackage) error
+	NativePackage    *NativePackage
 	procLibrary      *ProcLibrary
+}
+
+// NativePackage retains one native invocation's importer, source diagnostics,
+// and output selection while it joins the complete dependency source graph.
+type NativePackage struct {
+	Importer                            types.Importer
+	DisplayNames                        map[string]string
+	Generated, Expanded                 map[string][]byte
+	LineDirectives, RejectConfiguration bool
 }
 
 // Crate describes an authored target without changing its Go package identity.
@@ -95,8 +109,14 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	configs := map[*syntax.File]config.Config{}
 	rootConfigs := map[*syntax.File]moduleRootConfig{}
 	var expanded *expand.Result
-	defer func() { err = FormatSourceDiagnostic(err, files, nil, expanded) }()
+	nativePackage := modules[0].NativePackage
+	var displayNames map[string]string
+	if nativePackage != nil {
+		displayNames = nativePackage.DisplayNames
+	}
+	defer func() { err = FormatSourceDiagnostic(err, files, displayNames, expanded) }()
 	diskNames := map[string]string{}
+	diskOutputs := map[string]string{}
 	owners := map[string]string{}
 	strictRoots := map[string]string{}
 	var requirements []rootRequirement
@@ -108,6 +128,26 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 		if err != nil {
 			return err
 		}
+		if module.NativePackage != nil {
+			selected := make(map[string]bool, len(names))
+			for _, name := range names {
+				selected[name] = true
+			}
+			// Explicit native inputs have already been selected by the caller,
+			// including names and directories omitted by package discovery.
+			for key := range module.NativePackage.DisplayNames {
+				relative, ok := strings.CutPrefix(key, module.Path+"/")
+				if !ok || !filepath.IsLocal(filepath.FromSlash(relative)) {
+					return fmt.Errorf("native source %s is outside module %s", key, module.Path)
+				}
+				name := filepath.Join(module.Dir, filepath.FromSlash(relative))
+				if !selected[name] {
+					names = append(names, name)
+					selected[name] = true
+				}
+			}
+			sort.Strings(names)
+		}
 		roots := module.Roots
 		if roots == nil {
 			roots, err = rootconfig.Load(module.Dir)
@@ -116,18 +156,20 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 			}
 		}
 		for _, name := range names {
-			matches, err := matchesModuleSource(name, module.Config.Environment.Context(module.Tags, module.Race))
-			if err != nil {
-				return err
-			}
-			if !matches {
-				continue
-			}
 			rel, err := filepath.Rel(module.Dir, name)
 			if err != nil {
 				return err
 			}
 			key := path.Join(module.Path, filepath.ToSlash(rel))
+			if displayNames[key] == "" {
+				matches, err := matchesModuleSource(name, module.Config.Environment.Context(module.Tags, module.Race))
+				if err != nil {
+					return err
+				}
+				if !matches {
+					continue
+				}
+			}
 			if !crates.selected(module, path.Dir(key)) {
 				continue
 			}
@@ -135,6 +177,9 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 				return fmt.Errorf("duplicate source file %s", key)
 			}
 			target := strings.TrimSuffix(name, ".gox") + ".go"
+			if displayNames[key] != "" {
+				target = strings.TrimSuffix(name, ".gox") + "_gox.go"
+			}
 			if _, err := os.Stat(target); err == nil {
 				return fmt.Errorf("%s: generated Go would overwrite an existing file", key)
 			} else if !os.IsNotExist(err) {
@@ -151,8 +196,12 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 					return &Diagnostic{File: key, Span: d.Span, Message: d.Message, Origin: resolve.Origin{File: key, Span: d.Span}}
 				}
 			}
-			if _, err := expand.Configure(file, module.Config); err != nil {
+			used, err := expand.Configure(file, module.Config)
+			if err != nil {
 				return err
+			}
+			if used && displayNames[key] != "" && nativePackage.RejectConfiguration {
+				return fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
 			}
 			configs[file] = module.Config
 			fileRoots, route := crates.roots(module, path.Dir(key), roots)
@@ -161,6 +210,7 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 				addCrateUse(file)
 			}
 			diskNames[key] = name
+			diskOutputs[key] = target
 			owners[path.Dir(key)] = module.Path
 			if module.Roots != nil {
 				strictRoots[key] = module.Path
@@ -200,7 +250,10 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	if err != nil {
 		return err
 	}
-	external := sourceModuleImporter(modules[0])
+	var external types.Importer = sourceModuleImporter(modules[0])
+	if nativePackage != nil && nativePackage.Importer != nil {
+		external = nativePackage.Importer
+	}
 	if producer != nil {
 		producer.importer = external
 	}
@@ -248,7 +301,7 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	if crates.expandedModules(expanded, rootConfigs, extra) {
 		return compileModules(modules, extra)
 	}
-	reportProcDiagnostics(modules[0].OnProcDiagnostic, files, nil, expanded)
+	reportProcDiagnostics(modules[0].OnProcDiagnostic, files, displayNames, expanded)
 	if cycle := macros.checkCycles(expanded); cycle != nil {
 		return cycle
 	}
@@ -257,6 +310,13 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	}
 	if err != nil {
 		return err
+	}
+	if nativePackage != nil && nativePackage.RejectConfiguration {
+		for name, file := range files {
+			if displayNames[name] != "" && expanded.ConfigurationFiles[file] {
+				return fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
+			}
+		}
 	}
 	for _, requirement := range applyExpandedRoots(expanded, rootConfigs, files) {
 		if _, exists := imports.namespaces[requirement.target]; !exists {
@@ -300,11 +360,21 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 			return err
 		}
 	}
+	if modules[0].OnSourcePackages != nil {
+		sources, err := snapshotSourcePackages(modules[1:], crates, files, rootConfigs)
+		if err != nil {
+			return err
+		}
+		if err := modules[0].OnSourcePackages(sources); err != nil {
+			return err
+		}
+	}
 	lowerFiles := make(map[string]*syntax.File, len(diskNames))
 	for name := range diskNames {
 		lowerFiles[name] = expandedFiles[name]
 	}
-	output, err := Lower(lowerFiles, info)
+	lineDirectives := nativePackage != nil && nativePackage.LineDirectives
+	output, err := lower(lowerFiles, info, emissionOptions{lineDirectives: lineDirectives, originals: files})
 	if err != nil {
 		return err
 	}
@@ -325,13 +395,23 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	if err := crates.prune(); err != nil {
 		return err
 	}
+	if nativePackage != nil {
+		for name, display := range displayNames {
+			if nativePackage.Generated != nil {
+				nativePackage.Generated[display] = output[name]
+			}
+			if nativePackage.Expanded != nil && resolved.Files[name] != nil {
+				nativePackage.Expanded[display] = []byte(printer.Source(resolved.Files[name].AST))
+			}
+		}
+	}
 	names := make([]string, 0, len(output))
 	for name := range output {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		target := strings.TrimSuffix(diskNames[name], ".gox") + ".go"
+		target := diskOutputs[name]
 		if err := os.WriteFile(target, output[name], 0o644); err != nil {
 			return err
 		}

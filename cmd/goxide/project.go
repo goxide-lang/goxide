@@ -341,6 +341,11 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err := copyDirectorySources(root, input, stage, manifest.Module, roots, tags, mode == "test", cfg); err != nil {
 		return err
 	}
+	sourceManifest, selectedRoots, _, err := nativeSourceDependencies(root, filepath.Join(stage, "go.mod"), roots, cfg)
+	if err != nil {
+		return err
+	}
+	manifest.Dependencies, roots = sourceManifest.Dependencies, selectedRoots
 	for _, name := range []string{"go.mod", "go.sum", rootconfig.Filename} {
 		if err := os.Remove(filepath.Join(stage, name)); err != nil && !os.IsNotExist(err) {
 			return err

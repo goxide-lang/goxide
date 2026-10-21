@@ -138,6 +138,11 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 		if !packageNames[path.Dir(src.key)][src.name] {
 			continue
 		}
+		if crates != nil && crates.owners[path.Dir(src.key)] == nil {
+			for _, target := range src.imports {
+				crates.edges = append(crates.edges, nativeCrateImport{path.Dir(src.key), target, src.key})
+			}
+		}
 		set := gotoken.NewFileSet()
 		file, err := goparser.ParseFile(set, src.key, src.data, goparser.SkipObjectResolution)
 		if err != nil {

@@ -31,6 +31,7 @@ type stagedRole struct {
 	wasm       []byte
 	sdk        string
 	unit       *project.Unit
+	sources    []lower.SourcePackage
 }
 
 func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target project.Target, kind string, configuration config.Config, options Options) (*Result, error) {
@@ -117,8 +118,27 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 				return nil, err
 			}
 		} else {
+			if options.PrepareNativePackage != nil {
+				if err := options.PrepareNativePackage(stage.modules); err != nil {
+					return nil, err
+				}
+			}
+			if options.OnPreparedSources != nil {
+				stage.modules[0].OnSourcePackages = func(sources []lower.SourcePackage) error { stage.sources = sources; return nil }
+			}
 			if err := lower.CompileModules(stage.modules); err != nil {
 				return nil, err
+			}
+			if options.OnPreparedSources != nil {
+				prepared := PreparedSources{SourcePackages: stage.sources, Roots: stage.modules[0].Roots, RuntimeRoots: stage.modules[0].RuntimeRoots}
+				for _, dependency := range graphs {
+					if producer := stages[dependency]; producer.library != nil {
+						prepared.Macros = append(prepared.Macros, ProcArtifact{Library: producer.library, WASM: append([]byte(nil), producer.wasm...)})
+					}
+				}
+				if err := options.OnPreparedSources(prepared); err != nil {
+					return nil, err
+				}
 			}
 			arguments := []string{"list", "-mod=readonly", "-tags=" + strings.Join(options.Tags, ","), "-f", "{{.Name}}"}
 			if options.Race {
@@ -261,10 +281,15 @@ func stageRole(graph *project.Graph, target project.Target, kind string, configu
 
 func runtimeRoots(graph *project.Graph, node *project.Node, roots paths.Roots, rootPackage string) []lower.RuntimeRoot {
 	var result []lower.RuntimeRoot
-	for _, alias := range project.Keys(node.Requests) {
+	for _, alias := range project.Keys(roots) {
 		root := roots[alias]
 		if root.Source == "toolchain" || root.Unavailable != "" || root.ModulePath == "" {
 			continue
+		}
+		if _, requested := node.Requests[alias]; !requested {
+			if _, selected := graph.Plan[root.ModulePath]; !selected {
+				continue
+			}
 		}
 		if child := node.Children[alias]; child != nil && child.Manifest.Lib != nil && child.Manifest.Lib.ProcMacro {
 			continue

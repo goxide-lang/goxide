@@ -93,7 +93,8 @@ type Result struct {
 	ProcDiagnostics []ProcDiagnostic
 	// UsesConfiguration includes evaluated source and macro-produced constructs,
 	// even when a false predicate removes the entire generated item.
-	UsesConfiguration bool
+	UsesConfiguration  bool
+	ConfigurationFiles map[*ast.File]bool
 	// TargetFiles contains original destination files, including removed items.
 	TargetFiles map[*ast.File]bool
 	Allocations map[*ast.CallExpr]bool
@@ -192,7 +193,7 @@ func Expand(files []*ast.File, resolver Resolver, configs ...map[*ast.File]confi
 // identities across the complete source graph.
 func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*ast.File]config.Config) (*Result, error) {
 	e := &engine{r: &Result{Expansions: map[ast.ExpnID]Expansion{}, Contexts: map[ast.SyntaxCtx]Context{}, RuntimeRoots: map[ast.SyntaxCtx]RuntimeRoot{},
-		Origins: map[ast.Node]Origin{}, Locations: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}, TargetFiles: map[*ast.File]bool{}}, resolver: resolver,
+		Origins: map[ast.Node]Origin{}, Locations: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}, TargetFiles: map[*ast.File]bool{}, ConfigurationFiles: map[*ast.File]bool{}}, resolver: resolver,
 		defs: map[Key]definition{}, trees: map[*ast.TokenTree][]syntaxToken{}, localFiles: map[*ast.File]bool{}, captured: map[ast.Node]bool{}, lexical: map[ast.Node]Scope{}, originals: map[ast.Node]ast.Node{}}
 	if len(configs) > 0 {
 		e.configs = configs[0]
@@ -209,6 +210,9 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*a
 			}
 			used, err := Configure(f, configuration)
 			e.r.UsesConfiguration = e.r.UsesConfiguration || used
+			if used {
+				e.r.ConfigurationFiles[f] = true
+			}
 			for _, targetFile := range configuration.Reads.TargetFiles() {
 				e.r.TargetFiles[targetFile] = true
 			}

@@ -42,13 +42,14 @@ type contextView struct {
 }
 
 type hygiene struct {
-	expanded   *expand.Result
-	names      map[*ast.File]string
-	result     *Result
-	views      map[contextView]*Scope
-	boundaries map[*Scope]expand.Context
-	callSites  map[ast.ExpnID]*Scope
-	owners     map[*Scope]ast.Node
+	expanded      *expand.Result
+	names         map[*ast.File]string
+	result        *Result
+	views         map[contextView]*Scope
+	boundaries    map[*Scope]expand.Context
+	callSites     map[ast.ExpnID]*Scope
+	owners        map[*Scope]ast.Node
+	genericOwners map[expand.Origin]expand.Origin
 }
 
 func (h *hygiene) init(result *Result) {
@@ -257,7 +258,7 @@ func (h *hygiene) capturedGenericBindings(scope *Scope, origin expand.Origin) ma
 	for _, param := range params.Params {
 		captured = captured || containsOrigin(h.expanded.Origins[param], origin)
 		for _, name := range param.Names {
-			captured = captured || containsOrigin(h.expanded.Origins[name], origin)
+			captured = captured || containsOrigin(h.expanded.Origins[name], origin) || containsOrigin(h.sourceGenericOwner(name), origin)
 		}
 	}
 	if !captured {
@@ -270,6 +271,49 @@ func (h *hygiene) capturedGenericBindings(scope *Scope, origin expand.Origin) ma
 		}
 	}
 	return bindings
+}
+
+// A copied field type still refers to the generic parameters of its source
+// type or enum. Preserve that relationship when a derive emits a new impl.
+// Function and block origins are deliberately excluded: their locals must keep
+// the lexical scopes handled by captureScope.
+func (h *hygiene) sourceGenericOwner(name *ast.Ident) expand.Origin {
+	origin := h.expanded.Origins[name]
+	if origin.File == nil {
+		return expand.Origin{}
+	}
+	if owner, ok := h.genericOwners[origin]; ok {
+		return owner
+	}
+	var owner expand.Origin
+	ast.Walk(origin.File, func(node ast.Node) bool {
+		var params *ast.GenericParams
+		switch node := node.(type) {
+		case *ast.TypeDecl:
+			params = node.Generics
+		case *ast.TypeSpec:
+			params = node.Generics
+		case *ast.EnumDecl:
+			params = node.Generics
+		}
+		if params == nil {
+			return true
+		}
+		for _, group := range params.Params {
+			for _, parameter := range group.Names {
+				if containsOrigin(expand.Origin{File: origin.File, Span: parameter.Span()}, origin) {
+					owner = expand.Origin{File: origin.File, Span: node.Span()}
+					return false
+				}
+			}
+		}
+		return true
+	})
+	if h.genericOwners == nil {
+		h.genericOwners = map[expand.Origin]expand.Origin{}
+	}
+	h.genericOwners[origin] = owner
+	return owner
 }
 
 func containsOrigin(outer, inner expand.Origin) bool {

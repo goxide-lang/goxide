@@ -46,6 +46,13 @@ func (c *checker) macroTypeArgument(node ast.Node) bool {
 	return true
 }
 
+func (c *checker) genericExprType(argument ast.Expr) types.Type {
+	if !c.macroTypeArgument(argument) {
+		return types.Typ[types.Invalid]
+	}
+	return c.exprType(argument)
+}
+
 func (c *checker) genericArgType(argument *ast.GenericArg) types.Type {
 	if !c.macroTypeArgument(argument) {
 		return types.Typ[types.Invalid]

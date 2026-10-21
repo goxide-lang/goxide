@@ -309,13 +309,13 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			}
 			args := make([]types.Type, len(n.Indices))
 			for i, a := range n.Indices {
-				args[i] = c.exprType(a)
+				args[i] = c.genericExprType(a)
 			}
 			t = c.instantiateFunctionType(sig, args, nil, n)
 		} else if named, ok := x.(*types.Named); ok && named.TypeParams().Len() > 0 && c.isTypeExpr(n.X) {
 			args := make([]types.Type, len(n.Indices))
 			for i, a := range n.Indices {
-				args[i] = c.exprType(a)
+				args[i] = c.genericExprType(a)
 			}
 			if inst, err := c.instantiateGo(named, args); err == nil {
 				t = inst
@@ -619,9 +619,6 @@ func tupleTypes(t *types.Tuple) []types.Type {
 }
 
 func (c *checker) exprType(e ast.Expr) types.Type {
-	if !c.macroTypeArgument(e) {
-		return types.Typ[types.Invalid]
-	}
 	if t, ok := e.(*ast.TypeExpr); ok {
 		return c.typ(t.Type)
 	}

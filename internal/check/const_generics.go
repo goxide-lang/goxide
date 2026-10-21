@@ -146,7 +146,7 @@ func (c *checker) explicitIndexArguments(sig *types.Signature, node *ast.IndexEx
 				}
 				constants = append(constants, value)
 			} else {
-				actual = append(actual, c.exprType(argument))
+				actual = append(actual, c.genericExprType(argument))
 			}
 		}
 	}

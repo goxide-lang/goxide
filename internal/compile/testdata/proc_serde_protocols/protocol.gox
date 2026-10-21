@@ -22,6 +22,8 @@ pub trait Deserialize {
  func deserialize(deserializer serde::Deserializer) (Self,error)
  func missing() (Self,bool)
 }
+pub trait LibraryDefault { func r#default() Self }
+pub func Make[T LibraryDefault]() T { return T::r#default() }
 pub func Write[T Serialize](value &T, serializer serde::Serializer) error { return Serialize::serialize(value,serializer) }
 pub func Read[T Deserialize](deserializer serde::Deserializer) (T,error) { return T::deserialize(deserializer) }
 pub func Missing[T Deserialize]() (T,bool) { return T::missing() }
@@ -107,4 +109,21 @@ impl[T any] Deserialize for Option[T] where T:Deserialize {
   return result,err
  }
  func missing() (Self,bool) { return Option[T]::None,true }
+}
+impl[T any] Serialize for *T where T:Serialize {
+ func serialize(self &Self, serializer serde::Serializer) error {
+  if *self==nil { return serializer.None() }
+  return serializer.Some(func(child serde::Serializer)error{return Write(&**self,child)})
+ }
+}
+impl[T any] Deserialize for *T where T:Deserialize {
+ func deserialize(deserializer serde::Deserializer) (Self,error) {
+  var result *T
+  err:=deserializer.Option(serde::VisitorFuncs{
+   OnNone:func()error{return nil},
+   OnSome:func(child serde::Deserializer)error{value,err:=Read[T](child);if err!=nil{return err};result=&value;return nil},
+  })
+  return result,err
+ }
+ func missing() (Self,bool) { return nil,false }
 }

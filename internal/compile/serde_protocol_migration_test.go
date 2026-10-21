@@ -111,6 +111,7 @@ pub struct Envelope {
  pub Amount Amount
 }
 `)
+	writeProjectFile(t, model, "defaults.gox", fixture("defaults.gox"))
 	writeProjectFile(t, app, project.ManifestName, fmt.Sprintf(`[go_mod]
 module="example.org/serde-consumer"
 go="1.27"
@@ -134,8 +135,8 @@ version=%q
 	if err != nil {
 		t.Fatal(err)
 	}
-	if deriveCalls != 6 {
-		t.Fatalf("ordinary library derive calls = %d, want 6", deriveCalls)
+	if deriveCalls != 11 {
+		t.Fatalf("ordinary library derive calls = %d, want 11", deriveCalls)
 	}
 	for _, operation := range []string{"build", "run"} {
 		arguments := []string{operation, "-mod=readonly"}

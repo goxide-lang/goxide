@@ -42,28 +42,43 @@ func serdeSplice(ctx pm.Context, stream token.TokenStream, bindings map[string]t
 	}
 	return result
 }
-func serdeWire(field syn.Field, name syn.Ident) (string, error) {
-	wire := name.Text()
+
+type serdeField struct {
+	wire         string
+	defaultValue bool
+	skip         bool
+}
+
+func serdeOptions(field syn.Field, name syn.Ident) (serdeField, error) {
+	options := serdeField{wire: name.Text()}
 	for _, attribute := range field.Attributes() {
 		path := attribute.Path().Tokens()
 		if len(path) != 1 || path[0].Text() != "serde" {
-			return "", fmt.Errorf("unsupported attribute")
+			return options, fmt.Errorf("unsupported attribute")
 		}
 		arguments := attribute.Arguments().Tokens()
 		if len(arguments) != 1 || arguments[0].Delimiter() != token.Parenthesis {
-			return "", fmt.Errorf("invalid serde attribute")
+			return options, fmt.Errorf("invalid serde attribute")
 		}
 		parts := arguments[0].Children().Tokens()
+		if len(parts) == 1 && parts[0].Text() == "default" {
+			options.defaultValue = true
+			continue
+		}
+		if len(parts) == 1 && parts[0].Text() == "skip" {
+			options.skip = true
+			continue
+		}
 		if len(parts) != 3 || parts[0].Text() != "rename" || parts[1].Text() != "=" {
-			return "", fmt.Errorf("only rename is used by this fixture")
+			return options, fmt.Errorf("expected rename, default or skip")
 		}
 		var err error
-		wire, err = strconv.Unquote(parts[2].Text())
+		options.wire, err = strconv.Unquote(parts[2].Text())
 		if err != nil {
-			return "", err
+			return options, err
 		}
 	}
-	return wire, nil
+	return options, nil
 }
 func deriveSerde(ctx pm.Context, input token.TokenStream, write bool) pm.Output {
 	item, err := syn.Parse(input)
@@ -95,6 +110,7 @@ func deriveSerde(ctx pm.Context, input token.TokenStream, write bool) pm.Output 
 	fields, record := item.Type().StructFields()
 	if record {
 		names, wires, types := []string{}, []string{}, []string{}
+		options := []serdeField{}
 		seen := map[string]bool{}
 		for _, field := range fields {
 			if len(field.Names()) == 0 {
@@ -104,41 +120,74 @@ func deriveSerde(ctx pm.Context, input token.TokenStream, write bool) pm.Output 
 				if name.Text() == "_" {
 					return pm.Failure("blank fields are not supported", field.Span())
 				}
-				wire, err := serdeWire(field, name)
+				option, err := serdeOptions(field, name)
 				if err != nil {
 					return pm.Failure(err.Error(), field.Span())
 				}
-				if seen[wire] {
+				if !option.skip && seen[option.wire] {
 					return pm.Failure("duplicate wire name", field.Span())
 				}
-				seen[wire] = true
+				if !option.skip {
+					seen[option.wire] = true
+				}
 				n := len(names)
 				fieldName, fieldType := fmt.Sprintf("__field%d", n), fmt.Sprintf("__type%d", n)
 				names = append(names, fieldName)
 				types = append(types, fieldType)
-				wires = append(wires, strconv.Quote(wire))
+				wires = append(wires, strconv.Quote(option.wire))
+				options = append(options, option)
 				bindings[fieldName], bindings[fieldType] = name.ToTokens(), field.Type().ToTokens()
-				bounds = append(bounds, fieldType+":__runtime::"+protocol)
+				if !option.skip {
+					bounds = append(bounds, fieldType+":__runtime::"+protocol)
+				}
+				if !write && (option.defaultValue || option.skip) {
+					bounds = append(bounds, fieldType+":__runtime::LibraryDefault")
+				}
+			}
+		}
+		var activeWires []string
+		for i, wire := range wires {
+			if !options[i].skip {
+				activeWires = append(activeWires, wire)
 			}
 		}
 		if write {
-			fmt.Fprintf(&body, "func serialize(self &Self,serializer __runtime::Serializer)error { writer,err:=serializer.Struct(%q,%d);if err!=nil{return err};", item.Name().Text(), len(names))
+			fmt.Fprintf(&body, "func serialize(self &Self,serializer __runtime::Serializer)error { writer,err:=serializer.Struct(%q,%d);if err!=nil{return err};", item.Name().Text(), len(activeWires))
 			for i, name := range names {
+				if options[i].skip {
+					continue
+				}
 				fmt.Fprintf(&body, "if err:=writer.Field(%s,func(child __runtime::Serializer)error{return __runtime::Write(&self.%s,child)});err!=nil{return __runtime::AtField(err,%s)};", wires[i], name, wires[i])
 			}
 			body.WriteString("return writer.End() }")
 		} else {
 			body.WriteString("func deserialize(deserializer __runtime::Deserializer)(Self,error){var result Self;")
 			for i := range names {
-				fmt.Fprintf(&body, "seen%d:=false;", i)
+				if !options[i].skip {
+					fmt.Fprintf(&body, "seen%d:=false;", i)
+				}
 			}
-			fmt.Fprintf(&body, "err:=deserializer.Struct(%q,[]string{%s},__runtime::VisitorFuncs{OnMap:func(fields __runtime::MapAccess)error{for{var name string;more,err:=fields.NextKey(func(child __runtime::Deserializer)error{value,err:=__runtime::ReadString(child);name=value;return err});if err!=nil{return err};if !more{break};switch name{", item.Name().Text(), strings.Join(wires, ","))
+			fmt.Fprintf(&body, "err:=deserializer.Struct(%q,[]string{%s},__runtime::VisitorFuncs{OnMap:func(fields __runtime::MapAccess)error{for{var name string;more,err:=fields.NextKey(func(child __runtime::Deserializer)error{value,err:=__runtime::ReadString(child);name=value;return err});if err!=nil{return err};if !more{break};switch name{", item.Name().Text(), strings.Join(activeWires, ","))
 			for i, name := range names {
+				if options[i].skip {
+					continue
+				}
 				fmt.Fprintf(&body, "case %s:if seen%d{return __runtime::NewError(__runtime::DuplicateField,name)};seen%d=true;if err:=fields.NextValue(func(child __runtime::Deserializer)error{value,err:=__runtime::Read[%s](child);result.%s=value;return __runtime::AtField(err,%s)});err!=nil{return err};", wires[i], i, i, types[i], name, wires[i])
 			}
 			body.WriteString("default:if err:=fields.NextValue(func(child __runtime::Deserializer)error{return child.Skip()});err!=nil{return err}}};return nil}});if err!=nil{return result,err};")
 			for i, name := range names {
+				if options[i].skip || options[i].defaultValue {
+					continue
+				}
 				fmt.Fprintf(&body, "if !seen%d{value,optional:=__runtime::Missing[%s]();if !optional{return result,__runtime::NewError(__runtime::MissingField,%s)};result.%s=value};", i, types[i], wires[i], name)
+			}
+			// Validate every required field before any business default runs.
+			for i, name := range names {
+				if options[i].skip {
+					fmt.Fprintf(&body, "result.%s=__runtime::Make[%s]();", name, types[i])
+				} else if options[i].defaultValue {
+					fmt.Fprintf(&body, "if !seen%d{result.%s=__runtime::Make[%s]()};", i, name, types[i])
+				}
 			}
 			body.WriteString("return result,nil};func missing()(Self,bool){var zero Self;return zero,false}")
 		}

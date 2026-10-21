@@ -1,0 +1,53 @@
+package model
+use macros;
+use codecs;
+
+var defaultTrace string
+pub func ResetDefaults() { defaultTrace="" }
+pub func DefaultTrace() string { return defaultTrace }
+type first int
+type last int
+type skipped struct { pub Index int }
+impl codecs::LibraryDefault for first { func r#default() Self { defaultTrace+="F";return first(len(defaultTrace)) } }
+impl codecs::LibraryDefault for skipped { func r#default() Self { defaultTrace+="S";return Self{Index:len(defaultTrace)} } }
+impl codecs::LibraryDefault for last { func r#default() Self { defaultTrace+="L";return last(len(defaultTrace)) } }
+impl codecs::Deserialize for first {
+ func deserialize(reader codecs::Deserializer)(Self,error){value,err:=codecs::Read[int](reader);return first(value),err}
+ func missing()(Self,bool){return 0,false}
+}
+impl codecs::Deserialize for last {
+ func deserialize(reader codecs::Deserializer)(Self,error){value,err:=codecs::Read[int](reader);return last(value),err}
+ func missing()(Self,bool){return 0,false}
+}
+#[derive(macros::LibraryDeserialize)]
+pub struct Defaults {
+ #[serde(default)]
+ pub First first
+ #[serde(skip)]
+ pub Ignored skipped
+ #[serde(default)]
+ pub Last last
+ pub Required *int
+ pub Optional Optional
+}
+
+type WriteOnly int
+impl codecs::Serialize for WriteOnly {
+ func serialize(self &Self,writer codecs::Serializer)error{return writer.Int64(int64(*self))}
+}
+#[derive(macros::LibrarySerialize)]
+pub struct SerializeOnly {
+ #[serde(default)]
+ pub Value WriteOnly
+ #[serde(skip)]
+ pub Hidden func()
+}
+type ReadOnly int
+impl codecs::Deserialize for ReadOnly {
+ func deserialize(reader codecs::Deserializer)(Self,error){value,err:=codecs::Read[int](reader);return ReadOnly(value),err}
+ func missing()(Self,bool){return 0,false}
+}
+#[derive(macros::LibraryDeserialize)]
+pub struct DeserializeOnly { pub Value ReadOnly }
+#[derive(macros::LibrarySerialize,macros::LibraryDeserialize)]
+pub struct PointerRecord { pub Pointer *int; pub Optional Optional }

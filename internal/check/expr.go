@@ -116,20 +116,29 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			sub := map[*types.TypeParam]types.Type{}
 			constants := map[*ConstParam]ConstValue{}
 			inferenceOK := true
-			for i, a := range n.Args {
+			parameter := func(index int) types.Type {
 				var want types.Type
-				if i < sig.Params().Len() {
-					want = sig.Params().At(i).Type()
+				if index < sig.Params().Len() {
+					want = sig.Params().At(index).Type()
 				} else if sig.Variadic() && sig.Params().Len() > 0 {
 					want = sig.Params().At(sig.Params().Len() - 1).Type()
 				}
-				if sig.Variadic() && i >= sig.Params().Len()-1 && !n.Ellipsis {
-					if s, ok := want.(*types.Slice); ok {
-						want = s.Elem()
+				if sig.Variadic() && index >= sig.Params().Len()-1 && !n.Ellipsis {
+					if slice, ok := want.(*types.Slice); ok {
+						want = slice.Elem()
 					}
 				}
+				return want
+			}
+			for i, a := range n.Args {
+				want := parameter(i)
 				got := c.expr(a, want)
-				if got != types.Typ[types.UntypedNil] {
+				_, call := referenceScrutinee(a).(*ast.CallExpr)
+				if tuple, ok := got.(*types.Tuple); ok && tuple.Len() > 1 && call && len(n.Args) == 1 && !n.Ellipsis {
+					for j := 0; j < tuple.Len(); j++ {
+						inferenceOK = c.inferArrayArguments(parameter(j), tuple.At(j).Type(), sub, constants) && inferenceOK
+					}
+				} else if got != types.Typ[types.UntypedNil] {
 					inferenceOK = c.inferArrayArguments(want, defaultType(got), sub, constants) && inferenceOK
 				}
 			}

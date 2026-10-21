@@ -110,6 +110,8 @@ match(norm(target(I)), norm(τ)) = θ，I 是唯一匹配实现
 
 实例化保持定义点绑定、Go 包身份与接收权限。不能为了展开库实现，把访问私有字段或私有 helper 的业务体搬到无权访问的包，也不能让定义包反向依赖消费者私有类型。必要时在定义包保留普通 Go 泛型 helper，传入已确定签名的操作函数；例如 `CloneVecFunc[T](value Vec[T], clone func(T) T)`。跨包 helper 使用稳定、可读的名称；具体公开入口负责提供操作，Go 业务调用者不处理编译器证据。多方法和关联类型按实际签名传递，不把任意协议抹成 `any` 或反射。
 
+普通泛型函数接受 Go 的单个多返回调用实参，例如 `Pair(native())`：逐项推导类型、数组长度与读写权限，再证明 trait 条件；可变参数同样按结果位置处理。原调用只求值一次，保留所在函数帧。跨包私有类型需要附带协议操作时，生成临时结构保存返回值，再进入现有绑定路径。`internal/check/sole_result_test.go` 与 `internal/lower/sole_result_test.go` 覆盖权限正反例、私有类型与关联类型、求值顺序、defer/go 时机和 recover，并执行 Go 产物及重复生成检查。
+
 保存 trait 方法值时，接收者在绑定时只求值一次；value 接收者每次调用取得独立副本，引用接收者继续指向原槽位。绑定器返回含原业务体的 Go 方法值；声明适配的直接调用和保存调用绑定实际原生 Go 方法，避免额外转发帧破坏 `defer`/`recover`。已有公开 Go 泛型入口需要保存方法时，其可用具体 carrier 同步提供对应绑定器，即使库内没有 Goxide 调用。`trait_method_value_frame_test.go`、`trait_go_binding_boundary_test.go` 和 `trait_concrete_frames_test.go` 覆盖这些行为及具体 impl 的业务体注释与 panic 源行；运行时 TraitView 的声明适配不在此次修改范围内。
 
 实例只写本次生成目录或受管原位产物，不修改依赖 checkout、模块缓存。只有生成 Go 的依赖提供其现有 API；需要新的源级条件实例时由 Goxide 取得模板并重新生成。

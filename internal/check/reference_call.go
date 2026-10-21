@@ -73,14 +73,24 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission, asynchronous
 		p.require(n.Fun, fun, p.fromGo(fun.typ))
 	}
 	sub := map[*types.TypeParam]*permission{}
-	args := make([]*permission, len(n.Args))
+	args := make([]*permission, 0, len(n.Args))
+	var argumentNodes []ast.Expr
 	for i, arg := range n.Args {
-		formal := p.callParam(fun, i, n.Ellipsis)
-		args[i] = p.expr(arg, formal)
-		p.inferPermission(formal, args[i], sub)
+		actual := p.expr(arg, p.callParam(fun, i, n.Ellipsis))
+		values := []*permission{actual}
+		_, call := referenceScrutinee(arg).(*ast.CallExpr)
+		if tuple, ok := p.c.out.Types[arg].(*types.Tuple); ok && tuple.Len() > 1 && call && len(n.Args) == 1 && !n.Ellipsis {
+			values = actual.results
+		}
+		for _, value := range values {
+			formal := p.callParam(fun, len(args), n.Ellipsis)
+			args = append(args, value)
+			argumentNodes = append(argumentNodes, arg)
+			p.inferPermission(formal, value, sub)
+		}
 	}
 	p.functionEvidence(n, p.c.out.FunctionInstances[n], sub)
-	for i, arg := range n.Args {
+	for i, arg := range argumentNodes {
 		formal := p.substitutePermission(p.callParam(fun, i, n.Ellipsis), sub)
 		actual := args[i]
 		if p.nativeScalarArgument(fun, actual, formal) {

@@ -4,6 +4,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"go/types"
+	"strconv"
 	"strings"
 
 	"github.com/goxide-lang/goxide/internal/check"
@@ -124,6 +125,50 @@ func (p *traitInference) parameter(value goast.Expr, typ types.Type) goast.Expr 
 	return name
 }
 
+// Packing keeps the source call in its original frame while binding every
+// result alongside protocol evidence, including types private to other packages.
+func (p *traitInference) tupleParameter(value goast.Expr, tuple *types.Tuple) []goast.Expr {
+	p.collect(tuple)
+	typeParams := &goast.FieldList{}
+	params := &goast.FieldList{}
+	fields := &goast.FieldList{}
+	var values []goast.Expr
+	var fieldTypes []*types.Var
+	for i := 0; i < tuple.Len(); i++ {
+		typ := p.e.fresh("Element")
+		name := p.e.fresh("Value")
+		field := goast.NewIdent("Value" + strconv.Itoa(i))
+		typeParams.List = append(typeParams.List, &goast.Field{Names: []*goast.Ident{typ}, Type: goast.NewIdent("any")})
+		params.List = append(params.List, &goast.Field{Names: []*goast.Ident{name}, Type: typ})
+		fields.List = append(fields.List, &goast.Field{Names: []*goast.Ident{field}, Type: typ})
+		values = append(values, &goast.KeyValueExpr{Key: field, Value: name})
+		fieldTypes = append(fieldTypes, types.NewField(0, nil, field.Name, tuple.At(i).Type(), false))
+	}
+	result := &goast.StructType{Fields: fields}
+	pack := p.e.fresh("Pack")
+	p.e.flowHelpers = append(p.e.flowHelpers, &goast.FuncDecl{
+		Name: pack,
+		Type: &goast.FuncType{TypeParams: typeParams, Params: params, Results: &goast.FieldList{List: []*goast.Field{{Type: result}}}},
+		Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CompositeLit{Type: result, Elts: values}}}}},
+	})
+	name := p.e.fresh("Argument")
+	boundFields := &goast.FieldList{}
+	previous := p.e.inferenceTypes
+	p.e.inferenceTypes = p.bodyTypes
+	for _, field := range fieldTypes {
+		boundFields.List = append(boundFields.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(field.Name())}, Type: p.e.goType(field.Type())})
+	}
+	p.e.inferenceTypes = previous
+	p.fields = append(p.fields, &goast.Field{Names: []*goast.Ident{name}, Type: &goast.StructType{Fields: boundFields}})
+	p.arguments = append(p.arguments, &goast.CallExpr{Fun: pack, Args: []goast.Expr{value}})
+	p.parameterTypes = append(p.parameterTypes, types.NewStruct(fieldTypes, nil))
+	var arguments []goast.Expr
+	for _, field := range fieldTypes {
+		arguments = append(arguments, &goast.SelectorExpr{X: name, Sel: goast.NewIdent(field.Name())})
+	}
+	return arguments
+}
+
 func (p *traitInference) finish(result goast.Expr, typ types.Type) goast.Expr {
 	p.collect(typ)
 	previous := p.e.inferenceTypes
@@ -134,7 +179,9 @@ func (p *traitInference) finish(result goast.Expr, typ types.Type) goast.Expr {
 		parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{name}, Type: goast.NewIdent("any")})
 	}
 	for i, field := range p.fields {
-		field.Type = p.e.goType(p.parameterTypes[i])
+		if field.Type == nil {
+			field.Type = p.e.goType(p.parameterTypes[i])
+		}
 	}
 	name := p.e.fresh("Bind")
 	decl := &goast.FuncDecl{Name: name, Type: &goast.FuncType{TypeParams: parameters, Params: &goast.FieldList{List: p.fields}, Results: &goast.FieldList{List: []*goast.Field{{Type: p.e.goType(typ)}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{result}}}}}
@@ -290,16 +337,23 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 	sig := e.functionInstanceSignature(instance)
 	values := e.exprs(call.Args)
 	var arguments []goast.Expr
-	for i, value := range values {
-		index := i
-		if index >= sig.Params().Len() {
-			index = sig.Params().Len() - 1
+	if len(call.Args) == 1 && !call.Ellipsis {
+		if tuple, ok := e.info.Types[call.Args[0]].(*types.Tuple); ok && tuple.Len() > 1 {
+			arguments = p.tupleParameter(values[0], tuple)
 		}
-		typ := sig.Params().At(index).Type()
-		if sig.Variadic() && index == sig.Params().Len()-1 && !call.Ellipsis {
-			typ = typ.(*types.Slice).Elem()
+	}
+	if arguments == nil {
+		for i, value := range values {
+			index := i
+			if index >= sig.Params().Len() {
+				index = sig.Params().Len() - 1
+			}
+			typ := sig.Params().At(index).Type()
+			if sig.Variadic() && index == sig.Params().Len()-1 && !call.Ellipsis {
+				typ = typ.(*types.Slice).Elem()
+			}
+			arguments = append(arguments, p.parameter(value, typ))
 		}
-		arguments = append(arguments, p.parameter(value, typ))
 	}
 	callbacks, callbackTypes := p.callbacks(e.info.GenericBounds[function.decl], instance.Evidence)
 	var witnesses []goast.Expr

@@ -526,7 +526,7 @@ func (c *checker) instantiate(t types.Type, args *ast.GenericArgs) types.Type {
 	}
 	actual := make([]types.Type, 0, len(args.Args))
 	for _, a := range args.Args {
-		actual = append(actual, c.typ(a.Type))
+		actual = append(actual, c.genericArgType(a))
 	}
 	if !valid(t) {
 		return t

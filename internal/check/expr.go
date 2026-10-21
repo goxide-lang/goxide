@@ -619,6 +619,9 @@ func tupleTypes(t *types.Tuple) []types.Type {
 }
 
 func (c *checker) exprType(e ast.Expr) types.Type {
+	if !c.macroTypeArgument(e) {
+		return types.Typ[types.Invalid]
+	}
 	if t, ok := e.(*ast.TypeExpr); ok {
 		return c.typ(t.Type)
 	}

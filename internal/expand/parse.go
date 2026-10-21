@@ -315,6 +315,18 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 			return v, nil
 		}
 		span := n.Span()
+		// A positional argument in an expression path may denote a const.
+		// Restore a captured expression as a value; the checker knows the
+		// declaration's parameter kind and validates its capture category.
+		if argument, ok := n.(*ast.GenericArg); ok && !typeSlot && argument.Name == nil {
+			if path, ok := argument.Type.(*ast.PathType); ok && len(path.Path.Segments) == 1 && path.Path.Segments[0].Args == nil {
+				piece, exact := s.exact(path.Span())
+				_, tokens := s.ttRanges[path.Span()]
+				if tokens || exact && piece.t.Fragment != nil && piece.t.Fragment.Kind != typeKind {
+					argument.Type, argument.Value = nil, path.Path.Segments[0].Name
+				}
+			}
+		}
 		var body []syntaxToken
 		if item, ok := n.(ast.Item); ok {
 			start := span.Start
@@ -385,11 +397,9 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 				}
 			}
 		}
-		// Multi-argument indexing is unambiguously generic instantiation.
-		idx, _ := n.(*ast.IndexExpr)
 		pathPart := false
 		switch n.(type) {
-		case *ast.PathType, *ast.Path, *ast.PathSegment:
+		case *ast.PathType, *ast.Path, *ast.PathSegment, *ast.GenericArgs, *ast.GenericArg:
 			pathPart = typeSlot || isType
 		}
 		elem := v.Elem()
@@ -398,8 +408,7 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 			if f.Type() == baseType {
 				continue
 			}
-			forceType := pathPart || idx != nil && len(idx.Indices) > 1 && elem.Type().Field(i).Name == "Indices"
-			x, err := e.restore(f, s, expn, caller, forceType, f.Type() == identPointer)
+			x, err := e.restore(f, s, expn, caller, pathPart, f.Type() == identPointer)
 			if err != nil {
 				return v, err
 			}

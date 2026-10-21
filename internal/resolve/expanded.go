@@ -59,6 +59,9 @@ func (h *hygiene) init(result *Result) {
 	}
 	result.Prints = h.expanded.Prints
 	result.GoResults = h.expanded.GoResults
+	if len(h.expanded.Captures) != 0 {
+		result.Captures = h.expanded.Captures
+	}
 	if len(h.expanded.Contexts) == 0 {
 		return
 	}

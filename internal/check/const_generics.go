@@ -395,10 +395,7 @@ func (c *checker) explicitFunctionArguments(sig *types.Signature, args *ast.Gene
 	if groups == nil {
 		actual := make([]types.Type, len(args.Args))
 		for index, argument := range args.Args {
-			if argument.Value != nil {
-				c.diag(argument, GenericConstraint, "a type argument is required")
-			}
-			actual[index] = c.typ(argument.Type)
+			actual[index] = c.genericArgType(argument)
 		}
 		return c.instantiateFunctionType(sig, actual, nil, args)
 	}
@@ -432,10 +429,7 @@ func (c *checker) explicitFunctionArguments(sig *types.Signature, args *ast.Gene
 				}
 				constants = append(constants, value)
 			} else {
-				if argument.Value != nil {
-					c.diag(argument, GenericConstraint, "a type argument is required")
-				}
-				actual = append(actual, c.typ(argument.Type))
+				actual = append(actual, c.genericArgType(argument))
 			}
 		}
 	}

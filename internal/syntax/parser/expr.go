@@ -322,11 +322,11 @@ func (p *parser) exprPath(x ast.Expr) *ast.Path {
 	switch n := x.(type) {
 	case *ast.Ident:
 
-		return &ast.Path{Base: p.base(n.Span().Start), Segments: []*ast.PathSegment{{Base: p.base(n.Span().Start), Name: n}}}
+		return &ast.Path{Base: ast.Base{Loc: n.Span()}, Segments: []*ast.PathSegment{{Base: ast.Base{Loc: n.Span()}, Name: n}}}
 	case *ast.TypeExpr:
 		if _, ok := n.Type.(*ast.SelfType); ok {
-			id := &ast.Ident{Base: p.base(n.Span().Start), Name: "Self"}
-			return &ast.Path{Base: p.base(n.Span().Start), Segments: []*ast.PathSegment{{Base: p.base(n.Span().Start), Name: id}}}
+			id := &ast.Ident{Base: ast.Base{Loc: n.Span()}, Name: "Self"}
+			return &ast.Path{Base: ast.Base{Loc: n.Span()}, Segments: []*ast.PathSegment{{Base: ast.Base{Loc: n.Span()}, Name: id}}}
 		}
 	case *ast.PathExpr:
 		return n.Path
@@ -335,18 +335,18 @@ func (p *parser) exprPath(x ast.Expr) *ast.Path {
 		if path == nil {
 			return nil
 		}
-		args := &ast.GenericArgs{Base: p.base(n.Span().Start)}
+		args := &ast.GenericArgs{Base: ast.Base{Loc: n.Span()}}
 		for _, x := range n.Indices {
 			args.Args = append(args.Args, p.genericArgExpr(x))
 		}
 		path.Segments[len(path.Segments)-1].Args = args
-		path.Base = p.base(n.Span().Start)
+		path.Base = ast.Base{Loc: n.Span()}
 		return path
 	}
 	return nil
 }
 func (p *parser) genericArgExpr(x ast.Expr) *ast.GenericArg {
-	arg := &ast.GenericArg{Base: p.base(x.Span().Start), Type: p.exprType(x)}
+	arg := &ast.GenericArg{Base: ast.Base{Loc: x.Span()}, Type: p.exprType(x)}
 	if arg.Type == nil {
 		arg.Value = x
 	}
@@ -356,48 +356,48 @@ func (p *parser) exprType(x ast.Expr) ast.Type {
 	switch n := x.(type) {
 	case *ast.IndexExpr:
 		if projection, ok := p.exprType(n.X).(*ast.ProjectionType); ok {
-			projection.Args = &ast.GenericArgs{Base: p.base(n.Span().Start)}
+			projection.Args = &ast.GenericArgs{Base: ast.Base{Loc: n.Span()}}
 			for _, x := range n.Indices {
 				projection.Args.Args = append(projection.Args.Args, p.genericArgExpr(x))
 			}
-			projection.Base = p.base(n.Span().Start)
+			projection.Base = ast.Base{Loc: n.Span()}
 			return projection
 		}
 		path := p.exprPath(x)
 		if path == nil {
 			return nil
 		}
-		return &ast.PathType{Base: p.base(x.Span().Start), Path: path}
+		return &ast.PathType{Base: ast.Base{Loc: x.Span()}, Path: path}
 	case *ast.Ident, *ast.PathExpr:
 		path := p.exprPath(x)
 		if path == nil {
 			return nil
 		}
-		return &ast.PathType{Base: p.base(x.Span().Start), Path: path}
+		return &ast.PathType{Base: ast.Base{Loc: x.Span()}, Path: path}
 	case *ast.TypeExpr:
 		return n.Type
 	case *ast.StarExpr:
 		t := p.exprType(n.X)
 		if t != nil {
-			return &ast.PointerType{Base: p.base(x.Span().Start), Elem: t}
+			return &ast.PointerType{Base: ast.Base{Loc: x.Span()}, Elem: t}
 		}
 	case *ast.RefExpr:
 		t := p.exprType(n.X)
 		if t != nil {
-			return &ast.RefType{Base: p.base(x.Span().Start), Elem: t, Mut: n.Mut}
+			return &ast.RefType{Base: ast.Base{Loc: x.Span()}, Elem: t, Mut: n.Mut}
 		}
 	case *ast.ParenExpr:
 		t := p.exprType(n.X)
 		if t != nil {
-			return &ast.ParenType{Base: p.base(x.Span().Start), Type: t}
+			return &ast.ParenType{Base: ast.Base{Loc: x.Span()}, Type: t}
 		}
 	case *ast.SelectorExpr:
 		t := p.exprType(n.X)
 		if t != nil {
-			return &ast.ProjectionType{Base: p.base(x.Span().Start), X: t, Item: n.Sel, Dot: true}
+			return &ast.ProjectionType{Base: ast.Base{Loc: x.Span()}, X: t, Item: n.Sel, Dot: true}
 		}
 	case *ast.MacroExpr:
-		return &ast.MacroType{Base: p.base(x.Span().Start), Path: n.Path, Args: n.Args}
+		return &ast.MacroType{Base: ast.Base{Loc: x.Span()}, Path: n.Path, Args: n.Args}
 	}
 	return nil
 }

@@ -160,6 +160,7 @@ func (d Diagnostic) Error() string {
 }
 
 type Result struct {
+	Captures    map[ast.Node]expand.Capture // Read-only fragment provenance for deferred generic slots.
 	GoResults   map[*ast.CallExpr]bool
 	Expansions  map[ast.ExpnID]expand.Expansion
 	Packages    []*Package

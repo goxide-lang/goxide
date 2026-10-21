@@ -53,6 +53,7 @@ type Target struct {
 	Name             string   `json:"name" toml:"name"`
 	Path             string   `json:"path" toml:"path"`
 	RequiredFeatures []string `json:"required_features,omitempty" toml:"required_features,omitempty"`
+	ProcMacro        bool     `json:"proc_macro,omitempty" toml:"proc_macro,omitempty"`
 }
 
 var ident = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
@@ -204,6 +205,9 @@ func validate(m Manifest) error {
 	for group, ts := range targets {
 		seen := map[string]bool{}
 		for _, t := range ts {
+			if group < 2 && t.ProcMacro {
+				return fmt.Errorf("target %s: proc_macro is only supported for lib", t.Name)
+			}
 			if group < 2 && !ident.MatchString(t.Name) || seen[t.Name] {
 				return fmt.Errorf("invalid or duplicate target name %q", t.Name)
 			}

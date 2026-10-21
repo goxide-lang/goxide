@@ -56,7 +56,7 @@ func newParser(src []byte) *parser {
 // ParseFile returns a recovered tree even when diagnostics contain errors.
 func ParseFile(filename string, src []byte) (*ast.File, []Diagnostic) {
 	p := newParser(src)
-	f := &ast.File{LineStarts: []uint32{0}}
+	f := &ast.File{LineStarts: []uint32{0}, Tokens: p.tokens}
 	for i, b := range src {
 		if b == '\n' && i+1 < len(src) {
 			f.LineStarts = append(f.LineStarts, uint32(i+1))
@@ -68,24 +68,34 @@ func ParseFile(filename string, src []byte) (*ast.File, []Diagnostic) {
 	if p.errorCount() > 0 {
 		f.Items = append(f.Items, &ast.BadItem{ItemBase: ast.ItemBase{Base: p.base(0)}, Text: "invalid package or token"})
 	}
-	for !p.at(token.EOF) {
-		p.semis()
-		if p.at(token.EOF) {
-			break
-		}
-		before := p.pos
-		f.Items = append(f.Items, p.item())
-		if !p.endStmt() {
-			f.Items = append(f.Items, &ast.BadItem{ItemBase: ast.ItemBase{Base: p.base(p.tok().Start)}, Text: "missing semicolon"})
-		}
-		p.progress(before)
-	}
+	f.Items = append(f.Items, p.items()...)
 	f.Base = p.base(0)
 	f.Comments = p.comments
 	f.Directives = p.directives
 	p.attachDocs(f, src)
 	renumber(f)
 	return f, p.diagnostics
+}
+
+func (p *parser) items() []ast.Item {
+	return p.itemList(p.item)
+}
+
+func (p *parser) itemList(parse func() ast.Item) []ast.Item {
+	var items []ast.Item
+	for !p.at(token.EOF) {
+		p.semis()
+		if p.at(token.EOF) {
+			break
+		}
+		before := p.pos
+		items = append(items, parse())
+		if !p.endStmt() {
+			items = append(items, &ast.BadItem{ItemBase: ast.ItemBase{Base: p.base(p.tok().Start)}, Text: "missing semicolon"})
+		}
+		p.progress(before)
+	}
+	return items
 }
 
 func ParseExpr(src []byte) (ast.Expr, []Diagnostic) {

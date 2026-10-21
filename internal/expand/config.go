@@ -144,7 +144,7 @@ func (s selection) item(item ast.Item) (bool, error) {
 	}
 	field.Set(reflect.ValueOf(selected))
 	switch item.(type) {
-	case *ast.MacroRulesDecl, *ast.MacroItem:
+	case *ast.MacroRulesDecl:
 		// These nodes disappear during expansion, so unsupported ordinary
 		// attributes must be diagnosed here instead of silently disappearing.
 		if len(selected) != 0 {

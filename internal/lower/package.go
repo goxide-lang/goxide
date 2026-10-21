@@ -14,6 +14,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/parser"
@@ -24,6 +25,13 @@ type PackageOptions struct {
 	LineDirectives      bool
 	Config              config.Config
 	RejectConfiguration bool // Partial in-place generation cannot switch package configuration.
+	ProcLibraries       []*ProcLibrary
+	// OnProcDiagnostic receives every procedural diagnostic in expansion order,
+	// including warnings, notes, and errors when compilation fails.
+	// Filename is the original input key, or a canonical source key for a
+	// projected procedural macro definition.
+	OnProcDiagnostic func(filename string, diagnostic expand.ProcDiagnostic)
+	procLibrary      *ProcLibrary
 }
 
 // CompilePackage compiles caller-selected .gox and native .go files from one
@@ -36,6 +44,9 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	}
 	if goImports == nil {
 		goImports = importer.Default()
+	}
+	if options.procLibrary != nil {
+		options.procLibrary.importer = goImports
 	}
 	if options.Config.Reads == nil {
 		options.Config.Reads = new(config.Reads)
@@ -96,6 +107,26 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 			return nil, fmt.Errorf("%s: expected .gox or .go source", name)
 		}
 	}
+	entries, err := procmacro.Collect(files, packagePath, options.procLibrary != nil)
+	if err != nil {
+		return nil, err
+	}
+	if library := options.procLibrary; library != nil {
+		library.Entries = entries
+		library.entryFiles = map[*procmacro.Entry]string{}
+		for _, entry := range entries {
+			for name, file := range files {
+				if file == entry.File {
+					library.entryFiles[entry] = name
+				}
+			}
+		}
+		procmacro.Strip(entries)
+	}
+	imports.procs, err = prepareProcLibraries(options.ProcLibraries, files, configs, rootConfigs, imports.owners)
+	if err != nil {
+		return nil, err
+	}
 	for _, requirement := range prepareSourceRoots(files, rootConfigs, goImports) {
 		if _, exists := imports.namespaces[requirement.target]; !exists {
 			imports.namespaces[requirement.target] = requirement
@@ -111,8 +142,9 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 		}
 		groups = append(groups, group)
 	}
-	macros := &moduleMacros{files: files, resolved: packages, imports: imports}
+	macros := &moduleMacros{files: files, resolved: packages, imports: imports, producer: options.procLibrary}
 	expanded, err = expand.ExpandPackages(groups, macros, configs)
+	reportProcDiagnostics(options.OnProcDiagnostic, files, displayNames, expanded)
 	if cycle := macros.checkCycles(expanded); cycle != nil {
 		return nil, cycle
 	}
@@ -144,13 +176,18 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	lowerFiles := map[string]*syntax.File{}
 	for name, file := range resolved.Files {
 		expandedFiles[name] = file.AST
-		if !file.AST.NativeGo {
+		if !file.AST.NativeGo && displayNames[name] != "" {
 			lowerFiles[name] = file.AST
 		}
 	}
 	checked, diagnostics := check.CheckWithImporter(expandedFiles, resolved, goImports, options.Config.Sizes())
 	if len(diagnostics) != 0 {
 		return nil, diagnostics[0]
+	}
+	if options.procLibrary != nil {
+		if err := options.procLibrary.validate(resolved, checked, goImports); err != nil {
+			return nil, err
+		}
 	}
 	generated, err := lower(lowerFiles, checked, emissionOptions{lineDirectives: options.LineDirectives, originals: files})
 	if err != nil {

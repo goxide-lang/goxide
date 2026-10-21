@@ -10,15 +10,19 @@ import (
 	public "github.com/goxide-lang/syntax/token"
 )
 
-// procInvocationConfig describes an already resolved function-like invocation.
+// procInvocationConfig describes an already resolved invocation.
 // Ctx is the fresh expansion context already registered in the engine.
 type procInvocationConfig struct {
 	RequestID, Entry string
+	Kind             pm.Kind
+	Position         pm.Position
 	Slot             fragmentKind
 	Definition, Call Origin
+	CallLocation     Origin
 	Ctx              ast.SyntaxCtx
 	Caller           Scope
 	Input            []syntaxToken
+	Args, Item       []syntaxToken
 	Target           pm.Target
 	Features         []string
 }
@@ -40,29 +44,39 @@ type procDiagnostic struct {
 // The SDK owns and validates the frozen wire reference table. These host-only
 // maps give its references meaning without serializing AST or compiler objects.
 type procInvocation struct {
-	engine     *engine
-	request    pm.Request
-	scope      *public.Scope
-	definition Origin
-	call       Origin
-	bindings   map[uint32]procBinding
-	contexts   map[procBinding]public.BindingContext
-	spans      map[uint32]Origin
-	spanIDs    map[Origin]public.Span
-	inputs     map[uint32]syntaxToken
+	engine       *engine
+	request      pm.Request
+	scope        *public.Scope
+	definition   Origin
+	callLocation Origin
+	bindings     map[uint32]procBinding
+	contexts     map[procBinding]public.BindingContext
+	spans        map[uint32]Origin
+	spanIDs      map[Origin]public.Span
+	inputs       map[uint32]syntaxToken
 }
 
 func (e *engine) newProcInvocation(config procInvocationConfig) (*procInvocation, error) {
 	positions := map[fragmentKind]pm.Position{
 		exprKind: pm.ExpressionPosition, typeKind: pm.TypePosition,
 		stmtKind: pm.StatementsPosition, itemKind: pm.ItemPosition,
+		itemsKind: pm.ItemsPosition,
 	}
 	position, ok := positions[config.Slot]
 	if !ok {
 		return nil, fmt.Errorf("unsupported procedural macro output slot %q", config.Slot)
 	}
+	if config.Position != "" {
+		position = config.Position
+	}
+	if config.Kind == "" {
+		config.Kind = pm.Function
+	}
 	if config.Definition.File == nil || config.Call.File == nil || e.r == nil {
 		return nil, fmt.Errorf("procedural macro invocation requires definition and call origins")
+	}
+	if config.CallLocation.File == nil {
+		config.CallLocation = config.Call
 	}
 	context, ok := e.r.Contexts[config.Ctx]
 	if !ok || config.Ctx == 0 {
@@ -70,7 +84,7 @@ func (e *engine) newProcInvocation(config procInvocationConfig) (*procInvocation
 	}
 	invocation := &procInvocation{
 		engine: e,
-		scope:  public.NewScope(config.RequestID), definition: config.Definition, call: config.Call,
+		scope:  public.NewScope(config.RequestID), definition: config.Definition, callLocation: config.CallLocation,
 		bindings: make(map[uint32]procBinding), contexts: make(map[procBinding]public.BindingContext),
 		spans: make(map[uint32]Origin), spanIDs: make(map[Origin]public.Span),
 		inputs: make(map[uint32]syntaxToken),
@@ -86,31 +100,41 @@ func (e *engine) newProcInvocation(config procInvocationConfig) (*procInvocation
 	if err != nil {
 		return nil, err
 	}
-	callSpan, err := invocation.span(config.Call)
+	callSpan, err := invocation.span(config.CallLocation)
 	if err != nil {
 		return nil, err
 	}
-	wire, err := invocation.inputWire(config.Input, false)
+	decode := func(input []syntaxToken) (public.TokenStream, error) {
+		wire, err := invocation.inputWire(input, false)
+		if err != nil {
+			return public.TokenStream{}, err
+		}
+		stream, err := invocation.scope.Decode(wire)
+		if err != nil {
+			return public.TokenStream{}, fmt.Errorf("procedural macro input: %w", err)
+		}
+		stream, err = invocation.scope.Capture(stream, callSite)
+		if err != nil {
+			return public.TokenStream{}, err
+		}
+		return stream, invocation.rememberInputs(stream.Tokens(), input)
+	}
+	input, err := decode(config.Input)
 	if err != nil {
 		return nil, err
 	}
-	// Decode admits complete lexical units directly, including implicit
-	// semicolons. Printing and reparsing would change those semicolons.
-	stream, err := invocation.scope.Decode(wire)
-	if err != nil {
-		return nil, fmt.Errorf("procedural macro input: %w", err)
-	}
-	stream, err = invocation.scope.Capture(stream, callSite)
+	args, err := decode(config.Args)
 	if err != nil {
 		return nil, err
 	}
-	if err = invocation.rememberInputs(stream.Tokens(), config.Input); err != nil {
+	item, err := decode(config.Item)
+	if err != nil {
 		return nil, err
 	}
 	invocation.request, err = pm.NewRequest(invocation.scope, pm.RequestConfig{
-		Entry: config.Entry, Kind: pm.Function, Position: position,
+		Entry: config.Entry, Kind: config.Kind, Position: position,
 		DefSite: defSite, CallSite: callSite, DefSpan: defSpan, CallSpan: callSpan,
-		Target: config.Target, Features: config.Features, Input: stream,
+		Target: config.Target, Features: config.Features, Input: input, Args: args, Item: item,
 	})
 	if err != nil {
 		return nil, err
@@ -129,7 +153,7 @@ func (p *procInvocation) binding(binding procBinding) public.BindingContext {
 
 func (p *procInvocation) span(origin Origin) (public.Span, error) {
 	if origin.File == nil {
-		origin = p.call
+		origin = p.callLocation
 	}
 	if span, ok := p.spanIDs[origin]; ok {
 		return span, nil
@@ -298,7 +322,7 @@ func (p *procInvocation) rememberInputs(nodes []public.Token, source []syntaxTok
 func (p *procInvocation) location(span public.Span) (Origin, error) {
 	if span.Reference() == 0 {
 		// Generated offsets have no associated source file in this bridge.
-		return p.call, nil
+		return p.callLocation, nil
 	}
 	origin, ok := p.spans[span.Reference()]
 	if !ok {

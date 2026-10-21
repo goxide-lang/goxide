@@ -14,20 +14,26 @@ import (
 )
 
 type rootRequirement struct {
-	target    string
-	origin    resolve.Origin
-	namespace paths.Namespace
+	target         string
+	origin         resolve.Origin
+	sourceFile     string // Actual source/output owner; diagnostic spans cannot change access.
+	namespace      paths.Namespace
+	sourceImporter types.Importer
 }
 
 type moduleRootConfig struct {
-	module, name string
-	roots        paths.Roots
-	goRoots      *paths.GoNamespaces
-	bindings     map[string]bool
-	uses         map[string][]*syntax.UseDecl
+	module, name   string
+	roots          paths.Roots
+	goRoots        *paths.GoNamespaces
+	bindings       map[string]bool
+	uses           map[string][]*syntax.UseDecl
+	sourceImporter types.Importer
 }
 
 func (r rootRequirement) check(owners map[string]string, external types.Importer) error {
+	if r.sourceImporter != nil {
+		external = r.sourceImporter
+	}
 	if r.namespace.Unavailable != "" {
 		return &Diagnostic{File: r.origin.File, Span: r.origin.Span, Message: r.namespace.Unavailable, Origin: r.origin}
 	}
@@ -86,10 +92,14 @@ func prepareSourceRoots(files map[string]*syntax.File, configs map[*syntax.File]
 		if !ok {
 			continue
 		}
-		if _, ok := external.(interface {
+		sourceImports := external
+		if config.sourceImporter != nil {
+			sourceImports = config.sourceImporter
+		}
+		if _, ok := sourceImports.(interface {
 			PackageIndex(string, string) ([]string, error)
 		}); ok {
-			config.goRoots = paths.NewGoNamespaces(external)
+			config.goRoots = paths.NewGoNamespaces(sourceImports)
 		}
 		roots := make(paths.Roots, len(config.roots))
 		for name, root := range config.roots {
@@ -208,10 +218,12 @@ func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]module
 				}
 				if owner, ok := configs[expanded.Scopes[root].File]; ok {
 					config.module, config.roots, config.goRoots, config.bindings, config.uses = owner.module, owner.roots, owner.goRoots, owner.bindings, owner.uses
+					config.sourceImporter = owner.sourceImporter
 				}
 			}
 			config.bindings, config.uses = nil, nil // Recomputed from the expanded scopes above.
 			if requirement, ok := applyUseRoot(config, use, expanded); ok {
+				requirement.sourceFile = fileNames[expanded.Origins[file].File]
 				if location, ok := expanded.Locations[use]; ok {
 					if name, ok := fileNames[location.File]; ok {
 						requirement.origin.File, requirement.origin.Span = name, location.Span
@@ -298,5 +310,5 @@ func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand
 		mapped = append(mapped, &segment)
 	}
 	use.Tree.Path.Segments = append(mapped, segments[1:]...)
-	return rootRequirement{target: target, origin: origin, namespace: namespace}, true
+	return rootRequirement{target: target, origin: origin, sourceFile: config.name, namespace: namespace, sourceImporter: config.sourceImporter}, true
 }

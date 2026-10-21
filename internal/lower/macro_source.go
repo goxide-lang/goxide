@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/derives"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
@@ -15,6 +16,84 @@ type moduleMacros struct {
 	files    map[string]*syntax.File
 	resolved *resolve.Result
 	imports  *moduleImporter
+	producer *ProcLibrary
+}
+
+// Built-in derive registrations use the same canonical routes as the later
+// resolver. A matching path suffix or a same-named source function is not proof
+// that the selected package owns the serde protocol.
+func (m *moduleMacros) LookupBuiltinDerive(path *syntax.Path, scope expand.Scope) (derives.Definition, bool) {
+	var source *resolve.File
+	for name, file := range m.files {
+		if file == scope.File {
+			source = m.resolved.Files[name]
+			break
+		}
+	}
+	if source == nil || len(path.Segments) == 0 {
+		return derives.Definition{}, false
+	}
+	name := path.Segments[0].Name.Name
+	key := resolve.Key{Name: name, Ctx: scope.Ctx}
+	var roots [][]string
+	var globs []*resolve.UseBinding
+	bound := false
+	for current := source.Scope; current != nil; current = current.Parent {
+		if symbol := current.Bindings[key]; symbol != nil {
+			bound = true
+			if len(path.Segments) == 1 && symbol.Decl.File == "" && symbol.Kind == resolve.Trait {
+				return derives.Builtin(name)
+			}
+			if len(symbol.Target) != 0 {
+				roots = append(roots, symbol.Target)
+			}
+			break
+		}
+		if aliases := current.Aliases[key]; len(aliases) != 0 {
+			bound = true
+			for _, alias := range aliases {
+				if alias.AliasOf == nil && len(alias.Target) != 0 {
+					roots = append(roots, alias.Target)
+				}
+			}
+			break
+		}
+		globs = append(globs, current.Globs...)
+	}
+	if len(roots) == 0 {
+		for _, use := range globs {
+			if len(m.imports.lookup(use.Target, key, map[string]bool{})) != 0 {
+				bound = true
+			}
+			roots = append(roots, append(append([]string(nil), use.Target...), name))
+		}
+	}
+	if !bound && len(path.Segments) == 1 {
+		if definition, ok := derives.Builtin(name); ok {
+			return definition, true
+		}
+	}
+	var selected derives.Definition
+	found := false
+	for _, root := range roots {
+		target := append([]string(nil), root...)
+		for _, segment := range path.Segments[1:] {
+			target = append(target, segment.Name.Name)
+		}
+		canonical, ok := m.imports.CanonicalPath(target)
+		if !ok {
+			continue
+		}
+		definition, ok := derives.Lookup(strings.Join(canonical[:len(canonical)-1], "/"), canonical[len(canonical)-1])
+		if !ok || derives.Validate(definition, m.imports.external) != nil {
+			continue
+		}
+		if found && selected != definition {
+			return derives.Definition{}, false
+		}
+		selected, found = definition, true
+	}
+	return selected, found
 }
 
 // Actual expansions retain source dependencies even when no Go import remains.
@@ -79,7 +158,7 @@ func (m *moduleMacros) checkCycles(expanded *expand.Result) error {
 	return nil
 }
 
-func (m *moduleMacros) LookupMacro(path *syntax.Path, scope expand.Scope) (*syntax.MacroRulesDecl, *syntax.File, error) {
+func (m *moduleMacros) lookupMacroCandidates(path *syntax.Path, scope expand.Scope) ([]moduleMember, string, error) {
 	var source *resolve.File
 	for name, file := range m.files {
 		if file == scope.File {
@@ -88,7 +167,7 @@ func (m *moduleMacros) LookupMacro(path *syntax.Path, scope expand.Scope) (*synt
 		}
 	}
 	if source == nil {
-		return nil, nil, fmt.Errorf("macro definition source is unavailable")
+		return nil, "", fmt.Errorf("macro definition source is unavailable")
 	}
 	parts := make([]string, len(path.Segments))
 	for i, segment := range path.Segments {
@@ -134,6 +213,15 @@ func (m *moduleMacros) LookupMacro(path *syntax.Path, scope expand.Scope) (*synt
 			target = strings.Join(parts[:len(parts)-1], "/")
 		}
 	}
+	return candidates, target, nil
+}
+
+func (m *moduleMacros) LookupMacro(path *syntax.Path, scope expand.Scope) (expand.Macro, error) {
+	candidates, target, err := m.lookupMacroCandidates(path, scope)
+	if err != nil {
+		return expand.Macro{}, err
+	}
+	name := path.Segments[len(path.Segments)-1].Name.Name
 	var macros []moduleMember
 	for _, candidate := range candidates {
 		if candidate.Kind == resolve.Macro && candidate.symbol != nil {
@@ -142,15 +230,19 @@ func (m *moduleMacros) LookupMacro(path *syntax.Path, scope expand.Scope) (*synt
 	}
 	macros = uniqueModuleMembers(macros)
 	if len(macros) > 1 {
-		return nil, nil, fmt.Errorf("macro %s is ambiguous", parts[len(parts)-1])
+		return expand.Macro{}, fmt.Errorf("macro %s is ambiguous", name)
 	}
 	if len(macros) == 1 {
 		symbol := macros[0].symbol
+		owner := filepath.ToSlash(filepath.Dir(symbol.Decl.File))
+		if proc, ok := m.imports.procs[owner][symbol.Name.Name]; ok {
+			return expand.Macro{Proc: proc.entry, File: proc.entry.File, Run: proc.library.Run}, nil
+		}
 		file := m.files[symbol.Decl.File]
 		if file != nil {
 			for _, item := range file.Items {
 				if decl, ok := item.(*syntax.MacroRulesDecl); ok && decl.Name.ID() == symbol.Decl.ID {
-					return decl, file, nil
+					return expand.Macro{Rules: decl, File: file}, nil
 				}
 			}
 		}
@@ -158,12 +250,23 @@ func (m *moduleMacros) LookupMacro(path *syntax.Path, scope expand.Scope) (*synt
 	if requirement, ok := m.imports.namespace(strings.Split(target, "/")); ok && requirement.namespace.PackagePath != "" {
 		target = requirement.namespace.PackagePath
 	}
-	name := parts[len(parts)-1]
+	if m.producer != nil {
+		for _, entry := range m.producer.Entries {
+			if target == m.producer.PackagePath && entry.Name == name {
+				return expand.Macro{}, fmt.Errorf("procedural macro %s cannot be invoked by its defining crate", name)
+			}
+			for _, candidate := range candidates {
+				if strings.Join(candidate.Target, "/") == m.producer.PackagePath+"/"+entry.Function.Name.Name {
+					return expand.Macro{}, fmt.Errorf("procedural macro %s cannot be invoked by its defining crate", entry.Name)
+				}
+			}
+		}
+	}
 	if packageScope := m.imports.local[target]; packageScope != nil {
 		if symbol := packageScope.Bindings[resolve.Key{Name: name}]; symbol != nil && symbol.Kind == resolve.Macro && symbol.Visibility != resolve.Public {
-			return nil, nil, fmt.Errorf("macro %s is private in %s", name, target)
+			return expand.Macro{}, fmt.Errorf("macro %s is private in %s", name, target)
 		}
-		return nil, nil, fmt.Errorf("macro %s has no source definition in %s", name, target)
+		return expand.Macro{}, fmt.Errorf("macro %s has no source definition in %s", name, target)
 	}
-	return nil, nil, fmt.Errorf("macro %s requires source module %s", name, target)
+	return expand.Macro{}, fmt.Errorf("macro %s requires source module %s", name, target)
 }

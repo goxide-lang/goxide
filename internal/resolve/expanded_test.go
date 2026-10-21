@@ -14,7 +14,7 @@ import (
 
 type sourceMacroResolver map[string]*ast.File
 
-func (sources sourceMacroResolver) LookupMacro(path *ast.Path, _ expand.Scope) (*ast.MacroRulesDecl, *ast.File, error) {
+func (sources sourceMacroResolver) LookupMacro(path *ast.Path, _ expand.Scope) (expand.Macro, error) {
 	var names []string
 	for _, segment := range path.Segments {
 		names = append(names, segment.Name.Name)
@@ -23,11 +23,11 @@ func (sources sourceMacroResolver) LookupMacro(path *ast.Path, _ expand.Scope) (
 	if file != nil {
 		for _, item := range file.Items {
 			if macro, ok := item.(*ast.MacroRulesDecl); ok && macro.Name.Name == names[len(names)-1] {
-				return macro, file, nil
+				return expand.Macro{Rules: macro, File: file}, nil
 			}
 		}
 	}
-	return nil, nil, fmt.Errorf("missing source macro %s", strings.Join(names, "::"))
+	return expand.Macro{}, fmt.Errorf("missing source macro %s", strings.Join(names, "::"))
 }
 
 func expandForResolution(t *testing.T, files map[string]*ast.File, names []string, lookup expand.Resolver) *expand.Result {

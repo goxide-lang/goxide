@@ -59,7 +59,7 @@ func structural(v reflect.Value) any {
 			if v.Type() == reflect.TypeFor[ast.Base]() && (name == "NodeID" || name == "Loc") {
 				continue
 			}
-			if v.Type() == reflect.TypeFor[ast.File]() && name == "LineStarts" {
+			if v.Type() == reflect.TypeFor[ast.File]() && (name == "LineStarts" || name == "Tokens") {
 				continue
 			}
 			if v.Type() == reflect.TypeFor[token.Token]() && (name == "Start" || name == "End") {

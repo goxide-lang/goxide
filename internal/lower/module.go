@@ -16,6 +16,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	"github.com/goxide-lang/goxide/internal/rootconfig"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
@@ -30,14 +31,20 @@ type Module struct {
 	Path, Dir string
 	// RootPackage is the canonical library entry declared by a project manifest.
 	// An empty value leaves native Go package imports unrestricted.
-	RootPackage string
-	Crates      []Crate
-	Targets     []TargetBoundary
-	Roots       paths.Roots
-	Config      config.Config
-	Context     context.Context
-	Tags        []string
-	Race        bool
+	RootPackage   string
+	Crates        []Crate
+	Targets       []TargetBoundary
+	Roots         paths.Roots
+	Config        config.Config
+	Context       context.Context
+	Tags          []string
+	Race          bool
+	ProcLibraries []*ProcLibrary
+	// Only the first module's callback is used. It receives the complete source
+	// graph's procedural diagnostics in expansion order, including errors, after
+	// module discovery finishes; intermediate discovery passes are not reported.
+	// Filename is the canonical source key, including the owning package path.
+	OnProcDiagnostic func(filename string, diagnostic expand.ProcDiagnostic)
 }
 
 // Crate describes an authored target without changing its Go package identity.
@@ -161,6 +168,17 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	if len(files) == 0 && len(crates.owners) == 0 {
 		return crates.prune()
 	}
+	if _, err := procmacro.Collect(files, "", false); err != nil {
+		return err
+	}
+	var libraries []*ProcLibrary
+	for _, module := range modules {
+		libraries = append(libraries, module.ProcLibraries...)
+	}
+	procs, err := prepareProcLibraries(libraries, files, configs, rootConfigs, owners)
+	if err != nil {
+		return err
+	}
 	external := sourceModuleImporter(modules[0])
 	requirements = prepareSourceRoots(files, rootConfigs, external)
 	packages := resolve.Resolve(crates.preliminaryFiles(files, extra), crates)
@@ -180,6 +198,7 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 		packages = resolve.Resolve(crates.preliminaryFiles(files, extra), crates)
 	}
 	imports := &moduleImporter{local: map[string]*resolve.Scope{}, external: external, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: owners, publicRoots: map[string]string{}, sourcePackages: map[string]bool{}, crates: crates}
+	imports.procs = procs
 	for _, module := range modules {
 		imports.publicRoots[module.Path] = module.RootPackage
 	}
@@ -205,6 +224,7 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	if crates.expandedModules(expanded, rootConfigs, extra) {
 		return compileModules(modules, extra)
 	}
+	reportProcDiagnostics(modules[0].OnProcDiagnostic, files, nil, expanded)
 	if cycle := macros.checkCycles(expanded); cycle != nil {
 		return cycle
 	}

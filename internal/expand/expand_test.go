@@ -285,8 +285,9 @@ var rowsValue = rows!([1,2];[];[3])`)
 
 type expandResolverFunc func(*ast.Path, Scope) (*ast.MacroRulesDecl, *ast.File, error)
 
-func (f expandResolverFunc) LookupMacro(path *ast.Path, scope Scope) (*ast.MacroRulesDecl, *ast.File, error) {
-	return f(path, scope)
+func (f expandResolverFunc) LookupMacro(path *ast.Path, scope Scope) (Macro, error) {
+	d, file, err := f(path, scope)
+	return Macro{Rules: d, File: file}, err
 }
 
 func TestExpandResolverKeepsSameNamedPackagesDistinct(t *testing.T) {

@@ -42,3 +42,20 @@ func ParseStmtTokens(tokens []token.Token) (ast.Stmt, []Diagnostic) {
 func ParseItemTokens(tokens []token.Token) (ast.Item, []Diagnostic) {
 	return parseItem(newTokenParser(tokens))
 }
+
+// ParseItemsTokens parses a declaration list, including an empty list.
+func ParseItemsTokens(tokens []token.Token) ([]ast.Item, []Diagnostic) {
+	p := newTokenParser(tokens)
+	items := p.items()
+	f := &ast.File{Items: items}
+	renumber(f)
+	return items, p.diagnostics
+}
+
+// ParseMembersTokens uses the grammar of a trait or impl member list.
+func ParseMembersTokens(tokens []token.Token, inTrait, defaultImpl bool) ([]ast.Item, []Diagnostic) {
+	p := newTokenParser(tokens)
+	items := p.itemList(func() ast.Item { return p.member(inTrait, inTrait, defaultImpl) })
+	renumber(&ast.File{Items: items})
+	return items, p.diagnostics
+}

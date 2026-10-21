@@ -1,13 +1,13 @@
 # 额外语法工具包：syntax、quote 与 syn
 
-状态：独立 `github.com/goxide-lang/syntax` module 首批已实现手写 Go 的 `token` 和 `proc_macro` 两包，包含词法树、调用内引用表、冻结 Context、Output、静态分派及 JSON 编解码。syn/quote 后续作为同 module 的普通工具包实现；此批不实现它们，也不采用 Goxide 自举生成发行代码。[RFC 0030](../rfcs/0030-procedural-macros.md) 的函数式调用转换桥已完成本地联调；源码登记、依赖角色与受限宿主继续按该篇推进。
+状态：独立 `github.com/goxide-lang/syntax` module 首批已实现手写 Go 的 `token` 和 `proc_macro` 两包，包含词法树、调用内引用表、冻结 Context、Output、静态分派及 JSON 编解码。syn/quote 后续作为同 module 的普通工具包实现；此批不实现它们，也不采用 Goxide 自举生成发行代码。[RFC 0030](../rfcs/0030-procedural-macros.md) 的源码登记、三类调用接线与 helper 已完成本地联调；依赖角色与受限宿主继续按该篇推进。
 
 | 状态 | 范围 |
 | --- | --- |
 | 已确认 | D16：独立 syntax 仓库/module；token 是唯一公共 TokenStream 类型所在包；proc_macro 是依赖 token 的 SDK；首批两包手写 Go。 |
 | 暂定 | T14：后续 syn/quote 的 AST、ToTokens、模板插值与具体 API；如以过程宏实现 quote!，另设宏源码项目。 |
-| 已实现 | 内部 token 直接解析、函数式调用的冻结引用桥、诊断位置与语义来源分离；SDK command 输出重新经过 resolve/check/lower。 |
-| 未定 | U11：RFC 0030 的源级登记、实际 SDK 协议内容匹配与受限过程宏宿主待接入验收。 |
+| 已实现 | 内部 token 直接解析、源码登记与 canonical SDK 验签、三类调用及 helper、冻结引用桥、诊断位置与语义来源分离；真实宏源码经测试 SDK command 展开，目标 Go build/run/test 通过。 |
+| 未定 | U11：RFC 0030 的角色构建、实际 SDK 协议内容匹配、RuntimeRoot 供应与受限过程宏宿主待接入验收。 |
 
 状态编号见[决策登记](decisions.md)。Rust 只用于参考语法工具与过程宏的分层，safe 标准库另以 [Go std](standard-library.md) 为基础设计。
 

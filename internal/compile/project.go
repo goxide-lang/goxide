@@ -258,6 +258,9 @@ func singleProject(root string) error {
 }
 
 func supportedManifest(manifest project.Manifest) error {
+	if manifest.Lib != nil && manifest.Lib.ProcMacro {
+		return fmt.Errorf("procedural macro projects require role planning and a restricted execution host, which are not configured")
+	}
 	if manifest.Build != nil {
 		return fmt.Errorf("build scripts resume after pre-MVP")
 	}

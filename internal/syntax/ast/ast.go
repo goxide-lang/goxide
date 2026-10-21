@@ -127,7 +127,8 @@ type File struct {
 	Items      []Item
 	Comments   []*CommentGroup
 	Directives []*Directive
-	LineStarts []uint32 // Source line byte offsets, for preserving comment placement.
+	LineStarts []uint32      // Source line byte offsets, for preserving comment placement.
+	Tokens     []token.Token // Original lexical units without comments, including EOF.
 }
 type Ident struct {
 	Base
@@ -810,6 +811,7 @@ func (*RangePat) patNode()               {}
 func (*BadPat) patNode()                 {}
 func (*FuncDecl) traitItemNode()         {}
 func (*TypeDecl) traitItemNode()         {}
+func (*MacroItem) traitItemNode()        {}
 
 // Walk visits nodes in field order. Returning false skips a node's children.
 func Walk(n Node, visit func(Node) bool) {

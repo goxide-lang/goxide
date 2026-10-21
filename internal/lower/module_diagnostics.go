@@ -8,6 +8,7 @@ import (
 
 	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
@@ -19,6 +20,22 @@ type moduleDiagnostic struct {
 
 func (e *moduleDiagnostic) Error() string { return e.message }
 func (e *moduleDiagnostic) Unwrap() error { return e.cause }
+
+func reportProcDiagnostics(report func(string, expand.ProcDiagnostic), files map[string]*syntax.File, displayNames map[string]string, expanded *expand.Result) {
+	if report == nil || expanded == nil || len(expanded.ProcDiagnostics) == 0 {
+		return
+	}
+	fileNames := make(map[*syntax.File]string, len(files))
+	for name, file := range files {
+		if displayNames[name] != "" {
+			name = displayNames[name]
+		}
+		fileNames[file] = name
+	}
+	for _, diagnostic := range expanded.ProcDiagnostics {
+		report(fileNames[diagnostic.Location.File], diagnostic)
+	}
+}
 
 // FormatSourceDiagnostic prints only source-stage diagnostics. Native Go errors
 // retain their generated positions because this pipeline has no Go source map.
@@ -34,10 +51,13 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 	var definition, call, display expand.Origin
 	var expn syntax.ExpnID
 	var expansion *expand.Diagnostic
+	var registration *procmacro.Diagnostic
 	var resolved resolve.Diagnostic
 	var checked check.Diagnostic
 	var lowered *Diagnostic
 	switch {
+	case errors.As(err, &registration):
+		name, span, message = registration.File, registration.Span, registration.Message
 	case errors.As(err, &expansion):
 		message, definition, call = expansion.Message, expansion.Definition, expansion.Call
 		display = expansion.Location

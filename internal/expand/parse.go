@@ -11,6 +11,11 @@ import (
 )
 
 const stmtKind fragmentKind = "statements"
+const singleStmtKind fragmentKind = "statement"
+const itemsKind fragmentKind = "items"
+const traitMembersKind fragmentKind = "trait members"
+const implMembersKind fragmentKind = "impl members"
+const defaultMembersKind fragmentKind = "Default impl members"
 
 type parseError struct {
 	code, message string
@@ -210,6 +215,14 @@ func (e *engine) parse(ts []syntaxToken, kind fragmentKind, expn ast.ExpnID, cal
 		n, ds = parser.ParseTypeTokens(s.tokens)
 	case itemKind:
 		n, ds = parser.ParseItemTokens(s.tokens)
+	case itemsKind:
+		var items []ast.Item
+		items, ds = parser.ParseItemsTokens(s.tokens)
+		n = &ast.File{Items: items}
+	case traitMembersKind, implMembersKind, defaultMembersKind:
+		var items []ast.Item
+		items, ds = parser.ParseMembersTokens(s.tokens, kind == traitMembersKind, kind == defaultMembersKind)
+		n = &ast.File{Items: items}
 	case stmtKind:
 		n, ds = parser.ParseStmtTokens(s.tokens)
 	default:
@@ -302,6 +315,15 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 			return v, nil
 		}
 		span := n.Span()
+		var body []syntaxToken
+		if item, ok := n.(ast.Item); ok {
+			start := span.Start
+			attrs := reflect.ValueOf(item).Elem().FieldByName("Attrs").Interface().([]*ast.Attr)
+			if len(attrs) != 0 {
+				start = attrs[len(attrs)-1].Span().End
+			}
+			body = s.syntax(ast.Span{Start: start, End: span.End})
+		}
 		if use, ok := s.ttRanges[span]; ok {
 			e.r.Captures[n] = Capture{Kind: string(ttKind), Use: use}
 			if _, isType := n.(ast.Type); typeSlot || isType {
@@ -394,6 +416,12 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 		b.Set(reflect.ValueOf(base))
 		e.r.Origins[n] = o
 		e.r.Locations[n] = s.location(span)
+		if item, ok := n.(ast.Item); ok && len(body) != 0 {
+			if e.itemBodies == nil {
+				e.itemBodies = map[ast.Item][]syntaxToken{}
+			}
+			e.itemBodies[item] = body
+		}
 		if e.lexical == nil {
 			e.lexical = map[ast.Node]Scope{}
 		}
@@ -448,6 +476,11 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 func (e *engine) locateFragment(n ast.Node, location Origin) {
 	ast.Walk(n, func(child ast.Node) bool {
 		e.r.Locations[child] = location
+		if item, ok := child.(ast.Item); ok {
+			if body, ok := e.itemBodies[item]; ok {
+				e.itemBodies[item] = syntaxLocations(body, location)
+			}
+		}
 		if tree, ok := child.(*ast.TokenTree); ok {
 			if tokens, ok := e.trees[tree]; ok {
 				e.trees[tree] = syntaxLocations(tokens, location)

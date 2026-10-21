@@ -5,8 +5,10 @@ import (
 	"reflect"
 
 	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/token"
+	pm "github.com/goxide-lang/syntax/proc_macro"
 )
 
 // Limits cover the complete ExpandPackages call, including nested expansions.
@@ -67,10 +69,20 @@ type Capture struct {
 // Resolver supplies source macro definitions for qualified/imported paths.
 // A missing source module must return an error; nil only enables package macros.
 type Resolver interface {
-	LookupMacro(path *ast.Path, scope Scope) (*ast.MacroRulesDecl, *ast.File, error)
+	LookupMacro(path *ast.Path, scope Scope) (Macro, error)
+}
+
+// Macro is a source-selected definition. Run is supplied by the compilation
+// host for a prepared procedural library; a missing host never executes code.
+type Macro struct {
+	Rules *ast.MacroRulesDecl
+	Proc  *procmacro.Entry
+	File  *ast.File
+	Run   func(pm.Request) ([]byte, error)
 }
 
 type Result struct {
+	ProcDiagnostics []ProcDiagnostic
 	// UsesConfiguration includes evaluated source and macro-produced constructs,
 	// even when a false predicate removes the entire generated item.
 	UsesConfiguration bool
@@ -95,6 +107,13 @@ type Result struct {
 	// Introductions preserves the template key of a generated package binding.
 	// resolve registers that key as well as the identifier's caller key.
 	Introductions map[*ast.Ident]Key
+}
+
+type ProcDiagnostic struct {
+	Severity pm.Severity
+	Message  string
+	Location Origin
+	Expn     ast.ExpnID
 }
 
 type Diagnostic struct {
@@ -135,6 +154,8 @@ type fragment struct {
 type definition struct {
 	decl *ast.MacroRulesDecl
 	file *ast.File
+	proc *procmacro.Entry
+	run  func(pm.Request) ([]byte, error)
 }
 type engine struct {
 	r                    *Result
@@ -146,6 +167,7 @@ type engine struct {
 	lexical              map[ast.Node]Scope
 	originals            map[ast.Node]ast.Node
 	trees                map[*ast.TokenTree][]syntaxToken
+	itemBodies           map[ast.Item][]syntaxToken
 	nextCtx              ast.SyntaxCtx
 	nodes, tokens, steps int
 	expansions           int
@@ -205,7 +227,7 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*a
 						return e.r, &Diagnostic{Code: "definition", Message: "duplicate macro " + k.Name,
 							Location: Origin{f, d.Span()}, Definition: Origin{old.file, old.decl.Span()}, Call: Origin{f, d.Span()}}
 					}
-					e.defs[k] = definition{d, f}
+					e.defs[k] = definition{decl: d, file: f}
 				}
 			}
 		}
@@ -216,7 +238,7 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*a
 				if _, ok := original.(*ast.MacroRulesDecl); ok {
 					continue
 				}
-				v, err := e.rewrite(reflect.ValueOf(n.Items[i]), f, 0)
+				rewritten, err := e.rewriteItems([]ast.Item{n.Items[i]}, f, 0, fileItems)
 				if err != nil {
 					// A module emitted by an earlier item may supply the
 					// source macro now being requested. Whole-module callers
@@ -225,8 +247,8 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*a
 					e.r.PartialFiles = append(out, n)
 					return e.r, err
 				}
-				if v.IsValid() {
-					items = append(items, v.Interface().(ast.Item))
+				if len(rewritten) != 0 {
+					items = append(items, rewritten...)
 				} else {
 					dropItemComments(n, n.Items[i])
 				}
@@ -301,19 +323,19 @@ func (e *engine) lookup(path *ast.Path, file *ast.File) (definition, error) {
 		}
 	}
 	if e.resolver != nil {
-		d, f, err := e.resolver.LookupMacro(path, scope)
+		d, err := e.resolver.LookupMacro(path, scope)
 		if err != nil {
 			return definition{}, err
 		}
-		if d != nil && f != nil {
-			e.reserve(f)
-			return definition{d, f}, nil
+		if (d.Rules != nil || d.Proc != nil) && d.File != nil {
+			e.reserve(d.File)
+			return definition{decl: d.Rules, file: d.File, proc: d.Proc, run: d.Run}, nil
 		}
 	}
 	return definition{}, fmt.Errorf("macro %s has no source definition in its resolution scope", id.Name)
 }
 
-func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fragmentKind, file *ast.File, parent ast.ExpnID) (ast.Node, error) {
+func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fragmentKind, file *ast.File, parent ast.ExpnID, slots ...fragmentKind) (ast.Node, error) {
 	if out, handled, err := e.builtin(n, path, args, kind, file, parent); handled {
 		return out, err
 	}
@@ -328,6 +350,13 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 	d, err := e.lookup(path, file)
 	if err != nil {
 		return nil, &Diagnostic{Code: "macro", Message: err.Error(), Location: location, Call: call, Definition: call, Expn: parent}
+	}
+	if d.proc != nil {
+		var position pm.Position
+		if len(slots) > 0 && slots[0] == singleStmtKind {
+			position = pm.StatementPosition
+		}
+		return e.invokeProc(n, d, args, kind, position, file, parent)
 	}
 	id := ast.ExpnID(len(e.r.Expansions) + 1)
 	stack := append([]ast.ExpnID(nil), e.r.Expansions[parent].Stack...)
@@ -401,7 +430,11 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 		return fail(code, err, span)
 	}
 	e.assignScopes(ts, ctx, caller)
-	out, err := e.parse(ts, kind, id, caller)
+	parseKind := kind
+	if len(slots) > 0 && slots[0] != singleStmtKind {
+		parseKind = slots[0]
+	}
+	out, err := e.parse(ts, parseKind, id, caller)
 	if err != nil {
 		code, span := "template", rule.Template.Span()
 		location := Origin{d.file, span}
@@ -416,6 +449,12 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 		}
 		return nil, &Diagnostic{Code: code, Message: err.Error(), Location: location, Definition: Origin{d.file, span}, Call: call, Expn: id}
 	}
+	if list, ok := out.(*ast.File); ok {
+		if len(list.Items) != 1 {
+			return fail("category", fmt.Errorf("declarative macro output requires exactly one item"), rule.Template.Span())
+		}
+		out = list.Items[0]
+	}
 	if item, ok := out.(ast.Item); ok {
 		keep, err := e.selection(file).item(item)
 		if err != nil {
@@ -423,6 +462,9 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 		}
 		if !keep {
 			return nil, nil
+		}
+		if err := e.rejectGeneratedRegistration(item, file, id); err != nil {
+			return nil, err
 		}
 		if !e.captured[out] {
 			destination := Scope{file, caller.Ctx}
@@ -432,6 +474,7 @@ func (e *engine) invoke(n ast.Node, path *ast.Path, args *ast.TokenTree, kind fr
 			}
 			e.introduce(item, destination)
 		}
+		return item, nil
 	} else if err := e.selection(file).children(out); err != nil {
 		return nil, err
 	}

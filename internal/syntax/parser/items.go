@@ -477,9 +477,17 @@ func (p *parser) member(inherited, inTrait, defaultMember bool) ast.Item {
 			p.error("impl associated type requires a type binding with =")
 		}
 	default:
-		p.error("trait/impl methods must start with func")
-		p.sync()
-		n = &ast.BadItem{ItemBase: ib, Text: "invalid member"}
+		if p.at(token.IDENT) {
+			x := p.expr()
+			if macro, ok := x.(*ast.MacroExpr); ok {
+				n = &ast.MacroItem{ItemBase: ib, Path: macro.Path, Args: macro.Args}
+			}
+		}
+		if n == nil {
+			p.error("trait/impl methods must start with func or a macro invocation")
+			p.sync()
+			n = &ast.BadItem{ItemBase: ib, Text: "invalid member"}
+		}
 	}
 	itemBase(n).Base = p.base(s)
 	if mods.Unsafe {

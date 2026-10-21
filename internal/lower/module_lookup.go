@@ -23,6 +23,7 @@ type moduleImporter struct {
 	publicRoots    map[string]string
 	sourcePackages map[string]bool
 	macros         map[string]map[resolve.Key]*resolve.Symbol
+	procs          map[string]map[string]boundProc
 	rootAccesses   []rootRequirement
 	crates         *crateGraph
 	err            error
@@ -42,6 +43,15 @@ func (i *moduleImporter) SetSourcePackages(packages []*resolve.Package) {
 	for _, pkg := range packages {
 		key := pkg.Dir + "\x00" + pkg.Name
 		if first {
+			for name, proc := range i.procs[filepath.ToSlash(pkg.Dir)] {
+				identity := resolve.Key{Name: name}
+				if pkg.Scope.Bindings[identity] != nil {
+					i.err = &Diagnostic{File: proc.file, Span: proc.entry.Attribute.Span(), Message: "duplicate procedural macro name " + name}
+					continue
+				}
+				pkg.Scope.Bindings[identity] = &resolve.Symbol{Name: identity, Kind: resolve.Macro,
+					Decl: resolve.Ref{File: proc.file, ID: proc.entry.Function.Name.ID()}, Visibility: resolve.Public}
+			}
 			for name, symbol := range pkg.Scope.Bindings {
 				if symbol.Kind == resolve.Macro {
 					if i.macros[key] == nil {
@@ -320,6 +330,9 @@ func (i *moduleImporter) symbolOwner(symbol *resolve.Symbol) []string {
 }
 
 func (i *moduleImporter) goPackage(path string) *types.Package {
+	if i.procPackage(path) {
+		return nil
+	}
 	pkg, loaded := i.cache[path]
 	if !loaded {
 		pkg, _ = i.external.Import(path)
@@ -334,7 +347,11 @@ func (i *moduleImporter) namespace(parts []string) (rootRequirement, bool) {
 		if !ok {
 			continue
 		}
-		namespace, found, err := paths.NewGoNamespaces(i.external).Resolve(requirement.namespace, parts[split:])
+		sourceImports := i.external
+		if requirement.sourceImporter != nil {
+			sourceImports = requirement.sourceImporter
+		}
+		namespace, found, err := paths.NewGoNamespaces(sourceImports).Resolve(requirement.namespace, parts[split:])
 		if err == nil && !found && split == len(parts) && requirement.namespace.PackagePath != "" {
 			err = requirement.check(i.owners, i.external)
 		}
@@ -370,6 +387,9 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		if i.procPackage(path.Dir(name)) {
+			continue
+		}
 		file := resolved.Files[name]
 		for _, use := range file.Uses {
 			var decl *syntax.UseDecl
@@ -385,12 +405,21 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 			fail := func(message string) error {
 				return &Diagnostic{File: name, Span: decl.Span(), Message: message, Origin: resolved.Origins[use.Decl]}
 			}
-			if requirement, ok := i.namespace(use.Target); ok {
+			for split := len(use.Target); split > 0; split-- {
+				requirement, ok := i.namespace(use.Target[:split])
+				if !ok || requirement.namespace.PackagePath == "" {
+					continue
+				}
+				requirement.sourceFile = name
+				if err := internalPackageAccess(requirement.namespace.PackagePath, name); err != nil {
+					return fail(err.Error())
+				}
 				if requirement.namespace.PackagePath != "" || requirement.namespace.Unavailable != "" {
 					if err := i.checkRootRequirement(requirement); err != nil {
 						return err
 					}
 				}
+				break
 			}
 			if i.err != nil {
 				return i.err
@@ -405,6 +434,18 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 				segments := decl.Tree.Path.Segments
 				return fail(fmt.Sprintf("use target %q is not a public item or namespace", segments[len(segments)-1].Name.Name))
 			}
+			if use.Resolved != nil {
+				target := use.Resolved.Target
+				if len(target) == 0 {
+					target = use.Target
+				}
+				if use.Resolved.Kind != resolve.Module && use.Resolved.Kind != resolve.Import && len(target) > 1 {
+					target = target[:len(target)-1]
+				}
+				if err := internalPackageAccess(strings.Join(target, "/"), name); err != nil {
+					return fail(err.Error())
+				}
+			}
 			if use.Glob && use.Resolved != nil {
 				switch use.Resolved.Kind {
 				case resolve.Variable, resolve.Constant, resolve.Function, resolve.Variant, resolve.Field, resolve.Label, resolve.Builtin, resolve.Macro:
@@ -414,6 +455,7 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 			}
 			if use.Blank {
 				if requirement, ok := i.namespace(use.Target); ok {
+					requirement.sourceFile = name
 					if requirement.namespace.PackagePath == "" {
 						return fail("blank use requires a concrete package, not a namespace group")
 					}
@@ -421,6 +463,12 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 						return err
 					}
 					use.Target = strings.Split(requirement.namespace.PackagePath, "/")
+				}
+				if i.procPackage(strings.Join(use.Target, "/")) {
+					return fail("procedural macro packages cannot be imported for runtime side effects")
+				}
+				if err := internalPackageAccess(strings.Join(use.Target, "/"), name); err != nil {
+					return fail(err.Error())
 				}
 				if !i.SourcePackage(use.Target) {
 					if _, err := i.external.Import(strings.Join(use.Target, "/")); err != nil {
@@ -435,7 +483,7 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 			}
 		}
 	}
-	return nil
+	return i.checkProcRuntimeUses(resolved)
 }
 
 func (i *moduleImporter) finishUseTarget(use *resolve.UseBinding) bool {

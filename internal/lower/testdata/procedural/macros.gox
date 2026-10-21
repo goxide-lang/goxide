@@ -1,0 +1,22 @@
+package answer_macros
+
+use syntax::token;
+use syntax::proc_macro as pm;
+
+#[proc_macro]
+pub func identity(ctx pm::Context, input token::TokenStream) pm::Output {
+    return pm::Success(input)
+}
+
+#[proc_macro_attribute]
+pub func keep(ctx pm::Context, args token::TokenStream, item token::TokenStream) pm::Output {
+    if !args.IsEmpty() {
+        return pm::Failure("keep takes no arguments", ctx.CallSpan())
+    }
+    return pm::Success(item)
+}
+
+#[proc_macro_derive(Answer, attributes(note))]
+pub func deriveAnswer(ctx pm::Context, item token::TokenStream) pm::Output {
+    return pm::FromParse(token::ParseText("pub func Answer() int { return 42 }", ctx.DefSite()))
+}

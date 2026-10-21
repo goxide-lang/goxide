@@ -9,16 +9,27 @@ import (
 	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
-func (i *moduleImporter) checkRootRequirement(requirement rootRequirement) error {
-	parts := strings.Split(requirement.namespace.PackagePath, "/")
+func internalPackageAccess(packagePath, sourceFile string) error {
+	parts := strings.Split(packagePath, "/")
 	for n, part := range parts {
 		if part == "internal" {
 			parent := strings.Join(parts[:n], "/")
-			caller := path.Dir(requirement.origin.File)
+			caller := path.Dir(sourceFile)
 			if parent == "" || caller != parent && !strings.HasPrefix(caller, parent+"/") {
-				return &Diagnostic{File: requirement.origin.File, Span: requirement.origin.Span, Message: fmt.Sprintf("use of internal package %s is not allowed from %s", requirement.namespace.PackagePath, caller), Origin: requirement.origin}
+				return fmt.Errorf("use of internal package %s is not allowed from %s", packagePath, caller)
 			}
 		}
+	}
+	return nil
+}
+
+func (i *moduleImporter) checkRootRequirement(requirement rootRequirement) error {
+	sourceFile := requirement.sourceFile
+	if sourceFile == "" {
+		sourceFile = requirement.origin.File
+	}
+	if err := internalPackageAccess(requirement.namespace.PackagePath, sourceFile); err != nil {
+		return &Diagnostic{File: requirement.origin.File, Span: requirement.origin.Span, Message: err.Error(), Origin: requirement.origin}
 	}
 	if err := requirement.check(i.owners, i.external); err != nil {
 		return err
@@ -59,9 +70,16 @@ func (i *moduleImporter) checkSourceRoots(resolved *resolve.Result) error {
 		if root == "" || target == "" || !i.sourcePackages[target] && !i.sourcePackages[root] {
 			continue
 		}
-		caller, _, _ := strings.Cut(requirement.target, "/$goxide$roots/")
+		sourceFile := requirement.sourceFile
+		if sourceFile == "" {
+			sourceFile = requirement.origin.File
+		}
+		caller := i.owners[path.Dir(sourceFile)]
+		if caller == "" {
+			caller, _, _ = strings.Cut(requirement.target, "/$goxide$roots/")
+		}
 		if i.crates != nil {
-			from, to := i.crates.owners[path.Dir(requirement.origin.File)], i.crates.owners[target]
+			from, to := i.crates.owners[path.Dir(sourceFile)], i.crates.owners[target]
 			if from != nil && to != nil && from.Root == to.Root {
 				continue
 			}

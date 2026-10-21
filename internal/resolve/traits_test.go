@@ -86,3 +86,42 @@ func f() { _ = model::Box::make; _ = model::Choice::Source::Item }
 		}
 	}
 }
+
+func TestImplPrerequisitesUseImplScope(t *testing.T) {
+	const source = `package p
+trait Copy {}
+trait Show {}
+struct Box[T any] { value T }
+impl[T any] Copy for Box[T] where T: Copy + Show, Self: Show {}
+impl Show for Box[int] where Self: Copy {}
+`
+	files := parseFiles(t, map[string]string{"p.gox": source})
+	result := resolve.Resolve(files, nil)
+	noDiagnostics(t, result)
+	file := result.Files["p.gox"]
+	for _, item := range files["p.gox"].Items[3:] {
+		impl := item.(*ast.ImplDecl)
+		pred := impl.Where.Predicates[len(impl.Where.Predicates)-1]
+		self := pred.Type.(*ast.SelfType)
+		resolution := file.References[self.ID()]
+		if resolution.Symbol == nil || resolution.Symbol.Decl.ID != impl.ID() {
+			t.Fatalf("where Self does not bind to its impl: %#v", resolution)
+		}
+	}
+}
+
+func TestTraitPrerequisiteSelfBinding(t *testing.T) {
+	const source = `package p
+trait Compare {}
+trait Equal where Self: Compare {}
+`
+	files := parseFiles(t, map[string]string{"p.gox": source})
+	result := resolve.Resolve(files, nil)
+	noDiagnostics(t, result)
+	trait := files["p.gox"].Items[1].(*ast.TraitDecl)
+	self := trait.Where.Predicates[0].Type.(*ast.SelfType)
+	resolution := result.Files["p.gox"].References[self.ID()]
+	if resolution.Symbol == nil || resolution.Symbol.Decl.ID != trait.ID() {
+		t.Fatalf("trait prerequisite Self lost its owner: %#v", resolution)
+	}
+}

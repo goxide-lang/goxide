@@ -401,9 +401,7 @@ func (p *parser) trait(ib ast.ItemBase) ast.Item {
 	p.next()
 	d := &ast.TraitDecl{ItemBase: ib, Name: p.ident()}
 	d.Generics = p.genericParams()
-	if d.Generics != nil {
-		d.Where = p.whereClause()
-	}
+	d.Where = p.whereClause()
 	p.expect(token.LBRACE)
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.semis()
@@ -432,9 +430,7 @@ func (p *parser) impl(ib ast.ItemBase, declare bool) ast.Item {
 	} else {
 		d.Type = first
 	}
-	if d.Generics != nil {
-		d.Where = p.whereClause()
-	}
+	d.Where = p.whereClause()
 	if declare && !p.at(token.LBRACE) {
 		return d
 	}

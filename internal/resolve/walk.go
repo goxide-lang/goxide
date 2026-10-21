@@ -56,17 +56,17 @@ func (r *resolver) walkItem(scope *Scope, item ast.Item) {
 		}
 	case *ast.TraitDecl:
 		inner := r.lexicalScope(BlockScope, scope, n)
-		r.generics(inner, n.Generics, n.Where)
 		r.selfType(inner, n, r.file.Scopes[n.ID()])
+		r.generics(inner, n.Generics, n.Where)
 		for _, member := range n.Items {
 			r.walkItem(inner, member)
 		}
 	case *ast.ImplDecl:
 		inner := r.lexicalScope(BlockScope, scope, n)
+		r.selfType(inner, n, r.file.Scopes[n.ID()])
 		r.generics(inner, n.Generics, n.Where)
 		r.typ(inner, n.Trait)
 		r.typ(inner, n.Type)
-		r.selfType(inner, n, r.file.Scopes[n.ID()])
 		for _, member := range n.Items {
 			r.walkItem(inner, member)
 		}

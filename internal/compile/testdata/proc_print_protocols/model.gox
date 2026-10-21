@@ -1,0 +1,86 @@
+package model
+use macros;
+use formatters;
+
+#[derive(macros::LibraryDebug)]
+pub struct Record { Number int; Text string }
+#[derive(macros::LibraryDebug)]
+pub struct Changed { Flag bool; Count int; Note string }
+func (Record) String() string { panic("Stringer fallback") }
+
+var trace string
+pub func Reset() { trace = "" }
+pub func Trace() string { return trace }
+struct Probe { label string; value int; fail bool }
+impl formatters::LibraryDisplay for Probe {
+ func display(self &Self) string {
+  trace += "F" + self.label
+  if self.fail { panic("formatter failed") }
+  return formatters::Display(&self.value)
+ }
+}
+func argument(label string, value int, fail bool) Probe {
+ trace += "A" + label
+ return Probe{label: label, value: value, fail: fail}
+}
+pub func Demo() {
+ macros::LibraryPrint!("prefix ")
+ macros::LibraryPrintln!("{{{}}} {:?} {}", 7, "quoted", true)
+}
+pub func EmptyPrint() { macros::LibraryPrint!("") }
+pub func Newlines() {
+ macros::LibraryPrintln!()
+ macros::LibraryPrintln!("")
+ macros::LibraryPrintln!("tail\n")
+ macros::LibraryPrint!("{{}}")
+}
+pub func Order() {
+ macros::LibraryPrintln!("{} {}", argument("x", 7, false), argument("y", 8, false))
+}
+pub func FormattingFailure() {
+ macros::LibraryPrintln!("{} {}", argument("x", 7, true), argument("y", 8, false))
+}
+func failure() Result[int,string] { trace += "fail"; return Result[int,string]::Err("stopped") }
+func shortCircuit() Result[int,string] {
+ macros::LibraryPrintln!("{} {} {}", argument("x", 7, false), failure()?, argument("z", 9, false))
+ return Result[int,string]::Ok(0)
+}
+pub func ShortCircuit() bool {
+ return match shortCircuit() { Result[int,string]::Ok(_) => false, Result[int,string]::Err(message) => message == "stopped" }
+}
+pub func Hygiene() {
+ printingArgument0 := 5
+ printingText := "caller"
+ formatters := "local"
+ macros::LibraryPrintln!("{} {} {}", printingArgument0, printingText, formatters)
+}
+pub func Nested() {
+ macros::LibraryPrintln!("outer {}", func() int { macros::LibraryPrintln!("inner"); return 9 }())
+}
+macro_rules! forwarded { ($format:expr, $value:expr) => { macros::LibraryPrintln!($format, $value) }; }
+pub func Forwarded() {
+ value := 12
+ forwarded!("forward {}", value + 1)
+}
+pub func Derived() {
+ macros::LibraryPrintln!("{:?} | {:?}", Record{Number: 3, Text: "first"}, Changed{Flag: true, Count: 17, Note: "new"})
+ macros::LibraryPrintln!("{:?}", Record{Number: 21, Text: "changed"})
+}
+enum Event { Ready }
+impl formatters::LibraryDebug for Event {
+ func debug(self &Self) string { return match *self { Event::Ready => "Event::Ready" } }
+}
+pub func InvalidEnum() {
+ var invalid Event
+ macros::LibraryPrintln!("{:?} {}", invalid, argument("y", 8, false))
+}
+pub func DirectRecover() {
+ defer func() { macros::LibraryPrintln!("{}", recover() != nil) }()
+ panic("recover in caller frame")
+}
+pub func Scalars() {
+ macros::LibraryPrintln!("{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {:?}", bool(true), int8(-8), int16(-16), int32(-32), int64(-64), uint(1), uint8(8), uint16(16), uint32(32), uint64(64), uintptr(9), float32(1.25), float64(2.5), complex64(1+2i), complex128(3+4i), "plain", "line\n")
+}
+pub func RawAndTrailing() {
+ macros::LibraryPrintln!(`raw {{}} {}`, 4,)
+}

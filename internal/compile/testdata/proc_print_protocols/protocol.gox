@@ -1,0 +1,41 @@
+package protocol
+use standard::formatting;
+pub func Write(text string) { formatting::Write(text) }
+pub trait LibraryDisplay { func display(self &Self) string }
+pub trait LibraryDebug { func debug(self &Self) string }
+pub func Display[T LibraryDisplay](value &T) string { return LibraryDisplay::display(value) }
+pub func Debug[T LibraryDebug](value &T) string { return LibraryDebug::debug(value) }
+impl LibraryDisplay for bool { func display(self &Self) string { return formatting::Bool(*self) } }
+impl LibraryDebug for bool { func debug(self &Self) string { return formatting::Bool(*self) } }
+impl LibraryDisplay for int { func display(self &Self) string { return formatting::Int(*self) } }
+impl LibraryDebug for int { func debug(self &Self) string { return formatting::Int(*self) } }
+impl LibraryDisplay for int8 { func display(self &Self) string { return formatting::Int8(*self) } }
+impl LibraryDebug for int8 { func debug(self &Self) string { return formatting::Int8(*self) } }
+impl LibraryDisplay for int16 { func display(self &Self) string { return formatting::Int16(*self) } }
+impl LibraryDebug for int16 { func debug(self &Self) string { return formatting::Int16(*self) } }
+impl LibraryDisplay for int32 { func display(self &Self) string { return formatting::Int32(*self) } }
+impl LibraryDebug for int32 { func debug(self &Self) string { return formatting::Int32(*self) } }
+impl LibraryDisplay for int64 { func display(self &Self) string { return formatting::Int64(*self) } }
+impl LibraryDebug for int64 { func debug(self &Self) string { return formatting::Int64(*self) } }
+impl LibraryDisplay for uint { func display(self &Self) string { return formatting::Uint(*self) } }
+impl LibraryDebug for uint { func debug(self &Self) string { return formatting::Uint(*self) } }
+impl LibraryDisplay for uint8 { func display(self &Self) string { return formatting::Uint8(*self) } }
+impl LibraryDebug for uint8 { func debug(self &Self) string { return formatting::Uint8(*self) } }
+impl LibraryDisplay for uint16 { func display(self &Self) string { return formatting::Uint16(*self) } }
+impl LibraryDebug for uint16 { func debug(self &Self) string { return formatting::Uint16(*self) } }
+impl LibraryDisplay for uint32 { func display(self &Self) string { return formatting::Uint32(*self) } }
+impl LibraryDebug for uint32 { func debug(self &Self) string { return formatting::Uint32(*self) } }
+impl LibraryDisplay for uint64 { func display(self &Self) string { return formatting::Uint64(*self) } }
+impl LibraryDebug for uint64 { func debug(self &Self) string { return formatting::Uint64(*self) } }
+impl LibraryDisplay for uintptr { func display(self &Self) string { return formatting::Uintptr(*self) } }
+impl LibraryDebug for uintptr { func debug(self &Self) string { return formatting::Uintptr(*self) } }
+impl LibraryDisplay for float32 { func display(self &Self) string { return formatting::Float32(*self) } }
+impl LibraryDebug for float32 { func debug(self &Self) string { return formatting::Float32(*self) } }
+impl LibraryDisplay for float64 { func display(self &Self) string { return formatting::Float64(*self) } }
+impl LibraryDebug for float64 { func debug(self &Self) string { return formatting::Float64(*self) } }
+impl LibraryDisplay for complex64 { func display(self &Self) string { return formatting::Complex64(*self) } }
+impl LibraryDebug for complex64 { func debug(self &Self) string { return formatting::Complex64(*self) } }
+impl LibraryDisplay for complex128 { func display(self &Self) string { return formatting::Complex128(*self) } }
+impl LibraryDebug for complex128 { func debug(self &Self) string { return formatting::Complex128(*self) } }
+impl LibraryDisplay for string { func display(self &Self) string { return formatting::DisplayString(*self) } }
+impl LibraryDebug for string { func debug(self &Self) string { return formatting::DebugString(*self) } }

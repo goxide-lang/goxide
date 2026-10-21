@@ -1,0 +1,9 @@
+package macros
+use syntax::token;
+use syntax::proc_macro as pm;
+#[proc_macro]
+pub func LibraryPrint(ctx pm::Context,input token::TokenStream) pm::Output { return printTokens(ctx,input,false) }
+#[proc_macro]
+pub func LibraryPrintln(ctx pm::Context,input token::TokenStream) pm::Output { return printTokens(ctx,input,true) }
+#[proc_macro_derive(LibraryDebug)]
+pub func libraryDebug(ctx pm::Context,input token::TokenStream) pm::Output { return deriveDebug(ctx,input) }

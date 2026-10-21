@@ -215,6 +215,12 @@ func (h *hygiene) captureScope(scope, stop, anchor *Scope, origin expand.Origin,
 		return anchor
 	}
 	parent := h.captureScope(scope.Parent, stop, anchor, origin, expn)
+	// A derive can copy an input's generic parameter group into a new impl.
+	// Its enclosing impl is generated, but references copied from that group
+	// still belong to the new parameter bindings, not the invocation scope.
+	if bindings := h.capturedGenericBindings(scope, origin); len(bindings) != 0 {
+		return &Scope{Kind: scope.Kind, Parent: parent, Bindings: bindings}
+	}
 	owner, ok := h.expanded.Origins[h.owners[scope]]
 	if !ok || !containsOrigin(owner, origin) {
 		return parent
@@ -225,6 +231,34 @@ func (h *hygiene) captureScope(scope, stop, anchor *Scope, origin expand.Origin,
 		}
 	}
 	return parent
+}
+
+func (h *hygiene) capturedGenericBindings(scope *Scope, origin expand.Origin) map[Key]*Symbol {
+	var params *ast.GenericParams
+	switch owner := h.owners[scope].(type) {
+	case *ast.FuncDecl:
+		params = owner.Generics
+	case *ast.TypeDecl:
+		params = owner.Generics
+	case *ast.TypeSpec:
+		params = owner.Generics
+	case *ast.EnumDecl:
+		params = owner.Generics
+	case *ast.TraitDecl:
+		params = owner.Generics
+	case *ast.ImplDecl:
+		params = owner.Generics
+	}
+	if params == nil || !containsOrigin(h.expanded.Origins[params], origin) {
+		return nil
+	}
+	bindings := map[Key]*Symbol{}
+	for name, symbol := range scope.Bindings {
+		if symbol.Kind == TypeParam {
+			bindings[name] = symbol
+		}
+	}
+	return bindings
 }
 
 func containsOrigin(outer, inner expand.Origin) bool {

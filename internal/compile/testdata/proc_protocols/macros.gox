@@ -1,7 +1,7 @@
 package macros
 use syntax::token;
 use syntax::proc_macro as pm;
-#[proc_macro_derive(LibraryDefault)]
+#[proc_macro_derive(LibraryDefault, attributes(library_default))]
 pub func deriveDefault(ctx pm::Context,input token::TokenStream) pm::Output { return derive(ctx,input,"Default") }
 #[proc_macro_derive(LibraryClone)]
 pub func deriveClone(ctx pm::Context,input token::TokenStream) pm::Output { return derive(ctx,input,"Clone") }

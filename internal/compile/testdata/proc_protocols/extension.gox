@@ -1,0 +1,133 @@
+package model
+use macros;
+use api;
+use fmt;
+
+var seedDefaults int
+type Seed int
+impl api::LibraryDefault for Seed { func r#default() Self {seedDefaults++;return Seed(seedDefaults)} }
+#[derive(macros::LibraryDefault)]
+pub enum DefaultState {
+ #[library_default]
+ Ready { First,Second Seed },
+ Unselected(chan int),
+}
+#[derive(macros::LibraryDefault)]
+enum DefaultUnit { #[library_default] Ready, Unselected(chan int), }
+type Absent = Option[chan int]
+#[derive(macros::LibraryDefault)]
+struct DefaultHolder { Selected DefaultState; Optional Absent; Unit DefaultUnit }
+pub func DefaultCases() string {
+ seedDefaults=0
+ value:=api::Make[DefaultHolder]()
+ pair:=match value.Selected {DefaultState::Ready{First:first,Second:second}=>fmt::Sprintf("%d %d",first,second),_=>"wrong"}
+ absent:=match value.Optional {Option::None=>true,Option::Some(_)=>false}
+ unit:=match value.Unit {DefaultUnit::Ready=>true,_=>false}
+ return fmt::Sprintf("%s %d %t %t",pair,seedDefaults,absent,unit)
+}
+
+type AliasKey = string
+var cloneCalls int
+#[derive(macros::LibraryDebug)]
+pub struct Piece { Text string; Values []int }
+impl api::LibraryClone for Piece {
+ func clone(self &Self) Self {cloneCalls++;return Piece{Text:self.Text+"*",Values:api::LibraryClone::clone(&self.Values)}}
+}
+#[derive(macros::LibraryClone,macros::LibraryDebug)]
+pub enum State { Empty, Pair(Piece,[]Piece), Named { Name string; Count int }, }
+pub func CloneState(value State) State {return api::LibraryClone::clone(&value)}
+pub func DebugState(value State) string {return api::LibraryDebug::debug(&value)}
+pub func InvalidResultClone() {var value Result[[]Piece,map[string][]Piece];_=api::LibraryClone::clone(&value)}
+pub func InvalidResultDebug() {var value Result[[]Piece,map[string][]Piece];_=api::LibraryDebug::debug(&value)}
+
+pub func CheckExtended() {
+ if DefaultCases()!="1 2 2 true true" {panic("selected default fields, order, or None payload requirement")}
+ original:=Piece{Text:"piece",Values:[]int{1}}
+ cloneCalls=0
+ values:=[]Piece{original,original}
+ copied:=api::LibraryClone::clone(&values)
+ copied[0].Values[0]=9
+ if cloneCalls!=2 || copied[0].Text!="piece*" || copied[1].Text!="piece*" || values[0].Values[0]!=1 || copied[1].Values[0]!=1 {panic("slice storage or element protocol")}
+ copied[0].Text="changed"
+ if values[0].Text!="piece" {panic("slice backing storage")}
+ cloneCalls=0
+ fixed:=[2]Piece{original,original}
+ fixedCopy:=api::LibraryClone::clone(&fixed)
+ fixedCopy[0].Values[0]=8
+ if cloneCalls!=2 || fixedCopy[1].Text!="piece*" || fixed[0].Values[0]!=1 || fixedCopy[1].Values[0]!=1 {panic("array element protocol or payload storage")}
+ cloneCalls=0
+ table:=map[AliasKey][]Piece{"b":[]Piece{original},"a":[]Piece{original}}
+ tableCopy:=api::LibraryClone::clone(&table)
+ tableCopy["a"][0].Values[0]=7
+ tableCopy["new"]=[]Piece{}
+ if cloneCalls!=2 || len(table)!=2 || table["a"][0].Values[0]!=1 || tableCopy["b"][0].Values[0]!=1 || tableCopy["b"][0].Text!="piece*" {panic("map storage or recursive value protocol")}
+ numbered:=map[int][]Piece{4:[]Piece{original}}
+ cloneCalls=0
+ numberedCopy:=api::LibraryClone::clone(&numbered)
+ numberedCopy[4][0].Values[0]=6
+ if cloneCalls!=1 || numbered[4][0].Values[0]!=1 {panic("integer map keys")}
+ var nilSlice []Piece
+ emptySlice:=make([]Piece,0)
+ var nilMap map[string][]Piece
+ emptyMap:=make(map[string][]Piece)
+ if api::LibraryClone::clone(&nilSlice)!=nil || api::LibraryClone::clone(&emptySlice)==nil || api::LibraryClone::clone(&nilMap)!=nil || api::LibraryClone::clone(&emptyMap)==nil {panic("nil and empty storage")}
+ cloneCalls=0
+ state:=State::Pair(original,[]Piece{original})
+ stateCopy:=CloneState(state)
+ match &mut stateCopy {State::Pair(first,rest)=>{first.Text="changed";first.Values[0]=5;(*rest)[0].Values[0]=4},_=>{panic("enum clone variant")}}
+ match state {State::Pair(first,rest)=>{if first.Text!="piece" || first.Values[0]!=1 || rest[0].Values[0]!=1 {panic("enum clone allocation or payload storage")}},_=>{panic("original enum variant")}}
+ if cloneCalls!=2 {panic("enum clone must use each field protocol")}
+ empty:=State::Empty
+ if DebugState(CloneState(empty))!="State::Empty" {panic("unit variant clone")}
+ named:=State::Named{Name:"name",Count:2}
+ namedCopy:=CloneState(named)
+ match &mut namedCopy {State::Named{Name:name,Count:count}=>{*name="changed";*count=3},_=>{panic("named clone variant")}}
+ if DebugState(named)!="State::Named { Name: \"name\", Count: 2 }" {panic("named clone allocation")}
+ cloneCalls=0
+ none:=Option[[]Piece]::None
+ noneCopy:=api::LibraryClone::clone(&none)
+ wrongNone:=match noneCopy {Option::None=>false,Option::Some(_)=>true}
+ if cloneCalls!=0 || wrongNone {panic("None clone")}
+ someNil:=Option[[]Piece]::Some(nil)
+ someNilCopy:=api::LibraryClone::clone(&someNil)
+ wrongNil:=match someNilCopy {Option::Some(value)=>value!=nil,Option::None=>true}
+ if wrongNil {panic("Some nil state")}
+ someEmpty:=Option[[]Piece]::Some([]Piece{})
+ someEmptyCopy:=api::LibraryClone::clone(&someEmpty)
+ wrongEmpty:=match someEmptyCopy {Option::Some(value)=>value==nil,Option::None=>true}
+ if wrongEmpty {panic("Some empty state")}
+ some:=Option[[]Piece]::Some([]Piece{original})
+ someCopy:=api::LibraryClone::clone(&some)
+ match someCopy {Option::Some(value)=>{value[0].Values[0]=3},Option::None=>{panic("Some clone")}}
+ wrongSome:=match some {Option::Some(value)=>value[0].Values[0]!=1,Option::None=>true}
+ if cloneCalls!=1 || wrongSome {panic("Some payload protocol or storage")}
+ cloneCalls=0
+ ok:=Result[[]Piece,map[string][]Piece]::Ok([]Piece{original})
+ okCopy:=api::LibraryClone::clone(&ok)
+ match okCopy {Result::Ok(value)=>{value[0].Values[0]=2},Result::Err(_)=>{panic("Ok clone")}}
+ wrongOk:=match ok {Result::Ok(value)=>value[0].Values[0]!=1,Result::Err(_)=>true}
+ if cloneCalls!=1 || wrongOk {panic("Ok active payload protocol or storage")}
+ cloneCalls=0
+ err:=Result[[]Piece,map[string][]Piece]::Err(map[string][]Piece{"error":[]Piece{original}})
+ errCopy:=api::LibraryClone::clone(&err)
+ match errCopy {Result::Err(value)=>{value["error"][0].Values[0]=0},Result::Ok(_)=>{panic("Err clone")}}
+ wrongErr:=match err {Result::Err(value)=>value["error"][0].Values[0]!=1,Result::Ok(_)=>true}
+ if cloneCalls!=1 || wrongErr {panic("Err active payload protocol or storage")}
+}
+
+pub func DebugCases() []string {
+ piece:=Piece{Text:"quoted\n\"",Values:[]int{1,2}}
+ empty:=State::Empty
+ pair:=State::Pair(piece,[]Piece{})
+ named:=State::Named{Name:"quoted\n\"",Count:3}
+ none:=Option[[]Piece]::None
+ someNil:=Option[[]Piece]::Some(nil)
+ someEmpty:=Option[[]Piece]::Some([]Piece{})
+ ok:=Result[[]Piece,map[string][]Piece]::Ok([]Piece{piece})
+ err:=Result[[]Piece,map[string][]Piece]::Err(map[string][]Piece{"b":[]Piece{},"a\n":[]Piece{piece}})
+ nested:=Option[Result[int,string]]::Some(Result[int,string]::Err("nested\n"))
+ var nilMap map[string]int
+ emptyMap:=map[string]int{}
+ table:=map[AliasKey]string{"z":"last","a\n":"first\""}
+ return []string{DebugState(empty),DebugState(pair),DebugState(named),api::LibraryDebug::debug(&none),api::LibraryDebug::debug(&someNil),api::LibraryDebug::debug(&someEmpty),api::LibraryDebug::debug(&ok),api::LibraryDebug::debug(&err),api::LibraryDebug::debug(&nested),api::LibraryDebug::debug(&nilMap),api::LibraryDebug::debug(&emptyMap),api::LibraryDebug::debug(&table)}
+}

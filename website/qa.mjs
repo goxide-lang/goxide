@@ -1,4 +1,4 @@
-import {write as writeSource,read as readEditor,view} from './monaco-qa.mjs';
+import {write as writeSource,read as readEditor,view,done} from './monaco-qa.mjs';
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -14,7 +14,7 @@ const page = await context.newPage();
 const errors=[];const requests=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));
 await fs.mkdir(new URL('qa-artifacts/',import.meta.url),{recursive:true});
-const finished=()=>page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('转译完成'),{},{timeout:60000});
+const finished=()=>done(page);
 await page.goto(base.replace(/\/$/,'')+'/playground.html');await finished();
 const manifest=await page.evaluate(async()=>await(await fetch('examples.json')).json());
 const a04Matrix=JSON.parse(await fs.readFile(new URL('a04-matrix.json',import.meta.url),'utf8'));
@@ -579,7 +579,7 @@ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=inner
 await page.screenshot({path:new URL('qa-artifacts/mobile.png',import.meta.url).pathname,fullPage:true});
 // Intercept only a QA worker to deterministically exercise hard timeout and cancel.
 await page.route('**/worker.js*',r=>r.fulfill({contentType:'application/javascript',body:`postMessage({type:'ready',rootsSha256:'${manifest.dependencyContext.sha256}'}); onmessage=()=>{};`}));
-await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent==='正在转译…');
+await page.reload();await page.waitForFunction(()=>document.querySelector('#status')?.textContent==='正在转译…');
 await page.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('超过 10 秒'),{},{timeout:15000});
 assert.equal(await readEditor(page,'生成结果'),'');
 await page.click('#compile');await page.waitForFunction(()=>document.querySelector('#status').textContent==='正在转译…');await page.click('#stop');

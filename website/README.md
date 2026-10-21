@@ -53,4 +53,6 @@ GOTOOLCHAIN=local GOWORK=off go vet -tags=goxideweb ./cmd/goxide-web
 
 浏览器脚本使用锁定的 Playwright，`CHROMIUM` 可指定本机 Chromium 路径，始终开启 Chromium sandbox。新站验收覆盖代码对照、快速开始预设与下载、文档搜索和目录、移动布局及按需加载；现有 catalog 验收保留真实 Worker/CLI 一致性、Monaco 编辑恢复、路由草稿和多文件检查。截图与运行日志保存在忽略目录，不能替代实际行为断言。
 
+`npm run test:compiler --prefix website` 仍指向历史 `qa.mjs` 扩展套件，其 `checks/`、a01/a04 夹具保留旧 `.gox import` 语法和旧前端诊断断言，尚未适配当前管线。它不属于上面的当前验收入口；不能把当前页面和 catalog 检查通过记为该历史套件也已通过。
+
 网站部署到 GitHub Pages 组织根路径 `/`。`learn/index.html` 、`docs/index.html` 与 `design/index.html` 支持直接访问和刷新；Go embed 服务和本地预览使用同样的入口。CI 执行网站构建与 HTTP 检查，浏览器验收需要单独运行。

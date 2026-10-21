@@ -16,8 +16,10 @@
 | 普通 Go 泛型 | Go 能直接表达、不依赖待定 Goxide 实现选择的类型和函数保留泛型；`Box[T any]` 不因条件 Default/Clone 收紧 T |
 | Go 使用边界 | 条件能力通过 Goxide 明确导出的普通函数使用；Go 调用者不传 Ops，也不引用实例哈希名 |
 | sugar | 按[分发模块配置](../design/toml-manifest.md#go-成员-sugar-配置)，所有 impl 来源一致；只对 Go 允许追加方法的目标生成短入口 |
+| 数组长度参数 | `const N int` 仅匹配固定数组长度、接受显式非负整数常量和原样转传；不开放长度表达式求解或 const 泛型具名类型 |
+| enum 外层检查 | `enum_valid(value)` 单次求值并返回外层变体是否合法；payload 与普通 match 的检查规则不变 |
 
-最小数组长度参数、显式 enum 可失败检查、既有 Default 递归规则调整，以及 Eq 结构派生 marker 的作者承诺入口仍是下文列明的候选；本次确认的转译边界不同时确认这些语义变化。`no_mangle` 不属于本篇或本次实现。
+最小数组长度参数与显式 enum 可失败检查已确认，待实现。Default 的函数调用图递归限制和 Eq 派生的现有资格规则保持不变；下文关于放宽这两项的候选暂不实施。`no_mangle` 不属于本篇或本次实现。
 
 [已确认决策](../design/decisions.md) D05 的外部原生采用、D19/D20 的权限边界、运行时 wrapper 和 enum 表示继续适用。此稿不增加 move、独占分析、动态字典、反射兜底或每种 derive 的编译器 hook。用户在泛型类型上使用 derive 可继续由宏明确拒绝；但库的泛型 impl 必须能为具体业务类型的泛型字段提供协议。
 
@@ -27,7 +29,7 @@ Error 派生、`go_result!` / `go_result_keep!`、`cfg` 属于不同边界：Err
 
 ### 1. 声明、归属与约束
 
-已确认语法沿用 `impl[T ...]`、`where` 形状和 `+` 组合；数组常量参数仍按第 4 节候选单列：
+已确认语法沿用 `impl[T ...]`、`where` 形状和 `+` 组合；数组常量参数按第 4 节限制使用：
 
 ```goxide
 impl[T Clone] Clone for []T { /* 必需成员 */ }
@@ -53,7 +55,7 @@ pub trait Eq where Self: PartialEq {}
 
 证明 `T: Eq` 时先证明其前提；在 `T: Eq` 的函数内可使用 PartialEq。只开放无环的非泛型 trait 前提，不增加默认方法、运行时自动视图转换或任意继承机制。PartialEq 继续使用两个值参数，不借迁移暗中改成只读借用。
 
-**待确认的 Eq 迁移候选。** 若保留“派生 Eq 只接受结构派生 PartialEq”的区别，可由普通库 marker `StructuralPartialEq` 表达：PartialEq 宏同时生成该 marker 的 impl，Eq 宏要求 `Self: StructuralPartialEq`。手写 PartialEq 本身不产生 marker。marker 与手写 Eq 一样是作者承诺，用户也可显式实现；它不是编译器签发的不可伪造证明。接受此规则包含接受这种显式承诺入口；不能为隐藏它重新增加 derive 名称判断。
+**暂缓的 Eq 迁移候选。** 若保留“派生 Eq 只接受结构派生 PartialEq”的区别，可由普通库 marker `StructuralPartialEq` 表达：PartialEq 宏同时生成该 marker 的 impl，Eq 宏要求 `Self: StructuralPartialEq`。手写 PartialEq 本身不产生 marker。marker 与手写 Eq 一样是作者承诺，用户也可显式实现；它不是编译器签发的不可伪造证明。接受此规则包含接受这种显式承诺入口；不能为隐藏它重新增加 derive 名称判断。
 
 Default 成员统一写作 `r#default`，使用普通 raw identifier；不再以 trait 名称触发关键字解析例外。静态函数返回真实 Self；Clone、Debug、Serialize 的 `self &Self` 保持既有只读权限；Deserialize 返回 `(Self, error)`，不抹成 `any`。
 
@@ -88,7 +90,7 @@ match(norm(target(I)), norm(τ)) = θ，I 是唯一匹配实现
 
 证明缓存按 canonical 目标、trait、关联绑定和代换区分。命中正在证明的同一义务报告完整链；不默认假设递归协议成立。无匹配、重叠、关联类型冲突或证明循环均在生成成功产物前诊断。
 
-普通函数体调用不进入上述 impl 证明栈。**既有 Default 递归限制的调整仍待确认。** 候选规则允许手写 `Default::r#default` 可经普通递归调用返回，也可能无限递归，语言不承诺终止。移除当前仅针对 Default 的函数调用图拒绝，是本稿明确提出的语义变化。相反，宏若显式生成递归字段前提，形成 `Node: Clone → []Node: Clone → Node: Clone`，仍是证明循环；本稿不以共同递归证明放行。
+普通函数体调用不进入上述 impl 证明栈。**既有 Default 递归限制的调整暂缓。** 候选规则允许手写 `Default::r#default` 可经普通递归调用返回，也可能无限递归，语言不承诺终止。移除当前仅针对 Default 的函数调用图拒绝，是本稿明确提出的语义变化。相反，宏若显式生成递归字段前提，形成 `Node: Clone → []Node: Clone → Node: Clone`，仍是证明循环；本稿不以共同递归证明放行。
 
 具体、无前提的 impl 则先登记其完整签名，再检查普通方法体；所有实现体通过后才可生成成功产物。检查方法体内的调用时，可以选择该无条件实现自身或同批登记的其他具体实现。以 `Node { Next *Node }` 为例，serde 宏可生成无 where 前提的具体 Serialize/Deserialize impl：方法体选择 `*Node` 容器证据，后者选择已登记的无条件 Node 证据。其 Go 形式是已选定的 Node 和指针处理函数相互调用；实例工作队列按身份去重，互相递归的具名业务类型按同一规则处理。方法体仍逐项检查字段协议，未知 codec 不能因提前登记而被放行。
 
@@ -112,19 +114,19 @@ match(norm(target(I)), norm(τ)) = θ，I 是唯一匹配实现
 
 已有具体 impl 的 wrapper、marker、固定工厂、As/For、carrier 和关联类型 witness 保留完整协议入口。静态条件实例化不向 `Box[T any]` 强加条件性 anchor，也不把源目标 T 换成运行时 wrapper。运行时视图仍按已选 impl 保存值或真实借用 owner。[Go 成员 sugar](../design/traits.md#go-成员-sugar) 在全部 impl 成员确定后按模块配置处理；实例化 `Box[User]` 不会使 Go 允许给这个特定实例单独追加方法。
 
-### 4. 最小数组长度参数候选
+### 4. 最小数组长度参数
 
-本节仍待确认。`const N int` 首批只服务固定长度数组和原样转传的长度参数：N 从实际 `[n]T` 的长度匹配，也可由显式非负整数常量提供。首批不接受负长度、非常量、`[N+1]` 模式求解、改变 N 的递归实例化或任意类型的 const 参数；不开放 const 泛型具名类型。
+本节已确认，待实现。`const N int` 首批只服务固定长度数组和原样转传的长度参数：N 从实际 `[n]T` 的长度匹配，也可由显式非负整数常量提供。首批不接受负长度、非常量、`[N+1]` 模式求解、改变 N 的递归实例化或任意类型的 const 参数；不开放 const 泛型具名类型。
 
-确认后沿用第 3 节的需求闭包，为需要的具体长度生成普通 Go 声明。元素类型能继续保留 Go 泛型时不额外展开；不能以每种数组长度一个编译器协议 hook 代替普通模板。原生 Go 通过已有具体入口使用结果，新的长度由 Goxide 源请求引出。
+沿用第 3 节的需求闭包，为需要的具体长度生成普通 Go 声明。元素类型能继续保留 Go 泛型时不额外展开；不能以每种数组长度一个编译器协议 hook 代替普通模板。原生 Go 通过已有具体入口使用结果，新的长度由 Goxide 源请求引出。
 
 ### 5. serde 迁移所需的普通表达性
 
-仅有 Serialize/Deserialize 方法签名还不足以保持现有行为。本节包含待确认的通用 enum 检查，以及迁移前必须落实的普通库协议；不把字段分派搬成编译器隐式 hook。
+仅有 Serialize/Deserialize 方法签名还不足以保持现有行为。本节包含已确认的通用 enum 检查，以及迁移前必须落实的普通库协议；不把字段分派搬成编译器隐式 hook。
 
-**显式 enum 检查候选。** 暂用内建调用 `enum_valid(value)` 表示，名字沿普通内建的解析和遮蔽规则。输入的静态类型须为具体 enum 或已知 enum 的泛型实例，透明 alias 同样适用；不接受任意 `T any`、接口或自动解引用的指针。参数只求值一次，结果为 bool：外层值属于本 enum 声明的一个变体且变体存储有效时为 true；nil 接口、typed-nil 变体、未知外层变体以及空 enum 的任何值为 false。该检查不遍历 payload，不执行用户方法，不使用反射或 recover；原生 Go 可传入的边界值也按同一规则处理。
+**显式 enum 检查已确认，待实现。** 内建调用 `enum_valid(value)` 沿普通内建的解析和遮蔽规则。输入的静态类型须为具体 enum 或已知 enum 的泛型实例，透明 alias 同样适用；不接受任意 `T any`、接口或自动解引用的指针。参数只求值一次，结果为 bool：外层值属于本 enum 声明的一个变体且变体存储有效时为 true；nil 接口、typed-nil 变体、未知外层变体以及空 enum 的任何值为 false。该检查不遍历 payload，不执行用户方法，不使用反射或 recover；原生 Go 可传入的边界值也按同一规则处理。
 
-Option/Result 按各自现有表示检查外层变体；None 是有效值，Some(nil) 的外层也有效，载荷为 nil 不在此处递归检查。普通 `match` 保留现有分派前的 nil panic，`_` 不接收非法值；显式检查不构成永久有效性证明，后续 match 仍执行自己的检查。serde 宏可先检查普通指针参数是否为 nil，再对解引用后的 enum 调用此操作，返回现有 Type error 后才进入 match。该提案新增了源级显式检查能力，须经确认后修订 enum 合同；不会恢复每类型 `Validate*` 包装或暴露私有 Go 变体名。
+Option/Result 按各自现有表示检查外层变体；None 是有效值，Some(nil) 的外层也有效，载荷为 nil 不在此处递归检查。普通 `match` 保留现有分派前的 nil panic，`_` 不接收非法值；显式检查不构成永久有效性证明，后续 match 仍执行自己的检查。serde 宏可先检查普通指针参数是否为 nil，再对解引用后的 enum 调用此操作，返回现有 Type error 后才进入 match。表示与检查规则统一见 [enum 合同](../design/enum-representation.md#21-显式外层有效性检查)；不生成每类型 `Validate*` 包装或暴露私有 Go 变体名。
 
 **Deserialize 的缺失字段协议。** 对字段 `type Maybe = Option[int]`，宏不能仅凭拼写决定缺失是否合法。候选普通库 trait 可把该行为作为一个明确静态成员，例如：
 
@@ -254,4 +256,4 @@ Go 调用已生成的具体业务入口、具体 impl 的完整协议入口以�
 8. Serialize/Deserialize 需求独立，保留 Option alias 缺失、pointer 缺失、present 错误、default/skip 顺序及 enum 错误行为；不按 derive 名称补隐式能力。
 9. 惰性属性遵循消费者生命周期，attribute 替换负责转交、derive 保留原项；未知属性仍拒绝，不实现 `no_mangle`。
 
-最小数组长度、enum 显式检查、Default 既有递归规则调整和 Eq marker 候选须分别确认后实施；跨仓库写入与发布遵循对应授权。阶段状态记录在状态表，不把机制原型或未执行的迁移验收记为完成。
+最小数组长度与 enum 显式检查已确认，按上述最小范围实施；Default 既有递归规则调整和 Eq marker 候选暂缓。跨仓库写入与发布遵循对应授权。阶段状态记录在状态表，不把机制原型或未执行的迁移验收记为完成。

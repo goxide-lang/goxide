@@ -292,13 +292,13 @@ func (p *permissionChecker) exprType(node ast.Expr) *permission {
 
 func (p *permissionChecker) instantiateFunction(fun *permission, args []ast.Expr, t types.Type, node ast.Node) *permission {
 	sig, ok := fun.typ.(*types.Signature)
-	if !ok || sig.TypeParams().Len() == 0 {
+	if !ok || !p.c.functionGeneric(sig) {
 		return fun
 	}
 	sub := map[*types.TypeParam]*permission{}
-	for i, arg := range args {
-		if i < sig.TypeParams().Len() {
-			sub[sig.TypeParams().At(i)] = p.exprType(arg)
+	for index, position := range p.c.typeArgumentPositions(sig, len(args)) {
+		if index < sig.TypeParams().Len() {
+			sub[sig.TypeParams().At(index)] = p.exprType(args[position])
 		}
 	}
 	return p.instantiatedFunction(fun, t, node, sub)
@@ -358,7 +358,7 @@ func (p *permissionChecker) inferPermission(formal, actual *permission, sub map[
 	if formal == nil || actual == nil {
 		return
 	}
-	if tp, ok := formal.typ.(*types.TypeParam); ok {
+	if tp, ok := formal.typ.(*types.TypeParam); ok && !p.c.out.isArray(formal.typ) {
 		// A free parameter in an impl or a constrained method is already fixed.
 		// Borrowing a value of that same parameter does not redefine the type's
 		// capabilities (and must not taint a distinct value returned as Self).
@@ -391,7 +391,7 @@ func (p *permissionChecker) substitutePermission(q *permission, sub map[*types.T
 	if q == nil {
 		return nil
 	}
-	if tp, ok := q.typ.(*types.TypeParam); ok && sub[tp] != nil {
+	if tp, ok := q.typ.(*types.TypeParam); ok && !p.c.out.isArray(q.typ) && sub[tp] != nil {
 		return sub[tp]
 	}
 	r := *q
@@ -401,7 +401,7 @@ func (p *permissionChecker) substitutePermission(q *permission, sub map[*types.T
 			typesub[tp] = q.typ
 		}
 	}
-	r.typ = substitute(q.typ, typesub)
+	r.typ = substitute(q.typ, typesub, p.c.out)
 	r.elem, r.key = p.substitutePermission(q.elem, sub), p.substitutePermission(q.key, sub)
 	r.receiver = p.substitutePermission(q.receiver, sub)
 	r.args, r.params, r.results = nil, nil, nil

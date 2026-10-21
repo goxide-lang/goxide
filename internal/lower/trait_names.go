@@ -57,6 +57,16 @@ func prepareTraits(info *check.Info) *traitProgram {
 	p.functions = prepareTraitFunctions(info)
 	p.prepareInstances(info)
 	for _, impl := range info.Impls {
+		if len(impl.ConstParams) != 0 {
+			if info.Demands != nil {
+				for _, definition := range info.Demands.GenericImpls {
+					if definition.Template == impl {
+						p.impls = append(p.impls, definition)
+					}
+				}
+			}
+			continue
+		}
 		if info.Demands != nil && !parameterizedImpl(impl) {
 			for _, selected := range info.Demands.Impls {
 				if implTemplate(selected) == impl {
@@ -74,7 +84,10 @@ func prepareTraits(info *check.Info) *traitProgram {
 		if a.File != b.File {
 			return a.File < b.File
 		}
-		return a.Decl.Span().Start < b.Decl.Span().Start
+		if a.Decl.Span().Start != b.Decl.Span().Start {
+			return a.Decl.Span().Start < b.Decl.Span().Start
+		}
+		return implIdentity(info, a) < implIdentity(info, b)
 	})
 	p.prepareTemplateNames(info)
 	seen := map[string]bool{}

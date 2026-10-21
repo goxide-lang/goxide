@@ -56,7 +56,7 @@ func (p *permissionChecker) requireLocal(node ast.Node, got, want *permission) {
 		return
 	}
 	if want.typ != nil {
-		if _, iface := want.typ.Underlying().(*types.Interface); iface && p.c.out.EnumOf(want.typ) == nil {
+		if _, iface := want.typ.Underlying().(*types.Interface); iface && !p.c.out.isArray(want.typ) && p.c.out.EnumOf(want.typ) == nil {
 			p.require(node, got, want)
 			return
 		}
@@ -448,7 +448,7 @@ func (p *permissionChecker) bindPattern(pattern ast.Pat, value *permission, mode
 		if s == nil {
 			return
 		}
-		if s.Kind == resolve.Variant || s.Kind == resolve.Constant {
+		if s.Kind == resolve.Variant || s.Kind == resolve.Constant || s.Kind == resolve.ConstParam {
 			return
 		}
 		binding := mode

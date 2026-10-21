@@ -219,9 +219,10 @@ func (c *checker) stmt(stmt ast.Stmt) {
 		t := c.expr(n.X, want)
 		key, value := types.Type(types.Typ[types.Int]), types.Type(types.Typ[types.Invalid])
 		if valid(t) {
+			if array, ok := c.out.ArrayOf(t); ok {
+				value = array.Elem
+			}
 			switch x := t.Underlying().(type) {
-			case *types.Array:
-				value = x.Elem()
 			case *types.Slice:
 				value = x.Elem()
 			case *types.Map:
@@ -382,7 +383,7 @@ func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 	switch p := p.(type) {
 	case *ast.BindPat:
 		if s := c.symbol(p.Name); s != nil && (s.Kind == resolve.Variant || s.Kind == resolve.Constant) {
-			if s.Kind == resolve.Constant && valid(t) && !types.Comparable(t) {
+			if s.Kind == resolve.Constant && valid(t) && !c.out.Comparable(t) {
 				c.diag(p, IncomparablePayload, "constant payload pattern requires a comparable type; use a binding with a guard")
 			}
 			return
@@ -406,7 +407,7 @@ func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 		}
 	case *ast.LitPat:
 		c.expr(p.Value, t)
-		if valid(t) && !types.Comparable(t) {
+		if valid(t) && !c.out.Comparable(t) {
 			c.diag(p, IncomparablePayload, "constant payload pattern requires a comparable type; use a binding with a guard")
 		}
 	case *ast.TuplePat:

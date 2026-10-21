@@ -16,6 +16,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	var t types.Type = types.Typ[types.Invalid]
 	switch n := node.(type) {
 	case *ast.Ident:
+		c.recordConstExpression(n)
 		t = c.symbolType(c.symbol(n))
 		if !c.file.AST.NativeGo && n.Name == "nil" && t == types.Typ[types.UntypedNil] {
 			if enum := c.out.EnumOf(expected); enum != nil {
@@ -27,6 +28,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = instanceType(con.Enum)
 		}
 	case *ast.PathExpr:
+		c.recordConstExpression(n)
 		if selected := c.out.Members[n]; selected != nil && selected.MethodExpr {
 			t = selected.Signature
 		} else if selected := c.staticMember(n); selected != nil {
@@ -102,6 +104,8 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = fun
 		} else if sig, ok := fun.(*types.Signature); ok {
 			sub := map[*types.TypeParam]types.Type{}
+			constants := map[*ConstParam]ConstValue{}
+			inferenceOK := true
 			for i, a := range n.Args {
 				var want types.Type
 				if i < sig.Params().Len() {
@@ -116,18 +120,27 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				}
 				got := c.expr(a, want)
 				if got != types.Typ[types.UntypedNil] {
-					infer(want, defaultType(got), sub)
+					inferenceOK = c.inferArrayArguments(want, defaultType(got), sub, constants) && inferenceOK
 				}
 			}
-			if sig.TypeParams().Len() > 0 {
+			if c.functionGeneric(sig) {
 				args := make([]types.Type, c.sourceArity(sig))
-				complete := true
+				complete := inferenceOK
+				constArgs := make([]ConstValue, len(c.out.FunctionConstParams[sig]))
+				for i, param := range c.out.FunctionConstParams[sig] {
+					var found bool
+					constArgs[i], found = constants[param]
+					complete = complete && found
+				}
 				for i := range args {
 					args[i] = sub[sig.TypeParams().At(i)]
 					complete = complete && valid(args[i])
 				}
+				if !complete && len(c.out.FunctionConstParams[sig]) != 0 {
+					c.diag(n, GenericConstraint, "cannot infer consistent const array arguments")
+				}
 				if complete {
-					if inst, ok := c.instantiateFunctionType(sig, args, n).(*types.Signature); ok {
+					if inst, ok := c.instantiateFunctionType(sig, args, constArgs, n).(*types.Signature); ok {
 						sig = inst
 						for i, arg := range n.Args {
 							index := i
@@ -203,16 +216,20 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			}
 		}
 		if !valid(t) {
-			t = c.typ(n.Type)
+			if array, ok := n.Type.(*ast.ArrayType); ok && array.Ellipsis {
+				t = c.inferredArrayLiteral(array, n.Elts)
+			} else {
+				t = c.typ(n.Type)
+			}
 			if n.Type == nil && valid(expected) {
 				t = expected
 			}
 		}
 		for i, elt := range n.Elts {
-			want, keyType := literalType(t, i, "")
+			want, keyType := c.literalType(t, i, "")
 			if kv, ok := elt.(*ast.KeyValue); ok {
 				if id, ok := kv.Key.(*ast.Ident); ok {
-					want, _ = literalType(t, i, id.Name)
+					want, _ = c.literalType(t, i, id.Name)
 				}
 				if con := c.out.Constructors[n]; con != nil {
 					if id, ok := kv.Key.(*ast.Ident); ok {
@@ -275,12 +292,16 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		}
 	case *ast.IndexExpr:
 		x := c.expr(n.X, nil)
-		if sig, ok := x.(*types.Signature); ok && sig.TypeParams().Len() > 0 {
+		if sig, ok := x.(*types.Signature); ok && c.functionGeneric(sig) {
+			if len(c.out.FunctionConstParams[sig]) != 0 {
+				t = c.explicitIndexArguments(sig, n)
+				break
+			}
 			args := make([]types.Type, len(n.Indices))
 			for i, a := range n.Indices {
 				args[i] = c.exprType(a)
 			}
-			t = c.instantiateFunctionType(sig, args, n)
+			t = c.instantiateFunctionType(sig, args, nil, n)
 		} else if named, ok := x.(*types.Named); ok && named.TypeParams().Len() > 0 && c.isTypeExpr(n.X) {
 			args := make([]types.Type, len(n.Indices))
 			for i, a := range n.Indices {
@@ -296,6 +317,10 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				c.expr(i, nil)
 			}
 			if valid(x) {
+				if array, ok := c.out.ArrayOf(x); ok {
+					t = array.Elem
+					break
+				}
 				switch v := x.Underlying().(type) {
 				case *types.Array:
 					t = v.Elem()
@@ -304,8 +329,8 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				case *types.Map:
 					t = v.Elem()
 				case *types.Pointer:
-					if a, ok := v.Elem().Underlying().(*types.Array); ok {
-						t = a.Elem()
+					if a, ok := c.out.ArrayOf(v.Elem()); ok {
+						t = a.Elem
 					}
 				case *types.Basic:
 					if v.Info()&types.IsString != 0 {
@@ -321,12 +346,16 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		c.expr(n.Max, nil)
 		t = x
 		if valid(x) {
+			if array, ok := c.out.ArrayOf(x); ok {
+				t = types.NewSlice(array.Elem)
+				break
+			}
 			switch v := x.Underlying().(type) {
 			case *types.Array:
 				t = types.NewSlice(v.Elem())
 			case *types.Pointer:
-				if a, ok := v.Elem().Underlying().(*types.Array); ok {
-					t = types.NewSlice(a.Elem())
+				if a, ok := c.out.ArrayOf(v.Elem()); ok {
+					t = types.NewSlice(a.Elem)
 				}
 			}
 		}
@@ -440,12 +469,15 @@ func (c *checker) nilLiteral(e ast.Expr) bool {
 	return ok && id.Name == "nil" && c.symbolType(c.symbol(id)) == types.Typ[types.UntypedNil]
 }
 
-func literalType(t types.Type, index int, name string) (types.Type, types.Type) {
+func (c *checker) literalType(t types.Type, index int, name string) (types.Type, types.Type) {
 	if !valid(t) {
 		return nil, nil
 	}
 	if p, ok := t.Underlying().(*types.Pointer); ok {
 		t = p.Elem()
+	}
+	if array, ok := c.out.ArrayOf(t); ok {
+		return array.Elem, types.Typ[types.Int]
 	}
 	switch t := t.Underlying().(type) {
 	case *types.Array:
@@ -616,39 +648,4 @@ func calleeName(e ast.Expr) string {
 		}
 	}
 	return ""
-}
-
-func infer(formal, actual types.Type, sub map[*types.TypeParam]types.Type) {
-	if formal == nil || actual == nil {
-		return
-	}
-	switch f := formal.(type) {
-	case *types.TypeParam:
-		sub[f] = actual
-	case *types.Slice:
-		if a, ok := actual.(*types.Slice); ok {
-			infer(f.Elem(), a.Elem(), sub)
-		}
-	case *types.Pointer:
-		if a, ok := actual.(*types.Pointer); ok {
-			infer(f.Elem(), a.Elem(), sub)
-		}
-	case *types.Signature:
-		if a, ok := actual.Underlying().(*types.Signature); ok && f.Variadic() == a.Variadic() {
-			infer(f.Params(), a.Params(), sub)
-			infer(f.Results(), a.Results(), sub)
-		}
-	case *types.Tuple:
-		if a, ok := actual.(*types.Tuple); ok && f.Len() == a.Len() {
-			for i := 0; i < f.Len(); i++ {
-				infer(f.At(i).Type(), a.At(i).Type(), sub)
-			}
-		}
-	case *types.Named:
-		if a, ok := actual.(*types.Named); ok && a.Origin() == f.Origin() {
-			for i := 0; i < f.TypeArgs().Len() && i < a.TypeArgs().Len(); i++ {
-				infer(f.TypeArgs().At(i), a.TypeArgs().At(i), sub)
-			}
-		}
-	}
 }

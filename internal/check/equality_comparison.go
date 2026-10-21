@@ -108,6 +108,10 @@ func (c *checker) checkEnumMapTypes(node ast.Node, t types.Type, seen map[types.
 	}
 	seen[t] = true
 	visit := func(t types.Type) { c.checkEnumMapTypes(node, t, seen) }
+	if array, ok := c.out.ArrayOf(t); ok {
+		visit(array.Elem)
+		return
+	}
 	switch t := t.Underlying().(type) {
 	case *types.Map:
 		if c.nonComparableEnum(t.Key(), nil) {
@@ -116,8 +120,6 @@ func (c *checker) checkEnumMapTypes(node ast.Node, t types.Type, seen map[types.
 		visit(t.Key())
 		visit(t.Elem())
 	case *types.Pointer:
-		visit(t.Elem())
-	case *types.Array:
 		visit(t.Elem())
 	case *types.Slice:
 		visit(t.Elem())
@@ -156,7 +158,7 @@ func (c *checker) nonComparableEnum(t types.Type, seen map[types.Type]bool) bool
 		seen[t] = true
 		for _, variant := range instance.Enum.Variants {
 			for _, field := range instance.Fields(variant) {
-				if !types.Comparable(field.Type) || c.nonComparableEnum(field.Type, seen) {
+				if !c.out.Comparable(field.Type) || c.nonComparableEnum(field.Type, seen) {
 					return true
 				}
 			}
@@ -164,6 +166,9 @@ func (c *checker) nonComparableEnum(t types.Type, seen map[types.Type]bool) bool
 		return false
 	}
 	seen[t] = true
+	if array, ok := c.out.ArrayOf(t); ok {
+		return c.nonComparableEnum(array.Elem, seen)
+	}
 	switch t := t.Underlying().(type) {
 	case *types.Struct:
 		for i := 0; i < t.NumFields(); i++ {
@@ -171,8 +176,6 @@ func (c *checker) nonComparableEnum(t types.Type, seen map[types.Type]bool) bool
 				return true
 			}
 		}
-	case *types.Array:
-		return c.nonComparableEnum(t.Elem(), seen)
 	}
 	return false
 }

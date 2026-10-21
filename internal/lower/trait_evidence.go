@@ -17,6 +17,12 @@ func traitBoundTarget(bound *check.TraitBound) types.Type {
 }
 
 func implTemplate(impl *check.Impl) *check.Impl {
+	if impl.Definition != nil {
+		return impl.Definition
+	}
+	if len(impl.ConstArgs) != 0 {
+		return impl
+	}
 	if impl.Template != nil {
 		return impl.Template
 	}
@@ -24,7 +30,7 @@ func implTemplate(impl *check.Impl) *check.Impl {
 }
 
 func parameterizedImpl(impl *check.Impl) bool {
-	return len(impl.TypeParams) != 0
+	return len(impl.TypeParams) != 0 || len(impl.ConstParams) != 0
 }
 
 func (e *emitter) goConstraint(constraint types.Type) goast.Expr {

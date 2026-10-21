@@ -134,7 +134,7 @@ func (p *traitProgram) prepareInstances(info *check.Info) {
 	var keys []string
 	for _, bodies := range info.Demands.Bodies {
 		for _, body := range bodies {
-			if body.Decl == nil || len(body.Substitution) == 0 {
+			if body.Decl == nil || len(body.Substitution) == 0 || len(body.ConstSubstitution) != 0 {
 				continue
 			}
 			local := true

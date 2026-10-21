@@ -61,6 +61,7 @@ type Variant struct {
 }
 
 type Enum struct {
+	info         *Info
 	Name, GoName string
 	Decl         *ast.EnumDecl
 	Type         *types.Named
@@ -93,7 +94,7 @@ func (i *Instance) Fields(v *Variant) []Field {
 		}
 	}
 	for j := range fields {
-		fields[j].Type = substitute(fields[j].Type, sub)
+		fields[j].Type = substitute(fields[j].Type, sub, i.Enum.info)
 	}
 	return fields
 }
@@ -125,35 +126,40 @@ type Try struct {
 }
 
 type Info struct {
-	GoResults         map[*ast.CallExpr]*GoResult
-	Resolve           *resolve.Result
-	GoImporter        types.Importer
-	GoSizes           types.Sizes
-	Diagnostics       []Diagnostic
-	Types             map[ast.Expr]types.Type
-	Enums             map[*ast.EnumDecl]*Enum
-	Matches           map[*ast.MatchExpr]*Match
-	Tries             map[*ast.TryExpr]*Try
-	Constructors      map[ast.Expr]*Constructor
-	Symbols           map[*resolve.Symbol]types.Type
-	PackagePaths      map[string]string
-	Modules           map[*ast.ModDecl]*resolve.Package
-	Derives           map[*types.Named]*Derive
-	Equalities        map[*ast.CallExpr]types.Type
-	RefBindings       map[*ast.BindPat]RefMode
-	Traits            map[*ast.TraitDecl]*Trait
-	Impls             map[*ast.ImplDecl]*Impl
-	ImplInstances     []*Impl
-	Members           map[ast.Expr]*MemberSelection
-	TraitViews        map[ast.Expr]*TraitView
-	TypeOverrides     map[ast.Type]types.Type
-	GenericBounds     map[*ast.FuncDecl][]*TraitBound
-	FunctionInstances map[ast.Node]*FunctionInstance
-	Demands           *DemandPlan
-	ConfigByFile      map[string]config.Config
-	Sugar             []*SugarMember
-	enums             map[*types.Named]*Enum
-	typeNodes         map[ast.Type]types.Type
+	ArrayPatterns       map[*types.TypeParam]*ArrayPattern
+	ConstParams         map[*resolve.Symbol]*ConstParam
+	ConstValues         map[ast.Expr]ConstValue
+	FunctionConstParams map[*types.Signature][]*ConstParam
+	FunctionGenerics    map[*types.Signature]*ast.GenericParams
+	GoResults           map[*ast.CallExpr]*GoResult
+	Resolve             *resolve.Result
+	GoImporter          types.Importer
+	GoSizes             types.Sizes
+	Diagnostics         []Diagnostic
+	Types               map[ast.Expr]types.Type
+	Enums               map[*ast.EnumDecl]*Enum
+	Matches             map[*ast.MatchExpr]*Match
+	Tries               map[*ast.TryExpr]*Try
+	Constructors        map[ast.Expr]*Constructor
+	Symbols             map[*resolve.Symbol]types.Type
+	PackagePaths        map[string]string
+	Modules             map[*ast.ModDecl]*resolve.Package
+	Derives             map[*types.Named]*Derive
+	Equalities          map[*ast.CallExpr]types.Type
+	RefBindings         map[*ast.BindPat]RefMode
+	Traits              map[*ast.TraitDecl]*Trait
+	Impls               map[*ast.ImplDecl]*Impl
+	ImplInstances       []*Impl
+	Members             map[ast.Expr]*MemberSelection
+	TraitViews          map[ast.Expr]*TraitView
+	TypeOverrides       map[ast.Type]types.Type
+	GenericBounds       map[*ast.FuncDecl][]*TraitBound
+	FunctionInstances   map[ast.Node]*FunctionInstance
+	Demands             *DemandPlan
+	ConfigByFile        map[string]config.Config
+	Sugar               []*SugarMember
+	enums               map[*types.Named]*Enum
+	typeNodes           map[ast.Type]types.Type
 }
 
 func (r *Info) EnumOf(t types.Type) *Instance {
@@ -224,6 +230,9 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 		sizes = types.SizesFor("gc", runtime.GOARCH)
 	}
 	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
+	r.ArrayPatterns = map[*types.TypeParam]*ArrayPattern{}
+	r.FunctionConstParams = map[*types.Signature][]*ConstParam{}
+	r.FunctionGenerics = map[*types.Signature]*ast.GenericParams{}
 	r.GoImporter = imports
 	r.GoSizes = sizes
 	r.ConfigByFile = options.ConfigByFile
@@ -327,6 +336,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 }
 
 type checker struct {
+	constantStack   map[*resolve.Symbol]bool
 	out             *Info
 	files           map[string]*ast.File
 	file            *resolve.File

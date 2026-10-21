@@ -10,13 +10,15 @@ import (
 // bodyTypes is separate from the member-signature substitution helper: a body
 // may contain ordinary Go generic function types whose binders must survive.
 type bodyTypes struct {
-	sub    map[*types.TypeParam]types.Type
-	memo   map[types.Type]types.Type
-	active map[*types.TypeParam]bool
+	info      *Info
+	constants map[*ConstParam]ConstValue
+	sub       map[*types.TypeParam]types.Type
+	memo      map[types.Type]types.Type
+	active    map[*types.TypeParam]bool
 }
 
-func newBodyTypes(sub map[*types.TypeParam]types.Type) *bodyTypes {
-	return &bodyTypes{sub: sub, memo: map[types.Type]types.Type{}, active: map[*types.TypeParam]bool{}}
+func newBodyTypes(info *Info, sub map[*types.TypeParam]types.Type, constants map[*ConstParam]ConstValue) *bodyTypes {
+	return &bodyTypes{info: info, constants: constants, sub: sub, memo: map[types.Type]types.Type{}, active: map[*types.TypeParam]bool{}}
 }
 
 func (r *bodyTypes) typ(t types.Type) types.Type {
@@ -26,7 +28,16 @@ func (r *bodyTypes) typ(t types.Type) types.Type {
 	if result := r.memo[t]; result != nil {
 		return result
 	}
-	if !usesSubstitution(t, r.sub, map[types.Type]bool{}) {
+	if r.info != nil {
+		if parameter, ok := types.Unalias(t).(*types.TypeParam); ok {
+			if array := r.info.ArrayPatterns[parameter]; array != nil {
+				result := r.info.ArrayType(r.typ(array.Elem), resolveConst(array.Length, r.constants))
+				r.memo[t] = result
+				return result
+			}
+		}
+	}
+	if !r.uses(t, map[types.Type]bool{}) {
 		return t
 	}
 	var result types.Type
@@ -115,7 +126,7 @@ func (r *bodyTypes) tuple(t *types.Tuple) *types.Tuple {
 }
 
 func (r *bodyTypes) signature(signature *types.Signature) *types.Signature {
-	local := newBodyTypes(copySubstitution(r.sub))
+	local := newBodyTypes(r.info, copySubstitution(r.sub), r.constants)
 	parameters := func(list *types.TypeParamList) []*types.TypeParam {
 		var result []*types.TypeParam
 		for i := 0; i < list.Len(); i++ {
@@ -143,6 +154,22 @@ func (r *bodyTypes) signature(signature *types.Signature) *types.Signature {
 		receiver = types.NewVar(old.Pos(), old.Pkg(), old.Name(), local.typ(old.Type()))
 	}
 	return types.NewSignatureType(receiver, receiverParams, params, local.tuple(signature.Params()), local.tuple(signature.Results()), signature.Variadic())
+}
+
+func (r *bodyTypes) uses(t types.Type, seen map[types.Type]bool) bool {
+	if t == nil || seen[t] {
+		return false
+	}
+	seen[t] = true
+	if parameter, ok := t.(*types.TypeParam); ok {
+		if r.info != nil {
+			if array := r.info.ArrayPatterns[parameter]; array != nil {
+				return resolveConst(array.Length, r.constants) != array.Length || r.uses(array.Elem, seen)
+			}
+		}
+		return r.sub[parameter] != nil && r.sub[parameter] != parameter
+	}
+	return typeChildren(t, func(child types.Type) bool { return r.uses(child, seen) })
 }
 
 func copySubstitution(sub map[*types.TypeParam]types.Type) map[*types.TypeParam]types.Type {
@@ -246,9 +273,19 @@ func typeChildren(t types.Type, visit func(types.Type) bool) bool {
 	return false
 }
 
-func bodyInfo(source *Info, sub map[*types.TypeParam]types.Type) *Info {
+func bodyInfo(source *Info, sub map[*types.TypeParam]types.Type, constants map[*ConstParam]ConstValue) *Info {
 	result := *source
-	r := newBodyTypes(sub)
+	r := newBodyTypes(source, sub, constants)
+	result.ConstValues = make(map[ast.Expr]ConstValue, len(source.ConstValues))
+	for node, value := range source.ConstValues {
+		result.ConstValues[node] = resolveConst(value, constants)
+	}
+	result.GenericBounds = make(map[*ast.FuncDecl][]*TraitBound, len(source.GenericBounds))
+	for node, bounds := range source.GenericBounds {
+		for _, bound := range bounds {
+			result.GenericBounds[node] = append(result.GenericBounds[node], substituteBoundConstants(bound, sub, constants))
+		}
+	}
 	result.Types = make(map[ast.Expr]types.Type, len(source.Types))
 	for node, typ := range source.Types {
 		result.Types[node] = r.typ(typ)
@@ -262,7 +299,7 @@ func bodyInfo(source *Info, sub map[*types.TypeParam]types.Type) *Info {
 		result.TypeOverrides[node] = r.typ(typ)
 	}
 	for node, typ := range source.typeNodes {
-		if usesSubstitution(typ, sub, map[types.Type]bool{}) {
+		if r.uses(typ, map[types.Type]bool{}) {
 			result.TypeOverrides[node] = r.typ(typ)
 		}
 	}

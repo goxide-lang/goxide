@@ -34,6 +34,11 @@ type AssociatedType struct {
 }
 
 type Impl struct {
+	Definition          *Impl
+	ConstParams         []*ConstParam
+	ConstArgs           []ConstValue
+	ConstSubstitution   map[*ConstParam]ConstValue
+	info                *Info
 	Decl                *ast.ImplDecl
 	File                string
 	Target              types.Type
@@ -87,14 +92,16 @@ type TraitView struct {
 }
 
 type TraitBound struct {
-	File            string
-	Param           *types.TypeParam
-	Target          types.Type
-	Trait           *Trait
-	Associated      map[string]types.Type
-	Projected       []*types.TypeParam
-	AssociatedNodes map[string]ast.Type
-	substitution    map[*types.TypeParam]types.Type
+	info              *Info
+	constSubstitution map[*ConstParam]ConstValue
+	File              string
+	Param             *types.TypeParam
+	Target            types.Type
+	Trait             *Trait
+	Associated        map[string]types.Type
+	Projected         []*types.TypeParam
+	AssociatedNodes   map[string]ast.Type
+	substitution      map[*types.TypeParam]types.Type
 }
 
 // Evidence records the selected source implementation or an in-scope premise.
@@ -105,6 +112,10 @@ type Evidence struct {
 }
 
 type FunctionInstance struct {
+	ConstArgs         []ConstValue
+	ConstSubstitution map[*ConstParam]ConstValue
+	// Definition points at the length-specialized emitted declaration.
+	Definition   *FunctionInstance
 	Signature    *types.Signature
 	TypeArgs     []types.Type
 	Evidence     []Evidence
@@ -481,12 +492,12 @@ func (c *checker) prepareImpls() {
 				if !valid(target) {
 					continue
 				}
-				if _, bare := target.(*types.TypeParam); bare {
+				if parameter, bare := target.(*types.TypeParam); bare && c.out.ArrayPatterns[parameter] == nil {
 					c.diag(n.Type, TraitInvalid, "impl target cannot be a bare type parameter")
 					continue
 				}
 				for _, param := range params {
-					if !containsType(target, param) {
+					if !c.out.containsType(target, param) {
 						c.diag(n, TraitInvalid, "impl type parameter must occur in its target: "+param.Obj().Name())
 					}
 				}
@@ -519,7 +530,12 @@ func (c *checker) prepareImpls() {
 				if named != nil {
 					named = named.Origin()
 				}
-				impl := &Impl{Decl: n, File: file.Name, Target: target, Base: named, Owner: c.pkg, Trait: trait, TypeParams: params, Requirements: requirements, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedState: map[string]uint8{}, Declare: declare}
+				impl := &Impl{info: c.out, ConstParams: c.constParameters(n.Generics), Decl: n, File: file.Name, Target: target, Base: named, Owner: c.pkg, Trait: trait, TypeParams: params, Requirements: requirements, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedState: map[string]uint8{}, Declare: declare}
+				for _, parameter := range impl.ConstParams {
+					if !c.out.containsConst(target, parameter) {
+						c.diag(n, TraitInvalid, "impl const parameter must occur in its target: "+parameter.Name.Name)
+					}
+				}
 				c.out.Impls[n] = impl
 				c.implOrder = append(c.implOrder, impl)
 			}
@@ -532,7 +548,7 @@ func (c *checker) prepareImpls() {
 				if old == impl {
 					break
 				}
-				if old.Trait == impl.Trait && implTargetsOverlap(old.Target, impl.Target, old.TypeParams, impl.TypeParams) && !old.Declare && !impl.Declare {
+				if old.Trait == impl.Trait && c.implTargetsOverlap(old, impl) && !old.Declare && !impl.Declare {
 					c.diag(impl.Decl, TraitInvalid, "duplicate trait implementation: overlapping target patterns")
 				}
 			}
@@ -758,7 +774,7 @@ func (c *checker) finishImpls() {
 			if old == impl {
 				break
 			}
-			if old.Trait == impl.Trait && impl.Trait != nil && implTargetsOverlap(old.Target, impl.Target, old.TypeParams, impl.TypeParams) {
+			if old.Trait == impl.Trait && impl.Trait != nil && c.implTargetsOverlap(old, impl) {
 				compatible := old.Declare && impl.Declare
 				for _, a := range impl.Trait.Associated {
 					compatible = compatible && types.Identical(old.Associated[a.Name], impl.Associated[a.Name])
@@ -787,19 +803,19 @@ func (c *checker) implSignature(m *Member, impl *Impl) *types.Signature {
 			sub[a.Param] = t
 		}
 	}
-	return substituteSignature(m.Signature, sub)
+	return substituteSignature(m.Signature, sub, c.out)
 }
-func substituteSignature(sig *types.Signature, sub map[*types.TypeParam]types.Type) *types.Signature {
-	return types.NewSignatureType(nil, nil, nil, substituteTuple(sig.Params(), sub), substituteTuple(sig.Results(), sub), sig.Variadic())
+func substituteSignature(sig *types.Signature, sub map[*types.TypeParam]types.Type, infos ...*Info) *types.Signature {
+	return types.NewSignatureType(nil, nil, nil, substituteTuple(sig.Params(), sub, infos...), substituteTuple(sig.Results(), sub, infos...), sig.Variadic())
 }
-func substituteTuple(tuple *types.Tuple, sub map[*types.TypeParam]types.Type) *types.Tuple {
+func substituteTuple(tuple *types.Tuple, sub map[*types.TypeParam]types.Type, infos ...*Info) *types.Tuple {
 	if tuple == nil {
 		return nil
 	}
 	vars := make([]*types.Var, tuple.Len())
 	for i := range vars {
 		v := tuple.At(i)
-		vars[i] = types.NewVar(0, v.Pkg(), v.Name(), substitute(v.Type(), sub))
+		vars[i] = types.NewVar(0, v.Pkg(), v.Name(), substitute(v.Type(), sub, infos...))
 	}
 	return types.NewTuple(vars...)
 }

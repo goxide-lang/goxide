@@ -4,6 +4,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"go/types"
+	"strconv"
 
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
@@ -12,6 +13,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	defer func() { e.macroLayout(n, out) }()
 	if n == nil {
 		return nil
+	}
+	if value, ok := e.info.ConstValues[n]; ok && value.Param == nil {
+		return &goast.BasicLit{Kind: gotoken.INT, Value: strconv.FormatInt(value.Value, 10)}
 	}
 	if call, ok := n.(*syntax.CallExpr); ok {
 		if adapter := e.info.GoResults[call]; adapter != nil {

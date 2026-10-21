@@ -91,6 +91,9 @@ func (e *emitter) functionTypeParameters(fn *syntax.FuncDecl) *goast.FieldList {
 	list := &goast.FieldList{}
 	index := 0
 	for _, parameter := range fn.Generics.Params {
+		if parameter.Const {
+			continue
+		}
 		for _, name := range parameter.Names {
 			var constraint goast.Expr
 			if signature != nil && index < signature.TypeParams().Len() {
@@ -104,6 +107,9 @@ func (e *emitter) functionTypeParameters(fn *syntax.FuncDecl) *goast.FieldList {
 			list.List = append(list.List, &goast.Field{Names: []*goast.Ident{e.ident(name)}, Type: constraint})
 			index++
 		}
+	}
+	if len(list.List) == 0 {
+		return nil
 	}
 	return list
 }

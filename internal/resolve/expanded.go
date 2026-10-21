@@ -215,9 +215,9 @@ func (h *hygiene) captureScope(scope, stop, anchor *Scope, origin expand.Origin,
 		return anchor
 	}
 	parent := h.captureScope(scope.Parent, stop, anchor, origin, expn)
-	// A derive can copy an input's generic parameter group into a new impl.
-	// Its enclosing impl is generated, but references copied from that group
-	// still belong to the new parameter bindings, not the invocation scope.
+	// A macro can copy a generic group or rebuild one from captured parameters.
+	// References from those parameters belong to the generated declaration's
+	// bindings, even when the enclosing declaration or group is generated.
 	if bindings := h.capturedGenericBindings(scope, origin); len(bindings) != 0 {
 		return &Scope{Kind: scope.Kind, Parent: parent, Bindings: bindings}
 	}
@@ -250,12 +250,22 @@ func (h *hygiene) capturedGenericBindings(scope *Scope, origin expand.Origin) ma
 	case *ast.ImplDecl:
 		params = owner.Generics
 	}
-	if params == nil || !containsOrigin(h.expanded.Origins[params], origin) {
+	if params == nil {
+		return nil
+	}
+	captured := containsOrigin(h.expanded.Origins[params], origin)
+	for _, param := range params.Params {
+		captured = captured || containsOrigin(h.expanded.Origins[param], origin)
+		for _, name := range param.Names {
+			captured = captured || containsOrigin(h.expanded.Origins[name], origin)
+		}
+	}
+	if !captured {
 		return nil
 	}
 	bindings := map[Key]*Symbol{}
 	for name, symbol := range scope.Bindings {
-		if symbol.Kind == TypeParam {
+		if symbol.Kind == TypeParam || symbol.Kind == ConstParam {
 			bindings[name] = symbol
 		}
 	}

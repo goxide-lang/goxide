@@ -281,7 +281,11 @@ func (p *printer) node(n ast.Node) {
 			p.node(n.Name)
 			p.s(" = ")
 		}
-		p.node(n.Type)
+		if n.Value != nil {
+			p.node(n.Value)
+		} else {
+			p.node(n.Type)
+		}
 	case *ast.GenericParams:
 		p.s("[")
 		for i, a := range n.Params {
@@ -295,6 +299,9 @@ func (p *printer) node(n ast.Node) {
 		}
 		p.s("]")
 	case *ast.GenericParam:
+		if n.Const {
+			p.s("const ")
+		}
 		p.identList(n.Names)
 		if n.Constraint != nil {
 			p.s(" ")

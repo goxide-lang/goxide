@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
-	"strconv"
 	"strings"
 
 	"github.com/goxide-lang/goxide/internal/resolve"
@@ -50,7 +49,7 @@ func (c *checker) builtinEnums() {
 			params = append(params, types.NewTypeParam(types.NewTypeName(0, p, "E", nil), anyType))
 		}
 		n.SetTypeParams(params)
-		e := &Enum{Name: name, GoName: name, Type: n, Builtin: true}
+		e := &Enum{info: c.out, Name: name, GoName: name, Type: n, Builtin: true}
 		if name == "Option" {
 			e.Variants = []*Variant{{Name: "None", GoName: "None"}, {Name: "Some", GoName: "Some", Fields: []Field{{Name: "Value", GoName: "Value", Type: params[0]}}}}
 		} else {
@@ -71,7 +70,7 @@ func (c *checker) collect(items []ast.Item) {
 			marker := types.NewFunc(0, c.pkg, "is"+n.Name.Name, types.NewSignatureType(nil, nil, nil, nil, nil, false))
 			t := types.NewNamed(types.NewTypeName(0, c.pkg, s.GoName, nil), types.NewInterfaceType([]*types.Func{marker}, nil).Complete(), nil)
 			c.named[s], c.out.Symbols[s] = t, t
-			e := &Enum{Name: n.Name.Name, GoName: s.GoName, Decl: n, Type: t}
+			e := &Enum{info: c.out, Name: n.Name.Name, GoName: s.GoName, Decl: n, Type: t}
 			c.out.Enums[n], c.out.enums[t] = e, e
 		case *ast.TypeDecl:
 			if n.Grouped {
@@ -80,6 +79,17 @@ func (c *checker) collect(items []ast.Item) {
 				}
 			} else {
 				c.collectType(n.Name, n.Type, n.Alias)
+			}
+		case *ast.ConstDecl:
+			for _, spec := range n.Specs {
+				for index, name := range spec.Names {
+					if symbol := c.symbol(name); symbol != nil && index < len(spec.Values) {
+						c.sourceValues[symbol] = sourceExpression{c.file, spec.Values[index]}
+						if spec.Type != nil {
+							c.sourceTypes[symbol] = permissionDeclaration{c.file, spec.Type}
+						}
+					}
+				}
 			}
 		case *ast.TraitDecl:
 			c.collectTrait(n)
@@ -113,6 +123,10 @@ func (c *checker) params(g *ast.GenericParams) []*types.TypeParam {
 	}
 	var out []*types.TypeParam
 	for _, p := range g.Params {
+		if p.Const {
+			c.diag(p, GenericConstraint, "const parameters are only supported on functions and impls")
+			continue
+		}
 		for _, name := range p.Names {
 			t := types.NewTypeParam(types.NewTypeName(0, c.pkg, name.Name, nil), anyType)
 			if s := c.symbol(name); s != nil {
@@ -123,6 +137,9 @@ func (c *checker) params(g *ast.GenericParams) []*types.TypeParam {
 	}
 	i := 0
 	for _, p := range g.Params {
+		if p.Const {
+			continue
+		}
 		for range p.Names {
 			if p.Constraint != nil {
 				out[i].SetConstraint(c.typ(p.Constraint))
@@ -219,6 +236,8 @@ func (c *checker) signatures(items []ast.Item) {
 			c.activeBounds = c.out.GenericBounds[n]
 			sig := types.NewSignatureType(nil, nil, params, c.tuple(n.Params), c.tuple(n.Results), len(n.Params) > 0 && n.Params[len(n.Params)-1].Variadic)
 			c.functionBounds[sig] = c.out.GenericBounds[n]
+			c.out.FunctionConstParams[sig] = c.constParameters(n.Generics)
+			c.out.FunctionGenerics[sig] = n.Generics
 			if s := c.symbol(n.Name); s != nil {
 				c.out.Symbols[s] = sig
 			}
@@ -303,9 +322,9 @@ func (c *checker) defineType(s *resolve.Symbol) {
 			sub[old] = param
 		}
 		for i, param := range params {
-			param.SetConstraint(substitute(n.TypeParams().At(i).Constraint(), sub))
+			param.SetConstraint(substitute(n.TypeParams().At(i).Constraint(), sub, c.out))
 		}
-		alias := types.NewAlias(types.NewTypeName(0, c.pkg, s.GoName, nil), substitute(underlying, sub))
+		alias := types.NewAlias(types.NewTypeName(0, c.pkg, s.GoName, nil), substitute(underlying, sub, c.out))
 		alias.SetTypeParams(params)
 		c.out.Symbols[s] = alias
 	} else if valid(underlying) {
@@ -361,11 +380,18 @@ func (c *checker) typ(node ast.Type) (result types.Type) {
 	case *ast.SliceType:
 		return types.NewSlice(c.typ(n.Elem))
 	case *ast.ArrayType:
-		var size int64
-		if lit, ok := n.Len.(*ast.BasicLit); ok {
-			size, _ = strconv.ParseInt(lit.Value, 0, 64)
+		if n.Ellipsis {
+			if known := c.out.typeNodes[n]; valid(known) {
+				return known
+			}
+			c.diag(n, GenericConstraint, "an inferred array length requires a composite literal")
+			return types.Typ[types.Invalid]
 		}
-		return types.NewArray(c.typ(n.Elem), size)
+		length, ok := c.constExpression(n.Len)
+		if !ok {
+			return types.Typ[types.Invalid]
+		}
+		return c.out.ArrayType(c.typ(n.Elem), length)
 	case *ast.MapType:
 		return types.NewMap(c.typ(n.Key), c.typ(n.Value))
 	case *ast.ChanType:
@@ -495,12 +521,12 @@ func (c *checker) validateInstance(i genericInstance) {
 }
 
 func (c *checker) instantiate(t types.Type, args *ast.GenericArgs) types.Type {
+	if sig, ok := t.(*types.Signature); ok {
+		return c.explicitFunctionArguments(sig, args)
+	}
 	actual := make([]types.Type, 0, len(args.Args))
 	for _, a := range args.Args {
 		actual = append(actual, c.typ(a.Type))
-	}
-	if sig, ok := t.(*types.Signature); ok {
-		return c.instantiateFunctionType(sig, actual, args)
 	}
 	if !valid(t) {
 		return t
@@ -580,7 +606,10 @@ func (c *checker) importedType(parts []string, name string) types.Type {
 	return types.Typ[types.Invalid]
 }
 
-func substitute(t types.Type, sub map[*types.TypeParam]types.Type) types.Type {
+func substitute(t types.Type, sub map[*types.TypeParam]types.Type, infos ...*Info) types.Type {
+	if len(infos) != 0 && infos[0] != nil {
+		return infos[0].Substitute(t, sub, nil)
+	}
 	switch t := t.(type) {
 	case *types.Alias:
 		return substitute(types.Unalias(t), sub)
@@ -626,7 +655,7 @@ func substitute(t types.Type, sub map[*types.TypeParam]types.Type) types.Type {
 		}
 		return types.NewStruct(fields, tags)
 	case *types.Interface, *types.Union:
-		return newBodyTypes(sub).typ(t)
+		return newBodyTypes(nil, sub, nil).typ(t)
 	}
 	return t
 }

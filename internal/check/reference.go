@@ -322,6 +322,10 @@ func (p *permissionChecker) fromGo(t types.Type) *permission {
 	}
 	t = types.Unalias(t)
 	switch t := t.(type) {
+	case *types.TypeParam:
+		if array, ok := p.c.out.ArrayOf(t); ok {
+			q.elem = p.fromGo(array.Elem)
+		}
 	case *types.Named:
 		for i := 0; i < t.TypeArgs().Len(); i++ {
 			q.args = append(q.args, p.fromGo(t.TypeArgs().At(i)))
@@ -360,7 +364,7 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 	}
 	t := p.c.typ(node)
 	q := p.fromGo(t)
-	if tp, ok := t.(*types.TypeParam); ok && sub[tp] != nil {
+	if tp, ok := t.(*types.TypeParam); ok && !p.c.out.isArray(t) && sub[tp] != nil {
 		return sub[tp]
 	}
 	switch n := node.(type) {
@@ -380,7 +384,7 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 				}
 			}
 		}
-		if tp, ok := t.(*types.TypeParam); ok && sub[tp] != nil {
+		if tp, ok := t.(*types.TypeParam); ok && !p.c.out.isArray(t) && sub[tp] != nil {
 			return sub[tp]
 		}
 		if n.Path != nil && len(n.Path.Segments) != 0 {
@@ -569,12 +573,13 @@ func (p *permissionChecker) element(q *permission) *permission {
 		}
 	}
 	if q.typ != nil {
+		if array, ok := p.c.out.ArrayOf(q.typ); ok {
+			return p.fromGo(array.Elem)
+		}
 		switch t := q.typ.Underlying().(type) {
 		case *types.Pointer:
 			return p.fromGo(t.Elem())
 		case *types.Slice:
-			return p.fromGo(t.Elem())
-		case *types.Array:
 			return p.fromGo(t.Elem())
 		case *types.Map:
 			return p.fromGo(t.Elem())
@@ -607,11 +612,13 @@ func (p *permissionChecker) readValueSeen(q *permission, seen map[types.Type]boo
 		}
 		return &r
 	}
+	if p.c.out.isArray(q.typ) {
+		r.elem = p.readValueSeen(p.element(q), seen)
+		return &r
+	}
 	switch q.typ.Underlying().(type) {
 	case *types.Pointer, *types.Slice, *types.Map, *types.Chan, *types.Interface, *types.Signature:
 		r.shared = true
-	case *types.Array:
-		r.elem = p.readValueSeen(p.element(q), seen)
 	case *types.Struct:
 		if permissionTypeSeen(seen, q.typ) {
 			return &r
@@ -784,7 +791,7 @@ func (p *permissionChecker) compatible(got, want *permission, seen map[[2]types.
 			}
 			return true
 		}
-		if _, ok := want.typ.Underlying().(*types.Interface); ok && p.c.out.EnumOf(want.typ) == nil {
+		if _, ok := want.typ.Underlying().(*types.Interface); ok && !p.c.out.isArray(want.typ) && p.c.out.EnumOf(want.typ) == nil {
 			return !p.restricted(got, map[types.Type]bool{})
 		}
 	}
@@ -842,6 +849,9 @@ func (p *permissionChecker) indirect(q *permission) bool {
 	}
 	if e := p.c.out.EnumOf(q.typ); e != nil {
 		return !e.Enum.Builtin
+	}
+	if p.c.out.isArray(q.typ) {
+		return false
 	}
 	switch q.typ.Underlying().(type) {
 	case *types.Pointer, *types.Slice, *types.Map, *types.Chan, *types.Interface, *types.Signature:

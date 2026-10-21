@@ -100,12 +100,20 @@ func (p *permissionChecker) protocolRead(node ast.Node, kind string, value *perm
 		}
 		return
 	}
+	if p.c.out.isArray(value.typ) {
+		element := p.element(value)
+		if value.shared {
+			element = p.readValue(element)
+		}
+		p.protocolRead(node, kind, element, seen)
+		return
+	}
 	switch value.typ.Underlying().(type) {
 	case *types.Struct:
 		for _, field := range p.fields(value) {
 			p.protocolRead(node, kind, field, seen)
 		}
-	case *types.Array, *types.Slice, *types.Map:
+	case *types.Slice, *types.Map:
 		element := p.element(value)
 		if value.shared {
 			element = p.readValue(element)
@@ -147,13 +155,22 @@ func (p *permissionChecker) clonedValue(value *permission, seen map[types.Type]b
 		}
 		return &r
 	}
+	if p.c.out.isArray(value.typ) {
+		r.shared = false
+		element := p.element(value)
+		if value.shared {
+			element = p.readValue(element)
+		}
+		r.elem = p.clonedValue(element, seen)
+		return &r
+	}
 	switch value.typ.Underlying().(type) {
 	case *types.Struct:
 		r.fields = map[string]*permission{}
 		for name, field := range p.fields(value) {
 			r.fields[name] = p.clonedValue(field, seen)
 		}
-	case *types.Array, *types.Slice, *types.Map:
+	case *types.Slice, *types.Map:
 		r.shared = false
 		element := p.element(value)
 		if value.shared {

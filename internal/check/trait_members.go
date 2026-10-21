@@ -12,7 +12,7 @@ func (b *TraitBound) MethodSignature(m *Member) *types.Signature {
 	for _, a := range b.Trait.Associated {
 		sub[a.Param] = b.Associated[a.Name]
 	}
-	return substituteSignature(m.Signature, sub)
+	return substituteSignature(m.Signature, sub, b.info)
 }
 
 func (c *checker) traitVisible(t *Trait) bool {
@@ -150,7 +150,7 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 				sub[a.Param] = n.TypeArgs().At(index)
 			}
 		}
-		return &MemberSelection{Member: m, Receiver: receiver, Signature: substituteSignature(m.Signature, sub)}
+		return &MemberSelection{Member: m, Receiver: receiver, Signature: substituteSignature(m.Signature, sub, c.out)}
 	}
 	base := types.Unalias(target)
 	if p, ok := base.(*types.Pointer); ok {

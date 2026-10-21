@@ -38,7 +38,9 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 		}
 		signature, _ := e.info.Symbols[e.file.Definitions[n.Name.ID()]].(*types.Signature)
 		if function := e.traits.functions[signature]; function != nil && e.traits.templateFunctions[n] {
-			if e.traits.helperFunctions[n] {
+			if hasConstParameters(n.Generics) {
+				e.itemExtras = append(e.itemExtras, e.constFunctionDeclarations(function)...)
+			} else if e.traits.helperFunctions[n] {
 				e.itemExtras = append(e.itemExtras, e.templateFunctionDeclaration(function)...)
 			}
 			e.itemExtras = append(e.itemExtras, e.instanceDeclarations(n)...)

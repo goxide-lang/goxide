@@ -166,8 +166,22 @@ func (p *parser) genericArgs() *ast.GenericArgs {
 		if p.at(token.IDENT) && p.peek(1).Kind == token.ASSIGN {
 			arg.Name = p.ident()
 			p.next()
+			arg.Type = p.typ()
+		} else {
+			// Preserve type-only syntax while allowing expressions in const slots.
+			if typeStart(p.tok().Kind) {
+				q := *p
+				q.diagnostics = append([]Diagnostic(nil), p.diagnostics...)
+				typ := q.typ()
+				if !hasNewErrors(q.diagnostics, len(p.diagnostics)) && (q.at(token.COMMA) || q.at(token.RBRACK)) {
+					*p = q
+					arg.Type = typ
+				}
+			}
+			if arg.Type == nil {
+				arg = p.genericArgExpr(p.expr())
+			}
 		}
-		arg.Type = p.typ()
 		arg.Base = p.base(s)
 		args.Args = append(args.Args, arg)
 		if !p.accept(token.COMMA) || p.pos == pos {
@@ -264,23 +278,39 @@ func (p *parser) genericParams() *ast.GenericParams {
 	start := p.next().Start
 	g := &ast.GenericParams{}
 	var pending []*ast.Ident
+	var pendingStart uint32
+	pendingConst := false
+	flushPending := func() {
+		for i, name := range pending {
+			start := name.Span().Start
+			if i == 0 && pendingConst {
+				start = pendingStart
+			}
+			g.Params = append(g.Params, &ast.GenericParam{Base: p.base(start), Names: []*ast.Ident{name}, Const: pendingConst})
+		}
+		pending, pendingConst = nil, false
+	}
 	for !p.at(token.RBRACK) && !p.at(token.EOF) {
 		pos := p.pos
 		s := p.tok().Start
+		if p.accept(token.CONST) {
+			flushPending()
+			pendingStart, pendingConst = s, true
+		} else if len(pending) == 0 {
+			pendingStart = s
+		}
 		name := p.ident()
 		pending = append(pending, name)
 		if typeStart(p.tok().Kind) {
 			c := p.typ()
-			g.Params = append(g.Params, &ast.GenericParam{Base: p.base(s), Names: pending, Constraint: c})
-			pending = nil
+			g.Params = append(g.Params, &ast.GenericParam{Base: p.base(pendingStart), Names: pending, Constraint: c, Const: pendingConst})
+			pending, pendingConst = nil, false
 		}
 		if !p.accept(token.COMMA) || p.pos == pos {
 			break
 		}
 	}
-	for _, name := range pending {
-		g.Params = append(g.Params, &ast.GenericParam{Base: p.base(name.Span().Start), Names: []*ast.Ident{name}})
-	}
+	flushPending()
 	p.expect(token.RBRACK)
 	g.Base = p.base(start)
 	return g

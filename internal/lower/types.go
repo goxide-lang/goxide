@@ -301,11 +301,17 @@ func (e *emitter) generics(params *syntax.GenericParams) *goast.FieldList {
 	}
 	list := &goast.FieldList{Opening: e.pos(params), Closing: e.end(params) - 1}
 	for _, p := range params.Params {
+		if p.Const {
+			continue
+		}
 		f := &goast.Field{Type: e.typ(p.Constraint)}
 		for _, name := range p.Names {
 			f.Names = append(f.Names, e.ident(name))
 		}
 		list.List = append(list.List, f)
+	}
+	if len(list.List) == 0 {
+		return nil
 	}
 	return list
 }

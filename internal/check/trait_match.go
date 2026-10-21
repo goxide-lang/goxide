@@ -3,7 +3,11 @@ package check
 import "go/types"
 
 // matchImplTarget binds only the impl's parameters; target parameters stay rigid.
-func matchImplTarget(pattern, target types.Type, parameters []*types.TypeParam) (map[*types.TypeParam]types.Type, bool) {
+func matchImplTarget(pattern, target types.Type, parameters []*types.TypeParam, contexts ...*implPatternContext) (map[*types.TypeParam]types.Type, bool) {
+	var context *implPatternContext
+	if len(contexts) != 0 {
+		context = contexts[0]
+	}
 	variables := make(map[*types.TypeParam]bool, len(parameters))
 	for _, parameter := range parameters {
 		variables[parameter] = true
@@ -12,6 +16,12 @@ func matchImplTarget(pattern, target types.Type, parameters []*types.TypeParam) 
 	var match func(types.Type, types.Type) bool
 	match = func(pattern, target types.Type) bool {
 		pattern, target = types.Unalias(pattern), types.Unalias(target)
+		if context != nil {
+			if array, ok := context.info.arrayShape(pattern); ok {
+				other, ok := context.info.arrayShape(target)
+				return ok && context.bind(array.Length, other.Length) && match(array.Elem, other.Elem)
+			}
+		}
 		if parameter, ok := pattern.(*types.TypeParam); ok && variables[parameter] {
 			if previous, bound := bindings[parameter]; bound {
 				return types.Identical(previous, target)
@@ -21,14 +31,18 @@ func matchImplTarget(pattern, target types.Type, parameters []*types.TypeParam) 
 		}
 		return sameImplTargetShape(pattern, target, match)
 	}
-	if !match(pattern, target) || len(bindings) != len(variables) {
+	if !match(pattern, target) || len(bindings) != len(variables) || context != nil && len(context.bindings) != len(context.parameters) {
 		return nil, false
 	}
 	return bindings, true
 }
 
 // Impl overlap depends on target shapes, never on their where predicates.
-func implTargetsOverlap(left, right types.Type, leftParams, rightParams []*types.TypeParam) bool {
+func implTargetsOverlap(left, right types.Type, leftParams, rightParams []*types.TypeParam, contexts ...*implPatternContext) bool {
+	var context *implPatternContext
+	if len(contexts) != 0 {
+		context = contexts[0]
+	}
 	variables := make(map[*types.TypeParam]bool, len(leftParams)+len(rightParams))
 	for _, parameters := range [][]*types.TypeParam{leftParams, rightParams} {
 		for _, parameter := range parameters {
@@ -51,6 +65,11 @@ func implTargetsOverlap(left, right types.Type, leftParams, rightParams []*types
 		typ = resolve(typ)
 		if typ == parameter {
 			return true
+		}
+		if context != nil {
+			if array, ok := context.info.arrayShape(typ); ok {
+				return occurs(parameter, array.Elem)
+			}
 		}
 		switch typ := typ.(type) {
 		case *types.Named:
@@ -108,6 +127,13 @@ func implTargetsOverlap(left, right types.Type, leftParams, rightParams []*types
 		left, right = resolve(left), resolve(right)
 		if types.Identical(left, right) {
 			return true
+		}
+		if context != nil {
+			if array, ok := context.info.arrayShape(left); ok {
+				if other, ok := context.info.arrayShape(right); ok {
+					return context.unify(array.Length, other.Length) && unify(array.Elem, other.Elem)
+				}
+			}
 		}
 		if parameter, ok := left.(*types.TypeParam); ok && variables[parameter] {
 			if occurs(parameter, right) {

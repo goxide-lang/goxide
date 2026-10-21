@@ -83,9 +83,9 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 				if args := path.Path.Segments[len(path.Path.Segments)-1].Args; args != nil {
 					if sig, ok := f.typ.typ.(*types.Signature); ok {
 						sub := map[*types.TypeParam]*permission{}
-						for i, arg := range args.Args {
-							if i < sig.TypeParams().Len() {
-								sub[sig.TypeParams().At(i)] = p.astType(arg.Type, nil)
+						for index, position := range p.c.typeArgumentPositions(sig, len(args.Args)) {
+							if index < sig.TypeParams().Len() {
+								sub[sig.TypeParams().At(index)] = p.astType(args.Args[position].Type, nil)
 							}
 						}
 						return p.instantiatedFunction(f.typ, q.typ, args, sub)
@@ -229,7 +229,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 		}
 		addressable, writable := p.place(n.X)
 		if x != nil && x.typ != nil {
-			if _, array := x.typ.Underlying().(*types.Array); array && !addressable {
+			if p.c.out.isArray(x.typ) && !addressable {
 				p.c.diag(n.X, ReferenceAddress, "slicing an array requires an addressable storage location")
 			}
 		}
@@ -408,7 +408,7 @@ func (p *permissionChecker) locations(node ast.Expr) []*permissionLocation {
 			}
 			value = p.deref(value)
 		}
-		if _, array := value.typ.Underlying().(*types.Array); !array {
+		if !p.c.out.isArray(value.typ) {
 			return nil
 		}
 		projected := make([]*permissionLocation, len(locations))
@@ -463,7 +463,7 @@ func (p *permissionChecker) place(node ast.Expr) (bool, bool) {
 	switch n := node.(type) {
 	case *ast.Ident, *ast.PathExpr:
 		s := p.c.symbol(n)
-		return s != nil && s.Kind != resolve.Constant && s.Kind != resolve.Function && s.Kind != resolve.Type && s.Kind != resolve.Variant, true
+		return s != nil && s.Kind != resolve.Constant && s.Kind != resolve.ConstParam && s.Kind != resolve.Function && s.Kind != resolve.Type && s.Kind != resolve.Variant, true
 	case *ast.ParenExpr:
 		return p.place(n.X)
 	case *ast.StarExpr:
@@ -497,13 +497,14 @@ func (p *permissionChecker) place(node ast.Expr) (bool, bool) {
 		if pointerType(q) {
 			return true, q.ref != ReadRef && !q.shared
 		}
+		if p.c.out.isArray(q.typ) {
+			return p.place(n.X)
+		}
 		switch q.typ.Underlying().(type) {
 		case *types.Slice:
 			return true, !q.shared
 		case *types.Map:
 			return false, !q.shared
-		case *types.Array:
-			return p.place(n.X)
 		}
 	}
 	return false, true

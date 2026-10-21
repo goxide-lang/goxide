@@ -213,7 +213,11 @@ func (c *checker) sourceArity(sig *types.Signature) int {
 	return count
 }
 
-func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Type, node ast.Node) types.Type {
+func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Type, constants []ConstValue, node ast.Node) types.Type {
+	constSub, validConsts := c.bindConstArguments(sig, constants, node)
+	if !validConsts {
+		return types.Typ[types.Invalid]
+	}
 	if len(args) != c.sourceArity(sig) {
 		c.diag(node, GenericConstraint, fmt.Sprintf("got %d type arguments but want %d", len(args), c.sourceArity(sig)))
 		return types.Typ[types.Invalid]
@@ -223,9 +227,9 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 	for i, arg := range args {
 		sub[sig.TypeParams().At(i)] = arg
 	}
-	instance := &FunctionInstance{Signature: sig, TypeArgs: append([]types.Type(nil), args...)}
+	instance := &FunctionInstance{Signature: sig, TypeArgs: append([]types.Type(nil), args...), ConstArgs: append([]ConstValue(nil), constants...), ConstSubstitution: constSub}
 	for _, bound := range c.functionBounds[sig] {
-		target := substitute(bound.Target, sub)
+		target := c.out.Substitute(bound.Target, sub, constSub)
 		witness := c.prove(target, bound.Trait)
 		instance.Evidence = append(instance.Evidence, witness)
 		bindings := evidenceAssociated(witness)
@@ -241,7 +245,7 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 			if got == nil {
 				got = types.Typ[types.Invalid]
 			}
-			want := substitute(bound.Associated[a.Name], sub)
+			want := c.out.Substitute(bound.Associated[a.Name], sub, constSub)
 			projected := false
 			for _, p := range bound.Projected {
 				if bound.Associated[a.Name] == p {
@@ -274,10 +278,18 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 	}
 	instance.Substitution = sub
 	c.out.FunctionInstances[node] = instance
-	t, err := c.instantiateGo(sig, actual)
+	var t types.Type = sig
+	var err error
+	if sig.TypeParams().Len() != 0 {
+		t, err = c.instantiateGo(sig, actual)
+	}
 	if err != nil {
 		c.diag(node, GenericConstraint, err.Error())
 		return types.Typ[types.Invalid]
+	}
+	if len(constants) != 0 {
+		r := newBodyTypes(c.out, sub, constSub)
+		return types.NewSignatureType(nil, nil, nil, r.tuple(sig.Params()), r.tuple(sig.Results()), sig.Variadic())
 	}
 	return t
 }

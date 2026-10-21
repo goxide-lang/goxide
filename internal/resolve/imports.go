@@ -285,11 +285,7 @@ func (r *resolver) pathMode(scope *Scope, p *ast.Path, static, macro bool) Resol
 	}
 	r.pathRecord(name, &res, macro)
 	for i, seg := range p.Segments {
-		if seg.Args != nil {
-			for _, arg := range seg.Args.Args {
-				r.typ(scope, arg.Type)
-			}
-		}
+		r.genericArgs(scope, seg.Args)
 		if i == 0 {
 			continue
 		}

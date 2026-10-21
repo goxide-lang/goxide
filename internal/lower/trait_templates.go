@@ -143,6 +143,8 @@ func (e *emitter) templateOperation(selection *check.MemberSelection) goast.Expr
 }
 
 func (e *emitter) templateOperationDeclaration(member *check.Member) []goast.Decl {
+	restoreInfo := e.memberBodyInfo(member)
+	defer restoreInfo()
 	parameters, restore := e.templateCallbacks(member.Impl.Requirements)
 	defer restore()
 	parameters.List = append(e.templateImplWitnessParameters(member.Impl), parameters.List...)
@@ -182,7 +184,7 @@ func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.D
 	}
 	ft := &goast.FuncType{Params: e.params(node.Params), Results: e.params(node.Results)}
 	business := &goast.FuncLit{Type: ft, Body: e.functionBody(ft, node.Body)}
-	name := templateFunctionName(function)
+	name := constFunctionName(function, e.instanceBodyFunction())
 	e.generatedName(name, node)
 	declaration := &goast.FuncDecl{Name: goast.NewIdent(name), Type: &goast.FuncType{TypeParams: typeParameters, Params: parameters, Results: &goast.FieldList{List: []*goast.Field{{Type: ft}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{business}}}}}
 	e.anchor(declaration, node)
@@ -190,6 +192,9 @@ func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.D
 	signature, _ := e.info.Symbols[function.symbol].(*types.Signature)
 	count := 0
 	for _, group := range node.Generics.Params {
+		if group.Const {
+			continue
+		}
 		count += len(group.Names)
 	}
 	for i := 0; i < count; i++ {
@@ -209,7 +214,7 @@ func (e *emitter) templateFunctionInstance(instance *check.FunctionInstance, fun
 		args = append(args, e.goType(typ))
 	}
 
-	factory := enumIndices(e.sourceGlobal(function.symbol.Decl.File, templateFunctionName(function)), args)
+	factory := enumIndices(e.sourceGlobal(function.symbol.Decl.File, constFunctionName(function, instance)), args)
 	return &goast.CallExpr{Fun: factory, Args: e.callbackArguments(e.info.GenericBounds[function.decl], instance.Evidence)}
 }
 
@@ -228,12 +233,25 @@ func (e *emitter) traitTemplateDeclarations(node syntax.Item) []goast.Decl {
 		return nil
 	}
 	impl := e.info.Impls[declaration]
+	if impl != nil && len(impl.ConstParams) != 0 {
+		var out []goast.Decl
+		for _, definition := range e.traits.impls {
+			if definition.Template == impl {
+				out = append(out, e.templateImplDeclarations(definition)...)
+			}
+		}
+		return out
+	}
 	if impl == nil || !parameterizedImpl(impl) {
 		return nil
 	}
 	if e.info.Demands != nil && e.info.Demands.ImplTemplates[impl] && !e.traits.templateImpls[impl] {
 		return nil
 	}
+	return e.templateImplDeclarations(impl)
+}
+
+func (e *emitter) templateImplDeclarations(impl *check.Impl) []goast.Decl {
 	var out []goast.Decl
 	if impl.Trait != nil {
 		for _, associated := range impl.Trait.Associated {
@@ -241,7 +259,7 @@ func (e *emitter) traitTemplateDeclarations(node syntax.Item) []goast.Decl {
 		}
 	}
 	for _, member := range impl.Methods {
-		if e.traits.helperImpls[impl] && (impl.Trait != nil || len(impl.Requirements) != 0) {
+		if (len(impl.ConstArgs) != 0 || e.traits.helperImpls[impl]) && (impl.Trait != nil || len(impl.Requirements) != 0) {
 			out = append(out, e.templateOperationDeclaration(member)...)
 		}
 		out = append(out, e.instanceDeclarations(member.Decl)...)

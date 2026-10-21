@@ -55,6 +55,9 @@ func (c *checker) goResult(call *ast.CallExpr, keep bool) types.Type {
 	if !c.satisfiesGo(failure, types.Universe.Lookup("error").Type().Underlying().(*types.Interface)) {
 		return fail("last result E must implement the predeclared error interface")
 	}
+	if c.out.isArray(failure) {
+		return fail("error result E must be nilable; a non-nilable error has no implicit success value")
+	}
 	switch failure.Underlying().(type) {
 	case *types.Interface, *types.Pointer, *types.Slice, *types.Map, *types.Signature, *types.Chan:
 	default:
@@ -89,6 +92,10 @@ func (c *checker) goResult(call *ast.CallExpr, keep bool) types.Type {
 // an identical public alias. Emit that alias so the adapter remains nameable.
 func (c *checker) exportedGoType(t types.Type) types.Type {
 	switch typ := t.(type) {
+	case *types.TypeParam:
+		if array, ok := c.out.ArrayOf(t); ok {
+			return c.out.ArrayType(c.exportedGoType(array.Elem), array.Length)
+		}
 	case *types.Named:
 		object := typ.Obj()
 		if object.Pkg() != nil && !object.Exported() {
@@ -173,6 +180,9 @@ func (c *checker) packageNameable(t types.Type) bool {
 			}
 		}
 	case *types.TypeParam:
+		if array, ok := c.out.ArrayOf(t); ok {
+			return array.Length.Param == nil && c.packageNameable(array.Elem)
+		}
 		return false
 	}
 	if object == nil || object.Pkg() == nil {

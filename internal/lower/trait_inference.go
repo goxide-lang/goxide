@@ -263,16 +263,8 @@ func (p *traitInference) operation(selection *check.MemberSelection) goast.Expr 
 	return &goast.CallExpr{Fun: fun, Args: args}
 }
 
-func functionInstanceSignature(instance *check.FunctionInstance) *types.Signature {
-	args := make([]types.Type, instance.Signature.TypeParams().Len())
-	for i := range args {
-		args[i] = instance.Substitution[instance.Signature.TypeParams().At(i)]
-	}
-	typ, err := types.Instantiate(nil, instance.Signature, args, false)
-	if err != nil {
-		return instance.Signature
-	}
-	return typ.(*types.Signature)
+func (e *emitter) functionInstanceSignature(instance *check.FunctionInstance) *types.Signature {
+	return types.NewSignatureType(nil, nil, nil, e.info.Substitute(instance.Signature.Params(), instance.Substitution, instance.ConstSubstitution).(*types.Tuple), e.info.Substitute(instance.Signature.Results(), instance.Substitution, instance.ConstSubstitution).(*types.Tuple), instance.Signature.Variadic())
 }
 
 func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool) {
@@ -291,7 +283,7 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 		return nil, false
 	}
 	p := newTraitInference(e)
-	sig := functionInstanceSignature(instance)
+	sig := e.functionInstanceSignature(instance)
 	values := e.exprs(call.Args)
 	var arguments []goast.Expr
 	for i, value := range values {
@@ -321,7 +313,7 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 	if sig.Variadic() {
 		factorySig = types.NewSignatureType(nil, nil, nil, factorySig.Params(), factorySig.Results(), true)
 	}
-	factory := e.sourceGlobal(function.symbol.Decl.File, strings.TrimSuffix(templateFunctionName(function), "Func")+"Call")
+	factory := e.sourceGlobal(function.symbol.Decl.File, strings.TrimSuffix(constFunctionName(function, instance), "Func")+"Call")
 	// A visible leading argument can instantiate an otherwise phantom parameter.
 	var prefix []goast.Expr
 	for _, typ := range instance.TypeArgs {

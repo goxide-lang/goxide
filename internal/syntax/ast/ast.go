@@ -179,8 +179,9 @@ type GenericArgs struct {
 }
 type GenericArg struct {
 	Base
-	Name *Ident
-	Type Type
+	Name  *Ident
+	Type  Type // Bare names remain ambiguous until the parameter kind is known.
+	Value Expr // Value arguments are mutually exclusive with Type.
 }
 type GenericParams struct {
 	Base
@@ -190,6 +191,7 @@ type GenericParam struct {
 	Base
 	Names      []*Ident
 	Constraint Type
+	Const      bool
 }
 type WhereClause struct {
 	Base

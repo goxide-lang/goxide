@@ -337,12 +337,7 @@ func (p *parser) exprPath(x ast.Expr) *ast.Path {
 		}
 		args := &ast.GenericArgs{Base: p.base(n.Span().Start)}
 		for _, x := range n.Indices {
-			t := p.exprType(x)
-			if t == nil {
-				p.error("expected type argument in static path")
-				t = &ast.BadType{Base: p.base(x.Span().Start)}
-			}
-			args.Args = append(args.Args, &ast.GenericArg{Base: p.base(x.Span().Start), Type: t})
+			args.Args = append(args.Args, p.genericArgExpr(x))
 		}
 		path.Segments[len(path.Segments)-1].Args = args
 		path.Base = p.base(n.Span().Start)
@@ -350,17 +345,20 @@ func (p *parser) exprPath(x ast.Expr) *ast.Path {
 	}
 	return nil
 }
+func (p *parser) genericArgExpr(x ast.Expr) *ast.GenericArg {
+	arg := &ast.GenericArg{Base: p.base(x.Span().Start), Type: p.exprType(x)}
+	if arg.Type == nil {
+		arg.Value = x
+	}
+	return arg
+}
 func (p *parser) exprType(x ast.Expr) ast.Type {
 	switch n := x.(type) {
 	case *ast.IndexExpr:
 		if projection, ok := p.exprType(n.X).(*ast.ProjectionType); ok {
 			projection.Args = &ast.GenericArgs{Base: p.base(n.Span().Start)}
 			for _, x := range n.Indices {
-				t := p.exprType(x)
-				if t == nil {
-					return nil
-				}
-				projection.Args.Args = append(projection.Args.Args, &ast.GenericArg{Base: p.base(x.Span().Start), Type: t})
+				projection.Args.Args = append(projection.Args.Args, p.genericArgExpr(x))
 			}
 			projection.Base = p.base(n.Span().Start)
 			return projection

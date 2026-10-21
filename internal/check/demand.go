@@ -27,13 +27,14 @@ type DemandPlan struct {
 // resolver tables are shared with the original Info and must not be rewritten.
 // A package initializer has Node set and Decl, Impl, Function left nil.
 type BodyInstance struct {
-	Node         ast.Node
-	Decl         *ast.FuncDecl
-	File         string
-	Impl         *Impl
-	Function     *FunctionInstance
-	Substitution map[*types.TypeParam]types.Type
-	Info         *Info
+	ConstSubstitution map[*ConstParam]ConstValue
+	Node              ast.Node
+	Decl              *ast.FuncDecl
+	File              string
+	Impl              *Impl
+	Function          *FunctionInstance
+	Substitution      map[*types.TypeParam]types.Type
+	Info              *Info
 }
 
 func (c *checker) collectDemands() {
@@ -55,7 +56,7 @@ func (c *checker) collectDemands() {
 	c.currentImpl, c.currentTrait, c.currentSelf = nil, nil, nil
 	collector.index()
 	collector.classify()
-	plan.Info = bodyInfo(c.out, nil)
+	plan.Info = bodyInfo(c.out, nil, nil)
 	collector.roots()
 }
 
@@ -151,6 +152,10 @@ func (d *demandCollector) index() {
 
 func (d *demandCollector) classify() {
 	for _, impl := range d.c.implOrder {
+		if len(impl.ConstParams) != 0 {
+			d.plan.ImplTemplates[impl] = true
+			continue
+		}
 		if len(impl.TypeParams) == 0 {
 			continue
 		}
@@ -160,11 +165,15 @@ func (d *demandCollector) classify() {
 		}
 	}
 	for _, function := range d.ordered {
+		if function.impl == nil && len(d.c.out.FunctionConstParams[function.signature]) != 0 {
+			d.plan.FunctionTemplates[function.decl] = true
+			continue
+		}
 		if function.impl != nil || function.signature == nil || function.signature.TypeParams().Len() == 0 {
 			continue
 		}
 		d.enter(function.file)
-		if d.functionInstance(function.signature, identityArguments(d.c, function.signature), false, function.decl) == nil {
+		if d.functionInstance(function.signature, identityArguments(d.c, function.signature), nil, false, function.decl) == nil {
 			d.plan.FunctionTemplates[function.decl] = true
 		}
 	}
@@ -189,7 +198,7 @@ func (d *demandCollector) classify() {
 					}
 				}
 				if instance := d.c.out.FunctionInstances[node]; instance != nil {
-					if callee := d.functions[instance.Signature]; callee != nil && d.plan.FunctionTemplates[callee.decl] && openArguments(instance.TypeArgs) {
+					if callee := d.functions[instance.Signature]; callee != nil && d.plan.FunctionTemplates[callee.decl] && (openArguments(instance.TypeArgs) || openConstants(instance.ConstArgs)) {
 						pending = true
 					}
 				}
@@ -235,7 +244,13 @@ func implDeclaration(impl *Impl) *Impl {
 }
 
 func (d *demandCollector) pendingImpl(impl *Impl) bool {
-	if impl == nil || !containsTypeParameter(impl.Target) {
+	if impl == nil {
+		return false
+	}
+	if len(impl.ConstArgs) != 0 {
+		return openConstants(impl.ConstArgs)
+	}
+	if !containsTypeParameter(impl.Target) {
 		return false
 	}
 	template := implDeclaration(impl)
@@ -260,6 +275,9 @@ func (d *demandCollector) roots() {
 			continue
 		}
 		d.enter(impl.File)
+		if len(impl.ConstParams) != 0 {
+			continue
+		}
 		if len(impl.TypeParams) == 0 {
 			if resolved := d.c.matchImpl(impl, impl.Target); resolved != nil {
 				d.impl(resolved, impl.Decl)
@@ -275,7 +293,7 @@ func (d *demandCollector) roots() {
 		d.enter(function.file)
 		var sub map[*types.TypeParam]types.Type
 		if function.signature != nil && function.signature.TypeParams().Len() != 0 {
-			if instance := d.functionInstance(function.signature, identityArguments(d.c, function.signature), true, function.decl); instance != nil {
+			if instance := d.functionInstance(function.signature, identityArguments(d.c, function.signature), nil, true, function.decl); instance != nil {
 				sub = instance.Substitution
 			}
 		}
@@ -301,17 +319,19 @@ func (d *demandCollector) addBody(body *BodyInstance) {
 	if body.Decl != nil {
 		d.plan.Bodies[body.Decl] = append(d.plan.Bodies[body.Decl], body)
 	}
-	body.Info = bodyInfo(d.c.out, body.Substitution)
+	body.Info = bodyInfo(d.c.out, body.Substitution, body.ConstSubstitution)
 	d.stack = append(d.stack, body)
 	defer func() { d.stack = d.stack[:len(d.stack)-1] }()
-	d.enter(body.File)
-	r := newBodyTypes(body.Substitution)
+	oldBounds := d.c.activeBounds
+	defer func() { d.c.activeBounds = oldBounds }()
+	d.enterBody(body)
+	r := newBodyTypes(d.c.out, body.Substitution, body.ConstSubstitution)
 	ast.Walk(body.Node, func(node ast.Node) bool {
 		if d.failed || node == nil {
 			return false
 		}
-		// Recursive demand processing changes the checker's lexical file.
-		d.enter(body.File)
+		// Recursive demand processing changes the checker's lexical file and premises.
+		d.enterBody(body)
 		if expression, ok := node.(ast.Expr); ok {
 			if selection := d.c.out.Members[expression]; selection != nil {
 				copy := *selection
@@ -319,7 +339,8 @@ func (d *demandCollector) addBody(body *BodyInstance) {
 				var selected *Impl
 				if selection.Bound != nil {
 					target := r.typ(selection.Bound.Target)
-					selected = d.c.prove(target, selection.Bound.Trait).Impl
+					witness := d.c.prove(target, selection.Bound.Trait)
+					selected, copy.Bound = witness.Impl, witness.Bound
 				} else if selection.Impl != nil {
 					selected = d.c.matchImpl(implDeclaration(selection.Impl), r.typ(selection.Impl.Target))
 				}
@@ -332,7 +353,7 @@ func (d *demandCollector) addBody(body *BodyInstance) {
 						}
 					}
 					d.impl(selected, node)
-				} else if selection.Impl != nil || selection.Bound != nil {
+				} else if copy.Bound == nil && (selection.Impl != nil || selection.Bound != nil) {
 					d.unresolved(node, "member implementation")
 				}
 				body.Info.Members[expression] = &copy
@@ -363,7 +384,11 @@ func (d *demandCollector) addBody(body *BodyInstance) {
 			for i, argument := range instance.TypeArgs {
 				args[i] = r.typ(argument)
 			}
-			copy := d.functionInstance(instance.Signature, args, true, node)
+			constants := make([]ConstValue, len(instance.ConstArgs))
+			for i, value := range instance.ConstArgs {
+				constants[i] = resolveConst(value, body.ConstSubstitution)
+			}
+			copy := d.functionInstance(instance.Signature, args, constants, true, node)
 			if copy != nil {
 				if function := d.functions[instance.Signature]; function != nil && d.plan.FunctionTemplates[function.decl] {
 					copy = d.function(copy, node)
@@ -388,6 +413,12 @@ func (d *demandCollector) mergeRoot(body *BodyInstance) {
 			return false
 		}
 		if expression, ok := node.(ast.Expr); ok {
+			if value, ok := body.Info.ConstValues[expression]; ok {
+				if d.plan.Info.ConstValues == nil {
+					d.plan.Info.ConstValues = map[ast.Expr]ConstValue{}
+				}
+				d.plan.Info.ConstValues[expression] = value
+			}
 			if typ := body.Info.Types[expression]; typ != nil {
 				d.plan.Info.Types[expression] = typ
 			}
@@ -428,6 +459,10 @@ func (d *demandCollector) mergeRoot(body *BodyInstance) {
 
 func (d *demandCollector) impl(impl *Impl, node ast.Node) {
 	template := implDeclaration(impl)
+	if len(template.ConstParams) != 0 {
+		d.constImpl(impl, node)
+		return
+	}
 	if len(template.TypeParams) != 0 && !d.plan.ImplTemplates[template] {
 		d.genericImpl(template)
 		return
@@ -464,13 +499,22 @@ func (d *demandCollector) genericImpl(impl *Impl) {
 	d.plan.GenericImpls = append(d.plan.GenericImpls, impl)
 	for _, member := range impl.Methods {
 		if member.Decl != nil && member.Decl.Body != nil && !impl.Declare {
-			d.addBody(&BodyInstance{Node: member.Decl, Decl: member.Decl, File: impl.File, Impl: impl})
+			d.addBody(&BodyInstance{Node: member.Decl, Decl: member.Decl, File: impl.File, Impl: impl, Substitution: impl.Substitution, ConstSubstitution: impl.ConstSubstitution})
 		}
 	}
 }
 
-func (d *demandCollector) functionInstance(signature *types.Signature, args []types.Type, diagnose bool, node ast.Node) *FunctionInstance {
-	instance := &FunctionInstance{Signature: signature, TypeArgs: append([]types.Type(nil), args...), Substitution: map[*types.TypeParam]types.Type{}}
+func (d *demandCollector) functionInstance(signature *types.Signature, args []types.Type, constants []ConstValue, diagnose bool, node ast.Node) *FunctionInstance {
+	instance := &FunctionInstance{Signature: signature, TypeArgs: append([]types.Type(nil), args...), ConstArgs: append([]ConstValue(nil), constants...), Substitution: map[*types.TypeParam]types.Type{}, ConstSubstitution: map[*ConstParam]ConstValue{}}
+	if len(constants) != len(d.c.out.FunctionConstParams[signature]) {
+		if diagnose {
+			d.unresolved(node, "function array length")
+		}
+		return nil
+	}
+	for index, parameter := range d.c.out.FunctionConstParams[signature] {
+		instance.ConstSubstitution[parameter] = constants[index]
+	}
 	if declaration := d.functions[signature]; declaration != nil {
 		instance.Decl, instance.File = declaration.decl, declaration.file
 	}
@@ -480,9 +524,9 @@ func (d *demandCollector) functionInstance(signature *types.Signature, args []ty
 		}
 	}
 	for _, bound := range d.c.functionBounds[signature] {
-		r := newBodyTypes(instance.Substitution)
+		r := newBodyTypes(d.c.out, instance.Substitution, instance.ConstSubstitution)
 		witness := d.c.prove(r.typ(bound.Target), bound.Trait)
-		if witness.Impl == nil {
+		if witness.Impl == nil && witness.Bound == nil {
 			if diagnose {
 				d.unresolved(node, "function prerequisite "+bound.Trait.Symbol.Name.Name)
 			}
@@ -490,7 +534,7 @@ func (d *demandCollector) functionInstance(signature *types.Signature, args []ty
 		}
 		instance.Evidence = append(instance.Evidence, witness)
 		for _, associated := range bound.Trait.Associated {
-			actual := witness.Impl.Associated[associated.Name]
+			actual := evidenceAssociated(witness)[associated.Name]
 			if projected := projectedBinding(bound, associated.Name); projected != nil {
 				instance.Substitution[projected] = actual
 			} else if !types.Identical(r.typ(bound.Associated[associated.Name]), actual) {
@@ -505,6 +549,9 @@ func (d *demandCollector) functionInstance(signature *types.Signature, args []ty
 }
 
 func (d *demandCollector) function(instance *FunctionInstance, node ast.Node) *FunctionInstance {
+	if len(instance.ConstArgs) != 0 {
+		return d.constFunction(instance, node)
+	}
 	if openArguments(instance.TypeArgs) {
 		d.unresolved(node, "conditional function")
 		return instance

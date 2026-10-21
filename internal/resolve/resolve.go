@@ -31,6 +31,7 @@ const (
 	Function
 	Type
 	TypeParam
+	ConstParam
 	Enum
 	Trait
 	Variant

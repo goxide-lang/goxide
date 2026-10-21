@@ -59,7 +59,7 @@ func CanUseGoReceiver(impl *Impl) bool {
 		sub[parameter] = target.Origin().TypeParams().At(i)
 	}
 	for _, parameter := range impl.TypeParams {
-		constraint, ok := substitute(parameter.Constraint(), sub).Underlying().(*types.Interface)
+		constraint, ok := substitute(parameter.Constraint(), sub, impl.info).Underlying().(*types.Interface)
 		if !ok || !types.Satisfies(sub[parameter], constraint) {
 			return false
 		}

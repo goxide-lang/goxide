@@ -86,7 +86,7 @@ func (e *emitter) traitFunctionInstance(node syntax.Node) (goast.Expr, bool) {
 // A concrete demand must not make a consumer depend on a specialization absent
 // from a separately compiled dependency.
 func (e *emitter) carrierFunctionInstance(function *traitFunction, instance *check.FunctionInstance) bool {
-	if e.boundCallbacks != nil || !e.traits.legacyFunctions[function.decl] {
+	if len(instance.ConstArgs) != 0 || e.boundCallbacks != nil || !e.traits.legacyFunctions[function.decl] {
 		return false
 	}
 	for _, argument := range instance.TypeArgs {
@@ -109,7 +109,7 @@ func (e *emitter) carrierFunctionInstance(function *traitFunction, instance *che
 func (p *traitProgram) prepareFunctionEntries(info *check.Info) {
 	p.legacyFunctions = map[*syntax.FuncDecl]bool{}
 	for _, function := range p.functions {
-		legacy := len(info.GenericBounds[function.decl]) != 0
+		legacy := len(info.GenericBounds[function.decl]) != 0 && !hasConstParameters(function.decl.Generics)
 		for _, bound := range info.GenericBounds[function.decl] {
 			legacy = legacy && bound.Param != nil
 		}

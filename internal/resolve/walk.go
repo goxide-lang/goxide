@@ -114,8 +114,12 @@ func (r *resolver) generics(scope *Scope, params *ast.GenericParams, where *ast.
 		r.file.Scopes[params.ID()] = scope
 		for _, param := range params.Params {
 			r.file.Visibility[param.ID()] = Private
+			kind := TypeParam
+			if param.Const {
+				kind = ConstParam
+			}
 			for _, name := range param.Names {
-				sym := r.define(scope, param, name, TypeParam)
+				sym := r.define(scope, param, name, kind)
 				if len(param.Names) == 1 {
 					r.recordDeclaration(param, sym)
 				}
@@ -275,6 +279,7 @@ func (r *resolver) genericArgs(scope *Scope, args *ast.GenericArgs) {
 	if args != nil {
 		for _, arg := range args.Args {
 			r.typ(scope, arg.Type)
+			r.expr(scope, arg.Value)
 			if arg.Name != nil {
 				r.file.References[arg.Name.ID()] = Resolution{Deferred: true}
 			}

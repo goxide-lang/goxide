@@ -6,6 +6,7 @@ import "go/types"
 // table. All local named declarations are copied so recursive fields and
 // promoted methods see the same view without changing source type identities.
 type goInterop struct {
+	info    *Info
 	local   map[*types.Package]bool
 	sugar   map[*types.Named][]*SugarMember
 	forward map[types.Type]types.Type
@@ -13,7 +14,7 @@ type goInterop struct {
 }
 
 func newGoInterop(c *checker) *goInterop {
-	r := &goInterop{local: map[*types.Package]bool{}, sugar: map[*types.Named][]*SugarMember{}, forward: map[types.Type]types.Type{}, reverse: map[types.Type]types.Type{}}
+	r := &goInterop{info: c.out, local: map[*types.Package]bool{}, sugar: map[*types.Named][]*SugarMember{}, forward: map[types.Type]types.Type{}, reverse: map[types.Type]types.Type{}}
 	for _, pkg := range c.packages {
 		r.local[pkg] = true
 	}
@@ -108,6 +109,10 @@ func (r *goInterop) typ(t types.Type, forward bool) types.Type {
 	case *types.Alias:
 		result = visit(types.Unalias(t))
 	case *types.TypeParam:
+		if array, ok := r.info.ArrayOf(t); ok {
+			result = r.info.ArrayType(visit(array.Elem), array.Length)
+			break
+		}
 		if !forward {
 			return t
 		}
@@ -232,7 +237,7 @@ func (r *goInterop) method(target *types.Named, member *SugarMember) *types.Func
 		// These parameters already belong to the Go view.
 		r.forward[parameter], r.reverse[parameter] = parameter, original
 	}
-	body := newBodyTypes(sub)
+	body := newBodyTypes(r.info, sub, nil)
 	for i, parameter := range parameters {
 		original := source.TypeArgs().At(i).(*types.TypeParam)
 		parameter.SetConstraint(r.typ(body.typ(original.Constraint()), true))

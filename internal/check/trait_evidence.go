@@ -14,9 +14,13 @@ type proofObligation struct {
 }
 
 func (c *checker) genericParameters(g *ast.GenericParams) []*types.TypeParam {
+	c.constParameters(g)
 	var params []*types.TypeParam
 	if g != nil {
 		for _, group := range g.Params {
+			if group.Const {
+				continue
+			}
 			for _, id := range group.Names {
 				p := types.NewTypeParam(types.NewTypeName(0, c.pkg, id.Name, nil), anyType)
 				c.out.Symbols[c.symbol(id)] = p
@@ -36,8 +40,10 @@ func (c *checker) traitBound(target types.Type, node ast.Type, used map[string]b
 	if trait == nil {
 		return nil
 	}
-	b := &TraitBound{File: c.file.Name, Target: target, Trait: trait, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}}
-	b.Param, _ = target.(*types.TypeParam)
+	b := &TraitBound{info: c.out, File: c.file.Name, Target: target, Trait: trait, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}}
+	if _, array := c.out.ArrayOf(target); !array {
+		b.Param, _ = target.(*types.TypeParam)
+	}
 	last := path.Path.Segments[len(path.Path.Segments)-1]
 	c.readAssociated(last.Args, trait, b.Associated, node)
 	if last.Args != nil {
@@ -93,9 +99,9 @@ func (c *checker) addBound(list *[]*TraitBound, bound *TraitBound, node ast.Node
 			if leftParam != nil {
 				sub := map[*types.TypeParam]types.Type{leftParam: right}
 				for _, existing := range *list {
-					existing.Target = substitute(existing.Target, sub)
+					existing.Target = substitute(existing.Target, sub, c.out)
 					for name, typ := range existing.Associated {
-						existing.Associated[name] = substitute(typ, sub)
+						existing.Associated[name] = substitute(typ, sub, c.out)
 					}
 					var projected []*types.TypeParam
 					for _, param := range existing.Projected {
@@ -106,7 +112,7 @@ func (c *checker) addBound(list *[]*TraitBound, bound *TraitBound, node ast.Node
 					existing.Projected = projected
 				}
 				for typ, override := range c.out.TypeOverrides {
-					c.out.TypeOverrides[typ] = substitute(override, sub)
+					c.out.TypeOverrides[typ] = substitute(override, sub, c.out)
 				}
 				old.AssociatedNodes[a.Name] = bound.AssociatedNodes[a.Name]
 				continue
@@ -151,9 +157,9 @@ func freshRequirement(bound *TraitBound, sub map[*types.TypeParam]types.Type, us
 		fresh[param] = next
 		copy.Projected = append(copy.Projected, next)
 	}
-	copy.Target = substitute(copy.Target, fresh)
+	copy.Target = substitute(copy.Target, fresh, copy.info)
 	for name, typ := range copy.Associated {
-		copy.Associated[name] = substitute(typ, fresh)
+		copy.Associated[name] = substitute(typ, fresh, copy.info)
 	}
 	return copy
 }
@@ -165,8 +171,12 @@ func (c *checker) sourceRequirements(g *ast.GenericParams, where *ast.WhereClaus
 			c.addBound(&result, b, node)
 			return
 		}
+		if c.constraintUsesConst(constraint) {
+			c.diag(constraint, GenericConstraint, "const array patterns in Go type constraints are not supported")
+			return
+		}
 		constraintType := c.typ(constraint)
-		if p, ok := target.(*types.TypeParam); ok {
+		if p, ok := target.(*types.TypeParam); ok && c.out.ArrayPatterns[p] == nil {
 			p.SetConstraint(types.NewInterfaceType(nil, []types.Type{p.Constraint(), constraintType}).Complete())
 		} else {
 			c.diag(constraint, TraitInvalid, "a concrete where target requires a declared trait constraint")
@@ -175,6 +185,9 @@ func (c *checker) sourceRequirements(g *ast.GenericParams, where *ast.WhereClaus
 	index := 0
 	if g != nil {
 		for _, group := range g.Params {
+			if group.Const {
+				continue
+			}
 			for range group.Names {
 				if group.Constraint != nil {
 					add(params[index], group.Constraint)
@@ -195,21 +208,37 @@ func (c *checker) sourceRequirements(g *ast.GenericParams, where *ast.WhereClaus
 }
 
 func substituteBound(b *TraitBound, sub map[*types.TypeParam]types.Type) *TraitBound {
+	return substituteBoundConstants(b, sub, nil)
+}
+
+func substituteBoundConstants(b *TraitBound, sub map[*types.TypeParam]types.Type, constants map[*ConstParam]ConstValue) *TraitBound {
 	copy := *b
+	copy.constSubstitution = make(map[*ConstParam]ConstValue, len(b.constSubstitution)+len(constants))
+	for parameter, value := range b.constSubstitution {
+		copy.constSubstitution[parameter] = resolveConst(value, constants)
+	}
+	for parameter, value := range constants {
+		if _, exists := copy.constSubstitution[parameter]; !exists {
+			copy.constSubstitution[parameter] = value
+		}
+	}
 	copy.substitution = map[*types.TypeParam]types.Type{}
 	for param, typ := range b.substitution {
-		copy.substitution[param] = substitute(typ, sub)
+		copy.substitution[param] = b.info.Substitute(typ, sub, constants)
 	}
 	for param, typ := range sub {
 		if copy.substitution[param] == nil {
 			copy.substitution[param] = typ
 		}
 	}
-	copy.Target = substitute(b.Target, sub)
-	copy.Param, _ = copy.Target.(*types.TypeParam)
+	copy.Target = b.info.Substitute(b.Target, sub, constants)
+	copy.Param = nil
+	if _, array := b.info.ArrayOf(copy.Target); !array {
+		copy.Param, _ = copy.Target.(*types.TypeParam)
+	}
 	copy.Associated = map[string]types.Type{}
 	for name, t := range b.Associated {
-		copy.Associated[name] = substitute(t, sub)
+		copy.Associated[name] = b.info.Substitute(t, sub, constants)
 	}
 	return &copy
 }
@@ -348,7 +377,7 @@ func (c *checker) checkTraitPrerequisiteCycles() {
 
 func (c *checker) validateConcreteImpls() {
 	for _, impl := range c.implOrder {
-		if len(impl.TypeParams) != 0 || len(impl.Requirements) == 0 {
+		if len(impl.TypeParams) != 0 || len(impl.ConstParams) != 0 || len(impl.Requirements) == 0 {
 			continue
 		}
 		c.file, c.pkg = c.out.Resolve.Files[impl.File], impl.Owner
@@ -363,19 +392,21 @@ func (c *checker) validateConcreteImpls() {
 }
 
 func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
-	sub, ok := matchImplTarget(template.Target, target, template.TypeParams)
+	context := newImplPatternContext(c.out, template.ConstParams)
+	sub, ok := matchImplTarget(template.Target, target, template.TypeParams, context)
+	constSub := context.bindings
 	if !ok {
 		return nil
 	}
 	for _, p := range template.TypeParams {
-		constraint, ok := substitute(p.Constraint(), sub).Underlying().(*types.Interface)
+		constraint, ok := c.out.Substitute(p.Constraint(), sub, constSub).Underlying().(*types.Interface)
 		if ok && !c.satisfiesGo(sub[p], constraint) {
 			return nil
 		}
 	}
 	var evidence []Evidence
 	for _, requirement := range template.Requirements {
-		bound := substituteBound(requirement, sub)
+		bound := substituteBoundConstants(requirement, sub, constSub)
 		witness := c.prove(bound.Target, bound.Trait)
 		if witness.Impl == nil && witness.Bound == nil {
 			return nil
@@ -408,7 +439,7 @@ func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
 		}
 		evidence = append(evidence, witness)
 	}
-	if len(template.TypeParams) == 0 && len(template.Requirements) == 0 {
+	if len(template.TypeParams) == 0 && len(template.ConstParams) == 0 && len(template.Requirements) == 0 {
 		return template
 	}
 	for _, old := range c.out.ImplInstances {
@@ -424,20 +455,26 @@ func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
 	}
 	instance.RequirementEvidence = evidence
 	instance.Substitution = sub
+	instance.ConstSubstitution = constSub
+	instance.ConstArgs = nil
+	for _, parameter := range template.ConstParams {
+		instance.ConstArgs = append(instance.ConstArgs, constSub[parameter])
+	}
 	instance.Associated = map[string]types.Type{}
 	for name, t := range template.Associated {
-		instance.Associated[name] = substitute(t, sub)
+		instance.Associated[name] = c.out.Substitute(t, sub, constSub)
 	}
 	instance.Methods = nil
 	for _, method := range template.Methods {
 		copy := *method
 		copy.Impl = &instance
-		copy.Signature = substituteSignature(method.Signature, sub)
+		r := newBodyTypes(c.out, sub, constSub)
+		copy.Signature = types.NewSignatureType(nil, nil, nil, r.tuple(method.Signature.Params()), r.tuple(method.Signature.Results()), method.Signature.Variadic())
 		instance.Methods = append(instance.Methods, &copy)
 	}
 	instance.Requirements = nil
 	for _, requirement := range template.Requirements {
-		instance.Requirements = append(instance.Requirements, substituteBound(requirement, sub))
+		instance.Requirements = append(instance.Requirements, substituteBoundConstants(requirement, sub, constSub))
 	}
 	c.out.ImplInstances = append(c.out.ImplInstances, &instance)
 	return &instance

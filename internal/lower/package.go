@@ -26,6 +26,7 @@ type PackageOptions struct {
 	Config              config.Config
 	RejectConfiguration bool // Partial in-place generation cannot switch package configuration.
 	ProcLibraries       []*ProcLibrary
+	RuntimeRoots        []RuntimeRoot
 	// OnProcDiagnostic receives every procedural diagnostic in expansion order,
 	// including warnings, notes, and errors when compilation fails.
 	// Filename is the original input key, or a canonical source key for a
@@ -88,7 +89,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 				return nil, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
 			}
 			configs[file] = options.Config
-			rootConfigs[file] = moduleRootConfig{module: packagePath, name: key, roots: roots}
+			rootConfigs[file] = moduleRootConfig{module: packagePath, name: key, roots: roots, runtimeRoots: options.RuntimeRoots}
 			if roots != nil {
 				strict[key] = packagePath
 			}
@@ -142,7 +143,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 		}
 		groups = append(groups, group)
 	}
-	macros := &moduleMacros{files: files, resolved: packages, imports: imports, producer: options.procLibrary}
+	macros := &moduleMacros{files: files, resolved: packages, imports: imports, producer: options.procLibrary, roots: rootConfigs}
 	expanded, err = expand.ExpandPackages(groups, macros, configs)
 	reportProcDiagnostics(options.OnProcDiagnostic, files, displayNames, expanded)
 	if cycle := macros.checkCycles(expanded); cycle != nil {

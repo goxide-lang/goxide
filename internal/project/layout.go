@@ -256,11 +256,11 @@ func (l *Layout) Begin(spec UnitSpec) (*Unit, error) {
 			return nil, fmt.Errorf("invalid target layout component %q", s)
 		}
 	}
-	if spec.Kind != "bin" && spec.Kind != "example" && spec.Kind != "lib" {
+	if spec.Kind != "bin" && spec.Kind != "example" && spec.Kind != "lib" && spec.Kind != "proc-macro" {
 		return nil, fmt.Errorf("invalid target kind")
 	}
 	validName := ident.MatchString(spec.Name)
-	if spec.Kind == "lib" {
+	if spec.Kind == "lib" || spec.Kind == "proc-macro" {
 		validName = validName || dependencyIdentifier(spec.Name)
 	}
 	if !validName {

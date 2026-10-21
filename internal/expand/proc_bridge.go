@@ -25,6 +25,7 @@ type procInvocationConfig struct {
 	Args, Item       []syntaxToken
 	Target           pm.Target
 	Features         []string
+	RuntimeRoots     map[string][]syntaxToken
 }
 
 // procBinding includes lexical ownership, not just a numeric hygiene mark.
@@ -131,10 +132,17 @@ func (e *engine) newProcInvocation(config procInvocationConfig) (*procInvocation
 	if err != nil {
 		return nil, err
 	}
+	roots := make(map[string]public.TokenStream, len(config.RuntimeRoots))
+	for _, name := range sortedRuntimeRootNames(config.RuntimeRoots) {
+		roots[name], err = decode(config.RuntimeRoots[name])
+		if err != nil {
+			return nil, err
+		}
+	}
 	invocation.request, err = pm.NewRequest(invocation.scope, pm.RequestConfig{
 		Entry: config.Entry, Kind: config.Kind, Position: position,
 		DefSite: defSite, CallSite: callSite, DefSpan: defSpan, CallSpan: callSpan,
-		Target: config.Target, Features: config.Features, Input: input, Args: args, Item: item,
+		Target: config.Target, Features: config.Features, Input: input, Args: args, Item: item, RuntimeRoots: roots,
 	})
 	if err != nil {
 		return nil, err

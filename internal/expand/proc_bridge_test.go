@@ -104,6 +104,37 @@ func TestProcBridgeSourceTokensRoundTrip(t *testing.T) {
 	}
 }
 
+func TestProcBridgeRuntimeRootRoundTripKeepsBoundContext(t *testing.T) {
+	e, config := procBridgeFixture(t, "value")
+	root := config.Input[0]
+	root.Ctx = 2
+	root.Scope, root.Lexical = Scope{File: config.Call.File, Ctx: 2}, Scope{File: config.Call.File, Ctx: 2}
+	config.RuntimeRoots = map[string][]syntaxToken{"logical.example/runtime": {root}}
+	invocation := procBridgeInvocation(t, e, config)
+	output := procBridgeOutput(t, invocation, func(request pm.Request) pm.Output {
+		ctx := request.Context()
+		stream, err := ctx.RuntimeRoot("logical.example/runtime")
+		if err != nil {
+			t.Fatal(err)
+		}
+		original := stream.Tokens()[0]
+		rebuilt, err := public.NewIdent(original.Text(), false, original.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return pm.Success(public.New(original.WithSpan(ctx.DefSpan()), rebuilt.WithSpan(ctx.CallSpan())))
+	})
+	if len(output) != 2 || output[0].Origin != root.Origin || output[1].Origin != config.Definition ||
+		output[0].Location != config.Definition || output[1].Location != config.Call {
+		t.Fatal("runtime root round trip lost reference identity or diagnostic spans")
+	}
+	for _, actual := range output {
+		if actual.Ctx != root.Ctx || actual.Scope != root.Scope || actual.Lexical != root.Lexical {
+			t.Fatal("runtime root round trip replaced its binding with DefSite or CallSite")
+		}
+	}
+}
+
 func TestProcBridgeSpanChangesOnlyDiagnostics(t *testing.T) {
 	e, config := procBridgeFixture(t, "outer(inner)")
 	invocation := procBridgeInvocation(t, e, config)

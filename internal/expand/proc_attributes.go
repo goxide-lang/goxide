@@ -336,6 +336,14 @@ func (e *engine) builtinDerive(path *ast.Path, file *ast.File) (derives.Definiti
 	if scope.File == nil {
 		scope = Scope{File: file, Ctx: root.Ctx}
 	}
+	if binding, ok := e.r.RuntimeRoots[scope.Ctx]; ok {
+		if resolver, available := e.resolver.(interface {
+			LookupRuntimeRootBuiltinDerive([]string, *ast.Path) (derives.Definition, bool)
+		}); available && root.Name == binding.Name {
+			return resolver.LookupRuntimeRootBuiltinDerive(binding.Target, path)
+		}
+		return derives.Definition{}, false
+	}
 	for context, ok := e.r.Contexts[scope.Ctx]; ok; context, ok = e.r.Contexts[scope.Ctx] {
 		scope = context.Definition
 	}

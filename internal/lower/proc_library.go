@@ -28,17 +28,19 @@ type ProcLibrary struct {
 	GoNames     map[string]string
 	Run         func(pm.Request) ([]byte, error)
 
-	sources    map[string][]byte
-	entryFiles map[*procmacro.Entry]string
-	roots      paths.Roots
-	config     config.Config
-	importer   types.Importer
+	sources      map[string][]byte
+	entryFiles   map[*procmacro.Entry]string
+	roots        paths.Roots
+	config       config.Config
+	importer     types.Importer
+	modulePath   string
+	compiledPath string
 }
 
 // CompileProcLibrary compiles a proc-macro producer as ordinary Go functions,
 // checking each source registration against the selected SDK's actual types.
 func CompileProcLibrary(sources map[string][]byte, packagePath string, goImports types.Importer, roots paths.Roots, options PackageOptions) (map[string][]byte, *ProcLibrary, error) {
-	library := &ProcLibrary{PackagePath: packagePath, GoNames: map[string]string{}, roots: maps.Clone(roots), config: options.Config}
+	library := &ProcLibrary{PackagePath: packagePath, modulePath: packagePath, compiledPath: packagePath, GoNames: map[string]string{}, roots: maps.Clone(roots), config: options.Config}
 	library.config.Features.Enabled = maps.Clone(options.Config.Features.Enabled)
 	library.config.Features.Declared = maps.Clone(options.Config.Features.Declared)
 	if environment := options.Config.Environment; environment != nil {
@@ -88,9 +90,15 @@ type boundProc struct {
 }
 
 func (i *moduleImporter) procPackage(packagePath string) bool {
-	for root := range i.procs {
+	for root, entries := range i.procs {
 		if packagePath == root || strings.HasPrefix(packagePath, root+"/") {
 			return true
+		}
+		for _, entry := range entries {
+			original := entry.library.compiledPath
+			if packagePath == original || strings.HasPrefix(packagePath, original+"/") {
+				return true
+			}
 		}
 	}
 	return false
@@ -151,7 +159,7 @@ func (i *moduleImporter) checkProcRuntimeUses(resolved *resolve.Result) error {
 			if requirement, ok := i.namespace(symbol.Target); ok {
 				target = requirement.namespace.PackagePath
 				packagePath = target
-				if procExpansion(origin.Expn) {
+				if procExpansion(origin.Expn) && (requirement.namespace.PackagePath != "" || requirement.namespace.Unavailable != "") {
 					requirement.sourceFile = name
 					if err := i.checkRootRequirement(requirement); err != nil {
 						failure = err
@@ -230,6 +238,11 @@ func prepareProcLibraries(libraries []*ProcLibrary, files map[string]*syntax.Fil
 			return nil, err
 		}
 		bound[library.PackagePath] = map[string]boundProc{}
+		roots := maps.Clone(library.roots)
+		if roots == nil {
+			roots = paths.Roots{}
+		}
+		roots["crate"] = paths.Namespace{PackagePath: library.PackagePath, ModulePath: library.modulePath, Source: "module"}
 		for name, file := range parsed {
 			for _, entry := range entries {
 				if entry.File == file {
@@ -245,10 +258,11 @@ func prepareProcLibraries(libraries []*ProcLibrary, files map[string]*syntax.Fil
 				}
 			}
 			file.Items = imports
+			addCrateUse(file)
 			files[name], configs[file] = file, library.config
-			rootConfigs[file] = moduleRootConfig{module: library.PackagePath, name: name, roots: library.roots, sourceImporter: library.importer}
+			rootConfigs[file] = moduleRootConfig{module: library.PackagePath, name: name, roots: roots, sourceImporter: library.importer}
 		}
-		owners[library.PackagePath] = library.PackagePath
+		owners[library.PackagePath] = library.modulePath
 	}
 	return bound, nil
 }

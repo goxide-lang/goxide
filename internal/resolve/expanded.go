@@ -69,6 +69,11 @@ func (h *hygiene) init(result *Result) {
 	}
 	for ctx, c := range h.expanded.Contexts {
 		scope := result.Contexts[ctx]
+		if root, ok := h.expanded.RuntimeRoots[ctx]; ok {
+			key := Key{Name: root.Name, Ctx: ctx}
+			scope.Bindings[key] = &Symbol{Name: key, Kind: Module, Visibility: Public, Target: append([]string(nil), root.Target...)}
+			continue
+		}
 		scope.Parent = h.target(c.Definition)
 		scope.Caller = h.target(c.Caller)
 	}

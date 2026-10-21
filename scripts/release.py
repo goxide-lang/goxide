@@ -36,9 +36,9 @@ with tempfile.TemporaryDirectory(prefix='goxide-release-') as temporary:
     work = Path(temporary).resolve()
     package = work / name
     package.mkdir()
-    subprocess.run(['go', 'build', '-mod=readonly', '-trimpath', '-buildvcs=false',
+    subprocess.run(['go', 'run', '-mod=readonly', './scripts/build.go',
                     f'-ldflags=-s -w -buildid= -X main.version={tag}',
-                    '-o', str(package / binary), './cmd/goxide'],
+                    '-o', str(package / binary)],
                    cwd=ROOT, env=dict(env, CGO_ENABLED='0'), check=True)
     shutil.copyfile(ROOT / 'LICENSE', package / 'LICENSE')
     (package / 'README.txt').write_text(

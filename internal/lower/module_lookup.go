@@ -124,7 +124,7 @@ func (i *moduleImporter) lookup(parts []string, name resolve.Key, visiting map[s
 			}
 			return nil
 		}
-		if path.Dir(requirement.origin.File) == requirement.namespace.PackagePath {
+		if path.Dir(requirement.sourceFile) == requirement.namespace.PackagePath {
 			if scope := i.local[requirement.namespace.PackagePath]; scope != nil {
 				if symbol := scope.Bindings[name]; symbol != nil {
 					return i.symbolMembers(symbol, strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)

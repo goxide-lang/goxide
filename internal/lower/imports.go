@@ -5,6 +5,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,6 +74,12 @@ func (e *emitter) external(n syntax.Node, target []string, name, preferred strin
 	}
 	if name == "" {
 		name = target[len(target)-1]
+	}
+	if strings.Join(target[:len(target)-1], "/") == filepath.ToSlash(filepath.Dir(e.name)) && !e.externalTest {
+		if symbol := e.file.References[n.ID()].Symbol; symbol != nil && symbol.Kind == resolve.Function {
+			return e.unshadowedFunction(name)
+		}
+		return &goast.Ident{NamePos: e.pos(n), Name: name}
 	}
 	pkg := e.importName(target[:len(target)-1], preferred, e.pos(n))
 	return &goast.SelectorExpr{X: pkg, Sel: &goast.Ident{NamePos: e.end(n) - gotoken.Pos(len(name)), Name: name}}

@@ -60,6 +60,32 @@ func runPreparedProject(req CompileRequest, prepared *compile.Result, sourceRoot
 	if err != nil {
 		return err
 	}
+	if prepared.ProcMacro != "" {
+		if req.Mode == "run" || req.Mode == "test" {
+			return fmt.Errorf("proc-macro lib is a WASI macro command; use an ordinary example or consumer to exercise it")
+		}
+		if req.Mode == "build" {
+			destination := prepared.ProcMacro
+			if req.Output != "" {
+				destination, err = packageOutput(req.Output, sourceRoot, "macro output", prepared.SourceRoots...)
+				if err != nil {
+					return err
+				}
+				data, err := os.ReadFile(prepared.ProcMacro)
+				if err != nil {
+					return err
+				}
+				if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(destination, data, 0o644); err != nil {
+					return err
+				}
+			}
+			_, err := fmt.Fprintln(out, destination)
+			return err
+		}
+	}
 	manifest, err := project.Detect(sourceRoot)
 	if err != nil {
 		return err

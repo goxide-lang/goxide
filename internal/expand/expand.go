@@ -41,6 +41,13 @@ type Context struct {
 	Expn       ast.ExpnID
 }
 
+// RuntimeRoot is a host-selected namespace. Its hygiene context grants this
+// one binding and never the private scope of the library that owns the root.
+type RuntimeRoot struct {
+	Name   string
+	Target []string
+}
+
 type Expansion struct {
 	Definition Origin
 	Call       Origin
@@ -82,6 +89,7 @@ type Macro struct {
 }
 
 type Result struct {
+	RuntimeRoots    map[ast.SyntaxCtx]RuntimeRoot
 	ProcDiagnostics []ProcDiagnostic
 	// UsesConfiguration includes evaluated source and macro-produced constructs,
 	// even when a false predicate removes the entire generated item.
@@ -183,7 +191,7 @@ func Expand(files []*ast.File, resolver Resolver, configs ...map[*ast.File]confi
 // ExpandPackages keeps package definitions separate while assigning expansion
 // identities across the complete source graph.
 func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*ast.File]config.Config) (*Result, error) {
-	e := &engine{r: &Result{Expansions: map[ast.ExpnID]Expansion{}, Contexts: map[ast.SyntaxCtx]Context{},
+	e := &engine{r: &Result{Expansions: map[ast.ExpnID]Expansion{}, Contexts: map[ast.SyntaxCtx]Context{}, RuntimeRoots: map[ast.SyntaxCtx]RuntimeRoot{},
 		Origins: map[ast.Node]Origin{}, Locations: map[ast.Node]Origin{}, Scopes: map[*ast.Ident]Scope{}, Introductions: map[*ast.Ident]Key{}, Captures: map[ast.Node]Capture{}, Allocations: map[*ast.CallExpr]bool{}, TargetFiles: map[*ast.File]bool{}}, resolver: resolver,
 		defs: map[Key]definition{}, trees: map[*ast.TokenTree][]syntaxToken{}, localFiles: map[*ast.File]bool{}, captured: map[ast.Node]bool{}, lexical: map[ast.Node]Scope{}, originals: map[ast.Node]ast.Node{}}
 	if len(configs) > 0 {
@@ -311,6 +319,21 @@ func (e *engine) lookup(path *ast.Path, file *ast.File) (definition, error) {
 	scope, ok := e.r.Scopes[id]
 	if !ok {
 		scope = Scope{file, id.Ctx}
+	}
+	if root, ok := e.r.RuntimeRoots[scope.Ctx]; ok {
+		if provider, available := e.resolver.(interface {
+			LookupRuntimeRootMacro([]string, *ast.Path) (Macro, error)
+		}); available && id.Name == root.Name {
+			macro, err := provider.LookupRuntimeRootMacro(root.Target, path)
+			if err != nil {
+				return definition{}, err
+			}
+			if (macro.Rules != nil || macro.Proc != nil) && macro.File != nil {
+				e.reserve(macro.File)
+				return definition{decl: macro.Rules, file: macro.File, proc: macro.Proc, run: macro.Run}, nil
+			}
+		}
+		return definition{}, fmt.Errorf("macro %s has no source definition in its bound runtime root", id.Name)
 	}
 	// Macro definitions are static package items, so template-local marks
 	// fall back to their definition scope before asking for source modules.

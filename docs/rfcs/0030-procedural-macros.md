@@ -2,9 +2,9 @@
 
 ## 状态与范围
 
-状态：**Draft；独立 token/SDK、源码登记与三类调用接线已实现，本地联调；角色构建与受限宿主待接入**。用户已确认按本篇推进 syntax 仓库首批的 `token` 与 `proc_macro`，先不实现 syn/quote。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
+状态：**Draft；独立 token/SDK、源码登记、三类调用、角色构建与 RuntimeRoot 已实现，本地联调；CLI/浏览器受限宿主待接入**。用户已确认按本篇推进 syntax 仓库首批的 `token` 与 `proc_macro`，先不实现 syn/quote。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
 
-本篇提出一个可独立验收的过程宏基础：公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。独立 `github.com/goxide-lang/syntax` module 已提供手写 Go 的 token 树/词法、调用内引用表、Context/Output、静态入口分派与严格 JSON 编解码。编译器已实现 `[lib].proc_macro` 清单字段、cfg 后源码登记、canonical SDK 签名校验，以及函数式、attribute、derive 的调用接线和 helper 归属。内部编译入口将已检查宏库投影为仅含登记宏的消费视图，支持别名与重导出；调用使用请求内引用表，并把诊断位置与可信来源分开。真实 Goxide 宏源码经 Go 和测试专用 SDK command 展开后，已通过目标程序 build/run/test 及重复生成一致检查。本地依赖采用相邻 syntax checkout。项目 CLI 的自动宏构建、依赖角色计划、RuntimeRoot 供应及 CLI/浏览器受限宿主继续按 A1–A10 接入；当前生产入口没有 native 宏执行器。
+本篇提出一个可独立验收的过程宏基础：公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。独立 `github.com/goxide-lang/syntax` module 已提供手写 Go 的 token 树/词法、调用内引用表、Context/Output、静态入口分派与严格 JSON 编解码。编译器已实现 `[lib].proc_macro` 清单字段、cfg 后源码登记、canonical SDK 签名校验，以及函数式、attribute、derive 的调用接线和 helper 归属。内部编译入口将已检查宏库投影为仅含登记宏的消费视图，支持别名与重导出；调用使用请求内引用表，并把诊断位置与可信来源分开。项目编排已按独立角色准备依赖、锁、特征与 staging，构建 Go WASI command；输出所属 crate 的 RuntimeRoot 经显式来源绑定。真实 Goxide 宏源码经测试 WASI 运行器展开后，目标程序 build/run/test 与离线锁定重放通过。本地依赖采用相邻 syntax checkout。CLI 的 proc-macro lib 可生成 WASM；实际展开仍须提供受限宿主，CLI/浏览器执行与资源限制继续按 A1–A10 接入。
 
 本篇不迁移 Default、serde 或其他内建宏，不补泛型 impl，不提供类型反射或已解析 TypeShape 查询，不开放编译脚本，也不实现完整 syn/quote。普通 syn/quote 库可以建立在本协议上；它们解析语法、构造语法，不取得类型检查或权限证明。库派生迁移仍需另行验收普通 trait/impl、生成代码及跨仓库发布。
 
@@ -31,6 +31,8 @@ path = "../syntax"
 ```
 
 对应 `use syntax::token` 和 `use syntax::proc_macro as pm`，下文沿用这两个别名。发行项目将该项换为现有 `go = "github.com/goxide-lang/syntax"` 与该 module 实际公开的 `version`，不隐式注入依赖。syntax 与编译器独立发布，不要求仓库版本号相同。正常 MVS/replace 完成后，构建器核对实际 SDK 协议内容与编译器构建时随附的协议内容是否一致；比较范围是 SDK 协议、token 词表及编解码合同，不是无关文档或整个仓库版本号。不同内容在构建宏前诊断，不静默覆盖选版结果，也不只凭 import path 或 SDK 自报标志认可。本地修改协议后须重建编译器；缓存产物绑定这份内容身份，不运行旧协议兼容分支。
+
+本地编译器构建入口为 `GOTOOLCHAIN=local GOWORK=off go run ./scripts/build.go -o /tmp/goxide`。它读取编译器实际选中的 SDK 源码闭包，将内容身份通过 linker stamp 固化到二进制；发行构建复用此入口。宏计划在自己的 MVS/replace 完成后核对实际 SDK 内容，缺少 stamp 或内容不一致时在构建宏前失败。文档、测试文件与 module 版本号不参与协议内容比较。
 
 SDK 内部表示不作为序列化协议直接导出，尤其不公开现有 `syntaxToken` 的 AST、文件指针或语义旁表。公共节点合同为：
 
@@ -267,7 +269,7 @@ NoError(D)   Admit(T, H, L) = J   Fit(K, p, J)
 
 ## 转译示例
 
-PM-01/02 的源码登记与三类调用已由内部编译入口和测试专用 SDK command 联调。项目 CLI 的自动宏构建与受限执行仍待接入。`token` 与 `pm` 分别显式绑定 `github.com/goxide-lang/syntax/token` 和 `github.com/goxide-lang/syntax/proc_macro`，`macros` 绑定相应过程宏 lib；完整项目验收还须提供这些依赖的真实版本与清单。Go 对照是完整目标程序，不包含宏执行器。
+PM-01/02 的源码登记与三类调用已联调，项目编排可构建 WASI 宏产物；CLI 的受限执行仍待接入。`token` 与 `pm` 分别显式绑定 `github.com/goxide-lang/syntax/token` 和 `github.com/goxide-lang/syntax/proc_macro`，`macros` 绑定相应过程宏 lib；完整项目验收还须提供这些依赖的真实版本与清单。Go 对照是完整目标程序，不包含宏执行器。
 
 ### PM-01：函数式恒等宏与运行时求值
 
@@ -429,19 +431,19 @@ func TestAnswerAPI(t *testing.T) {
 | A9 | CLI 与浏览器使用同一宏产物/请求，成功输出和确定错误一致；浏览器缺宏明确失败，异步界面可取消 |
 | A10 | 同输入两次生成 Go 字节一致；检查源码位置、可读性、无宏运行时泄漏；普通手写 Go 消费通过 |
 
-A1–A10 尚未全量完成。已覆盖源码登记与验签、三类入口和输出位置、属性/derive 顺序、helper 共同消费者、别名与重导出、片段与卫生、诊断位置、真实 Goxide 宏源码到测试 SDK command，再到目标 Go build/run/test 和重复生成一致。完整 WASI 执行、角色计划与锁、SDK 协议内容匹配、RuntimeRoot 供应及浏览器验收继续实施。syntax 仓库保留词法/结构、冻结上下文、JSON 拒绝/预算和静态分派测试。
+A1–A10 尚未全量完成。已覆盖源码登记与验签、三类入口和输出位置、属性/derive 顺序、helper 共同消费者、别名与重导出、片段与卫生、诊断位置、真实 Goxide 宏源码到测试 SDK command，再到目标 Go build/run/test 和重复生成一致。角色计划与锁、SDK 协议内容匹配、RuntimeRoot 和真实 WASI 产物已接线，测试运行器覆盖上游宏构建、目标/宏配置隔离、运行库重导出与离线锁定重放。固定 WASI profile、资源上限、取消及 CLI/浏览器宿主继续实施。syntax 仓库保留词法/结构、冻结上下文、JSON 拒绝/预算和静态分派测试。
 
 ### 实施顺序与共享代码边界
 
 职责保持在三处：项目/编译编排准备来源、角色计划和宏产物；expand 负责名字选择、输入/输出、卫生、顺序与累计预算；宿主适配负责运行一个已准备的 WASM 请求。expand/lower 不自行启动 Go 工具链或下载依赖。CLI 与浏览器提供实际宿主实现后才按需要引入共同调用接口，前端继续使用一条展开与检查管线。
 
 1. 接受源级及宿主合同后，从 `main` 按实际调用需要提取源 token 留存、声明列表解析、片段/来源复制及输出位置校验，配独立回归。保留现有声明宏行为，不为提取而开放零/多 item 输出。
-2. 独立 syntax module 的手写 Go token/SDK、编译器转换桥、源码登记、三类调用及 helper 已完成本地联调。继续接角色构建图、WASI command 启动器与受限宿主，再将已有调用接线接入项目 CLI；此批不实现 syn/quote。
+2. 独立 syntax module 的手写 Go token/SDK、编译器转换桥、源码登记、三类调用、helper、角色构建图、WASI command 启动器与 RuntimeRoot 已完成本地联调。继续实现受限宿主并接入项目 CLI；此批不实现 syn/quote。
 3. 接浏览器同产物执行、取消、预算及角色隔离验收，完成 A1–A10 后再提交基础能力为已实现。实现内部可按主题提交，基础能力验收不以模拟宿主替代。
 4. 声明式 Draft 分支以后再整理到共享基线上，仅保留其专用语法/匹配与差异；不把 RFC 0029 接受作为本篇前置条件。
 5. 同 syntax module 中的普通 syn/quote 包、普通泛型 impl 和 Default/serde 迁移分别设计与验收。若后续 `quote!` 使用过程宏实现，其独立宏源码项目依赖 token/builder 直接构造输出，不能调用尚在构建的自身宏；普通 syntax module 不反向依赖该宏项目。源码项目可同仓库，但不因此合并 module 或构建角色。后续 Goxide 自举、生成 Go 的发行方式及跨仓库改动另按授权确定。
 
-编译器已保留源 token，提供普通声明及 trait/impl 成员的结构化列表解析。`Resolver.LookupMacro` 返回已选定的声明宏或过程宏登记；展开器共用位置校验与递归流程。`CompileProcLibrary` 验证并生成宏实现的普通 Go，消费方通过已准备的 `ProcLibrary` 和宿主回调接入；尚未配置宿主的实际调用明确失败。包和模块编译入口通过 `OnProcDiagnostic` 按顺序交付诊断及源文件身份，包含成功展开的 warning/note；模块发现重试只交付最终一轮诊断。原有声明式函数宏仍只输出一个 item。
+编译器已保留源 token，提供普通声明及 trait/impl 成员的结构化列表解析。`Resolver.LookupMacro` 返回已选定的声明宏或过程宏登记；展开器共用位置校验与递归流程。`CompileProcLibrary` 与多包入口 `CompileProcModules` 验证并生成宏实现的普通 Go；项目编排从角色计划构建静态 launcher 和 WASM，消费方通过已准备的 `ProcLibrary` 和宿主回调接入。`RuntimeRoot` 绑定消费者可达的公开根，其上下文只授权该根，其他新建标识符不能借此取得词法私有权限；尚未配置宿主的实际调用明确失败。包和模块编译入口通过 `OnProcDiagnostic` 按顺序交付诊断及源文件身份，包含成功展开的 warning/note；模块发现重试只交付最终一轮诊断。原有声明式函数宏仍只输出一个 item。
 
 ### 接受前需确认
 

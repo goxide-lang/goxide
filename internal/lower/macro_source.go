@@ -17,6 +17,7 @@ type moduleMacros struct {
 	resolved *resolve.Result
 	imports  *moduleImporter
 	producer *ProcLibrary
+	roots    map[*syntax.File]moduleRootConfig
 }
 
 // Built-in derive registrations use the same canonical routes as the later
@@ -222,6 +223,10 @@ func (m *moduleMacros) LookupMacro(path *syntax.Path, scope expand.Scope) (expan
 		return expand.Macro{}, err
 	}
 	name := path.Segments[len(path.Segments)-1].Name.Name
+	return m.selectMacro(candidates, target, name)
+}
+
+func (m *moduleMacros) selectMacro(candidates []moduleMember, target, name string) (expand.Macro, error) {
 	var macros []moduleMember
 	for _, candidate := range candidates {
 		if candidate.Kind == resolve.Macro && candidate.symbol != nil {

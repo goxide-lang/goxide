@@ -32,6 +32,7 @@ type Lock struct {
 	Git             map[string]string               `json:"git"`
 	Sums            map[string]string               `json:"sums"`
 	Plans           map[string]map[string]Selection `json:"plans,omitempty"`
+	Roles           map[string]RoleLock             `json:"roles,omitempty"`
 }
 
 // UnmarshalJSON prevents pre-1.0 vendor artifacts from silently changing source policy.
@@ -65,6 +66,7 @@ type Node struct {
 	SourceKey       string
 	SourceID        string
 	source          sourceIdentity
+	sourceSelection Selection
 	SelectedVersion string
 	Manifest        Manifest
 	Features        map[string]bool
@@ -73,6 +75,14 @@ type Node struct {
 	Sources         map[string]Dependency // Active module sources with resolved Module identities.
 }
 type Graph struct {
+	// Nodes and Plan contain only this role's ordinary Go build closure.
+	Role                   string
+	Platform               string
+	ProcEdges              []ProcEdge
+	DependencyPlanID       string // Lock configuration identity; excludes local source bodies.
+	roles                  *rolePlanner
+	roleRoot               *Node
+	roleSelections         map[string]Selection
 	nativeStandalone       bool
 	featureOverrides       map[string]Request
 	overrides              map[string]Manifest

@@ -40,11 +40,13 @@ type Module struct {
 	Tags          []string
 	Race          bool
 	ProcLibraries []*ProcLibrary
+	RuntimeRoots  []RuntimeRoot
 	// Only the first module's callback is used. It receives the complete source
 	// graph's procedural diagnostics in expansion order, including errors, after
 	// module discovery finishes; intermediate discovery passes are not reported.
 	// Filename is the canonical source key, including the owning package path.
 	OnProcDiagnostic func(filename string, diagnostic expand.ProcDiagnostic)
+	procLibrary      *ProcLibrary
 }
 
 // Crate describes an authored target without changing its Go package identity.
@@ -154,7 +156,7 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 			}
 			configs[file] = module.Config
 			fileRoots, route := crates.roots(module, path.Dir(key), roots)
-			rootConfigs[file] = moduleRootConfig{module: route, name: key, roots: fileRoots}
+			rootConfigs[file] = moduleRootConfig{module: route, name: key, roots: fileRoots, runtimeRoots: module.RuntimeRoots}
 			if fileRoots["crate"].PackagePath != "" {
 				addCrateUse(file)
 			}
@@ -168,8 +170,27 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	if len(files) == 0 && len(crates.owners) == 0 {
 		return crates.prune()
 	}
-	if _, err := procmacro.Collect(files, "", false); err != nil {
+	producer := modules[0].procLibrary
+	rootPackage := ""
+	if producer != nil {
+		rootPackage = producer.PackagePath
+	}
+	entries, err := procmacro.Collect(files, rootPackage, producer != nil)
+	if err != nil {
 		return err
+	}
+	if producer != nil {
+		producer.Entries = entries
+		producer.GoNames = map[string]string{}
+		producer.entryFiles = map[*procmacro.Entry]string{}
+		for _, entry := range entries {
+			for name, file := range files {
+				if file == entry.File {
+					producer.entryFiles[entry] = name
+				}
+			}
+		}
+		procmacro.Strip(entries)
 	}
 	var libraries []*ProcLibrary
 	for _, module := range modules {
@@ -180,6 +201,9 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 		return err
 	}
 	external := sourceModuleImporter(modules[0])
+	if producer != nil {
+		producer.importer = external
+	}
 	requirements = prepareSourceRoots(files, rootConfigs, external)
 	packages := resolve.Resolve(crates.preliminaryFiles(files, extra), crates)
 	native, err := nativeModuleFiles(modules, packages.Packages, external, crates)
@@ -219,7 +243,7 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 		}
 		sourcePackages = append(sourcePackages, source)
 	}
-	macros := &moduleMacros{files: files, resolved: packages, imports: imports}
+	macros := &moduleMacros{files: files, resolved: packages, imports: imports, producer: producer, roots: rootConfigs}
 	expanded, err = expand.ExpandPackages(sourcePackages, macros, configs)
 	if crates.expandedModules(expanded, rootConfigs, extra) {
 		return compileModules(modules, extra)
@@ -270,6 +294,11 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 	info, diagnostics := check.CheckWithImporter(expandedFiles, resolved, external, modules[0].Config.Sizes())
 	if len(diagnostics) != 0 {
 		return diagnostics[0]
+	}
+	if producer != nil {
+		if err := producer.validate(resolved, info, external); err != nil {
+			return err
+		}
 	}
 	lowerFiles := make(map[string]*syntax.File, len(diskNames))
 	for name := range diskNames {

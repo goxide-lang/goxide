@@ -169,6 +169,11 @@ func (e *engine) runProc(n ast.Node, d definition, args, item []syntaxToken, kin
 	}
 	sort.Strings(features)
 	cfg := procInvocationConfig{RequestID: fmt.Sprintf("expansion-%d", id), Entry: d.proc.Name, Kind: d.proc.Kind, Slot: kind, Position: position, Definition: definition, Call: call, CallLocation: location, Ctx: ctx, Caller: caller, Target: target, Features: features}
+	var err error
+	cfg.RuntimeRoots, err = e.procRuntimeRoots(file, location, id)
+	if err != nil {
+		return fail("macro", err)
+	}
 	if d.proc.Kind == pm.Function {
 		cfg.Input = args
 	} else {

@@ -28,6 +28,7 @@ type moduleRootConfig struct {
 	bindings       map[string]bool
 	uses           map[string][]*syntax.UseDecl
 	sourceImporter types.Importer
+	runtimeRoots   []RuntimeRoot
 }
 
 func (r rootRequirement) check(owners map[string]string, external types.Importer) error {

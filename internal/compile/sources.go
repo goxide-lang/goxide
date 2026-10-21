@@ -42,6 +42,15 @@ func moduleRoots(node *project.Node) (paths.Roots, error) {
 		}
 		mappings[alias] = rootconfig.Mapping{Module: dependency.Module, Package: packagePath, Source: source}
 	}
+	if library := node.Manifest.Lib; library != nil && library.ProcMacro {
+		if child := node.Children[library.Name]; child != nil && child.Module == node.Module {
+			packagePath, err := libraryPackage(child)
+			if err != nil {
+				return nil, err
+			}
+			mappings[library.Name] = rootconfig.Mapping{Module: node.Module, Package: packagePath, Source: "module"}
+		}
+	}
 	roots, err := rootconfig.Build(mappings)
 	if err != nil {
 		return nil, err
@@ -78,7 +87,7 @@ func targetCrates(node *project.Node, selected project.Target, kind string) ([]l
 		kind    string
 		targets []project.Target
 	}{{"bin", node.Manifest.Bins}, {"example", node.Manifest.Examples}}
-	if node.Manifest.Lib != nil {
+	if node.Manifest.Lib != nil && (!node.Manifest.Lib.ProcMacro || kind == "lib") {
 		groups = append(groups, struct {
 			kind    string
 			targets []project.Target
@@ -150,7 +159,7 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 		if err != nil {
 			return "", err
 		}
-		if targetUnavailable(*library, node.Features) == "" {
+		if (!library.ProcMacro || kind == "lib") && targetUnavailable(*library, node.Features) == "" {
 			if !info.IsDir() {
 				files[filepath.Clean(library.Path)] = filepath.Base(library.Path)
 			}
@@ -179,7 +188,7 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 	// Keep ancestor directories traversable when they contain the selected
 	// target or a library entry; crate ownership selects packages afterwards.
 	included := []string{selected.Path}
-	if library := node.Manifest.Lib; library != nil && targetUnavailable(*library, node.Features) == "" {
+	if library := node.Manifest.Lib; library != nil && (!library.ProcMacro || kind == "lib") && targetUnavailable(*library, node.Features) == "" {
 		included = append(included, library.Path)
 	}
 	for directory := range excluded {

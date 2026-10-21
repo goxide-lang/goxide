@@ -84,7 +84,6 @@ func TestProjectRejectsDeferredCapabilities(t *testing.T) {
 	}{
 		{"workspace", "\n[workspace]\nmembers=[]\n", "workspace"},
 		{"build", "\n[build]\nentry='build.gox'\ninputs=['build.gox']\noutputs=['generated.go']\n", "build"},
-		{"procedural macros", "\n[lib]\nname='macros'\npath='macros'\nproc_macro=true\n", "role planning and a restricted execution host"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := smallProject(t)

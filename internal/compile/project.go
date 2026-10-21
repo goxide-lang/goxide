@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/goxide-lang/goxide/internal/config"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/project"
+	pm "github.com/goxide-lang/syntax/proc_macro"
 )
 
 type Options struct {
@@ -26,6 +26,9 @@ type Options struct {
 	Config                                  config.Config
 	Tags                                    []string
 	Race                                    bool
+	// RunProcMacro executes a prepared WASM command. A nil callback leaves
+	// actual expansion unavailable until a restricted host is supplied.
+	RunProcMacro func(wasm []byte, request pm.Request) ([]byte, error)
 }
 
 // Result names a stable generated Go module and its selected target package.
@@ -34,6 +37,7 @@ type Result struct {
 	Kind        string
 	SourceRoots []string // Original inputs, retained for caller output protection.
 	Config      config.Config
+	ProcMacro   string // Prepared WASI command for a proc-macro lib target.
 }
 
 // PrepareProject generates a single manifest project and its source dependencies.
@@ -87,10 +91,11 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		return nil, err
 	}
 	defer release()
-	graph, err := project.LoadWithTarget(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.ExecEnv())
+	plans, err := project.LoadBuildPlans(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, environment.ExecEnv())
 	if err != nil {
 		return nil, err
 	}
+	graph := plans.Target
 	target, err := project.Select(manifest, options.Bin, options.Example, options.Lib, graph.Root.Features)
 	if err != nil {
 		return nil, err
@@ -101,135 +106,12 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	} else if options.Example != "" {
 		kind = "example"
 	}
-	features := make(map[string]config.Features, len(graph.Nodes))
-	for _, node := range graph.Nodes {
-		selected := config.Features{Enabled: node.Features}
-		if node.HasManifest {
-			if err := singleProject(node.Root); err != nil {
-				return nil, err
-			}
-			if err := supportedManifest(node.Manifest); err != nil {
-				return nil, fmt.Errorf("%s: %w", node.Module, err)
-			}
-			selected.Declared = make(map[string]bool, len(node.Manifest.Features))
-			for name := range node.Manifest.Features {
-				selected.Declared[name] = true
-			}
-		}
-		if node == graph.Root && options.NativeFeatures != nil {
-			selected = *options.NativeFeatures
-		}
-		features[node.SourceKey] = selected
-	}
 	layout, err := project.OpenLayout(root, manifest.Module, targetDir)
 	if err != nil {
 		return nil, err
 	}
 	defer layout.Close()
-	for _, node := range graph.Nodes {
-		cached := node.CheckoutRoot != "" && within(graph.Cache, node.CheckoutRoot) && within(node.CheckoutRoot, node.Root)
-		if within(layout.Root, node.Root) && !cached || node != graph.Root && within(node.Root, layout.Root) {
-			return nil, fmt.Errorf("target directory overlaps source module %s", node.Module)
-		}
-	}
-	staged, err := os.MkdirTemp(layout.Root, ".generation-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(staged)
-	modules := make([]lower.Module, 0, len(graph.Nodes))
-	generated := make(map[string]string, len(graph.Nodes))
-	ordered := append([]*project.Node{graph.Root}, graph.Nodes...)
-	entry := ""
-	for _, node := range ordered {
-		if generated[node.Module] != "" {
-			continue
-		}
-		output := filepath.Join(staged, "deps", project.Digest(node.Module)[:16])
-		selected := project.Target{Name: "native", Path: "."}
-		targetKind := "lib"
-		if node == graph.Root {
-			output = filepath.Join(staged, "module")
-			selected, targetKind = target, kind
-		} else if node.Manifest.Lib != nil {
-			selected = *node.Manifest.Lib
-		}
-		packagePath, err := stageSources(node, selected, targetKind, output)
-		if err != nil {
-			return nil, err
-		}
-		if node == graph.Root {
-			entry = "./" + filepath.ToSlash(packagePath)
-			if packagePath == "." {
-				entry = "."
-			}
-		}
-		roots, err := moduleRoots(node)
-		if err != nil {
-			return nil, err
-		}
-		if node == graph.Root && options.Roots != nil {
-			roots = options.Roots
-		}
-		generated[node.Module] = output
-		rootPackage := ""
-		if node.Manifest.Lib != nil {
-			rootPackage, err = libraryPackage(node)
-			if err != nil {
-				return nil, err
-			}
-		}
-		moduleConfig := configuration
-		moduleConfig.Features = features[node.SourceKey]
-		module := lower.Module{Path: node.Module, Dir: output, RootPackage: rootPackage, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race}
-		if node.HasManifest && !(node == graph.Root && options.NativeFeatures != nil) {
-			module.Crates, module.Targets, err = targetCrates(node, selected, targetKind)
-			if err != nil {
-				return nil, err
-			}
-		}
-		modules = append(modules, module)
-	}
-	if err := prepareModules(graph, generated); err != nil {
-		return nil, err
-	}
-	if err := lower.CompileModules(modules); err != nil {
-		return nil, err
-	}
-	arguments := []string{"list", "-mod=readonly", "-tags=" + strings.Join(options.Tags, ","), "-f", "{{.Name}}"}
-	if options.Race {
-		arguments = append(arguments, "-race")
-	}
-	name, err := goCommand(graph, generated[graph.Root.Module], append(arguments, entry)...)
-	if err != nil {
-		return nil, err
-	}
-	if main := strings.TrimSpace(string(name)) == "main"; kind == "lib" && main || kind != "lib" && !main {
-		if kind == "lib" {
-			return nil, fmt.Errorf("lib target %s must be an importable package, not package main", target.Name)
-		}
-		return nil, fmt.Errorf("%s target %s must be package main", kind, target.Name)
-	}
-	spec, err := unitSpec(graph, target, kind, configuration, features, options.Tags, options.Race)
-	if err != nil {
-		return nil, err
-	}
-	unit, err := layout.Begin(spec)
-	if err != nil {
-		return nil, err
-	}
-	if err := graph.Save(); err != nil {
-		return nil, err
-	}
-	if err := unit.PublishBundle(staged); err != nil {
-		return nil, err
-	}
-	configuration.Features = features[graph.Root.SourceKey]
-	result := &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry, Kind: kind, Config: configuration}
-	for _, node := range graph.Nodes {
-		result.SourceRoots = append(result.SourceRoots, node.Root)
-	}
-	return result, nil
+	return prepareBuildPlans(plans, layout, target, kind, configuration, options)
 }
 
 func singleProject(root string) error {
@@ -258,9 +140,6 @@ func singleProject(root string) error {
 }
 
 func supportedManifest(manifest project.Manifest) error {
-	if manifest.Lib != nil && manifest.Lib.ProcMacro {
-		return fmt.Errorf("procedural macro projects require role planning and a restricted execution host, which are not configured")
-	}
 	if manifest.Build != nil {
 		return fmt.Errorf("build scripts resume after pre-MVP")
 	}

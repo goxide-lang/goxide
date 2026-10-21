@@ -387,7 +387,7 @@ func (c *checker) typ(node ast.Type) (result types.Type) {
 			c.diag(n, GenericConstraint, "an inferred array length requires a composite literal")
 			return types.Typ[types.Invalid]
 		}
-		length, ok := c.constExpression(n.Len)
+		length, ok := c.constantLength(n.Len, true)
 		if !ok {
 			return types.Typ[types.Invalid]
 		}

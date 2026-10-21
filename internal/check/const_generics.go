@@ -245,12 +245,18 @@ func (c *checker) constParameters(g *ast.GenericParams) []*ConstParam {
 }
 
 func (c *checker) constExpression(node ast.Expr) (ConstValue, bool) {
+	return c.constantLength(node, false)
+}
+
+// Ordinary array types also admit Go length and target layout constants. Const generic
+// arguments deliberately retain their narrower integer-expression boundary.
+func (c *checker) constantLength(node ast.Expr, layout bool) (ConstValue, bool) {
 	if node == nil {
 		c.diag(c.file.AST, GenericConstraint, "an integer const argument is required")
 		return ConstValue{}, false
 	}
 	if paren, ok := node.(*ast.ParenExpr); ok {
-		return c.constExpression(paren.X)
+		return c.constantLength(paren.X, layout)
 	}
 	if parameter := c.out.ConstParams[c.symbol(node)]; parameter != nil {
 		return ConstValue{Param: parameter}, true
@@ -260,7 +266,7 @@ func (c *checker) constExpression(node ast.Expr) (ConstValue, bool) {
 		return ConstValue{}, false
 	}
 
-	value := c.integerConstant(node)
+	value := c.integerConstant(node, layout)
 	if value.Kind() == constant.Int {
 		if number, ok := constant.Int64Val(value); ok && number >= 0 {
 			return ConstValue{Value: number}, true
@@ -285,7 +291,7 @@ func (c *checker) integerConstantType(symbol *resolve.Symbol) bool {
 	return !ok || basic.Info()&types.IsInteger != 0
 }
 
-func (c *checker) integerConstant(node ast.Expr) (result constant.Value) {
+func (c *checker) integerConstant(node ast.Expr, layout bool) (result constant.Value) {
 	result = constant.MakeUnknown()
 	defer func() {
 		if recover() != nil || result.Kind() == constant.Int && constant.BitLen(result) > 512 {
@@ -310,17 +316,17 @@ func (c *checker) integerConstant(node ast.Expr) (result constant.Value) {
 			old := c.file
 			c.file = source.file
 			defer func() { c.file = old; delete(c.constantStack, symbol) }()
-			return c.integerConstant(source.node)
+			return c.integerConstant(source.node, layout)
 		}
 	}
 	if value := c.importedIntegerConstant(node); value != nil {
 		return value
 	}
 	if paren, ok := node.(*ast.ParenExpr); ok {
-		return c.integerConstant(paren.X)
+		return c.integerConstant(paren.X, layout)
 	}
 	if unary, ok := node.(*ast.UnaryExpr); ok {
-		value := c.integerConstant(unary.X)
+		value := c.integerConstant(unary.X, layout)
 		if value.Kind() != constant.Int {
 			return result
 		}
@@ -332,7 +338,7 @@ func (c *checker) integerConstant(node ast.Expr) (result constant.Value) {
 		return result
 	}
 	if binary, ok := node.(*ast.BinaryExpr); ok {
-		left, right := c.integerConstant(binary.X), c.integerConstant(binary.Y)
+		left, right := c.integerConstant(binary.X, layout), c.integerConstant(binary.Y, layout)
 		if left.Kind() != constant.Int || right.Kind() != constant.Int {
 			return result
 		}
@@ -357,6 +363,9 @@ func (c *checker) integerConstant(node ast.Expr) (result constant.Value) {
 			}
 		}
 		return result
+	}
+	if call, ok := node.(*ast.CallExpr); ok && layout {
+		return c.arrayBuiltinConstant(call)
 	}
 	return c.constant(node)
 }
@@ -566,6 +575,18 @@ func (c *checker) inferredArrayLiteral(array *ast.ArrayType, elements []ast.Expr
 
 // Imported Go constants already carry their exact value in go/types.
 func (c *checker) importedIntegerConstant(node ast.Expr) constant.Value {
+	object := c.importedConstantObject(node)
+	if object == nil {
+		return nil
+	}
+	basic, ok := types.Unalias(object.Type()).Underlying().(*types.Basic)
+	if !ok || basic.Info()&types.IsInteger == 0 {
+		return constant.MakeUnknown()
+	}
+	return object.Val()
+}
+
+func (c *checker) importedConstantObject(node ast.Expr) *types.Const {
 	var reference resolve.Resolution
 	switch expression := node.(type) {
 	case *ast.PathExpr:
@@ -582,13 +603,6 @@ func (c *checker) importedIntegerConstant(node ast.Expr) constant.Value {
 		}
 		name = symbol.GoName
 	}
-	object, ok := c.importedObject(parts, name).(*types.Const)
-	if !ok {
-		return nil
-	}
-	basic, ok := types.Unalias(object.Type()).Underlying().(*types.Basic)
-	if !ok || basic.Info()&types.IsInteger == 0 {
-		return constant.MakeUnknown()
-	}
-	return object.Val()
+	object, _ := c.importedObject(parts, name).(*types.Const)
+	return object
 }

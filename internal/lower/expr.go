@@ -18,6 +18,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		return &goast.BasicLit{Kind: gotoken.INT, Value: strconv.FormatInt(value.Value, 10)}
 	}
 	if call, ok := n.(*syntax.CallExpr); ok {
+		if instance := e.info.EnumValid[call]; instance != nil {
+			return e.enumValid(call, instance)
+		}
 		if adapter := e.info.GoResults[call]; adapter != nil {
 			return e.goResult(call, adapter)
 		}

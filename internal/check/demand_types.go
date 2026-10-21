@@ -286,6 +286,10 @@ func bodyInfo(source *Info, sub map[*types.TypeParam]types.Type, constants map[*
 			result.GenericBounds[node] = append(result.GenericBounds[node], substituteBoundConstants(bound, sub, constants))
 		}
 	}
+	result.EnumValid = make(map[*ast.CallExpr]*Instance, len(source.EnumValid))
+	for node, instance := range source.EnumValid {
+		result.EnumValid[node] = r.enum(instance)
+	}
 	result.Types = make(map[ast.Expr]types.Type, len(source.Types))
 	for node, typ := range source.Types {
 		result.Types[node] = r.typ(typ)

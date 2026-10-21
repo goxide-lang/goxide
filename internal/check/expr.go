@@ -16,6 +16,9 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	var t types.Type = types.Typ[types.Invalid]
 	switch n := node.(type) {
 	case *ast.Ident:
+		if c.enumValidBuiltin(n) {
+			c.diag(n, "enum-valid-call", "enum_valid must be called with an enum value")
+		}
 		c.recordConstExpression(n)
 		t = c.symbolType(c.symbol(n))
 		if !c.file.AST.NativeGo && n.Name == "nil" && t == types.Typ[types.UntypedNil] {
@@ -28,6 +31,9 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = instanceType(con.Enum)
 		}
 	case *ast.PathExpr:
+		if c.enumValidBuiltin(n) {
+			c.diag(n, "enum-valid-call", "enum_valid must be called with an enum value")
+		}
 		c.recordConstExpression(n)
 		if selected := c.out.Members[n]; selected != nil && selected.MethodExpr {
 			t = selected.Signature
@@ -58,6 +64,10 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	case *ast.ParenExpr:
 		t = c.expr(n.X, expected)
 	case *ast.CallExpr:
+		if result, ok := c.enumValid(n); ok {
+			t = result
+			break
+		}
 		if result, ok := c.unsafeCall(n); ok {
 			t = result
 			break

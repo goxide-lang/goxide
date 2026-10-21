@@ -75,6 +75,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	}
 	fset := gotoken.NewFileSet()
 	var emitters []*emitter
+	enumValidHelpers := map[*check.Enum]bool{}
 	memberSymbols := make(map[*resolve.Symbol]bool)
 	externalTests := make(map[*resolve.Scope]bool)
 	if res != nil {
@@ -96,6 +97,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	for _, name := range names {
 		tree := files[name]
 		e := &emitter{symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
+		e.enumValidHelpers = enumValidHelpers
 		e.lineDirectives, e.original = options.lineDirectives, options.originals[name]
 		if res != nil {
 			e.file = res.Files[name]
@@ -148,11 +150,6 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 				return nil, &Diagnostic{File: name, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
 			}
 		}
-		e.addImports(f)
-		e.positions(f, fset)
-		if options.lineDirectives {
-			multilineSourceBodies(f, fset)
-		}
 		e.goFile = f
 		emitters = append(emitters, e)
 	}
@@ -163,6 +160,17 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			if diagnostic.Severity == resolve.Error {
 				return nil, &Diagnostic{File: diagnostic.File, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
 			}
+		}
+	}
+	for _, e := range emitters {
+		e.goFile.Decls = append(e.goFile.Decls, e.enumValidDeclarations()...)
+		if e.err != nil {
+			return nil, e.err
+		}
+		e.addImports(e.goFile)
+		e.positions(e.goFile, fset)
+		if options.lineDirectives {
+			multilineSourceBodies(e.goFile, fset)
 		}
 	}
 	bindMembers(fset, emitters)
@@ -359,6 +367,7 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	enumValidHelpers   map[*check.Enum]bool
 	inferenceTypes     map[types.Type]*goast.Ident
 	functionFrame      *functionFrame
 	assignmentGuard    *goast.Ident

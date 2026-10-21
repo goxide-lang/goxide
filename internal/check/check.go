@@ -131,6 +131,7 @@ type Info struct {
 	ConstValues         map[ast.Expr]ConstValue
 	FunctionConstParams map[*types.Signature][]*ConstParam
 	FunctionGenerics    map[*types.Signature]*ast.GenericParams
+	EnumValid           map[*ast.CallExpr]*Instance
 	GoResults           map[*ast.CallExpr]*GoResult
 	Resolve             *resolve.Result
 	GoImporter          types.Importer

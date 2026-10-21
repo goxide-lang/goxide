@@ -30,6 +30,8 @@ func prelude() *Scope {
 		k := Key{Name: name}
 		s.Bindings[k] = &Symbol{Name: k, Kind: kind, GoName: name}
 	}
+	k := Key{Name: "enum_valid"}
+	s.Bindings[k] = &Symbol{Name: k, Kind: Builtin, GoName: "enum_valid"}
 	for _, name := range []string{"Option", "Result"} {
 		k := Key{Name: name}
 		s.Bindings[k] = &Symbol{Name: k, Kind: Type, GoName: name}

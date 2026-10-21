@@ -102,6 +102,10 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 					prelude("panic")
 				}
 				if call, ok := node.(*syntax.CallExpr); ok {
+					if instance := info.EnumValid[call]; instance != nil {
+						prelude("bool")
+						prelude("nil")
+					}
 					if typ := info.Equalities[call]; typ != nil {
 						if _, basic := types.Unalias(typ).(*types.Basic); basic {
 							prelude("bool")
@@ -242,7 +246,7 @@ func (e *emitter) checkMacroNames() {
 }
 
 func (e *emitter) checkMacroName(id *syntax.Ident, symbol *resolve.Symbol) {
-	if id.Expn == 0 || symbol == nil {
+	if id.Expn == 0 || symbol == nil || symbol.Kind == resolve.Builtin && symbol.Name.Name == "enum_valid" {
 		return
 	}
 	expansion := e.result.Expansions[id.Expn]

@@ -102,5 +102,12 @@ func (d *demandCollector) enterBody(body *BodyInstance) {
 		if body.Impl != nil {
 			d.c.activeBounds = append(append([]*TraitBound(nil), d.c.activeBounds...), body.Impl.Requirements...)
 		}
+	} else if body.Function != nil && openArguments(body.Function.TypeArgs) {
+		// Reuse proven premises so recursive open calls retain their evidence identity.
+		for _, evidence := range body.Function.Evidence {
+			if evidence.Bound != nil {
+				d.c.activeBounds = append(d.c.activeBounds, evidence.Bound)
+			}
+		}
 	}
 }

@@ -555,10 +555,6 @@ func (d *demandCollector) function(instance *FunctionInstance, node ast.Node) *F
 	if len(instance.ConstArgs) != 0 {
 		return d.constFunction(instance, node)
 	}
-	if openArguments(instance.TypeArgs) {
-		d.unresolved(node, "conditional function")
-		return instance
-	}
 	for _, old := range d.plan.Functions {
 		if old.Decl == instance.Decl && identicalArguments(old.TypeArgs, instance.TypeArgs) && sameEvidence(old.Evidence, instance.Evidence) {
 			return old

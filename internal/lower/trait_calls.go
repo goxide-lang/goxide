@@ -63,7 +63,7 @@ func (e *emitter) operationFunction(selection *check.MemberSelection) goast.Expr
 		return &goast.SelectorExpr{X: carrier, Sel: goast.NewIdent(traitOperation(m))}
 	}
 	ops := e.evidenceType(check.Evidence{Bound: selection.Bound, Impl: selection.Impl})
-	return &goast.SelectorExpr{X: &goast.CompositeLit{Type: ops}, Sel: goast.NewIdent(traitOperation(m))}
+	return &goast.SelectorExpr{X: &goast.ParenExpr{X: &goast.CompositeLit{Type: ops}}, Sel: goast.NewIdent(traitOperation(m))}
 }
 
 func nativeMember(selection *check.MemberSelection) bool {

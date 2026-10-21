@@ -36,3 +36,16 @@ func main(){ int(1).equals(int(2)) }
 		t.Fatalf("primitive intrinsic hid ambiguous ordinary members: %v", err)
 	}
 }
+
+func TestOrdinaryProtocolOperationInControlHeader(t *testing.T) {
+	runPrivateAssociatedFixture(t, map[string]string{"main.gox": `package main
+use fmt;
+trait Compare { func equals(self Self, other Self) bool }
+impl Compare for int { func equals(self Self, other Self) bool { return self == other } }
+func main() {
+ if !Compare::equals(int(1), int(2)) { fmt::Println("different") }
+ for Compare::equals(int(1), int(1)) { break }
+ switch { case Compare::equals(int(1), int(1)): fmt::Println("same") }
+}
+`}, "different\nsame\n")
+}

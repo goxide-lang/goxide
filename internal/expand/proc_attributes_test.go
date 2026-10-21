@@ -144,6 +144,62 @@ func TestProceduralAttributesReplaceBeforeBodyAndReclassify(t *testing.T) {
 	}
 }
 
+func TestProceduralAttributeForwardsOnlyReturnedAttributes(t *testing.T) {
+	resolver := newAttributeResolver(t, []pm.Entry{{Name: "forward", Attribute: func(ctx pm.Context, _, item public.TokenStream) pm.Output {
+		return procText(ctx, item.Display()+"\ntype Extra int")
+	}}}, nil)
+	file := expandFile(t, "forward_attributes.gox", "#[forward] #[derive(Default)] enum Value { #[default] Empty }")
+	result, err := expandAttributes([]*ast.File{file}, resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Files[0].Items) != 2 {
+		t.Fatalf("replacement item count = %d", len(result.Files[0].Items))
+	}
+	value := result.Files[0].Items[0].(*ast.EnumDecl)
+	if len(value.Attrs) != 1 || attributeName(value.Attrs[0]) != "derive" || len(value.Variants[0].Attrs) != 1 || attributeName(value.Variants[0].Attrs[0]) != "default" {
+		t.Fatalf("forwarded builtin request or helper was lost: %s", printer.Source(value))
+	}
+	extra := result.Files[0].Items[1].(*ast.TypeDecl)
+	if len(extra.Attrs) != 0 {
+		t.Fatalf("replacement sibling inherited attributes: %s", printer.Source(extra))
+	}
+}
+
+func TestProceduralDeriveRetainsUnconsumedAttributes(t *testing.T) {
+	resolver := newAttributeResolver(t, []pm.Entry{{Name: "Custom", Derive: func(ctx pm.Context, item public.TokenStream) pm.Output {
+		text := item.Display()
+		compact := strings.Join(strings.Fields(text), "")
+		if !strings.Contains(compact, "#[untouched(flag)]") || !strings.Contains(compact, "#[owned]") {
+			t.Errorf("derive input omitted unconsumed attribute or helper: %s", text)
+		}
+		return procText(ctx, "type Extra int")
+	}}}, map[string][]string{"Custom": {"owned"}})
+	file := expandFile(t, "unconsumed_attributes.gox", "#[untouched(flag)] #[derive(Custom)] type Value struct { #[owned] Field int }")
+	result, err := expandAttributes([]*ast.File{file}, resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Files[0].Items) != 2 {
+		t.Fatalf("derive item count = %d", len(result.Files[0].Items))
+	}
+	value := result.Files[0].Items[0].(*ast.TypeDecl)
+	if len(value.Attrs) != 1 || attributeName(value.Attrs[0]) != "untouched" {
+		t.Fatalf("original item lost its unconsumed attribute: %s", printer.Source(value))
+	}
+	args := value.Attrs[0].Args
+	if args == nil || len(args.Tokens) != 1 || args.Tokens[0].Token == nil || args.Tokens[0].Token.Text != "flag" {
+		t.Fatalf("unconsumed attribute arguments changed: %s", printer.Source(value))
+	}
+	if len(value.Type.(*ast.StructType).Fields[0].Attrs) != 0 {
+		t.Fatalf("completed helper consumer retained its helper: %s", printer.Source(value))
+	}
+	extra := result.Files[0].Items[1].(*ast.TypeDecl)
+	if len(extra.Attrs) != 0 {
+		t.Fatalf("derive output inherited original attributes: %s", printer.Source(extra))
+	}
+}
+
 func TestProceduralDerivesShareSnapshotAndConsumeSharedHelpers(t *testing.T) {
 	var inputs, order []string
 	entry := func(name string) pm.Entry {

@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-**泛型/条件 impl、按需实例化与 Go 普通入口边界已确认，实施中。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态与实际验收见[状态表](../mvp-gap-audit.md)。
+**泛型/条件 impl、按需实例化与 Go 普通入口已实现。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态与实际验收见[状态表](../mvp-gap-audit.md)。
 
 [RFC 0030](0030-procedural-macros.md) 提供语法变换与受限执行，宏不查询类型、不登记 impl。Default、Clone、Debug、PartialEq、Eq、Serialize、Deserialize 的迁移使用普通库协议；每个业务协议仍须保持原有行为并分别验收。
 
@@ -126,7 +126,7 @@ match(norm(target(I)), norm(τ)) = θ，I 是唯一匹配实现
 
 **显式 enum 检查已确认，待实现。** 内建调用 `enum_valid(value)` 沿普通内建的解析和遮蔽规则。输入的静态类型须为具体 enum 或已知 enum 的泛型实例，透明 alias 同样适用；不接受任意 `T any`、接口或自动解引用的指针。参数只求值一次，结果为 bool：外层值属于本 enum 声明的一个变体且变体存储有效时为 true；nil 接口、typed-nil 变体、未知外层变体以及空 enum 的任何值为 false。该检查不遍历 payload，不执行用户方法，不使用反射或 recover；原生 Go 可传入的边界值也按同一规则处理。
 
-Option/Result 按各自现有表示检查外层变体；None 是有效值，Some(nil) 的外层也有效，载荷为 nil 不在此处递归检查。普通 `match` 保留现有分派前的 nil panic，`_` 不接收非法值；显式检查不构成永久有效性证明，后续 match 仍执行自己的检查。serde 宏可先检查普通指针参数是否为 nil，再对解引用后的 enum 调用此操作，返回现有 Type error 后才进入 match。表示与检查规则统一见 [enum 合同](../design/enum-representation.md#21-显式外层有效性检查)；不生成每类型 `Validate*` 包装或暴露私有 Go 变体名。
+Option/Result 按各自现有表示检查外层变体；None 是有效值，Some(nil) 的外层也有效，载荷为 nil 不在此处递归检查。普通 `match` 保留现有分派前的 nil panic，`_` 不接收非法值；显式检查不构成永久有效性证明，后续 match 仍执行自己的检查。serde 宏可先检查普通指针参数是否为 nil，再对解引用后的 enum 调用此操作，返回现有 Type error 后才进入 match。表示与检查规则统一见 [enum 合同](../design/enum-representation.md#21-显式外层有效性检查)；普通可命名输入在调用处生成检查。跨包私有 enum、私有变体或私有类型实参无法在调用处命名时，允许按需在 enum 定义包生成编译器内部检查函数，并由 Go 推导类型实参；该函数不增加 Goxide 公开 API，不暴露私有变体名，也不改变单次求值和无用户方法调用的规则。
 
 **Deserialize 的缺失字段协议。** 对字段 `type Maybe = Option[int]`，宏不能仅凭拼写决定缺失是否合法。候选普通库 trait 可把该行为作为一个明确静态成员，例如：
 

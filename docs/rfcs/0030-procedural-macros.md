@@ -155,7 +155,7 @@ helper 是惰性语法，不执行宏。`attributes(a, b)` 在该 derive 所在�
 
 若名称同时解析为可执行 attribute，报告歧义，要求限定可执行路径；不能先执行再判断。没有对应 derive 的残留 helper 报未知属性。普通 attribute 不登记独立 helper；它可以读取和消费目标中的属性，保留项上的未消费未知属性仍报错。
 
-**已确认、待实现的 [Go 成员 sugar](../design/traits.md#go-成员-sugar)** 取最终声明所在的目标分发模块配置，默认开启；宏定义模块的配置不传给调用方。CLI 只覆盖本次选中的入口模块，不传播到依赖；workspace 多入口按[清单合同](../design/toml-manifest.md#go-成员-sugar-配置)处理。derive 生成 trait 实现时输出普通 `impl`，后续阶段与手写实现按同一规则生成 sugar；不引入 `derive_sugar` / `derive_nosugar`，也不扩展 TokenStream、Output 或 Context 来携带 sugar 策略。
+**已实现的 [Go 成员 sugar](../design/traits.md#go-成员-sugar)** 取最终声明所在的目标分发模块配置，默认开启；宏定义模块的配置不传给调用方。CLI 只覆盖本次选中的入口模块，不传播到依赖；workspace 多入口按[清单合同](../design/toml-manifest.md#go-成员-sugar-配置)处理。derive 生成 trait 实现时输出普通 `impl`，后续阶段与手写实现按同一规则生成 sugar；不引入 `derive_sugar` / `derive_nosugar`，也不扩展 TokenStream、Output 或 Context 来携带 sugar 策略。
 
 宏不能动态新增来源依赖、过程宏入口或宏定义。输出的 `use` / `mod` 只能使用既有显式来源及正常模块发现规则，不读取任意文件；缺包与循环仍用现有诊断。运行时副作用、求值次数、短路与控制转移由生成的普通语法决定，TokenStream 和卫生不提供“一次求值”保证。
 

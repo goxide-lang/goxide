@@ -28,7 +28,7 @@ func (*CC) isEE() {}
 - 标记方法**未导出**，因此只有声明包能实现该接口。Go 在跨包、跨 module 下都强制这一点，实测确认（见 §7）。这就是"闭合"的实现方式。
 - 命名：变体结构体名 = 变体名的 Go 名（按 `frontend-ast.md` §6.1 的可见性映射）。
 - 空变体是零字段结构体；带载荷变体的字段按源码顺序命名（元组变体用 `Value`，多载荷用 `V0`、`V1`；结构变体用字段名转成的 Go 名）。
-- 不生成 tag 常量、不生成 `Validate*`、不生成 `Tag*` / `Value*` / `Project*` 辅助函数。旧管线为元数据与跨包 ABI 生成的这些入口在新管线里都不存在。
+- 不生成 tag 常量或公开 `Validate*` API，不生成 `Tag*` / `Value*` / `Project*` 辅助函数。旧管线为元数据与跨包 ABI 生成的这些入口在新管线里都不存在。
 
 ### 1.1 P4 的类型锚与实例适配
 
@@ -63,7 +63,7 @@ if v == nil { panic("goxide: match on nil EE") }
 
 当前值属于本 enum 的一个变体且外层存储有效时返回 true；nil 接口、typed-nil 变体、未知外层变体，以及空 enum 的任何值返回 false。检查不遍历 payload、不执行用户方法，也不使用反射或 recover。Option/Result 按其实际表示检查外层；None 和 Some(nil) 都是有效外层值。
 
-显式检查可用于 serde 等库返回自己的错误。后续 `match` 仍执行本节原有检查，不把此前返回 true 当作永久证明；不生成每类型 `Validate*` 包装。完整使用边界见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#5-serde-迁移所需的普通表达性)。
+显式检查可用于 serde 等库返回自己的错误。后续 `match` 仍执行本节原有检查，不把此前返回 true 当作永久证明；普通可命名输入在调用处检查；只有跨包私有 enum、私有变体或私有类型实参无法在调用处命名时，才按需在 enum 定义包生成编译器内部检查函数。Go 自动推导类型实参，私有变体名留在定义包，不新增 Goxide 公开 API。完整使用边界见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#5-serde-迁移所需的普通表达性)。
 
 ## 3. match 降低
 

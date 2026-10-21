@@ -5,8 +5,8 @@
 | 状态 | 范围 |
 | --- | --- |
 | P4 | 非泛型 trait、本包具体 struct/enum 的 impl、三种 self 接收权限、普通关联类型、单 trait 泛型约束、空 carrier、运行时 wrapper 和 Go 适配。 |
-| 已确认，待实现 | [Go 成员 sugar](#go-成员-sugar)：按独立分发模块配置，默认开启；所有 impl 使用相同生成规则。 |
-| 已确认，实施中 | [条件 impl 与按需实例化](../rfcs/0031-generic-protocol-impls.md)：多约束、具体 impl 直接生成、条件实例由 Goxide 实际请求引出；Go 使用明确普通入口。 |
+| 支持 | [Go 成员 sugar](#go-成员-sugar)：按独立分发模块配置，默认开启；所有 impl 使用相同生成规则。 |
+| 支持 | [条件 impl 与按需实例化](../rfcs/0031-generic-protocol-impls.md)：多约束、具体 impl 直接生成、条件实例由 Goxide 实际请求引出；Go 使用明确普通入口。 |
 | 后续 | 泛型 trait、GAT、默认关联类型、默认方法和特化。 |
 
 状态编号见[决策登记](decisions.md)。有体实现写在基础类型 T 上，通过成员的 `self Self` / `self &Self` / `self &mut Self` 区分传值、只读和可写接收者。`declare impl` 的原生 T / *T 方法集按精确 Go 类型核对，不把原生指针视为获得引用权限。见[源级权限约束](overview.md#35-源级权限与-go-表示必须分开)。
@@ -221,13 +221,13 @@ P4 的工厂采用 `As<Type><Trait>`，helper 采用 `As<Trait>` / `For<Type>`�
 
 ### 条件实现与 Go 泛型边界
 
-设计已确认，实施中，完整规则见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#3-转译范围需求闭包与-go-入口)。具体 impl 在前提检查通过后直接生成；带待定协议条件的模板按当前转译范围的实际请求递归实例化。普通 Go 能直接表达的泛型继续保留，`Box[T any]` 不因 `impl[T Default] Default for Box[T]` 收紧 T。
+已实现，完整规则见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#3-转译范围需求闭包与-go-入口)。具体 impl 在前提检查通过后直接生成；带待定协议条件的模板按当前转译范围的实际请求递归实例化。普通 Go 能直接表达的泛型继续保留，`Box[T any]` 不因 `impl[T Default] Default for Box[T]` 收紧 T。
 
 Go 使用者通过 Goxide 明确导出的普通函数使用条件能力，例如 `EncodeRoot` / `DecodeRoot` 或 `DefaultUserBox`。这些入口确定目标类型及所需条件；Go 调用者不传 Ops、不引用实例哈希名。现有具体协议入口仍完整保留。实例化的 `Box[User]` 不单独获得 Go 专属 receiver 方法；sugar 仍遵循下节的本地目标与接收者规则。
 
 ### Go 成员 sugar
 
-状态：**设计已确认，待实现**。sugar 是供 Go 调用者使用的 trait 实例成员转发，例如 `c.Debug()` 转到已选定的 Debug 实现。业务仍由该 impl 的 wrapper 或静态证据入口承载；可用 As 视图时，转发形如 `c.AsDebug().Debug()`。接收权限、参数和结果沿用原成员，借用必须保留真实对象或 enum owner，不为生成短方法复制取址。
+状态：**支持**。sugar 是供 Go 调用者使用的 trait 实例成员转发，例如 `c.Debug()` 转到已选定的 Debug 实现。业务仍由该 impl 的 wrapper 或静态证据入口承载；可用 As 视图时，转发形如 `c.AsDebug().Debug()`。接收权限、参数和结果沿用原成员，借用必须保留真实对象或 enum owner，不为生成短方法复制取址。
 
 是否生成 sugar 由独立分发模块的作者选择，默认开启，适用于同模块 `.gox` / `.go` 混写和生成 Go dist 发布。模块内各包、lib/bin/example 使用同一有效值，`gen/transpile/build/run/test` 使用同一默认与优先级；清单、CLI 和依赖边界见 [sugar 配置](toml-manifest.md#go-成员-sugar-配置)。关闭时仍生成协议要求的 wrapper、marker、固定工厂、As/For 和 carrier，保留用户自己声明的固有方法。
 

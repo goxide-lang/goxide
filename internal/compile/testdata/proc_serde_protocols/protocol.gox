@@ -1,0 +1,110 @@
+package codecs
+pub use serde::Serializer;
+pub use serde::Deserializer;
+pub use serde::SeqAccess;
+pub use serde::MapAccess;
+pub use serde::EnumAccess;
+pub use serde::VariantAccess;
+pub use serde::VisitorFuncs;
+pub use serde::ReadString;
+pub use serde::NewError;
+pub use serde::AtField;
+pub use serde::AtIndex;
+pub use serde::AtVariant;
+pub use serde::Type;
+pub use serde::Range;
+pub use serde::MissingField;
+pub use serde::DuplicateField;
+pub use serde::UnknownVariant;
+use serde;
+pub trait Serialize { func serialize(self &Self, serializer serde::Serializer) error }
+pub trait Deserialize {
+ func deserialize(deserializer serde::Deserializer) (Self,error)
+ func missing() (Self,bool)
+}
+pub func Write[T Serialize](value &T, serializer serde::Serializer) error { return Serialize::serialize(value,serializer) }
+pub func Read[T Deserialize](deserializer serde::Deserializer) (T,error) { return T::deserialize(deserializer) }
+pub func Missing[T Deserialize]() (T,bool) { return T::missing() }
+impl Serialize for int { func serialize(self &Self, serializer serde::Serializer) error { return serializer.Int64(int64(*self)) } }
+impl Deserialize for int {
+ func deserialize(deserializer serde::Deserializer) (Self,error) {
+  value,err:=serde::ReadInt64(deserializer)
+  if err!=nil { return 0,err }
+  if int64(int(value))!=value { return 0,serde::NewError(serde::Range,"int overflow") }
+  return int(value),nil
+ }
+ func missing() (Self,bool) { return 0,false }
+}
+impl[T any] Serialize for []T where T:Serialize {
+ func serialize(self &Self, serializer serde::Serializer) error {
+  sequence,err:=serializer.Seq(len(*self)); if err!=nil { return err }
+  for index:=range *self {
+   if err:=sequence.Element(func(child serde::Serializer)error{return Write(&(*self)[index],child)});err!=nil{return serde::AtIndex(err,index)}
+  }
+  return sequence.End()
+ }
+}
+impl[T any] Deserialize for []T where T:Deserialize {
+ func deserialize(deserializer serde::Deserializer) (Self,error) {
+  result:=make([]T,0)
+  err:=deserializer.Seq(serde::VisitorFuncs{OnSeq:func(sequence serde::SeqAccess)error{
+   for {
+    more,err:=sequence.NextElement(func(child serde::Deserializer)error{
+     value,err:=Read[T](child);if err!=nil{return serde::AtIndex(err,len(result))};result=append(result,value);return nil
+    })
+    if err!=nil{return err};if !more{break}
+   }
+   return nil
+  }})
+  return result,err
+ }
+ func missing() (Self,bool) { var zero Self;return zero,false }
+}
+impl[T any,const N int] Serialize for [N]T where T:Serialize {
+ func serialize(self &Self, serializer serde::Serializer) error {
+  sequence,err:=serializer.Seq(len(*self));if err!=nil{return err}
+  for index:=range *self {
+   if err:=sequence.Element(func(child serde::Serializer)error{return Write(&(*self)[index],child)});err!=nil{return serde::AtIndex(err,index)}
+  }
+  return sequence.End()
+ }
+}
+impl[T any,const N int] Deserialize for [N]T where T:Deserialize {
+ func deserialize(deserializer serde::Deserializer) (Self,error) {
+  var result [N]T
+  index:=0
+  err:=deserializer.Seq(serde::VisitorFuncs{OnSeq:func(sequence serde::SeqAccess)error{
+   for {
+    more,err:=sequence.NextElement(func(child serde::Deserializer)error{
+     if index>=len(result){return serde::NewError(serde::Range,"array too long")}
+     value,err:=Read[T](child);if err!=nil{return serde::AtIndex(err,index)};result[index]=value;index++;return nil
+    })
+    if err!=nil{return err};if !more{break}
+   }
+   if index!=len(result){return serde::NewError(serde::Range,"array too short")}
+   return nil
+  }})
+  return result,err
+ }
+ func missing() (Self,bool) { var zero Self;return zero,false }
+}
+impl[T any] Serialize for Option[T] where T:Serialize {
+ func serialize(self &Self, serializer serde::Serializer) error {
+  if !enum_valid(*self){return serde::NewError(serde::Type,"invalid Option")}
+  return match &*self {
+   Option[T]::None=>serializer.None(),
+   Option[T]::Some(value)=>serializer.Some(func(child serde::Serializer)error{return Write(value,child)}),
+  }
+ }
+}
+impl[T any] Deserialize for Option[T] where T:Deserialize {
+ func deserialize(deserializer serde::Deserializer) (Self,error) {
+  result:=Option[T]::None
+  err:=deserializer.Option(serde::VisitorFuncs{
+   OnNone:func()error{result=Option[T]::None;return nil},
+   OnSome:func(child serde::Deserializer)error{value,err:=Read[T](child);if err!=nil{return err};result=Option[T]::Some(value);return nil},
+  })
+  return result,err
+ }
+ func missing() (Self,bool) { return Option[T]::None,true }
+}

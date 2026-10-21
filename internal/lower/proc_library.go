@@ -155,6 +155,15 @@ func (i *moduleImporter) checkProcRuntimeUses(resolved *resolve.Result) error {
 			packagePath := path.Dir(target)
 			if symbol.Kind == resolve.Module || symbol.Kind == resolve.Import {
 				packagePath = target
+			} else if len(symbol.Target) > 1 && procExpansion(origin.Expn) {
+				// A canonical item route can include a type, trait, or enum before
+				// the selected member. Recover its declaration rather than treating
+				// those item names as directories in the runtime import path.
+				last := len(symbol.Target) - 1
+				members := i.lookup(symbol.Target[:last], resolve.Key{Name: symbol.Target[last], Ctx: symbol.Name.Ctx}, map[string]bool{})
+				if len(members) == 1 && members[0].symbol != nil && members[0].symbol.Decl.File != "" {
+					packagePath = path.Dir(members[0].symbol.Decl.File)
+				}
 			}
 			if requirement, ok := i.namespace(symbol.Target); ok {
 				target = requirement.namespace.PackagePath

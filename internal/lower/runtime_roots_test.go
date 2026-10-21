@@ -231,6 +231,54 @@ func TestRuntimeRootGoNamespaceWithoutRootPackage(t *testing.T) {
 	}
 }
 
+func TestRuntimeRootStaticMembersAndVariants(t *testing.T) {
+	_, library, _ := compileProcFixture(t, procFixtureSource)
+	const runtimePath = "example.org/item-runtime"
+	root := lower.RuntimeRoot{LogicalModule: runtimePath, BindingID: "selected-runtime", Namespace: paths.Namespace{PackagePath: runtimePath, ModulePath: runtimePath}}
+	for _, test := range []struct{ name, suffix, expression, want string }{
+		{"static method", "::Factory::Value()", "macros::identity!()", ""},
+		{"enum variant", "::Choice::Item(42)", "runtime::Read(macros::identity!())", ""},
+		{"private static method", "::Factory::secret()", "macros::identity!()", "private inherent member is not visible"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			library.Run = procFixtureHost(pm.Entry{Name: "identity", Function: func(ctx pm.Context, _ public.TokenStream) pm.Output {
+				return runtimeRootOutput(t, ctx, runtimePath, test.suffix)
+			}})
+			base := t.TempDir()
+			consumer, runtime := filepath.Join(base, "consumer"), filepath.Join(base, "runtime")
+			writeDiagnosticModuleFile(t, consumer, "go.mod", []byte("module consumer\ngo 1.27\nrequire "+runtimePath+" v0.0.0\nreplace "+runtimePath+" => ../runtime\n"))
+			writeDiagnosticModuleFile(t, consumer, "main.gox", []byte("package main\nuse macros; use runtime;\nfunc main() { println("+test.expression+") }\n"))
+			writeDiagnosticModuleFile(t, runtime, "go.mod", []byte("module "+runtimePath+"\ngo 1.27\n"))
+			writeDiagnosticModuleFile(t, runtime, "lib.gox", []byte(`package runtime
+pub type Factory struct {}
+impl Factory {
+ pub func Value() int { return 42 }
+ func secret() int { return 99 }
+}
+pub enum Choice { Item(int) }
+pub func Read(value Choice) int { return match value { Choice::Item(n) => n } }
+`))
+			err := lower.CompileModules([]lower.Module{
+				{Path: "consumer", Dir: consumer, Config: testConfig(t), Roots: paths.Roots{"runtime": root.Namespace, "macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, ProcLibraries: []*lower.ProcLibrary{library}, RuntimeRoots: []lower.RuntimeRoot{root}},
+				{Path: runtimePath, Dir: runtime, RootPackage: runtimePath, Config: testConfig(t)},
+			})
+			if test.want != "" {
+				if err == nil || !strings.Contains(err.Error(), test.want) {
+					t.Fatalf("expected %q, got %v", test.want, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			runGo(t, consumer, "build", "./...")
+			if got := runGo(t, consumer, "run", "."); got != "42\n" {
+				t.Fatalf("generated item path output = %q", got)
+			}
+		})
+	}
+}
+
 func TestRuntimeRootCanonicalBuiltinDerive(t *testing.T) {
 	_, library, _ := compileProcFixture(t, procFixtureSource)
 	const owner = "github.com/goxide-lang/serde"

@@ -139,7 +139,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		f.Decls = append(f.Decls, e.deriveDeclarations()...)
 		f.Decls = append(f.Decls, e.errorDeclarations()...)
 		f.Decls = append(f.Decls, e.serdeDeclarations()...)
-		f.Decls = append(f.Decls, e.traitDeclarations()...)
+		f.Decls = e.traitDeclarations(f.Decls)
 		f.Decls = append(f.Decls, e.resultAdapters...)
 		f.Decls = append(f.Decls, e.flowHelpers...)
 		if e.err != nil {
@@ -367,6 +367,7 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	traitBodySources   map[goast.Decl]syntax.Node
 	enumValidHelpers   map[*check.Enum]bool
 	inferenceTypes     map[types.Type]*goast.Ident
 	functionFrame      *functionFrame

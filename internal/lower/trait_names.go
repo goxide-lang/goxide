@@ -34,6 +34,9 @@ type traitProgram struct {
 	helperFunctions   map[*syntax.FuncDecl]bool
 	helperImpls       map[*check.Impl]bool
 	inferredCalls     map[*syntax.FuncDecl]bool
+	boundBindings     map[*check.TraitBound]map[string]bool
+	implBindings      map[*check.Impl]map[string]bool
+	nativeBounds      map[*check.TraitBound]map[string]bool
 }
 
 type traitCarrier struct {
@@ -141,6 +144,7 @@ func prepareTraits(info *check.Info) *traitProgram {
 		p.prepareTemplateHelpers(info)
 		p.prepareInferenceCalls(info)
 	}
+	p.prepareBindings(info)
 	return p
 }
 

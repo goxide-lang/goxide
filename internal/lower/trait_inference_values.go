@@ -14,14 +14,8 @@ func (e *emitter) inferredMemberValue(selection *check.MemberSelection, receiver
 	}
 	p := newTraitInference(e)
 	captured := p.parameter(receiver, receiverType)
-	operation := p.operation(selection)
-	p.collect(selection.Signature)
-	previous := e.inferenceTypes
-	e.inferenceTypes = p.bodyTypes
-	ft, arguments := e.memberSignature(selection.Signature)
-	e.inferenceTypes = previous
-	arguments = append([]goast.Expr{captured}, arguments...)
-	value := &goast.FuncLit{Type: ft, Body: forwardBody(operation, arguments, selection.Signature)}
+	binder := p.binding(selection)
+	value := &goast.CallExpr{Fun: binder, Args: []goast.Expr{captured}}
 	return p.finish(value, selection.Signature), true
 }
 

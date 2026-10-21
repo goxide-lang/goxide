@@ -87,6 +87,10 @@ func (e *emitter) evidenceMethods(bounds []*check.TraitBound) []*goast.Field {
 				ft.Params.List = append([]*goast.Field{{Names: []*goast.Ident{goast.NewIdent("self")}, Type: e.goType(receiver)}}, ft.Params.List...)
 			}
 			methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(name)}, Type: ft})
+			if !member.Static && e.traits.boundNeedsBinding(bound, member.Name) {
+				selection := &check.MemberSelection{Member: member, Bound: bound, Signature: bound.MethodSignature(member)}
+				methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(traitBinding(member))}, Type: e.goType(e.bindingSignature(selection))})
+			}
 		}
 		for _, associated := range bound.Trait.Associated {
 			name := traitWitness(bound.Trait, associated.Name)

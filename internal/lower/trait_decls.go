@@ -38,7 +38,7 @@ func (e *emitter) traitDecl(n *syntax.TraitDecl) goast.Decl {
 	return &goast.GenDecl{Tok: gotoken.TYPE, Specs: []goast.Spec{spec}}
 }
 
-func (e *emitter) traitDeclarations() []goast.Decl {
+func (e *emitter) traitDeclarations(declarations []goast.Decl) []goast.Decl {
 	var out []goast.Decl
 	for _, impl := range e.traits.impls {
 		if impl.File != e.name {
@@ -50,11 +50,14 @@ func (e *emitter) traitDeclarations() []goast.Decl {
 			}
 			for _, m := range impl.Methods {
 				out = append(out, e.inherentDeclaration(m))
+				if e.traits.memberNeedsBinding(m) && !parameterizedImpl(impl) {
+					out = append(out, e.bindingDeclaration(m, nil))
+				}
 			}
 			continue
 		}
 		if parameterizedImpl(impl) {
-			if impl.Trait.Runtime {
+			if impl.Trait.Runtime || e.traits.implNeedsBindings(impl) {
 				out = append(out, e.templateRuntimeDeclarations(impl)...)
 			}
 		} else {
@@ -83,9 +86,39 @@ func (e *emitter) traitDeclarations() []goast.Decl {
 	}
 	out = append(out, e.sugarDeclarations()...)
 	for _, decl := range out {
+		if source := e.traitBodySources[decl]; source != nil {
+			e.anchor(decl, source)
+			// Keep source comments next to the business body. Only generated
+			// functions are inserted; existing declarations retain their order.
+			position := e.pos(source)
+			index := len(declarations)
+			for i, existing := range declarations {
+				existingPosition := existing.Pos()
+				if existingSource := e.traitBodySources[existing]; existingSource != nil {
+					existingPosition = e.pos(existingSource)
+				}
+				if existingPosition.IsValid() && existingPosition > position {
+					index = i
+					break
+				}
+			}
+			declarations = append(declarations, nil)
+			copy(declarations[index+1:], declarations[index:])
+			declarations[index] = decl
+			continue
+		}
 		clearTraitPositions(decl)
+		declarations = append(declarations, decl)
 	}
-	return out
+	return declarations
+}
+
+func (e *emitter) traitSourceBody(declaration *goast.FuncDecl, source syntax.Node) *goast.FuncDecl {
+	if e.traitBodySources == nil {
+		e.traitBodySources = make(map[goast.Decl]syntax.Node)
+	}
+	e.traitBodySources[declaration] = source
+	return declaration
 }
 
 func clearTraitPositions(node goast.Node) {
@@ -143,6 +176,9 @@ func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 		out = append(out, e.implOpsDeclarations(impl)...)
 	}
 	for _, m := range impl.Methods {
+		if impl.Declare {
+			out = append(out, e.declaredOperationDeclaration(m))
+		}
 		carrier := e.traits.carriers[impl.Base]
 		if carrier == nil || !carrierTarget(e.info, impl) {
 			// Existing non-carrier impls retain their exported free operation.
@@ -151,6 +187,9 @@ func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 			}
 		} else if carrier.file != e.name {
 			out = append(out, e.operationDeclaration(m, carrier))
+			if e.traits.memberNeedsBinding(m) {
+				out = append(out, e.bindingDeclaration(m, carrier))
+			}
 		}
 	}
 	return out
@@ -164,25 +203,13 @@ func (e *emitter) implOpsDeclarations(impl *check.Impl) []goast.Decl {
 		result := e.goType(impl.Associated[associated.Name])
 		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(traitWitness(impl.Trait, associated.Name)), Recv: receiverField("", e.implOpsType(impl)), Type: resultFunc(result), Body: &goast.BlockStmt{List: []goast.Stmt{varStmt(goast.NewIdent("value"), result, nil), &goast.ReturnStmt{Results: []goast.Expr{goast.NewIdent("value")}}}}})
 	}
-	legacyFree := !parameterizedImpl(impl) && impl.Base != nil && impl.Base.TypeParams().Len() == 0 && impl.Base.TypeArgs().Len() == 0
 	for _, member := range impl.Methods {
-		var declaration *goast.FuncDecl
-		if legacyFree {
-			ft, args := e.memberSignature(member.Signature)
-			if !member.Static {
-				receiver := impl.Target
-				if member.Receiver != check.ValueRef {
-					receiver = types.NewPointer(receiver)
-				}
-				ft.Params.List = append([]*goast.Field{{Names: []*goast.Ident{goast.NewIdent("self")}, Type: e.goType(receiver)}}, ft.Params.List...)
-				args = append([]goast.Expr{goast.NewIdent("self")}, args...)
-			}
-			declaration = &goast.FuncDecl{Name: goast.NewIdent(traitOperation(member)), Type: ft, Body: forwardBody(e.sourceGlobal(impl.File, e.traitFreeOperation(member)), args, member.Signature)}
-		} else {
-			declaration = e.operationDeclaration(member, &traitCarrier{name: name}).(*goast.FuncDecl)
-		}
+		declaration := e.operationDeclaration(member, &traitCarrier{name: name}).(*goast.FuncDecl)
 		declaration.Recv = receiverField("", e.implOpsType(impl))
 		out = append(out, declaration)
+		if e.traits.memberNeedsBinding(member) {
+			out = append(out, e.bindingDeclaration(member, &traitCarrier{name: name}))
+		}
 	}
 	return out
 }
@@ -241,7 +268,7 @@ func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {
 	if used {
 		decl.Body.List = append([]goast.Stmt{&goast.AssignStmt{Lhs: []goast.Expr{self}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{target}}}, decl.Body.List...)
 	}
-	return decl
+	return e.traitSourceBody(decl, m.Decl)
 }
 
 func (e *emitter) factoryDeclaration(impl *check.Impl) goast.Decl {
@@ -286,6 +313,9 @@ func (e *emitter) carrierDeclarations(carrier *traitCarrier) []goast.Decl {
 			// Bodies stay in the source impl file to retain its name-resolution context.
 			if impl.File == e.name {
 				out = append(out, e.operationDeclaration(m, carrier))
+				if e.traits.memberNeedsBinding(m) {
+					out = append(out, e.bindingDeclaration(m, carrier))
+				}
 			}
 			if m.Static && short[exportedName(m.GoName)] == 1 {
 				ft, args := e.memberSignature(m.Signature)
@@ -313,10 +343,10 @@ func (e *emitter) operationDeclaration(m *check.Member, carrier *traitCarrier) g
 	} else {
 		decl.Recv = receiverField("", goast.NewIdent(carrier.name))
 	}
-	if m.Static {
+	if !m.Impl.Declare {
 		decl.Type = &goast.FuncType{Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}
 		decl.Body = e.functionBody(decl.Type, m.Decl.Body)
-		return decl
+		return e.traitSourceBody(decl, m.Decl)
 	}
 	ft, args := e.memberSignature(m.Signature)
 	receiver := m.Impl.Target
@@ -351,7 +381,7 @@ func (e *emitter) inherentDeclaration(m *check.Member) goast.Decl {
 	} else {
 		e.generatedName(decl.Name.Name, m.Decl)
 	}
-	return decl
+	return e.traitSourceBody(decl, m.Decl)
 }
 
 func (e *emitter) facadeDeclarations(facade *traitFacade) []goast.Decl {

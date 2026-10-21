@@ -197,12 +197,16 @@ func (p *traitInference) callbacks(bounds []*check.TraitBound, evidence []check.
 					}
 				}
 			}
-			selection := &check.MemberSelection{Member: member, Impl: selected.Impl, Bound: selected.Bound}
+			selection := &check.MemberSelection{Member: member, Impl: selected.Impl, Bound: selected.Bound, Signature: member.Signature}
 			if selected.Bound != nil {
 				selection.Signature = selected.Bound.MethodSignature(method)
 			}
 			args = append(args, p.operation(selection))
 			parameters = append(parameters, operationSignature(selection))
+			if !method.Static && p.e.traits.boundNeedsBinding(bound, method.Name) {
+				args = append(args, p.binding(selection))
+				parameters = append(parameters, p.e.bindingSignature(selection))
+			}
 		}
 		for _, associated := range bound.Trait.Associated {
 			var typ types.Type

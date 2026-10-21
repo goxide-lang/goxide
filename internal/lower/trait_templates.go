@@ -44,6 +44,16 @@ func (e *emitter) templateCallbacks(bounds []*check.TraitBound) (*goast.FieldLis
 				parameter.Names = nil
 			}
 			parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(name)}, Type: ft})
+			if !method.Static && e.traits.boundNeedsBinding(bound, method.Name) {
+				bindingName := name + "Bind"
+				for e.reserved[bindingName] {
+					bindingName += "_"
+				}
+				e.reserved[bindingName] = true
+				names["bind:"+method.Name] = goast.NewIdent(bindingName)
+				selection := &check.MemberSelection{Member: method, Bound: bound, Signature: bound.MethodSignature(method)}
+				parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(bindingName)}, Type: e.goType(e.bindingSignature(selection))})
+			}
 		}
 		for _, associated := range bound.Trait.Associated {
 			base := "goxide" + typeTargetName(traitBoundTarget(bound)) + "Type" + exportedName(associated.Name)
@@ -95,7 +105,14 @@ func (e *emitter) callbackArguments(bounds []*check.TraitBound, evidence []check
 					}
 				}
 			}
-			args = append(args, e.operationFunction(&check.MemberSelection{Member: member, Impl: selected.Impl, Bound: selected.Bound}))
+			selection := &check.MemberSelection{Member: member, Impl: selected.Impl, Bound: selected.Bound, Signature: member.Signature}
+			if selected.Bound != nil {
+				selection.Signature = selected.Bound.MethodSignature(method)
+			}
+			args = append(args, e.operationFunction(selection))
+			if !method.Static && e.traits.boundNeedsBinding(bound, method.Name) {
+				args = append(args, e.bindingFunction(selection))
+			}
 		}
 		for _, associated := range bound.Trait.Associated {
 			args = append(args, e.associatedCallback(selected, bound, associated.Name))
@@ -259,6 +276,9 @@ func (e *emitter) templateImplDeclarations(impl *check.Impl) []goast.Decl {
 		}
 	}
 	for _, member := range impl.Methods {
+		if e.traits.memberNeedsBinding(member) {
+			out = append(out, e.templateBindingDeclaration(member))
+		}
 		if (len(impl.ConstArgs) != 0 || e.traits.helperImpls[impl]) && (impl.Trait != nil || len(impl.Requirements) != 0) {
 			out = append(out, e.templateOperationDeclaration(member)...)
 		}
@@ -280,7 +300,9 @@ func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
 			out = append(out, e.wrapperMethod(member))
 		}
 	}
-	out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", e.implWrapperType(impl)), Type: &goast.FuncType{Params: &goast.FieldList{}}, Body: &goast.BlockStmt{}})
+	if impl.Trait.Runtime {
+		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", e.implWrapperType(impl)), Type: &goast.FuncType{Params: &goast.FieldList{}}, Body: &goast.BlockStmt{}})
+	}
 	var elements []goast.Expr
 	elements = append(elements, &goast.KeyValueExpr{Key: goast.NewIdent("target"), Value: goast.NewIdent("target")})
 	for _, parameter := range parameters.List {
@@ -288,12 +310,16 @@ func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
 			elements = append(elements, &goast.KeyValueExpr{Key: goast.NewIdent(parameterName.Name), Value: goast.NewIdent(parameterName.Name)})
 		}
 	}
-	ft := &goast.FuncType{Params: receiverField("target", e.goType(captureType(impl))), Results: &goast.FieldList{List: []*goast.Field{{Type: e.traitViewType(impl)}}}}
+	resultType := e.implWrapperType(impl)
+	if impl.Trait.Runtime {
+		resultType = e.traitViewType(impl)
+	}
+	ft := &goast.FuncType{Params: receiverField("target", e.goType(captureType(impl))), Results: &goast.FieldList{List: []*goast.Field{{Type: resultType}}}}
 	factoryBody := &goast.FuncLit{Type: ft, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CompositeLit{Type: e.implWrapperType(impl), Elts: elements}}}}}}
 	factoryName := e.traitFactoryName(impl)
 	e.generatedName(factoryName, impl.Decl)
 	out = append(out, &goast.FuncDecl{Name: goast.NewIdent(factoryName), Type: &goast.FuncType{TypeParams: e.templateImplParameters(impl), Params: &goast.FieldList{List: append(e.templateImplWitnessParameters(impl), parameters.List...)}, Results: &goast.FieldList{List: []*goast.Field{{Type: ft}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{factoryBody}}}}})
-	if impl.Base != nil && e.localTypePackage(impl.Base.Obj().Pkg()) && nativeInherentImpl(impl) {
+	if impl.Trait.Runtime && impl.Base != nil && e.localTypePackage(impl.Base.Obj().Pkg()) && nativeInherentImpl(impl) {
 		e.generatedMember(impl.Base, traitAs(impl), impl)
 		out = append(out, e.asDeclaration(impl, captureType(impl), nil))
 	}

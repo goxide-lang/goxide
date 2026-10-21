@@ -36,6 +36,9 @@ func (e *emitter) traitView(n syntax.Expr, value goast.Expr) goast.Expr {
 
 func (e *emitter) operationFunction(selection *check.MemberSelection) goast.Expr {
 	m := selection.Member
+	if selection.Impl != nil && selection.Impl.Declare {
+		return &goast.CallExpr{Fun: e.sourceGlobal(selection.Impl.File, e.declaredOperationName(m))}
+	}
 	if selection.Bound != nil {
 		if callback := e.callbackOperation(selection.Bound, m); callback != nil {
 			return callback
@@ -100,13 +103,7 @@ func (e *emitter) memberExpr(selection *check.MemberSelection) goast.Expr {
 	if inferred, ok := e.inferredMemberValue(selection, receiver); ok {
 		return inferred
 	}
-	// Capture a method value's receiver now, including value-copy semantics.
-	ft, args := e.memberSignature(selection.Signature)
-	captured := e.fresh("Receiver")
-	args = append([]goast.Expr{captured}, args...)
-	inner := &goast.FuncLit{Type: ft, Body: forwardBody(e.operationFunction(selection), args, selection.Signature)}
-	outer := &goast.FuncLit{Type: &goast.FuncType{Params: receiverField(captured.Name, e.goType(e.memberReceiverType(selection))), Results: &goast.FieldList{List: []*goast.Field{{Type: ft}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{inner}}}}}
-	return &goast.CallExpr{Fun: outer, Args: []goast.Expr{receiver}}
+	return &goast.CallExpr{Fun: e.bindingFunction(selection), Args: []goast.Expr{receiver}}
 }
 
 func (e *emitter) memberCall(call *syntax.CallExpr) (goast.Expr, bool) {
@@ -150,6 +147,26 @@ func (e *emitter) memberCall(call *syntax.CallExpr) (goast.Expr, bool) {
 		}
 	}
 	if !nativeMember(selection) {
+		if selection.Impl != nil && selection.Impl.Declare || e.traits.nativeBoundCall(selection.Bound, m.Name) {
+			bound := *selection
+			if bound.MethodExpr {
+				var parameters []*types.Var
+				for i := 1; i < bound.Signature.Params().Len(); i++ {
+					parameters = append(parameters, bound.Signature.Params().At(i))
+				}
+				bound.Signature = types.NewSignatureType(nil, nil, nil, types.NewTuple(parameters...), bound.Signature.Results(), bound.Signature.Variadic())
+				bound.MethodExpr = false
+			}
+			value, ok := e.inferredMemberValue(&bound, args[0])
+			if !ok {
+				value = &goast.CallExpr{Fun: e.bindingFunction(&bound), Args: args[:1]}
+			}
+			result := &goast.CallExpr{Fun: value, Args: args[1:]}
+			if call.Ellipsis {
+				result.Ellipsis = 1
+			}
+			return result, true
+		}
 		if inferred, ok := e.inferredOperationCall(selection, args, call.Ellipsis); ok {
 			return inferred, true
 		}

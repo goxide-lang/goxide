@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
@@ -34,7 +35,9 @@ func Crash[T Copy](value &T) {
 func Other() {}
 func main() { values := []int{1}; Crash[[]int](&values) }
 `
-	output, err := lower.CompilePackage(map[string][]byte{"review.gox": []byte(source)}, "review", nil, nil, lower.PackageOptions{LineDirectives: true})
+	configuration := testdeps.Configuration()
+	imports := typecheck.NewImporter("review.gox", typecheck.ImporterOptions{Config: configuration})
+	output, err := lower.CompilePackage(map[string][]byte{"review.gox": []byte(source)}, "review", imports, nil, lower.PackageOptions{LineDirectives: true, Config: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,6 +118,9 @@ func main() {
 `,
 	}
 	input := t.TempDir()
+	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module review\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for name, source := range sources {
 		path := filepath.Join(input, strings.TrimPrefix(name, "review/"))
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -134,9 +140,6 @@ func main() {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(again)
-	if err := testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module review\n\ngo 1.27\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	for _, name := range []string{"main.go", "lib/lib.go"} {
 		data, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {

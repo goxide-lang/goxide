@@ -1,0 +1,18 @@
+package business
+use model;
+use protocol::facade::Into;
+use protocol;
+
+pub func HiddenRoundTrip(value int) int {
+    hidden:=model::Secret(value)
+    return protocol::Convert[int](hidden)
+}
+pub func HiddenSource(value int) model::Count {
+    return model::Count::from(model::PrivateSource(value))
+}
+pub func WrapAll[T any](values []T) []T {
+    wrapped:=model::Wrap[T]{Values:values}
+    return wrapped.into::<Into[[]T]>()
+}
+pub func Ints(values []int) []int { return WrapAll(values) }
+pub func Texts(values []string) []string { return WrapAll(values) }

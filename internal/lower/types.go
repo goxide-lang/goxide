@@ -147,6 +147,9 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	case *syntax.SliceType:
 		return &goast.ArrayType{Lbrack: e.pos(n), Elt: e.typ(n.Elem)}
 	case *syntax.ArrayType:
+		if parameter := e.validationConstParameter(n.Len); parameter != nil {
+			return e.validation.arrayType(parameter, e.typ(n.Elem))
+		}
 		length := e.expr(n.Len)
 		if n.Ellipsis {
 			length = &goast.Ellipsis{Ellipsis: e.pos(n) + 1}

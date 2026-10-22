@@ -10,6 +10,8 @@ import (
 // The Go compiler remains responsible for reporting type errors.
 type memberRenamer struct {
 	sources map[types.Object]string
+	prepare func(*types.Package)
+	report  func(error)
 }
 
 func (r *memberRenamer) rename(packagePath string, fset *gotoken.FileSet, files []*goast.File, names map[*goast.Ident]string, importer types.Importer, sizes types.Sizes) *types.Package {
@@ -37,8 +39,16 @@ func (r *memberRenamer) rename(packagePath string, fset *gotoken.FileSet, files 
 			Selections: map[*goast.SelectorExpr]*types.Selection{},
 			Types:      map[goast.Expr]types.TypeAndValue{},
 		}
-		config := types.Config{Importer: importer, Sizes: sizes, Error: func(error) {}}
-		pkg, _ := config.Check(packagePath, fset, files, info)
+		var diagnostics []error
+		config := types.Config{Importer: importer, Sizes: sizes, Error: func(err error) { diagnostics = append(diagnostics, err) }}
+		var pkg *types.Package
+		if r.prepare == nil {
+			pkg, _ = config.Check(packagePath, fset, files, info)
+		} else {
+			pkg = types.NewPackage(packagePath, files[0].Name.Name)
+			r.prepare(pkg)
+			_ = types.NewChecker(&config, fset, pkg, info).Files(files)
+		}
 		desired := map[types.Object]string{}
 		sources := make(map[types.Object]string, len(r.sources)+len(names))
 		for obj, name := range r.sources {
@@ -122,6 +132,11 @@ func (r *memberRenamer) rename(packagePath string, fset *gotoken.FileSet, files 
 			rename(id, name)
 		}
 		if !changed {
+			if r.report != nil {
+				for _, diagnostic := range diagnostics {
+					r.report(diagnostic)
+				}
+			}
 			for id, source := range originals {
 				if obj := memberOrigin(info.Defs[id]); obj != nil {
 					r.sources[obj] = source

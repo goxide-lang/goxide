@@ -14,7 +14,7 @@ func (e *emitter) enumTraitMethods(target *types.Named) []*goast.Field {
 		fields = append(fields, &goast.Field{Names: []*goast.Ident{goast.NewIdent(typeCarrierAnchor)}, Type: e.carrierAnchor(carrier, e.goType(target)).Type})
 	}
 	for _, impl := range e.traits.impls {
-		if impl.Base == target && impl.Trait != nil && impl.Trait.Runtime && impl.Capture == check.ValueRef && types.Identical(impl.Target, target) {
+		if impl.Base == target && impl.Trait != nil && impl.Trait.Runtime && !parameterizedTrait(impl.Trait) && impl.Capture == check.ValueRef && types.Identical(impl.Target, target) {
 			e.generatedMember(target, traitAs(impl), impl)
 			fields = append(fields, &goast.Field{Names: []*goast.Ident{goast.NewIdent(traitAs(impl))}, Type: resultFunc(e.traitViewType(impl))})
 		}
@@ -28,7 +28,7 @@ func (e *emitter) enumTraitDeclarations(target *types.Named, receiver goast.Expr
 		out = append(out, e.carrierAnchor(carrier, receiver))
 	}
 	for _, impl := range e.traits.impls {
-		if impl.Base == target && impl.Trait != nil && impl.Trait.Runtime && impl.Capture == check.ValueRef && types.Identical(impl.Target, target) {
+		if impl.Base == target && impl.Trait != nil && impl.Trait.Runtime && !parameterizedTrait(impl.Trait) && impl.Capture == check.ValueRef && types.Identical(impl.Target, target) {
 			method := e.asDeclaration(impl, target, nil)
 			method.Recv = receiverField("target", receiver)
 			out = append(out, method)

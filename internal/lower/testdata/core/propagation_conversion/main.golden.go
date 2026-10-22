@@ -1,7 +1,7 @@
 package main
 
-import sum "github.com/goxide-lang/std/sum"
 import fmt "fmt"
+import sum "github.com/goxide-lang/std/sum"
 
 type NilError struct{}
 
@@ -15,8 +15,15 @@ var conversions int
 var assignableConversions int
 var continued bool
 
-func FromWrapped(err error) Wrapped    { conversions++; return Wrapped{Cause: err} }
-func FromAssignable(err Wrapped) error { assignableConversions++; return err }
+func (GoxideWrappedFromErrorOps_aab95634) From(err error) Wrapped {
+	conversions++
+	return Wrapped{Cause: err}
+}
+
+func (GoxideErrorFromWrappedOps_0374e4f6) From(err Wrapped) error {
+	assignableConversions++
+	return err
+}
 
 func source() sum.Result[int, error] {
 	var err *NilError
@@ -31,7 +38,7 @@ func converted() sum.Result[string, Wrapped] {
 		case 1:
 			gxOk2 = sum.ValueOk(gxTry1)
 		case 2:
-			return sum.NewErr[string, Wrapped](FromWrapped(sum.ValueErr(gxTry1)))
+			return sum.NewErr[string, Wrapped]((GoxideWrappedFromErrorOps_aab95634{}).From(sum.ValueErr(gxTry1)))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
@@ -82,4 +89,9 @@ func main() {
 	wrapper, ok := err.(Wrapped)
 	p, typed := wrapper.Cause.(*NilError)
 	fmt.Println(conversions, assignableConversions, ok, typed && p == nil && wrapper.Cause != nil, continued)
+}
+
+type GoxideWrappedFromErrorOps_aab95634 struct {
+}
+type GoxideErrorFromWrappedOps_0374e4f6 struct {
 }

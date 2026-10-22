@@ -8,10 +8,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
-type proofObligation struct {
-	target types.Type
-	trait  *Trait
-}
+type proofObligation struct{ goal *TraitBound }
 
 func (c *checker) genericParameters(g *ast.GenericParams) []*types.TypeParam {
 	c.constParameters(g)
@@ -24,11 +21,42 @@ func (c *checker) genericParameters(g *ast.GenericParams) []*types.TypeParam {
 			for _, id := range group.Names {
 				p := types.NewTypeParam(types.NewTypeName(0, c.pkg, id.Name, nil), anyType)
 				c.out.Symbols[c.symbol(id)] = p
+				if c.out.parameterIdentities == nil {
+					c.out.parameterIdentities = map[*types.TypeParam]string{}
+				}
+				c.out.parameterIdentities[p] = c.genericParameterIdentity(g, len(params))
 				params = append(params, p)
 			}
 		}
 	}
 	return params
+}
+
+func (c *checker) genericParameterIdentity(g *ast.GenericParams, index int) string {
+	owner := ""
+	ast.Walk(c.file.AST, func(node ast.Node) bool {
+		switch n := node.(type) {
+		case *ast.FuncDecl:
+			if n.Generics == g {
+				owner = "func:" + n.Name.Name
+			}
+		case *ast.TypeDecl:
+			if n.Generics == g {
+				owner = "type:" + n.Name.Name
+			}
+		case *ast.TraitDecl:
+			if n.Generics == g {
+				owner = "trait:" + n.Name.Name
+			}
+		case *ast.EnumDecl:
+			if n.Generics == g {
+				owner = "enum:" + n.Name.Name
+			}
+		}
+		return true
+	})
+	path := c.out.CanonicalPackagePath(c.pkg)
+	return fmt.Sprintf("%s::%s:%d", path, owner, index)
 }
 
 func (c *checker) traitBound(target types.Type, node ast.Type, used map[string]bool) *TraitBound {
@@ -45,6 +73,8 @@ func (c *checker) traitBound(target types.Type, node ast.Type, used map[string]b
 		b.Param, _ = target.(*types.TypeParam)
 	}
 	last := path.Path.Segments[len(path.Path.Segments)-1]
+	b.Inputs, b.InputNodes, b.inputPermissions = c.readTraitInputs(last.Args, trait, node)
+	b.targetPermission = c.newPermissionChecker().fromGo(target)
 	c.readAssociated(last.Args, trait, b.Associated, node)
 	if last.Args != nil {
 		for _, arg := range last.Args.Args {
@@ -71,6 +101,11 @@ func (c *checker) traitBound(target types.Type, node ast.Type, used map[string]b
 		b.Associated[a.Name] = p
 		b.Projected = append(b.Projected, p)
 	}
+	b.associatedPermissions = map[string]*permission{}
+	p := c.newPermissionChecker()
+	for name := range b.Associated {
+		b.associatedPermissions[name] = p.boundAssociated(b, name, nil)
+	}
 	return b
 }
 
@@ -87,7 +122,7 @@ func projectedBinding(bound *TraitBound, name string) *types.TypeParam {
 // not create a second output identity; explicit bindings refine that identity.
 func (c *checker) addBound(list *[]*TraitBound, bound *TraitBound, node ast.Node) *TraitBound {
 	for _, old := range *list {
-		if old.Trait != bound.Trait || !types.Identical(old.Target, bound.Target) {
+		if !c.sameApplication(old, bound) {
 			continue
 		}
 		for _, a := range old.Trait.Associated {
@@ -98,11 +133,9 @@ func (c *checker) addBound(list *[]*TraitBound, bound *TraitBound, node ast.Node
 			}
 			if leftParam != nil {
 				sub := map[*types.TypeParam]types.Type{leftParam: right}
+				sources := map[*types.TypeParam]*permission{leftParam: c.newPermissionChecker().boundAssociated(bound, a.Name, nil)}
 				for _, existing := range *list {
-					existing.Target = substitute(existing.Target, sub, c.out)
-					for name, typ := range existing.Associated {
-						existing.Associated[name] = substitute(typ, sub, c.out)
-					}
+					*existing = *c.substituteBoundApplication(existing, sub, nil, sources)
 					var projected []*types.TypeParam
 					for _, param := range existing.Projected {
 						if param != leftParam {
@@ -115,6 +148,7 @@ func (c *checker) addBound(list *[]*TraitBound, bound *TraitBound, node ast.Node
 					c.out.TypeOverrides[typ] = substitute(override, sub, c.out)
 				}
 				old.AssociatedNodes[a.Name] = bound.AssociatedNodes[a.Name]
+				old.associatedPermissions[a.Name] = sources[leftParam]
 				continue
 			}
 			conflict := !types.Identical(left, right)
@@ -131,7 +165,7 @@ func (c *checker) addBound(list *[]*TraitBound, bound *TraitBound, node ast.Node
 	*list = append(*list, bound)
 	if bound.Param != nil {
 		for _, old := range c.bounds[bound.Param] {
-			if old.Trait == bound.Trait {
+			if c.sameApplication(old, bound) {
 				return bound
 			}
 		}
@@ -140,8 +174,8 @@ func (c *checker) addBound(list *[]*TraitBound, bound *TraitBound, node ast.Node
 	return bound
 }
 
-func freshRequirement(bound *TraitBound, sub map[*types.TypeParam]types.Type, used map[string]bool, pkg *types.Package) *TraitBound {
-	copy := substituteBound(bound, sub)
+func (c *checker) freshRequirement(bound *TraitBound, sub map[*types.TypeParam]types.Type, sources map[*types.TypeParam]*permission, used map[string]bool, pkg *types.Package) *TraitBound {
+	copy := c.substituteBoundApplication(bound, sub, nil, sources)
 	copy.Projected = nil
 	fresh := map[*types.TypeParam]types.Type{}
 	for _, param := range bound.Projected {
@@ -157,7 +191,7 @@ func freshRequirement(bound *TraitBound, sub map[*types.TypeParam]types.Type, us
 		fresh[param] = next
 		copy.Projected = append(copy.Projected, next)
 	}
-	copy.Target = substitute(copy.Target, fresh, copy.info)
+	copy = substituteBound(copy, fresh)
 	for name, typ := range copy.Associated {
 		copy.Associated[name] = substitute(typ, fresh, copy.info)
 	}
@@ -166,8 +200,12 @@ func freshRequirement(bound *TraitBound, sub map[*types.TypeParam]types.Type, us
 
 func (c *checker) sourceRequirements(g *ast.GenericParams, where *ast.WhereClause, params []*types.TypeParam, used map[string]bool, node ast.Node) []*TraitBound {
 	var result []*TraitBound
-	add := func(target types.Type, constraint ast.Type) {
+	add := func(target types.Type, targetNode ast.Type, constraint ast.Type) {
 		if b := c.traitBound(target, constraint, used); b != nil {
+			b.TargetNode = targetNode
+			if targetNode != nil {
+				b.targetPermission = c.newPermissionChecker().astType(targetNode, nil)
+			}
 			c.addBound(&result, b, node)
 			return
 		}
@@ -190,7 +228,7 @@ func (c *checker) sourceRequirements(g *ast.GenericParams, where *ast.WhereClaus
 			}
 			for range group.Names {
 				if group.Constraint != nil {
-					add(params[index], group.Constraint)
+					add(params[index], nil, group.Constraint)
 				}
 				index++
 			}
@@ -200,7 +238,7 @@ func (c *checker) sourceRequirements(g *ast.GenericParams, where *ast.WhereClaus
 		for _, predicate := range where.Predicates {
 			target := c.typ(predicate.Type)
 			for _, constraint := range predicate.Bounds {
-				add(target, constraint)
+				add(target, predicate.Type, constraint)
 			}
 		}
 	}
@@ -232,6 +270,10 @@ func substituteBoundConstants(b *TraitBound, sub map[*types.TypeParam]types.Type
 		}
 	}
 	copy.Target = b.info.Substitute(b.Target, sub, constants)
+	copy.Inputs = nil
+	for _, input := range b.Inputs {
+		copy.Inputs = append(copy.Inputs, b.info.Substitute(input, sub, constants))
+	}
 	copy.Param = nil
 	if _, array := b.info.ArrayOf(copy.Target); !array {
 		copy.Param, _ = copy.Target.(*types.TypeParam)
@@ -240,7 +282,54 @@ func substituteBoundConstants(b *TraitBound, sub map[*types.TypeParam]types.Type
 	for name, t := range b.Associated {
 		copy.Associated[name] = b.info.Substitute(t, sub, constants)
 	}
+	copy.Projected = nil
+	for _, parameter := range b.Projected {
+		if projected, ok := b.info.Substitute(parameter, sub, constants).(*types.TypeParam); ok && !b.info.isArray(projected) {
+			copy.Projected = append(copy.Projected, projected)
+		}
+	}
+	c := &checker{out: b.info}
+	copy.targetPermission = c.substituteSourcePermission(b.targetPermission, sub, constants, b.permissionSubstitution)
+	copy.inputPermissions = nil
+	for _, source := range b.inputPermissions {
+		copy.inputPermissions = append(copy.inputPermissions, c.substituteSourcePermission(source, sub, constants, b.permissionSubstitution))
+	}
+	copy.associatedPermissions = map[string]*permission{}
+	for name, source := range b.associatedPermissions {
+		copy.associatedPermissions[name] = c.substituteSourcePermission(source, sub, constants, b.permissionSubstitution)
+	}
 	return &copy
+}
+
+func (c *checker) substituteBoundApplication(bound *TraitBound, sub map[*types.TypeParam]types.Type, constants map[*ConstParam]ConstValue, sources map[*types.TypeParam]*permission) *TraitBound {
+	copy := *bound
+	copy.permissionSubstitution = map[*types.TypeParam]*permission{}
+	for parameter, source := range bound.permissionSubstitution {
+		copy.permissionSubstitution[parameter] = source
+	}
+	for parameter, source := range sources {
+		copy.permissionSubstitution[parameter] = source
+	}
+	return substituteBoundConstants(&copy, sub, constants)
+}
+
+func (c *checker) evidenceAssociatedPermission(e Evidence, name string) *permission {
+	p := c.newPermissionChecker()
+	if e.Impl != nil {
+		return p.implAssociated(e.Impl, name, nil)
+	}
+	if e.Bound != nil {
+		return p.boundAssociated(e.Bound, name, nil)
+	}
+	var result *permission
+	for _, branch := range e.Cases {
+		source := c.evidenceAssociatedPermission(branch.Evidence, name)
+		if result != nil && !c.sameSourceType(result, source) {
+			return nil
+		}
+		result = source
+	}
+	return result
 }
 
 func (c *checker) inheritedBounds(bounds []*TraitBound, node ast.Node) []*TraitBound {
@@ -262,11 +351,20 @@ func (c *checker) inheritedBounds(bounds []*TraitBound, node ast.Node) []*TraitB
 		path[b.Trait] = true
 		defer delete(path, b.Trait)
 		sub := map[*types.TypeParam]types.Type{b.Trait.Self: b.Target}
+		head := c.boundHeadPermissions(b)
+		sources := map[*types.TypeParam]*permission{b.Trait.Self: head[0]}
+		for index, parameter := range b.Trait.TypeParams {
+			if index < len(b.Inputs) {
+				sub[parameter] = b.Inputs[index]
+				sources[parameter] = head[index+1]
+			}
+		}
 		for _, a := range b.Trait.Associated {
 			sub[a.Param] = b.Associated[a.Name]
+			sources[a.Param] = c.newPermissionChecker().boundAssociated(b, a.Name, nil)
 		}
 		for _, requirement := range b.Trait.Requirements {
-			next := freshRequirement(requirement, sub, used, c.pkg)
+			next := c.freshRequirement(requirement, sub, sources, used, c.pkg)
 			next = c.addBound(&result, next, node)
 			add(next, path)
 		}
@@ -279,7 +377,7 @@ func (c *checker) inheritedBounds(bounds []*TraitBound, node ast.Node) []*TraitB
 
 func (c *checker) boundFor(target types.Type, trait *Trait) *TraitBound {
 	for _, b := range c.boundsFor(target) {
-		if b.Trait == trait {
+		if b.Trait == trait && len(b.Inputs) == 0 {
 			return b
 		}
 	}
@@ -296,7 +394,7 @@ func (c *checker) boundsFor(target types.Type) []*TraitBound {
 			if types.Identical(b.Target, target) {
 				found := false
 				for _, old := range result {
-					found = found || old.Trait == b.Trait
+					found = found || c.sameApplication(old, b)
 				}
 				if !found {
 					result = append(result, b)
@@ -312,36 +410,29 @@ func (c *checker) boundsFor(target types.Type) []*TraitBound {
 }
 
 func (c *checker) prove(target types.Type, trait *Trait) Evidence {
+	return c.proveApplication(&TraitBound{info: c.out, Target: target, Trait: trait})
+}
+
+func (c *checker) proveApplication(goal *TraitBound) Evidence {
 	if len(c.proofStack) == 0 {
 		c.proofFailure = ""
 	}
-	if !valid(target) {
+	if goal == nil || goal.Trait == nil || !valid(goal.Target) {
 		return Evidence{}
 	}
-	if b := c.boundFor(target, trait); b != nil {
-		return Evidence{Bound: b}
-	}
-	for _, old := range c.proofStack {
-		if old.trait == trait && types.Identical(old.target, target) {
-			c.proofFailure = "cyclic trait prerequisite: " + c.proofDescription(target, trait)
-			return Evidence{}
+	for _, bound := range c.boundsFor(goal.Target) {
+		if c.sameApplication(bound, goal) {
+			return Evidence{Bound: bound}
 		}
 	}
-	if len(c.proofStack) >= 128 {
-		c.proofFailure = "trait prerequisite expansion limit exceeded: " + c.proofDescription(target, trait)
-		return Evidence{}
+	evidence := c.solveApplication(goal)
+	if evidence.Impl != nil {
+		evidence = c.implementationBodyEvidence(evidence.Impl)
 	}
-	c.proofStack = append(c.proofStack, proofObligation{target, trait})
-	defer func() { c.proofStack = c.proofStack[:len(c.proofStack)-1] }()
-	for _, template := range c.implOrder {
-		if template.Trait != trait {
-			continue
-		}
-		if instance := c.matchImpl(template, target); instance != nil {
-			return Evidence{Impl: instance}
-		}
+	if len(evidence.Cases) != 0 && c.caseState != nil {
+		evidence = c.recordBodyChoice(goal, evidence)
 	}
-	return Evidence{}
+	return evidence
 }
 
 func (c *checker) checkTraitPrerequisiteCycles() {
@@ -381,7 +472,7 @@ func (c *checker) validateConcreteImpls() {
 			continue
 		}
 		c.file, c.pkg = c.out.Resolve.Files[impl.File], impl.Owner
-		if c.matchImpl(impl, impl.Target) == nil {
+		if c.matchImplApplication(impl, c.implApplication(impl)) == nil {
 			message := "implementation prerequisites are not satisfied"
 			if c.proofFailure != "" {
 				message += ": " + c.proofFailure
@@ -392,9 +483,16 @@ func (c *checker) validateConcreteImpls() {
 }
 
 func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
-	context := newImplPatternContext(c.out, template.ConstParams)
-	sub, ok := matchImplTarget(template.Target, target, template.TypeParams, context)
-	constSub := context.bindings
+	goal := c.implApplication(template)
+	goal.Target = target
+	if !types.Identical(template.Target, target) {
+		goal.targetPermission = c.newPermissionChecker().fromGo(target)
+	}
+	return c.matchImplApplication(template, goal)
+}
+
+func (c *checker) matchImplApplication(template *Impl, goal *TraitBound) *Impl {
+	sub, constSub, sourceSub, ok := c.matchApplicationHead(template, goal)
 	if !ok {
 		return nil
 	}
@@ -406,9 +504,9 @@ func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
 	}
 	var evidence []Evidence
 	for _, requirement := range template.Requirements {
-		bound := substituteBoundConstants(requirement, sub, constSub)
-		witness := c.prove(bound.Target, bound.Trait)
-		if witness.Impl == nil && witness.Bound == nil {
+		bound := c.substituteBoundApplication(requirement, sub, constSub, sourceSub)
+		witness := c.proveApplication(bound)
+		if witness.Impl == nil && witness.Bound == nil && len(witness.Cases) == 0 {
 			return nil
 		}
 		bindings := evidenceAssociated(witness)
@@ -418,6 +516,7 @@ func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
 			for _, p := range requirement.Projected {
 				if requirement.Associated[a.Name] == p {
 					sub[p], projected = bindings[a.Name], true
+					sourceSub[p] = c.evidenceAssociatedPermission(witness, a.Name)
 				}
 			}
 			if !projected && !types.Identical(want, bindings[a.Name]) {
@@ -443,12 +542,16 @@ func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
 		return template
 	}
 	for _, old := range c.out.ImplInstances {
-		if old.Template == template && types.Identical(old.Target, target) && sameEvidence(old.RequirementEvidence, evidence) {
+		if old.Template == template && c.sameApplication(c.implApplication(old), goal) && sameEvidence(old.RequirementEvidence, evidence) {
 			return old
 		}
 	}
 	instance := *template
-	instance.Template, instance.Target = template, target
+	instance.Template, instance.Target = template, goal.Target
+	instance.Inputs = append([]types.Type(nil), goal.Inputs...)
+	head := c.boundHeadPermissions(goal)
+	instance.targetPermission, instance.inputPermissions = head[0], head[1:]
+	instance.permissionSubstitution = sourceSub
 	instance.TypeArgs = nil
 	for _, p := range template.TypeParams {
 		instance.TypeArgs = append(instance.TypeArgs, sub[p])
@@ -461,6 +564,10 @@ func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
 		instance.ConstArgs = append(instance.ConstArgs, constSub[parameter])
 	}
 	instance.Associated = map[string]types.Type{}
+	instance.associatedPermissions = map[string]*permission{}
+	for name, source := range template.associatedPermissions {
+		instance.associatedPermissions[name] = c.substituteSourcePermission(source, sub, constSub, sourceSub)
+	}
 	for name, t := range template.Associated {
 		instance.Associated[name] = c.out.Substitute(t, sub, constSub)
 	}
@@ -474,18 +581,35 @@ func (c *checker) matchImpl(template *Impl, target types.Type) *Impl {
 	}
 	instance.Requirements = nil
 	for _, requirement := range template.Requirements {
-		instance.Requirements = append(instance.Requirements, substituteBoundConstants(requirement, sub, constSub))
+		instance.Requirements = append(instance.Requirements, c.substituteBoundApplication(requirement, sub, constSub, sourceSub))
 	}
 	c.out.ImplInstances = append(c.out.ImplInstances, &instance)
 	return &instance
 }
 
 func evidenceAssociated(e Evidence) map[string]types.Type {
+	if e.outputs != nil {
+		return e.outputs
+	}
 	if e.Bound != nil {
 		return e.Bound.Associated
 	}
 	if e.Impl != nil {
 		return e.Impl.Associated
+	}
+	if len(e.Cases) != 0 {
+		result := map[string]types.Type{}
+		for name, typ := range evidenceAssociated(e.Cases[0].Evidence) {
+			result[name] = typ
+		}
+		for _, branch := range e.Cases[1:] {
+			for name, typ := range result {
+				if !types.Identical(typ, evidenceAssociated(branch.Evidence)[name]) {
+					delete(result, name)
+				}
+			}
+		}
+		return result
 	}
 	return nil
 }
@@ -495,7 +619,7 @@ func sameEvidence(left, right []Evidence) bool {
 		return false
 	}
 	for i := range left {
-		if left[i] != right[i] {
+		if left[i].Key() != right[i].Key() {
 			return false
 		}
 	}
@@ -505,7 +629,7 @@ func sameEvidence(left, right []Evidence) bool {
 func (c *checker) proofDescription(target types.Type, trait *Trait) string {
 	var chain []string
 	for _, obligation := range c.proofStack {
-		chain = append(chain, types.TypeString(obligation.target, nil)+": "+obligation.trait.Symbol.Name.Name)
+		chain = append(chain, obligation.goal.ApplicationKey())
 	}
 	chain = append(chain, types.TypeString(target, nil)+": "+trait.Symbol.Name.Name)
 	return strings.Join(chain, " -> ")

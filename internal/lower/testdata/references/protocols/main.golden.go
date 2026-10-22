@@ -1,9 +1,9 @@
 package main
 
+import fmt "fmt"
 import sort "sort"
 import strconv "strconv"
 import strings "strings"
-import fmt "fmt"
 
 type Data struct {
 	Items  []int

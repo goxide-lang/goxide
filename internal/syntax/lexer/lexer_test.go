@@ -73,7 +73,7 @@ func TestContextualWordsStayIdentifiers(t *testing.T) {
 }
 
 func TestAutomaticSemicolons(t *testing.T) {
-	for _, src := range []string{"x\n", "123\n", "2.3\n", "2i\n", "'x'\n", "\"x\"\n", "break\n", "continue\n", "fallthrough\n", "return\n", "x++\n", "x--\n", "f()\n", "a[0]\n", "{}\n", "Self\n", "x"} {
+	for _, src := range []string{"x\n", "123\n", "2.3\n", "2i\n", "'x'\n", "\"x\"\n", "break\n", "continue\n", "fallthrough\n", "return\n", "x++\n", "x--\n", "f()\n", "a[0]\n", "{}\n", "Self\n", "x", "T::from::<From[S]>\n", "value.into::<Into[T]>", "value.into::/*comment*/<Into[T]>/*tail\n*/"} {
 		ts, ds := Lex([]byte(src))
 		if len(ds) != 0 {
 			t.Fatal(ds)
@@ -82,7 +82,7 @@ func TestAutomaticSemicolons(t *testing.T) {
 			t.Errorf("%q: no implicit semicolon: %v", src, ts)
 		}
 	}
-	for _, src := range []string{"x +\n", "a,\n", "func\n", "if\n", "x;\n"} {
+	for _, src := range []string{"x +\n", "a,\n", "func\n", "if\n", "x;\n", "x >\n", "x >>\n", "T::from::<From[S]> >\n"} {
 		ts, ds := Lex([]byte(src))
 		if len(ds) != 0 {
 			t.Fatal(ds)

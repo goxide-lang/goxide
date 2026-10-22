@@ -1,7 +1,7 @@
 package main
 
-import sum "github.com/goxide-lang/std/sum"
 import fmt "fmt"
+import sum "github.com/goxide-lang/std/sum"
 import strings "strings"
 
 type NilError struct{}

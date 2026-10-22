@@ -1,6 +1,6 @@
 # 设计决策与讨论覆盖登记
 
-更新：2026-10-01。项目暂称 goxide / Goxide；远端仓库名 `goxide` 不代表已经决定改名。
+更新：2026-10-22。项目暂称 goxide / Goxide；远端仓库名 `goxide` 不代表已经决定改名。
 
 本文区分讨论中确认的方向、为使设计可评审而写出的候选规则，以及仍没有方案的部分。**“已确认”不表示“已实现”**；实现分支已有有限可运行原型，准确范围见[实现说明](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/IMPLEMENTATION.md)；完整 goxide 编译器、linter、LSP 与可发布基础包尚未完成。实现进度以 [roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md) 为准。
 
@@ -49,7 +49,8 @@
 | R25 | 固有成员定义在独立 impl T 中；无 self 放空 carrier，enum 有 self 放接口与各变体，struct 实例成员按 Go receiver 降低 | [RFC 0020](../rfcs/0020-associated-functions.md)；self 优先于返回 Self，无 static，不生成固有成员包函数；新映射待实现 |
 | R26 | impl 成员按 goxide 规则转译并支持 Self/self；直接书写的 Go 函数和方法保留原生 Go 语义 | [RFC 0020](../rfcs/0020-associated-functions.md)；Self 绑定源目标类型，self 仅绑定实例接收者；不全局替换同名 Go 标识符，不限制其他 goxide 特性只能位于 impl 内 |
 | D37 | P4：impl 以基础 T 为目标，self 使用 Self / &Self / &mut Self；关联投影为 Self::Item / T::Trait::Item，运行时值完整绑定；泛型关联类型经空 carrier witness 推导，Go 调用保留源类型实参数量 | [trait](traits.md)、[关联类型](associated-types.md)、[enum 类型锚](enum-representation.md#11-p4-的类型锚与实例适配)；struct/enum 统一查询，enum Self 为 E，类型锚/witness 不运行；值 As 转发与借用 ForE 保留身份；外部类型不注入 anchor，nil 沿用 Go/enum 规则 |
-| D38 | 条件 impl 按当前转译范围的实际请求实例化；具体 impl 直接生成，普通 Go 泛型保留；Go 通过明确普通函数入口使用条件能力，不提供 Ops 或实例哈希名 | [RFC 0031](../rfcs/0031-generic-protocol-impls.md)；模块 sugar 默认开启，CLI 仅覆盖入口模块，见 [trait](traits.md#go-成员-sugar) 和 [配置](toml-manifest.md#go-成员-sugar-配置) |
+| D38 | 条件 impl 按当前转译范围的实际请求实例化；具体 impl 直接生成，普通 Go 泛型保留；Go 通过明确普通函数入口使用条件能力，调用方不传 Ops 或实例哈希名 | [RFC 0031](../rfcs/0031-generic-protocol-impls.md)；模块 sugar 默认开启，CLI 仅覆盖入口模块，见 [trait](traits.md#go-成员-sugar) 和 [配置](toml-manifest.md#go-成员-sugar-配置) |
+| D39 | trait 位置类型参数是输入，关联类型是输出；完整实现头按有序 owner 检查，通用互斥共享类型、长度、Go 与协议约束；未知不当作互斥 | [RFC 0031](../rfcs/0031-generic-protocol-impls.md)、[RFC 0032](../rfcs/0032-from-into-conversions.md)；定义点证明与分支检查保留 source 权限，标准 identity/Into blanket 是普通 impl，参数化应用使用稳定 pair operations |
 
 已确认新增 **D19（2026-10-01）**：用户明确要求默认兼容 Go 式指针/别名；有具体风险依据先 warning，不以无法证明安全大面积拒绝。语法、类型、已确认不变量错误不降级；warning 与运行时 race 分开，不能宣称静态安全。该反馈否决 T01/T06 及前两轮严格默认，不撤销无关 D01–D18。
 
@@ -57,7 +58,7 @@
 
 已确认新增 **D21（2026-10-01）**：用户将宏、enum/match、指针能力中的只读/可写分离列为 T0。T0 是优先级，不表示全套特性一次实现。enum 的早期 raw 常量路线已被 D27 撤回；当前只有封闭变体，数值/string 通过 serde 映射，非法输入/匹配行为需明确。共享与内部可变考虑 goxide/std 包装，不先引入整套所有权或智能指针系统。用户认为宏收益明确；仍保留客观卫生、诊断和工具链验收，不把“100% 正向”写成实测结论。D20 不变。
 
-已确认新增 **D22（2026-10-01）**：`?` 首先限于 Option/Result，不公开 Try/Residual。返回 Result 的目标错误类型已知时允许唯一的一步显式 From 转换，不搜索转换链、不接受任意泛型 blanket 转换。静态 Go `error` 只能走明确兜底或业务分类，不能推断其动态变体。当前先设计转译器与 std 的转换基础，Error 的 `#[from]` 等人体工程库后续生成普通转换 impl；精确语法、impl 选择细则和前端实现仍待闭合，见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#后续迁移边界) 与 RFC 0005。
+已确认新增 **D22（2026-10-01，按 RFC 0032 更新）**：`?` 限于 Option/Result，不公开 Try/Residual。Result 的错误可赋值时直接传播，否则按精确静态来源 E 与目标 F 选择唯一的标准 `F:From[E]`，选择在定义点冻结。允许通过通用归属、互斥和有限需求检查的显式泛型 impl；不搜索转换链，不猜静态 Go `error` 的动态变体。标准 identity 与 From → Into 均由普通库 impl 提供，Error 的 `#[from]` 等人体工程库后续生成普通 impl，见 [RFC 0032](../rfcs/0032-from-into-conversions.md)。
 
 **实施交接授权**：先冻结本地文档基线 `v0.0.0-mvp-doc`，再在独立实现会话推进模式宏、log/tracing 场景及 Debug/Clone/serde/thiserror 派生。JSON 是推荐首版格式，完整 Rust 兼容并非目标。本线程继续研究/spec/RFC，实现发现回流；授权实施不表示其他候选已经确认。
 
@@ -108,7 +109,7 @@
 | U12 | 增量查询、完整 LSP、构建驱动、自举一致性验收 | 尚未实现；保持 Go seed 的方案为暂定 |
 | U13 | supertrait、GAT、特化、锁块语法 | 延期 / 另行设计；借用 match 已由 D21 纳入目标，具体实现见 U02/U08 |
 | U14 | Rust / LLVM 到 Go 汇编的受限计算内核路线 | 不作为首版主后端；ABI / GC / 栈约定等尚未解决 |
-| U17 | Option/Result 专用 `?`、From/Into 完整转换协议、Go 多返回显式包装 | [传播 RFC](../rfcs/research/0005-option-result-question.md) 的限域及显式一步方向已确认；[RFC 0032](../rfcs/0032-from-into-conversions.md) 提出参数化 trait、identity/Into blanket、跨包 owner/冲突与普通证据选择，整体待确认；不公开 Try/Residual，不搜索转换链或猜动态 error |
+| U17（转换协议已收敛） | Option/Result 专用 `?`、参数化 From/Into 与定义点一步选择由 D22/D39 确认；Go 多返回使用显式包装 | [RFC 0032](../rfcs/0032-from-into-conversions.md)；公开发布与实现进度见[状态表](../mvp-gap-audit.md)，通用 Try/Residual 留待后续 |
 | U18 | serde-rs 分层到 Go/goxide 的接口映射、字段/数字/enum 策略及派生子集 | [RFC 0006](../rfcs/research/0006-serde-core-and-formats.md)；分层已确定，具体 helper/visitor ABI 与严格 JSON 偏差仍候选；无公开 core Value，格式 Value 不强制中转 |
 | U19（撤回） | 开放 raw/C enum 与同值别名 | 已由 D27 撤回；不再等待旧别名问题；serde 外部映射不创建开放 enum |
 | U16 | trait 双路径、消除包装的语义条件及发布 ABI | [RFC 0004](../rfcs/research/0004-trait-lowering-paths.md)；比较直接调用/值视图/指针视图/字典，D05/D06 未被候选替换 |

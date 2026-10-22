@@ -17,6 +17,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/resolve"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
@@ -113,7 +114,9 @@ func lowerDeriveSources(sources map[string]string) (map[string][]byte, error) {
 	for i, name := range names {
 		files[name] = expanded.Files[i]
 	}
-	info, ds := check.Check(files, resolved)
+	configuration := testdeps.Configuration()
+	imports := typecheck.NewImporter("fixture.gox", typecheck.ImporterOptions{Config: configuration})
+	info, ds := check.CheckWithImporter(files, resolved, imports, configuration.Sizes())
 	if len(ds) > 0 {
 		return nil, fmt.Errorf("check: %v", ds)
 	}

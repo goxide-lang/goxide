@@ -50,8 +50,8 @@ func validateConfig(config Config) Result[Config,error] {
 }
 
 func loadConfig(data []byte) Result[Config,ConfigError] {
-    config := decodeConfig(data)?
-    valid := validateConfig(config)?
+    config := match decodeConfig(data) { Result[Config,error]::Ok(value) => value, Result[Config,error]::Err(cause) => { return Result[Config,ConfigError]::Err(FromConfigError(cause)) }, }
+    valid := match validateConfig(config) { Result[Config,error]::Ok(value) => value, Result[Config,error]::Err(cause) => { return Result[Config,ConfigError]::Err(FromConfigError(cause)) }, }
     return Result[Config,ConfigError]::Ok(valid)
 }
 

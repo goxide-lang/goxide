@@ -41,7 +41,7 @@ func (p *permissionChecker) adjustedReceiver(node ast.Expr, q *permission, addre
 func (p *permissionChecker) traitView(node ast.Expr, view *TraitView) *permission {
 	got := p.rawExpr(node, nil)
 	got = p.adjustedReceiver(node, got, view.Address, view.Deref, view.Capture)
-	want := p.fromGo(view.Impl.Target)
+	want := p.c.implHeadPermissions(view.Impl)[0]
 	if view.Capture != ValueRef {
 		want = &permission{typ: types.NewPointer(want.typ), ref: view.Capture, elem: want}
 	}
@@ -51,6 +51,7 @@ func (p *permissionChecker) traitView(node ast.Expr, view *TraitView) *permissio
 	q.fields = map[string]*permission{"target": got}
 	oldFile, oldPkg, oldImpl, oldTrait, oldSelf := p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
 	p.c.enterImpl(view.Impl)
+	q.args = append(q.args, p.c.implHeadPermissions(view.Impl)[1:]...)
 	for _, a := range view.Impl.Trait.Associated {
 		q.args = append(q.args, p.implAssociated(view.Impl, a.Name, nil))
 	}
@@ -80,9 +81,7 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 			p.c.currentSelf = m.Trait.Self
 			p.c.pkg = m.Trait.Type.Obj().Pkg()
 		}
-		if selection.Bound != nil {
-			p.c.currentSelf = selection.Bound.Target
-		}
+
 		if file := p.c.out.Resolve.Files[m.File]; file != nil {
 			p.c.file = file
 		}
@@ -96,20 +95,41 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 	if m.Trait != nil {
 		sub := map[*types.TypeParam]*permission{}
 		if selection.Impl != nil {
-			sub[m.Trait.Self] = p.fromGo(selection.Impl.Target)
+			head := p.c.implHeadPermissions(selection.Impl)
+			sub[m.Trait.Self] = head[0]
+			for index, parameter := range m.Trait.TypeParams {
+				if index+1 < len(head) {
+					sub[parameter] = head[index+1]
+				}
+			}
 			for _, a := range m.Trait.Associated {
 				sub[a.Param] = p.implAssociated(selection.Impl, a.Name, nil)
 			}
 		}
 		if selection.Bound != nil {
-			sub[m.Trait.Self] = p.fromGo(selection.Bound.Target)
+			head := p.c.boundHeadPermissions(selection.Bound)
+			sub[m.Trait.Self] = head[0]
+			for index, parameter := range m.Trait.TypeParams {
+				if index+1 < len(head) {
+					sub[parameter] = head[index+1]
+				}
+			}
 			for _, a := range m.Trait.Associated {
 				sub[a.Param] = p.boundAssociated(selection.Bound, a.Name, nil)
 			}
 		}
 		if selection.Impl == nil && selection.Bound == nil && actual != nil {
 			if named, ok := types.Unalias(actual.typ).(*types.Named); ok {
-				for i, a := range m.Trait.Associated {
+				for index, parameter := range m.Trait.TypeParams {
+					if index < named.TypeArgs().Len() {
+						sub[parameter] = p.fromGo(named.TypeArgs().At(index))
+						if index < len(actual.args) {
+							sub[parameter] = actual.args[index]
+						}
+					}
+				}
+				for offset, a := range m.Trait.Associated {
+					i := len(m.Trait.TypeParams) + offset
 					if i < named.TypeArgs().Len() {
 						sub[a.Param] = p.fromGo(named.TypeArgs().At(i))
 						if i < len(actual.args) {
@@ -129,7 +149,7 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 				value = p.deref(value)
 			}
 			inferred := map[*types.TypeParam]*permission{}
-			p.inferPermission(p.fromGo(selection.Impl.Template.Target), value, inferred)
+			p.inferPermission(p.c.implHeadPermissions(selection.Impl.Template)[0], value, inferred)
 			for param, permission := range inferred {
 				sub[param] = permission
 			}
@@ -148,7 +168,13 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 	} else {
 		base = selection.Bound.Target
 	}
-	q.receiver = p.substitutePermission(p.fromGo(base), p.instance)
+	source := p.fromGo(base)
+	if selection.Impl != nil {
+		source = p.c.implHeadPermissions(selection.Impl)[0]
+	} else if selection.Bound != nil {
+		source = p.c.boundHeadPermissions(selection.Bound)[0]
+	}
+	q.receiver = p.substitutePermission(source, p.instance)
 	if m.Receiver != ValueRef {
 		q.receiver = &permission{typ: types.NewPointer(q.receiver.typ), ref: m.Receiver, elem: q.receiver}
 	}
@@ -234,6 +260,9 @@ func (p *permissionChecker) sourceMethod(method *types.Func) *permissionFunction
 }
 
 func (p *permissionChecker) implAssociated(impl *Impl, name string, sub map[*types.TypeParam]*permission) *permission {
+	if source := impl.associatedPermissions[name]; source != nil {
+		return p.substitutePermission(source, p.implSubstitution(impl, sub))
+	}
 	if !valid(impl.Associated[name]) {
 		return p.fromGo(impl.Associated[name])
 	}
@@ -256,10 +285,16 @@ func (p *permissionChecker) boundAssociated(bound *TraitBound, name string, sub 
 	for param, typ := range bound.substitution {
 		combined[param] = p.fromGo(typ)
 	}
+	for param, permission := range bound.permissionSubstitution {
+		combined[param] = permission
+	}
 	for param, permission := range sub {
 		combined[param] = permission
 	}
 	sub = combined
+	if source := bound.associatedPermissions[name]; source != nil {
+		return p.substitutePermission(source, sub)
+	}
 	if node := bound.AssociatedNodes[name]; node != nil {
 		old, oldImpl, oldTrait, oldSelf := p.c.file, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
 		p.c.file = p.c.out.Resolve.Files[bound.File]
@@ -289,7 +324,13 @@ func (p *permissionChecker) checkImplSignatures() {
 			p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = nil, impl.Trait, impl.Trait.Self
 			_, _, params = receiverParams(decl.Decl)
 			want := p.functionType(params, decl.Decl.Results)
-			sub := map[*types.TypeParam]*permission{impl.Trait.Self: p.fromGo(impl.Target)}
+			head := p.c.implHeadPermissions(impl)
+			sub := map[*types.TypeParam]*permission{impl.Trait.Self: head[0]}
+			for index, parameter := range impl.Trait.TypeParams {
+				if index+1 < len(head) {
+					sub[parameter] = head[index+1]
+				}
+			}
 			for _, a := range impl.Trait.Associated {
 				sub[a.Param] = p.implAssociated(impl, a.Name, nil)
 			}
@@ -343,6 +384,9 @@ func (p *permissionChecker) sameSourcePermissions(a, b *permission, seen map[[2]
 
 func (p *permissionChecker) implSubstitution(impl *Impl, input map[*types.TypeParam]*permission) map[*types.TypeParam]*permission {
 	sub := map[*types.TypeParam]*permission{}
+	for param, permission := range impl.permissionSubstitution {
+		sub[param] = permission
+	}
 	for param, permission := range input {
 		sub[param] = permission
 	}

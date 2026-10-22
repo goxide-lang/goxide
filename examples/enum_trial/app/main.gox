@@ -34,11 +34,11 @@ func allowed(n int) Result[int,error] {
     return Result[int,error]::Ok(n)
 }
 func prepare(input []byte, enabled bool) Result[Receipt,Failure] {
-    q := load(input)?
-    id := number(q.Name)?
+    q := match load(input) { Result[cfg::Request,error]::Ok(value) => value, Result[cfg::Request,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, }
+    id := match number(q.Name) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, }
     units := match q.Mode {
         cfg::Mode::Immediate => 1,
-        cfg::Mode::Batch(n) => allowed(n)?,
+        cfg::Mode::Batch(n) => match allowed(n) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, },
     }
     logkit::event_if!(enabled, id + units)
     return Result[Receipt,Failure]::Ok(Receipt{

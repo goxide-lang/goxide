@@ -8,8 +8,9 @@ import (
 )
 
 type sourceExpression struct {
-	file *resolve.File
-	node ast.Expr
+	file   *resolve.File
+	node   ast.Expr
+	result int // One-based result of a multi-result call; zero selects the expression.
 }
 
 // A source borrow selects members of its borrowed value. Its Go pointer
@@ -78,6 +79,18 @@ func (p *permissionChecker) sourceShape(node ast.Expr, seen map[*resolve.Symbol]
 			p.c.file = d.file
 			q = p.sourceShape(d.node, seen)
 			p.c.file = old
+			if d.result > 0 {
+				if q != nil && d.result <= len(q.results) {
+					q = q.results[d.result-1]
+				} else {
+					return p.fromGo(p.c.out.Symbols[s])
+				}
+			}
+			if q != nil && types.Identical(defaultType(q.typ), p.c.out.Symbols[s]) {
+				copy := *q
+				copy.typ = p.c.out.Symbols[s]
+				q = &copy
+			}
 			return q
 		}
 		if f := p.functions[s]; f != nil {
@@ -131,8 +144,39 @@ func (p *permissionChecker) sourceShape(node ast.Expr, seen map[*resolve.Symbol]
 		return value
 	case *ast.CallExpr:
 		fun := p.sourceShape(n.Fun, seen)
-		if fun != nil && len(fun.results) == 1 {
-			return fun.results[0]
+		if fun != nil {
+			instance := p.c.out.FunctionInstances[n]
+			if instance == nil {
+				instance = p.c.out.FunctionInstances[n.Fun]
+			}
+			if instance == nil {
+				if path, ok := n.Fun.(*ast.PathExpr); ok && path.Path != nil && len(path.Path.Segments) != 0 {
+					instance = p.c.out.FunctionInstances[path.Path.Segments[len(path.Path.Segments)-1].Args]
+				}
+			}
+			if instance != nil {
+				if instance.Case != nil && instance.Case.checkerState != nil {
+					function := p.c.caseFunctions[instance.Signature]
+					if function.file != nil {
+						symbol := function.file.Definitions[function.declaration.Name.ID()]
+						if shape := instance.Case.checkerState.referenceHints.functions[symbol]; shape != nil {
+							fun = shape.typ
+						}
+					}
+				}
+				sources := map[*types.TypeParam]*permission{}
+				for parameter, typ := range instance.Substitution {
+					sources[parameter] = p.fromGo(typ)
+				}
+				for parameter, source := range instance.permissionSubstitution {
+					sources[parameter] = source
+				}
+				fun = p.substitutePermission(fun, sources)
+			}
+			if len(fun.results) == 1 {
+				return fun.results[0]
+			}
+			q.results = fun.results
 		}
 	case *ast.TypeAssertExpr:
 		return p.astType(n.Type, nil)
@@ -200,4 +244,16 @@ func (p *permissionChecker) sourceDereference(q *permission) *permission {
 		return p.readValue(value)
 	}
 	return value
+}
+
+func (c *checker) sourceValueAt(expressions []ast.Expr, index int) sourceExpression {
+	if len(expressions) == 1 {
+		if tuple, ok := c.out.Types[expressions[0]].(*types.Tuple); ok && tuple.Len() > 1 && index < tuple.Len() {
+			return sourceExpression{file: c.file, node: expressions[0], result: index + 1}
+		}
+	}
+	if index < len(expressions) {
+		return sourceExpression{file: c.file, node: expressions[index]}
+	}
+	return sourceExpression{}
 }

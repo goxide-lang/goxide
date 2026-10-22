@@ -32,6 +32,12 @@ func (c *checker) prepareGoSugar() {
 	}
 	explicit, fixed := map[key]bool{}, map[key]bool{}
 	for _, implementation := range c.implOrder {
+		if len(c.out.ImplCases[implementation]) != 0 {
+			continue
+		}
+		if implementation.Trait != nil && len(implementation.Trait.TypeParams) != 0 {
+			continue
+		}
 		target := ordinaryGoReceiverTarget(implementation)
 		if target == nil {
 			continue
@@ -57,8 +63,11 @@ func (c *checker) prepareGoSugar() {
 	candidates := map[key][]*SugarMember{}
 	var order []key
 	for _, implementation := range c.implOrder {
+		if len(c.out.ImplCases[implementation]) != 0 {
+			continue
+		}
 		target := ordinaryGoReceiverTarget(implementation)
-		if target == nil || implementation.Trait == nil || !c.out.ConfigByFile[implementation.File].GoSugarEnabled() {
+		if target == nil || implementation.Trait == nil || len(implementation.Trait.TypeParams) != 0 || !c.out.ConfigByFile[implementation.File].GoSugarEnabled() {
 			continue
 		}
 		c.file, c.pkg = c.out.Resolve.Files[implementation.File], implementation.Owner

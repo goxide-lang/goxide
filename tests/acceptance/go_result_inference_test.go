@@ -129,7 +129,7 @@ func TestNestedValidation(t *testing.T){seen:=0;values:=__borrow_std.ValueOk(Bin
 		"arity":           {`func f()(int,int,error){return 1,2,nil};func Bad(){_=go_result!(f())}`, "wrap multiple values"},
 		"zero":            {`func f(){};func Bad(){_=go_result!(f())}`, "expected E"},
 		"not-call":        {`func Bad(e error){_=go_result!(e)}`, "operand must be a call"},
-		"partial-discard": {`func f()(int,error){return 1,nil};func Bad()Result[int,error]{n:=go_result_keep!(f())?;return Result[int,error]::Ok(n)}`, "no explicit one-step conversion"},
+		"partial-discard": {`func f()(int,error){return 1,nil};func Bad()Result[int,error]{n:=go_result_keep!(f())?;return Result[int,error]::Ok(n)}`, "canonical github.com/goxide-lang/std/convert::From is unavailable"},
 		"from-chain": {`type E struct{};func(*E)Error()string{return "e"};func f()(int,*E){return 1,&E{}}
 #[derive(Error)]
 #[error("failure")]
@@ -137,7 +137,7 @@ type Failure struct{
 #[from]
 Cause error
 }
-func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok(n)}`, "no explicit one-step conversion"},
+func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok(n)}`, "canonical github.com/goxide-lang/std/convert::From is unavailable"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

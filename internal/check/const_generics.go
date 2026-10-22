@@ -116,10 +116,6 @@ func (c *implPatternContext) unify(left, right ConstValue) bool {
 	return false
 }
 
-func (c *checker) implTargetsOverlap(left, right *Impl) bool {
-	return implTargetsOverlap(left.Target, right.Target, left.TypeParams, right.TypeParams, newImplPatternContext(c.out, left.ConstParams, right.ConstParams))
-}
-
 func (c *checker) explicitIndexArguments(sig *types.Signature, node *ast.IndexExpr) types.Type {
 	groups := c.out.FunctionGenerics[sig]
 	want := 0

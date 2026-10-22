@@ -50,6 +50,13 @@ func CanUseGoReceiver(impl *Impl) bool {
 	if ordinaryGoReceiverTarget(impl) == nil || len(impl.Requirements) != 0 {
 		return false
 	}
+	definition := impl
+	if impl.Template != nil {
+		definition = impl.Template
+	}
+	if impl.info != nil && len(impl.info.ImplCases[definition]) != 0 {
+		return false
+	}
 	target := types.Unalias(impl.Target).(*types.Named)
 	sub := map[*types.TypeParam]types.Type{}
 	for i, parameter := range impl.TypeParams {

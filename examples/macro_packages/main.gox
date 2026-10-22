@@ -13,7 +13,7 @@ pub enum AppError {
     Input(error),
 }
 func process(enabled bool,fail bool) Result[int,AppError] {
-    n:=logs::take!(logs::Fetch(fail))
+    n:=logs::take!(match logs::Fetch(fail) { Result[int,error]::Ok(value) => Result[int,AppError]::Ok(value), Result[int,error]::Err(cause) => Result[int,AppError]::Err(FromAppError(cause)), })
     logs::event_if!(enabled,"request", "request_id",42,"workers",n)
     return Result[int,AppError]::Ok(n)
 }

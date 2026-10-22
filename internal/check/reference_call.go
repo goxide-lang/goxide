@@ -398,11 +398,18 @@ func (p *permissionChecker) inferPermission(formal, actual *permission, sub map[
 }
 
 func (p *permissionChecker) substitutePermission(q *permission, sub map[*types.TypeParam]*permission) *permission {
+	return p.substitutePermissionActive(q, sub, map[*types.TypeParam]bool{})
+}
+
+func (p *permissionChecker) substitutePermissionActive(q *permission, sub map[*types.TypeParam]*permission, active map[*types.TypeParam]bool) *permission {
 	if q == nil {
 		return nil
 	}
-	if tp, ok := q.typ.(*types.TypeParam); ok && !p.c.out.isArray(q.typ) && sub[tp] != nil {
-		return sub[tp]
+	if tp, ok := q.typ.(*types.TypeParam); ok && !p.c.out.isArray(q.typ) && q.ref == ValueRef && sub[tp] != nil && sub[tp] != q && !active[tp] {
+		active[tp] = true
+		result := p.substitutePermissionActive(sub[tp], sub, active)
+		delete(active, tp)
+		return result
 	}
 	r := *q
 	typesub := map[*types.TypeParam]types.Type{}
@@ -412,21 +419,21 @@ func (p *permissionChecker) substitutePermission(q *permission, sub map[*types.T
 		}
 	}
 	r.typ = substitute(q.typ, typesub, p.c.out)
-	r.elem, r.key = p.substitutePermission(q.elem, sub), p.substitutePermission(q.key, sub)
-	r.receiver = p.substitutePermission(q.receiver, sub)
+	r.elem, r.key = p.substitutePermissionActive(q.elem, sub, active), p.substitutePermissionActive(q.key, sub, active)
+	r.receiver = p.substitutePermissionActive(q.receiver, sub, active)
 	r.args, r.params, r.results = nil, nil, nil
 	for _, v := range q.args {
-		r.args = append(r.args, p.substitutePermission(v, sub))
+		r.args = append(r.args, p.substitutePermissionActive(v, sub, active))
 	}
 	for _, v := range q.params {
-		r.params = append(r.params, p.substitutePermission(v, sub))
+		r.params = append(r.params, p.substitutePermissionActive(v, sub, active))
 	}
 	for _, v := range q.results {
-		r.results = append(r.results, p.substitutePermission(v, sub))
+		r.results = append(r.results, p.substitutePermissionActive(v, sub, active))
 	}
 	r.fields = map[string]*permission{}
 	for name, v := range q.fields {
-		r.fields[name] = p.substitutePermission(v, sub)
+		r.fields[name] = p.substitutePermissionActive(v, sub, active)
 	}
 	return &r
 }

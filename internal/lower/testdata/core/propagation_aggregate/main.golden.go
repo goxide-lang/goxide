@@ -1,7 +1,7 @@
 package main
 
-import sum "github.com/goxide-lang/std/sum"
 import fmt "fmt"
+import sum "github.com/goxide-lang/std/sum"
 
 func mark(name string, value int, trace *[]string) int {
 	*trace = append(*trace, name)

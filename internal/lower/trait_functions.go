@@ -110,8 +110,9 @@ func (p *traitProgram) prepareFunctionEntries(info *check.Info) {
 	p.legacyFunctions = map[*syntax.FuncDecl]bool{}
 	for _, function := range p.functions {
 		legacy := len(info.GenericBounds[function.decl]) != 0 && !hasConstParameters(function.decl.Generics)
+		legacy = legacy && len(info.BodyCases[function.decl]) == 0
 		for _, bound := range info.GenericBounds[function.decl] {
-			legacy = legacy && bound.Param != nil
+			legacy = legacy && bound.Param != nil && !parameterizedTrait(bound.Trait)
 		}
 		p.legacyFunctions[function.decl] = legacy
 	}
@@ -154,7 +155,7 @@ func (p *traitProgram) prepareFunctionEntries(info *check.Info) {
 func (p *traitProgram) prepareTemplateHelpers(info *check.Info) {
 	p.helperFunctions = map[*syntax.FuncDecl]bool{}
 	p.helperImpls = map[*check.Impl]bool{}
-	var inspect func(syntax.Node)
+	var inspect func(syntax.Node, *check.Info)
 	var addFunction func(*traitFunction)
 	var addImpl func(*check.Impl)
 	addFunction = func(function *traitFunction) {
@@ -162,7 +163,7 @@ func (p *traitProgram) prepareTemplateHelpers(info *check.Info) {
 			return
 		}
 		p.helperFunctions[function.decl] = true
-		inspect(function.decl.Body)
+		inspect(function.decl.Body, info)
 	}
 	addImpl = func(impl *check.Impl) {
 		impl = implTemplate(impl)
@@ -171,17 +172,17 @@ func (p *traitProgram) prepareTemplateHelpers(info *check.Info) {
 		}
 		p.helperImpls[impl] = true
 		for _, member := range impl.Methods {
-			inspect(member.Decl.Body)
+			inspect(member.Decl.Body, info)
 		}
 	}
-	inspect = func(body syntax.Node) {
+	inspect = func(body syntax.Node, current *check.Info) {
 		syntax.Walk(body, func(node syntax.Node) bool {
 			if expression, ok := node.(syntax.Expr); ok {
-				if member := info.Members[expression]; member != nil && member.Impl != nil && parameterizedImpl(implTemplate(member.Impl)) {
+				if member := current.Members[expression]; member != nil && member.Impl != nil && parameterizedImpl(implTemplate(member.Impl)) {
 					addImpl(member.Impl)
 				}
 			}
-			if instance := info.FunctionInstances[node]; instance != nil {
+			if instance := current.FunctionInstances[node]; instance != nil {
 				if function := p.functions[instance.Signature]; function != nil && info.Demands.FunctionTemplates[function.decl] {
 					addFunction(function)
 				}
@@ -206,6 +207,17 @@ func (p *traitProgram) prepareTemplateHelpers(info *check.Info) {
 		}
 	}
 	// Runtime views need a generic wrapper and its definition-package members.
+	for _, function := range p.functions {
+		if len(info.BodyCases[function.decl]) != 0 {
+			p.templateFunctions[function.decl] = true
+			addFunction(function)
+		}
+	}
+	for _, branches := range info.BodyCases {
+		for _, branch := range branches {
+			inspect(branch.Decl.Body, branch.Info)
+		}
+	}
 	for _, impl := range p.impls {
 		if parameterizedImpl(impl) && (!info.Demands.ImplTemplates[impl] || impl.Trait != nil && impl.Trait.Runtime) {
 			addImpl(impl)

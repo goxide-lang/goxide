@@ -1,6 +1,7 @@
 package lower
 
 import (
+	"bytes"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
@@ -13,6 +14,53 @@ import (
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
+
+// Sort complete import declarations after formatting has attached their source
+// comments. Moving only AST declarations would leave use documentation at its
+// old position and attach it to the wrong import.
+func canonicalImports(file *goast.File, set *gotoken.FileSet, source []byte) []byte {
+	type declaration struct {
+		path       string
+		start, end int
+		documented bool
+	}
+	var declarations []declaration
+	for _, node := range file.Decls {
+		decl, ok := node.(*goast.GenDecl)
+		if !ok || decl.Tok != gotoken.IMPORT {
+			continue
+		}
+		start, end := decl.Pos(), decl.End()
+		if decl.Doc != nil {
+			start = decl.Doc.Pos()
+		}
+		for _, spec := range decl.Specs {
+			if comment := spec.(*goast.ImportSpec).Comment; comment != nil && comment.End() > end {
+				end = comment.End()
+			}
+		}
+		declarations = append(declarations, declaration{path: decl.Specs[0].(*goast.ImportSpec).Path.Value, start: set.PositionFor(start, false).Offset, end: set.PositionFor(end, false).Offset, documented: decl.Doc != nil})
+	}
+	ordered := append([]declaration(nil), declarations...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].path < ordered[j].path })
+	var result bytes.Buffer
+	cursor := 0
+	for index, original := range declarations {
+		separator := source[cursor:original.start]
+		if index != 0 && len(bytes.TrimSpace(separator)) == 0 {
+			result.WriteByte('\n')
+			if ordered[index].documented {
+				result.WriteByte('\n')
+			}
+		} else {
+			result.Write(separator)
+		}
+		result.Write(source[ordered[index].start:ordered[index].end])
+		cursor = original.end
+	}
+	result.Write(source[cursor:])
+	return result.Bytes()
+}
 
 type importUse struct {
 	path, alias string

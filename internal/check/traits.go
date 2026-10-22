@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"go/types"
-	"path/filepath"
 	"strings"
 
 	"github.com/goxide-lang/goxide/internal/resolve"
@@ -20,6 +19,7 @@ type Trait struct {
 	Symbol       *resolve.Symbol
 	Type         *types.Named
 	Self         *types.TypeParam
+	TypeParams   []*types.TypeParam
 	Associated   []*AssociatedType
 	Methods      []*Member
 	Runtime      bool
@@ -34,28 +34,39 @@ type AssociatedType struct {
 }
 
 type Impl struct {
-	Definition          *Impl
-	ConstParams         []*ConstParam
-	ConstArgs           []ConstValue
-	ConstSubstitution   map[*ConstParam]ConstValue
-	info                *Info
-	Decl                *ast.ImplDecl
-	File                string
-	Target              types.Type
-	Base                *types.Named
-	Trait               *Trait
-	Associated          map[string]types.Type
-	AssociatedNodes     map[string]ast.Type
-	Methods             []*Member
-	Capture             RefMode
-	Owner               *types.Package
-	TypeParams          []*types.TypeParam
-	TypeArgs            []types.Type
-	Template            *Impl
-	Requirements        []*TraitBound
-	RequirementEvidence []Evidence
-	Substitution        map[*types.TypeParam]types.Type
-	associatedState     map[string]uint8
+	Case                   *ImplCase
+	CaseEvidence           []Evidence
+	MethodCases            map[*ast.FuncDecl]*BodyCase
+	MethodCaseEvidence     map[*ast.FuncDecl][]Evidence
+	Definition             *Impl
+	ConstParams            []*ConstParam
+	ConstArgs              []ConstValue
+	ConstSubstitution      map[*ConstParam]ConstValue
+	info                   *Info
+	Decl                   *ast.ImplDecl
+	DeclID                 string
+	File                   string
+	Target                 types.Type
+	Base                   *types.Named
+	Trait                  *Trait
+	Inputs                 []types.Type
+	InputNodes             []ast.Type
+	Associated             map[string]types.Type
+	AssociatedNodes        map[string]ast.Type
+	Methods                []*Member
+	Capture                RefMode
+	Owner                  *types.Package
+	TypeParams             []*types.TypeParam
+	TypeArgs               []types.Type
+	Template               *Impl
+	Requirements           []*TraitBound
+	RequirementEvidence    []Evidence
+	Substitution           map[*types.TypeParam]types.Type
+	associatedState        map[string]uint8
+	associatedPermissions  map[string]*permission
+	targetPermission       *permission
+	inputPermissions       []*permission
+	permissionSubstitution map[*types.TypeParam]*permission
 }
 
 type Member struct {
@@ -78,6 +89,7 @@ type MemberSelection struct {
 	Receiver                   ast.Expr
 	Address, Deref, MethodExpr bool
 	Signature                  *types.Signature
+	Evidence                   Evidence
 }
 
 type TraitView struct {
@@ -90,37 +102,66 @@ type TraitView struct {
 }
 
 type TraitBound struct {
-	info              *Info
-	constSubstitution map[*ConstParam]ConstValue
-	File              string
-	Param             *types.TypeParam
-	Target            types.Type
-	Trait             *Trait
-	Associated        map[string]types.Type
-	Projected         []*types.TypeParam
-	AssociatedNodes   map[string]ast.Type
-	substitution      map[*types.TypeParam]types.Type
+	info                   *Info
+	constSubstitution      map[*ConstParam]ConstValue
+	File                   string
+	Param                  *types.TypeParam
+	Target                 types.Type
+	TargetNode             ast.Type
+	Trait                  *Trait
+	Inputs                 []types.Type
+	InputNodes             []ast.Type
+	Associated             map[string]types.Type
+	Projected              []*types.TypeParam
+	AssociatedNodes        map[string]ast.Type
+	substitution           map[*types.TypeParam]types.Type
+	associatedPermissions  map[string]*permission
+	targetPermission       *permission
+	inputPermissions       []*permission
+	permissionSubstitution map[*types.TypeParam]*permission
 }
 
 // Evidence records the selected source implementation or an in-scope premise.
 // It never derives source protocol membership from a Go method set.
 type Evidence struct {
-	Bound *TraitBound
-	Impl  *Impl
+	Bound   *TraitBound
+	Impl    *Impl
+	Cases   []EvidenceCase
+	outputs map[string]types.Type
+}
+
+// GoPredicate is a branch-local Go constraint on a type that remains rigid.
+type GoPredicate struct {
+	Target     types.Type
+	Constraint *types.Interface
+}
+
+// EvidenceCase is one leaf of a proved exhaustive, disjoint compile-time choice.
+// Only the application solver constructs Cases after proving coverage.
+type EvidenceCase struct {
+	Requirements           []*TraitBound
+	GoConstraints          []GoPredicate
+	Evidence               Evidence
+	Substitution           map[*types.TypeParam]types.Type
+	ConstSubstitution      map[*ConstParam]ConstValue
+	permissionSubstitution map[*types.TypeParam]*permission
 }
 
 type FunctionInstance struct {
+	Case              *BodyCase
+	CaseEvidence      []Evidence
 	ConstArgs         []ConstValue
 	ConstSubstitution map[*ConstParam]ConstValue
 	// Definition points at the length-specialized emitted declaration.
-	Definition   *FunctionInstance
-	Signature    *types.Signature
-	TypeArgs     []types.Type
-	Evidence     []Evidence
-	Decl         *ast.FuncDecl
-	File         string
-	Substitution map[*types.TypeParam]types.Type
-	Body         *BodyInstance
+	Definition             *FunctionInstance
+	Signature              *types.Signature
+	TypeArgs               []types.Type
+	Evidence               []Evidence
+	Decl                   *ast.FuncDecl
+	File                   string
+	Substitution           map[*types.TypeParam]types.Type
+	Body                   *BodyInstance
+	permissionSubstitution map[*types.TypeParam]*permission
 }
 
 func (c *checker) collectTrait(n *ast.TraitDecl) {
@@ -129,25 +170,7 @@ func (c *checker) collectTrait(n *ast.TraitDecl) {
 		return
 	}
 	t := types.NewNamed(types.NewTypeName(0, c.pkg, s.GoName, nil), anyType, nil)
-	packagePath := c.pkg.Path()
-	if path := c.out.PackagePaths[packagePath]; path != "" {
-		packagePath = path
-	} else if filepath.IsAbs(packagePath) {
-		// A source-only input has no module identity. Keep its marker stable
-		// across checkout locations while distinguishing source packages.
-		root := packagePath
-		for _, p := range c.out.Resolve.Packages {
-			for {
-				rel, err := filepath.Rel(root, p.Dir)
-				if err != nil || rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-					break
-				}
-				root = filepath.Dir(root)
-			}
-		}
-		rel, _ := filepath.Rel(root, packagePath)
-		packagePath = filepath.ToSlash(rel) + "/" + c.pkg.Name()
-	}
+	packagePath := c.out.CanonicalPackagePath(c.pkg)
 	digest := sha256.Sum256([]byte(packagePath + "::" + s.Name.Name))
 	trait := &Trait{Decl: n, File: c.file.Name, Symbol: s, Type: t, Self: types.NewTypeParam(types.NewTypeName(0, c.pkg, "Self", nil), anyType), Marker: fmt.Sprintf("GoxideTrait%s_%x", strings.TrimLeft(s.GoName, "_"), digest[:4])}
 	c.out.Traits[n] = trait
@@ -261,6 +284,28 @@ func (c *checker) sourcePathSymbol(parts []*ast.PathSegment) *resolve.Symbol {
 	if symbol == nil {
 		return nil
 	}
+	// A project dependency alias has an importer-only root in Symbol.Target.
+	// Deferred projections resolve the trait suffix here, so follow the
+	// importer's actual namespace before walking that suffix.
+	if symbol.Kind == resolve.Import {
+		if file := c.out.Resolve.Files[symbol.Decl.File]; file != nil {
+			for _, use := range file.Uses {
+				if use.Symbol == symbol {
+					target := append([]string(nil), use.Target...)
+					for _, part := range parts[1:] {
+						target = append(target, part.Name.Name)
+					}
+					if resolved := c.localSymbol(target); resolved != nil {
+						return c.visibleSymbol(lastName, resolved)
+					}
+					if use.Resolved != nil {
+						symbol = use.Resolved
+					}
+					break
+				}
+			}
+		}
+	}
 	if len(symbol.Target) > 0 {
 		target := append([]string(nil), symbol.Target...)
 		for _, part := range parts[1:] {
@@ -299,8 +344,9 @@ func (c *checker) eachTrait(f func(*Trait)) {
 
 func (c *checker) prepareTraits() {
 	c.eachTrait(func(t *Trait) {
-		if t.Decl.Generics != nil {
-			c.diag(t.Decl, TraitInvalid, "traits must be non-generic")
+		t.TypeParams = c.genericParameters(t.Decl.Generics)
+		if len(c.constParameters(t.Decl.Generics)) != 0 {
+			c.diag(t.Decl, TraitInvalid, "trait inputs must be type parameters")
 		}
 		for _, item := range t.Decl.Items {
 			if n, ok := item.(*ast.TypeDecl); ok {
@@ -312,52 +358,46 @@ func (c *checker) prepareTraits() {
 				c.out.Symbols[c.symbol(n.Name)] = p
 			}
 		}
-		params := make([]*types.TypeParam, 0, len(t.Associated))
+		params := append([]*types.TypeParam(nil), t.TypeParams...)
 		for _, a := range t.Associated {
 			params = append(params, a.Param)
 		}
 		t.Type.SetTypeParams(params)
 	})
-	c.eachTrait(func(t *Trait) {
-		c.currentTrait, c.currentSelf = t, t.Self
-		t.Requirements = c.sourceRequirements(nil, t.Decl.Where, nil, map[string]bool{}, t.Decl)
-		for _, requirement := range t.Requirements {
-			if requirement.Target != t.Self {
-				c.diag(t.Decl, TraitInvalid, "trait prerequisites must constrain Self")
+	c.eachTrait(func(t *Trait) { c.pendingTraits = append(c.pendingTraits, t) })
+	c.completePendingTraits()
+}
+
+func (c *checker) prepareTraitMethods(t *Trait) {
+	var methods []*types.Func
+	t.Runtime = true
+	instances := 0
+	for _, item := range t.Decl.Items {
+		if fn, ok := item.(*ast.FuncDecl); ok {
+			if fn.Body != nil {
+				c.diag(fn, TraitInvalid, "trait defaults are not supported; provide every method in the impl")
 			}
-		}
-		c.currentTrait, c.currentSelf = nil, nil
-	})
-	c.checkTraitPrerequisiteCycles()
-	c.eachTrait(func(t *Trait) {
-		c.currentTrait, c.currentSelf = t, t.Self
-		var methods []*types.Func
-		t.Runtime = true
-		instances := 0
-		for _, item := range t.Decl.Items {
-			if fn, ok := item.(*ast.FuncDecl); ok {
-				if fn.Body != nil {
-					c.diag(fn, TraitInvalid, "trait defaults are not supported; provide every method in the impl")
-				}
-				m := c.makeMember(fn, nil, t)
-				t.Methods = append(t.Methods, m)
-				if m.Static {
-					continue
-				}
-				instances++
-				if containsType(m.Signature, t.Self) {
-					t.Runtime = false
-				}
-				methods = append(methods, types.NewFunc(0, c.pkg, m.Name, m.Signature))
+			m := c.makeMember(fn, nil, t)
+			t.Methods = append(t.Methods, m)
+			if m.Static {
+				continue
 			}
+			instances++
+			if containsType(m.Signature, t.Self) {
+				t.Runtime = false
+			}
+			methods = append(methods, types.NewFunc(0, c.pkg, m.Name, m.Signature))
 		}
-		if instances == 0 && len(t.Methods) != 0 {
-			t.Runtime = false
-		}
-		methods = append(methods, types.NewFunc(0, c.pkg, t.Marker, types.NewSignatureType(nil, nil, nil, nil, nil, false)))
-		t.Type.SetUnderlying(types.NewInterfaceType(methods, nil).Complete())
-		c.currentTrait, c.currentSelf = nil, nil
-	})
+	}
+	if instances == 0 && len(t.Methods) != 0 {
+		t.Runtime = false
+	}
+	var markerArgs []*types.Var
+	for i := 0; i < t.Type.TypeParams().Len(); i++ {
+		markerArgs = append(markerArgs, types.NewVar(0, c.pkg, "", t.Type.TypeParams().At(i)))
+	}
+	methods = append(methods, types.NewFunc(0, c.pkg, t.Marker, types.NewSignatureType(nil, nil, nil, types.NewTuple(markerArgs...), nil, false)))
+	t.Type.SetUnderlying(types.NewInterfaceType(methods, nil).Complete())
 }
 
 func receiverParams(fn *ast.FuncDecl) (RefMode, bool, []*ast.Param) {
@@ -466,127 +506,148 @@ func (c *checker) prepareImpls() {
 					continue
 				}
 				builtin := false
-				for _, d := range c.out.Resolve.Derives {
-					if d.Impl == n {
-						builtin = true
-						break
-					}
+				for _, derive := range c.out.Resolve.Derives {
+					builtin = builtin || derive.Impl == n
 				}
-				if builtin {
-					continue
+				if !builtin {
+					c.pendingImpls = append(c.pendingImpls, pendingImpl{declaration: n, file: file, pkg: c.pkg})
 				}
-				params := c.genericParameters(n.Generics)
-				requirements := c.sourceRequirements(n.Generics, nil, params, map[string]bool{}, n)
-				target := types.Unalias(c.typ(n.Type))
-				if !valid(target) {
-					continue
-				}
-				if parameter, bare := target.(*types.TypeParam); bare && c.out.ArrayPatterns[parameter] == nil {
-					c.diag(n.Type, TraitInvalid, "impl target cannot be a bare type parameter")
-					continue
-				}
-				for _, param := range params {
-					if !c.out.containsType(target, param) {
-						c.diag(n, TraitInvalid, "impl type parameter must occur in its target: "+param.Obj().Name())
-					}
-				}
-				var trait *Trait
-				if n.Trait != nil {
-					if path, ok := n.Trait.(*ast.PathType); ok && len(path.Path.Segments) > 0 {
-						trait = c.traitPath(path.Path.Segments)
-					}
-					if trait == nil {
-						c.diag(n.Trait, TraitInvalid, "impl requires a declared trait")
-						continue
-					}
-				}
-				named, _ := target.(*types.Named)
-				localTarget := named != nil && named.Obj().Pkg() == c.pkg
-				if !localTarget && (trait == nil || trait.Type.Obj().Pkg() != c.pkg) {
-					c.diag(n.Type, TraitInvalid, "body impl requires the trait or outer named target to belong to this package")
-					continue
-				}
-				if named != nil {
-					named = named.Origin()
-				}
-				impl := &Impl{info: c.out, ConstParams: c.constParameters(n.Generics), Decl: n, File: file.Name, Target: target, Base: named, Owner: c.pkg, Trait: trait, TypeParams: params, Requirements: requirements, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedState: map[string]uint8{}}
-				for _, parameter := range impl.ConstParams {
-					if !c.out.containsConst(target, parameter) {
-						c.diag(n, TraitInvalid, "impl const parameter must occur in its target: "+parameter.Name.Name)
-					}
-				}
-				c.out.Impls[n] = impl
-				c.implOrder = append(c.implOrder, impl)
 			}
 		}
 	}
-	for _, impl := range c.implOrder {
-		c.enterImpl(impl)
-		if impl.Trait != nil {
-			for _, old := range c.implOrder {
-				if old == impl {
-					break
-				}
-				if old.Trait == impl.Trait && c.implTargetsOverlap(old, impl) {
-					c.diag(impl.Decl, TraitInvalid, "duplicate trait implementation: overlapping target patterns")
-				}
-			}
+	c.completePendingImpls()
+}
+
+func (c *checker) prepareImpl(n *ast.ImplDecl) *Impl {
+	params := c.genericParameters(n.Generics)
+	requirements := c.sourceRequirements(n.Generics, nil, params, map[string]bool{}, n)
+	target := types.Unalias(c.typ(n.Type))
+	if !valid(target) {
+		return nil
+	}
+	var trait *Trait
+	if n.Trait != nil {
+		if path, ok := n.Trait.(*ast.PathType); ok && len(path.Path.Segments) > 0 {
+			trait = c.traitPath(path.Path.Segments)
 		}
-		for _, item := range impl.Decl.Items {
-			if n, ok := item.(*ast.TypeDecl); ok {
-				if impl.Trait == nil {
-					c.diag(n, TraitInvalid, "associated types require a trait impl")
-					continue
-				}
-				if !n.Alias || n.Type == nil || n.Generics != nil {
-					c.diag(n, TraitInvalid, "associated type requires one concrete binding")
-					continue
-				}
-				c.registerAssociated(impl, n.Name.Name, n.Type, n)
-			}
+		if trait == nil {
+			c.diag(n.Trait, TraitInvalid, "impl requires a declared trait")
+			return nil
 		}
-		used := map[string]bool{}
-		for _, param := range impl.TypeParams {
+	}
+	named, _ := target.(*types.Named)
+	if named != nil {
+		named = named.Origin()
+	}
+	impl := &Impl{info: c.out, ConstParams: c.constParameters(n.Generics), Decl: n, File: c.file.Name, Target: target, Base: named, Owner: c.pkg, Trait: trait, TypeParams: params, Requirements: requirements, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedState: map[string]uint8{}}
+	p := c.newPermissionChecker()
+	impl.targetPermission = p.astType(n.Type, nil)
+	if path, ok := n.Trait.(*ast.PathType); ok && trait != nil {
+		last := path.Path.Segments[len(path.Path.Segments)-1]
+		impl.Inputs, impl.InputNodes, impl.inputPermissions = c.readTraitInputs(last.Args, trait, n.Trait)
+	}
+	if trait == nil && (named == nil || named.Obj().Pkg() != c.pkg) {
+		c.diag(n.Type, TraitInvalid, "inherent impl requires a local named target")
+		return nil
+	}
+	if !c.implOwnerAllowed(impl) {
+		c.diag(n.Type, TraitInvalid, "body impl requires the trait or an allowed local type in its ordered head to belong to this package")
+		return nil
+	}
+	head := append([]types.Type{target}, impl.Inputs...)
+	for _, param := range params {
+		found := false
+		for _, slot := range head {
+			found = found || c.out.containsType(slot, param)
+		}
+		if !found {
+			c.diag(n, TraitInvalid, "impl type parameter must occur in its head: "+param.Obj().Name())
+		}
+	}
+	for _, parameter := range impl.ConstParams {
+		found := false
+		for _, slot := range head {
+			found = found || c.out.containsConst(slot, parameter)
+		}
+		if !found {
+			c.diag(n, TraitInvalid, "impl const parameter must occur in its head: "+parameter.Name.Name)
+		}
+	}
+	c.out.Impls[n] = impl
+	c.implOrder = append(c.implOrder, impl)
+	return impl
+}
+
+func (c *checker) prepareImplBody(impl *Impl) {
+	c.enterImpl(impl)
+	for _, item := range impl.Decl.Items {
+		if n, ok := item.(*ast.TypeDecl); ok {
+			if impl.Trait == nil {
+				c.diag(n, TraitInvalid, "associated types require a trait impl")
+				continue
+			}
+			if !n.Alias || n.Type == nil || n.Generics != nil {
+				c.diag(n, TraitInvalid, "associated type requires one concrete binding")
+				continue
+			}
+			c.registerAssociated(impl, n.Name.Name, n.Type, n)
+		}
+	}
+	used := map[string]bool{}
+	for _, param := range impl.TypeParams {
+		used[param.Obj().Name()] = true
+	}
+	for _, requirement := range impl.Requirements {
+		for _, param := range requirement.Projected {
 			used[param.Obj().Name()] = true
 		}
-		for _, requirement := range impl.Requirements {
-			for _, param := range requirement.Projected {
-				used[param.Obj().Name()] = true
+	}
+	for _, requirement := range c.sourceRequirements(nil, impl.Decl.Where, nil, used, impl.Decl) {
+		c.addBound(&impl.Requirements, requirement, impl.Decl)
+	}
+	impl.Requirements = c.inheritedBounds(impl.Requirements, impl.Decl)
+	if impl.Trait != nil {
+		for _, a := range impl.Trait.Associated {
+			if impl.AssociatedNodes[a.Name] == nil {
+				c.diag(impl.Decl, TraitInvalid, "missing associated type "+a.Name)
+			} else {
+				c.resolveAssociated(impl, a.Name, impl.Decl)
 			}
 		}
-		for _, requirement := range c.sourceRequirements(nil, impl.Decl.Where, nil, used, impl.Decl) {
-			c.addBound(&impl.Requirements, requirement, impl.Decl)
+	}
+	if impl.Trait != nil {
+		sub := map[*types.TypeParam]types.Type{impl.Trait.Self: impl.Target}
+		head := c.implHeadPermissions(impl)
+		sources := map[*types.TypeParam]*permission{impl.Trait.Self: head[0]}
+		for index, parameter := range impl.Trait.TypeParams {
+			if index < len(impl.Inputs) {
+				sub[parameter] = impl.Inputs[index]
+				sources[parameter] = head[index+1]
+			}
+		}
+		for _, a := range impl.Trait.Associated {
+			sub[a.Param] = impl.Associated[a.Name]
+			sources[a.Param] = c.newPermissionChecker().implAssociated(impl, a.Name, nil)
+		}
+		for _, requirement := range impl.Trait.Requirements {
+			c.addBound(&impl.Requirements, c.freshRequirement(requirement, sub, sources, used, c.pkg), impl.Decl)
 		}
 		impl.Requirements = c.inheritedBounds(impl.Requirements, impl.Decl)
-		if impl.Trait != nil {
-			for _, a := range impl.Trait.Associated {
-				if impl.AssociatedNodes[a.Name] == nil {
-					c.diag(impl.Decl, TraitInvalid, "missing associated type "+a.Name)
-				} else {
-					c.resolveAssociated(impl, a.Name, impl.Decl)
-				}
-			}
-		}
-		if impl.Trait != nil {
-			sub := map[*types.TypeParam]types.Type{impl.Trait.Self: impl.Target}
-			for _, a := range impl.Trait.Associated {
-				sub[a.Param] = impl.Associated[a.Name]
-			}
-			for _, requirement := range impl.Trait.Requirements {
-				c.addBound(&impl.Requirements, freshRequirement(requirement, sub, used, c.pkg), impl.Decl)
-			}
-			impl.Requirements = c.inheritedBounds(impl.Requirements, impl.Decl)
-		}
-		for _, item := range impl.Decl.Items {
-			if n, ok := item.(*ast.TypeDecl); ok {
-				c.out.Symbols[c.symbol(n.Name)] = impl.Associated[n.Name.Name]
-			}
-			if fn, ok := item.(*ast.FuncDecl); ok {
-				impl.Methods = append(impl.Methods, c.makeMember(fn, impl, impl.Trait))
-			}
-		}
-		c.leaveImpl()
 	}
+	for _, item := range impl.Decl.Items {
+		if n, ok := item.(*ast.TypeDecl); ok {
+			c.out.Symbols[c.symbol(n.Name)] = impl.Associated[n.Name.Name]
+		}
+		if fn, ok := item.(*ast.FuncDecl); ok {
+			impl.Methods = append(impl.Methods, c.makeMember(fn, impl, impl.Trait))
+		}
+	}
+	p := c.newPermissionChecker()
+	impl.associatedPermissions = map[string]*permission{}
+	for name := range impl.Associated {
+		impl.associatedPermissions[name] = p.implAssociated(impl, name, nil)
+	}
+	c.leaveImpl()
 }
 
 func (c *checker) registerAssociated(impl *Impl, name string, typ ast.Type, node ast.Node) {
@@ -661,11 +722,57 @@ func (c *checker) readAssociated(args *ast.GenericArgs, t *Trait, bindings map[s
 	}
 	for _, a := range args.Args {
 		if a.Name == nil {
-			c.diag(node, TraitInvalid, "trait arguments must name an associated type")
 			continue
 		}
 		c.setAssociated(bindings, t, a.Name.Name, c.typ(a.Type), a)
 	}
+}
+
+func (c *checker) readTraitInputs(args *ast.GenericArgs, trait *Trait, node ast.Node) ([]types.Type, []ast.Type, []*permission) {
+	var inputs []types.Type
+	var nodes []ast.Type
+	var sources []*permission
+	p := c.newPermissionChecker()
+	if args != nil {
+		named := false
+		for _, arg := range args.Args {
+			if arg.Name != nil {
+				named = true
+				continue
+			}
+			if named {
+				c.diag(arg, TraitInvalid, "positional trait inputs must precede associated bindings")
+			}
+			if arg.Type == nil || arg.Value != nil {
+				c.diag(arg, TraitInvalid, "trait inputs must be types")
+				continue
+			}
+			inputs = append(inputs, c.typ(arg.Type))
+			nodes = append(nodes, arg.Type)
+			sources = append(sources, p.astType(arg.Type, nil))
+		}
+	}
+	if len(inputs) != len(trait.TypeParams) {
+		c.diag(node, TraitInvalid, fmt.Sprintf("trait %s requires %d positional inputs, got %d", trait.Symbol.Name.Name, len(trait.TypeParams), len(inputs)))
+	} else {
+		c.checkTraitInputConstraints(inputs, trait, node)
+	}
+	return inputs, nodes, sources
+}
+
+func (c *checker) checkTraitInputConstraints(inputs []types.Type, trait *Trait, node ast.Node) bool {
+	sub := map[*types.TypeParam]types.Type{}
+	for index, parameter := range trait.TypeParams {
+		sub[parameter] = inputs[index]
+	}
+	validInputs := true
+	for index, parameter := range trait.TypeParams {
+		if constraint, ok := c.out.Substitute(parameter.Constraint(), sub, nil).Underlying().(*types.Interface); ok && valid(inputs[index]) && !c.satisfiesGo(inputs[index], constraint) {
+			c.diag(node, GenericConstraint, "trait input does not satisfy declared constraint: "+parameter.Obj().Name())
+			validInputs = false
+		}
+	}
+	return validInputs
 }
 
 func (c *checker) finishImpls() {
@@ -727,6 +834,11 @@ func sameSignature(a, b *types.Signature) bool {
 }
 func (c *checker) implSignature(m *Member, impl *Impl) *types.Signature {
 	sub := map[*types.TypeParam]types.Type{impl.Trait.Self: impl.Target}
+	for index, parameter := range impl.Trait.TypeParams {
+		if index < len(impl.Inputs) {
+			sub[parameter] = impl.Inputs[index]
+		}
+	}
 	for _, a := range impl.Trait.Associated {
 		if t := impl.Associated[a.Name]; t != nil {
 			sub[a.Param] = t

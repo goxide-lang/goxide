@@ -133,7 +133,8 @@ pub struct Ghost[T any] { pub Value T }
 impl[T Copy] Copy for Ghost[T] {
     func copy(self &Self) Self { return Self{Value: Copy::copy(&self.Value)} }
 }
-pub func grow[T Copy](value T) { grow[[]T]([]T{value}) }
+pub func copyOnce[T Copy](value T) T { return Copy::copy(&value) }
+pub func copyNested[T Copy](value []T) []T { return copyOnce[[]T](value) }
 pub trait Probe { func probe(self Self) int }
 pub struct Runner {}
 impl Probe for Runner {

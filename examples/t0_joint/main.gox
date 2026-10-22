@@ -22,8 +22,8 @@ func load(input []byte)Result[cfg::Request,error]{q,e:=cfg::Decode(input);if e!=
 func number(s string)Result[int,error]{n,e:=strconv::Atoi(s);if e!=nil{return Result[int,error]::Err(e)};return Result[int,error]::Ok(n)}
 func allowed(n,limit int)Result[int,error]{if n<=0||n>limit{return Result[int,error]::Err(OverCapacity)};return Result[int,error]::Ok(n)}
 func prepare(input []byte,capacity int,enabled bool)Result[Receipt,Failure]{
-    q:=load(input)?
-    id:=number(q.Name)?
+    q:=match load(input) { Result[cfg::Request,error]::Ok(value) => value, Result[cfg::Request,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, }
+    id:=match number(q.Name) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, }
     budget:=store::Budget{Limit:capacity,History:[]int{capacity}}
     view:=match q.Mode{
         cfg::Mode::Immediate=>store::View(&budget),
@@ -31,7 +31,7 @@ func prepare(input []byte,capacity int,enabled bool)Result[Receipt,Failure]{
     }
     units:=match q.Mode{
         cfg::Mode::Immediate=>1,
-        cfg::Mode::Batch(n)=>allowed(n,view.Limit)?,
+        cfg::Mode::Batch(n)=>match allowed(n,view.Limit) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, },
     }
     units=match q.Mode{cfg::Mode::Immediate=>units,cfg::Mode::Batch(_)=>units}
     snapshot:=*view

@@ -749,7 +749,11 @@ func (p *printer) node(n ast.Node) {
 		p.node(n.Args)
 	case *ast.QualifiedSelectorExpr:
 		p.expression(n.X, 7)
-		p.s(".")
+		if n.Static {
+			p.s("::")
+		} else {
+			p.s(".")
+		}
 		p.node(n.Sel)
 		p.s("::<")
 		p.node(n.Trait)

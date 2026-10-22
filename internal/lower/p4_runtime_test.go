@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/goxide-lang/goxide/internal/lower"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestP4RuntimeViewsAndQualifiedMethods(t *testing.T) {
@@ -35,6 +36,14 @@ func TestP4ExplicitWrappersShareNativeStateAndRestrictMethodSet(t *testing.T) {
 func prepareP4RuntimeFixture(t *testing.T, fixtureName, modulePath string) string {
 	t.Helper()
 	fixture := filepath.Join("testdata", "traits", fixtureName)
+	input := t.TempDir()
+	if err := os.CopyFS(input, os.DirFS(fixture)); err != nil {
+		t.Fatal(err)
+	}
+	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module "+modulePath+"\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fixture = input
 	configuration := testConfig(t)
 	if fixtureName == "runtime" {
 		// This fixture deliberately gives several traits the same Read method.

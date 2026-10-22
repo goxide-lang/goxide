@@ -23,14 +23,24 @@ func hasConstParameters(generics *syntax.GenericParams) bool {
 
 func constFunctionName(function *traitFunction, instance *check.FunctionInstance) string {
 	name := templateFunctionName(function)
+	if instance != nil {
+		for _, argument := range instance.ConstArgs {
+			if argument.Param != nil {
+				return caseFunctionName(name, instance.Case)
+			}
+		}
+	}
 	if instance == nil || len(instance.ConstArgs) == 0 {
+		if instance != nil {
+			return caseFunctionName(name, instance.Case)
+		}
 		return name
 	}
 	name = strings.TrimSuffix(name, "Func")
 	for _, argument := range instance.ConstArgs {
 		name += "N" + strconv.FormatInt(argument.Value, 10)
 	}
-	return name + "Func"
+	return caseFunctionName(name+"Func", instance.Case)
 }
 
 func (e *emitter) instanceBodyFunction() *check.FunctionInstance {
@@ -53,6 +63,9 @@ func (e *emitter) constFunctionDeclarations(function *traitFunction) []goast.Dec
 	previousInfo, previousBody := e.info, e.instanceBody
 	defer func() { e.info, e.instanceBody = previousInfo, previousBody }()
 	var out []goast.Decl
+	if e.validation != nil {
+		out = append(out, e.templateFunctionDeclaration(function)...)
+	}
 	for _, definition := range definitions {
 		e.info, e.instanceBody = definition.Body.Info, definition.Body
 		out = append(out, e.templateFunctionDeclaration(function)...)

@@ -538,9 +538,10 @@ type MacroExpr struct {
 }
 type QualifiedSelectorExpr struct {
 	Base
-	X     Expr
-	Sel   *Ident
-	Trait Type
+	X      Expr
+	Sel    *Ident
+	Trait  Type
+	Static bool
 }
 type AwaitExpr struct {
 	Base

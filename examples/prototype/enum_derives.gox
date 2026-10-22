@@ -55,7 +55,7 @@ func remote(cause error) AppError { return AppError::Remote(cause) }
 func missing() AppError { return AppError::Missing }
 
 func failWith(cause error) Result[int,AppError] {
-    n := Result[int,error]::Err(cause)?
+    n := Result[int,AppError]::Err(FromAppError(cause))?
     return Result[int,AppError]::Ok(n)
 }
 func failureValue(value Result[int,AppError]) AppError {
@@ -73,7 +73,7 @@ func decodeCommand(data []byte) Result[Command,error] {
 }
 
 func loadCommand(data []byte) Result[Command,AppError] {
-    command := decodeCommand(data)?
+    command := match decodeCommand(data) { Result[Command,error]::Ok(value) => value, Result[Command,error]::Err(cause) => { return Result[Command,AppError]::Err(FromAppError(cause)) }, }
     match command {
         Command::Batch(items) => {
             if len(items) == 0 {

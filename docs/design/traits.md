@@ -1,6 +1,6 @@
 # 显式 trait 与多接口实现
 
-状态：P4 已在新管线完成。运行时 impl 统一生成独立 wrapper，实例业务方法与 marker 均位于 wrapper；静态操作和泛型证据使用空 carrier。有体 impl 执行用户方法体，固定包级工厂负责适配，便利入口只转发工厂，不修改外部原生类型。
+状态：支持参数化 trait、条件 impl、通用互斥与定义点证据选择。运行时 impl 统一生成独立 wrapper，实例业务方法与 marker 均位于 wrapper；无输入 trait 的静态操作使用空 carrier，参数化应用使用完整类型对的操作入口。有体 impl 执行用户方法体，固定包级工厂负责适配，便利入口只转发工厂，不修改外部原生类型。
 
 `declare impl` 及其相容合并已移除，trait 关系由普通有体 impl 建立。Go interface 保留结构式语义，普通 Go 双向调用与既有 `declare func/type` 支持保留，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
 
@@ -9,7 +9,8 @@
 | P4 | 非泛型 trait、本包具体 struct/enum 的 impl、三种 self 接收权限、普通关联类型、单 trait 泛型约束、空 carrier、运行时 wrapper 和 Go 适配。 |
 | 支持 | [Go 成员 sugar](#go-成员-sugar)：按独立分发模块配置，默认开启；所有 impl 使用相同生成规则。 |
 | 支持 | [条件 impl 与按需实例化](../rfcs/0031-generic-protocol-impls.md)：多约束、具体 impl 直接生成、条件实例由 Goxide 实际请求引出；Go 使用明确普通入口。 |
-| 后续 | 泛型 trait、GAT、默认关联类型、默认方法和特化。 |
+| 支持 | trait 位置类型输入、完整 application 投影、输入推导与限定静态方法值；共享符号约束、包级开放世界与有限分支定义检查。 |
+| 后续 | GAT、默认关联类型、默认方法和特化。 |
 
 状态编号见[决策登记](decisions.md)。有体实现写在基础类型 T 上，通过成员的 `self Self` / `self &Self` / `self &mut Self` 区分传值、只读和可写接收者。普通 Go 调用按真实方法集和源级权限检查，不把原生指针视为获得引用权限。见[源级权限约束](overview.md#35-源级权限与-go-表示必须分开)。
 
@@ -57,7 +58,7 @@ impl TextReader for Buffer {
 
 有体 impl 完整提供业务方法，即使原生类型已有同名同签名方法，也执行所写方法体。需要复用时显式委托。两个 impl 的基础目标均是 Buffer，接收者权限分别由 self 参数声明。
 
-规范实现键包含基础目标与 trait 身份；P4 的 trait 不带位置参数，关联类型是实现的输出。相同目标不能以不同关联类型再实现同一 trait。有体实现保持唯一，同一实现重复书写也不合并。实现包须满足归属规则；外部 trait 和外部类型不能仅通过透明别名取得本地归属，需要适配时使用自己的包装类型，见 [Go 互操作](go-interop.md)。
+规范实现头包含 `Self`、trait 身份与有序位置输入，关联类型是选定实现的输出。`Q[A, Item=B]` 中 A 参与选择，B 在选择后核对；改变关联输出不能区分重叠实现。互斥的条件实现可具有相同头，重复有体实现不合并。归属按完整头的顺序检查：trait owner 可定义实现，否则从 Self 开始寻找允许的本地具名根，前缀不能含未覆盖参数；透明别名不创造本地身份。完整规则见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md) 与 [RFC 0032](../rfcs/0032-from-into-conversions.md)。
 
 ## 3. 统一 wrapper 的 Go 降低
 
@@ -138,7 +139,7 @@ b.read::<TextReader>()
 b.read::<byteio::Reader>(p)
 ```
 
-限定调用选择一个 trait；等价函数式写法为 `Trait::read(b, p)`。普通调用按已有引用与寻址规则构造接收者候选，在同一候选中先查固有方法，再查可见显式 trait 实现；多个 trait 候选须限定。不得把某个后续候选上的固有方法提前覆盖先前候选。struct 与 enum 使用同一源级成员表，不引入 Rust Deref trait 或所有权系统。已经是 trait 视图的值调用该 trait 方法，不再按原对象的方法集选择。
+限定调用选择一个完整 trait application，例如 `x.read::<Reader[int]>()`；静态调用与保存值可写 `T::from::<From[S]>`。输入可从实参、已知结果上下文或唯一的定义点约束推导，不枚举 impl 猜输入。等价函数式写法为 `Trait::read(b, p)`。普通调用按已有引用与寻址规则构造接收者候选，在同一候选中先查固有方法，再查可见显式 trait 实现；多个 trait 候选须限定。不得把某个后续候选上的固有方法提前覆盖先前候选。struct 与 enum 使用同一源级成员表，不引入 Rust Deref trait 或所有权系统。已经是 trait 视图的值调用该 trait 方法，不再按原对象的方法集选择。
 
 新增 impl 可能使未限定的 goxide 调用歧义，但不得改变既有 wrapper 或工厂符号。Go API 稳定与源码调用永不歧义不是同一承诺。
 
@@ -146,7 +147,7 @@ b.read::<byteio::Reader>(p)
 
 前端先选择 impl，生成 `TraitView(value, implID)`，记录接收者、业务来源和固定工厂。运行时视图生成对应 wrapper，接收者表达式只求值一次。
 
-该转换保留源级类型和引用权限。真实接收类型/impl 不匹配仍 error；引用视图可以复制、返回和存储，不追加逃逸或独占检查。原生指针不因 marker 自动获得不同源类型。
+该转换保留源级类型和引用权限。trait 位置输入保持不变型：即使 `&T` 与 `&mut T` 降低为相同 Go 指针，也不能互换对应的运行时视图。真实接收类型/impl 不匹配仍 error；引用视图可以复制、返回和存储，不追加逃逸或独占检查。原生指针不因 marker 自动获得不同源类型。
 
 | 使用位置 | 转换规则 |
 | --- | --- |
@@ -185,9 +186,13 @@ b.read::<byteio::Reader>(p)
 
 P4 的工厂采用 `As<Type><Trait>`，helper 采用 `As<Trait>` / `For<Type>`；marker 编码完整 trait 身份。carrier operation 始终有 trait 与成员身份确定的 canonical 名称；唯一静态成员可增加简短转发，保留 `typeinfo.Of[T]().Abc()`。多个 trait 具有同名静态成员时，只使用 canonical 入口，无限定源码调用报歧义，简短入口不猜选实现。生成名与用户声明冲突时诊断，不静默覆盖或重命名；新增实现不能改变旧工厂身份。
 
+参数化 trait 的静态入口和运行时工厂按完整 application 与实现声明生成稳定名称，不在 Self 上添加容易冲突的短业务方法。普通 Go 调用仍使用 Go 泛型与固定工厂；输入及关联输出编码到 marker 签名，源级引用权限由编译器继续检查。
+
 ### 条件实现与 Go 泛型边界
 
 已实现，完整规则见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#3-转译范围需求闭包与-go-入口)。具体 impl 在前提检查通过后直接生成；带待定协议条件的模板按当前转译范围的实际请求递归实例化。普通 Go 能直接表达的泛型继续保留，`Box[T any]` 不因 `impl[T Default] Default for Box[T]` 收紧 T。
+
+定义体在未知类型与长度下检查。条件应用若需要有限分区，每个可达分支都单独检查，包括未被调用的 const 泛型函数和 impl；实例化保留定义点选定的证据。
 
 Go 使用者通过 Goxide 明确导出的普通函数使用条件能力，例如 `EncodeRoot` / `DecodeRoot` 或 `DefaultUserBox`。这些入口确定目标类型及所需条件；Go 调用者不传 Ops、不引用实例哈希名。现有具体协议入口仍完整保留。实例化的 `Box[User]` 不单独获得 Go 专属 receiver 方法；sugar 仍遵循下节的本地目标与接收者规则。
 

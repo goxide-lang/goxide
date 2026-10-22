@@ -26,6 +26,14 @@ func TestP4StaticProtocolExample(t *testing.T) {
 
 func TestP4CarrierAssociatedTypesAndNativeEnumViews(t *testing.T) {
 	fixture := filepath.Join("testdata", "traits", "static")
+	input := t.TempDir()
+	if err := os.CopyFS(input, os.DirFS(fixture)); err != nil {
+		t.Fatal(err)
+	}
+	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module traitfixture\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fixture = input
 	module, err := lower.PrepareModule([]string{fixture}, "traitfixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)

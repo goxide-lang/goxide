@@ -122,10 +122,14 @@ type Constructor struct {
 type Try struct {
 	Input, Output *Instance
 	Value, Error  types.Type
-	Conversion    *resolve.Symbol
+	Conversion    *MemberSelection
 }
 
 type Info struct {
+	traitApplications   map[*types.Named]*TraitBound
+	BodyCases           map[*ast.FuncDecl][]*BodyCase
+	ImplCases           map[*Impl][]*ImplCase
+	parameterIdentities map[*types.TypeParam]string
 	ArrayPatterns       map[*types.TypeParam]*ArrayPattern
 	ConstParams         map[*resolve.Symbol]*ConstParam
 	ConstValues         map[ast.Expr]ConstValue
@@ -197,12 +201,7 @@ func (r *Info) EnumOf(t types.Type) *Instance {
 
 // Check leaves the input trees and resolver tables unchanged.
 func Check(files map[string]*ast.File, res *resolve.Result) (*Info, []Diagnostic) {
-	return CheckWithConversions(files, res, nil)
-}
-
-// CheckWithConversions registers only the explicitly supplied one-step helpers.
-func CheckWithConversions(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref) (*Info, []Diagnostic) {
-	return checkFiles(files, res, helpers, Options{})
+	return checkFiles(files, res, Options{})
 }
 
 // CheckWithImporter uses the source module's Go dependency graph for external types.
@@ -219,10 +218,10 @@ type Options struct {
 }
 
 func CheckWithOptions(files map[string]*ast.File, res *resolve.Result, options Options) (*Info, []Diagnostic) {
-	return checkFiles(files, res, nil, options)
+	return checkFiles(files, res, options)
 }
 
-func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, options Options) (*Info, []Diagnostic) {
+func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options) (*Info, []Diagnostic) {
 	imports, sizes := options.Importer, options.Sizes
 	if imports == nil {
 		imports = importer.Default()
@@ -280,6 +279,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	}
 	c.prepareTraits()
 	c.prepareImpls()
+	c.signaturePhase = 1
 	for _, p := range res.Packages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
@@ -287,20 +287,29 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 			c.signatures(f.AST.Items)
 		}
 	}
+	if !c.certifyImpls() {
+		// Member and body evidence require a certified declaration graph.
+		// Stop here so derived missing-evidence errors cannot hide the actual
+		// overlapping declarations, including conflicts in dependencies.
+		return r.checkedResult()
+	}
+	c.checkTraitPrerequisiteCycles()
 	c.finishImpls()
+	c.signaturePhase = 2
+	for _, p := range res.Packages {
+		c.pkg = c.packages[p]
+		for _, f := range p.Files {
+			c.file = f
+			c.signatures(f.AST.Items)
+		}
+	}
+	c.signaturePhase = 0
 	c.validateConcreteImpls()
 	c.referenceHints = c.newPermissionChecker()
 	c.referenceHints.eachFile(func(items []ast.Item) { c.referenceHints.collect(items) })
 	c.enumNames()
 	c.collectDerives()
 	c.prepareGoSugar()
-	for _, ref := range helpers {
-		if f := res.Files[ref.File]; f != nil {
-			if s := f.Definitions[ref.ID]; s != nil {
-				c.conversions = append(c.conversions, s)
-			}
-		}
-	}
 	for _, p := range res.Packages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
@@ -308,13 +317,18 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 			c.globals(f.AST.Items)
 		}
 	}
-	for _, p := range res.Packages {
-		c.pkg = c.packages[p]
-		for _, f := range p.Files {
-			c.file = f
-			for _, item := range f.AST.Items {
-				c.item(item)
+	for _, implementations := range []bool{true, false} {
+		for _, p := range res.Packages {
+			c.pkg = c.packages[p]
+			for _, f := range p.Files {
+				c.file = f
+				c.checkItemPhase(f.AST.Items, implementations)
 			}
+		}
+		if implementations {
+			c.prepareImplCases()
+			c.out.Sugar = nil
+			c.prepareGoSugar()
 		}
 	}
 	for _, instance := range c.instances {
@@ -326,6 +340,10 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	if len(r.Diagnostics) == 0 {
 		c.collectDemands()
 	}
+	return r.checkedResult()
+}
+
+func (r *Info) checkedResult() (*Info, []Diagnostic) {
 	sort.SliceStable(r.Diagnostics, func(i, j int) bool {
 		a, b := r.Diagnostics[i], r.Diagnostics[j]
 		if a.File != b.File {
@@ -337,39 +355,52 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 }
 
 type checker struct {
-	constantStack   map[*resolve.Symbol]bool
-	out             *Info
-	files           map[string]*ast.File
-	file            *resolve.File
-	pkg             *types.Package
-	packages        map[*resolve.Package]*types.Package
-	named           map[*resolve.Symbol]*types.Named
-	variants        map[*resolve.Symbol]*Constructor
-	builtins        map[string]*Enum
-	imported        map[string]*types.Package
-	importer        types.Importer
-	returns         []types.Type
-	conversions     []*resolve.Symbol
-	constants       map[*resolve.Symbol]constant.Value
-	instances       []genericInstance
-	declarations    map[*resolve.Symbol]*typeDeclaration
-	traits          map[*resolve.Symbol]*Trait
-	implOrder       []*Impl
-	memberSymbols   map[*resolve.Symbol]*Member
-	bounds          map[*types.TypeParam][]*TraitBound
-	activeBounds    []*TraitBound
-	proofStack      []proofObligation
-	proofFailure    string
-	functionBounds  map[*types.Signature][]*TraitBound
-	currentImpl     *Impl
-	currentTrait    *Trait
-	currentSelf     types.Type
-	sourceTypes     map[*resolve.Symbol]permissionDeclaration
-	sourceValues    map[*resolve.Symbol]sourceExpression
-	referenceHints  *permissionChecker
-	referenceModes  map[*resolve.Symbol]RefMode
-	currentReceiver *resolve.Symbol
-	goInterop       *goInterop
+	pendingDeclarations    []pendingDeclaration
+	pendingImpls           []pendingImpl
+	pendingTraits          []*Trait
+	traitRequirementsReady map[*Trait]bool
+	expectedSources        map[ast.Expr]*permission
+	returnSources          []*permission
+	caseFunctions          map[*types.Signature]caseFunction
+	signatureCases         map[*ast.FuncDecl]*bodyCaseState
+	checkedFunctions       map[*ast.FuncDecl]uint8
+	caseState              *bodyCaseState
+	checkingBodyCase       bool
+	signaturePhase         uint8
+	constantStack          map[*resolve.Symbol]bool
+	out                    *Info
+	files                  map[string]*ast.File
+	file                   *resolve.File
+	pkg                    *types.Package
+	packages               map[*resolve.Package]*types.Package
+	named                  map[*resolve.Symbol]*types.Named
+	variants               map[*resolve.Symbol]*Constructor
+	builtins               map[string]*Enum
+	imported               map[string]*types.Package
+	importer               types.Importer
+	returns                []types.Type
+	constants              map[*resolve.Symbol]constant.Value
+	instances              []genericInstance
+	declarations           map[*resolve.Symbol]*typeDeclaration
+	traits                 map[*resolve.Symbol]*Trait
+	implOrder              []*Impl
+	memberSymbols          map[*resolve.Symbol]*Member
+	bounds                 map[*types.TypeParam][]*TraitBound
+	activeBounds           []*TraitBound
+	activeGoConstraints    []GoPredicate
+	coherence              *coherenceState
+	proofStack             []proofObligation
+	proofFailure           string
+	functionBounds         map[*types.Signature][]*TraitBound
+	currentImpl            *Impl
+	currentTrait           *Trait
+	currentSelf            types.Type
+	sourceTypes            map[*resolve.Symbol]permissionDeclaration
+	sourceValues           map[*resolve.Symbol]sourceExpression
+	referenceHints         *permissionChecker
+	referenceModes         map[*resolve.Symbol]RefMode
+	currentReceiver        *resolve.Symbol
+	goInterop              *goInterop
 }
 
 func (c *checker) diag(n ast.Node, code, message string) {

@@ -88,9 +88,6 @@ func (c *checker) collectDerives() {
 		}
 		if entry.Name == "Error" {
 			c.errorProtocol(d)
-			if entry.Helper != nil {
-				c.conversions = append(c.conversions, entry.Helper)
-			}
 		}
 	}
 	for _, d := range c.out.Derives {

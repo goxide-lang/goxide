@@ -47,13 +47,15 @@ func (e *emitter) operationFunction(selection *check.MemberSelection) goast.Expr
 		}
 	}
 	if selection.Impl != nil && parameterizedImpl(implTemplate(selection.Impl)) && (m.Trait != nil || len(implTemplate(selection.Impl).Requirements) != 0) {
-		return e.templateOperation(selection)
+		if !genericPairOps(e.info, selection.Impl) || e.privateEvidence(check.Evidence{Impl: selection.Impl}) {
+			return e.templateOperation(selection)
+		}
 	}
 	if m.Trait == nil {
 		return enumIndices(e.sourceGlobal(m.File, e.inherentName(m)), e.implTypeArgs(selection.Impl))
 	}
 	var target types.Type
-	if selection.Bound != nil && selection.Bound.Param != nil {
+	if selection.Bound != nil && selection.Bound.Param != nil && !parameterizedTrait(selection.Bound.Trait) {
 		target = traitBoundTarget(selection.Bound)
 	} else if selection.Impl != nil && carrierTarget(e.info, implTemplate(selection.Impl)) && e.nameableType(selection.Impl.Target) {
 		target = selection.Impl.Target
@@ -91,6 +93,9 @@ func (e *emitter) memberExpr(selection *check.MemberSelection) goast.Expr {
 		return &goast.SelectorExpr{X: e.goType(selection.Signature.Params().At(0).Type()), Sel: goast.NewIdent(m.GoName)}
 	}
 	if m.Static || selection.MethodExpr {
+		if inferred, ok := e.inferredOperationValue(selection); ok {
+			return inferred
+		}
 		return e.operationFunction(selection)
 	}
 	receiver := adjustReceiver(e.expr(selection.Receiver), selection.Address, selection.Deref)
@@ -107,6 +112,10 @@ func (e *emitter) memberCall(call *syntax.CallExpr) (goast.Expr, bool) {
 	selection := e.info.Members[call.Fun]
 	if selection == nil || e.replacements[call.Fun] != nil {
 		return nil, false
+	}
+	if len(selection.Evidence.Cases) != 0 {
+		e.fail(call.Fun, "trait 条件证据尚未实例化为操作或约束回调")
+		return nil, true
 	}
 	m := selection.Member
 	var fun goast.Expr

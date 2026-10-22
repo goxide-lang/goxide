@@ -28,20 +28,7 @@ func (c *checker) globals(items []ast.Item) {
 func (c *checker) item(item ast.Item) {
 	switch n := item.(type) {
 	case *ast.FuncDecl:
-		old := c.returns
-		oldBounds := c.activeBounds
-		c.activeBounds = c.out.GenericBounds[n]
-		oldReceiver := c.currentReceiver
-		if m := c.memberSymbols[c.symbol(n.Name)]; m != nil && !m.Static {
-			c.currentReceiver = c.symbol(n.Params[0].Names[0])
-		}
-		c.returns = tupleTypes(c.tuple(n.Results))
-		c.tuple(n.Params)
-		c.tuple(n.Recv)
-		c.block(n.Body)
-		c.returns = old
-		c.currentReceiver = oldReceiver
-		c.activeBounds = oldBounds
+		c.checkFunctionCases(n)
 	case *ast.VarDecl:
 		c.values(n.Specs)
 	case *ast.ConstDecl:
@@ -63,15 +50,53 @@ func (c *checker) item(item ast.Item) {
 	}
 }
 
+func (c *checker) checkItemPhase(items []ast.Item, implementations bool) {
+	for _, item := range items {
+		switch declaration := item.(type) {
+		case *ast.ModDecl:
+			c.checkItemPhase(declaration.Items, implementations)
+		case *ast.DeclareDecl:
+			c.checkItemPhase([]ast.Item{declaration.Decl}, implementations)
+		case *ast.ImplDecl:
+			if implementations {
+				c.item(item)
+			}
+		default:
+			if !implementations {
+				c.item(item)
+			}
+		}
+	}
+}
+
+func (c *checker) checkFunctionBody(n *ast.FuncDecl) {
+	old, oldBounds, oldReceiver := c.returns, c.activeBounds, c.currentReceiver
+	oldSources := c.returnSources
+	c.activeBounds = c.out.GenericBounds[n]
+	if member := c.memberSymbols[c.symbol(n.Name)]; member != nil && !member.Static {
+		c.currentReceiver = c.symbol(n.Params[0].Names[0])
+	}
+	c.returns = tupleTypes(c.tuple(n.Results))
+	c.returnSources = c.newPermissionChecker().functionType(nil, n.Results).results
+	c.tuple(n.Params)
+	c.tuple(n.Recv)
+	c.block(n.Body)
+	c.validateConstBody(n.Body, c.returns)
+	c.returns, c.activeBounds, c.currentReceiver = old, oldBounds, oldReceiver
+	c.returnSources = oldSources
+}
+
 func (c *checker) values(specs []*ast.ValueSpec) {
 	for _, s := range specs {
 		var want types.Type
+		var source *permission
 		if s.Type != nil {
 			want = c.typ(s.Type)
+			source = c.newPermissionChecker().astType(s.Type, nil)
 		}
 		var values []types.Type
 		for _, v := range s.Values {
-			t := c.expr(v, want)
+			t := c.exprSource(v, want, source)
 			if tuple, ok := t.(*types.Tuple); ok {
 				values = append(values, tupleTypes(tuple)...)
 			} else {
@@ -90,8 +115,8 @@ func (c *checker) values(specs []*ast.ValueSpec) {
 				c.out.Symbols[sym] = t
 				if s.Type != nil {
 					c.sourceTypes[sym] = permissionDeclaration{c.file, s.Type}
-				} else if i < len(s.Values) {
-					c.sourceValues[sym] = sourceExpression{c.file, s.Values[i]}
+				} else {
+					c.sourceValues[sym] = c.sourceValueAt(s.Values, i)
 				}
 				if sym.Kind == resolve.Constant && i < len(s.Values) {
 					c.constants[sym] = c.constant(s.Values[i])
@@ -126,10 +151,12 @@ func (c *checker) stmt(stmt ast.Stmt) {
 		c.item(n.Decl)
 	case *ast.LetStmt:
 		var want types.Type
+		var source *permission
 		if n.Type != nil {
 			want = c.typ(n.Type)
+			source = c.newPermissionChecker().astType(n.Type, nil)
 		}
-		got := c.expr(n.Value, want)
+		got := c.exprSource(n.Value, want, source)
 		if want == nil {
 			want = defaultType(got)
 		}
@@ -139,7 +166,7 @@ func (c *checker) stmt(stmt ast.Stmt) {
 				if n.Type != nil {
 					c.sourceTypes[sym] = permissionDeclaration{c.file, n.Type}
 				} else {
-					c.sourceValues[sym] = sourceExpression{c.file, n.Value}
+					c.sourceValues[sym] = sourceExpression{file: c.file, node: n.Value}
 				}
 			}
 		}
@@ -147,10 +174,12 @@ func (c *checker) stmt(stmt ast.Stmt) {
 		var values []types.Type
 		for i, r := range n.Rhs {
 			var want types.Type
+			var source *permission
 			if i < len(n.Lhs) {
 				want = c.expr(n.Lhs[i], nil)
+				source = c.memberSource(n.Lhs[i], want)
 			}
-			t := c.expr(r, want)
+			t := c.exprSource(r, want, source)
 			if tuple, ok := t.(*types.Tuple); ok {
 				values = append(values, tupleTypes(tuple)...)
 			} else {
@@ -170,8 +199,8 @@ func (c *checker) stmt(stmt ast.Stmt) {
 						c.out.Symbols[sym] = defaultType(values[i])
 					}
 					c.out.Types[id] = c.out.Symbols[sym]
-					if i < len(n.Rhs) && c.sourceTypes[sym].node == nil {
-						c.sourceValues[sym] = sourceExpression{c.file, n.Rhs[i]}
+					if c.sourceTypes[sym].node == nil {
+						c.sourceValues[sym] = c.sourceValueAt(n.Rhs, i)
 					}
 				}
 			} else {
@@ -187,10 +216,14 @@ func (c *checker) stmt(stmt ast.Stmt) {
 	case *ast.ReturnStmt:
 		for i, v := range n.Results {
 			var want types.Type
+			var source *permission
 			if i < len(c.returns) {
 				want = c.returns[i]
 			}
-			c.expr(v, want)
+			if i < len(c.returnSources) {
+				source = c.returnSources[i]
+			}
+			c.exprSource(v, want, source)
 		}
 	case *ast.IfStmt:
 		c.checkMatchHeader(n.Init, n.Cond)

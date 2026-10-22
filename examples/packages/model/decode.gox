@@ -9,8 +9,8 @@ func decode(data []byte) Result[Config,error] {
 }
 
 func load(data []byte) Result[Config,ConfigError] {
-    config := decode(data)?
-    valid := validate(config)?
+    config := match decode(data) { Result[Config,error]::Ok(value) => value, Result[Config,error]::Err(cause) => { return Result[Config,ConfigError]::Err(FromConfigError(cause)) }, }
+    valid := match validate(config) { Result[Config,error]::Ok(value) => value, Result[Config,error]::Err(cause) => { return Result[Config,ConfigError]::Err(FromConfigError(cause)) }, }
     return Result[Config,ConfigError]::Ok(valid)
 }
 

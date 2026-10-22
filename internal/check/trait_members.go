@@ -9,6 +9,11 @@ import (
 
 func (b *TraitBound) MethodSignature(m *Member) *types.Signature {
 	sub := map[*types.TypeParam]types.Type{b.Trait.Self: b.Target}
+	for index, parameter := range b.Trait.TypeParams {
+		if index < len(b.Inputs) {
+			sub[parameter] = b.Inputs[index]
+		}
+	}
 	for _, a := range b.Trait.Associated {
 		sub[a.Param] = b.Associated[a.Name]
 	}
@@ -145,7 +150,13 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 		}
 		sub := map[*types.TypeParam]types.Type{}
 		n := types.Unalias(target).(*types.Named)
-		for index, a := range trait.Associated {
+		for index, parameter := range trait.TypeParams {
+			if index < n.TypeArgs().Len() {
+				sub[parameter] = n.TypeArgs().At(index)
+			}
+		}
+		for offset, a := range trait.Associated {
+			index := len(trait.TypeParams) + offset
 			if index < n.TypeArgs().Len() {
 				sub[a.Param] = n.TypeArgs().At(index)
 			}
@@ -306,7 +317,13 @@ func (c *checker) qualifiedCall(call *ast.CallExpr) bool {
 		return false
 	}
 	actual := c.expr(call.Args[0], nil)
-	selection := c.instanceMember(path, call.Args[0], actual, name, trait)
+	prefix := *path.Path
+	prefix.Segments = parts[:len(parts)-1]
+	qualified := &ast.QualifiedSelectorExpr{Base: path.Base, X: call.Args[0], Trait: &ast.PathType{Base: path.Base, Path: &prefix}, Sel: parts[len(parts)-1].Name}
+	selection, handled := c.parameterizedMember(qualified, call.Args[1:], nil, true, call.Ellipsis)
+	if !handled {
+		selection = c.instanceMember(path, call.Args[0], actual, name, trait)
+	}
 	if selection == nil {
 		return false
 	}
@@ -347,16 +364,37 @@ func (c *checker) adaptTrait(node ast.Expr, actual, expected types.Type) types.T
 	}
 	var impl *Impl
 	lookupTarget, base := c.receiverTargets(node, actual)
-	impl = c.findImpl(lookupTarget, trait)
+	n := types.Unalias(expected).(*types.Named)
+	goal := &TraitBound{info: c.out, Trait: trait, Target: lookupTarget}
+	if known := c.out.traitApplications[n]; known != nil {
+		copy := *known
+		goal = &copy
+		goal.Target = lookupTarget
+	} else {
+		for index := range trait.TypeParams {
+			if index < n.TypeArgs().Len() {
+				goal.Inputs = append(goal.Inputs, n.TypeArgs().At(index))
+			}
+		}
+	}
+	goal.targetPermission = c.memberSource(node, actual)
+	if !types.Identical(actual, lookupTarget) && goal.targetPermission != nil {
+		goal.targetPermission = goal.targetPermission.elem
+	}
+	impl = c.proveApplication(goal).Impl
 	if impl == nil {
-		impl = c.findImpl(base, trait)
+		goal.Target = base
+		if goal.targetPermission != nil && !types.Identical(goal.targetPermission.typ, base) {
+			goal.targetPermission = goal.targetPermission.elem
+		}
+		impl = c.proveApplication(goal).Impl
 	}
 	if impl == nil {
 		c.diag(node, TraitInvalid, "runtime trait conversion requires an explicit implementation")
 		return actual
 	}
-	n := types.Unalias(expected).(*types.Named)
-	for i, a := range trait.Associated {
+	for offset, a := range trait.Associated {
+		i := len(trait.TypeParams) + offset
 		if i >= n.TypeArgs().Len() || !types.Identical(n.TypeArgs().At(i), impl.Associated[a.Name]) {
 			c.diag(node, TraitInvalid, "associated binding does not match implementation: "+a.Name)
 		}

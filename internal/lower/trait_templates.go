@@ -81,7 +81,7 @@ func (e *emitter) callbackOperation(bound *check.TraitBound, member *check.Membe
 		return e.callbackReference(names[member.Name])
 	}
 	for candidate, names := range e.boundCallbacks {
-		if candidate.Trait == bound.Trait && types.Identical(traitBoundTarget(candidate), traitBoundTarget(bound)) {
+		if candidate.ApplicationKey() == bound.ApplicationKey() {
 			return e.callbackReference(names[member.Name])
 		}
 	}
@@ -94,6 +94,10 @@ func (e *emitter) callbackArguments(bounds []*check.TraitBound, evidence []check
 		selected := check.Evidence{Bound: bound}
 		if index < len(evidence) {
 			selected = evidence[index]
+		}
+		if len(selected.Cases) != 0 {
+			e.fail(bound.Trait.Decl, "trait 条件证据尚未实例化为操作或约束回调")
+			return nil
 		}
 		for _, method := range bound.Trait.Methods {
 			member := method
@@ -126,7 +130,9 @@ func (e *emitter) templateImplParameters(impl *check.Impl) *goast.FieldList {
 	for _, parameter := range impl.TypeParams {
 		fields = append(fields, &goast.Field{Names: []*goast.Ident{goast.NewIdent(parameter.Obj().Name())}, Type: e.goConstraint(parameter.Constraint())})
 	}
-	fields = append(fields, projectedParameters(impl.Requirements)...)
+	if impl.Case == nil {
+		fields = append(fields, projectedParameters(impl.Requirements)...)
+	}
 	if len(fields) == 0 {
 		return nil
 	}
@@ -150,13 +156,15 @@ func (e *emitter) templateImplArguments(impl *check.Impl) []goast.Expr {
 
 func (e *emitter) templateOperationName(member *check.Member) string {
 	impl := implTemplate(member.Impl)
-	return "Goxide" + e.traits.templateNames[impl] + exportedName(member.GoName) + "Func"
+	return caseFunctionName("Goxide"+e.traits.templateNames[impl]+exportedName(member.GoName)+"Func", memberCase(member))
 }
 
 func (e *emitter) templateOperation(selection *check.MemberSelection) goast.Expr {
 	impl := selection.Impl
-	function := enumIndices(e.sourceGlobal(impl.File, e.templateOperationName(selection.Member)), e.templateImplArguments(impl))
-	return &goast.CallExpr{Fun: function, Args: append(e.templateImplWitnessArguments(impl), e.callbackArguments(implTemplate(impl).Requirements, impl.RequirementEvidence)...)}
+	member := selectedMember(selection)
+	function := enumIndices(e.sourceGlobal(impl.File, e.templateOperationName(member)), e.operationTemplateArguments(member))
+	bounds, evidence := operationCallbacks(member)
+	return &goast.CallExpr{Fun: function, Args: append(e.operationWitnessArguments(member), e.callbackArguments(bounds, evidence)...)}
 }
 
 func (e *emitter) templateOperationDeclaration(member *check.Member) []goast.Decl {
@@ -169,7 +177,11 @@ func (e *emitter) templateOperationDeclaration(member *check.Member) []goast.Dec
 	e.generatedName(name, member.Decl)
 	ft := &goast.FuncType{Params: e.params(member.Decl.Params), Results: e.params(member.Decl.Results)}
 	business := &goast.FuncLit{Type: ft, Body: e.functionBody(ft, member.Decl.Body)}
-	outer := &goast.FuncType{TypeParams: e.templateImplParameters(member.Impl), Params: parameters, Results: &goast.FieldList{List: []*goast.Field{{Type: ft}}}}
+	typeParameters := e.templateImplParameters(member.Impl)
+	if branch := memberCase(member); branch != nil {
+		typeParameters = e.bodyCaseParameters(branch)
+	}
+	outer := &goast.FuncType{TypeParams: typeParameters, Params: parameters, Results: &goast.FieldList{List: []*goast.Field{{Type: ft}}}}
 	declaration := &goast.FuncDecl{Name: goast.NewIdent(name), Type: outer, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{business}}}}}
 	e.anchor(declaration, member.Decl)
 	out := []goast.Decl{declaration}
@@ -189,11 +201,21 @@ func templateFunctionName(function *traitFunction) string {
 
 func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.Decl {
 	node := function.decl
+	if (e.instanceBody == nil || e.instanceBody.Case == nil) && len(e.info.BodyCases[node]) != 0 {
+		return e.caseFunctionDeclarations(function)
+	}
 	bounds := e.info.GenericBounds[node]
+	var branch *check.BodyCase
+	if e.instanceBody != nil && e.instanceBody.Case != nil {
+		branch = e.instanceBody.Case
+		bounds = e.bodyCaseBounds(branch)
+	}
 	parameters, restore := e.templateCallbacks(bounds)
 	defer restore()
 	typeParameters := e.functionTypeParameters(node)
-	if projected := projectedParameters(bounds); len(projected) != 0 {
+	if branch != nil {
+		typeParameters = e.bodyCaseParameters(branch)
+	} else if projected := projectedParameters(bounds); len(projected) != 0 {
 		if typeParameters == nil {
 			typeParameters = &goast.FieldList{}
 		}
@@ -214,8 +236,17 @@ func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.D
 		}
 		count += len(group.Names)
 	}
+	if branch != nil {
+		count = len(branch.TypeParams)
+	}
 	for i := 0; i < count; i++ {
-		callParameters.List = append(callParameters.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent("_")}, Type: resultFunc(e.goType(signature.TypeParams().At(i)))})
+		var parameter *types.TypeParam
+		if branch != nil {
+			parameter = branch.TypeParams[i]
+		} else {
+			parameter = signature.TypeParams().At(i)
+		}
+		callParameters.List = append(callParameters.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent("_")}, Type: resultFunc(e.goType(parameter))})
 	}
 	callParameters.List = append(callParameters.List, parameters.List...)
 	out := []goast.Decl{declaration}
@@ -227,12 +258,13 @@ func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.D
 
 func (e *emitter) templateFunctionInstance(instance *check.FunctionInstance, function *traitFunction) goast.Expr {
 	var args []goast.Expr
-	for _, typ := range instance.TypeArgs {
+	for _, typ := range functionCaseArguments(instance) {
 		args = append(args, e.goType(typ))
 	}
 
 	factory := enumIndices(e.sourceGlobal(function.symbol.Decl.File, constFunctionName(function, instance)), args)
-	return &goast.CallExpr{Fun: factory, Args: e.callbackArguments(e.info.GenericBounds[function.decl], instance.Evidence)}
+	bounds, evidence := e.functionCallbacks(function, instance)
+	return &goast.CallExpr{Fun: factory, Args: e.callbackArguments(bounds, evidence)}
 }
 
 // Preserve the semantic ellipsis when source positions are absent in helpers.
@@ -252,6 +284,9 @@ func (e *emitter) traitTemplateDeclarations(node syntax.Item) []goast.Decl {
 	impl := e.info.Impls[declaration]
 	if impl != nil && len(impl.ConstParams) != 0 {
 		var out []goast.Decl
+		if e.validation != nil {
+			out = append(out, e.templateImplDeclarations(impl)...)
+		}
 		for _, definition := range e.traits.impls {
 			if definition.Template == impl {
 				out = append(out, e.templateImplDeclarations(definition)...)
@@ -262,7 +297,7 @@ func (e *emitter) traitTemplateDeclarations(node syntax.Item) []goast.Decl {
 	if impl == nil || !parameterizedImpl(impl) {
 		return nil
 	}
-	if e.info.Demands != nil && e.info.Demands.ImplTemplates[impl] && !e.traits.templateImpls[impl] {
+	if e.validation == nil && e.info.Demands != nil && e.info.Demands.ImplTemplates[impl] && !e.traits.templateImpls[impl] && !implHasBodyCases(e.info, impl) {
 		return nil
 	}
 	return e.templateImplDeclarations(impl)
@@ -276,10 +311,15 @@ func (e *emitter) templateImplDeclarations(impl *check.Impl) []goast.Decl {
 		}
 	}
 	for _, member := range impl.Methods {
+		if len(e.info.BodyCases[member.Decl]) != 0 {
+			out = append(out, e.caseMethodDeclarations(member)...)
+			out = append(out, e.instanceDeclarations(member.Decl)...)
+			continue
+		}
 		if e.traits.memberNeedsBinding(member) {
 			out = append(out, e.templateBindingDeclaration(member))
 		}
-		if (len(impl.ConstArgs) != 0 || e.traits.helperImpls[impl]) && (impl.Trait != nil || len(impl.Requirements) != 0) {
+		if (len(impl.ConstArgs) != 0 || e.traits.helperImpls[impl]) && (e.validation != nil || impl.Trait != nil || len(impl.Requirements) != 0) {
 			out = append(out, e.templateOperationDeclaration(member)...)
 		}
 		out = append(out, e.instanceDeclarations(member.Decl)...)
@@ -288,6 +328,9 @@ func (e *emitter) templateImplDeclarations(impl *check.Impl) []goast.Decl {
 }
 
 func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
+	if e.caseViewImpl != impl && (impl.Case != nil || len(e.info.ImplCases[implTemplate(impl)]) != 0) {
+		return e.caseRuntimeDeclarations(impl)
+	}
 	parameters, restore := e.templateCallbacks(impl.Requirements)
 	defer restore()
 	name := e.traitWrapper(impl)
@@ -301,7 +344,7 @@ func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
 		}
 	}
 	if impl.Trait.Runtime {
-		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", e.implWrapperType(impl)), Type: &goast.FuncType{Params: &goast.FieldList{}}, Body: &goast.BlockStmt{}})
+		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", e.implWrapperType(impl)), Type: e.traitMarkerSignature(traitViewArguments(impl)), Body: &goast.BlockStmt{}})
 	}
 	var elements []goast.Expr
 	elements = append(elements, &goast.KeyValueExpr{Key: goast.NewIdent("target"), Value: goast.NewIdent("target")})
@@ -319,7 +362,7 @@ func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
 	factoryName := e.traitFactoryName(impl)
 	e.generatedName(factoryName, impl.Decl)
 	out = append(out, &goast.FuncDecl{Name: goast.NewIdent(factoryName), Type: &goast.FuncType{TypeParams: e.templateImplParameters(impl), Params: &goast.FieldList{List: append(e.templateImplWitnessParameters(impl), parameters.List...)}, Results: &goast.FieldList{List: []*goast.Field{{Type: ft}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{factoryBody}}}}})
-	if impl.Trait.Runtime && impl.Base != nil && e.localTypePackage(impl.Base.Obj().Pkg()) && nativeInherentImpl(impl) {
+	if impl.Trait.Runtime && impl.Case == nil && !parameterizedTrait(impl.Trait) && impl.Base != nil && e.localTypePackage(impl.Base.Obj().Pkg()) && nativeInherentImpl(impl) {
 		e.generatedMember(impl.Base, traitAs(impl), impl)
 		out = append(out, e.asDeclaration(impl, captureType(impl), nil))
 	}

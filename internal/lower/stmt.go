@@ -50,6 +50,9 @@ func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
 	case *syntax.SwitchStmt:
 		return &goast.SwitchStmt{Switch: e.pos(n), Init: e.stmt(n.Init), Tag: e.expr(n.Tag), Body: e.cases(n, n.Cases)}
 	case *syntax.TypeSwitchStmt:
+		if e.validation != nil {
+			return e.validationTypeSwitch(n, e.stmt(n.Init), e.stmt(n.Assign))
+		}
 		return &goast.TypeSwitchStmt{Switch: e.pos(n), Init: e.stmt(n.Init), Assign: e.stmt(n.Assign), Body: e.cases(n, n.Cases)}
 	case *syntax.CaseClause:
 		list := e.exprs(n.List)

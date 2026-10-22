@@ -43,7 +43,7 @@ func exercise(ok bool,trace *[]string)Result[int,Failure]{
  var r &int = &(*w)
  reader:=capture(r)
  defer func(){*trace=append(*trace,"cleanup")}()
- value:=take!(load(ok,trace))
+ value:=take!(match load(ok,trace){Result[int,error]::Ok(value)=>Result[int,Failure]::Ok(value),Result[int,error]::Err(cause)=>Result[int,Failure]::Err(FromFailure(cause)),})
  bump(w)
  scalar:=func(int)int{return -100};_=scalar
  *trace=append(*trace,"continued")

@@ -48,6 +48,13 @@ func (p *traitProgram) prepareBindings(info *check.Info) {
 		for _, evidence := range impl.RequirementEvidence {
 			inspectImpl(evidence.Impl)
 		}
+		for declaration, branch := range impl.MethodCases {
+			evidence := impl.MethodCaseEvidence[declaration]
+			connect(branch.Requirements, evidence)
+			for _, supplied := range evidence {
+				inspectImpl(supplied.Impl)
+			}
+		}
 	}
 	inspect := func(current *check.Info) {
 		for node, selection := range current.Members {
@@ -73,14 +80,26 @@ func (p *traitProgram) prepareBindings(info *check.Info) {
 		}
 		for _, instance := range current.FunctionInstances {
 			if function := p.functions[instance.Signature]; function != nil {
-				connect(info.GenericBounds[function.decl], instance.Evidence)
+				if instance.Case != nil {
+					connect(instance.Case.Requirements, instance.CaseEvidence)
+				} else {
+					connect(info.GenericBounds[function.decl], instance.Evidence)
+				}
 			}
 			for _, evidence := range instance.Evidence {
+				inspectImpl(evidence.Impl)
+			}
+			for _, evidence := range instance.CaseEvidence {
 				inspectImpl(evidence.Impl)
 			}
 		}
 	}
 	inspect(info)
+	for _, branches := range info.BodyCases {
+		for _, branch := range branches {
+			inspect(branch.Info)
+		}
+	}
 	if info.Demands != nil {
 		for _, bodies := range info.Demands.Bodies {
 			for _, body := range bodies {
@@ -141,7 +160,7 @@ func markBinding[K comparable](bindings map[K]map[string]bool, key K, method str
 
 func (p *traitProgram) boundNeedsBinding(bound *check.TraitBound, member string) bool {
 	for candidate, methods := range p.boundBindings {
-		if candidate.Trait == bound.Trait && types.Identical(traitBoundTarget(candidate), traitBoundTarget(bound)) && methods[member] {
+		if candidate.ApplicationKey() == bound.ApplicationKey() && methods[member] {
 			return true
 		}
 	}
@@ -171,7 +190,7 @@ func (e *emitter) bindingSignature(selection *check.MemberSelection) *types.Sign
 }
 
 func (e *emitter) bindingFunction(selection *check.MemberSelection) goast.Expr {
-	member := selection.Member
+	member := selectedMember(selection)
 	if selection.Bound != nil {
 		if callback := e.callbackOperation(selection.Bound, &check.Member{Name: "bind:" + member.Name}); callback != nil {
 			return callback
@@ -179,14 +198,17 @@ func (e *emitter) bindingFunction(selection *check.MemberSelection) goast.Expr {
 	}
 	if selection.Impl != nil && parameterizedImpl(implTemplate(selection.Impl)) {
 		impl := selection.Impl
-		factory := enumIndices(e.sourceGlobal(impl.File, e.templateBindingName(member)), e.templateImplArguments(impl))
-		return &goast.CallExpr{Fun: factory, Args: append(e.templateImplWitnessArguments(impl), e.callbackArguments(implTemplate(impl).Requirements, impl.RequirementEvidence)...)}
+		if !genericPairOps(e.info, impl) || e.privateEvidence(check.Evidence{Impl: impl}) {
+			factory := enumIndices(e.sourceGlobal(impl.File, e.templateBindingName(member)), e.operationTemplateArguments(member))
+			bounds, evidence := operationCallbacks(member)
+			return &goast.CallExpr{Fun: factory, Args: append(e.operationWitnessArguments(member), e.callbackArguments(bounds, evidence)...)}
+		}
 	}
 	if member.Trait == nil {
 		return e.sourceGlobal(member.File, e.inherentName(member)+"Bind")
 	}
 	var target types.Type
-	if selection.Bound != nil && selection.Bound.Param != nil {
+	if selection.Bound != nil && selection.Bound.Param != nil && !parameterizedTrait(selection.Bound.Trait) {
 		target = traitBoundTarget(selection.Bound)
 	}
 	if selection.Impl != nil && carrierTarget(e.info, implTemplate(selection.Impl)) && e.nameableType(selection.Impl.Target) {
@@ -205,17 +227,19 @@ func (p *traitInference) binding(selection *check.MemberSelection) goast.Expr {
 	if impl == nil || !parameterizedImpl(implTemplate(impl)) {
 		return p.parameter(p.e.bindingFunction(selection), p.e.bindingSignature(selection))
 	}
-	args, parameters := p.callbacks(implTemplate(impl).Requirements, impl.RequirementEvidence)
-	witnesses, witnessTypes := p.implWitnesses(impl)
+	member := selectedMember(selection)
+	bounds, evidence := operationCallbacks(member)
+	args, parameters := p.callbacks(bounds, evidence)
+	witnesses, witnessTypes := p.operationWitnesses(member)
 	args, parameters = append(witnesses, args...), append(witnessTypes, parameters...)
-	factory := p.parameter(p.e.sourceGlobal(impl.File, p.e.templateBindingName(selection.Member)), signatureOf(parameters, p.e.bindingSignature(selection)))
+	factory := p.parameter(p.e.sourceGlobal(impl.File, p.e.templateBindingName(member)), signatureOf(parameters, p.e.bindingSignature(selection)))
 	return &goast.CallExpr{Fun: factory, Args: args}
 }
 
 // The Go method value captures this wrapper once. wrapperMethod contains the
 // original body and establishes a fresh self parameter on every invocation.
 func (e *emitter) boundWrapperMethod(member *check.Member, receiver goast.Expr) goast.Expr {
-	if member.Trait == nil {
+	if member.Trait == nil || memberCase(member) != nil {
 		return e.boundInherentBody(member, receiver)
 	}
 	target := receiver
@@ -265,7 +289,11 @@ func (e *emitter) templateBindingDeclaration(member *check.Member) goast.Decl {
 	binder := &goast.FuncLit{Type: binderType, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{e.boundWrapperMethod(member, receiver)}}}}}
 	name := e.templateBindingName(member)
 	e.generatedName(name, member.Decl)
-	declaration := &goast.FuncDecl{Name: goast.NewIdent(name), Type: &goast.FuncType{TypeParams: e.templateImplParameters(member.Impl), Params: parameters, Results: &goast.FieldList{List: []*goast.Field{{Type: binderType}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{binder}}}}}
+	typeParameters := e.templateImplParameters(member.Impl)
+	if branch := memberCase(member); branch != nil {
+		typeParameters = e.bodyCaseParameters(branch)
+	}
+	declaration := &goast.FuncDecl{Name: goast.NewIdent(name), Type: &goast.FuncType{TypeParams: typeParameters, Params: parameters, Results: &goast.FieldList{List: []*goast.Field{{Type: binderType}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{binder}}}}}
 	if member.Trait == nil {
 		e.anchor(declaration, member.Decl)
 	}

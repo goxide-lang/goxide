@@ -99,10 +99,14 @@ func (c *checker) checkReferences() {
 	globals := p.env
 	p.globals = globals
 	p.eachFile(func(items []ast.Item) { p.checkItems(items, globals) })
+	c.checkCaseReferences(globals)
 }
 
 func (c *checker) newPermissionChecker() *permissionChecker {
 	p := &permissionChecker{c: c, env: permissionEnv{}, declared: permissionEnv{}, functions: map[*resolve.Symbol]*permissionFunction{}, named: map[*types.Named]permissionDeclaration{}, enumFiles: map[*Enum]*resolve.File{}, building: map[*resolve.Symbol]bool{}, observed: permissionEnv{}, initializers: map[*resolve.Symbol]*permissionInitializer{}}
+	if c.referenceHints != nil {
+		p.enumFiles = cloneMap(c.referenceHints.enumFiles)
+	}
 	for s, d := range c.declarations {
 		if n := c.named[s]; n != nil {
 			p.named[n.Origin()] = permissionDeclaration{d.file, d.node}
@@ -126,6 +130,10 @@ func (p *permissionChecker) collect(items []ast.Item) {
 		switch n := item.(type) {
 		case *ast.FuncDecl:
 			oldBounds := p.c.activeBounds
+			oldState := p.c.caseState
+			if !p.c.checkingBodyCase && p.c.signatureCases[n] != nil {
+				p.c.caseState = p.c.signatureCases[n]
+			}
 			p.c.activeBounds = p.c.out.GenericBounds[n]
 			q := p.functionType(n.Params, n.Results)
 			q.typ = p.c.out.Symbols[p.c.symbol(n.Name)]
@@ -140,6 +148,7 @@ func (p *permissionChecker) collect(items []ast.Item) {
 			p.functions[p.c.symbol(n.Name)] = f
 			q.function = f
 			p.c.activeBounds = oldBounds
+			p.c.caseState = oldState
 		case *ast.EnumDecl:
 			p.enumFiles[p.c.out.Enums[n]] = p.c.file
 		case *ast.VarDecl:
@@ -210,6 +219,9 @@ func (p *permissionChecker) checkItems(items []ast.Item, globals permissionEnv) 
 		switch n := item.(type) {
 		case *ast.FuncDecl:
 			if n.Body == nil {
+				continue
+			}
+			if !p.c.checkingBodyCase && len(p.c.out.BodyCases[n]) != 0 {
 				continue
 			}
 			oldBounds := p.c.activeBounds
@@ -367,23 +379,23 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 	if tp, ok := t.(*types.TypeParam); ok && !p.c.out.isArray(t) && sub[tp] != nil {
 		return sub[tp]
 	}
+	if parts := projectionTypePath(node); len(parts) >= 3 {
+		target, trait, qualifier := p.c.associatedPath(parts)
+		if trait != nil {
+			goal := p.c.applicationFromArgs(target, trait, qualifier.Args, node)
+			goal.targetPermission = p.c.projectionTargetPermission(parts, trait)
+			name := parts[len(parts)-1].Name.Name
+			if result := p.c.evidenceAssociatedPermission(p.c.projectionEvidence(goal, name, node), name); result != nil {
+				return p.substitutePermission(result, sub)
+			}
+		}
+	}
 	switch n := node.(type) {
 	case *ast.ProjectionType:
 		if _, self := n.X.(*ast.SelfType); self && p.c.currentImpl != nil {
 			return p.implAssociated(p.c.currentImpl, n.Item.Name, sub)
 		}
 	case *ast.PathType:
-		if n.Path != nil && len(n.Path.Segments) >= 3 {
-			parts := n.Path.Segments
-			target, trait, _ := p.c.associatedPath(parts)
-			if bound := p.c.boundFor(target, trait); bound != nil {
-				return p.boundAssociated(bound, parts[len(parts)-1].Name.Name, sub)
-			} else if trait != nil {
-				if impl := p.c.findImpl(target, trait); impl != nil {
-					return p.implAssociated(impl, parts[len(parts)-1].Name.Name, sub)
-				}
-			}
-		}
 		if tp, ok := t.(*types.TypeParam); ok && !p.c.out.isArray(t) && sub[tp] != nil {
 			return sub[tp]
 		}
@@ -392,6 +404,11 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 			if seg.Args != nil {
 				q.args = nil
 				if trait := p.c.traitOf(t); trait != nil {
+					for _, arg := range seg.Args.Args {
+						if arg.Name == nil {
+							q.args = append(q.args, p.astType(arg.Type, sub))
+						}
+					}
 					for _, assoc := range trait.Associated {
 						for _, a := range seg.Args.Args {
 							if a.Name != nil && a.Name.Name == assoc.Name {
@@ -452,6 +469,25 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 				q.fields[name.Name] = value
 			}
 		}
+	case *ast.InterfaceType:
+		q.fields = map[string]*permission{}
+		for _, method := range n.Methods {
+			if method.Name != nil {
+				value := p.functionType(method.Params, method.Results)
+				if iface, ok := t.Underlying().(*types.Interface); ok {
+					for index := 0; index < iface.NumMethods(); index++ {
+						if iface.Method(index).Name() == method.Name.Name {
+							value.typ = iface.Method(index).Type()
+						}
+					}
+				}
+				q.fields[method.Name.Name] = p.substitutePermission(value, sub)
+			} else if method.Type != nil {
+				for name, value := range p.astType(method.Type, sub).fields {
+					q.fields[name] = value
+				}
+			}
+		}
 	case *ast.FuncType:
 		q.params, q.results = p.paramTypes(n.Params), p.paramTypes(n.Results)
 		for i, parameter := range q.params {
@@ -460,6 +496,9 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 		for i, result := range q.results {
 			q.results[i] = p.substitutePermission(result, sub)
 		}
+	}
+	if len(sub) != 0 {
+		return p.substitutePermission(q, sub)
 	}
 	return q
 }
@@ -783,7 +822,12 @@ func (p *permissionChecker) compatible(got, want *permission, seen map[[2]types.
 		}
 	}
 	if got.typ != nil && want.typ != nil {
-		if p.c.traitOf(got.typ) != nil && types.Identical(got.typ, want.typ) {
+		if trait := p.c.traitOf(got.typ); trait != nil && types.Identical(got.typ, want.typ) {
+			for index := range trait.TypeParams {
+				if index >= len(got.args) || index >= len(want.args) || !p.c.sameSourceType(got.args[index], want.args[index]) {
+					return false
+				}
+			}
 			for i, arg := range got.args {
 				if i < len(want.args) && !p.compatible(arg, want.args[i], seen) {
 					return false

@@ -1,0 +1,7 @@
+package api
+
+pub trait Source {
+    type Item
+    func values(self Self) []Self::Item
+    func label(self Self) string
+}

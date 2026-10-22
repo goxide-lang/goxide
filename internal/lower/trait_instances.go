@@ -1,6 +1,8 @@
 package lower
 
 import (
+	"crypto/sha256"
+	"fmt"
 	goast "go/ast"
 	"go/types"
 	"path/filepath"
@@ -20,10 +22,23 @@ type traitInstance struct {
 // Concrete and ordinary generic impl bodies use their own rebound semantic
 // view. Other instantiations of the same declaration must stay independent.
 func (e *emitter) memberBodyInfo(member *check.Member) func() {
+	if e.instanceBody != nil && e.instanceBody.Case != nil && e.instanceBody.Decl == member.Decl {
+		return func() {}
+	}
 	previousInfo, previousBody := e.info, e.instanceBody
+	if e.caseViewImpl == member.Impl {
+		view := member.Impl.Case
+		e.info = view.Info
+		branch := view.Methods[member.Decl]
+		if branch != nil {
+			e.info = branch.Info
+		}
+		e.instanceBody = &check.BodyInstance{Node: member.Decl, Decl: member.Decl, File: member.File, Impl: member.Impl, Info: e.info, Case: branch, Substitution: view.Substitution, ConstSubstitution: member.Impl.ConstSubstitution}
+		return func() { e.info, e.instanceBody = previousInfo, previousBody }
+	}
 	if e.info.Demands != nil {
 		for _, body := range e.info.Demands.Bodies[member.Decl] {
-			if body.Impl != nil && implTemplate(body.Impl) == implTemplate(member.Impl) && types.Identical(body.Impl.Target, member.Impl.Target) {
+			if body.Impl != nil && implTemplate(body.Impl) == implTemplate(member.Impl) && (check.Evidence{Impl: body.Impl}).Key() == (check.Evidence{Impl: member.Impl}).Key() {
 				e.info, e.instanceBody = body.Info, body
 				break
 			}
@@ -33,16 +48,46 @@ func (e *emitter) memberBodyInfo(member *check.Member) func() {
 }
 
 func instanceImplKey(info *check.Info, impl *check.Impl, member string) string {
-	return implIdentity(info, impl) + ":" + types.TypeString(impl.Target, func(pkg *types.Package) string { return canonicalPackage(info, pkg) }) + ":" + member
+	key := implIdentity(info, impl) + ":" + (check.Evidence{Impl: impl}).Key() + ":" + member
+	for _, declaration := range impl.Methods {
+		if declaration.Name != member || impl.MethodCases[declaration.Decl] == nil {
+			continue
+		}
+		key += ":case:" + impl.MethodCases[declaration.Decl].Key
+		for _, evidence := range impl.MethodCaseEvidence[declaration.Decl] {
+			key += "{case:" + evidence.Key() + "}"
+		}
+	}
+	return key
 }
 
 func instanceFunctionKey(info *check.Info, function *traitFunction, instance *check.FunctionInstance) string {
 	var key strings.Builder
-	key.WriteString(function.symbol.Decl.File)
-	key.WriteString(":" + strconv.Itoa(int(function.decl.Span().Start)))
+	owner := filepath.ToSlash(filepath.Dir(function.symbol.Decl.File))
+	if source := info.Resolve.Files[function.symbol.Decl.File]; source != nil {
+		owner = canonicalPackage(info, types.NewPackage(owner, source.AST.Package.Name))
+	}
+	key.WriteString(owner + "::" + function.symbol.GoName)
+	if instance.Case != nil {
+		key.WriteString(":case:" + instance.Case.Key)
+	}
 	for _, typ := range instance.TypeArgs {
 		key.WriteByte(':')
 		key.WriteString(types.TypeString(typ, func(pkg *types.Package) string { return canonicalPackage(info, pkg) }))
+	}
+	for _, argument := range instance.ConstArgs {
+		key.WriteString(":const:")
+		if argument.Param != nil {
+			key.WriteString(argument.Param.Name.Name)
+		} else {
+			key.WriteString(strconv.FormatInt(argument.Value, 10))
+		}
+	}
+	for _, evidence := range instance.Evidence {
+		key.WriteString("{" + evidence.Key() + "}")
+	}
+	for _, evidence := range instance.CaseEvidence {
+		key.WriteString("{case:" + evidence.Key() + "}")
 	}
 	return key.String()
 }
@@ -131,7 +176,6 @@ func (p *traitProgram) prepareInstances(info *check.Info) {
 			p.templateFunctions[declared.decl] = true
 		}
 	}
-	var keys []string
 	for _, bodies := range info.Demands.Bodies {
 		for _, body := range bodies {
 			if body.Decl == nil || len(body.Substitution) == 0 || len(body.ConstSubstitution) != 0 {
@@ -149,7 +193,7 @@ func (p *traitProgram) prepareInstances(info *check.Info) {
 				key = instanceImplKey(info, body.Impl, body.Decl.Name.Name)
 				name = "Goxide" + typeTargetName(body.Impl.Target)
 				if body.Impl.Trait != nil {
-					name += traitName(body.Impl.Trait)
+					name += traitApplicationName(body.Impl)
 				}
 				name += exportedName(body.Decl.Name.Name)
 			} else if body.Function != nil {
@@ -164,31 +208,11 @@ func (p *traitProgram) prepareInstances(info *check.Info) {
 				}
 			}
 			if key != "" && p.instances[key] == nil {
+				digest := sha256.Sum256([]byte(key))
+				name += fmt.Sprintf("_%x", digest[:4])
 				p.instances[key] = &traitInstance{body: body, name: name}
-				keys = append(keys, key)
 			}
 		}
-	}
-	sort.Strings(keys)
-	used, reserved := map[string]bool{}, map[string]bool{}
-	for _, key := range keys {
-		instance := p.instances[key]
-		reserved[filepath.Dir(instance.body.File)+":"+instance.name] = true
-	}
-	for _, key := range keys {
-		instance := p.instances[key]
-		prefix := filepath.Dir(instance.body.File) + ":"
-		name := instance.name
-		if used[prefix+name] {
-			for suffix := 2; ; suffix++ {
-				candidate := name + strconv.Itoa(suffix)
-				if !used[prefix+candidate] && !reserved[prefix+candidate] {
-					instance.name = candidate
-					break
-				}
-			}
-		}
-		used[prefix+instance.name] = true
 	}
 }
 

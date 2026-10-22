@@ -27,14 +27,18 @@ type DemandPlan struct {
 // resolver tables are shared with the original Info and must not be rewritten.
 // A package initializer has Node set and Decl, Impl, Function left nil.
 type BodyInstance struct {
-	ConstSubstitution map[*ConstParam]ConstValue
-	Node              ast.Node
-	Decl              *ast.FuncDecl
-	File              string
-	Impl              *Impl
-	Function          *FunctionInstance
-	Substitution      map[*types.TypeParam]types.Type
-	Info              *Info
+	Case                   *BodyCase
+	CaseEvidence           []Evidence
+	ConstSubstitution      map[*ConstParam]ConstValue
+	Node                   ast.Node
+	Decl                   *ast.FuncDecl
+	File                   string
+	Impl                   *Impl
+	Function               *FunctionInstance
+	Substitution           map[*types.TypeParam]types.Type
+	Info                   *Info
+	permissionSubstitution map[*types.TypeParam]*permission
+	caseOnly               bool
 }
 
 func (c *checker) collectDemands() {
@@ -45,18 +49,20 @@ func (c *checker) collectDemands() {
 	}
 	c.out.Demands = plan
 	collector := &demandCollector{c: c, plan: plan, functions: map[*types.Signature]*demandFunction{}, declarations: map[*ast.FuncDecl]*demandFunction{}, generic: map[*Impl]bool{}}
-	file, pkg, bounds, active := c.file, c.pkg, c.bounds, c.activeBounds
+	file, pkg, bounds, active, goConstraints := c.file, c.pkg, c.bounds, c.activeBounds, c.activeGoConstraints
 	impl, trait, self := c.currentImpl, c.currentTrait, c.currentSelf
 	defer func() {
 		c.file, c.pkg, c.bounds, c.activeBounds = file, pkg, bounds, active
+		c.activeGoConstraints = goConstraints
 		c.currentImpl, c.currentTrait, c.currentSelf = impl, trait, self
 	}()
 	// Template assumptions are not proofs for a demanded concrete operation.
-	c.bounds, c.activeBounds = map[*types.TypeParam][]*TraitBound{}, nil
+	c.bounds, c.activeBounds, c.activeGoConstraints = map[*types.TypeParam][]*TraitBound{}, nil, nil
 	c.currentImpl, c.currentTrait, c.currentSelf = nil, nil, nil
 	collector.index()
 	collector.classify()
 	plan.Info = bodyInfo(c.out, nil, nil)
+	collector.caseRoots()
 	collector.roots()
 }
 
@@ -148,10 +154,50 @@ func (d *demandCollector) index() {
 			instance.Decl, instance.File = function.decl, function.file
 		}
 	}
+	for declaration, branches := range d.c.out.BodyCases {
+		function := d.declarations[declaration]
+		if function == nil || function.impl != nil {
+			continue
+		}
+		file := d.c.out.Resolve.Files[function.file]
+		symbol := file.Definitions[declaration.Name.ID()]
+		for _, branch := range branches {
+			if signature, ok := branch.Info.Symbols[symbol].(*types.Signature); ok {
+				d.functions[signature] = function
+			}
+		}
+	}
+}
+
+func (d *demandCollector) caseRoots() {
+	check := func(branch *BodyCase) {
+		body := &BodyInstance{Node: branch.Decl, Decl: branch.Decl, File: branch.File, Case: branch, Substitution: branch.Substitution, ConstSubstitution: branch.ConstSubstitution, permissionSubstitution: branch.permissionSubstitution, caseOnly: true}
+		d.addBody(body)
+		branch.Info = body.Info
+	}
+	for _, function := range d.ordered {
+		for _, branch := range d.c.out.BodyCases[function.decl] {
+			check(branch)
+		}
+	}
+	for _, impl := range d.c.implOrder {
+		for _, branch := range d.c.out.ImplCases[impl] {
+			for _, member := range impl.Methods {
+				if method := branch.Methods[member.Decl]; method != nil {
+					check(method)
+				}
+			}
+		}
+	}
 }
 
 func (d *demandCollector) classify() {
 	for _, impl := range d.c.implOrder {
+		for _, member := range impl.Methods {
+			if len(d.c.out.BodyCases[member.Decl]) != 0 {
+				d.plan.ImplTemplates[impl] = true
+			}
+		}
 		if len(impl.ConstParams) != 0 {
 			d.plan.ImplTemplates[impl] = true
 			continue
@@ -160,11 +206,15 @@ func (d *demandCollector) classify() {
 			continue
 		}
 		d.enter(impl.File)
-		if d.c.matchImpl(impl, impl.Target) == nil {
+		if d.c.matchImplApplication(impl, d.c.implApplication(impl)) == nil {
 			d.plan.ImplTemplates[impl] = true
 		}
 	}
 	for _, function := range d.ordered {
+		if function.impl == nil && len(d.c.out.BodyCases[function.decl]) != 0 {
+			d.plan.FunctionTemplates[function.decl] = true
+			continue
+		}
 		if function.impl == nil && len(d.c.out.FunctionConstParams[function.signature]) != 0 {
 			d.plan.FunctionTemplates[function.decl] = true
 			continue
@@ -244,19 +294,22 @@ func (d *demandCollector) pendingImpl(impl *Impl) bool {
 	if impl == nil {
 		return false
 	}
-	if len(impl.ConstArgs) != 0 {
-		return openConstants(impl.ConstArgs)
+	if openConstants(impl.ConstArgs) {
+		return true
 	}
-	if !containsTypeParameter(impl.Target) {
+	if !containsTypeParameter(impl.Target) && !openArguments(impl.Inputs) {
 		return false
 	}
 	template := implDeclaration(impl)
-	return d.plan.ImplTemplates[template] || d.c.matchImpl(template, impl.Target) == nil
+	return d.plan.ImplTemplates[template] || d.c.matchImplApplication(template, d.c.implApplication(impl)) == nil
 }
 
 func (d *demandCollector) pendingSelection(selection *MemberSelection) bool {
+	if len(selection.Evidence.Cases) != 0 {
+		return true
+	}
 	if selection.Bound != nil {
-		witness := d.c.prove(selection.Bound.Target, selection.Bound.Trait)
+		witness := d.c.proveApplication(selection.Bound)
 		return witness.Impl == nil || d.pendingImpl(witness.Impl)
 	}
 	return d.pendingImpl(selection.Impl)
@@ -273,7 +326,7 @@ func (d *demandCollector) roots() {
 			continue
 		}
 		if len(impl.TypeParams) == 0 {
-			if resolved := d.c.matchImpl(impl, impl.Target); resolved != nil {
+			if resolved := d.c.matchImplApplication(impl, d.c.implApplication(impl)); resolved != nil {
 				d.impl(resolved, impl.Decl)
 			}
 		} else if (impl.Trait == nil || sugar[impl]) && !d.plan.ImplTemplates[impl] {
@@ -313,13 +366,18 @@ func (d *demandCollector) addBody(body *BodyInstance) {
 	if body.Decl != nil {
 		d.plan.Bodies[body.Decl] = append(d.plan.Bodies[body.Decl], body)
 	}
-	body.Info = bodyInfo(d.c.out, body.Substitution, body.ConstSubstitution)
+	source := d.c.out
+	if body.Case != nil {
+		source = body.Case.Info
+	}
+	body.Info = bodyInfoPermissions(source, body.Substitution, body.ConstSubstitution, body.permissionSubstitution)
+	body.Info.Demands = d.plan
 	d.stack = append(d.stack, body)
 	defer func() { d.stack = d.stack[:len(d.stack)-1] }()
-	oldBounds := d.c.activeBounds
-	defer func() { d.c.activeBounds = oldBounds }()
+	oldBounds, oldGoConstraints := d.c.activeBounds, d.c.activeGoConstraints
+	defer func() { d.c.activeBounds, d.c.activeGoConstraints = oldBounds, oldGoConstraints }()
 	d.enterBody(body)
-	r := newBodyTypes(d.c.out, body.Substitution, body.ConstSubstitution)
+	r := newBodyTypes(source, body.Substitution, body.ConstSubstitution)
 	ast.Walk(body.Node, func(node ast.Node) bool {
 		if d.failed || node == nil {
 			return false
@@ -327,52 +385,53 @@ func (d *demandCollector) addBody(body *BodyInstance) {
 		// Recursive demand processing changes the checker's lexical file and premises.
 		d.enterBody(body)
 		if expression, ok := node.(ast.Expr); ok {
-			if selection := d.c.out.Members[expression]; selection != nil {
-				copy := *selection
-				copy.Signature, _ = r.typ(selection.Signature).(*types.Signature)
-				var selected *Impl
-				if selection.Bound != nil {
-					target := r.typ(selection.Bound.Target)
-					witness := d.c.prove(target, selection.Bound.Trait)
-					selected, copy.Bound = witness.Impl, witness.Bound
-				} else if selection.Impl != nil {
-					selected = d.c.matchImpl(implDeclaration(selection.Impl), r.typ(selection.Impl.Target))
-				}
-				if selected != nil {
-					copy.Impl, copy.Bound = selected, nil
-					for _, member := range selected.Methods {
-						if member.Decl == selection.Member.Decl || member.Name == selection.Member.Name && member.Static == selection.Member.Static {
-							copy.Member = member
-							break
-						}
+			if selection := source.Members[expression]; selection != nil {
+				copy, resolved := d.instantiateMember(source, selection, body.Substitution, body.ConstSubstitution, body.permissionSubstitution)
+				if copy.Impl != nil {
+					if !body.caseOnly {
+						d.impl(copy.Impl, node)
 					}
-					d.impl(selected, node)
-				} else if copy.Bound == nil && (selection.Impl != nil || selection.Bound != nil) {
+				} else if !resolved {
 					d.unresolved(node, "member implementation")
 				}
-				body.Info.Members[expression] = &copy
-				if body.Function == nil && body.Impl == nil {
-					d.plan.Info.Members[expression] = &copy
+				body.Info.Members[expression] = copy
+				if body.Function == nil && body.Impl == nil && !body.caseOnly {
+					d.plan.Info.Members[expression] = copy
 				}
 			}
-			if view := d.c.out.TraitViews[expression]; view != nil {
+			if attempt, ok := expression.(*ast.TryExpr); ok {
+				if trial := source.Tries[attempt]; trial != nil && trial.Conversion != nil {
+					selected, resolved := d.instantiateMember(source, trial.Conversion, body.Substitution, body.ConstSubstitution, body.permissionSubstitution)
+					body.Info.Tries[attempt].Conversion = selected
+					if !resolved {
+						d.unresolved(node, "propagation conversion")
+					} else if selected.Impl != nil && !body.caseOnly {
+						d.impl(selected.Impl, node)
+					}
+					if body.Function == nil && body.Impl == nil && !body.caseOnly {
+						d.plan.Info.Tries[attempt] = body.Info.Tries[attempt]
+					}
+				}
+			}
+			if view := source.TraitViews[expression]; view != nil {
 				copy := *view
 				copy.Type, copy.SourceType = r.typ(view.Type), r.typ(view.SourceType)
 				if view.Impl != nil {
-					copy.Impl = d.c.matchImpl(implDeclaration(view.Impl), r.typ(view.Impl.Target))
-					if copy.Impl != nil {
+					witness, _ := d.instantiateEvidence(Evidence{Impl: view.Impl}, body.Substitution, body.ConstSubstitution, body.permissionSubstitution)
+					copy.Impl = witness.Impl
+					if copy.Impl != nil && !body.caseOnly {
 						d.impl(copy.Impl, node)
-					} else {
+					} else if copy.Impl == nil {
 						d.unresolved(node, "trait view implementation")
 					}
 				}
 				body.Info.TraitViews[expression] = &copy
-				if body.Function == nil && body.Impl == nil {
+				if body.Function == nil && body.Impl == nil && !body.caseOnly {
 					d.plan.Info.TraitViews[expression] = &copy
 				}
 			}
 		}
-		if instance := d.c.out.FunctionInstances[node]; instance != nil {
+		if instance := source.FunctionInstances[node]; instance != nil {
 			d.enter(body.File)
 			args := make([]types.Type, len(instance.TypeArgs))
 			for i, argument := range instance.TypeArgs {
@@ -382,20 +441,25 @@ func (d *demandCollector) addBody(body *BodyInstance) {
 			for i, value := range instance.ConstArgs {
 				constants[i] = resolveConst(value, body.ConstSubstitution)
 			}
-			copy := d.functionInstance(instance.Signature, args, constants, true, node)
+			permissions := d.composePermissions(instance.permissionSubstitution, body.Substitution, body.ConstSubstitution, body.permissionSubstitution)
+			signature := instance.Signature
+			if function := d.functions[signature]; function != nil {
+				signature = function.signature
+			}
+			copy := d.functionInstanceWithPermissions(signature, args, constants, permissions, true, node)
 			if copy != nil {
-				if function := d.functions[instance.Signature]; function != nil && d.plan.FunctionTemplates[function.decl] {
+				if function := d.functions[signature]; function != nil && d.plan.FunctionTemplates[function.decl] && !body.caseOnly {
 					copy = d.function(copy, node)
 				}
 				body.Info.FunctionInstances[node] = copy
-				if body.Function == nil && body.Impl == nil {
+				if body.Function == nil && body.Impl == nil && !body.caseOnly {
 					d.plan.Info.FunctionInstances[node] = copy
 				}
 			}
 		}
 		return !d.failed
 	})
-	if body.Function == nil && body.Impl == nil {
+	if body.Function == nil && body.Impl == nil && !body.caseOnly {
 		d.mergeRoot(body)
 	}
 }
@@ -464,12 +528,12 @@ func (d *demandCollector) impl(impl *Impl, node ast.Node) {
 		d.genericImpl(template)
 		return
 	}
-	if containsTypeParameter(impl.Target) || openArguments(impl.TypeArgs) {
+	if (containsTypeParameter(impl.Target) || openArguments(impl.Inputs) || openArguments(impl.TypeArgs)) && len(impl.MethodCases) == 0 {
 		d.unresolved(node, "conditional implementation")
 		return
 	}
 	for _, old := range d.plan.Impls {
-		if implDeclaration(old) == template && types.Identical(old.Target, impl.Target) && sameEvidence(old.RequirementEvidence, impl.RequirementEvidence) {
+		if implDeclaration(old) == template && old.ApplicationKey() == impl.ApplicationKey() && sameEvidence(old.RequirementEvidence, impl.RequirementEvidence) && sameMethodCases(old.MethodCases, impl.MethodCases) && sameMethodCaseEvidence(old.MethodCaseEvidence, impl.MethodCaseEvidence) {
 			return
 		}
 	}
@@ -479,11 +543,23 @@ func (d *demandCollector) impl(impl *Impl, node ast.Node) {
 			d.impl(evidence.Impl, node)
 		}
 	}
+	for _, evidence := range impl.CaseEvidence {
+		if evidence.Impl != nil {
+			d.impl(evidence.Impl, node)
+		}
+	}
+	for _, proofs := range impl.MethodCaseEvidence {
+		for _, evidence := range proofs {
+			if evidence.Impl != nil {
+				d.impl(evidence.Impl, node)
+			}
+		}
+	}
 	for _, member := range impl.Methods {
 		if member.Decl == nil || member.Decl.Body == nil {
 			continue
 		}
-		body := &BodyInstance{Node: member.Decl, Decl: member.Decl, File: impl.File, Impl: impl, Substitution: impl.Substitution}
+		body := &BodyInstance{Node: member.Decl, Decl: member.Decl, File: impl.File, Impl: impl, Case: impl.MethodCases[member.Decl], CaseEvidence: impl.MethodCaseEvidence[member.Decl], Substitution: impl.Substitution, ConstSubstitution: impl.ConstSubstitution, permissionSubstitution: impl.permissionSubstitution}
 		d.addBody(body)
 	}
 }
@@ -496,13 +572,25 @@ func (d *demandCollector) genericImpl(impl *Impl) {
 	d.plan.GenericImpls = append(d.plan.GenericImpls, impl)
 	for _, member := range impl.Methods {
 		if member.Decl != nil && member.Decl.Body != nil {
-			d.addBody(&BodyInstance{Node: member.Decl, Decl: member.Decl, File: impl.File, Impl: impl, Substitution: impl.Substitution, ConstSubstitution: impl.ConstSubstitution})
+			sub := impl.Substitution
+			branch := impl.MethodCases[member.Decl]
+			if branch != nil {
+				sub = copySubstitution(sub)
+				for parameter, typ := range branch.Substitution {
+					sub[parameter] = typ
+				}
+			}
+			d.addBody(&BodyInstance{Node: member.Decl, Decl: member.Decl, File: impl.File, Impl: impl, Case: branch, CaseEvidence: impl.MethodCaseEvidence[member.Decl], Substitution: sub, ConstSubstitution: impl.ConstSubstitution, permissionSubstitution: impl.permissionSubstitution})
 		}
 	}
 }
 
 func (d *demandCollector) functionInstance(signature *types.Signature, args []types.Type, constants []ConstValue, diagnose bool, node ast.Node) *FunctionInstance {
-	instance := &FunctionInstance{Signature: signature, TypeArgs: append([]types.Type(nil), args...), ConstArgs: append([]ConstValue(nil), constants...), Substitution: map[*types.TypeParam]types.Type{}, ConstSubstitution: map[*ConstParam]ConstValue{}}
+	return d.functionInstanceWithPermissions(signature, args, constants, nil, diagnose, node)
+}
+
+func (d *demandCollector) functionInstanceWithPermissions(signature *types.Signature, args []types.Type, constants []ConstValue, permissions map[*types.TypeParam]*permission, diagnose bool, node ast.Node) *FunctionInstance {
+	instance := &FunctionInstance{Signature: signature, TypeArgs: append([]types.Type(nil), args...), ConstArgs: append([]ConstValue(nil), constants...), Substitution: map[*types.TypeParam]types.Type{}, ConstSubstitution: map[*ConstParam]ConstValue{}, permissionSubstitution: permissions}
 	if len(constants) != len(d.c.out.FunctionConstParams[signature]) {
 		if diagnose {
 			d.unresolved(node, "function array length")
@@ -522,18 +610,31 @@ func (d *demandCollector) functionInstance(signature *types.Signature, args []ty
 	}
 	for _, bound := range d.c.functionBounds[signature] {
 		r := newBodyTypes(d.c.out, instance.Substitution, instance.ConstSubstitution)
-		witness := d.c.prove(r.typ(bound.Target), bound.Trait)
-		if witness.Impl == nil && witness.Bound == nil {
+		goal := d.c.substituteBoundApplication(bound, instance.Substitution, instance.ConstSubstitution, instance.permissionSubstitution)
+		witness := d.c.proveApplication(goal)
+		if witness.Impl == nil && witness.Bound == nil && len(witness.Cases) == 0 {
 			if diagnose {
 				d.unresolved(node, "function prerequisite "+bound.Trait.Symbol.Name.Name)
 			}
 			return nil
+		}
+		if diagnose {
+			var ok bool
+			witness, ok = d.instantiateEvidence(witness, nil, nil, nil)
+			if !ok {
+				d.unresolved(node, "function prerequisite branch "+bound.Trait.Symbol.Name.Name)
+				return nil
+			}
 		}
 		instance.Evidence = append(instance.Evidence, witness)
 		for _, associated := range bound.Trait.Associated {
 			actual := evidenceAssociated(witness)[associated.Name]
 			if projected := projectedBinding(bound, associated.Name); projected != nil {
 				instance.Substitution[projected] = actual
+				if instance.permissionSubstitution == nil {
+					instance.permissionSubstitution = map[*types.TypeParam]*permission{}
+				}
+				instance.permissionSubstitution[projected] = d.c.evidenceAssociatedPermission(witness, associated.Name)
 			} else if !types.Identical(r.typ(bound.Associated[associated.Name]), actual) {
 				if diagnose {
 					d.unresolved(node, "associated binding "+associated.Name)
@@ -541,6 +642,15 @@ func (d *demandCollector) functionInstance(signature *types.Signature, args []ty
 				return nil
 			}
 		}
+	}
+	if len(d.c.out.BodyCases[instance.Decl]) != 0 && diagnose {
+		branch, sub, evidence, ok := d.selectBodyCase(instance.Decl, instance.Substitution, instance.ConstSubstitution, instance.permissionSubstitution)
+		if !ok {
+			d.unresolved(node, "function body branch")
+			return nil
+		}
+		instance.Case, instance.Substitution, instance.CaseEvidence = branch, sub, evidence
+		instance.permissionSubstitution = d.casePermissions(branch, sub, instance.ConstSubstitution, instance.permissionSubstitution)
 	}
 	return instance
 }
@@ -550,7 +660,7 @@ func (d *demandCollector) function(instance *FunctionInstance, node ast.Node) *F
 		return d.constFunction(instance, node)
 	}
 	for _, old := range d.plan.Functions {
-		if old.Decl == instance.Decl && identicalArguments(old.TypeArgs, instance.TypeArgs) && sameEvidence(old.Evidence, instance.Evidence) {
+		if old.Decl == instance.Decl && old.Case == instance.Case && identicalArguments(old.TypeArgs, instance.TypeArgs) && sameEvidence(old.Evidence, instance.Evidence) && sameEvidence(old.CaseEvidence, instance.CaseEvidence) {
 			return old
 		}
 	}
@@ -560,7 +670,12 @@ func (d *demandCollector) function(instance *FunctionInstance, node ast.Node) *F
 			d.impl(evidence.Impl, node)
 		}
 	}
-	body := &BodyInstance{Node: instance.Decl, Decl: instance.Decl, File: instance.File, Function: instance, Substitution: instance.Substitution}
+	for _, evidence := range instance.CaseEvidence {
+		if evidence.Impl != nil {
+			d.impl(evidence.Impl, node)
+		}
+	}
+	body := &BodyInstance{Node: instance.Decl, Decl: instance.Decl, File: instance.File, Function: instance, Case: instance.Case, CaseEvidence: instance.CaseEvidence, Substitution: instance.Substitution, ConstSubstitution: instance.ConstSubstitution, permissionSubstitution: instance.permissionSubstitution}
 	instance.Body = body
 	d.addBody(body)
 	return instance

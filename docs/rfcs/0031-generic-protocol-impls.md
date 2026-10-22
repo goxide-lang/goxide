@@ -2,15 +2,15 @@
 
 ## 状态与范围
 
-**基础泛型/条件 impl、按需实例化与 Go 普通入口已实现；declare impl 已移除，通用互斥求解见第 2 节，正在实施。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态与实际验收见[状态表](../mvp-gap-audit.md)。
+**参数化 trait、通用互斥、定义点证据分区、按需实例化与 Go 普通入口已实现；declare impl 已移除。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态、验收入口及标准库发布边界见[状态表](../mvp-gap-audit.md)。业务派生宏的正式迁移仍逐项验收，不由通用协议能力自动完成。
 
 [RFC 0030](0030-procedural-macros.md) 提供语法变换与受限执行，宏不查询类型、不登记 impl。Default、Clone、Debug、PartialEq、Eq、Serialize、Deserialize 的迁移使用普通库协议；每个业务协议仍须保持原有行为并分别验收。
 
 | 当前基础能力 | 规则 |
 | --- | --- |
 | 泛型与条件 impl | 类型参数、同一类型的多个 trait 约束、具体或复合类型的 where 条件由普通 checker 处理；条件不收紧目标类型本身 |
-| impl 归属与唯一性 | 有体 impl 归 trait 定义包或最外层具名目标的定义包；可能匹配同一目标的实现冲突，不以约束或特化排序 |
-| 普通协议前提 | 非泛型 trait 可声明无环的 `where Self: Other` 前提；关联类型按所属 trait 区分 |
+| impl 归属与唯一性 | 按 Self 与位置输入组成的完整有序头检查 owner；只有共享约束证明交集不可能的声明才可并存，不按特化或源码顺序选择 |
+| 普通协议前提 | 普通 trait 可声明无环的 `where Self: Other[Input]` 前提；输入与源权限参与身份，关联类型按完整 application 区分 |
 | 具体 impl | 没有待定参数且前提可证明的 impl 直接生成，Go 使用者可调用其正常公开入口 |
 | 按需实例化 | 含待定源级协议条件的 impl/函数保留为模板；从本次转译范围内的实际请求递归生成已确定的实例 |
 | 普通 Go 泛型 | Go 能直接表达、不依赖待定 Goxide 实现选择的类型和函数保留泛型；`Box[T any]` 不因条件 Default/Clone 收紧 T |
@@ -23,7 +23,7 @@
 
 [已确认决策](../design/decisions.md) D05 已改为移除 `declare impl`；D19/D20 的权限边界、普通有体 impl 的运行时 wrapper 和 enum 表示继续适用。此稿不增加 move、独占分析、动态字典、反射兜底或每种 derive 的编译器 hook。当前部分业务宏仍拒绝泛型声明；通用迁移完成时须支持其业务合同适用的泛型类型，不能把该拒绝作为完成边界。库的泛型 impl 同时须为业务字段提供协议。
 
-Error 派生、`go_result!` / `go_result_keep!`、`cfg` 属于不同边界：Error 的 struct 方法已有普通 inherent impl 迁移证明，enum 固有方法的新映射及完整 From/Into 仍未实现；go_result 涉及调用结果形状和错误转换，cfg 决定进入展开的源码。当前工作聚焦转译器与 std 基础，Error 的 `#[from]`、消息和上下文等人体工程库后续开发。print/println 的库化另验格式检查与调用行为；本篇提供其可使用的普通协议能力。
+Error 派生、`go_result!` / `go_result_keep!`、`cfg` 属于不同边界：Error 的 struct 方法已有普通 inherent impl 迁移证明，enum 固有方法的新映射仍未实现；From/Into 基础按 RFC 0032 实现。Error 的 `#[from]`、消息和上下文等人体工程库后续开发；现有内建 Error helper 仍可显式调用，但不登记为 `?` 转换证据。go_result 涉及调用结果形状和错误转换，cfg 决定进入展开的源码。print/println 的库化另验格式检查与调用行为；本篇提供其可使用的普通协议能力。
 
 ## 源级规则
 
@@ -38,11 +38,11 @@ impl[T any] Decode for Box[T] where T: Deserialize + Default { /* 必需成员 *
 impl[T Clone, const N int] Clone for [N]T { /* 必需成员 */ }
 ```
 
-第一个和第四个 impl 位于 Clone 的定义包；第二个也可位于 Box 的定义包。`Box[T]` 自身可保持 `T any`，协议条件不回写成类型声明的约束。where 左侧允许实际字段类型，如 `[]Label`，从而让过程宏只依据语法输出条件，再交给普通类型检查证明。泛型 impl 的每个参数必须出现在目标模式中；不开放 `impl[T P] Q for T` 这种裸类型参数 blanket impl。
+第一个和第四个 impl 位于 Clone 的定义包；第二个也可位于 Box 的定义包。`Box[T]` 自身可保持 `T any`，协议条件不回写成类型声明的约束。where 左侧允许实际字段类型，如 `[]Label`，从而让过程宏只依据语法输出条件，再交给普通类型检查证明。泛型 impl 的每个参数必须能从 Self 与位置输入的完整头绑定；满足 RFC 0032 有序 owner 与本篇互斥规则的裸参数 blanket impl 可以声明。
 
-归属以 canonical 包与类型身份判断，透明 alias 不创建新 owner，新 defined 类型是独立目标。`[]Local`、`map[string]Local` 和 `[3]Local` 的元素属于本包，不使这些未命名容器成为本包所有。traits 不带位置类型参数；方法不引入独立泛型参数，关联类型仍是 impl 的输出。
+归属以 canonical 包与类型身份判断，透明 alias 不创建新 owner，新 defined 类型是独立目标。`[]Local`、`map[string]Local` 和 `[3]Local` 的元素属于本包，不使这些未命名容器成为本包所有。trait 位置类型参数是输入；方法不引入独立泛型参数，关联类型仍是 impl 的输出。
 
-这不引入 underlying-type 自动采用：`type Score = int` 可使用 int 的实现，`type Score int` 不因此取得任何协议。当前 Default/Clone/Debug 的字段检查也先要求 defined 类型有显式实现，serde 只展开 alias、不展开 defined 类型的 underlying；内部生成函数对已登记根类型的解包不是普通字段兜底。迁移须保留这一差别，不开放裸 T blanket 或按派生名称补证据。为 Score 新写普通显式 impl 属于本篇允许的库/用户定义能力，不是假定旧代码已有该实现。
+这不引入 underlying-type 自动采用：`type Score = int` 可使用 int 的实现，`type Score int` 不因此取得任何协议。当前 Default/Clone/Debug 的字段检查也先要求 defined 类型有显式实现，serde 只展开 alias、不展开 defined 类型的 underlying；内部生成函数对已登记根类型的解包不是普通字段兜底。迁移须保留这一差别，不按派生名称补证据；普通 blanket 必须通过统一的归属、互斥与前提检查。
 
 同一目标可同时要求多个 trait；关联类型绑定仍按所属 trait 区分。成员查询保持现有权限候选和固有成员优先规则，同名 trait 成员须限定，不按约束书写次序选择。每个约束都须有显式 impl，不能凭 Go 方法集补足。
 
@@ -53,7 +53,7 @@ pub trait PartialEq { func equals(self Self, other Self) bool }
 pub trait Eq where Self: PartialEq {}
 ```
 
-证明 `T: Eq` 时先证明其前提；在 `T: Eq` 的函数内可使用 PartialEq。只开放无环的非泛型 trait 前提，不增加默认方法、运行时自动视图转换或任意继承机制。PartialEq 继续使用两个值参数，不借迁移暗中改成只读借用。
+证明 `T: Eq` 时先证明其前提；在 `T: Eq` 的函数内可使用 PartialEq。只开放无环的普通 trait 前提；带输入的前提按完整类型与权限代入，不增加默认方法、运行时自动视图转换或任意继承机制。PartialEq 继续使用两个值参数，不借迁移暗中改成只读借用。
 
 **暂缓的 Eq 迁移候选。** 若保留“派生 Eq 只接受结构派生 PartialEq”的区别，可由普通库 marker `StructuralPartialEq` 表达：PartialEq 宏同时生成该 marker 的 impl，Eq 宏要求 `Self: StructuralPartialEq`。手写 PartialEq 本身不产生 marker。marker 与手写 Eq 一样是作者承诺，用户也可显式实现；它不是编译器签发的不可伪造证明。接受此规则包含接受这种显式承诺入口；不能为隐藏它重新增加 derive 名称判断。
 
@@ -63,7 +63,7 @@ trait 与派生宏沿 RFC 0030 的单一名字空间：运行库可导出 `Clone
 
 ### 2. 通用互斥与实现选择（设计提案）
 
-本节是通用过程宏迁移的完整目标，尚未实现；替代“只比较目标头”和此前只覆盖具体类型的有限否定提案。当前实现仍按第 1 节的非参数化 trait、受限 owner 和保守头重叠检查工作。通用迁移的完成标准包括带未知类型/长度参数的声明与跨包条件证据，不能以有限具体实例或宏主动拒绝泛型代替。`declare impl` 已完整移除。
+本节的通用求解与选择合同已实现，替代“只比较目标头”和此前只覆盖具体类型的有限否定方案。定义中保留未知类型/长度参数，按共享约束及包级开放环境证明；真实过程宏输出与手写声明共用此路径。业务宏的正式发布仍独立推进，不能把有限具体实例或宏主动拒绝泛型当作通用能力验收。`declare impl` 已完整移除。
 
 已确认：完整移除 `declare impl`，保留普通 Go 双向互调用；trait 输入可由实参和已知返回上下文推导；采用包级开放世界。完整头、owner 扩展和转换调用见 [RFC 0032](0032-from-into-conversions.md#源级规则)；本节统一规定所有普通协议的求解与选择，不按宏或 trait 名称特判。不引入特化、用户负 impl 或运行时协议搜索。
 
@@ -158,6 +158,8 @@ impl protocols::Reader for BufferReader {
 
 所有声明先通过全图 coherence 认证，再检查调用所需的正证据。定义点的显式协议前提可直接携带 evidence parameter；它在实例化时填充，不按候选顺序重搜。若某候选在 ParamEnv 下已有正证据，可用已认证的成对互斥证书排除其他候选；其他候选单独求解为 Unknown 不妨碍这一排除。若只能得到有限、完备且互斥的条件分区，可保存编译期证据分支，后续实例化选定叶。每个可达分支均须在对应约束下完成成员签名、关联输出、方法体和权限检查；不能让某次实例化掩盖其他分支中的错误。无法证明分区覆盖则要求补充普通约束或诊断，不能把不完整分区延迟成运行时试错。
 
+未被调用的泛型定义也检查全部证据叶。源级检查保留数组长度 N/M 的精确身份；独立的 Go 验证 AST 检查普通运算、赋值、返回和控制流，对 const 参数使用未知长度，不选择代表性长度，也不进入生成产物。实际生成仍只按已请求的具体长度专门化。
+
 类型推导先依据 trait 声明签名及已有类型信息求出完整输入，规则见 RFC 0032；不反向枚举 impl 或 where 猜测未知输入。选定证据记录 DeclID、全部类型/长度代换、关联输出和前提证据。方法候选、投影、缓存、实例队列、绑定器和符号身份均须包含完整 application；实现声明身份与义务查询身份分别维护。
 
 区分三张递归图：
@@ -174,7 +176,7 @@ Default 函数调用图规则调整及 Eq marker 仍是既有暂缓项。本节�
 
 #### 2.6 通用过程宏迁移验收
 
-以下均为待实施验收，不得用当前具体类型宏探针代替。参数化语法、solver、证据、lower 和真实宏迁移按依赖次序完成；每一行包含对应源级诊断或正例，而非只测内部 helper 返回值。
+以下是完整验收合同，测试入口及发布状态见状态表。每一行包含对应源级诊断或正例；不能只测内部 helper，也不能用具体类型宏探针代替未知类型/长度的定义期证明。
 
 | 编号 | 最低覆盖 | 预期 |
 | --- | --- | --- |
@@ -347,7 +349,7 @@ func CloneRecord(value *Record) Record {
 
 ### 后续迁移边界
 
-已确认固有成员的新 Go 映射、enum 校验的 std 宏入口，以及后续 `std::prelude` 方向；这些实现与验收尚未完成。完整 From/Into 合同和下述配置/返回适配边界继续设计。Default 递归与 Eq marker 继续暂缓。
+已确认固有成员的新 Go 映射、enum 校验的 std 宏入口，以及后续 `std::prelude` 方向；这些实现与验收尚未完成。From/Into 基础已按 RFC 0032 实现，下述配置/返回适配迁移边界保持独立。Default 递归与 Eq marker 继续暂缓。
 
 **保留配置选择和 Go 返回适配为语言机制。** 普通宏可输出现有 `cfg` / `cfg_attr` / `cfg!` 语法，由编译器继续按来源和构建角色求值。原始源码的配置选择先于入口登记与宏执行，宏生成项按现有展开流程继续筛选；完整规则包含宏 Context 不可查询的环境，不能以普通 attribute 执行代替。`go_result!` / `go_result_keep!` 继续依据真实单值或双值返回签名选择适配，按原静态错误类型判断 nil，并保留调用帧。让它们完整迁出需要另行设计配置阶段接口及静态返回形状能力，不能把仅支持 target/feature 或精确 `error` 的库函数算作完整替代。该候选保留 RFC 0030 的纯语法边界及 D36 的行为。
 
@@ -367,9 +369,9 @@ Self 始终是完整 enum；`self &Self` / `self &mut Self` 须保留真实 owne
 
 **From/Into 转换协议。** 当前讨论和实现范围是转译器与 std 基础：std 定义转换协议，编译器检查普通 impl 并为 `?` 选择转换；Error 派生库以后读取 `#[from]` 并输出普通转换 impl。属性、错误消息、source 与上下文选择属于库的职责，不作为转换协议的编译器登记入口。
 
-D22 与 [RFC 0005](research/0005-option-result-question.md#11-thiserror-与静态错误类型) 已确认 `?` 先普通可赋值，再精确静态来源与目标的唯一一步 From；不搜索链、不为匹配先装箱、不猜 Go error 的动态类型。当前实现仍只登记本包 Error 派生的 helper，完整 From/Into 尚未实现。
+D22 与 [RFC 0005](research/0005-option-result-question.md#11-thiserror-与静态错误类型) 已确认 `?` 先普通可赋值，再精确静态来源与目标的唯一一步 From；不搜索链、不为匹配先装箱、不猜 Go error 的动态类型。当前实现查询 canonical `std::convert::From`，不再登记本包 helper 或 Error 派生的转换函数。
 
-[RFC 0032](0032-from-into-conversions.md) 已给出完整候选：以完整 trait application 区分来源与目标，std 用普通 identity 与 Into blanket，统一跨包归属、通用互斥证明及 `?` 证据选择。该提案明确修订本篇的无输入 trait、参数只出现在 Self、裸参数 target 禁令和 owner 范围；通用互斥及原生采用移除统一按本篇第 2 节，不以具体类型子集为完成标准。完整合同已确认并开始实施；declare impl 已移除。没有新增 `#[try_from]` 登记属性。
+[RFC 0032](0032-from-into-conversions.md) 以完整 trait application 区分来源与目标，std 用普通 identity 与 Into blanket，统一跨包归属、通用互斥证明及 `?` 证据选择。此前无输入 trait、参数只出现在 Self、裸参数 target 禁令已被完整头规则替代；通用互斥及原生采用移除统一按本篇第 2 节。没有新增 `#[try_from]` 登记属性。
 
 **enum 比较前的有限结构校验。** 公开入口采用 `std::enum_assert!(value)`，名字不带 valid 后缀。宏表示检查请求，类型布局及字段访问由后续类型检查与降低处理，不向过程宏开放类型查询。首批用于 payload 静态类型完全确定的 enum 实例：实参求值一次，无返回值；普通 PartialEq 宏在两个操作数都已求值后，先对左值、再对右值调用，随后才比较变体或执行业务相等方法。校验读取活动 payload，穿过结构体字段、array、slice 和 map 值，不调用字段的业务协议，也不把额外协议条件加到字段类型上。非法 enum 按既有规则 panic。现有 `enum_valid` 的外层 bool 检查保持不变。
 

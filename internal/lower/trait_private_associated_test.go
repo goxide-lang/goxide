@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/goxide-lang/goxide/internal/lower"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestTraitTemplatePrivateAssociatedType(t *testing.T) {
@@ -65,6 +66,9 @@ func main() { fmt::Println(model::Extract(ops::Zero[model::Cell]())) }
 func runPrivateAssociatedFixture(t *testing.T, sources map[string]string, want string) {
 	t.Helper()
 	input := t.TempDir()
+	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module associatedfixture\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for name, source := range sources {
 		path := filepath.Join(input, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -98,7 +102,6 @@ func runPrivateAssociatedFixture(t *testing.T, sources map[string]string, want s
 			t.Fatalf("same input changed %s", name)
 		}
 	}
-	pinP4Dependencies(t, module)
 	runGo(t, module, "build", "./...")
 	if got := runGo(t, module, "run", "."); got != want {
 		t.Fatalf("output = %q, want %q", got, want)

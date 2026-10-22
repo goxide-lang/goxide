@@ -30,6 +30,11 @@ func (e *emitter) fresh(prefix string) *goast.Ident {
 }
 
 func (e *emitter) goType(t types.Type) goast.Expr {
+	if e.validation != nil {
+		if array, ok := e.info.ArrayOf(t); ok && array.Length.Param != nil {
+			return e.validation.arrayType(array.Length.Param, e.goType(array.Elem))
+		}
+	}
 	for actual, name := range e.inferenceTypes {
 		if types.Identical(actual, t) {
 			return goast.NewIdent(name.Name)

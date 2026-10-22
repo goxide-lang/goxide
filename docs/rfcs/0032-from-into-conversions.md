@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-**设计已确认，正在实施。** 本篇给出完整实施合同：普通参数化 trait 定义转换，std 用普通 impl 提供 identity 与 From → Into，`?` 选择标准 From 的一个已确定实现。已有单步传播规则继续作为约束；新增的泛型 trait、impl 归属和 blanket 规则在本篇明确列出，不能把它们记为现有支持。
+**语言与标准库源码已实现，标准库发布及编译器依赖 pin 更新待执行。** 普通参数化 trait 定义转换，std 用普通 impl 提供 identity 与 From → Into，`?` 选择标准 From 的一个已确定实现。实际跨模块验收直接打包当前 std 源码，通过隔离 Go 模块代理加载，没有用 replace 或重声明协议代替；它不等同于新版本已公开发布。验收入口见[状态表](../mvp-gap-audit.md)。
 
 范围是转译器与 std。Error 的 `#[from]`、错误消息、source、backtrace 和上下文选择留给后续人体工程库；这些库只输出普通 impl。`TryFrom/TryInto`、隐式数值转换、转换链、通用 Try/Residual、特化、负 impl、GAT 和默认方法不在本篇实施范围。这里的 From 不采用 Rust move 语义，按 Goxide 既有传值、共享存储与引用权限工作。
 
@@ -11,8 +11,8 @@
 | 现有合同 | 本方案 |
 | --- | --- |
 | D22 / [传播 RFC](research/0005-option-result-question.md)：可赋值优先，精确静态来源与目标，一步 From；不猜动态 error | 保留；`?` 的本包 helper 清单改为普通协议证据 |
-| D22 的“不接受任意泛型 blanket 转换” | 需修订为只接受下述通用归属、无重叠和终止规则认可的显式泛型 impl；不开放隐式链或任意第三方兜底 |
-| [RFC 0031](0031-generic-protocol-impls.md)：trait 无输入类型参数、impl 参数只出现在 Self、禁止裸参数目标 | 需扩展为参数化 trait 和完整实现头；允许满足归属规则的 blanket；关联类型仍是输出 |
+| D22 的“不接受任意泛型 blanket 转换” | 已修订为只接受下述通用归属、无重叠和终止规则认可的显式泛型 impl；不开放隐式链或任意第三方兜底 |
+| [RFC 0031](0031-generic-protocol-impls.md)：trait 无输入类型参数、impl 参数只出现在 Self、禁止裸参数目标 | 已扩展为参数化 trait 和完整实现头；允许满足归属规则的 blanket；关联类型仍是输出 |
 | RFC 0031：trait 包或最外层具名 Self 包拥有有体 impl | 扩展到有序完整实现头，包含本地来源及指针链；避免本地 S → 外部 T 无法定义 From |
 | RFC 0031：忽略 where 的保守重叠检查、定义点绑定、有限需求闭包 | 完整实现头先合一，再按 RFC 0031 的共享约束求解排除交集；泛型参数、未来跨包有体实现与原生 Go 前提均参与。未知仍拒绝，定义点绑定与有限闭包保留 |
 | [RFC 0003](0003-declare-impl.md)：原生采用移除合同 | 已确认删除全部 declare impl；普通有体 impl、Go interface 与双向 API 调用保留 |
@@ -23,13 +23,13 @@
 
 已确认完整删除 declare impl、从已知类型信息推导 trait 输入，并按包级开放世界检查；普通 Go 双向互调用保留。其完整规则及通用过程宏验收统一见 [RFC 0031 第 2 节](0031-generic-protocol-impls.md#2-通用互斥与实现选择设计提案)。参数化 trait、完整实现头、有序 owner、通用 identity/Into blanket 和固定转换选择均已确认实施；当前进展见状态表。
 
-推荐扩展通用 trait 能力，而非增加 `#[try_from]` 或 From⇒Into 编译器专用规则。后两者仍需处理多来源身份、跨包和冲突，却会留下独立转换登记路径。
+采用通用 trait 能力，无需增加 `#[try_from]` 或 From⇒Into 编译器专用规则。后两者仍需处理多来源身份、跨包和冲突，却会留下独立转换登记路径。
 
 ## 源级规则
 
 ### 1. 标准协议与运行合同
 
-以下为拟提供于 `std::convert` 的普通声明；完整 trait 路径以及静态限定调用是本篇候选语法：
+`std::convert` 提供以下普通声明；完整 trait 路径以及静态限定调用参与普通成员解析：
 
 ```goxide
 pub trait From[S any] {
@@ -61,7 +61,7 @@ trait 声明的位置类型参数是**输入**，必须参与实现选择；关�
 
 应用写作 `Q[A1,...,An, Item=U]`：位置输入在前，现有关联类型绑定在后；输入数量与声明一致，不增加默认输入或部分 trait application。每个输入先满足声明的普通类型/协议约束，关联输出则在选定 impl 后核对。`T::Q[A]::Item` 投影同时指明输入，`T:Q[A] + Q[B]` 保存两份独立义务；同一 application 的矛盾输出绑定仍诊断。模板与方法体中的 Self、输入参数按符号绑定替换，不按拼写识别 From。
 
-候选限定调用扩展现有 `::<Trait>`：
+限定调用扩展现有 `::<Trait>`：
 
 ```goxide
 a := AppError::from::<From[*io::Error]>(io_error)
@@ -85,7 +85,7 @@ c := io_error.into::<Into[AppError]>()      // 显式限定始终可用
 
 不能从“目前只有一个实现”、where 能否证明、关联输出反向搜索或某条转换链猜出未知输入。返回上下文必须由显式标注、已知形参/返回签名等先确定；无类型常量沿普通定型规则处理，不为通过某个 impl 改定类型。若推导结果未定或多个不同 trait 同名，诊断要求补全限定/目标类型；调用者也可使用普通 helper。保存方法值同样可用完整限定或已知函数类型上下文推导。`?` 的来源 E 来自操作数 Result[A,E]，目标 F 来自最近函数/闭包的 Result[B,F]，继续按第 5 节精确查询 F:From[E]，不套用普通调用的 ParamEnv 输入固定规则。
 
-std 可提供普通函数形式，避免调用方反复写完整限定：
+以下普通函数形式可由调用方提供，避免反复写完整限定；当前 std 仅提供必需的 trait 与 impl，未添加这些可选 helper：
 
 ```goxide
 pub func from[T any, S any](value S) T where T: From[S] {

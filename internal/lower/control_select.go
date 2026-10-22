@@ -18,7 +18,11 @@ func (e *emitter) flowTypeSwitch(n *syntax.TypeSwitchStmt) goast.Stmt {
 	assign := e.stmt(n.Assign)
 	list = append(list, e.pending...)
 	e.pending = old
-	list = append(list, &goast.TypeSwitchStmt{Assign: assign, Body: e.cases(n, n.Cases)})
+	if e.validation != nil {
+		list = append(list, e.validationTypeSwitch(n, nil, assign))
+	} else {
+		list = append(list, &goast.TypeSwitchStmt{Assign: assign, Body: e.cases(n, n.Cases)})
+	}
 	return &goast.BlockStmt{List: list}
 }
 

@@ -178,12 +178,12 @@ func TestOrdinaryConsumer(t *testing.T) { verify() }
 		{
 			name:   "foreign-trait-and-target",
 			source: "impl api::Reader for native::Counter { func read(self &mut Self,p []byte)(int,error){return self.Read(p)} }",
-			want:   "body impl requires the trait or outer named target to belong to this package",
+			want:   "body impl requires the trait or an allowed local type in its ordered head to belong to this package",
 		},
 		{
 			name:   "foreign-alias-does-not-own-target",
 			source: "type NativeAlias = native::Counter\nimpl api::Reader for NativeAlias { func read(self &mut Self,p []byte)(int,error){return self.Read(p)} }",
-			want:   "body impl requires the trait or outer named target to belong to this package",
+			want:   "body impl requires the trait or an allowed local type in its ordered head to belong to this package",
 		},
 		{
 			name:   "identical-business-bodies-do-not-merge",

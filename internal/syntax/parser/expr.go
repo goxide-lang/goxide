@@ -214,9 +214,24 @@ func (p *parser) postfix(x ast.Expr) ast.Expr {
 			}
 		case token.DCOLON:
 			if p.peek(1).Kind == token.LSS {
-				s, ok := x.(*ast.SelectorExpr)
-				if !ok {
-					p.error("::<Trait> requires a value selector")
+				var receiver ast.Expr
+				var member *ast.Ident
+				static := false
+				switch selected := x.(type) {
+				case *ast.SelectorExpr:
+					receiver, member, static = selected.X, selected.Sel, selected.Static
+				case *ast.PathExpr:
+					segments := selected.Path.Segments
+					if len(segments) > 1 && segments[len(segments)-1].Args == nil {
+						prefix := *selected.Path
+						prefix.Segments = append([]*ast.PathSegment(nil), segments[:len(segments)-1]...)
+						prefix.Base = ast.Base{Loc: ast.Span{Start: selected.Span().Start, End: segments[len(segments)-2].Span().End}}
+						receiver = &ast.TypeExpr{Base: prefix.Base, Type: &ast.PathType{Base: prefix.Base, Path: &prefix}}
+						member, static = segments[len(segments)-1].Name, true
+					}
+				}
+				if member == nil {
+					p.error("::<Trait> requires a member selector")
 					return x
 				}
 				p.next()
@@ -228,7 +243,7 @@ func (p *parser) postfix(x ast.Expr) ast.Expr {
 				default:
 					p.error("qualified selector requires one trait path")
 				}
-				x = &ast.QualifiedSelectorExpr{Base: p.base(start), X: s.X, Sel: s.Sel, Trait: trait}
+				x = &ast.QualifiedSelectorExpr{Base: p.base(start), X: receiver, Sel: member, Trait: trait, Static: static}
 			} else {
 				path := p.exprPath(x)
 				if path == nil {

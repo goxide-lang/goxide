@@ -15,10 +15,16 @@ pub enum AppError {
     #[from]
     Fetch(error),
 }
+func fetchResult(kind string) Result[int,AppError] {
+    return match p::Fetch(kind) {
+        Result[int,error]::Ok(value) => Result[int,AppError]::Ok(value),
+        Result[int,error]::Err(cause) => Result[int,AppError]::Err(FromAppError(cause)),
+    }
+}
 func wrapped(kind string) Result[int,AppError] {
     FromAppError := func(error) AppError { panic("captured local helper") }
     _ = FromAppError
-    value := take!(p::Fetch(kind))
+    value := take!(fetchResult(kind))
     return Result[int,AppError]::Ok(value + 1)
 }
 func unpack(value Result[int,AppError]) (int,error) {
@@ -39,7 +45,7 @@ func importedTarget(kind string) p::Result[int,error] {
     return p::Success(value + 2)
 }
 func shadow(kind string) Result[int,AppError] {
-    input := p::Fetch(kind)
+    input := fetchResult(kind)
     p := 99
     _ = p
     value := input?

@@ -1,0 +1,17 @@
+package macros
+
+use syntax::token;
+use syntax::proc_macro as pm;
+
+#[proc_macro]
+pub func classify(ctx pm::Context, input token::TokenStream) pm::Output { return generate(ctx,input,true,false) }
+#[proc_macro]
+pub func overlap(ctx pm::Context, input token::TokenStream) pm::Output { return generate(ctx,input,true,true) }
+#[proc_macro_attribute]
+pub func classifyAttribute(ctx pm::Context, args token::TokenStream, item token::TokenStream) pm::Output { return generate(ctx,item,true,false) }
+#[proc_macro_attribute]
+pub func overlapAttribute(ctx pm::Context, args token::TokenStream, item token::TokenStream) pm::Output { return generate(ctx,item,true,true) }
+#[proc_macro_derive(Classify)]
+pub func classifyDerive(ctx pm::Context, item token::TokenStream) pm::Output { return generate(ctx,item,false,false) }
+#[proc_macro_derive(Overlap)]
+pub func overlapDerive(ctx pm::Context, item token::TokenStream) pm::Output { return generate(ctx,item,false,true) }

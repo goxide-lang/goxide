@@ -53,6 +53,7 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 type emissionOptions struct {
 	lineDirectives bool
 	originals      map[string]*syntax.File
+	validation     *definitionValidation
 }
 
 func lower(files map[string]*syntax.File, info *check.Info, options emissionOptions) (map[string][]byte, error) {
@@ -63,13 +64,18 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			return nil, info.Diagnostics[0]
 		}
 	}
+	if options.validation == nil && hasGenericDefinitions(files) {
+		if err := ValidateDefinitions(files, info); err != nil {
+			return nil, err
+		}
+	}
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	hygienicNames := macroNames(info)
-	traits := prepareTraits(info)
+	traits := prepareTraits(info, options.validation != nil)
 	if info != nil && info.Demands != nil && info.Demands.Info != nil {
 		info = info.Demands.Info
 	}
@@ -98,6 +104,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		tree := files[name]
 		e := &emitter{symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
 		e.enumValidHelpers = enumValidHelpers
+		e.validation = options.validation
 		e.lineDirectives, e.original = options.lineDirectives, options.originals[name]
 		if res != nil {
 			e.file = res.Files[name]
@@ -168,12 +175,23 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			return nil, e.err
 		}
 		e.addImports(e.goFile)
-		e.positions(e.goFile, fset)
+		if options.validation == nil {
+			e.positions(e.goFile, fset)
+		} else {
+			lines := make([]int, len(e.tree.LineStarts))
+			for index, offset := range e.tree.LineStarts {
+				lines[index] = int(offset)
+			}
+			e.tokenFile.SetLines(lines)
+		}
 		if options.lineDirectives {
 			multilineSourceBodies(e.goFile, fset)
 		}
 	}
 	bindMembers(fset, emitters)
+	if options.validation != nil {
+		return nil, options.validation.err
+	}
 	out := make(map[string][]byte, len(files))
 	for _, e := range emitters {
 		var buf bytes.Buffer
@@ -193,11 +211,13 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			e.fail(e.tree, "生成的 Go 语法无效: "+err.Error())
 			return nil, e.err
 		}
-		if _, err := goparser.ParseFile(gotoken.NewFileSet(), e.name, data, goparser.AllErrors); err != nil {
+		set := gotoken.NewFileSet()
+		parsed, err := goparser.ParseFile(set, e.name, data, goparser.AllErrors|goparser.ParseComments)
+		if err != nil {
 			e.fail(e.tree, "生成的 Go 语法无效: "+err.Error())
 			return nil, e.err
 		}
-		out[e.name] = data
+		out[e.name] = canonicalImports(parsed, set, data)
 	}
 	return out, nil
 }
@@ -207,6 +227,9 @@ type goImporter func(string) (*types.Package, error)
 func (f goImporter) Import(path string) (*types.Package, error) { return f(path) }
 
 func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
+	if len(emitters) == 0 {
+		return
+	}
 	groups := map[string][]*emitter{}
 	tests := map[*resolve.Scope][]*emitter{}
 	needed := false
@@ -219,7 +242,8 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 		}
 		needed = needed || len(e.memberNames) > 0
 	}
-	if !needed {
+	validation := emitters[0].validation
+	if !needed && validation == nil {
 		return
 	}
 	// Go's receiver validation requires a file for both declared type names and
@@ -256,6 +280,10 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 		}
 	}()
 	var renamer memberRenamer
+	if validation != nil {
+		renamer.prepare = validation.preparePackage
+		renamer.report = func(err error) { validation.report(err, emitters) }
+	}
 	loaded := map[string]*types.Package{}
 	loadedGroups := map[*emitter]*types.Package{}
 	loading := map[*emitter]bool{}
@@ -382,6 +410,7 @@ type emitter struct {
 	boundCallbacks     map[*check.TraitBound]map[string]goast.Expr
 	callbackReceiver   string
 	instanceBody       *check.BodyInstance
+	caseViewImpl       *check.Impl
 	itemExtras         []goast.Decl
 	symbolNames        map[*resolve.Symbol]string
 	primitiveAliases   map[string]*goast.Ident
@@ -409,6 +438,7 @@ type emitter struct {
 	externalTest       bool
 	lineDirectives     bool
 	original           *syntax.File
+	validation         *definitionValidation
 }
 
 func (e *emitter) samePackage(file string) bool {

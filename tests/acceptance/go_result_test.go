@@ -75,7 +75,7 @@ type Failure struct {
  #[from]
  Cause error
 }
-func Convert(s string)Result[int,Failure]{n:=go_result!(int,strconv::Atoi(s))?;return Result[int,Failure]::Ok(n)}
+func Convert(s string)Result[int,Failure]{n:=match go_result!(int,strconv::Atoi(s)){Result[int,error]::Ok(value)=>value,Result[int,error]::Err(cause)=>{return Result[int,Failure]::Err(FromFailure(cause))},};return Result[int,Failure]::Ok(n)}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
 	packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)

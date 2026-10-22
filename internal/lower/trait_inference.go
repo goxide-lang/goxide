@@ -234,6 +234,10 @@ func (p *traitInference) callbacks(bounds []*check.TraitBound, evidence []check.
 		if i < len(evidence) {
 			selected = evidence[i]
 		}
+		if len(selected.Cases) != 0 {
+			p.e.fail(bound.Trait.Decl, "trait 条件证据尚未实例化为操作或约束回调")
+			return nil, nil
+		}
 		for _, method := range bound.Trait.Methods {
 			member := method
 			if selected.Impl != nil {
@@ -306,11 +310,13 @@ func (p *traitInference) operation(selection *check.MemberSelection) goast.Expr 
 	if instance := p.e.traits.instances[instanceImplKey(p.e.info, impl, selection.Member.Name)]; instance != nil {
 		return p.parameter(p.e.sourceGlobal(instance.body.File, instance.name), operationSignature(selection))
 	}
-	args, parameters := p.callbacks(implTemplate(impl).Requirements, impl.RequirementEvidence)
-	witnesses, witnessTypes := p.implWitnesses(impl)
+	member := selectedMember(selection)
+	bounds, evidence := operationCallbacks(member)
+	args, parameters := p.callbacks(bounds, evidence)
+	witnesses, witnessTypes := p.operationWitnesses(member)
 	args = append(witnesses, args...)
 	parameters = append(witnessTypes, parameters...)
-	fun := p.parameter(p.e.sourceGlobal(impl.File, p.e.templateOperationName(selection.Member)), signatureOf(parameters, operationSignature(selection)))
+	fun := p.parameter(p.e.sourceGlobal(impl.File, p.e.templateOperationName(member)), signatureOf(parameters, operationSignature(selection)))
 	return &goast.CallExpr{Fun: fun, Args: args}
 }
 
@@ -355,10 +361,11 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 			arguments = append(arguments, p.parameter(value, typ))
 		}
 	}
-	callbacks, callbackTypes := p.callbacks(e.info.GenericBounds[function.decl], instance.Evidence)
+	bounds, evidence := e.functionCallbacks(function, instance)
+	callbacks, callbackTypes := p.callbacks(bounds, evidence)
 	var witnesses []goast.Expr
 	var witnessTypes []types.Type
-	for _, typ := range instance.TypeArgs {
+	for _, typ := range functionCaseArguments(instance) {
 		witnesses = append(witnesses, p.witness(typ))
 		witnessTypes = append(witnessTypes, signatureOf(nil, typ))
 	}
@@ -374,7 +381,7 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 	factory := e.sourceGlobal(function.symbol.Decl.File, strings.TrimSuffix(constFunctionName(function, instance), "Func")+"Call")
 	// A visible leading argument can instantiate an otherwise phantom parameter.
 	var prefix []goast.Expr
-	for _, typ := range instance.TypeArgs {
+	for _, typ := range functionCaseArguments(instance) {
 		if !e.nameableType(typ) {
 			break
 		}
@@ -395,7 +402,12 @@ func (e *emitter) privateEvidence(evidence check.Evidence) bool {
 	if evidence.Impl == nil {
 		return false
 	}
-	for _, typ := range evidence.Impl.TypeArgs {
+	typesToName := append([]types.Type{evidence.Impl.Target}, evidence.Impl.TypeArgs...)
+	typesToName = append(typesToName, evidence.Impl.Inputs...)
+	for _, typ := range evidence.Impl.Associated {
+		typesToName = append(typesToName, typ)
+	}
+	for _, typ := range typesToName {
 		if !e.nameableType(typ) {
 			return true
 		}
@@ -403,6 +415,13 @@ func (e *emitter) privateEvidence(evidence check.Evidence) bool {
 	for _, nested := range evidence.Impl.RequirementEvidence {
 		if e.privateEvidence(nested) {
 			return true
+		}
+	}
+	for _, branch := range evidence.Impl.MethodCaseEvidence {
+		for _, nested := range branch {
+			if e.privateEvidence(nested) {
+				return true
+			}
 		}
 	}
 	return false
@@ -502,6 +521,11 @@ func (p *traitProgram) prepareInferenceCalls(info *check.Info) {
 	for _, body := range info.Demands.Roots {
 		inspect(body)
 	}
+	for _, branches := range info.BodyCases {
+		for _, branch := range branches {
+			inspect(&check.BodyInstance{Node: branch.Decl, Decl: branch.Decl, File: branch.File, Info: branch.Info, Case: branch})
+		}
+	}
 	for _, bodies := range info.Demands.Bodies {
 		for _, body := range bodies {
 			inspect(body)
@@ -509,12 +533,12 @@ func (p *traitProgram) prepareInferenceCalls(info *check.Info) {
 	}
 }
 func (e *emitter) needsFunctionInference(instance *check.FunctionInstance) bool {
-	for _, typ := range instance.TypeArgs {
+	for _, typ := range functionCaseArguments(instance) {
 		if !e.nameableType(typ) {
 			return true
 		}
 	}
-	for _, evidence := range instance.Evidence {
+	for _, evidence := range append(append([]check.Evidence(nil), instance.Evidence...), instance.CaseEvidence...) {
 		if e.privateEvidence(evidence) {
 			return true
 		}
@@ -544,8 +568,10 @@ func (e *emitter) inferredOperationCall(selection *check.MemberSelection, values
 		}
 		arguments = append(arguments, p.parameter(value, typ))
 	}
-	callbacks, callbackTypes := p.callbacks(implTemplate(impl).Requirements, impl.RequirementEvidence)
-	witnesses, witnessTypes := p.implWitnesses(impl)
+	member := selectedMember(selection)
+	bounds, evidence := operationCallbacks(member)
+	callbacks, callbackTypes := p.callbacks(bounds, evidence)
+	witnesses, witnessTypes := p.operationWitnesses(member)
 	zero := types.NewSignatureType(nil, nil, nil, types.NewTuple(), sig.Results(), false)
 	params := append(witnessTypes, callbackTypes...)
 	for i := 0; i < sig.Params().Len(); i++ {
@@ -555,7 +581,7 @@ func (e *emitter) inferredOperationCall(selection *check.MemberSelection, values
 	if sig.Variadic() {
 		factorySig = types.NewSignatureType(nil, nil, nil, factorySig.Params(), factorySig.Results(), true)
 	}
-	factory := e.sourceGlobal(impl.File, strings.TrimSuffix(e.templateOperationName(selection.Member), "Func")+"Call")
+	factory := e.sourceGlobal(impl.File, strings.TrimSuffix(e.templateOperationName(member), "Func")+"Call")
 	fun := p.parameter(factory, factorySig)
 	args := append(witnesses, callbacks...)
 	args = append(args, arguments...)

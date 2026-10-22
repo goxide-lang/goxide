@@ -27,10 +27,20 @@ func (e *emitter) traitDecl(n *syntax.TraitDecl) goast.Decl {
 			methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(m.GoName)}, Type: ft})
 		}
 	}
-	methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(trait.Marker)}, Type: &goast.FuncType{Params: &goast.FieldList{}}})
+	var arguments []types.Type
+	for _, parameter := range trait.TypeParams {
+		arguments = append(arguments, parameter)
+	}
+	for _, associated := range trait.Associated {
+		arguments = append(arguments, associated.Param)
+	}
+	methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(trait.Marker)}, Type: e.traitMarkerSignature(arguments)})
 	spec := &goast.TypeSpec{Name: goast.NewIdent(trait.Symbol.GoName), Type: &goast.InterfaceType{Methods: &goast.FieldList{List: methods}}}
-	if len(trait.Associated) != 0 {
+	if len(arguments) != 0 {
 		spec.TypeParams = &goast.FieldList{}
+		for _, parameter := range trait.TypeParams {
+			spec.TypeParams.List = append(spec.TypeParams.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(parameter.Obj().Name())}, Type: e.goConstraint(parameter.Constraint())})
+		}
 		for _, a := range trait.Associated {
 			spec.TypeParams.List = append(spec.TypeParams.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(a.Param.Obj().Name())}, Type: goast.NewIdent("any")})
 		}
@@ -57,6 +67,9 @@ func (e *emitter) traitDeclarations(declarations []goast.Decl) []goast.Decl {
 			continue
 		}
 		if parameterizedImpl(impl) {
+			if genericPairOps(e.info, impl) {
+				out = append(out, e.implOpsDeclarations(impl)...)
+			}
 			if impl.Trait.Runtime || e.traits.implNeedsBindings(impl) {
 				out = append(out, e.templateRuntimeDeclarations(impl)...)
 			}
@@ -107,7 +120,11 @@ func (e *emitter) traitDeclarations(declarations []goast.Decl) []goast.Decl {
 			declarations[index] = decl
 			continue
 		}
-		clearTraitPositions(decl)
+		if e.validation == nil {
+			clearTraitPositions(decl)
+		} else {
+			e.anchor(decl, e.tree)
+		}
 		declarations = append(declarations, decl)
 	}
 	return declarations
@@ -164,10 +181,10 @@ func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 		}
 	}
 	if impl.Trait.Runtime {
-		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", e.implWrapperType(impl)), Type: &goast.FuncType{Params: &goast.FieldList{}}, Body: &goast.BlockStmt{}})
+		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(impl.Trait.Marker), Recv: receiverField("", e.implWrapperType(impl)), Type: e.traitMarkerSignature(traitViewArguments(impl)), Body: &goast.BlockStmt{}})
 		out = append(out, e.factoryDeclaration(impl))
 		local := impl.Base != nil && e.localTypePackage(impl.Base.Obj().Pkg())
-		if local && nativeInherentImpl(impl) {
+		if local && !parameterizedTrait(impl.Trait) && nativeInherentImpl(impl) {
 			e.generatedMember(impl.Base, traitAs(impl), impl)
 			out = append(out, e.asDeclaration(impl, captureType(impl), nil))
 		}
@@ -178,8 +195,9 @@ func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 	for _, m := range impl.Methods {
 		carrier := e.traits.carriers[impl.Base]
 		if carrier == nil || !carrierTarget(e.info, impl) {
-			// Existing non-carrier impls retain their exported free operation.
-			if !parameterizedImpl(impl) && impl.Base != nil && impl.Base.TypeParams().Len() == 0 && impl.Base.TypeArgs().Len() == 0 {
+			// Non-parameterized protocols retain their exported free operation.
+			// Parameterized protocols expose the method on their complete pair ops.
+			if !parameterizedTrait(impl.Trait) && !parameterizedImpl(impl) && impl.Base != nil && impl.Base.TypeParams().Len() == 0 && impl.Base.TypeArgs().Len() == 0 {
 				out = append(out, e.operationDeclaration(m, nil))
 			}
 		} else if carrier.file != e.name {
@@ -205,7 +223,9 @@ func (e *emitter) implOpsDeclarations(impl *check.Impl) []goast.Decl {
 		declaration.Recv = receiverField("", e.implOpsType(impl))
 		out = append(out, declaration)
 		if e.traits.memberNeedsBinding(member) {
-			out = append(out, e.bindingDeclaration(member, &traitCarrier{name: name}))
+			binding := e.bindingDeclaration(member, &traitCarrier{name: name}).(*goast.FuncDecl)
+			binding.Recv = receiverField("", e.implOpsType(impl))
+			out = append(out, binding)
 		}
 	}
 	return out
@@ -220,10 +240,26 @@ func captureType(impl *check.Impl) types.Type {
 
 func (e *emitter) traitViewType(impl *check.Impl) goast.Expr {
 	var args []goast.Expr
-	for _, a := range impl.Trait.Associated {
-		args = append(args, e.goType(impl.Associated[a.Name]))
+	for _, argument := range traitViewArguments(impl) {
+		args = append(args, e.goType(argument))
 	}
 	return enumIndices(e.sourceGlobal(impl.Trait.File, impl.Trait.Symbol.GoName), args)
+}
+
+func traitViewArguments(impl *check.Impl) []types.Type {
+	args := append([]types.Type(nil), impl.Inputs...)
+	for _, associated := range impl.Trait.Associated {
+		args = append(args, impl.Associated[associated.Name])
+	}
+	return args
+}
+
+func (e *emitter) traitMarkerSignature(arguments []types.Type) *goast.FuncType {
+	params := &goast.FieldList{}
+	for _, argument := range arguments {
+		params.List = append(params.List, &goast.Field{Type: e.goType(argument)})
+	}
+	return &goast.FuncType{Params: params}
 }
 
 func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {

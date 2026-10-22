@@ -256,7 +256,7 @@ impl[T any] Source for Box[T] {
 func TestGenericTraitRejections(t *testing.T) {
 	for _, test := range []struct{ name, source, code, message string }{
 		{"missing bound", `trait P {}; type Box[T any] struct {}; impl[T any] P for Box[T] where T: P {}; func Accept[T P](x T) {}; func run(){Accept[Box[string]](Box[string]{})}`, check.GenericConstraint, "does not explicitly implement"},
-		{"bare type parameter", `trait P {}; impl[T any] P for T {}`, check.TraitInvalid, ""},
+		{"inherent bare type parameter", `impl[T any] T {}`, check.TraitInvalid, ""},
 		{"unused parameter", `trait P {}; type Box[T any] struct {}; impl[T any, U any] P for Box[T] {}`, check.TraitInvalid, ""},
 		{"ambiguous multi bound", `trait P {func score(self Self)int}; trait Q {func score(self Self)int}; func Score[T any](x T)int where T:P+Q{return x.score()}`, check.TraitInvalid, "ambiguous"},
 		{"concrete where missing", `trait P {}; type Box[T any] struct {}; func Accept[T any](x T) where Box[int]:P {}; func run(){Accept[int](1)}`, check.GenericConstraint, "does not explicitly implement"},

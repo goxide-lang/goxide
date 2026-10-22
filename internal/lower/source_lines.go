@@ -37,7 +37,7 @@ func (e *emitter) sourceLocation(node syntax.Node) string {
 // construct that produced them while retaining positions on ordinary children.
 // Optional positions that affect Go syntax must remain absent.
 func (e *emitter) anchor(node goast.Node, source syntax.Node) {
-	if !e.lineDirectives || node == nil || source == nil {
+	if (!e.lineDirectives && e.validation == nil) || node == nil || source == nil {
 		return
 	}
 	position := e.pos(source)

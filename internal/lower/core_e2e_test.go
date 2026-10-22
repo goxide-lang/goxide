@@ -153,7 +153,7 @@ func TestCorePropagationPreservesValues(t *testing.T) {
 }
 
 func TestCorePropagationSingleStepConversion(t *testing.T) {
-	runCoreFixture(t, "propagation_conversion", "1 0 true true false\n", 0, 1, "FromWrapped", "FromAssignable")
+	runCoreFixture(t, "propagation_conversion", "1 0 true true false\n", 0, 1)
 }
 
 func TestCorePropagationLoopsSwitchesAndAssignments(t *testing.T) {
@@ -168,14 +168,19 @@ func TestCorePropagationTypeSwitchAndSelect(t *testing.T) {
 	runCoreFixture(t, "propagation_select", "14\n-1 [channel value load] 0\n7 [channel value load] 0\n-1 0\n9 0\n", 1, 1)
 }
 
-func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, wantTagSwitches int, helpers ...string) {
+func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, wantTagSwitches int) {
 	t.Helper()
 	directory := filepath.Join("testdata", "core", fixture)
 	source, err := os.ReadFile(filepath.Join(directory, "main.gox"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	const name = "corefixture/main.gox"
+	name := "corefixture/main.gox"
+	if fixture == "propagation_conversion" {
+		// This isolated lowering fixture declares its protocol in the canonical
+		// source package. The module integration tests load the actual std source.
+		name = "github.com/goxide-lang/std/convert/main.gox"
+	}
 	file, diagnostics := syntaxparser.ParseFile(name, source)
 	if len(diagnostics) != 0 {
 		t.Fatalf("parse: %v", diagnostics)
@@ -189,20 +194,7 @@ func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, 
 	if len(resolved.Diagnostics) != 0 {
 		t.Fatalf("resolve: %v", resolved.Diagnostics)
 	}
-	var conversions []resolve.Ref
-	for _, helper := range helpers {
-		found := false
-		for _, item := range expanded.Files[0].Items {
-			if function, ok := item.(*ast.FuncDecl); ok && function.Name.Name == helper {
-				conversions = append(conversions, resolve.Ref{File: name, ID: function.ID()})
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("missing conversion helper %s", helper)
-		}
-	}
-	info, checked := check.CheckWithConversions(files, resolved, conversions)
+	info, checked := check.Check(files, resolved)
 	if len(checked) != 0 {
 		t.Fatalf("check: %v", checked)
 	}

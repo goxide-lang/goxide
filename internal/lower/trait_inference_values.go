@@ -7,6 +7,14 @@ import (
 	"github.com/goxide-lang/goxide/internal/check"
 )
 
+func (e *emitter) inferredOperationValue(selection *check.MemberSelection) (goast.Expr, bool) {
+	if !e.needsOperationInference(selection) {
+		return nil, false
+	}
+	p := newTraitInference(e)
+	return p.finish(p.operation(selection), operationSignature(selection)), true
+}
+
 func (e *emitter) inferredMemberValue(selection *check.MemberSelection, receiver goast.Expr) (goast.Expr, bool) {
 	receiverType := e.memberReceiverType(selection)
 	if e.nameableType(receiverType) && e.nameableType(selection.Signature) && !e.privateEvidence(check.Evidence{Impl: selection.Impl}) {
@@ -27,12 +35,13 @@ func (e *emitter) inferredTraitView(view *check.TraitView, value goast.Expr) (go
 	}
 	p := newTraitInference(e)
 	captured := p.parameter(value, captureType(impl))
-	callbacks, callbackTypes := p.callbacks(template.Requirements, impl.RequirementEvidence)
-	witnesses, witnessTypes := p.implWitnesses(impl)
+	bounds, evidence := viewCallbacks(impl)
+	callbacks, callbackTypes := p.callbacks(bounds, evidence)
+	witnesses, witnessTypes := p.viewWitnesses(impl)
 	arguments := append(witnesses, callbacks...)
 	parameters := append(witnessTypes, callbackTypes...)
 	constructorType := signatureOf([]types.Type{captureType(impl)}, view.Type)
-	factory := p.parameter(e.sourceGlobal(template.File, e.traitFactoryName(template)), signatureOf(parameters, constructorType))
+	factory := p.parameter(e.sourceGlobal(template.File, e.traitFactoryName(impl)), signatureOf(parameters, constructorType))
 	constructor := &goast.CallExpr{Fun: factory, Args: arguments}
 	result := &goast.CallExpr{Fun: constructor, Args: []goast.Expr{captured}}
 	return p.finish(result, view.Type), true

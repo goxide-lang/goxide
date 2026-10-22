@@ -51,10 +51,35 @@ func (c *checker) instantiateGo(t types.Type, arguments []types.Type) (types.Typ
 }
 
 func (c *checker) satisfiesGo(t types.Type, constraint *types.Interface) bool {
+	t = c.refineGoType(t)
 	if c.goInterop == nil || len(c.goInterop.sugar) == 0 {
 		return types.Satisfies(t, constraint)
 	}
 	return types.Satisfies(c.goInterop.typ(t, true), c.goInterop.typ(constraint, true).(*types.Interface))
+}
+
+// Branch predicates refine fresh Go parameters; declaration parameters remain
+// rigid source identities and are never mutated by a proof branch.
+func (c *checker) refineGoType(t types.Type) types.Type {
+	if len(c.activeGoConstraints) == 0 {
+		return t
+	}
+	sub := map[*types.TypeParam]types.Type{}
+	constraints := map[*types.TypeParam][]types.Type{}
+	for _, predicate := range c.activeGoConstraints {
+		if parameter, ok := types.Unalias(predicate.Target).(*types.TypeParam); ok && !c.out.isArray(parameter) {
+			constraints[parameter] = append(constraints[parameter], predicate.Constraint)
+			if sub[parameter] == nil {
+				sub[parameter] = types.NewTypeParam(types.NewTypeName(parameter.Obj().Pos(), parameter.Obj().Pkg(), parameter.Obj().Name(), nil), anyType)
+			}
+		}
+	}
+	for original, refinements := range constraints {
+		components := append([]types.Type{original.Constraint()}, refinements...)
+		constraint := types.NewInterfaceType(nil, components).Complete()
+		sub[original].(*types.TypeParam).SetConstraint(c.out.Substitute(constraint, sub, nil))
+	}
+	return c.out.Substitute(t, sub, nil)
 }
 
 // Only native Go syntax sees forwarded methods by their emitted Go name.

@@ -500,27 +500,55 @@ func (c *checker) try(n *ast.TryExpr) types.Type {
 	if input.Enum.Name == "Result" && len(input.Args) > 1 && len(info.Output.Args) > 1 {
 		info.Error = input.Args[1]
 		target := info.Output.Args[1]
-		if !c.assignableGo(info.Error, target) {
-			var found int
-			for _, helper := range c.conversions {
-				if !c.sameSourcePackage(helper.Decl.File, c.file.Name) {
-					continue
-				}
-				sig, ok := c.out.Symbols[helper].(*types.Signature)
-				if ok && sig.Params().Len() == 1 && sig.Results().Len() == 1 && types.Identical(sig.Params().At(0).Type(), info.Error) && types.Identical(sig.Results().At(0).Type(), target) {
-					info.Conversion = helper
-					found++
-				}
-			}
-			if found != 1 {
-				reason := "no explicit one-step conversion"
-				if found > 1 {
-					reason = "ambiguous explicit one-step conversion"
-				}
-				reason += "; requires a unique explicit From in the current package"
-				c.diag(n, TryReturnType, strings.Join([]string{"cannot propagate", info.Error.String(), "to", target.String() + ":", reason}, " "))
-			}
+		p := c.newPermissionChecker()
+		source := p.enumField(c.memberSource(n.X, c.out.Types[n.X]), input.Variant("Err"), 0)
+		want := p.fromGo(target)
+		if len(c.returnSources) == 1 {
+			want = p.enumField(c.returnSources[0], info.Output.Variant("Err"), 0)
+		}
+		if !c.assignableGo(info.Error, target) || !p.compatible(source, want, map[[2]types.Type]bool{}) {
+			info.Conversion = c.tryConversion(n, target, info.Error, want, source)
 		}
 	}
 	return info.Value
+}
+
+// ? is a language use of this exact standard declaration. User protocols with
+// the same spelling, helper functions, and Into never enter this query.
+func (c *checker) tryConversion(node *ast.TryExpr, target, source types.Type, targetSource, inputSource *permission) *MemberSelection {
+	var trait *Trait
+	for _, candidate := range c.out.Traits {
+		if candidate.Symbol.Name.Name == "From" && c.out.CanonicalPackagePath(candidate.Type.Obj().Pkg()) == "github.com/goxide-lang/std/convert" {
+			trait = candidate
+			break
+		}
+	}
+	if trait == nil || len(trait.TypeParams) != 1 || memberNamed(trait.Methods, "from", true) == nil {
+		c.diag(node, TryReturnType, fmt.Sprintf("cannot propagate %s to %s: canonical github.com/goxide-lang/std/convert::From is unavailable", source, target))
+		return nil
+	}
+	goal := &TraitBound{info: c.out, File: c.file.Name, Trait: trait, Target: target, Inputs: []types.Type{source}, targetPermission: targetSource, inputPermissions: []*permission{inputSource}}
+	witness := c.proveApplication(goal)
+	if witness.Impl == nil && witness.Bound == nil && len(witness.Cases) == 0 {
+		message := fmt.Sprintf("cannot propagate %s to %s: requires %s", source, target, goal.ApplicationKey())
+		if c.proofFailure != "" {
+			message += ": " + c.proofFailure
+		}
+		c.diag(node, TryReturnType, message)
+		return nil
+	}
+	selection := &MemberSelection{Evidence: witness}
+	if witness.Impl != nil {
+		selection.Impl = witness.Impl
+		selection.Member = memberNamed(witness.Impl.Methods, "from", true)
+		selection.Signature = selection.Member.Signature
+	} else {
+		selection.Bound = witness.Bound
+		if selection.Bound == nil {
+			selection.Bound = goal
+		}
+		selection.Member = memberNamed(trait.Methods, "from", true)
+		selection.Signature = selection.Bound.MethodSignature(selection.Member)
+	}
+	return selection
 }

@@ -274,6 +274,10 @@ func typeChildren(t types.Type, visit func(types.Type) bool) bool {
 }
 
 func bodyInfo(source *Info, sub map[*types.TypeParam]types.Type, constants map[*ConstParam]ConstValue) *Info {
+	return bodyInfoPermissions(source, sub, constants, nil)
+}
+
+func bodyInfoPermissions(source *Info, sub map[*types.TypeParam]types.Type, constants map[*ConstParam]ConstValue, sources map[*types.TypeParam]*permission) *Info {
 	result := *source
 	r := newBodyTypes(source, sub, constants)
 	result.ConstValues = make(map[ast.Expr]ConstValue, len(source.ConstValues))
@@ -283,7 +287,8 @@ func bodyInfo(source *Info, sub map[*types.TypeParam]types.Type, constants map[*
 	result.GenericBounds = make(map[*ast.FuncDecl][]*TraitBound, len(source.GenericBounds))
 	for node, bounds := range source.GenericBounds {
 		for _, bound := range bounds {
-			result.GenericBounds[node] = append(result.GenericBounds[node], substituteBoundConstants(bound, sub, constants))
+			c := &checker{out: source}
+			result.GenericBounds[node] = append(result.GenericBounds[node], c.substituteBoundApplication(bound, sub, constants, sources))
 		}
 	}
 	result.EnumValid = make(map[*ast.CallExpr]*Instance, len(source.EnumValid))
@@ -327,6 +332,11 @@ func bodyInfo(source *Info, sub map[*types.TypeParam]types.Type, constants map[*
 		copy := *attempt
 		copy.Input, copy.Output = r.enum(copy.Input), r.enum(copy.Output)
 		copy.Value, copy.Error = r.typ(copy.Value), r.typ(copy.Error)
+		if attempt.Conversion != nil {
+			selection := *attempt.Conversion
+			selection.Signature, _ = r.typ(selection.Signature).(*types.Signature)
+			copy.Conversion = &selection
+		}
 		result.Tries[node] = &copy
 	}
 	result.GoResults = make(map[*ast.CallExpr]*GoResult, len(source.GoResults))

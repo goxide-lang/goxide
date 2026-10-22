@@ -8,10 +8,14 @@ import (
 	"testing"
 
 	"github.com/goxide-lang/goxide/internal/lower"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestEnumValidNativeBoundaries(t *testing.T) {
 	source := t.TempDir()
+	if err := testdeps.WriteFile(filepath.Join(source, "go.mod"), []byte("module enumvalidfixture\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for name, contents := range map[string]string{
 		"model/model.gox": `package model
 pub enum Event[T any] { Unit, Payload(T), Wrapped(Event[T]) }

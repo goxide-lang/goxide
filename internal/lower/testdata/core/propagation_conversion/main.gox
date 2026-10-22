@@ -11,8 +11,13 @@ var conversions int
 var assignableConversions int
 var continued bool
 
-func FromWrapped(err error) Wrapped { conversions++; return Wrapped{Cause: err} }
-func FromAssignable(err Wrapped) error { assignableConversions++; return err }
+pub trait From[S any] { func from(value S) Self }
+impl From[error] for Wrapped {
+	func from(err error) Wrapped { conversions++; return Wrapped{Cause: err} }
+}
+impl From[Wrapped] for error {
+	func from(err Wrapped) error { assignableConversions++; return err }
+}
 
 func source() Result[int, error] {
 	var err *NilError

@@ -21,6 +21,11 @@ func implTemplate(impl *check.Impl) *check.Impl {
 		return impl.Definition
 	}
 	if len(impl.ConstArgs) != 0 {
+		for _, argument := range impl.ConstArgs {
+			if argument.Param != nil && impl.Template != nil {
+				return impl.Template
+			}
+		}
 		return impl
 	}
 	if impl.Template != nil {
@@ -31,6 +36,25 @@ func implTemplate(impl *check.Impl) *check.Impl {
 
 func parameterizedImpl(impl *check.Impl) bool {
 	return len(impl.TypeParams) != 0 || len(impl.ConstParams) != 0
+}
+
+func parameterizedTrait(trait *check.Trait) bool {
+	return trait != nil && len(trait.TypeParams) != 0
+}
+
+func genericPairOps(info *check.Info, impl *check.Impl) bool {
+	impl = implTemplate(impl)
+	return parameterizedTrait(impl.Trait) && parameterizedImpl(impl) && len(impl.ConstParams) == 0 && len(impl.ConstArgs) == 0 && len(impl.Requirements) == 0 &&
+		!implHasBodyCases(info, impl) && (info.Demands == nil || !info.Demands.ImplTemplates[impl])
+}
+
+func implHasBodyCases(info *check.Info, impl *check.Impl) bool {
+	for _, member := range impl.Methods {
+		if len(info.BodyCases[member.Decl]) != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *emitter) goConstraint(constraint types.Type) goast.Expr {
@@ -179,7 +203,7 @@ func (e *emitter) implTypeArgs(impl *check.Impl) []goast.Expr {
 
 func (e *emitter) implOpsName(impl *check.Impl) string {
 	impl = implTemplate(impl)
-	return "Goxide" + targetName(impl) + traitName(impl.Trait) + "Ops_" + implSuffix(e.info, impl)
+	return "Goxide" + targetName(impl) + traitApplicationName(impl) + "Ops_" + implSuffix(e.info, impl)
 }
 
 func (e *emitter) implOpsType(impl *check.Impl) goast.Expr {
@@ -192,14 +216,19 @@ func (e *emitter) implOpsType(impl *check.Impl) goast.Expr {
 
 func (e *emitter) implWrapperType(impl *check.Impl) goast.Expr {
 	template := implTemplate(impl)
-	return enumIndices(e.sourceGlobal(template.File, e.traitWrapper(template)), e.templateImplReceiverArguments(impl))
+	return enumIndices(e.sourceGlobal(template.File, e.traitWrapper(impl)), e.viewTypeArguments(impl))
 }
 
 func (e *emitter) implFactory(impl *check.Impl) goast.Expr {
 	template := implTemplate(impl)
 	if parameterizedImpl(template) {
-		factory := enumIndices(e.sourceGlobal(template.File, e.traitFactoryName(template)), e.templateImplArguments(impl))
-		return &goast.CallExpr{Fun: factory, Args: append(e.templateImplWitnessArguments(impl), e.callbackArguments(template.Requirements, impl.RequirementEvidence)...)}
+		arguments := e.templateImplArguments(impl)
+		if impl.Case != nil {
+			arguments = e.viewTypeArguments(impl)
+		}
+		factory := enumIndices(e.sourceGlobal(template.File, e.traitFactoryName(impl)), arguments)
+		bounds, evidence := viewCallbacks(impl)
+		return &goast.CallExpr{Fun: factory, Args: append(e.viewWitnessArguments(impl), e.callbackArguments(bounds, evidence)...)}
 	}
 	return e.sourceGlobal(template.File, e.traitFactoryName(template))
 }

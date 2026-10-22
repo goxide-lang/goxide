@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestMatchImplTarget(t *testing.T) {
+func TestMatchApplicationSourceHead(t *testing.T) {
 	x, y := implMatchParam("X"), implMatchParam("Y")
 	integer, text := types.Typ[types.Int], types.Typ[types.String]
 	pair := implMatchNamed("Pair", 2)
@@ -56,9 +56,10 @@ func TestMatchImplTarget(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, ok := matchImplTarget(test.pattern, test.target, test.parameters)
+			c := &checker{out: &Info{}}
+			got, _, _, ok := c.matchApplicationHead(&Impl{Target: test.pattern, TypeParams: test.parameters}, &TraitBound{Target: test.target})
 			if ok != (test.want != nil) {
-				t.Fatalf("matchImplTarget(%s, %s) = %v, %v; want %v", test.pattern, test.target, got, ok, test.want)
+				t.Fatalf("matchApplicationHead(%s, %s) = %v, %v; want %v", test.pattern, test.target, got, ok, test.want)
 			}
 			if len(got) != len(test.want) {
 				t.Fatalf("bindings = %v, want %v", got, test.want)
@@ -72,7 +73,7 @@ func TestMatchImplTarget(t *testing.T) {
 	}
 }
 
-func TestImplTargetsOverlap(t *testing.T) {
+func TestCoherenceHeadUnification(t *testing.T) {
 	x, y := implMatchParam("X"), implMatchParam("Y")
 	integer, text := types.Typ[types.Int], types.Typ[types.String]
 	pair := implMatchNamed("Pair", 2)
@@ -104,11 +105,11 @@ func TestImplTargetsOverlap(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := implTargetsOverlap(test.left, test.right, test.leftParams, test.rightParams); got != test.want {
-				t.Fatalf("implTargetsOverlap(%s, %s) = %v, want %v", test.left, test.right, got, test.want)
+			if got := unifyApplicationHeads(test.left, test.right, test.leftParams, test.rightParams); got != test.want {
+				t.Fatalf("unifyApplicationHeads(%s, %s) = %v, want %v", test.left, test.right, got, test.want)
 			}
-			if got := implTargetsOverlap(test.right, test.left, test.rightParams, test.leftParams); got != test.want {
-				t.Fatalf("reverse implTargetsOverlap(%s, %s) = %v, want %v", test.right, test.left, got, test.want)
+			if got := unifyApplicationHeads(test.right, test.left, test.rightParams, test.leftParams); got != test.want {
+				t.Fatalf("reverse unifyApplicationHeads(%s, %s) = %v, want %v", test.right, test.left, got, test.want)
 			}
 		})
 	}
@@ -135,4 +136,13 @@ func implMatchInstance(t *testing.T, named *types.Named, arguments ...types.Type
 		t.Fatal(err)
 	}
 	return instance
+}
+
+// Both heads share the same substitution store used by coherence conditions.
+func unifyApplicationHeads(left, right types.Type, leftParams, rightParams []*types.TypeParam) bool {
+	c := &checker{out: &Info{}}
+	state := newCoherenceConstraints(c)
+	state.addParameters(leftParams, nil)
+	state.addParameters(rightParams, nil)
+	return state.unify(state.source(left), state.source(right)) && !state.exhausted && !state.uncertain
 }

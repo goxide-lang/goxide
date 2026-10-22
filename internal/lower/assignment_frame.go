@@ -20,6 +20,12 @@ type functionFrame struct {
 }
 
 func (e *emitter) functionBody(typ *goast.FuncType, source *syntax.Block) *goast.BlockStmt {
+	if e.validation != nil && e.tree.NativeGo {
+		// Native bodies are intentionally absent from the semantic source graph.
+		// A terminating signature stub keeps generic native declarations valid in
+		// the definition-only checker without pretending to validate their body.
+		return &goast.BlockStmt{List: []goast.Stmt{&goast.ForStmt{Body: &goast.BlockStmt{}}}}
+	}
 	outer, guard := e.functionFrame, e.assignmentGuard
 	frame := &functionFrame{typ: typ, source: source}
 	e.functionFrame, e.assignmentGuard = frame, nil

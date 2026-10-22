@@ -14,8 +14,16 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	if n == nil {
 		return nil
 	}
-	if value, ok := e.info.ConstValues[n]; ok && value.Param == nil {
-		return &goast.BasicLit{Kind: gotoken.INT, Value: strconv.FormatInt(value.Value, 10)}
+	if parameter := e.validationConstParameter(n); parameter != nil {
+		return &goast.Ident{NamePos: e.pos(n), Name: e.validation.constantName(parameter)}
+	}
+	if value, ok := e.info.ConstValues[n]; ok {
+		if value.Param == nil {
+			return &goast.BasicLit{Kind: gotoken.INT, Value: strconv.FormatInt(value.Value, 10)}
+		}
+		if e.validation != nil {
+			return &goast.Ident{NamePos: e.pos(n), Name: e.validation.constantName(value.Param)}
+		}
 	}
 	if call, ok := n.(*syntax.CallExpr); ok {
 		if instance := e.info.EnumValid[call]; instance != nil {
@@ -42,6 +50,10 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		return function
 	}
 	if member := e.info.Members[n]; member != nil {
+		if len(member.Evidence.Cases) != 0 {
+			e.fail(n, "trait 条件证据尚未实例化为操作或约束回调")
+			return nil
+		}
 		return e.memberExpr(member)
 	}
 	if result, ok := e.enumConstruct(n); ok {
@@ -69,6 +81,11 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		}
 		return &goast.Ident{NamePos: e.pos(n), Name: name}
 	case *syntax.CompositeLit:
+		if e.validation != nil {
+			if array, ok := e.info.ArrayOf(e.info.Types[n]); ok && array.Length.Param != nil {
+				return e.validationArrayLiteral(n, array)
+			}
+		}
 		brace := e.pos(n)
 		if n.Type != nil {
 			brace = e.end(n.Type)

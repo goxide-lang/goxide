@@ -35,7 +35,12 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			c.diag(n, "enum-valid-call", "enum_valid must be called with an enum value")
 		}
 		c.recordConstExpression(n)
-		if selected := c.out.Members[n]; selected != nil && selected.MethodExpr {
+		if selected, handled := c.parameterizedMember(n, nil, expected, false, false); handled {
+			if selected != nil {
+				c.out.Members[n] = selected
+				t = selected.Signature
+			}
+		} else if selected := c.out.Members[n]; selected != nil && selected.MethodExpr {
 			t = selected.Signature
 		} else if selected := c.staticMember(n); selected != nil {
 			c.out.Members[n] = selected
@@ -62,7 +67,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = types.Typ[types.UntypedString]
 		}
 	case *ast.ParenExpr:
-		t = c.expr(n.X, expected)
+		t = c.exprSource(n.X, expected, c.expectedSources[n])
 	case *ast.CallExpr:
 		if result, ok := c.enumValid(n); ok {
 			t = result
@@ -92,7 +97,25 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		if c.traitOf(expected) != nil {
 			funExpected = nil
 		}
-		fun := c.expr(n.Fun, funExpected)
+		var fun types.Type
+		if c.expectedSources == nil {
+			c.expectedSources = map[ast.Expr]*permission{}
+		}
+		c.expectedSources[n.Fun] = c.expectedSources[n]
+		partial, explicit := c.partialFunctionApplication(n)
+		if selected, handled := c.parameterizedMember(n.Fun, n.Args, expected, true, n.Ellipsis); handled {
+			fun = types.Typ[types.Invalid]
+			if selected != nil {
+				c.out.Members[n.Fun] = selected
+				c.out.Types[n.Fun] = selected.Signature
+				fun = selected.Signature
+			}
+		} else if partial != nil {
+			fun = partial
+			c.out.Types[n.Fun] = partial
+		} else {
+			fun = c.expr(n.Fun, funExpected)
+		}
 		if con := c.out.Constructors[n.Fun]; con != nil {
 			fields := con.Enum.Fields(con.Variant)
 			for i, a := range n.Args {
@@ -114,8 +137,15 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			t = fun
 		} else if sig, ok := fun.(*types.Signature); ok {
 			sub := map[*types.TypeParam]types.Type{}
+			for parameter, actual := range explicit {
+				sub[parameter] = actual
+			}
 			constants := map[*ConstParam]ConstValue{}
 			inferenceOK := true
+			var formal *permission
+			if c.referenceHints != nil {
+				formal = c.referenceHints.sourceShape(n.Fun, map[*resolve.Symbol]bool{})
+			}
 			parameter := func(index int) types.Type {
 				var want types.Type
 				if index < sig.Params().Len() {
@@ -128,11 +158,15 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 						want = slice.Elem()
 					}
 				}
-				return want
+				return c.out.Substitute(want, explicit, nil)
 			}
 			for i, a := range n.Args {
 				want := parameter(i)
-				got := c.expr(a, want)
+				var source *permission
+				if formal != nil {
+					source = c.referenceHints.callParam(formal, i, n.Ellipsis)
+				}
+				got := c.exprSource(a, want, source)
 				_, call := referenceScrutinee(a).(*ast.CallExpr)
 				if tuple, ok := got.(*types.Tuple); ok && tuple.Len() > 1 && call && len(n.Args) == 1 && !n.Ellipsis {
 					for j := 0; j < tuple.Len(); j++ {
@@ -157,10 +191,15 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				}
 				if !complete && len(c.out.FunctionConstParams[sig]) != 0 {
 					c.diag(n, GenericConstraint, "cannot infer consistent const array arguments")
+				} else if !complete && partial != nil {
+					c.diag(n, GenericConstraint, "cannot infer complete trailing type arguments")
 				}
 				if complete {
 					if inst, ok := c.instantiateFunctionType(sig, args, constArgs, n).(*types.Signature); ok {
 						sig = inst
+						if partial != nil {
+							c.out.Types[n.Fun] = inst
+						}
 						for i, arg := range n.Args {
 							index := i
 							if sig.Variadic() && index >= sig.Params().Len() {
@@ -297,6 +336,13 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			}
 			break
 		}
+		if selected, handled := c.parameterizedMember(n, nil, expected, false, false); handled {
+			if selected != nil {
+				c.out.Members[n] = selected
+				t = selected.Signature
+			}
+			break
+		}
 		if selected := c.instanceMember(n, n.X, x, n.Sel.Name, nil); selected != nil {
 			if selected.Member.Native == nil {
 				c.out.Members[n] = selected
@@ -429,8 +475,11 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		}
 	case *ast.FuncLit:
 		params, results := c.tuple(n.Params), c.tuple(n.Results)
+		oldSources := c.returnSources
+		c.returnSources = c.newPermissionChecker().functionType(nil, n.Results).results
 		if n.Result != nil {
 			results = types.NewTuple(types.NewVar(0, c.pkg, "", c.typ(n.Result)))
+			c.returnSources = []*permission{c.newPermissionChecker().astType(n.Result, nil)}
 		}
 		old := c.returns
 		c.returns = tupleTypes(results)
@@ -440,12 +489,17 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			if len(c.returns) == 1 {
 				want = c.returns[0]
 			}
-			ret := c.expr(n.Expr, want)
+			var source *permission
+			if len(c.returnSources) == 1 {
+				source = c.returnSources[0]
+			}
+			ret := c.exprSource(n.Expr, want, source)
 			if results.Len() == 0 {
 				results = types.NewTuple(types.NewVar(0, c.pkg, "", defaultType(ret)))
 			}
 		}
 		c.returns = old
+		c.returnSources = oldSources
 		t = types.NewSignatureType(nil, nil, nil, params, results, len(n.Params) > 0 && n.Params[len(n.Params)-1].Variadic)
 	case *ast.MatchExpr:
 		t = c.match(n, expected, false)
@@ -460,6 +514,13 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	case *ast.TypeExpr:
 		t = c.typ(n.Type)
 	case *ast.QualifiedSelectorExpr:
+		if selected, handled := c.parameterizedMember(n, nil, expected, false, false); handled {
+			if selected != nil {
+				c.out.Members[n] = selected
+				t = selected.Signature
+			}
+			break
+		}
 		x := c.expr(n.X, nil)
 		var trait *Trait
 		if path, ok := n.Trait.(*ast.PathType); ok && path.Path != nil && len(path.Path.Segments) > 0 {

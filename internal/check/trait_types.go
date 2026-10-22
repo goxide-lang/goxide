@@ -4,10 +4,16 @@ import (
 	"fmt"
 	"go/types"
 
+	"github.com/goxide-lang/goxide/internal/resolve"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (c *checker) traitType(node ast.Type) (types.Type, bool) {
+	if projection, ok := node.(*ast.ProjectionType); ok {
+		if parts := projectionTypePath(projection); len(parts) >= 3 {
+			return c.traitType(&ast.PathType{Base: projection.Base, Path: &ast.Path{Base: projection.Base, Segments: parts}})
+		}
+	}
 	switch n := node.(type) {
 	case *ast.SelfType:
 		if c.currentSelf != nil {
@@ -39,8 +45,15 @@ func (c *checker) traitType(node ast.Type) (types.Type, bool) {
 		}
 		parts := n.Path.Segments
 		if target, trait, qualifier := c.associatedPath(parts); trait != nil {
-			c.checkProjectionBindings(target, trait, qualifier.Args, n)
-			return c.projectAssociated(target, trait, parts[len(parts)-1].Name.Name, n), true
+			goal := c.applicationFromArgs(target, trait, qualifier.Args, n)
+			goal.targetPermission = c.projectionTargetPermission(parts, trait)
+			witness := c.projectionEvidence(goal, parts[len(parts)-1].Name.Name, n)
+			c.checkApplicationBindings(goal, witness, n)
+			if output := evidenceAssociated(witness)[parts[len(parts)-1].Name.Name]; output != nil {
+				return output, true
+			}
+			c.diag(n, TraitInvalid, "associated projection requires an explicit implementation of "+trait.Symbol.Name.Name)
+			return types.Typ[types.Invalid], true
 		}
 		last := parts[len(parts)-1]
 		if trait := c.traitPath(parts); trait != nil {
@@ -49,7 +62,8 @@ func (c *checker) traitType(node ast.Type) (types.Type, bool) {
 			}
 			bindings := map[string]types.Type{}
 			c.readAssociated(last.Args, trait, bindings, n)
-			args := make([]types.Type, 0, len(trait.Associated))
+			inputs, nodes, sources := c.readTraitInputs(last.Args, trait, n)
+			args := append([]types.Type(nil), inputs...)
 			for _, a := range trait.Associated {
 				v := bindings[a.Name]
 				if v == nil {
@@ -65,10 +79,108 @@ func (c *checker) traitType(node ast.Type) (types.Type, bool) {
 			if err != nil {
 				return types.Typ[types.Invalid], true
 			}
+			if named, ok := t.(*types.Named); ok {
+				if c.out.traitApplications == nil {
+					c.out.traitApplications = map[*types.Named]*TraitBound{}
+				}
+				c.out.traitApplications[named] = &TraitBound{info: c.out, File: c.file.Name, Trait: trait, Inputs: inputs, InputNodes: nodes, inputPermissions: sources, Associated: bindings}
+			}
 			return t, true
 		}
 	}
 	return nil, false
+}
+
+// Self paths retain projection nodes in the parser, including nested generic
+// arguments. Expose the same ordered segments used by ordinary qualified paths.
+func projectionTypePath(node ast.Type) []*ast.PathSegment {
+	switch typ := node.(type) {
+	case *ast.PathType:
+		if typ.Path != nil {
+			return typ.Path.Segments
+		}
+	case *ast.SelfType:
+		return []*ast.PathSegment{{Base: typ.Base, Name: &ast.Ident{Base: typ.Base, Name: "Self"}}}
+	case *ast.ProjectionType:
+		if typ.Dot {
+			return nil
+		}
+		if prefix := projectionTypePath(typ.X); prefix != nil {
+			return append(append([]*ast.PathSegment(nil), prefix...), &ast.PathSegment{Base: typ.Base, Name: typ.Item, Args: typ.Args})
+		}
+	}
+	return nil
+}
+
+// Fully qualified Self projections name the declaration's own associated
+// bindings, just like Self::Item. They do not select a global implementation.
+func (c *checker) projectionEvidence(goal *TraitBound, name string, node ast.Node) Evidence {
+	for _, bound := range c.boundsFor(goal.Target) {
+		if c.sameApplication(bound, goal) {
+			return Evidence{Bound: bound}
+		}
+	}
+	if c.currentImpl != nil && c.sameApplication(c.implApplication(c.currentImpl), goal) {
+		c.resolveAssociated(c.currentImpl, name, node)
+		return Evidence{Impl: c.currentImpl}
+	}
+	if trait := c.currentTrait; c.currentImpl == nil && trait != nil && goal.Trait == trait {
+		bound := &TraitBound{info: c.out, File: c.file.Name, Trait: trait, Target: trait.Self, Associated: map[string]types.Type{}}
+		for _, parameter := range trait.TypeParams {
+			bound.Inputs = append(bound.Inputs, parameter)
+		}
+		if c.sameApplication(bound, goal) {
+			for _, associated := range trait.Associated {
+				bound.Associated[associated.Name] = associated.Param
+			}
+			return Evidence{Bound: bound}
+		}
+	}
+	return c.proveApplication(goal)
+}
+
+func (c *checker) applicationFromArgs(target types.Type, trait *Trait, args *ast.GenericArgs, node ast.Node) *TraitBound {
+	goal := &TraitBound{info: c.out, File: c.file.Name, Trait: trait, Target: target, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedPermissions: map[string]*permission{}}
+	goal.Inputs, goal.InputNodes, goal.inputPermissions = c.readTraitInputs(args, trait, node)
+	c.readAssociated(args, trait, goal.Associated, node)
+	if args != nil {
+		for _, arg := range args.Args {
+			if arg.Name != nil {
+				goal.AssociatedNodes[arg.Name.Name] = arg.Type
+				goal.associatedPermissions[arg.Name.Name] = c.newPermissionChecker().astType(arg.Type, nil)
+			}
+		}
+	}
+	return goal
+}
+
+func (c *checker) projectionTargetPermission(parts []*ast.PathSegment, trait *Trait) *permission {
+	for split := 1; split < len(parts)-1; split++ {
+		if c.traitPath(parts[split:len(parts)-1]) == trait {
+			if split == 1 && parts[0].Name.Name == "Self" && c.currentSelf != nil {
+				if c.currentImpl != nil {
+					return c.implHeadPermissions(c.currentImpl)[0]
+				}
+				return c.newPermissionChecker().fromGo(c.currentSelf)
+			}
+			path := &ast.PathType{Base: parts[0].Base, Path: &ast.Path{Base: parts[0].Base, Segments: parts[:split]}}
+			return c.newPermissionChecker().astType(path, nil)
+		}
+	}
+	return nil
+}
+
+func (c *checker) checkApplicationBindings(goal *TraitBound, witness Evidence, node ast.Node) {
+	bindings := evidenceAssociated(witness)
+	for name, want := range goal.Associated {
+		if !types.Identical(want, bindings[name]) {
+			c.diag(node, TraitInvalid, "associated projection binding conflicts with implementation: "+name)
+			continue
+		}
+		if source := goal.associatedPermissions[name]; source != nil && !c.sameSourceType(source, c.evidenceAssociatedPermission(witness, name)) {
+			c.diag(node, TraitInvalid, "associated projection reference permissions conflict with implementation: "+name)
+		}
+	}
 }
 
 // A projection contains two independently resolved paths: the source type and
@@ -92,46 +204,6 @@ func (c *checker) associatedPath(parts []*ast.PathSegment) (types.Type, *Trait, 
 	return nil, nil, nil
 }
 
-func (c *checker) checkProjectionBindings(target types.Type, trait *Trait, args *ast.GenericArgs, node ast.Node) {
-	if args == nil {
-		return
-	}
-	provided := map[string]types.Type{}
-	c.readAssociated(args, trait, provided, node)
-	var bindings map[string]types.Type
-	var bound *TraitBound
-	var impl *Impl
-	bound = c.boundFor(target, trait)
-	if bound != nil {
-		bindings = bound.Associated
-	} else {
-		impl = c.findImpl(target, trait)
-		if impl != nil {
-			bindings = impl.Associated
-		}
-	}
-	p := c.newPermissionChecker()
-	for _, arg := range args.Args {
-		if arg.Name == nil {
-			continue
-		}
-		name := arg.Name.Name
-		if !types.Identical(provided[name], bindings[name]) {
-			c.diag(arg, TraitInvalid, "associated projection binding conflicts with implementation: "+name)
-			continue
-		}
-		var want *permission
-		if bound != nil {
-			want = p.boundAssociated(bound, name, nil)
-		} else if impl != nil {
-			want = p.implAssociated(impl, name, nil)
-		}
-		if want != nil && !p.sameSourcePermissions(p.astType(arg.Type, nil), want, map[[2]types.Type]bool{}) {
-			c.diag(arg, TraitInvalid, "associated projection reference permissions conflict with implementation: "+name)
-		}
-	}
-}
-
 func (c *checker) selfAssociated(name string, node ast.Node) types.Type {
 	if c.currentImpl != nil {
 		return c.resolveAssociated(c.currentImpl, name, node)
@@ -149,20 +221,6 @@ func (c *checker) selfAssociated(name string, node ast.Node) types.Type {
 		}
 	}
 	c.diag(node, TraitInvalid, "unknown associated type "+name)
-	return types.Typ[types.Invalid]
-}
-
-func (c *checker) projectAssociated(target types.Type, trait *Trait, name string, node ast.Node) types.Type {
-	if bound := c.boundFor(target, trait); bound != nil {
-		if t := bound.Associated[name]; t != nil {
-			return t
-		}
-	} else if impl := c.findImpl(target, trait); impl != nil {
-		if t := impl.Associated[name]; t != nil {
-			return t
-		}
-	}
-	c.diag(node, TraitInvalid, "associated projection requires an explicit implementation of "+trait.Symbol.Name.Name)
 	return types.Typ[types.Invalid]
 }
 
@@ -198,7 +256,54 @@ func (c *checker) sourceArity(sig *types.Signature) int {
 	return count
 }
 
+// A call may supply a leading type-argument prefix and infer the remaining
+// arguments from its ordinary parameters. Keep the original signature until
+// inference finishes so its trait premises are instantiated only once.
+func (c *checker) partialFunctionApplication(call *ast.CallExpr) (*types.Signature, map[*types.TypeParam]types.Type) {
+	var signature *types.Signature
+	var arguments []types.Type
+	switch expression := call.Fun.(type) {
+	case *ast.IndexExpr:
+		signature, _ = c.expr(expression.X, nil).(*types.Signature)
+		if signature == nil || len(c.out.FunctionConstParams[signature]) != 0 || len(expression.Indices) >= c.sourceArity(signature) {
+			return nil, nil
+		}
+		for _, argument := range expression.Indices {
+			arguments = append(arguments, c.genericExprType(argument))
+		}
+	case *ast.PathExpr:
+		if expression.Path == nil || len(expression.Path.Segments) == 0 {
+			return nil, nil
+		}
+		last := expression.Path.Segments[len(expression.Path.Segments)-1]
+		if last.Args == nil {
+			return nil, nil
+		}
+		signature, _ = c.symbolType(c.sourcePathSymbol(expression.Path.Segments)).(*types.Signature)
+		if signature == nil {
+			signature, _ = c.importType(expression.Path).(*types.Signature)
+		}
+		if signature == nil || len(c.out.FunctionConstParams[signature]) != 0 || len(last.Args.Args) >= c.sourceArity(signature) {
+			return nil, nil
+		}
+		for _, argument := range last.Args.Args {
+			arguments = append(arguments, c.genericArgType(argument))
+		}
+	default:
+		return nil, nil
+	}
+	if len(arguments) == 0 {
+		return nil, nil
+	}
+	substitution := map[*types.TypeParam]types.Type{}
+	for index, argument := range arguments {
+		substitution[signature.TypeParams().At(index)] = argument
+	}
+	return signature, substitution
+}
+
 func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Type, constants []ConstValue, node ast.Node) types.Type {
+	c.ensureFunctionCases(sig)
 	constSub, validConsts := c.bindConstArguments(sig, constants, node)
 	if !validConsts {
 		return types.Typ[types.Invalid]
@@ -212,14 +317,15 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 	for i, arg := range args {
 		sub[sig.TypeParams().At(i)] = arg
 	}
-	instance := &FunctionInstance{Signature: sig, TypeArgs: append([]types.Type(nil), args...), ConstArgs: append([]ConstValue(nil), constants...), ConstSubstitution: constSub}
+	sources := c.functionArgumentPermissions(sig, node, sub)
+	instance := &FunctionInstance{Signature: sig, TypeArgs: append([]types.Type(nil), args...), ConstArgs: append([]ConstValue(nil), constants...), ConstSubstitution: constSub, permissionSubstitution: sources}
 	for _, bound := range c.functionBounds[sig] {
-		target := c.out.Substitute(bound.Target, sub, constSub)
-		witness := c.prove(target, bound.Trait)
+		goal := c.substituteBoundApplication(bound, sub, constSub, sources)
+		witness := c.proveApplication(goal)
 		instance.Evidence = append(instance.Evidence, witness)
 		bindings := evidenceAssociated(witness)
-		if witness.Impl == nil && witness.Bound == nil {
-			message := "type does not explicitly implement " + bound.Trait.Symbol.Name.Name
+		if witness.Impl == nil && witness.Bound == nil && len(witness.Cases) == 0 {
+			message := "type does not explicitly implement " + bound.Trait.Symbol.Name.Name + ": " + goal.ApplicationKey()
 			if c.proofFailure != "" {
 				message += ": " + c.proofFailure
 			}
@@ -237,6 +343,7 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 					projected = true
 					actual = append(actual, got)
 					sub[p] = got
+					sources[p] = c.evidenceAssociatedPermission(witness, a.Name)
 					break
 				}
 			}
@@ -255,6 +362,9 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 				for param, typ := range sub {
 					permissions[param] = p.fromGo(typ)
 				}
+				for param, source := range sources {
+					permissions[param] = source
+				}
 				if source != nil && !p.sameSourcePermissions(source, p.boundAssociated(bound, a.Name, permissions), map[[2]types.Type]bool{}) {
 					c.diag(node, GenericConstraint, "associated reference permissions do not satisfy constraint: "+a.Name)
 				}
@@ -262,6 +372,7 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 		}
 	}
 	instance.Substitution = sub
+	c.functionBodyEvidence(instance)
 	c.out.FunctionInstances[node] = instance
 	var t types.Type = sig
 	var err error
@@ -272,9 +383,96 @@ func (c *checker) instantiateFunctionType(sig *types.Signature, args []types.Typ
 		c.diag(node, GenericConstraint, err.Error())
 		return types.Typ[types.Invalid]
 	}
+	if instance.Case != nil {
+		function := c.caseFunctions[sig]
+		symbol := function.file.Definitions[function.declaration.Name.ID()]
+		if selected, ok := instance.Case.Info.Symbols[symbol].(*types.Signature); ok {
+			r := newBodyTypes(c.out, instance.Substitution, constSub)
+			return types.NewSignatureType(nil, nil, nil, r.tuple(selected.Params()), r.tuple(selected.Results()), selected.Variadic())
+		}
+	}
 	if len(constants) != 0 {
 		r := newBodyTypes(c.out, sub, constSub)
 		return types.NewSignatureType(nil, nil, nil, r.tuple(sig.Params()), r.tuple(sig.Results()), sig.Variadic())
 	}
 	return t
+}
+
+func (c *checker) functionArgumentPermissions(signature *types.Signature, node ast.Node, sub map[*types.TypeParam]types.Type) map[*types.TypeParam]*permission {
+	p := c.referenceHints
+	if p == nil {
+		p = c.newPermissionChecker()
+	}
+	result := map[*types.TypeParam]*permission{}
+	for parameter, typ := range sub {
+		result[parameter] = p.fromGo(typ)
+	}
+	switch n := node.(type) {
+	case *ast.IndexExpr:
+		for index, position := range c.typeArgumentPositions(signature, len(n.Indices)) {
+			if index < signature.TypeParams().Len() {
+				result[signature.TypeParams().At(index)] = p.exprType(n.Indices[position])
+			}
+		}
+	case *ast.GenericArgs:
+		index := 0
+		for _, arg := range n.Args {
+			if arg.Type != nil && index < signature.TypeParams().Len() {
+				result[signature.TypeParams().At(index)] = p.astType(arg.Type, nil)
+				index++
+			}
+		}
+	case *ast.CallExpr:
+		formal := p.sourceShape(n.Fun, map[*resolve.Symbol]bool{})
+		inferred := map[*types.TypeParam]*permission{}
+		for index, value := range c.callArgumentSources(n.Args, n.Ellipsis, false) {
+			if formal != nil {
+				p.inferPermission(p.callParam(formal, index, n.Ellipsis), value, inferred)
+			}
+		}
+		for parameter, source := range inferred {
+			if sub[parameter] != nil {
+				result[parameter] = source
+			}
+		}
+		// Explicit arguments remain authoritative, including source references
+		// erased to Go pointers in the ordinary type substitution.
+		var explicit ast.Node
+		switch function := n.Fun.(type) {
+		case *ast.IndexExpr:
+			explicit = function
+		case *ast.PathExpr:
+			if function.Path != nil && len(function.Path.Segments) != 0 {
+				if arguments := function.Path.Segments[len(function.Path.Segments)-1].Args; arguments != nil {
+					explicit = arguments
+				}
+			}
+		}
+		if explicit != nil {
+			for parameter, source := range c.functionArgumentPermissions(signature, explicit, nil) {
+				result[parameter] = source
+			}
+		}
+	}
+	return result
+}
+
+// Calls expand a sole multi-result argument before matching formal parameters.
+// The same source shapes drive ordinary generic and trait-input inference.
+func (c *checker) callArgumentSources(arguments []ast.Expr, ellipsis, evaluate bool) []*permission {
+	var values []*permission
+	for _, argument := range arguments {
+		typ := c.out.Types[argument]
+		if evaluate || !valid(typ) {
+			typ = c.expr(argument, nil)
+		}
+		source := c.memberSource(argument, defaultType(typ))
+		_, call := referenceScrutinee(argument).(*ast.CallExpr)
+		if tuple, ok := typ.(*types.Tuple); ok && tuple.Len() > 1 && call && len(arguments) == 1 && !ellipsis && source != nil {
+			values = append(values, source.results...)
+		} else {
+			values = append(values, source)
+		}
+	}
+	return values
 }

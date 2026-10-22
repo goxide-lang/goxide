@@ -110,3 +110,31 @@ trait Equal where Self: Compare + Display {}
 	}
 	assertRoundTrip(t, file)
 }
+
+func TestQualifiedStaticTraitInputSyntax(t *testing.T) {
+	const source = `package p
+func convert[T any, S any](value S) T where T: From[S] {
+ make := T::from::<From[S]>
+ a := pkg::Box[T]::from::<protocol::From[S]>(value)
+ b := ([]T)::from::<From[S]>(value)
+ c := value.into::<Into[T]>()
+ return make(value)
+}
+`
+	file, diagnostics := parser.ParseFile("qualified.gox", []byte(source))
+	if errors := errorsOnly(diagnostics); len(errors) != 0 {
+		t.Fatal(errors)
+	}
+	body := file.Items[0].(*ast.FuncDecl).Body
+	for index, statement := range body.List[:4] {
+		value := statement.(*ast.AssignStmt).Rhs[0]
+		if call, ok := value.(*ast.CallExpr); ok {
+			value = call.Fun
+		}
+		selector, ok := value.(*ast.QualifiedSelectorExpr)
+		if !ok || selector.Static != (index < 3) {
+			t.Fatalf("statement %d selector = %#v", index, value)
+		}
+	}
+	assertRoundTrip(t, file)
+}

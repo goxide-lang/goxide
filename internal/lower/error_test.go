@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestErrorDeriveMessagesSourcesAndPropagation(t *testing.T) {
+func TestErrorDeriveMessagesSourcesAndExplicitHelper(t *testing.T) {
 	module, err := supportModule(t, `package main
 use errors;
 var cause = errors::New("cause")
@@ -29,9 +29,10 @@ type (
     }
 )
 func load() Result[int,Failure] {
-    n := Result[int,error]::Err(cause)?
+    n := Result[int,Failure]::Err(FromFailure(cause))?
     return Result[int,Failure]::Ok(n)
 }
+
 func main() {
     failure := match load() { Result[int,Failure]::Err(err) => err, _ => Failure::Missing }
     counted := Failure::Count(3)
@@ -46,6 +47,20 @@ func main() {
 	want := "input failed true bad count 3 cannot open data true\n"
 	if got := runGo(t, module, "run", "."); got != want {
 		t.Fatalf("Error derive output = %q, want %q", got, want)
+	}
+}
+
+func TestErrorDeriveHelperIsNotConversionEvidence(t *testing.T) {
+	_, err := supportModule(t, `package main
+#[derive(Error)] #[error("wrapped")]
+type Failure struct { #[from] Cause error }
+func load(value Result[int,error]) Result[int,Failure] {
+    return Result[int,Failure]::Ok(value?)
+}
+func main(){}
+`)
+	if err == nil || !strings.Contains(err.Error(), "canonical github.com/goxide-lang/std/convert::From is unavailable") {
+		t.Fatalf("Error helper registered implicit conversion evidence: %v", err)
 	}
 }
 

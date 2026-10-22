@@ -1,0 +1,92 @@
+package model
+use protocol::facade::From;
+use protocol::facade::Into;
+use protocol;
+use native;
+use runtime;
+
+pub struct Count { pub N int }
+pub struct Summary { pub Err error }
+pub struct Wrap[T any] { pub Values []T }
+struct secret { value int }
+type privateSource int
+
+impl From[int] for Count { func from(value int) Self { return Self{N:value} } }
+impl From[string] for Count { func from(value string) Self { return Self{N:len(value)} } }
+impl From[privateSource] for Count { func from(value privateSource) Self { return Self{N:int(value)} } }
+impl From[error] for Summary { func from(value error) Self { return Self{Err:value} } }
+impl From[int] for secret { func from(value int) Self { return Self{value:value} } }
+impl From[secret] for int { func from(value secret) Self { return value.value } }
+
+impl[T any] protocol::Elements for Wrap[T] {
+    type Item = T
+    func elements(self Self) []T { return self.Values }
+}
+impl[T any] Into[[]T] for Wrap[T] { func into(self Self) []T { return self.Values } }
+impl Into[int] for Count { func into(self Self) int { return self.N } }
+
+pub func Numeric(value int) Count { return Count::from(value) }
+pub func Textual(value string) Count { return Count::from::<From[string]>(value) }
+pub func InferredInto(value int) Count { var result Count=value.into();return result }
+pub func ReturnContext(value int) Count { return value.into() }
+func keep(value Count) Count { return value }
+pub func ArgumentContext(value int) Count { return keep(value.into()) }
+pub func Saved(value int) func()Count { return value.into::<Into[Count]> }
+pub func SavedImplicit(value int) func()Count { return value.into }
+pub func Factory() func(int)Count { return Count::from }
+pub func FactoryExplicit() func(string)Count { return Count::from::<From[string]> }
+pub func Two[T any](first int,second string) (T,T) where T:From[int]+From[string] { return T::from(first),T::from(second) }
+pub func Both(first int,second string) (Count,Count) { return Two[Count](first,second) }
+pub func One[T From[error]](value *native::Fault) T { return T::from(value) }
+pub func BoxFault(value *native::Fault) Summary { return One[Summary](value) }
+pub func InOnly[S Into[Count]](value S) Count { return value.into() }
+pub func UniqueInput(value int) Count { return InOnly(value) }
+pub func Secret(value int) secret { return secret::from(value) }
+pub func PrivateSource(value int) privateSource { return privateSource(value) }
+pub func CountView(value Count) Into[int] { return value }
+pub func IntView(value int) Into[Count] { return value }
+pub func SliceView(values []int) Into[[]int] { return Wrap[int]{Values:values} }
+pub func NilIdentity(value *native::Fault) *native::Fault { return protocol::Convert[*native::Fault,*native::Fault](value) }
+pub func ErrorIdentity(value error) error { return protocol::Convert[error,error](value) }
+
+pub struct Signal {}
+impl From[*bool] for Signal {
+    func from(caught *bool) Self { *caught=recover()!=nil;return Self{} }
+}
+pub func DeferredFrom(caught *bool) {
+    defer Signal::from::<From[*bool]>(caught)
+    panic("direct From")
+}
+pub func SavedFrom(caught *bool) {
+    call:=Signal::from::<From[*bool]>;
+    defer call(caught)
+    panic("saved From")
+}
+pub func DeferredInto(caught *bool) {
+    defer caught.into::<Into[Signal]>()
+    panic("Into blanket")
+}
+pub func SavedInto(caught *bool) {
+    call:=caught.into::<Into[Signal]>;
+    defer call()
+    panic("saved Into")
+}
+pub func RuntimeInto(caught *bool) {
+    var view Into[Signal]=caught
+    defer view.into()
+    panic("runtime Into")
+}
+
+pub struct Action { pub Mode int; pub Trace *[]string }
+pub struct Outcome {}
+impl From[Action] for Outcome {
+    func from(value Action) Self {
+        *value.Trace=append(*value.Trace,"from")
+        defer func(){*value.Trace=append(*value.Trace,"from-defer")}()
+        if value.Mode==1 { panic("conversion panic") }
+        if value.Mode==2 { runtime::Goexit() }
+        return Self{}
+    }
+}
+pub func ConvertAction(value Action) Outcome { return Outcome::from(value) }
+pub func IntoAction(value Action) Outcome { return value.into() }

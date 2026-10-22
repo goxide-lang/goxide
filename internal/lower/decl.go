@@ -89,9 +89,6 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 		}
 		e.fail(n, "impl 声明尚未降低")
 	case *syntax.DeclareDecl:
-		if impl, ok := n.Decl.(*syntax.ImplDecl); ok && e.info.Impls[impl] != nil {
-			return nil
-		}
 		e.fail(n, "declare 声明尚未降低")
 	case *syntax.MacroRulesDecl:
 		e.fail(n, "宏定义尚未降低")

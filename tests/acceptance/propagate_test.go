@@ -96,7 +96,7 @@ func TestPropagationExplicitRejections(t *testing.T) {
 	}
 }
 
-func TestPropagationFromRace(t *testing.T) {
+func TestErrorHelperAndPropagationRace(t *testing.T) {
 	enumGeneratedModule(t, `package fixture
 use errors;
 #[derive(Error)]
@@ -107,13 +107,16 @@ type AppError struct {
 }
 var sentinel=errors::New("sentinel")
 func source()Result[int,error]{return Result[int,error]::Err(sentinel)}
-func converted()Result[string,AppError]{_=source()?;return Result[string,AppError]::Ok("wrong")}
+func converted()Result[string,AppError]{
+ match source(){Result::Err(err)=>{return Result[string,AppError]::Err(FromAppError(err))},Result::Ok(_)=>{return Result[string,AppError]::Ok("wrong")}}
+ panic("unreachable")
+}
 func assignable()Result[string,error]{_=converted()?;return Result[string,error]::Ok("wrong")}
 func cause(v Result[string,AppError])error{match v {Result[string,AppError]::Err(e)=>{return e.Cause},Result[string,AppError]::Ok(_)=>{return nil},};panic("unreachable")}
 func boxed(v Result[string,error])error{match v {Result[string,error]::Err(e)=>{return e},Result[string,error]::Ok(_)=>{return nil},};panic("unreachable")}
 `, `package fixture
 import("errors";"testing")
-func TestOneStepFromAndAssignableFirst(t *testing.T){if cause(converted())!=sentinel{t.Fatal("From lost source")};err:=boxed(assignable());if !errors.Is(err,sentinel){t.Fatalf("assignment lost chain: %v",err)};if _,ok:=err.(AppError);!ok{t.Fatalf("assignment changed concrete error: %T",err)}}
+func TestExplicitHelperAndAssignablePropagation(t *testing.T){if cause(converted())!=sentinel{t.Fatal("helper lost source")};err:=boxed(assignable());if !errors.Is(err,sentinel){t.Fatalf("assignment lost chain: %v",err)};if _,ok:=err.(AppError);!ok{t.Fatalf("assignment changed concrete error: %T",err)}}
 `, false)
 }
 

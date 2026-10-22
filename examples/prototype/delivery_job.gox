@@ -58,9 +58,9 @@ func unitsFor(job Job, limit &int) Result[int,error] {
     panic("unreachable")
 }
 func prepareJob(input []byte, limit &int, enabled bool) Result[Receipt,JobFailure] {
-    job:=decodeJob(input)?
-    name:=requireName(job)?
-    units:=unitsFor(job,limit)?
+    job:=match decodeJob(input) { Result[Job,error]::Ok(value) => value, Result[Job,error]::Err(cause) => { return Result[Receipt,JobFailure]::Err(FromJobFailure(cause)) }, }
+    name:=match requireName(job) { Result[string,error]::Ok(value) => value, Result[string,error]::Err(cause) => { return Result[Receipt,JobFailure]::Err(FromJobFailure(cause)) }, }
+    units:=match unitsFor(job,limit) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,JobFailure]::Err(FromJobFailure(cause)) }, }
     snapshot:=CloneJob(&job)
     job_event!(enabled,snapshot.Name,units)
     return Result[Receipt,JobFailure]::Ok(Receipt{Name:name,Units:units})

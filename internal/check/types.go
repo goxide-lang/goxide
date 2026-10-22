@@ -75,16 +75,16 @@ func (c *checker) collect(items []ast.Item) {
 		case *ast.TypeDecl:
 			if n.Grouped {
 				for _, s := range n.Specs {
-					c.collectType(s.Name, s.Type, s.Alias)
+					c.collectType(s.Name, s.Type, s.Generics, s.Alias)
 				}
 			} else {
-				c.collectType(n.Name, n.Type, n.Alias)
+				c.collectType(n.Name, n.Type, n.Generics, n.Alias)
 			}
 		case *ast.ConstDecl:
 			for _, spec := range n.Specs {
 				for index, name := range spec.Names {
 					if symbol := c.symbol(name); symbol != nil && index < len(spec.Values) {
-						c.sourceValues[symbol] = sourceExpression{c.file, spec.Values[index]}
+						c.sourceValues[symbol] = sourceExpression{file: c.file, node: spec.Values[index]}
 						if spec.Type != nil {
 							c.sourceTypes[symbol] = permissionDeclaration{c.file, spec.Type}
 						}
@@ -104,17 +104,18 @@ func (c *checker) collect(items []ast.Item) {
 type typeDeclaration struct {
 	file                     *resolve.File
 	node                     ast.Type
+	generics                 *ast.GenericParams
 	alias, defining, defined bool
 }
 
-func (c *checker) collectType(id *ast.Ident, t ast.Type, alias bool) {
+func (c *checker) collectType(id *ast.Ident, t ast.Type, generics *ast.GenericParams, alias bool) {
 	s := c.symbol(id)
 	if s == nil {
 		return
 	}
 	n := types.NewNamed(types.NewTypeName(0, c.pkg, s.GoName, nil), types.Typ[types.Invalid], nil)
 	c.named[s], c.out.Symbols[s] = n, n
-	c.declarations[s] = &typeDeclaration{file: c.file, node: t, alias: alias}
+	c.declarations[s] = &typeDeclaration{file: c.file, node: t, generics: generics, alias: alias}
 }
 
 func (c *checker) params(g *ast.GenericParams) []*types.TypeParam {
@@ -141,7 +142,7 @@ func (c *checker) params(g *ast.GenericParams) []*types.TypeParam {
 			continue
 		}
 		for range p.Names {
-			if p.Constraint != nil {
+			if p.Constraint != nil && c.declarationEvidenceReady(p.Constraint) {
 				out[i].SetConstraint(c.typ(p.Constraint))
 			}
 			i++
@@ -184,8 +185,28 @@ func (c *checker) prepareGenerics(items []ast.Item) {
 
 func (c *checker) signatures(items []ast.Item) {
 	for _, item := range items {
+		if function, ok := item.(*ast.FuncDecl); ok {
+			if c.signaturePhase == 1 && len(function.Recv) == 0 || c.signaturePhase == 2 && len(function.Recv) != 0 {
+				continue
+			}
+		}
+		if c.signaturePhase == 2 {
+			if _, enum := item.(*ast.EnumDecl); enum {
+				continue
+			}
+		}
+		if c.signaturePhase == 1 {
+			switch item.(type) {
+			case *ast.TypeDecl, *ast.EnumDecl, *ast.FuncDecl:
+				if c.signatureNeedsEvidence(item, map[*resolve.Symbol]bool{}) {
+					c.pendingDeclarations = append(c.pendingDeclarations, pendingDeclaration{item, c.file, c.pkg})
+					continue
+				}
+			}
+		}
 		switch n := item.(type) {
 		case *ast.EnumDecl:
+			c.completeGenericConstraints(n.Generics)
 			e := c.out.Enums[n]
 			if e == nil {
 				continue
@@ -230,12 +251,19 @@ func (c *checker) signatures(items []ast.Item) {
 				c.typeSignature(n.Name, n.Type, n.Generics, n.Alias)
 			}
 		case *ast.FuncDecl:
+			previousState := c.caseState
+			state := &bodyCaseState{}
+			c.caseState = state
 			c.receiverParams(n.Recv)
 			params := c.functionParams(n)
 			oldBounds := c.activeBounds
 			c.activeBounds = c.out.GenericBounds[n]
 			sig := types.NewSignatureType(nil, nil, params, c.tuple(n.Params), c.tuple(n.Results), len(n.Params) > 0 && n.Params[len(n.Params)-1].Variadic)
 			c.functionBounds[sig] = c.out.GenericBounds[n]
+			if c.caseFunctions == nil {
+				c.caseFunctions = map[*types.Signature]caseFunction{}
+			}
+			c.caseFunctions[sig] = caseFunction{declaration: n, file: c.file, pkg: c.pkg}
 			c.out.FunctionConstParams[sig] = c.constParameters(n.Generics)
 			c.out.FunctionGenerics[sig] = n.Generics
 			if s := c.symbol(n.Name); s != nil {
@@ -253,6 +281,13 @@ func (c *checker) signatures(items []ast.Item) {
 				}
 			}
 			c.activeBounds = oldBounds
+			c.caseState = previousState
+			if len(state.choices) != 0 {
+				if c.signatureCases == nil {
+					c.signatureCases = map[*ast.FuncDecl]*bodyCaseState{}
+				}
+				c.signatureCases[n] = state
+			}
 		case *ast.ModDecl:
 			c.signatures(n.Items)
 		case *ast.DeclareDecl:
@@ -294,6 +329,7 @@ func (c *checker) receiverParams(params []*ast.Param) {
 }
 
 func (c *checker) typeSignature(name *ast.Ident, t ast.Type, g *ast.GenericParams, alias bool) {
+	c.completeGenericConstraints(g)
 	s := c.symbol(name)
 	c.defineType(s)
 }
@@ -303,9 +339,13 @@ func (c *checker) defineType(s *resolve.Symbol) {
 	if decl == nil || decl.defined || decl.defining {
 		return
 	}
-	decl.defining = true
 	oldFile, oldPkg := c.file, c.pkg
 	c.file = decl.file
+	if !c.declarationEvidenceReady(decl.node) || decl.generics != nil && !c.declarationEvidenceReady(decl.generics) {
+		c.file = oldFile
+		return
+	}
+	decl.defining = true
 	n := c.named[s]
 	if n == nil {
 		return
@@ -428,6 +468,7 @@ func (c *checker) typ(node ast.Type) (result types.Type) {
 				embeds = append(embeds, c.typ(m.Type))
 			}
 		}
+		c.validateSymbolicInterface(n, methods, embeds)
 		return types.NewInterfaceType(methods, embeds).Complete()
 	case *ast.UnionType:
 		var terms []*types.Term

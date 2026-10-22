@@ -307,6 +307,22 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 	case *ast.TryExpr:
 		x := p.expr(n.X, nil)
 		if trial := p.c.out.Tries[n]; trial != nil && trial.Input != nil {
+			if failure := trial.Input.Variant("Err"); failure != nil && trial.Output != nil && trial.Output.Enum.Name == "Result" && len(p.results) == 1 {
+				actual := p.enumField(x, failure, 0)
+				want := p.enumField(p.results[0], trial.Output.Variant("Err"), 0)
+				if trial.Conversion == nil {
+					p.require(n, actual, want)
+				} else {
+					fun := p.traitMember(n, trial.Conversion)
+					if fun != nil && len(fun.params) == 1 && len(fun.results) == 1 {
+						p.require(n, actual, fun.params[0])
+						p.require(n, fun.results[0], want)
+						p.checkGenericCall(fun, []*permission{actual}, nil)
+						p.applyEffects(fun)
+						p.applyEffects(actual)
+					}
+				}
+			}
 			if v := trial.Input.Variant("Some"); v != nil {
 				q = p.enumField(x, v, 0)
 			} else if v := trial.Input.Variant("Ok"); v != nil {

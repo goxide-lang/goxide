@@ -1,0 +1,28 @@
+package business
+use model;
+
+// No From import: the selected implementation has canonical std identity.
+pub func TryPrivate(value int) Result[int,int] {
+    n:=model::PrivateResult(value)?
+    return Result[int,int]::Ok(n)
+}
+pub func AssignWithoutTraitImport(value Result[int,*model::LocalFault]) Result[int,error] {
+    n:=value?
+    return Result[int,error]::Ok(n)
+}
+pub func TryWithoutTraitImport() Result[int,model::Failure] {
+    n:=model::OriginalFault()?
+    return Result[int,model::Failure]::Ok(n)
+}
+pub func TryPrivateSuccess(ok bool,value int) Result[int,int] {
+    hidden:=model::PrivateSuccess(ok,value)?
+    return Result[int,int]::Ok(model::SecretValue(hidden))
+}
+pub func TryPrivateOption(ok bool,value int) Option[int] {
+    hidden:=model::PrivateOption(ok,value)?
+    return Option[int]::Some(model::SecretValue(hidden))
+}
+pub func TryPrivateInvalid() Result[int,int] {
+    hidden:=model::PrivateInvalid()?
+    return Result[int,int]::Ok(model::SecretValue(hidden))
+}

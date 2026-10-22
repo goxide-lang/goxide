@@ -1,10 +1,10 @@
 package main
 
+import fmt "fmt"
 import sum "github.com/goxide-lang/std/sum"
 import sort "sort"
 import strconv "strconv"
 import strings "strings"
-import fmt "fmt"
 
 type Item struct{ Text string }
 type (

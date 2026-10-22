@@ -67,11 +67,11 @@ func (e *emitter) functionEvidenceGroups(fn *syntax.FuncDecl) []functionEvidence
 	byParam := map[*types.TypeParam]int{}
 	for _, bound := range bounds {
 		param, _ := traitBoundTarget(bound).(*types.TypeParam)
-		if index, found := byParam[param]; param != nil && found {
+		if index, found := byParam[param]; param != nil && found && !parameterizedTrait(bound.Trait) {
 			groups[index].bounds = append(groups[index].bounds, bound)
 			continue
 		}
-		if param != nil {
+		if param != nil && !parameterizedTrait(bound.Trait) {
 			byParam[param] = len(groups)
 		}
 		groups = append(groups, functionEvidenceGroup{param: param, bounds: []*check.TraitBound{bound}, name: e.evidenceNames[bound]})

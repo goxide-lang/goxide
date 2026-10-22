@@ -99,12 +99,13 @@ pub enum LocalError{
 }
 func OptionFlow(ok bool)Option[int]{n:=m::Pick(ok)?;return Option[int]::Some(n+1)}
 func ResultFlow(kind int)Result[string,error]{n:=m::Load(kind)?;_=n;return Result[string,error]::Ok("done")}
-func Wrapped(kind int)Result[int,LocalError]{n:=m::Load(kind)?;return Result[int,LocalError]::Ok(n)}
+func Wrapped(kind int)Result[int,LocalError]{n:=match m::Load(kind){Result[int,error]::Ok(value)=>value,Result[int,error]::Err(cause)=>{return Result[int,LocalError]::Err(FromLocalError(cause))},};return Result[int,LocalError]::Ok(n)}
 func Match(v Option[int])int{return match v{Option[int]::Some(n)=>n,Option[int]::None=>0,}}
 func Alias()int{v:=r::Numeric[int]::Some(9);return match v{r::Int::Some(n)=>n,r::Maybe[int]::None=>0,}}
 func Reorder()int{v:=r::Swap[error,int]::Ok(10);return match v{r::Outcome[int,error]::Ok(n)=>n,r::Swap[error,int]::Err(_)=>0,}}
 func Fixed()int{v:=r::Fixed[int]::Ok(11);return match v{r::Fixed[int]::Ok(n)=>n,r::Fixed[int]::Err(_)=>0,}}
 func Private()Option[int]{n:=m::Private()?;return Option[int]::Some(n.N)}
+func Secret()Option[int]{n:=m::Secret()?;return Option[int]::Some(n.N)}
 func Shape()int{v:=r::Wrap[int]::Some(struct{T int;V int}{T:2,V:3});return match v{r::Wrap[int]::Some(n)=>n.T+n.V,r::Wrap[int]::None=>0,}}
 func PrivateMatch()int{return match m::Private(){r::Private::Some(n)=>n.N,r::Private::None=>0,}}
 func Forward(){_=m::Secret()}
@@ -172,7 +173,7 @@ func TestProducer(t *testing.T){for _,wire:=range []string{"{}",`+"`"+`{"Value":
 import __borrow_std "github.com/goxide-lang/std/sum"
 
 import("testing";"errors";"fmt";"strings";m "sums.example/lib/model")
-func TestBusiness(t *testing.T){if Match(OptionFlow(true))!=6||Match(OptionFlow(false))!=0||Alias()!=9||Reorder()!=10||Fixed()!=11||PrivateMatch()!=7||Shape()!=5{t.Fatal("business")};if __borrow_std.ValueSome(Private())!=7{t.Fatal("private")};if __borrow_std.ValueOk(ResultFlow(0))!="done"{t.Fatal("result")};if !errors.Is(__borrow_std.ValueErr(ResultFlow(1)),m.Sentinel){t.Fatal("cause")};if e:=__borrow_std.ValueErr(ResultFlow(2));e==nil{t.Fatal("typed nil lost")};if !errors.Is(__borrow_std.ValueErr(Wrapped(1)),m.Sentinel){t.Fatal("from")};if __borrow_std.TagOption(NestedNone())!=0{t.Fatal("Some(None)")};_=Shadow()}
+func TestBusiness(t *testing.T){if Match(OptionFlow(true))!=6||Match(OptionFlow(false))!=0||Alias()!=9||Reorder()!=10||Fixed()!=11||PrivateMatch()!=7||Shape()!=5{t.Fatal("business")};if __borrow_std.ValueSome(Private())!=7{t.Fatal("private")};if n:=__borrow_std.ValueSome(Secret());n!=8{t.Fatal("private unnamed payload",n)};if __borrow_std.ValueOk(ResultFlow(0))!="done"{t.Fatal("result")};if !errors.Is(__borrow_std.ValueErr(ResultFlow(1)),m.Sentinel){t.Fatal("cause")};if e:=__borrow_std.ValueErr(ResultFlow(2));e==nil{t.Fatal("typed nil lost")};if !errors.Is(__borrow_std.ValueErr(Wrapped(1)),m.Sentinel){t.Fatal("from")};if __borrow_std.TagOption(NestedNone())!=0{t.Fatal("Some(None)")};_=Shadow()}
 func TestNewConcreteInstance(t *testing.T){
  if __borrow_std.TagOption(NewInstance(__borrow_std.None[bool]()))!=0||!__borrow_std.ValueSome(NewInstance(__borrow_std.NewSome(true))){t.Fatal("new concrete identity")}
 }
@@ -232,8 +233,7 @@ func TestGo(t *testing.T){var v r.Maybe[int]=__borrow_std.NewSome[int](4);if __b
 	})
 	for name, tc := range map[string]struct{ body, want string }{
 		"fake-family":                {`use library::fake as f;func Bad()Result[int,error]{n:=f::Get()?;return Result[int,error]::Ok(n)}`, "requires Option or Result"},
-		"private-unnameable":         {`use library::model as m;func Bad()Option[int]{n:=m::Secret()?;return Option[int]::Some(n.N)}`, "not nameable"},
-		"external-from-not-implicit": {`use library::model as m;func Bad()Result[int,m::RemoteError]{n:=m::Load(1)?;return Result[int,m::RemoteError]::Ok(n)}`, "unique explicit From"},
+		"external-from-not-implicit": {`use library::model as m;func Bad()Result[int,m::RemoteError]{n:=m::Load(1)?;return Result[int,m::RemoteError]::Ok(n)}`, "canonical github.com/goxide-lang/std/convert::From is unavailable"},
 		"cross-family":               {`use library::model as m;func Bad()Option[int]{n:=m::Load(0)?;return Option[int]::Some(n)}`, "return the same Option or Result family"},
 		"non-exhaustive":             {`use library::model as m;func Bad(v Option[int])int{return match v{Option[int]::Some(n)=>n,}}`, "does not cover Option::None"},
 		"constrained-alias-ctor":     {`use library::relay as r;func Bad(){_=r::Numeric[string]::Some("bad")}`, "does not satisfy"},

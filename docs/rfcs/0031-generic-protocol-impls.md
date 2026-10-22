@@ -2,11 +2,11 @@
 
 ## 状态与范围
 
-**泛型/条件 impl、按需实例化与 Go 普通入口已实现。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态与实际验收见[状态表](../mvp-gap-audit.md)。
+**基础泛型/条件 impl、按需实例化与 Go 普通入口已实现；通用互斥求解与泛型 declare 设计见第 2 节，尚未实现。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态与实际验收见[状态表](../mvp-gap-audit.md)。
 
 [RFC 0030](0030-procedural-macros.md) 提供语法变换与受限执行，宏不查询类型、不登记 impl。Default、Clone、Debug、PartialEq、Eq、Serialize、Deserialize 的迁移使用普通库协议；每个业务协议仍须保持原有行为并分别验收。
 
-| 已确认边界 | 规则 |
+| 当前基础能力 | 规则 |
 | --- | --- |
 | 泛型与条件 impl | 类型参数、同一类型的多个 trait 约束、具体或复合类型的 where 条件由普通 checker 处理；条件不收紧目标类型本身 |
 | impl 归属与唯一性 | 有体 impl 归 trait 定义包或最外层具名目标的定义包；可能匹配同一目标的实现冲突，不以约束或特化排序 |
@@ -21,13 +21,13 @@
 
 最小数组长度参数与显式 enum 可失败检查已实现。Default 的函数调用图递归限制和 Eq 派生的现有资格规则保持不变；下文关于放宽这两项的候选暂不实施。`no_mangle` 不属于本篇或本次实现。
 
-[已确认决策](../design/decisions.md) D05 的外部原生采用、D19/D20 的权限边界、运行时 wrapper 和 enum 表示继续适用。此稿不增加 move、独占分析、动态字典、反射兜底或每种 derive 的编译器 hook。用户在泛型类型上使用 derive 可继续由宏明确拒绝；但库的泛型 impl 必须能为具体业务类型的泛型字段提供协议。
+[已确认决策](../design/decisions.md) D05 的外部原生采用、D19/D20 的权限边界、运行时 wrapper 和 enum 表示继续适用。此稿不增加 move、独占分析、动态字典、反射兜底或每种 derive 的编译器 hook。当前部分业务宏仍拒绝泛型声明；通用迁移完成时须支持其业务合同适用的泛型类型，不能把该拒绝作为完成边界。库的泛型 impl 同时须为业务字段提供协议。
 
 Error 派生、`go_result!` / `go_result_keep!`、`cfg` 属于不同边界：Error 的 struct 方法已有普通 inherent impl 迁移证明，enum 固有方法的新映射及完整 From/Into 仍未实现；go_result 涉及调用结果形状和错误转换，cfg 决定进入展开的源码。当前工作聚焦转译器与 std 基础，Error 的 `#[from]`、消息和上下文等人体工程库后续开发。print/println 的库化另验格式检查与调用行为；本篇提供其可使用的普通协议能力。
 
 ## 源级规则
 
-### 1. 声明、归属与约束
+### 1. 声明、归属与约束（当前基础合同）
 
 已确认语法沿用 `impl[T ...]`、`where` 形状和 `+` 组合；数组常量参数按第 4 节限制使用：
 
@@ -61,40 +61,153 @@ Default 成员统一写作 `r#default`，使用普通 raw identifier；不再以
 
 trait 与派生宏沿 RFC 0030 的单一名字空间：运行库可导出 `Clone` trait，并将宏包重导出为 `derive`，调用写作 `#[derive(protocols::derive::Clone)]`；也可显式导入宏并改名。现有裸内建派生入口在迁移时删除，不用编译器固定映射模拟普通库。宏输出的运行库路径通过既定定义点绑定与 RuntimeRoot 解析，消费者按 RFC 0030 声明运行库依赖；宏执行依赖不会自动成为目标依赖。这里的模块及导出名是示例，最终库布局须在迁移前确定。
 
-### 2. 唯一性与证明模型
+### 2. 通用互斥与实现选择（设计提案）
 
-输入为展开后声明集合 `D`、canonical 类型/包环境 `Γ` 与有效配置 `C`；输出为带已选实现和证据的类型化程序，或源位置诊断。宏产生的声明与手写声明属于同一个 `D`。
+本节是通用过程宏迁移的完整目标，尚未实现；替代“只比较目标头”和此前只覆盖具体类型的有限否定提案。当前实现仍按第 1 节的非参数化 trait、受限 owner 和保守头重叠检查工作。通用迁移的完成标准包括带未知类型/长度参数的声明、跨包条件证据与泛型 declare，不能以有限具体实例或宏主动拒绝泛型代替。
 
-定义 `I = (owner, trait, target-pattern, parameters, prerequisites, body)`。`norm` 解析 alias 和路径身份；`θ` 是目标模式匹配得到的类型及数组长度代换；`P ⊢ τ:Q ⇓ w` 表示在当前证明栈 `P` 下，为目标 τ 的协议 Q 选中静态证据 w。
+已确认四项方向：保留第三方 declare 开放；允许裸 T 的显式泛型 declare；trait 输入可由实参和已知返回上下文推导；采用包级开放世界。完整头、owner 扩展和转换调用见 [RFC 0032](0032-from-into-conversions.md#源级规则)；本节统一规定所有普通协议的求解与选择，不按宏或 trait 名称特判。不引入特化、用户负 impl 或运行时协议搜索。
+
+#### 2.1 身份、量词与结果
+
+输入为 cfg 选择和宏展开后的声明 D、canonical 类型/包环境 Γ、定义点约束 ParamEnv 与开放环境 Horizon。收齐当前包及其可达源码依赖的声明后再认证；声明顺序、use 别名、重导出、依赖遍历次序不参与选择。
 
 ```text
-Owner(I) = owner(trait(I)) 或 owner(outermost-named(target(I)))
-全部参数出现在 target(I) 中，成员及关联类型在 prerequisites(I) 下可检查
-────────────────────────────────────────────────────────────── [Impl合法]
-                       Γ ⊢ I valid
-
-trait(I) = trait(J)，存在 θ、φ 使 norm(θ target(I)) = norm(φ target(J))
-I、J 是两个不同有体实现（不考察各自 prerequisites）
-────────────────────────────────────────────────────────────── [重叠拒绝]
-                       Γ ⊢ I, J conflict
-
-match(norm(target(I)), norm(τ)) = θ，I 是唯一匹配实现
-(τ,Q) 不在 P，每个 θ prerequisite(I) 均在 P ∪ {(τ,Q)} 下可证明
-────────────────────────────────────────────────────────────── [实现选择]
-            P ⊢ τ:Q ⇓ Selected(I, θ, prerequisite-witnesses)
+ImplDecl = (DeclID, owner, parameters, Head, Predicates, body-or-native-binding)
+Head = (canonical TraitID, norm(Self), norm(trait inputs...))
+Overlap(I,J) = ∃ X,Y. Head(I,X)=Head(J,Y) ∧ Predicates(I,X) ∧ Predicates(J,Y)
 ```
 
-这些规则是设计约束，不是已完成的形式证明。删除 owner 条件会让任意依赖定义外部类型的业务；删除重叠检查会让依赖集合或顺序改变分派；用“当前约束不相交”规避重叠，会在以后增加 impl 时改变唯一性。本稿采用保守的目标模式合一检查，不求解约束互斥性。
+透明 alias 归一，defined 类型保留名义身份；源级 &T、&mut T、原生 *T 保留不同权限合同。关联类型是输出，不是 Head 的额外输入。允许同 Head、互斥 where 的两个声明后，证据和生成符号必须使用各自稳定 DeclID；不能再用 owner/target/trait 三元组去重。DeclID 可用规范化声明头及条件区分，同一 canonical 声明经多条导入路径加载仍只有一份。重复但无关的声明不能因此去重；完全重复的有体 impl 仍冲突。
 
-`declare impl` 继续采用真实原生方法，保留 [RFC 0003](0003-declare-impl.md) 允许第三方包采用外部 trait/类型和相容声明合并的规则。该入口不能因新的有体 impl owner 规则被删除。相同采用关系可合并；有体与 declare 的匹配目标重叠仍诊断，不用“有体优先”覆盖已有行为。首批不要求泛型 declare；现有具体 declare 必须仍能参与泛型函数的证据传递。
+互斥是存在量查询：分别 freshen 两边参数，将头合一的代换、两边全部前提放进同一个约束状态 Σ。不能用不同 T 分别满足 A、B，就声称同一个 T 同时满足二者。函数/impl 体检查是定义点的全称保证：泛型参数 rigid，在 ParamEnv 下证明每次使用所需能力，不能靠某次具体调用碰巧成立放过模板。
 
-证明缓存按 canonical 目标、trait、关联绑定和代换区分。命中正在证明的同一义务报告完整链；不默认假设递归协议成立。无匹配、重叠、关联类型冲突或证明循环均在生成成功产物前诊断。
+```text
+Intersect(I,J,Horizon) → Impossible(certificate)
+                       | Possible(witness)
+                       | Unknown(reason, residual constraints)
+```
 
-普通函数体调用不进入上述 impl 证明栈。**既有 Default 递归限制的调整暂缓。** 候选规则允许手写 `Default::r#default` 可经普通递归调用返回，也可能无限递归，语言不承诺终止。移除当前仅针对 Default 的函数调用图拒绝，是本稿明确提出的语义变化。相反，宏若显式生成递归字段前提，形成 `Node: Clone → []Node: Clone → Node: Clone`，仍是证明循环；本稿不以共同递归证明放行。
+Impossible 要证明所有允许代入与预留扩展都无交点；Possible 给出一致的具体或符号见证；其余为 Unknown。两个有体实现或有体/declare 只有 Impossible 才能并存。Possible 诊断展示交点，Unknown 诊断说“无法证明互斥”及剩余义务，不能冒充已找到重叠实例。相容 declare 的合并按 2.4 节单独判断。
 
-具体、无前提的 impl 则先登记其完整签名，再检查普通方法体；所有实现体通过后才可生成成功产物。检查方法体内的调用时，可以选择该无条件实现自身或同批登记的其他具体实现。以 `Node { Next *Node }` 为例，serde 宏可生成无 where 前提的具体 Serialize/Deserialize impl：方法体选择 `*Node` 容器证据，后者选择已登记的无条件 Node 证据。其 Go 形式是已选定的 Node 和指针处理函数相互调用；实例工作队列按身份去重，互相递归的具名业务类型按同一规则处理。方法体仍逐项检查字段协议，未知 codec 不能因提前登记而被放行。
+#### 2.2 共享约束求解
 
-这与带有 `where *Node: Serialize` 的 Node impl 不同：后者的资格本身依赖尚待证明的同一资格，仍被拒绝。现有 serde 生成器可通过直接 helper 调用处理递归字段，迁移不能机械地给每个具体字段增加 where 而失去此能力。当前 Clone 的递归拒绝可由其宏生成显式字段前提保留；不要求所有业务宏选择同一前提策略。两种递归都不承诺运行时终止，也不替循环对象图增加检测。
+```text
+SolveExists(Σ, goals):
+    饱和类型、const、Go type-set、原生签名及可用关联输出等式
+    有矛盾 → Impossible
+    无 goals 且 Σ 已证可满足 → Possible；无法判定可满足性 → Unknown
+    取一个 goal，枚举当前 impl 分支及 Horizon 的未来分支
+    每个分支把头等式、前提、输出和其余 goals 放回同一 Σ
+    任一分支 Possible → Possible
+    枚举完备且全部分支 Impossible → Impossible
+    否则 → Unknown
+```
+
+已知有体/declare、未来有体 MayBody、未来采用 MayDeclare 是同一次 OR 枚举。AND 中任一条件失败即可排除该分支；每个答案保留代换和剩余约束，不能只缓存布尔值。未来分支也继续参与约束归约，例如原生方法产生 T=int、另一必要条件产生 T=string 时，仍可符号化反证。Go 方法结构相容仅产生未来采用的可能，不创建实际 Goxide impl 或可调用证据。
+
+完成范围必须包含以下普通证明规则：
+
+- 名义类型和构造类型合一、重复参数、occurs check；T=Box[T] 等无限类型无解。不能按 underlying 混同 defined 类型。
+- Go 约束的有限 union/intersection，精确类型项和 ~underlying 项，以及已允许的 comparable、方法签名合同。~int 与 ~string 可直接反证，不能只枚举当前已知具名类型来代表 ~int。comparable 按当前 Go 约束满足规则处理，不把接口类型与运行时值可比较性混为一谈。
+- 同名必需方法的精确参数、返回、variadic 和接收者约束；确定类型交给当前 Go 类型环境核验，符号类型保留准确条件。无法精确处理的方法集合返回 Unknown，不能猜空集。
+- 现有 const N int 的数组长度等式、非负合法长度域及常量矛盾；N=2 且 N=3 无解，未知 N 不妨碍证明。现有源语言禁止的 const 算术仍按第 4 节诊断，求解预算耗尽另报 Unknown。
+- 同一协议 application 的关联输出等式，但须先取得独立的 coherence 依据，规则如下。
+
+对于已认证的 Q，T:Q[Item=int] 与 T:Q[Item=string] 可利用输出唯一性证明互斥。两个待比较 impl 自己声明不同输出，则不能据此断言互斥：输出差异可能恰是冲突。记录每张互斥证书依赖的 trait coherence；在同一个待证依赖 SCC 内，先禁止彼此借用输出唯一性，只能展开具体分支或使用头、Go 约束等独立事实。某节点独立认证后才解锁它的输出等式；剩余循环担保返回 Unknown(CircularCoherenceDependency)。
+
+#### 2.3 包级开放世界与负证明
+
+Horizon 不是可切换的编译选项。它记录定义包 K、选定源码/原生依赖版本、cfg、完整声明集、owner 规则、开放 declare 合同及以下扩展类别；所有否定证书绑定这些依据。对 impl 对 I/J，只能分别使用 I 或 J 的定义包作为 K，任一合法定义环境取得的互斥证书即可成立；不能任选无关包关闭世界。全图认证保留证书的 K 和依赖快照，消费者验证其依据仍有效，不能改用消费者包为 K 重判既有声明对。实际新增声明仍与既有实现逐对检查，证书依赖变化则重新认证。
+
+1. **定义包当前源码固定。** 对 K 中 impl 进行认证时，K 的声明已完整收集。修改 K 的 impl、类型或方法后重检。不能为方便证明把可达外包当作 K 所有。
+2. **未来下游包开放。** 枚举新包可定义的新具名类型，按 RFC 0032 的有序 owner 规则判断是否能满足义务；裸变量可取新类型，固定外部名义构造及其指针链不会因内部参数来自新包而转移 owner。已有但未加载的包按同样的 owner 与依赖方向判断；可新增保持无环的依赖边，不能只看当前可达性。没有加载到声明本身不能作为不存在证明。
+3. **兼容外包有体扩展按句法形状预留。** 在保持 import DAG 与既有类型/trait 合同的前提下，预留两类新增声明：(a) OwnerOK 且完整头每次参数出现都被非 * 构造覆盖；(b) 某个头位置的具名根是该版本新定义的 owner 类型，首个这种新本地根之前没有未覆盖参数，之后可有。新根可属于既有上游或未来下游，alias/重导出不创建新根。对既有根新增的其他 blanket、删改 impl、放宽 where 或改变输出属于需重新验证的变更，不作为兼容新增预留。covered 按每次出现判断：Q[P] for Box[P] 仍有未覆盖 P；Q[P] for NewForeign 可用新的 Self 根预留；Q[P,NewForeign] for OldForeign 不能用后面的新根掩盖前面的裸 P。这是 coherence 的扩展分类，不宣称任意库 API 变化都兼容。
+4. **第三方采用始终单独开放。** MayDeclare 不受有体 owner 限制。固定类型的原生方法可能让未来适配包采用它；匿名或不可直接命名的实例也可能通过已确认的裸 T 模板被覆盖，不能只凭私有性关闭该分支。上游原生类型新增方法、或嵌入类型改变提升路径，在允许保留既有公开签名的扩展中预留；直接稳定同名方法的签名矛盾不能由新增另一个同名方法修复。
+
+MayBody 对每个已有非 K 包及 FreshDownstream 包类构造上述两类存在分支，并保留头合一、OwnerOK、普通类型约束和 trait 必要前提。已有根分支中，外包无法通过无环依赖命名的名义子树只能由参数代替，而参数的每次出现须满足对应覆盖条件。新根分支要求头位置本身（只穿过 * 链）可与 FreshNamed 合一；不能从 []T 或 KnownBox[T] 内部取 owner，固定名义根也不会因 T 未定变成新根。所有可能分支均被反证才关闭 MayBody；形状/投影分析不完备则 Unknown。
+
+负证明不依赖外包当前的 private 可见性：其 owner 可能新增公开 alias，泛型参数也可覆盖私有实参。实际声明仍执行普通可见性检查；只在未来扩展分析中保守预留可经无环依赖取得的名称。MayBody 与 MayDeclare 的 residual 继续和其他条件共享 Σ，避免分别找出的未来实例被错误拼接。
+
+关键验收是在 Wrap 定义包证明泛型 `impl[T] Into[[]T] for Wrap[T]` 与 std blanket 互斥：交点要求 `[]T:From[Wrap[T]]`。当前完整声明无可满足分支；未来下游无法拥有 slice 或 Wrap 外层，上游要接收无法命名的 Wrap[T] 必须使用未覆盖来源参数的 blanket，From 静态成员又关闭 declare。因此在整个 T 域排除该义务，而非先实例化 int/string。反之，裸 `T:Q` 可被新下游具名类型满足，普通实例协议可被合法 declare 采用，均不能因当前无实现就否定。
+
+该规则保证库检查考虑允许的未来扩展；新增本包实现、依赖版本/cfg 变化及不在兼容预留类别内的 blanket 扩展仍触发相关包与下游重检。缓存绑定完整环境和依赖证书，不能复用旧锁文件或另一 cfg 下的负结论。新增实际交点应报冲突，不能改成更具体实现优先。运行时插件、反射发现和纯 Go marker 不参与源码实现集合。
+
+#### 2.4 泛型 declare 与相容合并
+
+[RFC 0003](0003-declare-impl.md) 的第三方采用、原生调用和固定工厂归属保留；本节扩展为泛型/条件声明与完整 trait 输入：
+
+```goxide
+// NativeRead 是原生 Go interface；Reader/Getter 是 Goxide trait。
+declare impl[T any] Getter[T] for native::Cell[T];
+declare impl[T NativeRead] Reader for T;
+declare impl[T any] BorrowReader for T where *T: NativeRead;
+```
+
+全部类型/长度参数须从完整输入头绑定；不能仅在 where、关联输出或原生返回类型中引入待猜参数。关联输出可依赖已绑定参数。声明合法性是全称证明：在其参数约束和 where 下，每个实例都具备原生方法与准确调用合同。仅存在一个能采用的实例不足以通过模板检查。
+
+self Self 检查精确 Self 方法集，self &Self / &mut Self 检查精确 *Self。`for *N[T]` 的借用接收者为 **N[T]，不消指针、自动取址、复制或 clone。T:NativeRead 不能证明 *T:NativeRead；复合原生义务 `where *T: NativeRead` 因此纳入完整设计。该义务检查原生 Go interface 约束，不能由 Goxide wrapper 或正在建立的 Reader 证据自证。原生权限合同仍由 declare 作者承担，不新增对 Go 方法体的只读证明。
+
+按原生方法身份、精确签名和唯一提升路径校验，不做返回转换或接口装箱来凑签名。trait 方法仍不带独立泛型参数；原生方法自带类型参数时，不能猜测实例化参数充当非泛型成员。含静态成员的 trait 继续不可 declare。裸 T 模板覆盖满足其合同的全部合法类型，包括匿名类型、接口、slice 等，不能暗藏不可表达的 named-only 条件；`declare impl[T any] Marker for T` 对空 marker 是全域显式 blanket，须与其他实现共同查冲突。
+
+MayDeclare 的量词相反：只需存在一个未来合法采用，就可能阻止否定。返回原生绑定模式、类型/长度等式、关联输出和剩余 NativeHas 条件；只有枚举完备且全部分支被反证，才能否定 declare 分支。以原生 Cell[T] 具有 Get() T 为例：
+
+| 条件 | 符号结果 |
+| --- | --- |
+| Cell[T]:Getter[U] | 产生 T=U，保留原生 Get 身份 |
+| 同一原生返回 T 被两项必要条件要求为 int 和 string | 联合矛盾，对整个 T 域反证 |
+| 要求该 Get 返回 []T | T=[]T，由 occurs check 反证 |
+| K 的完整且无外部提升可能的 Cell[T] 缺 Get | 整个族不能采用，不必具体化 T |
+| 外包 Cell[T] 目前缺 Get，但允许新增方法 | 保留未来方法分支，不能按当前缺失否定 |
+| Self 是未知 T，约束未提供 Get | 声明未获全称证明；未来采用仍可能，不能把约束缺失当负条件 |
+
+两个 declare 的完整头与前提先求交集。只有 Impossible 可独立保留；Possible 或 Unknown 都须在联合约束下证明原生业务绑定及提升路径、完整关联输出、源权限和调用合同处处相同，才合并逻辑关系。泛型/具体 declare 可相容，不选“更具体”的提供者；可用条件是两条声明的并集，不能误写成同时满足两边的交集。未能证明绑定相同则诊断，Unknown 报未能证明相容/互斥，不伪称发现实际交点；有体/declare 的交集不能因业务体恰好转调同一方法而合并。
+
+逻辑合并保留每个声明包的 Go wrapper 和固定工厂，静态调用/方法值按同一原生绑定执行。已有适配点保存其提供者；泛型证据连同提供者需求传到实例化，选定后固定。新建运行时视图遇到多个等价外部提供者时，推荐要求本包相容 declare 或作者显式命名的普通函数消歧；此用法分支待确认。例：适配包定义 `pub func view(b &mut native::Buffer) api::Reader { return b }`，消费者调用 `adapter_a::view(b)`。生成的 As/For 是 Go API，不能假称已可在 Goxide 源码中直接拼写。另一分支是按固定包路径自动选新视图的提供者，其代价是依赖变化可能改变可观察的 wrapper 动态类型；无论采用哪项，都不以 provider 顺序决定逻辑 impl 业务。
+
+同一声明包内部，相容的泛型/具体 declare 仍可能对应不同物理工厂。新适配点在已证明适用且等价的候选中按稳定 canonical DeclID 选择表示，选定后连同模板实参保存；不是按具体程度选择业务。尚未确定适用者的泛型证据继续传递 provider 需求，不能提前任选。新增同包声明后新适配点的表示可能变化；已公开工厂和已选证据的 wrapper 身份保留。不能用“一个完整 application 一个工厂名”把泛型 wrapper 实例与已有具体 wrapper 强行视作同一 Go 动态类型。
+
+#### 2.5 正证据、递归与降低
+
+所有声明先通过全图 coherence 认证，再检查调用所需的正证据。定义点的显式协议前提可直接携带 evidence parameter；它在实例化时填充，不按候选顺序重搜。若某候选在 ParamEnv 下已有正证据，可用已认证的成对互斥证书排除其他候选；其他候选单独求解为 Unknown 不妨碍这一排除。若只能得到有限、完备且互斥的条件分区，可保存编译期证据分支，后续实例化选定叶。每个可达分支均须在对应约束下完成成员签名、关联输出、方法体和权限检查；不能让某次实例化掩盖其他分支中的错误。无法证明分区覆盖则要求补充普通约束或诊断，不能把不完整分区延迟成运行时试错。
+
+类型推导先依据 trait 声明签名及已有类型信息求出完整输入，规则见 RFC 0032；不反向枚举 impl 或 where 猜测未知输入。选定证据记录 DeclID、全部类型/长度代换、关联输出、前提证据及需要的 provider。方法候选、投影、缓存、实例队列、绑定器和符号身份均须包含完整 application；实现声明身份与义务查询身份分别维护。
+
+区分三张递归图：
+
+- 逻辑义务用 canonical query tabling，普通 trait 采用归纳证据；遇到同一义务不默认真，也不立即缓存为假。有限且完整展开、无开放外部分支的 SCC 可用最小不动点判定没有基础证明；类型增长、外部残余或未完成展开返回 Unknown。
+- coherence 证书依赖图按 2.2 节处理关联输出循环；不能以自身待证唯一性反证自身冲突。
+- 普通业务调用与生成需求图沿第 3 节处理。已登记无条件具体 impl 的方法体可相互递归；实例队列去重，不能把业务递归误判成资格递归。
+
+预算按确定性的节点、分支、类型项和推理步数计费。耗尽报告查询链和剩余条件；不按墙钟时间改变判定，不把溢出或临时 SCC 结论写成永久负缓存。固定输入、配置和预算下的诊断及生成结果应稳定。
+
+Go 降低继续使用已选 ops、定义包模板和精确签名回调，普通 Go 能表达的泛型保留；不引入动态字典、反射或全局 impl 注册表。不同的同 Head 条件声明有不同生成符号，但不向原始泛型类型无条件追加能力。私有字段业务留在定义包，std 不反向 import 消费者；真正被调用的方法承载业务体，直接调用和方法值保持求值、槽位、defer/recover。Go 消费者沿 D38 调用作者公开的普通入口。
+
+Default 函数调用图规则调整及 Eq marker 仍是既有暂缓项。本节解决普通资格证明，不借此放宽业务宏合同。serde 递归具体类型可由宏生成无条件 Serialize/Deserialize impl，先登记签名，再在业务体中选择已登记 Node 与容器操作；带有 `where *Node:Serialize` 的资格环则需要归纳基础，不能因运行时递归合法而默认成立。Clone 宏显式生成的循环字段前提继续失败；两种策略都不保证运行时对象图终止。
+
+#### 2.6 通用过程宏迁移验收
+
+以下均为待实施验收，不得用当前具体类型宏探针代替。参数化语法、solver、证据、lower 和真实宏迁移按依赖次序完成；每一行包含对应源级诊断或正例，而非只测内部 helper 返回值。
+
+| 编号 | 最低覆盖 | 预期 |
+| --- | --- | --- |
+| GC-01 | 同 Head 的 Box[T] 两条 impl 分别要求 ~int、~string；交叉 union 与真实交集对照 | 符号互斥通过；交集有见证则拒绝；不同 DeclID 不混淆 |
+| GC-02 | 同一 T 的独立已认证 Q.Item=int/string；仅输出不同的两个 impl；相互担保 coherence 的 SCC | 前者通过，后两者冲突或明确 Unknown，不循环自证 |
+| GC-03 | 数组前提联合产生 N=2/N=3、N 相等及未知合法长度 | 符号长度证明；不枚举全部 N，不开放 const 算术 |
+| GC-04 | Wrap[T] → []T 的独立 Into；添加对应 From；同容器逐元素 From 在 S=T | 非 ground 独立 Into 通过；后两项实际冲突，不能特化 |
+| GC-05 | 未知 T 可取未来下游本地类型；有序 owner、* 链、covered 参数、alias、同 module 不同 package | 预留合法未来分支；消费者保留定义包证书；不把未加载/未导入等同于不存在 |
+| GC-06 | Cell[T] 原生签名等式/矛盾/occurs；本地完整缺方法；外部未来方法和嵌入提升 | 精确反证或保留未来分支；第三方开放 declare 不误判负 |
+| GC-07 | 固定泛型族及裸 T declare；*T 原生约束；目标 *N[T] 的 **N[T]；匿名/interface/空 marker | 全称验证；参数绑定、指针层与全域 blanket 后果准确 |
+| GC-08 | 泛型/具体及跨包相容 declare；未知交集；同包/跨包工厂来源；输出/权限/绑定冲突；有体/declare | 相容逻辑合并且条件为并集，工厂身份固定；其余区分实际冲突与未知诊断 |
+| GC-09 | 正证据加成对互斥证书；泛型 ParamEnv 传递；完备/不完备条件分区 | 不取首个、不按包优先；只保存可证明的编译期选择 |
+| GC-10 | 封闭无基础逻辑环、可证明基础、类型增长、预算边界与循环关联输出 | 有界、稳定诊断；业务递归不误拒；溢出不当否定 |
+| GC-11 | From/Into 的单个/多个已知 application、实参/返回上下文推导、歧义、私有类型及限定方法值 | 按声明签名推导；不通过 impl 试重载或反推关联输出 |
+| GC-12 | 手写、声明宏、WASI function-like/attribute/derive 生成相同泛型条件实现 | 同一语义与诊断；至少覆盖泛型 struct/enum、嵌套容器、关联输出和长度参数 |
+| GC-13 | 至少三个独立 module：协议/通用库、原生或适配库、业务与 Go 消费者；公开发布 pin | 真实 .gox 生成 Go 后 build/run/test；私有类型/字段、runtime view、无反向依赖、Go 普通入口 |
+| GC-14 | 文件/import/重导出/依赖枚举顺序重排，重复生成，cfg/版本变化后重检 | 字节一致；声明不重复，负缓存失效正确，新增冲突不改变旧选择 |
+
+GC-12/13 的真实 WASI 宏只读取语法并输出普通声明；至少一例在泛型声明仍含未知参数时证明互斥，随后用多个实例实际运行，不能先穷举 int/string 再宣称泛型完成。derive、attribute、function-like 三类均须端到端接入；错误中的义务链与宏来源位置可追踪。已有 `syn_generic_test.go`、`attribute_protocol_migration_test.go` 和 `const_macro_test.go` 可作为基础，新增验收落在相关测试中，不另造证据文档。
+
+Go 行为同时覆盖 nil/typed-nil、值副本与真实借用槽、权限反例、单次求值、直接及保存方法值的 recover、源码行号和普通 Go 调用。通用基础通过后，各业务宏仍按本篇既有 Default/Clone/Debug/PartialEq/Eq/serde/Error 合同逐项迁移；新增基础验收不抵消深层 enum 比较、缺失字段协议和正式库发布等尚存缺口。只有完整泛型能力、业务等价与相关 hook 移除都通过，才能将对应迁移标为完成。
 
 ### 3. 转译范围、需求闭包与 Go 入口
 
@@ -216,7 +329,7 @@ func CloneRecord(value *Record) Record {
 
 ## 拒绝与边界
 
-以下均由 Goxide 前端拒绝，不能留给 Go 错误或静默退化：
+以下记录当前合同；GP-05/06 在通用方案实施后改按第 2 节的联合约束判定，其余行为不变。错误均由 Goxide 前端诊断，不能留给 Go 错误或静默退化：
 
 | 编号 | 输入或条件 | 原因 |
 | --- | --- | --- |
@@ -268,7 +381,7 @@ Self 始终是完整 enum；`self &Self` / `self &mut Self` 须保留真实 owne
 
 D22 与 [RFC 0005](research/0005-option-result-question.md#11-thiserror-与静态错误类型) 已确认 `?` 先普通可赋值，再精确静态来源与目标的唯一一步 From；不搜索链、不为匹配先装箱、不猜 Go error 的动态类型。当前实现仍只登记本包 Error 派生的 helper，完整 From/Into 尚未实现。
 
-[RFC 0032](0032-from-into-conversions.md) 已给出完整候选：以完整 trait application 区分来源与目标，std 用普通 identity 与 Into blanket，统一跨包归属、有限互斥证明及 `?` 证据选择。该提案明确修订本篇的无输入 trait、参数只出现在 Self、裸参数 target 禁令、owner 范围和忽略 where 的重叠检查；只在能够可靠否定交集时放行具体独立 Into，未知仍拒绝。在整体确认与实施前，本篇现有合同保持有效。没有新增 `#[try_from]` 登记属性。
+[RFC 0032](0032-from-into-conversions.md) 已给出完整候选：以完整 trait application 区分来源与目标，std 用普通 identity 与 Into blanket，统一跨包归属、通用互斥证明及 `?` 证据选择。该提案明确修订本篇的无输入 trait、参数只出现在 Self、裸参数 target 禁令和 owner 范围；通用互斥与泛型 declare 统一按本篇第 2 节，不以具体类型子集为完成标准。在整体确认与实施前，本篇现有合同保持有效。没有新增 `#[try_from]` 登记属性。
 
 **enum 比较前的有限结构校验。** 公开入口采用 `std::enum_assert!(value)`，名字不带 valid 后缀。宏表示检查请求，类型布局及字段访问由后续类型检查与降低处理，不向过程宏开放类型查询。首批用于 payload 静态类型完全确定的 enum 实例：实参求值一次，无返回值；普通 PartialEq 宏在两个操作数都已求值后，先对左值、再对右值调用，随后才比较变体或执行业务相等方法。校验读取活动 payload，穿过结构体字段、array、slice 和 map 值，不调用字段的业务协议，也不把额外协议条件加到字段类型上。非法 enum 按既有规则 panic。现有 `enum_valid` 的外层 bool 检查保持不变。
 

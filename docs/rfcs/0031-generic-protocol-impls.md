@@ -268,7 +268,7 @@ Self 始终是完整 enum；`self &Self` / `self &mut Self` 须保留真实 owne
 
 D22 与 [RFC 0005](research/0005-option-result-question.md#11-thiserror-与静态错误类型) 已确认 `?` 先普通可赋值，再精确静态来源与目标的唯一一步 From；不搜索链、不为匹配先装箱、不猜 Go error 的动态类型。当前实现仍只登记本包 Error 派生的 helper，完整 From/Into 尚未实现。
 
-后续协议设计需以 `(Source, Target)` 为转换身份，明确同一目标的多个来源、From 与 Into 的对应关系、泛型约束、实现归属、跨包可见性和重复冲突。本篇现有 trait 不带输入类型参数，关联类型只是实现输出，不能拿单一关联 Source 冒充完整多来源 From。若用 `From[S] for T` 与 `Into[T] for S` 表达，须先扩展普通 trait 的输入身份；From 自动提供 Into 的方式也需明确，不能默认开放目前禁止的裸参数 blanket impl。From 的失败边界与显式可失败转换另行确定，不增加 `#[try_from]` 登记属性。具体合同仍待设计确认，现有运行行为保持到新协议完成验收。
+[RFC 0032](0032-from-into-conversions.md) 已给出完整候选：以完整 trait application 区分来源与目标，std 用普通 identity 与 Into blanket，统一跨包归属、保守重叠检查及 `?` 证据选择。该提案明确修订本篇的无输入 trait、参数只出现在 Self、裸参数 target 禁令和 owner 范围；在整体确认与实施前，本篇现有合同保持有效。没有新增 `#[try_from]` 登记属性。
 
 **enum 比较前的有限结构校验。** 公开入口采用 `std::enum_assert!(value)`，名字不带 valid 后缀。宏表示检查请求，类型布局及字段访问由后续类型检查与降低处理，不向过程宏开放类型查询。首批用于 payload 静态类型完全确定的 enum 实例：实参求值一次，无返回值；普通 PartialEq 宏在两个操作数都已求值后，先对左值、再对右值调用，随后才比较变体或执行业务相等方法。校验读取活动 payload，穿过结构体字段、array、slice 和 map 值，不调用字段的业务协议，也不把额外协议条件加到字段类型上。非法 enum 按既有规则 panic。现有 `enum_valid` 的外层 bool 检查保持不变。
 

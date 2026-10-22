@@ -106,7 +106,7 @@
 | U12 | 增量查询、完整 LSP、构建驱动、自举一致性验收 | 尚未实现；保持 Go seed 的方案为暂定 |
 | U13 | supertrait、GAT、特化、锁块语法 | 延期 / 另行设计；借用 match 已由 D21 纳入目标，具体实现见 U02/U08 |
 | U14 | Rust / LLVM 到 Go 汇编的受限计算内核路线 | 不作为首版主后端；ABI / GC / 栈约定等尚未解决 |
-| U17 | Option/Result 专用 `?` 的精确语法与实现、Go 多返回显式包装 | [RFC 0005](../rfcs/research/0005-option-result-question.md)；限域及显式 From 单步转换方向已确认，不公开 Try/Residual，不搜索转换链；Go error 静态类型需显式兜底或分类 |
+| U17 | Option/Result 专用 `?`、From/Into 完整转换协议、Go 多返回显式包装 | [传播 RFC](../rfcs/research/0005-option-result-question.md) 的限域及显式一步方向已确认；[RFC 0032](../rfcs/0032-from-into-conversions.md) 提出参数化 trait、identity/Into blanket、跨包 owner/冲突与普通证据选择，整体待确认；不公开 Try/Residual，不搜索转换链或猜动态 error |
 | U18 | serde-rs 分层到 Go/goxide 的接口映射、字段/数字/enum 策略及派生子集 | [RFC 0006](../rfcs/research/0006-serde-core-and-formats.md)；分层已确定，具体 helper/visitor ABI 与严格 JSON 偏差仍候选；无公开 core Value，格式 Value 不强制中转 |
 | U19（撤回） | 开放 raw/C enum 与同值别名 | 已由 D27 撤回；不再等待旧别名问题；serde 外部映射不创建开放 enum |
 | U16 | trait 双路径、消除包装的语义条件及发布 ABI | [RFC 0004](../rfcs/research/0004-trait-lowering-paths.md)；比较直接调用/值视图/指针视图/字典，D05/D06 未被候选替换 |

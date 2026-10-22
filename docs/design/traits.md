@@ -1,6 +1,8 @@
 # 显式 trait 与多接口实现
 
-状态：P4 已在新管线完成。运行时 impl 统一生成独立 wrapper，实例业务方法与 marker 均位于 wrapper；静态操作和泛型证据使用空 carrier。declare 逐方法转发原生业务，有体 impl 执行用户方法体。固定包级工厂负责适配，便利入口只转发工厂，不修改外部原生类型。
+状态：P4 已在新管线完成。运行时 impl 统一生成独立 wrapper，实例业务方法与 marker 均位于 wrapper；静态操作和泛型证据使用空 carrier。有体 impl 执行用户方法体，固定包级工厂负责适配，便利入口只转发工厂，不修改外部原生类型。
+
+[RFC 0003](../rfcs/0003-declare-impl.md) 已确认移除 `declare impl`；当前编译器仍实现原生采用与相容合并，代码待删。下文涉及 declare 采用、验签、合并及其示例均描述这部分现存实现，不再作为目标语言合同。普通有体 impl、其 wrapper/marker/工厂、Go interface 的结构式语义及 Go 双向调用保留；`declare func/type` 不在此次删除范围。
 
 | 状态 | 范围 |
 | --- | --- |
@@ -39,6 +41,8 @@
 ## 2. 源级语法
 
 ### 2.1 declare：采用已有业务方法
+
+本节入口已决定移除、实现待删；替代写法与边界见 [RFC 0003](../rfcs/0003-declare-impl.md)。
 
 ```goxide
 use native;

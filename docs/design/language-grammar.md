@@ -4,6 +4,8 @@
 
 这里的 EBNF 覆盖当前解析器的各类入口。名字是否存在、类型是否一致、引用是否可写、trait 是否满足和某个节点能否降低为 Go，由后续阶段检查。文法中的上下文条件与各节的实现边界一起构成阅读规则；单独满足产生式还不足以判定一个完整程序有效。
 
+[RFC 0003](../rfcs/0003-declare-impl.md) 已确认移除 `declare impl`，但当前解析、检查和降低实现尚未删除。本文暂保留对应产生式以反映代码现状，不表示目标语言继续支持它；`declare func/type` 及 `declare` 关键字不在此次删除范围。
+
 ## 1. 记法与处理次序
 
 ```text
@@ -317,7 +319,7 @@ DeclaredType = Attributes [ "pub" ] "type" Identifier
 
 当前运行子集使用非泛型 trait、具体具名类型的 impl、无默认值的关联类型、关联类型绑定、静态方法和单 trait 的函数泛型约束。trait 默认方法、泛型 trait/impl、多 trait 约束和泛型关联类型仍在该解析文法内，但语义检查会拒绝。trait 的分组关联类型可以解析，当前检查同样拒绝；impl 的关联类型必须用单项 `type Item = T` 绑定，不能仅写 `type Item` 或改成分组声明。
 
-`declare impl P[Item = int] for Native;` 是当前 Go 侧适配入口。`declare func`、`declare type` 具有解析入口，尚未完成相应降低。`declare func` 和 `declare impl` 不能带主体。解析器复用普通类型声明入口，因而还可读取分组 `declare type (...)` 及 `declare struct ...`；这些同样没有当前可运行的 declare 类型实现。
+`declare impl P[Item = int] for Native;` 当前仍可用于 Go 侧适配，但已按 [RFC 0003](../rfcs/0003-declare-impl.md) 决定移除；上面的 `DeclaredImpl` 产生式和对应实现待删。`declare func`、`declare type` 具有解析入口，尚未完成相应降低。`declare func` 和 `declare impl` 不能带主体。解析器复用普通类型声明入口，因而还可读取分组 `declare type (...)` 及 `declare struct ...`；这些同样没有当前可运行的 declare 类型实现。
 
 ## 7. 类型、泛型与投影
 
@@ -686,7 +688,7 @@ TokenTreeBrackets = "[" { TokenTreeElement } "]" ;
 | 普通 Go 结构 | 本文列出的类型、函数、复合字面量、语句和控制流均有解析入口；包导入改用 `use` | [parser 测试](../../internal/syntax/parser/parser_test.go)、[表达式测试](../../internal/syntax/parser/expr_test.go) |
 | enum、match、引用、`?`、宏、派生 | 有完整编译路径；具体限制按对应语义检查执行 | [能力状态表](../mvp-gap-audit.md)及其端到端测试 |
 | 外部 `mod` 与 `use` | 完整包图中可解析、检查和生成；内联 `mod`、分组 use 和 `super::` 当前拒绝 | [包检查](../../internal/check/packages.go)、[多包验收](../../internal/compile/project_e2e_test.go) |
-| trait / impl / 关联类型 | 非泛型 trait、具体 impl、单 trait 函数约束和 Go 侧 `declare impl` 已实现 | [trait 检查](../../internal/check/traits.go)、[静态协议验收](../../internal/lower/p4_static_test.go) |
+| trait / impl / 关联类型 | 非泛型 trait、具体 impl、单 trait 函数约束和 Go 侧 `declare impl` 已实现；`declare impl` 已决定移除、实现待删 | [trait 检查](../../internal/check/traits.go)、[静态协议验收](../../internal/lower/p4_static_test.go)、[移除合同](../rfcs/0003-declare-impl.md) |
 | 泛型 trait/impl、多 trait bound、GAT、trait 默认方法 | 相关形状能解析，当前检查拒绝 | [trait 检查](../../internal/check/traits.go)、[约束检查](../../internal/check/trait_types.go) |
 | bar 闭包、`unsafe` 修饰符/表达式、`declare func/type` | 能解析，当前降低拒绝 | [表达式降低](../../internal/lower/expr.go)、[声明降低](../../internal/lower/decl.go) |
 | `let`、`loop`、`while`、`await`、范围模式 | AST 留有节点类型，当前解析器没有相应语言产生式 | [AST](../../internal/syntax/ast/ast.go)、[语句](../../internal/syntax/parser/stmt.go)、[模式](../../internal/syntax/parser/pattern.go) |

@@ -4,11 +4,13 @@
 
 已确认：运行时 trait 视图统一使用独立 wrapper；固定包级工厂作为后端入口，为 Go 用户提供 As/For helper。trait 接口保留导出 marker，由 wrapper 实现。P4 已在新管线完成；Self 接收权限、enum 便利入口和 nil 规则按本篇及[trait 合同](../design/traits.md)。原始类型 marker 注入方案已被替代。
 
+[RFC 0003](0003-declare-impl.md) 已确认移除 `declare impl` 及无体采用的相容合并，当前编译器实现待删。本篇原生采用、验签、合并及 W01 等相关示例仅描述现存实现；普通有体 impl 的 wrapper、marker、固定工厂和 Go 双向调用合同继续有效。`declare func/type` 不在此次删除范围。
+
 适用范围是能形成运行时实例视图的 trait。无 self 的关联操作及泛型证据使用空 carrier，关联类型 witness 只参与 Go 类型推导；P2 派生保持 [RFC 0013](0013-derive.md) 的既有 helper。不要求静态调用构造运行时 wrapper。旧发布反例见 [RFC 0001](0001-package-loading.md)，本篇 W01 给出其具体解法。
 
 ## 源级规则
 
-1. `declare impl` 验证并采用原生业务方法，由 wrapper 显式转发；有体 impl 的方法体直接生成在对应 wrapper 上。两者都不向原生类型添加方法。
+1. 有体 impl 的方法体直接生成在对应 wrapper 上，不向原生类型添加方法。当前仍实现的 `declare impl` 验证原生业务并由 wrapper 转发，但该采用入口已决定移除，见 [RFC 0003](0003-declare-impl.md)。
 2. trait 在 A 包、类型在 B 包、impl 在 C 包时，wrapper 和工厂生成在 C，依赖方向为 C → A、B。不默认放在 trait 定义包，也不修改 B 的源码、模块缓存或 GOROOT。
 3. 用包级函数适配，例如 `adapters.AsBytesBufferSized(b)`。goxide 的期望类型转换和限定调用直接记录工厂/impl 身份，不要求 `b` 在 Go 中真的具有 As 方法。
 4. 每个规范运行时 impl 使用自己的 wrapper；同名不同 trait 方法不会碰撞。正式编码要包括稳定包/类型/trait/参数身份，示例短名不构成最终 ABI。

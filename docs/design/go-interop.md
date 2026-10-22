@@ -1,10 +1,10 @@
 # Go 原生类型的显式适配
 
-状态：P4 已在新管线完成。运行时 impl 统一使用声明包拥有的 wrapper，marker 保留在 wrapper 上。declare 转发原生业务，有体 impl 执行用户代码；固定工厂负责适配，As/For 只转发工厂。外部类型不追加方法或 carrier 类型锚。
+状态：本篇描述 P4 已实现的原生采用。[RFC 0003](../rfcs/0003-declare-impl.md) 已确认移除 `declare impl` 及其相容合并，当前编译器代码待删；下文采用、验签和合并示例不再作为目标语言合同。普通有体 impl 继续执行用户代码并使用固定 wrapper、marker 和工厂，As/For 只转发工厂。普通 Go 双向调用与 `declare func/type` 保留，外部类型不追加方法或 carrier 类型锚。
 
 | 状态 | 范围 |
 | --- | --- |
-| 已确认 | D05、D06、R24：使用方声明、impl 包生成统一 wrapper、保留 marker、不要求原生包预备 As 或 wrapper。 |
+| 已确认 | D05 移除原生采用入口；D06、R24 的普通有体 impl、统一 wrapper、marker 与固定工厂保留，见 [RFC 0003](../rfcs/0003-declare-impl.md)。 |
 | P4 | 结构化代入 Self、精确原生方法集、相同 declare 合并、名称冲突检查、固定工厂与保存 owner 的 For。 |
 | 后续 | P5 跨包 Goxide 加载与发布信息恢复；共享适配包、缓存和 LSP 另随相应阶段推进。 |
 
@@ -13,6 +13,8 @@
 诊断边界仍按 D19/D20：基础类型权限照常检查，别名/逃逸风险分析不属 MVP，不以未知效果或无法证明不逃逸普遍拒绝。
 
 ## 1. 声明属于使用方 C 包
+
+以下是当前仍实现、已决定移除的 `declare impl` 用法；新目标合同见 [RFC 0003](../rfcs/0003-declare-impl.md)。
 
 ```goxide
 package C

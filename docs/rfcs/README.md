@@ -51,7 +51,7 @@
 | [0028 crate 与路径根](0028-crate-roots.md) | lib/bin/example、Go 混编、依赖别名与标准库 fallback | 已实现；各 target 独立 crate，删除全部 namespaces，保留 alias 根并按真实 Go 子路径解析 |
 | [0030 过程宏基础草案](0030-procedural-macros.md) | TokenStream、卫生、登记、依赖角色、WASI 宿主 | Draft；核心调用、宿主及依赖角色已实现；业务宏迁移与浏览器物理执行硬截止待完成 |
 | [0031 普通库协议与条件 impl](0031-generic-protocol-impls.md) | 泛型/条件 impl、多约束、按需实例化与 Go 普通入口 | 通用互斥、定义点分支检查与参数化 trait 已实现；declare impl 已移除，Default/Eq 调整及派生正式迁移暂缓 |
-| [0032 From / Into](0032-from-into-conversions.md) | 多来源转换、参数化 trait、实现归属/冲突、一步传播及 Go 表示 | 语言与 std 源码已实现，真实模块代理验收；公开 std 发布与编译器 pin 更新待执行 |
+| [0032 From / Into](0032-from-into-conversions.md) | 多来源转换、参数化 trait、实现归属/冲突、一步传播及 Go 表示 | 语言与 std 已实现，公开依赖 pin 下真实跨模块验收通过 |
 
 RFC 0024 use路径仍在[独立提案分支](https://github.com/goxide-lang/goxide/blob/5e4b118f25262d8022d1b8f72575d89d69f096aa/docs/rfcs/0024-use-paths.md)，该历史提案未整体批准。当前 `crate::` 及根选择合同见 RFC 0028；其他未确认的路径语法不由此开放。
 

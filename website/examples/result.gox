@@ -18,10 +18,13 @@ func parsePort(text string) Result[int,error] {
     return Result::Ok(n)
 }
 
-// The registered error -> PortError conversion runs only on Err.
+// The explicit Error helper runs only on Err.
 // The success type changes from int to string.
 func nextPort(text string) Result[string,PortError] {
-    n := parsePort(text)?
+    n := match parsePort(text) {
+        Result::Ok(value) => value,
+        Result::Err(cause) => { return Result::Err(FromPortError(cause)) },
+    }
     return Result::Ok(strconv::Itoa(n + 1))
 }
 

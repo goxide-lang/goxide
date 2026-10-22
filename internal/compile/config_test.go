@@ -170,6 +170,22 @@ func main() { fmt::Println(label(), nativeValue, cfg!(target_pointer_width("32")
 	}
 }
 
+func TestProjectRejectsExplicitWorkspace(t *testing.T) {
+	root := smallProject(t)
+	t.Setenv("GOWORK", filepath.Join(t.TempDir(), "go.work"))
+	environment, err := config.Prepare("", root, "", false, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := PrepareProject(root, Options{Offline: true, Config: config.Config{Environment: environment}})
+	if result != nil || err == nil || err.Error() != "workspace migration unsupported: explicit GOWORK" {
+		t.Fatalf("authored project accepted an explicit workspace: %v, %v", result, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "goxide.lock")); !os.IsNotExist(err) {
+		t.Fatalf("rejected workspace published a lock: %v", err)
+	}
+}
+
 func TestProjectUsesCapturedEnvironmentForEveryGoCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Go command observation uses a POSIX shell wrapper")

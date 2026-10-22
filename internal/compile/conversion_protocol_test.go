@@ -34,7 +34,14 @@ func TestParameterizedConversionModulesAndDependencyRecheck(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return string(data)
+		source := string(data)
+		if filepath.Ext(name) == ".gox" {
+			// Static lookup considers all reachable public traits. Keep this
+			// author-owned method distinct from std::convert::From.from while
+			// retaining unqualified input inference, including private sources.
+			source = strings.NewReplacer("func from(", "func customFrom(", "::from", "::customFrom").Replace(source)
+		}
+		return source
 	}
 	writeProjectFile(t, protocol, project.ManifestName, `[go_mod]
 module="example.org/conversion-protocol"
@@ -170,7 +177,7 @@ path="."
 	// coherent in the protocol package, but overlaps model's independent Into.
 	writeProjectFile(t, protocol, "lib.gox", fixture("protocol.gox")+`
 impl[S any,T any] From[S] for []T where S:Elements[Item=T] {
-    func from(value S) Self { return value.elements() }
+    func customFrom(value S) Self { return value.elements() }
 }
 `)
 	upgraded, err := PrepareProject(protocol, Options{Lib: true, Offline: true})

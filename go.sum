@@ -4,6 +4,10 @@ github.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0 h1:SP87Kr41DUhta
 github.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0/go.mod h1:m4z9CAWRl/5hQN6+9RQ7Sfr/gK9wcWk+ANoqbSxlW0g=
 github.com/goxide-lang/std v0.0.0-20261009104839-c02a09d8c417 h1:qZkTUGMRpdJJTcFeNd0nal+Yv08fo7yGGPTX9IUKNRw=
 github.com/goxide-lang/std v0.0.0-20261009104839-c02a09d8c417/go.mod h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ=
+github.com/goxide-lang/std v0.0.2-0.20261022080716-37d9c6ea17cd h1:TMROpY3ggYDZe2Hb2tTjLhIpG1JWTvx0q66TzLDTwCw=
+github.com/goxide-lang/std v0.0.2-0.20261022080716-37d9c6ea17cd/go.mod h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ=
+github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=
+github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/pelletier/go-toml/v2 v2.4.3 h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY=

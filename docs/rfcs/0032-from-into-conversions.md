@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-**语言与标准库源码已实现，标准库发布及编译器依赖 pin 更新待执行。** 普通参数化 trait 定义转换，std 用普通 impl 提供 identity 与 From → Into，`?` 选择标准 From 的一个已确定实现。实际跨模块验收直接打包当前 std 源码，通过隔离 Go 模块代理加载，没有用 replace 或重声明协议代替；它不等同于新版本已公开发布。验收入口见[状态表](../mvp-gap-audit.md)。
+**语言与标准库实现及公开依赖 pin 验收已完成。** 普通参数化 trait 定义转换，std 用普通 impl 提供 identity 与 From → Into，`?` 选择标准 From 的一个已确定实现。跨模块验收读取编译器固定的公开 std 版本，执行真实 Go build/run/test、锁定重放及别名重排检查。验收入口见[状态表](../mvp-gap-audit.md)。
 
 范围是转译器与 std。Error 的 `#[from]`、错误消息、source、backtrace 和上下文选择留给后续人体工程库；这些库只输出普通 impl。`TryFrom/TryInto`、隐式数值转换、转换链、通用 Try/Residual、特化、负 impl、GAT 和默认方法不在本篇实施范围。这里的 From 不采用 Rust move 语义，按 Goxide 既有传值、共享存储与引用权限工作。
 

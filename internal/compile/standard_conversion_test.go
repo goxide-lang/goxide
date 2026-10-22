@@ -1,19 +1,11 @@
 package compile
 
 import (
-	"archive/zip"
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
-	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
-	"sort"
 	"strings"
 	"testing"
 
@@ -22,9 +14,7 @@ import (
 )
 
 // Unlike TestParameterizedConversionModulesAndDependencyRecheck, this fixture
-// only reexports From/Into from the selected standard source module. The local
-// prerelease path exercises ordinary verified module acquisition without replace;
-// it does not claim that the compiler's published dependency pin has that API.
+// only reexports From/Into from the compiler's pinned, published standard module.
 func TestStandardConversionAndPropagationModules(t *testing.T) {
 	standard := standardConversionManifest(t)
 	root := t.TempDir()
@@ -219,128 +209,5 @@ impl From[Source] for Target {func from(value Source)(Self,error){return Self{},
 
 func standardConversionManifest(t *testing.T) string {
 	t.Helper()
-	const module = "github.com/goxide-lang/std"
-	source := os.Getenv("GOXIDE_TEST_STD_SOURCE")
-	if source == "" {
-		manifest := pinnedStandardManifest(t)
-		metadata, err := project.ReadMod(filepath.Join(runtime.GOROOT(), "bin", "go"), filepath.Join("..", ".."))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var version string
-		for _, dependency := range metadata.Require {
-			if dependency.Path == module {
-				version = dependency.Version
-			}
-		}
-		command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "mod", "download", "-json", module+"@"+version)
-		command.Env = project.GoEnv(false, os.Environ())
-		output, err := command.CombinedOutput()
-		if err != nil {
-			t.Fatalf("download pinned standard source: %v\n%s", err, output)
-		}
-		var downloaded struct{ Dir string }
-		if err := json.Unmarshal(output, &downloaded); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := os.Stat(filepath.Join(downloaded.Dir, "convert", "lib.gox")); os.IsNotExist(err) {
-			t.Skipf("published compiler std pin %s has no convert source; set GOXIDE_TEST_STD_SOURCE for explicit unpublished-source integration", version)
-		} else if err != nil {
-			t.Fatal(err)
-		}
-		return manifest
-	}
-	if !filepath.IsAbs(source) {
-		t.Fatal("GOXIDE_TEST_STD_SOURCE must be an explicit absolute source directory")
-	}
-	files := standardSourceFiles(t, source)
-	for _, required := range []string{"go.mod", project.ManifestName, "convert/lib.gox"} {
-		if len(files[required]) == 0 {
-			t.Fatalf("standard source does not contain %s", required)
-		}
-	}
-	const version = "v0.0.0-goxide-test.1"
-	proxy, cache := t.TempDir(), t.TempDir()
-	base := filepath.Join(proxy, filepath.FromSlash(module), "@v")
-	writeProjectFile(t, base, version+".mod", string(files["go.mod"]))
-	writeProjectFile(t, base, version+".info", fmt.Sprintf("{\"Version\":%q,\"Time\":\"2026-10-22T00:00:00Z\"}", version))
-	archiveFile, err := os.Create(filepath.Join(base, version+".zip"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	archive := zip.NewWriter(archiveFile)
-	var names []string
-	for name := range files {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		entry, err := archive.Create(module + "@" + version + "/" + name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := entry.Write(files[name]); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := archive.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := archiveFile.Close(); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GOPROXY", (&url.URL{Scheme: "file", Path: filepath.ToSlash(proxy)}).String())
-	t.Setenv("GOSUMDB", "off")
-	t.Setenv("GOMODCACHE", cache)
-	t.Cleanup(func() {
-		if !reflect.DeepEqual(files, standardSourceFiles(t, source)) {
-			t.Error("compilation modified the selected standard source checkout")
-		}
-		if err := filepath.WalkDir(cache, func(name string, entry fs.DirEntry, err error) error {
-			if err == nil && entry.IsDir() {
-				return os.Chmod(name, 0755)
-			}
-			return err
-		}); err != nil {
-			t.Error(err)
-		}
-	})
-	t.Logf("testing unpublished std source %s as %s through isolated GOPROXY; published pin not validated by this run", source, version)
-	return fmt.Sprintf("[dependencies.standard]\ngo=%q\nversion=%q\n", module, version)
-}
-
-func standardSourceFiles(t *testing.T, source string) map[string][]byte {
-	t.Helper()
-	files := map[string][]byte{}
-	err := filepath.WalkDir(source, func(name string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			if name != source && (strings.HasPrefix(entry.Name(), ".") || entry.Name() == "vendor") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		relative, err := filepath.Rel(source, name)
-		if err != nil {
-			return err
-		}
-		extension := filepath.Ext(name)
-		if extension != ".go" && extension != ".gox" && relative != "go.mod" && relative != project.ManifestName && relative != "LICENSE" {
-			return nil
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("standard source contains a symlink: %s", relative)
-		}
-		data, err := os.ReadFile(name)
-		if err == nil {
-			files[filepath.ToSlash(relative)] = bytes.Clone(data)
-		}
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return files
+	return pinnedStandardManifest(t)
 }

@@ -210,7 +210,7 @@ func main(){fmt::Println(h::Read(h::Get()))}
 		bad := consumer(t, "package main\nuse library::internal::hidden as h;\nfunc main(){_=h::Get()}\n")
 		rejected := func(path string) {
 			msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", filepath.Join(t.TempDir(), "bad"), path)
-			singleExternalContains(t, msg, "app.gox:2:", "internal package a06.example/lib/internal/hidden is inaccessible from a06.example/app")
+			singleExternalContains(t, msg, "app.gox:2:", "use of internal package a06.example/lib/internal/hidden is not allowed from a06.example/app")
 		}
 		rejected(filepath.Join(bad, "app.gox"))
 		link := filepath.Join(lib, "tools/linked.gox")

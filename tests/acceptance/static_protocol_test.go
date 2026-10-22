@@ -239,6 +239,19 @@ func Value() User { return User::Abc() }
 		if err := os.CopyFS(wrong, os.DirFS(selected)); err != nil {
 			t.Fatal(err)
 		}
+		// This replacement tests native Go support packages, not std's
+		// separately published Goxide source project and conversion traits.
+		if err := filepath.WalkDir(wrong, func(name string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if !entry.IsDir() && (entry.Name() == "goxide.toml" || filepath.Ext(name) == ".gox") {
+				return os.Remove(name)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
 		packagesWrite(t, wrong, "typeinfo/typeinfo.go", `package typeinfo
 const GoxideTypeInfoABI = 1
 type CarrierFor[T any,S ~struct{}] interface { GoxideInternalTypeCarrierForSelf(T) S }

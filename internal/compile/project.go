@@ -101,7 +101,8 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	}
 	environment := configuration.Environment
 	tool := environment.GoTool
-	if work, _ := environment.LookupEnv("GOWORK"); work != "" && work != "off" {
+	// Native inputs use a private staged project and always execute with GOWORK=off.
+	if work, _ := environment.LookupEnv("GOWORK"); options.NativeFeatures == nil && work != "" && work != "off" {
 		return nil, fmt.Errorf("workspace migration unsupported: explicit GOWORK")
 	}
 	targetDir := options.TargetDir

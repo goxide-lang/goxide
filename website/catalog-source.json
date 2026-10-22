@@ -195,8 +195,8 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "显式表达缺失与失败；? 向最近的用户函数传播，并可使用已登记的单步错误转换。",
-      "usage": "返回类型和 match 目标提供上下文，可写 Result::Ok/Err、Option::Some/None；nextPort 仍在失败时用登记的 From 单步转换。",
+      "summary": "显式表达缺失与失败；? 向最近的用户函数传播，显式错误包装保留错误链。",
+      "usage": "返回类型和 match 目标提供上下文，可写 Result::Ok/Err、Option::Some/None；nextPort 在失败时显式调用 FromPortError，nameLength 用 ? 传播 None。",
       "limitation": "没有通用 Try/Residual、转换链搜索或全程序联合推导。缺少直接期望类型的 None、Result 单侧构造须补显式参数；不会从后续 return 反推局部变量。",
       "examples": [
         "result"

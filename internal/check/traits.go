@@ -47,9 +47,7 @@ type Impl struct {
 	Associated          map[string]types.Type
 	AssociatedNodes     map[string]ast.Type
 	Methods             []*Member
-	Declare             bool
 	Capture             RefMode
-	AliasOf             *Impl
 	Owner               *types.Package
 	TypeParams          []*types.TypeParam
 	TypeArgs            []types.Type
@@ -381,7 +379,7 @@ func (c *checker) makeMember(fn *ast.FuncDecl, impl *Impl, trait *Trait) *Member
 	if fn.Generics != nil || fn.Where != nil || len(fn.Recv) != 0 || fn.Path != nil {
 		c.diag(fn, TraitInvalid, "trait and impl members cannot have method type parameters or a Go receiver")
 	}
-	if impl != nil && !impl.Declare && fn.Body == nil {
+	if impl != nil && fn.Body == nil {
 		c.diag(fn, TraitInvalid, "impl member requires a body")
 	}
 	if !static {
@@ -463,11 +461,6 @@ func (c *checker) prepareImpls() {
 		for _, file := range pkg.Files {
 			c.file = file
 			for _, item := range file.AST.Items {
-				declare := false
-				if d, ok := item.(*ast.DeclareDecl); ok {
-					item = d.Decl
-					declare = true
-				}
 				n, ok := item.(*ast.ImplDecl)
 				if !ok {
 					continue
@@ -480,10 +473,6 @@ func (c *checker) prepareImpls() {
 					}
 				}
 				if builtin {
-					continue
-				}
-				if declare && (n.Generics != nil || n.Where != nil) {
-					c.diag(n, TraitInvalid, "declare impl requires a concrete non-generic target")
 					continue
 				}
 				params := c.genericParameters(n.Generics)
@@ -513,24 +502,14 @@ func (c *checker) prepareImpls() {
 				}
 				named, _ := target.(*types.Named)
 				localTarget := named != nil && named.Obj().Pkg() == c.pkg
-				if declare {
-					base := target
-					if pointer, ok := base.(*types.Pointer); ok {
-						base = types.Unalias(pointer.Elem())
-					}
-					named, _ = base.(*types.Named)
-					if named == nil || named.TypeArgs().Len() != 0 || named.TypeParams().Len() != 0 {
-						c.diag(n.Type, TraitInvalid, "declare impl requires a concrete named type")
-						continue
-					}
-				} else if !localTarget && (trait == nil || trait.Type.Obj().Pkg() != c.pkg) {
+				if !localTarget && (trait == nil || trait.Type.Obj().Pkg() != c.pkg) {
 					c.diag(n.Type, TraitInvalid, "body impl requires the trait or outer named target to belong to this package")
 					continue
 				}
 				if named != nil {
 					named = named.Origin()
 				}
-				impl := &Impl{info: c.out, ConstParams: c.constParameters(n.Generics), Decl: n, File: file.Name, Target: target, Base: named, Owner: c.pkg, Trait: trait, TypeParams: params, Requirements: requirements, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedState: map[string]uint8{}, Declare: declare}
+				impl := &Impl{info: c.out, ConstParams: c.constParameters(n.Generics), Decl: n, File: file.Name, Target: target, Base: named, Owner: c.pkg, Trait: trait, TypeParams: params, Requirements: requirements, Associated: map[string]types.Type{}, AssociatedNodes: map[string]ast.Type{}, associatedState: map[string]uint8{}}
 				for _, parameter := range impl.ConstParams {
 					if !c.out.containsConst(target, parameter) {
 						c.diag(n, TraitInvalid, "impl const parameter must occur in its target: "+parameter.Name.Name)
@@ -548,22 +527,8 @@ func (c *checker) prepareImpls() {
 				if old == impl {
 					break
 				}
-				if old.Trait == impl.Trait && c.implTargetsOverlap(old, impl) && !old.Declare && !impl.Declare {
+				if old.Trait == impl.Trait && c.implTargetsOverlap(old, impl) {
 					c.diag(impl.Decl, TraitInvalid, "duplicate trait implementation: overlapping target patterns")
-				}
-			}
-		}
-		if impl.Declare && impl.Trait != nil {
-			if path, ok := impl.Decl.Trait.(*ast.PathType); ok {
-				args := path.Path.Segments[len(path.Path.Segments)-1].Args
-				if args != nil {
-					for _, a := range args.Args {
-						if a.Name != nil {
-							c.registerAssociated(impl, a.Name.Name, a.Type, a)
-						} else {
-							c.diag(a, TraitInvalid, "trait arguments must name an associated type")
-						}
-					}
 				}
 			}
 		}
@@ -716,24 +681,7 @@ func (c *checker) finishImpls() {
 					}
 				}
 				want := c.implSignature(decl, impl)
-				if impl.Declare {
-					if decl.Static {
-						c.diag(impl.Decl, TraitInvalid, "declare impl cannot adopt a static member")
-						continue
-					}
-					receiver := impl.Target
-					if decl.Receiver != ValueRef {
-						receiver = types.NewPointer(receiver)
-					}
-					obj, _, _ := types.LookupFieldOrMethod(receiver, false, c.pkg, decl.GoName)
-					fn, ok := obj.(*types.Func)
-					if !ok || !sameSignature(fn.Type().(*types.Signature), want) {
-						c.diag(impl.Decl, TraitInvalid, "native method does not match "+decl.GoName)
-						continue
-					}
-					actual = &Member{File: decl.File, Name: decl.Name, GoName: decl.GoName, Signature: want, Receiver: decl.Receiver, Trait: impl.Trait, Impl: impl, Native: fn, Decl: decl.Decl, Symbol: decl.Symbol}
-					impl.Methods = append(impl.Methods, actual)
-				} else if actual == nil {
+				if actual == nil {
 					c.diag(impl.Decl, TraitInvalid, "missing trait member "+decl.Name)
 					continue
 				}
@@ -769,25 +717,6 @@ func (c *checker) finishImpls() {
 			impl.Capture = WriteRef
 		} else if borrow {
 			impl.Capture = ReadRef
-		}
-		for _, old := range c.implOrder {
-			if old == impl {
-				break
-			}
-			if old.Trait == impl.Trait && impl.Trait != nil && c.implTargetsOverlap(old, impl) {
-				compatible := old.Declare && impl.Declare
-				for _, a := range impl.Trait.Associated {
-					compatible = compatible && types.Identical(old.Associated[a.Name], impl.Associated[a.Name])
-				}
-				if !compatible && (old.Declare || impl.Declare) {
-					c.diag(impl.Decl, TraitInvalid, "conflicting trait implementation")
-				} else if compatible && c.sameSourcePackage(impl.File, old.File) {
-					impl.AliasOf = old
-					if old.AliasOf != nil {
-						impl.AliasOf = old.AliasOf
-					}
-				}
-			}
 		}
 		c.leaveImpl()
 	}

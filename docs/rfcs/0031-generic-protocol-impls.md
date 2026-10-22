@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-**基础泛型/条件 impl、按需实例化与 Go 普通入口已实现；通用互斥求解及 declare impl 移除合同见第 2 节，尚未实现。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态与实际验收见[状态表](../mvp-gap-audit.md)。
+**基础泛型/条件 impl、按需实例化与 Go 普通入口已实现；declare impl 已移除，通用互斥求解见第 2 节，正在实施。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态与实际验收见[状态表](../mvp-gap-audit.md)。
 
 [RFC 0030](0030-procedural-macros.md) 提供语法变换与受限执行，宏不查询类型、不登记 impl。Default、Clone、Debug、PartialEq、Eq、Serialize、Deserialize 的迁移使用普通库协议；每个业务协议仍须保持原有行为并分别验收。
 
@@ -63,7 +63,7 @@ trait 与派生宏沿 RFC 0030 的单一名字空间：运行库可导出 `Clone
 
 ### 2. 通用互斥与实现选择（设计提案）
 
-本节是通用过程宏迁移的完整目标，尚未实现；替代“只比较目标头”和此前只覆盖具体类型的有限否定提案。当前实现仍按第 1 节的非参数化 trait、受限 owner 和保守头重叠检查工作。通用迁移的完成标准包括带未知类型/长度参数的声明与跨包条件证据，不能以有限具体实例或宏主动拒绝泛型代替。`declare impl` 已决定完整移除，不再扩展泛型原生采用。
+本节是通用过程宏迁移的完整目标，尚未实现；替代“只比较目标头”和此前只覆盖具体类型的有限否定提案。当前实现仍按第 1 节的非参数化 trait、受限 owner 和保守头重叠检查工作。通用迁移的完成标准包括带未知类型/长度参数的声明与跨包条件证据，不能以有限具体实例或宏主动拒绝泛型代替。`declare impl` 已完整移除。
 
 已确认：完整移除 `declare impl`，保留普通 Go 双向互调用；trait 输入可由实参和已知返回上下文推导；采用包级开放世界。完整头、owner 扩展和转换调用见 [RFC 0032](0032-from-into-conversions.md#源级规则)；本节统一规定所有普通协议的求解与选择，不按宏或 trait 名称特判。不引入特化、用户负 impl 或运行时协议搜索。
 
@@ -152,7 +152,7 @@ impl protocols::Reader for BufferReader {
 
 删除采用后，solver 不再需要 MayDeclare、无体声明合并、原生绑定等价证明或多个采用工厂的选择规则。普通有体 impl 的 runtime wrapper、marker、固定工厂、As/For 和 Go 成员 sugar 保留；它们服务已选业务实现，不给外部原生类型添加方法，也不从 Go marker 反推 impl。每个完整 application 的业务实现由互斥认证保证唯一，不按包路径或具体程度消歧。
 
-这轮只确认目标合同；编译器仍有旧采用实现。实施时一并删除其语法分支、checker/lower 路径和采用专用测试，以拒绝 `declare impl`、普通有体适配和双向互调用验收替代；不能误删承载其他外部声明的 DeclareDecl。没有原生采用的兼容回退。
+编译器已删除采用语法、checker/lower 路径和采用专用测试，保留承载其他外部声明的 DeclareDecl。源码及宏输出使用同一声明语法；普通有体适配和双向互调用由跨模块生成测试覆盖。
 
 #### 2.5 正证据、递归与降低
 
@@ -213,7 +213,7 @@ Go 行为同时覆盖 nil/typed-nil、值副本与真实借用槽、权限反例
 
 普通泛型函数接受 Go 的单个多返回调用实参，例如 `Pair(native())`：逐项推导类型、数组长度与读写权限，再证明 trait 条件；可变参数同样按结果位置处理。原调用只求值一次，保留所在函数帧。跨包私有类型需要附带协议操作时，生成临时结构保存返回值，再进入现有绑定路径。`internal/check/sole_result_test.go` 与 `internal/lower/sole_result_test.go` 覆盖权限正反例、私有类型与关联类型、求值顺序、defer/go 时机和 recover，并执行 Go 产物及重复生成检查。
 
-保存 trait 方法值时，接收者在绑定时只求值一次；value 接收者每次调用取得独立副本，引用接收者继续指向原槽位。绑定器返回含原业务体的 Go 方法值；声明适配的直接调用和保存调用绑定实际原生 Go 方法，避免额外转发帧破坏 `defer`/`recover`。已有公开 Go 泛型入口需要保存方法时，其可用具体 carrier 同步提供对应绑定器，即使库内没有 Goxide 调用。`trait_method_value_frame_test.go`、`trait_go_binding_boundary_test.go` 和 `trait_concrete_frames_test.go` 覆盖这些行为及具体 impl 的业务体注释与 panic 源行；运行时 TraitView 的声明适配不在此次修改范围内。
+保存 trait 方法值时，接收者在绑定时只求值一次；value 接收者每次调用取得独立副本，引用接收者继续指向原槽位。绑定器返回含原业务体的 Go 方法值；普通原生方法值直接绑定 Go 方法，保留 `defer`/`recover` 的调用帧。已有公开 Go 泛型入口需要保存方法时，其可用具体 carrier 同步提供对应绑定器，即使库内没有 Goxide 调用。`trait_method_value_frame_test.go`、`trait_go_binding_boundary_test.go` 和 `trait_concrete_frames_test.go` 覆盖这些行为及具体 impl 的业务体注释与 panic 源行。
 
 实例只写本次生成目录或受管原位产物，不修改依赖 checkout、模块缓存。只有生成 Go 的依赖提供其现有 API；需要新的源级条件实例时由 Goxide 取得模板并重新生成。
 
@@ -369,7 +369,7 @@ Self 始终是完整 enum；`self &Self` / `self &mut Self` 须保留真实 owne
 
 D22 与 [RFC 0005](research/0005-option-result-question.md#11-thiserror-与静态错误类型) 已确认 `?` 先普通可赋值，再精确静态来源与目标的唯一一步 From；不搜索链、不为匹配先装箱、不猜 Go error 的动态类型。当前实现仍只登记本包 Error 派生的 helper，完整 From/Into 尚未实现。
 
-[RFC 0032](0032-from-into-conversions.md) 已给出完整候选：以完整 trait application 区分来源与目标，std 用普通 identity 与 Into blanket，统一跨包归属、通用互斥证明及 `?` 证据选择。该提案明确修订本篇的无输入 trait、参数只出现在 Self、裸参数 target 禁令和 owner 范围；通用互斥及原生采用移除统一按本篇第 2 节，不以具体类型子集为完成标准。其余提案仍待整体确认与实施；declare impl 移除方向已确认，当前实现待删。没有新增 `#[try_from]` 登记属性。
+[RFC 0032](0032-from-into-conversions.md) 已给出完整候选：以完整 trait application 区分来源与目标，std 用普通 identity 与 Into blanket，统一跨包归属、通用互斥证明及 `?` 证据选择。该提案明确修订本篇的无输入 trait、参数只出现在 Self、裸参数 target 禁令和 owner 范围；通用互斥及原生采用移除统一按本篇第 2 节，不以具体类型子集为完成标准。完整合同已确认并开始实施；declare impl 已移除。没有新增 `#[try_from]` 登记属性。
 
 **enum 比较前的有限结构校验。** 公开入口采用 `std::enum_assert!(value)`，名字不带 valid 后缀。宏表示检查请求，类型布局及字段访问由后续类型检查与降低处理，不向过程宏开放类型查询。首批用于 payload 静态类型完全确定的 enum 实例：实参求值一次，无返回值；普通 PartialEq 宏在两个操作数都已求值后，先对左值、再对右值调用，随后才比较变体或执行业务相等方法。校验读取活动 payload，穿过结构体字段、array、slice 和 map 值，不调用字段的业务协议，也不把额外协议条件加到字段类型上。非法 enum 按既有规则 panic。现有 `enum_valid` 的外层 bool 检查保持不变。
 

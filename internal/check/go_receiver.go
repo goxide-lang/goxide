@@ -6,7 +6,7 @@ import "go/types"
 // instantiation of a generic named type. Partial and repeated arguments cannot
 // be expressed as a receiver declaration.
 func ordinaryGoReceiverTarget(impl *Impl) *types.Named {
-	if impl == nil || impl.AliasOf != nil {
+	if impl == nil {
 		return nil
 	}
 	named, ok := types.Unalias(impl.Target).(*types.Named)

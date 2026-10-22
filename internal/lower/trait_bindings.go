@@ -16,14 +16,7 @@ import (
 func (p *traitProgram) prepareBindings(info *check.Info) {
 	p.boundBindings = map[*check.TraitBound]map[string]bool{}
 	p.implBindings = map[*check.Impl]map[string]bool{}
-	p.nativeBounds = map[*check.TraitBound]map[string]bool{}
 	calls := map[syntax.Expr]bool{}
-	declared := map[*check.Trait]bool{}
-	for _, impl := range info.Impls {
-		if impl.Declare {
-			declared[impl.Trait] = true
-		}
-	}
 	for _, file := range info.Resolve.Files {
 		syntax.Walk(file.AST, func(node syntax.Node) bool {
 			if call, ok := node.(*syntax.CallExpr); ok {
@@ -63,15 +56,6 @@ func (p *traitProgram) prepareBindings(info *check.Info) {
 				continue
 			}
 			if calls[node] {
-				// A native adapter has no source body to place in its carrier operation.
-				// Binding its real Go method keeps direct calls out of the adapter frame.
-				if selection.Bound != nil && declared[selection.Bound.Trait] {
-					markBinding(p.boundBindings, selection.Bound, selection.Member.Name)
-					markBinding(p.nativeBounds, selection.Bound, selection.Member.Name)
-				}
-				if selection.Impl != nil && selection.Impl.Declare {
-					markBinding(p.implBindings, implTemplate(selection.Impl), selection.Member.Name)
-				}
 				continue
 			}
 			if selection.MethodExpr {
@@ -168,18 +152,6 @@ func (p *traitProgram) memberNeedsBinding(member *check.Member) bool {
 	return !member.Static && p.implBindings[implTemplate(member.Impl)][member.Name]
 }
 
-func (p *traitProgram) nativeBoundCall(bound *check.TraitBound, method string) bool {
-	if bound == nil {
-		return false
-	}
-	for candidate, methods := range p.nativeBounds {
-		if candidate.Trait == bound.Trait && types.Identical(traitBoundTarget(candidate), traitBoundTarget(bound)) && methods[method] {
-			return true
-		}
-	}
-	return false
-}
-
 func (p *traitProgram) implNeedsBindings(impl *check.Impl) bool {
 	for _, member := range impl.Methods {
 		if p.memberNeedsBinding(member) {
@@ -245,9 +217,6 @@ func (p *traitInference) binding(selection *check.MemberSelection) goast.Expr {
 func (e *emitter) boundWrapperMethod(member *check.Member, receiver goast.Expr) goast.Expr {
 	if member.Trait == nil {
 		return e.boundInherentBody(member, receiver)
-	}
-	if member.Impl.Declare {
-		return &goast.SelectorExpr{X: receiver, Sel: goast.NewIdent(member.Native.Name())}
 	}
 	target := receiver
 	if member.Receiver == check.ValueRef && member.Impl.Capture != check.ValueRef {
@@ -319,17 +288,4 @@ func (e *emitter) boundInherentBody(member *check.Member, captured goast.Expr) g
 		body.List = append([]goast.Stmt{&goast.AssignStmt{Lhs: []goast.Expr{e.ident(source)}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{captured}}}, body.List...)
 	}
 	return &goast.FuncLit{Type: typ, Body: body}
-}
-
-func (e *emitter) declaredOperationName(member *check.Member) string {
-	return e.traitFreeOperation(member) + "Native"
-}
-
-func (e *emitter) declaredOperationDeclaration(member *check.Member) goast.Decl {
-	selection := &check.MemberSelection{Member: member, Impl: member.Impl, Signature: member.Signature}
-	receiver := e.goType(e.memberReceiverType(selection))
-	method := &goast.SelectorExpr{X: &goast.ParenExpr{X: receiver}, Sel: goast.NewIdent(member.Native.Name())}
-	name := e.declaredOperationName(member)
-	e.generatedName(name, member.Impl.Decl)
-	return &goast.FuncDecl{Name: goast.NewIdent(name), Type: resultFunc(e.goType(operationSignature(selection))), Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{method}}}}}
 }

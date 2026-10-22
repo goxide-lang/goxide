@@ -36,7 +36,6 @@ type traitProgram struct {
 	inferredCalls     map[*syntax.FuncDecl]bool
 	boundBindings     map[*check.TraitBound]map[string]bool
 	implBindings      map[*check.Impl]map[string]bool
-	nativeBounds      map[*check.TraitBound]map[string]bool
 }
 
 type traitCarrier struct {
@@ -78,7 +77,7 @@ func prepareTraits(info *check.Info) *traitProgram {
 				}
 			}
 		}
-		if impl.AliasOf == nil && (info.Demands == nil || !info.Demands.ImplTemplates[impl] || p.templateImpls[impl]) {
+		if info.Demands == nil || !info.Demands.ImplTemplates[impl] || p.templateImpls[impl] {
 			p.impls = append(p.impls, impl)
 		}
 	}

@@ -165,11 +165,11 @@ impl Derived for int { func derived(self Self) int { return 2 } }
 func Read[T Derived](value T) int { return value.base() + value.derived() }
 func run() int { return Read[int](3) }
 `},
-		{"concrete native declare", `
+		{"trait owner implements native type", `
 use time;
-pub trait Stamp { func Unix(self Self) int64 }
-declare impl Stamp for time::Time;
-func Unix[T Stamp](value T) int64 { return value.Unix() }
+pub trait Stamp { func stamp(self Self) int64 }
+impl Stamp for time::Time { func stamp(self Self) int64 { return self.Unix() } }
+func Unix[T Stamp](value T) int64 { return value.stamp() }
 func run(value time::Time) int64 { return Unix[time::Time](value) }
 `},
 	} {
@@ -186,13 +186,13 @@ func run(value time::Time) int64 { return Unix[time::Time](value) }
 					}
 				}
 			}
-			if test.name == "concrete native declare" {
+			if test.name == "trait owner implements native type" {
 				if len(info.FunctionInstances) == 0 {
-					t.Fatal("native declare has no function instance evidence")
+					t.Fatal("trait owner implementation has no function instance evidence")
 				}
 				for _, instance := range info.FunctionInstances {
-					if len(instance.Evidence) != 1 || instance.Evidence[0].Impl == nil || !instance.Evidence[0].Impl.Declare {
-						t.Fatalf("native declare evidence lost: %+v", instance)
+					if len(instance.Evidence) != 1 || instance.Evidence[0].Impl == nil || instance.Evidence[0].Impl.Trait.Symbol.Name.Name != "Stamp" {
+						t.Fatalf("trait owner implementation evidence lost: %+v", instance)
 					}
 				}
 			}

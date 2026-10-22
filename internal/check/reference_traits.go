@@ -60,7 +60,7 @@ func (p *permissionChecker) traitView(node ast.Expr, view *TraitView) *permissio
 
 func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelection) *permission {
 	m := selection.Member
-	if m.Native != nil && m.Decl == nil {
+	if m.Native != nil {
 		return p.nativeMethodExpression(node, m.Native, selection.Signature)
 	}
 	oldFile, oldPkg, oldImpl, oldTrait, oldSelf := p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
@@ -71,7 +71,7 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 	if selection.Receiver != nil {
 		actual = p.expr(selection.Receiver, nil)
 	}
-	if selection.Impl != nil && m.Native == nil {
+	if selection.Impl != nil {
 		p.c.enterImpl(selection.Impl)
 	} else {
 		p.c.currentImpl = nil
@@ -274,16 +274,7 @@ func (p *permissionChecker) boundAssociated(bound *TraitBound, name string, sub 
 
 func (p *permissionChecker) checkImplSignatures() {
 	for _, impl := range p.c.implOrder {
-		if impl.AliasOf != nil {
-			p.c.enterImpl(impl)
-			for _, a := range impl.Trait.Associated {
-				if !p.sameSourcePermissions(p.implAssociated(impl, a.Name, nil), p.implAssociated(impl.AliasOf, a.Name, nil), map[[2]types.Type]bool{}) {
-					p.c.diag(impl.Decl, TraitInvalid, "conflicting associated reference permissions: "+a.Name)
-				}
-			}
-			p.c.leaveImpl()
-		}
-		if impl.Trait == nil || impl.Declare {
+		if impl.Trait == nil {
 			continue
 		}
 		p.c.enterImpl(impl)

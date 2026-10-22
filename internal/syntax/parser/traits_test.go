@@ -27,7 +27,6 @@ impl Source for Box {
 }
 func Read[T Source](value T) T::Source::Item { return value.read() }
 func ReadWhere[T](value T) T::Source::Item where T: Source { return value.read() }
-declare impl Source[Item = int] for Native;
 enum Choice { some(int), empty }
 impl Choice {
  func get(self Self) int {

@@ -128,10 +128,18 @@ func TestTraitAliasCanonicalImplementation(t *testing.T) {
 
 func TestTraitQualifiedSourcePackages(t *testing.T) {
 	sources := map[string]string{
-		"api/api.gox":         `package api;pub trait Source{type Item;func Get(self Self)Self::Item}`,
-		"other/api.gox":       `package other;pub trait Source{type Item;func Get(self Self)Self::Item}`,
-		"model/model.gox":     `package model;type Value struct{};func(self Value)Get()int{return 7}`,
-		"adapter/adapter.gox": `package adapter;use fixture::api;use fixture::other;use fixture::model;declare impl api::Source[Item=int] for model::Value;declare impl other::Source[Item=int] for model::Value;func Read[T api::Source](x T)T::api::Source::Item{return x.Get()};func F(x model::Value)int{return api::Source::Get(x)+x.Get::<other::Source>()};func V(x model::Value)api::Source[Item=int]{return x};func Project(x model::Value)model::Value::api::Source::Item{return x.Get()}`,
+		"api/api.gox":     `package api;pub trait Source{type Item;func Get(self Self)Self::Item}`,
+		"other/api.gox":   `package other;pub trait Source{type Item;func Get(self Self)Self::Item}`,
+		"model/model.gox": `package model;type Value struct{};func(self Value)Get()int{return 7}`,
+		"adapter/adapter.gox": `package adapter;use fixture::api;use fixture::other;use fixture::model;
+type Value struct{raw model::Value}
+func(self Value)Get()int{return self.raw.Get()}
+impl api::Source for Value{type Item=int;func Get(self Self)int{return self.raw.Get()}}
+impl other::Source for Value{type Item=int;func Get(self Self)int{return self.raw.Get()}}
+func Read[T api::Source](x T)T::api::Source::Item{return x.Get()}
+func F(x Value)int{return api::Source::Get(x)+x.Get::<other::Source>()}
+func V(x Value)api::Source[Item=int]{return x}
+func Project(x Value)Value::api::Source::Item{return x.Get::<api::Source>()}`,
 	}
 	root := t.TempDir()
 	files := map[string]*ast.File{}

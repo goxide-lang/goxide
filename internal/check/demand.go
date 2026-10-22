@@ -234,9 +234,6 @@ func openArguments(args []types.Type) bool {
 }
 
 func implDeclaration(impl *Impl) *Impl {
-	for impl != nil && impl.AliasOf != nil {
-		impl = impl.AliasOf
-	}
 	if impl != nil && impl.Template != nil {
 		return implDeclaration(impl.Template)
 	}
@@ -271,9 +268,6 @@ func (d *demandCollector) roots() {
 		sugar[implDeclaration(member.Impl)] = true
 	}
 	for _, impl := range d.c.implOrder {
-		if impl.AliasOf != nil {
-			continue
-		}
 		d.enter(impl.File)
 		if len(impl.ConstParams) != 0 {
 			continue
@@ -486,7 +480,7 @@ func (d *demandCollector) impl(impl *Impl, node ast.Node) {
 		}
 	}
 	for _, member := range impl.Methods {
-		if member.Decl == nil || member.Decl.Body == nil || impl.Declare {
+		if member.Decl == nil || member.Decl.Body == nil {
 			continue
 		}
 		body := &BodyInstance{Node: member.Decl, Decl: member.Decl, File: impl.File, Impl: impl, Substitution: impl.Substitution}
@@ -501,7 +495,7 @@ func (d *demandCollector) genericImpl(impl *Impl) {
 	d.generic[impl] = true
 	d.plan.GenericImpls = append(d.plan.GenericImpls, impl)
 	for _, member := range impl.Methods {
-		if member.Decl != nil && member.Decl.Body != nil && !impl.Declare {
+		if member.Decl != nil && member.Decl.Body != nil {
 			d.addBody(&BodyInstance{Node: member.Decl, Decl: member.Decl, File: impl.File, Impl: impl, Substitution: impl.Substitution, ConstSubstitution: impl.ConstSubstitution})
 		}
 	}

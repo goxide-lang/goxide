@@ -75,7 +75,7 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 		}
 	}
 	private := false
-	for _, template := range c.preferredImpls() {
+	for _, template := range c.implOrder {
 		if memberNamed(template.Methods, name, true) == nil {
 			continue
 		}
@@ -181,7 +181,7 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 				}
 			}
 		}
-		for _, template := range c.preferredImpls() {
+		for _, template := range c.implOrder {
 			member := memberNamed(template.Methods, name, false)
 			if member == nil || member.Receiver != mode {
 				continue

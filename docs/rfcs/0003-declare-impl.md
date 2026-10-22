@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-**已确认完整移除 `declare impl`，编译器删除工作尚未实施。** 原生采用、相容无体声明合并和泛型采用提案由本篇替换。当前代码仍接受旧入口，实施与验收状态见[状态表](../mvp-gap-audit.md)。
+**已完整移除 `declare impl`。** 原生采用、相容无体声明合并及其生成路径已删除；普通 Go 双向调用和有体适配继续保留。实施与验收状态见[状态表](../mvp-gap-audit.md)。
 
 删除的是“把现有 Go 方法显式登记成 Goxide trait 实现”的语言入口，包含 trait/type 所有者及第三方声明。普通 Go 双向调用、Go interface、`declare func`、`declare type` 与普通有体 impl 保留，不删除 declare 关键字或其他外部声明能力。
 
@@ -55,4 +55,4 @@ Go 消费者调用生成的 Read，Goxide 消费者调用原生 Read；两者都
 - 真实 `.gox → .go` 后，以独立 Go 消费模块 build/run/test：直接函数/方法/interface 调用、原指针状态、nil/typed-nil、可见性、方法值与调用帧；同输入两次生成字节一致。
 - 通用互斥仍覆盖非 ground 条件、未来有体实现和 Go 原生约束。删除采用不能变成只接受具体类型或忽略外包新增方法的理由。
 
-这轮更新设计与完成条件；现有编译器尚未执行上述删除和行为验收。
+删除边界由 `declaration_boundary_test.go` 覆盖源码、声明宏及真实 WASI 三类宏；`go_interop_test.go` 覆盖四个独立模块的普通互调用、有体适配和 Go 消费者。通用互斥与 From/Into 继续按 RFC 0031/0032 推进。

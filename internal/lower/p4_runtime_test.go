@@ -22,12 +22,12 @@ func TestP4RuntimeViewsAndQualifiedMethods(t *testing.T) {
 	runGo(t, module, "vet", "./...")
 }
 
-func TestP4DeclareNativeMethodsAndRestrictedWrapperMethodSet(t *testing.T) {
-	module := prepareP4RuntimeFixture(t, "declare", "traitdeclare")
+func TestP4ExplicitWrappersShareNativeStateAndRestrictMethodSet(t *testing.T) {
+	module := prepareP4RuntimeFixture(t, "wrappers", "traitwrappers")
 	runGo(t, module, "build", "./...")
 	const want = "true false false 6\n6 source <nil> 0\n2 pa <nil> 2\n2 ir <nil> 0\nother <nil>\nagain <nil>\nview <nil> true true\n"
 	if got := runGo(t, module, "run", "."); got != want {
-		t.Fatalf("native wrapper = %q, want %q", got, want)
+		t.Fatalf("explicit wrapper = %q, want %q", got, want)
 	}
 	runGo(t, module, "vet", "./...")
 }

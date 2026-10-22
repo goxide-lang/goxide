@@ -2,7 +2,7 @@
 
 本文保留新前端的设计动机与 AST 约定。当前编译器已使用独立语法树，旧文本重写管线已经删除。完整的当前词法、文法及解析边界见[词法与文法](language-grammar.md)，阶段契约与 Go 降低见[编译与转译语义](translation-semantics.md)；下文原始设计中的暂定构造不自动等同于已经实现。
 
-[RFC 0003](../rfcs/0003-declare-impl.md) 已确认移除 `declare impl`，当前实现与对应 AST 分支待删。`DeclareDecl` 仍承载 `declare func/type`，不随原生采用入口一起删除；下表保留当前节点形状并标明这一差异。
+`DeclareDecl` 承载既有 `declare func/type` 声明。`declare impl` 已移除，解析器与宏输出校验只接受前两种内部声明，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
 
 ## 1. 为什么重写
 
@@ -196,7 +196,7 @@ type File struct {
 | `EnumDecl` | `enum E[T] { A, B(int), }` | 变体见下 |
 | `TraitDecl` | `trait T { func m() Self; type Item }` | 成员是 `TraitItem`：方法签名（可带默认体）或关联类型 |
 | `ImplDecl` | `impl T for U { ... }`、`impl U { ... }` | `Trait` 为空表示固有 impl；成员是 `FuncDecl` 或关联类型绑定 |
-| `DeclareDecl` | `declare func p::F(...)`、`declare impl T for U;` | 当前包装一个无体的 `FuncDecl` / `ImplDecl` / `TypeDecl`；仅 `declare impl` 分支已决定移除、实现待删，见 [RFC 0003](../rfcs/0003-declare-impl.md) |
+| `DeclareDecl` | `declare func p::F(...)`、`declare type T` | 包装无体的 `FuncDecl` 或 `TypeDecl`；不包装 `ImplDecl` |
 | `MacroRulesDecl` | `macro_rules! name { (...) => {...}; }` | 见 5.6 |
 | `MacroItem` | 声明位置的 `name!(...)` | 展开后由展开结果替换，原节点保留在展开表里 |
 | `ConstDecl` / `VarDecl` | Go 的 `const` / `var`，含分组和 `iota` | 与 Go 相同 |

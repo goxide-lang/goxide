@@ -333,7 +333,7 @@ func (c *checker) prove(target types.Type, trait *Trait) Evidence {
 	}
 	c.proofStack = append(c.proofStack, proofObligation{target, trait})
 	defer func() { c.proofStack = c.proofStack[:len(c.proofStack)-1] }()
-	for _, template := range c.preferredImpls() {
+	for _, template := range c.implOrder {
 		if template.Trait != trait {
 			continue
 		}

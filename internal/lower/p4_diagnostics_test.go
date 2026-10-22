@@ -51,22 +51,6 @@ impl Mut for Data { func add(self &mut Self) { self.N++ } }
 	}
 }
 
-func TestP4DeclareRequiresExactCompleteSelfMethodSet(t *testing.T) {
-	for _, test := range []struct{ name, receiver, target string }{
-		{"value-does-not-gain-pointer-methods", "Self", "bytes::Buffer"},
-		{"pointer-self-reference-is-double-pointer", "&mut Self", "*bytes::Buffer"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			source := "package model\nuse bytes;\ntrait Reader{func read(self " + test.receiver + ",p []byte)(int,error)}\n/*bad*/declare impl Reader for " + test.target + ";/*end*/\n"
-			files, info, diagnostics := checkP4DiagnosticSource(t, source)
-			assertP4SourceDiagnostic(t, source, diagnostics, check.TraitInvalid, "native method does not match")
-			if output, err := lower.Lower(files, info); output != nil || err == nil {
-				t.Fatalf("invalid native method set emitted Go: output=%v error=%v", output, err)
-			}
-		})
-	}
-}
-
 func TestP4GeneratedFactoryCollisionIdentifiesImpl(t *testing.T) {
 	const source = `package model
 trait View {func value(self Self)int}

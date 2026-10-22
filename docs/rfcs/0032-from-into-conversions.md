@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-**设计提案，尚未批准实施。** 本篇给出完整推荐方案：普通参数化 trait 定义转换，std 用普通 impl 提供 identity 与 From → Into，`?` 选择标准 From 的一个已确定实现。已有单步传播规则继续作为约束；新增的泛型 trait、impl 归属和 blanket 规则在本篇明确列出，不能把它们记为现有支持。
+**设计已确认，正在实施。** 本篇给出完整实施合同：普通参数化 trait 定义转换，std 用普通 impl 提供 identity 与 From → Into，`?` 选择标准 From 的一个已确定实现。已有单步传播规则继续作为约束；新增的泛型 trait、impl 归属和 blanket 规则在本篇明确列出，不能把它们记为现有支持。
 
 范围是转译器与 std。Error 的 `#[from]`、错误消息、source、backtrace 和上下文选择留给后续人体工程库；这些库只输出普通 impl。`TryFrom/TryInto`、隐式数值转换、转换链、通用 Try/Residual、特化、负 impl、GAT 和默认方法不在本篇实施范围。这里的 From 不采用 Rust move 语义，按 Goxide 既有传值、共享存储与引用权限工作。
 
@@ -21,7 +21,7 @@
 | [RFC 0030](0030-procedural-macros.md)：纯语法宏，普通输出再检查 | 保留；宏无需登记转换、查询类型或获得新权限 |
 | std::prelude 后续提供常用名称 | 可重导出 From/Into；不影响实现身份、归属或 `?` 的选择 |
 
-已确认完整删除 declare impl、从已知类型信息推导 trait 输入，并按包级开放世界检查；普通 Go 双向互调用保留。其完整规则及通用过程宏验收统一见 [RFC 0031 第 2 节](0031-generic-protocol-impls.md#2-通用互斥与实现选择设计提案)。其余新增语言合同仍为本篇设计提案，尚未实施。
+已确认完整删除 declare impl、从已知类型信息推导 trait 输入，并按包级开放世界检查；普通 Go 双向互调用保留。其完整规则及通用过程宏验收统一见 [RFC 0031 第 2 节](0031-generic-protocol-impls.md#2-通用互斥与实现选择设计提案)。参数化 trait、完整实现头、有序 owner、通用 identity/Into blanket 和固定转换选择均已确认实施；当前进展见状态表。
 
 推荐扩展通用 trait 能力，而非增加 `#[try_from]` 或 From⇒Into 编译器专用规则。后两者仍需处理多来源身份、跨包和冲突，却会留下独立转换登记路径。
 
@@ -358,4 +358,4 @@ Rust 的 [From](https://doc.rust-lang.org/std/convert/trait.From.html) / [Into](
 
 既有手写探针已验证推荐 Go 机制：Go 1.27.1 下，两独立 module、多包 ops/运行时视图/泛型绑定、已发布 std/sum pin 的手写传播形状，实际 build/run/test/vet 通过；测试覆盖多来源、原 cause 身份、typed nil、跨包私有 S/T、identity、泛型 carrier、失败分支单次转换、defer 及 From/Into 的 recover 帧差别。探针中的 Error/Unwrap 是手写方法，只核对 cause 身份，不代表 enum 新固有映射已验收。这是候选表示的可行性证据，尚未验证 Goxide 前端实现上述语法或 coherence。
 
-完整移除 declare impl、保留普通 Go 双向互调用、类型上下文输入推导及包级开放世界已确认；其余待整体确认的语义改动是参数化 trait、完整头与有序 owner/指针规则、普通 identity/Into blanket，以及泛型声明环境中的固定转换选择。通用互斥规则按 RFC 0031 设计及验收，不保留具体类型首批门槛。实现前同步 RFC 0031、D22/传播规范、trait/原生互调用合同及前端 AST。生成名的可读前缀可沿现有规划收敛，但不能遗漏完整身份；源码行号、private callback 的具体实现沿现有机制选择。
+完整移除 declare impl、普通 Go 双向互调用、类型上下文输入推导、包级开放世界、参数化 trait、完整头与有序 owner/指针规则、普通 identity/Into blanket，以及泛型声明环境中的固定转换选择均已确认。通用互斥规则按 RFC 0031 设计及验收，不保留具体类型首批门槛。实现前同步 RFC 0031、D22/传播规范、trait/原生互调用合同及前端 AST。生成名的可读前缀可沿现有规划收敛，但不能遗漏完整身份；源码行号、private callback 的具体实现沿现有机制选择。

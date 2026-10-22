@@ -95,7 +95,6 @@ impl Point[int] { pub func Read() int { return self.X } }
 impl Empty {}
 unsafe func raw[T any](x T) T where T: any { return x }
 declare func native::Read(p *int) int
-declare impl Iter for Native
 declare type Native
 pub macro_rules! make { ($x:expr) => { $x }; }
 make!(type Generated int)

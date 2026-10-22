@@ -170,21 +170,6 @@ func (c *checker) findImpl(target types.Type, trait *Trait) *Impl {
 	return c.prove(target, trait).Impl
 }
 
-func (c *checker) preferredImpls() []*Impl {
-	result := make([]*Impl, 0, len(c.implOrder))
-	for _, impl := range c.implOrder {
-		if c.sameSourcePackage(impl.File, c.file.Name) {
-			result = append(result, impl)
-		}
-	}
-	for _, impl := range c.implOrder {
-		if !c.sameSourcePackage(impl.File, c.file.Name) {
-			result = append(result, impl)
-		}
-	}
-	return result
-}
-
 func (c *checker) functionParams(fn *ast.FuncDecl) []*types.TypeParam {
 	result := c.genericParameters(fn.Generics)
 	used := map[string]bool{}

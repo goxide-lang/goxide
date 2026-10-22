@@ -24,7 +24,7 @@
 | --- | --- | --- |
 | [0001 包加载与发布](0001-package-loading.md) | `.go` / `.d.gox` / `.gox`、dist | 同一个 Go 模块；本地 wrapper 的完整发布 |
 | [0002 trait](0002-traits.md) | 显式实现、限定分派与期望类型适配 | 统一 wrapper、marker、一次求值 |
-| [0003 原生采用移除](0003-declare-impl.md) | 删除 declare impl，保留普通 Go 双向调用 | 方向已确认；普通有体适配、边界与删除验收，代码待实施 |
+| [0003 原生采用移除](0003-declare-impl.md) | 删除 declare impl，保留普通 Go 双向调用 | 已删除采用入口；保留普通有体适配与双向 Go 调用 |
 | [0004 关联类型](0004-associated-types.md) | 定义、绑定与投影 | 固定 Go 接口、实现证据 |
 | [0005 引用与句柄](0005-borrows.md) | 读写借用、Arc、解引用与再借用 | 相同指针表示下的不同权限 |
 | [0006 原生调用](0006-foreign-api.md) | declare func、unsafe、Ptr / AsPtr | 调用与函数值、可信契约 |
@@ -50,8 +50,8 @@
 | [0027 正式命名](0027-goxide-naming.md) | Goxide / goxide / .gox / GOXIDE_* | 已完成命名与ABI迁移，旧输入/产物明确拒绝并重生成 |
 | [0028 crate 与路径根](0028-crate-roots.md) | lib/bin/example、Go 混编、依赖别名与标准库 fallback | 已实现；各 target 独立 crate，删除全部 namespaces，保留 alias 根并按真实 Go 子路径解析 |
 | [0030 过程宏基础草案](0030-procedural-macros.md) | TokenStream、卫生、登记、依赖角色、WASI 宿主 | Draft；核心调用、宿主及依赖角色已实现；业务宏迁移与浏览器物理执行硬截止待完成 |
-| [0031 普通库协议与条件 impl](0031-generic-protocol-impls.md) | 泛型/条件 impl、多约束、按需实例化与 Go 普通入口 | 基础能力、最小数组长度及 enum 检查已实现；通用互斥及完整宏迁移验收已设计，declare impl 移除已确认，Default/Eq 规则调整暂缓 |
-| [0032 From / Into](0032-from-into-conversions.md) | 多来源转换、参数化 trait、实现归属/冲突、一步传播及 Go 表示 | 完整设计提案；Go 机制已验证，语言与 std 新协议未实现 |
+| [0031 普通库协议与条件 impl](0031-generic-protocol-impls.md) | 泛型/条件 impl、多约束、按需实例化与 Go 普通入口 | 基础能力、最小数组长度及 enum 检查已实现；通用互斥及完整宏迁移验收已设计，declare impl 已移除，Default/Eq 规则调整暂缓 |
+| [0032 From / Into](0032-from-into-conversions.md) | 多来源转换、参数化 trait、实现归属/冲突、一步传播及 Go 表示 | 完整设计已确认并开始实施；Go 机制已验证，语言与 std 新协议待完成 |
 
 RFC 0024 use路径仍在[独立提案分支](https://github.com/goxide-lang/goxide/blob/5e4b118f25262d8022d1b8f72575d89d69f096aa/docs/rfcs/0024-use-paths.md)，该历史提案未整体批准。当前 `crate::` 及根选择合同见 RFC 0028；其他未确认的路径语法不由此开放。
 

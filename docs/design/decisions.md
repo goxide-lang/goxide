@@ -14,7 +14,7 @@
 
 当前 P4 合同见 [trait](traits.md)、[关联类型](associated-types.md)及 D37：基础目标与三种 self 权限、统一 wrapper/marker、固定工厂、空 carrier 与关联类型 witness。struct/enum 共用成员查询；enum 值 As 与借用 owner 的 For 分别保留。类型关联函数和原生 Go 声明边界见 [RFC 0020](../rfcs/0020-associated-functions.md)。
 
-[RFC 0003](../rfcs/0003-declare-impl.md) 已确认移除 `declare impl` 及无体采用的相容合并；当前编译器实现尚待删除。下文涉及该入口的旧 P4 规则仅描述现存实现，不再作为目标语言合同。普通有体 impl、运行时 wrapper、Go 双向调用及 `declare func/type` 保留。
+`declare impl` 及无体采用的相容合并已移除；普通有体 impl、运行时 wrapper、Go 双向调用及既有 `declare func/type` 支持保留，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
 
 ## 2. 已确认的方向
 
@@ -26,7 +26,7 @@
 | D02 | 所有新语法同时设计 Go 降低与双向互操作 | [总纲](overview.md)；不能只展示 goxide 写法 |
 | D03 | 改善安全性、显式实现与可读性、Go 包互操作是三项目标 | [符合程度](overview.md#21-三项目标的符合程度)；尚无完整安全性证明 |
 | D04 | 使用 trait 表达显式实现，保留 Go interface 的结构式语义；纳入普通关联类型 | [trait](traits.md)、[关联类型](associated-types.md)；P4 子集由 D37 收敛 |
-| D05 | 已确认删除 `declare impl` 原生采用入口；当前解析、检查与降低实现待删。普通 Go 双向调用保留，需要适配而完整头不满足有体 impl 归属规则时，使用自有包装类型和普通有体 impl | [移除合同](../rfcs/0003-declare-impl.md)；不改变普通有体 impl 的归属规则，不删除 `declare func/type` |
+| D05 | 已删除 `declare impl` 原生采用入口及解析、检查、降低专用分支。普通 Go 双向调用保留，需要适配而完整头不满足有体 impl 归属规则时，使用自有包装类型和普通有体 impl | [移除合同](../rfcs/0003-declare-impl.md)；不改变普通有体 impl 的归属规则，不删除 `declare func/type` |
 | D06 | 有体 impl 的实现函数直接定义在对应 wrapper；多个 impl 的同名方法允许不同签名或行为；保持稳定 As 入口 | [trait](traits.md)；不再在原类型生成改名业务方法 |
 | D07 | 根据使用处期望类型决定是否插入 trait 适配；保留值本身的类型 | [使用处转换](traits.md#6-期望类型驱动的转换)；泛型和容器细节暂定 |
 | D08 | 拆分 Go 指针用途：Option 表达缺失、`mut& T` 表达写引用、`Arc[T]` 对应 Go 共享指针；不引入全局 move | [引用专题](pointers-and-borrows.md)；D19 更新默认诊断：别名/独占风险 warning，不承诺静态独占，Arc 使用 Go GC |
@@ -41,7 +41,7 @@
 | D17 | 提供面向 goxide 的 LSP，未来考虑 goxide 自举 | [编译器与工具链](compiler-and-tooling.md)；启动语言、复用组件和阶段路线为暂定方案 |
 | D18 | 先完成设计；总纲和各专题分开，维护决策状态与路线，支持另一台机器继续 | [README](../../README.md)、[roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)；本次修改不代表开始编译器实现 |
 | R19 | 发布完整 dist；同一 Go 模块携带 .go、.d.gox 与可选 .gox；Go 编译 .go，goxide 额外加载声明或源码 | [RFC 0001](../rfcs/0001-package-loading.md)；wrapper 与 marker 随 impl 包发布，无需外部方法注入 |
-| R20 | 已确认随 `declare impl` 删除无体采用的相容合并；普通有体实现继续接受一致性检查 | [RFC 0003](../rfcs/0003-declare-impl.md)；当前采用、合并及混合冲突实现待删，不保留泛型 declare 或 provider 选择分支 |
+| R20 | 已随 `declare impl` 删除无体采用的相容合并；普通有体实现继续接受一致性检查 | [RFC 0003](../rfcs/0003-declare-impl.md)；重复有体实现不合并，不保留泛型 declare 或 provider 选择分支 |
 | R21 | match 按模式区分值复制、只读借用与可变借用 | [RFC 0009](../rfcs/0009-match.md)；具体语法、作用域与支持原位借用的 ABI 未定 |
 | R22 | 所有新特性和语法有独立 spec/RFC，以转译前后、双向调用和反例表达约束 | [RFC 清单](../rfcs/README.md)、[模板](../rfcs/TEMPLATE.md)；已写文档不代表已实现 |
 | R23 | goxide 源级使用变体枚举分派，不直接采用 Go 的 .(T)/.(type) 作为分派语法；增强保证由 goxide 工具链提供 | 后端和原生 Go 仍可使用 Go 类型检查/反射；普通 Go 调用者不获得 goxide 静态权限保证 |
@@ -95,8 +95,8 @@
 | ID | 未闭合问题 | 影响 |
 | --- | --- | --- |
 | U01 | 完整词法 / 语法、类型表示、包和符号身份；最终语言名称 | 解析器、诊断与稳定输出 |
-| U02 | 引用获取、保存/构造、字段及容器只读投影、输出槽位；持有类型必要性 | RFC 0003 §6.1–6.2 核对 D08/D11；内建容器写操作、浅复制元素引用及接口/any 断言须保留权限，类型表示尚未闭合。H 临时契约未批准且不是 MVP 前提；风险来源/别名分析另属 D20 长期工作 |
-| U03（P4 子集已收敛） | 基础目标上的 self 接收权限见 D37；Arc 等持有类型仍按专门设计推进 | 原生 *T 与源级引用不因 Go 表示相同而合并；declare 结构代入 Self 后验证精确方法集 |
+| U02 | 引用获取、保存/构造、字段及容器只读投影、输出槽位；持有类型必要性 | [引用合同](pointers-and-borrows.md)与[原生 API](foreign-api.md)核对 D08/D11；内建容器写操作、浅复制元素引用及接口/any 断言须保留权限，类型表示尚未闭合。H 临时契约未批准且不是 MVP 前提；风险来源/别名分析另属 D20 长期工作 |
+| U03（P4 子集已收敛） | 基础目标上的 self 接收权限见 D37；Arc 等持有类型仍按专门设计推进 | 原生 *T 与源级引用不因 Go 表示相同而合并；普通 Go 调用按真实方法集与源级权限检查 |
 | U04（P4 子集已收敛） | 单 trait 约束、普通关联投影及 carrier witness 已选定；更宽泛型系统延期 | 静态成员和裸 Self 不因此成为任意动态接口；不加入运行时字典 |
 | U05 | 递归 Go 类型视图、嵌套 Ptr / slice / map、函数值和回调桥接 | 不能把单层 *T 转换实验外推成全 ABI 兼容 |
 | U06 | pub、公开字段、回调及共享对象的验证时机和错误接口 | Go 双向边界与输入有效性 |
@@ -134,7 +134,6 @@
 | 连续下划线加一就能可逆编码组合名称 | 该编码有碰撞，不采用；正式符号编码未定 |
 | 无 I/O 的 Syntax→Syntax 编译期用户函数是非过程宏 | 分类错误已纠正；仍属于过程宏，首版采用声明模式与内建派生 |
 | safe 标准库参照 Rust std | 已纠正为 Go std；Rust 仅参考宏机制与派生协议 |
-| 独立的相同 declare 一律冲突 | 相容无体声明可合并，有体唯一；矛盾契约仍诊断 |
 | match 固定只有值绑定，借用模式延期 | 按模式区分值/只读借用/可变借用；旧值型 case 实验只是部分机制验证 |
 | dist 需要另建包下载/加载体系 | 同一 Go 模块携带 .go/.d.goxide/可选 .gox；外部 marker 的 lowering 单独评审 |
 

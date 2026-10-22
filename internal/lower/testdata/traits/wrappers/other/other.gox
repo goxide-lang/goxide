@@ -1,0 +1,14 @@
+package other
+
+use bytes;
+use traitwrappers::adapters;
+
+type Buffer struct { raw *bytes::Buffer }
+
+func Wrap(raw *bytes::Buffer) Buffer { return Buffer{raw:raw} }
+
+impl adapters::Reader for Buffer {
+    func read(self &mut Self, destination []byte) (int, error) { return self.raw.Read(destination) }
+}
+
+func View(source &mut Buffer) adapters::Reader { return source }

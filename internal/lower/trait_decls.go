@@ -176,9 +176,6 @@ func (e *emitter) implDeclarations(impl *check.Impl) []goast.Decl {
 		out = append(out, e.implOpsDeclarations(impl)...)
 	}
 	for _, m := range impl.Methods {
-		if impl.Declare {
-			out = append(out, e.declaredOperationDeclaration(m))
-		}
 		carrier := e.traits.carriers[impl.Base]
 		if carrier == nil || !carrierTarget(e.info, impl) {
 			// Existing non-carrier impls retain their exported free operation.
@@ -233,11 +230,6 @@ func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {
 	restore := e.memberBodyInfo(m)
 	defer restore()
 	impl := m.Impl
-	var nativeType *goast.FuncType
-	var nativeArgs []goast.Expr
-	if impl.Declare {
-		nativeType, nativeArgs = e.memberSignature(m.Signature)
-	}
 	view := e.fresh("View").Name
 	previousReceiver := e.callbackReceiver
 	if parameterizedImpl(impl) {
@@ -248,11 +240,6 @@ func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {
 	var target goast.Expr = &goast.SelectorExpr{X: goast.NewIdent(view), Sel: goast.NewIdent("target")}
 	if m.Receiver == check.ValueRef && impl.Capture != check.ValueRef {
 		target = &goast.StarExpr{X: target}
-	}
-	if impl.Declare {
-		decl.Type = nativeType
-		decl.Body = forwardBody(&goast.SelectorExpr{X: target, Sel: goast.NewIdent(m.Native.Name())}, nativeArgs, m.Signature)
-		return decl
 	}
 	decl.Type = &goast.FuncType{Params: e.params(m.Decl.Params[1:]), Results: e.params(m.Decl.Results)}
 	decl.Body = e.functionBody(decl.Type, m.Decl.Body)
@@ -343,28 +330,9 @@ func (e *emitter) operationDeclaration(m *check.Member, carrier *traitCarrier) g
 	} else {
 		decl.Recv = receiverField("", goast.NewIdent(carrier.name))
 	}
-	if !m.Impl.Declare {
-		decl.Type = &goast.FuncType{Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}
-		decl.Body = e.functionBody(decl.Type, m.Decl.Body)
-		return e.traitSourceBody(decl, m.Decl)
-	}
-	ft, args := e.memberSignature(m.Signature)
-	receiver := m.Impl.Target
-	if m.Receiver != check.ValueRef {
-		receiver = types.NewPointer(receiver)
-	}
-	ft.Params.List = append([]*goast.Field{{Names: []*goast.Ident{goast.NewIdent("self")}, Type: e.goType(receiver)}}, ft.Params.List...)
-	var target goast.Expr = goast.NewIdent("self")
-	if m.Receiver == check.ValueRef && m.Impl.Capture != check.ValueRef {
-		target = &goast.UnaryExpr{Op: gotoken.AND, X: target}
-	}
-	var wrapper goast.Expr = &goast.CompositeLit{Type: e.implWrapperType(m.Impl), Elts: []goast.Expr{&goast.KeyValueExpr{Key: goast.NewIdent("target"), Value: target}}}
-	if m.Impl.Trait.Runtime {
-		wrapper = &goast.CallExpr{Fun: e.implFactory(m.Impl), Args: []goast.Expr{target}}
-	}
-	decl.Type = ft
-	decl.Body = forwardBody(&goast.SelectorExpr{X: wrapper, Sel: goast.NewIdent(m.GoName)}, args, m.Signature)
-	return decl
+	decl.Type = &goast.FuncType{Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}
+	decl.Body = e.functionBody(decl.Type, m.Decl.Body)
+	return e.traitSourceBody(decl, m.Decl)
 }
 
 func (e *emitter) inherentDeclaration(m *check.Member) goast.Decl {
@@ -402,7 +370,7 @@ func (e *emitter) facadeDeclarations(facade *traitFacade) []goast.Decl {
 		if types.Identical(captureType(impl), facade.typ) {
 			arg = &goast.StarExpr{X: arg}
 		} else if !types.Identical(captureType(impl), types.NewPointer(facade.typ)) {
-			// The full Self of `declare impl ... for *T` remains *T.
+			// A pointer Self retains its additional receiver indirection.
 			arg = &goast.UnaryExpr{Op: gotoken.AND, X: arg}
 		}
 		out = append(out, &goast.FuncDecl{Name: goast.NewIdent(traitAs(impl)), Recv: receiverField("view", goast.NewIdent(name)), Type: resultFunc(e.traitViewType(impl)), Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: e.implFactory(impl), Args: []goast.Expr{arg}}}}}}})

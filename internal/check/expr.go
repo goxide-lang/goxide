@@ -298,7 +298,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			break
 		}
 		if selected := c.instanceMember(n, n.X, x, n.Sel.Name, nil); selected != nil {
-			if selected.Member.Native == nil || selected.Impl != nil {
+			if selected.Member.Native == nil {
 				c.out.Members[n] = selected
 			}
 			t = selected.Signature

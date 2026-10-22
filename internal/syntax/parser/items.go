@@ -20,6 +20,12 @@ func (p *parser) parseItem(member, declare bool) ast.Item {
 	ib := ast.ItemBase{Attrs: p.attrs()}
 	ib.Vis = p.visibility()
 	mods := ast.FuncMods{Unsafe: p.accept(token.UNSAFE)}
+	if declare && !p.at(token.FUNC) && !p.at(token.TYPE) && !p.at(token.STRUCT) {
+		p.error("declare requires func or type")
+		p.sync()
+		ib.Base = p.base(start)
+		return &ast.BadItem{ItemBase: ib, Text: "invalid declaration"}
+	}
 	var n ast.Item
 	switch p.tok().Kind {
 	case token.FUNC:
@@ -46,22 +52,12 @@ func (p *parser) parseItem(member, declare bool) ast.Item {
 	case token.TRAIT:
 		n = p.trait(ib)
 	case token.IMPL:
-		n = p.impl(ib, declare)
+		n = p.impl(ib)
 	case token.DECLARE:
 		p.next()
 		decl := p.parseItem(false, true)
-		switch d := decl.(type) {
-		case *ast.FuncDecl:
-			if d.Body != nil {
-				p.error("declare function must not have a body")
-			}
-		case *ast.ImplDecl:
-			if d.Items != nil {
-				p.error("declare impl must not have a body")
-			}
-		case *ast.TypeDecl:
-		default:
-			p.error("declare requires func, impl, or type")
+		if d, ok := decl.(*ast.FuncDecl); ok && d.Body != nil {
+			p.error("declare function must not have a body")
 		}
 		n = &ast.DeclareDecl{ItemBase: ib, Decl: decl}
 	case token.IMPORT:
@@ -419,7 +415,7 @@ func (p *parser) trait(ib ast.ItemBase) ast.Item {
 	p.expect(token.RBRACE)
 	return d
 }
-func (p *parser) impl(ib ast.ItemBase, declare bool) ast.Item {
+func (p *parser) impl(ib ast.ItemBase) ast.Item {
 	p.next()
 	d := &ast.ImplDecl{ItemBase: ib}
 	d.Generics = p.genericParams()
@@ -431,9 +427,6 @@ func (p *parser) impl(ib ast.ItemBase, declare bool) ast.Item {
 		d.Type = first
 	}
 	d.Where = p.whereClause()
-	if declare && !p.at(token.LBRACE) {
-		return d
-	}
 	d.Items = []ast.Item{}
 	defaultImpl := false
 	if trait, ok := d.Trait.(*ast.PathType); ok && trait.Path != nil && len(trait.Path.Segments) == 1 {

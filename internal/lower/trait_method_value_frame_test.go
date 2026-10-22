@@ -28,13 +28,15 @@ trait RecoverSelf { func catchSelf(self Self, caught *bool) Self }
 impl[T any] RecoverSelf for []T {
  func catchSelf(self Self, caught *bool) Self { *caught = recover() != nil; return self }
 }
-trait DeclaredCatch { func catchNative(self Self, caught *bool) }
+trait BodyCatch { func catchBody(self Self, caught *bool) }
 type Adapted int
-func (value Adapted) catchNative(caught *bool) { *caught = recover() != nil }
-declare impl DeclaredCatch for Adapted;
+impl BodyCatch for Adapted {
+ func catchBody(self Self, caught *bool) { *caught = recover() != nil }
+}
 trait BorrowedCatch { func catchValue(self &Self, caught *bool) }
-func (value Adapted) catchValue(caught *bool) { *caught = recover() != nil }
-declare impl BorrowedCatch for Adapted;
+impl BorrowedCatch for Adapted {
+ func catchValue(self &Self, caught *bool) { *caught = recover() != nil }
+}
 type Native int
 func (value Native) catchPanic(caught *bool) { *caught = recover() != nil }
 func direct(caught *bool) {
@@ -94,33 +96,33 @@ func privateSelfResult(caught *bool) {
  defer deferred(caught)
  panic("private self result")
 }
-func declaredDirect(caught *bool) {
+func bodyDirect(caught *bool) {
  value := Adapted(1)
- defer value.catchNative::<DeclaredCatch>(caught)
- panic("declared direct")
+ defer value.catchBody::<BodyCatch>(caught)
+ panic("body direct")
 }
-func declaredSaved(caught *bool) {
+func bodySaved(caught *bool) {
  value := Adapted(1)
- deferred := value.catchNative::<DeclaredCatch>;
+ deferred := value.catchBody::<BodyCatch>;
  defer deferred(caught)
- panic("declared saved")
+ panic("body saved")
 }
-func declaredBorrowedDirect(caught *bool) {
+func borrowedDirect(caught *bool) {
  value := Adapted(1)
  defer value.catchValue::<BorrowedCatch>(caught)
- panic("declared borrowed direct")
+ panic("borrowed direct")
 }
-func declaredBorrowedSaved(caught *bool) {
+func borrowedSaved(caught *bool) {
  value := Adapted(1)
  deferred := value.catchValue::<BorrowedCatch>;
  defer deferred(caught)
- panic("declared borrowed saved")
+ panic("borrowed saved")
 }
 func borrowedBound[T BorrowedCatch](value &T, caught *bool) {
  defer value.catchValue(caught)
- panic("declared borrowed bound")
+ panic("borrowed bound")
 }
-func declaredBorrowedBound(caught *bool) {
+func borrowedConcreteBound(caught *bool) {
  value := Adapted(1)
  borrowedBound(&value, caught)
 }
@@ -141,9 +143,9 @@ func observe(run func(*bool)) bool {
 func main() {
  fmt::Println(observe(direct), observe(saved), observe(directPrivate), observe(savedPrivate), observe(native))
  fmt::Println("concrete", observe(concreteDirect), observe(concreteSaved), "bound", observe(boundSaved), observe(boundPrivateSaved), "private-variadic", observe(privateVariadic), "private-self-result", observe(privateSelfResult))
- fmt::Println("declared", observe(declaredDirect), observe(declaredSaved), "borrowed", observe(declaredBorrowedDirect), observe(declaredBorrowedSaved), observe(declaredBorrowedBound))
+ fmt::Println("body", observe(bodyDirect), observe(bodySaved), "borrowed", observe(borrowedDirect), observe(borrowedSaved), observe(borrowedConcreteBound))
 }
-`}, "true true true true true\nconcrete true true bound true true private-variadic true private-self-result true\ndeclared true true borrowed true true true\n")
+`}, "true true true true true\nconcrete true true bound true true private-variadic true private-self-result true\nbody true true borrowed true true true\n")
 }
 
 func TestTraitMethodValuePreservesReceiverCopiesAndBorrowedSlots(t *testing.T) {

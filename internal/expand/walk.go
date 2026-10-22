@@ -263,13 +263,11 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 			switch d := n.Decl.(type) {
 			case *ast.FuncDecl:
 				valid = d.Body == nil
-			case *ast.ImplDecl:
-				valid = d.Items == nil
 			case *ast.TypeDecl:
 				valid = true
 			}
 			if !valid {
-				return v, e.attributeError(n.Decl, file, parent, "declare requires a function or impl without a body, or a type")
+				return v, e.attributeError(n.Decl, file, parent, "declare requires a function without a body or a type")
 			}
 		}
 	case reflect.Slice:

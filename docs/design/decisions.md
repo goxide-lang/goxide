@@ -44,7 +44,7 @@
 | R22 | 所有新特性和语法有独立 spec/RFC，以转译前后、双向调用和反例表达约束 | [RFC 清单](../rfcs/README.md)、[模板](../rfcs/TEMPLATE.md)；已写文档不代表已实现 |
 | R23 | goxide 源级使用变体枚举分派，不直接采用 Go 的 .(T)/.(type) 作为分派语法；增强保证由 goxide 工具链提供 | 后端和原生 Go 仍可使用 Go 类型检查/反射；普通 Go 调用者不获得 goxide 静态权限保证 |
 | R24 | 所有运行时 trait 视图统一 wrapper；trait 接口与 wrapper 保留 marker；固定工厂及 As/For helper | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；P4 权限、enum helper 和 nil 规则由 D37 收敛，跨包载体加载由 P5 接续 |
-| R25 | 构造函数等关联函数定义在独立 impl T 中，T::method 降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；首参数 self 区分实例/关联成员，无 static；P4 采用 NewT/TMethod 并诊断名称冲突 |
+| R25 | 固有成员定义在独立 impl T 中；无 self 放空 carrier，enum 有 self 放接口与各变体，struct 实例成员按 Go receiver 降低 | [RFC 0020](../rfcs/0020-associated-functions.md)；self 优先于返回 Self，无 static，不生成固有成员包函数；新映射待实现 |
 | R26 | impl 成员按 goxide 规则转译并支持 Self/self；直接书写的 Go 函数和方法保留原生 Go 语义 | [RFC 0020](../rfcs/0020-associated-functions.md)；Self 绑定源目标类型，self 仅绑定实例接收者；不全局替换同名 Go 标识符，不限制其他 goxide 特性只能位于 impl 内 |
 | D37 | P4：impl 以基础 T 为目标，self 使用 Self / &Self / &mut Self；关联投影为 Self::Item / T::Trait::Item，运行时值完整绑定；泛型关联类型经空 carrier witness 推导，Go 调用保留源类型实参数量 | [trait](traits.md)、[关联类型](associated-types.md)、[enum 类型锚](enum-representation.md#11-p4-的类型锚与实例适配)；struct/enum 统一查询，enum Self 为 E，类型锚/witness 不运行；值 As 转发与借用 ForE 保留身份；外部类型不注入 anchor，nil 沿用 Go/enum 规则 |
 | D38 | 条件 impl 按当前转译范围的实际请求实例化；具体 impl 直接生成，普通 Go 泛型保留；Go 通过明确普通函数入口使用条件能力，不提供 Ops 或实例哈希名 | [RFC 0031](../rfcs/0031-generic-protocol-impls.md)；模块 sugar 默认开启，CLI 仅覆盖入口模块，见 [trait](traits.md#go-成员-sugar) 和 [配置](toml-manifest.md#go-成员-sugar-配置) |
@@ -55,7 +55,7 @@
 
 已确认新增 **D21（2026-10-01）**：用户将宏、enum/match、指针能力中的只读/可写分离列为 T0。T0 是优先级，不表示全套特性一次实现。enum 的早期 raw 常量路线已被 D27 撤回；当前只有封闭变体，数值/string 通过 serde 映射，非法输入/匹配行为需明确。共享与内部可变考虑 goxide/std 包装，不先引入整套所有权或智能指针系统。用户认为宏收益明确；仍保留客观卫生、诊断和工具链验收，不把“100% 正向”写成实测结论。D20 不变。
 
-已确认新增 **D22（2026-10-01）**：`?` 首先限于 Option/Result，不公开 Try/Residual。thiserror 核心派生生成显式 From；返回 Result 的目标错误类型已知时允许唯一的一步显式转换，不搜索转换链、不接受任意泛型 blanket 转换。静态 Go `error` 只能走明确兜底或业务分类，不能推断其动态变体。精确语法、impl 选择细则和前端实现仍待闭合，见 RFC 0005。
+已确认新增 **D22（2026-10-01）**：`?` 首先限于 Option/Result，不公开 Try/Residual。返回 Result 的目标错误类型已知时允许唯一的一步显式 From 转换，不搜索转换链、不接受任意泛型 blanket 转换。静态 Go `error` 只能走明确兜底或业务分类，不能推断其动态变体。当前先设计转译器与 std 的转换基础，Error 的 `#[from]` 等人体工程库后续生成普通转换 impl；精确语法、impl 选择细则和前端实现仍待闭合，见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#后续迁移边界) 与 RFC 0005。
 
 **实施交接授权**：先冻结本地文档基线 `v0.0.0-mvp-doc`，再在独立实现会话推进模式宏、log/tracing 场景及 Debug/Clone/serde/thiserror 派生。JSON 是推荐首版格式，完整 Rust 兼容并非目标。本线程继续研究/spec/RFC，实现发现回流；授权实施不表示其他候选已经确认。
 
@@ -84,7 +84,7 @@
 | T15 | Go 启动前端 / LSP，独立 goxide AST 和语义 IR；复用 Go 包加载、输出和类型信息 | 自举阶段、复用边界、仓库布局和工具进程协议见[工具链草案](compiler-and-tooling.md) |
 | T16 | Unit 用 struct{}；第三方锁经普通 Lock/Unlock 原语接入 | 回调语法、没有结果的 return 插入、第三方适配构造器及来源检查 |
 | T17（P4 子集已收敛） | 固定工厂 `As<Type><Trait>`、`As<Trait>` / `For<Type>`、完整 trait 身份 marker 与名称冲突诊断 | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；跨包共享适配与发布信息由 P5 接续 |
-| T18（P4 已收敛） | self Self / &Self / &mut Self；new → NewT，其他关联函数 → TMethod，首版不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；pub 控制公开，私有入口首字母小写；enum 实例函数用显式 E / *E 参数 |
+| T18（已收敛） | self Self / &Self / &mut Self；是否有 self 决定成员位置，返回 Self 不改变分类；不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；pub 控制公开，真实借用槽位和方法值行为保留；R25 的新 Go 映射待实现 |
 
 ## 4. 未定与明确延期
 

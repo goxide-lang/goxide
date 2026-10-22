@@ -22,7 +22,7 @@
 | 原始类型 | 数据、固有方法与类型身份 | 原始 named type |
 | trait | 必须显式采用的行为协议 | 编译期实现关系；满足运行时条件时有对应接口 |
 | `impl Trait for T` | 选定的 trait 实现关系与业务来源 | 对应 wrapper、marker 和固定工厂 |
-| `impl T` | 类型自有的关联函数与实例成员 | 关联函数降低为包级函数；实例成员按接收者规则降低 |
+| `impl T` | 类型自有的关联函数与实例成员 | 已确认无 self 放 carrier，enum 有 self 放接口与变体；struct 实例用 Go receiver；新映射待实现，见 RFC 0020 |
 | trait 视图 | 选择了特定 impl 的值 | 保存接收者的 wrapper，按需装入接口 |
 | Go interface | 结构式方法集合 | 原生 Go 接口，保留 Go 规则 |
 

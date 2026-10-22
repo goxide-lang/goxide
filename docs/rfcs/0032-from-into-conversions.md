@@ -14,7 +14,7 @@
 | D22 的“不接受任意泛型 blanket 转换” | 需修订为只接受下述通用归属、无重叠和终止规则认可的显式泛型 impl；不开放隐式链或任意第三方兜底 |
 | [RFC 0031](0031-generic-protocol-impls.md)：trait 无输入类型参数、impl 参数只出现在 Self、禁止裸参数目标 | 需扩展为参数化 trait 和完整实现头；允许满足归属规则的 blanket；关联类型仍是输出 |
 | RFC 0031：trait 包或最外层具名 Self 包拥有有体 impl | 扩展到有序完整实现头，包含本地来源及指针链；避免本地 S → 外部 T 无法定义 From |
-| RFC 0031：忽略 where 的保守重叠检查、定义点绑定、有限需求闭包 | 保留，比较对象从 Self 扩为完整实现头 |
+| RFC 0031：忽略 where 的保守重叠检查、定义点绑定、有限需求闭包 | 完整实现头先合一，再允许有限的前提不成立证明排除交集；未知仍拒绝。定义点绑定与有限闭包保留 |
 | [RFC 0003](0003-declare-impl.md)：第三方采用原生方法、相容 declare 合并 | 保留；合并键增加 trait 输入，不用新有体 impl 规则取消原有例外 |
 | [RFC 0020](0020-associated-functions.md)：无 self 固有成员在 carrier，enum 有 self 在接口和变体 | 保留；From/Into 是 trait 实现，不自动变成固有成员或修改原始 enum 的方法集 |
 | [RFC 0019](0019-uniform-trait-wrappers.md)：运行时 trait 统一 wrapper | 保留；From 只有静态操作，Into 在目标已确定时可形成普通运行时视图 |
@@ -47,11 +47,11 @@ impl[S any, T any] Into[T] for S where T: From[S] {
 }
 ```
 
-`From[S] for T` 表示从 S 得到 T；转换不要求 S/T 实现 Go error，也不自动建立反向 `From[T] for S`。`Into[T] for S` 调用相同的已选 From。identity 按普通赋值返回值，不 clone、不解包接口，也不归一化 typed nil。
+`From[S] for T` 表示从 S 得到 T；转换不要求 S/T 实现 Go error，也不自动建立反向 `From[T] for S`。std blanket 提供的 `Into[T] for S` 调用相同的已选 From；独立 Into 须通过下述互斥检查，它不反向提供 From。identity 按普通赋值返回值，不 clone、不解包接口，也不归一化 typed nil。
 
 From 的签名没有失败分支，适用于无预期失败的转换；可失败解析或有多个业务含义的转换用具名函数返回 Result。编译器不证明函数不会 panic，也不把其 panic 捕获成 Err；panic、defer、Goexit 沿普通函数规则传播。From 本身不自动产生 Error/Unwrap，不判断一个业务转换是否“无损”。引用资格按普通参数和返回检查，不能因 Go 表示相同而擦掉只读权限。
 
-Into 的转发体是真实 std 源码调用层。`defer x.into::<Into[T]>()` 延期执行 Into，Into 再调用 From；From 中的直接 recover 因而不是直接延期调用。编译器不得把 Into 无条件改成 From 别名，也不得为 From/Into 额外插入业务转发帧。
+上述 std blanket 的 Into 转发体是真实 std 源码调用层。`defer x.into::<Into[T]>()` 延期执行这个 Into，Into 再调用 From；From 中的直接 recover 因而不是直接延期调用。独立 Into 按自身业务体执行。编译器不得把 Into 无条件改成 From 别名，也不得为 From/Into 额外插入业务转发帧。
 
 ### 2. trait 输入、调用与多来源
 
@@ -116,19 +116,31 @@ trait 的方法不增加独立类型参数；本篇仅扩展 trait 输入。类�
 
 只有 Go 产物的依赖提供现有 Go API，不凭方法名扫描出新 Goxide impl。Goxide 源依赖按既有 P5/RFC 0031 恢复声明和条件模板；不新增 enum 元数据或运行时转换注册表。
 
-### 4. 重叠、一致性与 Into 的唯一来源
+### 4. 重叠、一致性与有限互斥证明
 
 完整实现头为 `(canonical Q, norm(Self), norm(A1), ..., norm(An))`。不同来源和目标可以并存；透明 alias 归一，新 defined type 不按 underlying 合并。where、关联输出、成员参数名、导入别名和声明顺序都不参与实现身份。
 
-两个不同有体实现只要完整头能合一就冲突，**忽略 where**，不证明约束互斥。不能先生成后让 Go 选重载，也不能靠某个调用当前没有触发来隐藏冲突。相容重复 declare 沿 RFC 0003 合并；同头有体/declare 冲突。
+完整头不能合一时不重叠；能合一时，把代换应用到两边前提，只有证明交集不可能成立才允许并存。首批使用下述有限证明，未覆盖情况仍按可能重叠拒绝。不根据具体程度、声明顺序或本包优先选择，也不让 Go 选重载。相容重复 declare 沿 RFC 0003 合并；有体/declare 也须检查实际适用范围。
 
-该规则带来三个有意的结果：
+分别以被比较的两个实现的定义包 K 为环境检查合一后的义务 O；任一包满足以下全部条件即可给出“不成立”证据，两边都不满足则未知。证明结果不依赖遍历顺序：
 
-- std 的 `Into[T] for S where T: From[S]` 覆盖全部 Into 实现头。业务只写 From；独立手写或 declare Into 都与它重叠，即使当前 From 前提不成立。无需编译器按 Into 名字另加禁令。
-- identity 覆盖全部 `From[T] for T`。不能覆盖 identity，也不能写 `impl[S] From[S] for AppError where S: SomeTrait` 作为无条件兜底；后者在 S=AppError 时仍重叠。
-- 通用 `From[[]S] for []T where T: From[S]` 或 `From[Box[S]] for Box[T]` 在 S=T 时与 identity 重叠。逐元素转换使用具名 map 函数。`From[T] for Box[T]` 则可与 identity 并存：合一要求无限类型 `T=Box[T]`，occurs check 排除它。
+1. O 的 Self、trait 输入及关联绑定均为完整具体类型/值，没有未知参数、未解投影或 const 变量。
+2. 完整头中有 K 定义的具名类型或其普通指针链，按 owner 规则可排除下游包为这组具体外部类型新增有体实现；仅仅“依赖图里没找到”不够。
+3. 该 trait 含静态成员，依现有 declare 合同无法通过第三方原生采用补出实现。此条件按成员资格判断，不按 From 名字特判。
+4. 当前配置的声明与依赖模板已完整收集，且没有任何可能匹配 O 的 impl 头。若存在匹配头但其 where 未证明、递归或达到资源限制，首批仍返回未知，不把证明失败当作否定，也不递归扩大否定推理。
 
-第三方 `declare impl` 的既有原生采用例外保留。它只采用真实原生实例方法、没有业务体，不允许借此登记普通包函数为静态 From；当前静态成员不能 declare 的限制继续适用。其他 trait 的相容 declare 仍可合并，不能因 Into 的特殊重叠结果撤销整个功能。
+交集中任一必要义务得到这种否定即可排除交集。已证明成立、已证明不成立、未知必须分开；未知不能当 false。依赖升级、cfg 或拥有包声明变化后重新检查；新增使两边同时适用的实现必须报冲突，不能静默更换旧选择。和 Rust 的 orphan 推理一样，这不保证新增上游 blanket 等破坏性更新永不影响下游。
+
+因此推荐规则的结果是：
+
+- 具体 Source/Target 中至少一方属于 K 时，可独立实现 `Into[Target] for Source`：若 `Target:From[Source]` 满足上述否定条件，std blanket 不适用。以后补上对应 From 会报冲突。仍推荐优先写 From，使显式 Into 和 `?` 都能使用。
+- `From[T] for T` 与同类型自转换真正重叠，禁止覆盖。`impl[S] From[S] for AppError where S: SomeTrait` 则须检查交点 `AppError:SomeTrait`：仅能可靠否定时允许；一般的“当前没有 SomeTrait”不足以通过。
+- 通用 `From[[]S] for []T where T:From[S]` 或 `From[Box[S]] for Box[T]` 在 S=T 时前提由 identity 成立，是真实交集，仍拒绝。具体不同元素类型的转换、不同外层容器之间的转换可通过检查；并非所有容器 From 都禁止。
+- `From[T] for Box[T]` 与 identity 的合一要求无限类型 `T=Box[T]`，由 occurs check 直接排除。首批不增加类型不等约束或用户负 impl；通用同容器逐元素转换使用具名 map 函数。
+
+第三方 `declare impl` 的既有原生采用例外保留。它只采用真实原生实例方法，不能登记普通包函数为静态 From。普通实例 trait 可能由下游 declare 补出，故不能照搬 Rust 的“orphan 禁止第三方实现”作为否定证据；首批对此一律保持未知。独立 declare Into 只有在同样取得 From 不适用证明、原生签名正确且无其他冲突时才可接受。
+
+Rust stable 的 [implicit negative impl check](https://rustc-dev-guide.rust-lang.org/coherence.html#the-implicit-negative-impl-check) 能证明某些交集不可能成立，不要求特化或用户编写负 impl；[Into 文档](https://doc.rust-lang.org/std/convert/trait.Into.html) 也明确允许仅实现 Into 的类型。这里的首批具体类型证明更窄：Rust 可接受的 `impl[T] Into[Vec[T]] for Wrap[T]` 尚不能由本篇首批规则证明，后续可扩展带参数的 owner/不可满足证明；未知不能靠尝试转换补救。普通 Go 布局不因这种放宽改变，选择仍在编译期完成。
 
 ### 5. 形式模型与 `?` 选择
 
@@ -141,17 +153,17 @@ OwnerOK(I)，全部 impl 参数可从 head(I) 绑定
                   Γ ⊢ I valid
 
 trait(I)=trait(J)，∃θ,φ: norm(θ head(I))=norm(φ head(J))
-I/J 是不同有体实现或不能合并的有体/declare；不使用 where 排除重叠
+I/J 不能合并；合一后的联合前提未被有限互斥证明排除
 ──────────────────────────────────────────────── [冲突]
                   Γ ⊢ I,J conflict
 
-match(head(I), (Q, T, A...))=θ，I 为唯一匹配头
+match(head(I), (Q, T, A...))=θ，其他匹配候选已由互斥证明排除
 (Q,T,A...) 不在 P，所有 θ prerequisite 在扩展的 P 下可证明
 ──────────────────────────────────────────────── [选择]
         P ⊢ T:Q[A...] ⇓ Selected(I,θ,evidence)
 ```
 
-先选择唯一匹配头，再证明前提；前提失败不回退到另一实现。循环和类型增长按 RFC 0031 诊断，不能因 From/Into 的名字默认共同递归成立。cache、证明栈、关联投影、成员候选、需求队列、绑定器和生成符号全部包含完整 trait application 及代换。仅把 checker 的匹配条件补齐而保留旧缓存键会合并错误，例如 `Count:From[[]int]` 与 `Count:From[[]string]`。
+收集匹配头及其前提，凭已检查的互斥证据排除不适用候选，再选择唯一具有正证据的实现；普通证明失败不是转试另一个实现的优先级机制。仍有未知候选时须报告未解决义务。循环和类型增长按 RFC 0031 诊断，不能因 From/Into 的名字默认共同递归成立。cache、证明栈、关联投影、成员候选、需求队列、绑定器和生成符号全部包含完整 trait application 及代换；否定缓存还须绑定声明环境与配置。仅把 checker 的匹配条件补齐而保留旧缓存键会合并错误，例如 `Count:From[[]int]` 与 `Count:From[[]string]`。
 
 对 `Result[A,E]` 上的 `?`，最近用户函数或闭包必须返回 `Result[B,F]`：
 
@@ -281,7 +293,7 @@ result := readSecret(hidden) // 42；调用包不需要拼写 model.secret
 
 `From[S]` 仅有静态成员，不能存成运行时值。固定目标 T 的 `Into[T]` 可按普通 trait 资格形成值视图，捕获来源 S 的值副本；直接源码调用默认静态分派，不自动装箱。
 
-跨包模板需要回调时，可用以下完整 Go 形状承载已选证据：
+对于 std blanket 提供的 Into，跨包模板需要回调时，可用以下完整 Go 形状承载已选证据；独立 Into 按其自身 impl 业务体生成视图，不要求 From 回调：
 
 ```go
 package conversion
@@ -307,9 +319,9 @@ func AsInto[S, T any](value S, from func(S) T) Into[T] {
 
 | 编号 | 输入 | 判定 |
 | --- | --- | --- |
-| CV-N01 | 同一 canonical S/T 定义两个 From，或通过 alias 重复 | Goxide 重叠诊断，指出两处定义 |
-| CV-N02 | 试图用不同 where、关联输出或文件顺序区分同一头 | Goxide 重叠诊断，不特化 |
-| CV-N03 | 独立实现/declare Into，或覆盖 identity | 与 std impl 头重叠 |
+| CV-N01 | 同一 canonical S/T 定义两个无条件 From，或通过 alias 重复 | Goxide 重叠诊断，指出两处定义 |
+| CV-N02 | 用不同 where 区分同一头但无法证明互斥，或靠文件顺序决定优先级 | Goxide 重叠诊断，不特化 |
+| CV-N03 | 已有适用 From 再独立实现/declare 对应 Into，或覆盖 identity | 真实交集，与 std impl 冲突 |
 | CV-N04 | 第三方包为两个外部类型写 From | owner 诊断；使用 newtype 或具名函数 |
 | CV-N05 | `impl[P] From[Local[P]] for P` | owner 之前有未覆盖 P；不能靠来源中的 Local 抢占所有目标 |
 | CV-N06 | impl 参数仅出现在 where/关联输出/方法体 | 未受实现头约束；拒绝搜索未知类型实参 |
@@ -323,7 +335,7 @@ func AsInto[S, T any](value S, from func(S) T) Into[T] {
 | CV-N14 | 为 Into 视图向外部来源类型添加 receiver，或给 E 接口加 From receiver | 非法 Go 生成；应改用 impl 包的 ops/wrapper |
 | CV-N15 | 请求 From 时消除 readonly 权限，或因 pointer-owner 规则自动解引用 | 普通权限/类型诊断；owner 不授予转换或写权限 |
 
-独立 Into 被 blanket 排除不意味着所有 trait 都禁止手写实例实现。From 不是编译器保留方法名，普通 `impl T { func from... }`、普通 Go 函数或同名自定义 trait 均不创建标准转换关系。
+From 不是编译器保留方法名，普通 `impl T { func from... }`、普通 Go 函数或同名自定义 trait 均不创建标准转换关系。仅实现 Into 的类型可满足 Into 约束，但不能用于要求 From 的 `?`。
 
 ## 双向互操作
 
@@ -335,14 +347,14 @@ Go → Goxide：具体已生成 From 操作可直接调用，或使用作者显�
 
 兼容目标是 `goxide/go.mod` 的 Go 1.27。新布局保留源类型身份、具体签名、typed nil、调用帧和包边界；不保持旧生成 helper 的 ABI，pre-1.0 随编译器与 std 一起重生成，不增加旧登记表回退或兼容包装。
 
-Rust 的 [From](https://doc.rust-lang.org/std/convert/trait.From.html) / [Into](https://doc.rust-lang.org/std/convert/trait.Into.html) 同样采用标准库 blanket 联系两个方向；本篇参考其输入/目标关系和 [orphan 规则](https://doc.rust-lang.org/reference/items/implementations.html#trait-implementation-coherence)。区别是 Goxide 保留普通赋值优先、没有 move，重叠检查继续忽略 where，并按现有 Go package 与明确生成边界工作；不宣称完整复制 Rust 的 trait 求解器。
+Rust 的 [From](https://doc.rust-lang.org/std/convert/trait.From.html) / [Into](https://doc.rust-lang.org/std/convert/trait.Into.html) 同样采用标准库 blanket 联系两个方向；本篇参考其输入/目标关系、[orphan 规则](https://doc.rust-lang.org/reference/items/implementations.html#trait-implementation-coherence) 及有限互斥证明。Goxide 保留普通赋值优先、没有 move，并需处理第三方 declare 例外；首批否定推理范围小于 Rust。
 
 ## 验收与未定项
 
 ### 实施顺序与完成条件
 
 1. 参数化 trait：解析、解析后身份、约束和关联投影支持完整输入；一个目标同时要求多个 From，私有类型和 alias 不混淆。
-2. 通用 impl 归属与重叠：完整头匹配、参数约束、指针 owner、identity/Into blanket；跨包候选去重与冲突不依赖顺序。
+2. 通用 impl 归属与重叠：完整头匹配、参数约束、指针 owner、identity/Into blanket 与有限互斥证明；具体独立 Into、补 From 后的冲突、同容器真实交集、不同容器/具体元素正例、上游未知和第三方 declare 反例；候选去重与冲突不依赖顺序。
 3. 证明与降低：所有缓存/实例/成员/绑定键包含完整 application；pair ops、泛型模板与精确回调保持定义包、函数帧和确定性。
 4. std 声明接入：From、Into、identity 与普通转发 impl；具体与条件实例分别验证，Error 派生库不作为前提。
 5. `?` 改为选定普通证据，删除 Error 专用转换登记。用手写普通 impl 证明旧传播行为后，再调整现有内建 Error 的过渡输出；不保留两套选择规则。
@@ -351,4 +363,4 @@ Rust 的 [From](https://doc.rust-lang.org/std/convert/trait.From.html) / [Into](
 
 本次只验证推荐 Go 机制：Go 1.27.1 下，两独立 module、多包 ops/运行时视图/泛型绑定、已发布 std/sum pin 的手写传播形状，实际 build/run/test/vet 通过；测试覆盖多来源、原 cause 身份、typed nil、跨包私有 S/T、identity、泛型 carrier、失败分支单次转换、defer 及 From/Into 的 recover 帧差别。探针中的 Error/Unwrap 是手写方法，只核对 cause 身份，不代表 enum 新固有映射已验收。这是候选表示的可行性证据，尚未验证 Goxide 前端实现上述语法或 coherence。
 
-方案需要一次整体确认的语义改动是：参数化 trait；完整实现头与有序 owner/指针规则；通用 blanket 及由此禁止独立 Into/identity 覆盖；限定调用与泛型声明环境中的固定选择。实现前同步 RFC 0031、D22/传播规范、trait/declare 合同及前端 AST。生成名的可读前缀可沿现有规划收敛，但不能遗漏完整身份；源码行号、private callback 的具体实现沿现有机制选择。
+方案需要一次整体确认的语义改动是：参数化 trait；完整实现头与有序 owner/指针规则；通用 blanket、有限互斥证明及 identity 的不可覆盖；限定调用与泛型声明环境中的固定选择。实现前同步 RFC 0031、D22/传播规范、trait/declare 合同及前端 AST。生成名的可读前缀可沿现有规划收敛，但不能遗漏完整身份；源码行号、private callback 的具体实现沿现有机制选择。

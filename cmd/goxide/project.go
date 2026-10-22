@@ -552,10 +552,11 @@ func exportDirectoryModule(tool, source, bundle, destination string, base []stri
 				if err != nil {
 					return err
 				}
-				if !strings.HasPrefix(relative, ".") {
+				relative = filepath.ToSlash(relative)
+				if relative != "." && relative != ".." && !strings.HasPrefix(relative, "./") && !strings.HasPrefix(relative, "../") {
 					relative = "./" + relative
 				}
-				arguments = append(arguments, "-replace="+old+"="+filepath.ToSlash(relative))
+				arguments = append(arguments, "-replace="+old+"="+relative)
 			}
 		}
 		if len(arguments) != 2 {

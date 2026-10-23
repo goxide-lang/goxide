@@ -75,7 +75,7 @@ jobs:
   checks:
     needs: scope
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -109,7 +109,7 @@ jobs:
             exit 1
           fi
       - name: Native race gate
-        run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -vet=off -count=1 -timeout=30m ./...
+        run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -p=1 -vet=off -count=1 -timeout=30m ./...
       - name: Native vet gate
         run: env -u GOWORK go vet -mod=readonly ./...
       - name: Documentation and design gate

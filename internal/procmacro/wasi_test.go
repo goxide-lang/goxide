@@ -21,6 +21,8 @@ import (
 	"github.com/goxide-lang/syntax/token"
 )
 
+var wasiTestBudgetMultiplier time.Duration = 1
+
 func TestWASIHostSDKCommand(t *testing.T) {
 	t.Setenv("GOXIDE_HOST_SECRET", "must not reach the macro")
 	wasm := buildWASIFixture(t, wasiSDKFixture)
@@ -83,8 +85,9 @@ func TestWASIHostSDKCommand(t *testing.T) {
 		})
 	}
 	t.Run("response_then_loop_is_not_success", func(t *testing.T) {
+		previous := host.invocation
 		host.invocation = 50 * time.Millisecond
-		defer func() { host.invocation = MaxInvocationTime }()
+		defer func() { host.invocation = previous }()
 		if _, _, err := run("response_loop"); err == nil || !strings.Contains(err.Error(), "invocation time budget") {
 			t.Fatalf("response followed by nontermination was accepted: %v", err)
 		}
@@ -219,7 +222,7 @@ func TestWASIHostGoPackageInitIsBounded(t *testing.T) {
 
 func wasiHostForTest(t *testing.T, ctx context.Context) *WASIHost {
 	t.Helper()
-	host, err := NewWASIHost(ctx)
+	host, err := NewWASIHostWithBudgets(ctx, MaxInvocationTime*wasiTestBudgetMultiplier, MaxCompilationTime*wasiTestBudgetMultiplier)
 	if err != nil {
 		t.Fatal(err)
 	}

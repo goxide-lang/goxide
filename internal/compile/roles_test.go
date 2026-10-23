@@ -12,11 +12,14 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/project"
 	pm "github.com/goxide-lang/syntax/proc_macro"
 )
+
+var wasiTestBudgetMultiplier time.Duration = 1
 
 func compilerSDKForTest(t *testing.T) string {
 	t.Helper()
@@ -39,7 +42,7 @@ func compilerSDKForTest(t *testing.T) string {
 
 func testWASI(t *testing.T, inspect func(pm.Request)) func([]byte, pm.Request) ([]byte, error) {
 	t.Helper()
-	host, err := procmacro.NewWASIHost(context.Background())
+	host, err := procmacro.NewWASIHostWithBudgets(context.Background(), procmacro.MaxInvocationTime*wasiTestBudgetMultiplier, procmacro.MaxCompilationTime*wasiTestBudgetMultiplier)
 	if err != nil {
 		t.Fatal(err)
 	}

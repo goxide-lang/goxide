@@ -43,6 +43,12 @@ type wasiCompiled struct {
 // NewWASIHost creates an in-process runtime with only the fixed macro profile.
 // Cancellation closes an executing guest, including its runtime and package init.
 func NewWASIHost(ctx context.Context) (*WASIHost, error) {
+	return NewWASIHostWithBudgets(ctx, MaxInvocationTime, MaxCompilationTime)
+}
+
+// NewWASIHostWithBudgets creates a runtime with explicit execution budgets.
+// Compiler requests use NewWASIHost; tests can account for instrumentation cost.
+func NewWASIHostWithBudgets(ctx context.Context, invocation, cumulative time.Duration) (*WASIHost, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("procedural macro host requires a context")
 	}
@@ -54,7 +60,7 @@ func NewWASIHost(ctx context.Context) (*WASIHost, error) {
 		WithCoreFeatures(api.CoreFeaturesV2).
 		WithMemoryLimitPages(MaxMemoryPages).
 		WithCloseOnContextDone(true))
-	host := &WASIHost{ctx: ctx, cancel: cancel, runtime: runtime, invocation: MaxInvocationTime, compilation: MaxCompilationTime, compiled: map[[sha256.Size]byte]wasiCompiled{}}
+	host := &WASIHost{ctx: ctx, cancel: cancel, runtime: runtime, invocation: invocation, compilation: cumulative, compiled: map[[sha256.Size]byte]wasiCompiled{}}
 	if err := installWASIProfile(ctx, runtime); err != nil {
 		_ = host.Close()
 		return nil, err

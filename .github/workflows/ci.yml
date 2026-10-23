@@ -108,14 +108,46 @@ jobs:
             printf '%s\n' "$unformatted"
             exit 1
           fi
-      - name: Native execution gate
-        run: python3 -B scripts/ci_go_test.py full-native -mod=readonly -vet=off -count=1 -timeout=30m ./...
       - name: Native race gate
         run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -vet=off -count=1 -timeout=30m ./...
       - name: Native vet gate
         run: env -u GOWORK go vet -mod=readonly ./...
       - name: Documentation and design gate
         run: python3 -B scripts/check_design.py
+      - name: Ensure checks did not change tracked inputs
+        run: git diff --exit-code
+
+  native:
+    needs: scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ inputs.go_version }}
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Prepare the pinned module graph
+        run: |
+          go version
+          gcc --version
+          echo "GO_BIN=$(command -v go)" >> "$GITHUB_ENV"
+          module_prep_dir="$(mktemp -d "$RUNNER_TEMP/modules.XXXXXX")"
+          cp go.mod go.sum "$module_prep_dir/"
+          GOWORK=off GOFLAGS=-mod=readonly go mod download -modfile="$module_prep_dir/go.mod" all
+          GOWORK=off GOFLAGS=-mod=readonly go mod verify -modfile="$module_prep_dir/go.mod"
+          cmp go.mod "$module_prep_dir/go.mod"
+          cmp go.sum "$module_prep_dir/go.sum"
+      - name: Native execution gate
+        run: python3 -B scripts/ci_go_test.py full-native -mod=readonly -p=1 -vet=off -count=1 -timeout=30m ./...
       - name: Ensure checks did not change tracked inputs
         run: git diff --exit-code
 
@@ -175,7 +207,7 @@ jobs:
   summary:
     name: CI summary
     if: always()
-    needs: [scope, checks, web]
+    needs: [scope, checks, native, web]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -183,6 +215,7 @@ jobs:
         env:
           SCOPE: ${{ needs.scope.result }}
           CHECKS: ${{ needs.checks.result }}
+          NATIVE: ${{ needs.native.result }}
           WEB: ${{ needs.web.result }}
           WEB_REQUIRED: ${{ needs.scope.outputs.web }}
         run: |
@@ -190,12 +223,14 @@ jobs:
             echo '| Layer | Result |'
             echo '| --- | --- |'
             echo "| Scope | $SCOPE |"
-            echo "| Native / race / vet / gofmt / docs | $CHECKS |"
+            echo "| Native execution | $NATIVE |"
+            echo "| Race / vet / gofmt / docs | $CHECKS |"
             echo "| WASM build / HTTP | $WEB |"
             echo '| Browser UI / real Worker QA | Not run; tracked gap in docs/ci.md |'
           } >> "$GITHUB_STEP_SUMMARY"
           test "$SCOPE" = success
           test "$CHECKS" = success
+          test "$NATIVE" = success
           if [ "$WEB_REQUIRED" = true ]; then
             test "$WEB" = success
           else

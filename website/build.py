@@ -30,6 +30,12 @@ license_path = go_license_path(goroot)
 catalog.write_index(catalog_data)
 context = dependency_context(ROOT)
 roots_file = ROOT / context['path']
+# Reject fixture drift even when an older module remains in a local cache.
+expected_modules = {name: json.loads(run(GO, 'list', '-m', '-json', name))['Version'] for name in ['github.com/goxide-lang/std', 'github.com/goxide-lang/serde']}
+for fixture_path in ['website/validation/package-files/example', 'examples/reexports']:
+    fixture_modules = json.loads(run(GO, 'mod', 'edit', '-json', cwd=ROOT/fixture_path))
+    assert {item['Path']: item['Version'] for item in fixture_modules['Require']} == expected_modules, f'{fixture_path}: public module selections differ from compiler'
+    assert not fixture_modules.get('Replace'), f'{fixture_path}: fixture must not replace public dependencies'
 patterns = ['std', *sorted({root['module'] + '/...' for root in context['roots'].values() if root['source'] == 'module'})]
 exports = ROOT/'internal/typecheck/browserexports'
 exports.mkdir(exist_ok=True)
@@ -106,10 +112,6 @@ with tempfile.TemporaryDirectory(prefix='goxide-web-package-') as temporary:
     assert module.startswith(b'module playground\n\ngo 1.27\n'), 'unexpected package example module policy'
     for metadata in ['go.mod', 'go.sum']:
         shutil.copyfile(fixture/metadata, project/metadata)
-    fixture_modules = json.loads(run(GO, 'mod', 'edit', '-json', cwd=project))
-    expected_modules = {name: json.loads(run(GO, 'list', '-m', '-json', name))['Version'] for name in ['github.com/goxide-lang/std', 'github.com/goxide-lang/serde']}
-    assert {item['Path']: item['Version'] for item in fixture_modules['Require']} == expected_modules, 'package fixture module selections differ from compiler'
-    assert not fixture_modules.get('Replace'), 'package fixture must not replace public dependencies'
     package_files = []
     for path in sorted(fixture.glob('*.gox')):
         source = path.read_bytes()

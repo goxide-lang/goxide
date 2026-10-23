@@ -31,18 +31,21 @@ Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译
 普通全树测试验证过程宏宿主的生产预算：单次 5 秒、单次编译累计 60 秒，并运行仅普通模式的
 完整 SDK 快照验收。普通与 race 任务均使用 `-p=1` 串行执行测试包，避免不同包争用 CPU
 导致生产预算超时，包括 race 测试启动的普通 CLI 子进程。两项任务运行在独立 runner 上。
-race 任务的流程上限为 60 分钟，单个测试包的上限仍为 30 分钟。
-race 全树保留完整插桩；两个原生宏测试宿主将默认预算乘以 20，
+正式过程宏验收会构建并执行 WASI 产物；套件时限为完整验收、串行包执行和冷缓存预留时间。
+普通任务的单包上限为 90 分钟、流程上限为 120 分钟；race 任务分别为 120 和 180 分钟。
+这些时限只控制 CI 测试套件，不改变过程宏的单次或累计生产预算。
+race 全树保留完整插桩；原生宏测试宿主将默认预算乘以 20，
 容纳插桩开销。测试中显式设置的毫秒级超时、循环和取消断言保持原值；CLI 与发布产物始终
 使用生产预算。race 检查验证并发与行为，生产时限由普通检查验证。
 
 `ci_go_test.py` 分开汇报测试包/无测试包、顶层测试/嵌套子测试及 pass/fail/skip；
 只记录实际墙钟，不把并行包的 `Elapsed` 相加。成功仅输出摘要，失败输出失败包记录；
-完整 JSON 保留在 runner 临时目录，不入 Git，也不传入日常 agent 上下文。
+完整 JSON 按行刷新并保留在 runner 临时目录，便于检查进行中的测试；不入 Git，
+也不传入日常 agent 上下文。
 
 ## 浏览器 CI 跟踪缺口
 
-现有 `website/qa.mjs`、`website/catalog-qa.mjs` 均显式设置 `chromiumSandbox: true`。
+现有 `website/redesign-qa.mjs`、`website/catalog-qa.mjs` 均显式设置 `chromiumSandbox: true`。
 CI 尚未调用浏览器验收；接入时先在实际 runner 确认保留 sandbox 的 Chromium 可以启动，
 再运行 HTTP/真实 Worker/UI 的应用验收。
 不得修改内核或浏览器安全设置来使测试通过。这里的 WASM 构建和 HTTP 通过不代表

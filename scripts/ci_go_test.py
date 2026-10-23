@@ -24,7 +24,7 @@ def main():
     outcomes = {"Top-level tests": Counter(), "Subtests": Counter()}
     packages, tested, active, failed_tests = {}, set(), set(), set()
     started = time.monotonic()
-    with json_log.open("w") as log, stderr_log.open("w") as errors:
+    with json_log.open("w", buffering=1) as log, stderr_log.open("w") as errors:
         try:
             process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE,
                                        stderr=errors, text=True, errors="replace")

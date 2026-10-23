@@ -75,7 +75,7 @@ jobs:
   checks:
     needs: scope
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -109,7 +109,7 @@ jobs:
             exit 1
           fi
       - name: Native race gate
-        run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -p=1 -vet=off -count=1 -timeout=30m ./...
+        run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -p=1 -vet=off -count=1 -timeout=120m ./...
       - name: Native vet gate
         run: env -u GOWORK go vet -mod=readonly ./...
       - name: Documentation and design gate
@@ -120,7 +120,7 @@ jobs:
   native:
     needs: scope
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -147,7 +147,7 @@ jobs:
           cmp go.mod "$module_prep_dir/go.mod"
           cmp go.sum "$module_prep_dir/go.sum"
       - name: Native execution gate
-        run: python3 -B scripts/ci_go_test.py full-native -mod=readonly -p=1 -vet=off -count=1 -timeout=30m ./...
+        run: python3 -B scripts/ci_go_test.py full-native -mod=readonly -p=1 -vet=off -count=1 -timeout=90m ./...
       - name: Ensure checks did not change tracked inputs
         run: git diff --exit-code
 

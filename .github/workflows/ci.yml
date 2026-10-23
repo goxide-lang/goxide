@@ -108,6 +108,8 @@ jobs:
             printf '%s\n' "$unformatted"
             exit 1
           fi
+      - name: Native execution gate
+        run: python3 -B scripts/ci_go_test.py full-native -mod=readonly -vet=off -count=1 -timeout=30m ./...
       - name: Native race gate
         run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -vet=off -count=1 -timeout=30m ./...
       - name: Native vet gate
@@ -188,7 +190,7 @@ jobs:
             echo '| Layer | Result |'
             echo '| --- | --- |'
             echo "| Scope | $SCOPE |"
-            echo "| Native race / vet / gofmt / docs | $CHECKS |"
+            echo "| Native / race / vet / gofmt / docs | $CHECKS |"
             echo "| WASM build / HTTP | $WEB |"
             echo '| Browser UI / real Worker QA | Not run; tracked gap in docs/ci.md |'
           } >> "$GITHUB_STEP_SUMMARY"

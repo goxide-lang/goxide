@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "a82bb80b54127dc670321536e44ad5009d6f1a9f",
-  "reviewedAt": "2026-10-23",
+  "compilerCommit": "bd95b47401267b17ac20b81924ae10e21c373559",
+  "reviewedAt": "2026-10-24",
   "evidenceRefs": {},
   "statusLabels": {
     "proposal": "提案",
@@ -757,5 +757,5 @@
       ]
     }
   ],
-  "compilerDigest": "a0e7d6f49a9129d79a69c5ba6f29c84c54d3c29c956ee1e8c7d53bda139c24df"
+  "compilerDigest": "8a550b89e1fe7428e05c10ae26548410ff39dcd5c47c3eace4b622de155c82a5"
 }

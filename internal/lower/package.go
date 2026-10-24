@@ -24,12 +24,16 @@ import (
 
 // PackageOptions controls generation for a package in an existing Go project.
 type PackageOptions struct {
+	// StableGo keeps dependency entry points independent of consumer instantiations.
+	StableGo            bool
 	LineDirectives      bool
 	Config              config.Config
 	RejectConfiguration bool // Partial in-place generation cannot switch package configuration.
 	ProcLibraries       []*ProcLibrary
 	RuntimeRoots        []RuntimeRoot
 	SourcePackages      []SourcePackage
+	// RequireRoot runs only when source resolution selects a dependency root.
+	RequireRoot func(alias string, namespace paths.Namespace) error
 	// Expanded, when supplied, receives resolved source for the original inputs.
 	Expanded map[string][]byte
 	// GoPackages receives the request's generated dependency graph and its
@@ -99,7 +103,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 				return nil, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
 			}
 			configs[file] = options.Config
-			rootConfigs[file] = moduleRootConfig{module: packagePath, name: key, roots: roots, runtimeRoots: options.RuntimeRoots}
+			rootConfigs[file] = moduleRootConfig{module: packagePath, name: key, roots: roots, runtimeRoots: options.RuntimeRoots, requireRoot: options.RequireRoot}
 			if roots != nil {
 				strict[key] = packagePath
 			}
@@ -232,7 +236,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 			return nil, err
 		}
 	}
-	generated, err := lower(lowerFiles, checked, emissionOptions{lineDirectives: options.LineDirectives, originals: files})
+	generated, err := lower(lowerFiles, checked, emissionOptions{lineDirectives: options.LineDirectives, originals: files, stableGo: options.StableGo})
 	if err != nil {
 		return nil, err
 	}

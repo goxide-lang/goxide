@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/paths"
 )
 
 // singleFileModule owns only configuration copies and one generated file. Its
@@ -22,6 +23,9 @@ type singleFileModule struct {
 	displayInput             string
 	temporary, modFile       string
 	config                   config.Config
+	usedSourceRoots          map[string]paths.Namespace
+	nativeRequirements       map[string]string
+	authoredMod              []byte
 }
 
 // Keep the execution environment aligned with the offline export importer,
@@ -89,6 +93,9 @@ func prepareSingleFileModule(input string, cfg config.Config) (_ *singleFileModu
 		}
 		if e != nil {
 			return nil, e
+		}
+		if item.source == "go.mod" {
+			m.authoredMod = data
 		}
 		if e = os.WriteFile(filepath.Join(dir, item.destination), data, 0600); e != nil {
 			return nil, e

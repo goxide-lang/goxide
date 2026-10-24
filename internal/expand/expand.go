@@ -180,6 +180,7 @@ type engine struct {
 	nextCtx              ast.SyntaxCtx
 	nodes, tokens, steps int
 	expansions           int
+	bindings             *macroBindings
 }
 
 // Expand collects every file's definitions before expanding any invocation.
@@ -222,6 +223,9 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*a
 			e.reserve(f)
 		}
 	}
+	if _, ok := resolver.(interface{ UpdateMacroBindings(*Result) error }); ok {
+		e.bindings = newMacroBindings(packages)
+	}
 	var out []*ast.File
 	for _, files := range packages {
 		e.defs = map[Key]definition{}
@@ -258,6 +262,9 @@ func ExpandPackages(packages [][]*ast.File, resolver Resolver, configs ...map[*a
 					n.Items = items
 					e.r.PartialFiles = append(out, n)
 					return e.r, err
+				}
+				if e.bindings != nil {
+					e.bindings.replace(original, rewritten)
 				}
 				if len(rewritten) != 0 {
 					items = append(items, rewritten...)
@@ -350,6 +357,9 @@ func (e *engine) lookup(path *ast.Path, file *ast.File) (definition, error) {
 		}
 	}
 	if e.resolver != nil {
+		if err := e.updateMacroBindings(); err != nil {
+			return definition{}, err
+		}
 		d, err := e.resolver.LookupMacro(path, scope)
 		if err != nil {
 			return definition{}, err

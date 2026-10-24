@@ -60,7 +60,7 @@ type rolePlanner struct {
 // LoadBuildPlans uses one owner lock and acquisition cache. target is GOOS/GOARCH;
 // procRoot selects the project's lib as a macro program instead of a normal
 // bin/example. A normal target can depend on its own separate proc-macro lib.
-func LoadBuildPlans(root, tool string, requested []string, defaults, offline, locked bool, targetDir, target string, procRoot bool, environment ...[]string) (*BuildPlans, error) {
+func LoadBuildPlans(root, tool string, requested []string, defaults, offline, locked bool, targetDir, target string, procRoot, nativeGeneration bool, environment ...[]string) (*BuildPlans, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func LoadBuildPlans(root, tool string, requested []string, defaults, offline, lo
 	}
 	defer os.RemoveAll(work)
 	owner := &Graph{WorkRoot: work, Tool: tool, Environment: base, Offline: offline, Locked: locked, Cache: filepath.Join(layout.Root, "cache", "git"), LockPath: filepath.Join(root, "goxide.lock"), ownerRoot: root, ownerModule: manifest.Module,
-		Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}, Roles: map[string]RoleLock{}}}
+		Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}, Roles: map[string]RoleLock{}}, nativeGeneration: nativeGeneration}
 	data, err := os.ReadFile(owner.LockPath)
 	if err == nil {
 		if err := json.Unmarshal(data, &owner.Lock); err != nil {
@@ -178,7 +178,7 @@ func (p *rolePlanner) load(root string, source *Node, requested []string, defaul
 		return nil, err
 	}
 	g := &Graph{Role: role, Platform: platform, roles: p, roleRoot: source, WorkRoot: p.owner.WorkRoot, Tool: p.owner.Tool, Environment: environment, Offline: p.owner.Offline, Locked: p.owner.Locked,
-		Cache: p.owner.Cache, LockPath: p.owner.LockPath, Lock: p.owner.Lock, original: p.owner.original, ownerRoot: p.owner.ownerRoot, ownerModule: p.owner.ownerModule}
+		Cache: p.owner.Cache, LockPath: p.owner.LockPath, Lock: p.owner.Lock, original: p.owner.original, ownerRoot: p.owner.ownerRoot, ownerModule: p.owner.ownerModule, nativeGeneration: p.owner.nativeGeneration}
 	if _, err := g.plan(root, requested, defaults); err != nil {
 		return nil, err
 	}
@@ -286,8 +286,20 @@ func (g *Graph) readRoot(root string) (*Node, error) {
 	// source crate retains the archive boundary and provenance, but cannot own
 	// a nested go.mod: Go module archives exclude nested modules.
 	transportRoot := source.source.Kind == "go" && source.CheckoutRoot != "" && filepath.Clean(root) == filepath.Clean(source.CheckoutRoot)
+	if !transportRoot && source.SelectedVersion != "" && source.source.Kind == "path" {
+		var err error
+		transportRoot, err = localModuleTransport(root)
+		if err != nil {
+			return nil, err
+		}
+	}
 	node, err := g.readNode(root, transportRoot, source.CheckoutRoot)
 	if node != nil {
+		if err == nil && source.Module != "" && node.Module != source.Module {
+			if err = g.bindSelectedModule(node, source.Module, source.sourceSelection); err != nil {
+				return nil, err
+			}
+		}
 		node.setSource(source.source)
 		node.CheckoutRoot, node.SelectedVersion = source.CheckoutRoot, source.SelectedVersion
 		node.sourceSelection = source.sourceSelection

@@ -42,7 +42,7 @@ func (e *emitter) operationFunction(selection *check.MemberSelection) goast.Expr
 		}
 	}
 	if selection.Impl != nil && selection.Impl.Template != nil {
-		if instance := e.traits.instances[instanceImplKey(e.info, selection.Impl, m.Name)]; instance != nil {
+		if instance := e.selectedInstance(instanceImplKey(e.info, selection.Impl, m.Name)); instance != nil {
 			return e.instanceOperation(instance)
 		}
 	}

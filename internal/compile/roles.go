@@ -119,6 +119,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 				return nil, err
 			}
 		} else {
+			stage.modules[0].StableGo = options.StableGo
 			if options.PrepareNativePackage != nil {
 				if err := options.PrepareNativePackage(stage.modules); err != nil {
 					return nil, err
@@ -160,7 +161,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 		if graph.Role == "proc-macro" {
 			tags, race = nil, false
 		}
-		spec, err := unitSpec(graph, stage.target, stage.kind, stage.config, stage.features, stage.sugar, tags, race)
+		spec, err := unitSpec(graph, stage.target, stage.kind, stage.config, stage.features, stage.sugar, tags, race, stage.modules[0].StableGo)
 		if err != nil {
 			return nil, err
 		}

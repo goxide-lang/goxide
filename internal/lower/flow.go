@@ -40,6 +40,9 @@ func (e *emitter) goType(t types.Type) goast.Expr {
 			return goast.NewIdent(name.Name)
 		}
 	}
+	if array := e.stableArrayType(t); array != nil {
+		return array
+	}
 	if t == nil || t == types.Typ[types.Invalid] {
 		e.fail(e.tree, "无法确定表达式类型")
 		return goast.NewIdent("any")
@@ -92,6 +95,51 @@ func (e *emitter) goType(t types.Type) goast.Expr {
 			dir = goast.RECV
 		}
 		return &goast.ChanType{Dir: dir, Value: e.goType(t.Elem())}
+	case *types.Struct:
+		if e.constTemplate != nil {
+			fields := &goast.FieldList{}
+			for index := 0; index < t.NumFields(); index++ {
+				member := t.Field(index)
+				field := &goast.Field{Type: e.goType(member.Type())}
+				if !member.Embedded() {
+					field.Names = []*goast.Ident{goast.NewIdent(member.Name())}
+				}
+				if tag := t.Tag(index); tag != "" {
+					field.Tag = &goast.BasicLit{Kind: gotoken.STRING, Value: fmt.Sprintf("%q", tag)}
+				}
+				fields.List = append(fields.List, field)
+			}
+			return &goast.StructType{Fields: fields}
+		}
+	case *types.Interface:
+		if e.constTemplate != nil {
+			methods := &goast.FieldList{}
+			for index := 0; index < t.NumExplicitMethods(); index++ {
+				method := t.ExplicitMethod(index)
+				methods.List = append(methods.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(method.Name())}, Type: e.goType(method.Type())})
+			}
+			for index := 0; index < t.NumEmbeddeds(); index++ {
+				methods.List = append(methods.List, &goast.Field{Type: e.goType(t.EmbeddedType(index))})
+			}
+			return &goast.InterfaceType{Methods: methods}
+		}
+	case *types.Union:
+		if e.constTemplate != nil {
+			var union goast.Expr
+			for index := 0; index < t.Len(); index++ {
+				term := t.Term(index)
+				typ := e.goType(term.Type())
+				if term.Tilde() {
+					typ = &goast.UnaryExpr{Op: gotoken.TILDE, X: typ}
+				}
+				if union == nil {
+					union = typ
+				} else {
+					union = &goast.BinaryExpr{X: union, Op: gotoken.OR, Y: typ}
+				}
+			}
+			return union
+		}
 	case *types.Signature:
 		fields := func(tuple *types.Tuple, variadic bool) *goast.FieldList {
 			list := &goast.FieldList{}
@@ -493,9 +541,13 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 // Arrays keep their storage when evaluating a later index or slice bound.
 func (e *emitter) container(n syntax.Expr, x goast.Expr) goast.Expr {
 	if t := e.info.Types[n]; t != nil {
-		if _, array := t.Underlying().(*types.Array); array && e.addressable(n) {
+		_, array := t.Underlying().(*types.Array)
+		if (array || e.stableArray(t) != nil) && e.addressable(n) {
 			id := e.fresh("Array")
 			e.pending = append(e.pending, varStmt(id, &goast.StarExpr{X: e.goType(t)}, &goast.UnaryExpr{Op: gotoken.AND, X: x}))
+			if e.stableArray(t) != nil {
+				return &goast.StarExpr{X: id}
+			}
 			return id
 		}
 	}
@@ -520,6 +572,9 @@ func (e *emitter) addressable(n syntax.Expr) bool {
 		return e.addressable(n.X)
 	case *syntax.IndexExpr:
 		if t := e.info.Types[n.X]; t != nil {
+			if e.stableArray(t) != nil {
+				return e.addressable(n.X)
+			}
 			switch t.Underlying().(type) {
 			case *types.Slice, *types.Pointer:
 				return true

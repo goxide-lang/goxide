@@ -11,10 +11,12 @@ func (e *emitter) inferredFunctionValue(function *traitFunction, instance *check
 	p := newTraitInference(e)
 	bounds, evidence := e.functionCallbacks(function, instance)
 	callbacks, callbackTypes := p.callbacks(bounds, evidence)
+	constants, constantTypes := p.stableConstants(e.stableFunctionPlan(function), instance.Substitution, instance.ConstSubstitution)
+	callbacks, callbackTypes = append(constants, callbacks...), append(constantTypes, callbackTypes...)
 	enumArgs, enumTypes := p.enumChecks(e.functionEnumChecks(function, instance))
 	callbacks, callbackTypes = append(callbacks, enumArgs...), append(callbackTypes, enumTypes...)
 	signature := e.functionInstanceSignature(instance)
-	factory := e.sourceGlobal(function.symbol.Decl.File, constFunctionName(function, instance))
+	factory := e.sourceGlobal(function.symbol.Decl.File, e.constFunctionName(function, instance))
 	var prefix []goast.Expr
 	for _, typ := range functionCaseArguments(instance) {
 		if !e.nameableType(typ) {

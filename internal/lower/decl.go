@@ -74,6 +74,9 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 		}
 		return decl
 	case *syntax.ConstDecl:
+		if e.constTemplate != nil {
+			return e.stableConstDecl(n)
+		}
 		return e.valueDecl(n, gotoken.CONST, n.Grouped, n.Specs)
 	case *syntax.VarDecl:
 		return e.valueDecl(n, gotoken.VAR, n.Grouped, n.Specs)
@@ -124,7 +127,12 @@ func (e *emitter) valueDecl(n syntax.Node, tok gotoken.Token, grouped bool, spec
 		value := &goast.ValueSpec{Type: e.typ(spec.Type)}
 		for _, expr := range spec.Values {
 			before, lowered := e.exprScoped(expr)
-			if len(before) > 0 {
+			if tok == gotoken.CONST && e.constTemplate != nil {
+				// Local constant len/cap lowering may retain source bindings.
+				// Those no-op uses belong before the declaration, not inside
+				// its initializer, which must remain a Go constant expression.
+				e.pending = append(e.pending, before...)
+			} else if len(before) > 0 {
 				// A package initializer has no surrounding statement block.
 				before = append(before, &goast.ReturnStmt{Results: []goast.Expr{lowered}})
 				lowered = &goast.CallExpr{Fun: &goast.FuncLit{Type: &goast.FuncType{Params: &goast.FieldList{}, Results: &goast.FieldList{List: []*goast.Field{{Type: e.goType(e.info.Types[expr])}}}}, Body: &goast.BlockStmt{List: before}}}

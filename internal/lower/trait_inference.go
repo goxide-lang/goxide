@@ -79,6 +79,16 @@ func (p *traitInference) collect(typ types.Type) {
 		}
 		p.collect(typ.Results())
 		return
+	case *types.Array:
+		if p.e.traits.stableGo {
+			p.collect(typ.Elem())
+			return
+		}
+	case *types.Pointer:
+		if p.e.traits.stableGo {
+			p.collect(typ.Elem())
+			return
+		}
 	case *types.Slice:
 		// Ellipsis forwarding must retain the slice/element relationship.
 		p.collect(typ.Elem())
@@ -101,6 +111,9 @@ func (p *traitInference) collect(typ types.Type) {
 	p.types = append(p.types, typ)
 	p.names = append(p.names, name)
 	p.bodyTypes[typ] = name
+	if p.e.traits.stableGo && p.e.info.Comparable(typ) {
+		p.constraints[typ] = appendAssertionType(p.constraints[typ], types.Universe.Lookup("comparable").Type())
+	}
 }
 
 func inferenceHasParameter(typ types.Type) bool {
@@ -340,6 +353,8 @@ func (p *traitInference) implWitnesses(impl *check.Impl) ([]goast.Expr, []types.
 		args = append(args, p.witness(target))
 		parameters = append(parameters, signatureOf(nil, target))
 	}
+	extra, extraTypes := p.stableConstants(p.e.stableImplPlan(impl), impl.Substitution, impl.ConstSubstitution)
+	args, parameters = append(args, extra...), append(parameters, extraTypes...)
 	return args, parameters
 }
 
@@ -348,7 +363,7 @@ func (p *traitInference) operation(selection *check.MemberSelection) goast.Expr 
 	if impl == nil || !parameterizedImpl(implTemplate(impl)) {
 		return p.parameter(p.e.operationFunction(selection), operationSignature(selection))
 	}
-	if instance := p.e.traits.instances[instanceImplKey(p.e.info, impl, selection.Member.Name)]; instance != nil {
+	if instance := p.e.selectedInstance(instanceImplKey(p.e.info, impl, selection.Member.Name)); instance != nil {
 		return p.parameter(p.e.instanceOperation(instance), operationSignature(selection))
 	}
 	member := selectedMember(selection)
@@ -379,7 +394,7 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 	if e.carrierFunctionInstance(function, instance) {
 		return nil, false
 	}
-	if e.traits.instances[instanceFunctionKey(e.info, function, instance)] != nil {
+	if e.selectedInstance(instanceFunctionKey(e.info, function, instance)) != nil {
 		return nil, false
 	}
 	if !e.needsFunctionInference(instance) {
@@ -409,6 +424,8 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 	}
 	bounds, evidence := e.functionCallbacks(function, instance)
 	callbacks, callbackTypes := p.callbacks(bounds, evidence)
+	constants, constantTypes := p.stableConstants(e.stableFunctionPlan(function), instance.Substitution, instance.ConstSubstitution)
+	callbacks, callbackTypes = append(constants, callbacks...), append(constantTypes, callbackTypes...)
 	enumArgs, enumTypes := p.enumChecks(e.functionEnumChecks(function, instance))
 	callbacks, callbackTypes = append(callbacks, enumArgs...), append(callbackTypes, enumTypes...)
 	var witnesses []goast.Expr
@@ -426,7 +443,7 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 	if sig.Variadic() {
 		factorySig = types.NewSignatureType(nil, nil, nil, factorySig.Params(), factorySig.Results(), true)
 	}
-	factory := e.sourceGlobal(function.symbol.Decl.File, strings.TrimSuffix(constFunctionName(function, instance), "Func")+"Call")
+	factory := e.sourceGlobal(function.symbol.Decl.File, strings.TrimSuffix(e.constFunctionName(function, instance), "Func")+"Call")
 	// A visible leading argument can instantiate an otherwise phantom parameter.
 	var prefix []goast.Expr
 	for _, typ := range functionCaseArguments(instance) {
@@ -507,6 +524,16 @@ func (e *emitter) templateCallDeclaration(funcName string, typeParams, callbacks
 	}
 	ft := &goast.FuncType{Params: &goast.FieldList{}, Results: e.params(node.Results)}
 	body := e.functionBody(ft, node.Body)
+	if e.constTemplate != nil {
+		for _, statement := range setup {
+			assignment := statement.(*goast.AssignStmt)
+			id := assignment.Lhs[0].(*goast.Ident)
+			if !generatedBodyUses(body, id.Name) {
+				assignment.Lhs[0] = goast.NewIdent("_")
+				assignment.Tok = gotoken.ASSIGN
+			}
+		}
+	}
 	body.List = append(setup, body.List...)
 	business := &goast.FuncLit{Type: ft, Body: body}
 	e.generatedName(name, node)
@@ -524,7 +551,7 @@ func (e *emitter) templateImplWitnessParameters(impl *check.Impl) []*goast.Field
 	for _, typ := range typesToWitness {
 		fields = append(fields, &goast.Field{Names: []*goast.Ident{goast.NewIdent("_")}, Type: resultFunc(e.goType(typ))})
 	}
-	return fields
+	return append(fields, e.stableConstParameters()...)
 }
 func (e *emitter) templateImplWitnessArguments(impl *check.Impl) []goast.Expr {
 	typesToWitness := []types.Type{impl.Target}
@@ -539,18 +566,33 @@ func (e *emitter) templateImplWitnessArguments(impl *check.Impl) []goast.Expr {
 	for _, typ := range typesToWitness {
 		args = append(args, e.typeWitness(typ))
 	}
-	return args
+	extra, _ := e.stableConstArguments(e.stableImplPlan(impl), impl.Substitution, impl.ConstSubstitution)
+	return append(args, extra...)
 }
 
 func (p *traitProgram) prepareInferenceCalls(info *check.Info) {
 	p.inferredCalls = map[*syntax.FuncDecl]bool{}
 	p.inferredOperations = map[*syntax.FuncDecl]bool{}
+	if p.stableGo {
+		for _, function := range p.functions {
+			if p.helperFunctions[function.decl] {
+				p.inferredCalls[function.decl] = true
+			}
+		}
+		for _, impl := range p.impls {
+			if parameterizedImpl(impl) {
+				for _, member := range impl.Methods {
+					p.inferredCalls[member.Decl], p.inferredOperations[member.Decl] = true, true
+				}
+			}
+		}
+	}
 	inspect := func(body *check.BodyInstance) {
 		source := info.Resolve.Files[body.File]
 		if source == nil || body.Info == nil {
 			return
 		}
-		e := &emitter{info: body.Info, traits: p, name: body.File, tree: source.AST}
+		e := &emitter{info: body.Info, traits: p, name: body.File, tree: source.AST, file: source, result: info.Resolve}
 		syntax.Walk(body.Node, func(node syntax.Node) bool {
 			if expression, ok := node.(syntax.Expr); ok {
 				if selection := body.Info.Members[expression]; selection != nil && e.needsOperationInference(selection) {
@@ -562,7 +604,7 @@ func (p *traitProgram) prepareInferenceCalls(info *check.Info) {
 				return true
 			}
 			if instance := e.functionInstance(call); instance != nil {
-				if function := p.functions[instance.Signature]; function != nil && p.instances[instanceFunctionKey(info, function, instance)] == nil && e.needsFunctionInference(instance) {
+				if function := p.functions[instance.Signature]; function != nil && e.selectedInstance(instanceFunctionKey(info, function, instance)) == nil && e.needsFunctionInference(instance) {
 					p.inferredCalls[function.decl] = true
 				}
 			}
@@ -601,7 +643,7 @@ func (e *emitter) needsFunctionInference(instance *check.FunctionInstance) bool 
 }
 func (e *emitter) needsOperationInference(selection *check.MemberSelection) bool {
 	impl := selection.Impl
-	return impl != nil && parameterizedImpl(implTemplate(impl)) && e.traits.instances[instanceImplKey(e.info, impl, selection.Member.Name)] == nil && (!e.nameableType(operationSignature(selection)) || e.privateEvidence(check.Evidence{Impl: impl}))
+	return impl != nil && parameterizedImpl(implTemplate(impl)) && e.selectedInstance(instanceImplKey(e.info, impl, selection.Member.Name)) == nil && (!e.nameableType(operationSignature(selection)) || e.privateEvidence(check.Evidence{Impl: impl}))
 }
 func (e *emitter) inferredOperationCall(selection *check.MemberSelection, values []goast.Expr, ellipsis bool) (goast.Expr, bool) {
 	if !e.needsOperationInference(selection) {

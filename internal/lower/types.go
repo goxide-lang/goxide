@@ -130,6 +130,11 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	if n == nil {
 		return nil
 	}
+	if e.constTemplate != nil {
+		if typ := e.info.SourceType(n); typ != nil {
+			return e.goType(typ)
+		}
+	}
 	if t := e.info.TypeOverrides[n]; t != nil {
 		return e.goType(t)
 	}

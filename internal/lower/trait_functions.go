@@ -100,7 +100,7 @@ func (e *emitter) traitFunctionInstance(node syntax.Node) (goast.Expr, bool) {
 		}
 		return enumIndices(e.sourceGlobal(function.symbol.Decl.File, function.symbol.GoName), args), true
 	}
-	if selected := e.traits.instances[instanceFunctionKey(e.info, function, instance)]; selected != nil {
+	if selected := e.selectedInstance(instanceFunctionKey(e.info, function, instance)); selected != nil {
 		return e.sourceGlobal(selected.body.File, selected.name), true
 	}
 	if !e.traits.templateFunctions[function.decl] {
@@ -219,6 +219,19 @@ func (p *traitProgram) prepareTemplateHelpers(info *check.Info) {
 			}
 			return true
 		})
+	}
+	if p.stableGo {
+		for _, function := range p.functions {
+			if info.Demands.FunctionTemplates[function.decl] {
+				p.templateFunctions[function.decl] = true
+				addFunction(function)
+			}
+		}
+		for _, impl := range p.impls {
+			if parameterizedImpl(impl) {
+				addImpl(impl)
+			}
+		}
 	}
 	for _, function := range info.Demands.Functions {
 		if declaration := p.functions[function.Signature]; declaration != nil && p.instances[instanceFunctionKey(info, declaration, function)] == nil {

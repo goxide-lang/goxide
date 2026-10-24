@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	goversion "go/version"
 	"io"
@@ -18,10 +19,12 @@ import (
 
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/naming"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/project"
 	"github.com/goxide-lang/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 // Package generation belongs to the nearest module. A nested native Go module
@@ -342,34 +345,75 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err := copyDirectorySources(root, input, stage, manifest.Module, roots, tags, mode == "test", cfg); err != nil {
 		return err
 	}
-	sourceManifest, selectedRoots, _, err := nativeSourceDependencies(root, filepath.Join(stage, "go.mod"), roots, cfg)
+	automatic := mode == "transpile"
+	sourceDependencies, err := nativeSourceDependencies(root, filepath.Join(stage, "go.mod"), roots, cfg, automatic)
 	if err != nil {
 		return err
 	}
-	manifest.Dependencies, roots = sourceManifest.Dependencies, selectedRoots
-	for _, name := range []string{"go.mod", "go.sum", rootconfig.Filename} {
-		if err := os.Remove(filepath.Join(stage, name)); err != nil && !os.IsNotExist(err) {
+	manifest.Dependencies, roots = sourceDependencies.manifest.Dependencies, sourceDependencies.roots
+	owner := &singleFileModule{root: root, config: cfg}
+	var requireRoot func(string, paths.Namespace) error
+	if automatic {
+		owner.nativeRequirements = sourceDependencies.required
+		imports := typecheck.NewImporter(filepath.Join(input, "input.gox"), typecheck.ImporterOptions{Config: cfg, Tags: tags, ModFile: filepath.Join(stage, "go.mod")})
+		roots, requireRoot, err = sourceDependencies.generationRoots(owner, imports)
+		if err != nil {
 			return err
 		}
 	}
-	helper, err := os.MkdirTemp(stage, "goxide_cli_entry_")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(helper, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
-		return err
-	}
-	manifest.Bins = []project.Target{{Name: "directory", Path: filepath.Base(helper)}}
-	data, err := project.Marshal(manifest)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(stage, project.ManifestName), data, 0600); err != nil {
-		return err
-	}
-	prepared, err := prepareProject(stage, compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: true, Roots: roots, NativeFeatures: &cfg.Features, Config: cfg, Tags: tags, Race: mode == "test"}, stderr)
-	if err != nil {
-		return err
+	var prepared *compile.Result
+	var helper string
+	for {
+		for _, name := range []string{"go.mod", "go.sum", rootconfig.Filename} {
+			if err := os.Remove(filepath.Join(stage, name)); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+		helper, err = os.MkdirTemp(stage, "goxide_cli_entry_")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(helper, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
+			return err
+		}
+		manifest.Bins = []project.Target{{Name: "directory", Path: filepath.Base(helper)}}
+		data, err := project.Marshal(manifest)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(stage, project.ManifestName), data, 0600); err != nil {
+			return err
+		}
+		options := compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: !automatic, Roots: roots, NativeFeatures: &cfg.Features, NativeGeneration: automatic, Config: cfg, Tags: tags, Race: mode == "test"}
+		if automatic {
+			options.PrepareNativePackage = func(modules []lower.Module) error {
+				modules[0].NativePackage = &lower.NativePackage{RequireRoot: requireRoot, StableGo: true}
+				return nil
+			}
+		}
+		var diagnostics bytes.Buffer
+		prepared, err = prepareProject(stage, options, &diagnostics)
+		var demand *nativeRootDemand
+		if !automatic || !errors.As(err, &demand) {
+			if _, writeErr := io.Copy(stderr, &diagnostics); err == nil && writeErr != nil {
+				err = writeErr
+			}
+			if err != nil {
+				return generationDependencyError(err, owner)
+			}
+			break
+		}
+		candidate := sourceDependencies.automatic[demand.alias][0]
+		sourceDependencies.manifest.Dependencies[demand.alias] = candidate.dependency
+		if err := os.RemoveAll(stage); err != nil {
+			return err
+		}
+		if err := os.Mkdir(stage, 0700); err != nil {
+			return err
+		}
+		if err := copyDirectorySources(root, input, stage, manifest.Module, roots, tags, false, cfg); err != nil {
+			return err
+		}
 	}
 	bundle := filepath.Dir(prepared.Root)
 	if err := os.RemoveAll(filepath.Join(prepared.Root, filepath.Base(helper))); err != nil {
@@ -385,6 +429,32 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	}
 	req := CompileRequest{Mode: mode, Input: input, Output: dest, GoTool: goTool, Tags: strings.Join(tags, ","), ProgramArgs: programArgs}
 	if mode == "transpile" {
+		owner.input = filepath.Join(prepared.Root, relative, "input.gox")
+		generated := map[string][]byte{}
+		entries, err := os.ReadDir(filepath.Dir(owner.input))
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".go" || strings.HasSuffix(entry.Name(), "_test.go") {
+				continue
+			}
+			name := filepath.Join(filepath.Dir(owner.input), entry.Name())
+			data, err := os.ReadFile(name)
+			if err != nil {
+				return err
+			}
+			generated[name] = data
+		}
+		name, data, err := generationToolsSource(owner, nil, generated)
+		if err != nil {
+			return err
+		}
+		if name != "" {
+			if err := os.WriteFile(name, data, 0644); err != nil {
+				return err
+			}
+		}
 		if err := checkPreparedPackage(req, prepared, true); err != nil {
 			return err
 		}

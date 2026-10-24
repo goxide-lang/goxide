@@ -294,7 +294,12 @@ func (e *emitter) wrapperMethod(m *check.Member) *goast.FuncDecl {
 		return true
 	})
 	if used {
-		decl.Body.List = append([]goast.Stmt{&goast.AssignStmt{Lhs: []goast.Expr{self}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{target}}}, decl.Body.List...)
+		token := gotoken.DEFINE
+		if e.constTemplate != nil && !generatedBodyUses(decl.Body, self.Name) {
+			self = goast.NewIdent("_")
+			token = gotoken.ASSIGN
+		}
+		decl.Body.List = append([]goast.Stmt{&goast.AssignStmt{Lhs: []goast.Expr{self}, Tok: token, Rhs: []goast.Expr{target}}}, decl.Body.List...)
 	}
 	return e.traitSourceBody(decl, m.Decl)
 }

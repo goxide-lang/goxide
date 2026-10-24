@@ -72,7 +72,7 @@ func (e *emitter) registerEvidenceNames(bounds []*check.TraitBound) {
 		if e.evidenceNames[bound] != "" {
 			continue
 		}
-		base := "Goxide" + typeTargetName(traitBoundTarget(bound)) + "Ops"
+		base := "Goxide" + e.templateTargetName(traitBoundTarget(bound)) + "Ops"
 		name := base
 		for index := 2; e.reserved[name]; index++ {
 			name = fmt.Sprintf("%s%d", base, index)

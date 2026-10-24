@@ -17,6 +17,15 @@ func (p *traitProgram) prepareBindings(info *check.Info) {
 	p.boundBindings = map[*check.TraitBound]map[string]bool{}
 	p.implBindings = map[*check.Impl]map[string]bool{}
 	p.enumReadExpressions = map[*syntax.FuncDecl]bool{}
+	if p.stableGo {
+		for _, impl := range p.impls {
+			for _, member := range impl.Methods {
+				if !member.Static {
+					markBinding(p.implBindings, implTemplate(impl), member.Name)
+				}
+			}
+		}
+	}
 	calls := map[syntax.Expr]*syntax.CallExpr{}
 	for _, file := range info.Resolve.Files {
 		syntax.Walk(file.AST, func(node syntax.Node) bool {
@@ -292,6 +301,8 @@ func (e *emitter) bindingDeclaration(member *check.Member, carrier *traitCarrier
 func (e *emitter) templateBindingDeclaration(member *check.Member) goast.Decl {
 	restoreInfo := e.memberBodyInfo(member)
 	defer restoreInfo()
+	restoreConsts := e.enterConstTemplate(e.stableImplPlan(member.Impl))
+	defer restoreConsts()
 	callbacks, restore := e.templateCallbacks(member.Impl.Requirements)
 	defer restore()
 	restoreEnums := e.templateEnumChecks(e.memberEnumChecks(member), callbacks)
@@ -307,7 +318,7 @@ func (e *emitter) templateBindingDeclaration(member *check.Member) goast.Decl {
 	e.generatedName(name, member.Decl)
 	typeParameters := e.templateImplParameters(member.Impl)
 	if branch := memberCase(member); branch != nil {
-		typeParameters = e.bodyCaseParameters(branch)
+		typeParameters = e.stableConstTypeParameters(e.bodyCaseParameters(branch))
 	}
 	declaration := &goast.FuncDecl{Name: goast.NewIdent(name), Type: &goast.FuncType{TypeParams: typeParameters, Params: parameters, Results: &goast.FieldList{List: []*goast.Field{{Type: binderType}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{binder}}}}}
 	if member.Trait == nil {

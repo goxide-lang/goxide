@@ -18,7 +18,7 @@ func roleManifest(module string, macro bool) string {
 
 func loadRoles(t *testing.T, root string, locked bool) *BuildPlans {
 	t.Helper()
-	plans, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, true, locked, "", "linux/amd64", false)
+	plans, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, true, locked, "", "linux/amd64", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestRolePlansLockReplayAndContentInvalidation(t *testing.T) {
 	}
 	wsWrite(t, root, "macros/"+ManifestName, roleManifest("example.org/macros", true)+"[dependencies.extra]\npath='../extra'\n")
 	wsWrite(t, root, "extra/"+ManifestName, roleManifest("example.org/extra", false))
-	_, err = LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, true, true, "", "linux/amd64", false)
+	_, err = LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, true, true, "", "linux/amd64", false, false)
 	if err == nil || !strings.Contains(err.Error(), "--locked") {
 		t.Fatalf("changed macro dependency accepted by --locked: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestRolePlansMacroCycle(t *testing.T) {
 	wsWrite(t, root, ManifestName, roleManifest("example.org/app", false)+"[dependencies.a]\npath='a'\n")
 	wsWrite(t, root, "a/"+ManifestName, roleManifest("example.org/a", true)+"[dependencies.b]\npath='../b'\n")
 	wsWrite(t, root, "b/"+ManifestName, roleManifest("example.org/b", true)+"[dependencies.a]\npath='../a'\n")
-	_, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, true, false, "", "linux/amd64", false)
+	_, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, true, false, "", "linux/amd64", false, false)
 	if err == nil || !strings.Contains(err.Error(), "procedural macro build cycle") || !strings.Contains(err.Error(), "example.org/a") || !strings.Contains(err.Error(), "example.org/b") {
 		t.Fatalf("macro cycle = %v", err)
 	}
@@ -122,7 +122,7 @@ func TestRolePlansOwnMacroLibrary(t *testing.T) {
 	wsWrite(t, root, ManifestName, roleManifest("example.org/macros", true))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	for _, procRoot := range []bool{false, true} {
-		plans, err := LoadBuildPlans(root, tool, nil, false, true, false, "", "linux/amd64", procRoot)
+		plans, err := LoadBuildPlans(root, tool, nil, false, true, false, "", "linux/amd64", procRoot, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -194,7 +194,7 @@ func TestRolePlansVersionedMacroDoesNotRaiseTargetSelection(t *testing.T) {
 	macro := roleManifest("example.org/macros", true) + "[[go.require]]\nmodule='example.org/common'\nversion='v1.1.0'\n"
 	roleProxyModule(t, proxy, "example.org/macros", "v1.0.0", macro, "module example.org/macros\n\ngo 1.27\n\nrequire example.org/common v1.1.0\n")
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	plans, err := LoadBuildPlans(root, tool, nil, false, false, false, "", "linux/amd64", false)
+	plans, err := LoadBuildPlans(root, tool, nil, false, false, false, "", "linux/amd64", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestRolePlansSameModuleMacroVersions(t *testing.T) {
 			metadata := "module example.org/macros\n\ngo 1.27\n"
 			roleProxyModule(t, proxy, "example.org/macros", "v1.0.0", macro, metadata)
 			roleProxyModule(t, proxy, "example.org/macros", "v1.1.0", roleManifest("example.org/macros", true), metadata)
-			plans, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, false, false, "", "linux/amd64", false)
+			plans, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, false, false, "", "linux/amd64", false, false)
 			if version == "v1.0.0" {
 				if err == nil || !strings.Contains(err.Error(), "procedural macro build cycle") {
 					t.Fatalf("same actual macro unit cycle: %v", err)
@@ -265,7 +265,7 @@ func TestRolePlansAcquireOnlySelectedSourceVersion(t *testing.T) {
 				manifest += "[[go.exclude]]\nmodule='example.org/common'\nversion='v1.0.0'\n"
 			}
 			wsWrite(t, root, ManifestName, manifest)
-			plans, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, false, false, "", "linux/amd64", false)
+			plans, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, false, false, "", "linux/amd64", false, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -281,7 +281,7 @@ func TestRolePlansRejectMacroMetadataSourceMismatch(t *testing.T) {
 	roleProxyModule(t, proxy, "example.org/macros", "v1.0.0", roleManifest("example.org/macros", true), "module example.org/macros\n\ngo 1.27\n")
 	wsWrite(t, proxy, "example.org/macros/@v/v1.0.0.mod", "module example.org/macros\n\ngo 1.26\n")
 	wsWrite(t, root, ManifestName, roleManifest("example.org/app", false)+"[dependencies.macros]\ngo='example.org/macros'\nversion='v1.0.0'\n")
-	_, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, false, false, "", "linux/amd64", false)
+	_, err := LoadBuildPlans(root, filepath.Join(runtime.GOROOT(), "bin", "go"), nil, false, false, false, "", "linux/amd64", false, false)
 	if err == nil || !strings.Contains(err.Error(), "differs between selected metadata and verified source") {
 		t.Fatalf("macro metadata/source mismatch = %v", err)
 	}

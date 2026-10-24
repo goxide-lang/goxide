@@ -84,6 +84,7 @@ type Graph struct {
 	roleRoot               *Node
 	roleSelections         map[string]Selection
 	nativeStandalone       bool
+	nativeGeneration       bool
 	featureOverrides       map[string]Request
 	overrides              map[string]Manifest
 	allFeatures            bool

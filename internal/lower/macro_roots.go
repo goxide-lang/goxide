@@ -15,10 +15,12 @@ import (
 
 type rootRequirement struct {
 	target         string
+	alias          string
 	origin         resolve.Origin
 	sourceFile     string // Actual source/output owner; diagnostic spans cannot change access.
 	namespace      paths.Namespace
 	sourceImporter types.Importer
+	requireRoot    func(alias string, namespace paths.Namespace) error
 }
 
 type moduleRootConfig struct {
@@ -29,6 +31,7 @@ type moduleRootConfig struct {
 	uses           map[string][]*syntax.UseDecl
 	sourceImporter types.Importer
 	runtimeRoots   []RuntimeRoot
+	requireRoot    func(alias string, namespace paths.Namespace) error
 }
 
 func (r rootRequirement) check(owners map[string]string, external types.Importer) error {
@@ -220,6 +223,7 @@ func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]module
 				if owner, ok := configs[expanded.Scopes[root].File]; ok {
 					config.module, config.roots, config.goRoots, config.bindings, config.uses = owner.module, owner.roots, owner.goRoots, owner.bindings, owner.uses
 					config.sourceImporter = owner.sourceImporter
+					config.requireRoot = owner.requireRoot
 				}
 			}
 			config.bindings, config.uses = nil, nil // Recomputed from the expanded scopes above.
@@ -311,5 +315,5 @@ func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand
 		mapped = append(mapped, &segment)
 	}
 	use.Tree.Path.Segments = append(mapped, segments[1:]...)
-	return rootRequirement{target: target, origin: origin, sourceFile: config.name, namespace: namespace, sourceImporter: config.sourceImporter}, true
+	return rootRequirement{target: target, alias: segments[0].Name.Name, origin: origin, sourceFile: config.name, namespace: namespace, sourceImporter: config.sourceImporter, requireRoot: config.requireRoot}, true
 }

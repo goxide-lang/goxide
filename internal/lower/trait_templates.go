@@ -23,7 +23,7 @@ func (e *emitter) templateCallbacks(bounds []*check.TraitBound) (*goast.FieldLis
 		names := map[string]goast.Expr{}
 		e.boundCallbacks[bound] = names
 		for _, method := range bound.Trait.Methods {
-			base := "goxide" + typeTargetName(traitBoundTarget(bound)) + exportedName(method.GoName)
+			base := "goxide" + e.templateTargetName(traitBoundTarget(bound)) + exportedName(method.GoName)
 			name := base
 			for suffix := 2; used[name] || e.reserved[name]; suffix++ {
 				name = base + strconv.Itoa(suffix)
@@ -56,7 +56,7 @@ func (e *emitter) templateCallbacks(bounds []*check.TraitBound) (*goast.FieldLis
 			}
 		}
 		for _, associated := range bound.Trait.Associated {
-			base := "goxide" + typeTargetName(traitBoundTarget(bound)) + "Type" + exportedName(associated.Name)
+			base := "goxide" + e.templateTargetName(traitBoundTarget(bound)) + "Type" + exportedName(associated.Name)
 			name := base
 			for suffix := 2; used[name] || e.reserved[name]; suffix++ {
 				name = base + strconv.Itoa(suffix)
@@ -130,6 +130,9 @@ func (e *emitter) templateImplParameters(impl *check.Impl) *goast.FieldList {
 	for _, parameter := range impl.TypeParams {
 		fields = append(fields, &goast.Field{Names: []*goast.Ident{e.goType(parameter).(*goast.Ident)}, Type: e.goConstraint(parameter.Constraint())})
 	}
+	if e.constTemplate != nil {
+		fields = e.stableConstTypeParameters(&goast.FieldList{List: fields}).List
+	}
 	if impl.Case == nil {
 		fields = append(fields, projectedParameters(impl.Requirements)...)
 	}
@@ -151,6 +154,9 @@ func (e *emitter) templateImplArguments(impl *check.Impl) []goast.Expr {
 		}
 	}
 
+	for _, typ := range e.stableConstTypes(e.stableImplPlan(impl), impl.Substitution, impl.ConstSubstitution) {
+		args = append(args, e.goType(typ))
+	}
 	return args
 }
 
@@ -176,6 +182,8 @@ func (e *emitter) templateOperation(selection *check.MemberSelection) goast.Expr
 func (e *emitter) templateOperationDeclaration(member *check.Member) []goast.Decl {
 	restoreInfo := e.memberBodyInfo(member)
 	defer restoreInfo()
+	restoreConsts := e.enterConstTemplate(e.stableImplPlan(member.Impl))
+	defer restoreConsts()
 	parameters, restore := e.templateCallbacks(member.Impl.Requirements)
 	defer restore()
 	restoreEnums := e.templateEnumChecks(e.memberEnumChecks(member), parameters)
@@ -190,7 +198,7 @@ func (e *emitter) templateOperationDeclaration(member *check.Member) []goast.Dec
 	e.guardEnumInherentBody(member, business.Body)
 	typeParameters := e.templateImplParameters(member.Impl)
 	if branch := memberCase(member); branch != nil {
-		typeParameters = e.bodyCaseParameters(branch)
+		typeParameters = e.stableConstTypeParameters(e.bodyCaseParameters(branch))
 	}
 	outer := &goast.FuncType{TypeParams: typeParameters, Params: parameters, Results: &goast.FieldList{List: []*goast.Field{{Type: ft}}}}
 	declaration := &goast.FuncDecl{Name: goast.NewIdent(name), Type: outer, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{business}}}}}
@@ -227,6 +235,8 @@ func templateFunctionName(function *traitFunction) string {
 
 func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.Decl {
 	node := function.decl
+	restoreConsts := e.enterConstTemplate(e.stableFunctionPlan(function))
+	defer restoreConsts()
 	if (e.instanceBody == nil || e.instanceBody.Case == nil) && len(e.info.BodyCases[node]) != 0 {
 		return e.caseFunctionDeclarations(function)
 	}
@@ -244,9 +254,10 @@ func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.D
 	}
 	restoreEnums := e.templateEnumChecks(e.functionEnumChecks(function, instance), parameters)
 	defer restoreEnums()
-	typeParameters := e.functionTypeParameters(node)
+	parameters.List = append(e.stableConstParameters(), parameters.List...)
+	typeParameters := e.stableConstTypeParameters(e.functionTypeParameters(node))
 	if branch != nil {
-		typeParameters = e.bodyCaseParameters(branch)
+		typeParameters = e.stableConstTypeParameters(e.bodyCaseParameters(branch))
 	} else if projected := projectedParameters(bounds); len(projected) != 0 {
 		if typeParameters == nil {
 			typeParameters = &goast.FieldList{}
@@ -255,7 +266,7 @@ func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.D
 	}
 	ft := &goast.FuncType{Params: e.params(node.Params), Results: e.params(node.Results)}
 	business := &goast.FuncLit{Type: ft, Body: e.functionBody(ft, node.Body)}
-	name := constFunctionName(function, e.instanceBodyFunction())
+	name := e.constFunctionName(function, e.instanceBodyFunction())
 	e.generatedName(name, node)
 	declaration := &goast.FuncDecl{Name: goast.NewIdent(name), Type: &goast.FuncType{TypeParams: typeParameters, Params: parameters, Results: &goast.FieldList{List: []*goast.Field{{Type: ft}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{business}}}}}
 	e.anchor(declaration, node)
@@ -294,9 +305,13 @@ func (e *emitter) templateFunctionInstance(instance *check.FunctionInstance, fun
 		args = append(args, e.goType(typ))
 	}
 
-	factory := enumIndices(e.sourceGlobal(function.symbol.Decl.File, constFunctionName(function, instance)), args)
+	for _, typ := range e.stableConstTypes(e.stableFunctionPlan(function), instance.Substitution, instance.ConstSubstitution) {
+		args = append(args, e.goType(typ))
+	}
+	factory := enumIndices(e.sourceGlobal(function.symbol.Decl.File, e.constFunctionName(function, instance)), args)
 	bounds, evidence := e.functionCallbacks(function, instance)
-	arguments := e.callbackArguments(bounds, evidence)
+	arguments, _ := e.stableConstArguments(e.stableFunctionPlan(function), instance.Substitution, instance.ConstSubstitution)
+	arguments = append(arguments, e.callbackArguments(bounds, evidence)...)
 	arguments = append(arguments, e.enumCheckArguments(e.functionEnumChecks(function, instance))...)
 	return &goast.CallExpr{Fun: factory, Args: arguments}
 }
@@ -317,6 +332,9 @@ func (e *emitter) traitTemplateDeclarations(node syntax.Item) []goast.Decl {
 	}
 	impl := e.info.Impls[declaration]
 	if impl != nil && len(impl.ConstParams) != 0 {
+		if e.traits.stableGo && e.validation == nil {
+			return e.templateImplDeclarations(impl)
+		}
 		var out []goast.Decl
 		if e.validation != nil {
 			out = append(out, e.templateImplDeclarations(impl)...)
@@ -331,7 +349,7 @@ func (e *emitter) traitTemplateDeclarations(node syntax.Item) []goast.Decl {
 	if impl == nil || !parameterizedImpl(impl) {
 		return nil
 	}
-	if e.validation == nil && e.info.Demands != nil && e.info.Demands.ImplTemplates[impl] && !e.traits.templateImpls[impl] && !implHasBodyCases(e.info, impl) {
+	if e.validation == nil && !e.traits.stableGo && e.info.Demands != nil && e.info.Demands.ImplTemplates[impl] && !e.traits.templateImpls[impl] && !implHasBodyCases(e.info, impl) {
 		return nil
 	}
 	return e.templateImplDeclarations(impl)
@@ -362,6 +380,8 @@ func (e *emitter) templateImplDeclarations(impl *check.Impl) []goast.Decl {
 }
 
 func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
+	restoreConsts := e.enterConstTemplate(e.stableImplPlan(impl))
+	defer restoreConsts()
 	if e.caseViewImpl != impl && (impl.Case != nil || len(e.info.ImplCases[implTemplate(impl)]) != 0) {
 		return e.caseRuntimeDeclarations(impl)
 	}
@@ -372,6 +392,7 @@ func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
 	name := e.traitWrapper(impl)
 	e.generatedName(name, impl.Decl)
 	fields := receiverField("target", e.goType(captureType(impl)))
+	fields.List = append(fields.List, e.stableConstParameters()...)
 	fields.List = append(fields.List, parameters.List...)
 	out := []goast.Decl{genericTypeDeclaration(name, e.templateImplParameters(impl), &goast.StructType{Fields: fields})}
 	for _, member := range impl.Methods {
@@ -384,7 +405,7 @@ func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
 	}
 	var elements []goast.Expr
 	elements = append(elements, &goast.KeyValueExpr{Key: goast.NewIdent("target"), Value: goast.NewIdent("target")})
-	for _, parameter := range parameters.List {
+	for _, parameter := range append(e.stableConstParameters(), parameters.List...) {
 		for _, parameterName := range parameter.Names {
 			elements = append(elements, &goast.KeyValueExpr{Key: goast.NewIdent(parameterName.Name), Value: goast.NewIdent(parameterName.Name)})
 		}
@@ -424,6 +445,8 @@ func (e *emitter) templateAssociatedName(impl *check.Impl, name string) string {
 }
 
 func (e *emitter) templateAssociatedDeclaration(impl *check.Impl, associated string) goast.Decl {
+	restoreConsts := e.enterConstTemplate(e.stableImplPlan(impl))
+	defer restoreConsts()
 	parameters, restore := e.templateCallbacks(impl.Requirements)
 	defer restore()
 	parameters.List = append(e.templateImplWitnessParameters(impl), parameters.List...)

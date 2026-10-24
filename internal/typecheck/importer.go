@@ -343,6 +343,17 @@ func CheckPackage(path string, sources map[string][]byte, imp types.Importer, si
 
 // CheckPackageTypes returns the checked identities for metadata export.
 func CheckPackageTypes(path string, sources map[string][]byte, imp types.Importer, sizes types.Sizes) (*types.Package, error) {
+	return checkPackageTypes(path, sources, nil, imp, sizes)
+}
+
+// CheckPackageWithDeclarations checks generated bodies while selected native
+// files contribute only declarations, as in single-file generation's frontend.
+func CheckPackageWithDeclarations(path string, sources map[string][]byte, declarations map[string]bool, imp types.Importer, sizes types.Sizes) error {
+	_, err := checkPackageTypes(path, sources, declarations, imp, sizes)
+	return err
+}
+
+func checkPackageTypes(path string, sources map[string][]byte, declarations map[string]bool, imp types.Importer, sizes types.Sizes) (*types.Package, error) {
 	if path == "" {
 		return nil, fmt.Errorf("package import path is required")
 	}
@@ -364,8 +375,23 @@ func CheckPackageTypes(path string, sources map[string][]byte, imp types.Importe
 		if err != nil {
 			return nil, err
 		}
+		if declarations[name] {
+			ast.Inspect(file, func(node ast.Node) bool {
+				switch node := node.(type) {
+				case *ast.FuncDecl:
+					if node.Body != nil {
+						node.Body = &ast.BlockStmt{List: []ast.Stmt{&ast.ForStmt{Body: &ast.BlockStmt{}}}}
+					}
+				case *ast.FuncLit:
+					// Preserve the inferred function type without checking a Go
+					// implementation or requiring a particular return signature.
+					node.Body = &ast.BlockStmt{List: []ast.Stmt{&ast.ForStmt{Body: &ast.BlockStmt{}}}}
+				}
+				return true
+			})
+		}
 		files = append(files, file)
 	}
-	conf := types.Config{Importer: imp, Sizes: sizes}
+	conf := types.Config{Importer: imp, Sizes: sizes, DisableUnusedImportCheck: len(declarations) != 0}
 	return conf.Check(path, fs, files, nil)
 }

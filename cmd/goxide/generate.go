@@ -170,14 +170,27 @@ func generatePackage(req CompileRequest, out, stderr io.Writer) error {
 	newImporter := func() types.Importer {
 		return typecheck.NewImporter(importSource, typecheck.ImporterOptions{Config: req.config, Tags: buildContext.BuildTags, ModFile: modFile})
 	}
-	options := lower.PackageOptions{LineDirectives: true, Config: req.config, RejectConfiguration: selected != "" && req.Output != "-"}
-	generated, err := compileNativePackage(owner, roots, req.config, buildContext.BuildTags, stderr, files, newImporter, options)
+	options := lower.PackageOptions{LineDirectives: true, Config: req.config, RejectConfiguration: selected != "" && req.Output != "-", StableGo: owner != nil}
+	generated, err := compileNativePackage(owner, roots, req.config, buildContext.BuildTags, stderr, files, newImporter, options, owner != nil)
 	imports := newImporter()
 	if err == nil && generated == nil {
 		generated, err = lower.CompilePackage(files, packagePath, imports, roots, options)
 	}
 	if err != nil {
-		return generationDependencyError(err)
+		return generationDependencyError(err, owner)
+	}
+	inPlace := req.Output != "-"
+	if owner != nil && inPlace {
+		imports, err = owner.generationImporter(buildContext.BuildTags)
+		if err != nil {
+			return err
+		}
+	}
+	generationError := func(err error) error {
+		if inPlace {
+			return generationPublicationError(err, owner)
+		}
+		return generationDependencyError(err, owner)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -210,20 +223,49 @@ func generatePackage(req CompileRequest, out, stderr io.Writer) error {
 			}
 			if runtimeImport.MatchString(path) {
 				if _, err := imports.Import(path); err != nil {
-					return generationDependencyError(fmt.Errorf("generated Go requires %s: %w", path, err))
+					return generationError(fmt.Errorf("generated Go requires %s: %w", path, err))
 				}
 			}
 		}
 	}
-	if selected == "" {
-		if err := checkGeneratedPackage(packagePath, files, generated, imports, req.config.Sizes()); err != nil {
-			return generationDependencyError(err)
+	if selected == "" || owner != nil {
+		if err := checkGeneratedPackage(packagePath, files, generated, imports, req.config.Sizes(), selected != ""); err != nil {
+			return generationError(err)
 		}
 	}
 	if req.Output == "-" {
+		if err := reportGenerationTools(stderr, owner, files, generated, false, imports); err != nil {
+			return err
+		}
 		_, err := out.Write(append([]byte(generatedHeader), generated[sources[0]]...))
 		return err
 	}
+	outputs := map[string][]byte{}
+	for _, source := range sources {
+		outputs[generatedFilename(source)] = append([]byte(generatedHeader), generated[source]...)
+	}
+	if selected == "" {
+		name, contents, err := generationToolsSource(owner, files, generated, imports)
+		if err != nil {
+			return err
+		}
+		if name != "" {
+			if _, exists := outputs[name]; exists {
+				return fmt.Errorf("generation dependency file conflicts with source output %s", name)
+			}
+			outputs[name] = contents
+		}
+	} else if err := reportGenerationTools(stderr, owner, files, generated, true, imports); err != nil {
+		return err
+	}
+	var outputNames []string
+	for target := range outputs {
+		if err := checkGeneratedOutput(target); err != nil {
+			return err
+		}
+		outputNames = append(outputNames, target)
+	}
+	sort.Strings(outputNames)
 	// Prepare every file before replacing any output. Rename replaces a hard
 	// link rather than writing through it into another source file.
 	staged := map[string]string{}
@@ -232,14 +274,13 @@ func generatePackage(req CompileRequest, out, stderr io.Writer) error {
 			os.Remove(temporary)
 		}
 	}()
-	for _, source := range sources {
-		target := generatedFilename(source)
+	for _, target := range outputNames {
 		file, err := os.CreateTemp(directory, ".goxide-gen-*")
 		if err != nil {
 			return err
 		}
 		staged[target] = file.Name()
-		_, writeErr := file.Write(append([]byte(generatedHeader), generated[source]...))
+		_, writeErr := file.Write(outputs[target])
 		if err := file.Close(); writeErr == nil {
 			writeErr = err
 		}
@@ -250,9 +291,7 @@ func generatePackage(req CompileRequest, out, stderr io.Writer) error {
 			return err
 		}
 	}
-	sort.Strings(sources)
-	for _, source := range sources {
-		target := generatedFilename(source)
+	for _, target := range outputNames {
 		if err := checkGeneratedOutput(target); err != nil {
 			return err
 		}
@@ -347,14 +386,22 @@ func checkGeneratedOutput(name string) error {
 
 var runtimeImport = regexp.MustCompile(`github\.com/goxide-lang/(?:std|serde)(?:/[A-Za-z0-9_]+)*`)
 
-func generationDependencyError(err error) error {
+func generationDependencyError(err error, owner *singleFileModule) error {
 	message := err.Error()
 	if !strings.Contains(message, "offline export data for ") {
 		return err
 	}
 	for _, path := range runtimeImport.FindAllString(message, -1) {
 		if strings.Contains(message, "cannot find module providing package "+path+":") || strings.Contains(message, "no required module provides package "+path+";") {
-			return fmt.Errorf("generated Go needs %s, which is not in this module\nadd it with: go get %s\n\n%w", path, path, err)
+			module := strings.Join(strings.Split(path, "/")[:3], "/")
+			if owner != nil && owner.nativeRequirements[module] != "" {
+				return err
+			}
+			cause := fmt.Errorf("generated Go needs %s, which is not in this module\nadd it with: go get %s\n\n%w", path, path, err)
+			if owner != nil && owner.nativeRequirements != nil && owner.nativeRequirements[module] == "" {
+				return &missingGenerationDependencies{Root: owner.root, Modules: []string{module}, Config: owner.config, Cause: cause}
+			}
+			return cause
 		}
 	}
 	return err

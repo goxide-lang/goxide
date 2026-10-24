@@ -20,6 +20,8 @@ const typeCarrierAnchor = "GoxideInternalTypeCarrierForSelf"
 
 // Generated names and their owning files are fixed before emitting any file.
 type traitProgram struct {
+	stableGo            bool
+	sourceInfo          *check.Info
 	impls               []*check.Impl
 	carriers            map[*types.Named]*traitCarrier
 	inherentCarriers    map[*check.Impl]*inherentCarrier
@@ -55,8 +57,8 @@ type traitFacade struct {
 	impls []*check.Impl
 }
 
-func prepareTraits(info *check.Info, validation bool) *traitProgram {
-	p := &traitProgram{carriers: map[*types.Named]*traitCarrier{}, facades: map[string]*traitFacade{}, claims: map[string]map[string]syntax.Node{}, members: map[*types.Named]map[string]syntax.Node{}}
+func prepareTraits(info *check.Info, validation, stableGo bool) *traitProgram {
+	p := &traitProgram{stableGo: stableGo, sourceInfo: info, carriers: map[*types.Named]*traitCarrier{}, facades: map[string]*traitFacade{}, claims: map[string]map[string]syntax.Node{}, members: map[*types.Named]map[string]syntax.Node{}}
 	if info == nil {
 		return p
 	}
@@ -64,10 +66,10 @@ func prepareTraits(info *check.Info, validation bool) *traitProgram {
 	p.prepareInstances(info)
 	for _, impl := range info.Impls {
 		if len(impl.ConstParams) != 0 {
-			if validation {
+			if validation || stableGo {
 				p.impls = append(p.impls, impl)
 			}
-			if info.Demands != nil {
+			if info.Demands != nil && !stableGo {
 				for _, definition := range info.Demands.GenericImpls {
 					if definition.Template == impl {
 						p.impls = append(p.impls, definition)
@@ -84,7 +86,7 @@ func prepareTraits(info *check.Info, validation bool) *traitProgram {
 				}
 			}
 		}
-		if validation || info.Demands == nil || !info.Demands.ImplTemplates[impl] || p.templateImpls[impl] || implHasBodyCases(info, impl) {
+		if validation || stableGo || info.Demands == nil || !info.Demands.ImplTemplates[impl] || p.templateImpls[impl] || implHasBodyCases(info, impl) {
 			p.impls = append(p.impls, impl)
 		}
 	}
@@ -99,6 +101,11 @@ func prepareTraits(info *check.Info, validation bool) *traitProgram {
 		return implIdentity(info, a) < implIdentity(info, b)
 	})
 	p.prepareTemplateNames(info)
+	if stableGo && info.Demands != nil {
+		for _, impl := range info.Demands.GenericImpls {
+			p.templateNames[impl] = p.templateNames[originalImpl(impl)]
+		}
+	}
 	seen := map[string]bool{}
 	unique := p.impls[:0]
 	for _, impl := range p.impls {
@@ -511,9 +518,26 @@ func (p *traitProgram) prepareTemplateNames(info *check.Info) {
 			continue
 		}
 		name := typeTargetName(impl.Target)
+		if p.stableGo {
+			name = stableTypeTargetName(info, impl.Target)
+		}
 		if impl.Trait != nil {
-			name += traitApplicationName(impl)
+			if p.stableGo {
+				name += traitName(impl.Trait)
+				for _, input := range impl.Inputs {
+					name += stableTypeTargetName(info, input)
+				}
+			} else {
+				name += traitApplicationName(impl)
+			}
 		}
 		p.templateNames[impl] = name + "_" + implSuffix(info, impl)
 	}
+}
+
+func (e *emitter) templateTargetName(target types.Type) string {
+	if e.traits.stableGo {
+		return stableTypeTargetName(e.info, target)
+	}
+	return typeTargetName(target)
 }

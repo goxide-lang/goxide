@@ -14,12 +14,18 @@ func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
 	}
 	switch n := n.(type) {
 	case *syntax.AssignStmt:
+		if assignment := e.stableArrayAssignment(n); assignment != nil {
+			return assignment
+		}
 		pos := e.pos(n)
 		if len(n.Lhs) != 0 {
 			pos = e.end(n.Lhs[len(n.Lhs)-1])
 		}
 		return &goast.AssignStmt{Lhs: e.exprs(n.Lhs), TokPos: pos, Tok: tokenKind(n.Tok), Rhs: e.exprs(n.Rhs)}
 	case *syntax.IncDecStmt:
+		if e.stableArrayTarget(n.X) {
+			return &goast.IncDecStmt{X: e.lvalue(n.X), Tok: tokenKind(n.Tok)}
+		}
 		return &goast.IncDecStmt{X: e.expr(n.X), TokPos: e.end(n.X), Tok: tokenKind(n.Tok)}
 	case *syntax.ExprStmt:
 		return &goast.ExprStmt{X: e.expr(n.X)}
@@ -82,6 +88,9 @@ func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
 	case *syntax.ForStmt:
 		return &goast.ForStmt{For: e.pos(n), Init: e.stmt(n.Init), Cond: e.expr(n.Cond), Post: e.stmt(n.Post), Body: e.block(n.Body)}
 	case *syntax.RangeStmt:
+		if statement := e.stableArrayRange(n); statement != nil {
+			return statement
+		}
 		tokPos := gotoken.NoPos
 		if n.Key != nil {
 			tokPos = e.end(n.Key)

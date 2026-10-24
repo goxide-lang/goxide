@@ -115,7 +115,7 @@ func (c *checker) arrayLayoutConstant(call *ast.CallExpr, name string) constant.
 	}
 	c.unsafeCall(call)
 	typ := defaultType(c.out.Types[call.Args[0]])
-	if !fixedLayout(typ) {
+	if !FixedLayout(typ) {
 		return unknown
 	}
 	var size int64
@@ -130,9 +130,10 @@ func (c *checker) arrayLayoutConstant(call *ast.CallExpr, name string) constant.
 	return constant.MakeInt64(size)
 }
 
+// FixedLayout reports whether a type has a compile-time Go size and alignment.
 // Pointer, slice, map, channel, function and interface headers have a fixed
 // layout even when they refer to type parameters. Arrays and structs do not.
-func fixedLayout(typ types.Type) bool {
+func FixedLayout(typ types.Type) bool {
 	if !valid(typ) {
 		return false
 	}
@@ -142,10 +143,10 @@ func fixedLayout(typ types.Type) bool {
 	}
 	switch underlying := typ.Underlying().(type) {
 	case *types.Array:
-		return fixedLayout(underlying.Elem())
+		return FixedLayout(underlying.Elem())
 	case *types.Struct:
 		for index := 0; index < underlying.NumFields(); index++ {
-			if !fixedLayout(underlying.Field(index).Type()) {
+			if !FixedLayout(underlying.Field(index).Type()) {
 				return false
 			}
 		}

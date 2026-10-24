@@ -109,6 +109,9 @@ func (e *emitter) operationTemplateArguments(member *check.Member) []goast.Expr 
 	for _, argument := range caseTypeArguments(branch, member.Impl.Substitution) {
 		arguments = append(arguments, e.goType(argument))
 	}
+	for _, typ := range e.stableConstTypes(e.stableImplPlan(member.Impl), member.Impl.Substitution, member.Impl.ConstSubstitution) {
+		arguments = append(arguments, e.goType(typ))
+	}
 	return arguments
 }
 
@@ -121,7 +124,8 @@ func (e *emitter) operationWitnessArguments(member *check.Member) []goast.Expr {
 	for _, typ := range append([]types.Type{member.Impl.Target}, caseTypeArguments(branch, member.Impl.Substitution)...) {
 		witnesses = append(witnesses, e.typeWitness(typ))
 	}
-	return witnesses
+	extra, _ := e.stableConstArguments(e.stableImplPlan(member.Impl), member.Impl.Substitution, member.Impl.ConstSubstitution)
+	return append(witnesses, extra...)
 }
 
 func (p *traitInference) operationWitnesses(member *check.Member) ([]goast.Expr, []types.Type) {
@@ -135,7 +139,8 @@ func (p *traitInference) operationWitnesses(member *check.Member) ([]goast.Expr,
 		arguments = append(arguments, p.witness(typ))
 		parameters = append(parameters, signatureOf(nil, typ))
 	}
-	return arguments, parameters
+	extra, extraTypes := p.stableConstants(p.e.stableImplPlan(member.Impl), member.Impl.Substitution, member.Impl.ConstSubstitution)
+	return append(arguments, extra...), append(parameters, extraTypes...)
 }
 
 func (e *emitter) caseMember(member *check.Member, branch *check.BodyCase) *check.Member {

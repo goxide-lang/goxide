@@ -40,6 +40,8 @@ type CompileRequest struct {
 	FeaturesSet, TargetSet                                          bool
 	GoSugar                                                         *bool
 	ProgramArgs                                                     []string
+	PromptInput                                                     io.Reader
+	Interactive                                                     bool
 }
 
 type compiledFile struct {
@@ -97,7 +99,7 @@ func compileSourceFile(filename string, source []byte, packagePath string, goImp
 	return compiledFile{Go: generated[filename], Expanded: []byte(printer.Source(resolvedFile.AST))}, nil
 }
 
-func compileModuleSourceFile(owner *singleFileModule, source []byte, roots sourcepaths.Roots, cfg config.Config, stderr io.Writer) (compiledFile, error) {
+func compileModuleSourceFile(owner *singleFileModule, source []byte, roots sourcepaths.Roots, cfg config.Config, stderr io.Writer, automatic bool) (compiledFile, error) {
 	display := owner.input
 	if owner.displayInput != "" {
 		display = owner.displayInput
@@ -109,20 +111,26 @@ func compileModuleSourceFile(owner *singleFileModule, source []byte, roots sourc
 	newImporter := func() types.Importer {
 		return typecheck.NewImporter(owner.input, typecheck.ImporterOptions{Config: cfg, ModFile: owner.modFile})
 	}
-	generated, err := compileNativePackage(owner, roots, cfg, nil, stderr, map[string][]byte{owner.input: source}, newImporter, lower.PackageOptions{Config: cfg, Expanded: expanded})
+	generated, err := compileNativePackage(owner, roots, cfg, nil, stderr, map[string][]byte{owner.input: source}, newImporter, lower.PackageOptions{Config: cfg, Expanded: expanded, StableGo: automatic}, automatic)
 	if err != nil {
-		return compiledFile{}, err
+		return compiledFile{}, generationDependencyError(err, owner)
 	}
 	if generated == nil {
 		return compileSourceFile(display, source, owner.packagePath, newImporter(), roots, cfg)
 	}
-	if err := typecheck.CheckPackage(owner.packagePath, generated, newImporter(), cfg.Sizes()); err != nil {
-		return compiledFile{}, err
+	imports := newImporter()
+	if err := typecheck.CheckPackage(owner.packagePath, generated, imports, cfg.Sizes()); err != nil {
+		return compiledFile{}, generationDependencyError(err, owner)
+	}
+	if automatic {
+		if err := reportGenerationTools(stderr, owner, map[string][]byte{owner.input: source}, generated, false, imports); err != nil {
+			return compiledFile{}, err
+		}
 	}
 	return compiledFile{Go: generated[display], Expanded: expanded[display]}, nil
 }
 
-func executeCompile(req CompileRequest, out, stderr io.Writer) error {
+func executeCompileOnce(req CompileRequest, out, stderr io.Writer) error {
 	switch req.Mode {
 	case "build", "run", "test", "transpile", "expand":
 	default:
@@ -171,12 +179,13 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	manifestRoot := ""
-	if info.IsDir() {
-		manifestRoot, err = generationProject(input)
-		if err != nil {
-			return err
-		}
+	projectDirectory := input
+	if !info.IsDir() {
+		projectDirectory = filepath.Dir(input)
+	}
+	manifestRoot, err := generationProject(projectDirectory)
+	if err != nil {
+		return err
 	}
 	nativeGeneration := mode == "transpile" && manifestRoot == ""
 	if nativeGeneration && (req.TargetSet || req.Target != "") {
@@ -228,7 +237,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			if *tags != "" {
 				return errors.New("--tags is not supported for manifest projects by the new compiler pipeline")
 			}
-			prepared, err := prepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, GoSugar: req.GoSugar, Config: req.config, Race: mode == "test"}, stderr)
+			prepared, err := prepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, StableGo: mode == "transpile" && *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, GoSugar: req.GoSugar, Config: req.config, Race: mode == "test"}, stderr)
 			if err != nil {
 				return err
 			}
@@ -325,7 +334,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if nativeGo {
 			result, err = compileNativeGoFile(input, src)
 		} else {
-			result, err = compileModuleSourceFile(owner, src, roots, req.config, stderr)
+			result, err = compileModuleSourceFile(owner, src, roots, req.config, stderr, nativeGeneration)
 		}
 	} else if nativeGo {
 		result, err = compileNativeGoFile(input, src)
@@ -341,7 +350,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 				return err
 			}
 			defer standalone.close()
-			result, err = compileModuleSourceFile(standalone, src, roots, req.config, stderr)
+			result, err = compileModuleSourceFile(standalone, src, roots, req.config, stderr, false)
 		} else {
 			result, err = compileSourceFile(input, src, "goxide/generated", typecheck.NewImporter(input, typecheck.ImporterOptions{Config: req.config}), roots, req.config)
 		}

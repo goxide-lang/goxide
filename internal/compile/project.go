@@ -20,15 +20,19 @@ import (
 type Options struct {
 	Bin, Example, GoTool, TargetDir, Target string
 	Lib                                     bool
-	Offline, Locked                         bool
-	Features                                []string
-	NoDefaultFeatures                       bool
-	GoSugar                                 *bool            // Overrides only the selected entry module.
-	NativeFeatures                          *config.Features // Native directory inputs keep an open root feature set.
-	Roots                                   paths.Roots      // Optional root-module namespace context for native directory inputs.
-	Config                                  config.Config
-	Tags                                    []string
-	Race                                    bool
+	// StableGo requests a separately consumable library export. Selecting a
+	// library target alone keeps the ordinary project compilation behavior.
+	StableGo          bool
+	Offline, Locked   bool
+	Features          []string
+	NoDefaultFeatures bool
+	GoSugar           *bool            // Overrides only the selected entry module.
+	NativeFeatures    *config.Features // Native directory inputs keep an open root feature set.
+	NativeGeneration  bool             // Native gen keeps Go replacement import identities.
+	Roots             paths.Roots      // Optional root-module namespace context for native directory inputs.
+	Config            config.Config
+	Tags              []string
+	Race              bool
 	// RunProcMacro executes a prepared WASM command. A nil callback leaves
 	// actual expansion unavailable until a restricted host is supplied.
 	RunProcMacro     func(wasm []byte, request pm.Request) ([]byte, error)
@@ -117,7 +121,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 		return nil, err
 	}
 	defer release()
-	plans, err := project.LoadBuildPlans(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, environment.ExecEnv())
+	plans, err := project.LoadBuildPlans(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, options.NativeGeneration, environment.ExecEnv())
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +182,7 @@ func supportedManifest(manifest project.Manifest) error {
 	return nil
 }
 
-func unitSpec(graph *project.Graph, target project.Target, kind string, configuration config.Config, features map[string]config.Features, sugar map[string]bool, tags []string, race bool) (project.UnitSpec, error) {
+func unitSpec(graph *project.Graph, target project.Target, kind string, configuration config.Config, features map[string]config.Features, sugar map[string]bool, tags []string, race, stableGo bool) (project.UnitSpec, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return project.UnitSpec{}, err
@@ -221,10 +225,11 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 		EnvReads    []config.EnvInput
 		Tags        []string
 		Race        bool
+		StableGo    bool
 		GoTool      string
 		Compiler    string
 		Plan        string
-	}{sources, target, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, environment.GoTool, project.Digest(compiler), graph.PlanID})
+	}{sources, target, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, stableGo, environment.GoTool, project.Digest(compiler), graph.PlanID})
 	host := environment.Host.OS + "-" + environment.Host.Arch
 	platform := environment.Target.OS + "-" + environment.Target.Arch
 	return project.UnitSpec{Host: host, Target: platform, Kind: kind, Name: target.Name, Config: identity}, nil

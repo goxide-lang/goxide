@@ -42,3 +42,19 @@ func TestCheckPackageRejectsConflicts(t *testing.T) {
 		t.Fatal("empty package accepted")
 	}
 }
+
+func TestCheckPackageWithNativeDeclarations(t *testing.T) {
+	files := map[string][]byte{
+		"native.go":    []byte("package p\nimport \"fmt\"\nfunc Native() int { fmt.Println(undefined); return \"wrong\" }\nvar Closure = func() int { return undefined }\n"),
+		"generated.go": []byte("package p\nfunc Generated() int { return Native() + Closure() }\n"),
+	}
+	declarations := map[string]bool{"native.go": true}
+	sizes := types.SizesFor("gc", runtime.GOARCH)
+	if err := CheckPackageWithDeclarations("example.org/p", files, declarations, importer.Default(), sizes); err != nil {
+		t.Fatalf("native bodies were checked: %v", err)
+	}
+	files["generated.go"] = []byte("package p\nfunc Generated() int { return \"wrong\" }\n")
+	if err := CheckPackageWithDeclarations("example.org/p", files, declarations, importer.Default(), sizes); err == nil || !strings.Contains(err.Error(), "generated.go:2:") || !strings.Contains(err.Error(), "cannot use") {
+		t.Fatalf("generated body was not checked: %v", err)
+	}
+}

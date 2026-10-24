@@ -19,6 +19,27 @@ type moduleMacros struct {
 	roots    map[*syntax.File]moduleRootConfig
 }
 
+// UpdateMacroBindings receives retained generated bindings before another
+// external macro is selected. It uses the same root precedence and hygiene as
+// the final resolution pass; source definitions keep their original identity.
+func (m *moduleMacros) UpdateMacroBindings(expanded *expand.Result) error {
+	for _, requirement := range applyExpandedRoots(expanded, m.roots, m.files) {
+		if _, exists := m.imports.namespaces[requirement.target]; !exists {
+			m.imports.namespaces[requirement.target] = requirement
+		}
+	}
+	var sourcePaths resolve.Importer
+	if m.imports.crates != nil {
+		sourcePaths = m.imports.crates
+	}
+	// As in the initial macro pass, leave external uses deferred. Resolving
+	// every root here could activate unrelated dependencies before a later
+	// expansion introduces the local declaration that shadows them.
+	m.resolved = resolve.ResolveExpanded(m.files, expanded, sourcePaths)
+	m.imports.SetSourcePackages(m.resolved.Packages)
+	return m.imports.err
+}
+
 // Actual expansions retain source dependencies even when no Go import remains.
 // Calls inside items removed by cfg never enter this graph.
 func (m *moduleMacros) checkCycles(expanded *expand.Result) error {
@@ -167,8 +188,10 @@ func (m *moduleMacros) selectMacro(candidates []moduleMember, target, name strin
 		}
 		file := m.files[symbol.Decl.File]
 		if file != nil {
+			// Binding snapshots renumber copied AST nodes. The original file
+			// and hygienic name still identify the unique source definition.
 			for _, item := range file.Items {
-				if decl, ok := item.(*syntax.MacroRulesDecl); ok && decl.Name.ID() == symbol.Decl.ID {
+				if decl, ok := item.(*syntax.MacroRulesDecl); ok && decl.Name.Name == symbol.Name.Name && decl.Name.Ctx == symbol.Name.Ctx {
 					return expand.Macro{Rules: decl, File: file}, nil
 				}
 			}

@@ -72,6 +72,9 @@ func (e *engine) copyValue(v reflect.Value, expn ast.ExpnID) reflect.Value {
 				if scope, ok := e.r.Scopes[oldID]; ok {
 					e.r.Scopes[n.(*ast.Ident)] = scope
 				}
+				if introduction, ok := e.r.Introductions[oldID]; ok {
+					e.r.Introductions[n.(*ast.Ident)] = introduction
+				}
 			}
 			if tree, ok := old.(*ast.TokenTree); ok {
 				if ts, ok := e.trees[tree]; ok {

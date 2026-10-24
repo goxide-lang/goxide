@@ -20,6 +20,9 @@ func (e *emitter) viewTypeArguments(impl *check.Impl) []goast.Expr {
 	for _, typ := range implCaseArguments(impl) {
 		arguments = append(arguments, e.goType(typ))
 	}
+	for _, typ := range e.stableConstTypes(e.stableImplPlan(impl), impl.Substitution, impl.ConstSubstitution) {
+		arguments = append(arguments, e.goType(typ))
+	}
 	return arguments
 }
 
@@ -38,7 +41,8 @@ func (e *emitter) viewWitnessArguments(impl *check.Impl) []goast.Expr {
 	for _, typ := range append([]types.Type{impl.Target}, implCaseArguments(impl)...) {
 		witnesses = append(witnesses, e.typeWitness(typ))
 	}
-	return witnesses
+	extra, _ := e.stableConstArguments(e.stableImplPlan(impl), impl.Substitution, impl.ConstSubstitution)
+	return append(witnesses, extra...)
 }
 
 func (p *traitInference) viewWitnesses(impl *check.Impl) ([]goast.Expr, []types.Type) {
@@ -51,7 +55,8 @@ func (p *traitInference) viewWitnesses(impl *check.Impl) ([]goast.Expr, []types.
 		arguments = append(arguments, p.witness(typ))
 		parameters = append(parameters, signatureOf(nil, typ))
 	}
-	return arguments, parameters
+	extra, extraTypes := p.stableConstants(p.e.stableImplPlan(impl), impl.Substitution, impl.ConstSubstitution)
+	return append(arguments, extra...), append(parameters, extraTypes...)
 }
 
 // A wrapper is emitted once for each reachable common method partition. Its

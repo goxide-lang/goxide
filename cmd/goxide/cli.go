@@ -137,6 +137,8 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 			if req.Input == "" && mode == "expand" {
 				return usageError(c, inputError())
 			}
+			req.PromptInput = os.Stdin
+			req.Interactive = term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
 			return executeCompile(req, out, stderr)
 		}
 		root.AddCommand(c)

@@ -54,7 +54,7 @@ func (e *emitter) withBreak(n syntax.Stmt, label *syntax.Ident) goast.Stmt {
 	var out goast.Stmt
 	switch n := n.(type) {
 	case *syntax.ForStmt:
-		if hasFlow(n.Init) || hasFlow(n.Cond) || hasFlow(n.Post) {
+		if hasFlow(n.Init) || hasFlow(n.Cond) || hasFlow(n.Post) || e.stableArrayStatement(n.Init) || e.stableArrayStatement(n.Post) {
 			out = e.flowFor(n)
 		} else {
 			out = e.stmt(n)
@@ -62,6 +62,10 @@ func (e *emitter) withBreak(n syntax.Stmt, label *syntax.Ident) goast.Stmt {
 	case *syntax.RangeStmt:
 		if framed, ok := e.framedRange(n); ok {
 			out = framed
+			break
+		}
+		if statement := e.stableArrayRange(n); statement != nil {
+			out = statement
 			break
 		}
 		out = e.stmt(n)
@@ -78,7 +82,7 @@ func (e *emitter) withBreak(n syntax.Stmt, label *syntax.Ident) goast.Stmt {
 			out = framed
 			break
 		}
-		flow := hasFlow(n.Init) || hasFlow(n.Tag)
+		flow := hasFlow(n.Init) || hasFlow(n.Tag) || e.stableArrayStatement(n.Init)
 		for _, c := range n.Cases {
 			for _, x := range c.List {
 				flow = flow || hasFlow(x)
@@ -194,7 +198,7 @@ func (e *emitter) flowStmt(n syntax.Stmt) goast.Stmt {
 			return nil
 		}
 	case *syntax.IfStmt:
-		if hasFlow(n.Init) || hasFlow(n.Cond) {
+		if hasFlow(n.Init) || hasFlow(n.Cond) || e.stableArrayStatement(n.Init) {
 			init := e.statement(n.Init)
 			before, cond := e.exprScoped(n.Cond)
 			init = append(init, before...)
@@ -232,6 +236,9 @@ func (e *emitter) flowStmt(n syntax.Stmt) goast.Stmt {
 func (e *emitter) assignment(n *syntax.AssignStmt) goast.Stmt {
 	if framed, ok := e.framedAssignment(n); ok {
 		return framed
+	}
+	if assignment := e.stableArrayAssignment(n); assignment != nil {
+		return assignment
 	}
 	flow := false
 	for _, x := range n.Lhs {
@@ -290,7 +297,8 @@ func (e *emitter) lvalue(n syntax.Expr) goast.Expr {
 	case *syntax.IndexExpr:
 		var x goast.Expr
 		if t := e.info.Types[n.X]; t != nil {
-			if _, array := t.Underlying().(*types.Array); array {
+			_, array := t.Underlying().(*types.Array)
+			if array || e.stableArray(t) != nil {
 				// An array is storage, not an operand value. Its final bounds and
 				// pointer checks belong to the assignment's write phase.
 				x = e.lvalue(n.X)
@@ -302,6 +310,12 @@ func (e *emitter) lvalue(n syntax.Expr) goast.Expr {
 		indices := e.ordered(n.Indices)
 		for i, id := range n.Indices {
 			indices[i] = e.spill(id, indices[i])
+		}
+		if array, pointer := e.stableArrayOperand(n.X); array != nil {
+			if !pointer {
+				x = &goast.UnaryExpr{Op: gotoken.AND, X: x}
+			}
+			x = e.stableArraySlice(array, x)
 		}
 		if len(indices) == 1 {
 			return &goast.IndexExpr{X: x, Index: indices[0]}
@@ -380,7 +394,7 @@ func (e *emitter) flowFor(n *syntax.ForStmt) goast.Stmt {
 		}
 	}
 	var post goast.Stmt
-	if hasFlow(n.Post) {
+	if hasFlow(n.Post) || e.stableArrayStatement(n.Post) {
 		first := e.fresh("First")
 		init = append(init, varStmt(first, goast.NewIdent("bool"), goast.NewIdent("true")))
 		postBody := &goast.IfStmt{Cond: first, Body: &goast.BlockStmt{List: []goast.Stmt{assign(first, goast.NewIdent("false"))}}, Else: &goast.BlockStmt{List: e.statement(n.Post)}}

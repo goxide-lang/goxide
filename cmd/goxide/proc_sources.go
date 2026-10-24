@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/types"
 	"io"
-	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -35,136 +35,10 @@ func nativeModuleCommand(root string, cfg config.Config, args ...string) ([]byte
 	return output, nil
 }
 
-// nativeSourceDependencies gives explicit source roots their selected Go
-// module's authored dependency graph. It does not infer aliases or fetch sources.
-// modFile must be private: completing Go's selected graph may update it and its sum.
-func nativeSourceDependencies(root, modFile string, roots paths.Roots, cfg config.Config) (project.Manifest, paths.Roots, []string, error) {
-	data, err := nativeModuleCommand(root, cfg, "mod", "edit", "-json", modFile)
-	if err != nil {
-		return project.Manifest{}, nil, nil, err
-	}
-	var mod project.ModFile
-	if err := json.Unmarshal(data, &mod); err != nil {
-		return project.Manifest{}, nil, nil, err
-	}
-	manifest := project.Manifest{Module: mod.Module.Path, GoVersion: mod.Go, Toolchain: mod.Toolchain, Codegen: project.CodegenConfig{GoSugar: cfg.GoSugar}, Dependencies: map[string]project.Dependency{}}
-	manifest.Native.Godebug = mod.Godebug
-	required := map[string]string{}
-	for _, item := range mod.Require {
-		manifest.Native.Require = append(manifest.Native.Require, project.GoRequire{Module: item.Path, Version: item.Version, Indirect: item.Indirect})
-		required[item.Path] = item.Version
-	}
-	for _, item := range mod.Exclude {
-		manifest.Native.Exclude = append(manifest.Native.Exclude, project.GoExclude{Module: item.Path, Version: item.Version})
-	}
-	for _, item := range mod.Replace {
-		replacement := project.GoReplace{Module: item.Old.Path, Version: item.Old.Version, With: item.New.Path, WithVersion: item.New.Version}
-		if item.New.Version == "" {
-			replacement.With = ""
-			replacement.Path = item.New.Path
-			if !filepath.IsAbs(replacement.Path) {
-				replacement.Path = filepath.Join(root, replacement.Path)
-			}
-		}
-		manifest.Native.Replace = append(manifest.Native.Replace, replacement)
-	}
-	updated := maps.Clone(roots)
-	var macros []string
-	type moduleSelection struct {
-		Path, Version, Dir string
-		Replace            *struct{ Path, Version, Dir string }
-	}
-	var selections map[string]moduleSelection
-	for _, alias := range project.Keys(roots) {
-		namespace := roots[alias]
-		if namespace.Source == "toolchain" || namespace.ModulePath == "" || namespace.ModulePath == mod.Module.Path {
-			continue
-		}
-		if selections == nil {
-			selections = map[string]moduleSelection{}
-			// An authored replacement may legitimately have no Go manifest yet.
-			// Retain Go's selected versions for the other explicit roots; source
-			// planning below validates the authored replacement independently.
-			selected, queryErr := nativeModuleCommand(root, cfg, "list", "-e", "-mod=mod", "-modfile="+modFile, "-m", "-json", "all")
-			if queryErr == nil {
-				decoder := json.NewDecoder(bytes.NewReader(selected))
-				for {
-					var selection moduleSelection
-					if err := decoder.Decode(&selection); err == io.EOF {
-						break
-					} else if err != nil {
-						return manifest, nil, nil, err
-					}
-					selections[selection.Path] = selection
-				}
-			}
-		}
-		selection := selections[namespace.ModulePath]
-		directory, version := selection.Dir, selection.Version
-		if selection.Replace != nil && selection.Replace.Dir != "" {
-			directory = selection.Replace.Dir
-		}
-		if version == "" {
-			version = required[namespace.ModulePath]
-		}
-		// Authored Goxide replacements have no go.mod for Go to read yet.
-		// Their source graph is resolved by the normal project planner below.
-		if directory == "" && version != "" {
-			for _, replacement := range manifest.Native.Replace {
-				if replacement.Module == namespace.ModulePath && replacement.Path != "" && (replacement.Version == "" || replacement.Version == version) {
-					directory = replacement.Path
-					if replacement.Version == version {
-						break
-					}
-				}
-			}
-		}
-		if directory == "" {
-			continue
-		}
-		found, err := project.Detect(directory)
-		if err != nil {
-			return manifest, nil, nil, err
-		}
-		if !found {
-			continue
-		}
-		dependency, err := project.Read(directory)
-		if err != nil {
-			return manifest, nil, nil, err
-		}
-		if dependency.Lib == nil {
-			continue
-		}
-		libraryPath := dependency.Lib.Path
-		info, err := os.Stat(filepath.Join(directory, libraryPath))
-		if err != nil {
-			return manifest, nil, nil, err
-		}
-		if !info.IsDir() {
-			libraryPath = "."
-		}
-		canonical := path.Join(namespace.ModulePath, filepath.ToSlash(libraryPath))
-		// A root configured for a particular package must not silently acquire a
-		// different library. Module-only roots select the declared library entry.
-		if namespace.PackagePath != "" && namespace.PackagePath != canonical {
-			continue
-		}
-		request := project.Dependency{Go: namespace.ModulePath, Version: version}
-		manifest.Dependencies[alias] = request
-		namespace.PackagePath, namespace.GoPrefix = canonical, ""
-		updated[alias] = namespace
-		if dependency.Lib.ProcMacro {
-			macros = append(macros, namespace.ModulePath)
-		}
-	}
-	return manifest, updated, macros, nil
-}
-
 // compileNativePackage preserves the selected files and compiles them together
-// with their ordinary dependencies exactly once after all macro roles are built.
+// with only the ordinary dependencies selected by the frontend's root lookup.
 // A nil output without an error leaves source-less compilation to its caller.
-func compileNativePackage(owner *singleFileModule, roots paths.Roots, cfg config.Config, tags []string, stderr io.Writer, files map[string][]byte, importer func() types.Importer, options lower.PackageOptions) (map[string][]byte, error) {
+func compileNativePackage(owner *singleFileModule, roots paths.Roots, cfg config.Config, tags []string, stderr io.Writer, files map[string][]byte, importer func() types.Importer, options lower.PackageOptions, automatic bool) (map[string][]byte, error) {
 	for _, name := range project.Keys(files) {
 		if err := naming.Source(name, files[name]); err != nil {
 			return nil, err
@@ -173,15 +47,70 @@ func compileNativePackage(owner *singleFileModule, roots paths.Roots, cfg config
 	if owner == nil {
 		return nil, nil
 	}
-	manifest, selected, macros, err := nativeSourceDependencies(owner.root, owner.modFile, roots, cfg)
+	plan, err := nativeSourceDependencies(owner.root, owner.modFile, roots, cfg, automatic)
 	if err != nil {
 		return nil, err
 	}
-	if len(manifest.Dependencies) == 0 {
+	if !automatic && len(plan.manifest.Dependencies) == 0 {
 		return nil, nil
 	}
-	directory := filepath.Join(owner.temporary, "sources")
-	if err := os.Mkdir(directory, 0700); err != nil {
+	selected := plan.roots
+	if automatic {
+		owner.nativeRequirements = plan.required
+		selected, options.RequireRoot, err = plan.generationRoots(owner, importer())
+		if err != nil {
+			return nil, err
+		}
+	}
+	configuration, err := os.ReadFile(owner.modFile)
+	if err != nil {
+		return nil, err
+	}
+	sumFile := strings.TrimSuffix(owner.modFile, ".mod") + ".sum"
+	sums, err := os.ReadFile(sumFile)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	hadSums := err == nil
+	for {
+		var generated map[string][]byte
+		var diagnostics bytes.Buffer
+		if len(plan.manifest.Dependencies) == 0 {
+			generated, err = lower.CompilePackage(files, owner.packagePath, importer(), selected, options)
+		} else {
+			generated, err = compilePreparedNativePackage(owner, plan.manifest, selected, plan.macros, cfg, tags, &diagnostics, files, importer, options, automatic)
+		}
+		var demand *nativeRootDemand
+		if !automatic || !errors.As(err, &demand) {
+			if _, writeErr := io.Copy(stderr, &diagnostics); err == nil && writeErr != nil {
+				err = writeErr
+			}
+			return generated, err
+		}
+		candidate := plan.automatic[demand.alias][0]
+		plan.manifest.Dependencies[demand.alias] = candidate.dependency
+		if candidate.macro {
+			plan.macros = append(plan.macros, candidate.namespace.ModulePath)
+		}
+		// A failed preparation may have installed generated replacements in the
+		// private module. Each new root starts from the same selected Go graph.
+		if err := os.WriteFile(owner.modFile, configuration, 0600); err != nil {
+			return nil, err
+		}
+		if hadSums {
+			if err := os.WriteFile(sumFile, sums, 0600); err != nil {
+				return nil, err
+			}
+		} else if err := os.Remove(sumFile); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		clear(options.Expanded)
+	}
+}
+
+func compilePreparedNativePackage(owner *singleFileModule, manifest project.Manifest, selected paths.Roots, macros []string, cfg config.Config, tags []string, stderr io.Writer, files map[string][]byte, importer func() types.Importer, options lower.PackageOptions, online bool) (map[string][]byte, error) {
+	directory, err := os.MkdirTemp(owner.temporary, "sources-")
+	if err != nil {
 		return nil, err
 	}
 	displayNames := map[string]string{}
@@ -228,12 +157,12 @@ func compileNativePackage(owner *singleFileModule, roots paths.Roots, cfg config
 	}
 	generated := map[string][]byte{}
 	err = withProcHost(stderr, func(run func([]byte, pm.Request) ([]byte, error), diagnostic func(string, expand.ProcDiagnostic)) error {
-		prepared, err := compile.PrepareProject(directory, compile.Options{GoTool: cfg.Environment.GoTool, TargetDir: filepath.Join(owner.temporary, "target"), Offline: true, Roots: selected, NativeFeatures: &cfg.Features, Config: cfg, Tags: tags, RunProcMacro: run, OnProcDiagnostic: diagnostic,
+		prepared, err := compile.PrepareProject(directory, compile.Options{GoTool: cfg.Environment.GoTool, TargetDir: directory + "-target", Offline: !online, Roots: selected, NativeFeatures: &cfg.Features, NativeGeneration: online, Config: cfg, Tags: tags, RunProcMacro: run, OnProcDiagnostic: diagnostic,
 			PrepareNativePackage: func(modules []lower.Module) error {
 				if err := owner.usePreparedModules(modules[0].Dir, macros); err != nil {
 					return err
 				}
-				modules[0].NativePackage = &lower.NativePackage{Importer: importer(), DisplayNames: displayNames, Generated: generated, Expanded: options.Expanded, LineDirectives: options.LineDirectives, RejectConfiguration: options.RejectConfiguration}
+				modules[0].NativePackage = &lower.NativePackage{Importer: importer(), DisplayNames: displayNames, Generated: generated, Expanded: options.Expanded, LineDirectives: options.LineDirectives, RejectConfiguration: options.RejectConfiguration, RequireRoot: options.RequireRoot, StableGo: options.StableGo}
 				return nil
 			}})
 		if err != nil {

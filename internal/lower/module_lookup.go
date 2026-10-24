@@ -346,6 +346,14 @@ func (i *moduleImporter) namespace(parts []string) (rootRequirement, bool) {
 		if !ok {
 			continue
 		}
+		if requirement.requireRoot != nil {
+			if err := requirement.requireRoot(requirement.alias, requirement.namespace); err != nil {
+				if i.err == nil {
+					i.err = err
+				}
+				return rootRequirement{}, false
+			}
+		}
 		sourceImports := i.external
 		if requirement.sourceImporter != nil {
 			sourceImports = requirement.sourceImporter

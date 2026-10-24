@@ -7,12 +7,16 @@ import (
 	"strconv"
 
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	defer func() { e.macroLayout(n, out) }()
 	if n == nil {
 		return nil
+	}
+	if constant := e.stableConstant(n); constant != nil {
+		return constant
 	}
 	if parameter := e.validationConstParameter(n); parameter != nil {
 		return &goast.Ident{NamePos: e.pos(n), Name: e.validation.constantName(parameter)}
@@ -26,6 +30,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		}
 	}
 	if call, ok := n.(*syntax.CallExpr); ok {
+		if length := e.stableLengthCall(call); length != nil {
+			return length
+		}
 		if typ := e.info.EnumAssertions[call]; typ != nil {
 			return e.enumAssert(call, typ)
 		}
@@ -81,6 +88,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		}
 		return &goast.Ident{NamePos: e.pos(n), Name: name}
 	case *syntax.CompositeLit:
+		if literal := e.stableArrayLiteral(n, false); literal != nil {
+			return literal
+		}
 		if e.validation != nil {
 			if array, ok := e.info.ArrayOf(e.info.Types[n]); ok && array.Length.Param != nil {
 				return e.validationArrayLiteral(n, array)
@@ -124,11 +134,17 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	case *syntax.SelectorExpr:
 		return &goast.SelectorExpr{X: e.expr(n.X), Sel: e.ident(n.Sel)}
 	case *syntax.IndexExpr:
+		if index := e.stableArrayIndex(n); index != nil {
+			return index
+		}
 		if len(n.Indices) == 1 {
 			return &goast.IndexExpr{X: e.expr(n.X), Lbrack: e.end(n.X), Index: e.expr(n.Indices[0]), Rbrack: e.end(n) - 1}
 		}
 		return &goast.IndexListExpr{X: e.expr(n.X), Lbrack: e.end(n.X), Indices: e.exprs(n.Indices), Rbrack: e.end(n) - 1}
 	case *syntax.SliceExpr:
+		if slice := e.stableArraySlicing(n); slice != nil {
+			return slice
+		}
 		return &goast.SliceExpr{X: e.expr(n.X), Lbrack: e.end(n.X), Low: e.expr(n.Low), High: e.expr(n.High), Max: e.expr(n.Max), Slice3: n.Slice3, Rbrack: e.end(n) - 1}
 	case *syntax.TypeAssertExpr:
 		return &goast.TypeAssertExpr{X: e.expr(n.X), Lparen: e.end(n.X) + 1, Type: e.typ(n.Type), Rparen: e.end(n) - 1}
@@ -141,6 +157,11 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	case *syntax.StarExpr:
 		return &goast.StarExpr{Star: e.pos(n), X: e.expr(n.X)}
 	case *syntax.UnaryExpr:
+		if n.Op == token.AND {
+			if literal := e.stableArrayAddress(n.X); literal != nil {
+				return literal
+			}
+		}
 		return &goast.UnaryExpr{OpPos: e.pos(n), Op: tokenKind(n.Op), X: e.expr(n.X)}
 	case *syntax.BinaryExpr:
 		return &goast.BinaryExpr{X: e.expr(n.X), OpPos: e.end(n.X), Op: tokenKind(n.Op), Y: e.expr(n.Y)}
@@ -162,6 +183,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	case *syntax.PathExpr:
 		return e.path(n.Path)
 	case *syntax.RefExpr:
+		if literal := e.stableArrayAddress(n.X); literal != nil {
+			return literal
+		}
 		return &goast.UnaryExpr{OpPos: e.pos(n), Op: gotoken.AND, X: e.expr(n.X)}
 	case *syntax.TypeExpr:
 		return e.typ(n.Type)

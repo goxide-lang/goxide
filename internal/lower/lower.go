@@ -54,6 +54,7 @@ type emissionOptions struct {
 	lineDirectives bool
 	originals      map[string]*syntax.File
 	validation     *definitionValidation
+	stableGo       bool
 }
 
 func lower(files map[string]*syntax.File, info *check.Info, options emissionOptions) (map[string][]byte, error) {
@@ -75,7 +76,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	}
 	sort.Strings(names)
 	hygienicNames := macroNames(info)
-	traits := prepareTraits(info, options.validation != nil)
+	traits := prepareTraits(info, options.validation != nil, options.stableGo)
 	if info != nil && info.Demands != nil && info.Demands.Info != nil {
 		info = info.Demands.Info
 	}
@@ -396,6 +397,7 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	constTemplate      *constTemplate
 	traitBodySources   map[goast.Decl]syntax.Node
 	enumValidHelpers   map[*check.Enum]bool
 	enumAssertions     *enumAssertionPlan

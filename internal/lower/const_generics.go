@@ -51,6 +51,9 @@ func (e *emitter) instanceBodyFunction() *check.FunctionInstance {
 }
 
 func (e *emitter) constFunctionDeclarations(function *traitFunction) []goast.Decl {
+	if e.traits.stableGo && e.validation == nil {
+		return e.templateFunctionDeclaration(function)
+	}
 	var definitions []*check.FunctionInstance
 	for _, definition := range e.info.Demands.Functions {
 		if definition.Decl == function.decl && len(definition.ConstArgs) != 0 {
@@ -71,4 +74,15 @@ func (e *emitter) constFunctionDeclarations(function *traitFunction) []goast.Dec
 		out = append(out, e.templateFunctionDeclaration(function)...)
 	}
 	return out
+}
+
+func (e *emitter) constFunctionName(function *traitFunction, instance *check.FunctionInstance) string {
+	if e.traits.stableGo {
+		var branch *check.BodyCase
+		if instance != nil {
+			branch = instance.Case
+		}
+		return caseFunctionName(templateFunctionName(function), branch)
+	}
+	return constFunctionName(function, instance)
 }

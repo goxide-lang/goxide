@@ -176,13 +176,18 @@ func (e *emitter) withAssignmentFrame(n syntax.Node, trial *check.Try, emit func
 	guardType := &goast.IndexExpr{X: &goast.SelectorExpr{X: runtime, Sel: goast.NewIdent("Assignment")}, Index: e.instanceType(trial.Output)}
 	previous := e.assignmentGuard
 	e.assignmentGuard = guard
+	pending := e.pending
+	e.pending = nil
 	statement := emit()
+	before := e.pending
+	e.pending = pending
 	e.assignmentGuard = previous
-	return &goast.BlockStmt{List: []goast.Stmt{
+	list := []goast.Stmt{
 		varStmt(guard, guardType, nil),
 		&goast.DeferStmt{Call: &goast.CallExpr{Fun: &goast.SelectorExpr{X: guard, Sel: goast.NewIdent("Catch")}, Args: []goast.Expr{pointer}}},
-		statement,
-	}}
+	}
+	list = append(list, before...)
+	return &goast.BlockStmt{List: append(list, statement)}
 }
 
 func (e *emitter) framedSwitch(n *syntax.SwitchStmt) (goast.Stmt, bool) {
@@ -225,6 +230,9 @@ func (e *emitter) framedRange(n *syntax.RangeStmt) (goast.Stmt, bool) {
 		return nil, false
 	}
 	return e.withAssignmentFrame(n, trial, func() goast.Stmt {
+		if statement := e.stableArrayRange(n); statement != nil {
+			return statement
+		}
 		statement := &goast.RangeStmt{For: e.pos(n), Key: e.expr(n.Key), Value: e.expr(n.Value), Tok: tokenKind(n.Tok), X: e.expr(n.X)}
 		guard := e.assignmentGuard
 		e.assignmentGuard = nil

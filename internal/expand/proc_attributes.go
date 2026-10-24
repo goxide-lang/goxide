@@ -55,6 +55,9 @@ func (e *engine) rewriteItems(items []ast.Item, file *ast.File, parent ast.ExpnI
 			return nil, err
 		}
 		result = append(result, output...)
+		if slot == fileItems && e.bindings != nil {
+			e.bindings.retain(file, output)
+		}
 	}
 	if slot == singleItem && len(result) != 1 {
 		return nil, e.attributeError(firstItem(items), file, parent, "this declaration slot requires exactly one item")

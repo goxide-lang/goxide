@@ -129,6 +129,17 @@ func normalizedReplaces(root string, m ModFile) ([]ModReplace, error) {
 	}
 	return out, nil
 }
+
+// A Go-selected local replacement may be a published library checkout. Its
+// transport must agree with the source manifest, just like a downloaded module.
+func localModuleTransport(root string) (bool, error) {
+	_, err := os.Lstat(filepath.Join(root, "go.mod"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 func (g *Graph) readNode(root string, published bool, checkout string) (*Node, error) {
 	present, e := Detect(root)
 	if e != nil {
@@ -271,6 +282,28 @@ func effective(s Selection) Selection {
 	}
 	return s
 }
+
+// A remote Go replacement changes the acquired source, not the import path.
+// Transport validation runs before this projection so the replacement still
+// has to declare its own verified module identity consistently.
+func (g *Graph) bindSelectedModule(node *Node, module string, selected Selection) error {
+	if node.Module == module {
+		return nil
+	}
+	replacement := selected.Replace
+	if !g.nativeGeneration || !node.HasManifest || replacement == nil || replacement.Version == "" || node.Module != replacement.Path {
+		return fmt.Errorf("module path mismatch: want %s, got %s", module, node.Module)
+	}
+	manifest := node.Manifest
+	manifest.Module = module
+	data, err := ModuleText(manifest)
+	if err != nil {
+		return err
+	}
+	node.Module, node.Mod.Module.Path, node.ModBytes = module, module, data
+	return nil
+}
+
 func (g *Graph) round(root string, requested []string, defaults bool, selected map[string]Selection) (*planningRound, error) {
 	r := &planningRound{nodes: map[string]*Node{}, selected: selected}
 	var e error
@@ -377,6 +410,10 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 						published = true
 					} else {
 						boundary = ""
+						published, e = localModuleTransport(dir)
+						if e != nil {
+							return nil, e
+						}
 					}
 				} else if d.Git != "" {
 					dir, e = g.gitSource(d)
@@ -468,8 +505,10 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					r.nodes[key] = child
 					changed = true
 				}
-				if d.Module != "" && child.Module != d.Module {
-					return nil, fmt.Errorf("dependency %s module path mismatch: want %s, got %s", alias, d.Module, child.Module)
+				if d.Module != "" {
+					if err := g.bindSelectedModule(child, d.Module, selected[d.Module]); err != nil {
+						return nil, fmt.Errorf("dependency %s: %w", alias, err)
+					}
 				}
 				if g.nativeStandalone {
 					if expected := g.Lock.NativeWorkspace.Members[n.Module].Dependencies[alias]; expected != "" && expected != child.Module {
@@ -726,7 +765,11 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			} else {
 				eff := effective(pin)
 				if eff.Version == "" {
-					node, err := g.readNode(eff.Path, false, "")
+					transport, err := localModuleTransport(eff.Path)
+					if err != nil {
+						return nil, err
+					}
+					node, err := g.readNode(eff.Path, transport, "")
 					if err != nil {
 						return nil, err
 					}
@@ -826,7 +869,11 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 		if !yes {
 			continue
 		}
-		n, err := g.readNode(rep.New.Path, false, "")
+		transport, err := localModuleTransport(rep.New.Path)
+		if err != nil {
+			return nil, err
+		}
+		n, err := g.readNode(rep.New.Path, transport, "")
 		if err != nil {
 			return nil, err
 		}

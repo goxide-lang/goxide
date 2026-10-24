@@ -19,6 +19,16 @@ type traitInstance struct {
 	name string
 }
 
+// Published packages cannot acquire a concrete entry when a new consumer is
+// compiled. Generic helpers also keep their bodies independent of those demands.
+func (e *emitter) selectedInstance(key string) *traitInstance {
+	instance := e.traits.instances[key]
+	if instance != nil && e.traits.stableGo && (!e.samePackage(instance.body.File) || e.boundCallbacks != nil) {
+		return nil
+	}
+	return instance
+}
+
 // Concrete and ordinary generic impl bodies use their own rebound semantic
 // view. Other instantiations of the same declaration must stay independent.
 func (e *emitter) memberBodyInfo(member *check.Member) func() {

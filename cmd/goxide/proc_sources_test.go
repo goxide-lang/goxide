@@ -49,10 +49,11 @@ func TestNativeSourceDependenciesSelectedVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer owner.close()
-	manifest, roots, _, err := nativeSourceDependencies(root, owner.modFile, paths.Roots{"library": {ModulePath: "example.org/native-discovery", GoPrefix: "example.org/native-discovery", Source: "module"}}, cfg)
+	dependencies, err := nativeSourceDependencies(root, owner.modFile, paths.Roots{"library": {ModulePath: "example.org/native-discovery", GoPrefix: "example.org/native-discovery", Source: "module"}}, cfg, false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	manifest, roots := dependencies.manifest, dependencies.roots
 	if selected := manifest.Dependencies["library"]; selected.Go != "example.org/native-discovery" || selected.Version != "v1.1.0" {
 		t.Fatalf("selected source = %+v", selected)
 	}
@@ -76,13 +77,14 @@ func TestNativeSourceDependenciesSelectedVersion(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer owner.close()
-		manifest, roots, _, err := nativeSourceDependencies(mixed, owner.modFile, paths.Roots{
+		dependencies, err := nativeSourceDependencies(mixed, owner.modFile, paths.Roots{
 			"library":  {ModulePath: "example.org/native-discovery", Source: "module"},
 			"authored": {ModulePath: "example.org/authored", Source: "module"},
-		}, cfg)
+		}, cfg, false)
 		if err != nil {
 			t.Fatal(err)
 		}
+		manifest, roots := dependencies.manifest, dependencies.roots
 		if manifest.Dependencies["library"].Version != "v1.1.0" || roots["library"].PackagePath != "example.org/native-discovery/src" {
 			t.Fatalf("lost selected published root: dependency=%+v root=%+v", manifest.Dependencies["library"], roots["library"])
 		}
@@ -105,10 +107,11 @@ func TestNativeSourceDependenciesSelectedVersion(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer owner.close()
-		manifest, roots, _, err := nativeSourceDependencies(replaced, owner.modFile, paths.Roots{"library": {ModulePath: "example.org/native-discovery", Source: "module"}}, cfg)
+		dependencies, err := nativeSourceDependencies(replaced, owner.modFile, paths.Roots{"library": {ModulePath: "example.org/native-discovery", Source: "module"}}, cfg, false)
 		if err != nil {
 			t.Fatal(err)
 		}
+		manifest, roots := dependencies.manifest, dependencies.roots
 		if manifest.Dependencies["library"].Version != "v1.1.0" || roots["library"].PackagePath != "example.org/native-discovery/src" {
 			t.Fatalf("wrong selected replacement: dependency=%+v root=%+v", manifest.Dependencies["library"], roots["library"])
 		}
@@ -222,11 +225,54 @@ func main() { fmt::Println(macros::echo!(6 * 7)) }
 `)
 	before := singleFileSnapshot(t, base)
 	input := filepath.Join(base, "app/main.gox")
+	verifyPublishedGo := false
 	invoke := func(args ...string) (string, string, error) {
+		// Generation consumes a published Go library; build and run continue to
+		// exercise the authoring-only Goxide dependency below.
+		if args[0] == "gen" || args[0] == "transpile" {
+			published := map[string]string{
+				"macros/go.mod":     "module example.org/native-macros\ngo 1.27\n",
+				"macros/src/api.go": "package macros\n",
+			}
+			if _, err := os.Stat(filepath.Join(base, "facade/goxide.toml")); err == nil {
+				published = map[string]string{}
+				published["facade/go.mod"] = "module example.org/native-facade\ngo 1.27\n"
+				published["facade/lib_gox.go"] = generatedHeader + "package facade\nfunc Value() int { return 42 }\n"
+			}
+			for name, source := range published {
+				write(name, source)
+			}
+			defer func() {
+				for name, source := range published {
+					path := filepath.Join(base, name)
+					data, err := os.ReadFile(path)
+					if err != nil || string(data) != source {
+						t.Fatalf("generation changed published dependency %s: %v", name, err)
+					}
+					if err := os.Remove(path); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}()
+		}
 		var stdout, stderr bytes.Buffer
 		command := exec.Command(binary, args...)
 		command.Env, command.Stdout, command.Stderr = query.Env, &stdout, &stderr
 		err := command.Run()
+		if err == nil && verifyPublishedGo && args[0] == "gen" && stdout.Len() != 0 {
+			// The compiler has exited and removed its private preparation. The
+			// generated consumer must run using the library's published Go API.
+			check := filepath.Join(base, "app/publication_check.go")
+			if err := os.WriteFile(check, stdout.Bytes(), 0600); err != nil {
+				t.Fatal(err)
+			}
+			defer os.Remove(check)
+			goRun := exec.Command(tool, "run", "-mod=readonly", check)
+			goRun.Dir, goRun.Env = filepath.Dir(input), query.Env
+			if output, err := goRun.CombinedOutput(); err != nil || string(output) != "42\n" {
+				t.Fatalf("published Go file entry: %v\n%s", err, output)
+			}
+		}
 		return stdout.String(), stderr.String(), err
 	}
 	var first string
@@ -234,6 +280,9 @@ func main() { fmt::Println(macros::echo!(6 * 7)) }
 		stdout, stderr, err := invoke("gen", "-o", "-", input)
 		if err != nil || !strings.Contains(stdout, "6 * 7") || strings.Count(stderr, "warning: native warning") != 1 {
 			t.Fatalf("gen: %v\n%s\n%s", err, stdout, stderr)
+		}
+		if !strings.Contains(stderr, "example.org/native-macros/src") || strings.Contains(stderr, "goxide_proc_") {
+			t.Fatalf("tools advice lost the published library entry: %s", stderr)
 		}
 		if n == 0 {
 			first = stdout
@@ -353,6 +402,8 @@ func main() { fmt::Println(Answer()) }
 		}
 	})
 	t.Run("runtime_reexport_and_file_entry", func(t *testing.T) {
+		verifyPublishedGo = true
+		defer func() { verifyPublishedGo = false }()
 		write("facade/goxide.toml", `[go_mod]
 module="example.org/native-facade"
 go="1.27"
@@ -385,7 +436,8 @@ use fmt;
 func main() { fmt::Println(facade::answer!()) }
 `)
 		before := singleFileSnapshot(t, base)
-		for _, args := range [][]string{{"gen", "-o", "-", input}, {"run", input}, {"run", filepath.Dir(input)}} {
+		var first string
+		for _, args := range [][]string{{"gen", "-o", "-", input}, {"gen", "-o", "-", input}, {"run", input}, {"run", filepath.Dir(input)}} {
 			stdout, stderr, err := invoke(args...)
 			if err != nil {
 				t.Fatalf("%v: %v\n%s\n%s", args, err, stdout, stderr)
@@ -395,6 +447,13 @@ func main() { fmt::Println(facade::answer!()) }
 			}
 			if args[0] == "run" && stdout != "42\n" {
 				t.Fatalf("run output %q", stdout)
+			}
+			if args[0] == "gen" {
+				if first == "" {
+					first = stdout
+				} else if first != stdout {
+					t.Fatal("file-entry generation changed bytes")
+				}
 			}
 		}
 		if after := singleFileSnapshot(t, base); !reflect.DeepEqual(before, after) {

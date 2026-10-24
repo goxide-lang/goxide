@@ -89,11 +89,21 @@ func (c *checker) parameterizedMember(node ast.Expr, arguments []ast.Expr, expec
 			if memberNamed(trait.Methods, name, static) == nil {
 				continue
 			}
+			visible := c.traitVisible(trait)
 			if static {
-				if trait.Type.Obj().Pkg() != c.pkg && (trait.Symbol == nil || trait.Symbol.Visibility != resolve.Public) {
-					continue
+				if _, parameter := types.Unalias(target).(*types.TypeParam); !parameter {
+					// Concrete type paths expose public static trait members even
+					// without importing the trait, just as staticMember does.
+					visible = trait.Type.Obj().Pkg() == c.pkg || trait.Symbol != nil && trait.Symbol.Visibility == resolve.Public
+				} else if !visible {
+					// A type parameter only sees its definition's traits and
+					// bounds, including qualified bounds without a bare import.
+					for _, bound := range c.boundsFor(target) {
+						visible = visible || bound.Trait == trait
+					}
 				}
-			} else if !c.traitVisible(trait) {
+			}
+			if !visible {
 				continue
 			}
 			traits = append(traits, trait)

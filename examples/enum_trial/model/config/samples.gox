@@ -1,7 +1,8 @@
 package config
+use std;
 
 // None, Some(nil) and Some(empty) are three distinct states.
-#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[derive(std::derive::Default, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
 type Samples struct { Items Option[[]int] }
 
 func None() Samples { return Samples{Items: Option[[]int]::None} }

@@ -21,5 +21,4 @@ func Describe(mode RunMode) (string, int) {
         RunMode::DryRun => { return "dry_run", 0 },
         RunMode::Workers(count) => { return "workers", count },
     }
-    panic("unreachable")
 }

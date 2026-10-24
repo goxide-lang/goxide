@@ -1,6 +1,6 @@
 # enum 表示与 match 降低
 
-状态：已确认（2026-10-13）。本文是新前端的 enum 规范，取代 `enums-and-match.md` 中与本文冲突的表示与降低章节；`frontend-ast.md` §5.1 只定义语法节点。
+状态：已确认，按不可变 payload 与固有成员映射更新。本文是新前端的 enum 规范，取代 `enums-and-match.md` 中与本文冲突的表示与降低章节；`frontend-ast.md` §5.1 只定义语法节点。
 
 ## 1. 表示
 
@@ -23,6 +23,7 @@ type CC struct{ K1, K2 int }
 func (*CC) isEE() {}
 ```
 
+- payload 槽位在 Goxide 中不可变；更新通过构造新 enum 并重绑定变量。容器 payload 按自身权限使用，`ref mut` / `match &mut` 不提供槽位写权限。详见[引用合同](enum-payload-borrows.md)。
 - 变体降级为**指针类型**使用：`&BB{...}`。接口方法定义在指针接收者上。
 - 标记方法名统一加 `is` 前缀加 enum 名（`isEE`）。加前缀是因为小写变体名会与结构体名相同（`enum ee { aa }` → `struct aa` 与 `func (*aa) aa()`，Go 报 field/method 同名）。
 - 标记方法**未导出**，因此只有声明包能实现该接口。Go 在跨包、跨 module 下都强制这一点，实测确认（见 §7）。这就是"闭合"的实现方式。
@@ -42,9 +43,11 @@ carrier 的实例操作使用普通参数：按值接收 E，借用接收 `*E`�
 
 ### 1.2 固有成员的已确认映射
 
-普通 `impl E` 无 self 的成员放在空 carrier；有 self 的成员在 E 接口声明，并由各指针变体直接承载业务体。是否有 self 优先于返回类型，返回 Self 的实例成员仍在接口与变体上，Self 始终为完整 E。该映射待实现，取代现有固有成员的包函数布局，详见 [RFC 0020](../rfcs/0020-associated-functions.md)。
+普通 `impl E` 无 self 的成员直接在空 carrier 上承载原业务体；`self Self` 与 `self &Self` 成员在 E 接口声明，并由各指针变体直接承载原业务体。Self 始终为完整 E，返回 Self 不改变成员位置。固有成员不受 trait sugar 开关控制；`self &mut Self` 固有成员拒绝。详见 [RFC 0020](../rfcs/0020-associated-functions.md)。
 
-借用成员仍须传递或绑定真实 `*E` 槽位，不能从变体临时装箱取址。方法值的捕获、调用帧、nil 时机以及条件泛型实例的方法集须与新布局共同验收；本节不改变 §1.1 的 trait wrapper 规则。
+值与只读方法值均捕获绑定时的变体对象，owner 后续重绑定不改变该对象。nil 接口按 Go 方法选择规则失败，typed-nil 变体进入方法后在业务体前 panic；原业务体保留直接 `defer` / `recover` 调用帧。
+
+普通 Go 泛型能表达的无条件方法直接生成；带待定协议条件的成员按 D38 的实际请求扁平化，不生成专用 view，也不将部分实例的能力写入整个泛型家族的方法集。本节不改变 §1.1 的 trait wrapper 规则。
 
 ## 2. nil 策略
 

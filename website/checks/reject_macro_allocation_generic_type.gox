@@ -1,4 +1,0 @@
-package p
-type Box[T any] struct{Value T}
-macro_rules! allocate {()=>{new(Box[int])};}
-func run(){_=allocate!()}

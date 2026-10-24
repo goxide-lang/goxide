@@ -9,7 +9,7 @@ import (
 // Sum payloads here are ordinary values; reference payloads remain a separate,
 // explicitly rejected boundary below rather than an implied supported feature.
 func TestT0ReferencePropagationDeriveMacroRace(t *testing.T) {
-	macroRaceModule(t, t0CombinationSource, `package fixture
+	enumFormalStdModule(t, t0CombinationSource, `package fixture
 import("testing";"reflect";"errors")
 func TestIdentityEvaluationAndCleanup(t *testing.T){
  for _,ok:=range []bool{false,true}{trace:=[]string{};got:=exercise(ok,&trace);want:=[]string{"load","cleanup"};n:=-1;if ok{want=[]string{"load","continued","cleanup"};n=14};if number(got)!=n||!reflect.DeepEqual(trace,want){t.Fatalf("ok=%t got=%d trace=%v",ok,number(got),trace)};if !ok&&!errors.Is(cause(got),sentinel){t.Fatal("derive From lost error identity")}}
@@ -17,18 +17,19 @@ func TestIdentityEvaluationAndCleanup(t *testing.T){
 func TestClosureBoundaryAndOption(t *testing.T){trace:=[]string{};if number(outer(&trace))!=7||!reflect.DeepEqual(trace,[]string{"load","inner-cleanup","outer-continued"}){t.Fatalf("closure trace=%v",trace)};if optionNumber(optionRead(true))!=5||optionNumber(optionRead(false))!=-1{t.Fatal("Option propagation with reference local")}}
 func TestCloneBesideReferences(t *testing.T){if cloneRead()!=3{t.Fatal("Clone or read reference changed")};if PhantomRun()!=7{t.Fatal("phantom type or macro call changed")}}
 func TestDirectDeferredReferenceArgument(t *testing.T){for _,ok:=range []bool{false,true}{trace:=[]string{};want:=2;if ok{want=6};if n:=runDeferred(ok,&trace);n!=want||!reflect.DeepEqual(trace,[]string{"load"}){t.Fatalf("ok=%t value=%d trace=%v",ok,n,trace)}}}
-`)
+`, false)
 }
 
 const t0CombinationSource = `package fixture
+use std;
 use errors;
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("failed")]
 type Failure struct {
  #[from]
  Cause error
 }
-#[derive(Clone)]
+#[derive(std::derive::Clone)]
 type Data struct { Values []int }
 var sentinel=errors::New("sentinel")
 func load(ok bool,trace *[]string)Result[int,error]{*trace=append(*trace,"load");if !ok{return Result[int,error]::Err(sentinel)};return Result[int,error]::Ok(4)}
@@ -43,7 +44,7 @@ func exercise(ok bool,trace *[]string)Result[int,Failure]{
  var r &int = &(*w)
  reader:=capture(r)
  defer func(){*trace=append(*trace,"cleanup")}()
- value:=take!(match load(ok,trace){Result[int,error]::Ok(value)=>Result[int,Failure]::Ok(value),Result[int,error]::Err(cause)=>Result[int,Failure]::Err(FromFailure(cause)),})
+ value:=take!(match load(ok,trace){Result[int,error]::Ok(value)=>Result[int,Failure]::Ok(value),Result[int,error]::Err(cause)=>Result[int,Failure]::Err(Failure::from::<std::From[error]>(cause)),})
  bump(w)
  scalar:=func(int)int{return -100};_=scalar
  *trace=append(*trace,"continued")
@@ -59,7 +60,7 @@ func optionRead(ok bool)Option[int]{n:=2;var r &int = &n;v:=optional(ok)?;return
 func number(v Result[int,Failure])int{match v {Result[int,Failure]::Ok(n)=>{return n},Result[int,Failure]::Err(_)=>{return -1},};panic("unreachable")}
 func cause(v Result[int,Failure])error{match v {Result[int,Failure]::Ok(_)=>{return nil},Result[int,Failure]::Err(e)=>{return e},};panic("unreachable")}
 func optionNumber(v Option[int])int{match v {Option[int]::Some(n)=>{return n},Option[int]::None=>{return -1},};panic("unreachable")}
-func cloneRead()int{n:=3;var r &int = &n;original:=Data{Values:[]int{read(r)}};copy:=CloneData(&original);copy.Values[0]=8;return original.Values[0]}
+func cloneRead()int{n:=3;var r &int = &n;original:=Data{Values:[]int{read(r)}};copy:=std::Clone::clone(&original);copy.Values[0]=8;return original.Values[0]}
 func deferBump(w &mut int,n int){*w+=n}
 func registerDeferred(w &mut int,ok bool,trace *[]string)Result[int,error]{defer deferBump(w,load(ok,trace)?);return Result[int,error]::Ok(*w)}
 func runDeferred(ok bool,trace *[]string)int{n:=2;w:=&mut n;_=registerDeferred(w,ok,trace);return n}

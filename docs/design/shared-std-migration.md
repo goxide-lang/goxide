@@ -1,6 +1,6 @@
 # 共享 std、独立 serde 与 sum 推导迁移计划
 
-2026-10-09 更新：本轮直接切换至内联独立 payload 槽、`ref` / `ref mut` 模式和 `&mut` 引用拼写，详见[当前原位 payload 合同](enum-payload-borrows.md)。下文旧 interface/case、旧 Go case API 和布局待定的章节记录历史阶段，不是当前接口或兼容承诺；完整 Rust 模式规则不由本轮实现。
+当前 enum 表示、不可变 payload 槽与引用语义分别见[密封接口表示](enum-representation.md)和[payload 合同](enum-payload-borrows.md)。下文保留旧管线与早期 ABI 讨论；其中内联槽、可写投影、旧 metadata 和未实现阶段描述均不作为当前用户 enum 规则。
 
 状态：本文记录 2026-10-04 的共享 sum/serde 迁移。2026-10-09 的 formatting/runtime 归属与直接切换要求以[支持库迁移合同](support-library-migration.md)为准，覆盖本文首轮不迁移一般 runtime helper 的边界。编译器基线 `ae61ec628b55e0fc66ce96d47261c0a6809c0280`，独立工作分支 `feat/shared-std-sums`。本文替代[此前研究](../rfcs/research/shared-sum-abi-and-inference.md)中“先同仓库”的建议；其已验证的 Go 机制与 ABI 风险仍适用。std 的“稳定核心”是分类，不构成 v1.0、长期 ABI 冻结或发布承诺。
 

@@ -2,7 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
-	"github.com/goxide-lang/goxide/internal/rootconfig"
+
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,64 +15,99 @@ func TestManualEqualityModules(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
-	mod := func(name, lib string) string {
-		text := fmt.Sprintf("module %s\ngo 1.27\n", name)
-		if lib != "" {
-			text += fmt.Sprintf("require manual.example/lib v0.0.0\nreplace manual.example/lib => %s\n", filepath.ToSlash(lib))
-		}
-		return text
-	}
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	src := t.TempDir()
-	packagesWrite(t, src, "go.mod", mod("manual.example/lib", ""))
-	writeAcceptanceRoots(t, src, map[string]rootconfig.Mapping{"reflect": {Source: "toolchain", Package: "reflect"}})
-	packagesWrite(t, src, "model/types.gox", `package model
+	writeStdFormalManifest(t, src, "manual.example/lib", "library", nil)
+	packagesWrite(t, src, "lib.gox", "package library; use std; use std::PartialEq; pub mod model; pub mod relay; \n")
+
+	packagesWrite(t, src, "model/types.gox", `package model; use std; use std::PartialEq;
 type Person struct{ID int;Name string}
 type Float float64
 type Catch struct{}
 type Counter int
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 pub enum Leaf{LeafUnit,}
 pub enum Gate{Unit,Child(Leaf),}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 pub enum Event{User(Person),Closed,}
-#[derive(PartialEq)]
+#[derive(std::derive::PartialEq)]
 type Stable struct{ID int}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Index map[Stable]int
-#[derive(PartialEq)]
+#[derive(std::derive::PartialEq)]
 type OrdinaryFloat struct{Value float64}
+
+impl Leaf {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Event {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Stable {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Index {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl OrdinaryFloat {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
 `)
-	packagesWrite(t, src, "model/impl.gox", `package model
+	packagesWrite(t, src, "model/impl.gox", `package model; use std; use std::PartialEq;
 use reflect;
 var PersonCalls int
 var GateCalls int
 var Recovered interface{}
-impl PartialEq for Person {
- func equals(self Person,other Person)bool{PersonCalls++;return self.ID.equals(other.ID)}
+impl std::PartialEq for Person {
+ func equals(self Self,other Self)bool{PersonCalls++;return self.ID.equals(other.ID)}
 }
-impl Eq for Person {}
-impl PartialEq for Float {
- func equals(self Float,other Float)bool{return self==other||(self!=self&&other!=other)}
+impl std::Eq for Person {}
+impl std::PartialEq for Float {
+ func equals(self Self,other Self)bool{return self==other||(self!=self&&other!=other)}
 }
-impl Eq for Float {}
-impl PartialEq for Gate {
- func equals(self Gate,other Gate)bool{GateCalls++;return true}
+impl std::Eq for Float {}
+impl std::PartialEq for Gate {
+ func equals(self Self,other Self)bool{std::enum_assert!(self);std::enum_assert!(other);GateCalls++;return true}
 }
-impl Eq for Gate {}
-impl Eq for Stable {}
-impl PartialEq for Catch {
- func equals(self Catch,other Catch)bool{Recovered=recover();return true}
+impl std::Eq for Gate {}
+impl std::Eq for Stable {}
+impl std::NativeKey for Stable {}
+impl std::PartialEq for Catch {
+ func equals(self Self,other Self)bool{Recovered=recover();return true}
 }
 func LocalTypeName()string{type EqualsPerson int;_=(Person{ID:1}).equals(Person{ID:1});return reflect::TypeOf(EqualsPerson(0)).Name()}
 func RecoverDirect(){defer (Catch{}).equals(Catch{});panic("manual-recover")}
-impl PartialEq for Counter {
- func equals(self Counter,other Counter)bool{if self==0||other==0{return self==other};EqualsCounter:=func(Counter,Counter)bool{return false};_=EqualsCounter;return descend(self-1,other-1)}
+impl std::PartialEq for Counter {
+ func equals(self Self,other Self)bool{if self==0||other==0{return self==other};EqualsCounter:=func(Counter,Counter)bool{return false};_=EqualsCounter;return descend(self-1,other-1)}
 }
-impl Eq for Counter {}
+impl std::Eq for Counter {}
 func descend(a,b Counter)bool{return a.equals(b)}
 var RecursiveInitial=Counter(3).equals(Counter(3))
 var Initial=(Person{ID:1,Name:"first"}).equals(Person{ID:1,Name:"second"})
+
+impl Person {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Float {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Gate {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Catch {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Counter {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
 `)
 	packagesWrite(t, src, "relay/relay.go", `package relay
 import m "manual.example/lib/model"
@@ -80,13 +115,13 @@ type Person=m.Person
 type Event=m.Event
 `)
 	lib := filepath.Join(t.TempDir(), "lib")
-	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
+	lib = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", lib, src))
 	appsrc := t.TempDir()
-	packagesWrite(t, appsrc, "go.mod", mod("manual.example/app", lib))
-	writeAcceptanceRoots(t, appsrc, map[string]rootconfig.Mapping{"model": {Module: "manual.example/lib", Package: "manual.example/lib/model"}, "relay": {Module: "manual.example/lib", Package: "manual.example/lib/relay"}})
-	packagesWrite(t, appsrc, "app.gox", `package app
-use model as m;use relay as r;
-#[derive(PartialEq,Eq)]
+	writeStdFormalManifest(t, appsrc, "manual.example/app", "app", map[string]string{"library": src})
+
+	packagesWrite(t, appsrc, "app.gox", `package app; use std; use std::PartialEq;
+use library::model as m;use library::relay as r;
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Bundle struct{User r::Person;Event r::Event;Users []m::Person;Index map[string]m::Person}
 func Same(a,b Bundle)bool{return a.equals(b)}
 func People(a,b r::Person)bool{return a.equals(b)}
@@ -96,15 +131,19 @@ var Trace string
 func Left(a m::Gate)m::Gate{Trace+="L";return a}
 func Right(a m::Gate)m::Gate{Trace+="R";return a}
 func Ordered(a,b m::Gate)bool{return Left(a).equals(Right(b))}
+
+impl Bundle {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
 `)
 	out := filepath.Join(t.TempDir(), "out")
-	compileAcceptanceGraph(t, true, appsrc, out, src)
+	compileStdFormalGraph(t, true, appsrc, out)
 	for _, pair := range [][2]string{{src, lib}, {appsrc, out}} {
 		repeated := filepath.Join(t.TempDir(), "repeat")
 		if pair[0] == src {
-			packagesCommand(t, root, cli, true, "transpile", "-o", repeated, src)
+			repeated = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", repeated, src))
 		} else {
-			compileAcceptanceGraph(t, true, pair[0], repeated, src)
+			compileStdFormalGraph(t, true, pair[0], repeated)
 		}
 		if err := filepath.WalkDir(pair[1], func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -135,7 +174,7 @@ import("testing";"math";"fmt";"strings";m "manual.example/lib/model")
 func TestBusinessEquality(t *testing.T){
  a:=m.Person{ID:7,Name:"old"};b:=m.Person{ID:7,Name:"new"}
  m.PersonCalls=0
- if !m.Initial||!m.RecursiveInitial||!m.EqualsCounter(4,4)||m.EqualsCounter(4,3)||!People(a,b)||m.PersonCalls!=1{t.Fatal("manual person implementation")}
+ if !m.Initial||!m.RecursiveInitial||!(m.CounterOps{}).Equal(4,4)||(m.CounterOps{}).Equal(4,3)||!People(a,b)||m.PersonCalls!=1{t.Fatal("manual person implementation")}
  x:=Bundle{a,&m.User{Value: a},[]m.Person{a},map[string]m.Person{"a":a}}
  y:=Bundle{b,&m.User{Value: b},[]m.Person{b},map[string]m.Person{"a":b}}
  m.PersonCalls=0;if !Same(x,y)||m.PersonCalls!=4{t.Fatal("derive skipped manual protocol",m.PersonCalls)}
@@ -154,55 +193,55 @@ func TestManualEnumValidation(t *testing.T){
 `)
 	packagesWrite(t, lib, "model/model_test.go", `package model
 import "testing"
-func TestNativeConsistentDerivedKeys(t *testing.T){if !EqualsIndex(Index{{ID:1}:4},Index{{ID:1}:4}){t.Fatal("manual Eq does not replace structural key proof")}}
+func TestNativeConsistentDerivedKeys(t *testing.T){if !(IndexOps{}).Equal(Index{{ID:1}:4},Index{{ID:1}:4}){t.Fatal("manual Eq does not replace structural key proof")}}
 `)
 	plain := t.TempDir()
-	packagesWrite(t, plain, "go.mod", mod("manual.example/plain", lib))
+	writeStdNativeConsumerManifest(t, plain, "manual.example/plain", lib)
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import("testing";m "manual.example/lib/model")
-func TestPublicManualHelpers(t *testing.T){if !m.EqualsPerson(m.Person{ID:1,Name:"a"},m.Person{ID:1,Name:"b"}){t.Fatal("Go helper")};m.GateCalls=0;defer func(){if recover()==nil||m.GateCalls!=0{t.Fatal("Go helper bypassed enum validation")}}();m.EqualsGate(nil,&m.Unit{})}
+func TestPublicManualHelpers(t *testing.T){if !(m.PersonOps{}).Equal(m.Person{ID:1,Name:"a"},m.Person{ID:1,Name:"b"}){t.Fatal("Go helper")};m.GateCalls=0;defer func(){if recover()==nil||m.GateCalls!=0{t.Fatal("Go helper bypassed enum validation")}}();(m.GateOps{}).Equal(nil,&m.Unit{})}
 `)
 	for _, dir := range []string{lib, out, plain} {
-		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
+		packagesCommand(t, dir, tool, true, "test", "-mod=mod", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
 	for name, code := range map[string]string{
-		"missing-partial":        `type T struct{};impl Eq for T {}`,
-		"missing-self":           `type T struct{};impl PartialEq for T {func equals(a T,b T)bool{return true}}`,
-		"wrong-parameter":        `type T struct{};impl PartialEq for T {func equals(self T,other int)bool{return true}}`,
-		"wrong-result":           `type T struct{};impl PartialEq for T {func equals(self T,other T)int{return 1}}`,
-		"static":                 `type T struct{};impl PartialEq for T {static func equals(self T,other T)bool{return true}}`,
-		"empty-partial":          `type T struct{};impl PartialEq for T {}`,
-		"eq-member":              `type T struct{};impl Eq for T {func equals(self T,other T)bool{return true}}`,
-		"extra-member":           `type T struct{};impl PartialEq for T {func equals(self T,other T)bool{return true};func extra(){}}`,
-		"alias-target":           `type T=struct{};impl PartialEq for T {func equals(self T,other T)bool{return true}}`,
-		"body-type":              `type T struct{};impl PartialEq for T {func equals(self T,other T)bool{return 7}}`,
-		"helper-collision":       `type T struct{};func EqualsT(a,b T)bool{return true};impl PartialEq for T {func equals(self T,other T)bool{return true}}`,
-		"manual-derived-partial": "#[derive(PartialEq)]\ntype T struct{}\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}",
-		"manual-derived-eq":      "#[derive(Eq)]\ntype T struct{}\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}",
-		"duplicate-eq":           `type T struct{};impl PartialEq for T {func equals(self T,other T)bool{return true}};impl Eq for T {};impl Eq for T {}`,
-		"manual-native-key":      "type T struct{ID int}\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}\nimpl Eq for T {}\n#[derive(PartialEq,Eq)]\ntype Index map[T]int",
-		"wrapped-manual-key":     "type T int\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}\nimpl Eq for T {}\n#[derive(PartialEq,Eq)]\ntype K struct{Value T}\n#[derive(PartialEq,Eq)]\ntype Index map[K]int",
-		"imported-manual-key":    "use model as m;\n#[derive(PartialEq,Eq)]\ntype Index map[m::Person]int",
-		"partial-only-field":     "type T struct{}\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}\n#[derive(PartialEq,Eq)]\ntype Outer struct{Value T}",
+		"missing-partial":        `type T struct{};impl std::Eq for T {}`,
+		"missing-self":           `type T struct{};impl std::PartialEq for T {func equals(a T,b T)bool{return true}}`,
+		"wrong-parameter":        `type T struct{};impl std::PartialEq for T {func equals(self Self,other int)bool{return true}}`,
+		"wrong-result":           `type T struct{};impl std::PartialEq for T {func equals(self Self,other Self)int{return 1}}`,
+		"static":                 `type T struct{};impl std::PartialEq for T {static func equals(self Self,other Self)bool{return true}}`,
+		"empty-partial":          `type T struct{};impl std::PartialEq for T {}`,
+		"eq-member":              `type T struct{};impl std::Eq for T {func equals(self Self,other Self)bool{return true}}`,
+		"extra-member":           `type T struct{};impl std::PartialEq for T {func equals(self Self,other Self)bool{return true};func extra(){}}`,
+		"alias-target":           `type T=struct{};impl std::PartialEq for T {func equals(self Self,other Self)bool{return true}}`,
+		"body-type":              `type T struct{};impl std::PartialEq for T {func equals(self Self,other Self)bool{return 7}}`,
+		"duplicate-partial":      `type T struct{};impl std::PartialEq for T {func equals(self Self,other Self)bool{return true}};impl std::PartialEq for T {func equals(self Self,other Self)bool{return true}}`,
+		"manual-derived-partial": "#[derive(std::derive::PartialEq)]\ntype T struct{}\nimpl std::PartialEq for T {func equals(self Self,other Self)bool{return true}}",
+		"manual-derived-eq":      "#[derive(std::derive::Eq)]\ntype T struct{}\nimpl std::PartialEq for T {func equals(self Self,other Self)bool{return true}}",
+		"duplicate-eq":           `type T struct{};impl std::PartialEq for T {func equals(self Self,other Self)bool{return true}};impl std::Eq for T {};impl std::Eq for T {}`,
+		"manual-native-key":      "type T struct{ID int}\nimpl std::PartialEq for T {func equals(self Self,other Self)bool{return true}}\nimpl std::Eq for T {}\n#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Index map[T]int",
+		"wrapped-manual-key":     "type T int\nimpl std::PartialEq for T {func equals(self Self,other Self)bool{return true}}\nimpl std::Eq for T {}\n#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype K struct{Value T}\n#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Index map[K]int",
+		"imported-manual-key":    "use library::model as m;\n#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Index map[m::Person]int",
+		"partial-only-field":     "type T struct{}\nimpl std::PartialEq for T {func equals(self Self,other Self)bool{return true}}\n#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Outer struct{Value T}",
 	} {
 		t.Run(name, func(t *testing.T) {
 			bad := t.TempDir()
-			packagesWrite(t, bad, "go.mod", mod("manual.example/bad", lib))
-			writeAcceptanceRoots(t, bad, map[string]rootconfig.Mapping{"model": {Module: "manual.example/lib", Package: "manual.example/lib/model"}, "relay": {Module: "manual.example/lib", Package: "manual.example/lib/relay"}})
-			packagesWrite(t, bad, "bad.gox", "package bad\n"+code)
-			compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "out"), src)
+			writeStdFormalManifest(t, bad, "manual.example/bad", "bad", map[string]string{"library": src})
+
+			packagesWrite(t, bad, "bad.gox", "package bad; use std; use std::PartialEq;\n"+code)
+			compileStdFormalGraph(t, false, bad, filepath.Join(t.TempDir(), "out"))
 		})
 	}
 	t.Run("duplicate-across-files", func(t *testing.T) {
 		bad := t.TempDir()
-		packagesWrite(t, bad, "go.mod", mod("manual.example/bad", lib))
-		writeAcceptanceRoots(t, bad, map[string]rootconfig.Mapping{"model": {Module: "manual.example/lib", Package: "manual.example/lib/model"}, "relay": {Module: "manual.example/lib", Package: "manual.example/lib/relay"}})
-		packagesWrite(t, bad, "type.gox", "package bad\ntype T struct{}")
+		writeStdFormalManifest(t, bad, "manual.example/bad", "bad", map[string]string{"library": src})
+
+		packagesWrite(t, bad, "type.gox", "package bad; use std; use std::PartialEq;\ntype T struct{}")
 		for _, n := range []string{"a.gox", "b.gox"} {
-			packagesWrite(t, bad, n, "package bad\nimpl PartialEq for T {func equals(self T,other T)bool{return true}}")
+			packagesWrite(t, bad, n, "package bad; use std; use std::PartialEq;\nimpl std::PartialEq for T {func equals(self Self,other Self)bool{return true}}\n")
 		}
-		msg := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "out"), src)
+		msg := compileStdFormalGraph(t, false, bad, filepath.Join(t.TempDir(), "out"))
 		if !strings.Contains(msg, "duplicate") {
 			t.Fatal(msg)
 		}

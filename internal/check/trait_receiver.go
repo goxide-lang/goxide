@@ -94,7 +94,7 @@ func (p *permissionChecker) sourceShape(node ast.Expr, seen map[*resolve.Symbol]
 			return q
 		}
 		if f := p.functions[s]; f != nil {
-			return f.typ
+			return p.sourceFunctionShape(node, f.typ)
 		}
 	case *ast.ParenExpr:
 		return p.sourceShape(n.X, seen)
@@ -134,7 +134,7 @@ func (p *permissionChecker) sourceShape(node ast.Expr, seen map[*resolve.Symbol]
 	case *ast.IndexExpr:
 		base := p.sourceShape(n.X, seen)
 		if signatureType(base) {
-			return base
+			return p.sourceFunctionShape(n, base)
 		}
 		base = p.sourceDereference(base)
 		value := p.element(base)
@@ -143,36 +143,8 @@ func (p *permissionChecker) sourceShape(node ast.Expr, seen map[*resolve.Symbol]
 		}
 		return value
 	case *ast.CallExpr:
-		fun := p.sourceShape(n.Fun, seen)
+		fun := p.sourceFunctionShape(n, p.sourceShape(n.Fun, seen))
 		if fun != nil {
-			instance := p.c.out.FunctionInstances[n]
-			if instance == nil {
-				instance = p.c.out.FunctionInstances[n.Fun]
-			}
-			if instance == nil {
-				if path, ok := n.Fun.(*ast.PathExpr); ok && path.Path != nil && len(path.Path.Segments) != 0 {
-					instance = p.c.out.FunctionInstances[path.Path.Segments[len(path.Path.Segments)-1].Args]
-				}
-			}
-			if instance != nil {
-				if instance.Case != nil && instance.Case.checkerState != nil {
-					function := p.c.caseFunctions[instance.Signature]
-					if function.file != nil {
-						symbol := function.file.Definitions[function.declaration.Name.ID()]
-						if shape := instance.Case.checkerState.referenceHints.functions[symbol]; shape != nil {
-							fun = shape.typ
-						}
-					}
-				}
-				sources := map[*types.TypeParam]*permission{}
-				for parameter, typ := range instance.Substitution {
-					sources[parameter] = p.fromGo(typ)
-				}
-				for parameter, source := range instance.permissionSubstitution {
-					sources[parameter] = source
-				}
-				fun = p.substitutePermission(fun, sources)
-			}
 			if len(fun.results) == 1 {
 				return fun.results[0]
 			}
@@ -185,6 +157,49 @@ func (p *permissionChecker) sourceShape(node ast.Expr, seen map[*resolve.Symbol]
 		q.typ = p.c.out.Types[node]
 	}
 	return q
+}
+
+// Function values carry the instantiated source permissions of their explicit
+// type arguments just as calls do. Keeping the declaration's free parameters
+// here would leak them into higher-order argument inference.
+func (p *permissionChecker) sourceFunctionShape(node ast.Expr, fun *permission) *permission {
+	if fun == nil {
+		return nil
+	}
+	instance := p.c.out.FunctionInstances[node]
+	if call, ok := node.(*ast.CallExpr); ok {
+		node = call.Fun
+		if instance == nil {
+			instance = p.c.out.FunctionInstances[node]
+		}
+	}
+	if instance == nil {
+		if path, ok := node.(*ast.PathExpr); ok && path.Path != nil && len(path.Path.Segments) != 0 {
+			instance = p.c.out.FunctionInstances[path.Path.Segments[len(path.Path.Segments)-1].Args]
+		}
+	}
+	if instance == nil {
+		return fun
+	}
+
+	if instance.Case != nil && instance.Case.checkerState != nil {
+		function := p.c.caseFunctions[instance.Signature]
+		if function.file != nil {
+			symbol := function.file.Definitions[function.declaration.Name.ID()]
+			if shape := instance.Case.checkerState.referenceHints.functions[symbol]; shape != nil {
+				fun = shape.typ
+			}
+		}
+	}
+	sources := map[*types.TypeParam]*permission{}
+	for parameter, typ := range instance.Substitution {
+		sources[parameter] = p.fromGo(typ)
+	}
+	for parameter, source := range instance.permissionSubstitution {
+		sources[parameter] = source
+	}
+	fun = p.substitutePermission(fun, sources)
+	return fun
 }
 
 // These hints use source declarations before the permission pass has a flow

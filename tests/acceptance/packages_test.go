@@ -2,7 +2,6 @@ package acceptance_test
 
 import (
 	"fmt"
-	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -11,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 // Compile the example through the CLI, then use a real, separate Go module.
@@ -20,7 +21,7 @@ func TestPackagesApplication(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 
 	t.Run("independent-module-race-and-build", func(t *testing.T) {
 		source := filepath.Join(t.TempDir(), "source")
@@ -44,7 +45,7 @@ func TestPackagesApplication(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		packagesWrite(t, source, "go.mod", packagesModule())
+		packagesWrite(t, source, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 		generated := filepath.Join(t.TempDir(), "generated")
 		packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
 		packagesWrite(t, generated, "application_test.go", packagesAssertions)
@@ -77,7 +78,7 @@ func TestPackagesApplication(t *testing.T) {
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {
 				source := t.TempDir()
-				packagesWrite(t, source, "go.mod", packagesModule())
+				packagesWrite(t, source, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 				writeAcceptanceFixtureRoots(t, source, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
 				packagesWrite(t, source, test.filename, test.source)
 				for name, data := range test.files {
@@ -85,10 +86,9 @@ func TestPackagesApplication(t *testing.T) {
 				}
 				output := packagesCommand(t, root, cli, false, "build", "--go", tool, "--runtime", root, "-o", filepath.Join(t.TempDir(), "bad"), source)
 				if test.name == "cross-file-type-error" || test.name == "nominal-enums" {
-					if !strings.Contains(output, "bad.go:") || !strings.Contains(output, "cannot use") {
-						t.Fatal("missing generated package type error", output)
+					if !strings.Contains(output, "cannot use") {
+						t.Fatal("missing package type error", output)
 					}
-					return
 				}
 				location := regexp.MustCompile(regexp.QuoteMeta(test.filename) + ":" + fmt.Sprint(test.line) + `(?::[0-9]+)?[: ]`)
 				if !location.MatchString(output) {
@@ -181,16 +181,16 @@ func TestExportedProtocols(t *testing.T) {
  if name,n:=cfg.Describe(&cfg.DryRun{}); name!="dry_run" || n!=0 {t.Fatal("exported unit constructor")}
  original,err:=cfg.Load([]byte("{\"Name\":\"mail\",\"Mode\":{\"Workers\":4},\"Labels\":[\"queue\"]}"))
  if err!=nil {t.Fatal(err)}
- clone:=cfg.CloneConfig(&original)
+ clone:=(cfg.ConfigOps{}).Copy(&original)
  clone.Labels[0]="changed"
  if original.Labels[0]!="queue" {t.Fatal("cross-package Clone shares slice")}
- mode:=cfg.CloneRunMode(&original.Mode)
- data,err:=serdejson.Encode(func(s serde.Serializer)error{return cfg.SerializeRunMode(s,&mode)})
+ mode:=(cfg.RunModeOps{}).Copy(&original.Mode)
+ data,err:=serdejson.Encode(func(s serde.Serializer)error{return (cfg.RunModeOps{}).Encode(s,&mode)})
  if err!=nil || string(data)!="{\"Workers\":4}" {t.Fatalf("enum serialize: %s %v",data,err)}
- decoded,err:=serdejson.Unmarshal(data,cfg.DeserializeRunMode)
+ decoded,err:=serdejson.Unmarshal(data,(cfg.RunModeOps{}).Decode)
  if err!=nil || !reflect.DeepEqual(decoded,mode) {t.Fatalf("enum deserialize: %#v %v",decoded,err)}
  sentinel:=errors.New("upstream")
- wrapped:=cfg.FromConfigError(sentinel)
+ wrapped:=(cfg.ConfigErrorOps{}).Wrap(sentinel)
  if !errors.Is(wrapped,sentinel) {t.Fatal("exported From lost cause")}
  _,err=cfg.Load([]byte("{\"Name\":\"mail\",\"Mode\":{\"Workers\":false},\"Labels\":[]}"))
  var detail *serde.Error

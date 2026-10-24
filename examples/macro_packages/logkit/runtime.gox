@@ -1,4 +1,5 @@
 package logkit
+use std;
 use serde;
 use errors;
 use slog;
@@ -9,5 +10,10 @@ func Fetch(fail bool) Result[int,error] {
     if fail { return Result[int,error]::Err(Sentinel) }
     return Result[int,error]::Ok(4)
 }
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone, std::derive::Debug)]
 pub enum Mode { Idle, Workers(int), }
+
+impl Mode {
+    pub func copy(value &Self) Self { return std::Clone::clone(value) }
+    pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}

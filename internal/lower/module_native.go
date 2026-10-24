@@ -55,13 +55,16 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 			})
 		}
 	}
-	for _, module := range modules {
+	for index, module := range modules {
 		context := module.Config.Environment.Context(module.Tags, module.Race)
 		files, err := moduleFiles(module.Dir, ".go")
 		if err != nil {
 			return nil, err
 		}
 		for _, filename := range files {
+			if index != 0 && strings.HasSuffix(filename, "_test.go") {
+				continue
+			}
 			rel, err := filepath.Rel(module.Dir, filename)
 			if err != nil {
 				return nil, err
@@ -206,9 +209,6 @@ func nativeDeclarations(name string, data []byte, file *goast.File, set *gotoken
 				return nil, fmt.Errorf("%s: native Go import %s: %w", name, importPath, err)
 			}
 			alias = pkg.Name()
-		}
-		if alias == "_" {
-			continue
 		}
 		span := syntax.Span{Start: uint32(offset(imported.Pos())), End: uint32(offset(imported.End()))}
 		base := syntax.Base{Loc: span}

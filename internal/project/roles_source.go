@@ -71,7 +71,7 @@ func (g *Graph) roleSelection(module, version string) (Selection, error) {
 		return Selection{}, fmt.Errorf("download lacks verified source identity: %s@%s", actualModule, actualVersion)
 	}
 	verified := Selection{Path: downloaded.Path, Version: downloaded.Version, Sum: downloaded.Sum, GoModSum: downloaded.GoModSum, Dir: downloaded.Dir, GoMod: downloaded.GoMod}
-	if err := verifyRoleDownload(verified, downloaded.Zip); err != nil {
+	if err := verifyModuleDownload(verified, downloaded.Zip); err != nil {
 		return Selection{}, err
 	}
 	if present, err := Detect(verified.Dir); err != nil {
@@ -113,9 +113,10 @@ func (g *Graph) rolePlanningRoot() string {
 	return g.ownerRoot
 }
 
-// Verify just the acquired module. `go mod verify` loads a complete native
-// dependency graph, which would cross the macro boundary before classification.
-func verifyRoleDownload(selection Selection, zipPath string) error {
+// Verify just the acquired remote module. Graph-wide `go mod verify` also
+// inspects replaced logical paths, including local-only dotless module names,
+// and would cross a macro boundary before classification.
+func verifyModuleDownload(selection Selection, zipPath string) error {
 	if err := NoSymlinks(selection.Dir); err != nil {
 		return err
 	}

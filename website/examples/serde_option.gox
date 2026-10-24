@@ -2,7 +2,7 @@ package main
 use serde;
 use fmt;
 use serde::json as serdejson;
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Request struct { Limit Option[int] }
 func describe(value Option[int]) string {
     return match value {
@@ -12,7 +12,7 @@ func describe(value Option[int]) string {
 }
 func main() {
     for _, input := range []string{`{}`, `{"Limit":null}`, `{"Limit":7}`} {
-        value, err := serdejson::Unmarshal([]byte(input), DeserializeRequest)
+        value, err := serdejson::Unmarshal([]byte(input), serde::Read[Request])
         if err != nil { panic(err) }
         fmt::Println(input, describe(value.Limit))
     }

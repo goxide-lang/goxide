@@ -2,7 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
-	"github.com/goxide-lang/goxide/internal/rootconfig"
+
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,45 +15,88 @@ func TestExplicitEqualityModules(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
-	mod := func(name, lib string) string {
-		s := fmt.Sprintf("module %s\ngo 1.27\n", name)
-		if lib != "" {
-			s += fmt.Sprintf("require equal.example/lib v0.0.0\nreplace equal.example/lib => %s\n", filepath.ToSlash(lib))
-		}
-		return s
-	}
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	libsrc := t.TempDir()
-	packagesWrite(t, libsrc, "go.mod", mod("equal.example/lib", ""))
-	packagesWrite(t, libsrc, "model/model.gox", `package model
-#[derive(PartialEq,Eq)]
+	writeStdFormalManifest(t, libsrc, "equal.example/lib", "library", nil)
+	packagesWrite(t, libsrc, "lib.gox", "package library; pub mod model; pub mod relay;\n")
+	packagesWrite(t, libsrc, "model/model.gox", `package model; use std; use std::PartialEq;
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Count uint64
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Point struct{X int;Y int}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Row [2]Point
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 pub enum Leaf{LeafUnit,}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 pub enum E{Unit,P(Point),A([2]int),Child(Leaf),}
-#[derive(PartialEq)]
+#[derive(std::derive::PartialEq)]
 pub enum Float{Value(float64),}
-#[derive(PartialEq)]
+#[derive(std::derive::PartialEq)]
 type Complex struct{Z complex128}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Key struct{ID int;Flags [2]bool}
-#[derive(PartialEq,Eq)]
+impl std::NativeKey for Key {}
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Dataset struct{Slices [][]int;Lookup map[string][]Point;Codes map[Key]Row;Enabled map[bool]int;Items []E;Events map[string]E}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Optional struct{Value Option[[]int]}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type OptionalLeaf struct{Value Option[Leaf]}
-#[derive(PartialEq)]
+#[derive(std::derive::PartialEq)]
 type FloatCollections struct{Values []float64;ByName map[string]complex128}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 pub enum Collection{Empty,Data(Dataset),}
 func ResultSeed()Result[[]int,map[string]int]{return Result[[]int,map[string]int]::Ok(nil)}
 func Local()bool{return E::P(Point{X:1,Y:2}).equals(E::P(Point{X:1,Y:2}))}
+
+impl Count {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Point {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Leaf {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl E {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Float {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Complex {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Key {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Dataset {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Optional {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl OptionalLeaf {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl FloatCollections {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl Collection {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
 `)
 	packagesWrite(t, libsrc, "relay/relay.go", `package relay
 import __borrow_std "github.com/goxide-lang/std/sum"
@@ -66,19 +109,19 @@ type Options=__borrow_std.Option[[]int]
 type New m.E
 `)
 	lib := filepath.Join(t.TempDir(), "lib")
-	packagesCommand(t, root, cli, true, "transpile", "-o", lib, libsrc)
+	lib = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", lib, libsrc))
 	appFor := func(code string) string {
 		src := t.TempDir()
-		packagesWrite(t, src, "go.mod", mod("equal.example/app", lib))
-		writeAcceptanceRoots(t, src, map[string]rootconfig.Mapping{"model": {Module: "equal.example/lib", Package: "equal.example/lib/model"}, "relay": {Module: "equal.example/lib", Package: "equal.example/lib/relay"}})
+		writeStdFormalManifest(t, src, "equal.example/app", "app", map[string]string{"library": libsrc})
+
 		packagesWrite(t, src, "app.gox", code)
 		return src
 	}
-	app := appFor(`package app
-use model as m;use relay as r;
-#[derive(PartialEq,Eq)]
+	app := appFor(`package app; use std; use std::PartialEq;
+use library::model as m;use library::relay as r;
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Pair struct{P r::Point;E r::Alias}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type ExternalSums struct{Direct Option[[]int];Alias r::Options;Result Result[[]int,map[string]int];Nested Option[m::Leaf]}
 var Initial=m::Point{X:1}.equals(m::Point{X:1})
 func Same(a,b r::Alias)bool{return a.equals(b)}
@@ -107,7 +150,7 @@ func Ordered(a,b r::Alias)bool{return Left(a).equals(Right(b))}
 macro_rules! equalityZero {()=>{int(0)};}
 macro_rules! equalityOuter {()=>{equalityZero!()};}
 macro_rules! equalityConvert {($x:expr)=>{int($x)};}
-#[derive(PartialEq,Eq)]
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type EqualityItem struct{N int}
 func EqualityDirect()int{return equalityZero!()}
 func EqualityFirst()int{return equalityOuter!()}
@@ -116,15 +159,27 @@ func EqualityNative()int{return int(0)}
 var EqualityCalls int
 func equalityNext()int{EqualityCalls++;return EqualityCalls}
 func EqualityEffect()int{return equalityConvert!(equalityNext())+equalityConvert!(equalityNext())}
+
+impl Pair {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl ExternalSums {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
+
+impl EqualityItem {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+}
 `)
 	out := filepath.Join(t.TempDir(), "out")
-	compileAcceptanceGraph(t, true, app, out, libsrc)
+	compileStdFormalGraph(t, true, app, out)
 	for _, pair := range [][2]string{{libsrc, lib}, {app, out}} {
 		second := filepath.Join(t.TempDir(), "repeat")
 		if pair[0] == libsrc {
-			packagesCommand(t, root, cli, true, "transpile", "-o", second, libsrc)
+			second = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", second, libsrc))
 		} else {
-			compileAcceptanceGraph(t, true, pair[0], second, libsrc)
+			compileStdFormalGraph(t, true, pair[0], second)
 		}
 		if err := filepath.WalkDir(pair[1], func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -154,7 +209,7 @@ func EqualityEffect()int{return equalityConvert!(equalityNext())+equalityConvert
 import __borrow_std "github.com/goxide-lang/std/sum"
 
 import("testing";"math";"strings";"fmt";m "equal.example/lib/model")
-func TestValues(t *testing.T){if EqualityDirect()!=0||EqualityFirst()!=0||EqualitySecond()!=0||EqualityNative()!=0{t.Fatal("macro zero conversion")};EqualityCalls=0;if EqualityEffect()!=3||EqualityCalls!=2{t.Fatal("macro argument evaluation count",EqualityCalls)};if !EqualsEqualityItem(EqualityItem{N:1},EqualityItem{N:1})||EqualsEqualityItem(EqualityItem{N:1},EqualityItem{N:2}){t.Fatal("macro adjacent derived equality")};a:=&m.P{Value: m.Point{X:1,Y:2}};b:=&m.P{Value: m.Point{X:1,Y:2}};if !IsNil(nil)||IsNil(a)||IsPresent(nil)||!IsPresent(a){t.Fatal("enum nil comparison")};if !Initial||!Same(a,b)||Same(a,&m.Unit{})||Same(a,&m.P{Value: m.Point{X:3}})||!Row()||!Big()||!Shadow(a,b)||!PairSame(Pair{m.Point{X:2},a},Pair{m.Point{X:2},b}){t.Fatal("value equality")};if !__borrow_std.ValueOk(Question(a, b)){t.Fatal("question")};if __borrow_std.TagOption(OptionFlow(__borrow_std.None[int]()))!=0{t.Fatal("None propagation")};n:=math.NaN();if FloatSame(&m.Value{Value: n},&m.Value{Value: n})||ComplexSame(m.Complex{Z:complex(n,0)},m.Complex{Z:complex(n,0)}){t.Fatal("NaN")};if !FloatSame(&m.Value{Value: math.Copysign(0,-1)},&m.Value{Value: 0}){t.Fatal("zero")}}
+func TestValues(t *testing.T){if EqualityDirect()!=0||EqualityFirst()!=0||EqualitySecond()!=0||EqualityNative()!=0{t.Fatal("macro zero conversion")};EqualityCalls=0;if EqualityEffect()!=3||EqualityCalls!=2{t.Fatal("macro argument evaluation count",EqualityCalls)};if !(EqualityItemOps{}).Equal(EqualityItem{N:1},EqualityItem{N:1})||(EqualityItemOps{}).Equal(EqualityItem{N:1},EqualityItem{N:2}){t.Fatal("macro adjacent derived equality")};a:=&m.P{Value: m.Point{X:1,Y:2}};b:=&m.P{Value: m.Point{X:1,Y:2}};if !IsNil(nil)||IsNil(a)||IsPresent(nil)||!IsPresent(a){t.Fatal("enum nil comparison")};if !Initial||!Same(a,b)||Same(a,&m.Unit{})||Same(a,&m.P{Value: m.Point{X:3}})||!Row()||!Big()||!Shadow(a,b)||!PairSame(Pair{m.Point{X:2},a},Pair{m.Point{X:2},b}){t.Fatal("value equality")};if !__borrow_std.ValueOk(Question(a, b)){t.Fatal("question")};if __borrow_std.TagOption(OptionFlow(__borrow_std.None[int]()))!=0{t.Fatal("None propagation")};n:=math.NaN();if FloatSame(&m.Value{Value: n},&m.Value{Value: n})||ComplexSame(m.Complex{Z:complex(n,0)},m.Complex{Z:complex(n,0)}){t.Fatal("NaN")};if !FloatSame(&m.Value{Value: math.Copysign(0,-1)},&m.Value{Value: 0}){t.Fatal("zero")}}
 func TestRecursiveContainers(t *testing.T){
  key:=m.Key{ID:7,Flags:[2]bool{true,false}}
  makeData:=func()m.Dataset{return m.Dataset{Slices:[][]int{{1,2},{3}},Lookup:map[string][]m.Point{"p":{{X:1,Y:2}}},Codes:map[m.Key]m.Row{key:{{X:4},{Y:5}}},Enabled:map[bool]int{true:1,false:0},Items:[]m.E{&m.Unit{},&m.P{Value: m.Point{X:8}}},Events:map[string]m.E{"ready":&m.Unit{}}}}
@@ -203,43 +258,43 @@ func TestValidationAndOrder(t *testing.T){valid:=&m.Unit{};for _,bad:=range []m.
 `)
 	packagesWrite(t, lib, "model/model_test.go", `package model
 import "testing"
-func TestHelpers(t *testing.T){if !EqualsDataset(Dataset{},Dataset{})||!Local()||!EqualsPoint(Point{X:2},Point{X:2})||!EqualsE(&A{Value: [2]int{1,2}},&A{Value: [2]int{1,2}}){t.Fatal("helpers")}}
+func TestHelpers(t *testing.T){if !(DatasetOps{}).Equal(Dataset{},Dataset{})||!Local()||!(PointOps{}).Equal(Point{X:2},Point{X:2})||!(EOps{}).Equal(&A{Value: [2]int{1,2}},&A{Value: [2]int{1,2}}){t.Fatal("helpers")}}
 `)
 	plain := t.TempDir()
-	packagesWrite(t, plain, "go.mod", mod("equal.example/plain", lib))
+	writeStdNativeConsumerManifest(t, plain, "equal.example/plain", lib)
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import("testing";m "equal.example/lib/model")
-func TestNative(t *testing.T){a:=&m.Unit{};if !m.EqualsDataset(m.Dataset{Slices:[][]int{{1}}},m.Dataset{Slices:[][]int{{1}}})||!m.EqualsE(a,a)||a!=a{t.Fatal("ordinary Go behavior")}}
+func TestNative(t *testing.T){a:=&m.Unit{};if !(m.DatasetOps{}).Equal(m.Dataset{Slices:[][]int{{1}}},m.Dataset{Slices:[][]int{{1}}})||!(m.EOps{}).Equal(a,a)||a!=a{t.Fatal("ordinary Go behavior")}}
 `)
 	for _, dir := range []string{lib, out, plain} {
-		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
+		packagesCommand(t, dir, tool, true, "test", "-mod=mod", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
 	assertNativeGoRejected(t, out, tool, map[string]nativeGoRejection{
-		"alias-option-nil": {"package app\nvar _=ExternalSums{Alias:nil}\n", "cannot use nil"},
+		"alias-option-nil": {"package app;\nvar _=ExternalSums{Alias:nil}\n", "cannot use nil"},
 	})
 	for name, tc := range map[string]struct{ code, want string }{
-		"nested-macro-conversion": {`#[derive(PartialEq,Eq)]
+		"nested-macro-conversion": {`#[derive(std::derive::PartialEq,std::derive::Eq)]
 type EqualityItem struct{N int}
 macro_rules! zero {()=>{int("bad")};}
 macro_rules! outer {()=>{zero!()};}
 func Run()int{return outer!()}`, "cannot convert"},
-		"enum-direct":          {`use model as m;func Bad(a,b m::E)bool{return a==b}`, "explicit PartialEq"},
-		"enum-not-equal":       {`use model as m;func Bad(a,b m::E)bool{return a!=b}`, "explicit PartialEq"},
-		"float-eq":             {"#[derive(PartialEq,Eq)]\ntype Bad struct{F float64}", "Eq"},
-		"complex-eq":           {"#[derive(PartialEq,Eq)]\ntype Bad complex128", "Eq"},
-		"missing-partial":      {"#[derive(Eq)]\ntype Bad struct{N int}", "PartialEq"},
-		"slice-pointer":        {"#[derive(PartialEq)]\ntype Bad struct{Items []*int}", "no explicit PartialEq implementation"},
-		"slice-float-eq":       {"#[derive(PartialEq,Eq)]\ntype Bad struct{Items []float64}", "Eq"},
-		"map-complex-value-eq": {"#[derive(PartialEq,Eq)]\ntype Bad struct{Items map[string]complex128}", "Eq"},
-		"map-float-key":        {"#[derive(PartialEq)]\ntype Bad struct{Items map[float64]int}", "map"},
-		"map-complex-key":      {"#[derive(PartialEq)]\ntype Bad struct{Items map[complex128]int}", "map"},
-		"map-interface-key":    {"#[derive(PartialEq)]\ntype Bad struct{Items map[any]int}", "map"},
-		"map-pointer-key":      {"#[derive(PartialEq)]\ntype Bad struct{Items map[*int]int}", "map"},
-		"map-enum-key":         {"pub enum Key{A,}\n#[derive(PartialEq)]\ntype Bad struct{Items map[Key]int}", "map"},
-		"map-nested-float-key": {"type Key struct{F float64}\n#[derive(PartialEq)]\ntype Bad struct{Items map[Key]int}", "map"},
-		"pointer":              {"#[derive(PartialEq,Eq)]\ntype Bad struct{P *int}", "no explicit PartialEq implementation"},
-		"unregistered":         {`use relay as r;func Bad(a,b r::New)bool{return a.equals(b)}`, "equals"},
+		"enum-direct":          {`use library::model as m;func Bad(a,b m::E)bool{return a==b}`, "explicit PartialEq"},
+		"enum-not-equal":       {`use library::model as m;func Bad(a,b m::E)bool{return a!=b}`, "explicit PartialEq"},
+		"float-eq":             {"#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Bad struct{F float64}", "Eq"},
+		"complex-eq":           {"#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Bad complex128", "Eq"},
+		"missing-partial":      {"#[derive(std::derive::Eq)]\ntype Bad struct{N int}", "PartialEq"},
+		"slice-pointer":        {"#[derive(std::derive::PartialEq)]\ntype Bad struct{Items []*int}", "missing trait implementation: GoxideTraitPartialEq"},
+		"slice-float-eq":       {"#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Bad struct{Items []float64}", "Eq"},
+		"map-complex-value-eq": {"#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Bad struct{Items map[string]complex128}", "Eq"},
+		"map-float-key":        {"#[derive(std::derive::PartialEq)]\ntype Bad struct{Items map[float64]int}", "missing trait implementation: GoxideTraitNativeKey"},
+		"map-complex-key":      {"#[derive(std::derive::PartialEq)]\ntype Bad struct{Items map[complex128]int}", "missing trait implementation: GoxideTraitNativeKey"},
+		"map-interface-key":    {"#[derive(std::derive::PartialEq)]\ntype Bad struct{Items map[any]int}", "missing trait implementation: GoxideTraitNativeKey"},
+		"map-pointer-key":      {"#[derive(std::derive::PartialEq)]\ntype Bad struct{Items map[*int]int}", "missing trait implementation: GoxideTraitNativeKey"},
+		"map-enum-key":         {"pub enum Key{A,}\n#[derive(std::derive::PartialEq)]\ntype Bad struct{Items map[Key]int}", "missing trait implementation: GoxideTraitNativeKey"},
+		"map-nested-float-key": {"type Key struct{F float64}\n#[derive(std::derive::PartialEq)]\ntype Bad struct{Items map[Key]int}", "missing trait implementation: GoxideTraitNativeKey"},
+		"pointer":              {"#[derive(std::derive::PartialEq,std::derive::Eq)]\ntype Bad struct{P *int}", "ambiguous trait method"},
+		"unregistered":         {`use library::relay as r;func Bad(a,b r::New)bool{return a.equals(b)}`, "no explicit implementation for selected trait application GoxideTraitPartialEq"},
 		"map-key": {`pub enum Bad{Items([]int),}
 func F(){_=map[Bad]int{}}`, "map key"},
 		"nested-map-key": {`pub enum Bad{Items([]int),}
@@ -255,8 +310,8 @@ func Bad(v E){m:=map[any]int{};m[v]=1}`, "map key"},
 func Bad(){_=map[any]int{E::S([]int{1}):1}}`, "map key"},
 		"mixed-interface-comparison": {`pub enum E{A,S([]int),}
 func Bad(v E,other any)bool{return v==other}`, "non-comparable payload"},
-		"imported-partial-not-eq": {`use model as m;
-#[derive(PartialEq,Eq)]
+		"imported-partial-not-eq": {`use library::model as m;
+#[derive(std::derive::PartialEq,std::derive::Eq)]
 type Bad struct{F m::Float}`, "Eq"},
 		"scalar-result-type": {`type B bool
 func Takes(B){}
@@ -265,11 +320,11 @@ func Bad(){a:=1;Takes(a.equals(1))}`, "cannot use"},
 func Bad(v E){delete(map[any]int{},v)}`, "map key"},
 		"interface-switch-case": {`pub enum E{A,S([]int),}
 func Bad(v E,other any){switch other{case v:}}`, "switch case comparison"},
-		"helper-collision": {"#[derive(PartialEq)]\ntype X struct{N int}\nfunc EqualsX(a,b X)bool{return true}", "conflicts with a package declaration"},
+		"manual-derived-conflict": {"#[derive(std::derive::PartialEq)]\ntype X struct{N int}\nimpl std::PartialEq for X{func equals(self Self,other Self)bool{return true}}", "overlapping"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			src := appFor("package app\n" + tc.code)
-			msg := compileAcceptanceGraph(t, false, src, filepath.Join(t.TempDir(), "out"), libsrc)
+			src := appFor("package app; use std; use std::PartialEq;\n" + tc.code)
+			msg := compileStdFormalGraph(t, false, src, filepath.Join(t.TempDir(), "out"))
 			if !strings.Contains(msg, tc.want) {
 				t.Fatal(msg)
 			}

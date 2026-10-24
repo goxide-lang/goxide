@@ -6,6 +6,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,45 @@ func TestP4StaticProtocolExample(t *testing.T) {
 	if got := runGo(t, module, "run", "."); got != "Ada Ada\n" {
 		t.Fatalf("static_protocol output = %q", got)
 	}
+}
+
+func prepareP2Example(t *testing.T, example, modulePath string) string {
+	t.Helper()
+	source := filepath.Join("..", "..", "examples", example)
+	var modules []string
+	for range 2 {
+		module, err := lower.PrepareModule([]string{source}, modulePath, testConfig(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(module) })
+		modules = append(modules, module)
+	}
+	err := filepath.WalkDir(modules[0], func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		relative, err := filepath.Rel(modules[0], name)
+		if err != nil {
+			return err
+		}
+		first, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		second, err := os.ReadFile(filepath.Join(modules[1], relative))
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(first, second) {
+			t.Fatalf("%s: repeated example generation changed %s", example, relative)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return modules[0]
 }
 
 func TestP4CarrierAssociatedTypesAndNativeEnumViews(t *testing.T) {

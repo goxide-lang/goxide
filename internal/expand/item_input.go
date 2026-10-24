@@ -34,11 +34,11 @@ func (s *skeleton) syntax(span ast.Span) []syntaxToken {
 // itemInput uses the current attribute list and the retained body tokens. This
 // allows removing an executable attribute without re-lexing or changing the
 // identities of body fragments forwarded through earlier macros.
-func (e *engine) itemInput(item ast.Item, file *ast.File) ([]syntaxToken, error) {
+func (e *engine) itemInput(item ast.Node, file *ast.File) ([]syntaxToken, error) {
 	body, ok := e.itemBodies[item]
 	if !ok {
 		original := item
-		if n, ok := e.originals[item].(ast.Item); ok {
+		if n := e.originals[item]; n != nil {
 			original = n
 		}
 		origin := e.r.Origins[original]
@@ -46,10 +46,6 @@ func (e *engine) itemInput(item ast.Item, file *ast.File) ([]syntaxToken, error)
 			origin = Origin{file, original.Span()}
 		}
 		span := origin.Span
-		attrs := reflect.ValueOf(original).Elem().FieldByName("Attrs").Interface().([]*ast.Attr)
-		if len(attrs) != 0 {
-			span.Start = attrs[len(attrs)-1].Span().End
-		}
 		var tokens []token.Token
 		for _, tok := range origin.File.Tokens {
 			if tok.Kind != token.EOF && tok.Start >= span.Start && tok.End <= span.End {
@@ -61,11 +57,24 @@ func (e *engine) itemInput(item ast.Item, file *ast.File) ([]syntaxToken, error)
 		if err != nil {
 			return nil, err
 		}
+		// Configuration selection replaces cfg_attr with its nested attribute.
+		// That attribute's span is inside the original brackets, so its end
+		// cannot identify the declaration body. Remove complete source groups.
+		for len(body) >= 2 && body[0].Token != nil && body[0].Token.Kind == token.HASH {
+			group := 1
+			if body[group].Token != nil && body[group].Token.Kind == token.NOT {
+				group++
+			}
+			if group >= len(body) || body[group].Tree == nil || body[group].Tree.Delim != ast.Bracket {
+				break
+			}
+			body = body[group+1:]
+		}
 		if len(body) == 0 {
 			return nil, fmt.Errorf("declaration has no retained source tokens")
 		}
 		if e.itemBodies == nil {
-			e.itemBodies = map[ast.Item][]syntaxToken{}
+			e.itemBodies = map[ast.Node][]syntaxToken{}
 		}
 		e.itemBodies[item] = body
 	}

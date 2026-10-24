@@ -32,6 +32,10 @@ type PackageOptions struct {
 	SourcePackages      []SourcePackage
 	// Expanded, when supplied, receives resolved source for the original inputs.
 	Expanded map[string][]byte
+	// GoPackages receives the request's generated dependency graph and its
+	// selected native files for a subsequent in-memory Go check. Pure Go
+	// dependencies retain the identities supplied by the original importer.
+	GoPackages map[string]map[string][]byte
 	// OnProcDiagnostic receives every procedural diagnostic in expansion order,
 	// including warnings, notes, and errors when compilation fails.
 	// Filename is the original input key, or a canonical source key for a
@@ -125,6 +129,10 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	if err := prepareSourcePackages(options.SourcePackages, files, configs, rootConfigs, imports, goImports); err != nil {
 		return nil, err
 	}
+	ordinaryFiles := make(map[string]bool, len(files))
+	for name := range files {
+		ordinaryFiles[name] = true
+	}
 	if imports.crates != nil {
 		imports.crates.edges = append(imports.crates.edges, nativeEdges...)
 	}
@@ -207,7 +215,7 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	lowerFiles := map[string]*syntax.File{}
 	for name, file := range resolved.Files {
 		expandedFiles[name] = file.AST
-		if !file.AST.NativeGo && displayNames[name] != "" {
+		if !file.AST.NativeGo && ordinaryFiles[name] {
 			lowerFiles[name] = file.AST
 		}
 	}
@@ -231,11 +239,18 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	if err := ApplyTargetConstraints(generated, files, options.Config); err != nil {
 		return nil, err
 	}
+	if options.GoPackages != nil {
+		collectPackageGoSources(options.GoPackages, packagePath, sources, options.SourcePackages, generated, checked.NativePackages)
+	}
 	output = make(map[string][]byte, len(generated))
 	for name, data := range generated {
-		output[displayNames[name]] = data
+		display := displayNames[name]
+		if display == "" {
+			continue
+		}
+		output[display] = data
 		if options.Expanded != nil {
-			options.Expanded[displayNames[name]] = []byte(printer.Source(resolved.Files[name].AST))
+			options.Expanded[display] = []byte(printer.Source(resolved.Files[name].AST))
 		}
 	}
 	return output, nil

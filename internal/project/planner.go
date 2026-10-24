@@ -1034,8 +1034,8 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 			return nil, fmt.Errorf("native requirement collides with reserved planner namespace: %s", line)
 		}
 	}
-	// Download by selected identity, then ask Go to verify cached zip AND expanded
-	// directory. A cached download's Sum by itself cannot detect a modified Dir.
+	// Verify the actual downloaded identities, including both ZIP and expanded
+	// content. Local replacements have no remote cache entry to verify.
 	data, e = run("mod", "download", "-json", "all")
 	if e != nil {
 		return nil, e
@@ -1043,18 +1043,24 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 	downloads := map[string]Selection{}
 	decoder = json.NewDecoder(bytes.NewReader(data))
 	for {
-		var s Selection
-		e = decoder.Decode(&s)
+		var downloaded struct {
+			Path, Version, Sum, GoModSum, Dir, GoMod, Zip string
+		}
+		e = decoder.Decode(&downloaded)
 		if e == io.EOF {
 			break
 		}
 		if e != nil {
 			return nil, e
 		}
+		s := Selection{Path: downloaded.Path, Version: downloaded.Version, Sum: downloaded.Sum, GoModSum: downloaded.GoModSum, Dir: downloaded.Dir, GoMod: downloaded.GoMod}
+		if s.Path == "" || s.Version == "" || s.Sum == "" || s.GoModSum == "" || s.Dir == "" || downloaded.Zip == "" {
+			return nil, fmt.Errorf("download lacks verified source identity: %s@%s", s.Path, s.Version)
+		}
+		if e = verifyModuleDownload(s, downloaded.Zip); e != nil {
+			return nil, fmt.Errorf("module source verification failed before manifest loading: %w", e)
+		}
 		downloads[s.Path+"@"+s.Version] = s
-	}
-	if _, e = run("mod", "verify"); e != nil {
-		return nil, fmt.Errorf("module source verification failed before manifest loading: %w", e)
 	}
 	for _, path := range keys(selected) {
 		s := selected[path]

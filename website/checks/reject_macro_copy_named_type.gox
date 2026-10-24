@@ -1,3 +1,0 @@
-package p
-macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
-func run(){type copy int;var n copy;_=transfer!([]int{},[]int{int(n)})}

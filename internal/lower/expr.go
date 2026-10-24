@@ -26,6 +26,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		}
 	}
 	if call, ok := n.(*syntax.CallExpr); ok {
+		if typ := e.info.EnumAssertions[call]; typ != nil {
+			return e.enumAssert(call, typ)
+		}
 		if instance := e.info.EnumValid[call]; instance != nil {
 			return e.enumValid(call, instance)
 		}
@@ -57,9 +60,6 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		return e.memberExpr(member)
 	}
 	if result, ok := e.enumConstruct(n); ok {
-		return result
-	}
-	if result, ok := e.equalityCall(n); ok {
 		return result
 	}
 	switch n := n.(type) {

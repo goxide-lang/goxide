@@ -1,128 +1,53 @@
-# RFC 0013：Default、Clone、Debug 内建派生
-
-本轮 A06 的单文件外部已登记协议恢复，按
-[RFC0001 实施前合同](0001-package-loading.md#a06-已知-go-module-的单文件外部恢复2026-10-06实施前合同)
-实施。复用下文已有 canonical identity、签名和来源验证；手写 Clone/Debug/serde
-登记不在本片新定，结果见[单文件外部恢复报告](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/docs/reviews/single-file-external-recovery-20261006.md)。
+# RFC 0013：普通库的 Default、Clone、Debug 与比较派生
 
 ## 状态与范围
 
-已确认目标：内建 `#[derive(Default, Clone, Debug)]`；用户可编程 derive 延期（D14）。
-Default 的字段约束、enum 默认变体规则与无 static 的关联函数声明已确认；通用静态降低、泛型证据和 formatter 仍未定。
-依据：[原设计](../design/macros.md)。derive 生成普通显式 impl，不能绕过 trait / 借用检查。类型关联函数/构造函数见 [RFC 0020](0020-associated-functions.md)；同名构造不会自动实现 Default。
+std 与 serde 的业务派生是正式 proc-macro 库，输出普通 trait/impl；不保留编译器内建业务派生、Default 专用递归禁令或 derive 来源特权。当前发布与全树验收状态见[能力状态表](../mvp-gap-audit.md)。宏执行及卫生见 [RFC 0030](0030-procedural-macros.md)，条件泛型与实现选择见 [RFC 0031](0031-generic-protocol-impls.md)。
 
 ## 源级规则
 
-当前序列化派生由 serde core 拥有：先 `use serde;`，再写 `#[derive(serde::Serialize, serde::Deserialize)]`。显式导入某一派生或改名后按 canonical owner 解析；缺失/错误 owner、JSON owner、同名普通类型均拒绝。旧全局裸名不再保留。见[静态路径合同](../design/static-paths.md)。
-
-最新 D28 补充确认：struct 自动 Default 必须每个字段有 Default，否则手动实现；enum 恰好标记一个默认变体，可以携带 payload，仅该变体的字段递归要求 Default，非默认变体不要求 Default。手动 Default 首期使用 `impl Default for T { func default() T { ... } }`，限同包本地非泛型 struct，具体边界见 [RFC 0020](0020-associated-functions.md#当前手动-default-实现子集)。
-
-- 按规范 trait 身份选择固定内建规则；只读目标类型形状和固定辅助属性。
-- Default 按声明顺序调用字段 Default；Clone 按同一顺序调用字段 Clone。
-- Debug 按声明顺序格式化字段；enum 保留并格式化当前合法变体。
-- 派生在目标类型包中生成实现；不读取外部类型私有布局、不修改字段、不新增导入。
-- 字段缺少协议、同键重复实现或未知 derive 报错，不静默覆盖或降级为 Go 赋值。
-- 普通赋值仍服从既有值复制规则；显式 Clone 不引入全局 move，也不承诺对象图深复制。
-
-## 转译示例
-
-**D01：非零业务默认值和具体类型 Clone。** goxide 声明片段。
-依赖：`Label` 已有显式 Default（返回 `"untitled"`）、Clone（同值复制）和 Debug。
+显式导入库并选择宏路径：
 
 ```goxide
-#[derive(Default, Clone, Debug)]
-pub struct Record {
-    title Label
+use std;
+use serde;
+
+struct Settings { Port int }
+impl std::Default for Settings {
+    func r#default() Self { return Self{Port: 8080} }
 }
+#[derive(std::derive::Default, std::derive::Clone, std::derive::Debug)]
+struct Record { Count int }
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
+struct Message { Text string }
 ```
 
-Go 对照：以下是具体类型的 Default / Clone 核心，省略与本例无关的字段导出策略。
-函数名仅表示已选 impl；不冻结导出名和泛型 ABI。
+宏只读取语法及已登记 helper 属性，生成普通声明；字段协议、类型身份、可见性、引用权限、归属与重叠实现由普通检查器处理。手写 impl 和宏产物使用同一路径，透明 alias 保留类型身份，新 defined 类型不继承协议。泛型派生输出满足字段业务需要的条件，不收紧原类型声明。
 
-```go
-type Label string
-type Record struct { title Label }
+## 字段行为
 
-func defaultLabel() Label { return "untitled" }
-func cloneLabel(value Label) Label { return value }
+| 协议 | 合同 |
+| --- | --- |
+| Default | struct 按字段声明顺序调用字段 Default；enum 恰好标记一个 `#[default]` 变体，只要求选中 payload 的协议；Option 返回 None 且不要求元素 Default，Result 不自动取得 Default |
+| Clone | 按字段顺序调用明确的 Clone；enum 保留活动变体，容器逐元素处理并保持 nil/空区别；普通赋值仍为 Go 浅复制 |
+| Debug | 按声明顺序显示类型、字段/变体名及内容，包括私有字段；complex64/complex128 与其容器/enum payload 均由普通 Debug impl 支持；不自动脱敏，也不是稳定序列化格式 |
+| PartialEq | 调用字段的普通相等协议；slice/map 区分 nil 与非 nil 空值；enum 派生在比较前依次调用 `std::enum_assert!` 校验两侧活动 payload |
+| Eq | 具有 PartialEq 前提的普通空 marker；显式 impl 是作者对等价关系的承诺，derive 按字段 Eq 条件生成普通 impl |
+| NativeKey | 独立承诺 PartialEq 与稳定 Go 原生键相等一致，并要求 comparable；Eq 不自动授予此能力，enum 不自动派生 NativeKey |
 
-func defaultRecord() Record {
-    title := defaultLabel()
-    return Record{title: title}
-}
-func cloneRecord(value *Record) Record {
-    title := cloneLabel(value.title)
-    return Record{title: title}
-}
-```
+Default 的方法体可以普通递归；协议前提循环和无限实例需求仍由通用机制诊断。字段缺协议、重复 impl 或无效 helper 均诊断，不以 Go 零值、反射或方法同名兜底。Debug 对 complex 的支持不自动提供 Clone、Default、Eq 或 Error 插值能力。
 
-`defaultRecord().title == "untitled"`；`var value Record` 的空字符串不是等价实现。
-`cloneRecord` 的 Go 指针表示源级只读借用；Go 签名本身不提供该检查。
-Debug 同样选择具体字段实现；其 formatter 签名尚未冻结，不能从上述函数自行推导 ABI。
+serde 两个方向独立。Deserialize 的 default 只用于缺失字段，skip 默认构造一次；完成本层读取和 required 检查后按字段顺序执行。Option 缺失/null 为 None，present 错误不回退默认，skip 只验证格式与预算。详见 [serde 合同](research/0006-serde-core-and-formats.md)。
 
-**D02：共享字段的 Clone 仍共享。** goxide 声明片段；依赖 Arc 的显式句柄 Clone。
+## Go 互操作与验证
 
-```goxide
-#[derive(Clone)]
-struct Handle {
-    shared Arc[Counter]
-}
-```
+静态协议通过已选 impl 的普通入口调用，实例协议按 wrapper 与 carrier 合同生成；固有 Error 方法按 [RFC 0020](0020-associated-functions.md)直接落在 struct receiver 或 enum 接口/变体上。Go 调用者使用生成的普通公开入口，Goxide 下游从源码恢复协议关系，不读取旧 enum metadata，也不猜同名 helper。
 
-Go 对照：核心片段依赖普通 `Counter` 类型；示例不读取或修改 Counter 内容。
+正式 std/serde 宏的验证入口为 `internal/compile/formal_std_test.go`、`formal_serde_test.go`；真实 CLI 跨包与原生 Go 验收仍在 `tests/acceptance`。全树及发布验收状态单独见状态表。
 
-```go
-type Handle struct { shared *Counter }
-func cloneArcCounter(value *Counter) *Counter { return value }
-func cloneHandle(value *Handle) Handle {
-    shared := cloneArcCounter(value.shared)
-    return Handle{shared: shared}
-}
-```
+## 旧管线实现记录
 
-约束：克隆前后 `shared` 指针相同；不因此获得可变权限或要求 `Counter: Clone`。
-锁句柄也必须共享同一锁和状态，不能按值复制内部 Go mutex。
-
-**D03：缺少字段协议必须拒绝。** goxide 反例，无 Go 输出。
-
-```goxide
-#[derive(Clone)]
-struct Exclusive {
-    value &mut int
-}
-```
-
-依赖借用类型规则；若 `&mut int` 尚无明确 Clone 协议，派生按缺协议拒绝；&mut 不承诺独占，不能因复制别名本身拒绝（D19/D20）。
-结构合法性若已在更早阶段拒绝，也不得由 derive 把它变成可接受程序。
-
-## 拒绝与边界
-
-- enum 的 Default 要求恰好一个 `#[default]` 变体；按字段声明顺序构造其 payload。缺少或重复标记、选中字段缺协议及非法属性位置均拒绝；不检查非选中变体的 Default。
-- Result 不自动取得 Default；nil 不因 Default 或 Go 零值存在就成为合法 Result / 非空引用。
-- 泛型 `var value T` 不能冒充 Default；容器需明确逐项调用选中的构造。
-- 字段 serde(default/skip) 解码调用已登记 Default，缺协议拒绝；default 只处理缺失，skip 忽略输入并默认构造一次。本层读取及 required 检查后按声明顺序调用，显式值/错误不回退默认。Serialize-only 无解码 Default 约束。此项替代旧 Go 零值策略，详见 [serde RFC](research/0006-serde-core-and-formats.md#71-字段-default-接入与兼容变化)。
-- 容器 Clone 必须说明存储、元素和别名行为；Go `slices.Clone` 不自动等于逐元素 Clone。
-- 内建具体 Option serde 的缺失/null 为 None；default/skip 沿用 Option 自身 None 默认，不调用载荷 Default。未 skip 的载荷必须有对应方向 codec；错误值不回退。skip 仅消费格式/预算，不检查目标类型。具体限制见 [serde RFC](research/0006-serde-core-and-formats.md#72-内建具体-option-派生)。
-- Debug 展示struct字段名和内容、enum源变体名和payload，包括私有业务数据；serde rename/value不改变显示。不自动脱敏，不绕过锁权限，不通过反射/Stringer/error兜底，也不是稳定序列化格式。
-- Default 无接收者、Clone 返回具体 Self；不得抹成 `any` 塞进统一运行时接口。
-
-## 双向互操作
-
-goxide 调用生成实现与手写 impl 使用同一套选择、权限和唯一性规则。
-Go 使用发布 `.go` 中公开的普通函数 / 类型；Default 不自动改变 Go 的零初始化行为。
-原生 Go 调用方不受 goxide 借用检查；派生不能被描述为给整个 Go 程序增加所有权保证。
-回到 goxide 时由 `.d.gox` 或 `.gox` 恢复协议信息，不从 Go 方法形状猜测派生语义。
-
-## 验收与未定项
-
-1. D01 验证业务默认值；多字段版本记录顺序，确保每个字段协议只调用一次。
-2. D02 验证共享身份；独立容器复制必须另用已选定的容器 Clone 契约验收。
-3. D03、缺少字段 Debug、重复 impl、多个 default 变体均不得生成成功产物。
-4. 成本：逐字段协议调用；递归、分配、共享及副作用取决于字段实现，不承诺统一复杂度。
-5. 未定：接收者类型与权限拼写、泛型字典或专门化、Debug formatter 和稳定符号编码。
-6. 未确定的泛型形式不得假称已有可编译降低；Go 示例不证明通用派生器已实现。
-
-当前手动入口与选中 payload 的实现证据见[独立业务验收](../../tests/acceptance/manual_default_test.go)；既有实现证据见[Default/打印验收](../../tests/acceptance/print_default_test.go)与[封闭映射验收](../../tests/acceptance/enum_wire_test.go)。泛型与完整 trait 后端仍后置；手动 Default 的具体子集不代表完整关联函数后端。
+以下带日期的记录保留历史链接与当时实现背景；其中 metadata、helper 登记、特定 derive 来源及 Default 禁环均已由上述普通库合同取代，不是当前前端规则。
 
 ## 跨包已登记 Default 字段（2026-10-03）
 

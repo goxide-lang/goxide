@@ -144,7 +144,7 @@ func (e *emitter) implGenerics(impl *check.Impl) *goast.FieldList {
 	}
 	fields := &goast.FieldList{}
 	for _, parameter := range impl.TypeParams {
-		fields.List = append(fields.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(parameter.Obj().Name())}, Type: e.goConstraint(parameter.Constraint())})
+		fields.List = append(fields.List, &goast.Field{Names: []*goast.Ident{e.goType(parameter).(*goast.Ident)}, Type: e.goConstraint(parameter.Constraint())})
 	}
 	fields.List = append(fields.List, e.evidenceParameters(impl.Requirements)...)
 	return fields
@@ -228,7 +228,9 @@ func (e *emitter) implFactory(impl *check.Impl) goast.Expr {
 		}
 		factory := enumIndices(e.sourceGlobal(template.File, e.traitFactoryName(impl)), arguments)
 		bounds, evidence := viewCallbacks(impl)
-		return &goast.CallExpr{Fun: factory, Args: append(e.viewWitnessArguments(impl), e.callbackArguments(bounds, evidence)...)}
+		args := append(e.viewWitnessArguments(impl), e.callbackArguments(bounds, evidence)...)
+		args = append(args, e.enumCheckArguments(e.viewEnumChecks(impl))...)
+		return &goast.CallExpr{Fun: factory, Args: args}
 	}
 	return e.sourceGlobal(template.File, e.traitFactoryName(template))
 }

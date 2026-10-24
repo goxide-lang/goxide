@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,32 +15,52 @@ func TestLocalProtocolAliasModules(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
-	mod := func(name, lib string) string {
-		s := fmt.Sprintf("module %s\ngo 1.27\n", name)
-		if lib != "" {
-			s += fmt.Sprintf("require aliases.example/lib v0.0.0\nreplace aliases.example/lib => %s\n", filepath.ToSlash(lib))
-		}
-		return s
-	}
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	src := t.TempDir()
-	packagesWrite(t, src, "go.mod", mod("aliases.example/lib", ""))
-	writeAcceptanceSerdeRoots(t, src, "")
-	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
-	packagesWrite(t, src, "model/item.gox", `package model; use serde;
-#[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
+	writeStdFormalManifest(t, src, "aliases.example/lib", "library", nil)
+
+	packagesWrite(t, src, "lib.gox", "package library; use std; use std::PartialEq;\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
+	packagesWrite(t, src, "model/item.gox", `package model; use std; use std::PartialEq; use serde;
+#[derive(std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 type Item struct{N int;Name string}
-impl Default for Item{func default()Item{return Item{N:7,Name:"producer"}}}
-#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
+impl std::Default for Item{func r#default()Item{return Item{N:7,Name:"producer"}}}
+#[derive(std::derive::Default,std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 pub enum E{
 #[default]
 Entry(Item),
 Empty,
 }
+
+impl Item {
+ pub func initial() Self { return std::default_value[Self]() }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl E {
+ pub func initial() Self { return std::default_value[Self]() }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
 `)
-	packagesWrite(t, src, "other/item.gox", `package different; use serde;
-#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
+	packagesWrite(t, src, "other/item.gox", `package different; use std; use std::PartialEq; use serde;
+#[derive(std::derive::Default,std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 type Item struct{Text string}
+
+impl Item {
+ pub func initial() Self { return std::default_value[Self]() }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
 `)
 	packagesWrite(t, src, "relay/relay.go", `package relay
 import m "aliases.example/lib/model"
@@ -54,10 +75,10 @@ func DebugItem(v *Item)string{return "fake"}
 func EqualsItem(a,b Item)bool{return true}
 `)
 	lib := filepath.Join(t.TempDir(), "lib")
-	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
+	lib = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", lib, src))
 	appsrc := t.TempDir()
-	packagesWrite(t, appsrc, "go.mod", mod("aliases.example/app", lib))
-	writeAcceptanceSerdeRoots(t, appsrc, "aliases.example/lib")
+	writeStdFormalManifest(t, appsrc, "aliases.example/app", "app", map[string]string{"library": src})
+
 	// Both canonical imports exist only in native Go: no goxide selector is available.
 	packagesWrite(t, appsrc, "aliases.go", `package app
 import m "aliases.example/lib/relay"
@@ -66,28 +87,60 @@ type Native=m.Item
 type NativeE=m.E
 type Duplicate=again.Item
 `)
-	packagesWrite(t, appsrc, "chain.gox", `package app; use serde;
+	packagesWrite(t, appsrc, "chain.gox", `package app; use std; use std::PartialEq; use serde;
 type Local=Native
 type Level=Local
 type Event=NativeE
-#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
+#[derive(std::derive::Default,std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 type Wrap struct{V Level;E Event;Again Duplicate}
-#[derive(Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
+#[derive(std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 type Bag struct{Items []Level;Lookup map[string]Local}
-#[derive(serde::Serialize,serde::Deserialize,PartialEq,Eq)]
+#[derive(serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 type Optional struct{Maybe Option[Level]}
 func Equal(a,b Wrap)bool{Local:=3;_=Local;return a.equals(b)}
+
+impl Wrap {
+ pub func initial() Self { return std::default_value[Self]() }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl Bag {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl Optional {
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
 `)
-	packagesWrite(t, appsrc, "other.gox", `package app; use serde;
+	packagesWrite(t, appsrc, "other.gox", `package app; use std; use std::PartialEq; use serde;
 use library::other as m;
 type Different=m::Item
-#[derive(Default,Clone,Debug,serde::Serialize,serde::Deserialize,PartialEq,Eq)]
+#[derive(std::derive::Default,std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 type Other struct{V Different}
+
+impl Other {
+ pub func initial() Self { return std::default_value[Self]() }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func equal(left Self, right Self) bool { return std::PartialEq::equals(left,right) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
 `)
 	out := filepath.Join(t.TempDir(), "app")
-	compileAcceptanceGraph(t, true, appsrc, out, src)
+	compileStdFormalGraph(t, true, appsrc, out)
 	repeat := filepath.Join(t.TempDir(), "repeat")
-	compileAcceptanceGraph(t, true, appsrc, repeat, src)
+	compileStdFormalGraph(t, true, appsrc, repeat)
 	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -114,63 +167,65 @@ type Other struct{V Different}
 	packagesWrite(t, out, "app_test.go", `package app
 import("testing";"reflect";"strings";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json";sum "github.com/goxide-lang/std/sum";m "aliases.example/lib/model")
 func TestAllProtocols(t *testing.T){
- v:=DefaultWrap();if v.V.N!=7||v.Again.Name!="producer"{t.Fatal(v)}
- c:=CloneWrap(&v);if !Equal(v,c)||!strings.Contains(DebugWrap(&v),"E::Entry(Item {"){t.Fatal(v,c,DebugWrap(&v))};c.V.N=8;if Equal(v,c){t.Fatal("wrong equality")}
- b,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeWrap(s,&v)});if e!=nil{t.Fatal(e)};d,e:=serdejson.Unmarshal(b,DeserializeWrap);if e!=nil||!reflect.DeepEqual(d,v){t.Fatal(string(b),d,e)}
+ v:=(WrapOps{}).Initial();if v.V.N!=7||v.Again.Name!="producer"{t.Fatal(v)}
+ c:=(WrapOps{}).Copy(&v);if !Equal(v,c)||!strings.Contains((WrapOps{}).Describe(&v),"E::Entry(Item {"){t.Fatal(v,c,(WrapOps{}).Describe(&v))};c.V.N=8;if Equal(v,c){t.Fatal("wrong equality")}
+ b,e:=serdejson.Encode(func(s serde.Serializer)error{return (WrapOps{}).Encode(s,&v)});if e!=nil{t.Fatal(e)};d,e:=serdejson.Unmarshal(b,(WrapOps{}).Decode);if e!=nil||!reflect.DeepEqual(d,v){t.Fatal(string(b),d,e)}
  if reflect.TypeOf(v.V)!=reflect.TypeOf(m.Item{}){t.Fatal("alias identity changed")}
- bag:=Bag{Items:[]Level{v.V},Lookup:map[string]Local{"x":v.V}};bc:=CloneBag(&bag);bc.Items[0].N=12;bc.Lookup["x"]=Local{N:13};if bag.Items[0].N!=7||bag.Lookup["x"].N!=7{t.Fatal("clone shared containers")}
- b,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeBag(s,&bag)});bd,e2:=serdejson.Unmarshal(b,DeserializeBag);if e!=nil||e2!=nil||!EqualsBag(bag,bd){t.Fatal(string(b),e,e2)}
- o:=DefaultOther();o.V.Text="other";oc:=CloneOther(&o);if !EqualsOther(o,oc)||DebugOther(&o)!="Other { V: Item { Text: \"other\" } }"{t.Fatal(o,oc)}
- b,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeOther(s,&o)});od,e2:=serdejson.Unmarshal(b,DeserializeOther);if e!=nil||e2!=nil||od.V.Text!="other"{t.Fatal(string(b),e,e2)}
- opt,e:=serdejson.Unmarshal([]byte("{}"),DeserializeOptional);if e!=nil||sum.TagOption(opt.Maybe)!=0{t.Fatal(opt,e)}
- b,e=serdejson.Encode(func(s serde.Serializer)error{return SerializeOptional(s,&opt)});opt2,e2:=serdejson.Unmarshal(b,DeserializeOptional);if e!=nil||e2!=nil||!EqualsOptional(opt,opt2){t.Fatal(string(b),e,e2)}
+ bag:=Bag{Items:[]Level{v.V},Lookup:map[string]Local{"x":v.V}};bc:=(BagOps{}).Copy(&bag);bc.Items[0].N=12;bc.Lookup["x"]=Local{N:13};if bag.Items[0].N!=7||bag.Lookup["x"].N!=7{t.Fatal("clone shared containers")}
+ b,e=serdejson.Encode(func(s serde.Serializer)error{return (BagOps{}).Encode(s,&bag)});bd,e2:=serdejson.Unmarshal(b,(BagOps{}).Decode);if e!=nil||e2!=nil||!(BagOps{}).Equal(bag,bd){t.Fatal(string(b),e,e2)}
+ o:=(OtherOps{}).Initial();o.V.Text="other";oc:=(OtherOps{}).Copy(&o);if !(OtherOps{}).Equal(o,oc)||(OtherOps{}).Describe(&o)!="Other { V: Item { Text: \"other\" } }"{t.Fatal(o,oc)}
+ b,e=serdejson.Encode(func(s serde.Serializer)error{return (OtherOps{}).Encode(s,&o)});od,e2:=serdejson.Unmarshal(b,(OtherOps{}).Decode);if e!=nil||e2!=nil||od.V.Text!="other"{t.Fatal(string(b),e,e2)}
+ opt,e:=serdejson.Unmarshal([]byte("{}"),(OptionalOps{}).Decode);if e!=nil||sum.TagOption(opt.Maybe)!=0{t.Fatal(opt,e)}
+ b,e=serdejson.Encode(func(s serde.Serializer)error{return (OptionalOps{}).Encode(s,&opt)});opt2,e2:=serdejson.Unmarshal(b,(OptionalOps{}).Decode);if e!=nil||e2!=nil||!(OptionalOps{}).Equal(opt,opt2){t.Fatal(string(b),e,e2)}
 }
 `)
 	plain := t.TempDir()
-	packagesWrite(t, plain, "go.mod", mod("aliases.example/plain", lib)+fmt.Sprintf("require aliases.example/app v0.0.0\nreplace aliases.example/app => %s\n", filepath.ToSlash(out)))
+	writeStdNativeConsumerManifest(t, plain, "aliases.example/plain", out)
 	packagesWrite(t, plain, "consumer_test.go", `package plain
 import("testing";a "aliases.example/app")
-func TestPublicGoHelpers(t *testing.T){v:=a.DefaultWrap();c:=a.CloneWrap(&v);if !a.EqualsWrap(v,c)||v.V.N!=7||a.DebugWrap(&v)==""{t.Fatal(v,c)}}
+func TestPublicGoHelpers(t *testing.T){v:=(a.WrapOps{}).Initial();c:=(a.WrapOps{}).Copy(&v);if !(a.WrapOps{}).Equal(v,c)||v.V.N!=7||(a.WrapOps{}).Describe(&v)==""{t.Fatal(v,c)}}
 `)
 	for _, dir := range []string{lib, out, plain} {
-		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
+		packagesCommand(t, dir, tool, true, "test", "-mod=mod", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
 	for _, kind := range []string{"Default", "Clone", "Debug", "Serialize", "Deserialize", "PartialEq", "Eq"} {
 		if kind == "Eq" {
 			kind = "PartialEq,Eq"
 		}
-		derive, ownerUse := kind, ""
+		derive, ownerUse := "std::derive::"+strings.ReplaceAll(kind, ",", ",std::derive::"), ""
+		want := "missing trait implementation:"
 		if kind == "Serialize" || kind == "Deserialize" {
-			derive, ownerUse = "serde::"+kind, "use serde;"
+			derive, ownerUse = "serde::derive::"+kind, "use serde;"
+			want = "does not explicitly implement " + kind
 		}
 		for _, definition := range []string{"type Local m::Item", "type Fresh m::Item;type Local=Fresh"} {
 			bad := t.TempDir()
-			packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
-			writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib")
-			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; %s\nuse library::model as m;\n%s\n#[derive(%s)]\ntype W struct{V Local}\n", ownerUse, definition, derive))
-			log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
-			if !strings.Contains(log, "bad.gox") && !strings.Contains(log, "requires an explicit ") {
+			writeStdFormalManifest(t, bad, "aliases.example/bad", "bad", map[string]string{"library": src})
+
+			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; use std; use std::PartialEq; %s\nuse library::model as m;\n%s\n#[derive(%s)]\ntype W struct{V Local}\n", ownerUse, definition, derive))
+			log := compileStdFormalGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"))
+			if !strings.Contains(log, "bad.gox") || !strings.Contains(log, want) {
 				t.Fatal(log)
 			}
 		}
 	}
 	shadow := t.TempDir()
-	packagesWrite(t, shadow, "go.mod", mod("aliases.example/shadow", lib))
-	writeAcceptanceSerdeRoots(t, shadow, "aliases.example/lib")
-	packagesWrite(t, shadow, "shadow.gox", `package shadow
+	writeStdFormalManifest(t, shadow, "aliases.example/shadow", "shadow", map[string]string{"library": src})
+
+	packagesWrite(t, shadow, "shadow.gox", `package shadow; use std; use std::PartialEq;
 use library::model as m;
 type Local=m::Item
 func Compare()bool{type Local struct{N int};a:=Local{N:1};return a.equals(a)}
 `)
-	logShadow := compileAcceptanceGraph(t, false, shadow, filepath.Join(t.TempDir(), "shadow"), src)
-	if !strings.Contains(logShadow, "shadow.gox:4:") || !strings.Contains(logShadow, "equals requires a primitive or an explicitly registered PartialEq type") {
+	logShadow := compileStdFormalGraph(t, false, shadow, filepath.Join(t.TempDir(), "shadow"))
+	if !strings.Contains(logShadow, "shadow.gox:4:") || !strings.Contains(logShadow, "no explicit implementation for selected trait application") {
 		t.Fatal(logShadow)
 	}
-	// Matching shape/helper spellings in another package do not convey registration.
+	// Matching shape and helper spellings do not provide a trait implementation.
 	bad := t.TempDir()
-	packagesWrite(t, bad, "go.mod", mod("aliases.example/bad", lib))
-	writeAcceptanceSerdeRoots(t, bad, "aliases.example/lib")
-	packagesWrite(t, bad, "bad.gox", "package bad\nuse library::fake as m;\ntype Local=m::Item\n#[derive(Clone)]\ntype W struct{V Local}\n")
-	compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "fake"), src)
+	writeStdFormalManifest(t, bad, "aliases.example/bad", "bad", map[string]string{"library": src})
+
+	packagesWrite(t, bad, "bad.gox", "package bad; use std; use std::PartialEq;\nuse library::fake as m;\ntype Local=m::Item\n#[derive(std::derive::Clone)]\ntype W struct{V Local}\n\nimpl W {\n pub func copy(value &Self) Self { return std::Clone::clone(value) }\n}\n")
+	compileStdFormalGraph(t, false, bad, filepath.Join(t.TempDir(), "fake"))
 }

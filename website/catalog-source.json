@@ -1,10 +1,8 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "690cd5178dc11a0089a41e9320ed1275778383e1",
-  "reviewedAt": "2026-10-16",
-  "evidenceRefs": {
-    "use-path": "5e4b118f25262d8022d1b8f72575d89d69f096aa"
-  },
+  "compilerCommit": "a82bb80b54127dc670321536e44ad5009d6f1a9f",
+  "reviewedAt": "2026-10-23",
+  "evidenceRefs": {},
   "statusLabels": {
     "proposal": "提案",
     "accepted": "已确认待实现",
@@ -89,15 +87,33 @@
     },
     {
       "id": "enum_borrows",
-      "title": "enum 载荷原位借用",
-      "description": "保存可写载荷引用；enum 值的普通赋值共享变体对象。",
-      "expectedStdout": "5 5\n5\n"
+      "title": "enum 不可变载荷与容器",
+      "description": "更新 enum 返回新值；按值匹配的 slice 保留容器权限。",
+      "expectedStdout": "2 1\n2\n9\n"
     },
     {
       "id": "static_protocol",
       "title": "显式静态协议与泛型调用",
       "description": "trait 声明关联函数，impl 提供 Self 构造，具体类型和泛型参数共享同一入口。",
       "expectedStdout": "Ada Ada\n"
+    },
+    {
+      "id": "proc_function",
+      "title": "函数式过程宏",
+      "description": "独立 WASI 宏把表达式乘二，参数只求值一次。",
+      "expectedStdout": "42 1\n"
+    },
+    {
+      "id": "proc_attribute",
+      "title": "属性过程宏",
+      "description": "宏接收属性参数和整个函数，替换函数体。",
+      "expectedStdout": "42\n"
+    },
+    {
+      "id": "proc_derive",
+      "title": "derive 过程宏",
+      "description": "使用 syntax::syn 解析类型，保留类型标识符并生成方法。",
+      "expectedStdout": "Order\n"
     }
   ],
   "items": [
@@ -112,19 +128,15 @@
       "support": "browser",
       "summary": "声明宏支持模式匹配、重复和嵌套，可在表达式、语句、类型与 item 位置展开。",
       "usage": "values!(next(), next(), 9) 构造列表，两个 next 各调用一次。twice 示例显式保存参数，避免重复求值。",
-      "limitation": "模板中的路径默认按定义点解析，$caller:: 显式使用调用点；重复写两次捕获表达式仍可能求值两次。过程宏与外部预编译宏包尚未交付。",
+      "limitation": "模板中的路径默认按定义点解析，$caller:: 显式使用调用点；重复写两次捕获表达式仍可能求值两次。函数式、属性和 derive 过程宏见独立示例；浏览器只执行网站随附的固定宏。",
       "examples": [
         "macro",
         "macro_repeat"
       ],
       "evidence": [
-        "internal/macros/macros_test.go",
-        "internal/macros/primitive_bindings_test.go",
         "tests/acceptance/macro_packages_test.go",
         "docs/rfcs/0011-macros.md",
-        "internal/macros/fragment_categories_test.go",
-        "tests/acceptance/macro_fragment_categories_test.go",
-        "internal/macros/primitive_aliases_test.go"
+        "tests/acceptance/macro_fragment_categories_test.go"
       ],
       "checks": []
     },
@@ -139,20 +151,20 @@
       "status": "partial",
       "support": "browser",
       "summary": "用具名变体表示状态与载荷，避免将任意整数当成有效状态。",
-      "usage": "用户 enum 生成密封 Go 接口，每个变体由一个指针结构体承载。普通赋值共享原变体对象；match 只分派一次，同一变体的 arm 按源码顺序选择。",
-      "limitation": "nil 接口不是合法 enum 值，match 分派前会 panic，_ 不兜 nil。引用视图保存 owner 槽位，已有 payload 投影继续指向取得时的变体字段。Option/Result 仍使用已发布 std/sum 的现有表示。",
+      "usage": "用户 enum 生成密封 Go 接口，每个变体由一个指针结构体承载。变体和 payload 槽不可变；变量赋值重新绑定新值。match 只分派一次，同一变体的 arm 按源码顺序选择。",
+      "limitation": "nil 接口和 typed-nil 不是合法 enum 值，match 分派前会 panic，_ 不兜 nil。payload 内 slice、map、pointer 按其自身权限使用；原生 Go 保留公开变体字段。Option/Result 继续使用已发布 std/sum 表示。",
       "examples": [
         "enum",
         "enum_borrows"
       ],
       "evidence": [
-        "internal/enums/lower.go",
         "tests/acceptance/enums_test.go",
         "tests/acceptance/enum_external_test.go",
-        "internal/frontend/enum_borrow_test.go"
+        "tests/acceptance/enum_payload_borrow_test.go"
       ],
       "checks": [
-        "incomplete_match"
+        "incomplete_match",
+        "enum_payload_write"
       ]
     },
     {
@@ -165,19 +177,16 @@
       "status": "partial",
       "support": "browser",
       "summary": "穷尽匹配配合 guard，把分支结果作为值使用。",
-      "usage": "正数 Count 匹配 guard，其余 Count 和 Empty 提供后备分支。scrutinee 不重复求值。值模式复制载荷；ref / ref mut 显式绑定原始槽，match &value / match &mut value 设置默认绑定。",
-      "limitation": "guard 不代替穷尽覆盖。借用模式保留入口判别快照与固定载荷槽；guard 修改 owner 不会重新选择变体。引用元素及 Go 桥接仍受现有类型权限约束，不代表完整借用检查。",
+      "usage": "正数 Count 匹配 guard，其余 Count 和 Empty 提供后备分支。scrutinee 不重复求值。值模式复制载荷，ref 与 match &value 只读借用载荷；可写 payload 投影会被拒绝。",
+      "limitation": "guard 不代替穷尽覆盖。guard 重新绑定原变量不会重新选择已匹配的变体。按值取得的 slice、map、pointer 保留其权限，不将整个对象图冻结。",
       "examples": [
         "enum",
         "match_composition",
         "enum_borrows"
       ],
       "evidence": [
-        "internal/matchexpr/lower.go",
         "tests/acceptance/match_call_signatures_test.go",
         "tests/acceptance/match_named_dynamic_test.go",
-        "internal/matchexpr/composite.go",
-        "internal/propagate/match_literals.go",
         "tests/acceptance/match_unary_composite_test.go",
         "docs/rfcs/0009-match.md"
       ],
@@ -191,23 +200,20 @@
       "topic": "language",
       "rfcs": [
         "0008",
-        "research/0005"
+        "research/0005",
+        "0032"
       ],
       "status": "partial",
       "support": "browser",
       "summary": "显式表达缺失与失败；? 向最近的用户函数传播，显式错误包装保留错误链。",
-      "usage": "返回类型和 match 目标提供上下文，可写 Result::Ok/Err、Option::Some/None；nextPort 在失败时显式调用 FromPortError，nameLength 用 ? 传播 None。",
+      "usage": "返回类型和 match 目标提供上下文，可写 Result::Ok/Err、Option::Some/None；nextPort 在失败时显式调用 PortError 的 std::From[error] 协议，nameLength 用 ? 传播 None。",
       "limitation": "没有通用 Try/Residual、转换链搜索或全程序联合推导。缺少直接期望类型的 None、Result 单侧构造须补显式参数；不会从后续 return 反推局部变量。",
       "examples": [
         "result"
       ],
       "evidence": [
-        "internal/propagate/lower.go",
         "tests/acceptance/propagate_test.go",
-        "tests/acceptance/propagate_values_test.go",
-        "internal/propagate/sum_inference.go",
-        "internal/frontend/shared_std_test.go",
-        "internal/frontend/explicit_std_test.go"
+        "tests/acceptance/propagate_values_test.go"
       ],
       "checks": [
         "option_no_context",
@@ -230,7 +236,6 @@
         "go_result"
       ],
       "evidence": [
-        "internal/propagate/go_result.go",
         "tests/acceptance/go_result_inference_test.go"
       ],
       "checks": [
@@ -247,18 +252,16 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "显式派生资格，使用 .equals 做内容比较；Clone 不改变普通赋值。",
-      "usage": "Batch 的 slice 克隆后可独立改动；修改前 equals 为 true，改后为 false。",
+      "summary": "std 的普通 PartialEq / Eq / Clone 协议及显式过程宏派生提供内容比较和克隆；普通赋值语义保持不变。",
+      "usage": "#[derive(std::derive::Clone, std::derive::PartialEq, std::derive::Eq)] 为 Batch 实现协议；std::Clone::clone 克隆 slice，std::PartialEq::equals 比较内容。",
       "limitation": "不自动为 pointer/interface 任意载荷提供 Clone/比较协议，不承诺循环容器图比较或全局深拷贝。",
       "examples": [
         "equality"
       ],
       "evidence": [
-        "internal/equality/lower.go",
         "tests/acceptance/equality_test.go",
         "tests/acceptance/manual_equality_test.go",
-        "tests/acceptance/macros_test.go",
-        "internal/frontend/derive_container_bindings_test.go"
+        "tests/acceptance/macros_test.go"
       ],
       "checks": [
         "clone_pointer"
@@ -274,19 +277,16 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "具体类型可显式派生或登记 Default；Debug 和固定格式宏让输出可读。",
-      "usage": "DefaultSettings() 返回端口 8080；普通 var 的零值仍为 0。println!(\"{:?}\", value) 使用登记的 Debug。",
-      "limitation": "完整 trait、手写 Clone/Debug 登记与递归 Default 资格仍有限。占位符数量不匹配会拒绝。",
+      "summary": "Default、Clone、Debug 是 std 的普通协议；独立 WASI 过程宏生成 impl，打印宏通过普通协议格式化。",
+      "usage": "std::default_value[Settings]() 使用手写 std::Default，返回端口 8080；普通 var 的零值仍为 0。std::println!(\"{:?}\", value) 使用 std::Debug。",
+      "limitation": "派生生成的协议实现受字段约束；不支持的字段类型需要手写相应协议。格式字符串必须是字面量，占位符数量不匹配会拒绝。",
       "examples": [
         "defaults",
         "derive"
       ],
       "evidence": [
-        "internal/printing/lower.go",
-        "internal/deriveextras/generate.go",
         "tests/acceptance/manual_default_test.go",
-        "tests/acceptance/print_default_test.go",
-        "internal/frontend/derive_container_bindings_test.go"
+        "tests/acceptance/print_default_test.go"
       ],
       "checks": [
         "format_arity"
@@ -302,8 +302,8 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "serde::Serialize / serde::Deserialize 由当前文件 use 的 serde 协议拥有者解析；JSON 是独立格式实现。",
-      "usage": "use serde; 后可派生 serde::Serialize 和 serde::Deserialize；别名与直接项 use 保留真实 owner。Config 用 serde::json 生成 JSON；Request.Limit 的缺失与 null 都解为 None。",
+      "summary": "serde::Serialize / serde::Deserialize 是普通协议；serde::derive 中的过程宏生成实现，JSON 保留独立格式层。",
+      "usage": "显式 use serde 后派生 serde::derive::Serialize 和 serde::derive::Deserialize；serde::Write[T] / serde::Read[T] 作为 JSON 回调。Request.Limit 缺失与 null 都解为 None。",
       "limitation": "Option 不代表 PATCH 的 missing/null/value 三态。Option[chan int] 缺少协议会拒绝；字段 adapter、自动 MarshalJSON、JSON Value 与 YAML 不能按提案当作现有 API。",
       "examples": [
         "derive",
@@ -312,10 +312,7 @@
       "evidence": [
         "tests/acceptance/option_serde_test.go",
         "tests/acceptance/serde_defaults_test.go",
-        "docs/serde-json.md",
-        "internal/frontend/serde_protocol_artifact_test.go",
-        "internal/derives/registry.go",
-        "internal/frontend/derive_bindings_test.go"
+        "docs/serde-json.md"
       ],
       "checks": [
         "serde_option_channel"
@@ -331,15 +328,14 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "显式 Error / #[from] 将业务错误、单步转换和 Go errors.Is/As 连起来。",
-      "usage": "PortError 包装解析错误；errors.Is 仍识别 strconv.ErrSyntax，错误链无需压成字符串。",
+      "summary": "std::derive::Error 生成普通 Go Error / Unwrap 方法和直接 std::From 转换，保留 Go errors.Is/As 的错误链。",
+      "usage": "PortError 的 #[from] 字段包装解析错误；通过 PortError::from::<std::From[error]>(cause) 显式构造，errors.Is 仍识别 strconv.ErrSyntax。",
       "limitation": "已传入的 cause 可以保留；不凭错误文案重建底层错误身份，也不自动生成任意 From 转换。",
       "examples": [
         "result",
         "go_result"
       ],
       "evidence": [
-        "internal/deriveextras/error.go",
         "tests/acceptance/serde_causes_test.go",
         "tests/acceptance/macros_test.go"
       ],
@@ -359,7 +355,6 @@
       "limitation": "跨包源码图与外部宏需要 CLI 工程；Playground 只接受固定依赖上下文和一个用户包，既非显式根也非标准库的名字会拒绝。",
       "examples": [],
       "evidence": [
-        "cmd/goxide/directory.go",
         "tests/acceptance/qualified_packages_test.go",
         "examples/reexports/README.md"
       ],
@@ -395,7 +390,6 @@
         "cmd/goxide/combination_review_test.go",
         "docs/rfcs/0025-unified-project.md",
         "cmd/goxide/import_go_test.go",
-        "internal/frontend/single_file.go",
         "cmd/goxide/single_file.go",
         "tests/acceptance/single_file_external_test.go"
       ],
@@ -458,19 +452,15 @@
       "status": "partial",
       "support": "browser",
       "summary": "&T 与 &mut T 保留访问权限；引用可复制、保存、返回和捕获，并可指向同一存储。",
-      "usage": "ref value / ref mut value 绑定原始 enum 载荷槽；match &value / match &mut value 设置默认绑定模式。示例返回并保存载荷引用，修改原值时普通 enum 副本保持独立。",
-      "limitation": "只读不是全局不可变，可写引用不承诺独占。替换 enum 后，旧引用仍指向原来的固定槽；它不跟随当前变体，写入非活跃槽也不切换变体。没有新增生命周期或借用风险检查器。",
+      "usage": "普通变量可用 &mut T 重新赋值；enum payload 只支持 ref value 或 match &value 的只读投影。按值 match 后可修改有写权限的容器内容，替换 payload 则构造新的 enum 值。",
+      "limitation": "只读不是全局不可变，可写引用不承诺独占。enum 变量的重新绑定不改变原变体对象；固有成员绑定当前对象，trait 借用视图仍遵守其引用权限。没有新增生命周期或借用风险检查器。",
       "examples": [
         "readonly",
         "enum_borrows"
       ],
       "evidence": [
-        "internal/refs/lower.go",
-        "internal/refs/flow.go",
         "tests/acceptance/refs_test.go",
-        "tests/acceptance/composite_permissions_test.go",
-        "internal/frontend/enum_borrow_test.go",
-        "internal/refs/projections_test.go"
+        "tests/acceptance/composite_permissions_test.go"
       ],
       "checks": [
         "readonly_write"
@@ -490,8 +480,7 @@
       "limitation": "不能宣称 Rust 借用安全或因为无法证明独占就默认拒绝。没有该能力的 Playground 入口。",
       "examples": [],
       "evidence": [
-        "docs/rfcs/0005-borrows.md",
-        "ROADMAP.md"
+        "docs/rfcs/0005-borrows.md"
       ],
       "checks": []
     },
@@ -504,7 +493,8 @@
         "0003",
         "0004",
         "0019",
-        "0020"
+        "0020",
+        "0031"
       ],
       "status": "partial",
       "support": "browser",
@@ -516,8 +506,6 @@
       ],
       "evidence": [
         "docs/static-protocols.md",
-        "internal/protocols/lower.go",
-        "internal/frontend/protocol_artifact.go",
         "tests/acceptance/static_protocol_test.go"
       ],
       "checks": []
@@ -552,16 +540,26 @@
       "title": "quote / syn 与过程宏",
       "topic": "future",
       "rfcs": [
-        "0014"
+        "0014",
+        "0030"
       ],
-      "status": "accepted",
-      "support": "unavailable",
-      "summary": "quote / syn 作为额外语法工具包是已确认目标；用户过程宏延期。",
-      "usage": "设计用途：读取或构造带来源的语法数据，再交给语义检查；解析成功不代表类型正确。",
-      "limitation": "公共 API、token 协议与首版范围尚未冻结；当前 macro_rules! 不是运行任意用户 AST 程序的宿主。",
-      "examples": [],
+      "status": "partial",
+      "support": "browser",
+      "summary": "syntax 提供 token、syn、quote 和 proc_macro SDK；过程宏在受限 WASI 中生成类型化 token stream。",
+      "usage": "下载过程宏教程，查看三个 #[proc_macro*] 注册入口和原生 Go 辅助实现；在浏览器修改消费者源码并查看真实展开结果。",
+      "limitation": "浏览器只加载随编译器发布并校验哈希的固定宏；用户不能上传 WASM、访问宿主文件系统或下载任意依赖。生成的 Go 需要在本地运行。",
+      "examples": [
+        "proc_function",
+        "proc_attribute",
+        "proc_derive"
+      ],
       "evidence": [
-        "docs/rfcs/0014-syntax-tools.md"
+        "docs/rfcs/0014-syntax-tools.md",
+        "docs/rfcs/0030-procedural-macros.md",
+        "internal/compile/proc_build_test.go",
+        "internal/compile/proc_attribute_scope_test.go",
+        "internal/lower/proc_snapshot_e2e_test.go",
+        "cmd/goxide/proc_macro_test.go"
       ],
       "checks": []
     },
@@ -571,7 +569,8 @@
       "topic": "interop",
       "rfcs": [
         "0015",
-        "0018"
+        "0018",
+        "0027"
       ],
       "status": "partial",
       "support": "browser",
@@ -584,7 +583,6 @@
       ],
       "evidence": [
         "tests/acceptance/source_lowering_test.go",
-        "tests/acceptance/source_mapping_test.go",
         "docs/rfcs/0018-lowering-contract.md"
       ],
       "checks": []
@@ -594,7 +592,8 @@
       "title": "显式依赖根与静态路径",
       "topic": "interop",
       "rfcs": [
-        "0024"
+        "0024",
+        "0028"
       ],
       "status": "partial",
       "support": "browser",
@@ -608,8 +607,6 @@
       "evidence": [
         "internal/paths/paths.go",
         "internal/rootconfig/roots.go",
-        "internal/frontend/static_paths_test.go",
-        "internal/frontend/deferred_use_test.go",
         "cmd/goxide-playground/main.go"
       ],
       "checks": [
@@ -617,7 +614,7 @@
       ],
       "snippet": {
         "language": "goxide · 显式依赖上下文",
-        "text": "use fmt;\nuse serde;\nuse serde::json as json;\n#[derive(serde::Serialize, serde::Deserialize)]\ntype Item struct { Value int }",
+        "text": "use fmt;\nuse serde;\nuse serde::json as json;\n#[derive(serde::derive::Serialize, serde::derive::Deserialize)]\ntype Item struct { Value int }",
         "note": "Playground 的固定项目声明在下方依赖源码视图展示。包静态路径与值成员使用不同分隔符。"
       },
       "development": "当前支持 crate/lib、依赖 alias、真实 Go 子包和标准库 fallback；Playground 限一个用户包，支持范围以当前源码、CLI/WASM 定向验收和下方限制为准。"
@@ -632,8 +629,8 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "公开 std 提供共享 Option/Result 身份、格式化与运行时支持，以及静态协议的零值类型载体；serde core / JSON 独立分层。",
-      "usage": "生成 Go 导入 std/sum、std/formatting、std/runtime 或 std/typeinfo，不依赖编译器支持包。typeinfo::Of 提取零值载体，不构造目标 T 或运行锚点方法。JSON 使用独立 serde/json。",
+      "summary": "公开 std 提供共享 Option/Result 身份、普通协议、过程宏、格式化与运行时支持；serde core / JSON 独立分层。",
+      "usage": "源码显式选择 std / serde 协议和 derive 宏；生成 Go 使用公开库与静态协议载体，不依赖编译器支持包。JSON 使用独立 serde/json。",
       "limitation": "网站使用清单记录的固定 std / serde 版本；固定版本不等于 v1 ABI 承诺。新管线不读取旧 enum、reference、use 或 protocol 元数据。用户 enum 使用密封接口；内建 Option 零值为 None，Result 零值非法。",
       "examples": [
         "result",
@@ -641,10 +638,9 @@
         "static_protocol"
       ],
       "evidence": [
-        "internal/frontend/shared_std_test.go",
-        "internal/frontend/serde_protocol_artifact_test.go",
-        "docs/reviews/public-library-migration-20261004.md",
-        "internal/frontend/protocol_typeinfo.go"
+        "internal/lower/enum_packages_test.go",
+        "tests/acceptance/sum_clone_debug_test.go",
+        "tests/acceptance/option_serde_test.go"
       ],
       "checks": []
     },
@@ -665,9 +661,9 @@
         "result"
       ],
       "evidence": [
-        "internal/frontend/shared_std_test.go",
-        "internal/frontend/readability_test.go",
-        "internal/enums/builtins_test.go"
+        "tests/acceptance/source_lowering_test.go",
+        "tests/acceptance/go_result_inference_test.go",
+        "internal/lower/enum_packages_test.go"
       ],
       "checks": [
         "option_no_context",
@@ -690,7 +686,6 @@
       "examples": [],
       "checks": [],
       "evidence": [
-        "docs/reviews/cobra-cli-20261004.md",
         "cmd/goxide/cli_process_test.go",
         "cmd/goxide/cli_dependency_graph_test.go"
       ],
@@ -715,12 +710,10 @@
       "examples": [],
       "checks": [],
       "evidence": [
-        "docs/reviews/vendor-import-20261004.md",
         "cmd/goxide/vendor_import_test.go",
         "cmd/goxide/import_sources_test.go",
         "cmd/goxide/import_sources_process_test.go",
-        "internal/project/supplied_sources.go",
-        "docs/reviews/source-selection-20261005.md"
+        "internal/project/supplied_sources.go"
       ]
     },
     {
@@ -739,7 +732,6 @@
       "checks": [],
       "evidence": [
         "docs/rfcs/0026-workspaces.md",
-        "docs/reviews/workspace-core-20261004.md",
         "cmd/goxide/workspace_test.go",
         "internal/project/workspace_test.go"
       ]
@@ -760,21 +752,10 @@
       "checks": [],
       "evidence": [
         "docs/design/workspace-import.md",
-        "docs/reviews/workspace-import-20261004.md",
         "cmd/goxide/native_enhanced_test.go",
-        "cmd/goxide/native_standalone_test.go",
-        "docs/reviews/vendor-local-modules-20261004.md"
+        "cmd/goxide/native_standalone_test.go"
       ]
     }
   ],
-  "compilerDigest": "6598024b9eb11a9ee9a710307bc78ab2ff0f6f3400465f8df74f763133adef27",
-  "evidenceSnapshots": {
-    "@use-path:docs/rfcs/0024-use-paths.md": {
-      "sourceCommit": "5e4b118f25262d8022d1b8f72575d89d69f096aa",
-      "sourcePath": "docs/rfcs/0024-use-paths.md",
-      "path": "website/evidence/0024-use-paths-5e4b118.txt",
-      "sha256": "9d3a71b5d773fb3c7b721c7c61bc9e2ec20e6a9773be53b8ea1b66cfbf2a3af9",
-      "gitBlob": "9e386b2155290b6d62ce06cead194e8b4ad10ee5"
-    }
-  }
+  "compilerDigest": "a0e7d6f49a9129d79a69c5ba6f29c84c54d3c29c956ee1e8c7d53bda139c24df"
 }

@@ -35,9 +35,18 @@ export async function read(page, label) {
   return page.evaluate(() => navigator.clipboard.readText());
 }
 export async function done(page) {
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
   await page.waitForFunction(
-    () => document.querySelector("#status")?.textContent.startsWith("转译完成"),
+    () => {
+      const status = document.querySelector("#status");
+      return status?.textContent.startsWith("转译完成") || status?.dataset.state === "error";
+    },
     null,
     { timeout: 60000 },
   );
+  if (await page.locator("#status").getAttribute("data-state") === "error") {
+    throw new Error("browser compilation failed: " + await page.locator("#diagnostic").textContent());
+  }
 }

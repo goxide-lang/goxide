@@ -16,6 +16,8 @@ import (
 // Unlike TestParameterizedConversionModulesAndDependencyRecheck, this fixture
 // only reexports From/Into from the compiler's pinned, published standard module.
 func TestStandardConversionAndPropagationModules(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	standard := standardConversionManifest(t)
 	root := t.TempDir()
 	protocol, model := filepath.Join(root, "protocol"), filepath.Join(root, "model")
@@ -70,7 +72,7 @@ pub func Convert[T any,S any](value S) T where T:From[S] {
 	writeProjectFile(t, consumer, "main.go", strings.Replace(readFixture("consumer.go"), "func verify() {", "func verify() {\n\tverifyPropagation()", 1))
 	writeProjectFile(t, consumer, "propagation.go", readFixture("propagation_consumer.go"))
 	writeProjectFile(t, consumer, "main_test.go", readFixture("consumer_test.go"))
-	library, err := PrepareProject(model, Options{Lib: true})
+	library, err := PrepareProject(model, Options{Lib: true, RunProcMacro: run})
 	if err != nil {
 		t.Fatalf("standard conversion generic library: %v", err)
 	}
@@ -91,7 +93,7 @@ pub func Convert[T any,S any](value S) T where T:From[S] {
 				writeProjectFile(t, protocol, "lib.gox", strings.ReplaceAll(string(source), "standard::", "foundation::"))
 				writeProjectFile(t, protocol, "facade/lib.gox", "package facade\npub use crate::Into;\npub use crate::From;\n")
 			}
-			first, err := PrepareProject(consumer, Options{})
+			first, err := PrepareProject(consumer, Options{RunProcMacro: run})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,7 +110,7 @@ pub func Convert[T any,S any](value S) T where T:From[S] {
 				t.Fatalf("standard alias/reexport changed canonical identities:\n%v\n%v", symbols, current)
 			}
 			lock := unchangedConfigLock(t, consumer, nil)
-			second, err := PrepareProject(consumer, Options{Offline: true, Locked: true})
+			second, err := PrepareProject(consumer, Options{Offline: true, Locked: true, RunProcMacro: run})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -121,6 +123,8 @@ pub func Convert[T any,S any](value S) T where T:From[S] {
 }
 
 func TestStandardPropagationRejectsNoncanonicalOrIndirectEvidence(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	standard := standardConversionManifest(t)
 	for _, fixture := range []struct {
 		name, declarations string
@@ -166,7 +170,7 @@ func f(value Option[int])Result[int,int]{n:=value?;return Result[int,int]::Ok(n)
 			root := t.TempDir()
 			writeProjectFile(t, root, project.ManifestName, "[go_mod]\nmodule=\"example.org/standard-negative\"\ngo=\"1.27\"\n[lib]\nname=\"negative\"\npath=\".\"\n"+standard)
 			writeProjectFile(t, root, "lib.gox", "package negative\n"+fixture.declarations+"\n")
-			result, err := PrepareProject(root, Options{Lib: true})
+			result, err := PrepareProject(root, Options{Lib: true, RunProcMacro: run})
 			var diagnostic check.Diagnostic
 			if result != nil || !errors.As(err, &diagnostic) || diagnostic.Code != check.TryReturnType {
 				t.Fatalf("invalid propagation was accepted or failed before propagation checking: %v, %v", result, err)
@@ -176,6 +180,8 @@ func f(value Option[int])Result[int,int]{n:=value?;return Result[int,int]::Ok(n)
 }
 
 func TestStandardConversionRejectsConflictsAndSignatures(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	standard := standardConversionManifest(t)
 	for _, fixture := range []struct {
 		name, declarations string
@@ -198,7 +204,7 @@ impl From[Source] for Target {func from(value Source)(Self,error){return Self{},
 			root := t.TempDir()
 			writeProjectFile(t, root, project.ManifestName, "[go_mod]\nmodule=\"example.org/standard-negative\"\ngo=\"1.27\"\n[lib]\nname=\"negative\"\npath=\".\"\n"+standard)
 			writeProjectFile(t, root, "lib.gox", "package negative\nuse standard::convert::From;\nuse standard::convert::Into;\n"+fixture.declarations+"\n")
-			result, err := PrepareProject(root, Options{Lib: true})
+			result, err := PrepareProject(root, Options{Lib: true, RunProcMacro: run})
 			var diagnostic check.Diagnostic
 			if result != nil || !errors.As(err, &diagnostic) || diagnostic.Code != check.TraitInvalid || fixture.overlap && !strings.Contains(diagnostic.Message, "overlap") {
 				t.Fatalf("invalid standard conversion declaration was accepted or misdiagnosed: %v, %v", result, err)

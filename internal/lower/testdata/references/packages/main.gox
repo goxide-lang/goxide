@@ -12,13 +12,13 @@ func main() {
     fmt::Println(*view, store.value)
 
     number := access::Cargo[int]::Named{item:6}
-    match &mut number {
-        access::Cargo::Named{item: value} => { *value += 1 },
+    match number {
+        access::Cargo::Named{item: value} => { number = access::Cargo[int]::Named{item:value + 1} },
         access::Cargo::Empty => {},
     }
     text := access::Cargo[string]::Named{item:"old"}
     match text {
-        access::Cargo::Named{item: ref mut value} => { *value = "changed" },
+        access::Cargo::Named{item: value} => { _ = value; text = access::Cargo[string]::Named{item:"changed"} },
         access::Cargo::Empty => {},
     }
     fmt::Println(match &number { access::Cargo::Named{item: value} => *value, _ => 0 }, match &text { access::Cargo::Named{item: value} => *value, _ => "" })

@@ -1,10 +1,11 @@
 package main
 use serde;
+use std;
 use fmt;
 use serde::json as serdejson;
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone, std::derive::Debug)]
 enum Mode { Off, Workers(int), }
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone, std::derive::Debug)]
 type Plan struct { Mode Mode; Enabled bool; Delta int; Steps []int }
 func build(mode Mode) Plan {
     return Plan{
@@ -15,15 +16,15 @@ func build(mode Mode) Plan {
     }
 }
 func main() {
-    mode, err := serdejson::Unmarshal([]byte(`{"Workers":3}`), DeserializeMode)
+    mode, err := serdejson::Unmarshal([]byte(`{"Workers":3}`), serde::Read[Mode])
     if err != nil { panic(err) }
     original := build(mode)
-    copied := ClonePlan(&original)
+    copied := std::Clone::clone(&original)
     copied.Steps[0] = 99
     if original.Steps[0] != 3 { panic("Clone shared slice storage") }
-    fmt::Println(DebugPlan(&original))
-    fmt::Println(DebugPlan(&copied))
-    data, err := serdejson::Marshal(&copied, SerializePlan)
+    fmt::Println(std::Debug::debug(&original))
+    fmt::Println(std::Debug::debug(&copied))
+    data, err := serdejson::Marshal(&copied, serde::Write[Plan])
     if err != nil { panic(err) }
     fmt::Println(string(data))
 }

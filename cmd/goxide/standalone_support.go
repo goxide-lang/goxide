@@ -9,7 +9,37 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/goxide-lang/goxide/internal/config"
 )
+
+func prepareStandaloneSourceModule(input, provider string, cfg config.Config) (_ *singleFileModule, err error) {
+	provider, err = filepath.Abs(provider)
+	if err != nil {
+		return nil, err
+	}
+	temporary, err := os.MkdirTemp("", "goxide-standalone-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			os.RemoveAll(temporary)
+		}
+	}()
+	root := filepath.Join(temporary, "module")
+	if err := os.Mkdir(root, 0700); err != nil {
+		return nil, err
+	}
+	if err := writeStandaloneSupportModule(cfg.Environment.GoTool, provider, root, cfg.Environment.ExecEnv()); err != nil {
+		return nil, err
+	}
+	return &singleFileModule{
+		input: filepath.Join(root, filepath.Base(input)), displayInput: input,
+		root: root, packagePath: "goxide.local/generated", temporary: temporary,
+		modFile: filepath.Join(root, "go.mod"), config: cfg,
+	}, nil
+}
 
 func publicSupportModule(path string) bool {
 	return path == "github.com/goxide-lang/std" || path == "github.com/goxide-lang/serde"

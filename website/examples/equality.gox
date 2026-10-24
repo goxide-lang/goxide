@@ -1,11 +1,12 @@
 package main
 use fmt;
-#[derive(Clone, PartialEq, Eq)]
+use std;
+#[derive(std::derive::Clone, std::derive::PartialEq, std::derive::Eq)]
 type Batch struct { Values []int }
 func main() {
     original := Batch{Values: []int{1, 2}}
-    copied := CloneBatch(&original)
-    fmt::Println("equal:", original.equals(copied))
+    copied := std::Clone::clone(&original)
+    fmt::Println("equal:", std::PartialEq::equals(original, copied))
     copied.Values[0] = 9
-    fmt::Println("after edit:", original.Values[0], copied.Values[0], original.equals(copied))
+    fmt::Println("after edit:", original.Values[0], copied.Values[0], std::PartialEq::equals(original, copied))
 }

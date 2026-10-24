@@ -22,7 +22,7 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 
 1. 显式 trait 实现，一个类型可实现多个 trait，允许不同实现拥有同名方法。
 2. 变体枚举、`Option`、`Result` 和带穷尽性检查的模式匹配。
-3. 卫生宏，以及覆盖宏展开前后位置关系的诊断与 IDE 支持；首版参考 Rust 的声明宏（模式 / 模板 / 重复），提供 print / println 与 Default / Clone / Debug 内建派生，用户可编程过程宏及自定义过程派生延期。
+3. 卫生宏，以及覆盖宏展开前后位置关系的诊断与 IDE 支持；声明宏支持模式 / 模板 / 重复；受限 WASI 过程宏提供 std 打印、基础派生与 serde 派生，输出普通 trait/impl。
 4. Go 包互操作，普通原生函数、方法和 Go interface 按真实签名使用；需要适配而完整头不满足有体 impl 归属规则时，以自有包装类型提供普通有体 impl，并由固定工厂生成 trait 视图，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
 5. 基础包围绕现有 Go std 提供 safe 声明与实际包装，并补充泛型 slice 的权限与 API 视图；额外包提供 quote / syn 风格语法工具。
 6. 用 Go 启动编译器与 LSP，之后逐步使用 goxide 自举。

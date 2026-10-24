@@ -6,6 +6,10 @@ import "go/types"
 // instantiation of a generic named type. Partial and repeated arguments cannot
 // be expressed as a receiver declaration.
 func ordinaryGoReceiverTarget(impl *Impl) *types.Named {
+	return goReceiverTarget(impl, false)
+}
+
+func goReceiverTarget(impl *Impl, enum bool) *types.Named {
 	if impl == nil {
 		return nil
 	}
@@ -14,8 +18,16 @@ func ordinaryGoReceiverTarget(impl *Impl) *types.Named {
 		return nil
 	}
 	switch named.Underlying().(type) {
-	case *types.Pointer, *types.Interface:
+	case *types.Pointer:
 		return nil
+	case *types.Interface:
+		if !enum || impl.info == nil {
+			return nil
+		}
+		instance := impl.info.EnumOf(named)
+		if instance == nil || instance.Enum.Builtin {
+			return nil
+		}
 	}
 	origin := named.Origin()
 	if origin.TypeParams().Len() == 0 {
@@ -47,7 +59,20 @@ func ordinaryGoReceiverTarget(impl *Impl) *types.Named {
 // Rechecking against those parameters avoids treating an impl's stronger
 // constraints as facts about every receiver instantiation.
 func CanUseGoReceiver(impl *Impl) bool {
-	if ordinaryGoReceiverTarget(impl) == nil || len(impl.Requirements) != 0 {
+	return canUseGoReceiver(impl, false)
+}
+
+// CanUseEnumReceiver reports whether an inherent impl covers the complete enum
+// family, allowing its methods on the interface and every variant.
+func CanUseEnumReceiver(impl *Impl) bool {
+	if impl == nil || impl.info == nil || impl.info.EnumOf(impl.Target) == nil {
+		return false
+	}
+	return canUseGoReceiver(impl, true)
+}
+
+func canUseGoReceiver(impl *Impl, enum bool) bool {
+	if goReceiverTarget(impl, enum) == nil || len(impl.Requirements) != 0 {
 		return false
 	}
 	definition := impl

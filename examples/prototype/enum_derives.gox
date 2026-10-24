@@ -1,4 +1,4 @@
-package main
+package main; use std; use std::PartialEq;
 use serde;
 
 use errors;
@@ -6,15 +6,15 @@ use fmt;
 use serde::json as serdejson;
 
 // Multiple data items live in an ordinary struct, carried by one enum payload.
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::derive::Serialize,serde::derive::Deserialize,std::derive::Debug,std::derive::Clone)]
 type WorkItem struct {
     Name string
     Retries []int
     Labels map[string]string
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-enum Command {
+#[derive(serde::derive::Serialize,serde::derive::Deserialize,std::derive::Debug,std::derive::Clone)]
+pub enum Command {
     Idle,
     Submit(WorkItem),
     Batch([]WorkItem),
@@ -23,22 +23,21 @@ enum Command {
 }
 
 // Struct field attributes remain effective inside a single enum payload.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize,serde::derive::Deserialize)]
 type TaggedItem struct {
     #[serde(rename="id")]
     ID string
     #[serde(default)]
     Attempts int
 }
-#[derive(serde::Serialize, serde::Deserialize)]
-enum TaggedCommand { Change(TaggedItem), }
+#[derive(serde::derive::Serialize,serde::derive::Deserialize)]
+pub enum TaggedCommand { Change(TaggedItem), }
 func taggedItem(command TaggedCommand) TaggedItem {
     match command {TaggedCommand::Change(item) => {return item},}
-    panic("unreachable")
 }
 
-#[derive(Error)]
-enum AppError {
+#[derive(std::derive::Error)]
+pub enum AppError {
     #[error("could not load jobs")]
     #[from]
     Input(error),
@@ -55,25 +54,24 @@ func remote(cause error) AppError { return AppError::Remote(cause) }
 func missing() AppError { return AppError::Missing }
 
 func failWith(cause error) Result[int,AppError] {
-    n := Result[int,AppError]::Err(FromAppError(cause))?
+    n := Result[int,AppError]::Err(AppError::wrap(cause))?
     return Result[int,AppError]::Ok(n)
 }
 func failureValue(value Result[int,AppError]) AppError {
     match value { Result[int,AppError]::Err(err) => {return err}, _ => {panic("not failure")}, }
-    panic("unreachable")
 }
 func errorKind(err AppError) string {
     return match err {AppError::Input(_) => "input", AppError::Count(_) => "count", AppError::Remote(_) => "remote", AppError::Missing => "missing",}
 }
 
 func decodeCommand(data []byte) Result[Command,error] {
-    command, err := serdejson::Unmarshal(data, DeserializeCommand)
+    command, err := serdejson::Unmarshal(data, Command::decode)
     if err != nil { return Result[Command,error]::Err(err) }
     return Result[Command,error]::Ok(command)
 }
 
 func loadCommand(data []byte) Result[Command,AppError] {
-    command := match decodeCommand(data) { Result[Command,error]::Ok(value) => value, Result[Command,error]::Err(cause) => { return Result[Command,AppError]::Err(FromAppError(cause)) }, }
+    command := match decodeCommand(data) { Result[Command,error]::Ok(value) => value, Result[Command,error]::Err(cause) => { return Result[Command,AppError]::Err(AppError::wrap(cause)) }, }
     match command {
         Command::Batch(items) => {
             if len(items) == 0 {
@@ -90,7 +88,6 @@ func accepted(v Result[Command,AppError]) Command {
         Result[Command,AppError]::Ok(command) => {return command},
         Result[Command,AppError]::Err(err) => {panic(err)},
     }
-    panic("unreachable")
 }
 
 func rejected(v Result[Command,AppError]) error {
@@ -98,7 +95,6 @@ func rejected(v Result[Command,AppError]) error {
         Result[Command,AppError]::Ok(_) => {return nil},
         Result[Command,AppError]::Err(err) => {return err},
     }
-    panic("unreachable")
 }
 
 func submit(item WorkItem) Command { return Command::Submit(item) }
@@ -108,28 +104,52 @@ func window(items [2]WorkItem) Command { return Command::Window(items) }
 func idle() Command { return Command::Idle }
 func submitted(command Command) WorkItem {
     match command { Command::Submit(item) => {return item}, _ => {panic("not Submit")}, }
-    panic("unreachable")
 }
 func batchItems(command Command) []WorkItem {
     match command { Command::Batch(items) => {return items}, _ => {panic("not Batch")}, }
-    panic("unreachable")
 }
 func indexedItems(command Command) map[string]WorkItem {
     match command { Command::Indexed(items) => {return items}, _ => {panic("not Indexed")}, }
-    panic("unreachable")
 }
 func windowItems(command Command) [2]WorkItem {
     match command { Command::Window(items) => {return items}, _ => {panic("not Window")}, }
-    panic("unreachable")
 }
 
 func main() {
     command := accepted(loadCommand([]byte(`{"Submit":{"Name":"mail","Retries":[1,2],"Labels":{"z":"last","a":"first"}}}`)))
-    snapshot := CloneCommand(&command)
+    snapshot := Command::copy(&command)
     item := submitted(snapshot)
     item.Retries[0] = 9
-    fmt::Println(DebugCommand(&command))
-    fmt::Println(DebugCommand(&snapshot))
+    fmt::Println(Command::describe(&command))
+    fmt::Println(Command::describe(&snapshot))
     err := rejected(loadCommand([]byte("{")))
     fmt::Println("error:", err, "cause:", errors::Unwrap(err))
+}
+
+impl WorkItem {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl Command {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl TaggedItem {
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl TaggedCommand {
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl AppError {
+ pub func wrap(cause error) Self { return AppError::from::<std::From[error]>(cause) }
 }

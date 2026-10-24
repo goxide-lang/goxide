@@ -416,6 +416,9 @@ func receiverParams(fn *ast.FuncDecl) (RefMode, bool, []*ast.Param) {
 
 func (c *checker) makeMember(fn *ast.FuncDecl, impl *Impl, trait *Trait) *Member {
 	mode, static, params := receiverParams(fn)
+	if impl != nil && impl.Trait == nil && mode == WriteRef && c.out.EnumOf(impl.Target) != nil {
+		c.diag(fn.Params[0], TraitInvalid, "enum inherent methods cannot use self &mut Self; return a new enum value")
+	}
 	if fn.Generics != nil || fn.Where != nil || len(fn.Recv) != 0 || fn.Path != nil {
 		c.diag(fn, TraitInvalid, "trait and impl members cannot have method type parameters or a Go receiver")
 	}
@@ -505,13 +508,7 @@ func (c *checker) prepareImpls() {
 				if !ok {
 					continue
 				}
-				builtin := false
-				for _, derive := range c.out.Resolve.Derives {
-					builtin = builtin || derive.Impl == n
-				}
-				if !builtin {
-					c.pendingImpls = append(c.pendingImpls, pendingImpl{declaration: n, file: file, pkg: c.pkg})
-				}
+				c.pendingImpls = append(c.pendingImpls, pendingImpl{declaration: n, file: file, pkg: c.pkg})
 			}
 		}
 	}
@@ -544,7 +541,7 @@ func (c *checker) prepareImpl(n *ast.ImplDecl) *Impl {
 	impl.targetPermission = p.astType(n.Type, nil)
 	if path, ok := n.Trait.(*ast.PathType); ok && trait != nil {
 		last := path.Path.Segments[len(path.Path.Segments)-1]
-		impl.Inputs, impl.InputNodes, impl.inputPermissions = c.readTraitInputs(last.Args, trait, n.Trait)
+		impl.Inputs, impl.InputNodes, impl.inputPermissions = c.readTraitInputArguments(last.Args, trait, n.Trait)
 	}
 	if trait == nil && (named == nil || named.Obj().Pkg() != c.pkg) {
 		c.diag(n.Type, TraitInvalid, "inherent impl requires a local named target")
@@ -633,6 +630,7 @@ func (c *checker) prepareImplBody(impl *Impl) {
 			c.addBound(&impl.Requirements, c.freshRequirement(requirement, sub, sources, used, c.pkg), impl.Decl)
 		}
 		impl.Requirements = c.inheritedBounds(impl.Requirements, impl.Decl)
+		c.inheritTraitGoRequirements(c.implApplication(impl))
 	}
 	for _, item := range impl.Decl.Items {
 		if n, ok := item.(*ast.TypeDecl); ok {
@@ -729,6 +727,14 @@ func (c *checker) readAssociated(args *ast.GenericArgs, t *Trait, bindings map[s
 }
 
 func (c *checker) readTraitInputs(args *ast.GenericArgs, trait *Trait, node ast.Node) ([]types.Type, []ast.Type, []*permission) {
+	inputs, nodes, sources := c.readTraitInputArguments(args, trait, node)
+	if len(inputs) == len(trait.TypeParams) {
+		c.checkTraitInputConstraints(inputs, trait, node)
+	}
+	return inputs, nodes, sources
+}
+
+func (c *checker) readTraitInputArguments(args *ast.GenericArgs, trait *Trait, node ast.Node) ([]types.Type, []ast.Type, []*permission) {
 	var inputs []types.Type
 	var nodes []ast.Type
 	var sources []*permission
@@ -754,8 +760,6 @@ func (c *checker) readTraitInputs(args *ast.GenericArgs, trait *Trait, node ast.
 	}
 	if len(inputs) != len(trait.TypeParams) {
 		c.diag(node, TraitInvalid, fmt.Sprintf("trait %s requires %d positional inputs, got %d", trait.Symbol.Name.Name, len(trait.TypeParams), len(inputs)))
-	} else {
-		c.checkTraitInputConstraints(inputs, trait, node)
 	}
 	return inputs, nodes, sources
 }

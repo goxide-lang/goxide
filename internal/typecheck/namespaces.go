@@ -6,7 +6,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/goxide-lang/goxide/internal/derives"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
@@ -203,14 +202,6 @@ func (i *NamespaceImporter) CheckUses(file *resolve.File) error {
 				return i.err
 			}
 			if !mapped || len(rest) != 0 {
-				// A registered derive has no runtime Go declaration.
-				if !use.Blank && !use.Glob {
-					if canonical, ok := i.CanonicalPath(use.Target); ok {
-						if _, registered := derives.Lookup(strings.Join(canonical[:len(canonical)-1], "/"), canonical[len(canonical)-1]); registered {
-							continue
-						}
-					}
-				}
 				segments := declaration.Tree.Path.Segments
 				return resolve.Diagnostic{File: file.Name, Span: declaration.Span(), Message: fmt.Sprintf("use target %q is not a public item or namespace", segments[len(segments)-1].Name.Name)}
 			}

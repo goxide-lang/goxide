@@ -18,7 +18,7 @@ func TestMacroFragmentCategoriesCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
+	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
 	outside := t.TempDir()
 
 	t.Run("FC-06-09-caller-expressions-and-definition-bindings", func(t *testing.T) {

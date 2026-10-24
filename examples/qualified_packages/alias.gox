@@ -1,10 +1,10 @@
 package main
 use source as renamed;
-func otherFileAlias() renamed::Result[int,error] {
+func otherFileAlias() Result[int,error] {
     n := renamed::Fetch("ok")?
     return renamed::Success(n+3)
 }
-func producerTypeAlias() renamed::Result[int,error] {
+func producerTypeAlias() Result[int,error] {
     n := renamed::AliasSuccess()?
     return renamed::Success(n)
 }

@@ -1,15 +1,17 @@
 package main
+use std;
+use std::PartialEq;
 
 use strings;
 
-impl Default for Label {
-    func default() Label {
+impl std::Default for Label {
+    func r#default() Label {
         calls = append(calls, "label")
         return Label{Text: strings::ToUpper("untitled")}
     }
 }
-impl Default for Step {
-    func default() Step {
+impl std::Default for Step {
+    func r#default() Step {
         calls = append(calls, "step")
         return Step{Number: len(calls)}
     }

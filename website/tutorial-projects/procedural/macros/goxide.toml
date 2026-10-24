@@ -1,0 +1,12 @@
+[go_mod]
+module = "example.org/website-macros"
+go = "1.27"
+
+[lib]
+name = "macros"
+path = "."
+proc_macro = true
+
+[dependencies.syntax]
+go = "github.com/goxide-lang/syntax"
+version = "v0.0.0-20261021034157-cb998fa4b2d4"

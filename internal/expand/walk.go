@@ -59,10 +59,8 @@ func (e *engine) copyValue(v reflect.Value, expn ast.ExpnID) reflect.Value {
 			if location, ok := e.r.Locations[old]; ok {
 				e.r.Locations[n] = location
 			}
-			if item, ok := old.(ast.Item); ok {
-				if body, ok := e.itemBodies[item]; ok {
-					e.itemBodies[n.(ast.Item)] = body
-				}
+			if body, ok := e.itemBodies[old]; ok {
+				e.itemBodies[n] = body
 			}
 			if capture, ok := e.r.Captures[old]; ok {
 				e.r.Captures[n] = capture
@@ -204,9 +202,7 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 					decl := v.Interface().(ast.ImplDecl)
 					if decl.Trait != nil {
 						slot = traitImplItems
-						if path, ok := decl.Trait.(*ast.PathType); ok && len(path.Path.Segments) == 1 && path.Path.Segments[0].Name.Name == "Default" {
-							slot = defaultImplItems
-						}
+
 					}
 					items, err := e.rewriteItems(v.Field(i).Interface().([]ast.Item), file, parent, slot)
 					if err != nil {

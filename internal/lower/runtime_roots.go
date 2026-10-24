@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goxide-lang/goxide/internal/derives"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/resolve"
@@ -174,17 +173,4 @@ func (m *moduleMacros) LookupRuntimeRootMacro(target []string, path *syntax.Path
 		return expand.Macro{}, m.imports.err
 	}
 	return m.selectMacro(candidates, strings.Join(prefix, "/"), name)
-}
-
-func (m *moduleMacros) LookupRuntimeRootBuiltinDerive(target []string, path *syntax.Path) (derives.Definition, bool) {
-	parts := append([]string(nil), target...)
-	for _, segment := range path.Segments[1:] {
-		parts = append(parts, segment.Name.Name)
-	}
-	canonical, ok := m.imports.CanonicalPath(parts)
-	if !ok {
-		return derives.Definition{}, false
-	}
-	definition, ok := derives.Lookup(strings.Join(canonical[:len(canonical)-1], "/"), canonical[len(canonical)-1])
-	return definition, ok && derives.Validate(definition, m.imports.external) == nil
 }

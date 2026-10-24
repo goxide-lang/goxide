@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/goxide-lang/goxide/internal/derives"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
@@ -508,11 +507,6 @@ func (i *moduleImporter) finishUseTarget(use *resolve.UseBinding) bool {
 	}
 	if i.SourcePackage(use.Target) || i.goPackage(strings.Join(use.Target, "/")) != nil {
 		return true
-	}
-	// A derive registration is a compile-time use target without a Go object.
-	if canonical, ok := i.CanonicalPath(use.Target); ok {
-		_, registered := derives.Lookup(strings.Join(canonical[:len(canonical)-1], "/"), canonical[len(canonical)-1])
-		return registered
 	}
 	return false
 }

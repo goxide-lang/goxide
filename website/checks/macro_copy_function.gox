@@ -1,7 +1,0 @@
-package main
-func copy(dst []int,src []int)int{return len(dst)+len(src)+10}
-macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
-func main(){
- copy:=func([]int,[]int)int{return 99}
- if transfer!([]int{1},[]int{2,3})!=13||copy(nil,nil)!=99{panic("definition function")}
-}

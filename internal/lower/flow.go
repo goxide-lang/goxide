@@ -47,6 +47,15 @@ func (e *emitter) goType(t types.Type) goast.Expr {
 	if local := e.localTypeAlias(t); local != nil {
 		return local
 	}
+	if alias, ok := t.(*types.Alias); ok && alias.Obj().Pkg() != nil {
+		underlying := types.Unalias(alias)
+		named, isNamed := underlying.(*types.Named)
+		if (!isNamed || named.Obj().Exported() || e.localTypePackage(named.Obj().Pkg())) && e.nameableType(underlying) {
+			// Inferred evidence can be shared by callers with different aliases.
+			// Spell its nameable defining type instead of importing a caller.
+			return e.goType(underlying)
+		}
+	}
 	if alias := e.exportedTypeAlias(t); alias != nil {
 		return e.goType(alias)
 	}
@@ -57,6 +66,16 @@ func (e *emitter) goType(t types.Type) goast.Expr {
 		return e.primitiveAlias(basic.Name())
 	}
 	switch t := t.(type) {
+	case *types.TypeParam:
+		for symbol, typ := range e.info.Symbols {
+			parameter, ok := typ.(*types.TypeParam)
+			if ok && parameter.Obj() == t.Obj() {
+				if name := e.symbolNames[symbol]; name != "" {
+					return goast.NewIdent(name)
+				}
+			}
+		}
+		return goast.NewIdent(t.Obj().Name())
 	case *types.Pointer:
 		return &goast.StarExpr{X: e.goType(t.Elem())}
 	case *types.Slice:
@@ -345,9 +364,6 @@ func (e *emitter) flowExpr(n syntax.Expr) goast.Expr {
 		}
 		children = []syntax.Expr{x.X, x.Y}
 	case *syntax.CallExpr:
-		if result, ok := e.equalityCall(x); ok {
-			return result
-		}
 		if result, ok := e.flowNativeMethod(x); ok {
 			return result
 		}

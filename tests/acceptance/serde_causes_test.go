@@ -3,6 +3,7 @@ package acceptance_test
 import (
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -11,12 +12,13 @@ func TestSerdeCausesInstalledBusinessRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", filepath.Join(bin, "goxide"))
 	cli := filepath.Join(bin, "goxide")
-	source := filepath.Join(root, "examples/serde_causes")
+	source := t.TempDir()
+	singleExternalCopyTree(t, filepath.Join(root, "examples/serde_causes"), source, "target")
 	outside := t.TempDir()
 	generated := filepath.Join(t.TempDir(), "module")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+	generated = strings.TrimSpace(deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source))
 	packagesWrite(t, generated, "business_test.go", serdeCausesAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
 	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "accepted 1\n" {
@@ -55,18 +57,18 @@ func TestSyntaxCauseOffsetsAndPaths(t *testing.T){
   {"{\"Operations\":[{\"Charge\":7]}",[]serde.PathSegment{{Kind:"Field",Name:"Operations"},{Kind:"Index",Index:0}}},
   {"{\"Operations\":[]} @",nil},
  }{
-  _,err:=serdejson.Unmarshal([]byte(tc.input),DeserializeOrder);detail(t,err,serde.Syntax,tc.path)
+  _,err:=serdejson.Unmarshal([]byte(tc.input),(OrderOps{}).Decode);detail(t,err,serde.Syntax,tc.path)
   var got,want *json.SyntaxError
   if !errors.As(err,&got)||!errors.As(nativeTokenError(tc.input),&want)||got.Offset!=want.Offset||got.Error()!=want.Error(){t.Fatalf("syntax %s: got=%#v want=%#v error=%v",tc.input,got,want,err)}
  }
 }
 func TestEmptyInputRetainsEOF(t *testing.T){
- _,err:=serdejson.Unmarshal(nil,DeserializeOrder);detail(t,err,serde.Syntax,nil)
+ _,err:=serdejson.Unmarshal(nil,(OrderOps{}).Decode);detail(t,err,serde.Syntax,nil)
  if !errors.Is(err,io.EOF){t.Fatalf("EOF lost: %v",err)}
 }
 func TestNestedRangeCause(t *testing.T){
  input:="{\"Operations\":[{\"Charge\":9223372036854775808}]}"
- _,err:=serdejson.Unmarshal([]byte(input),DeserializeOrder)
+ _,err:=serdejson.Unmarshal([]byte(input),(OrderOps{}).Decode)
  detail(t,err,serde.Range,[]serde.PathSegment{{Kind:"Field",Name:"Operations"},{Kind:"Index",Index:0},{Kind:"Variant",Name:"Charge"}})
  var cause *strconv.NumError
  if !errors.As(err,&cause)||!errors.Is(err,strconv.ErrRange)||cause.Func!="ParseInt"||cause.Num!="9223372036854775808" {t.Fatalf("range cause: %#v %v",cause,err)}
@@ -87,7 +89,7 @@ func TestBackendChecksDoNotInventCause(t *testing.T){
   {"{\"Operations\":[],\"Operations\":[]}","Duplicate",[]serde.PathSegment{{Kind:"Field",Name:"Operations"}}},
   {"{\"Operations\":[]} {}",serde.Syntax,nil},
  }{
-  _,err:=serdejson.Unmarshal([]byte(tc.input),DeserializeOrder);e:=detail(t,err,tc.kind,tc.path)
+  _,err:=serdejson.Unmarshal([]byte(tc.input),(OrderOps{}).Decode);e:=detail(t,err,tc.kind,tc.path)
   for {inner,ok:=e.Cause.(*serde.Error);if !ok{break};e=inner};if e.Cause!=nil{t.Fatalf("fabricated cause %s: %#v",tc.input,e.Cause)}
  }
  err:=serdejson.Decode([]byte("1e-9999"),func(d serde.Deserializer)error{_,e:=serde.ReadFloat64(d);return e})

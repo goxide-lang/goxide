@@ -11,6 +11,8 @@ import (
 )
 
 func TestProjectGoSugarChangesNativeMethodSetsAndReplays(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	module, err := project.ReadMod(filepath.Join(runtime.GOROOT(), "bin", "go"), filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +95,7 @@ func TestNativeProtocolViews(t *testing.T) {
 			}
 			writePolicy("app", appManifest, test.rootPolicy)
 			writePolicy("dep", depManifest, test.depPolicy)
-			result, err := PrepareProject(app, Options{Offline: true, Locked: lock != nil, GoSugar: test.override})
+			result, err := PrepareProject(app, Options{Offline: true, Locked: lock != nil, GoSugar: test.override, RunProcMacro: run})
 			if err != nil {
 				t.Fatal(err)
 			}

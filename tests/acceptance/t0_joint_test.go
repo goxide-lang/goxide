@@ -15,7 +15,7 @@ func TestT0JointBusiness(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	bin, outside := t.TempDir(), t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
+	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", filepath.Join(bin, "goxide"))
 	cli := filepath.Join(bin, "goxide")
 	sourceFor := func() string {
 		dir := t.TempDir()
@@ -30,9 +30,6 @@ func TestT0JointBusiness(t *testing.T) {
 			b, e := os.ReadFile(path)
 			if e != nil {
 				return e
-			}
-			if rel == "main.gox" {
-				b = []byte(strings.Replace(string(b), "    return Receipt{},errors::New(\"unreachable result\")\n", "", 1))
 			}
 			packagesWrite(t, dir, rel, string(b))
 			return nil

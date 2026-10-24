@@ -22,6 +22,9 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 		t = c.out.Types[ref.X]
 	}
 	instance := c.out.EnumOf(t)
+	if instance != nil && mode == WriteRef {
+		c.diag(n.X, ReferencePermission, "enum payload slots are immutable; use a value pattern")
+	}
 	if instance != nil && !c.enumAccessible(instance) {
 		c.diag(n, VariantMismatch, "internal-origin alias cannot expose enum variants outside its internal package boundary")
 	}
@@ -57,6 +60,14 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 	wild := false
 	var result types.Type
 	for _, arm := range n.Arms {
+		if instance != nil && mode != WriteRef {
+			ast.Walk(arm.Pat, func(node ast.Node) bool {
+				if binding, ok := node.(*ast.BindPat); ok && binding.Ref && binding.Mut {
+					c.diag(binding, ReferencePermission, "enum payload slots are immutable; use a value pattern")
+				}
+				return true
+			})
+		}
 		name := c.patternName(arm.Pat)
 		matchesEnum := c.patternMatches(arm.Pat, t)
 		unreachable := wild || covered[name]

@@ -1,13 +1,13 @@
 package acceptance_test
 
 import (
-	"fmt"
-	"github.com/goxide-lang/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 func TestGoResultMacros(t *testing.T) {
@@ -15,10 +15,11 @@ func TestGoResultMacros(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	source := t.TempDir()
-	packagesWrite(t, source, "go.mod", packagesModule())
+	packagesWrite(t, source, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"std":   {Module: "github.com/goxide-lang/std"},
 		"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
 		"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
 	})
@@ -34,6 +35,7 @@ func AliasCall()(Number,ErrorAlias){return 7,nil}
 func Generic[T any](v T)(T,error){return v,nil}
 `)
 	packagesWrite(t, source, "app.gox", `package app
+use std;
 use strconv;
 use io;
 use errors;
@@ -69,13 +71,13 @@ func FamilyTypeShadow()any{type Result int;_=Result(99);return go_result!(int,st
 func MacroKeep()Result[int,Partial]{return m::retained!(pair(2))}
 func MacroType()Result[Number,error]{return m::typed!(Number,AliasCall())}
 func OrdinaryQuestion()Result[int,error]{return Result[int,error]::Ok(m::ordinary!(strconv::Atoi("12"))?)}
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("parse failure")]
 type Failure struct {
  #[from]
  Cause error
 }
-func Convert(s string)Result[int,Failure]{n:=match go_result!(int,strconv::Atoi(s)){Result[int,error]::Ok(value)=>value,Result[int,error]::Err(cause)=>{return Result[int,Failure]::Err(FromFailure(cause))},};return Result[int,Failure]::Ok(n)}
+func Convert(s string)Result[int,Failure]{n:=match go_result!(int,strconv::Atoi(s)){Result[int,error]::Ok(value)=>value,Result[int,error]::Err(cause)=>{return Result[int,Failure]::Err(Failure::from::<std::From[error]>(cause))},};return Result[int,Failure]::Ok(n)}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
 	packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
@@ -123,8 +125,9 @@ func TestOrderAndFrames(t *testing.T){trace=nil;e:=__borrow_std.ValueErr(Factory
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			packagesWrite(t, dir, "go.mod", packagesModule())
+			packagesWrite(t, dir, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 			writeMacroFixtureRoots(t, dir, map[string]rootconfig.Mapping{
+				"std":   {Module: "github.com/goxide-lang/std"},
 				"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
 				"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
 			})
@@ -145,11 +148,12 @@ func TestGoResultIndependentModules(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	producer := t.TempDir()
-	packagesWrite(t, producer, "go.mod", "module adapter.example/producer\ngo 1.27\n")
+	packagesWrite(t, producer, "go.mod", "module adapter.example/producer\ngo 1.27\n"+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, producer, map[string]rootconfig.Mapping{
 		"producer": {Module: "adapter.example/producer", Package: "adapter.example/producer"},
+		"std":      {Module: "github.com/goxide-lang/std", Package: "github.com/goxide-lang/std"},
 	})
 	packagesWrite(t, producer, "native.go", `package producer
 import "io"
@@ -167,8 +171,9 @@ func Wrapped()Result[int,Partial]{return go_result_keep!(int,Read())}
 	consumer := t.TempDir()
 	writeMacroFixtureRoots(t, consumer, map[string]rootconfig.Mapping{
 		"producer": {Module: "adapter.example/producer", Package: "adapter.example/producer"},
+		"std":      {Module: "github.com/goxide-lang/std", Package: "github.com/goxide-lang/std"},
 	})
-	packagesWrite(t, consumer, "go.mod", fmt.Sprintf("module adapter.example/consumer\ngo 1.27\nrequire adapter.example/producer v0.0.0\nreplace adapter.example/producer => %q\n", prodOut))
+	writeStdNativeConsumerManifest(t, consumer, "adapter.example/consumer", prodOut)
 	packagesWrite(t, consumer, "consumer.gox", `package consumer
 use producer as p;
 use strconv;

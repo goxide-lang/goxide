@@ -19,6 +19,7 @@ import (
 // source directory remains Go's module owner; no sibling source is selected.
 type singleFileModule struct {
 	input, root, packagePath string
+	displayInput             string
 	temporary, modFile       string
 	config                   config.Config
 }

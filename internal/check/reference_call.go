@@ -25,13 +25,6 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission, asynchronous
 		}
 		return q
 	}
-	_, print := p.c.out.Resolve.Prints[n]
-	if print {
-		for _, arg := range n.Args {
-			p.expr(arg, nil)
-		}
-		return q
-	}
 	if adapter := p.c.out.GoResults[n]; adapter != nil {
 		actual := p.expr(adapter.Call, nil)
 		value, failure := p.fromGo(adapter.Value), actual
@@ -49,9 +42,6 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission, asynchronous
 		q.args = []*permission{value, payload}
 		q.fields = map[string]*permission{"Ok.0": value, "Err.0": payload}
 		return q
-	}
-	if result, handled := p.protocolCall(n, want); handled {
-		return result
 	}
 	if p.c.isTypeExpr(n.Fun) {
 		target := p.exprType(n.Fun)

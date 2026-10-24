@@ -1,4 +1,0 @@
-package p
-type Item int
-macro_rules! allocate {()=>{new(Item)};}
-func run(){_=allocate!()}

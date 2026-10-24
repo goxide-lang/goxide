@@ -62,7 +62,6 @@ func (h *hygiene) init(result *Result) {
 	if len(h.expanded.Expansions) != 0 {
 		result.Expansions = h.expanded.Expansions
 	}
-	result.Prints = h.expanded.Prints
 	result.GoResults = h.expanded.GoResults
 	if len(h.expanded.Captures) != 0 {
 		result.Captures = h.expanded.Captures

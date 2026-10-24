@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/expand"
@@ -59,6 +60,9 @@ func snapshotSourcePackages(modules []Module, crates *crateGraph, originals map[
 				return nil, err
 			}
 			for _, name := range names {
+				if strings.HasSuffix(name, "_test"+extension) {
+					continue
+				}
 				matches, err := matchesModuleSource(name, module.Config.Environment.Context(module.Tags, module.Race))
 				if err != nil {
 					return nil, err

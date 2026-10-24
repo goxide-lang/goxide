@@ -335,9 +335,8 @@ func (r *resolver) expr(scope *Scope, expr ast.Expr) {
 		r.expr(scope, n.X)
 		r.typ(scope, n.Type)
 	case *ast.CallExpr:
-		_, print := r.result.Prints[n]
 		_, adapter := r.result.GoResults[n]
-		if !print && !adapter {
+		if !adapter {
 			r.expr(scope, n.Fun)
 		}
 		for _, arg := range n.Args {

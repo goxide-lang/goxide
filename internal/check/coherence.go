@@ -238,6 +238,7 @@ func (s *coherenceConstraints) freshImpl(impl *Impl) *Impl {
 		copy.Associated[name] = s.c.out.Substitute(output, sub, constants)
 		copy.associatedPermissions[name] = s.c.substituteSourcePermission(sourceChild(impl.associatedPermissions[name], output), sub, constants, nil)
 	}
+	s.native = append(s.native, s.c.traitGoRequirements(s.c.implApplication(&copy))...)
 	return &copy
 }
 
@@ -303,6 +304,18 @@ func (c *checker) solveExists(s *coherenceConstraints, owner *types.Package, act
 }
 
 func (c *checker) solveGoals(s *coherenceConstraints, owner *types.Package, active map[string]bool) coherenceAnswer {
+	// A repeated conjunct needs one proof; otherwise consuming it can look like
+	// a recursive query because queryKey identifies constraints as a set.
+	seen := map[string]bool{}
+	goals := s.goals[:0]
+	for _, goal := range s.goals {
+		key := s.bound(goal).EvidenceKey()
+		if !seen[key] {
+			seen[key] = true
+			goals = append(goals, goal)
+		}
+	}
+	s.goals = goals
 	if len(s.goals) == 0 {
 		if s.uncertain {
 			return coherenceAnswer{coherenceUnknown, s.uncertainty, s}
@@ -387,11 +400,7 @@ func (s *coherenceConstraints) addTraitPrerequisites(goal *TraitBound) {
 		sub[parameter] = goal.Inputs[index]
 		permissions[parameter] = s.c.boundHeadPermissions(goal)[index+1]
 	}
-	for parameter, target := range sub {
-		if constraint, ok := s.c.out.Substitute(parameter.Constraint(), sub, nil).Underlying().(*types.Interface); ok && (!constraint.Empty() || constraint.IsComparable()) {
-			s.native = append(s.native, GoPredicate{target, constraint})
-		}
-	}
+	s.native = append(s.native, s.c.traitGoRequirements(goal)...)
 	for _, requirement := range goal.Trait.Requirements {
 		s.goals = append(s.goals, s.c.substituteBoundApplication(requirement, sub, nil, permissions))
 	}

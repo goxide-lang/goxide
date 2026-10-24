@@ -1,0 +1,6 @@
+package main
+use serde;
+
+impl Order {
+    pub func decode(d serde::Deserializer) (Self, error) { return serde::Read[Self](d) }
+}

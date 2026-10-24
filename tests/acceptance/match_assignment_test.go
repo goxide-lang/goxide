@@ -13,7 +13,7 @@ func TestMatchAssignmentInferenceModules(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	sourceFor := func(body string) string {
 		dir := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, dir, "go.mod", packagesModule())

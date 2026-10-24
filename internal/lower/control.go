@@ -15,9 +15,6 @@ func (e *emitter) statement(n syntax.Stmt) (output []goast.Stmt) {
 	if n == nil {
 		return nil
 	}
-	if out, ok := e.printStatement(n); ok {
-		return out
-	}
 	old := e.pending
 	e.pending = nil
 	stmt := e.flowStmt(n)
@@ -267,7 +264,13 @@ func (e *emitter) assignment(n *syntax.AssignStmt) goast.Stmt {
 			for i, l := range n.Lhs {
 				id, ok := l.(*syntax.Ident)
 				if ok && e.file.Definitions[id.ID()] != nil && id.Name != "_" {
-					e.pending = append(e.pending, varStmt(e.ident(id), e.goType(e.info.Types[n.Rhs[i]]), rhs[i]))
+					if typ := e.info.Types[n.Rhs[i]]; e.nameableType(typ) {
+						e.pending = append(e.pending, varStmt(e.ident(id), e.goType(typ), rhs[i]))
+					} else {
+						// A returned enum may carry a foreign private type argument.
+						// Its Go value already has the enum interface type.
+						e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{e.ident(id)}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{rhs[i]}})
+					}
 				} else {
 					e.pending = append(e.pending, assign(lhs[i], rhs[i]))
 				}

@@ -169,6 +169,8 @@ func (c *checker) sourceBoundConditions(bound *TraitBound, budget *coherenceCons
 			}
 		}
 		branch := evidenceConditions{}
+		application := c.substituteBoundApplication(c.implApplication(template), sub, constants, sources)
+		branch.predicates = append(branch.predicates, c.traitGoRequirements(application)...)
 		for _, parameter := range template.TypeParams {
 			constraint, ok := c.out.Substitute(parameter.Constraint(), sub, constants).Underlying().(*types.Interface)
 			if ok && (!constraint.Empty() || constraint.IsComparable()) {
@@ -184,6 +186,7 @@ func (c *checker) sourceBoundConditions(bound *TraitBound, budget *coherenceCons
 }
 
 func (s *coherenceConstraints) addBoundParameters(bound *TraitBound) {
+	s.native = append(s.native, s.c.traitGoRequirements(bound)...)
 	seen := map[types.Type]bool{}
 	var visit func(types.Type)
 	visit = func(typ types.Type) {

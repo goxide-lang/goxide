@@ -97,6 +97,31 @@ func compileSourceFile(filename string, source []byte, packagePath string, goImp
 	return compiledFile{Go: generated[filename], Expanded: []byte(printer.Source(resolvedFile.AST))}, nil
 }
 
+func compileModuleSourceFile(owner *singleFileModule, source []byte, roots sourcepaths.Roots, cfg config.Config, stderr io.Writer) (compiledFile, error) {
+	display := owner.input
+	if owner.displayInput != "" {
+		display = owner.displayInput
+	}
+	if err := naming.Source(display, source); err != nil {
+		return compiledFile{}, err
+	}
+	expanded := map[string][]byte{}
+	newImporter := func() types.Importer {
+		return typecheck.NewImporter(owner.input, typecheck.ImporterOptions{Config: cfg, ModFile: owner.modFile})
+	}
+	generated, err := compileNativePackage(owner, roots, cfg, nil, stderr, map[string][]byte{owner.input: source}, newImporter, lower.PackageOptions{Config: cfg, Expanded: expanded})
+	if err != nil {
+		return compiledFile{}, err
+	}
+	if generated == nil {
+		return compileSourceFile(display, source, owner.packagePath, newImporter(), roots, cfg)
+	}
+	if err := typecheck.CheckPackage(owner.packagePath, generated, newImporter(), cfg.Sizes()); err != nil {
+		return compiledFile{}, err
+	}
+	return compiledFile{Go: generated[display], Expanded: expanded[display]}, nil
+}
+
 func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	switch req.Mode {
 	case "build", "run", "test", "transpile", "expand":
@@ -259,6 +284,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		return err
 	}
 	var result compiledFile
+	var standalone *singleFileModule
 	var configuredTool string
 	moduleRoot := ""
 	if owner != nil {
@@ -299,29 +325,26 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if nativeGo {
 			result, err = compileNativeGoFile(input, src)
 		} else {
-			expanded := map[string][]byte{}
-			newImporter := func() types.Importer {
-				return typecheck.NewImporter(input, typecheck.ImporterOptions{Config: req.config, ModFile: owner.modFile})
-			}
-			var generated map[string][]byte
-			generated, err = compileNativePackage(owner, roots, req.config, nil, stderr, map[string][]byte{input: src}, newImporter, lower.PackageOptions{Config: req.config, Expanded: expanded})
-			if err == nil && generated == nil {
-				result, err = compileSourceFile(input, src, owner.packagePath, newImporter(), roots, req.config)
-			} else {
-				if err == nil {
-					err = typecheck.CheckPackage(owner.packagePath, generated, newImporter(), req.config.Sizes())
-				}
-				result = compiledFile{Go: generated[input], Expanded: expanded[input]}
-			}
+			result, err = compileModuleSourceFile(owner, src, roots, req.config, stderr)
 		}
 	} else if nativeGo {
 		result, err = compileNativeGoFile(input, src)
 	} else {
-		importContext := input
-		if *runtimeRoot != "" {
-			importContext = filepath.Join(*runtimeRoot, "go.mod")
+		provider := *runtimeRoot
+		if provider == "" && (mode == "run" || mode == "build") {
+			cwd, _ := os.Getwd()
+			provider = findModule(cwd)
 		}
-		result, err = compileSourceFile(input, src, "goxide/generated", typecheck.NewImporter(importContext, typecheck.ImporterOptions{Config: req.config}), roots, req.config)
+		if provider != "" {
+			standalone, err = prepareStandaloneSourceModule(input, provider, req.config)
+			if err != nil {
+				return err
+			}
+			defer standalone.close()
+			result, err = compileModuleSourceFile(standalone, src, roots, req.config, stderr)
+		} else {
+			result, err = compileSourceFile(input, src, "goxide/generated", typecheck.NewImporter(input, typecheck.ImporterOptions{Config: req.config}), roots, req.config)
+		}
 	}
 	if err != nil {
 		return err
@@ -345,29 +368,34 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if owner != nil {
 		return owner.run(req, result, configuredTool, out, stderr)
 	}
-	root := *runtimeRoot
-	if root == "" {
-		root = findModule(filepath.Dir(input))
-		if root == "" {
-			cwd, _ := os.Getwd()
-			root = findModule(cwd)
-		}
-	}
-	if root == "" {
-		return errors.New("standalone run/build requires --runtime pointing to a Go module manifest with pinned std/serde dependencies")
-	}
-	root, err = filepath.Abs(root)
-	if err != nil {
-		return err
-	}
 	tool := req.GoTool
-	tmp, err := os.MkdirTemp("", "goxide-run-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmp)
-	if err = writeStandaloneSupportModule(tool, root, tmp, environment.ExecEnv()); err != nil {
-		return err
+	tmp := ""
+	if standalone != nil {
+		tmp = standalone.root
+	} else {
+		root := *runtimeRoot
+		if root == "" {
+			root = findModule(filepath.Dir(input))
+			if root == "" {
+				cwd, _ := os.Getwd()
+				root = findModule(cwd)
+			}
+		}
+		if root == "" {
+			return errors.New("standalone run/build requires --runtime pointing to a Go module manifest with pinned std/serde dependencies")
+		}
+		root, err = filepath.Abs(root)
+		if err != nil {
+			return err
+		}
+		tmp, err = os.MkdirTemp("", "goxide-run-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(tmp)
+		if err = writeStandaloneSupportModule(tool, root, tmp, environment.ExecEnv()); err != nil {
+			return err
+		}
 	}
 	if err = os.WriteFile(filepath.Join(tmp, "main.go"), result.Go, 0600); err != nil {
 		return err

@@ -1,4 +1,6 @@
 package main
+use std;
+use std::PartialEq;
 
 mod logkit;
 
@@ -9,7 +11,7 @@ use strconv;
 use config as cfg;
 use logkit;
 
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("order rejected")]
 type Failure struct {
     #[from]
@@ -34,11 +36,11 @@ func allowed(n int) Result[int,error] {
     return Result[int,error]::Ok(n)
 }
 func prepare(input []byte, enabled bool) Result[Receipt,Failure] {
-    q := match load(input) { Result[cfg::Request,error]::Ok(value) => value, Result[cfg::Request,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, }
-    id := match number(q.Name) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, }
+    q := match load(input) { Result[cfg::Request,error]::Ok(value) => value, Result[cfg::Request,error]::Err(cause) => { return Result[Receipt,Failure]::Err(Failure::from::<std::From[error]>(cause)) }, }
+    id := match number(q.Name) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,Failure]::Err(Failure::from::<std::From[error]>(cause)) }, }
     units := match q.Mode {
         cfg::Mode::Immediate => 1,
-        cfg::Mode::Batch(n) => match allowed(n) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,Failure]::Err(FromFailure(cause)) }, },
+        cfg::Mode::Batch(n) => match allowed(n) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,Failure]::Err(Failure::from::<std::From[error]>(cause)) }, },
     }
     logkit::event_if!(enabled, id + units)
     return Result[Receipt,Failure]::Ok(Receipt{
@@ -54,21 +56,26 @@ func Run(input string, enabled bool) (Receipt,error) {
 }
 
 // These field protocols are registered by the separately generated model module.
-#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[derive(std::derive::Default, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
 type Snapshot struct { Data cfg::Samples }
+impl Snapshot {
+    pub func initial() Self { return std::default_value[Self]() }
+    pub func copy(self &Self) Self { return std::Clone::clone(self) }
+    pub func inspect(self &Self) string { return std::Debug::debug(self) }
+}
 func Same(a, b Snapshot) bool { return a.equals(b) }
 
 func ShowSamples() {
-    none := DefaultSnapshot()
+    none := std::default_value[Snapshot]()
     nilSome := Snapshot{Data: cfg::Some(nil)}
     emptySome := Snapshot{Data: cfg::Some([]int{})}
-    fmt::Println(DebugSnapshot(&none))
-    fmt::Println(DebugSnapshot(&nilSome))
-    fmt::Println(DebugSnapshot(&emptySome))
+    fmt::Println(std::Debug::debug(&none))
+    fmt::Println(std::Debug::debug(&nilSome))
+    fmt::Println(std::Debug::debug(&emptySome))
     fmt::Printf("equals none/some(nil)=%t some(nil)/some(empty)=%t\n",
         none.equals(nilSome), nilSome.equals(emptySome))
     original := Snapshot{Data: cfg::Some([]int{1})}
-    copied := CloneSnapshot(&original)
+    copied := std::Clone::clone(&original)
     cfg::Items(copied.Data)[0] = 9
     fmt::Printf("clone source=%v copy=%v equals=%t\n",
         cfg::Items(original.Data), cfg::Items(copied.Data), original.equals(copied))

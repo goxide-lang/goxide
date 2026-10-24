@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestT0FinalAuditBusinessRace(t *testing.T) {
@@ -16,24 +18,21 @@ func TestT0FinalAuditBusinessRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input = []byte(strings.NewReplacer("enum AuditState", "pub enum AuditState", "enum Receipt", "pub enum Receipt", "    panic(\"unreachable\")\n", "").Replace(string(input)))
-	source = filepath.Join(t.TempDir(), "final_audit.gox")
-	if err := os.WriteFile(source, input, 0600); err != nil {
-		t.Fatal(err)
-	}
-	result, err := compileAcceptanceLanguageFixture(source, input)
+	authored := t.TempDir()
+	writeStdFormalBinaryManifest(t, authored, "finalaudit.example/business", "business")
+	packagesWrite(t, authored, "final_audit.gox", string(input))
+	result, _, err := testdeps.PrepareFormalBinary(t, authored)
 	if err != nil {
 		t.Fatal(err)
 	}
-	generated := t.TempDir()
-	packagesWrite(t, generated, "go.mod", "module finalaudit.example/business\ngo 1.27\n")
-	packagesWrite(t, generated, "main.go", string(result.Go))
+	generated := result.Root
 	packagesWrite(t, generated, "audit_test.go", finalAuditAssertions)
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", ".")
+	testdeps.RunFormalGo(t, result, "test", "-mod=readonly", "-race", "-count=1", "-v", ".")
+	testdeps.RunFormalGo(t, result, "vet", "-mod=readonly", ".")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
-	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--roots", filepath.Join(root, "examples/prototype/goxide.roots.toml"), "--go", tool, "--runtime", root, source)
+	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
+	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--go", tool, authored)
 	if got != "audit webhook done\n" {
 		t.Fatalf("unexpected business output: %q", got)
 	}
@@ -43,15 +42,23 @@ func TestT0FinalAuditBoundaries(t *testing.T) {
 	cases := []struct{ name, source, want string }{
 		{"plain-int", "func f(v int){match v {_=>{},}}", "enum"},
 		{"any-erases-identity", "enum E { A, }\nfunc f(v any){match v {_=>{},}}", "enum"},
-		{"missing-clone", "enum S { A, }\n#[derive(Clone)]\ntype Record struct { Value S }", "no explicit clone implementation"},
-		{"helper-not-protocol", "enum S { A, }\nfunc CloneS(v *S) S{return *v}\n#[derive(Clone)]\ntype Record struct { Value S }", "no explicit clone implementation"},
+		{"missing-clone", "use std; enum S { A, }\n#[derive(std::derive::Clone)]\ntype Record struct { Value S }", "missing trait implementation"},
+		{"helper-not-protocol", "use std; enum S { A, }\nfunc CloneS(v *S) S{return *v}\n#[derive(std::derive::Clone)]\ntype Record struct { Value S }", "missing trait implementation"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			name := filepath.Join(t.TempDir(), tc.name+".gox")
-			_, err := compileAcceptanceLanguageFixture(name, []byte("package boundary\n"+tc.source+"\n"))
+			var err error
+			if tc.name == "missing-clone" || tc.name == "helper-not-protocol" {
+				_, err = testdeps.FormalSource(t, name, []byte("package boundary\n"+tc.source+"\n"))
+			} else {
+				_, err = compileAcceptanceLanguageFixture(name, []byte("package boundary\n"+tc.source+"\n"))
+			}
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) || !strings.Contains(err.Error(), filepath.Base(name)+":") {
 				t.Fatalf("want located %s rejection, got %v", tc.want, err)
+			}
+			if tc.want == "missing trait implementation" && !strings.Contains(strings.ToLower(err.Error()), "clone") {
+				t.Fatalf("missing Clone prerequisite: %v", err)
 			}
 		})
 	}
@@ -61,11 +68,11 @@ const finalAuditAssertions = `package main
 import("reflect";"testing")
 func TestAuditClonesClosedVariants(t *testing.T){
  for _,state:=range []AuditState{ready(),done()}{
-  original:=state;cloned:=CloneAuditState(&original)
+  original:=state;cloned:=(AuditStateOps{}).Copy(&original)
   if isReady(cloned)!=isReady(state) {t.Fatal("Clone changed variant")}
   record:=copyAudit(state)
   if isReady(record.Current.State)!=isReady(state) || record.Current.Revision!=3 || record.Label!="webhook" {t.Fatal(record)}
-  changed:=CloneAuditRecord(&record);changed.Current.State=ready()
+  changed:=(AuditRecordOps{}).Copy(&record);changed.Current.State=ready()
   if isReady(record.Current.State)!=isReady(state) {t.Fatal("nested value clone aliases source")}
   trace:=[]string{};calls:=0
   got:=archive(func()AuditState{calls++;trace=append(trace,"read");return cloned},&trace)

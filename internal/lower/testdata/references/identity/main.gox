@@ -4,9 +4,9 @@ use fmt;
 
 enum Counter { Count(int), Empty, }
 
-func project(counter &mut Counter) &mut int {
+func project(counter &Counter) &int {
     match *counter {
-        Counter::Count(ref mut value) => { return value },
+        Counter::Count(ref value) => { return value },
         Counter::Empty => { panic("empty counter") },
     }
     panic("exhaustive match")
@@ -14,71 +14,35 @@ func project(counter &mut Counter) &mut int {
 func read(counter Counter) int {
     return match counter { Counter::Count(value) => value, Counter::Empty => 0 }
 }
+func replace(counter &mut Counter, value int) { *counter = Counter::Count(value) }
 func optionValue(option Option[int]) int {
     return match option { Option::Some(value) => value, Option::None => 0 }
 }
-func optionProject(option &mut Option[int]) &mut int {
-    match &mut *option {
-        Option::Some(value) => { return value },
-        Option::None => { panic("empty option") },
-    }
-    panic("exhaustive match")
-}
 func resultValue(result Result[int,string]) int {
     return match result { Result::Ok(value) => value, Result::Err(_) => 0 }
-}
-func resultProject(result &mut Result[int,string]) &mut int {
-    match *result {
-        Result::Ok(ref mut value) => { return value },
-        Result::Err(_) => { panic("failed result") },
-    }
-    panic("exhaustive match")
 }
 
 func main() {
     counter := Counter::Count(1)
     before := counter
-    saved := project(&mut counter)
-    match &mut counter {
-        Counter::Count(value) => { *value += 1 },
-        Counter::Empty => {},
-    }
-    *saved += 3
-    fmt::Println(read(counter), read(before))
-    match &counter {
-        Counter::Count(value) => { fmt::Println(*value) },
-        Counter::Empty => {},
-    }
-    same := saved == project(&mut counter)
-    counter = Counter::Count(10)
-    *saved = 7
+    saved := project(&counter)
+    same := saved == project(&counter)
+    replace(&mut counter, 10)
     fmt::Println(same, read(counter), read(before), *saved)
     counter = Counter::Empty
-    *saved = 8
-    fmt::Println(read(before), *saved)
+    fmt::Println(read(counter), read(before), *saved)
     counter = Counter::Count(20)
     fmt::Println(read(counter), *saved)
 
     option := Option[int]::Some(1)
     copiedOption := option
-    optionRef := optionProject(&mut option)
-    *optionRef = 2
+    option = Option[int]::Some(2)
     first, copied := optionValue(option), optionValue(copiedOption)
-    option = Option[int]::Some(3)
-    replaced := *optionRef
     option = Option[int]::None
-    cleared := *optionRef
-    *optionRef = 4
-    option = Option[int]::Some(5)
-    fmt::Println(first, copied, replaced, cleared, *optionRef)
+    fmt::Println(first, copied, optionValue(option))
 
     result := Result[int,string]::Ok(3)
     copiedResult := result
-    resultRef := resultProject(&mut result)
-    *resultRef = 4
-    written, original := resultValue(result), resultValue(copiedResult)
     result = Result[int,string]::Err("changed")
-    clearedResult := *resultRef
-    result = Result[int,string]::Ok(9)
-    fmt::Println(written, original, clearedResult, *resultRef)
+    fmt::Println(resultValue(result), resultValue(copiedResult))
 }

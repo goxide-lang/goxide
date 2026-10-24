@@ -25,13 +25,13 @@
 | 原始类型 | 数据、固有方法与类型身份 | 原始 named type |
 | trait | 必须显式实现的行为协议 | 编译期实现关系；满足运行时条件时有对应接口 |
 | `impl Trait for T` | 选定的 trait 实现关系与业务来源 | 对应 wrapper、marker 和固定工厂 |
-| `impl T` | 类型自有的关联函数与实例成员 | 已确认无 self 放 carrier，enum 有 self 放接口与变体；struct 实例用 Go receiver；新映射待实现，见 RFC 0020 |
+| `impl T` | 类型自有的关联函数与实例成员 | 无 self 放 carrier；enum 值/只读成员放接口与变体，可写固有 self 拒绝；struct 实例用 Go receiver；条件成员按需扁平化，见 RFC 0020 |
 | trait 视图 | 选择了特定 impl 的值 | 保存接收者的 wrapper，按需装入接口 |
 | Go interface | 结构式方法集合 | 原生 Go 接口，保留 Go 规则 |
 
 方法签名相同不自动创建 goxide impl。降低后的 trait 接口仍要求业务方法和 marker；marker 必须保留，显式关系、权限与精确目标身份由源级解析与检查结果决定。
 
-此模型描述可形成运行时视图的实例方法。无 self 的 trait 操作按选定 impl 通过空 carrier 调用，不加入运行时接口；P2 的具体派生 helper 保持既有合同。`impl A for T` 与 trait 继承是不同功能，supertrait 另行设计。
+此模型描述可形成运行时视图的实例方法。无 self 的 trait 操作按选定 impl 通过空 carrier 调用，不加入运行时接口；std/serde 派生产物与手写 impl 使用同一规则。`impl A for T` 与 trait 继承是不同功能，supertrait 另行设计。
 
 例如同时具有 `func make() Self` 与 `func transform(self &Self) Self` 的 trait 可在具体类型和泛型约束下使用；裸 Self 结果使其不能成为 `var value Trait` 的运行时视图，不能因此拒绝整个 impl。
 
@@ -194,7 +194,7 @@ P4 的工厂采用 `As<Type><Trait>`，helper 采用 `As<Trait>` / `For<Type>`�
 
 定义体在未知类型与长度下检查。条件应用若需要有限分区，每个可达分支都单独检查，包括未被调用的 const 泛型函数和 impl；实例化保留定义点选定的证据。
 
-Go 使用者通过 Goxide 明确导出的普通函数使用条件能力，例如 `EncodeRoot` / `DecodeRoot` 或 `DefaultUserBox`。这些入口确定目标类型及所需条件；Go 调用者不传 Ops、不引用实例哈希名。现有具体协议入口仍完整保留。实例化的 `Box[User]` 不单独获得 Go 专属 receiver 方法；sugar 仍遵循下节的本地目标与接收者规则。
+Go 使用者通过 Goxide 明确导出的普通函数使用条件能力，例如 `EncodeRoot` / `DecodeRoot` 或 `DefaultUserBox`。这些入口确定目标类型及所需条件；Go 调用者不传 Ops、不引用实例哈希名。现有具体协议入口仍完整保留。实例化的 `Box[User]` 不单独获得 Go 专属 receiver 方法；条件固有成员也不生成专用 view 或为整个泛型家族追加方法。sugar 仍遵循下节的本地目标与接收者规则。
 
 ### Go 成员 sugar
 

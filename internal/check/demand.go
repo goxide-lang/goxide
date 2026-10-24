@@ -504,14 +504,17 @@ func (d *demandCollector) mergeRoot(body *BodyInstance) {
 				d.plan.Info.Tries[node] = value
 			}
 		case *ast.CallExpr:
+			if value := body.Info.EnumAssertions[node]; value != nil {
+				if d.plan.Info.EnumAssertions == nil {
+					d.plan.Info.EnumAssertions = map[*ast.CallExpr]types.Type{}
+				}
+				d.plan.Info.EnumAssertions[node] = value
+			}
 			if value := body.Info.EnumValid[node]; value != nil {
 				d.plan.Info.EnumValid[node] = value
 			}
 			if value := body.Info.GoResults[node]; value != nil {
 				d.plan.Info.GoResults[node] = value
-			}
-			if value := body.Info.Equalities[node]; value != nil {
-				d.plan.Info.Equalities[node] = value
 			}
 		}
 		return true

@@ -138,6 +138,10 @@ func sourceTypeKey(info *Info, typ types.Type, source *permission) string {
 		}
 	}
 	switch t := typ.(type) {
+	case *types.Basic:
+		// byte and rune are alternate spellings of uint8 and int32. A
+		// prerequisite key must agree with types.Identical for these aliases.
+		return types.Typ[t.Kind()].Name()
 	case *types.TypeParam:
 		if info != nil {
 			for _, impl := range info.Impls {

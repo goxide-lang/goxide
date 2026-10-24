@@ -21,8 +21,9 @@ Exhaustive(E, A) ⇔ E 的合法值域 ⊆ Cover(A)
 | 当前模式 | 绑定结果 |
 | --- | --- |
 | `V(x)` | payload 的浅复制；使用首个 guard 前的快照 |
-| `V(ref x)` / `V(ref mut x)` | 原 payload 的只读/可写引用 |
-| `match &e` / `match &mut e` 中的 `V(x)` | 普通绑定默认取得只读/可写引用 |
+| `V(ref x)` | 原 payload 的只读引用 |
+| `V(ref mut x)` / `match &mut e` | 拒绝：payload 槽位不可变 |
+| `match &e` 中的 `V(x)` | 普通绑定默认取得只读引用 |
 
 引用必须指向真实可寻址字段或槽位；当前解析器不接受 `&pattern`，旧草案的 `V(&x)` 不能代替 `V(ref x)`。匹配中的外围 `return`、`break`、`continue`、`defer` 和 `?` 保留原控制流目标。实现覆盖范围见[能力状态表](../mvp-gap-audit.md)。
 

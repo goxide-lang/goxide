@@ -38,10 +38,11 @@ type traitInference struct {
 	types          []types.Type
 	names          []*goast.Ident
 	bodyTypes      map[types.Type]*goast.Ident
+	constraints    map[types.Type][]types.Type
 }
 
 func newTraitInference(e *emitter) *traitInference {
-	return &traitInference{e: e, bodyTypes: map[types.Type]*goast.Ident{}}
+	return &traitInference{e: e, bodyTypes: map[types.Type]*goast.Ident{}, constraints: map[types.Type][]types.Type{}}
 }
 
 func (p *traitInference) collect(typ types.Type) {
@@ -49,6 +50,25 @@ func (p *traitInference) collect(typ types.Type) {
 		return
 	}
 	switch typ := typ.(type) {
+	case *types.Named:
+		// Keep a public type constructor related to its private arguments. Treating
+		// Box[hidden] and hidden as unrelated type parameters loses Go inference for
+		// a generic factory that accepts both func(hidden) and Box[hidden].
+		if typ.TypeArgs().Len() != 0 && p.e.nameableType(typ.Origin()) {
+			substitution := map[*types.TypeParam]types.Type{}
+			for index := 0; index < typ.TypeArgs().Len(); index++ {
+				substitution[typ.TypeParams().At(index)] = typ.TypeArgs().At(index)
+			}
+			for index := 0; index < typ.TypeArgs().Len(); index++ {
+				argument := typ.TypeArgs().At(index)
+				p.collect(argument)
+				constraint := p.e.info.Substitute(typ.TypeParams().At(index).Constraint(), substitution, nil)
+				if !types.Identical(constraint, types.Universe.Lookup("any").Type()) {
+					p.constraints[argument] = appendAssertionType(p.constraints[argument], constraint)
+				}
+			}
+			return
+		}
 	case *types.Signature:
 		for i := 0; i < typ.Params().Len(); i++ {
 			parameter := typ.Params().At(i).Type()
@@ -84,7 +104,10 @@ func (p *traitInference) collect(typ types.Type) {
 }
 
 func inferenceHasParameter(typ types.Type) bool {
-	switch t := typ.(type) {
+	if typ == nil {
+		return false
+	}
+	switch t := types.Unalias(typ).(type) {
 	case *types.TypeParam:
 		return true
 	case *types.Named:
@@ -103,6 +126,13 @@ func inferenceHasParameter(typ types.Type) bool {
 		return inferenceHasParameter(t.Key()) || inferenceHasParameter(t.Elem())
 	case *types.Chan:
 		return inferenceHasParameter(t.Elem())
+	case *types.Struct:
+		for index := 0; index < t.NumFields(); index++ {
+			if inferenceHasParameter(t.Field(index).Type()) {
+				return true
+			}
+		}
+
 	case *types.Signature:
 		return inferenceHasParameter(t.Params()) || inferenceHasParameter(t.Results())
 	case *types.Tuple:
@@ -175,13 +205,24 @@ func (p *traitInference) finish(result goast.Expr, typ types.Type) goast.Expr {
 	p.e.inferenceTypes = p.bodyTypes
 	defer func() { p.e.inferenceTypes = previous }()
 	parameters := &goast.FieldList{}
-	for _, name := range p.names {
-		parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{name}, Type: goast.NewIdent("any")})
+	for index, name := range p.names {
+		var constraint goast.Expr = goast.NewIdent("any")
+		if requirements := p.constraints[p.types[index]]; len(requirements) != 0 {
+			methods := &goast.FieldList{}
+			for _, required := range requirements {
+				methods.List = append(methods.List, &goast.Field{Type: p.e.goType(required)})
+			}
+			constraint = &goast.InterfaceType{Methods: methods}
+		}
+		parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{name}, Type: constraint})
 	}
 	for i, field := range p.fields {
 		if field.Type == nil {
 			field.Type = p.e.goType(p.parameterTypes[i])
 		}
+	}
+	if len(parameters.List) == 0 {
+		parameters = nil
 	}
 	name := p.e.fresh("Bind")
 	decl := &goast.FuncDecl{Name: name, Type: &goast.FuncType{TypeParams: parameters, Params: &goast.FieldList{List: p.fields}, Results: &goast.FieldList{List: []*goast.Field{{Type: p.e.goType(typ)}}}}, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{result}}}}}
@@ -308,11 +349,13 @@ func (p *traitInference) operation(selection *check.MemberSelection) goast.Expr 
 		return p.parameter(p.e.operationFunction(selection), operationSignature(selection))
 	}
 	if instance := p.e.traits.instances[instanceImplKey(p.e.info, impl, selection.Member.Name)]; instance != nil {
-		return p.parameter(p.e.sourceGlobal(instance.body.File, instance.name), operationSignature(selection))
+		return p.parameter(p.e.instanceOperation(instance), operationSignature(selection))
 	}
 	member := selectedMember(selection)
 	bounds, evidence := operationCallbacks(member)
 	args, parameters := p.callbacks(bounds, evidence)
+	enumArgs, enumTypes := p.enumChecks(p.e.memberEnumChecks(member))
+	args, parameters = append(args, enumArgs...), append(parameters, enumTypes...)
 	witnesses, witnessTypes := p.operationWitnesses(member)
 	args = append(witnesses, args...)
 	parameters = append(witnessTypes, parameters...)
@@ -325,12 +368,15 @@ func (e *emitter) functionInstanceSignature(instance *check.FunctionInstance) *t
 }
 
 func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool) {
-	instance := e.info.FunctionInstances[call]
+	instance := e.functionInstance(call)
 	if instance == nil {
 		return nil, false
 	}
 	function := e.traits.functions[instance.Signature]
 	if function == nil || !e.traits.templateFunctions[function.decl] {
+		return nil, false
+	}
+	if e.carrierFunctionInstance(function, instance) {
 		return nil, false
 	}
 	if e.traits.instances[instanceFunctionKey(e.info, function, instance)] != nil {
@@ -363,6 +409,8 @@ func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool)
 	}
 	bounds, evidence := e.functionCallbacks(function, instance)
 	callbacks, callbackTypes := p.callbacks(bounds, evidence)
+	enumArgs, enumTypes := p.enumChecks(e.functionEnumChecks(function, instance))
+	callbacks, callbackTypes = append(callbacks, enumArgs...), append(callbackTypes, enumTypes...)
 	var witnesses []goast.Expr
 	var witnessTypes []types.Type
 	for _, typ := range functionCaseArguments(instance) {
@@ -496,6 +544,7 @@ func (e *emitter) templateImplWitnessArguments(impl *check.Impl) []goast.Expr {
 
 func (p *traitProgram) prepareInferenceCalls(info *check.Info) {
 	p.inferredCalls = map[*syntax.FuncDecl]bool{}
+	p.inferredOperations = map[*syntax.FuncDecl]bool{}
 	inspect := func(body *check.BodyInstance) {
 		source := info.Resolve.Files[body.File]
 		if source == nil || body.Info == nil {
@@ -503,11 +552,16 @@ func (p *traitProgram) prepareInferenceCalls(info *check.Info) {
 		}
 		e := &emitter{info: body.Info, traits: p, name: body.File, tree: source.AST}
 		syntax.Walk(body.Node, func(node syntax.Node) bool {
+			if expression, ok := node.(syntax.Expr); ok {
+				if selection := body.Info.Members[expression]; selection != nil && e.needsOperationInference(selection) {
+					p.inferredOperations[selection.Member.Decl] = true
+				}
+			}
 			call, ok := node.(*syntax.CallExpr)
 			if !ok {
 				return true
 			}
-			if instance := body.Info.FunctionInstances[call]; instance != nil {
+			if instance := e.functionInstance(call); instance != nil {
 				if function := p.functions[instance.Signature]; function != nil && p.instances[instanceFunctionKey(info, function, instance)] == nil && e.needsFunctionInference(instance) {
 					p.inferredCalls[function.decl] = true
 				}
@@ -571,6 +625,8 @@ func (e *emitter) inferredOperationCall(selection *check.MemberSelection, values
 	member := selectedMember(selection)
 	bounds, evidence := operationCallbacks(member)
 	callbacks, callbackTypes := p.callbacks(bounds, evidence)
+	enumArgs, enumTypes := p.enumChecks(e.memberEnumChecks(member))
+	callbacks, callbackTypes = append(callbacks, enumArgs...), append(callbackTypes, enumTypes...)
 	witnesses, witnessTypes := p.operationWitnesses(member)
 	zero := types.NewSignatureType(nil, nil, nil, types.NewTuple(), sig.Results(), false)
 	params := append(witnessTypes, callbackTypes...)

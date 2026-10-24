@@ -15,7 +15,6 @@ const singleStmtKind fragmentKind = "statement"
 const itemsKind fragmentKind = "items"
 const traitMembersKind fragmentKind = "trait members"
 const implMembersKind fragmentKind = "impl members"
-const defaultMembersKind fragmentKind = "Default impl members"
 
 type parseError struct {
 	code, message string
@@ -219,9 +218,9 @@ func (e *engine) parse(ts []syntaxToken, kind fragmentKind, expn ast.ExpnID, cal
 		var items []ast.Item
 		items, ds = parser.ParseItemsTokens(s.tokens)
 		n = &ast.File{Items: items}
-	case traitMembersKind, implMembersKind, defaultMembersKind:
+	case traitMembersKind, implMembersKind:
 		var items []ast.Item
-		items, ds = parser.ParseMembersTokens(s.tokens, kind == traitMembersKind, kind == defaultMembersKind)
+		items, ds = parser.ParseMembersTokens(s.tokens, kind == traitMembersKind)
 		n = &ast.File{Items: items}
 	case stmtKind:
 		n, ds = parser.ParseStmtTokens(s.tokens)
@@ -328,9 +327,10 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 			}
 		}
 		var body []syntaxToken
-		if item, ok := n.(ast.Item); ok {
+		_, groupedType := n.(*ast.TypeSpec)
+		if _, item := n.(ast.Item); item || groupedType {
 			start := span.Start
-			attrs := reflect.ValueOf(item).Elem().FieldByName("Attrs").Interface().([]*ast.Attr)
+			attrs := reflect.ValueOf(n).Elem().FieldByName("Attrs").Interface().([]*ast.Attr)
 			if len(attrs) != 0 {
 				start = attrs[len(attrs)-1].Span().End
 			}
@@ -425,11 +425,11 @@ func (e *engine) restore(v reflect.Value, s *skeleton, expn ast.ExpnID, caller S
 		b.Set(reflect.ValueOf(base))
 		e.r.Origins[n] = o
 		e.r.Locations[n] = s.location(span)
-		if item, ok := n.(ast.Item); ok && len(body) != 0 {
+		if len(body) != 0 {
 			if e.itemBodies == nil {
-				e.itemBodies = map[ast.Item][]syntaxToken{}
+				e.itemBodies = map[ast.Node][]syntaxToken{}
 			}
-			e.itemBodies[item] = body
+			e.itemBodies[n] = body
 		}
 		if e.lexical == nil {
 			e.lexical = map[ast.Node]Scope{}

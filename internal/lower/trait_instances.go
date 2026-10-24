@@ -231,7 +231,26 @@ func (e *emitter) instanceDeclarations(node *syntax.FuncDecl) []goast.Decl {
 		e.info, e.instanceBody, e.boundCallbacks = body.Info, body, nil
 		ft := &goast.FuncType{Params: e.params(node.Params), Results: e.params(node.Results)}
 		declaration := &goast.FuncDecl{Name: goast.NewIdent(instance.name), Type: ft, Body: e.functionBody(ft, node.Body)}
-		e.generatedName(instance.name, node)
+		static := false
+		if body.Impl != nil && body.Impl.Trait == nil {
+			for _, member := range body.Impl.Methods {
+				if member.Decl == node && !member.Static {
+					e.guardEnumInherentBody(member, declaration.Body)
+				}
+				if member.Decl == node && member.Static {
+					static = true
+					name := instance.name + "Ops"
+					e.generatedName(name, node)
+					out = append(out, genericTypeDeclaration(name, nil, &goast.StructType{Fields: &goast.FieldList{}}))
+					declaration.Name = goast.NewIdent(member.GoName)
+					declaration.Recv = receiverField("", goast.NewIdent(name))
+					break
+				}
+			}
+		}
+		if !static {
+			e.generatedName(instance.name, node)
+		}
 		e.anchor(declaration, node)
 		out = append(out, declaration)
 		e.info, e.instanceBody, e.boundCallbacks = previousInfo, previousBody, previousCallbacks

@@ -3,13 +3,13 @@ use serde;
 
 var defaultCalls int
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Settings struct { Port int }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 pub enum Mode { Idle, Ready(Settings), }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Request struct {
     Count Option[int]
     Config Option[Settings]
@@ -28,29 +28,29 @@ type Request struct {
     Secret Option[chan int]
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::derive::Serialize)]
 type OutputPayload struct { Port int }
-#[derive(serde::Serialize)]
+#[derive(serde::derive::Serialize)]
 type OutputOnly struct { Value Option[OutputPayload] }
-#[derive(serde::Deserialize)]
+#[derive(serde::derive::Deserialize)]
 type InputPayload struct { Port int }
-#[derive(serde::Deserialize)]
+#[derive(serde::derive::Deserialize)]
 type InputOnly struct { Value Option[InputPayload] }
 
 // Defaults inside Some are ordinary payload decoding, not an Option default.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type PayloadWithDefault struct {
     #[serde(default)]
     Config Settings
 }
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type DefaultEnvelope struct {
     #[serde(default)]
     Value Option[PayloadWithDefault]
 }
 
 // InputPayload has Deserialize only, no Default registration.
-#[derive(serde::Deserialize)]
+#[derive(serde::derive::Deserialize)]
 type ProtocolEnvelope struct {
     Plain Option[InputPayload]
     SideEffects Option[Settings]

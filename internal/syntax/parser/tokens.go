@@ -53,9 +53,9 @@ func ParseItemsTokens(tokens []token.Token) ([]ast.Item, []Diagnostic) {
 }
 
 // ParseMembersTokens uses the grammar of a trait or impl member list.
-func ParseMembersTokens(tokens []token.Token, inTrait, defaultImpl bool) ([]ast.Item, []Diagnostic) {
+func ParseMembersTokens(tokens []token.Token, inTrait bool) ([]ast.Item, []Diagnostic) {
 	p := newTokenParser(tokens)
-	items := p.itemList(func() ast.Item { return p.member(inTrait, inTrait, defaultImpl) })
+	items := p.itemList(func() ast.Item { return p.member(inTrait, inTrait) })
 	renumber(&ast.File{Items: items})
 	return items, p.diagnostics
 }

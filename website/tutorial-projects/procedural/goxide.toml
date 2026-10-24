@@ -1,0 +1,10 @@
+[go_mod]
+module = "playground"
+go = "1.27"
+
+[[bin]]
+name = "procedural"
+path = "."
+
+[dependencies.macros]
+path = "macros"

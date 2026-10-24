@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/goxide-lang/goxide/internal/derives"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/token"
 	pm "github.com/goxide-lang/syntax/proc_macro"
@@ -105,7 +104,7 @@ func Collect(files map[string]*ast.File, rootPackage string, enabled bool) ([]*E
 			if entry.Name == "_" {
 				return fail("procedural macro name cannot be _")
 			}
-			if reserved(rootPackage, entry.Name) {
+			if reserved(entry.Name) {
 				return fail("reserved built-in macro name " + entry.Name)
 			}
 			if registered[entry.Name] != nil {
@@ -137,15 +136,9 @@ func registrationKind(attr *ast.Attr) pm.Kind {
 	return ""
 }
 
-func reserved(owner, name string) bool {
-	if _, ok := derives.Builtin(name); ok {
-		return true
-	}
-	if _, ok := derives.Lookup(owner, name); ok {
-		return true
-	}
+func reserved(name string) bool {
 	switch name {
-	case "cfg", "go_result", "go_result_keep", "print", "println":
+	case "cfg", "go_result", "go_result_keep":
 		return true
 	}
 	return false

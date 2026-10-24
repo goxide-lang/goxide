@@ -128,7 +128,7 @@ func (e *emitter) callbackArguments(bounds []*check.TraitBound, evidence []check
 func (e *emitter) templateImplParameters(impl *check.Impl) *goast.FieldList {
 	var fields []*goast.Field
 	for _, parameter := range impl.TypeParams {
-		fields = append(fields, &goast.Field{Names: []*goast.Ident{goast.NewIdent(parameter.Obj().Name())}, Type: e.goConstraint(parameter.Constraint())})
+		fields = append(fields, &goast.Field{Names: []*goast.Ident{e.goType(parameter).(*goast.Ident)}, Type: e.goConstraint(parameter.Constraint())})
 	}
 	if impl.Case == nil {
 		fields = append(fields, projectedParameters(impl.Requirements)...)
@@ -163,8 +163,14 @@ func (e *emitter) templateOperation(selection *check.MemberSelection) goast.Expr
 	impl := selection.Impl
 	member := selectedMember(selection)
 	function := enumIndices(e.sourceGlobal(impl.File, e.templateOperationName(member)), e.operationTemplateArguments(member))
+	if member.Trait == nil && member.Static {
+		carrier := enumIndices(e.sourceGlobal(impl.File, e.inherentTemplateCarrierName(member)), e.inherentTemplateArguments(member))
+		function = carrierMethod(carrier, member.GoName+"Func")
+	}
 	bounds, evidence := operationCallbacks(member)
-	return &goast.CallExpr{Fun: function, Args: append(e.operationWitnessArguments(member), e.callbackArguments(bounds, evidence)...)}
+	arguments := append(e.operationWitnessArguments(member), e.callbackArguments(bounds, evidence)...)
+	arguments = append(arguments, e.enumCheckArguments(e.memberEnumChecks(member))...)
+	return &goast.CallExpr{Fun: function, Args: arguments}
 }
 
 func (e *emitter) templateOperationDeclaration(member *check.Member) []goast.Decl {
@@ -172,11 +178,16 @@ func (e *emitter) templateOperationDeclaration(member *check.Member) []goast.Dec
 	defer restoreInfo()
 	parameters, restore := e.templateCallbacks(member.Impl.Requirements)
 	defer restore()
+	restoreEnums := e.templateEnumChecks(e.memberEnumChecks(member), parameters)
+	defer restoreEnums()
 	parameters.List = append(e.templateImplWitnessParameters(member.Impl), parameters.List...)
 	name := e.templateOperationName(member)
-	e.generatedName(name, member.Decl)
+	if member.Trait != nil || !member.Static || e.traits.inferredOperations[member.Decl] {
+		e.generatedName(name, member.Decl)
+	}
 	ft := &goast.FuncType{Params: e.params(member.Decl.Params), Results: e.params(member.Decl.Results)}
 	business := &goast.FuncLit{Type: ft, Body: e.functionBody(ft, member.Decl.Body)}
+	e.guardEnumInherentBody(member, business.Body)
 	typeParameters := e.templateImplParameters(member.Impl)
 	if branch := memberCase(member); branch != nil {
 		typeParameters = e.bodyCaseParameters(branch)
@@ -185,8 +196,23 @@ func (e *emitter) templateOperationDeclaration(member *check.Member) []goast.Dec
 	declaration := &goast.FuncDecl{Name: goast.NewIdent(name), Type: outer, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{business}}}}}
 	e.anchor(declaration, member.Decl)
 	out := []goast.Decl{declaration}
+	if member.Trait == nil && member.Static {
+		carrier := e.inherentTemplateCarrierName(member)
+		e.generatedName(carrier, member.Decl)
+		method, bridge := e.inherentTemplateDeclaration(member, declaration, member.GoName+"Func")
+		out = []goast.Decl{genericTypeDeclaration(carrier, typeParameters, &goast.StructType{Fields: &goast.FieldList{}}), method}
+		if e.traits.inferredOperations[member.Decl] {
+			out = append(out, bridge)
+		}
+	}
 	if e.traits.inferredCalls[member.Decl] {
-		out = append(out, e.templateCallDeclaration(name, outer.TypeParams, parameters, member.Decl))
+		call := e.templateCallDeclaration(name, typeParameters, parameters, member.Decl)
+		if member.Trait == nil && member.Static {
+			method, bridge := e.inherentTemplateDeclaration(member, call.(*goast.FuncDecl), member.GoName+"Call")
+			out = append(out, method, bridge)
+		} else {
+			out = append(out, call)
+		}
 	}
 	return out
 }
@@ -212,6 +238,12 @@ func (e *emitter) templateFunctionDeclaration(function *traitFunction) []goast.D
 	}
 	parameters, restore := e.templateCallbacks(bounds)
 	defer restore()
+	var instance *check.FunctionInstance
+	if e.instanceBody != nil {
+		instance = e.instanceBody.Function
+	}
+	restoreEnums := e.templateEnumChecks(e.functionEnumChecks(function, instance), parameters)
+	defer restoreEnums()
 	typeParameters := e.functionTypeParameters(node)
 	if branch != nil {
 		typeParameters = e.bodyCaseParameters(branch)
@@ -264,7 +296,9 @@ func (e *emitter) templateFunctionInstance(instance *check.FunctionInstance, fun
 
 	factory := enumIndices(e.sourceGlobal(function.symbol.Decl.File, constFunctionName(function, instance)), args)
 	bounds, evidence := e.functionCallbacks(function, instance)
-	return &goast.CallExpr{Fun: factory, Args: e.callbackArguments(bounds, evidence)}
+	arguments := e.callbackArguments(bounds, evidence)
+	arguments = append(arguments, e.enumCheckArguments(e.functionEnumChecks(function, instance))...)
+	return &goast.CallExpr{Fun: factory, Args: arguments}
 }
 
 // Preserve the semantic ellipsis when source positions are absent in helpers.
@@ -319,7 +353,7 @@ func (e *emitter) templateImplDeclarations(impl *check.Impl) []goast.Decl {
 		if e.traits.memberNeedsBinding(member) {
 			out = append(out, e.templateBindingDeclaration(member))
 		}
-		if (len(impl.ConstArgs) != 0 || e.traits.helperImpls[impl]) && (e.validation != nil || impl.Trait != nil || len(impl.Requirements) != 0) {
+		if (len(impl.ConstArgs) != 0 || e.traits.helperImpls[impl]) && (e.validation != nil || impl.Trait != nil || len(impl.Requirements) != 0 || member.Static && e.traits.inferredOperations[member.Decl]) {
 			out = append(out, e.templateOperationDeclaration(member)...)
 		}
 		out = append(out, e.instanceDeclarations(member.Decl)...)
@@ -333,6 +367,8 @@ func (e *emitter) templateRuntimeDeclarations(impl *check.Impl) []goast.Decl {
 	}
 	parameters, restore := e.templateCallbacks(impl.Requirements)
 	defer restore()
+	restoreEnums := e.templateEnumChecks(e.viewEnumChecks(impl), parameters)
+	defer restoreEnums()
 	name := e.traitWrapper(impl)
 	e.generatedName(name, impl.Decl)
 	fields := receiverField("target", e.goType(captureType(impl)))

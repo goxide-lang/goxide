@@ -1,2 +1,0 @@
-package main
-func main(){p:=new(7);if *p!=7{panic("Go 1.27 new expression control")}}

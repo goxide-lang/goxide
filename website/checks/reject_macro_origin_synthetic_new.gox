@@ -1,5 +1,0 @@
-package main
-macro_rules! outer { ($x:expr) => { new($x?) }; }
-func value() Option[int] { return Option[int]::Some(1) }
-func f() Option[int] { _ = outer!(value()); return Option[int]::None }
-func main() {}

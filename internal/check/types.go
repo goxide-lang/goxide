@@ -41,19 +41,33 @@ func (c *checker) enumNames() {
 }
 
 func (c *checker) builtinEnums() {
-	p := types.NewPackage("github.com/goxide-lang/std/sum", "sum")
+	p, err := c.importer.Import("github.com/goxide-lang/std/sum")
+	if err != nil {
+		p = types.NewPackage("github.com/goxide-lang/std/sum", "sum")
+	}
 	for _, name := range []string{"Option", "Result"} {
-		n := types.NewNamed(types.NewTypeName(0, p, name, nil), types.NewStruct(nil, nil), nil)
-		params := []*types.TypeParam{types.NewTypeParam(types.NewTypeName(0, p, "T", nil), anyType)}
-		if name == "Result" {
-			params = append(params, types.NewTypeParam(types.NewTypeName(0, p, "E", nil), anyType))
+		var n *types.Named
+		if object := p.Scope().Lookup(name); object != nil {
+			n, _ = types.Unalias(object.Type()).(*types.Named)
 		}
-		n.SetTypeParams(params)
+		count := 1
+		if name == "Result" {
+			count = 2
+		}
+		if n == nil || n.TypeParams().Len() != count {
+			n = types.NewNamed(types.NewTypeName(0, p, name, nil), types.NewStruct(nil, nil), nil)
+			params := []*types.TypeParam{types.NewTypeParam(types.NewTypeName(0, p, "T", nil), anyType)}
+			if count == 2 {
+				params = append(params, types.NewTypeParam(types.NewTypeName(0, p, "E", nil), anyType))
+			}
+			n.SetTypeParams(params)
+		}
+		params := n.TypeParams()
 		e := &Enum{info: c.out, Name: name, GoName: name, Type: n, Builtin: true}
 		if name == "Option" {
-			e.Variants = []*Variant{{Name: "None", GoName: "None"}, {Name: "Some", GoName: "Some", Fields: []Field{{Name: "Value", GoName: "Value", Type: params[0]}}}}
+			e.Variants = []*Variant{{Name: "None", GoName: "None"}, {Name: "Some", GoName: "Some", Fields: []Field{{Name: "Value", GoName: "Value", Type: params.At(0)}}}}
 		} else {
-			e.Variants = []*Variant{{Name: "Ok", GoName: "Ok", Fields: []Field{{Name: "Value", GoName: "Value", Type: params[0]}}}, {Name: "Err", GoName: "Err", Fields: []Field{{Name: "Value", GoName: "Value", Type: params[1]}}}}
+			e.Variants = []*Variant{{Name: "Ok", GoName: "Ok", Fields: []Field{{Name: "Value", GoName: "Value", Type: params.At(0)}}}, {Name: "Err", GoName: "Err", Fields: []Field{{Name: "Value", GoName: "Value", Type: params.At(1)}}}}
 		}
 		c.builtins[name], c.out.enums[n] = e, e
 	}

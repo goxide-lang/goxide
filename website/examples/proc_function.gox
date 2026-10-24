@@ -1,0 +1,10 @@
+package main
+
+use fmt;
+use macros;
+
+func main() {
+    calls := 0
+    next := func() int { calls++; return 21 }
+    fmt::Println(macros::twice!(next()), calls)
+}

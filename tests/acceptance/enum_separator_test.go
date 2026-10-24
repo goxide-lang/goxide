@@ -29,7 +29,7 @@ func TestEnumSeparatorPackageCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	src := t.TempDir()
 	packagesWrite(t, src, "go.mod", packagesModule())
 	writeAcceptanceFixtureRoots(t, src, "packages.example/app", map[string]string{"model": "packages.example/app/model"})

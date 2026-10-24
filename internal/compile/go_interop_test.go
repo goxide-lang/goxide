@@ -14,6 +14,8 @@ import (
 )
 
 func TestOrdinaryGoInteropAndExplicitTraitBodies(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	module, err := project.ReadMod(filepath.Join(runtime.GOROOT(), "bin", "go"), filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +157,7 @@ func TestOrdinaryConsumer(t *testing.T) { verify() }
 `,
 	})
 	consumer := filepath.Join(root, "consumer")
-	first, err := PrepareProject(consumer, Options{Offline: true})
+	first, err := PrepareProject(consumer, Options{Offline: true, RunProcMacro: run})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +168,7 @@ func TestOrdinaryConsumer(t *testing.T) { verify() }
 	configuredGo(t, first, "test", "-mod=readonly", "-count=1", first.Entry)
 	before := projectSnapshot(t, filepath.Dir(first.Root))
 	lock := unchangedConfigLock(t, consumer, nil)
-	second, err := PrepareProject(consumer, Options{Offline: true, Locked: true})
+	second, err := PrepareProject(consumer, Options{Offline: true, Locked: true, RunProcMacro: run})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +195,7 @@ func TestOrdinaryConsumer(t *testing.T) { verify() }
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			writeProjectFile(t, root, "adapter/rejected.gox", "package adapter\nuse api;\nuse native;\n"+test.source+"\n")
-			result, err := PrepareProject(consumer, Options{Offline: true, Locked: true})
+			result, err := PrepareProject(consumer, Options{Offline: true, Locked: true, RunProcMacro: run})
 			var diagnostic check.Diagnostic
 			if result != nil || !errors.As(err, &diagnostic) || diagnostic.Code != check.TraitInvalid || !strings.Contains(diagnostic.Message, test.want) || !strings.HasSuffix(diagnostic.File, "/rejected.gox") {
 				t.Fatalf("invalid implementation boundary = %v, %v", result, err)

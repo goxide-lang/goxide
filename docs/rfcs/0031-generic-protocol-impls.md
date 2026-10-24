@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-**参数化 trait、通用互斥、定义点证据分区、按需实例化与 Go 普通入口已实现；declare impl 已移除。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态、验收入口及标准库发布边界见[状态表](../mvp-gap-audit.md)。业务派生宏的正式迁移仍逐项验收，不由通用协议能力自动完成。
+**参数化 trait、通用互斥、定义点证据分区、按需实例化与 Go 普通入口已实现；declare impl 已移除。** 宏输出普通 Goxide 声明，经同一条解析、名字、类型及权限检查管线处理。当前状态、验收入口及标准库发布边界见[状态表](../mvp-gap-audit.md)。std/serde 正式过程宏及普通协议实现已接入，完整回归与发布验收仍见状态表。
 
 [RFC 0030](0030-procedural-macros.md) 提供语法变换与受限执行，宏不查询类型、不登记 impl。Default、Clone、Debug、PartialEq、Eq、Serialize、Deserialize 的迁移使用普通库协议；每个业务协议仍须保持原有行为并分别验收。
 
@@ -19,11 +19,11 @@
 | 数组长度参数 | `const N int` 仅匹配固定数组长度、接受显式非负整数常量和原样转传；不开放长度表达式求解或 const 泛型具名类型 |
 | enum 外层检查 | `enum_valid(value)` 单次求值并返回外层变体是否合法；payload 与普通 match 的检查规则不变 |
 
-最小数组长度参数与显式 enum 可失败检查已实现。Default 的函数调用图递归限制和 Eq 派生的现有资格规则保持不变；下文关于放宽这两项的候选暂不实施。`no_mangle` 不属于本篇或本次实现。
+最小数组长度参数与显式 enum 检查已实现。Default 不再有专用函数调用图禁环；普通方法体可递归，协议前提循环和无限实例需求由通用检查诊断。Eq 是具有 PartialEq 前提的普通 marker，手写空 impl 是作者对等价关系的承诺；derive 只生成普通约束和 impl。NativeKey 独立承诺 PartialEq 与稳定的 Go 原生键相等语义一致，并要求 Go comparable。`no_mangle` 不属于本次实现。
 
-[已确认决策](../design/decisions.md) D05 已改为移除 `declare impl`；D19/D20 的权限边界、普通有体 impl 的运行时 wrapper 和 enum 表示继续适用。此稿不增加 move、独占分析、动态字典、反射兜底或每种 derive 的编译器 hook。当前部分业务宏仍拒绝泛型声明；通用迁移完成时须支持其业务合同适用的泛型类型，不能把该拒绝作为完成边界。库的泛型 impl 同时须为业务字段提供协议。
+[已确认决策](../design/decisions.md) D05 已改为移除 `declare impl`；D19/D20 的权限边界、普通有体 impl 的运行时 wrapper 和 enum 表示继续适用。此稿不增加 move、独占分析、动态字典、反射兜底或每种 derive 的编译器 hook。库宏读取类型语法并生成条件泛型 impl，所需字段协议仍由普通检查器证明。手写、声明宏和过程宏产物使用同一条选择与检查路径，不按 derive 来源授予额外资格。
 
-Error 派生、`go_result!` / `go_result_keep!`、`cfg` 属于不同边界：Error 的 struct 方法已有普通 inherent impl 迁移证明，enum 固有方法的新映射仍未实现；From/Into 基础按 RFC 0032 实现。Error 的 `#[from]`、消息和上下文等人体工程库后续开发；现有内建 Error helper 仍可显式调用，但不登记为 `?` 转换证据。go_result 涉及调用结果形状和错误转换，cfg 决定进入展开的源码。print/println 的库化另验格式检查与调用行为；本篇提供其可使用的普通协议能力。
+Error 与 print/println 已由 std 过程宏输出普通实现；Error 的 struct/enum 方法使用普通 inherent impl，`#[from]` 输出普通 From impl。消息和 source 选择属于库。`go_result!` / `go_result_keep!` 继续依据真实 Go 返回类型适配，cfg 继续决定进入展开的源码，二者属于语言机制。
 
 ## 源级规则
 
@@ -46,7 +46,7 @@ impl[T Clone, const N int] Clone for [N]T { /* 必需成员 */ }
 
 同一目标可同时要求多个 trait；关联类型绑定仍按所属 trait 区分。成员查询保持现有权限候选和固有成员优先规则，同名 trait 成员须限定，不按约束书写次序选择。每个约束都须有显式 impl，不能凭 Go 方法集补足。
 
-普通 trait 前提可表达 Eq 对 PartialEq 的关系；将现有 Eq 派生迁为下列库协议时仍须核对其独立行为合同：
+普通 trait 前提表达 Eq 对 PartialEq 的关系：
 
 ```goxide
 pub trait PartialEq { func equals(self Self, other Self) bool }
@@ -55,11 +55,11 @@ pub trait Eq where Self: PartialEq {}
 
 证明 `T: Eq` 时先证明其前提；在 `T: Eq` 的函数内可使用 PartialEq。只开放无环的普通 trait 前提；带输入的前提按完整类型与权限代入，不增加默认方法、运行时自动视图转换或任意继承机制。PartialEq 继续使用两个值参数，不借迁移暗中改成只读借用。
 
-**暂缓的 Eq 迁移候选。** 若保留“派生 Eq 只接受结构派生 PartialEq”的区别，可由普通库 marker `StructuralPartialEq` 表达：PartialEq 宏同时生成该 marker 的 impl，Eq 宏要求 `Self: StructuralPartialEq`。手写 PartialEq 本身不产生 marker。marker 与手写 Eq 一样是作者承诺，用户也可显式实现；它不是编译器签发的不可伪造证明。接受此规则包含接受这种显式承诺入口；不能为隐藏它重新增加 derive 名称判断。
+**Eq 与 NativeKey。** Eq 是具有 PartialEq 前提的普通 marker，作者可通过手写 Eq impl 显式承诺等价关系。库的 `derive(Eq)` 另要求目标实现 `DerivedPartialEq`，并为字段或 underlying 类型生成 Eq 前提；`derive(PartialEq)` 生成该 marker，手写 PartialEq 的作者也可显式实现 `DerivedPartialEq` 来提供承诺。`DerivedPartialEq` 是可手写的普通库资格，不是编译器追踪的派生来源；只手写 PartialEq 而未提供该承诺时，不满足 `derive(Eq)` 的资格前提。NativeKey 另以 `Self: PartialEq` 和 `Self: comparable` 为前提，承诺该业务相等与稳定 Go 原生键语义一致。这些承诺均由普通 impl 表达，编译器不分析业务体以证明等价关系。
 
 Default 成员统一写作 `r#default`，使用普通 raw identifier；不再以 trait 名称触发关键字解析例外。静态函数返回真实 Self；Clone、Debug、Serialize 的 `self &Self` 保持既有只读权限；Deserialize 返回 `(Self, error)`，不抹成 `any`。
 
-trait 与派生宏沿 RFC 0030 的单一名字空间：运行库可导出 `Clone` trait，并将宏包重导出为 `derive`，调用写作 `#[derive(protocols::derive::Clone)]`；也可显式导入宏并改名。现有裸内建派生入口在迁移时删除，不用编译器固定映射模拟普通库。宏输出的运行库路径通过既定定义点绑定与 RuntimeRoot 解析，消费者按 RFC 0030 声明运行库依赖；宏执行依赖不会自动成为目标依赖。这里的模块及导出名是示例，最终库布局须在迁移前确定。
+trait 与派生宏沿 RFC 0030 的单一名字空间：运行库可导出 `Clone` trait，并将宏包重导出为 `derive`，调用写作 `#[derive(protocols::derive::Clone)]`；也可显式导入宏并改名。裸内建派生入口已删除，不用编译器固定映射模拟普通库。宏输出的运行库路径通过既定定义点绑定与 RuntimeRoot 解析，消费者按 RFC 0030 声明运行库依赖；宏执行依赖不会自动成为目标依赖。正式 std 与 serde 均通过 `derive` 子路径重导出宏。
 
 ### 2. 通用互斥与实现选择（设计提案）
 
@@ -172,7 +172,7 @@ impl protocols::Reader for BufferReader {
 
 Go 降低继续使用已选 ops、定义包模板和精确签名回调，普通 Go 能表达的泛型保留；不引入动态字典、反射或全局 impl 注册表。不同的同 Head 条件声明有不同生成符号，但不向原始泛型类型无条件追加能力。私有字段业务留在定义包，std 不反向 import 消费者；真正被调用的方法承载业务体，直接调用和方法值保持求值、槽位、defer/recover。Go 消费者沿 D38 调用作者公开的普通入口。
 
-Default 函数调用图规则调整及 Eq marker 仍是既有暂缓项。本节解决普通资格证明，不借此放宽业务宏合同。serde 递归具体类型可由宏生成无条件 Serialize/Deserialize impl，先登记签名，再在业务体中选择已登记 Node 与容器操作；带有 `where *Node:Serialize` 的资格环则需要归纳基础，不能因运行时递归合法而默认成立。Clone 宏显式生成的循环字段前提继续失败；两种策略都不保证运行时对象图终止。
+Default 方法体与其他普通函数一样允许递归，Eq 使用普通 marker；资格前提仍由本节统一证明。serde 递归具体类型可由宏生成无条件 Serialize/Deserialize impl，先登记签名，再在业务体中选择已登记 Node 与容器操作；带有 `where *Node:Serialize` 的资格环则需要归纳基础，不能因运行时递归合法而默认成立。Clone 宏显式生成的循环字段前提继续失败；两种策略都不保证运行时对象图终止。
 
 #### 2.6 通用过程宏迁移验收
 
@@ -249,13 +249,13 @@ pub func read[T Deserialize](d Deserializer) (T, error) {
 
 `missing` 返回缺失时的值和是否接受缺失；它不是默认方法，每个库实现显式提供。Option 实现返回 None 和 true，普通 scalar、pointer、容器及派生业务类型返回零值和 false；pointer 可接受显式 null，不因此接受字段缺失。该方法不承担 `#[serde(default)]` 的业务默认工作。宏通过普通协议选择处理 alias，先完成读取和所有必填校验，之后才按字段顺序应用 default/skip；已有字段的格式错误不触发 default。库的最终方法名和 API 可在迁移设计中收敛，但不能省略这个可表达机制、改用宏类型查询或按 Option 拼写判断。
 
-Serialize 与 Deserialize 必须为独立协议。Serialize 的非 skip 字段只要求 Serialize；Deserialize 的非 skip 字段要求 Deserialize，default/skip 字段另要求 Default，skip 字段不要求任何读写 codec。仅 Serialize 上出现 default 不应额外要求 Default。返回 Self 的 Deserialize 通过上例显式类型实参的普通 read 函数选择具体实例，不依赖从 Deserializer 输入猜出目标类型。用户泛型 derive 暂拒绝，不影响库容器实现独立支持两个方向。
+Serialize 与 Deserialize 必须为独立协议。Serialize 的非 skip 字段只要求 Serialize；Deserialize 的非 skip 字段要求 Deserialize，default/skip 字段另要求 Default，skip 字段不要求任何读写 codec。仅 Serialize 上出现 default 不应额外要求 Default。返回 Self 的 Deserialize 通过上例显式类型实参的普通 read 函数选择具体实例，不依赖从 Deserializer 输入猜出目标类型。泛型 derive 生成对应方向所需的普通条件 impl，库容器实现独立支持两个方向。
 
 serde 的 map 实现首批精确针对 `map[string]T`；string 的透明 alias 同样匹配，defined string key 不自动匹配，保持当前边界。一般 std map 协议若引入 K 参数，还必须保留普通 Go `comparable` 类型约束，K 的 Go 声明不能降低成 any。一个仅含 marker 的库 trait 或手写 Eq 都不能让原本不可比较的类型成为 Go map key。comparable 只保证 map 类型可形成，不扩大各协议原有的键支持范围；需要更窄的稳定相等约束时，再使用普通显式库协议，不让 comparable 自动授予 Eq。
 
 ## 转译示例
 
-以下展示已确认的输出边界；库协议名称在派生迁移时接入，示例不将当前内建名称误认为已迁移。
+以下展示普通库协议与按需实例化的输出边界；正式入口使用显式 std/serde 路径。
 
 ### GP-01：slice 条件实现由具体入口请求
 
@@ -315,7 +315,7 @@ func CloneRecord(value *Record) Record {
 
 `Box[T any]` 与 `defaultBox[T Default]() Box[T]` 使用不同约束。现有 carrier 能让 Go 从具体类型推导 Default 操作时，函数可以保留对应普通 Go 泛型；这不自动授予任意 `Box[T]` 一个普通 anchor。对没有 anchor 的容器组合，作者提供例如 `defaultUserBox() Box[User]` 的具体入口，由 Goxide 完成条件选择。
 
-已有 Default 的业务默认、字段顺序和递归拒绝继续按当前合同处理；调整既有递归规则仍是本篇单列候选。
+Default 保留业务默认和字段顺序；普通方法体递归不受专用禁环检查，有限需求与协议前提检查对所有 trait 一致。
 
 ## 拒绝与边界
 
@@ -337,19 +337,17 @@ func CloneRecord(value *Record) Record {
 
 库实现继续承担既有行为：Default 按字段顺序调用业务默认，enum 只要求默认变体 payload；Option 默认 None 不要求元素 Default，Result 不自动取得 Default；容器 Clone 说明存储和元素复制，不能改用赋值兜底；Debug 保持字段/变体名、数据及字符串引号，map 输出的排序等行为由库实现；serde 保持方向独立、缺失/default/skip、错误与范围检查、nil/空和 Option 规则。enum 的检查和变体身份属于通用 enum 合同，显式可失败检查按第 5 节实现，宏不能绕过普通 match 的检查。
 
-这些要求需逐项迁移验收，不因泛型 impl 可以表达某个签名就认为业务等价。原生 map 键资格等额外能力若需证明，应由普通库协议及约束表达；手写 Eq 不自动取得该资格，浮点等类型也不能因 Go comparable 就被授予 Eq。不能在 checker 中按 Default、Clone 或 serde 名字偷偷补实现。
+原生 map 键资格由普通 NativeKey 协议表达，手写 Eq 不自动取得该资格。标准库不为 float/complex 提供 Eq 或 NativeKey；本地 defined 类型可通过显式普通 impl 作出相应语义承诺。Debug 支持 complex64/complex128 字段、容器元素及 enum payload，不以其他协议缺失阻断 Debug。编译器不按 Default、Clone、Eq 或 serde 名称补实现，也不记录 derive 来源特权。
 
-**PartialEq 的 enum 深层校验仍是迁移缺口。** 现有 enum 相等入口在比较变体或执行手写相等方法前，先校验左操作数、再校验右操作数的有效载荷；校验会穿过结构体字段、数组、slice 和 map 的值，即使载荷类型有手写 PartialEq。普通结构体和容器的相等比较则仍按访问顺序短路。`enum_valid` 只检查外层，不能代替这个既有合同。例如外层 enum 的有效变体携带一个结构体，结构体中未初始化的内层 enum 仍须导致 panic，即使另一操作数属于不同外层变体，且载荷的手写相等方法不会被调用。`tests/acceptance/equality_test.go` 与 `manual_equality_test.go` 保留这些行为验收；当前普通库证明尚未提供等价的通用表达方式，不得据此移除该校验或偷偷增加字段协议要求。所需通用能力或行为调整须另行确认。
+**enum PartialEq 的有限结构校验。** std 的普通 PartialEq 派生在两个操作数都已求值后，通过 `std::enum_assert!` 先校验左值、再校验右值，然后比较变体或调用 payload 的相等协议。遍历规则见下文；普通 struct/容器相等仍按访问顺序短路。手写 PartialEq 是普通方法，作者需要同样的 enum 校验时显式调用该宏，不按实现来源插入特殊检查。
 
-普通库迁移基础已有真实 WASI 验证：`internal/compile/protocol_migration_test.go` 从公共 syn 读取实际字段和变体，生成五种 `Library*` 普通协议实现。具体 struct/enum 的 Default/Clone/Debug 证明覆盖默认变体字段的约束与调用顺序、Option None 不要求元素 Default、Result/容器不自动取得 Default；Clone 覆盖 slice/array/map、enum 与 Option/Result 的元素协议、独立存储和 nil/empty 状态；Debug 覆盖字段/变体名、字符串转义及 map 稳定排序。map Clone 的键限于非 complex 的内建 scalar，Debug 限于 string，透明 alias 对照通过，defined key 不自动匹配。14 个拒绝用例检查缺失协议、helper 选择及键资格；原有私有字段和手写字段相等协议断言保留。该宏仍只接受具体类型，未补齐上述 enum 深层 PartialEq、Eq 派生资格或 Default 调用图规则。
+正式库入口为 `std::derive::{Default, Clone, Debug, PartialEq, Eq, NativeKey, Error}`、`std::print!` / `std::println!` 及 `serde::derive::{Serialize, Deserialize}`。宏经正式 proc-macro 源码、WASI 执行、RuntimeRoot 和普通 trait 检查；目标依赖与宏角色分别选版、锁定并校验来源。
 
-`internal/compile/error_protocol_migration_test.go` 以普通 `LibraryError` 宏读取 struct 字段和自定义 helper，生成 inherent `Error() string` 与有 source 时的 `Unwrap() error`，不使用内建 Error hook。证明覆盖消息插值与转义、scalar/error 透明 alias、私有字段、nil/typed-nil source 的保留，以及原生 `errors.Is` / `errors.As` 到达原 cause；14 个拒绝用例覆盖消息/helper 错误、source 与 scalar 类型资格、手写方法冲突。此证明限于具体 struct，不包含 enum 原生 error 桥接或 `#[from]` 注册。
-
-两项证明均实际执行 Go 消费者 build/run/test，并核对锁定重放的生成内容与锁文件字节一致。`internal/compile/serde_protocol_migration_test.go` 验证普通 Serialize/Deserialize 协议与现有公开 serde API 的接线、条件容器、读写方向独立、Option alias 与指针的缺失区别、显式 null、default/skip 顺序及 enum 错误路径。`attribute_protocol_migration_test.go` 覆盖 attribute 产出的条件 impl，`print_protocol_migration_test.go` 覆盖格式解析、普通 Display/Debug 调用、求值顺序和调用帧。它们使用普通宏与库入口；std/serde 正式迁移发布及完整业务等价验收仍待完成。Default 专用调用图检查与 Eq 派生资格仍按上面的暂缓决定处理；旧入口的移除须随对应库的正式迁移验收进行。
+`internal/compile/formal_std_test.go` 与 `formal_serde_test.go` 使用公开 pin 的正式宏执行目标 Go build/run/test 和锁定重放；原有普通库迁移测试继续覆盖公共 syn、attribute、格式求值与调用帧。完整业务回归及发布状态统一由[状态表](../mvp-gap-audit.md)记录。
 
 ### 后续迁移边界
 
-已确认固有成员的新 Go 映射、enum 校验的 std 宏入口，以及后续 `std::prelude` 方向；这些实现与验收尚未完成。From/Into 基础已按 RFC 0032 实现，下述配置/返回适配迁移边界保持独立。Default 递归与 Eq marker 继续暂缓。
+固有成员的新 Go 映射与 `std::enum_assert!` 已接入。From/Into 按 RFC 0032 实现；配置/返回适配仍保留为语言机制。`std::prelude` 的清单和导入规则待设计。
 
 **保留配置选择和 Go 返回适配为语言机制。** 普通宏可输出现有 `cfg` / `cfg_attr` / `cfg!` 语法，由编译器继续按来源和构建角色求值。原始源码的配置选择先于入口登记与宏执行，宏生成项按现有展开流程继续筛选；完整规则包含宏 Context 不可查询的环境，不能以普通 attribute 执行代替。`go_result!` / `go_result_keep!` 继续依据真实单值或双值返回签名选择适配，按原静态错误类型判断 nil，并保留调用帧。让它们完整迁出需要另行设计配置阶段接口及静态返回形状能力，不能把仅支持 target/feature 或精确 `error` 的库函数算作完整替代。该候选保留 RFC 0030 的纯语法边界及 D36 的行为。
 
@@ -358,16 +356,16 @@ func CloneRecord(value *Record) Record {
 | 固有成员 | 已确认的 Go 位置 |
 | --- | --- |
 | 无 self，任意返回类型 | 类型的空 carrier |
-| enum 有 self，含返回 Self | E 接口声明签名，各指针变体承载方法业务体 |
+| enum 值或只读 self，含返回 Self | E 接口声明签名，各指针变体承载原业务体；可写 self 固有成员拒绝 |
 | struct 有 self，含返回 Self | 按接收权限生成普通 Go receiver 方法 |
 
-是否带 self 优先于返回类型；固有成员不生成包级纯函数。当前后端仍把关联函数与普通 enum 实例方法生成为包函数，现有 carrier 主要服务 trait，需补齐仅有固有 impl 的类型与泛型 carrier。trait wrapper、marker 和 As/For 的合同继续按 [enum 表示](../design/enum-representation.md#11-p4-的类型锚与实例适配)。
+是否带 self 优先于返回类型。普通关联函数与无条件 enum 实例方法采用上表布局；带待定协议条件的成员仍按 D38 的实际请求扁平化。trait wrapper、marker 和 As/For 继续按 [enum 表示](../design/enum-representation.md#11-p4-的类型锚与实例适配)。
 
-Self 始终是完整 enum；`self &Self` / `self &mut Self` 须保留真实 owner 槽，不能从变体临时装箱取址。carrier 与变体直接承载业务体，绑定方法值也须保持原求值、捕获和 `defer` / `recover` 行为。具体借用 owner 的承载、公开 Go 签名，以及 nil/typed-nil 在直接调用、方法值绑定和调用时的行为仍需闭合；条件 impl 的能力不能无条件写入整个泛型 enum 家族的方法集。固有成员不受 trait sugar 开关控制，按普通可见性和每个变体的字段/方法冲突规则检查。
+Self 始终是完整 enum。值与只读固有方法值捕获绑定时的变体对象；owner 重绑定不改换对象。typed-nil 在方法业务体前检查，业务体保留原 `defer` / `recover` 帧。`self &mut Self` 固有成员拒绝，payload 槽位不可写，更新返回新 enum。条件能力只按实际请求扁平化，不建立专用 view，也不写入整个泛型家族的方法集。固有成员不受 trait sugar 开关控制，按普通可见性和字段/方法冲突规则检查。
 
-验收须包含无 self 的 carrier、普通非 Error 方法、返回 Self、原生 Go interface 调用、直接与保存方法值的 recover、nil/typed-nil、私有变体、名称冲突，以及借用槽替换和条件泛型实例。Error 库以后输出相同的普通 impl，不另设专用桥接路径。
+对应 `internal/lower/inherent_carrier_test.go` 与 `inherent_enum_test.go` 覆盖无 self carrier、普通非 Error 方法、返回 Self、原生 Go interface、直接与保存方法值的 recover、nil/typed-nil、私有变体、名称冲突、owner 重绑定及条件泛型实例。Error 宏输出相同的普通 impl。
 
-**From/Into 转换协议。** 当前讨论和实现范围是转译器与 std 基础：std 定义转换协议，编译器检查普通 impl 并为 `?` 选择转换；Error 派生库以后读取 `#[from]` 并输出普通转换 impl。属性、错误消息、source 与上下文选择属于库的职责，不作为转换协议的编译器登记入口。
+**From/Into 转换协议。** 当前讨论和实现范围是转译器与 std 基础：std 定义转换协议，编译器检查普通 impl 并为 `?` 选择转换；Error 派生库读取 `#[from]` 并输出普通转换 impl。属性、错误消息、source 与上下文选择属于库的职责，不作为转换协议的编译器登记入口。
 
 D22 与 [RFC 0005](research/0005-option-result-question.md#11-thiserror-与静态错误类型) 已确认 `?` 先普通可赋值，再精确静态来源与目标的唯一一步 From；不搜索链、不为匹配先装箱、不猜 Go error 的动态类型。当前实现查询 canonical `std::convert::From`，不再登记本包 helper 或 Error 派生的转换函数。
 
@@ -375,7 +373,7 @@ D22 与 [RFC 0005](research/0005-option-result-question.md#11-thiserror-与静�
 
 **enum 比较前的有限结构校验。** 公开入口采用 `std::enum_assert!(value)`，名字不带 valid 后缀。宏表示检查请求，类型布局及字段访问由后续类型检查与降低处理，不向过程宏开放类型查询。首批用于 payload 静态类型完全确定的 enum 实例：实参求值一次，无返回值；普通 PartialEq 宏在两个操作数都已求值后，先对左值、再对右值调用，随后才比较变体或执行业务相等方法。校验读取活动 payload，穿过结构体字段、array、slice 和 map 值，不调用字段的业务协议，也不把额外协议条件加到字段类型上。非法 enum 按既有规则 panic。现有 `enum_valid` 的外层 bool 检查保持不变。
 
-校验范围沿用当前有限遍历：不遍历 pointer、普通 interface 或 map 键；遇到当前包含路径上已有的规范类型，终止该条边且不再次校验该节点。例如 `E` 的变体携带 `[]E`，slice 元素会在静态回边处截断，不能据此证明整个运行时对象图有效。若将不可访问字段的检查移到其定义包，生成 helper 仍须保留调用点的路径截断，不能重新开始校验。只在实际需要读取的字段无法合法访问且没有可生成检查的定义源码时诊断；无关私有 scalar 字段不构成拒绝理由。这部分跨包实现与等价验收尚未完成，不能把 helper 设想记作支持。迁移时以普通库宏验收有限遍历、左右顺序、手写 payload 协议及私有字段路径，再移除对应 hook。
+校验范围沿用当前有限遍历：不遍历 pointer、普通 interface 或 map 键；遇到当前包含路径上已有的规范类型，终止该条边且不再次校验该节点。例如 `E` 的变体携带 `[]E`，slice 元素会在静态回边处截断，不能据此证明整个运行时对象图有效。若将不可访问字段的检查移到其定义包，生成 helper 仍须保留调用点的路径截断，不能重新开始校验。只在实际需要读取的字段无法合法访问且没有可生成检查的定义源码时诊断；无关私有 scalar 字段不构成拒绝理由。跨包检查已接入按需定义包 helper；待定模板通过实际需求提供校验回调，并保留包含路径的截断。对应 `internal/lower/enum_assert_test.go`、`enum_assert_template_test.go` 和 `enum_assert_hygiene_test.go` 覆盖私有字段、私有类型实参、条件泛型、卫生及直接 recover 调用帧；全树和正式库完整回归仍按状态表验收。
 
 **后续 std::prelude。** 已确认提供标准库常用入口的 prelude 方向。具体重导出清单、导入方式和遮蔽规则以后设计；当前仍沿显式 use 与宏路径解析，不由这项决定增加隐式注入或新的名称优先级。
 
@@ -403,4 +401,4 @@ Go 调用已生成的具体业务入口、具体 impl 的完整协议入口以�
 8. Serialize/Deserialize 需求独立，保留 Option alias 缺失、pointer 缺失、present 错误、default/skip 顺序及 enum 错误行为；不按 derive 名称补隐式能力。
 9. 惰性属性遵循消费者生命周期，attribute 替换负责转交、derive 保留原项；未知属性仍拒绝，不实现 `no_mangle`。
 
-最小数组长度与 enum 显式检查已按上述最小范围实现；Default 既有递归规则调整和 Eq marker 候选暂缓。跨仓库写入与发布遵循对应授权。阶段状态记录在状态表，不把机制原型或未执行的迁移验收记为完成。
+最小数组长度、enum 显式检查、普通 Default 递归及 Eq/NativeKey marker 已按本文合同接入。阶段与发布状态记录在状态表，全树及跨仓库发布验收仍待完成。

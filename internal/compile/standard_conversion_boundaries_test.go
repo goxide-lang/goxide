@@ -11,6 +11,8 @@ import (
 )
 
 func TestStandardConversionRejectsUnboundOrAmbiguousApplications(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	standard := standardConversionManifest(t)
 	for _, fixture := range []struct {
 		name, declarations, want string
@@ -41,7 +43,7 @@ func f(value *Source)Target{return Target::from(value)}`, "no explicit implement
 			writeProjectFile(t, root, project.ManifestName, "[go_mod]\nmodule=\"example.org/standard-boundary\"\ngo=\"1.27\"\n[lib]\nname=\"boundary\"\npath=\".\"\n"+standard)
 			writeProjectFile(t, root, "lib.gox", "package boundary\nuse standard::convert::From;\nuse standard::convert::Into;\n"+fixture.declarations+"\n")
 			writeProjectFile(t, root, "foreign/lib.gox", "package foreign\npub struct Source{}\npub struct Target{}\n")
-			result, err := PrepareProject(root, Options{Lib: true})
+			result, err := PrepareProject(root, Options{Lib: true, RunProcMacro: run})
 			var diagnostic check.Diagnostic
 			if result != nil || !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message, fixture.want) {
 				t.Fatalf("invalid application was accepted or misdiagnosed: %v, %v; want %q", result, err, fixture.want)
@@ -51,6 +53,8 @@ func f(value *Source)Target{return Target::from(value)}`, "no explicit implement
 }
 
 func TestStandardConversionProofAndDemandTermination(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	standard := standardConversionManifest(t)
 	for _, fixture := range []struct {
 		name, declarations, want string
@@ -73,7 +77,7 @@ func f()int{return Grow(1)}`, "instantiation cycle"},
 			writeProjectFile(t, root, "lib.gox", "package termination\nuse standard::convert::From;\n"+fixture.declarations+"\n")
 			var first string
 			for range 2 {
-				result, err := PrepareProject(root, Options{Lib: true})
+				result, err := PrepareProject(root, Options{Lib: true, RunProcMacro: run})
 				if result != nil {
 					configuredGo(t, result, "build", "-mod=readonly", result.Entry)
 				}

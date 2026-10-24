@@ -24,6 +24,8 @@ import (
 // These are ordinary user protocols. Standard From identity for ? is tested
 // separately against the compiler's published std dependency.
 func TestParameterizedConversionModulesAndDependencyRecheck(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	root := t.TempDir()
 	protocol, model := filepath.Join(root, "protocol"), filepath.Join(root, "model")
 	business, consumer := filepath.Join(root, "business"), filepath.Join(root, "consumer")
@@ -99,7 +101,7 @@ path="."
 	writeManifests("v1.0.0", false)
 	// The Wrap[T] -> []T declaration must be checked for every T, including
 	// unknown future types, before any downstream Ints or Texts demand exists.
-	library, err := PrepareProject(model, Options{Lib: true})
+	library, err := PrepareProject(model, Options{Lib: true, RunProcMacro: run})
 	if err != nil {
 		t.Fatalf("generic independent Into library: %v", err)
 	}
@@ -122,7 +124,7 @@ path="."
 					writeProjectFile(t, item.directory, "lib.gox", strings.Join(lines, "\n"))
 				}
 			}
-			first, err := PrepareProject(consumer, Options{})
+			first, err := PrepareProject(consumer, Options{RunProcMacro: run})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -163,7 +165,7 @@ path="."
 				t.Fatalf("import, reexport or dependency ordering changed declaration identities:\nbefore=%v\nafter=%v", symbols, current)
 			}
 			lock := unchangedConfigLock(t, consumer, nil)
-			second, err := PrepareProject(consumer, Options{Offline: true, Locked: true})
+			second, err := PrepareProject(consumer, Options{Offline: true, Locked: true, RunProcMacro: run})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -180,14 +182,14 @@ impl[S any,T any] From[S] for []T where S:Elements[Item=T] {
     func customFrom(value S) Self { return value.elements() }
 }
 `)
-	upgraded, err := PrepareProject(protocol, Options{Lib: true, Offline: true})
+	upgraded, err := PrepareProject(protocol, Options{Lib: true, Offline: true, RunProcMacro: run})
 	if err != nil {
 		t.Fatalf("upstream extension is not independently coherent: %v", err)
 	}
 	configuredGo(t, upgraded, "build", "-mod=readonly", upgraded.Entry)
 	commit("v2.0.0")
 	writeManifests("v2.0.0", true)
-	rejected, err := PrepareProject(consumer, Options{})
+	rejected, err := PrepareProject(consumer, Options{RunProcMacro: run})
 	var diagnostic check.Diagnostic
 	if rejected != nil || !errors.As(err, &diagnostic) || diagnostic.Code != check.TraitInvalid || !strings.Contains(diagnostic.Message, "overlap") {
 		t.Fatalf("dependency upgrade reused old negative evidence or changed implementation preference: %v, %v", rejected, err)

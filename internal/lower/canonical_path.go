@@ -6,9 +6,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
-// CanonicalPath follows namespaces and source reexports for a compiler
-// registration. The final name need not be a Go object: resolve checks it
-// against the fixed derive registry after the package route is established.
+// CanonicalPath follows namespaces and source reexports to their package identity.
 func (i *moduleImporter) CanonicalPath(parts []string) ([]string, bool) {
 	paths := i.canonicalPaths(parts, map[string]bool{})
 	var result []string

@@ -11,6 +11,8 @@ import (
 )
 
 func TestCoherenceRechecksNativeGoMethodEnvironment(t *testing.T) {
+	compilerSDKForTest(t)
+	run := testWASI(t, nil)
 	root := t.TempDir()
 	model := filepath.Join(root, "model")
 	writeProjectFile(t, root, "native/go.mod", "module example.org/coherence-native\n\ngo 1.27\n")
@@ -38,7 +40,7 @@ impl Q for Box[native::Row] {func value(self Self)int{return 7}}
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			writeProjectFile(t, root, "native/native.go", "package native\ntype Row struct{}\n"+fixture.method+"\n")
-			result, err := PrepareProject(model, Options{Lib: true, Offline: true})
+			result, err := PrepareProject(model, Options{Lib: true, Offline: true, RunProcMacro: run})
 			if fixture.want == "" {
 				if err != nil {
 					t.Fatal(err)

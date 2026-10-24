@@ -117,6 +117,9 @@ func (c *checker) newPermissionChecker() *permissionChecker {
 
 func (p *permissionChecker) eachFile(f func([]ast.Item)) {
 	for _, pkg := range p.c.out.Resolve.Packages {
+		if p.c.packages[pkg] != nil && p.c.packages[pkg] == p.c.out.NativePackages[pkg.Dir] {
+			continue
+		}
 		p.c.pkg = p.c.packages[pkg]
 		for _, file := range pkg.Files {
 			p.c.file = file
@@ -352,6 +355,12 @@ func (p *permissionChecker) fromGo(t types.Type) *permission {
 		q.key, q.elem = p.fromGo(t.Key()), p.fromGo(t.Elem())
 	case *types.Chan:
 		q.elem = p.fromGo(t.Elem())
+	case *types.Struct:
+		q.fields = map[string]*permission{}
+		for i := 0; i < t.NumFields(); i++ {
+			field := t.Field(i)
+			q.fields[field.Name()] = p.fromGo(field.Type())
+		}
 	case *types.Signature:
 		for i := 0; i < t.Params().Len(); i++ {
 			q.params = append(q.params, p.fromGo(t.Params().At(i).Type()))
@@ -391,6 +400,10 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 		}
 	}
 	switch n := node.(type) {
+	case *ast.SelfType:
+		if impl := p.c.currentImpl; impl != nil {
+			return p.substitutePermission(p.c.implHeadPermissions(impl)[0], p.implSubstitution(impl, sub))
+		}
 	case *ast.ProjectionType:
 		if _, self := n.X.(*ast.SelfType); self && p.c.currentImpl != nil {
 			return p.implAssociated(p.c.currentImpl, n.Item.Name, sub)
@@ -428,9 +441,15 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 				old := p.c.file
 				p.c.file = decl.file
 				args := p.substitution(p.c.named[s], q.args)
-				// Named reference and container types retain their source
-				// capabilities even though go/types exposes only their layout.
-				if _, structure := decl.node.(*ast.StructType); !structure || decl.alias {
+				// Named aggregate members are expanded by fields when needed.
+				// Eagerly expanding a named interface here would reconstruct all
+				// method signatures, then discard them; recursive callback
+				// interfaces can repeat that work along exponentially many paths.
+				// Reference and container declarations still retain capabilities
+				// that go/types does not encode in their representation.
+				_, structure := decl.node.(*ast.StructType)
+				_, iface := decl.node.(*ast.InterfaceType)
+				if !structure && !iface || decl.alias {
 					under := p.astType(decl.node, args)
 					if decl.alias {
 						q = under
@@ -441,6 +460,15 @@ func (p *permissionChecker) astType(node ast.Type, sub map[*types.TypeParam]*per
 				}
 				p.c.file = old
 				delete(p.building, s)
+			} else if alias, ok := t.(*types.Alias); ok && p.c.declarations[s] == nil {
+				// Imported aliases have no source declaration to replay. Their
+				// RHS maps source argument permissions to the underlying type's
+				// argument order, including fixed and repeated arguments.
+				arguments := map[*types.TypeParam]*permission{}
+				for index := 0; index < alias.TypeParams().Len() && index < len(q.args); index++ {
+					arguments[alias.TypeParams().At(index)] = q.args[index]
+				}
+				q = p.substitutePermission(p.fromGo(alias.Origin().Rhs()), arguments)
 			}
 		}
 	case *ast.RefType:
@@ -518,6 +546,8 @@ func (p *permissionChecker) fields(q *permission) map[string]*permission {
 	if q == nil || q.typ == nil {
 		return fields
 	}
+	underlying := q.typ.Underlying()
+	var sub map[*types.TypeParam]*permission
 	if n, ok := types.Unalias(q.typ).(*types.Named); ok {
 		if decl, exists := p.named[n.Origin()]; exists {
 			old := p.c.file
@@ -527,13 +557,18 @@ func (p *permissionChecker) fields(q *permission) map[string]*permission {
 			for name, value := range p.fields(under) {
 				fields[name] = value
 			}
+		} else {
+			// Imported fields must retain permissions supplied for the
+			// original binders, which go/types' instantiated fields erase.
+			underlying = n.Origin().Underlying()
+			sub = p.substitution(n.Origin(), q.args)
 		}
 	}
-	if st, ok := q.typ.Underlying().(*types.Struct); ok {
+	if st, ok := underlying.(*types.Struct); ok {
 		for i := 0; i < st.NumFields(); i++ {
 			f := st.Field(i)
 			if fields[f.Name()] == nil {
-				fields[f.Name()] = p.fromGo(f.Type())
+				fields[f.Name()] = p.substitutePermission(p.fromGo(f.Type()), sub)
 			}
 		}
 	}
@@ -606,6 +641,11 @@ func (p *permissionChecker) element(q *permission) *permission {
 			p.c.file = decl.file
 			under := p.astType(decl.node, p.substitution(n.Origin(), q.args))
 			p.c.file = old
+			if under.elem != nil {
+				return under.elem
+			}
+		} else {
+			under := p.substitutePermission(p.fromGo(n.Origin().Underlying()), p.substitution(n.Origin(), q.args))
 			if under.elem != nil {
 				return under.elem
 			}

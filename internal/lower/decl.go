@@ -37,6 +37,8 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 			return nil
 		}
 		signature, _ := e.info.Symbols[e.file.Definitions[n.Name.ID()]].(*types.Signature)
+		restoreTypeNames := e.functionTypeNames(n, signature)
+		defer restoreTypeNames()
 		if function := e.traits.functions[signature]; function != nil && e.traits.templateFunctions[n] {
 			if hasConstParameters(n.Generics) {
 				e.itemExtras = append(e.itemExtras, e.constFunctionDeclarations(function)...)
@@ -84,7 +86,7 @@ func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
 	case *syntax.TraitDecl:
 		return e.traitDecl(n)
 	case *syntax.ImplDecl:
-		if e.deriveImpl(n) || e.info.Impls[n] != nil {
+		if e.info.Impls[n] != nil {
 			return nil
 		}
 		e.fail(n, "impl 声明尚未降低")

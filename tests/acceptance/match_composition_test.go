@@ -11,8 +11,9 @@ func TestMatchCompositionRace(t *testing.T) {
 	source := `package fixture
 use serde;
 use errors;
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 pub enum Config { Off, Enabled(int), }
+impl Config { pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) } }
 type Wide = uint64
 func mark(t *[]string,s string,n int)int{*t=append(*t,s);return n}
 func checked(t *[]string,ok bool)Result[uint64,error]{mark(t,"checked",0);if !ok{return Result[uint64,error]::Err(errors::New("bad"))};return Result[uint64,error]::Ok(7)}
@@ -51,13 +52,13 @@ func shadowedCallback(n uint64)uint64{panic("captured package function")}
 func referenceSignatureShadow(c Config,r &int,shadowedCallback (func(int)uint64))uint64{return shadowedCallback(match c{Config::Off=>*r,_=>2,})}
 func unpack(r Result[uint64,error])uint64{return match r {Result[uint64,error]::Ok(n)=>n,Result[uint64,error]::Err(_)=>0,}}
 `
-	enumGeneratedModule(t, source, `package fixture
+	enumFormalStdModule(t, source, `package fixture
 import("testing";"reflect";"github.com/goxide-lang/serde/json")
-func TestConfigSuccessFailureAndSelection(t *testing.T){for _,tt:=range []struct{json string;ok bool;want uint64;trace []string}{{"{\"Enabled\":3}",true,10,[]string{"first","guard","checked","last","defer"}},{"{\"Enabled\":3}",false,0,[]string{"first","guard","checked","defer"}},{"\"Off\"",false,4,[]string{"first","last","defer"}}}{c,e:=serdejson.Unmarshal([]byte(tt.json),DeserializeConfig);if e!=nil{t.Fatal(e)};trace:=[]string{};got:=unpack(run(c,tt.ok,&trace));if got!=tt.want||!reflect.DeepEqual(trace,tt.trace){t.Fatalf("got %d trace %v",got,trace)}}}
-func TestContextAndNestedBinding(t *testing.T){c,e:=serdejson.Unmarshal([]byte("{\"Enabled\":3}"),DeserializeConfig);if e!=nil{t.Fatal(e)};if wide(63)!=uint64(1)<<63||!nils()||nested(c)!=4||nestedCall(c)!=3||directiveMatch(c)!=2{t.Fatal("context or binding changed")}}
-func TestStatementAndNearestFunction(t *testing.T){c,e:=serdejson.Unmarshal([]byte("\"Off\""),DeserializeConfig);if e!=nil{t.Fatal(e)};jumping(c);if directiveMatch(c)!=1||inlineClosure(c)!=7{t.Fatal("inline closure")};trace:=[]string{};discard(c,&trace);if !reflect.DeepEqual(trace,[]string{"before","arm","after"}){t.Fatal(trace)};trace=nil;if closure(&trace)!=42||!reflect.DeepEqual(trace,[]string{"checked","outer"}){t.Fatal(trace)}}
+func TestConfigSuccessFailureAndSelection(t *testing.T){for _,tt:=range []struct{json string;ok bool;want uint64;trace []string}{{"{\"Enabled\":3}",true,10,[]string{"first","guard","checked","last","defer"}},{"{\"Enabled\":3}",false,0,[]string{"first","guard","checked","defer"}},{"\"Off\"",false,4,[]string{"first","last","defer"}}}{c,e:=serdejson.Unmarshal([]byte(tt.json),(ConfigOps{}).Decode);if e!=nil{t.Fatal(e)};trace:=[]string{};got:=unpack(run(c,tt.ok,&trace));if got!=tt.want||!reflect.DeepEqual(trace,tt.trace){t.Fatalf("got %d trace %v",got,trace)}}}
+func TestContextAndNestedBinding(t *testing.T){c,e:=serdejson.Unmarshal([]byte("{\"Enabled\":3}"),(ConfigOps{}).Decode);if e!=nil{t.Fatal(e)};if wide(63)!=uint64(1)<<63||!nils()||nested(c)!=4||nestedCall(c)!=3||directiveMatch(c)!=2{t.Fatal("context or binding changed")}}
+func TestStatementAndNearestFunction(t *testing.T){c,e:=serdejson.Unmarshal([]byte("\"Off\""),(ConfigOps{}).Decode);if e!=nil{t.Fatal(e)};jumping(c);if directiveMatch(c)!=1||inlineClosure(c)!=7{t.Fatal("inline closure")};trace:=[]string{};discard(c,&trace);if !reflect.DeepEqual(trace,[]string{"before","arm","after"}){t.Fatal(trace)};trace=nil;if closure(&trace)!=42||!reflect.DeepEqual(trace,[]string{"checked","outer"}){t.Fatal(trace)}}
 func TestInvalidBeforeArms(t *testing.T){trace:=[]string{};defer func(){if recover()==nil||!reflect.DeepEqual(trace,[]string{"first","defer"}){t.Fatalf("trace=%v",trace)}}();run(nil,true,&trace)}
-func TestReferenceSignatureKeepsLocalCallback(t *testing.T){c,e:=serdejson.Unmarshal([]byte("\"Off\""),DeserializeConfig);if e!=nil{t.Fatal(e)};n:=41;if referenceSignatureShadow(c,&n,func(n int)uint64{return uint64(n+1)})!=42{t.Fatal("captured package signature")}}
+func TestReferenceSignatureKeepsLocalCallback(t *testing.T){c,e:=serdejson.Unmarshal([]byte("\"Off\""),(ConfigOps{}).Decode);if e!=nil{t.Fatal(e)};n:=41;if referenceSignatureShadow(c,&n,func(n int)uint64{return uint64(n+1)})!=42{t.Fatal("captured package signature")}}
 `, false)
 }
 func TestMatchCompositionBoundaries(t *testing.T) {
@@ -82,17 +83,18 @@ func TestMatchCompositionPackagesRace(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	source := filepath.Join(t.TempDir(), "source")
-	packagesWrite(t, source, "go.mod", packagesModule())
-	writeAcceptanceFixtureRoots(t, source, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
+	writeStdFormalManifest(t, source, "packages.example/app", "app", nil)
 	packagesWrite(t, source, "model/types.gox", `package model
 use serde;
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 pub enum Mode { Off, Workers(int), }
+impl Mode { pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) } }
 `)
 	packagesWrite(t, source, "app.gox", `package app
-use model as cfg;
+pub mod model;
+use crate::model as cfg;
 func add(a,b int)int{return a+b}
 func Composed(m cfg::Mode)int{return add(1,match m {cfg::Mode::Workers(n)=>match cfg::Mode::Workers(n+1){cfg::Mode::Workers(n)=>n,_=>0,},_=>0,})}
 func Explicit(m cfg::Mode)int{
@@ -104,10 +106,10 @@ func Ordered(m cfg::Mode,t *[]int)int{return add(mark(t,1),match m{cfg::Mode::Wo
 func mark(t *[]int,n int)int{*t=append(*t,n);return n}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
-	packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
+	generated = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", generated, source))
 	packagesWrite(t, generated, "app_test.go", `package app
 import("testing";"reflect";cfg "packages.example/app/model";"github.com/goxide-lang/serde/json")
-func TestCrossPackageConfig(t *testing.T){for n:=0;n<20;n++{m:=&cfg.Workers{Value: n};if Composed(m)!=n+2||Composed(m)!=Explicit(m){t.Fatal(n)}};m,e:=serdejson.Unmarshal([]byte("{\"Workers\":3}"),cfg.DeserializeMode);if e!=nil||Composed(m)!=5{t.Fatal(e)}}
+func TestCrossPackageConfig(t *testing.T){for n:=0;n<20;n++{m:=&cfg.Workers{Value: n};if Composed(m)!=n+2||Composed(m)!=Explicit(m){t.Fatal(n)}};m,e:=serdejson.Unmarshal([]byte("{\"Workers\":3}"),(cfg.ModeOps{}).Decode);if e!=nil||Composed(m)!=5{t.Fatal(e)}}
 func TestCrossPackageInvalid(t *testing.T){for _,m:=range []cfg.Mode{nil}{func(){trace:=[]int{};defer func(){if recover()==nil||!reflect.DeepEqual(trace,[]int{1}){t.Fatalf("invalid %T trace %v",m,trace)}}();Ordered(m,&trace)}()}}
 var sink int
 func BenchmarkComposed(b *testing.B){m:=&cfg.Workers{Value: 3};b.ReportAllocs();for i:=0;i<b.N;i++{sink=Composed(m)}}

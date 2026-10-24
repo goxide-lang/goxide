@@ -12,7 +12,7 @@ func Run(logger *slog::Logger, id string, data []byte) error {
         logger.Error("configuration rejected", "request_id", transport::RequestID(id), "error", err.Error(), "cause", fmt::Sprint(errors::Unwrap(err)))
         return err
     }
-    copy := cfg::CloneConfig(&config)
+    copy := cfg::Config::copy(&config)
     mode, workers := cfg::Describe(copy.Mode)
     logger.Info("configuration accepted", "request_id", transport::RequestID(id), "name", copy.Name, "mode", mode, "workers", workers)
     return nil

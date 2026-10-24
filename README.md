@@ -2,13 +2,16 @@
 
 Goxide 为 Go 项目提供 enum、match、声明宏、Option/Result、`?` 和显式派生，生成可直接交给 Go 工具链的源码。
 
-从当前源码安装：准备 Go 1.27，并将 Go 的安装目录加入 `PATH`：
+从当前源码安装：准备 Go 1.27，并在构建和运行 Goxide 时使用同一 Go 工具链：
 
 ```sh
 git clone https://github.com/goxide-lang/goxide.git
 cd goxide
-GOTOOLCHAIN=local GOWORK=off go install ./cmd/goxide
+GOTOOLCHAIN=local GOWORK=off go run ./scripts/build.go -o ./bin/goxide
+export PATH="$PWD/bin:$PATH"
 ```
+
+构建脚本会写入过程宏所需的语法 SDK 内容身份。Windows 将输出改为 `./bin/goxide.exe`，并把该目录加入 `PATH`。
 
 在已有 Go 包中加入 `choice.gox`，`package` 与手写 Go 一致：
 
@@ -54,7 +57,7 @@ func answer() int { return match Choice::Take(42) { Choice::Take(n) => n, Choice
 
 ```sh
 GOWORK=off GOTOOLCHAIN=local go build ./...
-GOWORK=off GOTOOLCHAIN=local go test -count=1 ./internal/... ./tests/...
+GOWORK=off GOTOOLCHAIN=local go test -p=1 -count=1 -timeout=90m ./internal/... ./tests/...
 GOWORK=off GOTOOLCHAIN=local go vet ./internal/... ./tests/...
 gofmt -l cmd internal tests
 python3 -B scripts/check_design.py --docs-only

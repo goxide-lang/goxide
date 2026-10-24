@@ -74,14 +74,17 @@ pub func CheckExtended() {
  cloneCalls=0
  state:=State::Pair(original,[]Piece{original})
  stateCopy:=CloneState(state)
- match &mut stateCopy {State::Pair(first,rest)=>{first.Text="changed";first.Values[0]=5;(*rest)[0].Values[0]=4},_=>{panic("enum clone variant")}}
+ match stateCopy {State::Pair(first,rest)=>{first.Text="changed";first.Values[0]=5;rest[0].Values[0]=4;stateCopy=State::Pair(first,rest)},_=>{panic("enum clone variant")}}
+ match stateCopy {State::Pair(first,rest)=>{if first.Text!="changed" || first.Values[0]!=5 || rest[0].Values[0]!=4 {panic("cloned enum contents")}},_=>{panic("enum clone variant")}}
  match state {State::Pair(first,rest)=>{if first.Text!="piece" || first.Values[0]!=1 || rest[0].Values[0]!=1 {panic("enum clone allocation or payload storage")}},_=>{panic("original enum variant")}}
  if cloneCalls!=2 {panic("enum clone must use each field protocol")}
  empty:=State::Empty
  if DebugState(CloneState(empty))!="State::Empty" {panic("unit variant clone")}
  named:=State::Named{Name:"name",Count:2}
  namedCopy:=CloneState(named)
- match &mut namedCopy {State::Named{Name:name,Count:count}=>{*name="changed";*count=3},_=>{panic("named clone variant")}}
+ match namedCopy {State::Named{Name:name,Count:count}=>{if name!="name" || count!=2 {panic("named clone fields")}},_=>{panic("named clone variant")}}
+ namedCopy=State::Named{Name:"changed",Count:3}
+ if DebugState(namedCopy)!="State::Named { Name: \"changed\", Count: 3 }" {panic("named value replacement")}
  if DebugState(named)!="State::Named { Name: \"name\", Count: 2 }" {panic("named clone allocation")}
  cloneCalls=0
  none:=Option[[]Piece]::None

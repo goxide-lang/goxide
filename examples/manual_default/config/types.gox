@@ -1,9 +1,13 @@
-package config
+package config; use std; use std::PartialEq;
 
 type Settings struct { Port int }
-impl Default for Settings {
-    func default() Settings { return Settings{Port: 9090} }
+impl std::Default for Settings {
+    func r#default() Settings { return Settings{Port: 9090} }
 }
 
 // A public ordinary constructor crosses the package boundary explicitly.
-func NewSettings() Settings { return DefaultSettings() }
+func NewSettings() Settings { return Settings::initial() }
+
+impl Settings {
+ pub func initial() Self { return std::default_value[Self]() }
+}

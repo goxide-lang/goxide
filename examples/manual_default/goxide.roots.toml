@@ -1,3 +1,0 @@
-[roots.config]
-module = "manualdefault.example/service"
-package = "manualdefault.example/service/config"

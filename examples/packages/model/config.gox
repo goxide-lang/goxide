@@ -1,9 +1,15 @@
 package model
+use std;
 use serde;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone)]
 type Config struct {
     Name string
     Mode RunMode
     Labels []string
+}
+
+impl Config {
+    pub func copy(value &Self) Self { return std::Clone::clone(value) }
+    pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
 }

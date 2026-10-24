@@ -304,6 +304,15 @@ func runtimeRoots(graph *project.Graph, node *project.Node, roots paths.Roots, r
 			if _, selected := graph.Plan[root.ModulePath]; !selected {
 				continue
 			}
+			// A native package alias does not expose its entire module as a
+			// macro capability, or compete with the module's declared library.
+			namespace := root.PackagePath
+			if root.GoPrefix != "" {
+				namespace = root.GoPrefix
+			}
+			if namespace != root.ModulePath {
+				continue
+			}
 		}
 		if child := node.Children[alias]; child != nil && child.Manifest.Lib != nil && child.Manifest.Lib.ProcMacro {
 			continue
@@ -359,7 +368,7 @@ func (stage *stagedRole) buildProcMacro(run func([]byte, pm.Request) ([]byte, er
 		return err
 	}
 	artifact := filepath.Join(stage.dir, "macro.wasm")
-	if _, err := goCommand(stage.graph, root, "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-o", artifact, "./goxide_proc_macro"); err != nil {
+	if _, err := goCommand(stage.graph, root, "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", artifact, "./goxide_proc_macro"); err != nil {
 		return err
 	}
 	stage.wasm, err = os.ReadFile(artifact)

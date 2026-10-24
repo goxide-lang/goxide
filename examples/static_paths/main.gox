@@ -4,18 +4,18 @@ mod logging;
 use logging;
 use serde as wire;
 use serde::json as json;
-use serde::Serialize as Serialize;
+use serde::derive::Serialize as Serialize;
 
-#[derive(Serialize, wire::Deserialize)]
+#[derive(Serialize, wire::derive::Deserialize)]
 type Message struct { Text string }
 
 func (m Message) Size() int { return len(m.Text) }
 
 func main() {
     original := Message{Text: "static paths"}
-    data, err := json::Marshal(&original, SerializeMessage)
+    data, err := json::Marshal(&original, wire::Write[Message])
     if err != nil { panic(err) }
-    decoded, err := json::Unmarshal(data, DeserializeMessage)
+    decoded, err := json::Unmarshal(data, wire::Read[Message])
     if err != nil { panic(err) }
     logging::show!(string(data))
     logging::show!(Message::Size(decoded))

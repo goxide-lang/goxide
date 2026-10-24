@@ -1,28 +1,30 @@
 package main
 
 use fmt;
+use std;
+use std::PartialEq;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(std::derive::Clone, std::derive::Debug, std::derive::PartialEq)]
 type Data struct { Items []int; Counts map[string]int }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(std::derive::Clone, std::derive::Debug, std::derive::PartialEq)]
 enum State { Pair(Data), Empty, }
 
 func main() {
     data := Data{Items:[]int{1}, Counts:map[string]int{"one":2}}
     var view &Data = &data
-    clone := CloneData(view)
+    clone := std::Clone::clone(view)
     clone.Items[0] = 9
     clone.Counts["one"] = 8
-    fmt::Println((*view).equals(data), EqualsData(*view,data), data.Items[0], data.Counts["one"], clone.Items[0], clone.Counts["one"])
-    fmt::Println(DebugData(view))
+    fmt::Println(data.equals(data), PartialEq::equals(data,data), data.Items[0], data.Counts["one"], clone.Items[0], clone.Counts["one"])
+    fmt::Println(std::Debug::debug(view))
 
     state := State::Pair(data)
     var stateView &State = &state
-    stateClone := CloneState(stateView)
+    stateClone := std::Clone::clone(stateView)
     match stateClone {
         State::Pair(value) => { value.Items[0] = 7; value.Counts["one"] = 6 },
         State::Empty => {},
     }
-    fmt::Println((*stateView).equals(state), EqualsState(*stateView,state))
-    fmt::Println(DebugState(stateView), DebugState(&stateClone))
+    fmt::Println(state.equals(state), PartialEq::equals(state,state))
+    fmt::Println(std::Debug::debug(stateView), std::Debug::debug(&stateClone))
 }

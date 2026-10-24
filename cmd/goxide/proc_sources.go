@@ -82,7 +82,10 @@ func nativeSourceDependencies(root, modFile string, roots paths.Roots, cfg confi
 		}
 		if selections == nil {
 			selections = map[string]moduleSelection{}
-			selected, queryErr := nativeModuleCommand(root, cfg, "list", "-mod=mod", "-modfile="+modFile, "-m", "-json", "all")
+			// An authored replacement may legitimately have no Go manifest yet.
+			// Retain Go's selected versions for the other explicit roots; source
+			// planning below validates the authored replacement independently.
+			selected, queryErr := nativeModuleCommand(root, cfg, "list", "-e", "-mod=mod", "-modfile="+modFile, "-m", "-json", "all")
 			if queryErr == nil {
 				decoder := json.NewDecoder(bytes.NewReader(selected))
 				for {
@@ -201,7 +204,11 @@ func compileNativePackage(owner *singleFileModule, roots paths.Roots, cfg config
 			return nil, err
 		}
 		if filepath.Ext(name) != ".go" {
-			displayNames[path.Join(manifest.Module, filepath.ToSlash(relative))] = name
+			display := name
+			if name == owner.input && owner.displayInput != "" {
+				display = owner.displayInput
+			}
+			displayNames[path.Join(manifest.Module, filepath.ToSlash(relative))] = display
 		}
 	}
 	helper, err := os.MkdirTemp(directory, "goxide_cli_entry_")

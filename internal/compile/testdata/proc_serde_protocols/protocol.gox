@@ -23,10 +23,10 @@ pub trait Deserialize {
  func missing() (Self,bool)
 }
 pub trait LibraryDefault { func r#default() Self }
-pub func Make[T LibraryDefault]() T { return T::r#default() }
+pub func Make[T LibraryDefault]() T { return T::r#default::<LibraryDefault>() }
 pub func Write[T Serialize](value &T, serializer serde::Serializer) error { return Serialize::serialize(value,serializer) }
-pub func Read[T Deserialize](deserializer serde::Deserializer) (T,error) { return T::deserialize(deserializer) }
-pub func Missing[T Deserialize]() (T,bool) { return T::missing() }
+pub func Read[T Deserialize](deserializer serde::Deserializer) (T,error) { return T::deserialize::<Deserialize>(deserializer) }
+pub func Missing[T Deserialize]() (T,bool) { return T::missing::<Deserialize>() }
 impl Serialize for int { func serialize(self &Self, serializer serde::Serializer) error { return serializer.Int64(int64(*self)) } }
 impl Deserialize for int {
  func deserialize(deserializer serde::Deserializer) (Self,error) {

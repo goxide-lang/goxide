@@ -1,13 +1,14 @@
 package main
+use std;
 
 use fmt;
 use serde;
 use serde::json as serdejson;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Debug, std::derive::Clone)]
 type Address struct { City string }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Debug, std::derive::Clone)]
 type Order struct {
     #[serde(rename="id")]
     ID uint64
@@ -18,12 +19,12 @@ type Order struct {
 
 func main() {
     input := []byte(`{"id":18446744073709551615,"Items":[{"City":"Paris"}]}`)
-    order, err := serdejson::Unmarshal(input, DeserializeOrder)
+    order, err := serdejson::Unmarshal(input, serde::Read[Order])
     if err != nil { panic(err) }
-    copy := CloneOrder(&order)
+    copy := std::Clone::clone(&order)
     copy.Items[0].City = "Berlin"
-    encoded, err := serdejson::Encode(func(s serde::Serializer) error { return SerializeOrder(s, &order) })
+    encoded, err := serdejson::Encode(func(s serde::Serializer) error { return serde::Write(s, &order) })
     if err != nil { panic(err) }
     fmt::Println(string(encoded))
-    fmt::Println(DebugOrder(&copy))
+    fmt::Println(std::Debug::debug(&copy))
 }

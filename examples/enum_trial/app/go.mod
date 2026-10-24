@@ -6,6 +6,6 @@ require trial.example/model v0.0.0
 
 replace trial.example/model => ../model
 
-require github.com/goxide-lang/serde v0.0.0-20261009021520-f342a31e20d0
+require github.com/goxide-lang/serde v0.0.0-20261023080815-5422034b0fcc
 
-require github.com/goxide-lang/std v0.0.0-20261009104839-c02a09d8c417
+require github.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1

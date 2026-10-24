@@ -13,9 +13,9 @@ func TestMacroDeriveDiagnosticCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
+	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
 	outside := t.TempDir()
-	const prefix = `package p
+	const prefix = `package p; use std; use std::PartialEq;
 macro_rules! noise {()=>{
  _=1
  _=2
@@ -24,14 +24,15 @@ macro_rules! noise {()=>{
 func Run(){noise!();noise!()}
 `
 	for _, tc := range []struct{ name, source, token, message string }{
-		{"derive", prefix + "#[derive(Unknown)]\ntype Item struct{N int}\n", "#[derive(Unknown)]", "unknown derive or non-canonical owner: Unknown"},
-		{"helper", prefix + "func CloneItem(){}\n#[derive(Clone)]\ntype Item struct{N int}\n", "#[derive(Clone)]", "generated helper CloneItem conflicts with a package declaration"},
+		{"derive", prefix + "#[derive(Unknown)]\ntype Item struct{N int}\n", "#[derive(Unknown)]", "unknown derive: Unknown"},
+		{"overlap", prefix + "#[derive(std::derive::Clone)]\ntype Item struct{N int}\nimpl std::Clone for Item{func clone(self &Self)Self{return *self}}\n", "#[derive(std::derive::Clone)]", "overlapping"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, newline := range []string{"\n", "\r\n"} {
 				source := strings.ReplaceAll(tc.source, "\n", newline)
 				dir := t.TempDir()
-				writeMacroFixtureRoots(t, dir, nil)
+				writeStdNativeRoots(t, dir)
+				packagesWrite(t, dir, "go.mod", "module example.org/diagnostics\ngo 1.27\n"+stdFixtureGoRequirements(t))
 				input := filepath.Join(dir, "input.gox")
 				packagesWrite(t, dir, "input.gox", source)
 				output := deliveryCommand(t, outside, cli, false, nil, "transpile", input)
@@ -48,20 +49,28 @@ func Run(){noise!();noise!()}
 	// Existing concrete derive semantics remain executable after the diagnostic
 	// change, including macro evaluation multiplicity and independent Clone data.
 	dir := t.TempDir()
-	writeMacroFixtureRoots(t, dir, nil)
-	packagesWrite(t, dir, "go.mod", "module example.org/diagnostics\ngo 1.27\n")
-	packagesWrite(t, dir, "main.gox", `package main
+	writeStdFormalBinaryManifest(t, dir, "example.org/diagnostics", "diagnostics")
+	packagesWrite(t, dir, "main.gox", `package main; use std; use std::PartialEq;
 use fmt;
 macro_rules! twice {($x:expr)=>{$x+$x};}
 macro_rules! print_fn {()=>{fmt::Println};}
-#[derive(Clone,Debug)]
+#[derive(std::derive::Clone,std::derive::Debug)]
 type Item struct{Values []int}
-#[derive(Default)]
+#[derive(std::derive::Default)]
 type Settings struct{Count int}
-func main(){n:=0;next:=func()int{n++;return 21};v:=Item{Values:[]int{twice!(next())}};c:=CloneItem(&v);c.Values[0]++;print:=print_fn!();print(n,v.Values[0],c.Values[0],DefaultSettings().Count,DebugItem(&v))}
+func main(){n:=0;next:=func()int{n++;return 21};v:=Item{Values:[]int{twice!(next())}};c:=Item::copy(&v);c.Values[0]++;print:=print_fn!();print(n,v.Values[0],c.Values[0],Settings::initial().Count,Item::describe(&v))}
+
+impl Item {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+}
+
+impl Settings {
+ pub func initial() Self { return std::default_value[Self]() }
+}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, dir)
+	generated = strings.TrimSpace(deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, dir))
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "./...")
 	deliveryCommand(t, generated, tool, true, nil, "vet", "./...")
 	output := deliveryCommand(t, generated, tool, true, nil, "run", "-race", ".")

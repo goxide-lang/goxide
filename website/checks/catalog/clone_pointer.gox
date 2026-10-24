@@ -1,4 +1,8 @@
 package main
-#[derive(Clone)]
+use std;
+#[derive(std::derive::Clone)]
 type Record struct { Value *int }
-func main() {}
+func main() {
+    record := Record{}
+    _ = std::Clone::clone(&record)
+}

@@ -89,12 +89,12 @@ path="../model"
 	var artifact []byte
 	wasi := testWASI(t, nil)
 	run := func(wasm []byte, request pm.Request) ([]byte, error) {
-		artifact = wasm
-		if request.Kind() == pm.Derive {
+		if request.Kind() == pm.Derive && request.Entry() == "LibraryDebug" {
 			deriveCalls++
 		}
-		if request.Kind() == pm.Function {
+		if request.Kind() == pm.Function && (request.Entry() == "LibraryPrint" || request.Entry() == "LibraryPrintln") {
 			functionCalls++
+			artifact = wasm
 		}
 		return wasi(wasm, request)
 	}

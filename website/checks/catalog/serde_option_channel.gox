@@ -1,5 +1,5 @@
 package main
 use serde;
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Request struct { Value Option[chan int] }
 func main() {}

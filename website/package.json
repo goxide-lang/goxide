@@ -4,7 +4,7 @@
   "scripts": {
     "build": "vite build",
     "test": "node redesign-qa.mjs && node catalog-qa.mjs",
-    "test:compiler": "node qa.mjs"
+    "test:proc-macro": "node --test tests/proc-macro-wasi.test.mjs"
   },
   "devDependencies": {
     "playwright": "1.58.2",

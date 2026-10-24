@@ -102,7 +102,10 @@ func (r *resolver) collectUses() {
 					r.diag(name, "use-conflict", fmt.Sprintf("use binding %q conflicts with a package declaration", name.Name))
 				}
 			} else if b := r.pkg.Scope.Parent.Bindings[u.Name]; b != nil && (u.Public || isStatic(b)) {
-				r.diag(name, "prelude-conflict", fmt.Sprintf("use binding %q conflicts with a preimported name", name.Name))
+				selected := r.importTarget(Resolution{Symbol: u.Symbol}).Symbol
+				if b.Kind != Builtin || selected == nil || selected.Kind != Macro {
+					r.diag(name, "prelude-conflict", fmt.Sprintf("use binding %q conflicts with a preimported name", name.Name))
+				}
 			}
 			r.checkGoName(r.pkg.Scope, name, u.Symbol)
 			for _, otherFile := range r.pkg.Files {

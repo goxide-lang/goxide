@@ -1,16 +1,18 @@
 package main
+use std;
+use std::PartialEq;
 
 use fmt;
 use math;
 
 type User struct { ID int; Text string }
-impl PartialEq for User { func equals(self User, other User) bool { return self.ID == other.ID } }
-impl Eq for User {}
-#[derive(PartialEq, Eq)]
+impl std::PartialEq for User { func equals(self Self, other Self) bool { return self.ID == other.ID } }
+impl std::Eq for User {}
+#[derive(std::derive::PartialEq, std::derive::Eq)]
 type Container struct { Users []User; Values map[string]int; Fixed [2]int; Choice Option[[]int] }
-#[derive(PartialEq)]
+#[derive(std::derive::PartialEq)]
 type Number float64
-#[derive(PartialEq, Eq)]
+#[derive(std::derive::PartialEq, std::derive::Eq)]
 pub enum State { Empty, Person(User), Values([]int) }
 
 var order []string

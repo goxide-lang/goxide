@@ -34,14 +34,14 @@
 | [0010 Vec 与视图](0010-collections.md) | 动态序列与 slice 借用 | 复制、别名、扩容与初始化 |
 | [0011 声明宏](0011-macros.md) | 模式、模板与卫生 | 展开、符号身份、重复求值 |
 | [0012 格式化](0012-formatting.md) | print / println 与格式检查 | 参数求值、格式协议、I/O 行为 |
-| [0013 内建派生](0013-derive.md) | Default / Clone / Debug | 静态 Self、字段协议与复制成本 |
+| [0013 普通库派生](0013-derive.md) | Default / Clone / Debug | 静态 Self、字段协议与复制成本 |
 | [0014 语法工具](0014-syntax-tools.md) | quote / syn | 语法数据、上下文与权限来源 |
 | [0015 公开边界](0015-public-api.md) | pub 与公开输入 | 导出命名、运行时检查与 Go 保证范围 |
 | [0016 safe std](0016-safe-std.md) | Go 标准库的声明与包装 | 实际契约、部分成功与适配成本 |
 | [0017 Map](0017-maps.md) | 多种 Map 实现与共同协议 | 查找、元素借用、后端差异 |
 | [0018 转译对应约束](0018-lowering-contract.md) | 全特性的共同降低规则 | 副作用、控制流、元数据与源码映射 |
 | [0019 统一 trait wrapper](0019-uniform-trait-wrappers.md) | 当前 trait 表示与 Go 便利入口 | marker、包级工厂、本地 As 与外部 ForT.As |
-| [0020 类型关联函数](0020-associated-functions.md) | impl 成员、T::method 与构造函数 | 原生 Go 声明边界、Self/self、Go 包函数与方法、泛型与初始化 |
+| [0020 类型关联函数](0020-associated-functions.md) | impl 成员、T::method 与构造函数 | 原生 Go 声明边界、Self/self、空 carrier 与变体方法、按需实例化 |
 | [0021 use 与 pub use](0021-reexports.md) | 目录包公开API聚合 | canonical身份、变量存储、函数defer、合法Go路由与metadata |
 | [0022 feature 与项目工具链](0022-project-toolchain.md) | feature、cfg/cfg_attr/cfg!、依赖来源与目标 | 新管线已支持 feature：顶层条件属性先选择，cfg! 只查布尔值；原生 Go/TOML 配置隔离；target/env、双模式目标与统一快照已实现，test 不开放 |
 | [0023 宿主构建脚本](0023-build-scripts.md) | 显式生成、本地host依赖、信任与声明缓存 | 未授权拒绝、原子产物、无沙箱边界 |
@@ -49,8 +49,8 @@
 | [0026 workspace](0026-workspaces.md) | Cargo风格成员/继承/锁与Go多模块 | 作者核心、根锁及受限go.work迁入已实现；vendor仅作输入转显式local模块；统一host resolver等扩展仍待设计/实现 |
 | [0027 正式命名](0027-goxide-naming.md) | Goxide / goxide / .gox / GOXIDE_* | 已完成命名与ABI迁移，旧输入/产物明确拒绝并重生成 |
 | [0028 crate 与路径根](0028-crate-roots.md) | lib/bin/example、Go 混编、依赖别名与标准库 fallback | 已实现；各 target 独立 crate，删除全部 namespaces，保留 alias 根并按真实 Go 子路径解析 |
-| [0030 过程宏基础草案](0030-procedural-macros.md) | TokenStream、卫生、登记、依赖角色、WASI 宿主 | Draft；核心调用、宿主及依赖角色已实现；业务宏迁移与浏览器物理执行硬截止待完成 |
-| [0031 普通库协议与条件 impl](0031-generic-protocol-impls.md) | 泛型/条件 impl、多约束、按需实例化与 Go 普通入口 | 通用互斥、定义点分支检查与参数化 trait 已实现；declare impl 已移除，Default/Eq 调整及派生正式迁移暂缓 |
+| [0030 过程宏基础草案](0030-procedural-macros.md) | TokenStream、卫生、登记、依赖角色、WASI 宿主 | 核心调用、宿主、依赖角色及 std/serde 正式库接线已实现；验收状态见[能力状态表](../mvp-gap-audit.md)，浏览器物理截止有平台限制 |
+| [0031 普通库协议与条件 impl](0031-generic-protocol-impls.md) | 泛型/条件 impl、多约束、按需实例化与 Go 普通入口 | 通用互斥、定义点分支检查与参数化 trait 已实现；declare impl 已移除，std/serde 正式过程宏、普通 Default 递归与 Eq/NativeKey 已接入；验收状态见[能力状态表](../mvp-gap-audit.md) |
 | [0032 From / Into](0032-from-into-conversions.md) | 多来源转换、参数化 trait、实现归属/冲突、一步传播及 Go 表示 | 语言与 std 已实现，公开依赖 pin 下真实跨模块验收通过 |
 
 RFC 0024 use路径仍在[独立提案分支](https://github.com/goxide-lang/goxide/blob/5e4b118f25262d8022d1b8f72575d89d69f096aa/docs/rfcs/0024-use-paths.md)，该历史提案未整体批准。当前 `crate::` 及根选择合同见 RFC 0028；其他未确认的路径语法不由此开放。

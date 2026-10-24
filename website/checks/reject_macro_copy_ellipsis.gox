@@ -1,3 +1,0 @@
-package p
-macro_rules! spread {($dst:expr,$src:expr)=>{copy($dst,$src...)};}
-func run(){_=spread!([]int{},[]int{1})}

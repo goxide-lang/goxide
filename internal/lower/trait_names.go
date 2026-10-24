@@ -20,22 +20,26 @@ const typeCarrierAnchor = "GoxideInternalTypeCarrierForSelf"
 
 // Generated names and their owning files are fixed before emitting any file.
 type traitProgram struct {
-	impls             []*check.Impl
-	carriers          map[*types.Named]*traitCarrier
-	facades           map[string]*traitFacade
-	claims            map[string]map[string]syntax.Node
-	members           map[*types.Named]map[string]syntax.Node
-	functions         map[*types.Signature]*traitFunction
-	instances         map[string]*traitInstance
-	templateImpls     map[*check.Impl]bool
-	templateFunctions map[*syntax.FuncDecl]bool
-	templateNames     map[*check.Impl]string
-	legacyFunctions   map[*syntax.FuncDecl]bool
-	helperFunctions   map[*syntax.FuncDecl]bool
-	helperImpls       map[*check.Impl]bool
-	inferredCalls     map[*syntax.FuncDecl]bool
-	boundBindings     map[*check.TraitBound]map[string]bool
-	implBindings      map[*check.Impl]map[string]bool
+	impls               []*check.Impl
+	carriers            map[*types.Named]*traitCarrier
+	inherentCarriers    map[*check.Impl]*inherentCarrier
+	facades             map[string]*traitFacade
+	claims              map[string]map[string]syntax.Node
+	members             map[*types.Named]map[string]syntax.Node
+	functions           map[*types.Signature]*traitFunction
+	instances           map[string]*traitInstance
+	templateImpls       map[*check.Impl]bool
+	templateFunctions   map[*syntax.FuncDecl]bool
+	templateNames       map[*check.Impl]string
+	legacyFunctions     map[*syntax.FuncDecl]bool
+	helperFunctions     map[*syntax.FuncDecl]bool
+	helperImpls         map[*check.Impl]bool
+	inferredCalls       map[*syntax.FuncDecl]bool
+	inferredOperations  map[*syntax.FuncDecl]bool
+	boundBindings       map[*check.TraitBound]map[string]bool
+	implBindings        map[*check.Impl]map[string]bool
+	enumReadExpressions map[*syntax.FuncDecl]bool
+	enumChecks          map[enumAssertionBodyKey][]types.Type
 }
 
 type traitCarrier struct {
@@ -147,6 +151,7 @@ func prepareTraits(info *check.Info, validation bool) *traitProgram {
 		p.prepareInferenceCalls(info)
 	}
 	p.prepareBindings(info)
+	p.prepareInherentCarriers(info)
 	if validation {
 		for _, function := range p.functions {
 			if function.decl.Body != nil && info.Demands != nil && info.Demands.FunctionTemplates[function.decl] {
@@ -159,6 +164,7 @@ func prepareTraits(info *check.Info, validation bool) *traitProgram {
 			}
 		}
 	}
+	p.prepareEnumAssertions(info)
 	return p
 }
 
@@ -441,7 +447,11 @@ func (e *emitter) reserveTraitNames() {
 		}
 		if impl.Trait == nil {
 			for _, m := range impl.Methods {
-				if m.Static || !nativeInherentImpl(impl) {
+				if m.Static {
+					if carrier := e.inherentCarrier(impl); carrier != nil {
+						e.reserved[carrier.name] = true
+					}
+				} else if !nativeInherentImpl(impl) {
 					e.reserved[e.inherentName(m)] = true
 				}
 			}

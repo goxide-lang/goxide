@@ -72,10 +72,51 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 				relevant[symbol.GoName] = true
 			}
 		}
-		for _, request := range result.Derives {
-			if request.Helper != nil && inPackage(request.File) {
-				add(request.Helper)
-				relevant[request.Helper.GoName] = true
+		typeSymbols := map[types.Type]*resolve.Symbol{}
+		for symbol, typ := range info.Symbols {
+			if !inPackage(symbol.Decl.File) || symbol.Kind != resolve.Type && symbol.Kind != resolve.Enum && symbol.Kind != resolve.TypeParam {
+				continue
+			}
+			if _, alias := typ.(*types.Alias); alias {
+				continue
+			}
+			if named, ok := typ.(*types.Named); ok {
+				typ = named.Origin()
+			}
+			typeSymbols[typ] = symbol
+		}
+		typeReference := func(typ types.Type) {
+			if basic, ok := typ.(*types.Basic); ok {
+				prelude(basic.Name())
+				return
+			}
+			if named, ok := typ.(*types.Named); ok {
+				typ = named.Origin()
+			}
+			if symbol := typeSymbols[typ]; symbol != nil {
+				add(symbol)
+				relevant[symbol.GoName] = true
+			}
+		}
+		enumReferences := func(instance *check.Instance) {
+			macroTypeNames(instance.Enum.Type, typeReference)
+			for _, argument := range instance.Args {
+				macroTypeNames(argument, typeReference)
+			}
+			if owner := typeSymbols[instance.Enum.Type.Origin()]; owner != nil {
+				file := result.Files[owner.Decl.File]
+				for _, variant := range instance.Enum.Variants {
+					if variant.Decl == nil {
+						continue
+					}
+					if symbol := file.Definitions[variant.Decl.Name.ID()]; symbol != nil {
+						// Source variants belong to an enum member scope; their Go
+						// structs occupy the package scope referenced by type switches.
+						scopes[symbol], fixed[symbol] = pkg.Scope, true
+						add(symbol)
+						relevant[symbol.GoName] = true
+					}
+				}
 			}
 		}
 		for _, symbol := range pkg.Scope.Bindings {
@@ -85,6 +126,7 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 			fixed[symbol] = true
 		}
 		for _, file := range pkg.Files {
+			probe := &emitter{info: info, result: result, file: file, name: file.Name, tree: file.AST}
 			for _, scope := range file.Scopes {
 				if scope.Kind == resolve.MemberScope {
 					for _, symbol := range scope.Bindings {
@@ -97,27 +139,34 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 				case *syntax.MatchExpr:
 					if match := info.Matches[node]; match != nil && match.Enum != nil {
 						prelude("panic")
+						enumReferences(match.Enum)
 					}
 				case *syntax.TryExpr:
 					prelude("panic")
+				case *syntax.ImplDecl:
+					if impl := info.Impls[node]; impl != nil {
+						for _, member := range impl.Methods {
+							if member.Trait == nil && !member.Static && info.EnumOf(impl.Target) != nil {
+								prelude("panic")
+								prelude("nil")
+								prelude("bool")
+								if instance := info.EnumOf(member.Impl.Target); instance != nil {
+									enumReferences(instance)
+								}
+							}
+						}
+					}
 				}
 				if call, ok := node.(*syntax.CallExpr); ok {
 					if instance := info.EnumValid[call]; instance != nil {
 						prelude("bool")
 						prelude("nil")
+						enumReferences(instance)
 					}
-					if typ := info.Equalities[call]; typ != nil {
-						if _, basic := types.Unalias(typ).(*types.Basic); basic {
-							prelude("bool")
-							macroTypeNames(typ, prelude)
-						}
-					}
-					if _, print := result.Prints[call]; print {
-						for index, argument := range call.Args {
-							if index > 0 {
-								macroTypeNames(info.Types[argument], prelude)
-							}
-						}
+					if typ := info.EnumAssertions[call]; typ != nil {
+						prelude("panic")
+						prelude("nil")
+						macroEnumAssertionNames(probe, typ, typeReference, enumReferences)
 					}
 				}
 				id, ok := node.(*syntax.Ident)
@@ -204,8 +253,19 @@ func (e *emitter) checkMacroNames() {
 			}
 		case *syntax.TryExpr:
 			panicSite = node
+		case *syntax.ImplDecl:
+			if impl := e.info.Impls[node]; impl != nil {
+				for _, member := range impl.Methods {
+					if member.Trait == nil && !member.Static && e.info.EnumOf(impl.Target) != nil {
+						panicSite = node
+					}
+				}
+			}
 		}
 		if call, ok := node.(*syntax.CallExpr); ok {
+			if e.info.EnumAssertions[call] != nil {
+				panicSite = call
+			}
 			fun := call.Fun
 			for {
 				paren, ok := fun.(*syntax.ParenExpr)
@@ -260,6 +320,11 @@ func (e *emitter) checkMacroName(id *syntax.Ident, symbol *resolve.Symbol) {
 				e.fail(id, "macro primitive conflicts with a definition-site declaration of "+symbol.Name.Name)
 			}
 		}
+		return
+	}
+	// Boolean constants have a name-free Go representation. reference emits
+	// 0 == 0 or 0 != 0 when a caller declaration shadows their spelling.
+	if symbol.Kind == resolve.Constant && (symbol.Name.Name == "true" || symbol.Name.Name == "false") {
 		return
 	}
 	if symbol.Kind != resolve.Builtin && symbol.Kind != resolve.Type && symbol.Kind != resolve.Constant {
@@ -412,13 +477,15 @@ func macroScopesOverlap(left, right *resolve.Scope) bool {
 	return false
 }
 
-func macroTypeNames(t types.Type, add func(string)) {
+// Follow only the types spelled in a generated Go type expression. Named
+// types contribute their name and arguments, not their hidden representation.
+func macroTypeNames(t types.Type, add func(types.Type)) {
 	if t == nil {
 		return
 	}
-	switch t := types.Unalias(types.Default(t)).(type) {
-	case *types.Basic:
-		add(t.Name())
+	t = types.Unalias(types.Default(t))
+	add(t)
+	switch t := t.(type) {
 	case *types.Named:
 		for i := 0; i < t.TypeArgs().Len(); i++ {
 			macroTypeNames(t.TypeArgs().At(i), add)
@@ -436,52 +503,69 @@ func macroTypeNames(t types.Type, add func(string)) {
 		for i := 0; i < t.NumFields(); i++ {
 			macroTypeNames(t.Field(i).Type(), add)
 		}
+	case *types.Chan:
+		macroTypeNames(t.Elem(), add)
+	case *types.Signature:
+		macroTypeNames(t.Params(), add)
+		macroTypeNames(t.Results(), add)
+	case *types.Tuple:
+		for i := 0; i < t.Len(); i++ {
+			macroTypeNames(t.At(i).Type(), add)
+		}
+	case *types.Interface:
+		for i := 0; i < t.NumExplicitMethods(); i++ {
+			macroTypeNames(t.ExplicitMethod(i).Type(), add)
+		}
+		for i := 0; i < t.NumEmbeddeds(); i++ {
+			macroTypeNames(t.EmbeddedType(i), add)
+		}
 	}
 }
 
-// A manual enum implementation keeps its function frame, but its parameters
-// cannot capture names used by the validation inserted before the user's body.
-func (e *emitter) manualEnumValidation(d *check.Derive, fn *syntax.FuncDecl) []goast.Stmt {
-	protected := map[string]bool{"nil": true, "panic": true}
-	for _, pkg := range e.result.Packages {
-		if pkg.Scope != e.file.Scope.Parent {
-			continue
+// The assertion inserts recursive type switches that have no source identifier
+// nodes. Reserve their bindings along the same finite path as the emitted walk.
+// A foreign private representation is handled by its owner helper, whose fresh
+// parameters do not share the caller's lexical scope.
+func macroEnumAssertionNames(e *emitter, typ types.Type, addType func(types.Type), addEnum func(*check.Instance)) {
+	var walk func(types.Type, []types.Type)
+	walk = func(typ types.Type, seen []types.Type) {
+		typ = types.Unalias(typ)
+		if !e.enumAssertionContains(typ, seen) {
+			return
 		}
-		for _, scope := range []*resolve.Scope{pkg.Scope, pkg.Scope.Parent} {
-			for _, symbol := range scope.Bindings {
-				if symbol.Kind == resolve.Type || symbol.Kind == resolve.Enum {
-					protected[symbol.GoName] = true
+		if named, ok := typ.(*types.Named); ok && e.enumAssertionNeedsHelper(named, seen) {
+			return
+		}
+		seen = append(append([]types.Type(nil), seen...), typ)
+		if instance := e.info.EnumOf(typ); instance != nil {
+			addEnum(instance)
+			for _, variant := range instance.Enum.Variants {
+				for _, field := range instance.Fields(variant) {
+					walk(field.Type, seen)
 				}
 			}
+			return
 		}
-	}
-	for _, enum := range e.info.Enums {
-		if e.localTypePackage(enum.Type.Obj().Pkg()) {
-			for _, variant := range enum.Variants {
-				protected[variant.GoName] = true
+		if array, ok := e.info.ArrayOf(typ); ok {
+			walk(array.Elem, seen)
+			return
+		}
+		if named, ok := typ.(*types.Named); ok {
+			typ = named.Underlying()
+		}
+		switch typ := typ.(type) {
+		case *types.Struct:
+			for i := 0; i < typ.NumFields(); i++ {
+				walk(typ.Field(i).Type(), seen)
 			}
+		case *types.Slice:
+			walk(typ.Elem(), seen)
+		case *types.Map:
+			walk(typ.Elem(), seen)
 		}
 	}
-	for _, fields := range [][]*syntax.Param{fn.Params, fn.Results} {
-		for _, p := range fields {
-			for _, id := range p.Names {
-				if protected[e.ident(id).Name] {
-					if symbol := e.file.Definitions[id.ID()]; symbol != nil {
-						e.symbolNames[symbol] = e.fresh("Argument").Name
-					}
-				}
-			}
-		}
+	if named, ok := types.Unalias(typ).(*types.Named); !ok || !e.enumAssertionNeedsHelper(named, nil) {
+		macroTypeNames(typ, addType)
 	}
-	var prefix strings.Builder
-	for _, p := range fn.Params {
-		for _, id := range p.Names {
-			prefix.WriteString(e.deriveValidation(d.Type, e.ident(id).Name, map[types.Type]bool{}))
-		}
-	}
-	declarations := e.deriveParse(d.Node, "func validate() {"+prefix.String()+"}")
-	if len(declarations) == 0 {
-		return nil
-	}
-	return declarations[0].(*goast.FuncDecl).Body.List
+	walk(typ, nil)
 }

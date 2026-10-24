@@ -29,14 +29,14 @@ func ReadOnly() &int { return &Count }
 pub macro_rules! add_two { ($value:expr) => { AddTwo($value) }; }
 func AddTwo(value int) int { return value + 2 }
 
-#[derive(wire::Serialize, wire::Deserialize)]
+#[derive(wire::derive::Serialize, wire::derive::Deserialize)]
 type Record struct { Value int }
 
 pub func encode(value int) string {
     record := Record{Value: value}
-    data, err := json::Marshal(&record, SerializeRecord)
+    data, err := json::Marshal(&record, wire::Write[Record])
     if err != nil { panic(err) }
-    decoded, err := json::Unmarshal(data, DeserializeRecord)
+    decoded, err := json::Unmarshal(data, wire::Read[Record])
     if err != nil || decoded.Value != value { panic("serde round trip") }
     if native::Label() != "native\n" { panic("native resource") }
     return string(data)

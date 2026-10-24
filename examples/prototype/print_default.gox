@@ -1,26 +1,26 @@
-package main
+package main; use std; use std::PartialEq;
 use serde;
 
 use serde::json as serdejson;
 
-#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(std::derive::Default,std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize)]
 enum state {
     Active(int),
     #[default]
     Standby,
 }
 
-#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(std::derive::Default,std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize)]
 type Limits struct { Retries int; Enabled bool }
 
-#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(std::derive::Default,std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize)]
 type Settings struct { Name string; State state; Limits Limits }
 
 macro_rules! snapshot {
-    ($value:expr) => { println!("snapshot {:?}", $value) };
+    ($value:expr) => { std::println!("snapshot {:?}", $value) };
 }
 macro_rules! fresh_settings {
-    () => { DefaultSettings() };
+    () => { Settings::initial() };
 }
 
 func stateName(value state) string {
@@ -28,16 +28,39 @@ func stateName(value state) string {
         state::Active(_) => { return "active" },
         state::Standby => { return "standby" },
     }
-    panic("unreachable")
 }
 
 func main() {
     initial:=fresh_settings!()
-    print!("startup={}",stateName(initial.State))
-    println!(" retries={}",initial.Limits.Retries)
-    loaded,err:=serdejson::Unmarshal([]byte(`{"Name":"nightly","State":{"Active":3},"Limits":{"Retries":2,"Enabled":true}}`),DeserializeSettings)
+    std::print!("startup={}",stateName(initial.State))
+    std::println!(" retries={}",initial.Limits.Retries)
+    loaded,err:=serdejson::Unmarshal([]byte(`{"Name":"nightly","State":{"Active":3},"Limits":{"Retries":2,"Enabled":true}}`),Settings::decode)
     if err!=nil { panic(err) }
-    copied:=CloneSettings(&loaded)
+    copied:=Settings::copy(&loaded)
     snapshot!(copied)
-    println!("ready {} {}",copied.Name,stateName(copied.State))
+    std::println!("ready {} {}",copied.Name,stateName(copied.State))
+}
+
+impl state {
+ pub func initial() Self { return std::default_value[Self]() }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl Limits {
+ pub func initial() Self { return std::default_value[Self]() }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl Settings {
+ pub func initial() Self { return std::default_value[Self]() }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
 }

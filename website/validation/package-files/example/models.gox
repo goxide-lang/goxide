@@ -2,8 +2,9 @@ package main
 
 // Each file independently binds util to its declared namespace.
 use serde as util;
+use std;
 
-#[derive(Clone, Debug, util::Serialize, util::Deserialize)]
+#[derive(std::derive::Clone, std::derive::Debug, util::derive::Serialize, util::derive::Deserialize)]
 type Item struct { Value int }
 
 // Package declarations and macros are available to sibling files.

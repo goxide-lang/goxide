@@ -165,8 +165,6 @@ type Result struct {
 	Expansions  map[ast.ExpnID]expand.Expansion
 	Packages    []*Package
 	Files       map[string]*File
-	Derives     []Derive
-	Prints      map[*ast.CallExpr]bool
 	Diagnostics []Diagnostic
 	Contexts    map[ast.SyntaxCtx]*Scope
 	// Origins contains diagnostic locations and expansion stacks. Lexical
@@ -238,8 +236,7 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 		r.collectPackage()
 	}
 	if sources, ok := importer.(interface{ SetSourcePackages([]*Package) }); ok {
-		// Share this pass's scopes before use and derive registration. Source
-		// imports then observe generated helpers as they are declared below.
+		// Share source scopes before resolving imports and attaching members.
 		sources.SetSourcePackages(out.Packages)
 	}
 	for _, r := range resolvers {
@@ -249,23 +246,7 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 		r.resolveUses()
 	}
 	for _, r := range resolvers {
-		r.collectDerives()
-	}
-	for _, r := range resolvers {
 		r.attachMembers()
-	}
-	for _, entry := range out.Derives {
-		if entry.Impl != nil && entry.Helper != nil {
-			file := out.Files[entry.File]
-			for _, item := range entry.Impl.Items {
-				if fn, ok := item.(*ast.FuncDecl); ok {
-					if symbol := file.Definitions[fn.Name.ID()]; symbol != nil {
-						symbol.GoName = entry.Helper.GoName
-						file.GoNames[fn.Name.ID()] = symbol.GoName
-					}
-				}
-			}
-		}
 	}
 	for _, r := range resolvers {
 		for _, f := range r.pkg.Files {

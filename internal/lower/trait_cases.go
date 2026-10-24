@@ -31,7 +31,7 @@ func (e *emitter) bodyCaseParameters(branch *check.BodyCase) *goast.FieldList {
 		if e.instanceBody != nil {
 			constraint = e.info.Substitute(constraint, e.instanceBody.Substitution, e.instanceBody.ConstSubstitution)
 		}
-		parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(parameter.Obj().Name())}, Type: e.goConstraint(constraint)})
+		parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{e.goType(parameter).(*goast.Ident)}, Type: e.goConstraint(constraint)})
 	}
 	if len(parameters.List) == 0 {
 		return nil

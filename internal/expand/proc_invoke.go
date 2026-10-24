@@ -54,8 +54,6 @@ func (e *engine) invokeProcItems(n ast.Node, d definition, args, item []syntaxTo
 			parseKind = traitMembersKind
 		case implItems, traitImplItems:
 			parseKind = implMembersKind
-		case defaultImplItems:
-			parseKind = defaultMembersKind
 		}
 	}
 	ts, id, caller, err := e.runProc(n, d, args, item, itemsKind, position, file, parent)
@@ -75,7 +73,7 @@ func slotPosition(slot itemSlot) pm.Position {
 		return pm.ItemPosition
 	case traitItems:
 		return pm.TraitMembersPosition
-	case implItems, traitImplItems, defaultImplItems:
+	case implItems, traitImplItems:
 		return pm.ImplMembersPosition
 	}
 	return pm.ItemsPosition
@@ -87,8 +85,6 @@ func slotParseKind(slot itemSlot) fragmentKind {
 		return traitMembersKind
 	case implItems, traitImplItems:
 		return implMembersKind
-	case defaultImplItems:
-		return defaultMembersKind
 	}
 	return itemKind
 }

@@ -1,4 +1,6 @@
 package main
+use std;
+use serde;
 
 use serde::json as serdejson;
 
@@ -11,7 +13,7 @@ func count(value Option[int]) int {
 }
 
 func main() {
-    value, err := serdejson::Unmarshal([]byte(`{"Count":7,"Items":[null,2],"Lookup":{},"Fixed":[null,4]}`), DeserializeRequest)
+    value, err := serdejson::Unmarshal([]byte(`{"Count":7,"Items":[null,2],"Lookup":{},"Fixed":[null,4]}`), serde::Read[Request])
     if err != nil { panic(err) }
-    println!("option {} {} {} {}", count(value.Count), count(value.Items[0]), count(value.Fixed[1]), defaultCalls)
+    std::println!("option {} {} {} {}", count(value.Count), count(value.Items[0]), count(value.Fixed[1]), defaultCalls)
 }

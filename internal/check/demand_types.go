@@ -295,6 +295,10 @@ func bodyInfoPermissions(source *Info, sub map[*types.TypeParam]types.Type, cons
 	for node, instance := range source.EnumValid {
 		result.EnumValid[node] = r.enum(instance)
 	}
+	result.EnumAssertions = make(map[*ast.CallExpr]types.Type, len(source.EnumAssertions))
+	for node, typ := range source.EnumAssertions {
+		result.EnumAssertions[node] = r.typ(typ)
+	}
 	result.Types = make(map[ast.Expr]types.Type, len(source.Types))
 	for node, typ := range source.Types {
 		result.Types[node] = r.typ(typ)
@@ -344,10 +348,6 @@ func bodyInfoPermissions(source *Info, sub map[*types.TypeParam]types.Type, cons
 		copy := *conversion
 		copy.Value, copy.Error, copy.Payload, copy.Result = r.typ(copy.Value), r.typ(copy.Error), r.typ(copy.Payload), r.typ(copy.Result)
 		result.GoResults[node] = &copy
-	}
-	result.Equalities = make(map[*ast.CallExpr]types.Type, len(source.Equalities))
-	for node, typ := range source.Equalities {
-		result.Equalities[node] = r.typ(typ)
 	}
 	return &result
 }

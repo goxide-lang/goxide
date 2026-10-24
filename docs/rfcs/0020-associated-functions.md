@@ -4,7 +4,7 @@
 
 已确认：类型关联函数定义在独立的 `impl T { ... }` 块中，用 `T::method(...)` 调用，降低到类型的空 carrier。Self 是基础目标 T；成员用 func 声明，首参数为 `self Self`、`self &Self` 或 `self &mut Self` 时为实例成员，其余为关联函数，不引入 static。**是否带 self 优先于返回类型**：带 self 且返回 Self 仍为实例成员。
 
-成员查询与三种 self 权限已经实现。固有成员的 Go 映射已按最新决定调整：无 self 放 carrier，enum 有 self 放接口与各变体，struct 实例成员沿普通 Go receiver；不生成固有成员包函数。关联函数与 enum 固有实例成员目前仍生成包函数，以下新布局待实现与验收，进度见[状态表](../mvp-gap-audit.md)。
+固有成员映射已实现：无 self 放空 carrier，enum 值和只读实例成员放接口与各指针变体，struct 实例成员沿普通 Go receiver；业务体直接放在对应方法内。enum 固有成员拒绝 `self &mut Self`，更新通过返回新 enum 并重绑定变量。条件成员遵循 D38 的按需扁平化，不为整个泛型家族添加不成立的方法，也不生成专用 view。全树及发布验收进度见[状态表](../mvp-gap-audit.md)。
 
 这里的“类函数”指无实例接收者的类型关联函数；构造函数是其中返回新值或句柄的一类。struct/enum 声明定义数据，增强成员写在 impl 块中。成员种类由首参数是否为 self 决定，不能根据函数体是否使用 self 推断。
 
@@ -89,7 +89,7 @@ func (PointOps) Shared(x, y int) *Point {
 
 ### C03：泛型构造保留类型实参
 
-直接书写的 Go 泛型类型声明与泛型 impl；impl 的类型参数声明拼写为草案：
+直接书写的 Go 泛型类型声明与泛型 impl；impl 的类型参数声明遵循 RFC 0031：
 
 ```goxide
 type Pair[T any] struct {
@@ -168,7 +168,7 @@ func MakePoint(x, y int) Point { return Point{x: x, y: y} }
 func (p Point) LegacySum() int { return p.x + p.y }
 ```
 
-调用仍是 `MakePoint(1, 2)` 和 `p.LegacySum()`；不从 MakePoint 的名称或返回类型推导 `Point::make`，也不为 LegacySum 自动创建 trait impl。若原生方法需要采用为 trait 实现，仍须显式 declare impl。原样保留指声明及执行语义，生成器可以正常格式化和组织文件。
+调用仍是 `MakePoint(1, 2)` 和 `p.LegacySum()`；不从 MakePoint 的名称或返回类型推导 `Point::make`，也不为 LegacySum 自动创建 trait impl。需要 Goxide trait 时，须按归属规则写普通有体 impl，必要时使用本地包装类型。原样保留指声明及执行语义，生成器可以正常格式化和组织文件。
 
 ### C07：impl 实例成员的 Self 与 self
 
@@ -241,31 +241,27 @@ trait 的 `Default.default() -> Self` 仍需选择显式 impl，通过已选实�
 
 ## 验收与未定项
 
-P4 验收覆盖具体 struct/enum 的关联函数、函数值、原生声明边界、Self/self 绑定、读写权限、同名成员选择和冲突诊断。泛型 impl 与 Arc 构造仍按各自后续范围推进；P2 的具体 Default helper 不借本阶段改变。
+验收覆盖具体及泛型 struct/enum 的关联函数、函数值、原生声明边界、Self/self 绑定、读写权限、同名成员选择和冲突诊断。关联函数见 `internal/lower/inherent_carrier_test.go`，enum 实例方法见 `internal/lower/inherent_enum_test.go`；Arc 构造仍属后续基础库范围。
 
 struct 与 enum 使用同一源级成员查询。接收者候选按已有引用规则构造，同一候选先查固有方法，再查唯一可见 trait；歧义用 `x.m::<Trait>` / `Trait::m(x)` 限定。trait 实例业务仍位于固定 wrapper，enum 值 As 由接口声明和各指针变体转发；借用视图用 ForE 保存真实 owner。
 
-carrier 与 enum 变体方法直接承载业务体，不能经额外转发帧改变 `defer` / `recover`。值方法的 self 是完整 E 快照；借用方法须传递或绑定真实 `*E` 槽位，不能把变体装入局部 E 再取址。保存的借用方法值继续观察该槽位的整体替换，保存的值方法值保留原快照。具体 owner 承载、Go 签名，以及 nil/typed-nil 在直接调用、方法值绑定和调用时的行为仍需设计并验收；不能借新映射静默改变这些合同。泛型条件 impl 也不能把只对部分实例成立的方法加入整个 E[T] / Variant[T] 的 Go 方法集；现有按需实例化须与新布局共同闭合。
+carrier 与 enum 变体方法直接承载原业务体，保持 `defer` / `recover` 调用帧。enum 值和只读成员均操作绑定时的完整 E 快照；保存的方法值继续使用旧变体对象，owner 重绑定不改换其对象。nil 接口的方法选择按 Go 规则失败；typed-nil 可以形成 Go 方法值，调用时先检查接收者，再进入业务体。
 
-## 当前手动 Default 实现子集
+带待定协议条件的成员只按实际请求生成扁平入口；普通无条件 Go 泛型方法保留泛型。既不建立条件专用 view，也不把只对部分实例成立的方法加入整个 E[T] / Variant[T] 方法集。公开 Go 使用者通过 Goxide 明确导出的普通函数使用这些条件能力。
+
+## 普通库 Default
+
+Default 是 std 的普通 trait，无接收者成员使用已选 impl 的静态入口；手写、声明宏与过程宏生成的实现遵循同一选择规则。
 
 ```goxide
-struct Settings {
-    Port int
+use std;
+
+struct Settings { Port int }
+impl std::Default for Settings {
+    func r#default() Self { return Self{Port: 8080} }
 }
-impl Default for Settings {
-    func default() Settings {
-        return Settings{Port: 8080}
-    }
-}
-#[derive(Default)]
-struct Application {
-    Config Settings
-}
+#[derive(std::derive::Default)]
+struct Application { Config Settings }
 ```
 
-手动实现的目标限同包本地非泛型 struct，成员必须是唯一的零参数 `default`，返回目标具体类型；该入口没有 self，也不需要 static。嵌套 struct 派生调用登记的手动实现，保留业务默认值。登记按包与类型身份进行，同包多文件可共享，不能按普通函数 `DefaultSettings` 的名称认领协议。重复手写实现、与 derive 冲突、错误参数或返回类型及不受支持的静态可达函数引用的递归协议依赖均须诊断。
-
-此子集不实现通用 trait 后端、实例 wrapper、泛型证据或跨包 Default 元数据消费；外部类型实现与跨包消费暂不支持。这里要求具体返回类型，不据此声称完整 `Self` 降低已经实现。
-
-当前 Default 子集不做动态回调分析或一般终止性证明；宏可调用已登记 helper，但 item 宏生成 impl 尚不支持。
+调用 `std::default_value[Application]()` 保留字段业务默认值；普通 `var` 初始化不调用 Default。条件泛型、跨包、透明 alias 和冲突按普通 trait 规则处理；普通同名函数不会取得协议身份。Default 方法可以像普通函数一样递归，不保留 Default 专用调用图禁环。协议前提循环和无法有限展开的实例需求仍由通用检查诊断。

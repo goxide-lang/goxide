@@ -55,7 +55,7 @@ func asynchronousCompile(work func() any) js.Value {
 	return promise
 }
 
-func compileOptions(packagePath string, diagnostics *[]string) (playground.Options, error) {
+func compileOptions(packagePath string, diagnostics *[]string, reportedErrors *bool) (playground.Options, error) {
 	cfg := requestConfig()
 	cfg.Features = macroBundle.Features
 	if macroBundle.PackagePath != "" {
@@ -69,6 +69,9 @@ func compileOptions(packagePath string, diagnostics *[]string) (playground.Optio
 		ProcLibraries: libraries, RuntimeRoots: macroBundle.RuntimeRoots,
 		SourcePackages: macroBundle.SourcePackages,
 		OnProcDiagnostic: func(filename string, diagnostic expand.ProcDiagnostic) {
+			if diagnostic.Severity == pm.Error {
+				*reportedErrors = true
+			}
 			line, column := 1, int(diagnostic.Location.Span.Start)+1
 			if file := diagnostic.Location.File; file != nil {
 				for index, offset := range file.LineStarts {
@@ -162,7 +165,7 @@ func awaitPromise(promise js.Value) (js.Value, error) {
 		return nil
 	})
 	failure := js.FuncOf(func(_ js.Value, args []js.Value) any {
-		done <- result{err: fmt.Errorf("procedural macro execution: %s", args[0].String())}
+		done <- result{err: fmt.Errorf("procedural macro execution: %s", js.Global().Get("String").Invoke(args[0]).String())}
 		return nil
 	})
 	defer success.Release()

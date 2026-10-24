@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
@@ -279,50 +280,85 @@ pub func Read(value Choice) int { return match value { Choice::Item(n) => n } }
 	}
 }
 
-func TestRuntimeRootCanonicalBuiltinDerive(t *testing.T) {
-	_, library, _ := compileProcFixture(t, procFixtureSource)
-	const owner = "github.com/goxide-lang/serde"
-	library.Run = procFixtureHost(pm.Entry{Name: "identity", Function: func(ctx pm.Context, _ public.TokenStream) pm.Output {
-		root, err := ctx.RuntimeRoot(owner)
-		if err != nil {
-			return pm.Failure(err.Error(), ctx.CallSpan())
-		}
-		parse := func(source string) []public.Token {
-			stream, err := public.ParseText(source, ctx.DefSite())
-			if err != nil {
-				t.Fatal(err)
-			}
-			tokens := stream.Tokens()
-			if len(tokens) != 0 && tokens[len(tokens)-1].Kind() == public.SemicolonKind && tokens[len(tokens)-1].Implicit() {
-				tokens = tokens[:len(tokens)-1]
-			}
-			return tokens
-		}
-		arguments, err := public.NewGroup(public.Parenthesis, public.New(append(root.Tokens(), parse("::Serialize")...)...), ctx.DefSite())
-		if err != nil {
-			t.Fatal(err)
-		}
-		attribute, err := public.NewGroup(public.Bracket, public.New(append(parse("derive"), arguments)...), ctx.DefSite())
-		if err != nil {
-			t.Fatal(err)
-		}
-		out := append(parse("#"), attribute)
-		out = append(out, parse("type Generated struct { Value int }")...)
-		return pm.Success(public.New(out...))
-	}})
-	directory := t.TempDir()
-	if err := testdeps.WriteFile(filepath.Join(directory, "go.mod"), []byte("module derivedroot\n\ngo 1.27\n"), 0600); err != nil {
-		t.Fatal(err)
+func TestRuntimeRootCanonicalProceduralDerive(t *testing.T) {
+	base := t.TempDir()
+	consumer, producer := filepath.Join(base, "consumer"), filepath.Join(base, "macros")
+	manifest := testdeps.FormalManifest(t, "derivedroot", "app", "[dependencies.macros]\npath=\"../macros\"\n")
+	manifest = strings.Replace(manifest, "[lib]", "[[bin]]", 1)
+	manifest = strings.Replace(manifest, "[dependencies.serde]", "[dependencies.wire]", 1)
+	writeDiagnosticModuleFile(t, consumer, "goxide.toml", []byte(manifest))
+	sdkVersion := strings.TrimSpace(runGo(t, ".", "list", "-m", "-f", "{{.Version}}", "github.com/goxide-lang/syntax"))
+	if sdkVersion == "" {
+		t.Fatal("compiler SDK has no public version pin")
 	}
-	writeDiagnosticModuleFile(t, directory, "main.gox", []byte("package main\nuse macros;\nmacros::identity!()\nfunc main() {}\n"))
-	root := lower.RuntimeRoot{LogicalModule: owner, BindingID: "pinned-serde", Namespace: paths.Namespace{ModulePath: owner, GoPrefix: owner}}
-	err := lower.CompileModules([]lower.Module{{Path: "derivedroot", Dir: directory, Config: testConfig(t), Roots: paths.Roots{"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, ProcLibraries: []*lower.ProcLibrary{library}, RuntimeRoots: []lower.RuntimeRoot{root}}})
+	writeDiagnosticModuleFile(t, producer, "goxide.toml", []byte(`[go_mod]
+module="example.org/runtime-root-macros"
+go="1.27"
+[lib]
+name="macros"
+path="."
+proc_macro=true
+[dependencies.syntax]
+go="github.com/goxide-lang/syntax"
+version="`+sdkVersion+`"
+`))
+	writeDiagnosticModuleFile(t, producer, "lib.gox", []byte(`package macros
+use syntax::proc_macro as pm;use syntax::token;
+#[proc_macro]
+pub func identity(ctx pm::Context,input token::TokenStream)pm::Output{return expandIdentity(ctx,input)}
+`))
+	writeDiagnosticModuleFile(t, producer, "expand.go", []byte(`package macros
+import (
+ pm "github.com/goxide-lang/syntax/proc_macro"
+ "github.com/goxide-lang/syntax/token"
+)
+func expandIdentity(ctx pm.Context,_ token.TokenStream)pm.Output{
+ root,err:=ctx.RuntimeRoot("github.com/goxide-lang/serde")
+ if err!=nil{return pm.Failure(err.Error(),ctx.CallSpan())}
+ parse:=func(text string)[]token.Token{
+  stream,err:=token.ParseText(text,ctx.DefSite());if err!=nil{panic(err)}
+  values:=stream.Tokens()
+  for len(values)>0&&values[len(values)-1].Kind()==token.SemicolonKind&&values[len(values)-1].Implicit(){values=values[:len(values)-1]}
+  return values
+ }
+ arguments,err:=token.NewGroup(token.Parenthesis,token.New(append(root.Tokens(),parse("::derive::Serialize")...)...),ctx.DefSite())
+ if err!=nil{return pm.Failure(err.Error(),ctx.CallSpan())}
+ attribute,err:=token.NewGroup(token.Bracket,token.New(append(parse("derive"),arguments)...),ctx.DefSite())
+ if err!=nil{return pm.Failure(err.Error(),ctx.CallSpan())}
+ output:=append(parse("#"),attribute)
+ output=append(output,parse("type Generated struct{Value int}")...)
+ return pm.Success(token.New(output...))
+}
+`))
+	writeDiagnosticModuleFile(t, consumer, "main.gox", []byte(`package main
+use macros;use wire;use wire::json;use fmt;
+macros::identity!()
+func main(){value:=Generated{Value:42};data,err:=json::Marshal(&value,wire::Write[Generated]);if err!=nil{panic(err)};fmt::Println(string(data))}
+`))
+	first, calls, err := testdeps.PrepareFormalBinary(t, consumer)
 	if err != nil {
 		t.Fatal(err)
 	}
-	generated, err := os.ReadFile(filepath.Join(directory, "main.go"))
-	if err != nil || !bytes.Contains(generated, []byte("Serialize")) {
-		t.Fatalf("bound canonical derive disappeared: %v\n%s", err, generated)
+	if calls < 2 {
+		t.Fatalf("runtime root did not invoke both procedural stages: %d", calls)
 	}
-	runGo(t, directory, "build", "-o", filepath.Join(t.TempDir(), "program"), ".")
+	generated, err := os.ReadFile(filepath.Join(first.Root, "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(generated, []byte("Serialize")) {
+		t.Fatalf("canonical procedural derive disappeared:\n%s", generated)
+	}
+	second, _, err := testdeps.PrepareFormalBinary(t, consumer, compile.Options{Locked: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := os.ReadFile(filepath.Join(second.Root, "main.go"))
+	if err != nil || !bytes.Equal(generated, again) {
+		t.Fatalf("runtime root generation changed: %v", err)
+	}
+	testdeps.RunFormalGo(t, first, "build", "-mod=readonly", "./...")
+	if got := testdeps.RunFormalGo(t, first, "run", "-mod=readonly", "."); got != "{\"Value\":42}\n" {
+		t.Fatalf("canonical runtime root output = %q", got)
+	}
 }

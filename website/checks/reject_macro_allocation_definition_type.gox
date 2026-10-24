@@ -1,4 +1,0 @@
-package p
-type make int
-macro_rules! allocate {()=>{make([]int,1)};}
-func run(){_=allocate!()}

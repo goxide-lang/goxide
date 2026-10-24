@@ -1,9 +1,11 @@
 package main
+use std;
+use serde;
 
 use serde::json as serdejson;
 
 func main() {
-    value, err := serdejson::Unmarshal([]byte(`{"Required":"demo","Optional":null}`), DeserializeRequest)
+    value, err := serdejson::Unmarshal([]byte(`{"Required":"demo","Optional":null}`), serde::Read[Request])
     if err != nil { panic(err) }
-    println!("{} {} {} {}", value.Required, value.First.Port, value.Child.Value.Port, defaultTrace)
+    std::println!("{} {} {} {}", value.Required, value.First.Port, value.Child.Value.Port, defaultTrace)
 }

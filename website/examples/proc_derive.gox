@@ -1,0 +1,9 @@
+package main
+
+use fmt;
+use macros;
+
+#[derive(macros::TypeName)]
+type Order struct { ID int }
+
+func main() { fmt::Println(Order{ID: 1001}.typeName()) }

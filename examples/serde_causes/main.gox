@@ -1,4 +1,5 @@
 package main
+use std;
 use serde;
 
 use os;
@@ -7,20 +8,20 @@ use json;
 use strconv;
 use serde::json as serdejson;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 pub enum Operation { Charge(int64), }
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Order struct { Operations []Operation }
 
 func main() {
     input:=`{"Operations":[{"Charge":7}]}`
     if len(os::Args)>1 { input=os::Args[1] }
-    order,err:=serdejson::Unmarshal([]byte(input),DeserializeOrder)
+    order,err:=serdejson::Unmarshal([]byte(input),serde::Read[Order])
     if err!=nil {
         var syntax *json::SyntaxError
-        if errors::As(err,&syntax) { println!("syntax {}",syntax.Offset); return }
-        if errors::Is(err,strconv::ErrRange) { println!("range"); return }
-        println!("rejected");return
+        if errors::As(err,&syntax) { std::println!("syntax {}",syntax.Offset); return }
+        if errors::Is(err,strconv::ErrRange) { std::println!("range"); return }
+        std::println!("rejected");return
     }
-    println!("accepted {}",len(order.Operations))
+    std::println!("accepted {}",len(order.Operations))
 }

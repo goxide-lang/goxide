@@ -8,6 +8,7 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/playground"
 	"github.com/goxide-lang/goxide/internal/rootconfig"
@@ -42,12 +43,16 @@ func compile(_ js.Value, args []js.Value) (result any) {
 		return map[string]any{"error": "source exceeds 32 KiB"}
 	}
 	var diagnostics []string
-	options, err := compileOptions("goxide/generated", &diagnostics)
+	reportedErrors := false
+	options, err := compileOptions("goxide/generated", &diagnostics, &reportedErrors)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
 	output, err := playground.CompilePackage([]playground.File{{Path: "playground.gox", Source: source}}, options)
 	if err != nil {
+		if reportedErrors {
+			err = lower.SummarizeProcDiagnostics(err)
+		}
 		return map[string]any{"error": err.Error(), "diagnostics": strings.Join(diagnostics, "\n")}
 	}
 	return map[string]any{"go": output[0].Source, "diagnostics": strings.Join(diagnostics, "\n")}
@@ -77,12 +82,16 @@ func compilePackage(_ js.Value, args []js.Value) (result any) {
 	// On js/wasm this reads only the export archives embedded at website build
 	// time. Each request receives a fresh importer and no request-local state.
 	var diagnostics []string
-	options, err := compileOptions("", &diagnostics)
+	reportedErrors := false
+	options, err := compileOptions("", &diagnostics, &reportedErrors)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
 	output, err := playground.CompilePackage(files, options)
 	if err != nil {
+		if reportedErrors {
+			err = lower.SummarizeProcDiagnostics(err)
+		}
 		return map[string]any{"error": err.Error(), "diagnostics": strings.Join(diagnostics, "\n")}
 	}
 	values := make([]any, len(output))

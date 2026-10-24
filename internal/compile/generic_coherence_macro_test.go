@@ -58,7 +58,14 @@ path="../macros"
 `+standard)
 			writeProjectFile(t, model, "lib.gox", genericCoherenceModel(route))
 			calls := map[pm.Kind]int{}
-			run := testWASI(t, func(request pm.Request) { calls[request.Kind()]++ })
+			run := testWASI(t, func(request pm.Request) {
+				// Count this fixture's macros independently of procedural macros
+				// used by its ordinary standard-library dependency.
+				switch request.Entry() {
+				case "classify", "overlap", "classifyAttribute", "overlapAttribute", "Classify", "Overlap":
+					calls[request.Kind()]++
+				}
+			})
 			library, err := PrepareProject(model, Options{Lib: true, Offline: true, RunProcMacro: run})
 			if err != nil {
 				t.Fatalf("generic library before concrete callers: %v", err)

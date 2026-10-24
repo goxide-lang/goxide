@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/lower"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
@@ -114,14 +115,13 @@ func TestMacroSourceVisibility(t *testing.T) {
 func TestMacroDeriveOwnerHygiene(t *testing.T) {
 	source := t.TempDir()
 	files := map[string]string{
-		"go.mod":            "module macroderive\n\ngo 1.27\n",
-		"goxide.roots.toml": "[roots.serde]\nmodule = \"github.com/goxide-lang/serde\"\npackage = \"github.com/goxide-lang/serde\"\n",
+		"goxide.toml": strings.Replace(testdeps.FormalManifest(t, "macroderive", "macroderive"), "[lib]", "[[bin]]", 1),
 		"macros.gox": `package main
 use serde as owner;
-macro_rules! named { ($owner:ident, $name:ident) => { #[derive($owner::Serialize)] type $name struct { Value int } }; }
+macro_rules! named { ($owner:ident, $name:ident) => { #[derive($owner::derive::Serialize)] type $name struct { Value int } }; }
 macro_rules! relay { ($owner:ident, $name:ident) => { named!($owner, $name) }; }
-macro_rules! defined { () => { #[derive(owner::Serialize)] type Defined struct { Value int } }; }
-macro_rules! caller { () => { #[derive($caller::s::Serialize)] type Caller struct { Value int } }; }
+macro_rules! defined { () => { #[derive(owner::derive::Serialize)] type Defined struct { Value int } }; }
+macro_rules! caller { () => { #[derive($caller::s::derive::Serialize)] type Caller struct { Value int } }; }
 `,
 		"main.gox": `package main
 use fmt as owner;
@@ -136,10 +136,10 @@ func main() {
     forwarded := Forwarded{Value:2}
     defined := Defined{Value:3}
     caller := Caller{Value:4}
-    a, _ := json::Marshal(&captured, SerializeCaptured)
-    b, _ := json::Marshal(&forwarded, SerializeForwarded)
-    c, _ := json::Marshal(&defined, SerializeDefined)
-    d, _ := json::Marshal(&caller, SerializeCaller)
+    a, _ := json::Marshal(&captured, s::Write[Captured])
+    b, _ := json::Marshal(&forwarded, s::Write[Forwarded])
+    c, _ := json::Marshal(&defined, s::Write[Defined])
+    d, _ := json::Marshal(&caller, s::Write[Caller])
     owner::Println(string(a), string(b), string(c), string(d))
 }
 `,
@@ -149,27 +149,32 @@ func main() {
 			t.Fatal(err)
 		}
 	}
-	var generated []string
-	for range 2 {
-		module, err := lower.PrepareModule([]string{source}, "macroderive", testConfig(t))
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { os.RemoveAll(module) })
-		generated = append(generated, module)
+	first, calls, err := testdeps.PrepareFormalBinary(t, source)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if calls < 4 {
+		t.Fatalf("owner hygiene invoked %d procedural derives for four registered items", calls)
+	}
+	generated := map[string][]byte{}
 	for _, name := range []string{"main.go", "macros.go"} {
-		first, err := os.ReadFile(filepath.Join(generated[0], name))
+		generated[name], err = os.ReadFile(filepath.Join(first.Root, name))
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := os.ReadFile(filepath.Join(generated[1], name))
-		if err != nil || !bytes.Equal(first, second) {
+	}
+	second, _, err := testdeps.PrepareFormalBinary(t, source, compile.Options{Locked: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, before := range generated {
+		after, err := os.ReadFile(filepath.Join(second.Root, name))
+		if err != nil || !bytes.Equal(before, after) {
 			t.Fatalf("%s: repeated generation differs: %v", name, err)
 		}
 	}
-	runGo(t, generated[0], "build", "./...")
-	if got := runGo(t, generated[0], "run", "."); got != "{\"Value\":1} {\"Value\":2} {\"Value\":3} {\"Value\":4}\n" {
+	testdeps.RunFormalGo(t, first, "build", "-mod=readonly", "./...")
+	if got := testdeps.RunFormalGo(t, first, "run", "-mod=readonly", "."); got != "{\"Value\":1} {\"Value\":2} {\"Value\":3} {\"Value\":4}\n" {
 		t.Fatalf("derived macro output = %q", got)
 	}
 	// A caller alias cannot acquire the definition file's same-spelled owner.
@@ -177,9 +182,8 @@ func main() {
 	if err := os.WriteFile(filepath.Join(source, "main.gox"), []byte(invalid), 0600); err != nil {
 		t.Fatal(err)
 	}
-	module, err := lower.PrepareModule([]string{source}, "macroderive", testConfig(t))
-	if module != "" {
-		os.RemoveAll(module)
+	rejected, _, err := testdeps.PrepareFormalBinary(t, source)
+	if rejected != nil {
 		t.Fatal("captured non-canonical owner produced Go output")
 	}
 	if err == nil || !strings.Contains(err.Error(), "derive") {

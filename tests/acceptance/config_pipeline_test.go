@@ -15,7 +15,7 @@ func TestConfigPipelineApplicationRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	macroRaceModule(t, string(source), configPipelineAssertions)
+	formalBusinessExample(t, source, configPipelineAssertions, "configuration accepted")
 }
 
 const configPipelineAssertions = `package main

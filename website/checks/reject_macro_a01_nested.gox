@@ -1,5 +1,0 @@
-package main
-// 嵌套保留完整定义/调用链。
-macro_rules! inner { ($T:expr) => { func() int { var value $T; _ = value; return 0 }() }; }
-macro_rules! outer { ($T:expr) => { inner!($T) }; }
-func main() { _ = outer!(int) }

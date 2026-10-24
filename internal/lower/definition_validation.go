@@ -6,6 +6,7 @@ import (
 	"go/constant"
 	gotoken "go/token"
 	"go/types"
+	"path/filepath"
 	"regexp"
 
 	"github.com/goxide-lang/goxide/internal/check"
@@ -36,7 +37,7 @@ func ValidateDefinitions(files map[string]*syntax.File, info *check.Info) error 
 			for _, name := range file.GoNames {
 				validation.reserved[name] = true
 			}
-			if file.AST.NativeGo {
+			if file.AST.NativeGo && info.NativePackages[filepath.ToSlash(filepath.Dir(name))] == nil {
 				inputs[name] = file.AST
 			}
 		}

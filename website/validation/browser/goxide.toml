@@ -1,0 +1,18 @@
+[go_mod]
+module = "playground"
+go = "1.27"
+
+[[bin]]
+name = "playground"
+path = "."
+
+[dependencies.macros]
+path = "macros"
+
+[dependencies.std]
+go = "github.com/goxide-lang/std"
+version = "v0.0.2-0.20261023080713-8db223547de1"
+
+[dependencies.serde]
+go = "github.com/goxide-lang/serde"
+version = "v0.0.0-20261023080815-5422034b0fcc"

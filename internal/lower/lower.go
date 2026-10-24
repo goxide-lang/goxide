@@ -82,6 +82,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	fset := gotoken.NewFileSet()
 	var emitters []*emitter
 	enumValidHelpers := map[*check.Enum]bool{}
+	enumAssertions := &enumAssertionPlan{}
 	memberSymbols := make(map[*resolve.Symbol]bool)
 	externalTests := make(map[*resolve.Scope]bool)
 	if res != nil {
@@ -104,6 +105,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		tree := files[name]
 		e := &emitter{symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
 		e.enumValidHelpers = enumValidHelpers
+		e.enumAssertions = enumAssertions
 		e.validation = options.validation
 		e.lineDirectives, e.original = options.lineDirectives, options.originals[name]
 		if res != nil {
@@ -125,7 +127,6 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		e.base = gotoken.Pos(e.tokenFile.Base())
 		e.reserveNames()
 		e.reserveTraitNames()
-		e.validatePrintStatements()
 		e.checkMacroNames()
 		f := &goast.File{Package: e.pos(tree.Package) - 8, Name: &goast.Ident{NamePos: e.pos(tree.Package), Name: tree.Package.Name}}
 		if f.Package < e.base {
@@ -143,12 +144,8 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			f.Decls = append(f.Decls, e.itemExtras...)
 			e.itemExtras = nil
 		}
-		f.Decls = append(f.Decls, e.deriveDeclarations()...)
-		f.Decls = append(f.Decls, e.errorDeclarations()...)
-		f.Decls = append(f.Decls, e.serdeDeclarations()...)
 		f.Decls = e.traitDeclarations(f.Decls)
 		f.Decls = append(f.Decls, e.resultAdapters...)
-		f.Decls = append(f.Decls, e.flowHelpers...)
 		if e.err != nil {
 			return nil, e.err
 		}
@@ -169,7 +166,11 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			}
 		}
 	}
+	if err := emitEnumAssertions(emitters, enumAssertions); err != nil {
+		return nil, err
+	}
 	for _, e := range emitters {
+		e.goFile.Decls = append(e.goFile.Decls, e.flowHelpers...)
 		e.goFile.Decls = append(e.goFile.Decls, e.enumValidDeclarations()...)
 		if e.err != nil {
 			return nil, e.err
@@ -397,6 +398,8 @@ func commonDirectory(root, dir string) string {
 type emitter struct {
 	traitBodySources   map[goast.Decl]syntax.Node
 	enumValidHelpers   map[*check.Enum]bool
+	enumAssertions     *enumAssertionPlan
+	enumCheckCallbacks map[types.Type]goast.Expr
 	inferenceTypes     map[types.Type]*goast.Ident
 	functionFrame      *functionFrame
 	assignmentGuard    *goast.Ident

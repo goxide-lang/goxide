@@ -89,22 +89,22 @@ func TestProceduralItemTokenLists(t *testing.T) {
 
 func TestProceduralMemberTokenLists(t *testing.T) {
 	for _, test := range []struct {
-		name, source         string
-		inTrait, defaultImpl bool
-		valid                bool
+		name, source string
+		inTrait      bool
+		valid        bool
 	}{
-		{"empty", "", true, false, true},
-		{"trait associated type", "type Item; func value(self Self) Item", true, false, true},
-		{"impl associated binding", "type Item = int; func value(self Self) int { return 1 }", false, false, true},
-		{"default method", "func default() Self { return Self{} }", false, true, true},
-		{"default outside default impl", "func default() Self { return Self{} }", false, false, false},
-		{"trait visibility", "pub func value(self Self)", true, false, false},
-		{"impl missing binding", "type Item", false, false, false},
-		{"variable member", "var value = 1", true, false, false},
-		{"declaration member", "trait Nested {}", false, false, false},
+		{"empty", "", true, true},
+		{"trait associated type", "type Item; func value(self Self) Item", true, true},
+		{"impl associated binding", "type Item = int; func value(self Self) int { return 1 }", false, true},
+		{"raw default method", "func r#default() Self { return Self{} }", false, true},
+		{"default outside default impl", "func default() Self { return Self{} }", false, false},
+		{"trait visibility", "pub func value(self Self)", true, false},
+		{"impl missing binding", "type Item", false, false},
+		{"variable member", "var value = 1", true, false},
+		{"declaration member", "trait Nested {}", false, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			items, diagnostics := parser.ParseMembersTokens(lexicalTokens(t, test.source), test.inTrait, test.defaultImpl)
+			items, diagnostics := parser.ParseMembersTokens(lexicalTokens(t, test.source), test.inTrait)
 			if valid := len(errorsOnly(diagnostics)) == 0; valid != test.valid {
 				t.Fatalf("member validity = %v, want %v: %v", valid, test.valid, diagnostics)
 			}

@@ -29,3 +29,7 @@ package = "joint.example/app/store"
 [roots.strconv]
 source = "toolchain"
 package = "strconv"
+
+[roots.std]
+module = "github.com/goxide-lang/std"
+package = "github.com/goxide-lang/std"

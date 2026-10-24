@@ -1,3 +1,0 @@
-package main
-import "strconv"
-func main() { _ = go_result!(string, strconv.Atoi("1")) }

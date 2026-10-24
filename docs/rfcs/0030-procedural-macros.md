@@ -2,17 +2,17 @@
 
 ## 状态与范围
 
-状态：**Draft；token/SDK、三类调用、角色构建、RuntimeRoot、CLI 与浏览器执行链路已实现，本地联调；浏览器物理执行截止仍有平台限制**。syntax 已提供 `token`、`proc_macro` 和单个类型声明的 `syn` 视图；完整语法工具与派生迁移另行推进。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
+状态：**token/SDK、三类调用、角色构建、RuntimeRoot、CLI 与浏览器执行链路已实现；std/serde 正式库迁移已接入，全树及发布验收进行中；浏览器物理执行截止仍有平台限制**。syntax 提供 `token`、`proc_macro` 和单个类型声明的 `syn` 视图；完整 syn/quote 另行推进。声明式 `derive()` / `attr(...)` 的 RFC 0029 与原型继续保留在 `draft-rfc/declarative-derive-attributes`；本篇不依赖合入该分支。
 
-本篇提供公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。独立 `github.com/goxide-lang/syntax` module 提供手写 Go 的 token 树/词法、调用内引用表、Context/Output、静态入口分派与严格 JSON 编解码。编译器支持 `[lib].proc_macro`、cfg 后源码登记、canonical SDK 验签、helper 归属、别名和重导出。项目编排按独立角色准备依赖、锁、特征与 staging，构建标准 Go WASI command；RuntimeRoot 通过消费者的显式来源绑定。CLI 使用进程内 wazero，浏览器通过页面管理的独立 Worker 运行相同产物；两侧沿普通前端检查宏输出。原生单文件、目录和 gen 入口从所属 Go module 或显式 roots 准备源码依赖。当前依赖采用相邻 syntax checkout，本地联调不发布。
+本篇提供公共 TokenStream、卫生与诊断来源、三个调用入口、derive helper 登记、源码依赖与重导出，以及 CLI/浏览器共用的受限 WASM 执行协议。独立 `github.com/goxide-lang/syntax` module 提供手写 Go 的 token 树/词法、调用内引用表、Context/Output、静态入口分派与严格 JSON 编解码。编译器支持 `[lib].proc_macro`、cfg 后源码登记、canonical SDK 验签、helper 归属、别名和重导出。项目编排按独立角色准备依赖、锁、特征与 staging，构建标准 Go WASI command；RuntimeRoot 通过消费者的显式来源绑定。CLI 使用进程内 wazero，浏览器通过页面管理的独立 Worker 运行相同产物；两侧沿普通前端检查宏输出。原生单文件、目录和 gen 入口从所属 Go module 或显式 roots 准备源码依赖。正式依赖使用已发布的 syntax/std/serde pin，并按角色校验源码与锁；当前验收状态见[能力状态表](../mvp-gap-audit.md)。
 
-本篇不迁移 Default、serde 或其他内建宏，不补泛型 impl，不提供类型反射或已解析 TypeShape 查询，不开放编译脚本，也不实现完整 syn/quote。普通 syn/quote 库可以建立在本协议上；它们解析语法、构造语法，不取得类型检查或权限证明。库派生迁移仍需另行验收普通 trait/impl、生成代码及跨仓库发布。
+本篇规定通用执行协议；std/serde 业务宏以普通库实现接入，泛型及协议选择由 RFC 0031 规定。宏不取得类型反射、已解析 TypeShape 或权限证明；编译脚本与完整 syn/quote 另行推进。
 
-公共 syn 及普通库协议的验证包括 `internal/compile/syn_test.go` 的具体字段派生、`syn_generic_test.go` 的条件泛型派生、`attribute_protocol_migration_test.go` 的 attribute 条件 impl、`const_macro_test.go` 的数组长度模板，以及 `protocol_migration_test.go` / `serde_protocol_migration_test.go` 的基础协议和序列化迁移证明。基础协议证明已覆盖具体 struct/enum 的 Default/Clone/Debug、Option/Result 和 slice/array/map；`error_protocol_migration_test.go` 另以普通 inherent impl 验证 struct 的 Error/Unwrap、原生 errors.Is/As、alias/私有字段及 nil/typed-nil source，未覆盖 enum 原生 error 桥接或 `#[from]` 注册。
+公共 syn 及普通库协议的验证包括 `internal/compile/syn_test.go` 的具体字段派生、`syn_generic_test.go` 的条件泛型派生、`attribute_protocol_migration_test.go` 的 attribute 条件 impl、`const_macro_test.go` 的数组长度模板，以及 `protocol_migration_test.go` / `serde_protocol_migration_test.go` 的基础协议和序列化迁移证明。基础协议证明已覆盖具体 struct/enum 的 Default/Clone/Debug、Option/Result 和 slice/array/map；`error_protocol_migration_test.go` 另以普通 inherent impl 验证 struct 的 Error/Unwrap、原生 errors.Is/As、alias/私有字段及 nil/typed-nil source，正式 Error 宏另经普通 enum 固有成员与 From impl 接线。
 
-`print_protocol_migration_test.go` 验证普通过程宏解析格式字面量、先依序求值全部实参，再调用 Display/Debug 协议与公开 formatting 库；覆盖原调用帧、错误及锁定重放。派生宏读取实际字段或变体，通过 RuntimeRoot 输出普通 trait 或 inherent impl；真实 WASI、目标 Go build/run/test 及锁定重放验证其行为。迁移证明使用新宏名和普通库入口，不进入内建派生登记；std/serde 的正式迁移、发布和完整业务兼容验收尚未执行，具体范围、PartialEq 深层校验缺口及暂缓的 Default/Eq 规则见 [RFC 0031](0031-generic-protocol-impls.md)。
+`print_protocol_migration_test.go` 验证普通过程宏解析格式字面量、先依序求值全部实参，再调用 Display/Debug 协议与公开 formatting 库；覆盖原调用帧、错误及锁定重放。派生宏读取实际字段或变体，通过 RuntimeRoot 输出普通 trait 或 inherent impl；真实 WASI、目标 Go build/run/test 及锁定重放验证其行为。迁移证明及正式 `formal_std_test.go` / `formal_serde_test.go` 均使用普通库入口；编译器业务派生登记已移除。正式库范围、enum 有限校验及普通 Default/Eq/NativeKey 规则见 [RFC 0031](0031-generic-protocol-impls.md)，完整回归与发布验收见状态表。
 
-关联：[声明宏合同](0011-macros.md)、[内建派生](0013-derive.md)、[crate 与依赖根](0028-crate-roots.md)、[语法工具设计](../design/syntax-tooling.md)、[能力状态表](../mvp-gap-audit.md)。Rust 的三个过程宏入口提供对照；Goxide 保持既定的定义点卫生，不采用 Rust 过程宏的默认非卫生行为。[Rust Reference](https://doc.rust-lang.org/reference/procedural-macros.html)
+关联：[声明宏合同](0011-macros.md)、[普通库派生](0013-derive.md)、[crate 与依赖根](0028-crate-roots.md)、[语法工具设计](../design/syntax-tooling.md)、[能力状态表](../mvp-gap-audit.md)。Rust 的三个过程宏入口提供对照；Goxide 保持既定的定义点卫生，不采用 Rust 过程宏的默认非卫生行为。[Rust Reference](https://doc.rust-lang.org/reference/procedural-macros.html)
 
 ## 源级规则
 
@@ -128,7 +128,7 @@ pub use description_macros as macros;
 // 使用方：#[derive(description::macros::Describe)]
 ```
 
-也可将单个宏重导出为 `DeriveDescribe`。别名和重导出保持 canonical 宏身份、定义点及 helper 所有者；不生成运行时转发包装。内建宏的保留名与现有冲突规则保持，过程宏不静默覆盖内建 Default 或 serde 派生。
+也可将单个宏重导出为 `DeriveDescribe`。别名和重导出保持 canonical 宏身份、定义点及 helper 所有者；不生成运行时转发包装。宏重名按普通名字与冲突规则处理；Default 与 serde 派生通过库路径解析，不保留同名内建业务入口。
 
 ### 4. 调用、helper 与展开顺序
 
@@ -147,13 +147,13 @@ attribute 接收去掉自身属性后的完整声明和其余有效属性，整�
 3. 解析最终项的全部 derive 请求与 helper 登记，验证目标类别；尚未解析的请求此时诊断。
 4. 同一项的所有过程式 derive 读取同一份去掉全部 derive 请求的语法快照，helper 和其他有效属性保留；不把前一个 derive 的产物喂给后一个。
 5. 保留原项并消费自定义 derive 请求，展开其声明体；按请求顺序处理、追加各 derive 产物。输出中新出现的普通宏调用继续展开。
-6. 剩余内建派生继续由既有检查/降低处理；helper 保留到所有对应消费者完成。已认可的编译器内建惰性属性随所属项保留，不作为宏执行，也不因展开结束而移除；由对应检查/降低阶段验证适用位置、参数并消费。展开后仍无已登记消费者的属性按未知属性诊断。全部结果进行普通名字、类型、权限检查。
+6. helper 保留到所有对应消费者完成；标准库业务派生均走普通过程宏，不再进入编译器专用派生分支。已认可的编译器内建惰性属性随所属项保留，不作为宏执行，也不因展开结束而移除；由对应检查/降低阶段验证适用位置、参数并消费。展开后仍无已登记消费者的属性按未知属性诊断。全部结果进行普通名字、类型、权限检查。
 
 所有宏都受同一总展开深度、次数、输出节点与 token 预算约束；宿主执行预算另见下文。首次失败返回完整展开链，不让部分产物进入降低，也不提交失败构建产物。
 
 helper 是惰性语法，不执行宏。`attributes(a, b)` 在该 derive 所在项及其字段/变体中认可这些简单属性名；只在当前项生效，不扩展到函数体中的嵌套声明。登记从最终 derive 集合确定，所以 helper 可放在该项 derive 之前；这是 Goxide 的明确选择，不宣称复制 Rust 的顺序规则。
 
-同一项的多个 derive 可共同登记一个 helper，例如 Serialize/Deserialize 共同读取 `serde`。宿主认可名称并向每个相关宏提供原语法；参数、位置、重复键及业务冲突由宏诊断。编译器记录 helper 的 canonical 消费者及消费状态，全部相关过程式和内建 derive 完成后才移除；例如不能因过程宏已结束就提前删除内建 Default 尚需读取的 `#[default]`。这份记录由宿主产生，不接受宏响应上传。
+同一项的多个 derive 可共同登记一个 helper，例如 Serialize/Deserialize 共同读取 `serde`。宿主认可名称并向每个相关宏提供原语法；参数、位置、重复键及业务冲突由宏诊断。编译器记录 helper 的 canonical 消费者及消费状态，全部相关 derive 消费者完成后才移除；例如同一语法快照中的 `#[default]` 由 std 的 Default 过程宏读取。这份记录由宿主产生，不接受宏响应上传。
 
 若名称同时解析为可执行 attribute，报告歧义，要求限定可执行路径；不能先执行再判断。没有对应 derive 的残留 helper 报未知属性。普通 attribute 不登记独立 helper；它可以读取和消费目标中的属性，保留项上的未消费未知属性仍报错。
 
@@ -201,7 +201,7 @@ RuntimeRoot(logicalModulePath) -> 已绑定的 Path，或带调用位置的错�
 
 ### 6. 宿主执行与资源边界
 
-**建议选择 WASI command 模式，每次调用创建全新实例。** 将宏库及 SDK 降低成普通 Go，由工具链生成专用 launcher，使用 `GOOS=wasip1 GOARCH=wasm GOTOOLCHAIN=local GOWORK=off go build -trimpath -buildvcs=false` 生成 command 模块。launcher 从固定登记表选择函数；宏作者不手写 main、WASI 导出或内存指针协议。构建产物使用虚拟源码身份，宿主保留实际位置映射，不把本地绝对路径作为宏的输入能力。
+**采用 WASI command 模式，每次调用创建全新实例。** 将宏库及 SDK 降低成普通 Go，由工具链生成专用 launcher，使用 `GOOS=wasip1 GOARCH=wasm GOTOOLCHAIN=local GOWORK=off go build -trimpath -buildvcs=false '-ldflags=-s -w -buildid='` 生成 command 模块，去除名称调试节与 build ID。launcher 从固定登记表选择函数；宏作者不手写 main、WASI 导出或内存指针协议。构建产物使用虚拟源码身份，宿主保留实际位置映射，不把本地绝对路径作为宏的输入能力。
 
 CLI 已采用经用户确认的 wazero v1.12.0 及其 `golang.org/x/sys` v0.44.0 依赖。宿主在编译器进程内执行，stdin/stdout 是内存缓冲，无须另起宏进程。浏览器运行同一 WASM 字节，在独立 Worker 中提供相同的受限 WASI profile。两侧共用请求、响应及宿主验证；不另建 js/wasm 宏发行物。Go 已提供 WASI command 构建，也支持 reactor，但首版不需要长期实例、export 指针调用或跨调用状态。[Go WASI](https://go.dev/blog/wasi)、[Go WASM exports](https://go.dev/blog/wasmexport)
 
@@ -262,7 +262,9 @@ Go 运行时会进行这些调用，不能简单缺省 clock/random/poll，也�
 
 当前浏览器实现按上述预算拒收结果并调用 `Worker.terminate()`；**实际停止 CPU 的时刻由浏览器决定，尚未满足严格物理执行截止**。Chromium 的 Worker 实现为强制终止安排约两秒延迟，忙循环可能在此期间继续运行；调试等条件还会影响时刻。验收分别检查结果截止、终止请求、最终 Worker 消亡及下一次编译恢复。[Chromium Worker 实现](https://chromium.googlesource.com/chromium/src/+/d28eacc708a343a74bc3f215a3f35777aa261699/third_party/blink/renderer/core/workers/worker_thread.cc)
 
-`website/macro_bundle.go` 在构建阶段从已检查的消费者项目导出 `manifest.json` 和按 SHA-256 命名的 WASM。浏览器嵌入的 `cmd/goxide-playground/proc_bundle.json` 是固定输入，默认 `{}`；验收通过 Go overlay 选入导出的快照，并配套同一目标的运行库 export archives 和宏文件。普通网站当前不附带外部宏。快照只保存逻辑源码、作用域、target/features 和公开根，依赖宿主环境变量的来源在导出时拒绝；原生 CLI 继续使用活源码支持 env 配置。
+`website/macro_bundle.go` 在构建阶段从已检查的消费者项目导出 `manifest.json` 和按 SHA-256 命名的 WASM。浏览器嵌入的 `cmd/goxide-playground/proc_bundle.json` 是固定输入，默认 `{}`；网站构建通过 Go overlay 选入正式 std/serde 与教程宏的快照，配套同一目标的纯 Go 依赖 export archives 和宏文件。快照只保存逻辑源码、作用域、target/features 和公开根，依赖宿主环境变量的来源在导出时拒绝；原生 CLI 继续使用活源码支持 env 配置。
+
+浏览器每次请求将用户输入与固定快照中的普通源码依赖共同检查、降低，按当前需求生成库实例。最终 Go 检查使用该请求的生成代码和选中的原生 Go 文件；纯 Go 叶包与图外导入仍经过固定 importer。原生 Go 中转包与所引用的生成包保持同一类型身份，只向页面返回用户文件。连续编辑新增字段类型会重新生成所需实例，失败请求不留下可复用的包缓存；验收见 `internal/playground/source_graph_test.go`。
 
 CLI 单文件/目录模式继续沿显式 roots 或所属 Go module 寻找宏来源；没有可用来源时给出缺依赖错误，不静默跳过宏。
 
@@ -455,7 +457,7 @@ A1–A10 的调用、来源、角色、卫生、诊断和确定性路径已有�
 2. 独立 syntax module 的手写 Go token/SDK、编译器转换桥、源码登记、三类调用、helper、角色构建图、WASI command 启动器、RuntimeRoot 与项目 CLI 受限宿主已完成本地联调。
 3. 浏览器同产物执行、取消、结果预算及角色隔离已接线；严格物理截止仍有平台限制。实现按主题提交，基础能力验收使用真实宏产物。
 4. 声明式 Draft 分支以后再整理到共享基线上，仅保留其专用语法/匹配与差异；不把 RFC 0029 接受作为本篇前置条件。
-5. 同 syntax module 中的普通 syn/quote 包、普通泛型 impl 和 Default/serde 迁移分别设计与验收。若后续 `quote!` 使用过程宏实现，其独立宏源码项目依赖 token/builder 直接构造输出，不能调用尚在构建的自身宏；普通 syntax module 不反向依赖该宏项目。源码项目可同仓库，但不因此合并 module 或构建角色。后续 Goxide 自举、生成 Go 的发行方式及跨仓库改动另按授权确定。
+5. 同 syntax module 中的普通 syn/quote 包独立演进；普通泛型 impl 和 std/serde 正式库实现按 RFC 0031 与状态表验收。若后续 `quote!` 使用过程宏实现，其独立宏源码项目依赖 token/builder 直接构造输出，不能调用尚在构建的自身宏；普通 syntax module 不反向依赖该宏项目。源码项目可同仓库，但不因此合并 module 或构建角色。后续 Goxide 自举、生成 Go 的发行方式及跨仓库改动另按授权确定。
 
 编译器已保留源 token，提供普通声明及 trait/impl 成员的结构化列表解析。`Resolver.LookupMacro` 返回已选定的声明宏或过程宏登记；展开器共用位置校验与递归流程。`CompileProcLibrary` 与多包入口 `CompileProcModules` 验证并生成宏实现的普通 Go；项目编排从角色计划构建静态 launcher 和 WASM，消费方通过已准备的 `ProcLibrary` 和宿主回调接入。`RuntimeRoot` 绑定消费者可达的公开根，其上下文只授权该根，其他新建标识符不能借此取得词法私有权限；尚未配置宿主的实际调用明确失败。包和模块编译入口通过 `OnProcDiagnostic` 按顺序交付诊断及源文件身份，包含成功展开的 warning/note；模块发现重试只交付最终一轮诊断。原有声明式函数宏仍只输出一个 item。
 

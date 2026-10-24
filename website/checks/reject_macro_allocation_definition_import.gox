@@ -1,4 +1,0 @@
-package p
-import new "strings"
-macro_rules! allocate {()=>{new(int)};}
-func run(){_=allocate!()}

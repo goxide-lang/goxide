@@ -73,7 +73,7 @@ func (c *checker) traitBound(target types.Type, node ast.Type, used map[string]b
 		b.Param, _ = target.(*types.TypeParam)
 	}
 	last := path.Path.Segments[len(path.Path.Segments)-1]
-	b.Inputs, b.InputNodes, b.inputPermissions = c.readTraitInputs(last.Args, trait, node)
+	b.Inputs, b.InputNodes, b.inputPermissions = c.readTraitInputArguments(last.Args, trait, node)
 	b.targetPermission = c.newPermissionChecker().fromGo(target)
 	c.readAssociated(last.Args, trait, b.Associated, node)
 	if last.Args != nil {
@@ -105,6 +105,10 @@ func (c *checker) traitBound(target types.Type, node ast.Type, used map[string]b
 	p := c.newPermissionChecker()
 	for name := range b.Associated {
 		b.associatedPermissions[name] = p.boundAssociated(b, name, nil)
+	}
+	c.inheritTraitGoRequirements(b)
+	if len(b.Inputs) == len(trait.TypeParams) {
+		c.checkTraitInputConstraints(b.Inputs, trait, node)
 	}
 	return b
 }
@@ -348,6 +352,7 @@ func (c *checker) inheritedBounds(bounds []*TraitBound, node ast.Node) []*TraitB
 		if path[b.Trait] {
 			return
 		}
+		c.inheritTraitGoRequirements(b)
 		path[b.Trait] = true
 		defer delete(path, b.Trait)
 		sub := map[*types.TypeParam]types.Type{b.Trait.Self: b.Target}
@@ -468,10 +473,11 @@ func (c *checker) checkTraitPrerequisiteCycles() {
 
 func (c *checker) validateConcreteImpls() {
 	for _, impl := range c.implOrder {
-		if len(impl.TypeParams) != 0 || len(impl.ConstParams) != 0 || len(impl.Requirements) == 0 {
+		if len(impl.TypeParams) != 0 || len(impl.ConstParams) != 0 || impl.Trait == nil && len(impl.Requirements) == 0 {
 			continue
 		}
 		c.file, c.pkg = c.out.Resolve.Files[impl.File], impl.Owner
+		c.proofFailure = ""
 		if c.matchImplApplication(impl, c.implApplication(impl)) == nil {
 			message := "implementation prerequisites are not satisfied"
 			if c.proofFailure != "" {
@@ -496,6 +502,9 @@ func (c *checker) matchImplApplication(template *Impl, goal *TraitBound) *Impl {
 	if !ok {
 		return nil
 	}
+	if !c.satisfiesTraitGoRequirements(goal) {
+		return nil
+	}
 	for _, p := range template.TypeParams {
 		constraint, ok := c.out.Substitute(p.Constraint(), sub, constSub).Underlying().(*types.Interface)
 		if ok && !c.satisfiesGo(sub[p], constraint) {
@@ -507,6 +516,9 @@ func (c *checker) matchImplApplication(template *Impl, goal *TraitBound) *Impl {
 		bound := c.substituteBoundApplication(requirement, sub, constSub, sourceSub)
 		witness := c.proveApplication(bound)
 		if witness.Impl == nil && witness.Bound == nil && len(witness.Cases) == 0 {
+			if c.proofFailure == "" {
+				c.proofFailure = "missing trait implementation: " + bound.ApplicationKey()
+			}
 			return nil
 		}
 		bindings := evidenceAssociated(witness)
@@ -547,8 +559,15 @@ func (c *checker) matchImplApplication(template *Impl, goal *TraitBound) *Impl {
 		}
 	}
 	instance := *template
-	instance.Template, instance.Target = template, goal.Target
-	instance.Inputs = append([]types.Type(nil), goal.Inputs...)
+	instance.Template = template
+	// Instances are shared by semantic application identity. Retain the
+	// declaration's type paths so an alias at the first call site cannot make
+	// the defining package import one of its consumers.
+	instance.Target = c.out.Substitute(template.Target, sub, constSub)
+	instance.Inputs = nil
+	for _, input := range template.Inputs {
+		instance.Inputs = append(instance.Inputs, c.out.Substitute(input, sub, constSub))
+	}
 	head := c.boundHeadPermissions(goal)
 	instance.targetPermission, instance.inputPermissions = head[0], head[1:]
 	instance.permissionSubstitution = sourceSub

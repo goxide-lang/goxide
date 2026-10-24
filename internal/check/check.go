@@ -136,35 +136,36 @@ type Info struct {
 	FunctionConstParams map[*types.Signature][]*ConstParam
 	FunctionGenerics    map[*types.Signature]*ast.GenericParams
 	EnumValid           map[*ast.CallExpr]*Instance
+	EnumAssertions      map[*ast.CallExpr]types.Type
 	GoResults           map[*ast.CallExpr]*GoResult
 	Resolve             *resolve.Result
-	GoImporter          types.Importer
-	GoSizes             types.Sizes
-	Diagnostics         []Diagnostic
-	Types               map[ast.Expr]types.Type
-	Enums               map[*ast.EnumDecl]*Enum
-	Matches             map[*ast.MatchExpr]*Match
-	Tries               map[*ast.TryExpr]*Try
-	Constructors        map[ast.Expr]*Constructor
-	Symbols             map[*resolve.Symbol]types.Type
-	PackagePaths        map[string]string
-	Modules             map[*ast.ModDecl]*resolve.Package
-	Derives             map[*types.Named]*Derive
-	Equalities          map[*ast.CallExpr]types.Type
-	RefBindings         map[*ast.BindPat]RefMode
-	Traits              map[*ast.TraitDecl]*Trait
-	Impls               map[*ast.ImplDecl]*Impl
-	ImplInstances       []*Impl
-	Members             map[ast.Expr]*MemberSelection
-	TraitViews          map[ast.Expr]*TraitView
-	TypeOverrides       map[ast.Type]types.Type
-	GenericBounds       map[*ast.FuncDecl][]*TraitBound
-	FunctionInstances   map[ast.Node]*FunctionInstance
-	Demands             *DemandPlan
-	ConfigByFile        map[string]config.Config
-	Sugar               []*SugarMember
-	enums               map[*types.Named]*Enum
-	typeNodes           map[ast.Type]types.Type
+	// NativePackages shares complete pure Go package identities with GoImporter.
+	NativePackages    map[string]*types.Package
+	GoImporter        types.Importer
+	GoSizes           types.Sizes
+	Diagnostics       []Diagnostic
+	Types             map[ast.Expr]types.Type
+	Enums             map[*ast.EnumDecl]*Enum
+	Matches           map[*ast.MatchExpr]*Match
+	Tries             map[*ast.TryExpr]*Try
+	Constructors      map[ast.Expr]*Constructor
+	Symbols           map[*resolve.Symbol]types.Type
+	PackagePaths      map[string]string
+	Modules           map[*ast.ModDecl]*resolve.Package
+	RefBindings       map[*ast.BindPat]RefMode
+	Traits            map[*ast.TraitDecl]*Trait
+	Impls             map[*ast.ImplDecl]*Impl
+	ImplInstances     []*Impl
+	Members           map[ast.Expr]*MemberSelection
+	TraitViews        map[ast.Expr]*TraitView
+	TypeOverrides     map[ast.Type]types.Type
+	GenericBounds     map[*ast.FuncDecl][]*TraitBound
+	FunctionInstances map[ast.Node]*FunctionInstance
+	Demands           *DemandPlan
+	ConfigByFile      map[string]config.Config
+	Sugar             []*SugarMember
+	enums             map[*types.Named]*Enum
+	typeNodes         map[ast.Type]types.Type
 }
 
 func (r *Info) EnumOf(t types.Type) *Instance {
@@ -229,7 +230,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 	if sizes == nil {
 		sizes = types.SizesFor("gc", runtime.GOARCH)
 	}
-	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
+	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum)}
 	r.ArrayPatterns = map[*types.TypeParam]*ArrayPattern{}
 	r.FunctionConstParams = map[*types.Signature][]*ConstParam{}
 	r.FunctionGenerics = map[*types.Signature]*ast.GenericParams{}
@@ -258,11 +259,15 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 	c.sourceTypes = make(map[*resolve.Symbol]permissionDeclaration)
 	c.sourceValues = make(map[*resolve.Symbol]sourceExpression)
 	c.referenceModes = make(map[*resolve.Symbol]RefMode)
+	sourcePackages := c.prepareNativePackages(options.Importer != nil)
+	if len(r.Diagnostics) != 0 {
+		return r.checkedResult()
+	}
 	c.builtinEnums()
 	r.PackagePaths = sourcePackagePaths(res)
 	c.checkImportedVisibility()
 	c.sourceModules()
-	for _, p := range res.Packages {
+	for _, p := range sourcePackages {
 		c.pkg = types.NewPackage(p.Dir, p.Name)
 		c.packages[p] = c.pkg
 		for _, f := range p.Files {
@@ -270,7 +275,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 			c.collect(f.AST.Items)
 		}
 	}
-	for _, p := range res.Packages {
+	for _, p := range sourcePackages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
 			c.file = f
@@ -280,7 +285,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 	c.prepareTraits()
 	c.prepareImpls()
 	c.signaturePhase = 1
-	for _, p := range res.Packages {
+	for _, p := range sourcePackages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
 			c.file = f
@@ -296,7 +301,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 	c.checkTraitPrerequisiteCycles()
 	c.finishImpls()
 	c.signaturePhase = 2
-	for _, p := range res.Packages {
+	for _, p := range sourcePackages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
 			c.file = f
@@ -304,13 +309,13 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 		}
 	}
 	c.signaturePhase = 0
-	c.validateConcreteImpls()
 	c.referenceHints = c.newPermissionChecker()
 	c.referenceHints.eachFile(func(items []ast.Item) { c.referenceHints.collect(items) })
 	c.enumNames()
-	c.collectDerives()
+	c.checkRemainingAttributes()
 	c.prepareGoSugar()
-	for _, p := range res.Packages {
+	c.validateConcreteImpls()
+	for _, p := range sourcePackages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
 			c.file = f
@@ -318,7 +323,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 		}
 	}
 	for _, implementations := range []bool{true, false} {
-		for _, p := range res.Packages {
+		for _, p := range sourcePackages {
 			c.pkg = c.packages[p]
 			for _, f := range p.Files {
 				c.file = f
@@ -334,7 +339,6 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 	for _, instance := range c.instances {
 		c.validateInstance(instance)
 	}
-	c.checkDefaultCycles()
 	c.checkEqualityComparisons()
 	c.checkReferences()
 	if len(r.Diagnostics) == 0 {

@@ -1,30 +1,31 @@
 package main
+use std;
 use serde;
 
 var defaultTrace string
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Settings struct { Port int }
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Token struct { Value string }
 // An unselected payload needs serde but deliberately has no Default.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Unsupported struct { Name string }
 
-#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[derive(std::derive::Default, serde::derive::Serialize, serde::derive::Deserialize)]
 pub enum Mode {
     Disabled(Unsupported),
     #[default]
     Ready(Settings),
 }
 
-#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[derive(std::derive::Default, serde::derive::Serialize, serde::derive::Deserialize)]
 type Nested struct {
     #[serde(default)]
     Value Settings
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Request struct {
     Required string
     #[serde(default)]
@@ -39,7 +40,7 @@ type Request struct {
 }
 
 // Output-only skip does not need a Default or serde protocol for the field.
-#[derive(serde::Serialize)]
+#[derive(serde::derive::Serialize)]
 type OutputOnly struct {
     Name string
     #[serde(skip)]

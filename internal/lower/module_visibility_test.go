@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/resolve"
@@ -372,16 +373,14 @@ func TestCompileModulesDeriveCannotSelectPrivateMappedNamespace(t *testing.T) {
 	app, lib := filepath.Join(root, "app"), filepath.Join(root, "lib")
 	writeDiagnosticModuleFile(t, app, "main.gox", []byte("package main\nuse hidden;\n#[derive(hidden::Serialize)]\ntype Record struct{Value int}\nfunc main(){}\n"))
 	writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\nmod hidden;\n"))
-	writeDiagnosticModuleFile(t, lib, "hidden/codecs.gox", []byte("package hidden\npub use wire::Serialize;\n"))
-	for directory, module := range map[string]string{app: "module app\n\ngo 1.27\nrequire zlib v0.0.0\nreplace zlib => ../lib\n", lib: "module zlib\n\ngo 1.27\n"} {
-		if err := testdeps.WriteFile(filepath.Join(directory, "go.mod"), []byte(module), 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	err := lower.CompileModules([]lower.Module{
-		{Path: "app", Dir: app, Roots: paths.Roots{"hidden": {PackagePath: "zlib/hidden", ModulePath: "zlib"}}, Config: testConfig(t)},
-		{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"wire": {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde"}}, Config: testConfig(t)},
-	})
+	writeDiagnosticModuleFile(t, lib, "hidden/codecs.gox", []byte("package hidden\npub use wire::derive::Serialize;\n"))
+	writeDiagnosticModuleFile(t, app, "goxide.toml", []byte(testdeps.FormalManifest(t, "app", "app", "[dependencies.lib]\npath=\"../lib\"\n")))
+	writeDiagnosticModuleFile(t, lib, "goxide.toml", []byte(strings.Replace(testdeps.FormalManifest(t, "zlib", "zlib"), "[dependencies.serde]", "[dependencies.wire]", 1)))
+	_, _, err := testdeps.PrepareFormal(t, app, compile.Options{Roots: paths.Roots{
+		"hidden": {PackagePath: "zlib/hidden", ModulePath: "zlib", Source: "module"},
+		"std":    {PackagePath: "github.com/goxide-lang/std", ModulePath: "github.com/goxide-lang/std", Source: "module"},
+		"serde":  {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module"},
+	}})
 	var diagnostic *lower.Diagnostic
 	if !errors.As(err, &diagnostic) || diagnostic.File != "app/main.gox" || !strings.Contains(diagnostic.Message, "not publicly reachable") {
 		t.Fatalf("derive bypassed private source namespace: %v", err)

@@ -316,7 +316,7 @@ Go 的语句节点全部保留：赋值、短声明、自增自减、表达式�
 | 节点 | 语法 |
 | --- | --- |
 | `WildPat` | `_` |
-| `BindPat` | `x`、`ref x`、`ref mut x`；预留 `x @ P` 的子模式字段 |
+| `BindPat` | `x`、`ref x`、`ref mut x`；enum payload 的 `ref mut` 由语义阶段拒绝；预留 `x @ P` 的子模式字段 |
 | `LitPat` | `1`、`"a"`、`true`、`-1` |
 | `PathPat` | `E::V`、`None`、命名常量 |
 | `TuplePat` | `E::V(p, q)`、`Some(x)` |

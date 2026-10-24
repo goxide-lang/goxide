@@ -3,31 +3,29 @@ package main
 use fmt;
 
 enum Counter { Count(int), Empty, }
-
-func edit(counter &mut Counter) &mut int {
-    match *counter {
-        Counter::Count(ref mut value) => { return value },
-        Counter::Empty => { panic("empty counter") },
-    }
-    panic("exhaustive match")
-}
+enum Items { Values([]int), }
 
 func read(counter Counter) int {
     return match counter { Counter::Count(value) => value, Counter::Empty => 0 }
+}
+func increment(counter Counter) Counter {
+    return match counter {
+        Counter::Count(value) => Counter::Count(value + 1),
+        Counter::Empty => Counter::Count(1),
+    }
 }
 
 func main() {
     counter := Counter::Count(1)
     before := counter
-    saved := edit(&mut counter)
-    match &mut counter {
-        Counter::Count(value) => { *value += 1 },
-        Counter::Empty => {},
-    }
-    *saved += 3
-    fmt::Println(read(counter), read(before)) // 5 5: both values share the same variant object.
+    counter = increment(counter)
+    fmt::Println(read(counter), read(before))
     match &counter {
         Counter::Count(value) => { fmt::Println(*value) },
         Counter::Empty => {},
     }
+    items := Items::Values([]int{3})
+    copied := items
+    match items { Items::Values(values) => { values[0] = 9 } }
+    fmt::Println(match copied { Items::Values(values) => values[0] })
 }

@@ -15,6 +15,33 @@ func (e *emitter) typeinfo(name string) goast.Expr {
 	return &goast.SelectorExpr{X: pkg, Sel: goast.NewIdent(name)}
 }
 
+// Type-based emission must use the same hygienic names as source identifiers.
+// Keep this binding local to the declaration: instantiated helpers may bind
+// the same source parameters to concrete types in their own emission scope.
+func (e *emitter) functionTypeNames(fn *syntax.FuncDecl, signature *types.Signature) func() {
+	previous := e.inferenceTypes
+	if fn.Generics == nil || signature == nil {
+		return func() {}
+	}
+	e.inferenceTypes = make(map[types.Type]*goast.Ident, len(previous)+signature.TypeParams().Len())
+	for typ, name := range previous {
+		e.inferenceTypes[typ] = name
+	}
+	index := 0
+	for _, group := range fn.Generics.Params {
+		if group.Const {
+			continue
+		}
+		for _, name := range group.Names {
+			if index < signature.TypeParams().Len() {
+				e.inferenceTypes[signature.TypeParams().At(index)] = e.ident(name)
+			}
+			index++
+		}
+	}
+	return func() { e.inferenceTypes = previous }
+}
+
 // Existing Go-expressible protocol functions retain carrier inference. Each
 // target uses one carrier proving all of its declared source bounds.
 func (e *emitter) functionGenerics(fn *syntax.FuncDecl) *goast.FieldList {

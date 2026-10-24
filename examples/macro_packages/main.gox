@@ -1,4 +1,5 @@
 package main
+use std;
 use fmt;
 use slog;
 use os;
@@ -6,20 +7,19 @@ use logkit as logs;
 use other as different;
 use serde::json as serdejson;
 
-#[derive(Error)]
+#[derive(std::derive::Error)]
 pub enum AppError {
     #[error("request failed")]
     #[from]
     Input(error),
 }
 func process(enabled bool,fail bool) Result[int,AppError] {
-    n:=logs::take!(match logs::Fetch(fail) { Result[int,error]::Ok(value) => Result[int,AppError]::Ok(value), Result[int,error]::Err(cause) => Result[int,AppError]::Err(FromAppError(cause)), })
+    n:=logs::take!(match logs::Fetch(fail) { Result[int,error]::Ok(value) => Result[int,AppError]::Ok(value), Result[int,error]::Err(cause) => Result[int,AppError]::Err(AppError::from::<std::From[error]>(cause)), })
     logs::event_if!(enabled,"request", "request_id",42,"workers",n)
     return Result[int,AppError]::Ok(n)
 }
 func unpack(value Result[int,AppError]) (int,error) {
     match value { Result[int,AppError]::Ok(n) => { return n,nil }, Result[int,AppError]::Err(e) => { return 0,e }, }
-    panic("unreachable")
 }
 func describe(value logs::Mode) string {
     return match value { logs::Mode::Idle => "idle", logs::Mode::Workers(_) => "workers", }
@@ -32,9 +32,9 @@ func emit(enabled func()bool,message func()string,field func()int) {
 func otherMacro(n int) int { return different::event_if!(n) }
 func main() {
     slog::SetDefault(slog::New(slog::NewJSONHandler(os::Stdout,nil)))
-    mode,err:=serdejson::Unmarshal([]byte(`{"Workers":4}`),logs::DeserializeMode)
+    mode,err:=serdejson::Unmarshal([]byte(`{"Workers":4}`),logs::Mode::decode)
     if err!=nil{panic(err)}
-    copied:=logs::CloneMode(&mode)
+    copied:=logs::Mode::copy(&mode)
     n,err:=unpack(process(true,false))
     fmt::Println(describe(copied),n,err,otherMacro(2))
 }

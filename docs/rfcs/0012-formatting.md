@@ -2,16 +2,14 @@
 
 ## 状态与范围
 
-已确认目标：首版提供 `print!` / `println!`（D14）。
-本文规定候选对应关系；格式子集、formatter 接口与 I/O 错误策略未冻结（T11、U09）。
-依据：[原设计](../design/macros.md)。格式检查由内建入口支持，不开放用户过程宏。
+`std::print!` / `std::println!` 已由正式过程宏库提供。宏解析格式字面量、输出普通 Display/Debug 调用，类型检查选择协议，公开 formatting 库负责运行时格式化与写入。当前全树及发布验收见[状态表](../mvp-gap-audit.md)，执行协议见 [RFC 0030](0030-procedural-macros.md)。
 
 ## 源级规则
 
-- 候选格式子集：字面量中的 `{}` 请求 Display，`{:?}` 请求 Debug，`{{` / `}}` 输出花括号。
+- 格式子集：字面量中的 `{}` 请求 Display，`{:?}` 请求 Debug，`{{` / `}}` 输出花括号。
 - 编译期检查格式语法、参数数量和显式 trait 实现；内建标量也必须有选定的实现。
 - 每个显式实参从左到右恰好求值一次，全部求值后再按占位符顺序运行 formatter。
-- 参数临时量保留借用来源；不能复制独占借用、延长借用或把格式计划带出调用。
+- 参数临时量保留源级类型与只读资格；复制、留存和别名风险不另加独占证明要求。
 - 不通过 Go 反射、`fmt.Stringer`、`error.Error()` 或 `any` 回退执行未知方法。
 - 打印在生成程序运行时执行；宏展开不执行参数、formatter 或 stdout 写入。
 
@@ -20,7 +18,7 @@
 **F01：先执行全部参数，再格式化。** goxide 函数体片段；`left` / `right` 返回 int。
 
 ```goxide
-println!("{} {}", left(), right());
+std::println!("{} {}", left(), right());
 ```
 
 Go 对照片段；依赖 `strconv`、选定的 stdout 写入 helper 及相同的参数函数。
@@ -35,20 +33,20 @@ writeChecked(out, goxideText0+" "+goxideText1+"\n")
 ```
 
 约束：顺序为 `left → right → Display(0) → Display(1) → write`，各参数只执行一次。
-若替换为有副作用的显式 formatter，仍保持这个顺序；借用冲突在生成 Go 前拒绝。
+若替换为有副作用的显式 formatter，仍保持这个顺序；真实只读写入等权限错误在生成 Go 前拒绝。
 
 **F02：空参数和换行。** goxide 函数体片段。
 
 ```goxide
-print!("");
-println!();
-println!("x\n");
+std::print!("");
+std::println!();
+std::println!("x\n");
 ```
 
 Go 对照；依赖下面的候选 `writeChecked` 与绑定到 stdout 的 `out`。
 
 ```go
-// print!("") 不产生输出。
+// std::print!("") 不产生输出。
 writeChecked(out, "\n")
 writeChecked(out, "x\n\n")
 ```
@@ -74,10 +72,10 @@ func writeChecked(out io.Writer, text string) {
 **F03：格式错误在前端拒绝。** goxide 反例；无对应 Go 输出。
 
 ```goxide
-print!();                  // 缺少格式字面量
-println!(runtime_format);  // 不支持运行时格式串
-println!("{}", 1, 2);      // 多余参数
-println!("{:?}", secret);  // 假设 secret 类型没有显式 Debug
+std::print!();                  // 缺少格式字面量
+std::println!(runtime_format);  // 不支持运行时格式串
+std::println!("{}", 1, 2);      // 多余参数
+std::println!("{:?}", secret);  // 假设 secret 类型没有显式 Debug
 ```
 
 依赖：`runtime_format` 为 string；`secret` 的类型未提供 Debug。

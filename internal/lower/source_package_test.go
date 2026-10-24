@@ -73,3 +73,32 @@ func TestSourceSnapshotMarksGeneratedEnvironmentSelection(t *testing.T) {
 		t.Fatalf("snapshot silently changed configuration: %v, output=%v", err, output)
 	}
 }
+
+func TestSourceSnapshotExcludesDependencyTests(t *testing.T) {
+	cfg := testConfig(t)
+	root := t.TempDir()
+	app, dependency := filepath.Join(root, "app"), filepath.Join(root, "dep")
+	consumer := []byte("package main\nuse dep;\nfunc main(){if dep::Value()!=42{panic(\"value\")}}\n")
+	writeDiagnosticModuleFile(t, app, "main.gox", consumer)
+	writeDiagnosticModuleFile(t, dependency, "lib.gox", []byte("package dep\npub func Value()int{return Native()}\n"))
+	writeDiagnosticModuleFile(t, dependency, "native.go", []byte("package dep\nfunc Native()int{return 42}\n"))
+	writeDiagnosticModuleFile(t, dependency, "internal_test.go", []byte("package dep\nimport missing \"missing.invalid/internal_test_only\"\nvar InternalTestOnly missing.Value\n"))
+	writeDiagnosticModuleFile(t, dependency, "external_test.go", []byte("package dep_test\nimport missing \"missing.invalid/external_test_only\"\nvar ExternalTestOnly missing.Value\n"))
+	writeDiagnosticModuleFile(t, dependency, "source_test.gox", []byte("package dep\npub func SourceTestOnly()int{return 1}\n"))
+	roots := paths.Roots{"dep": {PackagePath: "example.org/dep", ModulePath: "example.org/dep"}}
+	var snapshots []lower.SourcePackage
+	err := lower.CompileModules([]lower.Module{{Path: "consumer", Dir: app, Roots: roots, Config: cfg, OnSourcePackages: func(sources []lower.SourcePackage) error { snapshots = sources; return nil }}, {Path: "example.org/dep", Dir: dependency, RootPackage: "example.org/dep", Config: cfg}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshots) != 1 || len(snapshots[0].Sources) != 2 || snapshots[0].Sources["lib.gox"] == nil || snapshots[0].Sources["native.go"] == nil {
+		t.Fatalf("dependency test sources escaped into snapshot: %+v", snapshots)
+	}
+	if _, err := lower.CompilePackage(map[string][]byte{"main.gox": consumer}, "consumer", importer.Default(), roots, lower.PackageOptions{Config: cfg, SourcePackages: snapshots}); err != nil {
+		t.Fatalf("ordinary dependency snapshot cannot compile: %v", err)
+	}
+	bad := []byte("package main\nuse dep;\nfunc main(){_=dep::SourceTestOnly()}\n")
+	if _, err := lower.CompilePackage(map[string][]byte{"main.gox": bad}, "consumer", importer.Default(), roots, lower.PackageOptions{Config: cfg, SourcePackages: snapshots}); err == nil || !strings.Contains(err.Error(), "unresolved") {
+		t.Fatalf("dependency test declarations became public: %v", err)
+	}
+}

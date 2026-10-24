@@ -69,6 +69,10 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	case *ast.ParenExpr:
 		t = c.exprSource(n.X, expected, c.expectedSources[n])
 	case *ast.CallExpr:
+		if result, ok := c.enumAssert(n); ok {
+			t = result
+			break
+		}
 		if result, ok := c.enumValid(n); ok {
 			t = result
 			break
@@ -82,17 +86,6 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			break
 		}
 		c.qualifiedCall(n)
-		if c.equalityCall(n) {
-			t = types.Typ[types.Bool]
-			break
-		}
-		if _, print := c.out.Resolve.Prints[n]; print {
-			for _, arg := range n.Args {
-				c.expr(arg, nil)
-			}
-			t = types.NewTuple()
-			break
-		}
 		funExpected := expected
 		if c.traitOf(expected) != nil {
 			funExpected = nil

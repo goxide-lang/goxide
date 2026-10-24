@@ -74,37 +74,40 @@ func TestDisabledLogArgumentsAreEager(t *testing.T){
 }
 
 func TestCloneAndErrorAcceptanceRace(t *testing.T) {
-	macroRaceModule(t, `package fixture
-#[derive(Clone)]
+	enumFormalStdModule(t, `package fixture
+use std;
+#[derive(std::derive::Clone)]
 type Leaf struct { Values []int }
-#[derive(Clone)]
+#[derive(std::derive::Clone)]
 type Tree struct { Rows [][]int; Index map[string][]Leaf; Pair [2][]int }
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("operation failed")]
 type Failure struct {
  #[from]
  Cause error
 }
+impl Tree { pub func copy(value &Self) Self { return std::Clone::clone(value) } }
+impl Failure { pub func wrap(cause error) Self { return Failure::from::<std::From[error]>(cause) } }
 `, `package fixture
 import("testing";"errors")
 type inner struct{}
 func(*inner)Error()string{return "inner"}
 func TestCloneNestedAndAliasPolicy(t *testing.T){
  shared:=[]int{1};original:=Tree{Rows:[][]int{shared,shared},Index:map[string][]Leaf{"k":{{Values:[]int{2}}}},Pair:[2][]int{[]int{3},nil}}
- copied:=CloneTree(&original)
+ copied:=TreeOps{}.Copy(&original)
  copied.Rows[0][0]=9;copied.Index["k"][0].Values[0]=8;copied.Pair[0][0]=7
  if original.Rows[0][0]!=1||original.Index["k"][0].Values[0]!=2||original.Pair[0][0]!=3 {t.Fatal("Clone retained nested backing storage")}
  if copied.Rows[1][0]!=1 {t.Fatal("Clone unexpectedly preserves source alias topology")}
- zero:=CloneTree(&Tree{});if zero.Rows!=nil||zero.Index!=nil||zero.Pair[0]!=nil{t.Fatal("nil changed")}
- empty:=CloneTree(&Tree{Rows:[][]int{},Index:map[string][]Leaf{}});if empty.Rows==nil||empty.Index==nil{t.Fatal("empty changed to nil")}
+ zero:=TreeOps{}.Copy(&Tree{});if zero.Rows!=nil||zero.Index!=nil||zero.Pair[0]!=nil{t.Fatal("nil changed")}
+ empty:=TreeOps{}.Copy(&Tree{Rows:[][]int{},Index:map[string][]Leaf{}});if empty.Rows==nil||empty.Index==nil{t.Fatal("empty changed to nil")}
 }
 func TestErrorChainsAndNil(t *testing.T){
- cause:=&inner{};wrapped:=FromFailure(cause);var got *inner
+ cause:=&inner{};wrapped:=FailureOps{}.Wrap(cause);var got *inner
  if !errors.Is(wrapped,cause)||!errors.As(wrapped,&got)||got!=cause{t.Fatal("chain broken")}
- nilWrapped:=FromFailure(nil);if nilWrapped.Unwrap()!=nil||nilWrapped.Error()!="operation failed" {t.Fatal("nil source broken")}
- var typed *inner;withTyped:=FromFailure(typed);if withTyped.Unwrap()==nil {t.Fatal("typed nil collapsed")}
+ nilWrapped:=FailureOps{}.Wrap(nil);if nilWrapped.Unwrap()!=nil||nilWrapped.Error()!="operation failed" {t.Fatal("nil source broken")}
+ var typed *inner;withTyped:=FailureOps{}.Wrap(typed);if withTyped.Unwrap()==nil {t.Fatal("typed nil collapsed")}
 }
-`)
+`, false)
 }
 
 func TestMacroAndCloneExplicitRejections(t *testing.T) {
@@ -121,33 +124,31 @@ func f(){_=bad!(1 2)}
 macro_rules! bad {($x:ident)=>{1};}
 func f(){_=bad!(42)}
 `,
-		"pointer clone": `package fixture
-#[derive(Clone)]
+		"pointer clone": `package fixture; use std;
+#[derive(std::derive::Clone)]
 type Bad struct { Value *int }
 `,
-		"external clone": `package fixture
+		"external clone": `package fixture; use std;
 use sync;
-#[derive(Clone)]
+#[derive(std::derive::Clone)]
 type Bad struct { Mutex sync::Mutex }
 `,
-		"generic clone": `package fixture
-#[derive(Clone)]
-type Bad[T any] struct { Value T }
-`,
-		"typed from unsupported": `package fixture
-#[derive(Error)]
+		"from non-error": `package fixture; use std;
+#[derive(std::derive::Error)]
 type Bad struct {
  #[from]
- Cause *Other
+ Cause int
 }
-
-type Other struct{}
-func(*Other)Error()string{return "other"}
 `,
 	}
 	for name, source := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := compileAcceptanceLanguageFixture("rejected.gox", []byte(source))
+			var err error
+			if name == "pointer clone" || name == "external clone" || name == "from non-error" {
+				_, err = testdeps.FormalSource(t, "rejected.gox", []byte(source), "[dependencies.sync]\ngo=\"sync\"\n")
+			} else {
+				_, err = compileAcceptanceLanguageFixture("rejected.gox", []byte(source))
+			}
 			if err == nil || !strings.Contains(err.Error(), "rejected.gox:") {
 				t.Fatalf("expected located rejection; got %v", err)
 			}
@@ -157,6 +158,23 @@ func(*Other)Error()string{return "other"}
 			t.Log(err)
 		})
 	}
+}
+
+func TestGenericCloneAcceptanceRace(t *testing.T) {
+	enumFormalStdModule(t, `package fixture; use std;
+#[derive(std::derive::Clone)]
+type Box[T any] struct{Value T}
+func Copy(value Box[[]int])Box[[]int]{return std::Clone::clone(&value)}
+`, `package fixture
+import "testing"
+func TestConcreteGenericClone(t *testing.T){
+ original:=Box[[]int]{Value:[]int{3}}
+ copied:=Copy(original);copied.Value[0]=8
+ if original.Value[0]!=3||copied.Value[0]!=8{t.Fatal("generic clone retained mutable storage")}
+ if Copy(Box[[]int]{}).Value!=nil{t.Fatal("nil slice changed")}
+ if Copy(Box[[]int]{Value:[]int{}}).Value==nil{t.Fatal("empty slice changed")}
+}
+`, false)
 }
 
 func TestMacroRawLiteralCRLFRace(t *testing.T) {

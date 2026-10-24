@@ -29,7 +29,7 @@
 
 历史文档中的 safe 视图现在仅指有明确类型/行为契约的便利用法，不表示静态生命周期或并发安全。D19 默认允许普通原生调用，不因缺少声明或无法验证契约要求 unsafe。逐 API 审核用于准确描述行为、生成真实桥接及提高 warning 精度；不是调用 Go std 的门票。明确 unsafe 操作仍按 D11，未知边界不会因无警告自动变安全。
 
-Option / Result 的表示与公开检查沿用[枚举设计](enums-and-match.md)；显式 impl、方法采用与 wrapper 沿用[trait 设计](traits.md)。Default、Clone、Debug 及格式化 / print 的基础契约由[宏与内建派生专题](macros.md)统一定义，本篇不另建同名协议。某个 Go 方法叫 Clone 或满足相同方法集，不自动成为这些 trait 的实现。
+Option / Result 的表示与公开检查沿用[枚举设计](enums-and-match.md)；显式 impl、方法采用与 wrapper 沿用[trait 设计](traits.md)。Default、Clone、Debug 及格式化 / print 的基础契约由[宏与普通库派生专题](macros.md)统一定义，本篇不另建同名协议。某个 Go 方法叫 Clone 或满足相同方法集，不自动成为这些 trait 的实现。
 
 ## 2. 逐 API 审核与 declare 的界限
 

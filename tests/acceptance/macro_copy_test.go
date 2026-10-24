@@ -17,7 +17,7 @@ func TestMacroCopyCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
+	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
 	outside := t.TempDir()
 
 	t.Run("generated-module", func(t *testing.T) {

@@ -62,6 +62,37 @@ func TestNativeSourceDependenciesSelectedVersion(t *testing.T) {
 	if after := singleFileSnapshot(t, root); !reflect.DeepEqual(before, after) {
 		t.Fatal("module query changed authored files")
 	}
+	t.Run("authored_replacement_and_selected_published_root", func(t *testing.T) {
+		mixed := t.TempDir()
+		projectWrite(t, mixed, map[string]string{
+			"go.mod":               "module example.org/mixed-consumer\ngo 1.27\nrequire (\nexample.org/native-discovery v1.0.0\nexample.org/native-bridge v1.0.0\nexample.org/authored v0.0.0\n)\nreplace example.org/authored => ./authored\n",
+			"main.gox":             "package main\nfunc main() {}\n",
+			"authored/goxide.toml": "[go_mod]\nmodule='example.org/authored'\ngo='1.27'\n[lib]\nname='authored'\npath='.'\n",
+			"authored/lib.gox":     "package authored\npub func Value() int { return 7 }\n",
+		})
+		before := singleFileSnapshot(t, mixed)
+		owner, err := prepareSingleFileModule(filepath.Join(mixed, "main.gox"), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer owner.close()
+		manifest, roots, _, err := nativeSourceDependencies(mixed, owner.modFile, paths.Roots{
+			"library":  {ModulePath: "example.org/native-discovery", Source: "module"},
+			"authored": {ModulePath: "example.org/authored", Source: "module"},
+		}, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if manifest.Dependencies["library"].Version != "v1.1.0" || roots["library"].PackagePath != "example.org/native-discovery/src" {
+			t.Fatalf("lost selected published root: dependency=%+v root=%+v", manifest.Dependencies["library"], roots["library"])
+		}
+		if manifest.Dependencies["authored"].Version != "v0.0.0" || roots["authored"].PackagePath != "example.org/authored" {
+			t.Fatalf("lost authored root: dependency=%+v root=%+v", manifest.Dependencies["authored"], roots["authored"])
+		}
+		if after := singleFileSnapshot(t, mixed); !reflect.DeepEqual(before, after) {
+			t.Fatal("mixed source discovery changed authored files")
+		}
+	})
 	t.Run("local_versioned_replacements", func(t *testing.T) {
 		replaced := t.TempDir()
 		projectWrite(t, replaced, map[string]string{

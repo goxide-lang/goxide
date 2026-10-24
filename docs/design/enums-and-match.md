@@ -1,6 +1,6 @@
 # 变体枚举、Option / Result 与模式匹配
 
-2026-10-09 更新：本轮直接切换至内联独立 payload 槽、`ref` / `ref mut` 模式和 `&mut` 引用拼写，详见[当前原位 payload 合同](enum-payload-borrows.md)。下文旧 interface/case、旧 Go case API 和布局待定的章节记录历史阶段，不是当前接口或兼容承诺；完整 Rust 模式规则不由本轮实现。
+当前 enum 表示、不可变 payload 槽与引用语义分别见[密封接口表示](enum-representation.md)和[payload 合同](enum-payload-borrows.md)。下文保留旧管线与早期 ABI 讨论；其中内联槽、可写投影、旧 metadata 和未实现阶段描述均不作为当前用户 enum 规则。
 
 交付边界（D20）：本文涉及的别名/借用风险 warning 是未来独立长期分析，不属于 MVP 验收；当前语言语法、类型、明确操作与真实 Go 行为照常设计。不得为未实现分析器强制复杂效果注解。
 

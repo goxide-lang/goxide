@@ -1,7 +1,6 @@
 package lower_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,60 +9,54 @@ import (
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
-func TestRawDefaultMemberMatchesBareDefault(t *testing.T) {
+func TestRawDefaultMemberUsesOrdinaryProtocol(t *testing.T) {
 	const source = `package main
 use fmt;
 
 type Entry struct { Label string; Value int }
+trait Default { func r#default() Self }
 var calls int
 impl Default for Entry {
-    func %s() Entry {
+    func r#default() Entry {
         calls++
         return Entry{Label: "manual", Value: 40 + calls}
     }
 }
-#[derive(Default)]
 type Pair struct { First Entry; Second Entry }
+impl Default for Pair {
+    func r#default() Self { return Self{First:Entry::r#default(),Second:Entry::r#default()} }
+}
 
 func main() {
-    pair := DefaultPair()
-    direct := DefaultEntry()
+    pair := Pair::r#default()
+    direct := Entry::r#default()
     fmt::Println(pair.First.Label, pair.First.Value, pair.Second.Label, pair.Second.Value, direct.Label, direct.Value, calls)
 }
 `
 	const want = "manual 41 manual 42 manual 43 3\n"
-	outputs := make(map[string]string)
-	for _, spelling := range []string{"default", "r#default"} {
-		t.Run(spelling, func(t *testing.T) {
-			sources := map[string]string{"protocolnames/main.gox": fmt.Sprintf(source, spelling)}
-			generated, err := lowerDeriveSources(sources)
-			if err != nil {
-				t.Fatal(err)
-			}
-			again, err := lowerDeriveSources(sources)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(generated, again) {
-				t.Fatal("same sources produced different Go bytes")
-			}
-			module := t.TempDir()
-			if err := testdeps.WriteFile(filepath.Join(module, "go.mod"), []byte("module protocolnames\n\ngo 1.27\n"), 0600); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(module, "main.go"), generated["protocolnames/main.gox"], 0600); err != nil {
-				t.Fatal(err)
-			}
-			runGo(t, module, "build", "./...")
-			got := runGo(t, module, "run", ".")
-			if got != want {
-				t.Fatalf("output = %q, want %q", got, want)
-			}
-			outputs[spelling] = got
-		})
+	sources := map[string]string{"protocolnames/main.gox": source}
+	generated, err := lowerDeriveSources(sources)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if outputs["default"] != outputs["r#default"] {
-		t.Fatalf("default output = %q, r#default output = %q", outputs["default"], outputs["r#default"])
+	again, err := lowerDeriveSources(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(generated, again) {
+		t.Fatal("same sources produced different Go bytes")
+	}
+	module := t.TempDir()
+	if err := testdeps.WriteFile(filepath.Join(module, "go.mod"), []byte("module protocolnames\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(module, "main.go"), generated["protocolnames/main.gox"], 0600); err != nil {
+		t.Fatal(err)
+	}
+	runGo(t, module, "build", "./...")
+	got := runGo(t, module, "run", ".")
+	if got != want {
+		t.Fatalf("output = %q, want %q", got, want)
 	}
 }
 

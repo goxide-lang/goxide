@@ -272,6 +272,7 @@ func (c *checker) completePendingTraits() bool {
 			continue
 		}
 		c.currentTrait, c.currentSelf = trait, trait.Self
+		trait.Requirements = c.inheritedBounds(trait.Requirements, trait.Decl)
 		bounds := c.activeBounds
 		c.activeBounds = trait.Requirements
 		c.prepareTraitMethods(trait)

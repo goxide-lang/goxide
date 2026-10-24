@@ -2,6 +2,7 @@ package compile_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	goast "go/ast"
 	"go/parser"
@@ -18,10 +19,12 @@ import (
 
 	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/compile"
+	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/project"
 )
 
 func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
+	options := p5Options(t)
 	cacheRoot, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +41,6 @@ func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
 	root := p5Project(t)
 	app := filepath.Join(root, "app")
 	before := p5Snapshot(t, root)
-	options := compile.Options{GoTool: filepath.Join(runtime.GOROOT(), "bin", "go")}
 	first, err := compile.PrepareProject(app, options)
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +118,7 @@ func TestP5ImportedReadOnlyReturnKeepsPermission(t *testing.T) {
 	if err := os.WriteFile(filename, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := compile.PrepareProject(app, compile.Options{})
+	_, err := compile.PrepareProject(app, p5Options(t))
 	var diagnostic check.Diagnostic
 	if !errors.As(err, &diagnostic) || diagnostic.Code != check.ReferencePermission {
 		t.Fatalf("cross-module reexport lost read-only permission: %v", err)
@@ -128,6 +130,24 @@ func TestP5ImportedReadOnlyReturnKeepsPermission(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(app, "goxide.lock")); !os.IsNotExist(err) {
 		t.Fatalf("failed source check published a lock: %v", err)
 	}
+}
+
+func p5Options(t *testing.T) compile.Options {
+	t.Helper()
+	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	identity, err := procmacro.ReadSDKIdentity(context.Background(), tool, filepath.Join("..", ".."), project.GoEnv(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := procmacro.CompilerSDKIdentity
+	procmacro.CompilerSDKIdentity = identity
+	t.Cleanup(func() { procmacro.CompilerSDKIdentity = previous })
+	host, err := procmacro.NewWASIHost(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = host.Close() })
+	return compile.Options{GoTool: tool, RunProcMacro: host.Run}
 }
 
 func p5Project(t *testing.T) string {

@@ -1,13 +1,14 @@
 package model
+use std;
 use serde;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone)]
 pub enum RunMode {
     DryRun,
     Workers(int),
 }
 
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("configuration rejected")]
 type ConfigError struct {
     #[from]
@@ -15,3 +16,12 @@ type ConfigError struct {
 }
 
 func dryRun() RunMode { return RunMode::DryRun }
+
+impl RunMode {
+    pub func copy(value &Self) Self { return std::Clone::clone(value) }
+    pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s,value) }
+    pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+impl ConfigError {
+    pub func wrap(cause error) Self { return ConfigError::from::<std::From[error]>(cause) }
+}

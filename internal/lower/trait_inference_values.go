@@ -7,6 +7,26 @@ import (
 	"github.com/goxide-lang/goxide/internal/check"
 )
 
+func (e *emitter) inferredFunctionValue(function *traitFunction, instance *check.FunctionInstance) goast.Expr {
+	p := newTraitInference(e)
+	bounds, evidence := e.functionCallbacks(function, instance)
+	callbacks, callbackTypes := p.callbacks(bounds, evidence)
+	enumArgs, enumTypes := p.enumChecks(e.functionEnumChecks(function, instance))
+	callbacks, callbackTypes = append(callbacks, enumArgs...), append(callbackTypes, enumTypes...)
+	signature := e.functionInstanceSignature(instance)
+	factory := e.sourceGlobal(function.symbol.Decl.File, constFunctionName(function, instance))
+	var prefix []goast.Expr
+	for _, typ := range functionCaseArguments(instance) {
+		if !e.nameableType(typ) {
+			break
+		}
+		prefix = append(prefix, e.goType(typ))
+	}
+	factory = enumIndices(factory, prefix)
+	fun := p.parameter(factory, signatureOf(callbackTypes, signature))
+	return p.finish(&goast.CallExpr{Fun: fun, Args: callbacks}, signature)
+}
+
 func (e *emitter) inferredOperationValue(selection *check.MemberSelection) (goast.Expr, bool) {
 	if !e.needsOperationInference(selection) {
 		return nil, false
@@ -37,6 +57,8 @@ func (e *emitter) inferredTraitView(view *check.TraitView, value goast.Expr) (go
 	captured := p.parameter(value, captureType(impl))
 	bounds, evidence := viewCallbacks(impl)
 	callbacks, callbackTypes := p.callbacks(bounds, evidence)
+	enumArgs, enumTypes := p.enumChecks(e.viewEnumChecks(impl))
+	callbacks, callbackTypes = append(callbacks, enumArgs...), append(callbackTypes, enumTypes...)
 	witnesses, witnessTypes := p.viewWitnesses(impl)
 	arguments := append(witnesses, callbacks...)
 	parameters := append(witnessTypes, callbackTypes...)

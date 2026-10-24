@@ -8,10 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/goxide-lang/goxide/internal/paths"
-	"github.com/goxide-lang/goxide/internal/typecheck"
-	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestStandaloneSupportModule(t *testing.T) {
@@ -50,7 +46,8 @@ func TestStandaloneSupportModule(t *testing.T) {
 		}
 	}
 	filename := filepath.Join(generated, "main.gox")
-	compiled, err := compileSourceFile(filename, []byte(`package main
+	source := `package main
+use std;
 use runtime as rt;
 func fail()(result int){
  guard:=rt::Assignment[int]{}
@@ -58,17 +55,29 @@ func fail()(result int){
  guard.Fail(42)
  return 0
 }
-func main(){println!("value={}",fail())}
-`), "goxide/generated", typecheck.NewImporter(filename, typecheck.ImporterOptions{Config: testdeps.Configuration()}), paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}}, testdeps.Configuration())
+func main(){std::println!("value={}",fail())}
+`
+	if err := os.WriteFile(filename, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fixtureRootsFile(t, generated, "[roots.std]\nmodule='github.com/goxide-lang/std'\n[roots.runtime]\nmodule='github.com/goxide-lang/std'\npackage='github.com/goxide-lang/std/runtime'\n")
+	cli := formalTestCLI(t)
+	prepared := filepath.Join(t.TempDir(), "module")
+	command := exec.Command(cli, "transpile", "--go", tool, "-o", prepared, generated)
+	command.Env = localEnv()
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("transpile with selected support: %v\n%s", err, output)
+	}
+	generated = prepared
+	compiled, err := os.ReadFile(filepath.Join(generated, "main.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(compiled.Go, []byte("github.com/goxide-lang/std/formatting")) {
-		t.Fatalf("generated printing did not import std/formatting: %s", compiled.Go)
+
+	if !bytes.Contains(compiled, []byte("github.com/goxide-lang/std/formatting")) {
+		t.Fatalf("generated printing did not import std/formatting: %s", compiled)
 	}
-	if err := os.WriteFile(filepath.Join(generated, "main.go"), compiled.Go, 0600); err != nil {
-		t.Fatal(err)
-	}
+
 	for _, args := range [][]string{{"list", "-mod=readonly", "-m", "all"}, {"list", "-buildvcs=false", "-mod=readonly", "-deps", "./..."}, {"run", "-buildvcs=false", "-mod=readonly", "."}} {
 		cmd := exec.Command(tool, args...)
 		cmd.Dir, cmd.Env = generated, localEnv()

@@ -16,11 +16,12 @@ import (
 func (p *traitProgram) prepareBindings(info *check.Info) {
 	p.boundBindings = map[*check.TraitBound]map[string]bool{}
 	p.implBindings = map[*check.Impl]map[string]bool{}
-	calls := map[syntax.Expr]bool{}
+	p.enumReadExpressions = map[*syntax.FuncDecl]bool{}
+	calls := map[syntax.Expr]*syntax.CallExpr{}
 	for _, file := range info.Resolve.Files {
 		syntax.Walk(file.AST, func(node syntax.Node) bool {
 			if call, ok := node.(*syntax.CallExpr); ok {
-				calls[call.Fun] = true
+				calls[call.Fun] = call
 			}
 			return true
 		})
@@ -59,10 +60,17 @@ func (p *traitProgram) prepareBindings(info *check.Info) {
 	inspect := func(current *check.Info) {
 		for node, selection := range current.Members {
 			inspectImpl(selection.Impl)
+			if selection.MethodExpr && selection.Member.Receiver == check.ReadRef && nativeEnumMember(selection.Member) {
+				if call := calls[node]; call == nil || hasFlow(call) {
+					p.enumReadExpressions[selection.Member.Decl] = true
+				}
+			}
 			if selection.Member.Static || nativeMember(selection) {
 				continue
 			}
-			if calls[node] {
+			// Hoisting a match or ? in an argument first binds the callee,
+			// preserving receiver evaluation before the argument's control flow.
+			if call := calls[node]; call != nil && !hasFlow(call) {
 				continue
 			}
 			if selection.MethodExpr {
@@ -201,7 +209,9 @@ func (e *emitter) bindingFunction(selection *check.MemberSelection) goast.Expr {
 		if !genericPairOps(e.info, impl) || e.privateEvidence(check.Evidence{Impl: impl}) {
 			factory := enumIndices(e.sourceGlobal(impl.File, e.templateBindingName(member)), e.operationTemplateArguments(member))
 			bounds, evidence := operationCallbacks(member)
-			return &goast.CallExpr{Fun: factory, Args: append(e.operationWitnessArguments(member), e.callbackArguments(bounds, evidence)...)}
+			arguments := append(e.operationWitnessArguments(member), e.callbackArguments(bounds, evidence)...)
+			arguments = append(arguments, e.enumCheckArguments(e.memberEnumChecks(member))...)
+			return &goast.CallExpr{Fun: factory, Args: arguments}
 		}
 	}
 	if member.Trait == nil {
@@ -230,6 +240,8 @@ func (p *traitInference) binding(selection *check.MemberSelection) goast.Expr {
 	member := selectedMember(selection)
 	bounds, evidence := operationCallbacks(member)
 	args, parameters := p.callbacks(bounds, evidence)
+	enumArgs, enumTypes := p.enumChecks(p.e.memberEnumChecks(member))
+	args, parameters = append(args, enumArgs...), append(parameters, enumTypes...)
 	witnesses, witnessTypes := p.operationWitnesses(member)
 	args, parameters = append(witnesses, args...), append(witnessTypes, parameters...)
 	factory := p.parameter(p.e.sourceGlobal(impl.File, p.e.templateBindingName(member)), signatureOf(parameters, p.e.bindingSignature(selection)))
@@ -262,7 +274,8 @@ func (e *emitter) bindingDeclaration(member *check.Member, carrier *traitCarrier
 	receiver := e.fresh("Receiver")
 	typ := e.goType(e.bindingSignature(selection)).(*goast.FuncType)
 	typ.Params.List[0].Names = []*goast.Ident{receiver}
-	body := &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{e.boundWrapperMethod(member, receiver)}}}}
+	prefix, captured := e.enumInherentSnapshot(member, receiver)
+	body := &goast.BlockStmt{List: append(prefix, &goast.ReturnStmt{Results: []goast.Expr{e.boundWrapperMethod(member, captured)}})}
 	declaration := &goast.FuncDecl{Type: typ, Body: body}
 	if member.Trait == nil {
 		name := e.inherentName(member) + "Bind"
@@ -281,12 +294,15 @@ func (e *emitter) templateBindingDeclaration(member *check.Member) goast.Decl {
 	defer restoreInfo()
 	callbacks, restore := e.templateCallbacks(member.Impl.Requirements)
 	defer restore()
+	restoreEnums := e.templateEnumChecks(e.memberEnumChecks(member), callbacks)
+	defer restoreEnums()
 	parameters := &goast.FieldList{List: append(e.templateImplWitnessParameters(member.Impl), callbacks.List...)}
 	selection := &check.MemberSelection{Member: member, Impl: member.Impl, Signature: member.Signature}
 	receiver := e.fresh("Receiver")
 	binderType := e.goType(e.bindingSignature(selection)).(*goast.FuncType)
 	binderType.Params.List[0].Names = []*goast.Ident{receiver}
-	binder := &goast.FuncLit{Type: binderType, Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{e.boundWrapperMethod(member, receiver)}}}}}
+	prefix, captured := e.enumInherentSnapshot(member, receiver)
+	binder := &goast.FuncLit{Type: binderType, Body: &goast.BlockStmt{List: append(prefix, &goast.ReturnStmt{Results: []goast.Expr{e.boundWrapperMethod(member, captured)}})}}
 	name := e.templateBindingName(member)
 	e.generatedName(name, member.Decl)
 	typeParameters := e.templateImplParameters(member.Impl)

@@ -27,10 +27,10 @@ func Hidden() { unknown!(); absent() }
 func Mode() string { return "json" }
 #[cfg(not(feature("json")))]
 func Mode() string { return "plain" }
-#[cfg_attr(feature("json"), derive(Default))]
+#[cfg_attr(not(feature("json")), cfg(any()))]
 type Counter struct { Value int }
 #[cfg(feature("json"))]
-func Count() int { return DefaultCounter().Value }
+func Count() int { return Counter{}.Value }
 #[cfg(not(feature("json")))]
 func Count() int { return -1 }
 const HasJSON = cfg!(feature("json"))
@@ -110,7 +110,7 @@ pub macro_rules! pass { ($value:expr) => { $value }; }
 pub macro_rules! relay { ($value:expr) => { pass!($value) }; }
 pub macro_rules! item { ($item:item) => { $item }; }
 pub macro_rules! selected { ($name:ident) => { #[cfg(feature("side"))] type $name struct { Value int } }; }
-pub macro_rules! derived { ($name:ident) => { #[cfg_attr(feature("side"), derive(Default))] type $name struct { Value int } }; }
+pub macro_rules! conditional { ($name:ident) => { #[cfg_attr(feature("side"), cfg(any()))] type $name struct { Value int } }; }
 `
 	const source = `package main
 use cfgkit;
@@ -120,9 +120,9 @@ const Parameter = cfgkit::named!("side")
 const Captured = cfgkit::pass!(cfg!(feature("side")))
 const Forwarded = cfgkit::relay!(cfg!(feature("side")))
 cfgkit::selected!(TemplateType)
-cfgkit::derived!(TemplateDefault)
+cfgkit::conditional!(TemplateConditional)
 cfgkit::item!(#[cfg(feature("side"))] type CapturedType struct { Value int })
-cfgkit::item!(#[cfg_attr(feature("side"), derive(Default))] type CapturedDefault struct { Value int })
+cfgkit::item!(#[cfg_attr(feature("side"), cfg(any()))] type CapturedConditional struct { Value int })
 cfgkit::item!(#[cfg_attr(feature("side"), cfg(any()))] type CapturedHidden struct {})
 `
 	const native = "package main\nimport \"fmt\"\nfunc main() { fmt.Println(Caller, Template, Parameter, Captured, Forwarded) }\n"
@@ -170,8 +170,8 @@ cfgkit::item!(#[cfg_attr(feature("side"), cfg(any()))] type CapturedHidden struc
 					return true
 				})
 				for name, want := range map[string]bool{
-					"TemplateType": !callerEnabled, "DefaultTemplateDefault": !callerEnabled,
-					"CapturedType": callerEnabled, "DefaultCapturedDefault": callerEnabled, "CapturedHidden": !callerEnabled,
+					"TemplateType": !callerEnabled, "TemplateConditional": callerEnabled,
+					"CapturedType": callerEnabled, "CapturedConditional": !callerEnabled, "CapturedHidden": !callerEnabled,
 				} {
 					if declared[name] != want {
 						t.Fatalf("%s presence = %t, want %t\n%s", name, declared[name], want, output["app/main.go"])

@@ -497,9 +497,9 @@ RestPattern = "." "." ;
 
 一个没有类型实参的单段名字最初保存为 `BindPat`：它可以是新绑定，也可能由后续解析结果确定为单元变体。带路径或实参的无 payload 模式保存为 `PathPat`。`Self` 必须跟 `::` 变体路径，不能作为独立模式。未转义 `_` 是通配符，未转义 `true` / `false` / `nil` 按字面量模式读取。
 
-`E::Pair(x, ref mut y)` 是 tuple payload 模式；`E::Record{name, count: n, ..}` 是命名 payload 模式。字段简写 `name` 等价于 `name: name` 的绑定形状。命名字段之间使用逗号；末尾 `..` 可带一个逗号，后面不能再有字段。tuple / struct 子模式递归使用 `Pattern`，因此 `A(x | y)` 在语法层可表示，但绑定一致性和匹配类型仍需检查。
+`E::Pair(x, ref y)` 是 tuple payload 模式；`E::Record{name, count: n, ..}` 是命名 payload 模式。字段简写 `name` 等价于 `name: name` 的绑定形状。命名字段之间使用逗号；末尾 `..` 可带一个逗号，后面不能再有字段。tuple / struct 子模式递归使用 `Pattern`，因此 `A(x | y)` 在语法层可表示，但绑定一致性和匹配类型仍需检查。
 
-当前没有独立 tuple 模式 `(x, y)`、括号模式、`x @ pattern`、范围模式 `a..b` 或 `&pattern`。`match &value` 的 `&` 属于被匹配表达式，payload 的引用绑定写 `ref` / `ref mut`。深层 payload 引用模式仍有检查限制。
+当前没有独立 tuple 模式 `(x, y)`、括号模式、`x @ pattern`、范围模式 `a..b` 或 `&pattern`。`match &value` 的 `&` 属于被匹配表达式，payload 的只读引用绑定写 `ref`。语法树仍可表示 `ref mut`，但 enum payload 不可变的语义检查会拒绝它和 `match &mut value`；深层引用模式仍有检查限制。
 
 enum 匹配在运行时分派一次，同一变体的 arm 按源顺序测试 guard。nil 不是合法 enum 值，分派前检查并 panic；`_` 不接住 nil。`OrPat`、guard、覆盖关系、引用槽位与分支结果的语义见[前端规范](frontend-ast.md)和[枚举表示](enum-representation.md)。arm 的 `{ ... }` 是普通语句块，不能凭文法给最后一个表达式附加隐式返回语义。
 
@@ -607,12 +607,12 @@ TargetPredicate = "target_os" | "target_arch" | "target_platform"
 
 | 属性 | 参数形状与位置 |
 | --- | --- |
-| `derive` | 协议路径的逗号列表；内建 `Default`、`Clone`、`Debug`、`PartialEq`、`Eq`、`Error`，以及 serde 所属的 `Serialize` / `Deserialize` |
+| `derive` | 过程宏路径的逗号列表；标准入口位于 `std::derive` 和 `serde::derive`，自定义 derive 通过 proc_macro 登记 |
 | `default` | enum 的默认变体标记；与 `Default` 派生配合 |
 | `serde` | `rename = "..."`、`value = 整数`、`skip`、`default`、`deny_unknown_fields` 的受限组合，位置与类型形状决定允许项 |
 | `error`、`source`、`from` | `Error` 派生使用的描述、来源和转换标记，按 struct / enum 形状检查 |
 
-这些名称不是通用用户自定义属性注册接口。精确字段和变体限制由[派生检查](../../internal/check/derive.go)、[serde 降低](../../internal/lower/serde.go)及 [Error 降低](../../internal/lower/error.go)定义；尤其 payload 变体的 serde wire 映射、变体字段属性仍有未实现部分。
+helper 名称由对应 derive 消费者登记，参数和位置由库宏检查；输出的字段协议、类型和权限由普通 checker 检查。标准库行为见[正式 std 验收](../../internal/compile/formal_std_test.go)、[正式 serde 验收](../../internal/compile/formal_serde_test.go)和 [wire 映射验收](../../tests/acceptance/enum_wire_test.go)，不保留编译器业务派生登记。
 
 ## 12. 声明宏与 token tree
 
@@ -667,17 +667,17 @@ TokenTreeBrackets = "[" { TokenTreeElement } "]" ;
 
 模板自由名按定义点解析，捕获片段保留原有绑定，每次展开的局部绑定获得新的语法上下文；`$caller::path` 明确切换到调用点。展开出的 item 放入调用包。这些绑定规则见[宏 RFC](../rfcs/0011-macros.md)，与 token 文法分开执行。
 
-### 12.3 内建宏
+### 12.3 标准宏与语言机制
 
 | 入口 | 当前参数与位置 |
 | --- | --- |
-| `print!("...", args...)` | 直接语句；这里的 `args...` 表示若干逗号分隔实参，源码不接受 Go 的展开 `...` |
-| `println!("...", args...)` / `println!()` | 直接语句；输出末尾换行 |
+| `std::print!("...", args...)` | 直接语句；这里的 `args...` 表示若干逗号分隔实参，源码不接受 Go 的展开 `...` |
+| `std::println!("...", args...)` / `std::println!()` | 直接语句；输出末尾换行 |
 | `cfg!(predicate)` | 布尔表达式，参数使用上节配置文法 |
 | `go_result!(call)` / `go_result!(T, call)` | 表达式或直接语句，将 Go 多返回值调用适配为 Result |
 | `go_result_keep!(call)` / `go_result_keep!(T, call)` | 同一调用形状，使用保留值的适配规则 |
 
-打印格式字符串必须是字面量，只支持 `{}`、`{:?}`、`{{`、`}}`，占位数必须等于后续参数数。`cfg`、`go_result`、`go_result_keep` 不能被同名用户宏定义替代。普通内建函数，如 `len`、`append`，仍使用普通调用文法，不带 `!`。
+std 打印是普通库过程宏，格式字符串必须是字面量，只支持 `{}`、`{:?}`、`{{`、`}}`，占位数必须等于后续参数数。`cfg`、`go_result`、`go_result_keep` 不能被同名用户宏定义替代。普通内建函数，如 `len`、`append`，仍使用普通调用文法，不带 `!`。
 
 ## 13. 解析、检查和设计占位的边界
 
@@ -686,11 +686,12 @@ TokenTreeBrackets = "[" { TokenTreeElement } "]" ;
 | 普通 Go 结构 | 本文列出的类型、函数、复合字面量、语句和控制流均有解析入口；包导入改用 `use` | [parser 测试](../../internal/syntax/parser/parser_test.go)、[表达式测试](../../internal/syntax/parser/expr_test.go) |
 | enum、match、引用、`?`、宏、派生 | 有完整编译路径；具体限制按对应语义检查执行 | [能力状态表](../mvp-gap-audit.md)及其端到端测试 |
 | 外部 `mod` 与 `use` | 完整包图中可解析、检查和生成；内联 `mod`、分组 use 和 `super::` 当前拒绝 | [包检查](../../internal/check/packages.go)、[多包验收](../../internal/compile/project_e2e_test.go) |
-| trait / impl / 关联类型 | 非泛型 trait、泛型条件 impl、多 trait 函数约束已实现；`declare impl` 已移除 | [trait 检查](../../internal/check/traits.go)、[静态协议验收](../../internal/lower/p4_static_test.go)、[移除合同](../rfcs/0003-declare-impl.md) |
-| 泛型 trait/impl、多 trait bound、GAT、trait 默认方法 | 相关形状能解析，当前检查拒绝 | [trait 检查](../../internal/check/traits.go)、[约束检查](../../internal/check/trait_types.go) |
+| trait / impl / 关联类型 | 参数化 trait、条件 impl、多 trait 约束与普通关联类型已实现；`declare impl` 已移除 | [trait 检查](../../internal/check/traits.go)、[静态协议验收](../../internal/lower/p4_static_test.go)、[移除合同](../rfcs/0003-declare-impl.md) |
+| GAT、trait 默认方法 | 相关形状能解析，当前检查拒绝 | [trait 检查](../../internal/check/traits.go)、[约束检查](../../internal/check/trait_types.go) |
 | bar 闭包、`unsafe` 修饰符/表达式、`declare func/type` | 能解析，当前降低拒绝 | [表达式降低](../../internal/lower/expr.go)、[声明降低](../../internal/lower/decl.go) |
 | `let`、`loop`、`while`、`await`、范围模式 | AST 留有节点类型，当前解析器没有相应语言产生式 | [AST](../../internal/syntax/ast/ast.go)、[语句](../../internal/syntax/parser/stmt.go)、[模式](../../internal/syntax/parser/pattern.go) |
-| async、用户过程宏、用户可编程 derive | 设计或保留能力，当前没有可运行语法入口 | [决策](decisions.md)、[宏 RFC](../rfcs/0011-macros.md)、[派生 RFC](../rfcs/0013-derive.md) |
+| 用户过程宏、用户可编程 derive | 通过显式 proc-macro 库登记并执行，输出沿普通语法与语义检查 | [过程宏 RFC](../rfcs/0030-procedural-macros.md) |
+| async | 设计或保留能力，当前没有可运行语法入口 | [决策](decisions.md) |
 
 错误恢复生成的 `BadItem`、`BadStmt`、`BadExpr`、`BadType`、`BadPat` 用于保留后续结构，不属于有效程序文法。`ParseFile` 即使有错误也返回恢复后的树，调用者必须查看 diagnostics；片段入口还会拒绝未消费完的 token。检查器和降低器会拒绝错误节点，不把恢复成功当作编译成功。
 

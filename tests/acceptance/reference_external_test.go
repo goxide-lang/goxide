@@ -15,7 +15,7 @@ func TestCrossModuleReferenceArtifacts(t *testing.T) {
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	module := func(path, library string) string {
 		s := fmt.Sprintf("module %s\ngo 1.27\n", path)
 		if library != "" {

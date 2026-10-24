@@ -1,7 +1,0 @@
-[
-  {
-    "id": "std-support-imports",
-    "source": "package main\nuse fmt;\nuse std::formatting as f;\nuse std::runtime as r;\nfunc guarded() (result int) { guard:=r::Assignment[int]{}; defer guard.Catch(&result); guard.Fail(42); return 0 }\nfunc main(){fmt::Println(f::Int(guarded()),f::Bool(true));println!(\"std {}\",7)}\n",
-    "expectedStdout": "42 true\nstd 7\n"
-  }
-]

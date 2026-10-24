@@ -39,7 +39,7 @@ func (e *emitter) traitDecl(n *syntax.TraitDecl) goast.Decl {
 	if len(arguments) != 0 {
 		spec.TypeParams = &goast.FieldList{}
 		for _, parameter := range trait.TypeParams {
-			spec.TypeParams.List = append(spec.TypeParams.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(parameter.Obj().Name())}, Type: e.goConstraint(parameter.Constraint())})
+			spec.TypeParams.List = append(spec.TypeParams.List, &goast.Field{Names: []*goast.Ident{e.goType(parameter).(*goast.Ident)}, Type: e.goConstraint(parameter.Constraint())})
 		}
 		for _, a := range trait.Associated {
 			spec.TypeParams.List = append(spec.TypeParams.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(a.Param.Obj().Name())}, Type: goast.NewIdent("any")})
@@ -59,6 +59,10 @@ func (e *emitter) traitDeclarations(declarations []goast.Decl) []goast.Decl {
 				continue
 			}
 			for _, m := range impl.Methods {
+				if nativeEnumMember(m) {
+					out = append(out, e.enumInherentDeclarations(m)...)
+					continue
+				}
 				out = append(out, e.inherentDeclaration(m))
 				if e.traits.memberNeedsBinding(m) && !parameterizedImpl(impl) {
 					out = append(out, e.bindingDeclaration(m, nil))
@@ -87,6 +91,7 @@ func (e *emitter) traitDeclarations(declarations []goast.Decl) []goast.Decl {
 	for _, carrier := range carriers {
 		out = append(out, e.carrierDeclarations(carrier)...)
 	}
+	out = append(out, e.inherentCarrierDeclarations()...)
 	var facades []*traitFacade
 	for _, facade := range e.traits.facades {
 		if facade.file == e.name {
@@ -377,13 +382,18 @@ func (e *emitter) inherentDeclaration(m *check.Member) goast.Decl {
 	parameters := e.implGenerics(m.Impl)
 	decl := &goast.FuncDecl{Name: goast.NewIdent(e.inherentName(m)), Type: &goast.FuncType{TypeParams: parameters, Params: e.params(m.Decl.Params), Results: e.params(m.Decl.Results)}}
 	decl.Body = e.functionBody(decl.Type, m.Decl.Body)
-	if !m.Static && nativeInherentImpl(m.Impl) {
+	if m.Static {
+		decl.Name = goast.NewIdent(m.GoName)
+		decl.Recv = receiverField("", e.inherentCarrierType(m.Impl))
+		decl.Type.TypeParams = nil
+	} else if nativeInherentImpl(m.Impl) {
 		decl.Name = goast.NewIdent(m.GoName)
 		decl.Recv = e.params(m.Decl.Params[:1])
 		decl.Type.Params = e.params(m.Decl.Params[1:])
 		decl.Type.TypeParams = nil
 	} else {
 		e.generatedName(decl.Name.Name, m.Decl)
+		e.guardEnumInherentBody(m, decl.Body)
 	}
 	return e.traitSourceBody(decl, m.Decl)
 }

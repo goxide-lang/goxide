@@ -12,6 +12,7 @@ PAGES = (
     ("go-gen", "开始使用", "在已有 Go 项目中使用 Goxide"),
     ("first-project", "开始使用", "第一个 Goxide 项目"),
     ("language", "语言", "语言速览"),
+    ("procedural-macros", "语言", "过程宏"),
     ("manifest", "项目与包管理", "清单字段"),
     ("dependencies", "项目与包管理", "依赖与命名空间"),
     ("lock-cache", "项目与包管理", "锁文件与缓存"),
@@ -106,7 +107,7 @@ def public_links(markdown, source, root):
     return "\n".join(lines)
 
 
-def build(root, go, run):
+def build(root, go, run, compiler_source):
     root = pathlib.Path(root).resolve()
     guide = root / "docs/website-guide.md"
     content = sections(guide.read_text(encoding="utf-8"))
@@ -118,6 +119,11 @@ def build(root, go, run):
             markdown = source.read_text(encoding="utf-8").partition("\n")[2].strip()
         else:
             markdown = content[title]
+        if identity == "install":
+            commit = compiler_source.get('commit') or compiler_source['baseCommit']
+            assert re.fullmatch('[0-9a-f]{40}', commit), 'installation requires a complete compiler commit'
+            markdown = markdown.replace('cd goxide\n', 'cd goxide\ngit checkout --detach ' + commit + '\n', 1)
+            markdown += '\n\n对应编译器源码：[' + commit[:12] + '](https://github.com/goxide-lang/goxide/tree/' + commit + ')。'
         if identity == "cli":
             executable = str(root / "bin/goxide")
             for command in ((), ("gen",), ("build",), ("run",), ("test",), ("env",)):

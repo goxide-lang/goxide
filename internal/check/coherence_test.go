@@ -30,6 +30,15 @@ impl[T interface{int|string}] P for Box[T] where T:B {}`, false},
 impl A for int {}; impl B for int {}
 impl[T interface{int|string}] P for Box[T] where T:A {}
 impl[T interface{int|string}] P for Box[T] where T:B {}`, true},
+		{"duplicate marker with prerequisite", `trait P {}; trait Q where Self:P {}; type T struct{}
+impl P for T {}; impl Q for T {}; impl Q for T {}; impl Q for T {}`, true},
+		{"duplicate methods with prerequisite", `trait P {}; trait Q where Self:P {func value(self Self)int}; type T struct{}
+impl P for T {}
+impl Q for T {func value(self Self)int{return 1}}
+impl Q for T {func value(self Self)int{return 2}}`, true},
+		{"shared prerequisite reached twice", `trait P {}; trait A where Self:P {}; trait B where Self:P {}; trait Q {}; type T struct{}
+impl P for T {}; impl A for T {}; impl B for T {}
+impl Q for T where T:A {}; impl Q for T where T:B {}`, true},
 		{"future downstream", `trait A {}; trait B {}; trait P {}; type Box[T any] struct { value T }
 impl A for int {}; impl B for string {}
 impl[T any] P for Box[T] where T:A {}

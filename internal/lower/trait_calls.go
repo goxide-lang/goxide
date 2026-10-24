@@ -43,15 +43,18 @@ func (e *emitter) operationFunction(selection *check.MemberSelection) goast.Expr
 	}
 	if selection.Impl != nil && selection.Impl.Template != nil {
 		if instance := e.traits.instances[instanceImplKey(e.info, selection.Impl, m.Name)]; instance != nil {
-			return e.sourceGlobal(instance.body.File, instance.name)
+			return e.instanceOperation(instance)
 		}
 	}
-	if selection.Impl != nil && parameterizedImpl(implTemplate(selection.Impl)) && (m.Trait != nil || len(implTemplate(selection.Impl).Requirements) != 0) {
+	if selection.Impl != nil && parameterizedImpl(implTemplate(selection.Impl)) && (m.Trait != nil || len(implTemplate(selection.Impl).Requirements) != 0 || m.Static && e.info.Demands != nil && e.info.Demands.ImplTemplates[implTemplate(selection.Impl)]) {
 		if !genericPairOps(e.info, selection.Impl) || e.privateEvidence(check.Evidence{Impl: selection.Impl}) {
 			return e.templateOperation(selection)
 		}
 	}
 	if m.Trait == nil {
+		if m.Static {
+			return carrierMethod(e.inherentCarrierType(selection.Impl), m.GoName)
+		}
 		return enumIndices(e.sourceGlobal(m.File, e.inherentName(m)), e.implTypeArgs(selection.Impl))
 	}
 	var target types.Type
@@ -69,7 +72,7 @@ func (e *emitter) operationFunction(selection *check.MemberSelection) goast.Expr
 }
 
 func nativeMember(selection *check.MemberSelection) bool {
-	return selection.Impl == nil && selection.Bound == nil || selection.Member.Trait == nil && !selection.Member.Static && nativeInherentImpl(selection.Impl)
+	return selection.Impl == nil && selection.Bound == nil || selection.Member.Trait == nil && !selection.Member.Static && (nativeInherentImpl(selection.Impl) || nativeEnumMember(selection.Member))
 }
 
 func (e *emitter) memberReceiverType(selection *check.MemberSelection) types.Type {
@@ -90,6 +93,9 @@ func (e *emitter) memberReceiverType(selection *check.MemberSelection) types.Typ
 func (e *emitter) memberExpr(selection *check.MemberSelection) goast.Expr {
 	m := selection.Member
 	if selection.MethodExpr && nativeMember(selection) {
+		if m.Receiver == check.ReadRef && nativeEnumMember(m) {
+			return carrierMethod(e.inherentCarrierType(selection.Impl), enumReadOperation(m))
+		}
 		return &goast.SelectorExpr{X: e.goType(selection.Signature.Params().At(0).Type()), Sel: goast.NewIdent(m.GoName)}
 	}
 	if m.Static || selection.MethodExpr {
@@ -100,6 +106,9 @@ func (e *emitter) memberExpr(selection *check.MemberSelection) goast.Expr {
 	}
 	receiver := adjustReceiver(e.expr(selection.Receiver), selection.Address, selection.Deref)
 	if nativeMember(selection) {
+		if m.Receiver == check.ReadRef && nativeEnumMember(m) {
+			receiver = enumReadReceiver(receiver)
+		}
 		return &goast.SelectorExpr{X: receiver, Sel: goast.NewIdent(m.GoName)}
 	}
 	if inferred, ok := e.inferredMemberValue(selection, receiver); ok {
@@ -147,6 +156,9 @@ func (e *emitter) memberCall(call *syntax.CallExpr) (goast.Expr, bool) {
 		}
 		args = e.exprs(ordinary)
 		if nativeMember(selection) {
+			if m.Receiver == check.ReadRef && nativeEnumMember(m) {
+				x = enumReadReceiver(x)
+			}
 			fun = &goast.SelectorExpr{X: x, Sel: goast.NewIdent(m.GoName)}
 		} else {
 			args = append([]goast.Expr{x}, args...)
@@ -163,4 +175,11 @@ func (e *emitter) memberCall(call *syntax.CallExpr) (goast.Expr, bool) {
 		result.Ellipsis = 1
 	}
 	return result, true
+}
+
+func enumReadReceiver(receiver goast.Expr) goast.Expr {
+	if address, ok := receiver.(*goast.UnaryExpr); ok && address.Op == gotoken.AND {
+		return address.X
+	}
+	return &goast.ParenExpr{X: &goast.StarExpr{X: receiver}}
 }

@@ -1,61 +1,29 @@
-# Same-package playground acceptance
+# Same-package Playground fixture
 
-This focused suite compares real browser Worker output with the current native
-CLI, then exercises the actual page. It preserves the legacy single-file examples
-and checks same-package file scopes, cross-file macros/derive/static protocols, filenames in
-diagnostics, invalid inputs, LF/CRLF, recovery, repeat compilation, source/output
-tabs, file editing/add/delete, example changes, and read-only dependency identity.
-Saved events from real Workers test both old request IDs and obsolete Worker
-instances deterministically. Helper-file clipboard copy, 390px mobile selectors
-and overflow, served WASM/dependency source hashes, and actual toolchain/module
-versions are also checked. Every dependency file is opened in the read-only UI;
-the formatting/runtime/sum/typeinfo packages must have the pinned std module identity,
-and the export dependency closure must contain no compiler packages. The browser
-is launched with its sandbox enabled.
+The five authored `.gox` files in `example/` exercise per-file import aliases,
+shared declarations and macros, formal std/serde derives, JSON round trips, and
+a trait with its implementation and generic calls split across files.
 
-The five source files also split a `Build` trait and generic factory into
-`protocol.gox`, its `User` implementation into `builder.gox`, and concrete /
-generic calls into `main.gox`. The native output checks both calls. These are
-same-package declarations; this fixture does not load external protocol artifacts.
-
-The model file binds `util` to serde; main and helpers independently bind it to
-strconv and strings. Serde derives and JSON round-trip are exercised across the
-package. Missing/wrong owners and dot-qualified derives reject with source file
-identity, including a correct serde owner imported only by a sibling file.
-The read-only roots TOML, its SHA-256, package static paths and real
-Go export origins are checked; an altered roots hash must fail before compilation.
-
-Use an already-built matching website and CLI; serve the generated website on
-loopback in the tool-approved context. No installation, network module fetch,
-full-tree validation, deployment, or build scripts are performed by this runner.
-The output directory must not already exist and should be outside the checkout.
-
-```sh
-source /workspace/.cloud-setup/env.sh
-export GOROOT=/workspace/.cloud-setup/toolchains/go1.27.1
-export GO_BIN="$GOROOT/bin/go"
-export PATH="$GOROOT/bin:$PATH"
-hash -r
-"$GO_BIN" version
-python3 -B website/validation/package-files/run.py \
-  --url http://127.0.0.1:18085 \
-  --cli /absolute/path/to/current/goxide \
-  --go "$GO_BIN" \
-  --out /tmp/goxide-package-files-acceptance
-```
-
-`summary.json` is authoritative; `passed: true` requires native expectations,
-Worker byte parity, all UI checks, and no page exceptions. Native commands and
-their stdout/stderr, complete Worker observations, manifest identity, and a page
-screenshot remain in that output directory. Go subprocesses use native
-`GOMAXPROCS=4`; this runner does not invoke Node Go WASM. The test fixture's
-`go.mod` fixes the CLI package path to `playground` and selects the exact std/serde
-versions used by the compiler; `go.sum` supplies their checked module identities.
-These Go module selections are distinct from the namespace-only roots TOML.
-Only the fixture's `.gox` files become
-editable browser inputs. Expected native stdout is:
+`website/procedural.py` copies these source bytes into the fixed browser consumer,
+runs the current stamped CLI, compares two generations and checks this output:
 
 ```text
 42 GOXIDE Item { Value: 21 }
 Ada Ada
 ```
+
+The fixture's `go.mod` and `go.sum` record the same public std/serde selections as
+the compiler. The build rejects pin drift or local replacements. Browser inputs
+contain only the `.gox` files; dependencies come from the fixed consumer snapshot.
+
+After the [website build and preview](../../README.md), run the current gate:
+
+```sh
+QA_URL=http://127.0.0.1:8084 npm test --prefix website
+```
+
+`catalog-qa.mjs` checks byte-for-byte Worker/CLI output, source and generated tabs,
+complete clipboard copies, undo and selection preservation, file add/delete,
+filename validation, diagnostics, recovery, Unicode package names, late Worker
+results, read-only dependency identity and narrow layouts. Chromium keeps its
+sandbox enabled; `CHROMIUM` selects an existing browser executable.

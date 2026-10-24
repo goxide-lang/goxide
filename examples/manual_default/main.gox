@@ -1,9 +1,9 @@
-package main
+package main; use std; use std::PartialEq;
 
-use config;
+mod config;
 
 func main() {
-    service := DefaultService()
+    service := Service::initial()
     remote := config::NewSettings()
-    println!("service {} {} {} {} {} {}", service.First.Port, service.Login.Name, service.Second.Port, ModeName(service.Mode), remote.Port, defaultTrace)
+    std::println!("service {} {} {} {} {} {}", service.First.Port, service.Login.Name, service.Second.Port, ModeName(service.Mode), remote.Port, defaultTrace)
 }

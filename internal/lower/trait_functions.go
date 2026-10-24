@@ -57,8 +57,35 @@ func (e *emitter) traitFunctionDeclaration(node *syntax.FuncDecl) goast.Decl {
 	return &goast.FuncDecl{Name: e.ident(node.Name), Type: typ, Body: e.functionBody(typ, node.Body)}
 }
 
+func (e *emitter) functionInstance(node syntax.Node) *check.FunctionInstance {
+	if call, ok := node.(*syntax.CallExpr); ok {
+		if instance := e.info.FunctionInstances[call]; instance != nil {
+			return instance
+		}
+		node = call.Fun
+	}
+	for {
+		if paren, ok := node.(*syntax.ParenExpr); ok {
+			node = paren.X
+			continue
+		}
+		break
+	}
+	// A call of a returned function is not another instantiation of its factory.
+	if _, nestedCall := node.(*syntax.CallExpr); nestedCall {
+		return nil
+	}
+	if instance := e.info.FunctionInstances[node]; instance != nil {
+		return instance
+	}
+	if node, ok := node.(*syntax.PathExpr); ok && node.Path != nil && len(node.Path.Segments) != 0 {
+		return e.info.FunctionInstances[node.Path.Segments[len(node.Path.Segments)-1].Args]
+	}
+	return nil
+}
+
 func (e *emitter) traitFunctionInstance(node syntax.Node) (goast.Expr, bool) {
-	instance := e.info.FunctionInstances[node]
+	instance := e.functionInstance(node)
 	if instance == nil {
 		return nil, false
 	}
@@ -78,6 +105,9 @@ func (e *emitter) traitFunctionInstance(node syntax.Node) (goast.Expr, bool) {
 	}
 	if !e.traits.templateFunctions[function.decl] {
 		return nil, false
+	}
+	if e.needsFunctionInference(instance) {
+		return e.inferredFunctionValue(function, instance), true
 	}
 	return e.templateFunctionInstance(instance, function), true
 }

@@ -1,0 +1,20 @@
+package main
+use serde;
+use fmt;
+use serde::json as serdejson;
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
+type EditedRequest struct { Limit Option[uint16]; Counts []uint16 }
+func describe(value Option[uint16]) string {
+    return match value {
+        Option::Some(n) => fmt::Sprintf("Some(%d)", n),
+        Option::None => "None",
+    }
+}
+func main() {
+    for _, input := range []string{`{"Counts":[1,2]}`, `{"Limit":null,"Counts":[1,2]}`, `{"Limit":7,"Counts":[1,2]}`} {
+        value, err := serdejson::Unmarshal([]byte(input), serde::Read[EditedRequest])
+        if err != nil { panic(err) }
+        if len(value.Counts) != 2 || value.Counts[1] != 2 { panic("edited slice did not decode") }
+        fmt::Println(input, describe(value.Limit))
+    }
+}

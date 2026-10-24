@@ -16,55 +16,29 @@ Goxide 为 Go 增加 enum、match、声明宏、派生和显式协议，生成�
 
 ## 安装
 
-`v0.0.1` 是实验性预发布，尚非正式稳定发行。后续版本即使只增加 patch 或 minor，仍可能对语言、CLI、配置格式和生成代码作出不兼容变更。
+本网站对应当前开发中的 Goxide。语言、CLI、配置格式和生成代码仍可能在 patch 或 minor 更新中发生不兼容变更。
 
-### 下载 CLI v0.0.1
+### 从对应源码构建当前 CLI
 
-按运行 CLI 的机器选择平台与 CPU 架构。归档包含 Goxide 可执行文件、许可证和安装说明；Go 工具链需要单独安装。
+本页教程使用正式 std/serde 过程宏和协议。请使用页面所列编译器提交构建 CLI；安装页的命令会固定到网站实际使用的源码版本。
 
-| 平台 | CPU 架构 | 下载 |
-| --- | --- | --- |
-| macOS | Intel（amd64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_darwin_amd64.tar.gz) |
-| macOS | Apple silicon（arm64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_darwin_arm64.tar.gz) |
-| Linux | x86-64（amd64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_linux_amd64.tar.gz) |
-| Linux | ARM64（arm64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_linux_arm64.tar.gz) |
-| Windows | x64（amd64） | [下载 zip](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_windows_amd64.zip) |
-
-[SHA-256 校验值](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/checksums.txt) · [v0.0.1 版本说明](https://github.com/goxide-lang/goxide/releases/tag/v0.0.1)
-
-下载后核对归档的 SHA-256。解压归档，将其中 `goxide`（Windows 为 `goxide.exe`）所在目录加入 `PATH`。
-
-### 配套 Go 与安装检查
-
-这五个平台的预编译 CLI 均使用 **Go 1.27.2** 构建，运行编译命令时必须使用 **Go 1.27.2，补丁号也须一致**。将 Go 加入 `PATH`；`--go` 可以指定其他位置的同版本 Go 可执行文件。CLI 不会自动下载或切换 Go 工具链。
+先安装 **Go 1.27.3** 和 Git。下面的环境变量写法适用于 macOS / Linux 终端；运行命令时也必须使用 **Go 1.27.3，补丁号也须一致**。
 
 ```sh
+git clone https://github.com/goxide-lang/goxide.git
+cd goxide
+GOTOOLCHAIN=local GOWORK=off go run ./scripts/build.go -o ./bin/goxide
+export PATH="$PWD/bin:$PATH"
 go version
 goxide --version
 goxide env
 ```
 
-`go version` 的版本应为 `go1.27.2`；发布二进制的版本输出应为：
+`scripts/build.go` 将所用语法 SDK 的内容身份写入 CLI，供过程宏编译和缓存校验使用。构建会下载 `go.mod` 中固定的公开依赖。源码构建的 CLI 版本显示为 `dev`，工具链版本应为 `go1.27.3`。
 
-```text
-goxide v0.0.1 (go1.27.2)
-```
+Windows 使用相同 Go 版本，将输出路径改为 `./bin/goxide.exe`，并把该 `bin` 目录加入 `PATH`。`--go` 可以指定其他位置的同版本 Go 可执行文件；CLI 不会自动下载或切换 Go 工具链。
 
-`goxide test` 使用 Go race detector，还需要启用 cgo 并安装该平台的 C 编译器。只运行浏览器 Playground 时，无需安装本地 CLI 或 Go。
-
-### 从标签源码安装
-
-也可以使用 Go 1.27.2 从同一标签构建。下面的环境变量写法适用于 macOS / Linux 终端：
-
-```sh
-git clone --branch v0.0.1 --depth 1 https://github.com/goxide-lang/goxide.git
-cd goxide
-GOTOOLCHAIN=local GOWORK=off go install -ldflags="-X main.version=v0.0.1" ./cmd/goxide
-```
-
-将 Go 安装可执行文件的目录加入 `PATH`：设置了 `GOBIN` 时使用该目录，否则使用 `go env GOPATH` 对应目录下的 `bin`。未传版本注入参数的普通源码构建显示 `goxide dev`，上述 `-ldflags` 将版本设为 `v0.0.1`。
-
-仓库位于 `goxide-lang/goxide`，当前开发源码的 Go module 路径为 `github.com/goxide-lang/goxide`；既有标签以对应的 `go.mod` 为准。源码构建同样要求运行时所选 Go 与构建 CLI 的 Go 版本完全一致；更换 Go 版本后，须用新工具链重新构建 CLI。
+`goxide test` 使用 Go race detector，还需要启用 cgo 并安装该平台的 C 编译器。更换 Go 版本后，须用新工具链重新构建 CLI。只运行浏览器 Playground 时，无需安装本地 CLI 或 Go。
 
 ## 第一个 Goxide 项目
 
@@ -138,7 +112,7 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 | Option、Result 与 `?` | 显式表示缺失或错误，提前返回错误结果 | [支持库与表示](design/enum-representation.md) |
 | 声明宏 | 在表达式、语句、类型和声明位置复用语法 | [宏](rfcs/0011-macros.md) |
 | 显式派生 | 为具体类型生成 Default、Clone、Debug、PartialEq、Eq、Error 或 serde 协议 | [派生](rfcs/0013-derive.md) |
-| 引用与 payload 投影 | 通过 `&` / `&mut` 区分读写权限，在 `match &value` 中访问原槽位 | [引用](rfcs/0005-borrows.md) |
+| 引用与 payload 投影 | 普通变量通过 `&` / `&mut` 区分读写权限；enum payload 槽不可变，`match &value` 只读访问，按值取得的容器保留自身权限 | [引用](rfcs/0005-borrows.md) |
 | trait、impl 与关联类型 | 为具体类型声明静态协议，适配现有 Go API | [trait](rfcs/0002-traits.md)、[关联类型](rfcs/0004-associated-types.md) |
 | 条件编译 | 按 feature、目标或环境选择完整声明 | [条件编译](#条件编译) |
 
@@ -147,6 +121,71 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 宏中的名字通常按定义点解析；需要调用点名称时显式使用 `$caller::`。`pub` 声明公开名称，Go 风格声明也保留首字母大写的公开约定。
 
 这些链接包含完整语言设计；选择实际用法时结合[当前能力](#能力与设计)中的实现范围。可以在 [Playground](https://goxide-lang.github.io/playground.html) 中查看生成 Go，或从[混合快速开始](https://goxide-lang.github.io/learn/?stage=mixed)开始。
+
+## 过程宏
+
+过程宏是独立的 Goxide 库模块。编译器先把宏编译为 WASI 程序，再在受限环境中执行展开；宏接收带来源和解析上下文的 token，返回新的 token 或诊断。消费者通过普通依赖和 `use` 选择宏。
+
+完整的[过程宏教程](https://goxide-lang.github.io/learn/?stage=procedural)提供消费者、宏模块、Go 辅助实现和项目测试。下载后先运行 `goxide build .`，再执行 `goxide run --offline --locked .` 和 `goxide test --offline --locked .`。移动本地 path 项目后，先不带 `--locked` 构建一次，记录新位置；之后锁定命令保持锁文件不变。
+
+### 函数式、属性与 derive
+
+```gox
+package main
+
+use fmt;
+use macros;
+
+// 属性宏接收参数和原始函数，替换函数体。
+#[macros::constant(6 * 7)]
+func answer() int { return 0 }
+
+// derive 宏保留类型，并追加 typeName 方法。
+#[derive(macros::TypeName)]
+type Order struct { ID int }
+
+func main() {
+    // 函数式宏把表达式乘二，只求值一次。
+    fmt::Println(macros::twice!(21), answer(), Order{ID: 1001}.typeName())
+}
+```
+
+宏库的 `goxide.toml` 在 `[lib]` 下设置 `proc_macro = true`，并固定 `syntax` SDK 的 Go module 版本。注册入口使用 `#[proc_macro]`、`#[proc_macro_attribute]` 或 `#[proc_macro_derive(TypeName)]`；参数和返回值使用 `syntax::token::TokenStream` 与 `syntax::proc_macro::Output`。
+
+教程中的 `TypeName` 使用 `syntax::syn` 解析具体类型，保留调用方的类型 token，再为新增关键字与方法体使用定义点上下文。它有意只支持无泛型的非 alias 类型；不支持的输入会产生可定位诊断。
+
+### 在浏览器中试用
+
+打开[函数式宏](https://goxide-lang.github.io/playground.html?example=proc_function)、[属性宏](https://goxide-lang.github.io/playground.html?example=proc_attribute)或[derive 宏](https://goxide-lang.github.io/playground.html?example=proc_derive)，修改输入后查看真正展开并转译的 Go。网站构建会用同一依赖图运行这些输入，浏览器验收核对生成代码与 CLI 字节一致。
+
+浏览器只执行随网站发布的固定宏快照，按 SHA-256 验证 WASM，并通过独立 Worker 执行。源码不能增加依赖、上传宏程序或读取宿主文件系统。宏单次执行最多 5 秒，单次编译累计最多 60 秒；编译总超时为 70 秒，停止操作会终止编译和宏 Worker。页面展示的程序输出来自构建时的真实 CLI 运行；浏览器不执行生成的 Go。
+
+### 使用标准库与 serde 的派生
+
+标准协议由库声明，派生和打印使用库导出的过程宏。声明 `std` 与 `serde` 依赖后，源码显式导入根：
+
+```gox
+use std;
+use serde;
+use serde::json as serdejson;
+
+#[derive(std::derive::Default, std::derive::Clone, std::derive::Debug,
+         serde::derive::Serialize, serde::derive::Deserialize)]
+type Config struct { Name string }
+
+func show() {
+    value := std::default_value[Config]()
+    copy := std::Clone::clone(&value)
+    std::println!("{:?}", copy)
+    data, err := serdejson::Marshal(&copy, serde::Write[Config])
+    if err != nil { panic(err) }
+    restored, err := serdejson::Unmarshal(data, serde::Read[Config])
+    if err != nil { panic(err) }
+    std::println!("{:?}", restored)
+}
+```
+
+宏生成普通 `impl`，也可以手写相同协议。Default 使用 `std::default_value[T]()`，Clone / Debug 使用 `std::Clone::clone(&value)` / `std::Debug::debug(&value)`，内容比较使用 `std::PartialEq::equals(left, right)`。serde 的 `Write[T]` 与 `Read[T]` 可直接作为 JSON 回调；不依赖按类型名自动拼出的辅助函数。
 
 ## 清单字段
 
@@ -394,13 +433,15 @@ optional 依赖不会自动创建同名 feature。未激活的 optional 来源�
 `#[cfg(...)]` 选择整个顶层声明，`#[cfg_attr(...)]` 按条件添加属性，`cfg!(...)` 返回布尔常量。
 
 ```gox
+use std;
+
 #[cfg(feature("json"))]
 func Encoding() string { return "json" }
 
 #[cfg(not(feature("json")))]
 func Encoding() string { return "plain" }
 
-#[cfg_attr(feature("trace"), derive(Debug))]
+#[cfg_attr(feature("trace"), derive(std::derive::Debug))]
 type Message struct { Text string }
 
 const HasJSON = cfg!(feature("json"))

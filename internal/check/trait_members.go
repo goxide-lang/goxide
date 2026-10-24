@@ -116,6 +116,30 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 	} else if private {
 		c.diag(n, TraitInvalid, "private inherent member is not visible from this package")
 	} else if valid(target) {
+		for _, template := range c.implOrder {
+			if template.Trait != nil || memberNamed(template.Methods, name, false) == nil {
+				continue
+			}
+			impl := c.matchImpl(template, target)
+			if impl == nil {
+				continue
+			}
+			member := memberNamed(impl.Methods, name, false)
+			if !c.memberAccessible(member) {
+				c.diag(n, TraitInvalid, "private inherent member is not visible from this package")
+				return nil
+			}
+			receiver := target
+			if member.Receiver != ValueRef {
+				receiver = types.NewPointer(receiver)
+			}
+			params := []*types.Var{types.NewVar(0, c.pkg, "self", receiver)}
+			for i := 0; i < member.Signature.Params().Len(); i++ {
+				params = append(params, member.Signature.Params().At(i))
+			}
+			signature := types.NewSignatureType(nil, nil, nil, types.NewTuple(params...), member.Signature.Results(), member.Signature.Variadic())
+			return &MemberSelection{Member: member, Impl: impl, MethodExpr: true, Signature: signature}
+		}
 		if object, _, _ := types.LookupFieldOrMethod(target, false, c.pkg, name); object != nil {
 			if function, ok := object.(*types.Func); ok {
 				signature := function.Type().(*types.Signature)

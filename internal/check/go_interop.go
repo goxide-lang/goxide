@@ -16,19 +16,21 @@ type goInterop struct {
 func newGoInterop(c *checker) *goInterop {
 	r := &goInterop{info: c.out, local: map[*types.Package]bool{}, sugar: map[*types.Named][]*SugarMember{}, forward: map[types.Type]types.Type{}, reverse: map[types.Type]types.Type{}}
 	for _, pkg := range c.packages {
-		r.local[pkg] = true
+		if c.out.NativePackages[pkg.Path()] == nil {
+			r.local[pkg] = true
+		}
 	}
 	for _, member := range c.out.Sugar {
 		target := ordinaryGoReceiverTarget(implDeclaration(member.Impl))
 		r.sugar[target] = append(r.sugar[target], member)
 	}
 	for _, implementation := range c.implOrder {
-		if implementation.Trait != nil || !CanUseGoReceiver(implementation) {
+		if implementation.Trait != nil || !CanUseGoReceiver(implementation) && !CanUseEnumReceiver(implementation) {
 			continue
 		}
 		for _, member := range implementation.Methods {
-			if !member.Static {
-				target := ordinaryGoReceiverTarget(implementation)
+			if !member.Static && (CanUseGoReceiver(implementation) || member.Receiver == ValueRef || member.Receiver == ReadRef) {
+				target := goReceiverTarget(implementation, true)
 				r.sugar[target] = append(r.sugar[target], &SugarMember{Impl: implementation, Member: member, Name: member.GoName, Signature: member.Signature})
 			}
 		}
@@ -132,7 +134,16 @@ func (r *goInterop) typ(t types.Type, forward bool) types.Type {
 	var result types.Type
 	switch t := t.(type) {
 	case *types.Alias:
-		result = visit(types.Unalias(t))
+		if forward && t.TypeParams().Len() != 0 && t.TypeArgs().Len() == 0 {
+			// A generic alias may reorder or fix arguments of its RHS. Keep
+			// its own binders when checking explicit Go type arguments.
+			parameters := r.parameters(t.TypeParams(), true)
+			alias := types.NewAlias(types.NewTypeName(t.Obj().Pos(), t.Obj().Pkg(), t.Obj().Name(), nil), visit(t.Rhs()))
+			alias.SetTypeParams(parameters)
+			result = alias
+		} else {
+			result = visit(types.Unalias(t))
+		}
 	case *types.TypeParam:
 		if array, ok := r.info.ArrayOf(t); ok {
 			result = r.info.ArrayType(visit(array.Elem), array.Length)
@@ -158,13 +169,35 @@ func (r *goInterop) typ(t types.Type, forward bool) types.Type {
 			copy := types.NewNamed(types.NewTypeName(t.Obj().Pos(), t.Obj().Pkg(), t.Obj().Name(), nil), nil, nil)
 			r.forward[t], r.reverse[copy] = copy, t
 			copy.SetTypeParams(r.parameters(t.TypeParams(), forward))
-			copy.SetUnderlying(visit(t.Underlying()))
+			underlying := visit(t.Underlying())
+			if iface, ok := underlying.(*types.Interface); ok && len(r.sugar[t]) != 0 {
+				methods := make([]*types.Func, iface.NumExplicitMethods())
+				for i := range methods {
+					methods[i] = iface.ExplicitMethod(i)
+				}
+				for _, member := range r.sugar[t] {
+					sub := map[*types.TypeParam]types.Type{}
+					for i, parameter := range member.Impl.TypeParams {
+						sub[parameter] = copy.TypeParams().At(i)
+					}
+					signature := r.typ(r.info.Substitute(member.Signature, sub, nil), true).(*types.Signature)
+					methods = append(methods, types.NewFunc(0, member.Impl.Owner, member.Name, signature))
+				}
+				embedded := make([]types.Type, iface.NumEmbeddeds())
+				for i := range embedded {
+					embedded[i] = iface.EmbeddedType(i)
+				}
+				underlying = types.NewInterfaceType(methods, embedded).Complete()
+			}
+			copy.SetUnderlying(underlying)
 			for i := 0; i < t.NumMethods(); i++ {
 				method := t.Method(i)
 				copy.AddMethod(types.NewFunc(method.Pos(), method.Pkg(), method.Name(), visit(method.Type()).(*types.Signature)))
 			}
 			for _, member := range r.sugar[t] {
-				copy.AddMethod(r.method(copy, member))
+				if _, isInterface := underlying.(*types.Interface); !isInterface {
+					copy.AddMethod(r.method(copy, member))
+				}
 			}
 			return copy
 		}

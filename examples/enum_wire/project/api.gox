@@ -1,0 +1,11 @@
+package main
+use serde;
+use std;
+
+impl Ticket {
+    pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s, value) }
+    pub func decode(d serde::Deserializer) (Self, error) { return serde::Read[Self](d) }
+    pub func initial() Self { return std::default_value[Self]() }
+    pub func describe(value &Self) string { return std::Debug::debug(value) }
+    pub func copy(value &Self) Self { return std::Clone::clone(value) }
+}

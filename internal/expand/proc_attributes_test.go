@@ -9,17 +9,16 @@ import (
 	"testing"
 
 	"github.com/goxide-lang/goxide/internal/config"
-	"github.com/goxide-lang/goxide/internal/derives"
 	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/printer"
 	pm "github.com/goxide-lang/syntax/proc_macro"
+	"github.com/goxide-lang/syntax/syn"
 	public "github.com/goxide-lang/syntax/token"
 )
 
 type attributeTestResolver struct {
-	macros  map[string]Macro
-	builtin map[string]derives.Definition
+	macros map[string]Macro
 }
 
 func (r *attributeTestResolver) LookupMacro(path *ast.Path, _ Scope) (Macro, error) {
@@ -29,19 +28,9 @@ func (r *attributeTestResolver) LookupMacro(path *ast.Path, _ Scope) (Macro, err
 	return Macro{}, fmt.Errorf("unknown macro %s", macroPathName(path))
 }
 
-func (r *attributeTestResolver) LookupBuiltinDerive(path *ast.Path, _ Scope) (derives.Definition, bool) {
-	if definition, ok := r.builtin[macroPathName(path)]; ok {
-		return definition, true
-	}
-	if len(path.Segments) == 1 {
-		return derives.Builtin(path.Segments[0].Name.Name)
-	}
-	return derives.Definition{}, false
-}
-
 func newAttributeResolver(t *testing.T, entries []pm.Entry, helpers map[string][]string) *attributeTestResolver {
 	t.Helper()
-	resolver := &attributeTestResolver{macros: map[string]Macro{}, builtin: map[string]derives.Definition{}}
+	resolver := &attributeTestResolver{macros: map[string]Macro{}}
 	for _, entry := range entries {
 		file := expandFile(t, entry.Name+"_definition.gox", "pub func "+entry.Name+"() {}")
 		kind := pm.Function
@@ -76,6 +65,76 @@ func expandAttributes(files []*ast.File, resolver Resolver) (*Result, error) {
 
 func procText(ctx pm.Context, source string) pm.Output {
 	return pm.FromParse(public.ParseText(source, ctx.DefSite()))
+}
+
+func TestProceduralConfigurationRetainsWholeItemInput(t *testing.T) {
+	for _, source := range []string{
+		`#[cfg_attr(all(), derive(Generate))] struct Value { Field int }`,
+		`#[cfg_attr(all(), forward, cfg_attr(all(), derive(Generate)))] struct Value { Field int }`,
+		`macro_rules! item { ($name:ident) => { #[cfg_attr(all(), derive(Generate))] struct $name { Field int } }; }; item!(Value)`,
+	} {
+		calls := 0
+		resolver := newAttributeResolver(t, []pm.Entry{
+			{Name: "forward", Attribute: func(_ pm.Context, _, input public.TokenStream) pm.Output { return pm.Success(input) }},
+			{Name: "Generate", Derive: func(ctx pm.Context, input public.TokenStream) pm.Output {
+				calls++
+				item, err := syn.Parse(input)
+				if err != nil {
+					t.Fatalf("configured derive input: %v: %s", err, input.Display())
+				}
+				fields, ok := item.Type().StructFields()
+				if item.Name().Text() != "Value" || !ok || len(fields) != 1 {
+					t.Fatalf("configured derive lost item: %s", input.Display())
+				}
+				return procText(ctx, "func Generated() {}")
+			}},
+		}, nil)
+		result, err := expandAttributes([]*ast.File{expandFile(t, "configured.gox", source)}, resolver)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if calls != 1 || !strings.Contains(printer.Source(result.Files[0]), "Generated") {
+			t.Fatalf("configured derive calls = %d", calls)
+		}
+	}
+}
+
+func TestProceduralGroupedTypeMembersRetainInputAndHelpers(t *testing.T) {
+	for _, source := range []string{
+		`type ( #[derive(Generate)] #[owned] pub First struct { Value int }; Second string; #[derive(Generate)] Third[T any] struct { Value T } )`,
+		`macro_rules! items { ($name:ident, $field:type) => { type ( #[derive(Generate)] #[owned] pub $name struct { Value $field }; Second string; #[derive(Generate)] Third[T any] struct { Value T } ) }; }; items!(First,int)`,
+	} {
+		var names []string
+		resolver := newAttributeResolver(t, []pm.Entry{{Name: "Generate", Derive: func(ctx pm.Context, input public.TokenStream) pm.Output {
+			item, err := syn.Parse(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			names = append(names, item.Name().Text())
+			fields, ok := item.Type().StructFields()
+			if !ok || len(fields) != 1 {
+				t.Fatalf("grouped member input lost field: %s", input.Display())
+			}
+			if item.Name().Text() == "First" && (item.Visibility().Display() != "pub" || len(item.Attributes()) != 1 || item.Attributes()[0].Path().Display() != "owned") {
+				t.Fatalf("grouped member lost visibility/helper: %s", input.Display())
+			}
+			if item.Name().Text() == "Third" && item.Generics().Display() != "[T any]" {
+				t.Fatalf("grouped member lost generics: %s", input.Display())
+			}
+			return procText(ctx, "func Generated"+item.Name().Text()+"() {}")
+		}}}, map[string][]string{"Generate": {"owned"}})
+		result, err := expandAttributes([]*ast.File{expandFile(t, "grouped.gox", source)}, resolver)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(names, []string{"First", "Third"}) {
+			t.Fatalf("grouped derive order = %v", names)
+		}
+		output := printer.Source(result.Files[0])
+		if strings.Contains(output, "#[") || !strings.Contains(output, "Second string") || !strings.Contains(output, "GeneratedFirst") || !strings.Contains(output, "GeneratedThird") {
+			t.Fatalf("grouped output lost declarations or retained consumed attributes: %s", output)
+		}
+	}
 }
 
 func TestDerivesWithoutResolverRemainForSemanticChecking(t *testing.T) {
@@ -145,9 +204,16 @@ func TestProceduralAttributesReplaceBeforeBodyAndReclassify(t *testing.T) {
 }
 
 func TestProceduralAttributeForwardsOnlyReturnedAttributes(t *testing.T) {
-	resolver := newAttributeResolver(t, []pm.Entry{{Name: "forward", Attribute: func(ctx pm.Context, _, item public.TokenStream) pm.Output {
-		return procText(ctx, item.Display()+"\ntype Extra int")
-	}}}, nil)
+	var inputs []string
+	resolver := newAttributeResolver(t, []pm.Entry{
+		{Name: "forward", Attribute: func(ctx pm.Context, _, item public.TokenStream) pm.Output {
+			return procText(ctx, item.Display()+"\ntype Extra int")
+		}},
+		{Name: "Default", Derive: func(_ pm.Context, item public.TokenStream) pm.Output {
+			inputs = append(inputs, item.Display())
+			return pm.Success(public.New())
+		}},
+	}, map[string][]string{"Default": {"default"}})
 	file := expandFile(t, "forward_attributes.gox", "#[forward] #[derive(Default)] enum Value { #[default] Empty }")
 	result, err := expandAttributes([]*ast.File{file}, resolver)
 	if err != nil {
@@ -157,8 +223,11 @@ func TestProceduralAttributeForwardsOnlyReturnedAttributes(t *testing.T) {
 		t.Fatalf("replacement item count = %d", len(result.Files[0].Items))
 	}
 	value := result.Files[0].Items[0].(*ast.EnumDecl)
-	if len(value.Attrs) != 1 || attributeName(value.Attrs[0]) != "derive" || len(value.Variants[0].Attrs) != 1 || attributeName(value.Variants[0].Attrs[0]) != "default" {
-		t.Fatalf("forwarded builtin request or helper was lost: %s", printer.Source(value))
+	if len(inputs) != 1 || !strings.Contains(inputs[0], "default") || strings.Contains(inputs[0], "Extra") {
+		t.Fatalf("forwarded derive request or helper was lost or inherited by its sibling: %v", inputs)
+	}
+	if len(value.Attrs) != 0 || len(value.Variants[0].Attrs) != 0 {
+		t.Fatalf("forwarded derive request or helper was not consumed: %s", printer.Source(value))
 	}
 	extra := result.Files[0].Items[1].(*ast.TypeDecl)
 	if len(extra.Attrs) != 0 {
@@ -209,41 +278,48 @@ func TestProceduralDerivesShareSnapshotAndConsumeSharedHelpers(t *testing.T) {
 			return procText(ctx, "const "+name+"Value = 1")
 		}}
 	}
-	resolver := newAttributeResolver(t, []pm.Entry{entry("First"), entry("Second")}, map[string][]string{"First": {"shared"}, "Second": {"shared"}})
+	resolver := newAttributeResolver(t, []pm.Entry{entry("First"), entry("Default"), entry("Second")}, map[string][]string{"First": {"shared"}, "Default": {"shared"}, "Second": {"shared"}})
 	file := expandFile(t, "derive.gox", "#[shared(item)] #[derive(First, Default, Second)] type Value struct { #[shared(field)] Field int }")
 	result, err := expandAttributes([]*ast.File{file}, resolver)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(order, []string{"First", "Second"}) || len(inputs) != 2 || inputs[0] != inputs[1] {
+	if !reflect.DeepEqual(order, []string{"First", "Default", "Second"}) || len(inputs) != 3 || inputs[0] != inputs[1] || inputs[0] != inputs[2] {
 		t.Fatalf("derive order/snapshots = %v / %#v", order, inputs)
 	}
 	if strings.Contains(inputs[0], "derive") || strings.Contains(inputs[0], "FirstValue") || strings.Count(inputs[0], "shared") != 2 {
 		t.Fatalf("derive snapshot = %s", inputs[0])
 	}
 	output := printer.Source(result.Files[0])
-	if strings.Contains(output, "shared") || !strings.Contains(output, "#[derive(Default)]") || !strings.Contains(output, "FirstValue") || !strings.Contains(output, "SecondValue") {
+	if strings.Contains(output, "shared") || strings.Contains(output, "#[derive") || !strings.Contains(output, "FirstValue") || !strings.Contains(output, "DefaultValue") || !strings.Contains(output, "SecondValue") {
 		t.Fatalf("derive output = %s", output)
 	}
-	if len(result.Files[0].Items) != 3 || !strings.Contains(printer.Source(file), "shared") {
+	if len(result.Files[0].Items) != 4 || !strings.Contains(printer.Source(file), "shared") {
 		t.Fatal("derive output order/count or source immutability failed")
 	}
 }
 
-func TestProceduralHelperRetainsBuiltinConsumer(t *testing.T) {
-	var input string
-	resolver := newAttributeResolver(t, []pm.Entry{{Name: "Custom", Derive: func(_ pm.Context, item public.TokenStream) pm.Output {
-		input = item.Display()
-		return pm.Success(public.New())
-	}}}, map[string][]string{"Custom": {"default"}})
+func TestProceduralHelperRemainsVisibleToEveryConsumer(t *testing.T) {
+	var inputs, order []string
+	entry := func(name string) pm.Entry {
+		return pm.Entry{Name: name, Derive: func(_ pm.Context, item public.TokenStream) pm.Output {
+			order = append(order, name)
+			inputs = append(inputs, item.Display())
+			return pm.Success(public.New())
+		}}
+	}
+	resolver := newAttributeResolver(t, []pm.Entry{entry("Custom"), entry("Default")}, map[string][]string{"Custom": {"default"}, "Default": {"default"}})
 	file := expandFile(t, "shared_default.gox", "#[derive(Custom, Default)] enum Value { #[default] Empty }")
 	result, err := expandAttributes([]*ast.File{file}, resolver)
 	if err != nil {
 		t.Fatal(err)
 	}
 	value := result.Files[0].Items[0].(*ast.EnumDecl)
-	if !strings.Contains(input, "default") || len(value.Variants[0].Attrs) != 1 || attributeName(value.Variants[0].Attrs[0]) != "default" {
-		t.Fatalf("builtin helper was removed: %s / %s", input, printer.Source(value))
+	if !reflect.DeepEqual(order, []string{"Custom", "Default"}) || len(inputs) != 2 || inputs[0] != inputs[1] || !strings.Contains(inputs[0], "default") {
+		t.Fatalf("shared helper was lost before every consumer ran: %v / %v", order, inputs)
+	}
+	if len(value.Attrs) != 0 || len(value.Variants[0].Attrs) != 0 {
+		t.Fatalf("completed consumers retained their shared helper: %s", printer.Source(value))
 	}
 }
 
@@ -281,9 +357,11 @@ func TestProceduralAttributesAllowRemovalBeforeUnresolvedDerive(t *testing.T) {
 	if err != nil || len(result.Files[0].Items) != 0 {
 		t.Fatalf("deleted unresolved derive: %v", err)
 	}
-	_, err = expandAttributes([]*ast.File{expandFile(t, "unknown.gox", "#[derive(Unknown)] type Value int")}, resolver)
-	if err == nil || !strings.Contains(err.Error(), "unknown derive") {
-		t.Fatalf("unresolved final derive accepted: %v", err)
+	for _, name := range []string{"Unknown", "Default", "Clone", "Debug", "PartialEq", "Eq", "Error", "serde::Serialize", "serde::Deserialize"} {
+		_, err = expandAttributes([]*ast.File{expandFile(t, "unknown.gox", "#[derive("+name+")] type Value int")}, resolver)
+		if err == nil || !strings.Contains(err.Error(), "unknown derive: "+name) {
+			t.Fatalf("unregistered derive %s accepted: %v", name, err)
+		}
 	}
 }
 
@@ -344,7 +422,7 @@ func TestProceduralItemSlots(t *testing.T) {
 		{"impl body", "type Value int; impl Value { #[replace] func value(self Self) {} }", "func value(self Self)", "requires a body", pm.ImplMembersPosition},
 		{"impl type binding", "type Value int; impl Value { #[replace] func value(self Self) {} }", "type Output int", "requires a type binding", pm.ImplMembersPosition},
 		{"trait impl visibility", "type Value int; impl Other for Value { #[replace] func value(self Self) {} }", "pub func value(self Self) {}", "inherit visibility", pm.ImplMembersPosition},
-		{"default impl member", "type Value int; impl Default for Value { #[replace] func default() Value { return Value{} } }", "func default() Value { return Value{} }", "", pm.ImplMembersPosition},
+		{"default impl member", "type Value int; impl Default for Value { #[replace] func r#default() Value { return Value{} } }", "func r#default() Value { return Value{} }", "", pm.ImplMembersPosition},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var position pm.Position

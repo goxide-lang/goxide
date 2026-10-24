@@ -101,7 +101,6 @@ type Result struct {
 	Allocations map[*ast.CallExpr]bool
 	Captures    map[ast.Node]Capture
 	GoResults   map[*ast.CallExpr]bool
-	Prints      map[*ast.CallExpr]bool
 	Files       []*ast.File
 	// PartialFiles holds completed items when expansion fails. Source loaders
 	// may discover generated modules here without replacing diagnostic inputs.
@@ -177,7 +176,7 @@ type engine struct {
 	lexical              map[ast.Node]Scope
 	originals            map[ast.Node]ast.Node
 	trees                map[*ast.TokenTree][]syntaxToken
-	itemBodies           map[ast.Item][]syntaxToken
+	itemBodies           map[ast.Node][]syntaxToken
 	nextCtx              ast.SyntaxCtx
 	nodes, tokens, steps int
 	expansions           int

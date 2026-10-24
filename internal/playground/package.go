@@ -110,14 +110,17 @@ func CompilePackage(files []File, options Options) (output []File, err error) {
 	}
 	// Reads belong to this request even if the immutable environment is reused.
 	options.Config.Reads = &config.Reads{}
+	goPackages := map[string]map[string][]byte{}
 	emitted, err := lower.CompilePackage(sources, packagePath, options.Importer, options.Roots, lower.PackageOptions{
 		Config: options.Config, ProcLibraries: options.ProcLibraries, RuntimeRoots: options.RuntimeRoots,
 		SourcePackages: options.SourcePackages, OnProcDiagnostic: options.OnProcDiagnostic,
+		GoPackages: goPackages,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if err := typecheck.CheckPackage(packagePath, emitted, options.Importer, options.Config.Sizes()); err != nil {
+	imports := &generatedImporter{sources: goPackages, external: options.Importer, sizes: options.Config.Sizes(), packages: map[string]*types.Package{}, loading: map[string]bool{}}
+	if _, err := imports.Import(packagePath); err != nil {
 		return nil, err
 	}
 	output = make([]File, 0, len(emitted))

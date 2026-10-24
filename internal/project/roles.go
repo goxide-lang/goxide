@@ -282,7 +282,11 @@ func (g *Graph) readRoot(root string) (*Node, error) {
 		return g.readNode(root, false, "")
 	}
 	source := g.roleRoot
-	node, err := g.readNode(root, source.source.Kind == "go" && source.CheckoutRoot != "", source.CheckoutRoot)
+	// Only the acquired Go module root owns transport metadata. An embedded
+	// source crate retains the archive boundary and provenance, but cannot own
+	// a nested go.mod: Go module archives exclude nested modules.
+	transportRoot := source.source.Kind == "go" && source.CheckoutRoot != "" && filepath.Clean(root) == filepath.Clean(source.CheckoutRoot)
+	node, err := g.readNode(root, transportRoot, source.CheckoutRoot)
 	if node != nil {
 		node.setSource(source.source)
 		node.CheckoutRoot, node.SelectedVersion = source.CheckoutRoot, source.SelectedVersion

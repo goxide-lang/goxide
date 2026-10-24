@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/goxide-lang/goxide/internal/derives"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/token"
 	pm "github.com/goxide-lang/syntax/proc_macro"
@@ -19,7 +18,6 @@ const (
 	traitItems
 	singleItem
 	traitImplItems
-	defaultImplItems
 )
 
 func itemAttributes(item ast.Item) *[]*ast.Attr {
@@ -149,16 +147,12 @@ func (e *engine) rewriteItem(item ast.Item, file *ast.File, parent ast.ExpnID, s
 	if requestsErr != nil {
 		return nil, e.attributeError(item, file, parent, requestsErr.Error())
 	}
-	var procedural []deriveRequest
 	for _, request := range requests {
 		if request.err != nil {
 			return nil, e.attributeError(request.attr, file, parent, request.err.Error())
 		}
-		if request.definition.proc != nil {
-			procedural = append(procedural, request)
-		}
 	}
-	if len(procedural) > 0 {
+	if len(requests) > 0 {
 		switch declaration := item.(type) {
 		case *ast.TypeDecl:
 			if declaration.Grouped || declaration.Name == nil {
@@ -172,22 +166,23 @@ func (e *engine) rewriteItem(item ast.Item, file *ast.File, parent ast.ExpnID, s
 			return nil, e.attributeError(item, file, parent, "derive requires a single named type declaration")
 		}
 	}
-	var input []syntaxToken
-	if len(procedural) != 0 {
-		snapshot := e.copyNode(item, 0).(ast.Item)
-		var snapshotAttrs []*ast.Attr
-		for _, attr := range *itemAttributes(snapshot) {
-			if attributeName(attr) != "derive" {
-				snapshotAttrs = append(snapshotAttrs, attr)
+	if declaration, ok := item.(*ast.TypeDecl); ok && declaration.Grouped {
+		for _, spec := range declaration.Specs {
+			if len(spec.Attrs) != 0 {
+				return e.rewriteTypeSpecs(declaration, file, parent, slot)
 			}
 		}
-		*itemAttributes(snapshot) = snapshotAttrs
+	}
+	var input []syntaxToken
+	if len(requests) != 0 {
+		snapshot := e.copyNode(item, 0).(ast.Item)
+		removeDerives(snapshot)
 		var err error
 		input, err = e.itemInput(snapshot, file)
 		if err != nil {
 			return nil, e.attributeError(item, file, parent, err.Error())
 		}
-		retainBuiltinDerives(item, requests)
+		removeDerives(item)
 	}
 	occurrences := helperOccurrences(item, helpers)
 	// Begin at fields rather than the item pointer: rewrite's item dispatch must
@@ -223,7 +218,7 @@ func (e *engine) rewriteItem(item ast.Item, file *ast.File, parent ast.ExpnID, s
 			return e.rewriteItems([]ast.Item{result.(ast.Item)}, file, nodeExpn(result), slot)
 		}
 	}
-	for _, request := range procedural {
+	for _, request := range requests {
 		items, expn, err := e.invokeProcItems(request.attr, request.definition, nil, input, file, parent, slot)
 		if err != nil {
 			return nil, err
@@ -239,22 +234,65 @@ func (e *engine) rewriteItem(item ast.Item, file *ast.File, parent ast.ExpnID, s
 			delete(helper.pending, request.consumer)
 		}
 	}
-	// Builtin consumers run after expansion; retain their helpers for check and
-	// lower. A shared custom helper disappears only after every consumer ran.
+	// A shared helper disappears only after every procedural consumer ran.
 	consumeHelpers(item, occurrences)
+	return output, nil
+}
+
+// A grouped type member is a complete named declaration for derives. Lift the
+// group into ordinary items so generated impls remain siblings of their types.
+func (e *engine) rewriteTypeSpecs(group *ast.TypeDecl, file *ast.File, parent ast.ExpnID, slot itemSlot) ([]ast.Item, error) {
+	if len(group.Attrs) != 0 {
+		return nil, e.attributeError(group.Attrs[0], file, parent, "unsupported attribute or invalid attribute position on type group")
+	}
+	var output []ast.Item
+	for _, spec := range group.Specs {
+		declaration := &ast.TypeDecl{ItemBase: spec.ItemBase, Name: spec.Name, Type: spec.Type, Alias: spec.Alias, Form: spec.Form, Generics: spec.Generics, Where: spec.Where}
+		if declaration.Vis.Kind == ast.VisNone {
+			declaration.Vis = group.Vis
+		}
+		if _, err := e.itemInput(spec, file); err != nil {
+			return nil, e.attributeError(spec, file, parent, err.Error())
+		}
+		body := append([]syntaxToken(nil), e.itemBodies[spec]...)
+		prefix := 0
+		if len(body) != 0 && body[0].Token != nil && body[0].Token.Kind == token.PUB {
+			prefix = 1
+			if len(body) > 1 && body[1].Tree != nil && body[1].Tree.Delim == ast.Paren {
+				prefix++
+			}
+		}
+		typeToken := body[prefix]
+		typeToken.Tree, typeToken.Fragment = nil, nil
+		typeToken.Token = &token.Token{Kind: token.TYPE, Text: "type"}
+		retained := append([]syntaxToken(nil), body[:prefix]...)
+		if prefix == 0 && group.Vis.Kind != ast.VisNone {
+			pub := typeToken
+			pub.Token = &token.Token{Kind: token.PUB, Text: "pub"}
+			retained = append(retained, pub)
+		}
+		retained = append(retained, typeToken)
+		retained = append(retained, body[prefix:]...)
+		e.itemBodies[declaration] = retained
+		e.r.Origins[declaration], e.r.Locations[declaration] = e.r.Origins[spec], e.r.Locations[spec]
+		e.lexical[declaration] = e.lexical[spec]
+		items, err := e.rewriteItem(declaration, file, parent, slot)
+		if err != nil {
+			return nil, err
+		}
+		output = append(output, items...)
+	}
 	return output, nil
 }
 
 type deriveConsumer struct {
 	file     *ast.File
 	function *ast.FuncDecl
-	builtin  derives.Definition
 }
 
 type deriveRequest struct {
 	attr       *ast.Attr
 	path       *ast.Path
-	tokens     []ast.TokenOrTree
 	definition definition
 	consumer   deriveConsumer
 	helpers    []string
@@ -263,7 +301,6 @@ type deriveRequest struct {
 
 type helperConsumers struct {
 	pending map[deriveConsumer]bool
-	builtin bool
 }
 
 func deriveHelpers(requests []deriveRequest) map[string]*helperConsumers {
@@ -278,11 +315,7 @@ func deriveHelpers(requests []deriveRequest) map[string]*helperConsumers {
 				consumers = &helperConsumers{pending: map[deriveConsumer]bool{}}
 				result[name] = consumers
 			}
-			if request.definition.proc == nil {
-				consumers.builtin = true
-			} else {
-				consumers.pending[request.consumer] = true
-			}
+			consumers.pending[request.consumer] = true
 		}
 	}
 	return result
@@ -290,8 +323,8 @@ func deriveHelpers(requests []deriveRequest) map[string]*helperConsumers {
 
 func (e *engine) itemDerives(item ast.Item, file *ast.File) ([]deriveRequest, error) {
 	// Without a source resolver there are no procedural derives or executable
-	// attributes. Keep the complete request and its helpers for resolve/check,
-	// which know the selected dependency roots and canonical protocol owners.
+	// attributes. Keep the complete request and its helpers for the caller's
+	// remaining processing.
 	if e.resolver == nil {
 		return nil, nil
 	}
@@ -314,54 +347,15 @@ func (e *engine) itemDerives(item ast.Item, file *ast.File) ([]deriveRequest, er
 				entry := request.definition.proc
 				request.consumer = deriveConsumer{file: entry.File, function: entry.Function}
 				request.helpers = entry.Helpers
-			} else if builtin, ok := e.builtinDerive(request.path, file); ok && request.err != nil {
-				request.definition, request.err = definition{}, nil
-				request.consumer.builtin = builtin
-				switch builtin.Name {
-				case "Default":
-					request.helpers = []string{"default"}
-				case "Error":
-					request.helpers = []string{"error", "source", "from"}
-				case "Serialize", "Deserialize":
-					request.helpers = []string{"serde"}
-				}
 			} else if request.err == nil {
 				request.err = fmt.Errorf("derive requires a derive procedural macro: %s", macroPathName(request.path))
 			} else {
-				request.err = fmt.Errorf("unknown derive or non-canonical owner: %s: %w", macroPathName(request.path), request.err)
+				request.err = fmt.Errorf("unknown derive: %s: %w", macroPathName(request.path), request.err)
 			}
 			result = append(result, request)
 		}
 	}
 	return result, firstError
-}
-
-func (e *engine) builtinDerive(path *ast.Path, file *ast.File) (derives.Definition, bool) {
-	root := path.Segments[0].Name
-	scope := e.r.Scopes[root]
-	if scope.File == nil {
-		scope = Scope{File: file, Ctx: root.Ctx}
-	}
-	if binding, ok := e.r.RuntimeRoots[scope.Ctx]; ok {
-		if resolver, available := e.resolver.(interface {
-			LookupRuntimeRootBuiltinDerive([]string, *ast.Path) (derives.Definition, bool)
-		}); available && root.Name == binding.Name {
-			return resolver.LookupRuntimeRootBuiltinDerive(binding.Target, path)
-		}
-		return derives.Definition{}, false
-	}
-	for context, ok := e.r.Contexts[scope.Ctx]; ok; context, ok = e.r.Contexts[scope.Ctx] {
-		scope = context.Definition
-	}
-	if resolver, ok := e.resolver.(interface {
-		LookupBuiltinDerive(*ast.Path, Scope) (derives.Definition, bool)
-	}); ok {
-		return resolver.LookupBuiltinDerive(path, scope)
-	}
-	if len(path.Segments) == 1 {
-		return derives.Builtin(root.Name)
-	}
-	return derives.Definition{}, false
 }
 
 func macroPathName(path *ast.Path) string {
@@ -409,13 +403,11 @@ func (e *engine) derivePaths(attr *ast.Attr, file *ast.File) ([]deriveRequest, e
 			}
 			current.path.Segments = append(current.path.Segments, &ast.PathSegment{Base: base, Name: id})
 			current.path.Loc.End = tok.End
-			current.tokens = append(current.tokens, value)
 			wantName = false
 			continue
 		}
 		switch tok.Kind {
 		case token.DCOLON:
-			current.tokens = append(current.tokens, value)
 			wantName = true
 		case token.COMMA:
 			result = append(result, current)
@@ -434,27 +426,10 @@ func (e *engine) derivePaths(attr *ast.Attr, file *ast.File) ([]deriveRequest, e
 	return result, nil
 }
 
-func retainBuiltinDerives(item ast.Item, requests []deriveRequest) {
+func removeDerives(item ast.Item) {
 	var attrs []*ast.Attr
 	for _, attr := range *itemAttributes(item) {
-		if attributeName(attr) != "derive" {
-			attrs = append(attrs, attr)
-			continue
-		}
-		var tokens []ast.TokenOrTree
-		for _, request := range requests {
-			if request.attr != attr || request.definition.proc != nil {
-				continue
-			}
-			if len(tokens) != 0 {
-				tokens = append(tokens, ast.TokenOrTree{Token: &token.Token{Kind: token.COMMA, Text: ","}})
-			}
-			tokens = append(tokens, request.tokens...)
-		}
-		if len(tokens) != 0 {
-			copy := *attr.Args
-			copy.Tokens = tokens
-			attr.Args = &copy
+		if attr.Inner || attributeName(attr) != "derive" {
 			attrs = append(attrs, attr)
 		}
 	}
@@ -516,7 +491,7 @@ func consumeHelpers(item ast.Item, occurrences map[*ast.Attr]*helperConsumers) {
 		var retained []*ast.Attr
 		for _, attr := range *attrs {
 			consumers := occurrences[attr]
-			if consumers == nil || consumers.builtin || len(consumers.pending) != 0 {
+			if consumers == nil || len(consumers.pending) != 0 {
 				retained = append(retained, attr)
 			}
 		}
@@ -547,7 +522,7 @@ func (e *engine) rejectGeneratedRegistration(item ast.Item, file *ast.File, expn
 }
 
 func (e *engine) validateItemSlot(item ast.Item, file *ast.File, parent ast.ExpnID, slot itemSlot) error {
-	impl := slot == implItems || slot == traitImplItems || slot == defaultImplItems
+	impl := slot == implItems || slot == traitImplItems
 	if !impl && slot != traitItems {
 		return nil
 	}
@@ -563,7 +538,7 @@ func (e *engine) validateItemSlot(item ast.Item, file *ast.File, parent ast.Expn
 	default:
 		return e.attributeError(item, file, parent, "trait/impl member output requires func or type")
 	}
-	if (slot == traitItems || slot == traitImplItems || slot == defaultImplItems) && reflect.ValueOf(item).Elem().FieldByName("Vis").Interface().(ast.Visibility).Kind != ast.VisNone {
+	if (slot == traitItems || slot == traitImplItems) && reflect.ValueOf(item).Elem().FieldByName("Vis").Interface().(ast.Visibility).Kind != ast.VisNone {
 		return e.attributeError(item, file, parent, "trait members inherit visibility")
 	}
 	return nil

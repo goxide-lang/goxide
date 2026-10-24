@@ -109,7 +109,7 @@ func TestCollectRejectsInvalidRegistration(t *testing.T) {
 }
 
 func TestCollectRejectsReservedNames(t *testing.T) {
-	for _, name := range []string{"cfg", "go_result", "go_result_keep", "print", "println", "Default", "Clone", "Debug", "Error", "PartialEq", "Eq"} {
+	for _, name := range []string{"cfg", "go_result", "go_result_keep"} {
 		file := source(t, root+"/input.gox", "#[proc_macro_derive("+name+")] pub func entry() {}")
 		if _, err := procmacro.Collect(map[string]*ast.File{root + "/input.gox": file}, root, true); err == nil || !strings.Contains(err.Error(), "reserved built-in") {
 			t.Fatalf("reserved %s: %v", name, err)
@@ -117,17 +117,13 @@ func TestCollectRejectsReservedNames(t *testing.T) {
 	}
 }
 
-func TestSerdeNamesAreReservedOnlyForCanonicalOwner(t *testing.T) {
-	for _, owner := range []string{root, "github.com/goxide-lang/serde"} {
-		for _, name := range []string{"Serialize", "Deserialize"} {
+func TestLibraryProtocolNamesAreOrdinaryRegistrations(t *testing.T) {
+	for _, owner := range []string{root, "github.com/goxide-lang/serde", "github.com/goxide-lang/std/macros"} {
+		for _, name := range []string{"Serialize", "Deserialize", "Default", "Clone", "Debug", "Error", "PartialEq", "Eq", "print", "println"} {
 			file := source(t, owner+"/input.gox", "#[proc_macro_derive("+name+")] pub func entry() {}")
 			entries, err := procmacro.Collect(map[string]*ast.File{owner + "/input.gox": file}, owner, true)
-			if owner == root {
-				if err != nil || len(entries) != 1 || entries[0].Name != name {
-					t.Fatalf("ordinary owner cannot register %s: %v", name, err)
-				}
-			} else if err == nil || !strings.Contains(err.Error(), "reserved built-in") {
-				t.Fatalf("canonical serde registration %s accepted: %v", name, err)
+			if err != nil || len(entries) != 1 || entries[0].Name != name {
+				t.Fatalf("library %s cannot register %s: %v", owner, name, err)
 			}
 		}
 	}

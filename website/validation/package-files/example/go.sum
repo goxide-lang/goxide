@@ -1,4 +1,4 @@
-github.com/goxide-lang/serde v0.0.0-20261023080815-5422034b0fcc h1:V4uS5/1hAhN6fQYQ+zdnrVhjxOOe8j98hM3Sko/l65c=
-github.com/goxide-lang/serde v0.0.0-20261023080815-5422034b0fcc/go.mod h1:z8qvILGhdkB516CdnmQMKOtbqyGsCoNWZ6L9eXJLbrM=
-github.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1 h1:EpVnxlA899sxjB2uWXm4p6AlV4zonGo6gM4wcz9HSyo=
-github.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=
+github.com/goxide-lang/serde v0.0.0-20261024103530-271278c04f5c h1:Eng7CWAjbB/JVNAzCwzclOz7WQXW52F0aZ2wYCx1PPc=
+github.com/goxide-lang/serde v0.0.0-20261024103530-271278c04f5c/go.mod h1:ML0HogcXJ1vHwYZK7acF9DblTGiHr1jwbKOqoalM4fE=
+github.com/goxide-lang/std v0.0.2-0.20261024103343-486aa5e95768 h1:e5FfD3kyHd5h0QevY7mXQRQAunmSBJgjUhl+gpmxw/U=
+github.com/goxide-lang/std v0.0.2-0.20261024103343-486aa5e95768/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=

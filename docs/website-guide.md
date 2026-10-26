@@ -124,68 +124,11 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 
 ## 过程宏
 
-过程宏是独立的 Goxide 库模块。编译器先把宏编译为 WASI 程序，再在受限环境中执行展开；宏接收带来源和解析上下文的 token，返回新的 token 或诊断。消费者通过普通依赖和 `use` 选择宏。
+过程宏与语法工具各有独立大章：[过程宏与 proc_macro](procedural-macros.md#过程宏概览)从完整项目讲三种入口、Context、卫生、诊断、目标配置和测试发布；[syntax 语法工具](syntax-tools.md#语法工具概览)讲 token 构造、syn 类型声明视图及公共 API。
 
-完整的[过程宏教程](https://goxide-lang.github.io/learn/?stage=procedural)提供消费者、宏模块、Go 辅助实现和项目测试。下载后先运行 `goxide build .`，再执行 `goxide run --offline --locked .` 和 `goxide test --offline --locked .`。移动本地 path 项目后，先不带 `--locked` 构建一次，记录新位置；之后锁定命令保持锁文件不变。
+第一次编写自己的宏，从[第一个过程宏](procedural-macros.md#第一个过程宏)开始：页面给出两个清单、完整宏实现、消费者和测试。也可以下载[三类过程宏项目](https://goxide-lang.github.io/learn/?stage=procedural)，查看 Goxide 登记函数及完整 Go 辅助实现。标准库和序列化协议的使用见[标准库与 serde 派生](procedural-macros.md#标准库与-serde-派生)。
 
-### 函数式、属性与 derive
-
-```gox
-package main
-
-use fmt;
-use macros;
-
-// 属性宏接收参数和原始函数，替换函数体。
-#[macros::constant(6 * 7)]
-func answer() int { return 0 }
-
-// derive 宏保留类型，并追加 typeName 方法。
-#[derive(macros::TypeName)]
-type Order struct { ID int }
-
-func main() {
-    // 函数式宏把表达式乘二，只求值一次。
-    fmt::Println(macros::twice!(21), answer(), Order{ID: 1001}.typeName())
-}
-```
-
-宏库的 `goxide.toml` 在 `[lib]` 下设置 `proc_macro = true`，并固定 `syntax` SDK 的 Go module 版本。注册入口使用 `#[proc_macro]`、`#[proc_macro_attribute]` 或 `#[proc_macro_derive(TypeName)]`；参数和返回值使用 `syntax::token::TokenStream` 与 `syntax::proc_macro::Output`。
-
-教程中的 `TypeName` 使用 `syntax::syn` 解析具体类型，保留调用方的类型 token，再为新增关键字与方法体使用定义点上下文。它有意只支持无泛型的非 alias 类型；不支持的输入会产生可定位诊断。
-
-### 在浏览器中试用
-
-打开[函数式宏](https://goxide-lang.github.io/playground.html?example=proc_function)、[属性宏](https://goxide-lang.github.io/playground.html?example=proc_attribute)或[derive 宏](https://goxide-lang.github.io/playground.html?example=proc_derive)，修改输入后查看真正展开并转译的 Go。网站构建会用同一依赖图运行这些输入，浏览器验收核对生成代码与 CLI 字节一致。
-
-浏览器只执行随网站发布的固定宏快照，按 SHA-256 验证 WASM，并通过独立 Worker 执行。源码不能增加依赖、上传宏程序或读取宿主文件系统。宏单次执行最多 5 秒，单次编译累计最多 60 秒；编译总超时为 70 秒，停止操作会终止编译和宏 Worker。页面展示的程序输出来自构建时的真实 CLI 运行；浏览器不执行生成的 Go。
-
-### 使用标准库与 serde 的派生
-
-标准协议由库声明，派生和打印使用库导出的过程宏。声明 `std` 与 `serde` 依赖后，源码显式导入根：
-
-```gox
-use std;
-use serde;
-use serde::json as serdejson;
-
-#[derive(std::derive::Default, std::derive::Clone, std::derive::Debug,
-         serde::derive::Serialize, serde::derive::Deserialize)]
-type Config struct { Name string }
-
-func show() {
-    value := std::default_value[Config]()
-    copy := std::Clone::clone(&value)
-    std::println!("{:?}", copy)
-    data, err := serdejson::Marshal(&copy, serde::Write[Config])
-    if err != nil { panic(err) }
-    restored, err := serdejson::Unmarshal(data, serde::Read[Config])
-    if err != nil { panic(err) }
-    std::println!("{:?}", restored)
-}
-```
-
-宏生成普通 `impl`，也可以手写相同协议。Default 使用 `std::default_value[T]()`，Clone / Debug 使用 `std::Clone::clone(&value)` / `std::Debug::debug(&value)`，内容比较使用 `std::PartialEq::equals(left, right)`。serde 的 `Write[T]` 与 `Read[T]` 可直接作为 JSON 回调；不依赖按类型名自动拼出的辅助函数。
+浏览器执行随网站发布的固定宏；自定义宏在本地构建、运行和测试。在线体验范围见[执行环境与浏览器](procedural-macros.md#执行环境与浏览器)。
 
 ## 清单字段
 

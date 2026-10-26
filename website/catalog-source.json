@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "compilerCommit": "bd95b47401267b17ac20b81924ae10e21c373559",
+  "compilerCommit": "92b0a0c42d904b338afee48c04c6d1293427708c",
   "reviewedAt": "2026-10-24",
   "evidenceRefs": {},
   "statusLabels": {
@@ -537,7 +537,7 @@
     },
     {
       "id": "syntax-tools",
-      "title": "quote / syn 与过程宏",
+      "title": "syntax 语法工具与过程宏",
       "topic": "future",
       "rfcs": [
         "0014",
@@ -545,9 +545,9 @@
       ],
       "status": "partial",
       "support": "browser",
-      "summary": "syntax 提供 token、syn、quote 和 proc_macro SDK；过程宏在受限 WASI 中生成类型化 token stream。",
-      "usage": "下载过程宏教程，查看三个 #[proc_macro*] 注册入口和原生 Go 辅助实现；在浏览器修改消费者源码并查看真实展开结果。",
-      "limitation": "浏览器只加载随编译器发布并校验哈希的固定宏；用户不能上传 WASM、访问宿主文件系统或下载任意依赖。生成的 Go 需要在本地运行。",
+      "summary": "syntax 提供 token、单个类型声明的 syn 视图和 proc_macro SDK；过程宏在受限 WASI 中读取并生成带上下文的 token。",
+      "usage": "从独立的过程宏与 syntax 文档学习完整实现和 API，下载三类宏项目在本地编写、运行和测试；浏览器可查看宏源码并修改调用方。",
+      "limitation": "完整 syn AST 与 quote 尚未实现。浏览器只执行随网站发布的固定宏，不能上传或在线构建自定义宏；生成的 Go 在本地运行。",
       "examples": [
         "proc_function",
         "proc_attribute",
@@ -757,5 +757,5 @@
       ]
     }
   ],
-  "compilerDigest": "8a550b89e1fe7428e05c10ae26548410ff39dcd5c47c3eace4b622de155c82a5"
+  "compilerDigest": "dc1485e6f18c2ceff104d465df56ceb332935d49f97d49e3a801d13485c02816"
 }

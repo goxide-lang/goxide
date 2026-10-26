@@ -5,6 +5,23 @@ import {write,read,view,done} from './monaco-qa.mjs';
 import {recordWorkerObservations} from './validation/worker-observations.mjs';
 const documentEnd=process.platform==='darwin'?'Meta+ArrowDown':'Control+End';
 const base=process.env.QA_URL||'http://127.0.0.1:8084';
+const layoutNames={source:'仅源码',result:'仅结果',horizontal:'左右并排',vertical:'上下排列'};
+async function selectLayout(page,layout){
+ const trigger=page.getByRole('button',{name:'编辑器布局',exact:true});
+ const menu=page.getByRole('group',{name:'选择编辑器布局',exact:true});
+ await trigger.click();await menu.waitFor({state:'visible'});
+ assert.equal(await trigger.getAttribute('aria-expanded'),'true');
+ await menu.getByRole('button',{name:layoutNames[layout],exact:true}).click();
+ await menu.waitFor({state:'hidden'});assert.equal(await trigger.getAttribute('aria-expanded'),'false');
+ assert.equal(await page.locator('.dual-editor').getAttribute('data-layout'),layout);
+}
+async function workspaceAction(page,name){
+ const trigger=page.getByRole('button',{name:'更多操作',exact:true});
+ const menu=page.getByRole('group',{name:'工作区操作',exact:true});
+ await trigger.click();await menu.waitFor({state:'visible'});
+ await menu.getByRole('button',{name,exact:true}).click();
+ await menu.waitFor({state:'hidden'});assert.equal(await trigger.getAttribute('aria-expanded'),'false');
+}
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM||'/usr/bin/chromium',headless:true,chromiumSandbox:true});
 try{
  const context=await browser.newContext({viewport:{width:1440,height:1000},permissions:['clipboard-read','clipboard-write'],reducedMotion:'reduce'});
@@ -32,27 +49,41 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  await nav('RFC 特性');await page.locator('#rfc-list a[href="/rfc.html?feature=traits"]').click();
  await page.goBack();await page.goBack();assert.equal(await read(page,'源码'),edited);assert.equal(await page.evaluate(()=>window.qaDocumentMarker),'same document');
  await page.goForward();await page.goForward();assert.match(page.url(),/feature=traits$/);await nav('Playground');assert.equal(await read(page,'源码'),edited);
- // Both create controls share name/duplicate/path validation.
- await page.fill('#new-file-name','../escape.gox');await source.locator('.tabs-row > .new-file').click();assert.match(await page.textContent('#file-error'),/普通/);
- await page.fill('#new-file-name','extra.gox');await source.locator('.file-tree .new-file').click();await done(page);await write(page,'package main\nconst Extra = 9\n');await done(page);
- await page.fill('#new-file-name','extra.gox');await source.locator('.tabs-row > .new-file').click();assert.match(await page.textContent('#file-error'),/已存在/);
- await page.fill('#new-file-name','second.gox');await source.locator('.tabs-row > .new-file').click();await done(page);assert.equal(await source.locator('.file-tabs [data-path]').count(),pkg.files.length+2);
- await source.getByRole('button',{name:'删除文件',exact:true}).click();await done(page);assert.equal(await read(page,'源码'),'package main\nconst Extra = 9\n');
- for(const layout of ['source','result','horizontal','vertical']){await page.click(`[data-layout="${layout}"]`);assert.equal(await page.locator('.source-panel').isVisible(),layout!=='result');assert.equal(await page.locator('.result-panel').isVisible(),layout!=='source');}
- await source.getByRole('button',{name:'收起文件树',exact:true}).click();assert.equal(await source.locator('.file-tree').isVisible(),false);await source.getByRole('button',{name:'展开文件树',exact:true}).click();
- for(const label of ['生成结果','只读依赖']){
-  const pane=view(page,label),original=await read(page,label);assert.equal(await pane.locator('.new-file').count(),0);await pane.getByRole('textbox').focus();await page.keyboard.press('ControlOrMeta+A');await page.keyboard.insertText('should not write');assert.equal(await read(page,label),original,'readonly '+label);
+ // Creation is local to the source explorer; output selection remains independent.
+ async function createFile(name) {
+  if (!await page.locator('#new-file-name').isVisible()) await source.getByRole('button',{name:'新建文件',exact:true}).click();
+  await page.fill('#new-file-name',name);await source.getByRole('button',{name:'创建',exact:true}).click();
  }
- await view(page,'只读依赖').locator('.file-tabs [data-path]').nth(1).click();assert.match(await page.locator('#playground .provenance').first().textContent(),/SHA-256/);
- await page.click('[data-layout="source"]');await write(page,'package main\nfunc broken( {');await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
- assert.ok(await source.locator('.squiggly-error').count()>0,'compiler location markers');await page.click('[data-layout="result"]');assert.equal(await read(page,'生成结果'),'');
+ await createFile('../escape.gox');assert.match(await page.textContent('#file-error'),/普通/);
+ await createFile('extra.gox');await done(page);await write(page,'package main\nconst Extra = 9\n');await done(page);
+ await createFile('extra.gox');assert.match(await page.textContent('#file-error'),/已存在/);
+ await createFile('second.gox');await done(page);assert.equal(await source.locator('.file-tabs [data-path]').count(),pkg.files.length+2);
+ await source.getByRole('button',{name:'删除文件',exact:true}).click();await done(page);assert.equal(await read(page,'源码'),'package main\nconst Extra = 9\n');
+ for(const layout of ['source','result','horizontal','vertical']){await selectLayout(page,layout);assert.equal(await page.locator('.source-panel').isVisible(),layout!=='result');assert.equal(await page.locator('.result-panel').isVisible(),layout!=='source');}
+ for(const [name,group] of [['编辑器布局','选择编辑器布局'],['更多操作','工作区操作']]){
+  const trigger=page.getByRole('button',{name,exact:true}),menu=page.getByRole('group',{name:group,exact:true});
+  await trigger.click();await menu.waitFor({state:'visible'});await page.keyboard.press('Escape');
+  await menu.waitFor({state:'hidden'});assert.equal(await trigger.getAttribute('aria-expanded'),'false');
+  assert.equal(await page.locator('.dual-editor').getAttribute('data-layout'),'vertical','Escape preserves layout');
+ }
+ await source.getByRole('button',{name:'收起文件树',exact:true}).click();assert.equal(await source.locator('.file-tree').isVisible(),false);await source.getByRole('button',{name:'展开文件树',exact:true}).click();
+ const output=view(page,'生成结果'),readonlyOutput=await read(page,'生成结果');
+ assert.equal(await output.locator('.new-file').count(),0);await output.getByRole('textbox').focus();await page.keyboard.press('ControlOrMeta+A');await page.keyboard.insertText('should not write');assert.equal(await read(page,'生成结果'),readonlyOutput,'readonly output');
+ await source.locator('.file-tree summary').click();
+ await source.locator(`.file-tree [data-path="${manifest.dependencyContext.path}"]`).click();
+ assert.equal(await read(page,'源码'),manifest.dependencyContext.source);
+ await source.getByRole('textbox').focus();await page.keyboard.press('ControlOrMeta+A');await page.keyboard.insertText('should not write');assert.equal(await read(page,'源码'),manifest.dependencyContext.source,'readonly dependency');
+ assert.match(await source.locator('.file-provenance').textContent(),/SHA-256/);
+ await source.locator(`.file-tabs [data-path="${file.path}"]`).click();
+ await selectLayout(page,'source');await write(page,'package main\nfunc broken( {');await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
+ assert.ok(await source.locator('.squiggly-error').count()>0,'compiler location markers');await page.locator('.diagnostic-links button').first().click();assert.equal(await source.getByRole('textbox').evaluate(element=>document.activeElement===element),true,'diagnostic focuses source');await selectLayout(page,'result');assert.equal(await read(page,'生成结果'),'');
  const oldEditor=await source.locator('.monaco-editor').elementHandle();
- await page.click('[data-layout="horizontal"]');await page.click('#reset');await done(page);
+ await selectLayout(page,'horizontal');await workspaceAction(page,'重置');await done(page);
  await source.getByRole('textbox').waitFor({state:'attached'});
  assert.equal(await oldEditor.evaluate(element=>element.isConnected),false,'reset removes old Monaco editor');
  assert.equal(await source.locator('.monaco-editor').count(),1,'one recreated source editor');
  assert.equal(await source.locator('.squiggly-error').count(),0);
- await write(page,pkg.files[0].source+'\n// stop test\n');await page.click('#stop');assert.equal(await read(page,'生成结果'),'');await page.click('#compile');await done(page);
+ await write(page,pkg.files[0].source+'\n// stop test\n');await workspaceAction(page,'中断');assert.equal(await read(page,'生成结果'),'');await page.click('#compile');await done(page);
  // Recompilation keeps an existing generated path selected, including helper files.
  const resultPath=pkg.generatedFiles.at(-1).path;await view(page,'生成结果').locator(`.file-tabs [data-path="${resultPath}"]`).click();await write(page,pkg.files[0].source+'\n// path retained\n');await done(page);assert.equal(await view(page,'生成结果').locator('.file-tabs [aria-pressed=true]').getAttribute('data-path'),resultPath);
  await nav('RFC 特性');assert.equal(await page.locator('#rfc-list a').count(),manifest.catalog.items.length);
@@ -63,7 +94,7 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  for(const check of manifest.editingChecks){
   await page.selectOption('#examples',check.example);await done(page);
   await write(page,check.source);await done(page);assert.equal(await read(page,'生成结果'),check.go,check.id+' edited Worker/CLI parity');
-  await page.click('#reset');await done(page);assert.equal(await read(page,'生成结果'),manifest.examples.find(example=>example.id===check.example).go,check.id+' edit recovery');
+  await workspaceAction(page,'重置');await done(page);assert.equal(await read(page,'生成结果'),manifest.examples.find(example=>example.id===check.example).go,check.id+' edit recovery');
  }
  // Every published rejection comes from the same native consumer graph.
  await nav('Playground');await page.selectOption('#examples',manifest.examples[0].id);await done(page);
@@ -71,7 +102,7 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
   await write(page,check.source);await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='error');
   assert.equal((await page.textContent('#diagnostic')).trim(),check.diagnostic,check.id+' diagnostic parity');
   assert.equal(await read(page,'生成结果'),'');assert.equal(await view(page,'生成结果').getByRole('button',{name:'复制文件',exact:true}).isDisabled(),true);
-  await page.click('#reset');await done(page);assert.equal(await read(page,'生成结果'),manifest.examples[0].go,check.id+' recovery');
+  await workspaceAction(page,'重置');await done(page);assert.equal(await read(page,'生成结果'),manifest.examples[0].go,check.id+' recovery');
  }
  // Reuse one real compiler Worker and filename across unrelated diagnostics.
  const nestedSource='package main\nmacro_rules! inner { () => { missing }; }\nmacro_rules! outer { () => { inner!() }; }\nfunc main() { _ = outer!() }\n';
@@ -103,21 +134,31 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  assert.ok(requests.some(request=>new URL(request.url()).pathname==='/'+guest.path),'real bundled macro WASM requested');
  assert.ok(requests.some(request=>new URL(request.url()).pathname==='/proc-macro-worker.js'),'real dedicated macro Worker requested');
  await nav('Playground');await page.selectOption('#examples','proc_function');await done(page);
+ assert.deepEqual(proc.macroSources.map(file=>file.path).sort(),['macros/expand.go','macros/goxide.toml','macros/lib.gox']);
+ const projectDownload=page.getByRole('link',{name:'下载完整项目',exact:true});
+ assert.equal(await projectDownload.getAttribute('href'),'/'+proc.macroDownload.path);
+ assert.equal((await context.request.get(base+'/'+proc.macroDownload.path)).status(),200);
+ await page.getByRole('button',{name:'查看宏实现',exact:true}).click();
+ assert.equal(await read(page,'源码'),proc.macroSources.find(file=>file.path===proc.macroEntryPath).source);
+ await source.getByRole('textbox').focus();await page.keyboard.press('ControlOrMeta+A');await page.keyboard.insertText('should not write');assert.equal(await read(page,'源码'),proc.macroSources.find(file=>file.path===proc.macroEntryPath).source,'readonly macro registration');
+ await source.locator('.file-tree [data-path="macros/expand.go"]').click();assert.equal(await read(page,'源码'),proc.macroSources.find(file=>file.path==='macros/expand.go').source,'complete helper implementation');
+ assert.equal(await page.getByRole('link',{name:'学习编写过程宏',exact:true}).getAttribute('href'),proc.macroDocumentation);
+ await source.locator('.file-tabs [data-path="playground.gox"]').click();
  await write(page,proc.source.replace('return 21','return 25'));await done(page);
  assert.match(await read(page,'生成结果'),/25/,'edited input reaches real procedural expansion');
  assert.match(await read(page,'生成结果'),/\*\s*2/,'function macro emitted multiplication');
  await write(page,proc.source.replace('macros::twice!(next())','macros::twice!()'));
  await page.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('twice requires an expression'));
  assert.equal(await read(page,'生成结果'),'','macro diagnostic clears previous result');
- await page.click('#reset');await done(page);assert.equal(await read(page,'生成结果'),proc.go,'recovery after macro diagnostic');
+ await workspaceAction(page,'重置');await done(page);assert.equal(await read(page,'生成结果'),proc.go,'recovery after macro diagnostic');
  await nav('Playground');await page.selectOption('#examples',manifest.examples[0].id);await done(page);
  for(const value of [80,81,82,83,84,85])await write(page,manifest.examples[0].source.replace('21',String(value)));await done(page);assert.match(await read(page,'生成结果'),/85/,'latest rapid edit');
- await write(page,'package main\nfunc main() {}\n'+' '.repeat(32769));await page.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('32 KiB'));assert.equal(await read(page,'生成结果'),'');await page.click('#reset');await done(page);
+ await write(page,'package main\nfunc main() {}\n'+' '.repeat(32769));await page.waitForFunction(()=>document.querySelector('#diagnostic').textContent.includes('32 KiB'));assert.equal(await read(page,'生成结果'),'');await workspaceAction(page,'重置');await done(page);
  await write(page,'package main\n// <img src=x onerror=alert(1)>\nfunc main() {}\n');await done(page);assert.equal(await page.locator('img').count(),0,'source is rendered as text');
  await source.getByRole('textbox').focus();await page.keyboard.press('ControlOrMeta+Enter');await done(page);await page.keyboard.press('Tab');assert.ok(await page.evaluate(()=>document.activeElement!==document.body));
  await write(page,'/* package decoy */\npackage/**/示例\nfunc F() {}\n');await done(page);
- await page.fill('#new-file-name','unicode.gox');await source.locator('.tabs-row > .new-file').click();await done(page);assert.equal(await read(page,'源码'),'package 示例\n','new file follows Unicode package clause');
- await page.click('#reset');await done(page);
+ await createFile('unicode.gox');await done(page);assert.equal(await read(page,'源码'),'package 示例\n','new file follows Unicode package clause');
+ await workspaceAction(page,'重置');await done(page);
  await nav('本地使用');await page.locator('#project-examples .file-view').first().waitFor();assert.ok(await page.locator('#project-examples .file-view').count()>0);assert.equal(await page.locator('#project-examples .new-file').count(),0);
  for(const project of manifest.projectExamples.filter(project=>project.download)){const link=page.locator(`#project-examples a[href="/${project.download.path}"]`);assert.equal(await link.getAttribute('download'),project.download.path);const response=await context.request.get(base+'/'+project.download.path);assert.equal(response.status(),200);const bytes=await response.body();assert.equal(bytes.subarray(0,2).toString(),'PK');assert.ok(project.download.files.includes('go.mod'));assert.ok(project.download.files.includes('go.sum'));assert.ok(project.download.files.includes('goxide.roots.toml'));assert.ok(project.download.files.includes('impl/impl.go'));assert.ok(project.download.files.some(path=>path.endsWith('.gox')));}
  assert.equal(await page.locator('#project-examples a[download]').count(),1);
@@ -126,8 +167,16 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  await page.goto(base+'/playground.html?example=missing');await page.getByRole('alert').filter({hasText:'找不到此示例'}).waitFor();
  await page.goto(base+'/playground.html?example=package_files');await done(page);
  await fs.mkdir(new URL('qa-artifacts/',import.meta.url),{recursive:true});await page.screenshot({path:new URL('qa-artifacts/preact-monaco-desktop.png',import.meta.url).pathname});
- await page.setViewportSize({width:390,height:844});for(const layout of ['source','result','horizontal','vertical']){await page.click(`[data-layout="${layout}"]`);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),layout+' reading width');}
- await page.click('[data-layout="horizontal"]');await page.screenshot({path:new URL('qa-artifacts/preact-monaco-narrow.png',import.meta.url).pathname});
+ await page.setViewportSize({width:390,height:844});
+ await source.locator('.file-tree').waitFor({state:'hidden'});await view(page,'生成结果').locator('.file-tree').waitFor({state:'hidden'});
+ const narrowFileCount=await source.locator('.file-tabs [data-path]').count();
+ await source.getByRole('button',{name:'新建文件',exact:true}).click();await page.locator('#new-file-name').waitFor({state:'visible'});
+ assert.equal(await source.locator('.file-tree').isVisible(),true,'narrow create opens source explorer');
+ await page.fill('#new-file-name','mobile.gox');await source.getByRole('button',{name:'取消',exact:true}).click();
+ await page.locator('#new-file-name').waitFor({state:'hidden'});assert.equal(await source.locator('.file-tabs [data-path]').count(),narrowFileCount,'cancel does not create a source file');
+ await source.getByRole('button',{name:'收起文件树',exact:true}).click();await source.locator('.file-tree').waitFor({state:'hidden'});
+ for(const layout of ['source','result','horizontal','vertical']){await selectLayout(page,layout);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),layout+' reading width');}
+ await selectLayout(page,'horizontal');await page.screenshot({path:new URL('qa-artifacts/preact-monaco-narrow.png',import.meta.url).pathname});
  await page.setViewportSize({width:1440,height:1000});assert.equal(await page.locator('.dual-editor').evaluate(element=>getComputedStyle(element).gridTemplateColumns.split(' ').length),2);
  await source.getByRole('textbox').focus();await page.keyboard.press('ControlOrMeta+f');await source.locator('.find-widget.visible').waitFor();await page.keyboard.press('Escape');await source.getByRole('textbox').focus();await page.keyboard.press('Control+Space');await page.waitForFunction(()=>document.querySelector('.suggest-widget.visible'),null,{timeout:10000});await page.keyboard.press('Escape');
  assert.deepEqual(errors,[]);assert.ok(requests.every(request=>request.url().startsWith(base)&&request.method()==='GET'),'same-origin GET only');assert.ok(requests.some(request=>/editor.worker-.*\.js/.test(request.url())),'bundled Monaco worker');assert.ok(!requests.some(request=>request.url().includes('/goxide/assets/')),'organization root base');
@@ -156,14 +205,14 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
   assert.match(diagnostic,/^[^\n]+\.gox:\d+:\d+:/,'host rejection source location');
   assert.match(diagnostic,/\n  macro defined at [^\n]+; called at [^\n]+/,'host rejection expansion trace');
   assert.equal(await read(rejected,'生成结果'),'','rejected host Promise clears output');
-  await rejected.unroute('**/worker.js*');await rejected.click('#stop');await rejected.click('#compile');await done(rejected);
+  await rejected.unroute('**/worker.js*');await workspaceAction(rejected,'中断');await rejected.click('#compile');await done(rejected);
   assert.equal(await read(rejected,'生成结果'),proc.go,'recovery after rejected host Promise');await rejected.close();
  }
  const interrupted=await context.newPage();
  let releaseFetch,seenFetch;const blocked=new Promise(resolve=>{releaseFetch=resolve}),requested=new Promise(resolve=>{seenFetch=resolve});
  await interrupted.route('**/proc-macros/*.wasm*',async route=>{seenFetch();await blocked;await route.continue().catch(()=>{});});
  await interrupted.goto(base+'/playground.html?example=proc_function');await requested;
- await interrupted.click('#stop');assert.equal(await read(interrupted,'生成结果'),'','stopping a macro clears output');
+ await workspaceAction(interrupted,'中断');assert.equal(await read(interrupted,'生成结果'),'','stopping a macro clears output');
  releaseFetch();await interrupted.unroute('**/proc-macros/*.wasm*');await interrupted.click('#compile');await done(interrupted);
  assert.equal(await read(interrupted,'生成结果'),proc.go,'fresh Worker recovers after macro cancellation');await interrupted.close();
  const editorFailure=await context.newPage();const loadErrors=[];editorFailure.on('pageerror',error=>loadErrors.push(error.message));
@@ -187,7 +236,7 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  await timeout.route('**/examples.json',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({...manifest,compileTimeoutMs:1000})}));
  await timeout.route('**/worker.js*',route=>route.fulfill({contentType:'application/javascript',body:`postMessage({type:'ready',rootsSha256:'${manifest.dependencyContext.sha256}',macroArtifacts:[]});onmessage=()=>{};`}));
  await timeout.goto(base+'/playground.html');await timeout.waitForFunction(()=>document.querySelector('#diagnostic')?.textContent.includes('编译超过 1 秒'));
- assert.equal(await read(timeout,'生成结果'),'');await timeout.click('#compile');await timeout.waitForFunction(()=>document.querySelector('#status')?.textContent==='正在转译…');await timeout.click('#stop');assert.match(await timeout.textContent('#status'),/已中断/);
+ assert.equal(await read(timeout,'生成结果'),'');await timeout.click('#compile');await timeout.waitForFunction(()=>document.querySelector('#status')?.textContent==='正在转译…');await workspaceAction(timeout,'中断');assert.match(await timeout.textContent('#status'),/已中断/);
  await timeout.unroute('**/worker.js*');await timeout.unroute('**/examples.json');await timeout.reload();await done(timeout);assert.equal(await read(timeout,'生成结果'),manifest.examples[0].go);await timeout.close();
  const delayed=await context.newPage();
  await delayed.addInitScript(()=>{

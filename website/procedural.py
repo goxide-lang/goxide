@@ -31,7 +31,7 @@ def build(root, dist, go, run, compiler_source):
         return generated_files(output)
 
     def check(project, output):
-        command(project, 'build', '--offline', '-o', str(output), '.')
+        command(project, 'build', '-o', str(output), '.')
         locked = (project / 'goxide.lock').read_bytes()
         assert run(str(output), cwd=project).decode() == OUTPUT, 'procedural tutorial binary output differs'
         assert command(project, 'run', '--offline', '--locked', '.') == OUTPUT, 'procedural tutorial output differs'
@@ -49,7 +49,7 @@ def build(root, dist, go, run, compiler_source):
         assert generate(project, base / 'generated-repeat') == generated, 'procedural tutorial generation changed bytes'
         files = [*original, dict(path='goxide.lock', source=(project / 'goxide.lock').read_text())]
         commands = [
-            dict(command='goxide build --offline .', stdout=''),
+            dict(command='goxide build .', stdout=''),
             dict(command='goxide gen --offline --locked -o ../generated .', stdout=generation_stdout[base / 'generated']),
             dict(command='goxide run --offline --locked .', stdout=OUTPUT),
             dict(command='goxide test --offline --locked .', stdout=tests),
@@ -80,7 +80,7 @@ def build(root, dist, go, run, compiler_source):
     return stage
 
 
-def browser(root, dist, go, run, catalog, bundle_tool, bundle_directory):
+def browser(root, dist, go, run, catalog, bundle_tool, bundle_directory, tutorial_download=None):
     """Give every editable input the same package identity and fixed sources."""
     cli = str(root / 'bin/goxide')
     context_path = root / 'website/validation/browser/goxide.toml'
@@ -99,6 +99,8 @@ def browser(root, dist, go, run, catalog, bundle_tool, bundle_directory):
         project.mkdir()
         (project / 'goxide.toml').write_bytes(context)
         shutil.copytree(root / 'website/tutorial-projects/procedural/macros', project / 'macros')
+        macro_sources = [dict(path='macros/' + file['path'], source=file['source'])
+                         for file in source_files(project / 'macros')]
 
         def inputs(files):
             for previous in project.glob('*.gox'):
@@ -132,6 +134,10 @@ def browser(root, dist, go, run, catalog, bundle_tool, bundle_directory):
             assert stdout == entry['expectedStdout'], name + ': runtime output changed'
             assert (project / 'goxide.lock').read_bytes() == locked, name + ': locked graph changed'
             examples[name] = dict(source=source, go=user_files[0]['source'], stdout=stdout)
+            if name in ('proc_function', 'proc_attribute', 'proc_derive'):
+                examples[name].update(macroSources=macro_sources, macroEntryPath='macros/lib.gox',
+                                      macroDocumentation='/docs/?page=' + name.replace('_', '-'),
+                                      macroDownload=tutorial_download)
         fixture = root / 'website/validation/package-files/example'
         package_files = [dict(path=path.name, source=path.read_text()) for path in sorted(fixture.glob('*.gox'))]
         inputs(package_files)

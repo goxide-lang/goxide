@@ -1,12 +1,6 @@
 // Drive the real editor through its keyboard and copy control, without product test hooks.
 export function view(page, label) {
-  return page
-    .locator("section.file-view")
-    .filter({
-      has: page
-        .locator(".view-toolbar strong")
-        .filter({ hasText: new RegExp("^" + label + "$") }),
-    });
+  return page.locator(`section.file-view[aria-label="${label}"]`);
 }
 export async function write(page, source) {
   const pane = view(page, "源码");

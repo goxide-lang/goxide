@@ -5,22 +5,39 @@ import re
 import unicodedata
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
+import sdk_reference
+
 
 PAGES = (
-    ("start", "开始使用", "选择使用方式"),
-    ("install", "开始使用", "安装"),
-    ("go-gen", "开始使用", "在已有 Go 项目中使用 Goxide"),
-    ("first-project", "开始使用", "第一个 Goxide 项目"),
-    ("language", "语言", "语言速览"),
-    ("procedural-macros", "语言", "过程宏"),
-    ("manifest", "项目与包管理", "清单字段"),
-    ("dependencies", "项目与包管理", "依赖与命名空间"),
-    ("lock-cache", "项目与包管理", "锁文件与缓存"),
-    ("features", "条件编译", "Feature"),
-    ("cfg", "条件编译", "条件编译"),
-    ("target-env", "条件编译", "目标与环境"),
-    ("cli", "CLI参考", "CLI 参考"),
-    ("status", "状态与设计", "能力与设计"),
+    ("start", "开始使用", "选择使用方式", "website-guide.md"),
+    ("install", "开始使用", "安装", "website-guide.md"),
+    ("go-gen", "开始使用", "在已有 Go 项目中使用 Goxide", "using-goxide-gen.md"),
+    ("first-project", "开始使用", "第一个 Goxide 项目", "website-guide.md"),
+    ("language", "语言", "语言速览", "website-guide.md"),
+    ("procedural-macros", "过程宏与 proc_macro", "过程宏概览", "procedural-macros.md"),
+    ("proc-first", "过程宏与 proc_macro", "第一个过程宏", "procedural-macros.md"),
+    ("proc-function", "过程宏与 proc_macro", "函数式过程宏", "procedural-macros.md"),
+    ("proc-attribute", "过程宏与 proc_macro", "属性过程宏", "procedural-macros.md"),
+    ("proc-derive", "过程宏与 proc_macro", "派生宏与 helper", "procedural-macros.md"),
+    ("proc-context", "过程宏与 proc_macro", "Context 与名称解析", "procedural-macros.md"),
+    ("proc-diagnostics", "过程宏与 proc_macro", "源码位置与诊断", "procedural-macros.md"),
+    ("proc-config", "过程宏与 proc_macro", "目标与条件编译", "procedural-macros.md"),
+    ("proc-project", "过程宏与 proc_macro", "宏项目测试与发布", "procedural-macros.md"),
+    ("proc-host", "过程宏与 proc_macro", "执行环境与浏览器", "procedural-macros.md"),
+    ("proc-standard", "过程宏与 proc_macro", "标准库与 serde 派生", "procedural-macros.md"),
+    ("syntax-overview", "syntax 语法工具", "语法工具概览", "syntax-tools.md"),
+    ("syntax-token", "syntax 语法工具", "读取与构造 token", "syntax-tools.md"),
+    ("syntax-syn", "syntax 语法工具", "读取类型声明", "syntax-tools.md"),
+    ("syntax-fragments", "syntax 语法工具", "保留语法与来源", "syntax-tools.md"),
+    ("syntax-host", "syntax 语法工具", "高级宿主协议", "syntax-tools.md"),
+    ("manifest", "项目与包管理", "清单字段", "website-guide.md"),
+    ("dependencies", "项目与包管理", "依赖与命名空间", "website-guide.md"),
+    ("lock-cache", "项目与包管理", "锁文件与缓存", "website-guide.md"),
+    ("features", "条件编译", "Feature", "website-guide.md"),
+    ("cfg", "条件编译", "条件编译", "website-guide.md"),
+    ("target-env", "条件编译", "目标与环境", "website-guide.md"),
+    ("cli", "CLI参考", "CLI 参考", "website-guide.md"),
+    ("status", "状态与设计", "能力与设计", "website-guide.md"),
 )
 
 
@@ -65,10 +82,14 @@ def design_sources(root):
 
 def public_links(markdown, source, root):
     guide = root / "docs/website-guide.md"
-    section_pages = {slug(title): identity for identity, _, title in PAGES if identity != "go-gen"}
+    section_pages = {(root / "docs" / filename, slug(title)): identity
+                     for identity, _, title, filename in PAGES if identity != "go-gen"}
+    section_pages[(guide, slug("过程宏"))] = "procedural-macros"
     document_pages = {
         root / "docs/using-goxide-gen.md": "/docs/?page=go-gen",
         root / "docs/mvp-gap-audit.md": "/docs/?page=status",
+        root / "docs/procedural-macros.md": "/docs/?page=procedural-macros",
+        root / "docs/syntax-tools.md": "/docs/?page=syntax-overview",
     }
     document_pages.update({path: '/design/?page=' + identity
                            for identity, _, path in design_sources(root)})
@@ -81,9 +102,9 @@ def public_links(markdown, source, root):
             return value
         destination = (source.parent / unquote(parsed.path)).resolve() if parsed.path else source
         fragment = unquote(parsed.fragment)
-        if destination == guide and fragment in section_pages:
-            return "/docs/?page=" + section_pages[fragment]
-        if destination in document_pages:
+        if (destination, fragment) in section_pages:
+            return "/docs/?page=" + section_pages[(destination, fragment)]
+        if parsed.path and destination in document_pages:
             return document_pages[destination] + ("#" + parsed.fragment if fragment else "")
         if not parsed.path:
             return value
@@ -109,16 +130,15 @@ def public_links(markdown, source, root):
 
 def build(root, go, run, compiler_source):
     root = pathlib.Path(root).resolve()
-    guide = root / "docs/website-guide.md"
-    content = sections(guide.read_text(encoding="utf-8"))
+    content = {filename: sections((root / "docs" / filename).read_text(encoding="utf-8"))
+               for filename in dict.fromkeys(page[3] for page in PAGES)}
     pages = []
-    for identity, category, title in PAGES:
-        source = guide
+    for identity, category, title, filename in PAGES:
+        source = root / "docs" / filename
         if identity == "go-gen":
-            source = root / "docs/using-goxide-gen.md"
             markdown = source.read_text(encoding="utf-8").partition("\n")[2].strip()
         else:
-            markdown = content[title]
+            markdown = content[filename][title]
         if identity == "install":
             commit = compiler_source.get('commit') or compiler_source['baseCommit']
             assert re.fullmatch('[0-9a-f]{40}', commit), 'installation requires a complete compiler commit'
@@ -142,6 +162,8 @@ def build(root, go, run, compiler_source):
         if str(root) in markdown:
             raise ValueError("local checkout path in published documentation")
         pages.append(dict(id=identity, category=category, title=title, markdown=markdown))
+    pages.extend(sdk_reference.build(root, go, run))
+    assert len({page['id'] for page in pages}) == len(pages), 'duplicate documentation page ID'
     return dict(pages=pages)
 
 

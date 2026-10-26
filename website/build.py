@@ -98,7 +98,7 @@ bundle_temporary = tempfile.TemporaryDirectory(prefix='goxide-web-macro-bundle-'
 bundle_directory = pathlib.Path(bundle_temporary.name)
 proc_tutorial = procedural.build(ROOT, dist, GO, run, compiler_source)
 browser_examples, package_example, checks, macro_bundle, editing_checks = procedural.browser(
-    ROOT, dist, GO, run, catalog_data, ROOT/'bin/website-macro-bundle', bundle_directory)
+    ROOT, dist, GO, run, catalog_data, ROOT/'bin/website-macro-bundle', bundle_directory, tutorial_download=proc_tutorial['download'])
 examples = [dict(id=entry['id'], title=entry['title'], description=entry['description'],
                  **browser_examples[entry['id']]) for entry in catalog_data['examples']]
 package_examples = [package_example]

@@ -8,11 +8,11 @@
 - `/learn/?stage=mixed`：订单 CLI 快速开始，含原生 Go、混合项目、完整 Gox、包管理与 feature；`/learn/?stage=procedural` 继续编写函数式、属性与 derive 过程宏。完整项目显示 `goxide.toml`、锁文件、源码、生成结果和可复制命令。
 - `/docs/?page=start`：中文指南、语言与配置参考、CLI 帮助和能力状态；支持本地搜索及页内目录。
 - `/design/?page=overview`：完整词法/文法、编译与转译规则、表示规范、决策与逐特性 RFC；与使用参考分别搜索。
-- `/playground.html`：真实浏览器单包转译。已有 `/rfc.html`、`/local.html` 入口继续可用。
+- `/playground.html`：真实浏览器单包转译；工具栏、源文件树、只读宏与依赖、独立生成文件树和可点击诊断在同一工作区。已有 `/rfc.html`、`/local.html` 入口继续可用。
 
 快速开始源码保存在 `tutorial-projects/`，`tutorials.py` 与 `procedural.py` 在临时目录执行真实 build/run/test、重复生成和锁定离线重放，并生成五份 `tutorial-*.zip`。每份下载会解压到另一目录重新验证。页面中的源码、生成 Go 和 CLI 输出均来自这些实际运行；配置预设展示已验证结果，浏览器不执行完整项目。
 
-文档由 `docs_content.py` 从仓库 Markdown 单源提取，CLI 参考读取本次编译器的帮助文本。设计文档同样直接读取 `docs/design/` 与编号 RFC；数学规则以可复制文本排版。Markdown 以安全文本、标题、代码、列表、表格和链接渲染。普通首页、快速开始和文档不加载 Monaco 或编译器 WASM；进入 Playground 才加载编辑器与编译 Worker。
+文档由 `docs_content.py` 从仓库 Markdown 单源提取，CLI 参考读取本次编译器的帮助文本。过程宏与 syntax 工具分为独立章节；`sdk_reference.py` / `sdk_reference.go` 从编译器 require 锁定的公开 SDK 提取 `proc_macro`、`token`、`syn` 的声明、方法、注释与示例，包含嵌入类型提升的方法，并链接到该版本源码。设计文档同样直接读取 `docs/design/` 与编号 RFC；数学规则以可复制文本排版。Markdown 以安全文本、标题、代码、列表、表格和链接渲染。普通首页、快速开始和文档不加载 Monaco 或编译器 WASM；进入 Playground 才加载编辑器与编译 Worker。
 
 ## 构建
 
@@ -38,7 +38,7 @@ python3 -B website/hosting/preview.py --port 8084 --headers
 
 Playground 转译一个用户包与固定随附依赖，最多 16 个 `.gox` 文件、UTF-8 总计 32 KiB；不运行生成的 Go、不下载任意依赖。所有浏览器示例的 CLI 基准使用 `validation/browser/goxide.toml` 的同一依赖图与 `playground` 包身份。一个编译 Worker，450ms 去抖，70 秒转译和 30 秒加载超时；编辑、失败和中断立即清空旧结果。
 
-函数式、属性和 derive 示例实际调用随网站发布的 WASI 宏。页面校验 WASM 哈希并管理独立宏 Worker，宏单次执行最多 5 秒、每次编译累计最多 60 秒；停止与失败会关闭相关 Worker。固定快照包含已检查的宏注册、普通源包和运行时根，消费者编辑不能添加可执行宏或改变依赖选择。
+函数式、属性和 derive 示例实际调用随网站发布的 WASI 宏。页面校验 WASM 哈希并管理独立宏 Worker，宏单次执行最多 5 秒、每次编译累计最多 60 秒；停止与失败会关闭相关 Worker。固定快照包含已检查的宏注册、普通源包和运行时根，消费者编辑不能添加可执行宏或改变依赖选择。三类示例可直接查看实际随附的宏登记、完整 Go 辅助实现与宏清单，并下载已运行验证的完整项目到本地修改。
 
 Monaco 提供文件模型、撤销/重做、查找、基础着色与可定位诊断。站内切换页面保留 Playground 草稿和选择，刷新会重新加载示例。未知条目有错误提示，未知资源返回真实 HTTP 404。
 

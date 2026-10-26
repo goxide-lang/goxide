@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`bd95b47401267b17ac20b81924ae10e21c373559`；证据复核日期：2026-10-24。
+编译器基线：`92b0a0c42d904b338afee48c04c6d1293427708c`；证据复核日期：2026-10-24。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -16,14 +16,14 @@
 | serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (97a067133b21); `tests/acceptance/serde_defaults_test.go` (1d74a106d9be); `docs/serde-json.md` (a55217213af4) |
 | Error 派生与错误链 | 0013, research/0005 | 部分实现 | browser | `tests/acceptance/serde_causes_test.go` (7a16c6af739e); `tests/acceptance/macros_test.go` (2caa6f0b718e) |
 | use / pub use 与 API 聚合 | 0021 | 部分实现 | cli | `tests/acceptance/qualified_packages_test.go` (07d24641ce15); `examples/reexports/README.md` (67e1513bf1e1) |
-| 多包、feature 与编译目标 | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (3a7e476ca4f1); `internal/project/planner.go` (d0b67d506a4b); `cmd/goxide/project_test.go` (1a70fd20e71c); `cmd/goxide/version_test.go` (891f8b0a6e38); `cmd/goxide/combination_review_test.go` (44a4bea56e38); `docs/rfcs/0025-unified-project.md` (63bafab76210); `cmd/goxide/import_go_test.go` (7f13a2b51e19); `cmd/goxide/single_file.go` (72447c301c4d); `tests/acceptance/single_file_external_test.go` (d58a06a2aa28) |
+| 多包、feature 与编译目标 | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (3a7e476ca4f1); `internal/project/planner.go` (bb8a6b1ddb52); `cmd/goxide/project_test.go` (1a70fd20e71c); `cmd/goxide/version_test.go` (891f8b0a6e38); `cmd/goxide/combination_review_test.go` (44a4bea56e38); `docs/rfcs/0025-unified-project.md` (63bafab76210); `cmd/goxide/import_go_test.go` (7f13a2b51e19); `cmd/goxide/single_file.go` (4bc46a485aad); `tests/acceptance/single_file_external_test.go` (d58a06a2aa28) |
 | 从普通 Go 迁入：plan → 新目录 | 0025 | MVP 阶段恢复 | unavailable | `docs/rfcs/0025-unified-project.md` (63bafab76210); `cmd/goxide/import_go.go` (726a93405de6); `cmd/goxide/import_go_test.go` (7f13a2b51e19) |
 | 宿主构建脚本与授权 | 0023 | MVP 阶段恢复 | unavailable | `internal/scripttrust/store.go` (1b8255621bb4); `cmd/goxide/scripts.go` (148c6ee0d37f); `cmd/goxide/buildscript_test.go` (81afc6dd298d); `cmd/goxide/combination_review_test.go` (44a4bea56e38) |
 | 只读路径与写引用 | 0005, 0006 | 部分实现 | browser | `tests/acceptance/refs_test.go` (4c4d47ea744d); `tests/acceptance/composite_permissions_test.go` (8d534def4950) |
 | 别名与借用风险分析 | 0005 | 已确认待实现 | unavailable | `docs/rfcs/0005-borrows.md` (f8d6395d5239) |
 | 静态协议、关联函数与 impl | 0002, 0003, 0004, 0019, 0020, 0031 | 部分实现 | browser | `docs/static-protocols.md` (6e7409874de4); `tests/acceptance/static_protocol_test.go` (89913a362dbd) |
 | safe std、锁与集合 | 0006, 0007, 0010, 0016, 0017 | 已确认待实现 | unavailable | `docs/rfcs/0007-locks.md` (3a27dc2b760e); `docs/rfcs/0010-collections.md` (4227ef865b5f); `docs/rfcs/0016-safe-std.md` (1226aafb44c7); `docs/rfcs/0017-maps.md` (632d10a19c9a) |
-| quote / syn 与过程宏 | 0014, 0030 | 部分实现 | browser | `docs/rfcs/0014-syntax-tools.md` (977cadd5ef80); `docs/rfcs/0030-procedural-macros.md` (1af928b3b65e); `internal/compile/proc_build_test.go` (a28671f3c38c); `internal/compile/proc_attribute_scope_test.go` (e2da6841c6aa); `internal/lower/proc_snapshot_e2e_test.go` (c987c5e5d484); `cmd/goxide/proc_macro_test.go` (195eb0c1cac6) |
+| syntax 语法工具与过程宏 | 0014, 0030 | 部分实现 | browser | `docs/rfcs/0014-syntax-tools.md` (977cadd5ef80); `docs/rfcs/0030-procedural-macros.md` (1af928b3b65e); `internal/compile/proc_build_test.go` (a28671f3c38c); `internal/compile/proc_attribute_scope_test.go` (e2da6841c6aa); `internal/lower/proc_snapshot_e2e_test.go` (c987c5e5d484); `cmd/goxide/proc_macro_test.go` (195eb0c1cac6) |
 | 降低约束与公开边界 | 0015, 0018, 0027 | 部分实现 | browser | `tests/acceptance/source_lowering_test.go` (1124d35f2782); `docs/rfcs/0018-lowering-contract.md` (5d756137f2ad) |
 | 显式依赖根与静态路径 | 0024, 0028 | 部分实现 | browser | `internal/paths/paths.go` (849ffb9f4799); `internal/rootconfig/roots.go` (a6fefb11ad44); `cmd/goxide-playground/main.go` (85121378384b) |
 | 分仓标准库与编译器支持 | 0008, 0016 | 部分实现 | browser | `internal/lower/enum_packages_test.go` (f56e7533af81); `tests/acceptance/sum_clone_debug_test.go` (d1f175634e1c); `tests/acceptance/option_serde_test.go` (97a067133b21) |

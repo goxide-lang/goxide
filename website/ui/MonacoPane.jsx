@@ -17,6 +17,7 @@ export default function MonacoPane({
   activePath,
   readonly,
   markers = [],
+  position,
   onChange,
   onCompile,
   label,
@@ -35,7 +36,10 @@ export default function MonacoPane({
       model: null,
       automaticLayout: true,
       minimap: { enabled: false },
-      fontSize: 14,
+      fontSize: 16,
+      lineHeight: 26,
+      padding: { top: 14, bottom: 14 },
+      lineNumbersMinChars: 3,
       scrollBeyondLastLine: false,
       wordBasedSuggestions: "currentDocument",
       readOnly: readonly,
@@ -70,9 +74,7 @@ export default function MonacoPane({
     const previous = instance.getModel();
     if (previous)
       views.current.set(previous.uri.path.slice(1), instance.saveViewState());
-    const needed = readonly
-      ? files.filter((file) => file.path === activePath)
-      : files;
+    const needed = files.filter((file) => (!readonly && !file.readonly) || file.path === activePath);
     for (const path of views.current.keys())
       if (!files.some((file) => file.path === path)) views.current.delete(path);
     for (const [path, model] of models.current)
@@ -117,8 +119,15 @@ export default function MonacoPane({
       if (views.current.has(activePath))
         instance.restoreViewState(views.current.get(activePath));
     }
-    instance.updateOptions({ readOnly: readonly });
+    instance.updateOptions({ readOnly: readonly || !!files.find((file) => file.path === activePath)?.readonly });
     switching.current = false;
   }, [files, activePath, readonly, markers]);
+  useLayoutEffect(() => {
+    if (!position || position.path !== activePath) return;
+    const target = { lineNumber: position.startLineNumber, column: position.startColumn };
+    editor.current.setPosition(target);
+    editor.current.revealPositionInCenter(target);
+    editor.current.focus();
+  }, [position, activePath]);
   return <div className="monaco-host" ref={host} />;
 }

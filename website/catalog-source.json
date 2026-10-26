@@ -68,10 +68,28 @@
       "expectedStdout": "0 8080\nsettings Settings { Port: 8080 }\n"
     },
     {
+      "id": "serde_struct",
+      "title": "serde：struct 与字段标记",
+      "description": "rename、default、skip 和未知字段检查，解析后重新编码。",
+      "expectedStdout": "Ada 0 true\n{\"user_name\":\"Ada\",\"Retries\":0}\ntrue\nnull rejected: true\nunknown rejected: true\n"
+    },
+    {
+      "id": "serde_enum",
+      "title": "serde：enum 与外部标签",
+      "description": "纯 unit rename，以及 unit、数值和 struct payload 的 JSON 分派与往返。",
+      "expectedStdout": "\"active\"\nidle \"Idle\"\ncount=7 {\"Count\":7}\nhello {\"Message\":{\"Text\":\"hello\"}}\nunknown variant rejected: true\n"
+    },
+    {
+      "id": "serde_untagged",
+      "title": "serde：手写 untagged 分派",
+      "description": "普通 impl 按 JSON 类型选择整数或字符串变体，编码时不输出标签。",
+      "expectedStdout": "-7 -> Number(-7) -> -7\n42 -> Number(42) -> 42\n\"42\" -> Text(\"42\") -> \"42\"\nrejected: 9223372036854775808\nrejected: 1.5\nrejected: true\nrejected: null\n"
+    },
+    {
       "id": "serde_option",
       "title": "Option 缺失与 null",
-      "description": "缺失/null 都是 None；不是 PATCH 三态。",
-      "expectedStdout": "{} None\n{\"Limit\":null} None\n{\"Limit\":7} Some(7)\n"
+      "description": "字段缺失、null 与 Some 的解析和编码，以及错误类型拒绝。",
+      "expectedStdout": "{} None {\"Limit\":null}\n{\"Limit\":null} None {\"Limit\":null}\n{\"Limit\":7} Some(7) {\"Limit\":7}\ninvalid value rejected: true\n"
     },
     {
       "id": "readonly",
@@ -303,10 +321,12 @@
       "status": "partial",
       "support": "browser",
       "summary": "serde::Serialize / serde::Deserialize 是普通协议；serde::derive 中的过程宏生成实现，JSON 保留独立格式层。",
-      "usage": "显式 use serde 后派生 serde::derive::Serialize 和 serde::derive::Deserialize；serde::Write[T] / serde::Read[T] 作为 JSON 回调。Request.Limit 缺失与 null 都解为 None。",
-      "limitation": "Option 不代表 PATCH 的 missing/null/value 三态。Option[chan int] 缺少协议会拒绝；字段 adapter、自动 MarshalJSON、JSON Value 与 YAML 不能按提案当作现有 API。",
+      "usage": "独立 serde 文档章节介绍 struct、enum、Option 与 rename/default/skip。Playground 使用 serde v0.0.1 的 json::FromString[T] / json::ToString[T]，演示外部标签、手写 untagged 类型分派与 JSON 字符串往返。",
+      "limitation": "自动派生只支持外部标签；tag/content/untagged helper 尚未实现。enum rename 只支持纯 unit；多字段 payload 可包装为 struct。Option 的 missing/null 都是 None；重叠形状的 untagged 试解需要可重放输入。",
       "examples": [
-        "derive",
+        "serde_struct",
+        "serde_enum",
+        "serde_untagged",
         "serde_option"
       ],
       "evidence": [
@@ -315,7 +335,10 @@
         "docs/serde-json.md"
       ],
       "checks": [
-        "serde_option_channel"
+        "serde_option_channel",
+        "serde_internal_tag",
+        "serde_adjacent_tag",
+        "serde_untagged"
       ]
     },
     {
@@ -598,7 +621,7 @@
       "status": "partial",
       "support": "browser",
       "summary": "静态路径从当前 crate、lib、依赖 alias 或未占名的标准库根选择包或公开项；包、类型、宏和派生使用 ::，值成员使用 .。",
-      "usage": "use serde::json as json; 绑定 serde 来源中的真实 Go 子包，json::Marshal 调用包项；item.Value 访问值字段。Playground 使用与 CLI 一致的根声明和标准库快照。",
+      "usage": "use serde::json as json; 绑定 serde 来源中的真实 Go 子包，json::FromString 调用包项；item.Value 访问值字段。Playground 使用与 CLI 一致的根声明和标准库快照。",
       "limitation": "不接受 .gox 的旧 import、包成员点号或字符串 use 路径；未声明的外部 module 不自动取得，真实 Go 子包须属于选定来源。根解析不代替版本求解、feature 激活或脚本授权。",
       "examples": [
         "derive",

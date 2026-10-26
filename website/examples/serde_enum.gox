@@ -1,0 +1,43 @@
+package main
+use fmt;
+use serde;
+use serde::json as json;
+
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
+enum Mode {
+    #[serde(rename="active")]
+    Active,
+    #[serde(rename="paused")]
+    Paused,
+}
+
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
+struct MessageBody { pub Text string }
+
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
+enum Event { Idle, Count(int), Message(MessageBody) }
+
+func describe(event Event) string {
+    return match event {
+        Event::Idle => "idle",
+        Event::Count(n) => fmt::Sprintf("count=%d", n),
+        Event::Message(message) => message.Text,
+    }
+}
+
+func main() {
+    mode, err := json::FromString[Mode](`"active"`)
+    if err != nil { panic(err) }
+    text, err := json::ToString[Mode](&mode)
+    if err != nil { panic(err) }
+    fmt::Println(text)
+    for _, input := range []string{`"Idle"`, `{"Count":7}`, `{"Message":{"Text":"hello"}}`} {
+        event, err := json::FromString[Event](input)
+        if err != nil { panic(err) }
+        text, err := json::ToString[Event](&event)
+        if err != nil { panic(err) }
+        fmt::Println(describe(event), text)
+    }
+    _, err = json::FromString[Event](`{"Unknown":7}`)
+    fmt::Println("unknown variant rejected:", err != nil)
+}

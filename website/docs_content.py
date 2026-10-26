@@ -14,6 +14,11 @@ PAGES = (
     ("go-gen", "开始使用", "在已有 Go 项目中使用 Goxide", "using-goxide-gen.md"),
     ("first-project", "开始使用", "第一个 Goxide 项目", "website-guide.md"),
     ("language", "语言", "语言速览", "website-guide.md"),
+    ("serde-overview", "serde 与 JSON", "serde 与 JSON 概览", "serde-json.md"),
+    ("serde-struct", "serde 与 JSON", "struct 与字段标记", "serde-json.md"),
+    ("serde-enum", "serde 与 JSON", "enum 与分派格式", "serde-json.md"),
+    ("serde-option", "serde 与 JSON", "Option 与缺失值", "serde-json.md"),
+    ("serde-limits", "serde 与 JSON", "限制和改进方向", "serde-json.md"),
     ("procedural-macros", "过程宏与 proc_macro", "过程宏概览", "procedural-macros.md"),
     ("proc-first", "过程宏与 proc_macro", "第一个过程宏", "procedural-macros.md"),
     ("proc-function", "过程宏与 proc_macro", "函数式过程宏", "procedural-macros.md"),
@@ -90,6 +95,7 @@ def public_links(markdown, source, root):
         root / "docs/mvp-gap-audit.md": "/docs/?page=status",
         root / "docs/procedural-macros.md": "/docs/?page=procedural-macros",
         root / "docs/syntax-tools.md": "/docs/?page=syntax-overview",
+        root / "docs/serde-json.md": "/docs/?page=serde-overview",
     }
     document_pages.update({path: '/design/?page=' + identity
                            for identity, _, path in design_sources(root)})

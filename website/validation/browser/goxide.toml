@@ -15,4 +15,4 @@ version = "v0.0.2-0.20261024103343-486aa5e95768"
 
 [dependencies.serde]
 go = "github.com/goxide-lang/serde"
-version = "v0.0.0-20261024103530-271278c04f5c"
+version = "v0.0.1"

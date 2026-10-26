@@ -23,3 +23,4 @@ self.onmessage = async ({data}) => {
     self.postMessage({type: 'result', id, error: error instanceof Error ? error.message : String(error)});
   }
 };
+self.postMessage({type: 'ready'});

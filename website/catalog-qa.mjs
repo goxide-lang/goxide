@@ -119,7 +119,7 @@ page.on('pageerror',error=>errors.push(error.message));context.on('request',requ
  const rawMacroHostSource=await fs.readFile(new URL('ui/proc-macro-host.js',import.meta.url),'utf8');
  await page.route(rawMacroHostURL,route=>route.fulfill({contentType:'text/javascript',body:rawMacroHostSource}));
  const rawResults=await recordWorkerObservations((collect,args)=>page.evaluate(collect,args),
-  {inputs:rawInputs,commit:manifest.commit,hash:manifest.wasmSha256,rootsHash:manifest.dependencyContext.sha256,macroHostURL:rawMacroHostURL,timeoutMs:70000},
+  {inputs:rawInputs,commit:manifest.commit,websiteCommit:manifest.websiteCommit,hash:manifest.wasmSha256,rootsHash:manifest.dependencyContext.sha256,macroHostURL:rawMacroHostURL,timeoutMs:70000},
   batch=>fs.writeFile(new URL('qa-artifacts/diagnostic-worker-observations.json',import.meta.url),JSON.stringify(batch,null,2)+'\n'));
  await page.unroute(rawMacroHostURL);
  for(let index=0;index<rawInputs.length;index++){

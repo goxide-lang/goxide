@@ -15,14 +15,14 @@ export function compiler(manifest, report) {
     debounce,
     input,
     macroHost = null,
-    allowedMacros = new Set();
+    macroFailed = false;
   function kill() {
     clearTimeout(timer);
     macroHost?.close();
     macroHost = null;
+    macroFailed = false;
     worker?.terminate();
     worker = null;
-    allowedMacros = new Set();
     ready = busy = false;
   }
   function fail(error) {
@@ -42,7 +42,6 @@ export function compiler(manifest, report) {
     }
     busy = true;
     const instance = worker, requestId = revision;
-    macroHost = createProcMacroHost(manifest.commit, allowedMacros);
     report({ status: "正在转译…", files: [] });
     const timeout = compileTimeoutMs(manifest);
     timer = setTimeout(() => {
@@ -94,16 +93,26 @@ export function compiler(manifest, report) {
           fail("内置宏目录无效，请刷新。");
           return;
         }
-        allowedMacros = new Set(artifacts);
-        clearTimeout(timer);
-        ready = true;
-        send();
+        if (macroHost) return;
+        const host = macroHost = createProcMacroHost(manifest.commit, artifacts, manifest.websiteCommit);
+        const loaded = () => {
+          if (worker !== instance || macroHost !== host) return;
+          clearTimeout(timer);
+          ready = true;
+          send();
+        };
+        if (artifacts.length === 0) loaded();
+        else host.prepare().then(loaded, error => {
+          if (worker === instance && macroHost === host)
+            fail(error instanceof Error ? error.message : String(error));
+        });
         return;
       }
       if (data.type === "macro-cancel") {
         if (busy && data.requestId === revision) {
           macroHost?.close("procedural macro execution canceled");
           macroHost = null;
+          macroFailed = true;
         }
         return;
       }
@@ -122,15 +131,17 @@ export function compiler(manifest, report) {
         };
         host.run(data.hash, data.request, data.budgetMs).then(
           result => reply(result, [result.response, result.stderr]),
-          error => reply({ error: error instanceof Error ? error.message : String(error) }),
+          error => {
+            if (current()) macroFailed = true;
+            reply({ error: error instanceof Error ? error.message : String(error) });
+          },
         );
         return;
       }
       if (data.type !== "result" || data.id !== revision || !busy) return;
       clearTimeout(timer);
-      macroHost?.close("compilation finished");
-      macroHost = null;
       busy = false;
+      if (macroFailed) kill();
       const messages = typeof data.diagnostics === "string" ? data.diagnostics : "";
       if (data.error) {
         report({

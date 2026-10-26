@@ -38,7 +38,7 @@ python3 -B website/hosting/preview.py --port 8084 --headers
 
 Playground 转译一个用户包与固定随附依赖，最多 16 个 `.gox` 文件、UTF-8 总计 32 KiB；不运行生成的 Go、不下载任意依赖。所有浏览器示例的 CLI 基准使用 `validation/browser/goxide.toml` 的同一依赖图与 `playground` 包身份。一个编译 Worker，450ms 去抖，70 秒转译和 30 秒加载超时；编辑、失败和中断立即清空旧结果。
 
-函数式、属性和 derive 示例实际调用随网站发布的 WASI 宏。页面校验 WASM 哈希并管理独立宏 Worker，宏单次执行最多 5 秒、每次编译累计最多 60 秒；停止与失败会关闭相关 Worker。固定快照包含已检查的宏注册、普通源包和运行时根，消费者编辑不能添加可执行宏或改变依赖选择。三类示例可直接查看实际随附的宏登记、完整 Go 辅助实现与宏清单，并下载已运行验证的完整项目到本地修改。
+函数式、属性和 derive 示例实际调用随网站发布的 WASI 宏。页面在 30 秒加载预算内下载并校验固定宏 WASM、启动独立宏 Worker，再开始转译；成功转译之间复用已校验字节和编译模块，每次调用仍创建独立实例。宏单次执行最多 5 秒、每次编译累计最多 60 秒；停止与宿主失败会关闭相关 Worker。固定快照包含已检查的宏注册、普通源包和运行时根，消费者编辑不能添加可执行宏或改变依赖选择。三类示例可直接查看实际随附的宏登记、完整 Go 辅助实现与宏清单，并下载已运行验证的完整项目到本地修改。
 
 Monaco 提供文件模型、撤销/重做、查找、基础着色与可定位诊断。站内切换页面保留 Playground 草稿和选择，刷新会重新加载示例。未知条目有错误提示，未知资源返回真实 HTTP 404。
 
@@ -50,6 +50,7 @@ Monaco 提供文件模型、撤销/重做、查找、基础着色与可定位诊
 QA_URL=http://127.0.0.1:8084 npm test --prefix website
 QA_URL=http://127.0.0.1:8084 node website/hosting/qa-routes.mjs
 node website/compiler_test.mjs
+node --test website/proc-macro-host_test.mjs
 npm run test:proc-macro --prefix website
 GOTOOLCHAIN=local GOWORK=off go test -race -tags=goxideweb ./cmd/goxide-web
 GOTOOLCHAIN=local GOWORK=off go vet -tags=goxideweb ./cmd/goxide-web

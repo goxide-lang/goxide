@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {collectWorkerObservations,recordWorkerObservations} from './worker-observations.mjs';
 const inputs=[{name:'first',source:'first'},{name:'second',source:'second'},{name:'recovery',source:'good'}];
-const args={inputs,commit:'compiler',hash:'wasm',rootsHash:'roots',timeoutMs:10};
+const args={inputs,commit:'compiler',websiteCommit:'site',hash:'wasm',rootsHash:'roots',timeoutMs:10};
 const original=globalThis.Worker;
 const originalHost=globalThis.qaCreateProcHost;
 let checks=0;
@@ -43,9 +43,11 @@ try {
  assert.equal(saved.failure.stage,'page-evaluate');assert.equal(saved.complete,false);checks++;
  for(const fails of [false,true]) {
   let hosts=0,closed=0,terminated=false;
-  globalThis.qaCreateProcHost=(commit,allowed)=>{
-   assert.equal(commit,'compiler');assert.deepEqual(allowed,['guest']);hosts++;
-   return {close(){closed++;},async run(hash,request,budget){
+  globalThis.qaCreateProcHost=(commit,allowed,site)=>{
+   assert.equal(commit,'compiler');assert.equal(site,'site');assert.deepEqual(allowed,['guest']);hosts++;
+   let prepared=false;
+   return {async prepare(){prepared=true;},close(){closed++;},async run(hash,request,budget){
+    assert.equal(prepared,true);
     assert.equal(hash,'guest');assert.ok(request instanceof ArrayBuffer);assert.equal(budget,5000);
     if(fails)throw new Error('guest rejected');
     return {response:new ArrayBuffer(2),stderr:new ArrayBuffer(0)};

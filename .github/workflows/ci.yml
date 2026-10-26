@@ -195,6 +195,8 @@ jobs:
         run: node --test website/validation/worker-observations_test.mjs
       - name: Compiler UI synchronous invalidation regressions
         run: node website/compiler_test.mjs
+      - name: Browser macro loading and deadline regressions
+        run: node --test website/proc-macro-host_test.mjs
       - name: Build matching CLI examples, exports and WASM offline
         run: python3 -B website/build.py --worktree
       - name: Embedded HTTP server race gate

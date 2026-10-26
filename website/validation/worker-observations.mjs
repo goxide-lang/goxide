@@ -1,5 +1,5 @@
 // This function is serialized into the real page by Playwright. Keep it standalone.
-export async function collectWorkerObservations({inputs,commit,hash,rootsHash,macroHostURL,timeoutMs=30000}) {
+export async function collectWorkerObservations({inputs,commit,websiteCommit,hash,rootsHash,macroHostURL,timeoutMs=30000}) {
  const observations=[];
  let worker,timer,macroHost,index=-1,raw;
  const response=()=>new Promise((resolve,reject)=>{
@@ -28,8 +28,10 @@ export async function collectWorkerObservations({inputs,commit,hash,rootsHash,ma
   if(ready.rootsSha256!==rootsHash)throw new Error('current matrix QA dependency roots mismatch');
   for(index=0;index<inputs.length;index++) {
    raw=undefined;
-   macroHost=createHost?.(commit,ready.macroArtifacts??[]);
-   const pending=response();worker.postMessage({type:'compile',id:index,source:inputs[index].source});
+   macroHost=createHost?.(commit,ready.macroArtifacts??[],websiteCommit);
+   const pending=response();
+   await Promise.race([macroHost?.prepare(),pending]);
+   worker.postMessage({type:'compile',id:index,source:inputs[index].source});
    const result=await pending;
    macroHost?.close('compilation finished');macroHost=null;
    if(result.type!=='result'||result.id!==index)throw new Error('current matrix QA worker result mismatch');

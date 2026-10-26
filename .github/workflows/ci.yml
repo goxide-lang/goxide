@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      website_release:
+        description: Build and upload a publishable website from its pinned compiler
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       checkout_ref:
@@ -167,7 +172,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: ${{ inputs.go_version }}
+          go-version: ${{ inputs.website_release && '1.27.3' || inputs.go_version }}
           go-version-file: go.mod
           cache-dependency-path: go.sum
       - name: Prepare the pinned module graph
@@ -198,13 +203,29 @@ jobs:
       - name: Browser macro loading and deadline regressions
         run: node --test website/proc-macro-host_test.mjs
       - name: Build matching CLI examples, exports and WASM offline
-        run: python3 -B website/build.py --worktree
+        run: |
+          if [ "${{ inputs.website_release }}" = true ]; then
+            python3 -B website/build.py
+          else
+            python3 -B website/build.py --worktree
+          fi
       - name: Embedded HTTP server race gate
         run: python3 -B scripts/ci_go_test.py web-race -mod=readonly -race -vet=off -tags=goxideweb -count=1 -timeout=10m ./cmd/goxide-web
       - name: Embedded HTTP server vet gate
         run: go vet -mod=readonly -tags=goxideweb ./cmd/goxide-web
       - name: Ensure build did not change tracked inputs
         run: git diff --exit-code
+      - name: Audit the publishable website
+        if: inputs.website_release
+        run: python3 -B website/hosting/audit.py
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: inputs.website_release
+        with:
+          name: website-${{ github.sha }}
+          path: website/dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
 
   summary:
     name: CI summary

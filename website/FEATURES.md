@@ -1,6 +1,6 @@
 # 网站 RFC 特性状态索引
 
-编译器基线：`92b0a0c42d904b338afee48c04c6d1293427708c`；证据复核日期：2026-10-24。
+编译器基线：`8112e7ccf71218d7d117d5be44b4180437cb8b09`；证据复核日期：2026-10-26。
 
 由 `website/catalog-source.json` 生成。状态是限定范围的人工判断；构建检查引用、源码版本、示例输出与拒绝例。此索引保留私有证据，公开构建仅导出摘要。
 
@@ -13,7 +13,7 @@
 | Go 返回值适配：静态 T/E 推导 | research/0005 | 已实现并验证 | browser | `tests/acceptance/go_result_inference_test.go` (2a50e89be603) |
 | PartialEq / Eq 与 Clone | 0008, 0013 | 部分实现 | browser | `tests/acceptance/equality_test.go` (51aa258333ea); `tests/acceptance/manual_equality_test.go` (0c0bea54a481); `tests/acceptance/macros_test.go` (2caa6f0b718e) |
 | Default、Debug 与格式宏 | 0012, 0013 | 部分实现 | browser | `tests/acceptance/manual_default_test.go` (e952158df116); `tests/acceptance/print_default_test.go` (e75011da8812) |
-| serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (97a067133b21); `tests/acceptance/serde_defaults_test.go` (1d74a106d9be); `docs/serde-json.md` (a55217213af4) |
+| serde 核心协议与 JSON | 0013, research/0006 | 部分实现 | browser | `tests/acceptance/option_serde_test.go` (97a067133b21); `tests/acceptance/serde_defaults_test.go` (1d74a106d9be); `docs/serde-json.md` (294f1e464af1) |
 | Error 派生与错误链 | 0013, research/0005 | 部分实现 | browser | `tests/acceptance/serde_causes_test.go` (7a16c6af739e); `tests/acceptance/macros_test.go` (2caa6f0b718e) |
 | use / pub use 与 API 聚合 | 0021 | 部分实现 | cli | `tests/acceptance/qualified_packages_test.go` (07d24641ce15); `examples/reexports/README.md` (67e1513bf1e1) |
 | 多包、feature 与编译目标 | 0001, 0022, 0025 | 部分实现 | cli | `internal/project/manifest.go` (3a7e476ca4f1); `internal/project/planner.go` (bb8a6b1ddb52); `cmd/goxide/project_test.go` (1a70fd20e71c); `cmd/goxide/version_test.go` (891f8b0a6e38); `cmd/goxide/combination_review_test.go` (44a4bea56e38); `docs/rfcs/0025-unified-project.md` (63bafab76210); `cmd/goxide/import_go_test.go` (7f13a2b51e19); `cmd/goxide/single_file.go` (4bc46a485aad); `tests/acceptance/single_file_external_test.go` (d58a06a2aa28) |

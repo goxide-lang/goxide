@@ -8,6 +8,14 @@ const hash = createHash("sha256").update(bytes).digest("hex");
 const flush = async () => {
   for (let index = 0; index < 4; index++) await new Promise(setImmediate);
 };
+const waitFor = async (predicate, description) => {
+  // WebCrypto completion is independent of the mocked watchdog clock.
+  const deadline = performance.now() + 5000;
+  while (!predicate()) {
+    assert.ok(performance.now() < deadline, `timed out waiting for ${description}`);
+    await new Promise(setImmediate);
+  }
+};
 
 function environment(t) {
   const original = { Worker: globalThis.Worker, fetch, setTimeout, clearTimeout };
@@ -42,10 +50,17 @@ function environment(t) {
     return worker;
   }
   async function prepared(content = bytes) {
+    const worker = currentCompiler(), previousMacro = currentMacro();
     fetches.at(-1).resolve(new Response(content));
-    await flush();
-    currentMacro()?.emit({ type: "ready" });
-    await flush();
+    await waitFor(() => worker.terminated ||
+      (currentMacro() && currentMacro() !== previousMacro && !currentMacro().terminated), "macro preparation");
+    if (worker.terminated) {
+      await flush();
+      return;
+    }
+    currentMacro().emit({ type: "ready" });
+    await waitFor(() => worker.terminated || worker.messages.some((message) => message.type === "compile"),
+      "compilation after macro readiness");
   }
   async function advance(milliseconds) {
     const end = now + milliseconds;
@@ -65,10 +80,13 @@ test("cold macro download may exceed invocation budget before Go compilation sta
   await env.advance(6000);
   assert.equal(worker.messages.length, 0, "Go compile waits for verified macro bytes and Worker readiness");
   assert.ok(!worker.terminated);
-  env.fetches[0].resolve(new Response(bytes)); await flush();
+  env.fetches[0].resolve(new Response(bytes));
+  await waitFor(() => env.currentMacro() || worker.terminated, "macro Worker creation");
   assert.equal(worker.messages.length, 0, "download completion still waits for Worker readiness");
   assert.equal(new URL(env.currentMacro().url, "http://localhost").searchParams.get("site"), "site");
-  env.currentMacro().emit({ type: "ready" }); await flush();
+  env.currentMacro().emit({ type: "ready" });
+  await waitFor(() => worker.terminated || worker.messages.some((message) => message.type === "compile"),
+    "compilation after macro readiness");
   assert.equal(worker.messages.at(-1).type, "compile");
   assert.ok(!env.reports.some((report) => report.error));
 });

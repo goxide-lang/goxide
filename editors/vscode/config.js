@@ -2,7 +2,7 @@
 
 const path = require("node:path");
 
-const settingNames = ["enabled", "executable", "gopls", "input", "bin", "example", "lib", "features", "tags", "noDefaultFeatures", "target", "enableManagedGo"];
+const settingNames = ["enabled", "executable", "gopls", "dlv", "input", "bin", "example", "lib", "features", "tags", "noDefaultFeatures", "target", "enableManagedGo"];
 const ignoredDirectories = new Set([".git", "node_modules"]);
 
 function contains(root, filename) {
@@ -26,10 +26,15 @@ function executable(base, value) {
 }
 
 function launchOptions(base, plan, settings, goConflict) {
+  const args = ["lsp", "--gopls", goConflict ? "off" : executable(base, settings.gopls), ...selectionArguments(settings), "--", plan.input];
+  return { command: executable(base, settings.executable), args, options: { cwd: plan.root } };
+}
+
+function selectionArguments(settings) {
   if ([settings.bin, settings.example, settings.lib].filter(Boolean).length > 1) {
     throw new Error("goxide.bin, goxide.example, and goxide.lib are mutually exclusive; select one project target.");
   }
-  const args = ["lsp", "--gopls", goConflict ? "off" : executable(base, settings.gopls)];
+  const args = [];
   if (settings.bin) args.push("--bin", settings.bin);
   if (settings.example) args.push("--example", settings.example);
   if (settings.lib) args.push("--lib");
@@ -37,8 +42,7 @@ function launchOptions(base, plan, settings, goConflict) {
   if (settings.tags.length) args.push("--tags", settings.tags.join(","));
   if (settings.noDefaultFeatures) args.push("--no-default-features");
   if (settings.target) args.push("--target", settings.target);
-  args.push("--", plan.input);
-  return { command: executable(base, settings.executable), args, options: { cwd: plan.root } };
+  return args;
 }
 
 function documentSelector(vscode, plan, managedGo) {
@@ -63,4 +67,4 @@ function watched(plan, filename) {
   return parts[0] !== "target" && !parts.some(part => ignoredDirectories.has(part));
 }
 
-module.exports = { settingNames, contains, projectPlan, launchOptions, documentSelector, owns, watched };
+module.exports = { settingNames, contains, projectPlan, executable, selectionArguments, launchOptions, documentSelector, owns, watched };

@@ -38,6 +38,8 @@ type NativeOptions struct {
 	DisplayNames        map[string]string
 	RejectConfiguration bool
 	LineDirectives      bool
+	// Private stages directory inputs before callers materialize executable Go.
+	Private bool
 }
 
 // NativeProject owns the private Go configuration and prepared source dependencies.
@@ -209,7 +211,7 @@ func PrepareNative(ctx context.Context, input string, options NativeOptions) (_ 
 		return nil, err
 	}
 	prepared.originals = map[string]string{}
-	if len(prepared.plan.Manifest.Dependencies) != 0 || !prepared.authoredModule || options.Sources != nil {
+	if len(prepared.plan.Manifest.Dependencies) != 0 || !prepared.authoredModule || options.Sources != nil || options.Private {
 		if err = prepared.stageInput(); err != nil {
 			return nil, err
 		}
@@ -478,7 +480,7 @@ func (p *NativeProject) preparePlain(ctx context.Context) error {
 	}
 	native := &analysis.NativePackage{RequireRoot: p.requireRoot, DisplayNames: p.displayNames(), RejectConfiguration: p.options.RejectConfiguration}
 	directory := p.directory
-	if p.authoredModule && p.options.Sources == nil {
+	if p.authoredModule && p.options.Sources == nil && !p.staged {
 		directory = p.owner.Root
 	}
 	overlays := map[string][]byte{}

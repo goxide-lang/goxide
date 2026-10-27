@@ -29,13 +29,16 @@ async function fixture(t, options = {}) {
   const settings = Object.fromEntries(Object.entries(manifest.contributes.configuration.properties)
     .map(([key, value]) => [key.slice("goxide.".length), structuredClone(value.default)]));
   Object.assign(settings, options.settings);
-  const events = Object.fromEntries(["open", "close", "folders", "configuration", "rename", "extensions", "trust"].map(name => [name, new Emitter()]));
+  const events = Object.fromEntries(["open", "close", "folders", "configuration", "rename", "extensions", "trust", "save"].map(name => [name, new Emitter()]));
   const clients = [], watchers = [], warnings = [], errors = [], updates = [], commands = new Map(), providers = new Map();
   const folder = { uri: fileURI(root), name: "test", index: 0 };
   const vscode = {
     Uri: { file: fileURI, parse: uri }, EventEmitter: Emitter,
     RelativePattern: class { constructor(base, pattern) { this.base = base; this.pattern = pattern; } },
     ViewColumn: { Beside: 2 }, ConfigurationTarget: { WorkspaceFolder: 3 },
+    TestRunProfileKind: { Run: 1, Debug: 2 },
+    tests: { createTestController: () => ({ createRunProfile() {}, dispose() {} }) },
+    debug: { registerDebugConfigurationProvider: () => ({ dispose() {} }), registerDebugAdapterDescriptorFactory: () => ({ dispose() {} }) },
     workspace: {
       isTrusted: options.trusted !== false,
       workspaceFolders: options.folder === false ? [] : [folder], textDocuments: [],
@@ -53,6 +56,7 @@ async function fixture(t, options = {}) {
       onDidOpenTextDocument: events.open.event, onDidCloseTextDocument: events.close.event,
       onDidChangeWorkspaceFolders: events.folders.event, onDidChangeConfiguration: events.configuration.event,
       onDidRenameFiles: events.rename.event, onDidGrantWorkspaceTrust: events.trust.event,
+      onDidSaveTextDocument: events.save.event,
       openTextDocument: async documentURI => {
         const content = await providers.get(documentURI.scheme).provideTextDocumentContent(documentURI, { isCancellationRequested: false });
         const document = { uri: documentURI, content, languageId: "plaintext" };

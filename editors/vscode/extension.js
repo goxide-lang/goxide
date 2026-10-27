@@ -3,6 +3,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { settingNames, contains, projectPlan, launchOptions, documentSelector, owns, watched } = require("./config");
+const { Development } = require("./development");
 
 const generatedScheme = "goxide-generated";
 const goExtensionIDs = ["golang.go", "golang.go-nightly"];
@@ -21,12 +22,14 @@ class Extension {
     this.lastGoConflict = this.conflict();
     this.output = vscode.window.createOutputChannel("Goxide", { log: true });
     this.previewChanged = new vscode.EventEmitter();
+    this.development = new Development(this);
     this.disposables.push(this.output, this.previewChanged);
   }
 
   async start() {
     const { vscode } = this;
     this.disposables.push(
+      ...this.development.register(),
       vscode.workspace.registerTextDocumentContentProvider(generatedScheme, {
         onDidChange: this.previewChanged.event,
         provideTextDocumentContent: (uri, token) => this.generatedContent(uri, token),

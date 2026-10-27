@@ -135,7 +135,7 @@ func NewQueries(result *Result) *Queries {
 			var typ types.Type
 			var member *check.MemberSelection
 			if result.Checked != nil {
-				typ = result.Checked.Symbols[symbol]
+				typ = q.symbolType(symbol)
 				if expression, ok := node.(syntax.Expr); ok {
 					if t := result.Checked.Types[expression]; t != nil {
 						typ = t
@@ -335,6 +335,29 @@ func (q *Queries) Hover(file string, offset uint32) (*Hover, error) {
 	}
 	return &Hover{Text: text, Range: entry.location}, nil
 }
+
+// Imported aliases and test-package views can name a source declaration without
+// owning another entry in the checker's symbol table. Follow only current
+// resolved identities; never import or reconstruct a signature during a query.
+func (q *Queries) symbolType(symbol *resolve.Symbol) types.Type {
+	if q.result == nil || q.result.Checked == nil {
+		return nil
+	}
+	seen := map[*resolve.Symbol]bool{}
+	for symbol != nil && !seen[symbol] {
+		seen[symbol] = true
+		if typ := q.result.Checked.Symbols[symbol]; typ != nil {
+			return typ
+		}
+		if symbol.AliasOf != nil {
+			symbol = symbol.AliasOf
+		} else {
+			symbol = q.targets[strings.Join(symbol.Target, "/")]
+		}
+	}
+	return nil
+}
+
 func (q *Queries) detail(symbol *resolve.Symbol, typ types.Type) string {
 	if typ != nil && !reliableType(typ, map[types.Type]bool{}) {
 		return ""
@@ -504,7 +527,7 @@ func (q *Queries) lexicalCompletions(file string, offset uint32, selected *query
 		seen[symbol.Name.Name] = true
 		var typ types.Type
 		if q.result.Checked != nil {
-			typ = q.result.Checked.Symbols[symbol]
+			typ = q.symbolType(symbol)
 		}
 		detail := q.detail(symbol, typ)
 		if detail == "" {

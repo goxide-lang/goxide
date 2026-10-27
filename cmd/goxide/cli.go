@@ -143,7 +143,7 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		}
 		root.AddCommand(c)
 	}
-	root.AddCommand(envCommand(out))
+	root.AddCommand(envCommand(out), lspCommand(out, stderr))
 	scripts := scriptsCommand("", out, stderr)
 	for _, action := range scriptActions {
 		scripts.AddCommand(scriptsCommand(action, out, stderr))

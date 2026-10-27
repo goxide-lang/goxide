@@ -16,12 +16,13 @@ import (
 )
 
 type rpcPeer struct {
-	connection *Connection
-	input      *os.File
-	output     *os.File
-	reader     *bufio.Reader
-	done       chan struct{}
-	err        error
+	connection  *Connection
+	input       *os.File
+	output      *os.File
+	reader      *bufio.Reader
+	done        chan struct{}
+	err         error
+	readTimeout time.Duration
 }
 
 func startRPC(t *testing.T, handler RequestHandler, notifications NotificationHandler) *rpcPeer {
@@ -74,7 +75,11 @@ func (p *rpcPeer) send(t *testing.T, body string) {
 
 func (p *rpcPeer) receive(t *testing.T) rpcMessage {
 	t.Helper()
-	if err := p.output.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+	timeout := p.readTimeout
+	if timeout == 0 {
+		timeout = 5 * time.Second
+	}
+	if err := p.output.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 		t.Fatal(err)
 	}
 	body, err := readRPCFrame(p.reader)

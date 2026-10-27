@@ -38,7 +38,7 @@ func TestProjectDefaultDiscoveryAndStaleOutputs(t *testing.T) {
 		}
 		// Explicit export retains the managed project cache. Observe that cache,
 		// rather than each fresh export, when checking incremental generation.
-		generated, err := filepath.Glob(filepath.Join(root, "target", "units", "*", "*", "*", "*", "*", "bundle", "module"))
+		generated, err := filepath.Glob(filepath.Join(root, "target", "units", "*", "*", "*", "*", "bundle", "module"))
 		if err != nil || len(generated) != 1 {
 			t.Fatalf("managed module: %v %v", generated, err)
 		}

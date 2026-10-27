@@ -17,6 +17,7 @@ import (
 type workspace struct {
 	owned        map[string]string
 	ownedLoaded  bool
+	assets       *singleFileAssets
 	project      *compile.Project
 	native       *compile.NativeProject
 	host         *procmacro.WASIHost
@@ -39,9 +40,12 @@ func prepareWorkspace(ctx context.Context, input string, options compile.Options
 	if !info.IsDir() {
 		directory = filepath.Dir(input)
 	}
-	root, err := project.DiscoverProject(directory)
-	if err != nil {
-		return nil, err
+	root := ""
+	if info.IsDir() || filepath.Base(input) == project.ManifestName {
+		root, err = project.DiscoverProject(directory)
+		if err != nil {
+			return nil, err
+		}
 	}
 	host, err := procmacro.NewWASIHost(context.WithoutCancel(ctx))
 	if err != nil {
@@ -71,7 +75,11 @@ func prepareWorkspace(ctx context.Context, input string, options compile.Options
 			w.root, w.goRoot = root, w.project.GoRoot()
 		}
 	} else {
-		w.native, err = compile.PrepareNative(ctx, input, compile.NativeOptions{Options: options, Automatic: true})
+		nativeInput := input
+		if filepath.Base(input) == project.ManifestName {
+			nativeInput = directory // A codegen-only manifest selects its native directory.
+		}
+		w.native, err = compile.PrepareNative(ctx, nativeInput, compile.NativeOptions{Options: options, Automatic: true})
 		if err == nil {
 			w.root, w.goRoot = w.native.Root(), w.native.GoRoot()
 		}

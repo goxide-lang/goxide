@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lsp/gopls"
+	"github.com/goxide-lang/goxide/internal/project"
 	"github.com/goxide-lang/goxide/internal/source"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
@@ -232,7 +234,7 @@ func (s *Server) startGo(ctx context.Context, root string, current *publishedAna
 	return backend, nil
 }
 
-func (s *Server) prepareGoView(w *workspace) (string, error) {
+func (s *Server) prepareGoView(ctx context.Context, w *workspace) (string, error) {
 	if w.native != nil && w.native.NativeRoot() != "" {
 		return w.native.NativeRoot(), nil
 	}
@@ -250,6 +252,25 @@ func (s *Server) prepareGoView(w *workspace) (string, error) {
 	}
 	if err := syncPrivateView(filepath.Dir(w.goRoot), s.goView); err != nil {
 		return "", err
+	}
+	w.assets = nil
+	if w.native != nil {
+		if _, module, packagePath := w.native.SingleFile(); module != "" {
+			// Retain every original internal-package visibility boundary while
+			// excluding unselected siblings from the private package itself.
+			viewModule := packagePath + "/goxide_lsp_file"
+			if strings.HasPrefix(viewModule, "gopkg.in/") {
+				viewModule += ".v0"
+			}
+			cfg := w.native.Config()
+			command := exec.CommandContext(ctx, cfg.Environment.GoTool, "mod", "edit", "-module="+viewModule, "-require="+module+"@"+project.Placeholder(module), "-replace="+module+"="+w.native.Root())
+			command.Dir = filepath.Join(s.goView, "module")
+			command.Env = cfg.Environment.ExecEnv()
+			command.WaitDelay = time.Second
+			if output, err := command.CombinedOutput(); err != nil {
+				return "", fmt.Errorf("single-file Go view: %w: %s", err, bytes.TrimSpace(output))
+			}
+		}
 	}
 	s.goViewSource = filepath.Dir(w.goRoot)
 	return filepath.Join(s.goView, "module"), nil
@@ -467,8 +488,15 @@ func (s *Server) syncGo(ctx context.Context, current *publishedAnalysis, w *work
 	if s.options.Gopls == "off" {
 		return nil, nil
 	}
-	root, err := s.prepareGoView(w)
+	root, err := s.prepareGoView(ctx, w)
 	if err != nil {
+		return nil, err
+	}
+	projection, masked, err := s.projectGo(current, w, maps)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.syncSingleFileAssets(ctx, current, w, projection); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -498,10 +526,6 @@ func (s *Server) syncGo(ctx context.Context, current *publishedAnalysis, w *work
 		s.backend = backend
 		backend.coordinator.Invalidate(s.epoch)
 		s.mu.Unlock()
-	}
-	projection, masked, err := s.projectGo(current, w, maps)
-	if err != nil {
-		return nil, err
 	}
 	projection.backend = backend
 	err = backend.coordinator.Sync(ctx, gopls.Projection{Epoch: current.epoch, Files: projection.files, Masked: masked})

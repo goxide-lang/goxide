@@ -22,8 +22,8 @@ import (
 )
 
 // NativeOptions selects the same private native module view for CLI and editors.
-// Sources, when provided, is an already selected package; nil selects a native
-// module directory, or the one standalone file outside any native module.
+// Sources, when provided, is an already selected package. Otherwise a file
+// selects only itself, and a directory selects the native module source tree.
 type NativeOptions struct {
 	// Dependencies and RequireRoot reuse a CLI's existing lazy-root selection.
 	Dependencies        *NativeDependencies
@@ -92,6 +92,13 @@ func PrepareNative(ctx context.Context, input string, options NativeOptions) (_ 
 		return nil, statErr
 	}
 	isDirectory := info != nil && info.IsDir()
+	if options.Sources == nil && !isDirectory {
+		data, err := os.ReadFile(input)
+		if err != nil {
+			return nil, err
+		}
+		options.Sources = map[string][]byte{input: data}
+	}
 	sourceDirectory := filepath.Dir(input)
 	if isDirectory {
 		sourceDirectory = input
@@ -146,14 +153,6 @@ func PrepareNative(ctx context.Context, input string, options NativeOptions) (_ 
 		if e := os.WriteFile(owner.ModFile, owner.AuthoredMod, 0600); e != nil {
 			owner.Close()
 			return nil, e
-		}
-		if options.Sources == nil {
-			data, e := os.ReadFile(input)
-			if e != nil {
-				owner.Close()
-				return nil, e
-			}
-			options.Sources = map[string][]byte{input: data}
 		}
 	}
 	owner.Config = cfg
@@ -255,13 +254,17 @@ func (p *NativeProject) prepare(ctx context.Context) error {
 	if len(p.plan.Manifest.Dependencies) == 0 {
 		return p.preparePlain(ctx)
 	}
+	// The native view owns these projected files. A source-dependency view
+	// replaces them with goxide.toml; remove them before staging can copy sums.
+	for _, name := range []string{"go.mod", "go.sum"} {
+		if err := os.Remove(filepath.Join(p.directory, name)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
 	if !p.staged {
 		if err := p.stageInput(); err != nil {
 			return err
 		}
-	}
-	if err := os.Remove(filepath.Join(p.directory, "go.mod")); err != nil && !os.IsNotExist(err) {
-		return err
 	}
 	if p.helper == "" {
 		var err error
@@ -318,13 +321,30 @@ func (p *NativeProject) prepare(ctx context.Context) error {
 // OwnsTargetSource excludes prepared dependency sources.
 func (p *NativeProject) OwnsTargetSource(name string) bool { return p.targetSource(name) }
 
-// NativeRoot identifies an authored native Go module. Standalone sources return empty.
+// NativeRoot identifies a selected native module directory. Explicit files use
+// a private Go view even when their imports belong to an authored module.
 func (p *NativeProject) NativeRoot() string {
-	if p.authoredModule {
+	if p.authoredModule && p.options.Sources == nil {
 		return p.owner.Root
 	}
 	return ""
 }
+
+// SingleFile identifies an explicitly selected file and its authored import
+// context. Package selections return empty values; standalone files have no module.
+func (p *NativeProject) SingleFile() (name, module, packagePath string) {
+	if len(p.options.Sources) != 1 {
+		return "", "", ""
+	}
+	if _, selected := p.options.Sources[p.owner.Input]; !selected {
+		return "", "", ""
+	}
+	if !p.authoredModule {
+		return p.owner.Input, "", p.owner.PackagePath
+	}
+	return p.owner.Input, p.plan.Manifest.Module, p.owner.PackagePath
+}
+
 func (p *NativeProject) GoModFile() string { return p.owner.ModFile }
 
 func (p *NativeProject) Root() string { return p.owner.Root }
@@ -435,6 +455,11 @@ func (p *NativeProject) Snapshot(ctx context.Context, overlays map[string][]byte
 func (p *NativeProject) preparePlain(ctx context.Context) error {
 	if err := os.WriteFile(filepath.Join(p.directory, "go.mod"), p.modBytes, 0600); err != nil {
 		return err
+	}
+	if p.hadSum {
+		if err := os.WriteFile(filepath.Join(p.directory, "go.sum"), p.sumBytes, 0600); err != nil {
+			return err
+		}
 	}
 	args := []string{"mod", "edit"}
 	for _, replacement := range p.plan.Manifest.Native.Replace {
@@ -590,7 +615,7 @@ func (p *NativeProject) stageInput() error {
 			}
 		}
 	}
-	for _, name := range []string{"go.mod", rootconfig.Filename} {
+	for _, name := range []string{"go.mod", "go.sum", rootconfig.Filename} {
 		if err := os.Remove(filepath.Join(p.directory, name)); err != nil && !os.IsNotExist(err) {
 			return err
 		}

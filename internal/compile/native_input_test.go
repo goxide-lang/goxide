@@ -182,3 +182,91 @@ func TestNativeDependencyPreparationCancellation(t *testing.T) {
 		t.Fatalf("cancellation took %s", elapsed)
 	}
 }
+
+func TestNativePreparationExplicitFileSelection(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeProjectFile(t, root, "go.mod", "module example.org/selected\ngo 1.27\n")
+	sums, err := os.ReadFile("../../go.sum")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeProjectFile(t, root, "go.sum", string(sums))
+	main := filepath.Join(root, "value.gox")
+	sibling := filepath.Join(root, "sibling.gox")
+	native := filepath.Join(root, "native.go")
+	mainText := []byte("package app\npub func Value() int { return sibling() + nativeSibling() }\n")
+	siblingText := []byte("package app\nfunc sibling() int { return 1 }\n")
+	nativeText := []byte("package app\nfunc nativeSibling() int { return 2 }\n")
+	for name, data := range map[string][]byte{main: mainText, sibling: siblingText, native: nativeText} {
+		if err := os.WriteFile(name, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, selection := range []string{"file", "directory", "provided-sources"} {
+		t.Run(selection, func(t *testing.T) {
+			input := main
+			options := NativeOptions{}
+			if selection == "directory" {
+				input = root
+			} else if selection == "provided-sources" {
+				options.Sources = map[string][]byte{main: mainText, sibling: siblingText, native: nativeText}
+			}
+			p, err := PrepareNative(t.Context(), input, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer p.Close()
+			if copied, err := os.ReadFile(filepath.Join(p.GoRoot(), "go.sum")); err != nil || string(copied) != string(sums) {
+				t.Fatalf("private Go view lost authored checksums: %q, %v", copied, err)
+			}
+			selected := selection != "file"
+			if selection == "directory" && p.NativeRoot() != root || selection == "file" && p.NativeRoot() != "" {
+				t.Fatalf("wrong native backend root for %s: %q", selection, p.NativeRoot())
+			}
+			if file, module, packagePath := p.SingleFile(); selection == "file" && (file != main || module != "example.org/selected" || packagePath != module) {
+				t.Fatalf("single-file import context: %q %q %q", file, module, packagePath)
+			}
+			if !p.OwnsTargetSource(main) || p.OwnsTargetSource(sibling) != selected || p.OwnsTargetSource(native) != selected {
+				t.Fatalf("selection %s admitted the wrong source set", selection)
+			}
+			snapshot, err := p.Snapshot(t.Context(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, analysisErr := analysis.Analyze(snapshot.Context, snapshot.Input)
+			snapshot.Close()
+			if selected && analysisErr != nil {
+				t.Fatal(analysisErr)
+			}
+			if !selected && (analysisErr == nil || !strings.Contains(analysisErr.Error(), "unresolved name")) {
+				t.Fatalf("single-file analysis accepted sibling declarations: %v", analysisErr)
+			}
+			if selected {
+				return
+			}
+			snapshot, err = p.Snapshot(t.Context(), map[string][]byte{
+				main:    []byte("package app\npub func Value() int { return 42 }\n"),
+				sibling: []byte("invalid sibling overlay"),
+				native:  []byte("invalid native sibling overlay"),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer snapshot.Close()
+			if len(snapshot.SourceNames) != 1 {
+				t.Fatalf("single-file source names include siblings: %v", snapshot.SourceNames)
+			}
+			for _, name := range snapshot.SourceNames {
+				if name != main {
+					t.Fatalf("selected file identity changed: %q", name)
+				}
+			}
+			if _, err := analysis.Analyze(snapshot.Context, snapshot.Input); err != nil {
+				t.Fatalf("selected overlay was lost or a sibling overlay was included: %v", err)
+			}
+		})
+	}
+}

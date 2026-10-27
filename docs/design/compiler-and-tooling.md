@@ -1,6 +1,6 @@
 # 编译器、Go 工具复用、LSP 与自举
 
-LSP 设计已确认，实施范围为 [MVP-5](../pre-mvp-plan.md#后续阶段mvp)。编译器已有 `parser.ParseFile → expand.Expand → resolve.ResolveExpanded → check.Check → lower.Lower` 管线；LSP 与共享分析快照实施中；缓存与布局的分项进度见状态表。当前支持度与测试入口统一见[能力状态表](../mvp-gap-audit.md)。本文集中维护设计、内部实施顺序和验收条件。
+LSP 设计的实施范围为 [MVP-5](../pre-mvp-plan.md#后续阶段mvp)。编译器使用 `parser.ParseFile → expand.Expand → resolve.ResolveExpanded → check.Check → lower.Lower` 管线，CLI、网站与语言服务共用 `internal/analysis`。当前支持度与测试入口统一见[能力状态表](../mvp-gap-audit.md)。本文集中维护架构合同、内部实施顺序和验收条件。
 
 语言语义沿用[已确认决策](decisions.md)、[前端 AST](frontend-ast.md)、[enum 表示](enum-representation.md)及已接受 RFC。D19/D20 的风险 warning 和长期分析边界不变；LSP 不新增语言规则，也不重启尚未完成的 workspace、迁入、vendor 或构建脚本阶段。自举目标单独保留在文末。
 
@@ -8,7 +8,7 @@ LSP 设计已确认，实施范围为 [MVP-5](../pre-mvp-plan.md#后续阶段mvp
 
 编译器和 LSP 在 `goxide/` 同仓、同一个 `github.com/goxide-lang/goxide` Go module 中实现，不新建 LSP 仓库、Go module 或父目录 `go.work`。入口为 `goxide lsp`，通过标准输入输出提供 LSP；日志使用标准错误。
 
-拟定文件归属如下，目录随对应阶段创建：
+文件归属如下：
 
 | 位置 | 职责 |
 | --- | --- |
@@ -34,21 +34,22 @@ LSP 设计已确认，实施范围为 [MVP-5](../pre-mvp-plan.md#后续阶段mvp
 
 CLI、LSP 和网站共用语言分析内核；网站沿用其现有导入器与宏宿主，不启动 gopls。宏登记、预解析、依赖发现及展开的固定点流程仍按现有语义执行，不另写一套编辑器近似实现。移出 `lower.CompilePackage`、`lower.CompileModules` 中重复的前端编排，`lower` 消费已分析结果并生成普通 Go。
 
-共享接口按以下职责实现，名称为内部合同示意：
+共享接口的实际职责如下：
 
 ```text
-compile.Prepare(ctx, request)             → Project
-Project.Snapshot(ctx, overlays)           → Input
-analysis.Analyze(ctx, Input)              → Analysis
-compile.GenerateAndCheck(ctx, Analysis)   → Output
-Project.Close()                          → 释放资源
+compile.Prepare / PrepareNative           → 项目及依赖资源
+Project.Snapshot(ctx, overlays)           → 固定输入及释放函数
+analysis.Analyze(ctx, Input)              → Result
+lower.Generate(ctx, Result, options)      → Go 与来源映射
+typecheck.CheckGeneratedGraph            → 完整 Go 图诊断
+Project.Close()                          → 取消并等待资源释放
 ```
 
 - `Project` 保存选定的项目图、配置、Go importer 和宏资源；准备、读取与分析同产物发布分开。现有只在回调期间有效的 `PreparedSources` 不能直接成为长期快照。
 - `Input` 固定源码字节、文档版本、输入集合、目标与有效配置；包括未保存的 `.gox` 和 `.go`。依赖、feature、tags、环境读取、Go 工具链和运行时支持库选择与 CLI 一致。
 - `Analysis` 发布原始/展开语法、解析绑定、类型、成员及 impl 选择、结构化诊断与各区域的可用范围。普通源码错误保留部分结果；取消、I/O 和工具进程故障作为执行错误处理。
 - `Output` 包含生成 Go、来源映射和完整校验诊断。编辑用投影共用 lowering，并标记可用范围；它只用于查询，不作为可执行构建产物发布。
-- 任务持有其快照及依赖资源直至结束；关闭项目先取消并等待任务释放，再关闭 importer、宏宿主与临时目录。LSP 不长期持有 CLI 的项目写锁或整个 target 的发布租约。
+- 任务持有其快照及依赖资源直至结束；关闭项目先取消并等待任务释放，再关闭 importer、宏宿主与临时目录。LSP 在私有目录规划与生成，读取已原子发布的依赖锁；已验证的 Git checkout 只读复用，缺失依赖在私有目录获取并随项目关闭清理。编辑器不获取 CLI 的项目写锁或整个 target 的发布租约。
 
 原始 AST 发布后不可变，配置筛选和宏展开构造工作树；未变化节点可共享，不为只读约定无条件深复制整棵树。`NodeID`、`SyntaxCtx`、符号和类型对象在所属文件版本及分析上下文中解释；依赖与配置未失效的不可变 AST、包结果可跨代共享，不能把过期结果或不同 importer 身份混入当前快照，也不能把编号当持久身份。新节点保存来源关系，查询使用现有 resolve/check 事实，不建立第二套绑定或类型系统。
 
@@ -88,7 +89,13 @@ Project.Close()                          → 释放资源
 
 项目准备复用现有 `internal/project` 和 `internal/compile` 的选择规则，不在 LSP 内另建依赖图或包管理器。原生 Go module 沿用作者目录和 Go 模块环境；TOML 项目由现有 loader 准备稳定的私有 Go 视图。首版不增加 `GOPACKAGESDRIVER`，不把所有原生 Go 项目复制到镜像目录。
 
+原生目录模式的 gopls 根仍是作者目录，依赖准备只修改私有 `-modfile`；TOML 和显式单文件使用会话生命周期内的稳定临时 Go 视图。显式文件只选中该文件，不因其位于 `go.mod` 或 `goxide.toml` 下而扩大为整个包或目标。原生 module 内的单文件视图使用作者包路径下的子 module，保留同 module 导入、嵌套 `internal` 和相对 replace 的可见性；作者目录中的其他 Go 文件不被屏蔽或改写。
+
+服务通过 `--target`、`--tags`、`--features`、`--bin`、`--example`、`--lib` 选择同一配置；只有 library 的项目可自动选中该唯一目标。一次服务处理一个项目配置，多项目由编辑器分别启动会话。[VS Code 扩展](../../editors/vscode/README.md)说明启动、Go 扩展协调和只读预览。
+
 依赖更新、源文件新增/删除、配置变化统一进入会话变更队列。原生 Go 代码、测试包变体、构建约束、相对 replace、资源与 `go:embed`、项目已有的 cgo 能力按当前入口规则处理；私有视图需要保留这些行为。嵌套 module、受管产物和依赖根沿用项目边界。
+
+单文件视图通过 Go named-file 加载取得精确 `EmbedFiles`，只复制实际资源；普通函数体编辑不重复执行资源发现。若嵌入资源同时具有 Go/C/汇编等可能进入目录编译的文件名，首版拒绝该 gopls 投影并报告后端限制：原版 gopls 的库包目录加载无法同时保留 named-file 源码集合和原始资源字节。编译器诊断、可靠源码查询与生成预览继续可用；不改写资源、包名或语言语义。
 
 `gen` 项目统一生成物识别与所有权规则：
 
@@ -112,6 +119,8 @@ package p
 ```
 
 恒假构建条件使旧声明退出 Go 包；删除最后一个源文件时，该包也应退出导入图。磁盘旧文件真正删除后释放屏蔽；若其已成为普通 Go 输入，则按新的分类和内容同步。 原版 gopls v0.24.0 在包的最后文件解除屏蔽时不会自动重载消费方的缺失导入；协调器在整代 overlay 更新后，用同一条 `workspace/didChangeWorkspaceFolders` 移除并重新加入原工作区，保留 overlay 并刷新 view。该额外工作仅用于解除屏蔽的拓扑变化，普通编辑仍只同步变化文件。启动、重启、重命名及配置切换均重建完整的当前文件/屏蔽集合，不能只处理本次编辑的文件。
+
+长会话使用固定 2,048 次后端 RPC 请求预算，限制原版 gopls 已完成请求的上下文保留。到达预算后停止新 Go 查询进入该进程，排空已接收查询，再回收进程并同步完整当前投影；正在完成的诊断批次、最多八个已接收查询和 shutdown 可跨过边界。维护复用当前 Analysis、查询索引、生成字节、映射及编译器诊断，不重新解析、展开、检查或编译宏。排空、回收、初始化与完整诊断共用 5 s 截止时间；超时后报告失败，下一次 Go 查询可以重试，源码查询仍可用。真正的源码或配置变更取消维护并进入普通分析。
 
 ### 6.2 整代更新与请求
 
@@ -151,6 +160,8 @@ Goxide 负责源码诊断、完整编译校验及项目配置诊断；gopls 补�
 - completion 的附加编辑、code action 及命令产生的后续编辑使用同一规则；gopls 命令不得绕过源文件/产物边界直接修改项目。
 - 可靠重命名及代码操作阶段对候选源码重新分析，并验证重新生成后的引用关系。后端生成符号不是用户重命名接口。
 
+首版只对开放文档中精确一一映射的补全编辑执行上述转换；宏派生、合成或需要符号级重规划的编辑整组拒绝。服务尚不声明 rename/code action/formatting 能力。预览请求为 `goxide/generatedSource`，可使用源码 URI 或先前返回的 `goxide-generated:` URI，并始终读取当前完成代。
+
 ## 8. 过程宏与第 2 级缓存
 
 声明宏按既有规则展开；过程宏解析、登记、编译并执行，二者展开结果参加正常的 resolve/check。过程宏依赖已知后可在后台预编译，用户查询复用已准备结果。
@@ -161,11 +172,13 @@ Goxide 负责源码诊断、完整编译校验及项目配置诊断；gopls 补�
 | 2：宏编译 | 共享 Go 编译缓存和宏编译产物的稳定槽位；CLI 依据自己的当前输入确认构建并执行宏 |
 | 3：展开语义结果 | 不在 LSP 与 CLI 间共享展开 AST、卫生绑定、类型或调用点结果 |
 
-实现目标固定为第 2 级。当前输入先经共享前端准备，再调用 Go 构建确认新鲜度，复用 Go 自身缓存；不因磁盘存在某个 WASM 就判定命中。它可以复用已编译工作，仍可能启动 Go 命令并重新链接。LSP 未保存输入与 CLI 磁盘输入使用隔离工作槽及原子发布，不能覆盖对方仍在使用的产物。
+实现目标固定为第 2 级。当前输入先经共享前端准备，再调用 Go 构建确认新鲜度，复用 Go 自身缓存；不因磁盘存在某个 WASM 就判定命中。它可以复用已编译工作，仍可能启动 Go 命令并重新链接。LSP 未保存输入与 CLI 磁盘输入使用隔离工作槽及原子文件发布，不能覆盖对方仍在使用的产物。CLI 创建配置 unit；LSP 只在已有、所有权匹配的 unit 中刷新 editor 槽，以该槽独立短租约串行化多个编辑器。unit 尚未创建或 editor 槽正忙时，保留本代私有结果。当前稳定槽是成功编译工作镜像，不被编译器直接读取作为命中；实际编译复用由 Go 缓存负责。
 
 失效规则：调用参数变化重做受影响展开；宏源码、传递本地依赖、选中版本/replace、feature、有效配置、工具链或 SDK 变化时重建受影响宏，再分析调用方。远端出现尚未选中的新版本不自动升级项目依赖。取消或失败结果不进入成功缓存。
 
 LSP 内部缓存按输入版本和依赖关系失效；调用点、fresh bindings 和来源始终属于当前快照。长期复用的 WASI 编译资源与每轮执行实例、预算、截止时间、取消状态分离，单次失败不污染下一次执行。
+
+编辑中的宏源码错误保留当前生产者诊断与可靠声明；该代宏没有可执行 WASM，依赖其展开的事实不可用，独立正常包仍可查询。修复后重新构建当前宏，不能回退到上一次成功产物。CLI 仍严格拒绝源错误，取消、I/O、工具链或 SDK 故障仍按执行错误处理。
 
 ## 9. 稳定产物路径与 OS-ARCH
 
@@ -187,7 +200,7 @@ target/
 
 ## 10. LSP 与 build/run 的性能合同
 
-两条路径分别建基线、测量和验收，不能用交互改善抵消构建退化，也不能用 Go 编译总时间掩盖前端重复工作。以下预算是实施目标，尚无完整 LSP 的性能测量。
+两条路径分别建基线、测量和验收，不能用交互改善抵消构建退化，也不能用 Go 编译总时间掩盖前端重复工作。以下预算由固定输入的可重复检查执行，不代表任意规模项目的延迟承诺。
 
 设计本身有以下潜在成本，需要在实现中控制并测量：
 
@@ -228,6 +241,12 @@ L0 固定项目规模、工具链、机器、配置、冷热缓存定义、样�
 LSP 场景分别包含冷启动到首次查询/完整诊断、热查询、函数体编辑、公开声明/配置编辑、宏参数编辑和宏/传递依赖编辑。源诊断与完整 Go 诊断分别计时；L0 固定各类输入停止后到完整同代诊断的预算和超时。仅在泛型定义验证或最终 Go 检查中出现的错误，也必须在该预算内发布，不能以快速语法诊断掩盖完整检查长期未完成。连续至少 1,000 次可复现编辑后，任务队列应收敛，已结束代可释放，同配置源码编辑不增加持久目录数量。
 
 超出基线波动范围的稳定 CLI 回归须定位并解决；LSP 还须达到上述交互预算。不能放宽阈值、缩小样例或丢弃失败/取消样本掩盖退化。测试及基准入口随实现交付，运行日志不追加到设计文档。
+
+固定服务端入口为 `GOXIDE_LSP_PERF=1 go test -count=1 -v ./internal/lsp -run '^TestLanguageServerInteractionBudget$'`：16 个函数、真实 gopls、已安装的本地 Go 工具链和离线依赖；150 个热查询、1,000 次突发编辑与另外 1,000 个完整分析代。源码诊断预算为 1 s，完整 Go 诊断及后端独有错误为 5 s，记录两个进程的 RSS、Go 堆和持久目录数量。该计时门槛仅在空闲测量主机运行；普通测试不受共享 CI 负载影响。
+
+后端轮换与回收的独立入口为 `GOXIDE_LSP_BACKEND_RESOURCE_REPORT=/绝对路径/新结果.json go test -count=1 -v ./internal/lsp -run '^TestLanguageServerBackendBudgetResources$'`：使用正式的 2,048 请求预算连续查询 12,000 次，记录各次进程回收、旧客户端释放及服务端堆/RSS。采样 RSS 不是进程树峰值；该入口与交互计时均在普通测试中跳过。
+
+编译链对照入口为 `go test ./internal/lower -run '^$' -bench '^BenchmarkCompilePackage$' -benchmem`，固定小包、多函数与声明宏三个样例，独立于 LSP 时间预算。`BenchmarkCompilerPhases` 使用相同输入分别测量共享前端、Go lowering/格式化，以及开启精确映射的生成成本；它们是组件成本，不能相加冒充 CLI 实测总耗时。
 
 ## 11. 实施阶段与验收
 

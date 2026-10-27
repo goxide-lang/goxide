@@ -99,7 +99,7 @@ func TestFormalCFGDeriveConflicts(t *testing.T) {
 	for _, test := range []struct{ name, declaration string }{
 		{"manual-default", `#[cfg_attr(feature("derive"), derive(std::derive::Default))]
 type Record struct { Value int }
-impl std::Default for Record { func r#default() Record { return Record{Value:9} } }`},
+impl std::Default for Record { func Default() Record { return Record{Value:9} } }`},
 		{"duplicate-debug", `#[derive(std::derive::Debug)]
 #[cfg_attr(feature("derive"), derive(std::derive::Debug))]
 type Record struct { Value int }`},

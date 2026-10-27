@@ -37,7 +37,7 @@ impl E {
 }
 `)
 	packagesWrite(t, src, "model/impl.gox", `package model; use std; use std::PartialEq;
-impl std::Default for Manual {func r#default()Manual{Calls++;return Manual{value:7}}}
+impl std::Default for Manual {func Default()Manual{Calls++;return Manual{value:7}}}
 
 impl Manual {
  pub func initial() Self { return std::default_value[Self]() }

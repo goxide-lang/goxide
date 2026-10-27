@@ -5,13 +5,13 @@ use std::PartialEq;
 use strings;
 
 impl std::Default for Label {
-    func r#default() Label {
+    func Default() Label {
         calls = append(calls, "label")
         return Label{Text: strings::ToUpper("untitled")}
     }
 }
 impl std::Default for Step {
-    func r#default() Step {
+    func Default() Step {
         calls = append(calls, "step")
         return Step{Number: len(calls)}
     }

@@ -13,7 +13,7 @@ const false = (0 == 0)
 var calls int
 #[derive(serde::derive::Serialize,serde::derive::Deserialize)]
 type Settings struct { Port int }
-impl std::Default for Settings { func r#default() Settings {calls++;return Settings{Port:8080}} }
+impl std::Default for Settings { func Default() Settings {calls++;return Settings{Port:8080}} }
 #[derive(serde::derive::Deserialize)]
 type Config struct {
  #[serde(default)]

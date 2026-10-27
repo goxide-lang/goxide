@@ -1,8 +1,10 @@
 {
-  "planning_sums": "github.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1 h1:EpVnxlA899sxjB2uWXm4p6AlV4zonGo6gM4wcz9HSyo=\ngithub.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
+  "planning_sums": "github.com/goxide-lang/std v0.0.2 h1:Nl9tO3IEGVw9/D9eQBPduFa0vrZKKUGgnOVcewcI2RU=\ngithub.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1 h1:EpVnxlA899sxjB2uWXm4p6AlV4zonGo6gM4wcz9HSyo=\ngithub.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=\ngithub.com/goxide-lang/std v0.0.2/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
   "version": 2,
   "git": {},
   "sums": {
+    "59f6bce04a743218e732a3bced958d68583166e25e1858bb7d29db821933d541": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
+    "6f2b16d95081f2a1f11a92c0bc2b377d9a1ce0f9d4375b15ede00fe47fa81305": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
     "b15ddc41dbe8924d49448f900cb310c52e002a91ac7985a9f08ac372054d2662": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
     "e2e5d6c2a2f2f56255e0621a380869bafef65d7616c25df057811f57fce4f5ba": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
     "ef32011ce4041404879afbc7b6f556ab78b4c39a2d1e02c363d96930035ed782": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n"
@@ -53,6 +55,63 @@
           "Version": "v0.0.0",
           "Replace": {
             "Path": "/Users/hxsf/workspace/go/pkg/mod/github.com/goxide-lang/std@v0.0.2-0.20261023080713-8db223547de1/macros",
+            "Version": ""
+          }
+        }
+      },
+      "Dependencies": [
+        {
+          "Consumer": "go:github.com/goxide-lang/std",
+          "Alias": "std_macros",
+          "Plan": "f402cd011a31739daa7638a939d581a352c3a978c9dffceec0795a0586c16767"
+        }
+      ]
+    },
+    "866da0217be779b74dc86ddf079a3cc5876ebb94fd13ab4865a13d657243e2a6": {
+      "Role": "target",
+      "Platform": "darwin/arm64",
+      "Root": "path:./.",
+      "Crate": null,
+      "Sources": [
+        {
+          "Key": "go:github.com/goxide-lang/std",
+          "Module": "github.com/goxide-lang/std",
+          "Input": "9539f2d1562a440c7e45c7a917d5a59e2c71b7cf9cefb5f7437a58d1ad13b2bc",
+          "Features": []
+        },
+        {
+          "Key": "go:github.com/goxide-lang/std:macros",
+          "Module": "github.com/goxide-lang/std/macros",
+          "Input": "d0f149b6f29eccaa17eb25ecf077ec8d5ee1b036342b89a1dd86f98a3e6f2707",
+          "Features": []
+        },
+        {
+          "Key": "path:./.",
+          "Module": "manualdefault.example/service",
+          "Input": "4a5d9e70b055831b8dc9477750cd62123352a05a710b0aafe007638c5c0a2a3b",
+          "Features": []
+        }
+      ],
+      "Modules": {
+        "github.com/goxide-lang/std": {
+          "Path": "github.com/goxide-lang/std",
+          "Version": "v0.0.2",
+          "Sum": "h1:Nl9tO3IEGVw9/D9eQBPduFa0vrZKKUGgnOVcewcI2RU=",
+          "GoModSum": "h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk="
+        },
+        "github.com/goxide-lang/syntax": {
+          "Path": "github.com/goxide-lang/syntax",
+          "Version": "v0.0.0-20261021034157-cb998fa4b2d4",
+          "Sum": "h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=",
+          "GoModSum": "h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg="
+        }
+      },
+      "ProcSources": {
+        "github.com/goxide-lang/std/macros": {
+          "Path": "github.com/goxide-lang/std/macros",
+          "Version": "v0.0.0",
+          "Replace": {
+            "Path": "/Users/hxsf/workspace/go/pkg/mod/github.com/goxide-lang/std@v0.0.2/macros",
             "Version": ""
           }
         }

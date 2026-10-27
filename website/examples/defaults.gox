@@ -4,7 +4,7 @@ use std;
 #[derive(std::derive::Debug)]
 type Settings struct { Port int }
 impl std::Default for Settings {
-    func r#default() Settings { return Settings{Port: 8080} }
+    func Default() Settings { return Settings{Port: 8080} }
 }
 func main() {
     var zero Settings

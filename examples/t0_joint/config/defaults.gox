@@ -3,5 +3,5 @@ use std;
 
 var DefaultCalls int
 impl std::Default for Settings {
-    func r#default() Settings { DefaultCalls++; return Settings{Port:8080} }
+    func Default() Settings { DefaultCalls++; return Settings{Port:8080} }
 }

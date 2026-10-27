@@ -19,7 +19,7 @@ pub enum E{
 Entry(Item),
 Empty,
 }
-impl std::Default for Item{func r#default()Item{return Item{N:7,Name:"local"}}}
+impl std::Default for Item{func Default()Item{return Item{N:7,Name:"local"}}}
 #[derive(std::derive::Default)]
 type Recursive struct{V Local}
 
@@ -112,9 +112,9 @@ func TestSamePackageAliasRejections(t *testing.T) {
 		"new-defined":             "#[derive(std::derive::Clone)]\ntype Item struct{N int}\ntype Fresh Item\ntype Local=Fresh\n#[derive(std::derive::Clone)]\ntype Wrap struct{V Local}",
 		"helper-not-registration": "type Item struct{N int}\nfunc CloneItem(v *Item)Item{return *v}\ntype Local=Item\n#[derive(std::derive::Clone)]\ntype Wrap struct{V Local}",
 		"derive-alias":            "#[derive(std::derive::Clone)]\ntype Item struct{N int}\n#[derive(std::derive::Clone)]\ntype Local=Item",
-		"derive-manual-conflict":  "#[derive(std::derive::Default)]\ntype Item struct{N int}\ntype Local=Item\nimpl std::Default for Item{func r#default()Item{return Item{}}}",
+		"derive-manual-conflict":  "#[derive(std::derive::Default)]\ntype Item struct{N int}\ntype Local=Item\nimpl std::Default for Item{func Default()Item{return Item{}}}",
 		"wrong-direction":         "#[derive(serde::derive::Serialize)]\ntype Item struct{N int}\ntype Local=Item\n#[derive(serde::derive::Deserialize)]\ntype Wrap struct{V Local}",
-		"bad-manual-return":       "type Item struct{N int}\ntype Local=Item\nimpl std::Default for Item{func r#default()Item{return 1}}\n#[derive(std::derive::Default)]\ntype Wrap struct{V Local}",
+		"bad-manual-return":       "type Item struct{N int}\ntype Local=Item\nimpl std::Default for Item{func Default()Item{return 1}}\n#[derive(std::derive::Default)]\ntype Wrap struct{V Local}",
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := testdeps.FormalSource(t, name+".gox", []byte("package fixture; use std; use std::PartialEq; use serde;\n"+body+"\n"))
@@ -129,7 +129,7 @@ func TestSamePackageAliasManualImplementation(t *testing.T) {
 	enumFormalStdModule(t, `package fixture; use std;
 type Item struct{N int}
 type Local=Item
-impl std::Default for Local{func r#default()Self{return Self{N:7}}}
+impl std::Default for Local{func Default()Self{return Self{N:7}}}
 func Make()Item{return std::default_value[Item]()}
 `, `package fixture
 import "testing"

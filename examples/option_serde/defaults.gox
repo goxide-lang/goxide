@@ -2,7 +2,7 @@ package main
 use std;
 
 impl std::Default for Settings {
-    func r#default() Settings {
+    func Default() Settings {
         defaultCalls += 1
         return Settings{Port:8080}
     }

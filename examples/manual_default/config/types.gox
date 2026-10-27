@@ -2,7 +2,7 @@ package config; use std; use std::PartialEq;
 
 type Settings struct { Port int }
 impl std::Default for Settings {
-    func r#default() Settings { return Settings{Port: 9090} }
+    func Default() Settings { return Settings{Port: 9090} }
 }
 
 // A public ordinary constructor crosses the package boundary explicitly.

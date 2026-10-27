@@ -73,7 +73,7 @@ func TestPrintDefaultExplicitRejections(t *testing.T) {
 		{"default-result", "#[derive(std::derive::Default)]\ntype Invalid struct { Value Result[int,error] }"},
 		{"default-nested-missing", "type Inner struct { N int }\n#[derive(std::derive::Default)]\ntype Invalid struct { Value Inner }"},
 		{"default-helper-not-protocol", "type Inner struct { N int };func DefaultInner()Inner{return Inner{N:7}}\n#[derive(std::derive::Default)]\ntype Invalid struct { Value Inner }"},
-		{"default-conflict", "#[derive(std::derive::Default)]\ntype Value struct { N int };impl std::Default for Value{func r#default()Self{return Self{}}}"},
+		{"default-conflict", "#[derive(std::derive::Default)]\ntype Value struct { N int };impl std::Default for Value{func Default()Self{return Self{}}}"},
 		{"default-generic-missing-bound", "#[derive(std::derive::Default)]\ntype Value[T any] struct { N T }\nfunc bad(){_=std::default_value[Value[chan int]]()}"},
 		{"default-scalar-shadow", "type int string\n#[derive(std::derive::Default)]\ntype Value struct { N int }"},
 	}

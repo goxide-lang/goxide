@@ -34,7 +34,7 @@ type IntegerMap map[string]int
 type IntegerArray [2]int
 var defaultCalls int
 struct Ticket { Value int }
-impl std::Default for Ticket {func r#default()Self{defaultCalls++;return Self{Value:defaultCalls}}}
+impl std::Default for Ticket {func Default()Self{defaultCalls++;return Self{Value:defaultCalls}}}
 #[derive(std::derive::Default)]
 struct Sequence { First Ticket; Second Ticket }
 #[derive(std::derive::PartialEq,std::derive::NativeKey)]
@@ -51,7 +51,7 @@ impl std::DerivedPartialEq for Promise {}
 func requireEq[T std::Eq](value T) {}
 struct Settings { Port int }
 func recursivePort(n int) int {if n==0{return 42};return recursivePort(n-1)}
-impl std::Default for Settings {func r#default()Self{return Self{Port:recursivePort(3)}}}
+impl std::Default for Settings {func Default()Self{return Self{Port:recursivePort(3)}}}
 func main() {
     captured:=std::default_value[Captured]()
     if captured.r#match!=0||!std::PartialEq::equals(captured,std::Clone::clone(&captured))||std::Debug::debug(&captured)!="Captured { match: 0 }" {panic("captured owner and raw field")}

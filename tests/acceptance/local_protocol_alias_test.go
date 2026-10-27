@@ -23,7 +23,7 @@ func TestLocalProtocolAliasModules(t *testing.T) {
 	packagesWrite(t, src, "model/item.gox", `package model; use std; use std::PartialEq; use serde;
 #[derive(std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 type Item struct{N int;Name string}
-impl std::Default for Item{func r#default()Item{return Item{N:7,Name:"producer"}}}
+impl std::Default for Item{func Default()Item{return Item{N:7,Name:"producer"}}}
 #[derive(std::derive::Default,std::derive::Clone,std::derive::Debug,serde::derive::Serialize,serde::derive::Deserialize,std::derive::PartialEq,std::derive::Eq)]
 pub enum E{
 #[default]

@@ -135,6 +135,14 @@ func main(){
 }
 `}, "")
 	})
+	t.Run("prelude-equality", func(t *testing.T) {
+		check(t, "prelude-equality", map[string]string{"main.gox": `package main
+func main(){
+ if !([]int{}).equals([]int{}) || ([]int{1}).equals([]int{2}) { panic("slice equality") }
+ if !Option[int]::None.equals(Option[int]::None) || Option[int]::None.equals(Option[int]::Some(1)) { panic("option equality") }
+}
+`}, "")
+	})
 	for _, test := range formalStdRejections() {
 		t.Run(test.name, func(t *testing.T) {
 			directory := filepath.Join(root, "negative", test.name)
@@ -168,7 +176,7 @@ func formalStdRejections() []formalStdRejection {
 		{"float-eq", `#[derive(std::derive::PartialEq,std::derive::Eq)] struct Value{Value float64}`, "", "prerequisites"},
 		{"unstable-map-key", `#[derive(std::derive::PartialEq)] struct Value{Value map[float64]int}`, "", "prerequisites"},
 		{"recursive-clone", `#[derive(std::derive::Clone)] struct Value{Values []Value}`, "", "recursive"},
-		{"manual-default-conflict", `#[derive(std::derive::Default)] struct Value{}; impl std::Default for Value{func r#default()Self{return Self{}}}`, "", "overlapping"},
+		{"manual-default-conflict", `#[derive(std::derive::Default)] struct Value{}; impl std::Default for Value{func Default()Self{return Self{}}}`, "", "overlapping"},
 		{"manual-eq-proof", `#[derive(std::derive::Eq)] type Value int; impl std::PartialEq for Value{func equals(self Self,other Self)bool{return true}}`, "", "prerequisites"},
 		{"manual-map-key", `type Key int; impl std::PartialEq for Key{func equals(self Self,other Self)bool{return true}}; impl std::Eq for Key{}; #[derive(std::derive::PartialEq)] struct Value{Map map[Key]int}`, "", "prerequisites"},
 		{"clone-defined-key", `type Key string; #[derive(std::derive::Clone)] struct Value{Value map[Key]int}`, "", "prerequisites"},
@@ -195,8 +203,6 @@ func formalStdRejections() []formalStdRejection {
 		{"print-expression", "", `_ = std::println!("x")`, "expected expression"},
 		{"print-defer", "", `defer std::println!("x")`, "expected expression"},
 		{"print-initializer", "", `if std::println!("x");true{}`, "exactly one statement"},
-		{"no-slice-method", "", `_ = ([]int{}).equals([]int{})`, "equals"},
-		{"no-option-method", "", `_ = Option[int]::None.equals(Option[int]::None)`, "equals"},
-		{"no-defined-method", `type Plain int`, `_ = Plain(1).equals(Plain(1))`, "equals"},
+		{"no-defined-method", `type Plain int`, `_ = Plain(1).equals(Plain(1))`, "no explicit implementation for selected trait application"},
 	}
 }

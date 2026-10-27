@@ -36,10 +36,10 @@ func TestManualDefaultInstalledBusinessRace(t *testing.T) {
 	// implementation for a foreign target remains unsupported.
 	foreign := t.TempDir()
 	writeStdFormalBinaryManifest(t, foreign, "manualdefault.example/rejected", "rejected")
-	packagesWrite(t, foreign, "config/types.gox", "package config; use std; use std::PartialEq;\ntype Settings struct { Port int }\nimpl std::Default for Settings { func r#default() Settings { return Settings{Port:9090} } }\n\nimpl Settings {\n pub func initial() Self { return std::default_value[Self]() }\n}\n")
+	packagesWrite(t, foreign, "config/types.gox", "package config; use std; use std::PartialEq;\ntype Settings struct { Port int }\nimpl std::Default for Settings { func Default() Settings { return Settings{Port:9090} } }\n\nimpl Settings {\n pub func initial() Self { return std::default_value[Self]() }\n}\n")
 	for i, body := range []string{
 		"#[derive(std::derive::Default)]\ntype Service struct { Value config::Settings }\nimpl Service{pub func initial()Self{return std::default_value[Self]()}}\n",
-		"impl std::Default for config::Settings { func r#default() config::Settings { return config::Settings{} } }\n",
+		"impl std::Default for config::Settings { func Default() config::Settings { return config::Settings{} } }\n",
 	} {
 		packagesWrite(t, foreign, "main.gox", "package main; use std; use std::PartialEq;\nmod config;\n"+body+"func main(){}\n")
 		destination := filepath.Join(t.TempDir(), "generated")
@@ -62,15 +62,15 @@ func TestRegisteredForeignDefault(t *testing.T){if (ServiceOps{}).Initial().Valu
 func TestManualDefaultExplicitRejections(t *testing.T) {
 	cases := []struct{ name, source string }{
 		{"parameters", `type Settings struct { Port int }
-impl std::Default for Settings { func r#default(port int) Settings { return Settings{Port:port} } }`},
+impl std::Default for Settings { func Default(port int) Settings { return Settings{Port:port} } }`},
 		{"wrong-result", `type Settings struct { Port int }
-impl std::Default for Settings { func r#default() int { return 8080 } }`},
+impl std::Default for Settings { func Default() int { return 8080 } }`},
 		{"pointer-result", `type Settings struct { Port int }
-impl std::Default for Settings { func r#default() *Settings { return &Settings{} } }`},
+impl std::Default for Settings { func Default() *Settings { return &Settings{} } }`},
 		{"duplicate-manual", `type Settings struct { Port int }
-impl std::Default for Settings { func r#default() Settings { return Settings{} } }
-impl std::Default for Settings { func r#default() Settings { return Settings{} } }`},
-		{"manual-and-derived", "#[derive(std::derive::Default)]\ntype Settings struct { Port int }\nimpl std::Default for Settings { func r#default() Settings { return Settings{} } }"},
+impl std::Default for Settings { func Default() Settings { return Settings{} } }
+impl std::Default for Settings { func Default() Settings { return Settings{} } }`},
+		{"manual-and-derived", "#[derive(std::derive::Default)]\ntype Settings struct { Port int }\nimpl std::Default for Settings { func Default() Settings { return Settings{} } }"},
 		{"ordinary-function-not-protocol", "type Settings struct { Port int }\nfunc DefaultSettings() Settings { return Settings{Port:8080} }\n#[derive(std::derive::Default)]\ntype Service struct { Value Settings }"},
 		{"selected-payload-missing-default", "type Unsupported struct { Label string }\n#[derive(std::derive::Default)]\npub enum Mode {\n#[default]\nReady(Unsupported),\n}"},
 		{"default-on-struct", "#[default]\ntype Settings struct { Port int }"},
@@ -126,7 +126,7 @@ func TestManualDefaultMayRecurse(t *testing.T) {
 	result, err := testdeps.FormalSource(t, "recursive.gox", []byte(`package fixture; use std;
  type Settings struct{Depth int}
  var Remaining int
- impl std::Default for Settings {func r#default()Self{if Remaining==0{return Self{}};Remaining--;value:=std::default_value[Self]();value.Depth++;return value}}
+ impl std::Default for Settings {func Default()Self{if Remaining==0{return Self{}};Remaining--;value:=std::default_value[Self]();value.Depth++;return value}}
  func Make(n int)Settings{Remaining=n;return std::default_value[Settings]()}
  `))
 	if err != nil {

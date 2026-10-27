@@ -4,3 +4,5 @@ github.com/goxide-lang/serde v0.0.0-20261023080815-5422034b0fcc/go.mod h1:z8qvIL
 github.com/goxide-lang/std v0.0.0-20261009104839-c02a09d8c417 h1:qZkTUGMRpdJJTcFeNd0nal+Yv08fo7yGGPTX9IUKNRw=
 github.com/goxide-lang/std v0.0.0-20261009104839-c02a09d8c417/go.mod h1:63NtaBDSKjpgXiP5gA5tcfO8GCwwcB0SdBzbxzkgXyQ=
 github.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=
+github.com/goxide-lang/std v0.0.2 h1:Nl9tO3IEGVw9/D9eQBPduFa0vrZKKUGgnOVcewcI2RU=
+github.com/goxide-lang/std v0.0.2/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=

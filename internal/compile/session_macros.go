@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/project"
 	pm "github.com/goxide-lang/syntax/proc_macro"
 )
 
@@ -52,10 +53,8 @@ func (p *Project) OwnsSource(name string) bool {
 		return false
 	}
 	for _, graph := range p.graphs {
-		for _, node := range graph.Nodes {
-			if within(node.Root, name) {
-				return true
-			}
+		if _, destination := p.stages[graph].sourceDestination(name); destination != "" {
+			return true
 		}
 	}
 	return false
@@ -68,10 +67,8 @@ func (p *Project) MacroSource(name string) bool {
 		if graph.Role != "proc-macro" || p.stages[graph].library == nil {
 			continue
 		}
-		for _, node := range graph.Nodes {
-			if within(node.Root, name) {
-				return true
-			}
+		if _, destination := p.stages[graph].sourceDestination(name); destination != "" {
+			return true
 		}
 	}
 	return false
@@ -80,10 +77,6 @@ func (p *Project) MacroSource(name string) bool {
 func (stage *stagedRole) applyOverlays(overlays map[string][]byte) error {
 	if len(overlays) == 0 {
 		return nil
-	}
-	destinations := map[string]string{}
-	for destination, original := range stage.originals {
-		destinations[original] = destination
 	}
 	for name, data := range overlays {
 		if !filepath.IsAbs(name) {
@@ -97,24 +90,7 @@ func (stage *stagedRole) applyOverlays(overlays map[string][]byte) error {
 		if extension != ".gox" && extension != ".go" {
 			continue
 		}
-		destination := destinations[name]
-		if destination == "" {
-			// New files retain their selected module-relative path. Existing file
-			// targets use the exact original-to-staged map above.
-			ownerRoot, ownerModule := "", ""
-			for _, node := range stage.graph.Nodes {
-				if within(node.Root, name) && len(node.Root) > len(ownerRoot) {
-					ownerRoot, ownerModule = node.Root, node.Module
-				}
-			}
-			if ownerRoot != "" {
-				relative, err := filepath.Rel(ownerRoot, name)
-				if err != nil {
-					return err
-				}
-				destination = filepath.Join(stage.generated[ownerModule], relative)
-			}
-		}
+		_, destination := stage.sourceDestination(name)
 		if destination == "" {
 			continue
 		}
@@ -134,4 +110,35 @@ func (stage *stagedRole) applyOverlays(overlays map[string][]byte) error {
 		}
 	}
 	return nil
+}
+
+// sourceDestination uses the same target paths that staged the fixed inventory,
+// including file-target relocation and exclusions for other executable targets.
+func (stage *stagedRole) sourceDestination(name string) (string, string) {
+	if !filepath.IsAbs(name) || within(filepath.Dir(stage.dir), name) {
+		return "", ""
+	}
+	name = filepath.Clean(name)
+	var owner *project.Node
+	for _, node := range stage.graph.Nodes {
+		if within(node.Root, name) && (owner == nil || len(node.Root) > len(owner.Root)) {
+			owner = node
+		}
+	}
+	if owner == nil || !sourcePathSelected(owner.Root, name) {
+		return "", ""
+	}
+	relative, err := filepath.Rel(owner.Root, name)
+	if err != nil {
+		return "", ""
+	}
+	selection := stage.selections[owner.Module]
+	if selection == nil {
+		return "", ""
+	}
+	relative, selected := selection.destination(relative)
+	if !selected {
+		return "", ""
+	}
+	return owner.Module, filepath.Join(stage.generated[owner.Module], relative)
 }

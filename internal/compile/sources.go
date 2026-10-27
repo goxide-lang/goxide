@@ -138,14 +138,20 @@ func libraryPackage(node *project.Node) (string, error) {
 	return node.Module, nil
 }
 
-func stageSources(node *project.Node, selected project.Target, kind, output string, managed bool, originals map[string]string) (string, error) {
+type sourceSelection struct {
+	files    map[string]string
+	excluded map[string]bool
+	entry    string
+}
+
+func selectSourcePaths(node *project.Node, selected project.Target, kind string) (*sourceSelection, error) {
 	files := map[string]string{}
 	excluded := map[string]bool{}
 	targets := append(append([]project.Target(nil), node.Manifest.Bins...), node.Manifest.Examples...)
 	for _, target := range targets {
 		info, err := targetInfo(node.Root, target.Path)
 		if err != nil {
-			return "", fmt.Errorf("target %s: %w", target.Name, err)
+			return nil, fmt.Errorf("target %s: %w", target.Name, err)
 		}
 		name := filepath.Clean(target.Path)
 		if info.IsDir() {
@@ -159,7 +165,7 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 	if library := node.Manifest.Lib; library != nil {
 		info, err := targetInfo(node.Root, library.Path)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if (!library.ProcMacro || kind == "lib") && targetUnavailable(*library, node.Features) == "" {
 			if !info.IsDir() {
@@ -175,7 +181,7 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 	}
 	info, err := targetInfo(node.Root, selected.Path)
 	if err != nil {
-		return "", fmt.Errorf("target %s: %w", selected.Name, err)
+		return nil, fmt.Errorf("target %s: %w", selected.Name, err)
 	}
 	entry := filepath.Clean(selected.Path)
 	if info.IsDir() {
@@ -201,10 +207,22 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 		}
 	}
 	if _, err := os.Lstat(filepath.Join(node.Root, "goxide_targets")); err == nil {
-		return "", fmt.Errorf("%s: goxide_targets is reserved for generated entries", node.Module)
+		return nil, fmt.Errorf("%s: goxide_targets is reserved for generated entries", node.Module)
 	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	return &sourceSelection{files: files, excluded: excluded, entry: entry}, nil
+}
+
+func stageSources(node *project.Node, selected project.Target, kind, output string, managed bool, originals map[string]string) (string, error) {
+	selection, err := selectSourcePaths(node, selected, kind)
+	if err != nil {
 		return "", err
 	}
+	return selection.stage(node, output, managed, originals)
+}
+
+func (selection *sourceSelection) stage(node *project.Node, output string, managed bool, originals map[string]string) (string, error) {
 	if err := os.MkdirAll(output, 0o755); err != nil {
 		return "", err
 	}
@@ -233,7 +251,7 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 		}
 		return closeErr
 	}
-	err = filepath.WalkDir(node.Root, func(name string, item fs.DirEntry, err error) error {
+	err := filepath.WalkDir(node.Root, func(name string, item fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -254,7 +272,7 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 			return fmt.Errorf("source module contains symlink: %s", name)
 		}
 		if item.IsDir() {
-			if item.Name() == ".goxide" || item.Name() == "vendor" || item.Name() == "goxide.lock.guard" || excluded[relative] {
+			if item.Name() == ".goxide" || item.Name() == "vendor" || item.Name() == "goxide.lock.guard" || selection.excluded[relative] {
 				return filepath.SkipDir
 			}
 			managed, err := project.ManagedSourceDirectory(name, node.Root, node.Module)
@@ -276,7 +294,7 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 		if relative == "go.mod" || relative == "go.work" || relative == "go.work.sum" || relative == project.ManifestName || relative == "goxide.lock" {
 			return nil
 		}
-		if destination, exists := files[relative]; exists {
+		if destination, exists := selection.files[relative]; exists {
 			if destination == "" {
 				return nil
 			}
@@ -295,13 +313,7 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 		}
 		// Embedded resources and fixtures are copied verbatim, even if they
 		// happen to use a source extension or a generated-file marker.
-		selected := true
-		for _, part := range strings.Split(filepath.ToSlash(relative), "/") {
-			if part == "testdata" || part == "vendor" || strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") {
-				selected = false
-				break
-			}
-		}
+		selected := sourceRelativeSelected(relative)
 		if selected && source.IsGenerated(name, data) {
 			published = append(published, pendingOutput{name, relative, data, info.Mode()})
 			return nil
@@ -324,7 +336,59 @@ func stageSources(node *project.Node, selected project.Target, kind, output stri
 	if err := os.WriteFile(filepath.Join(output, "go.mod"), node.ModBytes, 0o644); err != nil {
 		return "", err
 	}
-	return entry, nil
+	return selection.entry, nil
+}
+
+// sourceRelativeSelected is the source-name rule shared with the ordinary
+// directory inventory. Staging still copies ignored fixtures as resources.
+func sourceRelativeSelected(relative string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(relative), "/") {
+		if part == "testdata" || part == "vendor" || strings.HasPrefix(part, ".") || strings.HasPrefix(part, "_") {
+			return false
+		}
+	}
+	return true
+}
+
+// sourcePathSelected admits new editor files only where ordinary source
+// discovery can visit. An existing nested module is a boundary even when its
+// file is not yet present in the parent's fixed source inventory.
+func sourcePathSelected(root, name string) bool {
+	if !filepath.IsAbs(name) || !within(root, name) {
+		return false
+	}
+	relative, err := filepath.Rel(root, name)
+	if err != nil || !sourceRelativeSelected(relative) {
+		return false
+	}
+	if strings.HasSuffix(name, "_gox.go") {
+		if data, err := os.ReadFile(name); err == nil && source.IsGenerated(name, data) {
+			return false
+		}
+	}
+	for dir := filepath.Dir(name); dir != root; dir = filepath.Dir(dir) {
+		if filepath.Dir(dir) == dir {
+			return false
+		}
+		for _, marker := range []string{"go.mod", project.ManifestName} {
+			if _, err := os.Stat(filepath.Join(dir, marker)); err == nil || !os.IsNotExist(err) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (selection *sourceSelection) destination(relative string) (string, bool) {
+	for directory := range selection.excluded {
+		if relative == directory || strings.HasPrefix(relative, directory+string(filepath.Separator)) {
+			return "", false
+		}
+	}
+	if destination, exists := selection.files[relative]; exists {
+		return destination, destination != ""
+	}
+	return relative, true
 }
 
 func targetInfo(root, relative string) (os.FileInfo, error) {

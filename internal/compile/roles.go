@@ -26,6 +26,7 @@ type stagedRole struct {
 	modules    []analysis.Module
 	generated  map[string]string
 	originals  map[string]string
+	selections map[string]*sourceSelection
 	library    *analysis.ProcLibrary
 	wasm       []byte
 	sdk        string
@@ -170,7 +171,7 @@ func (stage *stagedRole) prepareProducerInput(ctx context.Context) error {
 }
 
 func stageRole(graph *project.Graph, target project.Target, kind string, configuration config.Config, options Options, selectedSource, staged string) (*stagedRole, error) {
-	stage := &stagedRole{graph: graph, dir: staged, target: target, kind: kind, config: configuration, features: map[string]config.Features{}, sugar: map[string]bool{}, generated: map[string]string{}, originals: map[string]string{}}
+	stage := &stagedRole{graph: graph, dir: staged, target: target, kind: kind, config: configuration, features: map[string]config.Features{}, sugar: map[string]bool{}, generated: map[string]string{}, originals: map[string]string{}, selections: map[string]*sourceSelection{}}
 	ordered := append([]*project.Node{graph.Root}, graph.Nodes...)
 	for _, node := range ordered {
 		if stage.generated[node.Module] != "" {
@@ -203,7 +204,12 @@ func stageRole(graph *project.Graph, target project.Target, kind string, configu
 		} else if node.Manifest.Lib != nil {
 			selected = *node.Manifest.Lib
 		}
-		packagePath, err := stageSources(node, selected, targetKind, output, node == graph.Root || node.HasManifest, stage.originals)
+		selection, err := selectSourcePaths(node, selected, targetKind)
+		if err != nil {
+			return nil, err
+		}
+		stage.selections[node.Module] = selection
+		packagePath, err := selection.stage(node, output, node == graph.Root || node.HasManifest, stage.originals)
 		if err != nil {
 			return nil, err
 		}

@@ -120,6 +120,9 @@ func (p *Project) Snapshot(ctx context.Context, overlays map[string][]byte) (*Sn
 			release()
 			return nil, err
 		}
+		if key == "" {
+			continue
+		}
 		input.Overlays[key] = bytes.Clone(data)
 		names[key] = name
 	}
@@ -152,23 +155,22 @@ func (p *Project) sourceKey(name string) (string, error) {
 		return "", fmt.Errorf("overlay filename must be absolute: %s", name)
 	}
 	name = filepath.Clean(name)
+	if extension := filepath.Ext(name); extension != ".gox" && extension != ".go" {
+		return "", nil
+	}
 	if key := p.sourceKeys[name]; key != "" {
 		return key, nil
 	}
-	var owner *project.Node
-	for _, node := range p.plans.Target.Nodes {
-		if within(node.Root, name) && (owner == nil || len(node.Root) > len(owner.Root)) {
-			owner = node
-		}
+	stage := p.stages[p.plans.Target]
+	module, destination := stage.sourceDestination(name)
+	if destination == "" {
+		return "", nil
 	}
-	if owner == nil {
-		return "", fmt.Errorf("overlay is outside the selected project: %s", name)
-	}
-	relative, err := filepath.Rel(owner.Root, name)
+	relative, err := filepath.Rel(stage.generated[module], destination)
 	if err != nil {
 		return "", err
 	}
-	return path.Join(owner.Module, filepath.ToSlash(relative)), nil
+	return path.Join(module, filepath.ToSlash(relative)), nil
 }
 
 // GoRoot is the private Go module view used by this prepared project.

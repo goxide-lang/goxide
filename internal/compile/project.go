@@ -226,11 +226,7 @@ func supportedManifest(manifest project.Manifest) error {
 }
 
 func unitSpec(graph *project.Graph, target project.Target, kind string, configuration config.Config, features map[string]config.Features, sugar map[string]bool, tags []string, race, stableGo bool) (project.UnitSpec, error) {
-	executable, err := os.Executable()
-	if err != nil {
-		return project.UnitSpec{}, err
-	}
-	compiler, err := os.ReadFile(executable)
+	compiler, err := compilerIdentity()
 	if err != nil {
 		return project.UnitSpec{}, err
 	}
@@ -273,7 +269,7 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 		GoTool      string
 		Compiler    string
 		Plan        string
-	}{sources, target, environment.Host, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, stableGo, environment.GoTool, project.Digest(compiler), unitDependencyID(graph)})
+	}{sources, target, environment.Host, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, stableGo, environment.GoTool, compiler, unitDependencyID(graph)})
 	host := environment.Host.OS + "-" + environment.Host.Arch
 	platform := environment.Target.OS + "-" + environment.Target.Arch
 	return project.UnitSpec{Host: host, Target: platform, Kind: kind, Name: target.Name, Config: identity}, nil

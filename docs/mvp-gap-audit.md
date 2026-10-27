@@ -38,6 +38,7 @@ std/serde 派生与打印通过正式过程宏和普通 trait/impl 实现；enum
 | import-go | 未做 | CLI 入口已摘除；[MVP-2](pre-mvp-plan.md#后续阶段mvp) | [cli_process_test.go](../cmd/goxide/cli_process_test.go)（拒绝入口） |
 | vendor 与供应来源选择 | 未做 | 当前项目入口拒绝 vendor；[MVP-3](pre-mvp-plan.md#后续阶段mvp) | 无新管线验收测试 |
 | 构建脚本授权 | 未做 | 项目构建拒绝 build 配置，scripts CLI 入口已摘除；[MVP-4](pre-mvp-plan.md#后续阶段mvp) | [project_test.go](../internal/compile/project_test.go)、[cli_process_test.go](../cmd/goxide/cli_process_test.go)（拒绝入口） |
-| source map | 部分 | `gen` 原位输出及 `-o -` 含行级 `//line`，宏映射到定义点或调用点；完整映射、列级、跨文件与 LSP 在 [MVP-5](pre-mvp-plan.md#后续阶段mvp)，`--source-map` sidecar 入口仍未开放 | [package_test.go](../internal/lower/package_test.go)、[generate_test.go](../cmd/goxide/generate_test.go)、[main_test.go](../cmd/goxide/main_test.go) |
-| LSP | 未做 | 诊断、符号导航、悬停和补全入口；[MVP-5](pre-mvp-plan.md#后续阶段mvp) | 无 |
+| source map | 部分 | `gen` 原位输出及 `-o -` 含行级 `//line`，宏映射到定义点或调用点；完整列级、跨文件、宏及验证代码映射按 [LSP 设计](design/compiler-and-tooling.md#7-源映射诊断与编辑)实施，`--source-map` sidecar 入口仍未开放 | [package_test.go](../internal/lower/package_test.go)、[generate_test.go](../cmd/goxide/generate_test.go)、[main_test.go](../cmd/goxide/main_test.go) |
+| LSP | 设计已确认，未实现 | [MVP-5 设计与 L0–L7 验收](design/compiler-and-tooling.md#11-实施阶段与验收)：同仓同 Go module，`goxide lsp`、共享分析与原版 gopls overlay；诊断、导航、悬停、补全、文档符号；[LSP 与构建分别做性能验收](design/compiler-and-tooling.md#10-lsp-与-buildrun-的性能合同) | 尚无正式 LSP 验收测试 |
+| LSP/CLI 宏缓存与产物路径调整 | 设计已确认，未实现 | [宏缓存第 2 级](design/compiler-and-tooling.md#8-过程宏与第-2-级缓存)，CLI 按当前输入确认并执行宏；[稳定路径](design/compiler-and-tooling.md#9-稳定产物路径与-os-arch)：不新增源码 hash，移除源码内容进入配置路径，`units/bin` 仅一层目标 OS-ARCH | 尚无共享缓存及新布局验收测试 |
 | safe std 首批入口、锁与集合 | 未做 | [MVP-6](pre-mvp-plan.md#后续阶段mvp)；一并验证 `std/sum` 的密封接口表示与携带全部类型参数的变体，调整其公开 Go API | 无 |

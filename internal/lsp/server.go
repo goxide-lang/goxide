@@ -60,6 +60,7 @@ type Server struct {
 	cancel                context.CancelFunc
 	documents             *DocumentStore
 	work                  chan struct{}
+	candidates            chan candidateRequest
 	workers               sync.WaitGroup
 	mu                    sync.Mutex
 	initialized, shutdown bool
@@ -89,7 +90,7 @@ func Serve(ctx context.Context, input io.ReadCloser, output io.Writer, options S
 		options.Log = io.Discard
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	s := &Server{options: options, connection: NewConnection(input, output), ctx: ctx, cancel: cancel, documents: NewDocumentStore(source.UTF16), encoding: source.UTF16, work: make(chan struct{}, 1), changed: make(chan struct{}), publishedURIs: map[string]bool{}}
+	s := &Server{options: options, connection: NewConnection(input, output), ctx: ctx, cancel: cancel, documents: NewDocumentStore(source.UTF16), encoding: source.UTF16, work: make(chan struct{}, 1), candidates: make(chan candidateRequest), changed: make(chan struct{}), publishedURIs: map[string]bool{}}
 	s.workers.Go(s.analyze)
 	err := s.connection.Serve(ctx, s.request, s.notification)
 	cancel()
@@ -158,6 +159,10 @@ func (s *Server) request(ctx context.Context, method string, raw json.RawMessage
 		return s.generatedSource(ctx, raw)
 	case "textDocument/formatting":
 		return s.formatting(ctx, raw)
+	case "textDocument/codeAction":
+		return s.codingActions(ctx, raw)
+	case "textDocument/signatureHelp":
+		return s.signatureHelp(ctx, raw)
 	case "textDocument/hover", "textDocument/definition", "textDocument/completion", "textDocument/documentSymbol":
 	default:
 		return nil, &RPCError{Code: CodeMethodNotFound, Message: "unsupported method: " + method}
@@ -234,7 +239,7 @@ func (s *Server) request(ctx context.Context, method string, raw json.RawMessage
 			return nil, err
 		}
 		if current.goProjection != nil {
-			answer, err = s.goQuery(ctx, current, key, offset, method)
+			answer, err = s.goQuery(ctx, current, key, offset, method, nil)
 		}
 	}
 	var unavailable *analysis.QueryUnavailable
@@ -303,7 +308,7 @@ func (s *Server) initialize(raw json.RawMessage) (any, error) {
 	s.directory, s.encoding, s.documents = directory, encoding, NewDocumentStore(encoding)
 	s.initialized = true
 	s.invalidateLocked(0, true)
-	return map[string]any{"capabilities": map[string]any{"positionEncoding": encoding, "textDocumentSync": map[string]any{"openClose": true, "change": 2, "save": map[string]any{"includeText": false}}, "hoverProvider": true, "definitionProvider": true, "completionProvider": map[string]any{"triggerCharacters": []string{".", ":"}}, "documentSymbolProvider": true, "documentFormattingProvider": true}, "serverInfo": map[string]string{"name": "goxide", "version": s.options.Version}}, nil
+	return map[string]any{"capabilities": map[string]any{"positionEncoding": encoding, "textDocumentSync": map[string]any{"openClose": true, "change": 2, "save": map[string]any{"includeText": false}}, "hoverProvider": true, "definitionProvider": true, "completionProvider": map[string]any{"triggerCharacters": []string{".", ":"}}, "documentSymbolProvider": true, "documentFormattingProvider": true, "codeActionProvider": map[string]any{"codeActionKinds": []string{"quickfix"}}, "signatureHelpProvider": map[string]any{"triggerCharacters": []string{"(", ","}}}, "serverInfo": map[string]string{"name": "goxide", "version": s.options.Version}}, nil
 }
 
 func (s *Server) notification(ctx context.Context, method string, raw json.RawMessage) error {
@@ -447,10 +452,18 @@ func (s *Server) awaitAnalysis(ctx context.Context, complete bool) (*publishedAn
 func (s *Server) analyze() {
 	var workspace *workspace
 	defer func() { workspace.close() }()
+	s.mu.Lock()
+	if s.candidates == nil {
+		s.candidates = make(chan candidateRequest)
+	}
+	s.mu.Unlock()
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
+		case request := <-s.candidates:
+			s.checkCandidate(workspace, request)
+			continue
 		case <-s.work:
 		}
 		// Coalesce typing without delaying the reader or cancellation path.

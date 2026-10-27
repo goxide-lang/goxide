@@ -117,6 +117,7 @@ const (
 
 type Match struct {
 	Enum      *Instance
+	Missing   []*Variant // Variants not covered by the checked, unguarded patterns.
 	Type      types.Type
 	Statement bool
 	Reference RefMode

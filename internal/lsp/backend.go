@@ -613,7 +613,7 @@ func (s *Server) mapGoLocation(current *publishedAnalysis, location wireLocation
 	return s.location(current, analysis.Location{File: mapping.Source.File, Span: syntaxSpan(mapping.Source.Span.Start, mapping.Source.Span.End)})
 }
 
-func (s *Server) goQuery(ctx context.Context, current *publishedAnalysis, key string, offset int, method string) (any, error) {
+func (s *Server) goQuery(ctx context.Context, current *publishedAnalysis, key string, offset int, method string, extra map[string]any) (any, error) {
 	current, release, err := s.acquireGo(ctx, current)
 	if err != nil {
 		return nil, err
@@ -626,7 +626,11 @@ func (s *Server) goQuery(ctx context.Context, current *publishedAnalysis, key st
 	if !ok {
 		return nil, nil
 	}
-	raw, err := current.goProjection.backend.coordinator.Query(ctx, current.epoch, method, map[string]any{"textDocument": map[string]string{"uri": uri}, "position": position})
+	params := map[string]any{"textDocument": map[string]string{"uri": uri}, "position": position}
+	for name, value := range extra {
+		params[name] = value
+	}
+	raw, err := current.goProjection.backend.coordinator.Query(ctx, current.epoch, method, params)
 	if err != nil {
 		if current.goProjection.backend.client.Err() != nil {
 			s.mu.Lock()
@@ -679,6 +683,9 @@ func (s *Server) goQuery(ctx context.Context, current *publishedAnalysis, key st
 	}
 	if method == "textDocument/documentSymbol" {
 		return s.goSymbols(current, uri, raw)
+	}
+	if method == "textDocument/signatureHelp" {
+		return raw, nil // Signature labels have no document positions to map.
 	}
 	return nil, nil
 }

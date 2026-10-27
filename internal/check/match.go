@@ -124,6 +124,7 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 	if instance != nil && !wild {
 		for _, variant := range instance.Enum.Variants {
 			if !covered[variant.Name] {
+				info.Missing = append(info.Missing, variant)
 				c.diag(n, NonExhaustive, fmt.Sprintf("match does not cover %s::%s", instance.Enum.Name, variant.Name))
 			}
 		}

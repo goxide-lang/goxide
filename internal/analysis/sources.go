@@ -7,6 +7,7 @@ import (
 	goast "go/ast"
 	"go/build"
 	goparser "go/parser"
+	"go/scanner"
 	gotoken "go/token"
 	"io"
 	"os"
@@ -57,12 +58,14 @@ type sourceSet struct {
 	previous          map[string]*Source
 	retryable, replay bool
 	preserve          bool
+	editor            bool
+	partials          map[string]*partialSource
 	snapshotPackages  bool
 	overlays          map[string][]byte
 }
 
 func captureSources(input Input) (*sourceSet, error) {
-	s := &sourceSet{files: map[string]*Source{}, names: map[string]string{}, keys: map[string]string{}, modules: map[string][]string{}, roots: map[string]paths.Roots{}, configured: map[string]configuredSource{}, preserve: input.Options.PreserveSyntax, overlays: input.Overlays}
+	s := &sourceSet{files: map[string]*Source{}, names: map[string]string{}, keys: map[string]string{}, modules: map[string][]string{}, roots: map[string]paths.Roots{}, configured: map[string]configuredSource{}, preserve: input.Options.PreserveSyntax || input.Options.Editor, editor: input.Options.Editor, partials: map[string]*partialSource{}, overlays: input.Overlays}
 	if input.Options.Previous != nil {
 		s.previous = input.Options.Previous.Sources
 	}
@@ -236,6 +239,12 @@ func (s *sourceSet) parse(key string) *Source {
 	if path.Ext(key) == ".go" {
 		source.GoTokens = gotoken.NewFileSet()
 		source.GoSyntax, source.err = goparser.ParseFile(source.GoTokens, key, source.Content, goparser.SkipObjectResolution)
+		if diagnostics, ok := source.err.(scanner.ErrorList); ok {
+			for _, diagnostic := range diagnostics {
+				offset := uint32(diagnostic.Pos.Offset)
+				source.Diagnostics = append(source.Diagnostics, parser.Diagnostic{Severity: parser.Error, Span: syntax.Span{Start: offset, End: offset}, Message: diagnostic.Msg})
+			}
+		}
 	} else {
 		source.Syntax, source.Diagnostics = parser.ParseFile(key, source.Content)
 		for _, diagnostic := range source.Diagnostics {
@@ -248,6 +257,68 @@ func (s *sourceSet) parse(key string) *Source {
 	return source
 }
 
+func (s *sourceSet) native(key string) (*goast.File, error) {
+	source := s.parse(key)
+	if source.err == nil || !s.editor {
+		return source.GoSyntax, source.err
+	}
+	file := source.GoSyntax
+	partial := &partialSource{file: key, diagnostics: source.Diagnostics}
+	s.partials[key] = partial
+	if file == nil || file.Name == nil || file.Name.Name == "" {
+		partial.region(syntax.Span{End: uint32(len(source.Content))}, UnknownDeclarations, "native package declaration is incomplete")
+		return nil, nil
+	}
+	span := func(node goast.Node) syntax.Span {
+		return syntax.Span{Start: uint32(source.GoTokens.Position(node.Pos()).Offset), End: uint32(source.GoTokens.Position(node.End()).Offset)}
+	}
+	bad := func(node goast.Node) bool {
+		incomplete := false
+		goast.Inspect(node, func(node goast.Node) bool {
+			switch node.(type) {
+			case *goast.BadExpr, *goast.BadDecl:
+				incomplete = true
+			}
+			return !incomplete
+		})
+		return incomplete
+	}
+	copy := *file
+	copy.Decls = nil
+	for _, decl := range file.Decls {
+		incomplete := false
+		if function, ok := decl.(*goast.FuncDecl); ok {
+			incomplete = bad(function.Type)
+			if function.Recv != nil {
+				incomplete = incomplete || bad(function.Recv)
+			}
+			for _, diagnostic := range source.Diagnostics {
+				if !spanContains(span(decl), diagnostic.Span) {
+					continue
+				}
+				if function.Body != nil && spanContains(span(function.Body), diagnostic.Span) {
+					partial.region(span(function.Body), IncompleteBody, "native function body is incomplete")
+				} else {
+					incomplete = true
+				}
+			}
+		} else {
+			incomplete = bad(decl)
+		}
+		if incomplete {
+			kind := UnknownDeclaration
+			if _, unknown := decl.(*goast.BadDecl); unknown {
+				kind = UnknownDeclarations
+			}
+			partial.region(span(decl), kind, "native declaration is incomplete")
+			copy.Decls = append(copy.Decls, &goast.BadDecl{From: decl.Pos(), To: decl.End()})
+			continue
+		}
+		copy.Decls = append(copy.Decls, decl)
+	}
+	return &copy, nil
+}
+
 func (s *sourceSet) working(key string, configuration config.Config) (*syntax.File, bool, error) {
 	if configured, ok := s.configured[key]; ok {
 		if configured.target {
@@ -257,13 +328,20 @@ func (s *sourceSet) working(key string, configuration config.Config) (*syntax.Fi
 	}
 	source := s.parse(key)
 	file := source.Syntax
-	if source.err != nil {
+	if source.err != nil && !s.editor {
 		return file, false, source.err
 	}
 	if s.preserve || s.previous[key] == source {
 		file = syntax.CloneFile(file)
 	} else {
 		source.Syntax = nil
+	}
+	if s.editor && source.err != nil {
+		file, s.partials[key] = projectSource(key, file, source.Diagnostics)
+		if file == nil {
+			s.configured[key] = configuredSource{}
+			return nil, false, nil
+		}
 	}
 	used, err := expand.Configure(file, configuration)
 	// Only graphs with item expansion need clean trees for a discovery retry.

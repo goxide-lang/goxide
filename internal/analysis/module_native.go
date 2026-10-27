@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -75,11 +76,14 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 			if !matches {
 				continue
 			}
-			input := inputs.parse(key)
-			if input.err != nil {
-				return nil, input.err
+			file, err := inputs.native(key)
+			if err != nil {
+				return nil, err
 			}
-			data, file := input.Content, input.GoSyntax
+			if file == nil {
+				continue
+			}
+			data := inputs.files[key].Content
 			src := source{key: key, name: file.Name.Name, data: data}
 			cgo := false
 			for _, imported := range file.Imports {
@@ -138,8 +142,14 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 				crates.edges = append(crates.edges, nativeCrateImport{path.Dir(src.key), target, src.key})
 			}
 		}
-		input := inputs.parse(src.key)
-		set, file := input.GoTokens, input.GoSyntax
+		file, err := inputs.native(src.key)
+		if err != nil {
+			return nil, err
+		}
+		if file == nil {
+			continue
+		}
+		set := inputs.files[src.key].GoTokens
 		tree, err := nativeDeclarations(src.key, src.data, file, set, names, importer)
 		if err != nil {
 			return nil, err
@@ -169,6 +179,8 @@ func nativeDeclarations(name string, data []byte, file *goast.File, set *gotoken
 	}
 	for _, declaration := range file.Decls {
 		switch declaration := declaration.(type) {
+		case *goast.BadDecl:
+			blank(declaration.Pos(), declaration.End())
 		case *goast.FuncDecl:
 			if declaration.Body != nil {
 				blank(declaration.Body.Pos(), declaration.Body.End())
@@ -251,8 +263,44 @@ func nativeDeclarations(name string, data []byte, file *goast.File, set *gotoken
 	}
 	source.Write(data[cursor:])
 	tree, diagnostics := parser.ParseFile(name, []byte(source.String()))
+	// Signature parsing expands Go selectors and escaped identifiers. Preserve
+	// the original byte coordinates before publishing this declaration view.
+	originalOffset := func(position uint32) uint32 {
+		delta := 0
+		for _, edit := range edits {
+			start := edit.start + delta
+			end := start + len(edit.text)
+			if int(position) < start {
+				break
+			}
+			if int(position) <= end {
+				if int(position) == end {
+					return uint32(edit.end)
+				}
+				if len(edit.text) == edit.end-edit.start {
+					return uint32(edit.start + int(position) - start)
+				}
+				return uint32(edit.start)
+			}
+			delta += len(edit.text) - (edit.end - edit.start)
+		}
+		return uint32(int(position) - delta)
+	}
+	syntax.Walk(tree, func(node syntax.Node) bool {
+		span := node.Span()
+		reflect.ValueOf(node).Elem().FieldByName("Loc").Set(reflect.ValueOf(syntax.Span{Start: originalOffset(span.Start), End: originalOffset(span.End)}))
+		return true
+	})
+	for i, offset := range tree.LineStarts {
+		tree.LineStarts[i] = originalOffset(offset)
+	}
+	for i := range tree.Tokens {
+		tree.Tokens[i].Start = originalOffset(tree.Tokens[i].Start)
+		tree.Tokens[i].End = originalOffset(tree.Tokens[i].End)
+	}
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Severity == parser.Error {
+			diagnostic.Span = syntax.Span{Start: originalOffset(diagnostic.Span.Start), End: originalOffset(diagnostic.Span.End)}
 			err := &Diagnostic{File: name, Source: tree, Span: diagnostic.Span, Message: "native Go declaration: " + diagnostic.Message, Origin: resolve.Origin{File: name, Span: diagnostic.Span}}
 			return nil, err
 		}

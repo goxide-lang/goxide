@@ -21,6 +21,8 @@ import (
 )
 
 type Options struct {
+	// Editor preserves reliable current declarations when source syntax is incomplete.
+	Editor bool
 	// PreserveSyntax retains raw source trees; CLI callers can transfer their ownership.
 	PreserveSyntax bool
 	// Previous reuses unchanged immutable parsing results from an earlier snapshot.
@@ -54,8 +56,12 @@ type Input struct {
 // Result retains the exact trees and semantic tables consumed by generation.
 type Result struct {
 	// Err prevents a partially checked result from being used for generation.
-	Err                    error
-	Diagnostics            []error
+	Err         error
+	Diagnostics []error
+	Regions     []Region
+	// Projection is a checked editor-only view. Err still describes the source.
+	Projection             *Result
+	ProjectionOnly         bool
 	Sources                map[string]*Source
 	Config                 config.Config
 	Files                  map[string]*syntax.File
@@ -100,6 +106,9 @@ func Analyze(ctx context.Context, input Input) (result *Result, err error) {
 			result.Err = err
 			if err != nil && len(result.Diagnostics) == 0 {
 				result.Diagnostics = []error{err}
+			}
+			if input.Options.Editor {
+				err = result.finishEditor(err)
 			}
 		}
 	}()
@@ -184,6 +193,10 @@ func loadPackage(input Input, sourceFiles *sourceSet) (g *graph, err error) {
 			if err != nil {
 				return g, err
 			}
+			if file == nil {
+				delete(files, key)
+				continue
+			}
 			if used && options.RejectConfiguration {
 				return g, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
 			}
@@ -193,11 +206,14 @@ func loadPackage(input Input, sourceFiles *sourceSet) (g *graph, err error) {
 				strict[key] = packagePath
 			}
 		case ".go":
-			source := sourceFiles.parse(key)
-			if source.err != nil {
-				return g, source.err
+			file, err := sourceFiles.native(key)
+			if err != nil {
+				return g, err
 			}
-			set, file := source.GoTokens, source.GoSyntax
+			if file == nil {
+				continue
+			}
+			set := sourceFiles.files[key].GoTokens
 			tree, nativeErr := nativeDeclarations(key, data, file, set, map[string]string{packagePath: file.Name.Name}, goImports)
 			if nativeErr != nil {
 				return g, nativeErr
@@ -322,6 +338,10 @@ func loadModules(ctx context.Context, input Input, extra map[string][]crateModul
 			if err != nil {
 				return g, err
 			}
+			if file == nil {
+				delete(files, key)
+				continue
+			}
 			if used && displayNames[key] != "" && nativePackage.RejectConfiguration {
 				return g, fmt.Errorf("conditional compilation requires whole-package generation; use gen with a directory input")
 			}
@@ -440,6 +460,9 @@ func analyzeGraph(ctx context.Context, g *graph) (result *Result, retry bool, er
 		return result, true, nil
 	}
 	reportProcDiagnostics(g.options.OnProcDiagnostic, files, g.display, expanded)
+	if err := checkContext(); err != nil {
+		return result, false, err
+	}
 	if cycle := macros.checkCycles(expanded); cycle != nil {
 		return result, false, cycle
 	}
@@ -447,7 +470,14 @@ func analyzeGraph(ctx context.Context, g *graph) (result *Result, retry bool, er
 		return result, false, imports.err
 	}
 	if err != nil {
-		return result, false, err
+		if !g.options.Editor {
+			return result, false, err
+		}
+		if _, sourceError := err.(*expand.Diagnostic); !sourceError {
+			return result, false, err
+		}
+		result.Diagnostics = append(result.Diagnostics, err)
+		g.recoverExpansion(expanded)
 	}
 	if g.options.RejectConfiguration {
 		for name, file := range files {
@@ -484,7 +514,9 @@ func analyzeGraph(ctx context.Context, g *graph) (result *Result, retry bool, er
 		for _, diagnostic := range resolved.Diagnostics {
 			result.Diagnostics = append(result.Diagnostics, diagnostic)
 		}
-		return result, false, resolved.Diagnostics[0]
+		if !g.options.Editor {
+			return result, false, resolved.Diagnostics[0]
+		}
 	}
 	if err := imports.checkSourceRoots(resolved); err != nil {
 		return result, false, err
@@ -509,11 +541,17 @@ func analyzeGraph(ctx context.Context, g *graph) (result *Result, retry bool, er
 	}
 	info, diagnostics := check.CheckWithOptions(expandedFiles, resolved, check.Options{Importer: external, Sizes: g.options.Config.Sizes(), ConfigByFile: configByFile})
 	result.Checked = info
+	if err := checkContext(); err != nil {
+		return result, false, err
+	}
 	if len(diagnostics) != 0 {
 		for _, diagnostic := range diagnostics {
 			result.Diagnostics = append(result.Diagnostics, diagnostic)
 		}
 		return result, false, diagnostics[0]
+	}
+	if len(result.Diagnostics) != 0 {
+		return result, false, result.Diagnostics[0]
 	}
 	if producer != nil {
 		if err := producer.validate(resolved, info, external); err != nil {

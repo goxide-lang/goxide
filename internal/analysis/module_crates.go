@@ -129,11 +129,13 @@ func (g *crateGraph) load(module *Module, crate *Crate, pkg string, extra map[st
 			children = append(children, crateModules(file)...)
 			continue
 		}
-		source := g.sources.parse(key)
-		if source.err != nil {
-			return source.err
+		file, err := g.sources.native(key)
+		if err != nil {
+			return err
 		}
-		file := source.GoSyntax
+		if file == nil {
+			continue
+		}
 		var targets []string
 		cgo := false
 		for _, imported := range file.Imports {

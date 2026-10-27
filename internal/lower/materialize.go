@@ -24,6 +24,9 @@ func Materialize(ctx context.Context, result *analysis.Result, output map[string
 	if result == nil || result.Err != nil {
 		return fmt.Errorf("materialization requires a successful analysis")
 	}
+	if result.ProjectionOnly {
+		return fmt.Errorf("editor-only projection cannot be materialized")
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}

@@ -231,6 +231,9 @@ func prepareProcLibraries(libraries []*ProcLibrary, files map[string]*syntax.Fil
 			if err != nil {
 				return nil, err
 			}
+			if file == nil {
+				continue
+			}
 			parsed[key] = file
 		}
 		entries, err := procmacro.Collect(parsed, library.PackagePath, true)

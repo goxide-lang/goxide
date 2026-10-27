@@ -170,16 +170,21 @@ func prepareSourcePackages(packages []SourcePackage, files map[string]*syntax.Fi
 				if err != nil {
 					return err
 				}
+				if file == nil {
+					continue
+				}
 				if pkg.Roots["crate"].PackagePath != "" {
 					addCrateUse(file)
 				}
 			case ".go":
-				source := sources.parse(key)
-				if source.err != nil {
-					return source.err
+				native, err := sources.native(key)
+				if err != nil {
+					return err
 				}
-				set, native := source.GoTokens, source.GoSyntax
-				var err error
+				if native == nil {
+					continue
+				}
+				set := sources.files[key].GoTokens
 				file, err = nativeDeclarations(key, data, native, set, packageNames, importer)
 				if err != nil {
 					return err

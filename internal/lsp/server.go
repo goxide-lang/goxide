@@ -30,6 +30,7 @@ type ServerOptions struct {
 type publishedAnalysis struct {
 	complete         bool
 	backendError     error
+	generateError    error
 	diskNames        map[string]string
 	sourceMaps       map[string]*source.Map
 	goDiagnostics    map[string][]wireDiagnostic
@@ -47,6 +48,8 @@ type publishedAnalysis struct {
 
 type Server struct {
 	backend               *goBackend
+	backendMaintenance    *goBackend
+	maintenanceDeadline   time.Time
 	goView                string
 	goViewSource          string
 	goFailure             string
@@ -109,6 +112,8 @@ func staleResult() error {
 func (s *Server) signalLocked() { close(s.changed); s.changed = make(chan struct{}) }
 func (s *Server) invalidateLocked(sequence uint64, reload bool) {
 	s.epoch++
+	s.backendMaintenance = nil
+	s.maintenanceDeadline = time.Time{}
 	if s.backend != nil {
 		s.backend.coordinator.Invalidate(s.epoch)
 	}
@@ -469,10 +474,27 @@ func (s *Server) analyze() {
 		documents := s.documents.Snapshot()
 		documentRevision := s.documentRevision
 		previous := s.current
+		maintenance := s.backendMaintenance
+		deadline := s.maintenanceDeadline
+		reuse := maintenance != nil && !reload && workspace != nil && previous != nil && previous.complete && previous.epoch == epoch && previous.goProjection != nil && previous.goProjection.backend == maintenance
+		if !reuse {
+			s.backendMaintenance = nil
+			s.maintenanceDeadline = time.Time{}
+		}
 		if reload || workspace == nil {
 			s.preparing, s.macroSource, s.watchSource = true, nil, nil
 		}
 		s.mu.Unlock()
+		if reuse {
+			current := *previous
+			current.documents, current.documentRevision = documents, documentRevision
+			s.refreshGo(ctx, &current, workspace, deadline)
+			if ctx.Err() == nil {
+				s.publish(&current, current.generateError)
+			}
+			cancel()
+			continue
+		}
 		if reload {
 			s.mu.Lock()
 			backend := s.backend
@@ -548,18 +570,8 @@ func (s *Server) analyze() {
 			}
 		}
 		if ctx.Err() == nil {
-			complete.goProjection, complete.backendError = s.syncGo(ctx, &complete, workspace, complete.sourceMaps)
-			if complete.goProjection != nil && complete.backendError == nil {
-				complete.goDiagnostics, complete.backendError = s.pullGoDiagnostics(ctx, &complete)
-			}
-			if complete.backendError != nil && ctx.Err() == nil {
-				message := "Go language service unavailable: " + complete.backendError.Error()
-				if s.goFailure != message {
-					s.goFailure = message
-					fmt.Fprintln(s.options.Log, message)
-					_ = s.connection.Notify(ctx, "window/logMessage", map[string]any{"type": 2, "message": message})
-				}
-			}
+			complete.generateError = generateErr
+			s.refreshGo(ctx, &complete, workspace, time.Time{})
 			if ctx.Err() == nil {
 				s.publish(&complete, generateErr)
 			}

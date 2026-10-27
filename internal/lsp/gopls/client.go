@@ -274,6 +274,14 @@ func (c *Client) Close(ctx context.Context) error {
 
 func (c *Client) Done() <-chan struct{} { return c.done }
 
+// RequestCount counts allocated outbound request IDs. Failed writes count
+// conservatively; notifications and replies to server requests do not count.
+func (c *Client) RequestCount() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.nextID
+}
+
 func (c *Client) Err() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -25,7 +25,17 @@ type goBackend struct {
 	coordinator  *gopls.Coordinator
 	root         string
 	preparedRoot string
+	// Guarded by Server.mu. Budget maintenance stops new admissions and waits
+	// for these already admitted queries before shutting down the process.
+	activeQueries int
+	idle          chan struct{}
+	retiring      bool
 }
+
+const (
+	goRequestLimit       = 2048
+	goMaintenanceTimeout = 5 * time.Second
+)
 
 type goProjection struct {
 	indexes map[string]*source.Index
@@ -37,12 +47,126 @@ type goProjection struct {
 }
 
 func (b *goBackend) close() {
+	b.closeContext(context.Background())
+}
+
+func (b *goBackend) closeContext(ctx context.Context) {
 	if b == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	_ = b.client.Close(ctx)
+}
+
+// acquireGo preserves the source epoch while a budget-exhausted backend is
+// replaced. A completed diagnostics batch and the eight request workers may
+// cross the limit; shutdown adds one final RPC. No new query is admitted to a
+// retiring process, and a query that already succeeded is not retried.
+func (s *Server) acquireGo(ctx context.Context, original *publishedAnalysis) (*publishedAnalysis, func(), error) {
+	waiting := false
+	attempted := false
+	var originalBackend *goBackend
+	if original.goProjection != nil {
+		originalBackend = original.goProjection.backend
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		current, err := s.awaitComplete(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		s.mu.Lock()
+		if current.epoch != original.epoch || s.epoch != original.epoch || s.shutdown {
+			s.mu.Unlock()
+			return nil, nil, staleResult()
+		}
+		if current.goProjection == nil || current.backendError != nil && attempted && s.backendMaintenance == nil {
+			s.mu.Unlock()
+			return current, func() {}, current.backendError
+		}
+		backend := current.goProjection.backend
+		// A fresh process's initial diagnostics can themselves be larger than
+		// the limit. Each waiting query still gets one admission after rebuild;
+		// otherwise a workspace with many open files could rebuild forever.
+		if s.backendMaintenance == nil && (current.backendError != nil || backend == originalBackend && backend.client.RequestCount() >= goRequestLimit) {
+			s.backendMaintenance = backend
+			backend.retiring = true
+			s.maintenanceDeadline = time.Now().Add(goMaintenanceTimeout)
+			select {
+			case s.work <- struct{}{}:
+			default:
+			}
+			s.signalLocked()
+		}
+		if s.backendMaintenance == nil {
+			if backend.activeQueries == 0 {
+				backend.idle = make(chan struct{})
+			}
+			backend.activeQueries++
+			s.mu.Unlock()
+			return current, func() {
+				s.mu.Lock()
+				backend.activeQueries--
+				if backend.activeQueries == 0 {
+					close(backend.idle)
+				}
+				s.mu.Unlock()
+			}, nil
+		}
+		attempted = true
+		if !waiting {
+			waitCtx, cancel := context.WithDeadline(ctx, s.maintenanceDeadline)
+			defer cancel()
+			ctx, waiting = waitCtx, true
+		}
+		changed := s.changed
+		s.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case <-s.ctx.Done():
+			return nil, nil, s.ctx.Err()
+		case <-changed:
+		}
+	}
+}
+
+func (s *Server) retireGo(ctx context.Context, backend *goBackend) error {
+	// The single worker owns backend replacement. Query admission is already
+	// stopped by maintenance or by the changed input epoch.
+	s.mu.Lock()
+	backend.retiring = true
+	idle, active := backend.idle, backend.activeQueries
+	s.mu.Unlock()
+	if active != 0 {
+		select {
+		case <-idle:
+		case <-ctx.Done():
+			// An admitted RPC may itself be stuck. Expiring maintenance must
+			// still kill its process, rather than retaining it indefinitely.
+			_ = backend.client.Close(ctx)
+			return ctx.Err()
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		_ = backend.client.Close(ctx)
+		return err
+	}
+	_ = backend.client.Close(ctx)
+	select {
+	case <-backend.client.Done():
+		s.mu.Lock()
+		if s.backend == backend {
+			s.backend = nil
+		}
+		s.mu.Unlock()
+		return ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *Server) startGo(ctx context.Context, root string, current *publishedAnalysis, w *workspace) (*goBackend, error) {
@@ -64,7 +188,7 @@ func (s *Server) startGo(ctx context.Context, root string, current *publishedAna
 	backend := &goBackend{client: client, coordinator: gopls.NewCoordinator(client), root: root}
 	uri, err := PathToURI(root)
 	if err != nil {
-		backend.close()
+		backend.closeContext(ctx)
 		return nil, err
 	}
 	settings := map[string]any{"pullDiagnostics": true, "fileWatcher": "off", "diagnosticsTrigger": "Save", "diagnosticsDelay": "1s"}
@@ -84,7 +208,7 @@ func (s *Server) startGo(ctx context.Context, root string, current *publishedAna
 		"initializationOptions": settings,
 	})
 	if err != nil {
-		backend.close()
+		backend.closeContext(ctx)
 		return nil, err
 	}
 	var initialized struct {
@@ -94,15 +218,15 @@ func (s *Server) startGo(ctx context.Context, root string, current *publishedAna
 		} `json:"capabilities"`
 	}
 	if err := json.Unmarshal(result, &initialized); err != nil {
-		backend.close()
+		backend.closeContext(ctx)
 		return nil, err
 	}
 	if len(initialized.Capabilities.DiagnosticProvider) == 0 || string(initialized.Capabilities.DiagnosticProvider) == "null" {
-		backend.close()
+		backend.closeContext(ctx)
 		return nil, fmt.Errorf("gopls does not provide the required pull diagnostic capability")
 	}
 	if encoding := initialized.Capabilities.PositionEncoding; encoding != "" && encoding != "utf-16" {
-		backend.close()
+		backend.closeContext(ctx)
 		return nil, fmt.Errorf("gopls selected unsupported backend position encoding %s", encoding)
 	}
 	return backend, nil
@@ -349,9 +473,16 @@ func (s *Server) syncGo(ctx context.Context, current *publishedAnalysis, w *work
 	}
 	s.mu.Lock()
 	backend := s.backend
+	retiring := backend != nil && backend.retiring
 	s.mu.Unlock()
-	if backend != nil && (backend.root != root || backend.preparedRoot != w.goRoot || backend.client.Err() != nil) {
-		backend.close()
+	if backend != nil && (backend.root != root || backend.preparedRoot != w.goRoot || backend.client.Err() != nil || retiring || backend.client.RequestCount() >= goRequestLimit) {
+		if retiring || backend.client.RequestCount() >= goRequestLimit {
+			if err := s.retireGo(ctx, backend); err != nil {
+				return nil, err
+			}
+		} else {
+			backend.close()
+		}
 		backend = nil
 	}
 	if backend == nil {
@@ -459,6 +590,14 @@ func (s *Server) mapGoLocation(current *publishedAnalysis, location wireLocation
 }
 
 func (s *Server) goQuery(ctx context.Context, current *publishedAnalysis, key string, offset int, method string) (any, error) {
+	current, release, err := s.acquireGo(ctx, current)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if current.goProjection == nil {
+		return nil, nil
+	}
 	uri, position, ok := s.backendPosition(current, key, offset)
 	if !ok {
 		return nil, nil
@@ -467,7 +606,7 @@ func (s *Server) goQuery(ctx context.Context, current *publishedAnalysis, key st
 	if err != nil {
 		if current.goProjection.backend.client.Err() != nil {
 			s.mu.Lock()
-			if s.epoch == current.epoch {
+			if s.epoch == current.epoch && !current.goProjection.backend.retiring {
 				s.invalidateLocked(s.sequence, false)
 			}
 			s.mu.Unlock()

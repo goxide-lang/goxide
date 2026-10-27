@@ -3,13 +3,63 @@ package lsp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 )
+
+// refreshGo never parses, expands, checks, or lowers source. Maintenance can
+// reuse the published immutable source result even when generation reported a
+// Go-only error. A changed input cancels the worker and prevents publication.
+func (s *Server) refreshGo(ctx context.Context, current *publishedAnalysis, w *workspace, deadline time.Time) {
+	workCtx := ctx
+	s.mu.Lock()
+	backend := s.backend
+	if deadline.IsZero() {
+		if backend != nil && (backend.retiring || backend.client.RequestCount()+uint64(backend.activeQueries) >= goRequestLimit) {
+			deadline = time.Now().Add(goMaintenanceTimeout)
+		}
+	}
+	s.mu.Unlock()
+	if !deadline.IsZero() {
+		var cancel context.CancelFunc
+		workCtx, cancel = context.WithDeadline(ctx, deadline)
+		defer cancel()
+	}
+	previous := current.goProjection
+	if previous == nil && backend != nil && !deadline.IsZero() {
+		// A changed input may first reach the limit during synchronization.
+		// Its new source analysis is also reusable if initialization fails.
+		previous = &goProjection{backend: backend}
+	}
+	current.goProjection, current.backendError = s.syncGo(workCtx, current, w, current.sourceMaps)
+	if current.goProjection != nil && current.backendError == nil {
+		var diagnostics map[string][]wireDiagnostic
+		diagnostics, current.backendError = s.pullGoDiagnostics(workCtx, current)
+		if current.backendError == nil {
+			current.goDiagnostics = diagnostics
+		}
+	}
+	if current.backendError != nil && current.goProjection == nil {
+		// Keep a failed maintenance snapshot only as a retry locator. Its
+		// backendError prevents queries from using the retired process. The
+		// next Go request may attempt one rebuild without reanalyzing source.
+		current.goProjection = previous
+	}
+	if current.backendError != nil && ctx.Err() == nil {
+		message := "Go language service unavailable: " + current.backendError.Error()
+		if s.goFailure != message {
+			s.goFailure = message
+			fmt.Fprintln(s.options.Log, message)
+			_ = s.connection.Notify(ctx, "window/logMessage", map[string]any{"type": 2, "message": message})
+		}
+	}
+}
 
 func (s *Server) setWorkspaceCallbacks(w *workspace) {
 	s.mu.Lock()

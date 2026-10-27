@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/check"
@@ -45,6 +46,10 @@ func (s *Server) publish(current *publishedAnalysis, err error) {
 		return
 	}
 	s.current = current
+	if current.complete {
+		s.backendMaintenance = nil
+		s.maintenanceDeadline = time.Time{}
+	}
 	s.signalLocked()
 	for uri := range s.publishedURIs {
 		if _, exists := diagnostics[uri]; !exists {

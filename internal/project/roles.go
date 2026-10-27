@@ -286,7 +286,7 @@ func (g *Graph) readRoot(root string) (*Node, error) {
 	// source crate retains the archive boundary and provenance, but cannot own
 	// a nested go.mod: Go module archives exclude nested modules.
 	transportRoot := source.source.Kind == "go" && source.CheckoutRoot != "" && filepath.Clean(root) == filepath.Clean(source.CheckoutRoot)
-	if !transportRoot && source.SelectedVersion != "" && source.source.Kind == "path" {
+	if !transportRoot && (source.source.Kind == "path" || source.source.Kind == "git") {
 		var err error
 		transportRoot, err = localModuleTransport(root)
 		if err != nil {

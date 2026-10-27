@@ -130,8 +130,8 @@ func normalizedReplaces(root string, m ModFile) ([]ModReplace, error) {
 	return out, nil
 }
 
-// A Go-selected local replacement may be a published library checkout. Its
-// transport must agree with the source manifest, just like a downloaded module.
+// Dependency checkouts may carry Go transport metadata alongside their source
+// manifest. Validate that policy just like a downloaded module.
 func localModuleTransport(root string) (bool, error) {
 	_, err := os.Lstat(filepath.Join(root, "go.mod"))
 	if os.IsNotExist(err) {
@@ -470,6 +470,12 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 						continue
 					}
 				}
+				if d.Version == "" {
+					published, e = localModuleTransport(dir)
+					if e != nil {
+						return nil, e
+					}
+				}
 				child := r.nodes[key]
 				if child == nil {
 					child, e = g.readNode(dir, published, boundary)
@@ -483,7 +489,7 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 					child.SourceKey = key
 					child.CheckoutRoot = boundary
 					child.SelectedVersion = version
-					if published {
+					if published && child.HasManifest {
 						if e = validatePublished(dir); e != nil {
 							deferred[key] = e
 						}

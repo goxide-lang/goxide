@@ -120,7 +120,7 @@ func main() { output::Println("explicit dependencies") }
 
 `git`、`path`、`go` 是互斥获取字段，`version` 配合 Go module；单独 version 的 registry 来源尚未实现。`go = "fmt"` 表示真实 Go 标准库，无 module/version 或下载，不接收 features/default_features。optional 仍由正常 feature 规则控制；内部加载校验 Standard，不用包名猜归属。
 
-path/Git 从所选项目根的 `goxide.toml` 中 `go_mod.module` 或 `go.mod` 中 `module` 读取 Go 投影路径，显式 `module` 可选且只作一致性断言。Git 的 `subdir` 仍选择含自身清单的项目/module 根，不选择普通子包。库作者的 `[lib]` 决定 Goxide 公开根；消费方不重复指定入口，也不能通过真实 Go 子路径绕过 Goxide 私有包。纯 Go 子包按使用路径查询，并核验实际 module owner；同一段的子包与成员冲突时报歧义。
+path/Git 从所选项目根的 `goxide.toml` 中 `go_mod.module` 或 `go.mod` 中 `module` 读取 Go 投影路径，显式 `module` 可选且只作一致性断言。依赖 checkout 可同时带有 Goxide 源清单与发布用的 `go.mod`；两份模块政策须一致，过程宏角色重载沿用此规则。主作者项目仍由 `goxide.toml` 管理 Go 元数据。Git 的 `subdir` 仍选择含自身清单的项目/module 根，不选择普通子包。库作者的 `[lib]` 决定 Goxide 公开根；消费方不重复指定入口，也不能通过真实 Go 子路径绕过 Goxide 私有包。纯 Go 子包按使用路径查询，并核验实际 module owner；同一段的子包与成员冲突时报歧义。
 
 可选 module 依赖同样先经过 feature 解析；全量声明决定根占名，只有活动 dependency 提供可用入口。访问未激活根报错，不由 `use` 启用依赖，也不 fallback 标准库。工具链依赖保留活动请求以提供根，但不参与下载、MVS 或增强模块构建。
 

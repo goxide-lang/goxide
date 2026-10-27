@@ -76,7 +76,7 @@ json = { go = "encoding/json" }
 output = { go = "fmt" }
 ```
 
-`use fmt;` 选择配置的项目，`use json;` 和 `use output;` 选择对应标准库包。这些别名不能作为“冗余标准库声明”删除。fallback 只提供候选根，源码仍须 `use` 建立绑定；不增加自动 import prelude。
+`use fmt;` 选择配置的项目，`use json;` 和 `use output;` 选择对应标准库包。这些别名不能作为“冗余标准库声明”删除。fallback 只提供候选根，源码仍须 `use` 建立绑定；标准库常用项的自动 prelude 按 [RFC 0031](0031-generic-protocol-impls.md#后续迁移边界) 单独提供。
 
 构建脚本的 host 上下文继续独立。默认标准库名字不会把 target 的库名、crate 树、module dependencies 或执行权限透传给 host；helper 依赖、冻结输入及授权闭包仍按[脚本合同](0023-build-scripts.md)处理。本方案不重启脚本 CLI 或扩大其权限。
 

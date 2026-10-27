@@ -178,7 +178,6 @@ func TestReservedSyntaxRejected(t *testing.T) {
 		`package p; trait T { missing() int }`,
 		`package p; impl T { missing() int {} }`,
 		`package p; mod m {}`,
-		`package p; use a::{b,c}`,
 		`package p; use super::x`,
 		`package p; enum E { A = 1, }`,
 		`package p; #![cfg(x)] func f() {}`,

@@ -1,5 +1,5 @@
 // Package resolve 在只读 AST 上解析名字，并按文件、NodeID 保存语义旁表。
-// 所有作用域均以 (名字, Ident.Ctx) 为键；ResolveExpanded 接入宏卫生旁表。
+// 所有作用域均以 (名字, Ident.Ctx, 命名空间) 为键；ResolveExpanded 接入宏卫生旁表。
 package resolve
 
 import (
@@ -12,9 +12,18 @@ import (
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
+// Namespace separates compile-time macros from ordinary language names.
+type Namespace uint8
+
+const (
+	OrdinaryNamespace Namespace = iota
+	MacroNamespace
+)
+
 type Key struct {
-	Name string
-	Ctx  ast.SyntaxCtx
+	Name      string
+	Ctx       ast.SyntaxCtx
+	Namespace Namespace
 }
 
 // Ref 包含文件身份，因为 NodeID 只在文件内唯一。
@@ -97,9 +106,12 @@ type UseBinding struct {
 	Name                Key
 	Target              []string
 	Glob, Blank, Public bool
+	Implicit            bool
 	BoundRoot           bool // The source root resolved to an explicit lexical binding.
 	Symbol              *Symbol
-	Resolved            *Symbol // Export selected by the use, before its route becomes a canonical target.
+	Resolved            *Symbol     // Export selected by the use, before its route becomes a canonical target.
+	Macro               *UseBinding // The independently resolved macro export of the same named use.
+	rootFallback        []string    // Dependency route used only when this namespace has no lexical root.
 }
 
 type File struct {
@@ -183,6 +195,7 @@ type External struct {
 
 // Importer 只查询显式路径或 glob 成员，不加载文件或实现跨包解析。
 // nil Importer 保留外部路径为 Deferred；具体模块路径始终保存在 Uses 中。
+// Lookup 只返回 name.Namespace 中的成员；前置查询可通过 DeferredImports 报告尚未加载成员。
 type Importer interface {
 	Lookup(path []string, name Key) []External
 }
@@ -242,8 +255,30 @@ func resolveFiles(files map[string]*ast.File, hygiene *hygiene, importer Importe
 	for _, r := range resolvers {
 		r.collectUses()
 	}
+	if sources, ok := importer.(interface {
+		SetUseResolver(func(*Symbol) bool, func(*UseBinding) bool)
+	}); ok {
+		bindingOwners := make(map[*UseBinding]*resolver)
+		for _, r := range resolvers {
+			for use := range r.useFiles {
+				bindingOwners[use] = r
+			}
+		}
+		// Aliases and public globs may be queried before their package reaches
+		// the main loop. Follow both with the same cycle-aware resolver.
+		sources.SetUseResolver(func(symbol *Symbol) bool {
+			owner := useOwners[symbol]
+			return owner == nil || owner.resolveUse(owner.symbolUses[symbol])
+		}, func(use *UseBinding) bool {
+			owner := bindingOwners[use]
+			return owner == nil || owner.resolveUse(use)
+		})
+	}
 	for _, r := range resolvers {
 		r.resolveUses()
+	}
+	for _, r := range resolvers {
+		r.checkUses()
 	}
 	for _, r := range resolvers {
 		r.attachMembers()

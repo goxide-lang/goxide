@@ -57,9 +57,9 @@ pub trait Eq where Self: PartialEq {}
 
 **Eq 与 NativeKey。** Eq 是具有 PartialEq 前提的普通 marker，作者可通过手写 Eq impl 显式承诺等价关系。库的 `derive(Eq)` 另要求目标实现 `DerivedPartialEq`，并为字段或 underlying 类型生成 Eq 前提；`derive(PartialEq)` 生成该 marker，手写 PartialEq 的作者也可显式实现 `DerivedPartialEq` 来提供承诺。`DerivedPartialEq` 是可手写的普通库资格，不是编译器追踪的派生来源；只手写 PartialEq 而未提供该承诺时，不满足 `derive(Eq)` 的资格前提。NativeKey 另以 `Self: PartialEq` 和 `Self: comparable` 为前提，承诺该业务相等与稳定 Go 原生键语义一致。这些承诺均由普通 impl 表达，编译器不分析业务体以证明等价关系。
 
-Default 成员统一写作 `r#default`，使用普通 raw identifier；不再以 trait 名称触发关键字解析例外。静态函数返回真实 Self；Clone、Debug、Serialize 的 `self &Self` 保持既有只读权限；Deserialize 返回 `(Self, error)`，不抹成 `any`。
+Default 的静态成员统一写作 `Default() Self`，使用普通标识符。静态函数返回真实 Self；Clone、Debug、Serialize 的 `self &Self` 保持既有只读权限；Deserialize 返回 `(Self, error)`，不抹成 `any`。
 
-trait 与派生宏沿 RFC 0030 的单一名字空间：运行库可导出 `Clone` trait，并将宏包重导出为 `derive`，调用写作 `#[derive(protocols::derive::Clone)]`；也可显式导入宏并改名。裸内建派生入口已删除，不用编译器固定映射模拟普通库。宏输出的运行库路径通过既定定义点绑定与 RuntimeRoot 解析，消费者按 RFC 0030 声明运行库依赖；宏执行依赖不会自动成为目标依赖。正式 std 与 serde 均通过 `derive` 子路径重导出宏。
+trait 与派生宏沿 RFC 0030 分别位于普通空间和宏空间：运行库可同时导出 `Clone` trait 与 `Clone` 派生宏，单个 `use protocols::Clone;` 引入两者；`#[derive(Clone)]` 选择宏，trait bound 选择普通项。宏包重导出为 `derive` 后，`#[derive(protocols::derive::Clone)]` 等限定路径也继续可用。裸内建派生入口已删除，不用编译器固定映射模拟普通库。宏输出的运行库路径通过既定定义点绑定与 RuntimeRoot 解析，消费者按 RFC 0030 声明运行库依赖；宏执行依赖不会自动成为目标依赖。正式 std 与 serde 保留 `derive` 子路径，std prelude 另以普通 `pub use` 直接重导出常用派生宏。
 
 ### 2. 通用互斥与实现选择（设计提案）
 
@@ -347,7 +347,7 @@ Default 保留业务默认和字段顺序；普通方法体递归不受专用禁
 
 ### 后续迁移边界
 
-固有成员的新 Go 映射与 `std::enum_assert!` 已接入。From/Into 按 RFC 0032 实现；配置/返回适配仍保留为语言机制。`std::prelude` 的清单和导入规则待设计。
+固有成员的新 Go 映射与 `std::enum_assert!` 已接入。From/Into 按 RFC 0032 实现；配置/返回适配仍保留为语言机制。`std::prelude` 自动提供常用名称，显式绑定和普通通配导入优先。
 
 **保留配置选择和 Go 返回适配为语言机制。** 普通宏可输出现有 `cfg` / `cfg_attr` / `cfg!` 语法，由编译器继续按来源和构建角色求值。原始源码的配置选择先于入口登记与宏执行，宏生成项按现有展开流程继续筛选；完整规则包含宏 Context 不可查询的环境，不能以普通 attribute 执行代替。`go_result!` / `go_result_keep!` 继续依据真实单值或双值返回签名选择适配，按原静态错误类型判断 nil，并保留调用帧。让它们完整迁出需要另行设计配置阶段接口及静态返回形状能力，不能把仅支持 target/feature 或精确 `error` 的库函数算作完整替代。该候选保留 RFC 0030 的纯语法边界及 D36 的行为。
 
@@ -375,7 +375,11 @@ D22 与 [RFC 0005](research/0005-option-result-question.md#11-thiserror-与静�
 
 校验范围沿用当前有限遍历：不遍历 pointer、普通 interface 或 map 键；遇到当前包含路径上已有的规范类型，终止该条边且不再次校验该节点。例如 `E` 的变体携带 `[]E`，slice 元素会在静态回边处截断，不能据此证明整个运行时对象图有效。若将不可访问字段的检查移到其定义包，生成 helper 仍须保留调用点的路径截断，不能重新开始校验。只在实际需要读取的字段无法合法访问且没有可生成检查的定义源码时诊断；无关私有 scalar 字段不构成拒绝理由。跨包检查已接入按需定义包 helper；待定模板通过实际需求提供校验回调，并保留包含路径的截断。对应 `internal/lower/enum_assert_test.go`、`enum_assert_template_test.go` 和 `enum_assert_hygiene_test.go` 覆盖私有字段、私有类型实参、条件泛型、卫生及直接 recover 调用帧；全树和正式库完整回归仍按状态表验收。
 
-**后续 std::prelude。** 已确认提供标准库常用入口的 prelude 方向。具体重导出清单、导入方式和遮蔽规则以后设计；当前仍沿显式 use 与宏路径解析，不由这项决定增加隐式注入或新的名称优先级。
+**自动 std::prelude。** 消费 std 的每个 `.gox` 文件自动引入所选依赖的 `std::prelude`；std 自身的源码继续显式引用所需项。库通过普通 `pub use` 导出 trait `Default`、`Clone`、`Debug`、`Display`、`PartialEq`、`Eq`、`NativeKey`、`From`、`Into`，以及 `default_value`、`print!`、`println!`、`enum_assert!` 和 `derive` namespace。prelude 同时直接重导出派生宏 `Default`、`Clone`、`Debug`、`PartialEq`、`Eq`、`NativeKey`、`Error`：`Debug` trait bound 和 `#[derive(Debug)]` 分别选择普通空间与宏空间；`#[derive(derive::Debug)]` 仍可使用。
+
+两个名字空间分别执行相同覆盖顺序：用户声明和显式命名 `use` 优先于普通 glob，普通 glob 优先于自动 prelude；私有 `use` 的覆盖只在当前文件生效。单个 `use` 导入目标两空间的全部同名公开出口；同一空间的歧义仍诊断，普通名称不会遮蔽同名宏。语言默认提供的 `Option`、`Result` 及其构造器也可被用户声明或导入覆盖，例如 `use thiserror::{Error, Result};`。自动 prelude 保持宏定义点解析，并让通配引入的 trait 参与实例方法查找。Go 的 `print()` / `println()` 与库的 `print!` / `println!` 按这一通用分空间规则共存。
+
+生成 Go 按实际引用选择 canonical 包路径；只用编译期宏不会给业务输出文件增加运行时 import。原生 `gen` 仍按[生成依赖合同](../design/dependency-roots.md#gen-产物与验收)，在 tools 文件中保留实际使用的纯生成依赖；完全未使用 prelude 时不产生运行时或 tools import。显式 `use package as _;` 仍保留包初始化依赖。
 
 ## 双向互操作
 

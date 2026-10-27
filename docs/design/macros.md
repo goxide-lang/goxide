@@ -18,6 +18,8 @@
 
 显式依赖分别提供宏构建角色与目标运行时角色。宏在受限 WASI 环境执行，不读取宿主磁盘、网络、环境、时钟或启动进程；允许生成普通运行时 I/O 代码。展开结果继续经过 `resolve → check → lower`，并使用 Go 运行时。
 
+trait、type、value 和 module 使用普通名字空间；声明宏与 function-like、attribute、derive 过程宏共用宏名字空间。同名普通项与宏可以共存，调用语法选择空间并继续校验宏入口种类。单个 `use` 引入目标两空间中的全部同名公开出口；别名、重导出和 glob 保留各自身份。每个空间独立按用户声明/命名 `use`、显式 glob、自动 prelude 的顺序选择，同空间歧义仍诊断。该规则适用于任意库名称，不依赖 std 特判，定义点卫生不变。
+
 serde 核心采用独立的 Serialize/Deserialize、Serializer/Deserializer 与 Visitor/Access；Value 属于 JSON 等格式层，见 [serde RFC](../rfcs/research/0006-serde-core-and-formats.md)。Debug 不作为序列化，派生也不直接退回 encoding/json。公共语法工具位于独立 syntax module，见[语法工具设计](syntax-tooling.md)。
 
 ## 2. 模式与模板操作结构化语法
@@ -39,7 +41,7 @@ serde 核心采用独立的 Serialize/Deserialize、Serializer/Deserializer 与 
 
 ## 3. 函数式声明宏示例
 
-当前源码包采用 `pub macro_rules! name` 导出、`use root as alias;` 绑定、`alias::name!(...)` 调用。根及精确 Go 包映射由[依赖配置](dependency-roots.md)声明；宏与运行时项共用静态路径解析。运行时 helper 按 Go 导出约定写 `Emit` 等公开函数；私有 helper 跨包不可见，须由作者提供公开 helper。旧包点号调用与 `import macro` 不再支持；`pub func` 等声明使用当前普通语法。限定实现与来源/预算边界见[宏实现说明](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/macros/README.md)。
+当前源码包采用 `pub macro_rules! name` 导出、`use root as alias;` 绑定、`alias::name!(...)` 调用。根及精确 Go 包映射由[依赖配置](dependency-roots.md)声明；宏与运行时项沿相同静态路径规则分别在宏空间和普通空间解析。运行时 helper 按 Go 导出约定写 `Emit` 等公开函数；私有 helper 跨包不可见，须由作者提供公开 helper。旧包点号调用与 `import macro` 不再支持；`pub func` 等声明使用当前普通语法。限定实现与来源/预算边界见[宏实现说明](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/macros/README.md)。
 
 以下使用 `macro_rules!` 的模式与模板。假设 `macrokit` 包提供一个普通、公开的运行时 helper：
 
@@ -152,12 +154,11 @@ Rust 的 `macro_rules!` 使用 mixed-site hygiene：局部变量和标签按定�
 ## 5. 普通库 Default、Clone 与 Debug 派生
 
 ```goxide
-use std;
-#[derive(std::derive::Default, std::derive::Clone, std::derive::Debug)]
+#[derive(Default, Clone, Debug)]
 struct Point { X int; Y int }
 ```
 
-宏读取 Point 的语法并输出普通 impl。完整基础及比较协议见 [RFC 0013](../rfcs/0013-derive.md)，实现来源不影响协议资格或后续检查。
+所选 std 源库的 prelude 通过普通重导出提供这些派生宏及同名 trait；`#[derive(Debug)]` 选择宏，`T: Debug` 选择 trait。`std::derive::Debug` 和 `derive::Debug` 等限定路径继续可用。宏读取 Point 的语法并输出普通 impl。完整基础及比较协议见 [RFC 0013](../rfcs/0013-derive.md)，实现来源不影响协议资格或后续检查。
 
 ### 5.1 类型形状、约束与冲突
 
@@ -165,7 +166,7 @@ struct Point { X int; Y int }
 
 ### 5.2 Default：显式构造合法值
 
-Default 的普通静态成员是 `r#default() Self`。struct 按字段顺序构造，enum 恰好选择一个 `#[default]` 变体，仅要求该变体的 payload 有 Default。Option 返回 None 且不要求载荷 Default；Result 不自动取得 Default。普通 `var`、`make`、map 缺失和 channel 零值不调用业务构造。
+Default 的普通静态成员是 `Default() Self`。struct 按字段顺序构造，enum 恰好选择一个 `#[default]` 变体，仅要求该变体的 payload 有 Default。Option 返回 None 且不要求载荷 Default；Result 不自动取得 Default。普通 `var`、`make`、map 缺失和 channel 零值不调用业务构造。
 
 手写实现可给出非零业务默认值，也可像普通函数一样递归。编译器不保留 Default 专用调用图检查；协议前提循环和无限实例需求由通用机制诊断。
 

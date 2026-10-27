@@ -43,7 +43,7 @@ func (i *moduleImporter) checkRootRequirement(requirement rootRequirement) error
 func (i *moduleImporter) checkSourceRoots(resolved *resolve.Result) error {
 	imports := map[*resolve.Symbol]*resolve.Symbol{}
 	for _, file := range resolved.Files {
-		for _, use := range file.Uses {
+		for _, use := range namespaceUses(file) {
 			if use.Symbol != nil && use.Resolved != nil {
 				imports[use.Symbol] = use.Resolved
 			}
@@ -103,7 +103,7 @@ func (i *moduleImporter) checkCrateImports(resolved *resolve.Result) error {
 	}
 	imports := map[*resolve.Symbol]*resolve.Symbol{}
 	for _, file := range resolved.Files {
-		for _, use := range file.Uses {
+		for _, use := range namespaceUses(file) {
 			if use.Symbol != nil && use.Resolved != nil {
 				imports[use.Symbol] = use.Resolved
 			}

@@ -25,7 +25,22 @@ type moduleImporter struct {
 	procs          map[string]map[string]boundProc
 	rootAccesses   []rootRequirement
 	crates         *crateGraph
+	deferred       bool // Macro binding snapshots query only already loaded source scopes.
+	resolveSymbol  func(*resolve.Symbol) bool
+	resolveUse     func(*resolve.UseBinding) bool
 	err            error
+}
+
+func (i *moduleImporter) DeferredImports() bool { return i.deferred }
+
+func (i *moduleImporter) SetUseResolver(resolveSymbol func(*resolve.Symbol) bool, resolveUse func(*resolve.UseBinding) bool) {
+	i.resolveSymbol, i.resolveUse = resolveSymbol, resolveUse
+}
+
+func (i *moduleImporter) bindingView() *moduleImporter {
+	view := *i
+	view.deferred, view.err, view.rootAccesses = true, nil, nil
+	return &view
 }
 
 type moduleMember struct {
@@ -43,7 +58,7 @@ func (i *moduleImporter) SetSourcePackages(packages []*resolve.Package) {
 		key := pkg.Dir + "\x00" + pkg.Name
 		if first {
 			for name, proc := range i.procs[filepath.ToSlash(pkg.Dir)] {
-				identity := resolve.Key{Name: name}
+				identity := resolve.Key{Name: name, Namespace: resolve.MacroNamespace}
 				if pkg.Scope.Bindings[identity] != nil {
 					i.err = &Diagnostic{File: proc.file, Span: proc.entry.Attribute.Span(), Message: "duplicate procedural macro name " + name}
 					continue
@@ -96,15 +111,18 @@ func (i *moduleImporter) Lookup(parts []string, name resolve.Key) []resolve.Exte
 
 func (i *moduleImporter) lookup(parts []string, name resolve.Key, visiting map[string]bool) []moduleMember {
 	packagePath := strings.Join(parts, "/")
-	key := fmt.Sprintf("%s::%s@%d", packagePath, name.Name, name.Ctx)
+	key := fmt.Sprintf("%s::%s@%d/%d", packagePath, name.Name, name.Ctx, name.Namespace)
 	if visiting[key] {
 		return nil
 	}
 	visiting[key] = true
 	defer delete(visiting, key)
-	if name.Ctx == 0 {
+	if name.Ctx == 0 && name.Namespace == resolve.OrdinaryNamespace {
 		target := append(append([]string(nil), parts...), name.Name)
-		if _, ok := i.namespace(target); ok {
+		if requirement, ok := i.namespace(target); ok {
+			if requirement.implicit && !i.requireRoot(requirement) {
+				return nil
+			}
 			// A mapped root is itself a namespace, just like an explicit child.
 			return []moduleMember{{External: resolve.External{Name: name, Kind: resolve.Module, Visibility: resolve.Public, Target: target}}}
 		}
@@ -130,7 +148,11 @@ func (i *moduleImporter) lookup(parts []string, name resolve.Key, visiting map[s
 				}
 			}
 		}
-		return i.packageMembers(strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)
+		members := i.packageMembers(strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)
+		if len(members) != 0 && requirement.implicit && !i.requireRoot(requirement) {
+			return nil
+		}
+		return members
 	}
 	// A source root follows declared module/item edges one segment at a time.
 	// Appending physical directories here would expose private or undeclared
@@ -226,6 +248,9 @@ func (i *moduleImporter) packageMembers(parts []string, name resolve.Key, visiti
 	if scope := i.local[packagePath]; scope != nil {
 		return i.scopeMembers(scope, parts, name, visiting)
 	}
+	if name.Namespace == resolve.MacroNamespace || i.deferred {
+		return nil
+	}
 	pkg := i.goPackage(packagePath)
 	if pkg == nil || name.Ctx != 0 {
 		return nil
@@ -269,6 +294,9 @@ func (i *moduleImporter) scopeMembers(scope *resolve.Scope, target []string, nam
 	if len(scope.Aliases[name]) == 0 {
 		for _, use := range scope.Globs {
 			if use.Public {
+				if i.resolveUse != nil && !i.resolveUse(use) {
+					continue
+				}
 				out = append(out, i.lookup(use.Target, name, visiting)...)
 			}
 		}
@@ -277,6 +305,9 @@ func (i *moduleImporter) scopeMembers(scope *resolve.Scope, target []string, nam
 }
 
 func (i *moduleImporter) symbolMembers(symbol *resolve.Symbol, owner []string, name resolve.Key, visiting map[string]bool) []moduleMember {
+	if i.resolveSymbol != nil && !i.resolveSymbol(symbol) {
+		return nil
+	}
 	for symbol.AliasOf != nil {
 		symbol = symbol.AliasOf
 		owner = i.symbolOwner(symbol)
@@ -285,10 +316,13 @@ func (i *moduleImporter) symbolMembers(symbol *resolve.Symbol, owner []string, n
 		target := symbol.Target
 		_, namespace := i.namespace(target)
 		if namespace {
+			if name.Namespace == resolve.MacroNamespace {
+				return nil
+			}
 			return []moduleMember{{External: resolve.External{Name: name, Kind: resolve.Module, Visibility: resolve.Public, Target: target}, symbol: symbol}}
 		}
 		if len(target) > 1 {
-			found := i.lookup(target[:len(target)-1], resolve.Key{Name: target[len(target)-1], Ctx: symbol.Name.Ctx}, visiting)
+			found := i.lookup(target[:len(target)-1], resolve.Key{Name: target[len(target)-1], Ctx: symbol.Name.Ctx, Namespace: name.Namespace}, visiting)
 			if len(found) > 0 {
 				for index := range found {
 					found[index].Name = name
@@ -296,9 +330,12 @@ func (i *moduleImporter) symbolMembers(symbol *resolve.Symbol, owner []string, n
 				return found
 			}
 		}
-		if i.SourcePackage(target) || i.goPackage(strings.Join(target, "/")) != nil {
+		if name.Namespace == resolve.OrdinaryNamespace && (i.SourcePackage(target) || i.goPackage(strings.Join(target, "/")) != nil) {
 			return []moduleMember{{External: resolve.External{Name: name, Kind: resolve.Module, Visibility: resolve.Public, Target: target}, symbol: symbol}}
 		}
+		return nil
+	}
+	if (symbol.Kind == resolve.Macro) != (name.Namespace == resolve.MacroNamespace) {
 		return nil
 	}
 	target := append(append([]string(nil), owner...), symbol.Name.Name)
@@ -329,7 +366,7 @@ func (i *moduleImporter) symbolOwner(symbol *resolve.Symbol) []string {
 }
 
 func (i *moduleImporter) goPackage(path string) *types.Package {
-	if i.procPackage(path) {
+	if i.deferred || i.procPackage(path) {
 		return nil
 	}
 	pkg, loaded := i.cache[path]
@@ -340,19 +377,34 @@ func (i *moduleImporter) goPackage(path string) *types.Package {
 	return pkg
 }
 
+func (i *moduleImporter) requireRoot(requirement rootRequirement) bool {
+	if i.deferred {
+		return true
+	}
+	if requirement.requireRoot != nil {
+		if err := requirement.requireRoot(requirement.alias, requirement.namespace); err != nil {
+			if i.err == nil {
+				i.err = err
+			}
+			return false
+		}
+	}
+	return true
+}
+
 func (i *moduleImporter) namespace(parts []string) (rootRequirement, bool) {
 	for split := len(parts); split > 0; split-- {
 		requirement, ok := i.namespaces[strings.Join(parts[:split], "/")]
 		if !ok {
 			continue
 		}
-		if requirement.requireRoot != nil {
-			if err := requirement.requireRoot(requirement.alias, requirement.namespace); err != nil {
-				if i.err == nil {
-					i.err = err
-				}
-				return rootRequirement{}, false
-			}
+		if i.deferred {
+			// Source modules are already available. Other roots stay deferred
+			// until an actual macro invocation or final resolution demands them.
+			return requirement, split == len(parts) && i.local[requirement.namespace.PackagePath] != nil
+		}
+		if !requirement.implicit && !i.requireRoot(requirement) {
+			return rootRequirement{}, false
 		}
 		sourceImports := i.external
 		if requirement.sourceImporter != nil {
@@ -398,7 +450,15 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 			continue
 		}
 		file := resolved.Files[name]
-		for _, use := range file.Uses {
+		for _, use := range namespaceUses(file) {
+			if use.Implicit {
+				// Trait member lookup needs the canonical package, but the injected
+				// glob itself does not retain a generation-only dependency.
+				if requirement, ok := i.namespace(use.Target); ok && requirement.namespace.PackagePath != "" {
+					use.Target = strings.Split(requirement.namespace.PackagePath, "/")
+				}
+				continue
+			}
 			var decl *syntax.UseDecl
 			for _, item := range file.AST.Items {
 				if candidate, ok := item.(*syntax.UseDecl); ok && candidate.ID() == use.Decl.ID {
@@ -439,6 +499,13 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 					return i.err
 				}
 				segments := decl.Tree.Path.Segments
+				if use.Glob && len(use.Target) > 1 {
+					last := len(use.Target) - 1
+					macros := i.Lookup(use.Target[:last], resolve.Key{Name: use.Target[last], Ctx: use.Name.Ctx, Namespace: resolve.MacroNamespace})
+					if len(macros) != 0 {
+						return fail(fmt.Sprintf("glob use target %q is not a namespace", segments[len(segments)-1].Name.Name))
+					}
+				}
 				return fail(fmt.Sprintf("use target %q is not a public item or namespace", segments[len(segments)-1].Name.Name))
 			}
 			if use.Resolved != nil {
@@ -497,12 +564,12 @@ func (i *moduleImporter) finishUseTarget(use *resolve.UseBinding) bool {
 	if use.Resolved != nil || use.Symbol != nil && use.Symbol.AliasOf != nil {
 		return true
 	}
-	if _, ok := i.namespace(use.Target); ok {
+	if _, ok := i.namespace(use.Target); ok && use.Name.Namespace == resolve.OrdinaryNamespace {
 		return true
 	}
 	if len(use.Target) > 1 {
 		last := len(use.Target) - 1
-		members := i.Lookup(use.Target[:last], resolve.Key{Name: use.Target[last], Ctx: use.Name.Ctx})
+		members := i.Lookup(use.Target[:last], resolve.Key{Name: use.Target[last], Ctx: use.Name.Ctx, Namespace: use.Name.Namespace})
 		if len(members) == 1 {
 			member := members[0]
 			use.Resolved = &resolve.Symbol{Name: member.Name, Kind: member.Kind, Visibility: member.Visibility, GoName: member.GoName, Target: member.Target}
@@ -513,10 +580,26 @@ func (i *moduleImporter) finishUseTarget(use *resolve.UseBinding) bool {
 			return true
 		}
 	}
-	if i.SourcePackage(use.Target) || i.goPackage(strings.Join(use.Target, "/")) != nil {
+	if use.Name.Namespace == resolve.OrdinaryNamespace && (i.SourcePackage(use.Target) || i.goPackage(strings.Join(use.Target, "/")) != nil) {
 		return true
 	}
 	return false
+}
+
+// Each source use may select one declaration from each namespace. Runtime
+// emission reads the ordinary branch; access checks validate both branches.
+func namespaceUses(file *resolve.File) []*resolve.UseBinding {
+	var uses []*resolve.UseBinding
+	for _, use := range file.Uses {
+		macro := use.Macro != nil && (use.Macro.Symbol != nil || use.Macro.Resolved != nil)
+		if use.Symbol != nil || !macro || use.Glob || use.Blank {
+			uses = append(uses, use)
+		}
+		if macro {
+			uses = append(uses, use.Macro)
+		}
+	}
+	return uses
 }
 
 func (i *moduleImporter) boundUse(use *resolve.UseBinding, decl *syntax.UseDecl, module string) bool {
@@ -525,6 +608,13 @@ func (i *moduleImporter) boundUse(use *resolve.UseBinding, decl *syntax.UseDecl,
 	}
 	for _, segment := range decl.Tree.Path.Segments {
 		if segment.Name.Name == "$goxide$roots" {
+			return true
+		}
+	}
+	// Canonical targets can leave this module after selecting a deferred root.
+	// Keep the registered source route as the evidence for that root binding.
+	for split := len(decl.RootFallback); split > 0; split-- {
+		if _, registered := i.namespaces[strings.Join(decl.RootFallback[:split], "/")]; registered {
 			return true
 		}
 	}

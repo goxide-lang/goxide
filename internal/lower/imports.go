@@ -234,7 +234,7 @@ func (e *emitter) addImports(f *goast.File) {
 	}
 	sources := make(map[syntax.NodeID]*syntax.UseDecl)
 	for _, item := range e.tree.Items {
-		if use, ok := item.(*syntax.UseDecl); ok {
+		if use, ok := item.(*syntax.UseDecl); ok && !use.Implicit {
 			sources[use.ID()] = use
 		}
 	}

@@ -28,14 +28,9 @@ func (m *moduleMacros) UpdateMacroBindings(expanded *expand.Result) error {
 			m.imports.namespaces[requirement.target] = requirement
 		}
 	}
-	var sourcePaths resolve.Importer
-	if m.imports.crates != nil {
-		sourcePaths = m.imports.crates
-	}
-	// As in the initial macro pass, leave external uses deferred. Resolving
-	// every root here could activate unrelated dependencies before a later
-	// expansion introduces the local declaration that shadows them.
-	m.resolved = resolve.ResolveExpanded(m.files, expanded, sourcePaths)
+	// Classify aliases from already loaded source scopes without activating
+	// other dependency roots that later generated declarations may shadow.
+	m.resolved = resolve.ResolveExpanded(m.files, expanded, m.imports.bindingView())
 	m.imports.SetSourcePackages(m.resolved.Packages)
 	return m.imports.err
 }
@@ -118,26 +113,43 @@ func (m *moduleMacros) lookupMacroCandidates(path *syntax.Path, scope expand.Sco
 		parts[i] = segment.Name.Name
 	}
 	key := resolve.Key{Name: parts[0], Ctx: scope.Ctx}
+	if len(parts) == 1 {
+		key.Namespace = resolve.MacroNamespace
+	}
 	visiting := map[string]bool{}
 	var roots []moduleMember
 	var globs []*resolve.UseBinding
 	for current := source.Scope; current != nil; current = current.Parent {
+		if current.Kind == resolve.PreludeScope {
+			break // Go builtins do not occupy the macro invocation namespace.
+		}
 		if symbol := current.Bindings[key]; symbol != nil {
 			owner := strings.Split(filepath.ToSlash(filepath.Dir(symbol.Decl.File)), "/")
 			roots = m.imports.symbolMembers(symbol, owner, key, visiting)
-			break
+			if len(roots) != 0 {
+				break
+			}
 		}
 		if aliases := current.Aliases[key]; len(aliases) != 0 {
 			for _, alias := range aliases {
 				roots = append(roots, m.imports.symbolMembers(alias, nil, key, visiting)...)
 			}
-			break
+			if len(roots) != 0 {
+				break
+			}
 		}
 		globs = append(globs, current.Globs...)
 	}
 	if len(roots) == 0 {
-		for _, use := range globs {
-			roots = append(roots, m.imports.lookup(use.Target, key, visiting)...)
+		for _, implicit := range []bool{false, true} {
+			for _, use := range globs {
+				if use.Implicit == implicit {
+					roots = append(roots, m.imports.lookup(use.Target, key, visiting)...)
+				}
+			}
+			if len(roots) != 0 {
+				break
+			}
 		}
 	}
 	var candidates []moduleMember
@@ -151,7 +163,7 @@ func (m *moduleMacros) lookupMacroCandidates(path *syntax.Path, scope expand.Sco
 			}
 			prefix := append(append([]string(nil), root.Target...), parts[1:len(parts)-1]...)
 			target = strings.Join(prefix, "/")
-			candidates = append(candidates, m.imports.lookup(prefix, resolve.Key{Name: parts[len(parts)-1], Ctx: scope.Ctx}, visiting)...)
+			candidates = append(candidates, m.imports.lookup(prefix, resolve.Key{Name: parts[len(parts)-1], Ctx: scope.Ctx, Namespace: resolve.MacroNamespace}, visiting)...)
 		}
 		if len(roots) == 0 {
 			target = strings.Join(parts[:len(parts)-1], "/")
@@ -213,7 +225,7 @@ func (m *moduleMacros) selectMacro(candidates []moduleMember, target, name strin
 		}
 	}
 	if packageScope := m.imports.local[target]; packageScope != nil {
-		if symbol := packageScope.Bindings[resolve.Key{Name: name}]; symbol != nil && symbol.Kind == resolve.Macro && symbol.Visibility != resolve.Public {
+		if symbol := packageScope.Bindings[resolve.Key{Name: name, Namespace: resolve.MacroNamespace}]; symbol != nil && symbol.Kind == resolve.Macro && symbol.Visibility != resolve.Public {
 			return expand.Macro{}, fmt.Errorf("macro %s is private in %s", name, target)
 		}
 		return expand.Macro{}, fmt.Errorf("macro %s has no source definition in %s", name, target)

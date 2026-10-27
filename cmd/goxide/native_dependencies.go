@@ -56,6 +56,11 @@ func (plan *nativeDependencies) generationRoots(owner *singleFileModule, importe
 			continue // Automatic names never replace a real toolchain namespace.
 		}
 		roots[alias] = plan.automatic[alias][0].namespace
+		if candidates := plan.automatic[alias]; len(candidates) == 1 && candidates[0].namespace.ModulePath == "github.com/goxide-lang/std" {
+			// Prelude lookup needs the selected standard source graph before any
+			// explicit use can demand a dependency root.
+			plan.manifest.Dependencies[alias] = candidates[0].dependency
+		}
 	}
 	missing := map[string]string{}
 	missingRequest := &missingGenerationDependencies{Root: owner.root, Config: owner.config}

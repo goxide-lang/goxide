@@ -454,14 +454,13 @@ func run() { known!(); value!(); absent!(); absent::nested!(); imported::unknown
 			}
 			noDiagnostics(t, result)
 			file := result.Files["p.gox"]
-			for _, tc := range []struct {
-				name string
-				kind resolve.Kind
-			}{{"known", resolve.Macro}, {"value", resolve.Variable}} {
-				id := named(t, files["p.gox"], source, tc.name+"!()", tc.name)
-				if symbol := file.References[id.ID()].Symbol; symbol == nil || symbol.Kind != tc.kind {
-					t.Fatalf("unexpanded %s did not use ordinary path resolution: %#v", tc.name, symbol)
-				}
+			id := named(t, files["p.gox"], source, "known!()", "known")
+			if symbol := file.References[id.ID()].Symbol; symbol == nil || symbol.Kind != resolve.Macro {
+				t.Fatalf("unexpanded macro did not use macro path resolution: %#v", symbol)
+			}
+			id = named(t, files["p.gox"], source, "value!()", "value")
+			if reference := file.References[id.ID()]; reference.Symbol != nil || !reference.Deferred {
+				t.Fatalf("ordinary value entered macro namespace: %#v", reference)
 			}
 			ast.Walk(file.AST, func(node ast.Node) bool {
 				if macro, ok := node.(*ast.MacroExpr); ok {

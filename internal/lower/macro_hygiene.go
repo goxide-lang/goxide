@@ -48,7 +48,7 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 		relevant := map[string]bool{}
 		groups := map[string]map[*resolve.Symbol]bool{}
 		add := func(symbol *resolve.Symbol) {
-			if symbol == nil || symbol.GoName == "" || symbol.GoName == "_" {
+			if symbol == nil || symbol.Name.Namespace == resolve.MacroNamespace || symbol.GoName == "" || symbol.GoName == "_" {
 				return
 			}
 			reserved[symbol.GoName] = true

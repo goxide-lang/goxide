@@ -36,7 +36,13 @@ func (p *parser) parseItem(member, declare bool) ast.Item {
 		n = p.values(ib)
 	case token.USE:
 		p.next()
-		n = &ast.UseDecl{ItemBase: ib, Tree: p.useTree()}
+		tree := p.useTree()
+		ast.UseLeaves(tree, func(path []*ast.PathSegment, leaf *ast.UseTree) {
+			if len(path) == 0 && leaf.Glob {
+				p.diagnostics = append(p.diagnostics, Diagnostic{Severity: Error, Span: leaf.Span(), Message: "glob use requires a path"})
+			}
+		})
+		n = &ast.UseDecl{ItemBase: ib, Tree: tree}
 	case token.MOD:
 		p.next()
 		d := &ast.ModDecl{ItemBase: ib, Name: p.ident()}
@@ -285,8 +291,9 @@ func (p *parser) values(ib ast.ItemBase) ast.Item {
 func (p *parser) useTree() *ast.UseTree {
 	s := p.tok().Start
 	path := &ast.Path{}
-	glob := false
-	for {
+	group := p.at(token.LBRACE)
+	glob := p.at(token.MUL)
+	for !group && !glob {
 		n := p.ident()
 		path.Segments = append(path.Segments, &ast.PathSegment{Base: p.base(n.Span().Start), Name: n})
 		if !p.accept(token.DCOLON) {
@@ -295,18 +302,30 @@ func (p *parser) useTree() *ast.UseTree {
 		if len(path.Segments) == 1 && n.Name == "super" && !n.Raw {
 			p.error("super:: paths are not yet supported")
 		}
-		if p.at(token.MUL) || p.at(token.LBRACE) {
-			glob = p.accept(token.MUL)
-			break
-		}
+		group = p.at(token.LBRACE)
+		glob = p.at(token.MUL)
 	}
 	path.Base = p.base(s)
 	u := &ast.UseTree{Path: path, Glob: glob}
-	if p.at(token.LBRACE) {
-		p.error("grouped use trees are not yet supported")
-		p.tokenTree()
+	if glob {
+		p.next()
+	}
+	if group {
+		p.expect(token.LBRACE)
+		u.Children = []*ast.UseTree{}
+		for !p.at(token.RBRACE) && !p.at(token.EOF) {
+			before := p.pos
+			u.Children = append(u.Children, p.useTree())
+			if !p.accept(token.COMMA) || p.pos == before {
+				break
+			}
+		}
+		p.expect(token.RBRACE)
 	}
 	if p.context("as") {
+		if u.Glob || u.Children != nil {
+			p.error("use aliases require a single path")
+		}
 		p.next()
 		u.Alias = p.ident()
 	}

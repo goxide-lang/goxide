@@ -359,6 +359,8 @@ func (g *crateGraph) preliminaryFiles(files map[string]*syntax.File, extra map[s
 
 func (g *crateGraph) Lookup([]string, resolve.Key) []resolve.External { return nil }
 
+func (g *crateGraph) DeferredImports() bool { return true }
+
 func (g *crateGraph) ModulePath(pkg, child string) []string {
 	if base := g.bases[pkg]; base != "" {
 		pkg = base

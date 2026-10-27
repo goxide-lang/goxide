@@ -258,7 +258,7 @@ use std;
 
 struct Settings { Port int }
 impl std::Default for Settings {
-    func r#default() Self { return Self{Port: 8080} }
+    func Default() Self { return Self{Port: 8080} }
 }
 #[derive(std::derive::Default)]
 struct Application { Config Settings }

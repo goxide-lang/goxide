@@ -171,6 +171,8 @@ func CompilePackage(sources map[string][]byte, packagePath string, goImports typ
 	}
 	packages := resolve.Resolve(files, sourcePaths)
 	imports.SetSourcePackages(packages.Packages)
+	packages = resolve.Resolve(files, imports.bindingView())
+	imports.SetSourcePackages(packages.Packages)
 	var groups [][]*syntax.File
 	for _, pkg := range packages.Packages {
 		var group []*syntax.File

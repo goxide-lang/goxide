@@ -356,14 +356,16 @@ func (r *resolver) introduce(scope *Scope, name *ast.Ident, symbol *Symbol) {
 	}
 	h := r.hygiene
 	if scope.Kind == MemberScope && name.Ctx != symbol.Name.Ctx {
-		scope.Bindings[key(name)] = symbol
+		identity := key(name)
+		identity.Namespace = symbol.Name.Namespace
+		scope.Bindings[identity] = symbol
 	}
 	if scope.Kind != PackageScope {
 		return
 	}
 	if alias, ok := h.expanded.Introductions[name]; ok {
 		if context := r.result.Contexts[alias.Ctx]; context != nil {
-			context.Bindings[Key{Name: alias.Name, Ctx: alias.Ctx}] = symbol
+			context.Bindings[Key{Name: alias.Name, Ctx: alias.Ctx, Namespace: symbol.Name.Namespace}] = symbol
 		}
 	}
 }

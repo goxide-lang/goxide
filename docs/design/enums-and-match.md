@@ -61,7 +61,7 @@ func decodeStateText(text string) (State, error) {
 
 ### 0.2 Default、Clone、Debug 边界
 
-struct 自动 Default 要求每个字段类型具有 Default，否则不能派生，应手写实现。当前手动入口为 `impl Default for T { func default() T { ... } }`，限同包本地非泛型 struct；不能仅取名 DefaultX 就认领协议。enum 必须指定唯一 `#[default]` 变体，允许 payload，按声明顺序递归调用选中变体各字段的 Default；非默认变体不要求 Default。跨包手动协议消费和通用 trait 后端仍未实现。
+struct 自动 Default 要求每个字段类型具有 Default，否则不能派生，应手写实现。当前手动入口为 `impl Default for T { func Default() T { ... } }`，限同包本地非泛型 struct；不能仅取名 DefaultX 就认领协议。enum 必须指定唯一 `#[default]` 变体，允许 payload，按声明顺序递归调用选中变体各字段的 Default；非默认变体不要求 Default。跨包手动协议消费和通用 trait 后端仍未实现。
 
 Clone 复制当前合法变体及有协议的 payload。Debug 显示源 enum/变体名及 payload，struct 显示字段名和内容，包括私有业务字段；serde rename/value 不改 Debug，不自动脱敏，也不是稳定 wire 格式。缺少字段 Debug/Clone 协议仍拒绝，不反射、不调用任意 Stringer/error 兜底。
 

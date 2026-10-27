@@ -10,6 +10,7 @@ import (
 
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
@@ -48,7 +49,7 @@ func Configure(file *ast.File, configuration config.Config) (used bool, err erro
 			dropItemComments(file, item)
 		}
 	}
-	file.Items = items
+	file.Items = parser.FlattenUses(items)
 	var id ast.NodeID
 	ast.Walk(file, func(n ast.Node) bool { id++; n.(interface{ SetID(ast.NodeID) }).SetID(id); return true })
 	return used, nil

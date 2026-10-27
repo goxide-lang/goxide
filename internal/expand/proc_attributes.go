@@ -239,6 +239,12 @@ func (e *engine) rewriteItem(item ast.Item, file *ast.File, parent ast.ExpnID, s
 	}
 	// A shared helper disappears only after every procedural consumer ran.
 	consumeHelpers(item, occurrences)
+	if use, ok := item.(*ast.UseDecl); ok && use.Tree != nil && use.Tree.Children != nil {
+		if len(use.Attrs) != 0 {
+			return nil, e.attributeError(use.Attrs[0], file, parent, "unsupported attribute or invalid attribute position")
+		}
+		return e.rewriteItems(e.splitUse(use), file, parent, slot)
+	}
 	return output, nil
 }
 

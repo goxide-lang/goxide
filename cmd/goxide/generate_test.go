@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"go/build"
 	"os"
 	"os/exec"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/procmacro"
+	"github.com/goxide-lang/goxide/internal/project"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
@@ -177,6 +180,13 @@ func TestGenerateReplacesMarkedOutputWithoutFollowingLinks(t *testing.T) {
 }
 
 func TestGenerateMissingRuntimeDependency(t *testing.T) {
+	identity, err := procmacro.ReadSDKIdentity(context.Background(), filepath.Join(runtime.GOROOT(), "bin", "go"), filepath.Join("..", ".."), project.GoEnv(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := procmacro.CompilerSDKIdentity
+	procmacro.CompilerSDKIdentity = identity
+	t.Cleanup(func() { procmacro.CompilerSDKIdentity = previous })
 	root := t.TempDir()
 	singleFileWrite(t, root, "go.mod", "module example.org/missing\ngo 1.27\n")
 	singleFileWrite(t, root, "value.gox", "package p\nfunc Value()Option[int]{return Option[int]::Some(42)}\n")

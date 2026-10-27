@@ -270,6 +270,9 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 			}
 		}
 	case reflect.Slice:
+		if v.IsNil() {
+			return v, nil
+		}
 		out := reflect.MakeSlice(v.Type(), 0, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			if v.Type() == stmtSliceType {

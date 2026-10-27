@@ -73,6 +73,7 @@ func ParseFile(filename string, src []byte) (*ast.File, []Diagnostic) {
 	f.Comments = p.comments
 	f.Directives = p.directives
 	p.attachDocs(f, src)
+	f.Items = FlattenUses(f.Items)
 	renumber(f)
 	return f, p.diagnostics
 }

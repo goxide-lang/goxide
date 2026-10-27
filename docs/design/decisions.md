@@ -147,7 +147,7 @@
 
 已确认 **D27（最新用户反馈）**：语言仅封闭变体 enum，撤回开放 raw/C enum；serde 内建宏负责数值/string 外部映射，未知 variant 解码报错，不制造合法未知值。业务 validator 后置，现有结构类型/enum边界验证保留。
 
-已确认 **D28（最新用户反馈）**：struct 派生 Default 要求每个字段实现 Default，否则手写；enum 标记默认变体。后续用户确认：仅选中默认变体的 payload 字段需要 Default，非默认变体不要求；允许带 payload 的默认变体。手动 Default 采用 `impl Default for T { func default() T { ... } }`，不引入 static，首参数 self 区分实例成员与关联函数。Debug 必须清楚说明输出字段/payload内容与隐私、格式稳定性边界。
+已确认 **D28（最新用户反馈）**：struct 派生 Default 要求每个字段实现 Default，否则手写；enum 标记默认变体。后续用户确认：仅选中默认变体的 payload 字段需要 Default，非默认变体不要求；允许带 payload 的默认变体。手动 Default 采用 `impl Default for T { func Default() T { ... } }`，不引入 static，首参数 self 区分实例成员与关联函数。Debug 必须清楚说明输出字段/payload内容与隐私、格式稳定性边界。
 
 已确认 **D29（按最新用户决定更新）**：enum payload 槽不可变，`match &mut e` 与 `ref mut` 不提供可写投影；变量 e 可整体重绑定。payload 中的容器和指针按自身权限使用，普通值模式不增加深层冻结。用户 enum 普通复制共享变体对象，重绑定后旧只读投影与固有方法值仍指向旧对象；Option/Result 保留现有内联槽，表示统一在 MVP-6。[引用合同](enum-payload-borrows.md)规定存储与权限，D20 不变。
 

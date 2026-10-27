@@ -120,15 +120,19 @@ pub func deriveDescribe(ctx pm::Context, item token::TokenStream) pm::Output { .
 
 函数式与 attribute 宏使用函数名登记；derive 使用属性中显式名称，函数实现名不构成目标 API。编译宏库时函数仍是普通函数符号；对消费者的投影只导出登记宏，不同时插入同名函数符号。其他 `pub` helper 也不是目标可导入成员。入口名称、类别、定义包、helper 列表和函数签名由编译器从源码收集；WASM 程序不能自行增加登记项。
 
-保持现有单一静态名字空间：同名 trait 与宏冲突，首版不做名字空间重构，也不提供同名三种入口重载。普通运行库可显式公开一个宏子入口：
+普通项与宏分别使用两个名字空间：trait、type、value 和 module 位于普通空间；`macro_rules!`、function-like、attribute 和 derive 宏共用宏空间。调用语法选择相应空间，宏入口种类继续校验；不提供宏空间内的同名三种入口重载。普通运行库可以同时公开同名 trait 与宏：
 
 ```goxide
 pub trait Describe { func describe(self Self) string; }
+pub use description_macros::Describe;
 pub use description_macros as macros;
-// 使用方：#[derive(description::macros::Describe)]
+// 使用方：use description::Describe; 同时引入 trait 与 derive 宏
+// #[derive(Describe)] 选择宏；Describe trait bound 选择普通项
 ```
 
-也可将单个宏重导出为 `DeriveDescribe`。别名和重导出保持 canonical 宏身份、定义点及 helper 所有者；不生成运行时转发包装。宏重名按普通名字与冲突规则处理；Default 与 serde 派生通过库路径解析，不保留同名内建业务入口。
+单个命名 `use` 导入目标在两个空间中的全部同名公开出口，别名分别应用于两个空间；glob 也分别收集两空间的公开项。每个空间独立执行覆盖顺序：用户声明与命名 `use` 优先，随后是显式 glob，最后是自动 prelude。同一空间的歧义仍诊断，另一空间的同名项不参与冲突或遮蔽。私有 `use` 的作用域仍是当前文件。
+
+`description::macros::Describe` 等限定路径和重命名单个宏的方式继续可用。别名和重导出保持 canonical 宏身份、定义点及 helper 所有者，不生成运行时转发包装。Default 与 serde 派生通过普通宏空间与库路径解析，不保留同名内建业务入口，也不按标准库名称特判。
 
 ### 4. 调用、helper 与展开顺序
 
@@ -437,7 +441,7 @@ func TestAnswerAPI(t *testing.T) {
 | 编号 | 必须验证的行为 |
 | --- | --- |
 | A1 | 真实宏源码 → Go → WASM → 宿主展开 → 目标 Go build/run/test，PM-01/02 输出及原生 Go API 正确 |
-| A2 | 三类入口、别名、重导出、错误入口、helper 共享/归属/残留、属性顺序、共同 derive 输入、单槽/成员约束 |
+| A2 | 三类入口、别名、重导出、普通项与宏同名、单个 use 导入两空间出口、各空间独立覆盖与歧义、错误入口、helper 共享/归属/残留、属性顺序、共同 derive 输入、单槽/成员约束 |
 | A3 | raw ident、复合标点、负数、显式/隐式分号、分组与 Fragment 跨声明/过程宏往返；不得破坏现有类别反例 |
 | A4 | 定义点/显式调用点/嵌套词法调用点、局部同名、重复插值、生成声明归属及私有访问正反例 |
 | A5 | 为输出关联显示 Span 不改变捕获内部变量、cfg、依赖根或权限；无效/陈旧句柄及伪造语义字段拒绝 |
@@ -447,7 +451,7 @@ func TestAnswerAPI(t *testing.T) {
 | A9 | CLI 与浏览器使用同一宏产物/请求，成功输出和确定错误一致；浏览器缺宏明确失败，异步界面可取消 |
 | A10 | 同输入两次生成 Go 字节一致；检查源码位置、可读性、无宏运行时泄漏；普通手写 Go 消费通过 |
 
-A1–A10 的调用、来源、角色、卫生、诊断和确定性路径已有验收；严格浏览器物理截止仍按第 6 节保留缺口。真实 Goxide 宏经标准 Go 构建后在 CLI 与 JavaScript 宿主运行，相同请求返回相同响应字节；生成目标 build/run/test、离线锁定重放及重复生成一致。浏览器完整链路覆盖三类宏、重导出、RuntimeRoot、多文件、warning/error、全新实例、失败恢复、停止和编辑取消。原生入口覆盖 gen、单文件/目录 build/run/test、显式 roots、来源隔离与作者文件不变。syntax 保留词法/结构、冻结上下文、JSON 拒绝/预算和静态分派测试。
+A1–A10 的既有调用、来源、角色、卫生、诊断和确定性路径已有验收；普通项与宏分空间的新增 A2 覆盖按状态表验收，严格浏览器物理截止仍按第 6 节保留缺口。真实 Goxide 宏经标准 Go 构建后在 CLI 与 JavaScript 宿主运行，相同请求返回相同响应字节；生成目标 build/run/test、离线锁定重放及重复生成一致。浏览器完整链路覆盖三类宏、重导出、RuntimeRoot、多文件、warning/error、全新实例、失败恢复、停止和编辑取消。原生入口覆盖 gen、单文件/目录 build/run/test、显式 roots、来源隔离与作者文件不变。syntax 保留词法/结构、冻结上下文、JSON 拒绝/预算和静态分派测试。
 
 ### 实施顺序与共享代码边界
 
@@ -465,7 +469,7 @@ A1–A10 的调用、来源、角色、卫生、诊断和确定性路径已有�
 
 推荐接受上述具体方案，决策集中在：
 
-1. `[lib].proc_macro`、带 Context 的三个登记签名、单名字空间与 helper 作用域/顺序。
+1. `[lib].proc_macro`、带 Context 的三个登记签名、普通项与宏分空间以及 helper 作用域/顺序。
 2. 公共 token/SDK 首批已按本篇实现；编译器转换桥已验收 Goxide token 单元、默认定义点卫生以及显示 Span 与可信来源分离；完整受限宿主与浏览器验收继续按 A1–A10 执行。
 3. 角色分开的宏构建计划及 `RuntimeRoot` 的显式可达性，不隐式拉入运行库。
 4. WASI command + 每次新实例、CLI 新增 wazero 依赖、浏览器相同产物及受限 profile。

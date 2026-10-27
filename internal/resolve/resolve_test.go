@@ -98,7 +98,7 @@ func TestDuplicatePackageDeclaration(t *testing.T) {
 }
 
 func TestPackageDeclarationConflictsWithPrelude(t *testing.T) {
-	for _, name := range []string{"Option", "int", "len"} {
+	for _, name := range []string{"int", "len"} {
 		t.Run(name, func(t *testing.T) {
 			source := "package p\nvar " + name + " = 1"
 			files := parseFiles(t, map[string]string{"p.gox": source})

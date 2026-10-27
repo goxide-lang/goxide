@@ -231,12 +231,14 @@ type UseTree struct {
 	Path     *Path
 	Alias    *Ident
 	Glob     bool
-	Children []*UseTree
+	Children []*UseTree // nil for a leaf; non-nil for a group, including {}.
 }
 
 type UseDecl struct {
 	ItemBase
-	Tree *UseTree
+	Tree         *UseTree
+	Implicit     bool     // Compiler-provided prelude; explicit bindings take precedence.
+	RootFallback []string // Compiler-provided route used only without a lexical root binding.
 }
 type ModDecl struct {
 	ItemBase

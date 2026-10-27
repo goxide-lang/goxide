@@ -2,6 +2,8 @@ package check
 
 import (
 	"go/types"
+	"path/filepath"
+	"strings"
 
 	"github.com/goxide-lang/goxide/internal/resolve"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
@@ -24,21 +26,127 @@ func (c *checker) traitVisible(t *Trait) bool {
 	if c.currentTrait == t {
 		return true
 	}
+	bound := map[resolve.Key]bool{}
+	var globs []*resolve.UseBinding
 	for scope := c.file.Scope; scope != nil; scope = scope.Parent {
-		for _, symbol := range scope.Bindings {
-			if c.traitForSymbol(symbol) == t {
+		if scope.Kind == resolve.PreludeScope {
+			break
+		}
+		for name, symbol := range scope.Bindings {
+			if name.Namespace == resolve.MacroNamespace {
+				continue
+			}
+			if !bound[name] && c.traitForSymbol(symbol) == t {
 				return true
 			}
+			bound[name] = true
 		}
-		for _, list := range scope.Aliases {
+		for name, list := range scope.Aliases {
+			if name.Namespace == resolve.MacroNamespace {
+				continue
+			}
 			for _, symbol := range list {
+				if !bound[name] && c.traitForSymbol(symbol) == t {
+					return true
+				}
+			}
+			bound[name] = true
+		}
+		globs = append(globs, scope.Globs...)
+	}
+	// Named bindings win over globs, and explicit globs win over the prelude.
+	for _, implicit := range []bool{false, true} {
+		members := map[resolve.Key][]*resolve.Symbol{}
+		for _, use := range globs {
+			if use.Implicit != implicit {
+				continue
+			}
+			for name, symbols := range c.globMembers(use, map[*resolve.Scope]bool{}) {
+				members[name] = append(members[name], symbols...)
+			}
+		}
+		for name, symbols := range members {
+			if bound[name] {
+				continue
+			}
+			for _, symbol := range symbols {
 				if c.traitForSymbol(symbol) == t {
 					return true
 				}
 			}
+			bound[name] = true
 		}
 	}
 	return false
+}
+
+func (c *checker) globMembers(use *resolve.UseBinding, visiting map[*resolve.Scope]bool) map[resolve.Key][]*resolve.Symbol {
+	var scope *resolve.Scope
+	if symbol := c.localSymbol(use.Target); symbol != nil {
+		scope = symbol.Members
+	}
+	if scope == nil {
+		path := strings.Join(use.Target, "/")
+		for _, pkg := range c.out.Resolve.Packages {
+			if pkg.IsExternalTest() {
+				continue
+			}
+			dir := filepath.ToSlash(pkg.Dir)
+			if path == dir || path == c.out.PackagePaths[dir] {
+				scope = pkg.Scope
+				break
+			}
+		}
+	}
+	if scope == nil {
+		path := strings.Join(use.Target, "/")
+		pkg := c.imported[path]
+		if pkg == nil {
+			pkg, _ = c.importer.Import(path)
+			c.imported[path] = pkg
+		}
+		members := map[resolve.Key][]*resolve.Symbol{}
+		if pkg != nil {
+			// Native names can shadow a prelude trait without being traits.
+			for _, name := range pkg.Scope().Names() {
+				if pkg.Scope().Lookup(name).Exported() {
+					members[resolve.Key{Name: name}] = nil
+				}
+			}
+		}
+		return members
+	}
+	if visiting[scope] {
+		return nil
+	}
+	visiting[scope] = true
+	defer delete(visiting, scope)
+	members := map[resolve.Key][]*resolve.Symbol{}
+	for name, symbol := range scope.Bindings {
+		if name.Namespace == resolve.OrdinaryNamespace && symbol.Visibility == resolve.Public {
+			members[name] = []*resolve.Symbol{symbol}
+		}
+	}
+	for name, aliases := range scope.Aliases {
+		if name.Namespace == resolve.OrdinaryNamespace && scope.Bindings[name] == nil {
+			for _, symbol := range aliases {
+				if symbol.Visibility == resolve.Public {
+					members[name] = append(members[name], symbol)
+				}
+			}
+		}
+	}
+	for _, glob := range scope.Globs {
+		if !glob.Public {
+			continue
+		}
+		for name, symbols := range c.globMembers(glob, visiting) {
+			if scope.Bindings[name] == nil && len(scope.Aliases[name]) == 0 {
+				members[name] = append(members[name], symbols...)
+			}
+		}
+	}
+	return members
 }
 
 func memberNamed(methods []*Member, name string, static bool) *Member {

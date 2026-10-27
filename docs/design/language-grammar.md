@@ -100,7 +100,7 @@ pub         mod         unsafe      declare     Self
 
 `async await let fn loop while macro` 是未来保留词：目前仍能作为标识符解析，未转义使用会产生警告。它们没有对应的当前语言特性。`true`、`false`、`nil`、`iota`、基本类型名和预声明函数名也都不是硬关键字，由名字解析和类型检查确定含义。
 
-`default` 有两个局部例外：属性名 `#[default]`，以及直接写作 `impl Default for T` 时的成员名 `func default()`。后者只适用于该单段 trait 路径且没有 Go 风格接收者的成员；其他函数名位置仍需遵守标识符规则。
+`default` 可作为属性名 `#[default]`。标准库 Default 的方法写作 `func Default() Self`，函数名遵守普通标识符规则。
 
 ## 4. 字面量与标点
 
@@ -225,7 +225,10 @@ ItemCore   = [ "unsafe" ] FunctionDecl
 IdentifierList = Identifier { "," Identifier } ;
 ExpressionList = Expression { "," Expression } ;
 
-UseDecl    = "use" UsePath [ "::" "*" ] [ "as" Identifier ] ;
+UseDecl    = "use" UseTree ;
+UseTree    = UsePath [ "as" Identifier ] | UsePath "::" "*"
+           | [ UsePath "::" ] UseGroup | "*" ;
+UseGroup   = "{" [ UseTree { "," UseTree } [ "," ] ] "}" ;
 UsePath    = Identifier { "::" Identifier } ;
 ModuleDecl = "mod" Identifier ;
 ```
@@ -234,7 +237,7 @@ ModuleDecl = "mod" Identifier ;
 
 新语法由 `pub` 控制公开；Go 风格的 `func`、`type`、`var`、`const` 声明还保留首字母大写即公开的约定。`pub` 小写名在 Go 侧生成一个相应的公开名字，不生成额外转发包装。具体名字映射见[前端规范](frontend-ast.md)与[公开 API 设计](../rfcs/0015-public-api.md)。
 
-`use fmt;`、`use encoding::json;`、`use source::Thing as Alias;`、`use source::*;` 均有文法入口；`as _` 用于副作用导入。路径各段不能写类型实参。分组 `use a::{b, c}`、根 `super::` 和内联 `mod child { ... }` 当前在解析阶段拒绝。外部 `mod child;` 由包加载器关联真实子包；单独解析一份文件不会凭空建立该包。
+`use fmt;`、`use encoding::json;`、`use source::Thing as Alias;`、`use source::*;` 均有文法入口；`as _` 用于副作用导入。路径各段不能写类型实参。分组支持 `use a::{b, c as d, nested::{self as ns, *}};` 和 `use {a::B, c::D};`，允许尾逗号和空组；组内 `self` 选择当前路径前缀，裸 `*` 必须有父路径。别名仅用于单一路径，不能放在组或 glob 后。根 `super::` 和内联 `mod child { ... }` 当前在解析阶段拒绝。外部 `mod child;` 由包加载器关联真实子包；单独解析一份文件不会凭空建立该包。
 
 `use crate::child;` 使用同一条路径文法，`crate` 的所属 target 含义在包加载与名字绑定时确定。自动库名、依赖 alias、标准库 fallback 与真实 Go 子包解析遵循 [RFC 0028](../rfcs/0028-crate-roots.md)；文法不直接决定依赖来源或包可见性。
 
@@ -688,7 +691,7 @@ std 打印是普通库过程宏，格式字符串必须是字面量，只支持 
 | --- | --- | --- |
 | 普通 Go 结构 | 本文列出的类型、函数、复合字面量、语句和控制流均有解析入口；包导入改用 `use` | [parser 测试](../../internal/syntax/parser/parser_test.go)、[表达式测试](../../internal/syntax/parser/expr_test.go) |
 | enum、match、引用、`?`、宏、派生 | 有完整编译路径；具体限制按对应语义检查执行 | [能力状态表](../mvp-gap-audit.md)及其端到端测试 |
-| 外部 `mod` 与 `use` | 完整包图中可解析、检查和生成；内联 `mod`、分组 use 和 `super::` 当前拒绝 | [包检查](../../internal/check/packages.go)、[多包验收](../../internal/compile/project_e2e_test.go) |
+| 外部 `mod` 与 `use` | 完整包图中可解析、检查和生成；支持分组、嵌套 use；内联 `mod` 和 `super::` 当前拒绝 | [包检查](../../internal/check/packages.go)、[多包验收](../../internal/compile/project_e2e_test.go) |
 | trait / impl / 关联类型 | 参数化 trait、条件 impl、多 trait 约束与普通关联类型已实现；`declare impl` 已移除 | [trait 检查](../../internal/check/traits.go)、[静态协议验收](../../internal/lower/p4_static_test.go)、[移除合同](../rfcs/0003-declare-impl.md) |
 | GAT、trait 默认方法 | 相关形状能解析，当前检查拒绝 | [trait 检查](../../internal/check/traits.go)、[约束检查](../../internal/check/trait_types.go) |
 | bar 闭包、`unsafe` 修饰符/表达式、`declare func/type` | 能解析，当前降低拒绝 | [表达式降低](../../internal/lower/expr.go)、[声明降低](../../internal/lower/decl.go) |

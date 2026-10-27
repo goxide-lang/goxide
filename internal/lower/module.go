@@ -307,6 +307,8 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 			imports.namespaces[requirement.target] = requirement
 		}
 	}
+	packages = resolve.Resolve(crates.preliminaryFiles(files, extra), imports.bindingView())
+	imports.SetSourcePackages(packages.Packages)
 	var sourcePackages [][]*syntax.File
 	for _, pkg := range packages.Packages {
 		var source []*syntax.File
@@ -347,8 +349,11 @@ func compileModules(modules []Module, extra map[string][]crateModule) (err error
 		return imports.err
 	}
 	for _, file := range resolved.Files {
-		for _, use := range file.Uses {
-			if requirement, ok := imports.namespace(use.Target); ok {
+		for _, use := range namespaceUses(file) {
+			if use.Implicit {
+				continue
+			}
+			if requirement, ok := imports.namespace(use.Target); ok && use.Name.Namespace == resolve.OrdinaryNamespace {
 				imports.rootAccesses = append(imports.rootAccesses, requirement)
 				use.Resolved = &resolve.Symbol{Kind: resolve.Module, Visibility: resolve.Public, Target: use.Target}
 			}

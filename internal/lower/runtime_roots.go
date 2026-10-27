@@ -168,7 +168,7 @@ func (m *moduleMacros) LookupRuntimeRootMacro(target []string, path *syntax.Path
 		prefix = append(prefix, segment.Name.Name)
 	}
 	name := path.Segments[len(path.Segments)-1].Name.Name
-	candidates := m.imports.lookup(prefix, resolve.Key{Name: name}, map[string]bool{})
+	candidates := m.imports.lookup(prefix, resolve.Key{Name: name, Namespace: resolve.MacroNamespace}, map[string]bool{})
 	if m.imports.err != nil {
 		return expand.Macro{}, m.imports.err
 	}

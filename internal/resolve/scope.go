@@ -10,7 +10,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
-func key(id *ast.Ident) Key { return Key{id.Name, id.Ctx} }
+func key(id *ast.Ident) Key { return Key{Name: id.Name, Ctx: id.Ctx} }
 func newScope(kind ScopeKind, parent *Scope) *Scope {
 	return &Scope{Kind: kind, Parent: parent, Bindings: make(map[Key]*Symbol), Aliases: make(map[Key][]*Symbol), Labels: make(map[Key]*Symbol)}
 }
@@ -69,11 +69,18 @@ func isStatic(s *Symbol) bool {
 	return false
 }
 
+func shadowablePrelude(s *Symbol) bool {
+	return s.Kind == Variant || s.Name.Name == "Option" || s.Name.Name == "Result"
+}
+
 func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kind) *Symbol {
 	if name == nil {
 		return nil
 	}
 	s := &Symbol{Name: r.declarationKey(scope, name), Kind: kind, Decl: r.ref(name), GoName: name.Name}
+	if kind == Macro {
+		s.Name.Namespace = MacroNamespace
+	}
 	if !r.file.AST.NativeGo && name.Name == "crate" && isStatic(s) {
 		r.diag(name, "reserved-root", "crate is a reserved static path root")
 	}
@@ -96,7 +103,7 @@ func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kin
 		r.introduce(scope, name, old)
 		return s
 	}
-	if preimport := scope.Parent; !r.file.AST.NativeGo && scope.Kind == PackageScope && kind != Function && preimport.Bindings[s.Name] != nil && preimport.Bindings[s.Name].Kind != Variant && name.Name != "true" && name.Name != "false" && name.Name != "comparable" {
+	if preimport := scope.Parent; !r.file.AST.NativeGo && scope.Kind == PackageScope && kind != Function && preimport.Bindings[s.Name] != nil && !shadowablePrelude(preimport.Bindings[s.Name]) && name.Name != "true" && name.Name != "false" && name.Name != "comparable" {
 		r.diag(name, "prelude-conflict", fmt.Sprintf("package declaration %q conflicts with a preimported name", name.Name))
 	}
 	if kind == Type || kind == Enum || kind == Trait || kind == TypeParam {
@@ -142,31 +149,40 @@ func (r *resolver) lookup(scope *Scope, k Key, static bool) Resolution {
 			}
 		}
 	}
-	// File and package globs compete only after all explicit bindings.
-	var candidates []*Symbol
+	// Explicit globs compete after named bindings; the automatic prelude is last.
 	var deferred []string
-	seen := make(map[string]bool)
-	for _, u := range globs {
-		path := strings.Join(u.Target, "::")
-		if seen[path] {
-			continue
+	for _, implicit := range []bool{false, true} {
+		if implicit && fallback != nil && !shadowablePrelude(fallback) && (!static || isStatic(fallback)) {
+			// Go's preimported names precede the implicit source prelude.
+			return Resolution{Symbol: fallback}
 		}
-		seen[path] = true
-		if r.importer == nil {
-			if deferred == nil {
-				deferred = append(append([]string{}, u.Target...), k.Name)
+		var candidates []*Symbol
+		seen := make(map[string]bool)
+		for _, u := range globs {
+			if u.Implicit != implicit {
+				continue
 			}
-			continue
-		}
-		for _, e := range r.importer.Lookup(u.Target, k) {
-			symbol := externalSymbol(u.Target, e)
-			if !static || isStatic(symbol) {
-				candidates = append(candidates, symbol)
+			path := strings.Join(u.Target, "::")
+			if seen[path] {
+				continue
+			}
+			seen[path] = true
+			if r.importer == nil {
+				if deferred == nil && !implicit {
+					deferred = append(append([]string{}, u.Target...), k.Name)
+				}
+				continue
+			}
+			for _, e := range r.importer.Lookup(u.Target, k) {
+				symbol := externalSymbol(u.Target, e)
+				if !static || isStatic(symbol) {
+					candidates = append(candidates, symbol)
+				}
 			}
 		}
-	}
-	if len(candidates) > 0 {
-		return choices(candidates)
+		if len(candidates) > 0 {
+			return choices(candidates)
+		}
 	}
 	if fallback != nil && (!static || isStatic(fallback)) {
 		return Resolution{Symbol: fallback}
@@ -186,7 +202,7 @@ func (r *resolver) importTarget(res Resolution) Resolution {
 		return res
 	}
 	target := symbol.Target
-	name := Key{Name: target[len(target)-1], Ctx: symbol.Name.Ctx}
+	name := Key{Name: target[len(target)-1], Ctx: symbol.Name.Ctx, Namespace: symbol.Name.Namespace}
 	var symbols []*Symbol
 	for _, external := range r.importer.Lookup(target[:len(target)-1], name) {
 		symbols = append(symbols, externalSymbol(target[:len(target)-1], external))

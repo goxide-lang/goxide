@@ -21,6 +21,7 @@ type rootRequirement struct {
 	namespace      paths.Namespace
 	sourceImporter types.Importer
 	requireRoot    func(alias string, namespace paths.Namespace) error
+	implicit       bool
 }
 
 type moduleRootConfig struct {
@@ -28,6 +29,7 @@ type moduleRootConfig struct {
 	roots          paths.Roots
 	goRoots        *paths.GoNamespaces
 	bindings       map[string]bool
+	macroBindings  map[string]bool
 	uses           map[string][]*syntax.UseDecl
 	sourceImporter types.Importer
 	runtimeRoots   []RuntimeRoot
@@ -77,15 +79,17 @@ func addCrateUse(file *syntax.File) {
 
 func prepareSourceRoots(files map[string]*syntax.File, configs map[*syntax.File]moduleRootConfig, external types.Importer) []rootRequirement {
 	modules := map[string]map[string]bool{}
+	macros := map[string]map[string]bool{}
 	var names []string
 	for name, file := range files {
 		names = append(names, name)
 		pkg := path.Dir(name)
 		if modules[pkg] == nil {
 			modules[pkg] = map[string]bool{}
+			macros[pkg] = map[string]bool{}
 		}
 		for _, item := range file.Items {
-			collectRootDeclarations(item, modules[pkg])
+			collectRootDeclarations(item, modules[pkg], macros[pkg])
 		}
 	}
 	sort.Strings(names)
@@ -113,13 +117,15 @@ func prepareSourceRoots(files map[string]*syntax.File, configs map[*syntax.File]
 			roots[name] = root
 		}
 		config.roots = roots
+		addStandardPrelude(file, config, modules)
 		config.bindings = map[string]bool{}
+		config.macroBindings = macros[path.Dir(name)]
 		config.uses = map[string][]*syntax.UseDecl{}
 		for name := range modules[path.Dir(name)] {
 			config.bindings[name] = true
 		}
 		for _, item := range file.Items {
-			if use, ok := item.(*syntax.UseDecl); ok && use.Tree != nil && use.Tree.Path != nil && len(use.Tree.Path.Segments) != 0 && !use.Tree.Glob {
+			if use, ok := item.(*syntax.UseDecl); ok && use.Tree != nil && use.Tree.Children == nil && use.Tree.Path != nil && len(use.Tree.Path.Segments) != 0 && !use.Tree.Glob {
 				segments := use.Tree.Path.Segments
 				name := segments[len(segments)-1].Name.Name
 				if use.Tree.Alias != nil {
@@ -136,7 +142,7 @@ func prepareSourceRoots(files map[string]*syntax.File, configs map[*syntax.File]
 	return requirements
 }
 
-func collectRootDeclarations(item syntax.Item, names map[string]bool) {
+func collectRootDeclarations(item syntax.Item, names, macros map[string]bool) {
 	add := func(name *syntax.Ident) {
 		if name != nil {
 			names[name.Name] = true
@@ -155,9 +161,9 @@ func collectRootDeclarations(item syntax.Item, names map[string]bool) {
 	case *syntax.ModDecl:
 		add(item.Name)
 	case *syntax.MacroRulesDecl:
-		add(item.Name)
+		macros[item.Name.Name] = true
 	case *syntax.DeclareDecl:
-		collectRootDeclarations(item.Decl, names)
+		collectRootDeclarations(item.Decl, names, macros)
 	}
 }
 
@@ -168,7 +174,7 @@ func applyModuleRoots(config moduleRootConfig, file *syntax.File) []rootRequirem
 		if !ok {
 			continue
 		}
-		if requirement, ok := applyUseRoot(config, use, nil); ok {
+		if requirement, ok := applyUseRoot(config, use, nil, false); ok {
 			requirements = append(requirements, requirement)
 		}
 	}
@@ -215,10 +221,11 @@ func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]module
 			if !ok {
 				continue
 			}
+			bound := false
 			if use.Tree != nil && use.Tree.Path != nil && len(use.Tree.Path.Segments) != 0 {
 				root := use.Tree.Path.Segments[0].Name
-				if root.Name != "crate" && bindings.Bound(file, use) {
-					continue
+				if !use.Implicit && root.Name != "crate" && bindings.Bound(file, use) {
+					bound = true
 				}
 				if owner, ok := configs[expanded.Scopes[root].File]; ok {
 					config.module, config.roots, config.goRoots, config.bindings, config.uses = owner.module, owner.roots, owner.goRoots, owner.bindings, owner.uses
@@ -226,8 +233,8 @@ func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]module
 					config.requireRoot = owner.requireRoot
 				}
 			}
-			config.bindings, config.uses = nil, nil // Recomputed from the expanded scopes above.
-			if requirement, ok := applyUseRoot(config, use, expanded); ok {
+			config.bindings, config.macroBindings, config.uses = nil, nil, nil // Recomputed from the expanded scopes above.
+			if requirement, ok := applyUseRoot(config, use, expanded, bound); ok {
 				requirement.sourceFile = fileNames[expanded.Origins[file].File]
 				if location, ok := expanded.Locations[use]; ok {
 					if name, ok := fileNames[location.File]; ok {
@@ -243,8 +250,9 @@ func applyExpandedRoots(expanded *expand.Result, configs map[*syntax.File]module
 	return requirements
 }
 
-func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand.Result) (rootRequirement, bool) {
-	if use.Tree == nil || use.Tree.Path == nil || len(use.Tree.Path.Segments) == 0 {
+func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand.Result, bound bool) (rootRequirement, bool) {
+	use.RootFallback = nil
+	if use.Tree == nil || use.Tree.Children != nil || use.Tree.Path == nil || len(use.Tree.Path.Segments) == 0 {
 		return rootRequirement{}, false
 	}
 	segments := use.Tree.Path.Segments
@@ -253,17 +261,17 @@ func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand
 			return rootRequirement{}, false // Already mapped before macro expansion.
 		}
 	}
-	if segments[0].Name.Name != "crate" && config.bindings[segments[0].Name.Name] {
-		return rootRequirement{}, false
+	if !use.Implicit && segments[0].Name.Name != "crate" && (config.bindings[segments[0].Name.Name] || len(segments) == 1 && config.macroBindings[segments[0].Name.Name]) {
+		bound = true
 	}
-	if segments[0].Name.Name != "crate" {
+	if !use.Implicit && segments[0].Name.Name != "crate" {
 		for _, binding := range config.uses[segments[0].Name.Name] {
 			same := binding == use
 			if expanded != nil && use.Expn == 0 {
 				same = expanded.Origins[use].Span == binding.Span()
 			}
 			if !same {
-				return rootRequirement{}, false
+				bound = true
 			}
 		}
 	}
@@ -291,11 +299,27 @@ func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand
 	}
 	// A private routing prefix retains namespace children and their source
 	// identities until a concrete member is selected by the resolver.
-	target := config.module + "/$goxide$roots/" + segments[0].Name.Name
+	route := config.module
+	if use.Implicit {
+		// Keep the automatic prelude separate from an explicit use of the same
+		// root, whose dependency must still be selected eagerly.
+		route += "/$goxide$prelude"
+	}
+	target := route + "/$goxide$roots/" + segments[0].Name.Name
 	origin := resolve.Origin{File: config.name, Span: use.Span(), Expn: use.Expn}
 	if expanded != nil {
 		origin.Span = expanded.Origins[use].Span
 		origin.Stack = expanded.Expansions[use.Expn].Stack
+	}
+	requirement := rootRequirement{target: target, alias: segments[0].Name.Name, origin: origin, sourceFile: config.name, namespace: namespace, sourceImporter: config.sourceImporter, requireRoot: config.requireRoot, implicit: use.Implicit}
+	if bound {
+		// Alias categories are known during resolution. Keep their lexical
+		// spelling and provide the dependency route only as a fallback.
+		use.RootFallback = strings.Split(target, "/")
+		for _, segment := range segments[1:] {
+			use.RootFallback = append(use.RootFallback, segment.Name.Name)
+		}
+		return requirement, true
 	}
 	if use.Tree.Alias == nil && !use.Tree.Glob {
 		original := segments[len(segments)-1].Name
@@ -315,5 +339,12 @@ func applyUseRoot(config moduleRootConfig, use *syntax.UseDecl, expanded *expand
 		mapped = append(mapped, &segment)
 	}
 	use.Tree.Path.Segments = append(mapped, segments[1:]...)
-	return rootRequirement{target: target, alias: segments[0].Name.Name, origin: origin, sourceFile: config.name, namespace: namespace, sourceImporter: config.sourceImporter, requireRoot: config.requireRoot}, true
+	if use.Implicit {
+		// Its source package is already selected. Route directly to that package
+		// so checking for a name does not select std on the way to its prelude.
+		requirement.target += "/prelude"
+		requirement.namespace.PackagePath += "/prelude"
+		requirement.namespace.GoPrefix = ""
+	}
+	return requirement, true
 }

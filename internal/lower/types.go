@@ -142,7 +142,7 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	case *syntax.PathType:
 		if n.Path != nil && len(n.Path.Segments) > 0 {
 			id := n.Path.Segments[0].Name
-			if s := e.file.References[id.ID()].Symbol; s != nil && s.Decl.File == "" && (s.Name.Name == "Option" || s.Name.Name == "Result") {
+			if s := e.file.References[id.ID()].Symbol; s != nil && s.Decl.File == "" && len(s.Target) == 0 && (s.Name.Name == "Option" || s.Name.Name == "Result") {
 				return e.typeArgs(e.sumMember(s.Name.Name), n.Path.Segments[0].Args)
 			}
 		}

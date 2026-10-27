@@ -17,8 +17,8 @@ import (
 	"github.com/tetratelabs/wazero/sys"
 )
 
-// WASIHost owns the macro execution budget for one compiler request. Every Run
-// creates a new instance. Compiled artifacts share a bounded FIFO cache.
+// WASIHost owns a runtime and a bounded FIFO cache of compiled artifacts.
+// Sessions have independent execution budgets and always use fresh instances.
 type WASIHost struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -26,13 +26,25 @@ type WASIHost struct {
 
 	mu          sync.Mutex
 	active      bool
+	activeDone  chan struct{}
 	closed      bool
-	spent       time.Duration
+	closeOnce   sync.Once
+	closeErr    error
 	invocation  time.Duration
 	compilation time.Duration
+	defaultRun  *WASISession
 	compiled    map[[sha256.Size]byte]wasiCompiled
 	order       [][sha256.Size]byte
 	cacheBytes  int
+}
+
+// WASISession owns cancellation and the cumulative budget for one compiler
+// request. Closing a session does not discard the host's compiled artifacts.
+type WASISession struct {
+	host   *WASIHost
+	ctx    context.Context
+	cancel context.CancelFunc
+	spent  time.Duration // Protected by host.mu.
 }
 
 type wasiCompiled struct {
@@ -61,6 +73,8 @@ func NewWASIHostWithBudgets(ctx context.Context, invocation, cumulative time.Dur
 		WithMemoryLimitPages(MaxMemoryPages).
 		WithCloseOnContextDone(true))
 	host := &WASIHost{ctx: ctx, cancel: cancel, runtime: runtime, invocation: invocation, compilation: cumulative, compiled: map[[sha256.Size]byte]wasiCompiled{}}
+	defaultCtx, defaultCancel := context.WithCancel(ctx)
+	host.defaultRun = &WASISession{host: host, ctx: defaultCtx, cancel: defaultCancel}
 	if err := installWASIProfile(ctx, runtime); err != nil {
 		_ = host.Close()
 		return nil, err
@@ -68,54 +82,110 @@ func NewWASIHostWithBudgets(ctx context.Context, invocation, cumulative time.Dur
 	return host, nil
 }
 
-// Close cancels active execution and releases the runtime and compiled artifact.
+// Close cancels active execution, waits for it to finish, and releases the
+// runtime and compiled artifacts. Concurrent and repeated calls share one close.
 func (host *WASIHost) Close() error {
-	host.mu.Lock()
-	if host.closed {
+	host.closeOnce.Do(func() {
+		host.mu.Lock()
+		host.closed = true
+		done := host.activeDone
 		host.mu.Unlock()
-		return nil
+		host.cancel()
+		if host.defaultRun != nil {
+			host.defaultRun.Close()
+		}
+		if done != nil {
+			<-done
+		}
+		host.closeErr = host.runtime.Close(context.Background())
+		host.compiled, host.order, host.cacheBytes = nil, nil, 0
+	})
+	return host.closeErr
+}
+
+// NewSession starts an independent compiler request using this host's cache.
+// At most one invocation may execute across all sessions; concurrent Run calls
+// return an error instead of retaining a queue of requests and input artifacts.
+func (host *WASIHost) NewSession(ctx context.Context) (*WASISession, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("procedural macro session requires a context")
 	}
-	host.closed = true
-	host.mu.Unlock()
-	host.cancel()
-	return host.runtime.Close(context.Background())
+	host.mu.Lock()
+	defer host.mu.Unlock()
+	if host.closed {
+		return nil, fmt.Errorf("procedural macro host is closed")
+	}
+	if err := host.ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	return &WASISession{host: host, ctx: ctx, cancel: cancel}, nil
+}
+
+// Close cancels this session's active invocation and rejects subsequent runs.
+// It is safe to call repeatedly. Host.Close waits for active execution to finish.
+func (session *WASISession) Close() {
+	session.cancel()
 }
 
 // Run accepts one frozen SDK request and returns its admitted response bytes.
 // Error diagnostics remain protocol responses so the expansion layer can retain
-// their ordered diagnostics and precise spans.
-func (host *WASIHost) Run(wasm []byte, request pm.Request) (response []byte, resultErr error) {
+// their ordered diagnostics and precise spans. Calls share the original compiler
+// request's cumulative budget; long-lived callers should create a session.
+func (host *WASIHost) Run(wasm []byte, request pm.Request) ([]byte, error) {
+	return host.defaultRun.Run(wasm, request)
+}
+
+// Run accepts a frozen SDK request within this session's execution budget.
+func (session *WASISession) Run(wasm []byte, request pm.Request) (response []byte, resultErr error) {
+	host := session.host
 	host.mu.Lock()
 	if host.closed {
 		host.mu.Unlock()
 		return nil, fmt.Errorf("procedural macro host is closed")
 	}
+	if err := host.ctx.Err(); err != nil {
+		host.mu.Unlock()
+		return nil, fmt.Errorf("procedural macro execution canceled: %w", err)
+	}
+	if err := session.ctx.Err(); err != nil {
+		host.mu.Unlock()
+		return nil, fmt.Errorf("procedural macro execution canceled: %w", err)
+	}
 	if host.active {
 		host.mu.Unlock()
 		return nil, fmt.Errorf("procedural macro host already has an active invocation")
 	}
-	remaining := host.compilation - host.spent
+	remaining := host.compilation - session.spent
 	if remaining <= 0 {
 		host.mu.Unlock()
 		return nil, fmt.Errorf("procedural macro cumulative execution budget exceeded (%s)", host.compilation)
 	}
 	host.active = true
+	host.activeDone = make(chan struct{})
 	host.mu.Unlock()
-	ctx, cancel := context.WithTimeout(host.ctx, min(host.invocation, remaining))
-	defer cancel()
+	ctx, cancel := context.WithTimeout(session.ctx, min(host.invocation, remaining))
+	stopHostCancel := context.AfterFunc(host.ctx, cancel)
 	started := time.Now()
 	var state *wasiState
 	defer func() {
-		host.mu.Lock()
-		host.spent += time.Since(started)
-		host.active = false
-		host.mu.Unlock()
 		if ctx.Err() != nil && (state == nil || state.fatal == nil) {
-			response, resultErr = nil, host.budgetError(ctx, remaining)
+			response, resultErr = nil, session.budgetError(ctx, remaining)
 			if state != nil {
 				resultErr = state.executionError(resultErr)
 			}
 		}
+		stopHostCancel()
+		cancel()
+		host.mu.Lock()
+		session.spent += time.Since(started)
+		host.active = false
+		close(host.activeDone)
+		host.activeDone = nil
+		host.mu.Unlock()
 	}()
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -144,6 +214,10 @@ func (host *WASIHost) Run(wasm []byte, request pm.Request) (response []byte, res
 		module, err := host.runtime.CompileModule(ctx, prepared)
 		if err != nil {
 			return nil, fmt.Errorf("procedural macro WASM validation: %w", err)
+		}
+		if err := ctx.Err(); err != nil {
+			_ = module.Close(context.Background())
+			return nil, err
 		}
 		start := module.ExportedFunctions()["_start"]
 		if start == nil || len(start.ParamTypes()) != 0 || len(start.ResultTypes()) != 0 {
@@ -180,8 +254,12 @@ func (host *WASIHost) Run(wasm []byte, request pm.Request) (response []byte, res
 	return append([]byte(nil), response...), nil
 }
 
-func (host *WASIHost) budgetError(ctx context.Context, remaining time.Duration) error {
+func (session *WASISession) budgetError(ctx context.Context, remaining time.Duration) error {
+	host := session.host
 	if err := host.ctx.Err(); err != nil {
+		return fmt.Errorf("procedural macro execution canceled: %w", err)
+	}
+	if err := session.ctx.Err(); err != nil {
 		return fmt.Errorf("procedural macro execution canceled: %w", err)
 	}
 	if remaining <= host.invocation {

@@ -141,8 +141,11 @@ pub func answer(ctx pm::Context, input token::TokenStream) pm::Output {
 		t.Fatal(err)
 	}
 	after := readProcBuildArtifact(t, second)
-	if first.ProcMacro == second.ProcMacro || bytes.Equal(before, after) {
-		t.Fatal("local helper content edit reused the old macro artifact")
+	if first.ProcMacro != second.ProcMacro || first.Root != second.Root {
+		t.Fatal("local helper content edit changed the stable macro output path")
+	}
+	if bytes.Equal(before, after) {
+		t.Fatal("local helper content edit reused the old macro bytes")
 	}
 	checkOutput(after, "22")
 	updated, err := os.ReadFile(filepath.Join(macros, "goxide.lock"))

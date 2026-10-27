@@ -266,7 +266,7 @@ func (l *Layout) Begin(spec UnitSpec) (*Unit, error) {
 	if !validName {
 		return nil, fmt.Errorf("invalid target layout component %q", spec.Name)
 	}
-	rel := filepath.Join(spec.Host, spec.Target, spec.Kind, spec.Name, spec.Config)
+	rel := filepath.Join(spec.Target, spec.Kind, spec.Name, spec.Config)
 	dir := filepath.Join(l.Root, "units", rel)
 	if e := l.ownedDirectory(dir, spec); e != nil {
 		return nil, e

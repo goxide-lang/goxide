@@ -1,6 +1,6 @@
 # 编译器、Go 工具复用、LSP 与自举
 
-LSP 设计已确认，实施范围为 [MVP-5](../pre-mvp-plan.md#后续阶段mvp)。编译器已有 `parser.ParseFile → expand.Expand → resolve.ResolveExpanded → check.Check → lower.Lower` 管线；LSP、共享分析快照及下文缓存/布局调整待实施。当前支持度与测试入口统一见[能力状态表](../mvp-gap-audit.md)。本文集中维护设计、内部实施顺序和验收条件。
+LSP 设计已确认，实施范围为 [MVP-5](../pre-mvp-plan.md#后续阶段mvp)。编译器已有 `parser.ParseFile → expand.Expand → resolve.ResolveExpanded → check.Check → lower.Lower` 管线；LSP 与共享分析快照实施中；缓存与布局的分项进度见状态表。当前支持度与测试入口统一见[能力状态表](../mvp-gap-audit.md)。本文集中维护设计、内部实施顺序和验收条件。
 
 语言语义沿用[已确认决策](decisions.md)、[前端 AST](frontend-ast.md)、[enum 表示](enum-representation.md)及已接受 RFC。D19/D20 的风险 warning 和长期分析边界不变；LSP 不新增语言规则，也不重启尚未完成的 workspace、迁入、vendor 或构建脚本阶段。自举目标单独保留在文末。
 
@@ -231,7 +231,7 @@ LSP 场景分别包含冷启动到首次查询/完整诊断、热查询、函数
 
 ## 11. 实施阶段与验收
 
-L0–L7 是 MVP-5 内部实施顺序和验收门槛，MVP-5 在完整闭环验收后交付。进度只记录在能力状态表；本次只确认文档，不开始实现。
+L0–L7 是 MVP-5 内部实施顺序和验收门槛，MVP-5 在完整闭环验收后交付。进度只记录在能力状态表；实现按下列阶段推进。
 
 | 阶段 | 主要归属与交付 | 退出条件 |
 | --- | --- | --- |

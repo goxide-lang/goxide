@@ -10,7 +10,7 @@
 target/
   .goxide-layout.json
   .layout-lock/
-  units/<host>/<target>/<kind>/<name>/<config>/
+  units/<target>/<kind>/<name>/<config>/
     .goxide-unit.json
     bundle/module/
     bundle/deps/<module-hash>/
@@ -21,21 +21,21 @@ target/
   scripts/<host>/<target>/<package-id>/
     .goxide-unit.json              # 包级脚本缓存容器，跨 bin/example 共享
     script-cache/              # runner 所有权标记及 entries/<完整输入键>
-  bin/<host>/<target>/<kind>/<name>/<config>/
+  bin/<target>/<kind>/<name>/<config>/
     .goxide-unit.json
     <name>[.exe]
     .goxide-binary.json
 ```
 
-host/target 为 GOOS-GOARCH；kind 为 lib/bin/example。config 包含整个已解析 goxide 图各节点的 module/root/go.mod/manifest/feature、激活 Git commit、tags、目标入口与种类、编译器内容摘要、Go 目标环境选项、共享选版/来源计划以及 test 的 race 模式。**它是配置身份，不是源码内容缓存键。** 源码修改可复用同一最终二进制路径，生成 module/deps 也保持稳定；不会据 config 跳过转译。build/run/transpile 的相同普通配置可共享 unit，test 配置隔离。
+target 为 GOOS-GOARCH；units/bin 路径只保留这一层平台目录，宿主信息保存在 unit 元数据并参与配置身份；kind 为 lib/bin/example/proc-macro。config 包含整个已解析 goxide 图各节点的 module/root/go.mod/manifest/feature、激活 Git commit、tags、目标入口与种类、编译器内容摘要、Go 目标环境选项、共享选版/来源计划（含传递过程宏依赖配置）以及 test 的 race 模式。过程宏源码及本地 helper 的内容变化不进入路径身份，仍按当前输入重新编译并执行。**它是配置身份，不是源码内容缓存键。** 源码修改可复用同一最终二进制路径，生成 module/deps 也保持稳定；不会据 config 跳过转译。build/run/transpile 的相同普通配置可共享 unit，test 配置隔离。
 
-本次继续明确拒绝非宿主 GOOS/GOARCH；只有路径分区并不解决前端跨平台类型尺寸问题。不可把目录字段视为已实现交叉编译。
+工具链入口按所选目标生成并构建；非宿主 run/test 提前拒绝。过程宏固定构建为 wasip1/wasm，宿主差异仍由配置身份区分。
 
 ## 统一条件配置的接入设计
 
 统一配置与身份见 [RFC 0022](../rfcs/0022-project-toolchain.md#生成物与配置身份)。先在受管临时目录完成一次编译，取得动态宏展开中的完整 env 读取记录，再计算 UnitSpec.Config、选择目录并发布。摘要包括规范化目标、所选 Go 与有效后端设置、每模块 feature 声明/启用集合及实际读取键的 present/原值；键值无损编码，unset 不等于空串。未读取变量不因 env 功能影响摘要，工具链模式忽略的原始 GOOS/GOARCH 仅在源码查询后计入。
 
-Host 与 Target 分开保存，仍使用 GOOS-GOARCH 路径分区。目标两种拼写归一化后共享配置目录；目标和环境不写入依赖锁身份。原生生成及单文件模式不增加持久转译缓存。原值不落入 unit 标记；失败清理、租约和覆盖保护沿用现有流程。
+Host 与 Target 分开保存，units/bin 仅使用 Target 的 GOOS-GOARCH 路径分区。目标两种拼写归一化后共享配置目录；目标和环境不写入依赖锁身份。原生生成及单文件模式不增加持久转译缓存。原值不落入 unit 标记；失败清理、租约和覆盖保护沿用现有流程。
 
 ## 构建与保留
 

@@ -16,6 +16,21 @@ import (
 	"github.com/goxide-lang/goxide/internal/project"
 )
 
+func TestUnitDependencyIdentityTracksSelectionsNotSourceBodies(t *testing.T) {
+	helper := &project.Graph{DependencyPlanID: "helper-selection", PlanID: "helper-body-1"}
+	macro := &project.Graph{DependencyPlanID: "macro-selection", PlanID: "macro-body-1", ProcEdges: []project.ProcEdge{{Consumer: &project.Node{SourceKey: "macro"}, Alias: "helper", Plan: helper}}}
+	graph := &project.Graph{DependencyPlanID: "target-selection", PlanID: "target-body-1", ProcEdges: []project.ProcEdge{{Consumer: &project.Node{SourceKey: "target"}, Alias: "macro", Plan: macro}}}
+	first := unitDependencyID(graph)
+	helper.PlanID, macro.PlanID, graph.PlanID = "helper-body-2", "macro-body-2", "target-body-2"
+	if unitDependencyID(graph) != first {
+		t.Fatal("ordinary source edits changed the output configuration")
+	}
+	helper.DependencyPlanID = "helper-new-selection"
+	if unitDependencyID(graph) == first {
+		t.Fatal("transitive macro dependency selection did not change the output configuration")
+	}
+}
+
 func TestProjectEnvironmentReadsDetermineGenerationIdentity(t *testing.T) {
 	root := smallProject(t)
 	writeProjectFile(t, root, "app.gox", `package main

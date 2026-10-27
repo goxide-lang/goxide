@@ -220,6 +220,7 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 	identity := project.Digest(struct {
 		Sources     []source
 		Target      project.Target
+		Host        config.Target
 		Platform    config.Target
 		Environment map[string][]byte
 		EnvReads    []config.EnvInput
@@ -229,10 +230,30 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 		GoTool      string
 		Compiler    string
 		Plan        string
-	}{sources, target, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, stableGo, environment.GoTool, project.Digest(compiler), graph.PlanID})
+	}{sources, target, environment.Host, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, stableGo, environment.GoTool, project.Digest(compiler), unitDependencyID(graph)})
 	host := environment.Host.OS + "-" + environment.Host.Arch
 	platform := environment.Target.OS + "-" + environment.Target.Arch
 	return project.UnitSpec{Host: host, Target: platform, Kind: kind, Name: target.Name, Config: identity}, nil
+}
+
+// Unit paths identify selected configurations, not macro source revisions.
+// Include the entire macro dependency closure: a nested selection can change
+// without changing the consumer's own dependency plan.
+func unitDependencyID(graph *project.Graph) string {
+	dependencies := make([]project.RoleDependency, 0, len(graph.ProcEdges))
+	for _, edge := range graph.ProcEdges {
+		dependencies = append(dependencies, project.RoleDependency{Consumer: edge.Consumer.SourceKey, Alias: edge.Alias, Plan: unitDependencyID(edge.Plan)})
+	}
+	sort.Slice(dependencies, func(i, j int) bool {
+		if dependencies[i].Consumer != dependencies[j].Consumer {
+			return dependencies[i].Consumer < dependencies[j].Consumer
+		}
+		return dependencies[i].Alias < dependencies[j].Alias
+	})
+	return project.Digest(struct {
+		Plan         string
+		Dependencies []project.RoleDependency
+	}{graph.DependencyPlanID, dependencies})
 }
 
 func within(root, name string) bool {

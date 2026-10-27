@@ -2,10 +2,7 @@ package compile
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,11 +163,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 			return nil, err
 		}
 		if len(plans.Macros) > 0 || graph.Role == "proc-macro" {
-			content, err := stagedContent(stage.dir)
-			if err != nil {
-				return nil, err
-			}
-			spec.Config = project.Digest([]string{spec.Config, stage.sdk, procmacro.ProfileID, content})
+			spec.Config = project.Digest([]string{spec.Config, stage.sdk, procmacro.ProfileID})
 		}
 		stage.unit, err = layout.Begin(spec)
 		if err != nil {
@@ -324,27 +317,6 @@ func runtimeRoots(graph *project.Graph, node *project.Node, roots paths.Roots, r
 		result = append(result, lower.RuntimeRoot{LogicalModule: node.Module, BindingID: project.Digest([]string{graph.PlanID, node.Module}), Namespace: paths.Namespace{ModulePath: node.Module, PackagePath: rootPackage, Source: "module"}})
 	}
 	return result
-}
-
-func stagedContent(root string) (string, error) {
-	hash := sha256.New()
-	err := filepath.WalkDir(root, func(name string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		data, err := os.ReadFile(name)
-		if err != nil {
-			return err
-		}
-		relative, err := filepath.Rel(root, name)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(hash, "%d:%s%d:", len(filepath.ToSlash(relative)), filepath.ToSlash(relative), len(data))
-		hash.Write(data)
-		return nil
-	})
-	return hex.EncodeToString(hash.Sum(nil)), err
 }
 
 func (stage *stagedRole) buildProcMacro(run func([]byte, pm.Request) ([]byte, error)) error {

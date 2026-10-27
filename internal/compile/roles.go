@@ -31,6 +31,8 @@ type stagedRole struct {
 	sdk        string
 	unit       *project.Unit
 	sources    []analysis.SourcePackage
+	input      *analysis.Input
+	spec       *project.UnitSpec
 }
 
 func prepareBuildPlans(ctx context.Context, plans *project.BuildPlans, layoutRoot string, target project.Target, kind string, configuration config.Config, options Options) (_ *Project, err error) {
@@ -76,6 +78,9 @@ func prepareBuildPlans(ctx context.Context, plans *project.BuildPlans, layoutRoo
 			stage.modules[index].Context = prepared.ctx
 		}
 		stages[graph] = stage
+		if err := stage.applyOverlays(options.SourceOverlays); err != nil {
+			return nil, err
+		}
 		if err := prepareModules(ctx, graph, stage.generated); err != nil {
 			return nil, err
 		}
@@ -125,7 +130,11 @@ func prepareBuildPlans(ctx context.Context, plans *project.BuildPlans, layoutRoo
 			}
 		}
 		if graph.Role == "proc-macro" {
-			if err := stage.buildProcMacro(ctx, options.RunProcMacro); err != nil {
+			if options.Editor && graph == plans.Target {
+				if err := stage.prepareProducerInput(ctx); err != nil {
+					return nil, err
+				}
+			} else if err := stage.buildProcMacro(ctx, options.RunProcMacro); err != nil {
 				return nil, err
 			}
 		} else {
@@ -141,6 +150,23 @@ func prepareBuildPlans(ctx context.Context, plans *project.BuildPlans, layoutRoo
 		return nil, err
 	}
 	return prepared, nil
+}
+
+func (stage *stagedRole) prepareProducerInput(ctx context.Context) error {
+	packagePath, err := libraryPackage(stage.graph.Root)
+	if err != nil {
+		return err
+	}
+	modules, _, err := analysis.PrepareProcModules(stage.modules, packagePath)
+	if err != nil {
+		return err
+	}
+	input, err := analysis.LoadInput(ctx, analysis.Input{Modules: modules})
+	if err != nil {
+		return err
+	}
+	stage.input = &input
+	return nil
 }
 
 func stageRole(graph *project.Graph, target project.Target, kind string, configuration config.Config, options Options, selectedSource, staged string) (*stagedRole, error) {

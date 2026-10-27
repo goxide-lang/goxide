@@ -18,8 +18,8 @@ import (
 	"github.com/goxide-lang/goxide/internal/project"
 )
 
-// Project owns prepared dependency views and macro resources. Preparation and
-// analysis do not hold a project/layout publication lease or update the lock.
+// Project owns prepared dependency views and macro resources. It does not
+// retain publication leases or update the dependency lock during preparation.
 type Project struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -52,13 +52,18 @@ type Snapshot struct {
 	SourceNames map[string]string // Canonical source key to original filename.
 	Context     context.Context
 	release     func()
+	macros      map[*analysis.ProcLibrary][]byte
 }
 
 func (s *Snapshot) Close() { s.release() }
 
 func (p *Project) loadInput(ctx context.Context) {
 	stage := p.stages[p.plans.Target]
-	p.input, p.inputErr = analysis.LoadInput(ctx, analysis.Input{Modules: stage.modules})
+	if stage.input != nil {
+		p.input = *stage.input
+	} else {
+		p.input, p.inputErr = analysis.LoadInput(ctx, analysis.Input{Modules: stage.modules})
+	}
 	if p.inputErr != nil {
 		return
 	}
@@ -100,18 +105,46 @@ func (p *Project) Snapshot(ctx context.Context, overlays map[string][]byte) (*Sn
 	for i := range input.Modules {
 		input.Modules[i].Context = ctx
 		input.Modules[i].Config.Reads = reads
+		if producer := input.Modules[i].Producer; producer != nil {
+			copy := *producer
+			input.Modules[i].Producer = &copy
+		}
 	}
 	input.Overlays = make(map[string][]byte, len(overlays))
 	for name, data := range overlays {
 		key, err := p.sourceKey(name)
 		if err != nil {
+			if p.MacroSource(name) {
+				continue
+			}
 			release()
 			return nil, err
 		}
 		input.Overlays[key] = bytes.Clone(data)
 		names[key] = name
 	}
-	return &Snapshot{Input: input, SourceNames: names, Context: ctx, release: release}, nil
+	macros := map[*analysis.ProcLibrary][]byte{}
+	for _, stage := range p.stages {
+		if stage.library != nil {
+			macros[stage.library] = stage.wasm
+			packagePath, err := libraryPackage(stage.graph.Root)
+			if err != nil {
+				release()
+				return nil, err
+			}
+			for staged, original := range stage.originals {
+				relative, err := filepath.Rel(stage.generated[stage.graph.Root.Module], staged)
+				if err != nil {
+					continue
+				}
+				key := path.Join(stage.graph.Root.Module, filepath.ToSlash(relative))
+				if path.Dir(key) == packagePath && filepath.Ext(staged) == ".gox" {
+					names[path.Join(stage.library.PackagePath, filepath.Base(staged))] = original
+				}
+			}
+		}
+	}
+	return &Snapshot{Input: input, SourceNames: names, Context: ctx, release: release, macros: macros}, nil
 }
 
 func (p *Project) sourceKey(name string) (string, error) {
@@ -184,6 +217,9 @@ func (p *Project) Close() error {
 }
 
 func (p *Project) buildAndPublish(ctx context.Context) (*Result, error) {
+	if p.options.Editor {
+		return nil, fmt.Errorf("editor preparation cannot publish build artifacts")
+	}
 	ctx, done, err := p.begin(ctx)
 	if err != nil {
 		return nil, err
@@ -263,12 +299,18 @@ func (p *Project) publish(ctx context.Context) (*Result, error) {
 		if graph.Role == "proc-macro" {
 			tags, race = nil, false
 		}
-		spec, err := unitSpec(graph, stage.target, stage.kind, stage.config, stage.features, stage.sugar, tags, race, stage.modules[0].StableGo)
-		if err != nil {
-			return nil, err
-		}
-		if len(p.plans.Macros) > 0 || graph.Role == "proc-macro" {
-			spec.Config = project.Digest([]string{spec.Config, stage.sdk, procmacro.ProfileID})
+		var spec project.UnitSpec
+		if stage.spec != nil {
+			spec = *stage.spec
+		} else {
+			var err error
+			spec, err = unitSpec(graph, stage.target, stage.kind, stage.config, stage.features, stage.sugar, tags, race, stage.modules[0].StableGo)
+			if err != nil {
+				return nil, err
+			}
+			if len(p.plans.Macros) > 0 || graph.Role == "proc-macro" {
+				spec.Config = project.Digest([]string{spec.Config, stage.sdk, procmacro.ProfileID})
+			}
 		}
 		stage.unit, err = layout.Begin(spec)
 		if err != nil {

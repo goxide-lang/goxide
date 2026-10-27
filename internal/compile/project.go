@@ -34,6 +34,12 @@ type Options struct {
 	Config            config.Config
 	Tags              []string
 	Race              bool
+	// Editor prepares the selected producer's current source without compiling
+	// its own unfinished body into WASM. Dependency macros are still built.
+	Editor bool
+	// SourceOverlays fix unsaved source bytes before preparing macro programs.
+	// Keys are absolute author filenames; nil removes a selected source.
+	SourceOverlays map[string][]byte
 	// RunProcMacro executes a prepared WASM command. A nil callback leaves
 	// actual expansion unavailable until a restricted host is supplied.
 	RunProcMacro     func(wasm []byte, request pm.Request) ([]byte, error)
@@ -81,9 +87,10 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	return prepared.buildAndPublish(context.Background())
 }
 
-// Prepare loads the selected graph and compiles its macros without analyzing
-// the target package or publishing generated output. Close releases its private
-// source views and importers after all snapshots have been released.
+// Prepare loads the selected graph and compiles dependency macros without
+// analyzing the target or publishing build output. Successful macro work has
+// separate intermediate slots. Close releases private views and importers once
+// all snapshots have been released.
 func Prepare(ctx context.Context, directory string, options Options) (*Project, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -173,6 +180,10 @@ func Prepare(ctx context.Context, directory string, options Options) (*Project, 
 		return nil, err
 	}
 	prepared.beforeLock = beforeLock
+	if err := prepared.publishMacroWork(ctx); err != nil {
+		prepared.Close()
+		return nil, err
+	}
 	return prepared, nil
 }
 

@@ -83,18 +83,25 @@ func TestConflictingImplBlocksSelectionAndProjection(t *testing.T) {
 }
 
 func TestNativeBodyRecoveryKeepsSourceSignature(t *testing.T) {
-	native := "package fixture\nfunc Native(value int)int{value.}\nfunc Good()string{return \"good\"}\n"
-	text := "package fixture\nfunc F()int{return Native(1)}\n"
-	result, err := analysis.Analyze(context.Background(), analysis.Input{Sources: map[string][]byte{"main.gox": []byte(text), "native.go": []byte(native)}, PackagePath: "fixture", Options: analysis.Options{Editor: true}})
-	if err != nil || result == nil || result.Err == nil {
-		t.Fatalf("analysis = %#v, %v", result, err)
-	}
-	hover, err := analysis.NewQueries(result).Hover("fixture/main.gox", uint32(strings.Index(text, "Native(1)")))
-	if err != nil || hover == nil || !strings.Contains(hover.Text, "func Native(value int) int") {
-		t.Fatalf("native signature = %#v, %v; %v", hover, err, result.Diagnostics)
-	}
-	if result.Projection != nil {
-		t.Fatal("invalid native source claimed a fully checked projection")
+	for _, broken := range []string{"value.", "return ("} {
+		t.Run(broken, func(t *testing.T) {
+			native := "package fixture\nfunc Native(value int)int{" + broken + "}\n"
+			if broken == "value." {
+				native += "func Good()string{return \"good\"}\n"
+			}
+			text := "package fixture\nfunc F()int{return Native(1)}\n"
+			result, err := analysis.Analyze(context.Background(), analysis.Input{Sources: map[string][]byte{"main.gox": []byte(text), "native.go": []byte(native)}, PackagePath: "fixture", Options: analysis.Options{Editor: true}})
+			if err != nil || result == nil || result.Err == nil {
+				t.Fatalf("analysis = %#v, %v", result, err)
+			}
+			hover, err := analysis.NewQueries(result).Hover("fixture/main.gox", uint32(strings.Index(text, "Native(1)")))
+			if err != nil || hover == nil || !strings.Contains(hover.Text, "func Native(value int) int") {
+				t.Fatalf("native signature = %#v, %v; %v", hover, err, result.Diagnostics)
+			}
+			if result.Projection != nil {
+				t.Fatal("invalid native source claimed a fully checked projection")
+			}
+		})
 	}
 }
 

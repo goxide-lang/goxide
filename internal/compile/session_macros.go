@@ -26,11 +26,14 @@ func (s *Snapshot) BindProcMacros(run func([]byte, pm.Request) ([]byte, error)) 
 				copy = &value
 				wasm := s.macros[library]
 				copy.Run = func(request pm.Request) ([]byte, error) {
-					if run == nil || wasm == nil {
-						return nil, fmt.Errorf("snapshot macro execution is unavailable")
-					}
 					if err := s.Context.Err(); err != nil {
 						return nil, err
+					}
+					if library.Unavailable != nil {
+						return nil, library.Unavailable.Err
+					}
+					if run == nil || wasm == nil {
+						return nil, fmt.Errorf("snapshot macro execution is unavailable")
 					}
 					output, err := run(bytes.Clone(wasm), request)
 					if canceled := s.Context.Err(); canceled != nil {

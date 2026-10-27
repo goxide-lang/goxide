@@ -130,6 +130,13 @@ func (p *Project) Snapshot(ctx context.Context, overlays map[string][]byte) (*Sn
 	for _, stage := range p.stages {
 		if stage.library != nil {
 			macros[stage.library] = stage.wasm
+			if failure := stage.library.Unavailable; failure != nil {
+				for key, disk := range stage.input.DiskNames {
+					if original := stage.originals[disk]; original != "" {
+						names[stage.library.SourceKey(key)] = original
+					}
+				}
+			}
 			packagePath, err := libraryPackage(stage.graph.Root)
 			if err != nil {
 				release()

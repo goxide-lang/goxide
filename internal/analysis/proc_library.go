@@ -17,14 +17,18 @@ import (
 	pm "github.com/goxide-lang/syntax/proc_macro"
 )
 
-// ProcLibrary is a checked producer package and its compile-time export table.
-// Run must be supplied by the caller's execution host. Compilation never
-// executes a producer directly or treats its Go functions as consumer exports.
+// ProcLibrary retains producer source and its compile-time export table. Runnable
+// libraries have passed source checking; editors may retain an Unavailable
+// current producer. Run belongs to the caller's host. Compilation never executes
+// a producer directly or treats its Go functions as consumer exports.
 type ProcLibrary struct {
 	PackagePath string
 	Entries     []*procmacro.Entry
 	GoNames     map[string]string
 	Run         func(pm.Request) ([]byte, error)
+	// Unavailable retains the current producer's source errors for editor
+	// consumers. Such a library has no executable program and cannot expand.
+	Unavailable *Result
 
 	sources      map[string][]byte
 	entryFiles   map[*procmacro.Entry]string
@@ -238,7 +242,12 @@ func prepareProcLibraries(libraries []*ProcLibrary, files map[string]*syntax.Fil
 		}
 		entries, err := procmacro.Collect(parsed, library.PackagePath, true)
 		if err != nil {
-			return nil, err
+			if library.Unavailable == nil || !sources.editor {
+				return nil, err
+			}
+			// No reliable export table exists for this current registration. Its
+			// producer diagnostics remain attached to the original source files.
+			entries = nil
 		}
 		bound[library.PackagePath] = map[string]boundProc{}
 		roots := maps.Clone(library.roots)

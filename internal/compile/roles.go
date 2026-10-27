@@ -2,7 +2,9 @@ package compile
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"go/types"
 	"os"
 	"path/filepath"
 
@@ -12,6 +14,9 @@ import (
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/source"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 	pm "github.com/goxide-lang/syntax/proc_macro"
 )
 
@@ -135,7 +140,7 @@ func prepareBuildPlans(ctx context.Context, plans *project.BuildPlans, layoutRoo
 				if err := stage.prepareProducerInput(ctx); err != nil {
 					return nil, err
 				}
-			} else if err := stage.buildProcMacro(ctx, options.RunProcMacro); err != nil {
+			} else if err := stage.buildProcMacro(ctx, options.RunProcMacro, options.Editor); err != nil {
 				return nil, err
 			}
 		} else {
@@ -296,15 +301,25 @@ func runtimeRoots(graph *project.Graph, node *project.Node, roots paths.Roots, r
 	return result
 }
 
-func (stage *stagedRole) buildProcMacro(ctx context.Context, run func([]byte, pm.Request) ([]byte, error)) error {
+func (stage *stagedRole) buildProcMacro(ctx context.Context, run func([]byte, pm.Request) ([]byte, error), editor bool) error {
 	root := stage.generated[stage.graph.Root.Module]
 	packagePath, err := libraryPackage(stage.graph.Root)
 	if err != nil {
 		return err
 	}
-	library, err := lower.CompileProcModules(stage.modules, packagePath)
+	var library *analysis.ProcLibrary
+	if editor {
+		library, err = stage.analyzeEditorMacro(ctx, packagePath)
+	} else {
+		library, err = lower.CompileProcModules(stage.modules, packagePath)
+	}
 	if err != nil {
 		return err
+	}
+	if library.Unavailable != nil {
+		library.PackagePath += "/goxide_proc_" + stage.graph.PlanID[:16]
+		stage.library = library
+		return nil
 	}
 	launcher := filepath.Join(root, "goxide_proc_macro")
 	if err := os.Mkdir(launcher, 0o755); err != nil {
@@ -343,4 +358,95 @@ func (stage *stagedRole) buildProcMacro(ctx context.Context, run func([]byte, pm
 	library.PackagePath += "/goxide_proc_" + stage.graph.PlanID[:16]
 	stage.library = library
 	return nil
+}
+
+func (stage *stagedRole) analyzeEditorMacro(ctx context.Context, packagePath string) (*analysis.ProcLibrary, error) {
+	modules, library, err := analysis.PrepareProcModules(stage.modules, packagePath)
+	if err != nil {
+		return nil, err
+	}
+	input, err := analysis.LoadInput(ctx, analysis.Input{Modules: modules, Options: analysis.Options{Editor: true}})
+	if err != nil {
+		return nil, err
+	}
+	// The producer's definition-site importer survives later consumer snapshots.
+	// Its prepared-project context is canceled with this preparation while it is
+	// being built, then remains owned by Project.Close after Prepare succeeds.
+	result, err := analysis.Analyze(modules[0].Context, input)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if result.Err != nil {
+		stage.input = &input
+		library.Unavailable = result
+		library.Run = func(pm.Request) ([]byte, error) { return nil, result.Err }
+		return library, nil
+	}
+	sourceMaps := map[string]*source.Map{}
+	output, err := lower.Generate(ctx, result, lower.GenerationOptions{SourceMaps: sourceMaps})
+	if err != nil {
+		return nil, err
+	}
+	imports := &macroEditorImporter{Importer: result.ExternalImporter()}
+	if err := typecheck.CheckGeneratedGraph(ctx, typecheck.GeneratedSources(result, output), imports, result.Config.Sizes()); err != nil {
+		if canceled := ctx.Err(); canceled != nil {
+			return nil, canceled
+		}
+		if imports.err != nil {
+			return nil, imports.err
+		}
+		diagnostic := macroSourceDiagnostic(result, sourceMaps, err)
+		if diagnostic == nil {
+			return nil, err
+		}
+		result.Err = diagnostic
+		result.Diagnostics = append(result.Diagnostics, diagnostic)
+		stage.input = &input
+		library.Unavailable = result
+		library.Run = func(pm.Request) ([]byte, error) { return nil, result.Err }
+		return library, nil
+	}
+	if err := lower.Materialize(ctx, result, output, lower.MaterializeOptions{RemoveSources: true}); err != nil {
+		return nil, err
+	}
+	return library, nil
+}
+
+// An external export failure is an execution failure even when go/types wraps it
+// in an import-site types.Error. Only errors in the selected source graph recover.
+type macroEditorImporter struct {
+	types.Importer
+	err error
+}
+
+func (i *macroEditorImporter) Import(name string) (*types.Package, error) {
+	pkg, err := i.Importer.Import(name)
+	if err != nil && i.err == nil {
+		i.err = err
+	}
+	return pkg, err
+}
+
+func macroSourceDiagnostic(result *analysis.Result, maps map[string]*source.Map, err error) *analysis.Diagnostic {
+	var diagnostic types.Error
+	if !errors.As(err, &diagnostic) || diagnostic.Fset == nil {
+		return nil
+	}
+	position := diagnostic.Fset.PositionFor(diagnostic.Pos, false)
+	file := position.Filename
+	span := source.ByteSpan{Start: position.Offset, End: position.Offset}
+	if filepath.Ext(file) != ".go" {
+		mapping, ok := maps[file].Generated(span)
+		if !ok || mapping.Kind == source.Synthetic {
+			return nil
+		}
+		file, span = mapping.Source.File, mapping.Source.Span
+	}
+	if result.Sources[file] == nil {
+		return nil
+	}
+	return &analysis.Diagnostic{File: file, Span: syntax.Span{Start: uint32(span.Start), End: uint32(span.End)}, Message: diagnostic.Msg}
 }

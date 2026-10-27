@@ -96,7 +96,19 @@ type graph struct {
 }
 
 func (g *graph) result() *Result {
-	return &Result{Sources: g.sources.files, Config: g.options.Config, Files: g.files, DisplayNames: g.display, DiskNames: g.diskNames, DiskOutputs: g.diskOutputs, Modules: g.modules, state: g}
+	result := &Result{Sources: g.sources.files, Config: g.options.Config, Files: g.files, DisplayNames: g.display, DiskNames: g.diskNames, DiskOutputs: g.diskOutputs, Modules: g.modules, state: g}
+	for _, library := range g.libraries {
+		if library == nil || library.Unavailable == nil {
+			continue
+		}
+		for key, input := range library.Unavailable.Sources {
+			g.sources.add(library.SourceKey(key), input.Content)
+		}
+		for _, diagnostic := range library.Unavailable.Diagnostics {
+			result.Diagnostics = append(result.Diagnostics, library.sourceDiagnostic(diagnostic))
+		}
+	}
+	return result
 }
 
 // Analyze runs the same source-language pipeline for CLI, editors and the web.

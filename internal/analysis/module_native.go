@@ -169,6 +169,11 @@ func nativeDeclarations(name string, data []byte, file *goast.File, set *gotoken
 	var edits []nativeSourceEdit
 	blank := func(start, end gotoken.Pos) {
 		a, b := offset(start), offset(end)
+		if b < a {
+			// An unfinished Go body may have no closing-brace position. Keep
+			// its signature while removing the incomplete remainder of the body.
+			b = len(data)
+		}
 		text := append([]byte(nil), data[a:b]...)
 		for i, c := range text {
 			if c != '\n' && c != '\r' {

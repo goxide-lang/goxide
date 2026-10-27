@@ -270,7 +270,13 @@ func (s *sourceSet) native(key string) (*goast.File, error) {
 		return nil, nil
 	}
 	span := func(node goast.Node) syntax.Span {
-		return syntax.Span{Start: uint32(source.GoTokens.Position(node.Pos()).Offset), End: uint32(source.GoTokens.Position(node.End()).Offset)}
+		start, end := source.GoTokens.Position(node.Pos()).Offset, source.GoTokens.Position(node.End()).Offset
+		if end < start {
+			// Go's recovered block can have no closing brace, so End() has no
+			// usable offset. Its incomplete body extends to the current EOF.
+			end = len(source.Content)
+		}
+		return syntax.Span{Start: uint32(start), End: uint32(end)}
 	}
 	bad := func(node goast.Node) bool {
 		incomplete := false

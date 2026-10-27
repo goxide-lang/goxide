@@ -7,6 +7,7 @@ import (
 
 	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/parser"
@@ -58,7 +59,8 @@ func (r *Result) finishEditor(execution error) error {
 	var expansionError *expand.Diagnostic
 	var bindingError resolve.Diagnostic
 	var checkingError check.Diagnostic
-	if errors.As(execution, &sourceError) || errors.As(execution, &expansionError) || errors.As(execution, &bindingError) || errors.As(execution, &checkingError) {
+	var registrationError *procmacro.Diagnostic
+	if errors.As(execution, &sourceError) || errors.As(execution, &expansionError) || errors.As(execution, &bindingError) || errors.As(execution, &checkingError) || errors.As(execution, &registrationError) {
 		return nil
 	}
 	return execution

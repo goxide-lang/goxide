@@ -296,11 +296,15 @@ func (p *parser) postfix(x ast.Expr) ast.Expr {
 	}
 }
 func (p *parser) macroAdjacent() bool {
-	if !p.at(token.NOT) || p.pos == 0 {
+	if !p.at(token.NOT) || p.pos == 0 || p.tokens[p.pos-1].End != p.tok().Start {
 		return false
 	}
 	next := p.peek(1)
-	return p.tokens[p.pos-1].End == p.tok().Start && p.tok().End == next.Start && (next.Kind == token.LPAREN || next.Kind == token.LBRACK || next.Kind == token.LBRACE)
+	switch next.Kind {
+	case token.EOF, token.SEMICOLON, token.COMMA, token.RBRACE, token.RPAREN, token.RBRACK, token.FATARROW:
+		return true // Keep an incomplete invocation's path at its missing arguments.
+	}
+	return p.tok().End == next.Start && (next.Kind == token.LPAREN || next.Kind == token.LBRACK || next.Kind == token.LBRACE)
 }
 func (p *parser) composite(t ast.Type, start uint32) ast.Expr {
 	p.expect(token.LBRACE)

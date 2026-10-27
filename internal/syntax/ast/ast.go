@@ -132,9 +132,10 @@ type File struct {
 }
 type Ident struct {
 	Base
-	Name string
-	Raw  bool
-	Ctx  SyntaxCtx
+	Name    string
+	Raw     bool
+	Missing bool // Recovery placeholder, never the source identifier _.
+	Ctx     SyntaxCtx
 }
 type Comment struct {
 	Base
@@ -156,8 +157,9 @@ type Attr struct {
 }
 type TokenTree struct {
 	Base
-	Delim  Delim
-	Tokens []TokenOrTree
+	Delim   Delim
+	Missing bool // An opening or closing delimiter is missing.
+	Tokens  []TokenOrTree
 }
 type TokenOrTree struct {
 	Token *token.Token

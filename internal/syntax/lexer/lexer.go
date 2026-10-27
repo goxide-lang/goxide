@@ -65,6 +65,9 @@ func (s *scanner) error(start, end int, message string) {
 }
 
 func (s *scanner) insertSemi(pos int) {
+	if pos > 0 && pos < len(s.src) && s.src[pos] == '\n' && s.src[pos-1] == '\r' {
+		pos--
+	}
 	s.tokens = append(s.tokens, token.Token{Kind: token.SEMICOLON, Text: ";", Start: uint32(pos), End: uint32(pos), Implicit: true})
 	s.semi = false
 }
@@ -166,6 +169,9 @@ func (s *scanner) next() {
 		if next == '/' {
 			s.pos += 2
 			for s.pos < len(s.src) && s.src[s.pos] != '\n' {
+				if s.src[s.pos] == '\r' && s.pos+1 < len(s.src) && s.src[s.pos+1] == '\n' {
+					break
+				}
 				s.pos++
 			}
 			s.emit(token.COMMENT, start, false)

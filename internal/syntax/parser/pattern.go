@@ -195,7 +195,8 @@ func (p *parser) tokenTree() *ast.TokenTree {
 		tree.Delim = ast.Brace
 		close = token.RBRACE
 	default:
-		p.error("expected delimited token tree")
+		p.missing("expected delimited token tree")
+		tree.Missing = true
 		tree.Base = p.base(start)
 		return tree
 	}
@@ -205,7 +206,8 @@ func (p *parser) tokenTree() *ast.TokenTree {
 		case token.LPAREN, token.LBRACK, token.LBRACE:
 			tree.Tokens = append(tree.Tokens, ast.TokenOrTree{Tree: p.tokenTree()})
 		case token.RPAREN, token.RBRACK, token.RBRACE:
-			p.error("mismatched delimiter in token tree")
+			p.expect(close)
+			tree.Missing = true
 			tree.Base = p.base(start)
 			return tree
 		default:
@@ -213,6 +215,7 @@ func (p *parser) tokenTree() *ast.TokenTree {
 			tree.Tokens = append(tree.Tokens, ast.TokenOrTree{Token: &t})
 		}
 	}
+	tree.Missing = !p.at(close)
 	p.expect(close)
 	tree.Base = p.base(start)
 	return tree

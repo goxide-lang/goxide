@@ -13,6 +13,9 @@ func (p *parser) block() *ast.Block {
 	defer func() { p.noComposite = old }()
 	b := &ast.Block{}
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		if p.declarationStart() {
+			break
+		}
 		before := p.pos
 		b.List = append(b.List, p.stmt())
 		if _, ok := b.List[len(b.List)-1].(*ast.EmptyStmt); !ok {
@@ -21,6 +24,9 @@ func (p *parser) block() *ast.Block {
 			}
 		}
 		p.progress(before)
+	}
+	if !p.at(token.RBRACE) {
+		b.List = append(b.List, &ast.BadStmt{StmtBase: ast.StmtBase{Base: p.base(p.tok().Start)}, Text: "missing }"})
 	}
 	p.expect(token.RBRACE)
 	b.Base = p.base(s)

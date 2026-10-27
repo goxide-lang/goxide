@@ -30,6 +30,7 @@ func (d Diagnostic) Error() string {
 type parser struct {
 	tokens      []token.Token
 	pos         int
+	end         uint32
 	nextID      ast.NodeID
 	diagnostics []Diagnostic
 	noComposite int
@@ -182,6 +183,7 @@ func (p *parser) peek(n int) token.Token {
 func (p *parser) at(k token.Kind) bool { return p.tok().Kind == k }
 func (p *parser) next() token.Token {
 	t := p.tok()
+	p.end = t.End
 	if t.Kind != token.EOF {
 		p.pos++
 	}
@@ -198,7 +200,7 @@ func (p *parser) expect(k token.Kind) token.Token {
 	if p.at(k) {
 		return p.next()
 	}
-	p.error("expected " + k.String() + ", found " + p.tok().Kind.String())
+	p.missing("expected " + k.String() + ", found " + p.tok().Kind.String())
 	t := p.tok()
 	t.Kind = k
 	t.Text = k.String()
@@ -209,11 +211,13 @@ func (p *parser) error(msg string) {
 	t := p.tok()
 	p.diagnostics = append(p.diagnostics, Diagnostic{Severity: Error, Span: ast.Span{Start: t.Start, End: t.End}, Message: msg})
 }
+func (p *parser) missing(msg string) {
+	start := p.tok().Start
+	p.end = start
+	p.diagnostics = append(p.diagnostics, Diagnostic{Severity: Error, Span: ast.Span{Start: start, End: start}, Message: msg})
+}
 func (p *parser) base(start uint32) ast.Base {
-	end := start
-	if p.pos > 0 {
-		end = p.tokens[p.pos-1].End
-	}
+	end := p.end
 	if end < start {
 		end = start
 	}
@@ -223,11 +227,16 @@ func (p *parser) base(start uint32) ast.Base {
 func (p *parser) ident() *ast.Ident {
 	t := p.tok()
 	if !p.at(token.IDENT) {
-		p.error("expected identifier (reserved words require r#)")
-		if !p.at(token.EOF) {
+		const message = "expected identifier (reserved words require r#)"
+		if p.recoveryBoundary() {
+			p.missing(message)
+		} else {
+			p.error(message)
 			p.next()
 		}
-		return &ast.Ident{Base: p.base(t.Start), Name: "_"}
+		base := p.base(t.Start)
+		base.Loc.End = t.Start
+		return &ast.Ident{Base: base, Missing: true}
 	}
 	p.next()
 	if !t.Raw && token.IsFutureReserved(t.Text) {
@@ -242,6 +251,9 @@ func (p *parser) semis() {
 func (p *parser) endStmt() bool {
 	if p.accept(token.SEMICOLON) || p.at(token.RBRACE) || p.at(token.EOF) {
 		return true
+	}
+	if p.declarationStart() && p.pos > 0 && p.tokens[p.pos-1].Kind == token.SEMICOLON {
+		return true // A recovered block already consumed the preceding newline.
 	}
 	p.error("expected semicolon or newline")
 	return false
@@ -259,13 +271,35 @@ func (p *parser) errorCount() int {
 func hasBad(n ast.Node) bool {
 	bad := false
 	ast.Walk(n, func(n ast.Node) bool {
-		switch n.(type) {
+		switch n := n.(type) {
 		case *ast.BadItem, *ast.BadStmt, *ast.BadExpr, *ast.BadType, *ast.BadPat:
 			bad = true
+		case *ast.Ident:
+			bad = bad || n.Missing
+		case *ast.TokenTree:
+			bad = bad || n.Missing
 		}
 		return !bad
 	})
 	return bad
+}
+func (p *parser) recoveryBoundary() bool {
+	switch p.tok().Kind {
+	case token.EOF, token.SEMICOLON, token.COMMA, token.RBRACE, token.RPAREN, token.RBRACK, token.LBRACE, token.FATARROW:
+		return true
+	}
+	return p.declarationStart()
+}
+
+// Named functions and package-only items cannot begin a block statement.
+func (p *parser) declarationStart() bool {
+	switch p.tok().Kind {
+	case token.FUNC:
+		return p.peek(1).Kind == token.IDENT
+	case token.PACKAGE, token.PUB, token.USE, token.MOD, token.ENUM, token.TRAIT, token.IMPL, token.DECLARE:
+		return true
+	}
+	return p.context("macro_rules") && p.peek(1).Kind == token.NOT && p.peek(2).Kind == token.IDENT
 }
 func (p *parser) progress(before int) {
 	if p.pos == before && !p.at(token.EOF) {

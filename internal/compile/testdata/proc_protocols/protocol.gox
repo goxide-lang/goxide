@@ -7,8 +7,8 @@ pub trait LibraryDebug { func debug(self &Self) string }
 pub trait LibraryPartialEq { func equals(self Self,other Self) bool }
 pub trait LibraryEq where Self: LibraryPartialEq {}
 pub func Make[T LibraryDefault]() T { return T::r#default::<LibraryDefault>() }
-pub func Equal[T LibraryPartialEq](left,right T) bool { return left.equals(right) }
-pub func RequireEq[T LibraryEq](left,right T) bool { return left.equals(right) }
+pub func Equal[T LibraryPartialEq](left,right T) bool { return left.equals::<LibraryPartialEq>(right) }
+pub func RequireEq[T LibraryEq](left,right T) bool { return left.equals::<LibraryPartialEq>(right) }
 impl LibraryDefault for int { func r#default() Self { return 0 } }
 impl LibraryClone for int { func clone(self &Self) Self { return *self } }
 impl LibraryDebug for int { func debug(self &Self) string { return strconv::Itoa(*self) } }

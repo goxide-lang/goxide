@@ -271,6 +271,9 @@ func (selection *sourceSelection) stage(node *project.Node, output string, manag
 		if item.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("source module contains symlink: %s", name)
 		}
+		if !item.IsDir() && filepath.Dir(name) == node.Root && project.LockTemporaryFile(item.Name()) {
+			return nil
+		}
 		if item.IsDir() {
 			if item.Name() == ".goxide" || item.Name() == "vendor" || item.Name() == "goxide.lock.guard" || selection.excluded[relative] {
 				return filepath.SkipDir

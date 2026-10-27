@@ -34,8 +34,10 @@ type Options struct {
 	Config            config.Config
 	Tags              []string
 	Race              bool
-	// Editor prepares the selected producer's current source without compiling
-	// its own unfinished body into WASM. Dependency macros are still built.
+	// Editor prepares private views without CLI writer leases or target output.
+	// A successful macro may refresh an existing independently leased editor lane.
+	// An unfinished selected producer is analyzed without compiling its own WASM;
+	// dependency macro programs are still built from the current inputs.
 	Editor bool
 	// SourceOverlays fix unsaved source bytes before preparing macro programs.
 	// Keys are absolute author filenames; nil removes a selected source.
@@ -139,16 +141,35 @@ func Prepare(ctx context.Context, directory string, options Options) (*Project, 
 	if targetDir == "" {
 		targetDir = "target"
 	}
-	release, err := project.LockProject(root)
-	if err != nil {
-		return nil, err
-	}
+	var release func()
+	var privateRoot string
 	defer func() {
 		if release != nil {
 			release()
 		}
+		if privateRoot != "" {
+			os.RemoveAll(privateRoot)
+		}
 	}()
-	plans, err := project.LoadBuildPlansContext(ctx, root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, options.NativeGeneration, environment.ExecEnv())
+	var plans *project.BuildPlans
+	if options.Editor {
+		privateRoot, err = os.MkdirTemp("", "goxide-editor-")
+		if err != nil {
+			return nil, err
+		}
+		canonical, canonicalErr := filepath.EvalSymlinks(privateRoot)
+		if canonicalErr != nil {
+			return nil, canonicalErr
+		}
+		privateRoot = canonical
+		plans, err = project.LoadEditorBuildPlansContext(ctx, root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, privateRoot, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, options.NativeGeneration, environment.ExecEnv())
+	} else {
+		release, err = project.LockProject(root)
+		if err != nil {
+			return nil, err
+		}
+		plans, err = project.LoadBuildPlansContext(ctx, root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, options.NativeGeneration, environment.ExecEnv())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -163,23 +184,31 @@ func Prepare(ctx context.Context, directory string, options Options) (*Project, 
 	} else if options.Example != "" {
 		kind = "example"
 	}
-	layout, err := project.OpenLayout(root, manifest.Module, targetDir)
-	if err != nil {
-		return nil, err
+	layoutRoot := privateRoot
+	var beforeLock []byte
+	if !options.Editor {
+		layout, err := project.OpenLayout(root, manifest.Module, targetDir)
+		if err != nil {
+			return nil, err
+		}
+		layoutRoot = layout.Root
+		layout.Close()
+		beforeLock, err = os.ReadFile(filepath.Join(root, "goxide.lock"))
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		release()
+		release = nil
 	}
-	layoutRoot := layout.Root
-	layout.Close()
-	beforeLock, err := os.ReadFile(filepath.Join(root, "goxide.lock"))
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	release()
-	release = nil
 	prepared, err := prepareBuildPlans(ctx, plans, layoutRoot, target, kind, configuration, options)
 	if err != nil {
 		return nil, err
 	}
 	prepared.beforeLock = beforeLock
+	if privateRoot != "" {
+		prepared.directories = append(prepared.directories, privateRoot)
+		privateRoot = "" // The prepared project's snapshots now own this lifetime.
+	}
 	if err := prepared.publishMacroWork(ctx); err != nil {
 		prepared.Close()
 		return nil, err

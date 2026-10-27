@@ -21,21 +21,22 @@ import (
 // Project owns prepared dependency views and macro resources. It does not
 // retain publication leases or update the dependency lock during preparation.
 type Project struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	plans       *project.BuildPlans
-	graphs      []*project.Graph
-	stages      map[*project.Graph]*stagedRole
-	options     Options
-	layoutRoot  string
-	beforeLock  []byte
-	directories []string
-	inputMu     sync.Mutex
-	inputLoaded bool
-	input       analysis.Input
-	inputErr    error
-	sourceNames map[string]string
-	sourceKeys  map[string]string
+	ctx              context.Context
+	cancel           context.CancelFunc
+	plans            *project.BuildPlans
+	graphs           []*project.Graph
+	stages           map[*project.Graph]*stagedRole
+	options          Options
+	layoutRoot       string
+	sourceLayoutRoot string
+	beforeLock       []byte
+	directories      []string
+	inputMu          sync.Mutex
+	inputLoaded      bool
+	input            analysis.Input
+	inputErr         error
+	sourceNames      map[string]string
+	sourceKeys       map[string]string
 
 	mu       sync.Mutex
 	closed   bool

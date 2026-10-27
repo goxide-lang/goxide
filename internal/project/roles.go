@@ -18,6 +18,15 @@ type BuildPlans struct {
 	owner  *Graph
 }
 
+// SourceLayoutRoot is the configured output boundary excluded from authored
+// source traversal, including while another process initializes its marker.
+func (g *Graph) SourceLayoutRoot() string {
+	if g.roles != nil {
+		return g.roles.layoutRoot
+	}
+	return ""
+}
+
 // ProcEdge retains the source dependency even though it is absent from the
 // consumer's Go build list. Consumer.Children[Alias] is Plan.Root.
 type ProcEdge struct {
@@ -66,6 +75,21 @@ func LoadBuildPlans(root, tool string, requested []string, defaults, offline, lo
 }
 
 func LoadBuildPlansContext(ctx context.Context, root, tool string, requested []string, defaults, offline, locked bool, targetDir, target string, procRoot, nativeGeneration bool, environment ...[]string) (*BuildPlans, error) {
+	return loadBuildPlansContext(ctx, root, tool, requested, defaults, offline, locked, targetDir, "", target, procRoot, nativeGeneration, environment...)
+}
+
+// LoadEditorBuildPlansContext reads the published dependency lock and existing
+// immutable Git checkouts without acquiring either writer lease. New Git
+// checkouts and planning files belong to privateRoot, which the caller retains
+// until all consumers of the returned plans have closed.
+func LoadEditorBuildPlansContext(ctx context.Context, root, tool string, requested []string, defaults, offline, locked bool, targetDir, privateRoot, target string, procRoot, nativeGeneration bool, environment ...[]string) (*BuildPlans, error) {
+	if privateRoot == "" {
+		return nil, fmt.Errorf("editor planning requires a private working directory")
+	}
+	return loadBuildPlansContext(ctx, root, tool, requested, defaults, offline, locked, targetDir, privateRoot, target, procRoot, nativeGeneration, environment...)
+}
+
+func loadBuildPlansContext(ctx context.Context, root, tool string, requested []string, defaults, offline, locked bool, targetDir, privateRoot, target string, procRoot, nativeGeneration bool, environment ...[]string) (*BuildPlans, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -99,17 +123,28 @@ func LoadBuildPlansContext(ctx context.Context, root, tool string, requested []s
 	if _, err := roleEnvironment(base, target); err != nil {
 		return nil, err
 	}
-	layout, err := OpenLayout(root, manifest.Module, targetDir)
-	if err != nil {
-		return nil, err
+	var layoutRoot, workRoot, cache, readCache string
+	if privateRoot != "" {
+		layoutRoot, readCache, err = editorLayout(root, manifest.Module, targetDir)
+		if err != nil {
+			return nil, err
+		}
+		workRoot, cache = privateRoot, filepath.Join(privateRoot, "cache", "git")
+	} else {
+		layout, err := OpenLayout(root, manifest.Module, targetDir)
+		if err != nil {
+			return nil, err
+		}
+		defer layout.Close()
+		layoutRoot, workRoot = layout.Root, layout.Root
+		cache = filepath.Join(layout.Root, "cache", "git")
 	}
-	defer layout.Close()
-	work, err := os.MkdirTemp(layout.Root, ".role-plan-")
+	work, err := os.MkdirTemp(workRoot, ".role-plan-")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(work)
-	owner := &Graph{ctx: ctx, WorkRoot: work, Tool: tool, Environment: base, Offline: offline, Locked: locked, Cache: filepath.Join(layout.Root, "cache", "git"), LockPath: filepath.Join(root, "goxide.lock"), ownerRoot: root, ownerModule: manifest.Module,
+	owner := &Graph{ctx: ctx, WorkRoot: work, Tool: tool, Environment: base, Offline: offline, Locked: locked, Cache: cache, readCache: readCache, LockPath: filepath.Join(root, "goxide.lock"), ownerRoot: root, ownerModule: manifest.Module,
 		Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}, Roles: map[string]RoleLock{}}, nativeGeneration: nativeGeneration}
 	data, err := os.ReadFile(owner.LockPath)
 	if err == nil {
@@ -134,7 +169,7 @@ func LoadBuildPlansContext(ctx context.Context, root, tool string, requested []s
 	if owner.Lock.Roles == nil {
 		owner.Lock.Roles = map[string]RoleLock{}
 	}
-	planner := &rolePlanner{owner: owner, layoutRoot: layout.Root, plans: map[string]*Graph{}, active: map[string]bool{}, selections: map[string]Selection{}, contents: map[string]string{}}
+	planner := &rolePlanner{owner: owner, layoutRoot: layoutRoot, plans: map[string]*Graph{}, active: map[string]bool{}, selections: map[string]Selection{}, contents: map[string]string{}}
 	role := "target"
 	if procRoot {
 		role, target = "proc-macro", "wasip1/wasm"
@@ -192,7 +227,7 @@ func (p *rolePlanner) load(root string, source *Node, requested []string, defaul
 		return nil, err
 	}
 	g := &Graph{ctx: p.owner.ctx, Role: role, Platform: platform, roles: p, roleRoot: source, WorkRoot: p.owner.WorkRoot, Tool: p.owner.Tool, Environment: environment, Offline: p.owner.Offline, Locked: p.owner.Locked,
-		Cache: p.owner.Cache, LockPath: p.owner.LockPath, Lock: p.owner.Lock, original: p.owner.original, ownerRoot: p.owner.ownerRoot, ownerModule: p.owner.ownerModule, nativeGeneration: p.owner.nativeGeneration}
+		Cache: p.owner.Cache, readCache: p.owner.readCache, LockPath: p.owner.LockPath, Lock: p.owner.Lock, original: p.owner.original, ownerRoot: p.owner.ownerRoot, ownerModule: p.owner.ownerModule, nativeGeneration: p.owner.nativeGeneration}
 	if _, err := g.plan(root, requested, defaults); err != nil {
 		return nil, err
 	}

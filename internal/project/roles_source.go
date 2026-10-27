@@ -222,6 +222,9 @@ func (p *rolePlanner) sourceContent(node *Node) (string, error) {
 		if entry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("source module contains symlink: %s", name)
 		}
+		if !entry.IsDir() && filepath.Dir(name) == node.Root && LockTemporaryFile(entry.Name()) {
+			return nil
+		}
 		if entry.IsDir() {
 			if entry.Name() == ".goxide" || entry.Name() == "vendor" {
 				return filepath.SkipDir

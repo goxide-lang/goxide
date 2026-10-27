@@ -100,7 +100,7 @@ pub func answer(ctx pm::Context,input token::TokenStream)pm::Output {
 	}
 	workSlots := func() []string {
 		t.Helper()
-		paths, err := filepath.Glob(filepath.Join(projects[true].layoutRoot, "units", "*", "proc-macro", "*", "*", "intermediate", "macro", "*"))
+		paths, err := filepath.Glob(filepath.Join(projects[false].layoutRoot, "units", "*", "proc-macro", "*", "*", "intermediate", "macro", "*"))
 		if err != nil {
 			t.Fatal(err)
 		}

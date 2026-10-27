@@ -103,6 +103,7 @@ type Graph struct {
 	Nodes                  []*Node
 	Lock                   Lock
 	LockPath, Cache        string
+	readCache              string // Editor-only immutable checkout fallback.
 	Offline, Locked        bool
 	original               []byte
 	Tool                   string
@@ -317,7 +318,7 @@ func gitContext(ctx context.Context, dir string, args ...string) (string, error)
 		}
 		cmd.Env = append(cmd.Env, v)
 	}
-	cmd.Env = append(cmd.Env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=")
+	cmd.Env = append(cmd.Env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=", "GIT_OPTIONAL_LOCKS=0")
 	b, e := cmd.Output()
 	if e != nil {
 		if ctx.Err() != nil {
@@ -327,47 +328,62 @@ func gitContext(ctx context.Context, dir string, args ...string) (string, error)
 	}
 	return strings.TrimSpace(string(b)), nil
 }
-func (g *Graph) gitSource(d Dependency) (string, error) {
+func (g *Graph) gitSource(d Dependency) (string, string, error) {
 	if e := validateGit(d.Git); e != nil {
-		return "", e
+		return "", "", e
 	}
 	if strings.HasPrefix(d.Rev, "-") || strings.ContainsAny(d.Rev, "\x00\n\r") {
-		return "", fmt.Errorf("invalid git revision")
+		return "", "", fmt.Errorf("invalid git revision")
 	}
 	if d.Tag != "" || d.Branch != "" {
 		ref := d.gitRef()
 		if _, e := gitContext(g.context(), "", "check-ref-format", ref); e != nil {
-			return "", fmt.Errorf("invalid git tag/branch: %w", e)
+			return "", "", fmt.Errorf("invalid git tag/branch: %w", e)
 		}
 	}
 	key := d.GitKey()
 	commit := g.Lock.Git[key]
 	if g.Lock.Unified != nil {
 		if expected, exists := g.Lock.Unified.GitPins[key]; exists && expected != commit {
-			return "", fmt.Errorf("unified lock missing or changed git pin")
+			return "", "", fmt.Errorf("unified lock missing or changed git pin")
 		}
 	}
 	if commit == "" && (g.Locked || g.Lock.Unified != nil && !g.unifiedPlanning) {
-		return "", fmt.Errorf("--locked: git source absent from lock")
+		return "", "", fmt.Errorf("--locked: git source absent from lock")
 	}
 	dir := filepath.Join(g.Cache, key)
+	readOnly := false
+	if g.readCache != "" {
+		shared := filepath.Join(g.readCache, key)
+		if e := NoSymlinks(shared); e != nil {
+			return "", "", e
+		}
+		if _, e := os.Stat(filepath.Join(shared, ".git")); e == nil {
+			dir, readOnly = shared, true
+		} else if !os.IsNotExist(e) {
+			return "", "", e
+		}
+	}
 	if e := NoSymlinks(dir); e != nil {
-		return "", e
+		return "", "", e
 	}
 	if _, e := os.Stat(filepath.Join(dir, ".git")); e != nil {
+		if readOnly {
+			return "", "", fmt.Errorf("cached git source changed during editor preparation: %w", e)
+		}
 		if g.Offline {
-			return "", fmt.Errorf("offline: git source is not cached")
+			return "", "", fmt.Errorf("offline: git source is not cached")
 		}
 		if e = os.MkdirAll(g.Cache, 0755); e != nil {
-			return "", e
+			return "", "", e
 		}
 		tmp, e := os.MkdirTemp(g.Cache, "clone-")
 		if e != nil {
-			return "", e
+			return "", "", e
 		}
 		defer os.RemoveAll(tmp)
 		if _, e = gitContext(g.context(), "", "clone", "--no-checkout", "--", d.Git, tmp); e != nil {
-			return "", e
+			return "", "", e
 		}
 		ref := commit
 		if ref == "" {
@@ -380,56 +396,57 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 			}
 		}
 		if e != nil {
-			return "", e
+			return "", "", e
 		}
 		if !isCommit(c) {
-			return "", fmt.Errorf("invalid resolved commit")
+			return "", "", fmt.Errorf("invalid resolved commit")
 		}
 		if _, e = gitContext(g.context(), tmp, "checkout", "--detach", c); e != nil {
-			return "", e
+			return "", "", e
 		}
 		if e = os.Rename(tmp, dir); e != nil {
-			return "", e
+			return "", "", e
 		}
 		commit = c
 	} else {
 		actual, e := gitContext(g.context(), dir, "rev-parse", "HEAD")
 		if e != nil {
-			return "", e
+			return "", "", e
 		}
 		if commit != "" && actual != commit {
-			return "", fmt.Errorf("cached git checkout does not match locked commit")
+			return "", "", fmt.Errorf("cached git checkout does not match locked commit")
 		}
 		if commit == "" {
 			want, err := gitContext(g.context(), dir, "rev-parse", "--verify", "--end-of-options", d.gitRef()+"^{commit}")
 			if err != nil {
-				return "", fmt.Errorf("unlocked cached checkout does not match requested revision: %w", err)
+				return "", "", fmt.Errorf("unlocked cached checkout does not match requested revision: %w", err)
 			}
 			if want != actual {
-				return "", fmt.Errorf("unlocked cached checkout does not match requested revision")
+				return "", "", fmt.Errorf("unlocked cached checkout does not match requested revision")
 			}
 		}
 		commit = actual
 		// Cached sources are immutable, including untracked files.
 		dirty, e := gitContext(g.context(), dir, "status", "--porcelain", "--untracked-files=all", "--ignored=matching")
 		if e != nil {
-			return "", e
+			return "", "", e
 		}
 		if dirty != "" {
-			return "", fmt.Errorf("cached git checkout has local modifications")
+			return "", "", fmt.Errorf("cached git checkout has local modifications")
 		}
 	}
 	g.Lock.Git[key] = commit
-	dir = filepath.Join(dir, filepath.FromSlash(d.Subdir))
+	checkout := dir
+	dir = filepath.Join(checkout, filepath.FromSlash(d.Subdir))
 	resolved, e := filepath.EvalSymlinks(dir)
 	if e != nil {
-		return "", e
+		return "", "", e
 	}
-	rel, e := filepath.Rel(filepath.Join(g.Cache, key), resolved)
+	rel, e := filepath.Rel(checkout, resolved)
 	if e != nil || rel == ".." || strings.HasPrefix(rel, "../") {
-		return "", fmt.Errorf("git subdir escapes repository")
+		return "", "", fmt.Errorf("git subdir escapes repository")
 	}
-	return resolved, nil
+	return resolved, checkout, nil
 }
 func isCommit(s string) bool {
 	if len(s) != 40 && len(s) != 64 {

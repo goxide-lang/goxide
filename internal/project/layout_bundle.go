@@ -35,17 +35,24 @@ func (u *Unit) PublishMacroWork(ctx context.Context, staged string, editor bool)
 	}
 	lane := "cli"
 	if editor {
-		lane = "editor"
+		if !u.layout.active {
+			return fmt.Errorf("target layout lease is closed")
+		}
+		return publishEditorMacroWork(ctx, u.Directory, staged)
 	}
 	return u.publishBundle(ctx, staged, filepath.Join(u.Intermediate, "macro", lane), filepath.Join(u.Directory, ".goxide-macro-"+lane+"-files.json"))
 }
 
 func (u *Unit) publishBundle(ctx context.Context, staged, bundle, record string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
 	if !u.layout.active {
 		return fmt.Errorf("target layout lease is closed")
+	}
+	return publishBundle(ctx, staged, bundle, record)
+}
+
+func publishBundle(ctx context.Context, staged, bundle, record string) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if e := NoSymlinks(bundle); e != nil {
 		return e
@@ -128,7 +135,7 @@ func (u *Unit) publishBundle(ctx context.Context, staged, bundle, record string)
 		return e
 	}
 	// Cancellation is observed before the commit point. Publication itself is
-	// short and serialized by the layout lease, as for ordinary bundles.
+	// short and serialized by the caller's layout lease or editor lane lease.
 	if err := ctx.Err(); err != nil {
 		return err
 	}

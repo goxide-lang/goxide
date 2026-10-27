@@ -52,7 +52,7 @@ func (s *Snapshot) BindProcMacros(run func([]byte, pm.Request) ([]byte, error)) 
 }
 
 func (p *Project) OwnsSource(name string) bool {
-	if within(p.layoutRoot, name) {
+	if within(p.layoutRoot, name) || p.sourceLayoutRoot != "" && within(p.sourceLayoutRoot, name) {
 		return false
 	}
 	for _, graph := range p.graphs {

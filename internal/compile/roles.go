@@ -44,7 +44,7 @@ type stagedRole struct {
 func prepareBuildPlans(ctx context.Context, plans *project.BuildPlans, layoutRoot string, target project.Target, kind string, configuration config.Config, options Options) (_ *Project, err error) {
 	graphs := append(append([]*project.Graph(nil), plans.Macros...), plans.Target)
 	stages := make(map[*project.Graph]*stagedRole, len(graphs))
-	prepared := &Project{plans: plans, graphs: graphs, stages: stages, layoutRoot: layoutRoot, options: options}
+	prepared := &Project{plans: plans, graphs: graphs, stages: stages, layoutRoot: layoutRoot, sourceLayoutRoot: plans.Target.SourceLayoutRoot(), options: options}
 	prepared.ctx, prepared.cancel = context.WithCancel(context.Background())
 	stopCancel := context.AfterFunc(ctx, prepared.cancel)
 	defer stopCancel()
@@ -212,6 +212,13 @@ func stageRole(graph *project.Graph, target project.Target, kind string, configu
 		selection, err := selectSourcePaths(node, selected, targetKind)
 		if err != nil {
 			return nil, err
+		}
+		// The selected output boundary is known before another writer has
+		// finished its ownership marker, so never traverse it as source.
+		if root := graph.SourceLayoutRoot(); root != "" {
+			if relative, err := filepath.Rel(node.Root, root); err == nil && relative != "." && within(node.Root, root) {
+				selection.excluded[relative] = true
+			}
 		}
 		stage.selections[node.Module] = selection
 		packagePath, err := selection.stage(node, output, node == graph.Root || node.HasManifest, stage.originals)

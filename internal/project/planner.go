@@ -433,11 +433,10 @@ func (g *Graph) round(root string, requested []string, defaults bool, selected m
 						}
 					}
 				} else if d.Git != "" {
-					dir, e = g.gitSource(d)
+					dir, boundary, e = g.gitSource(d)
 					if e != nil {
 						return nil, e
 					}
-					boundary = filepath.Join(g.Cache, d.GitKey())
 					source, e = gitIdentity(d.Git, g.Lock.Git[d.GitKey()], d.Subdir)
 					if e != nil {
 						return nil, e

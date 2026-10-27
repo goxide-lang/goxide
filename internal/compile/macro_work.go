@@ -41,6 +41,16 @@ func (p *Project) publishMacroWork(ctx context.Context) error {
 		return err
 	}
 	root := p.plans.Target.Root
+	if p.options.Editor {
+		// Existing editor lanes have independent leases; creating configuration
+		// units remains the CLI's responsibility. Private work is always usable.
+		for _, work := range stages {
+			if err := project.PublishEditorMacroWork(ctx, root.Root, root.Module, p.sourceLayoutRoot, work.spec, work.stage.dir); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	release, err := project.LockProject(root.Root)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {

@@ -101,7 +101,7 @@ func (g *Graph) portablePlan(root string, selections map[string]Selection, nodes
 	out := portableSelections(root, selections)
 	for _, n := range nodes {
 		module := n.Module
-		if n.CheckoutRoot == "" || !contained(g.Cache, n.CheckoutRoot) {
+		if n.CheckoutRoot == "" || !(contained(g.Cache, n.CheckoutRoot) || g.readCache != "" && contained(g.readCache, n.CheckoutRoot)) {
 			continue
 		}
 		s, ok := out[module]

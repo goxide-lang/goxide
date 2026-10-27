@@ -174,9 +174,13 @@ func (c *Client) Initialize(ctx context.Context, params any) (json.RawMessage, e
 	}
 	var initialize struct {
 		WorkspaceFolders json.RawMessage `json:"workspaceFolders"`
+		RootURI          string          `json:"rootUri"`
 	}
 	if err := json.Unmarshal(data, &initialize); err != nil {
 		return nil, err
+	}
+	if (len(initialize.WorkspaceFolders) == 0 || string(initialize.WorkspaceFolders) == "null") && initialize.RootURI != "" {
+		initialize.WorkspaceFolders, _ = json.Marshal([]map[string]string{{"uri": initialize.RootURI, "name": initialize.RootURI}})
 	}
 	c.mu.Lock()
 	c.folders = initialize.WorkspaceFolders

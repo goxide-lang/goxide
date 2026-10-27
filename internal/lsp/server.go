@@ -163,6 +163,8 @@ func (s *Server) request(ctx context.Context, method string, raw json.RawMessage
 		return s.codingActions(ctx, raw)
 	case "textDocument/signatureHelp":
 		return s.signatureHelp(ctx, raw)
+	case "textDocument/references", "textDocument/prepareRename", "textDocument/rename":
+		return s.referencesAndRename(ctx, method, raw)
 	case "textDocument/hover", "textDocument/definition", "textDocument/completion", "textDocument/documentSymbol":
 	default:
 		return nil, &RPCError{Code: CodeMethodNotFound, Message: "unsupported method: " + method}
@@ -308,7 +310,7 @@ func (s *Server) initialize(raw json.RawMessage) (any, error) {
 	s.directory, s.encoding, s.documents = directory, encoding, NewDocumentStore(encoding)
 	s.initialized = true
 	s.invalidateLocked(0, true)
-	return map[string]any{"capabilities": map[string]any{"positionEncoding": encoding, "textDocumentSync": map[string]any{"openClose": true, "change": 2, "save": map[string]any{"includeText": false}}, "hoverProvider": true, "definitionProvider": true, "completionProvider": map[string]any{"triggerCharacters": []string{".", ":"}}, "documentSymbolProvider": true, "documentFormattingProvider": true, "codeActionProvider": map[string]any{"codeActionKinds": []string{"quickfix"}}, "signatureHelpProvider": map[string]any{"triggerCharacters": []string{"(", ","}}}, "serverInfo": map[string]string{"name": "goxide", "version": s.options.Version}}, nil
+	return map[string]any{"capabilities": map[string]any{"positionEncoding": encoding, "textDocumentSync": map[string]any{"openClose": true, "change": 2, "save": map[string]any{"includeText": false}}, "hoverProvider": true, "definitionProvider": true, "completionProvider": map[string]any{"triggerCharacters": []string{".", ":"}}, "documentSymbolProvider": true, "documentFormattingProvider": true, "codeActionProvider": map[string]any{"codeActionKinds": []string{"quickfix"}}, "signatureHelpProvider": map[string]any{"triggerCharacters": []string{"(", ","}}, "referencesProvider": true, "renameProvider": map[string]any{"prepareProvider": true}}, "serverInfo": map[string]string{"name": "goxide", "version": s.options.Version}}, nil
 }
 
 func (s *Server) notification(ctx context.Context, method string, raw json.RawMessage) error {

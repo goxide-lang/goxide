@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/goxide-lang/goxide/internal/source"
@@ -284,26 +283,11 @@ func (s *Server) checkEditVersions(current *publishedAnalysis, edits *sourceWork
 }
 
 func (s *Server) mapGoEdit(current *publishedAnalysis, change goEdit) (mappedGoEdit, error) {
-	p := current.goProjection
-	key, index := p.keys[change.URI], p.indexes[change.URI]
-	if key == "" || index == nil {
-		return mappedGoEdit{}, fmt.Errorf("backend edit targets an unselected Go document")
-	}
-	start, end, err := strictOffsets(index, change.Edit.Range, source.UTF16)
+	edit, err := s.goSourceEdit(current, change)
 	if err != nil {
 		return mappedGoEdit{}, err
 	}
-	location := source.Location{File: key, Span: source.ByteSpan{Start: start, End: end}}
-	if filepath.Ext(key) != ".go" {
-		location, err = exactGoSource(p, key, location.Span)
-		if err != nil {
-			return mappedGoEdit{}, err
-		}
-	}
-	sourceIndex, name := current.indexes[location.File], current.names[location.File]
-	if sourceIndex == nil || name == "" || current.result == nil || current.result.Sources[location.File] == nil {
-		return mappedGoEdit{}, fmt.Errorf("backend edit has no selected original source")
-	}
+	sourceIndex, name := current.indexes[edit.File], current.names[edit.File]
 	uri, err := PathToURI(name)
 	if err != nil {
 		return mappedGoEdit{}, err
@@ -312,11 +296,7 @@ func (s *Server) mapGoEdit(current *publishedAnalysis, change goEdit) (mappedGoE
 	if !open || document.Text != sourceIndex.Text() || source.IsGenerated(name, []byte(document.Text)) {
 		return mappedGoEdit{}, fmt.Errorf("backend edit target is not an open authored source document")
 	}
-	span := location.Span
-	if span.Start < 0 || span.End < span.Start || span.End > sourceIndex.Len() ||
-		sourceIndex.Text()[span.Start:span.End] != index.Text()[start:end] {
-		return mappedGoEdit{}, fmt.Errorf("backend edit mapping does not preserve source bytes")
-	}
+	span := source.ByteSpan{Start: int(edit.Span.Start), End: int(edit.Span.End)}
 	range_, err := sourceIndex.Range(span.Start, span.End, s.encoding)
 	if err != nil {
 		return mappedGoEdit{}, err

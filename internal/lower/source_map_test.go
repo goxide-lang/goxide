@@ -145,3 +145,28 @@ func TestSourceMapAfterImportAndTargetRewriting(t *testing.T) {
 		t.Fatalf("post-rewrite reference mapping: %+v", entry)
 	}
 }
+
+func TestSourceMapPreservesPublicFieldLiteralKeys(t *testing.T) {
+	const name = "mapfixture/main.gox"
+	text := "package fixture\ntype Box struct{pub value int}\nfunc Source()Box{return Box{value:42}}\n"
+	result, err := analysis.Analyze(t.Context(), analysis.Input{PackagePath: "mapfixture", Sources: map[string][]byte{name: []byte(text)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	maps := map[string]*source.Map{}
+	output, err := lower.Generate(t.Context(), result, lower.GenerationOptions{SourceMaps: maps})
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated := string(output[name])
+	start := strings.Index(generated, "Value:")
+	if start < 0 {
+		t.Fatalf("fixture has no public field key: %s", generated)
+	}
+	span := source.ByteSpan{Start: start, End: start + len("Value")}
+	entry, ok := maps[name].Generated(span)
+	want := strings.Index(text, "value:42")
+	if !ok || entry.Kind != source.Derived || entry.Generated != span || entry.Source != (source.Location{File: name, Span: source.ByteSpan{Start: want, End: want + len("value")}}) || len(entry.Expansions) != 0 {
+		t.Fatalf("public field key lost its source token: %+v", entry)
+	}
+}

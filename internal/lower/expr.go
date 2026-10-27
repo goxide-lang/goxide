@@ -107,7 +107,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 				if _, record := typ.Underlying().(*types.Struct); record {
 					if field, ok := elt.(*syntax.KeyValue); ok {
 						if id, ok := field.Key.(*syntax.Ident); ok {
-							elts[i].(*goast.KeyValueExpr).Key = &goast.Ident{NamePos: e.pos(id), Name: id.Name}
+							key := &goast.Ident{NamePos: e.pos(id), Name: id.Name}
+							e.recordSource(key, id)
+							elts[i].(*goast.KeyValueExpr).Key = key
 						}
 					}
 				}

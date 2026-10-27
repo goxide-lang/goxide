@@ -684,8 +684,8 @@ func (s *Server) goQuery(ctx context.Context, current *publishedAnalysis, key st
 	if method == "textDocument/documentSymbol" {
 		return s.goSymbols(current, uri, raw)
 	}
-	if method == "textDocument/signatureHelp" {
-		return raw, nil // Signature labels have no document positions to map.
+	if method == "textDocument/signatureHelp" || method == "textDocument/references" || method == "textDocument/prepareRename" || method == "textDocument/rename" {
+		return raw, nil // These callers validate or map the response before returning it.
 	}
 	return nil, nil
 }

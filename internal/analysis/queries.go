@@ -30,7 +30,10 @@ type DocumentSymbol struct {
 	Range, Selection   Location
 	Children           []DocumentSymbol
 }
-type QueryUnavailable struct{ Reason string }
+type QueryUnavailable struct {
+	Reason string
+	Go     bool
+}
 
 func (e *QueryUnavailable) Error() string { return "query unavailable: " + e.Reason }
 
@@ -43,6 +46,7 @@ type queryEntry struct {
 	unavailable string
 	definition  *Location
 	text        string
+	deferred    bool
 }
 type queryScope struct {
 	location Location
@@ -116,14 +120,23 @@ func NewQueries(result *Result) *Queries {
 		syntax.Walk(file.AST, func(node syntax.Node) bool { q.nodes[resolve.Ref{File: name, ID: node.ID()}] = node; return true })
 	}
 	for name, file := range result.Resolved.Files {
+		fieldKeys := map[*syntax.Ident]bool{}
 		syntax.Walk(file.AST, func(node syntax.Node) bool {
+			if literal, ok := node.(*syntax.CompositeLit); ok {
+				q.indexCompositeKeys(name, literal, fieldKeys)
+			}
+			if key, ok := node.(*syntax.Ident); ok && fieldKeys[key] {
+				return true
+			}
 			location := q.location(name, node)
 			if scope := file.Scopes[node.ID()]; scope != nil {
 				q.scopes[location.File] = append(q.scopes[location.File], queryScope{location, scope})
 			}
 			symbol := file.Definitions[node.ID()]
+			deferred := false
 			if symbol == nil {
-				symbol = file.References[node.ID()].Symbol
+				reference := file.References[node.ID()]
+				symbol, deferred = reference.Symbol, reference.Deferred
 			}
 			// Declaration tables also index the whole declaration. A cursor in
 			// its body must never fall back to the function's name or signature.
@@ -161,12 +174,13 @@ func NewQueries(result *Result) *Queries {
 				symbol = nil
 				if result.Checked != nil && typ != nil && typ != types.Typ[types.Invalid] {
 					symbol, goRef = q.goMember(result.Checked.Types[selector.X], selector.Sel.Name, name)
+					deferred = symbol == nil
 				} else {
 					unavailable = "member selection is not available in the current source"
 				}
 			}
 			if symbol != nil || typ != nil || member != nil || unavailable != "" {
-				q.entries[location.File] = append(q.entries[location.File], queryEntry{location: location, symbol: symbol, typ: typ, member: member, goRef: goRef, unavailable: unavailable})
+				q.entries[location.File] = append(q.entries[location.File], queryEntry{location: location, symbol: symbol, typ: typ, member: member, goRef: goRef, unavailable: unavailable, deferred: deferred})
 			}
 			return true
 		})

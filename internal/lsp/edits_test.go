@@ -105,7 +105,7 @@ func TestGoEditGuardMapsWholeVersionedGroup(t *testing.T) {
 			}
 			for _, change := range mapped.DocumentChanges {
 				document, originalURI := current.documents.Documents[change.TextDocument.URI]
-				if change.TextDocument.Version != 7 || !originalURI {
+				if change.TextDocument.Version == nil || *change.TextDocument.Version != 7 || !originalURI {
 					t.Fatalf("lost source URI/version: %+v", change)
 				}
 				start, end, err := document.Index.Offsets(change.Edits[0].Range, encoding)

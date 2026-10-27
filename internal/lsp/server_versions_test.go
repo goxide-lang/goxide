@@ -59,7 +59,7 @@ func TestLanguageServerVersionOnlyChangeRebindsNewEdits(t *testing.T) {
 				t.Fatalf("new and retained snapshot versions: current=%+v before=%+v", current.documents.Documents[uri], before.documents.Documents[uri])
 			}
 			mapped, err := server.guardGoEdits(current, []goEdit{native})
-			if err != nil || len(mapped.DocumentChanges) != 1 || mapped.DocumentChanges[0].TextDocument.Version != document.Version+1 {
+			if err != nil || len(mapped.DocumentChanges) != 1 || mapped.DocumentChanges[0].TextDocument.Version == nil || *mapped.DocumentChanges[0].TextDocument.Version != document.Version+1 {
 				t.Fatalf("new edit did not bind the current version: %+v, %v", mapped, err)
 			}
 			raw, _ := json.Marshal([]any{map[string]any{"label": "current", "textEdit": native.Edit}})

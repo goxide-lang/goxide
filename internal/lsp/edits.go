@@ -189,7 +189,7 @@ type goEdit struct {
 
 type versionedDocument struct {
 	URI     string `json:"uri"`
-	Version int    `json:"version"`
+	Version *int   `json:"version"`
 }
 
 type sourceDocumentEdits struct {
@@ -234,7 +234,7 @@ func (s *Server) guardGoEdits(current *publishedAnalysis, changes []goEdit) (*so
 	for _, edit := range mapped {
 		group := grouped[edit.uri]
 		if group == nil {
-			group = &sourceDocumentEdits{TextDocument: versionedDocument{URI: edit.uri, Version: edit.version}}
+			group = &sourceDocumentEdits{TextDocument: versionedDocument{URI: edit.uri, Version: &edit.version}}
 			grouped[edit.uri] = group
 		}
 		group.Edits = append(group.Edits, edit.edit)
@@ -268,7 +268,15 @@ func (s *Server) checkEditVersions(current *publishedAnalysis, edits *sourceWork
 		uri, version := change.TextDocument.URI, change.TextDocument.Version
 		captured, exists := current.documents.Documents[uri]
 		latest, open := s.documents.documents[uri]
-		if !exists || !open || captured.Version != version || latest.Version != version || latest.Text != captured.Text {
+		if version == nil {
+			name, pathErr := URIToPath(uri)
+			_, equivalentOpen, lookupErr := documentAtPath(s.documents.documents, name)
+			if exists || open || pathErr != nil || lookupErr != nil || equivalentOpen || !closedSourceUnchanged(current, uri) {
+				return staleResult()
+			}
+			continue
+		}
+		if !exists || !open || captured.Version != *version || latest.Version != *version || latest.Text != captured.Text {
 			return staleResult()
 		}
 	}

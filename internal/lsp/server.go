@@ -32,6 +32,7 @@ type publishedAnalysis struct {
 	backendError     error
 	generateError    error
 	diskNames        map[string]string
+	editable         map[string]bool
 	sourceMaps       map[string]*source.Map
 	goDiagnostics    map[string][]wireDiagnostic
 	goProjection     *goProjection
@@ -543,7 +544,7 @@ func (s *Server) analyze() {
 			cancel()
 			continue
 		}
-		current := &publishedAnalysis{epoch: epoch, result: result, names: snapshot.names, keys: map[string]string{}, indexes: map[string]*source.Index{}, documents: documents, documentRevision: documentRevision, diskNames: snapshot.input.DiskNames}
+		current := &publishedAnalysis{epoch: epoch, result: result, names: snapshot.names, keys: map[string]string{}, indexes: map[string]*source.Index{}, documents: documents, documentRevision: documentRevision, diskNames: snapshot.input.DiskNames, editable: map[string]bool{}}
 		if result != nil {
 			current.queries = analysis.NewQueries(result)
 			for key, input := range result.Sources {
@@ -551,6 +552,8 @@ func (s *Server) analyze() {
 				name := current.names[key]
 				if name != "" {
 					current.keys[filepath.Clean(name)] = key
+					relative, err := filepath.Rel(workspace.root, name)
+					current.editable[key] = err == nil && filepath.IsLocal(relative) && workspace.ownsSource(name) && !source.IsGenerated(name, input.Content)
 				}
 			}
 		}

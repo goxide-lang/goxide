@@ -16,33 +16,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/check"
-	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
-
-type Severity uint8
-
-const Error Severity = 0
-
-type Diagnostic struct {
-	Definition, Call expand.Origin
-	Severity         Severity
-	File             string
-	Span             syntax.Span
-	Message          string
-	Origin           resolve.Origin
-}
-
-func (d *Diagnostic) Error() string {
-	message := fmt.Sprintf("%s:%d:%d: %s", d.File, d.Span.Start, d.Span.End, d.Message)
-	if d.Call.File != nil {
-		message += fmt.Sprintf(" (macro definition %d:%d, call %d:%d)", d.Definition.Span.Start, d.Definition.Span.End, d.Call.Span.Start, d.Call.Span.End)
-	}
-	return message
-}
 
 // Lower 的输出键沿用输入文件名；调用方写盘时将 .gox 后缀换成 .go。
 // files 和 info 必须描述同一批 AST。失败时返回 nil，不返回部分输出。
@@ -113,7 +92,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			e.file = res.Files[name]
 		}
 		if tree == nil {
-			return nil, &Diagnostic{File: name, Message: "缺少输入 AST"}
+			return nil, &analysis.Diagnostic{File: name, Message: "缺少输入 AST"}
 		}
 		if e.file == nil || e.file.AST != tree {
 			e.fail(tree, "缺少与输入 AST 对应的名字解析结果")
@@ -152,7 +131,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		}
 		for _, diagnostic := range res.Diagnostics {
 			if diagnostic.File == name && diagnostic.Severity == resolve.Error {
-				return nil, &Diagnostic{File: name, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
+				return nil, &analysis.Diagnostic{File: name, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
 			}
 		}
 		e.goFile = f
@@ -163,7 +142,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	if res != nil {
 		for _, diagnostic := range res.Diagnostics {
 			if diagnostic.Severity == resolve.Error {
-				return nil, &Diagnostic{File: diagnostic.File, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
+				return nil, &analysis.Diagnostic{File: diagnostic.File, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
 			}
 		}
 	}
@@ -437,7 +416,7 @@ type emitter struct {
 	tree               *syntax.File
 	file               *resolve.File
 	result             *resolve.Result
-	err                *Diagnostic
+	err                *analysis.Diagnostic
 	imports            map[string]*importUse
 	reserved           map[string]bool
 	externalTest       bool
@@ -463,7 +442,7 @@ func (e *emitter) fail(n syntax.Node, message string) {
 	if n != nil && !reflect.ValueOf(n).IsNil() {
 		span = n.Span()
 	}
-	e.err = &Diagnostic{File: e.name, Span: span, Message: message, Origin: resolve.Origin{File: e.name, Span: span}}
+	e.err = &analysis.Diagnostic{File: e.name, Span: span, Message: message, Origin: resolve.Origin{File: e.name, Span: span}}
 	if e.result != nil && n != nil && !reflect.ValueOf(n).IsNil() {
 		if origin, ok := e.result.Origins[resolve.Ref{File: e.name, ID: n.ID()}]; ok {
 			e.err.Origin = origin

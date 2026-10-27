@@ -5,11 +5,11 @@ import (
 	"go/format"
 	"strings"
 
-	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/analysis"
 	pm "github.com/goxide-lang/syntax/proc_macro"
 )
 
-func procLauncher(library *lower.ProcLibrary) ([]byte, error) {
+func procLauncher(library *analysis.ProcLibrary) ([]byte, error) {
 	var output strings.Builder
 	alias := "macros"
 	if len(library.Entries) == 0 {

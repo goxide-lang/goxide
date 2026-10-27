@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/analysis"
 )
 
 func TestProjectGoSugarPoliciesAndStableLock(t *testing.T) {
@@ -42,7 +42,7 @@ func TestProjectGoSugarPoliciesAndStableLock(t *testing.T) {
 			}
 			writePolicy("app", appManifest, test.rootPolicy)
 			writePolicy("dep", depManifest, test.depPolicy)
-			var snapshots []lower.SourcePackage
+			var snapshots []analysis.SourcePackage
 			result, err := PrepareProject(app, Options{Offline: true, Locked: lock != nil, GoSugar: test.override, OnPreparedSources: func(sources PreparedSources) error {
 				snapshots = sources.SourcePackages
 				return nil

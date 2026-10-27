@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/expand"
-	"github.com/goxide-lang/goxide/internal/lower"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
@@ -40,5 +40,5 @@ func SourceError(err error, sources map[string]DiagnosticSource, expanded *expan
 	for name, source := range sources {
 		files[name], names[name] = source.AST, source.Name
 	}
-	return lower.FormatSourceDiagnostic(err, files, names, expanded)
+	return analysis.FormatSourceDiagnostic(err, files, names, expanded)
 }

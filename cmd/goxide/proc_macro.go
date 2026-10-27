@@ -7,9 +7,9 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/expand"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/procmacro"
 	pm "github.com/goxide-lang/syntax/proc_macro"
 )
@@ -72,7 +72,7 @@ func withProcHost(stderr io.Writer, work func(func([]byte, pm.Request) ([]byte, 
 	}
 	err := work(run, diagnostic)
 	if reportedErrors {
-		err = lower.SummarizeProcDiagnostics(err)
+		err = analysis.SummarizeProcDiagnostics(err)
 	}
 	return err
 }

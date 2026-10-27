@@ -1,12 +1,9 @@
-package lower
+package analysis
 
 import (
 	"fmt"
-	goparser "go/parser"
-	gotoken "go/token"
 	"go/types"
 	"maps"
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -14,12 +11,8 @@ import (
 	"strings"
 
 	"github.com/goxide-lang/goxide/internal/config"
-	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/paths"
-	"github.com/goxide-lang/goxide/internal/rootconfig"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
-	"github.com/goxide-lang/goxide/internal/syntax/parser"
-	"github.com/goxide-lang/goxide/internal/syntax/printer"
 )
 
 // SourcePackage preserves an ordinary dependency's source-language namespace,
@@ -40,30 +33,20 @@ type SourcePackage struct {
 	EnvironmentDependent bool              `json:"environment_dependent,omitempty"`
 }
 
-func snapshotSourcePackages(modules []Module, crates *crateGraph, originals map[string]*syntax.File, configurations map[*syntax.File]moduleRootConfig) ([]SourcePackage, error) {
+func snapshotSourcePackages(modules []Module, crates *crateGraph, originals map[string]*syntax.File, configurations map[*syntax.File]moduleRootConfig, sources *sourceSet) ([]SourcePackage, error) {
 	packages := map[string]*SourcePackage{}
 	for _, module := range modules {
 		if module.Config.Environment == nil {
 			return nil, fmt.Errorf("source snapshots require an explicit target")
 		}
-		moduleRoots := module.Roots
-		if moduleRoots == nil {
-			var err error
-			moduleRoots, err = rootconfig.Load(module.Dir)
-			if err != nil {
-				return nil, err
-			}
-		}
+		moduleRoots := sources.roots[module.Path]
 		for _, extension := range []string{".gox", ".go"} {
-			names, err := moduleFiles(module.Dir, extension)
-			if err != nil {
-				return nil, err
-			}
+			names := sources.moduleFiles(module, extension)
 			for _, name := range names {
 				if strings.HasSuffix(name, "_test"+extension) {
 					continue
 				}
-				matches, err := matchesModuleSource(name, module.Config.Environment.Context(module.Tags, module.Race))
+				matches, err := sources.matches(name, module.Config.Environment.Context(module.Tags, module.Race))
 				if err != nil {
 					return nil, err
 				}
@@ -82,21 +65,13 @@ func snapshotSourcePackages(modules []Module, crates *crateGraph, originals map[
 				if extension == ".go" && originals[key] == nil {
 					continue
 				}
-				data, err := os.ReadFile(name)
-				if err != nil {
-					return nil, err
-				}
+				data := sources.read(name)
 				if extension == ".gox" {
-					file, diagnostics := parser.ParseFile(key, data)
-					for _, diagnostic := range diagnostics {
-						if diagnostic.Severity == parser.Error {
-							return nil, &Diagnostic{File: key, Span: diagnostic.Span, Message: diagnostic.Message}
-						}
+					configured, ok := sources.configured[key]
+					if !ok {
+						return nil, fmt.Errorf("source %s was not analyzed", key)
 					}
-					if _, err := expand.Configure(file, module.Config); err != nil {
-						return nil, err
-					}
-					data = []byte(printer.Source(file))
+					data = configured.text
 				}
 				pkg := packages[packagePath]
 				if pkg == nil {
@@ -125,7 +100,7 @@ func snapshotSourcePackages(modules []Module, crates *crateGraph, originals map[
 	return result, nil
 }
 
-func prepareSourcePackages(packages []SourcePackage, files map[string]*syntax.File, configs map[*syntax.File]config.Config, roots map[*syntax.File]moduleRootConfig, imports *moduleImporter, importer types.Importer) error {
+func prepareSourcePackages(packages []SourcePackage, files map[string]*syntax.File, configs map[*syntax.File]config.Config, roots map[*syntax.File]moduleRootConfig, imports *moduleImporter, importer types.Importer, sources *sourceSet) error {
 	packageNames := map[string]string{}
 	seenModules := map[string]bool{}
 	if len(packages) != 0 {
@@ -155,12 +130,16 @@ func prepareSourcePackages(packages []SourcePackage, files map[string]*syntax.Fi
 			imports.crates.owners[pkg.PackagePath] = &Crate{Root: root, Library: true}
 		}
 		for name, data := range pkg.Sources {
-			file, err := goparser.ParseFile(gotoken.NewFileSet(), name, data, goparser.PackageClauseOnly)
-			if err == nil {
-				packageNames[pkg.PackagePath] = file.Name.Name
-				break
+			key := path.Join(pkg.PackagePath, name)
+			sources.add(key, data)
+			source := sources.parse(key)
+			if source.GoSyntax != nil {
+				packageNames[pkg.PackagePath] = source.GoSyntax.Name.Name
+			} else if source.Syntax != nil {
+				packageNames[pkg.PackagePath] = source.Syntax.Package.Name
 			}
 		}
+
 	}
 	for _, pkg := range packages {
 		environment, err := config.NewEnvironment(pkg.Target, nil)
@@ -178,32 +157,29 @@ func prepareSourcePackages(packages []SourcePackage, files map[string]*syntax.Fi
 			if path.Base(name) != name {
 				return fmt.Errorf("invalid source snapshot filename %s", name)
 			}
-			key, data := path.Join(pkg.PackagePath, name), pkg.Sources[name]
+			key := path.Join(pkg.PackagePath, name)
+			data := sources.files[key].Content
 			if files[key] != nil {
 				return fmt.Errorf("duplicate source file %s", key)
 			}
 			var file *syntax.File
 			switch path.Ext(name) {
 			case ".gox":
-				var diagnostics []parser.Diagnostic
-				file, diagnostics = parser.ParseFile(key, data)
-				for _, diagnostic := range diagnostics {
-					if diagnostic.Severity == parser.Error {
-						return &Diagnostic{File: key, Span: diagnostic.Span, Message: diagnostic.Message}
-					}
-				}
-				if _, err := expand.Configure(file, configuration); err != nil {
+				var err error
+				file, _, err = sources.working(key, configuration)
+				if err != nil {
 					return err
 				}
 				if pkg.Roots["crate"].PackagePath != "" {
 					addCrateUse(file)
 				}
 			case ".go":
-				set := gotoken.NewFileSet()
-				native, err := goparser.ParseFile(set, key, data, goparser.SkipObjectResolution)
-				if err != nil {
-					return err
+				source := sources.parse(key)
+				if source.err != nil {
+					return source.err
 				}
+				set, native := source.GoTokens, source.GoSyntax
+				var err error
 				file, err = nativeDeclarations(key, data, native, set, packageNames, importer)
 				if err != nil {
 					return err

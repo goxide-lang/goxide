@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	pm "github.com/goxide-lang/syntax/proc_macro"
@@ -34,7 +35,7 @@ func TestUseTreeAttributesResolveBeforeSplitting(t *testing.T) {
 				"strings": {PackagePath: "strings", Source: "toolchain"},
 			}
 			sources := map[string][]byte{"main.gox": []byte("package main\n" + test.source + "\n")}
-			output, err := lower.CompilePackage(sources, "consumer", imports, roots, lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}})
+			output, err := lower.CompilePackage(sources, "consumer", imports, roots, lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}})
 			if err != nil {
 				t.Fatal(err)
 			}

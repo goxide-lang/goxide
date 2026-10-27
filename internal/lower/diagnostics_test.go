@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
@@ -43,14 +44,14 @@ func TestUnsupportedFeaturesReturnLocatedDiagnosticsWithoutPartialOutput(t *test
 			if output != nil {
 				t.Fatalf("failure leaked partial output: %v", output)
 			}
-			var diagnostic *lower.Diagnostic
+			var diagnostic *analysis.Diagnostic
 			if !errors.As(err, &diagnostic) {
 				t.Fatalf("error has no structured lower diagnostic: %T %v", err, err)
 			}
 			if diagnostic.File != "z-bad.gox" || diagnostic.Span.Start == 0 || diagnostic.Span.Start >= diagnostic.Span.End || diagnostic.Span.End > uint32(len(source)) {
 				t.Fatalf("diagnostic has no valid source location: %#v", diagnostic)
 			}
-			if diagnostic.Severity != lower.Error || diagnostic.Origin.File != diagnostic.File || diagnostic.Origin.Span != diagnostic.Span {
+			if diagnostic.Severity != analysis.Error || diagnostic.Origin.File != diagnostic.File || diagnostic.Origin.Span != diagnostic.Span {
 				t.Fatalf("diagnostic lost severity or origin: %#v", diagnostic)
 			}
 			if !strings.Contains(diagnostic.Message, "尚未降低") || !strings.Contains(diagnostic.Message, test.feature) {
@@ -67,7 +68,7 @@ func TestRawGoKeywordHasLocatedDiagnostic(t *testing.T) {
 	const source = "package p\nfunc f() { r#type := 1; _ = r#type }\n"
 	files := parseDiagnosticSources(t, map[string]string{"keyword.gox": source})
 	output, err := lower.Lower(files, checked(t, files, resolve.Resolve(files, nil)))
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if output != nil || !errors.As(err, &diagnostic) {
 		t.Fatalf("raw Go keyword was not rejected atomically: output=%v, error=%v", output, err)
 	}

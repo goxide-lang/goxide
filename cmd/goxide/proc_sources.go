@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/expand"
@@ -158,11 +159,11 @@ func compilePreparedNativePackage(owner *singleFileModule, manifest project.Mani
 	generated := map[string][]byte{}
 	err = withProcHost(stderr, func(run func([]byte, pm.Request) ([]byte, error), diagnostic func(string, expand.ProcDiagnostic)) error {
 		prepared, err := compile.PrepareProject(directory, compile.Options{GoTool: cfg.Environment.GoTool, TargetDir: directory + "-target", Offline: !online, Roots: selected, NativeFeatures: &cfg.Features, NativeGeneration: online, Config: cfg, Tags: tags, RunProcMacro: run, OnProcDiagnostic: diagnostic,
-			PrepareNativePackage: func(modules []lower.Module) error {
+			PrepareNativePackage: func(modules []analysis.Module) error {
 				if err := owner.usePreparedModules(modules[0].Dir, macros); err != nil {
 					return err
 				}
-				modules[0].NativePackage = &lower.NativePackage{Importer: importer(), DisplayNames: displayNames, Generated: generated, Expanded: options.Expanded, LineDirectives: options.LineDirectives, RejectConfiguration: options.RejectConfiguration, RequireRoot: options.RequireRoot, StableGo: options.StableGo}
+				modules[0].NativePackage = &analysis.NativePackage{Importer: importer(), DisplayNames: displayNames, Generated: generated, Expanded: options.Expanded, LineDirectives: options.LineDirectives, RejectConfiguration: options.RejectConfiguration, RequireRoot: options.RequireRoot, StableGo: options.StableGo}
 				return nil
 			}})
 		if err != nil {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
@@ -55,7 +56,7 @@ type Pulse int
 trait Measure {func measure(self Self)int}
 impl Measure for Pulse {func measure(self Self)int{return int(self)}}
 `+tc.extra))
-				err := lower.CompileModules([]lower.Module{{Path: "nativealias", Dir: root, Config: testConfig(t)}})
+				err := lower.CompileModules([]analysis.Module{{Path: "nativealias", Dir: root, Config: testConfig(t)}})
 				if tc.want != "" {
 					if err == nil || !strings.Contains(err.Error(), "main.gox") || !strings.Contains(err.Error(), tc.want) {
 						t.Fatalf("want source-located %s rejection, got %v", tc.want, err)

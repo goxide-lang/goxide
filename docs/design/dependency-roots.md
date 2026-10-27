@@ -15,11 +15,11 @@
 | 清单读取、feature 求解与 target 选择 | [manifest.go](../../internal/project/manifest.go) 的 `Parse/validate/Resolve/Select`；[compile/project.go](../../internal/compile/project.go) 的 `PrepareProject` | 校验库名与全量依赖占名；分离已声明根和活动根；把 lib/bin/example 的选中入口及可用 lib 交给包加载器 |
 | 来源图与 Go 选版 | [graph.go](../../internal/project/graph.go)、[planner.go](../../internal/project/planner.go) | 保留来源身份、feature 合并与 Go module 选版职责；自动库入口不创建 self dependency，crate 也不成为新来源节点 |
 | 编译前的 Go module 上下文 | [compile/modules.go](../../internal/compile/modules.go) 的 `prepareModules` | 为 importer 准备受管 go.mod、已选版本和来源映射；此步骤在 `CompileModules` 之前 |
-| 源文件选择、包图和 target 归属 | [sources.go](../../internal/compile/sources.go) 的 `stageSources/moduleRoots/libraryPackage`；[lower/module.go](../../internal/lower/module.go) 的 `CompileModules/moduleSources`；[module_crates.go](../../internal/lower/module_crates.go) | 确定 target 根、有效 `mod` 图及同 target 原生 Go import 闭包；检查嵌套 target、共享 lib、生成包和文件型 target 的归属及实际包路径 |
-| Go 混编与纯 Go 包加载 | [module_native.go](../../internal/lower/module_native.go)、[module_lookup.go](../../internal/lower/module_lookup.go)、[go_namespaces.go](../../internal/paths/go_namespaces.go) | 共享同包声明、隔离文件 import；让纯 Go 子包参加 `mod` 图，按真实 Go 包树和来源身份解析外部子路径；检查手写 `.go` import 的跨 crate 边界 |
-| 语法、宏上下文与静态名字绑定 | [parser](../../internal/syntax/parser/)、[expand.go](../../internal/expand/expand.go)、[static_bindings.go](../../internal/expand/static_bindings.go)、[macro_roots.go](../../internal/lower/macro_roots.go)、[resolve](../../internal/resolve/) | 识别固定 `crate::`、自动库根和定义点归属；lower/typecheck 共用展开后的卫生静态绑定，统一根优先级及标准库 fallback；纯 Go 来源按真实子路径和导出成员解析并检查歧义，Goxide 来源保持公开模块树 |
-| 包可达性与成员/类型检查 | [module_visibility.go](../../internal/lower/module_visibility.go) 的 `checkSourceRoots`；[check/packages.go](../../internal/check/packages.go) | 对解析到的真实目标检查 crate 公开边界；保留成员权限、Go internal、main 和循环规则，保持类型身份 |
-| Go 降低与产物发布 | [canonical_path.go](../../internal/lower/canonical_path.go)、[lower/imports.go](../../internal/lower/imports.go)、[layout_bundle.go](../../internal/project/layout_bundle.go) | 消费已解析叶子包，生成普通 import 并发布完整 bundle；共享库不复制、不加包装，核对重复生成一致性 |
+| 源文件选择、包图和 target 归属 | [sources.go](../../internal/compile/sources.go) 的 `stageSources/moduleRoots/libraryPackage`；[analysis/sources.go](../../internal/analysis/sources.go) 的 `LoadInput` 与 [analysis.go](../../internal/analysis/analysis.go) 的 `Analyze`；[module_crates.go](../../internal/analysis/module_crates.go) | 确定 target 根、有效 `mod` 图及同 target 原生 Go import 闭包；检查嵌套 target、共享 lib、生成包和文件型 target 的归属及实际包路径 |
+| Go 混编与纯 Go 包加载 | [module_native.go](../../internal/analysis/module_native.go)、[module_lookup.go](../../internal/analysis/module_lookup.go)、[go_namespaces.go](../../internal/paths/go_namespaces.go) | 共享同包声明、隔离文件 import；让纯 Go 子包参加 `mod` 图，按真实 Go 包树和来源身份解析外部子路径；检查手写 `.go` import 的跨 crate 边界 |
+| 语法、宏上下文与静态名字绑定 | [parser](../../internal/syntax/parser/)、[expand.go](../../internal/expand/expand.go)、[static_bindings.go](../../internal/expand/static_bindings.go)、[macro_roots.go](../../internal/analysis/macro_roots.go)、[resolve](../../internal/resolve/) | 识别固定 `crate::`、自动库根和定义点归属；lower/typecheck 共用展开后的卫生静态绑定，统一根优先级及标准库 fallback；纯 Go 来源按真实子路径和导出成员解析并检查歧义，Goxide 来源保持公开模块树 |
+| 包可达性与成员/类型检查 | [module_visibility.go](../../internal/analysis/module_visibility.go) 的 `checkSourceRoots`；[check/packages.go](../../internal/check/packages.go) | 对解析到的真实目标检查 crate 公开边界；保留成员权限、Go internal、main 和循环规则，保持类型身份 |
+| Go 降低与产物发布 | [canonical_path.go](../../internal/analysis/canonical_path.go)、[lower/imports.go](../../internal/lower/imports.go)、[layout_bundle.go](../../internal/project/layout_bundle.go) | 消费已解析叶子包，生成普通 import 并发布完整 bundle；共享库不复制、不加包装，核对重复生成一致性 |
 
 全量根声明保留占名，活动请求决定可用性；包归属与公开路径按 crate 检查，不因同 module 放行。包加载与最终生成产物只纳入选中入口、lib 及明确可达子包，项目 CLI 显式选择 lib/bin/example。当前完成范围和回归入口见状态表。
 
@@ -34,7 +34,7 @@
 | 浏览器单文件/多文件 | [playground/package.go](../../internal/playground/package.go)、[platform_wasm.go](../../internal/typecheck/platform_wasm.go)、[website/build.py](../../website/build.py) | 使用配套工具链的标准库 origins/export 快照，保持 CLI/WASM 规则一致；浏览器不执行 Go 工具链查询 |
 | host/build helper | [cmd/goxide/roots.go](../../cmd/goxide/roots.go)、[buildscript/prepare.go](../../internal/buildscript/prepare.go) | 保留独立根和权限上下文，删除映射字段不能把 target 根透传给 host；脚本 CLI 的重启仍属原阶段 |
 
-标准库包身份的现有证据入口是 [module_importer.go](../../internal/lower/module_importer.go)、[typecheck/importer.go](../../internal/typecheck/importer.go) 和 WASM importer 的 `PackageOrigin`。fallback 属于名字绑定与导入上下文，不属于依赖下载/选版或最终 Go 输出阶段。
+标准库包身份的现有证据入口是 [module_importer.go](../../internal/analysis/module_importer.go)、[typecheck/importer.go](../../internal/typecheck/importer.go) 和 WASM importer 的 `PackageOrigin`。fallback 属于名字绑定与导入上下文，不属于依赖下载/选版或最终 Go 输出阶段。
 
 ### 实现顺序
 

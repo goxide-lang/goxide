@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/procmacro"
@@ -82,7 +83,7 @@ macros={path="../producer"}
 	}
 	t.Cleanup(func() { _ = host.Close() })
 	type artifact struct {
-		Snapshot lower.ProcLibrarySnapshot
+		Snapshot analysis.ProcLibrarySnapshot
 		WASM     []byte
 	}
 	var snapshots []artifact
@@ -90,7 +91,7 @@ macros={path="../producer"}
 	_, err = compile.PrepareProject(app, compile.Options{Offline: true, RunProcMacro: host.Run, OnPreparedSources: func(prepared compile.PreparedSources) error {
 		sources = prepared
 		for _, macro := range prepared.Macros {
-			snapshot, err := lower.SnapshotProcLibrary(macro.Library)
+			snapshot, err := analysis.SnapshotProcLibrary(macro.Library)
 			if err != nil {
 				return err
 			}
@@ -125,9 +126,9 @@ macros={path="../producer"}
 		t.Fatal(err)
 	}
 	consumerImports := importer.Default()
-	var libraries []*lower.ProcLibrary
+	var libraries []*analysis.ProcLibrary
 	for _, macro := range snapshots {
-		library, err := lower.LoadProcLibrarySnapshot(macro.Snapshot, consumerImports, func(request pm.Request) ([]byte, error) {
+		library, err := analysis.LoadProcLibrarySnapshot(macro.Snapshot, consumerImports, func(request pm.Request) ([]byte, error) {
 			return host.Run(macro.WASM, request)
 		})
 		if err != nil {

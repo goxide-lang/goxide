@@ -7,8 +7,8 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/config"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/playground"
 	"github.com/goxide-lang/goxide/internal/rootconfig"
@@ -51,7 +51,7 @@ func compile(_ js.Value, args []js.Value) (result any) {
 	output, err := playground.CompilePackage([]playground.File{{Path: "playground.gox", Source: source}}, options)
 	if err != nil {
 		if reportedErrors {
-			err = lower.SummarizeProcDiagnostics(err)
+			err = analysis.SummarizeProcDiagnostics(err)
 		}
 		return map[string]any{"error": err.Error(), "diagnostics": strings.Join(diagnostics, "\n")}
 	}
@@ -90,7 +90,7 @@ func compilePackage(_ js.Value, args []js.Value) (result any) {
 	output, err := playground.CompilePackage(files, options)
 	if err != nil {
 		if reportedErrors {
-			err = lower.SummarizeProcDiagnostics(err)
+			err = analysis.SummarizeProcDiagnostics(err)
 		}
 		return map[string]any{"error": err.Error(), "diagnostics": strings.Join(diagnostics, "\n")}
 	}

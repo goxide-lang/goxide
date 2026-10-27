@@ -1,4 +1,4 @@
-package lower
+package analysis
 
 import (
 	"errors"
@@ -34,22 +34,6 @@ func SummarizeProcDiagnostics(err error) error {
 	return &moduleDiagnostic{location: formatted.location, message: "procedural macro expansion failed", notes: formatted.notes, cause: err}
 }
 
-func reportProcDiagnostics(report func(string, expand.ProcDiagnostic), files map[string]*syntax.File, displayNames map[string]string, expanded *expand.Result) {
-	if report == nil || expanded == nil || len(expanded.ProcDiagnostics) == 0 {
-		return
-	}
-	fileNames := make(map[*syntax.File]string, len(files))
-	for name, file := range files {
-		if displayNames[name] != "" {
-			name = displayNames[name]
-		}
-		fileNames[file] = name
-	}
-	for _, diagnostic := range expanded.ProcDiagnostics {
-		report(fileNames[diagnostic.Location.File], diagnostic)
-	}
-}
-
 // FormatSourceDiagnostic prints only source-stage diagnostics. Native Go errors
 // retain their generated positions because this pipeline has no Go source map.
 func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNames map[string]string, expanded *expand.Result) error {
@@ -67,7 +51,7 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 	var registration *procmacro.Diagnostic
 	var resolved resolve.Diagnostic
 	var checked check.Diagnostic
-	var lowered *Diagnostic
+	var analyzed *Diagnostic
 	switch {
 	case errors.As(err, &registration):
 		name, span, message = registration.File, registration.Span, registration.Message
@@ -88,12 +72,12 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 		if checked.Origin.File != "" {
 			name, span = checked.Origin.File, checked.Origin.Span
 		}
-	case errors.As(err, &lowered):
-		name, span, message = lowered.File, lowered.Span, lowered.Message
-		definition, call = lowered.Definition, lowered.Call
-		expn = lowered.Origin.Expn
-		if lowered.Origin.File != "" {
-			name, span = lowered.Origin.File, lowered.Origin.Span
+	case errors.As(err, &analyzed):
+		name, span, message = analyzed.File, analyzed.Span, analyzed.Message
+		definition, call = analyzed.Definition, analyzed.Call
+		expn = analyzed.Origin.Expn
+		if analyzed.Origin.File != "" {
+			name, span = analyzed.Origin.File, analyzed.Origin.Span
 		}
 	default:
 		return err
@@ -112,6 +96,9 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 	}
 	position := func(name string, span syntax.Span) string {
 		file := files[name]
+		if file == nil && analyzed != nil && analyzed.File == name {
+			file = analyzed.Source
+		}
 		if file == nil {
 			return ""
 		}
@@ -122,7 +109,7 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 			}
 			line, column = index+1, int(span.Start-offset)+1
 		}
-		if displayNames[name] != "" {
+		if files[name] != nil && displayNames[name] != "" {
 			name = displayNames[name]
 		}
 		return fmt.Sprintf("%s:%d:%d", name, line, column)

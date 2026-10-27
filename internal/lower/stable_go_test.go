@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
@@ -58,7 +59,7 @@ func runStableGoLibraryFixture(t *testing.T, library, prefix string, cases []sta
 				writeDiagnosticModuleFile(t, directory, "library/lib_gox.go", frozen)
 			}
 		}
-		if err := lower.CompileModules([]lower.Module{{Path: "stablefixture", Dir: directory, Config: testConfig(t), Roots: roots, StableGo: true}}); err != nil {
+		if err := lower.CompileModules([]analysis.Module{{Path: "stablefixture", Dir: directory, Config: testConfig(t), Roots: roots, StableGo: true}}); err != nil {
 			t.Fatal(err)
 		}
 		generated, err := os.ReadFile(filepath.Join(directory, "library/lib_gox.go"))

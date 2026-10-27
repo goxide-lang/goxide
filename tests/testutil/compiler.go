@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/expand"
@@ -102,7 +103,7 @@ func Module(source, destination string, roots paths.Roots) error {
 // ModuleGraph compiles fixture modules together from their source declarations.
 // Destinations are independent writable staging directories, just as in P5.
 func ModuleGraph(inputs ...ModuleInput) error {
-	modules := make([]lower.Module, 0, len(inputs))
+	modules := make([]analysis.Module, 0, len(inputs))
 	for _, input := range inputs {
 		if err := os.CopyFS(input.Destination, os.DirFS(input.Source)); err != nil {
 			return err
@@ -133,7 +134,7 @@ func ModuleGraph(inputs ...ModuleInput) error {
 			}
 		}
 
-		modules = append(modules, lower.Module{Path: module, Dir: input.Destination, Roots: roots, Config: Configuration()})
+		modules = append(modules, analysis.Module{Path: module, Dir: input.Destination, Roots: roots, Config: Configuration()})
 	}
 	if err := lower.CompileModules(modules); err != nil {
 		return err

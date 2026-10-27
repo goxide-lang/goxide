@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/lower"
@@ -63,7 +64,7 @@ func AsDataView(value Data) int {return value.N}
 		t.Fatalf("check: %v", diagnostics)
 	}
 	output, err := lower.Lower(files, info)
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if output != nil || !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message, "AsDataView") {
 		t.Fatalf("missing generated-name source diagnostic: output=%v error=%v", output, err)
 	}
@@ -84,7 +85,7 @@ pub enum Data { Item { AsView int } }
 		t.Fatalf("check: %v", diagnostics)
 	}
 	output, err := lower.Lower(files, info)
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if output != nil || !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message, "AsView") {
 		t.Fatalf("missing enum view/payload collision: output=%v error=%v", output, err)
 	}

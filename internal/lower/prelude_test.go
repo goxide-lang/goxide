@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 )
@@ -47,7 +48,7 @@ func TestAutomaticPreludeImportsOnDemand(t *testing.T) {
 					"custom":   {PackagePath: "app/custom", ModulePath: "app"},
 					"client":   {PackagePath: "app/client", ModulePath: "app"},
 				}
-				if err := lower.CompileModules([]lower.Module{
+				if err := lower.CompileModules([]analysis.Module{
 					{Path: "app", Dir: app, Roots: roots, Config: testConfig(t)},
 					{Path: standard, Dir: std, RootPackage: standard, Roots: paths.Roots{"library": {PackagePath: standard, ModulePath: standard}}, Config: testConfig(t)},
 				}); err != nil {

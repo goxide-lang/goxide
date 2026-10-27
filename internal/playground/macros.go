@@ -8,8 +8,8 @@ import (
 	"io"
 	"regexp"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/config"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	pm "github.com/goxide-lang/syntax/proc_macro"
 )
@@ -17,17 +17,17 @@ import (
 // MacroBundle is built alongside the browser compiler. Editable playground
 // input cannot add libraries, change their roots, or select executable bytes.
 type MacroBundle struct {
-	PackagePath    string                `json:"package,omitempty"`
-	Features       config.Features       `json:"features"`
-	Artifacts      []MacroArtifact       `json:"artifacts,omitempty"`
-	Roots          paths.Roots           `json:"roots,omitempty"`
-	RuntimeRoots   []lower.RuntimeRoot   `json:"runtime_roots,omitempty"`
-	SourcePackages []lower.SourcePackage `json:"source_packages,omitempty"`
+	PackagePath    string                   `json:"package,omitempty"`
+	Features       config.Features          `json:"features"`
+	Artifacts      []MacroArtifact          `json:"artifacts,omitempty"`
+	Roots          paths.Roots              `json:"roots,omitempty"`
+	RuntimeRoots   []analysis.RuntimeRoot   `json:"runtime_roots,omitempty"`
+	SourcePackages []analysis.SourcePackage `json:"source_packages,omitempty"`
 }
 
 type MacroArtifact struct {
-	SHA256  string                    `json:"sha256"`
-	Library lower.ProcLibrarySnapshot `json:"library"`
+	SHA256  string                       `json:"sha256"`
+	Library analysis.ProcLibrarySnapshot `json:"library"`
 }
 
 func ParseMacroBundle(data []byte) (MacroBundle, error) {
@@ -68,10 +68,10 @@ func ParseMacroBundle(data []byte) (MacroBundle, error) {
 
 // Libraries creates request-local bindings from the fixed build snapshot. The
 // runner receives only a digest already present in this bundle.
-func (bundle MacroBundle) Libraries(importer types.Importer, run func(string, pm.Request) ([]byte, error)) ([]*lower.ProcLibrary, error) {
-	var libraries []*lower.ProcLibrary
+func (bundle MacroBundle) Libraries(importer types.Importer, run func(string, pm.Request) ([]byte, error)) ([]*analysis.ProcLibrary, error) {
+	var libraries []*analysis.ProcLibrary
 	for _, artifact := range bundle.Artifacts {
-		library, err := lower.LoadProcLibrarySnapshot(artifact.Library, importer, func(request pm.Request) ([]byte, error) {
+		library, err := analysis.LoadProcLibrarySnapshot(artifact.Library, importer, func(request pm.Request) ([]byte, error) {
 			return run(artifact.SHA256, request)
 		})
 		if err != nil {

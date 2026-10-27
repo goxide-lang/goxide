@@ -1,12 +1,10 @@
-package lower
+package analysis
 
 import (
 	"fmt"
 	goast "go/ast"
-	goparser "go/parser"
 	gotoken "go/token"
 	"go/types"
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -22,7 +20,7 @@ import (
 // Native signatures participate in the same resolution and type checking as
 // Goxide declarations, so aliases and methods retain their package identity.
 // These read-only declaration trees are never lowered or written back to disk.
-func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer types.Importer, crates *crateGraph) (map[string]*syntax.File, error) {
+func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer types.Importer, crates *crateGraph, inputs *sourceSet) (map[string]*syntax.File, error) {
 	type source struct {
 		key, name string
 		data      []byte
@@ -57,10 +55,7 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 	}
 	for index, module := range modules {
 		context := module.Config.Environment.Context(module.Tags, module.Race)
-		files, err := moduleFiles(module.Dir, ".go")
-		if err != nil {
-			return nil, err
-		}
+		files := inputs.moduleFiles(module, ".go")
 		for _, filename := range files {
 			if index != 0 && strings.HasSuffix(filename, "_test.go") {
 				continue
@@ -73,21 +68,18 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 			if crates != nil && !crates.selected(module, path.Dir(key)) {
 				continue
 			}
-			matches, err := context.MatchFile(filepath.Dir(filename), filepath.Base(filename))
+			matches, err := inputs.matches(filename, context)
 			if err != nil {
 				return nil, err
 			}
 			if !matches {
 				continue
 			}
-			data, err := os.ReadFile(filename)
-			if err != nil {
-				return nil, err
+			input := inputs.parse(key)
+			if input.err != nil {
+				return nil, input.err
 			}
-			file, err := goparser.ParseFile(gotoken.NewFileSet(), filename, data, goparser.ImportsOnly|goparser.SkipObjectResolution)
-			if err != nil {
-				return nil, err
-			}
+			data, file := input.Content, input.GoSyntax
 			src := source{key: key, name: file.Name.Name, data: data}
 			cgo := false
 			for _, imported := range file.Imports {
@@ -146,11 +138,8 @@ func nativeModuleFiles(modules []Module, packages []*resolve.Package, importer t
 				crates.edges = append(crates.edges, nativeCrateImport{path.Dir(src.key), target, src.key})
 			}
 		}
-		set := gotoken.NewFileSet()
-		file, err := goparser.ParseFile(set, src.key, src.data, goparser.SkipObjectResolution)
-		if err != nil {
-			return nil, err
-		}
+		input := inputs.parse(src.key)
+		set, file := input.GoTokens, input.GoSyntax
 		tree, err := nativeDeclarations(src.key, src.data, file, set, names, importer)
 		if err != nil {
 			return nil, err
@@ -183,7 +172,6 @@ func nativeDeclarations(name string, data []byte, file *goast.File, set *gotoken
 		case *goast.FuncDecl:
 			if declaration.Body != nil {
 				blank(declaration.Body.Pos(), declaration.Body.End())
-				declaration.Body = nil
 			}
 		case *goast.GenDecl:
 			if declaration.Tok == gotoken.IMPORT {
@@ -227,6 +215,12 @@ func nativeDeclarations(name string, data []byte, file *goast.File, set *gotoken
 	var visit func(goast.Node) bool
 	visit = func(node goast.Node) bool {
 		switch node := node.(type) {
+		case *goast.FuncDecl:
+			if node.Recv != nil {
+				goast.Inspect(node.Recv, visit)
+			}
+			goast.Inspect(node.Type, visit)
+			return false
 		case *goast.ImportSpec:
 			return false
 		case *goast.SelectorExpr:
@@ -259,8 +253,8 @@ func nativeDeclarations(name string, data []byte, file *goast.File, set *gotoken
 	tree, diagnostics := parser.ParseFile(name, []byte(source.String()))
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Severity == parser.Error {
-			err := &Diagnostic{File: name, Span: diagnostic.Span, Message: "native Go declaration: " + diagnostic.Message, Origin: resolve.Origin{File: name, Span: diagnostic.Span}}
-			return nil, FormatSourceDiagnostic(err, map[string]*syntax.File{name: tree}, nil, nil)
+			err := &Diagnostic{File: name, Source: tree, Span: diagnostic.Span, Message: "native Go declaration: " + diagnostic.Message, Origin: resolve.Origin{File: name, Span: diagnostic.Span}}
+			return nil, err
 		}
 	}
 	tree.NativeGo = true

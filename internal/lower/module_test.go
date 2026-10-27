@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/resolve"
@@ -35,7 +36,7 @@ func TestCompileModulesMappedBlankImports(t *testing.T) {
 		for name, source := range sources {
 			writeDiagnosticModuleFile(t, directory, name, []byte(source))
 		}
-		if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
+		if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
 			t.Fatal(err)
 		}
 		output, err := os.ReadFile(filepath.Join(directory, "main.go"))
@@ -92,8 +93,8 @@ func TestCompileModulesRejectInvalidRootsBeforeWriting(t *testing.T) {
 			writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module fixture\n\ngo 1.27\n"))
 			writeDiagnosticModuleFile(t, directory, "main.gox", []byte(source))
 			writeDiagnosticModuleFile(t, directory, "child/child.gox", []byte("package child\npub func Value() int { return 1 }\n"))
-			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: test.roots}})
-			var diagnostic *lower.Diagnostic
+			err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: test.roots}})
+			var diagnostic *analysis.Diagnostic
 			if !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message, test.want) || diagnostic.File != "fixture/main.gox" || diagnostic.Span.Start == 0 || diagnostic.Span.End > uint32(len(source)) {
 				t.Fatalf("missing located %q diagnostic: %v", test.want, err)
 			}
@@ -124,7 +125,7 @@ func TestCompileModulesMappedNamespacesRequireStaticPaths(t *testing.T) {
 				"fmt":   {PackagePath: "fmt", Source: "toolchain"},
 				"bytes": {PackagePath: "bytes", Source: "toolchain"},
 			}
-			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}})
+			err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}})
 			var diagnostic resolve.Diagnostic
 			start := uint32(strings.Index(source, test.selector))
 			if !errors.As(err, &diagnostic) || diagnostic.Code != "namespace-as-value" || diagnostic.File != "fixture/main.gox" || diagnostic.Span.Start != start || diagnostic.Span.End != start+uint32(len(test.receiver)) {
@@ -170,7 +171,7 @@ func main() {
 		directory := t.TempDir()
 		writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module fixture\n\ngo 1.27\n"))
 		writeDiagnosticModuleFile(t, directory, "main.gox", []byte(source))
-		if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
+		if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
 			t.Fatal(err)
 		}
 		output, err := os.ReadFile(filepath.Join(directory, "main.go"))
@@ -202,7 +203,7 @@ func TestCompileModulesPublicLocalTypeAlias(t *testing.T) {
 	} {
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}}}); err != nil {
+	if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := runGo(t, directory, "run", "."); got != "7 8\n" {
@@ -230,7 +231,7 @@ func TestCompileModulesChecksEmittedImportCycles(t *testing.T) {
 				bName, spanStart = "b/b.go", strings.Index(test.b, `_ "fixture/a"`)
 			}
 			writeDiagnosticModuleFile(t, directory, bName, []byte(test.b))
-			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t)}})
+			err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t)}})
 			if !test.cycle {
 				if err != nil {
 					t.Fatal(err)
@@ -238,7 +239,7 @@ func TestCompileModulesChecksEmittedImportCycles(t *testing.T) {
 				runGo(t, directory, "build", "./...")
 				return
 			}
-			var diagnostic *lower.Diagnostic
+			var diagnostic *analysis.Diagnostic
 			if !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message, "Go import cycle: fixture/a -> fixture/b -> fixture/a") || diagnostic.File != "fixture/"+bName || diagnostic.Span.Start != uint32(spanStart) {
 				t.Fatalf("missing source import cycle diagnostic: %v", err)
 			}

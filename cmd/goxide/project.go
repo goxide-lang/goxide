@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/config"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/naming"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/project"
@@ -386,8 +386,8 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 		}
 		options := compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: !automatic, Roots: roots, NativeFeatures: &cfg.Features, NativeGeneration: automatic, Config: cfg, Tags: tags, Race: mode == "test"}
 		if automatic {
-			options.PrepareNativePackage = func(modules []lower.Module) error {
-				modules[0].NativePackage = &lower.NativePackage{RequireRoot: requireRoot, StableGo: true}
+			options.PrepareNativePackage = func(modules []analysis.Module) error {
+				modules[0].NativePackage = &analysis.NativePackage{RequireRoot: requireRoot, StableGo: true}
 				return nil
 			}
 		}

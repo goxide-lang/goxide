@@ -1,10 +1,7 @@
-package lower
+package analysis
 
 import (
 	"fmt"
-	goparser "go/parser"
-	gotoken "go/token"
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -15,12 +12,12 @@ import (
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/resolve"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
-	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 // crateGraph selects authored packages before parsing or checking unrelated
 // targets. Go imports add compilation membership, never source namespace exports.
 type crateGraph struct {
+	sources        *sourceSet
 	modules        []Module
 	files          map[string][]string
 	owners         map[string]*Crate
@@ -39,8 +36,8 @@ type crateModule struct {
 	public bool
 }
 
-func selectCrates(modules []Module, extra map[string][]crateModule) (*crateGraph, error) {
-	g := &crateGraph{modules: modules, files: map[string][]string{}, owners: map[string]*Crate{}, bases: map[string]string{}, packageModules: map[string]string{}}
+func selectCrates(modules []Module, extra map[string][]crateModule, sources *sourceSet) (*crateGraph, error) {
+	g := &crateGraph{sources: sources, modules: modules, files: map[string][]string{}, owners: map[string]*Crate{}, bases: map[string]string{}, packageModules: map[string]string{}}
 	if len(modules) != 0 {
 		g.goImports = sourceModuleImporter(modules[0])
 	}
@@ -49,10 +46,7 @@ func selectCrates(modules []Module, extra map[string][]crateModule) (*crateGraph
 			continue
 		}
 		for _, ext := range []string{".gox", ".go"} {
-			names, err := moduleFiles(module.Dir, ext)
-			if err != nil {
-				return nil, err
-			}
+			names := sources.moduleFiles(module, ext)
 			for _, name := range names {
 				rel, err := filepath.Rel(module.Dir, name)
 				if err != nil {
@@ -118,37 +112,28 @@ func (g *crateGraph) load(module *Module, crate *Crate, pkg string, extra map[st
 	active := false
 	context := module.Config.Environment.Context(module.Tags, module.Race)
 	for _, filename := range g.files[pkg] {
-		matches, err := matchesModuleSource(filename, context)
+		matches, err := g.sources.matches(filename, context)
 		if err != nil {
 			return err
 		}
 		if !matches {
 			continue
 		}
-		data, err := os.ReadFile(filename)
-		if err != nil {
-			return err
-		}
 		key := path.Join(pkg, filepath.Base(filename))
 		if strings.HasSuffix(filename, ".gox") {
 			active = true
-			file, diagnostics := parser.ParseFile(key, data)
-			for _, d := range diagnostics {
-				if d.Severity == parser.Error {
-					err := &Diagnostic{File: key, Span: d.Span, Message: d.Message, Origin: resolve.Origin{File: key, Span: d.Span}}
-					return FormatSourceDiagnostic(err, map[string]*syntax.File{key: file}, nil, nil)
-				}
-			}
-			if _, err := expand.Configure(file, module.Config); err != nil {
+			file, _, err := g.sources.working(key, module.Config)
+			if err != nil {
 				return err
 			}
 			children = append(children, crateModules(file)...)
 			continue
 		}
-		file, err := goparser.ParseFile(gotoken.NewFileSet(), key, data, goparser.ImportsOnly|goparser.SkipObjectResolution)
-		if err != nil {
-			return err
+		source := g.sources.parse(key)
+		if source.err != nil {
+			return source.err
 		}
+		file := source.GoSyntax
 		var targets []string
 		cgo := false
 		for _, imported := range file.Imports {
@@ -366,20 +351,4 @@ func (g *crateGraph) ModulePath(pkg, child string) []string {
 		pkg = base
 	}
 	return strings.Split(path.Join(pkg, child), "/")
-}
-
-// Remove only unreachable staged source, so downstream go test ./... cannot
-// compile a different target accidentally. The user's checkout is untouched.
-func (g *crateGraph) prune() error {
-	for pkg, names := range g.files {
-		if g.owners[pkg] != nil {
-			continue
-		}
-		for _, name := range names {
-			if err := os.Remove(name); err != nil && !os.IsNotExist(err) {
-				return err
-			}
-		}
-	}
-	return nil
 }

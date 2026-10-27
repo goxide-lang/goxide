@@ -1,6 +1,7 @@
 package lower_test
 
 import (
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"testing"
 )
@@ -25,7 +26,7 @@ func main(){fmt.Println(library.Exercise())}
 	} {
 		writeDiagnosticModuleFile(t, root, name, []byte(source))
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: "booleanfixture", Dir: root, Config: testConfig(t)}}); err != nil {
+	if err := lower.CompileModules([]analysis.Module{{Path: "booleanfixture", Dir: root, Config: testConfig(t)}}); err != nil {
 		t.Fatal(err)
 	}
 	runGo(t, root, "build", ".")

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
@@ -172,7 +173,7 @@ func identity()int{return 5}
 func main(){value:=keep{Value:9};println(identity(),identity!(7),value.Value)}
 `
 	roots := paths.Roots{"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}
-	options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}}
+	options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}}
 	var previous []byte
 	for attempt := 0; attempt < 2; attempt++ {
 		output, err := lower.CompilePackage(map[string][]byte{"main.gox": []byte(source)}, "consumer", imports, roots, options)
@@ -221,7 +222,7 @@ func main(){println(util!(),Value!(),runtime())}
 	var previous []byte
 	for attempt := 0; attempt < 2; attempt++ {
 		directory := writeMacroNamespaceFixture(t, sources)
-		if err := lower.CompileModules([]lower.Module{{Path: "namespacefixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
+		if err := lower.CompileModules([]analysis.Module{{Path: "namespacefixture", Dir: directory, Config: testConfig(t), Roots: roots}}); err != nil {
 			t.Fatal(err)
 		}
 		output, err := os.ReadFile(filepath.Join(directory, "main.go"))

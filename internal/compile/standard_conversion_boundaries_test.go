@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/check"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/project"
 )
 
@@ -82,7 +82,7 @@ func f()int{return Grow(1)}`, "instantiation cycle"},
 					configuredGo(t, result, "build", "-mod=readonly", result.Entry)
 				}
 				var diagnostic check.Diagnostic
-				var definitionDiagnostic *lower.Diagnostic
+				var definitionDiagnostic *analysis.Diagnostic
 				validDiagnostic := errors.As(err, &diagnostic) && strings.Contains(diagnostic.Message, fixture.want)
 				if fixture.name == "growing-conversion-demand" {
 					validDiagnostic = errors.As(err, &definitionDiagnostic) && strings.Contains(err.Error(), fixture.want) && strings.Contains(err.Error(), "lib.gox:")

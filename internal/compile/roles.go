@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
@@ -23,13 +24,13 @@ type stagedRole struct {
 	config     config.Config
 	features   map[string]config.Features
 	sugar      map[string]bool
-	modules    []lower.Module
+	modules    []analysis.Module
 	generated  map[string]string
-	library    *lower.ProcLibrary
+	library    *analysis.ProcLibrary
 	wasm       []byte
 	sdk        string
 	unit       *project.Unit
-	sources    []lower.SourcePackage
+	sources    []analysis.SourcePackage
 }
 
 func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target project.Target, kind string, configuration config.Config, options Options) (*Result, error) {
@@ -79,7 +80,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 	// All plans and their Go sources are prepared before the first macro runs.
 	for _, graph := range graphs {
 		stage := stages[graph]
-		seen := map[*lower.ProcLibrary]bool{}
+		seen := map[*analysis.ProcLibrary]bool{}
 		var attach func(*project.Graph) error
 		attach = func(plan *project.Graph) error {
 			library := stages[plan].library
@@ -123,7 +124,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 				}
 			}
 			if options.OnPreparedSources != nil {
-				stage.modules[0].OnSourcePackages = func(sources []lower.SourcePackage) error { stage.sources = sources; return nil }
+				stage.modules[0].OnSourcePackages = func(sources []analysis.SourcePackage) error { stage.sources = sources; return nil }
 			}
 			if err := lower.CompileModules(stage.modules); err != nil {
 				return nil, err
@@ -271,7 +272,7 @@ func stageRole(graph *project.Graph, target project.Target, kind string, configu
 			moduleConfig.GoSugar = options.GoSugar
 		}
 		stage.sugar[node.SourceKey] = moduleConfig.GoSugarEnabled()
-		module := lower.Module{Path: node.Module, Dir: output, RootPackage: rootPackage, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race}
+		module := analysis.Module{Path: node.Module, Dir: output, RootPackage: rootPackage, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race}
 		if graph.Role == "proc-macro" {
 			module.Tags, module.Race = nil, false
 		}
@@ -287,8 +288,8 @@ func stageRole(graph *project.Graph, target project.Target, kind string, configu
 	return stage, nil
 }
 
-func runtimeRoots(graph *project.Graph, node *project.Node, roots paths.Roots, rootPackage string) []lower.RuntimeRoot {
-	var result []lower.RuntimeRoot
+func runtimeRoots(graph *project.Graph, node *project.Node, roots paths.Roots, rootPackage string) []analysis.RuntimeRoot {
+	var result []analysis.RuntimeRoot
 	for _, alias := range project.Keys(roots) {
 		root := roots[alias]
 		if root.Source == "toolchain" || root.Unavailable != "" || root.ModulePath == "" {
@@ -311,10 +312,10 @@ func runtimeRoots(graph *project.Graph, node *project.Node, roots paths.Roots, r
 		if child := node.Children[alias]; child != nil && child.Manifest.Lib != nil && child.Manifest.Lib.ProcMacro {
 			continue
 		}
-		result = append(result, lower.RuntimeRoot{LogicalModule: root.ModulePath, BindingID: project.Digest([]string{graph.PlanID, root.ModulePath}), Namespace: root})
+		result = append(result, analysis.RuntimeRoot{LogicalModule: root.ModulePath, BindingID: project.Digest([]string{graph.PlanID, root.ModulePath}), Namespace: root})
 	}
 	if library := node.Manifest.Lib; library != nil && !library.ProcMacro && targetUnavailable(*library, node.Features) == "" {
-		result = append(result, lower.RuntimeRoot{LogicalModule: node.Module, BindingID: project.Digest([]string{graph.PlanID, node.Module}), Namespace: paths.Namespace{ModulePath: node.Module, PackagePath: rootPackage, Source: "module"}})
+		result = append(result, analysis.RuntimeRoot{LogicalModule: node.Module, BindingID: project.Digest([]string{graph.PlanID, node.Module}), Namespace: paths.Namespace{ModulePath: node.Module, PackagePath: rootPackage, Source: "module"}})
 	}
 	return result
 }

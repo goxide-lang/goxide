@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/goxide-lang/goxide/internal/config"
@@ -212,6 +213,7 @@ type packageOrigin struct {
 }
 
 type sourceImporter struct {
+	mu sync.Mutex
 	types.Importer
 	sources      map[string]packageFiles
 	origins      map[string]packageOrigin
@@ -226,9 +228,19 @@ type packageIndex struct {
 	err   error
 }
 
+// Import serializes the Go export reader and its closure caches. A complete
+// package identity can then be shared by independent analysis consumers.
+func (i *sourceImporter) Import(path string) (*types.Package, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.Importer.Import(path)
+}
+
 // PackageIndex contains only packages selected from this exact module or Go
 // distribution. Nested modules and unrelated transitive dependencies are absent.
 func (i *sourceImporter) PackageIndex(source, module string) ([]string, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	key := source + "\x00" + module
 	result, ok := i.indices[key]
 	if !ok {
@@ -241,10 +253,12 @@ func (i *sourceImporter) PackageIndex(source, module string) ([]string, error) {
 // PackageOrigin reports the Go resolver's actual selected module. Namespace
 // bindings use this proof instead of inferring ownership from a path prefix.
 func (i *sourceImporter) PackageOrigin(path string) (module string, standard bool, err error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	if path == "unsafe" {
 		return "", true, nil
 	}
-	if _, err := i.Import(path); err != nil {
+	if _, err := i.Importer.Import(path); err != nil {
 		return "", false, err
 	}
 	origin, ok := i.origins[path]
@@ -255,14 +269,22 @@ func (i *sourceImporter) PackageOrigin(path string) (module string, standard boo
 }
 
 func (i *sourceImporter) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	if imp, ok := i.Importer.(types.ImporterFrom); ok {
 		return imp.ImportFrom(path, dir, mode)
 	}
-	return i.Import(path)
+	return i.Importer.Import(path)
 }
 
 func (i *sourceImporter) PackageFiles(path string) (string, []string, error) {
-	if _, err := i.Import(path); err != nil {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.packageFiles(path)
+}
+
+func (i *sourceImporter) packageFiles(path string) (string, []string, error) {
+	if _, err := i.Importer.Import(path); err != nil {
 		return "", nil, err
 	}
 	p, ok := i.sources[path]
@@ -276,13 +298,19 @@ func (i *sourceImporter) PackageFiles(path string) (string, []string, error) {
 // ordinary Go packages whose named types can change without an goxide marker change.
 // Paths are import-relative, so moving an identical local replacement is stable.
 func (i *sourceImporter) PackageFingerprint(path string) (string, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.packageFingerprint(path)
+}
+
+func (i *sourceImporter) packageFingerprint(path string) (string, error) {
 	if path == "unsafe" {
 		return i.build + ":unsafe", nil
 	}
 	if v, ok := i.fingerprints[path]; ok {
 		return v, nil
 	}
-	if _, _, e := i.PackageFiles(path); e != nil {
+	if _, _, e := i.packageFiles(path); e != nil {
 		return "", e
 	}
 	p := i.sources[path]
@@ -303,7 +331,7 @@ func (i *sourceImporter) PackageFingerprint(path string) (string, error) {
 		if dep == "C" {
 			continue
 		}
-		v, e := i.PackageFingerprint(dep)
+		v, e := i.packageFingerprint(dep)
 		if e != nil {
 			return "", e
 		}

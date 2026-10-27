@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 )
@@ -80,7 +81,7 @@ func TestRequireRootFollowsMacroScope(t *testing.T) {
 	kit := paths.Namespace{PackagePath: "example.org/kit", ModulePath: "example.org/kit"}
 	data := paths.Namespace{PackagePath: "example.org/data", ModulePath: "example.org/data"}
 	pending := paths.Namespace{PackagePath: "example.org/pending", ModulePath: "example.org/pending", GoPrefix: "example.org/pending"}
-	packages := []lower.SourcePackage{
+	packages := []analysis.SourcePackage{
 		{PackagePath: kit.PackagePath, ModulePath: kit.ModulePath, RootPackage: kit.PackagePath, Target: cfg.Environment.Target, Roots: paths.Roots{"api": data}, Sources: map[string][]byte{"macros.gox": []byte(`package kit
 pub macro_rules! definition { ($name:ident) => { use api as $name; }; }
 pub macro_rules! caller { ($name:ident) => { use $caller::api as $name; }; }
@@ -136,7 +137,7 @@ func TestGeneratedBindingsPrecedeRootsDuringMacroLookup(t *testing.T) {
 			output, err := lower.CompilePackage(map[string][]byte{"main.gox": []byte("package fixture\nuse kit;\n" + test.source + "\nuse dep::Ready;\nfunc Value() int { _ = Ready; return kit::value!() }\n")}, "fixture", importer.Default(),
 				paths.Roots{"kit": kit, "dep": {Unavailable: "shadowed dependency must remain unavailable"}}, lower.PackageOptions{
 					Config: cfg,
-					SourcePackages: []lower.SourcePackage{{PackagePath: kit.PackagePath, ModulePath: kit.ModulePath, RootPackage: kit.PackagePath, Target: cfg.Environment.Target,
+					SourcePackages: []analysis.SourcePackage{{PackagePath: kit.PackagePath, ModulePath: kit.ModulePath, RootPackage: kit.PackagePath, Target: cfg.Environment.Target,
 						Sources: map[string][]byte{"lib.gox": []byte("package kit\npub macro_rules! value { () => { 42 }; }\n")}}},
 					RequireRoot: func(alias string, namespace paths.Namespace) error {
 						if alias == "kit" && namespace == kit {
@@ -159,7 +160,7 @@ func TestNativePackageRequireRoot(t *testing.T) {
 	writeDiagnosticModuleFile(t, directory, "main.gox", []byte("package main\nuse pending;\nfunc main() { pending::value!() }\n"))
 	root := paths.Namespace{PackagePath: "example.org/pending", ModulePath: "example.org/pending", GoPrefix: "example.org/pending"}
 	demand := &rootDemand{alias: "pending", namespace: root}
-	err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Roots: paths.Roots{"pending": root}, Config: testConfig(t), NativePackage: &lower.NativePackage{
+	err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Roots: paths.Roots{"pending": root}, Config: testConfig(t), NativePackage: &analysis.NativePackage{
 		Importer:     importer.Default(),
 		DisplayNames: map[string]string{"fixture/main.gox": filepath.Join(directory, "main.gox")},
 		RequireRoot: func(alias string, namespace paths.Namespace) error {
@@ -180,7 +181,7 @@ func TestRequireRootRetainsToolchainFallback(t *testing.T) {
 	writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module fixture\n\ngo 1.27\n"))
 	writeDiagnosticModuleFile(t, directory, "main.gox", []byte("package main\nuse fmt;\nfunc main() { fmt::Println(42) }\n"))
 	calls := 0
-	err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Roots: paths.Roots{}, Config: testConfig(t), NativePackage: &lower.NativePackage{RequireRoot: func(alias string, namespace paths.Namespace) error {
+	err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Roots: paths.Roots{}, Config: testConfig(t), NativePackage: &analysis.NativePackage{RequireRoot: func(alias string, namespace paths.Namespace) error {
 		calls++
 		if alias != "fmt" || namespace.Source != "toolchain" || namespace.PackagePath != "fmt" {
 			t.Fatalf("toolchain fallback changed: %s %+v", alias, namespace)

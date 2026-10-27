@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/expand"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/project"
 	pm "github.com/goxide-lang/syntax/proc_macro"
@@ -40,17 +40,17 @@ type Options struct {
 	// OnPreparedSources runs while the role-specific importers and staged Go
 	// dependencies remain available, so callers can create fixed distributions.
 	OnPreparedSources    func(PreparedSources) error
-	PrepareNativePackage func([]lower.Module) error
+	PrepareNativePackage func([]analysis.Module) error
 }
 
 // PreparedSources is valid only during OnPreparedSources. Its macro libraries
 // retain their own role's live importers, so fixed-distribution snapshots must
 // be taken here rather than after the staging directories have been removed.
 type PreparedSources struct {
-	SourcePackages []lower.SourcePackage
+	SourcePackages []analysis.SourcePackage
 	Macros         []ProcArtifact
 	Roots          paths.Roots
-	RuntimeRoots   []lower.RuntimeRoot
+	RuntimeRoots   []analysis.RuntimeRoot
 }
 
 // Result names a stable generated Go module and its selected target package.
@@ -65,7 +65,7 @@ type Result struct {
 // ProcArtifact is one checked macro program and its restricted WASI command.
 // The library is available for a source snapshot; execution uses the supplied host.
 type ProcArtifact struct {
-	Library *lower.ProcLibrary
+	Library *analysis.ProcLibrary
 	WASM    []byte
 }
 

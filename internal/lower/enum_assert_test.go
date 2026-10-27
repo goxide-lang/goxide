@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 )
 
@@ -263,7 +264,7 @@ func main() {
 			writeDiagnosticModuleFile(t, directory, name, []byte(source))
 		}
 		pinP4Dependencies(t, directory)
-		if err := lower.CompileModules([]lower.Module{{Path: "associatedfixture", Dir: directory, Config: testConfig(t)}}); err != nil {
+		if err := lower.CompileModules([]analysis.Module{{Path: "associatedfixture", Dir: directory, Config: testConfig(t)}}); err != nil {
 			t.Fatal(err)
 		}
 		output, err := os.ReadFile(filepath.Join(directory, "main.go"))

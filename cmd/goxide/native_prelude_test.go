@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
@@ -58,8 +59,8 @@ func TestNativeAutomaticPrelude(t *testing.T) {
 				singleFileWrite(t, root, name, source)
 			}
 			if test.name == "trait-method" {
-				if err := lower.CompileModules([]lower.Module{{Path: standard, Dir: filepath.Join(root, "std"), RootPackage: standard, Config: cfg, StableGo: true,
-					Crates: []lower.Crate{{Root: standard, SourceDir: standard, Library: true}},
+				if err := lower.CompileModules([]analysis.Module{{Path: standard, Dir: filepath.Join(root, "std"), RootPackage: standard, Config: cfg, StableGo: true,
+					Crates: []analysis.Crate{{Root: standard, SourceDir: standard, Library: true}},
 				}}); err != nil {
 					t.Fatalf("publish trait fixture: %v", err)
 				}

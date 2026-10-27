@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 )
@@ -24,7 +25,7 @@ func TestCompileModulesMacroReexportPackageOrder(t *testing.T) {
 					writeDiagnosticModuleFile(t, library, "go.mod", []byte("module "+provider+"\n\ngo 1.27\n"))
 					writeDiagnosticModuleFile(t, library, "lib.gox", []byte("package library\nmod hidden;"+export.source+"\n"))
 					writeDiagnosticModuleFile(t, library, "hidden/macros.gox", []byte("package hidden\npub macro_rules! add_two{($value:expr)=>{$value+2};}\n"))
-					if err := lower.CompileModules([]lower.Module{
+					if err := lower.CompileModules([]analysis.Module{
 						{Path: "app", Dir: app, Roots: paths.Roots{"lib": {PackagePath: provider, ModulePath: provider}}, Config: testConfig(t)},
 						{Path: provider, Dir: library, RootPackage: provider, Config: testConfig(t)},
 					}); err != nil {

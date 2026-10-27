@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/project"
 	"github.com/goxide-lang/goxide/internal/rootconfig"
@@ -81,9 +81,9 @@ func targetUnavailable(target project.Target, features map[string]bool) string {
 	return ""
 }
 
-func targetCrates(node *project.Node, selected project.Target, kind string) ([]lower.Crate, []lower.TargetBoundary, error) {
-	var crates []lower.Crate
-	var boundaries []lower.TargetBoundary
+func targetCrates(node *project.Node, selected project.Target, kind string) ([]analysis.Crate, []analysis.TargetBoundary, error) {
+	var crates []analysis.Crate
+	var boundaries []analysis.TargetBoundary
 	packageRoots := map[string]string{}
 	groups := []struct {
 		kind    string
@@ -102,8 +102,8 @@ func targetCrates(node *project.Node, selected project.Target, kind string) ([]l
 				return nil, nil, fmt.Errorf("target %s: %w", target.Name, err)
 			}
 			source := path.Join(node.Module, filepath.ToSlash(target.Path))
-			boundaries = append(boundaries, lower.TargetBoundary{Path: source, File: !info.IsDir()})
-			crate := lower.Crate{Name: target.Name, Root: source, SourceDir: source, Library: group.kind == "lib", Unavailable: targetUnavailable(target, node.Features)}
+			boundaries = append(boundaries, analysis.TargetBoundary{Path: source, File: !info.IsDir()})
+			crate := analysis.Crate{Name: target.Name, Root: source, SourceDir: source, Library: group.kind == "lib", Unavailable: targetUnavailable(target, node.Features)}
 			if !info.IsDir() {
 				crate.SourceDir = path.Dir(source)
 				crate.Root = path.Join(node.Module, "goxide_targets", group.kind, target.Name)

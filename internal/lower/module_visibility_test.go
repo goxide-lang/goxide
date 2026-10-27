@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
@@ -39,11 +40,11 @@ func TestCompileModulesRejectMappedPrivatePackages(t *testing.T) {
 			writeDiagnosticModuleFile(t, lib, "hidden/value.gox", []byte("package hidden\npub mod leaf;\npub func Value() int { return 9 }\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/leaf/value.gox", []byte("package leaf\npub func Value() int { return 11 }\n"))
 			roots := paths.Roots{"api": {PackagePath: "zlib/" + test.target, ModulePath: "zlib"}}
-			err := lower.CompileModules([]lower.Module{
+			err := lower.CompileModules([]analysis.Module{
 				{Path: "app", Dir: app, Roots: roots, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{}, Config: testConfig(t)},
 			})
-			var diagnostic *lower.Diagnostic
+			var diagnostic *analysis.Diagnostic
 			if !errors.As(err, &diagnostic) || diagnostic.File != "app/main.gox" || !strings.Contains(diagnostic.Message, "not publicly reachable") || !strings.Contains(diagnostic.Message, `"zlib/`+test.target+`"`) {
 				t.Fatalf("missing public-entry diagnostic: %v", err)
 			}
@@ -82,7 +83,7 @@ func TestCompileModulesPublicPackageRoutes(t *testing.T) {
 				writeDiagnosticModuleFile(t, lib, "entry/hidden/value.gox", []byte("package hidden\npub mod leaf;\npub func Value() int { return 9 }\n"))
 				writeDiagnosticModuleFile(t, lib, "entry/hidden/leaf/value.gox", []byte("package leaf\npub func Value() int { return 11 }\n"))
 				roots := paths.Roots{"api": {PackagePath: test.target, ModulePath: "zlib"}, "console": {PackagePath: "fmt", Source: "toolchain"}}
-				if err := lower.CompileModules([]lower.Module{
+				if err := lower.CompileModules([]analysis.Module{
 					{Path: "app", Dir: app, Roots: roots, Config: testConfig(t)},
 					{Path: "zlib", Dir: lib, RootPackage: "zlib/entry", Roots: paths.Roots{}, Config: testConfig(t)},
 				}); err != nil {
@@ -115,7 +116,7 @@ func TestCompileModulesPublicReachabilityKeepsUnusedRootsLazy(t *testing.T) {
 	writeDiagnosticModuleFile(t, lib, "go.mod", []byte("module zlib\n\ngo 1.27\n"))
 	writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\npub mod visible;\n"))
 	writeDiagnosticModuleFile(t, lib, "visible/value.gox", []byte("package visible\npub func Value() int{return 1}\n"))
-	if err := lower.CompileModules([]lower.Module{
+	if err := lower.CompileModules([]analysis.Module{
 		{Path: "app", Dir: app, Roots: paths.Roots{"api": {PackagePath: "zlib/visible", ModulePath: "zlib"}}, Config: testConfig(t)},
 		{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"unused": {GoPrefix: "unavailable.invalid/missing", ModulePath: "unavailable.invalid/missing", Source: "module"}}, Config: testConfig(t)},
 	}); err != nil {
@@ -133,11 +134,11 @@ func TestCompileModulesRejectMappedGoLeafBelowPrivateSourceModule(t *testing.T) 
 	writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\nmod hidden;\n"))
 	writeDiagnosticModuleFile(t, lib, "hidden/mod.gox", []byte("package hidden\npub use leaf;\n"))
 	writeDiagnosticModuleFile(t, lib, "hidden/leaf/value.go", []byte("package leaf\nimport _ \"zlib\"\nfunc Value() int{return 1}\n"))
-	err := lower.CompileModules([]lower.Module{
+	err := lower.CompileModules([]analysis.Module{
 		{Path: "app", Dir: app, Roots: paths.Roots{"api": {PackagePath: "zlib/hidden/leaf", ModulePath: "zlib"}}, Config: testConfig(t)},
 		{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"leaf": {PackagePath: "zlib/hidden/leaf", ModulePath: "zlib"}}, Config: testConfig(t)},
 	})
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if !errors.As(err, &diagnostic) || diagnostic.File != "app/main.gox" || !strings.Contains(diagnostic.Message, "not publicly reachable") {
 		t.Fatalf("Go leaf bypassed private source ancestor: %v", err)
 	}
@@ -158,11 +159,11 @@ func TestCompileModulesMemberReexportCannotExposeSameNamedPackage(t *testing.T) 
 			writeDiagnosticModuleFile(t, lib, "hidden/member.gox", []byte("package hidden\npub func leaf() int{return 1}\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/leaf/value.gox", []byte("package leaf\npub mod child;pub func Value() int{return 2}\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/leaf/child/value.gox", []byte("package child\npub func Value() int{return 3}\n"))
-			err := lower.CompileModules([]lower.Module{
+			err := lower.CompileModules([]analysis.Module{
 				{Path: "app", Dir: app, Roots: paths.Roots{"api": {PackagePath: "zlib/" + test.target, ModulePath: "zlib"}}, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{}, Config: testConfig(t)},
 			})
-			var diagnostic *lower.Diagnostic
+			var diagnostic *analysis.Diagnostic
 			wantFile, wantMessage := "app/main.gox", "not publicly reachable"
 			if test.name == "member-glob" {
 				wantFile, wantMessage = "zlib/lib.gox", `glob use target "leaf" is not a namespace`
@@ -189,7 +190,7 @@ func TestCompileModulesMemberReexportWithSameNamedPackage(t *testing.T) {
 			writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\nmod hidden;pub use hidden::leaf;\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/member.gox", []byte("package hidden\n"+test.member+"\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/leaf/value.gox", []byte("package leaf\npub func Value() int{return 2}\n"))
-			if err := lower.CompileModules([]lower.Module{
+			if err := lower.CompileModules([]analysis.Module{
 				{Path: "app", Dir: app, Roots: paths.Roots{"lib": {PackagePath: "zlib", ModulePath: "zlib"}, "console": {PackagePath: "fmt", Source: "toolchain"}}, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{}, Config: testConfig(t)},
 			}); err != nil {
@@ -218,7 +219,7 @@ func TestCompileModulesValueCannotSelectSameNamedPackageMembers(t *testing.T) {
 			writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\nmod hidden;pub use hidden::leaf;\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/member.gox", []byte("package hidden\n"+declaration+"\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/leaf/value.gox", []byte("package leaf\npub func Value()int{return 2}\n"))
-			err := lower.CompileModules([]lower.Module{
+			err := lower.CompileModules([]analysis.Module{
 				{Path: "app", Dir: app, Roots: paths.Roots{"lib": {PackagePath: "zlib", ModulePath: "zlib"}}, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{}, Config: testConfig(t)},
 			})
@@ -247,7 +248,7 @@ func TestCompileModulesTypeCannotSelectSameNamedPackageMembers(t *testing.T) {
 			writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\nmod hidden;"+test.export+"\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/member.gox", []byte("package hidden\npub type leaf struct{}\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/leaf/value.gox", []byte("package leaf\npub func Value()int{return 2}\n"))
-			err := lower.CompileModules([]lower.Module{
+			err := lower.CompileModules([]analysis.Module{
 				{Path: "app", Dir: app, Roots: paths.Roots{"lib": {PackagePath: "zlib", ModulePath: "zlib"}}, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{}, Config: testConfig(t)},
 			})
@@ -270,7 +271,7 @@ func TestCompileModulesPublicNamespaceWithSameNamedPrivateItem(t *testing.T) {
 	writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\npub use physical as API;\n"))
 	writeDiagnosticModuleFile(t, lib, "hidden/member.gox", []byte("package hidden\nfunc leaf()int{return 99}\n"))
 	writeDiagnosticModuleFile(t, lib, "hidden/leaf/value.gox", []byte("package leaf\npub func Value()int{return 31}\n"))
-	if err := lower.CompileModules([]lower.Module{
+	if err := lower.CompileModules([]analysis.Module{
 		{Path: "app", Dir: app, Roots: paths.Roots{"lib": {PackagePath: "zlib", ModulePath: "zlib"}, "console": {PackagePath: "fmt", Source: "toolchain"}}, Config: testConfig(t)},
 		{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"physical": {PackagePath: "zlib/hidden/leaf", ModulePath: "zlib"}}, Config: testConfig(t)},
 	}); err != nil {
@@ -297,11 +298,11 @@ func TestCompileModulesRejectPrivateMemberUse(t *testing.T) {
 			writeDiagnosticModuleFile(t, lib, "go.mod", []byte("module zlib\n\ngo 1.27\n"))
 			writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\nmod hidden;pub use hidden as API;\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/member.gox", []byte("package hidden\nfunc secret()int{return 1}\ntype hidden struct{}\n"))
-			err := lower.CompileModules([]lower.Module{
+			err := lower.CompileModules([]analysis.Module{
 				{Path: "app", Dir: app, Roots: paths.Roots{"lib": {PackagePath: "zlib", ModulePath: "zlib"}}, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{}, Config: testConfig(t)},
 			})
-			var diagnostic *lower.Diagnostic
+			var diagnostic *analysis.Diagnostic
 			if !errors.As(err, &diagnostic) || diagnostic.File != "app/main.gox" || !strings.Contains(diagnostic.Message, "not a public item or namespace") || strings.Contains(diagnostic.Message, "$goxide$roots") {
 				t.Fatalf("missing private member use diagnostic: %v", err)
 			}
@@ -328,7 +329,7 @@ func TestCompileModulesPublicNamespaceAliasAcrossFiles(t *testing.T) {
 	writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\npub use facade::API;\n"))
 	writeDiagnosticModuleFile(t, lib, "facade/api.gox", []byte("package facade\nmod hidden;pub use hidden as API;\n"))
 	writeDiagnosticModuleFile(t, lib, "facade/hidden/value.gox", []byte("package hidden\npub func Value() int{return 13}\n"))
-	if err := lower.CompileModules([]lower.Module{
+	if err := lower.CompileModules([]analysis.Module{
 		{Path: "app", Dir: app, Roots: paths.Roots{"lib": {PackagePath: "zlib", ModulePath: "zlib"}, "direct": {PackagePath: "zlib/facade/hidden", ModulePath: "zlib"}, "console": {PackagePath: "fmt", Source: "toolchain"}}, Config: testConfig(t)},
 		{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"facade": {PackagePath: "zlib/facade", ModulePath: "zlib"}}, Config: testConfig(t)},
 	}); err != nil {
@@ -354,7 +355,7 @@ func TestCompileModulesNativePackagePublicRoutes(t *testing.T) {
 				writeDiagnosticModuleFile(t, lib, "lib.go", []byte("package zlib\n"))
 			}
 			writeDiagnosticModuleFile(t, lib, "child/value.go", []byte("package child\nfunc Value() int{return 17}\n"))
-			if err := lower.CompileModules([]lower.Module{
+			if err := lower.CompileModules([]analysis.Module{
 				{Path: "app", Dir: app, Roots: paths.Roots{"api": {PackagePath: "zlib/child", ModulePath: "zlib"}, "console": {PackagePath: "fmt", Source: "toolchain"}}, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{"child": {PackagePath: "zlib/child", ModulePath: "zlib"}}, Config: testConfig(t)},
 			}); err != nil {
@@ -381,7 +382,7 @@ func TestCompileModulesDeriveCannotSelectPrivateMappedNamespace(t *testing.T) {
 		"std":    {PackagePath: "github.com/goxide-lang/std", ModulePath: "github.com/goxide-lang/std", Source: "module"},
 		"serde":  {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module"},
 	}})
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if !errors.As(err, &diagnostic) || diagnostic.File != "app/main.gox" || !strings.Contains(diagnostic.Message, "not publicly reachable") {
 		t.Fatalf("derive bypassed private source namespace: %v", err)
 	}
@@ -407,7 +408,7 @@ func TestCompileModulesMacroUsesAfterExpansion(t *testing.T) {
 			writeDiagnosticModuleFile(t, lib, "go.mod", []byte("module zlib\n\ngo 1.27\n"))
 			writeDiagnosticModuleFile(t, lib, "lib.gox", []byte("package zlib\n"+test.export+"\n"))
 			writeDiagnosticModuleFile(t, lib, "hidden/macros.gox", []byte("package hidden\n"+test.declaration+"\n"))
-			err := lower.CompileModules([]lower.Module{
+			err := lower.CompileModules([]analysis.Module{
 				{Path: "app", Dir: app, Roots: paths.Roots{"lib": {PackagePath: test.mapping, ModulePath: "zlib"}, "console": {PackagePath: "fmt", Source: "toolchain"}}, Config: testConfig(t)},
 				{Path: "zlib", Dir: lib, RootPackage: "zlib", Roots: paths.Roots{}, Config: testConfig(t)},
 			})

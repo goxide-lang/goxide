@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/resolve"
@@ -31,7 +32,7 @@ func TestExpansionDiagnosticDisplayLocationKeepsTrace(t *testing.T) {
 			diagnostic := &expand.Diagnostic{
 				Code: "category", Message: "rejected", Definition: definition, Call: call, Location: tc.location,
 			}
-			formatted := lower.FormatSourceDiagnostic(diagnostic, files, nil, nil)
+			formatted := analysis.FormatSourceDiagnostic(diagnostic, files, nil, nil)
 			if !strings.HasPrefix(formatted.Error(), tc.want) ||
 				!strings.Contains(formatted.Error(), "macro definition defs.gox:2:1; call call.gox:2:1") {
 				t.Fatalf("wrong display or lost trace: %v", formatted)
@@ -76,7 +77,7 @@ func TestLowerFailureUsesResolvedDisplayLocation(t *testing.T) {
 		trees[name] = file.AST
 	}
 	output, err := lower.Lower(trees, checked(t, trees, resolved))
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if output != nil || !errors.As(err, &diagnostic) {
 		t.Fatalf("expected located lower failure: output=%v, error=%v", output, err)
 	}
@@ -99,7 +100,7 @@ func TestLowerRejectsDiagnosticDisplayedOutsideOutputFiles(t *testing.T) {
 		Code: "unresolved", Message: "missing generated name", Severity: resolve.Error,
 	}}
 	output, err := lower.Lower(files, info)
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if output != nil || !errors.As(err, &diagnostic) || diagnostic.Origin.File != location.File || diagnostic.Origin.Span != location.Span {
 		t.Fatalf("diagnostic in a non-output file was lost: output=%v, error=%v", output, err)
 	}

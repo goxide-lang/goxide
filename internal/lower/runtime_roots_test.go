@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
@@ -31,7 +32,7 @@ func runtimeRootOutput(t *testing.T, ctx pm.Context, logical, suffix string) pm.
 
 func TestRuntimeRootBindingsAndMissingCapabilities(t *testing.T) {
 	_, library, imports := compileProcFixture(t, procFixtureSource)
-	root := lower.RuntimeRoot{LogicalModule: "consumer", BindingID: "consumer-lib-content", Namespace: paths.Namespace{PackagePath: "consumer", ModulePath: "consumer"}}
+	root := analysis.RuntimeRoot{LogicalModule: "consumer", BindingID: "consumer-lib-content", Namespace: paths.Namespace{PackagePath: "consumer", ModulePath: "consumer"}}
 	aliases := paths.Roots{
 		"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage},
 		"first":  root.Namespace, "renamed": root.Namespace,
@@ -39,22 +40,22 @@ func TestRuntimeRootBindingsAndMissingCapabilities(t *testing.T) {
 	sources := map[string][]byte{"main.gox": []byte("package main\nuse macros;\npub func Value() int { return 42 }\nfunc private() int { return 99 }\nfunc main() { println(macros::identity!()) }\n")}
 	for _, test := range []struct {
 		name  string
-		roots []lower.RuntimeRoot
+		roots []analysis.RuntimeRoot
 		query string
 		want  string
 	}{
-		{name: "self", roots: []lower.RuntimeRoot{root}, query: "consumer"},
-		{name: "duplicate aliases", roots: []lower.RuntimeRoot{root, root}, query: "consumer"},
+		{name: "self", roots: []analysis.RuntimeRoot{root}, query: "consumer"},
+		{name: "duplicate aliases", roots: []analysis.RuntimeRoot{root, root}, query: "consumer"},
 		{name: "missing", query: "consumer", want: `runtime root "consumer" is not available`},
-		{name: "logical identity only", roots: []lower.RuntimeRoot{root}, query: "replacement.example/module", want: `runtime root "replacement.example/module" is not available`},
-		{name: "ambiguous content", roots: []lower.RuntimeRoot{root, {LogicalModule: root.LogicalModule, BindingID: "other-content", Namespace: root.Namespace}}, query: "consumer", want: `runtime root "consumer" is not available`},
-		{name: "inactive", roots: []lower.RuntimeRoot{{LogicalModule: root.LogicalModule, BindingID: root.BindingID, Namespace: paths.Namespace{PackagePath: "consumer", ModulePath: "consumer", Unavailable: "inactive"}}}, query: "consumer", want: `runtime root "consumer" is not available`},
+		{name: "logical identity only", roots: []analysis.RuntimeRoot{root}, query: "replacement.example/module", want: `runtime root "replacement.example/module" is not available`},
+		{name: "ambiguous content", roots: []analysis.RuntimeRoot{root, {LogicalModule: root.LogicalModule, BindingID: "other-content", Namespace: root.Namespace}}, query: "consumer", want: `runtime root "consumer" is not available`},
+		{name: "inactive", roots: []analysis.RuntimeRoot{{LogicalModule: root.LogicalModule, BindingID: root.BindingID, Namespace: paths.Namespace{PackagePath: "consumer", ModulePath: "consumer", Unavailable: "inactive"}}}, query: "consumer", want: `runtime root "consumer" is not available`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			library.Run = procFixtureHost(pm.Entry{Name: "identity", Function: func(ctx pm.Context, _ public.TokenStream) pm.Output {
 				return runtimeRootOutput(t, ctx, test.query, "::Value()")
 			}})
-			options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}, RuntimeRoots: test.roots}
+			options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}, RuntimeRoots: test.roots}
 			output, err := lower.CompilePackage(sources, "consumer", imports, aliases, options)
 			if test.want != "" {
 				if err == nil || output != nil || !strings.Contains(err.Error(), test.want) || !strings.Contains(err.Error(), "main.gox:5:") {
@@ -97,7 +98,7 @@ func TestRuntimeRootBindingsAndMissingCapabilities(t *testing.T) {
 				}
 				return pm.Success(public.New(identifier.WithSpan(ctx.DefSpan())))
 			}})
-			output, err := lower.CompilePackage(sources, "consumer", imports, aliases, lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}, RuntimeRoots: []lower.RuntimeRoot{root}})
+			output, err := lower.CompilePackage(sources, "consumer", imports, aliases, lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}, RuntimeRoots: []analysis.RuntimeRoot{root}})
 			if err == nil || output != nil || !strings.Contains(err.Error(), "unresolved name") {
 				t.Fatalf("root context exposed an unrelated binding: %v\n%s", err, output["main.gox"])
 			}
@@ -108,8 +109,8 @@ func TestRuntimeRootBindingsAndMissingCapabilities(t *testing.T) {
 func TestRuntimeRootReexportsAndOutputOwnership(t *testing.T) {
 	_, library, _ := compileProcFixture(t, procFixtureSource)
 	const consumerPath, facadePath, runtimePath = "example.org/consumer", "example.org/facade", "example.org/runtime"
-	ordinary := func(module string) lower.RuntimeRoot {
-		return lower.RuntimeRoot{LogicalModule: module, BindingID: module + "-selected-content", Namespace: paths.Namespace{PackagePath: module, ModulePath: module}}
+	ordinary := func(module string) analysis.RuntimeRoot {
+		return analysis.RuntimeRoot{LogicalModule: module, BindingID: module + "-selected-content", Namespace: paths.Namespace{PackagePath: module, ModulePath: module}}
 	}
 	for _, test := range []struct {
 		name, reexport, suffix, want string
@@ -150,10 +151,10 @@ func TestRuntimeRootReexportsAndOutputOwnership(t *testing.T) {
 				consumerConfig, facadeConfig := testConfig(t), testConfig(t)
 				consumerConfig.Features.Enabled = map[string]bool{"consumer": true}
 				facadeConfig.Features.Enabled = map[string]bool{"facade": true}
-				err := lower.CompileModules([]lower.Module{
-					{Path: consumerPath, Dir: consumer, Roots: paths.Roots{"facade": ordinary(facadePath).Namespace}, Config: consumerConfig, ProcLibraries: []*lower.ProcLibrary{library}, RuntimeRoots: []lower.RuntimeRoot{ordinary(facadePath)}},
-					{Path: facadePath, Dir: facade, RootPackage: facadePath, Roots: paths.Roots{"dependency": ordinary(runtimePath).Namespace, "macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, Config: facadeConfig, RuntimeRoots: []lower.RuntimeRoot{ordinary(facadePath), ordinary(runtimePath)}},
-					{Path: runtimePath, Dir: runtime, RootPackage: runtimePath, Config: testConfig(t), RuntimeRoots: []lower.RuntimeRoot{ordinary(runtimePath)}},
+				err := lower.CompileModules([]analysis.Module{
+					{Path: consumerPath, Dir: consumer, Roots: paths.Roots{"facade": ordinary(facadePath).Namespace}, Config: consumerConfig, ProcLibraries: []*analysis.ProcLibrary{library}, RuntimeRoots: []analysis.RuntimeRoot{ordinary(facadePath)}},
+					{Path: facadePath, Dir: facade, RootPackage: facadePath, Roots: paths.Roots{"dependency": ordinary(runtimePath).Namespace, "macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, Config: facadeConfig, RuntimeRoots: []analysis.RuntimeRoot{ordinary(facadePath), ordinary(runtimePath)}},
+					{Path: runtimePath, Dir: runtime, RootPackage: runtimePath, Config: testConfig(t), RuntimeRoots: []analysis.RuntimeRoot{ordinary(runtimePath)}},
 				})
 				if err != nil {
 					return consumer, nil, err
@@ -205,8 +206,8 @@ func TestRuntimeRootGoNamespaceWithoutRootPackage(t *testing.T) {
 	library.Run = procFixtureHost(pm.Entry{Name: "identity", Function: func(ctx pm.Context, _ public.TokenStream) pm.Output {
 		return runtimeRootOutput(t, ctx, runtimePath, "::leaf::Value()")
 	}})
-	root := lower.RuntimeRoot{LogicalModule: runtimePath, BindingID: "native-selected-content", Namespace: paths.Namespace{PackagePath: runtimePath, GoPrefix: runtimePath, ModulePath: runtimePath}}
-	facadeRoot := lower.RuntimeRoot{LogicalModule: facadePath, BindingID: "facade-selected-content", Namespace: paths.Namespace{PackagePath: facadePath, ModulePath: facadePath}}
+	root := analysis.RuntimeRoot{LogicalModule: runtimePath, BindingID: "native-selected-content", Namespace: paths.Namespace{PackagePath: runtimePath, GoPrefix: runtimePath, ModulePath: runtimePath}}
+	facadeRoot := analysis.RuntimeRoot{LogicalModule: facadePath, BindingID: "facade-selected-content", Namespace: paths.Namespace{PackagePath: facadePath, ModulePath: facadePath}}
 	base := t.TempDir()
 	consumer, facade, runtime := filepath.Join(base, "consumer"), filepath.Join(base, "facade"), filepath.Join(base, "runtime")
 	writeDiagnosticModuleFile(t, consumer, "go.mod", []byte("module "+consumerPath+"\ngo 1.27\nrequire (\n"+facadePath+" v0.0.0\n"+runtimePath+" v0.0.0\n)\nreplace "+facadePath+" => ../facade\nreplace "+runtimePath+" => ../runtime\n"))
@@ -215,9 +216,9 @@ func TestRuntimeRootGoNamespaceWithoutRootPackage(t *testing.T) {
 	writeDiagnosticModuleFile(t, facade, "facade.gox", []byte("package facade\npub use dependency as runtime;\n"))
 	writeDiagnosticModuleFile(t, runtime, "go.mod", []byte("module "+runtimePath+"\ngo 1.27\n"))
 	writeDiagnosticModuleFile(t, runtime, "leaf/value.go", []byte("package leaf\nfunc Value() int { return 42 }\n"))
-	err := lower.CompileModules([]lower.Module{
-		{Path: consumerPath, Dir: consumer, Config: testConfig(t), Roots: paths.Roots{"facade": facadeRoot.Namespace, "macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, ProcLibraries: []*lower.ProcLibrary{library}, RuntimeRoots: []lower.RuntimeRoot{facadeRoot}},
-		{Path: facadePath, Dir: facade, RootPackage: facadePath, Config: testConfig(t), Roots: paths.Roots{"dependency": root.Namespace}, RuntimeRoots: []lower.RuntimeRoot{facadeRoot, root}},
+	err := lower.CompileModules([]analysis.Module{
+		{Path: consumerPath, Dir: consumer, Config: testConfig(t), Roots: paths.Roots{"facade": facadeRoot.Namespace, "macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, ProcLibraries: []*analysis.ProcLibrary{library}, RuntimeRoots: []analysis.RuntimeRoot{facadeRoot}},
+		{Path: facadePath, Dir: facade, RootPackage: facadePath, Config: testConfig(t), Roots: paths.Roots{"dependency": root.Namespace}, RuntimeRoots: []analysis.RuntimeRoot{facadeRoot, root}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +236,7 @@ func TestRuntimeRootGoNamespaceWithoutRootPackage(t *testing.T) {
 func TestRuntimeRootStaticMembersAndVariants(t *testing.T) {
 	_, library, _ := compileProcFixture(t, procFixtureSource)
 	const runtimePath = "example.org/item-runtime"
-	root := lower.RuntimeRoot{LogicalModule: runtimePath, BindingID: "selected-runtime", Namespace: paths.Namespace{PackagePath: runtimePath, ModulePath: runtimePath}}
+	root := analysis.RuntimeRoot{LogicalModule: runtimePath, BindingID: "selected-runtime", Namespace: paths.Namespace{PackagePath: runtimePath, ModulePath: runtimePath}}
 	for _, test := range []struct{ name, suffix, expression, want string }{
 		{"static method", "::Factory::Value()", "macros::identity!()", ""},
 		{"enum variant", "::Choice::Item(42)", "runtime::Read(macros::identity!())", ""},
@@ -259,8 +260,8 @@ impl Factory {
 pub enum Choice { Item(int) }
 pub func Read(value Choice) int { return match value { Choice::Item(n) => n } }
 `))
-			err := lower.CompileModules([]lower.Module{
-				{Path: "consumer", Dir: consumer, Config: testConfig(t), Roots: paths.Roots{"runtime": root.Namespace, "macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, ProcLibraries: []*lower.ProcLibrary{library}, RuntimeRoots: []lower.RuntimeRoot{root}},
+			err := lower.CompileModules([]analysis.Module{
+				{Path: "consumer", Dir: consumer, Config: testConfig(t), Roots: paths.Roots{"runtime": root.Namespace, "macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, ProcLibraries: []*analysis.ProcLibrary{library}, RuntimeRoots: []analysis.RuntimeRoot{root}},
 				{Path: runtimePath, Dir: runtime, RootPackage: runtimePath, Config: testConfig(t)},
 			})
 			if test.want != "" {

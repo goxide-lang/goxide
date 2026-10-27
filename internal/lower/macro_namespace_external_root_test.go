@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 )
@@ -26,7 +27,7 @@ func main(){println(util!(),Value!(),runtime())}
 		writeDiagnosticModuleFile(t, app, "macros/lib.gox", []byte("package macros\npub macro_rules! util{()=>{5};}\n"))
 		writeDiagnosticModuleFile(t, library, "go.mod", []byte("module zlib\n\ngo 1.27\n"))
 		writeDiagnosticModuleFile(t, library, "lib.gox", []byte("package zlib\npub func Runtime()int{return 3}\npub macro_rules! Value{()=>{42};}\n"))
-		if err := lower.CompileModules([]lower.Module{
+		if err := lower.CompileModules([]analysis.Module{
 			{Path: "app", Dir: app, Config: testConfig(t), Roots: paths.Roots{
 				"macros": {PackagePath: "app/macros", ModulePath: "app"},
 				"util":   {PackagePath: "zlib", ModulePath: "zlib"},

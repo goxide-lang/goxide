@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 )
 
@@ -23,7 +24,7 @@ impl[T interface{~int}] Value for Box[T] {type Item=int;func value(self Self)int
 impl[T interface{~string}] Value for Box[T] {type Item=string;func value(self Self)string{return "text"}}
 ` + test.declaration
 			_, err := lowerDeriveSources(map[string]string{"main.gox": source})
-			var diagnostic *lower.Diagnostic
+			var diagnostic *analysis.Diagnostic
 			if !errors.As(err, &diagnostic) || diagnostic.File != "main.gox" || diagnostic.Span.Start == 0 || !strings.Contains(diagnostic.Message, "mismatched types string") {
 				t.Fatalf("unused branch did not report source string subtraction: %v", err)
 			}

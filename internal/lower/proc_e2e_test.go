@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/typecheck"
@@ -98,7 +99,7 @@ func main() { if err := run(); err != nil { fmt.Fprintln(os.Stderr, err); os.Exi
 	consumerRoots := paths.Roots{"fmt": {GoPrefix: "fmt", PackagePath: "fmt", Source: "toolchain"}, "macros": {PackagePath: library.PackagePath, ModulePath: library.PackagePath, Source: "path"}}
 	generate := func() map[string][]byte {
 		t.Helper()
-		output, err := lower.CompilePackage(map[string][]byte{mainName: read("main.gox")}, "example.org/consumer", consumerImporter, consumerRoots, lower.PackageOptions{Config: configuration, ProcLibraries: []*lower.ProcLibrary{library}})
+		output, err := lower.CompilePackage(map[string][]byte{mainName: read("main.gox")}, "example.org/consumer", consumerImporter, consumerRoots, lower.PackageOptions{Config: configuration, ProcLibraries: []*analysis.ProcLibrary{library}})
 		if err != nil {
 			t.Fatal(err)
 		}

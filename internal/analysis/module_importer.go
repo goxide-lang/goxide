@@ -1,4 +1,4 @@
-package lower
+package analysis
 
 import (
 	"bytes"
@@ -13,9 +13,11 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type moduleGoImporter struct {
+	mu          sync.Mutex
 	root, tool  string
 	context     context.Context
 	env         []string
@@ -30,6 +32,8 @@ type moduleGoImporter struct {
 }
 
 func (i *moduleGoImporter) PackageIndex(source, module string) ([]string, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	key := source + "\x00" + module
 	if i.indices == nil {
 		i.indices, i.indexErrors = map[string][]string{}, map[string]error{}
@@ -100,9 +104,15 @@ func sourceModuleImporter(module Module) *moduleGoImporter {
 	return i
 }
 
-func (i *moduleGoImporter) Import(path string) (*types.Package, error) { return i.gc.Import(path) }
+func (i *moduleGoImporter) Import(path string) (*types.Package, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.gc.Import(path)
+}
 
 func (i *moduleGoImporter) PackageOrigin(path string) (string, bool, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	if _, ok := i.owners[path]; !ok {
 		if err := i.load(path, false); err != nil {
 			return "", false, err

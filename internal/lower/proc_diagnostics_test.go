@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
@@ -65,7 +66,7 @@ func TestCompilePackageProceduralDiagnostics(t *testing.T) {
 			}})
 			var diagnostics []expand.ProcDiagnostic
 			var filenames []string
-			options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}, OnProcDiagnostic: func(filename string, diagnostic expand.ProcDiagnostic) {
+			options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}, OnProcDiagnostic: func(filename string, diagnostic expand.ProcDiagnostic) {
 				filenames = append(filenames, filename)
 				diagnostics = append(diagnostics, diagnostic)
 			}}
@@ -93,7 +94,7 @@ func TestCompileProcLibraryProceduralDiagnostics(t *testing.T) {
 	source := procFixtureSource + "\nuse macros as upstream;\nfunc Extra() int { return upstream::identity!(42) }\n"
 	var diagnostics []expand.ProcDiagnostic
 	var filenames []string
-	options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{upstream}, OnProcDiagnostic: func(filename string, diagnostic expand.ProcDiagnostic) {
+	options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{upstream}, OnProcDiagnostic: func(filename string, diagnostic expand.ProcDiagnostic) {
 		filenames = append(filenames, filename)
 		diagnostics = append(diagnostics, diagnostic)
 	}}
@@ -113,12 +114,12 @@ func TestCompileModulesProceduralDiagnostics(t *testing.T) {
 			}})
 			var diagnostics []expand.ProcDiagnostic
 			var filenames []string
-			var modules []lower.Module
+			var modules []analysis.Module
 			for _, name := range []string{"first", "second"} {
 				directory := t.TempDir()
 				writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module "+name+"\n\ngo 1.27\n"))
 				writeDiagnosticModuleFile(t, directory, "main.gox", []byte("package main\nuse macros;\nfunc main() { println(macros::identity!(42)) }\n"))
-				modules = append(modules, lower.Module{Path: name, Dir: directory, Roots: paths.Roots{"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}})
+				modules = append(modules, analysis.Module{Path: name, Dir: directory, Roots: paths.Roots{"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}})
 			}
 			modules[0].OnProcDiagnostic = func(filename string, diagnostic expand.ProcDiagnostic) {
 				filenames = append(filenames, filename)
@@ -153,7 +154,7 @@ func TestCompileModulesProceduralDiagnosticsSkipDiscoveryRetries(t *testing.T) {
 	writeDiagnosticModuleFile(t, directory, "child/value.gox", []byte("package child\nuse macros;\npub func Value() int { return macros::identity!(42) }\n"))
 	var diagnostics []expand.ProcDiagnostic
 	var filenames []string
-	err := lower.CompileModules([]lower.Module{{Path: "consumer", Dir: directory, Roots: paths.Roots{"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, Config: testConfig(t), Crates: []lower.Crate{{Root: "consumer", SourceDir: "consumer"}}, ProcLibraries: []*lower.ProcLibrary{library}, OnProcDiagnostic: func(filename string, diagnostic expand.ProcDiagnostic) {
+	err := lower.CompileModules([]analysis.Module{{Path: "consumer", Dir: directory, Roots: paths.Roots{"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}, Config: testConfig(t), Crates: []analysis.Crate{{Root: "consumer", SourceDir: "consumer"}}, ProcLibraries: []*analysis.ProcLibrary{library}, OnProcDiagnostic: func(filename string, diagnostic expand.ProcDiagnostic) {
 		filenames = append(filenames, filename)
 		diagnostics = append(diagnostics, diagnostic)
 	}}})

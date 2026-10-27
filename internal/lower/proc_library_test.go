@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/procmacro"
@@ -99,7 +100,7 @@ pub func derive_impl(ctx pm::Context, input tokens::TokenStream) pm::Output { re
 pub func Helper() int { return 99 }
 `
 
-func compileProcFixture(t *testing.T, source string) (map[string][]byte, *lower.ProcLibrary, procFixtureImporter) {
+func compileProcFixture(t *testing.T, source string) (map[string][]byte, *analysis.ProcLibrary, procFixtureImporter) {
 	t.Helper()
 	imports := procFixtureSDK(t)
 	output, library, err := lower.CompileProcLibrary(map[string][]byte{"macros.gox": []byte(source)}, procFixturePackage, imports, procFixtureRoots(), lower.PackageOptions{Config: testConfig(t)})
@@ -158,7 +159,7 @@ func TestCompilePackageProceduralAliasesAndSourceOnlyExports(t *testing.T) {
 		{"use macros::*;", "identity"},
 	} {
 		source := "package main\n" + spelling.use + "\nfunc main() { println(" + spelling.call + "!(42)) }\n"
-		options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}}
+		options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}}
 		output, err := lower.CompilePackage(map[string][]byte{"main.gox": []byte(source)}, "consumer", imports, roots, options)
 		if err != nil {
 			t.Fatal(err)
@@ -175,7 +176,7 @@ func TestCompilePackageProceduralAliasesAndSourceOnlyExports(t *testing.T) {
 		"use macros as _; func main() {}",
 		"use macros; func main() { macros::identity() }",
 	} {
-		output, err := lower.CompilePackage(map[string][]byte{"main.gox": []byte("package main\n" + body)}, "consumer", imports, roots, lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}})
+		output, err := lower.CompilePackage(map[string][]byte{"main.gox": []byte("package main\n" + body)}, "consumer", imports, roots, lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}})
 		if err == nil || output != nil {
 			t.Fatalf("runtime proc export accepted: %s\n%s", body, output["main.gox"])
 		}
@@ -191,7 +192,7 @@ func TestCompilePackageProceduralDefinitionUsesAndMissingHost(t *testing.T) {
 	_, library, imports := compileProcFixture(t, producer)
 	roots := paths.Roots{"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}
 	source := []byte("package main\nuse macros;\nfunc main() { format := 7; _ = format; println(macros::identity!()) }\n")
-	options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}}
+	options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}}
 	output, err := lower.CompilePackage(map[string][]byte{"main.gox": source}, "consumer", imports, roots, options)
 	if err == nil || output != nil || !strings.Contains(err.Error(), "host") {
 		t.Fatalf("missing execution host accepted: %v", err)
@@ -218,7 +219,7 @@ func TestCompilePackagePreparedProcDoesNotAddSDKToConsumer(t *testing.T) {
 	_, library, _ := compileProcFixture(t, procFixtureSource)
 	consumerImports := procFixtureImporter{packages: map[string]*types.Package{}, native: importer.Default()}
 	roots := paths.Roots{"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage}}
-	options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}}
+	options := lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}}
 	source := map[string][]byte{"main.gox": []byte("package main\nuse macros;\nfunc main() { _ = macros::identity!(42) }\n")}
 	library.Run = procFixtureHost(pm.Entry{Name: "identity", Function: func(_ pm.Context, input public.TokenStream) pm.Output { return pm.Success(input) }})
 	if output, err := lower.CompilePackage(source, "consumer", consumerImports, roots, options); err != nil || len(output) != 1 {
@@ -270,7 +271,7 @@ func TestCompilePackageProcDisplaySpanCannotGrantInternalAccess(t *testing.T) {
 				}
 				return pm.Success(public.New(tokens...))
 			}})
-			output, err := lower.CompilePackage(map[string][]byte{"main.gox": []byte("package main\nuse macros;\nmacros::identity!()\nfunc main() {}")}, "elsewhere.org/consumer", imports, consumerRoots, lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}})
+			output, err := lower.CompilePackage(map[string][]byte{"main.gox": []byte("package main\nuse macros;\nmacros::identity!()\nfunc main() {}")}, "elsewhere.org/consumer", imports, consumerRoots, lower.PackageOptions{Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}})
 			if err == nil || output != nil || !strings.Contains(err.Error(), "internal package example.org/internal/hidden is not allowed from elsewhere.org/consumer") {
 				t.Fatalf("display span changed internal access: %v\n%s", err, output["main.gox"])
 			}
@@ -289,7 +290,7 @@ func TestCompileModulesProceduralReexport(t *testing.T) {
 		"macros": {PackagePath: procFixturePackage, ModulePath: procFixturePackage},
 		"facade": {PackagePath: "consumer/facade", ModulePath: "consumer"},
 	}
-	err := lower.CompileModules([]lower.Module{{Path: "consumer", Dir: directory, Roots: roots, Config: testConfig(t), ProcLibraries: []*lower.ProcLibrary{library}}})
+	err := lower.CompileModules([]analysis.Module{{Path: "consumer", Dir: directory, Roots: roots, Config: testConfig(t), ProcLibraries: []*analysis.ProcLibrary{library}}})
 	if err != nil {
 		t.Fatal(err)
 	}

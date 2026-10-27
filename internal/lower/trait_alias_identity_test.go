@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
@@ -53,7 +54,7 @@ func main(){
 		for name, source := range sources {
 			writeDiagnosticModuleFile(t, generated, name, []byte(source))
 		}
-		if err := lower.CompileModules([]lower.Module{{Path: "aliasfixture", Dir: generated, Config: testConfig(t)}}); err != nil {
+		if err := lower.CompileModules([]analysis.Module{{Path: "aliasfixture", Dir: generated, Config: testConfig(t)}}); err != nil {
 			t.Fatal(err)
 		}
 		files := map[string][]byte{}

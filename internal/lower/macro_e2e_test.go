@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/lower"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
@@ -103,7 +104,7 @@ func TestMacroSourceVisibility(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, test.want)
 			}
 			if test.name == "private-helper" {
-				var diagnostic *lower.Diagnostic
+				var diagnostic *analysis.Diagnostic
 				if !errors.As(err, &diagnostic) || diagnostic.Origin.Expn == 0 || len(diagnostic.Origin.Stack) != 1 || diagnostic.Definition.File == nil || diagnostic.Call.File == nil || diagnostic.Definition.File.Package.Name != "kit" || diagnostic.Call.File.Package.Name != "main" {
 					t.Fatalf("private macro reference lost definition/call origins: %#v", diagnostic)
 				}

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/expand"
 	"github.com/goxide-lang/goxide/internal/lower"
@@ -110,7 +111,7 @@ func main() {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := lower.SnapshotProcLibrary(checked)
+	snapshot, err := analysis.SnapshotProcLibrary(checked)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func main() {
 	if strings.Contains(string(metadata), directory) {
 		t.Fatal("fixed macro metadata contains a build machine path")
 	}
-	var restored lower.ProcLibrarySnapshot
+	var restored analysis.ProcLibrarySnapshot
 	if err := json.Unmarshal(metadata, &restored); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func main() {
 	t.Cleanup(func() { _ = host.Close() })
 	consumerImports := importer.Default()
 	invocations := 0
-	library, err := lower.LoadProcLibrarySnapshot(restored, consumerImports, func(request pm.Request) ([]byte, error) {
+	library, err := analysis.LoadProcLibrarySnapshot(restored, consumerImports, func(request pm.Request) ([]byte, error) {
 		invocations++
 		return host.Run(wasm, request)
 	})
@@ -148,10 +149,10 @@ func main() {
 	const facadePath = "example.org/playground_facade"
 	options := Options{
 		Config:   config.Config{Environment: consumerEnvironment, Features: config.Features{Enabled: map[string]bool{"consumer": true}}},
-		Importer: consumerImports, ProcLibraries: []*lower.ProcLibrary{library},
+		Importer: consumerImports, ProcLibraries: []*analysis.ProcLibrary{library},
 		Roots:        paths.Roots{"chosen": {PackagePath: facadePath, ModulePath: facadePath}},
-		RuntimeRoots: []lower.RuntimeRoot{{LogicalModule: PackagePath, BindingID: "fixed-consumer", Namespace: paths.Namespace{PackagePath: PackagePath, ModulePath: PackagePath}}},
-		SourcePackages: []lower.SourcePackage{{
+		RuntimeRoots: []analysis.RuntimeRoot{{LogicalModule: PackagePath, BindingID: "fixed-consumer", Namespace: paths.Namespace{PackagePath: PackagePath, ModulePath: PackagePath}}},
+		SourcePackages: []analysis.SourcePackage{{
 			PackagePath: facadePath, ModulePath: facadePath, Target: consumerEnvironment.Target,
 			Sources: map[string][]byte{"lib.gox": []byte("package facade\npub use macros::*;\n")},
 			Roots:   paths.Roots{"macros": {PackagePath: producerPath, ModulePath: producerPath}},

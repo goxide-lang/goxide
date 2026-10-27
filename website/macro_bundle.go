@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/playground"
 	"github.com/goxide-lang/goxide/internal/procmacro"
 )
@@ -44,7 +44,7 @@ func main() {
 		OnPreparedSources: func(prepared compile.PreparedSources) error {
 			bundle.Roots, bundle.RuntimeRoots, bundle.SourcePackages = prepared.Roots, prepared.RuntimeRoots, prepared.SourcePackages
 			for _, artifact := range prepared.Macros {
-				snapshot, err := lower.SnapshotProcLibrary(artifact.Library)
+				snapshot, err := analysis.SnapshotProcLibrary(artifact.Library)
 				if err != nil {
 					return err
 				}

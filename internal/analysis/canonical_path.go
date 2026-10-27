@@ -1,4 +1,4 @@
-package lower
+package analysis
 
 import (
 	"strings"

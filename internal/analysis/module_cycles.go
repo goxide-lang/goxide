@@ -1,4 +1,4 @@
-package lower
+package analysis
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	goparser "go/parser"
 	gotoken "go/token"
 	"io"
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -26,7 +25,7 @@ type moduleImport struct {
 
 // Check the emitted imports: a source-only macro or an unused use does not
 // create a Go dependency. Native Go files contribute edges without being edited.
-func checkModuleCycles(modules []Module, output map[string][]byte, resolved *resolve.Result, imports *moduleImporter) error {
+func checkModuleCycles(modules []Module, output map[string][]byte, resolved *resolve.Result, imports *moduleImporter, sources *sourceSet) error {
 	graph := map[string][]moduleImport{}
 	packageNames := map[string]string{}
 	for _, pkg := range resolved.Packages {
@@ -112,10 +111,7 @@ func checkModuleCycles(modules []Module, output map[string][]byte, resolved *res
 		}
 	}
 	for _, module := range modules {
-		names, err := moduleFiles(module.Dir, ".go")
-		if err != nil {
-			return err
-		}
+		names := sources.moduleFiles(module, ".go")
 		for _, name := range names {
 			rel, err := filepath.Rel(module.Dir, name)
 			if err != nil {
@@ -125,10 +121,7 @@ func checkModuleCycles(modules []Module, output map[string][]byte, resolved *res
 			if imports.crates != nil && !imports.crates.selected(module, path.Dir(key)) {
 				continue
 			}
-			data, err := os.ReadFile(name)
-			if err != nil {
-				return err
-			}
+			data := sources.read(name)
 			if err := add(key, data); err != nil {
 				return err
 			}
@@ -175,4 +168,8 @@ func checkModuleCycles(modules []Module, output map[string][]byte, resolved *res
 		}
 	}
 	return nil
+}
+
+func (r *Result) CheckImportCycles(output map[string][]byte) error {
+	return checkModuleCycles(r.Modules, output, r.Resolved, r.state.imports, r.state.sources)
 }

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/config"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/typecheck"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
@@ -205,7 +205,7 @@ func label()string{return native::ToUpper("ok")}
 	var output []File
 	var options Options
 	project, calls, err := testdeps.PrepareFormal(t, input, compile.Options{
-		PrepareNativePackage: func(modules []lower.Module) error {
+		PrepareNativePackage: func(modules []analysis.Module) error {
 			module := modules[0]
 			options = Options{Config: module.Config, Importer: typecheck.NewImporter(filepath.Join(module.Dir, "model.gox"), typecheck.ImporterOptions{Config: module.Config})}
 			return nil

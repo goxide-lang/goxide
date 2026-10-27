@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
@@ -14,10 +15,10 @@ import (
 func TestSourcePackageSnapshotKeepsPublicBoundaries(t *testing.T) {
 	cfg := testConfig(t)
 	root := paths.Namespace{PackagePath: "example.org/lib", ModulePath: "example.org/lib"}
-	makePackage := func(pkg, source string) lower.SourcePackage {
-		return lower.SourcePackage{PackagePath: pkg, ModulePath: root.ModulePath, RootPackage: root.PackagePath, Target: cfg.Environment.Target, Roots: paths.Roots{"crate": root}, Sources: map[string][]byte{"lib.gox": []byte(source)}}
+	makePackage := func(pkg, source string) analysis.SourcePackage {
+		return analysis.SourcePackage{PackagePath: pkg, ModulePath: root.ModulePath, RootPackage: root.PackagePath, Target: cfg.Environment.Target, Roots: paths.Roots{"crate": root}, Sources: map[string][]byte{"lib.gox": []byte(source)}}
 	}
-	packages := []lower.SourcePackage{
+	packages := []analysis.SourcePackage{
 		makePackage(root.PackagePath, "package lib\nmod hidden;\npub func Value()int{return hidden::Value()}\n"),
 		makePackage(root.PackagePath+"/hidden", "package hidden\npub func Value()int{return 42}\n"),
 	}
@@ -60,8 +61,8 @@ func TestSourceSnapshotMarksGeneratedEnvironmentSelection(t *testing.T) {
 	writeDiagnosticModuleFile(t, app, "main.gox", consumer)
 	writeDiagnosticModuleFile(t, dependency, "lib.gox", []byte("package dep\nmacro_rules! exported { () => { #[cfg(env(\"SOURCE_SNAPSHOT_ON\"))] pub func Value()int{return 42} }; }\nexported!()\n"))
 	roots := paths.Roots{"dep": {PackagePath: "example.org/dep", ModulePath: "example.org/dep"}}
-	var snapshots []lower.SourcePackage
-	err = lower.CompileModules([]lower.Module{{Path: "consumer", Dir: app, Roots: roots, Config: cfg, OnSourcePackages: func(sources []lower.SourcePackage) error { snapshots = sources; return nil }}, {Path: "example.org/dep", Dir: dependency, RootPackage: "example.org/dep", Config: cfg}})
+	var snapshots []analysis.SourcePackage
+	err = lower.CompileModules([]analysis.Module{{Path: "consumer", Dir: app, Roots: roots, Config: cfg, OnSourcePackages: func(sources []analysis.SourcePackage) error { snapshots = sources; return nil }}, {Path: "example.org/dep", Dir: dependency, RootPackage: "example.org/dep", Config: cfg}})
 	if err != nil {
 		t.Fatalf("live compilation lost captured environment: %v", err)
 	}
@@ -86,8 +87,8 @@ func TestSourceSnapshotExcludesDependencyTests(t *testing.T) {
 	writeDiagnosticModuleFile(t, dependency, "external_test.go", []byte("package dep_test\nimport missing \"missing.invalid/external_test_only\"\nvar ExternalTestOnly missing.Value\n"))
 	writeDiagnosticModuleFile(t, dependency, "source_test.gox", []byte("package dep\npub func SourceTestOnly()int{return 1}\n"))
 	roots := paths.Roots{"dep": {PackagePath: "example.org/dep", ModulePath: "example.org/dep"}}
-	var snapshots []lower.SourcePackage
-	err := lower.CompileModules([]lower.Module{{Path: "consumer", Dir: app, Roots: roots, Config: cfg, OnSourcePackages: func(sources []lower.SourcePackage) error { snapshots = sources; return nil }}, {Path: "example.org/dep", Dir: dependency, RootPackage: "example.org/dep", Config: cfg}})
+	var snapshots []analysis.SourcePackage
+	err := lower.CompileModules([]analysis.Module{{Path: "consumer", Dir: app, Roots: roots, Config: cfg, OnSourcePackages: func(sources []analysis.SourcePackage) error { snapshots = sources; return nil }}, {Path: "example.org/dep", Dir: dependency, RootPackage: "example.org/dep", Config: cfg}})
 	if err != nil {
 		t.Fatal(err)
 	}

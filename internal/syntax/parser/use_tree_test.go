@@ -21,9 +21,9 @@ use foo::{r#self};
 	if errors := errorsOnly(diagnostics); len(errors) != 0 {
 		t.Fatal(errors)
 	}
-	want := []string{"pub use foo", "pub use foo::Item as Alias", "pub use foo::nested as ns", "pub use foo::nested::*", "use foo::A", "use bar::B", "use foo::r#self"}
+	want := []string{"pub use foo::{self, Item as Alias, nested::{self as ns, *}}", "use {foo::A, bar::B}", "use foo::{}", "use {}", "use foo::{r#self}"}
 	if len(file.Items) != len(want) {
-		t.Fatalf("use leaves = %d, want %d", len(file.Items), len(want))
+		t.Fatalf("source declarations = %d, want %d", len(file.Items), len(want))
 	}
 	for i, item := range file.Items {
 		if got := strings.TrimSpace(printer.Source(item)); got != want[i] {
@@ -33,7 +33,7 @@ use foo::{r#self};
 	seen := map[ast.NodeID]bool{}
 	ast.Walk(file, func(n ast.Node) bool {
 		if seen[n.ID()] {
-			t.Fatalf("flattened uses share a node: %T at %v", n, n.Span())
+			t.Fatalf("raw uses share a node: %T at %v", n, n.Span())
 		}
 		seen[n.ID()] = true
 		return true

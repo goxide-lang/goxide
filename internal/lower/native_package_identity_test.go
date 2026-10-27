@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
@@ -46,8 +47,8 @@ func main(){
 import "nativefixture/shared"
 func Value()shared.Box[shared.Token]{return shared.Box[shared.Token]{Value:shared.Token{Value:42}}}
 `))
-		module := lower.Module{Path: "nativefixture", Dir: root, Config: testConfig(t), Roots: paths.Roots{"nativebridge": {ModulePath: "nativebridge", PackagePath: "nativebridge"}}}
-		if err := lower.CompileModules([]lower.Module{module}); err != nil {
+		module := analysis.Module{Path: "nativefixture", Dir: root, Config: testConfig(t), Roots: paths.Roots{"nativebridge": {ModulePath: "nativebridge", PackagePath: "nativebridge"}}}
+		if err := lower.CompileModules([]analysis.Module{module}); err != nil {
 			t.Fatal(err)
 		}
 		generated, err := os.ReadFile(filepath.Join(root, "main.go"))

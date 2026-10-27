@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/lower"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
@@ -45,7 +46,7 @@ func Relay[T api::Ready]()int{return T::value()}
 func Both[T any]()int where T:api::Ready+other::Ready{return T::value::<api::Ready>()+T::value::<other::Ready>()}
 func main(){fmt::Println(api::Read[[]int](),other::Read[[]int](),Relay[[]int](),Both[[]int]())}
 `+extra))
-				err := lower.CompileModules([]lower.Module{{Path: "staticscope", Dir: root, Config: testConfig(t)}})
+				err := lower.CompileModules([]analysis.Module{{Path: "staticscope", Dir: root, Config: testConfig(t)}})
 				if conflict {
 					if err == nil || !strings.Contains(err.Error(), "main.gox:7:") || !strings.Contains(err.Error(), "ambiguous trait member") {
 						t.Fatalf("competing definition bounds should remain ambiguous: %v", err)
@@ -95,7 +96,7 @@ func main(){
  fmt::Println(model::Count::make(model::Source(7)).Value,model::Count::make(7).Value,plain(9).Value)
 }
 `))
-		if err := lower.CompileModules([]lower.Module{{Path: "staticinput", Dir: root, Config: testConfig(t)}}); err != nil {
+		if err := lower.CompileModules([]analysis.Module{{Path: "staticinput", Dir: root, Config: testConfig(t)}}); err != nil {
 			t.Fatal(err)
 		}
 		generated, err := os.ReadFile(filepath.Join(root, "main.go"))

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/compile"
-	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/typecheck"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
@@ -56,7 +56,7 @@ func main() {
 	var outputs [][]File
 	options := Options{}
 	first, _, err := testdeps.PrepareFormalBinary(t, input, compile.Options{
-		PrepareNativePackage: func(modules []lower.Module) error {
+		PrepareNativePackage: func(modules []analysis.Module) error {
 			options.Config = modules[0].Config
 			// This importer is rooted in the compiler's pinned raw modules, not
 			// the generated fixture whose export data describe only the first edit.

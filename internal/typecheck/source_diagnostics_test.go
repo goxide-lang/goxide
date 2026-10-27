@@ -2,6 +2,9 @@ package typecheck
 
 import (
 	"errors"
+	"fmt"
+	"go/token"
+	"go/types"
 	"strings"
 	"testing"
 
@@ -37,5 +40,29 @@ func TestSourceDiagnosticPositions(t *testing.T) {
 	generated := errors.New("generated.go:17:4: native type error")
 	if SourceError(generated, sources, nil) != generated {
 		t.Fatal("invented a source mapping for generated Go")
+	}
+}
+
+func TestGeneratedDiagnosticUsesDisplayNameWithoutSourceMapping(t *testing.T) {
+	set := token.NewFileSet()
+	file := set.AddFile("logical/main.gox", -1, 100)
+	file.AddLine(20)
+	original := types.Error{Fset: set, Pos: file.Pos(35), Msg: "undefined: logical/main.gox"}
+	wrapped := fmt.Errorf("validation for logical/main.gox: %w", original)
+	sources := map[string]DiagnosticSource{"logical/main.gox": {Name: "main.gox", Text: []byte("package p\n")}}
+	formatted := SourceError(wrapped, sources, nil)
+	const want = "validation for logical/main.gox: main.gox:2:16: undefined: logical/main.gox"
+	if formatted.Error() != want {
+		t.Fatalf("diagnostic = %q, want %q", formatted.Error(), want)
+	}
+	var retained types.Error
+	if !errors.As(formatted, &retained) || retained.Fset != set || retained.Pos != original.Pos || set.Position(original.Pos).Filename != "logical/main.gox" {
+		t.Fatal("display formatting mutated or discarded the generated position")
+	}
+	if SourceError(formatted, sources, nil) != formatted {
+		t.Fatal("display formatting is not idempotent")
+	}
+	if SourceError(wrapped, nil, nil) != wrapped {
+		t.Fatal("unmapped generated filename changed")
 	}
 }

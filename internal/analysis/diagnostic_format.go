@@ -3,6 +3,7 @@ package analysis
 import (
 	"errors"
 	"fmt"
+	"go/types"
 	"sort"
 	"strings"
 
@@ -23,6 +24,14 @@ type moduleDiagnostic struct {
 func (e *moduleDiagnostic) Error() string { return e.location + ": " + e.message + e.notes }
 func (e *moduleDiagnostic) Unwrap() error { return e.cause }
 
+type generatedDisplayDiagnostic struct {
+	message string
+	cause   error
+}
+
+func (e *generatedDisplayDiagnostic) Error() string { return e.message }
+func (e *generatedDisplayDiagnostic) Unwrap() error { return e.cause }
+
 // SummarizeProcDiagnostics retains the source location and expansion trace after
 // a caller has already displayed every procedural diagnostic in source order.
 func SummarizeProcDiagnostics(err error) error {
@@ -34,8 +43,9 @@ func SummarizeProcDiagnostics(err error) error {
 	return &moduleDiagnostic{location: formatted.location, message: "procedural macro expansion failed", notes: formatted.notes, cause: err}
 }
 
-// FormatSourceDiagnostic prints only source-stage diagnostics. Native Go errors
-// retain their generated positions because this pipeline has no Go source map.
+// FormatSourceDiagnostic prints source-stage diagnostics with authored positions.
+// Native Go errors use display filenames but retain their generated line and
+// column because this pipeline has no Go source map.
 func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNames map[string]string, expanded *expand.Result) error {
 	if err == nil {
 		return nil
@@ -80,7 +90,7 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 			name, span = analyzed.Origin.File, analyzed.Origin.Span
 		}
 	default:
-		return err
+		return formatGeneratedDisplayName(err, displayNames)
 	}
 	keys := make([]string, 0, len(files))
 	for key := range files {
@@ -158,4 +168,28 @@ func FormatSourceDiagnostic(err error, files map[string]*syntax.File, displayNam
 		trace = "\n  " + strings.Join(notes, "\n  ")
 	}
 	return &moduleDiagnostic{location: location, message: message, notes: trace, cause: err}
+}
+
+func formatGeneratedDisplayName(err error, displayNames map[string]string) error {
+	var diagnostic types.Error
+	if !errors.As(err, &diagnostic) || diagnostic.Fset == nil {
+		return err
+	}
+	position := diagnostic.Fset.Position(diagnostic.Pos)
+	name := displayNames[position.Filename]
+	if name == "" || name == position.Filename {
+		return err
+	}
+	original, message := diagnostic.Error(), err.Error()
+	if !strings.HasSuffix(message, original) {
+		return err
+	}
+	location := position.String()
+	position.Filename = name
+	// Change only the structured diagnostic's filename. Keep wrapper context,
+	// message text and the original error/position available to other consumers.
+	return &generatedDisplayDiagnostic{
+		message: strings.TrimSuffix(message, original) + position.String() + strings.TrimPrefix(original, location),
+		cause:   err,
+	}
 }

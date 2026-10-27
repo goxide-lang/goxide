@@ -85,20 +85,20 @@ func (e *emitter) caseRuntimeDeclarations(impl *check.Impl) []goast.Decl {
 		copy.CaseEvidence = nil
 		copy.MethodCases = branch.Methods
 		copy.MethodCaseEvidence = nil
-		copy.Target = branch.Info.Substitute(impl.Target, branch.Substitution, impl.ConstSubstitution)
+		copy.Target = e.typeState.Substitute(branch.Info, impl.Target, branch.Substitution, impl.ConstSubstitution)
 		copy.Inputs = make([]types.Type, len(impl.Inputs))
 		for index, input := range impl.Inputs {
-			copy.Inputs[index] = branch.Info.Substitute(input, branch.Substitution, impl.ConstSubstitution)
+			copy.Inputs[index] = e.typeState.Substitute(branch.Info, input, branch.Substitution, impl.ConstSubstitution)
 		}
 		copy.Associated = map[string]types.Type{}
 		for name, output := range impl.Associated {
-			copy.Associated[name] = branch.Info.Substitute(output, branch.Substitution, impl.ConstSubstitution)
+			copy.Associated[name] = e.typeState.Substitute(branch.Info, output, branch.Substitution, impl.ConstSubstitution)
 		}
 		copy.Methods = nil
 		for _, member := range impl.Methods {
 			selected := *member
 			selected.Impl = &copy
-			selected.Signature = branch.Info.Substitute(member.Signature, branch.Substitution, impl.ConstSubstitution).(*types.Signature)
+			selected.Signature = e.typeState.Substitute(branch.Info, member.Signature, branch.Substitution, impl.ConstSubstitution).(*types.Signature)
 			copy.Methods = append(copy.Methods, &selected)
 		}
 		e.info, e.instanceBody, e.caseViewImpl = branch.Info, nil, &copy

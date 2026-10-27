@@ -71,7 +71,7 @@ func (e *emitter) enumInherentMethods(target *types.Named) []*goast.Field {
 			for index, parameter := range impl.TypeParams {
 				sub[parameter] = target.TypeParams().At(index)
 			}
-			signature := e.info.Substitute(member.Signature, sub, nil).(*types.Signature)
+			signature := e.typeState.Substitute(e.info, member.Signature, sub, nil).(*types.Signature)
 			typ, _ := e.memberSignature(signature)
 			fields = append(fields, &goast.Field{Names: []*goast.Ident{goast.NewIdent(member.GoName)}, Type: typ})
 		}

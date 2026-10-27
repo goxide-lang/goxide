@@ -11,6 +11,7 @@ import (
 // may contain ordinary Go generic function types whose binders must survive.
 type bodyTypes struct {
 	info      *Info
+	state     *TypeState
 	constants map[*ConstParam]ConstValue
 	sub       map[*types.TypeParam]types.Type
 	memo      map[types.Type]types.Type
@@ -28,10 +29,16 @@ func (r *bodyTypes) typ(t types.Type) types.Type {
 	if result := r.memo[t]; result != nil {
 		return result
 	}
-	if r.info != nil {
+	if r.info != nil || r.state != nil {
 		if parameter, ok := types.Unalias(t).(*types.TypeParam); ok {
-			if array := r.info.ArrayPatterns[parameter]; array != nil {
-				result := r.info.ArrayType(r.typ(array.Elem), resolveConst(array.Length, r.constants))
+			if array, ok := r.arrayOf(parameter); ok {
+				elem, length := r.typ(array.Elem), resolveConst(array.Length, r.constants)
+				var result types.Type
+				if r.state != nil {
+					result = r.state.arrayType(r.info, elem, length)
+				} else {
+					result = r.info.ArrayType(elem, length)
+				}
 				r.memo[t] = result
 				return result
 			}
@@ -127,6 +134,7 @@ func (r *bodyTypes) tuple(t *types.Tuple) *types.Tuple {
 
 func (r *bodyTypes) signature(signature *types.Signature) *types.Signature {
 	local := newBodyTypes(r.info, copySubstitution(r.sub), r.constants)
+	local.state = r.state
 	parameters := func(list *types.TypeParamList) []*types.TypeParam {
 		var result []*types.TypeParam
 		for i := 0; i < list.Len(); i++ {
@@ -162,14 +170,19 @@ func (r *bodyTypes) uses(t types.Type, seen map[types.Type]bool) bool {
 	}
 	seen[t] = true
 	if parameter, ok := t.(*types.TypeParam); ok {
-		if r.info != nil {
-			if array := r.info.ArrayPatterns[parameter]; array != nil {
-				return resolveConst(array.Length, r.constants) != array.Length || r.uses(array.Elem, seen)
-			}
+		if array, ok := r.arrayOf(parameter); ok {
+			return resolveConst(array.Length, r.constants) != array.Length || r.uses(array.Elem, seen)
 		}
 		return r.sub[parameter] != nil && r.sub[parameter] != parameter
 	}
 	return typeChildren(t, func(child types.Type) bool { return r.uses(child, seen) })
+}
+
+func (r *bodyTypes) arrayOf(typ types.Type) (*ArrayPattern, bool) {
+	if r.state != nil {
+		return r.state.ArrayOf(r.info, typ)
+	}
+	return r.info.ArrayOf(typ)
 }
 
 func copySubstitution(sub map[*types.TypeParam]types.Type) map[*types.TypeParam]types.Type {

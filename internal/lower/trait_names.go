@@ -20,6 +20,7 @@ const typeCarrierAnchor = "GoxideInternalTypeCarrierForSelf"
 
 // Generated names and their owning files are fixed before emitting any file.
 type traitProgram struct {
+	typeState           *check.TypeState
 	stableGo            bool
 	sourceInfo          *check.Info
 	impls               []*check.Impl
@@ -57,8 +58,8 @@ type traitFacade struct {
 	impls []*check.Impl
 }
 
-func prepareTraits(info *check.Info, validation, stableGo bool) *traitProgram {
-	p := &traitProgram{stableGo: stableGo, sourceInfo: info, carriers: map[*types.Named]*traitCarrier{}, facades: map[string]*traitFacade{}, claims: map[string]map[string]syntax.Node{}, members: map[*types.Named]map[string]syntax.Node{}}
+func prepareTraits(info *check.Info, state *check.TypeState, validation, stableGo bool) *traitProgram {
+	p := &traitProgram{typeState: state, stableGo: stableGo, sourceInfo: info, carriers: map[*types.Named]*traitCarrier{}, facades: map[string]*traitFacade{}, claims: map[string]map[string]syntax.Node{}, members: map[*types.Named]map[string]syntax.Node{}}
 	if info == nil {
 		return p
 	}
@@ -519,13 +520,13 @@ func (p *traitProgram) prepareTemplateNames(info *check.Info) {
 		}
 		name := typeTargetName(impl.Target)
 		if p.stableGo {
-			name = stableTypeTargetName(info, impl.Target)
+			name = stableTypeTargetName(p.typeState, info, impl.Target)
 		}
 		if impl.Trait != nil {
 			if p.stableGo {
 				name += traitName(impl.Trait)
 				for _, input := range impl.Inputs {
-					name += stableTypeTargetName(info, input)
+					name += stableTypeTargetName(p.typeState, info, input)
 				}
 			} else {
 				name += traitApplicationName(impl)
@@ -537,7 +538,7 @@ func (p *traitProgram) prepareTemplateNames(info *check.Info) {
 
 func (e *emitter) templateTargetName(target types.Type) string {
 	if e.traits.stableGo {
-		return stableTypeTargetName(e.info, target)
+		return stableTypeTargetName(e.typeState, e.info, target)
 	}
 	return typeTargetName(target)
 }

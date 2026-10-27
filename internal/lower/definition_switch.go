@@ -33,7 +33,7 @@ func (e *emitter) validationTypeSwitch(node *syntax.TypeSwitchStmt, init, guard 
 		for _, typ := range clause.Types {
 			syntax.Walk(typ, func(part syntax.Node) bool {
 				if ident, ok := part.(*syntax.Ident); ok {
-					if array, ok := e.info.ArrayOf(e.info.Symbols[e.valueSymbol(ident)]); ok {
+					if array, ok := e.typeState.ArrayOf(e.info, e.info.Symbols[e.valueSymbol(ident)]); ok {
 						symbolic = symbolic || array.Length.Param != nil
 					}
 				}

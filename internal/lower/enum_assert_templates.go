@@ -62,14 +62,14 @@ func (p *traitProgram) prepareEnumAssertions(info *check.Info) {
 					member := selectedMember(selection)
 					impl := member.Impl
 					edges[body.key] = append(edges[body.key], edge{enumAssertionBodyKey{member.Decl, memberCase(member)}, func(typ types.Type) types.Type {
-						return substituteEnumCheck(current, typ, impl.Substitution, impl.ConstSubstitution)
+						return substituteEnumCheck(p.typeState, current, typ, impl.Substitution, impl.ConstSubstitution)
 					}})
 				}
 			}
 			if instance := current.FunctionInstances[node]; instance != nil {
 				if function := p.functions[instance.Signature]; function != nil {
 					edges[body.key] = append(edges[body.key], edge{enumAssertionBodyKey{function.decl, instance.Case}, func(typ types.Type) types.Type {
-						return substituteEnumCheck(current, typ, instance.Substitution, instance.ConstSubstitution)
+						return substituteEnumCheck(p.typeState, current, typ, instance.Substitution, instance.ConstSubstitution)
 					}})
 				}
 			}
@@ -157,7 +157,7 @@ func (e *emitter) memberEnumChecks(member *check.Member) []types.Type {
 	key := enumAssertionBodyKey{member.Decl, memberCase(member)}
 	var out []types.Type
 	for _, typ := range e.traits.enumChecks[key] {
-		out = append(out, substituteEnumCheck(e.info, typ, member.Impl.Substitution, member.Impl.ConstSubstitution))
+		out = append(out, substituteEnumCheck(e.typeState, e.info, typ, member.Impl.Substitution, member.Impl.ConstSubstitution))
 	}
 	return out
 }
@@ -173,7 +173,7 @@ func (e *emitter) viewEnumChecks(impl *check.Impl) []types.Type {
 	}
 	var out []types.Type
 	for _, typ := range requirements {
-		out = append(out, substituteEnumCheck(e.info, typ, impl.Substitution, impl.ConstSubstitution))
+		out = append(out, substituteEnumCheck(e.typeState, e.info, typ, impl.Substitution, impl.ConstSubstitution))
 	}
 	return out
 }
@@ -189,7 +189,7 @@ func (e *emitter) functionEnumChecks(function *traitFunction, instance *check.Fu
 	var out []types.Type
 	for _, typ := range e.traits.enumChecks[key] {
 		if instance != nil {
-			typ = substituteEnumCheck(e.info, typ, instance.Substitution, instance.ConstSubstitution)
+			typ = substituteEnumCheck(e.typeState, e.info, typ, instance.Substitution, instance.ConstSubstitution)
 		}
 		out = append(out, typ)
 	}
@@ -279,9 +279,9 @@ func assertionTypeContains(container, want types.Type) bool {
 // Recursive calls substitute simultaneously: A->B, B->A swaps parameters;
 // it must not chase replacements back into the caller's binders. Isolating the
 // callee binders also retains arrays and associated-type substitution support.
-func substituteEnumCheck(info *check.Info, typ types.Type, substitution map[*types.TypeParam]types.Type, constants map[*check.ConstParam]check.ConstValue) types.Type {
+func substituteEnumCheck(state *check.TypeState, info *check.Info, typ types.Type, substitution map[*types.TypeParam]types.Type, constants map[*check.ConstParam]check.ConstValue) types.Type {
 	if len(substitution) == 0 {
-		return info.Substitute(typ, nil, constants)
+		return state.Substitute(info, typ, nil, constants)
 	}
 	isolated := map[*types.TypeParam]types.Type{}
 	arguments := map[*types.TypeParam]types.Type{}
@@ -290,5 +290,5 @@ func substituteEnumCheck(info *check.Info, typ types.Type, substitution map[*typ
 		isolated[parameter] = fresh
 		arguments[fresh] = argument
 	}
-	return info.Substitute(info.Substitute(typ, isolated, constants), arguments, nil)
+	return state.Substitute(info, state.Substitute(info, typ, isolated, constants), arguments, nil)
 }

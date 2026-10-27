@@ -10,6 +10,10 @@ import (
 )
 
 func (b *TraitBound) MethodSignature(m *Member) *types.Signature {
+	return substituteSignature(m.Signature, b.methodSubstitution(), b.info)
+}
+
+func (b *TraitBound) methodSubstitution() map[*types.TypeParam]types.Type {
 	sub := map[*types.TypeParam]types.Type{b.Trait.Self: b.Target}
 	for index, parameter := range b.Trait.TypeParams {
 		if index < len(b.Inputs) {
@@ -19,7 +23,7 @@ func (b *TraitBound) MethodSignature(m *Member) *types.Signature {
 	for _, a := range b.Trait.Associated {
 		sub[a.Param] = b.Associated[a.Name]
 	}
-	return substituteSignature(m.Signature, sub, b.info)
+	return sub
 }
 
 func (c *checker) traitVisible(t *Trait) bool {

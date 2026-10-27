@@ -16,7 +16,7 @@ type inherentCarrier struct {
 	impl *check.Impl
 }
 
-func plainInherentCarrier(info *check.Info, impl *check.Impl) bool {
+func (p *traitProgram) plainInherentCarrier(info *check.Info, impl *check.Impl) bool {
 	if len(impl.Requirements) != 0 || len(impl.ConstParams) != 0 || len(impl.ConstArgs) != 0 || implHasBodyCases(info, impl) || info.Demands != nil && info.Demands.ImplTemplates[impl] {
 		return false
 	}
@@ -38,7 +38,7 @@ func plainInherentCarrier(info *check.Info, impl *check.Impl) bool {
 		sub[parameter] = target.Origin().TypeParams().At(index)
 	}
 	for _, parameter := range impl.TypeParams {
-		constraint, ok := info.Substitute(parameter.Constraint(), sub, nil).Underlying().(*types.Interface)
+		constraint, ok := p.typeState.Substitute(info, parameter.Constraint(), sub, nil).Underlying().(*types.Interface)
 		if !ok || !types.Satisfies(sub[parameter], constraint) {
 			return false
 		}
@@ -59,13 +59,13 @@ func (p *traitProgram) prepareInherentCarriers(info *check.Info) {
 			}
 			name := targetName(impl) + "Ops_" + implSuffix(info, impl)
 			var carrier *inherentCarrier
-			if plainInherentCarrier(info, impl) {
+			if p.plainInherentCarrier(info, impl) {
 				name = impl.Base.Obj().Name() + "Ops"
 				carrier = shared[impl.Base]
 			}
 			if carrier == nil {
 				carrier = &inherentCarrier{name: name, impl: impl}
-				if plainInherentCarrier(info, impl) {
+				if p.plainInherentCarrier(info, impl) {
 					shared[impl.Base] = carrier
 				}
 			}

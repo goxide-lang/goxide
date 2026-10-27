@@ -163,13 +163,17 @@ func (i *Info) ArrayType(elem types.Type, length ConstValue) types.Type {
 			return rep
 		}
 	}
+	rep := arrayRepresentative(elem, length)
+	i.ArrayPatterns[rep] = &ArrayPattern{Elem: elem, Length: length}
+	return rep
+}
+
+func arrayRepresentative(elem types.Type, length ConstValue) *types.TypeParam {
 	constraint := types.Type(anyType)
 	if types.Comparable(elem) {
 		constraint = types.Universe.Lookup("comparable").Type()
 	}
-	rep := types.NewTypeParam(types.NewTypeName(0, nil, "["+length.Param.Name.Name+"]"+types.TypeString(elem, nil), nil), constraint)
-	i.ArrayPatterns[rep] = &ArrayPattern{Elem: elem, Length: length}
-	return rep
+	return types.NewTypeParam(types.NewTypeName(0, nil, "["+length.Param.Name.Name+"]"+types.TypeString(elem, nil), nil), constraint)
 }
 
 // Substitute resolves source array lengths together with ordinary type values.

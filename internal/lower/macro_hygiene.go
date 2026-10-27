@@ -17,7 +17,7 @@ import (
 )
 
 // Names are chosen after resolution, so spelling cannot change macro bindings.
-func macroNames(info *check.Info) map[*resolve.Symbol]string {
+func macroNames(info *check.Info, state *check.TypeState) map[*resolve.Symbol]string {
 	names := map[*resolve.Symbol]string{}
 	if info == nil || info.Resolve == nil {
 		return names
@@ -126,7 +126,7 @@ func macroNames(info *check.Info) map[*resolve.Symbol]string {
 			fixed[symbol] = true
 		}
 		for _, file := range pkg.Files {
-			probe := &emitter{info: info, result: result, file: file, name: file.Name, tree: file.AST}
+			probe := &emitter{typeState: state, info: info, result: result, file: file, name: file.Name, tree: file.AST}
 			for _, scope := range file.Scopes {
 				if scope.Kind == resolve.MemberScope {
 					for _, symbol := range scope.Bindings {
@@ -540,13 +540,13 @@ func macroEnumAssertionNames(e *emitter, typ types.Type, addType func(types.Type
 		if instance := e.info.EnumOf(typ); instance != nil {
 			addEnum(instance)
 			for _, variant := range instance.Enum.Variants {
-				for _, field := range instance.Fields(variant) {
+				for _, field := range e.typeState.Fields(instance, variant) {
 					walk(field.Type, seen)
 				}
 			}
 			return
 		}
-		if array, ok := e.info.ArrayOf(typ); ok {
+		if array, ok := e.typeState.ArrayOf(e.info, typ); ok {
 			walk(array.Elem, seen)
 			return
 		}

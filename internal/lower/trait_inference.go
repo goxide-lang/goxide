@@ -62,7 +62,7 @@ func (p *traitInference) collect(typ types.Type) {
 			for index := 0; index < typ.TypeArgs().Len(); index++ {
 				argument := typ.TypeArgs().At(index)
 				p.collect(argument)
-				constraint := p.e.info.Substitute(typ.TypeParams().At(index).Constraint(), substitution, nil)
+				constraint := p.e.typeState.Substitute(p.e.info, typ.TypeParams().At(index).Constraint(), substitution, nil)
 				if !types.Identical(constraint, types.Universe.Lookup("any").Type()) {
 					p.constraints[argument] = appendAssertionType(p.constraints[argument], constraint)
 				}
@@ -111,7 +111,7 @@ func (p *traitInference) collect(typ types.Type) {
 	p.types = append(p.types, typ)
 	p.names = append(p.names, name)
 	p.bodyTypes[typ] = name
-	if p.e.traits.stableGo && p.e.info.Comparable(typ) {
+	if p.e.traits.stableGo && p.e.typeState.Comparable(p.e.info, typ) {
 		p.constraints[typ] = appendAssertionType(p.constraints[typ], types.Universe.Lookup("comparable").Type())
 	}
 }
@@ -304,7 +304,7 @@ func (p *traitInference) callbacks(bounds []*check.TraitBound, evidence []check.
 			}
 			selection := &check.MemberSelection{Member: member, Impl: selected.Impl, Bound: selected.Bound, Signature: member.Signature}
 			if selected.Bound != nil {
-				selection.Signature = selected.Bound.MethodSignature(method)
+				selection.Signature = p.e.typeState.MethodSignature(selected.Bound, method)
 			}
 			args = append(args, p.operation(selection))
 			parameters = append(parameters, operationSignature(selection))
@@ -379,7 +379,7 @@ func (p *traitInference) operation(selection *check.MemberSelection) goast.Expr 
 }
 
 func (e *emitter) functionInstanceSignature(instance *check.FunctionInstance) *types.Signature {
-	return types.NewSignatureType(nil, nil, nil, e.info.Substitute(instance.Signature.Params(), instance.Substitution, instance.ConstSubstitution).(*types.Tuple), e.info.Substitute(instance.Signature.Results(), instance.Substitution, instance.ConstSubstitution).(*types.Tuple), instance.Signature.Variadic())
+	return types.NewSignatureType(nil, nil, nil, e.typeState.Substitute(e.info, instance.Signature.Params(), instance.Substitution, instance.ConstSubstitution).(*types.Tuple), e.typeState.Substitute(e.info, instance.Signature.Results(), instance.Substitution, instance.ConstSubstitution).(*types.Tuple), instance.Signature.Variadic())
 }
 
 func (e *emitter) inferredFunctionCall(call *syntax.CallExpr) (goast.Expr, bool) {
@@ -592,7 +592,7 @@ func (p *traitProgram) prepareInferenceCalls(info *check.Info) {
 		if source == nil || body.Info == nil {
 			return
 		}
-		e := &emitter{info: body.Info, traits: p, name: body.File, tree: source.AST, file: source, result: info.Resolve}
+		e := &emitter{typeState: p.typeState, info: body.Info, traits: p, name: body.File, tree: source.AST, file: source, result: info.Resolve}
 		syntax.Walk(body.Node, func(node syntax.Node) bool {
 			if expression, ok := node.(syntax.Expr); ok {
 				if selection := body.Info.Members[expression]; selection != nil && e.needsOperationInference(selection) {

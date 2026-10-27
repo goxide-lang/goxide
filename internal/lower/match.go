@@ -410,7 +410,7 @@ func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant,
 	var part func(syntax.Pat, types.Type, goast.Expr, goast.Expr)
 	var fields func(*check.Instance, *check.Variant, matchPayload, syntax.Pat)
 	fields = func(instance *check.Instance, variant *check.Variant, payload matchPayload, pat syntax.Pat) {
-		decls := instance.Fields(variant)
+		decls := e.typeState.Fields(instance, variant)
 		e.eachMatchField(variant, pat, func(index int, child syntax.Pat) {
 			if index >= len(payload.values) || index >= len(decls) {
 				e.fail(child, "变体模式载荷数量不匹配")

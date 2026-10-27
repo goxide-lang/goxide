@@ -31,7 +31,7 @@ func (e *emitter) templateCallbacks(bounds []*check.TraitBound) (*goast.FieldLis
 			used[name] = true
 			e.reserved[name] = true
 			names[method.Name] = goast.NewIdent(name)
-			ft, _ := e.memberSignature(bound.MethodSignature(method))
+			ft, _ := e.memberSignature(e.typeState.MethodSignature(bound, method))
 			if !method.Static {
 				target := traitBoundTarget(bound)
 				if method.Receiver != check.ValueRef {
@@ -51,7 +51,7 @@ func (e *emitter) templateCallbacks(bounds []*check.TraitBound) (*goast.FieldLis
 				}
 				e.reserved[bindingName] = true
 				names["bind:"+method.Name] = goast.NewIdent(bindingName)
-				selection := &check.MemberSelection{Member: method, Bound: bound, Signature: bound.MethodSignature(method)}
+				selection := &check.MemberSelection{Member: method, Bound: bound, Signature: e.typeState.MethodSignature(bound, method)}
 				parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(bindingName)}, Type: e.goType(e.bindingSignature(selection))})
 			}
 		}
@@ -111,7 +111,7 @@ func (e *emitter) callbackArguments(bounds []*check.TraitBound, evidence []check
 			}
 			selection := &check.MemberSelection{Member: member, Impl: selected.Impl, Bound: selected.Bound, Signature: member.Signature}
 			if selected.Bound != nil {
-				selection.Signature = selected.Bound.MethodSignature(method)
+				selection.Signature = e.typeState.MethodSignature(selected.Bound, method)
 			}
 			args = append(args, e.operationFunction(selection))
 			if !method.Static && e.traits.boundNeedsBinding(bound, method.Name) {

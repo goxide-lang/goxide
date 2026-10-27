@@ -47,7 +47,7 @@ func (e *emitter) stableConstPlan(node syntax.Node, constants []*check.ConstPara
 			return
 		}
 		seen[typ] = true
-		if array, ok := info.ArrayOf(typ); ok {
+		if array, ok := e.typeState.ArrayOf(info, typ); ok {
 			collect(array.Elem)
 			if array.Length.Param != nil {
 				for _, old := range plan.arrays {
@@ -157,8 +157,8 @@ func (e *emitter) enterConstTemplate(plan *constTemplate) func() {
 	if e.instanceBody != nil && e.instanceBody.Case != nil {
 		contextInfo = e.info
 		for _, array := range plan.arrays {
-			array.typ = contextInfo.Substitute(array.typ, e.instanceBody.Substitution, nil)
-			if pattern, ok := contextInfo.ArrayOf(array.typ); ok {
+			array.typ = e.typeState.Substitute(contextInfo, array.typ, e.instanceBody.Substitution, nil)
+			if pattern, ok := e.typeState.ArrayOf(contextInfo, array.typ); ok {
 				array.elem = pattern.Elem
 				array.length = pattern.Length.Param
 			}
@@ -166,8 +166,8 @@ func (e *emitter) enterConstTemplate(plan *constTemplate) func() {
 	} else if e.caseViewImpl != nil && e.caseViewImpl.Case != nil {
 		contextInfo = e.info
 		for _, array := range plan.arrays {
-			array.typ = contextInfo.Substitute(array.typ, e.caseViewImpl.Substitution, nil)
-			if pattern, ok := contextInfo.ArrayOf(array.typ); ok {
+			array.typ = e.typeState.Substitute(contextInfo, array.typ, e.caseViewImpl.Substitution, nil)
+			if pattern, ok := e.typeState.ArrayOf(contextInfo, array.typ); ok {
 				array.elem = pattern.Elem
 				array.length = pattern.Length.Param
 			}
@@ -188,7 +188,7 @@ func (e *emitter) stableArray(typ types.Type) *constArray {
 	if e.constTemplate == nil {
 		return nil
 	}
-	array, ok := e.info.ArrayOf(typ)
+	array, ok := e.typeState.ArrayOf(e.info, typ)
 	if !ok || array.Length.Param == nil {
 		return nil
 	}
@@ -245,7 +245,7 @@ func (e *emitter) stableConstTypeParameters(fields *goast.FieldList) *goast.Fiel
 	}
 	for _, array := range e.constTemplate.arrays {
 		constraint := "any"
-		if e.info.Comparable(array.typ) {
+		if e.typeState.Comparable(e.info, array.typ) {
 			constraint = "comparable"
 		}
 		fields.List = append(fields.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(array.typeName)}, Type: goast.NewIdent(constraint)})
@@ -272,7 +272,7 @@ func (e *emitter) stableConstTypes(plan *constTemplate, sub map[*types.TypeParam
 	}
 	var result []types.Type
 	for _, array := range plan.arrays {
-		result = append(result, e.traits.sourceInfo.Substitute(array.typ, sub, constants))
+		result = append(result, e.typeState.Substitute(e.traits.sourceInfo, array.typ, sub, constants))
 	}
 	return result
 }
@@ -302,7 +302,7 @@ func (e *emitter) stableConstArguments(plan *constTemplate, sub map[*types.TypeP
 		signatures = append(signatures, types.Typ[types.Int])
 	}
 	for _, typ := range e.stableConstTypes(plan, sub, constants) {
-		array, ok := e.info.ArrayOf(typ)
+		array, ok := e.typeState.ArrayOf(e.info, typ)
 		if !ok {
 			e.fail(e.tree, "stable Go array shape is missing")
 			continue
@@ -316,7 +316,7 @@ func (e *emitter) stableProjection(typ types.Type) goast.Expr {
 	if array := e.stableArray(typ); array != nil {
 		return e.callbackReference(goast.NewIdent(array.sliceName))
 	}
-	array, ok := e.info.ArrayOf(typ)
+	array, ok := e.typeState.ArrayOf(e.info, typ)
 	if !ok || array.Length.Param != nil {
 		e.fail(e.tree, "stable Go array projection needs a checked length")
 		return goast.NewIdent("goxideMissingArray")
@@ -345,27 +345,27 @@ func (p *traitInference) stableConstants(plan *constTemplate, sub map[*types.Typ
 	return values, signatures
 }
 
-func stableTypeTargetName(info *check.Info, typ types.Type) string {
-	if array, ok := info.ArrayOf(typ); ok {
+func stableTypeTargetName(state *check.TypeState, info *check.Info, typ types.Type) string {
+	if array, ok := state.ArrayOf(info, typ); ok {
 		length := strconv.FormatInt(array.Length.Value, 10)
 		if array.Length.Param != nil {
 			length = exportedName(array.Length.Param.Name.Name)
 		}
-		return stableTypeTargetName(info, array.Elem) + "Array" + length
+		return stableTypeTargetName(state, info, array.Elem) + "Array" + length
 	}
 	switch t := types.Unalias(typ).(type) {
 	case *types.Named:
 		name := exportedName(t.Obj().Name())
 		for i := 0; i < t.TypeArgs().Len(); i++ {
-			name += stableTypeTargetName(info, t.TypeArgs().At(i))
+			name += stableTypeTargetName(state, info, t.TypeArgs().At(i))
 		}
 		return name
 	case *types.Pointer:
-		return stableTypeTargetName(info, t.Elem()) + "Pointer"
+		return stableTypeTargetName(state, info, t.Elem()) + "Pointer"
 	case *types.Slice:
-		return stableTypeTargetName(info, t.Elem()) + "Slice"
+		return stableTypeTargetName(state, info, t.Elem()) + "Slice"
 	case *types.Map:
-		return "Map" + stableTypeTargetName(info, t.Key()) + stableTypeTargetName(info, t.Elem())
+		return "Map" + stableTypeTargetName(state, info, t.Key()) + stableTypeTargetName(state, info, t.Elem())
 	case *types.Chan:
 		direction := "Chan"
 		if t.Dir() == types.RecvOnly {
@@ -373,15 +373,15 @@ func stableTypeTargetName(info *check.Info, typ types.Type) string {
 		} else if t.Dir() == types.SendOnly {
 			direction = "SendChan"
 		}
-		return direction + stableTypeTargetName(info, t.Elem())
+		return direction + stableTypeTargetName(state, info, t.Elem())
 	case *types.Signature:
 		name := "Func"
 		for i := 0; i < t.Params().Len(); i++ {
-			name += stableTypeTargetName(info, t.Params().At(i).Type())
+			name += stableTypeTargetName(state, info, t.Params().At(i).Type())
 		}
 		name += "To"
 		for i := 0; i < t.Results().Len(); i++ {
-			name += stableTypeTargetName(info, t.Results().At(i).Type())
+			name += stableTypeTargetName(state, info, t.Results().At(i).Type())
 		}
 		return name
 	}

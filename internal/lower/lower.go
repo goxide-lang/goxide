@@ -54,8 +54,9 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	hygienicNames := macroNames(info)
-	traits := prepareTraits(info, options.validation != nil, options.stableGo)
+	typeState := &check.TypeState{}
+	hygienicNames := macroNames(info, typeState)
+	traits := prepareTraits(info, typeState, options.validation != nil, options.stableGo)
 	if info != nil && info.Demands != nil && info.Demands.Info != nil {
 		info = info.Demands.Info
 	}
@@ -83,7 +84,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	}
 	for _, name := range names {
 		tree := files[name]
-		e := &emitter{symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
+		e := &emitter{typeState: typeState, symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
 		e.enumValidHelpers = enumValidHelpers
 		e.enumAssertions = enumAssertions
 		e.validation = options.validation
@@ -376,6 +377,7 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	typeState          *check.TypeState
 	constTemplate      *constTemplate
 	traitBodySources   map[goast.Decl]syntax.Node
 	enumValidHelpers   map[*check.Enum]bool

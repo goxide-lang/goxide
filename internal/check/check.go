@@ -85,6 +85,10 @@ func (i *Instance) Variant(name string) *Variant {
 
 // Fields substitutes the enum's actual type arguments into a variant's payload.
 func (i *Instance) Fields(v *Variant) []Field {
+	return i.fields(v, nil)
+}
+
+func (i *Instance) fields(v *Variant, state *TypeState) []Field {
 	fields := append([]Field(nil), v.Fields...)
 	params := i.Enum.Type.TypeParams()
 	sub := make(map[*types.TypeParam]types.Type)
@@ -94,7 +98,11 @@ func (i *Instance) Fields(v *Variant) []Field {
 		}
 	}
 	for j := range fields {
-		fields[j].Type = substitute(fields[j].Type, sub, i.Enum.info)
+		if state != nil {
+			fields[j].Type = state.Substitute(i.Enum.info, fields[j].Type, sub, nil)
+		} else {
+			fields[j].Type = substitute(fields[j].Type, sub, i.Enum.info)
+		}
 	}
 	return fields
 }

@@ -92,7 +92,7 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 			return literal
 		}
 		if e.validation != nil {
-			if array, ok := e.info.ArrayOf(e.info.Types[n]); ok && array.Length.Param != nil {
+			if array, ok := e.typeState.ArrayOf(e.info, e.info.Types[n]); ok && array.Length.Param != nil {
 				return e.validationArrayLiteral(n, array)
 			}
 		}

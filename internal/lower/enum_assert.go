@@ -99,7 +99,7 @@ func (e *emitter) enumAssertionContains(typ types.Type, seen []types.Type) bool 
 		return true
 	}
 	seen = append(append([]types.Type(nil), seen...), typ)
-	if array, ok := e.info.ArrayOf(typ); ok {
+	if array, ok := e.typeState.ArrayOf(e.info, typ); ok {
 		return e.enumAssertionContains(array.Elem, seen)
 	}
 	if named, ok := typ.(*types.Named); ok {
@@ -142,7 +142,7 @@ func (e *emitter) enumAssertionPrivate(typ *types.Named, seen []types.Type) bool
 			if !gotoken.IsExported(variant.GoName) {
 				return true
 			}
-			for _, field := range instance.Fields(variant) {
+			for _, field := range e.typeState.Fields(instance, variant) {
 				if !gotoken.IsExported(field.GoName) && e.enumAssertionContains(field.Type, append(seen, typ)) {
 					return true
 				}
@@ -188,7 +188,7 @@ func (e *emitter) enumAssertionBody(typ types.Type, value goast.Expr, seen []typ
 				clause.List = []goast.Expr{variantType}
 				clause.Body = []goast.Stmt{varStmt(zero, variantType, nil), &goast.IfStmt{Cond: &goast.BinaryExpr{X: active, Op: gotoken.EQL, Y: zero}, Body: &goast.BlockStmt{List: []goast.Stmt{invalid()}}}}
 			}
-			for _, field := range instance.Fields(variant) {
+			for _, field := range e.typeState.Fields(instance, variant) {
 				var member goast.Expr = &goast.SelectorExpr{X: active, Sel: goast.NewIdent(field.GoName)}
 				if instance.Enum.Builtin {
 					member = &goast.CallExpr{Fun: e.sumMember("Value" + variant.Name), Args: []goast.Expr{value}}
@@ -204,7 +204,7 @@ func (e *emitter) enumAssertionBody(typ types.Type, value goast.Expr, seen []typ
 		return []goast.Stmt{&goast.TypeSwitchStmt{Assign: &goast.AssignStmt{Lhs: []goast.Expr{active}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{&goast.TypeAssertExpr{X: value}}}, Body: cases}}
 	}
 	var element types.Type
-	if array, ok := e.info.ArrayOf(typ); ok {
+	if array, ok := e.typeState.ArrayOf(e.info, typ); ok {
 		element = array.Elem
 	} else {
 		if named, ok := typ.(*types.Named); ok {
@@ -355,7 +355,7 @@ func (e *emitter) enumAssertionTypes(helper *enumAssertionHelper, typ types.Type
 				if !types.Identical(argument, opaque) {
 					continue
 				}
-				constraint := e.info.Substitute(typ.TypeParams().At(index).Constraint(), substitution, nil)
+				constraint := e.typeState.Substitute(e.info, typ.TypeParams().At(index).Constraint(), substitution, nil)
 				if types.Identical(constraint, types.Universe.Lookup("any").Type()) {
 					continue
 				}

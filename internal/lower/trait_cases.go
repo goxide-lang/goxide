@@ -29,7 +29,7 @@ func (e *emitter) bodyCaseParameters(branch *check.BodyCase) *goast.FieldList {
 	for _, parameter := range branch.TypeParams {
 		constraint := parameter.Constraint()
 		if e.instanceBody != nil {
-			constraint = e.info.Substitute(constraint, e.instanceBody.Substitution, e.instanceBody.ConstSubstitution)
+			constraint = e.typeState.Substitute(e.info, constraint, e.instanceBody.Substitution, e.instanceBody.ConstSubstitution)
 		}
 		parameters.List = append(parameters.List, &goast.Field{Names: []*goast.Ident{e.goType(parameter).(*goast.Ident)}, Type: e.goConstraint(constraint)})
 	}
@@ -157,14 +157,14 @@ func (e *emitter) caseMember(member *check.Member, branch *check.BodyCase) *chec
 	if len(member.Impl.ConstSubstitution) != 0 {
 		impl.ConstSubstitution = member.Impl.ConstSubstitution
 	}
-	impl.Target = e.info.Substitute(impl.Target, branch.Substitution, impl.ConstSubstitution)
+	impl.Target = e.typeState.Substitute(e.info, impl.Target, branch.Substitution, impl.ConstSubstitution)
 	impl.Inputs = make([]types.Type, len(member.Impl.Inputs))
 	for i, input := range member.Impl.Inputs {
-		impl.Inputs[i] = e.info.Substitute(input, branch.Substitution, impl.ConstSubstitution)
+		impl.Inputs[i] = e.typeState.Substitute(e.info, input, branch.Substitution, impl.ConstSubstitution)
 	}
 	impl.Associated = map[string]types.Type{}
 	for name, output := range member.Impl.Associated {
-		impl.Associated[name] = e.info.Substitute(output, branch.Substitution, impl.ConstSubstitution)
+		impl.Associated[name] = e.typeState.Substitute(e.info, output, branch.Substitution, impl.ConstSubstitution)
 	}
 	impl.Requirements = e.bodyCaseBounds(branch)
 	impl.RequirementEvidence = nil
@@ -172,7 +172,7 @@ func (e *emitter) caseMember(member *check.Member, branch *check.BodyCase) *chec
 	impl.MethodCaseEvidence = nil
 	copy := *member
 	copy.Impl = &impl
-	copy.Signature = e.info.Substitute(member.Signature, branch.Substitution, impl.ConstSubstitution).(*types.Signature)
+	copy.Signature = e.typeState.Substitute(e.info, member.Signature, branch.Substitution, impl.ConstSubstitution).(*types.Signature)
 	return &copy
 }
 

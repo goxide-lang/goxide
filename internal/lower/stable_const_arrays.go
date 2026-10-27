@@ -142,7 +142,7 @@ func (e *emitter) stableArrayShape(node syntax.Expr) (*check.ArrayPattern, bool)
 	if ok {
 		typ = pointer.Elem()
 	}
-	array, _ := e.info.ArrayOf(typ)
+	array, _ := e.typeState.ArrayOf(e.info, typ)
 	return array, ok
 }
 

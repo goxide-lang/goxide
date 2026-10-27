@@ -102,7 +102,7 @@ func (e *emitter) evidenceMethods(bounds []*check.TraitBound) []*goast.Field {
 				continue
 			}
 			seen[name] = true
-			ft, _ := e.memberSignature(bound.MethodSignature(member))
+			ft, _ := e.memberSignature(e.typeState.MethodSignature(bound, member))
 			if !member.Static {
 				receiver := traitBoundTarget(bound)
 				if member.Receiver != check.ValueRef {
@@ -112,7 +112,7 @@ func (e *emitter) evidenceMethods(bounds []*check.TraitBound) []*goast.Field {
 			}
 			methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(name)}, Type: ft})
 			if !member.Static && e.traits.boundNeedsBinding(bound, member.Name) {
-				selection := &check.MemberSelection{Member: member, Bound: bound, Signature: bound.MethodSignature(member)}
+				selection := &check.MemberSelection{Member: member, Bound: bound, Signature: e.typeState.MethodSignature(bound, member)}
 				methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(traitBinding(member))}, Type: e.goType(e.bindingSignature(selection))})
 			}
 		}

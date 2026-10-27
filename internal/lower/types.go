@@ -126,7 +126,7 @@ func (e *emitter) addFunctionAliases(file *goast.File) {
 }
 
 func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
-	defer func() { e.macroLayout(n, out) }()
+	defer func() { e.macroLayout(n, out); e.recordSource(out, n) }()
 	if n == nil {
 		return nil
 	}

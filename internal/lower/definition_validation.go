@@ -43,6 +43,12 @@ func ValidateDefinitions(files map[string]*syntax.File, info *check.Info) error 
 		}
 	}
 	_, err := lower(inputs, info, emissionOptions{validation: validation})
+	if _, generatedError := err.(types.Error); generatedError {
+		// Successful compilation does not need source tracking. On failure,
+		// replay the same private lowering state with exact diagnostic tokens.
+		validation.err, validation.provenance = nil, true
+		_, err = lower(inputs, info, emissionOptions{validation: validation})
+	}
 	return err
 }
 
@@ -72,6 +78,7 @@ func hasGenericDefinitions(files map[string]*syntax.File) bool {
 }
 
 type definitionValidation struct {
+	provenance bool
 	parameters map[*check.ConstParam]validationParameter
 	reserved   map[string]bool
 	err        error
@@ -149,6 +156,10 @@ func (v *definitionValidation) report(err error, emitters []*emitter) {
 	if v.err != nil {
 		return
 	}
+	if !v.provenance {
+		v.err = err
+		return
+	}
 	diagnostic, ok := err.(types.Error)
 	if !ok {
 		v.err = err
@@ -158,15 +169,11 @@ func (v *definitionValidation) report(err error, emitters []*emitter) {
 		if diagnostic.Pos < emitter.base || diagnostic.Pos >= emitter.base+gotoken.Pos(emitter.tokenFile.Size()) {
 			continue
 		}
-		offset := uint32(diagnostic.Pos - emitter.base)
-		var source syntax.Node = emitter.tree
-		syntax.Walk(emitter.tree, func(node syntax.Node) bool {
-			span := node.Span()
-			if span.Start <= offset && offset < span.End && span.End-span.Start <= source.Span().End-source.Span().Start {
-				source = node
-			}
-			return true
-		})
+		original := emitter.diagnosticNodes[diagnostic.Pos]
+		if original == nil {
+			v.err = fmt.Errorf("泛型定义检查失败（生成的 Go 无源码映射）: %w", diagnostic)
+			return
+		}
 		names := map[string]string{}
 		for parameter, generated := range v.parameters {
 			names[generated.length] = parameter.Name.Name
@@ -178,10 +185,9 @@ func (v *definitionValidation) report(err error, emitters []*emitter) {
 			}
 			return identifier
 		})
-		emitter.fail(source, "泛型定义检查失败: "+message)
+		emitter.fail(original, "泛型定义检查失败: "+message)
 		v.err = emitter.err
 		return
 	}
-	emitters[0].fail(emitters[0].tree, "泛型定义检查失败: "+diagnostic.Msg)
-	v.err = emitters[0].err
+	v.err = fmt.Errorf("泛型定义检查失败（生成的 Go 无源码映射）: %w", diagnostic)
 }

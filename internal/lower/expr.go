@@ -11,7 +11,7 @@ import (
 )
 
 func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
-	defer func() { e.macroLayout(n, out) }()
+	defer func() { e.macroLayout(n, out); e.recordSource(out, n) }()
 	if n == nil {
 		return nil
 	}

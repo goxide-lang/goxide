@@ -260,11 +260,13 @@ func (e *emitter) expr(n syntax.Expr) (out goast.Expr) {
 	}
 	pendingStart := len(e.pending)
 	defer func() {
+		defer func() { e.recordSource(out, n) }()
 		out = e.traitView(n, out)
 		if e.lineDirectives {
 			if id, ok := out.(*goast.Ident); ok && !id.NamePos.IsValid() {
 				copy := *id
 				out = &copy
+				e.copySource(id, out)
 			}
 			e.anchor(out, n)
 			if pendingStart < len(e.pending) {

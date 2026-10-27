@@ -8,7 +8,7 @@ import (
 )
 
 func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
-	defer func() { e.macroLayout(n, out) }()
+	defer func() { e.macroLayout(n, out); e.recordSource(out, n) }()
 	if n == nil {
 		return nil
 	}
@@ -134,7 +134,8 @@ func (e *emitter) stmts(nodes []syntax.Stmt) []goast.Stmt {
 	return list
 }
 
-func (e *emitter) block(n *syntax.Block) *goast.BlockStmt {
+func (e *emitter) block(n *syntax.Block) (out *goast.BlockStmt) {
+	defer func() { e.recordSource(out, n) }()
 	if n == nil {
 		return nil
 	}

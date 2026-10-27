@@ -9,7 +9,7 @@ import (
 )
 
 func (e *emitter) decl(n syntax.Item) (out goast.Decl) {
-	defer func() { e.macroLayout(n, out); e.anchor(out, n) }()
+	defer func() { e.macroLayout(n, out); e.anchor(out, n); e.recordSource(out, n) }()
 	if n == nil {
 		return nil
 	}

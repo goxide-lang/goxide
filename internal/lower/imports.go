@@ -115,7 +115,25 @@ func (e *emitter) importName(target []string, preferred string, pos gotoken.Pos)
 	return &goast.Ident{NamePos: pos, Name: alias}
 }
 
-func (e *emitter) external(n syntax.Node, target []string, name, preferred string) goast.Expr {
+func (e *emitter) external(n syntax.Node, target []string, name, preferred string) (out goast.Expr) {
+	defer func() {
+		e.recordSource(out, n)
+		var first, last *syntax.Ident
+		switch original := n.(type) {
+		case *syntax.Ident:
+			last = original
+		case *syntax.Path:
+			if len(original.Segments) != 0 {
+				first, last = original.Segments[0].Name, original.Segments[len(original.Segments)-1].Name
+			}
+		}
+		if selector, ok := out.(*goast.SelectorExpr); ok {
+			e.recordSource(selector.X, first)
+			e.recordSource(selector.Sel, last)
+		} else {
+			e.recordSource(out, last)
+		}
+	}()
 	if len(target) < 2 {
 		e.fail(n, "外部成员缺少包路径")
 		return nil
@@ -133,7 +151,8 @@ func (e *emitter) external(n syntax.Node, target []string, name, preferred strin
 	return &goast.SelectorExpr{X: pkg, Sel: &goast.Ident{NamePos: e.end(n) - gotoken.Pos(len(name)), Name: name}}
 }
 
-func (e *emitter) reference(id *syntax.Ident) goast.Expr {
+func (e *emitter) reference(id *syntax.Ident) (out goast.Expr) {
+	defer func() { e.recordSource(out, id) }()
 	if id == nil {
 		return nil
 	}
@@ -278,7 +297,11 @@ func (e *emitter) addImports(f *goast.File) {
 			Path: &goast.BasicLit{ValuePos: namePos, Kind: gotoken.STRING, Value: strconv.Quote(imported.path)},
 		}
 		// Separate declarations retain each use's documentation at its source position.
-		declarations = append(declarations, &goast.GenDecl{TokPos: imported.pos, Tok: gotoken.IMPORT, Specs: []goast.Spec{spec}})
+		declaration := &goast.GenDecl{TokPos: imported.pos, Tok: gotoken.IMPORT, Specs: []goast.Spec{spec}}
+		e.recordSource(declaration, imported.source)
+		e.recordSource(spec, imported.source)
+		e.recordSource(spec.Path, imported.source)
+		declarations = append(declarations, declaration)
 		f.Imports = append(f.Imports, spec)
 	}
 	f.Decls = append(declarations, f.Decls...)

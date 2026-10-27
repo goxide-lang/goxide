@@ -64,6 +64,7 @@ func (e *emitter) anchor(node goast.Node, source syntax.Node) {
 		if id, ok := node.(*goast.Ident); ok && !id.NamePos.IsValid() && value.CanSet() {
 			copy := *id
 			value.Set(reflect.ValueOf(&copy))
+			e.copySource(id, &copy)
 		}
 		if value.Kind() == reflect.Interface {
 			value = value.Elem()

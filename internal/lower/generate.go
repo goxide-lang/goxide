@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/source"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
@@ -13,6 +14,9 @@ import (
 type GenerationOptions struct {
 	StableGo       bool
 	LineDirectives bool
+	// SourceMaps receives maps of final output bytes, keyed like Generate output.
+	// A nil map disables source tracking during ordinary emission.
+	SourceMaps map[string]*source.Map
 }
 
 // Generate emits Go from an already successful analysis. It never reads or
@@ -26,7 +30,11 @@ func Generate(ctx context.Context, result *analysis.Result, options GenerationOp
 	if result == nil || result.Err != nil || result.Checked == nil {
 		return nil, fmt.Errorf("generation requires a successful source analysis")
 	}
-	output, err := lower(result.EmitFiles, result.Checked, emissionOptions{lineDirectives: options.LineDirectives, originals: result.Files, stableGo: options.StableGo})
+	var mapped map[string]*emitter
+	if options.SourceMaps != nil {
+		mapped = map[string]*emitter{}
+	}
+	output, err := lower(result.EmitFiles, result.Checked, emissionOptions{lineDirectives: options.LineDirectives, originals: result.Files, stableGo: options.StableGo, sourceMaps: mapped})
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +61,15 @@ func Generate(ctx context.Context, result *analysis.Result, options GenerationOp
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+	}
+	if mapped != nil {
+		maps, err := buildSourceMaps(result, output, mapped)
+		if err != nil {
+			return nil, err
+		}
+		for name, mapping := range maps {
+			options.SourceMaps[name] = mapping
 		}
 	}
 	return output, nil

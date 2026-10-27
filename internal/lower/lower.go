@@ -34,6 +34,7 @@ type emissionOptions struct {
 	originals      map[string]*syntax.File
 	validation     *definitionValidation
 	stableGo       bool
+	sourceMaps     map[string]*emitter
 }
 
 func lower(files map[string]*syntax.File, info *check.Info, options emissionOptions) (map[string][]byte, error) {
@@ -88,6 +89,9 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		e.enumValidHelpers = enumValidHelpers
 		e.enumAssertions = enumAssertions
 		e.validation = options.validation
+		if options.sourceMaps != nil || options.validation != nil && options.validation.provenance {
+			e.sourceNodes = map[goast.Node]syntax.Node{}
+		}
 		e.lineDirectives, e.original = options.lineDirectives, options.originals[name]
 		if res != nil {
 			e.file = res.Files[name]
@@ -110,6 +114,7 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		e.reserveTraitNames()
 		e.checkMacroNames()
 		f := &goast.File{Package: e.pos(tree.Package) - 8, Name: &goast.Ident{NamePos: e.pos(tree.Package), Name: tree.Package.Name}}
+		e.recordSource(f.Name, tree.Package)
 		if f.Package < e.base {
 			f.Package = e.base
 		}
@@ -170,6 +175,9 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			multilineSourceBodies(e.goFile, fset)
 		}
 	}
+	if options.validation != nil && options.validation.provenance {
+		fset = validationPositions(emitters)
+	}
 	bindMembers(fset, emitters)
 	if options.validation != nil {
 		return nil, options.validation.err
@@ -200,6 +208,9 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			return nil, e.err
 		}
 		out[e.name] = canonicalImports(parsed, set, data)
+		if options.sourceMaps != nil {
+			options.sourceMaps[e.name] = e
+		}
 	}
 	return out, nil
 }
@@ -414,6 +425,8 @@ type emitter struct {
 	goFile             *goast.File
 	memberSymbols      map[*resolve.Symbol]bool
 	memberNames        map[*goast.Ident]string
+	sourceNodes        map[goast.Node]syntax.Node
+	diagnosticNodes    map[gotoken.Pos]syntax.Node
 	name               string
 	tree               *syntax.File
 	file               *resolve.File
@@ -517,6 +530,7 @@ func (e *emitter) ident(id *syntax.Ident) *goast.Ident {
 		out.Name = id.Name
 		e.memberNames[out] = name
 	}
+	e.recordSource(out, id)
 	return out
 }
 

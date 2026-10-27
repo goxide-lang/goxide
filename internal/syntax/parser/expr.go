@@ -101,7 +101,7 @@ func (p *parser) operand() ast.Expr {
 		return &ast.ParenExpr{Base: p.base(start), X: x}
 	case token.FUNC:
 		p.next()
-		params, results, paren := p.signature()
+		params, results, paren := p.signature(false, false)
 		if p.at(token.LBRACE) {
 			body := p.block()
 			return &ast.FuncLit{Base: p.base(start), Form: ast.GoFunc, Params: params, Results: results, ResultParen: paren, Body: body}

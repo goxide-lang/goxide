@@ -94,7 +94,7 @@ func (p *parser) typeAtom() ast.Type {
 		return &ast.ChanType{Base: p.base(start), Dir: dir, Elem: e}
 	case token.FUNC:
 		p.next()
-		params, results, paren := p.signature()
+		params, results, paren := p.signature(false, false)
 		return &ast.FuncType{Base: p.base(start), Params: params, Results: results, ResultParen: paren}
 	case token.STRUCT:
 		return p.structType()
@@ -192,19 +192,19 @@ func (p *parser) genericArgs() *ast.GenericArgs {
 	args.Base = p.base(start)
 	return args
 }
-func (p *parser) signature(allowWhere ...bool) (params, results []*ast.Param, resultParen bool) {
-	params = p.params()
+func (p *parser) signature(allowWhere, receiver bool) (params, results []*ast.Param, resultParen bool) {
+	params = p.params(receiver)
 	if p.at(token.LPAREN) {
 		resultParen = true
-		results = p.params()
-	} else if typeStart(p.tok().Kind) && !(len(allowWhere) > 0 && allowWhere[0] && p.context("where")) {
+		results = p.params(false)
+	} else if typeStart(p.tok().Kind) && !(allowWhere && p.context("where")) {
 		start := p.tok().Start
 		t := p.typ()
 		results = []*ast.Param{{Base: p.base(start), Type: t}}
 	}
 	return
 }
-func (p *parser) params() []*ast.Param {
+func (p *parser) params(receiver bool) []*ast.Param {
 	p.expect(token.LPAREN)
 	var params []*ast.Param
 	var pending []*ast.Param
@@ -212,7 +212,9 @@ func (p *parser) params() []*ast.Param {
 		pos := p.pos
 		start := p.tok().Start
 		param := &ast.Param{Attrs: p.attrs()}
-		if p.accept(token.ELLIPSIS) {
+		if receiver && len(params) == 0 && p.selfParam(param) {
+			// Shorthand receivers share the explicit self parameter representation.
+		} else if p.accept(token.ELLIPSIS) {
 			param.Variadic = true
 			param.Type = p.typ()
 		} else if p.namedArrayField() {
@@ -264,6 +266,36 @@ func (p *parser) params() []*ast.Param {
 	p.expect(token.RPAREN)
 	return params
 }
+
+func (p *parser) selfParam(param *ast.Param) bool {
+	start, offset := p.tok().Start, 0
+	borrowed := p.at(token.AND)
+	if borrowed {
+		offset++
+	}
+	mutable := borrowed && p.peek(offset).Kind == token.IDENT && !p.peek(offset).Raw && p.peek(offset).Text == "mut"
+	if mutable {
+		offset++
+	}
+	name, next := p.peek(offset), p.peek(offset+1)
+	if name.Kind != token.IDENT || name.Raw || name.Text != "self" || (next.Kind != token.COMMA && next.Kind != token.RPAREN) {
+		return false
+	}
+	for range offset {
+		p.next()
+	}
+	ident := p.ident()
+	param.Names = []*ast.Ident{ident}
+	base := p.base(ident.Span().Start)
+	// The implicit type must not claim a macro's captured self identifier.
+	base.Loc.End = base.Loc.Start
+	param.Type = &ast.SelfType{Base: base}
+	if borrowed {
+		param.Type = &ast.RefType{Base: p.base(start), Elem: param.Type, Mut: mutable}
+	}
+	return true
+}
+
 func bareTypeName(t ast.Type) *ast.Ident {
 	n, ok := t.(*ast.PathType)
 	if ok && len(n.Path.Segments) == 1 && n.Path.Segments[0].Args == nil {
@@ -410,7 +442,7 @@ func (p *parser) interfaceType() *ast.InterfaceType {
 		m := &ast.InterfaceMethod{Attrs: p.attrs()}
 		if p.at(token.IDENT) && p.peek(1).Kind == token.LPAREN {
 			m.Name = p.ident()
-			m.Params, m.Results, m.ResultParen = p.signature()
+			m.Params, m.Results, m.ResultParen = p.signature(false, false)
 		} else {
 			m.Type = p.typ()
 		}

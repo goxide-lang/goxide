@@ -69,6 +69,86 @@ func TestAssociatedTypeRejectsDottedSelf(t *testing.T) {
 	t.Fatalf("missing projection syntax diagnostic: %v", diagnostics)
 }
 
+func TestReceiverShorthandSyntax(t *testing.T) {
+	const source = `package p
+trait Counter {
+ func value(self, first, second int) int
+ func read(&self) int
+ func write(&mut self, value int)
+}
+impl Counter for Number {
+ func value(self, first, second int) int { return self.N + first + second }
+ func read(&self) int { return self.N }
+ func write(&mut self, value int) { self.N = value }
+}
+impl Number { func copy(self) Self { return self } }
+type Number struct { N int }
+`
+	file, diagnostics := parser.ParseFile("receivers.gox", []byte(source))
+	if errors := errorsOnly(diagnostics); len(errors) != 0 {
+		t.Fatal(errors)
+	}
+	trait := file.Items[0].(*ast.TraitDecl)
+	impl := file.Items[1].(*ast.ImplDecl)
+	for index := range trait.Items {
+		for _, method := range []*ast.FuncDecl{trait.Items[index].(*ast.FuncDecl), impl.Items[index].(*ast.FuncDecl)} {
+			param := method.Params[0]
+			if len(param.Names) != 1 || param.Names[0].Name != "self" {
+				t.Fatalf("%s receiver names = %v", method.Name.Name, param.Names)
+			}
+			typ := param.Type
+			if index > 0 {
+				ref, ok := typ.(*ast.RefType)
+				if !ok || ref.Mut != (index == 2) {
+					t.Fatalf("%s reference receiver = %#v", method.Name.Name, typ)
+				}
+				typ = ref.Elem
+			}
+			if _, ok := typ.(*ast.SelfType); !ok {
+				t.Fatalf("%s receiver type = %T", method.Name.Name, typ)
+			}
+			if index == 0 && (len(method.Params) != 2 || len(method.Params[1].Names) != 2) {
+				t.Fatalf("value receiver consumed the following grouped parameters: %#v", method.Params)
+			}
+		}
+	}
+	assertRoundTrip(t, file)
+}
+
+func TestReceiverShorthandDoesNotChangeOtherParameters(t *testing.T) {
+	const source = `package p
+type self int
+func regular(self, other int) {}
+func borrowed(&self) {}
+type Function func(&self)
+type Interface interface { read(&self) }
+impl Number {
+ func static(value int, other self) &self { return nil }
+ func read(self &Self, callback func(&self)) &self { return nil }
+ func escaped(r#self) {}
+}
+`
+	file, diagnostics := parser.ParseFile("parameters.gox", []byte(source))
+	if errors := errorsOnly(diagnostics); len(errors) != 0 {
+		t.Fatal(errors)
+	}
+	count := 0
+	ast.Walk(file, func(node ast.Node) bool {
+		if _, ok := node.(*ast.SelfType); ok {
+			count++
+		}
+		return true
+	})
+	if count != 1 {
+		t.Fatalf("ordinary self types were rewritten: found %d Self nodes", count)
+	}
+	regular := file.Items[1].(*ast.FuncDecl)
+	if len(regular.Params) != 1 || len(regular.Params[0].Names) != 2 {
+		t.Fatalf("ordinary grouped parameter changed: %#v", regular.Params)
+	}
+	assertRoundTrip(t, file)
+}
+
 func TestConditionalImplSyntax(t *testing.T) {
 	const source = `package p
 impl[T any] Copy for Box[T] where T: Copy + Show {

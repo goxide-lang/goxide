@@ -267,9 +267,12 @@ Signature    = Parameters [ Result ] ;
 Result       = Type | Parameters ;
 Parameters   = "(" [ Parameter { "," Parameter } [ "," ] ] ")" ;
 Parameter    = Attributes [ IdentifierList ] [ "..." ] Type ;
+SelfParameter = Attributes ( "self" | "&" [ "mut" ] "self" ) ;
 ```
 
 该规则同时覆盖 `func f(x int) int`、`func (x T) M()`、匿名参数 `func(int, string)`、同类型参数组 `func(x, y int)`、命名结果和可变参数。参数名与类型的区分采用前瞻和待定名字组；`x, y int` 在 AST 中成为一组名字及同一个类型。`x []T` / `x [N]T` 与 `T[A]` 的区分还查看方括号之后能否继续一个类型。
+
+仅 trait / impl 成员的第一参数可用 `SelfParameter` 代替普通 `Parameter`；三种写法分别等价于 `self Self`、`self &Self`、`self &mut Self`。普通函数、结果参数及嵌套函数类型不启用该简写；`r#self` 仍按普通标识符解析。
 
 接收者数量、可变参数必须在最后、命名与未命名参数的合法组合等由语义及 Go 检查限制。文法能读取无函数体声明；它是否属于可使用的外部声明仍由后续阶段决定。带泛型参数的函数才把结果位置的未转义 `where` 识别为约束起始词；普通函数可以用名为 `where` 的类型作结果。
 
@@ -313,7 +316,7 @@ DeclaredType = Attributes [ "pub" ] "type" Identifier
                [ GenericParameters ] [ [ "=" ] Type ] [ WhereClause ] ;
 ```
 
-`impl T` 是固有实现，`impl P for T` 是 trait 实现。trait / impl 方法必须有 `func` 前缀；成员主体里不能随意嵌套普通顶层 item。实例方法通过第一参数 `self Self`、`self &Self`、`self &mut Self` 表示接收者；没有 `self` 的成员为静态方法。函数解析器还可读取 Go 风格接收者，实际 trait 接收者规则由检查器约束。
+`impl T` 是固有实现，`impl P for T` 是 trait 实现。trait / impl 方法必须有 `func` 前缀；成员主体里不能随意嵌套普通顶层 item。实例方法通过第一参数 `self Self`、`self &Self`、`self &mut Self` 表示接收者，也可简写为 `self`、`&self`、`&mut self`；没有 `self` 的成员为静态方法。函数解析器还可读取 Go 风格接收者，实际 trait 接收者规则由检查器约束。
 
 当前支持非泛型 trait、普通泛型与条件 impl、无默认值的关联类型、关联类型绑定、静态方法和多 trait 函数约束。trait 默认方法、参数化 trait 和泛型关联类型仍在该解析文法内，尚未完成语义实现。trait 的分组关联类型可以解析，当前检查同样拒绝；impl 的关联类型必须用单项 `type Item = T` 绑定，不能仅写 `type Item` 或改成分组声明。
 

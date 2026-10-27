@@ -29,7 +29,7 @@ func (p *parser) parseItem(member, declare bool) ast.Item {
 	var n ast.Item
 	switch p.tok().Kind {
 	case token.FUNC:
-		n = p.function(ib, mods, declare)
+		n = p.function(ib, mods, declare, member)
 	case token.TYPE, token.STRUCT:
 		n = p.typeDecl(ib, member || declare)
 	case token.CONST, token.VAR:
@@ -127,11 +127,11 @@ func itemBase(n ast.Item) *ast.ItemBase {
 	panic("unknown item")
 }
 
-func (p *parser) function(ib ast.ItemBase, mods ast.FuncMods, declare bool) ast.Item {
+func (p *parser) function(ib ast.ItemBase, mods ast.FuncMods, declare, member bool) ast.Item {
 	p.expect(token.FUNC)
 	f := &ast.FuncDecl{ItemBase: ib, Mods: mods}
 	if p.at(token.LPAREN) {
-		f.Recv = p.params()
+		f.Recv = p.params(false)
 	}
 	validName := p.at(token.IDENT)
 	f.Name = p.ident()
@@ -147,7 +147,7 @@ func (p *parser) function(ib ast.ItemBase, mods ast.FuncMods, declare bool) ast.
 		f.Name = path.Segments[len(path.Segments)-1].Name
 	}
 	f.Generics = p.genericParams()
-	f.Params, f.Results, f.ResultParen = p.signature(f.Generics != nil)
+	f.Params, f.Results, f.ResultParen = p.signature(f.Generics != nil, member && len(f.Recv) == 0)
 	if f.Generics != nil {
 		f.Where = p.whereClause()
 	}
@@ -449,7 +449,7 @@ func (p *parser) member(inherited, inTrait bool) ast.Item {
 	var n ast.Item
 	switch p.tok().Kind {
 	case token.FUNC:
-		n = p.function(ib, mods, false)
+		n = p.function(ib, mods, false, true)
 	case token.TYPE:
 		n = p.typeDecl(ib, true)
 		if d, ok := n.(*ast.TypeDecl); ok && !inTrait && (d.Type == nil || !d.Alias) {

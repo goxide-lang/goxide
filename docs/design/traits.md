@@ -108,7 +108,7 @@ marker 使用导出的稳定符号，使其他包拥有的 wrapper 能实现 tra
 
 ## 4. 接收者、共享状态与 self
 
-`Self` 与 `self` 区分大小写：`impl Trait for T` 中 Self 是基础目标 T，enum 的 Self 是完整 enum 接口；不是 wrapper、carrier 或变体。首参数 `self Self` 为传值，`self &Self` 为只读引用，`self &mut Self` 为可写引用。impl 与 trait 的接收模式必须一致。无接收者关联函数可以使用 Self，但没有隐式 self；不能按函数体是否使用 self 推断成员种类。
+`Self` 与 `self` 区分大小写：`impl Trait for T` 中 Self 是基础目标 T，enum 的 Self 是完整 enum 接口；不是 wrapper、carrier 或变体。首参数 `self Self` 为传值，`self &Self` 为只读引用，`self &mut Self` 为可写引用。trait、trait impl 与固有 impl 的成员首参数也可分别简写为 `self`、`&self`、`&mut self`，解析时展开为同一显式参数，权限和生成 Go 不变；普通函数、Go 风格接收者、其他参数和结果类型不应用该简写。impl 与 trait 的接收模式必须一致。无接收者关联函数可以使用 Self，但没有隐式 self；不能按函数体是否使用 self 推断成员种类。
 
 完整运行时视图按该 trait 的实例方法选择捕获方式：
 

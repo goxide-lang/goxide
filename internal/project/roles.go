@@ -1,6 +1,7 @@
 package project
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -61,6 +62,13 @@ type rolePlanner struct {
 // procRoot selects the project's lib as a macro program instead of a normal
 // bin/example. A normal target can depend on its own separate proc-macro lib.
 func LoadBuildPlans(root, tool string, requested []string, defaults, offline, locked bool, targetDir, target string, procRoot, nativeGeneration bool, environment ...[]string) (*BuildPlans, error) {
+	return LoadBuildPlansContext(context.Background(), root, tool, requested, defaults, offline, locked, targetDir, target, procRoot, nativeGeneration, environment...)
+}
+
+func LoadBuildPlansContext(ctx context.Context, root, tool string, requested []string, defaults, offline, locked bool, targetDir, target string, procRoot, nativeGeneration bool, environment ...[]string) (*BuildPlans, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -101,7 +109,7 @@ func LoadBuildPlans(root, tool string, requested []string, defaults, offline, lo
 		return nil, err
 	}
 	defer os.RemoveAll(work)
-	owner := &Graph{WorkRoot: work, Tool: tool, Environment: base, Offline: offline, Locked: locked, Cache: filepath.Join(layout.Root, "cache", "git"), LockPath: filepath.Join(root, "goxide.lock"), ownerRoot: root, ownerModule: manifest.Module,
+	owner := &Graph{ctx: ctx, WorkRoot: work, Tool: tool, Environment: base, Offline: offline, Locked: locked, Cache: filepath.Join(layout.Root, "cache", "git"), LockPath: filepath.Join(root, "goxide.lock"), ownerRoot: root, ownerModule: manifest.Module,
 		Lock: Lock{Version: 2, Git: map[string]string{}, Sums: map[string]string{}, Roles: map[string]RoleLock{}}, nativeGeneration: nativeGeneration}
 	data, err := os.ReadFile(owner.LockPath)
 	if err == nil {
@@ -133,6 +141,12 @@ func LoadBuildPlans(root, tool string, requested []string, defaults, offline, lo
 	}
 	graph, err := planner.load(root, nil, requested, defaults, role, target)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	result := &BuildPlans{Target: graph, owner: owner}
@@ -177,7 +191,7 @@ func (p *rolePlanner) load(root string, source *Node, requested []string, defaul
 	if err != nil {
 		return nil, err
 	}
-	g := &Graph{Role: role, Platform: platform, roles: p, roleRoot: source, WorkRoot: p.owner.WorkRoot, Tool: p.owner.Tool, Environment: environment, Offline: p.owner.Offline, Locked: p.owner.Locked,
+	g := &Graph{ctx: p.owner.ctx, Role: role, Platform: platform, roles: p, roleRoot: source, WorkRoot: p.owner.WorkRoot, Tool: p.owner.Tool, Environment: environment, Offline: p.owner.Offline, Locked: p.owner.Locked,
 		Cache: p.owner.Cache, LockPath: p.owner.LockPath, Lock: p.owner.Lock, original: p.owner.original, ownerRoot: p.owner.ownerRoot, ownerModule: p.owner.ownerModule, nativeGeneration: p.owner.nativeGeneration}
 	if _, err := g.plan(root, requested, defaults); err != nil {
 		return nil, err

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/goxide-lang/goxide/internal/analysis"
 	"github.com/goxide-lang/goxide/internal/config"
@@ -26,6 +25,7 @@ type stagedRole struct {
 	sugar      map[string]bool
 	modules    []analysis.Module
 	generated  map[string]string
+	originals  map[string]string
 	library    *analysis.ProcLibrary
 	wasm       []byte
 	sdk        string
@@ -33,26 +33,35 @@ type stagedRole struct {
 	sources    []analysis.SourcePackage
 }
 
-func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target project.Target, kind string, configuration config.Config, options Options) (*Result, error) {
+func prepareBuildPlans(ctx context.Context, plans *project.BuildPlans, layoutRoot string, target project.Target, kind string, configuration config.Config, options Options) (_ *Project, err error) {
 	graphs := append(append([]*project.Graph(nil), plans.Macros...), plans.Target)
 	stages := make(map[*project.Graph]*stagedRole, len(graphs))
+	prepared := &Project{plans: plans, graphs: graphs, stages: stages, layoutRoot: layoutRoot, options: options}
+	prepared.ctx, prepared.cancel = context.WithCancel(context.Background())
+	stopCancel := context.AfterFunc(ctx, prepared.cancel)
+	defer stopCancel()
+	defer func() {
+		if err != nil {
+			prepared.Close()
+		}
+	}()
 	for _, graph := range graphs {
 		for _, node := range graph.Nodes {
 			cached := node.CheckoutRoot != "" && within(graph.Cache, node.CheckoutRoot) && within(node.CheckoutRoot, node.Root)
-			if within(layout.Root, node.Root) && !cached || node.Root != plans.Target.Root.Root && within(node.Root, layout.Root) {
+			if within(layoutRoot, node.Root) && !cached || node.Root != plans.Target.Root.Root && within(node.Root, layoutRoot) {
 				return nil, fmt.Errorf("target directory overlaps source module %s", node.Module)
 			}
 		}
-		staged, err := os.MkdirTemp(layout.Root, ".generation-")
+		staged, err := os.MkdirTemp(layoutRoot, ".generation-")
 		if err != nil {
 			return nil, err
 		}
-		defer os.RemoveAll(staged)
+		prepared.directories = append(prepared.directories, staged)
 		selected, targetKind := target, kind
 		cfg := configuration
 		if graph.Role == "proc-macro" {
 			selected, targetKind = *graph.Root.Manifest.Lib, "proc-macro"
-			cfg.Environment, err = config.Prepare(graph.Tool, graph.Root.Root, "wasip1/wasm", false, graph.Environment)
+			cfg.Environment, err = config.PrepareContext(ctx, graph.Tool, graph.Root.Root, "wasip1/wasm", false, graph.Environment)
 			if err != nil {
 				return nil, err
 			}
@@ -63,12 +72,15 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 			return nil, err
 		}
 		stage.modules[0].OnProcDiagnostic = options.OnProcDiagnostic
+		for index := range stage.modules {
+			stage.modules[index].Context = prepared.ctx
+		}
 		stages[graph] = stage
-		if err := prepareModules(graph, stage.generated); err != nil {
+		if err := prepareModules(ctx, graph, stage.generated); err != nil {
 			return nil, err
 		}
 		if graph.Role == "proc-macro" {
-			stage.sdk, err = procmacro.ReadSDKIdentity(context.Background(), graph.Tool, stage.generated[graph.Root.Module], project.GoEnv(true, graph.Environment))
+			stage.sdk, err = procmacro.ReadSDKIdentity(ctx, graph.Tool, stage.generated[graph.Root.Module], project.GoEnv(true, graph.Environment))
 			if err != nil {
 				return nil, err
 			}
@@ -113,7 +125,7 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 			}
 		}
 		if graph.Role == "proc-macro" {
-			if err := stage.buildProcMacro(options.RunProcMacro); err != nil {
+			if err := stage.buildProcMacro(ctx, options.RunProcMacro); err != nil {
 				return nil, err
 			}
 		} else {
@@ -123,84 +135,16 @@ func prepareBuildPlans(plans *project.BuildPlans, layout *project.Layout, target
 					return nil, err
 				}
 			}
-			if options.OnPreparedSources != nil {
-				stage.modules[0].OnSourcePackages = func(sources []analysis.SourcePackage) error { stage.sources = sources; return nil }
-			}
-			if err := lower.CompileModules(stage.modules); err != nil {
-				return nil, err
-			}
-			if options.OnPreparedSources != nil {
-				prepared := PreparedSources{SourcePackages: stage.sources, Roots: stage.modules[0].Roots, RuntimeRoots: stage.modules[0].RuntimeRoots}
-				for _, dependency := range graphs {
-					if producer := stages[dependency]; producer.library != nil {
-						prepared.Macros = append(prepared.Macros, ProcArtifact{Library: producer.library, WASM: append([]byte(nil), producer.wasm...)})
-					}
-				}
-				if err := options.OnPreparedSources(prepared); err != nil {
-					return nil, err
-				}
-			}
-			arguments := []string{"list", "-mod=readonly", "-tags=" + strings.Join(options.Tags, ","), "-f", "{{.Name}}"}
-			if options.Race {
-				arguments = append(arguments, "-race")
-			}
-			name, err := goCommand(graph, stage.generated[graph.Root.Module], append(arguments, stage.entry)...)
-			if err != nil {
-				return nil, err
-			}
-			if main := strings.TrimSpace(string(name)) == "main"; kind == "lib" && main || kind != "lib" && !main {
-				if kind == "lib" {
-					return nil, fmt.Errorf("lib target %s must be an importable package, not package main", target.Name)
-				}
-				return nil, fmt.Errorf("%s target %s must be package main", kind, target.Name)
-			}
-		}
-		tags, race := options.Tags, options.Race
-		if graph.Role == "proc-macro" {
-			tags, race = nil, false
-		}
-		spec, err := unitSpec(graph, stage.target, stage.kind, stage.config, stage.features, stage.sugar, tags, race, stage.modules[0].StableGo)
-		if err != nil {
-			return nil, err
-		}
-		if len(plans.Macros) > 0 || graph.Role == "proc-macro" {
-			spec.Config = project.Digest([]string{spec.Config, stage.sdk, procmacro.ProfileID})
-		}
-		stage.unit, err = layout.Begin(spec)
-		if err != nil {
-			return nil, err
 		}
 	}
-	if err := plans.Save(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	for _, graph := range graphs {
-		stage := stages[graph]
-		if err := stage.unit.PublishBundle(stage.dir); err != nil {
-			return nil, err
-		}
-	}
-	final := stages[plans.Target]
-	final.config.Features = final.features[plans.Target.Root.SourceKey]
-	final.config.GoSugar = final.modules[0].Config.GoSugar
-	result := &Result{Root: filepath.Join(final.unit.Bundle, "module"), Entry: final.entry, Kind: final.kind, Config: final.config}
-	if len(final.wasm) != 0 {
-		result.ProcMacro = filepath.Join(final.unit.Bundle, "macro.wasm")
-	}
-	seen := map[string]bool{}
-	for _, graph := range graphs {
-		for _, node := range graph.Nodes {
-			if !seen[node.Root] {
-				result.SourceRoots = append(result.SourceRoots, node.Root)
-				seen[node.Root] = true
-			}
-		}
-	}
-	return result, nil
+	return prepared, nil
 }
 
 func stageRole(graph *project.Graph, target project.Target, kind string, configuration config.Config, options Options, selectedSource, staged string) (*stagedRole, error) {
-	stage := &stagedRole{graph: graph, dir: staged, target: target, kind: kind, config: configuration, features: map[string]config.Features{}, sugar: map[string]bool{}, generated: map[string]string{}}
+	stage := &stagedRole{graph: graph, dir: staged, target: target, kind: kind, config: configuration, features: map[string]config.Features{}, sugar: map[string]bool{}, generated: map[string]string{}, originals: map[string]string{}}
 	ordered := append([]*project.Node{graph.Root}, graph.Nodes...)
 	for _, node := range ordered {
 		if stage.generated[node.Module] != "" {
@@ -233,7 +177,7 @@ func stageRole(graph *project.Graph, target project.Target, kind string, configu
 		} else if node.Manifest.Lib != nil {
 			selected = *node.Manifest.Lib
 		}
-		packagePath, err := stageSources(node, selected, targetKind, output)
+		packagePath, err := stageSources(node, selected, targetKind, output, node == graph.Root || node.HasManifest, stage.originals)
 		if err != nil {
 			return nil, err
 		}
@@ -320,7 +264,7 @@ func runtimeRoots(graph *project.Graph, node *project.Node, roots paths.Roots, r
 	return result
 }
 
-func (stage *stagedRole) buildProcMacro(run func([]byte, pm.Request) ([]byte, error)) error {
+func (stage *stagedRole) buildProcMacro(ctx context.Context, run func([]byte, pm.Request) ([]byte, error)) error {
 	root := stage.generated[stage.graph.Root.Module]
 	packagePath, err := libraryPackage(stage.graph.Root)
 	if err != nil {
@@ -342,7 +286,7 @@ func (stage *stagedRole) buildProcMacro(run func([]byte, pm.Request) ([]byte, er
 		return err
 	}
 	artifact := filepath.Join(stage.dir, "macro.wasm")
-	if _, err := goCommand(stage.graph, root, "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", artifact, "./goxide_proc_macro"); err != nil {
+	if _, err := goCommand(ctx, stage.graph, root, "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", artifact, "./goxide_proc_macro"); err != nil {
 		return err
 	}
 	stage.wasm, err = os.ReadFile(artifact)

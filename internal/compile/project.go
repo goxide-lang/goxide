@@ -2,6 +2,7 @@
 package compile
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -72,6 +73,21 @@ type ProcArtifact struct {
 // PrepareProject generates a single manifest project and its source dependencies.
 // The caller can run Go build/run/test in Result.Root after this function returns.
 func PrepareProject(directory string, options Options) (*Result, error) {
+	prepared, err := Prepare(context.Background(), directory, options)
+	if err != nil {
+		return nil, err
+	}
+	defer prepared.Close()
+	return prepared.buildAndPublish(context.Background())
+}
+
+// Prepare loads the selected graph and compiles its macros without analyzing
+// the target package or publishing generated output. Close releases its private
+// source views and importers after all snapshots have been released.
+func Prepare(ctx context.Context, directory string, options Options) (*Project, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	root, err := project.DiscoverProject(directory)
 	if err != nil {
 		return nil, err
@@ -95,7 +111,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	}
 	configuration := options.Config
 	if configuration.Environment == nil {
-		configuration.Environment, err = config.Prepare(options.GoTool, root, options.Target, false, os.Environ())
+		configuration.Environment, err = config.PrepareContext(ctx, options.GoTool, root, options.Target, false, os.Environ())
 		if err != nil {
 			return nil, err
 		}
@@ -120,8 +136,12 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer release()
-	plans, err := project.LoadBuildPlans(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, options.NativeGeneration, environment.ExecEnv())
+	defer func() {
+		if release != nil {
+			release()
+		}
+	}()
+	plans, err := project.LoadBuildPlansContext(ctx, root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, options.NativeGeneration, environment.ExecEnv())
 	if err != nil {
 		return nil, err
 	}
@@ -140,8 +160,20 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer layout.Close()
-	return prepareBuildPlans(plans, layout, target, kind, configuration, options)
+	layoutRoot := layout.Root
+	layout.Close()
+	beforeLock, err := os.ReadFile(filepath.Join(root, "goxide.lock"))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	release()
+	release = nil
+	prepared, err := prepareBuildPlans(ctx, plans, layoutRoot, target, kind, configuration, options)
+	if err != nil {
+		return nil, err
+	}
+	prepared.beforeLock = beforeLock
+	return prepared, nil
 }
 
 func singleProject(root string) error {

@@ -23,6 +23,13 @@ var semanticGoKeys = []string{
 // Prepare resolves Go defaults after applying this workflow's target policy.
 // captured is the invocation's original environment, including when it is empty.
 func Prepare(tool, dir, targetText string, native bool, captured []string) (*Environment, error) {
+	return PrepareContext(context.Background(), tool, dir, targetText, native, captured)
+}
+
+func PrepareContext(ctx context.Context, tool, dir, targetText string, native bool, captured []string) (*Environment, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	selected := HostTarget()
 	if native && targetText != "" {
 		return nil, fmt.Errorf("--target is not accepted by native Go generation; use GOOS and GOARCH")
@@ -51,7 +58,7 @@ func Prepare(tool, dir, targetText string, native bool, captured []string) (*Env
 	if !native {
 		execution["GOOS"], execution["GOARCH"] = selected.OS, selected.Arch
 	}
-	output, err := goOutput(tool, dir, environmentSlice(execution), "env", "-json")
+	output, err := goOutput(ctx, tool, dir, environmentSlice(execution), "env", "-json")
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +87,7 @@ func Prepare(tool, dir, targetText string, native bool, captured []string) (*Env
 			e.values[key] = value
 		}
 	}
-	output, err = goOutput(tool, dir, e.execution, "tool", "dist", "list", "-json")
+	output, err = goOutput(ctx, tool, dir, e.execution, "tool", "dist", "list", "-json")
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +112,7 @@ func Prepare(tool, dir, targetText string, native bool, captured []string) (*Env
 	})
 	// Read Go's own experiment, architecture and release tags instead of
 	// duplicating their version-specific derivation.
-	output, err = goOutput(tool, dir, e.execution, "list", "-f", `{{join context.ToolTags ","}};{{join context.ReleaseTags ","}}`, "unsafe")
+	output, err = goOutput(ctx, tool, dir, e.execution, "list", "-f", `{{join context.ToolTags ","}};{{join context.ReleaseTags ","}}`, "unsafe")
 	if err != nil {
 		return nil, err
 	}
@@ -142,8 +149,8 @@ func findTool(tool, pathValue string) (string, error) {
 	return "", fmt.Errorf("Go tool %q is not available in the captured PATH", tool)
 }
 
-func goOutput(tool, dir string, env []string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func goOutput(ctx context.Context, tool, dir string, env []string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	c := exec.CommandContext(ctx, tool, args...)
 	c.Dir, c.Env = dir, env
@@ -152,6 +159,9 @@ func goOutput(tool, dir string, env []string, args ...string) ([]byte, error) {
 	c.Stderr = &stderr
 	output, err := c.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
 		return nil, fmt.Errorf("Go %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
 	}
 	return output, nil

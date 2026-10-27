@@ -57,7 +57,7 @@ func (g *Graph) roleSelection(module, version string) (Selection, error) {
 	if err := os.WriteFile(filepath.Join(work, "go.sum"), []byte(g.roles.owner.Lock.PlanningSums), 0644); err != nil {
 		return Selection{}, err
 	}
-	data, err := goCommand(g.Tool, work, g.Offline, g.Environment, "mod", "download", "-json", actualModule+"@"+actualVersion)
+	data, err := goCommandContext(g.context(), g.Tool, work, g.Offline, g.Environment, "mod", "download", "-json", actualModule+"@"+actualVersion)
 	if err != nil {
 		return Selection{}, err
 	}

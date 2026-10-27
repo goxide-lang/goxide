@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type UnifiedLock struct {
@@ -75,6 +77,7 @@ type Node struct {
 	Sources         map[string]Dependency // Active module sources with resolved Module identities.
 }
 type Graph struct {
+	ctx context.Context
 	// Nodes and Plan contain only this role's ordinary Go build closure.
 	Role                   string
 	Platform               string
@@ -107,6 +110,13 @@ type Graph struct {
 	Plan                   map[string]Selection
 	PlanID                 string
 	RootMod                ModFile
+}
+
+func (g *Graph) context() context.Context {
+	if g.ctx != nil {
+		return g.ctx
+	}
+	return context.Background()
 }
 
 func Digest(v any) string {
@@ -291,10 +301,15 @@ func validateGit(raw string) error {
 	return nil
 }
 func git(dir string, args ...string) (string, error) {
+	return gitContext(context.Background(), dir, args...)
+}
+
+func gitContext(ctx context.Context, dir string, args ...string) (string, error) {
 	argv := []string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.allow=never", "-c", "protocol.https.allow=always", "-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=always", "-c", "credential.helper="}
 	argv = append(argv, args...)
-	cmd := exec.Command("git", argv...)
+	cmd := exec.CommandContext(ctx, "git", argv...)
 	cmd.Dir = dir
+	cmd.WaitDelay = time.Second
 	for _, v := range os.Environ() {
 		k, _, _ := strings.Cut(v, "=")
 		if strings.HasPrefix(k, "GIT_") || k == "SSH_ASKPASS" || k == "SSH_ASKPASS_REQUIRE" {
@@ -305,6 +320,9 @@ func git(dir string, args ...string) (string, error) {
 	cmd.Env = append(cmd.Env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=")
 	b, e := cmd.Output()
 	if e != nil {
+		if ctx.Err() != nil {
+			e = ctx.Err()
+		}
 		return "", fmt.Errorf("git operation failed: %w", e)
 	}
 	return strings.TrimSpace(string(b)), nil
@@ -318,7 +336,7 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 	}
 	if d.Tag != "" || d.Branch != "" {
 		ref := d.gitRef()
-		if _, e := git("", "check-ref-format", ref); e != nil {
+		if _, e := gitContext(g.context(), "", "check-ref-format", ref); e != nil {
 			return "", fmt.Errorf("invalid git tag/branch: %w", e)
 		}
 	}
@@ -348,17 +366,17 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 			return "", e
 		}
 		defer os.RemoveAll(tmp)
-		if _, e = git("", "clone", "--no-checkout", "--", d.Git, tmp); e != nil {
+		if _, e = gitContext(g.context(), "", "clone", "--no-checkout", "--", d.Git, tmp); e != nil {
 			return "", e
 		}
 		ref := commit
 		if ref == "" {
 			ref = d.gitRef()
 		}
-		c, e := git(tmp, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+		c, e := gitContext(g.context(), tmp, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
 		if e != nil && (commit != "" || d.Rev != "") {
-			if _, e = git(tmp, "fetch", "--", "origin", ref); e == nil {
-				c, e = git(tmp, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
+			if _, e = gitContext(g.context(), tmp, "fetch", "--", "origin", ref); e == nil {
+				c, e = gitContext(g.context(), tmp, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
 			}
 		}
 		if e != nil {
@@ -367,7 +385,7 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 		if !isCommit(c) {
 			return "", fmt.Errorf("invalid resolved commit")
 		}
-		if _, e = git(tmp, "checkout", "--detach", c); e != nil {
+		if _, e = gitContext(g.context(), tmp, "checkout", "--detach", c); e != nil {
 			return "", e
 		}
 		if e = os.Rename(tmp, dir); e != nil {
@@ -375,7 +393,7 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 		}
 		commit = c
 	} else {
-		actual, e := git(dir, "rev-parse", "HEAD")
+		actual, e := gitContext(g.context(), dir, "rev-parse", "HEAD")
 		if e != nil {
 			return "", e
 		}
@@ -383,14 +401,17 @@ func (g *Graph) gitSource(d Dependency) (string, error) {
 			return "", fmt.Errorf("cached git checkout does not match locked commit")
 		}
 		if commit == "" {
-			want, err := git(dir, "rev-parse", "--verify", "--end-of-options", d.gitRef()+"^{commit}")
-			if err != nil || want != actual {
+			want, err := gitContext(g.context(), dir, "rev-parse", "--verify", "--end-of-options", d.gitRef()+"^{commit}")
+			if err != nil {
+				return "", fmt.Errorf("unlocked cached checkout does not match requested revision: %w", err)
+			}
+			if want != actual {
 				return "", fmt.Errorf("unlocked cached checkout does not match requested revision")
 			}
 		}
 		commit = actual
 		// Cached sources are immutable, including untracked files.
-		dirty, e := git(dir, "status", "--porcelain", "--untracked-files=all", "--ignored=matching")
+		dirty, e := gitContext(g.context(), dir, "status", "--porcelain", "--untracked-files=all", "--ignored=matching")
 		if e != nil {
 			return "", e
 		}

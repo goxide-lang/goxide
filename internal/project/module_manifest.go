@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -146,11 +147,19 @@ func ModuleText(m Manifest) ([]byte, error) {
 
 // ImportMod uses Go's parser. Unsupported directives are never silently lost.
 func ImportMod(tool, root string, environment ...[]string) (Manifest, error) {
-	return importMod(tool, root, false, environment...)
+	return ImportModContext(context.Background(), tool, root, environment...)
 }
-func ImportWorkspaceMod(tool, root string) (Manifest, error) { return importMod(tool, root, true) }
-func importMod(tool, root string, debug bool, environment ...[]string) (Manifest, error) {
+func ImportModContext(ctx context.Context, tool, root string, environment ...[]string) (Manifest, error) {
+	return importMod(ctx, tool, root, false, environment...)
+}
+func ImportWorkspaceMod(tool, root string) (Manifest, error) {
+	return importMod(context.Background(), tool, root, true)
+}
+func importMod(ctx context.Context, tool, root string, debug bool, environment ...[]string) (Manifest, error) {
 	var m Manifest
+	if err := ctx.Err(); err != nil {
+		return m, err
+	}
 	info, err := os.Lstat(filepath.Join(root, "go.mod"))
 	if err != nil || !info.Mode().IsRegular() {
 		return m, fmt.Errorf("import-go root must contain its own regular go.mod")
@@ -159,7 +168,7 @@ func importMod(tool, root string, debug bool, environment ...[]string) (Manifest
 	if len(environment) != 0 {
 		base = environment[0]
 	}
-	b, e := goCommand(tool, root, true, base, "mod", "edit", "-json")
+	b, e := goCommandContext(ctx, tool, root, true, base, "mod", "edit", "-json")
 	if e != nil {
 		return m, e
 	}

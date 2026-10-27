@@ -83,7 +83,7 @@ func (g *Graph) bindNativeLocal(module string, pin Selection, replacements []Mod
 	if Digest(data) != record.Input {
 		return pin, fmt.Errorf("copied lock local module metadata changed for %s", module)
 	}
-	m, e := ReadMod(g.Tool, location, g.Environment)
+	m, e := ReadModContext(g.context(), g.Tool, location, g.Environment)
 	if e != nil {
 		return pin, e
 	}

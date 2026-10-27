@@ -2,6 +2,7 @@ package compile
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +15,7 @@ import (
 
 // Each generated module gets the same Go-selected graph. Relative replacements
 // work both in the temporary tree and after PublishBundle moves its contents.
-func prepareModules(graph *project.Graph, generated map[string]string) error {
+func prepareModules(ctx context.Context, graph *project.Graph, generated map[string]string) error {
 	macroModules := map[string]bool{}
 	for _, edge := range graph.ProcEdges {
 		macroModules[edge.Plan.Root.Module] = true
@@ -65,7 +66,7 @@ func prepareModules(graph *project.Graph, generated map[string]string) error {
 			edits = append(edits, "-replace="+module+"="+filepath.ToSlash(relative))
 		}
 		if len(edits) > 2 {
-			if _, err := goCommand(graph, root, edits...); err != nil {
+			if _, err := goCommand(ctx, graph, root, edits...); err != nil {
 				return err
 			}
 		}
@@ -102,10 +103,10 @@ func prepareModules(graph *project.Graph, generated map[string]string) error {
 		} else if graph.Locked {
 			return fmt.Errorf("--locked: module configuration absent from lock: %s", node.Module)
 		}
-		if _, err := goCommand(graph, root, "mod", "download", "all"); err != nil {
+		if _, err := goCommand(ctx, graph, root, "mod", "download", "all"); err != nil {
 			return err
 		}
-		data, err := goCommand(graph, root, "list", "-mod=readonly", "-m", "-json", "all")
+		data, err := goCommand(ctx, graph, root, "list", "-mod=readonly", "-m", "-json", "all")
 		if err != nil {
 			return err
 		}
@@ -161,8 +162,8 @@ func prepareModules(graph *project.Graph, generated map[string]string) error {
 	return nil
 }
 
-func goCommand(graph *project.Graph, root string, args ...string) ([]byte, error) {
-	command := exec.Command(graph.Tool, args...)
+func goCommand(ctx context.Context, graph *project.Graph, root string, args ...string) ([]byte, error) {
+	command := exec.CommandContext(ctx, graph.Tool, args...)
 	command.Dir = root
 	command.Env = project.GoEnv(graph.Offline, graph.Environment)
 	var stderr bytes.Buffer

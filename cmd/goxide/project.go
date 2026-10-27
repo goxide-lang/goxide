@@ -24,6 +24,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/project"
 	"github.com/goxide-lang/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/source"
 	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
@@ -551,16 +552,11 @@ func copyDirectorySources(root, input, stage, module string, roots paths.Roots, 
 		if err != nil {
 			return err
 		}
-		if !resource && strings.HasSuffix(name, "_gox.go") && generatedGo(name, data) {
-			source := strings.TrimSuffix(name, "_gox.go") + ".gox"
-			if sourceInfo, err := os.Stat(source); err == nil && sourceInfo.Mode().IsRegular() {
-				for _, directory := range selected {
-					if within(directory, source) {
-						return nil // The selected source is regenerated with this invocation's policy.
-					}
+		if !resource && source.IsGenerated(name, data) {
+			for _, directory := range selected {
+				if within(directory, name) {
+					return nil // This managed source scope uses only the current projection.
 				}
-			} else if err != nil && !os.IsNotExist(err) {
-				return err
 			}
 		}
 		if !resource && (extension == ".go" || extension == ".gox") {

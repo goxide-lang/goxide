@@ -1,9 +1,11 @@
 package typecheck
 
 import (
+	"context"
 	"fmt"
 	"go/types"
 	"path"
+	"sort"
 
 	"github.com/goxide-lang/goxide/internal/analysis"
 )
@@ -12,8 +14,21 @@ import (
 // from the same analysis. Fully native packages keep their export-data identities.
 func GeneratedSources(result *analysis.Result, generated map[string][]byte) map[string]map[string][]byte {
 	packages := map[string]map[string][]byte{}
+	externalTests := map[string]bool{}
+	if result.Resolved != nil {
+		for _, pkg := range result.Resolved.Packages {
+			if pkg.IsExternalTest() {
+				for _, file := range pkg.Files {
+					externalTests[file.Name] = true
+				}
+			}
+		}
+	}
 	add := func(name string, data []byte) {
 		pkg := path.Dir(name)
+		if externalTests[name] {
+			pkg += "_test"
+		}
 		if packages[pkg] == nil {
 			packages[pkg] = map[string][]byte{}
 		}
@@ -36,6 +51,26 @@ func CheckGeneratedPackage(packagePath string, sources map[string]map[string][]b
 	imports := &generatedImporter{sources: sources, external: external, sizes: sizes, packages: map[string]*types.Package{}, loading: map[string]bool{}}
 	_, err := imports.Import(packagePath)
 	return err
+}
+
+// CheckGeneratedGraph checks every selected package once, including packages
+// without consumers. Dependencies retain the identities from this one check.
+func CheckGeneratedGraph(ctx context.Context, sources map[string]map[string][]byte, external types.Importer, sizes types.Sizes) error {
+	imports := &generatedImporter{sources: sources, external: external, sizes: sizes, packages: map[string]*types.Package{}, loading: map[string]bool{}}
+	names := make([]string, 0, len(sources))
+	for name := range sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, err := imports.Import(name); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
 }
 
 // Every edit rebuilds the selected source graph. Only packages outside that

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/paths"
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
@@ -49,13 +50,13 @@ func TestNativeAutomaticDependencySelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.automatic) != 3 || plan.automatic["selected"][0].dependency.Version != "v1.1.0" {
-		t.Fatalf("wrong automatic candidates: %+v", plan.automatic)
+	if len(plan.Automatic) != 3 || plan.Automatic["selected"][0].Dependency.Version != "v1.1.0" {
+		t.Fatalf("wrong automatic candidates: %+v", plan.Automatic)
 	}
-	if fork := plan.automatic["forked"][0]; fork.dependency.Go != "example.org/replaced" || fork.dependency.Version != "v1.0.0" || fork.namespace.PackagePath != "example.org/replaced/src" {
+	if fork := plan.Automatic["forked"][0]; fork.Dependency.Go != "example.org/replaced" || fork.Dependency.Version != "v1.0.0" || fork.Namespace.PackagePath != "example.org/replaced/src" {
 		t.Fatalf("replacement lost logical identity: %+v", fork)
 	}
-	if len(plan.manifest.Dependencies) != 0 {
+	if len(plan.Manifest.Dependencies) != 0 {
 		t.Fatal("candidate discovery activated source dependencies")
 	}
 	for _, name := range []string{"selected@v1.1.0", "indirect@v1.0.0", "fork@v1.4.0"} {
@@ -83,13 +84,13 @@ func TestNativeAutomaticDependencySelection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, exists := plan.automatic["selected"]; exists {
+		if _, exists := plan.Automatic["selected"]; exists {
 			t.Fatal("explicit module gained its default name")
 		}
-		if _, exists := plan.automatic["indirect"]; exists {
+		if _, exists := plan.Automatic["indirect"]; exists {
 			t.Fatal("automatic alias replaced an explicit root")
 		}
-		if plan.roots["renamed"] != roots["renamed"] || len(plan.manifest.Dependencies) != 0 {
+		if plan.Roots["renamed"] != roots["renamed"] || len(plan.Manifest.Dependencies) != 0 {
 			t.Fatal("exact package acquired the library entry")
 		}
 	})
@@ -156,7 +157,7 @@ func TestNativeAutomaticSourceOnlyReplacementSelection(t *testing.T) {
 			singleFileWrite(t, base, "app/main.gox", "package main\nfunc main() {}\n")
 			app := filepath.Join(base, "app")
 			cfg := testdeps.Configuration()
-			selectDependencies := func() (*nativeDependencies, error) {
+			selectDependencies := func() (*compile.NativeDependencies, error) {
 				owner, err := prepareSingleFileModule(filepath.Join(app, "main.gox"), cfg)
 				if err != nil {
 					return nil, err
@@ -169,13 +170,13 @@ func TestNativeAutomaticSourceOnlyReplacementSelection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(plan.automatic["library"]) != 1 || plan.automatic["library"][0].dependency.Version != wantVersion {
-				t.Fatalf("source-only replacement did not follow selected version: %+v", plan.automatic)
+			if len(plan.Automatic["library"]) != 1 || plan.Automatic["library"][0].Dependency.Version != wantVersion {
+				t.Fatalf("source-only replacement did not follow selected version: %+v", plan.Automatic)
 			}
-			if len(plan.automatic["selected"]) != 1 || plan.automatic["selected"][0].dependency.Version != "v1.2.0" {
-				t.Fatalf("TOML dependency constraints were lost: %+v", plan.automatic)
+			if len(plan.Automatic["selected"]) != 1 || plan.Automatic["selected"][0].Dependency.Version != "v1.2.0" {
+				t.Fatalf("TOML dependency constraints were lost: %+v", plan.Automatic)
 			}
-			if plan.required["example.org/selected"] != "v1.0.0" || len(plan.manifest.Dependencies) != 0 {
+			if plan.Required["example.org/selected"] != "v1.0.0" || len(plan.Manifest.Dependencies) != 0 {
 				t.Fatal("private selection changed authored candidates or activated source compilation")
 			}
 			if !reflect.DeepEqual(before, singleFileSnapshot(t, base)) {
@@ -215,7 +216,7 @@ func TestNativeAutomaticTransitiveSourceOnlyReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.automatic) != 0 || len(plan.manifest.Dependencies) != 0 || plan.required["example.org/library"] != "" {
+	if len(plan.Automatic) != 0 || len(plan.Manifest.Dependencies) != 0 || plan.Required["example.org/library"] != "" {
 		t.Fatal("transitive source-only replacement became an authored candidate")
 	}
 	if !reflect.DeepEqual(before, singleFileSnapshot(t, base)) {

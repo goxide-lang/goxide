@@ -351,13 +351,13 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err != nil {
 		return err
 	}
-	manifest.Dependencies, roots = sourceDependencies.manifest.Dependencies, sourceDependencies.roots
+	manifest.Dependencies, roots = sourceDependencies.Manifest.Dependencies, sourceDependencies.Roots
 	owner := &singleFileModule{root: root, config: cfg}
 	var requireRoot func(string, paths.Namespace) error
 	if automatic {
-		owner.nativeRequirements = sourceDependencies.required
+		owner.nativeRequirements = sourceDependencies.Required
 		imports := typecheck.NewImporter(filepath.Join(input, "input.gox"), typecheck.ImporterOptions{Config: cfg, Tags: tags, ModFile: filepath.Join(stage, "go.mod")})
-		roots, requireRoot, err = sourceDependencies.generationRoots(owner, imports)
+		roots, requireRoot, err = owner.generationRoots(sourceDependencies, imports)
 		if err != nil {
 			return err
 		}
@@ -394,7 +394,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 		}
 		var diagnostics bytes.Buffer
 		prepared, err = prepareProject(stage, options, &diagnostics)
-		var demand *nativeRootDemand
+		var demand *compile.NativeRootDemand
 		if !automatic || !errors.As(err, &demand) {
 			if _, writeErr := io.Copy(stderr, &diagnostics); err == nil && writeErr != nil {
 				err = writeErr
@@ -404,8 +404,8 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 			}
 			break
 		}
-		candidate := sourceDependencies.automatic[demand.alias][0]
-		sourceDependencies.manifest.Dependencies[demand.alias] = candidate.dependency
+		candidate := sourceDependencies.Automatic[demand.Alias][0]
+		sourceDependencies.Manifest.Dependencies[demand.Alias] = candidate.Dependency
 		if err := os.RemoveAll(stage); err != nil {
 			return err
 		}

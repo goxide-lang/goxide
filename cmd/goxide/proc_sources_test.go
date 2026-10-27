@@ -53,7 +53,7 @@ func TestNativeSourceDependenciesSelectedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest, roots := dependencies.manifest, dependencies.roots
+	manifest, roots := dependencies.Manifest, dependencies.Roots
 	if selected := manifest.Dependencies["library"]; selected.Go != "example.org/native-discovery" || selected.Version != "v1.1.0" {
 		t.Fatalf("selected source = %+v", selected)
 	}
@@ -84,7 +84,7 @@ func TestNativeSourceDependenciesSelectedVersion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		manifest, roots := dependencies.manifest, dependencies.roots
+		manifest, roots := dependencies.Manifest, dependencies.Roots
 		if manifest.Dependencies["library"].Version != "v1.1.0" || roots["library"].PackagePath != "example.org/native-discovery/src" {
 			t.Fatalf("lost selected published root: dependency=%+v root=%+v", manifest.Dependencies["library"], roots["library"])
 		}
@@ -111,7 +111,7 @@ func TestNativeSourceDependenciesSelectedVersion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		manifest, roots := dependencies.manifest, dependencies.roots
+		manifest, roots := dependencies.Manifest, dependencies.Roots
 		if manifest.Dependencies["library"].Version != "v1.1.0" || roots["library"].PackagePath != "example.org/native-discovery/src" {
 			t.Fatalf("wrong selected replacement: dependency=%+v root=%+v", manifest.Dependencies["library"], roots["library"])
 		}

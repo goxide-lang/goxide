@@ -12,28 +12,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/compile"
 )
 
 // scripts/build.go stamps the compiler's published require pins.
 var stdSuggestedVersion, serdeSuggestedVersion string
 
-type missingGenerationDependencies struct {
-	Root    string
-	Modules []string
-	Config  config.Config
-	Cause   error
-}
-
-func (e *missingGenerationDependencies) Error() string {
-	message := "generation needs dependencies absent from go.mod: " + strings.Join(e.Modules, ", ")
-	if e.Cause != nil {
-		message += "\n" + e.Cause.Error()
-	}
-	return message
-}
-
-func (e *missingGenerationDependencies) Unwrap() error { return e.Cause }
+type missingGenerationDependencies = compile.MissingNativeDependencies
 
 func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if req.PromptInput != nil {

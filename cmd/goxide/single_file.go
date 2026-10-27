@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,8 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/paths"
 )
@@ -31,105 +30,23 @@ type singleFileModule struct {
 // Keep the execution environment aligned with the offline export importer,
 // including private-module settings that can otherwise bypass GOPROXY=off.
 func singleFileEnvironment(base ...[]string) []string {
-	environment := []string{}
-	for _, value := range localEnv(base...) {
-		name, _, _ := strings.Cut(value, "=")
-		if name != "GONOPROXY" && name != "GOVCS" {
-			environment = append(environment, value)
-		}
+	env := os.Environ()
+	if len(base) != 0 {
+		env = base[0]
 	}
-	return append(environment, "GONOPROXY=none", "GOVCS=*:off")
+	return compile.NativeEnvironment(env)
 }
 
-func prepareSingleFileModule(input string, cfg config.Config) (_ *singleFileModule, err error) {
-	input, err = filepath.Abs(input)
-	if err != nil {
+func prepareSingleFileModule(input string, cfg config.Config) (*singleFileModule, error) {
+	module, err := compile.OpenNativeModule(context.Background(), input, cfg)
+	if err != nil || module == nil {
 		return nil, err
 	}
-	input, err = filepath.EvalSymlinks(input)
-	if err != nil {
-		return nil, err
-	}
-	root := filepath.Dir(input)
-	for {
-		_, err = os.Lstat(filepath.Join(root, "go.mod"))
-		if err == nil {
-			break
-		}
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-		parent := filepath.Dir(root)
-		if parent == root {
-			return nil, nil // Standalone keeps its existing runtime fallback.
-		}
-		root = parent
-	}
-	temporaryRoot, err := filepath.Abs(os.TempDir())
-	if err != nil {
-		return nil, err
-	}
-	temporaryRoot, err = filepath.EvalSymlinks(temporaryRoot)
-	if err != nil {
-		return nil, err
-	}
-	if pathWithin(root, temporaryRoot) {
-		return nil, fmt.Errorf("configured single-file temporary directory must be outside the source module; set TMPDIR to an external directory")
-	}
-	dir, err := os.MkdirTemp(temporaryRoot, "goxide-single-")
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err != nil {
-			os.RemoveAll(dir)
-		}
-	}()
-	m := &singleFileModule{input: input, root: root, temporary: dir, modFile: filepath.Join(dir, "consumer.mod"), config: cfg}
-	for _, item := range []struct{ source, destination string }{{"go.mod", "consumer.mod"}, {"go.sum", "consumer.sum"}} {
-		data, e := os.ReadFile(filepath.Join(root, item.source))
-		if item.source == "go.sum" && os.IsNotExist(e) {
-			continue
-		}
-		if e != nil {
-			return nil, e
-		}
-		if item.source == "go.mod" {
-			m.authoredMod = data
-		}
-		if e = os.WriteFile(filepath.Join(dir, item.destination), data, 0600); e != nil {
-			return nil, e
-		}
-	}
-	// Ask Go to parse the copied configuration, retaining every directive in the
-	// original bytes. Relative replaces still belong to root, not temporary.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, cfg.Environment.GoTool, "mod", "edit", "-json", m.modFile)
-	cmd.Dir, cmd.Env = root, singleFileEnvironment(cfg.Environment.ExecEnv())
-	data, err := cmd.Output()
-	if err != nil {
-		if failure, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("input module configuration: %w: %s", err, bytes.TrimSpace(failure.Stderr))
-		}
-		return nil, fmt.Errorf("input module configuration: %w", err)
-	}
-	var declarations struct{ Module *struct{ Path string } }
-	if err = json.Unmarshal(data, &declarations); err != nil {
-		return nil, err
-	}
-	if declarations.Module == nil || declarations.Module.Path == "" {
-		return nil, fmt.Errorf("input go.mod has no module directive")
-	}
-	rel, err := filepath.Rel(root, filepath.Dir(input))
-	if err != nil {
-		return nil, err
-	}
-	m.packagePath = declarations.Module.Path
-	if rel != "." {
-		m.packagePath += "/" + filepath.ToSlash(rel)
-	}
-	return m, nil
+	return &singleFileModule{input: module.Input, root: module.Root, packagePath: module.PackagePath, temporary: module.Temporary, modFile: module.ModFile, config: module.Config, authoredMod: module.AuthoredMod}, nil
+}
+
+func (m *singleFileModule) nativeModule() *compile.NativeModule {
+	return &compile.NativeModule{Input: m.input, Root: m.root, PackagePath: m.packagePath, Temporary: m.temporary, ModFile: m.modFile, Config: m.config, AuthoredMod: m.authoredMod}
 }
 
 func (m *singleFileModule) close() { os.RemoveAll(m.temporary) }

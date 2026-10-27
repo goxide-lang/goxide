@@ -32,6 +32,9 @@ func helperServer(mode string) error {
 		return err
 	}
 	var held json.RawMessage
+	files := make(map[string]helperFile)
+	var changes []helperChange
+	var diagnostics []string
 	for {
 		msg, err := readMessage(reader)
 		if err != nil {
@@ -87,14 +90,71 @@ func helperServer(mode string) error {
 			if string(params.ID) != string(held) {
 				return fmt.Errorf("cancel ID %s != held ID %s", params.ID, held)
 			}
-			if err := write(message{ID: held, Error: &ResponseError{Code: -32800, Message: "canceled"}}); err != nil {
-				return err
+			if mode != "ignore-cancel" {
+				if err := write(message{ID: held, Error: &ResponseError{Code: -32800, Message: "canceled"}}); err != nil {
+					return err
+				}
 			}
 			if err := write(message{Method: "test/canceled", Params: held}); err != nil {
 				return err
 			}
 		case "test/echo":
 			if err := write(message{ID: msg.ID, Result: msg.Params}); err != nil {
+				return err
+			}
+		case "test/release":
+			if err := write(message{ID: held, Result: json.RawMessage(`"obsolete"`)}); err != nil {
+				return err
+			}
+			if err := write(message{ID: msg.ID, Result: json.RawMessage(`"released"`)}); err != nil {
+				return err
+			}
+		case "textDocument/didOpen", "textDocument/didChange", "textDocument/didClose":
+			var params struct {
+				TextDocument struct {
+					URI     string `json:"uri"`
+					Text    string `json:"text"`
+					Version int32  `json:"version"`
+				} `json:"textDocument"`
+				ContentChanges []struct {
+					Text string `json:"text"`
+				} `json:"contentChanges"`
+			}
+			if err := json.Unmarshal(msg.Params, &params); err != nil {
+				return err
+			}
+			doc := params.TextDocument
+			if msg.Method == "textDocument/didClose" {
+				delete(files, doc.URI)
+			} else {
+				text := doc.Text
+				if len(params.ContentChanges) != 0 {
+					text = params.ContentChanges[0].Text
+				}
+				files[doc.URI] = helperFile{Text: text, Version: doc.Version}
+			}
+			changes = append(changes, helperChange{Method: msg.Method, URI: doc.URI, Version: doc.Version})
+		case "test/snapshot":
+			result, _ := json.Marshal(helperSnapshot{Files: files, Changes: changes, Diagnostics: diagnostics})
+			if err := write(message{ID: msg.ID, Result: result}); err != nil {
+				return err
+			}
+		case "textDocument/diagnostic":
+			var params struct {
+				TextDocument struct {
+					URI string `json:"uri"`
+				} `json:"textDocument"`
+			}
+			if err := json.Unmarshal(msg.Params, &params); err != nil {
+				return err
+			}
+			diagnostics = append(diagnostics, params.TextDocument.URI)
+			if mode == "hold-diagnostics" {
+				held = msg.ID
+				if err := write(message{Method: "test/holding", Params: msg.Params}); err != nil {
+					return err
+				}
+			} else if err := write(message{ID: msg.ID, Result: json.RawMessage(`{"kind":"full","items":[]}`)}); err != nil {
 				return err
 			}
 		case "test/crash":
@@ -114,6 +174,23 @@ func helperServer(mode string) error {
 			return nil
 		}
 	}
+}
+
+type helperFile struct {
+	Text    string
+	Version int32
+}
+
+type helperChange struct {
+	Method  string
+	URI     string
+	Version int32
+}
+
+type helperSnapshot struct {
+	Files       map[string]helperFile
+	Changes     []helperChange
+	Diagnostics []string
 }
 
 func startHelper(t *testing.T, mode string, notify func(context.Context, Notification)) *Client {

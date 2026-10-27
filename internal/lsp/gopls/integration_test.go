@@ -26,14 +26,6 @@ type publishedDiagnostics struct {
 
 func startGopls(t *testing.T, files map[string]string) (*Client, string, <-chan Notification) {
 	t.Helper()
-	path := os.Getenv("GOXIDE_TEST_GOPLS")
-	if path == "" {
-		var err error
-		path, err = exec.LookPath("gopls")
-		if err != nil {
-			t.Skip("gopls not found in PATH; set GOXIDE_TEST_GOPLS to run protocol integration tests")
-		}
-	}
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -46,6 +38,19 @@ func startGopls(t *testing.T, files map[string]string) (*Client, string, <-chan 
 		}
 		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 			t.Fatal(err)
+		}
+	}
+	return startGoplsAt(t, root)
+}
+
+func startGoplsAt(t *testing.T, root string) (*Client, string, <-chan Notification) {
+	t.Helper()
+	path := os.Getenv("GOXIDE_TEST_GOPLS")
+	if path == "" {
+		var err error
+		path, err = exec.LookPath("gopls")
+		if err != nil {
+			t.Skip("gopls not found in PATH; set GOXIDE_TEST_GOPLS to run protocol integration tests")
 		}
 	}
 	events := make(chan Notification, 256)

@@ -4,13 +4,14 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { settingNames, contains, projectPlan, launchOptions, documentSelector, owns, watched } = require("./config");
 const { Development } = require("./development");
+const { Gopls } = require("./tools");
 
 const generatedScheme = "goxide-generated";
 const goExtensionIDs = ["golang.go", "golang.go-nightly"];
 let active;
 
 class Extension {
-  constructor(vscode, LanguageClient) {
+  constructor(vscode, LanguageClient, storageURI) {
     this.vscode = vscode;
     this.LanguageClient = LanguageClient;
     this.sessions = new Map();
@@ -21,6 +22,7 @@ class Extension {
     this.warnedGo = false;
     this.lastGoConflict = this.conflict();
     this.output = vscode.window.createOutputChannel("Goxide", { log: true });
+    this.tools = new Gopls(vscode, storageURI, this.output);
     this.previewChanged = new vscode.EventEmitter();
     this.development = new Development(this);
     this.disposables.push(this.output, this.previewChanged);
@@ -138,8 +140,10 @@ class Extension {
     const rootURI = vscode.Uri.file(plan.root);
     const settings = this.settings(folder?.uri || rootURI);
     const goConflict = this.conflict();
-    const managedGo = settings.enableManagedGo && !goConflict && settings.gopls !== "off";
-    const options = launchOptions(folder?.uri.fsPath || plan.root, plan, settings, goConflict);
+    const gopls = await this.tools.prepare(settings.gopls, goConflict, plan.root);
+    if (this.disposed) return;
+    const managedGo = settings.enableManagedGo && gopls !== "off";
+    const options = launchOptions(folder?.uri.fsPath || plan.root, plan, { ...settings, gopls }, goConflict);
     const session = { plan, folder, settings, persistent, managedGo, client: undefined, disposables: [] };
     const client = new this.LanguageClient("goxide", `Goxide (${path.basename(plan.root)})`, options, {
       documentSelector: documentSelector(vscode, plan, managedGo),
@@ -268,6 +272,7 @@ class Extension {
   }
 
   async restart(configurationChanged = false) {
+    this.tools.reset();
     for (const session of [...this.sessions.values()]) {
       if (configurationChanged) {
         await session.client.sendNotification("workspace/didChangeConfiguration", {
@@ -290,6 +295,7 @@ class Extension {
 
   async dispose() {
     this.disposed = true;
+    this.tools.dispose();
     await this.pending;
     const sessions = [...this.sessions.values()];
     this.sessions.clear();
@@ -307,8 +313,8 @@ async function exists(filename) {
   }
 }
 
-async function activate() {
-  active = new Extension(require("vscode"), require("vscode-languageclient/node").LanguageClient);
+async function activate(context) {
+  active = new Extension(require("vscode"), require("vscode-languageclient/node").LanguageClient, context.globalStorageUri);
   await active.start();
 }
 

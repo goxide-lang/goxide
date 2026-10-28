@@ -9,6 +9,7 @@
   "engines": { "vscode": "^1.91.0" },
   "categories": ["Programming Languages", "Debuggers", "Testing"],
   "main": "./extension.js",
+  "extensionKind": ["workspace"],
   "activationEvents": ["onLanguage:goxide", "workspaceContains:goxide.toml", "onDebugResolve:goxide", "onDebugInitialConfigurations"],
   "capabilities": {
     "untrustedWorkspaces": { "supported": false, "description": "Goxide starts the configured compiler and prepares project dependencies." },
@@ -63,7 +64,7 @@
       "properties": {
         "goxide.enabled": { "type": "boolean", "default": true, "scope": "resource", "description": "Enable Goxide language services in this folder." },
         "goxide.executable": { "type": "string", "default": "goxide", "minLength": 1, "scope": "resource", "description": "Goxide executable path or command on PATH. Relative paths resolve from the workspace folder." },
-        "goxide.gopls": { "type": "string", "default": "gopls", "minLength": 1, "scope": "resource", "description": "Original gopls executable path, command on PATH, or off to disable Go-backed services." },
+        "goxide.gopls": { "type": "string", "default": "gopls", "minLength": 1, "scope": "resource", "description": "Original gopls path or command, or off to disable Go-backed services. The default uses PATH first, then installs v0.24.0 with go into the extension host's private storage. Custom paths are never replaced." },
         "goxide.dlv": { "type": "string", "default": "dlv", "minLength": 1, "scope": "resource", "description": "Original Delve executable used for Goxide debugging. Relative paths resolve from the workspace folder." },
         "goxide.input": { "type": "string", "default": "", "scope": "resource", "description": "Project directory, goxide.toml, or one .gox file, relative to the workspace folder. Empty discovers goxide.toml; other .gox files use standalone sessions." },
         "goxide.bin": { "type": "string", "default": "", "scope": "resource", "description": "Selected project binary. Mutually exclusive with goxide.example and goxide.lib." },
@@ -77,7 +78,7 @@
       }
     }
   },
-  "scripts": { "test": "node --test test/*.test.js", "test:host": "node host-test/run.js", "test:development": "node host-test/development-run.js", "test:debug": "node host-test/debug-run.js", "check": "node --check extension.js && node --check config.js && node --check development.js", "package": "vsce package" },
+  "scripts": { "test": "node --test test/*.test.js", "test:host": "node host-test/run.js", "test:development": "node host-test/development-run.js", "test:debug": "node host-test/debug-run.js", "check": "node --check extension.js && node --check config.js && node --check development.js && node --check tools.js", "package": "vsce package" },
   "dependencies": { "vscode-languageclient": "11.0.0" },
   "devDependencies": { "@vscode/vsce": "4.0.0" }
 }

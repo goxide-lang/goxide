@@ -2,7 +2,7 @@
 
 通过 `goxide lsp` 提供诊断、悬浮信息、定义跳转、补全、签名提示、文档符号、引用查找、重命名、格式化和快速修复。重命名会重新分析候选源码、检查生成 Go，并验证原有源码绑定未改变。扩展还提供 Run、Test Explorer 和基于 Delve 的调试入口。
 
-需要 VS Code 1.91 或更新版本、带 `lsp` 和 `dev` 子命令的 Goxide，以及编译器要求的 Go 工具链。Go 后端使用原版 `gopls`；当前服务端契约以 v0.24.0 验证。调试另外需要外部安装的官方 Delve（`dlv`），不依赖 Go 扩展提供调试器。扩展不会自动安装这些工具。
+需要 VS Code 1.91 或更新版本、带 `lsp` 和 `dev` 子命令的 Goxide，以及编译器要求的 Go 工具链。Go 后端使用原版 `gopls`；当前服务端契约以 v0.24.0 验证。调试另外需要外部安装的官方 Delve（`dlv`），不依赖 Go 扩展提供调试器。VSIX 不内置 Goxide、gopls 或 Delve。
 
 ## 安装与启动
 
@@ -16,7 +16,11 @@ npm run package
 
 随后在 VS Code 中运行 **Extensions: Install from VSIX**，选择生成的 `goxide-0.0.0.vsix`。打包使用 Node.js 22 或更新版本；扩展运行时使用 VS Code 自带的 Node.js。
 
-将 `goxide`、`gopls` 和需要调试时使用的 `dlv` 放入扩展宿主的 `PATH`，或设置其可执行文件路径。在 Remote SSH/容器窗口中，应配置远端路径。
+将 `goxide` 和需要调试时使用的 `dlv` 放入扩展宿主的 `PATH`，或设置其可执行文件路径。扩展不会下载这两个工具。在 Remote SSH/容器窗口中，扩展与工具运行在远端宿主，应配置远端路径。
+
+默认 `goxide.gopls` 为 `gopls`，优先复用宿主 `PATH` 中的可执行文件。缺少时显示可取消进度，按[官方安装方式](https://go.dev/gopls/advanced#installing-unreleased-versions)执行 `go install golang.org/x/tools/gopls@v0.24.0`，将二进制保存到扩展宿主 `globalStorage` 的 `tools/gopls-v0.24.0/<platform>-<arch>/`。安装需要宿主 `PATH` 中有 `go`，使用 Go 的正常模块和构建缓存、代理及工具链设置；安装进程通过 `go env GOHOSTOS GOHOSTARCH` 选择 Go 工具链自身的宿主目标，并设置私有 `GOBIN`，支持 Go 与扩展进程使用不同架构的模拟运行组合。不受项目交叉编译目标影响，不修改全局 Go 或 VS Code 配置。Windows 使用 `gopls.exe`，macOS 与 Linux 使用 `gopls`。
+
+自定义 gopls 命令/路径会直接使用，`off` 或启用的 Go 扩展会跳过安装。多个项目共享一次工具准备；失败或取消后保留 Goxide 源码服务，错误见 **Output → Goxide**，运行 **Goxide: Restart Language Server** 可重试。成功安装的固定版本会复用，安装中间产物会清理。
 
 - 打开包含 `goxide.toml` 的工作区文件夹，会创建一个项目会话。打开嵌套项目的 `.gox` 时，只检查该文件的祖先目录。
 - 目录模式（包括已有 Go module）在文件夹设置中指定 `"goxide.input": "."`。
@@ -45,7 +49,7 @@ npm run package
 | --- | --- | --- |
 | `goxide.enabled` | `true` | 是否启用该文件夹的 Goxide 服务与开发命令 |
 | `goxide.executable` | `goxide` | 编译器可执行文件 |
-| `goxide.gopls` | `gopls` | 原版 gopls 可执行文件；`off` 禁用 Go 后端 |
+| `goxide.gopls` | `gopls` | 默认优先用 `PATH`，缺少时私有安装 v0.24.0；也可指定命令/路径，`off` 禁用 Go 后端 |
 | `goxide.dlv` | `dlv` | 原版 Delve 可执行文件，用于 Goxide 调试 |
 | `goxide.input` | `""` | 目录、`goxide.toml` 或单个 `.gox`；留空时按上述规则发现 |
 | `goxide.bin` | `""` | 选择项目 binary，与 `example`、`lib` 互斥 |
@@ -127,7 +131,7 @@ Run、测试发现、测试运行和 Debug 会保存所选输入范围内的未�
 
 服务日志在 **Output → Goxide**。编译器或 gopls 不可用时按服务端诊断处理；修改路径后运行重启命令。
 
-开发校验使用 `npm test`、`npm run check` 和 `npm run package`。测试覆盖参数传递、配置 schema、项目选择器、Go 扩展冲突、文件与配置事件、只读预览、会话释放、过期测试选择、进程树取消和调试测试结果；不替代真实 VS Code 窗口中的交互验收。
+开发校验使用 `npm test`、`npm run check` 和 `npm run package`。测试覆盖参数传递、配置 schema、项目选择器、Go 扩展冲突、gopls 私有安装与失败/取消重试、文件与配置事件、只读预览、会话释放、过期测试选择、进程树取消和调试测试结果；不替代真实 VS Code 窗口中的交互验收。
 
 在已有 VS Code 的 macOS/Linux 主机可运行 `npm run test:host`。它使用临时用户数据与扩展目录启动真实 VS Code，连接受控 stdio 服务，验证五项能力、UTF-16、Go 文件选择器、预览和关闭/重启流程；不下载 Electron，也不修改用户配置。非默认安装路径通过 `VSCODE_EXECUTABLE` 指向 VS Code 可执行文件。该测试验证客户端协议接线，编译器行为仍由服务端端到端测试覆盖。
 

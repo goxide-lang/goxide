@@ -29,7 +29,7 @@ function execute(options, token, onLine) {
   return new Promise((resolve, reject) => {
     if (token?.isCancellationRequested) return resolve({ code: null, cancelled: true, stdout: "", stderr: "" });
     const child = spawn(options.command, options.args, {
-      cwd: options.cwd, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32",
+      cwd: options.cwd, env: options.env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true,
     });
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -58,7 +58,7 @@ function execute(options, token, onLine) {
     child.on("error", error => {
       clearTimeout(killTimer);
       cancellation?.dispose();
-      reject(new Error(error.code === "ENOENT" ? `Goxide executable was not found: ${options.command}. Set goxide.executable to an installed compiler.` : error.message));
+      reject(new Error(error.code === "ENOENT" ? `Executable was not found: ${options.command}. Check the extension host PATH and configured executable paths.` : error.message));
     });
     child.on("close", code => {
       // Closing the group leader's pipes does not prove detached/background

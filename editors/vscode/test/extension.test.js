@@ -86,10 +86,15 @@ async function fixture(t, options = {}) {
       return { uri: "goxide-generated:///test/main.go", content: "package main\n" };
     }
   }
-  const extension = new Extension(vscode, Client);
+  const extension = new Extension(vscode, Client, fileURI(path.join(root, "storage")));
+  const preparations = [];
+  extension.tools.prepare = async (...args) => {
+    preparations.push(args);
+    return options.prepare ? options.prepare(...args) : args[1] ? "off" : args[0];
+  };
   t.after(() => extension.dispose());
   const document = (name, languageId = "goxide") => ({ uri: fileURI(path.join(root, name)), languageId });
-  return { root, settings, events, clients, watchers, warnings, errors, updates, commands, providers, vscode, extension, document };
+  return { root, settings, events, clients, watchers, warnings, errors, updates, commands, providers, vscode, extension, document, preparations };
 }
 
 test("Go extension conflict disables the backend while retaining Goxide source services", async t => {
@@ -191,8 +196,44 @@ test("untrusted workspaces do not launch executable clients", async t => {
   f.vscode.workspace.textDocuments.push(f.document("main.gox"));
   await f.extension.start();
   assert.equal(f.clients.length, 0);
+  assert.deepEqual(f.preparations, []);
   f.vscode.workspace.isTrusted = true;
   f.events.trust.fire();
   await f.extension.pending;
   assert.equal(f.clients.length, 1);
+});
+
+test("prepared gopls path reaches the server without changing compiler settings", async t => {
+  const backend = path.join(os.tmpdir(), "extension storage", "gopls");
+  const f = await fixture(t, { prepare: () => backend, settings: { executable: "tools/goxide" } });
+  await f.extension.start();
+  assert.deepEqual(f.preparations, [["gopls", false, f.root]]);
+  assert.equal(f.clients[0].serverOptions.args[2], backend);
+  assert.equal(f.clients[0].serverOptions.command, path.join(f.root, "tools/goxide"));
+  assert.equal(f.settings.gopls, "gopls");
+  assert.deepEqual(f.updates, []);
+});
+
+test("failed tool preparation keeps source services and restart retries preparation", async t => {
+  let attempts = 0;
+  const f = await fixture(t, { prepare: () => ++attempts === 1 ? "off" : "/private/gopls", settings: { enableManagedGo: true } });
+  await f.extension.start();
+  assert.equal(f.clients[0].serverOptions.args[2], "off");
+  assert.deepEqual(f.clients[0].clientOptions.documentSelector.map(value => value.language), ["goxide"]);
+  await f.commands.get("goxide.restart")();
+  assert.equal(attempts, 2);
+  assert.equal(f.clients[1].serverOptions.args[2], "/private/gopls");
+  assert.deepEqual(f.clients[1].clientOptions.documentSelector.map(value => value.language), ["goxide", "go"]);
+});
+
+test("disposal waits for tool cancellation without starting a late client", async t => {
+  let started, cancelled;
+  const ready = new Promise(resolve => { started = resolve; });
+  const f = await fixture(t, { prepare: () => new Promise(resolve => { cancelled = resolve; started(); }) });
+  f.extension.tools.dispose = () => cancelled("off");
+  const starting = f.extension.start();
+  await ready;
+  await f.extension.dispose();
+  await starting;
+  assert.equal(f.clients.length, 0);
 });

@@ -1,13 +1,16 @@
 {
-  "planning_sums": "github.com/goxide-lang/serde v0.0.0-20261023080815-5422034b0fcc h1:V4uS5/1hAhN6fQYQ+zdnrVhjxOOe8j98hM3Sko/l65c=\ngithub.com/goxide-lang/serde v0.0.0-20261023080815-5422034b0fcc/go.mod h1:z8qvILGhdkB516CdnmQMKOtbqyGsCoNWZ6L9eXJLbrM=\ngithub.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1 h1:EpVnxlA899sxjB2uWXm4p6AlV4zonGo6gM4wcz9HSyo=\ngithub.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
+  "planning_sums": "github.com/goxide-lang/serde v0.0.0-20261023080815-5422034b0fcc h1:V4uS5/1hAhN6fQYQ+zdnrVhjxOOe8j98hM3Sko/l65c=\ngithub.com/goxide-lang/serde v0.0.0-20261023080815-5422034b0fcc/go.mod h1:z8qvILGhdkB516CdnmQMKOtbqyGsCoNWZ6L9eXJLbrM=\ngithub.com/goxide-lang/serde v0.0.2 h1:4S+hC8ZB4IB1W8nPVtuhWvF6DmRIE58CHm/aG+BAFw8=\ngithub.com/goxide-lang/serde v0.0.2/go.mod h1:8jyJRVuN+UbOA2dIvJCoL0U5yKDEaXjZ8DAmodgoBcY=\ngithub.com/goxide-lang/std v0.0.2 h1:Nl9tO3IEGVw9/D9eQBPduFa0vrZKKUGgnOVcewcI2RU=\ngithub.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1 h1:EpVnxlA899sxjB2uWXm4p6AlV4zonGo6gM4wcz9HSyo=\ngithub.com/goxide-lang/std v0.0.2-0.20261023080713-8db223547de1/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=\ngithub.com/goxide-lang/std v0.0.2/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
   "version": 2,
   "git": {},
   "sums": {
+    "1423898873ed87cd08bcbc5650bb094e080f87a354ff158e8fe397579b345d24": "github.com/goxide-lang/std v0.0.2-0.20261024103343-486aa5e95768 h1:e5FfD3kyHd5h0QevY7mXQRQAunmSBJgjUhl+gpmxw/U=\ngithub.com/goxide-lang/std v0.0.2-0.20261024103343-486aa5e95768/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=\ngithub.com/goxide-lang/std v0.0.2 h1:Nl9tO3IEGVw9/D9eQBPduFa0vrZKKUGgnOVcewcI2RU=\ngithub.com/goxide-lang/std v0.0.2/go.mod h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
+    "84a1750a08d167e442956e8332af807039e45234774c2eaad168f786ba16a1f5": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
     "84e6fea3f91e8ebe557d622f72264ba8669b608b2c3325a7c6be272c22c1b77b": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
     "9b7c084330114935a6c26ff0fed99687e0d6a44a69908f982415b6f3228a6106": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
     "ba04d437e5a5d08a28a4194a4eb12d7d6c70e50baf29d85a2b5a4bbaa5c91b69": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
     "cab6a60055ff7028040b4fba1f4a00f569d6d6328f6e3736d55dbdd69d69bd43": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
-    "e2e5d6c2a2f2f56255e0621a380869bafef65d7616c25df057811f57fce4f5ba": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n"
+    "e2e5d6c2a2f2f56255e0621a380869bafef65d7616c25df057811f57fce4f5ba": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n",
+    "f02622277e86142eff49179d85e564c563a8cd01d008292723d0e0b867c2db90": "github.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4 h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=\ngithub.com/goxide-lang/syntax v0.0.0-20261021034157-cb998fa4b2d4/go.mod h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg=\n"
   },
   "roles": {
     "09a682442f8f92e8fdd2fcb701c9c263d81037a38acd049270c2873645e7bb5e": {
@@ -107,6 +110,94 @@
           "Version": "v0.0.0",
           "Replace": {
             "Path": "/Users/hxsf/workspace/go/pkg/mod/github.com/goxide-lang/std@v0.0.2-0.20261023080713-8db223547de1/macros",
+            "Version": ""
+          }
+        }
+      },
+      "Dependencies": [
+        {
+          "Consumer": "go:github.com/goxide-lang/serde",
+          "Alias": "serde_macros",
+          "Plan": "09a682442f8f92e8fdd2fcb701c9c263d81037a38acd049270c2873645e7bb5e"
+        },
+        {
+          "Consumer": "go:github.com/goxide-lang/std",
+          "Alias": "std_macros",
+          "Plan": "f402cd011a31739daa7638a939d581a352c3a978c9dffceec0795a0586c16767"
+        }
+      ]
+    },
+    "a5690159ef39ceb3d04f2d9b93c0fb64f1581d15fbe446265ece3fb0b88255dd": {
+      "Role": "target",
+      "Platform": "darwin/arm64",
+      "Root": "path:./.",
+      "Crate": null,
+      "Sources": [
+        {
+          "Key": "go:github.com/goxide-lang/serde",
+          "Module": "github.com/goxide-lang/serde",
+          "Input": "3b6280810e93541a4ad130ce157544e48842df509476e0eacfa1eaf47807c39c",
+          "Features": []
+        },
+        {
+          "Key": "go:github.com/goxide-lang/serde:macros",
+          "Module": "github.com/goxide-lang/serde/macros",
+          "Input": "c8e26203fc7992af946e8668d7af779ba5530e566649bf5e7a42203f11cfc583",
+          "Features": []
+        },
+        {
+          "Key": "go:github.com/goxide-lang/std",
+          "Module": "github.com/goxide-lang/std",
+          "Input": "9539f2d1562a440c7e45c7a917d5a59e2c71b7cf9cefb5f7437a58d1ad13b2bc",
+          "Features": []
+        },
+        {
+          "Key": "go:github.com/goxide-lang/std:macros",
+          "Module": "github.com/goxide-lang/std/macros",
+          "Input": "d0f149b6f29eccaa17eb25ecf077ec8d5ee1b036342b89a1dd86f98a3e6f2707",
+          "Features": []
+        },
+        {
+          "Key": "path:./.",
+          "Module": "enumwire.example/dispatch",
+          "Input": "e5ac006315336b14ab85271a7e1dc9fb050c2a91fd86d1ddf7baef441a7a2481",
+          "Features": []
+        }
+      ],
+      "Modules": {
+        "github.com/goxide-lang/serde": {
+          "Path": "github.com/goxide-lang/serde",
+          "Version": "v0.0.2",
+          "Sum": "h1:4S+hC8ZB4IB1W8nPVtuhWvF6DmRIE58CHm/aG+BAFw8=",
+          "GoModSum": "h1:8jyJRVuN+UbOA2dIvJCoL0U5yKDEaXjZ8DAmodgoBcY="
+        },
+        "github.com/goxide-lang/std": {
+          "Path": "github.com/goxide-lang/std",
+          "Version": "v0.0.2",
+          "Sum": "h1:Nl9tO3IEGVw9/D9eQBPduFa0vrZKKUGgnOVcewcI2RU=",
+          "GoModSum": "h1:Fy7RtA9YH48XZ9/yLsQJq7UKeaChA1T0slJ9YD9QOLk="
+        },
+        "github.com/goxide-lang/syntax": {
+          "Path": "github.com/goxide-lang/syntax",
+          "Version": "v0.0.0-20261021034157-cb998fa4b2d4",
+          "Sum": "h1:7q2XjgjZpRi3DbIlPzO+cbnQCvd6Y3fZn44Xj9R1nkQ=",
+          "GoModSum": "h1:ixIlSxgWxhfOEi260QJThct5d+tE0jfW1TFaMxXh5Lg="
+        }
+      },
+      "ProcSources": {
+        "github.com/goxide-lang/serde/macros": {
+          "Path": "github.com/goxide-lang/serde/macros",
+          "Version": "v0.0.0",
+          "Replace": {
+            "Path": "/Users/hxsf/workspace/go/pkg/mod/github.com/goxide-lang/serde@v0.0.2/macros",
+            "Version": ""
+          }
+        },
+        "github.com/goxide-lang/std/macros": {
+          "Path": "github.com/goxide-lang/std/macros",
+          "Version": "v0.0.0",
+          "Replace": {
+            "Path": "/Users/hxsf/workspace/go/pkg/mod/github.com/goxide-lang/std@v0.0.2/macros",
             "Version": ""
           }
         }

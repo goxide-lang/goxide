@@ -21,6 +21,9 @@ def main():
     environment = os.environ.copy()
     environment.pop("GOWORK", None)  # Workspace fixtures must discover their go.work.
     directory = Path(tempfile.mkdtemp(prefix="goxide-go-test-", dir=os.getenv("RUNNER_TEMP")))
+    environment["GOXIDE_WASM_TRACE_DIR"] = str(directory)
+    if label.startswith("native-"):
+        environment["GOXIDE_WASM_CACHE"] = str(directory / "wasm-cache")
     json_log, stderr_log = directory / "go-test.jsonl", directory / "stderr.log"
     outcomes = {"Top-level tests": Counter(), "Subtests": Counter()}
     packages, package_started, tested, active, failed_tests = {}, {}, set(), set(), set()
@@ -126,6 +129,25 @@ def main():
                     ("pass", "fail", "skip", "unfinished")) + " |")
     rows.extend(["", "Only observed outcomes are counted; package elapsed times are not summed.",
                  f"Raw logs: `{directory}`.", ""])
+    macro_hosts = []
+    for path in directory.glob("macro-host-*.json"):
+        try:
+            macro_hosts.append(json.loads(path.read_text()))
+        except (OSError, ValueError) as error:
+            print(f"[{label}] Unreadable macro host statistics: {path}: {error}", flush=True)
+    if macro_hosts:
+        total = Counter()
+        for host in macro_hosts:
+            total.update(host)
+        rows.extend(["#### Macro host activity", "",
+                     "| Closed hosts | Calls | Memory hits | Module loads | Load/compile seconds | Execute seconds | Disk cache enabled | Cache fallbacks |",
+                     "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                     f"| {len(macro_hosts)} | {total['calls']} | {total['memory_hits']} | {total['module_loads']} | "
+                     f"{total['module_load_ns'] / 1e9:.3f} | {total['execute_ns'] / 1e9:.3f} | "
+                     f"{int(total['disk_cache'])} | {int(total['cache_fallback'])} |", "",
+                     "Module loads count CompileModule calls, including disk loads and retries; "
+                     "they are not cold backend compilation counts. Times sum work across hosts, not wall time. "
+                     "Hosts interrupted before Close are not included.", ""])
     for heading, durations in (("Package elapsed time", package_elapsed),
                                ("Slowest top-level tests", test_elapsed)):
         rows.extend([f"#### {heading}", "", "| Name | Seconds |", "| --- | ---: |"])

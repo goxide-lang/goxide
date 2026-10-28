@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { EventEmitter, once } from "node:events";
 import { test } from "node:test";
 import { compiler } from "./ui/compiler.js";
 
@@ -12,6 +13,8 @@ const flush = async () => {
 function environment(t) {
   const original = { Worker: globalThis.Worker, fetch, setTimeout, clearTimeout };
   const workers = [], fetches = [], reports = [], timers = new Map();
+  const changes = new EventEmitter();
+  const changed = () => changes.emit("state");
   let now = 0, nextTimer = 0;
   globalThis.setTimeout = (callback, delay) => {
     const id = ++nextTimer;
@@ -20,9 +23,9 @@ function environment(t) {
   };
   globalThis.clearTimeout = (id) => timers.delete(id);
   globalThis.Worker = class {
-    constructor(url) { this.url = String(url); this.messages = []; workers.push(this); }
-    postMessage(message, transfer = []) { this.messages.push(structuredClone(message, { transfer })); }
-    terminate() { this.terminated = true; }
+    constructor(url) { this.url = String(url); this.messages = []; workers.push(this); changed(); }
+    postMessage(message, transfer = []) { this.messages.push(structuredClone(message, { transfer })); changed(); }
+    terminate() { this.terminated = true; changed(); }
     emit(data) { this.onmessage?.({ data }); }
   };
   globalThis.fetch = (url, { signal }) => new Promise((resolve, reject) => {
@@ -30,10 +33,23 @@ function environment(t) {
     signal.addEventListener("abort", () => reject(new Error("fetch aborted")), { once: true });
   });
   const service = compiler({ websiteCommit: "site", commit: "compiler", wasmSha256: "compiler-hash",
-    dependencyContext: { sha256: "roots" }, compileTimeoutMs: 70000 }, (report) => reports.push(report));
+    dependencyContext: { sha256: "roots" }, compileTimeoutMs: 70000 }, (report) => { reports.push(report); changed(); });
   t.after(() => { service.dispose(); Object.assign(globalThis, original); });
   const currentCompiler = () => workers.findLast((worker) => worker.url.startsWith("/worker.js?"));
   const currentMacro = () => workers.findLast((worker) => worker.url.startsWith("/proc-macro-worker.js?"));
+  async function waitFor(predicate, description) {
+    // WebCrypto finishes outside the mocked watchdog clock; wait for its
+    // observable lifecycle effect instead of a fixed number of event-loop turns.
+    const abort = new AbortController();
+    const timeout = original.setTimeout(() => abort.abort(new Error(`timed out waiting for ${description}`)), 5000);
+    try {
+      while (!predicate()) await once(changes, "state", { signal: abort.signal });
+    } catch (error) {
+      throw abort.signal.aborted ? abort.signal.reason : error;
+    } finally {
+      original.clearTimeout(timeout);
+    }
+  }
   async function start() {
     service.update({ files: [{ path: "playground.gox", source: "package main" }], packageMode: false }, true);
     const worker = currentCompiler();
@@ -42,10 +58,12 @@ function environment(t) {
     return worker;
   }
   async function prepared(content = bytes) {
+    const worker = currentCompiler(), previous = currentMacro();
     fetches.at(-1).resolve(new Response(content));
-    await flush();
-    currentMacro()?.emit({ type: "ready" });
-    await flush();
+    await waitFor(() => worker.terminated || (currentMacro() && currentMacro() !== previous), "verified macro Worker");
+    if (worker.terminated) return;
+    currentMacro().emit({ type: "ready" });
+    await waitFor(() => worker.terminated || worker.messages.some((message) => message.type === "compile"), "compiler request");
   }
   async function advance(milliseconds) {
     const end = now + milliseconds;
@@ -56,7 +74,7 @@ function environment(t) {
     }
     now = end;
   }
-  return { service, workers, fetches, reports, currentCompiler, currentMacro, start, prepared, advance };
+  return { service, workers, fetches, reports, currentCompiler, currentMacro, start, prepared, advance, waitFor };
 }
 
 test("cold macro download may exceed invocation budget before Go compilation starts", async (t) => {
@@ -65,10 +83,12 @@ test("cold macro download may exceed invocation budget before Go compilation sta
   await env.advance(6000);
   assert.equal(worker.messages.length, 0, "Go compile waits for verified macro bytes and Worker readiness");
   assert.ok(!worker.terminated);
-  env.fetches[0].resolve(new Response(bytes)); await flush();
+  env.fetches[0].resolve(new Response(bytes));
+  await env.waitFor(() => env.currentMacro() || worker.terminated, "verified macro Worker");
   assert.equal(worker.messages.length, 0, "download completion still waits for Worker readiness");
   assert.equal(new URL(env.currentMacro().url, "http://localhost").searchParams.get("site"), "site");
-  env.currentMacro().emit({ type: "ready" }); await flush();
+  env.currentMacro().emit({ type: "ready" });
+  await env.waitFor(() => worker.terminated || worker.messages.some((message) => message.type === "compile"), "compiler request");
   assert.equal(worker.messages.at(-1).type, "compile");
   assert.ok(!env.reports.some((report) => report.error));
 });

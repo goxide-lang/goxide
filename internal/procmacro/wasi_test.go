@@ -222,6 +222,7 @@ func TestWASIHostGoPackageInitIsBounded(t *testing.T) {
 
 func wasiHostForTest(t *testing.T, ctx context.Context) *WASIHost {
 	t.Helper()
+	t.Setenv("GOXIDE_WASM_CACHE", t.TempDir())
 	host, err := NewWASIHostWithBudgets(ctx, MaxInvocationTime*wasiTestBudgetMultiplier, MaxCompilationTime*wasiTestBudgetMultiplier)
 	if err != nil {
 		t.Fatal(err)

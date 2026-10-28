@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -20,9 +21,12 @@ import (
 // WASIHost owns a runtime and a bounded FIFO cache of compiled artifacts.
 // Sessions have independent execution budgets and always use fresh instances.
 type WASIHost struct {
-	ctx     context.Context
-	cancel  context.CancelFunc
-	runtime wazero.Runtime
+	ctx       context.Context
+	cancel    context.CancelFunc
+	runtime   wazero.Runtime
+	diskCache wazero.CompilationCache
+	cacheDir  string
+	traceDir  string
 
 	mu          sync.Mutex
 	active      bool
@@ -36,6 +40,7 @@ type WASIHost struct {
 	compiled    map[[sha256.Size]byte]wasiCompiled
 	order       [][sha256.Size]byte
 	cacheBytes  int
+	stats       WASIHostStats
 }
 
 // WASISession owns cancellation and the cumulative budget for one compiler
@@ -68,18 +73,33 @@ func NewWASIHostWithBudgets(ctx context.Context, invocation, cumulative time.Dur
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().
+	cache, directory, cacheErr := newWASICompilationCache()
+	runtime, err := newWASIRuntime(ctx, cache)
+	if err != nil {
+		cancel()
+		if cache != nil {
+			_ = cache.Close(context.Background())
+		}
+		return nil, err
+	}
+	host := &WASIHost{ctx: ctx, cancel: cancel, runtime: runtime, diskCache: cache, cacheDir: directory,
+		traceDir: os.Getenv("GOXIDE_WASM_TRACE_DIR"), invocation: invocation, compilation: cumulative,
+		compiled: map[[sha256.Size]byte]wasiCompiled{}, stats: WASIHostStats{DiskCache: cache != nil, CacheFallback: cacheErr != nil}}
+	defaultCtx, defaultCancel := context.WithCancel(ctx)
+	host.defaultRun = &WASISession{host: host, ctx: defaultCtx, cancel: defaultCancel}
+	return host, nil
+}
+
+func newWASIRuntime(ctx context.Context, cache wazero.CompilationCache) (wazero.Runtime, error) {
+	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithCompilationCache(cache).
 		WithCoreFeatures(api.CoreFeaturesV2).
 		WithMemoryLimitPages(MaxMemoryPages).
 		WithCloseOnContextDone(true))
-	host := &WASIHost{ctx: ctx, cancel: cancel, runtime: runtime, invocation: invocation, compilation: cumulative, compiled: map[[sha256.Size]byte]wasiCompiled{}}
-	defaultCtx, defaultCancel := context.WithCancel(ctx)
-	host.defaultRun = &WASISession{host: host, ctx: defaultCtx, cancel: defaultCancel}
 	if err := installWASIProfile(ctx, runtime); err != nil {
-		_ = host.Close()
+		_ = runtime.Close(context.Background())
 		return nil, err
 	}
-	return host, nil
+	return runtime, nil
 }
 
 // Close cancels active execution, waits for it to finish, and releases the
@@ -98,7 +118,11 @@ func (host *WASIHost) Close() error {
 			<-done
 		}
 		host.closeErr = host.runtime.Close(context.Background())
+		if host.diskCache != nil {
+			host.closeErr = errors.Join(host.closeErr, host.diskCache.Close(context.Background()))
+		}
 		host.compiled, host.order, host.cacheBytes = nil, nil, 0
+		host.writeStats()
 	})
 	return host.closeErr
 }
@@ -170,6 +194,7 @@ func (session *WASISession) Run(wasm []byte, request pm.Request) (response []byt
 	ctx, cancel := context.WithTimeout(session.ctx, min(host.invocation, remaining))
 	stopHostCancel := context.AfterFunc(host.ctx, cancel)
 	started := time.Now()
+	stats := WASIHostStats{Invocations: 1}
 	var state *wasiState
 	defer func() {
 		if ctx.Err() != nil && (state == nil || state.fatal == nil) {
@@ -182,6 +207,14 @@ func (session *WASISession) Run(wasm []byte, request pm.Request) (response []byt
 		cancel()
 		host.mu.Lock()
 		session.spent += time.Since(started)
+		host.stats.Invocations += stats.Invocations
+		host.stats.MemoryHits += stats.MemoryHits
+		host.stats.ModuleLoads += stats.ModuleLoads
+		host.stats.ModuleLoadTime += stats.ModuleLoadTime
+		host.stats.ExecutionTime += stats.ExecutionTime
+		if stats.CacheFallback {
+			host.stats.DiskCache, host.stats.CacheFallback = false, true
+		}
 		host.active = false
 		close(host.activeDone)
 		host.activeDone = nil
@@ -200,7 +233,9 @@ func (session *WASISession) Run(wasm []byte, request pm.Request) (response []byt
 	}
 	id := sha256.Sum256(prepared)
 	compiled, cached := host.compiled[id]
-	if !cached {
+	if cached {
+		stats.MemoryHits++
+	} else {
 		for host.cacheBytes+len(prepared) > MaxWASMBytes {
 			oldID := host.order[0]
 			old := host.compiled[oldID]
@@ -211,7 +246,29 @@ func (session *WASISession) Run(wasm []byte, request pm.Request) (response []byt
 			delete(host.compiled, oldID)
 			host.order = host.order[1:]
 		}
-		module, err := host.runtime.CompileModule(ctx, prepared)
+		load := func() (wazero.CompiledModule, error) {
+			stats.ModuleLoads++
+			started := time.Now()
+			defer func() { stats.ModuleLoadTime += time.Since(started) }()
+			return host.runtime.CompileModule(ctx, prepared)
+		}
+		module, err := load()
+		if err != nil && host.diskCache != nil && ctx.Err() == nil {
+			// Cache I/O and corrupt cache entries must not prevent compilation.
+			// Retry once without disk caching, within the original deadline.
+			_ = host.runtime.Close(context.Background())
+			_ = host.diskCache.Close(context.Background())
+			host.diskCache, host.cacheDir = nil, ""
+			host.compiled = map[[sha256.Size]byte]wasiCompiled{}
+			host.order, host.cacheBytes = nil, 0
+			stats.CacheFallback = true
+			var runtime wazero.Runtime
+			runtime, err = newWASIRuntime(ctx, nil)
+			if err == nil {
+				host.runtime = runtime
+				module, err = load()
+			}
+		}
 		if err != nil {
 			return nil, fmt.Errorf("procedural macro WASM validation: %w", err)
 		}
@@ -231,7 +288,9 @@ func (session *WASISession) Run(wasm []byte, request pm.Request) (response []byt
 	}
 	state = newWASIState(input.Bytes())
 	ctx = context.WithValue(ctx, wasiStateKey{}, state)
+	executionStarted := time.Now()
 	module, runErr := host.runtime.InstantiateModule(ctx, compiled.module, wazero.NewModuleConfig().WithName(""))
+	stats.ExecutionTime += time.Since(executionStarted)
 	if module != nil {
 		_ = module.Close(context.Background())
 	}

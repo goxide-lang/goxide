@@ -121,7 +121,7 @@ Run、测试发现、测试运行和 Debug 会保存所选输入范围内的未�
 
 省略 `input` 时使用当前 Goxide 项目。配置可覆盖 `bin`/`example`/`lib`、`features`、`tags`、`noDefaultFeatures`、`target`，并支持 `args`、`cwd`、`env`、`stopOnEntry` 和单次会话的 `dlv` 路径；显式目标优先于会话选择。调试测试通常使用 Test Explorer，也可设置 `"test": true`、`package`（发现结果中的完整包路径）和 `run`（测试名正则）。**Run Without Debugging**（noDebug）仍使用同一 DAP 适配器并需要 Delve；普通 **Goxide: Run** 使用任务终端。
 
-官方 Delve v1.27.2 已通过真实 VS Code noDebug、Test Explorer Debug profile，以及 Linux 目标上的跨包 `.gox` 断点、原始调用栈、单步和局部变量验收。调试目标需要宿主允许进程调试；本机 macOS 的纯 Go 对照同样停在 `task_for_pid` 授权调用，尚未验证该宿主上的真实断点。扩展不会自动修改系统调试权限。
+官方 Delve v1.27.2 已通过真实 VS Code noDebug、Test Explorer Debug profile，以及 macOS arm64 和 Linux arm64 目标上的跨包 `.gox` 断点、原始调用栈、单步和局部变量验收。macOS 使用稳定版 VS Code 1.143.0、Go 1.27.1 和隔离的用户数据及扩展目录完成，Developer mode 保持关闭。调试目标需要宿主允许进程调试；扩展不会自动修改系统调试权限。
 
 ## 生成代码预览
 

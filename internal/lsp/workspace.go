@@ -30,6 +30,8 @@ type workspaceSnapshot struct {
 	close func()
 }
 
+var newWorkspaceWASIHost = procmacro.NewWASIHost
+
 func prepareWorkspace(ctx context.Context, input string, options compile.Options) (*workspace, error) {
 	options.Editor = true
 	info, err := os.Stat(input)
@@ -47,7 +49,7 @@ func prepareWorkspace(ctx context.Context, input string, options compile.Options
 			return nil, err
 		}
 	}
-	host, err := procmacro.NewWASIHost(context.WithoutCancel(ctx))
+	host, err := newWorkspaceWASIHost(context.WithoutCancel(ctx))
 	if err != nil {
 		return nil, err
 	}

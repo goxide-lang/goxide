@@ -14,6 +14,8 @@ import (
 	pm "github.com/goxide-lang/syntax/proc_macro"
 )
 
+var newWASIHost = procmacro.NewWASIHost
+
 func prepareProject(directory string, options compile.Options, stderr io.Writer) (*compile.Result, error) {
 	var result *compile.Result
 	err := withProcHost(stderr, func(run func([]byte, pm.Request) ([]byte, error), diagnostic func(string, expand.ProcDiagnostic)) error {
@@ -45,7 +47,7 @@ func withProcHost(stderr io.Writer, work func(func([]byte, pm.Request) ([]byte, 
 		}()
 		if host == nil {
 			var err error
-			host, err = procmacro.NewWASIHost(ctx)
+			host, err = newWASIHost(ctx)
 			if err != nil {
 				return nil, err
 			}

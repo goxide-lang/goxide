@@ -139,8 +139,6 @@ jobs:
             printf '%s\n' "$unformatted"
             exit 1
           fi
-      - name: Native race gate
-        run: python3 -B scripts/ci_go_test.py full-race -mod=readonly -race -p=1 -vet=off -count=1 -timeout=120m ./...
       - name: Native vet gate
         run: env -u GOWORK go vet -mod=readonly ./...
       - name: Documentation and design gate
@@ -148,10 +146,14 @@ jobs:
       - name: Ensure checks did not change tracked inputs
         run: git diff --exit-code
 
-  native:
+  race:
     needs: scope
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, compile-1, compile-2, lower, lsp, cli, prototype, acceptance-1, acceptance-2, acceptance-3, acceptance-4]
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -176,10 +178,213 @@ jobs:
           GOWORK=off GOFLAGS=-mod=readonly go mod verify -modfile="$module_prep_dir/go.mod"
           cmp go.mod "$module_prep_dir/go.mod"
           cmp go.sum "$module_prep_dir/go.sum"
-      - name: Native execution gate
-        run: python3 -B scripts/ci_go_test.py full-native -mod=readonly -p=1 -vet=off -count=1 -timeout=90m ./...
+      - name: Install the pinned gopls for real backend contracts
+        if: matrix.group == 'lsp'
+        run: |
+          lsp_tools_dir="$RUNNER_TEMP/lsp-tools"
+          GOWORK=off GOBIN="$lsp_tools_dir" go install golang.org/x/tools/gopls@v0.24.0
+          "$lsp_tools_dir/gopls" version
+          echo "$lsp_tools_dir" >> "$GITHUB_PATH"
+      - name: Install Delve for real debug adapter contracts
+        if: matrix.group == 'cli'
+        run: |
+          debug_tools_dir="$RUNNER_TEMP/debug-tools"
+          GOWORK=off GOBIN="$debug_tools_dir" go install github.com/go-delve/delve/cmd/dlv@v1.27.2
+          "$debug_tools_dir/dlv" version
+          echo "GOXIDE_TEST_DLV=$debug_tools_dir/dlv" >> "$GITHUB_ENV"
+      - name: Native race gate
+        timeout-minutes: 150
+        env:
+          RACE_GROUP: ${{ matrix.group }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess, sys
+          environment = os.environ.copy()
+          environment.pop('GOWORK', None)
+          go = environment['GO_BIN']
+          module = subprocess.check_output([go, 'list', '-mod=readonly', '-m'], env=environment, text=True).strip()
+          packages = subprocess.check_output([go, 'list', '-mod=readonly', '-race', './...'], env=environment, text=True).splitlines()
+          dedicated = {
+              'compile': [module + '/internal/compile'],
+              'lower': [module + '/internal/lower'],
+              'lsp': [module + '/internal/lsp', module + '/internal/lsp/gopls'],
+              'cli': [module + '/cmd/goxide'],
+              'prototype': [module + '/tests/prototype'],
+              'acceptance': [module + '/tests/acceptance'],
+          }
+          isolated = {package for selected in dedicated.values() for package in selected}
+          groups = {**dedicated, 'core': [package for package in packages if package not in isolated]}
+          planned = [package for selected in groups.values() for package in selected]
+          assert all(groups.values()) and len(planned) == len(set(planned))
+          assert sorted(planned) == sorted(packages), 'race plan must cover every package exactly once'
+          group = environment['RACE_GROUP']
+          kind, separator, suffix = group.rpartition('-')
+          shard_count = {'compile': 2, 'acceptance': 4}.get(kind) if separator else None
+          shard = int(suffix) - 1 if shard_count else None
+          selected = groups[kind if shard is not None else group]
+          arguments = ['-mod=readonly', '-race', '-p=2' if group == 'core' else '-p=1',
+                       '-vet=off', '-count=1', '-timeout=120m']
+          names = []
+          if shard is not None:
+              listing = subprocess.check_output([go, 'test', '-mod=readonly', '-race', '-vet=off',
+                                                 '-list', '^(Test|Example|Fuzz)', *selected],
+                                                env=environment, text=True)
+              names = sorted(line for line in listing.splitlines()
+                             if re.fullmatch(r'(Test|Example|Fuzz)\w*', line))
+              shards = [names[index::shard_count] for index in range(shard_count)]
+              flattened = [name for part in shards for name in part]
+              assert shard in range(shard_count) and all(shards) and len(flattened) == len(set(flattened))
+              assert sorted(flattened) == names, f'{kind} shards must cover every test exactly once'
+              names = shards[shard]
+              arguments += ['-run', '^(' + '|'.join(re.escape(name) for name in names) + ')$']
+          print(f'Race {group}: {len(selected)} of {len(packages)} packages', flush=True)
+          for name in selected + names:
+              print(name, flush=True)
+          with open(environment['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              print(f'### Race {group}\n\n' + '\n'.join(f'- `{name}`' for name in selected + names) + '\n', file=summary)
+          os.execve(sys.executable, [sys.executable, '-B', 'scripts/ci_go_test.py', 'race-' + group,
+                                    *arguments, *selected], environment)
+          PY
+      - name: Reject skipped backend and debugger contracts
+        if: matrix.group == 'lsp' || matrix.group == 'cli'
+        env:
+          RACE_GROUP: ${{ matrix.group }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          allowed = {'TestLanguageServerInteractionBudget', 'TestLanguageServerBackendBudgetResources',
+                     'TestGoplsResourceRetention'} if os.environ['RACE_GROUP'] == 'lsp' else set()
+          logs = list(Path(os.environ['RUNNER_TEMP']).glob('goxide-go-test-*/go-test.jsonl'))
+          assert logs, 'missing test execution logs'
+          skipped = []
+          for log in logs:
+              for line in log.read_text().splitlines():
+                  event = json.loads(line)
+                  if event.get('Action') == 'skip' and event.get('Test') not in allowed:
+                      skipped.append((event.get('Package'), event.get('Test')))
+          assert not skipped, f'unexpected skipped contracts: {skipped}'
+          PY
       - name: Ensure checks did not change tracked inputs
         run: git diff --exit-code
+      - name: Preserve race test logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: go-test-race-${{ matrix.group }}
+          path: ${{ runner.temp }}/goxide-go-test-*/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  native:
+    needs: scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.scope.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ needs.scope.outputs.go_version }}
+          cache-dependency-path: go.sum
+      - name: Prepare the pinned module graph
+        run: |
+          go version
+          gcc --version
+          echo "GO_BIN=$(command -v go)" >> "$GITHUB_ENV"
+          module_prep_dir="$(mktemp -d "$RUNNER_TEMP/modules.XXXXXX")"
+          cp go.mod go.sum "$module_prep_dir/"
+          GOWORK=off GOFLAGS=-mod=readonly go mod download -modfile="$module_prep_dir/go.mod" all
+          GOWORK=off GOFLAGS=-mod=readonly go mod verify -modfile="$module_prep_dir/go.mod"
+          cmp go.mod "$module_prep_dir/go.mod"
+          cmp go.sum "$module_prep_dir/go.sum"
+      - name: Native-only WASI snapshot contracts
+        run: >-
+          python3 -B scripts/ci_go_test.py native-snapshots
+          -mod=readonly -p=1 -vet=off -count=1 -timeout=15m
+          -run '^(TestProcSnapshotPreparedRoleLifetime|TestPackageCheckedProceduralSnapshot)$'
+          ./internal/lower ./internal/playground
+      - name: Production WASI invocation and cumulative budgets
+        run: >-
+          python3 -B scripts/ci_go_test.py native-budgets
+          -mod=readonly -p=1 -vet=off -count=1 -timeout=15m
+          -run '^TestWASIHost(SDKCommand|GoPackageInitIsBounded|TimeoutCancellationAndCumulativeBudget)$'
+          ./internal/procmacro
+      - name: Published std and serde under production budgets
+        run: >-
+          python3 -B scripts/ci_go_test.py native-protocols
+          -mod=readonly -p=1 -vet=off -count=1 -timeout=15m
+          -run '^TestFormalCFGDerivedProtocols$/^true$' ./internal/compile
+      - name: Formatted source under production budgets
+        run: >-
+          python3 -B scripts/ci_go_test.py native-format
+          -mod=readonly -p=1 -vet=off -count=1 -timeout=15m
+          -run '^TestFormattedTraitsMatchMacrosAndGenericsBuildAndRun$' ./internal/format
+      - name: Formal fixture under production budgets
+        run: >-
+          python3 -B scripts/ci_go_test.py native-formal-fixture
+          -mod=readonly -p=1 -vet=off -count=1 -timeout=15m
+          -run '^TestDefaultOrdinaryHelperCoexists$' ./tests/prototype
+      - name: LSP workspace and candidate sessions under production budgets
+        run: >-
+          python3 -B scripts/ci_go_test.py native-lsp-macros
+          -mod=readonly -p=1 -vet=off -count=1 -timeout=15m
+          -run '^(TestCandidateUsesFreshMacroSession|TestLanguageServerUnsavedProceduralMacro)$' ./internal/lsp
+      - name: CLI generation under production budgets
+        run: >-
+          python3 -B scripts/ci_go_test.py native-cli-macros
+          -mod=readonly -p=1 -vet=off -count=1 -timeout=15m
+          -run '^TestGenerateMissingRuntimeDependency$' ./cmd/goxide
+      - name: Cold-cache project compilation under production budgets
+        run: >-
+          python3 -B scripts/ci_go_test.py native-project-macros
+          -mod=readonly -p=1 -vet=off -count=1 -timeout=15m
+          -run '^TestP5ProjectBuildRunTestAndStableLock$' ./internal/compile
+      - name: Verify every native contract actually passed
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          module = subprocess.check_output([os.environ['GO_BIN'], 'list', '-mod=readonly', '-m'], text=True).strip()
+          required = {
+              ('internal/lower', 'TestProcSnapshotPreparedRoleLifetime'),
+              ('internal/playground', 'TestPackageCheckedProceduralSnapshot'),
+              ('internal/procmacro', 'TestWASIHostSDKCommand'),
+              ('internal/procmacro', 'TestWASIHostGoPackageInitIsBounded'),
+              ('internal/procmacro', 'TestWASIHostTimeoutCancellationAndCumulativeBudget'),
+              ('internal/compile', 'TestFormalCFGDerivedProtocols/true'),
+              ('internal/format', 'TestFormattedTraitsMatchMacrosAndGenericsBuildAndRun'),
+              ('tests/prototype', 'TestDefaultOrdinaryHelperCoexists'),
+              ('internal/lsp', 'TestCandidateUsesFreshMacroSession'),
+              ('internal/lsp', 'TestLanguageServerUnsavedProceduralMacro'),
+              ('cmd/goxide', 'TestGenerateMissingRuntimeDependency'),
+              ('internal/compile', 'TestP5ProjectBuildRunTestAndStableLock'),
+          }
+          observed = set()
+          for path in pathlib.Path(os.environ['RUNNER_TEMP']).glob('goxide-go-test-*/go-test.jsonl'):
+              for line in path.open():
+                  event = json.loads(line)
+                  if event.get('Action') == 'pass' and event.get('Test'):
+                      observed.add((event['Package'].removeprefix(module + '/'), event['Test']))
+          missing = sorted(required - observed)
+          assert not missing, f'native contracts did not pass: {missing}'
+          print(f'All {len(required)} native contracts passed.')
+          PY
+      - name: Ensure checks did not change tracked inputs
+        run: git diff --exit-code
+      - name: Preserve native test logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: go-test-native
+          path: ${{ runner.temp }}/goxide-go-test-*/
+          if-no-files-found: ignore
+          retention-days: 7
 
   web:
     needs: scope
@@ -234,6 +439,14 @@ jobs:
         run: go vet -mod=readonly -tags=goxideweb ./cmd/goxide-web
       - name: Ensure build did not change tracked inputs
         run: git diff --exit-code
+      - name: Preserve HTTP test logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: go-test-web
+          path: ${{ runner.temp }}/goxide-go-test-*/
+          if-no-files-found: ignore
+          retention-days: 7
 
   compiler:
     needs: scope
@@ -321,7 +534,7 @@ jobs:
   summary:
     name: CI summary
     if: always()
-    needs: [scope, checks, native, web, compiler, extension]
+    needs: [scope, checks, race, native, web, compiler, extension]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -329,6 +542,7 @@ jobs:
         env:
           SCOPE: ${{ needs.scope.result }}
           CHECKS: ${{ needs.checks.result }}
+          RACE: ${{ needs.race.result }}
           NATIVE: ${{ needs.native.result }}
           WEB: ${{ needs.web.result }}
           COMPILER: ${{ needs.compiler.result }}
@@ -339,8 +553,9 @@ jobs:
             echo '| Layer | Result |'
             echo '| --- | --- |'
             echo "| Scope | $SCOPE |"
-            echo "| Native execution | $NATIVE |"
-            echo "| Race / vet / gofmt / docs | $CHECKS |"
+            echo "| Native-only / production budgets | $NATIVE |"
+            echo "| Race (all packages / two compile and four acceptance shards) | $RACE |"
+            echo "| Vet / gofmt / docs | $CHECKS |"
             echo "| WASM build / HTTP | $WEB |"
             echo "| Six native CLI archives | $COMPILER |"
             echo "| Universal VSIX | $EXTENSION |"
@@ -348,6 +563,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           test "$SCOPE" = success
           test "$CHECKS" = success
+          test "$RACE" = success
           test "$NATIVE" = success
           test "$COMPILER" = success
           test "$EXTENSION" = success

@@ -6,7 +6,7 @@
 
 | 触发 / 层 | 检查范围 |
 | --- | --- |
-| 所有 PR、push main、手动触发 | 全树普通测试和 race、独立 vet、gofmt、Markdown 链接/锚点/围栏门禁、文档 Go 示例运行 |
+| 所有 PR、push main、手动触发 | 全树 race 一次、普通模式差异与生产预算检查、独立 vet/gofmt、文档检查 |
 | 所有 CI | 六个平台的 CLI 构建及解压运行验收，插件 Node 测试及通用 VSIX 打包；产物保留 7 天 |
 | 网站及依赖相关变更 | 网站工具回归、离线 CLI 示例/导出数据/WASM 构建、带 `goxideweb` 标签的 HTTP race/vet |
 | CI summary | 无路径过滤，始终汇总；失败、取消或应运行却跳过都不能报告成功 |
@@ -30,20 +30,94 @@ Python 3.12，Linux runner 提供 C 编译器；网站和插件各自使用 Node
 全树测试移除外层 `GOWORK` 以保留 workspace 发现合同；其余脚本保留自身隔离规则。
 原生 `GOMAXPROCS=4`；若增加 Node 执行 Go WASM 的入口，仅该进程设为 1。
 
-普通全树测试验证过程宏宿主的生产预算：单次 5 秒、单次编译累计 60 秒，并运行仅普通模式的
-完整 SDK 快照验收。普通与 race 任务均使用 `-p=1` 串行执行测试包，避免不同包争用 CPU
-导致生产预算超时，包括 race 测试启动的普通 CLI 子进程。两项任务运行在独立 runner 上。
-正式过程宏验收会构建并执行 WASI 产物；套件时限为完整验收、串行包执行和冷缓存预留时间。
-普通任务的单包上限为 90 分钟、流程上限为 120 分钟；race 任务分别为 120 和 180 分钟。
-这些时限只控制 CI 测试套件，不改变过程宏的单次或累计生产预算。
-race 全树保留完整插桩；原生宏测试宿主将默认预算乘以 20，
-容纳插桩开销。测试中显式设置的毫秒级超时、循环和取消断言保持原值；CLI 与发布产物始终
-使用生产预算。race 检查验证并发与行为，生产时限由普通检查验证。
+## 测试分工与并发
 
-`ci_go_test.py` 分开汇报测试包/无测试包、顶层测试/嵌套子测试及 pass/fail/skip；
-只记录实际墙钟，不把并行包的 `Elapsed` 相加。成功仅输出摘要，失败输出失败包记录；
-完整 JSON 按行刷新并保留在 runner 临时目录，便于检查进行中的测试；不入 Git，
-也不传入日常 agent 上下文。
+全树行为测试只在 race 模式执行一次。包集合来自 `go list -mod=readonly -race ./...`，
+分组校验互斥且并集等于完整集合；新增包自动进入 core。
+
+| 分组 | 保留的覆盖 | 执行方式 |
+| --- | --- | --- |
+| core | 词法/解析、展开、解析名字、检查、项目工具、宏宿主等其余包 | 独立 runner，`-p=2` |
+| compile-1…2 | 项目编译、正式库、跨模块协议、锁文件与依赖准备 | 顶层用例分两片，独立 runner，片内串行 |
+| lower、cli、prototype | 生成 Go 行为、CLI 和跨模块序列化 | 每组独立 runner，组内 `-p=1` |
+| lsp | LSP、gopls 协议、未保存编辑、取消/进程回收及真实宏 | 两包共用独立 runner，`-p=1` |
+| acceptance-1…4 | 所有语言、正式库、跨包与安装后 CLI 验收 | 同一包的顶层用例分四片，独立 runner，片内串行 |
+| native | 下表中的普通模式专属与生产预算验收 | 独立 runner，顺序执行 |
+| compiler、web、extension | 六平台归档实跑、WASM/HTTP、编辑器行为与 VSIX | 各自独立作业，保留构建目标差异 |
+
+LSP runner 安装与扩展相同的 `gopls v0.24.0` 并加入 PATH，真实后端协议和导航回归必须执行。
+CLI runner 安装 `Delve v1.27.2`，以绝对路径设置 `GOXIDE_TEST_DLV`，执行真实断点和无调试运行的 DAP 合同；
+这两个检查不依赖编辑器 UI。工具安装失败直接使作业失败。
+固定主机的性能及资源观察仍由显式环境变量单独启用，不在共享 runner 上断言。
+这两个作业还检查原始测试 JSON：CLI 不允许跳过，LSP 仅允许上述三项固定主机观察跳过；
+子用例跳过同样会被检查，父用例通过不能掩盖后端合同未执行。
+
+compile 和 acceptance 通过当前 race 构建的 `go test -list '^(Test|Example|Fuzz)'` 取得用例，
+排序后轮转分片。每个顶层用例及其全部子用例只属于一片；校验片非空、互斥且完整，
+不维护容易漏新增用例的手写名单。分片包含 example 与 fuzz 的 seed corpus，未启用持续 fuzz。
+各片按数量分配；长子用例仍会影响均衡，依据产物中的真实时间调整，分片数不等于提速倍数。
+
+普通模式只运行以下已有检查：
+
+| 测试 | 原因 |
+| --- | --- |
+| `lower.TestProcSnapshotPreparedRoleLifetime` | `!race`；真实 WASI 角色准备、快照与生命周期 |
+| `playground.TestPackageCheckedProceduralSnapshot` | `!race`；完整 SDK 快照、传输及消费边界 |
+| `procmacro.TestWASIHostSDKCommand` | 完整 SDK 冷启动、响应、输出限额和失败后恢复 |
+| `procmacro.TestWASIHostGoPackageInitIsBounded` | Go guest 初始化也受截止控制 |
+| `procmacro.TestWASIHostTimeoutCancellationAndCumulativeBudget` | 单次/累计耗尽、取消及单活动实例 |
+| `compile.TestFormalCFGDerivedProtocols/true` | 固定公开 std/serde 的四种派生、业务输出及 locked 重放 |
+| `format.TestFormattedTraitsMatchMacrosAndGenericsBuildAndRun` | 格式化后真实生成、稳定重放与运行输出 |
+| `prototype.TestDefaultOrdinaryHelperCoexists` | formal 公共夹具的普通预算、正式 Default 派生与 Go 断言 |
+| `lsp.TestCandidateUsesFreshMacroSession` | 关闭分析 session 后，候选修改使用独立真实宏 session |
+| `lsp.TestLanguageServerUnsavedProceduralMacro` | 真实 LSP 传输及宏、传递依赖、调用方的未保存修改 |
+| `cli.TestGenerateMissingRuntimeDependency` | CLI 原位生成的正式 std 宏、缺依赖诊断及补齐后的生成 |
+| `compile.TestP5ProjectBuildRunTestAndStableLock` | 外部测试包的真实宏宿主、空模块缓存、生成代码及 offline/locked 重放 |
+
+这些是生产预算的代表性验收，不重复全部语言输入。宏生产预算仍是单次 5 秒、
+一个宿主累计 60 秒；WASM 准备、编译、初始化与执行都受相应截止控制。
+race 测试宿主（含进程内 CLI 与 LSP）的默认预算乘 20，以容纳插桩开销；显式毫秒级耗尽、循环、取消断言不变。
+普通测试、CLI、发布二进制和 LSP 的真实宏宿主仍使用生产预算，外层 `-race` 不会自动传播到子进程。
+生成代码的 `go test -race` 必须保留，因为它检测的是生成程序，而非编译器测试进程。
+
+可删的是重复执行同一断言的流程和无调用者的测试辅助函数；不能仅按文件主题删除测试。
+例如语义诊断、生成代码运行、跨包/原生 Go 消费、CLI 交付分别验证不同边界；
+同输入两次生成用于确定性校验，冷缓存、offline、locked 与发布归档实跑也各有独立作用。
+只调用 `main`/`Exercise` 的合成测试若已有同一次生成的精确程序输出断言，则不再重复构建执行。
+已摘除 CLI 入口的 workspace/import-go/vendor/scripts 不保留无条件 Skip 的旧流程占位，
+未实现范围继续由[状态表](mvp-gap-audit.md)记录。已支持的 feature/lib/bin/example 使用当前
+语法和布局恢复有效断言；环境或平台条件导致的 Skip 必须按未执行覆盖报告。
+
+### 并发边界
+
+- `-p` 调度构建命令和不同包的测试进程；`-parallel` 只影响主动调用 `t.Parallel()` 的用例。
+  当前重型套件保持包内串行。外层 `-p=1` 不限制用例自行启动的 Go 子进程。
+- formal helper 临时修改 `procmacro.CompilerSDKIdentity`；CLI 多处使用 `t.Setenv`/`t.Chdir`，
+  一些子用例还共享宿主、计数器、锁文件或缓存测试夹具，不能直接加 `t.Parallel()`。
+  不同测试进程隔离这些状态；标准 Go 构建缓存支持并发，本身不是必须串行的理由。
+- 固定墙钟预算要求 CPU 余量。LSP 还验证 500ms、1 秒、5 秒级完成/取消行为，
+  与编译和大量 Go 子进程争抢 CPU 会产生环境性失败，所以放到独立 runner。
+- 网站构建清空并重写 exports/dist；同 checkout 的两个构建不能并行，HTTP embed 编译要等构建完成。
+  Node 网站测试和扩展测试各有进程全局替换或 PATH 修改，文件内不盲目开启并发。
+
+继续使用 Go 原生调度和 GitHub Actions matrix，不增加 make/CMake/xmake。
+make 可以包装命令，但不会自动发现上述共享状态或协调嵌套 Go 子进程；增加一层调度不能替代隔离。
+本地按改动运行对应包/用例；需要全树时使用 `go test -race -p=1 -vet=off -count=1 ./...`，
+再补上述 native 差异检查，避免在同一机器同时运行多套重型门禁。
+
+### 时间和结果
+
+race 每组单包上限 120 分钟、步骤上限 150 分钟、作业上限 180 分钟，留出日志上传时间；native 每步单包上限 15 分钟、
+作业上限 30 分钟。这些上限不改变宏的生产时限。
+`ci_go_test.py` 启动时打印日志目录，逐包完成和失败即时输出，顶层用例超过 10 秒时打印耗时；
+最终列出最慢的包与顶层用例、未完成项及 pass/fail/skip；没有任何顶层测试通过的空筛选或全跳过门禁直接失败。包、父用例和子用例的时间有包含或并行关系，
+不相加冒充墙钟。公共端到端 helper 另记录项目准备、宏宿主累计时间及子进程时间；宏宿主时间包含
+WASM 准备/编译/执行，不等于纯 guest 执行时间。
+
+完整 `go-test.jsonl` 与 stderr 逐行落盘。native、各 race 分组与 HTTP 通过 `always()` 上传
+`go-test-*` 诊断产物，保留 7 天；取消或强制终止时上传仍是尽力尝试。
+发布只选择 `goxide-*` 交付产物。CI summary 要求 native、整个 race 矩阵及其它必需作业成功，
+失败、取消或应运行却跳过均不得报告通过。
 
 ## 浏览器 CI 跟踪缺口
 

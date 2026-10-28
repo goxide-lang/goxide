@@ -16,12 +16,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/project"
 )
+
+var p5WASIBudgetMultiplier time.Duration = 1
 
 func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
 	options := p5Options(t)
@@ -142,7 +145,7 @@ func p5Options(t *testing.T) compile.Options {
 	previous := procmacro.CompilerSDKIdentity
 	procmacro.CompilerSDKIdentity = identity
 	t.Cleanup(func() { procmacro.CompilerSDKIdentity = previous })
-	host, err := procmacro.NewWASIHost(context.Background())
+	host, err := procmacro.NewWASIHostWithBudgets(context.Background(), procmacro.MaxInvocationTime*p5WASIBudgetMultiplier, procmacro.MaxCompilationTime*p5WASIBudgetMultiplier)
 	if err != nil {
 		t.Fatal(err)
 	}

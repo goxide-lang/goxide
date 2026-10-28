@@ -15,7 +15,6 @@ import (
 	"github.com/goxide-lang/goxide/internal/compile"
 	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/lower"
-	"github.com/goxide-lang/goxide/internal/procmacro"
 	"github.com/goxide-lang/goxide/internal/project"
 )
 
@@ -56,7 +55,7 @@ func prepareDevelopment(ctx context.Context, req developmentRequest, stderr io.W
 			return nil, err
 		}
 	}
-	host, err := procmacro.NewWASIHost(ctx)
+	host, err := newWASIHost(ctx)
 	if err != nil {
 		return nil, err
 	}

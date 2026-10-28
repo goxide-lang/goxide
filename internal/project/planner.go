@@ -75,7 +75,12 @@ func goCommandContext(ctx context.Context, tool, dir string, offline bool, envir
 		if ctx.Err() != nil {
 			e = ctx.Err()
 		}
-		return nil, fmt.Errorf("Go module planning %s: %w: %s", args[0], e, strings.TrimSpace(stderr.String()))
+		detail := strings.TrimSpace(stderr.String())
+		if detail == "" {
+			// go mod download -json reports download errors on stdout.
+			detail = strings.TrimSpace(string(b))
+		}
+		return nil, fmt.Errorf("Go module planning %s: %w: %s", args[0], e, detail)
 	}
 	return b, nil
 }

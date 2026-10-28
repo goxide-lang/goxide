@@ -17,6 +17,7 @@
   },
   "contributes": {
     "languages": [{ "id": "goxide", "aliases": ["Goxide", "goxide"], "extensions": [".gox"], "configuration": "./language-configuration.json" }],
+    "grammars": [{ "language": "goxide", "scopeName": "source.goxide", "path": "./syntaxes/goxide.tmLanguage.json" }],
     "commands": [
       { "command": "goxide.restart", "title": "Goxide: Restart Language Server" },
       { "command": "goxide.generatedSource", "title": "Goxide: Show Generated Go" },
@@ -78,7 +79,7 @@
       }
     }
   },
-  "scripts": { "test": "node --test test/*.test.js", "test:host": "node host-test/run.js", "test:development": "node host-test/development-run.js", "test:debug": "node host-test/debug-run.js", "check": "node --check extension.js && node --check config.js && node --check development.js && node --check tools.js", "package": "vsce package" },
+  "scripts": { "test": "node --test test/*.test.js", "test:syntax": "node host-test/syntax-test.js", "test:host": "node host-test/run.js", "test:development": "node host-test/development-run.js", "test:debug": "node host-test/debug-run.js", "check": "node --check extension.js && node --check config.js && node --check development.js && node --check tools.js", "package": "vsce package" },
   "dependencies": { "vscode-languageclient": "11.0.0" },
   "devDependencies": { "@vscode/vsce": "4.0.0" }
 }

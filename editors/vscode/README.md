@@ -2,6 +2,8 @@
 
 通过 `goxide lsp` 提供诊断、悬浮信息、定义跳转、补全、签名提示、文档符号、引用查找、重命名、格式化和快速修复。重命名会重新分析候选源码、检查生成 Go，并验证原有源码绑定未改变。扩展还提供 Run、Test Explorer 和基于 Delve 的调试入口。
 
+`.gox` 文件自带 TextMate 语法高亮，覆盖注释、字面量、声明、`match`、宏、属性和引用语法；无需先启动语言服务器。
+
 需要 VS Code 1.91 或更新版本、带 `lsp` 和 `dev` 子命令的 Goxide，以及编译器要求的 Go 工具链。Go 后端使用原版 `gopls`；当前服务端契约以 v0.24.0 验证。调试另外需要外部安装的官方 Delve（`dlv`），不依赖 Go 扩展提供调试器。VSIX 不内置 Goxide、gopls 或 Delve。
 
 ## 安装与启动
@@ -132,6 +134,8 @@ Run、测试发现、测试运行和 Debug 会保存所选输入范围内的未�
 服务日志在 **Output → Goxide**。编译器或 gopls 不可用时按服务端诊断处理；修改路径后运行重启命令。
 
 开发校验使用 `npm test`、`npm run check` 和 `npm run package`。测试覆盖参数传递、配置 schema、项目选择器、Go 扩展冲突、gopls 私有安装与失败/取消重试、文件与配置事件、只读预览、会话释放、过期测试选择、进程树取消和调试测试结果；不替代真实 VS Code 窗口中的交互验收。
+
+`npm run test:syntax` 复用已安装 VS Code 的 TextMate/Oniguruma 引擎验证真实分词，无需新增依赖或打开窗口。macOS 默认读取 `/Applications/Visual Studio Code.app`；其他位置或平台通过 `VSCODE_EXECUTABLE` 指向 VS Code 应用可执行文件（不是 `code` CLI 启动脚本）。
 
 在已有 VS Code 的 macOS/Linux 主机可运行 `npm run test:host`。它使用临时用户数据与扩展目录启动真实 VS Code，连接受控 stdio 服务，验证五项能力、UTF-16、Go 文件选择器、预览和关闭/重启流程；不下载 Electron，也不修改用户配置。非默认安装路径通过 `VSCODE_EXECUTABLE` 指向 VS Code 可执行文件。该测试验证客户端协议接线，编译器行为仍由服务端端到端测试覆盖。
 

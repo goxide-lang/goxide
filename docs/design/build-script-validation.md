@@ -32,8 +32,7 @@
 自编测试位置：
 
 - [core tests](../../internal/buildscript/buildscript_test.go)：冻结字节/配置、内容/目录/env/tool键、真实Go/goxide helper、拒绝路径与链接、声明输出、失败/超时/缓存发布、授权回调、clean、host-only。
-- [CLI tests](../../cmd/goxide/buildscript_test.go)：schema/embed、两bin共享、feature变化、root/helper/tool/依赖包许可、撤销及更新、超时恢复、clean保留信任/源码。
-- [联合布局tests](../../cmd/goxide/buildscript_layout_test.go)：默认target可运行二进制、旧bundle独立重编、CLI/env优先级、跨bin缓存、指定布局clean、修改binary/陌生目录/symlink拒绝、nested target、helper信任位置。
+- CLI 构建脚本入口已在 P6 摘除；对应的无条件跳过占位测试已删除，重启与验收范围见[状态表](../mvp-gap-audit.md)。
 - [布局cache tests](../../internal/project/layout_scripts_test.go)、[信任store tests](../../internal/scripttrust/store_test.go)、[生成前端tests](https://github.com/goxide-lang/goxide/blob/bd90e606dcfa220b4054fe41c56bdc63a5687355/internal/frontend/generated_module_test.go)。
 
 ```sh

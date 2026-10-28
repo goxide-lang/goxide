@@ -3,9 +3,7 @@ package prototype_test
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -47,29 +45,6 @@ impl Order {
 		t.Fatal("derive is coupled to JSON")
 	}
 	runFormalSerde(t, result, runtimeAssertions)
-}
-
-func runGenerated(t *testing.T, generated []byte, assertions string) {
-	t.Helper()
-	dir := t.TempDir()
-	files := map[string][]byte{
-		"go.mod":            []byte("module fixture\n\ngo 1.27\n"),
-		"generated.go":      generated,
-		"generated_test.go": []byte(assertions),
-	}
-	for name, data := range files {
-		if err := testdeps.WriteFile(filepath.Join(dir, name), data, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin/go"), "test", "-count=1", "-v", ".")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("generated Go failed: %v\n%s\n--- generated ---\n%s", err, output, generated)
-	}
-	t.Logf("generated Go compiled and executed:\n%s", output)
 }
 
 func TestDeriveRejectsInvalidInput(t *testing.T) {
@@ -252,6 +227,5 @@ func runFormalSerde(t *testing.T, result testdeps.FormalResult, assertions strin
 	if err := os.WriteFile(filepath.Join(result.Project.Root, "generated_test.go"), []byte(assertions), 0600); err != nil {
 		t.Fatal(err)
 	}
-	testdeps.RunFormalGo(t, result.Project, "build", "-mod=readonly", ".")
 	testdeps.RunFormalGo(t, result.Project, "test", "-mod=readonly", "-count=1", ".")
 }

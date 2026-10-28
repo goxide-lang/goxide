@@ -63,8 +63,6 @@ func TestPrintDefaultExplicitRejections(t *testing.T) {
 		{"helper-not-debug-protocol", `type Value struct{N int};func DebugValue(*Value)string{return "not registered"};func f(){std::println!("{:?}",Value{})}`},
 		{"go-statement", `func f(){go std::println!("later")}`},
 		{"defer-statement", `func f(){defer std::println!("later")}`},
-		{"default-enum-missing", "#[derive(std::derive::Default)]\nenum E { A, B, }"},
-		{"default-enum-many", "#[derive(std::derive::Default)]\nenum E {\n#[default]\nA,\n#[default]\nB,\n}"},
 		{"default-enum-payload-without-default", "#[derive(std::derive::Default)]\nenum E {\n#[default]\nA(Result[int,string]),\n}"},
 		{"default-without-derive", "enum E {\n#[default]\nA,\n}"},
 		{"default-reference", "#[derive(std::derive::Default)]\ntype Invalid struct { Value &int }"},

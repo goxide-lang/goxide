@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -47,7 +48,6 @@ func main() { Exercise() }
 			manifest := "[go_mod]\nmodule='example.org/formal-cfg'\ngo='1.27'\n[[bin]]\nname='fixture'\npath='.'\n[features]\nderive=[]\n[dependencies.fmt]\ngo='fmt'\n" + dependencies
 			writeProjectFile(t, root, project.ManifestName, manifest)
 			writeProjectFile(t, root, "main.gox", source)
-			writeProjectFile(t, root, "main_test.go", "package main\nimport \"testing\"\nfunc TestCFG(t *testing.T){Exercise()}\n")
 			derives := 0
 			options := Options{Offline: true, RunProcMacro: testWASI(t, func(request pm.Request) {
 				if request.Kind() == pm.Derive {
@@ -70,11 +70,16 @@ func main() { Exercise() }
 			if derives != wantCalls {
 				t.Fatalf("executed derives = %d, want %d", derives, wantCalls)
 			}
-			configuredGo(t, first, "build", "-mod=readonly", "-o", filepath.Join(root, "program"), first.Entry)
-			if got := configuredGo(t, first, "run", "-mod=readonly", first.Entry); got != want {
-				t.Fatalf("conditional derive output = %q, want %q", got, want)
+			binary := filepath.Join(root, "program")
+			if first.Config.Environment.Target.OS == "windows" {
+				binary += ".exe"
 			}
-			configuredGo(t, first, "test", "-mod=readonly", "-count=1", first.Entry)
+			configuredGo(t, first, "build", "-mod=readonly", "-o", binary, first.Entry)
+			command := exec.Command(binary)
+			command.Dir, command.Env = first.Root, project.GoEnv(true, first.Config.Environment.ExecEnv())
+			if got, err := command.CombinedOutput(); err != nil || string(got) != want {
+				t.Fatalf("conditional derive output = %q, want %q: %v", got, want, err)
+			}
 			before, err := os.ReadFile(filepath.Join(first.Root, "main.go"))
 			if err != nil {
 				t.Fatal(err)

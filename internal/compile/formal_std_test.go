@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -44,16 +45,20 @@ func formalStdAcceptance(t *testing.T, dependencies string) {
 		for file, source := range sources {
 			writeProjectFile(t, directory, file, source)
 		}
-		writeProjectFile(t, directory, "main_test.go", "package main\nimport \"testing\"\nfunc TestFormalBehavior(t *testing.T){main()}\n")
 		first, err := PrepareProject(directory, Options{Offline: true, RunProcMacro: run})
 		if err != nil {
 			t.Fatal(err)
 		}
-		configuredGo(t, first, "build", "-mod=readonly", "-o", filepath.Join(root, "consumer-"+name), first.Entry)
-		if got := configuredGo(t, first, "run", "-mod=readonly", first.Entry); got != want {
-			t.Fatalf("formal std output = %q, want %q", got, want)
+		binary := filepath.Join(root, "consumer-"+name)
+		if first.Config.Environment.Target.OS == "windows" {
+			binary += ".exe"
 		}
-		configuredGo(t, first, "test", "-mod=readonly", "-count=1", first.Entry)
+		configuredGo(t, first, "build", "-mod=readonly", "-o", binary, first.Entry)
+		command := exec.Command(binary)
+		command.Dir, command.Env = first.Root, project.GoEnv(true, first.Config.Environment.ExecEnv())
+		if got, err := command.CombinedOutput(); err != nil || string(got) != want {
+			t.Fatalf("formal std output = %q, want %q: %v", got, want, err)
+		}
 		before := projectSnapshot(t, filepath.Dir(first.Root))
 		lock, err := os.ReadFile(filepath.Join(directory, "goxide.lock"))
 		if err != nil {

@@ -34,7 +34,6 @@ func projectRun(t *testing.T, root string, args ...string) (string, error) {
 }
 
 func TestProjectTargetsAndFeatures(t *testing.T) {
-	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/project\n\ngo 1.27\n",
@@ -61,7 +60,7 @@ path = 'src/lib.gox'
 [go_mod]
 `,
 		"src/lib.gox":       "package app\nfunc Value()int{return 42}\n",
-		"src/one.gox":       "package main\nuse fmt;\nuse project as a;\nfunc main(){fmt::Println(\"one\",a::Value(),cfg!(feature(\"pretty\")))}\n",
+		"src/one.gox":       "package main\nuse fmt;\nuse app as a;\nfunc main(){fmt::Println(\"one\",a::Value(),cfg!(feature(\"pretty\")))}\n",
 		"src/two.gox":       "package main\nuse fmt;\nfunc main(){fmt::Println(\"two\")}\n",
 		"examples/demo.gox": "package main\nuse fmt;\nfunc main(){fmt::Println(\"example\")}\n",
 	})
@@ -103,11 +102,10 @@ path = 'src/lib.gox'
 			t.Fatalf("%s %v", b, e)
 		}
 	}
-	sm, e := os.ReadFile(filepath.Join(generated, "goxide_targets/bin/one/one.go.map.json"))
-	if e != nil || !bytes.Contains(sm, []byte(filepath.Join(root, "src/one.gox"))) {
-		t.Fatalf("original source mapping missing: %s %v", sm, e)
+	if _, err := os.Stat(filepath.Join(generated, "goxide_targets/bin/one/one.go")); err != nil {
+		t.Fatalf("selected entry missing: %v", err)
 	}
-	if _, e = os.Stat(filepath.Join(generated, "src/two.go")); !os.IsNotExist(e) {
+	if _, err := os.Stat(filepath.Join(generated, "goxide_targets/bin/two/two.go")); !os.IsNotExist(err) {
 		t.Fatal("unselected entry emitted")
 	}
 }
@@ -124,7 +122,6 @@ path = 'app.gox'
 		t.Fatalf("%s %v", b, e)
 	}
 	t.Run("library-target-diagnostic", func(t *testing.T) {
-		t.Skip("MVP-DEFERRED: MVP CLI library targets deferred by P6")
 		if _, e := projectRun(t, root, "build", "--lib"); e == nil || !strings.Contains(e.Error(), "no lib") {
 			t.Fatal(e)
 		}
@@ -132,77 +129,6 @@ path = 'app.gox'
 	projectWrite(t, root, map[string]string{"app.gox": "package main\nfunc main(){_ = missing}\n"})
 	if _, e := projectRun(t, root, "run", "--offline"); e == nil || (!strings.Contains(e.Error(), "app.gox:2:17:") || !strings.Contains(e.Error(), "unresolved name")) {
 		t.Fatalf("source location lost: %v", e)
-	}
-}
-
-func TestProjectLocalFeatureUnion(t *testing.T) {
-	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
-	base := t.TempDir()
-	root := filepath.Join(base, "root")
-	shared := filepath.Join(base, "shared")
-	projectWrite(t, shared, map[string]string{
-		"go.mod": "module example.org/shared\n\ngo 1.27\n",
-		"goxide.toml": `[features]
-a = []
-b = []
-d = []
-default = ['d']
-
-[lib]
-name = 'shared'
-path = 'lib.gox'
-
-[go_mod]
-`,
-		"lib.gox": "package shared\nfunc Flags()string{s:=\"\";if cfg!(feature(\"a\")){s+=\"a\"};if cfg!(feature(\"b\")){s+=\"b\"};if cfg!(feature(\"d\")){s+=\"d\"};return s}\n",
-	})
-	for _, name := range []string{"left", "right"} {
-		feature := "a"
-		if name == "right" {
-			feature = "b"
-		}
-		projectWrite(t, filepath.Join(base, name), map[string]string{
-			"go.mod":      "module example.org/" + name + "\n\ngo 1.27\n",
-			"goxide.toml": manifestJSON(`{"lib":{"name":"lib","path":"lib.gox"},"dependencies":{"shared":{"module":"example.org/shared","path":"../shared","default_features":false,"features":["` + feature + `"]}}}`),
-			"lib.gox":     "package " + name + "\nuse shared as s;\nfunc Flags()string{return s::Flags()}\n",
-		})
-	}
-	projectWrite(t, root, map[string]string{
-		"go.mod": "module example.org/root\n\ngo 1.27\n",
-		"goxide.toml": `[[bin]]
-name = 'app'
-path = 'main.gox'
-
-[dependencies]
-[dependencies.left]
-module = 'example.org/left'
-path = '../left'
-
-[dependencies.optional]
-module = 'example.org/missing'
-optional = true
-path = '../not-present'
-
-[dependencies.right]
-module = 'example.org/right'
-path = '../right'
-
-[features]
-missing = ['dep:optional']
-
-[go_mod]
-`,
-		"main.gox":     "package main\nuse fmt;\nuse left as l;\nuse right as r;\nfunc main(){fmt::Println(l::Flags(),r::Flags())}\n",
-		"disabled.gox": "//goxide:cfg feature(\"missing\")\npackage main\nuse missing_dependency;\nfunc Never()Unknown{return nonexistent()}\n",
-	})
-	if b, e := projectRun(t, root, "run", "--offline"); e != nil || strings.TrimSpace(b) != "ab ab" {
-		t.Fatalf("union: %s %v", b, e)
-	}
-	if b, e := projectRun(t, root, "run", "--offline", "--locked"); e != nil || strings.TrimSpace(b) != "ab ab" {
-		t.Fatalf("offline lock: %s %v", b, e)
-	}
-	if _, e := projectRun(t, root, "run", "--features", "missing", "--offline"); e == nil {
-		t.Fatal("missing optional source accepted")
 	}
 }
 
@@ -360,7 +286,6 @@ version = 'v1.0.0'
 }
 
 func TestProjectSelectionAndOutputConflicts(t *testing.T) {
-	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
 	projectWrite(t, root, map[string]string{
 		"go.mod": "module example.org/selection\n\ngo 1.27\n",
@@ -374,11 +299,11 @@ path = '.'
 [go_mod]
 `,
 		"lib.gox":           "package lib\nfunc Value()int{return 3}\n",
-		"off.gox":           "//goxide:cfg feature(\"extra\")\npackage lib\nuse no;\nfunc Missing()Unknown{return nope()}\n",
+		"off.gox":           "package lib\n#[cfg(feature(\"extra\"))]\nuse no;\n#[cfg(feature(\"extra\"))]\nfunc Missing()Unknown{return nope()}\n",
 		"tagged.gox":        "//go:build unavailable\n\npackage lib\nvar X=cfg!(feature(\"unknown\"))\n",
 		"unrelated/bad.gox": "package other\nvar X=cfg!(feature(\"unknown\"))\n",
 		"lib_test.go":       "package lib_test\nimport \"testing\"\nimport h \"example.org/selection/helper\"\nfunc TestValue(t *testing.T){if h.Value()!=3{t.Fatal(\"bad\")}}\n",
-		"helper/helper.gox": "package helper\nuse selection as l;\nfunc Value()int{return l::Value()}\n",
+		"helper/helper.gox": "package helper\nuse crate as l;\nfunc Value()int{return l::Value()}\n",
 	})
 	if b, e := projectRun(t, root, "build", "--lib", "--offline"); e != nil {
 		t.Fatalf("%s %v", b, e)
@@ -389,17 +314,19 @@ path = '.'
 	if _, e := projectRun(t, root, "build", "--lib", "--offline", "--features", "extra"); e == nil {
 		t.Fatal("selected invalid import accepted")
 	}
-	projectWrite(t, root, map[string]string{"goxide.toml": `[features]
-extra = []
-
+	collision := t.TempDir()
+	projectWrite(t, collision, map[string]string{"goxide.toml": `[go_mod]
+module = 'example.org/collision'
+go = '1.27'
 [lib]
 name = 'lib'
 path = 'src/lib.gox'
-
-[go_mod]
 `, "src/lib.gox": "package lib\nfunc X(){}\n", "lib.go": "package lib\nfunc Existing(){}\n"})
-	if _, e := projectRun(t, root, "build", "--lib", "--offline"); e == nil || !strings.Contains(e.Error(), "filename conflicts") {
-		t.Fatalf("output collision: %v", e)
+	if _, err := projectRun(t, collision, "build", "--lib", "--offline"); err == nil || !strings.Contains(err.Error(), "generated Go would overwrite an existing file") {
+		t.Fatalf("output collision: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(collision, "lib.go")); err != nil || string(data) != "package lib\nfunc Existing(){}\n" {
+		t.Fatalf("conflicting author file changed: %s %v", data, err)
 	}
 }
 
@@ -526,7 +453,6 @@ func TestProjectDependencyAndTargetDiagnostics(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Run("feature-gated-targets", func(t *testing.T) {
-		t.Skip("MVP-DEFERRED: MVP CLI dependency features and example targets deferred by P6")
 		base := t.TempDir()
 		root := filepath.Join(base, "root")
 		dep := filepath.Join(base, "dep")
@@ -583,12 +509,9 @@ path = '.'
 }
 
 func TestProjectConditionalGoxideAcrossTargets(t *testing.T) {
-	t.Skip("MVP-DEFERRED: MVP CLI features, library and example targets deferred by P6")
 	root := t.TempDir()
-	// Inline enum discriminants use std/sum.Tag for type-name hygiene. This
-	// project selects that public dependency explicitly, including offline runs.
 	projectWrite(t, root, map[string]string{
-		"go.mod": "module example.org/conditional\n\ngo 1.27\nrequire github.com/goxide-lang/std v0.0.0-20261009104839-c02a09d8c417\n",
+		"go.mod": "module example.org/conditional\n\ngo 1.27\n",
 		"goxide.toml": `[[bin]]
 name = 'one'
 path = 'cmd/one'
@@ -612,29 +535,32 @@ path = '.'
 
 [go_mod]
 `,
-		"enabled.gox": `//goxide:cfg feature("extra")
-package lib
-#[derive(Debug)]
-type Item struct { Value int }
+		"enabled.gox": `package lib
+#[cfg(feature("extra"))]
 pub enum State { Empty, Count(int), }
+#[cfg(feature("extra"))]
 macro_rules! twice { ($x:expr) => { $x + $x }; }
+#[cfg(feature("extra"))]
 func Value() int {
  return match State::Count(twice!(21)) {State::Empty => 0, State::Count(n) => n,}
 }
 `,
-		"disabled.gox": "//goxide:cfg not(feature(\"extra\"))\npackage lib\nfunc Value()int{return 0}\n",
-		"never.gox": `//goxide:cfg feature("never")
-package lib
+		"disabled.gox": "package lib\n#[cfg(not(feature(\"extra\")))]\nfunc Value()int{return 0}\n",
+		"never.gox": `package lib
+#[cfg(feature("never"))]
 use never as absent;
-#[derive(Debug)]
+#[cfg(feature("never"))]
 type Missing struct { Value absent::Unknown }
+#[cfg(feature("never"))]
 enum Unresolved { Case(absent::Unknown), }
+#[cfg(feature("never"))]
 macro_rules! query { ($x:expr) => { cfg!(feature($x)) }; }
+#[cfg(feature("never"))]
 func Never(){unknown_macro!(unresolved)}
 `,
 	})
 	for _, entry := range []string{"cmd/one", "cmd/two", "examples/demo"} {
-		projectWrite(t, root, map[string]string{entry + "/main.gox": "package main\nuse fmt;\nuse conditional as lib;\nfunc main(){fmt::Println(lib::Value())}\n"})
+		projectWrite(t, root, map[string]string{entry + "/main.gox": "package main\nuse fmt;\nuse lib;\nfunc main(){fmt::Println(lib::Value())}\n"})
 	}
 	for _, tc := range []struct {
 		args []string
@@ -651,13 +577,11 @@ func Never(){unknown_macro!(unresolved)}
 			t.Fatalf("%v: %s %v", tc.args, b, e)
 		}
 	}
-	// Balanced invalid expression grammar is deferred, not silently accepted when enabled.
-	projectWrite(t, root, map[string]string{"never.gox": "//goxide:cfg feature(\"never\")\npackage lib\nfunc Broken(){x:=}\n"})
-	if _, e := projectRun(t, root, "run", "--bin", "one", "--offline"); e != nil {
-		t.Fatal(e)
-	}
-	if _, e := projectRun(t, root, "run", "--bin", "one", "--offline", "--features", "never"); e == nil {
-		t.Fatal("enabled malformed expression accepted")
+	projectWrite(t, root, map[string]string{"never.gox": "package lib\n#[cfg(feature(\"never\"))]\nfunc Broken(){x:=}\n"})
+	for _, features := range []string{"", "never"} {
+		if _, err := projectRun(t, root, "run", "--bin", "one", "--offline", "--features", features); err == nil || !strings.Contains(err.Error(), "never.gox") || !strings.Contains(err.Error(), "expected expression") {
+			t.Fatalf("malformed source must fail before cfg selection: %v", err)
+		}
 	}
 }
 

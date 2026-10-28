@@ -2,6 +2,7 @@ package compile
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -58,13 +59,6 @@ func inspect() (bool, bool, int, int) {
 }
 func main() { fmt.Println(inspect()) }
 `,
-		"app/main_test.go": `package main
-import "testing"
-func TestNativeProtocolViews(t *testing.T) {
- _, _, local, remote := inspect()
- if local != 7 || remote != 9 { t.Fatalf("protocol views = %d %d", local, remote) }
-}
-`,
 	})
 	app := filepath.Join(root, "app")
 	on, off := true, false
@@ -100,11 +94,16 @@ func TestNativeProtocolViews(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := fmt.Sprintf("%t %t 7 9\n", test.rootSugar, test.depSugar)
-			configuredGo(t, result, "build", "-mod=readonly", "-o", filepath.Join(root, "consumer"), result.Entry)
-			if got := configuredGo(t, result, "run", "-mod=readonly", result.Entry); got != want {
-				t.Fatalf("native method sets and protocol views = %q, want %q", got, want)
+			binary := filepath.Join(root, "consumer")
+			if result.Config.Environment.Target.OS == "windows" {
+				binary += ".exe"
 			}
-			configuredGo(t, result, "test", "-mod=readonly", "-count=1", result.Entry)
+			configuredGo(t, result, "build", "-mod=readonly", "-o", binary, result.Entry)
+			command := exec.Command(binary)
+			command.Dir, command.Env = result.Root, project.GoEnv(true, result.Config.Environment.ExecEnv())
+			if got, err := command.CombinedOutput(); err != nil || string(got) != want {
+				t.Fatalf("native method sets and protocol views = %q, want %q: %v", got, want, err)
+			}
 			identity := fmt.Sprintf("%t/%t", test.rootSugar, test.depSugar)
 			files := projectSnapshot(t, filepath.Dir(result.Root))
 			if prior, ok := seen[identity]; ok {

@@ -52,7 +52,7 @@ path = 'src/lib.gox'
 [go_mod]
 `,
 		"src/lib.gox":         "package lib\nuse dep as d;\nfunc Value()string{if cfg!(feature(\"extra\")){return \"on \"+d::Value()};return \"off \"+d::Value()}\n",
-		"src/one.gox":         "package main\nuse fmt;\nuse layout as l;\nfunc main(){fmt::Println(l::Value())}\n",
+		"src/one.gox":         "package main\nuse fmt;\nuse lib as l;\nfunc main(){fmt::Println(l::Value())}\n",
 		"src/two.gox":         "package main\nuse fmt;\nfunc main(){fmt::Println(\"two\")}\n",
 		"examples/demo.gox":   "package main\nuse fmt;\nfunc main(){fmt::Println(\"example\")}\n",
 		"cmd/web/main.go":     "package main\nimport \"fmt\"\nimport _ \"embed\"\n//go:embed message.txt\nvar message string\nfunc main(){fmt.Println(message)}\n",
@@ -76,7 +76,6 @@ func runLayoutBinary(t *testing.T, path, want string) {
 	}
 }
 func TestProjectManagedLayoutEndToEnd(t *testing.T) {
-	t.Skip("MVP-DEFERRED: MVP CLI layout across feature, library and example targets deferred by P6")
 	root, dep := layoutFixture(t, true)
 	build := func(args ...string) string {
 		t.Helper()
@@ -108,12 +107,12 @@ func TestProjectManagedLayoutEndToEnd(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if !bytes.Contains(oldMod, []byte(filepath.Dir(generated)+string(filepath.Separator)+"deps")) {
-			t.Fatalf("replace not generation-local: %s", oldMod)
+		module, err := project.ReadMod(filepath.Join(runtime.GOROOT(), "bin", "go"), generated)
+		if err != nil {
+			t.Fatal(err)
 		}
-		sm, e := os.ReadFile(filepath.Join(generated, "goxide_targets/bin/one/one.go.map.json"))
-		if e != nil || !bytes.Contains(sm, []byte(filepath.Join(root, "src/one.gox"))) {
-			t.Fatalf("source map: %s %v", sm, e)
+		if len(module.Replace) != 1 || module.Replace[0].Old.Path != "example.org/layoutdep" || !within(filepath.Join(filepath.Dir(generated), "deps"), filepath.Join(generated, module.Replace[0].New.Path)) {
+			t.Fatalf("replace not generation-local: %+v", module.Replace)
 		}
 		projectWrite(t, dep, map[string]string{"lib.go": "package dep\nfunc Value()string{return \"new dependency\"}\n"})
 		latest := build("--bin", "one", "--locked")

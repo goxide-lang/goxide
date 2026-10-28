@@ -188,30 +188,6 @@ func TestImportSourceSelectionInput(t *testing.T) {
 		})
 	}
 }
-func TestImportSourcesWorkspace(t *testing.T) {
-	t.Skip("MVP-DEFERRED: MVP CLI workspace import and selection deferred by P6")
-	root, _, _ := sourceFixture(t, true, true)
-	base := filepath.Dir(root)
-	projectWrite(t, base, map[string]string{"go.work": "go 1.27\nuse ./old\n"})
-	os.RemoveAll(filepath.Join(root, "vendor"))
-	t.Setenv("GOWORK", "")
-	vendorGo(t, base, "work", "vendor")
-	projectWrite(t, base, map[string]string{"vendor/example.org/d/d.go": "package d\nconst Value=\"workspace modification\"\n"})
-	out := filepath.Join(t.TempDir(), "migrated")
-	req := ImportRequest{Root: base, Out: out, Workspace: true, GoTool: "go", Sources: []string{"example.org/d=remote"}, AcceptSourceDiff: []string{"example.org/d"}, Offline: true}
-	var log bytes.Buffer
-	if e := executeImportGo(req, &log, &log); e != nil {
-		t.Fatalf("%v %s", e, &log)
-	}
-	a := sourceAudit(t, out)
-	if !a.Sources["example.org/d"].Accepted {
-		t.Fatal(a.Sources)
-	}
-	if b, e := projectRun(t, out, "run", "--package", "example.org/app", "--offline", "--locked"); e != nil || strings.TrimSpace(b) != "remote" {
-		t.Fatalf("%v %s", e, b)
-	}
-}
-
 func TestImportSourceCacheIntegrity(t *testing.T) {
 	for _, which := range []string{"zip", "expanded"} {
 		t.Run(which, func(t *testing.T) {

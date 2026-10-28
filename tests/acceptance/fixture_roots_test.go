@@ -21,10 +21,6 @@ func acceptanceSerdeRoots() paths.Roots {
 	}
 }
 
-func compileAcceptanceSerdeFixture(filename string, source []byte) (testdeps.SourceResult, error) {
-	return testdeps.Source(filename, source, acceptanceSerdeRoots())
-}
-
 func writeAcceptanceSerdeRoots(t *testing.T, dir, libraryModule string) {
 	t.Helper()
 	var data strings.Builder

@@ -98,7 +98,7 @@ package gen
 func Version() int { return 42 }
 ```
 
-消费端 `cmd/app/main.gox` 声明 `mod gen;` 并写 `use crate::gen;`，生成 Go import `example.org/app/cmd/app/gen`，无需把生成文件写回源码。多个 target 共用的生成包归入 lib，经库公开入口消费。generated `.go` 和资源可使用正常 `go:embed`；文件入口映射仍遵循 RFC 0022，不自动移动同目录资源。已有脚本机制的[试用示例](../../examples/build_script/README.md)和[端到端测试](../../cmd/goxide/buildscript_test.go)保留；本例新增的 crate 归属由 RFC 0028 的行为验收覆盖。
+消费端 `cmd/app/main.gox` 声明 `mod gen;` 并写 `use crate::gen;`，生成 Go import `example.org/app/cmd/app/gen`，无需把生成文件写回源码。多个 target 共用的生成包归入 lib，经库公开入口消费。generated `.go` 和资源可使用正常 `go:embed`；文件入口映射仍遵循 RFC 0022，不自动移动同目录资源。已有脚本机制保留[试用示例](../../examples/build_script/README.md)和[runner 测试](../../internal/buildscript/buildscript_test.go)；CLI 入口的重启与端到端验收见[状态表](../mvp-gap-audit.md)，本例新增的 crate 归属按 RFC 0028 验收。
 
 BS-01 黑例：未信任根项目，输入完全相同，构建在任何 host 编译/执行前返回 `B-TRUST-ROOT`；不会因仅需 transpile 而绕过。trust-project 后再走以上顺序。
 

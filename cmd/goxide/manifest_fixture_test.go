@@ -42,18 +42,6 @@ func manifestJSON(s string) string {
 	}
 	return string(b)
 }
-func decodeManifestFixture(b []byte, m *map[string]any) error {
-	if e := toml.Unmarshal(b, m); e != nil {
-		return e
-	}
-	for a, b := range map[string]string{"bin": "bins", "example": "examples"} {
-		if v, ok := (*m)[a]; ok {
-			(*m)[b] = v
-			delete(*m, a)
-		}
-	}
-	return nil
-}
 
 // Fixture builders combine native module identity with the project fields.
 // Native-only projects and published Go transport metadata keep their go.mod.

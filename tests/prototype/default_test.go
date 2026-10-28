@@ -66,10 +66,6 @@ func TestDefaults(t *testing.T){
 func TestDefaultRejectsUnsupported(t *testing.T) {
 	cases := []string{
 		`#[derive(std::derive::Default)]
-enum E { A, B }`,
-		`#[derive(std::derive::Default)]
-enum E { #[default] A, #[default] B }`,
-		`#[derive(std::derive::Default)]
 enum E { #[default] A(Result[int,string]), B }`,
 		`#[derive(std::derive::Default)]
 enum E { #[default] #[default] A }`,

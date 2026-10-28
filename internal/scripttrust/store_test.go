@@ -3,6 +3,7 @@ package scripttrust
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -43,23 +44,31 @@ func TestPersistentTrustAndLease(t *testing.T) {
 	}
 }
 func TestTrustRejectsLinksAndBadJSON(t *testing.T) {
-	dir := t.TempDir()
-	outside := t.TempDir()
-	link := filepath.Join(dir, "link")
-	if e := os.Symlink(outside, link); e != nil {
-		t.Skip(e)
-	}
-	t.Setenv("GOXIDE_TRUST_DIR", link)
-	if _, e := Open(); e == nil {
-		t.Fatal("linked policy directory")
-	}
-	t.Setenv("GOXIDE_TRUST_DIR", dir)
-	if e := os.WriteFile(filepath.Join(dir, "grants.json"), []byte(`{"version":1,"projects":{},"subjects":{},"unexpected":true}`), 0600); e != nil {
-		t.Fatal(e)
-	}
-	if _, e := Open(); e == nil {
-		t.Fatal("unknown trust field")
-	}
+	t.Run("symlink", func(t *testing.T) {
+		dir := t.TempDir()
+		outside := t.TempDir()
+		link := filepath.Join(dir, "link")
+		if e := os.Symlink(outside, link); e != nil {
+			if runtime.GOOS == "windows" {
+				t.Skip(e)
+			}
+			t.Fatal(e)
+		}
+		t.Setenv("GOXIDE_TRUST_DIR", link)
+		if _, e := Open(); e == nil {
+			t.Fatal("linked policy directory")
+		}
+	})
+	t.Run("unknown-json-field", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("GOXIDE_TRUST_DIR", dir)
+		if e := os.WriteFile(filepath.Join(dir, "grants.json"), []byte(`{"version":1,"projects":{},"subjects":{},"unexpected":true}`), 0600); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := Open(); e == nil {
+			t.Fatal("unknown trust field")
+		}
+	})
 }
 
 func TestTrustCannotLiveInSourceOrManagedArtifacts(t *testing.T) {

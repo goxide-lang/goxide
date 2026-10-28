@@ -7,6 +7,7 @@
 | 触发 / 层 | 检查范围 |
 | --- | --- |
 | 所有 PR、push main、手动触发 | 全树普通测试和 race、独立 vet、gofmt、Markdown 链接/锚点/围栏门禁、文档 Go 示例运行 |
+| 所有 CI | 六个平台的 CLI 构建及解压运行验收，插件 Node 测试及通用 VSIX 打包；产物保留 7 天 |
 | 网站及依赖相关变更 | 网站工具回归、离线 CLI 示例/导出数据/WASM 构建、带 `goxideweb` 标签的 HTTP race/vet |
 | CI summary | 无路径过滤，始终汇总；失败、取消或应运行却跳过都不能报告成功 |
 
@@ -20,7 +21,8 @@ PR 在 `opened`、`synchronize`、`reopened`、`ready_for_review` 和 `converted
 网站使用 `python3 -B website/build.py --worktree` 构建当前 checkout；CLI 示例、
 导出数据与 WASM 记录同一源码摘要，并在构建前后校验一致。网站 job 仅追加 HTTP 包的 race/vet。
 
-Go 从 `go.mod` 选择配套 1.27.x；Python 3.12，Linux runner 提供 C 编译器；web job显式安装Node 22，并用website/package-lock.json执行npm ci，供Preact/Vite/Monaco构建与worker检查使用。
+准备任务从 `go.mod` 选择配套 Go，固定具体补丁版本和 checkout 提交，供全部检查和构建使用。
+Python 3.12，Linux runner 提供 C 编译器；网站和插件各自使用 Node 22 与对应的 `package-lock.json` 执行 `npm ci`。
 完整 Git 历史用于 catalog 快照。缓存按锁文件选取；先用仓外清单副本
 预热完整固定模块图并 `verify`，逐字节确认 `go.mod/go.sum` 未变。网站 job 随后设置 `GOPROXY=off`；
 原生检查保留 Go proxy 配置，供 P5 独立空模块缓存测试首次获取固定依赖，后续离线重跑由测试显式控制。
@@ -60,15 +62,26 @@ A03 lowering 路径完成。普通 CI 工作流只有 `contents: read`，checkou
 
 推送 `v` 前缀的 SemVer tag（如 `v0.0.1`）自动触发 `Release`；也可手动输入已存在的
 tag 重试未完成的发布。工作流始终解析 `refs/tags/<tag>` 并固定对应提交，所有平台使用
-准备阶段解析的同一 Go 补丁版本。`checks` 复用上述完整 CI 门禁，构建任务在五个原生 runner
-上分别生成 macOS / Linux amd64、arm64，以及 Windows amd64 的 CLI 包。
+准备阶段解析的同一 Go 补丁版本。`checks` 复用上述完整 CI 门禁和产物；发布直接下载同次运行的
+CLI 与 VSIX，不重复构建。CLI 矩阵在六个原生 runner 上分别生成 macOS / Linux / Windows 的
+amd64、arm64 包；插件只有一个通用 VSIX，不内置 `goxide`、`gopls` 或 `dlv`。
 
 归档包含可执行文件、许可证与安装说明；版本来自 tag，可用 `goxide --version` 查看。
-每个平台都解压归档后，真实执行快速开始多包项目的生成、运行、构建和 race 测试。
-CLI 要求本地 Go 版本与构建版本完全一致（包括补丁号）；`test` 另需 C 编译器。
-Windows arm64 暂未纳入发布矩阵，因为当前 Go race detector 不支持该目标。
+每个平台都解压归档后，真实执行快速开始多包项目的生成、运行和构建。Windows arm64 执行生成
+模块的普通 Go 测试，并核对 `TestDescribe` 通过；其他平台执行 `goxide test` 的 race 测试。
+CLI 要求本地 Go 版本与构建版本完全一致（包括补丁号）；`goxide test` 另需 C 编译器，且当前 Go
+race detector 不支持 Windows arm64，因此该平台暂用生成后的 `go test`。
 
-只有全部检查和平台任务成功后，发布任务才使用 `contents: write` 创建草稿、上传完整归档
-与 `checksums.txt`，最后公开 Release。已公开的资产不覆盖；失败时可重试尚未公开的草稿。
+普通 CI 的 CLI 版本和文件名使用 `dev-<12位提交SHA>`；tag 构建使用完整 tag。VSIX 文件名也保留
+完整 tag 或开发标识，内部版本采用数字 `major.minor.patch`，开发构建为 `0.0.0`；预发布包设置
+VS Code 的 pre-release 标记。打包不修改 `package.json` 或锁文件。这些 VSIX 通过 GitHub
+下载交付，多个 rc 共用数字内部版本；Marketplace 发布及其升级版本策略另行安排。
+
+安装 VSIX 后，Goxide 从配置或 PATH 获取。默认 gopls 先查 PATH，缺少时由插件通过 `go install`
+准备固定版本，保存在扩展宿主的私有目录，并显示进度与取消入口；显式配置的命令或路径按原值使用。
+
+只有全部检查和平台任务成功后，发布任务才使用 `contents: write` 创建草稿、上传六个 CLI 归档、
+一个 VSIX 与覆盖全部七项的 `checksums.txt`，核对远端资产集合及大小后公开 Release。
+已公开的资产不覆盖；失败时可重试尚未公开的草稿。
 `v0.*` 和带预发布标识的 tag 均标为 GitHub prerelease，且不设为 latest。
 pre-1.0 是实验阶段，语言、CLI、配置及生成代码仍可在 patch / minor 版本中发生破坏性变更。

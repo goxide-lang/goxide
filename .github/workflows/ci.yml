@@ -14,6 +14,12 @@ on:
       go_version:
         type: string
         required: true
+      release_tag:
+        type: string
+        default: ''
+      release_prerelease:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -31,15 +37,41 @@ env:
 jobs:
   scope:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     outputs:
       web: ${{ steps.paths.outputs.web }}
+      commit: ${{ steps.identity.outputs.commit }}
+      go_version: ${{ steps.identity.outputs.go_version }}
+      version: ${{ steps.identity.outputs.version }}
+      prerelease: ${{ steps.identity.outputs.prerelease }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ inputs.go_version }}
+          go-version-file: go.mod
+          cache: false
+      - name: Resolve one source and toolchain for checks and artifacts
+        id: identity
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_PRERELEASE: ${{ inputs.release_prerelease }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          go_version = subprocess.check_output(['go', 'env', 'GOVERSION'], text=True).strip().removeprefix('go')
+          tag = os.environ['RELEASE_TAG']
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              print(f'commit={commit}', file=out)
+              print(f'go_version={go_version}', file=out)
+              print(f'version={tag or "dev-" + commit[:12]}', file=out)
+              print(f'prerelease={os.environ["RELEASE_PRERELEASE"] if tag else "true"}', file=out)
+          PY
       - name: Select the website job
         id: paths
         env:
@@ -79,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
+          ref: ${{ needs.scope.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -87,8 +119,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: ${{ inputs.go_version }}
-          go-version-file: go.mod
+          go-version: ${{ needs.scope.outputs.go_version }}
           cache-dependency-path: go.sum
       - name: Prepare the pinned module graph
         run: |
@@ -124,7 +155,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
+          ref: ${{ needs.scope.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -132,8 +163,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: ${{ inputs.go_version }}
-          go-version-file: go.mod
+          go-version: ${{ needs.scope.outputs.go_version }}
           cache-dependency-path: go.sum
       - name: Prepare the pinned module graph
         run: |
@@ -159,7 +189,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
+          ref: ${{ needs.scope.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -167,8 +197,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: ${{ inputs.go_version }}
-          go-version-file: go.mod
+          go-version: ${{ needs.scope.outputs.go_version }}
           cache-dependency-path: go.sum
       - name: Prepare the pinned module graph
         run: |
@@ -206,10 +235,93 @@ jobs:
       - name: Ensure build did not change tracked inputs
         run: git diff --exit-code
 
+  compiler:
+    needs: scope
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: linux_amd64
+          - runner: ubuntu-24.04-arm
+            target: linux_arm64
+          - runner: macos-15-intel
+            target: darwin_amd64
+          - runner: macos-15
+            target: darwin_arm64
+          - runner: windows-2025
+            target: windows_amd64
+          - runner: windows-11-arm
+            target: windows_arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.scope.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ needs.scope.outputs.go_version }}
+          cache-dependency-path: go.sum
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Build, unpack and exercise the native CLI
+        env:
+          RELEASE_TAG: ${{ needs.scope.outputs.version }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: python -B scripts/release.py
+      - name: Ensure packaging did not change tracked inputs
+        run: git diff --exit-code
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: goxide-${{ matrix.target }}
+          path: release-dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  extension:
+    needs: scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.scope.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - name: Install locked extension dependencies
+        run: npm ci --prefix editors/vscode
+      - name: Check extension behavior and JavaScript
+        run: |
+          npm test --prefix editors/vscode
+          npm run check --prefix editors/vscode
+      - name: Package the universal VSIX without tool binaries
+        env:
+          RELEASE_TAG: ${{ needs.scope.outputs.version }}
+          RELEASE_PRERELEASE: ${{ needs.scope.outputs.prerelease }}
+        run: python3 -B scripts/package_extension.py
+      - name: Ensure packaging did not change tracked inputs
+        run: git diff --exit-code
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: goxide-vsix
+          path: release-dist/*.vsix
+          if-no-files-found: error
+          retention-days: 7
+
   summary:
     name: CI summary
     if: always()
-    needs: [scope, checks, native, web]
+    needs: [scope, checks, native, web, compiler, extension]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -219,6 +331,8 @@ jobs:
           CHECKS: ${{ needs.checks.result }}
           NATIVE: ${{ needs.native.result }}
           WEB: ${{ needs.web.result }}
+          COMPILER: ${{ needs.compiler.result }}
+          EXTENSION: ${{ needs.extension.result }}
           WEB_REQUIRED: ${{ needs.scope.outputs.web }}
         run: |
           {
@@ -228,11 +342,15 @@ jobs:
             echo "| Native execution | $NATIVE |"
             echo "| Race / vet / gofmt / docs | $CHECKS |"
             echo "| WASM build / HTTP | $WEB |"
+            echo "| Six native CLI archives | $COMPILER |"
+            echo "| Universal VSIX | $EXTENSION |"
             echo '| Browser UI / real Worker QA | Not run; tracked gap in docs/ci.md |'
           } >> "$GITHUB_STEP_SUMMARY"
           test "$SCOPE" = success
           test "$CHECKS" = success
           test "$NATIVE" = success
+          test "$COMPILER" = success
+          test "$EXTENSION" = success
           if [ "$WEB_REQUIRED" = true ]; then
             test "$WEB" = success
           else

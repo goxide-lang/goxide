@@ -75,6 +75,25 @@ async function run() {
   const configurationIndex = all.findIndex(item => item.method === "workspace/didChangeConfiguration");
   const shutdownIndex = all.findIndex(item => item.method === "shutdown");
   assert.ok(configurationIndex >= 0 && shutdownIndex > configurationIndex);
+
+  const standalonePath = path.join(path.dirname(root), "standalone", "main.gox");
+  await fs.mkdir(path.dirname(standalonePath));
+  await fs.writeFile(standalonePath, "package main\nfunc main() {}\n");
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // openTextDocument retains an extra model reference for three minutes.
+    // Open as a user does so closing the editor closes the document immediately.
+    await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(standalonePath), { preview: false });
+    const standalone = vscode.window.activeTextEditor.document;
+    const launched = await until(async () => (await records()).filter(item => item.argv?.at(-1) === standalonePath).at(attempt));
+    await until(async () => (await records()).some(item => item.pid === launched.pid && item.method === "textDocument/didOpen"));
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    await until(async () => (await records()).some(item => item.pid === launched.pid && item.method === "exit")).catch(async error => {
+      throw new Error(`${error.message}: ${JSON.stringify({ isClosed: standalone.isClosed, visible: vscode.window.visibleTextEditors.map(editor => editor.document.uri.toString()), lifecycle: (await records()).filter(item => item.pid === launched.pid).map(item => item.method) })}`);
+    });
+    const lifecycle = (await records()).filter(item => item.pid === launched.pid).map(item => item.method);
+    assert.ok(lifecycle.indexOf("textDocument/didClose") > lifecycle.indexOf("textDocument/didOpen"), "standalone shutdown lost didClose");
+    assert.ok(lifecycle.indexOf("shutdown") > lifecycle.indexOf("textDocument/didClose"), "standalone shutdown overtook didClose");
+  }
   await require("../extension").deactivate();
 
   // Exercise the actual LanguageClient converter and provider registration.
@@ -98,7 +117,7 @@ async function run() {
     assert.ok(boundaryRecords.some(item => item.method === "textDocument/didOpen" && item.params.textDocument.uri === source.uri.toString()));
     assert.equal(boundaryRecords.some(item => item.params?.textDocument?.uri === outside.uri.toString()), false, "the project client sent an outside document to its server");
   } finally { await boundary.stop(); }
-  console.log("Goxide extension-host test passed: stdio, UTF-16, five capabilities, project document boundary, native Go selector, preview, edits, configuration restart, shutdown.");
+  console.log("Goxide extension-host test passed: stdio, UTF-16, five capabilities, project document boundary, native Go selector, preview, edits, configuration restart, standalone close/reopen, shutdown.");
 }
 
 module.exports = { run };

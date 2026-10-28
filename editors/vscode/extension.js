@@ -144,12 +144,20 @@ class Extension {
     if (this.disposed) return;
     const managedGo = settings.enableManagedGo && gopls !== "off";
     const options = launchOptions(folder?.uri.fsPath || plan.root, plan, { ...settings, gopls }, goConflict);
-    const session = { plan, folder, settings, persistent, managedGo, client: undefined, disposables: [] };
+    const session = { plan, folder, settings, persistent, managedGo, client: undefined, disposables: [], pendingClose: new Set() };
     const client = new this.LanguageClient("goxide", `Goxide (${path.basename(plan.root)})`, options, {
       documentSelector: documentSelector(vscode, plan, managedGo),
       workspaceFolder: { uri: rootURI, name: folder?.name || path.basename(plan.root), index: folder?.index || 0 },
       outputChannel: this.output,
       markdown: { isTrusted: false },
+      middleware: {
+        didClose: async (document, next) => {
+          const sending = next(document);
+          session.pendingClose.add(sending);
+          try { await sending; }
+          finally { session.pendingClose.delete(sending); }
+        },
+      },
     });
     session.client = client;
     try {
@@ -207,9 +215,7 @@ class Extension {
   async closeDocument(document) {
     const session = this.sessionFor(document.uri);
     if (!session || session.persistent) return;
-    const stillOpen = this.vscode.workspace.textDocuments.some(other =>
-      other.uri.scheme === "file" && other.uri.toString() !== document.uri.toString() && owns(session.plan, other.uri.fsPath));
-    if (!stillOpen) await this.stopSession(session);
+    await this.stopSession(session, true);
   }
 
   async generatedContent(uri, token) {
@@ -286,7 +292,13 @@ class Extension {
     await this.discover();
   }
 
-  async stopSession(session) {
+  async stopSession(session, onlyIfUnused = false) {
+    // The client sends didClose asynchronously after our close event listener.
+    while (session.pendingClose.size) await Promise.allSettled([...session.pendingClose]);
+    if (onlyIfUnused && this.vscode.workspace.textDocuments.some(document =>
+      !document.isClosed && document.uri.scheme === "file" && owns(session.plan, document.uri.fsPath) &&
+      (document.languageId === "goxide" && document.uri.fsPath.endsWith(".gox") ||
+        session.plan.managed && session.managedGo && document.languageId === "go" && document.uri.fsPath.endsWith(".go")))) return;
     this.sessions.delete(session.plan.input);
     for (const [uri, owner] of this.previews) if (owner === session) this.previews.delete(uri);
     for (const disposable of session.disposables) disposable.dispose();

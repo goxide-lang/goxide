@@ -21,6 +21,12 @@ function uri(value) {
   return { scheme: url.protocol.slice(0, -1), fsPath: url.protocol === "file:" ? fileURLToPath(url) : url.pathname, toString: () => url.href };
 }
 const fileURI = filename => uri(pathToFileURL(filename).href);
+const turn = () => new Promise(resolve => setImmediate(resolve));
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
 
 async function fixture(t, options = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "goxide-vscode-"));
@@ -78,7 +84,7 @@ async function fixture(t, options = {}) {
   };
   class Client {
     constructor(id, name, serverOptions, clientOptions) { Object.assign(this, { id, name, serverOptions, clientOptions, notifications: [], requests: [], stopped: false }); clients.push(this); }
-    async start() { this.started = true; }
+    async start() { await options.start?.(); this.started = true; }
     async stop() { this.stopped = true; }
     async sendNotification(method, params) { this.notifications.push({ method, params }); }
     async sendRequest(method, params) {
@@ -171,6 +177,136 @@ test("ordinary Go workspaces remain unmanaged; standalone sessions stop when clo
   await f.extension.pending;
   assert.equal(f.clients[0].stopped, true);
   assert.equal(f.watchers[0].disposed, true);
+  assert.equal(f.extension.sessions.size, 0);
+});
+
+function close(f, document, next) {
+  document.isClosed = true;
+  f.vscode.workspace.textDocuments = f.vscode.workspace.textDocuments.filter(other => other !== document);
+  f.events.close.fire(document);
+  // LanguageClient registers after Extension and sends within the same event.
+  const client = f.clients.at(-1);
+  return next && (client.clientOptions.middleware?.didClose(document, next) || next(document));
+}
+
+test("standalone shutdown waits until didClose has been sent", async t => {
+  const f = await fixture(t, { project: false });
+  const document = f.document("single.gox");
+  f.vscode.workspace.textDocuments.push(document);
+  await f.extension.start();
+  const gate = deferred();
+  const sending = close(f, document, () => gate.promise);
+  await turn();
+  const stoppedEarly = f.clients[0].stopped;
+  gate.resolve();
+  await sending;
+  await f.extension.pending;
+  assert.equal(stoppedEarly, false, "server stopped while didClose was still sending");
+  assert.equal(f.clients[0].stopped, true);
+  assert.equal(f.extension.sessions.size, 0);
+});
+
+test("reopening the same URI while didClose sends keeps its session", async t => {
+  const f = await fixture(t, { project: false });
+  const document = f.document("single.gox");
+  f.vscode.workspace.textDocuments.push(document);
+  await f.extension.start();
+  const gate = deferred();
+  const sending = close(f, document, () => gate.promise);
+  await turn();
+  const reopened = f.document("single.gox");
+  f.vscode.workspace.textDocuments.push(reopened);
+  f.events.open.fire(reopened);
+  gate.resolve();
+  await sending;
+  await f.extension.pending;
+  assert.equal(f.clients.length, 1);
+  assert.equal(f.clients[0].stopped, false);
+});
+
+test("configuration restart drains additional didClose sends and preserves their errors", async t => {
+  const f = await fixture(t);
+  const first = f.document("first.gox"), second = f.document("second.gox");
+  f.vscode.workspace.textDocuments.push(first, second);
+  await f.extension.start();
+  const firstGate = deferred(), secondGate = deferred();
+  const firstSending = close(f, first, () => firstGate.promise);
+  f.events.configuration.fire({ affectsConfiguration: section => section === "goxide" });
+  await turn();
+  const stoppedBeforeFirst = f.clients[0].stopped;
+  const secondSending = close(f, second, () => secondGate.promise);
+  const rejected = assert.rejects(secondSending, /close send failed/);
+  firstGate.resolve();
+  await firstSending;
+  await turn();
+  const stoppedBeforeSecond = f.clients[0].stopped;
+  secondGate.reject(new Error("close send failed"));
+  await rejected;
+  await f.extension.pending;
+  assert.equal(stoppedBeforeFirst, false);
+  assert.equal(stoppedBeforeSecond, false);
+  assert.equal(f.clients[0].stopped, true);
+  assert.equal(f.clients.length, 2);
+  assert.equal(f.clients[1].stopped, false);
+});
+
+test("discovered projects stay open for another Goxide file but not unsynchronized files", async t => {
+  const f = await fixture(t, { project: false });
+  await fs.mkdir(path.join(f.root, "nested"));
+  await fs.writeFile(path.join(f.root, "nested/goxide.toml"), "[package]\nname = 'nested'\n");
+  const source = f.document("nested/main.gox"), other = f.document("nested/other.gox");
+  const readme = f.document("nested/README.md", "markdown"), native = f.document("nested/native.go", "go");
+  f.vscode.workspace.textDocuments.push(source, other, readme, native);
+  await f.extension.start();
+  await close(f, source, async () => {});
+  await f.extension.pending;
+  assert.equal(f.clients[0].stopped, false);
+  await close(f, other, async () => {});
+  await f.extension.pending;
+  assert.equal(f.clients[0].stopped, true);
+});
+
+test("changing the last Goxide file to plaintext releases its session", async t => {
+  const f = await fixture(t, { project: false });
+  const document = f.document("single.gox");
+  f.vscode.workspace.textDocuments.push(document);
+  await f.extension.start();
+  const sending = close(f, document, async () => {});
+  f.vscode.workspace.textDocuments.push(f.document("single.gox", "plaintext"));
+  await sending;
+  await f.extension.pending;
+  assert.equal(f.clients[0].stopped, true);
+});
+
+test("managed Go keeps a discovered session open until its last selected file closes", async t => {
+  const f = await fixture(t, { project: false, settings: { enableManagedGo: true } });
+  await fs.mkdir(path.join(f.root, "nested"));
+  await fs.writeFile(path.join(f.root, "nested/goxide.toml"), "[package]\nname = 'nested'\n");
+  const source = f.document("nested/main.gox"), native = f.document("nested/native.go", "go");
+  f.vscode.workspace.textDocuments.push(source, native,
+    f.document("nested/notes.md"), f.document("nested/snippet.txt", "go"));
+  await f.extension.start();
+  await close(f, source, async () => {});
+  await f.extension.pending;
+  assert.equal(f.clients[0].stopped, false);
+  await close(f, native, async () => {});
+  await f.extension.pending;
+  assert.equal(f.clients[0].stopped, true);
+});
+
+test("closing a standalone document during startup still reclaims the completed client", async t => {
+  const ready = deferred(), gate = deferred();
+  const f = await fixture(t, { project: false, start: () => { ready.resolve(); return gate.promise; } });
+  const document = f.document("single.gox");
+  f.vscode.workspace.textDocuments.push(document);
+  const starting = f.extension.start();
+  await ready.promise;
+  close(f, document);
+  gate.resolve();
+  await starting;
+  await f.extension.pending;
+  assert.equal(f.clients[0].started, true);
+  assert.equal(f.clients[0].stopped, true);
   assert.equal(f.extension.sessions.size, 0);
 });
 

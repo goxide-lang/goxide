@@ -19,12 +19,15 @@ async function main() {
     await fs.mkdir(path.join(workspace, ".vscode"), { recursive: true });
     const launcher = path.join(temporary, "goxide test executable");
     await fs.writeFile(launcher, `#!${process.execPath}\nrequire(${JSON.stringify(path.join(__dirname, "server.js"))});\n`, { mode: 0o700 });
-    await fs.writeFile(path.join(workspace, ".vscode/settings.json"), JSON.stringify({
+    const settings = JSON.stringify({
       "goxide.executable": launcher, "goxide.gopls": "fixture-gopls", "goxide.enableManagedGo": true,
       "goxide.features": ["fast"], "goxide.target": "linux/amd64", "extensions.autoUpdate": false,
       "goxide.lib": true, "goxide.tags": ["debug", "trace"], "goxide.noDefaultFeatures": true,
       "workbench.startupEditor": "none", "telemetry.telemetryLevel": "off",
-    }));
+    });
+    await fs.writeFile(path.join(workspace, ".vscode/settings.json"), settings);
+    await fs.mkdir(path.join(temporary, "user-data", "User"), { recursive: true });
+    await fs.writeFile(path.join(temporary, "user-data", "User", "settings.json"), settings);
     await fs.writeFile(path.join(workspace, "goxide.toml"), "[package]\nname = 'fixture'\n");
     await fs.writeFile(path.join(workspace, "main.gox"), "package main\n// 😀\nfunc main() {}\n");
     await fs.writeFile(path.join(workspace, "native.go"), "package main\nvar native = 1\n");

@@ -191,11 +191,13 @@ func deliveryCommand(t *testing.T, dir, tool string, success bool, extra []strin
 	}
 	cmd.Env = append(cmd.Env, "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOFLAGS=")
 	cmd.Env = append(cmd.Env, extra...)
+	started := time.Now()
 	output, err := cmd.CombinedOutput()
+	elapsed := time.Since(started)
 	if (err == nil) != success {
-		t.Fatalf("%s %v: expected success=%t; got %v\n%s", tool, args, success, err, output)
+		t.Fatalf("%s %v: elapsed=%.3fs expected success=%t; got %v\n%s", tool, args, elapsed.Seconds(), success, err, output)
 	}
-	t.Logf("%s %v:\n%s", filepath.Base(tool), args, output)
+	t.Logf("%s %v: elapsed=%.3fs\n%s", filepath.Base(tool), args, elapsed.Seconds(), output)
 	return string(output)
 }
 

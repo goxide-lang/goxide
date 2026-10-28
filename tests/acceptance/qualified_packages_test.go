@@ -54,7 +54,7 @@ func compileQualifiedModule(t *testing.T, source string) (string, error) {
 	destination := filepath.Join(t.TempDir(), "generated")
 	command := exec.Command(cli, "transpile", "-o", destination, source)
 	command.Dir = root
-	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOCACHE=/tmp/goxide-macro-cache")
+	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off")
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("qualified native module: %w\n%s", err, output)

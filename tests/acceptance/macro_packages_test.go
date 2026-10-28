@@ -55,7 +55,7 @@ func compileMacroPackage(t *testing.T, source, destination string) error {
 	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
 	command := exec.Command(cli, "transpile", "-o", destination, source)
 	command.Dir = root
-	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOCACHE=/tmp/goxide-macro-cache")
+	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off")
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("macro package CLI: %w\n%s", err, output)

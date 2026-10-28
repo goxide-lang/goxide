@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
@@ -118,12 +119,14 @@ func packagesCommand(t *testing.T, dir, executable string, success bool, args ..
 	t.Helper()
 	cmd := exec.Command(executable, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOCACHE=/tmp/goxide-macro-cache")
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off")
+	started := time.Now()
 	output, err := cmd.CombinedOutput()
+	elapsed := time.Since(started)
 	if (err == nil) != success {
-		t.Fatalf("%s %v: expected success=%t; got %v\n%s", executable, args, success, err, output)
+		t.Fatalf("%s %v: elapsed=%.3fs expected success=%t; got %v\n%s", executable, args, elapsed.Seconds(), success, err, output)
 	}
-	t.Logf("%s %v:\n%s", filepath.Base(executable), args, output)
+	t.Logf("%s %v: elapsed=%.3fs\n%s", filepath.Base(executable), args, elapsed.Seconds(), output)
 	return string(output)
 }
 

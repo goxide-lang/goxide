@@ -61,6 +61,12 @@ func PrepareFormalBinary(t *testing.T, root string, overrides ...compile.Options
 
 func prepareFormal(t *testing.T, root string, library bool, overrides ...compile.Options) (*compile.Result, int, error) {
 	t.Helper()
+	started := time.Now()
+	var macroHostElapsed time.Duration
+	calls := 0
+	defer func() {
+		t.Logf("formal preparation: elapsed=%.3fs macro_host_elapsed=%.3fs macro_calls=%d (host includes WASM preparation, compilation, and execution)", time.Since(started).Seconds(), macroHostElapsed.Seconds(), calls)
+	}()
 	options := compile.Options{}
 	if len(overrides) > 1 {
 		t.Fatal("formal preparation accepts at most one option set")
@@ -83,10 +89,11 @@ func prepareFormal(t *testing.T, root string, library bool, overrides ...compile
 		t.Fatal(err)
 	}
 	defer host.Close()
-	calls := 0
 	options.Lib, options.Offline = library, true
 	options.RunProcMacro = func(wasm []byte, request pm.Request) ([]byte, error) {
 		calls++
+		invocationStarted := time.Now()
+		defer func() { macroHostElapsed += time.Since(invocationStarted) }()
 		return host.Run(wasm, request)
 	}
 	result, err := compile.PrepareProject(root, options)
@@ -138,9 +145,12 @@ func RunFormalGo(t *testing.T, result *compile.Result, args ...string) string {
 	environment := result.Config.Environment
 	command := exec.Command(environment.GoTool, args...)
 	command.Dir, command.Env = result.Root, project.GoEnv(true, environment.ExecEnv())
+	started := time.Now()
 	output, err := command.CombinedOutput()
+	elapsed := time.Since(started)
 	if err != nil {
-		t.Fatalf("formal generated Go %s: %v\n%s", strings.Join(args, " "), err, output)
+		t.Fatalf("formal generated Go %s: elapsed=%.3fs: %v\n%s", strings.Join(args, " "), elapsed.Seconds(), err, output)
 	}
+	t.Logf("formal generated Go %s: elapsed=%.3fs\n%s", strings.Join(args, " "), elapsed.Seconds(), output)
 	return string(output)
 }

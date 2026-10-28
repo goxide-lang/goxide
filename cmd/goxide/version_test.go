@@ -225,7 +225,6 @@ func TestVersionSourceNativeAndMixedDiagnostics(t *testing.T) {
 	}
 }
 func TestVersionSourceGraphChangeAndOscillation(t *testing.T) {
-	t.Skip("MVP-DEFERRED: MVP CLI feature-selected dependency versions deferred by P6")
 	for _, oscillates := range []bool{false, true} {
 		t.Run(fmt.Sprint(oscillates), func(t *testing.T) {
 			proxy, _ := versionProxy(t)

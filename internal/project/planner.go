@@ -285,6 +285,7 @@ type planningRound struct {
 	local        map[string]string
 	versioned    map[string]bool
 	macros       map[string]*Node
+	pending      []string
 	errors       []error
 }
 
@@ -693,6 +694,7 @@ func (g *Graph) solve(root string, r *planningRound) (map[string]Selection, erro
 					// Select versions before downloading/classifying their source.
 					// Unselected or excluded minimum versions need not exist.
 					roleShadows[source.Module] = nil
+					r.pending = append(r.pending, source.Module)
 				}
 			}
 		}
@@ -1284,6 +1286,14 @@ func (g *Graph) plan(root string, requested []string, defaults bool) (*Graph, er
 		next, e := g.solve(root, r)
 		if e != nil {
 			return nil, e
+		}
+		if len(r.pending) > 0 {
+			// Empty source projections only discover new module identities. Keep
+			// the current sources until their native requirements can participate.
+			for _, module := range r.pending {
+				selected[module] = next[module]
+			}
+			continue
 		}
 		// Identity excludes cache/temporary directories; nodes/edges/features include
 		// only this round's root-reachable manifest closure, never accumulated history.

@@ -239,6 +239,25 @@ func (p *rolePlanner) load(root string, source *Node, requested []string, defaul
 		}
 	}
 	p.mergeSums(g.Lock.PlanningSums)
+	hasMacros := g.Root.Manifest.Lib != nil && g.Root.Manifest.Lib.ProcMacro
+	for _, consumer := range g.Nodes {
+		for _, child := range consumer.Children {
+			hasMacros = hasMacros || procBoundary(child, g.Root)
+		}
+	}
+	if role == "target" && !hasMacros {
+		nodes := map[string]*Node{}
+		for _, node := range g.Nodes {
+			nodes[node.SourceKey] = node
+		}
+		if err := g.lockModulePlan(root, g.Plan, nodes); err != nil {
+			return nil, err
+		}
+		p.owner.Lock.Plans = g.Lock.Plans
+		g.DependencyPlanID = Digest(g.portablePlan(root, g.Plan, nodes))
+		g.PlanID = g.DependencyPlanID
+		return g, nil
+	}
 	record, key, unit, err := p.record(g)
 	if err != nil {
 		return nil, err
@@ -292,19 +311,6 @@ func (p *rolePlanner) load(root string, source *Node, requested []string, defaul
 	})
 	sort.Strings(macroIDs)
 	g.PlanID = Digest([]any{unit, macroIDs})
-	if role == "target" && len(g.ProcEdges) == 0 {
-		nodes := map[string]*Node{}
-		for _, node := range g.Nodes {
-			nodes[node.SourceKey] = node
-		}
-		if err := g.lockModulePlan(root, g.Plan, nodes); err != nil {
-			return nil, err
-		}
-		p.owner.Lock.Plans = g.Lock.Plans
-		g.DependencyPlanID = Digest(g.portablePlan(root, g.Plan, nodes))
-		g.PlanID = g.DependencyPlanID
-		return g, nil
-	}
 	if old, exists := p.owner.Lock.Roles[key]; g.Locked && (!exists || Digest(old) != Digest(record)) {
 		return nil, fmt.Errorf("--locked: %s role plan missing or changed for %s", role, g.Root.Module)
 	}
